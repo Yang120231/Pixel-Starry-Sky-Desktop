@@ -1,0 +1,17 @@
+# 依赖与构建产物
+node_modules/
+out/
+dist/
+release/
+target/
+
+# 临时文件目录：只保留说明文件（规则见 AGENTS.md § 2）
+/scratch/*
+!/scratch/README.md
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+*.log
+.env
+.env.*
