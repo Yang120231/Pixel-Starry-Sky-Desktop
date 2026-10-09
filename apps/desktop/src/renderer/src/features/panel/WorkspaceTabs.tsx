@@ -1,19 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import {
-  Box,
-  Copy,
-  FileText,
-  FolderTree,
-  GitBranch,
-  Globe,
-  ListChecks,
-  Maximize2,
-  Minimize2,
-  Package,
-  Plus,
-  SquareTerminal,
-  X,
-} from 'lucide-react'
+import { ChevronDown, FileText, Maximize2, Minimize2, Plus, X } from 'lucide-react'
 import { cn, CountBadge, IconButton } from '@/ui'
 import { useInbox } from './inbox/useInbox'
 import { ActionMenu, type MenuAction } from '@/ui/ActionMenu'
@@ -21,17 +7,7 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { dirtyFile, useFiles } from '@/features/files/store'
 import { parseFileTab } from '@/features/panes/tree'
 import { panelCloseTargets, TOOL_IDS, type PanelLayout, type ToolId } from './workspaceState'
-
-const icons: Partial<Record<string, typeof FolderTree>> = {
-  files: FolderTree,
-  git: GitBranch,
-  artifacts: Package,
-  terminal: SquareTerminal,
-  browser: Globe,
-  tasks: ListChecks,
-  sandbox: Box,
-  copies: Copy,
-}
+import { GROUP_KEY, TOOLS, toolIcon } from './tools'
 export function WorkspaceTabs({
   layout,
   maximized,
@@ -52,7 +28,16 @@ export function WorkspaceTabs({
     strip = useRef<HTMLDivElement>(null)
   // 任务标签上显示待处理数量（docs/ui/tasks-inbox.md §2）
   const inboxCount = useInbox().length
-  const [menu, setMenu] = useState<{ id: string | null; x: number; y: number; trigger: HTMLElement } | null>(null)
+  // id 为标签时是标签右键菜单；null 时是「+」菜单（all 为真时是「全部标签」溢出菜单）
+  const [menu, setMenu] = useState<{
+    id: string | null
+    all?: boolean
+    x: number
+    y: number
+    trigger: HTMLElement
+  } | null>(null)
+  /** 标签栏放不下（出现横向滚动）时显示「全部标签」按钮 */
+  const [overflowing, setOverflowing] = useState(false)
   const label = (id: string): string =>
     files.tabs.find(f => f.id === id)?.name ??
     parseFileTab(id)?.path.split('/').pop() ??
@@ -60,6 +45,7 @@ export function WorkspaceTabs({
   useLayoutEffect(() => {
     const list = strip.current
     const reveal = () => {
+      if (list) setOverflowing(list.scrollWidth > list.clientWidth + 1)
       const tab = list?.querySelector<HTMLElement>('[aria-selected="true"]')?.parentElement
       if (!list || !tab) return
       if (tab.offsetLeft < list.scrollLeft) list.scrollLeft = tab.offsetLeft
@@ -80,7 +66,22 @@ export function WorkspaceTabs({
           run: () => onClose(panelCloseTargets(layout, menu.id!, mode)),
         })),
       ]
-    : TOOL_IDS.map(id => ({ label: t(`workspace.${id}`), run: () => onSelect(id) }))
+    : menu?.all
+      ? // 溢出菜单：列出全部标签，当前标签打勾
+        layout.tabs.map(id => ({
+          label: label(id),
+          icon: toolIcon(id) ?? FileText,
+          checked: id === layout.active,
+          run: () => onSelect(id),
+        }))
+      : // 「+」菜单：按分组列出工具，已打开的打勾（选中只是切换过去）
+        TOOLS.map((tool, i) => ({
+          label: t(`workspace.${tool.id}`),
+          icon: tool.icon,
+          checked: layout.tabs.includes(tool.id),
+          section: TOOLS[i - 1]?.group !== tool.group ? t(GROUP_KEY[tool.group]) : undefined,
+          run: () => onSelect(tool.id),
+        }))
   return (
     <div data-panel-tabs className="flex h-10 min-w-0 shrink-0 items-center gap-1 border-b border-line-layout px-2">
       <div
@@ -90,7 +91,7 @@ export function WorkspaceTabs({
         className="relative flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]"
       >
         {layout.tabs.map(id => {
-          const Icon = icons[id] ?? FileText,
+          const Icon = toolIcon(id) ?? FileText,
             file = files.tabs.find(f => f.id === id)
           return (
             <div
@@ -155,13 +156,27 @@ export function WorkspaceTabs({
           )
         })}
       </div>
+      {overflowing && (
+        <IconButton
+          icon={ChevronDown}
+          label={t('workspace.allTabs')}
+          size={28}
+          iconSize={15}
+          aria-haspopup="menu"
+          aria-expanded={menu?.all === true}
+          onClick={e => {
+            const r = e.currentTarget.getBoundingClientRect()
+            setMenu(menu ? null : { id: null, all: true, x: r.left, y: r.bottom, trigger: e.currentTarget })
+          }}
+        />
+      )}
       <IconButton
         icon={Plus}
         label={t('workspace.add')}
         size={28}
         iconSize={15}
         aria-haspopup="menu"
-        aria-expanded={menu?.id === null}
+        aria-expanded={menu?.id === null && !menu.all}
         onClick={e => {
           const r = e.currentTarget.getBoundingClientRect()
           setMenu(menu ? null : { id: null, x: r.left, y: r.bottom, trigger: e.currentTarget })
@@ -169,14 +184,14 @@ export function WorkspaceTabs({
       />
       <IconButton
         icon={maximized ? Minimize2 : Maximize2}
-        label={text(maximized ? '还原面板' : '放大面板')}
+        label={t(maximized ? 'workspace.restore' : 'workspace.maximize')}
         size={28}
         iconSize={15}
         onClick={() => window.dispatchEvent(new Event('pixelsky:panel-maximize'))}
       />
       <IconButton
         icon={X}
-        label={text('收起右侧面板')}
+        label={t('workspace.collapse')}
         size={28}
         iconSize={15}
         onClick={() => window.dispatchEvent(new Event('pixelsky:close-right-workspace'))}

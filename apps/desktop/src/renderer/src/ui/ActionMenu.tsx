@@ -1,5 +1,6 @@
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { Check, type LucideIcon } from 'lucide-react'
 import { cn } from './cn'
 
 export interface MenuAction {
@@ -7,6 +8,12 @@ export interface MenuAction {
   run(): void
   disabled?: boolean
   danger?: boolean
+  /** 左侧图标 */
+  icon?: LucideIcon
+  /** 设置后成为可勾选项（menuitemcheckbox），为真时右侧打勾 */
+  checked?: boolean
+  /** 在这一项前面插入分组小标题 */
+  section?: string
 }
 /** Shared context menu, outside scroll containers, with keyboard navigation. */
 export function ActionMenu({
@@ -73,24 +80,42 @@ export function ActionMenu({
         }
       }}
     >
-      {actions.map(action => (
-        <button
-          type="button"
-          role="menuitem"
-          key={action.label}
-          disabled={action.disabled}
-          className={cn(
-            'flex min-h-8 w-full items-center rounded-md px-3 py-1.5 text-left text-ui hover:bg-hover disabled:opacity-40',
-            action.danger ? 'text-danger' : 'text-fg',
-          )}
-          onClick={() => {
-            onClose()
-            action.run()
-          }}
-        >
-          {action.label}
-        </button>
-      ))}
+      {actions.map((action, index) => {
+        const Icon = action.icon
+        return (
+          <Fragment key={`${index}:${action.label}`}>
+            {action.section && (
+              <div
+                role="presentation"
+                className={cn(
+                  'px-3 pb-1 text-label text-fg-faint',
+                  index > 0 ? 'mt-1 border-t border-line pt-2' : 'pt-1',
+                )}
+              >
+                {action.section}
+              </div>
+            )}
+            <button
+              type="button"
+              role={action.checked === undefined ? 'menuitem' : 'menuitemcheckbox'}
+              aria-checked={action.checked}
+              disabled={action.disabled}
+              className={cn(
+                'flex min-h-8 w-full items-center gap-2 rounded-md px-3 py-1.5 text-left text-ui hover:bg-hover disabled:opacity-40',
+                action.danger ? 'text-danger' : 'text-fg',
+              )}
+              onClick={() => {
+                onClose()
+                action.run()
+              }}
+            >
+              {Icon && <Icon size={15} strokeWidth={1.5} className="shrink-0 text-fg-muted" />}
+              <span className="min-w-0 flex-1 truncate">{action.label}</span>
+              {action.checked && <Check size={14} strokeWidth={1.75} className="shrink-0 text-fg-muted" />}
+            </button>
+          </Fragment>
+        )
+      })}
     </div>,
     document.body,
   )

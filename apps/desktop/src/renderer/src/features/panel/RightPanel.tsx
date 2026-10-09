@@ -20,7 +20,8 @@ import { paneActions } from '@/features/panes/store'
 import { isFileTab, parseFileTab } from '@/features/panes/tree'
 import type { WorkspaceRef } from '../../../../shared/types/workspace'
 import { WorkspaceTabs } from './WorkspaceTabs'
-import { TOOL_IDS } from './workspaceState'
+import { ToolLauncher } from './ToolLauncher'
+import { recordRecentFile } from './recentFiles'
 import {
   detachPanelFile,
   forgetPanelTabs,
@@ -60,8 +61,11 @@ export function RightPanel({ maximized = false, visible = true }: { maximized?: 
   useEffect(() => {
     if (layout.active) setVisited(old => new Set([...old, layout.active!]))
     for (const id of layout.tabs.filter(isFileTab)) void ensureFile(id)
-    if (layout.active && isFileTab(layout.active)) activateFile(layout.active)
-  }, [layout])
+    if (layout.active && isFileTab(layout.active)) {
+      activateFile(layout.active)
+      recordRecentFile(scope, layout.active)
+    }
+  }, [layout, scope])
   useEffect(() => {
     const show = (e: Event) => {
       const detail = (e as CustomEvent<{ ref?: WorkspaceRef }>).detail
@@ -216,22 +220,7 @@ export function RightPanel({ maximized = false, visible = true }: { maximized?: 
               </div>
             ),
         )}
-        {layout.active === null && (
-          <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-fg-muted">
-            <p className="text-ui">{t('workspace.empty')}</p>
-            <div className="flex flex-wrap justify-center gap-2">
-              {TOOL_IDS.map(id => (
-                <button
-                  key={id}
-                  className="rounded-md border border-line bg-surface px-3 py-2 text-meta hover:bg-hover"
-                  onClick={() => select(id)}
-                >
-                  {t(`workspace.${id}`)}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        {layout.active === null && <ToolLauncher scope={scope} showRecent={!!workspace.ref} onSelect={select} />}
       </div>
     </aside>
   )
