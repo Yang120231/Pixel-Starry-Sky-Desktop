@@ -26,4 +26,30 @@ describe('machine resource ownership', () => {
     expect(remoteArguments('engine:renameSession', [value, value], machine)).toEqual([id, value])
     expect(remoteArguments('engine:answer', [value, value, { type: 'deny' }], machine)).toEqual([id, id, { type: 'deny' }])
   })
+  it('does not route free text that merely starts with a machine prefix', () => {
+    expect(argumentMachine([machine + '~hello', null])).toBeNull()
+    expect(argumentMachine([machine + '~' + id + ' extra', null])).toBeNull()
+    expect(argumentMachine([machine + '~', null])).toBeNull()
+    expect(argumentMachine([machine + '~' + id, null])).toBe(machine)
+  })
+  it('only encodes uuid values in resource fields', () => {
+    expect(remoteIds({ id: 'not-a-uuid', sessionId: id, other: id }, machine, true)).toEqual({ id: 'not-a-uuid', sessionId: machine + '~' + id, other: id })
+    expect(remoteIds({ ids: [id, 'x'] }, machine, true)).toEqual({ ids: [machine + '~' + id, 'x'] })
+    expect(remoteIds({ ids: [machine + '~' + id] }, machine, false)).toEqual({ ids: [id] })
+    expect(remoteIds(null, machine, true)).toBeNull()
+  })
+  it('routes object arguments by sessionId, projectId, then id', () => {
+    expect(argumentMachine([{ sessionId: machine + '~' + id }])).toBe(machine)
+    expect(argumentMachine([{ id: machine + '~' + id }])).toBe(machine)
+    expect(argumentMachine([{ other: machine + '~' + id }])).toBeNull()
+    expect(argumentMachine([])).toBeNull()
+    expect(argumentMachine([42])).toBeNull()
+  })
+  it('decodes only declared positional resource parameters', () => {
+    const value = machine + '~' + id
+    expect(remoteArguments('projectTools:searchTasks', [value, value], machine)).toEqual([value, id])
+    expect(remoteArguments('engine:steerQueued', [value, value, value, value], machine)).toEqual([id, id, id, value])
+    expect(remoteArguments('engine:cancelQueued', [value, value], machine)).toEqual([id, id])
+    expect(remoteArguments('x', [{ projectId: value, input: { id: value } }], machine)).toEqual([{ projectId: id, input: { id: value } }])
+  })
 })

@@ -4,6 +4,7 @@ export function machineOf(id: unknown): string {
 }
 const fields = new Set(['id', 'sessionId', 'projectId', 'itemId', 'turnId', 'queueId', 'taskId', 'terminalId', 'serviceId', 'copyId', 'parentId', 'expectedTurnId', 'fromItemId', 'userItemId', 'requestId', 'messageId', 'toolUseId', 'workspaceSessionId'])
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i
+const resourceId = /^ssh-[a-f0-9-]+~[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i
 const opaque = new Set(['input','output','content','env','arguments','schema','metadata'])
 export function remoteIds<T>(value: T, machine: string, encode: boolean, field = ''): T {
   if (opaque.has(field)) return value
@@ -18,7 +19,8 @@ export function remoteIds<T>(value: T, machine: string, encode: boolean, field =
 }
 export function argumentMachine(args: unknown[]): string | null {
   const first = args[0]
-  if (typeof first === 'string' && machineOf(first) !== 'local') return machineOf(first)
+  // 字符串首参数只有是完整「机器前缀~uuid」才算资源 ID，避免搜索文字之类被误路由
+  if (typeof first === 'string' && resourceId.test(first)) return machineOf(first)
   if (first && typeof first === 'object') {
     const data = first as Record<string, unknown>
     for (const key of ['sessionId', 'projectId', 'id']) if (machineOf(data[key]) !== 'local') return machineOf(data[key])
@@ -27,7 +29,8 @@ export function argumentMachine(args: unknown[]): string | null {
 }
 /** Only positional resource parameters are decoded; prompt/title/path strings are user data. */
 export function remoteArguments(method: string, args: unknown[], machine: string): unknown[] {
-  const ids = new Set([0])
+  // searchTasks(text, projectId)：第一个参数是用户输入的文字，资源 ID 在第二位
+  const ids = new Set(method === 'projectTools:searchTasks' ? [1] : [0])
   if (/^engine:(cancelQueued|moveQueued|runQueuedNow|steerQueued|rewind|interruptTurn|answer|stopTask|taskOutput|subagentTranscript)$/.test(method)) ids.add(1)
   if (method === 'engine:steerQueued') ids.add(2)
   return args.map((arg, index) => typeof arg === 'string' ? ids.has(index) ? remoteIds(arg, machine, false) : arg : remoteIds(arg, machine, false))
