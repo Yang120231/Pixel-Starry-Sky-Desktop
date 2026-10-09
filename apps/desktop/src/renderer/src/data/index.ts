@@ -41,10 +41,12 @@ export const {
 
 /** 会话标题；没有选中会话时是「新会话」 */
 export function sessionTitle(id: string | null): string {
-  if (!id) return tr('engine.hooks.message472')
+  if (!id) return tr('engine.hooks.newConversation')
   for (const p of projects) {
     const s = [...p.sessions, ...(p.archived ?? [])].find(x => x.id === id)
     if (s) return s.title
   }
-  return recent.find(r => r.id === id)?.title ?? pinned.find(p => p.id === id)?.title ?? tr('engine.hooks.message472')
+  return (
+    recent.find(r => r.id === id)?.title ?? pinned.find(p => p.id === id)?.title ?? tr('engine.hooks.newConversation')
+  )
 }

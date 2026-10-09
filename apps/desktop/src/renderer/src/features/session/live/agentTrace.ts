@@ -6,19 +6,19 @@ export type RunState = 'running' | 'done' | 'failed' | 'stopped' | 'queued'
 
 export const RUN_STATE_LABEL: Record<RunState, string> = {
   get running() {
-    return tr('session.live.agentTrace.message193')
+    return tr('session.live.agentTrace.running')
   },
   get done() {
-    return tr('session.live.agentTrace.message194')
+    return tr('session.live.agentTrace.completed')
   },
   get failed() {
-    return tr('session.live.agentTrace.message195')
+    return tr('session.live.agentTrace.failed')
   },
   get stopped() {
-    return tr('session.live.agentTrace.message196')
+    return tr('session.live.agentTrace.stopped')
   },
   get queued() {
-    return tr('session.live.agentTrace.message197')
+    return tr('session.live.agentTrace.queued')
   },
 }
 
@@ -56,13 +56,12 @@ export function elapsed(run: { startedAt: number; durationMs: number }, state: R
 
 /** 1.8 秒、12 秒、2 分 05 秒、1 小时 02 分 */
 export function formatDuration(ms: number): string {
-  if (!ms || ms < 0) return tr('session.live.agentTrace.message198')
+  if (!ms || ms < 0) return tr('session.live.agentTrace.n0s')
   const s = ms / 1000
-  if (s < 60) return tr('session.live.agentTrace.message199', { p0: s < 10 ? s.toFixed(1) : Math.round(s) })
+  if (s < 60) return tr('session.live.agentTrace.s', { p0: s < 10 ? s.toFixed(1) : Math.round(s) })
   const m = Math.floor(s / 60)
-  if (m < 60)
-    return tr('session.live.agentTrace.message200', { p0: m, p1: String(Math.round(s % 60)).padStart(2, '0') })
-  return tr('session.live.agentTrace.message201', { p0: Math.floor(m / 60), p1: String(m % 60).padStart(2, '0') })
+  if (m < 60) return tr('session.live.agentTrace.mS', { p0: m, p1: String(Math.round(s % 60)).padStart(2, '0') })
+  return tr('session.live.agentTrace.hM', { p0: Math.floor(m / 60), p1: String(m % 60).padStart(2, '0') })
 }
 
 /** 28,470 */

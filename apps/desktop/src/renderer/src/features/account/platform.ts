@@ -204,9 +204,9 @@ export function balanceBlocked(group: PlatformGroup, balance: number | null): bo
 
 /** 一条线路读不出模型的原因；能用时为 null */
 export function groupProblem(group: PlatformGroup, balance: number | null): string | null {
-  if (balanceBlocked(group, balance)) return tr('account.platform.message6')
-  if (group.modelsError) return tr('account.platform.message7', { p0: group.modelsError })
-  return group.models.length === 0 ? tr('account.platform.message8') : null
+  if (balanceBlocked(group, balance)) return tr('account.platform.insufficientBalanceAddCredits')
+  if (group.modelsError) return tr('account.platform.couldNotLoadModels', { p0: group.modelsError })
+  return group.models.length === 0 ? tr('account.platform.noModelsAvailableOn') : null
 }
 
 /** 平台没有可用线路时给用户看的原因，balance 为真时提示充值 */
@@ -214,21 +214,23 @@ export function noRouteReason(
   s: Pick<PlatformState, 'groups' | 'error'>,
   balance: number | null,
 ): { message: string; balance: boolean } {
-  if (s.groups.length === 0) return { message: s.error ?? tr('account.platform.message9'), balance: false }
+  if (s.groups.length === 0) return { message: s.error ?? tr('account.platform.noRoutesAvailableAsk'), balance: false }
   if (s.groups.every(g => balanceBlocked(g, balance))) {
     return {
       get message() {
-        return tr('account.platform.message10')
+        return tr('account.platform.insufficientBalanceAllAvailable')
       },
       balance: true,
     }
   }
   const first = s.groups.map(g => groupProblem(g, balance)).find(Boolean)
-  return { message: first ?? s.error ?? tr('account.platform.message11'), balance: false }
+  return { message: first ?? s.error ?? tr('account.platform.noModelsAvailableOn2'), balance: false }
 }
 
 export function billingLabel(group: PlatformGroupInfo): string {
-  return group.billing_source === 'plan_only' ? tr('account.platform.message12') : tr('account.platform.message13')
+  return group.billing_source === 'plan_only'
+    ? tr('account.platform.subscriptionCredits')
+    : tr('account.platform.balanceBilling')
 }
 
 /** ×0.8、×1、×0.125（最多三位小数） */
@@ -255,12 +257,12 @@ export async function refreshPlatform(): Promise<void> {
       const r = models[i]
       return r.status === 'fulfilled'
         ? { ...g, models: r.value, modelsError: null }
-        : { ...g, models: [], modelsError: (r.reason as Error)?.message ?? tr('account.platform.message14') }
+        : { ...g, models: [], modelsError: (r.reason as Error)?.message ?? tr('account.platform.failedToLoad') }
     })
     const anyModel = groups.some(g => g.models.length > 0)
     const error =
       groups.length > 0 && !anyModel
-        ? (groups.find(g => g.modelsError)?.modelsError ?? tr('account.platform.message15'))
+        ? (groups.find(g => g.modelsError)?.modelsError ?? tr('account.platform.noModelsAvailableIn'))
         : null
     set({ groups, loaded: true, loading: false, error, ...resolvePlatform(groups, state.groupId, state.model) }, true)
   } catch (e) {

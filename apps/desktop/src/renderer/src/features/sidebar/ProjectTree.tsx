@@ -48,7 +48,7 @@ export function ProjectTree({
               }
             />
             {open && p.sessions.length === 0 && (
-              <SidebarEmpty className="pl-9">{tr('sidebar.ProjectTree.message393')}</SidebarEmpty>
+              <SidebarEmpty className="pl-9">{tr('sidebar.ProjectTree.noConversationsYet')}</SidebarEmpty>
             )}
             {open &&
               p.sessions.map(s => (

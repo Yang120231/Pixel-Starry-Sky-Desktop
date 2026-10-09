@@ -81,7 +81,7 @@ function AgentRow({
       <StateIcon state={a.state} />
       <span className="min-w-0">
         <span className="block truncate text-list text-fg">
-          {a.label || a.id || tr('session.live.AgentTracePanel.message202')}
+          {a.label || a.id || tr('session.live.AgentTracePanel.queued')}
         </span>
         <span className="block truncate text-label text-fg-faint">
           {[a.type, shortModel(a.model)].filter(Boolean).join(' · ')}
@@ -113,11 +113,11 @@ function ColumnHead() {
   return (
     <div className="grid grid-cols-[16px_minmax(0,1.3fr)_minmax(0,1fr)_64px_70px_36px] gap-2 px-2 pb-1 text-label text-fg-faint">
       <span />
-      <span>{tr('session.contextData.message145')}</span>
-      <span>{tr('session.live.AgentTracePanel.message203')}</span>
-      <span className="text-right">{tr('session.live.AgentTracePanel.message204')}</span>
+      <span>{tr('session.contextData.agents')}</span>
+      <span>{tr('session.live.AgentTracePanel.timeline')}</span>
+      <span className="text-right">{tr('session.live.AgentTracePanel.duration')}</span>
       <span className="text-right">Tokens</span>
-      <span className="text-right">{tr('session.live.AgentTracePanel.message205')}</span>
+      <span className="text-right">{tr('session.live.AgentTracePanel.tools')}</span>
     </div>
   )
 }
@@ -166,20 +166,22 @@ function WorkflowSection({
         {p.total > 0 && (
           <span>
             {p.done}/{p.total}
-            {tr('session.live.AgentTracePanel.message206')}{' '}
+            {tr('session.live.AgentTracePanel.agents')}{' '}
           </span>
         )}
         <span>{formatDuration(elapsed(run, s, now))}</span>
         <span>{formatCount(run.tokens)} tokens</span>
         <span>
           {run.toolCalls}
-          {tr('session.live.AgentTracePanel.message207')}{' '}
+          {tr('session.live.AgentTracePanel.toolCalls')}{' '}
         </span>
       </div>
       {open && (
         <div className="border-t border-line-subtle px-1.5 pt-2 pb-1.5">
           {run.agents.length === 0 ? (
-            <div className="px-2 py-2 text-meta text-fg-faint">{tr('session.live.AgentTracePanel.message208')}</div>
+            <div className="px-2 py-2 text-meta text-fg-faint">
+              {tr('session.live.AgentTracePanel.noAgentsDispatchedYet')}
+            </div>
           ) : (
             <>
               <ColumnHead />
@@ -278,7 +280,7 @@ function AgentFocus({
         className="inline-flex w-fit items-center gap-1.5 rounded-md px-1.5 py-1 text-meta text-fg-muted hover:bg-hover hover:text-fg"
       >
         <ArrowLeft size={14} strokeWidth={1.5} />
-        {tr('session.live.AgentTracePanel.message209')}{' '}
+        {tr('session.live.AgentTracePanel.backToList')}{' '}
       </button>
       <div>
         <div className="flex items-center gap-2">
@@ -295,7 +297,7 @@ function AgentFocus({
           <span>{formatCount(agent.tokens)} tokens</span>
           <span>
             {agent.toolCalls}
-            {tr('session.live.AgentTracePanel.message207')}{' '}
+            {tr('session.live.AgentTracePanel.toolCalls')}{' '}
           </span>
         </div>
       </div>
@@ -311,7 +313,7 @@ function AgentFocus({
               strokeWidth={1.5}
               className={cn('transition-transform duration-(--dur-fast)', taskOpen && 'rotate-90')}
             />
-            {tr('session.live.AgentTracePanel.message210')}{' '}
+            {tr('session.live.AgentTracePanel.task')}{' '}
           </button>
           {taskOpen && (
             <div className="border-t border-line-subtle px-3 py-2">
@@ -322,7 +324,7 @@ function AgentFocus({
       )}
       {agent.result && !items?.length && (
         <div className="text-meta text-fg-muted">
-          {tr('session.live.AgentTracePanel.message211')}
+          {tr('session.live.AgentTracePanel.result')}
           {agent.result}
         </div>
       )}
@@ -332,10 +334,10 @@ function AgentFocus({
         ) : items === null ? (
           <div className="flex items-center gap-2 text-meta text-fg-muted">
             <Spinner size={12} />
-            {tr('session.live.AgentTracePanel.message212')}{' '}
+            {tr('session.live.AgentTracePanel.loadingConversation')}{' '}
           </div>
         ) : rest.length === 0 ? (
-          <div className="text-meta text-fg-faint">{tr('session.live.AgentTracePanel.message213')}</div>
+          <div className="text-meta text-fg-faint">{tr('session.live.AgentTracePanel.noOutputYet')}</div>
         ) : (
           rest.map(it => <TranscriptItem key={it.id} item={it} />)
         )}
@@ -394,20 +396,20 @@ export function AgentTracePanel({ sessionId, runs, focus, onFocus, onClose }: Ag
   return (
     <aside
       className="pop-in absolute top-12 right-0 bottom-0 z-30 flex w-[min(560px,92%)] flex-col border-l border-line bg-app shadow-popover"
-      aria-label={tr('session.live.AgentTracePanel.message214')}
+      aria-label={tr('session.live.AgentTracePanel.agentActivity')}
     >
       <header className="flex h-11 shrink-0 items-center gap-2 border-b border-line px-4">
         <Bot size={16} strokeWidth={1.5} className="shrink-0 text-fg-secondary" />
-        <span className="text-ui font-medium text-fg">{tr('session.live.AgentTracePanel.message214')}</span>
+        <span className="text-ui font-medium text-fg">{tr('session.live.AgentTracePanel.agentActivity')}</span>
         {!empty && (
           <span className="min-w-0 truncate text-meta text-fg-muted tabular-nums">
             {runs.workflows.length}
-            {tr('session.live.AgentTracePanel.message215')} {runs.agents.length}
-            {tr('session.live.AgentTracePanel.message216')} {formatCount(totalTokens)} tokens
+            {tr('session.live.AgentTracePanel.orchestrations')} {runs.agents.length}
+            {tr('session.live.AgentTracePanel.subagentsTotal')} {formatCount(totalTokens)} tokens
           </span>
         )}
         <span className="flex-1" />
-        <IconButton icon={X} label={tr('session.live.AgentTracePanel.message217')} onClick={onClose} />
+        <IconButton icon={X} label={tr('session.live.AgentTracePanel.closeEsc')} onClick={onClose} />
       </header>
       <div className="selectable min-h-0 flex-1 overflow-y-auto px-4 py-4">
         {focus && focused ? (
@@ -422,8 +424,10 @@ export function AgentTracePanel({ sessionId, runs, focus, onFocus, onClose }: Ag
         ) : empty ? (
           <div className="flex flex-col items-center px-6 pt-16 text-center">
             <Bot size={28} strokeWidth={1.25} className="text-fg-faint" />
-            <div className="mt-3 text-ui text-fg">{tr('session.live.AgentTracePanel.message218')}</div>
-            <p className="mt-1.5 max-w-80 text-meta text-fg-muted">{tr('session.live.AgentTracePanel.message219')}</p>
+            <div className="mt-3 text-ui text-fg">{tr('session.live.AgentTracePanel.noSubagentsRunningYet')}</div>
+            <p className="mt-1.5 max-w-80 text-meta text-fg-muted">
+              {tr('session.live.AgentTracePanel.enableUltracodeOrAsk')}
+            </p>
           </div>
         ) : (
           <div className="flex flex-col gap-3">
@@ -440,7 +444,7 @@ export function AgentTracePanel({ sessionId, runs, focus, onFocus, onClose }: Ag
             {runs.agents.length > 0 && (
               <section className="rounded-xl border border-line bg-surface px-1.5 pt-2.5 pb-1.5 shadow-sm">
                 <div className="px-2 pb-2 text-ui font-medium text-fg">
-                  {tr('session.live.AgentTracePanel.message220')}
+                  {tr('session.live.AgentTracePanel.subagentsAgentTool')}
                 </div>
                 <ColumnHead />
                 {runs.agents.map(a => (

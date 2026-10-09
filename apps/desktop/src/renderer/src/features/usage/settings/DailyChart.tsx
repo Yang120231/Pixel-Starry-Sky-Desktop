@@ -9,7 +9,7 @@ const SERIES = [
   {
     key: 'input',
     get label() {
-      return tr('session.turnStatsData.message376')
+      return tr('session.turnStatsData.input')
     },
     color: 'bg-chart-input',
     value: (b: UsageBucket) => b.input + b.cacheWrite,
@@ -17,7 +17,7 @@ const SERIES = [
   {
     key: 'cache',
     get label() {
-      return tr('session.turnStatsData.message381')
+      return tr('session.turnStatsData.cacheRead')
     },
     color: 'bg-chart-cache',
     value: (b: UsageBucket) => b.cacheRead,
@@ -25,7 +25,7 @@ const SERIES = [
   {
     key: 'output',
     get label() {
-      return tr('session.live.SessionStrips.message275')
+      return tr('session.live.SessionStrips.output')
     },
     color: 'bg-chart-output',
     value: (b: UsageBucket) => b.output,
@@ -73,22 +73,22 @@ export function DailyChart({ buckets, bucket }: { buckets: UsageBucket[]; bucket
               </span>
             ))}
             <span>
-              {tr('settings.replyStats.message851')} {formatTotalCost(buckets[shown])}
+              {tr('settings.replyStats.cost')} {formatTotalCost(buckets[shown])}
             </span>
             <span>
-              {tr('settings.usage.DailyChart.message948')} {formatTokens(totals[shown])}
+              {tr('settings.usage.DailyChart.total')} {formatTokens(totals[shown])}
             </span>
           </span>
         ) : (
           <span className="text-fg-muted tabular-nums">
             {totals[peak] > 0
-              ? tr('settings.usage.DailyChart.message949', { p0: formatTokens(totals[peak]), p1: label(peak) })
-              : tr('settings.usage.DailyChart.message950')}
+              ? tr('settings.usage.DailyChart.peak', { p0: formatTokens(totals[peak]), p1: label(peak) })
+              : tr('settings.usage.DailyChart.noUsageInThis')}
           </span>
         )}
         <span
           className="flex shrink-0 items-center gap-3 text-fg-muted"
-          aria-label={tr('settings.usage.DailyChart.message951')}
+          aria-label={tr('settings.usage.DailyChart.legend')}
         >
           {SERIES.map(s => (
             <span key={s.key} className="flex items-center gap-1">
@@ -101,7 +101,7 @@ export function DailyChart({ buckets, bucket }: { buckets: UsageBucket[]; bucket
 
       <div
         role="img"
-        aria-label={tr('settings.usage.DailyChart.message952', {
+        aria-label={tr('settings.usage.DailyChart.usageChartPeak', {
           p0: bucket === 'hour' ? '今天每小时' : '每日',
           p1: formatTokens(totals[peak]),
         })}
@@ -157,8 +157,8 @@ export function DailyChart({ buckets, bucket }: { buckets: UsageBucket[]; bucket
           >
             {i === buckets.length - 1
               ? bucket === 'hour'
-                ? tr('settings.usage.DailyChart.message954')
-                : tr('settings.usage.DailyChart.message955')
+                ? tr('settings.usage.DailyChart.now')
+                : tr('settings.usage.DailyChart.today')
               : label(i)}
           </span>
         ))}

@@ -24,24 +24,24 @@ export function RequestRetrySettings() {
   }
   return (
     <SettingRow
-      title={tr('settings.models.ModelsSection.message832')}
-      description={tr('settings.models.RequestRetrySettings.message835')}
-      hint={tr('settings.models.RequestRetrySettings.message836')}
+      title={tr('settings.models.ModelsSection.requestRetries')}
+      description={tr('settings.models.RequestRetrySettings.maximumAutomaticRetriesFor')}
+      hint={tr('settings.models.RequestRetrySettings.appliesToClaudeCode')}
     >
       <Segmented
-        label={tr('settings.models.RequestRetrySettings.message837')}
+        label={tr('settings.models.RequestRetrySettings.requestRetryMode')}
         value={state.maxRetries === null ? 'engine' : 'custom'}
         options={[
           {
             value: 'engine',
             get label() {
-              return tr('settings.models.RequestRetrySettings.message838')
+              return tr('settings.models.RequestRetrySettings.engineDefault')
             },
           },
           {
             value: 'custom',
             get label() {
-              return tr('settings.account.TopUp.message673')
+              return tr('settings.account.TopUp.custom')
             },
           },
         ]}
@@ -55,18 +55,18 @@ export function RequestRetrySettings() {
           onSubmit={e => {
             e.preventDefault()
             const value = parse()
-            if (value === null) setError(tr('settings.models.RequestRetrySettings.message839'))
+            if (value === null) setError(tr('settings.models.RequestRetrySettings.enterIntegerFrom0'))
             else save(value)
           }}
         >
           <div className="flex flex-wrap items-center gap-2">
             <label htmlFor="request-retry-count" className="text-ui text-fg-secondary">
-              {tr('settings.models.RequestRetrySettings.message840')}
+              {tr('settings.models.RequestRetrySettings.retryCount')}
             </label>
             <div className="flex items-center gap-1 rounded-md border border-line bg-surface p-1">
               <IconButton
                 icon={Minus}
-                label={tr('settings.models.RequestRetrySettings.message841')}
+                label={tr('settings.models.RequestRetrySettings.decreaseRetryCount')}
                 size={28}
                 iconSize={14}
                 disabled={busy || (parse() ?? 0) <= 0}
@@ -74,7 +74,7 @@ export function RequestRetrySettings() {
               />
               <input
                 id="request-retry-count"
-                aria-label={tr('settings.models.RequestRetrySettings.message840')}
+                aria-label={tr('settings.models.RequestRetrySettings.retryCount')}
                 type="number"
                 inputMode="numeric"
                 min="0"
@@ -90,7 +90,7 @@ export function RequestRetrySettings() {
               />
               <IconButton
                 icon={Plus}
-                label={tr('settings.models.RequestRetrySettings.message842')}
+                label={tr('settings.models.RequestRetrySettings.increaseRetryCount')}
                 size={28}
                 iconSize={14}
                 disabled={busy || (parse() ?? 15) >= 15}
@@ -98,17 +98,17 @@ export function RequestRetrySettings() {
               />
             </div>
             <Button type="submit" variant="outline" disabled={busy || draft === String(state.maxRetries)}>
-              {state.saving ? tr('editor.FileEditor.message466') : tr('files.FileConfirm.message523')}
+              {state.saving ? tr('editor.FileEditor.saving') : tr('files.FileConfirm.save')}
             </Button>
-            <span className="text-meta text-fg-muted">{tr('settings.models.RequestRetrySettings.message843')}</span>
+            <span className="text-meta text-fg-muted">{tr('settings.models.RequestRetrySettings.n015Retries')}</span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-meta text-fg-muted">{tr('settings.models.RequestRetrySettings.message844')}</span>
+            <span className="text-meta text-fg-muted">{tr('settings.models.RequestRetrySettings.presets')}</span>
             {[0, 1, 3, 5, 10].map(value => (
               <button
                 key={value}
                 type="button"
-                aria-label={tr('settings.models.RequestRetrySettings.message845', { p0: value })}
+                aria-label={tr('settings.models.RequestRetrySettings.setRetries', { p0: value })}
                 disabled={busy}
                 onClick={() => save(value)}
                 className={cn(
@@ -122,8 +122,8 @@ export function RequestRetrySettings() {
           </div>
           <p className="text-meta text-fg-muted">
             {state.maxRetries === 0
-              ? tr('settings.models.RequestRetrySettings.message846')
-              : tr('settings.models.RequestRetrySettings.message847', {
+              ? tr('settings.models.RequestRetrySettings.doNotRetryAfter')
+              : tr('settings.models.RequestRetrySettings.upToRetriesAfter', {
                   p0: state.maxRetries,
                   p1: state.maxRetries + 1,
                 })}
@@ -131,7 +131,9 @@ export function RequestRetrySettings() {
         </form>
       )}
       {state.maxRetries === null && (
-        <p className="mt-3 text-meta text-fg-muted">{tr('settings.models.RequestRetrySettings.message848')}</p>
+        <p className="mt-3 text-meta text-fg-muted">
+          {tr('settings.models.RequestRetrySettings.useEnginesCurrentRetry')}
+        </p>
       )}
       {(error || state.error) && (
         <p role="alert" className="mt-3 text-meta text-danger">
@@ -145,7 +147,7 @@ export function RequestRetrySettings() {
         disabled={busy || state.maxRetries === null}
         onClick={() => save(null)}
       >
-        {tr('settings.models.RequestRetrySettings.message849')}
+        {tr('settings.models.RequestRetrySettings.resetToDefault')}
       </Button>
     </SettingRow>
   )

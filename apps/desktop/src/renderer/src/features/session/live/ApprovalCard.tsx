@@ -30,26 +30,26 @@ const BODY = 'max-h-[34vh] overflow-auto'
 const SCOPE_INFO: Record<AlwaysScope, { label: string; desc: string }> = {
   session: {
     get label() {
-      return tr('session.live.ApprovalCard.message221')
+      return tr('session.live.ApprovalCard.thisSession')
     },
     get desc() {
-      return tr('session.live.ApprovalCard.message222')
+      return tr('session.live.ApprovalCard.expiresWhenThisSession')
     },
   },
   project: {
     get label() {
-      return tr('session.live.ApprovalCard.message223')
+      return tr('session.live.ApprovalCard.thisProject')
     },
     get desc() {
-      return tr('session.live.ApprovalCard.message224')
+      return tr('session.live.ApprovalCard.saveToProjectsClaude')
     },
   },
   user: {
     get label() {
-      return tr('session.live.ApprovalCard.message225')
+      return tr('session.live.ApprovalCard.allProjects')
     },
     get desc() {
-      return tr('session.live.ApprovalCard.message226')
+      return tr('session.live.ApprovalCard.saveToClaudeSettings')
     },
   },
 }
@@ -70,7 +70,7 @@ function AlwaysAllowButton({
     return (
       <Button variant="outline" disabled={disabled} onClick={() => onPick(scopes[0])}>
         {SCOPE_INFO[scopes[0]].label}
-        {tr('session.live.ApprovalCard.message227')}{' '}
+        {tr('session.live.ApprovalCard.alwaysAllow')}{' '}
       </Button>
     )
   }
@@ -83,12 +83,12 @@ function AlwaysAllowButton({
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        {tr('session.live.ApprovalCard.message228')}{' '}
+        {tr('session.live.ApprovalCard.alwaysAllow2')}{' '}
         <ChevronDown size={14} strokeWidth={1.5} className="text-fg-muted" />
       </Button>
       <Popover open={open} onClose={() => setOpen(false)} className="bottom-full left-0 mb-2 w-72">
         <div className="px-2 pt-1.5 pb-1 text-label font-medium text-fg-faint">
-          {tr('session.live.ApprovalCard.message229')}
+          {tr('session.live.ApprovalCard.alwaysAllowScope')}
         </div>
         {scopes.map(scope => (
           <button
@@ -152,7 +152,7 @@ export function ApprovalCard({
         <Icon size={16} strokeWidth={1.5} className="shrink-0 text-fg-secondary" />
         <span className="min-w-0 flex-1 truncate">{translateMessage(request.title)}</span>
         <span className="shrink-0 text-meta font-normal text-fg-faint">
-          {tr('session.live.ApprovalCard.message230')}
+          {tr('session.live.ApprovalCard.waitingForYourDecision')}
         </span>
       </header>
 
@@ -213,7 +213,7 @@ export function ApprovalCard({
 
         {request.kind === 'plan' && (
           <div className={cn(BODY, 'rounded-lg border border-line bg-wall-tint px-4 py-3')}>
-            <Markdown text={request.plan || tr('session.live.ApprovalCard.message231')} />
+            <Markdown text={request.plan || tr('session.live.ApprovalCard.noPlanContent')} />
           </div>
         )}
 
@@ -229,7 +229,9 @@ export function ApprovalCard({
                   )}
                   {q.question}
                   {q.multiSelect && (
-                    <span className="ml-1 text-meta text-fg-faint">{tr('session.live.ApprovalCard.message232')}</span>
+                    <span className="ml-1 text-meta text-fg-faint">
+                      {tr('session.live.ApprovalCard.selectMultiple')}
+                    </span>
                   )}
                 </div>
                 <div className="flex flex-col gap-1">
@@ -285,7 +287,7 @@ export function ApprovalCard({
                 })
               }
             >
-              {tr('session.live.ApprovalCard.message233')}{' '}
+              {tr('session.live.ApprovalCard.submitAnswers')}{' '}
             </Button>
             <Button
               variant="ghost"
@@ -294,21 +296,21 @@ export function ApprovalCard({
                 answer({
                   type: 'deny',
                   get message() {
-                    return tr('session.live.ApprovalCard.message234')
+                    return tr('session.live.ApprovalCard.userSkippedThisQuestion')
                   },
                 })
               }
             >
-              {tr('session.live.ApprovalCard.message235')}{' '}
+              {tr('session.live.ApprovalCard.skip')}{' '}
             </Button>
           </>
         ) : request.kind === 'plan' ? (
           <>
             <Button variant="primary" disabled={sent} onClick={() => answer({ type: 'allow' })}>
-              {tr('session.live.ApprovalCard.message236')}{' '}
+              {tr('session.live.ApprovalCard.startExecution')}{' '}
             </Button>
             <Button variant="ghost" disabled={sent} onClick={() => answer({ type: 'deny' })}>
-              {tr('session.live.ApprovalCard.message237')}{' '}
+              {tr('session.live.ApprovalCard.refinePlan')}{' '}
             </Button>
           </>
         ) : (
@@ -320,7 +322,7 @@ export function ApprovalCard({
                 answer(request.formSchema !== undefined ? { type: 'form', content: formContent! } : { type: 'allow' })
               }
             >
-              {tr('session.live.ApprovalCard.message238')}{' '}
+              {tr('session.live.ApprovalCard.allowOnce')}{' '}
             </Button>
             {request.alwaysScopes.length > 0 && (
               <AlwaysAllowButton
@@ -330,7 +332,7 @@ export function ApprovalCard({
               />
             )}
             <Button variant="ghost" disabled={sent} onClick={() => answer({ type: 'deny' })}>
-              {tr('session.live.ApprovalCard.message239')}{' '}
+              {tr('session.live.ApprovalCard.deny')}{' '}
             </Button>
           </>
         )}

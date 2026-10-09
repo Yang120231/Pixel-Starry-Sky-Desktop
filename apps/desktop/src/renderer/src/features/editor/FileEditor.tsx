@@ -70,7 +70,7 @@ export function FileEditor({
     return (
       <div className="flex flex-1 items-center justify-center gap-2 text-meta text-fg-muted">
         <Spinner size={14} />
-        {tr('editor.FileEditor.message456')}
+        {tr('editor.FileEditor.loadingFile')}
       </div>
     )
   const doc = tab.document,
@@ -91,7 +91,7 @@ export function FileEditor({
             icon={Eye}
             size={28}
             iconSize={15}
-            label={preview ? tr('editor.FileEditor.message457') : tr('editor.FileEditor.message458')}
+            label={preview ? tr('editor.FileEditor.backToMarkdownEditor') : tr('editor.FileEditor.previewMarkdown')}
             active={preview}
             onClick={() => {
               setPreview(v => !v)
@@ -104,7 +104,7 @@ export function FileEditor({
             icon={Save}
             size={28}
             iconSize={15}
-            label={tr('editor.FileEditor.message459')}
+            label={tr('editor.FileEditor.saveFileCtrlS')}
             disabled={!!readonly || !dirtyFile(tab) || tab.saving || isDemo}
             onClick={() => void saveFile(id)}
           />
@@ -113,10 +113,10 @@ export function FileEditor({
           icon={RefreshCw}
           size={28}
           iconSize={15}
-          label={tr('editor.FileEditor.message460')}
+          label={tr('editor.FileEditor.reloadFile')}
           disabled={tab.loading || tab.saving}
           onClick={() => {
-            void confirmFiles([id], tr('editor.FileEditor.message461')).then(ok => {
+            void confirmFiles([id], tr('editor.FileEditor.loadNewVersion')).then(ok => {
               if (ok) void loadFile(id)
             })
           }}
@@ -166,16 +166,16 @@ export function FileEditor({
               role="status"
               className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line bg-subtle px-3 py-2 text-meta text-fg"
             >
-              <span className="flex-1">{tr('editor.FileEditor.message462')}</span>
+              <span className="flex-1">{tr('editor.FileEditor.fileChangedExternallyYour')}</span>
               <button
                 className="text-accent-fg hover:underline"
                 onClick={() => {
-                  void confirmFiles([id], tr('editor.FileEditor.message461')).then(ok => {
+                  void confirmFiles([id], tr('editor.FileEditor.loadNewVersion')).then(ok => {
                     if (ok) void loadFile(id)
                   })
                 }}
               >
-                {tr('editor.FileEditor.message461')}
+                {tr('editor.FileEditor.loadNewVersion')}
               </button>
               <button
                 className="text-fg-secondary hover:underline"
@@ -186,20 +186,25 @@ export function FileEditor({
                   })
                 }
               >
-                {tr('editor.FileEditor.message463')}
+                {tr('editor.FileEditor.keepMyChanges')}
               </button>
             </div>
           )}
           {tab.error && (
             <div role="status" className="flex shrink-0 items-start gap-2 px-3 py-2 text-meta text-danger">
               <span className="flex-1">{translateMessage(tab.error)}</span>
-              <button aria-label={tr('editor.FileEditor.message464')} onClick={() => updateFile(id, { error: null })}>
-                {tr('editor.code.theme.message425')}
+              <button
+                aria-label={tr('editor.FileEditor.dismissFileNotice')}
+                onClick={() => updateFile(id, { error: null })}
+              >
+                {tr('editor.code.theme.close')}
               </button>
             </div>
           )}
           {readonly && (
-            <p className="shrink-0 bg-subtle px-3 py-2 text-meta text-fg-muted">{tr('editor.FileEditor.message465')}</p>
+            <p className="shrink-0 bg-subtle px-3 py-2 text-meta text-fg-muted">
+              {tr('editor.FileEditor.thisFileExceeds2')}
+            </p>
           )}
           {doc?.kind === 'text' ? (
             <>
@@ -215,11 +220,11 @@ export function FileEditor({
                 </div>
               )}
               <footer className="flex min-h-7 shrink-0 flex-wrap items-center justify-end gap-x-3 border-t border-line-layout px-3 py-1 text-label text-fg-muted">
-                {tab.saving && <span className="mr-auto">{tr('editor.FileEditor.message466')}</span>}
-                {dirtyFile(tab) && !tab.saving && <span className="mr-auto">{tr('editor.FileEditor.message467')}</span>}
+                {tab.saving && <span className="mr-auto">{tr('editor.FileEditor.saving')}</span>}
+                {dirtyFile(tab) && !tab.saving && <span className="mr-auto">{tr('editor.FileEditor.unsaved')}</span>}
                 <span>
-                  {tr('editor.FileEditor.message468')} {tab.cursor.line}
-                  {tr('editor.FileEditor.message469')} {tab.cursor.column}
+                  {tr('editor.FileEditor.ln')} {tab.cursor.line}
+                  {tr('editor.FileEditor.col')} {tab.cursor.column}
                 </span>
                 <span>{fileLanguage(tab.path)}</span>
                 <span>UTF-8{doc.bom ? ' BOM' : ''}</span>
@@ -234,8 +239,8 @@ export function FileEditor({
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-ui text-fg-muted">
               <FileText size={24} />
-              <p>{doc?.kind === 'unsupported' ? doc.reason : tr('editor.FileEditor.message470')}</p>
-              <p className="text-meta">{tr('editor.FileEditor.message471')}</p>
+              <p>{doc?.kind === 'unsupported' ? doc.reason : tr('editor.FileEditor.couldNotReadThis')}</p>
+              <p className="text-meta">{tr('editor.FileEditor.useExternalEditorButton')}</p>
             </div>
           )}
         </div>

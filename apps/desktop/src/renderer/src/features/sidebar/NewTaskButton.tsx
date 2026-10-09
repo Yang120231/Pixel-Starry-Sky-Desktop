@@ -15,7 +15,7 @@ export function NewTaskButton({ onClick }: { onClick?: () => void }) {
       icon={getSidebarIcon('newTask', prefs.icons)}
       label={tr('sidebar.action.newTask')}
       size={32}
-      onClick={onClick ?? (() => comingSoon(tr('sidebar.NewTaskButton.message392')))}
+      onClick={onClick ?? (() => comingSoon(tr('sidebar.NewTaskButton.newTask')))}
     />
   )
 }

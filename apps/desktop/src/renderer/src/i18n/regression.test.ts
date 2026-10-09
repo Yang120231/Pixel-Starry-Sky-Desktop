@@ -163,6 +163,10 @@ describe('i18n 防回归', () => {
     expect(Object.keys(allMessages).length).toBe(owners.size)
   })
 
+  it('词典 key 不用自动编号（前缀.messageN），按英文文案起名', () => {
+    expect(Object.keys(allMessages).filter(key => /\.message\d+$/.test(key))).toEqual([])
+  })
+
   it('源码中 tr / t 的字面量 key 都存在于词典', () => {
     const call = /(?<![\w$.])(?:tr|t)\(\s*(['"])([^'"\n]+)\1/g
     const missing: string[] = []

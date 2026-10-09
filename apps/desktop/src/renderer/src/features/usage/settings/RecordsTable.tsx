@@ -10,19 +10,19 @@ import { ModelCell, TIME_COL_WIDTH, TimeCell, UsageDetailCard, UsageTable, type 
 const OUTCOME: Record<UsageRecord['outcome'], { text: string; cls: string }> = {
   completed: {
     get text() {
-      return tr('settings.usage.RecordsTable.message973')
+      return tr('settings.usage.RecordsTable.completed')
     },
     cls: 'text-fg-muted',
   },
   interrupted: {
     get text() {
-      return tr('settings.usage.RecordsTable.message974')
+      return tr('settings.usage.RecordsTable.interrupted')
     },
     cls: 'text-warn',
   },
   failed: {
     get text() {
-      return tr('session.live.agentTrace.message195')
+      return tr('session.live.agentTrace.failed')
     },
     cls: 'text-danger',
   },
@@ -37,7 +37,7 @@ const COLUMNS: Array<UsageColumn<UsageRecord>> = [
   {
     key: 'time',
     get label() {
-      return tr('settings.usage.RecordsTable.message975')
+      return tr('settings.usage.RecordsTable.time')
     },
     width: TIME_COL_WIDTH,
     render: r => <TimeCell text={formatTime(r.endedAt)} />,
@@ -47,7 +47,7 @@ const COLUMNS: Array<UsageColumn<UsageRecord>> = [
   {
     key: 'model',
     get label() {
-      return tr('session.ModelSourceMenu.message291')
+      return tr('session.ModelSourceMenu.model')
     },
     render: r => <ModelCell model={r.model} />,
     title: r => r.model,
@@ -56,17 +56,17 @@ const COLUMNS: Array<UsageColumn<UsageRecord>> = [
   {
     key: 'source',
     get label() {
-      return tr('settings.usage.RecordsTable.message976')
+      return tr('settings.usage.RecordsTable.conversation')
     },
     hideBelow: 760,
-    render: r => r.sessionTitle || tr('settings.usage.RecordsTable.message977'),
+    render: r => r.sessionTitle || tr('settings.usage.RecordsTable.untitledConversation'),
     title: r => r.sessionTitle,
     cellClass: () => 'text-fg',
   },
   {
     key: 'input',
     get label() {
-      return tr('session.turnStatsData.message376')
+      return tr('session.turnStatsData.input')
     },
     width: 'w-[4em]',
     align: 'right',
@@ -75,7 +75,7 @@ const COLUMNS: Array<UsageColumn<UsageRecord>> = [
   {
     key: 'cache',
     get label() {
-      return tr('session.turnStatsData.message381')
+      return tr('session.turnStatsData.cacheRead')
     },
     width: 'w-[4.4em]',
     align: 'right',
@@ -85,7 +85,7 @@ const COLUMNS: Array<UsageColumn<UsageRecord>> = [
   {
     key: 'output',
     get label() {
-      return tr('session.live.SessionStrips.message275')
+      return tr('session.live.SessionStrips.output')
     },
     width: 'w-[4em]',
     align: 'right',
@@ -94,7 +94,7 @@ const COLUMNS: Array<UsageColumn<UsageRecord>> = [
   {
     key: 'cost',
     get label() {
-      return tr('settings.replyStats.message851')
+      return tr('settings.replyStats.cost')
     },
     width: 'w-[5.6em]',
     align: 'right',
@@ -103,7 +103,7 @@ const COLUMNS: Array<UsageColumn<UsageRecord>> = [
   {
     key: 'requests',
     get label() {
-      return tr('settings.usage.RecordsTable.message978')
+      return tr('settings.usage.RecordsTable.requests')
     },
     width: 'w-[3.4em]',
     align: 'right',
@@ -114,7 +114,7 @@ const COLUMNS: Array<UsageColumn<UsageRecord>> = [
   {
     key: 'duration',
     get label() {
-      return tr('session.live.AgentTracePanel.message204')
+      return tr('session.live.AgentTracePanel.duration')
     },
     width: 'w-[4.8em]',
     align: 'right',
@@ -125,7 +125,7 @@ const COLUMNS: Array<UsageColumn<UsageRecord>> = [
   {
     key: 'status',
     get label() {
-      return tr('settings.usage.RecordsTable.message979')
+      return tr('settings.usage.RecordsTable.outcome')
     },
     width: 'w-[3.2em]',
     align: 'right',
@@ -149,7 +149,7 @@ export function RecordsTable({
   useI18n()
   return (
     <UsageTable
-      title={tr('settings.usage.RecordsTable.message980')}
+      title={tr('settings.usage.RecordsTable.requestRecords')}
       rows={page.records}
       rowKey={r => r.id}
       columns={COLUMNS}
@@ -167,21 +167,24 @@ function RecordDetail({ r, onOpenSession }: { r: UsageRecord; onOpenSession: (id
   return (
     <UsageDetailCard
       fields={[
-        [tr('settings.usage.RecordsTable.message976'), r.sessionTitle || tr('settings.usage.RecordsTable.message977')],
-        [tr('sidebar.Sidebar.message398'), dimLabel('project', r.project ?? '')],
-        [tr('session.ModelSourceMenu.message283'), dimLabel('engine', r.engine)],
-        [tr('session.ModelSourceMenu.message310'), dimLabel('route', r.route)],
-        [tr('settings.usage.RecordsTable.message981'), String(r.requests)],
-        [tr('settings.usage.RecordsTable.message979'), OUTCOME[r.outcome].text],
-        [tr('settings.usage.RecordsTable.message982'), formatTokens(r.input)],
-        [tr('session.turnStatsData.message383'), formatTokens(r.cacheWrite)],
-        [tr('session.turnStatsData.message381'), formatTokens(r.cacheRead)],
-        [tr('session.live.SessionStrips.message275'), formatTokens(r.output)],
-        [tr('settings.replyStats.message851'), formatCost(r.costUsd, r.costSource, r.billing)],
-        [tr('settings.usage.KpiCards.message967'), formatPercent(cacheHitRate(r))],
-        [tr('session.live.AgentTracePanel.message204'), formatDuration(r.durationMs)],
-        [tr('settings.usage.RecordsTable.message984'), new Date(r.startedAt).toLocaleString('zh-CN')],
-        [tr('settings.usage.RecordsTable.message985'), new Date(r.endedAt).toLocaleString('zh-CN')],
+        [
+          tr('settings.usage.RecordsTable.conversation'),
+          r.sessionTitle || tr('settings.usage.RecordsTable.untitledConversation'),
+        ],
+        [tr('sidebar.Sidebar.projects'), dimLabel('project', r.project ?? '')],
+        [tr('session.ModelSourceMenu.engine'), dimLabel('engine', r.engine)],
+        [tr('session.ModelSourceMenu.route'), dimLabel('route', r.route)],
+        [tr('settings.usage.RecordsTable.requestCount'), String(r.requests)],
+        [tr('settings.usage.RecordsTable.outcome'), OUTCOME[r.outcome].text],
+        [tr('settings.usage.RecordsTable.inputCacheMisses'), formatTokens(r.input)],
+        [tr('session.turnStatsData.cacheWrite'), formatTokens(r.cacheWrite)],
+        [tr('session.turnStatsData.cacheRead'), formatTokens(r.cacheRead)],
+        [tr('session.live.SessionStrips.output'), formatTokens(r.output)],
+        [tr('settings.replyStats.cost'), formatCost(r.costUsd, r.costSource, r.billing)],
+        [tr('settings.usage.KpiCards.cacheHit'), formatPercent(cacheHitRate(r))],
+        [tr('session.live.AgentTracePanel.duration'), formatDuration(r.durationMs)],
+        [tr('settings.usage.RecordsTable.started'), new Date(r.startedAt).toLocaleString('zh-CN')],
+        [tr('settings.usage.RecordsTable.ended'), new Date(r.endedAt).toLocaleString('zh-CN')],
       ]}
       footer={
         <>
@@ -189,7 +192,7 @@ function RecordDetail({ r, onOpenSession }: { r: UsageRecord; onOpenSession: (id
             {r.id}
           </span>
           <Button variant="ghost" icon={ExternalLink} onClick={() => onOpenSession(r.sessionId)}>
-            {tr('settings.usage.RecordsTable.message986')}{' '}
+            {tr('settings.usage.RecordsTable.openConversation')}{' '}
           </Button>
         </>
       }

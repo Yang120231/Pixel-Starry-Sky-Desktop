@@ -9,14 +9,14 @@ export function CacheMissSettings() {
   const enabled = useCacheMissAlert()
   return (
     <SettingRow
-      title={tr('settings.CacheMissSettings.message684')}
-      description={tr('settings.CacheMissSettings.message685')}
-      hint={tr('settings.CacheMissSettings.message686')}
+      title={tr('settings.CacheMissSettings.cacheMissAlerts')}
+      description={tr('settings.CacheMissSettings.getAlertWhenConsecutive')}
+      hint={tr('settings.CacheMissSettings.noAlertsOnFirst')}
       control={
         <button
           type="button"
           role="switch"
-          aria-label={tr('settings.CacheMissSettings.message684')}
+          aria-label={tr('settings.CacheMissSettings.cacheMissAlerts')}
           aria-checked={enabled}
           onClick={() => setCacheMissAlert(!enabled)}
           className={cn(

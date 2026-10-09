@@ -51,7 +51,7 @@ export function replyStatParts(usage: TurnUsage): { parts: StatPart[]; detail: s
   const tokens = (n: unknown): string => (known(n) ? formatTokens(n) : '—')
   const detail = sorted
     .map(([name, m]) =>
-      tr('session.turnStatsData.message372', {
+      tr('session.turnStatsData.uncachedInputCacheRead', {
         p0: name,
         p1: tokens(m.input),
         p2: tokens(m.cacheRead),
@@ -68,7 +68,7 @@ export function replyStatParts(usage: TurnUsage): { parts: StatPart[]; detail: s
       key: 'elapsed',
       text: formatDuration(usage.durationMs),
       get title() {
-        return tr('session.turnStatsData.message373')
+        return tr('session.turnStatsData.totalDuration')
       },
     })
   if (totalInput !== null && output !== null)
@@ -76,7 +76,7 @@ export function replyStatParts(usage: TurnUsage): { parts: StatPart[]; detail: s
       key: 'tokens',
       text: `↑${formatTokens(totalInput)} ↓${formatTokens(output)}`,
       get title() {
-        return tr('session.turnStatsData.message374')
+        return tr('session.turnStatsData.inputIncludingCacheReads')
       },
     })
   if (costText)
@@ -86,39 +86,49 @@ export function replyStatParts(usage: TurnUsage): { parts: StatPart[]; detail: s
       get title() {
         return platform
           ? tr(pending ? 'billing.pending' : costs.length < entries.length ? 'billing.unavailable' : 'billing.actual')
-          : tr('session.turnStatsData.message375')
+          : tr('session.turnStatsData.costEngineEstimate')
       },
     })
   parts.push({
     key: 'model',
     text: `${sorted[0][0]}${sorted.length > 1 ? ` +${sorted.length - 1}` : ''}`,
     get title() {
-      return tr('session.ModelSourceMenu.message291')
+      return tr('session.ModelSourceMenu.model')
     },
     mono: true,
   })
   const count = (key: ReplyStatKey, label: string, value: number | null, title: string): void => {
     if (value !== null) parts.push({ key, text: `${label} ${formatTokens(value)}`, title })
   }
-  count('inputTokens', tr('session.turnStatsData.message376'), input, tr('session.turnStatsData.message377'))
-  count('outputTokens', tr('session.live.SessionStrips.message275'), output, tr('session.turnStatsData.message378'))
-  count('totalTokens', tr('session.turnStatsData.message379'), totalTokens, tr('session.turnStatsData.message380'))
-  count('cacheRead', tr('session.turnStatsData.message381'), cacheRead, tr('session.turnStatsData.message382'))
-  count('cacheWrite', tr('session.turnStatsData.message383'), cacheWrite, tr('session.turnStatsData.message384'))
+  count(
+    'inputTokens',
+    tr('session.turnStatsData.input'),
+    input,
+    tr('session.turnStatsData.uncachedInputTokensExcluding'),
+  )
+  count('outputTokens', tr('session.live.SessionStrips.output'), output, tr('session.turnStatsData.outputTokens'))
+  count(
+    'totalTokens',
+    tr('session.turnStatsData.total'),
+    totalTokens,
+    tr('session.turnStatsData.totalTokensUncachedInput'),
+  )
+  count('cacheRead', tr('session.turnStatsData.cacheRead'), cacheRead, tr('session.turnStatsData.cacheReadTokens'))
+  count('cacheWrite', tr('session.turnStatsData.cacheWrite'), cacheWrite, tr('session.turnStatsData.cacheWriteTokens'))
   if (hitRate !== null)
     parts.push({
       key: 'cacheHitRate',
-      text: tr('session.turnStatsData.message385', { p0: (hitRate * 100).toFixed(1).replace(/\.0$/, '') }),
+      text: tr('session.turnStatsData.cacheHit', { p0: (hitRate * 100).toFixed(1).replace(/\.0$/, '') }),
       get title() {
-        return tr('session.turnStatsData.message386')
+        return tr('session.turnStatsData.cacheReadAllInput')
       },
     })
   if (requests !== null)
     parts.push({
       key: 'requests',
-      text: tr('session.turnStatsData.message387', { p0: requests }),
+      text: tr('session.turnStatsData.requests', { p0: requests }),
       get title() {
-        return tr('session.turnStatsData.message388')
+        return tr('session.turnStatsData.sumOfRequestCounts')
       },
     })
   return { parts, detail }

@@ -20,7 +20,7 @@ const SERIF_OPTIONS: Array<SegmentedOption<'on' | 'off'>> = [
   {
     value: 'on',
     get label() {
-      return tr('settings.FontSettings.message796')
+      return tr('settings.FontSettings.on')
     },
   },
 ]
@@ -37,35 +37,47 @@ export function FontSettings() {
 
   return (
     <>
-      <SettingRow title={tr('settings.FontSettings.message797')} description={tr('settings.FontSettings.message798')}>
+      <SettingRow
+        title={tr('settings.FontSettings.interfaceFont')}
+        description={tr('settings.FontSettings.usedInSidebarButtons')}
+      >
         <FontPicker
-          label={tr('settings.FontSettings.message797')}
+          label={tr('settings.FontSettings.interfaceFont')}
           value={f.sans}
           onChange={sans => setFontPrefs({ sans })}
-          placeholder={tr('settings.FontSettings.message799')}
-          sample={tr('settings.FontSettings.message800')}
+          placeholder={tr('settings.FontSettings.systemDefaultInterSegoe')}
+          sample={tr('settings.FontSettings.pixelStarrySkyAa')}
         />
       </SettingRow>
-      <SettingRow title={tr('settings.FontSettings.message801')} description={tr('settings.FontSettings.message802')}>
+      <SettingRow
+        title={tr('settings.FontSettings.codeFont')}
+        description={tr('settings.FontSettings.usedForCodePaths')}
+      >
         <FontPicker
-          label={tr('settings.FontSettings.message801')}
+          label={tr('settings.FontSettings.codeFont')}
           value={f.mono}
           onChange={mono => setFontPrefs({ mono })}
-          placeholder={tr('settings.FontSettings.message803')}
+          placeholder={tr('settings.FontSettings.systemDefaultJetbrainsMono')}
           sample="const a = 0x1f;"
         />
       </SettingRow>
-      <SettingRow title={tr('settings.FontSettings.message804')} description={tr('settings.FontSettings.message805')}>
+      <SettingRow
+        title={tr('settings.FontSettings.fontSize')}
+        description={tr('settings.FontSettings.scaleTextOnlyButtons')}
+      >
         <Segmented
-          label={tr('settings.FontSettings.message804')}
+          label={tr('settings.FontSettings.fontSize')}
           options={SCALE_OPTIONS}
           value={String(f.scale)}
           onChange={v => setFontPrefs({ scale: Number(v) })}
         />
       </SettingRow>
-      <SettingRow title={tr('settings.FontSettings.message806')} description={tr('settings.FontSettings.message807')}>
+      <SettingRow
+        title={tr('settings.FontSettings.serifConversationText')}
+        description={tr('settings.FontSettings.useSerifFontsSongti')}
+      >
         <Segmented
-          label={tr('settings.FontSettings.message806')}
+          label={tr('settings.FontSettings.serifConversationText')}
           options={SERIF_OPTIONS}
           value={f.serifProse ? 'on' : 'off'}
           onChange={v => setFontPrefs({ serifProse: v === 'on' })}
@@ -74,7 +86,7 @@ export function FontSettings() {
       {!isDefault && (
         <div className="-mt-2 pb-2">
           <Button variant="ghost" className="-ml-3" onClick={resetFontPrefs}>
-            {tr('settings.FontSettings.message808')}{' '}
+            {tr('settings.FontSettings.resetFontSettings')}{' '}
           </Button>
         </div>
       )}

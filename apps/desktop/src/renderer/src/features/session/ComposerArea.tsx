@@ -33,7 +33,11 @@ export function ComposerArea({ children }: { children: ReactNode }) {
         {(['left', 'right'] as const).map(side => (
           <ResizeHandle
             key={side}
-            label={side === 'left' ? tr('session.ComposerArea.message121') : tr('session.ComposerArea.message122')}
+            label={
+              side === 'left'
+                ? tr('session.ComposerArea.resizeLeftComposerEdge')
+                : tr('session.ComposerArea.resizeRightComposerEdge')
+            }
             axis="x"
             className={`composer-resize-${side}`}
             scale={side === 'left' ? -2 : 2}

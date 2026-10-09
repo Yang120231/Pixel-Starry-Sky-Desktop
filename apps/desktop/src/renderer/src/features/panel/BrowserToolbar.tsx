@@ -50,18 +50,18 @@ export function BrowserToolbar({ pages, activePageId, onSelectPage, url, annotat
         <div className="flex shrink-0 items-center">
           <IconButton
             icon={ArrowLeft}
-            label={tr('panel.BrowserToolbar.message80')}
-            onClick={() => comingSoon(tr('panel.BrowserToolbar.message80'))}
+            label={tr('panel.BrowserToolbar.back')}
+            onClick={() => comingSoon(tr('panel.BrowserToolbar.back'))}
           />
           <IconButton
             icon={ArrowRight}
-            label={tr('panel.BrowserToolbar.message81')}
-            onClick={() => comingSoon(tr('panel.BrowserToolbar.message81'))}
+            label={tr('panel.BrowserToolbar.forward')}
+            onClick={() => comingSoon(tr('panel.BrowserToolbar.forward'))}
           />
           <IconButton
             icon={RotateCw}
-            label={tr('account.AccountMenu.message45')}
-            onClick={() => comingSoon(tr('account.AccountMenu.message45'))}
+            label={tr('account.AccountMenu.refresh')}
+            onClick={() => comingSoon(tr('account.AccountMenu.refresh'))}
           />
         </div>
         <div className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md border border-line bg-surface px-2.5 text-list">
@@ -69,17 +69,17 @@ export function BrowserToolbar({ pages, activePageId, onSelectPage, url, annotat
           {url ? (
             <span className="truncate text-fg-secondary">{url}</span>
           ) : (
-            <span className="truncate text-fg-faint">{tr('panel.BrowserToolbar.message82')}</span>
+            <span className="truncate text-fg-faint">{tr('panel.BrowserToolbar.enterUrl')}</span>
           )}
         </div>
         {annotationCount > 0 && (
           <button
             type="button"
-            onClick={() => comingSoon(tr('panel.BrowserToolbar.message83'))}
+            onClick={() => comingSoon(tr('panel.BrowserToolbar.annotate'))}
             className="press flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-accent-soft px-2.5 text-list text-accent-fg hover:opacity-85"
           >
             <MessageSquareText size={15} strokeWidth={1.5} />
-            {tr('panel.BrowserToolbar.message83')} {annotationCount}
+            {tr('panel.BrowserToolbar.annotate')} {annotationCount}
           </button>
         )}
       </div>

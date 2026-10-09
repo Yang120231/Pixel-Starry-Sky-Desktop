@@ -30,8 +30,8 @@ export function formatAmount(value: number, currency = 'USD'): string {
 /** 更新时间：1 分钟内「刚刚」，1 小时内「N 分钟前」，更早显示 HH:mm */
 export function formatUpdatedAt(ms: number, now: number = Date.now()): string {
   const diff = now - ms
-  if (!Number.isFinite(diff) || diff < 60_000) return tr('account.format.message0')
-  if (diff < 3_600_000) return tr('account.format.message1', { p0: Math.floor(diff / 60_000) })
+  if (!Number.isFinite(diff) || diff < 60_000) return tr('account.format.justNow')
+  if (diff < 3_600_000) return tr('account.format.minutesAgo', { p0: Math.floor(diff / 60_000) })
   const d = new Date(ms)
   if (getLocale() === 'en-US')
     return new Intl.DateTimeFormat(getLocale(), { hour: 'numeric', minute: '2-digit' }).format(d)
@@ -66,7 +66,7 @@ export function isQuotaDanger(q: Quota | null | undefined): boolean {
 export function formatWindow(w: string): string {
   const m = /^(\d+)\s*([hd])$/i.exec(w.trim())
   if (!m) return w
-  return `${m[1]} ${m[2].toLowerCase() === 'h' ? tr('account.format.message2') : tr('account.format.message3')}`
+  return `${m[1]} ${m[2].toLowerCase() === 'h' ? tr('account.format.hours') : tr('account.format.days')}`
 }
 
 /** 售价：CNY 显示 "¥99" / "¥350.00"（整数不带小数），其他币种显示 "99 USD" */
@@ -80,7 +80,7 @@ export function formatPrice(value: number, currency = 'CNY'): string {
 
 /** 计费方式：balance_only → 按余额计费，subscription → 订阅计费，其他原样显示 */
 export function formatBillingSource(source: string): string {
-  if (source === 'balance_only') return tr('account.format.message4')
-  if (source === 'subscription') return tr('account.format.message5')
+  if (source === 'balance_only') return tr('account.format.balanceBilling')
+  if (source === 'subscription') return tr('account.format.subscriptionBilling')
   return source
 }

@@ -28,7 +28,7 @@ export function Chip({ icon: Icon, tone = 'neutral', onRemove, className, childr
       {onRemove && (
         <button
           type="button"
-          aria-label={tr('ui.Chip.message411')}
+          aria-label={tr('ui.Chip.remove')}
           onClick={onRemove}
           className="inline-flex size-[18px] shrink-0 items-center justify-center rounded text-current opacity-70 hover:bg-hover hover:opacity-100"
         >

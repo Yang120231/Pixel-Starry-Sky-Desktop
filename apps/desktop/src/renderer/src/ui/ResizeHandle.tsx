@@ -131,7 +131,7 @@ export function ResizeHandle({
       aria-valuemin={Math.round(min)}
       aria-valuemax={Math.round(max)}
       aria-valuenow={Math.round(value)}
-      title={tr('ui.ResizeHandle.message414', { p0: label })}
+      title={tr('ui.ResizeHandle.doubleClickOrEnter', { p0: label })}
       className={cn('layout-resize-handle no-drag', axis === 'x' ? 'layout-resize-x' : 'layout-resize-y', className)}
       data-resizing={active || undefined}
       onPointerDown={down}

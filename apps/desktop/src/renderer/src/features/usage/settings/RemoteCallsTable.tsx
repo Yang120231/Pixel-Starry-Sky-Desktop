@@ -9,19 +9,19 @@ import { ModelCell, TIME_COL_WIDTH, TimeCell, UsageDetailCard, UsageTable, type 
 const STATUS: Record<RemoteCall['status'], { text: string; cls: string }> = {
   success: {
     get text() {
-      return tr('settings.usage.RemoteCallsTable.message987')
+      return tr('settings.usage.RemoteCallsTable.succeeded')
     },
     cls: 'text-fg-muted',
   },
   error: {
     get text() {
-      return tr('session.live.agentTrace.message195')
+      return tr('session.live.agentTrace.failed')
     },
     cls: 'text-danger',
   },
   rate_limited: {
     get text() {
-      return tr('settings.usage.RemoteCallsTable.message988')
+      return tr('settings.usage.RemoteCallsTable.rateLimited')
     },
     cls: 'text-warn',
   },
@@ -29,14 +29,14 @@ const STATUS: Record<RemoteCall['status'], { text: string; cls: string }> = {
 
 const CLIENT_LABEL: Record<RemoteCall['client'], string> = {
   get 'pixelsky-desktop'() {
-    return tr('settings.usage.RemoteCallsTable.message989')
+    return tr('settings.usage.RemoteCallsTable.desktop')
   },
   'jucode-cli': 'CLI',
   get api() {
-    return tr('settings.usage.RemoteCallsTable.message990')
+    return tr('settings.usage.RemoteCallsTable.directApiKey')
   },
   get unknown() {
-    return tr('settings.usage.RemoteCallsTable.message991')
+    return tr('settings.usage.RemoteCallsTable.unknown')
   },
 }
 
@@ -54,7 +54,7 @@ const COLUMNS: Array<UsageColumn<RemoteCall>> = [
   {
     key: 'time',
     get label() {
-      return tr('settings.usage.RecordsTable.message975')
+      return tr('settings.usage.RecordsTable.time')
     },
     width: TIME_COL_WIDTH,
     render: c => <TimeCell text={formatTime(c.createdAt)} />,
@@ -64,7 +64,7 @@ const COLUMNS: Array<UsageColumn<RemoteCall>> = [
   {
     key: 'model',
     get label() {
-      return tr('session.ModelSourceMenu.message291')
+      return tr('session.ModelSourceMenu.model')
     },
     render: c => <ModelCell model={c.model} />,
     title: c => c.model,
@@ -73,7 +73,7 @@ const COLUMNS: Array<UsageColumn<RemoteCall>> = [
   {
     key: 'source',
     get label() {
-      return tr('settings.usage.RemoteCallsTable.message992')
+      return tr('settings.usage.RemoteCallsTable.client')
     },
     hideBelow: 760,
     render: c => CLIENT_LABEL[c.client],
@@ -81,7 +81,7 @@ const COLUMNS: Array<UsageColumn<RemoteCall>> = [
   {
     key: 'input',
     get label() {
-      return tr('session.turnStatsData.message376')
+      return tr('session.turnStatsData.input')
     },
     width: 'w-[4em]',
     align: 'right',
@@ -90,7 +90,7 @@ const COLUMNS: Array<UsageColumn<RemoteCall>> = [
   {
     key: 'cache',
     get label() {
-      return tr('session.turnStatsData.message381')
+      return tr('session.turnStatsData.cacheRead')
     },
     width: 'w-[4.4em]',
     align: 'right',
@@ -100,7 +100,7 @@ const COLUMNS: Array<UsageColumn<RemoteCall>> = [
   {
     key: 'output',
     get label() {
-      return tr('session.live.SessionStrips.message275')
+      return tr('session.live.SessionStrips.output')
     },
     width: 'w-[4em]',
     align: 'right',
@@ -109,7 +109,7 @@ const COLUMNS: Array<UsageColumn<RemoteCall>> = [
   {
     key: 'cost',
     get label() {
-      return tr('settings.usage.RemoteCallsTable.message993')
+      return tr('settings.usage.RemoteCallsTable.charge')
     },
     width: 'w-[5.6em]',
     align: 'right',
@@ -118,7 +118,7 @@ const COLUMNS: Array<UsageColumn<RemoteCall>> = [
   {
     key: 'ttft',
     get label() {
-      return tr('settings.usage.RemoteCallsTable.message994')
+      return tr('settings.usage.RemoteCallsTable.firstToken')
     },
     width: 'w-[3.6em]',
     align: 'right',
@@ -129,7 +129,7 @@ const COLUMNS: Array<UsageColumn<RemoteCall>> = [
   {
     key: 'duration',
     get label() {
-      return tr('session.live.AgentTracePanel.message204')
+      return tr('session.live.AgentTracePanel.duration')
     },
     width: 'w-[4.8em]',
     align: 'right',
@@ -140,7 +140,7 @@ const COLUMNS: Array<UsageColumn<RemoteCall>> = [
   {
     key: 'status',
     get label() {
-      return tr('settings.usage.RecordsTable.message979')
+      return tr('settings.usage.RecordsTable.outcome')
     },
     width: 'w-[3.2em]',
     align: 'right',
@@ -162,7 +162,7 @@ export function RemoteCallsTable({
   useI18n()
   return (
     <UsageTable
-      title={tr('settings.usage.RemoteCallsTable.message995')}
+      title={tr('settings.usage.RemoteCallsTable.accountRequests')}
       rows={page.calls}
       rowKey={c => c.id}
       columns={COLUMNS}
@@ -180,26 +180,29 @@ function CallDetail({ c }: { c: RemoteCall }) {
   return (
     <UsageDetailCard
       fields={[
-        [tr('settings.usage.RemoteCallsTable.message992'), CLIENT_LABEL[c.client]],
-        [tr('settings.usage.RemoteCallsTable.message996'), c.device ?? '—'],
+        [tr('settings.usage.RemoteCallsTable.client'), CLIENT_LABEL[c.client]],
+        [tr('settings.usage.RemoteCallsTable.device'), c.device ?? '—'],
         ['Key', c.keyName ?? '—'],
         [
-          tr('settings.usage.RemoteCallsTable.message997'),
+          tr('settings.usage.RemoteCallsTable.requestType'),
           c.stream
-            ? tr('settings.usage.RemoteCallsTable.message998')
-            : tr('settings.usage.RemoteCallsTable.message999'),
+            ? tr('settings.usage.RemoteCallsTable.streaming')
+            : tr('settings.usage.RemoteCallsTable.nonStreaming'),
         ],
         ['HTTP', `${c.httpStatus}`],
-        [tr('settings.usage.RecordsTable.message979'), STATUS[c.status].text],
-        [tr('settings.usage.RecordsTable.message982'), formatTokens(c.input)],
-        [tr('session.turnStatsData.message383'), formatTokens(c.cacheWrite)],
-        [tr('session.turnStatsData.message381'), formatTokens(c.cacheRead)],
-        [tr('session.live.SessionStrips.message275'), formatTokens(c.output)],
-        [tr('settings.usage.RemoteCallsTable.message993'), formatCost(c.costUsd, 'platform', c.billing)],
-        [tr('settings.usage.RemoteCallsTable.message1001'), c.firstTokenMs === null ? '—' : `${c.firstTokenMs} ms`],
-        [tr('session.live.AgentTracePanel.message204'), formatDuration(c.durationMs)],
-        [tr('settings.usage.RemoteCallsTable.message1002'), c.turnId ?? '—'],
-        [tr('settings.usage.RemoteCallsTable.message1003'), new Date(c.createdAt).toLocaleString('zh-CN')],
+        [tr('settings.usage.RecordsTable.outcome'), STATUS[c.status].text],
+        [tr('settings.usage.RecordsTable.inputCacheMisses'), formatTokens(c.input)],
+        [tr('session.turnStatsData.cacheWrite'), formatTokens(c.cacheWrite)],
+        [tr('session.turnStatsData.cacheRead'), formatTokens(c.cacheRead)],
+        [tr('session.live.SessionStrips.output'), formatTokens(c.output)],
+        [tr('settings.usage.RemoteCallsTable.charge'), formatCost(c.costUsd, 'platform', c.billing)],
+        [
+          tr('settings.usage.RemoteCallsTable.timeToFirstToken'),
+          c.firstTokenMs === null ? '—' : `${c.firstTokenMs} ms`,
+        ],
+        [tr('session.live.AgentTracePanel.duration'), formatDuration(c.durationMs)],
+        [tr('settings.usage.RemoteCallsTable.relatedTurn'), c.turnId ?? '—'],
+        [tr('settings.usage.RemoteCallsTable.requestedAt'), new Date(c.createdAt).toLocaleString('zh-CN')],
       ]}
       footer={
         <span className="selectable min-w-0 truncate font-mono text-label text-fg-faint" title={c.id}>
@@ -219,15 +222,15 @@ export function RemoteCallsPlaceholder({ onBack }: { onBack: () => void }) {
         <CloudOff size={20} strokeWidth={1.5} />
       </span>
       <div className="mt-3 text-ui font-medium text-fg-secondary">
-        {tr('settings.usage.RemoteCallsTable.message1004')}
+        {tr('settings.usage.RemoteCallsTable.accountRequestDetailsAre')}
       </div>
       <p className="mt-1 max-w-md text-meta text-fg-muted">
-        {tr('settings.usage.RemoteCallsTable.message1005')}{' '}
+        {tr('settings.usage.RemoteCallsTable.eachModelRequestWill')}{' '}
         <code className="rounded-sm bg-subtle px-1 font-mono">pnpm dev:demo</code>
-        {tr('settings.usage.RemoteCallsTable.message1006')}{' '}
+        {tr('settings.usage.RemoteCallsTable.text')}{' '}
       </p>
       <button type="button" onClick={onBack} className="mt-3 text-meta text-accent-fg hover:underline">
-        {tr('settings.usage.RemoteCallsTable.message1007')}{' '}
+        {tr('settings.usage.RemoteCallsTable.backToLocalRecords')}{' '}
       </button>
     </div>
   )
@@ -242,11 +245,11 @@ export function RemoteCallsSignInPlaceholder({ onSignIn }: { onSignIn: () => voi
         <CloudOff size={20} strokeWidth={1.5} />
       </span>
       <div className="mt-3 text-ui font-medium text-fg-secondary">
-        {tr('settings.usage.RemoteCallsTable.message1008')}
+        {tr('settings.usage.RemoteCallsTable.signInToView')}
       </div>
-      <p className="mt-1 max-w-md text-meta text-fg-muted">{tr('settings.usage.RemoteCallsTable.message1009')}</p>
+      <p className="mt-1 max-w-md text-meta text-fg-muted">{tr('settings.usage.RemoteCallsTable.signInToPixel')}</p>
       <button type="button" onClick={onSignIn} className="mt-3 text-meta text-accent-fg hover:underline">
-        {tr('settings.usage.RemoteCallsTable.message1010')}{' '}
+        {tr('settings.usage.RemoteCallsTable.signIn')}{' '}
       </button>
     </div>
   )

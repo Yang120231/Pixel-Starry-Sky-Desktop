@@ -74,13 +74,13 @@ export function UsageTable<T>({
           </span>
           <IconButton
             icon={ChevronLeft}
-            label={tr('settings.usage.UsageTable.message1027')}
+            label={tr('settings.usage.UsageTable.previousPage')}
             disabled={offset === 0}
             onClick={() => onPage(Math.max(0, offset - pageSize))}
           />
           <IconButton
             icon={ChevronRight}
-            label={tr('settings.usage.UsageTable.message1028')}
+            label={tr('settings.usage.UsageTable.nextPage')}
             disabled={to >= total}
             onClick={() => onPage(offset + pageSize)}
           />

@@ -14,13 +14,13 @@ export const editorLabel = (item: EditorItem): string => [item.name, item.versio
 export const editorSource = (item: EditorItem): string =>
   ({
     get registry() {
-      return tr('editor.EditorIcon.message451')
+      return tr('editor.EditorIcon.registry')
     },
     get location() {
-      return tr('editor.EditorIcon.message452')
+      return tr('editor.EditorIcon.defaultLocation')
     },
     path: 'PATH',
     get manual() {
-      return tr('editor.EditorIcon.message453')
+      return tr('editor.EditorIcon.manuallySpecified')
     },
   })[item.source ?? (item.manual ? 'manual' : 'location')]

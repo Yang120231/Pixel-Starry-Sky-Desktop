@@ -31,8 +31,8 @@ export function WallpaperSettings() {
   return (
     <>
       <SettingRow
-        title={tr('settings.searchIndex.message910')}
-        description={tr('settings.WallpaperSettings.message1029')}
+        title={tr('settings.searchIndex.wallpaper')}
+        description={tr('settings.WallpaperSettings.fillWindowWithImage')}
         hint={error ?? undefined}
         hintTone={error ? 'danger' : 'muted'}
       >
@@ -44,24 +44,26 @@ export function WallpaperSettings() {
               ) : (
                 <img
                   src={wp.url}
-                  alt={tr('settings.WallpaperSettings.message1030')}
+                  alt={tr('settings.WallpaperSettings.currentWallpaper')}
                   className="h-full w-full object-cover"
                 />
               )
             ) : (
               <span className="text-meta text-fg-faint">
-                {wp.name ? tr('session.live.SessionStrips.message276') : tr('settings.WallpaperSettings.message1031')}
+                {wp.name ? tr('session.live.SessionStrips.loading') : tr('settings.WallpaperSettings.notSet')}
               </span>
             )}
           </div>
           <div className="flex min-w-0 flex-col gap-2">
             <div className="flex gap-2">
               <Button icon={ImagePlus} disabled={busy} onClick={() => inputRef.current?.click()}>
-                {wp.name ? tr('settings.WallpaperSettings.message1032') : tr('settings.WallpaperSettings.message1033')}
+                {wp.name
+                  ? tr('settings.WallpaperSettings.change')
+                  : tr('settings.WallpaperSettings.chooseImageOrVideo')}
               </Button>
               {wp.name && (
                 <Button variant="ghost" icon={Trash2} onClick={() => void removeWallpaper()}>
-                  {tr('ui.Chip.message411')}{' '}
+                  {tr('ui.Chip.remove')}{' '}
                 </Button>
               )}
             </div>
@@ -84,11 +86,11 @@ export function WallpaperSettings() {
       {wp.name && (
         <>
           <SettingRow
-            title={tr('settings.searchIndex.message912')}
-            description={tr('settings.WallpaperSettings.message1034')}
+            title={tr('settings.searchIndex.opacity')}
+            description={tr('settings.WallpaperSettings.howMuchWallpaperShows')}
           >
             <Slider
-              label={tr('settings.searchIndex.message912')}
+              label={tr('settings.searchIndex.opacity')}
               min={10}
               max={90}
               step={5}
@@ -98,11 +100,11 @@ export function WallpaperSettings() {
             />
           </SettingRow>
           <SettingRow
-            title={tr('settings.searchIndex.message914')}
-            description={tr('settings.WallpaperSettings.message1035')}
+            title={tr('settings.searchIndex.blur')}
+            description={tr('settings.WallpaperSettings.blurWallpaperToMake')}
           >
             <Slider
-              label={tr('settings.searchIndex.message914')}
+              label={tr('settings.searchIndex.blur')}
               min={0}
               max={20}
               value={wp.blur}

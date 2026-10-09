@@ -44,12 +44,12 @@ export function ContextWindowButton({ sessionId }: { sessionId: string | null })
       ? diagnostic.window - (diagnostic.categories.find(c => c.kind === 'buffer')?.tokens ?? 0)
       : null
   const reason = isDemo
-    ? tr('session.ContextWindowButton.message153')
+    ? tr('session.ContextWindowButton.engineActionsAreUnavailable')
     : !sessionId
-      ? tr('session.ContextWindowButton.message154')
+      ? tr('session.ContextWindowButton.startConversationFirst')
       : snapshot?.state !== 'idle' || !!snapshot?.queue.length
-        ? tr('session.ContextWindowButton.message155')
-        : tr('session.ContextWindowButton.message156')
+        ? tr('session.ContextWindowButton.waitForCurrentTask')
+        : tr('session.ContextWindowButton.thisEngineDoesNot')
   useEffect(() => {
     setOpen(false)
     setConfirm(false)
@@ -121,19 +121,19 @@ export function ContextWindowButton({ sessionId }: { sessionId: string | null })
         ref={trigger}
         type="button"
         data-context-trigger
-        aria-label={tr('session.ContextWindowButton.message157')}
+        aria-label={tr('session.ContextWindowButton.contextWindow')}
         aria-haspopup="dialog"
         aria-expanded={open}
         title={
           context?.compacting
-            ? tr('session.ContextWindowButton.message158')
+            ? tr('session.ContextWindowButton.compactingContext')
             : percent !== null
-              ? tr('session.ContextWindowButton.message159', {
+              ? tr('session.ContextWindowButton.context', {
                   p0: contextNumber(context?.used),
                   p1: contextNumber(context?.window),
                   p2: percent.toFixed(1),
                 })
-              : tr('session.ContextWindowButton.message160')
+              : tr('session.ContextWindowButton.viewContextWindow')
         }
         onClick={() => setOpen(v => !v)}
         className={cn(
@@ -144,9 +144,9 @@ export function ContextWindowButton({ sessionId }: { sessionId: string | null })
         <ContextRing percent={Math.min(100, Math.max(0, percent ?? 0))} size={16} />
         <span className="tabular-nums">
           {context?.compacting
-            ? tr('session.ContextWindowButton.message161')
+            ? tr('session.ContextWindowButton.compacting')
             : percent === null
-              ? tr('session.ContextWindowButton.message162')
+              ? tr('session.ContextWindowButton.context2')
               : `${Number(percent.toFixed(1))}%`}
         </span>
       </button>
@@ -155,7 +155,7 @@ export function ContextWindowButton({ sessionId }: { sessionId: string | null })
           <div
             ref={popup}
             role="dialog"
-            aria-label={tr('session.ContextWindowButton.message163')}
+            aria-label={tr('session.ContextWindowButton.contextWindowDetails')}
             tabIndex={-1}
             data-context-popover
             className="pop-in no-drag fixed z-50 max-h-[calc(100vh-16px)] w-[440px] max-w-[calc(100vw-16px)] overflow-y-auto rounded-xl border border-line-card bg-popover p-4 text-ui text-fg shadow-menu outline-none"
@@ -168,15 +168,15 @@ export function ContextWindowButton({ sessionId }: { sessionId: string | null })
             }}
           >
             <div className="flex items-center gap-2">
-              <h2 className="flex-1 text-ui font-medium">{tr('session.ContextWindowButton.message157')}</h2>
+              <h2 className="flex-1 text-ui font-medium">{tr('session.ContextWindowButton.contextWindow')}</h2>
               <span className="text-ui text-fg-secondary tabular-nums">
                 {context?.stale
-                  ? tr('session.ContextWindowButton.message164')
+                  ? tr('session.ContextWindowButton.waitingForUpdate')
                   : `${contextNumber(context?.used)} / ${contextNumber(context?.window)}${percent === null ? '' : `（${Number(percent.toFixed(1))}%）`}`}
               </span>
               <button
                 type="button"
-                aria-label={tr('session.ContextWindowButton.message165')}
+                aria-label={tr('session.ContextWindowButton.closeContextDetails')}
                 onClick={close}
                 className="rounded-md p-1 text-fg-muted hover:bg-hover"
               >
@@ -185,7 +185,7 @@ export function ContextWindowButton({ sessionId }: { sessionId: string | null })
             </div>
             <div
               role="progressbar"
-              aria-label={tr('session.ContextWindowButton.message166')}
+              aria-label={tr('session.ContextWindowButton.contextUsage')}
               aria-valuenow={percent === null ? undefined : Math.min(100, percent)}
               aria-valuemin={0}
               aria-valuemax={100}
@@ -203,42 +203,42 @@ export function ContextWindowButton({ sessionId }: { sessionId: string | null })
             <div className="flex flex-wrap items-center justify-between gap-2 text-meta text-fg-muted">
               <span>
                 {context?.compacting
-                  ? tr('session.ContextWindowButton.message167')
+                  ? tr('session.ContextWindowButton.compactingConversation')
                   : context?.stale
-                    ? tr('session.ContextWindowButton.message168')
+                    ? tr('session.ContextWindowButton.dataIsStaleWaiting')
                     : percent !== null && percent >= 80
-                      ? tr('session.ContextWindowButton.message169')
+                      ? tr('session.ContextWindowButton.highContextUsage')
                       : context?.used === null || !context
-                        ? tr('session.ContextWindowButton.message170')
+                        ? tr('session.ContextWindowButton.waitingForFirstRequest')
                         : !context.window
-                          ? tr('session.ContextWindowButton.message171')
-                          : tr('session.ContextWindowButton.message172', {
+                          ? tr('session.ContextWindowButton.windowCapacityUnavailable')
+                          : tr('session.ContextWindowButton.tokensRemaining', {
                               p0: contextNumber(Math.max(0, context.window - context.used)),
                             })}
               </span>
               <button
                 type="button"
                 disabled={!canCompact}
-                title={!canCompact ? reason : tr('session.ContextWindowButton.message173')}
+                title={!canCompact ? reason : tr('session.ContextWindowButton.compactingCallsModelAnd')}
                 onClick={() => setConfirm(v => !v)}
                 className="inline-flex items-center gap-1 text-accent-fg hover:underline disabled:cursor-default disabled:text-fg-faint disabled:no-underline"
               >
                 <Scissors size={13} />
-                {tr('session.ContextWindowButton.message174')}
+                {tr('session.ContextWindowButton.compactConversation')}
               </button>
             </div>
             {compactLimit !== null && (
               <p className="mt-2 text-label text-fg-muted">
-                {tr('session.ContextWindowButton.message175')} {contextNumber(diagnostic!.window - compactLimit)}
-                {tr('session.ContextWindowButton.message176')} {contextNumber(compactLimit)}
+                {tr('session.ContextWindowButton.engineReserve')} {contextNumber(diagnostic!.window - compactLimit)}
+                {tr('session.ContextWindowButton.tokensUsableUpTo')} {contextNumber(compactLimit)}
               </p>
             )}
             {confirm && (
               <div className="mt-3 rounded-lg bg-subtle p-3 text-meta">
-                <p>{tr('session.ContextWindowButton.message177')}</p>
+                <p>{tr('session.ContextWindowButton.compactingCallsModelAnd2')}</p>
                 <div className="mt-2 flex justify-end gap-3">
                   <button type="button" onClick={() => setConfirm(false)} className="text-fg-muted">
-                    {tr('account.AccountMenu.message31')}
+                    {tr('account.AccountMenu.cancel')}
                   </button>
                   <button
                     type="button"
@@ -246,7 +246,7 @@ export function ContextWindowButton({ sessionId }: { sessionId: string | null })
                     onClick={() => void compact()}
                     className="text-accent-fg disabled:opacity-50"
                   >
-                    {tr('session.ContextWindowButton.message178')}
+                    {tr('session.ContextWindowButton.startCompaction')}
                   </button>
                 </div>
               </div>
@@ -267,29 +267,29 @@ export function ContextWindowButton({ sessionId }: { sessionId: string | null })
                 className="flex h-8 w-full items-center gap-1 text-left text-ui text-fg-secondary hover:text-fg"
               >
                 <ChevronRight size={14} className={details ? 'rotate-90' : undefined} />
-                {tr('session.ContextWindowButton.message179')}
+                {tr('session.ContextWindowButton.viewDetailedUsage')}
               </button>
               {details && (
                 <div className="mt-2">
                   <div className="mb-2 flex items-center gap-2 text-label text-fg-muted">
                     <span className="flex-1">
                       {diagnostic
-                        ? tr('session.ContextWindowButton.message180', {
+                        ? tr('session.ContextWindowButton.engineDiagnosticEstimate', {
                             p0: context?.diagnosticStale ? '（待刷新）' : '',
                           })
-                        : tr('session.ContextWindowButton.message182')}
+                        : tr('session.ContextWindowButton.latestMainRequestCount')}
                     </span>
                     <button
                       type="button"
                       disabled={!canInspect}
-                      title={!canInspect ? reason : tr('session.ContextWindowButton.message183')}
+                      title={!canInspect ? reason : tr('session.ContextWindowButton.engineDiagnosticsMayQuery')}
                       onClick={() => void inspect()}
                       className="inline-flex items-center gap-1 text-accent-fg disabled:text-fg-faint"
                     >
                       <RefreshCw size={12} className={busy === 'inspect' ? 'animate-spin' : undefined} />
                       {busy === 'inspect'
-                        ? tr('session.ContextWindowButton.message184')
-                        : tr('session.ContextWindowButton.message185')}
+                        ? tr('session.ContextWindowButton.refreshing')
+                        : tr('session.ContextWindowButton.refreshDetails')}
                     </button>
                   </div>
                   {diagnostic ? (
@@ -304,38 +304,43 @@ export function ContextWindowButton({ sessionId }: { sessionId: string | null })
                           />
                         ))}
                       </div>
-                      <DetailGroup title={tr('session.contextData.message142')} rows={diagnostic.tools} />
-                      <DetailGroup title={tr('session.contextData.message143')} rows={diagnostic.memory} />
-                      <DetailGroup title={tr('session.contextData.message145')} rows={diagnostic.agents} />
+                      <DetailGroup title={tr('session.contextData.mcpTools')} rows={diagnostic.tools} />
+                      <DetailGroup title={tr('session.contextData.memoryFiles')} rows={diagnostic.memory} />
+                      <DetailGroup title={tr('session.contextData.agents')} rows={diagnostic.agents} />
                       <DetailGroup title="Skills" rows={diagnostic.skills} />
                     </>
                   ) : (
                     <>
-                      <NumberRow name={tr('session.contextData.message149')} value={context?.input ?? null} />
-                      <NumberRow name={tr('session.contextData.message150')} value={context?.cacheRead ?? null} />
-                      <NumberRow name={tr('session.contextData.message151')} value={context?.cacheWrite ?? null} />
-                      <p className="mt-2 text-label text-fg-faint">{tr('session.ContextWindowButton.message186')}</p>
+                      <NumberRow name={tr('session.contextData.uncachedInput')} value={context?.input ?? null} />
+                      <NumberRow name={tr('session.contextData.cacheRead')} value={context?.cacheRead ?? null} />
+                      <NumberRow name={tr('session.contextData.cacheWrite')} value={context?.cacheWrite ?? null} />
+                      <p className="mt-2 text-label text-fg-faint">
+                        {tr('session.ContextWindowButton.contentCategoriesAreNot')}
+                      </p>
                     </>
                   )}
                   <div className="mt-3 border-t border-line pt-2">
-                    <NumberRow name={tr('session.ContextWindowButton.message187')} value={context?.output ?? null} />
+                    <NumberRow
+                      name={tr('session.ContextWindowButton.latestOutputExcludedFrom')}
+                      value={context?.output ?? null}
+                    />
                   </div>
                   <p className="mt-2 text-label text-fg-faint">
                     {diagnostic
-                      ? tr('session.ContextWindowButton.message188')
-                      : tr('session.ContextWindowButton.message189')}
+                      ? tr('session.ContextWindowButton.diagnosticsEstimateNewlyAdded')
+                      : tr('session.ContextWindowButton.usageIsSumOf')}
                   </p>
                 </div>
               )}
             </div>
             <p className="mt-2 truncate text-label text-fg-faint" title={context?.model ?? ''}>
-              {context?.model ?? tr('session.ContextWindowButton.message190')}
+              {context?.model ?? tr('session.ContextWindowButton.modelNotReportedYet')}
               {context?.observedAt
-                ? tr('session.ContextWindowButton.message191', {
+                ? tr('session.ContextWindowButton.updated', {
                     p0: new Date(context.observedAt).toLocaleTimeString('zh-CN'),
                   })
                 : ''}
-              {isDemo ? tr('session.ContextWindowButton.message192') : ''}
+              {isDemo ? tr('session.ContextWindowButton.demoData') : ''}
             </p>
           </div>,
           document.body,

@@ -28,13 +28,13 @@ export function SidebarFooter({ onAddProject, onNewTask }: SidebarActionCallback
   const name = acc.user?.name ?? null
   const subtitle =
     acc.status === 'signed-in'
-      ? tr('sidebar.SidebarFooter.message404', { p0: acc.balanceText ?? '—' })
+      ? tr('sidebar.SidebarFooter.balance', { p0: acc.balanceText ?? '—' })
       : acc.status === 'signing-in'
-        ? tr('sidebar.SidebarFooter.message405')
+        ? tr('sidebar.SidebarFooter.signingIn')
         : acc.status === 'loading'
-          ? tr('account.AccountMenu.message25')
-          : tr('sidebar.SidebarFooter.message406')
-  const title = name ?? tr('sidebar.SidebarFooter.message407')
+          ? tr('account.AccountMenu.loadingAccount')
+          : tr('sidebar.SidebarFooter.clickToSignIn')
+  const title = name ?? tr('sidebar.SidebarFooter.notSignedIn')
   const accountLabel = [title, subtitle].filter(Boolean).join('\n')
   const tools = layout.bottom.length
   const showText = tools < SIDEBAR_ROW_LIMIT

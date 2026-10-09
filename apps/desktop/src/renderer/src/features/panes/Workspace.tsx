@@ -258,8 +258,8 @@ export function Workspace(props: WorkspaceProps) {
                 key={key}
                 role="separator"
                 aria-orientation={row ? 'vertical' : 'horizontal'}
-                aria-label={tr('panes.Workspace.message585')}
-                title={tr('panes.Workspace.message585')}
+                aria-label={tr('panes.Workspace.dragToResizePanes')}
+                title={tr('panes.Workspace.dragToResizePanes')}
                 className={cn(
                   'pane-divider absolute z-20',
                   row ? 'cursor-col-resize' : 'cursor-row-resize',

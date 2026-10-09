@@ -35,7 +35,9 @@ describe('中英文词典', () => {
   })
   it('动态参数保留用户原始文字，包括插值符号', () => {
     setCurrentLocale('en-US')
-    expect(tr('files.FileConfirm.message515', { p0: '中文文件{p0}.ts' })).toBe('中文文件{p0}.ts has unsaved changes')
+    expect(tr('files.FileConfirm.hasUnsavedChanges', { p0: '中文文件{p0}.ts' })).toBe(
+      '中文文件{p0}.ts has unsaved changes',
+    )
     expect(translateText('用户项目名称')).toBe('用户项目名称')
     expect(translateText('src/中文文件.ts')).toBe('src/中文文件.ts')
   })

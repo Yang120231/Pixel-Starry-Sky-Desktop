@@ -38,7 +38,7 @@ export function useItemLocation(
       if (performance.now() < deadline) frame = requestAnimationFrame(attempt)
       else {
         finishItemNavigation(target.token)
-        toast(tr('search.useItemLocation.message611'))
+        toast(tr('search.useItemLocation.thisContentNoLonger'))
       }
     }
     frame = requestAnimationFrame(attempt)

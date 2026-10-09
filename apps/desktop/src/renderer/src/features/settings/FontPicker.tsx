@@ -87,7 +87,7 @@ export function FontPicker({ label, value, onChange, placeholder, sample }: Font
         />
         <button
           type="button"
-          aria-label={tr('settings.FontPicker.message789', { p0: label })}
+          aria-label={tr('settings.FontPicker.chooseFromInstalledFonts', { p0: label })}
           aria-expanded={open}
           aria-controls={listId}
           onClick={openList}
@@ -106,9 +106,9 @@ export function FontPicker({ label, value, onChange, placeholder, sample }: Font
             <Search size={14} strokeWidth={1.5} className="shrink-0" />
             <input
               autoFocus
-              aria-label={tr('settings.FontPicker.message790')}
+              aria-label={tr('settings.FontPicker.searchFonts')}
               value={query}
-              placeholder={tr('settings.FontPicker.message791')}
+              placeholder={tr('settings.FontPicker.searchInstalledFonts')}
               onChange={e => setQuery(e.target.value)}
               className="min-w-0 flex-1 bg-transparent text-list text-fg outline-none placeholder:text-fg-faint"
             />
@@ -121,16 +121,16 @@ export function FontPicker({ label, value, onChange, placeholder, sample }: Font
                 setOpen(false)
               }}
             >
-              <span className="text-fg">{tr('settings.FontPicker.message792')}</span>
+              <span className="text-fg">{tr('settings.FontPicker.systemDefault')}</span>
             </FontOption>
             {fonts === null && (
-              <li className="px-2.5 py-2 text-meta text-fg-faint">{tr('settings.FontPicker.message793')}</li>
+              <li className="px-2.5 py-2 text-meta text-fg-faint">{tr('settings.FontPicker.loadingInstalledFonts')}</li>
             )}
             {fonts !== null && fonts.length === 0 && (
-              <li className="px-2.5 py-2 text-meta text-fg-faint">{tr('settings.FontPicker.message794')}</li>
+              <li className="px-2.5 py-2 text-meta text-fg-faint">{tr('settings.FontPicker.couldNotLoadInstalled')}</li>
             )}
             {fonts !== null && fonts.length > 0 && shown.length === 0 && (
-              <li className="px-2.5 py-2 text-meta text-fg-faint">{tr('settings.FontPicker.message795')}</li>
+              <li className="px-2.5 py-2 text-meta text-fg-faint">{tr('settings.FontPicker.noMatchingFonts')}</li>
             )}
             {shown.map(family => (
               <FontOption

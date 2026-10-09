@@ -86,7 +86,7 @@ export function useSessionTitle(id: string | null): string {
     id ? (s.snapshots[id]?.record.title ?? s.sessions.find(x => x.record.id === id)?.record.title ?? null) : null,
   )
   if (!isLive) return (id ? demoChanges[id]?.title : undefined) ?? demoTitle(id)
-  return live ?? tr('engine.hooks.message472')
+  return live ?? tr('engine.hooks.newConversation')
 }
 
 // ---------------------------------------------------------------------------
@@ -343,9 +343,9 @@ export function useComposerController(
       }
     else if (needsBalance(group) && balance !== null && balance <= 0) blocker = { kind: 'balance' }
   } else if (engine && engine.status === 'unauthenticated') {
-    blocker = { kind: 'self-auth', message: engine.message ?? tr('engine.hooks.message473', { p0: engine.name }) }
+    blocker = { kind: 'self-auth', message: engine.message ?? tr('engine.hooks.isNotSignedIn', { p0: engine.name }) }
   } else if (engine && engine.status !== 'ready') {
-    blocker = { kind: 'self-missing', message: engine.message ?? tr('engine.hooks.message474', { p0: engine.name }) }
+    blocker = { kind: 'self-missing', message: engine.message ?? tr('engine.hooks.isUnavailable', { p0: engine.name }) }
   }
 
   /** 平台的（分组，模型）：优先保住 want 这个模型，否则沿用全局默认 */
@@ -369,7 +369,7 @@ export function useComposerController(
       await b.updateSession(record.id, { platform: null, model: selfModelFrom(record.model) })
       return
     }
-    if (!platform.email) throw new Error(tr('engine.hooks.message475'))
+    if (!platform.email) throw new Error(tr('engine.hooks.signInToPixel'))
     const pick = await platformPick(record.model)
     await b.updateSession(record.id, {
       platform: { groupId: pick.groupId, account: platform.email },
@@ -408,7 +408,7 @@ export function useComposerController(
     // 先保模型：当前线路没有这个模型就换到包含它、倍率最低的线路
     const keep = platform.groups.find(g => g.id === record.platform?.groupId)?.models.includes(m)
     const route = keep ? record.platform.groupId : groupsForModel(platform.groups, m)[0]?.id
-    if (!route) throw new Error(tr('engine.hooks.message476'))
+    if (!route) throw new Error(tr('engine.hooks.noRouteSupportsThis'))
     await b.updateSession(record.id, {
       platform: { groupId: route, account: record.platform.account },
       model: m,
@@ -425,16 +425,17 @@ export function useComposerController(
     steerAvailable: snap?.flags.steerAvailable === true,
     state: snap?.state ?? 'idle',
     cancelQueued: id =>
-      record ? b.cancelQueued(record.id, id) : Promise.reject(new Error(tr('engine.hooks.message477'))),
+      record ? b.cancelQueued(record.id, id) : Promise.reject(new Error(tr('engine.hooks.conversationNotFound'))),
     moveQueued: (id, index) =>
-      record ? b.moveQueued(record.id, id, index) : Promise.reject(new Error(tr('engine.hooks.message477'))),
+      record ? b.moveQueued(record.id, id, index) : Promise.reject(new Error(tr('engine.hooks.conversationNotFound'))),
     runQueuedNow: id =>
-      record ? b.runQueuedNow(record.id, id) : Promise.reject(new Error(tr('engine.hooks.message477'))),
+      record ? b.runQueuedNow(record.id, id) : Promise.reject(new Error(tr('engine.hooks.conversationNotFound'))),
     steerQueued: id =>
       record && snap?.turnId
         ? b.steerQueued(record.id, id, snap.turnId)
-        : Promise.reject(new Error(tr('engine.hooks.message478'))),
-    resumeQueue: () => (record ? b.resumeQueue(record.id) : Promise.reject(new Error(tr('engine.hooks.message477')))),
+        : Promise.reject(new Error(tr('engine.hooks.noTaskIsCurrently'))),
+    resumeQueue: () =>
+      record ? b.resumeQueue(record.id) : Promise.reject(new Error(tr('engine.hooks.conversationNotFound'))),
     started,
     source,
     groupId,
@@ -487,8 +488,9 @@ export function useComposerController(
       )
         throw new Error(tr('composer.attachment.unsupportedEngine'))
       // 平台失败不改用自有（D023）：拦下来让用户自己选
-      if (blocker?.kind === 'signin') throw new Error(tr('engine.hooks.message479'))
-      if (blocker?.kind === 'account') throw new Error(tr('engine.hooks.message480', { p0: blocker.account }))
+      if (blocker?.kind === 'signin') throw new Error(tr('engine.hooks.signInToPixel2'))
+      if (blocker?.kind === 'account')
+        throw new Error(tr('engine.hooks.thisConversationUsesS', { p0: blocker.account }))
       if (blocker?.kind === 'no-route') throw new Error(blocker.message)
       const usePlatform = source === 'platform'
       if (record && started) {
@@ -496,7 +498,7 @@ export function useComposerController(
         return
       }
       if (usePlatform && (platform.loading || !groupId || !model))
-        throw new Error(platform.error ?? tr('engine.hooks.message481'))
+        throw new Error(platform.error ?? tr('engine.hooks.platformRoutesAreLoading'))
       const sourcePatch = usePlatform
         ? { platform: { groupId: groupId!, account: platform.email! }, model, engine: engineId }
         : { platform: null, model }
@@ -508,10 +510,10 @@ export function useComposerController(
       // 欢迎页：先确认引擎可用、有项目，再创建会话
       const info = engine ?? (await b.engines()).find(e => e.id === engineId)
       if (info && info.status !== 'ready' && !(usePlatform && info.status === 'unauthenticated'))
-        throw new Error(info.message ?? tr('session.ModelSourceMenu.message315', { p0: info.name }))
+        throw new Error(info.message ?? tr('session.ModelSourceMenu.isTemporarilyUnavailable', { p0: info.name }))
       const workspace = draftKey ? draftWorkspace(draftKey) : null
       const projectId = workspace?.projectId ?? getEngineState().currentProjectId ?? (await addProject())
-      if (!projectId) throw new Error(tr('engine.hooks.message482'))
+      if (!projectId) throw new Error(tr('engine.hooks.chooseProjectFolderFirst'))
       const created = await b.createSession({
         projectId,
         copyId: workspace?.copyId,

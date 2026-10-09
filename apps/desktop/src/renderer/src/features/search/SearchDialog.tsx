@@ -17,25 +17,25 @@ const SCOPES: Array<{ id: SearchScope; name: string }> = [
   {
     id: 'all',
     get name() {
-      return tr('search.SearchDialog.message588')
+      return tr('search.SearchDialog.allContent')
     },
   },
   {
     id: 'titles',
     get name() {
-      return tr('search.SearchDialog.message589')
+      return tr('search.SearchDialog.conversationTitles')
     },
   },
   {
     id: 'messages',
     get name() {
-      return tr('search.SearchDialog.message590')
+      return tr('search.SearchDialog.messages')
     },
   },
   {
     id: 'tools',
     get name() {
-      return tr('search.SearchDialog.message591')
+      return tr('search.SearchDialog.toolContent')
     },
   },
 ]
@@ -130,7 +130,7 @@ export function SearchDialog({
             result.results = [...rows, ...result.results].slice(0, 50)
           }
           if (disposed || request.current !== requestId || result?.cancelled) return
-          if (!result) throw new Error(tr('search.SearchDialog.message592'))
+          if (!result) throw new Error(tr('search.SearchDialog.localConversationSearchIs'))
           setResponse(result)
         } catch (err) {
           if (!disposed && request.current === requestId) setError((err as Error).message)
@@ -196,9 +196,15 @@ export function SearchDialog({
       >
         <header className="flex items-center gap-3 px-4 pt-3 pb-1.5">
           <h2 id="search-title" className="flex-1 text-ui font-medium text-fg-secondary">
-            {tr('search.SearchDialog.message593')}
+            {tr('search.SearchDialog.searchConversationsAndContent')}
           </h2>
-          <IconButton icon={X} label={tr('search.SearchDialog.message594')} size={24} iconSize={14} onClick={onClose} />
+          <IconButton
+            icon={X}
+            label={tr('search.SearchDialog.closeSearchEsc')}
+            size={24}
+            iconSize={14}
+            onClick={onClose}
+          />
         </header>
         <div className="mx-4 flex items-center gap-2 rounded-lg border border-line bg-subtle px-3 focus-within:border-accent-line">
           <Search size={16} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
@@ -207,8 +213,8 @@ export function SearchDialog({
             type="search"
             value={text}
             maxLength={200}
-            placeholder={tr('search.SearchDialog.message595')}
-            aria-label={tr('search.SearchDialog.message596')}
+            placeholder={tr('search.SearchDialog.searchTitlesMessagesCommands')}
+            aria-label={tr('search.SearchDialog.searchTerms')}
             role="combobox"
             aria-autocomplete="list"
             aria-expanded
@@ -225,7 +231,7 @@ export function SearchDialog({
           {loading && <Spinner size={14} />}
         </div>
         <div className="flex flex-wrap items-center gap-2 border-b border-line-subtle px-4 py-3">
-          <div role="group" aria-label={tr('search.SearchDialog.message597')} className="flex flex-wrap gap-1">
+          <div role="group" aria-label={tr('search.SearchDialog.searchScope')} className="flex flex-wrap gap-1">
             {SCOPES.map(s => (
               <button
                 key={s.id}
@@ -248,7 +254,7 @@ export function SearchDialog({
           className="min-h-36 min-w-0 flex-1 overflow-y-auto p-2"
           id="global-search-results"
           role="listbox"
-          aria-label={tr('search.SearchDialog.message598')}
+          aria-label={tr('search.SearchDialog.searchResults')}
           aria-busy={loading}
         >
           {response.results.map((r, i) => {
@@ -307,33 +313,33 @@ export function SearchDialog({
           {!response.results.length && (
             <div role="status" className="px-4 py-9 text-center text-ui text-fg-muted">
               {loading
-                ? tr('search.SearchDialog.message599')
+                ? tr('search.SearchDialog.searching')
                 : (error ??
                   (!response.sessionCount
-                    ? tr('search.SearchDialog.message600')
+                    ? tr('search.SearchDialog.noConversationsYetStart')
                     : text.trim()
-                      ? tr('search.SearchDialog.message601')
-                      : tr('search.SearchDialog.message602')))}
+                      ? tr('search.SearchDialog.noMatchingContentTry')
+                      : tr('search.SearchDialog.noConversationsInThis')))}
             </div>
           )}
           {response.partial && (
             <p role="status" className="px-3 py-2 text-meta text-warn">
-              {tr('search.SearchDialog.message603')}
+              {tr('search.SearchDialog.someConversationRecordsCould')}
             </p>
           )}
           {response.truncated && (
             <p role="status" className="px-3 py-2 text-meta text-fg-muted">
-              {tr('search.SearchDialog.message604')}
+              {tr('search.SearchDialog.tooManyResultsNarrow')}
             </p>
           )}
         </div>
         <footer className="flex items-center gap-3 border-t border-line-subtle px-4 py-2.5 text-label text-fg-faint">
           <span className="flex-1">
-            {text.trim() ? tr('search.SearchDialog.message605') : tr('search.SearchDialog.message606')}
+            {text.trim() ? tr('search.SearchDialog.localSearch') : tr('search.SearchDialog.recentConversations')}
           </span>
-          <span>{tr('search.SearchDialog.message607')}</span>
-          <span>{tr('search.SearchDialog.message608')}</span>
-          <span>{tr('search.SearchDialog.message609')}</span>
+          <span>{tr('search.SearchDialog.select')}</span>
+          <span>{tr('search.SearchDialog.enterOpen')}</span>
+          <span>{tr('search.SearchDialog.escClose')}</span>
         </footer>
       </div>
     </div>

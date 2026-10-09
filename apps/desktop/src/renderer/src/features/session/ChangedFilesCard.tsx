@@ -31,16 +31,16 @@ export function ChangedFilesCard({
         </span>
         <div className="min-w-0 flex-1">
           <div className="text-prose leading-snug font-semibold text-fg">
-            {tr('session.ChangedFilesCard.message103')} {data.files.length}
-            {tr('session.ChangedFilesCard.message104')}{' '}
+            {tr('session.ChangedFilesCard.edited')} {data.files.length}
+            {tr('session.ChangedFilesCard.files')}{' '}
           </div>
           <DiffStat added={data.added} removed={data.removed} className="text-meta" />
         </div>
-        <Button variant="ghost" icon={Undo2} onClick={() => comingSoon(tr('session.ChangedFilesCard.message105'))}>
-          {tr('session.ChangedFilesCard.message105')}{' '}
+        <Button variant="ghost" icon={Undo2} onClick={() => comingSoon(tr('session.ChangedFilesCard.undo'))}>
+          {tr('session.ChangedFilesCard.undo')}{' '}
         </Button>
-        <Button variant="outline" pill onClick={() => comingSoon(tr('session.ChangedFilesCard.message106'))}>
-          {tr('session.ChangedFilesCard.message106')}{' '}
+        <Button variant="outline" pill onClick={() => comingSoon(tr('session.ChangedFilesCard.review'))}>
+          {tr('session.ChangedFilesCard.review')}{' '}
         </Button>
       </div>
       <ul className="px-2 pb-2">
@@ -52,7 +52,7 @@ export function ChangedFilesCard({
             <button
               type="button"
               className="min-w-0 flex-1 truncate text-left hover:underline"
-              title={tr('session.ChangedFilesCard.message107')}
+              title={tr('session.ChangedFilesCard.openFileInPixel')}
               disabled={!target && !isDemo}
               onClick={() => {
                 const ref = target ?? (isDemo && projects[0] ? { projectId: projects[0].id } : null)

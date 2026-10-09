@@ -68,57 +68,57 @@ export const editorTheme = [
 
 export const editorPhrases = {
   get Find() {
-    return tr('editor.code.theme.message416')
+    return tr('editor.code.theme.find')
   },
   get Replace() {
-    return tr('editor.code.theme.message417')
+    return tr('editor.code.theme.replace')
   },
   get 'Replace all'() {
-    return tr('editor.code.theme.message418')
+    return tr('editor.code.theme.replaceAll')
   },
   get replace() {
-    return tr('editor.code.theme.message417')
+    return tr('editor.code.theme.replace')
   },
   get 'replace all'() {
-    return tr('editor.code.theme.message418')
+    return tr('editor.code.theme.replaceAll')
   },
   get next() {
-    return tr('editor.code.theme.message419')
+    return tr('editor.code.theme.next')
   },
   get previous() {
-    return tr('editor.code.theme.message420')
+    return tr('editor.code.theme.previous')
   },
   get all() {
-    return tr('editor.code.theme.message421')
+    return tr('editor.code.theme.all')
   },
   get 'match case'() {
-    return tr('editor.code.theme.message422')
+    return tr('editor.code.theme.matchCase')
   },
   get regexp() {
-    return tr('editor.code.theme.message423')
+    return tr('editor.code.theme.regularExpression')
   },
   get 'by word'() {
-    return tr('editor.code.theme.message424')
+    return tr('editor.code.theme.wholeWords')
   },
   get close() {
-    return tr('editor.code.theme.message425')
+    return tr('editor.code.theme.close')
   },
   get 'Go to line'() {
-    return tr('editor.code.theme.message426')
+    return tr('editor.code.theme.goToLine')
   },
   get go() {
-    return tr('editor.code.theme.message427')
+    return tr('editor.code.theme.go')
   },
   get 'Fold line'() {
-    return tr('editor.code.theme.message428')
+    return tr('editor.code.theme.foldLine')
   },
   get 'Unfold line'() {
-    return tr('editor.code.theme.message429')
+    return tr('editor.code.theme.unfoldLine')
   },
   get to() {
-    return tr('editor.code.theme.message430')
+    return tr('editor.code.theme.replaceWith')
   },
   get 'No matches'() {
-    return tr('editor.code.theme.message431')
+    return tr('editor.code.theme.noMatches')
   },
 }

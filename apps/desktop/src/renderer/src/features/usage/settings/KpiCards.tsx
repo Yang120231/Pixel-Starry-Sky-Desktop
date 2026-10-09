@@ -15,46 +15,46 @@ export function KpiCards({ totals, prev }: { totals: UsageTotals; prev: UsageTot
   return (
     <div className="grid grid-cols-4 gap-3 @max-[700px]:grid-cols-2">
       <Card
-        label={tr('settings.usage.KpiCards.message963')}
+        label={tr('settings.usage.KpiCards.conversationTurns')}
         value={`${totals.turns}`}
-        unit={tr('settings.usage.KpiCards.message964')}
-        sub={tr('settings.usage.KpiCards.message965', { p0: totals.requests })}
+        unit={tr('settings.usage.KpiCards.turns')}
+        sub={tr('settings.usage.KpiCards.requests', { p0: totals.requests })}
         delta={formatDelta(totals.turns, prev.turns)}
       />
       <Card
         label="Token"
         value={formatTokens(totalTokens(totals))}
-        sub={tr('settings.usage.KpiCards.message966', {
+        sub={tr('settings.usage.KpiCards.inputOutput', {
           p0: formatTokens(totals.input + totals.cacheRead + totals.cacheWrite),
           p1: formatTokens(totals.output),
         })}
         delta={formatDelta(totalTokens(totals), totalTokens(prev))}
       />
       <Card
-        label={tr('settings.usage.KpiCards.message967')}
+        label={tr('settings.usage.KpiCards.cacheHit')}
         value={formatPercent(hit)}
-        sub={tr('settings.usage.KpiCards.message968', { p0: formatTokens(totals.cacheRead) })}
+        sub={tr('settings.usage.KpiCards.cacheRead', { p0: formatTokens(totals.cacheRead) })}
         delta={
           hitDelta === null
             ? null
             : {
                 text:
                   hitDelta === 0
-                    ? tr('settings.usage.KpiCards.message969')
+                    ? tr('settings.usage.KpiCards.unchanged')
                     : `${hitDelta > 0 ? '▲' : '▼'}${Math.abs(hitDelta)}pt`,
                 up: hitDelta >= 0,
               }
         }
       />
       <Card
-        label={tr('settings.replyStats.message851')}
+        label={tr('settings.replyStats.cost')}
         value={formatTotalCost(totals)}
         sub={
           missingCost > 0
-            ? tr('settings.usage.KpiCards.message970', { p0: missingCost })
+            ? tr('settings.usage.KpiCards.recordsWithoutReportedCost', { p0: missingCost })
             : totals.costActual === totals.costKnown && totals.costKnown > 0
               ? tr('billing.actual')
-              : tr('settings.usage.KpiCards.message971')
+              : tr('settings.usage.KpiCards.estimateReportedByEngine')
         }
         delta={totals.costKnown > 0 && prev.costKnown > 0 ? formatDelta(totals.costUsd, prev.costUsd) : null}
       />
@@ -81,7 +81,7 @@ function Card({
       <div className="flex items-baseline justify-between gap-2 text-meta text-fg-muted">
         <span className="truncate">{label}</span>
         {delta && (
-          <span className="shrink-0 tabular-nums" title={tr('settings.usage.KpiCards.message972')}>
+          <span className="shrink-0 tabular-nums" title={tr('settings.usage.KpiCards.comparedWithPreviousPeriod')}>
             {delta.text}
           </span>
         )}

@@ -215,7 +215,7 @@ export function App() {
         </CollapsibleSlot>
         {sidebarOpen && (
           <ResizeHandle
-            label={tr('App.message21')}
+            label={tr('App.resizeSidebar')}
             axis="x"
             className="sidebar-resize"
             value={sidebarWidth}

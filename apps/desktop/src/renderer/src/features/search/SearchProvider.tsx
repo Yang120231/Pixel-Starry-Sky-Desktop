@@ -65,11 +65,11 @@ export function SearchProvider({ children }: { children: ReactNode }) {
 
 export function useOpenSearch(): () => void {
   const open = useContext(SearchContext)
-  if (!open) throw new Error(tr('search.SearchProvider.message610'))
+  if (!open) throw new Error(tr('search.SearchProvider.searchMustBeUsed'))
   return open.show
 }
 export function useSearchUi() {
   const value = useContext(SearchContext)
-  if (!value) throw new Error(tr('search.SearchProvider.message610'))
+  if (!value) throw new Error(tr('search.SearchProvider.searchMustBeUsed'))
   return value
 }

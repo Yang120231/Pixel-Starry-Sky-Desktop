@@ -28,11 +28,11 @@ export function CopyButton({ text, label, iconOnly }: { text: string; label?: st
   const Icon = state === 'copied' ? Check : Copy
   const status =
     state === 'copied'
-      ? tr('code.CodeBlock.message55')
+      ? tr('code.CodeBlock.copied')
       : state === 'failed'
-        ? tr('code.CodeBlock.message56')
-        : tr('code.CodeBlock.message57')
-  const name = label ?? tr('code.CodeBlock.message57')
+        ? tr('code.CodeBlock.copyFailed')
+        : tr('code.CodeBlock.copy')
+  const name = label ?? tr('code.CodeBlock.copy')
   return (
     <button
       type="button"

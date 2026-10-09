@@ -75,7 +75,7 @@ export function EffortSlider({
         data-dragging={drag !== null || undefined}
         role="slider"
         tabIndex={disabled ? -1 : 0}
-        aria-label={tr('session.Composer.message119')}
+        aria-label={tr('session.Composer.reasoningEffort')}
         aria-valuemin={0}
         aria-valuemax={count - 1}
         aria-valuenow={shown}

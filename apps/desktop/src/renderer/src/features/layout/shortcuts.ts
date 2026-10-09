@@ -90,43 +90,43 @@ export const CYCLE_TAB = {
 export const PANE_SHORTCUTS: Array<{ label: string; keys: string }> = [
   {
     get label() {
-      return tr('shortcuts.message1036')
+      return tr('shortcuts.splitPaneRight')
     },
     keys: SPLIT_RIGHT.label,
   },
   {
     get label() {
-      return tr('shortcuts.message1037')
+      return tr('shortcuts.splitPaneDown')
     },
     keys: SPLIT_DOWN.label,
   },
   {
     get label() {
-      return tr('shortcuts.message1038')
+      return tr('shortcuts.closeTabClosePane')
     },
     keys: CLOSE_TAB.label,
   },
   {
     get label() {
-      return tr('shortcuts.message1039')
+      return tr('shortcuts.jumpToPaneN')
     },
     keys: JUMP_PANE.label,
   },
   {
     get label() {
-      return tr('shortcuts.message1040')
+      return tr('shortcuts.switchToPreviousNext')
     },
     keys: CYCLE_PANE.label,
   },
   {
     get label() {
-      return tr('shortcuts.message1041')
+      return tr('shortcuts.expandRestoreCurrentPane')
     },
     keys: ZOOM_PANE.label,
   },
   {
     get label() {
-      return tr('shortcuts.message1042')
+      return tr('shortcuts.switchTabsInPane')
     },
     keys: CYCLE_TAB.label + ' / Ctrl+Shift+Tab',
   },

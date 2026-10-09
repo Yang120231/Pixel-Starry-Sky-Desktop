@@ -235,7 +235,7 @@ export const paneActions = {
     if (
       T.isFileTab(tab) &&
       (source.id !== target.leafId || target.edge) &&
-      !(await confirmFiles([tab], tr('panes.store.message583')))
+      !(await confirmFiles([tab], tr('panes.store.moveTab')))
     )
       return
     if (!T.leafOfTab(state.layout.root, tab) || state.closing[target.leafId]) return
@@ -304,7 +304,7 @@ export const paneActions = {
         ? (rect.w * container.width) / 2 >= MIN_PANE.width
         : (rect.h * container.height) / 2 >= MIN_PANE.height
     if (!room) {
-      notify(tr('panes.store.message584'))
+      notify(tr('panes.store.notEnoughSpaceFor'))
       return
     }
     const leafId = newId('p')
@@ -330,7 +330,7 @@ export const paneActions = {
   /** 关闭窗格：先收拢到 0（有动画时），动画结束后再从布局里删掉；里面的会话继续在后台运行 */
   async closePane(leafId: string): Promise<void> {
     const fileTabs = T.findLeaf(state.layout.root, leafId)?.tabs.filter(T.isFileTab) ?? []
-    if (!(await confirmFiles(fileTabs, tr('panes.PaneView.message566')))) return
+    if (!(await confirmFiles(fileTabs, tr('panes.PaneView.closePane')))) return
     if (state.closing[leafId]) return
     const all = T.leaves(state.layout.root)
     if (!all.some(l => l.id === leafId)) return

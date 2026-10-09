@@ -58,16 +58,21 @@ function useTabInfo(tab: string | null): TabInfo {
       file: true,
       dirty: file ? dirtyFile(file) : false,
     }
-  return { title: tab === null ? tr('panes.PaneView.message559') : title, project, status }
+  return { title: tab === null ? tr('panes.PaneView.emptyPane') : title, project, status }
 }
 
 function StatusMark({ status }: { status: TabStatus }) {
   useI18n()
   if (status === 'running') return <Spinner size={11} className="shrink-0" />
   if (status === 'waiting')
-    return <span className="size-1.5 shrink-0 rounded-full bg-warn" aria-label={tr('panes.PaneView.message560')} />
+    return (
+      <span
+        className="size-1.5 shrink-0 rounded-full bg-warn"
+        aria-label={tr('panes.PaneView.waitingForConfirmation')}
+      />
+    )
   if (status === 'unread')
-    return <span className="size-1.5 shrink-0 rounded-full bg-accent" aria-label={tr('panes.PaneView.message561')} />
+    return <span className="size-1.5 shrink-0 rounded-full bg-accent" aria-label={tr('panes.PaneView.newReply')} />
   return null
 }
 
@@ -112,12 +117,12 @@ export const PaneView = memo(function PaneView(props: PaneViewProps) {
             {info.status === 'running' && (
               <span className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full bg-accent-soft px-2 text-label font-medium text-accent-fg">
                 <Spinner size={10} />
-                {tr('session.live.agentTrace.message193')}{' '}
+                {tr('session.live.agentTrace.running')}{' '}
               </span>
             )}
             {info.status === 'waiting' && (
               <span className="inline-flex h-5 shrink-0 items-center rounded-full bg-subtle px-2 text-label font-medium text-warn">
-                {tr('panes.PaneView.message560')}
+                {tr('panes.PaneView.waitingForConfirmation')}
               </span>
             )}
             {info.project && (
@@ -132,7 +137,7 @@ export const PaneView = memo(function PaneView(props: PaneViewProps) {
             <IconButton
               icon={maximized ? Minimize2 : Maximize2}
               label={withShortcut(
-                maximized ? tr('panes.PaneView.message562') : tr('panes.PaneView.message563'),
+                maximized ? tr('panes.PaneView.restorePane') : tr('panes.PaneView.expandPane'),
                 ZOOM_PANE,
               )}
               iconSize={14}
@@ -141,7 +146,7 @@ export const PaneView = memo(function PaneView(props: PaneViewProps) {
             <span className="relative">
               <IconButton
                 icon={Ellipsis}
-                label={tr('session.SessionHeader.message347')}
+                label={tr('session.SessionHeader.more')}
                 active={menuOpen}
                 aria-haspopup="menu"
                 aria-expanded={menuOpen}
@@ -157,7 +162,7 @@ export const PaneView = memo(function PaneView(props: PaneViewProps) {
                     paneActions.split('row', props.areaSize())
                   }}
                 >
-                  {tr('panes.PaneView.message564')} {SPLIT_RIGHT.label}）
+                  {tr('panes.PaneView.splitRight')} {SPLIT_RIGHT.label}）
                 </PopoverItem>
                 <PopoverItem
                   icon={<Rows2 size={15} strokeWidth={1.5} className="text-fg-secondary" />}
@@ -167,7 +172,7 @@ export const PaneView = memo(function PaneView(props: PaneViewProps) {
                     paneActions.split('col', props.areaSize())
                   }}
                 >
-                  {tr('panes.PaneView.message565')} {SPLIT_DOWN.label}）
+                  {tr('panes.PaneView.splitDown')} {SPLIT_DOWN.label}）
                 </PopoverItem>
                 <PopoverItem
                   icon={<X size={15} strokeWidth={1.5} className="text-fg-secondary" />}
@@ -176,13 +181,13 @@ export const PaneView = memo(function PaneView(props: PaneViewProps) {
                     paneActions.closePane(leaf.id)
                   }}
                 >
-                  {tr('panes.PaneView.message566')}{' '}
+                  {tr('panes.PaneView.closePane')}{' '}
                 </PopoverItem>
               </Popover>
             </span>
             <IconButton
               icon={X}
-              label={tr('panes.PaneView.message567')}
+              label={tr('panes.PaneView.closePaneConversationContinues')}
               iconSize={15}
               onClick={() => paneActions.closePane(leaf.id)}
             />
@@ -282,7 +287,7 @@ function TabStrip({ leaf, dim, areaSize }: { leaf: Leaf; dim: boolean; areaSize:
     <div
       data-tab-strip
       role="tablist"
-      aria-label={tr('panes.PaneView.message568')}
+      aria-label={tr('panes.PaneView.conversationTabsDragTo')}
       className={cn(
         'pane-head-content flex items-center gap-1 overflow-x-auto px-2 pt-1 pb-1.5 [scrollbar-width:none]',
         dim && 'opacity-55',
@@ -304,8 +309,8 @@ function TabStrip({ leaf, dim, areaSize }: { leaf: Leaf; dim: boolean; areaSize:
       ))}
       <button
         type="button"
-        aria-label={tr('panes.PaneView.message569')}
-        title={tr('panes.PaneView.message569')}
+        aria-label={tr('panes.PaneView.newConversationInThis')}
+        title={tr('panes.PaneView.newConversationInThis')}
         onClick={() => {
           paneActions.focus(leaf.id)
           paneActions.open(null)
@@ -356,7 +361,7 @@ function Tab({
       role="tab"
       aria-selected={active}
       tabIndex={active ? 0 : -1}
-      title={tr('panes.PaneView.message570', { p0: info.title })}
+      title={tr('panes.PaneView.dragToReorderMove', { p0: info.title })}
       onPointerDown={e => beginDrag(e, tab, info.title)}
       onContextMenu={e => {
         e.preventDefault()
@@ -393,11 +398,11 @@ function Tab({
       {info.file ? <FileText size={12} className="shrink-0 text-fg-muted" /> : <StatusMark status={info.status} />}
       <span className="truncate">{info.file ? info.title.split('/').pop() : info.title}</span>
       {info.dirty && (
-        <span aria-label={tr('panes.PaneView.message571')} className="size-1.5 shrink-0 rounded-full bg-fg-muted" />
+        <span aria-label={tr('panes.PaneView.unsavedChanges')} className="size-1.5 shrink-0 rounded-full bg-fg-muted" />
       )}
       <button
         type="button"
-        aria-label={tr('panes.PaneView.message572', { p0: info.title })}
+        aria-label={tr('panes.PaneView.close', { p0: info.title })}
         onClick={e => {
           e.stopPropagation()
           paneActions.closeTab(leafId, tab)
@@ -447,46 +452,46 @@ function TabMenu({
   const choices: { label: string; target: DropTarget; disabled?: boolean }[] = [
     {
       get label() {
-        return tr('panes.PaneView.message573')
+        return tr('panes.PaneView.moveTabLeft')
       },
       target: { leafId: leaf.id, index: index - 1 },
       disabled: index <= 0,
     },
     {
       get label() {
-        return tr('panes.PaneView.message574')
+        return tr('panes.PaneView.moveTabRight')
       },
       target: { leafId: leaf.id, index: index + 2 },
       disabled: index >= leaf.tabs.length - 1,
     },
     {
       get label() {
-        return tr('panes.drag.message549')
+        return tr('panes.drag.splitToLeft')
       },
       target: { leafId: leaf.id, edge: 'left' },
     },
     {
       get label() {
-        return tr('panes.drag.message550')
+        return tr('panes.drag.splitToRight')
       },
       target: { leafId: leaf.id, edge: 'right' },
     },
     {
       get label() {
-        return tr('panes.drag.message551')
+        return tr('panes.drag.splitAbove')
       },
       target: { leafId: leaf.id, edge: 'top' },
     },
     {
       get label() {
-        return tr('panes.drag.message552')
+        return tr('panes.drag.splitBelow')
       },
       target: { leafId: leaf.id, edge: 'bottom' },
     },
     ...all.flatMap((l, i) =>
       l.id === leaf.id || closing[l.id]
         ? []
-        : [{ label: tr('panes.PaneView.message575', { p0: i + 1 }), target: { leafId: l.id, index: l.tabs.length } }],
+        : [{ label: tr('panes.PaneView.moveToPane', { p0: i + 1 }), target: { leafId: l.id, index: l.tabs.length } }],
     ),
   ]
   useLayoutEffect(() => {
@@ -513,7 +518,7 @@ function TabMenu({
     <div
       ref={ref}
       role="menu"
-      aria-label={tr('panes.PaneView.message576')}
+      aria-label={tr('panes.PaneView.moveConversationTab')}
       className="pop-in no-drag fixed z-50 max-h-[calc(100vh-16px)] min-w-48 overflow-y-auto rounded-lg border border-line-card bg-popover p-1 shadow-menu"
       style={{ left: menu.x, top: menu.y }}
       onKeyDown={e => {
@@ -580,7 +585,7 @@ function TabMenu({
               onClose()
             }}
           >
-            {tr('panes.PaneView.message577')}
+            {tr('panes.PaneView.revealInFileTree')}
           </button>
           <button
             role="menuitem"
@@ -591,7 +596,7 @@ function TabMenu({
               onClose()
             }}
           >
-            {tr('panes.PaneView.message578')}
+            {tr('panes.PaneView.copyFilePath')}
           </button>
           <button
             role="menuitem"
@@ -603,7 +608,7 @@ function TabMenu({
               onClose()
             }}
           >
-            {tr('panes.PaneView.message579')}
+            {tr('panes.PaneView.openWithExternalEditor')}
           </button>
           <div className="my-1 border-t border-line" />
         </>
@@ -636,7 +641,7 @@ function TabMenu({
           onClose()
         }}
       >
-        {tr('panel.PanelTabs.message85')}
+        {tr('panel.PanelTabs.closeTab')}
       </button>
     </div>,
     document.body,
@@ -648,11 +653,11 @@ function EmptyPane() {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-fg-muted">
       <MousePointerClick size={22} strokeWidth={1.5} />
-      <span className="text-ui">{tr('panes.PaneView.message580')}</span>
+      <span className="text-ui">{tr('panes.PaneView.openConversationFromSidebar')}</span>
       <span className="text-meta text-fg-faint">
         {SPLIT_RIGHT.label}
-        {tr('panes.PaneView.message581')} {SPLIT_DOWN.label}
-        {tr('panes.PaneView.message582')}{' '}
+        {tr('panes.PaneView.splitRight2')} {SPLIT_DOWN.label}
+        {tr('panes.PaneView.splitDown2')}{' '}
       </span>
       <button
         type="button"
@@ -660,7 +665,7 @@ function EmptyPane() {
         className="press mt-2 inline-flex h-8 items-center gap-1.5 rounded-md border border-line-strong bg-surface px-3 text-ui font-medium text-fg shadow-sm hover:border-fg-faint"
       >
         <Plus size={15} strokeWidth={1.5} />
-        {tr('sidebar.NewTaskButton.message392')}{' '}
+        {tr('sidebar.NewTaskButton.newTask')}{' '}
       </button>
     </div>
   )

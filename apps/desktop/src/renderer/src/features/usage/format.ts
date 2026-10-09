@@ -74,29 +74,29 @@ export function formatTime(t: number, now = Date.now()): string {
 
 export const DIMENSION_LABEL: Record<UsageDimension, string> = {
   get model() {
-    return tr('session.ModelSourceMenu.message291')
+    return tr('session.ModelSourceMenu.model')
   },
   get project() {
-    return tr('sidebar.Sidebar.message398')
+    return tr('sidebar.Sidebar.projects')
   },
   get engine() {
-    return tr('session.ModelSourceMenu.message283')
+    return tr('session.ModelSourceMenu.engine')
   },
   get route() {
-    return tr('session.ModelSourceMenu.message310')
+    return tr('session.ModelSourceMenu.route')
   },
 }
 
 const ROUTE_LABEL: Record<UsageRoute, string> = {
   get cli() {
-    return tr('usage.format.message1044')
+    return tr('usage.format.cliSignIn')
   },
   get pixelsky() {
-    return tr('usage.format.message1045')
+    return tr('usage.format.pixelStarrySkyAccount')
   },
   'api-key': 'API Key',
   get unknown() {
-    return tr('settings.usage.RemoteCallsTable.message991')
+    return tr('settings.usage.RemoteCallsTable.unknown')
   },
 }
 
@@ -106,7 +106,7 @@ const ENGINE_LABEL: Record<string, string> = { claude: 'Claude Code', codex: 'Co
 export function dimLabel(dim: UsageDimension, key: string): string {
   if (dim === 'route') return ROUTE_LABEL[key as UsageRoute] ?? key
   if (dim === 'engine') return ENGINE_LABEL[key] ?? key
-  if (dim === 'project') return key || tr('usage.format.message1046')
+  if (dim === 'project') return key || tr('usage.format.noProject')
   return key
 }
 
@@ -117,7 +117,7 @@ export function formatDelta(cur: number, prev: number): { text: string; up: bool
   if (pct === 0)
     return {
       get text() {
-        return tr('settings.usage.KpiCards.message969')
+        return tr('settings.usage.KpiCards.unchanged')
       },
       up: true,
     }

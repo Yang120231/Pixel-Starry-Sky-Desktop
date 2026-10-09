@@ -37,7 +37,7 @@ export function useOpenSessionRequests(open: (id: string) => void): void {
             .then(show)
             .catch(e => toast(e.message))
         else show()
-      } else toast(tr('engine.openRequests.message513'))
+      } else toast(tr('engine.openRequests.thisConversationWasDeleted'))
     }
     window.addEventListener(OPEN_SESSION_EVENT, onRequest)
     return () => window.removeEventListener(OPEN_SESSION_EVENT, onRequest)

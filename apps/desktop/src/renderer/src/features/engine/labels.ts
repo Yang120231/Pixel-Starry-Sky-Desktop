@@ -28,75 +28,75 @@ export function engineAccent(engine: EngineId): string {
 /** Fast 模式开不了的原因（CLI 的 fast_mode_disabled_reason） */
 const FAST_BLOCKED: Record<string, string> = {
   get free() {
-    return tr('engine.labels.message483')
+    return tr('engine.labels.unavailableForFreeAccounts')
   },
   get preference() {
-    return tr('engine.labels.message484')
+    return tr('engine.labels.fastModeIsNot')
   },
   get extra_usage_disabled() {
-    return tr('engine.labels.message485')
+    return tr('engine.labels.extraUsageIsNot')
   },
   get network_error() {
-    return tr('engine.labels.message486')
+    return tr('engine.labels.networkError')
   },
   get not_first_party() {
-    return tr('engine.labels.message487')
+    return tr('engine.labels.onlySupportedByOfficial')
   },
   get disabled_by_env() {
-    return tr('engine.labels.message488')
+    return tr('engine.labels.disabledByEnvironmentVariable')
   },
   get model_not_allowed() {
-    return tr('session.ComposerMenus.message126')
+    return tr('session.ComposerMenus.notSupportedByThis')
   },
   get pending() {
-    return tr('engine.labels.message489')
+    return tr('engine.labels.checkingAccountStatus')
   },
 }
 
 export function fastBlockedText(reason: string): string {
-  return FAST_BLOCKED[reason] ?? tr('engine.labels.message490')
+  return FAST_BLOCKED[reason] ?? tr('engine.labels.temporarilyUnavailable')
 }
 
 /** 后台任务类型名 */
 export function taskKindLabel(kind: string): string {
-  if (kind.startsWith('local_workflow')) return tr('engine.labels.message491')
-  if (kind.startsWith('local_bash')) return tr('engine.labels.message492')
-  if (kind.startsWith('local_agent')) return tr('engine.labels.message493')
-  if (kind.startsWith('monitor')) return tr('engine.labels.message494')
-  return tr('engine.labels.message495')
+  if (kind.startsWith('local_workflow')) return tr('engine.labels.multiAgentOrchestration')
+  if (kind.startsWith('local_bash')) return tr('engine.labels.backgroundCommand')
+  if (kind.startsWith('local_agent')) return tr('engine.labels.subagent')
+  if (kind.startsWith('monitor')) return tr('engine.labels.monitorTask')
+  return tr('engine.labels.backgroundTask')
 }
 
 export const PERMISSION_INFO: Record<PermissionMode, { label: string; hint: string }> = {
   ask: {
     get label() {
-      return tr('engine.labels.message496')
+      return tr('engine.labels.askEveryTime')
     },
     get hint() {
-      return tr('engine.labels.message497')
+      return tr('engine.labels.askBeforeEditingFiles')
     },
   },
   edits: {
     get label() {
-      return tr('engine.labels.message498')
+      return tr('engine.labels.autoEdit')
     },
     get hint() {
-      return tr('engine.labels.message499')
+      return tr('engine.labels.editProjectFilesAutomatically')
     },
   },
   plan: {
     get label() {
-      return tr('engine.labels.message500')
+      return tr('engine.labels.planMode')
     },
     get hint() {
-      return tr('engine.labels.message501')
+      return tr('engine.labels.readOnlyProposePlan')
     },
   },
   full: {
     get label() {
-      return tr('engine.labels.message502')
+      return tr('engine.labels.fullAccess')
     },
     get hint() {
-      return tr('engine.labels.message503')
+      return tr('engine.labels.executeWithoutAskingUse')
     },
   },
 }
@@ -104,10 +104,10 @@ export const PERMISSION_INFO: Record<PermissionMode, { label: string; hint: stri
 /** 侧边栏右侧的相对时间：刚刚 / 5分钟 / 3小时 / 2天 / 10-05 */
 export function relativeTime(ts: number, now = Date.now()): string {
   const s = Math.max(0, (now - ts) / 1000)
-  if (s < 60) return tr('account.format.message0')
-  if (s < 3600) return tr('engine.labels.message504', { p0: Math.floor(s / 60) })
-  if (s < 86400) return tr('engine.labels.message505', { p0: Math.floor(s / 3600) })
-  if (s < 86400 * 30) return tr('engine.labels.message506', { p0: Math.floor(s / 86400) })
+  if (s < 60) return tr('account.format.justNow')
+  if (s < 3600) return tr('engine.labels.m', { p0: Math.floor(s / 60) })
+  if (s < 86400) return tr('engine.labels.h', { p0: Math.floor(s / 3600) })
+  if (s < 86400 * 30) return tr('engine.labels.d', { p0: Math.floor(s / 86400) })
   const d = new Date(ts)
   return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
@@ -144,31 +144,31 @@ export const SELF_MODELS: Record<EngineId, Array<{ value: string | null; label: 
     {
       value: null,
       get label() {
-        return tr('engine.labels.message507')
+        return tr('engine.labels.default')
       },
       get hint() {
-        return tr('engine.labels.message508')
+        return tr('engine.labels.useClaudeCodeSettings')
       },
     },
     {
       value: 'opus',
       label: 'Opus',
       get hint() {
-        return tr('engine.labels.message509')
+        return tr('engine.labels.latestOpus')
       },
     },
     {
       value: 'sonnet',
       label: 'Sonnet',
       get hint() {
-        return tr('engine.labels.message510')
+        return tr('engine.labels.latestSonnet')
       },
     },
     {
       value: 'haiku',
       label: 'Haiku',
       get hint() {
-        return tr('engine.labels.message511')
+        return tr('engine.labels.latestHaiku')
       },
     },
   ],
@@ -176,10 +176,10 @@ export const SELF_MODELS: Record<EngineId, Array<{ value: string | null; label: 
     {
       value: null,
       get label() {
-        return tr('engine.labels.message507')
+        return tr('engine.labels.default')
       },
       get hint() {
-        return tr('engine.labels.message512')
+        return tr('engine.labels.useCodexSettings')
       },
     },
   ],
@@ -187,5 +187,5 @@ export const SELF_MODELS: Record<EngineId, Array<{ value: string | null; label: 
 
 /** 自有模型的显示名：别名用表里的名字，完整模型名原样显示 */
 export function selfModelLabel(engine: EngineId, model: string | null): string {
-  return SELF_MODELS[engine].find(m => m.value === model)?.label ?? model ?? tr('engine.labels.message507')
+  return SELF_MODELS[engine].find(m => m.value === model)?.label ?? model ?? tr('engine.labels.default')
 }

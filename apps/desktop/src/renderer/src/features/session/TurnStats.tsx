@@ -28,7 +28,7 @@ export function TurnStats({
     <div
       className={`group/message flex flex-wrap items-center gap-x-1.5 gap-y-1 text-meta text-fg-faint tabular-nums ${className ?? ''}`}
       title={detail}
-      aria-label={tr('session.TurnStats.message371')}
+      aria-label={tr('session.TurnStats.replyStatistics')}
     >
       {leading}
       {parts.map((part, index) => (

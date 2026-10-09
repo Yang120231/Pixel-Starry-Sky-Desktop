@@ -94,7 +94,7 @@ function start() {
       if (!gotPush) setSnapshot(toSnapshot(s))
     })
     .catch(e => {
-      if (!gotPush) setSnapshot({ ...SIGNED_OUT, error: errorText(e, tr('account.useAccount.message16')) })
+      if (!gotPush) setSnapshot({ ...SIGNED_OUT, error: errorText(e, tr('account.useAccount.couldNotLoadAccount')) })
     })
 }
 
@@ -134,10 +134,10 @@ function makeAction(name: 'login' | 'cancelLogin' | 'logout' | 'refresh', fallba
   }
 }
 
-const login = makeAction('login', () => tr('account.useAccount.message17'))
-const cancelLogin = makeAction('cancelLogin', () => tr('account.useAccount.message18'))
-const logout = makeAction('logout', () => tr('account.useAccount.message19'))
-const refresh = makeAction('refresh', () => tr('account.useAccount.message20'))
+const login = makeAction('login', () => tr('account.useAccount.signInFailedPlease'))
+const cancelLogin = makeAction('cancelLogin', () => tr('account.useAccount.couldNotCancelSign'))
+const logout = makeAction('logout', () => tr('account.useAccount.couldNotSignOut'))
+const refresh = makeAction('refresh', () => tr('account.useAccount.refreshFailedTryAgain'))
 
 /** 账号状态钩子。所有调用方共享同一个 store；操作函数引用稳定、不会抛出 */
 export function useAccount(): UseAccountResult {

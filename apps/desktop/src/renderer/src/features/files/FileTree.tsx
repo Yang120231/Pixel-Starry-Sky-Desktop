@@ -80,12 +80,12 @@ export function FileTree({
         className={cn('flex min-h-0 flex-1 flex-col', compact && 'w-52 shrink-0 flex-none border-r border-line-layout')}
       >
         <div className="flex h-10 shrink-0 items-center gap-1 px-2">
-          <span className="flex-1 px-1 text-ui font-medium text-fg">{tr('files.FileTree.message524')}</span>
+          <span className="flex-1 px-1 text-ui font-medium text-fg">{tr('files.FileTree.files')}</span>
           <IconButton
             icon={RefreshCw}
             size={26}
             iconSize={14}
-            label={tr('files.FileTree.message525')}
+            label={tr('files.FileTree.refreshFilesAndGit')}
             onClick={() => setRevision(n => n + 1)}
           />
           <IconButton
@@ -102,8 +102,8 @@ export function FileTree({
         <label className="mx-2 mb-2 flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-line bg-subtle px-2">
           <Search size={14} className="shrink-0 text-fg-muted" />
           <input
-            aria-label={tr('files.FileTree.message527')}
-            placeholder={tr('files.FileTree.message528')}
+            aria-label={tr('files.FileTree.filterFilesByName')}
+            placeholder={tr('files.FileTree.filterFilesByName2')}
             value={query}
             onChange={e => setQuery(e.target.value)}
             className="min-w-0 flex-1 bg-transparent text-meta text-fg outline-none"
@@ -111,11 +111,11 @@ export function FileTree({
           {query && (
             <button
               type="button"
-              aria-label={tr('files.FileTree.message529')}
+              aria-label={tr('files.FileTree.clearFileFilter')}
               onClick={() => setQuery('')}
               className="text-meta text-fg-muted"
             >
-              {tr('files.FileTree.message530')}
+              {tr('files.FileTree.clear')}
             </button>
           )}
         </label>
@@ -143,7 +143,7 @@ export function FileTree({
               />
             ))
           ) : (
-            <p className="px-4 py-6 text-meta text-fg-muted">{tr('files.FileTree.message531')}</p>
+            <p className="px-4 py-6 text-meta text-fg-muted">{tr('files.FileTree.noProjectYetAdd')}</p>
           )}
         </div>
       </div>
@@ -239,7 +239,7 @@ function ProjectRoot({
       <button
         type="button"
         aria-expanded={expanded}
-        aria-label={tr('files.FileTree.message532', { p0: expanded ? '收起' : '展开', p1: name })}
+        aria-label={tr('files.FileTree.project', { p0: expanded ? '收起' : '展开', p1: name })}
         onClick={() => setExpanded(v => !v)}
         className="flex h-9 w-full items-center gap-2 px-3 text-left text-ui text-fg hover:bg-hover"
       >
@@ -256,7 +256,7 @@ function ProjectRoot({
             {searching && (
               <p className="flex items-center gap-2 px-2 py-2 text-meta text-fg-muted">
                 <Spinner size={12} />
-                {tr('files.FileTree.message534')}
+                {tr('files.FileTree.filtering')}
               </p>
             )}
             {error && (
@@ -276,12 +276,12 @@ function ProjectRoot({
               />
             ))}
             {results && !results.entries.length && (
-              <p className="px-2 py-2 text-meta text-fg-muted">{tr('files.FileTree.message535')}</p>
+              <p className="px-2 py-2 text-meta text-fg-muted">{tr('files.FileTree.noMatchingFiles')}</p>
             )}
             {results?.truncated && (
-              <p className="px-2 py-2 text-label text-fg-muted">{tr('files.FileTree.message536')}</p>
+              <p className="px-2 py-2 text-label text-fg-muted">{tr('files.FileTree.showingPartialResultsNarrow')}</p>
             )}
-            <p className="px-2 py-1 text-label text-fg-faint">{tr('files.FileTree.message537')}</p>
+            <p className="px-2 py-1 text-label text-fg-faint">{tr('files.FileTree.filterByNameSkips')}</p>
           </div>
         ) : (
           <Directory refTarget={refTarget} path="" depth={0} revision={revision} statuses={statuses} />
@@ -333,7 +333,7 @@ function Directory({
     return (
       <p className="flex items-center gap-2 px-4 py-2 text-meta text-fg-muted">
         <Spinner size={12} />
-        {tr('editor.FileEditor.message456')}
+        {tr('editor.FileEditor.loadingFile')}
       </p>
     )
   return (
@@ -348,8 +348,10 @@ function Directory({
           statuses={statuses}
         />
       ))}
-      {!list.entries.length && <p className="px-4 py-1 text-meta text-fg-faint">{tr('files.FileTree.message538')}</p>}
-      {list.truncated && <p className="px-4 py-1 text-meta text-fg-muted">{tr('files.FileTree.message539')}</p>}
+      {!list.entries.length && <p className="px-4 py-1 text-meta text-fg-faint">{tr('files.FileTree.emptyFolder')}</p>}
+      {list.truncated && (
+        <p className="px-4 py-1 text-meta text-fg-muted">{tr('files.FileTree.largeDirectoryShowingFirst')}</p>
+      )}
     </div>
   )
 }
@@ -438,9 +440,9 @@ function FileRow({
       >
         <button
           type="button"
-          aria-label={`${entry.kind === 'directory' ? (expanded ? tr('files.FileTree.message540') : tr('files.FileTree.message541')) : tr('files.FileTree.message542')} ${entry.path}`}
+          aria-label={`${entry.kind === 'directory' ? (expanded ? tr('files.FileTree.collapseFolder') : tr('files.FileTree.expandFolder')) : tr('files.FileTree.openFile')} ${entry.path}`}
           aria-expanded={entry.kind === 'directory' ? expanded : undefined}
-          title={entry.path + (entry.linked ? tr('files.FileTree.message543') : '')}
+          title={entry.path + (entry.linked ? tr('files.FileTree.link') : '')}
           onClick={() =>
             entry.kind === 'directory'
               ? setExpanded(v => !v)
@@ -459,7 +461,7 @@ function FileRow({
           <span className="min-w-0 flex-1 truncate">{showPath ? entry.path : entry.name}</span>
           {status && (
             <span
-              title={tr('files.FileTree.message544', { p0: status })}
+              title={tr('files.FileTree.gitStatus', { p0: status })}
               className={cn('shrink-0 text-label', status === 'D' || status === '!' ? 'text-danger' : 'text-success')}
             >
               {status}
@@ -468,11 +470,11 @@ function FileRow({
         </button>
         <button
           type="button"
-          aria-label={tr('files.FileTree.message545', { p0: entry.path })}
-          title={tr('files.FileTree.message546')}
+          aria-label={tr('files.FileTree.copyFilePath', { p0: entry.path })}
+          title={tr('files.FileTree.copyPath')}
           className="ml-1 flex size-5 shrink-0 items-center justify-center rounded-sm text-fg-muted opacity-0 hover:bg-hover focus:opacity-100 group-hover/file:opacity-100"
           onClick={() => {
-            if (isDemo) setError(tr('files.FileTree.message547'))
+            if (isDemo) setError(tr('files.FileTree.demoModeCannotCopy'))
             else void window.pixelsky!.files.copyPath(refTarget, entry.path).catch(e => setError(e.message))
           }}
         >
@@ -498,13 +500,13 @@ function FileRow({
           }}
           actions={[
             {
-              label: tr('panes.PaneView.message578'),
+              label: tr('panes.PaneView.copyFilePath'),
               run: () => {
                 if (!isDemo) void window.pixelsky!.files.copyPath(refTarget, entry.path).catch(e => setError(e.message))
               },
             },
             {
-              label: tr('panes.PaneView.message579'),
+              label: tr('panes.PaneView.openWithExternalEditor'),
               run: () => {
                 if (!isDemo)
                   void window.pixelsky!.editor.open(refTarget, undefined, entry.path).catch(e => setError(e.message))

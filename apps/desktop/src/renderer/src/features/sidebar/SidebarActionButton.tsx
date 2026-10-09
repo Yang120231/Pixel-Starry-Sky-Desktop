@@ -29,10 +29,10 @@ export function SidebarActionButton({
     action === 'addProject'
       ? tr('sidebar.action.addProject')
       : action === 'settings'
-        ? withShortcut(tr('sidebar.SidebarFooter.message408'), OPEN_SETTINGS)
+        ? withShortcut(tr('sidebar.SidebarFooter.settings'), OPEN_SETTINGS)
         : action === 'plugins'
           ? tr('plugins.title')
-          : tr('nav.TopNav.message60')
+          : tr('nav.TopNav.usage')
   const section = action === 'plugins' || action === 'usage' ? action : undefined
   const active =
     settings.open &&

@@ -23,7 +23,7 @@ function start(): void {
     set({
       loading: false,
       get error() {
-        return tr('settings.requestRetry.message866')
+        return tr('settings.requestRetry.configureRequestRetriesIn')
       },
     })
     return

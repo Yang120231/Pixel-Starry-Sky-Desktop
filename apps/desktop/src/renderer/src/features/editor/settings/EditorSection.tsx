@@ -15,13 +15,13 @@ export function EditorSection() {
   const state = useEditors(),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false)
-  const [name, setName] = useState(tr('settings.editor.EditorSection.message694')),
+  const [name, setName] = useState(tr('settings.editor.EditorSection.customEditor')),
     [mode, setMode] = useState<'folder' | 'code'>('folder')
   const run = async (fn: () => Promise<unknown>): Promise<void> => {
     setBusy(true)
     setError('')
     try {
-      if (isDemo) throw new Error(tr('settings.editor.EditorSection.message695'))
+      if (isDemo) throw new Error(tr('settings.editor.EditorSection.demoModeCannotChange'))
       await fn()
     } catch (e) {
       setError((e as Error).message)
@@ -40,16 +40,16 @@ export function EditorSection() {
   }
   return (
     <section>
-      <SectionTitle>{tr('settings.editor.EditorSection.message696')}</SectionTitle>
-      <p className="mt-2 mb-4 text-ui text-fg-muted">{tr('settings.editor.EditorSection.message697')}</p>
+      <SectionTitle>{tr('settings.editor.EditorSection.editor')}</SectionTitle>
+      <p className="mt-2 mb-4 text-ui text-fg-muted">{tr('settings.editor.EditorSection.viewAndEditFiles')}</p>
       {error && (
         <p role="status" className="mb-3 text-meta text-danger">
           {translateMessage(error)}
         </p>
       )}
       <SettingRow
-        title={tr('settings.editor.EditorSection.message698')}
-        description={tr('settings.editor.EditorSection.message699')}
+        title={tr('settings.editor.EditorSection.defaultOpeningMethod')}
+        description={tr('settings.editor.EditorSection.toolbarOpensBuiltIn')}
       >
         <div className="flex flex-wrap gap-2">
           <button
@@ -61,7 +61,7 @@ export function EditorSection() {
               void run(async () => setEditors(await window.pixelsky!.editor.preferences({ openWith: 'app' })))
             }
           >
-            {tr('ui.Logo.message413')}
+            {tr('ui.Logo.pixelStarrySky')}
           </button>
           {state?.items.map(item => (
             <button
@@ -84,8 +84,8 @@ export function EditorSection() {
         </div>
       </SettingRow>
       <SettingRow
-        title={tr('settings.editor.EditorSection.message700')}
-        description={tr('settings.editor.EditorSection.message701')}
+        title={tr('settings.editor.EditorSection.defaultExternalEditor')}
+        description={tr('settings.editor.EditorSection.editorToolbarsExternalEditor')}
       >
         <div className="flex flex-wrap gap-2">
           {state?.items.map(item => (
@@ -102,32 +102,34 @@ export function EditorSection() {
             >
               <EditorIcon item={item} />
               {editorLabel(item)}
-              {!item.available && tr('editor.EditorButton.message444')}
+              {!item.available && tr('editor.EditorButton.unavailable')}
             </button>
           ))}
           {state?.items.length === 0 && (
-            <span className="text-meta text-fg-muted">{tr('settings.editor.EditorSection.message702')}</span>
+            <span className="text-meta text-fg-muted">
+              {tr('settings.editor.EditorSection.noEditorDetectedChoose')}
+            </span>
           )}
         </div>
       </SettingRow>
       <SettingRow
-        title={tr('settings.editor.EditorSection.message703')}
-        description={tr('settings.editor.EditorSection.message704')}
+        title={tr('settings.editor.EditorSection.windowMode')}
+        description={tr('settings.editor.EditorSection.vsCodeCompatibleEditors')}
       >
         <Segmented
-          label={tr('settings.editor.EditorSection.message705')}
+          label={tr('settings.editor.EditorSection.editorWindowMode')}
           value={state?.window ?? 'reuse'}
           options={[
             {
               value: 'reuse',
               get label() {
-                return tr('settings.editor.EditorSection.message706')
+                return tr('settings.editor.EditorSection.reuseWindow')
               },
             },
             {
               value: 'new',
               get label() {
-                return tr('settings.editor.EditorSection.message707')
+                return tr('settings.editor.EditorSection.newWindow')
               },
             },
           ]}
@@ -136,7 +138,7 @@ export function EditorSection() {
           }
         />
       </SettingRow>
-      <GroupTitle>{tr('settings.editor.EditorSection.message708')}</GroupTitle>
+      <GroupTitle>{tr('settings.editor.EditorSection.localEditors')}</GroupTitle>
       <Button
         icon={RefreshCw}
         disabled={busy}
@@ -145,7 +147,7 @@ export function EditorSection() {
           void refreshEditors(true).catch(e => setError(e.message))
         }}
       >
-        {tr('session.SourceHintBar.message369')}
+        {tr('session.SourceHintBar.detectAgain')}
       </Button>
       <div className="mt-3 space-y-2">
         {state?.items.map(item => (
@@ -156,8 +158,8 @@ export function EditorSection() {
               <span className="ml-auto text-meta text-fg-muted">
                 {editorSource(item)} ·{' '}
                 {item.available
-                  ? tr('settings.editor.EditorSection.message709')
-                  : tr('settings.editor.EditorSection.message710')}
+                  ? tr('settings.editor.EditorSection.available')
+                  : tr('settings.editor.EditorSection.invalidPath')}
               </span>
             </div>
             <p title={item.path} className="mt-1 break-all text-meta text-fg-muted">
@@ -171,32 +173,32 @@ export function EditorSection() {
                 className="mt-2 text-meta text-accent-fg hover:underline"
               >
                 {item.kind === 'custom'
-                  ? tr('settings.editor.EditorSection.message711')
-                  : tr('settings.editor.EditorSection.message712')}
+                  ? tr('settings.editor.EditorSection.removeConfiguration')
+                  : tr('settings.editor.EditorSection.restoreAutomaticDetection')}
               </button>
             )}
           </div>
         ))}
         {state?.checkedAt ? (
           <p className="text-meta text-fg-faint">
-            {tr('settings.editor.EditorSection.message713')} {new Date(state.checkedAt).toLocaleTimeString('zh-CN')}
+            {tr('settings.editor.EditorSection.detectedAt')} {new Date(state.checkedAt).toLocaleTimeString('zh-CN')}
           </p>
         ) : null}
       </div>
-      <GroupTitle>{tr('settings.editor.EditorSection.message714')}</GroupTitle>
+      <GroupTitle>{tr('settings.editor.EditorSection.executablePath')}</GroupTitle>
       <div className="flex flex-wrap gap-2">
         {(['trae-cn', 'trae', 'vscode', 'cursor', 'windsurf'] as const).map((kind, i) => (
           <Button key={kind} disabled={busy || isDemo} onClick={() => choose(kind)}>
-            {tr('settings.editor.EditorSection.message715')} {['Trae CN', 'Trae', 'VS Code', 'Cursor', 'Windsurf'][i]}
-            {tr('settings.editor.EditorSection.message716')}{' '}
+            {tr('settings.editor.EditorSection.choose')} {['Trae CN', 'Trae', 'VS Code', 'Cursor', 'Windsurf'][i]}
+            {tr('settings.editor.EditorSection.executable')}{' '}
           </Button>
         ))}
       </div>
-      <GroupTitle>{tr('settings.editor.EditorSection.message694')}</GroupTitle>
+      <GroupTitle>{tr('settings.editor.EditorSection.customEditor')}</GroupTitle>
       <label className="mb-3 flex items-center gap-3 text-ui text-fg-secondary">
-        {tr('settings.editor.EditorSection.message717')}
+        {tr('settings.editor.EditorSection.name')}
         <input
-          aria-label={tr('settings.editor.EditorSection.message718')}
+          aria-label={tr('settings.editor.EditorSection.customEditorName')}
           value={name}
           onChange={e => setName(e.target.value)}
           maxLength={60}
@@ -204,19 +206,19 @@ export function EditorSection() {
         />
       </label>
       <Segmented
-        label={tr('settings.editor.EditorSection.message719')}
+        label={tr('settings.editor.EditorSection.customEditorOpeningMethod')}
         value={mode}
         options={[
           {
             value: 'folder',
             get label() {
-              return tr('settings.editor.EditorSection.message720')
+              return tr('settings.editor.EditorSection.folderArgument')
             },
           },
           {
             value: 'code',
             get label() {
-              return tr('settings.editor.EditorSection.message721')
+              return tr('settings.editor.EditorSection.vsCodeCompatible')
             },
           },
         ]}
@@ -224,7 +226,7 @@ export function EditorSection() {
       />
       <div className="mt-3">
         <Button disabled={busy || isDemo || !name.trim()} onClick={() => choose('custom')}>
-          {tr('settings.editor.EditorSection.message722')}
+          {tr('settings.editor.EditorSection.chooseExecutableAndAdd')}
         </Button>
       </div>
     </section>

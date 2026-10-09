@@ -135,6 +135,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
 export function useTheme(): ThemeContextValue {
   const value = useContext(ThemeContext)
-  if (!value) throw new Error(tr('theme.ThemeProvider.message1043'))
+  if (!value) throw new Error(tr('theme.ThemeProvider.usethemeMustBeUsed'))
   return value
 }

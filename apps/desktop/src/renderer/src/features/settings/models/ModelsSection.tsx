@@ -34,22 +34,22 @@ import { demo, isDemo } from '@/data/demo'
 
 const ENGINE_STATUS: Record<string, string> = {
   get ready() {
-    return tr('settings.models.ModelsSection.message809')
+    return tr('settings.models.ModelsSection.ready')
   },
   get unauthenticated() {
-    return tr('sidebar.SidebarFooter.message407')
+    return tr('sidebar.SidebarFooter.notSignedIn')
   },
   get missing() {
-    return tr('settings.engines.parts.message784')
+    return tr('settings.engines.parts.notInstalled')
   },
   get outdated() {
-    return tr('settings.engines.parts.message785')
+    return tr('settings.engines.parts.outdatedVersion')
   },
   get error() {
-    return tr('settings.engines.parts.message786')
+    return tr('settings.engines.parts.detectionFailed')
   },
   get unsupported() {
-    return tr('session.ModelSourceMenu.message285')
+    return tr('session.ModelSourceMenu.comingSoon2')
   },
 }
 
@@ -69,28 +69,28 @@ export function ModelsSection({ onOpenEngines }: { onOpenEngines?: () => void })
 
   return (
     <section>
-      <SectionTitle>{tr('settings.models.ModelsSection.message810')}</SectionTitle>
-      <p className="-mt-2 mb-5 text-meta text-fg-muted">{tr('settings.models.ModelsSection.message811')}</p>
+      <SectionTitle>{tr('settings.models.ModelsSection.modelsCredits')}</SectionTitle>
+      <p className="-mt-2 mb-5 text-meta text-fg-muted">{tr('settings.models.ModelsSection.defaultsForNewTasks')}</p>
 
       <SettingRow
-        title={tr('settings.models.ModelsSection.message812')}
-        description={tr('settings.models.ModelsSection.message813')}
+        title={tr('settings.models.ModelsSection.defaultCreditSource')}
+        description={tr('settings.models.ModelsSection.platformBilledThroughPixel')}
       >
         <Segmented<CreditSource>
-          label={tr('settings.models.ModelsSection.message812')}
+          label={tr('settings.models.ModelsSection.defaultCreditSource')}
           value={platform.source}
           onChange={setDefaultSource}
           options={[
             {
               value: 'platform',
               get label() {
-                return tr('session.ModelSourceMenu.message279')
+                return tr('session.ModelSourceMenu.platform')
               },
             },
             {
               value: 'self',
               get label() {
-                return tr('session.ModelSourceMenu.message280')
+                return tr('session.ModelSourceMenu.ownAccount')
               },
             },
           ]}
@@ -100,38 +100,38 @@ export function ModelsSection({ onOpenEngines }: { onOpenEngines?: () => void })
       {platform.source === 'platform' ? (
         <>
           <SettingRow
-            title={tr('settings.models.ModelsSection.message814')}
-            description={tr('settings.models.ModelsSection.message815')}
+            title={tr('settings.models.ModelsSection.defaultModel')}
+            description={tr('settings.models.ModelsSection.modelsFromYourAvailable')}
           >
             <Select
-              label={tr('settings.models.ModelsSection.message814')}
+              label={tr('settings.models.ModelsSection.defaultModel')}
               mono
               className="w-full max-w-sm"
               disabled={models.length === 0}
               value={platform.model ?? ''}
               placeholder={
                 platform.email
-                  ? tr('settings.models.ModelsSection.message816')
-                  : tr('settings.models.ModelsSection.message817')
+                  ? tr('settings.models.ModelsSection.noModelsAvailable')
+                  : tr('settings.models.ModelsSection.availableAfterSignIn')
               }
               onChange={v => setDefaultModel(v)}
               options={models.map(m => ({ value: m, label: m }))}
             />
           </SettingRow>
           <SettingRow
-            title={tr('settings.models.ModelsSection.message818')}
-            description={tr('settings.models.ModelsSection.message819')}
+            title={tr('settings.models.ModelsSection.defaultRoute')}
+            description={tr('settings.models.ModelsSection.onlyRoutesSupportingDefault')}
           >
             {routes.length === 0 ? (
               <p className="text-meta text-fg-faint">
                 {platform.email
-                  ? tr('settings.models.ModelsSection.message820')
-                  : tr('settings.models.ModelsSection.message817')}
+                  ? tr('settings.models.ModelsSection.noRoutesAvailable')
+                  : tr('settings.models.ModelsSection.availableAfterSignIn')}
               </p>
             ) : (
               <div
                 role="radiogroup"
-                aria-label={tr('settings.models.ModelsSection.message818')}
+                aria-label={tr('settings.models.ModelsSection.defaultRoute')}
                 className="flex max-w-md flex-col gap-1"
               >
                 {routes.map(g => {
@@ -168,11 +168,11 @@ export function ModelsSection({ onOpenEngines }: { onOpenEngines?: () => void })
         </>
       ) : (
         <SettingRow
-          title={tr('settings.models.ModelsSection.message814')}
-          description={tr('settings.models.ModelsSection.message821')}
+          title={tr('settings.models.ModelsSection.defaultModel')}
+          description={tr('settings.models.ModelsSection.claudeCodeModelAliases')}
         >
           <Select
-            label={tr('settings.models.ModelsSection.message814')}
+            label={tr('settings.models.ModelsSection.defaultModel')}
             className="w-full max-w-sm"
             value={platform.selfModel ?? ''}
             onChange={v => setDefaultSelfModel(v || null)}
@@ -182,12 +182,12 @@ export function ModelsSection({ onOpenEngines }: { onOpenEngines?: () => void })
       )}
 
       {/* 平台线路一览 */}
-      <GroupTitle>{tr('session.ModelSourceMenu.message279')}</GroupTitle>
+      <GroupTitle>{tr('session.ModelSourceMenu.platform')}</GroupTitle>
       {!platform.email ? (
         <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-line px-4 py-3">
-          <span className="text-meta text-fg-muted">{tr('settings.models.ModelsSection.message822')}</span>
+          <span className="text-meta text-fg-muted">{tr('settings.models.ModelsSection.signInToPixel')}</span>
           <Button variant="primary" icon={LogIn} onClick={() => void account.login()}>
-            {tr('account.AccountMenu.message28')}{' '}
+            {tr('account.AccountMenu.signIn')}{' '}
           </Button>
         </div>
       ) : (
@@ -195,7 +195,7 @@ export function ModelsSection({ onOpenEngines }: { onOpenEngines?: () => void })
           <div className="mb-2 flex items-center justify-between gap-3 text-meta text-fg-muted">
             <span className="min-w-0 truncate">
               {platform.email}
-              {account.balanceText ? tr('settings.models.ModelsSection.message823', { p0: account.balanceText }) : ''}
+              {account.balanceText ? tr('settings.models.ModelsSection.balance', { p0: account.balanceText }) : ''}
             </span>
             <button
               type="button"
@@ -204,7 +204,7 @@ export function ModelsSection({ onOpenEngines }: { onOpenEngines?: () => void })
               className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 hover:bg-hover hover:text-fg disabled:opacity-50"
             >
               <RefreshCw size={12} className={cn(platform.loading && 'animate-spin')} />
-              {platform.loading ? tr('session.ModelSourceMenu.message305') : tr('account.AccountMenu.message45')}
+              {platform.loading ? tr('session.ModelSourceMenu.refreshing') : tr('account.AccountMenu.refresh')}
             </button>
           </div>
           {platform.groups.length === 0 ? (
@@ -212,7 +212,7 @@ export function ModelsSection({ onOpenEngines }: { onOpenEngines?: () => void })
               {platform.loading ? (
                 <span className="inline-flex items-center gap-2">
                   <Spinner />
-                  {tr('session.ModelSourceMenu.message307')}{' '}
+                  {tr('session.ModelSourceMenu.loadingRoutes')}{' '}
                 </span>
               ) : (
                 noRouteReason(platform, account.account?.balance ?? null).message
@@ -231,7 +231,7 @@ export function ModelsSection({ onOpenEngines }: { onOpenEngines?: () => void })
                       <span className="block truncate text-ui text-fg">{g.name}</span>
                       <span className={cn('block text-meta', problem ? 'text-danger' : 'truncate text-fg-muted')}>
                         {billingLabel(g)} ·{' '}
-                        {problem ?? tr('settings.models.ModelsSection.message824', { p0: g.models.length })}
+                        {problem ?? tr('settings.models.ModelsSection.models', { p0: g.models.length })}
                       </span>
                     </span>
                     <span className="shrink-0 text-ui text-fg-secondary tabular-nums">
@@ -250,8 +250,10 @@ export function ModelsSection({ onOpenEngines }: { onOpenEngines?: () => void })
         <div ref={visibilityRef} data-setting-title="菜单里显示的模型" className="mt-5 scroll-mt-4">
           <div className="mb-2 flex items-baseline justify-between gap-3">
             <div>
-              <div className="text-ui font-medium text-fg">{tr('settings.models.ModelsSection.message825')}</div>
-              <p className="mt-1 text-meta text-fg-muted">{tr('settings.models.ModelsSection.message826')}</p>
+              <div className="text-ui font-medium text-fg">{tr('settings.models.ModelsSection.modelsShownInMenu')}</div>
+              <p className="mt-1 text-meta text-fg-muted">
+                {tr('settings.models.ModelsSection.hiddenModelsAreRemoved')}
+              </p>
             </div>
             {platform.hiddenModels.some(m => models.includes(m)) && (
               <button
@@ -259,7 +261,7 @@ export function ModelsSection({ onOpenEngines }: { onOpenEngines?: () => void })
                 onClick={showAllModels}
                 className="shrink-0 text-meta text-accent-fg hover:underline"
               >
-                {tr('settings.models.ModelsSection.message827')}{' '}
+                {tr('settings.models.ModelsSection.showAll')}{' '}
               </button>
             )}
           </div>
@@ -267,15 +269,15 @@ export function ModelsSection({ onOpenEngines }: { onOpenEngines?: () => void })
             <input
               value={modelQuery}
               onChange={e => setModelQuery(e.target.value)}
-              placeholder={tr('session.ModelSourceMenu.message293')}
-              aria-label={tr('session.ModelSourceMenu.message293')}
+              placeholder={tr('session.ModelSourceMenu.searchModels')}
+              aria-label={tr('session.ModelSourceMenu.searchModels')}
               spellCheck={false}
               className="mb-2 h-8 w-full max-w-xs rounded-md border border-line bg-subtle px-2.5 font-mono text-meta text-fg outline-none placeholder:font-sans placeholder:text-fg-faint focus:border-line-strong focus:bg-surface"
             />
           )}
           <div className="overflow-hidden rounded-lg border border-line">
             {matchModels(models, modelQuery).length === 0 && (
-              <div className="px-4 py-2 text-meta text-fg-faint">{tr('session.ModelSourceMenu.message294')}</div>
+              <div className="px-4 py-2 text-meta text-fg-faint">{tr('session.ModelSourceMenu.noMatchingModels')}</div>
             )}
             {matchModels(models, modelQuery).map(m => {
               const shown = !platform.hiddenModels.includes(m)
@@ -289,11 +291,11 @@ export function ModelsSection({ onOpenEngines }: { onOpenEngines?: () => void })
                   </span>
                   <span className="shrink-0 text-meta text-fg-faint">
                     {lines}
-                    {tr('settings.models.ModelsSection.message828')}{' '}
+                    {tr('settings.models.ModelsSection.routes')}{' '}
                   </span>
                   <Switch
                     checked={shown}
-                    label={tr('settings.models.ModelsSection.message829', { p0: m })}
+                    label={tr('settings.models.ModelsSection.showInMenu', { p0: m })}
                     onChange={on => setModelHidden(m, !on)}
                   />
                 </div>
@@ -304,7 +306,7 @@ export function ModelsSection({ onOpenEngines }: { onOpenEngines?: () => void })
       )}
 
       {/* 本机引擎：详细设置（路径、环境变量、压缩模型）在「本机引擎」页 */}
-      <GroupTitle>{tr('settings.models.ModelsSection.message830')}</GroupTitle>
+      <GroupTitle>{tr('settings.models.ModelsSection.ownAccountLocalEngine')}</GroupTitle>
       <div className="mt-3 flex items-center gap-3 rounded-lg border border-line px-4 py-2.5">
         <span className="flex min-w-0 flex-1 flex-wrap gap-x-4 gap-y-1">
           {engines.map(e => (
@@ -320,17 +322,17 @@ export function ModelsSection({ onOpenEngines }: { onOpenEngines?: () => void })
         </span>
         {onOpenEngines && (
           <button type="button" onClick={onOpenEngines} className="shrink-0 text-meta text-accent-fg hover:underline">
-            {tr('settings.models.ModelsSection.message831')}{' '}
+            {tr('settings.models.ModelsSection.engineSettings')}{' '}
           </button>
         )}
       </div>
 
       {/* 以后：自定义 API（docs/ui/source-switch.md §5） */}
-      <GroupTitle>{tr('settings.models.ModelsSection.message832')}</GroupTitle>
+      <GroupTitle>{tr('settings.models.ModelsSection.requestRetries')}</GroupTitle>
       <RequestRetrySettings />
-      <GroupTitle>{tr('settings.models.ModelsSection.message833')}</GroupTitle>
+      <GroupTitle>{tr('settings.models.ModelsSection.customApi')}</GroupTitle>
       <div className="mt-3 rounded-lg border border-dashed border-line px-4 py-4 text-meta text-fg-muted">
-        {tr('settings.models.ModelsSection.message834')}{' '}
+        {tr('settings.models.ModelsSection.comingSoonAddYour')}{' '}
       </div>
     </section>
   )

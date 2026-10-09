@@ -86,14 +86,14 @@ const SECTIONS: Array<{ id: SectionId; label: string; icon: LucideIcon }> = [
   {
     id: 'account',
     get label() {
-      return tr('settings.AboutSection.message626')
+      return tr('settings.AboutSection.account')
     },
     icon: UserRound,
   },
   {
     id: 'appearance',
     get label() {
-      return tr('settings.SettingsDialog.message920')
+      return tr('settings.SettingsDialog.appearance')
     },
     icon: Palette,
   },
@@ -107,42 +107,42 @@ const SECTIONS: Array<{ id: SectionId; label: string; icon: LucideIcon }> = [
   {
     id: 'shortcuts',
     get label() {
-      return tr('settings.searchIndex.message916')
+      return tr('settings.searchIndex.shortcuts')
     },
     icon: Keyboard,
   },
   {
     id: 'editor',
     get label() {
-      return tr('settings.editor.EditorSection.message696')
+      return tr('settings.editor.EditorSection.editor')
     },
     icon: CodeXml,
   },
   {
     id: 'models',
     get label() {
-      return tr('settings.models.ModelsSection.message810')
+      return tr('settings.models.ModelsSection.modelsCredits')
     },
     icon: Route,
   },
   {
     id: 'usage',
     get label() {
-      return tr('nav.TopNav.message60')
+      return tr('nav.TopNav.usage')
     },
     icon: ChartColumn,
   },
   {
     id: 'engines',
     get label() {
-      return tr('settings.engines.EnginesSection.message779')
+      return tr('settings.engines.EnginesSection.localEngines')
     },
     icon: Cpu,
   },
   {
     id: 'about',
     get label() {
-      return tr('settings.searchIndex.message918')
+      return tr('settings.searchIndex.about')
     },
     icon: Info,
   },
@@ -152,19 +152,19 @@ const SECTIONS: Array<{ id: SectionId; label: string; icon: LucideIcon }> = [
 const NAV_GROUPS: Array<{ label: string | null; ids: SectionId[] }> = [
   {
     get label() {
-      return tr('settings.SettingsDialog.message921')
+      return tr('settings.SettingsDialog.application')
     },
     ids: ['account', 'appearance', 'notifications', 'editor', 'shortcuts', 'machines'],
   },
   {
     get label() {
-      return tr('session.ModelSourceMenu.message291')
+      return tr('session.ModelSourceMenu.model')
     },
     ids: ['models', 'usage'],
   },
   {
     get label() {
-      return tr('session.ModelSourceMenu.message283')
+      return tr('session.ModelSourceMenu.engine')
     },
     ids: ['engines', 'plugins', 'terminal'],
   },
@@ -348,7 +348,7 @@ export function SettingsDialog({
           className="flex h-12 shrink-0 cursor-grab items-center justify-between border-b border-line pr-2 pl-5 select-none active:cursor-grabbing"
         >
           <h2 id="settings-title" className="text-section font-semibold text-fg">
-            {t('sidebar.SidebarFooter.message408')}
+            {t('sidebar.SidebarFooter.settings')}
           </h2>
           <IconButton icon={X} label={text('关闭（Esc）')} onClick={onClose} />
         </header>
@@ -356,7 +356,7 @@ export function SettingsDialog({
         {/* 右下角的调整大小手柄：拖动改变宽 / 高（记住尺寸，下次打开沿用） */}
         <div
           aria-hidden
-          title={tr('settings.SettingsDialog.message922')}
+          title={tr('settings.SettingsDialog.dragToResize')}
           onMouseDown={e => startDrag(e, 'resize')}
           className="absolute right-0 bottom-0 z-10 flex size-5 cursor-se-resize items-end justify-end p-1 text-fg-faint hover:text-fg-muted"
         >
@@ -367,7 +367,7 @@ export function SettingsDialog({
 
         <div className="flex min-h-0 flex-1">
           <nav
-            aria-label={t('sidebar.SidebarFooter.message408')}
+            aria-label={t('sidebar.SidebarFooter.settings')}
             className="flex w-[196px] shrink-0 flex-col border-r border-line bg-sidebar p-2"
           >
             <label className="mb-2 flex h-8 shrink-0 items-center gap-2 rounded-md border border-line bg-surface px-2.5 focus-within:border-line-strong">
@@ -387,7 +387,7 @@ export function SettingsDialog({
               {query && (
                 <button
                   type="button"
-                  aria-label={tr('settings.SettingsDialog.message924')}
+                  aria-label={tr('settings.SettingsDialog.clearSearch')}
                   onClick={() => setQuery('')}
                   className="shrink-0 text-fg-faint hover:text-fg"
                 >
@@ -517,21 +517,21 @@ const THEME_OPTIONS: Array<{ value: ThemePreference; label: string; icon: Lucide
   {
     value: 'light',
     get label() {
-      return tr('settings.SettingsDialog.message926')
+      return tr('settings.SettingsDialog.light')
     },
     icon: Sun,
   },
   {
     value: 'dark',
     get label() {
-      return tr('settings.SettingsDialog.message927')
+      return tr('settings.SettingsDialog.dark')
     },
     icon: Moon,
   },
   {
     value: 'system',
     get label() {
-      return tr('settings.SettingsDialog.message928')
+      return tr('settings.SettingsDialog.system')
     },
     icon: Monitor,
   },
@@ -541,13 +541,13 @@ const MOTION_OPTIONS: Array<{ value: MotionPreference; label: string }> = [
   {
     value: 'on',
     get label() {
-      return tr('settings.SettingsDialog.message929')
+      return tr('settings.SettingsDialog.alwaysOn')
     },
   },
   {
     value: 'system',
     get label() {
-      return tr('settings.SettingsDialog.message928')
+      return tr('settings.SettingsDialog.system')
     },
   },
   {
@@ -562,19 +562,19 @@ const PANE_FOCUS_OPTIONS: Array<{ value: PaneFocusMotion; label: string }> = [
   {
     value: 'flash',
     get label() {
-      return tr('settings.SettingsDialog.message930')
+      return tr('settings.SettingsDialog.highlight')
     },
   },
   {
     value: 'slide',
     get label() {
-      return tr('settings.SettingsDialog.message931')
+      return tr('settings.SettingsDialog.slide')
     },
   },
   {
     value: 'none',
     get label() {
-      return tr('settings.SettingsDialog.message932')
+      return tr('settings.SettingsDialog.none')
     },
   },
 ]
@@ -587,8 +587,11 @@ function AppearanceSection() {
   const motionDisabled = motion === 'off' || (motion === 'system' && systemReducedMotion)
   return (
     <section>
-      <SectionTitle>{tr('settings.SettingsDialog.message920')}</SectionTitle>
-      <SettingRow title={tr('settings.searchIndex.message898')} description={tr('settings.SettingsDialog.message933')}>
+      <SectionTitle>{tr('settings.SettingsDialog.appearance')}</SectionTitle>
+      <SettingRow
+        title={tr('settings.searchIndex.theme')}
+        description={tr('settings.SettingsDialog.whenFollowingSystemTheme')}
+      >
         <Segmented
           label={text('主题')}
           options={THEME_OPTIONS.map(option => ({ ...option, label: text(option.label) }))}
@@ -597,25 +600,25 @@ function AppearanceSection() {
         />
       </SettingRow>
       <SettingRow
-        title={tr('settings.SettingsDialog.message934')}
-        description={tr('settings.SettingsDialog.message935')}
+        title={tr('settings.SettingsDialog.interfaceLanguage')}
+        description={tr('settings.SettingsDialog.chooseLanguageUsedBy')}
       >
         <Segmented
-          label={t('settings.SettingsDialog.message934')}
+          label={t('settings.SettingsDialog.interfaceLanguage')}
           options={LOCALE_OPTIONS}
           value={locale}
           onChange={value => setLocale(value as Locale)}
         />
       </SettingRow>
       <SettingRow
-        title={tr('settings.searchIndex.message900')}
-        description={tr('settings.SettingsDialog.message936')}
+        title={tr('settings.searchIndex.motion')}
+        description={tr('settings.SettingsDialog.animationsForSidebarAnd')}
         hint={
           systemReducedMotion
             ? motion === 'on'
-              ? tr('settings.SettingsDialog.message937')
+              ? tr('settings.SettingsDialog.systemAnimationsAreDisabled')
               : motion === 'system'
-                ? tr('settings.SettingsDialog.message938')
+                ? tr('settings.SettingsDialog.systemAnimationsAreDisabled2')
                 : undefined
             : undefined
         }
@@ -629,9 +632,13 @@ function AppearanceSection() {
       </SettingRow>
 
       <SettingRow
-        title={tr('settings.searchIndex.message902')}
-        description={tr('settings.SettingsDialog.message939')}
-        hint={motionDisabled ? tr('settings.SettingsDialog.message940') : tr('settings.SettingsDialog.message941')}
+        title={tr('settings.searchIndex.paneSwitching')}
+        description={tr('settings.SettingsDialog.highlightBrieflyLightsUp')}
+        hint={
+          motionDisabled
+            ? tr('settings.SettingsDialog.motionIsDisabledPane')
+            : tr('settings.SettingsDialog.onlyAffectsFocusChanges')
+        }
       >
         <Segmented
           label={text('切换窗格时')}
@@ -644,15 +651,15 @@ function AppearanceSection() {
 
       <SidebarSettings />
 
-      <GroupTitle>{tr('settings.engines.EngineDetail.message742')}</GroupTitle>
+      <GroupTitle>{tr('settings.engines.EngineDetail.conversation')}</GroupTitle>
       <ComposerStyleSettings />
       <ReplyStatsSettings />
       <CacheMissSettings />
 
-      <GroupTitle>{tr('settings.SettingsDialog.message942')}</GroupTitle>
+      <GroupTitle>{tr('settings.SettingsDialog.fonts')}</GroupTitle>
       <FontSettings />
 
-      <GroupTitle>{tr('settings.searchIndex.message910')}</GroupTitle>
+      <GroupTitle>{tr('settings.searchIndex.wallpaper')}</GroupTitle>
       <WallpaperSettings />
     </section>
   )
@@ -691,25 +698,25 @@ const SHORTCUTS: Array<{ label: string; keys: string }> = [
   },
   {
     get label() {
-      return tr('settings.SettingsDialog.message943')
+      return tr('settings.SettingsDialog.toggleSidebar')
     },
     keys: TOGGLE_SIDEBAR.label,
   },
   {
     get label() {
-      return tr('settings.SettingsDialog.message944')
+      return tr('settings.SettingsDialog.toggleRightPanel')
     },
     keys: TOGGLE_PANEL.label,
   },
   {
     get label() {
-      return tr('settings.SettingsDialog.message945')
+      return tr('settings.SettingsDialog.openSettings')
     },
     keys: OPEN_SETTINGS.label,
   },
   {
     get label() {
-      return tr('search.SearchDialog.message593')
+      return tr('search.SearchDialog.searchConversationsAndContent')
     },
     keys: OPEN_SEARCH.label,
   },
@@ -720,7 +727,7 @@ function ShortcutsSection() {
   useI18n()
   return (
     <section>
-      <SectionTitle>{tr('settings.searchIndex.message916')}</SectionTitle>
+      <SectionTitle>{tr('settings.searchIndex.shortcuts')}</SectionTitle>
       <ul className="overflow-hidden rounded-lg border border-line">
         {SHORTCUTS.map(({ label, keys }) => (
           <li

@@ -7,20 +7,20 @@ import { billing, type PlanOffer } from '@/data'
 
 const PERIOD_LABELS: Record<PlanOffer['period'], string> = {
   get month() {
-    return tr('settings.account.PlanStore.message654')
+    return tr('settings.account.PlanStore.month')
   },
   get quarter() {
-    return tr('settings.account.PlanStore.message655')
+    return tr('settings.account.PlanStore.quarter')
   },
   get year() {
-    return tr('settings.account.PlanStore.message656')
+    return tr('settings.account.PlanStore.year')
   },
 }
 
 const quotaLabels = (): Array<[keyof PlanOffer['quotas'], string]> => [
-  ['daily', tr('settings.account.PlanStore.message657')],
-  ['weekly', tr('settings.account.PlanStore.message658')],
-  ['monthly', tr('settings.account.PlanStore.message659')],
+  ['daily', tr('settings.account.PlanStore.daily')],
+  ['weekly', tr('settings.account.PlanStore.weekly')],
+  ['monthly', tr('settings.account.PlanStore.monthly')],
 ]
 
 /** 账号 → 订阅套餐：套餐卡片。购买暂未接入，按钮只弹「即将推出」（docs/ui/settings.md §9.4） */
@@ -32,8 +32,8 @@ export function PlanStore({ currentPlan, currency }: { currentPlan: string | nul
   if (plans.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-line-strong px-4 py-10 text-center">
-        <div className="text-ui font-medium text-fg">{tr('settings.account.PlanStore.message660')}</div>
-        <p className="mt-1 text-meta text-fg-muted">{tr('settings.account.PlanStore.message661')}</p>
+        <div className="text-ui font-medium text-fg">{tr('settings.account.PlanStore.noPlansAvailableFor')}</div>
+        <p className="mt-1 text-meta text-fg-muted">{tr('settings.account.PlanStore.plansWillAppearHere')}</p>
       </div>
     )
   }
@@ -44,10 +44,10 @@ export function PlanStore({ currentPlan, currency }: { currentPlan: string | nul
         {plans.map(plan => {
           const current = plan.name === currentPlan
           const action = current
-            ? tr('settings.account.PlanStore.message662')
+            ? tr('settings.account.PlanStore.renew')
             : currentPlan
-              ? tr('settings.account.PlanStore.message663')
-              : tr('settings.account.PlanStore.message664')
+              ? tr('settings.account.PlanStore.change')
+              : tr('settings.account.PlanStore.subscribe')
           return (
             <div
               key={plan.id}
@@ -59,9 +59,9 @@ export function PlanStore({ currentPlan, currency }: { currentPlan: string | nul
               <div className="flex min-h-5 items-center gap-1.5">
                 <span className="min-w-0 truncate text-ui font-medium text-fg">{plan.name}</span>
                 {current ? (
-                  <Tag>{tr('settings.account.PlanStore.message665')}</Tag>
+                  <Tag>{tr('settings.account.PlanStore.current')}</Tag>
                 ) : (
-                  plan.recommended && <Tag>{tr('settings.account.PlanStore.message666')}</Tag>
+                  plan.recommended && <Tag>{tr('settings.account.PlanStore.recommended')}</Tag>
                 )}
               </div>
 
@@ -80,7 +80,7 @@ export function PlanStore({ currentPlan, currency }: { currentPlan: string | nul
                     <div key={key} className="flex justify-between gap-2">
                       <dt className="text-fg-muted">
                         {label}
-                        {tr('settings.account.PlanStore.message667')}
+                        {tr('settings.account.PlanStore.credits')}
                       </dt>
                       <dd className="text-fg tabular-nums">{formatAmount(value, currency)}</dd>
                     </div>
@@ -101,7 +101,7 @@ export function PlanStore({ currentPlan, currency }: { currentPlan: string | nul
                 <Button
                   variant={plan.recommended || current ? 'primary' : 'outline'}
                   className="w-full justify-center"
-                  onClick={() => comingSoon(tr('settings.account.PlanStore.message668'))}
+                  onClick={() => comingSoon(tr('settings.account.PlanStore.purchaseOnline'))}
                 >
                   {action}
                 </Button>

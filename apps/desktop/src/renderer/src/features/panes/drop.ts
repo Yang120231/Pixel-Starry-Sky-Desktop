@@ -75,15 +75,15 @@ export function dropProblem(
   area: { width: number; height: number },
 ): string | null {
   const source = leafOfTab(layout.root, tab)
-  if (!source || !findLeaf(layout.root, target.leafId)) return tr('panes.drop.message556')
+  if (!source || !findLeaf(layout.root, target.leafId)) return tr('panes.drop.conversationOrTargetPane')
   if (!target.edge) return null
-  if (source.id === target.leafId && source.tabs.length === 1) return tr('panes.drop.message557')
+  if (source.id === target.leafId && source.tabs.length === 1) return tr('panes.drop.openAnotherConversationBefore')
   const next = dropLayout(layout, tab, target, 'preview:leaf', 'preview:split', area)
   const panes = computeRects(next.root).panes
   for (const id of [target.leafId, 'preview:leaf']) {
     const rect = panes.get(id)
     if (!rect || rect.w * area.width < MIN_PANE.width || rect.h * area.height < MIN_PANE.height) {
-      return tr('panes.drop.message558')
+      return tr('panes.drop.notEnoughSpaceCollapse')
     }
   }
   return null

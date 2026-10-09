@@ -31,7 +31,7 @@ const extensions: Record<string, string> = {
 }
 export function fileLanguage(path: string): string {
   const name = path.split(/[\\/]/).pop()?.toLowerCase() ?? ''
-  return extensions[name.split('.').pop() ?? ''] ?? tr('code.highlight.message58')
+  return extensions[name.split('.').pop() ?? ''] ?? tr('code.highlight.plainText')
 }
 export async function loadLanguage(path: string): Promise<Extension> {
   switch (fileLanguage(path)) {

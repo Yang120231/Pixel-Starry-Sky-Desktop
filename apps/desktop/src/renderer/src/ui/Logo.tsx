@@ -30,7 +30,7 @@ export function Logo({ size = 22 }: { size?: number }) {
       height={size}
       viewBox="0 0 11 11"
       shapeRendering="crispEdges"
-      aria-label={tr('ui.Logo.message413')}
+      aria-label={tr('ui.Logo.pixelStarrySky')}
     >
       <rect width="11" height="11" rx="2.6" className="fill-fg" shapeRendering="geometricPrecision" />
       {STAR.map(([x, y]) => (

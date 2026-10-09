@@ -12,7 +12,7 @@ export function ToolRow({ call }: { call: ToolCall }) {
     return (
       <div className="flex h-[30px] items-center gap-2 rounded-md px-2 text-list text-fg-secondary">
         <FilePen size={16} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
-        <span className="shrink-0">{tr('session.live.ItemRows.message253')}</span>
+        <span className="shrink-0">{tr('session.live.ItemRows.edit')}</span>
         <span className="truncate font-mono text-meta text-code-path">{call.path}</span>
         <DiffStat added={call.added} removed={call.removed} className="text-meta" />
       </div>
@@ -21,11 +21,11 @@ export function ToolRow({ call }: { call: ToolCall }) {
   return (
     <button
       type="button"
-      onClick={() => comingSoon(tr('session.ToolRow.message370'))}
+      onClick={() => comingSoon(tr('session.ToolRow.expandToolOutput'))}
       className="press flex h-[30px] w-full items-center gap-2 rounded-md px-2 text-left text-list text-fg-secondary hover:bg-hover"
     >
       <SquareTerminal size={16} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
-      <span className="shrink-0">{tr('session.live.ItemRows.message255')}</span>
+      <span className="shrink-0">{tr('session.live.ItemRows.ran')}</span>
       <code className="truncate rounded-sm bg-subtle px-1.5 py-0.5 font-mono text-meta text-fg">{call.command}</code>
       {call.ok && <Check size={14} strokeWidth={2} className="shrink-0 text-success" />}
       <span className="shrink-0 text-meta text-fg-muted tabular-nums">{call.duration}</span>

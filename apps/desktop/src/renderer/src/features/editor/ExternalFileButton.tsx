@@ -17,7 +17,7 @@ export function ExternalFileButton({ tab }: { tab: OpenFile }) {
     if (isDemo) {
       updateFile(tab.id, {
         get error() {
-          return tr('editor.EditorButton.message432')
+          return tr('editor.EditorButton.demoModeCannotOpen')
         },
       })
       return
@@ -39,7 +39,7 @@ export function ExternalFileButton({ tab }: { tab: OpenFile }) {
         icon={CodeXml}
         size={28}
         iconSize={15}
-        label={tr('editor.ExternalFileButton.message454')}
+        label={tr('editor.ExternalFileButton.openFileInExternal')}
         disabled={busy}
         onClick={() => {
           if (editors?.items.some(e => e.id === editors.defaultId && e.available)) void launch()
@@ -58,7 +58,7 @@ export function ExternalFileButton({ tab }: { tab: OpenFile }) {
             </PopoverItem>
           ))}
         {!editors?.items.some(e => e.available) && (
-          <p className="p-3 text-meta text-fg-muted">{tr('editor.ExternalFileButton.message455')}</p>
+          <p className="p-3 text-meta text-fg-muted">{tr('editor.ExternalFileButton.noEditorDetectedSpecify')}</p>
         )}
       </Popover>
     </span>

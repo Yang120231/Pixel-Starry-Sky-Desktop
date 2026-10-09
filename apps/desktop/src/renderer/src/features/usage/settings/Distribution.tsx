@@ -32,29 +32,29 @@ export function Distribution({
   return (
     <div className="@container min-w-0">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h4 className="text-ui font-medium text-fg">{tr('settings.usage.Distribution.message956')}</h4>
+        <h4 className="text-ui font-medium text-fg">{tr('settings.usage.Distribution.distribution')}</h4>
         <Segmented
-          label={tr('settings.usage.Distribution.message957')}
+          label={tr('settings.usage.Distribution.distributionDimension')}
           options={DIM_OPTIONS}
           value={dim}
           onChange={onDim}
         />
       </div>
       {rows.length === 0 ? (
-        <p className="py-4 text-center text-meta text-fg-faint">{tr('settings.usage.Distribution.message958')}</p>
+        <p className="py-4 text-center text-meta text-fg-faint">{tr('settings.usage.Distribution.noData')}</p>
       ) : (
         <table className="w-full table-fixed text-list tabular-nums">
           <thead>
             <tr className="text-left text-meta text-fg-muted">
               <th className="w-[28%] pb-2 font-normal">{DIMENSION_LABEL[dim]}</th>
-              <th className="w-[24%] pb-2 font-normal">{tr('settings.usage.Distribution.message959')}</th>
+              <th className="w-[24%] pb-2 font-normal">{tr('settings.usage.Distribution.share')}</th>
               <th className="w-[12%] pb-2 text-right font-normal">Token</th>
               <th className="w-[11%] pb-2 text-right font-normal @max-[600px]:hidden">
-                {tr('session.live.SessionStrips.message275')}
+                {tr('session.live.SessionStrips.output')}
               </th>
-              <th className="w-[15%] pb-2 text-right font-normal">{tr('settings.replyStats.message851')}</th>
+              <th className="w-[15%] pb-2 text-right font-normal">{tr('settings.replyStats.cost')}</th>
               <th className="w-[10%] pb-2 text-right font-normal @max-[520px]:hidden">
-                {tr('settings.usage.Distribution.message960')}
+                {tr('settings.usage.Distribution.turns')}
               </th>
             </tr>
           </thead>
@@ -67,7 +67,9 @@ export function Distribution({
                   key={r.key}
                   onClick={() => !active && onPick(r.key)}
                   title={
-                    active ? tr('settings.usage.Distribution.message961') : tr('settings.usage.Distribution.message962')
+                    active
+                      ? tr('settings.usage.Distribution.filteredByThisItem')
+                      : tr('settings.usage.Distribution.clickToFilterBy')
                   }
                   className="cursor-default border-t border-line-subtle hover:bg-hover"
                 >

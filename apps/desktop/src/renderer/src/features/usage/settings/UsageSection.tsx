@@ -20,13 +20,13 @@ const MODE_OPTIONS: Array<SegmentedOption<'local' | 'account'>> = [
   {
     value: 'local',
     get label() {
-      return tr('settings.usage.UsageSection.message1011')
+      return tr('settings.usage.UsageSection.localRecords')
     },
   },
   {
     value: 'account',
     get label() {
-      return tr('settings.usage.RemoteCallsTable.message995')
+      return tr('settings.usage.RemoteCallsTable.accountRequests')
     },
   },
 ]
@@ -35,25 +35,25 @@ const RANGE_OPTIONS: Array<SegmentedOption<UsageRangeId>> = [
   {
     value: 'today',
     get label() {
-      return tr('settings.usage.DailyChart.message955')
+      return tr('settings.usage.DailyChart.today')
     },
   },
   {
     value: '7d',
     get label() {
-      return tr('settings.usage.UsageSection.message1012')
+      return tr('settings.usage.UsageSection.n7Days')
     },
   },
   {
     value: '30d',
     get label() {
-      return tr('settings.usage.UsageSection.message1013')
+      return tr('settings.usage.UsageSection.n30Days')
     },
   },
   {
     value: '90d',
     get label() {
-      return tr('settings.usage.UsageSection.message1014')
+      return tr('settings.usage.UsageSection.n90Days')
     },
   },
 ]
@@ -105,9 +105,9 @@ export function UsageSection({ onOpenSession }: { onOpenSession: (sessionId: str
     <section>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-baseline gap-3">
-          <SectionTitle>{tr('nav.TopNav.message60')}</SectionTitle>
+          <SectionTitle>{tr('nav.TopNav.usage')}</SectionTitle>
           <Segmented
-            label={tr('settings.usage.UsageSection.message1015')}
+            label={tr('settings.usage.UsageSection.recordSource')}
             options={MODE_OPTIONS}
             value={mode}
             onChange={changeMode}
@@ -126,13 +126,13 @@ export function UsageSection({ onOpenSession }: { onOpenSession: (sessionId: str
               }
             }}
           >
-            {tr('settings.usage.UsageSection.message1016')}{' '}
+            {tr('settings.usage.UsageSection.exportCsv')}{' '}
           </Button>
           {confirmClear ? (
             <span className="flex items-center gap-1.5 text-meta text-fg-secondary">
-              {tr('settings.usage.UsageSection.message1017')}{' '}
+              {tr('settings.usage.UsageSection.clearAllRecords')}{' '}
               <Button variant="ghost" onClick={() => setConfirmClear(false)}>
-                {tr('account.AccountMenu.message31')}{' '}
+                {tr('account.AccountMenu.cancel')}{' '}
               </Button>
               <Button
                 variant="primary"
@@ -142,7 +142,7 @@ export function UsageSection({ onOpenSession }: { onOpenSession: (sessionId: str
                   await clear()
                 }}
               >
-                {tr('files.FileTree.message530')}{' '}
+                {tr('files.FileTree.clear')}{' '}
               </Button>
             </span>
           ) : (
@@ -152,7 +152,7 @@ export function UsageSection({ onOpenSession }: { onOpenSession: (sessionId: str
               disabled={(empty && chips.length === 0) || mode !== 'local'}
               onClick={() => setConfirmClear(true)}
             >
-              {tr('files.FileTree.message530')}{' '}
+              {tr('files.FileTree.clear')}{' '}
             </Button>
           )}
         </div>
@@ -160,7 +160,7 @@ export function UsageSection({ onOpenSession }: { onOpenSession: (sessionId: str
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Segmented
-          label={tr('settings.usage.UsageSection.message1018')}
+          label={tr('settings.usage.UsageSection.timeRange')}
           options={RANGE_OPTIONS}
           value={range}
           onChange={changeRange}
@@ -173,7 +173,7 @@ export function UsageSection({ onOpenSession }: { onOpenSession: (sessionId: str
             {DIMENSION_LABEL[d]}：{dimLabel(d, v)}
             <button
               type="button"
-              aria-label={tr('settings.usage.UsageSection.message1019', { p0: DIMENSION_LABEL[d] })}
+              aria-label={tr('settings.usage.UsageSection.removeFilter', { p0: DIMENSION_LABEL[d] })}
               onClick={() => changeFilter({ ...filter, [d]: undefined })}
               className="inline-flex size-5 items-center justify-center rounded-full hover:bg-hover"
             >
@@ -183,7 +183,7 @@ export function UsageSection({ onOpenSession }: { onOpenSession: (sessionId: str
         ))}
         {chips.length > 1 && (
           <button type="button" onClick={() => changeFilter({})} className="text-meta text-fg-muted hover:text-fg">
-            {tr('settings.usage.UsageSection.message1020')}{' '}
+            {tr('settings.usage.UsageSection.clearFilters')}{' '}
           </button>
         )}
       </div>
@@ -221,7 +221,7 @@ export function UsageSection({ onOpenSession }: { onOpenSession: (sessionId: str
             <Panel>
               <RecordsTable page={page} pageSize={PAGE_SIZE} onPage={setOffset} onOpenSession={onOpenSession} />
             </Panel>
-            <p className="text-meta text-fg-faint">{tr('settings.usage.UsageSection.message1021')} </p>
+            <p className="text-meta text-fg-faint">{tr('settings.usage.UsageSection.recordsStayOnThis')} </p>
           </div>
         ))
       )}
@@ -252,7 +252,7 @@ function AccountModeBody({
   if (rm.status === 'loading' || rm.page === null) {
     return (
       <div className="overflow-hidden rounded-lg border border-line bg-surface p-4 text-meta text-fg-muted tabular-nums">
-        {tr('settings.usage.UsageSection.message1022')}
+        {tr('settings.usage.UsageSection.loadingAccountRequests')}
       </div>
     )
   }
@@ -286,10 +286,14 @@ function EmptyState({ filtered }: { filtered: boolean }) {
         <ChartColumn size={20} strokeWidth={1.5} />
       </span>
       <div className="mt-3 text-ui font-medium text-fg-secondary">
-        {filtered ? tr('settings.usage.UsageSection.message1023') : tr('settings.usage.UsageSection.message1024')}
+        {filtered
+          ? tr('settings.usage.UsageSection.noRecordsMatchThese')
+          : tr('settings.usage.UsageSection.noUsageRecordsYet')}
       </div>
       <p className="mt-1 max-w-sm text-meta text-fg-muted">
-        {filtered ? tr('settings.usage.UsageSection.message1025') : tr('settings.usage.UsageSection.message1026')}
+        {filtered
+          ? tr('settings.usage.UsageSection.chooseAnotherTimeRange')
+          : tr('settings.usage.UsageSection.afterStartingConversationEach')}
       </p>
     </div>
   )

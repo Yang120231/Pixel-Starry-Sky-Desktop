@@ -18,37 +18,37 @@ export const REPLY_STAT_KEYS = [
 export type ReplyStatKey = (typeof REPLY_STAT_KEYS)[number]
 export const REPLY_STAT_LABELS: Record<ReplyStatKey, string> = {
   get elapsed() {
-    return tr('session.turnStatsData.message373')
+    return tr('session.turnStatsData.totalDuration')
   },
   get tokens() {
-    return tr('settings.replyStats.message850')
+    return tr('settings.replyStats.tokensInputOutput')
   },
   get cost() {
-    return tr('settings.replyStats.message851')
+    return tr('settings.replyStats.cost')
   },
   get model() {
-    return tr('session.ModelSourceMenu.message291')
+    return tr('session.ModelSourceMenu.model')
   },
   get inputTokens() {
-    return tr('settings.replyStats.message852')
+    return tr('settings.replyStats.uncachedInputTokens')
   },
   get outputTokens() {
-    return tr('session.turnStatsData.message378')
+    return tr('session.turnStatsData.outputTokens')
   },
   get totalTokens() {
-    return tr('settings.replyStats.message853')
+    return tr('settings.replyStats.totalTokens')
   },
   get cacheRead() {
-    return tr('session.contextData.message150')
+    return tr('session.contextData.cacheRead')
   },
   get cacheWrite() {
-    return tr('session.contextData.message151')
+    return tr('session.contextData.cacheWrite')
   },
   get cacheHitRate() {
-    return tr('settings.replyStats.message854')
+    return tr('settings.replyStats.cacheHitRate')
   },
   get requests() {
-    return tr('settings.replyStats.message855')
+    return tr('settings.replyStats.modelRequestCount')
   },
 }
 
@@ -56,19 +56,19 @@ export const DEFAULT_REPLY_STATS: readonly ReplyStatKey[] = ['elapsed', 'tokens'
 export const REPLY_STAT_GROUPS: readonly { label: string; keys: readonly ReplyStatKey[] }[] = [
   {
     get label() {
-      return tr('settings.replyStats.message856')
+      return tr('settings.replyStats.basicInformation')
     },
     keys: DEFAULT_REPLY_STATS,
   },
   {
     get label() {
-      return tr('settings.replyStats.message857')
+      return tr('settings.replyStats.tokenBreakdown')
     },
     keys: ['inputTokens', 'outputTokens', 'totalTokens', 'cacheRead', 'cacheWrite', 'cacheHitRate'],
   },
   {
     get label() {
-      return tr('settings.replyStats.message858')
+      return tr('settings.replyStats.requestStatistics')
     },
     keys: ['requests'],
   },

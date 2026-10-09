@@ -105,27 +105,23 @@ export function SourceHintBar({
         icon={<ArrowLeftRight size={14} />}
         actions={
           <>
-            <Action onClick={onCancelConfirm}>{tr('account.AccountMenu.message31')}</Action>
+            <Action onClick={onCancelConfirm}>{tr('account.AccountMenu.cancel')}</Action>
             <Action primary onClick={apply}>
-              {busy ? (
-                <Spinner />
-              ) : (
-                tr('session.SourceHintBar.message356', { p0: confirm === 'self' ? '自有' : '平台' })
-              )}
+              {busy ? <Spinner /> : tr('session.SourceHintBar.switchTo', { p0: confirm === 'self' ? '自有' : '平台' })}
             </Action>
           </>
         }
       >
         <div className="font-medium text-fg">
-          {tr('session.SourceHintBar.message357')}
-          {confirm === 'self' ? tr('session.ModelSourceMenu.message280') : tr('session.ModelSourceMenu.message279')}
-          {tr('session.SourceHintBar.message358')}
+          {tr('session.SourceHintBar.switchTo2')}
+          {confirm === 'self' ? tr('session.ModelSourceMenu.ownAccount') : tr('session.ModelSourceMenu.platform')}
+          {tr('session.SourceHintBar.toContinueThisConversation')}
         </div>
         <div>
           {confirm === 'self'
-            ? tr('session.SourceHintBar.message359', { p0: engineName })
-            : tr('session.SourceHintBar.message360', { p0: route ? `线路「${route.name}」` : '' })}
-          {tr('session.SourceHintBar.message362')}{' '}
+            ? tr('session.SourceHintBar.futureRequestsAreBilled', { p0: engineName })
+            : tr('session.SourceHintBar.futureRequestsUsePlatform', { p0: route ? `线路「${route.name}」` : '' })}
+          {tr('session.SourceHintBar.engineRestartsAndResumes')}{' '}
         </div>
         {error && <div className="text-danger">{translateMessage(error)}</div>}
       </Bar>
@@ -136,12 +132,14 @@ export function SourceHintBar({
   if (!b || live.running) return null
   const useSelf = (
     <Action onClick={() => onRequestSource('self')}>
-      {live.started ? tr('session.live.NoticeActions.message265') : tr('session.SourceHintBar.message363')}
+      {live.started
+        ? tr('session.live.NoticeActions.continueWithOwnAccount')
+        : tr('session.SourceHintBar.useOwnAccount')}
     </Action>
   )
   const usePlatformBtn = live.platformAvailable ? (
     <Action onClick={() => onRequestSource('platform')}>
-      {live.started ? tr('session.live.NoticeActions.message266') : tr('session.SourceHintBar.message364')}
+      {live.started ? tr('session.live.NoticeActions.continueWithPlatform') : tr('session.SourceHintBar.usePlatform')}
     </Action>
   ) : null
 
@@ -155,19 +153,19 @@ export function SourceHintBar({
             <>
               {useSelf}
               <Action primary onClick={() => void account.login()}>
-                {tr('account.AccountMenu.message28')}
+                {tr('account.AccountMenu.signIn')}
               </Action>
             </>
           }
         >
-          {tr('session.SourceHintBar.message365')}{' '}
+          {tr('session.SourceHintBar.signInToPixel')}{' '}
         </Bar>
       )
     case 'account':
       return (
         <Bar tone="warn" icon={<TriangleAlert size={14} />} actions={useSelf}>
-          {tr('session.SourceHintBar.message366')} {b.account}
-          {tr('session.SourceHintBar.message367')}{' '}
+          {tr('session.SourceHintBar.thisConversationUses')} {b.account}
+          {tr('session.SourceHintBar.sPlatformCreditsSigned')}{' '}
         </Bar>
       )
     case 'no-route':
@@ -180,10 +178,10 @@ export function SourceHintBar({
               {useSelf}
               {b.balance && (
                 <Action onClick={() => settings.openSettings('account')}>
-                  {tr('session.live.NoticeActions.message267')}
+                  {tr('session.live.NoticeActions.viewAccount')}
                 </Action>
               )}
-              <Action onClick={() => void refreshPlatform()}>{tr('session.ModelSourceMenu.message308')}</Action>
+              <Action onClick={() => void refreshPlatform()}>{tr('session.ModelSourceMenu.retry')}</Action>
             </>
           }
         >
@@ -198,14 +196,14 @@ export function SourceHintBar({
           actions={
             <>
               {useSelf}
-              <Action onClick={onOpenMenu}>{tr('session.live.NoticeActions.message264')}</Action>
+              <Action onClick={onOpenMenu}>{tr('session.live.NoticeActions.changeRoute')}</Action>
               <Action onClick={() => settings.openSettings('account')}>
-                {tr('session.live.NoticeActions.message267')}
+                {tr('session.live.NoticeActions.viewAccount')}
               </Action>
             </>
           }
         >
-          {tr('session.SourceHintBar.message368')}{' '}
+          {tr('session.SourceHintBar.insufficientBalanceThisRoute')}{' '}
         </Bar>
       )
     case 'self-auth':
@@ -217,7 +215,7 @@ export function SourceHintBar({
           actions={
             <>
               {usePlatformBtn}
-              <Action onClick={live.redetect}>{tr('session.SourceHintBar.message369')}</Action>
+              <Action onClick={live.redetect}>{tr('session.SourceHintBar.detectAgain')}</Action>
             </>
           }
         >

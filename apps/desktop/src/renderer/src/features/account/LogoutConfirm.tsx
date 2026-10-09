@@ -16,17 +16,17 @@ export function LogoutConfirm({
   return (
     <div
       role="alertdialog"
-      aria-label={tr('account.LogoutConfirm.message47')}
+      aria-label={tr('account.LogoutConfirm.confirmSignOut')}
       className={cn('flex flex-col gap-2', className)}
     >
-      <div className="text-ui font-medium text-fg">{tr('account.LogoutConfirm.message48')}</div>
-      <p className="text-meta text-fg-muted">{tr('account.LogoutConfirm.message49')}</p>
+      <div className="text-ui font-medium text-fg">{tr('account.LogoutConfirm.signOut')}</div>
+      <p className="text-meta text-fg-muted">{tr('account.LogoutConfirm.youWillNeedTo')}</p>
       <div className="mt-1 flex justify-end gap-2">
         <Button variant="outline" autoFocus onClick={onCancel}>
-          {tr('account.AccountMenu.message31')}{' '}
+          {tr('account.AccountMenu.cancel')}{' '}
         </Button>
         <Button variant="primary" className="bg-danger!" onClick={onConfirm}>
-          {tr('account.LogoutConfirm.message50')}{' '}
+          {tr('account.LogoutConfirm.signOut2')}{' '}
         </Button>
       </div>
     </div>

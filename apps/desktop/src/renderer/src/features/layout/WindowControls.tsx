@@ -13,7 +13,7 @@ const SNAP_LAYOUTS: SnapSpec[] = [
   {
     id: 'columns-2',
     get label() {
-      return tr('nav.WindowControls.message61')
+      return tr('nav.WindowControls.twoColumns')
     },
     zones: [
       { x: 0, y: 0, width: 6, height: 4 },
@@ -23,7 +23,7 @@ const SNAP_LAYOUTS: SnapSpec[] = [
   {
     id: 'columns-3',
     get label() {
-      return tr('nav.WindowControls.message62')
+      return tr('nav.WindowControls.threeColumns')
     },
     zones: [
       { x: 0, y: 0, width: 4, height: 4 },
@@ -34,7 +34,7 @@ const SNAP_LAYOUTS: SnapSpec[] = [
   {
     id: 'large-left',
     get label() {
-      return tr('nav.WindowControls.message63')
+      return tr('nav.WindowControls.largeLeftTwoRight')
     },
     zones: [
       { x: 0, y: 0, width: 8, height: 4 },
@@ -45,7 +45,7 @@ const SNAP_LAYOUTS: SnapSpec[] = [
   {
     id: 'large-right',
     get label() {
-      return tr('nav.WindowControls.message64')
+      return tr('nav.WindowControls.twoLeftLargeRight')
     },
     zones: [
       { x: 0, y: 0, width: 4, height: 2 },
@@ -56,7 +56,7 @@ const SNAP_LAYOUTS: SnapSpec[] = [
   {
     id: 'grid-4',
     get label() {
-      return tr('nav.WindowControls.message65')
+      return tr('nav.WindowControls.fourQuadrants')
     },
     zones: [
       { x: 0, y: 0, width: 6, height: 2 },
@@ -68,7 +68,7 @@ const SNAP_LAYOUTS: SnapSpec[] = [
   {
     id: 'wide-center',
     get label() {
-      return tr('nav.WindowControls.message66')
+      return tr('nav.WindowControls.wideCenter')
     },
     zones: [
       { x: 0, y: 0, width: 3, height: 4 },

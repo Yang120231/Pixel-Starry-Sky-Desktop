@@ -86,6 +86,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
 export function useSettings(): SettingsContextValue {
   const value = useContext(SettingsContext)
-  if (!value) throw new Error(tr('settings.SettingsProvider.message946'))
+  if (!value) throw new Error(tr('settings.SettingsProvider.usesettingsMustBeUsed'))
   return value
 }

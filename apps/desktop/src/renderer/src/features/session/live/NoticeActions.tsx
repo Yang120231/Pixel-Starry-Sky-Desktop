@@ -8,19 +8,19 @@ import { classifyError, type ErrorKind } from './errorKind'
 
 const LABEL: Record<SourceAction, string> = {
   get 'open-menu'() {
-    return tr('session.live.NoticeActions.message264')
+    return tr('session.live.NoticeActions.changeRoute')
   },
   get 'use-self'() {
-    return tr('session.live.NoticeActions.message265')
+    return tr('session.live.NoticeActions.continueWithOwnAccount')
   },
   get 'use-platform'() {
-    return tr('session.live.NoticeActions.message266')
+    return tr('session.live.NoticeActions.continueWithPlatform')
   },
   get 'open-account'() {
-    return tr('session.live.NoticeActions.message267')
+    return tr('session.live.NoticeActions.viewAccount')
   },
   get 'sign-in'() {
-    return tr('session.live.NoticeActions.message268')
+    return tr('session.live.NoticeActions.signInAgain')
   },
 }
 

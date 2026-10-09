@@ -30,10 +30,10 @@ import { MenuRow, MenuTitle, TRIGGER } from './ComposerMenus'
 
 const SOURCE_LABEL: Record<CreditSource, string> = {
   get platform() {
-    return tr('session.ModelSourceMenu.message279')
+    return tr('session.ModelSourceMenu.platform')
   },
   get self() {
-    return tr('session.ModelSourceMenu.message280')
+    return tr('session.ModelSourceMenu.ownAccount')
   },
 }
 
@@ -85,16 +85,16 @@ function triggerText(live: SourceMenuController, rate: number | null): { model: 
   const engineId = live.engine?.id ?? 'claude'
   if (live.source === 'platform')
     return {
-      model: live.model ?? tr('session.ModelSourceMenu.message281'),
+      model: live.model ?? tr('session.ModelSourceMenu.chooseModel'),
       source:
         rate === null
-          ? tr('session.ModelSourceMenu.message279')
-          : tr('session.ModelSourceMenu.message282', { p0: formatMultiplier(rate) }),
+          ? tr('session.ModelSourceMenu.platform')
+          : tr('session.ModelSourceMenu.platform2', { p0: formatMultiplier(rate) }),
     }
   return {
     model: live.model ? selfModelLabel(engineId, live.model) : (live.engine?.name ?? 'Claude Code'),
     get source() {
-      return tr('session.ModelSourceMenu.message280')
+      return tr('session.ModelSourceMenu.ownAccount')
     },
   }
 }
@@ -203,39 +203,41 @@ export function ModelSourceMenu({
         ) : (
           <div style={{ maxHeight: menuHeight }} className="flex flex-col overflow-y-auto">
             {/* 引擎 */}
-            <MenuTitle>{tr('session.ModelSourceMenu.message283')}</MenuTitle>
+            <MenuTitle>{tr('session.ModelSourceMenu.engine')}</MenuTitle>
             <MiniSegmented
-              label={tr('session.ModelSourceMenu.message283')}
+              label={tr('session.ModelSourceMenu.engine')}
               value={engineId}
               onChange={id => live.selectEngine(id)}
               options={visibleEngines(live.engines, engineConfig, engineId).map(e => ({
                 value: e.id,
-                label: e.status === 'unsupported' ? tr('session.ModelSourceMenu.message284', { p0: e.name }) : e.name,
+                label: e.status === 'unsupported' ? tr('session.ModelSourceMenu.comingSoon', { p0: e.name }) : e.name,
                 icon: <EngineIcon engine={e.id} size={14} />,
                 disabled: !live.canSwitchEngine || e.status === 'unsupported',
                 title:
                   e.status === 'unsupported'
-                    ? tr('session.ModelSourceMenu.message285')
+                    ? tr('session.ModelSourceMenu.comingSoon2')
                     : !live.canSwitchEngine
-                      ? tr('session.ModelSourceMenu.message286')
+                      ? tr('session.ModelSourceMenu.existingConversationCannotSwitch')
                       : undefined,
               }))}
             />
             {!live.canSwitchEngine && (
-              <p className="px-2 pt-1 text-label text-fg-faint">{tr('session.ModelSourceMenu.message287')}</p>
+              <p className="px-2 pt-1 text-label text-fg-faint">
+                {tr('session.ModelSourceMenu.cannotSwitchEnginesAfter')}
+              </p>
             )}
 
             {/* 额度来源 */}
             <div className="mt-2 flex items-baseline justify-between gap-2 border-t border-line-subtle px-2 pt-2.5 pb-1">
-              <span className="text-label font-medium text-fg-faint">{tr('session.ModelSourceMenu.message288')}</span>
+              <span className="text-label font-medium text-fg-faint">{tr('session.ModelSourceMenu.creditSource')}</span>
               {live.source === 'platform' && account.balanceText && (
                 <span className="text-meta text-fg-muted tabular-nums">
-                  {tr('account.AccountMenu.message36')} {account.balanceText}
+                  {tr('account.AccountMenu.balance')} {account.balanceText}
                 </span>
               )}
             </div>
             <MiniSegmented
-              label={tr('session.ModelSourceMenu.message288')}
+              label={tr('session.ModelSourceMenu.creditSource')}
               value={live.source}
               onChange={s => {
                 if (live.started) onOpenChange(false)
@@ -246,11 +248,15 @@ export function ModelSourceMenu({
                 label: SOURCE_LABEL[s],
                 disabled: s === 'platform' && !live.platformAvailable,
                 title:
-                  s === 'platform' && !live.platformAvailable ? tr('session.ModelSourceMenu.message289') : undefined,
+                  s === 'platform' && !live.platformAvailable
+                    ? tr('session.ModelSourceMenu.platformCreditsCurrentlySupport')
+                    : undefined,
               }))}
             />
             {live.started && (
-              <p className="px-2 pt-1 text-label text-fg-faint">{tr('session.ModelSourceMenu.message290')}</p>
+              <p className="px-2 pt-1 text-label text-fg-faint">
+                {tr('session.ModelSourceMenu.appliesToThisConversation')}
+              </p>
             )}
 
             {live.source === 'platform' ? (
@@ -261,26 +267,28 @@ export function ModelSourceMenu({
 
             {/* 模型 */}
             <div className="mt-2 border-t border-line-subtle pt-1">
-              <MenuTitle>{tr('session.ModelSourceMenu.message291')}</MenuTitle>
+              <MenuTitle>{tr('session.ModelSourceMenu.model')}</MenuTitle>
               {live.source === 'platform' ? (
                 platform.email && allModels.length > 0 ? (
                   models.length === 0 ? (
-                    <p className="px-2 pb-1.5 text-meta text-fg-faint">{tr('session.ModelSourceMenu.message292')}</p>
+                    <p className="px-2 pb-1.5 text-meta text-fg-faint">
+                      {tr('session.ModelSourceMenu.allModelsAreHidden')}
+                    </p>
                   ) : (
                     <>
                       {models.length > MODEL_SEARCH_MIN && (
                         <input
                           value={modelQuery}
                           onChange={e => setModelQuery(e.target.value)}
-                          placeholder={tr('session.ModelSourceMenu.message293')}
-                          aria-label={tr('session.ModelSourceMenu.message293')}
+                          placeholder={tr('session.ModelSourceMenu.searchModels')}
+                          aria-label={tr('session.ModelSourceMenu.searchModels')}
                           spellCheck={false}
                           className="mx-2 mb-1 h-7 w-[calc(100%-1rem)] rounded-md border border-line bg-subtle px-2 font-mono text-meta text-fg outline-none placeholder:font-sans placeholder:text-fg-faint focus:border-line-strong focus:bg-surface"
                         />
                       )}
                       {matchModels(models, modelQuery).length === 0 && (
                         <p className="px-2 pb-1.5 text-meta text-fg-faint">
-                          {tr('session.ModelSourceMenu.message294')}
+                          {tr('session.ModelSourceMenu.noMatchingModels')}
                         </p>
                       )}
                       {matchModels(models, modelQuery).map(m => {
@@ -296,7 +304,7 @@ export function ModelSourceMenu({
                             hint={
                               min === null
                                 ? undefined
-                                : tr('session.ModelSourceMenu.message295', {
+                                : tr('session.ModelSourceMenu.routes', {
                                     p0: formatMultiplier(min),
                                     p1: multi ? ' 起' : '',
                                     p2: gs.length,
@@ -310,8 +318,8 @@ export function ModelSourceMenu({
                 ) : (
                   <p className="px-2 pb-1.5 text-meta text-fg-faint">
                     {platform.email
-                      ? tr('session.ModelSourceMenu.message297')
-                      : tr('session.ModelSourceMenu.message298')}
+                      ? tr('session.ModelSourceMenu.modelsAppearAfterRoutes')
+                      : tr('session.ModelSourceMenu.signInToView')}
                   </p>
                 )
               ) : (
@@ -333,7 +341,7 @@ export function ModelSourceMenu({
                 <MenuRow
                   selected
                   title={<span className="font-mono text-meta">{live.model}</span>}
-                  hint={tr('session.ModelSourceMenu.message299')}
+                  hint={tr('session.ModelSourceMenu.modelUsedByThis')}
                 />
               )}
               {live.source === 'platform' && allModels.length > 0 && (
@@ -342,12 +350,12 @@ export function ModelSourceMenu({
                   onClick={manageModels}
                   className="mx-1 flex h-7 items-center rounded-md px-1.5 text-meta text-fg-muted hover:bg-hover hover:text-fg"
                 >
-                  {tr('session.ModelSourceMenu.message300')}{' '}
+                  {tr('session.ModelSourceMenu.manageModels')}{' '}
                   {platform.hiddenModels.length > 0 && (
                     <span className="ml-1 text-fg-faint">
-                      {tr('session.ModelSourceMenu.message301')}{' '}
+                      {tr('session.ModelSourceMenu.hidden')}{' '}
                       {allModels.filter(m => platform.hiddenModels.includes(m)).length}
-                      {tr('session.ModelSourceMenu.message302')}{' '}
+                      {tr('session.ModelSourceMenu.text')}{' '}
                     </span>
                   )}
                 </button>
@@ -365,10 +373,10 @@ export function ModelSourceMenu({
                 <button
                   type="button"
                   onClick={() => live.saveAsDefault()}
-                  title={tr('session.ModelSourceMenu.message303')}
+                  title={tr('session.ModelSourceMenu.useThisConversationsCredit')}
                   className="flex h-7 items-center rounded-md px-2 text-meta text-fg-secondary hover:bg-hover hover:text-fg"
                 >
-                  {tr('session.ModelSourceMenu.message304')}{' '}
+                  {tr('session.ModelSourceMenu.setAsDefault')}{' '}
                 </button>
               )}
               <div className="flex-1" />
@@ -382,7 +390,7 @@ export function ModelSourceMenu({
                 className="flex h-7 items-center gap-1.5 rounded-md px-2 text-meta text-fg-muted hover:bg-hover hover:text-fg disabled:opacity-50"
               >
                 <RefreshCw size={12} className={cn(platform.loading && 'animate-spin')} />
-                {platform.loading ? tr('session.ModelSourceMenu.message305') : tr('account.AccountMenu.message45')}
+                {platform.loading ? tr('session.ModelSourceMenu.refreshing') : tr('account.AccountMenu.refresh')}
               </button>
             </div>
           </div>
@@ -401,14 +409,14 @@ function PlatformRoute({ live, onOpenRoutes }: { live: SourceMenuController; onO
   if (!platform.email) {
     return (
       <div className="mx-2 mt-2 flex items-center justify-between gap-2 rounded-md bg-subtle px-2.5 py-2 text-meta text-fg-muted">
-        <span>{tr('session.ModelSourceMenu.message306')}</span>
+        <span>{tr('session.ModelSourceMenu.signInToPixel')}</span>
         <button
           type="button"
           onClick={() => void account.login()}
           className="flex shrink-0 items-center gap-1 text-accent-fg hover:underline"
         >
           <LogIn size={12} />
-          {tr('account.AccountMenu.message28')}{' '}
+          {tr('account.AccountMenu.signIn')}{' '}
         </button>
       </div>
     )
@@ -417,7 +425,7 @@ function PlatformRoute({ live, onOpenRoutes }: { live: SourceMenuController; onO
     return (
       <div className="flex items-center gap-2 px-2 py-2 text-meta text-fg-muted">
         <Spinner />
-        {tr('session.ModelSourceMenu.message307')}{' '}
+        {tr('session.ModelSourceMenu.loadingRoutes')}{' '}
       </div>
     )
   }
@@ -436,11 +444,11 @@ function PlatformRoute({ live, onOpenRoutes }: { live: SourceMenuController; onO
               onClick={() => settings.openSettings('account')}
               className="text-accent-fg hover:underline"
             >
-              {tr('session.live.NoticeActions.message267')}{' '}
+              {tr('session.live.NoticeActions.viewAccount')}{' '}
             </button>
           )}
           <button type="button" onClick={() => void refreshPlatform()} className="text-accent-fg hover:underline">
-            {tr('session.ModelSourceMenu.message308')}{' '}
+            {tr('session.ModelSourceMenu.retry')}{' '}
           </button>
         </div>
       </div>
@@ -451,16 +459,16 @@ function PlatformRoute({ live, onOpenRoutes }: { live: SourceMenuController; onO
       type="button"
       onClick={onOpenRoutes}
       className="mx-1 mt-1.5 flex items-center gap-2 rounded-md px-1 py-1.5 text-left hover:bg-hover"
-      aria-label={tr('session.ModelSourceMenu.message309')}
+      aria-label={tr('session.ModelSourceMenu.chooseRoute')}
     >
-      <span className="w-8 shrink-0 text-meta text-fg-muted">{tr('session.ModelSourceMenu.message310')}</span>
+      <span className="w-8 shrink-0 text-meta text-fg-muted">{tr('session.ModelSourceMenu.route')}</span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-ui text-fg">{group.name}</span>
         <span className="block truncate text-meta text-fg-muted">{billingLabel(group)}</span>
       </span>
       <span
         className="shrink-0 text-ui text-fg-secondary tabular-nums"
-        title={tr('session.ModelSourceMenu.message311')}
+        title={tr('session.ModelSourceMenu.thisAccountsBillingMultiplier')}
       >
         {formatMultiplier(group.rate_multiplier)}
       </span>
@@ -487,8 +495,8 @@ function SelfStatus({
       <div className="flex items-center gap-1.5 px-2 pt-2 text-meta text-fg-muted">
         <Check size={13} className="text-success" />
         {e.name}
-        {tr('session.ModelSourceMenu.message312')}{' '}
-        {e.version ? tr('session.ModelSourceMenu.message313', { p0: e.version }) : ''}
+        {tr('session.ModelSourceMenu.localSignIn')}{' '}
+        {e.version ? tr('session.ModelSourceMenu.version', { p0: e.version }) : ''}
       </div>
     )
   }
@@ -497,16 +505,16 @@ function SelfStatus({
       <div className="flex items-center justify-between gap-2">
         <span>
           {e.status === 'unauthenticated'
-            ? tr('session.ModelSourceMenu.message314', { p0: e.name })
-            : tr('session.ModelSourceMenu.message315', { p0: e.name })}
+            ? tr('session.ModelSourceMenu.signInToFirst', { p0: e.name })
+            : tr('session.ModelSourceMenu.isTemporarilyUnavailable', { p0: e.name })}
         </span>
         {e.message && (
           <button type="button" onClick={onToggleHelp} className="shrink-0 text-accent-fg hover:underline">
             {showHelp
-              ? tr('session.ModelSourceMenu.message316')
+              ? tr('session.ModelSourceMenu.collapse')
               : e.status === 'unauthenticated'
-                ? tr('session.ModelSourceMenu.message317')
-                : tr('session.ModelSourceMenu.message318')}
+                ? tr('session.ModelSourceMenu.howToSignIn')
+                : tr('session.ModelSourceMenu.viewReason')}
           </button>
         )}
       </div>
@@ -543,11 +551,11 @@ function RoutesPage({
       >
         <ChevronLeft size={14} />
         <span className="truncate">
-          {tr('session.ModelSourceMenu.message310')}
+          {tr('session.ModelSourceMenu.route')}
           {live.model ? (
             <span className="font-mono">
               （{live.model}
-              {tr('session.ModelSourceMenu.message319')}{' '}
+              {tr('session.ModelSourceMenu.available')}{' '}
             </span>
           ) : null}
         </span>
@@ -571,14 +579,18 @@ function RoutesPage({
             hint={
               <span className={cn(lowBalance && 'text-warn')}>
                 {billingLabel(g)}
-                {lowBalance ? tr('session.ModelSourceMenu.message320') : g.description ? ` · ${g.description}` : ''}
+                {lowBalance
+                  ? tr('session.ModelSourceMenu.insufficientBalance')
+                  : g.description
+                    ? ` · ${g.description}`
+                    : ''}
               </span>
             }
           />
         )
       })}
       <p className="border-t border-line-subtle px-2 pt-1.5 pb-1 text-label text-fg-faint">
-        {tr('session.ModelSourceMenu.message321')}
+        {tr('session.ModelSourceMenu.onlyRoutesSupportingThis')}
       </p>
     </div>
   )

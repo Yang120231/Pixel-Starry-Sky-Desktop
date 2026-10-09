@@ -126,12 +126,12 @@ export async function setWallpaperFile(file: File): Promise<string | null> {
     : file.type.startsWith('image/')
       ? 'image'
       : null
-  if (!kind) return tr('appearance.wallpaper.message22')
-  if (file.size > MAX_WALLPAPER_BYTES) return tr('appearance.wallpaper.message23')
+  if (!kind) return tr('appearance.wallpaper.supportedImagesPngJpg')
+  if (file.size > MAX_WALLPAPER_BYTES) return tr('appearance.wallpaper.fileTooLargeMaximum')
   try {
     await withStore('readwrite', s => s.put(file, FILE_KEY))
   } catch {
-    return tr('appearance.wallpaper.message24')
+    return tr('appearance.wallpaper.couldNotSaveWallpaper')
   }
   if (state.url) URL.revokeObjectURL(state.url)
   emit({ ...state, name: file.name, kind, url: URL.createObjectURL(file) })

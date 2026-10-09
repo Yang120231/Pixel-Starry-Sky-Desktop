@@ -35,7 +35,7 @@ export function FileLifecycle() {
     const unsubscribe = window.pixelsky?.files.onBeforeClose(() => {
       void confirmFiles(
         getFiles().tabs.map(t => t.id),
-        tr('files.FileConfirm.message521'),
+        tr('files.FileConfirm.quitApplication'),
       ).then(ok => {
         if (ok) void window.pixelsky!.files.finishClose()
       })

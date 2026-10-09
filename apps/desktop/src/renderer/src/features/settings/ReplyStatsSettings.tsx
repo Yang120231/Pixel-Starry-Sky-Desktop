@@ -20,18 +20,18 @@ export function ReplyStatsSettings() {
   const selected = useReplyStats()
   return (
     <SettingRow
-      title={tr('settings.ReplyStatsSettings.message859')}
-      description={tr('settings.ReplyStatsSettings.message860')}
+      title={tr('settings.ReplyStatsSettings.statisticsBelowReplies')}
+      description={tr('settings.ReplyStatsSettings.chooseWhichStatisticsAppear')}
     >
       <div
         className="mb-3 rounded-lg border border-line bg-subtle px-3 py-3"
-        aria-label={tr('settings.ReplyStatsSettings.message861')}
+        aria-label={tr('settings.ReplyStatsSettings.replyStatisticsPreview')}
       >
-        <div className="mb-2 text-label text-fg-muted">{tr('settings.ReplyStatsSettings.message862')}</div>
+        <div className="mb-2 text-label text-fg-muted">{tr('settings.ReplyStatsSettings.previewSampleData')}</div>
         {selected.length > 0 ? (
           <TurnStats usage={replyStatsPreview} />
         ) : (
-          <div className="text-meta text-fg-muted">{tr('settings.ReplyStatsSettings.message863')}</div>
+          <div className="text-meta text-fg-muted">{tr('settings.ReplyStatsSettings.hideStatistics')}</div>
         )}
       </div>
       <div className="space-y-4">
@@ -65,7 +65,7 @@ export function ReplyStatsSettings() {
           </fieldset>
         ))}
       </div>
-      <p className="mt-3 text-meta text-fg-faint">{tr('settings.ReplyStatsSettings.message864')}</p>
+      <p className="mt-3 text-meta text-fg-faint">{tr('settings.ReplyStatsSettings.uncachedInputExcludesCache')}</p>
       <Button
         variant="ghost"
         icon={RotateCcw}
@@ -73,7 +73,7 @@ export function ReplyStatsSettings() {
         disabled={isDefaultReplyStats(selected)}
         onClick={resetReplyStats}
       >
-        {tr('settings.ReplyStatsSettings.message865')}{' '}
+        {tr('settings.ReplyStatsSettings.resetStatistics')}{' '}
       </Button>
     </SettingRow>
   )

@@ -1,486 +1,486 @@
 // 固定界面词典。key 保持稳定，新增语言补齐同一组条目。
 export const catalog = {
-  "account.format.message0": {
+  "account.format.justNow": {
     "zh": "刚刚",
     "en": "Just now"
   },
-  "account.format.message1": {
+  "account.format.minutesAgo": {
     "zh": "{p0} 分钟前",
     "en": "{p0} minutes ago"
   },
-  "account.format.message2": {
+  "account.format.hours": {
     "zh": "小时",
     "en": "hours"
   },
-  "account.format.message3": {
+  "account.format.days": {
     "zh": "天",
     "en": "days"
   },
-  "account.format.message4": {
+  "account.format.balanceBilling": {
     "zh": "按余额计费",
     "en": "Balance billing"
   },
-  "account.format.message5": {
+  "account.format.subscriptionBilling": {
     "zh": "订阅计费",
     "en": "Subscription billing"
   },
-  "account.platform.message6": {
+  "account.platform.insufficientBalanceAddCredits": {
     "zh": "余额不足：按余额计费的线路要先充值，才能读取模型和调用",
     "en": "Insufficient balance. Add credits to load and use models on balance-billed routes."
   },
-  "account.platform.message7": {
+  "account.platform.couldNotLoadModels": {
     "zh": "模型读取失败：{p0}",
     "en": "Could not load models: {p0}"
   },
-  "account.platform.message8": {
+  "account.platform.noModelsAvailableOn": {
     "zh": "这条线路暂时没有可用模型",
     "en": "No models available on this route yet"
   },
-  "account.platform.message9": {
+  "account.platform.noRoutesAvailableAsk": {
     "zh": "暂无可用线路：请管理员在后台公开分组并分配使用权限",
     "en": "No routes available. Ask an administrator to publish groups and grant access."
   },
-  "account.platform.message10": {
+  "account.platform.insufficientBalanceAllAvailable": {
     "zh": "余额不足：可用的线路都按余额计费，余额为 0 时读不到模型，也不能调用。充值后点「重试」，或改用自有",
     "en": "Insufficient balance. All available routes bill your balance. Add credits and retry, or use your own account."
   },
-  "account.platform.message11": {
+  "account.platform.noModelsAvailableOn2": {
     "zh": "线路里暂时没有可用模型",
     "en": "No models available on these routes yet"
   },
-  "account.platform.message12": {
+  "account.platform.subscriptionCredits": {
     "zh": "订阅额度",
     "en": "Subscription credits"
   },
-  "account.platform.message13": {
+  "account.platform.balanceBilling": {
     "zh": "余额计费",
     "en": "Balance billing"
   },
-  "account.platform.message14": {
+  "account.platform.failedToLoad": {
     "zh": "读取失败",
     "en": "Failed to load"
   },
-  "account.platform.message15": {
+  "account.platform.noModelsAvailableIn": {
     "zh": "分组里暂时没有可用模型",
     "en": "No models available in this group yet"
   },
-  "account.useAccount.message16": {
+  "account.useAccount.couldNotLoadAccount": {
     "zh": "无法读取账号状态",
     "en": "Could not load account status"
   },
-  "account.useAccount.message17": {
+  "account.useAccount.signInFailedPlease": {
     "zh": "登录失败，请重试",
     "en": "Sign-in failed. Please retry."
   },
-  "account.useAccount.message18": {
+  "account.useAccount.couldNotCancelSign": {
     "zh": "取消登录失败",
     "en": "Could not cancel sign-in"
   },
-  "account.useAccount.message19": {
+  "account.useAccount.couldNotSignOut": {
     "zh": "退出登录失败",
     "en": "Could not sign out"
   },
-  "account.useAccount.message20": {
+  "account.useAccount.refreshFailedTryAgain": {
     "zh": "刷新失败，请稍后再试",
     "en": "Refresh failed. Try again later."
   },
-  "App.message21": {
+  "App.resizeSidebar": {
     "zh": "调整侧边栏宽度",
     "en": "Resize sidebar"
   },
-  "appearance.wallpaper.message22": {
+  "appearance.wallpaper.supportedImagesPngJpg": {
     "zh": "只支持图片（png / jpg / webp / gif / avif）或视频（mp4 / webm）",
     "en": "Supported images: png / jpg / webp / gif / avif. Supported videos: mp4 / webm."
   },
-  "appearance.wallpaper.message23": {
+  "appearance.wallpaper.fileTooLargeMaximum": {
     "zh": "文件太大，最大 200 MB",
     "en": "File too large. Maximum size is 200 MB."
   },
-  "appearance.wallpaper.message24": {
+  "appearance.wallpaper.couldNotSaveWallpaper": {
     "zh": "保存壁纸失败，请再试一次",
     "en": "Could not save wallpaper. Please retry."
   },
-  "account.AccountMenu.message25": {
+  "account.AccountMenu.loadingAccount": {
     "zh": "正在读取账号…",
     "en": "Loading account…"
   },
-  "account.AccountMenu.message26": {
+  "account.AccountMenu.signInToPixel": {
     "zh": "登录像素星空账号",
     "en": "Sign in to Pixel Starry Sky"
   },
-  "account.AccountMenu.message27": {
+  "account.AccountMenu.signInToAccess": {
     "zh": "登录后可以使用账号下的模型，并在这里查看余额和额度。",
     "en": "Sign in to access your models and view your balance and credits here."
   },
-  "account.AccountMenu.message28": {
+  "account.AccountMenu.signIn": {
     "zh": "登录",
     "en": "Sign in"
   },
-  "account.AccountMenu.message29": {
+  "account.AccountMenu.waitingForAuthorization": {
     "zh": "等待授权",
     "en": "Waiting for authorization"
   },
-  "account.AccountMenu.message30": {
+  "account.AccountMenu.authorizationPageIsOpen": {
     "zh": "已在浏览器中打开授权页，完成后会自动回来。",
     "en": "The authorization page is open in your browser. Sign-in will complete automatically."
   },
-  "account.AccountMenu.message31": {
+  "account.AccountMenu.cancel": {
     "zh": "取消",
     "en": "Cancel"
   },
-  "account.AccountMenu.message32": {
+  "account.AccountMenu.accountSettings": {
     "zh": "账号设置…",
     "en": "Account settings…"
   },
-  "account.AccountMenu.message33": {
+  "account.AccountMenu.today": {
     "zh": "今日",
     "en": "Today"
   },
-  "account.AccountMenu.message34": {
+  "account.AccountMenu.thisWeek": {
     "zh": "本周",
     "en": "This week"
   },
-  "account.AccountMenu.message35": {
+  "account.AccountMenu.thisMonth": {
     "zh": "本月",
     "en": "This month"
   },
-  "account.AccountMenu.message36": {
+  "account.AccountMenu.balance": {
     "zh": "余额",
     "en": "Balance"
   },
-  "account.AccountMenu.message37": {
+  "account.AccountMenu.balanceIsTemporarilyUnavailable": {
     "zh": "余额暂时获取不到",
     "en": "Balance is temporarily unavailable"
   },
-  "account.AccountMenu.message38": {
+  "account.AccountMenu.updating": {
     "zh": "正在更新…",
     "en": "Updating…"
   },
-  "account.AccountMenu.message39": {
+  "account.AccountMenu.updated": {
     "zh": "更新于 {p0}",
     "en": "Updated {p0}"
   },
-  "account.AccountMenu.message40": {
+  "account.AccountMenu.expires": {
     "zh": "到期",
     "en": "Expires"
   },
-  "account.AccountMenu.message41": {
+  "account.AccountMenu.limit": {
     "zh": "限额",
     "en": "Limit"
   },
-  "account.AccountMenu.message42": {
+  "account.AccountMenu.resetsByTimeWindow": {
     "zh": "按时间窗口重置",
     "en": "Resets by time window"
   },
-  "account.AccountMenu.message43": {
+  "account.AccountMenu.every": {
     "zh": "每 {p0}",
     "en": "Every {p0}"
   },
-  "account.AccountMenu.message44": {
+  "account.AccountMenu.refreshCredits": {
     "zh": "刷新额度",
     "en": "Refresh credits"
   },
-  "account.AccountMenu.message45": {
+  "account.AccountMenu.refresh": {
     "zh": "刷新",
     "en": "Refresh"
   },
-  "account.AccountMenu.message46": {
+  "account.AccountMenu.signOut": {
     "zh": "退出",
     "en": "Sign out"
   },
-  "account.LogoutConfirm.message47": {
+  "account.LogoutConfirm.confirmSignOut": {
     "zh": "确认退出登录",
     "en": "Confirm sign out"
   },
-  "account.LogoutConfirm.message48": {
+  "account.LogoutConfirm.signOut": {
     "zh": "确定退出登录？",
     "en": "Sign out?"
   },
-  "account.LogoutConfirm.message49": {
+  "account.LogoutConfirm.youWillNeedTo": {
     "zh": "退出后需要重新在浏览器中授权才能使用账号下的模型。",
     "en": "You will need to authorize again in your browser to use your account's models."
   },
-  "account.LogoutConfirm.message50": {
+  "account.LogoutConfirm.signOut2": {
     "zh": "退出登录",
     "en": "Sign out"
   },
-  "account.QuotaBar.message51": {
+  "account.QuotaBar.unlimited": {
     "zh": "不限",
     "en": "Unlimited"
   },
-  "account.QuotaBar.message52": {
+  "account.QuotaBar.usage": {
     "zh": "{p0}用量",
     "en": "{p0} usage"
   },
-  "code.CodeBlock.message53": {
+  "code.CodeBlock.code": {
     "zh": "代码",
     "en": "Code"
   },
-  "code.CodeBlock.message54": {
+  "code.CodeBlock.copyCode": {
     "zh": "复制代码",
     "en": "Copy code"
   },
-  "code.CodeBlock.message55": {
+  "code.CodeBlock.copied": {
     "zh": "已复制",
     "en": "Copied"
   },
-  "code.CodeBlock.message56": {
+  "code.CodeBlock.copyFailed": {
     "zh": "复制失败",
     "en": "Copy failed"
   },
-  "code.CodeBlock.message57": {
+  "code.CodeBlock.copy": {
     "zh": "复制",
     "en": "Copy"
   },
-  "code.highlight.message58": {
+  "code.highlight.plainText": {
     "zh": "纯文本",
     "en": "Plain text"
   },
-  "nav.TopNav.message59": {
+  "nav.TopNav.mainNavigation": {
     "zh": "主导航",
     "en": "Main navigation"
   },
-  "nav.TopNav.message60": {
+  "nav.TopNav.usage": {
     "zh": "用量",
     "en": "Usage"
   },
-  "nav.WindowControls.message61": {
+  "nav.WindowControls.twoColumns": {
     "zh": "左右两列",
     "en": "Two columns"
   },
-  "nav.WindowControls.message62": {
+  "nav.WindowControls.threeColumns": {
     "zh": "三列",
     "en": "Three columns"
   },
-  "nav.WindowControls.message63": {
+  "nav.WindowControls.largeLeftTwoRight": {
     "zh": "左大右上下",
     "en": "Large left, two right"
   },
-  "nav.WindowControls.message64": {
+  "nav.WindowControls.twoLeftLargeRight": {
     "zh": "左上下右大",
     "en": "Two left, large right"
   },
-  "nav.WindowControls.message65": {
+  "nav.WindowControls.fourQuadrants": {
     "zh": "四宫格",
     "en": "Four quadrants"
   },
-  "nav.WindowControls.message66": {
+  "nav.WindowControls.wideCenter": {
     "zh": "中间宽列",
     "en": "Wide center"
   },
-  "nav.WindowControls.message67": {
+  "nav.WindowControls.restore": {
     "zh": "还原",
     "en": "Restore"
   },
-  "nav.WindowControls.message68": {
+  "nav.WindowControls.maximize": {
     "zh": "最大化",
     "en": "Maximize"
   },
-  "nav.WindowControls.message69": {
+  "nav.WindowControls.windowControls": {
     "zh": "窗口操作",
     "en": "Window controls"
   },
-  "nav.WindowControls.message70": {
+  "nav.WindowControls.minimize": {
     "zh": "最小化",
     "en": "Minimize"
   },
-  "nav.WindowControls.message71": {
+  "nav.WindowControls.closeWindow": {
     "zh": "关闭窗口",
     "en": "Close window"
   },
-  "nav.WindowControls.message72": {
+  "nav.WindowControls.windows11WindowLayouts": {
     "zh": "Windows 11 窗口布局",
     "en": "Windows 11 window layouts"
   },
-  "nav.WindowControls.message73": {
+  "nav.WindowControls.zone": {
     "zh": "区域",
     "en": "Zone"
   },
-  "nav.WindowControls.message74": {
+  "nav.WindowControls.notEnoughDisplaySpace": {
     "zh": "当前显示器空间不足",
     "en": "Not enough display space"
   },
-  "nav.WindowControls.message75": {
+  "nav.WindowControls.restorePreviousWindowSize": {
     "zh": "恢复原窗口大小和位置",
     "en": "Restore previous window size and position"
   },
-  "panel.BrowserTab.message78": {
+  "panel.BrowserTab.noPageOpenYet": {
     "zh": "还没有打开网页",
     "en": "No page open yet"
   },
-  "panel.BrowserTab.message79": {
+  "panel.BrowserTab.enterUrlAboveOr": {
     "zh": "在上方输入网址，或让智能体打开预览",
     "en": "Enter a URL above, or ask the agent to open a preview"
   },
-  "panel.BrowserToolbar.message80": {
+  "panel.BrowserToolbar.back": {
     "zh": "后退",
     "en": "Back"
   },
-  "panel.BrowserToolbar.message81": {
+  "panel.BrowserToolbar.forward": {
     "zh": "前进",
     "en": "Forward"
   },
-  "panel.BrowserToolbar.message82": {
+  "panel.BrowserToolbar.enterUrl": {
     "zh": "输入网址",
     "en": "Enter URL"
   },
-  "panel.BrowserToolbar.message83": {
+  "panel.BrowserToolbar.annotate": {
     "zh": "批注",
     "en": "Annotate"
   },
-  "panel.PanelTabs.message85": {
+  "panel.PanelTabs.closeTab": {
     "zh": "关闭标签",
     "en": "Close tab"
   },
-  "panel.RightPanel.message87": {
+  "panel.RightPanel.comingSoon": {
     "zh": "即将推出",
     "en": "Coming soon"
   },
-  "session.CacheMissAlerts.message88": {
+  "session.CacheMissAlerts.couldNotStop": {
     "zh": "停止失败：{p0}",
     "en": "Could not stop: {p0}"
   },
-  "session.CacheMissAlerts.message89": {
+  "session.CacheMissAlerts.cacheNotice": {
     "zh": "缓存提醒",
     "en": "Cache notice"
   },
-  "session.CacheMissAlerts.message90": {
+  "session.CacheMissAlerts.cacheMiss": {
     "zh": "缓存未命中",
     "en": "Cache miss"
   },
-  "session.CacheMissAlerts.message91": {
+  "session.CacheMissAlerts.lowCacheHitRate": {
     "zh": "缓存命中偏低",
     "en": "Low cache hit rate"
   },
-  "session.CacheMissAlerts.message92": {
+  "session.CacheMissAlerts.currentInputTokensCache": {
     "zh": "本次输入 {p0} Token，缓存读取 {p1} Token；前次输入 {p2} Token",
     "en": "Current input: {p0} tokens, cache read: {p1} tokens; previous input: {p2} tokens"
   },
-  "session.CacheMissAlerts.message93": {
+  "session.CacheMissAlerts.currentInput": {
     "zh": "本次输入",
     "en": "Current input"
   },
-  "session.CacheMissAlerts.message94": {
+  "session.CacheMissAlerts.cacheRead": {
     "zh": "，缓存读取",
     "en": ", cache read"
   },
-  "session.CacheMissAlerts.message95": {
+  "session.CacheMissAlerts.previousInput": {
     "zh": "；前次输入",
     "en": "; previous input"
   },
-  "session.CacheMissAlerts.message96": {
+  "session.CacheMissAlerts.youCanAlsoStop": {
     "zh": "，也可在输入框手动停止。",
     "en": ". You can also stop from the composer."
   },
-  "session.CacheMissAlerts.message97": {
+  "session.CacheMissAlerts.stoppingThisTurn": {
     "zh": "正在停止这一轮…",
     "en": "Stopping this turn…"
   },
-  "session.CacheMissAlerts.message98": {
+  "session.CacheMissAlerts.stopManuallyFromComposer": {
     "zh": "请在输入框手动停止",
     "en": "Stop manually from the composer"
   },
-  "session.CacheMissAlerts.message99": {
+  "session.CacheMissAlerts.taskIsRunningCloses": {
     "zh": "任务仍在运行 · {p0} 秒后关闭",
     "en": "Task is running · closes in {p0}s"
   },
-  "session.CacheMissAlerts.message100": {
+  "session.CacheMissAlerts.keepRunning": {
     "zh": "继续运行",
     "en": "Keep running"
   },
-  "session.CacheMissAlerts.message101": {
+  "session.CacheMissAlerts.stopping": {
     "zh": "正在停止…",
     "en": "Stopping…"
   },
-  "session.CacheMissAlerts.message102": {
+  "session.CacheMissAlerts.stopThisTurn": {
     "zh": "停止本轮",
     "en": "Stop this turn"
   },
-  "session.ChangedFilesCard.message103": {
+  "session.ChangedFilesCard.edited": {
     "zh": "编辑了",
     "en": "Edited"
   },
-  "session.ChangedFilesCard.message104": {
+  "session.ChangedFilesCard.files": {
     "zh": "个文件",
     "en": "files"
   },
-  "session.ChangedFilesCard.message105": {
+  "session.ChangedFilesCard.undo": {
     "zh": "撤销",
     "en": "Undo"
   },
-  "session.ChangedFilesCard.message106": {
+  "session.ChangedFilesCard.review": {
     "zh": "审查",
     "en": "Review"
   },
-  "session.ChangedFilesCard.message107": {
+  "session.ChangedFilesCard.openFileInPixel": {
     "zh": "在像素星空中打开文件",
     "en": "Open file in Pixel Starry Sky"
   },
-  "session.Composer.message108": {
+  "session.Composer.send": {
     "zh": "发送",
     "en": "Send"
   },
-  "session.Composer.message109": {
+  "session.Composer.resizeComposerHeight": {
     "zh": "调整输入框高度",
     "en": "Resize composer height"
   },
-  "session.Composer.message110": {
+  "session.Composer.addMoreInstructionsEnter": {
     "zh": "继续补充要求，Enter 加入队列…",
     "en": "Add more instructions. Enter to queue…"
   },
-  "session.Composer.message111": {
+  "session.Composer.tabToInsert": {
     "zh": "按 Tab 填入",
     "en": "Tab to insert"
   },
-  "session.Composer.message112": {
+  "session.Composer.stop": {
     "zh": "停止",
     "en": "Stop"
   },
-  "session.Composer.message113": {
+  "session.Composer.stopThisTaskAnd": {
     "zh": "停止当前任务并暂停队列",
     "en": "Stop this task and pause the queue"
   },
-  "session.Composer.message114": {
+  "session.Composer.queueMessage": {
     "zh": "加入队列",
     "en": "Queue message"
   },
-  "session.Composer.message115": {
+  "session.Composer.queueMessageEnter": {
     "zh": "加入队列（Enter）",
     "en": "Queue message (Enter)"
   },
-  "session.Composer.message116": {
+  "session.Composer.sendEnter": {
     "zh": "发送（Enter）",
     "en": "Send (Enter)"
   },
-  "session.Composer.message117": {
+  "session.Composer.add": {
     "zh": "添加",
     "en": "Add"
   },
-  "session.Composer.message118": {
+  "session.Composer.permissionMode": {
     "zh": "权限模式",
     "en": "Permission mode"
   },
-  "session.Composer.message119": {
+  "session.Composer.reasoningEffort": {
     "zh": "推理强度",
     "en": "Reasoning effort"
   },
-  "session.Composer.message120": {
+  "session.Composer.voiceInput": {
     "zh": "语音输入",
     "en": "Voice input"
   },
-  "session.ComposerArea.message121": {
+  "session.ComposerArea.resizeLeftComposerEdge": {
     "zh": "调整输入框左侧宽度",
     "en": "Resize left composer edge"
   },
-  "session.ComposerArea.message122": {
+  "session.ComposerArea.resizeRightComposerEdge": {
     "zh": "调整输入框右侧宽度",
     "en": "Resize right composer edge"
   },
-  "session.ComposerMenus.message123": {
+  "session.ComposerMenus.reasoningEffortUltracodeEnabled": {
     "zh": "推理强度 {p0} · Ultracode 已开启",
     "en": "Reasoning effort {p0} · Ultracode enabled"
   },
-  "session.ComposerMenus.message124": {
+  "session.ComposerMenus.reasoningEffort": {
     "zh": "推理强度 {p0}",
     "en": "Reasoning effort {p0}"
   },
@@ -488,887 +488,887 @@ export const catalog = {
     "zh": "已开启：{p0}",
     "en": "On: {p0}"
   },
-  "session.ComposerMenus.message125": {
+  "session.ComposerMenus.resetToDefault": {
     "zh": "恢复默认（{p0}）",
     "en": "Reset to default ({p0})"
   },
-  "session.ComposerMenus.message126": {
+  "session.ComposerMenus.notSupportedByThis": {
     "zh": "当前模型不支持",
     "en": "Not supported by this model"
   },
-  "session.ComposerMenus.message127": {
+  "session.ComposerMenus.orchestrateMultipleSubagentsFor": {
     "zh": "每个任务都编排多个子智能体，消耗显著增加",
     "en": "Orchestrate multiple subagents for each task. Usage increases significantly."
   },
-  "session.ComposerMenus.message128": {
+  "session.ComposerMenus.fastMode": {
     "zh": "Fast 模式",
     "en": "Fast mode"
   },
-  "session.ComposerMenus.message129": {
+  "session.ComposerMenus.temporarilyUnavailable": {
     "zh": "暂时不可用：{p0}",
     "en": "Temporarily unavailable: {p0}"
   },
-  "session.ComposerMenus.message130": {
+  "session.ComposerMenus.unknownReason": {
     "zh": "原因未知",
     "en": "Unknown reason"
   },
-  "session.ComposerMenus.message131": {
+  "session.ComposerMenus.fasterOutputAtHigher": {
     "zh": "更快的输出速度，按更高价格计费",
     "en": "Faster output at a higher price"
   },
-  "session.ComposerMenus.message132": {
+  "session.ComposerMenus.showThinkingSummaries": {
     "zh": "显示思考摘要",
     "en": "Show thinking summaries"
   },
-  "session.ComposerMenus.message133": {
+  "session.ComposerMenus.showSummaryOfModel": {
     "zh": "在回复前展示模型思考过程的摘要",
     "en": "Show a summary of model reasoning before the reply"
   },
-  "session.ComposerMenus.message134": {
+  "session.ComposerMenus.permissions": {
     "zh": "权限：{p0}",
     "en": "Permissions: {p0}"
   },
-  "session.ComposerMenus.message135": {
+  "session.ComposerMenus.notSupportedByThis2": {
     "zh": "当前引擎暂不支持",
     "en": "Not supported by this engine yet"
   },
-  "session.ComposerStatusBar.message136": {
+  "session.ComposerStatusBar.chooseProjectFolder": {
     "zh": "选择项目文件夹",
     "en": "Choose project folder"
   },
-  "session.ComposerStatusBar.message137": {
+  "session.ComposerStatusBar.chooseProject": {
     "zh": "选择项目",
     "en": "Choose project"
   },
-  "session.ComposerStatusBar.message138": {
+  "session.ComposerStatusBar.chooseProjectToStart": {
     "zh": "在哪个项目里开始",
     "en": "Choose a project to start in"
   },
-  "session.ComposerStatusBar.message139": {
+  "session.ComposerStatusBar.addProjectFolder": {
     "zh": "添加项目文件夹…",
     "en": "Add project folder…"
   },
-  "session.contextData.message140": {
+  "session.contextData.systemPrompt": {
     "zh": "系统提示",
     "en": "System prompt"
   },
-  "session.contextData.message141": {
+  "session.contextData.systemTools": {
     "zh": "系统工具",
     "en": "System tools"
   },
-  "session.contextData.message142": {
+  "session.contextData.mcpTools": {
     "zh": "MCP 工具",
     "en": "MCP tools"
   },
-  "session.contextData.message143": {
+  "session.contextData.memoryFiles": {
     "zh": "记忆文件",
     "en": "Memory files"
   },
-  "session.contextData.message144": {
+  "session.contextData.customAgents": {
     "zh": "自定义智能体",
     "en": "Custom agents"
   },
-  "session.contextData.message145": {
+  "session.contextData.agents": {
     "zh": "智能体",
     "en": "Agents"
   },
-  "session.contextData.message146": {
+  "session.contextData.conversationMessages": {
     "zh": "对话消息",
     "en": "Conversation messages"
   },
-  "session.contextData.message147": {
+  "session.contextData.autocompactReserve": {
     "zh": "自动压缩预留",
     "en": "Autocompact reserve"
   },
-  "session.contextData.message148": {
+  "session.contextData.availableSpace": {
     "zh": "可用空间",
     "en": "Available space"
   },
-  "session.contextData.message149": {
+  "session.contextData.uncachedInput": {
     "zh": "普通输入",
     "en": "Uncached input"
   },
-  "session.contextData.message150": {
+  "session.contextData.cacheRead": {
     "zh": "缓存读取",
     "en": "Cache read"
   },
-  "session.contextData.message151": {
+  "session.contextData.cacheWrite": {
     "zh": "缓存写入",
     "en": "Cache write"
   },
-  "session.contextData.message152": {
+  "session.contextData.remainingCapacity": {
     "zh": "剩余容量",
     "en": "Remaining capacity"
   },
-  "session.ContextWindowButton.message153": {
+  "session.ContextWindowButton.engineActionsAreUnavailable": {
     "zh": "演示模式不执行引擎操作",
     "en": "Engine actions are unavailable in demo mode"
   },
-  "session.ContextWindowButton.message154": {
+  "session.ContextWindowButton.startConversationFirst": {
     "zh": "先开始一个会话",
     "en": "Start a conversation first"
   },
-  "session.ContextWindowButton.message155": {
+  "session.ContextWindowButton.waitForCurrentTask": {
     "zh": "等待当前任务与排队消息结束",
     "en": "Wait for the current task and queued messages to finish"
   },
-  "session.ContextWindowButton.message156": {
+  "session.ContextWindowButton.thisEngineDoesNot": {
     "zh": "当前引擎尚未提供此能力",
     "en": "This engine does not provide this capability yet"
   },
-  "session.ContextWindowButton.message157": {
+  "session.ContextWindowButton.contextWindow": {
     "zh": "上下文窗口",
     "en": "Context window"
   },
-  "session.ContextWindowButton.message158": {
+  "session.ContextWindowButton.compactingContext": {
     "zh": "正在压缩上下文",
     "en": "Compacting context"
   },
-  "session.ContextWindowButton.message159": {
+  "session.ContextWindowButton.context": {
     "zh": "上下文 {p0} / {p1}（{p2}%）",
     "en": "Context {p0} / {p1} ({p2}%)"
   },
-  "session.ContextWindowButton.message160": {
+  "session.ContextWindowButton.viewContextWindow": {
     "zh": "查看上下文窗口",
     "en": "View context window"
   },
-  "session.ContextWindowButton.message161": {
+  "session.ContextWindowButton.compacting": {
     "zh": "压缩中",
     "en": "Compacting"
   },
-  "session.ContextWindowButton.message162": {
+  "session.ContextWindowButton.context2": {
     "zh": "上下文",
     "en": "Context"
   },
-  "session.ContextWindowButton.message163": {
+  "session.ContextWindowButton.contextWindowDetails": {
     "zh": "上下文窗口详情",
     "en": "Context window details"
   },
-  "session.ContextWindowButton.message164": {
+  "session.ContextWindowButton.waitingForUpdate": {
     "zh": "等待更新",
     "en": "Waiting for update"
   },
-  "session.ContextWindowButton.message165": {
+  "session.ContextWindowButton.closeContextDetails": {
     "zh": "关闭上下文窗口详情",
     "en": "Close context details"
   },
-  "session.ContextWindowButton.message166": {
+  "session.ContextWindowButton.contextUsage": {
     "zh": "上下文占用",
     "en": "Context usage"
   },
-  "session.ContextWindowButton.message167": {
+  "session.ContextWindowButton.compactingConversation": {
     "zh": "正在压缩对话…",
     "en": "Compacting conversation…"
   },
-  "session.ContextWindowButton.message168": {
+  "session.ContextWindowButton.dataIsStaleWaiting": {
     "zh": "数据已过期，等待下一次请求或刷新诊断",
     "en": "Data is stale. Waiting for the next request or refreshed diagnostics."
   },
-  "session.ContextWindowButton.message169": {
+  "session.ContextWindowButton.highContextUsage": {
     "zh": "上下文占用较高",
     "en": "High context usage"
   },
-  "session.ContextWindowButton.message170": {
+  "session.ContextWindowButton.waitingForFirstRequest": {
     "zh": "等待首次请求",
     "en": "Waiting for the first request"
   },
-  "session.ContextWindowButton.message171": {
+  "session.ContextWindowButton.windowCapacityUnavailable": {
     "zh": "窗口大小未提供",
     "en": "Window capacity unavailable"
   },
-  "session.ContextWindowButton.message172": {
+  "session.ContextWindowButton.tokensRemaining": {
     "zh": "剩余 {p0} Token",
     "en": "{p0} tokens remaining"
   },
-  "session.ContextWindowButton.message173": {
+  "session.ContextWindowButton.compactingCallsModelAnd": {
     "zh": "压缩会调用模型，可能产生费用",
     "en": "Compacting calls the model and may incur charges"
   },
-  "session.ContextWindowButton.message174": {
+  "session.ContextWindowButton.compactConversation": {
     "zh": "压缩对话",
     "en": "Compact conversation"
   },
-  "session.ContextWindowButton.message175": {
+  "session.ContextWindowButton.engineReserve": {
     "zh": "引擎预留",
     "en": "Engine reserve"
   },
-  "session.ContextWindowButton.message176": {
+  "session.ContextWindowButton.tokensUsableUpTo": {
     "zh": "Token；可用至",
     "en": "tokens; usable up to"
   },
-  "session.ContextWindowButton.message177": {
+  "session.ContextWindowButton.compactingCallsModelAnd2": {
     "zh": "压缩会调用模型，可能产生费用。对话和草稿会保留。",
     "en": "Compacting calls the model and may incur charges. Your conversation and draft are preserved."
   },
-  "session.ContextWindowButton.message178": {
+  "session.ContextWindowButton.startCompaction": {
     "zh": "开始压缩",
     "en": "Start compaction"
   },
-  "session.ContextWindowButton.message179": {
+  "session.ContextWindowButton.viewDetailedUsage": {
     "zh": "查看详细占用",
     "en": "View detailed usage"
   },
-  "session.ContextWindowButton.message180": {
+  "session.ContextWindowButton.engineDiagnosticEstimate": {
     "zh": "引擎诊断估算{p0}",
     "en": "Engine diagnostic estimate{p0}"
   },
-  "session.ContextWindowButton.message181": {
+  "session.ContextWindowButton.refreshNeeded": {
     "zh": "（待刷新）",
     "en": "(refresh needed)"
   },
-  "session.ContextWindowButton.message182": {
+  "session.ContextWindowButton.latestMainRequestCount": {
     "zh": "最近主请求计数",
     "en": "Latest main request count"
   },
-  "session.ContextWindowButton.message183": {
+  "session.ContextWindowButton.engineDiagnosticsMayQuery": {
     "zh": "引擎诊断可查询 Token 计数接口，不生成模型回复",
     "en": "Engine diagnostics may query token counting APIs without generating a reply"
   },
-  "session.ContextWindowButton.message184": {
+  "session.ContextWindowButton.refreshing": {
     "zh": "刷新中…",
     "en": "Refreshing…"
   },
-  "session.ContextWindowButton.message185": {
+  "session.ContextWindowButton.refreshDetails": {
     "zh": "刷新明细",
     "en": "Refresh details"
   },
-  "session.ContextWindowButton.message186": {
+  "session.ContextWindowButton.contentCategoriesAreNot": {
     "zh": "内容分类尚未获取；可在会话空闲后刷新引擎诊断。",
     "en": "Content categories are not available yet. Refresh engine diagnostics when the conversation is idle."
   },
-  "session.ContextWindowButton.message187": {
+  "session.ContextWindowButton.latestOutputExcludedFrom": {
     "zh": "最近请求输出（不计入占用）",
     "en": "Latest output (excluded from usage)"
   },
-  "session.ContextWindowButton.message188": {
+  "session.ContextWindowButton.diagnosticsEstimateNewlyAdded": {
     "zh": "引擎诊断包含新增消息的估算，可能高于最近请求占用。",
     "en": "Diagnostics estimate newly added messages and may exceed the latest request's usage."
   },
-  "session.ContextWindowButton.message189": {
+  "session.ContextWindowButton.usageIsSumOf": {
     "zh": "占用为最近一次主请求的三种输入总和，缓存已包含在输入内。",
     "en": "Usage is the sum of three input categories from the latest main request, including cached input."
   },
-  "session.ContextWindowButton.message190": {
+  "session.ContextWindowButton.modelNotReportedYet": {
     "zh": "模型尚未报告",
     "en": "Model not reported yet"
   },
-  "session.ContextWindowButton.message191": {
+  "session.ContextWindowButton.updated": {
     "zh": "· 更新于 {p0}",
     "en": "· Updated {p0}"
   },
-  "session.ContextWindowButton.message192": {
+  "session.ContextWindowButton.demoData": {
     "zh": "· 演示数据",
     "en": "· Demo data"
   },
-  "session.live.agentTrace.message193": {
+  "session.live.agentTrace.running": {
     "zh": "运行中",
     "en": "Running"
   },
-  "session.live.agentTrace.message194": {
+  "session.live.agentTrace.completed": {
     "zh": "已完成",
     "en": "Completed"
   },
-  "session.live.agentTrace.message195": {
+  "session.live.agentTrace.failed": {
     "zh": "失败",
     "en": "Failed"
   },
-  "session.live.agentTrace.message196": {
+  "session.live.agentTrace.stopped": {
     "zh": "已停止",
     "en": "Stopped"
   },
-  "session.live.agentTrace.message197": {
+  "session.live.agentTrace.queued": {
     "zh": "排队中",
     "en": "Queued"
   },
-  "session.live.agentTrace.message198": {
+  "session.live.agentTrace.n0s": {
     "zh": "0 秒",
     "en": "0s"
   },
-  "session.live.agentTrace.message199": {
+  "session.live.agentTrace.s": {
     "zh": "{p0} 秒",
     "en": "{p0}s"
   },
-  "session.live.agentTrace.message200": {
+  "session.live.agentTrace.mS": {
     "zh": "{p0} 分 {p1} 秒",
     "en": "{p0}m {p1}s"
   },
-  "session.live.agentTrace.message201": {
+  "session.live.agentTrace.hM": {
     "zh": "{p0} 小时 {p1} 分",
     "en": "{p0}h {p1}m"
   },
-  "session.live.AgentTracePanel.message202": {
+  "session.live.AgentTracePanel.queued": {
     "zh": "（排队中）",
     "en": "(queued)"
   },
-  "session.live.AgentTracePanel.message203": {
+  "session.live.AgentTracePanel.timeline": {
     "zh": "时间线",
     "en": "Timeline"
   },
-  "session.live.AgentTracePanel.message204": {
+  "session.live.AgentTracePanel.duration": {
     "zh": "耗时",
     "en": "Duration"
   },
-  "session.live.AgentTracePanel.message205": {
+  "session.live.AgentTracePanel.tools": {
     "zh": "工具",
     "en": "Tools"
   },
-  "session.live.AgentTracePanel.message206": {
+  "session.live.AgentTracePanel.agents": {
     "zh": "个智能体",
     "en": "agents"
   },
-  "session.live.AgentTracePanel.message207": {
+  "session.live.AgentTracePanel.toolCalls": {
     "zh": "次工具调用",
     "en": "tool calls"
   },
-  "session.live.AgentTracePanel.message208": {
+  "session.live.AgentTracePanel.noAgentsDispatchedYet": {
     "zh": "还没有派出智能体",
     "en": "No agents dispatched yet"
   },
-  "session.live.AgentTracePanel.message209": {
+  "session.live.AgentTracePanel.backToList": {
     "zh": "返回列表",
     "en": "Back to list"
   },
-  "session.live.AgentTracePanel.message210": {
+  "session.live.AgentTracePanel.task": {
     "zh": "任务",
     "en": "Task"
   },
-  "session.live.AgentTracePanel.message211": {
+  "session.live.AgentTracePanel.result": {
     "zh": "结果：",
     "en": "Result:"
   },
-  "session.live.AgentTracePanel.message212": {
+  "session.live.AgentTracePanel.loadingConversation": {
     "zh": "读取会话中",
     "en": "Loading conversation"
   },
-  "session.live.AgentTracePanel.message213": {
+  "session.live.AgentTracePanel.noOutputYet": {
     "zh": "还没有输出",
     "en": "No output yet"
   },
-  "session.live.AgentTracePanel.message214": {
+  "session.live.AgentTracePanel.agentActivity": {
     "zh": "智能体追踪",
     "en": "Agent activity"
   },
-  "session.live.AgentTracePanel.message215": {
+  "session.live.AgentTracePanel.orchestrations": {
     "zh": "个编排 ·",
     "en": "orchestrations ·"
   },
-  "session.live.AgentTracePanel.message216": {
+  "session.live.AgentTracePanel.subagentsTotal": {
     "zh": "个子智能体 · 共",
     "en": "subagents · Total"
   },
-  "session.live.AgentTracePanel.message217": {
+  "session.live.AgentTracePanel.closeEsc": {
     "zh": "关闭（Esc）",
     "en": "Close (Esc)"
   },
-  "session.live.AgentTracePanel.message218": {
+  "session.live.AgentTracePanel.noSubagentsRunningYet": {
     "zh": "还没有子智能体运行",
     "en": "No subagents running yet"
   },
-  "session.live.AgentTracePanel.message219": {
+  "session.live.AgentTracePanel.enableUltracodeOrAsk": {
     "zh": "开启 Ultracode，或让 Claude 调用 Agent 工具后，这里会显示每个智能体的运行轨迹、耗时和 token 消耗。",
     "en": "Enable Ultracode, or ask Claude to use the Agent tool, to view each agent's activity, duration and token usage."
   },
-  "session.live.AgentTracePanel.message220": {
+  "session.live.AgentTracePanel.subagentsAgentTool": {
     "zh": "子智能体（Agent 工具）",
     "en": "Subagents (Agent tool)"
   },
-  "session.live.ApprovalCard.message221": {
+  "session.live.ApprovalCard.thisSession": {
     "zh": "本会话",
     "en": "This session"
   },
-  "session.live.ApprovalCard.message222": {
+  "session.live.ApprovalCard.expiresWhenThisSession": {
     "zh": "关闭会话后失效",
     "en": "Expires when this session closes"
   },
-  "session.live.ApprovalCard.message223": {
+  "session.live.ApprovalCard.thisProject": {
     "zh": "本项目",
     "en": "This project"
   },
-  "session.live.ApprovalCard.message224": {
+  "session.live.ApprovalCard.saveToProjectsClaude": {
     "zh": "保存到项目的 .claude/settings.local.json",
     "en": "Save to the project's .claude/settings.local.json"
   },
-  "session.live.ApprovalCard.message225": {
+  "session.live.ApprovalCard.allProjects": {
     "zh": "所有项目",
     "en": "All projects"
   },
-  "session.live.ApprovalCard.message226": {
+  "session.live.ApprovalCard.saveToClaudeSettings": {
     "zh": "保存到 ~/.claude/settings.json",
     "en": "Save to ~/.claude/settings.json"
   },
-  "session.live.ApprovalCard.message227": {
+  "session.live.ApprovalCard.alwaysAllow": {
     "zh": "始终允许",
     "en": "Always allow"
   },
-  "session.live.ApprovalCard.message228": {
+  "session.live.ApprovalCard.alwaysAllow2": {
     "zh": "始终允许…",
     "en": "Always allow…"
   },
-  "session.live.ApprovalCard.message229": {
+  "session.live.ApprovalCard.alwaysAllowScope": {
     "zh": "始终允许，范围",
     "en": "Always allow, scope"
   },
-  "session.live.ApprovalCard.message230": {
+  "session.live.ApprovalCard.waitingForYourDecision": {
     "zh": "等你决定",
     "en": "Waiting for your decision"
   },
-  "session.live.ApprovalCard.message231": {
+  "session.live.ApprovalCard.noPlanContent": {
     "zh": "（没有计划内容）",
     "en": "(No plan content)"
   },
-  "session.live.ApprovalCard.message232": {
+  "session.live.ApprovalCard.selectMultiple": {
     "zh": "（可多选）",
     "en": "(Select multiple)"
   },
-  "session.live.ApprovalCard.message233": {
+  "session.live.ApprovalCard.submitAnswers": {
     "zh": "提交回答",
     "en": "Submit answers"
   },
-  "session.live.ApprovalCard.message234": {
+  "session.live.ApprovalCard.userSkippedThisQuestion": {
     "zh": "用户跳过了这个问题。",
     "en": "The user skipped this question."
   },
-  "session.live.ApprovalCard.message235": {
+  "session.live.ApprovalCard.skip": {
     "zh": "跳过",
     "en": "Skip"
   },
-  "session.live.ApprovalCard.message236": {
+  "session.live.ApprovalCard.startExecution": {
     "zh": "开始执行",
     "en": "Start execution"
   },
-  "session.live.ApprovalCard.message237": {
+  "session.live.ApprovalCard.refinePlan": {
     "zh": "继续完善计划",
     "en": "Refine the plan"
   },
-  "session.live.ApprovalCard.message238": {
+  "session.live.ApprovalCard.allowOnce": {
     "zh": "允许一次",
     "en": "Allow once"
   },
-  "session.live.ApprovalCard.message239": {
+  "session.live.ApprovalCard.deny": {
     "zh": "拒绝",
     "en": "Deny"
   },
-  "session.live.errorKind.message240": {
+  "session.live.errorKind.platformSignInExpired": {
     "zh": "平台登录已失效或已切换账号：请重新登录像素星空账号，或改用自有继续",
     "en": "Platform sign-in expired or the account changed. Sign in to Pixel Starry Sky again, or continue with your own account."
   },
-  "session.live.ItemRows.message241": {
+  "session.live.ItemRows.steered": {
     "zh": "已引导",
     "en": "Steered"
   },
-  "session.live.ItemRows.message242": {
+  "session.live.ItemRows.thinking": {
     "zh": "思考中…",
     "en": "Thinking…"
   },
-  "session.live.ItemRows.message243": {
+  "session.live.ItemRows.thinking2": {
     "zh": "思考过程",
     "en": "Thinking"
   },
-  "session.live.ItemRows.message244": {
+  "session.live.ItemRows.noChangesToDisplay": {
     "zh": "没有可显示的改动内容",
     "en": "No changes to display"
   },
-  "session.live.ItemRows.message245": {
+  "session.live.ItemRows.denied": {
     "zh": "已拒绝",
     "en": "Denied"
   },
-  "session.live.ItemRows.message246": {
+  "session.live.ItemRows.interrupted": {
     "zh": "已中断",
     "en": "Interrupted"
   },
-  "session.live.ItemRows.message247": {
+  "session.live.ItemRows.read": {
     "zh": "读取",
     "en": "Read"
   },
-  "session.live.ItemRows.message248": {
+  "session.live.ItemRows.search": {
     "zh": "搜索",
     "en": "Search"
   },
-  "session.live.ItemRows.message249": {
+  "session.live.ItemRows.web": {
     "zh": "网页",
     "en": "Web"
   },
-  "session.live.ItemRows.message250": {
+  "session.live.ItemRows.subtask": {
     "zh": "子任务",
     "en": "Subtask"
   },
-  "session.live.ItemRows.message251": {
+  "session.live.ItemRows.subagentCall": {
     "zh": "子智能体「{p0}」调用",
     "en": "Subagent \"{p0}\" call"
   },
-  "session.live.ItemRows.message252": {
+  "session.live.ItemRows.create": {
     "zh": "新建",
     "en": "Create"
   },
-  "session.live.ItemRows.message253": {
+  "session.live.ItemRows.edit": {
     "zh": "编辑",
     "en": "Edit"
   },
-  "session.live.ItemRows.message254": {
+  "session.live.ItemRows.running": {
     "zh": "正在运行",
     "en": "Running"
   },
-  "session.live.ItemRows.message255": {
+  "session.live.ItemRows.ran": {
     "zh": "运行了",
     "en": "Ran"
   },
-  "session.live.ItemRows.message256": {
+  "session.live.ItemRows.openInPixelStarry": {
     "zh": "在像素星空中打开 {p0}",
     "en": "Open {p0} in Pixel Starry Sky"
   },
-  "session.live.ItemRows.message257": {
+  "session.live.ItemRows.collapseFileChanges": {
     "zh": "收起文件改动",
     "en": "Collapse file changes"
   },
-  "session.live.ItemRows.message258": {
+  "session.live.ItemRows.expandFileChanges": {
     "zh": "展开文件改动",
     "en": "Expand file changes"
   },
-  "session.live.ItemRows.message259": {
+  "session.live.ItemRows.orchestration": {
     "zh": "编排",
     "en": "Orchestration"
   },
-  "session.live.ItemRows.message260": {
+  "session.live.ItemRows.viewActivity": {
     "zh": "查看追踪",
     "en": "View activity"
   },
-  "session.live.ItemRows.message261": {
+  "session.live.ItemRows.toDo": {
     "zh": "待办",
     "en": "To-do"
   },
-  "session.live.LiveTranscript.message262": {
+  "session.live.LiveTranscript.openingConversation": {
     "zh": "正在打开会话…",
     "en": "Opening conversation…"
   },
-  "session.live.LiveTranscript.message263": {
+  "session.live.LiveTranscript.working": {
     "zh": "正在处理…",
     "en": "Working…"
   },
-  "session.live.NoticeActions.message264": {
+  "session.live.NoticeActions.changeRoute": {
     "zh": "换线路",
     "en": "Change route"
   },
-  "session.live.NoticeActions.message265": {
+  "session.live.NoticeActions.continueWithOwnAccount": {
     "zh": "改用自有继续",
     "en": "Continue with own account"
   },
-  "session.live.NoticeActions.message266": {
+  "session.live.NoticeActions.continueWithPlatform": {
     "zh": "改用平台继续",
     "en": "Continue with platform"
   },
-  "session.live.NoticeActions.message267": {
+  "session.live.NoticeActions.viewAccount": {
     "zh": "查看账户",
     "en": "View account"
   },
-  "session.live.NoticeActions.message268": {
+  "session.live.NoticeActions.signInAgain": {
     "zh": "重新登录",
     "en": "Sign in again"
   },
-  "session.live.RetryStatus.message269": {
+  "session.live.RetryStatus.requestRetryProgress": {
     "zh": "请求重试进度",
     "en": "Request retry progress"
   },
-  "session.live.RetryStatus.message270": {
+  "session.live.RetryStatus.retrying": {
     "zh": "，正在重试",
     "en": ", retrying"
   },
-  "session.live.RetryStatus.message271": {
+  "session.live.RetryStatus.resumingInAboutS": {
     "zh": "· 约 {p0} 秒后继续",
     "en": "· Resuming in about {p0}s"
   },
-  "session.live.RetryStatus.message272": {
+  "session.live.RetryStatus.retryingRequest": {
     "zh": "· 正在重新请求…",
     "en": "· Retrying request…"
   },
-  "session.live.SessionStrips.message273": {
+  "session.live.SessionStrips.viewSubagentConversation": {
     "zh": "查看子智能体会话",
     "en": "View subagent conversation"
   },
-  "session.live.SessionStrips.message274": {
+  "session.live.SessionStrips.collapseOutput": {
     "zh": "收起输出",
     "en": "Collapse output"
   },
-  "session.live.SessionStrips.message275": {
+  "session.live.SessionStrips.output": {
     "zh": "输出",
     "en": "Output"
   },
-  "session.live.SessionStrips.message276": {
+  "session.live.SessionStrips.loading": {
     "zh": "读取中…",
     "en": "Loading…"
   },
-  "session.live.SessionStrips.message277": {
+  "session.live.SessionStrips.showingLastPortionOnly": {
     "zh": "只显示最后一段",
     "en": "Showing the last portion only"
   },
-  "session.live.SessionStrips.message278": {
+  "session.live.SessionStrips.noOutputYet": {
     "zh": "暂无输出",
     "en": "No output yet"
   },
-  "session.ModelSourceMenu.message279": {
+  "session.ModelSourceMenu.platform": {
     "zh": "平台",
     "en": "Platform"
   },
-  "session.ModelSourceMenu.message280": {
+  "session.ModelSourceMenu.ownAccount": {
     "zh": "自有",
     "en": "Own account"
   },
-  "session.ModelSourceMenu.message281": {
+  "session.ModelSourceMenu.chooseModel": {
     "zh": "选择模型",
     "en": "Choose model"
   },
-  "session.ModelSourceMenu.message282": {
+  "session.ModelSourceMenu.platform2": {
     "zh": "平台 {p0}",
     "en": "Platform {p0}"
   },
-  "session.ModelSourceMenu.message283": {
+  "session.ModelSourceMenu.engine": {
     "zh": "引擎",
     "en": "Engine"
   },
-  "session.ModelSourceMenu.message284": {
+  "session.ModelSourceMenu.comingSoon": {
     "zh": "{p0} · 即将支持",
     "en": "{p0} · Coming soon"
   },
-  "session.ModelSourceMenu.message285": {
+  "session.ModelSourceMenu.comingSoon2": {
     "zh": "即将支持",
     "en": "Coming soon"
   },
-  "session.ModelSourceMenu.message286": {
+  "session.ModelSourceMenu.existingConversationCannotSwitch": {
     "zh": "已经开始的会话不能换引擎，请新建任务",
     "en": "An existing conversation cannot switch engines. Create a new task."
   },
-  "session.ModelSourceMenu.message287": {
+  "session.ModelSourceMenu.cannotSwitchEnginesAfter": {
     "zh": "已经开始的会话不能换引擎",
     "en": "Cannot switch engines after a conversation starts"
   },
-  "session.ModelSourceMenu.message288": {
+  "session.ModelSourceMenu.creditSource": {
     "zh": "额度来源",
     "en": "Credit source"
   },
-  "session.ModelSourceMenu.message289": {
+  "session.ModelSourceMenu.platformCreditsCurrentlySupport": {
     "zh": "平台额度目前只支持 Claude Code",
     "en": "Platform credits currently support Claude Code only"
   },
-  "session.ModelSourceMenu.message290": {
+  "session.ModelSourceMenu.appliesToThisConversation": {
     "zh": "只改这个会话；平台和自有之间切换会重启引擎并接上原对话",
     "en": "Applies to this conversation only. Switching credit sources restarts the engine and resumes your conversation."
   },
-  "session.ModelSourceMenu.message291": {
+  "session.ModelSourceMenu.model": {
     "zh": "模型",
     "en": "Model"
   },
-  "session.ModelSourceMenu.message292": {
+  "session.ModelSourceMenu.allModelsAreHidden": {
     "zh": "所有模型都隐藏了",
     "en": "All models are hidden"
   },
-  "session.ModelSourceMenu.message293": {
+  "session.ModelSourceMenu.searchModels": {
     "zh": "搜索模型",
     "en": "Search models"
   },
-  "session.ModelSourceMenu.message294": {
+  "session.ModelSourceMenu.noMatchingModels": {
     "zh": "没有匹配的模型",
     "en": "No matching models"
   },
-  "session.ModelSourceMenu.message295": {
+  "session.ModelSourceMenu.routes": {
     "zh": "{p0}{p1} · {p2} 条线路",
     "en": "{p0}{p1} · {p2} routes"
   },
-  "session.ModelSourceMenu.message296": {
+  "session.ModelSourceMenu.andUp": {
     "zh": "起",
     "en": "and up"
   },
-  "session.ModelSourceMenu.message297": {
+  "session.ModelSourceMenu.modelsAppearAfterRoutes": {
     "zh": "读取线路后显示模型",
     "en": "Models appear after routes load"
   },
-  "session.ModelSourceMenu.message298": {
+  "session.ModelSourceMenu.signInToView": {
     "zh": "登录后显示平台模型",
     "en": "Sign in to view platform models"
   },
-  "session.ModelSourceMenu.message299": {
+  "session.ModelSourceMenu.modelUsedByThis": {
     "zh": "当前会话使用的模型",
     "en": "Model used by this conversation"
   },
-  "session.ModelSourceMenu.message300": {
+  "session.ModelSourceMenu.manageModels": {
     "zh": "管理模型…",
     "en": "Manage models…"
   },
-  "session.ModelSourceMenu.message301": {
+  "session.ModelSourceMenu.hidden": {
     "zh": "（已隐藏",
     "en": "(hidden:"
   },
-  "session.ModelSourceMenu.message302": {
+  "session.ModelSourceMenu.text": {
     "zh": "个）",
     "en": ")"
   },
-  "session.ModelSourceMenu.message303": {
+  "session.ModelSourceMenu.useThisConversationsCredit": {
     "zh": "把这个会话的额度来源、线路和模型设为新任务的默认",
     "en": "Use this conversation's credit source, route and model as defaults for new tasks"
   },
-  "session.ModelSourceMenu.message304": {
+  "session.ModelSourceMenu.setAsDefault": {
     "zh": "设为默认",
     "en": "Set as default"
   },
-  "session.ModelSourceMenu.message305": {
+  "session.ModelSourceMenu.refreshing": {
     "zh": "正在刷新…",
     "en": "Refreshing…"
   },
-  "session.ModelSourceMenu.message306": {
+  "session.ModelSourceMenu.signInToPixel": {
     "zh": "登录像素星空账号后使用平台额度",
     "en": "Sign in to Pixel Starry Sky to use platform credits"
   },
-  "session.ModelSourceMenu.message307": {
+  "session.ModelSourceMenu.loadingRoutes": {
     "zh": "正在读取线路…",
     "en": "Loading routes…"
   },
-  "session.ModelSourceMenu.message308": {
+  "session.ModelSourceMenu.retry": {
     "zh": "重试",
     "en": "Retry"
   },
-  "session.ModelSourceMenu.message309": {
+  "session.ModelSourceMenu.chooseRoute": {
     "zh": "选择线路",
     "en": "Choose route"
   },
-  "session.ModelSourceMenu.message310": {
+  "session.ModelSourceMenu.route": {
     "zh": "线路",
     "en": "Route"
   },
-  "session.ModelSourceMenu.message311": {
+  "session.ModelSourceMenu.thisAccountsBillingMultiplier": {
     "zh": "当前账号在这条线路上的计费倍率",
     "en": "This account's billing multiplier for this route"
   },
-  "session.ModelSourceMenu.message312": {
+  "session.ModelSourceMenu.localSignIn": {
     "zh": "本机登录",
     "en": "Local sign-in"
   },
-  "session.ModelSourceMenu.message313": {
+  "session.ModelSourceMenu.version": {
     "zh": "· 版本 {p0}",
     "en": "· Version {p0}"
   },
-  "session.ModelSourceMenu.message314": {
+  "session.ModelSourceMenu.signInToFirst": {
     "zh": "需要先登录 {p0}",
     "en": "Sign in to {p0} first"
   },
-  "session.ModelSourceMenu.message315": {
+  "session.ModelSourceMenu.isTemporarilyUnavailable": {
     "zh": "{p0} 暂时不可用",
     "en": "{p0} is temporarily unavailable"
   },
-  "session.ModelSourceMenu.message316": {
+  "session.ModelSourceMenu.collapse": {
     "zh": "收起",
     "en": "Collapse"
   },
-  "session.ModelSourceMenu.message317": {
+  "session.ModelSourceMenu.howToSignIn": {
     "zh": "怎么登录",
     "en": "How to sign in"
   },
-  "session.ModelSourceMenu.message318": {
+  "session.ModelSourceMenu.viewReason": {
     "zh": "查看原因",
     "en": "View reason"
   },
-  "session.ModelSourceMenu.message319": {
+  "session.ModelSourceMenu.available": {
     "zh": "可用）",
     "en": "available)"
   },
-  "session.ModelSourceMenu.message320": {
+  "session.ModelSourceMenu.insufficientBalance": {
     "zh": "· 余额不足",
     "en": "· Insufficient balance"
   },
-  "session.ModelSourceMenu.message321": {
+  "session.ModelSourceMenu.onlyRoutesSupportingThis": {
     "zh": "不含这个模型的线路不列出；按倍率从低到高排",
     "en": "Only routes supporting this model are shown, ordered by billing multiplier"
   },
-  "session.QueuedMessages.message322": {
+  "session.QueuedMessages.messageQueue": {
     "zh": "消息队列",
     "en": "Message queue"
   },
-  "session.QueuedMessages.message323": {
+  "session.QueuedMessages.queuePaused": {
     "zh": "队列已暂停",
     "en": "Queue paused"
   },
-  "session.QueuedMessages.message324": {
+  "session.QueuedMessages.resumeQueue": {
     "zh": "继续队列",
     "en": "Resume queue"
   },
-  "session.QueuedMessages.message325": {
+  "session.QueuedMessages.expandAll": {
     "zh": "展开全部",
     "en": "Expand all"
   },
-  "session.QueuedMessages.message326": {
+  "session.QueuedMessages.steeringHasNotBeen": {
     "zh": "当前引擎尚未通过引导验证，可等待或插队",
     "en": "Steering has not been validated for this engine. Wait or run this message next."
   },
-  "session.QueuedMessages.message327": {
+  "session.QueuedMessages.noTaskCanAccept": {
     "zh": "当前没有可接收引导的任务，或正在等待审批",
     "en": "No task can accept steering right now, or approval is pending"
   },
-  "session.QueuedMessages.message328": {
+  "session.QueuedMessages.settingsDifferFromCurrent": {
     "zh": "设置与当前任务不同，可等待或插队",
     "en": "Settings differ from the current task. Wait or run this message next."
   },
-  "session.QueuedMessages.message329": {
+  "session.QueuedMessages.sendAdditionalInstructionsTo": {
     "zh": "不中断，将补充要求交给当前任务",
     "en": "Send additional instructions to the current task without interrupting it"
   },
-  "session.QueuedMessages.message330": {
+  "session.QueuedMessages.executionFailed": {
     "zh": "执行失败",
     "en": "Execution failed"
   },
-  "session.QueuedMessages.message331": {
+  "session.QueuedMessages.deliveryNeedsVerification": {
     "zh": "交付待核对",
     "en": "Delivery needs verification"
   },
-  "session.QueuedMessages.message332": {
+  "session.QueuedMessages.waitingForAdoption": {
     "zh": "等待采纳",
     "en": "Waiting for adoption"
   },
-  "session.QueuedMessages.message333": {
+  "session.QueuedMessages.starting": {
     "zh": "正在启动",
     "en": "Starting"
   },
-  "session.QueuedMessages.message334": {
+  "session.QueuedMessages.moveMessageUp": {
     "zh": "上移消息",
     "en": "Move message up"
   },
-  "session.QueuedMessages.message335": {
+  "session.QueuedMessages.moveMessageDown": {
     "zh": "下移消息",
     "en": "Move message down"
   },
-  "session.QueuedMessages.message336": {
+  "session.QueuedMessages.steer": {
     "zh": "引导",
     "en": "Steer"
   },
-  "session.QueuedMessages.message337": {
+  "session.QueuedMessages.runAgainAfterChecking": {
     "zh": "已核对后重新执行；可能重复上次已发生的操作",
     "en": "Run again after checking. Previously completed actions may be repeated."
   },
-  "session.QueuedMessages.message338": {
+  "session.QueuedMessages.interruptCurrentTaskAnd": {
     "zh": "中断当前任务，优先执行这条消息",
     "en": "Interrupt the current task and run this message first"
   },
-  "session.QueuedMessages.message339": {
+  "session.QueuedMessages.runNext": {
     "zh": "插队",
     "en": "Run next"
   },
-  "session.QueuedMessages.message340": {
+  "session.QueuedMessages.withdraw": {
     "zh": "撤回",
     "en": "Withdraw"
   },
-  "session.QueuedMessages.message341": {
+  "session.QueuedMessages.modelEffortAndCredit": {
     "zh": "模型、强度与额度来源按入队时的选择执行；权限和会话开关按执行时读取",
     "en": "Model, effort and credit source are saved when queued; permissions and session switches are read at execution time"
   },
-  "session.QueuedMessages.message342": {
+  "session.QueuedMessages.engineDefaultModel": {
     "zh": "引擎默认模型",
     "en": "Engine default model"
   },
-  "session.QueuedMessages.message343": {
+  "session.QueuedMessages.platformRoute": {
     "zh": "平台线路 {p0}",
     "en": "Platform route {p0}"
   },
-  "session.QueuedMessages.message344": {
+  "session.QueuedMessages.ownCredits": {
     "zh": "自有额度",
     "en": "Own credits"
   },
-  "session.QueuedMessages.message345": {
+  "session.QueuedMessages.viewFullMessage": {
     "zh": "查看完整消息",
     "en": "View full message"
   },
@@ -1424,2803 +1424,2803 @@ export const catalog = {
     "zh": "之前暂停的消息保持暂停，新消息会直接发送",
     "en": "Earlier paused messages stay paused; new messages are sent directly"
   },
-  "session.SessionHeader.message346": {
+  "session.SessionHeader.expandSidebar": {
     "zh": "展开侧边栏",
     "en": "Expand sidebar"
   },
-  "session.SessionHeader.message347": {
+  "session.SessionHeader.more": {
     "zh": "更多",
     "en": "More"
   },
-  "session.SessionHeader.message348": {
+  "session.SessionHeader.commit": {
     "zh": "提交",
     "en": "Commit"
   },
-  "session.SessionHeader.message349": {
+  "session.SessionHeader.moreGitActions": {
     "zh": "更多 git 操作",
     "en": "More Git actions"
   },
-  "session.SessionHeader.message350": {
+  "session.SessionHeader.terminal": {
     "zh": "终端",
     "en": "Terminal"
   },
-  "session.SessionHeader.message351": {
+  "session.SessionHeader.commandPalette": {
     "zh": "命令面板",
     "en": "Command palette"
   },
-  "session.SessionHeader.message352": {
+  "session.SessionHeader.switchComputer": {
     "zh": "切换机器",
     "en": "Switch computer"
   },
-  "session.SessionHeader.message353": {
+  "session.SessionHeader.local": {
     "zh": "本机",
     "en": "Local"
   },
-  "session.SessionHeader.message354": {
+  "session.SessionHeader.collapseRightPanel": {
     "zh": "收起右侧面板",
     "en": "Collapse right panel"
   },
-  "session.SessionHeader.message355": {
+  "session.SessionHeader.expandRightPanel": {
     "zh": "展开右侧面板",
     "en": "Expand right panel"
   },
-  "session.SourceHintBar.message356": {
+  "session.SourceHintBar.switchTo": {
     "zh": "改用{p0}",
     "en": "Switch to {p0}"
   },
-  "session.SourceHintBar.message357": {
+  "session.SourceHintBar.switchTo2": {
     "zh": "换到",
     "en": "Switch to"
   },
-  "session.SourceHintBar.message358": {
+  "session.SourceHintBar.toContinueThisConversation": {
     "zh": "继续这段对话？",
     "en": "to continue this conversation?"
   },
-  "session.SourceHintBar.message359": {
+  "session.SourceHintBar.futureRequestsAreBilled": {
     "zh": "之后的调用由本机 {p0} 的登录付费。",
     "en": "Future requests are billed to your local {p0} account."
   },
-  "session.SourceHintBar.message360": {
+  "session.SourceHintBar.futureRequestsUsePlatform": {
     "zh": "之后的调用走平台{p0}，从像素星空账号扣费。",
     "en": "Future requests use platform{p0} and are billed to your Pixel Starry Sky account."
   },
-  "session.SourceHintBar.message361": {
+  "session.SourceHintBar.route": {
     "zh": "线路「{p0}」",
     "en": "route \"{p0}\""
   },
-  "session.SourceHintBar.message362": {
+  "session.SourceHintBar.engineRestartsAndResumes": {
     "zh": "引擎会重启并接上原来的对话，从下一条消息生效。",
     "en": "The engine restarts and resumes this conversation. Takes effect on the next message."
   },
-  "session.SourceHintBar.message363": {
+  "session.SourceHintBar.useOwnAccount": {
     "zh": "改用自有",
     "en": "Use own account"
   },
-  "session.SourceHintBar.message364": {
+  "session.SourceHintBar.usePlatform": {
     "zh": "改用平台",
     "en": "Use platform"
   },
-  "session.SourceHintBar.message365": {
+  "session.SourceHintBar.signInToPixel": {
     "zh": "平台额度需要先登录像素星空账号",
     "en": "Sign in to Pixel Starry Sky to use platform credits"
   },
-  "session.SourceHintBar.message366": {
+  "session.SourceHintBar.thisConversationUses": {
     "zh": "这个会话用的是",
     "en": "This conversation uses"
   },
-  "session.SourceHintBar.message367": {
+  "session.SourceHintBar.sPlatformCreditsSigned": {
     "zh": "的平台额度，当前登录的不是这个账号",
     "en": "'s platform credits. The signed-in account does not match."
   },
-  "session.SourceHintBar.message368": {
+  "session.SourceHintBar.insufficientBalanceThisRoute": {
     "zh": "余额不足，这条线路按余额计费，发送可能会失败",
     "en": "Insufficient balance. This route uses balance billing and sending may fail."
   },
-  "session.SourceHintBar.message369": {
+  "session.SourceHintBar.detectAgain": {
     "zh": "重新检测",
     "en": "Detect again"
   },
-  "session.ToolRow.message370": {
+  "session.ToolRow.expandToolOutput": {
     "zh": "展开工具输出",
     "en": "Expand tool output"
   },
-  "session.TurnStats.message371": {
+  "session.TurnStats.replyStatistics": {
     "zh": "回复统计",
     "en": "Reply statistics"
   },
-  "session.turnStatsData.message372": {
+  "session.turnStatsData.uncachedInputCacheRead": {
     "zh": "{p0}：普通输入 {p1} · 缓存读 {p2} · 缓存写 {p3} · 输出 {p4} · {p5} 次请求 · {p6}",
     "en": "{p0}: Uncached input {p1} · Cache read {p2} · Cache write {p3} · Output {p4} · {p5} requests · {p6}"
   },
-  "session.turnStatsData.message373": {
+  "session.turnStatsData.totalDuration": {
     "zh": "总耗时",
     "en": "Total duration"
   },
-  "session.turnStatsData.message374": {
+  "session.turnStatsData.inputIncludingCacheReads": {
     "zh": "输入（含缓存读取、写入） / 输出 Token",
     "en": "Input (including cache reads and writes) / output tokens"
   },
-  "session.turnStatsData.message375": {
+  "session.turnStatsData.costEngineEstimate": {
     "zh": "费用（引擎报告的估算）",
     "en": "Cost (engine estimate)"
   },
-  "session.turnStatsData.message376": {
+  "session.turnStatsData.input": {
     "zh": "输入",
     "en": "Input"
   },
-  "session.turnStatsData.message377": {
+  "session.turnStatsData.uncachedInputTokensExcluding": {
     "zh": "普通输入 Token（不含缓存读取和写入）",
     "en": "Uncached input tokens (excluding cache reads and writes)"
   },
-  "session.turnStatsData.message378": {
+  "session.turnStatsData.outputTokens": {
     "zh": "输出 Token",
     "en": "Output tokens"
   },
-  "session.turnStatsData.message379": {
+  "session.turnStatsData.total": {
     "zh": "总计",
     "en": "Total"
   },
-  "session.turnStatsData.message380": {
+  "session.turnStatsData.totalTokensUncachedInput": {
     "zh": "总 Token（普通输入 + 缓存读取 + 缓存写入 + 输出）",
     "en": "Total tokens (uncached input + cache read + cache write + output)"
   },
-  "session.turnStatsData.message381": {
+  "session.turnStatsData.cacheRead": {
     "zh": "缓存读",
     "en": "Cache read"
   },
-  "session.turnStatsData.message382": {
+  "session.turnStatsData.cacheReadTokens": {
     "zh": "缓存读取 Token",
     "en": "Cache read tokens"
   },
-  "session.turnStatsData.message383": {
+  "session.turnStatsData.cacheWrite": {
     "zh": "缓存写",
     "en": "Cache write"
   },
-  "session.turnStatsData.message384": {
+  "session.turnStatsData.cacheWriteTokens": {
     "zh": "缓存写入 Token",
     "en": "Cache write tokens"
   },
-  "session.turnStatsData.message385": {
+  "session.turnStatsData.cacheHit": {
     "zh": "缓存命中 {p0}%",
     "en": "Cache hit {p0}%"
   },
-  "session.turnStatsData.message386": {
+  "session.turnStatsData.cacheReadAllInput": {
     "zh": "缓存读取 / 全部输入 Token（含缓存读取和写入）",
     "en": "Cache read / all input tokens (including cache reads and writes)"
   },
-  "session.turnStatsData.message387": {
+  "session.turnStatsData.requests": {
     "zh": "请求 {p0} 次",
     "en": "{p0} requests"
   },
-  "session.turnStatsData.message388": {
+  "session.turnStatsData.sumOfRequestCounts": {
     "zh": "各模型请求次数之和，沿用引擎统计口径",
     "en": "Sum of request counts across models, as reported by the engine"
   },
-  "session.WelcomeView.message389": {
+  "session.WelcomeView.howCanIHelp": {
     "zh": "有什么可以帮你？",
     "en": "How can I help?"
   },
-  "session.WelcomeView.message390": {
+  "session.WelcomeView.chooseProjectFolderThen": {
     "zh": "先选择一个项目文件夹，然后描述你要做的事",
     "en": "Choose a project folder, then describe what you want to do"
   },
-  "session.WelcomeView.message391": {
+  "session.WelcomeView.startNewTaskOn": {
     "zh": "在这台电脑上开始一个新任务",
     "en": "Start a new task on this computer"
   },
-  "sidebar.NewTaskButton.message392": {
+  "sidebar.NewTaskButton.newTask": {
     "zh": "新建任务",
     "en": "New task"
   },
-  "sidebar.ProjectTree.message393": {
+  "sidebar.ProjectTree.noConversationsYet": {
     "zh": "暂无会话",
     "en": "No conversations yet"
   },
-  "sidebar.RunStatusPill.message395": {
+  "sidebar.RunStatusPill.newReply": {
     "zh": "新回复",
     "en": "New reply"
   },
-  "sidebar.Sidebar.message396": {
+  "sidebar.Sidebar.addProject": {
     "zh": "添加项目",
     "en": "Add project"
   },
-  "sidebar.Sidebar.message397": {
+  "sidebar.Sidebar.pinned": {
     "zh": "置顶",
     "en": "Pinned"
   },
-  "sidebar.Sidebar.message398": {
+  "sidebar.Sidebar.projects": {
     "zh": "项目",
     "en": "Projects"
   },
-  "sidebar.Sidebar.message399": {
+  "sidebar.Sidebar.noProjectsYet": {
     "zh": "还没有项目",
     "en": "No projects yet"
   },
-  "sidebar.Sidebar.message400": {
+  "sidebar.Sidebar.addProjectFolder": {
     "zh": "添加项目文件夹",
     "en": "Add project folder"
   },
-  "sidebar.Sidebar.message401": {
+  "sidebar.Sidebar.recentTasks": {
     "zh": "最近任务",
     "en": "Recent tasks"
   },
-  "sidebar.Sidebar.message402": {
+  "sidebar.Sidebar.searchTasks": {
     "zh": "搜索任务",
     "en": "Search tasks"
   },
-  "sidebar.Sidebar.message403": {
+  "sidebar.Sidebar.noTasksYet": {
     "zh": "暂无任务",
     "en": "No tasks yet"
   },
-  "sidebar.SidebarFooter.message404": {
+  "sidebar.SidebarFooter.balance": {
     "zh": "余额 {p0}",
     "en": "Balance {p0}"
   },
-  "sidebar.SidebarFooter.message405": {
+  "sidebar.SidebarFooter.signingIn": {
     "zh": "登录中…",
     "en": "Signing in…"
   },
-  "sidebar.SidebarFooter.message406": {
+  "sidebar.SidebarFooter.clickToSignIn": {
     "zh": "点击登录",
     "en": "Click to sign in"
   },
-  "sidebar.SidebarFooter.message407": {
+  "sidebar.SidebarFooter.notSignedIn": {
     "zh": "未登录",
     "en": "Not signed in"
   },
-  "sidebar.SidebarFooter.message408": {
+  "sidebar.SidebarFooter.settings": {
     "zh": "设置",
     "en": "Settings"
   },
-  "sidebar.SidebarHeader.message409": {
+  "sidebar.SidebarHeader.switchWorkspace": {
     "zh": "切换工作区",
     "en": "Switch workspace"
   },
-  "sidebar.SidebarHeader.message410": {
+  "sidebar.SidebarHeader.collapseSidebar": {
     "zh": "收起侧边栏",
     "en": "Collapse sidebar"
   },
-  "ui.Chip.message411": {
+  "ui.Chip.remove": {
     "zh": "移除",
     "en": "Remove"
   },
-  "ui.ComingSoon.message412": {
+  "ui.ComingSoon.isComingSoon": {
     "zh": "「{p0}」即将推出",
     "en": "\"{p0}\" is coming soon"
   },
-  "ui.Logo.message413": {
+  "ui.Logo.pixelStarrySky": {
     "zh": "像素星空",
     "en": "Pixel Starry Sky"
   },
-  "ui.ResizeHandle.message414": {
+  "ui.ResizeHandle.doubleClickOrEnter": {
     "zh": "{p0}；双击或 Enter 恢复默认；方向键微调",
     "en": "{p0}; double-click or Enter to reset; arrow keys to adjust"
   },
-  "editor.code.positions.message415": {
+  "editor.code.positions.spaces": {
     "zh": "空格: {p0}",
     "en": "Spaces: {p0}"
   },
-  "editor.code.theme.message416": {
+  "editor.code.theme.find": {
     "zh": "查找",
     "en": "Find"
   },
-  "editor.code.theme.message417": {
+  "editor.code.theme.replace": {
     "zh": "替换",
     "en": "Replace"
   },
-  "editor.code.theme.message418": {
+  "editor.code.theme.replaceAll": {
     "zh": "全部替换",
     "en": "Replace all"
   },
-  "editor.code.theme.message419": {
+  "editor.code.theme.next": {
     "zh": "下一个",
     "en": "Next"
   },
-  "editor.code.theme.message420": {
+  "editor.code.theme.previous": {
     "zh": "上一个",
     "en": "Previous"
   },
-  "editor.code.theme.message421": {
+  "editor.code.theme.all": {
     "zh": "全部",
     "en": "All"
   },
-  "editor.code.theme.message422": {
+  "editor.code.theme.matchCase": {
     "zh": "区分大小写",
     "en": "Match case"
   },
-  "editor.code.theme.message423": {
+  "editor.code.theme.regularExpression": {
     "zh": "正则表达式",
     "en": "Regular expression"
   },
-  "editor.code.theme.message424": {
+  "editor.code.theme.wholeWords": {
     "zh": "全词匹配",
     "en": "Whole words"
   },
-  "editor.code.theme.message425": {
+  "editor.code.theme.close": {
     "zh": "关闭",
     "en": "Close"
   },
-  "editor.code.theme.message426": {
+  "editor.code.theme.goToLine": {
     "zh": "跳到行",
     "en": "Go to line"
   },
-  "editor.code.theme.message427": {
+  "editor.code.theme.go": {
     "zh": "跳转",
     "en": "Go"
   },
-  "editor.code.theme.message428": {
+  "editor.code.theme.foldLine": {
     "zh": "折叠行",
     "en": "Fold line"
   },
-  "editor.code.theme.message429": {
+  "editor.code.theme.unfoldLine": {
     "zh": "展开行",
     "en": "Unfold line"
   },
-  "editor.code.theme.message430": {
+  "editor.code.theme.replaceWith": {
     "zh": "替换为",
     "en": "Replace with"
   },
-  "editor.code.theme.message431": {
+  "editor.code.theme.noMatches": {
     "zh": "没有匹配项",
     "en": "No matches"
   },
-  "editor.EditorButton.message432": {
+  "editor.EditorButton.demoModeCannotOpen": {
     "zh": "演示模式不打开本机编辑器",
     "en": "Demo mode cannot open local editors"
   },
-  "editor.EditorButton.message433": {
+  "editor.EditorButton.requestedToOpenProject": {
     "zh": "已请求 {p0} 打开项目",
     "en": "Requested {p0} to open the project"
   },
-  "editor.EditorButton.message434": {
+  "editor.EditorButton.demoModeCannotAccess": {
     "zh": "演示模式不操作本机项目",
     "en": "Demo mode cannot access local projects"
   },
-  "editor.EditorButton.message435": {
+  "editor.EditorButton.collapseFileTree": {
     "zh": "收起文件树",
     "en": "Collapse file tree"
   },
-  "editor.EditorButton.message436": {
+  "editor.EditorButton.openCurrentProjectIn": {
     "zh": "在像素星空中打开当前项目",
     "en": "Open current project in Pixel Starry Sky"
   },
-  "editor.EditorButton.message437": {
+  "editor.EditorButton.openCurrentProjectWith": {
     "zh": "用 {p0} 打开当前项目",
     "en": "Open current project with {p0}"
   },
-  "editor.EditorButton.message438": {
+  "editor.EditorButton.externalEditor": {
     "zh": "外部编辑器",
     "en": "External editor"
   },
-  "editor.EditorButton.message439": {
+  "editor.EditorButton.chooseProjectFirst": {
     "zh": "先选择项目",
     "en": "Choose a project first"
   },
-  "editor.EditorButton.message440": {
+  "editor.EditorButton.chooseHowToOpen": {
     "zh": "选择打开方式",
     "en": "Choose how to open"
   },
-  "editor.EditorButton.message441": {
+  "editor.EditorButton.projectOpeningOptions": {
     "zh": "项目打开方式",
     "en": "Project opening options"
   },
-  "editor.EditorButton.message442": {
+  "editor.EditorButton.noProjectSelected": {
     "zh": "未选择项目",
     "en": "No project selected"
   },
-  "editor.EditorButton.message443": {
+  "editor.EditorButton.openInPixelStarry": {
     "zh": "在像素星空中打开",
     "en": "Open in Pixel Starry Sky"
   },
-  "editor.EditorButton.message444": {
+  "editor.EditorButton.unavailable": {
     "zh": "（不可用）",
     "en": "(unavailable)"
   },
-  "editor.EditorButton.message445": {
+  "editor.EditorButton.noEditorDetectedSpecify": {
     "zh": "未检测到编辑器，可在设置中指定",
     "en": "No editor detected. Specify one in settings."
   },
-  "editor.EditorButton.message446": {
+  "editor.EditorButton.detectingEditors": {
     "zh": "正在检测编辑器…",
     "en": "Detecting editors…"
   },
-  "editor.EditorButton.message447": {
+  "editor.EditorButton.showInFileExplorer": {
     "zh": "在资源管理器中打开",
     "en": "Show in File Explorer"
   },
-  "editor.EditorButton.message448": {
+  "editor.EditorButton.copyProjectPath": {
     "zh": "复制项目路径",
     "en": "Copy project path"
   },
-  "editor.EditorButton.message449": {
+  "editor.EditorButton.detectEditorsAgain": {
     "zh": "重新检测编辑器",
     "en": "Detect editors again"
   },
-  "editor.EditorButton.message450": {
+  "editor.EditorButton.editorSettings": {
     "zh": "编辑器设置…",
     "en": "Editor settings…"
   },
-  "editor.EditorIcon.message451": {
+  "editor.EditorIcon.registry": {
     "zh": "注册表",
     "en": "Registry"
   },
-  "editor.EditorIcon.message452": {
+  "editor.EditorIcon.defaultLocation": {
     "zh": "默认位置",
     "en": "Default location"
   },
-  "editor.EditorIcon.message453": {
+  "editor.EditorIcon.manuallySpecified": {
     "zh": "手动指定",
     "en": "Manually specified"
   },
-  "editor.ExternalFileButton.message454": {
+  "editor.ExternalFileButton.openFileInExternal": {
     "zh": "用外部编辑器打开文件（定位当前行）",
     "en": "Open file in external editor at the current line"
   },
-  "editor.ExternalFileButton.message455": {
+  "editor.ExternalFileButton.noEditorDetectedSpecify": {
     "zh": "未检测到编辑器，请在设置中指定程序路径",
     "en": "No editor detected. Specify its executable in settings."
   },
-  "editor.FileEditor.message456": {
+  "editor.FileEditor.loadingFile": {
     "zh": "读取文件…",
     "en": "Loading file…"
   },
-  "editor.FileEditor.message457": {
+  "editor.FileEditor.backToMarkdownEditor": {
     "zh": "返回 Markdown 编辑",
     "en": "Back to Markdown editor"
   },
-  "editor.FileEditor.message458": {
+  "editor.FileEditor.previewMarkdown": {
     "zh": "预览 Markdown",
     "en": "Preview Markdown"
   },
-  "editor.FileEditor.message459": {
+  "editor.FileEditor.saveFileCtrlS": {
     "zh": "保存文件（Ctrl+S）",
     "en": "Save file (Ctrl+S)"
   },
-  "editor.FileEditor.message460": {
+  "editor.FileEditor.reloadFile": {
     "zh": "重新加载文件",
     "en": "Reload file"
   },
-  "editor.FileEditor.message461": {
+  "editor.FileEditor.loadNewVersion": {
     "zh": "载入新版本",
     "en": "Load new version"
   },
-  "editor.FileEditor.message462": {
+  "editor.FileEditor.fileChangedExternallyYour": {
     "zh": "文件已被修改，你的未保存内容仍保留。",
     "en": "The file changed externally. Your unsaved edits are preserved."
   },
-  "editor.FileEditor.message463": {
+  "editor.FileEditor.keepMyChanges": {
     "zh": "保留我的修改",
     "en": "Keep my changes"
   },
-  "editor.FileEditor.message464": {
+  "editor.FileEditor.dismissFileNotice": {
     "zh": "关闭文件提示",
     "en": "Dismiss file notice"
   },
-  "editor.FileEditor.message465": {
+  "editor.FileEditor.thisFileExceeds2": {
     "zh": "文件超过 2MiB，以只读纯文本打开。可用外部编辑器编辑。",
     "en": "This file exceeds 2 MiB and opens as read-only plain text. Use an external editor to edit it."
   },
-  "editor.FileEditor.message466": {
+  "editor.FileEditor.saving": {
     "zh": "保存中…",
     "en": "Saving…"
   },
-  "editor.FileEditor.message467": {
+  "editor.FileEditor.unsaved": {
     "zh": "未保存",
     "en": "Unsaved"
   },
-  "editor.FileEditor.message468": {
+  "editor.FileEditor.ln": {
     "zh": "行",
     "en": "Ln"
   },
-  "editor.FileEditor.message469": {
+  "editor.FileEditor.col": {
     "zh": "，列",
     "en": ", Col"
   },
-  "editor.FileEditor.message470": {
+  "editor.FileEditor.couldNotReadThis": {
     "zh": "无法读取此文件",
     "en": "Could not read this file"
   },
-  "editor.FileEditor.message471": {
+  "editor.FileEditor.useExternalEditorButton": {
     "zh": "请用工具栏的外部编辑器打开。",
     "en": "Use the external editor button in the toolbar."
   },
-  "engine.hooks.message472": {
+  "engine.hooks.newConversation": {
     "zh": "新会话",
     "en": "New conversation"
   },
-  "engine.hooks.message473": {
+  "engine.hooks.isNotSignedIn": {
     "zh": "{p0} 还没登录",
     "en": "{p0} is not signed in"
   },
-  "engine.hooks.message474": {
+  "engine.hooks.isUnavailable": {
     "zh": "{p0} 不可用",
     "en": "{p0} is unavailable"
   },
-  "engine.hooks.message475": {
+  "engine.hooks.signInToPixel": {
     "zh": "请先登录像素星空账号",
     "en": "Sign in to Pixel Starry Sky first"
   },
-  "engine.hooks.message476": {
+  "engine.hooks.noRouteSupportsThis": {
     "zh": "没有包含这个模型的线路",
     "en": "No route supports this model"
   },
-  "engine.hooks.message477": {
+  "engine.hooks.conversationNotFound": {
     "zh": "会话不存在",
     "en": "Conversation not found"
   },
-  "engine.hooks.message478": {
+  "engine.hooks.noTaskIsCurrently": {
     "zh": "当前没有运行中的任务",
     "en": "No task is currently running"
   },
-  "engine.hooks.message479": {
+  "engine.hooks.signInToPixel2": {
     "zh": "平台额度需要先登录像素星空账号，或改用自有",
     "en": "Sign in to Pixel Starry Sky to use platform credits, or use your own account"
   },
-  "engine.hooks.message480": {
+  "engine.hooks.thisConversationUsesS": {
     "zh": "这个会话用的是 {p0} 的平台额度，请登录该账号或改用自有",
     "en": "This conversation uses {p0}'s platform credits. Sign in to that account or use your own account."
   },
-  "engine.hooks.message481": {
+  "engine.hooks.platformRoutesAreLoading": {
     "zh": "正在读取平台线路，请稍后再发",
     "en": "Platform routes are loading. Please wait before sending."
   },
-  "engine.hooks.message482": {
+  "engine.hooks.chooseProjectFolderFirst": {
     "zh": "请先选择一个项目文件夹",
     "en": "Choose a project folder first"
   },
-  "engine.labels.message483": {
+  "engine.labels.unavailableForFreeAccounts": {
     "zh": "免费账号不能使用",
     "en": "Unavailable for free accounts"
   },
-  "engine.labels.message484": {
+  "engine.labels.fastModeIsNot": {
     "zh": "账号没有开启 Fast 模式",
     "en": "Fast mode is not enabled for this account"
   },
-  "engine.labels.message485": {
+  "engine.labels.extraUsageIsNot": {
     "zh": "账号没有开启额外用量",
     "en": "Extra usage is not enabled for this account"
   },
-  "engine.labels.message486": {
+  "engine.labels.networkError": {
     "zh": "网络错误",
     "en": "Network error"
   },
-  "engine.labels.message487": {
+  "engine.labels.onlySupportedByOfficial": {
     "zh": "只支持 Anthropic 官方接口",
     "en": "Only supported by the official Anthropic API"
   },
-  "engine.labels.message488": {
+  "engine.labels.disabledByEnvironmentVariable": {
     "zh": "被环境变量关闭了",
     "en": "Disabled by an environment variable"
   },
-  "engine.labels.message489": {
+  "engine.labels.checkingAccountStatus": {
     "zh": "正在确认账号状态",
     "en": "Checking account status"
   },
-  "engine.labels.message490": {
+  "engine.labels.temporarilyUnavailable": {
     "zh": "暂时不可用",
     "en": "Temporarily unavailable"
   },
-  "engine.labels.message491": {
+  "engine.labels.multiAgentOrchestration": {
     "zh": "多智能体编排",
     "en": "Multi-agent orchestration"
   },
-  "engine.labels.message492": {
+  "engine.labels.backgroundCommand": {
     "zh": "后台命令",
     "en": "Background command"
   },
-  "engine.labels.message493": {
+  "engine.labels.subagent": {
     "zh": "子智能体",
     "en": "Subagent"
   },
-  "engine.labels.message494": {
+  "engine.labels.monitorTask": {
     "zh": "监视任务",
     "en": "Monitor task"
   },
-  "engine.labels.message495": {
+  "engine.labels.backgroundTask": {
     "zh": "后台任务",
     "en": "Background task"
   },
-  "engine.labels.message496": {
+  "engine.labels.askEveryTime": {
     "zh": "每次询问",
     "en": "Ask every time"
   },
-  "engine.labels.message497": {
+  "engine.labels.askBeforeEditingFiles": {
     "zh": "改文件、运行命令前都先问你",
     "en": "Ask before editing files or running commands"
   },
-  "engine.labels.message498": {
+  "engine.labels.autoEdit": {
     "zh": "自动编辑",
     "en": "Auto-edit"
   },
-  "engine.labels.message499": {
+  "engine.labels.editProjectFilesAutomatically": {
     "zh": "项目里改文件不问，运行命令要问",
     "en": "Edit project files automatically; ask before running commands"
   },
-  "engine.labels.message500": {
+  "engine.labels.planMode": {
     "zh": "计划模式",
     "en": "Plan mode"
   },
-  "engine.labels.message501": {
+  "engine.labels.readOnlyProposePlan": {
     "zh": "只读，先出方案，你同意后再动手",
     "en": "Read-only. Propose a plan and wait for approval before acting."
   },
-  "engine.labels.message502": {
+  "engine.labels.fullAccess": {
     "zh": "完全放行",
     "en": "Full access"
   },
-  "engine.labels.message503": {
+  "engine.labels.executeWithoutAskingUse": {
     "zh": "什么都不问，直接执行，请小心",
     "en": "Execute without asking. Use with care."
   },
-  "engine.labels.message504": {
+  "engine.labels.m": {
     "zh": "{p0}分钟",
     "en": "{p0}m"
   },
-  "engine.labels.message505": {
+  "engine.labels.h": {
     "zh": "{p0}小时",
     "en": "{p0}h"
   },
-  "engine.labels.message506": {
+  "engine.labels.d": {
     "zh": "{p0}天",
     "en": "{p0}d"
   },
-  "engine.labels.message507": {
+  "engine.labels.default": {
     "zh": "默认",
     "en": "Default"
   },
-  "engine.labels.message508": {
+  "engine.labels.useClaudeCodeSettings": {
     "zh": "跟随 Claude Code 的设置",
     "en": "Use Claude Code settings"
   },
-  "engine.labels.message509": {
+  "engine.labels.latestOpus": {
     "zh": "最新 Opus",
     "en": "Latest Opus"
   },
-  "engine.labels.message510": {
+  "engine.labels.latestSonnet": {
     "zh": "最新 Sonnet",
     "en": "Latest Sonnet"
   },
-  "engine.labels.message511": {
+  "engine.labels.latestHaiku": {
     "zh": "最新 Haiku",
     "en": "Latest Haiku"
   },
-  "engine.labels.message512": {
+  "engine.labels.useCodexSettings": {
     "zh": "跟随 Codex 的设置",
     "en": "Use Codex settings"
   },
-  "engine.openRequests.message513": {
+  "engine.openRequests.thisConversationWasDeleted": {
     "zh": "这个会话已经删除",
     "en": "This conversation was deleted"
   },
-  "files.FileConfirm.message514": {
+  "files.FileConfirm.filesHaveUnsavedChanges": {
     "zh": "文件有未保存修改",
     "en": "Files have unsaved changes"
   },
-  "files.FileConfirm.message515": {
+  "files.FileConfirm.hasUnsavedChanges": {
     "zh": "{p0} 有未保存的修改",
     "en": "{p0} has unsaved changes"
   },
-  "files.FileConfirm.message516": {
+  "files.FileConfirm.filesHaveUnsavedChanges2": {
     "zh": "{p0} 个文件有未保存的修改",
     "en": "{p0} files have unsaved changes"
   },
-  "files.FileConfirm.message517": {
+  "files.FileConfirm.chooseHowToHandle": {
     "zh": "之前，请选择如何处理这些修改。",
     "en": ": choose how to handle these changes."
   },
-  "files.FileConfirm.message518": {
+  "files.FileConfirm.discardChanges": {
     "zh": "放弃修改",
     "en": "Discard changes"
   },
-  "files.FileConfirm.message519": {
+  "files.FileConfirm.saveDidNotComplete": {
     "zh": "保存未完成，请重试",
     "en": "Save did not complete. Please retry."
   },
-  "files.FileConfirm.message520": {
+  "files.FileConfirm.newEditsWereMade": {
     "zh": "保存期间有新的修改，请再次保存",
     "en": "New edits were made while saving. Save again."
   },
-  "files.FileConfirm.message521": {
+  "files.FileConfirm.quitApplication": {
     "zh": "退出应用",
     "en": "Quit application"
   },
-  "files.FileConfirm.message522": {
+  "files.FileConfirm.saveAll": {
     "zh": "保存全部",
     "en": "Save all"
   },
-  "files.FileConfirm.message523": {
+  "files.FileConfirm.save": {
     "zh": "保存",
     "en": "Save"
   },
-  "files.FileTree.message524": {
+  "files.FileTree.files": {
     "zh": "文件",
     "en": "Files"
   },
-  "files.FileTree.message525": {
+  "files.FileTree.refreshFilesAndGit": {
     "zh": "刷新文件与 Git 状态",
     "en": "Refresh files and Git status"
   },
-  "files.FileTree.message526": {
+  "files.FileTree.collapseAllFolders": {
     "zh": "收起所有文件夹",
     "en": "Collapse all folders"
   },
-  "files.FileTree.message527": {
+  "files.FileTree.filterFilesByName": {
     "zh": "按名称筛选文件",
     "en": "Filter files by name"
   },
-  "files.FileTree.message528": {
+  "files.FileTree.filterFilesByName2": {
     "zh": "按名称筛选文件…",
     "en": "Filter files by name…"
   },
-  "files.FileTree.message529": {
+  "files.FileTree.clearFileFilter": {
     "zh": "清空文件筛选",
     "en": "Clear file filter"
   },
-  "files.FileTree.message530": {
+  "files.FileTree.clear": {
     "zh": "清空",
     "en": "Clear"
   },
-  "files.FileTree.message531": {
+  "files.FileTree.noProjectYetAdd": {
     "zh": "还没有项目，先在左侧添加项目文件夹",
     "en": "No project yet. Add a project folder in the sidebar."
   },
-  "files.FileTree.message532": {
+  "files.FileTree.project": {
     "zh": "{p0}项目 {p1}",
     "en": "{p0} project {p1}"
   },
-  "files.FileTree.message533": {
+  "files.FileTree.expand": {
     "zh": "展开",
     "en": "Expand"
   },
-  "files.FileTree.message534": {
+  "files.FileTree.filtering": {
     "zh": "筛选中…",
     "en": "Filtering…"
   },
-  "files.FileTree.message535": {
+  "files.FileTree.noMatchingFiles": {
     "zh": "没有匹配的文件",
     "en": "No matching files"
   },
-  "files.FileTree.message536": {
+  "files.FileTree.showingPartialResultsNarrow": {
     "zh": "只显示部分结果，请缩小筛选范围",
     "en": "Showing partial results. Narrow your filter."
   },
-  "files.FileTree.message537": {
+  "files.FileTree.filterByNameSkips": {
     "zh": "按名称筛选，跳过 .git 与 node_modules",
     "en": "Filter by name; skips .git and node_modules"
   },
-  "files.FileTree.message538": {
+  "files.FileTree.emptyFolder": {
     "zh": "空文件夹",
     "en": "Empty folder"
   },
-  "files.FileTree.message539": {
+  "files.FileTree.largeDirectoryShowingFirst": {
     "zh": "目录过大，显示前 500 项；可按名称筛选",
     "en": "Large directory. Showing the first 500 entries; filter by name to narrow results."
   },
-  "files.FileTree.message540": {
+  "files.FileTree.collapseFolder": {
     "zh": "收起文件夹",
     "en": "Collapse folder"
   },
-  "files.FileTree.message541": {
+  "files.FileTree.expandFolder": {
     "zh": "展开文件夹",
     "en": "Expand folder"
   },
-  "files.FileTree.message542": {
+  "files.FileTree.openFile": {
     "zh": "打开文件",
     "en": "Open file"
   },
-  "files.FileTree.message543": {
+  "files.FileTree.link": {
     "zh": "（链接）",
     "en": "(link)"
   },
-  "files.FileTree.message544": {
+  "files.FileTree.gitStatus": {
     "zh": "Git 状态 {p0}",
     "en": "Git status {p0}"
   },
-  "files.FileTree.message545": {
+  "files.FileTree.copyFilePath": {
     "zh": "复制文件路径 {p0}",
     "en": "Copy file path {p0}"
   },
-  "files.FileTree.message546": {
+  "files.FileTree.copyPath": {
     "zh": "复制路径",
     "en": "Copy path"
   },
-  "files.FileTree.message547": {
+  "files.FileTree.demoModeCannotCopy": {
     "zh": "演示模式不复制本机路径",
     "en": "Demo mode cannot copy local paths"
   },
-  "files.store.message548": {
+  "files.store.demoModeCannotSave": {
     "zh": "演示模式不保存本机文件",
     "en": "Demo mode cannot save local files"
   },
-  "panes.drag.message549": {
+  "panes.drag.splitToLeft": {
     "zh": "移到左侧分屏",
     "en": "Split to the left"
   },
-  "panes.drag.message550": {
+  "panes.drag.splitToRight": {
     "zh": "移到右侧分屏",
     "en": "Split to the right"
   },
-  "panes.drag.message551": {
+  "panes.drag.splitAbove": {
     "zh": "移到上方分屏",
     "en": "Split above"
   },
-  "panes.drag.message552": {
+  "panes.drag.splitBelow": {
     "zh": "移到下方分屏",
     "en": "Split below"
   },
-  "panes.drag.message553": {
+  "panes.drag.moveHere": {
     "zh": "移到这里",
     "en": "Move here"
   },
-  "panes.drag.message554": {
+  "panes.drag.moveIntoThisPane": {
     "zh": "移入这个窗格",
     "en": "Move into this pane"
   },
-  "panes.drag.message555": {
+  "panes.drag.dragToTabBar": {
     "zh": "拖到标签栏或窗格边缘，Esc 取消",
     "en": "Drag to the tab bar or a pane edge. Esc to cancel."
   },
-  "panes.drop.message556": {
+  "panes.drop.conversationOrTargetPane": {
     "zh": "会话或目标窗格已关闭",
     "en": "The conversation or target pane closed"
   },
-  "panes.drop.message557": {
+  "panes.drop.openAnotherConversationBefore": {
     "zh": "先打开另一个对话，再拖到边缘分屏",
     "en": "Open another conversation before splitting at an edge"
   },
-  "panes.drop.message558": {
+  "panes.drop.notEnoughSpaceCollapse": {
     "zh": "空间不足，收起侧边栏或面板后再分屏",
     "en": "Not enough space. Collapse the sidebar or panel before splitting."
   },
-  "panes.PaneView.message559": {
+  "panes.PaneView.emptyPane": {
     "zh": "空窗格",
     "en": "Empty pane"
   },
-  "panes.PaneView.message560": {
+  "panes.PaneView.waitingForConfirmation": {
     "zh": "待你确认",
     "en": "Waiting for confirmation"
   },
-  "panes.PaneView.message561": {
+  "panes.PaneView.newReply": {
     "zh": "有新回复",
     "en": "New reply"
   },
-  "panes.PaneView.message562": {
+  "panes.PaneView.restorePane": {
     "zh": "还原窗格",
     "en": "Restore pane"
   },
-  "panes.PaneView.message563": {
+  "panes.PaneView.expandPane": {
     "zh": "放大窗格",
     "en": "Expand pane"
   },
-  "panes.PaneView.message564": {
+  "panes.PaneView.splitRight": {
     "zh": "向右拆分（",
     "en": "Split right ("
   },
-  "panes.PaneView.message565": {
+  "panes.PaneView.splitDown": {
     "zh": "向下拆分（",
     "en": "Split down ("
   },
-  "panes.PaneView.message566": {
+  "panes.PaneView.closePane": {
     "zh": "关闭窗格",
     "en": "Close pane"
   },
-  "panes.PaneView.message567": {
+  "panes.PaneView.closePaneConversationContinues": {
     "zh": "关闭窗格（会话继续在后台运行）",
     "en": "Close pane (conversation continues in the background)"
   },
-  "panes.PaneView.message568": {
+  "panes.PaneView.conversationTabsDragTo": {
     "zh": "会话标签（可拖动排序或分屏）",
     "en": "Conversation tabs (drag to reorder or split)"
   },
-  "panes.PaneView.message569": {
+  "panes.PaneView.newConversationInThis": {
     "zh": "在这个窗格新建会话",
     "en": "New conversation in this pane"
   },
-  "panes.PaneView.message570": {
+  "panes.PaneView.dragToReorderMove": {
     "zh": "{p0}（拖动排序、移入窗格或拖到边缘分屏；右键查看更多操作）",
     "en": "{p0} (drag to reorder, move between panes, or split at an edge; right-click for more)"
   },
-  "panes.PaneView.message571": {
+  "panes.PaneView.unsavedChanges": {
     "zh": "未保存修改",
     "en": "Unsaved changes"
   },
-  "panes.PaneView.message572": {
+  "panes.PaneView.close": {
     "zh": "关闭「{p0}」",
     "en": "Close \"{p0}\""
   },
-  "panes.PaneView.message573": {
+  "panes.PaneView.moveTabLeft": {
     "zh": "标签向左移动",
     "en": "Move tab left"
   },
-  "panes.PaneView.message574": {
+  "panes.PaneView.moveTabRight": {
     "zh": "标签向右移动",
     "en": "Move tab right"
   },
-  "panes.PaneView.message575": {
+  "panes.PaneView.moveToPane": {
     "zh": "移到窗格 {p0}",
     "en": "Move to pane {p0}"
   },
-  "panes.PaneView.message576": {
+  "panes.PaneView.moveConversationTab": {
     "zh": "移动会话标签",
     "en": "Move conversation tab"
   },
-  "panes.PaneView.message577": {
+  "panes.PaneView.revealInFileTree": {
     "zh": "在文件树中显示",
     "en": "Reveal in file tree"
   },
-  "panes.PaneView.message578": {
+  "panes.PaneView.copyFilePath": {
     "zh": "复制文件路径",
     "en": "Copy file path"
   },
-  "panes.PaneView.message579": {
+  "panes.PaneView.openWithExternalEditor": {
     "zh": "用外部编辑器打开",
     "en": "Open with external editor"
   },
-  "panes.PaneView.message580": {
+  "panes.PaneView.openConversationFromSidebar": {
     "zh": "点左侧的会话打开到这里，或新建任务",
     "en": "Open a conversation from the sidebar, or create a new task"
   },
-  "panes.PaneView.message581": {
+  "panes.PaneView.splitRight2": {
     "zh": "向右拆分 ·",
     "en": "Split right ·"
   },
-  "panes.PaneView.message582": {
+  "panes.PaneView.splitDown2": {
     "zh": "向下拆分",
     "en": "Split down"
   },
-  "panes.store.message583": {
+  "panes.store.moveTab": {
     "zh": "移动标签",
     "en": "Move tab"
   },
-  "panes.store.message584": {
+  "panes.store.notEnoughSpaceFor": {
     "zh": "窗口放不下更多窗格了，关掉一个，或收起侧边栏腾出位置",
     "en": "Not enough space for more panes. Close a pane or collapse the sidebar."
   },
-  "panes.Workspace.message585": {
+  "panes.Workspace.dragToResizePanes": {
     "zh": "拖动调整窗格大小，双击均分",
     "en": "Drag to resize panes; double-click to distribute evenly"
   },
-  "search.ProjectFilter.message586": {
+  "search.ProjectFilter.filterProjects": {
     "zh": "筛选项目：{p0}",
     "en": "Filter projects: {p0}"
   },
-  "search.ProjectFilter.message587": {
+  "search.ProjectFilter.projectFilterOptions": {
     "zh": "项目筛选选项",
     "en": "Project filter options"
   },
-  "search.SearchDialog.message588": {
+  "search.SearchDialog.allContent": {
     "zh": "全部内容",
     "en": "All content"
   },
-  "search.SearchDialog.message589": {
+  "search.SearchDialog.conversationTitles": {
     "zh": "会话标题",
     "en": "Conversation titles"
   },
-  "search.SearchDialog.message590": {
+  "search.SearchDialog.messages": {
     "zh": "对话内容",
     "en": "Messages"
   },
-  "search.SearchDialog.message591": {
+  "search.SearchDialog.toolContent": {
     "zh": "工具内容",
     "en": "Tool content"
   },
-  "search.SearchDialog.message592": {
+  "search.SearchDialog.localConversationSearchIs": {
     "zh": "本机会话搜索暂不可用",
     "en": "Local conversation search is unavailable"
   },
-  "search.SearchDialog.message593": {
+  "search.SearchDialog.searchConversationsAndContent": {
     "zh": "搜索会话与内容",
     "en": "Search conversations and content"
   },
-  "search.SearchDialog.message594": {
+  "search.SearchDialog.closeSearchEsc": {
     "zh": "关闭搜索（Esc）",
     "en": "Close search (Esc)"
   },
-  "search.SearchDialog.message595": {
+  "search.SearchDialog.searchTitlesMessagesCommands": {
     "zh": "搜索标题、消息、命令或路径…",
     "en": "Search titles, messages, commands or paths…"
   },
-  "search.SearchDialog.message596": {
+  "search.SearchDialog.searchTerms": {
     "zh": "搜索关键词",
     "en": "Search terms"
   },
-  "search.SearchDialog.message597": {
+  "search.SearchDialog.searchScope": {
     "zh": "搜索范围",
     "en": "Search scope"
   },
-  "search.SearchDialog.message598": {
+  "search.SearchDialog.searchResults": {
     "zh": "搜索结果",
     "en": "Search results"
   },
-  "search.SearchDialog.message599": {
+  "search.SearchDialog.searching": {
     "zh": "正在搜索…",
     "en": "Searching…"
   },
-  "search.SearchDialog.message600": {
+  "search.SearchDialog.noConversationsYetStart": {
     "zh": "还没有会话，开始一个任务后就可以搜索",
     "en": "No conversations yet. Start a task to enable search."
   },
-  "search.SearchDialog.message601": {
+  "search.SearchDialog.noMatchingContentTry": {
     "zh": "没有找到匹配内容，试试其他关键词",
     "en": "No matching content. Try different search terms."
   },
-  "search.SearchDialog.message602": {
+  "search.SearchDialog.noConversationsInThis": {
     "zh": "这个项目还没有会话",
     "en": "No conversations in this project yet"
   },
-  "search.SearchDialog.message603": {
+  "search.SearchDialog.someConversationRecordsCould": {
     "zh": "部分会话记录未能读取",
     "en": "Some conversation records could not be read"
   },
-  "search.SearchDialog.message604": {
+  "search.SearchDialog.tooManyResultsNarrow": {
     "zh": "结果较多，请缩小关键词或选择项目",
     "en": "Too many results. Narrow your search or choose a project."
   },
-  "search.SearchDialog.message605": {
+  "search.SearchDialog.localSearch": {
     "zh": "本机搜索",
     "en": "Local search"
   },
-  "search.SearchDialog.message606": {
+  "search.SearchDialog.recentConversations": {
     "zh": "最近会话",
     "en": "Recent conversations"
   },
-  "search.SearchDialog.message607": {
+  "search.SearchDialog.select": {
     "zh": "↑↓ 选择",
     "en": "↑↓ Select"
   },
-  "search.SearchDialog.message608": {
+  "search.SearchDialog.enterOpen": {
     "zh": "Enter 打开",
     "en": "Enter Open"
   },
-  "search.SearchDialog.message609": {
+  "search.SearchDialog.escClose": {
     "zh": "Esc 关闭",
     "en": "Esc Close"
   },
-  "search.SearchProvider.message610": {
+  "search.SearchProvider.searchMustBeUsed": {
     "zh": "搜索入口必须位于 SearchProvider 内",
     "en": "Search must be used within SearchProvider"
   },
-  "search.useItemLocation.message611": {
+  "search.useItemLocation.thisContentNoLonger": {
     "zh": "这条内容已不存在，或尚未能定位",
     "en": "This content no longer exists or cannot be located yet"
   },
-  "settings.AboutSection.message612": {
+  "settings.AboutSection.developmentMode": {
     "zh": "开发模式",
     "en": "Development mode"
   },
-  "settings.AboutSection.message613": {
+  "settings.AboutSection.portable": {
     "zh": "便携版",
     "en": "Portable"
   },
-  "settings.AboutSection.message614": {
+  "settings.AboutSection.installed": {
     "zh": "安装版",
     "en": "Installed"
   },
-  "settings.AboutSection.message615": {
+  "settings.AboutSection.applicationInformationIsUnavailable": {
     "zh": "当前环境拿不到应用信息",
     "en": "Application information is unavailable in this environment"
   },
-  "settings.AboutSection.message616": {
+  "settings.AboutSection.copyFailedSelectAnd": {
     "zh": "复制失败，请手动选择文字复制",
     "en": "Copy failed. Select and copy the text manually."
   },
-  "settings.AboutSection.message617": {
+  "settings.AboutSection.signedIn": {
     "zh": "已登录 · {p0}",
     "en": "Signed in · {p0}"
   },
-  "settings.AboutSection.message618": {
+  "settings.AboutSection.version": {
     "zh": "版本 {p0} · {p1}",
     "en": "Version {p0} · {p1}"
   },
-  "settings.AboutSection.message619": {
+  "settings.AboutSection.version2": {
     "zh": "版本 —",
     "en": "Version —"
   },
-  "settings.AboutSection.message620": {
+  "settings.AboutSection.checkForUpdates": {
     "zh": "检查更新",
     "en": "Check for updates"
   },
-  "settings.AboutSection.message621": {
+  "settings.AboutSection.copyVersionInformation": {
     "zh": "复制版本信息",
     "en": "Copy version information"
   },
-  "settings.AboutSection.message622": {
+  "settings.AboutSection.runtimeEnvironment": {
     "zh": "运行环境",
     "en": "Runtime environment"
   },
-  "settings.AboutSection.message623": {
+  "settings.AboutSection.applicationVersion": {
     "zh": "应用版本",
     "en": "Application version"
   },
-  "settings.AboutSection.message624": {
+  "settings.AboutSection.system": {
     "zh": "系统",
     "en": "System"
   },
-  "settings.AboutSection.message625": {
+  "settings.AboutSection.accountAndData": {
     "zh": "账号与数据",
     "en": "Account and data"
   },
-  "settings.AboutSection.message626": {
+  "settings.AboutSection.account": {
     "zh": "账号",
     "en": "Account"
   },
-  "settings.AboutSection.message627": {
+  "settings.AboutSection.manage": {
     "zh": "管理",
     "en": "Manage"
   },
-  "settings.AboutSection.message628": {
+  "settings.AboutSection.authenticationService": {
     "zh": "认证服务",
     "en": "Authentication service"
   },
-  "settings.AboutSection.message629": {
+  "settings.AboutSection.openAuthenticationServiceIn": {
     "zh": "在浏览器中打开认证服务",
     "en": "Open authentication service in browser"
   },
-  "settings.AboutSection.message630": {
+  "settings.AboutSection.dataDirectory": {
     "zh": "数据目录",
     "en": "Data directory"
   },
-  "settings.AboutSection.message631": {
+  "settings.AboutSection.openDataDirectory": {
     "zh": "打开数据目录",
     "en": "Open data directory"
   },
-  "settings.AboutSection.message632": {
+  "settings.AboutSection.links": {
     "zh": "链接",
     "en": "Links"
   },
-  "settings.AboutSection.message633": {
+  "settings.AboutSection.sourceRepository": {
     "zh": "代码仓库",
     "en": "Source repository"
   },
-  "settings.AboutSection.message634": {
+  "settings.AboutSection.openSourceRepositoryIn": {
     "zh": "在浏览器中打开代码仓库",
     "en": "Open source repository in browser"
   },
-  "settings.AboutSection.message635": {
+  "settings.AboutSection.builtWith": {
     "zh": "基于",
     "en": "Built with"
   },
-  "settings.AboutSection.message636": {
+  "settings.AboutSection.andOtherOpenSource": {
     "zh": "等开源项目构建。",
     "en": "and other open-source projects."
   },
-  "settings.AboutSection.message637": {
+  "settings.AboutSection.authenticationService2": {
     "zh": "认证服务 {p0}",
     "en": "Authentication service {p0}"
   },
-  "settings.account.AccountOverview.message638": {
+  "settings.account.AccountOverview.groups": {
     "zh": "分组",
     "en": "Groups"
   },
-  "settings.account.AccountOverview.message639": {
+  "settings.account.AccountOverview.manageRoutesInModels": {
     "zh": "在「模型与额度」里管理线路",
     "en": "Manage routes in Models & credits"
   },
-  "settings.account.AccountOverview.message640": {
+  "settings.account.AccountOverview.addCredits": {
     "zh": "充值",
     "en": "Add credits"
   },
-  "settings.account.AccountOverview.message641": {
+  "settings.account.AccountOverview.currentPlan": {
     "zh": "当前套餐",
     "en": "Current plan"
   },
-  "settings.account.AccountOverview.message642": {
+  "settings.account.AccountOverview.changePlan": {
     "zh": "更换套餐",
     "en": "Change plan"
   },
-  "settings.account.AccountOverview.message643": {
+  "settings.account.AccountOverview.noSubscription": {
     "zh": "未订阅",
     "en": "No subscription"
   },
-  "settings.account.AccountOverview.message644": {
+  "settings.account.AccountOverview.subscriptionsIncludeDailyAnd": {
     "zh": "订阅套餐后每天、每月有固定额度，用完再从余额扣除。",
     "en": "Subscriptions include daily and monthly credits. Additional usage is charged to your balance."
   },
-  "settings.account.AccountOverview.message645": {
+  "settings.account.AccountOverview.viewPlans": {
     "zh": "查看套餐",
     "en": "View plans"
   },
-  "settings.account.AccountOverview.message646": {
+  "settings.account.AccountOverview.refreshBalanceAndCredits": {
     "zh": "刷新余额和额度",
     "en": "Refresh balance and credits"
   },
-  "settings.account.AccountOverview.message647": {
+  "settings.account.AccountOverview.updating": {
     "zh": "更新中…",
     "en": "Updating…"
   },
-  "settings.account.AccountSection.message648": {
+  "settings.account.AccountSection.overview": {
     "zh": "概览",
     "en": "Overview"
   },
-  "settings.account.AccountSection.message649": {
+  "settings.account.AccountSection.subscriptionPlans": {
     "zh": "订阅套餐",
     "en": "Subscription plans"
   },
-  "settings.account.AccountSection.message650": {
+  "settings.account.AccountSection.accountPage": {
     "zh": "账号页面",
     "en": "Account page"
   },
-  "settings.account.AccountSection.message651": {
+  "settings.account.AccountSection.signInToPixel": {
     "zh": "登录像素星空账号后，可以使用账号下的模型，查看余额和额度，购买订阅或充值。",
     "en": "Sign in to Pixel Starry Sky to use your models, view balance and credits, subscribe or add credits."
   },
-  "settings.account.AccountSection.message652": {
+  "settings.account.AccountSection.accountServices": {
     "zh": "账号服务",
     "en": "Account services"
   },
-  "settings.account.AccountSection.message653": {
+  "settings.account.AccountSection.manageInBrowser": {
     "zh": "在浏览器中管理",
     "en": "Manage in browser"
   },
-  "settings.account.PlanStore.message654": {
+  "settings.account.PlanStore.month": {
     "zh": "月",
     "en": "month"
   },
-  "settings.account.PlanStore.message655": {
+  "settings.account.PlanStore.quarter": {
     "zh": "季",
     "en": "quarter"
   },
-  "settings.account.PlanStore.message656": {
+  "settings.account.PlanStore.year": {
     "zh": "年",
     "en": "year"
   },
-  "settings.account.PlanStore.message657": {
+  "settings.account.PlanStore.daily": {
     "zh": "每日",
     "en": "Daily"
   },
-  "settings.account.PlanStore.message658": {
+  "settings.account.PlanStore.weekly": {
     "zh": "每周",
     "en": "Weekly"
   },
-  "settings.account.PlanStore.message659": {
+  "settings.account.PlanStore.monthly": {
     "zh": "每月",
     "en": "Monthly"
   },
-  "settings.account.PlanStore.message660": {
+  "settings.account.PlanStore.noPlansAvailableFor": {
     "zh": "暂时没有可购买的套餐",
     "en": "No plans available for purchase yet"
   },
-  "settings.account.PlanStore.message661": {
+  "settings.account.PlanStore.plansWillAppearHere": {
     "zh": "套餐上架后会显示在这里。",
     "en": "Plans will appear here when published."
   },
-  "settings.account.PlanStore.message662": {
+  "settings.account.PlanStore.renew": {
     "zh": "续费",
     "en": "Renew"
   },
-  "settings.account.PlanStore.message663": {
+  "settings.account.PlanStore.change": {
     "zh": "更换",
     "en": "Change"
   },
-  "settings.account.PlanStore.message664": {
+  "settings.account.PlanStore.subscribe": {
     "zh": "订阅",
     "en": "Subscribe"
   },
-  "settings.account.PlanStore.message665": {
+  "settings.account.PlanStore.current": {
     "zh": "当前",
     "en": "Current"
   },
-  "settings.account.PlanStore.message666": {
+  "settings.account.PlanStore.recommended": {
     "zh": "推荐",
     "en": "Recommended"
   },
-  "settings.account.PlanStore.message667": {
+  "settings.account.PlanStore.credits": {
     "zh": "额度",
     "en": "Credits"
   },
-  "settings.account.PlanStore.message668": {
+  "settings.account.PlanStore.purchaseOnline": {
     "zh": "在线购买",
     "en": "Purchase online"
   },
-  "settings.account.TopUp.message669": {
+  "settings.account.TopUp.enterAmountWithUp": {
     "zh": "请输入金额，最多两位小数",
     "en": "Enter an amount with up to two decimal places"
   },
-  "settings.account.TopUp.message670": {
+  "settings.account.TopUp.amountRange": {
     "zh": "金额范围 {p0} – {p1}",
     "en": "Amount range: {p0} – {p1}"
   },
-  "settings.account.TopUp.message671": {
+  "settings.account.TopUp.creditAmount": {
     "zh": "充值金额",
     "en": "Credit amount"
   },
-  "settings.account.TopUp.message672": {
+  "settings.account.TopUp.bonus": {
     "zh": "送",
     "en": "Bonus"
   },
-  "settings.account.TopUp.message673": {
+  "settings.account.TopUp.custom": {
     "zh": "自定义",
     "en": "Custom"
   },
-  "settings.account.TopUp.message674": {
+  "settings.account.TopUp.anyAmount": {
     "zh": "任意金额",
     "en": "Any amount"
   },
-  "settings.account.TopUp.message675": {
+  "settings.account.TopUp.customCreditAmount": {
     "zh": "自定义充值金额",
     "en": "Custom credit amount"
   },
-  "settings.account.TopUp.message676": {
+  "settings.account.TopUp.range": {
     "zh": "范围 {p0} – {p1}",
     "en": "Range: {p0} – {p1}"
   },
-  "settings.account.TopUp.message677": {
+  "settings.account.TopUp.paymentMethod": {
     "zh": "支付方式",
     "en": "Payment method"
   },
-  "settings.account.TopUp.message678": {
+  "settings.account.TopUp.onlinePaymentsAreNot": {
     "zh": "在线支付暂未开放。",
     "en": "Online payments are not available yet."
   },
-  "settings.account.TopUp.message679": {
+  "settings.account.TopUp.creditsReceived": {
     "zh": "到账额度",
     "en": "Credits received"
   },
-  "settings.account.TopUp.message680": {
+  "settings.account.TopUp.includingBonus": {
     "zh": "（含赠送",
     "en": "(including bonus"
   },
-  "settings.account.TopUp.message681": {
+  "settings.account.TopUp.amountDue": {
     "zh": "应付",
     "en": "Amount due"
   },
-  "settings.account.TopUp.message682": {
+  "settings.account.TopUp.onlinePayment": {
     "zh": "在线支付",
     "en": "Online payment"
   },
-  "settings.account.TopUp.message683": {
+  "settings.account.TopUp.pay": {
     "zh": "去支付",
     "en": "Pay"
   },
-  "settings.CacheMissSettings.message684": {
+  "settings.CacheMissSettings.cacheMissAlerts": {
     "zh": "缓存未命中提醒",
     "en": "Cache miss alerts"
   },
-  "settings.CacheMissSettings.message685": {
+  "settings.CacheMissSettings.getAlertWhenConsecutive": {
     "zh": "连续请求的缓存命中明显降低时提醒，可在 5 秒内停止本轮；不操作则继续运行。",
     "en": "Get an alert when consecutive requests show a significant drop in cache hits. Stop this turn within 5 seconds, or let it continue."
   },
-  "settings.CacheMissSettings.message686": {
+  "settings.CacheMissSettings.noAlertsOnFirst": {
     "zh": "首次请求、模型或线路切换、上下文压缩及长时间停顿后不提醒。提醒出现时，请求已经开始。",
     "en": "No alerts on first requests, model or route changes, compaction, or long pauses. The request has already started when the alert appears."
   },
-  "settings.ComposerStyleSettings.message687": {
+  "settings.ComposerStyleSettings.composerStyle": {
     "zh": "对话框风格",
     "en": "Composer style"
   },
-  "settings.ComposerStyleSettings.message688": {
+  "settings.ComposerStyleSettings.chatgptPlacesToolsInside": {
     "zh": "ChatGPT 将工具放在输入框内；Claude 将设置工具放在框外。两种风格都保留上下文窗口功能。",
     "en": "ChatGPT places tools inside the composer; Claude places settings outside. Both styles include context window tools."
   },
-  "settings.ComposerStyleSettings.message689": {
+  "settings.ComposerStyleSettings.chooseComposerStyle": {
     "zh": "选择 {p0} 对话框风格",
     "en": "Choose {p0} composer style"
   },
-  "settings.ComposerStyleSettings.message690": {
+  "settings.ComposerStyleSettings.typeMessage": {
     "zh": "输入内容…",
     "en": "Type a message…"
   },
-  "settings.ComposerStyleSettings.message691": {
+  "settings.ComposerStyleSettings.toolsAndSendButton": {
     "zh": "工具与发送按钮在框内",
     "en": "Tools and send button inside"
   },
-  "settings.ComposerStyleSettings.message692": {
+  "settings.ComposerStyleSettings.settingsOutsideSendButton": {
     "zh": "设置工具在框外，发送按钮在框内",
     "en": "Settings outside, send button inside"
   },
-  "settings.ComposerStyleSettings.message693": {
+  "settings.ComposerStyleSettings.effort": {
     "zh": "强度",
     "en": "Effort"
   },
-  "settings.editor.EditorSection.message694": {
+  "settings.editor.EditorSection.customEditor": {
     "zh": "自定义编辑器",
     "en": "Custom editor"
   },
-  "settings.editor.EditorSection.message695": {
+  "settings.editor.EditorSection.demoModeCannotChange": {
     "zh": "演示模式不更改本机编辑器设置",
     "en": "Demo mode cannot change local editor settings"
   },
-  "settings.editor.EditorSection.message696": {
+  "settings.editor.EditorSection.editor": {
     "zh": "编辑器",
     "en": "Editor"
   },
-  "settings.editor.EditorSection.message697": {
+  "settings.editor.EditorSection.viewAndEditFiles": {
     "zh": "文件可在像素星空内查看和编辑，也可以使用本机编辑器。",
     "en": "View and edit files in Pixel Starry Sky, or use a local editor."
   },
-  "settings.editor.EditorSection.message698": {
+  "settings.editor.EditorSection.defaultOpeningMethod": {
     "zh": "默认打开方式",
     "en": "Default opening method"
   },
-  "settings.editor.EditorSection.message699": {
+  "settings.editor.EditorSection.toolbarOpensBuiltIn": {
     "zh": "顶栏主按钮默认打开软件内文件树，文件在工作区中编辑；也可以选择本机编辑器。",
     "en": "The toolbar opens the built-in file tree by default, with files edited in the workspace. You can also choose a local editor."
   },
-  "settings.editor.EditorSection.message700": {
+  "settings.editor.EditorSection.defaultExternalEditor": {
     "zh": "默认外部编辑器",
     "en": "Default external editor"
   },
-  "settings.editor.EditorSection.message701": {
+  "settings.editor.EditorSection.editorToolbarsExternalEditor": {
     "zh": "编辑器工具栏的「用外部编辑器打开」使用此选择，不改变顶栏的默认打开方式。",
     "en": "The editor toolbar's external editor button uses this choice without changing the main toolbar default."
   },
-  "settings.editor.EditorSection.message702": {
+  "settings.editor.EditorSection.noEditorDetectedChoose": {
     "zh": "未检测到编辑器，可在下方选择程序路径",
     "en": "No editor detected. Choose an executable path below."
   },
-  "settings.editor.EditorSection.message703": {
+  "settings.editor.EditorSection.windowMode": {
     "zh": "打开窗口",
     "en": "Window mode"
   },
-  "settings.editor.EditorSection.message704": {
+  "settings.editor.EditorSection.vsCodeCompatibleEditors": {
     "zh": "VS Code 兼容编辑器支持复用窗口；普通自定义程序按自身方式打开。",
     "en": "VS Code-compatible editors support window reuse. Other programs use their own behavior."
   },
-  "settings.editor.EditorSection.message705": {
+  "settings.editor.EditorSection.editorWindowMode": {
     "zh": "编辑器窗口方式",
     "en": "Editor window mode"
   },
-  "settings.editor.EditorSection.message706": {
+  "settings.editor.EditorSection.reuseWindow": {
     "zh": "复用窗口",
     "en": "Reuse window"
   },
-  "settings.editor.EditorSection.message707": {
+  "settings.editor.EditorSection.newWindow": {
     "zh": "新窗口",
     "en": "New window"
   },
-  "settings.editor.EditorSection.message708": {
+  "settings.editor.EditorSection.localEditors": {
     "zh": "本机编辑器",
     "en": "Local editors"
   },
-  "settings.editor.EditorSection.message709": {
+  "settings.editor.EditorSection.available": {
     "zh": "可用",
     "en": "Available"
   },
-  "settings.editor.EditorSection.message710": {
+  "settings.editor.EditorSection.invalidPath": {
     "zh": "路径失效",
     "en": "Invalid path"
   },
-  "settings.editor.EditorSection.message711": {
+  "settings.editor.EditorSection.removeConfiguration": {
     "zh": "移除配置",
     "en": "Remove configuration"
   },
-  "settings.editor.EditorSection.message712": {
+  "settings.editor.EditorSection.restoreAutomaticDetection": {
     "zh": "恢复自动检测",
     "en": "Restore automatic detection"
   },
-  "settings.editor.EditorSection.message713": {
+  "settings.editor.EditorSection.detectedAt": {
     "zh": "检测于",
     "en": "Detected at"
   },
-  "settings.editor.EditorSection.message714": {
+  "settings.editor.EditorSection.executablePath": {
     "zh": "指定程序路径",
     "en": "Executable path"
   },
-  "settings.editor.EditorSection.message715": {
+  "settings.editor.EditorSection.choose": {
     "zh": "选择",
     "en": "Choose"
   },
-  "settings.editor.EditorSection.message716": {
+  "settings.editor.EditorSection.executable": {
     "zh": "程序…",
     "en": "executable…"
   },
-  "settings.editor.EditorSection.message717": {
+  "settings.editor.EditorSection.name": {
     "zh": "名称",
     "en": "Name"
   },
-  "settings.editor.EditorSection.message718": {
+  "settings.editor.EditorSection.customEditorName": {
     "zh": "自定义编辑器名称",
     "en": "Custom editor name"
   },
-  "settings.editor.EditorSection.message719": {
+  "settings.editor.EditorSection.customEditorOpeningMethod": {
     "zh": "自定义编辑器打开方式",
     "en": "Custom editor opening method"
   },
-  "settings.editor.EditorSection.message720": {
+  "settings.editor.EditorSection.folderArgument": {
     "zh": "普通文件夹参数",
     "en": "Folder argument"
   },
-  "settings.editor.EditorSection.message721": {
+  "settings.editor.EditorSection.vsCodeCompatible": {
     "zh": "VS Code 兼容",
     "en": "VS Code compatible"
   },
-  "settings.editor.EditorSection.message722": {
+  "settings.editor.EditorSection.chooseExecutableAndAdd": {
     "zh": "选择程序并添加…",
     "en": "Choose executable and add…"
   },
-  "settings.engines.EngineDetail.message723": {
+  "settings.engines.EngineDetail.allEngines": {
     "zh": "全部引擎",
     "en": "All engines"
   },
-  "settings.engines.EngineDetail.message724": {
+  "settings.engines.EngineDetail.changesTakeEffectImmediately": {
     "zh": "改了立刻生效。除「新会话默认值」外，对已经开始的会话也生效：下一条消息开始前会用新设置重启",
     "en": "Changes take effect immediately. Except for new conversation defaults, they also apply to existing conversations: the engine restarts with the new settings before your next message"
   },
-  "settings.engines.EngineDetail.message725": {
+  "settings.engines.EngineDetail.andResumesConversation": {
     "zh": "，对话会接上。",
     "en": "and resumes the conversation."
   },
-  "settings.engines.EngineDetail.message726": {
+  "settings.engines.EngineDetail.newConversationDefaults": {
     "zh": "新会话默认值",
     "en": "New conversation defaults"
   },
-  "settings.engines.EngineDetail.message727": {
+  "settings.engines.EngineDetail.appliesToNewConversations": {
     "zh": "对之后新建的会话生效；已开始的会话在输入框里单独改。会话里改过的选择也会记到这里。",
     "en": "Applies to new conversations. Change existing conversations in the composer; those selections are also saved here."
   },
-  "settings.engines.EngineDetail.message728": {
+  "settings.engines.EngineDetail.higherEffortSpendsMore": {
     "zh": "越高想得越久，用量也越大。",
     "en": "Higher effort spends more time thinking and uses more credits."
   },
-  "settings.engines.EngineDetail.message729": {
+  "settings.engines.EngineDetail.defaultReasoningEffort": {
     "zh": "默认推理强度",
     "en": "Default reasoning effort"
   },
-  "settings.engines.EngineDetail.message730": {
+  "settings.engines.EngineDetail.default": {
     "zh": "{p0} 默认",
     "en": "{p0} default"
   },
-  "settings.engines.EngineDetail.message731": {
+  "settings.engines.EngineDetail.permissions": {
     "zh": "权限",
     "en": "Permissions"
   },
-  "settings.engines.EngineDetail.message732": {
+  "settings.engines.EngineDetail.defaultPermissions": {
     "zh": "默认权限",
     "en": "Default permissions"
   },
-  "settings.engines.EngineDetail.message733": {
+  "settings.engines.EngineDetail.defaultModelsForPlatform": {
     "zh": "平台额度和自有额度的默认模型都在「模型与额度」里选。",
     "en": "Default models for platform and own-account credits are set in Models & credits."
   },
-  "settings.engines.EngineDetail.message734": {
+  "settings.engines.EngineDetail.manageModels": {
     "zh": "管理模型 →",
     "en": "Manage models →"
   },
-  "settings.engines.EngineDetail.message735": {
+  "settings.engines.EngineDetail.fasterRepliesWithHigher": {
     "zh": "回复更快，用量也更大。",
     "en": "Faster replies with higher usage."
   },
-  "settings.engines.EngineDetail.message736": {
+  "settings.engines.EngineDetail.enableFastModeBy": {
     "zh": "默认开启 Fast 模式",
     "en": "Enable Fast mode by default"
   },
-  "settings.engines.EngineDetail.message737": {
+  "settings.engines.EngineDetail.orchestrateMultipleSubagentsFor": {
     "zh": "每个任务都编排多个子智能体分头完成，更彻底，用量也更大。",
     "en": "Orchestrate multiple subagents for each task. More thorough, with higher usage."
   },
-  "settings.engines.EngineDetail.message738": {
+  "settings.engines.EngineDetail.enableUltracodeByDefault": {
     "zh": "默认开启 Ultracode",
     "en": "Enable Ultracode by default"
   },
-  "settings.engines.EngineDetail.message739": {
+  "settings.engines.EngineDetail.showThinking": {
     "zh": "显示思考过程",
     "en": "Show thinking"
   },
-  "settings.engines.EngineDetail.message740": {
+  "settings.engines.EngineDetail.onRequestAndShow": {
     "zh": "开：请求并显示思考摘要（计入输出 token）；关：不请求也不显示。",
     "en": "On: request and show thinking summaries (counted as output tokens). Off: do not request or show them."
   },
-  "settings.engines.EngineDetail.message741": {
+  "settings.engines.EngineDetail.showThinkingByDefault": {
     "zh": "默认显示思考过程",
     "en": "Show thinking by default"
   },
-  "settings.engines.EngineDetail.message742": {
+  "settings.engines.EngineDetail.conversation": {
     "zh": "对话",
     "en": "Conversation"
   },
-  "settings.engines.EngineDetail.message743": {
+  "settings.engines.EngineDetail.allowQuestionsDuringTasks": {
     "zh": "允许中途向我提问",
     "en": "Allow questions during tasks"
   },
-  "settings.engines.EngineDetail.message744": {
+  "settings.engines.EngineDetail.onPauseToAsk": {
     "zh": "开：遇到该你定的选择会停下来问你；关：自己拿主意，并在回复里说明做了哪些假设。",
     "en": "On: pause to ask when you need to decide. Off: make decisions and explain assumptions in the reply."
   },
-  "settings.engines.EngineDetail.message745": {
+  "settings.engines.EngineDetail.autocompactThreshold": {
     "zh": "自动压缩触发点",
     "en": "Autocompact threshold"
   },
-  "settings.engines.EngineDetail.message746": {
+  "settings.engines.EngineDetail.automaticallyCompactAtThis": {
     "zh": "上下文用到窗口的这个比例时自动压缩，越低压缩越早、越省用量，但较早的细节丢得也越多。默认由引擎按模型决定。",
     "en": "Automatically compact at this percentage of the context window. Lower values reduce usage but lose earlier details sooner. The default depends on the engine and model."
   },
-  "settings.engines.EngineDetail.message747": {
+  "settings.engines.EngineDetail.defaultBuiltInThreshold": {
     "zh": "默认（内置阈值）",
     "en": "Default (built-in threshold)"
   },
-  "settings.engines.EngineDetail.message748": {
+  "settings.engines.EngineDetail.atUsage": {
     "zh": "用到 {p0}% 时",
     "en": "At {p0}% usage"
   },
-  "settings.engines.EngineDetail.message749": {
+  "settings.engines.EngineDetail.advanced": {
     "zh": "高级",
     "en": "Advanced"
   },
-  "settings.engines.EngineDetail.message750": {
+  "settings.engines.EngineDetail.showInEngineMenu": {
     "zh": "在引擎菜单中显示",
     "en": "Show in engine menu"
   },
-  "settings.engines.EngineDetail.message751": {
+  "settings.engines.EngineDetail.hideThisEngineFrom": {
     "zh": "关掉后输入框的引擎菜单里不再列出它；已经在用它的会话不受影响。",
     "en": "Hide this engine from the composer menu. Existing conversations using it are unaffected."
   },
-  "settings.engines.EngineDetail.message752": {
+  "settings.engines.EngineDetail.defaultEngineCannotBe": {
     "zh": "默认引擎不能隐藏，先把别的引擎设为默认。",
     "en": "The default engine cannot be hidden. Set another engine as default first."
   },
-  "settings.engines.EngineDetail.message753": {
+  "settings.engines.EngineDetail.demoModeCannotUpdate": {
     "zh": "演示模式不更新本机程序",
     "en": "Demo mode cannot update local programs"
   },
-  "settings.engines.EngineDetail.message754": {
+  "settings.engines.EngineDetail.executableNotDetected": {
     "zh": "未检测到程序",
     "en": "Executable not detected"
   },
-  "settings.engines.EngineDetail.message755": {
+  "settings.engines.EngineDetail.detecting": {
     "zh": "检测中…",
     "en": "Detecting…"
   },
-  "settings.engines.EngineDetail.message756": {
+  "settings.engines.EngineDetail.checkingForUpdates": {
     "zh": "正在检查更新…",
     "en": "Checking for updates…"
   },
-  "settings.engines.EngineDetail.message757": {
+  "settings.engines.EngineDetail.runningClaudeUpdateThis": {
     "zh": "正在运行 claude update，可能要一两分钟，期间不影响正在进行的对话…",
     "en": "Running claude update. This may take a minute or two. Existing conversations continue normally…"
   },
-  "settings.engines.EngineDetail.message758": {
+  "settings.engines.EngineDetail.updateDidNotComplete": {
     "zh": "更新没有完成",
     "en": "Update did not complete"
   },
-  "settings.engines.EngineDetail.message759": {
+  "settings.engines.EngineDetail.updatedToPreviously": {
     "zh": "已更新到 {p0}（原来是 {p1}）",
     "en": "Updated to {p0} (previously {p1})"
   },
-  "settings.engines.EngineDetail.message760": {
+  "settings.engines.EngineDetail.alreadyUpToDate": {
     "zh": "已是最新版本{p0}",
     "en": "Already up to date{p0}"
   },
-  "settings.engines.EngineDetail.message761": {
+  "settings.engines.EngineDetail.newConversationsUseUpdated": {
     "zh": "新开的会话用新版本；已经开始的会话下一次启动引擎时换成新版本。",
     "en": "New conversations use the updated version. Existing conversations use it the next time their engine starts."
   },
-  "settings.engines.EngineDetail.message762": {
+  "settings.engines.EngineDetail.useEngineSettings": {
     "zh": "跟随引擎设置（{p0}）",
     "en": "Use engine settings ({p0})"
   },
-  "settings.engines.EngineDetail.message763": {
+  "settings.engines.EngineDetail.useEngineSettings2": {
     "zh": "跟随引擎设置",
     "en": "Use engine settings"
   },
-  "settings.engines.EngineDetail.message764": {
+  "settings.engines.EngineDetail.outputStyle": {
     "zh": "输出风格",
     "en": "Output style"
   },
-  "settings.engines.EngineDetail.message765": {
+  "settings.engines.EngineDetail.changesWritingStyleNot": {
     "zh": "回答的行文风格，不影响做事的认真程度。列表来自 {p0}，包括 ~/.claude/output-styles 里自己写的风格。",
     "en": "Changes the writing style, not task thoroughness. Styles come from {p0}, including your own ~/.claude/output-styles."
   },
-  "settings.engines.EngineDetail.message766": {
+  "settings.engines.EngineDetail.couldNotLoadS": {
     "zh": "没读到 {p0} 的输出风格列表（引擎不可用或版本太旧）。",
     "en": "Could not load {p0}'s output styles. The engine may be unavailable or outdated."
   },
-  "settings.engines.EngineDetail.message767": {
+  "settings.engines.EngineDetail.loading": {
     "zh": "正在读取…",
     "en": "Loading…"
   },
-  "settings.engines.EngineDetail.message768": {
+  "settings.engines.EngineDetail.notFound": {
     "zh": "{p0}（没找到）",
     "en": "{p0} (not found)"
   },
-  "settings.engines.EngineDetail.message769": {
+  "settings.engines.EngineDetail.contextCompactionModel": {
     "zh": "压缩上下文用的模型",
     "en": "Context compaction model"
   },
-  "settings.engines.EngineDetail.message770": {
+  "settings.engines.EngineDetail.platformConversationsOnlyUse": {
     "zh": "只对平台会话生效：压缩请求改用这个模型（当前线路没有它时仍用会话模型）。建议选上下文窗口不小于会话模型的。自有会话由 {p0} 自己决定。",
     "en": "Platform conversations only: use this model for compaction, falling back to the session model if the route does not support it. Choose at least the session model's context capacity. Own-account conversations are managed by {p0}."
   },
-  "settings.engines.EngineDetail.message771": {
+  "settings.engines.EngineDetail.contextCompactionModel2": {
     "zh": "{p0} 压缩上下文用的模型",
     "en": "{p0} context compaction model"
   },
-  "settings.engines.EngineDetail.message772": {
+  "settings.engines.EngineDetail.useConversationModel": {
     "zh": "跟随会话模型",
     "en": "Use conversation model"
   },
-  "settings.engines.EngineDetail.message773": {
+  "settings.engines.EngineDetail.thisLineIsNot": {
     "zh": "这一行不是 KEY=VALUE：{p0}",
     "en": "This line is not KEY=VALUE: {p0}"
   },
-  "settings.engines.EngineDetail.message774": {
+  "settings.engines.EngineDetail.executablePath": {
     "zh": "可执行文件路径",
     "en": "Executable path"
   },
-  "settings.engines.EngineDetail.message775": {
+  "settings.engines.EngineDetail.overrideDetectedExecutableLeave": {
     "zh": "覆盖自动查找到的程序；留空就自动查找。改了会重新检测。",
     "en": "Override the detected executable. Leave blank to detect automatically. Changes trigger detection again."
   },
-  "settings.engines.EngineDetail.message776": {
+  "settings.engines.EngineDetail.executablePath2": {
     "zh": "{p0} 可执行文件路径",
     "en": "{p0} executable path"
   },
-  "settings.engines.EngineDetail.message777": {
+  "settings.engines.EngineDetail.environmentVariables": {
     "zh": "环境变量",
     "en": "Environment variables"
   },
-  "settings.engines.EngineDetail.message778": {
+  "settings.engines.EngineDetail.oneKeyValuePer": {
     "zh": "KEY=VALUE 每行一条，在系统环境之上追加。平台会话的网关地址和凭据仍以平台为准，这里的同名变量不生效。",
     "en": "One KEY=VALUE per line, added to system variables. Platform gateway URLs and credentials take precedence over matching values here."
   },
-  "settings.engines.EnginesSection.message779": {
+  "settings.engines.EnginesSection.localEngines": {
     "zh": "本机引擎",
     "en": "Local engines"
   },
-  "settings.engines.EnginesSection.message780": {
+  "settings.engines.EnginesSection.localProgramsThatExecute": {
     "zh": "执行工具的本机程序。自有额度用它们自己的登录；平台额度也由它们执行，只是模型请求改走平台。点一个引擎设置它的新会话默认值、输出风格、压缩等。",
     "en": "Local programs that execute tools. Own-account mode uses their sign-in; platform mode routes model requests through the platform. Select an engine to configure defaults, styles, compaction and more."
   },
-  "settings.engines.EnginesSection.message781": {
+  "settings.engines.EnginesSection.detectingLocalEngines": {
     "zh": "正在检测本机引擎…",
     "en": "Detecting local engines…"
   },
-  "settings.engines.EnginesSection.message782": {
+  "settings.engines.EnginesSection.settings": {
     "zh": "{p0} 设置",
     "en": "{p0} settings"
   },
-  "settings.engines.EnginesSection.message783": {
+  "settings.engines.EnginesSection.hiddenFromMenu": {
     "zh": "菜单中已隐藏",
     "en": "Hidden from menu"
   },
-  "settings.engines.parts.message784": {
+  "settings.engines.parts.notInstalled": {
     "zh": "未安装",
     "en": "Not installed"
   },
-  "settings.engines.parts.message785": {
+  "settings.engines.parts.outdatedVersion": {
     "zh": "版本过旧",
     "en": "Outdated version"
   },
-  "settings.engines.parts.message786": {
+  "settings.engines.parts.detectionFailed": {
     "zh": "检测出错",
     "en": "Detection failed"
   },
-  "settings.engines.parts.message787": {
+  "settings.engines.parts.anthropicsOfficialCodingCli": {
     "zh": "Anthropic 官方的编码 CLI。像素星空通过它读写文件、运行命令；长链路的工具调用稳定可靠。",
     "en": "Anthropic's official coding CLI. Pixel Starry Sky uses it to read and edit files and run commands, with reliable tool execution across long tasks."
   },
-  "settings.engines.parts.message788": {
+  "settings.engines.parts.openaisCodingCliSupport": {
     "zh": "OpenAI 的编码 CLI。即将支持。",
     "en": "OpenAI's coding CLI. Support coming soon."
   },
-  "settings.FontPicker.message789": {
+  "settings.FontPicker.chooseFromInstalledFonts": {
     "zh": "从本机字体中选择{p0}",
     "en": "Choose {p0} from installed fonts"
   },
-  "settings.FontPicker.message790": {
+  "settings.FontPicker.searchFonts": {
     "zh": "搜索字体",
     "en": "Search fonts"
   },
-  "settings.FontPicker.message791": {
+  "settings.FontPicker.searchInstalledFonts": {
     "zh": "搜索本机字体",
     "en": "Search installed fonts"
   },
-  "settings.FontPicker.message792": {
+  "settings.FontPicker.systemDefault": {
     "zh": "系统默认",
     "en": "System default"
   },
-  "settings.FontPicker.message793": {
+  "settings.FontPicker.loadingInstalledFonts": {
     "zh": "正在读取本机字体…",
     "en": "Loading installed fonts…"
   },
-  "settings.FontPicker.message794": {
+  "settings.FontPicker.couldNotLoadInstalled": {
     "zh": "读取不到本机字体列表，可以直接在输入框里输入字体名",
     "en": "Could not load installed fonts. Enter a font name directly instead."
   },
-  "settings.FontPicker.message795": {
+  "settings.FontPicker.noMatchingFonts": {
     "zh": "没有匹配的字体",
     "en": "No matching fonts"
   },
-  "settings.FontSettings.message796": {
+  "settings.FontSettings.on": {
     "zh": "开启",
     "en": "On"
   },
-  "settings.FontSettings.message797": {
+  "settings.FontSettings.interfaceFont": {
     "zh": "界面字体",
     "en": "Interface font"
   },
-  "settings.FontSettings.message798": {
+  "settings.FontSettings.usedInSidebarButtons": {
     "zh": "侧边栏、按钮、菜单和对话内容。可以从本机字体里选，也可以直接输入字体名（多个用逗号分隔，回车生效）。",
     "en": "Used in the sidebar, buttons, menus and conversations. Choose an installed font or enter names separated by commas, then press Enter."
   },
-  "settings.FontSettings.message799": {
+  "settings.FontSettings.systemDefaultInterSegoe": {
     "zh": "系统默认（Inter、Segoe UI、微软雅黑）",
     "en": "System default (Inter, Segoe UI, Microsoft YaHei)"
   },
-  "settings.FontSettings.message800": {
+  "settings.FontSettings.pixelStarrySkyAa": {
     "zh": "像素星空 Aa 123",
     "en": "Pixel Starry Sky Aa 123"
   },
-  "settings.FontSettings.message801": {
+  "settings.FontSettings.codeFont": {
     "zh": "代码字体",
     "en": "Code font"
   },
-  "settings.FontSettings.message802": {
+  "settings.FontSettings.usedForCodePaths": {
     "zh": "代码、文件路径、分支名和快捷键提示，建议选等宽字体。",
     "en": "Used for code, paths, branch names and shortcuts. A monospace font is recommended."
   },
-  "settings.FontSettings.message803": {
+  "settings.FontSettings.systemDefaultJetbrainsMono": {
     "zh": "系统默认（JetBrains Mono、Cascadia Mono、Consolas）",
     "en": "System default (JetBrains Mono, Cascadia Mono, Consolas)"
   },
-  "settings.FontSettings.message804": {
+  "settings.FontSettings.fontSize": {
     "zh": "字号",
     "en": "Font size"
   },
-  "settings.FontSettings.message805": {
+  "settings.FontSettings.scaleTextOnlyButtons": {
     "zh": "只放大或缩小文字，按钮、间距等布局尺寸不变。",
     "en": "Scale text only. Buttons, spacing and other layout sizes remain unchanged."
   },
-  "settings.FontSettings.message806": {
+  "settings.FontSettings.serifConversationText": {
     "zh": "对话正文用衬线体",
     "en": "Serif conversation text"
   },
-  "settings.FontSettings.message807": {
+  "settings.FontSettings.useSerifFontsSongti": {
     "zh": "助手回复的正文改用衬线字体（宋体、Noto Serif SC、Georgia），长文更好读；代码仍是等宽字体。",
     "en": "Use serif fonts (Songti, Noto Serif SC, Georgia) for longer assistant replies. Code remains monospace."
   },
-  "settings.FontSettings.message808": {
+  "settings.FontSettings.resetFontSettings": {
     "zh": "恢复默认字体设置",
     "en": "Reset font settings"
   },
-  "settings.models.ModelsSection.message809": {
+  "settings.models.ModelsSection.ready": {
     "zh": "已就绪",
     "en": "Ready"
   },
-  "settings.models.ModelsSection.message810": {
+  "settings.models.ModelsSection.modelsCredits": {
     "zh": "模型与额度",
     "en": "Models & credits"
   },
-  "settings.models.ModelsSection.message811": {
+  "settings.models.ModelsSection.defaultsForNewTasks": {
     "zh": "新任务默认用这里的设置。已经开始的会话在输入框的模型菜单里单独改，不影响这里。",
     "en": "Defaults for new tasks. Existing conversations can change their model menu selections independently."
   },
-  "settings.models.ModelsSection.message812": {
+  "settings.models.ModelsSection.defaultCreditSource": {
     "zh": "默认额度来源",
     "en": "Default credit source"
   },
-  "settings.models.ModelsSection.message813": {
+  "settings.models.ModelsSection.platformBilledThroughPixel": {
     "zh": "平台：走像素星空账号的线路扣费；自有：用本机引擎自己的登录。平台出错时不会自动改用自有。",
     "en": "Platform: billed through Pixel Starry Sky routes. Own account: uses local engine sign-in. Platform failures never switch automatically to your own account."
   },
-  "settings.models.ModelsSection.message814": {
+  "settings.models.ModelsSection.defaultModel": {
     "zh": "默认模型",
     "en": "Default model"
   },
-  "settings.models.ModelsSection.message815": {
+  "settings.models.ModelsSection.modelsFromYourAvailable": {
     "zh": "来自你能用的平台线路。先选模型，线路自动对齐到包含它、倍率最低的一条。",
     "en": "Models from your available platform routes. Choose a model and its lowest-multiplier supported route is selected automatically."
   },
-  "settings.models.ModelsSection.message816": {
+  "settings.models.ModelsSection.noModelsAvailable": {
     "zh": "暂无可用模型",
     "en": "No models available"
   },
-  "settings.models.ModelsSection.message817": {
+  "settings.models.ModelsSection.availableAfterSignIn": {
     "zh": "登录后显示",
     "en": "Available after sign-in"
   },
-  "settings.models.ModelsSection.message818": {
+  "settings.models.ModelsSection.defaultRoute": {
     "zh": "默认线路",
     "en": "Default route"
   },
-  "settings.models.ModelsSection.message819": {
+  "settings.models.ModelsSection.onlyRoutesSupportingDefault": {
     "zh": "只列包含默认模型的线路，按倍率从低到高。倍率是当前账号的有效倍率（含专属倍率）。",
     "en": "Only routes supporting the default model are listed, ordered by effective billing multiplier, including account-specific rates."
   },
-  "settings.models.ModelsSection.message820": {
+  "settings.models.ModelsSection.noRoutesAvailable": {
     "zh": "暂无可用线路",
     "en": "No routes available"
   },
-  "settings.models.ModelsSection.message821": {
+  "settings.models.ModelsSection.claudeCodeModelAliases": {
     "zh": "Claude Code 的模型别名；「默认」跟随 Claude Code 自己的设置。",
     "en": "Claude Code model aliases. Default follows Claude Code's own settings."
   },
-  "settings.models.ModelsSection.message822": {
+  "settings.models.ModelsSection.signInToPixel": {
     "zh": "登录像素星空账号后，可以使用管理员公开的平台线路。",
     "en": "Sign in to Pixel Starry Sky to use published platform routes."
   },
-  "settings.models.ModelsSection.message823": {
+  "settings.models.ModelsSection.balance": {
     "zh": "· 余额 {p0}",
     "en": "· Balance {p0}"
   },
-  "settings.models.ModelsSection.message824": {
+  "settings.models.ModelsSection.models": {
     "zh": "{p0} 个模型",
     "en": "{p0} models"
   },
-  "settings.models.ModelsSection.message825": {
+  "settings.models.ModelsSection.modelsShownInMenu": {
     "zh": "菜单里显示的模型",
     "en": "Models shown in menu"
   },
-  "settings.models.ModelsSection.message826": {
+  "settings.models.ModelsSection.hiddenModelsAreRemoved": {
     "zh": "关掉的模型不在输入框菜单里列出，不影响调用。正在用的和默认模型总会显示。",
     "en": "Hidden models are removed from the composer menu without affecting requests. Current and default models always remain visible."
   },
-  "settings.models.ModelsSection.message827": {
+  "settings.models.ModelsSection.showAll": {
     "zh": "全部显示",
     "en": "Show all"
   },
-  "settings.models.ModelsSection.message828": {
+  "settings.models.ModelsSection.routes": {
     "zh": "条线路",
     "en": "routes"
   },
-  "settings.models.ModelsSection.message829": {
+  "settings.models.ModelsSection.showInMenu": {
     "zh": "在菜单里显示 {p0}",
     "en": "Show {p0} in menu"
   },
-  "settings.models.ModelsSection.message830": {
+  "settings.models.ModelsSection.ownAccountLocalEngine": {
     "zh": "自有（本机引擎）",
     "en": "Own account (local engine)"
   },
-  "settings.models.ModelsSection.message831": {
+  "settings.models.ModelsSection.engineSettings": {
     "zh": "引擎设置…",
     "en": "Engine settings…"
   },
-  "settings.models.ModelsSection.message832": {
+  "settings.models.ModelsSection.requestRetries": {
     "zh": "请求重试",
     "en": "Request retries"
   },
-  "settings.models.ModelsSection.message833": {
+  "settings.models.ModelsSection.customApi": {
     "zh": "自定义 API",
     "en": "Custom API"
   },
-  "settings.models.ModelsSection.message834": {
+  "settings.models.ModelsSection.comingSoonAddYour": {
     "zh": "即将支持：填自己的 API 地址和 Key（Anthropic / OpenAI 兼容），作为第三种额度来源。",
     "en": "Coming soon: add your own Anthropic or OpenAI-compatible API URL and key as a third credit source."
   },
-  "settings.models.RequestRetrySettings.message835": {
+  "settings.models.RequestRetrySettings.maximumAutomaticRetriesFor": {
     "zh": "模型请求遇到临时错误时最多自动重试多少次。0 表示不自动重试；修改后从下一轮生效。",
     "en": "Maximum automatic retries for temporary model request errors. 0 disables retries. Changes apply from the next turn."
   },
-  "settings.models.RequestRetrySettings.message836": {
+  "settings.models.RequestRetrySettings.appliesToClaudeCode": {
     "zh": "适用于 Claude Code 的平台与自有请求。不会自动重新执行整轮任务或工具操作。",
     "en": "Applies to Claude Code platform and own-account requests. Entire tasks and tool actions are never replayed automatically."
   },
-  "settings.models.RequestRetrySettings.message837": {
+  "settings.models.RequestRetrySettings.requestRetryMode": {
     "zh": "请求重试模式",
     "en": "Request retry mode"
   },
-  "settings.models.RequestRetrySettings.message838": {
+  "settings.models.RequestRetrySettings.engineDefault": {
     "zh": "跟随引擎",
     "en": "Engine default"
   },
-  "settings.models.RequestRetrySettings.message839": {
+  "settings.models.RequestRetrySettings.enterIntegerFrom0": {
     "zh": "请输入 0～15 的整数",
     "en": "Enter an integer from 0 to 15"
   },
-  "settings.models.RequestRetrySettings.message840": {
+  "settings.models.RequestRetrySettings.retryCount": {
     "zh": "重试次数",
     "en": "Retry count"
   },
-  "settings.models.RequestRetrySettings.message841": {
+  "settings.models.RequestRetrySettings.decreaseRetryCount": {
     "zh": "减少重试次数",
     "en": "Decrease retry count"
   },
-  "settings.models.RequestRetrySettings.message842": {
+  "settings.models.RequestRetrySettings.increaseRetryCount": {
     "zh": "增加重试次数",
     "en": "Increase retry count"
   },
-  "settings.models.RequestRetrySettings.message843": {
+  "settings.models.RequestRetrySettings.n015Retries": {
     "zh": "0～15 次",
     "en": "0–15 retries"
   },
-  "settings.models.RequestRetrySettings.message844": {
+  "settings.models.RequestRetrySettings.presets": {
     "zh": "常用",
     "en": "Presets"
   },
-  "settings.models.RequestRetrySettings.message845": {
+  "settings.models.RequestRetrySettings.setRetries": {
     "zh": "设为重试 {p0} 次",
     "en": "Set {p0} retries"
   },
-  "settings.models.RequestRetrySettings.message846": {
+  "settings.models.RequestRetrySettings.doNotRetryAfter": {
     "zh": "失败后不自动重试",
     "en": "Do not retry after failure"
   },
-  "settings.models.RequestRetrySettings.message847": {
+  "settings.models.RequestRetrySettings.upToRetriesAfter": {
     "zh": "失败后最多重试 {p0} 次，共最多 {p1} 次尝试",
     "en": "Up to {p0} retries after failure; at most {p1} attempts in total"
   },
-  "settings.models.RequestRetrySettings.message848": {
+  "settings.models.RequestRetrySettings.useEnginesCurrentRetry": {
     "zh": "使用引擎当前的默认重试策略",
     "en": "Use the engine's current retry policy"
   },
-  "settings.models.RequestRetrySettings.message849": {
+  "settings.models.RequestRetrySettings.resetToDefault": {
     "zh": "恢复默认",
     "en": "Reset to default"
   },
-  "settings.replyStats.message850": {
+  "settings.replyStats.tokensInputOutput": {
     "zh": "Token（输入 / 输出）",
     "en": "Tokens (input / output)"
   },
-  "settings.replyStats.message851": {
+  "settings.replyStats.cost": {
     "zh": "费用",
     "en": "Cost"
   },
-  "settings.replyStats.message852": {
+  "settings.replyStats.uncachedInputTokens": {
     "zh": "普通输入 Token",
     "en": "Uncached input tokens"
   },
-  "settings.replyStats.message853": {
+  "settings.replyStats.totalTokens": {
     "zh": "总 Token",
     "en": "Total tokens"
   },
-  "settings.replyStats.message854": {
+  "settings.replyStats.cacheHitRate": {
     "zh": "缓存命中率",
     "en": "Cache hit rate"
   },
-  "settings.replyStats.message855": {
+  "settings.replyStats.modelRequestCount": {
     "zh": "模型请求次数",
     "en": "Model request count"
   },
-  "settings.replyStats.message856": {
+  "settings.replyStats.basicInformation": {
     "zh": "基础信息",
     "en": "Basic information"
   },
-  "settings.replyStats.message857": {
+  "settings.replyStats.tokenBreakdown": {
     "zh": "Token 明细",
     "en": "Token breakdown"
   },
-  "settings.replyStats.message858": {
+  "settings.replyStats.requestStatistics": {
     "zh": "调用统计",
     "en": "Request statistics"
   },
-  "settings.ReplyStatsSettings.message859": {
+  "settings.ReplyStatsSettings.statisticsBelowReplies": {
     "zh": "回复下方的统计",
     "en": "Statistics below replies"
   },
-  "settings.ReplyStatsSettings.message860": {
+  "settings.ReplyStatsSettings.chooseWhichStatisticsAppear": {
     "zh": "选择每轮回复下方显示的数据。立即应用到所有会话，并在本机保存。",
     "en": "Choose which statistics appear below each reply. Changes apply to all conversations and are saved locally."
   },
-  "settings.ReplyStatsSettings.message861": {
+  "settings.ReplyStatsSettings.replyStatisticsPreview": {
     "zh": "回复统计预览",
     "en": "Reply statistics preview"
   },
-  "settings.ReplyStatsSettings.message862": {
+  "settings.ReplyStatsSettings.previewSampleData": {
     "zh": "预览 · 示例数据",
     "en": "Preview · Sample data"
   },
-  "settings.ReplyStatsSettings.message863": {
+  "settings.ReplyStatsSettings.hideStatistics": {
     "zh": "不显示统计",
     "en": "Hide statistics"
   },
-  "settings.ReplyStatsSettings.message864": {
+  "settings.ReplyStatsSettings.uncachedInputExcludesCache": {
     "zh": "普通输入不含缓存；「输入 / 输出」中的输入包含缓存。没有数据的项目会自动隐藏。",
     "en": "Uncached input excludes cache; input / output includes cache in input. Fields without data are hidden automatically."
   },
-  "settings.ReplyStatsSettings.message865": {
+  "settings.ReplyStatsSettings.resetStatistics": {
     "zh": "恢复默认统计",
     "en": "Reset statistics"
   },
-  "settings.requestRetry.message866": {
+  "settings.requestRetry.configureRequestRetriesIn": {
     "zh": "请在桌面应用中设置请求重试",
     "en": "Configure request retries in the desktop app"
   },
-  "settings.searchIndex.message867": {
+  "settings.searchIndex.composerStyleLayoutChatgpt": {
     "zh": "输入框 风格 样式 布局 chatgpt claude 工具框内 框外",
     "en": "composer style layout chatgpt claude inside outside toolbar"
   },
-  "settings.searchIndex.message868": {
+  "settings.searchIndex.openingMethodBuiltIn": {
     "zh": "打开方式 内置编辑器 像素星空 CodeMirror 软件内 打开项目 Trae TraeCode CN",
     "en": "opening method built-in editor Pixel Starry Sky CodeMirror project Trae TraeCode CN"
   },
-  "settings.searchIndex.message869": {
+  "settings.searchIndex.editorCursorVsCode": {
     "zh": "编辑器 Cursor VS Code Windsurf Trae TraeCode CN 打开项目 默认",
     "en": "editor Cursor VS Code Windsurf Trae TraeCode CN open project default"
   },
-  "settings.searchIndex.message870": {
+  "settings.searchIndex.editorReuseWindowNew": {
     "zh": "编辑器 复用窗口 新窗口",
     "en": "editor reuse window new window"
   },
-  "settings.searchIndex.message871": {
+  "settings.searchIndex.editorProgramPathExe": {
     "zh": "编辑器 程序 路径 exe 检测",
     "en": "editor program path exe detection"
   },
-  "settings.searchIndex.message872": {
+  "settings.searchIndex.editorFolderArgumentsAdd": {
     "zh": "编辑器 文件夹 参数 添加",
     "en": "editor folder arguments add"
   },
-  "settings.searchIndex.message873": {
+  "settings.searchIndex.signInSignOut": {
     "zh": "登录 退出登录 余额 套餐 订阅 充值 额度 限额",
     "en": "sign in sign out balance plan subscription credits limits"
   },
-  "settings.searchIndex.message874": {
+  "settings.searchIndex.platformOwnAccountCredits": {
     "zh": "平台 自有 额度 扣费 来源",
     "en": "platform own account credits billing source"
   },
-  "settings.searchIndex.message875": {
+  "settings.searchIndex.modelNewTaskClaude": {
     "zh": "模型 新任务 claude opus sonnet haiku",
     "en": "model new task claude opus sonnet haiku"
   },
-  "settings.searchIndex.message876": {
+  "settings.searchIndex.routeGroupMultiplierBilling": {
     "zh": "线路 分组 倍率 计费",
     "en": "route group multiplier billing"
   },
-  "settings.searchIndex.message877": {
+  "settings.searchIndex.routeGroupMultiplierBalance": {
     "zh": "线路 分组 倍率 余额计费 订阅额度 刷新",
     "en": "route group multiplier balance subscription refresh"
   },
-  "settings.searchIndex.message878": {
+  "settings.searchIndex.hiddenModelsManageModel": {
     "zh": "隐藏模型 管理模型 模型列表 显示",
     "en": "hidden models manage model list visibility"
   },
-  "settings.searchIndex.message879": {
+  "settings.searchIndex.retryFailureTemporaryErrors": {
     "zh": "重试 失败 临时错误 自动重试",
     "en": "retry failure temporary errors automatic retry"
   },
-  "settings.searchIndex.message880": {
+  "settings.searchIndex.byokKeyUrlOpenai": {
     "zh": "byok key 地址 openai anthropic 兼容",
     "en": "byok key url openai anthropic compatible"
   },
-  "settings.searchIndex.message881": {
+  "settings.searchIndex.engineVersionPathDetect": {
     "zh": "引擎 版本 路径 重新检测 claude 默认引擎 设为默认",
     "en": "engine version path detect claude default engine"
   },
-  "settings.searchIndex.message882": {
+  "settings.searchIndex.engineOpenaiCodex": {
     "zh": "引擎 openai codex",
     "en": "engine openai codex"
   },
-  "settings.searchIndex.message883": {
+  "settings.searchIndex.upgradeUpdateVersionClaude": {
     "zh": "升级 更新 版本 claude update 新版本",
     "en": "upgrade update version claude update new version"
   },
-  "settings.searchIndex.message884": {
+  "settings.searchIndex.defaultsNewTaskNew": {
     "zh": "默认 新任务 新会话",
     "en": "defaults new task new conversation"
   },
-  "settings.searchIndex.message885": {
+  "settings.searchIndex.effortThinkingDefaultLow": {
     "zh": "effort 思考 强度 默认 low high max",
     "en": "effort thinking default low high max"
   },
-  "settings.searchIndex.message886": {
+  "settings.searchIndex.askAutoEditPlan": {
     "zh": "询问 自动编辑 计划模式 完全放行 bypass 默认权限",
     "en": "ask auto-edit plan full access bypass default permissions"
   },
-  "settings.searchIndex.message887": {
+  "settings.searchIndex.fastSpeedDefault": {
     "zh": "fast 快速 默认",
     "en": "fast speed default"
   },
-  "settings.searchIndex.message888": {
+  "settings.searchIndex.ultracodeSubagentsOrchestrationDefault": {
     "zh": "ultracode 子智能体 编排 默认",
     "en": "ultracode subagents orchestration default"
   },
-  "settings.searchIndex.message889": {
+  "settings.searchIndex.thinkingSummaryDefault": {
     "zh": "思考 摘要 thinking 默认",
     "en": "thinking summary default"
   },
-  "settings.searchIndex.message890": {
+  "settings.searchIndex.outputStyleExplanatoryLearning": {
     "zh": "output style 风格 行文 explanatory learning proactive concise",
     "en": "output style explanatory learning proactive concise"
   },
-  "settings.searchIndex.message891": {
+  "settings.searchIndex.questionsAskuserquestionInterruptAssumptions": {
     "zh": "提问 问题 askuserquestion 打断 自己拿主意",
     "en": "questions askuserquestion interrupt assumptions"
   },
-  "settings.searchIndex.message892": {
+  "settings.searchIndex.compactThresholdPercentageContext": {
     "zh": "压缩 compact 阈值 百分比 上下文 窗口 autocompact",
     "en": "compact threshold percentage context window autocompact"
   },
-  "settings.searchIndex.message893": {
+  "settings.searchIndex.compactSummaryContextCompaction": {
     "zh": "压缩 compact 摘要 上下文 压缩模型",
     "en": "compact summary context compaction model"
   },
-  "settings.searchIndex.message894": {
+  "settings.searchIndex.hideEngineMenuShow": {
     "zh": "隐藏 引擎 菜单 显示",
     "en": "hide engine menu show"
   },
-  "settings.searchIndex.message895": {
+  "settings.searchIndex.pathClaudeExeDetection": {
     "zh": "路径 claude.exe 自动查找 覆盖 启动方式",
     "en": "path claude.exe detection override launch"
   },
-  "settings.searchIndex.message896": {
+  "settings.searchIndex.envProxyHttpsProxy": {
     "zh": "env 代理 proxy https_proxy key=value 启动方式",
     "en": "env proxy https_proxy key=value launch"
   },
-  "settings.searchIndex.message897": {
+  "settings.searchIndex.requestRecordsTokensCost": {
     "zh": "调用记录 token 费用 导出 csv 账号调用 本机记录 统计",
     "en": "request records tokens cost export csv account local statistics"
   },
-  "settings.searchIndex.message898": {
+  "settings.searchIndex.theme": {
     "zh": "主题",
     "en": "Theme"
   },
-  "settings.searchIndex.message899": {
+  "settings.searchIndex.lightDarkSystemTheme": {
     "zh": "浅色 深色 跟随系统 暗色 dark light",
     "en": "light dark system theme"
   },
-  "settings.searchIndex.message900": {
+  "settings.searchIndex.motion": {
     "zh": "动画",
     "en": "Motion"
   },
-  "settings.searchIndex.message901": {
+  "settings.searchIndex.motionTransitionReducedAnimation": {
     "zh": "动效 过渡 减少动画",
     "en": "motion transition reduced animation"
   },
-  "settings.searchIndex.message902": {
+  "settings.searchIndex.paneSwitching": {
     "zh": "切换窗格时",
     "en": "Pane switching"
   },
-  "settings.searchIndex.message903": {
+  "settings.searchIndex.paneSplitHighlightSlide": {
     "zh": "窗格 分屏 高亮 滑动 焦点 动画",
     "en": "pane split highlight slide focus animation"
   },
-  "settings.searchIndex.message904": {
+  "settings.searchIndex.statisticsDurationTokensCost": {
     "zh": "统计行 耗时 token 费用 回复",
     "en": "statistics duration tokens cost reply"
   },
-  "settings.searchIndex.message905": {
+  "settings.searchIndex.cacheHitRateAlerts": {
     "zh": "缓存 命中率 提醒 停止",
     "en": "cache hit rate alerts stop"
   },
-  "settings.searchIndex.message906": {
+  "settings.searchIndex.font": {
     "zh": "字体 font",
     "en": "font"
   },
-  "settings.searchIndex.message907": {
+  "settings.searchIndex.monospaceFont": {
     "zh": "等宽 字体 mono",
     "en": "monospace font"
   },
-  "settings.searchIndex.message908": {
+  "settings.searchIndex.textSizeScaleFont": {
     "zh": "文字大小 放大 缩小 字体大小",
     "en": "text size scale font size"
   },
-  "settings.searchIndex.message909": {
+  "settings.searchIndex.serifSongtiReading": {
     "zh": "衬线 宋体 阅读",
     "en": "serif Songti reading"
   },
-  "settings.searchIndex.message910": {
+  "settings.searchIndex.wallpaper": {
     "zh": "壁纸",
     "en": "Wallpaper"
   },
-  "settings.searchIndex.message911": {
+  "settings.searchIndex.backgroundImageVideoWallpaper": {
     "zh": "背景 图片 视频 wallpaper",
     "en": "background image video wallpaper"
   },
-  "settings.searchIndex.message912": {
+  "settings.searchIndex.opacity": {
     "zh": "透出程度",
     "en": "Opacity"
   },
-  "settings.searchIndex.message913": {
+  "settings.searchIndex.wallpaperTransparencyOpacity": {
     "zh": "壁纸 透明 不透明度",
     "en": "wallpaper transparency opacity"
   },
-  "settings.searchIndex.message914": {
+  "settings.searchIndex.blur": {
     "zh": "模糊",
     "en": "Blur"
   },
-  "settings.searchIndex.message915": {
+  "settings.searchIndex.wallpaperBlur": {
     "zh": "壁纸 虚化 blur",
     "en": "wallpaper blur"
   },
-  "settings.searchIndex.message916": {
+  "settings.searchIndex.shortcuts": {
     "zh": "快捷键",
     "en": "Shortcuts"
   },
-  "settings.searchIndex.message917": {
+  "settings.searchIndex.keyboardCtrlSplitSidebar": {
     "zh": "键盘 ctrl 分屏 侧边栏 面板 搜索",
     "en": "keyboard ctrl split sidebar panel search"
   },
-  "settings.searchIndex.message918": {
+  "settings.searchIndex.about": {
     "zh": "关于",
     "en": "About"
   },
-  "settings.searchIndex.message919": {
+  "settings.searchIndex.versionUpdateDataDirectory": {
     "zh": "版本 更新 数据目录 运行环境 链接",
     "en": "version update data directory runtime links"
   },
-  "settings.SettingsDialog.message920": {
+  "settings.SettingsDialog.appearance": {
     "zh": "外观",
     "en": "Appearance"
   },
-  "settings.SettingsDialog.message921": {
+  "settings.SettingsDialog.application": {
     "zh": "应用",
     "en": "Application"
   },
-  "settings.SettingsDialog.message922": {
+  "settings.SettingsDialog.dragToResize": {
     "zh": "拖动调整大小",
     "en": "Drag to resize"
   },
-  "settings.SettingsDialog.message923": {
+  "settings.SettingsDialog.searchSettings": {
     "zh": "搜索设置",
     "en": "Search settings"
   },
-  "settings.SettingsDialog.message924": {
+  "settings.SettingsDialog.clearSearch": {
     "zh": "清空搜索",
     "en": "Clear search"
   },
-  "settings.SettingsDialog.message925": {
+  "settings.SettingsDialog.noMatchingSettings": {
     "zh": "没有匹配的设置",
     "en": "No matching settings"
   },
-  "settings.SettingsDialog.message926": {
+  "settings.SettingsDialog.light": {
     "zh": "浅色",
     "en": "Light"
   },
-  "settings.SettingsDialog.message927": {
+  "settings.SettingsDialog.dark": {
     "zh": "深色",
     "en": "Dark"
   },
-  "settings.SettingsDialog.message928": {
+  "settings.SettingsDialog.system": {
     "zh": "跟随系统",
     "en": "System"
   },
-  "settings.SettingsDialog.message929": {
+  "settings.SettingsDialog.alwaysOn": {
     "zh": "始终开启",
     "en": "Always on"
   },
-  "settings.SettingsDialog.message930": {
+  "settings.SettingsDialog.highlight": {
     "zh": "高亮",
     "en": "Highlight"
   },
-  "settings.SettingsDialog.message931": {
+  "settings.SettingsDialog.slide": {
     "zh": "滑动",
     "en": "Slide"
   },
-  "settings.SettingsDialog.message932": {
+  "settings.SettingsDialog.none": {
     "zh": "无",
     "en": "None"
   },
-  "settings.SettingsDialog.message933": {
+  "settings.SettingsDialog.whenFollowingSystemTheme": {
     "zh": "跟随系统时，会随 Windows 的浅色 / 深色模式自动切换。",
     "en": "When following the system, the theme changes with Windows light / dark mode."
   },
-  "settings.SettingsDialog.message934": {
+  "settings.SettingsDialog.interfaceLanguage": {
     "zh": "界面语言",
     "en": "Interface language"
   },
-  "settings.SettingsDialog.message935": {
+  "settings.SettingsDialog.chooseLanguageUsedBy": {
     "zh": "选择像素星空界面使用的语言。",
     "en": "Choose the language used by the Pixel Starry Sky interface."
   },
-  "settings.SettingsDialog.message936": {
+  "settings.SettingsDialog.animationsForSidebarAnd": {
     "zh": "侧边栏、右侧面板的展开收起，窗格的拆分、移动与标签切换，菜单弹出，按钮按下等动画效果。",
     "en": "Animations for sidebar and panel transitions, pane splits and tab switching, menus and button presses."
   },
-  "settings.SettingsDialog.message937": {
+  "settings.SettingsDialog.systemAnimationsAreDisabled": {
     "zh": "系统已关闭「动画效果」，当前仍显示动画。",
     "en": "System animations are disabled, but app animations remain enabled."
   },
-  "settings.SettingsDialog.message938": {
+  "settings.SettingsDialog.systemAnimationsAreDisabled2": {
     "zh": "系统已关闭「动画效果」，所以现在不显示动画。",
     "en": "System animations are disabled, so app animations are currently hidden."
   },
-  "settings.SettingsDialog.message939": {
+  "settings.SettingsDialog.highlightBrieflyLightsUp": {
     "zh": "高亮会在新窗格周围短暂亮起；滑动会将焦点框移过去；无则直接切换。",
     "en": "Highlight briefly lights up the new pane; Slide moves the focus frame; None switches immediately."
   },
-  "settings.SettingsDialog.message940": {
+  "settings.SettingsDialog.motionIsDisabledPane": {
     "zh": "动画已关闭，切换窗格时直接跳过去",
     "en": "Motion is disabled. Pane focus switches immediately."
   },
-  "settings.SettingsDialog.message941": {
+  "settings.SettingsDialog.onlyAffectsFocusChanges": {
     "zh": "只影响切换焦点，拆分、均分和关闭窗格仍沿用布局动画。",
     "en": "Only affects focus changes. Splits, equal sizing and closing panes keep their layout animations."
   },
-  "settings.SettingsDialog.message942": {
+  "settings.SettingsDialog.fonts": {
     "zh": "字体",
     "en": "Fonts"
   },
-  "settings.SettingsDialog.message943": {
+  "settings.SettingsDialog.toggleSidebar": {
     "zh": "收起 / 展开侧边栏",
     "en": "Toggle sidebar"
   },
-  "settings.SettingsDialog.message944": {
+  "settings.SettingsDialog.toggleRightPanel": {
     "zh": "收起 / 展开右侧面板",
     "en": "Toggle right panel"
   },
-  "settings.SettingsDialog.message945": {
+  "settings.SettingsDialog.openSettings": {
     "zh": "打开设置",
     "en": "Open settings"
   },
-  "settings.SettingsProvider.message946": {
+  "settings.SettingsProvider.usesettingsMustBeUsed": {
     "zh": "useSettings 必须在 SettingsProvider 内使用",
     "en": "useSettings must be used within SettingsProvider"
   },
-  "settings.usage.DailyChart.message947": {
+  "settings.usage.DailyChart.text": {
     "zh": "{p0}月{p1}日",
     "en": "{p0}/{p1}"
   },
-  "settings.usage.DailyChart.message948": {
+  "settings.usage.DailyChart.total": {
     "zh": "合计",
     "en": "Total"
   },
-  "settings.usage.DailyChart.message949": {
+  "settings.usage.DailyChart.peak": {
     "zh": "峰值 {p0}（{p1}）",
     "en": "Peak {p0} ({p1})"
   },
-  "settings.usage.DailyChart.message950": {
+  "settings.usage.DailyChart.noUsageInThis": {
     "zh": "这段时间没有用量",
     "en": "No usage in this period"
   },
-  "settings.usage.DailyChart.message951": {
+  "settings.usage.DailyChart.legend": {
     "zh": "图例",
     "en": "Legend"
   },
-  "settings.usage.DailyChart.message952": {
+  "settings.usage.DailyChart.usageChartPeak": {
     "zh": "{p0}用量柱状图，峰值 {p1}",
     "en": "{p0} usage chart, peak {p1}"
   },
-  "settings.usage.DailyChart.message953": {
+  "settings.usage.DailyChart.todayByHour": {
     "zh": "今天每小时",
     "en": "Today by hour"
   },
-  "settings.usage.DailyChart.message954": {
+  "settings.usage.DailyChart.now": {
     "zh": "现在",
     "en": "Now"
   },
-  "settings.usage.DailyChart.message955": {
+  "settings.usage.DailyChart.today": {
     "zh": "今天",
     "en": "Today"
   },
-  "settings.usage.Distribution.message956": {
+  "settings.usage.Distribution.distribution": {
     "zh": "分布",
     "en": "Distribution"
   },
-  "settings.usage.Distribution.message957": {
+  "settings.usage.Distribution.distributionDimension": {
     "zh": "分布维度",
     "en": "Distribution dimension"
   },
-  "settings.usage.Distribution.message958": {
+  "settings.usage.Distribution.noData": {
     "zh": "没有数据",
     "en": "No data"
   },
-  "settings.usage.Distribution.message959": {
+  "settings.usage.Distribution.share": {
     "zh": "占比",
     "en": "Share"
   },
-  "settings.usage.Distribution.message960": {
+  "settings.usage.Distribution.turns": {
     "zh": "轮次",
     "en": "Turns"
   },
-  "settings.usage.Distribution.message961": {
+  "settings.usage.Distribution.filteredByThisItem": {
     "zh": "已按这一项筛选",
     "en": "Filtered by this item"
   },
-  "settings.usage.Distribution.message962": {
+  "settings.usage.Distribution.clickToFilterBy": {
     "zh": "点击只看这一项",
     "en": "Click to filter by this item"
   },
-  "settings.usage.KpiCards.message963": {
+  "settings.usage.KpiCards.conversationTurns": {
     "zh": "调用轮次",
     "en": "Conversation turns"
   },
-  "settings.usage.KpiCards.message964": {
+  "settings.usage.KpiCards.turns": {
     "zh": "轮",
     "en": "turns"
   },
-  "settings.usage.KpiCards.message965": {
+  "settings.usage.KpiCards.requests": {
     "zh": "{p0} 次请求",
     "en": "{p0} requests"
   },
-  "settings.usage.KpiCards.message966": {
+  "settings.usage.KpiCards.inputOutput": {
     "zh": "输入 {p0} · 输出 {p1}",
     "en": "Input {p0} · Output {p1}"
   },
-  "settings.usage.KpiCards.message967": {
+  "settings.usage.KpiCards.cacheHit": {
     "zh": "缓存命中",
     "en": "Cache hit"
   },
-  "settings.usage.KpiCards.message968": {
+  "settings.usage.KpiCards.cacheRead": {
     "zh": "缓存读 {p0}",
     "en": "Cache read {p0}"
   },
-  "settings.usage.KpiCards.message969": {
+  "settings.usage.KpiCards.unchanged": {
     "zh": "持平",
     "en": "Unchanged"
   },
-  "settings.usage.KpiCards.message970": {
+  "settings.usage.KpiCards.recordsWithoutReportedCost": {
     "zh": "{p0} 条未报告费用",
     "en": "{p0} records without reported cost"
   },
-  "settings.usage.KpiCards.message971": {
+  "settings.usage.KpiCards.estimateReportedByEngine": {
     "zh": "引擎报告的估算值",
     "en": "Estimate reported by the engine"
   },
-  "settings.usage.KpiCards.message972": {
+  "settings.usage.KpiCards.comparedWithPreviousPeriod": {
     "zh": "和上一个同样长度的时间段比较",
     "en": "Compared with the previous period of the same length"
   },
-  "settings.usage.RecordsTable.message973": {
+  "settings.usage.RecordsTable.completed": {
     "zh": "完成",
     "en": "Completed"
   },
-  "settings.usage.RecordsTable.message974": {
+  "settings.usage.RecordsTable.interrupted": {
     "zh": "中断",
     "en": "Interrupted"
   },
-  "settings.usage.RecordsTable.message975": {
+  "settings.usage.RecordsTable.time": {
     "zh": "时间",
     "en": "Time"
   },
-  "settings.usage.RecordsTable.message976": {
+  "settings.usage.RecordsTable.conversation": {
     "zh": "会话",
     "en": "Conversation"
   },
-  "settings.usage.RecordsTable.message977": {
+  "settings.usage.RecordsTable.untitledConversation": {
     "zh": "未命名会话",
     "en": "Untitled conversation"
   },
-  "settings.usage.RecordsTable.message978": {
+  "settings.usage.RecordsTable.requests": {
     "zh": "请求",
     "en": "Requests"
   },
-  "settings.usage.RecordsTable.message979": {
+  "settings.usage.RecordsTable.outcome": {
     "zh": "结果",
     "en": "Outcome"
   },
-  "settings.usage.RecordsTable.message980": {
+  "settings.usage.RecordsTable.requestRecords": {
     "zh": "调用记录",
     "en": "Request records"
   },
-  "settings.usage.RecordsTable.message981": {
+  "settings.usage.RecordsTable.requestCount": {
     "zh": "请求次数",
     "en": "Request count"
   },
-  "settings.usage.RecordsTable.message982": {
+  "settings.usage.RecordsTable.inputCacheMisses": {
     "zh": "输入（未命中缓存）",
     "en": "Input (cache misses)"
   },
-  "settings.usage.RecordsTable.message983": {
+  "settings.usage.RecordsTable.notReportedByEngine": {
     "zh": "引擎未报告",
     "en": "Not reported by engine"
   },
-  "settings.usage.RecordsTable.message984": {
+  "settings.usage.RecordsTable.started": {
     "zh": "开始",
     "en": "Started"
   },
-  "settings.usage.RecordsTable.message985": {
+  "settings.usage.RecordsTable.ended": {
     "zh": "结束",
     "en": "Ended"
   },
-  "settings.usage.RecordsTable.message986": {
+  "settings.usage.RecordsTable.openConversation": {
     "zh": "打开这个会话",
     "en": "Open conversation"
   },
-  "settings.usage.RemoteCallsTable.message987": {
+  "settings.usage.RemoteCallsTable.succeeded": {
     "zh": "成功",
     "en": "Succeeded"
   },
-  "settings.usage.RemoteCallsTable.message988": {
+  "settings.usage.RemoteCallsTable.rateLimited": {
     "zh": "限流",
     "en": "Rate limited"
   },
-  "settings.usage.RemoteCallsTable.message989": {
+  "settings.usage.RemoteCallsTable.desktop": {
     "zh": "桌面端",
     "en": "Desktop"
   },
-  "settings.usage.RemoteCallsTable.message990": {
+  "settings.usage.RemoteCallsTable.directApiKey": {
     "zh": "直接用 Key",
     "en": "Direct API key"
   },
-  "settings.usage.RemoteCallsTable.message991": {
+  "settings.usage.RemoteCallsTable.unknown": {
     "zh": "未知",
     "en": "Unknown"
   },
-  "settings.usage.RemoteCallsTable.message992": {
+  "settings.usage.RemoteCallsTable.client": {
     "zh": "客户端",
     "en": "Client"
   },
-  "settings.usage.RemoteCallsTable.message993": {
+  "settings.usage.RemoteCallsTable.charge": {
     "zh": "扣费",
     "en": "Charge"
   },
-  "settings.usage.RemoteCallsTable.message994": {
+  "settings.usage.RemoteCallsTable.firstToken": {
     "zh": "首字",
     "en": "First token"
   },
-  "settings.usage.RemoteCallsTable.message995": {
+  "settings.usage.RemoteCallsTable.accountRequests": {
     "zh": "账号调用",
     "en": "Account requests"
   },
-  "settings.usage.RemoteCallsTable.message996": {
+  "settings.usage.RemoteCallsTable.device": {
     "zh": "设备",
     "en": "Device"
   },
-  "settings.usage.RemoteCallsTable.message997": {
+  "settings.usage.RemoteCallsTable.requestType": {
     "zh": "请求方式",
     "en": "Request type"
   },
-  "settings.usage.RemoteCallsTable.message998": {
+  "settings.usage.RemoteCallsTable.streaming": {
     "zh": "流式",
     "en": "Streaming"
   },
-  "settings.usage.RemoteCallsTable.message999": {
+  "settings.usage.RemoteCallsTable.nonStreaming": {
     "zh": "非流式",
     "en": "Non-streaming"
   },
-  "settings.usage.RemoteCallsTable.message1000": {
+  "settings.usage.RemoteCallsTable.noBillingInformation": {
     "zh": "无计费信息",
     "en": "No billing information"
   },
-  "settings.usage.RemoteCallsTable.message1001": {
+  "settings.usage.RemoteCallsTable.timeToFirstToken": {
     "zh": "首字延迟",
     "en": "Time to first token"
   },
-  "settings.usage.RemoteCallsTable.message1002": {
+  "settings.usage.RemoteCallsTable.relatedTurn": {
     "zh": "关联轮次",
     "en": "Related turn"
   },
-  "settings.usage.RemoteCallsTable.message1003": {
+  "settings.usage.RemoteCallsTable.requestedAt": {
     "zh": "发起时间",
     "en": "Requested at"
   },
-  "settings.usage.RemoteCallsTable.message1004": {
+  "settings.usage.RemoteCallsTable.accountRequestDetailsAre": {
     "zh": "账号调用明细即将推出",
     "en": "Account request details are coming soon"
   },
-  "settings.usage.RemoteCallsTable.message1005": {
+  "settings.usage.RemoteCallsTable.eachModelRequestWill": {
     "zh": "这一块已经定好形状（每一次模型请求一条：模型、客户端、token、实际扣费、延迟），等认证服务提供接口后接入。演示数据用",
     "en": "Each model request will show its model, client, tokens, actual charges and latency once the authentication service API is available. View sample data using"
   },
-  "settings.usage.RemoteCallsTable.message1006": {
+  "settings.usage.RemoteCallsTable.text": {
     "zh": "查看。",
     "en": "."
   },
-  "settings.usage.RemoteCallsTable.message1007": {
+  "settings.usage.RemoteCallsTable.backToLocalRecords": {
     "zh": "回到本机记录",
     "en": "Back to local records"
   },
-  "settings.usage.RemoteCallsTable.message1008": {
+  "settings.usage.RemoteCallsTable.signInToView": {
     "zh": "登录后查看账号调用",
     "en": "Sign in to view account requests"
   },
-  "settings.usage.RemoteCallsTable.message1009": {
+  "settings.usage.RemoteCallsTable.signInToPixel": {
     "zh": "登录像素星空账号后，可以查看这个账号每一次模型调用的明细（所有设备、所有客户端）。",
     "en": "Sign in to Pixel Starry Sky to view individual model requests across all devices and clients."
   },
-  "settings.usage.RemoteCallsTable.message1010": {
+  "settings.usage.RemoteCallsTable.signIn": {
     "zh": "去登录",
     "en": "Sign in"
   },
-  "settings.usage.UsageSection.message1011": {
+  "settings.usage.UsageSection.localRecords": {
     "zh": "本机记录",
     "en": "Local records"
   },
-  "settings.usage.UsageSection.message1012": {
+  "settings.usage.UsageSection.n7Days": {
     "zh": "7 天",
     "en": "7 days"
   },
-  "settings.usage.UsageSection.message1013": {
+  "settings.usage.UsageSection.n30Days": {
     "zh": "30 天",
     "en": "30 days"
   },
-  "settings.usage.UsageSection.message1014": {
+  "settings.usage.UsageSection.n90Days": {
     "zh": "90 天",
     "en": "90 days"
   },
-  "settings.usage.UsageSection.message1015": {
+  "settings.usage.UsageSection.recordSource": {
     "zh": "记录范围",
     "en": "Record source"
   },
-  "settings.usage.UsageSection.message1016": {
+  "settings.usage.UsageSection.exportCsv": {
     "zh": "导出 CSV",
     "en": "Export CSV"
   },
-  "settings.usage.UsageSection.message1017": {
+  "settings.usage.UsageSection.clearAllRecords": {
     "zh": "清空全部记录？",
     "en": "Clear all records?"
   },
-  "settings.usage.UsageSection.message1018": {
+  "settings.usage.UsageSection.timeRange": {
     "zh": "时间范围",
     "en": "Time range"
   },
-  "settings.usage.UsageSection.message1019": {
+  "settings.usage.UsageSection.removeFilter": {
     "zh": "移除筛选 {p0}",
     "en": "Remove filter {p0}"
   },
-  "settings.usage.UsageSection.message1020": {
+  "settings.usage.UsageSection.clearFilters": {
     "zh": "清除筛选",
     "en": "Clear filters"
   },
-  "settings.usage.UsageSection.message1021": {
+  "settings.usage.UsageSection.recordsStayOnThis": {
     "zh": "记录只保存在这台电脑上，保留 90 天，只有时间、模型、token 数、费用和耗时，不含对话内容。费用是引擎报告的估算值，可能和实际账单不同。",
     "en": "Records stay on this computer for 90 days. They include time, model, token counts, cost and duration, but no conversation content. Costs are engine estimates and may differ from actual bills."
   },
-  "settings.usage.UsageSection.message1022": {
+  "settings.usage.UsageSection.loadingAccountRequests": {
     "zh": "正在读取账号调用…",
     "en": "Loading account requests…"
   },
-  "settings.usage.UsageSection.message1023": {
+  "settings.usage.UsageSection.noRecordsMatchThese": {
     "zh": "没有符合筛选条件的记录",
     "en": "No records match these filters"
   },
-  "settings.usage.UsageSection.message1024": {
+  "settings.usage.UsageSection.noUsageRecordsYet": {
     "zh": "还没有用量记录",
     "en": "No usage records yet"
   },
-  "settings.usage.UsageSection.message1025": {
+  "settings.usage.UsageSection.chooseAnotherTimeRange": {
     "zh": "换一个时间范围，或者移除筛选条件。",
     "en": "Choose another time range or remove filters."
   },
-  "settings.usage.UsageSection.message1026": {
+  "settings.usage.UsageSection.afterStartingConversationEach": {
     "zh": "开始对话后，每一轮的模型调用都会记在这里：用了哪个模型、多少 token、花了多少钱。记录只保存在这台电脑上。",
     "en": "After starting a conversation, each turn's model, token count and cost appear here. Records stay on this computer."
   },
-  "settings.usage.UsageTable.message1027": {
+  "settings.usage.UsageTable.previousPage": {
     "zh": "上一页",
     "en": "Previous page"
   },
-  "settings.usage.UsageTable.message1028": {
+  "settings.usage.UsageTable.nextPage": {
     "zh": "下一页",
     "en": "Next page"
   },
-  "settings.WallpaperSettings.message1029": {
+  "settings.WallpaperSettings.fillWindowWithImage": {
     "zh": "用图片或视频（mp4 / webm，静音循环）铺满整个窗口。文件只保存在本机，最大 200 MB。",
     "en": "Fill the window with an image or silent looping video (mp4 / webm). Files stay on this computer. Maximum size: 200 MB."
   },
-  "settings.WallpaperSettings.message1030": {
+  "settings.WallpaperSettings.currentWallpaper": {
     "zh": "当前壁纸",
     "en": "Current wallpaper"
   },
-  "settings.WallpaperSettings.message1031": {
+  "settings.WallpaperSettings.notSet": {
     "zh": "未设置",
     "en": "Not set"
   },
-  "settings.WallpaperSettings.message1032": {
+  "settings.WallpaperSettings.change": {
     "zh": "更换…",
     "en": "Change…"
   },
-  "settings.WallpaperSettings.message1033": {
+  "settings.WallpaperSettings.chooseImageOrVideo": {
     "zh": "选择图片或视频…",
     "en": "Choose image or video…"
   },
-  "settings.WallpaperSettings.message1034": {
+  "settings.WallpaperSettings.howMuchWallpaperShows": {
     "zh": "壁纸能透出来多少。越低文字越清楚。",
     "en": "How much wallpaper shows through. Lower values improve text readability."
   },
-  "settings.WallpaperSettings.message1035": {
+  "settings.WallpaperSettings.blurWallpaperToMake": {
     "zh": "把壁纸虚化，界面上的文字更容易看清。",
     "en": "Blur the wallpaper to make interface text easier to read."
   },
-  "shortcuts.message1036": {
+  "shortcuts.splitPaneRight": {
     "zh": "向右拆分窗格",
     "en": "Split pane right"
   },
-  "shortcuts.message1037": {
+  "shortcuts.splitPaneDown": {
     "zh": "向下拆分窗格",
     "en": "Split pane down"
   },
-  "shortcuts.message1038": {
+  "shortcuts.closeTabClosePane": {
     "zh": "关闭标签（窗格空了就关闭窗格）",
     "en": "Close tab (close pane if empty)"
   },
-  "shortcuts.message1039": {
+  "shortcuts.jumpToPaneN": {
     "zh": "跳到第 N 个窗格",
     "en": "Jump to pane N"
   },
-  "shortcuts.message1040": {
+  "shortcuts.switchToPreviousNext": {
     "zh": "切换到上一个 / 下一个窗格",
     "en": "Switch to previous / next pane"
   },
-  "shortcuts.message1041": {
+  "shortcuts.expandRestoreCurrentPane": {
     "zh": "放大 / 还原当前窗格",
     "en": "Expand / restore current pane"
   },
-  "shortcuts.message1042": {
+  "shortcuts.switchTabsInPane": {
     "zh": "切换窗格里的标签",
     "en": "Switch tabs in pane"
   },
-  "theme.ThemeProvider.message1043": {
+  "theme.ThemeProvider.usethemeMustBeUsed": {
     "zh": "useTheme 必须在 ThemeProvider 内使用",
     "en": "useTheme must be used within ThemeProvider"
   },
-  "usage.format.message1044": {
+  "usage.format.cliSignIn": {
     "zh": "CLI 登录",
     "en": "CLI sign-in"
   },
-  "usage.format.message1045": {
+  "usage.format.pixelStarrySkyAccount": {
     "zh": "像素星空账号",
     "en": "Pixel Starry Sky account"
   },
-  "usage.format.message1046": {
+  "usage.format.noProject": {
     "zh": "未归属项目",
     "en": "No project"
   }

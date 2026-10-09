@@ -193,7 +193,7 @@ function LiveSessionView({
                         className="press inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-meta text-fg-muted hover:bg-hover hover:text-fg"
                       >
                         <Bot size={13} strokeWidth={1.75} />
-                        {tr('session.live.AgentTracePanel.message214')}{' '}
+                        {tr('session.live.AgentTracePanel.agentActivity')}{' '}
                       </button>
                     )}
                   </div>

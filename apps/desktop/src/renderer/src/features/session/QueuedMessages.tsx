@@ -51,7 +51,7 @@ export function QueuedMessages({
   return (
     <section
       className="mb-2 flex max-h-64 flex-col gap-1.5 overflow-y-auto"
-      aria-label={tr('session.QueuedMessages.message322')}
+      aria-label={tr('session.QueuedMessages.messageQueue')}
     >
       <div className="flex items-center gap-2 px-1 text-meta text-fg-muted">
         {paused && !onlyFailures ? <Pause size={12} /> : <CornerDownRight size={12} />}
@@ -59,8 +59,8 @@ export function QueuedMessages({
           {onlyFailures
             ? tr('session.queue.sendFailed')
             : paused
-              ? tr('session.QueuedMessages.message323')
-              : tr('session.QueuedMessages.message322')}{' '}
+              ? tr('session.QueuedMessages.queuePaused')
+              : tr('session.QueuedMessages.messageQueue')}{' '}
           · {items.length}
         </span>
         {paused && !onlyFailures && live.state === 'idle' && (
@@ -75,12 +75,12 @@ export function QueuedMessages({
             className="h-6 px-2 text-meta"
             onClick={() => void action('resume', live.resumeQueue)}
           >
-            {tr('session.QueuedMessages.message324')}
+            {tr('session.QueuedMessages.resumeQueue')}
           </Button>
         )}
         {items.length > 3 && (
           <button type="button" className="rounded-md px-2 py-1 hover:bg-hover" onClick={() => setExpanded(v => !v)}>
-            {expanded ? tr('session.ModelSourceMenu.message316') : tr('session.QueuedMessages.message325')}
+            {expanded ? tr('session.ModelSourceMenu.collapse') : tr('session.QueuedMessages.expandAll')}
           </button>
         )}
       </div>
@@ -89,25 +89,25 @@ export function QueuedMessages({
         const canSteer =
           q.status === 'queued' && live.steerAvailable && live.state === 'running' && same(q.settings, live.execution)
         const steerReason = !live.steerAvailable
-          ? tr('session.QueuedMessages.message326')
+          ? tr('session.QueuedMessages.steeringHasNotBeen')
           : live.state !== 'running'
-            ? tr('session.QueuedMessages.message327')
+            ? tr('session.QueuedMessages.noTaskCanAccept')
             : !same(q.settings, live.execution)
-              ? tr('session.QueuedMessages.message328')
-              : tr('session.QueuedMessages.message329')
+              ? tr('session.QueuedMessages.settingsDifferFromCurrent')
+              : tr('session.QueuedMessages.sendAdditionalInstructionsTo')
         const label = isSendFailure(q)
           ? tr('session.queue.sendFailed')
           : q.status === 'failed'
-            ? tr('session.QueuedMessages.message330')
+            ? tr('session.QueuedMessages.executionFailed')
             : q.status === 'uncertain'
-              ? tr('session.QueuedMessages.message331')
+              ? tr('session.QueuedMessages.deliveryNeedsVerification')
               : q.status === 'delivering'
-                ? tr('session.QueuedMessages.message332')
+                ? tr('session.QueuedMessages.waitingForAdoption')
                 : q.status === 'dispatching'
-                  ? tr('session.QueuedMessages.message333')
+                  ? tr('session.QueuedMessages.starting')
                   : q.held
                     ? tr('session.QueuedMessages.held')
-                    : tr('session.live.agentTrace.message197')
+                    : tr('session.live.agentTrace.queued')
         return (
           <div key={q.id} data-queue-id={q.id} className="rounded-lg border border-line-card bg-surface px-3 py-2">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -127,7 +127,7 @@ export function QueuedMessages({
                       icon={ArrowUp}
                       size={24}
                       iconSize={12}
-                      label={tr('session.QueuedMessages.message334')}
+                      label={tr('session.QueuedMessages.moveMessageUp')}
                       disabled={!!busy || live.queue.indexOf(q) === 0}
                       onClick={() => void action(q.id, () => live.moveQueued(q.id, live.queue.indexOf(q) - 1))}
                     />
@@ -135,7 +135,7 @@ export function QueuedMessages({
                       icon={ArrowDown}
                       size={24}
                       iconSize={12}
-                      label={tr('session.QueuedMessages.message335')}
+                      label={tr('session.QueuedMessages.moveMessageDown')}
                       disabled={!!busy || live.queue.indexOf(q) === live.queue.length - 1}
                       onClick={() => void action(q.id, () => live.moveQueued(q.id, live.queue.indexOf(q) + 1))}
                     />
@@ -147,7 +147,7 @@ export function QueuedMessages({
                         disabled={!!busy || !canSteer}
                         onClick={() => void action(q.id, () => live.steerQueued(q.id))}
                       >
-                        {tr('session.QueuedMessages.message336')}
+                        {tr('session.QueuedMessages.steer')}
                       </Button>
                     </span>
                   </>
@@ -161,12 +161,12 @@ export function QueuedMessages({
                       disabled={!!busy}
                       title={
                         q.status === 'uncertain'
-                          ? tr('session.QueuedMessages.message337')
-                          : tr('session.QueuedMessages.message338')
+                          ? tr('session.QueuedMessages.runAgainAfterChecking')
+                          : tr('session.QueuedMessages.interruptCurrentTaskAnd')
                       }
                       onClick={() => void action(q.id, () => live.runQueuedNow(q.id))}
                     >
-                      {q.error ? tr('session.ModelSourceMenu.message308') : tr('session.QueuedMessages.message339')}
+                      {q.error ? tr('session.ModelSourceMenu.retry') : tr('session.QueuedMessages.runNext')}
                     </Button>
                     <Button
                       variant="ghost"
@@ -185,17 +185,20 @@ export function QueuedMessages({
                         })
                       }
                     >
-                      {tr('session.QueuedMessages.message340')}
+                      {tr('session.QueuedMessages.withdraw')}
                     </Button>
                   </>
                 )}
               </div>
             </div>
-            <div className="mt-0.5 pl-3.5 text-label text-fg-faint" title={tr('session.QueuedMessages.message341')}>
-              {q.settings.model ?? tr('session.QueuedMessages.message342')} · {effortLabel(q.settings.effort)} ·{' '}
+            <div
+              className="mt-0.5 pl-3.5 text-label text-fg-faint"
+              title={tr('session.QueuedMessages.modelEffortAndCredit')}
+            >
+              {q.settings.model ?? tr('session.QueuedMessages.engineDefaultModel')} · {effortLabel(q.settings.effort)} ·{' '}
               {q.settings.platform
-                ? tr('session.QueuedMessages.message343', { p0: q.settings.platform.groupId })
-                : tr('session.QueuedMessages.message344')}
+                ? tr('session.QueuedMessages.platformRoute', { p0: q.settings.platform.groupId })
+                : tr('session.QueuedMessages.ownCredits')}
             </div>
             {q.error && <p className="mt-1 text-meta whitespace-pre-wrap text-warn">{translateMessage(q.error)}</p>}
             {!!q.attachments?.length && (
@@ -206,7 +209,7 @@ export function QueuedMessages({
             {(q.text.length > 60 || q.text.includes('\n')) && (
               <details className="mt-1 pl-3.5 text-meta text-fg-muted">
                 <summary className="cursor-pointer text-label hover:text-fg">
-                  {tr('session.QueuedMessages.message345')}
+                  {tr('session.QueuedMessages.viewFullMessage')}
                 </summary>
                 <p className="mt-1 whitespace-pre-wrap break-words">{q.text}</p>
               </details>

@@ -33,7 +33,7 @@ export function SubagentStrip({ subagents }: { subagents: SubagentStatus[] }) {
           key={a.id}
           type="button"
           onClick={() => openTrace?.({ agentId: a.id })}
-          title={tr('session.live.SessionStrips.message273')}
+          title={tr('session.live.SessionStrips.viewSubagentConversation')}
           className="press inline-flex h-7 max-w-full min-w-0 items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 text-meta text-fg-secondary shadow-sm hover:border-line-strong"
         >
           <Bot size={13} strokeWidth={1.75} className="shrink-0 text-fg-muted" />
@@ -103,14 +103,14 @@ export function TaskStrip({ sessionId, tasks }: { sessionId: string; tasks: Back
               <span className="flex-1" />
               {openTrace && t.kind.startsWith('local_workflow') && (
                 <button type="button" className={LINK} onClick={() => openTrace()}>
-                  {tr('session.live.ItemRows.message260')}{' '}
+                  {tr('session.live.ItemRows.viewActivity')}{' '}
                 </button>
               )}
               {hasOutput(t.kind) && (
                 <button type="button" className={LINK} onClick={() => toggleOutput(t.id)}>
                   {open === t.id
-                    ? tr('session.live.SessionStrips.message274')
-                    : tr('session.live.SessionStrips.message275')}
+                    ? tr('session.live.SessionStrips.collapseOutput')
+                    : tr('session.live.SessionStrips.output')}
                 </button>
               )}
               <button
@@ -119,25 +119,27 @@ export function TaskStrip({ sessionId, tasks }: { sessionId: string; tasks: Back
                 disabled={!!stopping[t.id]}
                 onClick={() => stop(t.id)}
               >
-                {stopping[t.id] ? tr('session.CacheMissAlerts.message101') : tr('session.Composer.message112')}
+                {stopping[t.id] ? tr('session.CacheMissAlerts.stopping') : tr('session.Composer.stop')}
               </button>
             </div>
             {open === t.id && (
               <div className="mt-1 mb-1 ml-5 rounded-lg border border-line bg-subtle px-3 py-2 text-meta">
                 {!out ? (
-                  <span className="text-fg-faint">{tr('session.live.SessionStrips.message276')}</span>
+                  <span className="text-fg-faint">{tr('session.live.SessionStrips.loading')}</span>
                 ) : 'error' in out ? (
                   <span className="text-fg-faint">{translateMessage(out.error)}</span>
                 ) : (
                   <>
                     {out.truncated && (
-                      <div className="mb-1 text-fg-faint">{tr('session.live.SessionStrips.message277')}</div>
+                      <div className="mb-1 text-fg-faint">
+                        {tr('session.live.SessionStrips.showingLastPortionOnly')}
+                      </div>
                     )}
                     <pre className="max-h-48 overflow-auto font-mono leading-[1.6] whitespace-pre-wrap text-fg-secondary">
-                      {out.output || tr('session.live.SessionStrips.message278')}
+                      {out.output || tr('session.live.SessionStrips.noOutputYet')}
                     </pre>
                     <button type="button" className={cn(LINK, 'mt-1 -ml-1.5')} onClick={() => loadOutput(t.id)}>
-                      {tr('account.AccountMenu.message45')}{' '}
+                      {tr('account.AccountMenu.refresh')}{' '}
                     </button>
                   </>
                 )}

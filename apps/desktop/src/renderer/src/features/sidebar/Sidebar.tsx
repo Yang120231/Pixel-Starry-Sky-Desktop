@@ -37,7 +37,7 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
   const recentId = useId()
   // 演示模式是 mock 数据，否则是引擎里的真实项目和会话
   const { projects, recent, runStatus } = useSidebarData()
-  const onAddProject = isLive ? () => void addProject() : () => comingSoon(tr('sidebar.Sidebar.message396'))
+  const onAddProject = isLive ? () => void addProject() : () => comingSoon(tr('sidebar.Sidebar.addProject'))
   const onNewTask = isLive ? () => onSelectSession(null) : undefined
   const compactSearch = prefs.layout.top.length >= 4
   return (
@@ -72,21 +72,21 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
 
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto px-3 pt-4 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {pinned.length > 0 && (
-          <SidebarSection title={tr('sidebar.Sidebar.message397')}>
+          <SidebarSection title={tr('sidebar.Sidebar.pinned')}>
             <PinnedList items={pinned} selectedSessionId={selectedSessionId} onSelectSession={onSelectSession} />
           </SidebarSection>
         )}
 
-        <SidebarSection title={tr('sidebar.Sidebar.message398')}>
+        <SidebarSection title={tr('sidebar.Sidebar.projects')}>
           {projects.length > 0 ? (
             <ProjectTree projects={projects} selectedSessionId={selectedSessionId} onSelectSession={onSelectSession} />
           ) : (
             <>
-              <SidebarEmpty>{tr('sidebar.Sidebar.message399')}</SidebarEmpty>
+              <SidebarEmpty>{tr('sidebar.Sidebar.noProjectsYet')}</SidebarEmpty>
               {isLive && (
                 <SidebarRow onClick={onAddProject}>
                   <FolderPlus size={16} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
-                  <span className="truncate">{tr('sidebar.Sidebar.message400')}</span>
+                  <span className="truncate">{tr('sidebar.Sidebar.addProjectFolder')}</span>
                 </SidebarRow>
               )}
             </>
@@ -106,7 +106,7 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
               onClick={() => setSidebarPrefs({ recentExpanded: !prefs.recentExpanded })}
               className="group flex h-8 w-full items-center gap-2 rounded-md px-2 text-label font-medium text-fg-muted hover:bg-hover hover:text-fg"
             >
-              <span className="shrink-0">{tr('sidebar.Sidebar.message401')}</span>
+              <span className="shrink-0">{tr('sidebar.Sidebar.recentTasks')}</span>
               <span className="h-px min-w-0 flex-1 bg-line-subtle" />
               <ChevronDown
                 size={14}

@@ -50,7 +50,7 @@ export function RetryStatus({ sessionId, retry }: { sessionId: string; retry: Re
   return (
     <div
       role="status"
-      aria-label={tr('session.live.RetryStatus.message269')}
+      aria-label={tr('session.live.RetryStatus.requestRetryProgress')}
       className="mb-2 rounded-lg border border-line-card bg-popover px-3 py-2.5"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -58,17 +58,17 @@ export function RetryStatus({ sessionId, retry }: { sessionId: string; retry: Re
           <RotateCw size={14} strokeWidth={1.5} className="shrink-0 text-warn" />
           <span className="text-meta text-fg-secondary tabular-nums">
             {retry.reason}
-            {tr('session.live.RetryStatus.message270')}
+            {tr('session.live.RetryStatus.retrying')}
             {attempt}
             {seconds !== null
               ? seconds > 0
-                ? tr('session.live.RetryStatus.message271', { p0: seconds })
-                : tr('session.live.RetryStatus.message272')
+                ? tr('session.live.RetryStatus.resumingInAboutS', { p0: seconds })
+                : tr('session.live.RetryStatus.retryingRequest')
               : ''}
           </span>
         </div>
         <Button variant="ghost" className="h-7 px-2 text-meta" disabled={busy} onClick={() => void stop()}>
-          {busy ? tr('session.CacheMissAlerts.message101') : tr('session.Composer.message112')}
+          {busy ? tr('session.CacheMissAlerts.stopping') : tr('session.Composer.stop')}
         </Button>
       </div>
       {error && <p className="mt-1 text-meta text-danger">{translateMessage(error)}</p>}

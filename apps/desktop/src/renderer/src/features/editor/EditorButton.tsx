@@ -42,12 +42,12 @@ export function EditorButton({
   const primary = editors?.items.find(e => e.id === editors.openWith)
   const unavailable = !inside && !primary?.available
   const title = unavailable
-    ? tr('editor.EditorButton.message450')
+    ? tr('editor.EditorButton.editorSettings')
     : inside
       ? filesOpen
-        ? tr('editor.EditorButton.message435')
-        : tr('editor.EditorButton.message436')
-      : tr('editor.EditorButton.message437', { p0: primary?.name ?? '' })
+        ? tr('editor.EditorButton.collapseFileTree')
+        : tr('editor.EditorButton.openCurrentProjectIn')
+      : tr('editor.EditorButton.openCurrentProjectWith', { p0: primary?.name ?? '' })
 
   const open = async (): Promise<void> => {
     if (busy) return
@@ -70,13 +70,13 @@ export function EditorButton({
     }
     if (!target.ref || !primary) return
     if (isDemo) {
-      setMessage(tr('editor.EditorButton.message432'))
+      setMessage(tr('editor.EditorButton.demoModeCannotOpen'))
       return
     }
     setBusy(true)
     try {
       const result = await window.pixelsky!.editor.open(target.ref, primary.id)
-      setMessage(tr('editor.EditorButton.message433', { p0: result.editor }))
+      setMessage(tr('editor.EditorButton.requestedToOpenProject', { p0: result.editor }))
     } catch (error) {
       setMessage((error as Error).message)
     } finally {
@@ -90,7 +90,9 @@ export function EditorButton({
         icon={CodeXml}
         size={32}
         iconSize={16}
-        label={unavailable || target.ref || (inside && filesOpen) ? title : tr('editor.EditorButton.message439')}
+        label={
+          unavailable || target.ref || (inside && filesOpen) ? title : tr('editor.EditorButton.chooseProjectFirst')
+        }
         active={inside && filesOpen}
         aria-pressed={inside ? filesOpen : undefined}
         disabled={busy || (!target.ref && !filesOpen && !unavailable)}

@@ -34,9 +34,9 @@ export function AccountOverview({
   const expires = formatDate(plan?.expiresAt)
   const quotas: Array<[string, Quota | null]> = plan
     ? [
-        [tr('account.AccountMenu.message33'), plan.daily],
-        [tr('account.AccountMenu.message34'), plan.weekly],
-        [tr('account.AccountMenu.message35'), plan.monthly],
+        [tr('account.AccountMenu.today'), plan.daily],
+        [tr('account.AccountMenu.thisWeek'), plan.weekly],
+        [tr('account.AccountMenu.thisMonth'), plan.monthly],
       ]
     : []
   const shownQuotas = quotas.filter((q): q is [string, Quota] => q[1] !== null)
@@ -57,15 +57,16 @@ export function AccountOverview({
       )}
 
       <div className="grid grid-cols-2 gap-3">
-        <Card title={tr('account.AccountMenu.message36')}>
+        <Card title={tr('account.AccountMenu.balance')}>
           <div className="text-title leading-none font-semibold text-fg tabular-nums">{balanceText}</div>
           {account.balance === null && (
-            <p className="mt-1.5 text-meta text-fg-muted">{tr('account.AccountMenu.message37')}</p>
+            <p className="mt-1.5 text-meta text-fg-muted">
+              {tr('account.AccountMenu.balanceIsTemporarilyUnavailable')}
+            </p>
           )}
           {group && (
             <p className="mt-2 truncate text-meta text-fg-muted">
-              {tr('settings.account.AccountOverview.message638')} {group.name} ·{' '}
-              {formatBillingSource(group.billingSource)}
+              {tr('settings.account.AccountOverview.groups')} {group.name} · {formatBillingSource(group.billingSource)}
             </p>
           )}
           <button
@@ -73,23 +74,23 @@ export function AccountOverview({
             onClick={() => settings.openSettings('models')}
             className="mt-1 self-start text-meta text-accent-fg hover:underline"
           >
-            {tr('settings.account.AccountOverview.message639')}{' '}
+            {tr('settings.account.AccountOverview.manageRoutesInModels')}{' '}
           </button>
           <div className="mt-auto pt-4">
             <Button variant="primary" onClick={() => onNavigate('topup')}>
-              {tr('settings.account.AccountOverview.message640')}{' '}
+              {tr('settings.account.AccountOverview.addCredits')}{' '}
             </Button>
           </div>
         </Card>
 
-        <Card title={tr('settings.account.AccountOverview.message641')}>
+        <Card title={tr('settings.account.AccountOverview.currentPlan')}>
           {plan ? (
             <>
               <div className="flex items-baseline justify-between gap-2">
                 <span className="min-w-0 truncate text-ui font-medium text-fg">{plan.name}</span>
                 {expires && (
                   <span className="shrink-0 text-meta text-fg-muted">
-                    {tr('account.AccountMenu.message40')} {expires}
+                    {tr('account.AccountMenu.expires')} {expires}
                   </span>
                 )}
               </div>
@@ -100,17 +101,19 @@ export function AccountOverview({
               </div>
               <div className="mt-auto pt-4">
                 <Button variant="outline" onClick={() => onNavigate('plans')}>
-                  {tr('settings.account.AccountOverview.message642')}{' '}
+                  {tr('settings.account.AccountOverview.changePlan')}{' '}
                 </Button>
               </div>
             </>
           ) : (
             <>
-              <div className="text-ui font-medium text-fg">{tr('settings.account.AccountOverview.message643')}</div>
-              <p className="mt-1 text-meta text-fg-muted">{tr('settings.account.AccountOverview.message644')}</p>
+              <div className="text-ui font-medium text-fg">{tr('settings.account.AccountOverview.noSubscription')}</div>
+              <p className="mt-1 text-meta text-fg-muted">
+                {tr('settings.account.AccountOverview.subscriptionsIncludeDailyAnd')}
+              </p>
               <div className="mt-auto pt-4">
                 <Button variant="outline" onClick={() => onNavigate('plans')}>
-                  {tr('settings.account.AccountOverview.message645')}{' '}
+                  {tr('settings.account.AccountOverview.viewPlans')}{' '}
                 </Button>
               </div>
             </>
@@ -119,12 +122,12 @@ export function AccountOverview({
       </div>
 
       {rateLimits.length > 0 && (
-        <Card title={tr('account.AccountMenu.message41')}>
+        <Card title={tr('account.AccountMenu.limit')}>
           <div className="flex flex-col gap-2.5">
             {rateLimits.map(r => (
               <QuotaBar
                 key={r.window}
-                label={tr('account.AccountMenu.message43', { p0: formatWindow(r.window) })}
+                label={tr('account.AccountMenu.every', { p0: formatWindow(r.window) })}
                 quota={r}
                 currency={currency}
               />
@@ -137,15 +140,15 @@ export function AccountOverview({
         type="button"
         onClick={onRefresh}
         disabled={refreshing}
-        aria-label={tr('settings.account.AccountOverview.message646')}
+        aria-label={tr('settings.account.AccountOverview.refreshBalanceAndCredits')}
         className="press no-drag flex h-8 w-fit items-center gap-1.5 rounded-md px-2 text-meta text-fg-secondary hover:bg-hover hover:text-fg disabled:opacity-70"
       >
         <RefreshCw size={14} strokeWidth={1.5} className={cn('shrink-0', refreshing && 'animate-spin')} />
-        {tr('account.AccountMenu.message45')}{' '}
+        {tr('account.AccountMenu.refresh')}{' '}
         <span className="text-fg-muted">
           {refreshing
-            ? tr('settings.account.AccountOverview.message647')
-            : tr('account.AccountMenu.message39', { p0: formatUpdatedAt(account.updatedAt, now) })}
+            ? tr('settings.account.AccountOverview.updating')
+            : tr('account.AccountMenu.updated', { p0: formatUpdatedAt(account.updatedAt, now) })}
         </span>
       </button>
     </div>

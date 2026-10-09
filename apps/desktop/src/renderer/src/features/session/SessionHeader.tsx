@@ -47,7 +47,7 @@ export function SessionHeader({
   const commands = useCommandPalette()
   const comingSoon = useComingSoon()
   const { layout } = useSidebarPrefs()
-  const onAddProject = isLive ? () => void addProject() : () => comingSoon(tr('sidebar.Sidebar.message396'))
+  const onAddProject = isLive ? () => void addProject() : () => comingSoon(tr('sidebar.Sidebar.addProject'))
   const onNewTask = isLive ? () => paneActions.open(null) : undefined
   return (
     <header

@@ -140,7 +140,7 @@ const LABELS: Record<string, string> = {
   makefile: 'Makefile',
   graphql: 'GraphQL',
   get plaintext() {
-    return tr('code.highlight.message58')
+    return tr('code.highlight.plainText')
   },
 }
 

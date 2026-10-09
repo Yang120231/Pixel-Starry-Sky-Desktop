@@ -15,11 +15,11 @@ export function ComposerStyleSettings() {
   return (
     <div>
       <SettingRow
-        title={tr('settings.ComposerStyleSettings.message687')}
-        description={tr('settings.ComposerStyleSettings.message688')}
+        title={tr('settings.ComposerStyleSettings.composerStyle')}
+        description={tr('settings.ComposerStyleSettings.chatgptPlacesToolsInside')}
       >
         <Segmented
-          label={tr('settings.ComposerStyleSettings.message687')}
+          label={tr('settings.ComposerStyleSettings.composerStyle')}
           options={OPTIONS}
           value={selected}
           onChange={setComposerStyle}
@@ -30,7 +30,7 @@ export function ComposerStyleSettings() {
           <button
             key={option.value}
             type="button"
-            aria-label={tr('settings.ComposerStyleSettings.message689', { p0: option.label })}
+            aria-label={tr('settings.ComposerStyleSettings.chooseComposerStyle', { p0: option.label })}
             aria-pressed={selected === option.value}
             onClick={() => setComposerStyle(option.value)}
             className={cn(
@@ -50,7 +50,7 @@ export function ComposerStyleSettings() {
               )}
             >
               <div className="flex h-9 items-center justify-between gap-2 text-meta text-fg-faint">
-                <span>{tr('settings.ComposerStyleSettings.message690')}</span>
+                <span>{tr('settings.ComposerStyleSettings.typeMessage')}</span>
                 {option.value === 'claude' && <SendMark />}
               </div>
               {option.value === 'chatgpt' && <PreviewTools send />}
@@ -62,8 +62,8 @@ export function ComposerStyleSettings() {
             )}
             <p className="mt-2 text-meta text-fg-muted">
               {option.value === 'chatgpt'
-                ? tr('settings.ComposerStyleSettings.message691')
-                : tr('settings.ComposerStyleSettings.message692')}
+                ? tr('settings.ComposerStyleSettings.toolsAndSendButton')
+                : tr('settings.ComposerStyleSettings.settingsOutsideSendButton')}
             </p>
           </button>
         ))}
@@ -78,9 +78,9 @@ function PreviewTools({ send = false }: { send?: boolean }) {
       <Plus size={12} />
       <ShieldCheck size={12} />
       <span className="flex-1" />
-      <span className="text-label">{tr('session.ModelSourceMenu.message291')}</span>
+      <span className="text-label">{tr('session.ModelSourceMenu.model')}</span>
       <ChevronDown size={10} />
-      <span className="text-label">{tr('settings.ComposerStyleSettings.message693')}</span>
+      <span className="text-label">{tr('settings.ComposerStyleSettings.effort')}</span>
       <Circle size={10} />
       {send && <SendMark />}
     </div>

@@ -17,7 +17,7 @@ const listeners = new Set<() => void>()
 const emit = (): void => listeners.forEach(cb => cb())
 export function confirmFiles(
   ids: string[],
-  action = tr('editor.code.theme.message425'),
+  action = tr('editor.code.theme.close'),
   deferDiscard?: (apply: () => void) => void,
 ): Promise<boolean> {
   const dirty = getFiles().tabs.filter(t => ids.includes(t.id) && dirtyFile(t))
@@ -63,7 +63,7 @@ export function FileConfirm() {
       ref={dialog}
       role="dialog"
       aria-modal="true"
-      aria-label={tr('files.FileConfirm.message514')}
+      aria-label={tr('files.FileConfirm.filesHaveUnsavedChanges')}
       className="fixed inset-0 z-[100] flex items-center justify-center bg-scrim p-4"
       onKeyDown={e => {
         e.stopPropagation()
@@ -84,12 +84,12 @@ export function FileConfirm() {
       <div className="w-full max-w-md rounded-xl border border-line-card bg-popover p-5 shadow-menu">
         <p className="text-ui font-medium text-fg">
           {tabs.length === 1
-            ? tr('files.FileConfirm.message515', { p0: tabs[0].name })
-            : tr('files.FileConfirm.message516', { p0: tabs.length })}
+            ? tr('files.FileConfirm.hasUnsavedChanges', { p0: tabs[0].name })
+            : tr('files.FileConfirm.filesHaveUnsavedChanges2', { p0: tabs.length })}
         </p>
         <p className="mt-2 text-meta text-fg-muted">
           {request.action}
-          {tr('files.FileConfirm.message517')}
+          {tr('files.FileConfirm.chooseHowToHandle')}
         </p>
         {tabs.length > 1 && (
           <p className="mt-2 max-h-24 overflow-auto text-meta text-fg-secondary">{tabs.map(t => t.path).join('、')}</p>
@@ -101,7 +101,7 @@ export function FileConfirm() {
         )}
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           <Button disabled={busy} onClick={() => finish(false)}>
-            {tr('account.AccountMenu.message31')}
+            {tr('account.AccountMenu.cancel')}
           </Button>
           <Button
             disabled={busy}
@@ -117,7 +117,7 @@ export function FileConfirm() {
               finish(true)
             }}
           >
-            {tr('files.FileConfirm.message518')}
+            {tr('files.FileConfirm.discardChanges')}
           </Button>
           <Button
             variant="primary"
@@ -127,12 +127,14 @@ export function FileConfirm() {
               void (async () => {
                 for (const tab of tabs)
                   if (!(await saveFile(tab.id))) {
-                    setError(getFiles().tabs.find(t => t.id === tab.id)?.error ?? tr('files.FileConfirm.message519'))
+                    setError(
+                      getFiles().tabs.find(t => t.id === tab.id)?.error ?? tr('files.FileConfirm.saveDidNotComplete'),
+                    )
                     setBusy(false)
                     return
                   }
                 if (getFiles().tabs.some(t => request.ids.includes(t.id) && dirtyFile(t))) {
-                  setError(tr('files.FileConfirm.message520'))
+                  setError(tr('files.FileConfirm.newEditsWereMade'))
                   setBusy(false)
                   return
                 }
@@ -142,8 +144,8 @@ export function FileConfirm() {
             }}
           >
             {tabs.length > 1 || request.action === '退出应用' || request.action === 'Quit application'
-              ? tr('files.FileConfirm.message522')
-              : tr('files.FileConfirm.message523')}
+              ? tr('files.FileConfirm.saveAll')
+              : tr('files.FileConfirm.save')}
           </Button>
         </div>
       </div>

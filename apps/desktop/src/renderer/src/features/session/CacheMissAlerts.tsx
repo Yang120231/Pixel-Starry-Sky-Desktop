@@ -70,7 +70,7 @@ export function CacheMissAlerts() {
             ? {
                 ...c,
                 stopping: false,
-                error: tr('session.CacheMissAlerts.message88', { p0: (e as Error).message }),
+                error: tr('session.CacheMissAlerts.couldNotStop', { p0: (e as Error).message }),
                 errorExpiresAt: Date.now() + 5_000,
               }
             : c,
@@ -84,7 +84,7 @@ export function CacheMissAlerts() {
   return (
     <div
       className="pointer-events-none fixed right-4 bottom-4 z-50 flex max-h-[70vh] w-[min(380px,calc(100vw-32px))] flex-col gap-2 overflow-y-auto"
-      aria-label={tr('session.CacheMissAlerts.message89')}
+      aria-label={tr('session.CacheMissAlerts.cacheNotice')}
     >
       {state.cards.map(card => {
         const w = card.warning,
@@ -96,49 +96,49 @@ export function CacheMissAlerts() {
             className="pointer-events-auto rounded-xl border border-line-card bg-popover p-4 shadow-menu"
             role="status"
             aria-label={
-              w.cached === 0 ? tr('session.CacheMissAlerts.message90') : tr('session.CacheMissAlerts.message91')
+              w.cached === 0 ? tr('session.CacheMissAlerts.cacheMiss') : tr('session.CacheMissAlerts.lowCacheHitRate')
             }
             data-session-id={w.sessionId}
           >
             <div className="flex items-center gap-2 text-ui font-medium text-fg">
               <CircleAlert size={16} strokeWidth={1.5} className="text-warn" />
-              {w.cached === 0 ? tr('session.CacheMissAlerts.message90') : tr('session.CacheMissAlerts.message91')}
+              {w.cached === 0 ? tr('session.CacheMissAlerts.cacheMiss') : tr('session.CacheMissAlerts.lowCacheHitRate')}
             </div>
             <p className="mt-2 truncate text-meta text-fg-secondary" title={`${w.title} · ${w.model}`}>
               「{w.title}」· {w.model}
             </p>
             <p
               className="mt-1 text-meta text-fg-muted"
-              title={tr('session.CacheMissAlerts.message92', {
+              title={tr('session.CacheMissAlerts.currentInputTokensCache', {
                 p0: w.input.toLocaleString(),
                 p1: w.cached.toLocaleString(),
                 p2: w.previousInput.toLocaleString(),
               })}
             >
-              {tr('session.CacheMissAlerts.message93')} {formatTokens(w.input)}
-              {tr('session.CacheMissAlerts.message94')} {formatTokens(w.cached)}
-              {tr('session.CacheMissAlerts.message95')} {formatTokens(w.previousInput)}。
+              {tr('session.CacheMissAlerts.currentInput')} {formatTokens(w.input)}
+              {tr('session.CacheMissAlerts.cacheRead')} {formatTokens(w.cached)}
+              {tr('session.CacheMissAlerts.previousInput')} {formatTokens(w.previousInput)}。
             </p>
             {card.error && (
               <p className="mt-2 text-meta text-danger">
                 {translateMessage(card.error)}
-                {tr('session.CacheMissAlerts.message96')}
+                {tr('session.CacheMissAlerts.youCanAlsoStop')}
               </p>
             )}
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
               <span className="text-label text-fg-faint tabular-nums" aria-live="off">
                 {card.stopping
-                  ? tr('session.CacheMissAlerts.message97')
+                  ? tr('session.CacheMissAlerts.stoppingThisTurn')
                   : card.error
-                    ? tr('session.CacheMissAlerts.message98')
-                    : tr('session.CacheMissAlerts.message99', { p0: seconds })}
+                    ? tr('session.CacheMissAlerts.stopManuallyFromComposer')
+                    : tr('session.CacheMissAlerts.taskIsRunningCloses', { p0: seconds })}
               </span>
               <div className="flex shrink-0 gap-1">
                 <Button variant="ghost" disabled={card.stopping} onClick={() => dismiss(id)}>
-                  {tr('session.CacheMissAlerts.message100')}
+                  {tr('session.CacheMissAlerts.keepRunning')}
                 </Button>
                 <Button variant="outline" disabled={card.stopping || seconds === 0} onClick={() => void stop(w)}>
-                  {card.stopping ? tr('session.CacheMissAlerts.message101') : tr('session.CacheMissAlerts.message102')}
+                  {card.stopping ? tr('session.CacheMissAlerts.stopping') : tr('session.CacheMissAlerts.stopThisTurn')}
                 </Button>
               </div>
             </div>

@@ -237,7 +237,7 @@ export async function saveFile(id: string): Promise<boolean> {
   if (!dirtyFile(tab)) return true
   updateFile(id, { saving: true, error: null })
   try {
-    if (isDemo) throw new Error(tr('files.store.message548'))
+    if (isDemo) throw new Error(tr('files.store.demoModeCannotSave'))
     const document = await window.pixelsky!.files.save(tab.ref, tab.path, tab.draft, tab.document.version)
     // 保存期间还可输入；只更新基线，不覆盖更晚的草稿。
     updateFile(id, { document, external: null, ignoredVersion: null, saving: false })

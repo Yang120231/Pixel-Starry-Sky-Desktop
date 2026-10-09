@@ -5,29 +5,29 @@ import type { EngineId } from '@pixelsky/protocol'
 
 export const ENGINE_STATUS: Record<string, string> = {
   get unauthenticated() {
-    return tr('sidebar.SidebarFooter.message407')
+    return tr('sidebar.SidebarFooter.notSignedIn')
   },
   get missing() {
-    return tr('settings.engines.parts.message784')
+    return tr('settings.engines.parts.notInstalled')
   },
   get outdated() {
-    return tr('settings.engines.parts.message785')
+    return tr('settings.engines.parts.outdatedVersion')
   },
   get error() {
-    return tr('settings.engines.parts.message786')
+    return tr('settings.engines.parts.detectionFailed')
   },
   get unsupported() {
-    return tr('session.ModelSourceMenu.message285')
+    return tr('session.ModelSourceMenu.comingSoon2')
   },
 }
 
 /** 详情页头部的一句介绍 */
 export const ENGINE_INTRO: Record<EngineId, string> = {
   get claude() {
-    return tr('settings.engines.parts.message787')
+    return tr('settings.engines.parts.anthropicsOfficialCodingCli')
   },
   get codex() {
-    return tr('settings.engines.parts.message788')
+    return tr('settings.engines.parts.openaisCodingCliSupport')
   },
 }
 
@@ -38,7 +38,7 @@ export function DefaultBadge() {
   useI18n()
   return (
     <span className="inline-flex h-5 items-center rounded-full bg-accent-soft px-2 text-label font-medium text-accent-fg">
-      {tr('engine.labels.message507')}
+      {tr('engine.labels.default')}
     </span>
   )
 }

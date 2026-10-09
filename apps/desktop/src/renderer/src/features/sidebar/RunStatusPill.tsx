@@ -71,11 +71,11 @@ export function RunStatusPill({
         {status.running > 0 ? <Spinner size={14} /> : <Dot tone="accent" size={6} className="mx-1" />}
         <span className="tabular-nums">
           {status.running}
-          {tr('session.live.agentTrace.message193')}{' '}
+          {tr('session.live.agentTrace.running')}{' '}
         </span>
         <span className="text-accent-fg tabular-nums">
           {status.newReplies}
-          {tr('sidebar.RunStatusPill.message395')}{' '}
+          {tr('sidebar.RunStatusPill.newReply')}{' '}
         </span>
         <span className="flex-1" />
         <ChevronUp

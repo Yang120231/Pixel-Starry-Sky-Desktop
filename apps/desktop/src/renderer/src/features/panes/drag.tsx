@@ -49,16 +49,16 @@ interface Gesture {
 }
 const EDGE_LABEL = {
   get left() {
-    return tr('panes.drag.message549')
+    return tr('panes.drag.splitToLeft')
   },
   get right() {
-    return tr('panes.drag.message550')
+    return tr('panes.drag.splitToRight')
   },
   get top() {
-    return tr('panes.drag.message551')
+    return tr('panes.drag.splitAbove')
   },
   get bottom() {
-    return tr('panes.drag.message552')
+    return tr('panes.drag.splitBelow')
   },
 }
 
@@ -244,12 +244,12 @@ export function DragPreview({ visual, area }: { visual: Visual | null; area: Ref
   const label =
     preview?.problem ??
     (preview?.marker
-      ? tr('panes.drag.message553')
+      ? tr('panes.drag.moveHere')
       : preview?.target.edge
         ? EDGE_LABEL[preview.target.edge]
         : preview
-          ? tr('panes.drag.message554')
-          : tr('panes.drag.message555'))
+          ? tr('panes.drag.moveIntoThisPane')
+          : tr('panes.drag.dragToTabBar'))
   return (
     <>
       {box && (

@@ -22,35 +22,35 @@ export function contextNumber(value: number | null | undefined): string {
 }
 const LABELS: Record<string, string> = {
   get 'System prompt'() {
-    return tr('session.contextData.message140')
+    return tr('session.contextData.systemPrompt')
   },
   get 'System tools'() {
-    return tr('session.contextData.message141')
+    return tr('session.contextData.systemTools')
   },
   get 'MCP tools'() {
-    return tr('session.contextData.message142')
+    return tr('session.contextData.mcpTools')
   },
   get 'Memory files'() {
-    return tr('session.contextData.message143')
+    return tr('session.contextData.memoryFiles')
   },
   get 'Custom agents'() {
-    return tr('session.contextData.message144')
+    return tr('session.contextData.customAgents')
   },
   get Agents() {
-    return tr('session.contextData.message145')
+    return tr('session.contextData.agents')
   },
   Skills: 'Skills',
   get Messages() {
-    return tr('session.contextData.message146')
+    return tr('session.contextData.conversationMessages')
   },
   get Conversation() {
-    return tr('session.contextData.message146')
+    return tr('session.contextData.conversationMessages')
   },
   get 'Autocompact buffer'() {
-    return tr('session.contextData.message147')
+    return tr('session.contextData.autocompactReserve')
   },
   get 'Free space'() {
-    return tr('session.contextData.message148')
+    return tr('session.contextData.availableSpace')
   },
 }
 export const contextLabel = (name: string): string => LABELS[name] ?? name
@@ -72,7 +72,7 @@ export function contextSegments(context: ContextWindow | null | undefined): Cont
   const data: ContextSegment[] = [
     {
       get name() {
-        return tr('session.contextData.message149')
+        return tr('session.contextData.uncachedInput')
       },
       tokens: context.input ?? 0,
       kind: 'used',
@@ -80,7 +80,7 @@ export function contextSegments(context: ContextWindow | null | undefined): Cont
     },
     {
       get name() {
-        return tr('session.contextData.message150')
+        return tr('session.contextData.cacheRead')
       },
       tokens: context.cacheRead ?? 0,
       kind: 'used',
@@ -88,7 +88,7 @@ export function contextSegments(context: ContextWindow | null | undefined): Cont
     },
     {
       get name() {
-        return tr('session.contextData.message151')
+        return tr('session.contextData.cacheWrite')
       },
       tokens: context.cacheWrite ?? 0,
       kind: 'used',
@@ -96,7 +96,7 @@ export function contextSegments(context: ContextWindow | null | undefined): Cont
     },
     {
       get name() {
-        return tr('session.contextData.message152')
+        return tr('session.contextData.remainingCapacity')
       },
       tokens: Math.max(0, context.window - context.used),
       kind: 'free',

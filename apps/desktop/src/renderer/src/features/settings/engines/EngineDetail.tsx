@@ -57,13 +57,13 @@ export function EngineDetail({
         className="-ml-1 mb-4 inline-flex items-center gap-0.5 rounded-md px-1 py-0.5 text-meta text-fg-muted hover:text-fg"
       >
         <ChevronLeft size={14} />
-        {tr('settings.engines.EngineDetail.message723')}{' '}
+        {tr('settings.engines.EngineDetail.allEngines')}{' '}
       </button>
 
       <Header engine={e} isDefault={isDefault} onSetDefault={onSetDefault} />
       <p className="mt-4 mb-2 rounded-lg bg-subtle px-3 py-2 text-meta text-fg-muted">
-        {tr('settings.engines.EngineDetail.message724')} {e.name}
-        {tr('settings.engines.EngineDetail.message725')}{' '}
+        {tr('settings.engines.EngineDetail.changesTakeEffectImmediately')} {e.name}
+        {tr('settings.engines.EngineDetail.andResumesConversation')}{' '}
       </p>
 
       {error && (
@@ -73,30 +73,30 @@ export function EngineDetail({
       )}
 
       <Group
-        title={tr('settings.engines.EngineDetail.message726')}
-        note={tr('settings.engines.EngineDetail.message727')}
+        title={tr('settings.engines.EngineDetail.newConversationDefaults')}
+        note={tr('settings.engines.EngineDetail.appliesToNewConversations')}
       >
         <Row
-          title={tr('session.Composer.message119')}
-          description={tr('settings.engines.EngineDetail.message728')}
+          title={tr('session.Composer.reasoningEffort')}
+          description={tr('settings.engines.EngineDetail.higherEffortSpendsMore')}
           control={
             <Select
-              label={tr('settings.engines.EngineDetail.message729')}
+              label={tr('settings.engines.EngineDetail.defaultReasoningEffort')}
               value={d.effort ?? ''}
               onChange={v => run({ defaults: { effort: (v || null) as Effort | null } })}
               options={[
-                { value: '', label: tr('settings.engines.EngineDetail.message730', { p0: e.name }) },
+                { value: '', label: tr('settings.engines.EngineDetail.default', { p0: e.name }) },
                 ...e.caps.efforts.map(x => ({ value: x, label: EFFORT_LABEL[x] })),
               ]}
             />
           }
         />
         <Row
-          title={tr('settings.engines.EngineDetail.message731')}
+          title={tr('settings.engines.EngineDetail.permissions')}
           description={PERMISSION_INFO[d.permissionMode].hint}
           control={
             <Select
-              label={tr('settings.engines.EngineDetail.message732')}
+              label={tr('settings.engines.EngineDetail.defaultPermissions')}
               value={d.permissionMode}
               onChange={v => run({ defaults: { permissionMode: v as PermissionMode } })}
               options={e.caps.permissionModes.map(m => ({ value: m, label: PERMISSION_INFO[m].label }))}
@@ -104,8 +104,8 @@ export function EngineDetail({
           }
         />
         <Row
-          title={tr('session.ModelSourceMenu.message291')}
-          description={tr('settings.engines.EngineDetail.message733')}
+          title={tr('session.ModelSourceMenu.model')}
+          description={tr('settings.engines.EngineDetail.defaultModelsForPlatform')}
           control={
             onOpenModels && (
               <button
@@ -113,19 +113,19 @@ export function EngineDetail({
                 onClick={onOpenModels}
                 className="shrink-0 text-meta text-accent-fg hover:underline"
               >
-                {tr('settings.engines.EngineDetail.message734')}{' '}
+                {tr('settings.engines.EngineDetail.manageModels')}{' '}
               </button>
             )
           }
         />
         {e.caps.fast && (
           <Row
-            title={tr('session.ComposerMenus.message128')}
-            description={tr('settings.engines.EngineDetail.message735')}
+            title={tr('session.ComposerMenus.fastMode')}
+            description={tr('settings.engines.EngineDetail.fasterRepliesWithHigher')}
             control={
               <Switch
                 checked={d.fast}
-                label={tr('settings.engines.EngineDetail.message736')}
+                label={tr('settings.engines.EngineDetail.enableFastModeBy')}
                 onChange={on => run({ defaults: { fast: on } })}
               />
             }
@@ -134,12 +134,12 @@ export function EngineDetail({
         {e.caps.ultracode && (
           <Row
             title="Ultracode"
-            description={tr('settings.engines.EngineDetail.message737')}
+            description={tr('settings.engines.EngineDetail.orchestrateMultipleSubagentsFor')}
             control={
               <Switch
                 checked={d.ultracode}
                 tone="ultracode"
-                label={tr('settings.engines.EngineDetail.message738')}
+                label={tr('settings.engines.EngineDetail.enableUltracodeByDefault')}
                 onChange={on => run({ defaults: { ultracode: on } })}
               />
             }
@@ -147,12 +147,12 @@ export function EngineDetail({
         )}
         {e.caps.thinkingSummaries && (
           <Row
-            title={tr('settings.engines.EngineDetail.message739')}
-            description={tr('settings.engines.EngineDetail.message740')}
+            title={tr('settings.engines.EngineDetail.showThinking')}
+            description={tr('settings.engines.EngineDetail.onRequestAndShow')}
             control={
               <Switch
                 checked={d.thinkingSummaries}
-                label={tr('settings.engines.EngineDetail.message741')}
+                label={tr('settings.engines.EngineDetail.showThinkingByDefault')}
                 onChange={on => run({ defaults: { thinkingSummaries: on } })}
               />
             }
@@ -161,15 +161,15 @@ export function EngineDetail({
       </Group>
 
       {e.id === 'claude' && (
-        <Group title={tr('settings.engines.EngineDetail.message742')}>
+        <Group title={tr('settings.engines.EngineDetail.conversation')}>
           <OutputStyleRow engine={e} value={config.outputStyle} onChange={outputStyle => run({ outputStyle })} />
           <Row
-            title={tr('settings.engines.EngineDetail.message743')}
-            description={tr('settings.engines.EngineDetail.message744')}
+            title={tr('settings.engines.EngineDetail.allowQuestionsDuringTasks')}
+            description={tr('settings.engines.EngineDetail.onPauseToAsk')}
             control={
               <Switch
                 checked={config.askQuestions}
-                label={tr('settings.engines.EngineDetail.message743')}
+                label={tr('settings.engines.EngineDetail.allowQuestionsDuringTasks')}
                 onChange={on => run({ askQuestions: on })}
               />
             }
@@ -179,25 +179,25 @@ export function EngineDetail({
 
       {e.id === 'codex' && <p className="mt-4 text-meta text-fg-muted">{tr('codex.nativeSettings')}</p>}
       {e.id === 'claude' && (
-        <Group title={tr('session.ContextWindowButton.message162')}>
+        <Group title={tr('session.ContextWindowButton.context2')}>
           <Row
-            title={tr('settings.engines.EngineDetail.message745')}
-            description={tr('settings.engines.EngineDetail.message746')}
+            title={tr('settings.engines.EngineDetail.autocompactThreshold')}
+            description={tr('settings.engines.EngineDetail.automaticallyCompactAtThis')}
             control={
               <Select
-                label={tr('settings.engines.EngineDetail.message745')}
+                label={tr('settings.engines.EngineDetail.autocompactThreshold')}
                 value={config.autoCompactPct === null ? '' : String(config.autoCompactPct)}
                 onChange={v => run({ autoCompactPct: v ? Number(v) : null })}
                 options={[
                   {
                     value: '',
                     get label() {
-                      return tr('settings.engines.EngineDetail.message747')
+                      return tr('settings.engines.EngineDetail.defaultBuiltInThreshold')
                     },
                   },
                   ...AUTO_COMPACT_PCTS.map(p => ({
                     value: String(p),
-                    label: tr('settings.engines.EngineDetail.message748', { p0: p }),
+                    label: tr('settings.engines.EngineDetail.atUsage', { p0: p }),
                   })),
                 ]}
               />
@@ -207,16 +207,16 @@ export function EngineDetail({
         </Group>
       )}
 
-      <Group title={tr('settings.engines.EngineDetail.message749')}>
+      <Group title={tr('settings.engines.EngineDetail.advanced')}>
         <Row
-          title={tr('settings.engines.EngineDetail.message750')}
-          description={tr('settings.engines.EngineDetail.message751')}
-          hint={isDefault ? tr('settings.engines.EngineDetail.message752') : undefined}
+          title={tr('settings.engines.EngineDetail.showInEngineMenu')}
+          description={tr('settings.engines.EngineDetail.hideThisEngineFrom')}
+          hint={isDefault ? tr('settings.engines.EngineDetail.defaultEngineCannotBe') : undefined}
           control={
             <Switch
               checked={!config.hidden}
               disabled={isDefault}
-              label={tr('settings.engines.EngineDetail.message750')}
+              label={tr('settings.engines.EngineDetail.showInEngineMenu')}
               onChange={on => run({ hidden: !on })}
             />
           }
@@ -248,7 +248,7 @@ function Header({
     if (!bridge) {
       setResult({
         get error() {
-          return tr('settings.engines.EngineDetail.message753')
+          return tr('settings.engines.EngineDetail.demoModeCannotUpdate')
         },
       })
       return
@@ -289,7 +289,7 @@ function Header({
             {ready ? (
               <span className="inline-flex items-center gap-1 text-meta text-success">
                 <CircleCheck size={12} />
-                {tr('settings.editor.EditorSection.message709')}{' '}
+                {tr('settings.editor.EditorSection.available')}{' '}
               </span>
             ) : (
               <span className="text-meta text-warn">{ENGINE_STATUS[e.status] ?? e.status}</span>
@@ -297,14 +297,14 @@ function Header({
           </div>
           <div className="selectable mt-0.5 truncate font-mono text-meta text-fg-muted" title={e.path ?? undefined}>
             {[e.version ? `v${e.version}` : null, e.path].filter(Boolean).join(' · ') ||
-              tr('settings.engines.EngineDetail.message754')}
+              tr('settings.engines.EngineDetail.executableNotDetected')}
           </div>
           <p className="mt-1 text-meta text-fg-secondary">{ENGINE_INTRO[e.id]}</p>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
           {!isDefault && ready && (
             <Button variant="outline" className="h-8 px-3 text-meta" onClick={() => void onSetDefault()}>
-              {tr('session.ModelSourceMenu.message304')}{' '}
+              {tr('session.ModelSourceMenu.setAsDefault')}{' '}
             </Button>
           )}
           <Button
@@ -314,7 +314,7 @@ function Header({
             disabled={redetecting || !isLive}
             onClick={() => void redetect()}
           >
-            {redetecting ? tr('settings.engines.EngineDetail.message755') : tr('session.SourceHintBar.message369')}
+            {redetecting ? tr('settings.engines.EngineDetail.detecting') : tr('session.SourceHintBar.detectAgain')}
           </Button>
           {canUpdate && (
             <span data-setting-title="检查更新" className="rounded-md">
@@ -325,7 +325,9 @@ function Header({
                 disabled={updating}
                 onClick={() => void update()}
               >
-                {updating ? tr('settings.engines.EngineDetail.message756') : tr('settings.AboutSection.message620')}
+                {updating
+                  ? tr('settings.engines.EngineDetail.checkingForUpdates')
+                  : tr('settings.AboutSection.checkForUpdates')}
               </Button>
             </span>
           )}
@@ -336,7 +338,9 @@ function Header({
           {translateMessage(e.message)}
         </p>
       )}
-      {updating && <p className="mt-3 text-meta text-fg-muted">{tr('settings.engines.EngineDetail.message757')}</p>}
+      {updating && (
+        <p className="mt-3 text-meta text-fg-muted">{tr('settings.engines.EngineDetail.runningClaudeUpdateThis')}</p>
+      )}
       {result && <UpdateResult result={result} />}
     </div>
   )
@@ -353,10 +357,10 @@ function UpdateResult({ result }: { result: (EngineUpdateResult & { before: stri
   }
   const changed = result.version && result.before && result.version !== result.before
   const title = !result.ok
-    ? tr('settings.engines.EngineDetail.message758')
+    ? tr('settings.engines.EngineDetail.updateDidNotComplete')
     : changed
-      ? tr('settings.engines.EngineDetail.message759', { p0: result.version, p1: result.before })
-      : tr('settings.engines.EngineDetail.message760', { p0: result.version ? `（${result.version}）` : '' })
+      ? tr('settings.engines.EngineDetail.updatedToPreviously', { p0: result.version, p1: result.before })
+      : tr('settings.engines.EngineDetail.alreadyUpToDate', { p0: result.version ? `（${result.version}）` : '' })
   return (
     <div role="status" className="mt-3 rounded-lg border border-line px-3 py-2">
       <p className={cn('text-meta', result.ok ? 'text-fg' : 'text-danger')}>{title}</p>
@@ -366,7 +370,9 @@ function UpdateResult({ result }: { result: (EngineUpdateResult & { before: stri
         </pre>
       )}
       {result.ok && changed && (
-        <p className="mt-1.5 text-label text-fg-faint">{tr('settings.engines.EngineDetail.message761')}</p>
+        <p className="mt-1.5 text-label text-fg-faint">
+          {tr('settings.engines.EngineDetail.newConversationsUseUpdated')}
+        </p>
       )}
     </div>
   )
@@ -400,25 +406,25 @@ function OutputStyleRow({
 
   const styles = catalog?.outputStyles ?? []
   const follow = catalog?.currentOutputStyle
-    ? tr('settings.engines.EngineDetail.message762', { p0: catalog.currentOutputStyle })
-    : tr('settings.engines.EngineDetail.message763')
+    ? tr('settings.engines.EngineDetail.useEngineSettings', { p0: catalog.currentOutputStyle })
+    : tr('settings.engines.EngineDetail.useEngineSettings2')
   return (
     <Row
-      title={tr('settings.engines.EngineDetail.message764')}
-      description={tr('settings.engines.EngineDetail.message765', { p0: e.name })}
+      title={tr('settings.engines.EngineDetail.outputStyle')}
+      description={tr('settings.engines.EngineDetail.changesWritingStyleNot', { p0: e.name })}
       hint={
-        !loading && styles.length === 0 ? tr('settings.engines.EngineDetail.message766', { p0: e.name }) : undefined
+        !loading && styles.length === 0 ? tr('settings.engines.EngineDetail.couldNotLoadS', { p0: e.name }) : undefined
       }
       control={
         <Select
-          label={tr('settings.engines.EngineDetail.message764')}
+          label={tr('settings.engines.EngineDetail.outputStyle')}
           disabled={loading}
           value={value ?? ''}
           onChange={v => onChange(v || null)}
           options={[
-            { value: '', label: loading ? tr('settings.engines.EngineDetail.message767') : follow },
+            { value: '', label: loading ? tr('settings.engines.EngineDetail.loading') : follow },
             ...(value && !styles.includes(value)
-              ? [{ value, label: tr('settings.engines.EngineDetail.message768', { p0: value }) }]
+              ? [{ value, label: tr('settings.engines.EngineDetail.notFound', { p0: value }) }]
               : []),
             ...styles.map(x => ({ value: x, label: x })),
           ]}
@@ -443,11 +449,11 @@ function CompactModelRow({
   const models = platformModels(platform.groups)
   return (
     <Row
-      title={tr('settings.engines.EngineDetail.message769')}
-      description={tr('settings.engines.EngineDetail.message770', { p0: e.name })}
+      title={tr('settings.engines.EngineDetail.contextCompactionModel')}
+      description={tr('settings.engines.EngineDetail.platformConversationsOnlyUse', { p0: e.name })}
       control={
         <Select
-          label={tr('settings.engines.EngineDetail.message771', { p0: e.name })}
+          label={tr('settings.engines.EngineDetail.contextCompactionModel2', { p0: e.name })}
           mono
           value={value ?? ''}
           onChange={v => onChange(v || null)}
@@ -455,7 +461,7 @@ function CompactModelRow({
             {
               value: '',
               get label() {
-                return tr('settings.engines.EngineDetail.message772')
+                return tr('settings.engines.EngineDetail.useConversationModel')
               },
             },
             ...(value && !models.includes(value) ? [{ value, label: value }] : []),
@@ -494,7 +500,7 @@ function LaunchRows({
   const saveEnv = (): void => {
     const { env: parsed, bad } = parseEnvLines(env)
     if (bad) {
-      setError(tr('settings.engines.EngineDetail.message773', { p0: bad }))
+      setError(tr('settings.engines.EngineDetail.thisLineIsNot', { p0: bad }))
       return
     }
     if (envLines(parsed) !== envLines(config.env)) save({ env: parsed })
@@ -503,23 +509,23 @@ function LaunchRows({
   return (
     <>
       <Row
-        title={tr('settings.engines.EngineDetail.message774')}
-        description={tr('settings.engines.EngineDetail.message775')}
+        title={tr('settings.engines.EngineDetail.executablePath')}
+        description={tr('settings.engines.EngineDetail.overrideDetectedExecutableLeave')}
       >
         <input
           value={path}
           onChange={ev => setPath(ev.target.value)}
           onBlur={savePath}
           onKeyDown={ev => ev.key === 'Enter' && savePath()}
-          placeholder={e.path ?? tr('settings.engines.EngineDetail.message776', { p0: e.id })}
-          aria-label={tr('settings.engines.EngineDetail.message774')}
+          placeholder={e.path ?? tr('settings.engines.EngineDetail.executablePath2', { p0: e.id })}
+          aria-label={tr('settings.engines.EngineDetail.executablePath')}
           className={cn(FIELD, 'font-mono text-meta')}
           spellCheck={false}
         />
       </Row>
       <Row
-        title={tr('settings.engines.EngineDetail.message777')}
-        description={tr('settings.engines.EngineDetail.message778')}
+        title={tr('settings.engines.EngineDetail.environmentVariables')}
+        description={tr('settings.engines.EngineDetail.oneKeyValuePer')}
       >
         <textarea
           value={env}
@@ -527,7 +533,7 @@ function LaunchRows({
           onBlur={saveEnv}
           rows={4}
           placeholder="HTTPS_PROXY=http://127.0.0.1:7890"
-          aria-label={tr('settings.engines.EngineDetail.message777')}
+          aria-label={tr('settings.engines.EngineDetail.environmentVariables')}
           className={cn(FIELD, 'resize-y font-mono text-meta')}
           spellCheck={false}
         />

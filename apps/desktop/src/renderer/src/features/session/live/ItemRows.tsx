@@ -40,7 +40,7 @@ export function UserBubble({ item, actions }: { item: ItemOf<'user'>; actions?: 
   if (item.mode === 'guidance')
     return (
       <div className="border-l border-accent-line pl-3 text-list whitespace-pre-wrap text-fg-muted">
-        <span className="mr-2 text-accent-fg">{tr('session.live.ItemRows.message241')}</span>
+        <span className="mr-2 text-accent-fg">{tr('session.live.ItemRows.steered')}</span>
         {item.text}
       </div>
     )
@@ -84,7 +84,7 @@ export function ReasoningBlock({ item }: { item: ItemOf<'reasoning'> }) {
         className="flex h-[30px] items-center gap-2 rounded-md px-2 text-list text-fg-muted hover:bg-hover hover:text-fg-secondary"
       >
         <Brain size={15} strokeWidth={1.5} className="shrink-0" />
-        <span>{running ? tr('session.live.ItemRows.message242') : tr('session.live.ItemRows.message243')}</span>
+        <span>{running ? tr('session.live.ItemRows.thinking') : tr('session.live.ItemRows.thinking2')}</span>
         {running ? <Spinner size={13} /> : <Chevron open={open} />}
       </button>
       {open && item.text && (
@@ -111,7 +111,9 @@ export function DiffView({ diff, path, className }: { diff: string; path?: strin
   }, [lines, path])
   if (!diff)
     return (
-      <div className={cn('px-3 py-2 text-meta text-fg-faint', className)}>{tr('session.live.ItemRows.message244')}</div>
+      <div className={cn('px-3 py-2 text-meta text-fg-faint', className)}>
+        {tr('session.live.ItemRows.noChangesToDisplay')}
+      </div>
     )
   return (
     <pre className={cn('overflow-auto font-mono text-meta leading-[1.6]', className)}>
@@ -164,11 +166,11 @@ function StatusMark({ status, okMark = true }: { status: ItemStatus; okMark?: bo
       return (
         <span className="inline-flex shrink-0 items-center gap-1 text-meta text-fg-muted">
           <Ban size={12} strokeWidth={1.75} />
-          {tr('session.live.ItemRows.message245')}
+          {tr('session.live.ItemRows.denied')}
         </span>
       )
     case 'interrupted':
-      return <span className="shrink-0 text-meta text-fg-muted">{tr('session.live.ItemRows.message246')}</span>
+      return <span className="shrink-0 text-meta text-fg-muted">{tr('session.live.ItemRows.interrupted')}</span>
   }
 }
 
@@ -176,26 +178,26 @@ const TOOL_META: Record<ToolKind, { icon: LucideIcon; verb: string }> = {
   read: {
     icon: FileText,
     get verb() {
-      return tr('session.live.ItemRows.message247')
+      return tr('session.live.ItemRows.read')
     },
   },
   search: {
     icon: Search,
     get verb() {
-      return tr('session.live.ItemRows.message248')
+      return tr('session.live.ItemRows.search')
     },
   },
   web: {
     icon: Globe,
     get verb() {
-      return tr('session.live.ItemRows.message249')
+      return tr('session.live.ItemRows.web')
     },
   },
   mcp: { icon: Plug, verb: 'MCP' },
   task: {
     icon: Bot,
     get verb() {
-      return tr('session.live.ItemRows.message250')
+      return tr('session.live.ItemRows.subtask')
     },
   },
   other: { icon: Wrench, verb: '' },
@@ -255,7 +257,7 @@ function SubagentTag({ name }: { name?: string }) {
   return (
     <span
       className="inline-flex max-w-40 shrink-0 items-center gap-1 rounded-sm bg-subtle px-1.5 text-label text-fg-muted"
-      title={tr('session.live.ItemRows.message251', { p0: name })}
+      title={tr('session.live.ItemRows.subagentCall', { p0: name })}
     >
       <Bot size={11} strokeWidth={1.75} className="shrink-0" />
       <span className="truncate">{name}</span>
@@ -267,8 +269,8 @@ const OUTPUT_BOX = 'mt-1 mb-1.5 ml-[23px] max-h-72 overflow-auto rounded-lg bord
 
 function fileVerb(changes: FileChange[]): string {
   return changes.length === 1 && changes[0].kind === 'add'
-    ? tr('session.live.ItemRows.message252')
-    : tr('session.live.ItemRows.message253')
+    ? tr('session.live.ItemRows.create')
+    : tr('session.live.ItemRows.edit')
 }
 
 /** 工具调用的一行：运行命令 / 编辑文件 / 读取 / 搜索 / 网页 / MCP / 子任务；点开看输出或 diff */
@@ -301,8 +303,7 @@ export function ToolItemRow({ item }: { item: ItemOf<'command' | 'file_change' |
   }
 
   if (item.kind === 'command') {
-    const verb =
-      item.status === 'running' ? tr('session.live.ItemRows.message254') : tr('session.live.ItemRows.message255')
+    const verb = item.status === 'running' ? tr('session.live.ItemRows.running') : tr('session.live.ItemRows.ran')
     return (
       <div ref={row}>
         <Row
@@ -353,7 +354,7 @@ export function ToolItemRow({ item }: { item: ItemOf<'command' | 'file_change' |
               <button
                 key={c.path}
                 type="button"
-                title={tr('session.live.ItemRows.message256', { p0: c.path })}
+                title={tr('session.live.ItemRows.openInPixelStarry', { p0: c.path })}
                 onClick={() => openChangedFile(c)}
                 className="truncate text-left font-mono text-meta text-code-path hover:underline"
               >
@@ -366,7 +367,9 @@ export function ToolItemRow({ item }: { item: ItemOf<'command' | 'file_change' |
           <SubagentTag name={item.subagent} />
           {item.changes.some(c => c.diff) && (
             <button
-              aria-label={open ? tr('session.live.ItemRows.message257') : tr('session.live.ItemRows.message258')}
+              aria-label={
+                open ? tr('session.live.ItemRows.collapseFileChanges') : tr('session.live.ItemRows.expandFileChanges')
+              }
               onClick={toggle}
               className="rounded-sm p-1 hover:bg-hover"
             >
@@ -400,7 +403,7 @@ export function ToolItemRow({ item }: { item: ItemOf<'command' | 'file_change' |
     <div ref={row}>
       <Row
         icon={meta.icon}
-        verb={item.name === 'Workflow' ? tr('session.live.ItemRows.message259') : meta.verb || item.name}
+        verb={item.name === 'Workflow' ? tr('session.live.ItemRows.orchestration') : meta.verb || item.name}
         expandable={!!item.output}
         open={open}
         onToggle={toggle}
@@ -417,7 +420,7 @@ export function ToolItemRow({ item }: { item: ItemOf<'command' | 'file_change' |
               onClick={() => openTrace?.({ toolUseId: item.id })}
               className="shrink-0 rounded-md px-1.5 py-1 text-meta text-accent-fg hover:bg-hover"
             >
-              {tr('session.live.ItemRows.message260')}{' '}
+              {tr('session.live.ItemRows.viewActivity')}{' '}
             </button>
           ) : undefined
         }
@@ -444,7 +447,7 @@ export function TodoCard({ item }: { item: ItemOf<'todo'> }) {
     <div className="rounded-xl border border-line-card bg-surface px-3.5 py-3 shadow-sm">
       <div className="mb-1.5 flex items-center gap-2 text-list text-fg-secondary">
         <ListTodo size={15} strokeWidth={1.5} className="text-fg-muted" />
-        <span>{tr('session.live.ItemRows.message261')}</span>
+        <span>{tr('session.live.ItemRows.toDo')}</span>
         <span className="text-meta text-fg-faint tabular-nums">
           {done}/{item.steps.length}
         </span>

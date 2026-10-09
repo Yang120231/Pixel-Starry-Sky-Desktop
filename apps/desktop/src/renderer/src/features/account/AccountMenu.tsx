@@ -28,7 +28,7 @@ export function AccountMenu({ open, onClose, className }: AccountMenuProps) {
       {acc.status === 'loading' && (
         <div className="flex items-center gap-2 px-3 py-3 text-ui text-fg-muted">
           <Spinner />
-          {tr('account.AccountMenu.message25')}{' '}
+          {tr('account.AccountMenu.loadingAccount')}{' '}
         </div>
       )}
 
@@ -40,11 +40,11 @@ export function AccountMenu({ open, onClose, className }: AccountMenuProps) {
             </p>
           )}
           <div>
-            <div className="text-ui font-medium text-fg">{tr('account.AccountMenu.message26')}</div>
-            <p className="mt-1 text-meta text-fg-muted">{tr('account.AccountMenu.message27')}</p>
+            <div className="text-ui font-medium text-fg">{tr('account.AccountMenu.signInToPixel')}</div>
+            <p className="mt-1 text-meta text-fg-muted">{tr('account.AccountMenu.signInToAccess')}</p>
           </div>
           <Button variant="primary" className="w-full justify-center" onClick={() => void acc.login()}>
-            {tr('account.AccountMenu.message28')}{' '}
+            {tr('account.AccountMenu.signIn')}{' '}
           </Button>
         </div>
       )}
@@ -54,12 +54,12 @@ export function AccountMenu({ open, onClose, className }: AccountMenuProps) {
           <div className="flex items-start gap-2">
             <Spinner className="mt-0.5" />
             <div>
-              <div className="text-ui font-medium text-fg">{tr('account.AccountMenu.message29')}</div>
-              <p className="mt-1 text-meta text-fg-muted">{tr('account.AccountMenu.message30')}</p>
+              <div className="text-ui font-medium text-fg">{tr('account.AccountMenu.waitingForAuthorization')}</div>
+              <p className="mt-1 text-meta text-fg-muted">{tr('account.AccountMenu.authorizationPageIsOpen')}</p>
             </div>
           </div>
           <Button variant="outline" className="w-full justify-center" onClick={() => void acc.cancelLogin()}>
-            {tr('account.AccountMenu.message31')}{' '}
+            {tr('account.AccountMenu.cancel')}{' '}
           </Button>
         </div>
       )}
@@ -89,7 +89,7 @@ export function AccountMenu({ open, onClose, className }: AccountMenuProps) {
               settings.openSettings('account')
             }}
           >
-            {tr('account.AccountMenu.message32')}{' '}
+            {tr('account.AccountMenu.accountSettings')}{' '}
           </PopoverItem>
         </div>
       )}
@@ -116,9 +116,9 @@ function SignedIn({ account, name, email, balanceText, error, refreshing, onRefr
   const expires = formatDate(plan?.expiresAt)
   const quotas: Array<[string, Quota | null]> = plan
     ? [
-        [tr('account.AccountMenu.message33'), plan.daily],
-        [tr('account.AccountMenu.message34'), plan.weekly],
-        [tr('account.AccountMenu.message35'), plan.monthly],
+        [tr('account.AccountMenu.today'), plan.daily],
+        [tr('account.AccountMenu.thisWeek'), plan.weekly],
+        [tr('account.AccountMenu.thisMonth'), plan.monthly],
       ]
     : []
   const shownQuotas = quotas.filter((q): q is [string, Quota] => q[1] !== null)
@@ -141,15 +141,15 @@ function SignedIn({ account, name, email, balanceText, error, refreshing, onRefr
       </div>
 
       <div className="px-3 pt-3 pb-4 text-center">
-        <div className="text-meta text-fg-muted">{tr('account.AccountMenu.message36')}</div>
+        <div className="text-meta text-fg-muted">{tr('account.AccountMenu.balance')}</div>
         <div className="mt-0.5 text-title leading-none font-semibold text-fg tabular-nums">{balanceText}</div>
         {account.balance === null && (
-          <p className="mt-1.5 text-meta text-fg-muted">{tr('account.AccountMenu.message37')}</p>
+          <p className="mt-1.5 text-meta text-fg-muted">{tr('account.AccountMenu.balanceIsTemporarilyUnavailable')}</p>
         )}
         <p className="mt-1.5 text-label text-fg-faint" aria-live="polite">
           {refreshing
-            ? tr('account.AccountMenu.message38')
-            : tr('account.AccountMenu.message39', { p0: formatUpdatedAt(account.updatedAt, now) })}
+            ? tr('account.AccountMenu.updating')
+            : tr('account.AccountMenu.updated', { p0: formatUpdatedAt(account.updatedAt, now) })}
         </p>
       </div>
 
@@ -159,7 +159,7 @@ function SignedIn({ account, name, email, balanceText, error, refreshing, onRefr
             <span className="min-w-0 truncate text-ui font-medium text-fg">{plan.name}</span>
             {expires && (
               <span className="shrink-0 text-meta text-fg-muted">
-                {tr('account.AccountMenu.message40')} {expires}
+                {tr('account.AccountMenu.expires')} {expires}
               </span>
             )}
           </div>
@@ -172,13 +172,13 @@ function SignedIn({ account, name, email, balanceText, error, refreshing, onRefr
       {rateLimits.length > 0 && (
         <div className="flex flex-col gap-2.5 border-t border-line-subtle px-3 py-3">
           <div className="flex items-baseline justify-between gap-2">
-            <span className="text-ui font-medium text-fg">{tr('account.AccountMenu.message41')}</span>
-            <span className="shrink-0 text-meta text-fg-muted">{tr('account.AccountMenu.message42')}</span>
+            <span className="text-ui font-medium text-fg">{tr('account.AccountMenu.limit')}</span>
+            <span className="shrink-0 text-meta text-fg-muted">{tr('account.AccountMenu.resetsByTimeWindow')}</span>
           </div>
           {rateLimits.map(r => (
             <QuotaBar
               key={r.window}
-              label={tr('account.AccountMenu.message43', { p0: formatWindow(r.window) })}
+              label={tr('account.AccountMenu.every', { p0: formatWindow(r.window) })}
               quota={r}
               currency={currency}
             />
@@ -204,11 +204,11 @@ function SignedIn({ account, name, email, balanceText, error, refreshing, onRefr
             type="button"
             onClick={onRefresh}
             disabled={refreshing}
-            aria-label={tr('account.AccountMenu.message44')}
+            aria-label={tr('account.AccountMenu.refreshCredits')}
             className="press no-drag flex h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md px-2 text-meta text-fg-secondary hover:bg-hover hover:text-fg disabled:opacity-70"
           >
             <RefreshCw size={14} strokeWidth={1.5} className={cn('shrink-0', refreshing && 'animate-spin')} />
-            <span>{tr('account.AccountMenu.message45')}</span>
+            <span>{tr('account.AccountMenu.refresh')}</span>
           </button>
           <button
             type="button"
@@ -216,7 +216,7 @@ function SignedIn({ account, name, email, balanceText, error, refreshing, onRefr
             className="press no-drag flex h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md px-2 text-meta text-fg-secondary hover:bg-hover hover:text-danger"
           >
             <LogOut size={14} strokeWidth={1.5} className="shrink-0" />
-            <span>{tr('account.AccountMenu.message46')}</span>
+            <span>{tr('account.AccountMenu.signOut')}</span>
           </button>
         </div>
       )}

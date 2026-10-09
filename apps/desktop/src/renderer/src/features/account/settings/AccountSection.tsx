@@ -17,19 +17,19 @@ const TABS: Array<SegmentedOption<AccountTab>> = [
   {
     value: 'overview',
     get label() {
-      return tr('settings.account.AccountSection.message648')
+      return tr('settings.account.AccountSection.overview')
     },
   },
   {
     value: 'plans',
     get label() {
-      return tr('settings.account.AccountSection.message649')
+      return tr('settings.account.AccountSection.subscriptionPlans')
     },
   },
   {
     value: 'topup',
     get label() {
-      return tr('settings.account.AccountOverview.message640')
+      return tr('settings.account.AccountOverview.addCredits')
     },
   },
 ]
@@ -44,10 +44,10 @@ export function AccountSection() {
   if (acc.status === 'loading') {
     return (
       <section>
-        <SectionTitle>{tr('settings.AboutSection.message626')}</SectionTitle>
+        <SectionTitle>{tr('settings.AboutSection.account')}</SectionTitle>
         <div className="flex items-center gap-2 text-ui text-fg-muted">
           <Spinner />
-          {tr('account.AccountMenu.message25')}{' '}
+          {tr('account.AccountMenu.loadingAccount')}{' '}
         </div>
       </section>
     )
@@ -56,7 +56,7 @@ export function AccountSection() {
   if (acc.status !== 'signed-in' || !acc.account || !acc.user) {
     return (
       <section>
-        <SectionTitle>{tr('settings.AboutSection.message626')}</SectionTitle>
+        <SectionTitle>{tr('settings.AboutSection.account')}</SectionTitle>
         <SignedOutCard />
         <AccountService />
       </section>
@@ -65,7 +65,7 @@ export function AccountSection() {
 
   return (
     <section>
-      <SectionTitle>{tr('settings.AboutSection.message626')}</SectionTitle>
+      <SectionTitle>{tr('settings.AboutSection.account')}</SectionTitle>
 
       <div className="rounded-lg border border-line bg-surface">
         <div className="flex items-center gap-3.5 p-4">
@@ -81,7 +81,7 @@ export function AccountSection() {
               className="hover:text-danger"
               onClick={() => setConfirmingLogout(true)}
             >
-              {tr('account.LogoutConfirm.message50')}{' '}
+              {tr('account.LogoutConfirm.signOut2')}{' '}
             </Button>
           )}
         </div>
@@ -96,7 +96,7 @@ export function AccountSection() {
 
       <div className="mt-5 mb-4">
         <Segmented
-          label={tr('settings.account.AccountSection.message650')}
+          label={tr('settings.account.AccountSection.accountPage')}
           options={TABS}
           value={tab}
           onChange={setTab}
@@ -140,21 +140,23 @@ function SignedOutCard() {
         </span>
         <div className="min-w-0">
           <div className="text-section font-semibold text-fg">
-            {signingIn ? tr('account.AccountMenu.message29') : tr('sidebar.SidebarFooter.message407')}
+            {signingIn ? tr('account.AccountMenu.waitingForAuthorization') : tr('sidebar.SidebarFooter.notSignedIn')}
           </div>
           <p className="mt-0.5 text-meta text-fg-muted">
-            {signingIn ? tr('account.AccountMenu.message30') : tr('settings.account.AccountSection.message651')}
+            {signingIn
+              ? tr('account.AccountMenu.authorizationPageIsOpen')
+              : tr('settings.account.AccountSection.signInToPixel')}
           </p>
         </div>
       </div>
       <div>
         {signingIn ? (
           <Button variant="outline" onClick={() => void acc.cancelLogin()}>
-            {tr('account.AccountMenu.message31')}{' '}
+            {tr('account.AccountMenu.cancel')}{' '}
           </Button>
         ) : (
           <Button variant="primary" onClick={() => void acc.login()}>
-            {tr('account.AccountMenu.message28')}{' '}
+            {tr('account.AccountMenu.signIn')}{' '}
           </Button>
         )}
       </div>
@@ -174,9 +176,11 @@ function AccountService() {
   }, [])
   return (
     <div className="mt-6">
-      <h4 className="mb-2 text-meta font-medium text-fg-muted">{tr('settings.account.AccountSection.message652')}</h4>
+      <h4 className="mb-2 text-meta font-medium text-fg-muted">
+        {tr('settings.account.AccountSection.accountServices')}
+      </h4>
       <div className="flex min-h-11 items-center gap-4 rounded-lg border border-line px-4 py-1.5">
-        <span className="w-20 shrink-0 text-ui text-fg-muted">{tr('settings.AboutSection.message628')}</span>
+        <span className="w-20 shrink-0 text-ui text-fg-muted">{tr('settings.AboutSection.authenticationService')}</span>
         <span className="selectable min-w-0 flex-1 truncate font-mono text-meta text-fg">
           {authUrl?.replace(/^https?:\/\//, '') ?? '—'}
         </span>
@@ -186,7 +190,7 @@ function AccountService() {
           className="h-7 px-2 text-meta"
           onClick={() => void window.pixelsky?.app.open('auth')}
         >
-          {tr('settings.account.AccountSection.message653')}{' '}
+          {tr('settings.account.AccountSection.manageInBrowser')}{' '}
         </Button>
       </div>
     </div>

@@ -9,13 +9,13 @@ import { Button, Logo, useComingSoon } from '@/ui'
 
 const CHANNEL_LABELS: Record<AppInfo['channel'], string> = {
   get dev() {
-    return tr('settings.AboutSection.message612')
+    return tr('settings.AboutSection.developmentMode')
   },
   get portable() {
-    return tr('settings.AboutSection.message613')
+    return tr('settings.AboutSection.portable')
   },
   get installed() {
-    return tr('settings.AboutSection.message614')
+    return tr('settings.AboutSection.installed')
   },
 }
 
@@ -34,7 +34,7 @@ export function AboutSection({ onOpenAccount }: { onOpenAccount: () => void }) {
   useEffect(() => {
     const bridge = window.pixelsky?.app
     if (!bridge) {
-      setError(tr('settings.AboutSection.message615'))
+      setError(tr('settings.AboutSection.applicationInformationIsUnavailable'))
       return
     }
     bridge.getInfo().then(setInfo, (e: unknown) => setError(String((e as Error)?.message ?? e)))
@@ -56,18 +56,18 @@ export function AboutSection({ onOpenAccount }: { onOpenAccount: () => void }) {
       await navigator.clipboard.writeText(diagnostics(info))
       setCopied(true)
     } catch {
-      setError(tr('settings.AboutSection.message616'))
+      setError(tr('settings.AboutSection.copyFailedSelectAnd'))
     }
   }
 
   const accountText =
     acc.status === 'signed-in'
-      ? tr('settings.AboutSection.message617', { p0: acc.user?.email ?? '' })
+      ? tr('settings.AboutSection.signedIn', { p0: acc.user?.email ?? '' })
       : acc.status === 'signing-in'
-        ? tr('sidebar.SidebarFooter.message405')
+        ? tr('sidebar.SidebarFooter.signingIn')
         : acc.status === 'loading'
-          ? tr('session.live.SessionStrips.message276')
-          : tr('sidebar.SidebarFooter.message407')
+          ? tr('session.live.SessionStrips.loading')
+          : tr('sidebar.SidebarFooter.notSignedIn')
 
   return (
     <section>
@@ -76,39 +76,39 @@ export function AboutSection({ onOpenAccount }: { onOpenAccount: () => void }) {
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
             <h3 className="text-section font-semibold text-fg">
-              {translateText(info?.name ?? tr('ui.Logo.message413'))}
+              {translateText(info?.name ?? tr('ui.Logo.pixelStarrySky'))}
             </h3>
             <span className="text-meta text-fg-muted">{info?.englishName ?? 'Pixel Starry Sky'}</span>
           </div>
           <p className="mt-0.5 text-ui text-fg-secondary tabular-nums">
             {info
-              ? tr('settings.AboutSection.message618', { p0: info.version, p1: CHANNEL_LABELS[info.channel] })
-              : tr('settings.AboutSection.message619')}
+              ? tr('settings.AboutSection.version', { p0: info.version, p1: CHANNEL_LABELS[info.channel] })
+              : tr('settings.AboutSection.version2')}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Button icon={RefreshCw} onClick={() => comingSoon(tr('settings.AboutSection.message620'))}>
-            {tr('settings.AboutSection.message620')}{' '}
+          <Button icon={RefreshCw} onClick={() => comingSoon(tr('settings.AboutSection.checkForUpdates'))}>
+            {tr('settings.AboutSection.checkForUpdates')}{' '}
           </Button>
           <Button icon={copied ? Check : Copy} onClick={copyInfo} disabled={!info} aria-live="polite">
-            {copied ? tr('code.CodeBlock.message55') : tr('settings.AboutSection.message621')}
+            {copied ? tr('code.CodeBlock.copied') : tr('settings.AboutSection.copyVersionInformation')}
           </Button>
         </div>
       </div>
 
       {error && <p className="mb-4 rounded-md bg-subtle px-3 py-2 text-meta text-danger">{translateMessage(error)}</p>}
 
-      <Group title={tr('settings.AboutSection.message622')}>
-        <Row label={tr('settings.AboutSection.message623')} value={info?.version} mono />
+      <Group title={tr('settings.AboutSection.runtimeEnvironment')}>
+        <Row label={tr('settings.AboutSection.applicationVersion')} value={info?.version} mono />
         <Row label="Electron" value={info?.electron} mono />
         <Row label="Chromium" value={info?.chrome} mono />
         <Row label="Node.js" value={info?.node} mono />
-        <Row label={tr('settings.AboutSection.message624')} value={info && `${info.os}（${info.arch}）`} />
+        <Row label={tr('settings.AboutSection.system')} value={info && `${info.os}（${info.arch}）`} />
       </Group>
 
-      <Group title={tr('settings.AboutSection.message625')}>
+      <Group title={tr('settings.AboutSection.accountAndData')}>
         <Row
-          label={tr('settings.AboutSection.message626')}
+          label={tr('settings.AboutSection.account')}
           value={accountText}
           action={
             <button
@@ -116,43 +116,55 @@ export function AboutSection({ onOpenAccount }: { onOpenAccount: () => void }) {
               onClick={onOpenAccount}
               className="press no-drag h-7 shrink-0 rounded-md px-2 text-meta text-fg-secondary hover:bg-hover hover:text-fg"
             >
-              {tr('settings.AboutSection.message627')}{' '}
+              {tr('settings.AboutSection.manage')}{' '}
             </button>
           }
         />
         <Row
-          label={tr('settings.AboutSection.message628')}
+          label={tr('settings.AboutSection.authenticationService')}
           value={info?.authUrl.replace(/^https?:\/\//, '')}
           mono
           action={
-            <LinkButton label={tr('settings.AboutSection.message629')} onClick={() => open('auth')} icon="external" />
+            <LinkButton
+              label={tr('settings.AboutSection.openAuthenticationServiceIn')}
+              onClick={() => open('auth')}
+              icon="external"
+            />
           }
         />
         <Row
-          label={tr('settings.AboutSection.message630')}
+          label={tr('settings.AboutSection.dataDirectory')}
           value={info?.dataDir}
           mono
           title={info?.dataDir}
           action={
-            <LinkButton label={tr('settings.AboutSection.message631')} onClick={() => open('data-dir')} icon="folder" />
+            <LinkButton
+              label={tr('settings.AboutSection.openDataDirectory')}
+              onClick={() => open('data-dir')}
+              icon="folder"
+            />
           }
         />
       </Group>
 
-      <Group title={tr('settings.AboutSection.message632')}>
+      <Group title={tr('settings.AboutSection.links')}>
         <Row
-          label={tr('settings.AboutSection.message633')}
+          label={tr('settings.AboutSection.sourceRepository')}
           value={info?.repoUrl.replace(/^https:\/\//, '')}
           mono
           action={
-            <LinkButton label={tr('settings.AboutSection.message634')} onClick={() => open('repo')} icon="external" />
+            <LinkButton
+              label={tr('settings.AboutSection.openSourceRepositoryIn')}
+              onClick={() => open('repo')}
+              icon="external"
+            />
           }
         />
       </Group>
 
       <p className="mt-6 text-meta text-fg-faint">
-        {tr('settings.AboutSection.message635')} {CREDITS.join('、')}
-        {tr('settings.AboutSection.message636')} <br />© 2026 Pixel Starry Sky
+        {tr('settings.AboutSection.builtWith')} {CREDITS.join('、')}
+        {tr('settings.AboutSection.andOtherOpenSource')} <br />© 2026 Pixel Starry Sky
       </p>
     </section>
   )
@@ -164,7 +176,7 @@ function diagnostics(info: AppInfo): string {
     `${translateText(info.name)}（${info.englishName}）${info.version} · ${CHANNEL_LABELS[info.channel]}`,
     `Electron ${info.electron} · Chromium ${info.chrome} · Node.js ${info.node} · V8 ${info.v8}`,
     `${info.os}（${info.arch}）`,
-    tr('settings.AboutSection.message637', { p0: info.authUrl }),
+    tr('settings.AboutSection.authenticationService2', { p0: info.authUrl }),
   ].join('\n')
 }
 

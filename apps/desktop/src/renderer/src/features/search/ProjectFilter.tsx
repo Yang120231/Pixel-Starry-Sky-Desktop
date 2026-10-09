@@ -25,7 +25,7 @@ export function ProjectFilter({
     {
       id: '',
       get name() {
-        return tr('session.live.ApprovalCard.message225')
+        return tr('session.live.ApprovalCard.allProjects')
       },
     },
     ...projects,
@@ -150,7 +150,7 @@ export function ProjectFilter({
         ref={trigger}
         type="button"
         role="combobox"
-        aria-label={tr('search.ProjectFilter.message586', { p0: label })}
+        aria-label={tr('search.ProjectFilter.filterProjects', { p0: label })}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
@@ -181,7 +181,7 @@ export function ProjectFilter({
             ref={menu}
             id={listId}
             role="listbox"
-            aria-label={tr('search.ProjectFilter.message587')}
+            aria-label={tr('search.ProjectFilter.projectFilterOptions')}
             className="pop-in no-drag fixed z-[60] overflow-y-auto rounded-lg border border-line-card bg-popover p-1 shadow-menu"
             style={position}
             onMouseDown={e => e.preventDefault()}

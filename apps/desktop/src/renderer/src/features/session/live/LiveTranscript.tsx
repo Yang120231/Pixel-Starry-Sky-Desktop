@@ -68,7 +68,7 @@ function ItemView({ item, reply }: { item: Item; reply?: string }) {
         <>
           <Markdown text={item.text} />
           {item.status === 'interrupted' && (
-            <div className="mt-1.5 text-meta text-fg-faint">{tr('session.live.ItemRows.message246')}</div>
+            <div className="mt-1.5 text-meta text-fg-faint">{tr('session.live.ItemRows.interrupted')}</div>
           )}
         </>
       )
@@ -177,7 +177,7 @@ export function LiveTranscript({ snapshot }: { snapshot: SessionSnapshot | null 
         {!snapshot && (
           <div className="conversation-message flex items-center gap-2 py-8 text-list text-fg-muted">
             <Spinner size={14} />
-            {tr('session.live.LiveTranscript.message262')}{' '}
+            {tr('session.live.LiveTranscript.openingConversation')}{' '}
           </div>
         )}
         {blocks.map((b, i) => {
@@ -250,7 +250,7 @@ export function LiveTranscript({ snapshot }: { snapshot: SessionSnapshot | null 
         {showThinking && (
           <div className="conversation-message flex h-[30px] items-center gap-2 px-2 text-list text-fg-muted">
             <Spinner size={13} />
-            {tr('session.live.LiveTranscript.message263')}{' '}
+            {tr('session.live.LiveTranscript.working')}{' '}
           </div>
         )}
       </div>

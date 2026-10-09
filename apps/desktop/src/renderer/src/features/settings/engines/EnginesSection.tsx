@@ -79,12 +79,14 @@ export function EnginesSection({ onOpenModels }: { onOpenModels?: () => void }) 
 
   return (
     <section>
-      <SectionTitle>{tr('settings.engines.EnginesSection.message779')}</SectionTitle>
-      <p className="-mt-2 mb-5 text-meta text-fg-muted">{tr('settings.engines.EnginesSection.message780')} </p>
+      <SectionTitle>{tr('settings.engines.EnginesSection.localEngines')}</SectionTitle>
+      <p className="-mt-2 mb-5 text-meta text-fg-muted">
+        {tr('settings.engines.EnginesSection.localProgramsThatExecute')}{' '}
+      </p>
       <div className="flex flex-col gap-2">
         {engines.length === 0 && (
           <div className="rounded-xl border border-line px-4 py-3 text-meta text-fg-muted">
-            {tr('settings.engines.EnginesSection.message781')}
+            {tr('settings.engines.EnginesSection.detectingLocalEngines')}
           </div>
         )}
         {engines.map(e => (
@@ -136,7 +138,7 @@ function EngineRow({
         type="button"
         disabled={unsupported}
         onClick={onOpen}
-        aria-label={tr('settings.engines.EnginesSection.message782', { p0: e.name })}
+        aria-label={tr('settings.engines.EnginesSection.settings', { p0: e.name })}
         className="flex min-w-0 flex-1 items-center gap-3 rounded-xl py-3 pl-4 text-left disabled:cursor-default"
       >
         <span
@@ -152,12 +154,12 @@ function EngineRow({
             <span className={cn('text-ui font-medium', unsupported ? 'text-fg-muted' : 'text-fg')}>{e.name}</span>
             {isDefault && <DefaultBadge />}
             {hidden && !isDefault && (
-              <span className="text-label text-fg-faint">{tr('settings.engines.EnginesSection.message783')}</span>
+              <span className="text-label text-fg-faint">{tr('settings.engines.EnginesSection.hiddenFromMenu')}</span>
             )}
             {e.status === 'ready' ? (
               <span className="inline-flex items-center gap-1 text-meta text-success">
                 <CircleCheck size={12} />
-                {e.version ?? tr('settings.editor.EditorSection.message709')}
+                {e.version ?? tr('settings.editor.EditorSection.available')}
               </span>
             ) : (
               <span className={cn('text-meta', unsupported ? 'text-fg-faint' : 'text-warn')}>
@@ -179,7 +181,7 @@ function EngineRow({
           onClick={onSetDefault}
           className="shrink-0 rounded-md border border-line px-2.5 py-1 text-meta text-fg-secondary hover:bg-hover hover:text-fg"
         >
-          {tr('session.ModelSourceMenu.message304')}{' '}
+          {tr('session.ModelSourceMenu.setAsDefault')}{' '}
         </button>
       )}
     </div>
