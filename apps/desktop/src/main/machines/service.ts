@@ -12,7 +12,8 @@ import { platformCharges } from '../platformBilling'
 import { validateQueuedInput } from '../platform'
 import { registerShutdown } from '../shutdown'
 import { FingerprintRequired, SshConnection } from './ssh'
-import { argumentMachine, machineOf, remoteIds, remoteArguments } from './identity'
+import { machineOf, remoteIds, remoteArguments } from './identity'
+import { resolveRoute } from './routing'
 
 interface StoredMachine extends Omit<MachineInput, 'password' | 'passphrase'> {
   id: string
@@ -369,54 +370,34 @@ export class Machines {
     this.hostEvent({ kind: 'sessions', sessions: [] })
   }
   async invoke(channel: string, args: unknown[], fallback: () => unknown): Promise<unknown> {
-    if (channel === 'engine:projects') return this.projects()
-    if (channel === 'engine:sessions') return this.sessions()
-    const explicit = argumentMachine(args)
-    const localRef = !!args[0] && typeof args[0] === 'object' && ('projectId' in args[0] || 'sessionId' in args[0])
-    const resource =
-      /^(engine:(openSession|send|context|compact|cancelQueued|moveQueued|runQueuedNow|steerQueued|resumeQueue|rewind|interrupt|interruptTurn|answer|updateSession|deleteSession|renameSession|archiveSession|setSessionBottom|stopTask|taskOutput|subagentTranscript|removeProject|renameProject)|projectTools:(tasks|createTask|updateTask|deleteTask|reorderTasks|copies|branches|previewCopy|createCopy|openCopy|removeCopy|forgetCopy|deleteService|startService|stopService|restartService|revealCopy))$/.test(
-        channel,
-      )
-    const id = explicit ?? (localRef || resource ? 'local' : this.currentId)
-    if (
-      id === 'local' ||
-      [
-        'files:finishClose',
-        'terminal:clipboardRead',
-        'terminal:clipboardWrite',
-        'terminal:openLink',
-        'projectTools:openExternal',
-      ].includes(channel)
-    )
-      return fallback()
-    if (channel === 'files:copyPath') {
-      const target = this.target(args[0] as WorkspaceRef)!
-      clipboard.writeText(posix.join(target.path, String(args[1] ?? '')))
-      return
+    const route = resolveRoute(channel, args, this.currentId)
+    switch (route.kind) {
+      case 'aggregate':
+        return route.what === 'projects' ? this.projects() : this.sessions()
+      case 'local':
+        return fallback()
+      case 'copyPath': {
+        const target = this.target(args[0] as WorkspaceRef)!
+        clipboard.writeText(posix.join(target.path, String(args[1] ?? '')))
+        return
+      }
+      case 'target':
+        return this.target(args[0] as WorkspaceRef)
+      case 'usageExport': {
+        const csv = await this.call<string>(route.machine, channel, args)
+        const result = await dialog.showSaveDialog({
+          defaultPath: 'pixelsky-remote-usage.csv',
+          filters: [{ name: 'CSV', extensions: ['csv'] }],
+        })
+        if (result.canceled || !result.filePath) return false
+        await writeFile(result.filePath, csv, 'utf8')
+        return true
+      }
+      case 'picker':
+        throw new Error('SSH_USE_WORKSPACE_PICKER')
+      case 'remote':
+        return this.call(route.machine, channel, args)
     }
-    if (channel === 'files:target') return this.target(args[0] as WorkspaceRef)
-    if (channel === 'engine:usageExport') {
-      const csv = await this.call<string>(id, channel, args)
-      const result = await dialog.showSaveDialog({
-        defaultPath: 'pixelsky-remote-usage.csv',
-        filters: [{ name: 'CSV', extensions: ['csv'] }],
-      })
-      if (result.canceled || !result.filePath) return false
-      await writeFile(result.filePath, csv, 'utf8')
-      return true
-    }
-    if (
-      [
-        'files:reveal',
-        'editor:open',
-        'projectTools:openPath',
-        'projectTools:revealCopy',
-        'projectTools:chooseDirectory',
-        'engine:addProject',
-      ].includes(channel)
-    )
-      throw new Error('SSH_USE_WORKSPACE_PICKER')
-    return this.call(id, channel, args)
   }
 }
 export async function initMachines(
