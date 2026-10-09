@@ -38,8 +38,9 @@ export interface IpcChannelSpec {
 /**
  * 本机与远端辅助进程的协议版本；`hello` 返回它，连接时必须一致。
  * 2（2026-10-09，结构重整 P6）：远端方法改用 main/core 的操作表，参数校验与本机一致，放弃未跟踪文件移到 trash/。
+ * 3（2026-10-10）：文件新建 / 重命名 / 删除 / 内容搜索，终端创建可带初始命令，固定任务（docs/ui/files-search-terminal-pins.md）。
  */
-export const REMOTE_PROTOCOL = 2
+export const REMOTE_PROTOCOL = 3
 
 export const IPC_CONTRACT = {
   'account:calls': { kind: 'invoke', route: 'local', trust: 'sender' },
@@ -254,10 +255,14 @@ export const IPC_CONTRACT = {
   'extensions:update': { kind: 'invoke', route: 'local', trust: 'sender' },
   'files:beforeClose': { kind: 'push', route: 'push', trust: 'none' },
   'files:copyPath': { kind: 'invoke', route: 'selected', special: 'copyPath', trust: 'sender' },
+  'files:create': { kind: 'invoke', route: 'selected', ids: [0], remote: 'files:create', trust: 'sender' },
   'files:finishClose': { kind: 'invoke', route: 'hostOnly', trust: 'sender' },
+  'files:grep': { kind: 'invoke', route: 'selected', ids: [0], remote: 'files:grep', trust: 'sender' },
   'files:headContent': { kind: 'invoke', route: 'selected', ids: [0], remote: 'files:headContent', trust: 'sender' },
   'files:list': { kind: 'invoke', route: 'selected', ids: [0], remote: 'files:list', trust: 'sender' },
   'files:read': { kind: 'invoke', route: 'selected', ids: [0], remote: 'files:read', trust: 'sender' },
+  'files:remove': { kind: 'invoke', route: 'selected', ids: [0], remote: 'files:remove', trust: 'sender' },
+  'files:rename': { kind: 'invoke', route: 'selected', ids: [0], remote: 'files:rename', trust: 'sender' },
   'files:reveal': { kind: 'invoke', route: 'selected', picker: true, trust: 'sender' },
   'files:save': { kind: 'invoke', route: 'selected', ids: [0], remote: 'files:save', trust: 'sender' },
   'files:search': { kind: 'invoke', route: 'selected', ids: [0], remote: 'files:search', trust: 'sender' },
@@ -500,6 +505,20 @@ export const IPC_CONTRACT = {
     route: 'selected',
     ids: [0],
     remote: 'projectTools:saveService',
+    trust: 'window',
+  },
+  'projectTools:pinTask': {
+    kind: 'invoke',
+    route: 'resource',
+    ids: [0],
+    remote: 'projectTools:pinTask',
+    trust: 'window',
+  },
+  'projectTools:pinnedTasks': {
+    kind: 'invoke',
+    route: 'selected',
+    ids: [0],
+    remote: 'projectTools:pinnedTasks',
     trust: 'window',
   },
   'projectTools:searchTasks': {

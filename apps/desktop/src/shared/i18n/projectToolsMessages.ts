@@ -265,4 +265,6 @@ export const projectToolsMessages = {
   'projectTools.inbox.collapse': { zh: '收起待处理', en: 'Collapse needs attention' },
   'projectTools.inbox.expand': { zh: '展开待处理', en: 'Expand needs attention' },
   'projectTools.inbox.palette': { zh: '打开待处理', en: 'Open needs attention' },
+  'projectTools.pinToSidebar': { zh: '固定到左侧栏', en: 'Pin to sidebar' },
+  'projectTools.unpinFromSidebar': { zh: '从左侧栏取消固定', en: 'Unpin from sidebar' },
 } as const

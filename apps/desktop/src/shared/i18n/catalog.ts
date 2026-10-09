@@ -2408,6 +2408,30 @@ export const catalog = {
     "zh": "工具内容",
     "en": "Tool content"
   },
+  "search.SearchDialog.projectFiles": {
+    "zh": "项目文件",
+    "en": "Project files"
+  },
+  "search.SearchDialog.fileName": {
+    "zh": "文件名",
+    "en": "File name"
+  },
+  "search.SearchDialog.fileLine": {
+    "zh": "第 {line} 行",
+    "en": "Line {line}"
+  },
+  "search.SearchDialog.openAProjectFirst": {
+    "zh": "先在窗格里打开一个项目，或在右上角选择项目，再搜索文件",
+    "en": "Open a project in the pane, or pick one at the top right, to search its files"
+  },
+  "search.SearchDialog.typeToSearchFiles": {
+    "zh": "输入文件名或文件里的文字",
+    "en": "Type a file name or text inside files"
+  },
+  "search.SearchDialog.fileResultsPartial": {
+    "zh": "文件太多，只显示了一部分结果，请输入更具体的内容",
+    "en": "Too many files; showing partial results. Try a more specific search"
+  },
   "search.SearchDialog.localConversationSearchIs": {
     "zh": "本机会话搜索暂不可用",
     "en": "Local conversation search is unavailable"

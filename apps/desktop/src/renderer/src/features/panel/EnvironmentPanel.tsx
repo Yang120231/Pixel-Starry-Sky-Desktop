@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { scriptCommand } from '@pixelsky/protocol'
 import { Clipboard, FolderOpen, Globe, Pencil, Play, RotateCw, Square, Trash2 } from 'lucide-react'
 import { Button, IconButton, Select } from '@/ui'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
@@ -234,7 +235,7 @@ function EnvironmentBody({ target, demo }: { target: WorkspaceRef; demo: boolean
                       ...Object.keys(data.scripts).map(value => ({ value, label: value })),
                     ]}
                     onChange={name => {
-                      if (name) setForm({ ...form, name, command: 'npm run ' + name })
+                      if (name) setForm({ ...form, name, command: scriptCommand(data.packageManager ?? 'npm', name) })
                     }}
                   />
                 )}

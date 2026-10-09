@@ -19,6 +19,7 @@ import { channelMessages } from '../../../shared/i18n/channelMessages'
 import { notificationMessages } from '../../../shared/i18n/notificationMessages'
 import { gitMessages } from '../../../shared/i18n/gitMessages'
 import { artifactMessages } from '../../../shared/i18n/artifactMessages'
+import { errorMessages } from '../../../shared/i18n/errorMessages'
 
 // 与 shared/i18n/translate.ts 的 allMessages 合并顺序一致
 const dictionaries: Record<string, Record<string, unknown>> = {
@@ -39,6 +40,7 @@ const dictionaries: Record<string, Record<string, unknown>> = {
   notificationMessages,
   gitMessages,
   artifactMessages,
+  errorMessages,
 }
 
 /** 中英文值不同、需要保持现状的重复 key（当前为空；新增重复必须先说明原因）。 */
@@ -161,6 +163,16 @@ describe('i18n 防回归', () => {
       .sort()
     expect(duplicates).toEqual([...ALLOWED_DUPLICATES].sort())
     expect(Object.keys(allMessages).length).toBe(owners.size)
+  })
+
+  it('codedError 用到的错误代码都在词典里（errors.<code>）', () => {
+    const engineRoot = join(__dirname, '..', '..', '..', '..', '..', '..', 'packages', 'engine', 'src')
+    const missing: string[] = []
+    for (const root of [mainRoot, sharedRoot, engineRoot])
+      for (const file of sourceFiles(root))
+        for (const match of readFileSync(file, 'utf8').matchAll(/codedError\(\s*'([\w.]+)'/g))
+          if (!(`errors.${match[1]}` in allMessages)) missing.push(`${relative(root, file)}: ${match[1]}`)
+    expect(missing).toEqual([])
   })
 
   it('词典 key 不用自动编号（前缀.messageN），按英文文案起名', () => {

@@ -14,6 +14,8 @@ import { channelMessages } from './channelMessages'
 import { notificationMessages } from './notificationMessages'
 import { gitMessages } from './gitMessages'
 import { artifactMessages } from './artifactMessages'
+import { errorMessages } from './errorMessages'
+import { replaceCodedErrors } from '@pixelsky/protocol'
 import type { Locale } from './messages'
 
 export const allMessages = {
@@ -34,6 +36,7 @@ export const allMessages = {
   ...notificationMessages,
   ...gitMessages,
   ...artifactMessages,
+  ...errorMessages,
 }
 export type TranslationKey = keyof typeof allMessages
 
@@ -76,6 +79,15 @@ const patterns = Object.entries(allMessages)
 /** 仅用于宿主错误、状态和系统通知，不应用于消息正文或文件内容。语言必须显式传入（renderer 的 core.ts 另有默认当前语言的封装）。 */
 export function translateMessage(input: string | null | undefined, language: Locale): string {
   const value = input ?? ''
+  // 带代码的宿主错误（codedError）：按 errors.<code> 查词典并代入参数；不认识的代码显示代码本身
+  const coded = replaceCodedErrors(value, ({ code, params }) => {
+    const message = (allMessages as Record<string, { zh: string; en: string } | undefined>)[`errors.${code}`]
+    if (!message) return code
+    return message[language === 'en-US' ? 'en' : 'zh'].replace(/\{(\w+)\}/g, (_, name: string) =>
+      String(params[name] ?? ''),
+    )
+  })
+  if (coded !== value) return coded
   const known = translateTextFor(language, value)
   if (known !== value || sourceKeys.has(value) || englishKeys.has(value)) return known
   for (const pattern of patterns) {

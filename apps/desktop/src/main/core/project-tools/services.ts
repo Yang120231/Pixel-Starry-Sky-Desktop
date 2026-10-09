@@ -7,6 +7,7 @@ import { StringDecoder } from 'node:string_decoder'
 import type { WorkspaceRef } from '../../../shared/types/workspace'
 import type { ServiceDefinition, ServiceInput, EnvironmentState, ToolStatus } from '../../../shared/types/project-tools'
 import { JsonStore, directory, gitInfo, optional, run, samePath, value, type ToolsHost } from './common'
+import { LOCKFILE_NAMES, detectPackageManager } from '@pixelsky/protocol'
 
 interface Runtime {
   child: ChildProcess
@@ -425,6 +426,19 @@ export class Services {
     const scripts = Object.fromEntries(
       Object.entries(pkg.scripts ?? {}).filter(([key, val]) => typeof val === 'string' && /^[\w:.-]+$/.test(key)),
     )
+    // 终端「脚本」菜单用它决定 npm / pnpm / yarn / bun run（docs/ui/files-search-terminal-pins.md §4.3）
+    const lockfiles = new Set(
+      (
+        await Promise.all(
+          LOCKFILE_NAMES.map(name =>
+            stat(join(target.path, name)).then(
+              () => name,
+              () => null,
+            ),
+          ),
+        )
+      ).filter((name): name is string => !!name),
+    )
     const state: EnvironmentState = {
       projectId: target.projectId,
       projectPath: target.path,
@@ -436,6 +450,7 @@ export class Services {
       services: this.list(ref),
       checkedAt: Date.now(),
       scripts,
+      packageManager: detectPackageManager(pkg.packageManager, name => lockfiles.has(name)),
     }
     this.cache.set(target.path, { at: Date.now(), state })
     return state

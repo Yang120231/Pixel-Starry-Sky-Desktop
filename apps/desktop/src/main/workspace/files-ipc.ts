@@ -11,7 +11,8 @@ import { nativeText } from '../app/ui-language'
 
 export async function initWorkspace(ctx: AppContext): Promise<void> {
   const resolveTarget: TargetResolver = ref => resolveWorkspace(ctx, ref)
-  const files = new WorkspaceFiles(resolveTarget)
+  // 文件树删除：移到系统回收站（docs/ui/files-search-terminal-pins.md §3）
+  const files = new WorkspaceFiles(resolveTarget, { trash: absolute => shell.trashItem(absolute) })
   const icons = new Map<string, string>()
   const editors = new Editors(app.getPath('userData'), resolveTarget, async path => {
     if (!icons.has(path)) icons.set(path, (await app.getFileIcon(path, { size: 'small' })).toDataURL())

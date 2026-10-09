@@ -55,7 +55,12 @@ export async function createRemoteRuntime(
   const resolve = (ref: WorkspaceRef) => resolveLocalWorkspace(host, ref)
   const tools = createToolsHost({ host: () => host, resolve, record: id => host.record(id) })
   const changed = () => peer.event('projectTools:changed', null)
-  const files = new WorkspaceFiles(resolve)
+  // 文件树删除：远端没有回收站，和 Git 面板一样移到数据目录的 trash/
+  const files = new WorkspaceFiles(resolve, {
+    trash: async (absolute, relative) => {
+      await moveToTrash(join(dataDir, 'trash'), [{ absolute, relative }])
+    },
+  })
   // Git 面板：远端没有回收站，放弃的未跟踪文件移到数据目录的 trash/（docs/ui/git-panel.md §2.4）
   const projectTools = new ProjectTools(join(dataDir, 'tools'), tools, changed, {
     trash: async list => {

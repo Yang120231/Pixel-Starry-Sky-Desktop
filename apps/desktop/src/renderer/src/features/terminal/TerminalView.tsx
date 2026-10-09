@@ -1,5 +1,5 @@
 import '@xterm/xterm/css/xterm.css'
-import { Terminal, type ITheme } from '@xterm/xterm'
+import { Terminal, type ILink, type ITheme } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { useEffect, useRef, useState } from 'react'
@@ -7,6 +7,9 @@ import type { TerminalRecord } from '../../../../shared/types/terminal'
 import { consumeTerminal, demoWrite, terminalError } from './store'
 import { screens } from './screens'
 import { isDemo } from '@/data'
+import { openFile } from '@/features/files/store'
+import { findPathMatches } from './terminalLinks'
+import { terminalFilePath } from './fileLinks'
 import { useI18n } from '@/i18n/I18nProvider'
 
 const ansi = [
@@ -169,15 +172,37 @@ export function TerminalView({
     const links = term.registerLinkProvider({
       provideLinks(line, callback) {
         const value = term.buffer.active.getLine(line - 1)?.translateToString(true) ?? ''
-        callback(
-          [...value.matchAll(/https?:\/\/[^\s<>"']+/g)].map(match => ({
-            text: match[0],
-            range: { start: { x: match.index + 1, y: line }, end: { x: match.index + match[0].length, y: line } },
-            activate: (event, text) => {
-              if (event.ctrlKey && !isDemo) void window.pixelsky!.terminal.openLink(text).catch(terminalError)
-            },
-          })),
-        )
+        const urls: ILink[] = [...value.matchAll(/https?:\/\/[^\s<>"']+/g)].map(match => ({
+          text: match[0],
+          range: { start: { x: match.index + 1, y: line }, end: { x: match.index + match[0].length, y: line } },
+          activate: (event, text) => {
+            if (event.ctrlKey && !isDemo) void window.pixelsky!.terminal.openLink(text).catch(terminalError)
+          },
+        }))
+        // 文件路径（docs/ui/files-search-terminal-pins.md §4.2）：只标项目内实际存在的文件，Ctrl+单击在右侧打开并定位
+        const candidates = isDemo ? [] : findPathMatches(value)
+        if (!candidates.length) return callback(urls.length ? urls : undefined)
+        const current = latest.current.record
+        void Promise.all(candidates.map(m => terminalFilePath(current, m.raw).catch(() => null))).then(resolved => {
+          const files: ILink[] = candidates.flatMap((m, i) => {
+            const path = resolved[i]
+            if (!path) return []
+            return [
+              {
+                text: value.slice(m.start, m.end),
+                range: { start: { x: m.start + 1, y: line }, end: { x: m.end, y: line } },
+                activate: (event: MouseEvent) => {
+                  if (event.ctrlKey || event.metaKey)
+                    void openFile({ projectId: current.projectId }, path, m.line ?? undefined, m.column ?? 1).catch(
+                      terminalError,
+                    )
+                },
+              },
+            ]
+          })
+          const all = [...urls, ...files]
+          callback(all.length ? all : undefined)
+        })
       },
     })
     const screen = {

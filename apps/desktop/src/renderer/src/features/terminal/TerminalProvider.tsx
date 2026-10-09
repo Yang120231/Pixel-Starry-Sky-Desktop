@@ -12,6 +12,7 @@ import {
   terminalError,
   terminalRename,
   terminalRestart,
+  terminalRunWhenReady,
   terminalState,
   useTerminalStore,
 } from './store'
@@ -22,6 +23,12 @@ import { getMachines, machineOf, selectMachine } from '@/features/machines/store
 import { getPage, showWorkbench } from '@/features/layout/page'
 
 type Action = 'rename' | 'close' | 'restart' | 'search' | 'clear'
+/** 左右分屏（docs/ui/files-search-terminal-pins.md §4.1）：两个终端 id 和左边所占比例 */
+export interface TerminalSplit {
+  left: string
+  right: string
+  ratio: number
+}
 interface TerminalUi {
   workspacePath: string
   open: boolean
@@ -41,6 +48,15 @@ interface TerminalUi {
   paste(id: string, text: string): void
   searchId: string | null
   stopSearch(): void
+  split: TerminalSplit | null
+  /** 新建一个终端放到右边（已分屏时替换右边） */
+  splitRight(): Promise<void>
+  /** 把已有的终端放到右边 */
+  showRight(id: string): void
+  unsplit(): void
+  setSplitRatio(ratio: number): void
+  /** 新建终端并运行一条项目脚本命令（标题用脚本名） */
+  runScript(name: string, command: string): Promise<void>
 }
 interface Dialog {
   kind: 'rename' | 'close' | 'restart' | 'paste'
@@ -51,7 +67,20 @@ interface Dialog {
 }
 const Context = createContext<TerminalUi | null>(null)
 const key = isDemo ? 'pixelsky.terminal.ui.demo' : 'pixelsky.terminal.ui'
-function read(): { open: boolean; projectId: string | null; activeId: string | null; height: number } {
+const clampRatio = (ratio: number): number => Math.min(0.8, Math.max(0.2, ratio))
+function readSplit(v: unknown): TerminalSplit | null {
+  const s = v as Partial<TerminalSplit> | null
+  return s && typeof s.left === 'string' && typeof s.right === 'string' && s.left !== s.right
+    ? { left: s.left, right: s.right, ratio: typeof s.ratio === 'number' ? clampRatio(s.ratio) : 0.5 }
+    : null
+}
+function read(): {
+  open: boolean
+  projectId: string | null
+  activeId: string | null
+  height: number
+  split: TerminalSplit | null
+} {
   try {
     const v = JSON.parse(localStorage.getItem(key) ?? '{}')
     return {
@@ -59,9 +88,10 @@ function read(): { open: boolean; projectId: string | null; activeId: string | n
       projectId: typeof v.projectId === 'string' ? v.projectId : null,
       activeId: typeof v.activeId === 'string' ? v.activeId : null,
       height: typeof v.height === 'number' ? Math.max(160, Math.min(620, v.height)) : 280,
+      split: readSplit(v.split),
     }
   } catch {
-    return { open: false, projectId: null, activeId: null, height: 280 }
+    return { open: false, projectId: null, activeId: null, height: 280, split: null }
   }
 }
 export function TerminalProvider({ children }: { children: ReactNode }) {
@@ -118,7 +148,10 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       if (ui.activeId !== next) setUi(v => ({ ...v, activeId: next }))
     }
     if (!ui.projectId && workspace.ref) setUi(v => ({ ...v, projectId: projectOf(workspace.ref) }))
-  }, [state.ready, state.terminals, ui.projectId, ui.activeId, workspace.key])
+    // 分屏里的任一终端已关闭：退回单屏
+    if (ui.split && ![ui.split.left, ui.split.right].every(id => state.terminals.some(r => r.id === id)))
+      setUi(v => ({ ...v, split: null }))
+  }, [state.ready, state.terminals, ui.projectId, ui.activeId, ui.split, workspace.key])
   const select = useCallback((id: string): void => {
     const r = terminalState().terminals.find(r => r.id === id)
     if (!r) return
@@ -129,18 +162,26 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
         .catch(terminalError)
       return
     }
-    setUi(v => ({ ...v, activeId: id, projectId: r.projectId, open: true }))
+    setUi(v => {
+      // 分屏时选一个不在两边的终端：换掉当前聚焦的那一边
+      const split =
+        v.split && id !== v.split.left && id !== v.split.right
+          ? v.activeId === v.split.right
+            ? { ...v.split, right: id }
+            : { ...v.split, left: id }
+          : v.split
+      return { ...v, activeId: id, projectId: r.projectId, open: true, split }
+    })
     openRightTab('terminal')
     requestAnimationFrame(() => screens.get(id)?.focus())
   }, [])
-  const create = async (
-    ref: WorkspaceRef | null = workspace.ref && projectOf(workspace.ref) === ui.projectId
+  const defaultRef = (): WorkspaceRef | null =>
+    workspace.ref && projectOf(workspace.ref) === ui.projectId
       ? workspace.ref
       : ui.projectId
         ? { projectId: ui.projectId }
-        : workspace.ref,
-    profileId?: string,
-  ): Promise<boolean> => {
+        : workspace.ref
+  const create = async (ref: WorkspaceRef | null = defaultRef(), profileId?: string): Promise<boolean> => {
     if (creating.current) return false
     if (!ref) {
       terminalError(new Error(t('terminal.chooseProject')))
@@ -303,8 +344,59 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
   })
+  const splitRight = async (): Promise<void> => {
+    const left = ui.split ? ui.split.left : ui.activeId
+    const ref = defaultRef()
+    if (!left || !ref || creating.current) return
+    creating.current = true
+    terminalError(null)
+    try {
+      const record = await terminalCreate(ref)
+      setUi(v => ({
+        ...v,
+        activeId: record.id,
+        open: true,
+        split: { left, right: record.id, ratio: v.split?.ratio ?? 0.5 },
+      }))
+      openRightTab('terminal')
+      requestAnimationFrame(() => screens.get(record.id)?.focus())
+    } catch (cause) {
+      terminalError(cause)
+    } finally {
+      creating.current = false
+    }
+  }
+  const showRight = (id: string): void => {
+    setUi(v => {
+      const left = v.activeId && v.activeId !== id ? v.activeId : v.split?.left
+      if (!left || left === id) return v
+      return { ...v, activeId: id, split: { left, right: id, ratio: v.split?.ratio ?? 0.5 } }
+    })
+    requestAnimationFrame(() => screens.get(id)?.focus())
+  }
+  const runScript = async (name: string, command: string): Promise<void> => {
+    const ref = defaultRef()
+    if (!ref || creating.current) return
+    creating.current = true
+    terminalError(null)
+    try {
+      const record = await terminalCreate(ref)
+      select(record.id)
+      await terminalRename(record.id, name).catch(() => undefined)
+      terminalRunWhenReady(record.id, command)
+    } catch (cause) {
+      terminalError(cause)
+    } finally {
+      creating.current = false
+    }
+  }
   const context: TerminalUi = {
     ...ui,
+    splitRight,
+    showRight,
+    runScript,
+    unsplit: () => setUi(v => ({ ...v, split: null })),
+    setSplitRatio: ratio => setUi(v => (v.split ? { ...v, split: { ...v.split, ratio: clampRatio(ratio) } } : v)),
     workspacePath: projectOf(workspace.ref) === ui.projectId ? workspace.path : '',
     maximized,
     toggle,

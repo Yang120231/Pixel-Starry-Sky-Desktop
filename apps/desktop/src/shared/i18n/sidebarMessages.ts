@@ -80,4 +80,10 @@ export const sidebarMessages = {
   'sidebar.icon.chart-column': { zh: '柱状图', en: 'Bar chart' },
   'sidebar.icon.chart-no-axes-combined': { zh: '趋势图', en: 'Trend chart' },
   'sidebar.icon.gauge': { zh: '仪表盘', en: 'Gauge' },
+  'sidebar.pinnedTasks': { zh: '固定任务', en: 'Pinned tasks' },
+  'sidebar.dropToPin': { zh: '松开，把任务固定到这里', en: 'Drop to pin the task here' },
+  'sidebar.openTask': { zh: '打开任务', en: 'Open task' },
+  'sidebar.unpinTask': { zh: '取消固定', en: 'Unpin' },
+  'sidebar.markDone': { zh: '标记完成', en: 'Mark done' },
+  'sidebar.markNotDone': { zh: '标记未完成', en: 'Mark not done' },
 } as const

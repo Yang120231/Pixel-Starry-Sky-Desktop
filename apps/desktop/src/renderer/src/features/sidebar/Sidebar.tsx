@@ -1,6 +1,6 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
-import { useId } from 'react'
+import { useId, useState } from 'react'
 import { ChevronDown, FolderPlus, Search } from 'lucide-react'
 import { cn, useComingSoon } from '@/ui'
 import { setSidebarPrefs, useSidebarPrefs } from '@/features/appearance/sidebar'
@@ -11,6 +11,8 @@ import { SidebarHeader } from './SidebarHeader'
 import { LayoutActionButton } from '@/features/layout/LayoutActionButton'
 import { SidebarEmpty, SidebarRow, SidebarSection } from './SidebarSection'
 import { PinnedList } from './PinnedList'
+import { PinnedTasks } from './PinnedTasks'
+import { TASK_DRAG_TYPE, draggedTask, pinTask } from '@/features/panel/pinnedTasks'
 import { ProjectTree } from './ProjectTree'
 import { RecentItem } from './RecentItem'
 import { RunStatusPill } from './RunStatusPill'
@@ -40,8 +42,29 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
   const onAddProject = isLive ? () => void addProject() : () => comingSoon(tr('sidebar.Sidebar.addProject'))
   const onNewTask = isLive ? () => onSelectSession(null) : undefined
   const compactSearch = prefs.layout.top.length >= 4
+  // 把任务清单里的任务拖到侧栏任意位置松开：固定到「固定任务」（docs/ui/files-search-terminal-pins.md §5）
+  const [dropping, setDropping] = useState(false)
+  const taskDrag = (e: React.DragEvent): boolean => e.dataTransfer.types.includes(TASK_DRAG_TYPE)
   return (
-    <aside className="flex h-full w-full min-w-0 flex-col bg-sidebar">
+    <aside
+      className={cn('flex h-full w-full min-w-0 flex-col bg-sidebar', dropping && 'sidebar-task-drop')}
+      onDragOver={e => {
+        if (!taskDrag(e)) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'copy'
+        if (!dropping) setDropping(true)
+      }}
+      onDragLeave={e => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropping(false)
+      }}
+      onDrop={e => {
+        if (!taskDrag(e)) return
+        e.preventDefault()
+        setDropping(false)
+        const task = draggedTask()
+        if (task) void pinTask(task, true).catch(() => undefined)
+      }}
+    >
       <SidebarHeader onCollapse={onCollapse} />
 
       <div className="no-drag flex shrink-0 items-center gap-1 px-3 pt-1" data-sidebar-actions>
@@ -76,6 +99,8 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
             <PinnedList items={pinned} selectedSessionId={selectedSessionId} onSelectSession={onSelectSession} />
           </SidebarSection>
         )}
+
+        <PinnedTasks dropping={dropping} />
 
         <SidebarSection title={tr('sidebar.Sidebar.projects')}>
           {projects.length > 0 ? (

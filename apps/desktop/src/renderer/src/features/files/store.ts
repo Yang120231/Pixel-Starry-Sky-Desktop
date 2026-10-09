@@ -77,6 +77,31 @@ export function retainSessionFiles(sessionId: string): void {
   for (const tab of affected) replacePanelFile(tab.id, fileTab({ projectId: project.id }, tab.path))
   for (const id of stored) replacePanelFile(id, fileTab({ projectId: project.id }, parseFileTab(id)!.path))
 }
+const sameRef = (a: WorkspaceRef, b: WorkspaceRef): boolean =>
+  a.projectId === b.projectId && a.sessionId === b.sessionId
+/** path 本身或它下面的文件（文件夹改名 / 删除时一起处理） */
+const under = (path: string, base: string): boolean => path === base || path.startsWith(base + '/')
+
+/** 已打开的、位于 path（文件或文件夹）下的文件（docs/ui/files-search-terminal-pins.md §3） */
+export const openFilesUnder = (ref: WorkspaceRef, path: string): OpenFile[] =>
+  state.tabs.filter(tab => sameRef(tab.ref, ref) && under(tab.path, path))
+
+/**
+ * 文件树重命名 / 移动后，已打开的标签换成新路径。标签 id 不变，保留编辑器和草稿；
+ * 保存的布局记新 id，重启后按新路径打开（和 retainSessionFiles 同样的做法）。
+ */
+export function renameOpenFiles(ref: WorkspaceRef, from: string, to: string): void {
+  let changed = false
+  const tabs = state.tabs.map(tab => {
+    if (!sameRef(tab.ref, ref) || !under(tab.path, from)) return tab
+    changed = true
+    const path = to + tab.path.slice(from.length)
+    replacePanelFile(tab.id, fileTab(tab.ref, path))
+    return { ...tab, path, name: path.split('/').pop() ?? path }
+  })
+  if (changed) set({ ...state, tabs })
+}
+
 export const dirtyFile = (tab: OpenFile): boolean =>
   tab.document?.kind === 'text' && tab.draft !== tab.document.content.replace(/\r\n/g, '\n')
 export const updateFile = (id: string, patch: Partial<OpenFile>): void =>

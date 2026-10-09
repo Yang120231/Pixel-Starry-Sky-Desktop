@@ -14,6 +14,8 @@ export interface MenuAction {
   checked?: boolean
   /** 在这一项前面插入分组小标题 */
   section?: string
+  /** 在这一项前面画一条分隔线（没有标题） */
+  separator?: boolean
 }
 /** Shared context menu, outside scroll containers, with keyboard navigation. */
 export function ActionMenu({
@@ -94,6 +96,9 @@ export function ActionMenu({
               >
                 {action.section}
               </div>
+            )}
+            {action.separator && !action.section && index > 0 && (
+              <div role="separator" className="mx-2 my-1 border-t border-line" />
             )}
             <button
               type="button"

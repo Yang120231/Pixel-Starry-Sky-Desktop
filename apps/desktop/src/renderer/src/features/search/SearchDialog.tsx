@@ -3,17 +3,24 @@ import { setCurrentProject } from '@/features/engine/store'
 import { paneActions } from '@/features/panes/store'
 import { requestTask } from '@/features/panel/taskNavigation'
 import { useI18n } from '@/i18n/I18nProvider'
-import { tr } from '../../i18n/core'
+import { tr, translateMessage } from '../../i18n/core'
 import { useEffect, useRef, useState, type RefObject } from 'react'
-import { CornerDownLeft, Folder, MessageSquare, Search, SquareTerminal, X } from 'lucide-react'
+import { CornerDownLeft, FileText, Folder, MessageSquare, Search, SquareTerminal, X } from 'lucide-react'
 import type { SearchQuery, SearchResponse, SearchResult, SearchScope } from '@pixelsky/protocol'
 import { IconButton, Spinner, cn } from '@/ui'
 import { OPEN_SESSION_EVENT, bridge, useEngineState } from '@/features/engine'
 import { isDemo } from '@/data'
 import { ProjectFilter } from './ProjectFilter'
 import { demo } from '@/data/demo'
+import { openFile } from '@/features/files/store'
+import { useActiveWorkspace } from '@/features/editor/target'
+import { demoFileHits, searchFiles, type FileHit, type FileHits } from './fileSearch'
+import type { WorkspaceRef } from '../../../../shared/types/workspace'
 
-const SCOPES: Array<{ id: SearchScope; name: string }> = [
+/** 「项目文件」只在界面里，不发给会话搜索 */
+type Scope = SearchScope | 'files'
+
+const SCOPES: Array<{ id: Scope; name: string }> = [
   {
     id: 'all',
     get name() {
@@ -38,7 +45,14 @@ const SCOPES: Array<{ id: SearchScope; name: string }> = [
       return tr('search.SearchDialog.toolContent')
     },
   },
+  {
+    id: 'files',
+    get name() {
+      return tr('search.SearchDialog.projectFiles')
+    },
+  },
 ]
+const noFiles: FileHits = { hits: [], truncated: false }
 let requestSequence = 0
 const emptyResponse: SearchResponse = { requestId: 0, results: [], truncated: false, partial: false, sessionCount: 0 }
 
@@ -68,7 +82,8 @@ export function SearchDialog({
 }) {
   useI18n()
   const [text, setText] = useState('')
-  const [scope, setScope] = useState<SearchScope>('all')
+  const [scope, setScope] = useState<Scope>('all')
+  const [fileHits, setFileHits] = useState<FileHits>(noFiles)
   const [projectId, setProjectId] = useState<string | null>(null)
   const [response, setResponse] = useState(emptyResponse)
   const [loading, setLoading] = useState(true)
@@ -79,6 +94,19 @@ export function SearchDialog({
   const request = useRef(0)
   const projects = useEngineState(s => s.projects)
   const options = isDemo ? demo().search.projects : projects
+  // 搜文件的项目：选了项目筛选就用它，否则用当前窗格的项目
+  const workspace = useActiveWorkspace()
+  const fileRef: WorkspaceRef | null = projectId ? { projectId } : workspace.ref
+  const fileRefKey = fileRef ? (fileRef.projectId ?? 'session:' + fileRef.sessionId) : ''
+  const openHit = (hit: FileHit) => {
+    void openFile(hit.ref, hit.path, hit.line ?? undefined, hit.column ?? 1).catch(() => undefined)
+    onClose()
+  }
+  const total = fileHits.hits.length + response.results.length
+  const activateIndex = (i: number) => {
+    if (i < fileHits.hits.length) openHit(fileHits.hits[i])
+    else if (response.results[i - fileHits.hits.length]) activate(response.results[i - fileHits.hits.length])
+  }
   const activate = (r: SearchResult) => {
     if (r.id.startsWith('manual-task:')) {
       setCurrentProject(r.projectId)
@@ -99,18 +127,43 @@ export function SearchDialog({
     setLoading(true)
     setError(null)
     setResponse(emptyResponse)
+    setFileHits(noFiles)
     setSelected(0)
     if (composing) return
     let disposed = false
     const timer = window.setTimeout(
       async () => {
+        // 项目文件：「全部」里带前几条，「项目文件」范围取全部；需要有项目和搜索词
+        const wantFiles = (scope === 'all' || scope === 'files') && !!text.trim() && !!fileRef
+        const files = wantFiles
+          ? isDemo
+            ? Promise.resolve(
+                demoFileHits(fileRef!, demo().files.contents, text.trim(), scope === 'files' ? 'full' : 'brief'),
+              )
+            : searchFiles(fileRef!, text, scope === 'files' ? 'full' : 'brief').catch(err =>
+                // 「全部」里文件搜索出错不影响会话结果；「项目文件」范围直接显示错误
+                scope === 'files' ? Promise.reject(err) : noFiles,
+              )
+          : Promise.resolve(noFiles)
+        if (scope === 'files') {
+          try {
+            const hits = await files
+            if (!disposed && request.current === requestId) setFileHits(hits)
+          } catch (err) {
+            if (!disposed && request.current === requestId) setError((err as Error).message)
+          } finally {
+            if (!disposed && request.current === requestId) setLoading(false)
+          }
+          return
+        }
         const query: SearchQuery = { requestId, text, scope, projectId }
         try {
-          const [result, tasks] = await Promise.all([
+          const [result, tasks, hits] = await Promise.all([
             isDemo ? demo().search.run(query) : bridge?.search(query),
             !isDemo && scope === 'all' && text.trim()
               ? window.pixelsky?.projectTools.searchTasks(text, projectId)
               : Promise.resolve([]),
+            files,
           ])
           if (result && tasks?.length) {
             const rows: SearchResult[] = tasks.map(task => ({
@@ -132,6 +185,7 @@ export function SearchDialog({
           if (disposed || request.current !== requestId || result?.cancelled) return
           if (!result) throw new Error(tr('search.SearchDialog.localConversationSearchIs'))
           setResponse(result)
+          setFileHits(hits)
         } catch (err) {
           if (!disposed && request.current === requestId) setError((err as Error).message)
         } finally {
@@ -145,12 +199,12 @@ export function SearchDialog({
       window.clearTimeout(timer)
       if (!isDemo) void bridge?.cancelSearch(requestId).catch(() => undefined)
     }
-  }, [text, scope, projectId, composing])
+  }, [text, scope, projectId, composing, fileRefKey])
   useEffect(() => {
     dialog.current
       ?.querySelector<HTMLElement>(`[data-result-index="${selected}"]`)
       ?.scrollIntoView({ block: 'nearest' })
-  }, [selected, response])
+  }, [selected, response, fileHits])
 
   return (
     <div
@@ -172,12 +226,12 @@ export function SearchDialog({
             e.preventDefault()
             e.stopPropagation()
             onClose()
-          } else if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && response.results.length) {
+          } else if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && total) {
             e.preventDefault()
-            setSelected(i => (i + (e.key === 'ArrowDown' ? 1 : -1) + response.results.length) % response.results.length)
-          } else if (e.key === 'Enter' && e.target === inputRef.current && response.results[selected] && !loading) {
+            setSelected(i => (i + (e.key === 'ArrowDown' ? 1 : -1) + total) % total)
+          } else if (e.key === 'Enter' && e.target === inputRef.current && selected < total && !loading) {
             e.preventDefault()
-            activate(response.results[selected])
+            activateIndex(selected)
           } else if (e.key === 'Tab') {
             const focusable = Array.from(
               dialog.current?.querySelectorAll<HTMLElement>('input,select,button:not(:disabled),[tabindex="0"]') ?? [],
@@ -219,7 +273,7 @@ export function SearchDialog({
             aria-autocomplete="list"
             aria-expanded
             aria-controls="global-search-results"
-            aria-activedescendant={response.results[selected] ? `search-result-${selected}` : undefined}
+            aria-activedescendant={selected < total ? `search-result-${selected}` : undefined}
             className="h-11 min-w-0 flex-1 bg-transparent text-prose text-fg outline-none placeholder:text-fg-faint"
             onChange={e => setText(e.target.value)}
             onCompositionStart={() => setComposing(true)}
@@ -257,7 +311,43 @@ export function SearchDialog({
           aria-label={tr('search.SearchDialog.searchResults')}
           aria-busy={loading}
         >
-          {response.results.map((r, i) => {
+          {fileHits.hits.map((hit, i) => (
+            <button
+              key={hit.key}
+              id={`search-result-${i}`}
+              type="button"
+              role="option"
+              aria-selected={i === selected}
+              tabIndex={-1}
+              data-result-index={i}
+              data-file-hit={hit.key}
+              onMouseEnter={() => setSelected(i)}
+              onClick={() => openHit(hit)}
+              className={cn(
+                'flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left',
+                i === selected ? 'bg-selected' : 'hover:bg-hover',
+              )}
+            >
+              <FileText size={16} strokeWidth={1.5} className="mt-0.5 shrink-0 text-fg-muted" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-ui font-medium text-fg">{hit.path.split('/').pop()}</span>
+                <span className="mt-0.5 block truncate text-label text-fg-faint">
+                  {hit.path} ·{' '}
+                  {hit.line === null
+                    ? tr('search.SearchDialog.fileName')
+                    : tr('search.SearchDialog.fileLine', { line: hit.line })}
+                </span>
+                {hit.text && (
+                  <span className="mt-1 block truncate font-mono text-meta text-fg-muted">
+                    <Fragments parts={searchSnippet(hit.text.trim(), searchTerms(text))} />
+                  </span>
+                )}
+              </span>
+              {i === selected && <CornerDownLeft size={13} className="mt-1 shrink-0 text-fg-faint" />}
+            </button>
+          ))}
+          {response.results.map((r, n) => {
+            const i = n + fileHits.hits.length
             const Icon = r.itemId
               ? ['command', 'tool', 'file_change'].includes(r.kind)
                 ? SquareTerminal
@@ -305,17 +395,29 @@ export function SearchDialog({
               </button>
             )
           })}
-          {!response.results.length && (
+          {!total && (
             <div role="status" className="px-4 py-9 text-center text-ui text-fg-muted">
               {loading
                 ? tr('search.SearchDialog.searching')
-                : (error ??
-                  (!response.sessionCount
-                    ? tr('search.SearchDialog.noConversationsYetStart')
-                    : text.trim()
-                      ? tr('search.SearchDialog.noMatchingContentTry')
-                      : tr('search.SearchDialog.noConversationsInThis')))}
+                : error
+                  ? translateMessage(error)
+                  : scope === 'files'
+                    ? !fileRef
+                      ? tr('search.SearchDialog.openAProjectFirst')
+                      : text.trim()
+                        ? tr('search.SearchDialog.noMatchingContentTry')
+                        : tr('search.SearchDialog.typeToSearchFiles')
+                    : !response.sessionCount
+                      ? tr('search.SearchDialog.noConversationsYetStart')
+                      : text.trim()
+                        ? tr('search.SearchDialog.noMatchingContentTry')
+                        : tr('search.SearchDialog.noConversationsInThis')}
             </div>
+          )}
+          {scope === 'files' && fileHits.truncated && (
+            <p role="status" className="px-3 py-2 text-meta text-fg-muted">
+              {tr('search.SearchDialog.fileResultsPartial')}
+            </p>
           )}
           {response.partial && (
             <p role="status" className="px-3 py-2 text-meta text-warn">

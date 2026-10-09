@@ -15,6 +15,19 @@ export interface DirectoryListing {
   entries: FileEntry[]
   truncated: boolean
 }
+/** 项目文件内容搜索的一条命中（docs/ui/files-search-terminal-pins.md §2） */
+export interface GrepMatch {
+  /** 相对项目，用 / 分隔 */
+  path: string
+  line: number
+  column: number
+  /** 这一行的内容（过长时截断） */
+  text: string
+}
+export interface GrepResult {
+  matches: GrepMatch[]
+  truncated: boolean
+}
 export type FileDocument =
   | {
       kind: 'text'

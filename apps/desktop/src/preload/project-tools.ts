@@ -20,6 +20,10 @@ import type {
 
 export interface ProjectToolsBridge {
   searchTasks(text: string, projectId: string | null): Promise<ManualTask[]>
+  /** 固定到左侧栏 / 取消固定（docs/ui/files-search-terminal-pins.md §5） */
+  pinTask(id: string, pinned: boolean): Promise<ManualTask>
+  /** 当前机器上所有已固定的任务 */
+  pinnedTasks(): Promise<ManualTask[]>
   tasks(projectId: string): Promise<TaskState>
   createTask(projectId: string, input: Partial<ManualTask>): Promise<ManualTask>
   updateTask(id: string, patch: Partial<ManualTask>): Promise<ManualTask>

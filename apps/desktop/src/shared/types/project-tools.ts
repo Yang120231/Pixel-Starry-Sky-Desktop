@@ -12,6 +12,8 @@ export interface ManualTask {
   order: number
   createdAt: number
   updatedAt: number
+  /** 固定到左侧栏的时间；没固定为 null 或没有（旧数据）（docs/ui/files-search-terminal-pins.md §5） */
+  pinnedAt?: number | null
 }
 export interface AiPlan {
   sessionId: string
@@ -70,6 +72,8 @@ export interface EnvironmentState {
   services: ServiceDefinition[]
   checkedAt: number
   scripts: Record<string, string>
+  /** 运行脚本用的包管理器（packageManager 字段或锁文件判断；旧远端没有这个字段） */
+  packageManager?: import('@pixelsky/protocol').PackageManager
 }
 export interface ProjectCopy {
   id: string

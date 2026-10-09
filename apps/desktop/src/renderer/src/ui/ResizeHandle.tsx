@@ -1,6 +1,6 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../i18n/core'
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react'
 import { cn } from './cn'
 
 interface ResizeHandleProps {
@@ -12,6 +12,8 @@ interface ResizeHandleProps {
   /** 居中输入框左右边缘的位移对应两倍宽度变化。 */
   scale?: number
   className?: string
+  /** 额外的定位样式（例如终端分屏把手按左栏宽度放置） */
+  style?: CSSProperties
   onChange(value: number): void
   onCommit(value: number): void
   onCancel?(): void
@@ -27,6 +29,7 @@ export function ResizeHandle({
   max,
   scale = 1,
   className,
+  style,
   onChange,
   onCommit,
   onCancel,
@@ -134,6 +137,7 @@ export function ResizeHandle({
       title={tr('ui.ResizeHandle.doubleClickOrEnter', { p0: label })}
       className={cn('layout-resize-handle no-drag', axis === 'x' ? 'layout-resize-x' : 'layout-resize-y', className)}
       data-resizing={active || undefined}
+      style={style}
       onPointerDown={down}
       onPointerMove={move}
       onPointerUp={() => finish()}

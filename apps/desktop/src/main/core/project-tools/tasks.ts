@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import type { ManualTask } from '../../../shared/types/project-tools'
+import { codedError } from '@pixelsky/protocol'
 import { JsonStore, value, type ToolsHost } from './common'
 
 type Input = Partial<ManualTask>
@@ -74,6 +75,31 @@ export class Tasks {
     })
     this.changed()
     return result
+  }
+  /** 固定到左侧栏 / 取消固定；不改 updatedAt（固定不算编辑） */
+  async pin(id: string, pinned: boolean): Promise<ManualTask> {
+    const result = await this.store.transaction(data => {
+      const task = data.tasks.find(t => t.id === id)
+      if (!task) throw codedError('tasks.notFound')
+      task.pinnedAt = pinned ? (task.pinnedAt ?? Date.now()) : null
+      return task
+    })
+    this.changed()
+    return result
+  }
+  /** 所有项目里已固定的任务，按固定时间排；项目已移除的不列 */
+  pinned(): ManualTask[] {
+    return this.store.data.tasks
+      .filter(task => {
+        if (!task.pinnedAt) return false
+        try {
+          this.host.resolve({ projectId: task.projectId })
+          return true
+        } catch {
+          return false
+        }
+      })
+      .sort((a, b) => (a.pinnedAt ?? 0) - (b.pinnedAt ?? 0))
   }
   async remove(id: string): Promise<void> {
     await this.store.transaction(data => {

@@ -43,4 +43,22 @@ export const workspaceMessages = {
   'workspace.maximize': { zh: '放大面板', en: 'Maximize panel' },
   'workspace.restore': { zh: '还原面板', en: 'Restore panel' },
   'workspace.collapse': { zh: '收起右侧面板', en: 'Collapse right panel' },
+  'workspace.newFile': { zh: '新建文件', en: 'New file' },
+  'workspace.newFolder': { zh: '新建文件夹', en: 'New folder' },
+  'workspace.renameEntry': { zh: '重命名', en: 'Rename' },
+  'workspace.deleteEntry': { zh: '删除', en: 'Delete' },
+  'workspace.fileName': { zh: '文件名', en: 'File name' },
+  'workspace.folderName': { zh: '文件夹名', en: 'Folder name' },
+  'workspace.deleteTitle': { zh: '删除「{name}」？', en: 'Delete “{name}”?' },
+  'workspace.deleteHint': {
+    zh: '会移到回收站，可以找回（远程机器上移到软件数据目录里的回收目录）。',
+    en: 'It will be moved to the trash and can be restored (on remote machines, to the app’s trash folder).',
+  },
+  'workspace.deleteDirty': {
+    zh: '有 {count} 个打开的文件还有未保存的修改，删除后这些修改会丢失。',
+    en: '{count} open files have unsaved changes that will be lost.',
+  },
+  'workspace.deleting': { zh: '删除中…', en: 'Deleting…' },
+  'workspace.cancel': { zh: '取消', en: 'Cancel' },
+  'workspace.demoCannotModify': { zh: '演示模式不能修改文件', en: 'Files can’t be changed in demo mode' },
 } as const

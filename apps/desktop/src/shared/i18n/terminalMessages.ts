@@ -151,4 +151,11 @@ export const terminalMessages = {
   'terminal.openPlugins': { zh: '打开插件配置', en: 'Open plugin settings' },
   'terminal.openAppearance': { zh: '打开外观设置', en: 'Open appearance settings' },
   'terminal.openShortcuts': { zh: '打开快捷键设置', en: 'Open shortcut settings' },
+  'terminal.splitRight': { zh: '向右分屏', en: 'Split right' },
+  'terminal.unsplit': { zh: '取消分屏', en: 'Unsplit' },
+  'terminal.splitWidth': { zh: '分屏宽度', en: 'Split width' },
+  'terminal.showRight': { zh: '在右侧显示', en: 'Show on the right' },
+  'terminal.scripts': { zh: '运行项目脚本', en: 'Run project script' },
+  'terminal.scriptsHint': { zh: '在新终端里运行', en: 'Runs in a new terminal' },
+  'terminal.noScripts': { zh: '没有找到 package.json 脚本', en: 'No package.json scripts found' },
 } as const

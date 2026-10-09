@@ -1,9 +1,17 @@
 import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
-import { readdir, realpath, stat, open, rename, unlink } from 'node:fs/promises'
+import { lstat, mkdir, readdir, realpath, stat, open, rename, unlink } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
-import { isAbsolute, join, relative, resolve, sep, extname } from 'node:path'
-import type { DirectoryListing, FileDocument, WorkspaceRef, WorkspaceTarget } from '../../shared/types/workspace'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep, extname } from 'node:path'
+import { codedError } from '@pixelsky/protocol'
+import { grepWorkspace } from './workspace-grep'
+import type {
+  DirectoryListing,
+  FileDocument,
+  GrepResult,
+  WorkspaceRef,
+  WorkspaceTarget,
+} from '../../shared/types/workspace'
 
 export const TEXT_LIMIT = 2 * 1024 * 1024
 export const READ_LIMIT = 10 * 1024 * 1024
@@ -37,7 +45,7 @@ function inside(root: string, file: string): boolean {
 /** 相对路径和真实路径都必须位于所选项目，避免目录链接指向项目外。 */
 export async function workspacePath(rootPath: string, input: unknown, kind?: 'file' | 'directory'): Promise<string> {
   if (typeof input !== 'string' || input.includes('\0') || input.includes(':') || isAbsolute(input))
-    throw new Error('请使用项目内的相对路径')
+    throw codedError('files.relativePath')
   let root: string
   try {
     root = await realpath(rootPath)
@@ -45,12 +53,12 @@ export async function workspacePath(rootPath: string, input: unknown, kind?: 'fi
     throw new Error('项目目录不存在')
   }
   const candidate = resolve(root, input)
-  if (!inside(root, candidate)) throw new Error('文件路径超出项目')
+  if (!inside(root, candidate)) throw codedError('files.outsideProject')
   let result: string
   try {
     result = await realpath(candidate)
   } catch {
-    throw new Error(input ? '文件或目录已不存在' : '项目目录不存在')
+    throw input ? codedError('files.notFound') : new Error('项目目录不存在')
   }
   if (!inside(root, result)) throw new Error('此链接指向项目外，无法在软件内打开')
   const info = await stat(result)
@@ -58,6 +66,73 @@ export async function workspacePath(rootPath: string, input: unknown, kind?: 'fi
   if (kind === 'file' && !info.isFile()) throw new Error('目标不是普通文件')
   return result
 }
+
+/** 文件 / 文件夹名：不能为空、. / ..，不能带 Windows 不允许的字符，也不能以空格或点结尾 */
+const BAD_NAME = /[\\/:*?"<>|\0]/
+export function validName(name: string): boolean {
+  return !!name && name !== '.' && name !== '..' && !BAD_NAME.test(name) && !/[ .]$/.test(name) && name.length <= 255
+}
+
+function relativeInput(input: unknown): string {
+  if (typeof input !== 'string' || input.includes('\0') || input.includes(':') || isAbsolute(input))
+    throw codedError('files.relativePath')
+  return input.replaceAll('\\', '/').replace(/^\.\//, '').replace(/\/+$/, '')
+}
+
+/**
+ * 项目内一个已存在的条目本身（不跟随最后一级的符号链接，重命名 / 删除的是链接而不是它指向的文件）。
+ * 上级目录的真实路径必须在项目内；不能是项目根目录。
+ */
+export async function workspaceEntry(rootPath: string, input: unknown): Promise<{ root: string; path: string }> {
+  const rel = relativeInput(input)
+  if (!rel) throw codedError('files.projectRoot')
+  const root = await realpath(rootPath).catch(() => {
+    throw new Error('项目目录不存在')
+  })
+  const lexical = resolve(root, rel)
+  if (!inside(root, lexical) || lexical === root) throw codedError('files.outsideProject')
+  const parent = await realpath(dirname(lexical)).catch(() => {
+    throw codedError('files.notFound')
+  })
+  if (parent !== root && !inside(root, parent)) throw codedError('files.outsideProject')
+  const path = join(parent, basename(lexical))
+  await lstat(path).catch(() => {
+    throw codedError('files.notFound')
+  })
+  return { root, path }
+}
+
+/** 项目内一个还不存在的新路径：名称合法、上级文件夹存在且在项目内、没有同名条目 */
+export async function workspaceNewPath(
+  rootPath: string,
+  input: unknown,
+  allowExisting?: string,
+): Promise<{ root: string; path: string }> {
+  const rel = relativeInput(input)
+  const name = rel.split('/').pop() ?? ''
+  if (!rel || !validName(name)) throw codedError('files.invalidName')
+  const root = await realpath(rootPath).catch(() => {
+    throw new Error('项目目录不存在')
+  })
+  const lexical = resolve(root, rel)
+  if (!inside(root, lexical) || lexical === root) throw codedError('files.outsideProject')
+  let parent: string
+  try {
+    parent = await realpath(dirname(lexical))
+    if (!(await stat(parent)).isDirectory()) throw new Error()
+  } catch {
+    throw codedError('files.parentMissing')
+  }
+  if (parent !== root && !inside(root, parent)) throw codedError('files.outsideProject')
+  const path = join(parent, name)
+  const existing = await lstat(path).catch(() => null)
+  // Windows 上只改大小写（a.ts → A.ts）时新旧是同一个条目，允许
+  const sameEntry = allowExisting !== undefined && allowExisting.toLowerCase() === path.toLowerCase()
+  if (existing && !sameEntry) throw codedError('files.exists', { name })
+  return { root, path }
+}
+
+const relativeTo = (root: string, path: string): string => relative(root, path).split(sep).join('/')
 
 async function boundedRead(file: string, max: number): Promise<Buffer> {
   const h = await open(file, 'r')
@@ -98,11 +173,58 @@ function decode(path: string, bytes: Buffer): Extract<FileDocument, { kind: 'tex
   }
 }
 
+export interface WorkspaceFilesOptions {
+  /** 删除时移到回收站：本机是系统回收站，远端是数据目录里的回收目录；不提供时拒绝删除 */
+  trash?: (absolute: string, relative: string) => Promise<void>
+}
+
 export class WorkspaceFiles {
   private saves = new Map<string, Promise<unknown>>()
-  constructor(private resolveTarget: TargetResolver) {}
+  constructor(
+    private resolveTarget: TargetResolver,
+    private options: WorkspaceFilesOptions = {},
+  ) {}
   target(value: unknown): WorkspaceTarget {
     return this.resolveTarget(workspaceRef(value))
+  }
+
+  /** 新建空文件或文件夹（docs/ui/files-search-terminal-pins.md §3）；返回相对项目的路径 */
+  async create(ref: WorkspaceRef, path: unknown, kind: unknown): Promise<{ path: string }> {
+    if (kind !== 'file' && kind !== 'folder') throw new Error('参数不正确')
+    const target = await workspaceNewPath(this.target(ref).path, path)
+    try {
+      if (kind === 'folder') await mkdir(target.path)
+      else await (await open(target.path, 'wx')).close()
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'EEXIST')
+        throw codedError('files.exists', { name: basename(target.path) })
+      throw err
+    }
+    return { path: relativeTo(target.root, target.path) }
+  }
+
+  /** 在同一项目内重命名或移动；目标已存在时拒绝 */
+  async rename(ref: WorkspaceRef, from: unknown, to: unknown): Promise<{ path: string }> {
+    const root = this.target(ref).path
+    const source = await workspaceEntry(root, from)
+    const target = await workspaceNewPath(root, to, source.path)
+    if (target.path === source.path) return { path: relativeTo(source.root, source.path) }
+    // 不能把文件夹移进它自己里面（只改大小写时 Windows 的路径比较会把两者当成同一个，跳过这个检查）
+    const caseOnly = target.path.toLowerCase() === source.path.toLowerCase()
+    if (!caseOnly && inside(source.path, target.path)) throw codedError('files.outsideProject')
+    await rename(source.path, target.path)
+    return { path: relativeTo(target.root, target.path) }
+  }
+
+  /** 删除：移到回收站，不做永久删除 */
+  async remove(ref: WorkspaceRef, path: unknown): Promise<void> {
+    if (!this.options.trash) throw new Error('当前环境不能删除文件')
+    const entry = await workspaceEntry(this.target(ref).path, path)
+    try {
+      await this.options.trash(entry.path, relativeTo(entry.root, entry.path))
+    } catch (err) {
+      throw codedError('files.trashFailed', { reason: (err as Error).message })
+    }
   }
 
   async list(ref: WorkspaceRef, path: string): Promise<DirectoryListing> {
@@ -163,6 +285,11 @@ export class WorkspaceFiles {
     return { entries, truncated: queue.length > 0 || examined >= 10000 || entries.length >= SEARCH_LIMIT }
   }
 
+  /** 内容搜索（git grep 或逐个读文件），路径相对项目 */
+  async grep(ref: WorkspaceRef, query: unknown): Promise<GrepResult> {
+    return grepWorkspace(await workspacePath(this.target(ref).path, '', 'directory'), query)
+  }
+
   async read(ref: WorkspaceRef, path: string): Promise<FileDocument> {
     const file = await workspacePath(this.target(ref).path, path, 'file')
     const info = await stat(file)
@@ -220,7 +347,7 @@ export class WorkspaceFiles {
           const info = await h.stat()
           if (!info.isFile() || info.size > TEXT_LIMIT) throw new Error('文件已变化，请重新加载')
           const original = await h.readFile()
-          if (HASH(original) !== version) throw new Error('文件已被其他程序修改，请重新加载后再保存；当前草稿仍保留')
+          if (HASH(original) !== version) throw codedError('files.changedOutside')
           const old = decode(path, original)
           const normalized = content.replace(/\r\n/g, '\n').replace(/\n/g, old.newline === 'crlf' ? '\r\n' : '\n')
           const next = Buffer.concat([
@@ -240,7 +367,7 @@ export class WorkspaceFiles {
             (await workspacePath(root, path, 'file')) !== file ||
             HASH(await boundedRead(file, TEXT_LIMIT)) !== version
           )
-            throw new Error('文件已被其他程序修改，请重新加载后再保存；当前草稿仍保留')
+            throw codedError('files.changedOutside')
           await h.close()
           await rename(temporary, file)
           return decode(path, next)

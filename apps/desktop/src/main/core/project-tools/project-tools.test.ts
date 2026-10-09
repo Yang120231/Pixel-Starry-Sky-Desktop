@@ -43,6 +43,31 @@ describe('project tools storage and task operations', () => {
     await expect(tasks.create('not-p', { title: 'bad' })).rejects.toThrow('unknown')
     await expect(tasks.reorder('p', [a.id, a.id])).rejects.toThrow()
   })
+  it('pins tasks to the sidebar, keeps pins across edits and restarts, lists only known projects', async () => {
+    const tasks = new Tasks(root, host, () => {})
+    await tasks.init()
+    const a = await tasks.create('p', { title: 'A' }),
+      b = await tasks.create('p', { title: 'B' })
+    await tasks.pin(b.id, true)
+    await tasks.pin(a.id, true)
+    const first = tasks.pinned()
+    expect(first.map(t => t.id)).toEqual([b.id, a.id])
+    // 再固定一次不改固定时间（顺序不变），编辑不丢固定
+    await tasks.pin(b.id, true)
+    await tasks.update(b.id, { title: 'B2' })
+    expect(tasks.pinned().map(t => [t.id, t.title])).toEqual([
+      [b.id, 'B2'],
+      [a.id, 'A'],
+    ])
+    await tasks.pin(a.id, false)
+    const restored = new Tasks(root, host, () => {})
+    await restored.init()
+    expect(restored.pinned().map(t => t.id)).toEqual([b.id])
+    await expect(tasks.pin('missing', true)).rejects.toThrow('tasks.notFound')
+    // 项目被移除后不再列出
+    restored.store.data.tasks[1].projectId = 'gone'
+    expect(restored.pinned()).toEqual([])
+  })
   it('failed snapshots restore state and keep live object references', async () => {
     const store = new JsonStore(join(root, 'data.json'), { tasks: [{ id: 'a', title: 'before' }] })
     await store.init()

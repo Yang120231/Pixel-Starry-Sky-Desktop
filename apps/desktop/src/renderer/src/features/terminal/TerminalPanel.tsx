@@ -3,9 +3,11 @@ import {
   ArrowDown,
   ArrowUp,
   ChevronDown,
+  Columns2,
   Maximize2,
   Minimize2,
   MoreHorizontal,
+  Play,
   Plus,
   Search,
   Settings,
@@ -27,6 +29,8 @@ import { screens } from './screens'
 import { createPortal } from 'react-dom'
 import { ActionMenu } from '@/ui/ActionMenu'
 import { workspaceTerminals } from './workspace'
+import { demo } from '@/data/demo'
+import { scriptCommand } from '@pixelsky/protocol'
 
 export function TerminalPanel({ embedded = false, visible = true }: { embedded?: boolean; visible?: boolean }) {
   const { t, text } = useI18n(),
@@ -44,6 +48,41 @@ export function TerminalPanel({ embedded = false, visible = true }: { embedded?:
   const [context, setContext] = useState<{ id: string; x: number; y: number; trigger: HTMLElement } | null>(null)
   const [query, setQuery] = useState(''),
     [found, setFound] = useState(true)
+  // 项目脚本菜单（docs/ui/files-search-terminal-pins.md §4.3）
+  const [scripts, setScripts] = useState<{
+    x: number
+    y: number
+    trigger: HTMLElement
+    items: Array<{ name: string; command: string }>
+  } | null>(null)
+  const body = useRef<HTMLDivElement>(null),
+    [bodyWidth, setBodyWidth] = useState(0)
+  useEffect(() => {
+    const el = body.current
+    if (!el) return
+    const observer = new ResizeObserver(() => setBodyWidth(el.clientWidth))
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+  const openScripts = async (trigger: HTMLElement): Promise<void> => {
+    if (scripts) return setScripts(null)
+    if (!ui.projectId) return
+    const r = trigger.getBoundingClientRect()
+    try {
+      const env = isDemo
+        ? demo().projectTools.environment
+        : await window.pixelsky!.projectTools.environment({ projectId: ui.projectId }, false)
+      const manager = env.packageManager ?? 'npm'
+      setScripts({
+        x: r.left,
+        y: r.bottom,
+        trigger,
+        items: Object.keys(env.scripts).map(name => ({ name, command: scriptCommand(manager, name) })),
+      })
+    } catch (cause) {
+      terminalError(cause)
+    }
+  }
   const items = workspaceTerminals(
     state.terminals,
     ui.projectId,
@@ -51,6 +90,10 @@ export function TerminalPanel({ embedded = false, visible = true }: { embedded?:
     machines.currentId === 'local' && window.pixelsky?.platform === 'win32',
   )
   const active = items.find(r => r.id === ui.activeId) ?? null
+  // 分屏（docs/ui/files-search-terminal-pins.md §4.1）：两边都是当前项目的终端时才显示
+  const split =
+    ui.split && items.some(r => r.id === ui.split!.left) && items.some(r => r.id === ui.split!.right) ? ui.split : null
+  const leftWidth = split ? Math.round(bodyWidth * split.ratio) : 0
   const visibleProjects = [
     ...projects.map(p => ({ value: p.id, label: p.name })),
     ...state.terminals
@@ -224,6 +267,25 @@ export function TerminalPanel({ embedded = false, visible = true }: { embedded?:
           onClick={() => void ui.create()}
           disabled={!ui.projectId || !state.ready}
         />
+        <IconButton
+          icon={Columns2}
+          label={t(split ? 'terminal.unsplit' : 'terminal.splitRight')}
+          size={28}
+          iconSize={14}
+          active={!!split}
+          disabled={!active || !state.ready}
+          onClick={() => (split ? ui.unsplit() : void ui.splitRight())}
+        />
+        <IconButton
+          icon={Play}
+          label={t('terminal.scripts')}
+          size={28}
+          iconSize={14}
+          aria-haspopup="menu"
+          aria-expanded={!!scripts}
+          disabled={!ui.projectId || !state.ready}
+          onClick={e => void openScripts(e.currentTarget)}
+        />
         <Select
           label={t('terminal.selectShell')}
           placeholder={t('terminal.selectShell')}
@@ -325,7 +387,7 @@ export function TerminalPanel({ embedded = false, visible = true }: { embedded?:
           <IconButton icon={X} label={t('terminal.closeSearch')} size={24} onClick={ui.stopSearch} />
         </div>
       )}
-      <div className="flex min-h-0 flex-1 flex-col bg-terminal">
+      <div ref={body} className={cn('relative flex min-h-0 flex-1 bg-terminal', split ? 'flex-row' : 'flex-col')}>
         {!active && (
           <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 text-center text-fg">
             <TerminalSquare size={25} className="text-fg-faint" />
@@ -349,16 +411,49 @@ export function TerminalPanel({ embedded = false, visible = true }: { embedded?:
             </button>
           </div>
         )}
-        {state.terminals.map(record => (
-          <TerminalView
-            key={record.id}
-            record={record}
-            visible={(embedded ? visible : ui.open) && active?.id === record.id}
-            onPaste={ui.paste}
-            onFind={() => void ui.request('search', record.id)}
-            onCycle={cycle}
+        {state.terminals.map(record => {
+          // 所有终端都留在同一个父元素里（换位置不重建 xterm，不丢输出），分屏只改外层的顺序和宽度
+          const side = split ? (record.id === split.left ? 'left' : record.id === split.right ? 'right' : null) : null
+          const shown = split ? side !== null : active?.id === record.id
+          return (
+            <div
+              key={record.id}
+              data-terminal-side={side ?? undefined}
+              className={cn(
+                shown ? 'flex min-h-0 min-w-0 flex-col' : 'contents',
+                side === 'right' && 'flex-1 border-l border-line-layout',
+                side && split && ui.activeId === record.id && 'terminal-split-focused',
+                !split && shown && 'flex-1',
+              )}
+              style={side === 'left' ? { order: 0, width: leftWidth, flex: 'none' } : side ? { order: 2 } : undefined}
+              onPointerDownCapture={() => {
+                if (side && ui.activeId !== record.id) ui.select(record.id)
+              }}
+            >
+              <TerminalView
+                record={record}
+                visible={(embedded ? visible : ui.open) && shown}
+                onPaste={ui.paste}
+                onFind={() => void ui.request('search', record.id)}
+                onCycle={cycle}
+              />
+            </div>
+          )
+        })}
+        {split && bodyWidth > 0 && (
+          <ResizeHandle
+            axis="x"
+            className="terminal-split-resize"
+            label={t('terminal.splitWidth')}
+            value={leftWidth}
+            min={160}
+            max={Math.max(160, bodyWidth - 160)}
+            style={{ left: leftWidth - 4 }}
+            onChange={v => ui.setSplitRatio(v / bodyWidth)}
+            onCommit={v => ui.setSplitRatio(v / bodyWidth)}
+            onReset={() => ui.setSplitRatio(0.5)}
           />
-        ))}
+        )}
       </div>
       {active && (
         <footer className="flex min-h-7 shrink-0 items-center gap-3 border-t border-line-layout px-3 text-label text-fg-muted">
@@ -390,11 +485,37 @@ export function TerminalPanel({ embedded = false, visible = true }: { embedded?:
             setContext(null)
             context.trigger.focus({ preventScroll: true })
           }}
-          actions={(['rename', 'close', 'clear', 'restart'] as const).map(action => ({
-            label: t(action === 'close' ? 'workspace.removeTerminal' : `terminal.${action}`),
-            danger: action === 'close',
-            run: () => void ui.request(action, context.id),
-          }))}
+          actions={[
+            ...(active && context.id !== active.id && context.id !== split?.right
+              ? [{ label: t('terminal.showRight'), icon: Columns2, run: () => ui.showRight(context.id) }]
+              : []),
+            ...(['rename', 'close', 'clear', 'restart'] as const).map(action => ({
+              label: t(action === 'close' ? 'workspace.removeTerminal' : `terminal.${action}`),
+              danger: action === 'close',
+              run: () => void ui.request(action, context.id),
+            })),
+          ]}
+        />
+      )}
+      {scripts && (
+        <ActionMenu
+          x={scripts.x}
+          y={scripts.y}
+          label={t('terminal.scripts')}
+          onClose={() => {
+            setScripts(null)
+            scripts.trigger.focus({ preventScroll: true })
+          }}
+          actions={
+            scripts.items.length
+              ? scripts.items.map((item, i) => ({
+                  label: `${item.name}  ·  ${item.command}`,
+                  icon: Play,
+                  section: i === 0 ? t('terminal.scriptsHint') : undefined,
+                  run: () => void ui.runScript(item.name, item.command),
+                }))
+              : [{ label: t('terminal.noScripts'), disabled: true, run: () => {} }]
+          }
         />
       )}
       {menu &&

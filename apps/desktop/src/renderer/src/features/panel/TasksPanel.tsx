@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowDown, ArrowUp, Check, Circle, Copy, ListChecks, Pencil, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, Circle, Copy, ListChecks, Pencil, Pin, PinOff, Trash2 } from 'lucide-react'
 import { Button, IconButton, Select } from '@/ui'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
@@ -11,6 +11,7 @@ import { CARD, FIELD, Field, NoProject, ToolError, ToolsHeader, useOperation, us
 import { TaskInbox } from './inbox/TaskInbox'
 import type { ManualTask, TaskState } from '../../../../shared/types/project-tools'
 import { demo as demoData } from '@/data/demo'
+import { TASK_DRAG_TYPE, pinTask, startTaskDrag, usePinnedTasks } from './pinnedTasks'
 const EMPTY: TaskState = { tasks: [], plans: [] }
 const blank = {
   title: '',
@@ -70,6 +71,9 @@ function TasksBody({ projectId, name, demo }: { projectId: string; name: string;
     [form, setForm] = useState(blank),
     [showForm, setShowForm] = useState(false)
   const { busy, error, setError, run } = useOperation()
+  // 固定到左侧栏（docs/ui/files-search-terminal-pins.md §5）
+  const pins = usePinnedTasks()
+  const pinnedNow = (task: ManualTask): boolean => pins.some(p => p.id === task.id) || (!demo && !!task.pinnedAt)
   const snapshots = useEngineState(s => s.snapshots),
     sessions = useEngineState(s => s.sessions)
   useEffect(() => {
@@ -347,16 +351,20 @@ function TasksBody({ projectId, name, demo }: { projectId: string; name: string;
           <article
             tabIndex={-1}
             data-tool-task={task.id}
-            draggable={!busy && filter === 'all' && !query}
+            draggable={!busy}
             onDragStart={e => {
-              e.dataTransfer.setData('application/x-pixelsky-task', task.id)
+              // 拖到清单里另一张卡片上是排序，拖到左侧栏是固定
+              e.dataTransfer.setData(TASK_DRAG_TYPE, task.id)
+              e.dataTransfer.effectAllowed = 'copyMove'
+              startTaskDrag(task)
             }}
+            onDragEnd={() => startTaskDrag(null)}
             onDragOver={e => {
-              if (e.dataTransfer.types.includes('application/x-pixelsky-task')) e.preventDefault()
+              if (filter === 'all' && !query && e.dataTransfer.types.includes(TASK_DRAG_TYPE)) e.preventDefault()
             }}
             onDrop={e => {
               e.preventDefault()
-              void move(e.dataTransfer.getData('application/x-pixelsky-task'), task.id)
+              if (filter === 'all' && !query) void move(e.dataTransfer.getData(TASK_DRAG_TYPE), task.id)
             }}
             key={task.id}
             className={CARD + ' flex items-start gap-2 outline-none focus:ring-1 focus:ring-accent'}
@@ -383,7 +391,14 @@ function TasksBody({ projectId, name, demo }: { projectId: string; name: string;
                 {task.tags.length > 0 && ' · ' + task.tags.join(', ')}
               </p>
             </div>
-            <div className="flex max-w-24 flex-wrap justify-end">
+            <div className="flex max-w-32 flex-wrap justify-end">
+              <IconButton
+                icon={pinnedNow(task) ? PinOff : Pin}
+                label={tr(pinnedNow(task) ? 'projectTools.unpinFromSidebar' : 'projectTools.pinToSidebar')}
+                active={pinnedNow(task)}
+                disabled={busy}
+                onClick={() => void run(() => pinTask(task, !pinnedNow(task)))}
+              />
               <IconButton
                 icon={ArrowUp}
                 label={tr('projectTools.moveUp')}

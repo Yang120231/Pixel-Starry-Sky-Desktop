@@ -41,7 +41,7 @@ describe('项目文件', () => {
     expect(await readFile(file)).toEqual(
       Buffer.concat([Buffer.from([239, 187, 191]), Buffer.from('新内容\r\n第二行\r\n')]),
     )
-    await expect(service.save(ref, doc.path, '覆盖', doc.version)).rejects.toThrow('其他程序修改')
+    await expect(service.save(ref, doc.path, '覆盖', doc.version)).rejects.toThrow('files.changedOutside')
     const concurrent = await Promise.allSettled([
       service.save(ref, doc.path, '第一笔', saved.version),
       service.save(ref, doc.path, '第二笔', saved.version),
@@ -54,17 +54,17 @@ describe('项目文件', () => {
     const doc = await service.read(ref, 'test.txt')
     if (doc.kind !== 'text') throw new Error('not text')
     await writeFile(join(root, 'test.txt'), 'external')
-    await expect(service.save(ref, 'test.txt', 'draft', doc.version)).rejects.toThrow('其他程序修改')
+    await expect(service.save(ref, 'test.txt', 'draft', doc.version)).rejects.toThrow('files.changedOutside')
     expect(await readFile(join(root, 'test.txt'), 'utf8')).toBe('external')
     await rm(join(root, 'test.txt'))
-    await expect(service.save(ref, 'test.txt', 'draft', doc.version)).rejects.toThrow('不存在')
+    await expect(service.save(ref, 'test.txt', 'draft', doc.version)).rejects.toThrow('files.notFound')
   })
   it('越界相对路径、绝对路径和项目外链接均被拦下', async () => {
     await mkdir(join(folder, 'outside'))
     await writeFile(join(folder, 'outside', 'secret.txt'), 'outside')
     await symlink(join(folder, 'outside'), join(root, 'linked'), process.platform === 'win32' ? 'junction' : 'dir')
-    await expect(workspacePath(root, '../outside/secret.txt')).rejects.toThrow('超出项目')
-    await expect(workspacePath(root, join(folder, 'outside/secret.txt'))).rejects.toThrow('相对路径')
+    await expect(workspacePath(root, '../outside/secret.txt')).rejects.toThrow('files.outsideProject')
+    await expect(workspacePath(root, join(folder, 'outside/secret.txt'))).rejects.toThrow('files.relativePath')
     await expect(workspacePath(root, 'linked/secret.txt')).rejects.toThrow('链接指向项目外')
     expect(() => workspaceRef({ projectId: 'p', sessionId: 's' })).toThrow('目标不正确')
   })
@@ -118,7 +118,7 @@ describe('项目文件', () => {
     expect(await nested.headContent(ref, '文件 (1).txt')).toBe('original\n')
     await writeFile(join(root, 'new.txt'), 'new')
     expect(await service.headContent(ref, 'new.txt')).toBeNull()
-    await expect(nested.headContent(ref, '../new.txt')).rejects.toThrow('超出项目')
+    await expect(nested.headContent(ref, '../new.txt')).rejects.toThrow('files.outsideProject')
   })
 })
 
