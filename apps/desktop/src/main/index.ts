@@ -21,7 +21,7 @@ import { initProjectTools } from './project-tools'
 import { initNotifications } from './notifications'
 import { confirmTerminalClose, closeWindowTerminals } from './terminal/ipc'
 import { shutdownServices } from './shutdown'
-import type { Locale } from '../renderer/src/i18n/messages'
+import type { Locale } from '../shared/i18n/messages'
 
 type ResolvedTheme = 'light' | 'dark'
 

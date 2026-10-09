@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import type { Locale } from './messages'
+import type { Locale } from '../../../shared/i18n/messages'
 import { tr, setCurrentLocale, translateText } from './core'
 
 const STORAGE_KEY = 'pixelsky.locale'

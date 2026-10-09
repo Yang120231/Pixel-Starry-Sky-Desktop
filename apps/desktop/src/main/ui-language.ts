@@ -1,7 +1,7 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import { trustedSender } from './account'
-import type { Locale } from '../renderer/src/i18n/messages'
-import { translateMessage } from '../renderer/src/i18n/core'
+import type { Locale } from '../shared/i18n/messages'
+import { translateMessage } from '../shared/i18n/translate'
 
 const languages = new WeakMap<BrowserWindow, Locale>()
 let lastLanguage: Locale = 'zh-CN'

@@ -9,5 +9,5 @@ docs/reference
 # 按磁盘格式手写的测试夹具，保持原样
 packages/engine/test/fixtures
 **/*.md
-apps/desktop/src/renderer/src/i18n/catalog.ts
-apps/desktop/src/renderer/src/i18n/systemMessages.ts
+apps/desktop/src/shared/i18n/catalog.ts
+apps/desktop/src/shared/i18n/systemMessages.ts

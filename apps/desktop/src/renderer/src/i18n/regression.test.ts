@@ -2,25 +2,25 @@
 import { describe, expect, it } from 'vitest'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
-import { allMessages } from './core'
-import { catalog } from './catalog'
-import { systemMessages } from './systemMessages'
-import { pluginMessages } from './pluginMessages'
-import { sessionMessages } from './sessionMessages'
-import { commandMessages } from './commandMessages'
-import { codexMessages } from './codexMessages'
-import { projectToolsMessages } from './projectToolsMessages'
-import { terminalMessages } from './terminalMessages'
-import { sidebarMessages } from './sidebarMessages'
-import { projectMessages } from './projectMessages'
-import { workspaceMessages } from './workspaceMessages'
-import { machineMessages, machineErrors } from './machineMessages'
-import { channelMessages } from './channelMessages'
-import { notificationMessages } from './notificationMessages'
-import { gitMessages } from './gitMessages'
-import { artifactMessages } from './artifactMessages'
+import { allMessages } from '../../../shared/i18n/translate'
+import { catalog } from '../../../shared/i18n/catalog'
+import { systemMessages } from '../../../shared/i18n/systemMessages'
+import { pluginMessages } from '../../../shared/i18n/pluginMessages'
+import { sessionMessages } from '../../../shared/i18n/sessionMessages'
+import { commandMessages } from '../../../shared/i18n/commandMessages'
+import { codexMessages } from '../../../shared/i18n/codexMessages'
+import { projectToolsMessages } from '../../../shared/i18n/projectToolsMessages'
+import { terminalMessages } from '../../../shared/i18n/terminalMessages'
+import { sidebarMessages } from '../../../shared/i18n/sidebarMessages'
+import { projectMessages } from '../../../shared/i18n/projectMessages'
+import { workspaceMessages } from '../../../shared/i18n/workspaceMessages'
+import { machineMessages, machineErrors } from '../../../shared/i18n/machineMessages'
+import { channelMessages } from '../../../shared/i18n/channelMessages'
+import { notificationMessages } from '../../../shared/i18n/notificationMessages'
+import { gitMessages } from '../../../shared/i18n/gitMessages'
+import { artifactMessages } from '../../../shared/i18n/artifactMessages'
 
-// 与 core.ts 的 allMessages 合并顺序一致
+// 与 shared/i18n/translate.ts 的 allMessages 合并顺序一致
 const dictionaries: Record<string, Record<string, unknown>> = {
   catalog,
   systemMessages,
@@ -50,6 +50,7 @@ const TEXT_LOOKUP_BASELINE = 42
 
 const srcRoot = join(__dirname, '..')
 const mainRoot = join(__dirname, '..', '..', '..', 'main')
+const sharedRoot = join(__dirname, '..', '..', '..', 'shared')
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -165,7 +166,7 @@ describe('i18n 防回归', () => {
   it('源码中 tr / t 的字面量 key 都存在于词典', () => {
     const call = /(?<![\w$.])(?:tr|t)\(\s*(['"])([^'"\n]+)\1/g
     const missing: string[] = []
-    for (const root of [srcRoot, mainRoot]) {
+    for (const root of [srcRoot, mainRoot, sharedRoot]) {
       for (const file of sourceFiles(root)) {
         const code = readFileSync(file, 'utf8')
         for (const match of code.matchAll(call)) {
