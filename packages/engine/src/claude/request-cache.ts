@@ -1,8 +1,7 @@
 import type { EngineEvent, RequestCacheUsage } from '@pixelsky/protocol'
+import { obj, str } from './shape'
 
 type Raw = Record<string, unknown>
-const obj = (v: unknown): Raw => v && typeof v === 'object' && !Array.isArray(v) ? v as Raw : {}
-const str = (v: unknown): string => typeof v === 'string' ? v : ''
 const KEYS = ['input_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens'] as const
 const count = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0
 interface Pending { id: string; model: string; usage: Raw; emitted: boolean }

@@ -24,11 +24,9 @@ import { completeToolItem, toolItem } from './tools'
 import { RequestCacheReader } from './request-cache'
 import { requestRetryState } from './retry-state'
 import { ContextReader } from './context'
+import { obj, num, str } from './shape'
 
 type Msg = Record<string, unknown>
-const obj = (v: unknown): Msg => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Msg) : {})
-const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
-const str = (v: unknown): string => (typeof v === 'string' ? v : '')
 
 /** 一个模型的累计用量（Claude modelUsage 里的数字） */
 interface UsageCounters {

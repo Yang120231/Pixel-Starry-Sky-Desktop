@@ -1,7 +1,7 @@
 import { contextCount, contextDiagnostic, type ContextWindow, type EngineEvent } from '@pixelsky/protocol'
+import { obj } from './shape'
 
 type Frame = Record<string, unknown>
-const obj = (v: unknown): Frame => v && typeof v === 'object' && !Array.isArray(v) ? v as Frame : {}
 const empty = (): ContextWindow => ({ model: null, used: null, window: null, input: null, cacheRead: null, cacheWrite: null, output: null, observedAt: null, source: 'request', stale: false, compacting: false, diagnostic: null, diagnosticStale: false })
 
 /** 合并同一主请求的明确计数；旧消息、累计结果、子智能体不会替换上下文。 */

@@ -9,10 +9,9 @@ import { loadSavedRuns } from './runs'
 import { alwaysPermissions, approvalFor } from './tools'
 import { claudeSessionDir, claudeTranscriptExists } from './transcript'
 import { ClaudeTranslator } from './translate'
+import { obj, str } from './shape'
 
 type Msg = Record<string, unknown>
-const obj = (v: unknown): Msg => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Msg) : {})
-const str = (v: unknown): string => (typeof v === 'string' ? v : '')
 
 /** 我们的权限模式 → Claude 的 --permission-mode */
 export const TO_CLAUDE_MODE: Record<PermissionMode, string> = {

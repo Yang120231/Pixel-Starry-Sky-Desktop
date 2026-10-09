@@ -2,10 +2,10 @@
 import { isAbsolute, relative } from 'node:path'
 import type { AlwaysScope, ApprovalRequest, FileChange, Item, ItemStatus, Question, TodoStep, ToolKind } from '@pixelsky/protocol'
 import { diffAdded, diffFromHunks, diffText, type PatchHunk } from '../diff'
+import { str } from './shape'
 
 type Input = Record<string, unknown>
 
-const str = (v: unknown): string => (typeof v === 'string' ? v : '')
 
 /** 输出最多保留这么多字符（头尾各一半），太长的命令输出不全放进内存和磁盘 */
 const MAX_OUTPUT = 40_000

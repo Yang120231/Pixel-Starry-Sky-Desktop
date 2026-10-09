@@ -8,11 +8,9 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import type { AgentRun, AgentRuns, Item, WorkflowRun } from '@pixelsky/protocol'
 import { completeToolItem, toolItem } from './tools'
+import { obj, num, str } from './shape'
 
 type Msg = Record<string, unknown>
-const obj = (v: unknown): Msg => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Msg) : {})
-const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
-const str = (v: unknown): string => (typeof v === 'string' ? v : '')
 const arr = (v: unknown): Msg[] => (Array.isArray(v) ? (v as Msg[]) : [])
 
 /** 会话记录文件最多读这么大（太大的跳过，避免卡住主进程） */
