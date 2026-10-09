@@ -1,4 +1,4 @@
-// 界面数据的类型。组件只依赖这里的类型和 data.ts 导出的值。
+// 界面数据的类型。组件只依赖这里的类型和 data/index.ts 导出的值。
 
 export interface CurrentUser {
   name: string
@@ -151,7 +151,7 @@ export interface AppData {
   assistantReply: AssistantReply | null
   changedFiles: ChangedFiles | null
   /** 演示对话这一轮的用量（回复下方统计行，docs/ui/usage.md §4）；null 时不显示 */
-  turnUsage: import('@/components/session/TurnStats').TurnUsage | null
+  turnUsage: import('@pixelsky/protocol').TurnUsage | null
   attachments: Attachment[]
   composer: { placeholder: string; engine: { short: string; name: string }; effort: string }
   /** 输入框下方状态栏；branch / contextPercent 为 null 时不显示对应项 */
@@ -263,3 +263,23 @@ export interface ChannelEvent extends ChannelMessageBase {
 }
 
 export type ChannelMessage = ChannelTextMessage | ChannelTask | ChannelEvent
+
+/** 设置 › 本机引擎用到的引擎信息（真实数据是 EngineInfo，演示数据只填这些） */
+export type EngineLite = Pick<
+  import('@pixelsky/protocol').EngineInfo,
+  'id' | 'name' | 'status' | 'version' | 'message' | 'path'
+> & {
+  caps: Pick<
+    import('@pixelsky/protocol').EngineCaps,
+    'permissionModes' | 'efforts' | 'ultracode' | 'fast' | 'thinkingSummaries'
+  >
+}
+
+/** 演示模式下对会话的改动（归档、删除、停止、改名、置底），只在内存里 */
+export interface DemoSessionChange {
+  archivedAt: number | null
+  deleted: boolean
+  stopped: boolean
+  title?: string
+  bottomedAt?: number | null
+}

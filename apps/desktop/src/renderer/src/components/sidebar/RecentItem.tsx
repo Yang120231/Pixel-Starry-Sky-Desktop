@@ -1,7 +1,7 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { GitPullRequest } from 'lucide-react'
 import { Dot } from '@/components/ui'
-import { projects, type RecentItem as Recent, type SessionStatus } from '@/mock/data'
+import { projects, type RecentItem as Recent, type SessionStatus } from '@/data'
 import { SessionRow } from './SessionRow'
 
 /** 最近任务如果同时是某个项目下的会话，就沿用它的状态 */

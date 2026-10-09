@@ -18,7 +18,7 @@ import { Button, cn, IconButton } from '@/components/ui'
 import { useActiveWorkspace } from '@/editor/target'
 import { usePluginText } from './text'
 import { ExtensionForm, type FormTarget } from './ExtensionForm'
-import { extensionTemplates } from '@/mock/extensionTemplates'
+import { extensionTemplates } from '@/data/extensionTemplates'
 const ICONS: Record<ExtensionKind, LucideIcon> = { plugin: Puzzle, mcp: Plug, cli: Terminal, skill: Star }
 const NAMES: Record<ExtensionKind, string> = { plugin: '插件', mcp: '连接器', cli: '命令行', skill: '技能' }
 interface Row {

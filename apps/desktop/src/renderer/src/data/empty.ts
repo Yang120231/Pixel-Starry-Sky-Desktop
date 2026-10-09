@@ -1,6 +1,6 @@
 // 空界面：新用户第一次打开时的样子，没有任何项目、会话或用户数据。默认显示这一套。
 import type { AppData } from './types'
-import { COMPOSER, RAIL_ITEMS } from './shared'
+import { COMPOSER, RAIL_ITEMS } from './constants'
 
 export const empty: AppData = {
   currentUser: null,

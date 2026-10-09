@@ -19,9 +19,10 @@ import { Button, EngineIcon, Select, cn } from '@/components/ui'
 import { Switch } from '@/components/session/ComposerMenus'
 import { platformModels, usePlatform } from '@/account/platform'
 import { EFFORT_LABEL, PERMISSION_INFO, bridge, isLive, redetectEngines } from '@/engine'
-import { demoEngineCatalog, type EngineLite } from '@/mock/platform'
 import { envLines, parseEnvLines } from './envLines'
 import { DefaultBadge, ENGINE_INTRO, ENGINE_STATUS, FIELD } from './parts'
+import { demo, isDemo } from '@/data/demo'
+import type { EngineLite } from '@/data/types'
 
 export function EngineDetail({
   engine: e,
@@ -382,7 +383,7 @@ function OutputStyleRow({
   onChange: (v: string | null) => void
 }) {
   useI18n()
-  const [catalog, setCatalog] = useState<EngineCatalog | null>(isLive ? null : demoEngineCatalog)
+  const [catalog, setCatalog] = useState<EngineCatalog | null>(isDemo ? demo().engines.catalog : null)
   const [loading, setLoading] = useState(isLive)
   useEffect(() => {
     if (!bridge) return

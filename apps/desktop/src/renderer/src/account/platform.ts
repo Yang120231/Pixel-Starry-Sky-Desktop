@@ -6,8 +6,7 @@ import { useEffect, useSyncExternalStore } from 'react'
 import type { EngineId } from '@pixelsky/protocol'
 import type { AccountState } from '../../../shared/types/account'
 import type { PlatformGroupInfo } from '../../../shared/types/platform-catalog'
-import { demoAccount } from '../mock/account'
-import { demoPlatformGroups } from '../mock/platform'
+import { demo } from '@/data/demo'
 
 export type CreditSource = 'platform' | 'self'
 
@@ -367,8 +366,8 @@ function start(): void {
   started = true
   if (window.pixelsky?.demo) {
     // 演示模式：假目录，选择照常保存在内存里
-    const groups = demoPlatformGroups.map(g => ({ ...g, modelsError: null }))
-    set({ email: demoAccount.email, groups, loaded: true, ...resolvePlatform(groups, state.groupId, state.model) })
+    const groups = demo().platformGroups.map(g => ({ ...g, modelsError: null }))
+    set({ email: demo().account.email, groups, loaded: true, ...resolvePlatform(groups, state.groupId, state.model) })
     return
   }
   const account = window.pixelsky?.account

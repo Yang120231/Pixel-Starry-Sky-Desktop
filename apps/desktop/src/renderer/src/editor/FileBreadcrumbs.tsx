@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { ChevronRight, Folder, FileText } from 'lucide-react'
 import { useI18n } from '@/i18n/I18nProvider'
-import { isDemo } from '@/mock/data'
-import { demoDirectory } from '@/mock/files'
+import { isDemo } from '@/data'
 import { openFile, type OpenFile } from '@/files/store'
 import { ActionMenu } from '@/components/ui/ActionMenu'
 import type { FileEntry } from '../../../shared/types/workspace'
+import { demo } from '@/data/demo'
 
 export function FileBreadcrumbs({ tab }: { tab: OpenFile }) {
   const { t, text } = useI18n()
@@ -19,7 +19,9 @@ export function FileBreadcrumbs({ tab }: { tab: OpenFile }) {
     setLoading(true)
     setError('')
     setEntries([])
-    const result = isDemo ? Promise.resolve(demoDirectory(menu.path)) : window.pixelsky!.files.list(tab.ref, menu.path)
+    const result = isDemo
+      ? Promise.resolve(demo().files.directory(menu.path))
+      : window.pixelsky!.files.list(tab.ref, menu.path)
     void result
       .then(
         list => {

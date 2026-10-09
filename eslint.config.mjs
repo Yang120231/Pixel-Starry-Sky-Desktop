@@ -86,7 +86,7 @@ export default tseslint.config(
   },
   {
     // renderer 不导入 src/main。用 @typescript-eslint/no-restricted-imports（同样的选项）而不是
-    // no-restricted-imports：后者同名，下面的 mock 规则（warn）会整体覆盖它。
+    // no-restricted-imports：后者同名，下面的 mock 规则会整体覆盖它。
     files: ['apps/desktop/src/renderer/**/*.{ts,tsx}'],
     rules: {
       '@typescript-eslint/no-restricted-imports': [
@@ -123,16 +123,17 @@ export default tseslint.config(
     },
   },
   {
-    // renderer 不应导入 mock/（第三批清零）
+    // renderer 不导入 mock/：演示数据只由 main.tsx 动态加载后装进 data/demo.ts，其它文件经 demo() 取用
+    // （docs/restructure.md §9.3；动态 import 不在这条规则里，由 renderer 结构测试检查）
     files: ['apps/desktop/src/renderer/src/**/*.{ts,tsx}'],
     ignores: ['apps/desktop/src/renderer/src/mock/**'],
     rules: {
       'no-restricted-imports': [
-        'warn',
+        'error',
         {
           patterns: [
-            { group: ['@/mock', '@/mock/*'], message: 'mock/ 只供演示数据使用，第三批清零' },
-            { group: ['**/mock', '**/mock/*'], message: 'mock/ 只供演示数据使用，第三批清零' },
+            { group: ['@/mock', '@/mock/*'], message: 'mock/ 只放演示数据，请经 @/data/demo 的 demo() 取用' },
+            { group: ['**/mock', '**/mock/*'], message: 'mock/ 只放演示数据，请经 @/data/demo 的 demo() 取用' },
           ],
         },
       ],

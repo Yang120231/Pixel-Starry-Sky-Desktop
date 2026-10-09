@@ -7,14 +7,14 @@ import { ChevronRight, RefreshCw, Scissors, X } from 'lucide-react'
 import type { ContextDetail } from '@pixelsky/protocol'
 import { ContextRing, cn } from '@/components/ui'
 import { bridge, useSession } from '@/engine'
-import { isDemo } from '@/mock/data'
-import { demoContext } from '@/mock/context'
+import { isDemo } from '@/data'
 import { contextLabel, contextNumber, contextPercentage, contextSegments } from './contextData'
+import { demo } from '@/data/demo'
 
 export function ContextWindowButton({ sessionId }: { sessionId: string | null }) {
   useI18n()
   const snapshot = useSession(isDemo ? null : sessionId)
-  const context = isDemo ? demoContext : snapshot?.context
+  const context = isDemo ? demo().context : snapshot?.context
   const percent = contextPercentage(context),
     segments = contextSegments(context)
   const [open, setOpen] = useState(false),

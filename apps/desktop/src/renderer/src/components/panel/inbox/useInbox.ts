@@ -3,9 +3,9 @@
 import { useMemo, useSyncExternalStore } from 'react'
 import { useEngineState } from '@/engine'
 import { machineOf, useMachines } from '@/machines/store'
-import { isDemo } from '@/mock/data'
-import { demoInbox } from '@/mock/inbox'
+import { isDemo } from '@/data'
 import { buildInbox, type InboxItem } from './inboxModel'
+import { demo } from '@/data/demo'
 
 const KEY = 'pixelsky.inbox.dismissed.v1'
 function load(): Record<string, string> {
@@ -19,7 +19,7 @@ function load(): Record<string, string> {
   }
 }
 let dismissed = load()
-let demoItems: InboxItem[] = demoInbox
+let demoItems: InboxItem[] = isDemo ? demo().inbox : []
 const listeners = new Set<() => void>()
 const emit = (): void => listeners.forEach(fn => fn())
 const subscribe = (fn: () => void) => {

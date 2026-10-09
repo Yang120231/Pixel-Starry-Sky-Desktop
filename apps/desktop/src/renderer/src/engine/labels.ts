@@ -1,7 +1,7 @@
 import { tr } from '../i18n/core'
 // 引擎相关的显示文字（中文）
 import type { Effort, EngineId, FileChange, PermissionMode } from '@pixelsky/protocol'
-import type { ChangedFiles } from '@/mock/types'
+import type { ChangedFiles } from '@/data/types'
 
 /** 推理强度用英文（和 JuCode 桌面版、Claude Code 一致） */
 export const EFFORT_LABEL: Record<Effort, string> = {

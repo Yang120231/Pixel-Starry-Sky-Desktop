@@ -4,11 +4,11 @@ import { Button, IconButton, Select } from '@/components/ui'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
-import { demoToolEnvironment } from '@/mock/projectTools'
 import { useProjectContext } from './projectContext'
 import { CARD, FIELD, Field, NoProject, ToolError, ToolsHeader, useOperation } from './ToolsUi'
 import type { EnvironmentState, ServiceDefinition, ServiceInput } from '../../../../shared/types/project-tools'
 import type { WorkspaceRef } from '../../../../shared/types/workspace'
+import { demo as demoData } from '@/data/demo'
 export const OPEN_BROWSER = 'pixelsky:open-browser'
 const blank: ServiceInput = {
   name: '',
@@ -37,7 +37,9 @@ export function EnvironmentPanel() {
 }
 function EnvironmentBody({ target, demo }: { target: WorkspaceRef; demo: boolean }) {
   useI18n()
-  const [data, setData] = useState<EnvironmentState | null>(demo ? structuredClone(demoToolEnvironment) : null)
+  const [data, setData] = useState<EnvironmentState | null>(
+    demo ? structuredClone(demoData().projectTools.environment) : null,
+  )
   const [form, setForm] = useState<ServiceInput | null>(null),
     [portInfo, setPortInfo] = useState<{ occupied: boolean; pid: string | null; suggested: number } | null>(null)
   const [confirm, setConfirm] = useState<{
@@ -83,8 +85,8 @@ function EnvironmentBody({ target, demo }: { target: WorkspaceRef; demo: boolean
           ...form,
           id: form.id ?? crypto.randomUUID(),
           projectId: 'demo',
-          workspacePath: demoToolEnvironment.projectPath,
-          cwd: form.cwd || demoToolEnvironment.projectPath,
+          workspacePath: demoData().projectTools.environment.projectPath,
+          cwd: form.cwd || demoData().projectTools.environment.projectPath,
           port: form.port ?? null,
           healthUrl: form.healthUrl ?? null,
           envNames: form.envNames ?? [],

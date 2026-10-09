@@ -2,7 +2,7 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
 import { Check, ChevronRight, FilePen, SquareTerminal } from 'lucide-react'
 import { DiffStat, useComingSoon } from '@/components/ui'
-import type { ToolCall } from '@/mock/data'
+import type { ToolCall } from '@/data'
 
 /** 工具调用的一行：编辑文件 / 运行命令（13px，路径和命令用等宽字） */
 export function ToolRow({ call }: { call: ToolCall }) {

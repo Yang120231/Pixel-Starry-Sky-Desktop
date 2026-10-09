@@ -1,5 +1,5 @@
 import { useI18n } from '@/i18n/I18nProvider'
-import { assistantReply } from '@/mock/data'
+import { assistantReply } from '@/data'
 
 /** 助手回复：正文 14px / 行高 1.7；行内代码用浅底等宽小块 */
 export function AssistantMessage() {

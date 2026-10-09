@@ -4,12 +4,12 @@ import { Button, IconButton, Select } from '@/components/ui'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
-import { demoToolCopies } from '@/mock/projectTools'
 import { OPEN_SESSION_EVENT } from '@/engine/openRequests'
 import { getFiles, dirtyFile, showFiles } from '@/files/store'
 import { useProjectContext } from './projectContext'
 import { CARD, FIELD, Field, NoProject, ToolError, ToolsHeader, useOperation } from './ToolsUi'
 import type { CopyInput, CopyPreview, ProjectCopy } from '../../../../shared/types/project-tools'
+import { demo as demoData } from '@/data/demo'
 const blank: CopyInput = { name: '', branch: '', base: 'HEAD', existingBranch: false }
 export function CopiesPanel() {
   const ctx = useProjectContext()
@@ -21,7 +21,7 @@ export function CopiesPanel() {
 }
 function CopiesBody({ projectId, name, demo }: { projectId: string; name: string; demo: boolean }) {
   useI18n()
-  const [copies, setCopies] = useState<ProjectCopy[]>(demo ? structuredClone(demoToolCopies) : []),
+  const [copies, setCopies] = useState<ProjectCopy[]>(demo ? structuredClone(demoData().projectTools.copies) : []),
     [branches, setBranches] = useState<string[]>([])
   const [form, setForm] = useState<CopyInput | null>(null),
     [preview, setPreview] = useState<CopyPreview | null>(null)
@@ -73,7 +73,7 @@ function CopiesBody({ projectId, name, demo }: { projectId: string; name: string
         setCopies(items => [
           ...items,
           {
-            ...demoToolCopies[0],
+            ...demoData().projectTools.copies[0],
             id: crypto.randomUUID(),
             name: preview.input.name,
             branch: preview.branch,

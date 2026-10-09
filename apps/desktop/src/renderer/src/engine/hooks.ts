@@ -17,6 +17,7 @@ import type {
   SessionSnapshot,
 } from '@pixelsky/protocol'
 import {
+  isDemo,
   projects as demoProjects,
   recent as demoRecent,
   runStatus as demoRunStatus,
@@ -24,11 +25,9 @@ import {
   type Project,
   type RecentItem,
   type SessionStatus,
-} from '@/mock/data'
+} from '@/data'
 import { engineAccent, fastBlockedText, relativeTime } from './labels'
 import { sidebarData, demoSidebarData, type RunStatus } from './sidebarData'
-import { useDemoSessionChanges } from '@/mock/sessionLifecycle'
-import { demoEngineStatus } from '@/mock/platform'
 import { useAccount } from '@/account/useAccount'
 import {
   getPlatformState,
@@ -58,6 +57,7 @@ import {
   startEngineStore,
   useEngineState,
 } from './store'
+import { demo, useDemoSessionChanges } from '@/data/demo'
 
 /** 是否连接了真实引擎（演示模式下为 false） */
 export const isLive = !!bridge
@@ -177,8 +177,8 @@ export function useDemoSourceController(): SourceMenuController {
     isDefault: true,
     platformAvailable: true,
     blocker: null,
-    engines: demoEngineStatus,
-    engine: demoEngineStatus[0],
+    engines: isDemo ? demo().engines.status : [],
+    engine: isDemo ? demo().engines.status[0] : null,
     canSwitchEngine: true,
     selectEngine: () => undefined,
     redetect: () => undefined,

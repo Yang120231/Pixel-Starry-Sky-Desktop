@@ -182,7 +182,8 @@ describe('i18n 防回归', () => {
   it('写死的中文字面量不增加', () => {
     let literals = 0,
       lookups = 0
-    for (const file of sourceFiles(srcRoot)) {
+    // data/ 是界面数据（空界面、导航、表单模板），原来在 mock/ 里，同样不计
+    for (const file of sourceFiles(srcRoot).filter(f => !relative(srcRoot, f).startsWith('data' + sep))) {
       const code = readFileSync(file, 'utf8')
       for (const { value, start } of extractStrings(code)) {
         if (!CJK.test(value)) continue

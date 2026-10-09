@@ -4,8 +4,8 @@ import { tr } from '../i18n/core'
 import { useMemo, useSyncExternalStore } from 'react'
 import type { AccountInfo, AccountState } from '../../../shared/types/account'
 import type { AccountBridge } from '../../../preload/account'
-import { demoAccount } from '../mock/account'
 import { formatBalance } from './format'
+import { demo } from '@/data/demo'
 
 export type AccountStatus = 'loading' | 'signed-out' | 'signing-in' | 'signed-in'
 
@@ -37,7 +37,8 @@ interface Snapshot {
 
 const LOADING: Snapshot = { status: 'loading', account: null, refreshing: false, error: null }
 const SIGNED_OUT: Snapshot = { status: 'signed-out', account: null, refreshing: false, error: null }
-const DEMO: Snapshot = { status: 'signed-in', account: demoAccount, refreshing: false, error: null }
+/** 演示模式的快照：第一次读取时创建，之后保持同一个对象（useSyncExternalStore 要求快照稳定） */
+let DEMO: Snapshot | null = null
 
 function getBridge(): AccountBridge | null {
   return window.pixelsky?.account ?? null
@@ -107,7 +108,7 @@ function subscribe(listener: () => void): () => void {
 }
 
 function getSnapshot(): Snapshot {
-  if (isDemoMode()) return DEMO
+  if (isDemoMode()) return (DEMO ??= { status: 'signed-in', account: demo().account, refreshing: false, error: null })
   // 没有桥接（普通浏览器）：直接是未登录，不必等待
   if (!getBridge()) return SIGNED_OUT
   return snapshot

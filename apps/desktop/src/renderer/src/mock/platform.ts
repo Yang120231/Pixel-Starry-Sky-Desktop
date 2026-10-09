@@ -1,5 +1,6 @@
 // 演示模式下的平台目录（--demo）。真实目录来自适配层 /v1/platform/groups（docs/ui/platform-groups.md）
-import type { EngineCaps, EngineCatalog, EngineConfig, EngineInfo, EngineLocalConfig } from '@pixelsky/protocol'
+import type { EngineCatalog, EngineConfig, EngineLocalConfig } from '@pixelsky/protocol'
+import type { EngineLite } from '@/data/types'
 import type { PlatformGroupInfo } from '../../../shared/types/platform-catalog'
 
 export const demoPlatformGroups: PlatformGroupInfo[] = [
@@ -31,11 +32,6 @@ export const demoPlatformGroups: PlatformGroupInfo[] = [
     models: ['claude-sonnet-5-5', 'claude-haiku-4-5'],
   },
 ]
-
-/** 设置 › 本机引擎用到的引擎信息（真实数据是 EngineInfo，演示数据只填这些） */
-export type EngineLite = Pick<EngineInfo, 'id' | 'name' | 'status' | 'version' | 'message' | 'path'> & {
-  caps: Pick<EngineCaps, 'permissionModes' | 'efforts' | 'ultracode' | 'fast' | 'thinkingSummaries'>
-}
 
 /** 演示模式下本机引擎的检测结果（设置 › 本机引擎） */
 export const demoEngineStatus: EngineLite[] = [

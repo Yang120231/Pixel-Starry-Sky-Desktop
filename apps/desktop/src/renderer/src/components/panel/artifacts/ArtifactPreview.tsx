@@ -4,10 +4,10 @@ import { IconButton, Segmented, Spinner } from '@/components/ui'
 import { Markdown } from '@/components/session/live/Markdown'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '@/i18n/core'
-import { demoArtifactPreview } from '@/mock/artifacts'
 import type { ArtifactDelivery } from '@pixelsky/protocol'
 import type { ArtifactPreview as Preview } from '../../../../../shared/types/artifacts'
 import { formatBytes, splitArtifactPath } from './artifactsModel'
+import { demo as demoData } from '@/data/demo'
 
 /** 交付文件的预览（docs/ui/artifacts-panel.md §3）：Markdown / 文本 / 图片 / 无脚本网页；PDF 和其他类型用默认应用打开 */
 export function ArtifactPreview({
@@ -34,7 +34,7 @@ export function ArtifactPreview({
     setPreview(null)
     setError('')
     if (demo) {
-      setPreview(demoArtifactPreview(item.path))
+      setPreview(demoData().artifacts.preview(item.path))
       return
     }
     window.pixelsky!.artifacts.read({ sessionId: item.sessionId, path: item.absolute }).then(

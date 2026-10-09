@@ -22,7 +22,6 @@ import { OPEN_SESSION_EVENT } from '@/engine/openRequests'
 import { relativeTime } from '@/engine'
 import { openFile } from '@/files/store'
 import { machineOf } from '@/machines/store'
-import { demoArtifactChange, demoArtifacts } from '@/mock/artifacts'
 import type {
   ArtifactDelivery,
   ArtifactFile,
@@ -37,6 +36,7 @@ import { NoProject, useRemember } from '../ToolsUi'
 import { EmptyState, PanelCard } from '../PanelSurface'
 import { groupBySession, splitArtifactPath } from './artifactsModel'
 import { ArtifactPreview } from './ArtifactPreview'
+import { demo as demoData } from '@/data/demo'
 
 const DAYS = 7
 const TYPE_ICON: Record<DeliveryType | 'other', LucideIcon> = {
@@ -79,7 +79,7 @@ function ArtifactsBody({
 }) {
   useI18n()
   const [tab, setTab] = useRemember<'changes' | 'delivered'>('pixelsky.artifacts.tab', 'changes')
-  const [data, setData] = useState<ArtifactResponse | null>(demo ? demoArtifacts : null)
+  const [data, setData] = useState<ArtifactResponse | null>(demo ? demoData().artifacts.response : null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [preview, setPreview] = useState<ArtifactDelivery | null>(null)
@@ -308,7 +308,7 @@ function FileRow({
     if (change && change !== 'loading') return
     setChange('loading')
     if (demo) {
-      setChange(demoArtifactChange(file.itemId, file.path))
+      setChange(demoData().artifacts.change(file.itemId, file.path))
       return
     }
     try {

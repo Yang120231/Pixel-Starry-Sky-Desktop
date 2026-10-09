@@ -1,7 +1,7 @@
 // 演示数据：照参考图 docs/reference/workbench-session.jpg 写的，品牌名已替换。
 // 用 `pnpm dev:demo` 启动时显示，用来对照参考图调样式。
-import type { AppData } from './types'
-import { COMPOSER, RAIL_ITEMS } from './shared'
+import type { AppData } from '@/data/types'
+import { COMPOSER, RAIL_ITEMS } from '@/data/constants'
 import { demoChannelMembers, demoChannelMessages, demoChannels } from './channels'
 
 export const demo: AppData = {

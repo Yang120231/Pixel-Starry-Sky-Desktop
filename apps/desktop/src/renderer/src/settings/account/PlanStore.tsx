@@ -3,7 +3,7 @@ import { tr } from '../../i18n/core'
 import { Check } from 'lucide-react'
 import { formatAmount, formatPrice } from '@/account'
 import { Button, cn, useComingSoon } from '@/components/ui'
-import { billing, type PlanOffer } from '@/mock/data'
+import { billing, type PlanOffer } from '@/data'
 
 const PERIOD_LABELS: Record<PlanOffer['period'], string> = {
   get month() {

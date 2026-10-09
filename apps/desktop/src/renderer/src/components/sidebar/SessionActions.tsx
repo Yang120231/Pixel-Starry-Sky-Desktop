@@ -2,7 +2,6 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { X } from 'lucide-react'
 import { isLive } from '@/engine'
 import { bridge, getEngineState } from '@/engine/store'
-import { changeDemoSession, getDemoSessionChanges } from '@/mock/sessionLifecycle'
 import { paneActions } from '@/panes/store'
 import { SESSION_REMOVED_EVENT } from '@/engine/sessionLifecycle'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
@@ -11,6 +10,7 @@ import { translateMessage } from '@/i18n/core'
 import { retainSessionFiles } from '@/files/store'
 import { RenameSessionDialog } from './RenameSessionDialog'
 import { normalizeSessionTitle } from '@pixelsky/protocol'
+import { demo, demoSessionChanges } from '@/data/demo'
 export interface SessionTarget {
   id: string
   title: string
@@ -83,7 +83,7 @@ export function SessionActionsProvider({ children }: { children: ReactNode }) {
   }, [])
   const fresh = (target: SessionTarget): SessionTarget => {
     if (!isLive) {
-      const change = getDemoSessionChanges()[target.id]
+      const change = demoSessionChanges()[target.id]
       return {
         ...target,
         title: change?.title ?? target.title,
@@ -129,18 +129,18 @@ export function SessionActionsProvider({ children }: { children: ReactNode }) {
         } else if (action === 'bottom') await bridge.setSessionBottom(current.id, !current.bottomed)
         else await bridge.archiveSession(current.id, action === 'archive', allowRunning)
       } else
-        changeDemoSession(
+        demo().sessions.change(
           current.id,
           action === 'bottom'
             ? {
                 bottomedAt: current.bottomed ? null : Date.now(),
-                archivedAt: current.archived ? (getDemoSessionChanges()[current.id]?.archivedAt ?? 1) : null,
+                archivedAt: current.archived ? (demoSessionChanges()[current.id]?.archivedAt ?? 1) : null,
               }
             : action === 'delete'
               ? { deleted: true, stopped: true }
               : {
                   archivedAt: action === 'archive' ? Date.now() : null,
-                  stopped: action === 'archive' || getDemoSessionChanges()[current.id]?.stopped === true,
+                  stopped: action === 'archive' || demoSessionChanges()[current.id]?.stopped === true,
                 },
         )
       if (action === 'archive' || action === 'delete') paneActions.closeSessions(new Set([current.id]))
@@ -178,9 +178,9 @@ export function SessionActionsProvider({ children }: { children: ReactNode }) {
         current = fresh(rename)
       if (isLive && bridge) await bridge.renameSession(current.id, next)
       else
-        changeDemoSession(current.id, {
+        demo().sessions.change(current.id, {
           title: next,
-          archivedAt: current.archived ? (getDemoSessionChanges()[current.id]?.archivedAt ?? 1) : null,
+          archivedAt: current.archived ? (demoSessionChanges()[current.id]?.archivedAt ?? 1) : null,
         })
       setRename(null)
       setToast({ kind: 'rename', id: current.id, title: next, at: Date.now() })

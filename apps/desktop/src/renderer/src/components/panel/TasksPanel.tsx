@@ -5,12 +5,12 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import { useEngineState } from '@/engine'
 import { OPEN_SESSION_EVENT } from '@/engine/openRequests'
-import { demoToolTasks } from '@/mock/projectTools'
 import { useProjectContext } from './projectContext'
 import { useTaskLocation } from './taskNavigation'
 import { CARD, FIELD, Field, NoProject, ToolError, ToolsHeader, useOperation, useRemember } from './ToolsUi'
 import { TaskInbox } from './inbox/TaskInbox'
 import type { ManualTask, TaskState } from '../../../../shared/types/project-tools'
+import { demo as demoData } from '@/data/demo'
 const EMPTY: TaskState = { tasks: [], plans: [] }
 const blank = {
   title: '',
@@ -45,7 +45,7 @@ export function TasksPanel() {
 }
 function TasksBody({ projectId, name, demo }: { projectId: string; name: string; demo: boolean }) {
   useI18n()
-  const [data, setData] = useState<TaskState>(demo ? structuredClone(demoToolTasks) : EMPTY)
+  const [data, setData] = useState<TaskState>(demo ? structuredClone(demoData().projectTools.tasks) : EMPTY)
   const [loaded, setLoaded] = useState(demo)
   const [filter, setFilter] = useRemember('pixelsky.tasks.filter:' + projectId, 'all')
   const [source, setSource] = useRemember('pixelsky.tasks.source:' + projectId, 'all')

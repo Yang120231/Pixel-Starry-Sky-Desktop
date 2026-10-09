@@ -1,7 +1,7 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { Pin, SquareKanban } from 'lucide-react'
 import { Dot, cn, useComingSoon } from '@/components/ui'
-import type { PinnedItem } from '@/mock/data'
+import type { PinnedItem } from '@/data'
 import { SidebarRow } from './SidebarSection'
 
 /** 置顶项（演示模式）：任务看板或固定的会话 */

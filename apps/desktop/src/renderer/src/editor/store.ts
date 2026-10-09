@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import type { EditorState } from '../../../shared/types/workspace'
-import { isDemo } from '@/mock/data'
-import { DEMO_EDITOR_STATE } from '@/mock/files'
+import { isDemo } from '@/data'
+import { demo } from '@/data/demo'
 let state: EditorState | null = null
 const listeners = new Set<() => void>()
 export function setEditors(next: EditorState): void {
@@ -18,5 +18,5 @@ export function useEditors(): EditorState | null {
   )
 }
 export async function refreshEditors(force = false): Promise<void> {
-  setEditors(isDemo ? DEMO_EDITOR_STATE : await window.pixelsky!.editor.state(force))
+  setEditors(isDemo ? demo().files.editorState : await window.pixelsky!.editor.state(force))
 }

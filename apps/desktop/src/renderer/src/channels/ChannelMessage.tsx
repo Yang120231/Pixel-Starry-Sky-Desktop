@@ -3,7 +3,7 @@ import { tr } from '../i18n/core'
 import { CornerUpLeft } from 'lucide-react'
 import { Avatar, cn, CopyButton, EngineIcon, IconButton } from '@/components/ui'
 import { Markdown } from '@/components/session/live/Markdown'
-import type { ChannelMember, ChannelTextMessage } from '@/mock/types'
+import type { ChannelMember, ChannelTextMessage } from '@/data/types'
 import { excerpt, splitMentions } from './model'
 import { formatClock } from './format'
 

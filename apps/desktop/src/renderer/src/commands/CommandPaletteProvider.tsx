@@ -42,9 +42,9 @@ import { useSessionActions, type SessionTarget } from '@/components/sidebar/Sess
 import { getEngineState } from '@/engine/store'
 import { getPanelLayout, getPanelScope, openRightTab } from '@/components/panel/workspaceStore'
 import { getFiles, saveFile, showFiles } from '@/files/store'
-import { isDemo, projects } from '@/mock/data'
-import { getDemoSessionChanges } from '@/mock/sessionLifecycle'
+import { isDemo, projects } from '@/data'
 import { rankCommands } from './rank'
+import { demoSessionChanges } from '@/data/demo'
 
 interface CommandItem {
   id: string
@@ -71,7 +71,7 @@ function sessionTarget(id: string | null): SessionTarget | null {
   if (!id || isFileTab(id) || isNewTab(id)) return null
   if (isDemo) {
     const s = projects.flatMap(p => [...p.sessions, ...(p.archived ?? [])]).find(s => s.id === id),
-      change = getDemoSessionChanges()[id]
+      change = demoSessionChanges()[id]
     if (!s || change?.deleted) return null
     return {
       id,

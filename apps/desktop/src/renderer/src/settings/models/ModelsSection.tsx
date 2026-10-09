@@ -26,11 +26,11 @@ import {
   type CreditSource,
 } from '@/account/platform'
 import { SELF_MODELS, isLive, useEngineState } from '@/engine'
-import { demoEngineStatus } from '@/mock/platform'
 import { GroupTitle, SectionTitle, SettingRow } from '../SettingRow'
 import { Switch } from '@/components/session/ComposerMenus'
 import { takeModelsScroll } from './scroll'
 import { RequestRetrySettings } from './RequestRetrySettings'
+import { demo, isDemo } from '@/data/demo'
 
 const ENGINE_STATUS: Record<string, string> = {
   get ready() {
@@ -58,7 +58,7 @@ export function ModelsSection({ onOpenEngines }: { onOpenEngines?: () => void })
   const platform = usePlatform()
   const account = useAccount()
   const liveEngines = useEngineState(s => s.engines)
-  const engines = isLive ? liveEngines : demoEngineStatus
+  const engines = isLive ? liveEngines : isDemo ? demo().engines.status : []
   const models = platformModels(platform.groups)
   const routes = groupsForModel(platform.groups, platform.model)
   const visibilityRef = useRef<HTMLDivElement>(null)

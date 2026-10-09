@@ -6,11 +6,11 @@ import { ChevronRight, Folder, FolderOpen, File, RefreshCw, ChevronsDownUp, Sear
 import { ActionMenu } from '@/components/ui/ActionMenu'
 import { IconButton, Spinner, cn } from '@/components/ui'
 import { useEngineState } from '@/engine'
-import { isDemo, projects as demoProjects } from '@/mock/data'
-import { demoDirectory, DEMO_FILES } from '@/mock/files'
+import { isDemo, projects as demoProjects } from '@/data'
 import { useActiveWorkspace } from '@/editor/target'
 import { OPEN_FILES_EVENT, openFile, useFiles } from './store'
 import type { DirectoryListing, FileEntry, WorkspaceRef } from '../../../shared/types/workspace'
+import { demo } from '@/data/demo'
 const pathKey = (path: string): string => {
   const p = path.replaceAll('\\', '/').replace(/\/$/, '')
   return window.pixelsky?.platform === 'win32' ? p.toLowerCase() : p
@@ -208,7 +208,7 @@ function ProjectRoot({
     const timer = setTimeout(() => {
       const result = isDemo
         ? Promise.resolve({
-            entries: Object.keys(DEMO_FILES)
+            entries: Object.keys(demo().files.contents)
               .filter(p => p.toLowerCase().includes(query.toLowerCase()))
               .map(path => ({ path, name: path.split('/').pop()!, kind: 'file' as const })),
             truncated: false,
@@ -310,7 +310,7 @@ function Directory({
     let cancelled = false
     setList(null)
     setError('')
-    const result = isDemo ? Promise.resolve(demoDirectory(path)) : window.pixelsky!.files.list(refTarget, path)
+    const result = isDemo ? Promise.resolve(demo().files.directory(path)) : window.pixelsky!.files.list(refTarget, path)
     void result.then(
       r => {
         if (!cancelled) setList(r)

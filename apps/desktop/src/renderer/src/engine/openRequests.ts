@@ -5,7 +5,7 @@ import { tr } from '../i18n/core'
 // 由布局（App / 分屏工作区）用这个钩子接住：会话存在就交给 open 打开（等同侧边栏点选），已删除就提示。
 import { useEffect, useRef } from 'react'
 import { useToast } from '@/components/ui'
-import { projects as demoProjects } from '@/mock/data'
+import { projects as demoProjects } from '@/data'
 import { isLive } from './hooks'
 import { getEngineState } from './store'
 import { navigateToItem } from '@/search/navigation'

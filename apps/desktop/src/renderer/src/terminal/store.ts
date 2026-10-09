@@ -1,9 +1,9 @@
 import { useSyncExternalStore } from 'react'
 import type { TerminalEvent, TerminalRecord, TerminalState, TerminalProfileInput } from '../../../shared/types/terminal'
 import type { WorkspaceRef } from '../../../shared/types/workspace'
-import { isDemo, projects } from '@/mock/data'
-import { demoTerminalProfiles, demoTerminalOutput } from '@/mock/terminal'
+import { isDemo, projects } from '@/data'
 import { translateMessage, tr } from '@/i18n/core'
+import { demo } from '@/data/demo'
 
 interface State extends TerminalState {
   ready: boolean
@@ -48,7 +48,7 @@ function event(value: TerminalEvent): void {
 export function initTerminalStore(): Promise<void> {
   return (init ??= (async () => {
     if (isDemo) {
-      set({ profiles: demoTerminalProfiles, defaultProfileId: demoTerminalProfiles[0].id, ready: true })
+      set({ profiles: demo().terminal.profiles, defaultProfileId: demo().terminal.profiles[0].id, ready: true })
       return
     }
     window.pixelsky?.terminal.onEvent(event)
@@ -107,8 +107,8 @@ export async function terminalProfile(input: TerminalProfileInput): Promise<void
 export async function removeTerminalProfile(id?: string): Promise<void> {
   if (isDemo) {
     set({
-      profiles: id ? state.profiles.filter(p => p.id !== id) : demoTerminalProfiles,
-      defaultProfileId: demoTerminalProfiles[0].id,
+      profiles: id ? state.profiles.filter(p => p.id !== id) : demo().terminal.profiles,
+      defaultProfileId: demo().terminal.profiles[0].id,
     })
     return
   }
@@ -135,7 +135,7 @@ export async function terminalCreate(ref: WorkspaceRef, profileId?: string): Pro
       createdAt: Date.now(),
     }
     applyTerminalRecord(record)
-    event({ type: 'data', terminalId: record.id, generation: 1, seq: 1, data: demoTerminalOutput })
+    event({ type: 'data', terminalId: record.id, generation: 1, seq: 1, data: demo().terminal.output })
     return record
   }
   const record = await window.pixelsky!.terminal.create(ref, profileId, crypto.randomUUID())
@@ -158,7 +158,7 @@ export async function terminalRestart(id: string, force = false): Promise<void> 
   if (!record) throw new Error(tr('terminal.missing'))
   if (isDemo) {
     applyTerminalRecord({ ...record, generation: record.generation + 1, status: 'running', exitCode: undefined })
-    event({ type: 'data', terminalId: id, generation: record.generation + 1, seq: 1, data: demoTerminalOutput })
+    event({ type: 'data', terminalId: id, generation: record.generation + 1, seq: 1, data: demo().terminal.output })
   } else applyTerminalRecord(await window.pixelsky!.terminal.restart(id, force))
 }
 export function demoWrite(id: string, data: string): void {

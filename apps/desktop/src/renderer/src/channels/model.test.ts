@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import type { Channel, ChannelMember, ChannelMessage } from '@/mock/types'
+import type { Channel, ChannelMember, ChannelMessage } from '@/data/types'
 import { setCurrentLocale } from '../i18n/core'
 import {
   appendMessage,

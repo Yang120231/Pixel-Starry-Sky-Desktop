@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { AtSign, Hash, Plus, Search, Users } from 'lucide-react'
 import { cn, CountBadge, IconButton, useComingSoon } from '@/components/ui'
 import { SidebarEmpty, SidebarSection } from '@/components/sidebar/SidebarSection'
-import type { Channel } from '@/mock/types'
+import type { Channel } from '@/data/types'
 
 /** 频道列表（docs/ui/channels.md §4）：搜索、频道行（未读 / @你）、新建频道 */
 export function ChannelList({

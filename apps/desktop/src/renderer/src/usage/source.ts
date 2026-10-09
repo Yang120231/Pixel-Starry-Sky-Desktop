@@ -2,10 +2,10 @@
 // - 演示模式：mock/usage.ts 生成的假数据，在界面里现场汇总；
 // - 真实模式：引擎层提供 usage* 接口后从主进程读取；接口还没有时显示空状态。
 import { useCallback, useEffect, useState } from 'react'
-import { isDemo } from '@/mock/data'
-import { demoUsageRecords } from '@/mock/usage'
+import { isDemo } from '@/data'
 import { listRecords, summarize, toCsv } from './aggregate'
 import type { UsageFilter, UsagePage, UsageRangeId, UsageRecord, UsageSummary } from './types'
+import { demo } from '@/data/demo'
 
 export interface UsageQuery {
   range: UsageRangeId
@@ -34,7 +34,7 @@ export function usageAvailable(): boolean {
 }
 
 // 本地记录：演示模式是假数据；真实模式在引擎接口实现前为空
-let localRecords: UsageRecord[] = isDemo ? demoUsageRecords(Date.now()) : []
+let localRecords: UsageRecord[] = isDemo ? demo().usageRecords(Date.now()) : []
 const listeners = new Set<() => void>()
 const notify = () => listeners.forEach(l => l())
 

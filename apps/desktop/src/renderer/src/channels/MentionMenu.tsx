@@ -2,7 +2,7 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../i18n/core'
 import { useLayoutEffect, useRef } from 'react'
 import { cn } from '@/components/ui'
-import type { ChannelMember } from '@/mock/types'
+import type { ChannelMember } from '@/data/types'
 import { agentMeta, MemberAvatar } from './ChannelMessage'
 
 /** 输入框里的 @ 菜单（docs/ui/channels.md §6）；结构和键盘处理照 components/session/CommandMenu.tsx */

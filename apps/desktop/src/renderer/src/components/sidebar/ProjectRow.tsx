@@ -8,7 +8,7 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { translateMessage } from '@/i18n/core'
 import { isLive, removeProject, renameProject } from '@/engine'
 import { machineOf } from '@/machines/store'
-import type { Project } from '@/mock/data'
+import type { Project } from '@/data'
 
 /**
  * 侧栏项目行：点击展开 / 收起；右键、⋯ 按钮、ContextMenu 键或 Shift+F10 打开项目菜单。

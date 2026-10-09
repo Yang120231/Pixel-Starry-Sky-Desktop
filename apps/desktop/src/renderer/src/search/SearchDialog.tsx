@@ -9,9 +9,9 @@ import { CornerDownLeft, Folder, MessageSquare, Search, SquareTerminal, X } from
 import type { SearchQuery, SearchResponse, SearchResult, SearchScope } from '@pixelsky/protocol'
 import { IconButton, Spinner, cn } from '@/components/ui'
 import { OPEN_SESSION_EVENT, bridge, useEngineState } from '@/engine'
-import { isDemo } from '@/mock/data'
-import { demoSearchProjects, searchDemo } from '@/mock/search'
+import { isDemo } from '@/data'
 import { ProjectFilter } from './ProjectFilter'
+import { demo } from '@/data/demo'
 
 const SCOPES: Array<{ id: SearchScope; name: string }> = [
   {
@@ -78,7 +78,7 @@ export function SearchDialog({
   const dialog = useRef<HTMLDivElement>(null)
   const request = useRef(0)
   const projects = useEngineState(s => s.projects)
-  const options = isDemo ? demoSearchProjects : projects
+  const options = isDemo ? demo().search.projects : projects
   const activate = (r: SearchResult) => {
     if (r.id.startsWith('manual-task:')) {
       setCurrentProject(r.projectId)
@@ -107,7 +107,7 @@ export function SearchDialog({
         const query: SearchQuery = { requestId, text, scope, projectId }
         try {
           const [result, tasks] = await Promise.all([
-            isDemo ? searchDemo(query) : bridge?.search(query),
+            isDemo ? demo().search.run(query) : bridge?.search(query),
             !isDemo && scope === 'all' && text.trim()
               ? window.pixelsky?.projectTools.searchTasks(text, projectId)
               : Promise.resolve([]),

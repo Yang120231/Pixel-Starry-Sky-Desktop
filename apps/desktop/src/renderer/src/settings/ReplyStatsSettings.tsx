@@ -3,7 +3,7 @@ import { tr } from '../i18n/core'
 import { Check, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui'
 import { TurnStats } from '@/components/session/TurnStats'
-import { replyStatsPreview } from '@/mock/replyStats'
+import { replyStatsPreview } from '@/data/replyStats'
 import {
   REPLY_STAT_GROUPS,
   REPLY_STAT_LABELS,

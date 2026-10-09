@@ -9,20 +9,21 @@ import { ChevronRight, CircleCheck } from 'lucide-react'
 import type { EngineConfig, EngineConfigPatch, EngineId } from '@pixelsky/protocol'
 import { EngineIcon, cn } from '@/components/ui'
 import { bridge, isLive, useEngineState } from '@/engine'
-import { demoEngineConfig, demoEngineStatus, type EngineLite } from '@/mock/platform'
 import { SectionTitle } from '../SettingRow'
 import { EngineDetail } from './EngineDetail'
 import { openEngineDetail, useEngineDetail } from './nav'
 import { DefaultBadge, ENGINE_STATUS } from './parts'
+import { demo, isDemo } from '@/data/demo'
+import type { EngineLite } from '@/data/types'
 
 export function EnginesSection({ onOpenModels }: { onOpenModels?: () => void }) {
   useI18n()
   const liveEngines = useEngineState(s => s.engines)
   const liveConfig = useEngineState(s => s.config)
   const liveDefaults = useEngineState(s => s.defaults)
-  const engines: EngineLite[] = isLive ? liveEngines : demoEngineStatus
-  // 演示模式：配置和默认引擎只在内存里
-  const [demoConfig, setDemoConfig] = useState<EngineConfig>(demoEngineConfig)
+  const engines: EngineLite[] = isLive ? liveEngines : isDemo ? demo().engines.status : []
+  // 演示模式：配置和默认引擎只在内存里（没有桥接也不是演示模式时，比如普通浏览器，是空列表）
+  const [demoConfig, setDemoConfig] = useState<EngineConfig | null>(() => (isDemo ? demo().engines.config : null))
   const [demoDefault, setDemoDefault] = useState<EngineId>('claude')
   const config = isLive ? liveConfig : demoConfig
   const defaultEngine = isLive ? (liveDefaults?.engine ?? 'claude') : demoDefault
@@ -34,10 +35,13 @@ export function EnginesSection({ onOpenModels }: { onOpenModels?: () => void }) 
 
   const save = async (engine: EngineId, patch: EngineConfigPatch): Promise<void> => {
     if (!bridge) {
-      setDemoConfig(c => ({
-        ...c,
-        [engine]: { ...c[engine], ...patch, defaults: { ...c[engine].defaults, ...(patch.defaults ?? {}) } },
-      }))
+      setDemoConfig(
+        c =>
+          c && {
+            ...c,
+            [engine]: { ...c[engine], ...patch, defaults: { ...c[engine].defaults, ...(patch.defaults ?? {}) } },
+          },
+      )
       return
     }
     // 主进程会广播 engine_config，store 跟着更新
@@ -47,7 +51,7 @@ export function EnginesSection({ onOpenModels }: { onOpenModels?: () => void }) 
     setError(null)
     if (!bridge) {
       setDemoDefault(engine)
-      setDemoConfig(c => ({ ...c, [engine]: { ...c[engine], hidden: false } }))
+      setDemoConfig(c => c && { ...c, [engine]: { ...c[engine], hidden: false } })
       return
     }
     try {

@@ -2,8 +2,7 @@ import { machineOf } from '@/machines/store'
 import { tr } from '../i18n/core'
 import { useSyncExternalStore } from 'react'
 import type { FileDocument, WorkspaceRef } from '../../../shared/types/workspace'
-import { isDemo, projects } from '@/mock/data'
-import { demoDocument } from '@/mock/files'
+import { isDemo, projects } from '@/data'
 import { paneActions } from '@/panes/store'
 import { getEngineState } from '@/engine/store'
 import { fileTab, parseFileTab } from '@/panes/tree'
@@ -15,6 +14,7 @@ import {
   panelFileIds,
   resolvePanelFileId,
 } from '@/components/panel/workspaceStore'
+import { demo } from '@/data/demo'
 
 export const OPEN_FILES_EVENT = 'pixelsky:open-files'
 export const FILE_CLOSED_EVENT = 'pixelsky:file-closed'
@@ -99,7 +99,7 @@ export async function loadFile(id: string): Promise<void> {
   if (!tab) return
   updateFile(id, { loading: true, error: null })
   try {
-    const document = isDemo ? demoDocument(tab.path) : await window.pixelsky!.files.read(tab.ref, tab.path)
+    const document = isDemo ? demo().files.document(tab.path) : await window.pixelsky!.files.read(tab.ref, tab.path)
     updateFile(id, {
       document,
       draft: document.kind === 'text' ? document.content.replace(/\r\n/g, '\n') : '',

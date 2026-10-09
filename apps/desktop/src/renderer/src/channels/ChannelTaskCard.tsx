@@ -2,7 +2,7 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr, type TranslationKey } from '../i18n/core'
 import { CircleCheck, CircleX, Clock, ShieldAlert, type LucideIcon } from 'lucide-react'
 import { Button, cn, DiffStat, Spinner } from '@/components/ui'
-import type { ChannelMember, ChannelTask, ChannelTaskStatus } from '@/mock/types'
+import type { ChannelMember, ChannelTask, ChannelTaskStatus } from '@/data/types'
 import { formatClock } from './format'
 
 const STATUS_LABEL: Record<ChannelTaskStatus, TranslationKey> = {

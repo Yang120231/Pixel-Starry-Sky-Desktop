@@ -12,7 +12,7 @@ import {
   type SessionSnapshot,
   type SessionSummary,
 } from '@pixelsky/protocol'
-import { isDemo } from '@/mock/data'
+import { isDemo } from '@/data'
 import { SESSION_REMOVED_EVENT } from './sessionLifecycle'
 import { getMachines, machineOf } from '@/machines/store'
 

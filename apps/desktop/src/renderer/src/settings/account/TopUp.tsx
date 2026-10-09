@@ -3,7 +3,7 @@ import { tr } from '../../i18n/core'
 import { useState, type ReactNode } from 'react'
 import { formatAmount, formatPrice } from '@/account'
 import { Button, Segmented, cn, useComingSoon } from '@/components/ui'
-import { billing } from '@/mock/data'
+import { billing } from '@/data'
 
 /** 选中的金额：预设选项的下标，或自定义 */
 type Choice = number | 'custom'

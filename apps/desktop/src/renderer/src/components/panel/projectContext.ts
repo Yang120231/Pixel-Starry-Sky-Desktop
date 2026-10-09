@@ -1,4 +1,4 @@
-import { isDemo, projects as demoProjects } from '@/mock/data'
+import { isDemo, projects as demoProjects } from '@/data'
 import { useActiveWorkspace } from '@/editor/target'
 import { useEngineState } from '@/engine'
 import type { WorkspaceRef } from '../../../../shared/types/workspace'

@@ -1,6 +1,6 @@
 import { ChevronDown, PanelLeft } from 'lucide-react'
 import { IconButton, cn } from '@/components/ui'
-import { brandName } from '@/mock/data'
+import { brandName } from '@/data'
 import { TOGGLE_SIDEBAR, withShortcut } from '@/shortcuts'
 import { useI18n } from '@/i18n/I18nProvider'
 import { openWorkspacePicker } from '@/machines/store'

@@ -1,6 +1,6 @@
 import { bottomOrder, type ProjectRecord, type SessionSummary } from '@pixelsky/protocol'
-import type { Project, RecentItem, SessionStatus } from '@/mock/types'
-import type { DemoSessionChange } from '@/mock/sessionLifecycle'
+import type { Project, RecentItem, SessionStatus } from '@/data/types'
+import type { DemoSessionChange } from '@/data/types'
 /** 底部运行状态胶囊展开后的一行：运行中的排前面，同组内保持会话列表顺序 */
 export interface RunStatusItem {
   id: string

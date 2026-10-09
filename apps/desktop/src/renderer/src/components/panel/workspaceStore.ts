@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { isDemo } from '@/mock/data'
+import { isDemo } from '@/data'
 import {
   activatePanelTab,
   emptyPanel,

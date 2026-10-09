@@ -3,10 +3,10 @@
 // - 真实模式：通过主进程读取已上线的用户调用接口；
 //   不存在时返回 NOT_IMPLEMENTED，页面显示「需认证服务提供接口」的占位说明。
 import { useEffect, useState } from 'react'
-import { isDemo } from '@/mock/data'
-import { demoRemoteCalls } from '@/mock/remoteCalls'
+import { isDemo } from '@/data'
 import type { RemoteCallPage } from './remote-types'
 import type { UsageRangeId } from './types'
+import { demo } from '@/data/demo'
 
 export const NOT_IMPLEMENTED = 'not_implemented'
 
@@ -55,7 +55,8 @@ function queryLocal(query: RemoteCallsQuery, now: number): RemoteCallPage {
         : query.range === '30d'
           ? today.getTime() - 29 * DAY
           : today.getTime() - 89 * DAY
-  const all = demoRemoteCalls(now)
+  const all = demo()
+    .remoteCalls(now)
     .filter(c => c.createdAt >= from && c.createdAt <= now && (query.model === null || c.model === query.model))
     .sort((a, b) => b.createdAt - a.createdAt)
   return {

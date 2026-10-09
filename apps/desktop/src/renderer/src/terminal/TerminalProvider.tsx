@@ -3,7 +3,7 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { useActiveWorkspace } from '@/editor/target'
 import { getEngineState } from '@/engine/store'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
-import { isDemo, projects } from '@/mock/data'
+import { isDemo, projects } from '@/data'
 import type { WorkspaceRef } from '../../../shared/types/workspace'
 import {
   initTerminalStore,

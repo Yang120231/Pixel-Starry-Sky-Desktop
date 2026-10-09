@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { demo } from './demo'
-import { empty } from './empty'
+import { empty } from '@/data/empty'
 import { unreadTotal } from '../channels/model'
 
 describe('协作频道演示数据', () => {

@@ -1,6 +1,6 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { Dot, Spinner, cn } from '@/components/ui'
-import type { Session } from '@/mock/data'
+import type { Session } from '@/data'
 import { SessionRow } from './SessionRow'
 
 /** 项目下面缩进的会话：文字与项目名对齐 */

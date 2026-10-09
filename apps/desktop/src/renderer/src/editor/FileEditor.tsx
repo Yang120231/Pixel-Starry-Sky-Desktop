@@ -23,7 +23,7 @@ import { fileLanguage } from './code/languages'
 import { fileIndent } from './code/positions'
 import { ExternalFileButton } from './ExternalFileButton'
 import { FileBreadcrumbs } from './FileBreadcrumbs'
-import { isDemo } from '@/mock/data'
+import { isDemo } from '@/data'
 
 export function FileEditor({
   id,

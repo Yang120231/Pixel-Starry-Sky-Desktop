@@ -15,13 +15,13 @@ import { Button, IconButton } from '@/components/ui'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
-import { demoToolBrowser } from '@/mock/projectTools'
 import { useComposerController } from '@/engine'
 import { PreviewViewport } from './PreviewViewport'
 import { useProjectContext } from './projectContext'
 import { FIELD, NoProject, ToolError, useOperation } from './ToolsUi'
 import type { BrowserState } from '../../../../shared/types/project-browser'
 import type { WorkspaceRef } from '../../../../shared/types/workspace'
+import { demo as demoData } from '@/data/demo'
 
 export function BrowserTab({ requested }: { requested?: { ref: WorkspaceRef; url: string; seq: number } | null }) {
   const ctx = useProjectContext()
@@ -41,7 +41,9 @@ function BrowserBody({
   requested?: { ref: WorkspaceRef; url: string; seq: number } | null
 }) {
   useI18n()
-  const [state, setState] = useState<BrowserState | null>(demo ? structuredClone(demoToolBrowser) : null)
+  const [state, setState] = useState<BrowserState | null>(
+    demo ? structuredClone(demoData().projectTools.browser) : null,
+  )
   const [address, setAddress] = useState(''),
     [note, setNote] = useState(''),
     [notesOpen, setNotesOpen] = useState(false)

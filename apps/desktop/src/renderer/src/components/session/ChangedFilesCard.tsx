@@ -3,10 +3,10 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
 import { FileDiff, Undo2 } from 'lucide-react'
 import { Button, DiffStat, cn, useComingSoon } from '@/components/ui'
-import { changedFiles, type ChangedFiles } from '@/mock/data'
+import { changedFiles, type ChangedFiles } from '@/data'
 import { openFile } from '@/files/store'
 import type { WorkspaceRef } from '../../../../shared/types/workspace'
-import { isDemo, projects } from '@/mock/data'
+import { isDemo, projects } from '@/data'
 import { useState } from 'react'
 
 /** 改动文件卡片；data 不传时用演示数据 */

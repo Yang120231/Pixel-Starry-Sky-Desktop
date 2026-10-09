@@ -6,7 +6,7 @@ import type {
   ChannelMessage,
   ChannelTask,
   ChannelTextMessage,
-} from '@/mock/types'
+} from '@/data/types'
 
 // ---------------------------------------------------------------------------
 // 时间线

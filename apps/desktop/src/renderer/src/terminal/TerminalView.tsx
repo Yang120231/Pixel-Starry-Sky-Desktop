@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { TerminalRecord } from '../../../shared/types/terminal'
 import { consumeTerminal, demoWrite, terminalError } from './store'
 import { screens } from './screens'
-import { isDemo } from '@/mock/data'
+import { isDemo } from '@/data'
 import { useI18n } from '@/i18n/I18nProvider'
 
 const ansi = [

@@ -2,7 +2,7 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../i18n/core'
 import { hasWallpaper } from '@/appearance/wallpaper'
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { isDemo } from '@/mock/data'
+import { isDemo } from '@/data'
 import { PANE_FOCUS_MOTION_KEY, readPaneFocusMotion, type PaneFocusMotion } from './paneFocusMotion'
 
 export type ThemePreference = 'light' | 'dark' | 'system'

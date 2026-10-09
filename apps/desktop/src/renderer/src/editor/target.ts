@@ -2,7 +2,7 @@ import { useEngineState } from '@/engine'
 import { usePaneState } from '@/panes/store'
 import { focusedTab, isNewTab, parseFileTab } from '@/panes/tree'
 import { useFiles } from '@/files/store'
-import { isDemo, projects } from '@/mock/data'
+import { isDemo, projects } from '@/data'
 import type { WorkspaceRef } from '../../../shared/types/workspace'
 import { draftWorkspace } from '@/machines/drafts'
 

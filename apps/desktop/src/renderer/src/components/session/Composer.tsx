@@ -2,7 +2,7 @@ import { translateMessage } from '../../i18n/core'
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
 import { ArrowUp, ChevronDown, Mic, Plus, ShieldOff, Square } from 'lucide-react'
 import { IconButton, cn, useComingSoon } from '@/components/ui'
-import { attachments as initialAttachments, composer } from '@/mock/data'
+import { attachments as initialAttachments, composer } from '@/data'
 import {
   SOURCE_ACTION_EVENT,
   useDemoSourceController,

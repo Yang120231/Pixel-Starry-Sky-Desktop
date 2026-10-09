@@ -1,6 +1,6 @@
 // 协作频道的演示数据（docs/ui/channels.md §9.1），只在 `pnpm dev:demo` 显示。
 // 时间相对本地 0 点推算，日期分隔始终是「昨天 / 今天」。
-import type { Channel, ChannelMember, ChannelMessage } from './types'
+import type { Channel, ChannelMember, ChannelMessage } from '@/data/types'
 
 const midnight = new Date()
 midnight.setHours(0, 0, 0, 0)

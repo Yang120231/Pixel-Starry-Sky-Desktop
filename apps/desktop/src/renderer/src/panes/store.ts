@@ -1,7 +1,7 @@
 import { tr } from '../i18n/core'
 // 多对话窗格的状态：布局树 + 关闭中 / 拖动中的标记，存 localStorage，重启恢复。规格见 docs/ui/multi-pane.md
 import { useSyncExternalStore } from 'react'
-import { isDemo } from '@/mock/data'
+import { isDemo } from '@/data'
 import { migrateNewComposerDraft } from '@/engine/drafts'
 import { cssDuration, motionEnabled } from './motion'
 import * as T from './tree'

@@ -1,8 +1,8 @@
 // 协作频道的界面状态（docs/ui/channels.md §1.1）。Phase A 只有内存数据：演示模式来自 mock/channels.ts，
 // 默认模式没有频道。Phase B 接入引擎后，isLive 时改从 window.pixelsky.channels 读写。
 import { useSyncExternalStore } from 'react'
-import { channelMembers, channelMessages, channels } from '@/mock/data'
-import type { Channel, ChannelMember, ChannelMessage, ChannelTextMessage } from '@/mock/types'
+import { channelMembers, channelMessages, channels } from '@/data'
+import type { Channel, ChannelMember, ChannelMessage, ChannelTextMessage } from '@/data/types'
 import { appendMessage, createMessage, firstUnreadAt, markRead, unreadTotal } from './model'
 
 export interface ChannelsState {

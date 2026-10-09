@@ -19,7 +19,6 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import { openFile } from '@/files/store'
 import { machineOf } from '@/machines/store'
-import { demoGitBranches, demoGitDiff, demoGitStatus } from '@/mock/git'
 import { useProjectContext } from '../projectContext'
 import { openRightTab } from '../workspaceStore'
 import { NoProject } from '../ToolsUi'
@@ -47,6 +46,7 @@ import {
 } from './gitModel'
 import { GitDiffView } from './GitDiffView'
 import { BranchMenu } from './BranchMenu'
+import { demo as demoData } from '@/data/demo'
 
 /** 命令面板触发的 Git 操作（docs/ui/git-panel.md §6）：先打开 Git 页，状态读到后再执行 */
 export type GitPaletteAction = 'pull' | 'push' | 'fetch' | 'branch'
@@ -125,7 +125,7 @@ function demoApply(status: GitStatus, action: string, arg?: unknown): GitStatus 
 function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean; active: boolean }) {
   useI18n()
   const api = window.pixelsky?.projectTools
-  const [status, setStatus] = useState<GitStatus | null>(demo ? structuredClone(demoGitStatus) : null)
+  const [status, setStatus] = useState<GitStatus | null>(demo ? structuredClone(demoData().git.status) : null)
   const [loadError, setLoadError] = useState('')
   const [failure, setFailure] = useState<GitFailure | null>(null)
   const [busy, setBusy] = useState(false)
@@ -245,7 +245,7 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
   const openBranches = async () => {
     setMenu(true)
     if (demo) {
-      setBranches(demoGitBranches)
+      setBranches(demoData().git.branches)
       return
     }
     setBranchesLoading(true)
@@ -406,7 +406,7 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
           {...fileActions(selectedFile, selected.area)}
           load={() =>
             demo
-              ? Promise.resolve(demoGitDiff(selectedFile.path))
+              ? Promise.resolve(demoData().git.diff(selectedFile.path))
               : api!.gitDiff(target, { path: selectedFile.path, area: selected.area, origPath: selectedFile.origPath })
           }
           onBack={() => setSelected(null)}

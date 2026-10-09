@@ -1,5 +1,5 @@
 import { useI18n } from '@/i18n/I18nProvider'
-import type { ToolCall } from '@/mock/data'
+import type { ToolCall } from '@/data'
 import { ToolRow } from './ToolRow'
 
 /** 工具调用组：左侧一条竖线把几行串起来 */

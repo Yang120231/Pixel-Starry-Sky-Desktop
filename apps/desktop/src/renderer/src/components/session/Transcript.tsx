@@ -1,5 +1,5 @@
 import { useI18n } from '@/i18n/I18nProvider'
-import { assistantReply, changedFiles, toolCalls, turnUsage } from '@/mock/data'
+import { assistantReply, changedFiles, toolCalls, turnUsage } from '@/data'
 import { cn } from '@/components/ui'
 import { ToolGroup } from './ToolGroup'
 import { AssistantMessage } from './AssistantMessage'

@@ -1,7 +1,7 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { Camera, Globe, Paperclip, Sparkles, type LucideIcon } from 'lucide-react'
 import { Chip } from '@/components/ui'
-import type { Attachment } from '@/mock/data'
+import type { Attachment } from '@/data'
 
 const ICONS: Record<Attachment['kind'], LucideIcon> = {
   browser: Globe,

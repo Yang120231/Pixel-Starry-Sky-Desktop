@@ -1,7 +1,7 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { Cloud, LayoutDashboard, MessageSquare, Puzzle, type LucideIcon } from 'lucide-react'
 import { CountBadge, Dot, IconButton, useComingSoon } from '@/components/ui'
-import { railItems, type RailItem } from '@/mock/data'
+import { railItems, type RailItem } from '@/data'
 import { openMachineManager } from '@/machines/store'
 import { setPage, showWorkbench, usePage } from '@/layout/page'
 import { useChannelUnreadTotal } from '@/channels/store'

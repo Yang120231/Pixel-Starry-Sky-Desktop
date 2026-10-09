@@ -1,17 +1,15 @@
 // 界面数据入口。组件只从这里导入（AGENTS.md §5）。
-// 默认是空界面（empty.ts）；用 `pnpm dev:demo` 启动时是演示数据（demo.ts）。
+// 默认是空界面（empty.ts）；用 `pnpm dev:demo` 启动时是演示数据（mock/demo.ts，经 data/demo.ts 装入）。
 // 以后接入真实数据时，只需要替换这个文件。
 import type { AppData } from './types'
-import { demo } from './demo'
+import { demo, isDemo } from './demo'
 import { empty } from './empty'
 import { tr } from '../i18n/core'
 
 export * from './types'
+export { isDemo }
 
-/** 是否为演示模式（主进程根据环境变量 PIXELSKY_DEMO=1 传入） */
-export const isDemo = window.pixelsky?.demo === true
-
-const DATA: AppData = isDemo ? demo : empty
+const DATA: AppData = isDemo ? demo().appData : empty
 
 export const brandName = 'Pixel Starry Sky'
 

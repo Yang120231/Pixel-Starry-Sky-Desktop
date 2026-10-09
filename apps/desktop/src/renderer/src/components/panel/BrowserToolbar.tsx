@@ -2,7 +2,7 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
 import { AppWindow, ArrowLeft, ArrowRight, Globe, Lock, MessageSquareText, RotateCw } from 'lucide-react'
 import { cn, IconButton, useComingSoon } from '@/components/ui'
-import type { BrowserPage } from '@/mock/data'
+import type { BrowserPage } from '@/data'
 
 interface BrowserToolbarProps {
   pages: BrowserPage[]

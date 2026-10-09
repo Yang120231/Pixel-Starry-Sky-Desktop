@@ -10,7 +10,7 @@ import { useEngineState, addProject } from '@/engine'
 import { useActiveWorkspace } from '@/editor/target'
 import { openRightTab } from '@/components/panel/workspaceStore'
 import { initMachines, machineOf, selectMachine, selectWorkspace, useMachines } from './store'
-import { isDemo } from '@/mock/data'
+import { isDemo } from '@/data'
 import { getFiles } from '@/files/store'
 import { confirmFiles } from '@/files/FileConfirm'
 

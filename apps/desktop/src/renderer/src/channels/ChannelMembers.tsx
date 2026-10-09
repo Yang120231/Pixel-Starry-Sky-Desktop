@@ -3,7 +3,7 @@ import { tr, type TranslationKey } from '../i18n/core'
 import type { ReactNode } from 'react'
 import { ArrowUpRight, Bot, UserPlus, X } from 'lucide-react'
 import { Button, cn, IconButton, Spinner, useComingSoon } from '@/components/ui'
-import type { AgentMember, Channel, ChannelAgentStatus, ChannelMember, HumanMember } from '@/mock/types'
+import type { AgentMember, Channel, ChannelAgentStatus, ChannelMember, HumanMember } from '@/data/types'
 import { agentMeta, MemberAvatar } from './ChannelMessage'
 
 const STATUS_LABEL: Record<ChannelAgentStatus, TranslationKey> = {

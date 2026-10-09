@@ -3,7 +3,7 @@ import type { MachineState, WorkspaceChoice } from '../../../shared/types/machin
 import { getEngineState, setCurrentProject, refreshMachineEngine, invalidateRemoteSnapshots } from '@/engine/store'
 import { paneActions } from '@/panes/store'
 import { refreshTerminals } from '@/terminal/store'
-import { isDemo } from '@/mock/data'
+import { isDemo } from '@/data'
 import { isNewTab } from '@/panes/tree'
 
 export const machineOf = (id: unknown): string =>

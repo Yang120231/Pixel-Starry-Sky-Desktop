@@ -1,5 +1,5 @@
 import { ChevronDown, Folder, GitBranch, Monitor } from 'lucide-react'
-import { composerStatus } from '@/mock/data'
+import { composerStatus } from '@/data'
 import type { StatusBarController } from '@/engine'
 import { useI18n } from '@/i18n/I18nProvider'
 import { openMachineManager, openWorkspacePicker, useMachines } from '@/machines/store'

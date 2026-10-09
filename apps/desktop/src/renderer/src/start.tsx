@@ -1,3 +1,4 @@
+// 界面的根渲染；由 main.tsx 在装入演示数据（如果是演示模式）之后动态加载
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles/globals.css'
