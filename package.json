@@ -10,6 +10,10 @@
     "capture": "pnpm --filter @pixelsky/desktop capture",
     "capture:demo": "pnpm --filter @pixelsky/desktop capture:demo",
     "dist": "pnpm --filter @pixelsky/desktop dist",
-    "test": "pnpm -r --if-present test"
+    "test": "pnpm -r --if-present test",
+    "check": "node scripts/check.mjs",
+    "lint": "node node_modules/eslint/bin/eslint.js .",
+    "format": "node node_modules/prettier/bin/prettier.cjs --write .",
+    "format:check": "node node_modules/prettier/bin/prettier.cjs --check ."
   }
 }
