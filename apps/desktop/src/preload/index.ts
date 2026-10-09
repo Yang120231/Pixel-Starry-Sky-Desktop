@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { HostEvent } from '@pixelsky/protocol'
+import type { HostEvent, IpcChannelName } from '@pixelsky/protocol'
 import type { AccountState } from '../shared/types/account'
 import type { AccountBridge } from './account'
 import type { AppInfoBridge } from './app-info'
@@ -14,20 +14,29 @@ import type { NotificationClick } from '../shared/types/notifications'
 import type { NotificationsBridge } from './notifications'
 import type { ArtifactsBridge } from './artifacts'
 
+// 通道名一律用契约键约束：拼错或未登记的通道在这里就是类型错误
+type Listener = Parameters<typeof ipcRenderer.on>[1]
+const invoke = (channel: IpcChannelName, ...args: unknown[]): Promise<any> => ipcRenderer.invoke(channel, ...args)
+const send = (channel: IpcChannelName, ...args: unknown[]): void => ipcRenderer.send(channel, ...args)
+const sendSync = (channel: IpcChannelName, ...args: unknown[]): unknown => ipcRenderer.sendSync(channel, ...args)
+const on = (channel: IpcChannelName, listener: Listener): void => {
+  ipcRenderer.on(channel, listener)
+}
+
 // 启动配置由主进程同步提供（沙箱里的 preload 拿不到命令行参数）
-const config = ipcRenderer.sendSync('app:config') as { demo: boolean }
+const config = sendSync('app:config') as { demo: boolean }
 
 // 账号登录与额度：所有网络请求都在主进程，这里只转发 IPC（规格见 docs/ui/account.md §4.2）
 const account: AccountBridge = {
-  listCalls: query => ipcRenderer.invoke('account:calls', query),
-  getState: () => ipcRenderer.invoke('account:get'),
-  login: () => ipcRenderer.invoke('account:login'),
-  cancelLogin: () => ipcRenderer.invoke('account:cancel'),
-  logout: () => ipcRenderer.invoke('account:logout'),
-  refresh: () => ipcRenderer.invoke('account:refresh'),
+  listCalls: query => invoke('account:calls', query),
+  getState: () => invoke('account:get'),
+  login: () => invoke('account:login'),
+  cancelLogin: () => invoke('account:cancel'),
+  logout: () => invoke('account:logout'),
+  refresh: () => invoke('account:refresh'),
   onChange: cb => {
     const listener = (_event: Electron.IpcRendererEvent, s: AccountState): void => cb(s)
-    ipcRenderer.on('account:changed', listener)
+    on('account:changed', listener)
     return () => {
       ipcRenderer.removeListener('account:changed', listener)
     }
@@ -35,9 +44,9 @@ const account: AccountBridge = {
 }
 
 /** invoke 抛出的错误带着「Error invoking remote method 'xxx': Error: 」前缀，去掉后只留给用户看的那句话 */
-async function call<T>(channel: string, ...args: unknown[]): Promise<T> {
+async function call<T>(channel: IpcChannelName, ...args: unknown[]): Promise<T> {
   try {
-    return (await ipcRenderer.invoke(channel, ...args)) as T
+    return (await invoke(channel, ...args)) as T
   } catch (err) {
     const message = String((err as Error)?.message ?? err).replace(
       /^Error invoking remote method '[^']+': (\w*Error: )?/,
@@ -93,7 +102,7 @@ const engine: EngineBridge = {
   usageClear: () => call('engine:usageClear'),
   onEvent: cb => {
     const listener = (_event: Electron.IpcRendererEvent, e: HostEvent): void => cb(e)
-    ipcRenderer.on('engine:event', listener)
+    on('engine:event', listener)
     return () => {
       ipcRenderer.removeListener('engine:event', listener)
     }
@@ -119,7 +128,7 @@ const files: FilesBridge = {
   copyPath: (ref, path) => call('files:copyPath', ref, path),
   onBeforeClose: cb => {
     const listener = (): void => cb()
-    ipcRenderer.on('files:beforeClose', listener)
+    on('files:beforeClose', listener)
     return () => ipcRenderer.removeListener('files:beforeClose', listener)
   },
   finishClose: () => call('files:finishClose'),
@@ -141,7 +150,7 @@ const windowControls: WindowBridge = {
   close: () => call('window:close'),
   onState: cb => {
     const listener = (_event: Electron.IpcRendererEvent, state: WindowState): void => cb(state)
-    ipcRenderer.on('window:state', listener)
+    on('window:state', listener)
     return () => ipcRenderer.removeListener('window:state', listener)
   },
 }
@@ -186,7 +195,7 @@ const projectTools: ProjectToolsBridge = {
   gitOperation: (ref, action) => call('projectTools:gitOperation', ref, action),
   onChange: cb => {
     const listener = (): void => cb()
-    ipcRenderer.on('projectTools:changed', listener)
+    on('projectTools:changed', listener)
     return () => ipcRenderer.removeListener('projectTools:changed', listener)
   },
 }
@@ -203,7 +212,7 @@ const projectBrowser: import('./project-browser').BrowserBridge = {
       _e: Electron.IpcRendererEvent,
       state: import('../shared/types/project-browser').BrowserState,
     ): void => cb(state)
-    ipcRenderer.on('projectBrowser:changed', listener)
+    on('projectBrowser:changed', listener)
     return () => ipcRenderer.removeListener('projectBrowser:changed', listener)
   },
 }
@@ -217,8 +226,8 @@ const terminal: TerminalBridge = {
   create: (ref, profileId, requestId) => call('terminal:create', ref, profileId, requestId),
   write: (id, gen, data) => call('terminal:write', id, gen, data),
   resize: (id, gen, cols, rows) => call('terminal:resize', id, gen, cols, rows),
-  ack: (id, gen, seq) => ipcRenderer.send('terminal:ack', id, gen, seq),
-  focused: value => ipcRenderer.send('terminal:focused', value),
+  ack: (id, gen, seq) => send('terminal:ack', id, gen, seq),
+  focused: value => send('terminal:focused', value),
   rename: (id, title) => call('terminal:rename', id, title),
   close: (id, force) => call('terminal:close', id, force),
   restart: (id, force) => call('terminal:restart', id, force),
@@ -230,7 +239,7 @@ const terminal: TerminalBridge = {
       _event: Electron.IpcRendererEvent,
       value: Parameters<TerminalBridge['onEvent']>[0] extends (event: infer E) => void ? E : never,
     ): void => cb(value)
-    ipcRenderer.on('terminal:event', listener)
+    on('terminal:event', listener)
     return () => ipcRenderer.removeListener('terminal:event', listener)
   },
 }
@@ -248,7 +257,7 @@ const notifications: NotificationsBridge = {
   show: input => call('notify:show', input),
   onClick: cb => {
     const listener = (_event: Electron.IpcRendererEvent, value: NotificationClick): void => cb(value)
-    ipcRenderer.on('notify:clicked', listener)
+    on('notify:clicked', listener)
     return () => ipcRenderer.removeListener('notify:clicked', listener)
   },
 }
@@ -268,7 +277,7 @@ contextBridge.exposeInMainWorld('pixelsky', {
     onChange: callback => {
       const listener = (_e: Electron.IpcRendererEvent, state: import('../shared/types/machines').MachineState) =>
         callback(state)
-      ipcRenderer.on('machines:changed', listener)
+      on('machines:changed', listener)
       return () => ipcRenderer.removeListener('machines:changed', listener)
     },
   } satisfies import('./machines').MachineBridge,
@@ -276,7 +285,7 @@ contextBridge.exposeInMainWorld('pixelsky', {
   /** 演示模式：显示照参考图写的演示数据，而不是空界面 */
   demo: config.demo,
   /** 同步窗口底色；transparent 仅供其他平台的原生覆盖层使用。Windows 按钮自绘。 */
-  setTheme: (theme: 'light' | 'dark', transparent = false) => ipcRenderer.send('theme:set', theme, transparent),
+  setTheme: (theme: 'light' | 'dark', transparent = false) => send('theme:set', theme, transparent),
   setLocale: (locale: 'zh-CN' | 'en-US') => call('ui:locale', locale),
   account,
   platformCatalog: {
@@ -308,7 +317,7 @@ contextBridge.exposeInMainWorld('pixelsky', {
     commands: ref => call('extensions:commands', ref),
     onChange: callback => {
       const listener = (): void => callback()
-      ipcRenderer.on('extensions:changed', listener)
+      on('extensions:changed', listener)
       return () => ipcRenderer.removeListener('extensions:changed', listener)
     },
   } satisfies ExtensionsBridge,
