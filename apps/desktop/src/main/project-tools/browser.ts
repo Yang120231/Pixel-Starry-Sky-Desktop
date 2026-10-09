@@ -1,4 +1,5 @@
-import { BrowserWindow, WebContentsView, dialog, ipcMain, session, shell, type IpcMainInvokeEvent } from 'electron'
+import { BrowserWindow, WebContentsView, dialog, session, shell, type IpcMainInvokeEvent } from 'electron'
+import * as ipc from '../ipc/guard'
 import { createHash, randomUUID } from 'node:crypto'
 import { join, basename } from 'node:path'
 import type { BrowserPage, BrowserState } from '../../shared/types/project-browser'
@@ -29,11 +30,7 @@ export function browserUrl(raw: unknown): string {
     throw new Error('只支持 HTTP 或 HTTPS 地址')
   return url.href
 }
-export async function initProjectBrowser(
-  dir: string,
-  host: ToolsHost,
-  trusted: (e: IpcMainInvokeEvent) => boolean,
-): Promise<void> {
+export async function initProjectBrowser(dir: string, host: ToolsHost): Promise<void> {
   const store = new JsonStore<{ scopes: Record<string, StoredScope> }>(join(dir, 'browser.json'), { scopes: {} })
   await store.init()
   for (const scope of Object.values(store.data.scopes))
@@ -268,8 +265,7 @@ export async function initProjectBrowser(
     return entry
   }
   const handle = (name: string, fn: (e: IpcMainInvokeEvent, scope: string, ...args: unknown[]) => unknown): void => {
-    ipcMain.handle('projectBrowser:' + name, async (e, ref, ...args) => {
-      if (!trusted(e)) throw new Error('不受信任的页面')
+    ipc.handle(`projectBrowser:${name}` as ipc.InvokeChannel, async (e, ref, ...args) => {
       const scope = scopeOf(workspaceRef(ref))
       if (
         name !== 'navigate' &&

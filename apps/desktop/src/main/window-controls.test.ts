@@ -3,18 +3,17 @@ import type { IpcMainInvokeEvent } from 'electron'
 
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, (event: IpcMainInvokeEvent) => unknown>(),
-  trusted: vi.fn(),
   fromWebContents: vi.fn(),
 }))
 vi.mock('electron', () => ({
+  app: { isPackaged: true },
   BrowserWindow: { fromWebContents: mocks.fromWebContents },
   ipcMain: {
     handle: (name: string, handler: (event: IpcMainInvokeEvent) => unknown) => mocks.handlers.set(name, handler),
   },
 }))
-vi.mock('./account', () => ({ trustedSender: mocks.trusted }))
 
-import { initWindowControls, snapBounds } from './window-controls'
+import { snapBounds } from './window-controls'
 
 describe('显示器工作区布局', () => {
   it('负坐标显示器三列无缝覆盖工作区，排除任务栏', () => {
@@ -45,30 +44,32 @@ describe('显示器工作区布局', () => {
 })
 
 describe('窗口操作调用方边界', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks()
     mocks.handlers.clear()
+    // ipc/guard 会拒绝重复注册，每个用例用一份新的模块
+    vi.resetModules()
+    const { initWindowControls } = await import('./window-controls')
     initWindowControls()
   })
-  const event = (subframe = false): IpcMainInvokeEvent => {
-    const mainFrame = { url: 'file:///app/index.html' }
+  const event = (subframe = false, url = 'file:///app/index.html'): IpcMainInvokeEvent => {
+    const mainFrame = { url }
     return {
       sender: { mainFrame },
-      senderFrame: subframe ? { url: mainFrame.url } : mainFrame,
+      senderFrame: subframe ? { url } : mainFrame,
     } as unknown as IpcMainInvokeEvent
   }
   it('不允许外部页面读取或操控窗口', () => {
-    mocks.trusted.mockReturnValue(false)
-    for (const handler of mocks.handlers.values()) expect(() => handler(event())).toThrow('不允许的调用方')
+    for (const handler of mocks.handlers.values())
+      expect(() => handler(event(false, 'https://example.com/'))).toThrow('不允许的调用方')
+    expect(mocks.handlers.size).toBe(7)
     expect(mocks.fromWebContents).not.toHaveBeenCalled()
   })
   it('即使地址可信，子框架也不能操控所属窗口', () => {
-    mocks.trusted.mockReturnValue(true)
     for (const handler of mocks.handlers.values()) expect(() => handler(event(true))).toThrow('不允许的调用方')
     expect(mocks.fromWebContents).not.toHaveBeenCalled()
   })
   it('窗口已关闭或调用方没有窗口时，不回退到其他窗口', () => {
-    mocks.trusted.mockReturnValue(true)
     for (const win of [null, { isDestroyed: () => true }]) {
       mocks.fromWebContents.mockReturnValue(win)
       for (const handler of mocks.handlers.values()) expect(() => handler(event())).toThrow('窗口已经关闭')

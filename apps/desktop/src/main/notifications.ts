@@ -1,6 +1,6 @@
 // 系统通知（docs/ui/notifications.md）：要不要提醒由渲染层判断，这里只负责弹出、点击回到窗口。
-import { app, BrowserWindow, ipcMain, Notification } from 'electron'
-import { trustedSender } from './account'
+import { app, BrowserWindow, Notification } from 'electron'
+import * as ipc from './ipc/guard'
 import type { NotificationInput } from '../shared/types/notifications'
 
 const MAX_LIVE = 20
@@ -61,9 +61,8 @@ function show(win: BrowserWindow, input: NotificationInput): void {
 }
 
 export function initNotifications(): void {
-  ipcMain.handle('notify:supported', event => trustedSender(event) && Notification.isSupported())
-  ipcMain.handle('notify:show', (event, raw: unknown) => {
-    if (!trustedSender(event)) throw new Error('不受信任的页面')
+  ipc.handle('notify:supported', () => Notification.isSupported(), { onUntrusted: () => false })
+  ipc.handle('notify:show', (event, raw: unknown) => {
     if (!Notification.isSupported()) return false
     const win = BrowserWindow.fromWebContents(event.sender)
     if (!win || win.isDestroyed()) return false

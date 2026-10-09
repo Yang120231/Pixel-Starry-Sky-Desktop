@@ -1,6 +1,6 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, shell, type IpcMainInvokeEvent } from 'electron'
 import { Editors } from './editors'
-import { trustedSender } from './account'
+import * as ipc from './ipc/guard'
 import { WorkspaceFiles, workspacePath, workspaceRef, type TargetResolver } from './workspace-files'
 import type { EditorKind } from '../shared/types/workspace'
 import { nativeText } from './ui-language'
@@ -14,13 +14,15 @@ export async function initWorkspace(resolveTarget: TargetResolver): Promise<void
     return icons.get(path)
   })
   await editors.init()
-  const handle = (name: string, fn: (e: IpcMainInvokeEvent, ...args: any[]) => unknown): void => {
-    ipcMain.handle(name, (e, ...args) => {
-      if (!trustedSender(e)) throw new Error('不允许的调用方')
-      return machines && (name.startsWith('files:') || name === 'editor:open')
-        ? machines.invoke(name, args, () => fn(e, ...args))
-        : fn(e, ...args)
-    })
+  const handle = (name: ipc.InvokeChannel, fn: (e: IpcMainInvokeEvent, ...args: any[]) => unknown): void => {
+    ipc.handle(
+      name,
+      (e, ...args) =>
+        machines && (name.startsWith('files:') || name === 'editor:open')
+          ? machines.invoke(name, args, () => fn(e, ...args))
+          : fn(e, ...args),
+      { deny: '不允许的调用方' },
+    )
   }
   handle('files:target', (_e, ref) => files.target(ref))
   handle('files:list', (_e, ref, path) => files.list(workspaceRef(ref), path))

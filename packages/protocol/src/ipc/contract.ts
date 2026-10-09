@@ -1,6 +1,6 @@
 /**
  * IPC 契约：桌面端所有 Electron IPC 通道的清单。纯数据，不导入 node / electron（远端辅助进程也会引用它）。
- * 目前只做声明，路由、参数解码、信任校验仍在各自模块里；`contract.test.ts` 和 `routing.test.ts` 负责保证两边一致。
+ * 信任校验由 `main/ipc/guard.ts` 按 `trust` 执行；`contract.test.ts` 和 `routing.test.ts` 负责保证两边一致。
  *
  * 字段：
  * - `kind`：`invoke`（渲染进程 `ipcRenderer.invoke`，主进程 `ipcMain.handle`）、`send`（`ipcRenderer.send`，主进程 `ipcMain.on`）、

@@ -1,10 +1,10 @@
 import { join } from 'node:path'
 import { realpathSync } from 'node:fs'
-import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from 'electron'
+import { app, BrowserWindow, dialog, safeStorage, shell } from 'electron'
 import { object, scope, text } from '@pixelsky/engine'
 import type { ExtensionScope, SessionRecord } from '@pixelsky/protocol'
 import type { WorkspaceRef } from '../shared/types/workspace'
-import { trustedSender } from './account'
+import * as ipc from './ipc/guard'
 import { ExtensionService } from './extensions/service'
 import { resolveWorkspace } from './engine-ipc'
 import { selectedMachine } from './machines/service'
@@ -57,8 +57,7 @@ export function initExtensions(env: (engine?: 'claude' | 'codex') => Record<stri
     for (const win of BrowserWindow.getAllWindows()) if (!win.isDestroyed()) win.webContents.send('extensions:changed')
   }
   const handle = (name: string, fn: (...args: unknown[]) => unknown): void => {
-    ipcMain.handle('extensions:' + name, (event, ...args) => {
-      if (!trustedSender(event)) throw new Error('不受信任的页面')
+    ipc.handle(`extensions:${name}` as ipc.InvokeChannel, (_event, ...args) => {
       if (selectedMachine() !== 'local') {
         if (name === 'commands') return []
         throw new Error('SSH_EXTENSIONS_REMOTE')

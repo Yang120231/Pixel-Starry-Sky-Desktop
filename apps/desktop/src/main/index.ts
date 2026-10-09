@@ -1,17 +1,9 @@
 import { join } from 'node:path'
 import { mkdirSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
-import {
-  app,
-  BrowserWindow,
-  dialog,
-  ipcMain,
-  Menu,
-  nativeTheme,
-  shell,
-  type MenuItemConstructorOptions,
-} from 'electron'
-import { initAccount, trustedSender } from './account'
+import { app, BrowserWindow, dialog, Menu, nativeTheme, shell, type MenuItemConstructorOptions } from 'electron'
+import { initAccount } from './account'
+import * as ipc from './ipc/guard'
 import { initAppInfo } from './app-info'
 import { initEngine, resolveWorkspace, projectToolsHost } from './engine-ipc'
 import { initWorkspace } from './workspace-ipc'
@@ -57,11 +49,14 @@ async function finishWindowClose(win: BrowserWindow): Promise<void> {
     finishing.delete(win)
   }
 }
-ipcMain.handle('files:finishClose', async event => {
-  if (!trustedSender(event)) throw new Error('不允许的调用方')
-  const win = BrowserWindow.fromWebContents(event.sender)
-  if (win) await finishWindowClose(win)
-})
+ipc.handle(
+  'files:finishClose',
+  async event => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (win) await finishWindowClose(win)
+  },
+  { deny: '不允许的调用方' },
+)
 app.on('before-quit', event => {
   if (quitReady) return
   event.preventDefault()
@@ -181,11 +176,11 @@ function createWindow(): BrowserWindow {
 }
 
 // 演示模式：PIXELSKY_DEMO=1 或启动参数带 --demo 时界面显示演示数据（pnpm dev:demo / 打包版 exe --demo），否则是空界面
-ipcMain.on('app:config', event => {
+ipc.on('app:config', event => {
   event.returnValue = { demo: process.env.PIXELSKY_DEMO === '1' || process.argv.includes('--demo') }
 })
 
-ipcMain.on('theme:set', (event, theme: ResolvedTheme, transparent?: boolean) => {
+ipc.on('theme:set', (event, theme: ResolvedTheme, transparent?: boolean) => {
   const win = BrowserWindow.fromWebContents(event.sender)
   if (!win || (theme !== 'light' && theme !== 'dark')) return
   win.setBackgroundColor(TITLE_BAR[theme].color)

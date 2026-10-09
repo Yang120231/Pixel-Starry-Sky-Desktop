@@ -1,4 +1,5 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, shell, webContents, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, shell, webContents, type IpcMainInvokeEvent } from 'electron'
+import * as ipc from '../ipc/guard'
 import type { TerminalProfileInput } from '../../shared/types/terminal'
 import type { WorkspaceRef } from '../../shared/types/workspace'
 import { TerminalManager, type TerminalTarget } from './manager'
@@ -10,18 +11,8 @@ import { RemoteTerminals } from '../machines/terminals'
 let manager: TerminalManager | undefined
 let remote: RemoteTerminals | undefined
 const observed = new Set<number>()
-function trusted(event: Electron.IpcMainEvent | IpcMainInvokeEvent): boolean {
-  if (event.senderFrame !== event.sender.mainFrame) return false
-  const win = BrowserWindow.fromWebContents(event.sender)
-  if (!win) return false
-  try {
-    const url = new URL(event.senderFrame?.url ?? '')
-    const dev = process.env.ELECTRON_RENDERER_URL
-    return url.protocol === 'file:' || (!!dev && !app.isPackaged && url.origin === new URL(dev).origin)
-  } catch {
-    return false
-  }
-}
+/** 终端通道：窗口必须存在，但不要求窗口的 webContents 就是调用方（保持原有的校验强度）。 */
+const terminalOnly = { looseOwner: true } as const
 function ref(value: unknown): WorkspaceRef {
   const item = value as Partial<WorkspaceRef>
   if (typeof item?.projectId === 'string' && item.projectId) return { projectId: item.projectId }
@@ -47,49 +38,52 @@ export async function initTerminalIpc(resolve: (ref: WorkspaceRef) => TerminalTa
     await remote.init()
   }
   const handle = (name: string, fn: (e: IpcMainInvokeEvent, ...args: any[]) => unknown): void => {
-    ipcMain.handle('terminal:' + name, (event, ...args) => {
-      if (!trusted(event)) throw new Error('不受信任的页面')
-      if (!observed.has(event.sender.id)) {
-        const owner = event.sender.id
-        observed.add(owner)
-        const cleanup = (): void => {
-          void service.shutdown(owner).catch(console.error)
-          void remote?.shutdown(owner).catch(console.error)
+    ipc.handle(
+      `terminal:${name}` as ipc.InvokeChannel,
+      (event, ...args) => {
+        if (!observed.has(event.sender.id)) {
+          const owner = event.sender.id
+          observed.add(owner)
+          const cleanup = (): void => {
+            void service.shutdown(owner).catch(console.error)
+            void remote?.shutdown(owner).catch(console.error)
+          }
+          event.sender.on('render-process-gone', cleanup)
+          event.sender.on('did-start-navigation', (_event, _url, _inPlace, isMain) => {
+            if (isMain) cleanup()
+          })
+          event.sender.once('destroyed', () => {
+            observed.delete(owner)
+            cleanup()
+          })
         }
-        event.sender.on('render-process-gone', cleanup)
-        event.sender.on('did-start-navigation', (_event, _url, _inPlace, isMain) => {
-          if (isMain) cleanup()
-        })
-        event.sender.once('destroyed', () => {
-          observed.delete(owner)
-          cleanup()
-        })
-      }
-      if (remote) {
-        const id = argumentMachine(args),
-          active = machines?.currentId ?? 'local',
-          owner = event.sender.id
-        if (name === 'state') {
-          const local = service.state(owner, args[0] === true),
-            ssh = remote.state(owner)
-          return { ...(active === 'local' ? local : ssh), terminals: [...local.terminals, ...ssh.terminals] }
+        if (remote) {
+          const id = argumentMachine(args),
+            active = machines?.currentId ?? 'local',
+            owner = event.sender.id
+          if (name === 'state') {
+            const local = service.state(owner, args[0] === true),
+              ssh = remote.state(owner)
+            return { ...(active === 'local' ? local : ssh), terminals: [...local.terminals, ...ssh.terminals] }
+          }
+          if (id) {
+            if (name === 'create') return remote.create(owner, ref(args[0]), args[1], args[2])
+            if (name === 'write') return remote.write(owner, args[0], args[1], args[2])
+            if (name === 'resize') return remote.resize(owner, args[0], args[1], args[2], args[3])
+            if (name === 'rename') return remote.rename(owner, args[0], args[1])
+            if (name === 'close' || name === 'restart')
+              return remote.change(owner, args[0], name === 'restart', args[1] === true)
+          }
+          if (
+            active !== 'local' &&
+            ['setDefaultProfile', 'saveProfile', 'removeProfile', 'resetProfiles', 'chooseProgram'].includes(name)
+          )
+            throw new Error('SSH_SHELL_MANAGED_REMOTELY')
         }
-        if (id) {
-          if (name === 'create') return remote.create(owner, ref(args[0]), args[1], args[2])
-          if (name === 'write') return remote.write(owner, args[0], args[1], args[2])
-          if (name === 'resize') return remote.resize(owner, args[0], args[1], args[2], args[3])
-          if (name === 'rename') return remote.rename(owner, args[0], args[1])
-          if (name === 'close' || name === 'restart')
-            return remote.change(owner, args[0], name === 'restart', args[1] === true)
-        }
-        if (
-          active !== 'local' &&
-          ['setDefaultProfile', 'saveProfile', 'removeProfile', 'resetProfiles', 'chooseProgram'].includes(name)
-        )
-          throw new Error('SSH_SHELL_MANAGED_REMOTELY')
-      }
-      return fn(event, ...args)
-    })
+        return fn(event, ...args)
+      },
+      terminalOnly,
+    )
   }
   handle('state', (e, force) => service.state(e.sender.id, force === true))
   handle('setDefaultProfile', (e, value) => service.setDefault(e.sender.id, id(value)))
@@ -110,15 +104,23 @@ export async function initTerminalIpc(resolve: (ref: WorkspaceRef) => TerminalTa
   )
   handle('write', (e, key, gen, data) => service.write(e.sender.id, id(key), gen, data))
   handle('resize', (e, key, gen, cols, rows) => service.resize(e.sender.id, id(key), gen, cols, rows))
-  ipcMain.on('terminal:ack', (e, key, gen, seq) => {
-    if (trusted(e) && typeof key === 'string' && Number.isInteger(gen) && Number.isInteger(seq)) {
-      if (machineOf(key) !== 'local') remote?.ack(e.sender.id, key, gen, seq)
-      else service.ack(e.sender.id, key, gen, seq)
-    }
-  })
-  ipcMain.on('terminal:focused', (e, value) => {
-    if (trusted(e) && typeof value === 'boolean') e.sender.setIgnoreMenuShortcuts(value)
-  })
+  ipc.on(
+    'terminal:ack',
+    (e, key, gen, seq) => {
+      if (typeof key === 'string' && Number.isInteger(gen) && Number.isInteger(seq)) {
+        if (machineOf(key) !== 'local') remote?.ack(e.sender.id, key, gen, seq)
+        else service.ack(e.sender.id, key, gen, seq)
+      }
+    },
+    terminalOnly,
+  )
+  ipc.on(
+    'terminal:focused',
+    (e, value) => {
+      if (typeof value === 'boolean') e.sender.setIgnoreMenuShortcuts(value)
+    },
+    terminalOnly,
+  )
   handle('rename', (e, key, title) => service.rename(e.sender.id, id(key), title))
   handle('close', (e, key, force) => service.change(e.sender.id, id(key), false, force === true))
   handle('restart', (e, key, force) => service.change(e.sender.id, id(key), true, force === true))

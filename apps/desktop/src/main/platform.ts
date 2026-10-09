@@ -3,11 +3,12 @@ import { platformGateway } from './platformGateway'
 import { once } from 'node:events'
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { app, ipcMain } from 'electron'
+import { app } from 'electron'
 import type { SessionRecord } from '@pixelsky/protocol'
 import { CLAUDE_COMPACT_MARKER, rewriteCompaction } from '@pixelsky/engine'
 import type { PlatformGroupInfo } from '../shared/types/platform-catalog'
-import { platformFetch, signedInEmail, trustedSender } from './account'
+import { platformFetch, signedInEmail } from './account'
+import * as ipc from './ipc/guard'
 
 async function jsonRequest(path: string, method = 'GET'): Promise<unknown> {
   const res = await platformFetch(path, { method, signal: AbortSignal.timeout(30_000) })
@@ -72,16 +73,17 @@ export async function initPlatform(
   compactModel: () => string | null = () => null,
   requestContext?: (record: SessionRecord) => ((requestId: string, model: string) => void | Promise<void>) | undefined,
 ): Promise<(record: SessionRecord) => NodeJS.ProcessEnv> {
-  ipcMain.handle('platform:groups', e => {
-    if (!trustedSender(e)) throw new Error('不受信任的页面')
-    return platformGroups()
-  })
-  ipcMain.handle('platform:models', async (e, id: unknown) => {
-    if (!trustedSender(e) || typeof id !== 'string' || !/^\d+$/.test(id)) throw new Error('无效的分组')
-    const data = await jsonRequest(`/v1/platform/groups/${id}/models`, 'POST')
-    if (!Array.isArray(data) || !data.every(m => typeof m === 'string')) throw new Error('平台模型数据格式异常')
-    return data
-  })
+  ipc.handle('platform:groups', () => platformGroups())
+  ipc.handle(
+    'platform:models',
+    async (_e, id: unknown) => {
+      if (typeof id !== 'string' || !/^\d+$/.test(id)) throw new Error('无效的分组')
+      const data = await jsonRequest(`/v1/platform/groups/${id}/models`, 'POST')
+      if (!Array.isArray(data) || !data.every(m => typeof m === 'string')) throw new Error('平台模型数据格式异常')
+      return data
+    },
+    { deny: '无效的分组' },
+  )
 
   const sessions = new Map<string, { secret: string; recordId: string }>()
   const settingsFiles = new Set<string>()

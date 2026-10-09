@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, safeStorage } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, safeStorage } from 'electron'
 import { join, isAbsolute, posix } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { hostname, homedir } from 'node:os'
@@ -7,7 +7,7 @@ import type { EngineHost } from '@pixelsky/engine'
 import type { HostEvent, ProjectRecord, SessionRecord, SessionSummary } from '@pixelsky/protocol'
 import type { MachineInfo, MachineInput, MachineState } from '../../shared/types/machines'
 import type { WorkspaceRef, WorkspaceTarget } from '../../shared/types/workspace'
-import { trustedSender } from '../account'
+import * as ipc from '../ipc/guard'
 import { platformCharges } from '../platformBilling'
 import { validateQueuedInput } from '../platform'
 import { registerShutdown } from '../shutdown'
@@ -423,10 +423,7 @@ export async function initMachines(
       id === 'local' ? host.addProject(path) : service.call(id, remoteMethod('machines:addProject'), [path]),
   }
   for (const [name, fn] of Object.entries(actions))
-    ipcMain.handle('machines:' + name, (event, ...args) => {
-      if (!trustedSender(event)) throw new Error('不受信任的页面')
-      return fn(...args)
-    })
+    ipc.handle(`machines:${name}` as ipc.InvokeChannel, (_event, ...args) => fn(...args))
   registerShutdown(() => {
     for (const machine of service.state().machines) if (machine.id !== 'local') service.disconnect(machine.id)
   })

@@ -6,8 +6,9 @@ import { createHash, randomBytes } from 'node:crypto'
 import { createServer, type Server, type ServerResponse } from 'node:http'
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { app, BrowserWindow, ipcMain, safeStorage, shell, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, safeStorage, shell } from 'electron'
 import { nativeText, windowLocale } from './ui-language'
+import * as ipc from './ipc/guard'
 import type { AccountInfo, AccountPlan, AccountState, Quota } from '../shared/types/account'
 
 // ---------------------------------------------------------------------------
@@ -114,18 +115,6 @@ function canEncrypt(): boolean {
     if (backend === 'basic_text' || backend === 'unknown') return false
   }
   return true
-}
-
-/** IPC 调用方必须是应用自己的页面（打包后的本地文件，或开发服务器的同源页面） */
-export function trustedSender(event: IpcMainInvokeEvent): boolean {
-  try {
-    const u = new URL(event.senderFrame?.url ?? '')
-    if (u.protocol === 'file:') return true
-    const dev = process.env.ELECTRON_RENDERER_URL
-    return !!dev && !app.isPackaged && u.origin === new URL(dev).origin
-  } catch {
-    return false
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -814,29 +803,45 @@ export function initAccount(): void {
   initialized = true
 
   // 只响应应用自己的页面；其他来源一律当作未登录 / 忽略
-  ipcMain.handle('account:get', (e): AccountState => (trustedSender(e) ? state : { status: 'signed-out' }))
-  ipcMain.handle('account:login', async e => {
-    if (!trustedSender(e)) return
-    try {
-      await login()
-    } catch (e) {
-      // 不把异常抛给渲染进程，统一变成状态里的错误
-      if (flow) {
-        closeFlow(flow)
-        flow = null
+  const ignore = { onUntrusted: () => undefined }
+  ipc.handle('account:get', (): AccountState => state, { onUntrusted: (): AccountState => ({ status: 'signed-out' }) })
+  ipc.handle(
+    'account:login',
+    async () => {
+      try {
+        await login()
+      } catch (e) {
+        // 不把异常抛给渲染进程，统一变成状态里的错误
+        if (flow) {
+          closeFlow(flow)
+          flow = null
+        }
+        setState({ status: 'signed-out', error: `登录失败：${describeError(e)}` })
       }
-      setState({ status: 'signed-out', error: `登录失败：${describeError(e)}` })
-    }
-  })
-  ipcMain.handle('account:cancel', e => {
-    if (trustedSender(e)) cancelLogin()
-  })
-  ipcMain.handle('account:logout', async e => {
-    if (trustedSender(e)) await logout()
-  })
-  ipcMain.handle('account:refresh', async e => {
-    if (trustedSender(e) && tokens) await fetchAccount().catch(() => undefined)
-  })
+    },
+    ignore,
+  )
+  ipc.handle(
+    'account:cancel',
+    () => {
+      cancelLogin()
+    },
+    ignore,
+  )
+  ipc.handle(
+    'account:logout',
+    async () => {
+      await logout()
+    },
+    ignore,
+  )
+  ipc.handle(
+    'account:refresh',
+    async () => {
+      if (tokens) await fetchAccount().catch(() => undefined)
+    },
+    ignore,
+  )
 
   loadPersisted()
   if (tokens && account) setState({ status: 'signed-in', account, refreshing: false })

@@ -35,11 +35,14 @@ function registeredChannels(): { handle: string[]; on: string[] } {
   const handle = new Set<string>(),
     on = new Set<string>()
   for (const { file, text } of sources(mainDir)) {
-    const sites = names(text, /ipcMain\.(?:handle|on|once)\(/g, 0).length
-    const direct = [...text.matchAll(/ipcMain\.(handle|on|once)\(\s*'([^']+)'\s*,/g)]
-    const prefixed = [...text.matchAll(/ipcMain\.handle\(\s*'(\w+:)'\s*\+\s*(\w+)\s*,/g)]
-    const wrapped = names(text, /ipcMain\.handle\(\s*(\w+)\s*,/g)
-    expect(direct.length + prefixed.length + wrapped.length, `${file}: unrecognised ipcMain registration`).toBe(sites)
+    // ipc/guard.ts 是唯一直接用 ipcMain 的文件；其他文件一律通过 `ipc.handle / ipc.on` 注册
+    if (file.endsWith('ipc/guard.ts')) continue
+    expect(text, `${file}: register through ipc/guard, not ipcMain`).not.toMatch(/\bipcMain\b/)
+    const sites = names(text, /\bipc\.(?:handle|on)\(/g, 0).length
+    const direct = [...text.matchAll(/\bipc\.(handle|on)\(\s*'([^']+)'\s*,/g)]
+    const prefixed = [...text.matchAll(/\bipc\.handle\(\s*`(\w+:)\$\{(\w+)\}`(?: as ipc\.InvokeChannel)?\s*,/g)]
+    const wrapped = names(text, /\bipc\.handle\(\s*(\w+)\s*,/g)
+    expect(direct.length + prefixed.length + wrapped.length, `${file}: unrecognised ipc registration`).toBe(sites)
     for (const m of direct) (m[1] === 'handle' ? handle : on).add(m[2])
     // 包装函数 handle('files:list', …)：名字写全，包装函数原样注册
     const calls = names(text, /\bhandle\(\s*'([^']+)'\s*,/g)

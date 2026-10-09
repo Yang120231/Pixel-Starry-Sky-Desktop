@@ -1,5 +1,5 @@
-import { BrowserWindow, ipcMain, screen, type IpcMainInvokeEvent } from 'electron'
-import { trustedSender } from './account'
+import { BrowserWindow, screen, type IpcMainInvokeEvent } from 'electron'
+import * as ipc from './ipc/guard'
 import type { WindowSnapLayout, WindowState } from '../shared/types/window'
 
 interface Zone {
@@ -60,68 +60,93 @@ export function snapBounds(
   return { x: area.x + left, y: area.y + top, width: right - left, height: bottom - top }
 }
 
+/** 调用方所在的窗口。来源、主框架和窗口是否存在已由 ipc/guard 校验过。 */
 function callingWindow(event: IpcMainInvokeEvent): BrowserWindow {
-  if (!trustedSender(event) || event.senderFrame !== event.sender.mainFrame) throw new Error('不允许的调用方')
-  const win = BrowserWindow.fromWebContents(event.sender)
-  if (!win || win.isDestroyed()) throw new Error('窗口已经关闭')
-  return win
+  return BrowserWindow.fromWebContents(event.sender)!
 }
+
+/** 来源或框架不对：「不允许的调用方」；调用方没有窗口或窗口已销毁：「窗口已经关闭」，都不回退到其他窗口。 */
+const callerOnly = { deny: '不允许的调用方', noWindow: '窗口已经关闭', looseOwner: true } as const
 
 function state(win: BrowserWindow): WindowState {
   return { maximized: win.isMaximized(), focused: win.isFocused(), snapped: snappedWindows.has(win) }
 }
 
 export function initWindowControls(): void {
-  ipcMain.handle('window:getState', event => state(callingWindow(event)))
-  ipcMain.handle('window:minimize', event => {
-    callingWindow(event).minimize()
-  })
-  ipcMain.handle('window:toggleMaximize', event => {
-    const win = callingWindow(event)
-    if (win.isMaximized()) win.unmaximize()
-    else win.maximize()
-  })
-  ipcMain.handle('window:snap', (event, layout: WindowSnapLayout, zone: number) => {
-    const win = callingWindow(event)
-    if (!LAYOUTS.has(layout) || !Number.isInteger(zone)) throw new Error('窗口布局不正确')
-    const zones = SNAP_ZONES[layout]
-    const selected = zones[zone]
-    if (!selected) throw new Error('窗口区域不正确')
-    const area = screen.getDisplayMatching(win.getBounds()).workArea
-    const bounds = snapBounds(area, layout, zone)
-    if (!bounds) throw new Error('当前显示器空间不足，无法使用这个区域')
-    if (!snappedWindows.has(win))
-      snappedWindows.set(win, { bounds: win.getNormalBounds(), minimum: win.getMinimumSize() })
-    if (win.isMaximized()) win.unmaximize()
-    // 布局模式允许小于普通窗口的 1100×700；最小保持单窗格可用的 400×300。
-    win.setMinimumSize(400, 300)
-    win.setBounds(bounds)
-    win.webContents.send('window:state', state(win))
-  })
-  ipcMain.handle('window:snapOptions', event => {
-    const win = callingWindow(event)
-    const area = screen.getDisplayMatching(win.getBounds()).workArea
-    return Object.fromEntries(
-      [...LAYOUTS].map(layout => [
-        layout,
-        SNAP_ZONES[layout].map((_, zone) => snapBounds(area, layout, zone) !== null),
-      ]),
-    )
-  })
-  ipcMain.handle('window:restoreSnap', event => {
-    const win = callingWindow(event)
-    const saved = snappedWindows.get(win)
-    if (!saved) return
-    if (win.isMaximized()) win.unmaximize()
-    snappedWindows.delete(win)
-    win.setMinimumSize(saved.minimum[0], saved.minimum[1])
-    win.setBounds(saved.bounds)
-    win.webContents.send('window:state', state(win))
-  })
+  ipc.handle('window:getState', event => state(callingWindow(event)), callerOnly)
+  ipc.handle(
+    'window:minimize',
+    event => {
+      callingWindow(event).minimize()
+    },
+    callerOnly,
+  )
+  ipc.handle(
+    'window:toggleMaximize',
+    event => {
+      const win = callingWindow(event)
+      if (win.isMaximized()) win.unmaximize()
+      else win.maximize()
+    },
+    callerOnly,
+  )
+  ipc.handle(
+    'window:snap',
+    (event, layout: WindowSnapLayout, zone: number) => {
+      const win = callingWindow(event)
+      if (!LAYOUTS.has(layout) || !Number.isInteger(zone)) throw new Error('窗口布局不正确')
+      const zones = SNAP_ZONES[layout]
+      const selected = zones[zone]
+      if (!selected) throw new Error('窗口区域不正确')
+      const area = screen.getDisplayMatching(win.getBounds()).workArea
+      const bounds = snapBounds(area, layout, zone)
+      if (!bounds) throw new Error('当前显示器空间不足，无法使用这个区域')
+      if (!snappedWindows.has(win))
+        snappedWindows.set(win, { bounds: win.getNormalBounds(), minimum: win.getMinimumSize() })
+      if (win.isMaximized()) win.unmaximize()
+      // 布局模式允许小于普通窗口的 1100×700；最小保持单窗格可用的 400×300。
+      win.setMinimumSize(400, 300)
+      win.setBounds(bounds)
+      win.webContents.send('window:state', state(win))
+    },
+    callerOnly,
+  )
+  ipc.handle(
+    'window:snapOptions',
+    event => {
+      const win = callingWindow(event)
+      const area = screen.getDisplayMatching(win.getBounds()).workArea
+      return Object.fromEntries(
+        [...LAYOUTS].map(layout => [
+          layout,
+          SNAP_ZONES[layout].map((_, zone) => snapBounds(area, layout, zone) !== null),
+        ]),
+      )
+    },
+    callerOnly,
+  )
+  ipc.handle(
+    'window:restoreSnap',
+    event => {
+      const win = callingWindow(event)
+      const saved = snappedWindows.get(win)
+      if (!saved) return
+      if (win.isMaximized()) win.unmaximize()
+      snappedWindows.delete(win)
+      win.setMinimumSize(saved.minimum[0], saved.minimum[1])
+      win.setBounds(saved.bounds)
+      win.webContents.send('window:state', state(win))
+    },
+    callerOnly,
+  )
   // 复用现有 close 事件与文件保存确认，不能用 destroy / app.exit 绕过。
-  ipcMain.handle('window:close', event => {
-    callingWindow(event).close()
-  })
+  ipc.handle(
+    'window:close',
+    event => {
+      callingWindow(event).close()
+    },
+    callerOnly,
+  )
 }
 
 export function observeWindowControls(win: BrowserWindow): void {

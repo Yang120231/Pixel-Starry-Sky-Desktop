@@ -7,7 +7,8 @@ import { platformCharges, accountCalls } from './platformBilling'
 // 3. 「添加项目」弹出系统的选择文件夹对话框；退出应用前关掉所有引擎进程。
 import { join } from 'node:path'
 import { writeFile } from 'node:fs/promises'
-import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, dialog, type IpcMainInvokeEvent } from 'electron'
+import * as ipc from './ipc/guard'
 import { nativeText } from './ui-language'
 import { EngineHost, searchQuery, type UsageQuery } from '@pixelsky/engine'
 import type {
@@ -117,18 +118,6 @@ export function resolveTerminalTarget(ref: WorkspaceRef): TerminalTarget {
   return { projectId: project.id, projectName: project.name, cwd: record.cwd }
 }
 
-/** 只接受应用自己的页面（打包后的本地文件，或开发服务器）发来的请求 */
-function trustedSender(event: IpcMainInvokeEvent): boolean {
-  try {
-    const u = new URL(event.senderFrame?.url ?? '')
-    if (u.protocol === 'file:') return true
-    const dev = process.env.ELECTRON_RENDERER_URL
-    return !!dev && !app.isPackaged && u.origin === new URL(dev).origin
-  } catch {
-    return false
-  }
-}
-
 function broadcast(e: HostEvent): void {
   if (machines) {
     machines.hostEvent(e)
@@ -201,9 +190,8 @@ export async function initEngine(): Promise<void> {
   initExtensions((engine = 'claude') => h.engineConfig()[engine].env)
   const shutdownTerminals = await initTerminalIpc(resolveTerminalTarget)
 
-  const handle = (channel: string, fn: (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown): void => {
-    ipcMain.handle(channel, (event, ...args) => {
-      if (!trustedSender(event)) throw new Error('不受信任的页面')
+  const handle = (channel: ipc.InvokeChannel, fn: (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown): void => {
+    ipc.handle(channel, (event, ...args) => {
       if (channel.startsWith('engine:') && machines) return machines.invoke(channel, args, () => fn(event, ...args))
       return fn(event, ...args)
     })
@@ -278,8 +266,7 @@ export async function initEngine(): Promise<void> {
   })
   // 用默认应用打开 / 在文件夹中显示：只限本机，只限改动记录里的文件
   for (const action of ['open', 'reveal'] as const)
-    ipcMain.handle('artifacts:' + action, async (event, input) => {
-      if (!trustedSender(event)) throw new Error('不受信任的页面')
+    ipc.handle(`artifacts:${action}`, async (_event, input) => {
       const v = artifactRef(input)
       if (machineOf(v.sessionId) !== 'local') throw new Error('远程机器上的文件只能预览')
       if (!(await h.recordedPath(v.sessionId, v.path))) throw new Error('只能打开 AI 改动记录里的文件')

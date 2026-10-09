@@ -1,4 +1,5 @@
-import { app, BrowserWindow, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, dialog, shell, type IpcMainInvokeEvent } from 'electron'
+import * as ipc from './ipc/guard'
 import { join } from 'node:path'
 import { Tasks } from './project-tools/tasks'
 import { Services, portStatus } from './project-tools/services'
@@ -16,18 +17,6 @@ import { gitInfo } from './project-tools/common'
 import type { WorkspaceChoice } from '../shared/types/machines'
 export let resolveCopyPath: ((projectId: string, copyId: string) => Promise<string>) | undefined
 
-/** A child website cannot claim the app's file URL to invoke project APIs. */
-export function toolsSender(event: IpcMainInvokeEvent): boolean {
-  const win = BrowserWindow.fromWebContents(event.sender)
-  if (!win || win.webContents !== event.sender || event.senderFrame !== event.sender.mainFrame) return false
-  try {
-    const url = new URL(event.senderFrame.url),
-      dev = process.env.ELECTRON_RENDERER_URL
-    return url.protocol === 'file:' || (!!dev && !app.isPackaged && url.origin === new URL(dev).origin)
-  } catch {
-    return false
-  }
-}
 export async function initProjectTools(host: ToolsHost): Promise<void> {
   const dir = join(app.getPath('userData'), 'project-tools')
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -53,8 +42,7 @@ export async function initProjectTools(host: ToolsHost): Promise<void> {
   const git = new GitTools(host, changed, { trash: path => shell.trashItem(path) })
   await Promise.all([tasks.init(), copies.init()])
   await services.init()
-  ipcMain.handle('machines:workspaces', async (event, projectId: string) => {
-    if (!toolsSender(event)) throw new Error('不受信任的页面')
+  ipc.handle('machines:workspaces', async (_event, projectId: string) => {
     const machine = machineOf(projectId)
     if (machine !== 'local') return machines!.call(machine, remoteMethod('machines:workspaces'), [projectId])
     const target = host.resolve({ projectId }),
@@ -72,8 +60,7 @@ export async function initProjectTools(host: ToolsHost): Promise<void> {
       })),
     ]
   })
-  ipcMain.handle('machines:openWorkspace', async (event, choice: WorkspaceChoice) => {
-    if (!toolsSender(event)) throw new Error('不受信任的页面')
+  ipc.handle('machines:openWorkspace', async (_event, choice: WorkspaceChoice) => {
     const machine = machineOf(choice.projectId)
     if (machine !== 'local')
       return machines!.call(machine, remoteMethod('machines:openWorkspace'), [
@@ -88,8 +75,7 @@ export async function initProjectTools(host: ToolsHost): Promise<void> {
     return host.create(choice.projectId, target.path)
   })
   const handle = (name: string, fn: (e: IpcMainInvokeEvent, ...args: unknown[]) => unknown): void => {
-    ipcMain.handle('projectTools:' + name, (event, ...args) => {
-      if (!toolsSender(event)) throw new Error('不受信任的页面')
+    ipc.handle(`projectTools:${name}` as ipc.InvokeChannel, (event, ...args) => {
       return machines ? machines.invoke('projectTools:' + name, args, () => fn(event, ...args)) : fn(event, ...args)
     })
   }
@@ -165,7 +151,7 @@ export async function initProjectTools(host: ToolsHost): Promise<void> {
   handle('gitSwitch', (_, ref, input) => git.switchBranch(workspaceRef(ref), input))
   handle('gitCreateBranch', (_, ref, input) => git.createBranch(workspaceRef(ref), input))
   handle('gitOperation', (_, ref, action) => git.operation(workspaceRef(ref), action))
-  await initProjectBrowser(dir, host, toolsSender)
+  await initProjectBrowser(dir, host)
   registerShutdown(async () => {
     if (timer) clearTimeout(timer)
     await services.shutdown()
