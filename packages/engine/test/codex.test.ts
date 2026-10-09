@@ -1,0 +1,73 @@
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { CodexAdapter, EngineHost } from '../src'
+import type { HostEvent } from '@pixelsky/protocol'
+import { codexPermission, turnErrorDetail } from '../src/codex/session'
+import { CodexTranslator, tokenCounts } from '../src/codex/translate'
+let root: string, host: EngineHost | undefined
+beforeEach(() => { const scratch = resolve('../../scratch'); mkdirSync(scratch, { recursive: true }); root = mkdtempSync(join(scratch, 'codex-test-')) })
+afterEach(async () => { await host?.shutdown(); host = undefined; rmSync(root, { recursive: true, force: true }) })
+const wait = async (fn: () => boolean): Promise<void> => { for (let i=0;i<300;i++) { if(fn())return; await new Promise(r=>setTimeout(r,10)) } throw new Error('Codex test timed out') }
+function setup() {
+  const log=join(root,'rpc.jsonl'), events:HostEvent[]=[], launcher={command:process.execPath,args:[fileURLToPath(new URL('./fakes/fake-codex.mjs',import.meta.url))]}
+  const adapter=new CodexAdapter({launcher,env:{...process.env,FAKE_CODEX_LOG:log},launchOptions:()=>({askQuestions:true,steeringValidated:true})})
+  host=new EngineHost({dataDir:join(root,'engine'),adapters:{codex:adapter},emit:e=>events.push(e),idleMs:50})
+  const session=host.createSession({projectId:host.addProject(root).id,engine:'codex',model:'fake-codex',effort:'high',permissionMode:'ask'})
+  const messages=()=>readFileSync(log,'utf8').trim().split('\n').map(line=>JSON.parse(line))
+  return {adapter,session,log,events,messages}
+}
+describe('Codex app-server adapter',()=>{
+ it('重连与失败的报错带上附加说明、错误类型和 HTTP 状态码，供界面查看详情',async()=>{
+  const {session}=setup();await host!.send(session.id,'重连');await wait(()=>host!.open(session.id).state==='idle'&&host!.open(session.id).items.filter(i=>i.kind==='notice').length===3)
+  const notices=host!.open(session.id).items.filter(i=>i.kind==='notice')
+  expect(notices.map(n=>n.kind==='notice'&&n.text)).toEqual(['Reconnecting... 1/2','Reconnecting... 2/2','exceeded retry limit, last status: 502 Bad Gateway'])
+  expect(notices[0]).toMatchObject({level:'error',detail:['stream disconnected before completion: error sending request for url (https://api.example.test/v1/responses)','type: responseStreamDisconnected','HTTP status: 502','will retry: yes'].join('\n')})
+  expect(notices[2]).toMatchObject({detail:['upstream connect error','type: responseTooManyFailedAttempts','HTTP status: 502'].join('\n')})
+ })
+ it('报错详情：只有 message 时为空，字符串错误类型照样列出',()=>{
+  expect(turnErrorDetail({message:'boom'})).toBeNull()
+  expect(turnErrorDetail(null)).toBeNull()
+  expect(turnErrorDetail({message:'x',codexErrorInfo:'usageLimitExceeded'},false)).toBe(['type: usageLimitExceeded','will retry: no'].join('\n'))
+ })
+ it('动态目录、流式、用量与空闲后恢复，不重复历史',async()=>{
+  const {adapter,session,messages}=setup()
+  expect((await adapter.info()).status).toBe('ready');expect((await adapter.catalog()).models?.[0].efforts).toContain('ultra')
+  await host!.send(session.id,'first');await wait(()=>host!.open(session.id).items.some(i=>i.kind==='turn_stats'))
+  expect(host!.open(session.id).items.filter(i=>i.kind==='assistant')).toHaveLength(1)
+  await new Promise(r=>setTimeout(r,100));await host!.send(session.id,'second');await wait(()=>host!.open(session.id).items.filter(i=>i.kind==='turn_stats').length===2)
+  expect(messages().some(m=>m.method==='thread/resume')).toBe(true)
+  expect(host!.open(session.id).items.filter(i=>i.kind==='user')).toHaveLength(2)
+  expect(host!.open(session.id).usage?.contextWindow).toBe(128000)
+ })
+ it('审批拒绝、中断与崩溃都结束轮次并暂停队列',async()=>{
+  const {session}=setup();await host!.send(session.id,'审批');await wait(()=>host!.open(session.id).pending.length===1)
+  host!.answer(session.id,'approve',{type:'deny'});await wait(()=>host!.open(session.id).state==='idle');expect(host!.open(session.id).pending).toEqual([])
+  host!.resumeQueue(session.id);await host!.send(session.id,'慢');await wait(()=>host!.open(session.id).flags.steerAvailable===true&&host!.open(session.id).state==='running');await host!.interrupt(session.id);expect(host!.open(session.id).queuePaused).toBe(true)
+ })
+ it('原生引导用对应轮次和 client ID，单条消费并显示用户内容',async()=>{
+  const {session,messages}=setup();await host!.send(session.id,'慢');await wait(()=>host!.open(session.id).flags.steerAvailable===true)
+  await new Promise(r=>setTimeout(r,40));const receipt=await host!.send(session.id,{text:'追加要求',clientMessageId:'guidance-1'})
+  const turnId=host!.open(session.id).turnId!;await host!.steerQueued(session.id,receipt.queueId,turnId)
+  await wait(()=>host!.open(session.id).items.some(i=>i.kind==='user'&&i.text==='追加要求'))
+  expect(messages().find(m=>m.method==='turn/steer').params.expectedTurnId).toMatch(/^turn-/)
+  expect(host!.open(session.id).items.filter(i=>i.kind==='user'&&i.text==='追加要求')).toHaveLength(1)
+  await host!.interrupt(session.id)
+ })
+ it('原生压缩走方法而非 turn/start 的普通提示',async()=>{
+  const {session,messages}=setup();await host!.send(session.id,'hello');await wait(()=>host!.open(session.id).state==='idle'&&host!.open(session.id).flags.compactAvailable===true)
+  await host!.compactContext(session.id);await wait(()=>messages().some(m=>m.method==='thread/compact/start'))
+  expect(messages().filter(m=>m.method==='turn/start')).toHaveLength(1)
+  await wait(()=>host!.open(session.id).state==='idle');expect(host!.open(session.id).context?.compacting).toBe(false)
+ })
+ it('文件 diff 和完整消息更新不重复累计文字，缓存拆分不重叠',()=>{
+  const items:unknown[]=[];const translator=new CodexTranslator(e=>items.push(e))
+  translator.item({type:'agentMessage',id:'one',text:''},false);translator.delta('item/agentMessage/delta',{itemId:'one',delta:'hello'});translator.item({type:'agentMessage',id:'one',text:'hello'},true)
+  expect(translator.items.get('cx-one')).toMatchObject({text:'hello'})
+  translator.item({type:'fileChange',id:'file',changes:[{path:'file.ts',kind:{type:'update'},diff:'@@\n-old\n+new'}]},true)
+  expect(translator.items.get('cx-file')).toMatchObject({changes:[{added:1,removed:1}]})
+  expect(tokenCounts({inputTokens:100,cachedInputTokens:40,cacheWriteInputTokens:10,outputTokens:20})).toMatchObject({input:50,cacheRead:40,cacheWrite:10,output:20})
+  expect(codexPermission('plan').sandboxPolicy).toEqual({type:'readOnly',networkAccess:false})
+ })
+})
