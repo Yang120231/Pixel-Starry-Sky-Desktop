@@ -307,27 +307,27 @@ describe('侧边栏外观偏好', () => {
   })
 
   it('顶栏工具与侧栏动作可在三排之间互相移动，图标随入口走', () => {
-    let layout = moveSidebarActionInLayout(DEFAULT_SIDEBAR_LAYOUT, 'terminal', 'bottom', 0)
-    expect(layout.header).not.toContain('terminal')
-    expect(layout.bottom).toEqual(['terminal', 'usage', 'plugins', 'settings'])
+    let layout = moveSidebarActionInLayout(DEFAULT_SIDEBAR_LAYOUT, 'git', 'bottom', 0)
+    expect(layout.header).not.toContain('git')
+    expect(layout.bottom).toEqual(['git', 'usage', 'plugins', 'settings'])
     layout = moveSidebarActionInLayout(layout, 'usage', 'header', 0)
     expect(layout.header[0]).toBe('usage')
-    expect(layout.bottom).toEqual(['terminal', 'plugins', 'settings'])
+    expect(layout.bottom).toEqual(['git', 'plugins', 'settings'])
     layout = moveSidebarActionInLayout(layout, 'channels', 'top', 99)
     expect(layout.top).toEqual(['addProject', 'newTask', 'channels'])
     expect(getLayoutIcon('usage', DEFAULT_SIDEBAR_ICONS)).toBe(getSidebarIcon('usage', DEFAULT_SIDEBAR_ICONS))
-    expect(getLayoutIcon('terminal', DEFAULT_SIDEBAR_ICONS)).toBeTruthy()
+    expect(getLayoutIcon('git', DEFAULT_SIDEBAR_ICONS)).toBeTruthy()
     // 顶栏工具放进侧栏后照样受每排上限约束；机器切换和右面板开关固定，不在布局里
-    for (const action of ['editor', 'commandPalette'] as const)
+    for (const action of ['machines', 'workbench'] as const)
       layout = moveSidebarActionInLayout(layout, action, 'top', 99)
-    expect(layout.top).toEqual(['addProject', 'newTask', 'channels', 'editor', 'commandPalette'])
-    expect(moveSidebarActionInLayout(layout, 'workbench', 'top', 0)).toEqual(layout)
-    expect(layout.header).toEqual(['usage', 'workbench', 'machines', 'git'])
+    expect(layout.top).toEqual(['addProject', 'newTask', 'channels', 'machines', 'workbench'])
+    expect(moveSidebarActionInLayout(layout, 'usage', 'top', 0)).toEqual(layout)
+    expect(layout.header).toEqual(['usage'])
   })
 
   it('侧栏一排最多 5 个，排满时拒绝移入但允许排内换序；顶栏不限', () => {
     let layout = DEFAULT_SIDEBAR_LAYOUT
-    for (const action of ['terminal', 'editor', 'commandPalette'] as const)
+    for (const action of ['workbench', 'machines', 'channels'] as const)
       layout = moveSidebarActionInLayout(layout, action, 'top', 99)
     expect(layout.top).toHaveLength(SIDEBAR_ROW_LIMIT)
     expect(isRowFull(layout, 'top')).toBe(true)
@@ -337,6 +337,23 @@ describe('侧边栏外观偏好', () => {
     for (const action of SIDEBAR_ACTIONS) layout = moveSidebarActionInLayout(layout, action, 'header', 0)
     expect(layout.header).toHaveLength(LAYOUT_ACTIONS.length - layout.top.length)
     expect(isRowFull(layout, 'header')).toBe(false)
+  })
+
+  it('终端、编辑器、命令面板已从图标位置移除（D066），旧偏好里的位置读取时丢弃', () => {
+    const prefs = parseSidebarPrefs({
+      version: 4,
+      layout: {
+        header: ['terminal', 'editor', 'commandPalette', 'workbench'],
+        top: ['commandPalette', 'newTask'],
+        bottom: ['editor', 'usage'],
+      },
+    })
+    const all = [...prefs.layout.header, ...prefs.layout.top, ...prefs.layout.bottom]
+    for (const gone of ['terminal', 'editor', 'commandPalette']) expect(all).not.toContain(gone)
+    expect(prefs.layout.header[0]).toBe('workbench')
+    expect(prefs.layout.top.slice(0, 1)).toEqual(['newTask'])
+    expect(all.sort()).toEqual([...LAYOUT_ACTIONS].sort())
+    expect(DEFAULT_SIDEBAR_LAYOUT.header).toEqual(['workbench', 'machines', 'channels', 'git'])
   })
 
   it('旧偏好里的自动化原位换成 Git（D061），不重复、不丢位置', () => {

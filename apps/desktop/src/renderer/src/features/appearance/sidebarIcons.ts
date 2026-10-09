@@ -4,8 +4,6 @@ import {
   ChartColumn,
   ChartNoAxesCombined,
   Cloud,
-  CodeXml,
-  Command,
   Folder,
   FolderOpen,
   FolderPlus,
@@ -20,7 +18,6 @@ import {
   Settings,
   SlidersHorizontal,
   SquarePen,
-  SquareTerminal,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -28,16 +25,12 @@ import {
 export const SIDEBAR_ACTIONS = ['newTask', 'addProject', 'settings', 'plugins', 'usage'] as const
 export type SidebarAction = (typeof SIDEBAR_ACTIONS)[number]
 
-/** 原右上角顶栏的工具；图标固定，位置可与侧栏动作互换 */
-export const HEADER_ACTIONS = [
-  'terminal',
-  'editor',
-  'commandPalette',
-  'workbench',
-  'machines',
-  'channels',
-  'git',
-] as const
+/**
+ * 原右上角顶栏的工具；图标固定，位置可与侧栏动作互换。
+ * 终端、编辑器（</>）、命令面板已于 2026-10-10 移除（D066）：终端和文件在右侧工作区，命令面板用 Ctrl+Shift+P；
+ * 保存的布局里如果还有它们，读取时自动丢弃。
+ */
+export const HEADER_ACTIONS = ['workbench', 'machines', 'channels', 'git'] as const
 export type HeaderAction = (typeof HEADER_ACTIONS)[number]
 
 /** 图标位置编辑器里可移动的全部入口 */
@@ -45,9 +38,6 @@ export const LAYOUT_ACTIONS = [...SIDEBAR_ACTIONS, ...HEADER_ACTIONS] as const
 export type LayoutAction = (typeof LAYOUT_ACTIONS)[number]
 
 const HEADER_ICONS: Record<HeaderAction, LucideIcon> = {
-  terminal: SquareTerminal,
-  editor: CodeXml,
-  commandPalette: Command,
   workbench: LayoutDashboard,
   machines: Cloud,
   channels: MessageSquare,
