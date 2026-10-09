@@ -35,8 +35,11 @@ export interface IpcChannelSpec {
   readonly trust: IpcTrust
 }
 
-/** 本机与远端辅助进程的协议版本；`hello` 返回它，连接时必须一致。 */
-export const REMOTE_PROTOCOL = 1
+/**
+ * 本机与远端辅助进程的协议版本；`hello` 返回它，连接时必须一致。
+ * 2（2026-10-09，结构重整 P6）：远端方法改用 main/core 的操作表，参数校验与本机一致，放弃未跟踪文件移到 trash/。
+ */
+export const REMOTE_PROTOCOL = 2
 
 export const IPC_CONTRACT = {
   'account:calls': { kind: 'invoke', route: 'local', trust: 'sender' },

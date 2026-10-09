@@ -4,6 +4,7 @@ import { createHash, generateKeyPairSync } from 'node:crypto'
 import { createServer, connect, type Server } from 'node:net'
 import { mkdtemp, writeFile, rm, mkdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
+import { REMOTE_PROTOCOL } from '@pixelsky/protocol'
 import { RpcPeer } from './rpc'
 import { SshConnection, FingerprintRequired, quoteSh } from './ssh'
 import type { MachineInput } from '../../shared/types/machines'
@@ -83,7 +84,7 @@ async function server() {
               const data = Buffer.concat(chunks)
               uploaded = data.toString()
               const hash = createHash('sha256').update(data).digest('hex')
-              stream.write('/test home/.local/share/pixelsky/remote/v1/helper-' + hash + '.cjs')
+              stream.write('/test home/.local/share/pixelsky/remote/v' + REMOTE_PROTOCOL + '/helper-' + hash + '.cjs')
               stream.exit(0)
               stream.end()
             })
@@ -92,7 +93,7 @@ async function server() {
           const peer = new RpcPeer(stream, stream, method => {
             if (method !== 'hello') throw new Error('Unsupported')
             return {
-              protocol: 1,
+              protocol: REMOTE_PROTOCOL,
               platform: 'linux',
               home: '/test home',
               arch: 'x64',
