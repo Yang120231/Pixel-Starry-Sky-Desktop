@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { checkMcp } from './check'
 let root:string
 beforeEach(()=>{const scratch=resolve('../../scratch');mkdirSync(scratch,{recursive:true});root=mkdtempSync(join(scratch,'mcp-check-'))})
-afterEach(()=>rmSync(root,{recursive:true,force:true}))
+// Windows 上子进程退出后句柄释放有延迟，重试几次，避免在 scratch 留下空目录
+afterEach(()=>rmSync(root,{recursive:true,force:true,maxRetries:4,retryDelay:150}))
 const result=(m:Record<string,unknown>):Record<string,unknown>|null=>m.method==='initialize'?{protocolVersion:(m.params as Record<string,unknown>).protocolVersion,capabilities:{tools:{}},serverInfo:{name:'fixture',version:'1'}}:m.method==='tools/list'?{tools:[{name:'fixture_tool',description:'本地检测工具',inputSchema:{type:'object'}}]}:null
 describe('MCP 只做初始化与工具列表',()=>{
   it('stdio 能加载工具，退出关闭服务器进程',async()=>{

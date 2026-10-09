@@ -1,0 +1,141 @@
+/// <reference types="node" />
+import { describe, expect, it } from 'vitest'
+import { readdirSync, readFileSync } from 'node:fs'
+import { join, relative, sep } from 'node:path'
+import { allMessages } from './core'
+import { catalog } from './catalog'
+import { systemMessages } from './systemMessages'
+import { pluginMessages } from './pluginMessages'
+import { sessionMessages } from './sessionMessages'
+import { commandMessages } from './commandMessages'
+import { codexMessages } from './codexMessages'
+import { projectToolsMessages } from './projectToolsMessages'
+import { terminalMessages } from './terminalMessages'
+import { sidebarMessages } from './sidebarMessages'
+import { projectMessages } from './projectMessages'
+import { workspaceMessages } from './workspaceMessages'
+import { machineMessages, machineErrors } from './machineMessages'
+import { channelMessages } from './channelMessages'
+import { notificationMessages } from './notificationMessages'
+import { gitMessages } from './gitMessages'
+import { artifactMessages } from './artifactMessages'
+
+// 与 core.ts 的 allMessages 合并顺序一致
+const dictionaries: Record<string, Record<string, unknown>> = {
+  catalog, systemMessages, pluginMessages, sessionMessages, commandMessages, codexMessages, projectToolsMessages,
+  terminalMessages, sidebarMessages, projectMessages, workspaceMessages, machineMessages, machineErrors,
+  channelMessages, notificationMessages, gitMessages, artifactMessages,
+}
+
+/** 中英文值不同、需要保持现状的重复 key（当前为空；新增重复必须先说明原因）。 */
+const ALLOWED_DUPLICATES: string[] = []
+/** renderer/src 下含 CJK 的字符串字面量个数基线；减少后请同步调低。 */
+const HARDCODED_CJK_BASELINE = 373
+/** text('中文') 反查词典调用个数基线；减少后请同步调低。 */
+const TEXT_LOOKUP_BASELINE = 42
+
+const srcRoot = join(__dirname, '..')
+const mainRoot = join(__dirname, '..', '..', '..', 'main')
+
+function walk(dir: string, out: string[] = []): string[] {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name)
+    if (entry.isDirectory()) walk(full, out)
+    else if (/\.tsx?$/.test(entry.name)) out.push(full)
+  }
+  return out
+}
+
+function sourceFiles(root: string): string[] {
+  return walk(root).filter(file => {
+    const rel = relative(root, file).split(sep).join('/')
+    if (/\.test\.tsx?$/.test(rel) || /\.d\.ts$/.test(rel)) return false
+    return !/(^|\/)(i18n|mock)\//.test(rel)
+  })
+}
+
+const CJK = /[㐀-鿿＀-￯　-〿]/
+
+/** 提取代码中的字符串字面量（跳过注释；模板字面量按整体计，嵌套表达式里的字符串另计）。 */
+function extractStrings(code: string): Array<{ value: string; start: number }> {
+  const result: Array<{ value: string; start: number }> = []
+  const stack: Array<'tpl' | 'brace'> = []
+  let i = 0
+  const readTemplate = (): void => {
+    // 从模板字面量内部开始读，遇到 ${ 压栈后返回
+    let buf = '', start = i
+    while (i < code.length) {
+      const c = code[i]
+      if (c === '\\') { buf += code.slice(i, i + 2); i += 2; continue }
+      if (c === '`') { result.push({ value: buf, start }); i++; return }
+      if (c === '$' && code[i + 1] === '{') {
+        result.push({ value: buf, start }); i += 2; stack.push('tpl'); return
+      }
+      buf += c; i++
+    }
+  }
+  while (i < code.length) {
+    const c = code[i], next = code[i + 1]
+    if (c === '/' && next === '/') { while (i < code.length && code[i] !== '\n') i++; continue }
+    if (c === '/' && next === '*') { const end = code.indexOf('*/', i + 2); i = end < 0 ? code.length : end + 2; continue }
+    if (c === '\'' || c === '"') {
+      const start = i; let buf = ''; i++
+      while (i < code.length && code[i] !== c && code[i] !== '\n') {
+        if (code[i] === '\\') { buf += code.slice(i, i + 2); i += 2 } else buf += code[i++]
+      }
+      i++; result.push({ value: buf, start }); continue
+    }
+    if (c === '`') { i++; readTemplate(); continue }
+    if (c === '{') { stack.push('brace'); i++; continue }
+    if (c === '}') {
+      const top = stack.pop(); i++
+      if (top === 'tpl') readTemplate()
+      continue
+    }
+    i++
+  }
+  return result
+}
+
+describe('i18n 防回归', () => {
+  it('各词典之间没有重复 key（白名单除外）', () => {
+    const owners = new Map<string, string[]>()
+    for (const [name, dict] of Object.entries(dictionaries)) {
+      for (const key of Object.keys(dict)) owners.set(key, [...(owners.get(key) ?? []), name])
+    }
+    const duplicates = [...owners].filter(([, names]) => names.length > 1).map(([key]) => key).sort()
+    expect(duplicates).toEqual([...ALLOWED_DUPLICATES].sort())
+    expect(Object.keys(allMessages).length).toBe(owners.size)
+  })
+
+  it('源码中 tr / t 的字面量 key 都存在于词典', () => {
+    const call = /(?<![\w$.])(?:tr|t)\(\s*(['"])([^'"\n]+)\1/g
+    const missing: string[] = []
+    for (const root of [srcRoot, mainRoot]) {
+      for (const file of sourceFiles(root)) {
+        const code = readFileSync(file, 'utf8')
+        for (const match of code.matchAll(call)) {
+          // 只检查长得像词典 key 的字面量（含点号的标识符），其它 t(...) 是局部函数
+          if (!/^[A-Za-z][\w-]*(\.[\w-]+)+$/.test(match[2])) continue
+          if (!(match[2] in allMessages)) missing.push(`${relative(srcRoot, file)}: ${match[2]}`)
+        }
+      }
+    }
+    expect(missing).toEqual([])
+  })
+
+  it('写死的中文字面量不增加', () => {
+    let literals = 0, lookups = 0
+    for (const file of sourceFiles(srcRoot)) {
+      const code = readFileSync(file, 'utf8')
+      for (const { value, start } of extractStrings(code)) {
+        if (!CJK.test(value)) continue
+        if (/(?<![\w$.])text\(\s*$/.test(code.slice(Math.max(0, start - 12), start))) lookups++
+        else literals++
+      }
+    }
+    // 减少后请同步调低基线，避免回升
+    expect(literals, `写死的中文字面量 ${literals} 个，超过基线 ${HARDCODED_CJK_BASELINE}；请改用 tr()`).toBeLessThanOrEqual(HARDCODED_CJK_BASELINE)
+    expect(lookups, `text('中文') 调用 ${lookups} 个，超过基线 ${TEXT_LOOKUP_BASELINE}`).toBeLessThanOrEqual(TEXT_LOOKUP_BASELINE)
+  })
+})
