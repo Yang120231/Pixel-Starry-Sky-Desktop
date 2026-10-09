@@ -54,7 +54,7 @@ function sourceFiles(root: string): string[] {
   })
 }
 
-const CJK = /[㐀-鿿＀-￯　-〿]/
+const CJK = /[\u3400-\u9fff\uff00-\uffef\u3000-\u303f]/
 
 /** 提取代码中的字符串字面量（跳过注释；模板字面量按整体计，嵌套表达式里的字符串另计）。 */
 function extractStrings(code: string): Array<{ value: string; start: number }> {
@@ -63,7 +63,8 @@ function extractStrings(code: string): Array<{ value: string; start: number }> {
   let i = 0
   const readTemplate = (): void => {
     // 从模板字面量内部开始读，遇到 ${ 压栈后返回
-    let buf = '', start = i
+    let buf = ''
+    const start = i
     while (i < code.length) {
       const c = code[i]
       if (c === '\\') { buf += code.slice(i, i + 2); i += 2; continue }

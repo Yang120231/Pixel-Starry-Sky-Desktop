@@ -152,7 +152,7 @@ export function DragPreview({ visual, area }: { visual: Visual | null; area: Ref
   if (!visual || !area.current) return null
   const origin = area.current.getBoundingClientRect()
   const preview = visual.preview
-  let box = preview ? { ...preview.box } : null
+  const box = preview ? { ...preview.box } : null
   if (box && preview?.target.edge) {
     const edge = preview.target.edge
     if (edge === 'left' || edge === 'right') { box.width /= 2; if (edge === 'right') box.x += box.width }

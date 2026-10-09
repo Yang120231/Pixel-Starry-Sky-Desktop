@@ -4,7 +4,12 @@ import tseslint from 'typescript-eslint'
 import reactHooks from 'eslint-plugin-react-hooks'
 import globals from 'globals'
 
-const files = ['apps/desktop/src/**/*.{ts,tsx}', 'packages/*/src/**/*.ts', 'packages/*/test/**/*.ts', 'scripts/**/*.{js,mjs}']
+const files = [
+  'apps/desktop/src/**/*.{ts,tsx}',
+  'packages/*/src/**/*.ts',
+  'packages/*/test/**/*.ts',
+  'scripts/**/*.{js,mjs}',
+]
 
 export default tseslint.config(
   { ignores: ['**/node_modules/**', '**/out/**', '**/dist/**', '**/release/**', 'scratch/**', '**/*.d.ts'] },
@@ -15,7 +20,10 @@ export default tseslint.config(
     rules: {
       // 第一次接入先降为 warn，后续逐步清零
       '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
       '@typescript-eslint/no-empty-object-type': 'warn',
       '@typescript-eslint/no-unused-expressions': 'warn',
       '@typescript-eslint/no-require-imports': 'warn',
@@ -24,6 +32,8 @@ export default tseslint.config(
       'no-useless-escape': 'warn',
       'no-useless-assignment': 'warn',
       'preserve-caught-error': 'off',
+      // 闭包先引用、后赋值的 let（如 project-tools 里的 copies）不算
+      'prefer-const': ['error', { ignoreReadBeforeAssign: true }],
     },
   },
   {
@@ -32,7 +42,7 @@ export default tseslint.config(
     languageOptions: { globals: { ...globals.browser } },
   },
   {
-    files: ['apps/desktop/src/renderer/src/**/*.tsx'],
+    files: ['apps/desktop/src/renderer/src/**/*.{ts,tsx}'],
     plugins: { 'react-hooks': reactHooks },
     rules: {
       ...reactHooks.configs.recommended.rules,

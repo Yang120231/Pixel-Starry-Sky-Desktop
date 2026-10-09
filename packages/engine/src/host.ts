@@ -606,7 +606,7 @@ export class EngineHost {
       case 'approval_resolved':
         if (rt.snapshot.turnId && rt.snapshot.pending.length === 0) this.apply(id, { type: 'status', state: 'running' })
         break
-      case 'turn_completed':
+      case 'turn_completed': {
         if (event.usage || this.platformRequests.has(`${id}:${event.turnId}`)) this.recordUsage(id, event.turnId, event.outcome, event.usage ?? { models: {}, durationMs: 0 })
         this.patchRecord(id, { lastOutcome: event.outcome, lastError: event.outcome === 'failed' ? (event.error ?? '').slice(0, 500) || null : null, updatedAt: Date.now() })
         if (rt.activeId) {
@@ -624,6 +624,7 @@ export class EngineHost {
         queueMicrotask(() => { void this.pump(id) })
         if (rt.snapshot.queuePaused || rt.snapshot.queue.length === 0) this.armIdle(id)
         break
+      }
       case 'input_ack': {
         const input = rt.snapshot.queue.find((q) => q.id === event.id && q.mode === 'guidance')
         if (input) {
