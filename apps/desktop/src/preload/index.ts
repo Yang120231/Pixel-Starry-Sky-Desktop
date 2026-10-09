@@ -16,7 +16,8 @@ import type { ArtifactsBridge } from './artifacts'
 
 // 通道名一律用契约键约束：拼错或未登记的通道在这里就是类型错误
 type Listener = Parameters<typeof ipcRenderer.on>[1]
-const invoke = (channel: IpcChannelName, ...args: unknown[]): Promise<any> => ipcRenderer.invoke(channel, ...args)
+const invoke = <T = unknown>(channel: IpcChannelName, ...args: unknown[]): Promise<T> =>
+  ipcRenderer.invoke(channel, ...args)
 const send = (channel: IpcChannelName, ...args: unknown[]): void => ipcRenderer.send(channel, ...args)
 const sendSync = (channel: IpcChannelName, ...args: unknown[]): unknown => ipcRenderer.sendSync(channel, ...args)
 const on = (channel: IpcChannelName, listener: Listener): void => {

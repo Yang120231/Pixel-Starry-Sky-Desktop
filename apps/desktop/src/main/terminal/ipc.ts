@@ -40,7 +40,7 @@ export async function initTerminalIpc(
     })
     await remote.init()
   }
-  const handle = (name: string, fn: (e: IpcMainInvokeEvent, ...args: any[]) => unknown): void => {
+  const handle = (name: string, fn: (e: IpcMainInvokeEvent, ...args: never[]) => unknown): void => {
     ipc.handle(
       `terminal:${name}` as ipc.InvokeChannel,
       (event, ...args) => {
@@ -128,11 +128,11 @@ export async function initTerminalIpc(
   handle('close', (e, key, force) => service.change(e.sender.id, id(key), false, force === true))
   handle('restart', (e, key, force) => service.change(e.sender.id, id(key), true, force === true))
   handle('clipboardRead', () => clipboard.readText())
-  handle('clipboardWrite', (_e, value) => {
+  handle('clipboardWrite', (_e, value: unknown) => {
     if (typeof value !== 'string' || value.length > 2_000_000) throw new Error('终端输入过长')
     clipboard.writeText(value)
   })
-  handle('openLink', (_e, value) => {
+  handle('openLink', (_e, value: unknown) => {
     if (typeof value !== 'string' || value.length > 8192 || !/^https?:\/\//i.test(value)) throw new Error('链接不正确')
     const url = new URL(value)
     if (!['http:', 'https:'].includes(url.protocol)) throw new Error('链接不正确')

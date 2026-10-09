@@ -53,7 +53,7 @@ export class UsageStore {
   }
 
   private files(): Array<{ name: string; year: number; month: number }> {
-    let names: string[] = []
+    let names: string[]
     try {
       names = readdirSync(this.dir)
     } catch {
@@ -72,7 +72,7 @@ export class UsageStore {
     const byId = new Map<string, UsageRecord>()
     for (const f of this.files()) {
       if (f.year * 12 + (f.month - 1) < startKey) continue
-      let text = ''
+      let text: string
       try {
         text = readFileSync(join(this.dir, f.name), 'utf8')
       } catch {

@@ -129,7 +129,7 @@ describe('SSH trust and loopback transport', () => {
     const target = await server(),
       untrusted = new SshConnection()
     cleanup.push(() => untrusted.close())
-    let fingerprint = ''
+    let fingerprint: string
     try {
       await untrusted.connect(target.config, null, undefined, target.helper, () => {})
       throw new Error('Unexpected trust')
@@ -176,7 +176,7 @@ describe('SSH trust and loopback transport', () => {
     const target = await server(),
       changed = new SshConnection()
     cleanup.push(() => changed.close())
-    let fingerprint = ''
+    let fingerprint: string
     try {
       await changed.connect(target.config, 'SHA256:old-key', undefined, target.helper, () => {})
       throw new Error('Unexpected trust')

@@ -152,7 +152,7 @@ export function classifyGitError(
   info: { action: GitAction; timedOut?: boolean; missing?: boolean },
 ): GitFailure {
   const detail = stderr.trim().slice(-4000)
-  let kind: GitFailureKind = 'unknown'
+  let kind: GitFailureKind
   if (info.missing) kind = 'missing'
   else if (info.timedOut) kind = 'timeout'
   else kind = RULES.find(([, re]) => re.test(stderr))?.[0] ?? 'unknown'

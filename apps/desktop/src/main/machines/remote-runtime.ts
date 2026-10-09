@@ -16,7 +16,7 @@ import { value } from '../core/args'
 import type { WorkspaceRef } from '../../shared/types/workspace'
 import type { RpcPeer } from './rpc'
 
-type Handler = (...args: any[]) => unknown
+type Handler = (...args: never[]) => unknown
 type RemoteOf<Spec> = Spec extends { readonly remote: infer Method extends string } ? Method : never
 /** Every method name the IPC contract declares in a `remote` field: each one needs an implementation below. */
 type ContractMethod = RemoteOf<(typeof IPC_CONTRACT)[keyof typeof IPC_CONTRACT]>
@@ -114,7 +114,7 @@ export async function createRemoteRuntime(
     resolve,
     async call(method: string, args: unknown[]) {
       if (!Object.hasOwn(methods, method)) throw new Error('REMOTE_UNSUPPORTED: ' + method)
-      return methods[method](...args)
+      return methods[method](...(args as never[]))
     },
     async close() {
       await Promise.allSettled([projectTools.shutdown(), host.shutdown()])

@@ -336,7 +336,7 @@ export class Machines {
     if (!state?.connection?.peer || state.info.status !== 'connected') throw new Error('SSH_NOT_CONNECTED')
     return state.connection
   }
-  async call<T = any>(id: string, channel: string, args: unknown[]): Promise<T> {
+  async call<T = unknown>(id: string, channel: string, args: unknown[]): Promise<T> {
     const result = await this.connection(id).peer!.call<T>(channel, remoteArguments(channel, args, id))
     return remoteIds(result, id, true)
   }
@@ -407,7 +407,7 @@ export async function initMachines(
   const service = new Machines(host, environment, ctx.events)
   ctx.machines = service
   await service.init()
-  const actions: Record<string, (...args: any[]) => unknown> = {
+  const actions: Record<string, (...args: never[]) => unknown> = {
     state: () => service.state(),
     save: value => service.save(value),
     connect: (id, fingerprint) => service.connect(id, fingerprint),

@@ -256,6 +256,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       const record = terminalState().terminals.find(r => r.id === dialog.id)
       if (!record) throw new Error(t('terminal.missing'))
       if (dialog.kind === 'rename') {
+        // eslint-disable-next-line no-control-regex -- 故意匹配控制字符，拒绝包含换行等控制字符的标题
         if (!value.trim() || [...value.trim()].length > 120 || /[\u0000-\u001f\u007f]/.test(value))
           throw new Error(t('terminal.invalidTitle'))
         await terminalRename(dialog.id, value.trim())

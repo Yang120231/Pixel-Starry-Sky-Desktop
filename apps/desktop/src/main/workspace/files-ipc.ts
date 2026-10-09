@@ -18,7 +18,7 @@ export async function initWorkspace(ctx: AppContext): Promise<void> {
     return icons.get(path)
   })
   await editors.init()
-  const handle = (name: ipc.InvokeChannel, fn: (e: IpcMainInvokeEvent, ...args: any[]) => unknown): void => {
+  const handle = (name: ipc.InvokeChannel, fn: (e: IpcMainInvokeEvent, ...args: never[]) => unknown): void => {
     ipc.handle(
       name,
       (e, ...args) =>

@@ -13,7 +13,7 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs'
-import { basename, delimiter, dirname, join, relative, resolve } from 'node:path'
+import { delimiter, dirname, join, relative, resolve } from 'node:path'
 import {
   contentVersion,
   digest,
@@ -36,7 +36,6 @@ import type {
   ExtensionCheck,
   ExtensionEntry,
   ExtensionImport,
-  ExtensionInput,
   ExtensionLaunch,
   ExtensionScope,
   ExtensionState,

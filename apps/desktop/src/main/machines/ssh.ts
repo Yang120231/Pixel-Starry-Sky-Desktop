@@ -171,7 +171,8 @@ export class SshConnection {
       })
       channel.on('close', (code: number) => {
         clearTimeout(timer)
-        code ? reject(new Error(errors || 'SSH_COMMAND_FAILED')) : resolve(output)
+        if (code) reject(new Error(errors || 'SSH_COMMAND_FAILED'))
+        else resolve(output)
       })
       channel.end(input)
     })

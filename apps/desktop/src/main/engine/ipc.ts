@@ -11,7 +11,7 @@ import { app, BrowserWindow, dialog, type IpcMainInvokeEvent } from 'electron'
 import * as ipc from '../ipc/guard'
 import { nativeText } from '../app/ui-language'
 import { EngineHost } from '@pixelsky/engine'
-import type { HostEvent } from '@pixelsky/protocol'
+import type { HostEvent, SessionRecord } from '@pixelsky/protocol'
 import type { AppContext } from '../app/context'
 import { platformCharges, accountCalls } from '../platform/billing'
 import { initPlatform, validateQueuedInput } from '../platform/platform'
@@ -31,7 +31,7 @@ export async function initEngine(ctx: AppContext): Promise<void> {
     id =>
       machineOf(id) === 'local'
         ? (ctx.engine?.executionRecord(id) ?? null)
-        : (ctx.machines?.call(machineOf(id), 'platform:record', [id]).catch(() => null) ?? null),
+        : (ctx.machines?.call<SessionRecord | null>(machineOf(id), 'platform:record', [id]).catch(() => null) ?? null),
     () => ctx.engine?.engineConfig().claude.compactModel ?? null,
     record => {
       const machine = machineOf(record.id)

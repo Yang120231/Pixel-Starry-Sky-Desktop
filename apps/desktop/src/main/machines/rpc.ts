@@ -9,7 +9,7 @@ export class RpcPeer {
   private readonly decoder = new StringDecoder('utf8')
   private readonly pending = new Map<
     number,
-    { resolve(v: any): void; reject(e: Error): void; timer: ReturnType<typeof setTimeout> }
+    { resolve(v: unknown): void; reject(e: Error): void; timer: ReturnType<typeof setTimeout> }
   >()
   private closed = false
   onEvent: (channel: string, data: unknown) => void = () => {}

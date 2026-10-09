@@ -127,6 +127,7 @@ export function terminalTitle(value: unknown): string {
     typeof value !== 'string' ||
     !value.trim() ||
     [...value.trim()].length > 120 ||
+    // eslint-disable-next-line no-control-regex -- 故意匹配控制字符，拒绝包含换行等控制字符的名称
     /[\u0000-\u001f\u007f]/.test(value)
   )
     throw new Error('终端名称需为 1–120 个字符，不能包含换行')

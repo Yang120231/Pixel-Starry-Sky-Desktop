@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { readFile, stat } from 'node:fs/promises'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { createServer, connect } from 'node:net'
 import { randomUUID } from 'node:crypto'
 import { StringDecoder } from 'node:string_decoder'
@@ -17,6 +17,7 @@ interface Runtime {
 }
 const envPattern = /TOKEN|SECRET|PASSWORD|KEY|AUTH|CREDENTIAL|COOKIE/i
 export function redact(input: string, secrets: string[]): string {
+  // eslint-disable-next-line no-control-regex -- 故意匹配终端转义码（ANSI 颜色序列），脱敏前先去掉
   let out = input.replace(/\x1b\[[0-9;]*m/g, '')
   for (const secret of secrets.filter(s => s.length >= 4).sort((a, b) => b.length - a.length))
     out = out.split(secret).join('[redacted]')

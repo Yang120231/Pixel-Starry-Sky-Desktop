@@ -33,6 +33,7 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true, maxRetries: 4, retryDelay: 150 })
 })
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- 远端返回的 JSON 结构因接口而异，改成 unknown 要在上百处断言里逐个收窄
 const call = <T = any>(method: string, ...args: unknown[]): Promise<T> => runtime.call(method, args) as Promise<T>
 
 describe('remote runtime', () => {
@@ -61,7 +62,7 @@ describe('remote runtime', () => {
     const session = await call('engine:createSession', { projectId: added.id })
     expect(session).toMatchObject({ projectId: added.id, cwd: project })
     await call('engine:renameSession', session.id, 'Hello')
-    expect((await call('engine:sessions')).map((s: any) => s.record.title)).toEqual(['Hello'])
+    expect((await call('engine:sessions')).map((s: { record: { title: string } }) => s.record.title)).toEqual(['Hello'])
     await expect(call('engine:createSession', { projectId: added.id, workspaceSessionId: 'missing' })).rejects.toThrow(
       '工作区不属于项目',
     )
@@ -79,7 +80,7 @@ describe('remote runtime', () => {
     ])
     await writeFile(join(project, 'a.txt'), 'hello')
     const ref = { projectId: added.id }
-    expect((await call('files:list', ref, '')).entries.map((e: any) => e.name)).toEqual(['a.txt'])
+    expect((await call('files:list', ref, '')).entries.map((e: { name: string }) => e.name)).toEqual(['a.txt'])
     const doc = await call('files:read', ref, 'a.txt')
     expect(doc).toMatchObject({ kind: 'text', content: 'hello' })
     await expect(call('files:read', ref, '../outside')).rejects.toThrow()
@@ -91,7 +92,7 @@ describe('remote runtime', () => {
     await call('projectTools:updateTask', task.id, { status: 'in_progress' })
     const state = await call('projectTools:tasks', added.id)
     expect(state.tasks).toMatchObject([{ id: task.id, title: 'Write tests', status: 'in_progress' }])
-    expect((await call('projectTools:searchTasks', 'write', null)).map((t: any) => t.id)).toEqual([task.id])
+    expect((await call('projectTools:searchTasks', 'write', null)).map((t: { id: string }) => t.id)).toEqual([task.id])
     await call('projectTools:deleteTask', task.id)
     expect((await call('projectTools:tasks', added.id)).tasks).toEqual([])
     expect(events.some(([channel]) => channel === 'projectTools:changed')).toBe(true)
@@ -112,7 +113,7 @@ describe('remote runtime', () => {
     const added = await call('engine:addProject', project)
     const ref = { projectId: added.id }
     const status = await call('projectTools:gitStatus', ref)
-    expect(status.untracked.map((f: any) => f.path)).toEqual(['new.txt'])
+    expect(status.untracked.map((f: { path: string }) => f.path)).toEqual(['new.txt'])
     await call('projectTools:gitDiscard', ref, { paths: [], untracked: ['new.txt'] })
     expect(existsSync(join(project, 'new.txt'))).toBe(false)
     expect(await readFile(join(project, '.git', 'HEAD'), 'utf8')).toMatch(/ref:/)
@@ -141,7 +142,10 @@ describe('remote runtime follows the local behavior', () => {
     const a = await call('projectTools:createTask', added.id, { title: 'Write tests', tags: ['remote'] })
     const b = await call('projectTools:createTask', added.id, { title: 'Write docs', note: 'remote helper' })
     await call('projectTools:updateTask', a.id, { note: 'updated later' })
-    expect((await call('projectTools:searchTasks', 'write remote', null)).map((t: any) => t.id)).toEqual([a.id, b.id])
+    expect((await call('projectTools:searchTasks', 'write remote', null)).map((t: { id: string }) => t.id)).toEqual([
+      a.id,
+      b.id,
+    ])
     expect(await call('projectTools:searchTasks', '   ', null)).toEqual([])
     expect(await call('projectTools:searchTasks', 'write', 'other-project')).toEqual([])
   })

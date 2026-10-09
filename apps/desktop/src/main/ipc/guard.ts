@@ -76,10 +76,13 @@ function check(event: IpcMainEvent | IpcMainInvokeEvent, trust: IpcTrust, opts: 
   return 'ok'
 }
 
-/** 注册 `ipcMain.handle` 通道：先按契约的信任档校验，通过后才调用 `fn`。 */
+/**
+ * 注册 `ipcMain.handle` 通道：先按契约的信任档校验，通过后才调用 `fn`。
+ * `fn` 的参数列表由各注册点自己声明（具体类型），这里用 `never[]` 接受任意参数列表；转发时的 IPC 参数不做类型保证。
+ */
 export function handle(
   channel: InvokeChannel,
-  fn: (event: IpcMainInvokeEvent, ...args: any[]) => unknown,
+  fn: (event: IpcMainInvokeEvent, ...args: never[]) => unknown,
   opts: HandleOptions = {},
 ): void {
   const trust = trustOf(channel, ['invoke'])
@@ -90,18 +93,18 @@ export function handle(
       if (opts.onUntrusted) return opts.onUntrusted()
       throw new Error(opts.deny ?? DEFAULT_DENY)
     }
-    return fn(event, ...args)
+    return fn(event, ...(args as never[]))
   })
 }
 
 /** 注册 `ipcMain.on` 通道（`send` / `sendSync`）：未受信的调用静默忽略。 */
 export function on(
   channel: SendChannel,
-  fn: (event: IpcMainEvent, ...args: any[]) => void,
+  fn: (event: IpcMainEvent, ...args: never[]) => void,
   opts: OnOptions = {},
 ): void {
   const trust = trustOf(channel, ['send', 'sendSync'])
   ipcMain.on(channel, (event, ...args) => {
-    if (check(event, trust, opts) === 'ok') fn(event, ...args)
+    if (check(event, trust, opts) === 'ok') fn(event, ...(args as never[]))
   })
 }

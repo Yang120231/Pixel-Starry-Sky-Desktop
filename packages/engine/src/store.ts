@@ -134,7 +134,7 @@ export class Store {
 
   loadRecords(): SessionRecord[] {
     const out: SessionRecord[] = []
-    let names: string[] = []
+    let names: string[]
     try {
       names = readdirSync(join(this.dir, 'sessions'))
     } catch {
