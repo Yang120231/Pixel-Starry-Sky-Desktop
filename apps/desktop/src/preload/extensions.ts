@@ -7,7 +7,7 @@ import type {
   ExtensionState,
   SkillCommand,
 } from '@pixelsky/protocol'
-import type { WorkspaceRef } from './workspace'
+import type { WorkspaceRef } from '../shared/types/workspace'
 export interface ExtensionsBridge {
   state(ref?: WorkspaceRef | null): Promise<ExtensionState>
   save(data: ExtensionInput): Promise<ExtensionEntry>

@@ -1,7 +1,7 @@
 import { isDemo, projects as demoProjects } from '@/mock/data'
 import { useActiveWorkspace } from '@/editor/target'
 import { useEngineState } from '@/engine'
-import type { WorkspaceRef } from '../../../../preload/workspace'
+import type { WorkspaceRef } from '../../../../shared/types/workspace'
 
 export function useProjectContext(): {
   projectId: string | null

@@ -2,7 +2,8 @@ import { tr } from '../i18n/core'
 // 账号状态：模块级 store，所有调用方共享同一份（一次 getState + 一个 onChange 订阅）
 // 规格见 docs/ui/account.md §4.3
 import { useMemo, useSyncExternalStore } from 'react'
-import type { AccountBridge, AccountInfo, AccountState } from '../../../preload/account'
+import type { AccountInfo, AccountState } from '../../../shared/types/account'
+import type { AccountBridge } from '../../../preload/account'
 import { demoAccount } from '../mock/account'
 import { formatBalance } from './format'
 

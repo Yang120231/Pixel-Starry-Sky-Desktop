@@ -1,5 +1,5 @@
 // 演示模式下的账号数据（--demo）。用户名和 mock/demo.ts 的 currentUser 保持一致
-import type { AccountInfo } from '../../../preload/account'
+import type { AccountInfo } from '../../../shared/types/account'
 
 export const demoAccount: AccountInfo = {
   name: '林夏',

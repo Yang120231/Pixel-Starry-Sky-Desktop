@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import type { EditorState } from '../../../preload/workspace'
+import type { EditorState } from '../../../shared/types/workspace'
 import { isDemo } from '@/mock/data'
 import { DEMO_EDITOR_STATE } from '@/mock/files'
 let state: EditorState | null = null

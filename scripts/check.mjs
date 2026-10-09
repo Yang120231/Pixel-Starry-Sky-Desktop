@@ -34,7 +34,11 @@ const steps = [
   { name: 'tsc:desktop-node', group: 'tsc', ...tsc(desktop, 'tsconfig.node.json') },
   { name: 'tsc:engine', group: 'tsc', ...tsc(engine, 'tsconfig.json') },
   { name: 'tsc:protocol', group: 'tsc', ...tsc(protocol, 'tsconfig.json') },
-  { name: 'test:desktop', group: 'test', ...vitest(desktop, ['src/renderer/src', 'src/main', '--root', '.']) },
+  {
+    name: 'test:desktop',
+    group: 'test',
+    ...vitest(desktop, ['src/renderer/src', 'src/main', 'src/shared', '--root', '.']),
+  },
   { name: 'test:engine', group: 'test', ...vitest(engine) },
   { name: 'test:protocol', group: 'test', ...vitest(protocol) },
   { name: 'docs', group: 'docs', cwd: root, script: join(root, 'scripts', 'check-docs.mjs'), args: [] },

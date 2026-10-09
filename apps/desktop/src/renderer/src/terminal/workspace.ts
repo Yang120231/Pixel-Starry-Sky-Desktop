@@ -1,4 +1,4 @@
-import type { TerminalRecord } from '../../../preload/terminal'
+import type { TerminalRecord } from '../../../shared/types/terminal'
 /** A worktree is a different working directory even when it belongs to the same project. */
 export function workspaceTerminals(
   items: TerminalRecord[],

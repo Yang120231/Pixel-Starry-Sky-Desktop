@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import type { TerminalRecord } from '../../../preload/terminal'
+import type { TerminalRecord } from '../../../shared/types/terminal'
 import { workspaceTerminals } from './workspace'
 
 it('keeps worktree processes separate when they share a project id', () => {

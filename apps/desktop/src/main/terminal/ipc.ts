@@ -1,6 +1,6 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, shell, webContents, type IpcMainInvokeEvent } from 'electron'
-import type { TerminalProfileInput } from '../../preload/terminal'
-import type { WorkspaceRef } from '../../preload/workspace'
+import type { TerminalProfileInput } from '../../shared/types/terminal'
+import type { WorkspaceRef } from '../../shared/types/workspace'
 import { TerminalManager, type TerminalTarget } from './manager'
 import { nativeText } from '../ui-language'
 import { machines } from '../machines/service'

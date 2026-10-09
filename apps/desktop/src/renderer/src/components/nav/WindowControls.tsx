@@ -1,6 +1,6 @@
 import { tr } from '../../i18n/core'
 import { useEffect, useRef, useState } from 'react'
-import type { WindowSnapLayout, WindowState } from '../../../../preload/window'
+import type { WindowSnapLayout, WindowState } from '../../../../shared/types/window'
 import { useI18n } from '@/i18n/I18nProvider'
 
 interface SnapSpec {

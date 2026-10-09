@@ -3,7 +3,7 @@ import { Check, GitBranch, Plus } from 'lucide-react'
 import { cn } from '@/components/ui'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
-import type { GitBranch as Branch } from '../../../../../preload/project-tools'
+import type { GitBranch as Branch } from '../../../../../shared/types/project-tools'
 
 /** 分支菜单（docs/ui/git-panel.md §2.6）：搜索、本地 / 远程两组、被副本占用的置灰、输入新名字时可以新建 */
 export function BranchMenu({

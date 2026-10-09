@@ -1,6 +1,6 @@
 // 演示模式下的平台目录（--demo）。真实目录来自适配层 /v1/platform/groups（docs/ui/platform-groups.md）
 import type { EngineCaps, EngineCatalog, EngineConfig, EngineInfo, EngineLocalConfig } from '@pixelsky/protocol'
-import type { PlatformGroupInfo } from '../../../preload/platform-catalog'
+import type { PlatformGroupInfo } from '../../../shared/types/platform-catalog'
 
 export const demoPlatformGroups: PlatformGroupInfo[] = [
   {

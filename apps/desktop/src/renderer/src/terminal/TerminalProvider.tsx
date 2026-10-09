@@ -4,7 +4,7 @@ import { useActiveWorkspace } from '@/editor/target'
 import { getEngineState } from '@/engine/store'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { isDemo, projects } from '@/mock/data'
-import type { WorkspaceRef } from '../../../preload/workspace'
+import type { WorkspaceRef } from '../../../shared/types/workspace'
 import {
   initTerminalStore,
   terminalClose,

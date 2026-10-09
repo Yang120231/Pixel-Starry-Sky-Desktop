@@ -2,7 +2,7 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
 import { cn } from '@/components/ui'
 import { formatAmount, isQuotaDanger, quotaPercent } from '@/account/format'
-import type { Quota } from '../../../../preload/account'
+import type { Quota } from '../../../../shared/types/account'
 
 /** 一条额度：标签 + 已用 / 上限 + 进度条（超过 90% 用 danger 色）。账号菜单和设置 → 账号共用 */
 export function QuotaBar({ label, quota, currency }: { label: string; quota: Quota; currency: string }) {

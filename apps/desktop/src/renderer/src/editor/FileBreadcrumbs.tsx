@@ -5,7 +5,7 @@ import { isDemo } from '@/mock/data'
 import { demoDirectory } from '@/mock/files'
 import { openFile, type OpenFile } from '@/files/store'
 import { ActionMenu } from '@/components/ui/ActionMenu'
-import type { FileEntry } from '../../../preload/workspace'
+import type { FileEntry } from '../../../shared/types/workspace'
 
 export function FileBreadcrumbs({ tab }: { tab: OpenFile }) {
   const { t, text } = useI18n()

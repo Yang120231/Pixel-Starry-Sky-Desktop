@@ -199,7 +199,7 @@ export const paneActions = {
         record = current
           ? (engine.snapshots[current]?.record ?? engine.sessions.find(s => s.record.id === current)?.record)
           : null
-      let chosen: import('../../../preload/machines').WorkspaceChoice | null = null
+      let chosen: import('../../../shared/types/machines').WorkspaceChoice | null = null
       try {
         chosen = JSON.parse(localStorage.getItem('pixelsky.last-workspace.' + getMachines().currentId) ?? 'null')
       } catch {}

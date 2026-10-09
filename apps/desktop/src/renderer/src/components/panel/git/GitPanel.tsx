@@ -32,8 +32,8 @@ import type {
   GitRemedy,
   GitResult,
   GitStatus,
-} from '../../../../../preload/project-tools'
-import type { WorkspaceRef } from '../../../../../preload/workspace'
+} from '../../../../../shared/types/project-tools'
+import type { WorkspaceRef } from '../../../../../shared/types/workspace'
 import {
   ago,
   changeCount,

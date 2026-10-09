@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process'
 import { readdir, realpath, stat, open, rename, unlink } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { isAbsolute, join, relative, resolve, sep, extname } from 'node:path'
-import type { DirectoryListing, FileDocument, WorkspaceRef, WorkspaceTarget } from '../preload/workspace'
+import type { DirectoryListing, FileDocument, WorkspaceRef, WorkspaceTarget } from '../shared/types/workspace'
 
 export const TEXT_LIMIT = 2 * 1024 * 1024
 export const READ_LIMIT = 10 * 1024 * 1024

@@ -1,6 +1,6 @@
 import { tr, getLocale } from '../i18n/core'
 // 账号相关的纯格式化函数（余额、更新时间、额度百分比）
-import type { Quota } from '../../../preload/account'
+import type { Quota } from '../../../shared/types/account'
 
 const numberFormat = (): Intl.NumberFormat =>
   new Intl.NumberFormat(getLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })

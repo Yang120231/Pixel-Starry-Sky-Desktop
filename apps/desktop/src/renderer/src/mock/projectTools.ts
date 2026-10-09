@@ -1,5 +1,5 @@
-import type { TaskState, EnvironmentState, ProjectCopy } from '../../../preload/project-tools'
-import type { BrowserState } from '../../../preload/project-browser'
+import type { TaskState, EnvironmentState, ProjectCopy } from '../../../shared/types/project-tools'
+import type { BrowserState } from '../../../shared/types/project-browser'
 export const demoToolTasks: TaskState = {
   tasks: [
     {

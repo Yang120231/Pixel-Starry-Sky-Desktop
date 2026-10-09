@@ -5,7 +5,7 @@ import { FileDiff, Undo2 } from 'lucide-react'
 import { Button, DiffStat, cn, useComingSoon } from '@/components/ui'
 import { changedFiles, type ChangedFiles } from '@/mock/data'
 import { openFile } from '@/files/store'
-import type { WorkspaceRef } from '../../../../preload/workspace'
+import type { WorkspaceRef } from '../../../../shared/types/workspace'
 import { isDemo, projects } from '@/mock/data'
 import { useState } from 'react'
 

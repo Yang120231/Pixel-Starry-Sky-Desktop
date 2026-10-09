@@ -1,4 +1,4 @@
-import type { WorkspaceChoice } from '../../../preload/machines'
+import type { WorkspaceChoice } from '../../../shared/types/machines'
 const KEY = 'pixelsky.new-workspace-targets'
 let targets: Record<string, WorkspaceChoice> = {}
 try {

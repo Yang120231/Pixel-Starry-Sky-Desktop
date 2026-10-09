@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { statSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
-import type { TerminalProfile, TerminalProfileInput } from '../../preload/terminal'
+import type { TerminalProfile, TerminalProfileInput } from '../../shared/types/terminal'
 export function executable(value: string): string | null {
   if (typeof value !== 'string' || !value || /[\r\n\0]/.test(value)) return null
   try {

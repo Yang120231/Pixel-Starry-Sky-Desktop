@@ -10,8 +10,8 @@ import { Copies } from '../project-tools/copies'
 import { GitTools } from '../project-tools/git'
 import { readArtifact } from '../artifact-files'
 import { gitInfo, samePath, value, type ToolsHost } from '../project-tools/common'
-import type { CopyInput, ManualTask, ServiceInput } from '../../preload/project-tools'
-import type { WorkspaceRef } from '../../preload/workspace'
+import type { CopyInput, ManualTask, ServiceInput } from '../../shared/types/project-tools'
+import type { WorkspaceRef } from '../../shared/types/workspace'
 import type { RpcPeer } from './rpc'
 
 export const REMOTE_PROTOCOL = 1

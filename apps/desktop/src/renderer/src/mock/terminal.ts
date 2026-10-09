@@ -1,4 +1,4 @@
-import type { TerminalProfile } from '../../../preload/terminal'
+import type { TerminalProfile } from '../../../shared/types/terminal'
 export const demoTerminalProfiles: TerminalProfile[] = [
   { id: 'pwsh', label: 'PowerShell 7', command: 'pwsh.exe', args: [], available: true },
   { id: 'cmd', label: 'cmd', command: 'cmd.exe', args: ['/d'], available: true },

@@ -3,7 +3,7 @@
 import { open, realpath, stat } from 'node:fs/promises'
 import { extname } from 'node:path'
 import { deliveryType } from '@pixelsky/protocol'
-import type { ArtifactPreview } from '../preload/artifacts'
+import type { ArtifactPreview } from '../shared/types/artifacts'
 
 export const ARTIFACT_TEXT_LIMIT = 512 * 1024
 export const ARTIFACT_IMAGE_LIMIT = 8 * 1024 * 1024

@@ -1,6 +1,6 @@
 // 产物面板的演示数据（docs/ui/artifacts-panel.md），只在 `pnpm dev:demo` 显示
 import type { ArtifactResponse, FileChange } from '@pixelsky/protocol'
-import type { ArtifactPreview } from '../../../preload/artifacts'
+import type { ArtifactPreview } from '../../../shared/types/artifacts'
 
 const now = Date.now()
 const root = 'D:/pixel-web'

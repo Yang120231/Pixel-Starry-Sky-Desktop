@@ -10,7 +10,7 @@ import { useProjectContext } from './projectContext'
 import { useTaskLocation } from './taskNavigation'
 import { CARD, FIELD, Field, NoProject, ToolError, ToolsHeader, useOperation, useRemember } from './ToolsUi'
 import { TaskInbox } from './inbox/TaskInbox'
-import type { ManualTask, TaskState } from '../../../../preload/project-tools'
+import type { ManualTask, TaskState } from '../../../../shared/types/project-tools'
 const EMPTY: TaskState = { tasks: [], plans: [] }
 const blank = {
   title: '',

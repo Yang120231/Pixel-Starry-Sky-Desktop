@@ -1,10 +1,4 @@
-export interface WindowState {
-  maximized: boolean
-  focused: boolean
-  snapped: boolean
-}
-
-export type WindowSnapLayout = 'columns-2' | 'columns-3' | 'large-left' | 'large-right' | 'grid-4' | 'wide-center'
+import type { WindowState, WindowSnapLayout } from '../shared/types/window'
 
 /** 仅操作发起调用的应用窗口。 */
 export interface WindowBridge {

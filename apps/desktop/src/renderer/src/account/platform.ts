@@ -4,8 +4,8 @@ import { tr } from '../i18n/core'
 // - 全局默认：额度来源、平台的分组和模型、自有时的模型；新任务都用它。已开始的会话用自己记录里的选择（engine/hooks.ts）。
 import { useEffect, useSyncExternalStore } from 'react'
 import type { EngineId } from '@pixelsky/protocol'
-import type { AccountState } from '../../../preload/account'
-import type { PlatformGroupInfo } from '../../../preload/platform-catalog'
+import type { AccountState } from '../../../shared/types/account'
+import type { PlatformGroupInfo } from '../../../shared/types/platform-catalog'
 import { demoAccount } from '../mock/account'
 import { demoPlatformGroups } from '../mock/platform'
 

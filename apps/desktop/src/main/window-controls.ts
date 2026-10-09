@@ -1,6 +1,6 @@
 import { BrowserWindow, ipcMain, screen, type IpcMainInvokeEvent } from 'electron'
 import { trustedSender } from './account'
-import type { WindowSnapLayout, WindowState } from '../preload/window'
+import type { WindowSnapLayout, WindowState } from '../shared/types/window'
 
 interface Zone {
   x: number

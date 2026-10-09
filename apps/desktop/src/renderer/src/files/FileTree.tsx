@@ -10,7 +10,7 @@ import { isDemo, projects as demoProjects } from '@/mock/data'
 import { demoDirectory, DEMO_FILES } from '@/mock/files'
 import { useActiveWorkspace } from '@/editor/target'
 import { OPEN_FILES_EVENT, openFile, useFiles } from './store'
-import type { DirectoryListing, FileEntry, WorkspaceRef } from '../../../preload/workspace'
+import type { DirectoryListing, FileEntry, WorkspaceRef } from '../../../shared/types/workspace'
 const pathKey = (path: string): string => {
   const p = path.replaceAll('\\', '/').replace(/\/$/, '')
   return window.pixelsky?.platform === 'win32' ? p.toLowerCase() : p

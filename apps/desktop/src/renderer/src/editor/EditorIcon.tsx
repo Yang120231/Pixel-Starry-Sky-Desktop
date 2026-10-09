@@ -1,7 +1,7 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../i18n/core'
 import { CodeXml } from 'lucide-react'
-import type { EditorItem } from '../../../preload/workspace'
+import type { EditorItem } from '../../../shared/types/workspace'
 export function EditorIcon({ item }: { item: EditorItem }) {
   useI18n()
   return item.icon ? (

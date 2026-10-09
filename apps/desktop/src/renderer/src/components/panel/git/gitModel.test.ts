@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { setCurrentLocale } from '../../../i18n/core'
-import type { GitFileChange, GitStatus } from '../../../../../preload/project-tools'
+import type { GitFileChange, GitStatus } from '../../../../../shared/types/project-tools'
 import { ago, diffMode, gitSections, needsCommitAll, neighbour, splitPath } from './gitModel'
 
 afterEach(() => setCurrentLocale('zh-CN'))

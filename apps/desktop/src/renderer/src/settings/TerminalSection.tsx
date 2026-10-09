@@ -12,7 +12,7 @@ import {
 } from '@/terminal/store'
 import { SectionTitle, SettingRow } from './SettingRow'
 import { useSettings } from './SettingsProvider'
-import type { TerminalProfile } from '../../../preload/terminal'
+import type { TerminalProfile } from '../../../shared/types/terminal'
 import { isDemo } from '@/mock/data'
 import { translateMessage } from '@/i18n/core'
 import { useMachines } from '@/machines/store'

@@ -9,8 +9,8 @@ import type {
   TerminalProfileInput,
   TerminalRecord,
   TerminalState,
-} from '../../preload/terminal'
-import type { WorkspaceRef } from '../../preload/workspace'
+} from '../../shared/types/terminal'
+import type { WorkspaceRef } from '../../shared/types/workspace'
 import { detectProfiles, profileInput, terminalEnvironment, terminalTitle } from './profiles'
 
 export interface TerminalTarget {

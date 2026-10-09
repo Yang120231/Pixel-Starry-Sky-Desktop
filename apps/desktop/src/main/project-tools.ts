@@ -8,12 +8,12 @@ import { value, type ToolsHost } from './project-tools/common'
 import { workspaceRef } from './workspace-files'
 import { nativeText } from './ui-language'
 import { registerShutdown } from './shutdown'
-import type { CopyInput, ManualTask, ServiceInput } from '../preload/project-tools'
+import type { CopyInput, ManualTask, ServiceInput } from '../shared/types/project-tools'
 import { initProjectBrowser } from './project-tools/browser'
 import { machines } from './machines/service'
 import { machineOf } from './machines/identity'
 import { gitInfo } from './project-tools/common'
-import type { WorkspaceChoice } from '../preload/machines'
+import type { WorkspaceChoice } from '../shared/types/machines'
 export let resolveCopyPath: ((projectId: string, copyId: string) => Promise<string>) | undefined
 
 /** A child website cannot claim the app's file URL to invoke project APIs. */

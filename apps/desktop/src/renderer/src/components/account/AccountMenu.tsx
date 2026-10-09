@@ -7,7 +7,7 @@ import { Button, Popover, PopoverItem, Spinner, cn } from '@/components/ui'
 import { useAccount } from '@/account/useAccount'
 import { useSettings } from '@/settings/SettingsProvider'
 import { formatDate, formatUpdatedAt, formatWindow } from '@/account/format'
-import type { Quota } from '../../../../preload/account'
+import type { Quota } from '../../../../shared/types/account'
 import { LogoutConfirm } from './LogoutConfirm'
 import { QuotaBar } from './QuotaBar'
 

@@ -7,7 +7,7 @@ import { formatBillingSource, formatDate, formatUpdatedAt, formatWindow } from '
 import { QuotaBar } from '@/components/account/QuotaBar'
 import { Button, cn } from '@/components/ui'
 import { useSettings } from '../SettingsProvider'
-import type { AccountInfo, Quota } from '../../../../preload/account'
+import type { AccountInfo, Quota } from '../../../../shared/types/account'
 import type { AccountTab } from './AccountSection'
 
 interface AccountOverviewProps {

@@ -3,7 +3,7 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateText } from '../i18n/core'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Check, Copy, ExternalLink, FolderOpen, RefreshCw } from 'lucide-react'
-import type { AppInfo, AppLink } from '../../../preload/app-info'
+import type { AppInfo, AppLink } from '../../../shared/types/app-info'
 import { useAccount } from '@/account'
 import { Button, Logo, useComingSoon } from '@/components/ui'
 

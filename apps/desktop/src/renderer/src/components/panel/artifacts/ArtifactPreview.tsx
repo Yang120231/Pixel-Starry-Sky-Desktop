@@ -6,7 +6,7 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '@/i18n/core'
 import { demoArtifactPreview } from '@/mock/artifacts'
 import type { ArtifactDelivery } from '@pixelsky/protocol'
-import type { ArtifactPreview as Preview } from '../../../../../preload/artifacts'
+import type { ArtifactPreview as Preview } from '../../../../../shared/types/artifacts'
 import { formatBytes, splitArtifactPath } from './artifactsModel'
 
 /** 交付文件的预览（docs/ui/artifacts-panel.md §3）：Markdown / 文本 / 图片 / 无脚本网页；PDF 和其他类型用默认应用打开 */

@@ -31,7 +31,7 @@ import type {
   DeliveryType,
   FileChange,
 } from '@pixelsky/protocol'
-import type { WorkspaceRef } from '../../../../../preload/workspace'
+import type { WorkspaceRef } from '../../../../../shared/types/workspace'
 import { useProjectContext } from '../projectContext'
 import { NoProject, useRemember } from '../ToolsUi'
 import { EmptyState, PanelCard } from '../PanelSurface'

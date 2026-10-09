@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ExtensionEntry, ExtensionKind, ExtensionScope, McpConfig } from '@pixelsky/protocol'
 import { Button } from '@/components/ui'
-import type { WorkspaceRef } from '../../../../preload/workspace'
+import type { WorkspaceRef } from '../../../../shared/types/workspace'
 import { usePluginText } from './text'
 import { tr } from '@/i18n/core'
 export type FormMode = 'save' | 'local' | 'git' | 'json'

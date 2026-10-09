@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { app, ipcMain } from 'electron'
 import type { SessionRecord } from '@pixelsky/protocol'
 import { CLAUDE_COMPACT_MARKER, rewriteCompaction } from '@pixelsky/engine'
-import type { PlatformGroupInfo } from '../preload/platform-catalog'
+import type { PlatformGroupInfo } from '../shared/types/platform-catalog'
 import { platformFetch, signedInEmail, trustedSender } from './account'
 
 async function jsonRequest(path: string, method = 'GET'): Promise<unknown> {

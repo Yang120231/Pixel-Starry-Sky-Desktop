@@ -20,8 +20,8 @@ import { useComposerController } from '@/engine'
 import { PreviewViewport } from './PreviewViewport'
 import { useProjectContext } from './projectContext'
 import { FIELD, NoProject, ToolError, useOperation } from './ToolsUi'
-import type { BrowserState } from '../../../../preload/project-browser'
-import type { WorkspaceRef } from '../../../../preload/workspace'
+import type { BrowserState } from '../../../../shared/types/project-browser'
+import type { WorkspaceRef } from '../../../../shared/types/workspace'
 
 export function BrowserTab({ requested }: { requested?: { ref: WorkspaceRef; url: string; seq: number } | null }) {
   const ctx = useProjectContext()

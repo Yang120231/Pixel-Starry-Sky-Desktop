@@ -3,7 +3,7 @@ import { usePaneState } from '@/panes/store'
 import { focusedTab, isNewTab, parseFileTab } from '@/panes/tree'
 import { useFiles } from '@/files/store'
 import { isDemo, projects } from '@/mock/data'
-import type { WorkspaceRef } from '../../../preload/workspace'
+import type { WorkspaceRef } from '../../../shared/types/workspace'
 import { draftWorkspace } from '@/machines/drafts'
 
 export function useActiveWorkspace(): { ref: WorkspaceRef | null; name: string; path: string; key: string } {

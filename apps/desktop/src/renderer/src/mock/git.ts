@@ -1,5 +1,5 @@
 // Git 面板的演示数据（docs/ui/git-panel.md），只在 `pnpm dev:demo` 显示
-import type { GitBranch, GitDiff, GitFileChange, GitStatus } from '../../../preload/project-tools'
+import type { GitBranch, GitDiff, GitFileChange, GitStatus } from '../../../shared/types/project-tools'
 
 const file = (path: string, code: GitFileChange['code'], origPath: string | null = null): GitFileChange => ({
   path,

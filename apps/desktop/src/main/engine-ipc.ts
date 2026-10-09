@@ -18,14 +18,14 @@ import type {
   UsageFilter,
   UsageRangeId,
 } from '@pixelsky/protocol'
-import type { SessionPatch } from '../preload/engine'
+import type { SessionPatch } from '../shared/types/engine'
 import { initPlatform, validateQueuedInput } from './platform'
 import { initExtensions, prepareExtensions, setExtensionProjects } from './extensions-ipc'
 import { initTerminalIpc } from './terminal/ipc'
 import { registerShutdown } from './shutdown'
 import { samePath } from './project-tools/common'
 import type { TerminalTarget } from './terminal/manager'
-import type { WorkspaceRef } from '../preload/workspace.d.ts'
+import type { WorkspaceRef } from '../shared/types/workspace'
 import { machines, initMachines } from './machines/service'
 import { machineOf } from './machines/identity'
 import { resolveCopyPath } from './project-tools'
@@ -82,8 +82,8 @@ export const projectToolsHost: import('./project-tools/common').ToolsHost = {
 
 /** 桌面文件与编辑器只读取已有的目标，不启动或重建会话引擎。 */
 export function resolveWorkspace(
-  ref: import('../preload/workspace').WorkspaceRef,
-): import('../preload/workspace').WorkspaceTarget {
+  ref: import('../shared/types/workspace').WorkspaceRef,
+): import('../shared/types/workspace').WorkspaceTarget {
   if (machineOf(ref.projectId ?? ref.sessionId) !== 'local') {
     const target = machines?.target(ref)
     if (target) return target

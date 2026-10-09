@@ -13,7 +13,7 @@
     "capture": "electron-vite build && node scripts/capture.mjs",
     "capture:demo": "electron-vite build && node scripts/capture.mjs --demo",
     "dist": "pnpm build && electron-builder --win portable",
-    "test": "vitest run src/renderer/src src/main --root ."
+    "test": "vitest run src/renderer/src src/main src/shared --root ."
   },
   "devDependencies": {
     "@codemirror/autocomplete": "^6.20.3",

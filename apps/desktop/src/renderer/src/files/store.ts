@@ -1,7 +1,7 @@
 import { machineOf } from '@/machines/store'
 import { tr } from '../i18n/core'
 import { useSyncExternalStore } from 'react'
-import type { FileDocument, WorkspaceRef } from '../../../preload/workspace'
+import type { FileDocument, WorkspaceRef } from '../../../shared/types/workspace'
 import { isDemo, projects } from '@/mock/data'
 import { demoDocument } from '@/mock/files'
 import { paneActions } from '@/panes/store'

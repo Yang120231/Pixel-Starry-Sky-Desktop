@@ -1,14 +1,17 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { HostEvent } from '@pixelsky/protocol'
-import type { AccountBridge, AccountState } from './account'
+import type { AccountState } from '../shared/types/account'
+import type { AccountBridge } from './account'
 import type { AppInfoBridge } from './app-info'
 import type { EngineBridge } from './engine'
 import type { FilesBridge, EditorBridge } from './workspace'
-import type { WindowBridge, WindowState } from './window'
+import type { WindowState } from '../shared/types/window'
+import type { WindowBridge } from './window'
 import type { ExtensionsBridge } from './extensions'
 import type { TerminalBridge } from './terminal'
 import type { ProjectToolsBridge } from './project-tools'
-import type { NotificationsBridge, NotificationClick } from './notifications'
+import type { NotificationClick } from '../shared/types/notifications'
+import type { NotificationsBridge } from './notifications'
 import type { ArtifactsBridge } from './artifacts'
 
 // 启动配置由主进程同步提供（沙箱里的 preload 拿不到命令行参数）
@@ -196,7 +199,10 @@ const projectBrowser: import('./project-browser').BrowserBridge = {
   annotate: (ref, id, text) => call('projectBrowser:annotate', ref, id, text),
   removeAnnotation: (ref, id, annotationId) => call('projectBrowser:removeAnnotation', ref, id, annotationId),
   onChange: cb => {
-    const listener = (_e: Electron.IpcRendererEvent, state: import('./project-browser').BrowserState): void => cb(state)
+    const listener = (
+      _e: Electron.IpcRendererEvent,
+      state: import('../shared/types/project-browser').BrowserState,
+    ): void => cb(state)
     ipcRenderer.on('projectBrowser:changed', listener)
     return () => ipcRenderer.removeListener('projectBrowser:changed', listener)
   },
@@ -260,7 +266,8 @@ contextBridge.exposeInMainWorld('pixelsky', {
     workspaces: id => call('machines:workspaces', id),
     openWorkspace: choice => call('machines:openWorkspace', choice),
     onChange: callback => {
-      const listener = (_e: Electron.IpcRendererEvent, state: import('./machines').MachineState) => callback(state)
+      const listener = (_e: Electron.IpcRendererEvent, state: import('../shared/types/machines').MachineState) =>
+        callback(state)
       ipcRenderer.on('machines:changed', listener)
       return () => ipcRenderer.removeListener('machines:changed', listener)
     },

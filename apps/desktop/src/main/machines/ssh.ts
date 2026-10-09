@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { connect as connectTcp, createServer, type Server } from 'node:net'
 import { RpcPeer, type RpcHandler } from './rpc'
-import type { MachineInput } from '../../preload/machines'
+import type { MachineInput } from '../../shared/types/machines'
 
 export const quoteSh = (value: string): string => "'" + value.replaceAll("'", "'\\''") + "'"
 export interface RemoteHello {

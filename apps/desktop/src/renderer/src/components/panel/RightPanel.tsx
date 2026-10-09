@@ -18,7 +18,7 @@ import { terminalState } from '@/terminal/store'
 import { workspaceTerminals } from '@/terminal/workspace'
 import { paneActions } from '@/panes/store'
 import { isFileTab, parseFileTab } from '@/panes/tree'
-import type { WorkspaceRef } from '../../../../preload/workspace'
+import type { WorkspaceRef } from '../../../../shared/types/workspace'
 import { WorkspaceTabs } from './WorkspaceTabs'
 import { TOOL_IDS } from './workspaceState'
 import {

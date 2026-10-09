@@ -9,7 +9,7 @@ import { OPEN_SESSION_EVENT } from '@/engine/openRequests'
 import { getFiles, dirtyFile, showFiles } from '@/files/store'
 import { useProjectContext } from './projectContext'
 import { CARD, FIELD, Field, NoProject, ToolError, ToolsHeader, useOperation } from './ToolsUi'
-import type { CopyInput, CopyPreview, ProjectCopy } from '../../../../preload/project-tools'
+import type { CopyInput, CopyPreview, ProjectCopy } from '../../../../shared/types/project-tools'
 const blank: CopyInput = { name: '', branch: '', base: 'HEAD', existingBranch: false }
 export function CopiesPanel() {
   const ctx = useProjectContext()

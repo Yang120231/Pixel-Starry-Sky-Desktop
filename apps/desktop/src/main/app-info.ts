@@ -1,7 +1,7 @@
 // 「关于」页的数据：版本、运行环境、数据目录等。规格见 docs/ui/settings.md §5
 import { release } from 'node:os'
 import { app, ipcMain, shell } from 'electron'
-import type { AppInfo, AppLink } from '../preload/app-info'
+import type { AppInfo, AppLink } from '../shared/types/app-info'
 import { baseUrl, trustedSender } from './account'
 
 const REPO_URL = 'https://github.com/xiaoheoxo/Pixel-Starry-Sky-Desktop'

@@ -1,5 +1,5 @@
 import { useI18n } from '@/i18n/I18nProvider'
-import type { WorkspaceRef } from '../../../preload/workspace'
+import type { WorkspaceRef } from '../../../shared/types/workspace'
 import { FileTree } from './FileTree'
 
 /** 文件内容在工作区标签中编辑；右侧面板保留浏览与筛选。 */

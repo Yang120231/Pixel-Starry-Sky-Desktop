@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync 
 import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain, safeStorage, shell, type IpcMainInvokeEvent } from 'electron'
 import { nativeText, windowLocale } from './ui-language'
-import type { AccountInfo, AccountPlan, AccountState, Quota } from '../preload/account'
+import type { AccountInfo, AccountPlan, AccountState, Quota } from '../shared/types/account'
 
 // ---------------------------------------------------------------------------
 // 常量

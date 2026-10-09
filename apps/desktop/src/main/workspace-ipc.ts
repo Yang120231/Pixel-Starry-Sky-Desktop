@@ -2,7 +2,7 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain, shell, type IpcMainInvo
 import { Editors } from './editors'
 import { trustedSender } from './account'
 import { WorkspaceFiles, workspacePath, workspaceRef, type TargetResolver } from './workspace-files'
-import type { EditorKind } from '../preload/workspace'
+import type { EditorKind } from '../shared/types/workspace'
 import { nativeText } from './ui-language'
 import { machines } from './machines/service'
 

@@ -3,8 +3,8 @@ import { realpath, mkdir, readFile, writeFile, rename } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep, dirname } from 'node:path'
 import { promisify } from 'node:util'
 import { randomUUID } from 'node:crypto'
-import type { WorkspaceRef } from '../../preload/workspace'
-import type { AiPlan } from '../../preload/project-tools'
+import type { WorkspaceRef } from '../../shared/types/workspace'
+import type { AiPlan } from '../../shared/types/project-tools'
 import type { SessionRecord } from '@pixelsky/protocol'
 export interface ToolsTarget {
   projectId: string

@@ -7,8 +7,8 @@ import { tr } from '@/i18n/core'
 import { demoToolEnvironment } from '@/mock/projectTools'
 import { useProjectContext } from './projectContext'
 import { CARD, FIELD, Field, NoProject, ToolError, ToolsHeader, useOperation } from './ToolsUi'
-import type { EnvironmentState, ServiceDefinition, ServiceInput } from '../../../../preload/project-tools'
-import type { WorkspaceRef } from '../../../../preload/workspace'
+import type { EnvironmentState, ServiceDefinition, ServiceInput } from '../../../../shared/types/project-tools'
+import type { WorkspaceRef } from '../../../../shared/types/workspace'
 export const OPEN_BROWSER = 'pixelsky:open-browser'
 const blank: ServiceInput = {
   name: '',

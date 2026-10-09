@@ -7,7 +7,7 @@ import { Button, Segmented } from '@/components/ui'
 import { GroupTitle, SectionTitle, SettingRow } from '../SettingRow'
 import { refreshEditors, setEditors, useEditors } from '@/editor/store'
 import { isDemo } from '@/mock/data'
-import type { EditorKind } from '../../../../preload/workspace'
+import type { EditorKind } from '../../../../shared/types/workspace'
 import { EditorIcon, editorLabel, editorSource } from '@/editor/EditorIcon'
 
 export function EditorSection() {

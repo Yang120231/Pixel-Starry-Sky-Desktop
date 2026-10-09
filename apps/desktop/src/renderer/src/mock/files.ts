@@ -1,4 +1,4 @@
-import type { DirectoryListing, FileDocument, EditorState } from '../../../preload/workspace'
+import type { DirectoryListing, FileDocument, EditorState } from '../../../shared/types/workspace'
 
 /** 明确标为演示的文件，仅 --demo 使用，不读写磁盘。 */
 export const DEMO_FILES: Record<string, string> = {

@@ -6,7 +6,7 @@ import { mkdtemp, writeFile, rm, mkdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { RpcPeer } from './rpc'
 import { SshConnection, FingerprintRequired, quoteSh } from './ssh'
-import type { MachineInput } from '../../preload/machines'
+import type { MachineInput } from '../../shared/types/machines'
 
 const cleanup: Array<() => void | Promise<void>> = []
 afterEach(async () => {

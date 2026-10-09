@@ -20,7 +20,7 @@ import { editorTheme } from '@/editor/code/theme'
 import { mergeTheme } from '@/editor/code/mergeTheme'
 import { loadLanguage } from '@/editor/code/languages'
 import { useRemember } from '../ToolsUi'
-import type { GitArea, GitDiff, GitFileChange } from '../../../../../preload/project-tools'
+import type { GitArea, GitDiff, GitFileChange } from '../../../../../shared/types/project-tools'
 import { diffMode, SPLIT_MIN_WIDTH, splitPath } from './gitModel'
 
 const COLLAPSE = { margin: 3, minSize: 4 }

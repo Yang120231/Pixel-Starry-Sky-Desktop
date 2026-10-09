@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
-import type { TerminalEvent, TerminalRecord, TerminalState, TerminalProfileInput } from '../../../preload/terminal'
-import type { WorkspaceRef } from '../../../preload/workspace'
+import type { TerminalEvent, TerminalRecord, TerminalState, TerminalProfileInput } from '../../../shared/types/terminal'
+import type { WorkspaceRef } from '../../../shared/types/workspace'
 import { isDemo, projects } from '@/mock/data'
 import { demoTerminalProfiles, demoTerminalOutput } from '@/mock/terminal'
 import { translateMessage, tr } from '@/i18n/core'

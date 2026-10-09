@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import type { MachineState, WorkspaceChoice } from '../../../preload/machines'
+import type { MachineState, WorkspaceChoice } from '../../../shared/types/machines'
 import { getEngineState, setCurrentProject, refreshMachineEngine, invalidateRemoteSnapshots } from '@/engine/store'
 import { paneActions } from '@/panes/store'
 import { refreshTerminals } from '@/terminal/store'

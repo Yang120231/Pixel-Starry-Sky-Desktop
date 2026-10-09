@@ -2,7 +2,7 @@ import { spawn, execFile } from 'node:child_process'
 import { readFile, mkdir, writeFile, rename, stat } from 'node:fs/promises'
 import { delimiter, join, resolve } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
-import type { EditorItem, EditorKind, EditorState, WorkspaceRef } from '../preload/workspace'
+import type { EditorItem, EditorKind, EditorState, WorkspaceRef } from '../shared/types/workspace'
 import { workspacePath, type TargetResolver } from './workspace-files'
 
 export const EDITORS = [

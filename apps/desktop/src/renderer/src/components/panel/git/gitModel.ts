@@ -1,5 +1,5 @@
 // Git 面板的纯函数（docs/ui/git-panel.md）
-import type { GitArea, GitFailureKind, GitFileChange, GitStatus } from '../../../../../preload/project-tools'
+import type { GitArea, GitFailureKind, GitFileChange, GitStatus } from '../../../../../shared/types/project-tools'
 import { tr, type TranslationKey } from '../../../i18n/core'
 
 export interface GitSection {
