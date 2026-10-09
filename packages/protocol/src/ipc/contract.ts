@@ -18,7 +18,8 @@
  * - `special`：`Machines.invoke` 对选中远端机器时的特殊处理（`files:copyPath`、`files:target`、`engine:usageExport`）。
  * - `remote`：远端辅助进程方法表里的方法名；只有确有远端实现的通道才写（可能与通道名不同）。
  * - `trust`：调用方校验的最低档位。`none` 不校验；`sender` 只验来源页面是应用自己的页面；
- *   `frame` 再验是顶层主框架；`window` 再验调用窗口存在（并与 webContents 一致）。
+ *   `frame` 再验是顶层主框架；`window` 再验调用窗口存在，默认还要求与 webContents 一致——
+ *   终端与 `window:*` 在注册点用 `looseOwner` 放宽为只要窗口存在，`window:*` 另用 `noWindow` 抛「窗口已经关闭」。
  */
 export type IpcKind = 'invoke' | 'send' | 'sendSync' | 'push'
 export type IpcRoute = 'local' | 'selected' | 'resource' | 'aggregate' | 'hostOnly' | 'self' | 'push'
@@ -534,6 +535,7 @@ export const IPC_CONTRACT = {
     remote: 'projectTools:updateTask',
     trust: 'window',
   },
+  // ack 在 terminal/ipc.ts 里自行按终端所在机器分流，所以是 self；focused 只影响本机窗口，是 local
   'terminal:ack': { kind: 'send', route: 'self', trust: 'window' },
   'terminal:chooseProgram': { kind: 'invoke', route: 'self', trust: 'window' },
   'terminal:clipboardRead': { kind: 'invoke', route: 'hostOnly', trust: 'window' },
