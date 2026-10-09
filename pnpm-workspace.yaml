@@ -1,0 +1,13 @@
+packages:
+  - apps/*
+  - packages/*
+
+allowBuilds:
+  electron: true
+  esbuild: true
+  node-pty: true
+  # electron-builder 的可选依赖，只用于 Squirrel 安装包，我们不用
+  electron-winstaller: false
+  # SSH uses the pure JavaScript implementation; optional native accelerators are not required.
+  cpu-features: false
+  ssh2: false

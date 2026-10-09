@@ -1,0 +1,15 @@
+{
+  "name": "pixel-starry-sky",
+  "private": true,
+  "packageManager": "pnpm@11.5.1",
+  "scripts": {
+    "dev": "pnpm --filter @pixelsky/desktop dev",
+    "dev:demo": "pnpm --filter @pixelsky/desktop dev:demo",
+    "build": "pnpm --filter @pixelsky/desktop build",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "capture": "pnpm --filter @pixelsky/desktop capture",
+    "capture:demo": "pnpm --filter @pixelsky/desktop capture:demo",
+    "dist": "pnpm --filter @pixelsky/desktop dist",
+    "test": "pnpm -r --if-present test"
+  }
+}

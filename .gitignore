@@ -15,3 +15,13 @@ Thumbs.db
 *.log
 .env
 .env.*
+
+# 截图只保留在本机，不入库（D062）
+docs/screenshots/
+
+# 本机工具设置
+.claude/settings.local.json
+
+# 各包误放的临时目录（应放根目录 scratch/）
+packages/*/scratch/
+apps/*/scratch/
