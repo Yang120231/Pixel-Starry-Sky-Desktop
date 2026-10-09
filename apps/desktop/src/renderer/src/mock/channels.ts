@@ -1,0 +1,57 @@
+// 协作频道的演示数据（docs/ui/channels.md §9.1），只在 `pnpm dev:demo` 显示。
+// 时间相对本地 0 点推算，日期分隔始终是「昨天 / 今天」。
+import type { Channel, ChannelMember, ChannelMessage } from './types'
+
+const midnight = new Date()
+midnight.setHours(0, 0, 0, 0)
+const TODAY = midnight.getTime()
+const YESTERDAY = new Date(midnight.getFullYear(), midnight.getMonth(), midnight.getDate() - 1).getTime()
+const at = (day: number, clock: string, seconds = 0): number => {
+  const [h, m] = clock.split(':').map(Number)
+  return day + (h * 60 + m) * 60_000 + seconds * 1000
+}
+
+export const demoChannelMembers: ChannelMember[] = [
+  { id: 'm-linxia', kind: 'human', name: '林夏', you: true, role: 'owner' },
+  { id: 'm-zhouning', kind: 'human', name: '周宁', role: 'member' },
+  { id: 'a-frontend', kind: 'agent', name: '前端助手', engine: 'claude', model: 'claude-opus-5-5', machineId: 'local', machine: '这台电脑', project: 'pixel-web', status: 'running', task: '设置页迁移到新的表单组件', sessionId: 's-settings-form' },
+  { id: 'a-reviewer', kind: 'agent', name: '审查员', engine: 'codex', model: 'gpt-5.5', machineId: 'local', machine: '这台电脑', project: 'pixel-web', status: 'idle', task: null, sessionId: 's-redesign' },
+  { id: 'a-builder', kind: 'agent', name: '构建助手', engine: 'codex', model: 'gpt-5.5', machineId: 'ssh-demo', machine: 'build-01（SSH）', project: 'pixel-desktop', status: 'waiting', task: '重新打包 0.1.0 便携版', sessionId: null },
+  { id: 'a-docs', kind: 'agent', name: '文档助手', engine: 'claude', model: 'claude-sonnet-5-5', machineId: 'local', machine: '这台电脑', project: 'docs-site', status: 'idle', task: null, sessionId: null },
+]
+
+export const demoChannels: Channel[] = [
+  { id: 'c-web', name: '网页版改版', topic: '把网页版工作台改成 Codex 式布局，并迁移设置页表单', project: 'pixel-web', scope: 'local', memberIds: ['m-linxia', 'a-frontend', 'a-reviewer'], unread: 2, mentioned: true, createdAt: YESTERDAY - 3 * 86_400_000 },
+  { id: 'c-release', name: '桌面发布', topic: '0.1.0 便携版发布前检查', project: 'pixel-desktop', scope: 'local', memberIds: ['m-linxia', 'a-builder', 'a-reviewer'], unread: 1, createdAt: YESTERDAY - 2 * 86_400_000 },
+  { id: 'c-changelog', name: '更新日志', topic: '整理 10 月更新日志', project: 'docs-site', scope: 'team', memberIds: ['m-linxia', 'm-zhouning', 'a-docs'], unread: 0, createdAt: YESTERDAY - 86_400_000 },
+  { id: 'c-notes', name: '调研笔记', topic: null, project: 'research-notes', scope: 'local', memberIds: ['m-linxia', 'a-docs'], unread: 0, createdAt: YESTERDAY },
+]
+
+export const demoChannelMessages: Record<string, ChannelMessage[]> = {
+  'c-web': [
+    { kind: 'event', id: 'web-e1', channelId: 'c-web', at: at(YESTERDAY, '09:55'), event: 'added', actorId: 'm-linxia', targetId: 'a-reviewer' },
+    { kind: 'message', id: 'web-m1', channelId: 'c-web', at: at(YESTERDAY, '10:02'), authorId: 'm-linxia', format: 'plain', text: '@审查员 帮我看一下侧栏改版的整体结构，重点是会话列表和最近任务的分组。', mentions: ['a-reviewer'] },
+    { kind: 'task', id: 'web-t1', channelId: 'c-web', at: at(YESTERDAY, '10:02', 20), authorId: 'm-linxia', assigneeId: 'a-reviewer', title: '审查侧栏改版结构', status: 'done', sessionId: 's-redesign', summary: '调整了 3 处分组顺序，补了键盘导航测试。', diff: { added: 42, removed: 10 } },
+    { kind: 'message', id: 'web-m2', channelId: 'c-web', at: at(YESTERDAY, '10:31'), authorId: 'a-reviewer', format: 'markdown', text: '看完了，整体结构没问题，改了几处：\n\n- 「最近任务」固定在账号行上方，不再跟着项目列表滚动\n- 会话行的状态点统一成 6px\n- 补了 `SidebarRow` 的方向键导航测试\n\n构建通过，没有新的告警。' },
+    { kind: 'message', id: 'web-m3', channelId: 'c-web', at: at(TODAY, '09:40'), authorId: 'm-linxia', format: 'plain', text: '@前端助手 把设置页迁到新的表单组件，先做「账号」和「外观」两页，校验提示和现有文案保持一致。', mentions: ['a-frontend'] },
+    { kind: 'task', id: 'web-t2', channelId: 'c-web', at: at(TODAY, '09:40', 20), authorId: 'm-linxia', assigneeId: 'a-frontend', title: '设置页迁移到新的表单组件', status: 'running', sessionId: 's-settings-form', summary: null, diff: null },
+    { kind: 'message', id: 'web-m4', channelId: 'c-web', at: at(TODAY, '09:52'), authorId: 'a-frontend', format: 'markdown', text: '「账号」页已经迁完，正在处理「外观」页的分段选择。字段校验沿用 `useField`，出错时在字段下方显示提示。' },
+    { kind: 'message', id: 'web-m5', channelId: 'c-web', at: at(TODAY, '10:05'), authorId: 'a-reviewer', format: 'plain', replyToId: 'web-m3', text: '@林夏 校验失败时的提示文案要和网页版统一吗？网页版现在用的是「请输入有效的…」。', mentions: ['m-linxia'] },
+  ],
+  'c-release': [
+    { kind: 'message', id: 'rel-m1', channelId: 'c-release', at: at(YESTERDAY, '16:20'), authorId: 'm-linxia', format: 'plain', text: '@构建助手 在 build-01 上打一个 0.1.0 便携版。', mentions: ['a-builder'] },
+    { kind: 'task', id: 'rel-t1', channelId: 'c-release', at: at(YESTERDAY, '16:20', 10), authorId: 'm-linxia', assigneeId: 'a-builder', title: '打包 0.1.0 便携版', status: 'failed', sessionId: null, summary: '签名证书已过期，打包在签名步骤中断。', diff: null },
+    { kind: 'message', id: 'rel-m2', channelId: 'c-release', at: at(TODAY, '11:02'), authorId: 'm-linxia', format: 'plain', text: '证书已经换好了，@构建助手 再打一次。', mentions: ['a-builder'] },
+    { kind: 'task', id: 'rel-t2', channelId: 'c-release', at: at(TODAY, '11:02', 10), authorId: 'm-linxia', assigneeId: 'a-builder', title: '重新打包 0.1.0 便携版', status: 'waiting', sessionId: null, summary: '上传前需要确认：会覆盖发布服务器上的同名文件。', diff: null },
+    { kind: 'message', id: 'rel-m3', channelId: 'c-release', at: at(TODAY, '11:14'), authorId: 'a-builder', format: 'markdown', text: '打包完成，上传前需要你确认：发布服务器上已经有同名的 `PixelSky-0.1.0-portable.exe`，继续会覆盖它。' },
+  ],
+  'c-changelog': [
+    { kind: 'event', id: 'log-e1', channelId: 'c-changelog', at: at(YESTERDAY, '13:50'), event: 'topic', actorId: 'm-linxia', value: '整理 10 月更新日志' },
+    { kind: 'event', id: 'log-e2', channelId: 'c-changelog', at: at(YESTERDAY, '14:00'), event: 'joined', actorId: 'm-zhouning' },
+    { kind: 'message', id: 'log-m1', channelId: 'c-changelog', at: at(YESTERDAY, '14:03'), authorId: 'm-zhouning', format: 'plain', text: '我把 10 月的 PR 列表整理好了，放在 changelog/2026-10.md，@文档助手 帮忙按模块归类一下。', mentions: ['a-docs'] },
+    { kind: 'task', id: 'log-t1', channelId: 'c-changelog', at: at(YESTERDAY, '14:03', 20), authorId: 'm-zhouning', assigneeId: 'a-docs', title: '整理 10 月更新日志', status: 'done', sessionId: null, summary: '按工作台、云主机、协作频道、设置四个模块归类，共 23 条。', diff: { added: 86, removed: 12 } },
+    { kind: 'message', id: 'log-m2', channelId: 'c-changelog', at: at(YESTERDAY, '14:20'), authorId: 'a-docs', format: 'markdown', text: '整理好了，按模块分成 4 组：\n\n| 模块 | 条目 |\n|---|---|\n| 工作台 | 9 |\n| 云主机 | 6 |\n| 协作频道 | 3 |\n| 设置 | 5 |\n\n有两条 PR 描述不清楚，我在文件里用 `TODO` 标出来了。' },
+    { kind: 'message', id: 'log-m3', channelId: 'c-changelog', at: at(YESTERDAY, '15:01'), authorId: 'm-linxia', format: 'plain', text: '谢谢，我今天看一下那两条 TODO。' },
+  ],
+  'c-notes': [],
+}

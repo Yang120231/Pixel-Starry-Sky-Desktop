@@ -1,0 +1,111 @@
+import { useI18n } from '@/i18n/I18nProvider'
+import { tr } from '../i18n/core'
+import { CornerUpLeft } from 'lucide-react'
+import { Avatar, cn, CopyButton, EngineIcon, IconButton } from '@/components/ui'
+import { Markdown } from '@/components/session/live/Markdown'
+import type { ChannelMember, ChannelTextMessage } from '@/mock/types'
+import { excerpt, splitMentions } from './model'
+import { formatClock } from './format'
+
+/** 成员头像：真人是圆形首字头像，AI 成员是圆角方块里的引擎图标 */
+export function MemberAvatar({ member, size = 28, className }: { member: ChannelMember | undefined; size?: number; className?: string }) {
+  useI18n()
+  if (member?.kind === 'agent') {
+    return (
+      <span className={cn('inline-flex shrink-0 items-center justify-center rounded-md border border-line-subtle bg-subtle', className)} style={{ width: size, height: size }}>
+        <EngineIcon engine={member.engine} size={Math.round(size * 0.55)} />
+      </span>
+    )
+  }
+  return <Avatar name={member?.name ?? '?'} size={size} className={className} />
+}
+
+/** 模型 · 机器（AI 成员）；真人没有 */
+export function agentMeta(member: ChannelMember | undefined): string | null {
+  if (member?.kind !== 'agent') return null
+  return [member.model, member.machine].filter(Boolean).join(' · ')
+}
+
+/** 作者行：名字、（你）、AI 标签、模型 · 机器、时间 */
+function AuthorLine({ member, at }: { member: ChannelMember | undefined; at: number }) {
+  useI18n()
+  const meta = agentMeta(member)
+  return (
+    <div className="flex min-w-0 items-baseline gap-1.5">
+      <span className="shrink-0 truncate text-list font-medium text-fg">{member?.name ?? '?'}</span>
+      {member?.kind === 'human' && member.you && <span className="shrink-0 text-meta text-fg-muted">{tr('channels.youSuffix')}</span>}
+      {member?.kind === 'agent' && <span className="shrink-0 self-center rounded bg-engine-chip px-1 text-[10px] leading-4 font-semibold text-engine-chip-fg">{tr('channels.ai')}</span>}
+      {meta && <span title={meta} className="min-w-0 truncate text-meta text-fg-faint">{meta}</span>}
+      <time dateTime={new Date(at).toISOString()} className="shrink-0 text-meta text-fg-faint tabular-nums">{formatClock(at)}</time>
+    </div>
+  )
+}
+
+/** 真人消息：纯文本，@成员 高亮 */
+function MentionText({ text, members }: { text: string; members: readonly ChannelMember[] }) {
+  return (
+    <p className="text-prose break-words whitespace-pre-wrap text-fg-body">
+      {splitMentions(text, members).map((segment, i) => segment.memberId
+        ? <span key={i} className="rounded bg-accent-soft px-0.5 text-accent-fg">{segment.text}</span>
+        : <span key={i}>{segment.text}</span>)}
+    </p>
+  )
+}
+
+/** 引用块：被引用人 + 原文摘要，点击跳到原消息 */
+function QuoteBlock({ quoted, author, onJump }: { quoted: ChannelTextMessage | undefined; author: ChannelMember | undefined; onJump: (id: string) => void }) {
+  useI18n()
+  if (!quoted) return <div className="mb-1 border-l-2 border-line-strong pl-2 text-meta text-fg-faint italic">{tr('channels.quoteMissing')}</div>
+  return (
+    <button type="button" title={tr('channels.jumpToQuote')} onClick={() => onJump(quoted.id)}
+      className="mb-1 flex w-full min-w-0 items-baseline gap-1.5 border-l-2 border-line-strong pl-2 text-left text-meta text-fg-muted hover:border-accent hover:text-fg">
+      <span className="shrink-0 font-medium">{author?.name ?? '?'}</span>
+      <span className="min-w-0 truncate">{excerpt(quoted.text)}</span>
+    </button>
+  )
+}
+
+export interface MessageGroupProps {
+  items: ChannelTextMessage[]
+  /** 全部成员（作者可能已经离开频道） */
+  membersById: ReadonlyMap<string, ChannelMember>
+  /** 这个频道的成员，用来高亮 @ */
+  channelMembers: readonly ChannelMember[]
+  messagesById: ReadonlyMap<string, ChannelTextMessage>
+  highlight: string | null
+  onReply: (id: string) => void
+  onJump: (id: string) => void
+}
+
+/** 同一作者的连续消息：第一条带头像和作者行，后面的悬停时在头像位置显示时间 */
+export function MessageGroup({ items, membersById, channelMembers, messagesById, highlight, onReply, onJump }: MessageGroupProps) {
+  useI18n()
+  const author = membersById.get(items[0].authorId)
+  return (
+    <div className="conversation-message mt-3 flex flex-col">
+      {items.map((m, i) => {
+        const quoted = m.replyToId ? messagesById.get(m.replyToId) : undefined
+        return (
+          <div key={m.id} data-channel-message={m.id}
+            className={cn('group/message relative -mx-2 flex gap-3 rounded-md px-2 py-0.5 hover:bg-hover focus-within:bg-hover', highlight === m.id && 'search-hit')}>
+            <div className="w-7 shrink-0 pt-0.5">
+              {i === 0
+                ? <MemberAvatar member={author} />
+                : <time dateTime={new Date(m.at).toISOString()} className="invisible block pt-1 text-right text-[10px] leading-4 text-fg-faint tabular-nums group-hover/message:visible">{formatClock(m.at)}</time>}
+            </div>
+            <div className="min-w-0 flex-1">
+              {i === 0 && <AuthorLine member={author} at={m.at} />}
+              {m.replyToId && <QuoteBlock quoted={quoted} author={quoted ? membersById.get(quoted.authorId) : undefined} onJump={onJump} />}
+              {m.format === 'markdown' ? <Markdown text={m.text} /> : <MentionText text={m.text} members={channelMembers} />}
+            </div>
+            <div role="toolbar" aria-label={tr('channels.messageActions')}
+              className="absolute -top-3 right-2 flex items-center gap-0.5 rounded-md border border-line-card bg-popover p-0.5 opacity-0 shadow-menu transition-opacity group-hover/message:opacity-100 group-focus-within/message:opacity-100">
+              <IconButton icon={CornerUpLeft} label={tr('channels.reply')} size={24} iconSize={13} onClick={() => onReply(m.id)} />
+              <CopyButton text={m.text} label={tr('channels.copy')} iconOnly />
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}

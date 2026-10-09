@@ -1,0 +1,138 @@
+/* 多对话窗格的动画（docs/ui/multi-pane.md §7）。
+   窗格用绝对定位、位置和大小按布局树换算成百分比；拆分、关闭、均分、放大都是改这四个值，
+   由 transition 平滑过渡。动画开关跟随 设置 → 外观 → 动画（<html data-motion>）。 */
+
+.pane-box {
+  transition-property: left, top, width, height, opacity;
+  transition-duration: var(--dur-expand);
+  transition-timing-function: var(--ease-out);
+}
+/* 拖动分隔线时跟手，不要过渡 */
+.pane-area[data-resizing] .pane-box,
+.pane-area[data-resizing] .pane-divider,
+.pane-area[data-resizing] .pane-focus-frame {
+  transition: none;
+}
+
+/* 标签拖动时预览跟随指针，避免选中文字；浮层不阻挡命中测试。 */
+.pane-area[data-tab-dragging] {
+  cursor: grabbing;
+  user-select: none;
+}
+.pane-area[data-tab-dragging] [role='tab'] {
+  cursor: grabbing;
+}
+
+.pane-divider {
+  transition-property: left, top, width, height, opacity;
+  transition-duration: var(--dur-expand);
+  transition-timing-function: var(--ease-out);
+}
+
+/* 分隔线（8px 宽的拖动热区）里的那条线：窗格之间不留缝，只画这一条。
+   工作区的布局线（--border-layout）是透明的，这里用 --border-strong；线从分界处往右 / 往下占 1px，
+   和当前窗格框多出的那 1px 重合。悬停或正在拖动时加粗成 2px 强调色。 */
+.pane-divider-line {
+  position: absolute;
+  background: var(--border-strong);
+  transition-property: background-color, left, top, width, height;
+  transition-duration: var(--dur-fast);
+  transition-timing-function: var(--ease-out);
+}
+.pane-divider[aria-orientation='vertical'] .pane-divider-line {
+  inset: 0 auto 0 4px;
+  width: 1px;
+}
+.pane-divider[aria-orientation='horizontal'] .pane-divider-line {
+  inset: 4px 0 auto 0;
+  height: 1px;
+}
+.pane-divider:is(:hover, [data-active]) .pane-divider-line {
+  background: var(--accent);
+}
+.pane-divider[aria-orientation='vertical']:is(:hover, [data-active]) .pane-divider-line {
+  left: 3px;
+  width: 2px;
+}
+.pane-divider[aria-orientation='horizontal']:is(:hover, [data-active]) .pane-divider-line {
+  top: 3px;
+  height: 2px;
+}
+
+/* 当前窗格的强调色框：换窗格、拆分、均分时跟着窗格一起移动 / 伸缩 */
+.pane-focus-frame {
+  transition-property: left, top, width, height;
+  transition-duration: var(--dur-expand);
+  transition-timing-function: var(--ease-out);
+}
+.pane-focus-frame[data-focus-jump] {
+  transition: none;
+}
+/* 外晕与内圈同时收回；内圈呈现 2px → 1px，避免改变框几何和分界单线。 */
+@keyframes pane-focus-flash {
+  from {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 24%, transparent), inset 0 0 0 1px var(--accent);
+    border-color: var(--accent);
+  }
+  to {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent), inset 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+  }
+}
+:root[data-pane-focus='flash'] .pane-focus-frame[data-flash] {
+  animation: pane-focus-flash var(--dur-pane-focus) var(--ease-out);
+}
+
+/* 窗格头：切换当前窗格时底色、透明度平滑变化 */
+.pane-head {
+  transition: background-color 160ms ease-out;
+}
+.pane-head-content {
+  transition: opacity 160ms ease-out;
+}
+
+/* 新标签：淡入并从窄撑开 */
+@keyframes pane-tab-in {
+  from {
+    opacity: 0;
+    transform: scaleX(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.pane-tab-in {
+  transform-origin: left center;
+  animation: pane-tab-in 180ms var(--ease-out);
+}
+
+/* 提示条从下面浮上来 */
+@keyframes pane-notice-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+.pane-notice {
+  animation: pane-notice-in 200ms var(--ease-out);
+}
+
+:root[data-motion='off'] :is(.pane-box, .pane-divider, .pane-focus-frame, .pane-head, .pane-head-content) {
+  transition: none;
+}
+:root[data-motion='off'] :is(.pane-tab-in, .pane-notice, .pane-focus-frame) {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-motion='system'] :is(.pane-box, .pane-divider, .pane-focus-frame, .pane-head, .pane-head-content) {
+    transition: none;
+  }
+  :root[data-motion='system'] :is(.pane-tab-in, .pane-notice, .pane-focus-frame) {
+    animation: none;
+  }
+}

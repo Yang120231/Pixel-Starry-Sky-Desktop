@@ -1,0 +1,25 @@
+# 打包配置（electron-builder）。用法：仓库根目录执行 pnpm dist，产物在 apps/desktop/release/
+appId: com.pixelsky.desktop
+productName: 像素星空
+# 下载 Electron 运行时用国内镜像（electron-builder 也认 ELECTRON_MIRROR 环境变量，可覆盖）
+electronDownload:
+  mirror: https://npmmirror.com/mirrors/electron/
+directories:
+  output: release
+  buildResources: build
+# 界面依赖已由 Vite 打进 out/，安装包里只需要构建产物
+files:
+  - out/**
+  - package.json
+asar: true
+# node-pty 使用其自带的 win32-x64 N-API 预编译文件；本机构建工具未安装 Spectre 缓解库，
+# 强制重编译会失败。Electron 44 已通过实际 PTY 输入 / resize / 退出验证。
+npmRebuild: false
+win:
+  target:
+    - target: portable
+      arch: x64
+  # 暂不签名（首次运行 SmartScreen 会提示“未知发布者”），但仍写入产品名、版本等文件信息；暂用 Electron 默认图标
+  signExecutable: false
+portable:
+  artifactName: PixelSky-${version}-portable.exe

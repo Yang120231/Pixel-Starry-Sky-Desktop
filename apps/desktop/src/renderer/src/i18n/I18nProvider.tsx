@@ -1,0 +1,43 @@
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import type { Locale } from './messages'
+import { tr, setCurrentLocale, translateText } from './core'
+
+const STORAGE_KEY = 'pixelsky.locale'
+interface I18nValue {
+  locale: Locale
+  setLocale: (locale: Locale) => void
+  t: typeof tr
+  text: (value: string) => string
+}
+const I18nContext = createContext<I18nValue | null>(null)
+
+function readLocale(): Locale {
+  try { return localStorage.getItem(STORAGE_KEY) === 'en-US' ? 'en-US' : 'zh-CN' } catch { return 'zh-CN' }
+}
+
+export function I18nProvider({ children }: { children: ReactNode }) {
+  const [locale, setLocaleState] = useState<Locale>(() => { const initial = readLocale(); setCurrentLocale(initial); return initial })
+  const setLocale = (next: Locale): void => { setCurrentLocale(next); setLocaleState(next); try { localStorage.setItem(STORAGE_KEY, next) } catch { /* 本次切换仍生效 */ } }
+  useEffect(() => {
+    const onStorage = (event: StorageEvent): void => { if (event.key === STORAGE_KEY || event.key === null) { const next = readLocale(); setCurrentLocale(next); setLocaleState(next) } }
+    window.addEventListener('storage', onStorage)
+    document.documentElement.dataset.locale = locale
+    document.documentElement.lang = locale
+    document.title = locale === 'en-US' ? 'Pixel Starry Sky' : '像素星空'
+    void window.pixelsky?.setLocale(locale).catch(console.error)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [locale])
+  const value = useMemo<I18nValue>(() => ({
+    locale,
+    setLocale,
+    t: tr,
+    text: translateText,
+  }), [locale])
+  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>
+}
+
+export function useI18n(): I18nValue {
+  const value = useContext(I18nContext)
+  if (!value) throw new Error('useI18n 必须在 I18nProvider 内使用')
+  return value
+}

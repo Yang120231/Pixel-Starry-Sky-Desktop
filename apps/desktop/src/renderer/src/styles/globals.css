@@ -1,0 +1,651 @@
+@import 'tailwindcss';
+@import './tokens.css';
+
+/* 搜索定位只强调条目，使用现有主题变量；移除 class 后恢复原背景。 */
+.search-hit {
+  border-radius: var(--radius-md);
+  background-color: var(--accent-soft);
+  box-shadow: 0 0 0 2px var(--accent-border);
+}
+
+/* 把设计变量映射成 Tailwind 类名：bg-app、text-fg-muted、border-line 等 */
+@theme inline {
+  --color-app: var(--bg-app);
+  --color-panel: var(--bg-panel);
+  --color-sidebar: var(--bg-sidebar);
+  --color-rail: var(--bg-rail);
+  --color-surface: var(--bg-surface);
+  --color-popover: var(--bg-popover);
+  --color-subtle: var(--bg-subtle);
+  --color-hover: var(--bg-hover);
+  --color-selected: var(--bg-selected);
+
+  --color-line: var(--border);
+  --color-line-subtle: var(--border-subtle);
+  --color-line-strong: var(--border-strong);
+  --color-line-layout: var(--border-layout);
+  --color-line-card: var(--border-card);
+  --color-line-composer: var(--border-composer);
+  --color-line-composer-focus: var(--border-composer-focus);
+  --color-composer-ring: var(--composer-focus-ring);
+
+  --color-fg: var(--text);
+  --color-fg-secondary: var(--text-secondary);
+  --color-fg-muted: var(--text-muted);
+  --color-fg-faint: var(--text-faint);
+  --color-fg-body: var(--text-body);
+
+  --color-accent: var(--accent);
+  --color-accent-on: var(--accent-on);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-fg: var(--accent-text);
+  --color-accent-line: var(--accent-border);
+  --color-online: var(--status-online);
+  --color-code-path: var(--code-path);
+  --color-code-inline: var(--code-inline-text);
+  --color-code-inline-bg: var(--code-inline-bg);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+  --color-notify: var(--notify);
+  --color-warn: var(--warn);
+
+  --color-primary: var(--btn-primary-bg);
+  --color-primary-fg: var(--btn-primary-text);
+  --color-disabled: var(--btn-disabled-bg);
+  --color-disabled-fg: var(--btn-disabled-text);
+  --color-engine-chip: var(--engine-chip-bg);
+  --color-engine-chip-fg: var(--engine-chip-text);
+  --color-engine-claude: var(--engine-claude);
+  --color-ultracode: var(--ultracode);
+  --color-avatar: var(--avatar-bg);
+  --color-avatar-fg: var(--avatar-text);
+  --color-scrim: var(--scrim);
+  --color-wall-tint: var(--wall-tint);
+  --color-chart-input: var(--chart-input);
+  --color-chart-cache: var(--chart-cache);
+  --color-chart-output: var(--chart-output);
+  --color-terminal: var(--terminal-bg);
+
+  --shadow-sm: var(--shadow-sm);
+  --shadow-float: var(--shadow-float);
+  --shadow-popover: var(--shadow-popover);
+  --shadow-composer: var(--shadow-composer);
+  --shadow-menu: var(--shadow-menu);
+
+  /* 用户在设置里选的字体排在最前面（--font-*-user，见 appearance/fonts.ts），后面是默认回退链 */
+  --font-sans: var(--font-sans-user,) 'Inter', 'Segoe UI Variable Text', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', system-ui,
+    sans-serif;
+  --font-mono: var(--font-mono-user,) 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+
+  /* 字号七级（docs/ui/design-refresh.md §4）：text-title / text-section / text-prose / text-ui / text-list / text-meta / text-label */
+  --text-title: calc(28px * var(--font-scale, 1));
+  --text-title--line-height: 1.2;
+  --text-title--letter-spacing: -0.02em;
+  --text-title--font-weight: 600;
+  --text-section: calc(16px * var(--font-scale, 1));
+  --text-section--line-height: 1.4;
+  --text-prose: calc(14px * var(--font-scale, 1));
+  --text-prose--line-height: 1.7;
+  --text-ui: calc(13.5px * var(--font-scale, 1));
+  --text-ui--line-height: 1.4;
+  --text-list: calc(13px * var(--font-scale, 1));
+  --text-list--line-height: 1.4;
+  --text-meta: calc(12px * var(--font-scale, 1));
+  --text-meta--line-height: 1.4;
+  --text-label: calc(11px * var(--font-scale, 1));
+  --text-label--line-height: 1.3;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+  --radius-2xl: 16px;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: var(--bg-app);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: calc(14px * var(--font-scale, 1));
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+  }
+  button {
+    cursor: default;
+  }
+  /* 输入框、对话内容允许选中文字 */
+  textarea,
+  input,
+  .selectable {
+    user-select: text;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--bg-selected);
+    border-radius: 9999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+/* 窗口拖动区域：顶部栏空白处可拖动，按钮等可交互元素不可拖动 */
+@utility drag {
+  -webkit-app-region: drag;
+}
+@utility no-drag {
+  -webkit-app-region: no-drag;
+}
+
+.terminal-panel { position: relative; }
+.terminal-panel-maximized { position: absolute; inset: 0; z-index: 30; height: auto !important; }
+.terminal-xterm { min-height: 0; width: 100%; }
+.terminal-xterm .xterm { height: 100%; padding: 4px 6px; }
+.terminal-xterm .xterm-viewport { background: var(--terminal-bg) !important; }
+.terminal-resize { position: absolute; left: 0; right: 0; top: -4px; height: 8px; z-index: 35; }
+.terminal-shell-select { width: 28px; min-width: 28px; padding: 0; justify-content: center; }
+.terminal-shell-select > span { display: none; }
+@utility titlebar-reserve {
+  padding-right: var(--titlebar-reserve);
+}
+
+/* 自绘窗口按钮：默认无独立底色，浅深主题与壁纸直接透出。 */
+.window-control {
+  -webkit-app-region: no-drag;
+  display: inline-flex;
+  width: var(--window-control-width);
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  background: transparent;
+  transition: background-color var(--dur-fast), color var(--dur-fast);
+}
+.window-controls[data-focused='false'] .window-control:not(:hover):not(:focus-visible) {
+  color: var(--text-muted);
+}
+.window-control:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+.window-control:focus-visible {
+  outline: 1px solid var(--accent-border);
+  outline-offset: -3px;
+}
+.window-control-close:hover {
+  color: var(--window-close-fg);
+  background: var(--window-close-bg);
+}
+.window-snap-popover {
+  position: absolute;
+  top: 46px;
+  right: 5px;
+  width: min(332px, calc(100vw - 10px));
+  padding: 10px;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-lg);
+  background: var(--bg-popover);
+  box-shadow: var(--shadow-menu);
+}
+.window-snap-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.window-snap-option {
+  min-width: 0;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  background: transparent;
+}
+.window-snap-option:hover,
+.window-snap-option:focus-visible {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.window-snap-preview {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+  gap: 2px;
+  height: 56px;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+}
+.window-snap-cell {
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+}
+.window-snap-cell:hover:not(:disabled),
+.window-snap-cell:focus-visible {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+}
+.window-snap-cell:disabled { opacity: .35; cursor: not-allowed; }
+.window-snap-cell { -webkit-app-region: no-drag; }
+.window-snap-label {
+  display: block;
+  overflow: hidden;
+  margin-top: 4px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  font-size: var(--text-meta);
+}
+/* 按下反馈：轻微缩小（按钮 0.97） */
+@utility press {
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    background-color var(--dur-base) var(--ease-out),
+    color var(--dur-base) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out);
+  &:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+}
+/* 弹出菜单出现：淡入并上移 3px */
+@utility pop-in {
+  animation: pop-in var(--dur-base) var(--ease-out);
+}
+/* 遮罩出现：淡入 */
+@utility fade-in {
+  animation: fade-in var(--dur-base) var(--ease-out);
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+/* 展开/收起调用详情行（docs/ui/settings.md、usage.md §9）：最大高度过渡 + 淡入 */
+@utility usage-expand {
+  max-height: 1200px;
+  opacity: 1;
+  transition:
+    max-height 220ms var(--ease-out),
+    opacity 160ms var(--ease-out);
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px) scale(0.985);
+  }
+}
+
+@layer base {
+  /* 键盘焦点：2px 强调色描边 */
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  textarea:focus-visible,
+  input:focus-visible {
+    outline: none;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+}
+
+/* 侧边栏、右侧面板收起 / 展开（components/ui/CollapsibleSlot.tsx）：外层宽度做动画，展开稍慢、收起稍快。
+   会话顶部栏右侧给系统窗口按钮的留白跟着同步过渡，按钮不会跳。
+   动画开关由设置里的「动画」决定（<html data-motion>，见 docs/ui/settings.md §3.1）。见 docs/ui/workbench.md §4.1 */
+.collapsible-slot {
+  transition: width var(--dur-collapse) var(--ease-out);
+}
+.collapsible-slot[data-open] {
+  transition-duration: var(--dur-expand);
+}
+.sidebar-history-content {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--dur-collapse) var(--ease-out);
+}
+.sidebar-history-content[data-expanded='true'] {
+  grid-template-rows: 1fr;
+  transition-duration: var(--dur-expand);
+}
+.sidebar-history-chevron {
+  transition: transform var(--dur-collapse) var(--ease-out);
+}
+.sidebar-history-chevron[data-expanded='true'] { transform: rotate(180deg); }
+/* 拖动直接跟手，收起/展开仍使用已有动画。 */
+:root[data-layout-resize] .collapsible-slot { transition: none; }
+:root[data-layout-resize] * { user-select: none !important; }
+:root[data-layout-resize='x'], :root[data-layout-resize='x'] * { cursor: col-resize !important; }
+:root[data-layout-resize='y'], :root[data-layout-resize='y'] * { cursor: row-resize !important; }
+.layout-resize-handle {
+  position: absolute;
+  z-index: 20;
+  touch-action: none;
+  outline-offset: 0;
+}
+.layout-resize-handle.layout-resize-x { width: 8px; cursor: col-resize; }
+.layout-resize-handle.layout-resize-y { height: 8px; cursor: row-resize; }
+.layout-resize-handle::after {
+  content: '';
+  position: absolute;
+  border-radius: var(--radius-full);
+  background: var(--accent-border);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.layout-resize-handle.layout-resize-x::after { width: 2px; inset: 0 auto 0 3px; }
+.layout-resize-handle.layout-resize-y::after { height: 2px; inset: 3px 0 auto 0; }
+.layout-resize-handle:hover::after,
+.layout-resize-handle:focus-visible::after,
+.layout-resize-handle[data-resizing]::after { opacity: 1; }
+/* 主区无描边，只在最外层绘制底色，内部不重复叠加壁纸透明底。 */
+.workbench-surface {
+  --bg-app: transparent;
+  --bg-panel: transparent;
+  --border-layout: transparent;
+  background: var(--bg-workbench);
+}
+/* 主区直接贴合窗口，拖动边从 48px 顶栏下方的正文开始。 */
+.sidebar-resize { top: 48px; bottom: 0; right: -4px; }
+.composer-resize-left { top: 16px; bottom: 40px; left: -4px; }
+.composer-resize-right { top: 16px; bottom: 40px; right: -4px; }
+.composer-resize-top { top: -4px; left: 16px; right: 16px; }
+:root[data-motion='off'] .layout-resize-handle::after { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  :root[data-motion='system'] .layout-resize-handle::after { transition: none; }
+}
+/* 关闭动画：设置选「关闭」，或选「跟随系统」且系统要求减少动态效果。默认「始终开启」不受系统影响 */
+:root[data-motion='off'] :is(.collapsible-slot, .sidebar-history-content, .sidebar-history-chevron, .session-header, .composer-card, .pane-divider-line) {
+  transition: none;
+}
+:root[data-motion='off'] .press:active {
+  transform: none;
+}
+:root[data-motion='off'] :is(.pop-in, .fade-in, .usage-expand) {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-motion='system'] :is(.collapsible-slot, .sidebar-history-content, .sidebar-history-chevron, .session-header, .composer-card, .pane-divider-line) {
+    transition: none;
+  }
+  :root[data-motion='system'] .press:active {
+    transform: none;
+  }
+  :root[data-motion='system'] :is(.pop-in, .fade-in, .usage-expand) {
+    animation: none;
+  }
+}
+
+/* 推理强度滑块（components/session/EffortSlider.tsx），配色和 JuCode 桌面版同步（docs/engines.md §15.7）：
+   --effort-accent 是引擎的品牌色（Claude：--engine-claude），没有品牌色时用正文色。
+   30px 胶囊轨道，已选部分用强调色 30% 填充；停靠点在内侧，圆点始终在胶囊里；
+   最高档时填充色流动（22% → 55% → 22%）、圆点发光。 */
+.effort-slider {
+  --effort-accent: var(--text);
+  padding: 0 15px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  touch-action: none;
+  outline: none;
+}
+/* 键盘焦点环：和胶囊轨道同形状，用强调色（以前是灰色直角框，深色下很突兀） */
+.effort-slider:focus-visible {
+  border-radius: 9999px;
+  box-shadow: 0 0 0 2px var(--bg-popover), 0 0 0 4px color-mix(in oklab, var(--effort-accent) 55%, transparent);
+}
+.effort-slider[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: default;
+}
+.effort-rail {
+  position: relative;
+  height: 30px;
+}
+.effort-track,
+.effort-fill {
+  position: absolute;
+  top: 0;
+  left: -15px;
+  height: 30px;
+  border-radius: 9999px;
+}
+.effort-track {
+  right: -15px;
+  background: var(--bg-subtle);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+}
+:root[data-theme='dark'] .effort-track {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 6%, transparent);
+}
+.effort-fill {
+  background: color-mix(in oklab, var(--text) 16%, transparent);
+  transition:
+    width var(--dur-base) var(--ease-out),
+    background var(--dur-base) var(--ease-out);
+}
+.effort-slider[data-tinted] .effort-fill {
+  background: color-mix(in oklab, var(--effort-accent) 30%, transparent);
+}
+/* 深色底上 30% 的橙色会发灰发棕，提高一些，让它读起来仍是品牌橙 */
+:root[data-theme='dark'] .effort-slider[data-tinted] .effort-fill {
+  background: color-mix(in oklab, var(--effort-accent) 42%, transparent);
+}
+:root[data-theme='dark'] .effort-slider[data-top] .effort-fill,
+.effort-slider[data-top] .effort-fill {
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--effort-accent) 22%, transparent) 0%,
+    color-mix(in oklab, var(--effort-accent) 55%, transparent) 50%,
+    color-mix(in oklab, var(--effort-accent) 22%, transparent) 100%
+  );
+  background-size: 200% 100%;
+  animation: effort-sweep 2.4s linear infinite;
+}
+.effort-stop {
+  position: absolute;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--text-faint);
+  transform: translate(-50%, -50%);
+}
+.effort-stop[data-passed] {
+  background: color-mix(in oklab, var(--text) 55%, transparent);
+}
+.effort-thumb {
+  position: absolute;
+  top: 50%;
+  width: 26px;
+  height: 26px;
+  border-radius: 9999px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-popover);
+  transform: translate(-50%, -50%);
+  transition:
+    left var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out);
+}
+:root[data-theme='dark'] .effort-thumb {
+  background: var(--text);
+}
+.effort-slider[data-top] .effort-thumb {
+  box-shadow:
+    var(--shadow-popover),
+    0 0 0 3px color-mix(in oklab, var(--effort-accent) 30%, transparent),
+    0 0 18px color-mix(in oklab, var(--effort-accent) 55%, transparent);
+}
+.effort-slider[data-dragging] :is(.effort-thumb, .effort-fill) {
+  transition: none;
+}
+@keyframes effort-sweep {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+/* 最高档的强度名（弹窗标题、输入框按钮）：在强调色上流动的一道光（文字渐变） */
+.effort-max {
+  background: linear-gradient(
+    90deg,
+    var(--effort-accent) 0%,
+    var(--effort-shine, color-mix(in oklab, var(--effort-accent) 35%, white)) 25%,
+    var(--effort-accent) 50%,
+    var(--effort-shine, color-mix(in oklab, var(--effort-accent) 35%, white)) 75%,
+    var(--effort-accent) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent !important;
+  animation: effort-sweep 3.2s linear infinite;
+}
+/* Ultracode 复用 Max 的流光，紫色与引擎强度的品牌色分别显示。 */
+.ultracode-glow {
+  --effort-accent: var(--ultracode);
+  --effort-shine: color-mix(in oklab, var(--ultracode) 75%, var(--bg-popover));
+}
+:root[data-motion='off'] :is(.effort-slider *, .effort-max) {
+  transition: none;
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-motion='system'] :is(.effort-slider *, .effort-max) {
+    transition: none;
+    animation: none;
+  }
+}
+
+/* 语法高亮：highlight.js 的 token 类名 → 设计变量 --syn-*（components/code/highlight.tsx，docs/ui/code-highlight.md） */
+.hljs-comment,
+.hljs-quote {
+  color: var(--syn-comment);
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-name,
+.hljs-tag {
+  color: var(--syn-keyword);
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-symbol,
+.hljs-char.escape_,
+.hljs-meta .hljs-string {
+  color: var(--syn-string);
+}
+.hljs-number,
+.hljs-literal,
+.hljs-variable.constant_,
+.hljs-template-variable {
+  color: var(--syn-number);
+}
+.hljs-title,
+.hljs-title.function_,
+.hljs-section {
+  color: var(--syn-func);
+}
+.hljs-title.class_,
+.hljs-type,
+.hljs-built_in,
+.hljs-attr,
+.hljs-attribute,
+.hljs-property,
+.hljs-selector-class,
+.hljs-selector-id,
+.hljs-selector-pseudo {
+  color: var(--syn-type);
+}
+.hljs-meta,
+.hljs-meta .hljs-keyword,
+.hljs-doctag,
+.hljs-bullet,
+.hljs-operator {
+  color: var(--syn-meta);
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 600;
+}
+.hljs-link {
+  text-decoration: underline;
+}
+.hljs-addition {
+  color: var(--success);
+}
+.hljs-deletion {
+  color: var(--danger);
+}
+
+/* ---------- 对话正文衬线体（设置 → 外观 → 字体，docs/ui/settings.md §7） ----------
+   只作用于助手回复正文（text-fg-body，演示和真实会话都用它），代码、行内代码仍是等宽字体 */
+:root[data-serif-prose] .text-fg-body {
+  font-family: Georgia, 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', SimSun, 'Times New Roman', serif;
+}
+:root[data-serif-prose] .text-fg-body :is(pre, code, kbd, samp),
+:root[data-serif-prose] .text-fg-body :is(pre, code, kbd, samp) * {
+  font-family: var(--font-mono);
+}
+
+/* ---------- 壁纸（docs/ui/settings.md §6） ----------
+   tokens.css 里 [data-wallpaper] 已把大块底色改透明、卡片改半透明；这里给半透明的卡片、输入框、菜单加背景模糊，
+   保证叠在壁纸上也看得清 */
+:root[data-wallpaper] .bg-surface {
+  backdrop-filter: blur(18px) saturate(1.15);
+}
+
+/* 开关（推理强度弹窗里的 Ultracode / Fast / 思考摘要等，components/session/ComposerMenus.tsx）：
+   关：淡底 + 细边，圆点白（深色下浅灰）；开：强调色底，圆点用主按钮文字色。浅色深色都看得清 */
+.ui-switch {
+  background: var(--bg-selected);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.ui-switch[aria-checked='true'] {
+  background: var(--accent);
+  box-shadow: none;
+}
+.ui-switch[data-tone='ultracode'][aria-checked='true'] {
+  background: var(--ultracode);
+}
+.ui-switch-knob {
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-sm);
+}
+:root[data-theme='dark'] .ui-switch-knob {
+  background: var(--text-muted);
+}
+.ui-switch[aria-checked='true'] .ui-switch-knob {
+  background: var(--btn-primary-text);
+}
+:root[data-theme='light'] .ui-switch[aria-checked='true'] .ui-switch-knob {
+  background: #ffffff;
+}
+
+.right-workspace-resize { top: 0; bottom: 0; left: -4px; }
+
+.terminal-project-select { width: 128px; max-width: 26%; flex-shrink: 0; }
+
+.collapsible-slot[data-size-changed] { transition: none; }

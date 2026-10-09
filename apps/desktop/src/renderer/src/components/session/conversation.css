@@ -1,0 +1,44 @@
+/* 阅读列在宽窗格内居中，窄窗格按自身宽度收紧边距。 */
+.conversation-view {
+  --conversation-scrollbar-width: 10px;
+  container-name: conversation;
+  container-type: inline-size;
+}
+.conversation-scroller {
+  scrollbar-gutter: stable both-edges;
+}
+.conversation-scroller::-webkit-scrollbar {
+  width: var(--conversation-scrollbar-width);
+}
+.conversation-inset {
+  width: 100%;
+  min-width: 0;
+  padding-inline: 24px;
+}
+.conversation-reading {
+  max-width: 1024px;
+  margin-inline: auto;
+  padding-inline: 32px;
+}
+.conversation-reading-strips {
+  width: calc(100% - 2 * var(--conversation-scrollbar-width));
+}
+.conversation-message {
+  width: 100%;
+  min-width: 0;
+  max-width: 960px;
+  align-self: flex-start;
+  overflow-wrap: anywhere;
+}
+.conversation-user-row {
+  width: 100%;
+  min-width: 0;
+}
+.conversation-user-bubble {
+  max-width: min(75%, 720px);
+  overflow-wrap: anywhere;
+}
+@container conversation (width < 640px) {
+  .conversation-inset, .conversation-reading { padding-inline: 16px; }
+  .conversation-user-bubble { max-width: 85%; }
+}

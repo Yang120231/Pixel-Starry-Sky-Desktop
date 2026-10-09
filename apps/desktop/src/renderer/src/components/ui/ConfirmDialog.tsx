@@ -1,0 +1,30 @@
+import { useEffect, useId, useRef, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
+import { cn } from './cn'
+export function ConfirmDialog({title,description,confirmLabel,cancelLabel,busy,error,danger,focusInput,confirmDisabled,onConfirm,onCancel}:{title:string;description:ReactNode;confirmLabel:string;cancelLabel:string;busy:boolean;error?:string|null;danger?:boolean;focusInput?:boolean;confirmDisabled?:boolean;onConfirm:()=>void;onCancel:()=>void}) {
+  const ref=useRef<HTMLDivElement>(null),cancel=useRef<HTMLButtonElement>(null),titleId=useId(),descriptionId=useId(),callbacks=useRef({onCancel,busy})
+  callbacks.current={onCancel,busy}
+  useEffect(()=>{
+    const previous=document.activeElement as HTMLElement|null
+    const input=focusInput?ref.current?.querySelector<HTMLInputElement>('input'):null
+    if(input){input.focus({preventScroll:true});input.select()}else cancel.current?.focus({preventScroll:true})
+    const key=(event:KeyboardEvent):void=>{
+      if(event.key==='Escape'){event.preventDefault();event.stopPropagation();if(!callbacks.current.busy)callbacks.current.onCancel()}
+      if(event.key==='Tab'){
+        const items=[...(ref.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),textarea:not(:disabled),select:not(:disabled),[tabindex="0"]')??[])],first=items[0],last=items.at(-1)
+        if(!first){event.preventDefault();ref.current?.focus();return}
+        if(event.shiftKey&&(document.activeElement===first||!ref.current?.contains(document.activeElement))){event.preventDefault();last?.focus()}
+        else if(!event.shiftKey&&(document.activeElement===last||!ref.current?.contains(document.activeElement))){event.preventDefault();first.focus()}
+      }
+    }
+    document.addEventListener('keydown',key,true)
+    return()=>{document.removeEventListener('keydown',key,true);if(previous?.isConnected)previous.focus({preventScroll:true})}
+  },[])
+  return createPortal(<div className="fixed inset-0 z-[80] flex items-center justify-center bg-scrim p-4" onMouseDown={event=>{if(event.target===event.currentTarget&&!busy)onCancel()}}>
+    <div ref={ref} data-session-confirm role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={descriptionId} tabIndex={-1} className="pop-in w-full max-w-md rounded-xl border border-line-card bg-popover p-5 text-fg shadow-popover outline-none">
+      <h3 id={titleId} className="break-words text-section font-semibold">{title}</h3><div id={descriptionId} className="mt-3 text-list leading-relaxed text-fg-secondary">{description}</div>
+      {error&&<p role="alert" className="mt-3 break-words text-meta text-danger">{error}</p>}
+      <div className="mt-5 flex flex-wrap justify-end gap-2"><button ref={cancel} disabled={busy} onClick={onCancel} className="press rounded-md border border-line px-3 py-2 text-ui hover:bg-hover disabled:opacity-50">{cancelLabel}</button><button disabled={busy||confirmDisabled} onClick={onConfirm} className={cn('press rounded-md px-3 py-2 text-ui font-medium disabled:opacity-50',danger?'bg-danger text-accent-on':'bg-primary text-primary-fg')}>{confirmLabel}</button></div>
+    </div>
+  </div>,document.body)
+}

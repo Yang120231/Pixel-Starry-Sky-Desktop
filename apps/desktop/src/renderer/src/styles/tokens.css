@@ -1,0 +1,241 @@
+/* 设计变量：浅色 / 深色两套。规格见 docs/ui/design-tokens.md 与 docs/ui/design-refresh.md（v2：暖灰 + 墨绿），改这里要同步改文档。
+   悬停 / 选中 / 浅底统一用「墨色 + 透明度」叠加（--ink），在任何底色上都成立。 */
+
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --ink: #20211f;
+
+  --bg-rail: #efefec;
+  --bg-sidebar: #f2f2ef;
+  --bg-app: #f8f8f6;
+  --bg-panel: #f8f8f6;
+  --bg-surface: #ffffff;
+  /* 弹出菜单：浅色和卡片一样白；深色比卡片 / 输入框亮一级，压在输入框上也分得清 */
+  --bg-popover: #ffffff;
+  --bg-workbench: #ffffff;
+  --bg-subtle: color-mix(in srgb, var(--ink) 4%, transparent);
+  --bg-hover: color-mix(in srgb, var(--ink) 4.5%, transparent);
+  --bg-selected: color-mix(in srgb, var(--ink) 7%, transparent);
+
+  --border: #e2e2dc;
+  --border-subtle: #eaeae5;
+  --border-strong: #cfcfc6;
+  /* 工作台的边缘层次：布局线最淡，卡片单层细描边，输入框聚焦时才稍强。 */
+  --border-layout: color-mix(in srgb, var(--ink) 6%, transparent);
+  --border-card: color-mix(in srgb, var(--ink) 10%, transparent);
+  --border-composer: color-mix(in srgb, var(--ink) 12%, transparent);
+  --border-composer-focus: color-mix(in srgb, var(--ink) 20%, transparent);
+  --composer-focus-ring: color-mix(in srgb, var(--ink) 4%, transparent);
+
+  --text: #20211f;
+  --text-secondary: #4a4c47;
+  --text-muted: #777872;
+  --text-faint: #a3a39b;
+  --text-body: #20211f;
+
+  --accent: #2d6151;
+  --accent-on: #ffffff;
+  --accent-soft: #e1eae5;
+  --accent-text: #2d6151;
+  --accent-border: #83a394;
+  --status-online: #4d8a75;
+  --code-path: #3e6a5c;
+
+  /* 代码语法高亮（参考 Mirasim / One Light，按暖灰底调低了饱和度），见 docs/ui/design-tokens.md §1.7 */
+  --syn-comment: #8b8a82;
+  --syn-keyword: #9b3f92;
+  --syn-string: #3f7f3b;
+  --syn-number: #9c6114;
+  --syn-func: #2f62c4;
+  --syn-type: #946a0e;
+  --syn-meta: #1b7a96;
+  --code-inline-text: #a8402f;
+  --code-inline-bg: rgba(168, 64, 47, 0.07);
+  --success: #2f7d4f;
+  --danger: #b8463f;
+  --notify: #d2483f;
+  --warn: #b97a36;
+
+  --btn-primary-bg: #20211f;
+  --btn-primary-text: #ffffff;
+  --btn-disabled-bg: #dcdcd5;
+  --btn-disabled-text: #ffffff;
+  --engine-chip-bg: #20211f;
+  --engine-chip-text: #ffffff;
+  /* 引擎（模型）品牌色：推理强度滑块、强度名的强调色（和 JuCode 一致，见 design-tokens.md） */
+  --engine-claude: #d97757;
+  --ultracode: #7c3aed;
+  --avatar-bg: #f0e2d6;
+  --avatar-text: #7a5a43;
+
+  --scrim: rgba(32, 33, 31, 0.28);
+  /* 主题的实色底（不受壁纸影响）：壁纸遮罩、Logo 里的星星、角标描边；以及有壁纸时侧栏、卡片的底色来源（docs/ui/settings.md §6） */
+  --wall-tint: #f8f8f6;
+  /* 用量图表三个系列（已用 dataviz 校验脚本验证色盲区分度、对比度，docs/ui/usage.md） */
+  --chart-input: #c26f12;
+  --chart-cache: #3a6fd0;
+  --chart-output: #0f8456;
+  --wall-sidebar: #f2f2ef;
+  --wall-surface: #ffffff;
+  --terminal-bg: #ffffff;
+  --terminal-fg: #20211f;
+  --terminal-cursor: #2d6151;
+  --terminal-selection: rgba(143, 208, 180, 0.28);
+  --terminal-ansi-0: #20211f;
+  --terminal-ansi-1: #b8463f;
+  --terminal-ansi-2: #2f7d4f;
+  --terminal-ansi-3: #946a0e;
+  --terminal-ansi-4: #2f62c4;
+  --terminal-ansi-5: #9b3f92;
+  --terminal-ansi-6: #1b7a96;
+  --terminal-ansi-7: #777872;
+  --terminal-ansi-8: #777872;
+  --terminal-ansi-9: #b8463f;
+  --terminal-ansi-10: #2f7d4f;
+  --terminal-ansi-11: #946a0e;
+  --terminal-ansi-12: #2f62c4;
+  --terminal-ansi-13: #9b3f92;
+  --terminal-ansi-14: #1b7a96;
+  --terminal-ansi-15: #ecebe7;
+
+  --shadow-sm: 0 1px 2px rgba(32, 33, 31, 0.04);
+  --shadow-float: 0 1px 2px rgba(32, 33, 31, 0.04), 0 8px 24px -6px rgba(32, 33, 31, 0.1);
+  --shadow-popover: 0 4px 12px rgba(32, 33, 31, 0.08), 0 16px 40px rgba(32, 33, 31, 0.14);
+  --shadow-composer: 0 2px 4px -2px rgba(32, 33, 31, 0.04), 0 8px 24px -8px rgba(32, 33, 31, 0.08);
+  --shadow-menu: 0 2px 8px -2px rgba(32, 33, 31, 0.06), 0 12px 24px -8px rgba(32, 33, 31, 0.1);
+  --shadow-workbench: 0 6px 24px -12px rgba(32, 33, 31, 0.08);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --ink: #faf9f5;
+
+  --bg-rail: #141413;
+  --bg-sidebar: #1a1a19;
+  --bg-app: #1f1f1e;
+  --bg-panel: #1f1f1e;
+  --bg-surface: #262624;
+  --bg-popover: #2e2e2b;
+  --bg-workbench: #242422;
+  --bg-subtle: color-mix(in srgb, var(--ink) 5%, transparent);
+  --bg-hover: color-mix(in srgb, var(--ink) 6%, transparent);
+  --bg-selected: color-mix(in srgb, var(--ink) 10%, transparent);
+
+  --border: #33332f;
+  --border-subtle: #2a2a28;
+  --border-strong: #45443f;
+  --border-layout: color-mix(in srgb, var(--ink) 5%, transparent);
+  --border-card: color-mix(in srgb, var(--ink) 8%, transparent);
+  --border-composer: color-mix(in srgb, var(--ink) 9%, transparent);
+  --border-composer-focus: color-mix(in srgb, var(--ink) 16%, transparent);
+  --composer-focus-ring: color-mix(in srgb, var(--ink) 5%, transparent);
+
+  --text: #ecebe7;
+  --text-secondary: #c2c0b6;
+  --text-muted: #9c9a92;
+  --text-faint: #6e6c66;
+  --text-body: #dcdad3;
+  --terminal-bg: #171716;
+  --terminal-fg: #ecebe7;
+  --terminal-cursor: #8fd0b4;
+  --terminal-selection: rgba(143, 208, 180, 0.32);
+  --terminal-ansi-0: #20211f;
+  --terminal-ansi-1: #f0857d;
+  --terminal-ansi-2: #6fcf97;
+  --terminal-ansi-3: #e0a86a;
+  --terminal-ansi-4: #82aaff;
+  --terminal-ansi-5: #c792ea;
+  --terminal-ansi-6: #89ddff;
+  --terminal-ansi-7: #c2c0b6;
+  --terminal-ansi-8: #9c9a92;
+  --terminal-ansi-9: #f0857d;
+  --terminal-ansi-10: #6fcf97;
+  --terminal-ansi-11: #e0a86a;
+  --terminal-ansi-12: #82aaff;
+  --terminal-ansi-13: #c792ea;
+  --terminal-ansi-14: #89ddff;
+  --terminal-ansi-15: #ecebe7;
+
+  --accent: #7fc4a8;
+  --accent-on: #13261e;
+  --accent-soft: #1e3a30;
+  --accent-text: #8fd0b4;
+  --accent-border: #4f8a73;
+  --status-online: #6fbf9c;
+  --code-path: #9cc7b5;
+
+  /* 代码语法高亮（参考 Mirasim / One Dark，按暖灰底调低了饱和度） */
+  --syn-comment: #84837c;
+  --syn-keyword: #c993da;
+  --syn-string: #a6c98d;
+  --syn-number: #dba579;
+  --syn-func: #82b2ea;
+  --syn-type: #e0c28d;
+  --syn-meta: #7cc3cd;
+  --code-inline-text: #ec9a87;
+  --code-inline-bg: rgba(236, 154, 135, 0.1);
+  --success: #6fcf97;
+  --danger: #f0857d;
+  --notify: #f0675e;
+  --warn: #e0a86a;
+
+  --btn-primary-bg: #ecebe7;
+  --btn-primary-text: #1a1a19;
+  --btn-disabled-bg: #3a3936;
+  --btn-disabled-text: #77756e;
+  --engine-chip-bg: #d6d4cc;
+  --engine-chip-text: #1a1a19;
+  --engine-claude: #d97757;
+  --ultracode: #c4a7ff;
+  --avatar-bg: #3a332d;
+  --avatar-text: #e8d9cb;
+
+  --scrim: rgba(0, 0, 0, 0.55);
+  --wall-tint: #1f1f1e;
+  --chart-input: #c77a22;
+  --chart-cache: #4f83e0;
+  --chart-output: #1e9a6c;
+  --wall-sidebar: #1a1a19;
+  --wall-surface: #262624;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-float: 0 0 0 1px rgba(250, 249, 245, 0.04), 0 10px 30px -6px rgba(0, 0, 0, 0.45);
+  --shadow-popover: 0 0 0 1px rgba(250, 249, 245, 0.06), 0 12px 32px rgba(0, 0, 0, 0.5);
+  /* 只有柔影，不再加第二道亮色描边。 */
+  --shadow-composer: 0 2px 6px rgba(0, 0, 0, 0.14), 0 12px 28px -10px rgba(0, 0, 0, 0.32);
+  --shadow-menu: 0 4px 12px rgba(0, 0, 0, 0.2), 0 12px 32px -8px rgba(0, 0, 0, 0.35);
+  --shadow-workbench: 0 8px 28px -14px rgba(0, 0, 0, 0.24);
+}
+
+:root {
+  /* 窗口按钮占用的宽度（Windows 自绘 3×46px），见 docs/ui/window-controls.md */
+  --titlebar-reserve: 140px;
+  --window-control-width: 46px;
+  --window-close-bg: #b8463f;
+  --window-close-fg: #ffffff;
+
+  /* 动画（两套主题共用），见 docs/ui/design-tokens.md §6 */
+  --ease-out: cubic-bezier(0.21, 0.47, 0.32, 0.98);
+  --dur-fast: 100ms; /* 按下反馈 */
+  --dur-base: 160ms; /* 悬停、菜单弹出 */
+  --dur-expand: 240ms; /* 侧边栏 / 右侧面板展开 */
+  --dur-collapse: 170ms; /* 侧边栏 / 右侧面板收起 */
+  --dur-pane-focus: 450ms; /* 换窗格的短暂高亮 */
+}
+:root[data-platform='darwin'] {
+  --titlebar-reserve: 0px;
+}
+
+/* 有壁纸时（<html data-wallpaper>）：主区、右侧面板、顶栏底色透明，侧边栏略带底色区分层次，
+   卡片 / 输入框 / 菜单半透明（globals.css 再加背景模糊）。文字颜色不变。docs/ui/settings.md §6 */
+:root[data-wallpaper] {
+  --bg-app: transparent;
+  --bg-panel: transparent;
+  --bg-rail: transparent;
+  --bg-sidebar: color-mix(in srgb, var(--wall-sidebar) 45%, transparent);
+  --bg-surface: color-mix(in srgb, var(--wall-surface) 78%, transparent);
+  --bg-workbench: color-mix(in srgb, var(--wall-surface) 12%, transparent);
+}

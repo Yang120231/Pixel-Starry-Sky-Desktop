@@ -1,0 +1,29 @@
+import { tr } from '../i18n/core'
+import { useEffect } from 'react'
+import { useEngineState } from '@/engine'
+import { usePaneState } from '@/panes/store'
+import { isFileTab, leaves } from '@/panes/tree'
+import { activateFile, checkOpenFiles, ensureFile, getFiles, hasDirtyFiles } from './store'
+import { confirmFiles } from './FileConfirm'
+
+export function FileLifecycle() {
+  const layout = usePaneState(s => s.layout)
+  const snapshots = useEngineState(s => s.snapshots)
+  const changeKey = Object.values(snapshots).flatMap(s => s.items.filter(i => i.kind === 'file_change').map(i => `${i.id}:${i.status}`)).join('|')
+  useEffect(() => {
+    for (const tab of leaves(layout.root).flatMap(l => l.tabs).filter(isFileTab)) void ensureFile(tab)
+    const tab = leaves(layout.root).find(l => l.id === layout.focused)?.active
+    if (tab && isFileTab(tab)) activateFile(tab)
+  }, [layout])
+  useEffect(() => { checkOpenFiles() }, [changeKey])
+  useEffect(() => {
+    window.addEventListener('focus', checkOpenFiles)
+    const before = (e: BeforeUnloadEvent): void => { if (hasDirtyFiles()) { e.preventDefault(); e.returnValue = '' } }
+    window.addEventListener('beforeunload', before)
+    const unsubscribe = window.pixelsky?.files.onBeforeClose(() => {
+      void confirmFiles(getFiles().tabs.map(t => t.id), tr("files.FileConfirm.message521")).then(ok => { if (ok) void window.pixelsky!.files.finishClose() })
+    })
+    return () => { window.removeEventListener('focus', checkOpenFiles); window.removeEventListener('beforeunload', before); unsubscribe?.() }
+  }, [])
+  return null
+}
