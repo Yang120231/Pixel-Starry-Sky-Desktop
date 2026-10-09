@@ -142,3 +142,5 @@ export {
   PROJECT_NAME_LIMIT,
   projectName as normalizeProjectName,
 } from './session-metadata'
+export type { IpcChannelName, IpcChannelSpec, IpcKind, IpcRoute, IpcSpecial, IpcTrust } from './ipc/contract'
+export { IPC_CONTRACT, REMOTE_PROTOCOL } from './ipc/contract'

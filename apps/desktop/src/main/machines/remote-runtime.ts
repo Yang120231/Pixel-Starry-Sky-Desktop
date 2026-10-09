@@ -1,7 +1,7 @@
 import { homedir, hostname, platform, arch } from 'node:os'
 import { join, dirname, isAbsolute } from 'node:path'
 import { mkdir, readdir, realpath, writeFile } from 'node:fs/promises'
-import type { SessionRecord } from '@pixelsky/protocol'
+import { REMOTE_PROTOCOL, type SessionRecord } from '@pixelsky/protocol'
 import { EngineHost, type EngineHostOptions } from '@pixelsky/engine'
 import { WorkspaceFiles, workspaceRef } from '../workspace-files'
 import { Tasks } from '../project-tools/tasks'
@@ -14,7 +14,6 @@ import type { CopyInput, ManualTask, ServiceInput } from '../../shared/types/pro
 import type { WorkspaceRef } from '../../shared/types/workspace'
 import type { RpcPeer } from './rpc'
 
-export const REMOTE_PROTOCOL = 1
 export async function createRemoteRuntime(
   peer: Pick<RpcPeer, 'call' | 'event'>,
   dataDir = join(homedir(), '.local', 'share', 'pixelsky', 'remote', 'data'),
