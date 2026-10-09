@@ -1,14 +1,15 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { CodexAdapter, EngineHost } from '../src'
 import type { HostEvent } from '@pixelsky/protocol'
 import { codexPermission, turnErrorDetail } from '../src/codex/session'
 import { CodexTranslator, tokenCounts } from '../src/codex/translate'
+import { makeTmp, removeTmp } from './helpers/tmp'
 let root: string, host: EngineHost | undefined
-beforeEach(() => { const scratch = resolve('../../scratch'); mkdirSync(scratch, { recursive: true }); root = mkdtempSync(join(scratch, 'codex-test-')) })
-afterEach(async () => { await host?.shutdown(); host = undefined; rmSync(root, { recursive: true, force: true }) })
+beforeEach(() => { root = makeTmp('codex-test') })
+afterEach(async () => { await host?.shutdown(); host = undefined; removeTmp(root) })
 const wait = async (fn: () => boolean): Promise<void> => { for (let i=0;i<300;i++) { if(fn())return; await new Promise(r=>setTimeout(r,10)) } throw new Error('Codex test timed out') }
 function setup() {
   const log=join(root,'rpc.jsonl'), events:HostEvent[]=[], launcher={command:process.execPath,args:[fileURLToPath(new URL('./fakes/fake-codex.mjs',import.meta.url))]}

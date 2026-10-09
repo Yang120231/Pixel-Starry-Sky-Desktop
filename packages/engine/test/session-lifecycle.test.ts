@@ -1,13 +1,14 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { EngineInfo, SessionSettings } from '@pixelsky/protocol'
 import type { EngineAdapter, EngineSession, SessionContext } from '../src/adapter'
 import { EngineHost } from '../src/host'
 import { ENGINES } from '../src/registry'
+import { makeTmp, removeTmp } from './helpers/tmp'
 let root:string,hosts:EngineHost[]
-beforeEach(()=>{const scratch=resolve('../../scratch');mkdirSync(scratch,{recursive:true});root=mkdtempSync(join(scratch,'session-lifecycle-'));hosts=[]})
-afterEach(async()=>{await Promise.all(hosts.map(h=>h.shutdown()));rmSync(root,{recursive:true,force:true})})
+beforeEach(()=>{root = makeTmp('session-lifecycle');hosts=[]})
+afterEach(async()=>{await Promise.all(hosts.map(h=>h.shutdown()));removeTmp(root)})
 const until=async(fn:()=>boolean)=>{for(let i=0;i<100;i++){if(fn())return;await new Promise(r=>setTimeout(r,5))}throw new Error('lifecycle timeout')}
 class Session implements EngineSession {
   active:string|null=null

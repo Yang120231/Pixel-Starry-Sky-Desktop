@@ -1,0 +1,7 @@
+{"kind":"user","id":"u1","text":"你好","createdAt":1791200000000,"turnId":"t1"}
+{"kind":"assistant","id":"a1","text":"你好，我是夹具。","status":"completed"}
+{"kind":"turn_stats","id":"stats-t1","turnId":"t1","outcome":"completed","usage":{"models":{"fixture-model":{"input":10,"cacheRead":90,"cacheWrite":0,"output":5,"costUsd":0.01,"requests":1}},"durationMs":1200}}
+{"kind":"user","id":"u2","text":"再来一句","createdAt":1791201000000,"turnId":"t2"}
+{"kind":"assistant","id":"a2","text":"旧内容","status":"completed"}
+{"kind":"assistant","id":"a2","text":"第二句的回复","status":"completed"}
+{"kind":"user","id":"broken

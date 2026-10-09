@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "projects": [
+    { "id": "proj-fixture-1", "name": "夹具项目", "path": "/fixture/workspace", "addedAt": 1791100000000 }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "items": [
+    { "id": "q-running", "text": "已开始交付", "createdAt": 1791201100000, "settings": { "model": "fixture-model", "effort": "medium", "platform": null }, "status": "running", "error": null, "mode": "normal" },
+    { "id": "q-queued", "text": "排队中", "createdAt": 1791201200000, "settings": { "model": "fixture-model", "effort": "medium", "platform": null }, "status": "queued", "error": null, "mode": "normal" },
+    { "id": "q-failed", "text": "失败的", "createdAt": 1791201300000, "settings": { "model": null, "effort": null, "platform": null }, "status": "failed", "error": "boom", "mode": "guidance" }
+  ],
+  "paused": false,
+  "receipts": [ { "queueId": "q-old", "status": "accepted" } ]
+}

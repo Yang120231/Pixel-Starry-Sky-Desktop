@@ -1,12 +1,13 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { ClaudeAdapter, EngineHost } from '../src'
 import type { HostEvent } from '@pixelsky/protocol'
+import { makeTmp, removeTmp } from './helpers/tmp'
 let root:string,host:EngineHost|undefined,events:HostEvent[]
-beforeEach(()=>{const scratch=resolve('../../scratch');mkdirSync(scratch,{recursive:true});root=mkdtempSync(join(scratch,'extension-launch-'));events=[]})
-afterEach(async()=>{await host?.shutdown();rmSync(root,{recursive:true,force:true})})
+beforeEach(()=>{root = makeTmp('extension-launch');events=[]})
+afterEach(async()=>{await host?.shutdown();removeTmp(root)})
 it('initialize 命令原生标记穿过适配器和宿主快照，区分内置与同名用户技能',async()=>{
   const commands=[
     {name:'compact',description:'Built-in summary',builtin:true},

@@ -1,11 +1,12 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { effective, expandedMcp, inside, mcpConfig, pluginDirectory, skillFile } from '../src/extensions/parse'
 import type { ExtensionEntry } from '@pixelsky/protocol'
+import { makeTmp, removeTmp } from './helpers/tmp'
 let root:string
-beforeEach(()=>{const scratch=resolve('../../scratch');mkdirSync(scratch,{recursive:true});root=mkdtempSync(join(scratch,'extension-parser-'))})
-afterEach(()=>rmSync(root,{recursive:true,force:true}))
+beforeEach(()=>{root = makeTmp('extension-parser')})
+afterEach(()=>removeTmp(root))
 describe('扩展解析与范围',()=>{
   it('MCP 环境引用按会话环境解析，缺失值显式报错',()=>{
     expect(expandedMcp({type:'http',url:'${BASE}/mcp',headers:{Authorization:'Bearer ${TOKEN:-local}'}},{BASE:'https://example.com'})).toMatchObject({url:'https://example.com/mcp',headers:{Authorization:'Bearer local'}})

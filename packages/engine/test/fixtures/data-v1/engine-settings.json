@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "maxRetries": 3,
+  "defaults": { "engine": "claude", "model": "fixture-model", "effort": "medium", "permissionMode": "plan", "ultracode": false, "fast": false, "thinkingSummaries": true },
+  "paths": { "claude": "/fixture/bin/claude" },
+  "env": { "claude": { "FIXTURE_FLAG": "1" } },
+  "compactModels": { "claude": "fixture-small" },
+  "engineDefaults": {},
+  "options": { "claude": { "autoCompactPct": 80 } }
+}

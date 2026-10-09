@@ -1,0 +1,14 @@
+{
+  "id": "22222222-2222-4222-8222-222222222222",
+  "projectId": "proj-fixture-1",
+  "cwd": "/fixture/workspace",
+  "engine": "claude",
+  "engineSessionId": null,
+  "title": "旧版记录",
+  "model": null,
+  "effort": null,
+  "permissionMode": "edits",
+  "createdAt": 1791000000000,
+  "updatedAt": 1791000000000,
+  "lastOutcome": null
+}
