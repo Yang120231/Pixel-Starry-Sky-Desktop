@@ -9,8 +9,19 @@ beforeEach(() => {
   mkdirSync(scratch, { recursive: true })
   root = mkdtempSync(join(scratch, 'mcp-check-'))
 })
-// Windows 上子进程（工作目录就是 root）被结束后句柄释放有延迟，最长重试约 2 秒，避免 EPERM 和在 scratch 留下空目录
-afterEach(() => rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 }))
+// Windows 上子进程（工作目录就是 root）被结束后句柄释放有延迟。rmSync 自带的 maxRetries 在满负载下仍偶发 EPERM，
+// 这里自己重试约 3 秒，避免测试失败和在 scratch 留下空目录
+afterEach(async () => {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      rmSync(root, { recursive: true, force: true })
+      return
+    } catch (error) {
+      if (attempt >= 30) throw error
+      await new Promise(r => setTimeout(r, 100))
+    }
+  }
+})
 const result = (m: Record<string, unknown>): Record<string, unknown> | null =>
   m.method === 'initialize'
     ? {
