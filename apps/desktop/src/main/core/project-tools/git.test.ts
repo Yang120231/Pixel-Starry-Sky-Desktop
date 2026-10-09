@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, readFile, writeFile, rm, access } from 'node:fs/promise
 import { createServer, type Server } from 'node:http'
 import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { GitResult, GitStatus } from '../../shared/types/project-tools'
+import type { GitResult, GitStatus } from '../../../shared/types/project-tools'
 import { git, type ToolsHost } from './common'
 import { GitTools } from './git'
 

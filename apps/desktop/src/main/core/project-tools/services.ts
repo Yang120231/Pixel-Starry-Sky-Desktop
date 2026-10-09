@@ -4,8 +4,8 @@ import { join, resolve } from 'node:path'
 import { createServer, connect } from 'node:net'
 import { randomUUID } from 'node:crypto'
 import { StringDecoder } from 'node:string_decoder'
-import type { WorkspaceRef } from '../../shared/types/workspace'
-import type { ServiceDefinition, ServiceInput, EnvironmentState, ToolStatus } from '../../shared/types/project-tools'
+import type { WorkspaceRef } from '../../../shared/types/workspace'
+import type { ServiceDefinition, ServiceInput, EnvironmentState, ToolStatus } from '../../../shared/types/project-tools'
 import { JsonStore, directory, gitInfo, optional, run, samePath, value, type ToolsHost } from './common'
 
 interface Runtime {

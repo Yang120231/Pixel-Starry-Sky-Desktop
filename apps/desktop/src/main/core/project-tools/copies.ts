@@ -1,7 +1,7 @@
 import { randomUUID, createHash } from 'node:crypto'
 import { mkdir, realpath, lstat } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
-import type { CopyInput, CopyPreview, ProjectCopy } from '../../shared/types/project-tools'
+import type { CopyInput, CopyPreview, ProjectCopy } from '../../../shared/types/project-tools'
 import { JsonStore, git, gitInfo, samePath, value, type ToolsHost } from './common'
 
 export class Copies {

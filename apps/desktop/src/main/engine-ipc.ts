@@ -24,21 +24,21 @@ import { initPlatform, validateQueuedInput } from './platform'
 import { initExtensions, prepareExtensions, setExtensionProjects } from './extensions-ipc'
 import { initTerminalIpc } from './terminal/ipc'
 import { registerShutdown } from './shutdown'
-import { samePath } from './project-tools/common'
+import { samePath } from './core/project-tools/common'
 import type { TerminalTarget } from './terminal/manager'
 import type { WorkspaceRef } from '../shared/types/workspace'
 import { machines, initMachines } from './machines/service'
 import { machineOf } from './machines/identity'
 import { resolveCopyPath } from './project-tools'
-import { workspaceRef } from './workspace-files'
-import { openable, readArtifact } from './artifact-files'
+import { workspaceRef } from './core/workspace-files'
+import { openable, readArtifact } from './core/artifact-files'
 import { isAbsolute } from 'node:path'
 import { shell } from 'electron'
 
 let host: EngineHost | null = null
 
 /** Project tools only create sessions in worktrees already validated by their manager. */
-export const projectToolsHost: import('./project-tools/common').ToolsHost = {
+export const projectToolsHost: import('./core/project-tools/common').ToolsHost = {
   resolve(ref) {
     const target = resolveWorkspace(ref)
     const projectId =

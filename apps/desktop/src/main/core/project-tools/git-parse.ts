@@ -6,7 +6,7 @@ import type {
   GitFailureKind,
   GitFileChange,
   GitRemedy,
-} from '../../shared/types/project-tools'
+} from '../../../shared/types/project-tools'
 
 export const MAX_ENTRIES = 5000
 

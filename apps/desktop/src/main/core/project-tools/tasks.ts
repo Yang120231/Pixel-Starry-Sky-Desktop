@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
-import type { ManualTask } from '../../shared/types/project-tools'
+import type { ManualTask } from '../../../shared/types/project-tools'
 import { JsonStore, value, type ToolsHost } from './common'
 
 type Input = Partial<ManualTask>

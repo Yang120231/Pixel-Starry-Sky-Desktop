@@ -3,7 +3,7 @@
 import { spawn } from 'node:child_process'
 import { readFile, stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import type { WorkspaceRef } from '../../shared/types/workspace'
+import type { WorkspaceRef } from '../../../shared/types/workspace'
 import type {
   GitAction,
   GitArea,
@@ -14,7 +14,7 @@ import type {
   GitPullMode,
   GitResult,
   GitStatus,
-} from '../../shared/types/project-tools'
+} from '../../../shared/types/project-tools'
 import { workspacePath } from '../workspace-files'
 import { value, type ToolsHost } from './common'
 import { classifyGitError, parseStatusV2 } from './git-parse'

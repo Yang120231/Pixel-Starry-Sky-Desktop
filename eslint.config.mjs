@@ -66,15 +66,13 @@ export default tseslint.config(
     },
   },
   {
-    // 远端辅助进程会打包的文件（electron.remote.config.ts <- remote-entry.ts 的 import 链）：禁止 electron，
+    // 远端辅助进程会打包的文件（electron.remote.config.ts <- remote-entry.ts 的 import 链）与 main/core（本机和远端共用）：禁止 electron，
     // 同时保留 main 不导入 renderer / preload 的限制（同名规则会整体覆盖，所以两条写在一起）
     files: [
       'apps/desktop/src/main/machines/remote-*.ts',
       'apps/desktop/src/main/machines/rpc.ts',
       'apps/desktop/src/main/machines/identity.ts',
-      'apps/desktop/src/main/project-tools/{common,copies,git,git-parse,services,tasks}.ts',
-      'apps/desktop/src/main/workspace-files.ts',
-      'apps/desktop/src/main/artifact-files.ts',
+      'apps/desktop/src/main/core/**/*.ts',
     ],
     rules: {
       'no-restricted-imports': [
