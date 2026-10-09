@@ -427,7 +427,31 @@ function handle(msg) {
     switch (r.subtype) {
       case 'initialize':
         const initialized = {
-          models: [],
+          models: [
+            {
+              value: 'default',
+              displayName: 'Default (recommended)',
+              description: 'Opus 5.5 · Most capable for complex work',
+              supportsEffort: true,
+              supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
+            },
+            {
+              value: 'opus',
+              resolvedModel: 'claude-opus-5-5',
+              displayName: 'Opus 5.5',
+              description: 'For complex work and everyday tasks',
+              supportsEffort: true,
+              supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
+              supportsFastMode: true,
+            },
+            {
+              value: 'haiku',
+              resolvedModel: 'claude-haiku-5-5',
+              displayName: 'Haiku 5.5',
+              description: 'Fastest model for simple tasks',
+              supportsEffort: false,
+            },
+          ],
           commands: process.env.FAKE_CLAUDE_COMMANDS
             ? JSON.parse(process.env.FAKE_CLAUDE_COMMANDS)
             : process.env.FAKE_CLAUDE_CONTEXT === '1'

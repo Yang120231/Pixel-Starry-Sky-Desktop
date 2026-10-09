@@ -6,7 +6,7 @@ import { tr } from '../../i18n/core'
 // 平台时先选模型、再选线路（分组），线路在子页里，按倍率从低到高排。
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Check, ChevronDown, ChevronLeft, ChevronRight, LogIn, RefreshCw } from 'lucide-react'
-import type { EngineConfig, EngineId } from '@pixelsky/protocol'
+import type { EngineConfig, EngineId, EngineModel } from '@pixelsky/protocol'
 import { EngineIcon, Popover, Spinner, cn } from '@/ui'
 import { useAccount } from '@/features/account/useAccount'
 import {
@@ -22,7 +22,7 @@ import {
   matchModels,
   type CreditSource,
 } from '@/features/account/platform'
-import { SELF_MODELS, selfModelLabel, useEngineState, type SourceMenuController } from '@/features/engine'
+import { selfModelLabel, selfModelOptions, useEngineState, type SourceMenuController } from '@/features/engine'
 import { useSettings } from '@/features/settings/SettingsProvider'
 import { useEngineCatalog } from '@/features/engine/catalog'
 import { requestModelsScroll } from '@/features/settings/models/scroll'
@@ -81,7 +81,11 @@ function MiniSegmented<T extends string>({
 }
 
 /** 输入框按钮上的文字：模型 + 额度来源 */
-function triggerText(live: SourceMenuController, rate: number | null): { model: string; source: string } {
+function triggerText(
+  live: SourceMenuController,
+  rate: number | null,
+  catalogModels?: EngineModel[],
+): { model: string; source: string } {
   const engineId = live.engine?.id ?? 'claude'
   if (live.source === 'platform')
     return {
@@ -92,7 +96,7 @@ function triggerText(live: SourceMenuController, rate: number | null): { model: 
           : tr('session.ModelSourceMenu.platform2', { p0: formatMultiplier(rate) }),
     }
   return {
-    model: live.model ? selfModelLabel(engineId, live.model) : (live.engine?.name ?? 'Claude Code'),
+    model: live.model ? selfModelLabel(engineId, live.model, catalogModels) : (live.engine?.name ?? 'Claude Code'),
     get source() {
       return tr('session.ModelSourceMenu.ownAccount')
     },
@@ -126,6 +130,7 @@ export function ModelSourceMenu({
   const engineId: EngineId = live.engine?.id ?? 'claude'
   const platform = usePlatform(engineId)
   const catalog = useEngineCatalog(engineId)
+  const selfOptions = selfModelOptions(engineId, catalog?.models)
   const account = useAccount()
   const [page, setPage] = useState<'main' | 'routes'>('main')
   const [showLoginHelp, setShowLoginHelp] = useState(false)
@@ -158,7 +163,7 @@ export function ModelSourceMenu({
 
   const engineConfig = useEngineState(s => s.config)
   const group = platform.groups.find(g => g.id === live.groupId)
-  const text = triggerText(live, group ? group.rate_multiplier : null)
+  const text = triggerText(live, group ? group.rate_multiplier : null, catalog?.models)
   const notReady = live.blocker !== null && live.blocker.kind !== 'balance'
 
   const run = (fn: () => Promise<void>): void => {
@@ -323,10 +328,7 @@ export function ModelSourceMenu({
                   </p>
                 )
               ) : (
-                [
-                  ...SELF_MODELS[engineId],
-                  ...(catalog?.models ?? []).map(m => ({ value: m.id, label: m.label, hint: m.id })),
-                ].map(m => (
+                selfOptions.map(m => (
                   <MenuRow
                     key={m.value ?? 'default'}
                     selected={m.value === live.model}
@@ -337,7 +339,7 @@ export function ModelSourceMenu({
                 ))
               )}
               {/* 会话里的完整模型名（比如从平台切回来的 claude-opus-5-5）不在别名表里时也显示出来 */}
-              {live.source === 'self' && live.model && !SELF_MODELS[engineId].some(m => m.value === live.model) && (
+              {live.source === 'self' && live.model && !selfOptions.some(m => m.value === live.model) && (
                 <MenuRow
                   selected
                   title={<span className="font-mono text-meta">{live.model}</span>}

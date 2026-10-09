@@ -1,11 +1,21 @@
 // Claude Code 适配器
 import { homedir } from 'node:os'
 import { delimiter } from 'node:path'
-import type { AgentRuns, EngineCatalog, EngineInfo, EngineUpdateResult, Item, SessionRecord } from '@pixelsky/protocol'
+import {
+  EFFORTS,
+  type AgentRuns,
+  type Effort,
+  type EngineCatalog,
+  type EngineInfo,
+  type EngineModel,
+  type EngineUpdateResult,
+  type Item,
+  type SessionRecord,
+} from '@pixelsky/protocol'
 import type { EngineAdapter, EngineSession, Launcher, SessionContext } from '../adapter'
 import { engineEnv } from '../env'
 import { run } from '../exec'
-import { ENGINES } from '../registry'
+import { engineBase } from '../registry'
 import { discoverClaude, type ClaudeDiscovery } from './discover'
 import { ClaudeProcess } from './process'
 import { ClaudeSession, type ClaudeLaunchOptions } from './session'
@@ -33,6 +43,36 @@ export interface ClaudeAdapterOptions {
 /** 输出风格列表的缓存时间 */
 const CATALOG_TTL = 5 * 60_000
 
+function isEffort(x: unknown): x is Effort {
+  return typeof x === 'string' && (EFFORTS as readonly string[]).includes(x)
+}
+
+/**
+ * 握手回包里的 models（Claude Code 的字段：value、displayName、description、resolvedModel、supportsEffort、supportedEffortLevels）
+ * 转成目录模型。value 为 default 的一项不进列表（界面已有「默认」行）。
+ */
+export function claudeModels(raw: unknown): EngineModel[] {
+  if (!Array.isArray(raw)) return []
+  const out: EngineModel[] = []
+  for (const m of raw as unknown[]) {
+    if (!m || typeof m !== 'object') continue
+    const o = m as Record<string, unknown>
+    if (typeof o.value !== 'string' || o.value === 'default') continue
+    const levels = o.supportsEffort === false || !Array.isArray(o.supportedEffortLevels) ? [] : o.supportedEffortLevels
+    out.push({
+      id: o.value,
+      label: typeof o.displayName === 'string' && o.displayName ? o.displayName : o.value,
+      description: typeof o.description === 'string' ? o.description : undefined,
+      resolved: typeof o.resolvedModel === 'string' ? o.resolvedModel : undefined,
+      efforts: levels.filter(isEffort),
+      defaultEffort: null,
+      inputModalities: ['text', 'image'],
+      isDefault: false,
+    })
+  }
+  return out
+}
+
 export class ClaudeAdapter implements EngineAdapter {
   private cached: ClaudeDiscovery | null = null
   private detecting: Promise<ClaudeDiscovery> | null = null
@@ -47,8 +87,13 @@ export class ClaudeAdapter implements EngineAdapter {
 
   private discover(force: boolean): Promise<ClaudeDiscovery> {
     if (this.opts.launcher) {
-      const d = ENGINES.claude
-      const info: EngineInfo = { ...d, status: 'ready', version: null, path: this.opts.launcher.command, message: null }
+      const info: EngineInfo = {
+        ...engineBase('claude'),
+        status: 'ready',
+        version: null,
+        path: this.opts.launcher.command,
+        message: null,
+      }
       this.cached = { info, launcher: this.opts.launcher, projectsDir: this.opts.projectsDir ?? null }
       return Promise.resolve(this.cached)
     }
@@ -164,6 +209,7 @@ export class ClaudeAdapter implements EngineAdapter {
       return {
         outputStyles: styles,
         currentOutputStyle: typeof init.output_style === 'string' ? init.output_style : null,
+        models: claudeModels(init.models),
       }
     } catch {
       return { outputStyles: [], currentOutputStyle: null }

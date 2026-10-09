@@ -1,6 +1,13 @@
 import { tr } from '../../i18n/core'
 // 引擎相关的显示文字（中文）
-import type { Effort, EngineId, FileChange, PermissionMode } from '@pixelsky/protocol'
+import {
+  ENGINES,
+  type Effort,
+  type EngineId,
+  type EngineModel,
+  type FileChange,
+  type PermissionMode,
+} from '@pixelsky/protocol'
 import type { ChangedFiles } from '@/data/types'
 
 /** 推理强度用英文（和 JuCode 桌面版、Claude Code 一致） */
@@ -22,7 +29,7 @@ export function effortLabel(e: Effort | null): string {
 
 /** 推理强度的强调色：引擎（模型）的品牌色，和 JuCode modelColor 一致；没有品牌色的引擎用正文色（空字符串） */
 export function engineAccent(engine: EngineId): string {
-  return engine === 'claude' ? 'var(--engine-claude)' : ''
+  return ENGINES[engine].accent ?? ''
 }
 
 /** Fast 模式开不了的原因（CLI 的 fast_mode_disabled_reason） */
@@ -98,6 +105,15 @@ export const PERMISSION_INFO: Record<PermissionMode, { label: string; hint: stri
     get hint() {
       return tr('engine.labels.executeWithoutAskingUse')
     },
+  },
+}
+
+/** 引擎专属的权限说明（覆盖 PERMISSION_INFO 的通用说明）；没写的模式用通用说明 */
+export const PERMISSION_HINTS: Partial<Record<EngineId, Partial<Record<PermissionMode, () => string>>>> = {
+  codex: {
+    ask: () => tr('codex.permission.ask'),
+    edits: () => tr('codex.permission.edits'),
+    plan: () => tr('codex.permission.plan'),
   },
 }
 
@@ -185,7 +201,30 @@ export const SELF_MODELS: Record<EngineId, Array<{ value: string | null; label: 
   ],
 }
 
-/** 自有模型的显示名：别名用表里的名字，完整模型名原样显示 */
-export function selfModelLabel(engine: EngineId, model: string | null): string {
-  return SELF_MODELS[engine].find(m => m.value === model)?.label ?? model ?? tr('engine.labels.default')
+/**
+ * 自有额度的模型菜单：第一项是「默认」（value null）；有引擎目录（catalog.models）就用目录，
+ * 没读到目录时退回 SELF_MODELS 里写死的别名；按 value 去重。
+ */
+export function selfModelOptions(
+  engine: EngineId,
+  catalogModels: EngineModel[] | undefined,
+): Array<{ value: string | null; label: string; hint: string }> {
+  const [defaultRow, ...aliases] = SELF_MODELS[engine]
+  const fromCatalog = (catalogModels ?? []).map(m => ({ value: m.id, label: m.label, hint: m.description || m.id }))
+  const seen = new Set<string | null>()
+  return [defaultRow, ...(fromCatalog.length > 0 ? fromCatalog : aliases)].filter(m => {
+    if (seen.has(m.value)) return false
+    seen.add(m.value)
+    return true
+  })
+}
+
+/** 自有模型的显示名：引擎目录里有就用目录的名字，其次别名表，完整模型名原样显示 */
+export function selfModelLabel(engine: EngineId, model: string | null, catalogModels?: EngineModel[]): string {
+  return (
+    catalogModels?.find(m => m.id === model)?.label ??
+    SELF_MODELS[engine].find(m => m.value === model)?.label ??
+    model ??
+    tr('engine.labels.default')
+  )
 }

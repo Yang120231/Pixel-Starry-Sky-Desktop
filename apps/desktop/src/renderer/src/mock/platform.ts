@@ -48,6 +48,10 @@ export const demoEngineStatus: EngineLite[] = [
       ultracode: true,
       fast: true,
       thinkingSummaries: true,
+      selfUpdate: true,
+      launchSettings: true,
+      pluginCommands: true,
+      platformSwitch: true,
     },
   },
   {
@@ -63,6 +67,10 @@ export const demoEngineStatus: EngineLite[] = [
       ultracode: false,
       fast: true,
       thinkingSummaries: true,
+      selfUpdate: false,
+      launchSettings: false,
+      pluginCommands: false,
+      platformSwitch: false,
     },
   },
 ]

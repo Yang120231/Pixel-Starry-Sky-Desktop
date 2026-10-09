@@ -2,8 +2,21 @@ import { homedir } from 'node:os'
 import { dirname, join, delimiter } from 'node:path'
 import type { EngineInfo } from '@pixelsky/protocol'
 import type { Launcher } from '../adapter'
-import { isFile, run } from '../exec'
-import { ENGINES } from '../registry'
+import { isFile, run, versionAtLeast } from '../exec'
+import { engineBase } from '../registry'
+
+/** app-server 协议仍是实验接口，0.160.0 是实测通过的下限 */
+export const CODEX_MIN_VERSION = '0.160.0'
+/** 按 --version 的结果判定状态：读不到版本号为 error，低于下限为 outdated */
+export function codexVersionStatus(version: string | null): { status: EngineInfo['status']; message: string | null } {
+  if (!version) return { status: 'error', message: 'Could not read the Codex version' }
+  if (!versionAtLeast(version, CODEX_MIN_VERSION))
+    return {
+      status: 'outdated',
+      message: `Codex is too old (requires ${CODEX_MIN_VERSION} or later). Run npm i -g @openai/codex@latest`,
+    }
+  return { status: 'ready', message: null }
+}
 
 /** npm shim 只用于找安装目录；协议子进程直接启动原生二进制。 */
 export function codexExecutable(path: string): string | null {
@@ -49,7 +62,7 @@ export async function discoverCodex(
         join(env.APPDATA ?? join(homedir(), 'AppData/Roaming'), 'npm/codex.cmd'),
       ].filter((v): v is string => !!v)
   const path = candidates.map(codexExecutable).find(Boolean)
-  const base = ENGINES.codex
+  const base = engineBase('codex')
   if (!path)
     return {
       info: {
@@ -64,13 +77,16 @@ export async function discoverCodex(
   const launcher = { command: path, args: [] },
     result = await run(launcher, ['--version'], toolEnvironment(launcher, env), 12_000)
   const version = result.stdout.match(/\d+\.\d+\.\d+/)?.[0] ?? null
+  const check = result.ok
+    ? codexVersionStatus(version)
+    : { status: 'error' as const, message: 'Codex executable could not start' }
   return {
     info: {
       ...base,
-      status: result.ok ? 'ready' : 'error',
+      status: check.status,
       version,
       path,
-      message: result.ok ? null : 'Codex executable could not start',
+      message: check.message,
     },
     launcher,
   }

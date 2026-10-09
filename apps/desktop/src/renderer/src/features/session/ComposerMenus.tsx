@@ -18,7 +18,14 @@ import {
 } from 'lucide-react'
 import type { PermissionMode } from '@pixelsky/protocol'
 import { IconButton, Popover, cn } from '@/ui'
-import { DEFAULT_EFFORT, EFFORT_LABEL, PERMISSION_INFO, effortLabel, type ComposerController } from '@/features/engine'
+import {
+  DEFAULT_EFFORT,
+  EFFORT_LABEL,
+  PERMISSION_HINTS,
+  PERMISSION_INFO,
+  effortLabel,
+  type ComposerController,
+} from '@/features/engine'
 import { EffortSlider } from './EffortSlider'
 
 export const PERMISSION_ICON: Record<PermissionMode, LucideIcon> = {
@@ -214,12 +221,17 @@ export function EffortMenu({ live }: { live: ComposerController }) {
             label={tr('session.ComposerMenus.resetToDefault', { p0: EFFORT_LABEL[DEFAULT_EFFORT] })}
             size={24}
             iconSize={14}
-            disabled={effort === DEFAULT_EFFORT}
+            disabled={effort === DEFAULT_EFFORT || efforts.length === 0}
             className="-mr-1 disabled:opacity-40"
             onClick={() => live.setEffort(DEFAULT_EFFORT)}
           />
         </div>
-        <EffortSlider efforts={efforts} effort={effort} onChange={live.setEffort} accent={accent} />
+        {/* 引擎目录说这个模型没有强度档位（例如 Haiku 4.5）：不画空滑块，只给一句说明 */}
+        {efforts.length > 0 ? (
+          <EffortSlider efforts={efforts} effort={effort} onChange={live.setEffort} accent={accent} />
+        ) : (
+          <p className="text-meta text-fg-muted">{tr('session.ComposerMenus.modelHasNoEffortLevels')}</p>
+        )}
         {hasSwitches && (
           <div className="mt-3 flex flex-col border-t border-line-subtle pt-1">
             {ultracodeSupported && (
@@ -320,9 +332,7 @@ export function PermissionMenu({
               title={PERMISSION_INFO[m].label}
               hint={
                 supported
-                  ? engine === 'codex' && m !== 'full'
-                    ? tr(`codex.permission.${m}`)
-                    : PERMISSION_INFO[m].hint
+                  ? ((engine ? PERMISSION_HINTS[engine]?.[m]?.() : undefined) ?? PERMISSION_INFO[m].hint)
                   : tr('session.ComposerMenus.notSupportedByThis2')
               }
               onClick={() => {

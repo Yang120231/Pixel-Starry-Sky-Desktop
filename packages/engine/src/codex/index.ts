@@ -1,7 +1,7 @@
 import type { EngineAdapter, EngineSession, Launcher, SessionContext } from '../adapter'
 import type { EngineCatalog, EngineInfo, Item, SessionRecord } from '@pixelsky/protocol'
 import { engineEnv } from '../env'
-import { ENGINES } from '../registry'
+import { engineBase } from '../registry'
 import { discoverCodex, toolEnvironment } from './discover'
 import { CodexProcess, object } from './process'
 import { codexCatalog } from './catalog'
@@ -37,7 +37,7 @@ export class CodexAdapter implements EngineAdapter {
     const result = this.opts.launcher
       ? {
           info: {
-            ...ENGINES.codex,
+            ...engineBase('codex'),
             status: 'ready' as const,
             version: null,
             path: this.opts.launcher.command,

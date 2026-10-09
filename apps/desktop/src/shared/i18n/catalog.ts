@@ -532,6 +532,10 @@ export const catalog = {
     "zh": "当前引擎暂不支持",
     "en": "Not supported by this engine yet"
   },
+  "session.ComposerMenus.modelHasNoEffortLevels": {
+    "zh": "当前模型不支持调节推理强度",
+    "en": "This model does not support reasoning effort"
+  },
   "session.ComposerStatusBar.chooseProjectFolder": {
     "zh": "选择项目文件夹",
     "en": "Choose project folder"

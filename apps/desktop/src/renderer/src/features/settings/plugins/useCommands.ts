@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { SkillCommand } from '@pixelsky/protocol'
+import { ENGINES, type EngineId, type SkillCommand } from '@pixelsky/protocol'
 import { useEngineState } from '@/features/engine'
 import { useActiveWorkspace } from '@/features/editor/target'
-export function useCommands(sessionId: string | null | undefined, engine: string | undefined): SkillCommand[] {
+export function useCommands(sessionId: string | null | undefined, engine: EngineId | undefined): SkillCommand[] {
   const workspace = useActiveWorkspace(),
     snapshot = useEngineState(state => (sessionId ? state.snapshots[sessionId] : undefined)),
     [configured, setConfigured] = useState<SkillCommand[]>([])
   useEffect(() => {
     let active = true
     const load = (): void => {
-      if (engine && engine !== 'claude') {
+      // 应用管理的插件命令只给能力表 pluginCommands 为真的引擎
+      if (engine && !ENGINES[engine]?.caps.pluginCommands) {
         setConfigured([])
         return
       }

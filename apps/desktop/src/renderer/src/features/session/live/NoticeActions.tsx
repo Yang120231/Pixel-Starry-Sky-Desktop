@@ -2,7 +2,7 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../../i18n/core'
 // 错误卡片下面的一键按钮（docs/ui/source-switch.md §3.5）：只给最近一轮的错误，按错误类型和会话的额度来源给下一步。
 // 按钮只发请求（features/engine/sourceActions.ts），切换额度来源的确认由同一会话的输入框负责。不会自动切换。
-import type { SessionRecord } from '@pixelsky/protocol'
+import { ENGINES, type SessionRecord } from '@pixelsky/protocol'
 import { requestSourceAction, type SourceAction } from '@/features/engine'
 import { classifyError, type ErrorKind } from './errorKind'
 
@@ -30,8 +30,8 @@ function actionsFor(kind: ErrorKind, platform: boolean, engine: SessionRecord['e
     if (kind === 'balance') return ['open-account', 'open-menu', 'use-self']
     return ['open-menu', 'use-self']
   }
-  // 自有：平台目前只支持 Claude Code
-  return engine === 'claude' ? ['use-platform'] : []
+  // 自有：只有能接平台额度的引擎（能力表 platformSwitch）才给「改用平台」
+  return ENGINES[engine].caps.platformSwitch ? ['use-platform'] : []
 }
 
 export function NoticeActions({ record, text }: { record: SessionRecord; text: string }) {

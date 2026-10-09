@@ -58,10 +58,10 @@ export interface EngineSession {
   steer?(text: string, userItemId: string, attachments?: ImageAttachment[]): Promise<void>
   /** 原生本地上下文诊断，仅宿主确认会话空闲后调用。 */
   context?(): Promise<import('@pixelsky/protocol').ContextDiagnostic>
-  /** 停止一个后台任务 */
-  stopTask(taskId: string): Promise<void>
-  /** 读一个后台任务的输出（只给最后一段） */
-  taskOutput(taskId: string): Promise<TaskOutput>
+  /** 停止一个后台任务；没有后台任务的引擎不实现（caps.backgroundTasks 为 false） */
+  stopTask?(taskId: string): Promise<void>
+  /** 读一个后台任务的输出（只给最后一段）；没有后台任务的引擎不实现 */
+  taskOutput?(taskId: string): Promise<TaskOutput>
   close(): Promise<void>
 }
 

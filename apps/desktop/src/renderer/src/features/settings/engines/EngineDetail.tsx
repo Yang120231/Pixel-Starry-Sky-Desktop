@@ -160,7 +160,7 @@ export function EngineDetail({
         )}
       </Group>
 
-      {e.id === 'claude' && (
+      {e.caps.launchSettings && (
         <Group title={tr('settings.engines.EngineDetail.conversation')}>
           <OutputStyleRow engine={e} value={config.outputStyle} onChange={outputStyle => run({ outputStyle })} />
           <Row
@@ -177,8 +177,8 @@ export function EngineDetail({
         </Group>
       )}
 
-      {e.id === 'codex' && <p className="mt-4 text-meta text-fg-muted">{tr('codex.nativeSettings')}</p>}
-      {e.id === 'claude' && (
+      {!e.caps.launchSettings && <p className="mt-4 text-meta text-fg-muted">{tr('codex.nativeSettings')}</p>}
+      {e.caps.launchSettings && (
         <Group title={tr('session.ContextWindowButton.context2')}>
           <Row
             title={tr('settings.engines.EngineDetail.autocompactThreshold')}
@@ -275,7 +275,7 @@ function Header({
   }
 
   const ready = e.status === 'ready'
-  const canUpdate = e.id === 'claude' && e.status !== 'missing' && e.status !== 'unsupported'
+  const canUpdate = e.caps.selfUpdate && e.status !== 'missing' && e.status !== 'unsupported'
   return (
     <div>
       <div data-setting-title={e.name} className="flex flex-wrap items-start gap-x-4 gap-y-3">

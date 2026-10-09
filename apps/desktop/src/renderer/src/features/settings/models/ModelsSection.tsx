@@ -25,7 +25,8 @@ import {
   usePlatform,
   type CreditSource,
 } from '@/features/account/platform'
-import { SELF_MODELS, isLive, useEngineState } from '@/features/engine'
+import { isLive, selfModelOptions, useEngineState } from '@/features/engine'
+import { useEngineCatalog } from '@/features/engine/catalog'
 import { GroupTitle, SectionTitle, SettingRow } from '../SettingRow'
 import { Switch } from '@/features/session/ComposerMenus'
 import { takeModelsScroll } from './scroll'
@@ -63,6 +64,7 @@ export function ModelsSection({ onOpenEngines }: { onOpenEngines?: () => void })
   const routes = groupsForModel(platform.groups, platform.model)
   const visibilityRef = useRef<HTMLDivElement>(null)
   const [modelQuery, setModelQuery] = useState('')
+  const claudeCatalog = useEngineCatalog('claude')
   useEffect(() => {
     if (takeModelsScroll()) visibilityRef.current?.scrollIntoView({ block: 'start' })
   }, [])
@@ -176,7 +178,11 @@ export function ModelsSection({ onOpenEngines }: { onOpenEngines?: () => void })
             className="w-full max-w-sm"
             value={platform.selfModel ?? ''}
             onChange={v => setDefaultSelfModel(v || null)}
-            options={SELF_MODELS.claude.map(m => ({ value: m.value ?? '', label: m.label, hint: m.hint }))}
+            options={selfModelOptions('claude', claudeCatalog?.models).map(m => ({
+              value: m.value ?? '',
+              label: m.label,
+              hint: m.hint,
+            }))}
           />
         </SettingRow>
       )}

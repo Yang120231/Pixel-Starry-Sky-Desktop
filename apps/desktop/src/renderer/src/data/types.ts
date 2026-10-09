@@ -271,7 +271,15 @@ export type EngineLite = Pick<
 > & {
   caps: Pick<
     import('@pixelsky/protocol').EngineCaps,
-    'permissionModes' | 'efforts' | 'ultracode' | 'fast' | 'thinkingSummaries'
+    | 'permissionModes'
+    | 'efforts'
+    | 'ultracode'
+    | 'fast'
+    | 'thinkingSummaries'
+    | 'selfUpdate'
+    | 'launchSettings'
+    | 'pluginCommands'
+    | 'platformSwitch'
   >
 }
 

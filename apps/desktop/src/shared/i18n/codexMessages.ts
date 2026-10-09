@@ -62,4 +62,13 @@ export const codexMessages = {
     zh: '请求模型与当前平台会话不一致',
     en: 'The requested model does not match the platform session',
   },
+  'codex.couldNotResumeThread': {
+    zh: '无法恢复 Codex 会话，已开始新会话（之前的上下文没有带过去）',
+    en: 'Could not resume the Codex thread; started a new thread (previous context was not carried over)',
+  },
+  'codex.couldNotReadVersion': { zh: '无法读取 Codex 版本号', en: 'Could not read the Codex version' },
+  'codex.codexIsTooOld': {
+    zh: 'Codex 版本太低（需要 0.160.0 或以上）：在终端运行 npm i -g @openai/codex@latest',
+    en: 'Codex is too old (requires 0.160.0 or later). Run npm i -g @openai/codex@latest',
+  },
 } as const

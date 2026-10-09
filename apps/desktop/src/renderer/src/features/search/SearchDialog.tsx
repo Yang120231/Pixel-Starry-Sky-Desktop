@@ -1,4 +1,4 @@
-import { searchSnippet, searchTerms } from '@pixelsky/protocol'
+import { ENGINES, searchSnippet, searchTerms } from '@pixelsky/protocol'
 import { setCurrentProject } from '@/features/engine/store'
 import { paneActions } from '@/features/panes/store'
 import { requestTask } from '@/features/panel/taskNavigation'
@@ -286,12 +286,7 @@ export function SearchDialog({
                   <span className="block truncate text-ui font-medium text-fg">{r.title}</span>
                   <span className="mt-0.5 block truncate text-label text-fg-faint">
                     {r.projectName} ·{' '}
-                    {r.id.startsWith('manual-task:')
-                      ? tr('projectTools.myTasks')
-                      : r.engine === 'claude'
-                        ? 'Claude Code'
-                        : 'Codex'}{' '}
-                    ·{' '}
+                    {r.id.startsWith('manual-task:') ? tr('projectTools.myTasks') : ENGINES[r.engine].name} ·{' '}
                     {new Date(r.updatedAt).toLocaleString('zh-CN', {
                       month: 'numeric',
                       day: 'numeric',

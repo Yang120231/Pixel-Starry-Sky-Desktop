@@ -31,10 +31,12 @@ export { SOURCE_ACTION_EVENT, requestSourceAction, type SourceAction } from './s
 export {
   DEFAULT_EFFORT,
   EFFORT_LABEL,
+  PERMISSION_HINTS,
   PERMISSION_INFO,
   SELF_MODELS,
   effortLabel,
   selfModelLabel,
+  selfModelOptions,
   engineAccent,
   relativeTime,
   taskKindLabel,

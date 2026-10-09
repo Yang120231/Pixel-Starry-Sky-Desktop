@@ -36,6 +36,14 @@ export interface EngineCaps {
   alwaysScopes: AlwaysScope[]
   /** 报告花费（美元） */
   costUsd: boolean
+  /** 有「检查更新」（Claude Code：claude update） */
+  selfUpdate: boolean
+  /** 设置里由像素星空管理的启动选项：输出风格、允许提问、自动压缩 */
+  launchSettings: boolean
+  /** 应用管理插件的命令 */
+  pluginCommands: boolean
+  /** 自有报错时提供「改用平台」 */
+  platformSwitch: boolean
 }
 
 /**
@@ -119,6 +127,10 @@ export interface EngineCatalog {
 export interface EngineModel {
   id: string
   label: string
+  /** 模型说明（引擎报上来的一句话） */
+  description?: string
+  /** 别名指向的完整模型 id，例如 opus → claude-opus-5-5 */
+  resolved?: string
   efforts: Effort[]
   defaultEffort: Effort | null
   inputModalities: string[]

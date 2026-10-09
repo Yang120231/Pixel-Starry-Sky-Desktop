@@ -99,6 +99,8 @@ export class CodexSession implements EngineSession {
   private reportedError: string | null = null
   /** 同一毫秒内的多条报错也要各自保留，id 不能只靠时间戳 */
   private noticeSeq = 0
+  /** 停止后等待 turn/completed 的回调，finish() 时统一唤醒 */
+  private turnWaiters: Array<() => void> = []
 
   constructor(
     private readonly launcher: Launcher,
@@ -171,8 +173,7 @@ export class CodexSession implements EngineSession {
       const policy = codexPermission(this.settings.permissionMode)
       if (allowed.length && !allowed.includes(policy.approvalPolicy))
         throw new Error('Codex managed requirements prohibit this permission mode')
-      const thread = await proc.request(record.engineSessionId ? 'thread/resume' : 'thread/start', {
-        ...(record.engineSessionId ? { threadId: record.engineSessionId } : {}),
+      const threadParams = {
         cwd: record.cwd,
         ...(record.model ? { model: record.model } : {}),
         approvalPolicy: policy.approvalPolicy,
@@ -182,10 +183,33 @@ export class CodexSession implements EngineSession {
             : this.settings.permissionMode === 'plan'
               ? 'read-only'
               : 'workspace-write',
-      })
+      }
+      let thread: Message,
+        resumeFailed = false
+      if (record.engineSessionId)
+        try {
+          thread = await proc.request('thread/resume', { threadId: record.engineSessionId, ...threadParams })
+        } catch (error) {
+          // 进程已经退出说明是连接问题，照常报错；进程还在说明线程找不到或已损坏，改用新线程
+          if (!proc.alive) throw error
+          thread = await proc.request('thread/start', threadParams)
+          resumeFailed = true
+        }
+      else thread = await proc.request('thread/start', threadParams)
       this.threadId = string(object(thread.thread).id)
       if (!this.threadId) throw new Error('Codex did not return a thread ID')
       this.ctx.setEngineSessionId(this.threadId)
+      if (resumeFailed)
+        this.ctx.emit({
+          type: 'item_completed',
+          item: {
+            kind: 'notice',
+            id: `cx-resume-${Date.now()}-${++this.noticeSeq}`,
+            level: 'warn',
+            text: 'Could not resume the Codex thread; started a new thread (previous context was not carried over)',
+            detail: null,
+          },
+        })
       this.ctx.emit({
         type: 'flags',
         flags: {
@@ -317,7 +341,13 @@ export class CodexSession implements EngineSession {
         ...(this.settings.effort ? { effort: this.settings.effort } : {}),
         summary: this.settings.thinkingSummaries ? 'concise' : 'none',
       })
-      if (this.active === active) this.nativeTurnId = string(object(result.turn).id) || this.nativeTurnId
+      const turnId = string(object(result.turn).id)
+      if (this.active === active) this.nativeTurnId = turnId || this.nativeTurnId
+      else if (turnId) {
+        // 开轮途中已经停止（本地已结束），原生那一轮可能仍在执行：补发中断，并丢弃它之后的事件
+        this.markFinished(turnId)
+        this.proc?.request('turn/interrupt', { threadId: this.threadId, turnId }).catch(() => {})
+      }
       this.ctx.emit({ type: 'input_ack', id: userItemId, state: 'consumed', mode: 'normal' })
     }
   }
@@ -534,7 +564,12 @@ export class CodexSession implements EngineSession {
   }
   answer(id: string, decision: ApprovalDecision): void {
     const approval = this.approvals.get(id)
-    if (!approval || !this.proc?.alive) return
+    if (!approval || !this.proc?.alive) {
+      // 找不到审批或进程已退出：同样结束这张卡片，不留下点不动的审批
+      this.approvals.delete(id)
+      this.ctx.emit({ type: 'approval_resolved', requestId: id })
+      return
+    }
     const allow = decision.type === 'allow' || decision.type === 'allow_always'
     if (allow && approval.request.canAllow === false) return
     if (decision.type === 'allow_always' && !approval.request.alwaysScopes.includes(decision.scope)) return
@@ -576,10 +611,7 @@ export class CodexSession implements EngineSession {
   private finish(outcome: TurnOutcome, error: string | null, detail: string | null = null): void {
     const active = this.active
     if (!active) return
-    if (this.nativeTurnId) {
-      this.finishedTurns.add(this.nativeTurnId)
-      if (this.finishedTurns.size > 200) this.finishedTurns.delete(this.finishedTurns.values().next().value!)
-    }
+    if (this.nativeTurnId) this.markFinished(this.nativeTurnId)
     this.active = null
     if (this.compacting) {
       this.compacting = false
@@ -635,32 +667,50 @@ export class CodexSession implements EngineSession {
       },
     })
     this.nativeTurnId = null
+    const waiters = this.turnWaiters
+    this.turnWaiters = []
+    for (const w of waiters) w()
+  }
+  private markFinished(turnId: string): void {
+    this.finishedTurns.add(turnId)
+    if (this.finishedTurns.size > 200) this.finishedTurns.delete(this.finishedTurns.values().next().value!)
+  }
+  /** 等待当前轮次结束（turn/completed 或本地 finish），超时返回 false */
+  private waitTurnEnd(timeoutMs: number): Promise<boolean> {
+    if (!this.active) return Promise.resolve(true)
+    return new Promise(resolve => {
+      const timer = setTimeout(() => {
+        this.turnWaiters = this.turnWaiters.filter(w => w !== done)
+        resolve(false)
+      }, timeoutMs)
+      const done = (): void => {
+        clearTimeout(timer)
+        resolve(true)
+      }
+      this.turnWaiters.push(done)
+    })
   }
   async interrupt(): Promise<void> {
     if (this.opening) await this.opening.catch(() => {})
     if (!this.active) return
     if (!this.nativeTurnId) {
+      // turn/start 还没返回：本地先结束，返回后 run() 会补发 turn/interrupt
       this.finish('interrupted', null)
       return
     }
     try {
       await this.proc?.request('turn/interrupt', { threadId: this.threadId, turnId: this.nativeTurnId })
     } catch {
+      // 中断请求本身失败：不再等待，直接结束进程，下次发消息时恢复
       this.proc?.kill()
+      this.finish('interrupted', null)
+      return
     }
-    if (this.active) {
-      await new Promise(resolve => setTimeout(resolve, 300))
-      if (this.active) {
-        this.proc?.kill()
-        this.finish('interrupted', null)
-      }
+    // 和 Claude 一致：等原生结束轮次（turn/completed）最多 5 秒，超时才强制结束进程
+    if (this.active && !(await this.waitTurnEnd(5_000))) {
+      this.proc?.kill()
+      this.finish('interrupted', null)
     }
-  }
-  async stopTask(): Promise<void> {
-    throw new Error('Codex background terminal management is not enabled')
-  }
-  async taskOutput(): Promise<never> {
-    throw new Error('Codex background terminal management is not enabled')
   }
   async close(): Promise<void> {
     this.closed = true

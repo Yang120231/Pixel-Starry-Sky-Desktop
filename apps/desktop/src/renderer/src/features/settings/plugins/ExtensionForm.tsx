@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react'
-import type { ExtensionEntry, ExtensionKind, ExtensionScope, McpConfig } from '@pixelsky/protocol'
+import {
+  ENGINES,
+  type ExtensionEntry,
+  type ExtensionKind,
+  type ExtensionScope,
+  type McpConfig,
+} from '@pixelsky/protocol'
 import { Button } from '@/ui'
 import type { WorkspaceRef } from '../../../../../shared/types/workspace'
 import { usePluginText } from './text'
@@ -245,7 +251,7 @@ export function ExtensionForm({
                   )
                 }
               />
-              {engine === 'claude' ? 'Claude Code' : 'Codex'}
+              {ENGINES[engine].name}
             </label>
           ))}
         </fieldset>

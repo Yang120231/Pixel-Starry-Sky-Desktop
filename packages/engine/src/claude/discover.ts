@@ -3,7 +3,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { EngineInfo } from '@pixelsky/protocol'
 import type { Launcher } from '../adapter'
-import { ENGINES } from '../registry'
+import { engineBase } from '../registry'
 import { IS_WINDOWS, dirsOnPath, findOnPath, isFile, run, versionAtLeast } from '../exec'
 
 /** 用到的参数（--permission-prompt-tool stdio、--effort、control 协议的 apply_flag_settings 等）在这个版本之后都有 */
@@ -49,8 +49,7 @@ export function findClaude(overridePath: string | null, env: NodeJS.ProcessEnv):
 }
 
 function base(): Omit<EngineInfo, 'status' | 'version' | 'path' | 'message'> {
-  const d = ENGINES.claude
-  return { id: d.id, name: d.name, short: d.short, caps: d.caps }
+  return engineBase('claude')
 }
 
 export async function discoverClaude(overridePath: string | null, env: NodeJS.ProcessEnv): Promise<ClaudeDiscovery> {

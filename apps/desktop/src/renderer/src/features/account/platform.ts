@@ -3,7 +3,7 @@ import { tr } from '../../i18n/core'
 // - 目录：管理员公开且当前账号有权限的分组，每个分组的模型一次读齐（先选模型、再选线路）。
 // - 全局默认：额度来源、平台的分组和模型、自有时的模型；新任务都用它。已开始的会话用自己记录里的选择（features/engine/hooks.ts）。
 import { useEffect, useSyncExternalStore } from 'react'
-import type { EngineId } from '@pixelsky/protocol'
+import { ENGINES, type EngineId } from '@pixelsky/protocol'
 import type { AccountState } from '../../../../shared/types/account'
 import type { PlatformGroupInfo } from '../../../../shared/types/platform-catalog'
 import { demo } from '@/data/demo'
@@ -59,12 +59,12 @@ try {
 }
 let projections: Partial<Record<EngineId, PlatformState>> = {}
 export function groupSupportsEngine(group: PlatformGroupInfo, engine: EngineId): boolean {
-  if (group.supported_apis && !group.supported_apis.includes(engine === 'codex' ? 'responses' : 'messages'))
-    return false
+  const desc = ENGINES[engine]
+  if (group.supported_apis && !group.supported_apis.includes(desc.wireApi)) return false
   if (group.supported_engines) return group.supported_engines.includes(engine)
-  return engine === 'codex'
-    ? group.platform === 'openai'
-    : !group.platform || ['anthropic', 'claude'].includes(group.platform)
+  // 旧目录没有写平台字段的分组，只归给允许的引擎（unlabeledGroups）
+  if (!group.platform) return desc.unlabeledGroups
+  return desc.platformVendors.includes(group.platform)
 }
 function saveEnginePreference(patch: Partial<SourcePreference>): void {
   codexUnsaved = false

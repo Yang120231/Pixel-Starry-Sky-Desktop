@@ -1,7 +1,10 @@
-import { appendFileSync } from 'node:fs'
+import { appendFileSync, existsSync } from 'node:fs'
 import readline from 'node:readline'
 const out = value => process.stdout.write(JSON.stringify(value) + '\n')
 const emit = (method, params) => out({ method, params })
+/** 测试通过创建这个文件打开「恢复线程失败」开关：thread/resume 报错，thread/start 给新线程 id */
+const resumeFails = () =>
+  !!process.env.FAKE_CODEX_RESUME_FAIL_FILE && existsSync(process.env.FAKE_CODEX_RESUME_FAIL_FILE)
 let initialized = false,
   thread = 'fake-thread',
   turn = null,
@@ -101,7 +104,11 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
       break
     case 'thread/start':
     case 'thread/resume':
-      thread = p.threadId ?? 'fake-thread'
+      if (m.method === 'thread/resume' && resumeFails()) {
+        out({ id: m.id, error: { code: -32000, message: 'thread not found: ' + p.threadId } })
+        break
+      }
+      thread = p.threadId ?? (resumeFails() ? 'fake-thread-new' : 'fake-thread')
       response(m, { thread: { id: thread, turns: [] } })
       break
     case 'turn/start': {
@@ -110,7 +117,17 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
           .filter(i => i.type === 'text')
           .map(i => i.text)
           .join('\n')
-      turn = { id, item: 'msg-' + next, text: '收到：' + text, timer: null }
+      if (text.includes('延迟')) {
+        // turn/start 的响应晚到：期间不推送任何通知，模拟开轮途中就点了停止
+        turn = { id, item: 'msg-' + next, text: '收到：' + text, timer: null, slow: false }
+        setTimeout(() => {
+          emit('turn/started', { threadId: thread, turn: { id, status: 'inProgress' } })
+          response(m, { turn: { id, status: 'inProgress' } })
+        }, 400)
+        break
+      }
+      // 缓停：收到 turn/interrupt 后约 1 秒才回 interrupted，且不会自己结束
+      turn = { id, item: 'msg-' + next, text: '收到：' + text, timer: null, slow: text.includes('缓停') }
       emit('turn/started', { threadId: thread, turn: { id, status: 'inProgress' } })
       emit('item/started', {
         threadId: thread,
@@ -158,7 +175,7 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
         })
         return
       }
-      turn.timer = setTimeout(() => finish(), text.includes('慢') ? 1800 : 50)
+      if (!turn.slow) turn.timer = setTimeout(() => finish(), text.includes('慢') ? 1800 : 50)
       break
     }
     case 'turn/steer':
@@ -179,10 +196,13 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
           .join(' ')
       response(m, { turnId: turn.id })
       break
-    case 'turn/interrupt':
+    case 'turn/interrupt': {
       response(m, {})
-      finish('interrupted')
+      const current = turn
+      if (current?.slow) setTimeout(() => turn === current && finish('interrupted'), 1000)
+      else finish('interrupted')
       break
+    }
     case 'thread/compact/start':
       turn = { id: 'compact-' + ++next, item: 'compact-item-' + next, text: 'Compacted', timer: null }
       emit('turn/started', { threadId: thread, turn: { id: turn.id, status: 'inProgress' } })

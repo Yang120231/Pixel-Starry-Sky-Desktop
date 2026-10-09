@@ -1140,5 +1140,9 @@ export const systemMessages = {
   "system.programNotFound": {
     "zh": "找不到程序：{p0}",
     "en": "Program not found: {p0}"
+  },
+  "system.noBackgroundTasks": {
+    "zh": "这个引擎没有后台任务",
+    "en": "This engine has no background tasks"
   }
 } as const

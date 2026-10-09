@@ -190,7 +190,11 @@ describe('本机引擎详情设置', () => {
   it('输出风格列表从 Claude Code 的初始化握手里读（不发消息）', async () => {
     const host = makeHost()
     const catalog = await host.engineCatalog('claude')
-    expect(catalog).toEqual({ outputStyles: ['default', 'Explanatory', 'Learning'], currentOutputStyle: 'default' })
+    expect(catalog).toMatchObject({
+      outputStyles: ['default', 'Explanatory', 'Learning'],
+      currentOutputStyle: 'default',
+    })
+    expect(catalog.models?.map(m => m.id)).toEqual(['opus', 'haiku'])
     expect(await host.engineCatalog('codex')).toEqual({ outputStyles: [], currentOutputStyle: null })
   })
 })

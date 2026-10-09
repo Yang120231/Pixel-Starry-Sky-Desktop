@@ -1,10 +1,11 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { CodexAdapter, EngineHost } from '../src'
 import type { HostEvent } from '@pixelsky/protocol'
 import { codexPermission, turnErrorDetail } from '../src/codex/session'
+import { CODEX_MIN_VERSION, codexVersionStatus } from '../src/codex/discover'
 import { CodexTranslator, tokenCounts } from '../src/codex/translate'
 import { makeTmp, removeTmp } from './helpers/tmp'
 let root: string, host: EngineHost | undefined
@@ -23,20 +24,20 @@ const wait = async (fn: () => boolean): Promise<void> => {
   }
   throw new Error('Codex test timed out')
 }
-function setup() {
+function setup(idleMs = 50) {
   const log = join(root, 'rpc.jsonl'),
     events: HostEvent[] = [],
     launcher = { command: process.execPath, args: [fileURLToPath(new URL('./fakes/fake-codex.mjs', import.meta.url))] }
   const adapter = new CodexAdapter({
     launcher,
-    env: { ...process.env, FAKE_CODEX_LOG: log },
+    env: { ...process.env, FAKE_CODEX_LOG: log, FAKE_CODEX_RESUME_FAIL_FILE: join(root, 'resume-fail') },
     launchOptions: () => ({ askQuestions: true, steeringValidated: true }),
   })
   host = new EngineHost({
     dataDir: join(root, 'engine'),
     adapters: { codex: adapter },
     emit: e => events.push(e),
-    idleMs: 50,
+    idleMs,
   })
   const session = host.createSession({
     projectId: host.addProject(root).id,
@@ -136,6 +137,84 @@ describe('Codex app-server adapter', () => {
     expect(messages().filter(m => m.method === 'turn/start')).toHaveLength(1)
     await wait(() => host!.open(session.id).state === 'idle')
     expect(host!.open(session.id).context?.compacting).toBe(false)
+  })
+  it('恢复线程失败时新开线程并提示，换掉记录里的线程 id，之后的消息正常完成', async () => {
+    const { session, messages } = setup()
+    const failFile = join(root, 'resume-fail')
+    await host!.send(session.id, 'first')
+    await wait(() => host!.open(session.id).items.some(i => i.kind === 'turn_stats'))
+    const oldId = host!.open(session.id).record.engineSessionId
+    writeFileSync(failFile, '')
+    await new Promise(r => setTimeout(r, 100))
+    await host!.send(session.id, 'second')
+    await wait(() => host!.open(session.id).items.filter(i => i.kind === 'turn_stats').length === 2)
+    expect(messages().some(m => m.method === 'thread/resume')).toBe(true)
+    expect(host!.open(session.id).items.filter(i => i.kind === 'notice')).toEqual([
+      expect.objectContaining({
+        kind: 'notice',
+        level: 'warn',
+        text: 'Could not resume the Codex thread; started a new thread (previous context was not carried over)',
+      }),
+    ])
+    expect(host!.open(session.id).record.engineSessionId).toBeTruthy()
+    expect(host!.open(session.id).record.engineSessionId).not.toBe(oldId)
+    rmSync(failFile)
+    await host!.send(session.id, 'third')
+    await wait(() => host!.open(session.id).items.filter(i => i.kind === 'turn_stats').length === 3)
+    expect(host!.open(session.id).state).toBe('idle')
+  })
+  it('停止后等原生结束这一轮，不会直接结束进程', async () => {
+    const { session, messages, events } = setup()
+    await host!.send(session.id, '缓停')
+    // 等原生轮次已经开始（有了 turn id），否则停止只会在本地结束
+    await wait(() => host!.open(session.id).items.some(i => i.kind === 'assistant'))
+    const started = Date.now()
+    await host!.interrupt(session.id)
+    // 原生约 1 秒后才回 interrupted：停止要等到它结束，而不是 300 毫秒就结束进程
+    expect(Date.now() - started).toBeGreaterThanOrEqual(900)
+    expect(host!.open(session.id).state).toBe('idle')
+    expect(messages().some(m => m.method === 'turn/interrupt')).toBe(true)
+    expect(messages().filter(m => m.method === 'thread/start' || m.method === 'thread/resume')).toHaveLength(1)
+    expect(
+      events.some(e => e.kind === 'session' && e.event.type === 'turn_completed' && e.event.outcome === 'interrupted'),
+    ).toBe(true)
+  })
+  it('turn/start 未返回时停止，返回后对返回的 turn id 补发 turn/interrupt', async () => {
+    // 停止后会话空闲，给足时间，让晚到的 turn/start 响应能回到还活着的进程
+    const { session, messages, log } = setup(3000)
+    await host!.send(session.id, '延迟')
+    await wait(() => existsSync(log) && messages().some(m => m.method === 'turn/start'))
+    await host!.interrupt(session.id)
+    expect(host!.open(session.id).state).toBe('idle')
+    await wait(() => messages().some(m => m.method === 'turn/interrupt'))
+    expect(messages().find(m => m.method === 'turn/interrupt').params).toEqual({
+      threadId: 'fake-thread',
+      turnId: 'turn-1',
+    })
+  })
+  it('找不到的审批也发 approval_resolved，不影响真正的审批', async () => {
+    const { session, events } = setup()
+    await host!.send(session.id, '审批')
+    await wait(() => host!.open(session.id).pending.length === 1)
+    host!.answer(session.id, 'missing-request', { type: 'deny' })
+    expect(
+      events.some(
+        e => e.kind === 'session' && e.event.type === 'approval_resolved' && e.event.requestId === 'missing-request',
+      ),
+    ).toBe(true)
+    expect(host!.open(session.id).pending).toHaveLength(1)
+    host!.answer(session.id, 'approve', { type: 'deny' })
+    await wait(() => host!.open(session.id).state === 'idle')
+    expect(host!.open(session.id).pending).toEqual([])
+  })
+  it('Codex 版本检查：读不到为 error，低于下限为 outdated，达到下限为 ready', () => {
+    expect(codexVersionStatus(null)).toEqual({ status: 'error', message: 'Could not read the Codex version' })
+    expect(codexVersionStatus('0.159.9')).toEqual({
+      status: 'outdated',
+      message: 'Codex is too old (requires 0.160.0 or later). Run npm i -g @openai/codex@latest',
+    })
+    expect(codexVersionStatus(CODEX_MIN_VERSION)).toEqual({ status: 'ready', message: null })
+    expect(codexVersionStatus('0.161.0')).toEqual({ status: 'ready', message: null })
   })
   it('文件 diff 和完整消息更新不重复累计文字，缓存拆分不重叠', () => {
     const items: unknown[] = []

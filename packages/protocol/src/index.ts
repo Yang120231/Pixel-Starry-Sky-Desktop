@@ -144,3 +144,5 @@ export {
 } from './session-metadata'
 export type { IpcChannelName, IpcChannelSpec, IpcKind, IpcRoute, IpcSpecial, IpcTrust } from './ipc/contract'
 export { IPC_CONTRACT, REMOTE_PROTOCOL } from './ipc/contract'
+export type { EngineDescriptor } from './engines'
+export { ENGINES, ENGINE_ORDER } from './engines'

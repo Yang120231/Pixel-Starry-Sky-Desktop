@@ -6,15 +6,16 @@ import { useEngineCatalog } from './catalog'
 import { useMachines, machineOf } from '@/features/machines/store'
 import { draftWorkspace } from '@/features/machines/drafts'
 import { notify } from '@/features/panes/store'
-import type {
-  Effort,
-  EngineId,
-  EngineInfo,
-  ImageAttachment,
-  PermissionMode,
-  QueuedMessage,
-  QueueSettings,
-  SessionSnapshot,
+import {
+  ENGINES,
+  type Effort,
+  type EngineId,
+  type EngineInfo,
+  type ImageAttachment,
+  type PermissionMode,
+  type QueuedMessage,
+  type QueueSettings,
+  type SessionSnapshot,
 } from '@pixelsky/protocol'
 import {
   isDemo,
@@ -325,8 +326,13 @@ export function useComposerController(
     (source === 'platform' ? groupId === platform.groupId && model === platform.model : model === platform.selfModel)
   const platformAvailable = true
   /** 平台模型切到自有时：完整的 Claude 模型名本机也认，其他（别的厂商）换回引擎默认 */
-  const selfModelFrom = (m: string | null): string | null =>
-    m && (engineId === 'codex' ? catalog?.models?.some(model => model.id === m) : /^claude-/.test(m)) ? m : null
+  const selfModelFrom = (m: string | null): string | null => {
+    const desc = ENGINES[engineId]
+    const known =
+      !!catalog?.models?.some(model => model.id === m || model.resolved === m) ||
+      (desc.nativeModelPrefix !== null && !!m?.startsWith(desc.nativeModelPrefix))
+    return m && known ? m : null
+  }
 
   let blocker: SourceBlocker | null = null
   if (source === 'platform') {
@@ -339,7 +345,9 @@ export function useComposerController(
       blocker = {
         kind: 'no-route',
         ...noRouteReason(platform, balance),
-        ...(engineId === 'codex' && platform.groups.length === 0 ? { message: tr('codex.noRoutes') } : {}),
+        ...(ENGINES[engineId].wireApi === 'responses' && platform.groups.length === 0
+          ? { message: tr('codex.noRoutes') }
+          : {}),
       }
     else if (needsBalance(group) && balance !== null && balance <= 0) blocker = { kind: 'balance' }
   } else if (engine && engine.status === 'unauthenticated') {

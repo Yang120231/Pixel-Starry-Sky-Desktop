@@ -247,12 +247,14 @@ export class HostTurn {
   async stopTask(id: string, taskId: string): Promise<void> {
     const s = this.ctx.runtimes.get(id)?.session
     if (!s) throw new Error('引擎没有在运行')
+    if (!s.stopTask) throw new Error('这个引擎没有后台任务')
     await s.stopTask(taskId)
   }
 
   async taskOutput(id: string, taskId: string): Promise<TaskOutput> {
     const s = this.ctx.runtimes.get(id)?.session
     if (!s) throw new Error('引擎没有在运行')
+    if (!s.taskOutput) throw new Error('这个引擎没有后台任务')
     return s.taskOutput(taskId)
   }
 
