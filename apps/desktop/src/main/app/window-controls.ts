@@ -1,6 +1,6 @@
 import { BrowserWindow, screen, type IpcMainInvokeEvent } from 'electron'
-import * as ipc from './ipc/guard'
-import type { WindowSnapLayout, WindowState } from '../shared/types/window'
+import * as ipc from '../ipc/guard'
+import type { WindowSnapLayout, WindowState } from '../../shared/types/window'
 
 interface Zone {
   x: number

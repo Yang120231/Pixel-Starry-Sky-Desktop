@@ -6,7 +6,7 @@ import type { BrowserPage, BrowserState } from '../../shared/types/project-brows
 import type { WorkspaceRef } from '../../shared/types/workspace'
 import { JsonStore, value, type ToolsHost } from '../core/project-tools/common'
 import { workspaceRef } from '../core/workspace-files'
-import { nativeText } from '../ui-language'
+import { nativeText } from '../app/ui-language'
 import type { AppContext } from '../app/context'
 import { machineOf } from '../machines/identity'
 import { browserRemoteUrl, browserTunnelUrl, remoteBrowserPort } from '../machines/browser-url'

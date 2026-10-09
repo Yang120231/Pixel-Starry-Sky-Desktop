@@ -3,10 +3,10 @@ import * as ipc from '../ipc/guard'
 import type { TerminalProfileInput } from '../../shared/types/terminal'
 import type { WorkspaceRef } from '../../shared/types/workspace'
 import { TerminalManager, type TerminalTarget } from './manager'
-import { nativeText } from '../ui-language'
+import { nativeText } from '../app/ui-language'
 import type { Machines } from '../machines/service'
 import { machineOf, argumentMachine } from '../machines/identity'
-import { RemoteTerminals } from '../machines/terminals'
+import { RemoteTerminals } from './remote'
 
 let manager: TerminalManager | undefined
 let remote: RemoteTerminals | undefined

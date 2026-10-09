@@ -7,9 +7,9 @@ import { createServer, type Server, type ServerResponse } from 'node:http'
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow, safeStorage, shell } from 'electron'
-import { nativeText, windowLocale } from './ui-language'
-import * as ipc from './ipc/guard'
-import type { AccountInfo, AccountPlan, AccountState, Quota } from '../shared/types/account'
+import { nativeText, windowLocale } from '../app/ui-language'
+import * as ipc from '../ipc/guard'
+import type { AccountInfo, AccountPlan, AccountState, Quota } from '../../shared/types/account'
 
 // ---------------------------------------------------------------------------
 // 常量

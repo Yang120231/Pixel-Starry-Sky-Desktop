@@ -1,6 +1,6 @@
 import { rangeWindow } from '@pixelsky/protocol'
 import type { PlatformCharge, PlatformSettlement, RemoteCallPage, RemoteCallsQuery } from '@pixelsky/protocol'
-import { platformFetch, signedInEmail } from './account'
+import { platformFetch, signedInEmail } from '../account/account'
 
 const date = (ms: number): string => new Date(ms).toISOString().slice(0, 10)
 async function query(params: URLSearchParams, signal: AbortSignal): Promise<unknown> {

@@ -1,14 +1,14 @@
 import { randomBytes } from 'node:crypto'
-import { platformGateway } from './platformGateway'
+import { platformGateway } from './gateway'
 import { once } from 'node:events'
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
 import type { SessionRecord } from '@pixelsky/protocol'
 import { CLAUDE_COMPACT_MARKER, rewriteCompaction } from '@pixelsky/engine'
-import type { PlatformGroupInfo } from '../shared/types/platform-catalog'
-import { platformFetch, signedInEmail } from './account'
-import * as ipc from './ipc/guard'
+import type { PlatformGroupInfo } from '../../shared/types/platform-catalog'
+import { platformFetch, signedInEmail } from '../account/account'
+import * as ipc from '../ipc/guard'
 
 async function jsonRequest(path: string, method = 'GET'): Promise<unknown> {
   const res = await platformFetch(path, { method, signal: AbortSignal.timeout(30_000) })

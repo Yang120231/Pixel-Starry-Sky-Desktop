@@ -2,7 +2,7 @@ import { once } from 'node:events'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Server } from 'node:http'
 import type { SessionRecord } from '@pixelsky/protocol'
-import { platformGateway } from './platformGateway'
+import { platformGateway } from './gateway'
 let server: Server
 afterEach(() => {
   server?.closeAllConnections()

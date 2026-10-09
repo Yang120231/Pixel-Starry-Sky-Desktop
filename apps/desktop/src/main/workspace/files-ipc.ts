@@ -1,13 +1,13 @@
 import { app, BrowserWindow, clipboard, dialog, shell, type IpcMainInvokeEvent } from 'electron'
-import { Editors } from './core/editors'
-import * as ipc from './ipc/guard'
-import { WorkspaceFiles, workspacePath, workspaceRef, type TargetResolver } from './core/workspace-files'
-import type { AppContext } from './app/context'
-import { resolveWorkspace } from './workspace/resolve'
-import { FILE_OPS } from './core/workspace/ops'
-import { opEntries } from './core/ops'
-import type { EditorKind } from '../shared/types/workspace'
-import { nativeText } from './ui-language'
+import { Editors } from '../core/editors'
+import * as ipc from '../ipc/guard'
+import { WorkspaceFiles, workspacePath, workspaceRef, type TargetResolver } from '../core/workspace-files'
+import type { AppContext } from '../app/context'
+import { resolveWorkspace } from './resolve'
+import { FILE_OPS } from '../core/workspace/ops'
+import { opEntries } from '../core/ops'
+import type { EditorKind } from '../../shared/types/workspace'
+import { nativeText } from '../app/ui-language'
 
 export async function initWorkspace(ctx: AppContext): Promise<void> {
   const resolveTarget: TargetResolver = ref => resolveWorkspace(ctx, ref)

@@ -3,11 +3,11 @@ import { realpathSync } from 'node:fs'
 import { app, dialog, safeStorage, shell } from 'electron'
 import { object, scope, text } from '@pixelsky/engine'
 import type { ExtensionLaunch, ExtensionScope, SessionRecord } from '@pixelsky/protocol'
-import type { WorkspaceRef } from '../shared/types/workspace'
-import * as ipc from './ipc/guard'
-import { ExtensionService } from './extensions/service'
-import { selectedMachine, type AppContext } from './app/context'
-import { resolveWorkspace } from './workspace/resolve'
+import type { WorkspaceRef } from '../../shared/types/workspace'
+import * as ipc from '../ipc/guard'
+import { ExtensionService } from './service'
+import { selectedMachine, type AppContext } from '../app/context'
+import { resolveWorkspace } from '../workspace/resolve'
 
 /**
  * 扩展（MCP / 插件 / 技能 / 命令行）的主进程一侧：服务实现在 extensions/service.ts。

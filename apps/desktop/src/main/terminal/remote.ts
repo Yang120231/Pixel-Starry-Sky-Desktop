@@ -5,10 +5,10 @@ import { readFile, writeFile } from 'node:fs/promises'
 import type { ClientChannel } from 'ssh2'
 import type { TerminalEvent, TerminalRecord, TerminalState } from '../../shared/types/terminal'
 import type { WorkspaceRef } from '../../shared/types/workspace'
-import { terminalTitle } from '../terminal/profiles'
-import { machineOf } from './identity'
-import { quoteSh } from './ssh'
-import type { Machines } from './service'
+import { terminalTitle } from './profiles'
+import { machineOf } from '../machines/identity'
+import { quoteSh } from '../machines/ssh'
+import type { Machines } from '../machines/service'
 
 interface Run {
   channel: ClientChannel
