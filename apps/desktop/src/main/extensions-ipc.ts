@@ -1,115 +1,127 @@
 import { join } from 'node:path'
 import { realpathSync } from 'node:fs'
-import { app, BrowserWindow, dialog, safeStorage, shell } from 'electron'
+import { app, dialog, safeStorage, shell } from 'electron'
 import { object, scope, text } from '@pixelsky/engine'
-import type { ExtensionScope, SessionRecord } from '@pixelsky/protocol'
+import type { ExtensionLaunch, ExtensionScope, SessionRecord } from '@pixelsky/protocol'
 import type { WorkspaceRef } from '../shared/types/workspace'
 import * as ipc from './ipc/guard'
 import { ExtensionService } from './extensions/service'
-import { resolveWorkspace } from './engine-ipc'
-import { selectedMachine } from './machines/service'
+import { selectedMachine, type AppContext } from './app/context'
+import { resolveWorkspace } from './workspace/resolve'
 
-let service: ExtensionService | null = null
-export function extensionService(): ExtensionService {
-  if (!service)
-    service = new ExtensionService(
-      join(app.getPath('userData'), 'extensions'),
-      {
-        available: () =>
-          safeStorage.isEncryptionAvailable() &&
-          (process.platform !== 'linux' || safeStorage.getSelectedStorageBackend() !== 'basic_text'),
-        encrypt: value => safeStorage.encryptString(value).toString('base64'),
-        decrypt: value => safeStorage.decryptString(Buffer.from(value, 'base64')),
-      },
-      () => ({ ...process.env, ...engineEnvironment?.() }),
-    )
-  return service
-}
-let engineEnvironment: ((engine?: 'claude' | 'codex') => Record<string, string>) | undefined
-export function prepareExtensions(record: SessionRecord): import('@pixelsky/protocol').ExtensionLaunch {
-  return extensionService().launch(record.cwd, record.engine, engineEnvironment?.(record.engine))
-}
-export function initExtensions(env: (engine?: 'claude' | 'codex') => Record<string, string>): void {
-  engineEnvironment = env
-  const project = (raw: unknown): string | null => {
-    if (raw == null) return null
-    const ref = object(raw)
-    return realpathSync(resolveWorkspace(ref as WorkspaceRef).path)
+/**
+ * 扩展（MCP / 插件 / 技能 / 命令行）的主进程一侧：服务实现在 extensions/service.ts。
+ * 服务在第一次用到时才创建（引擎启动会话时、或页面第一次请求时），引擎没加载时环境变量只用进程自己的。
+ */
+export class Extensions {
+  private service: ExtensionService | null = null
+
+  constructor(private readonly ctx: AppContext) {}
+
+  private env(engine: 'claude' | 'codex' = 'claude'): Record<string, string> | undefined {
+    return this.ctx.engine?.engineConfig()[engine].env
   }
-  const checkedScope = (raw: unknown): ExtensionScope => {
-    const s = scope(raw)
-    if (s.kind === 'project') {
-      // 渲染进程只能选已注册项目；传入路径由项目列表核对。
-      if (
-        !projectsProvider?.().some(path => {
-          try {
-            return realpathSync(path).toLowerCase() === s.path.toLowerCase()
-          } catch {
-            return false
-          }
-        })
+
+  get(): ExtensionService {
+    if (!this.service)
+      this.service = new ExtensionService(
+        join(app.getPath('userData'), 'extensions'),
+        {
+          available: () =>
+            safeStorage.isEncryptionAvailable() &&
+            (process.platform !== 'linux' || safeStorage.getSelectedStorageBackend() !== 'basic_text'),
+          encrypt: value => safeStorage.encryptString(value).toString('base64'),
+          decrypt: value => safeStorage.decryptString(Buffer.from(value, 'base64')),
+        },
+        () => ({ ...process.env, ...this.env() }),
       )
-        throw new Error('先添加该项目再设置项目范围')
+    return this.service
+  }
+
+  /** 会话启动前：给引擎准备这个工作目录生效的扩展 */
+  prepare(record: SessionRecord): ExtensionLaunch {
+    return this.get().launch(record.cwd, record.engine, this.env(record.engine))
+  }
+
+  register(): void {
+    const { ctx } = this
+    const project = (raw: unknown): string | null => {
+      if (raw == null) return null
+      const ref = object(raw)
+      return realpathSync(resolveWorkspace(ctx, ref as WorkspaceRef).path)
     }
-    return s
-  }
-  const changed = (): void => {
-    for (const win of BrowserWindow.getAllWindows()) if (!win.isDestroyed()) win.webContents.send('extensions:changed')
-  }
-  const handle = (name: string, fn: (...args: unknown[]) => unknown): void => {
-    ipc.handle(`extensions:${name}` as ipc.InvokeChannel, (_event, ...args) => {
-      if (selectedMachine() !== 'local') {
-        if (name === 'commands') return []
-        throw new Error('SSH_EXTENSIONS_REMOTE')
+    const checkedScope = (raw: unknown): ExtensionScope => {
+      const s = scope(raw)
+      if (s.kind === 'project') {
+        // 渲染进程只能选已注册项目；传入路径由项目列表核对。
+        if (
+          !ctx.engine
+            ?.projects()
+            .map(p => p.path)
+            .some(path => {
+              try {
+                return realpathSync(path).toLowerCase() === s.path.toLowerCase()
+              } catch {
+                return false
+              }
+            })
+        )
+          throw new Error('先添加该项目再设置项目范围')
       }
-      return fn(...args)
+      return s
+    }
+    const handle = (name: string, fn: (...args: unknown[]) => unknown): void => {
+      ipc.handle(`extensions:${name}` as ipc.InvokeChannel, (_event, ...args) => {
+        if (selectedMachine(ctx) !== 'local') {
+          if (name === 'commands') return []
+          throw new Error('SSH_EXTENSIONS_REMOTE')
+        }
+        return fn(...args)
+      })
+    }
+    const service = () => this.get()
+    const mutate = async <T>(fn: () => Promise<T> | T): Promise<T> => {
+      const value = await service().mutate(fn)
+      ctx.events.broadcast('extensions:changed')
+      return value
+    }
+    handle('state', ref => service().state(project(ref)))
+    handle('save', raw => {
+      const data = object(raw)
+      return mutate(() => service().upsert({ ...data, scope: checkedScope(data.scope) }))
     })
-  }
-  const mutate = async <T>(fn: () => Promise<T> | T): Promise<T> => {
-    const value = await extensionService().mutate(fn)
-    changed()
-    return value
-  }
-  handle('state', ref => extensionService().state(project(ref)))
-  handle('save', raw => {
-    const data = object(raw)
-    return mutate(() => extensionService().upsert({ ...data, scope: checkedScope(data.scope) }))
-  })
-  handle('import', raw => {
-    const data = object(raw)
-    return mutate(async () => {
-      const s = checkedScope(data.scope),
-        e = await extensionService().import({ ...data, scope: s })
-      return extensionService()
-        .state(s.kind === 'project' ? s.path : null)
-        .entries.find(x => x.id === e.id)!
+    handle('import', raw => {
+      const data = object(raw)
+      return mutate(async () => {
+        const s = checkedScope(data.scope),
+          e = await service().import({ ...data, scope: s })
+        return service()
+          .state(s.kind === 'project' ? s.path : null)
+          .entries.find(x => x.id === e.id)!
+      })
     })
-  })
-  handle('importMcp', (json, s) =>
-    mutate(() => extensionService().importMcp(text(json, 'JSON', 2 * 1024 * 1024), checkedScope(s))),
-  )
-  handle('toggle', (id, enabled) => {
-    if (typeof enabled !== 'boolean') throw new Error('开关值不正确')
-    return mutate(() => extensionService().toggle(text(id, 'id'), enabled))
-  })
-  handle('remove', id => mutate(() => extensionService().remove(text(id, 'id'))))
-  handle('check', (id, ref) => mutate(() => extensionService().check(text(id, 'id'), project(ref))))
-  handle('update', (id, apply) => mutate(() => extensionService().update(text(id, 'id'), apply === true)))
-  handle('skillText', (id, ref) => extensionService().skillText(text(id, 'id'), project(ref)))
-  handle('commands', ref => extensionService().commands(project(ref)))
-  handle('reveal', (id, ref) => {
-    shell.showItemInFolder(extensionService().location(text(id, 'id'), project(ref)))
-  })
-  handle('choose', async kind => {
-    const selected =
-      kind === 'program'
-        ? await dialog.showOpenDialog({ title: '选择命令行程序', properties: ['openFile'] })
-        : await dialog.showOpenDialog({ title: '选择插件或技能目录', properties: ['openDirectory'] })
-    return selected.canceled ? null : (selected.filePaths[0] ?? null)
-  })
-  app.on('will-quit', () => service?.close())
-}
-let projectsProvider: (() => string[]) | undefined
-export function setExtensionProjects(fn: () => string[]): void {
-  projectsProvider = fn
+    handle('importMcp', (json, s) =>
+      mutate(() => service().importMcp(text(json, 'JSON', 2 * 1024 * 1024), checkedScope(s))),
+    )
+    handle('toggle', (id, enabled) => {
+      if (typeof enabled !== 'boolean') throw new Error('开关值不正确')
+      return mutate(() => service().toggle(text(id, 'id'), enabled))
+    })
+    handle('remove', id => mutate(() => service().remove(text(id, 'id'))))
+    handle('check', (id, ref) => mutate(() => service().check(text(id, 'id'), project(ref))))
+    handle('update', (id, apply) => mutate(() => service().update(text(id, 'id'), apply === true)))
+    handle('skillText', (id, ref) => service().skillText(text(id, 'id'), project(ref)))
+    handle('commands', ref => service().commands(project(ref)))
+    handle('reveal', (id, ref) => {
+      shell.showItemInFolder(service().location(text(id, 'id'), project(ref)))
+    })
+    handle('choose', async kind => {
+      const selected =
+        kind === 'program'
+          ? await dialog.showOpenDialog({ title: '选择命令行程序', properties: ['openFile'] })
+          : await dialog.showOpenDialog({ title: '选择插件或技能目录', properties: ['openDirectory'] })
+      return selected.canceled ? null : (selected.filePaths[0] ?? null)
+    })
+    app.on('will-quit', () => this.service?.close())
+  }
 }

@@ -7,8 +7,7 @@ import type { WorkspaceRef } from '../../shared/types/workspace'
 import { JsonStore, value, type ToolsHost } from '../core/project-tools/common'
 import { workspaceRef } from '../core/workspace-files'
 import { nativeText } from '../ui-language'
-import { registerShutdown } from '../shutdown'
-import { machines } from '../machines/service'
+import type { AppContext } from '../app/context'
 import { machineOf } from '../machines/identity'
 import { browserRemoteUrl, browserTunnelUrl, remoteBrowserPort } from '../machines/browser-url'
 
@@ -30,7 +29,7 @@ export function browserUrl(raw: unknown): string {
     throw new Error('只支持 HTTP 或 HTTPS 地址')
   return url.href
 }
-export async function initProjectBrowser(dir: string, host: ToolsHost): Promise<void> {
+export async function initProjectBrowser(ctx: AppContext, dir: string, host: ToolsHost): Promise<void> {
   const store = new JsonStore<{ scopes: Record<string, StoredScope> }>(join(dir, 'browser.json'), { scopes: {} })
   await store.init()
   for (const scope of Object.values(store.data.scopes))
@@ -64,8 +63,7 @@ export async function initProjectBrowser(dir: string, host: ToolsHost): Promise<
     return { scope, pages: s.pages, activeId: s.activeId }
   }
   const broadcast = (scope: string): void => {
-    for (const win of BrowserWindow.getAllWindows())
-      if (!win.isDestroyed()) win.webContents.send('projectBrowser:changed', displayState(state(scope)))
+    ctx.events.broadcast('projectBrowser:changed', displayState(state(scope)))
   }
   const displayState = (value: BrowserState): BrowserState => ({
     ...value,
@@ -75,7 +73,7 @@ export async function initProjectBrowser(dir: string, host: ToolsHost): Promise<
     const machine = scopeMachines.get(scope) ?? 'local',
       port = remoteBrowserPort(url)
     if (machine === 'local' || port === null) return url
-    return browserTunnelUrl(url, await machines!.connection(machine).forwardPort(port))
+    return browserTunnelUrl(url, await ctx.machines!.connection(machine).forwardPort(port))
   }
   const persist = (): void => {
     void store.transaction(() => {}).catch(() => {})
@@ -401,7 +399,7 @@ export async function initProjectBrowser(dir: string, host: ToolsHost): Promise<
     broadcast(scope)
     return state(scope)
   })
-  registerShutdown(() => {
+  ctx.lifecycle.onShutdown(() => {
     for (const v of views.values()) if (!v.view.webContents.isDestroyed()) v.view.webContents.close()
     views.clear()
   })

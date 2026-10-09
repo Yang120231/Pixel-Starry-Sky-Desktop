@@ -2,13 +2,15 @@ import { app, BrowserWindow, clipboard, dialog, shell, type IpcMainInvokeEvent }
 import { Editors } from './core/editors'
 import * as ipc from './ipc/guard'
 import { WorkspaceFiles, workspacePath, workspaceRef, type TargetResolver } from './core/workspace-files'
+import type { AppContext } from './app/context'
+import { resolveWorkspace } from './workspace/resolve'
 import { FILE_OPS } from './core/workspace/ops'
 import { opEntries } from './core/ops'
 import type { EditorKind } from '../shared/types/workspace'
 import { nativeText } from './ui-language'
-import { machines } from './machines/service'
 
-export async function initWorkspace(resolveTarget: TargetResolver): Promise<void> {
+export async function initWorkspace(ctx: AppContext): Promise<void> {
+  const resolveTarget: TargetResolver = ref => resolveWorkspace(ctx, ref)
   const files = new WorkspaceFiles(resolveTarget)
   const icons = new Map<string, string>()
   const editors = new Editors(app.getPath('userData'), resolveTarget, async path => {
@@ -20,8 +22,8 @@ export async function initWorkspace(resolveTarget: TargetResolver): Promise<void
     ipc.handle(
       name,
       (e, ...args) =>
-        machines && (name.startsWith('files:') || name === 'editor:open')
-          ? machines.invoke(name, args, () => fn(e, ...args))
+        ctx.machines && (name.startsWith('files:') || name === 'editor:open')
+          ? ctx.machines.invoke(name, args, () => fn(e, ...args))
           : fn(e, ...args),
       { deny: '不允许的调用方' },
     )

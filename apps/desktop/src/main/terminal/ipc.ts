@@ -4,7 +4,7 @@ import type { TerminalProfileInput } from '../../shared/types/terminal'
 import type { WorkspaceRef } from '../../shared/types/workspace'
 import { TerminalManager, type TerminalTarget } from './manager'
 import { nativeText } from '../ui-language'
-import { machines } from '../machines/service'
+import type { Machines } from '../machines/service'
 import { machineOf, argumentMachine } from '../machines/identity'
 import { RemoteTerminals } from '../machines/terminals'
 
@@ -23,7 +23,10 @@ function id(value: unknown): string {
   if (typeof value !== 'string' || !value || value.length > 160) throw new Error('终端请求不正确')
   return value
 }
-export async function initTerminalIpc(resolve: (ref: WorkspaceRef) => TerminalTarget): Promise<() => Promise<void>> {
+export async function initTerminalIpc(
+  machines: Machines | null,
+  resolve: (ref: WorkspaceRef) => TerminalTarget,
+): Promise<() => Promise<void>> {
   const service = new TerminalManager(app.getPath('userData'), resolve, (owner, event) => {
     const target = webContents.fromId(owner)
     if (target && !target.isDestroyed()) target.send('terminal:event', event)

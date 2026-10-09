@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, safeStorage } from 'electron'
+import { app, clipboard, dialog, safeStorage } from 'electron'
 import { join, isAbsolute, posix } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { hostname, homedir } from 'node:os'
@@ -10,7 +10,8 @@ import type { WorkspaceRef, WorkspaceTarget } from '../../shared/types/workspace
 import * as ipc from '../ipc/guard'
 import { platformCharges } from '../platformBilling'
 import { validateQueuedInput } from '../platform'
-import { registerShutdown } from '../shutdown'
+import type { AppContext } from '../app/context'
+import type { EventBus, PushChannel } from '../app/events'
 import { FingerprintRequired, SshConnection } from './ssh'
 import { machineOf, remoteIds, remoteArguments, remoteMethod } from './identity'
 import { resolveRoute } from './routing'
@@ -56,10 +57,6 @@ function input(value: MachineInput): MachineInput {
     passphrase: typeof value.passphrase === 'string' ? value.passphrase : undefined,
   }
 }
-export let machines: Machines | null = null
-export const selectedMachine = (): string => machines?.currentId ?? 'local'
-export const remoteRecord = (id: string): SessionRecord | null => machines?.record(id) ?? null
-
 export class Machines {
   currentId = 'local'
   private configs: StoredMachine[] = []
@@ -71,6 +68,7 @@ export class Machines {
   constructor(
     private host: EngineHost,
     private environment: (record: SessionRecord) => NodeJS.ProcessEnv,
+    private events: EventBus,
   ) {}
   async init(): Promise<void> {
     try {
@@ -131,11 +129,10 @@ export class Machines {
     }
   }
   changed(): void {
-    for (const win of BrowserWindow.getAllWindows())
-      if (!win.isDestroyed()) win.webContents.send('machines:changed', this.state())
+    this.events.broadcast('machines:changed', this.state())
   }
-  broadcast(channel: string, value: unknown): void {
-    for (const win of BrowserWindow.getAllWindows()) if (!win.isDestroyed()) win.webContents.send(channel, value)
+  broadcast(channel: PushChannel, value: unknown): void {
+    this.events.broadcast(channel, value)
   }
   projects(): ProjectRecord[] {
     return [...this.host.projects(), ...[...this.states.values()].flatMap(s => s.projects)]
@@ -401,12 +398,14 @@ export class Machines {
     }
   }
 }
+/** 创建 SSH 机器服务并放进 ctx.machines（读配置之前就放，和原来的时机一致），注册 machines:* 接口 */
 export async function initMachines(
+  ctx: AppContext,
   host: EngineHost,
   environment: (record: SessionRecord) => NodeJS.ProcessEnv,
 ): Promise<Machines> {
-  const service = new Machines(host, environment)
-  machines = service
+  const service = new Machines(host, environment, ctx.events)
+  ctx.machines = service
   await service.init()
   const actions: Record<string, (...args: any[]) => unknown> = {
     state: () => service.state(),
@@ -425,7 +424,7 @@ export async function initMachines(
   }
   for (const [name, fn] of Object.entries(actions))
     ipc.handle(`machines:${name}` as ipc.InvokeChannel, (_event, ...args) => fn(...args))
-  registerShutdown(() => {
+  ctx.lifecycle.onShutdown(() => {
     for (const machine of service.state().machines) if (machine.id !== 'local') service.disconnect(machine.id)
   })
   return service

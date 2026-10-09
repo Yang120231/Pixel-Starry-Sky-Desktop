@@ -5,14 +5,14 @@ import { app, BrowserWindow, dialog, Menu, nativeTheme, shell, type MenuItemCons
 import { initAccount } from './account'
 import * as ipc from './ipc/guard'
 import { initAppInfo } from './app-info'
-import { initEngine, resolveWorkspace, projectToolsHost } from './engine-ipc'
+import { initEngine } from './engine-ipc'
 import { initWorkspace } from './workspace-ipc'
 import { initWindowControls, observeWindowControls } from './window-controls'
 import { initUiLanguage, nativeText } from './ui-language'
 import { initProjectTools } from './project-tools'
 import { initNotifications } from './notifications'
 import { confirmTerminalClose, closeWindowTerminals } from './terminal/ipc'
-import { shutdownServices } from './shutdown'
+import { createAppContext } from './app/context'
 import type { Locale } from '../shared/i18n/messages'
 
 type ResolvedTheme = 'light' | 'dark'
@@ -28,6 +28,8 @@ const TITLE_BAR_HEIGHT = 48
 const captureDir = process.env.PIXELSKY_CAPTURE
 // 调试端口会向本机所有进程开放整个页面，只在开发环境（未打包）允许打开
 const debugPort = app.isPackaged ? undefined : process.env.PIXELSKY_DEBUG_PORT
+/** 主进程共用的状态：事件、退出任务、引擎 / SSH 机器 / 项目工具（app/context.ts） */
+const ctx = createAppContext()
 const closingAllowed = new WeakSet<BrowserWindow>()
 const finishing = new WeakSet<BrowserWindow>()
 let quitRequested = false
@@ -69,7 +71,7 @@ app.on('before-quit', event => {
     return
   }
   quitRequested = true
-  void shutdownServices().finally(() => {
+  void ctx.lifecycle.shutdown().finally(() => {
     quitReady = true
     app.quit()
   })
@@ -267,9 +269,9 @@ app.whenReady().then(async () => {
   initNotifications() // 系统通知，见 notifications.ts
   initAccount() // 账号登录与额度，见 account.ts
   initAppInfo() // 「关于」页的版本与运行环境，见 app-info.ts
-  await initEngine() // 引擎系统（Claude Code 等），见 engine-ipc.ts
-  await initWorkspace(resolveWorkspace)
-  await initProjectTools(projectToolsHost)
+  await initEngine(ctx) // 引擎系统（Claude Code 等），见 engine-ipc.ts
+  await initWorkspace(ctx)
+  await initProjectTools(ctx)
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
