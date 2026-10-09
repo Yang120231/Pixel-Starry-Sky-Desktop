@@ -8,4 +8,23 @@ export { CodexAdapter } from './codex'
 export { searchQuery } from './search'
 export { artifactQuery, collectArtifacts, recordedIn, sessionArtifacts, within } from './artifacts'
 export { UsageStore, USAGE_RETENTION_DAYS, type UsageQuery } from './usage'
-export * from './extensions/parse'
+export {
+  MASKED_SECRET,
+  contentVersion,
+  dictionary,
+  digest,
+  effective,
+  expandedMcp,
+  extensionName,
+  files,
+  input,
+  inside,
+  jsonFile,
+  mcpConfig,
+  object,
+  pluginDirectory,
+  scope,
+  skillFile,
+  strings,
+  text,
+} from './extensions/parse'
