@@ -56,9 +56,14 @@ function queryLocal(query: RemoteCallsQuery, now: number): RemoteCallPage {
           ? today.getTime() - 29 * DAY
           : today.getTime() - 89 * DAY
   const all = demoRemoteCalls(now)
-    .filter((c) => c.createdAt >= from && c.createdAt <= now && (query.model === null || c.model === query.model))
+    .filter(c => c.createdAt >= from && c.createdAt <= now && (query.model === null || c.model === query.model))
     .sort((a, b) => b.createdAt - a.createdAt)
-  return { calls: all.slice(query.offset, query.offset + query.limit), total: all.length, offset: query.offset, nextCursor: null }
+  return {
+    calls: all.slice(query.offset, query.offset + query.limit),
+    total: all.length,
+    offset: query.offset,
+    nextCursor: null,
+  }
 }
 
 /** 读取一页账号调用记录 */
@@ -81,9 +86,11 @@ export function useRemoteCalls(query: RemoteCallsQuery): RemoteCallsResult {
     }
     setResult({ page: null, loading: true, error: null, status: 'loading' })
     b.listCalls!({ ...query, now })
-      .then((page) => !cancelled && setResult({ page, loading: false, error: null, status: 'ready' }))
-      .catch((e: unknown) =>
-        !cancelled && setResult({ page: null, loading: false, error: String((e as Error)?.message ?? e), status: 'error' }),
+      .then(page => !cancelled && setResult({ page, loading: false, error: null, status: 'ready' }))
+      .catch(
+        (e: unknown) =>
+          !cancelled &&
+          setResult({ page: null, loading: false, error: String((e as Error)?.message ?? e), status: 'error' }),
       )
     return () => {
       cancelled = true

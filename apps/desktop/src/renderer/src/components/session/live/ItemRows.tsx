@@ -37,12 +37,22 @@ type ItemOf<K extends Item['kind']> = Extract<Item, { kind: K }>
 /** actions：气泡左侧、底部对齐的操作（悬停显示），不额外占行高 */
 export function UserBubble({ item, actions }: { item: ItemOf<'user'>; actions?: ReactNode }) {
   useI18n()
-  if (item.mode === 'guidance') return <div className="border-l border-accent-line pl-3 text-list whitespace-pre-wrap text-fg-muted"><span className="mr-2 text-accent-fg">{tr("session.live.ItemRows.message241")}</span>{item.text}</div>
+  if (item.mode === 'guidance')
+    return (
+      <div className="border-l border-accent-line pl-3 text-list whitespace-pre-wrap text-fg-muted">
+        <span className="mr-2 text-accent-fg">{tr('session.live.ItemRows.message241')}</span>
+        {item.text}
+      </div>
+    )
   return (
     <div className="flex items-end justify-end gap-1">
       {actions}
       <div className="conversation-user-bubble rounded-2xl rounded-br-md bg-subtle px-4 py-2.5 text-prose break-words whitespace-pre-wrap text-fg">
-        {!!item.attachments?.length && <div className="mb-2"><ImageAttachments images={item.attachments} /></div>}
+        {!!item.attachments?.length && (
+          <div className="mb-2">
+            <ImageAttachments images={item.attachments} />
+          </div>
+        )}
         {item.text}
       </div>
     </div>
@@ -70,11 +80,11 @@ export function ReasoningBlock({ item }: { item: ItemOf<'reasoning'> }) {
     <div>
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen(v => !v)}
         className="flex h-[30px] items-center gap-2 rounded-md px-2 text-list text-fg-muted hover:bg-hover hover:text-fg-secondary"
       >
         <Brain size={15} strokeWidth={1.5} className="shrink-0" />
-        <span>{running ? tr("session.live.ItemRows.message242") : tr("session.live.ItemRows.message243")}</span>
+        <span>{running ? tr('session.live.ItemRows.message242') : tr('session.live.ItemRows.message243')}</span>
         {running ? <Spinner size={13} /> : <Chevron open={open} />}
       </button>
       {open && item.text && (
@@ -97,9 +107,12 @@ export function DiffView({ diff, path, className }: { diff: string; path?: strin
   const code = useMemo(() => {
     const lang = languageFromPath(path)
     if (!lang) return null
-    return highlightLines(lines.map((l) => (isCodeLine(l) ? l.slice(1) : '')).join('\n'), lang)
+    return highlightLines(lines.map(l => (isCodeLine(l) ? l.slice(1) : '')).join('\n'), lang)
   }, [lines, path])
-  if (!diff) return <div className={cn('px-3 py-2 text-meta text-fg-faint', className)}>{tr("session.live.ItemRows.message244")}</div>
+  if (!diff)
+    return (
+      <div className={cn('px-3 py-2 text-meta text-fg-faint', className)}>{tr('session.live.ItemRows.message244')}</div>
+    )
   return (
     <pre className={cn('overflow-auto font-mono text-meta leading-[1.6]', className)}>
       {lines.map((line, i) => {
@@ -117,7 +130,9 @@ export function DiffView({ diff, path, className }: { diff: string; path?: strin
           >
             {highlighted ? (
               <>
-                <span className={line[0] === '+' ? 'text-success' : line[0] === '-' ? 'text-danger' : undefined}>{line[0]}</span>
+                <span className={line[0] === '+' ? 'text-success' : line[0] === '-' ? 'text-danger' : undefined}>
+                  {line[0]}
+                </span>
                 {code[i]}
               </>
             ) : (
@@ -146,18 +161,43 @@ function StatusMark({ status, okMark = true }: { status: ItemStatus; okMark?: bo
     case 'failed':
       return <X size={14} strokeWidth={2} className="shrink-0 text-danger" />
     case 'declined':
-      return <span className="inline-flex shrink-0 items-center gap-1 text-meta text-fg-muted"><Ban size={12} strokeWidth={1.75} />{tr("session.live.ItemRows.message245")}</span>
+      return (
+        <span className="inline-flex shrink-0 items-center gap-1 text-meta text-fg-muted">
+          <Ban size={12} strokeWidth={1.75} />
+          {tr('session.live.ItemRows.message245')}
+        </span>
+      )
     case 'interrupted':
-      return <span className="shrink-0 text-meta text-fg-muted">{tr("session.live.ItemRows.message246")}</span>
+      return <span className="shrink-0 text-meta text-fg-muted">{tr('session.live.ItemRows.message246')}</span>
   }
 }
 
 const TOOL_META: Record<ToolKind, { icon: LucideIcon; verb: string }> = {
-  read: { icon: FileText, get verb() { return tr("session.live.ItemRows.message247") } },
-  search: { icon: Search, get verb() { return tr("session.live.ItemRows.message248") } },
-  web: { icon: Globe, get verb() { return tr("session.live.ItemRows.message249") } },
+  read: {
+    icon: FileText,
+    get verb() {
+      return tr('session.live.ItemRows.message247')
+    },
+  },
+  search: {
+    icon: Search,
+    get verb() {
+      return tr('session.live.ItemRows.message248')
+    },
+  },
+  web: {
+    icon: Globe,
+    get verb() {
+      return tr('session.live.ItemRows.message249')
+    },
+  },
   mcp: { icon: Plug, verb: 'MCP' },
-  task: { icon: Bot, get verb() { return tr("session.live.ItemRows.message250") } },
+  task: {
+    icon: Bot,
+    get verb() {
+      return tr('session.live.ItemRows.message250')
+    },
+  },
   other: { icon: Wrench, verb: '' },
 }
 
@@ -213,7 +253,10 @@ function SubagentTag({ name }: { name?: string }) {
   useI18n()
   if (!name) return null
   return (
-    <span className="inline-flex max-w-40 shrink-0 items-center gap-1 rounded-sm bg-subtle px-1.5 text-label text-fg-muted" title={tr("session.live.ItemRows.message251", { p0: name })}>
+    <span
+      className="inline-flex max-w-40 shrink-0 items-center gap-1 rounded-sm bg-subtle px-1.5 text-label text-fg-muted"
+      title={tr('session.live.ItemRows.message251', { p0: name })}
+    >
       <Bot size={11} strokeWidth={1.75} className="shrink-0" />
       <span className="truncate">{name}</span>
     </span>
@@ -223,7 +266,9 @@ function SubagentTag({ name }: { name?: string }) {
 const OUTPUT_BOX = 'mt-1 mb-1.5 ml-[23px] max-h-72 overflow-auto rounded-lg border border-line-card bg-subtle'
 
 function fileVerb(changes: FileChange[]): string {
-  return changes.length === 1 && changes[0].kind === 'add' ? tr("session.live.ItemRows.message252") : tr("session.live.ItemRows.message253")
+  return changes.length === 1 && changes[0].kind === 'add'
+    ? tr('session.live.ItemRows.message252')
+    : tr('session.live.ItemRows.message253')
 }
 
 /** 工具调用的一行：运行命令 / 编辑文件 / 读取 / 搜索 / 网页 / MCP / 子任务；点开看输出或 diff */
@@ -232,22 +277,32 @@ export function ToolItemRow({ item }: { item: ItemOf<'command' | 'file_change' |
   const [open, setOpen] = useState(false)
   const location = useItemNavigation()
   const row = useRef<HTMLDivElement>(null)
-  const workspace = useActiveWorkspace(), [fileError, setFileError] = useState('')
+  const workspace = useActiveWorkspace(),
+    [fileError, setFileError] = useState('')
   useEffect(() => {
-    if (location?.itemId === item.id && row.current?.closest<HTMLElement>('[data-search-session]')?.dataset.searchSession === location.sessionId) setOpen(true)
+    if (
+      location?.itemId === item.id &&
+      row.current?.closest<HTMLElement>('[data-search-session]')?.dataset.searchSession === location.sessionId
+    )
+      setOpen(true)
   }, [location, item.id])
   const openTrace = useOpenTrace()
-  const toggle = () => setOpen((v) => !v)
+  const toggle = () => setOpen(v => !v)
   const openChangedFile = (change: FileChange): void => {
     const sessionId = row.current?.closest<HTMLElement>('[data-search-session]')?.dataset.searchSession
     const ref = sessionId ? { sessionId } : workspace.ref
     if (!ref) return
-    const added = change.diff.split('\n').filter(l => l.startsWith('+') && !l.startsWith('+++')).map(l => l.slice(1)).join('\n')
+    const added = change.diff
+      .split('\n')
+      .filter(l => l.startsWith('+') && !l.startsWith('+++'))
+      .map(l => l.slice(1))
+      .join('\n')
     void openFile(ref, change.path, undefined, 1, change.newText || added).catch(e => setFileError(e.message))
   }
 
   if (item.kind === 'command') {
-    const verb = item.status === 'running' ? tr("session.live.ItemRows.message254") : tr("session.live.ItemRows.message255")
+    const verb =
+      item.status === 'running' ? tr('session.live.ItemRows.message254') : tr('session.live.ItemRows.message255')
     return (
       <div ref={row}>
         <Row
@@ -263,11 +318,20 @@ export function ToolItemRow({ item }: { item: ItemOf<'command' | 'file_change' |
             </>
           }
         >
-          <code className="truncate rounded-sm bg-subtle px-1.5 py-0.5 font-mono text-[length:calc(12.5px*var(--font-scale,1))] text-fg" title={item.description ?? item.command}>
+          <code
+            className="truncate rounded-sm bg-subtle px-1.5 py-0.5 font-mono text-[length:calc(12.5px*var(--font-scale,1))] text-fg"
+            title={item.description ?? item.command}
+          >
             {item.command}
           </code>
         </Row>
-        {open && item.output && <pre className={cn(OUTPUT_BOX, 'p-3 font-mono text-meta leading-[1.6] whitespace-pre-wrap text-fg-secondary')}>{item.output}</pre>}
+        {open && item.output && (
+          <pre
+            className={cn(OUTPUT_BOX, 'p-3 font-mono text-meta leading-[1.6] whitespace-pre-wrap text-fg-secondary')}
+          >
+            {item.output}
+          </pre>
+        )}
       </div>
     )
   }
@@ -278,16 +342,46 @@ export function ToolItemRow({ item }: { item: ItemOf<'command' | 'file_change' |
     return (
       <div ref={row}>
         <div className="flex min-h-[30px] min-w-0 items-center gap-2 rounded-md px-2 text-list text-fg-secondary">
-          {item.changes[0]?.kind === 'add' ? <FilePlus size={15} className="shrink-0 text-fg-muted" /> : <FilePen size={15} className="shrink-0 text-fg-muted" />}
+          {item.changes[0]?.kind === 'add' ? (
+            <FilePlus size={15} className="shrink-0 text-fg-muted" />
+          ) : (
+            <FilePen size={15} className="shrink-0 text-fg-muted" />
+          )}
           <span className="shrink-0">{fileVerb(item.changes)}</span>
-          <div className="flex min-w-0 flex-1 gap-2 overflow-hidden">{item.changes.map(c => <button key={c.path} type="button" title={tr("session.live.ItemRows.message256", { p0: c.path })} onClick={() => openChangedFile(c)} className="truncate text-left font-mono text-meta text-code-path hover:underline">{c.path}</button>)}</div>
-          {(added > 0 || removed > 0) && <DiffStat added={added} removed={removed} className="text-meta" />}<StatusMark status={item.status} okMark={false} /><SubagentTag name={item.subagent} />
-          {item.changes.some(c => c.diff) && <button aria-label={open ? tr("session.live.ItemRows.message257") : tr("session.live.ItemRows.message258")} onClick={toggle} className="rounded-sm p-1 hover:bg-hover"><Chevron open={open} /></button>}
+          <div className="flex min-w-0 flex-1 gap-2 overflow-hidden">
+            {item.changes.map(c => (
+              <button
+                key={c.path}
+                type="button"
+                title={tr('session.live.ItemRows.message256', { p0: c.path })}
+                onClick={() => openChangedFile(c)}
+                className="truncate text-left font-mono text-meta text-code-path hover:underline"
+              >
+                {c.path}
+              </button>
+            ))}
+          </div>
+          {(added > 0 || removed > 0) && <DiffStat added={added} removed={removed} className="text-meta" />}
+          <StatusMark status={item.status} okMark={false} />
+          <SubagentTag name={item.subagent} />
+          {item.changes.some(c => c.diff) && (
+            <button
+              aria-label={open ? tr('session.live.ItemRows.message257') : tr('session.live.ItemRows.message258')}
+              onClick={toggle}
+              className="rounded-sm p-1 hover:bg-hover"
+            >
+              <Chevron open={open} />
+            </button>
+          )}
         </div>
-        {fileError && <p role="status" className="px-2 text-meta text-danger">{fileError}</p>}
+        {fileError && (
+          <p role="status" className="px-2 text-meta text-danger">
+            {fileError}
+          </p>
+        )}
         {open && (
           <div className={cn(OUTPUT_BOX, 'bg-surface py-1.5')}>
-            {item.changes.map((c) => (
+            {item.changes.map(c => (
               <div key={c.path}>
                 {item.changes.length > 1 && <div className="px-3 pt-1 font-mono text-meta text-fg-muted">{c.path}</div>}
                 <DiffView diff={c.diff} path={c.path} />
@@ -306,7 +400,7 @@ export function ToolItemRow({ item }: { item: ItemOf<'command' | 'file_change' |
     <div ref={row}>
       <Row
         icon={meta.icon}
-        verb={item.name === 'Workflow' ? tr("session.live.ItemRows.message259") : meta.verb || item.name}
+        verb={item.name === 'Workflow' ? tr('session.live.ItemRows.message259') : meta.verb || item.name}
         expandable={!!item.output}
         open={open}
         onToggle={toggle}
@@ -322,7 +416,9 @@ export function ToolItemRow({ item }: { item: ItemOf<'command' | 'file_change' |
               type="button"
               onClick={() => openTrace?.({ toolUseId: item.id })}
               className="shrink-0 rounded-md px-1.5 py-1 text-meta text-accent-fg hover:bg-hover"
-            >{tr("session.live.ItemRows.message260")} </button>
+            >
+              {tr('session.live.ItemRows.message260')}{' '}
+            </button>
           ) : undefined
         }
       >
@@ -330,7 +426,11 @@ export function ToolItemRow({ item }: { item: ItemOf<'command' | 'file_change' |
           {item.title}
         </span>
       </Row>
-      {open && item.output && <pre className={cn(OUTPUT_BOX, 'p-3 font-mono text-meta leading-[1.6] whitespace-pre-wrap text-fg-secondary')}>{item.output}</pre>}
+      {open && item.output && (
+        <pre className={cn(OUTPUT_BOX, 'p-3 font-mono text-meta leading-[1.6] whitespace-pre-wrap text-fg-secondary')}>
+          {item.output}
+        </pre>
+      )}
     </div>
   )
 }
@@ -339,12 +439,12 @@ export function ToolItemRow({ item }: { item: ItemOf<'command' | 'file_change' |
 export function TodoCard({ item }: { item: ItemOf<'todo'> }) {
   useI18n()
   if (item.steps.length === 0) return null
-  const done = item.steps.filter((s) => s.status === 'completed').length
+  const done = item.steps.filter(s => s.status === 'completed').length
   return (
     <div className="rounded-xl border border-line-card bg-surface px-3.5 py-3 shadow-sm">
       <div className="mb-1.5 flex items-center gap-2 text-list text-fg-secondary">
         <ListTodo size={15} strokeWidth={1.5} className="text-fg-muted" />
-        <span>{tr("session.live.ItemRows.message261")}</span>
+        <span>{tr('session.live.ItemRows.message261')}</span>
         <span className="text-meta text-fg-faint tabular-nums">
           {done}/{item.steps.length}
         </span>
@@ -362,7 +462,12 @@ export function TodoCard({ item }: { item: ItemOf<'todo'> }) {
               {s.status === 'completed' && <Check size={10} strokeWidth={3} />}
               {s.status === 'in_progress' && <span className="size-1.5 rounded-full bg-accent" />}
             </span>
-            <span className={cn(s.status === 'completed' ? 'text-fg-muted line-through' : 'text-fg', s.status === 'in_progress' && 'font-medium')}>
+            <span
+              className={cn(
+                s.status === 'completed' ? 'text-fg-muted line-through' : 'text-fg',
+                s.status === 'in_progress' && 'font-medium',
+              )}
+            >
               {s.text}
             </span>
           </li>
@@ -397,17 +502,26 @@ export function NoticeRow({ item }: { item: ItemOf<'notice'> }) {
           <button
             type="button"
             aria-expanded={open}
-            onClick={() => setOpen((v) => !v)}
+            onClick={() => setOpen(v => !v)}
             className="press -my-0.5 inline-flex h-6 shrink-0 items-center gap-0.5 rounded-md px-1.5 text-meta opacity-80 hover:bg-danger/10 hover:opacity-100"
           >
             {tr(open ? 'session.notice.hideDetail' : 'session.notice.showDetail')}
-            <ChevronRight size={13} strokeWidth={1.5} className={cn('transition-transform duration-(--dur-fast)', open && 'rotate-90')} />
+            <ChevronRight
+              size={13}
+              strokeWidth={1.5}
+              className={cn('transition-transform duration-(--dur-fast)', open && 'rotate-90')}
+            />
           </button>
         )}
       </div>
       {detail && open && (
-        <div data-notice-detail className="mt-2 ml-[23px] rounded-md border border-line-subtle bg-surface/70 text-fg-secondary">
-          <pre className="selectable max-h-60 overflow-auto px-3 py-2 font-mono text-meta break-all whitespace-pre-wrap">{detail}</pre>
+        <div
+          data-notice-detail
+          className="mt-2 ml-[23px] rounded-md border border-line-subtle bg-surface/70 text-fg-secondary"
+        >
+          <pre className="selectable max-h-60 overflow-auto px-3 py-2 font-mono text-meta break-all whitespace-pre-wrap">
+            {detail}
+          </pre>
           <div className="flex justify-end border-t border-line-subtle px-1.5 py-1">
             <CopyButton text={`${text}\n${detail}`} label={tr('session.notice.copyDetail')} />
           </div>

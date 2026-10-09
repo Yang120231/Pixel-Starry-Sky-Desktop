@@ -112,7 +112,9 @@ export interface SessionSettings {
 }
 
 /** 入队时固定成本相关设置；权限与会话开关在实际执行时读取。 */
-export type QueueSettings = Pick<SessionSettings, 'model' | 'effort'> & { platform: NonNullable<SessionSettings['platform']> | null }
+export type QueueSettings = Pick<SessionSettings, 'model' | 'effort'> & {
+  platform: NonNullable<SessionSettings['platform']> | null
+}
 
 /** 用户输入的图片。Base64 只保存在本地队列 / 引擎发送链路，不进入搜索正文。 */
 export interface ImageAttachment {
@@ -236,7 +238,15 @@ export interface TodoStep {
 export type ToolKind = 'read' | 'search' | 'web' | 'mcp' | 'task' | 'other'
 
 export type Item =
-  | { kind: 'user'; id: string; text: string; attachments?: ImageAttachment[]; createdAt: number; turnId?: string; mode?: 'normal' | 'guidance' }
+  | {
+      kind: 'user'
+      id: string
+      text: string
+      attachments?: ImageAttachment[]
+      createdAt: number
+      turnId?: string
+      mode?: 'normal' | 'guidance'
+    }
   /** 助手回复，Markdown */
   | { kind: 'assistant'; id: string; text: string; status: ItemStatus }
   /** 思考过程，界面默认折叠 */
@@ -575,7 +585,10 @@ export interface EngineDefaults extends SessionSettings {
 }
 
 /** 每个引擎各自记的新会话默认值（设置 › 本机引擎 › 详情，docs/ui/engine-settings-redesign.md §3.2） */
-export type SessionDefaults = Pick<SessionSettings, 'model' | 'effort' | 'permissionMode' | 'ultracode' | 'fast' | 'thinkingSummaries'>
+export type SessionDefaults = Pick<
+  SessionSettings,
+  'model' | 'effort' | 'permissionMode' | 'ultracode' | 'fast' | 'thinkingSummaries'
+>
 
 /**
  * 每个引擎的本机配置（设置 › 本机引擎，docs/ui/plan-search-panes-compact.md §1、§3，engine-settings-redesign.md §3.2）：

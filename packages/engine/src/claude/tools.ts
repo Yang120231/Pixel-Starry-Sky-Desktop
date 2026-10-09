@@ -1,11 +1,19 @@
 // Claude Code 的工具调用 → 统一条目（docs/engines.md §9「工具归类」）
 import { isAbsolute, relative } from 'node:path'
-import type { AlwaysScope, ApprovalRequest, FileChange, Item, ItemStatus, Question, TodoStep, ToolKind } from '@pixelsky/protocol'
+import type {
+  AlwaysScope,
+  ApprovalRequest,
+  FileChange,
+  Item,
+  ItemStatus,
+  Question,
+  TodoStep,
+  ToolKind,
+} from '@pixelsky/protocol'
 import { diffAdded, diffFromHunks, diffText, type PatchHunk } from '../diff'
 import { str } from './shape'
 
 type Input = Record<string, unknown>
-
 
 /** 输出最多保留这么多字符（头尾各一半），太长的命令输出不全放进内存和磁盘 */
 const MAX_OUTPUT = 40_000
@@ -38,13 +46,13 @@ function fileChangesFromInput(name: string, input: Input, cwd: string): FileChan
     return [{ path, kind: 'update', newText: str(input.new_string).slice(0, MAX_OUTPUT), ...d }]
   }
   if (name === 'MultiEdit' && Array.isArray(input.edits)) {
-    const parts = (input.edits as Input[]).map((e) => diffText(str(e.old_string), str(e.new_string)))
+    const parts = (input.edits as Input[]).map(e => diffText(str(e.old_string), str(e.new_string)))
     return [
       {
         path,
         kind: 'update',
         newText: str((input.edits as Input[])[0]?.new_string).slice(0, MAX_OUTPUT),
-        diff: parts.map((p) => p.diff).join('\n'),
+        diff: parts.map(p => p.diff).join('\n'),
         added: parts.reduce((n, p) => n + p.added, 0),
         removed: parts.reduce((n, p) => n + p.removed, 0),
       },
@@ -62,7 +70,10 @@ function toolTitle(name: string, input: Input, cwd: string): { tool: ToolKind; t
     case 'Glob':
       return { tool: 'search', title: str(input.pattern) }
     case 'Grep':
-      return { tool: 'search', title: [str(input.pattern), input.path ? displayPath(str(input.path), cwd) : ''].filter(Boolean).join(' · ') }
+      return {
+        tool: 'search',
+        title: [str(input.pattern), input.path ? displayPath(str(input.path), cwd) : ''].filter(Boolean).join(' · '),
+      }
     case 'WebFetch':
       return { tool: 'web', title: str(input.url) }
     case 'WebSearch':
@@ -87,7 +98,7 @@ function toolTitle(name: string, input: Input, cwd: string): { tool: ToolKind; t
 
 function todoSteps(input: Input): TodoStep[] {
   if (!Array.isArray(input.todos)) return []
-  return (input.todos as Input[]).map((t) => ({
+  return (input.todos as Input[]).map(t => ({
     text: str(t.content) || str(t.activeForm),
     status: t.status === 'completed' ? 'completed' : t.status === 'in_progress' ? 'in_progress' : 'pending',
   }))
@@ -96,7 +107,8 @@ function todoSteps(input: Input): TodoStep[] {
 /** 工具调用开始：模型给出了完整参数。subagent：调用它的子智能体名字（主智能体调用时不传） */
 export function toolItem(id: string, name: string, input: Input, cwd: string, subagent?: string): Item {
   const item = baseToolItem(id, name, input, cwd)
-  if (subagent && (item.kind === 'command' || item.kind === 'file_change' || item.kind === 'tool')) return { ...item, subagent }
+  if (subagent && (item.kind === 'command' || item.kind === 'file_change' || item.kind === 'tool'))
+    return { ...item, subagent }
   return item
 }
 
@@ -127,7 +139,7 @@ export function resultText(content: unknown): string {
   if (typeof content === 'string') return content
   if (Array.isArray(content)) {
     return content
-      .map((c) => {
+      .map(c => {
         const b = c as Input
         if (b.type === 'text') return str(b.text)
         if (b.type === 'image') return '[图片]'
@@ -140,7 +152,13 @@ export function resultText(content: unknown): string {
 }
 
 /** 工具调用结束：拿到 tool_result（以及 Claude 附带的结构化结果 tool_use_result） */
-export function completeToolItem(item: Item, content: unknown, isError: boolean, structured: unknown, status?: ItemStatus): Item {
+export function completeToolItem(
+  item: Item,
+  content: unknown,
+  isError: boolean,
+  structured: unknown,
+  status?: ItemStatus,
+): Item {
   const text = clip(resultText(content))
   const finalStatus: ItemStatus = status ?? (isError ? 'failed' : 'completed')
   const r = (structured && typeof structured === 'object' ? structured : {}) as Input
@@ -176,12 +194,12 @@ export function completeToolItem(item: Item, content: unknown, isError: boolean,
 
 function questionsFromInput(input: Input): Question[] {
   if (!Array.isArray(input.questions)) return []
-  return (input.questions as Input[]).map((q) => ({
+  return (input.questions as Input[]).map(q => ({
     question: str(q.question),
     header: str(q.header),
     multiSelect: q.multiSelect === true,
     options: Array.isArray(q.options)
-      ? (q.options as Input[]).map((o) => ({ label: str(o.label), description: str(o.description) }))
+      ? (q.options as Input[]).map(o => ({ label: str(o.label), description: str(o.description) }))
       : [],
   }))
 }
@@ -199,9 +217,9 @@ const DESTINATION: Record<AlwaysScope, string> = { session: 'session', project: 
 export function alwaysPermissions(toolName: string, suggestions: unknown[], scope: AlwaysScope): unknown[] {
   const destination = DESTINATION[scope]
   const rules = suggestions
-    .map((x) => (x && typeof x === 'object' ? (x as Input) : {}))
-    .filter((x) => x.type === 'addRules' && x.behavior === 'allow' && Array.isArray(x.rules))
-    .map((x) => ({ ...x, destination }))
+    .map(x => (x && typeof x === 'object' ? (x as Input) : {}))
+    .filter(x => x.type === 'addRules' && x.behavior === 'allow' && Array.isArray(x.rules))
+    .map(x => ({ ...x, destination }))
   return rules.length > 0 ? rules : [{ type: 'addRules', rules: [{ toolName }], behavior: 'allow', destination }]
 }
 
@@ -215,14 +233,26 @@ export function approvalFor(
 ): ApprovalRequest {
   const common = { requestId, itemId: toolUseId, alwaysScopes: CLAUDE_ALWAYS_SCOPES }
   if (COMMAND_TOOLS.has(toolName)) {
-    return { ...common, kind: 'command', title: '运行命令', command: str(input.command), description: str(input.description) || undefined }
+    return {
+      ...common,
+      kind: 'command',
+      title: '运行命令',
+      command: str(input.command),
+      description: str(input.description) || undefined,
+    }
   }
   if (EDIT_TOOLS.has(toolName)) {
     const changes = fileChangesFromInput(toolName, input, cwd)
     return { ...common, kind: 'file_change', title: toolName === 'Write' ? '写入文件' : '修改文件', changes }
   }
   if (toolName === 'AskUserQuestion') {
-    return { ...common, kind: 'question', title: 'Claude 想问你', questions: questionsFromInput(input), alwaysScopes: [] }
+    return {
+      ...common,
+      kind: 'question',
+      title: 'Claude 想问你',
+      questions: questionsFromInput(input),
+      alwaysScopes: [],
+    }
   }
   if (toolName === 'ExitPlanMode') {
     return { ...common, kind: 'plan', title: '计划已就绪，要开始执行吗？', plan: str(input.plan), alwaysScopes: [] }

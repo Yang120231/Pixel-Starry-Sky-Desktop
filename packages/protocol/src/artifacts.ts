@@ -74,7 +74,8 @@ for (const [type, exts] of Object.entries({
   web: 'html htm',
   archive: 'zip 7z tar gz tgz rar bz2 xz',
   media: 'mp3 mp4 wav webm ogg m4a mov',
-} as Record<DeliveryType, string>)) for (const ext of exts.split(' ')) TYPES[ext] = type as DeliveryType
+} as Record<DeliveryType, string>))
+  for (const ext of exts.split(' ')) TYPES[ext] = type as DeliveryType
 
 /** 按扩展名判断是不是「交付」类文件；源码、配置等返回 null */
 export function deliveryType(path: string): DeliveryType | null {

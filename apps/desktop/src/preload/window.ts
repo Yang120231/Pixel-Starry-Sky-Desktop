@@ -4,13 +4,7 @@ export interface WindowState {
   snapped: boolean
 }
 
-export type WindowSnapLayout =
-  | 'columns-2'
-  | 'columns-3'
-  | 'large-left'
-  | 'large-right'
-  | 'grid-4'
-  | 'wide-center'
+export type WindowSnapLayout = 'columns-2' | 'columns-3' | 'large-left' | 'large-right' | 'grid-4' | 'wide-center'
 
 /** 仅操作发起调用的应用窗口。 */
 export interface WindowBridge {

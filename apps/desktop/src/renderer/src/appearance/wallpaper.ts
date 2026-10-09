@@ -48,7 +48,10 @@ function clamp(n: number, min: number, max: number): number {
 
 /* ---------- IndexedDB ---------- */
 
-function withStore<T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBRequest<T> | void): Promise<T | undefined> {
+function withStore<T>(
+  mode: IDBTransactionMode,
+  fn: (store: IDBObjectStore) => IDBRequest<T> | void,
+): Promise<T | undefined> {
   return new Promise((resolve, reject) => {
     const open = indexedDB.open(DB, 1)
     open.onupgradeneeded = () => open.result.createObjectStore('files')
@@ -83,7 +86,7 @@ function emit(next: WallpaperState): void {
     // 忽略
   }
   applyRoot()
-  listeners.forEach((l) => l())
+  listeners.forEach(l => l())
 }
 
 /** tokens.css 据 data-wallpaper 透出壁纸；Windows 自绘按钮透明，其他平台同步原生覆盖层。 */
@@ -104,8 +107,8 @@ export function hasWallpaper(): boolean {
 // 启动时：记录过壁纸就先把底色设透明（避免先闪一下纯色），再从 IndexedDB 读文件
 if (state.name) {
   document.documentElement.dataset.wallpaper = state.kind
-  void withStore<Blob>('readonly', (s) => s.get(FILE_KEY) as IDBRequest<Blob>)
-    .then((blob) => {
+  void withStore<Blob>('readonly', s => s.get(FILE_KEY) as IDBRequest<Blob>)
+    .then(blob => {
       if (blob) emit({ ...state, url: URL.createObjectURL(blob) })
       else emit({ ...state, name: '', url: null })
     })
@@ -118,13 +121,17 @@ export function getWallpaper(): WallpaperState {
 
 /** 选择新壁纸。返回错误信息（中文），成功返回 null */
 export async function setWallpaperFile(file: File): Promise<string | null> {
-  const kind: WallpaperKind | null = file.type.startsWith('video/') ? 'video' : file.type.startsWith('image/') ? 'image' : null
-  if (!kind) return tr("appearance.wallpaper.message22")
-  if (file.size > MAX_WALLPAPER_BYTES) return tr("appearance.wallpaper.message23")
+  const kind: WallpaperKind | null = file.type.startsWith('video/')
+    ? 'video'
+    : file.type.startsWith('image/')
+      ? 'image'
+      : null
+  if (!kind) return tr('appearance.wallpaper.message22')
+  if (file.size > MAX_WALLPAPER_BYTES) return tr('appearance.wallpaper.message23')
   try {
-    await withStore('readwrite', (s) => s.put(file, FILE_KEY))
+    await withStore('readwrite', s => s.put(file, FILE_KEY))
   } catch {
-    return tr("appearance.wallpaper.message24")
+    return tr('appearance.wallpaper.message24')
   }
   if (state.url) URL.revokeObjectURL(state.url)
   emit({ ...state, name: file.name, kind, url: URL.createObjectURL(file) })
@@ -135,7 +142,7 @@ export async function removeWallpaper(): Promise<void> {
   if (state.url) URL.revokeObjectURL(state.url)
   emit({ ...state, name: '', url: null })
   try {
-    await withStore('readwrite', (s) => s.delete(FILE_KEY))
+    await withStore('readwrite', s => s.delete(FILE_KEY))
   } catch {
     // 忽略：下次选择新壁纸会覆盖
   }

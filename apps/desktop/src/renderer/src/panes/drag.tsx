@@ -1,6 +1,15 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../i18n/core'
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type RefObject,
+} from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/components/ui'
 import { dropProblem, edgeAt, type Box, type DropTarget } from './drop'
@@ -17,10 +26,41 @@ interface Hit {
   marker: Box | null
   strip: HTMLElement | null
 }
-interface Preview extends Hit { problem: string | null }
-interface Visual { tab: string; title: string; x: number; y: number; preview: Preview | null }
-interface Gesture { tab: string; title: string; pointerId: number; startX: number; startY: number; x: number; y: number; started: boolean; handle: HTMLElement }
-const EDGE_LABEL = { get left() { return tr("panes.drag.message549") }, get right() { return tr("panes.drag.message550") }, get top() { return tr("panes.drag.message551") }, get bottom() { return tr("panes.drag.message552") } }
+interface Preview extends Hit {
+  problem: string | null
+}
+interface Visual {
+  tab: string
+  title: string
+  x: number
+  y: number
+  preview: Preview | null
+}
+interface Gesture {
+  tab: string
+  title: string
+  pointerId: number
+  startX: number
+  startY: number
+  x: number
+  y: number
+  started: boolean
+  handle: HTMLElement
+}
+const EDGE_LABEL = {
+  get left() {
+    return tr('panes.drag.message549')
+  },
+  get right() {
+    return tr('panes.drag.message550')
+  },
+  get top() {
+    return tr('panes.drag.message551')
+  },
+  get bottom() {
+    return tr('panes.drag.message552')
+  },
+}
 
 function boxOf(el: HTMLElement): Box {
   const r = el.getBoundingClientRect()
@@ -44,7 +84,10 @@ function hitAt(area: HTMLElement, x: number, y: number): Hit | null {
       const index = found < 0 ? tabs.length : found
       const before = tabs[index]?.getBoundingClientRect()
       const last = tabs.at(-1)?.getBoundingClientRect()
-      const at = Math.max(r.left + 2, Math.min(r.right - 2, before ? before.left - 2 : last ? last.right + 2 : r.left + 8))
+      const at = Math.max(
+        r.left + 2,
+        Math.min(r.right - 2, before ? before.left - 2 : last ? last.right + 2 : r.left + 8),
+      )
       return { target: { leafId, index }, box, marker: { x: at, y: r.top + 2, width: 2, height: r.height - 6 }, strip }
     }
   }
@@ -60,8 +103,24 @@ export function usePaneDrag(area: RefObject<HTMLDivElement | null>) {
   const [visual, setVisual] = useState<Visual | null>(null)
 
   const begin = useCallback<BeginDrag>((event, tab, title) => {
-    if (event.button !== 0 || !event.isPrimary || (event.target as HTMLElement).closest('button') || document.querySelector('[role="dialog"][aria-modal="true"]')) return
-    gesture.current = { tab, title, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, x: event.clientX, y: event.clientY, started: false, handle: event.currentTarget }
+    if (
+      event.button !== 0 ||
+      !event.isPrimary ||
+      (event.target as HTMLElement).closest('button') ||
+      document.querySelector('[role="dialog"][aria-modal="true"]')
+    )
+      return
+    gesture.current = {
+      tab,
+      title,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      x: event.clientX,
+      y: event.clientY,
+      started: false,
+      handle: event.currentTarget,
+    }
   }, [])
 
   useEffect(() => {
@@ -82,23 +141,32 @@ export function usePaneDrag(area: RefObject<HTMLDivElement | null>) {
       if (!el || !g?.started) return
       const state = getPaneState()
       const owner = leafOfTab(state.layout.root, g.tab)
-      if (!owner || state.closing[owner.id]) { finish(); return }
+      if (!owner || state.closing[owner.id]) {
+        finish()
+        return
+      }
       let hit = hitAt(el, g.x, g.y)
       if (hit && state.closing[hit.target.leafId]) hit = null
       // 连续帧滚动标签栏，指针不用移动也能拖到隐藏的标签。
       if (hit?.strip) {
         const r = hit.strip.getBoundingClientRect()
         const distance = g.x < r.left + 32 ? g.x - (r.left + 32) : g.x > r.right - 32 ? g.x - (r.right - 32) : 0
-        if (distance) { hit.strip.scrollLeft += Math.max(-12, Math.min(12, distance / 3)); hit = hitAt(el, g.x, g.y) }
+        if (distance) {
+          hit.strip.scrollLeft += Math.max(-12, Math.min(12, distance / 3))
+          hit = hitAt(el, g.x, g.y)
+        }
       }
-      const problem = hit ? dropProblem(state.layout, g.tab, hit.target, { width: el.clientWidth, height: el.clientHeight }) : null
+      const problem = hit
+        ? dropProblem(state.layout, g.tab, hit.target, { width: el.clientWidth, height: el.clientHeight })
+        : null
       setVisual({ tab: g.tab, title: g.title, x: g.x, y: g.y, preview: hit ? { ...hit, problem } : null })
       frame = requestAnimationFrame(preview)
     }
     const move = (event: PointerEvent): void => {
       const g = gesture.current
       if (!g || event.pointerId !== g.pointerId) return
-      g.x = event.clientX; g.y = event.clientY
+      g.x = event.clientX
+      g.y = event.clientY
       if (!g.started && Math.hypot(g.x - g.startX, g.y - g.startY) >= 6) {
         g.started = true
         g.handle.setPointerCapture(g.pointerId)
@@ -115,17 +183,27 @@ export function usePaneDrag(area: RefObject<HTMLDivElement | null>) {
       finish()
       if (hit && el) paneActions.dropTab(g.tab, hit.target, { width: el.clientWidth, height: el.clientHeight })
     }
-    const cancel = (event: PointerEvent): void => { if (event.pointerId === gesture.current?.pointerId) finish() }
+    const cancel = (event: PointerEvent): void => {
+      if (event.pointerId === gesture.current?.pointerId) finish()
+    }
     const key = (event: KeyboardEvent): void => {
       if (!gesture.current?.started) return
-      if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); finish() }
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        finish()
+      }
       // 避免快捷键在手持标签时关闭或改变布局。
-      else if (event.ctrlKey || event.metaKey || event.altKey) { event.preventDefault(); event.stopImmediatePropagation() }
+      else if (event.ctrlKey || event.metaKey || event.altKey) {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+      }
     }
     const click = (event: MouseEvent): void => {
       if (Date.now() > skipClickUntil.current) return
       skipClickUntil.current = 0
-      event.preventDefault(); event.stopImmediatePropagation()
+      event.preventDefault()
+      event.stopImmediatePropagation()
     }
     window.addEventListener('pointermove', move, { passive: false })
     window.addEventListener('pointerup', up)
@@ -155,21 +233,73 @@ export function DragPreview({ visual, area }: { visual: Visual | null; area: Ref
   const box = preview ? { ...preview.box } : null
   if (box && preview?.target.edge) {
     const edge = preview.target.edge
-    if (edge === 'left' || edge === 'right') { box.width /= 2; if (edge === 'right') box.x += box.width }
-    else { box.height /= 2; if (edge === 'bottom') box.y += box.height }
+    if (edge === 'left' || edge === 'right') {
+      box.width /= 2
+      if (edge === 'right') box.x += box.width
+    } else {
+      box.height /= 2
+      if (edge === 'bottom') box.y += box.height
+    }
   }
-  const label = preview?.problem ?? (preview?.marker ? tr("panes.drag.message553") : preview?.target.edge ? EDGE_LABEL[preview.target.edge] : preview ? tr("panes.drag.message554") : tr("panes.drag.message555"))
-  return <>
-    {box && <div data-drop-preview data-drop-edge={preview?.target.edge ?? 'merge'}
-      className={cn('pointer-events-none absolute z-30 flex items-center justify-center rounded-lg border-2', preview?.problem ? 'border-danger bg-danger/10' : 'border-accent bg-accent-soft/60')}
-      style={{ left: box.x - origin.left + 4, top: box.y - origin.top + 4, width: Math.max(0, box.width - 8), height: Math.max(0, box.height - 8) }}>
-      {!preview?.marker && <span className="mx-4 rounded-md bg-popover px-3 py-2 text-center text-ui text-fg shadow-menu">{label}</span>}
-    </div>}
-    {preview?.marker && <div data-drop-marker className="pointer-events-none absolute z-40 rounded-full bg-accent"
-      style={{ left: preview.marker.x - origin.left, top: preview.marker.y - origin.top, width: preview.marker.width, height: preview.marker.height }} />}
-    {createPortal(<div data-drag-ghost className="pointer-events-none fixed z-50 max-w-64 rounded-lg border border-line-card bg-popover px-3 py-2 text-meta text-fg shadow-menu"
-      style={{ left: Math.min(Math.max(8, visual.x + 14), window.innerWidth - 264), top: Math.min(visual.y + 14, window.innerHeight - 66) }}>
-      <div className="truncate font-medium">{visual.title}</div><div className="mt-1 text-label text-fg-muted">{label}</div>
-    </div>, document.body)}
-  </>
+  const label =
+    preview?.problem ??
+    (preview?.marker
+      ? tr('panes.drag.message553')
+      : preview?.target.edge
+        ? EDGE_LABEL[preview.target.edge]
+        : preview
+          ? tr('panes.drag.message554')
+          : tr('panes.drag.message555'))
+  return (
+    <>
+      {box && (
+        <div
+          data-drop-preview
+          data-drop-edge={preview?.target.edge ?? 'merge'}
+          className={cn(
+            'pointer-events-none absolute z-30 flex items-center justify-center rounded-lg border-2',
+            preview?.problem ? 'border-danger bg-danger/10' : 'border-accent bg-accent-soft/60',
+          )}
+          style={{
+            left: box.x - origin.left + 4,
+            top: box.y - origin.top + 4,
+            width: Math.max(0, box.width - 8),
+            height: Math.max(0, box.height - 8),
+          }}
+        >
+          {!preview?.marker && (
+            <span className="mx-4 rounded-md bg-popover px-3 py-2 text-center text-ui text-fg shadow-menu">
+              {label}
+            </span>
+          )}
+        </div>
+      )}
+      {preview?.marker && (
+        <div
+          data-drop-marker
+          className="pointer-events-none absolute z-40 rounded-full bg-accent"
+          style={{
+            left: preview.marker.x - origin.left,
+            top: preview.marker.y - origin.top,
+            width: preview.marker.width,
+            height: preview.marker.height,
+          }}
+        />
+      )}
+      {createPortal(
+        <div
+          data-drag-ghost
+          className="pointer-events-none fixed z-50 max-w-64 rounded-lg border border-line-card bg-popover px-3 py-2 text-meta text-fg shadow-menu"
+          style={{
+            left: Math.min(Math.max(8, visual.x + 14), window.innerWidth - 264),
+            top: Math.min(visual.y + 14, window.innerHeight - 66),
+          }}
+        >
+          <div className="truncate font-medium">{visual.title}</div>
+          <div className="mt-1 text-label text-fg-muted">{label}</div>
+        </div>,
+        document.body,
+      )}
+    </>
+  )
 }

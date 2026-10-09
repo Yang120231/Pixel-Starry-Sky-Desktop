@@ -23,7 +23,7 @@ export const demo: AppData = {
         { id: 's-settings-form', title: '设置页迁移到新的表单组件', status: 'running' },
         { id: 's-cloud-onboarding', title: '把云主机配置引导改成两步', status: 'idle', time: '3天' },
       ],
-      archived:[{id:'s-archived-demo',title:'已完成的项目检查',status:'idle',time:'5天',archivedAt:1}],
+      archived: [{ id: 's-archived-demo', title: '已完成的项目检查', status: 'idle', time: '5天', archivedAt: 1 }],
     },
     { id: 'pixel-desktop', name: 'pixel-desktop', branch: 'feat/turn-island', sessions: [] },
     { id: 'pixel-channel', name: 'pixel-channel', sessions: [] },
@@ -63,7 +63,14 @@ export const demo: AppData = {
   turnUsage: {
     durationMs: 44_000,
     models: {
-      'claude-opus-5-5': { input: 1200, cacheRead: 48_000, cacheWrite: 2900, output: 2100, costUsd: 0.0743, requests: 7 },
+      'claude-opus-5-5': {
+        input: 1200,
+        cacheRead: 48_000,
+        cacheWrite: 2900,
+        output: 2100,
+        costUsd: 0.0743,
+        requests: 7,
+      },
       'claude-haiku-4-5': { input: 600, cacheRead: 9000, cacheWrite: 0, output: 380, costUsd: 0.0034, requests: 2 },
     },
   },

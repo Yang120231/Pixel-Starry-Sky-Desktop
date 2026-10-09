@@ -16,13 +16,13 @@ const config = ipcRenderer.sendSync('app:config') as { demo: boolean }
 
 // 账号登录与额度：所有网络请求都在主进程，这里只转发 IPC（规格见 docs/ui/account.md §4.2）
 const account: AccountBridge = {
-  listCalls: (query) => ipcRenderer.invoke('account:calls', query),
+  listCalls: query => ipcRenderer.invoke('account:calls', query),
   getState: () => ipcRenderer.invoke('account:get'),
   login: () => ipcRenderer.invoke('account:login'),
   cancelLogin: () => ipcRenderer.invoke('account:cancel'),
   logout: () => ipcRenderer.invoke('account:logout'),
   refresh: () => ipcRenderer.invoke('account:refresh'),
-  onChange: (cb) => {
+  onChange: cb => {
     const listener = (_event: Electron.IpcRendererEvent, s: AccountState): void => cb(s)
     ipcRenderer.on('account:changed', listener)
     return () => {
@@ -36,31 +36,34 @@ async function call<T>(channel: string, ...args: unknown[]): Promise<T> {
   try {
     return (await ipcRenderer.invoke(channel, ...args)) as T
   } catch (err) {
-    const message = String((err as Error)?.message ?? err).replace(/^Error invoking remote method '[^']+': (\w*Error: )?/, '')
+    const message = String((err as Error)?.message ?? err).replace(
+      /^Error invoking remote method '[^']+': (\w*Error: )?/,
+      '',
+    )
     throw new Error(message)
   }
 }
 
 // 引擎系统：会话都在主进程里跑，这里只转发 IPC（规格见 docs/engines.md §5）
 const engine: EngineBridge = {
-  search: (query) => call('engine:search', query),
-  cancelSearch: (id) => call('engine:cancelSearch', id),
+  search: query => call('engine:search', query),
+  cancelSearch: id => call('engine:cancelSearch', id),
   config: () => call('engine:config'),
   setConfig: (engine, patch) => call('engine:setConfig', engine, patch),
-  setDefaultEngine: (engine) => call('engine:setDefaultEngine', engine),
+  setDefaultEngine: engine => call('engine:setDefaultEngine', engine),
   catalog: (engine, force) => call('engine:catalog', engine, force),
-  updateEngine: (engine) => call('engine:update', engine),
+  updateEngine: engine => call('engine:update', engine),
   retrySettings: () => call('engine:retrySettings'),
-  setRetrySettings: (maxRetries) => call('engine:setRetrySettings', maxRetries),
-  engines: (force) => call('engine:engines', !!force),
+  setRetrySettings: maxRetries => call('engine:setRetrySettings', maxRetries),
+  engines: force => call('engine:engines', !!force),
   defaults: () => call('engine:defaults'),
   projects: () => call('engine:projects'),
   addProject: () => call('engine:addProject'),
-  removeProject: (id) => call('engine:removeProject', id),
+  removeProject: id => call('engine:removeProject', id),
   renameProject: (id, name) => call('engine:renameProject', id, name),
   sessions: () => call('engine:sessions'),
-  createSession: (opts) => call('engine:createSession', opts),
-  openSession: (id) => call('engine:openSession', id),
+  createSession: opts => call('engine:createSession', opts),
+  openSession: id => call('engine:openSession', id),
   send: (id, text) => call('engine:send', id, text),
   context: id => call('engine:context', id),
   compact: id => call('engine:compact', id),
@@ -68,24 +71,24 @@ const engine: EngineBridge = {
   moveQueued: (id, queueId, toIndex) => call('engine:moveQueued', id, queueId, toIndex),
   runQueuedNow: (id, queueId) => call('engine:runQueuedNow', id, queueId),
   steerQueued: (id, queueId, turnId) => call('engine:steerQueued', id, queueId, turnId),
-  resumeQueue: (id) => call('engine:resumeQueue', id),
+  resumeQueue: id => call('engine:resumeQueue', id),
   rewind: (id, itemId) => call('engine:rewind', id, itemId),
-  interrupt: (id) => call('engine:interrupt', id),
+  interrupt: id => call('engine:interrupt', id),
   interruptTurn: (id, turnId) => call('engine:interruptTurn', id, turnId),
   answer: (id, requestId, decision) => call('engine:answer', id, requestId, decision),
   updateSession: (id, patch) => call('engine:updateSession', id, patch),
-  deleteSession: (id) => call('engine:deleteSession', id),
-  archiveSession:(id,archived,stopRunning)=>call('engine:archiveSession',id,archived,stopRunning),
-  renameSession:(id,title)=>call('engine:renameSession',id,title),
-  setSessionBottom:(id,bottomed)=>call('engine:setSessionBottom',id,bottomed),
+  deleteSession: id => call('engine:deleteSession', id),
+  archiveSession: (id, archived, stopRunning) => call('engine:archiveSession', id, archived, stopRunning),
+  renameSession: (id, title) => call('engine:renameSession', id, title),
+  setSessionBottom: (id, bottomed) => call('engine:setSessionBottom', id, bottomed),
   stopTask: (id, taskId) => call('engine:stopTask', id, taskId),
   taskOutput: (id, taskId) => call('engine:taskOutput', id, taskId),
   subagentTranscript: (id, agentId) => call('engine:subagentTranscript', id, agentId),
-  usageSummary: (q) => call('engine:usageSummary', q),
-  usageList: (q) => call('engine:usageList', q),
-  usageExport: (q) => call('engine:usageExport', q),
+  usageSummary: q => call('engine:usageSummary', q),
+  usageList: q => call('engine:usageList', q),
+  usageExport: q => call('engine:usageExport', q),
   usageClear: () => call('engine:usageClear'),
-  onEvent: (cb) => {
+  onEvent: cb => {
     const listener = (_event: Electron.IpcRendererEvent, e: HostEvent): void => cb(e)
     ipcRenderer.on('engine:event', listener)
     return () => {
@@ -97,7 +100,7 @@ const engine: EngineBridge = {
 // 「关于」页：版本、运行环境，打开数据目录等（docs/ui/settings.md §5）
 const appInfo: AppInfoBridge = {
   getInfo: () => call('app:info'),
-  open: (link) => call('app:open', link),
+  open: link => call('app:open', link),
 }
 
 // 渲染进程能用的能力只通过这里暴露，统一挂在 window.pixelsky 上
@@ -217,7 +220,10 @@ const terminal: TerminalBridge = {
   clipboardWrite: value => call('terminal:clipboardWrite', value),
   openLink: url => call('terminal:openLink', url),
   onEvent: cb => {
-    const listener = (_event: Electron.IpcRendererEvent, value: Parameters<TerminalBridge['onEvent']>[0] extends (event: infer E) => void ? E : never): void => cb(value)
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      value: Parameters<TerminalBridge['onEvent']>[0] extends (event: infer E) => void ? E : never,
+    ): void => cb(value)
     ipcRenderer.on('terminal:event', listener)
     return () => ipcRenderer.removeListener('terminal:event', listener)
   },
@@ -242,12 +248,22 @@ const notifications: NotificationsBridge = {
 }
 contextBridge.exposeInMainWorld('pixelsky', {
   machines: {
-    state: () => call('machines:state'), save: input => call('machines:save', input),
-    connect: (id, fingerprint) => call('machines:connect', id, fingerprint), disconnect: id => call('machines:disconnect', id),
-    remove: id => call('machines:remove', id), select: id => call('machines:select', id), chooseKey: () => call('machines:chooseKey'),
-    directories: (id, path) => call('machines:directories', id, path), addProject: (id, path) => call('machines:addProject', id, path),
-    workspaces: id => call('machines:workspaces', id), openWorkspace: choice => call('machines:openWorkspace', choice),
-    onChange: callback => { const listener = (_e: Electron.IpcRendererEvent, state: import('./machines').MachineState) => callback(state); ipcRenderer.on('machines:changed', listener); return () => ipcRenderer.removeListener('machines:changed', listener) },
+    state: () => call('machines:state'),
+    save: input => call('machines:save', input),
+    connect: (id, fingerprint) => call('machines:connect', id, fingerprint),
+    disconnect: id => call('machines:disconnect', id),
+    remove: id => call('machines:remove', id),
+    select: id => call('machines:select', id),
+    chooseKey: () => call('machines:chooseKey'),
+    directories: (id, path) => call('machines:directories', id, path),
+    addProject: (id, path) => call('machines:addProject', id, path),
+    workspaces: id => call('machines:workspaces', id),
+    openWorkspace: choice => call('machines:openWorkspace', choice),
+    onChange: callback => {
+      const listener = (_e: Electron.IpcRendererEvent, state: import('./machines').MachineState) => callback(state)
+      ipcRenderer.on('machines:changed', listener)
+      return () => ipcRenderer.removeListener('machines:changed', listener)
+    },
   } satisfies import('./machines').MachineBridge,
   platform: process.platform,
   /** 演示模式：显示照参考图写的演示数据，而不是空界面 */
@@ -271,10 +287,22 @@ contextBridge.exposeInMainWorld('pixelsky', {
   notifications,
   artifacts,
   extensions: {
-    state:ref=>call('extensions:state',ref),save:data=>call('extensions:save',data),import:data=>call('extensions:import',data),
-    importMcp:(json,scope)=>call('extensions:importMcp',json,scope),toggle:(id,enabled)=>call('extensions:toggle',id,enabled),remove:id=>call('extensions:remove',id),
-    check:(id,ref)=>call('extensions:check',id,ref),update:(id,apply)=>call('extensions:update',id,apply),skillText:(id,ref)=>call('extensions:skillText',id,ref),
-    choose:kind=>call('extensions:choose',kind),reveal:(id,ref)=>call('extensions:reveal',id,ref),commands:ref=>call('extensions:commands',ref),
-    onChange:callback=>{const listener=():void=>callback();ipcRenderer.on('extensions:changed',listener);return ()=>ipcRenderer.removeListener('extensions:changed',listener)},
+    state: ref => call('extensions:state', ref),
+    save: data => call('extensions:save', data),
+    import: data => call('extensions:import', data),
+    importMcp: (json, scope) => call('extensions:importMcp', json, scope),
+    toggle: (id, enabled) => call('extensions:toggle', id, enabled),
+    remove: id => call('extensions:remove', id),
+    check: (id, ref) => call('extensions:check', id, ref),
+    update: (id, apply) => call('extensions:update', id, apply),
+    skillText: (id, ref) => call('extensions:skillText', id, ref),
+    choose: kind => call('extensions:choose', kind),
+    reveal: (id, ref) => call('extensions:reveal', id, ref),
+    commands: ref => call('extensions:commands', ref),
+    onChange: callback => {
+      const listener = (): void => callback()
+      ipcRenderer.on('extensions:changed', listener)
+      return () => ipcRenderer.removeListener('extensions:changed', listener)
+    },
   } satisfies ExtensionsBridge,
 })

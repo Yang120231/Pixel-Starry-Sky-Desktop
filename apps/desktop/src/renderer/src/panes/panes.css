@@ -71,11 +71,15 @@
 /* 外晕与内圈同时收回；内圈呈现 2px → 1px，避免改变框几何和分界单线。 */
 @keyframes pane-focus-flash {
   from {
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 24%, transparent), inset 0 0 0 1px var(--accent);
+    box-shadow:
+      0 0 0 4px color-mix(in srgb, var(--accent) 24%, transparent),
+      inset 0 0 0 1px var(--accent);
     border-color: var(--accent);
   }
   to {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent), inset 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent);
+    box-shadow:
+      0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent),
+      inset 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent);
     border-color: color-mix(in srgb, var(--accent) 70%, transparent);
   }
 }

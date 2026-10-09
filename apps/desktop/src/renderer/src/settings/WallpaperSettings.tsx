@@ -31,8 +31,8 @@ export function WallpaperSettings() {
   return (
     <>
       <SettingRow
-        title={tr("settings.searchIndex.message910")}
-        description={tr("settings.WallpaperSettings.message1029")}
+        title={tr('settings.searchIndex.message910')}
+        description={tr('settings.WallpaperSettings.message1029')}
         hint={error ?? undefined}
         hintTone={error ? 'danger' : 'muted'}
       >
@@ -42,19 +42,27 @@ export function WallpaperSettings() {
               wp.kind === 'video' ? (
                 <video src={wp.url} muted autoPlay loop playsInline className="h-full w-full object-cover" />
               ) : (
-                <img src={wp.url} alt={tr("settings.WallpaperSettings.message1030")} className="h-full w-full object-cover" />
+                <img
+                  src={wp.url}
+                  alt={tr('settings.WallpaperSettings.message1030')}
+                  className="h-full w-full object-cover"
+                />
               )
             ) : (
-              <span className="text-meta text-fg-faint">{wp.name ? tr("session.live.SessionStrips.message276") : tr("settings.WallpaperSettings.message1031")}</span>
+              <span className="text-meta text-fg-faint">
+                {wp.name ? tr('session.live.SessionStrips.message276') : tr('settings.WallpaperSettings.message1031')}
+              </span>
             )}
           </div>
           <div className="flex min-w-0 flex-col gap-2">
             <div className="flex gap-2">
               <Button icon={ImagePlus} disabled={busy} onClick={() => inputRef.current?.click()}>
-                {wp.name ? tr("settings.WallpaperSettings.message1032") : tr("settings.WallpaperSettings.message1033")}
+                {wp.name ? tr('settings.WallpaperSettings.message1032') : tr('settings.WallpaperSettings.message1033')}
               </Button>
               {wp.name && (
-                <Button variant="ghost" icon={Trash2} onClick={() => void removeWallpaper()}>{tr("ui.Chip.message411")} </Button>
+                <Button variant="ghost" icon={Trash2} onClick={() => void removeWallpaper()}>
+                  {tr('ui.Chip.message411')}{' '}
+                </Button>
               )}
             </div>
             {wp.name && (
@@ -68,31 +76,37 @@ export function WallpaperSettings() {
             type="file"
             accept={WALLPAPER_ACCEPT}
             className="hidden"
-            onChange={(e) => void onPick(e.target.files?.[0])}
+            onChange={e => void onPick(e.target.files?.[0])}
           />
         </div>
       </SettingRow>
 
       {wp.name && (
         <>
-          <SettingRow title={tr("settings.searchIndex.message912")} description={tr("settings.WallpaperSettings.message1034")}>
+          <SettingRow
+            title={tr('settings.searchIndex.message912')}
+            description={tr('settings.WallpaperSettings.message1034')}
+          >
             <Slider
-              label={tr("settings.searchIndex.message912")}
+              label={tr('settings.searchIndex.message912')}
               min={10}
               max={90}
               step={5}
               value={Math.round(wp.show * 100)}
-              onChange={(v) => setWallpaperPrefs({ show: v / 100 })}
+              onChange={v => setWallpaperPrefs({ show: v / 100 })}
               display={`${Math.round(wp.show * 100)}%`}
             />
           </SettingRow>
-          <SettingRow title={tr("settings.searchIndex.message914")} description={tr("settings.WallpaperSettings.message1035")}>
+          <SettingRow
+            title={tr('settings.searchIndex.message914')}
+            description={tr('settings.WallpaperSettings.message1035')}
+          >
             <Slider
-              label={tr("settings.searchIndex.message914")}
+              label={tr('settings.searchIndex.message914')}
               min={0}
               max={20}
               value={wp.blur}
-              onChange={(v) => setWallpaperPrefs({ blur: v })}
+              onChange={v => setWallpaperPrefs({ blur: v })}
               display={`${wp.blur}px`}
             />
           </SettingRow>

@@ -4,9 +4,11 @@ import { tr } from '@/i18n/core'
 export async function readImage(file: File): Promise<ImageAttachment> {
   if (!file.size || file.size > MAX_IMAGE_BYTES) throw new Error(tr('composer.attachment.tooLarge'))
   const buffer = await file.arrayBuffer()
-  const bytes = new Uint8Array(buffer), mediaType = imageMediaType(bytes)
+  const bytes = new Uint8Array(buffer),
+    mediaType = imageMediaType(bytes)
   if (!mediaType) throw new Error(tr('composer.attachment.invalidType'))
-  const blob = new Blob([buffer], { type: mediaType }), url = URL.createObjectURL(blob)
+  const blob = new Blob([buffer], { type: mediaType }),
+    url = URL.createObjectURL(blob)
   try {
     const dimensions = await new Promise<{ width: number; height: number }>((resolve, reject) => {
       const image = new Image()
@@ -20,12 +22,23 @@ export async function readImage(file: File): Promise<ImageAttachment> {
       reader.onerror = () => reject(new Error(tr('composer.attachment.readError')))
       reader.readAsDataURL(blob)
     })
-    return { id: crypto.randomUUID(), name: file.name || 'image', mediaType, bytes: file.size, ...dimensions, dataBase64 }
-  } finally { URL.revokeObjectURL(url) }
+    return {
+      id: crypto.randomUUID(),
+      name: file.name || 'image',
+      mediaType,
+      bytes: file.size,
+      ...dimensions,
+      dataBase64,
+    }
+  } finally {
+    URL.revokeObjectURL(url)
+  }
 }
 export function imageBlob(image: ImageAttachment): Blob {
   return new Blob([Uint8Array.from(atob(image.dataBase64), c => c.charCodeAt(0))], { type: image.mediaType })
 }
 export function imageSize(bytes: number): string {
-  return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MiB` : `${Math.max(1, Math.round(bytes / 1024))} KiB`
+  return bytes >= 1024 * 1024
+    ? `${(bytes / 1024 / 1024).toFixed(1)} MiB`
+    : `${Math.max(1, Math.round(bytes / 1024))} KiB`
 }

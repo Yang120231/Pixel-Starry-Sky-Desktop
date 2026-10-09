@@ -15,31 +15,61 @@ export function SearchProvider({ children }: { children: ReactNode }) {
   const openSearch = useCallback(() => {
     if (document.querySelector('[aria-modal="true"]:not([data-global-search]):not([data-command-palette])')) return
     window.dispatchEvent(new Event('pixelsky:close-command-for-search'))
-    if (input.current) { input.current.focus(); input.current.select(); return }
+    if (input.current) {
+      input.current.focus()
+      input.current.select()
+      return
+    }
     returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
     setOpen(true)
   }, [])
   const close = useCallback(() => {
     setOpen(false)
-    requestAnimationFrame(() => { if (returnFocus.current?.isConnected) returnFocus.current.focus({ preventScroll: true }) })
+    requestAnimationFrame(() => {
+      if (returnFocus.current?.isConnected) returnFocus.current.focus({ preventScroll: true })
+    })
   }, [])
   useEffect(() => {
     const hide = (): void => setOpen(false)
     window.addEventListener('pixelsky:close-search-for-command', hide)
     const onKey = (e: KeyboardEvent) => {
       if (!OPEN_SEARCH.match(e) || e.isComposing) return
-      if (document.activeElement instanceof HTMLElement && document.activeElement.closest('[data-terminal-input]')) return
-      e.preventDefault(); e.stopPropagation(); openSearch()
+      if (document.activeElement instanceof HTMLElement && document.activeElement.closest('[data-terminal-input]'))
+        return
+      e.preventDefault()
+      e.stopPropagation()
+      openSearch()
     }
     window.addEventListener('keydown', onKey, true)
-    return () => { window.removeEventListener('keydown', onKey, true); window.removeEventListener('pixelsky:close-search-for-command', hide) }
+    return () => {
+      window.removeEventListener('keydown', onKey, true)
+      window.removeEventListener('pixelsky:close-search-for-command', hide)
+    }
   }, [openSearch])
-  return <SearchContext.Provider value={{ open, show: openSearch, toggle: () => { if (open) close(); else openSearch() } }}>{children}{open && <SearchDialog inputRef={input} onClose={close} />}</SearchContext.Provider>
+  return (
+    <SearchContext.Provider
+      value={{
+        open,
+        show: openSearch,
+        toggle: () => {
+          if (open) close()
+          else openSearch()
+        },
+      }}
+    >
+      {children}
+      {open && <SearchDialog inputRef={input} onClose={close} />}
+    </SearchContext.Provider>
+  )
 }
 
 export function useOpenSearch(): () => void {
   const open = useContext(SearchContext)
-  if (!open) throw new Error(tr("search.SearchProvider.message610"))
+  if (!open) throw new Error(tr('search.SearchProvider.message610'))
   return open.show
 }
-export function useSearchUi() { const value = useContext(SearchContext); if (!value) throw new Error(tr("search.SearchProvider.message610")); return value }
+export function useSearchUi() {
+  const value = useContext(SearchContext)
+  if (!value) throw new Error(tr('search.SearchProvider.message610'))
+  return value
+}

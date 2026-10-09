@@ -4,7 +4,11 @@ import { useI18n } from '@/i18n/I18nProvider'
 
 export function SectionTitle({ children }: { children: ReactNode }) {
   const { text } = useI18n()
-  return <h3 className="mb-4 text-section font-semibold text-fg">{typeof children === 'string' ? text(children) : children}</h3>
+  return (
+    <h3 className="mb-4 text-section font-semibold text-fg">
+      {typeof children === 'string' ? text(children) : children}
+    </h3>
+  )
 }
 
 /** 设置分组小标题（外观页里的「字体」「壁纸」），上方留出间距和分隔线 */
@@ -39,7 +43,10 @@ export function SettingRow({
   const { text } = useI18n()
   const translatedTitle = text(title)
   return (
-    <div data-setting-title={title} className="rounded-md border-t border-line-subtle py-5 first-of-type:border-t-0 first-of-type:pt-0">
+    <div
+      data-setting-title={title}
+      className="rounded-md border-t border-line-subtle py-5 first-of-type:border-t-0 first-of-type:pt-0"
+    >
       <div className={control ? 'flex items-center justify-between gap-4' : undefined}>
         <div className="min-w-0">
           <div className="text-ui font-medium text-fg">{translatedTitle}</div>
@@ -48,7 +55,9 @@ export function SettingRow({
         {control}
       </div>
       {children}
-      {hint && <p className={cn('mt-2 text-meta', hintTone === 'danger' ? 'text-danger' : 'text-fg-faint')}>{text(hint)}</p>}
+      {hint && (
+        <p className={cn('mt-2 text-meta', hintTone === 'danger' ? 'text-danger' : 'text-fg-faint')}>{text(hint)}</p>
+      )}
     </div>
   )
 }

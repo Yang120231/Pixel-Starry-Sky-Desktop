@@ -20,16 +20,23 @@ interface AccountOverviewProps {
 }
 
 /** 账号 → 概览：余额、当前套餐、限额、刷新（docs/ui/settings.md §9.3） */
-export function AccountOverview({ account, balanceText, error, refreshing, onRefresh, onNavigate }: AccountOverviewProps) {
+export function AccountOverview({
+  account,
+  balanceText,
+  error,
+  refreshing,
+  onRefresh,
+  onNavigate,
+}: AccountOverviewProps) {
   useI18n()
   const settings = useSettings()
   const { plan, rateLimits, currency, group } = account
   const expires = formatDate(plan?.expiresAt)
   const quotas: Array<[string, Quota | null]> = plan
     ? [
-        [tr("account.AccountMenu.message33"), plan.daily],
-        [tr("account.AccountMenu.message34"), plan.weekly],
-        [tr("account.AccountMenu.message35"), plan.monthly],
+        [tr('account.AccountMenu.message33'), plan.daily],
+        [tr('account.AccountMenu.message34'), plan.weekly],
+        [tr('account.AccountMenu.message35'), plan.monthly],
       ]
     : []
   const shownQuotas = quotas.filter((q): q is [string, Quota] => q[1] !== null)
@@ -50,29 +57,41 @@ export function AccountOverview({ account, balanceText, error, refreshing, onRef
       )}
 
       <div className="grid grid-cols-2 gap-3">
-        <Card title={tr("account.AccountMenu.message36")}>
+        <Card title={tr('account.AccountMenu.message36')}>
           <div className="text-title leading-none font-semibold text-fg tabular-nums">{balanceText}</div>
-          {account.balance === null && <p className="mt-1.5 text-meta text-fg-muted">{tr("account.AccountMenu.message37")}</p>}
+          {account.balance === null && (
+            <p className="mt-1.5 text-meta text-fg-muted">{tr('account.AccountMenu.message37')}</p>
+          )}
           {group && (
-            <p className="mt-2 truncate text-meta text-fg-muted">{tr("settings.account.AccountOverview.message638")} {group.name} · {formatBillingSource(group.billingSource)}
+            <p className="mt-2 truncate text-meta text-fg-muted">
+              {tr('settings.account.AccountOverview.message638')} {group.name} ·{' '}
+              {formatBillingSource(group.billingSource)}
             </p>
           )}
           <button
             type="button"
             onClick={() => settings.openSettings('models')}
             className="mt-1 self-start text-meta text-accent-fg hover:underline"
-          >{tr("settings.account.AccountOverview.message639")} </button>
+          >
+            {tr('settings.account.AccountOverview.message639')}{' '}
+          </button>
           <div className="mt-auto pt-4">
-            <Button variant="primary" onClick={() => onNavigate('topup')}>{tr("settings.account.AccountOverview.message640")} </Button>
+            <Button variant="primary" onClick={() => onNavigate('topup')}>
+              {tr('settings.account.AccountOverview.message640')}{' '}
+            </Button>
           </div>
         </Card>
 
-        <Card title={tr("settings.account.AccountOverview.message641")}>
+        <Card title={tr('settings.account.AccountOverview.message641')}>
           {plan ? (
             <>
               <div className="flex items-baseline justify-between gap-2">
                 <span className="min-w-0 truncate text-ui font-medium text-fg">{plan.name}</span>
-                {expires && <span className="shrink-0 text-meta text-fg-muted">{tr("account.AccountMenu.message40")} {expires}</span>}
+                {expires && (
+                  <span className="shrink-0 text-meta text-fg-muted">
+                    {tr('account.AccountMenu.message40')} {expires}
+                  </span>
+                )}
               </div>
               <div className="mt-3 flex flex-col gap-2.5">
                 {shownQuotas.map(([label, q]) => (
@@ -80,15 +99,19 @@ export function AccountOverview({ account, balanceText, error, refreshing, onRef
                 ))}
               </div>
               <div className="mt-auto pt-4">
-                <Button variant="outline" onClick={() => onNavigate('plans')}>{tr("settings.account.AccountOverview.message642")} </Button>
+                <Button variant="outline" onClick={() => onNavigate('plans')}>
+                  {tr('settings.account.AccountOverview.message642')}{' '}
+                </Button>
               </div>
             </>
           ) : (
             <>
-              <div className="text-ui font-medium text-fg">{tr("settings.account.AccountOverview.message643")}</div>
-              <p className="mt-1 text-meta text-fg-muted">{tr("settings.account.AccountOverview.message644")}</p>
+              <div className="text-ui font-medium text-fg">{tr('settings.account.AccountOverview.message643')}</div>
+              <p className="mt-1 text-meta text-fg-muted">{tr('settings.account.AccountOverview.message644')}</p>
               <div className="mt-auto pt-4">
-                <Button variant="outline" onClick={() => onNavigate('plans')}>{tr("settings.account.AccountOverview.message645")} </Button>
+                <Button variant="outline" onClick={() => onNavigate('plans')}>
+                  {tr('settings.account.AccountOverview.message645')}{' '}
+                </Button>
               </div>
             </>
           )}
@@ -96,10 +119,15 @@ export function AccountOverview({ account, balanceText, error, refreshing, onRef
       </div>
 
       {rateLimits.length > 0 && (
-        <Card title={tr("account.AccountMenu.message41")}>
+        <Card title={tr('account.AccountMenu.message41')}>
           <div className="flex flex-col gap-2.5">
-            {rateLimits.map((r) => (
-              <QuotaBar key={r.window} label={tr("account.AccountMenu.message43", { p0: formatWindow(r.window) })} quota={r} currency={currency} />
+            {rateLimits.map(r => (
+              <QuotaBar
+                key={r.window}
+                label={tr('account.AccountMenu.message43', { p0: formatWindow(r.window) })}
+                quota={r}
+                currency={currency}
+              />
             ))}
           </div>
         </Card>
@@ -109,10 +137,16 @@ export function AccountOverview({ account, balanceText, error, refreshing, onRef
         type="button"
         onClick={onRefresh}
         disabled={refreshing}
-        aria-label={tr("settings.account.AccountOverview.message646")}
+        aria-label={tr('settings.account.AccountOverview.message646')}
         className="press no-drag flex h-8 w-fit items-center gap-1.5 rounded-md px-2 text-meta text-fg-secondary hover:bg-hover hover:text-fg disabled:opacity-70"
       >
-        <RefreshCw size={14} strokeWidth={1.5} className={cn('shrink-0', refreshing && 'animate-spin')} />{tr("account.AccountMenu.message45")} <span className="text-fg-muted">{refreshing ? tr("settings.account.AccountOverview.message647") : tr("account.AccountMenu.message39", { p0: formatUpdatedAt(account.updatedAt, now) })}</span>
+        <RefreshCw size={14} strokeWidth={1.5} className={cn('shrink-0', refreshing && 'animate-spin')} />
+        {tr('account.AccountMenu.message45')}{' '}
+        <span className="text-fg-muted">
+          {refreshing
+            ? tr('settings.account.AccountOverview.message647')
+            : tr('account.AccountMenu.message39', { p0: formatUpdatedAt(account.updatedAt, now) })}
+        </span>
       </button>
     </div>
   )

@@ -17,8 +17,8 @@ export interface RailItem {
 export type SessionStatus = 'idle' | 'running' | 'unread'
 
 export interface Session {
-  bottomedAt?:number|null
-  archivedAt?:number|null
+  bottomedAt?: number | null
+  archivedAt?: number | null
   id: string
   title: string
   status: SessionStatus
@@ -33,7 +33,7 @@ export interface Project {
   running?: boolean
   expanded?: boolean
   sessions: Session[]
-  archived?:Session[]
+  archived?: Session[]
 }
 
 export interface PinnedItem {
@@ -48,7 +48,7 @@ export interface PinnedItem {
 }
 
 export interface RecentItem {
-  bottomedAt?:number|null
+  bottomedAt?: number | null
   id: string
   title: string
   project?: string

@@ -2,14 +2,21 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { emptySnapshot, reduce, type EngineEvent, type PermissionMode, type SessionRecord, type TurnOutcome } from '@pixelsky/protocol'
+import {
+  emptySnapshot,
+  reduce,
+  type EngineEvent,
+  type PermissionMode,
+  type SessionRecord,
+  type TurnOutcome,
+} from '@pixelsky/protocol'
 import { ClaudeTranslator } from '../src/claude/translate'
 
 function fixture(name: string): Record<string, unknown>[] {
   return readFileSync(fileURLToPath(new URL(`./fixtures/${name}.jsonl`, import.meta.url)), 'utf8')
     .split('\n')
     .filter(Boolean)
-    .map((l) => JSON.parse(l) as Record<string, unknown>)
+    .map(l => JSON.parse(l) as Record<string, unknown>)
 }
 
 function translate(name: string, prepare?: (t: ClaudeTranslator) => void) {
@@ -18,10 +25,10 @@ function translate(name: string, prepare?: (t: ClaudeTranslator) => void) {
   const modes: PermissionMode[] = []
   const ends: TurnOutcome[] = []
   const t = new ClaudeTranslator('D:\\work', {
-    emit: (e) => events.push(e),
-    sessionId: (id) => sessionIds.push(id),
-    permissionMode: (m) => modes.push(m),
-    turnEnded: (o) => ends.push(o),
+    emit: e => events.push(e),
+    sessionId: id => sessionIds.push(id),
+    permissionMode: m => modes.push(m),
+    turnEnded: o => ends.push(o),
     fastState: () => {},
   })
   t.startTurn('turn-1')
@@ -56,7 +63,7 @@ describe('ClaudeTranslator（真实录像）', () => {
     expect(ends).toEqual(['completed'])
 
     const snap = events.reduce(reduce, emptySnapshot(record))
-    const kinds = snap.items.map((i) => i.kind)
+    const kinds = snap.items.map(i => i.kind)
     expect(kinds).toEqual(['file_change', 'assistant'])
 
     const fc = snap.items[0]
@@ -66,7 +73,7 @@ describe('ClaudeTranslator（真实录像）', () => {
     }
     expect(snap.items[1]).toMatchObject({ kind: 'assistant', text: 'done', status: 'completed' })
 
-    const usage = events.filter((e) => e.type === 'usage').at(-1)
+    const usage = events.filter(e => e.type === 'usage').at(-1)
     expect(usage?.type === 'usage' && usage.usage.costUsd).toBeCloseTo(0.0952944)
     expect(usage?.type === 'usage' && usage.usage.contextWindow).toBe(1_000_000)
     expect(usage?.type === 'usage' && usage.usage.contextTokens).toBeGreaterThan(30_000)
@@ -75,17 +82,23 @@ describe('ClaudeTranslator（真实录像）', () => {
     expect(done).toMatchObject({ type: 'turn_completed', turnId: 'turn-1', outcome: 'completed', error: null })
     // 这一轮的用量：一个模型、两次请求（工具调用一次 + 回复一次）
     const u = done?.type === 'turn_completed' ? done.usage : undefined
-    expect(u?.models['claude-sonnet-5-5']).toMatchObject({ input: 1198, cacheRead: 33742, cacheWrite: 33944, output: 129, requests: 2 })
+    expect(u?.models['claude-sonnet-5-5']).toMatchObject({
+      input: 1198,
+      cacheRead: 33742,
+      cacheWrite: 33944,
+      output: 129,
+      requests: 2,
+    })
     expect(u?.models['claude-sonnet-5-5'].costUsd).toBeCloseTo(0.0952944)
     expect(u?.durationMs).toBeGreaterThanOrEqual(0)
   })
 
   it('流式正文先 item_started 再增量，最后用完整内容完成', () => {
     const { events } = translate('claude-write-allow')
-    const started = events.find((e) => e.type === 'item_started' && e.item.kind === 'assistant')
-    const deltas = events.filter((e) => e.type === 'item_delta')
+    const started = events.find(e => e.type === 'item_started' && e.item.kind === 'assistant')
+    const deltas = events.filter(e => e.type === 'item_delta')
     expect(started).toBeTruthy()
-    expect(deltas.map((d) => (d.type === 'item_delta' ? d.delta : '')).join('')).toBe('done')
+    expect(deltas.map(d => (d.type === 'item_delta' ? d.delta : '')).join('')).toBe('done')
   })
 
   it('中断：回复标成 interrupted，一轮结果是 interrupted，不弹错误', () => {
@@ -94,7 +107,7 @@ describe('ClaudeTranslator（真实录像）', () => {
     const snap = events.reduce(reduce, emptySnapshot(record))
     expect(snap.items).toHaveLength(1)
     expect(snap.items[0]).toMatchObject({ kind: 'assistant', status: 'interrupted' })
-    expect(snap.items.some((i) => i.kind === 'notice')).toBe(false)
+    expect(snap.items.some(i => i.kind === 'notice')).toBe(false)
     expect(events.at(-1)).toMatchObject({ type: 'turn_completed', outcome: 'interrupted', error: null })
   })
 
@@ -102,11 +115,12 @@ describe('ClaudeTranslator（真实录像）', () => {
     const toolUseId = (() => {
       for (const m of fixture('claude-write-deny')) {
         const content = (m.message as { content?: unknown })?.content
-        if (m.type === 'assistant' && Array.isArray(content) && content[0]?.type === 'tool_use') return content[0].id as string
+        if (m.type === 'assistant' && Array.isArray(content) && content[0]?.type === 'tool_use')
+          return content[0].id as string
       }
       return ''
     })()
-    const { events, ends } = translate('claude-write-deny', (t) => t.markDeclined(toolUseId))
+    const { events, ends } = translate('claude-write-deny', t => t.markDeclined(toolUseId))
     expect(ends).toEqual(['completed'])
     const snap = events.reduce(reduce, emptySnapshot(record))
     expect(snap.items[0]).toMatchObject({ kind: 'file_change', status: 'declined' })
@@ -121,16 +135,26 @@ describe('ClaudeTranslator（真实录像）', () => {
 
   it('子 agent 的消息不进对话流', () => {
     const events: EngineEvent[] = []
-    const t = new ClaudeTranslator('D:\\work', { emit: (e) => events.push(e), sessionId: () => {}, permissionMode: () => {}, turnEnded: () => {}, fastState: () => {} })
+    const t = new ClaudeTranslator('D:\\work', {
+      emit: e => events.push(e),
+      sessionId: () => {},
+      permissionMode: () => {},
+      turnEnded: () => {},
+      fastState: () => {},
+    })
     t.startTurn('t')
-    t.handle({ type: 'assistant', parent_tool_use_id: 'toolu_parent', message: { id: 'm', content: [{ type: 'text', text: '子任务内部' }] } })
+    t.handle({
+      type: 'assistant',
+      parent_tool_use_id: 'toolu_parent',
+      message: { id: 'm', content: [{ type: 'text', text: '子任务内部' }] },
+    })
     expect(events).toHaveLength(0)
   })
 
   it('用量按进程累计求差：同一进程里没有新 token 的一轮不带 usage；换进程后基线清零', () => {
     const events: EngineEvent[] = []
     const t = new ClaudeTranslator('D:\\work', {
-      emit: (e) => events.push(e),
+      emit: e => events.push(e),
       sessionId: () => {},
       permissionMode: () => {},
       turnEnded: () => {},
@@ -139,7 +163,7 @@ describe('ClaudeTranslator（真实录像）', () => {
     const turn = (name: string, id: string) => {
       t.startTurn(id)
       for (const m of fixture(name)) t.handle(m)
-      const done = events.filter((e) => e.type === 'turn_completed').at(-1)
+      const done = events.filter(e => e.type === 'turn_completed').at(-1)
       return done?.type === 'turn_completed' ? done.usage : undefined
     }
     expect(turn('claude-write-allow', 't1')?.models['claude-sonnet-5-5'].input).toBe(1198)

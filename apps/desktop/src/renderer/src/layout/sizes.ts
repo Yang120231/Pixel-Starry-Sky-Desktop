@@ -22,19 +22,33 @@ function read(): LayoutSizes {
       composer: validSize(p.composer, 320, 2400, DEFAULT_COMPOSER_WIDTH),
       composerHeight: typeof p.composerHeight === 'number' ? validSize(p.composerHeight, 56, 1200, 56) : null,
     }
-  } catch { return { rightWorkspace: 720, sidebar: DEFAULT_SIDEBAR_WIDTH, composer: DEFAULT_COMPOSER_WIDTH, composerHeight: null } }
+  } catch {
+    return {
+      rightWorkspace: 720,
+      sidebar: DEFAULT_SIDEBAR_WIDTH,
+      composer: DEFAULT_COMPOSER_WIDTH,
+      composerHeight: null,
+    }
+  }
 }
 let sizes = read()
 const listeners = new Set<() => void>()
 export function setLayoutSize<K extends keyof LayoutSizes>(key: K, value: LayoutSizes[K], persist = false): void {
   const changed = sizes[key] !== value
   if (changed) sizes = { ...sizes, [key]: value }
-  if (persist) try { localStorage.setItem(KEY, JSON.stringify(sizes)) } catch { /* 本次使用仍然有效 */ }
+  if (persist)
+    try {
+      localStorage.setItem(KEY, JSON.stringify(sizes))
+    } catch {
+      /* 本次使用仍然有效 */
+    }
   if (changed) listeners.forEach(fn => fn())
 }
 function subscribe(fn: () => void): () => void {
   listeners.add(fn)
-  return () => { listeners.delete(fn) }
+  return () => {
+    listeners.delete(fn)
+  }
 }
 export function useLayoutSize<K extends keyof LayoutSizes>(key: K): LayoutSizes[K] {
   return useSyncExternalStore(subscribe, () => sizes[key])

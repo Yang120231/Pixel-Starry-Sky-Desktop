@@ -17,10 +17,19 @@ import { join } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 
 const argv = process.argv.slice(2)
-if (process.env.FAKE_CLAUDE_ENV_LOG) writeFileSync(process.env.FAKE_CLAUDE_ENV_LOG, JSON.stringify({ base: process.env.ANTHROPIC_BASE_URL, token: process.env.ANTHROPIC_AUTH_TOKEN, key: process.env.ANTHROPIC_API_KEY, autoCompact: process.env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE }))
+if (process.env.FAKE_CLAUDE_ENV_LOG)
+  writeFileSync(
+    process.env.FAKE_CLAUDE_ENV_LOG,
+    JSON.stringify({
+      base: process.env.ANTHROPIC_BASE_URL,
+      token: process.env.ANTHROPIC_AUTH_TOKEN,
+      key: process.env.ANTHROPIC_API_KEY,
+      autoCompact: process.env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE,
+    }),
+  )
 if (process.env.FAKE_CLAUDE_LOG) appendFileSync(process.env.FAKE_CLAUDE_LOG, JSON.stringify(argv) + '\n')
 
-const arg = (name) => {
+const arg = name => {
   const i = argv.indexOf(name)
   return i >= 0 ? argv[i + 1] : null
 }
@@ -37,8 +46,8 @@ const bgTasks = new Map()
 const ultracodeAvailable = process.env.FAKE_CLAUDE_NO_ULTRACODE !== '1'
 const cwd = process.cwd()
 
-const out = (o) => process.stdout.write(JSON.stringify(o) + '\n')
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const out = o => process.stdout.write(JSON.stringify(o) + '\n')
+const sleep = ms => new Promise(r => setTimeout(r, ms))
 
 let turn = null // { aborted: boolean }
 const pendingInputs = []
@@ -65,17 +74,28 @@ function touchTranscript() {
 
 // FAKE_CLAUDE_CHAIN=1：像真实 CLI 一样写 user / assistant 链（uuid、parentUuid），
 // 支持 --resume-session-at=<uuid> 截断；FAKE_CLAUDE_CHAIN_LOG 记录启动时模型能看到的用户消息。
-const resumeAt = argv.find((a) => a.startsWith('--resume-session-at='))?.slice('--resume-session-at='.length) ?? null
+const resumeAt = argv.find(a => a.startsWith('--resume-session-at='))?.slice('--resume-session-at='.length) ?? null
 let chainTail = null
 if (process.env.FAKE_CLAUDE_CHAIN) {
   const file = transcriptFile()
-  const entries = file && existsSync(file) ? readFileSync(file, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []
-  const byId = new Map(entries.map((e) => [e.uuid, e]))
-  if (resumeAt && !byId.has(resumeAt)) { process.stderr.write(`No message found with uuid ${resumeAt}\n`); process.exit(1) }
+  const entries =
+    file && existsSync(file)
+      ? readFileSync(file, 'utf8')
+          .split('\n')
+          .filter(Boolean)
+          .map(l => JSON.parse(l))
+      : []
+  const byId = new Map(entries.map(e => [e.uuid, e]))
+  if (resumeAt && !byId.has(resumeAt)) {
+    process.stderr.write(`No message found with uuid ${resumeAt}\n`)
+    process.exit(1)
+  }
   chainTail = resumeAt ?? entries.at(-1)?.uuid ?? null
   const visible = []
-  for (let id = chainTail; id; id = byId.get(id)?.parentUuid) if (byId.get(id)?.type === 'user') visible.unshift(byId.get(id).text)
-  if (process.env.FAKE_CLAUDE_CHAIN_LOG) appendFileSync(process.env.FAKE_CLAUDE_CHAIN_LOG, JSON.stringify(visible) + '\n')
+  for (let id = chainTail; id; id = byId.get(id)?.parentUuid)
+    if (byId.get(id)?.type === 'user') visible.unshift(byId.get(id).text)
+  if (process.env.FAKE_CLAUDE_CHAIN_LOG)
+    appendFileSync(process.env.FAKE_CLAUDE_CHAIN_LOG, JSON.stringify(visible) + '\n')
 }
 function chain(type, uuid, text) {
   const file = transcriptFile()
@@ -91,13 +111,35 @@ function stream(event) {
 async function streamText(text, pieces) {
   const id = `msg_fake_${runId}_${++msgSeq}`
   const cacheProbe = process.env.FAKE_CLAUDE_CACHE_ALERT === '1'
-  if (cacheProbe) stream({ type: 'message_start', message: { id: `${id}_baseline`, model: 'fake-model', usage: { input_tokens: 10000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } })
-  stream({ type: 'message_start', message: { id, model: 'fake-model', usage: cacheProbe ? { input_tokens: 12000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } : { input_tokens: 10 } } })
+  if (cacheProbe)
+    stream({
+      type: 'message_start',
+      message: {
+        id: `${id}_baseline`,
+        model: 'fake-model',
+        usage: { input_tokens: 10000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+      },
+    })
+  stream({
+    type: 'message_start',
+    message: {
+      id,
+      model: 'fake-model',
+      usage: cacheProbe
+        ? { input_tokens: 12000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
+        : { input_tokens: 10 },
+    },
+  })
   stream({ type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } })
   let sent = ''
   for (const p of pieces) {
     if (turn?.aborted) {
-      out({ type: 'assistant', message: { id, content: [{ type: 'text', text: sent }] }, parent_tool_use_id: null, aborted: true })
+      out({
+        type: 'assistant',
+        message: { id, content: [{ type: 'text', text: sent }] },
+        parent_tool_use_id: null,
+        aborted: true,
+      })
       return false
     }
     stream({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: p } })
@@ -106,7 +148,11 @@ async function streamText(text, pieces) {
   }
   out({ type: 'assistant', message: { id, content: [{ type: 'text', text }] }, parent_tool_use_id: null })
   stream({ type: 'content_block_stop', index: 0 })
-  stream({ type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { input_tokens: 10, cache_read_input_tokens: 90, cache_creation_input_tokens: 0, output_tokens: 5 } })
+  stream({
+    type: 'message_delta',
+    delta: { stop_reason: 'end_turn' },
+    usage: { input_tokens: 10, cache_read_input_tokens: 90, cache_creation_input_tokens: 0, output_tokens: 5 },
+  })
   stream({ type: 'message_stop' })
   return true
 }
@@ -121,7 +167,9 @@ function result(subtype, extra = {}) {
   totals.cacheReadInputTokens += 90
   out({
     type: 'result',
-    ...(process.env.FAKE_CLAUDE_GUIDE ? { user_message_uuid: inputUuid, user_message_uuids: [inputUuid, ...foldedUuids] } : {}),
+    ...(process.env.FAKE_CLAUDE_GUIDE
+      ? { user_message_uuid: inputUuid, user_message_uuids: [inputUuid, ...foldedUuids] }
+      : {}),
     subtype,
     is_error: subtype !== 'success',
     session_id: sessionId,
@@ -146,14 +194,23 @@ function ask(toolUseId, input) {
       permission_suggestions: [{ type: 'setMode', mode: 'acceptEdits', destination: 'session' }],
     },
   })
-  return new Promise((resolve) => pendingAnswers.set(requestId, resolve))
+  return new Promise(resolve => pendingAnswers.set(requestId, resolve))
 }
 
 async function runTurn(text) {
   turn = { aborted: false }
   touchTranscript()
-  out({ type: 'system', subtype: 'init', session_id: sessionId, cwd, model: 'fake-model', permissionMode,
-    ...(process.env.FAKE_CLAUDE_GUIDE ? { capabilities: ['msg_lifecycle_v1', 'interrupt_receipt_v1', 'interrupt_cancel_queued_v1'] } : {}) })
+  out({
+    type: 'system',
+    subtype: 'init',
+    session_id: sessionId,
+    cwd,
+    model: 'fake-model',
+    permissionMode,
+    ...(process.env.FAKE_CLAUDE_GUIDE
+      ? { capabilities: ['msg_lifecycle_v1', 'interrupt_receipt_v1', 'interrupt_cancel_queued_v1'] }
+      : {}),
+  })
 
   if (text === '/compact' && process.env.FAKE_CLAUDE_CONTEXT === '1') {
     out({ type: 'system', subtype: 'status', status: 'compacting' })
@@ -165,7 +222,11 @@ async function runTurn(text) {
   }
 
   if (text.includes('认证失败')) {
-    result('success', { is_error: true, result: 'API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"Invalid bearer token"}}' })
+    result('success', {
+      is_error: true,
+      result:
+        'API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"Invalid bearer token"}}',
+    })
     turn = null
     return
   }
@@ -178,25 +239,39 @@ async function runTurn(text) {
   if (text.includes('写文件')) {
     const toolUseId = `toolu_fake_${++msgSeq}`
     const input = { file_path: join(cwd, 'hello.txt'), content: 'hi' }
-    out({ type: 'assistant', message: { id: `msg_fake_${runId}_${msgSeq}`, content: [{ type: 'tool_use', id: toolUseId, name: 'Write', input }] }, parent_tool_use_id: null })
+    out({
+      type: 'assistant',
+      message: {
+        id: `msg_fake_${runId}_${msgSeq}`,
+        content: [{ type: 'tool_use', id: toolUseId, name: 'Write', input }],
+      },
+      parent_tool_use_id: null,
+    })
     const answer = allowedTools.has('Write') ? { behavior: 'allow' } : await ask(toolUseId, input)
     if (answer.behavior === 'allow') {
       for (const p of Array.isArray(answer.updatedPermissions) ? answer.updatedPermissions : []) {
         if (p.type === 'addRules' && p.behavior === 'allow') {
           for (const rule of p.rules) allowedTools.add(rule.toolName)
-          if (process.env.FAKE_CLAUDE_LOG) appendFileSync(process.env.FAKE_CLAUDE_LOG.replace(/\.log$/, '.perm.log'), JSON.stringify(p) + '\n')
+          if (process.env.FAKE_CLAUDE_LOG)
+            appendFileSync(process.env.FAKE_CLAUDE_LOG.replace(/\.log$/, '.perm.log'), JSON.stringify(p) + '\n')
         }
       }
       out({
         type: 'user',
-        message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUseId, content: 'File created successfully' }] },
+        message: {
+          role: 'user',
+          content: [{ type: 'tool_result', tool_use_id: toolUseId, content: 'File created successfully' }],
+        },
         parent_tool_use_id: null,
         tool_use_result: { type: 'create', filePath: input.file_path, content: 'hi', structuredPatch: [] },
       })
     } else {
       out({
         type: 'user',
-        message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUseId, content: answer.message, is_error: true }] },
+        message: {
+          role: 'user',
+          content: [{ type: 'tool_result', tool_use_id: toolUseId, content: answer.message, is_error: true }],
+        },
         parent_tool_use_id: null,
         tool_use_result: `Error: ${answer.message}`,
       })
@@ -209,17 +284,77 @@ async function runTurn(text) {
 
   if (text.includes('子任务')) {
     const toolUseId = `toolu_agent_${++msgSeq}`
-    out({ type: 'assistant', message: { id: `msg_fake_${runId}_${msgSeq}`, content: [{ type: 'tool_use', id: toolUseId, name: 'Agent', input: { description: '读 README', subagent_type: 'general-purpose', prompt: '读一下 README' } }] }, parent_tool_use_id: null })
-    out({ type: 'system', subtype: 'task_started', task_id: 'agent1', tool_use_id: toolUseId, description: '读 README', subagent_type: 'general-purpose', task_type: 'local_agent' })
-    out({ type: 'assistant', message: { id: 'msg_sub_1', content: [{ type: 'tool_use', id: 'toolu_sub_read', name: 'Read', input: { file_path: join(cwd, 'README.md') } }] }, parent_tool_use_id: toolUseId })
-    out({ type: 'system', subtype: 'task_progress', task_id: 'agent1', description: '读 README', last_tool_name: 'Read', usage: { total_tokens: 1200, tool_uses: 1, duration_ms: 800 } })
-    out({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_sub_read', content: '# demo' }] }, parent_tool_use_id: toolUseId })
-    out({ type: 'system', subtype: 'task_notification', task_id: 'agent1', status: 'completed', summary: '读完了', output_file: '', usage: { total_tokens: 1500, tool_uses: 1, duration_ms: 1000 } })
+    out({
+      type: 'assistant',
+      message: {
+        id: `msg_fake_${runId}_${msgSeq}`,
+        content: [
+          {
+            type: 'tool_use',
+            id: toolUseId,
+            name: 'Agent',
+            input: { description: '读 README', subagent_type: 'general-purpose', prompt: '读一下 README' },
+          },
+        ],
+      },
+      parent_tool_use_id: null,
+    })
+    out({
+      type: 'system',
+      subtype: 'task_started',
+      task_id: 'agent1',
+      tool_use_id: toolUseId,
+      description: '读 README',
+      subagent_type: 'general-purpose',
+      task_type: 'local_agent',
+    })
+    out({
+      type: 'assistant',
+      message: {
+        id: 'msg_sub_1',
+        content: [
+          { type: 'tool_use', id: 'toolu_sub_read', name: 'Read', input: { file_path: join(cwd, 'README.md') } },
+        ],
+      },
+      parent_tool_use_id: toolUseId,
+    })
+    out({
+      type: 'system',
+      subtype: 'task_progress',
+      task_id: 'agent1',
+      description: '读 README',
+      last_tool_name: 'Read',
+      usage: { total_tokens: 1200, tool_uses: 1, duration_ms: 800 },
+    })
     out({
       type: 'user',
-      message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUseId, content: 'README 里写着 demo' }] },
+      message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_sub_read', content: '# demo' }] },
+      parent_tool_use_id: toolUseId,
+    })
+    out({
+      type: 'system',
+      subtype: 'task_notification',
+      task_id: 'agent1',
+      status: 'completed',
+      summary: '读完了',
+      output_file: '',
+      usage: { total_tokens: 1500, tool_uses: 1, duration_ms: 1000 },
+    })
+    out({
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: toolUseId, content: 'README 里写着 demo' }],
+      },
       parent_tool_use_id: null,
-      tool_use_result: { agentId: 'agent1', status: 'completed', resolvedModel: 'claude-sonnet-5-5', totalTokens: 1500, totalToolUseCount: 1, totalDurationMs: 1000 },
+      tool_use_result: {
+        agentId: 'agent1',
+        status: 'completed',
+        resolvedModel: 'claude-sonnet-5-5',
+        totalTokens: 1500,
+        totalToolUseCount: 1,
+        totalDurationMs: 1000,
+      },
     })
     await streamText('子任务完成', ['子任务完成'])
     result('success')
@@ -230,9 +365,26 @@ async function runTurn(text) {
 
   if (text.includes('后台')) {
     bgTasks.set('bg1', { task_id: 'bg1', task_type: 'local_bash', description: 'npm run dev' })
-    out({ type: 'system', subtype: 'task_started', task_id: 'bg1', description: 'npm run dev', task_type: 'local_bash', is_backgrounded: true })
-    out({ type: 'system', subtype: 'background_tasks_changed', tasks: [...bgTasks.values(), { task_id: 'amb', task_type: 'local_bash', description: '内部', ambient: true }] })
-    out({ type: 'system', subtype: 'task_progress', task_id: 'bg1', description: '服务已启动', usage: { total_tokens: 0, tool_uses: 0, duration_ms: 10 } })
+    out({
+      type: 'system',
+      subtype: 'task_started',
+      task_id: 'bg1',
+      description: 'npm run dev',
+      task_type: 'local_bash',
+      is_backgrounded: true,
+    })
+    out({
+      type: 'system',
+      subtype: 'background_tasks_changed',
+      tasks: [...bgTasks.values(), { task_id: 'amb', task_type: 'local_bash', description: '内部', ambient: true }],
+    })
+    out({
+      type: 'system',
+      subtype: 'task_progress',
+      task_id: 'bg1',
+      description: '服务已启动',
+      usage: { total_tokens: 0, tool_uses: 0, duration_ms: 10 },
+    })
     await streamText('后台已启动', ['后台已启动'])
     result('success')
     turn = null
@@ -254,7 +406,7 @@ async function runTurn(text) {
 
 let buf = ''
 process.stdin.setEncoding('utf8')
-process.stdin.on('data', (chunk) => {
+process.stdin.on('data', chunk => {
   buf += chunk
   let i
   while ((i = buf.indexOf('\n')) >= 0) {
@@ -276,19 +428,25 @@ function handle(msg) {
       case 'initialize':
         const initialized = {
           models: [],
-          commands: process.env.FAKE_CLAUDE_COMMANDS ? JSON.parse(process.env.FAKE_CLAUDE_COMMANDS) : process.env.FAKE_CLAUDE_CONTEXT === '1' ? [{ name: 'context' }, { name: 'compact' }] : [],
+          commands: process.env.FAKE_CLAUDE_COMMANDS
+            ? JSON.parse(process.env.FAKE_CLAUDE_COMMANDS)
+            : process.env.FAKE_CLAUDE_CONTEXT === '1'
+              ? [{ name: 'context' }, { name: 'compact' }]
+              : [],
           current_permission_mode: permissionMode,
           output_style: 'default',
           available_output_styles: ['default', 'Explanatory', 'Learning'],
           fast_mode_state: fastMode ? 'on' : 'off',
           fast_mode_disabled_reason: fastBlocked || (fastMode ? undefined : 'sdk_opt_in_required'),
         }
-        if (process.env.FAKE_CLAUDE_INIT_DELAY) setTimeout(() => respond(msg.request_id, initialized), Number(process.env.FAKE_CLAUDE_INIT_DELAY))
+        if (process.env.FAKE_CLAUDE_INIT_DELAY)
+          setTimeout(() => respond(msg.request_id, initialized), Number(process.env.FAKE_CLAUDE_INIT_DELAY))
         else respond(msg.request_id, initialized)
         return
       case 'set_max_thinking_tokens':
         thinkingDisplay = r.thinking_display
-        if (process.env.FAKE_CLAUDE_LOG) appendFileSync(process.env.FAKE_CLAUDE_LOG.replace(/\.log$/, '.thinking.log'), String(thinkingDisplay) + '\n')
+        if (process.env.FAKE_CLAUDE_LOG)
+          appendFileSync(process.env.FAKE_CLAUDE_LOG.replace(/\.log$/, '.thinking.log'), String(thinkingDisplay) + '\n')
         respond(msg.request_id, {})
         return
       case 'stop_task': {
@@ -296,7 +454,14 @@ function handle(msg) {
         if (t) {
           bgTasks.delete(r.task_id)
           out({ type: 'system', subtype: 'background_tasks_changed', tasks: [...bgTasks.values()] })
-          out({ type: 'system', subtype: 'task_notification', task_id: r.task_id, status: 'stopped', summary: t.description, output_file: '' })
+          out({
+            type: 'system',
+            subtype: 'task_notification',
+            task_id: r.task_id,
+            status: 'stopped',
+            summary: t.description,
+            output_file: '',
+          })
         }
         respond(msg.request_id, {})
         return
@@ -306,9 +471,9 @@ function handle(msg) {
         return
       case 'interrupt':
         if (turn) turn.aborted = true
-        const cancelled = r.cancel_queued ? pendingInputs.splice(0).map((m) => m.uuid) : []
+        const cancelled = r.cancel_queued ? pendingInputs.splice(0).map(m => m.uuid) : []
         for (const id of cancelled) out({ type: 'command_lifecycle', command_uuid: id, state: 'cancelled' })
-        respond(msg.request_id, { still_queued: pendingInputs.map((m) => m.uuid), cancelled })
+        respond(msg.request_id, { still_queued: pendingInputs.map(m => m.uuid), cancelled })
         return
       case 'apply_flag_settings':
         if (typeof r.settings?.ultracode === 'boolean' && ultracodeAvailable) ultracode = r.settings.ultracode
@@ -316,7 +481,15 @@ function handle(msg) {
         respond(msg.request_id, {})
         return
       case 'get_settings':
-        respond(msg.request_id, { applied: { model: 'fake-model', effort: 'high', ultracode, ultracodeRequested: ultracode, ultracodeAvailable } })
+        respond(msg.request_id, {
+          applied: {
+            model: 'fake-model',
+            effort: 'high',
+            ultracode,
+            ultracodeRequested: ultracode,
+            ultracodeAvailable,
+          },
+        })
         return
       case 'set_permission_mode':
         permissionMode = r.mode
@@ -337,17 +510,66 @@ function handle(msg) {
   if (msg.type === 'user') {
     if (process.env.FAKE_CLAUDE_IMAGES) {
       const content = msg.message.content
-      appendFileSync(process.env.FAKE_CLAUDE_IMAGES, JSON.stringify({ types: typeof content === 'string' ? ['string'] : content.map(block => block.type),
-        text: typeof content === 'string' ? content : content.filter(block => block.type === 'text').map(block => block.text).join(''),
-        images: typeof content === 'string' ? [] : content.filter(block => block.type === 'image').map(block => ({ mediaType: block.source.media_type,
-          bytes: Buffer.from(block.source.data, 'base64').length, sha256: createHash('sha256').update(Buffer.from(block.source.data, 'base64')).digest('hex') })) }) + '\n')
+      appendFileSync(
+        process.env.FAKE_CLAUDE_IMAGES,
+        JSON.stringify({
+          types: typeof content === 'string' ? ['string'] : content.map(block => block.type),
+          text:
+            typeof content === 'string'
+              ? content
+              : content
+                  .filter(block => block.type === 'text')
+                  .map(block => block.text)
+                  .join(''),
+          images:
+            typeof content === 'string'
+              ? []
+              : content
+                  .filter(block => block.type === 'image')
+                  .map(block => ({
+                    mediaType: block.source.media_type,
+                    bytes: Buffer.from(block.source.data, 'base64').length,
+                    sha256: createHash('sha256').update(Buffer.from(block.source.data, 'base64')).digest('hex'),
+                  })),
+        }) + '\n',
+      )
     }
     if (msg.message.content === '/context' && process.env.FAKE_CLAUDE_CONTEXT === '1') {
-      if (process.env.FAKE_CLAUDE_CONTEXT_EXIT === '1') { process.exit(3); return }
-      const context_usage = { model: 'fake-model', total_tokens: 60000, raw_max_tokens: 200000, categories: [{ name: 'System prompt', tokens: 10000, kind: 'used' }, { name: 'Messages', tokens: 50000, kind: 'used' }, { name: 'Autocompact buffer', tokens: 30000, kind: 'buffer' }, { name: 'Free space', tokens: 110000, kind: 'free' }], skills: [], memory_files: [], mcp_tools: [], agents: [] }
+      if (process.env.FAKE_CLAUDE_CONTEXT_EXIT === '1') {
+        process.exit(3)
+        return
+      }
+      const context_usage = {
+        model: 'fake-model',
+        total_tokens: 60000,
+        raw_max_tokens: 200000,
+        categories: [
+          { name: 'System prompt', tokens: 10000, kind: 'used' },
+          { name: 'Messages', tokens: 50000, kind: 'used' },
+          { name: 'Autocompact buffer', tokens: 30000, kind: 'buffer' },
+          { name: 'Free space', tokens: 110000, kind: 'free' },
+        ],
+        skills: [],
+        memory_files: [],
+        mcp_tools: [],
+        agents: [],
+      }
       const send = () => {
-        out({ type: 'assistant', local_command_run: { command: 'context' }, context_usage, message: { model: '<synthetic>', content: [{ type: 'text', text: '诊断不应加入对话' }] } })
-        out({ type: 'result', local_command: 'context', user_message_uuid: msg.uuid, is_error: false, result: '', usage: {}, modelUsage: {} })
+        out({
+          type: 'assistant',
+          local_command_run: { command: 'context' },
+          context_usage,
+          message: { model: '<synthetic>', content: [{ type: 'text', text: '诊断不应加入对话' }] },
+        })
+        out({
+          type: 'result',
+          local_command: 'context',
+          user_message_uuid: msg.uuid,
+          is_error: false,
+          result: '',
+          usage: {},
+          modelUsage: {},
+        })
       }
       setTimeout(send, Number(process.env.FAKE_CLAUDE_CONTEXT_DELAY ?? 0))
       return
@@ -356,7 +578,12 @@ function handle(msg) {
       out({ type: 'command_lifecycle', command_uuid: msg.uuid, state: 'queued' })
       if (turn && process.env.FAKE_CLAUDE_GUIDE === 'fold') {
         foldedUuids.push(msg.uuid)
-        out({ type: 'assistant', message: { content: [] }, user_message_uuid: inputUuid, user_message_uuids: [inputUuid, ...foldedUuids] })
+        out({
+          type: 'assistant',
+          message: { content: [] },
+          user_message_uuid: inputUuid,
+          user_message_uuids: [inputUuid, ...foldedUuids],
+        })
       } else if (turn) pendingInputs.push(msg)
       else runInput(msg)
       return

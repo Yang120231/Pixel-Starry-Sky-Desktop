@@ -16,7 +16,7 @@ const hosts: EngineHost[] = []
 function makeHost(): EngineHost {
   const h = new EngineHost({
     dataDir: join(root, 'data'),
-    emit: (e) => {
+    emit: e => {
       events.push(e)
       // 调试用：SMOKE_LOG=<文件> 时把事件逐行写下来
       if (process.env.SMOKE_LOG) appendFileSync(process.env.SMOKE_LOG, JSON.stringify(e).slice(0, 600) + '\n')
@@ -32,22 +32,24 @@ async function waitFor<T>(pick: () => T | undefined | null | false, timeoutMs = 
     const v = pick()
     if (v) return v
     if (Date.now() - start > timeoutMs) throw new Error('等待超时')
-    await new Promise((r) => setTimeout(r, 100))
+    await new Promise(r => setTimeout(r, 100))
   }
 }
 
 const turns = (id: string) =>
-  events.flatMap((e) => (e.kind === 'session' && e.sessionId === id && e.event.type === 'turn_completed' ? [e.event] : []))
+  events.flatMap(e =>
+    e.kind === 'session' && e.sessionId === id && e.event.type === 'turn_completed' ? [e.event] : [],
+  )
 
 const lastAssistant = (host: EngineHost, id: string) =>
   host
     .open(id)
-    .items.filter((i) => i.kind === 'assistant')
-    .map((i) => (i.kind === 'assistant' ? i.text : ''))
+    .items.filter(i => i.kind === 'assistant')
+    .map(i => (i.kind === 'assistant' ? i.text : ''))
     .at(-1) ?? ''
 
 afterAll(async () => {
-  await Promise.all(hosts.map((h) => h.shutdown()))
+  await Promise.all(hosts.map(h => h.shutdown()))
   rmSync(root, { recursive: true, force: true })
   // Claude Code 给测试项目写的会话记录（~/.claude/projects/<编码后的临时目录>）也一起删掉，不在用户目录里留垃圾
   rmSync(join(defaultProjectsDir(process.env), encodeCwd(projectDir)), { recursive: true, force: true })
@@ -73,7 +75,7 @@ describe('真实 Claude Code', () => {
     expect(host.open(record.id).usage?.contextWindow).toBeGreaterThan(0)
     // 用量记录（docs/ui/usage.md）：这一轮有统计条目，写进了用量文件
     expect(t.usage).toBeTruthy()
-    const stats = host.open(record.id).items.find((i) => i.kind === 'turn_stats')
+    const stats = host.open(record.id).items.find(i => i.kind === 'turn_stats')
     const models = stats?.kind === 'turn_stats' ? Object.values(stats.usage.models) : []
     console.log('本轮用量：', JSON.stringify(stats?.kind === 'turn_stats' ? stats.usage : null))
     expect(models.length).toBeGreaterThan(0)
@@ -91,13 +93,13 @@ describe('真实 Claude Code', () => {
     await waitFor(() => turns(record.id).length >= 2)
     expect(turns(record.id)[1].outcome).toBe('completed')
     expect(readFileSync(join(projectDir, 'hello.txt'), 'utf8').trim()).toBe('hi')
-    expect(host.open(record.id).items.some((i) => i.kind === 'file_change' && i.status === 'completed')).toBe(true)
+    expect(host.open(record.id).items.some(i => i.kind === 'file_change' && i.status === 'completed')).toBe(true)
   })
 
   it('中断正在输出的回复', async () => {
     await host.send(record.id, '从 1 数到 300，每行一个数字，不要用工具。')
     await waitFor(() =>
-      events.some((e) => e.kind === 'session' && e.sessionId === record.id && e.event.type === 'item_delta'),
+      events.some(e => e.kind === 'session' && e.sessionId === record.id && e.event.type === 'item_delta'),
     )
     await host.interrupt(record.id)
     await waitFor(() => turns(record.id).length >= 3)
@@ -121,7 +123,10 @@ describe('真实 Claude Code', () => {
   it('子智能体：子智能体条、追踪数据、子智能体的会话能读出来', async () => {
     const h = hosts.at(-1)!
     s2 = h.createSession({ projectId: record.projectId, model: 'sonnet', effort: 'low', permissionMode: 'edits' })
-    await h.send(s2.id, '用 Agent 工具派一个 general-purpose 子智能体，description 写「看目录」，让它用 Glob 列出当前目录的文件并汇报。你自己不要用其他工具，最后只回复 done。')
+    await h.send(
+      s2.id,
+      '用 Agent 工具派一个 general-purpose 子智能体，description 写「看目录」，让它用 Glob 列出当前目录的文件并汇报。你自己不要用其他工具，最后只回复 done。',
+    )
     // 子智能体调用工具也可能要审批（审批卡片照常出现）：测试里一律允许
     await waitFor(() => {
       for (const p of h.open(s2.id).pending) h.answer(s2.id, p.requestId, { type: 'allow' })
@@ -129,21 +134,36 @@ describe('真实 Claude Code', () => {
     })
     const snap = h.open(s2.id)
     console.log('subagents', JSON.stringify(snap.subagents))
-    console.log('runs.agents', JSON.stringify(snap.runs.agents.map((a) => ({ id: a.id, label: a.label, state: a.state, tokens: a.tokens, model: a.model }))))
-    console.log('sub tools', JSON.stringify(snap.items.filter((i) => 'subagent' in i && i.subagent).map((i) => [i.kind, 'name' in i ? i.name : '', 'subagent' in i ? i.subagent : ''])))
+    console.log(
+      'runs.agents',
+      JSON.stringify(
+        snap.runs.agents.map(a => ({ id: a.id, label: a.label, state: a.state, tokens: a.tokens, model: a.model })),
+      ),
+    )
+    console.log(
+      'sub tools',
+      JSON.stringify(
+        snap.items
+          .filter(i => 'subagent' in i && i.subagent)
+          .map(i => [i.kind, 'name' in i ? i.name : '', 'subagent' in i ? i.subagent : '']),
+      ),
+    )
     expect(snap.subagents.length).toBeGreaterThan(0)
     expect(snap.runs.agents.length).toBeGreaterThan(0)
     const agent = snap.runs.agents[0]
     expect(agent.tokens).toBeGreaterThan(0)
     const items = await h.subagentTranscript(s2.id, agent.id)
-    console.log('transcript kinds', items.map((i) => i.kind).join(','))
+    console.log('transcript kinds', items.map(i => i.kind).join(','))
     expect(items.length).toBeGreaterThan(0)
     console.log('suggestion', JSON.stringify(h.open(s2.id).suggestion))
   })
 
   it('后台命令：出现在后台任务条，能读输出、能停止', async () => {
     const h = hosts.at(-1)!
-    await h.send(s2.id, '用 shell 工具在后台（run_in_background: true）运行这个命令：ping -n 120 127.0.0.1 。启动后立刻只回复 started，不要等它结束。')
+    await h.send(
+      s2.id,
+      '用 shell 工具在后台（run_in_background: true）运行这个命令：ping -n 120 127.0.0.1 。启动后立刻只回复 started，不要等它结束。',
+    )
     await waitFor(() => {
       for (const p of h.open(s2.id).pending) h.answer(s2.id, p.requestId, { type: 'allow' })
       return turns(s2.id).length >= 2
@@ -155,7 +175,10 @@ describe('真实 Claude Code', () => {
     console.log('output', JSON.stringify(out).slice(0, 200))
     await h.stopTask(s2.id, task.id)
     await waitFor(() => h.open(s2.id).tasks.length === 0, 20_000)
-    const notices = h.open(s2.id).items.filter((i) => i.kind === 'notice').map((i) => (i.kind === 'notice' ? i.text : ''))
+    const notices = h
+      .open(s2.id)
+      .items.filter(i => i.kind === 'notice')
+      .map(i => (i.kind === 'notice' ? i.text : ''))
     console.log('notices', JSON.stringify(notices))
   })
 
@@ -164,7 +187,14 @@ describe('真实 Claude Code', () => {
     await h.update(s2.id, { thinkingSummaries: false })
     await h.update(s2.id, { fast: true })
     const snap = h.open(s2.id)
-    console.log('flags', JSON.stringify(snap.flags), 'fast', snap.record.fast, 'thinking', snap.record.thinkingSummaries)
+    console.log(
+      'flags',
+      JSON.stringify(snap.flags),
+      'fast',
+      snap.record.fast,
+      'thinking',
+      snap.record.thinkingSummaries,
+    )
     expect(snap.record.thinkingSummaries).toBe(false)
     expect(snap.flags.fastState).not.toBeNull()
   })

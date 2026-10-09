@@ -39,6 +39,11 @@
   overflow-wrap: anywhere;
 }
 @container conversation (width < 640px) {
-  .conversation-inset, .conversation-reading { padding-inline: 16px; }
-  .conversation-user-bubble { max-width: 85%; }
+  .conversation-inset,
+  .conversation-reading {
+    padding-inline: 16px;
+  }
+  .conversation-user-bubble {
+    max-width: 85%;
+  }
 }

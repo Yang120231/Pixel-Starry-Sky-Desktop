@@ -9,7 +9,6 @@ export const RAIL_ITEMS: RailItem[] = [
   { id: 'skills', label: '技能与插件', icon: 'skills' },
 ]
 
-
 export const COMPOSER: AppData['composer'] = {
   placeholder: '描述你要做的事，@ 添加文件，/ 输入命令',
   engine: { short: 'Cx', name: 'Codex' },

@@ -6,9 +6,26 @@
 // <dataDir>/sessions/<id>/items.jsonl  已完成的条目，每行一个，只追加
 //
 // 写入都是同步的小文件操作：保证顺序，量也很小（只在条目完成时写，不写流式增量）。
-import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
-import type { EngineDefaults, EngineId, Item, ProjectRecord, QueueSummary, SessionDefaults, SessionRecord } from '@pixelsky/protocol'
+import type {
+  EngineDefaults,
+  EngineId,
+  Item,
+  ProjectRecord,
+  QueueSummary,
+  SessionDefaults,
+  SessionRecord,
+} from '@pixelsky/protocol'
 import { messageInput, type QueueFile } from './queue'
 import { retryLimit } from './retry'
 
@@ -40,7 +57,15 @@ export interface EngineOptions {
 
 export const DEFAULT_SETTINGS: EngineSettingsFile = {
   maxRetries: null,
-  defaults: { engine: 'claude', model: null, effort: 'high', permissionMode: 'edits', ultracode: false, fast: false, thinkingSummaries: true },
+  defaults: {
+    engine: 'claude',
+    model: null,
+    effort: 'high',
+    permissionMode: 'edits',
+    ultracode: false,
+    fast: false,
+    thinkingSummaries: true,
+  },
   paths: {},
   env: {},
   compactModels: {},
@@ -87,7 +112,11 @@ export class Store {
   loadSettings(): EngineSettingsFile {
     const data = readJson<Partial<EngineSettingsFile>>(join(this.dir, 'engine-settings.json'))
     let maxRetries: number | null = null
-    try { maxRetries = retryLimit(data?.maxRetries ?? null) } catch { /* 旧文件或损坏值恢复跟随引擎 */ }
+    try {
+      maxRetries = retryLimit(data?.maxRetries ?? null)
+    } catch {
+      /* 旧文件或损坏值恢复跟随引擎 */
+    }
     return {
       maxRetries,
       defaults: { ...DEFAULT_SETTINGS.defaults, ...(data?.defaults ?? {}) },
@@ -116,7 +145,18 @@ export class Store {
       const rec = readJson<SessionRecord>(join(this.dir, 'sessions', name, 'record.json'))
       // 旧版本保存的记录没有 ultracode 字段
       if (rec && rec.id === name) {
-        out.push({ ...rec, bottomedAt: typeof rec.bottomedAt === 'number' && Number.isFinite(rec.bottomedAt) && rec.bottomedAt > 0 ? rec.bottomedAt : null, titleEdited: rec.titleEdited === true, archivedAt: typeof rec.archivedAt === 'number' && Number.isFinite(rec.archivedAt) ? rec.archivedAt : null, ultracode: rec.ultracode === true, fast: rec.fast === true, thinkingSummaries: rec.thinkingSummaries !== false })
+        out.push({
+          ...rec,
+          bottomedAt:
+            typeof rec.bottomedAt === 'number' && Number.isFinite(rec.bottomedAt) && rec.bottomedAt > 0
+              ? rec.bottomedAt
+              : null,
+          titleEdited: rec.titleEdited === true,
+          archivedAt: typeof rec.archivedAt === 'number' && Number.isFinite(rec.archivedAt) ? rec.archivedAt : null,
+          ultracode: rec.ultracode === true,
+          fast: rec.fast === true,
+          thinkingSummaries: rec.thinkingSummaries !== false,
+        })
       }
     }
     return out
@@ -137,14 +177,28 @@ export class Store {
   loadQueue(record: SessionRecord): QueueFile {
     const raw = readJson<QueueFile & { version?: number }>(join(this.sessionDir(record.id), 'queue.json'))
     if (!raw || raw.version !== 1 || !Array.isArray(raw.items)) return { items: [], paused: false, receipts: [] }
-    const items = raw.items.flatMap((item) => {
+    const items = raw.items.flatMap(item => {
       try {
-        const input = messageInput({ text: item.text, clientMessageId: item.id, attachments: item.attachments, settings: item.settings }, record, () => item.id)
+        const input = messageInput(
+          { text: item.text, clientMessageId: item.id, attachments: item.attachments, settings: item.settings },
+          record,
+          () => item.id,
+        )
         const settled = item.status === 'queued' || item.status === 'failed' || item.status === 'uncertain'
-        return [{ ...item, id: input.clientMessageId, text: input.text, settings: input.settings, status: settled ? item.status : 'uncertain' as const,
-          mode: item.mode === 'guidance' ? 'guidance' as const : 'normal' as const,
-          error: settled ? item.error ?? null : '上次退出前已开始交付，请核对后再重试' }]
-      } catch { return [] }
+        return [
+          {
+            ...item,
+            id: input.clientMessageId,
+            text: input.text,
+            settings: input.settings,
+            status: settled ? item.status : ('uncertain' as const),
+            mode: item.mode === 'guidance' ? ('guidance' as const) : ('normal' as const),
+            error: settled ? (item.error ?? null) : '上次退出前已开始交付，请核对后再重试',
+          },
+        ]
+      } catch {
+        return []
+      }
     })
     return { items, paused: items.length > 0, receipts: Array.isArray(raw.receipts) ? raw.receipts.slice(-256) : [] }
   }
@@ -153,7 +207,7 @@ export class Store {
   peekQueue(id: string): QueueSummary | null {
     const raw = readJson<QueueFile & { version?: number }>(join(this.sessionDir(id), 'queue.json'))
     if (!raw || raw.version !== 1 || !Array.isArray(raw.items) || raw.items.length === 0) return null
-    const failed = raw.items.filter((item) => item.status === 'failed' || item.status === 'uncertain').length
+    const failed = raw.items.filter(item => item.status === 'failed' || item.status === 'uncertain').length
     return { queued: raw.items.length - failed, failed, paused: true }
   }
 
@@ -167,8 +221,9 @@ export class Store {
   replaceItems(sessionId: string, items: Item[]): void {
     const dir = this.sessionDir(sessionId)
     mkdirSync(dir, { recursive: true })
-    const file = join(dir, 'items.jsonl'), tmp = `${file}.tmp`
-    writeFileSync(tmp, items.map((item) => JSON.stringify(item) + '\n').join(''), 'utf8')
+    const file = join(dir, 'items.jsonl'),
+      tmp = `${file}.tmp`
+    writeFileSync(tmp, items.map(item => JSON.stringify(item) + '\n').join(''), 'utf8')
     renameSync(tmp, file)
   }
 

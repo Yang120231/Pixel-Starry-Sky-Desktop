@@ -57,7 +57,9 @@ function save(): void {
     try {
       // 关闭动画还没播完的窗格不保存
       let layout = state.layout
-      for(const file of getFiles().tabs)if(file.ref.projectId&&T.parseFileTab(file.id)?.ref.sessionId)layout=T.replaceTab(layout,file.id,T.fileTab(file.ref,file.path))
+      for (const file of getFiles().tabs)
+        if (file.ref.projectId && T.parseFileTab(file.id)?.ref.sessionId)
+          layout = T.replaceTab(layout, file.id, T.fileTab(file.ref, file.path))
       for (const id of Object.keys(state.closing)) layout = T.removeLeaf(layout, id, newId('p'))
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ v: 1, root: layout.root, focused: layout.focused }))
     } catch {
@@ -66,11 +68,12 @@ function save(): void {
   }, 300)
 }
 
-function setLayout(layout: Layout,persist=true): void {
+function setLayout(layout: Layout, persist = true): void {
   if (layout === state.layout) return
   state = { ...state, layout }
   emit()
-  if(persist)save();else window.clearTimeout(saveTimer)
+  if (persist) save()
+  else window.clearTimeout(saveTimer)
 }
 
 /** 启动时调用一次：读出保存的布局；initialTab 是没有保存记录时默认打开的标签 */
@@ -79,7 +82,12 @@ export function startPanes(initialTab: string | null): void {
   started = true
   state = { ...state, layout: load(initialTab) }
   const focused = T.focusedTab(state.layout)
-  const newTab = focused && T.isNewTab(focused) ? focused : T.leaves(state.layout.root).flatMap(l => l.tabs).find(T.isNewTab)
+  const newTab =
+    focused && T.isNewTab(focused)
+      ? focused
+      : T.leaves(state.layout.root)
+          .flatMap(l => l.tabs)
+          .find(T.isNewTab)
   if (!isDemo && newTab) migrateNewComposerDraft(newTab)
   emit()
 }
@@ -90,7 +98,7 @@ export function getPaneState(): PaneState {
 
 export function usePaneState<T>(selector: (s: PaneState) => T): T {
   return useSyncExternalStore(
-    (cb) => {
+    cb => {
       listeners.add(cb)
       return () => listeners.delete(cb)
     },
@@ -110,9 +118,15 @@ export function notify(text: string): void {
 export const paneActions = {
   switchMachine(id: string): void {
     window.clearTimeout(saveTimer)
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ v: 1, root: state.layout.root, focused: state.layout.focused })) } catch {}
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ v: 1, root: state.layout.root, focused: state.layout.focused }),
+      )
+    } catch {}
     STORAGE_KEY = id === 'local' ? 'pixelsky.panes' : 'pixelsky.panes.' + id
-    state = { ...state, layout: load(null), closing: {}, notice: null }; emit()
+    state = { ...state, layout: load(null), closing: {}, notice: null }
+    emit()
   },
   /** Transfer an editor without closing its document or losing undo history. */
   detachFileTab(tab: string): void {
@@ -121,7 +135,8 @@ export const paneActions = {
     for (const leaf of T.leaves(layout.root)) {
       if (!leaf.tabs.includes(tab)) continue
       layout = T.closeTab(layout, leaf.id, tab)
-      if (!T.findLeaf(layout.root, leaf.id)?.tabs.length && T.leaves(layout.root).length > 1) layout = T.removeLeaf(layout, leaf.id, newId('p'))
+      if (!T.findLeaf(layout.root, leaf.id)?.tabs.length && T.leaves(layout.root).length > 1)
+        layout = T.removeLeaf(layout, leaf.id, newId('p'))
     }
     setLayout(layout)
   },
@@ -129,16 +144,32 @@ export const paneActions = {
     showWorkbench()
     const area = document.querySelector('.pane-area')?.getBoundingClientRect()
     // 面板正在开合时按最终宽度检查，否则快速点文件会错误地落回单窗格。
-    const remaining = [...document.querySelectorAll<HTMLElement>('.collapsible-slot')].reduce((sum, slot) => sum + slot.getBoundingClientRect().width - (Number.parseFloat(slot.style.width) || 0), 0)
-    const leafId = newId('p'), anchorId = state.layout.focused
-    const next = openFileLayout(state.layout, tab, { width: (area?.width ?? window.innerWidth - 300) + remaining, height: area?.height ?? window.innerHeight - 48 }, leafId, newId('s'))
-    if (!T.findLeaf(next.root, leafId) || !motionEnabled()) { setLayout(next); return }
+    const remaining = [...document.querySelectorAll<HTMLElement>('.collapsible-slot')].reduce(
+      (sum, slot) => sum + slot.getBoundingClientRect().width - (Number.parseFloat(slot.style.width) || 0),
+      0,
+    )
+    const leafId = newId('p'),
+      anchorId = state.layout.focused
+    const next = openFileLayout(
+      state.layout,
+      tab,
+      { width: (area?.width ?? window.innerWidth - 300) + remaining, height: area?.height ?? window.innerHeight - 48 },
+      leafId,
+      newId('s'),
+    )
+    if (!T.findLeaf(next.root, leafId) || !motionEnabled()) {
+      setLayout(next)
+      return
+    }
     setLayout(T.splitStart(next, leafId, anchorId))
     const goal = T.parentSplit(next.root, leafId)
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      const now = T.parentSplit(state.layout.root, leafId)
-      if (goal && now && now.id === goal.id && now.children.length === goal.children.length) setLayout(T.setSizes(state.layout, now.id, goal.sizes))
-    }))
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        const now = T.parentSplit(state.layout.root, leafId)
+        if (goal && now && now.id === goal.id && now.children.length === goal.children.length)
+          setLayout(T.setSizes(state.layout, now.id, goal.sizes))
+      }),
+    )
   },
   focus(leafId: string): void {
     setLayout(T.focusLeaf(state.layout, leafId))
@@ -164,11 +195,25 @@ export const paneActions = {
     if (current && T.isNewTab(current)) return
     const tab = newId(T.NEW_TAB_PREFIX)
     if (!isDemo) {
-      const engine = getEngineState(), record = current ? engine.snapshots[current]?.record ?? engine.sessions.find(s => s.record.id === current)?.record : null
+      const engine = getEngineState(),
+        record = current
+          ? (engine.snapshots[current]?.record ?? engine.sessions.find(s => s.record.id === current)?.record)
+          : null
       let chosen: import('../../../preload/machines').WorkspaceChoice | null = null
-      try { chosen = JSON.parse(localStorage.getItem('pixelsky.last-workspace.' + getMachines().currentId) ?? 'null') } catch {}
+      try {
+        chosen = JSON.parse(localStorage.getItem('pixelsky.last-workspace.' + getMachines().currentId) ?? 'null')
+      } catch {}
       const project = engine.projects.find(p => p.id === (record?.projectId ?? engine.currentProjectId))
-      if (project) bindDraftWorkspace(tab, { projectId: project.id, name: project.name, path: record?.cwd ?? (chosen?.projectId === project.id ? chosen.path : project.path), copyId: chosen?.projectId === project.id && (!record || chosen.path === record.cwd) ? chosen.copyId : null, branch: chosen?.branch ?? null, error: null, sessionId: record?.id })
+      if (project)
+        bindDraftWorkspace(tab, {
+          projectId: project.id,
+          name: project.name,
+          path: record?.cwd ?? (chosen?.projectId === project.id ? chosen.path : project.path),
+          copyId: chosen?.projectId === project.id && (!record || chosen.path === record.cwd) ? chosen.copyId : null,
+          branch: chosen?.branch ?? null,
+          error: null,
+          sessionId: record?.id,
+        })
     }
     if (!isDemo) migrateNewComposerDraft(tab)
     setLayout(T.openTab(layout, tab))
@@ -187,26 +232,45 @@ export const paneActions = {
   async dropTab(tab: string, target: DropTarget, area: { width: number; height: number }): Promise<void> {
     const source = T.leafOfTab(state.layout.root, tab)
     if (!source || state.closing[source.id] || state.closing[target.leafId]) return
-    if (T.isFileTab(tab) && (source.id !== target.leafId || target.edge) && !await confirmFiles([tab], tr("panes.store.message583"))) return
+    if (
+      T.isFileTab(tab) &&
+      (source.id !== target.leafId || target.edge) &&
+      !(await confirmFiles([tab], tr('panes.store.message583')))
+    )
+      return
     if (!T.leafOfTab(state.layout.root, tab) || state.closing[target.leafId]) return
     const problem = dropProblem(state.layout, tab, target, area)
-    if (problem) { notify(problem); return }
+    if (problem) {
+      notify(problem)
+      return
+    }
     const leafId = newId('p')
     const next = dropLayout(state.layout, tab, target, leafId, newId('s'), area)
-    if (!target.edge || next === state.layout || !motionEnabled()) { setLayout(next); return }
+    if (!target.edge || next === state.layout || !motionEnabled()) {
+      setLayout(next)
+      return
+    }
     setLayout(T.splitStart(next, leafId, target.leafId))
     const goal = T.parentSplit(next.root, leafId)
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      const now = T.parentSplit(state.layout.root, leafId)
-      if (goal && now && now.id === goal.id && now.children.every((c, i) => c.id === goal.children[i]?.id) && now.children.length === goal.children.length) {
-        setLayout(T.setSizes(state.layout, now.id, goal.sizes))
-      }
-    }))
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        const now = T.parentSplit(state.layout.root, leafId)
+        if (
+          goal &&
+          now &&
+          now.id === goal.id &&
+          now.children.every((c, i) => c.id === goal.children[i]?.id) &&
+          now.children.length === goal.children.length
+        ) {
+          setLayout(T.setSizes(state.layout, now.id, goal.sizes))
+        }
+      }),
+    )
   },
 
   /** 关闭标签；窗格空了、而且还有别的窗格时，连窗格一起关掉 */
   async closeTab(leafId: string, tab: string): Promise<void> {
-    if (T.isFileTab(tab) && !await confirmFiles([tab])) return
+    if (T.isFileTab(tab) && !(await confirmFiles([tab]))) return
     if (!T.findLeaf(state.layout.root, leafId)?.tabs.includes(tab)) return
     const next = T.closeTab(state.layout, leafId, tab)
     if (T.isFileTab(tab)) removeFile(tab)
@@ -235,9 +299,12 @@ export const paneActions = {
     const { layout } = state
     const rect = T.computeRects(layout.root).panes.get(layout.focused)
     if (!rect) return
-    const room = dir === 'row' ? (rect.w * container.width) / 2 >= MIN_PANE.width : (rect.h * container.height) / 2 >= MIN_PANE.height
+    const room =
+      dir === 'row'
+        ? (rect.w * container.width) / 2 >= MIN_PANE.width
+        : (rect.h * container.height) / 2 >= MIN_PANE.height
     if (!room) {
-      notify(tr("panes.store.message584"))
+      notify(tr('panes.store.message584'))
       return
     }
     const leafId = newId('p')
@@ -263,10 +330,10 @@ export const paneActions = {
   /** 关闭窗格：先收拢到 0（有动画时），动画结束后再从布局里删掉；里面的会话继续在后台运行 */
   async closePane(leafId: string): Promise<void> {
     const fileTabs = T.findLeaf(state.layout.root, leafId)?.tabs.filter(T.isFileTab) ?? []
-    if (!await confirmFiles(fileTabs, tr("panes.PaneView.message566"))) return
+    if (!(await confirmFiles(fileTabs, tr('panes.PaneView.message566')))) return
     if (state.closing[leafId]) return
     const all = T.leaves(state.layout.root)
-    if (!all.some((l) => l.id === leafId)) return
+    if (!all.some(l => l.id === leafId)) return
     fileTabs.forEach(removeFile)
     if (all.length === 1) {
       // 只剩一个窗格：清空标签，保留窗格
@@ -283,7 +350,7 @@ export const paneActions = {
       return
     }
     // 焦点先移到相邻窗格，收拢中的窗格不再响应操作
-    const order = all.findIndex((l) => l.id === leafId)
+    const order = all.findIndex(l => l.id === leafId)
     const neighbor = (all[order - 1] ?? all[order + 1]).id
     let layout = T.collapseLeaf(state.layout, leafId)
     if (layout.focused === leafId) layout = T.focusLeaf(layout, neighbor)
@@ -306,11 +373,13 @@ export const paneActions = {
     setLayout(T.equalize(state.layout, splitId))
   },
   /** 去掉已经不存在的会话标签（真实引擎启动、会话列表读出来以后调用一次） */
-  closeSessions(ids:Set<string>):void {
-    const before=state.layout
-    let next=T.pruneTabs(before,tab=>T.isFileTab(tab)||!ids.has(tab))
-    for(const leaf of T.leaves(next.root))if(!leaf.tabs.length&&T.findLeaf(before.root,leaf.id)?.tabs.some(tab=>ids.has(tab)))next=T.openTab({...next,focused:leaf.id},newId('new:'))
-    setLayout({...next,focused:before.focused},!isDemo)
+  closeSessions(ids: Set<string>): void {
+    const before = state.layout
+    let next = T.pruneTabs(before, tab => T.isFileTab(tab) || !ids.has(tab))
+    for (const leaf of T.leaves(next.root))
+      if (!leaf.tabs.length && T.findLeaf(before.root, leaf.id)?.tabs.some(tab => ids.has(tab)))
+        next = T.openTab({ ...next, focused: leaf.id }, newId('new:'))
+    setLayout({ ...next, focused: before.focused }, !isDemo)
   },
   prune(keep: (tab: string) => boolean): void {
     setLayout(T.pruneTabs(state.layout, tab => T.isFileTab(tab) || keep(tab)))

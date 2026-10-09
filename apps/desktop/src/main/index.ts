@@ -1,7 +1,16 @@
 import { join } from 'node:path'
 import { mkdirSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, shell, type MenuItemConstructorOptions } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  nativeTheme,
+  shell,
+  type MenuItemConstructorOptions,
+} from 'electron'
 import { initAccount, trustedSender } from './account'
 import { initAppInfo } from './app-info'
 import { initEngine, resolveWorkspace, projectToolsHost } from './engine-ipc'
@@ -35,10 +44,18 @@ async function finishWindowClose(win: BrowserWindow): Promise<void> {
   if (finishing.has(win) || win.isDestroyed()) return
   finishing.add(win)
   try {
-    if (!await confirmTerminalClose(win)) { quitRequested = false; return }
+    if (!(await confirmTerminalClose(win))) {
+      quitRequested = false
+      return
+    }
     await closeWindowTerminals(win)
-    if (!win.isDestroyed()) { closingAllowed.add(win); win.close() }
-  } finally { finishing.delete(win) }
+    if (!win.isDestroyed()) {
+      closingAllowed.add(win)
+      win.close()
+    }
+  } finally {
+    finishing.delete(win)
+  }
 }
 ipcMain.handle('files:finishClose', async event => {
   if (!trustedSender(event)) throw new Error('不允许的调用方')
@@ -57,7 +74,10 @@ app.on('before-quit', event => {
     return
   }
   quitRequested = true
-  void shutdownServices().finally(() => { quitReady = true; app.quit() })
+  void shutdownServices().finally(() => {
+    quitReady = true
+    app.quit()
+  })
 })
 if (debugPort) app.commandLine.appendSwitch('remote-debugging-port', debugPort)
 
@@ -115,12 +135,25 @@ function createWindow(): BrowserWindow {
   win.on('close', event => {
     if (captureDir || closingAllowed.has(win) || win.webContents.isDestroyed()) return
     event.preventDefault()
-    if (win.webContents.isCrashed()) { void finishWindowClose(win); return }
+    if (win.webContents.isCrashed()) {
+      void finishWindowClose(win)
+      return
+    }
     win.webContents.send('files:beforeClose')
   })
   win.webContents.on('will-prevent-unload', event => {
-    if (closingAllowed.has(win)) { event.preventDefault(); return }
-    const choice = dialog.showMessageBoxSync(win, { type: 'question', title: nativeText(win, '文件尚未保存'), message: nativeText(win, '有文件包含未保存的修改，仍然退出吗？'), buttons: [nativeText(win, '返回保存'), nativeText(win, '放弃修改并退出')], defaultId: 0, cancelId: 0 })
+    if (closingAllowed.has(win)) {
+      event.preventDefault()
+      return
+    }
+    const choice = dialog.showMessageBoxSync(win, {
+      type: 'question',
+      title: nativeText(win, '文件尚未保存'),
+      message: nativeText(win, '有文件包含未保存的修改，仍然退出吗？'),
+      buttons: [nativeText(win, '返回保存'), nativeText(win, '放弃修改并退出')],
+      defaultId: 0,
+      cancelId: 0,
+    })
     if (choice === 1) event.preventDefault()
   })
 
@@ -148,7 +181,7 @@ function createWindow(): BrowserWindow {
 }
 
 // 演示模式：PIXELSKY_DEMO=1 或启动参数带 --demo 时界面显示演示数据（pnpm dev:demo / 打包版 exe --demo），否则是空界面
-ipcMain.on('app:config', (event) => {
+ipcMain.on('app:config', event => {
   event.returnValue = { demo: process.env.PIXELSKY_DEMO === '1' || process.argv.includes('--demo') }
 })
 
@@ -165,11 +198,11 @@ ipcMain.on('theme:set', (event, theme: ResolvedTheme, transparent?: boolean) => 
 
 async function capture(win: BrowserWindow, dir: string): Promise<void> {
   mkdirSync(dir, { recursive: true })
-  await new Promise<void>((resolve) => win.webContents.once('did-finish-load', () => resolve()))
+  await new Promise<void>(resolve => win.webContents.once('did-finish-load', () => resolve()))
   // 截图需要窗口在屏幕外可见才能拿到真实渲染结果
   win.setPosition(-4000, -4000)
   win.showInactive()
-  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+  const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
   const shots: Partial<Record<ResolvedTheme, Buffer>> = {}
   for (const theme of ['light', 'dark'] as const) {
     // 等 React 挂载出主题钩子，切换后确认 <html data-theme> 真的变了，否则报错退出
@@ -213,10 +246,18 @@ async function capture(win: BrowserWindow, dir: string): Promise<void> {
 function setAppMenu(locale: Locale = 'zh-CN'): void {
   const template: MenuItemConstructorOptions[] = [
     // macOS 的应用菜单里已经有「退出」；其他平台放在「文件」菜单里。都不放「关闭窗口」
-    process.platform === 'darwin' ? { role: 'appMenu' } : { label: locale === 'en-US' ? 'File' : '文件', submenu: [{ role: 'quit' }] },
+    process.platform === 'darwin'
+      ? { role: 'appMenu' }
+      : { label: locale === 'en-US' ? 'File' : '文件', submenu: [{ role: 'quit' }] },
     { role: 'editMenu' },
     { role: 'viewMenu' },
-    { label: locale === 'en-US' ? 'Window' : '窗口', submenu: [{ role: 'minimize' }, ...(process.platform === 'darwin' ? [{ role: 'zoom' } as MenuItemConstructorOptions] : [])] },
+    {
+      label: locale === 'en-US' ? 'Window' : '窗口',
+      submenu: [
+        { role: 'minimize' },
+        ...(process.platform === 'darwin' ? [{ role: 'zoom' } as MenuItemConstructorOptions] : []),
+      ],
+    },
   ]
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }

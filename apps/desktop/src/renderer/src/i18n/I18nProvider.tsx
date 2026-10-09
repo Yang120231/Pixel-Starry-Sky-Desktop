@@ -12,14 +12,36 @@ interface I18nValue {
 const I18nContext = createContext<I18nValue | null>(null)
 
 function readLocale(): Locale {
-  try { return localStorage.getItem(STORAGE_KEY) === 'en-US' ? 'en-US' : 'zh-CN' } catch { return 'zh-CN' }
+  try {
+    return localStorage.getItem(STORAGE_KEY) === 'en-US' ? 'en-US' : 'zh-CN'
+  } catch {
+    return 'zh-CN'
+  }
 }
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(() => { const initial = readLocale(); setCurrentLocale(initial); return initial })
-  const setLocale = (next: Locale): void => { setCurrentLocale(next); setLocaleState(next); try { localStorage.setItem(STORAGE_KEY, next) } catch { /* 本次切换仍生效 */ } }
+  const [locale, setLocaleState] = useState<Locale>(() => {
+    const initial = readLocale()
+    setCurrentLocale(initial)
+    return initial
+  })
+  const setLocale = (next: Locale): void => {
+    setCurrentLocale(next)
+    setLocaleState(next)
+    try {
+      localStorage.setItem(STORAGE_KEY, next)
+    } catch {
+      /* 本次切换仍生效 */
+    }
+  }
   useEffect(() => {
-    const onStorage = (event: StorageEvent): void => { if (event.key === STORAGE_KEY || event.key === null) { const next = readLocale(); setCurrentLocale(next); setLocaleState(next) } }
+    const onStorage = (event: StorageEvent): void => {
+      if (event.key === STORAGE_KEY || event.key === null) {
+        const next = readLocale()
+        setCurrentLocale(next)
+        setLocaleState(next)
+      }
+    }
     window.addEventListener('storage', onStorage)
     document.documentElement.dataset.locale = locale
     document.documentElement.lang = locale
@@ -27,12 +49,15 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     void window.pixelsky?.setLocale(locale).catch(console.error)
     return () => window.removeEventListener('storage', onStorage)
   }, [locale])
-  const value = useMemo<I18nValue>(() => ({
-    locale,
-    setLocale,
-    t: tr,
-    text: translateText,
-  }), [locale])
+  const value = useMemo<I18nValue>(
+    () => ({
+      locale,
+      setLocale,
+      t: tr,
+      text: translateText,
+    }),
+    [locale],
+  )
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>
 }
 

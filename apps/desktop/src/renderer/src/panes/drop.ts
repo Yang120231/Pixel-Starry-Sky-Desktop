@@ -1,10 +1,26 @@
 import { tr } from '../i18n/core'
 // 拖放命中与尺寸检查：纯函数，拖动预览与提交使用相同规则。
-import { computeRects, equalize, findLeaf, leafOfTab, leaves, moveTab, moveTabToEdge, parentSplit, type Edge, type Layout } from './tree'
+import {
+  computeRects,
+  equalize,
+  findLeaf,
+  leafOfTab,
+  leaves,
+  moveTab,
+  moveTabToEdge,
+  parentSplit,
+  type Edge,
+  type Layout,
+} from './tree'
 
 export const MIN_PANE = { width: 400, height: 300 }
 export type DropTarget = { leafId: string; index: number; edge?: never } | { leafId: string; edge: Edge; index?: never }
-export interface Box { x: number; y: number; width: number; height: number }
+export interface Box {
+  x: number
+  y: number
+  width: number
+  height: number
+}
 
 export function edgeAt(box: Box, x: number, y: number): Edge | null {
   // 最近的边获胜，角落不会同时触发两条边；中央保留足够的合并区域。
@@ -19,7 +35,14 @@ export function edgeAt(box: Box, x: number, y: number): Edge | null {
   return nearest[1] <= 1 ? nearest[0] : null
 }
 
-export function dropLayout(layout: Layout, tab: string, target: DropTarget, leafId: string, splitId: string, area?: { width: number; height: number }): Layout {
+export function dropLayout(
+  layout: Layout,
+  tab: string,
+  target: DropTarget,
+  leafId: string,
+  splitId: string,
+  area?: { width: number; height: number },
+): Layout {
   const next = target.edge
     ? moveTabToEdge(layout, tab, target.leafId, target.edge, leafId, splitId)
     : moveTab(layout, tab, target.leafId, target.index)
@@ -36,21 +59,31 @@ export function dropLayout(layout: Layout, tab: string, target: DropTarget, leaf
   const parent = parentSplit(next.root, leafId)
   if (!parent) return next
   const balanced = equalize(next, parent.id)
-  return fits(balanced, leaves(parent).map(l => l.id)) ? balanced : next
+  return fits(
+    balanced,
+    leaves(parent).map(l => l.id),
+  )
+    ? balanced
+    : next
 }
 
 /** 先看移空源窗格后的最终尺寸；允许把两格的唯一会话重排，而非误判为再加一格。 */
-export function dropProblem(layout: Layout, tab: string, target: DropTarget, area: { width: number; height: number }): string | null {
+export function dropProblem(
+  layout: Layout,
+  tab: string,
+  target: DropTarget,
+  area: { width: number; height: number },
+): string | null {
   const source = leafOfTab(layout.root, tab)
-  if (!source || !findLeaf(layout.root, target.leafId)) return tr("panes.drop.message556")
+  if (!source || !findLeaf(layout.root, target.leafId)) return tr('panes.drop.message556')
   if (!target.edge) return null
-  if (source.id === target.leafId && source.tabs.length === 1) return tr("panes.drop.message557")
+  if (source.id === target.leafId && source.tabs.length === 1) return tr('panes.drop.message557')
   const next = dropLayout(layout, tab, target, 'preview:leaf', 'preview:split', area)
   const panes = computeRects(next.root).panes
   for (const id of [target.leafId, 'preview:leaf']) {
     const rect = panes.get(id)
     if (!rect || rect.w * area.width < MIN_PANE.width || rect.h * area.height < MIN_PANE.height) {
-      return tr("panes.drop.message558")
+      return tr('panes.drop.message558')
     }
   }
   return null

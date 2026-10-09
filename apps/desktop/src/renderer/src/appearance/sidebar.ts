@@ -1,7 +1,13 @@
 import { useSyncExternalStore } from 'react'
 import {
-  DEFAULT_SIDEBAR_ICONS, LAYOUT_ACTIONS, SIDEBAR_ACTIONS, isSidebarIcon,
-  type LayoutAction, type SidebarAction, type SidebarIconId, type SidebarIcons,
+  DEFAULT_SIDEBAR_ICONS,
+  LAYOUT_ACTIONS,
+  SIDEBAR_ACTIONS,
+  isSidebarIcon,
+  type LayoutAction,
+  type SidebarAction,
+  type SidebarIconId,
+  type SidebarIcons,
 } from './sidebarIcons'
 
 export type { HeaderAction, LayoutAction, SidebarAction, SidebarIconId, SidebarIcons } from './sidebarIcons'
@@ -58,7 +64,7 @@ function parseSidebarLayout(value: unknown): SidebarLayout {
     for (const row of LAYOUT_PLACEMENTS) {
       if (!Array.isArray(saved[row])) continue
       for (const raw of saved[row]) {
-        const item = typeof raw === 'string' ? RENAMED[raw] ?? raw : raw
+        const item = typeof raw === 'string' ? (RENAMED[raw] ?? raw) : raw
         if (isLayoutAction(item) && !seen.has(item)) place(row, item)
       }
     }
@@ -73,8 +79,11 @@ function parseSidebarLayout(value: unknown): SidebarLayout {
 
 function defaults(): SidebarPrefs {
   return {
-    version: 4, showRecent: true, recentExpanded: true,
-    icons: { ...DEFAULT_SIDEBAR_ICONS }, layout: parseSidebarLayout(null),
+    version: 4,
+    showRecent: true,
+    recentExpanded: true,
+    icons: { ...DEFAULT_SIDEBAR_ICONS },
+    layout: parseSidebarLayout(null),
   }
 }
 
@@ -94,7 +103,11 @@ export function parseSidebarPrefs(value: unknown): SidebarPrefs {
   }
   if (saved.version === 2 || saved.version === 3 || saved.version === 4) {
     result.layout = parseSidebarLayout(saved.layout)
-    if (saved.version === 2 && result.layout.top.join() === 'addProject,newTask' && result.layout.bottom.join() === 'settings,plugins,usage') {
+    if (
+      saved.version === 2 &&
+      result.layout.top.join() === 'addProject,newTask' &&
+      result.layout.bottom.join() === 'settings,plugins,usage'
+    ) {
       result.layout = parseSidebarLayout(null)
     }
   }
@@ -112,7 +125,9 @@ export function readSidebarPrefs(): SidebarPrefs {
 let prefs = readSidebarPrefs()
 const listeners = new Set<() => void>()
 
-export function getSidebarPrefs(): SidebarPrefs { return prefs }
+export function getSidebarPrefs(): SidebarPrefs {
+  return prefs
+}
 
 export function setSidebarPrefs(patch: Partial<Omit<SidebarPrefs, 'version'>>): void {
   prefs = parseSidebarPrefs({ ...prefs, ...patch, version: 4 })
@@ -142,7 +157,10 @@ export function resetSidebarLayout(): void {
 
 /** index 是先移除原位置后，在目标排中的插入索引；目标侧栏排已满时不移动。不修改传入布局。 */
 export function moveSidebarActionInLayout(
-  layout: SidebarLayout, action: LayoutAction, row: SidebarPlacement, index: number,
+  layout: SidebarLayout,
+  action: LayoutAction,
+  row: SidebarPlacement,
+  index: number,
 ): SidebarLayout {
   const result = parseSidebarLayout(layout)
   if (!isLayoutAction(action) || !LAYOUT_PLACEMENTS.includes(row) || isRowFull(result, row, action)) return result
@@ -160,7 +178,9 @@ export function moveSidebarAction(action: LayoutAction, row: SidebarPlacement, i
 function onStorage(event: StorageEvent): void {
   try {
     if (event.storageArea !== localStorage || (event.key !== SIDEBAR_PREFS_KEY && event.key !== null)) return
-  } catch { return }
+  } catch {
+    return
+  }
   prefs = readSidebarPrefs()
   listeners.forEach(listener => listener())
 }

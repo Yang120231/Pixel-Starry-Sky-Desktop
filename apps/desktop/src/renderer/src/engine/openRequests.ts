@@ -13,8 +13,8 @@ import { navigateToItem } from '@/search/navigation'
 export const OPEN_SESSION_EVENT = 'pixelsky:open-session'
 
 function sessionExists(id: string): boolean {
-  if (isLive) return getEngineState().sessions.some((s) => s.record.id === id)
-  return demoProjects.some((p) => p.sessions.some((s) => s.id === id))
+  if (isLive) return getEngineState().sessions.some(s => s.record.id === id)
+  return demoProjects.some(p => p.sessions.some(s => s.id === id))
 }
 
 export function useOpenSessionRequests(open: (id: string) => void): void {
@@ -27,12 +27,17 @@ export function useOpenSessionRequests(open: (id: string) => void): void {
       const id = detail?.sessionId
       if (typeof id !== 'string' || !id) return
       if (sessionExists(id)) {
-        const show = () => { openRef.current(id); if (typeof detail?.itemId === 'string' && detail.itemId) navigateToItem(id, detail.itemId) }
+        const show = () => {
+          openRef.current(id)
+          if (typeof detail?.itemId === 'string' && detail.itemId) navigateToItem(id, detail.itemId)
+        }
         const machine = machineOf(id)
-        if (getMachines().currentId !== machine) void selectMachine(machine).then(show).catch(e => toast(e.message))
+        if (getMachines().currentId !== machine)
+          void selectMachine(machine)
+            .then(show)
+            .catch(e => toast(e.message))
         else show()
-      }
-      else toast(tr("engine.openRequests.message513"))
+      } else toast(tr('engine.openRequests.message513'))
     }
     window.addEventListener(OPEN_SESSION_EVENT, onRequest)
     return () => window.removeEventListener(OPEN_SESSION_EVENT, onRequest)

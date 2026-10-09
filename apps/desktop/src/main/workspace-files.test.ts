@@ -18,11 +18,14 @@ beforeEach(async () => {
     return { ref: value, name: '测试项目', path: root }
   })
 })
-afterEach(async () => { await rm(folder, { recursive: true, force: true }) })
+afterEach(async () => {
+  await rm(folder, { recursive: true, force: true })
+})
 
 describe('项目文件', () => {
   it('目录与名称筛选使用真实路径，忽略 .git，目录优先排序', async () => {
-    await mkdir(join(root, '.git')); await mkdir(join(root, 'src'))
+    await mkdir(join(root, '.git'))
+    await mkdir(join(root, 'src'))
     await writeFile(join(root, 'README.md'), 'hello')
     await writeFile(join(root, 'src', 'main.ts'), 'export const n = 1\n')
     expect((await service.list(ref, '')).entries.map(e => e.path)).toEqual(['src', 'README.md'])
@@ -35,9 +38,14 @@ describe('项目文件', () => {
     expect(doc.kind).toBe('text')
     if (doc.kind !== 'text') throw new Error('not text')
     const saved = await service.save(ref, doc.path, '新内容\n第二行\n', doc.version)
-    expect(await readFile(file)).toEqual(Buffer.concat([Buffer.from([239, 187, 191]), Buffer.from('新内容\r\n第二行\r\n')]))
+    expect(await readFile(file)).toEqual(
+      Buffer.concat([Buffer.from([239, 187, 191]), Buffer.from('新内容\r\n第二行\r\n')]),
+    )
     await expect(service.save(ref, doc.path, '覆盖', doc.version)).rejects.toThrow('其他程序修改')
-    const concurrent = await Promise.allSettled([service.save(ref, doc.path, '第一笔', saved.version), service.save(ref, doc.path, '第二笔', saved.version)])
+    const concurrent = await Promise.allSettled([
+      service.save(ref, doc.path, '第一笔', saved.version),
+      service.save(ref, doc.path, '第二笔', saved.version),
+    ])
     expect(concurrent.filter(r => r.status === 'fulfilled')).toHaveLength(1)
     expect(concurrent.filter(r => r.status === 'rejected')).toHaveLength(1)
   })
@@ -52,7 +60,8 @@ describe('项目文件', () => {
     await expect(service.save(ref, 'test.txt', 'draft', doc.version)).rejects.toThrow('不存在')
   })
   it('越界相对路径、绝对路径和项目外链接均被拦下', async () => {
-    await mkdir(join(folder, 'outside')); await writeFile(join(folder, 'outside', 'secret.txt'), 'outside')
+    await mkdir(join(folder, 'outside'))
+    await writeFile(join(folder, 'outside', 'secret.txt'), 'outside')
     await symlink(join(folder, 'outside'), join(root, 'linked'), process.platform === 'win32' ? 'junction' : 'dir')
     await expect(workspacePath(root, '../outside/secret.txt')).rejects.toThrow('超出项目')
     await expect(workspacePath(root, join(folder, 'outside/secret.txt'))).rejects.toThrow('相对路径')
@@ -68,10 +77,17 @@ describe('项目文件', () => {
     expect(await service.read(ref, 'legacy.txt')).toMatchObject({ kind: 'unsupported' })
     const large = await service.read(ref, 'large.txt')
     expect(large).toMatchObject({ kind: 'text', readonly: true })
-    if (large.kind === 'text') await expect(service.save(ref, 'large.txt', 'small', large.version)).rejects.toThrow('文件已变化')
+    if (large.kind === 'text')
+      await expect(service.save(ref, 'large.txt', 'small', large.version)).rejects.toThrow('文件已变化')
     await writeFile(join(root, 'huge.txt'), Buffer.alloc(READ_LIMIT + 1, 65))
-    expect(await service.read(ref, 'huge.txt')).toMatchObject({ kind: 'unsupported', reason: '文件太大，请用外部编辑器打开' })
-    expect(await service.read(ref, 'pic.png')).toMatchObject({ kind: 'image', dataUrl: 'data:image/png;base64,iVBORw==' })
+    expect(await service.read(ref, 'huge.txt')).toMatchObject({
+      kind: 'unsupported',
+      reason: '文件太大，请用外部编辑器打开',
+    })
+    expect(await service.read(ref, 'pic.png')).toMatchObject({
+      kind: 'image',
+      dataUrl: 'data:image/png;base64,iVBORw==',
+    })
   })
   it('Git 标记以项目为准，兼容项目位于仓库子目录', async () => {
     execFileSync('git', ['init', '--quiet'], { cwd: root, windowsHide: true })
@@ -92,7 +108,11 @@ describe('项目文件', () => {
     expect(await service.headContent(ref, 'sub/文件 (1).txt')).toBeNull()
     execFileSync('git', ['init', '--quiet'], { cwd: root, windowsHide: true })
     execFileSync('git', ['add', '.'], { cwd: root, windowsHide: true })
-    execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '--quiet', '-m', 'fixture'], { cwd: root, windowsHide: true })
+    execFileSync(
+      'git',
+      ['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '--quiet', '-m', 'fixture'],
+      { cwd: root, windowsHide: true },
+    )
     await writeFile(join(root, 'sub', '文件 (1).txt'), 'modified\n')
     const nested = new WorkspaceFiles(value => ({ ref: value, name: 'sub', path: join(root, 'sub') }))
     expect(await nested.headContent(ref, '文件 (1).txt')).toBe('original\n')
@@ -104,26 +124,54 @@ describe('项目文件', () => {
 
 describe('编辑器参数', () => {
   it('中文与 shell 特殊字符作为参数原样传入，文件定位保留盘符', () => {
-    expect(editorArgs('code', 'reuse', 'D:\\中文 & 项目', 'D:\\中文 & 项目\\file.ts', 10, 4)).toEqual(['--reuse-window', 'D:\\中文 & 项目', '--goto', 'D:\\中文 & 项目\\file.ts:10:4'])
+    expect(editorArgs('code', 'reuse', 'D:\\中文 & 项目', 'D:\\中文 & 项目\\file.ts', 10, 4)).toEqual([
+      '--reuse-window',
+      'D:\\中文 & 项目',
+      '--goto',
+      'D:\\中文 & 项目\\file.ts:10:4',
+    ])
     expect(editorArgs('code', 'new', 'D:\\项目')).toEqual(['--new-window', 'D:\\项目'])
     expect(editorArgs('folder', 'new', 'D:\\项目', 'D:\\项目\\file.txt')).toEqual(['D:\\项目\\file.txt'])
     expect(() => editorArgs('code', 'reuse', root, 'file.ts', -1)).toThrow('行列不正确')
   })
   it('自定义程序用参数数组启动，偏好重启恢复，不继承 Electron Node 模式', async () => {
-    const program = join(root, 'launcher.cjs'), log = join(folder, 'launch-result.json')
-    await writeFile(program, `require('node:fs').writeFileSync(${JSON.stringify(log)}, JSON.stringify({argv:process.argv,mode:process.env.ELECTRON_RUN_AS_NODE}))`)
+    const program = join(root, 'launcher.cjs'),
+      log = join(folder, 'launch-result.json')
+    await writeFile(
+      program,
+      `require('node:fs').writeFileSync(${JSON.stringify(log)}, JSON.stringify({argv:process.argv,mode:process.env.ELECTRON_RUN_AS_NODE}))`,
+    )
     const prefs = join(folder, 'prefs')
     await mkdir(prefs)
-    await writeFile(join(prefs, 'editor-settings.json'), JSON.stringify({ defaultId: 'custom:test', window: 'new', custom: [{ id: 'custom:test', name: '测试编辑器', kind: 'custom', path: process.execPath, mode: 'folder' }] }))
+    await writeFile(
+      join(prefs, 'editor-settings.json'),
+      JSON.stringify({
+        defaultId: 'custom:test',
+        window: 'new',
+        custom: [{ id: 'custom:test', name: '测试编辑器', kind: 'custom', path: process.execPath, mode: 'folder' }],
+      }),
+    )
     const editor = new Editors(prefs, value => ({ ref: value, name: 'project', path: root }))
     await editor.init()
     expect((await editor.state()).defaultId).toBe('custom:test')
     expect((await editor.state()).openWith).toBe('app')
     const previous = process.env.ELECTRON_RUN_AS_NODE
     process.env.ELECTRON_RUN_AS_NODE = '1'
-    try { await editor.open(ref, undefined, 'launcher.cjs') } finally { if (previous === undefined) delete process.env.ELECTRON_RUN_AS_NODE; else process.env.ELECTRON_RUN_AS_NODE = previous }
+    try {
+      await editor.open(ref, undefined, 'launcher.cjs')
+    } finally {
+      if (previous === undefined) delete process.env.ELECTRON_RUN_AS_NODE
+      else process.env.ELECTRON_RUN_AS_NODE = previous
+    }
     let data: { argv: string[]; mode?: string } | null = null
-    for (let i = 0; i < 40; i++) { try { data = JSON.parse(await readFile(log, 'utf8')); break } catch { await new Promise(r => setTimeout(r, 25)) } }
+    for (let i = 0; i < 40; i++) {
+      try {
+        data = JSON.parse(await readFile(log, 'utf8'))
+        break
+      } catch {
+        await new Promise(r => setTimeout(r, 25))
+      }
+    }
     expect(data?.argv[1]).toBe(program)
     expect(data?.mode).toBeUndefined()
     await editor.preferences({ window: 'reuse' })
@@ -136,7 +184,12 @@ describe('编辑器参数', () => {
     const editor = new Editors(prefs, value => ({ ref: value, name: 'project', path: root }))
     await editor.init()
     const configured = await editor.configure('trae-cn', process.execPath)
-    expect(configured.items.find(e => e.id === 'trae-cn')).toMatchObject({ kind: 'trae-cn', path: process.execPath, manual: true, source: 'manual' })
+    expect(configured.items.find(e => e.id === 'trae-cn')).toMatchObject({
+      kind: 'trae-cn',
+      path: process.execPath,
+      manual: true,
+      source: 'manual',
+    })
     await editor.preferences({ defaultId: 'trae-cn', openWith: 'trae-cn' })
     const restarted = new Editors(prefs, value => ({ ref: value, name: 'project', path: root }))
     await restarted.init()

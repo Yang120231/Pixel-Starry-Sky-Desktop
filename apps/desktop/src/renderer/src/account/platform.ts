@@ -44,17 +44,38 @@ const HIDDEN_KEY = 'pixelsky.platform.hiddenModels'
 const ENGINE_KEY = 'pixelsky.sources.v2'
 let codexPreference: SourcePreference = { source: 'self', groupId: null, model: null, selfModel: null }
 let codexUnsaved = true
-try { const saved = JSON.parse(localStorage.getItem(ENGINE_KEY) ?? '{}').codex; if (saved) { codexUnsaved=false;codexPreference = { source: saved.source === 'platform' ? 'platform' : 'self', groupId: typeof saved.groupId === 'string' ? saved.groupId : null, model: typeof saved.model === 'string' ? saved.model : null, selfModel: typeof saved.selfModel === 'string' ? saved.selfModel : null } } } catch { /* 首次使用 */ }
+try {
+  const saved = JSON.parse(localStorage.getItem(ENGINE_KEY) ?? '{}').codex
+  if (saved) {
+    codexUnsaved = false
+    codexPreference = {
+      source: saved.source === 'platform' ? 'platform' : 'self',
+      groupId: typeof saved.groupId === 'string' ? saved.groupId : null,
+      model: typeof saved.model === 'string' ? saved.model : null,
+      selfModel: typeof saved.selfModel === 'string' ? saved.selfModel : null,
+    }
+  }
+} catch {
+  /* 首次使用 */
+}
 let projections: Partial<Record<EngineId, PlatformState>> = {}
 export function groupSupportsEngine(group: PlatformGroupInfo, engine: EngineId): boolean {
-  if(group.supported_apis && !group.supported_apis.includes(engine==='codex'?'responses':'messages'))return false
+  if (group.supported_apis && !group.supported_apis.includes(engine === 'codex' ? 'responses' : 'messages'))
+    return false
   if (group.supported_engines) return group.supported_engines.includes(engine)
-  return engine === 'codex' ? group.platform === 'openai' : !group.platform || ['anthropic', 'claude'].includes(group.platform)
+  return engine === 'codex'
+    ? group.platform === 'openai'
+    : !group.platform || ['anthropic', 'claude'].includes(group.platform)
 }
 function saveEnginePreference(patch: Partial<SourcePreference>): void {
   codexUnsaved = false
   codexPreference = { ...codexPreference, ...patch }
-  if (!window.pixelsky?.demo) try { localStorage.setItem(ENGINE_KEY, JSON.stringify({ codex: codexPreference })) } catch { /* 保留内存 */ }
+  if (!window.pixelsky?.demo)
+    try {
+      localStorage.setItem(ENGINE_KEY, JSON.stringify({ codex: codexPreference }))
+    } catch {
+      /* 保留内存 */
+    }
   set({})
 }
 
@@ -71,7 +92,12 @@ function readPreference(): SourcePreference {
   try {
     const p = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Record<string, unknown>
     const s = (v: unknown): string | null => (typeof v === 'string' ? v : null)
-    return { source: p.source === 'self' ? 'self' : 'platform', groupId: s(p.groupId), model: s(p.model), selfModel: s(p.selfModel) }
+    return {
+      source: p.source === 'self' ? 'self' : 'platform',
+      groupId: s(p.groupId),
+      model: s(p.model),
+      selfModel: s(p.selfModel),
+    }
   } catch {
     return { source: 'platform', groupId: null, model: null, selfModel: null }
   }
@@ -85,7 +111,15 @@ let unsaved = (() => {
     return true
   }
 })()
-let state: PlatformState = { ...readPreference(), email: null, groups: [], loaded: false, loading: false, error: null, hiddenModels: readHidden() }
+let state: PlatformState = {
+  ...readPreference(),
+  email: null,
+  groups: [],
+  loaded: false,
+  loading: false,
+  error: null,
+  hiddenModels: readHidden(),
+}
 const listeners = new Set<() => void>()
 let started = false
 /** 账号变了就加一，丢掉旧账号还没回来的请求 */
@@ -104,12 +138,13 @@ function set(patch: Partial<PlatformState>, persist = false): void {
       /* 存不下也能用当前选择 */
     }
   }
-  listeners.forEach((fn) => fn())
+  listeners.forEach(fn => fn())
 }
 
 export function getPlatformState(engine: EngineId = 'claude'): PlatformState {
   if (!projections[engine]) {
-    const groups = state.groups.filter(group => groupSupportsEngine(group, engine)), preference = engine === 'claude' ? state : codexPreference
+    const groups = state.groups.filter(group => groupSupportsEngine(group, engine)),
+      preference = engine === 'claude' ? state : codexPreference
     const resolved = resolvePlatform(groups, preference.groupId, preference.model)
     projections[engine] = { ...state, ...preference, groups, ...(state.loaded ? resolved : {}) }
   }
@@ -140,14 +175,18 @@ export function groupsForModel(groups: PlatformGroup[], model: string | null): P
  * 把（分组，模型）对齐到目录：先保模型——模型还在就换到包含它的分组（原分组有就不动，否则取倍率最低的）；
  * 模型不在了就保分组、取分组的第一个模型；都不在了取第一个有模型的分组。目录为空时两者都是 null。
  */
-export function resolvePlatform(groups: PlatformGroup[], groupId: string | null, model: string | null): { groupId: string | null; model: string | null } {
+export function resolvePlatform(
+  groups: PlatformGroup[],
+  groupId: string | null,
+  model: string | null,
+): { groupId: string | null; model: string | null } {
   if (model) {
-    const current = groups.find((g) => g.id === groupId && g.models.includes(model))
+    const current = groups.find(g => g.id === groupId && g.models.includes(model))
     if (current) return { groupId: current.id, model }
     const cheapest = groupsForModel(groups, model)[0]
     if (cheapest) return { groupId: cheapest.id, model }
   }
-  const group = groups.find((g) => g.id === groupId && g.models.length > 0) ?? groups.find((g) => g.models.length > 0)
+  const group = groups.find(g => g.id === groupId && g.models.length > 0) ?? groups.find(g => g.models.length > 0)
   return group ? { groupId: group.id, model: group.models[0] } : { groupId: null, model: null }
 }
 
@@ -166,23 +205,31 @@ export function balanceBlocked(group: PlatformGroup, balance: number | null): bo
 
 /** 一条线路读不出模型的原因；能用时为 null */
 export function groupProblem(group: PlatformGroup, balance: number | null): string | null {
-  if (balanceBlocked(group, balance)) return tr("account.platform.message6")
-  if (group.modelsError) return tr("account.platform.message7", { p0: group.modelsError })
-  return group.models.length === 0 ? tr("account.platform.message8") : null
+  if (balanceBlocked(group, balance)) return tr('account.platform.message6')
+  if (group.modelsError) return tr('account.platform.message7', { p0: group.modelsError })
+  return group.models.length === 0 ? tr('account.platform.message8') : null
 }
 
 /** 平台没有可用线路时给用户看的原因，balance 为真时提示充值 */
-export function noRouteReason(s: Pick<PlatformState, 'groups' | 'error'>, balance: number | null): { message: string; balance: boolean } {
-  if (s.groups.length === 0) return { message: s.error ?? tr("account.platform.message9"), balance: false }
-  if (s.groups.every((g) => balanceBlocked(g, balance))) {
-    return { get message() { return tr("account.platform.message10") }, balance: true }
+export function noRouteReason(
+  s: Pick<PlatformState, 'groups' | 'error'>,
+  balance: number | null,
+): { message: string; balance: boolean } {
+  if (s.groups.length === 0) return { message: s.error ?? tr('account.platform.message9'), balance: false }
+  if (s.groups.every(g => balanceBlocked(g, balance))) {
+    return {
+      get message() {
+        return tr('account.platform.message10')
+      },
+      balance: true,
+    }
   }
-  const first = s.groups.map((g) => groupProblem(g, balance)).find(Boolean)
-  return { message: first ?? s.error ?? tr("account.platform.message11"), balance: false }
+  const first = s.groups.map(g => groupProblem(g, balance)).find(Boolean)
+  return { message: first ?? s.error ?? tr('account.platform.message11'), balance: false }
 }
 
 export function billingLabel(group: PlatformGroupInfo): string {
-  return group.billing_source === 'plan_only' ? tr("account.platform.message12") : tr("account.platform.message13")
+  return group.billing_source === 'plan_only' ? tr('account.platform.message12') : tr('account.platform.message13')
 }
 
 /** ×0.8、×1、×0.125（最多三位小数） */
@@ -203,14 +250,19 @@ export async function refreshPlatform(): Promise<void> {
   try {
     const list = await api.groups()
     // 每个分组的模型一起读：先选模型、再选线路需要全部分组的模型
-    const models = await Promise.allSettled(list.map((g) => api.models(g.id)))
+    const models = await Promise.allSettled(list.map(g => api.models(g.id)))
     if (gen !== generation) return
     const groups: PlatformGroup[] = list.map((g, i) => {
       const r = models[i]
-      return r.status === 'fulfilled' ? { ...g, models: r.value, modelsError: null } : { ...g, models: [], modelsError: (r.reason as Error)?.message ?? tr("account.platform.message14") }
+      return r.status === 'fulfilled'
+        ? { ...g, models: r.value, modelsError: null }
+        : { ...g, models: [], modelsError: (r.reason as Error)?.message ?? tr('account.platform.message14') }
     })
-    const anyModel = groups.some((g) => g.models.length > 0)
-    const error = groups.length > 0 && !anyModel ? (groups.find((g) => g.modelsError)?.modelsError ?? tr("account.platform.message15")) : null
+    const anyModel = groups.some(g => g.models.length > 0)
+    const error =
+      groups.length > 0 && !anyModel
+        ? (groups.find(g => g.modelsError)?.modelsError ?? tr('account.platform.message15'))
+        : null
     set({ groups, loaded: true, loading: false, error, ...resolvePlatform(groups, state.groupId, state.model) }, true)
   } catch (e) {
     if (gen === generation) set({ groups: [], loaded: true, loading: false, error: (e as Error).message })
@@ -222,28 +274,40 @@ export async function refreshPlatform(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export function setDefaultSource(source: CreditSource, engine: EngineId = 'claude'): void {
-  if (engine === 'codex') { saveEnginePreference({ source }); return }
+  if (engine === 'codex') {
+    saveEnginePreference({ source })
+    return
+  }
   set({ source }, true)
 }
 
 /** 平台：换模型，分组按「先保模型」对齐 */
 export function setDefaultModel(model: string, engine: EngineId = 'claude'): void {
-  const current = getPlatformState(engine), patch = { source: 'platform' as const, ...resolvePlatform(current.groups, current.groupId, model) }
+  const current = getPlatformState(engine),
+    patch = { source: 'platform' as const, ...resolvePlatform(current.groups, current.groupId, model) }
   if (engine === 'codex') saveEnginePreference(patch)
   else set(patch, true)
 }
 
 /** 平台：换线路（分组）；分组没有当前模型时取它的第一个模型 */
 export function setDefaultGroup(groupId: string, engine: EngineId = 'claude'): void {
-  const current = getPlatformState(engine), group = current.groups.find((g) => g.id === groupId)
+  const current = getPlatformState(engine),
+    group = current.groups.find(g => g.id === groupId)
   if (!group || group.models.length === 0) return
-  const patch = { source: 'platform' as const, groupId, model: current.model && group.models.includes(current.model) ? current.model : group.models[0] }
+  const patch = {
+    source: 'platform' as const,
+    groupId,
+    model: current.model && group.models.includes(current.model) ? current.model : group.models[0],
+  }
   if (engine === 'codex') saveEnginePreference(patch)
   else set(patch, true)
 }
 
 export function setDefaultSelfModel(selfModel: string | null, engine: EngineId = 'claude'): void {
-  if (engine === 'codex') { saveEnginePreference({ source: 'self', selfModel }); return }
+  if (engine === 'codex') {
+    saveEnginePreference({ source: 'self', selfModel })
+    return
+  }
   set({ source: 'self', selfModel }, true)
 }
 
@@ -262,7 +326,7 @@ function saveHidden(hiddenModels: string[]): void {
 }
 
 export function setModelHidden(model: string, hidden: boolean): void {
-  const rest = state.hiddenModels.filter((m) => m !== model)
+  const rest = state.hiddenModels.filter(m => m !== model)
   saveHidden(hidden ? [...rest, model] : rest)
 }
 
@@ -272,7 +336,7 @@ export function showAllModels(): void {
 
 /** 菜单里列出的模型：隐藏的不列，但 keep 里的（正在用的、默认的）照常显示，免得选中的东西不见了 */
 export function visibleModels(models: string[], hidden: string[], keep: Array<string | null>): string[] {
-  return models.filter((m) => !hidden.includes(m) || keep.includes(m))
+  return models.filter(m => !hidden.includes(m) || keep.includes(m))
 }
 
 /** 模型多于这个数时显示搜索框 */
@@ -282,12 +346,15 @@ export const MODEL_SEARCH_MIN = 8
 export function matchModels(models: string[], query: string): string[] {
   const norm = (s: string) => s.toLowerCase().replace(/[\s-]+/g, '')
   const q = norm(query)
-  return q ? models.filter((m) => norm(m).includes(q)) : models
+  return q ? models.filter(m => norm(m).includes(q)) : models
 }
 
 /** 「设为默认」：把一个会话的选择写回全局默认 */
 export function saveDefault(p: Partial<SourcePreference>, engine: EngineId = 'claude'): void {
-  if (engine === 'codex') { saveEnginePreference(p); return }
+  if (engine === 'codex') {
+    saveEnginePreference(p)
+    return
+  }
   set(p, true)
 }
 
@@ -300,7 +367,7 @@ function start(): void {
   started = true
   if (window.pixelsky?.demo) {
     // 演示模式：假目录，选择照常保存在内存里
-    const groups = demoPlatformGroups.map((g) => ({ ...g, modelsError: null }))
+    const groups = demoPlatformGroups.map(g => ({ ...g, modelsError: null }))
     set({ email: demoAccount.email, groups, loaded: true, ...resolvePlatform(groups, state.groupId, state.model) })
     return
   }
@@ -317,18 +384,22 @@ function start(): void {
     generation++
     // 登录默认平台（D023）：这次运行中新登录的账号把默认来源设回平台；启动时读到的已登录状态不改用户的选择。
     // 新装还没选过：没登录就默认自有，免得第一次打开就被「请登录」挡住
-    const source: CreditSource | undefined = !initial && email ? 'platform' : unsaved ? (email ? 'platform' : 'self') : undefined
+    const source: CreditSource | undefined =
+      !initial && email ? 'platform' : unsaved ? (email ? 'platform' : 'self') : undefined
     if (source || codexUnsaved) saveEnginePreference({ source: source ?? (email ? 'platform' : 'self') })
-    set({ email, groups: [], loaded: false, loading: false, error: null, ...(source ? { source } : {}) }, !!email || unsaved)
+    set(
+      { email, groups: [], loaded: false, loading: false, error: null, ...(source ? { source } : {}) },
+      !!email || unsaved,
+    )
     if (email) void refreshPlatform()
   }
-  account.onChange((next) => {
+  account.onChange(next => {
     pushed = true
     apply(next, false)
   })
   void account
     .getState()
-    .then((next) => {
+    .then(next => {
       if (!pushed) apply(next, true)
     })
     .catch(() => undefined)
@@ -337,7 +408,7 @@ function start(): void {
 export function usePlatform(engine: EngineId = 'claude'): PlatformState {
   useEffect(start, [])
   return useSyncExternalStore(
-    (fn) => {
+    fn => {
       listeners.add(fn)
       return () => listeners.delete(fn)
     },

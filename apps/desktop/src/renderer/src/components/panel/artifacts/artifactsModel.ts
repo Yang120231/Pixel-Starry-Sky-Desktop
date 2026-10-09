@@ -1,13 +1,27 @@
 // 产物面板的纯函数（docs/ui/artifacts-panel.md）
 import type { ArtifactTurn, DeliveryType } from '@pixelsky/protocol'
 
-export interface SessionGroup { sessionId: string; title: string; engine: ArtifactTurn['engine']; archived: boolean; at: number; turns: ArtifactTurn[] }
+export interface SessionGroup {
+  sessionId: string
+  title: string
+  engine: ArtifactTurn['engine']
+  archived: boolean
+  at: number
+  turns: ArtifactTurn[]
+}
 
 /** 变更按会话分组：会话按最近一轮的时间倒序，组内各轮也倒序 */
 export function groupBySession(turns: readonly ArtifactTurn[]): SessionGroup[] {
   const groups = new Map<string, SessionGroup>()
   for (const turn of turns) {
-    const g = groups.get(turn.sessionId) ?? { sessionId: turn.sessionId, title: turn.title, engine: turn.engine, archived: turn.archived, at: turn.at, turns: [] }
+    const g = groups.get(turn.sessionId) ?? {
+      sessionId: turn.sessionId,
+      title: turn.title,
+      engine: turn.engine,
+      archived: turn.archived,
+      at: turn.at,
+      turns: [],
+    }
     g.turns.push(turn)
     g.at = Math.max(g.at, turn.at)
     groups.set(turn.sessionId, g)
@@ -25,7 +39,15 @@ export function formatBytes(bytes: number | null): string {
 }
 
 /** 交付类型（含「其他」） */
-export const ICON_TYPES: readonly (DeliveryType | 'other')[] = ['document', 'image', 'table', 'web', 'archive', 'media', 'other']
+export const ICON_TYPES: readonly (DeliveryType | 'other')[] = [
+  'document',
+  'image',
+  'table',
+  'web',
+  'archive',
+  'media',
+  'other',
+]
 
 /** 路径拆成文件名和目录（兼容 Windows 分隔符） */
 export function splitArtifactPath(path: string): { name: string; dir: string } {

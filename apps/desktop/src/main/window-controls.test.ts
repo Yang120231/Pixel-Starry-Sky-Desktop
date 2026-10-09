@@ -8,7 +8,9 @@ const mocks = vi.hoisted(() => ({
 }))
 vi.mock('electron', () => ({
   BrowserWindow: { fromWebContents: mocks.fromWebContents },
-  ipcMain: { handle: (name: string, handler: (event: IpcMainInvokeEvent) => unknown) => mocks.handlers.set(name, handler) },
+  ipcMain: {
+    handle: (name: string, handler: (event: IpcMainInvokeEvent) => unknown) => mocks.handlers.set(name, handler),
+  },
 }))
 vi.mock('./account', () => ({ trustedSender: mocks.trusted }))
 
@@ -26,7 +28,10 @@ describe('显示器工作区布局', () => {
   })
   it('四宫格奇数像素无缝对齐，且使用副屏原点', () => {
     const area = { x: 1920, y: -100, width: 1921, height: 1041 }
-    const a = snapBounds(area, 'grid-4', 0)!, b = snapBounds(area, 'grid-4', 1)!, c = snapBounds(area, 'grid-4', 2)!, d = snapBounds(area, 'grid-4', 3)!
+    const a = snapBounds(area, 'grid-4', 0)!,
+      b = snapBounds(area, 'grid-4', 1)!,
+      c = snapBounds(area, 'grid-4', 2)!,
+      d = snapBounds(area, 'grid-4', 3)!
     expect(a.x + a.width).toBe(b.x)
     expect(a.y + a.height).toBe(c.y)
     expect(d.x + d.width).toBe(area.x + area.width)
@@ -47,7 +52,10 @@ describe('窗口操作调用方边界', () => {
   })
   const event = (subframe = false): IpcMainInvokeEvent => {
     const mainFrame = { url: 'file:///app/index.html' }
-    return { sender: { mainFrame }, senderFrame: subframe ? { url: mainFrame.url } : mainFrame } as unknown as IpcMainInvokeEvent
+    return {
+      sender: { mainFrame },
+      senderFrame: subframe ? { url: mainFrame.url } : mainFrame,
+    } as unknown as IpcMainInvokeEvent
   }
   it('不允许外部页面读取或操控窗口', () => {
     mocks.trusted.mockReturnValue(false)

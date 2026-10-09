@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { bottomOrder, projectName, PROJECT_NAME_LIMIT, sessionTitle, SESSION_TITLE_LIMIT } from '../src/session-metadata'
+import {
+  bottomOrder,
+  projectName,
+  PROJECT_NAME_LIMIT,
+  sessionTitle,
+  SESSION_TITLE_LIMIT,
+} from '../src/session-metadata'
 
 describe('sessionTitle', () => {
   it('去掉首尾空白后返回', () => {
@@ -38,17 +44,18 @@ describe('projectName', () => {
 })
 
 describe('bottomOrder', () => {
-  const sort = (xs: Array<{ id: string; bottomedAt?: number | null }>) => [...xs].sort(bottomOrder).map((x) => x.id)
+  const sort = (xs: Array<{ id: string; bottomedAt?: number | null }>) => [...xs].sort(bottomOrder).map(x => x.id)
   it('普通项保持输入顺序（稳定排序），置底项排在后面', () => {
-    expect(sort([{ id: 'a', bottomedAt: 5 }, { id: 'b' }, { id: 'c', bottomedAt: null }, { id: 'd', bottomedAt: 0 }])).toEqual([
-      'b',
-      'c',
-      'd',
-      'a',
-    ])
+    expect(
+      sort([{ id: 'a', bottomedAt: 5 }, { id: 'b' }, { id: 'c', bottomedAt: null }, { id: 'd', bottomedAt: 0 }]),
+    ).toEqual(['b', 'c', 'd', 'a'])
   })
   it('置底项按设置先后排列', () => {
-    expect(sort([{ id: 'late', bottomedAt: 20 }, { id: 'early', bottomedAt: 10 }, { id: 'n' }])).toEqual(['n', 'early', 'late'])
+    expect(sort([{ id: 'late', bottomedAt: 20 }, { id: 'early', bottomedAt: 10 }, { id: 'n' }])).toEqual([
+      'n',
+      'early',
+      'late',
+    ])
   })
   it('比较值', () => {
     expect(bottomOrder({}, {})).toBe(0)

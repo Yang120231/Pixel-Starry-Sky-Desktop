@@ -28,12 +28,12 @@ export function SubagentStrip({ subagents }: { subagents: SubagentStatus[] }) {
   if (subagents.length === 0) return null
   return (
     <div className="flex flex-wrap gap-1.5">
-      {subagents.map((a) => (
+      {subagents.map(a => (
         <button
           key={a.id}
           type="button"
           onClick={() => openTrace?.({ agentId: a.id })}
-          title={tr("session.live.SessionStrips.message273")}
+          title={tr('session.live.SessionStrips.message273')}
           className="press inline-flex h-7 max-w-full min-w-0 items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 text-meta text-fg-secondary shadow-sm hover:border-line-strong"
         >
           <Bot size={13} strokeWidth={1.75} className="shrink-0 text-fg-muted" />
@@ -61,11 +61,11 @@ export function TaskStrip({ sessionId, tasks }: { sessionId: string; tasks: Back
   if (tasks.length === 0) return null
 
   const loadOutput = (taskId: string): void => {
-    setOutputs((o) => ({ ...o, [taskId]: undefined }))
+    setOutputs(o => ({ ...o, [taskId]: undefined }))
     bridge
       ?.taskOutput(sessionId, taskId)
-      .then((out) => setOutputs((o) => ({ ...o, [taskId]: out })))
-      .catch((err: Error) => setOutputs((o) => ({ ...o, [taskId]: { error: err.message } })))
+      .then(out => setOutputs(o => ({ ...o, [taskId]: out })))
+      .catch((err: Error) => setOutputs(o => ({ ...o, [taskId]: { error: err.message } })))
   }
   const toggleOutput = (taskId: string): void => {
     const next = open === taskId ? null : taskId
@@ -73,17 +73,19 @@ export function TaskStrip({ sessionId, tasks }: { sessionId: string; tasks: Back
     if (next) loadOutput(next)
   }
   const stop = (taskId: string): void => {
-    setStopping((s) => ({ ...s, [taskId]: true }))
-    bridge?.stopTask(sessionId, taskId).catch(() => setStopping((s) => {
-      const rest = { ...s }
-      delete rest[taskId]
-      return rest
-    }))
+    setStopping(s => ({ ...s, [taskId]: true }))
+    bridge?.stopTask(sessionId, taskId).catch(() =>
+      setStopping(s => {
+        const rest = { ...s }
+        delete rest[taskId]
+        return rest
+      }),
+    )
   }
 
   return (
     <div className="flex max-h-[30vh] flex-col gap-1 overflow-y-auto rounded-xl border border-line bg-surface px-3 py-2 shadow-sm">
-      {tasks.map((t) => {
+      {tasks.map(t => {
         const out = outputs[t.id]
         return (
           <div key={t.id} className="min-w-0">
@@ -100,28 +102,43 @@ export function TaskStrip({ sessionId, tasks }: { sessionId: string; tasks: Back
               )}
               <span className="flex-1" />
               {openTrace && t.kind.startsWith('local_workflow') && (
-                <button type="button" className={LINK} onClick={() => openTrace()}>{tr("session.live.ItemRows.message260")} </button>
+                <button type="button" className={LINK} onClick={() => openTrace()}>
+                  {tr('session.live.ItemRows.message260')}{' '}
+                </button>
               )}
               {hasOutput(t.kind) && (
                 <button type="button" className={LINK} onClick={() => toggleOutput(t.id)}>
-                  {open === t.id ? tr("session.live.SessionStrips.message274") : tr("session.live.SessionStrips.message275")}
+                  {open === t.id
+                    ? tr('session.live.SessionStrips.message274')
+                    : tr('session.live.SessionStrips.message275')}
                 </button>
               )}
-              <button type="button" className={cn(LINK, 'hover:text-danger')} disabled={!!stopping[t.id]} onClick={() => stop(t.id)}>
-                {stopping[t.id] ? tr("session.CacheMissAlerts.message101") : tr("session.Composer.message112")}
+              <button
+                type="button"
+                className={cn(LINK, 'hover:text-danger')}
+                disabled={!!stopping[t.id]}
+                onClick={() => stop(t.id)}
+              >
+                {stopping[t.id] ? tr('session.CacheMissAlerts.message101') : tr('session.Composer.message112')}
               </button>
             </div>
             {open === t.id && (
               <div className="mt-1 mb-1 ml-5 rounded-lg border border-line bg-subtle px-3 py-2 text-meta">
                 {!out ? (
-                  <span className="text-fg-faint">{tr("session.live.SessionStrips.message276")}</span>
+                  <span className="text-fg-faint">{tr('session.live.SessionStrips.message276')}</span>
                 ) : 'error' in out ? (
                   <span className="text-fg-faint">{translateMessage(out.error)}</span>
                 ) : (
                   <>
-                    {out.truncated && <div className="mb-1 text-fg-faint">{tr("session.live.SessionStrips.message277")}</div>}
-                    <pre className="max-h-48 overflow-auto font-mono leading-[1.6] whitespace-pre-wrap text-fg-secondary">{out.output || tr("session.live.SessionStrips.message278")}</pre>
-                    <button type="button" className={cn(LINK, 'mt-1 -ml-1.5')} onClick={() => loadOutput(t.id)}>{tr("account.AccountMenu.message45")} </button>
+                    {out.truncated && (
+                      <div className="mb-1 text-fg-faint">{tr('session.live.SessionStrips.message277')}</div>
+                    )}
+                    <pre className="max-h-48 overflow-auto font-mono leading-[1.6] whitespace-pre-wrap text-fg-secondary">
+                      {out.output || tr('session.live.SessionStrips.message278')}
+                    </pre>
+                    <button type="button" className={cn(LINK, 'mt-1 -ml-1.5')} onClick={() => loadOutput(t.id)}>
+                      {tr('account.AccountMenu.message45')}{' '}
+                    </button>
                   </>
                 )}
               </div>

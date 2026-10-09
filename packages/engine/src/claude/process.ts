@@ -36,7 +36,13 @@ export class ClaudeProcess {
   private exited = false
   readonly exitPromise: Promise<void>
 
-  constructor(launcher: Launcher, args: string[], cwd: string, env: NodeJS.ProcessEnv, private readonly h: ClaudeProcessHandlers) {
+  constructor(
+    launcher: Launcher,
+    args: string[],
+    cwd: string,
+    env: NodeJS.ProcessEnv,
+    private readonly h: ClaudeProcessHandlers,
+  ) {
     this.child = spawn(launcher.command, [...launcher.args, ...args], {
       cwd,
       env,
@@ -45,8 +51,8 @@ export class ClaudeProcess {
     })
     this.child.stdin.on('error', () => {}) // 进程已退出时写入会报 EPIPE，退出事件里统一处理
     this.child.stderr.on('data', (d: Buffer) => this.stderr.push(d.toString('utf8')))
-    readJsonLines(this.child.stdout, (msg) => this.dispatch(msg))
-    this.exitPromise = new Promise((resolve) => {
+    readJsonLines(this.child.stdout, msg => this.dispatch(msg))
+    this.exitPromise = new Promise(resolve => {
       const done = (code: number | null): void => {
         if (this.exited) return
         this.exited = true
@@ -58,8 +64,8 @@ export class ClaudeProcess {
         this.h.onExit(code, this.stderr.toString())
         resolve()
       }
-      this.child.on('exit', (code) => done(code))
-      this.child.on('error', (err) => {
+      this.child.on('exit', code => done(code))
+      this.child.on('error', err => {
         this.stderr.push(`\n${err.message}`)
         done(null)
       })
@@ -107,7 +113,11 @@ export class ClaudeProcess {
   }
 
   /** 发 control 请求，等 CLI 回应 */
-  request(subtype: string, payload: Record<string, unknown> = {}, timeoutMs = 15_000): Promise<Record<string, unknown>> {
+  request(
+    subtype: string,
+    payload: Record<string, unknown> = {},
+    timeoutMs = 15_000,
+  ): Promise<Record<string, unknown>> {
     if (this.exited) return Promise.reject(new Error('Claude Code 进程已退出'))
     const id = `req_${++this.nextId}_${randomUUID().slice(0, 8)}`
     return new Promise((resolve, reject) => {
@@ -130,9 +140,16 @@ export class ClaudeProcess {
   }
 
   sendUserMessage(text: string, uuid: string, attachments: ImageAttachment[] = []): void {
-    const content = attachments.length > 0
-      ? [...(text.trim() ? [{ type: 'text', text }] : []), ...attachments.map(image => ({ type: 'image', source: { type: 'base64', media_type: image.mediaType, data: image.dataBase64 } }))]
-      : text
+    const content =
+      attachments.length > 0
+        ? [
+            ...(text.trim() ? [{ type: 'text', text }] : []),
+            ...attachments.map(image => ({
+              type: 'image',
+              source: { type: 'base64', media_type: image.mediaType, data: image.dataBase64 },
+            })),
+          ]
+        : text
     this.write({
       type: 'user',
       message: { role: 'user', content },
@@ -158,8 +175,9 @@ export class ClaudeProcess {
     if (this.exited) return
     try {
       if (IS_WINDOWS && this.child.pid) {
-        spawn('taskkill', ['/pid', String(this.child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }).on('error', () =>
-          this.child.kill(),
+        spawn('taskkill', ['/pid', String(this.child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }).on(
+          'error',
+          () => this.child.kill(),
         )
       } else {
         this.child.kill()

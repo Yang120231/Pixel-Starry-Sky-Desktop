@@ -6,9 +6,30 @@ import type { UsageBucket } from '@/usage/types'
 
 /** 三个系列（颜色已用 dataviz 校验脚本验证，见 tokens.css --chart-*）。输入含缓存写 */
 const SERIES = [
-  { key: 'input', get label() { return tr("session.turnStatsData.message376") }, color: 'bg-chart-input', value: (b: UsageBucket) => b.input + b.cacheWrite },
-  { key: 'cache', get label() { return tr("session.turnStatsData.message381") }, color: 'bg-chart-cache', value: (b: UsageBucket) => b.cacheRead },
-  { key: 'output', get label() { return tr("session.live.SessionStrips.message275") }, color: 'bg-chart-output', value: (b: UsageBucket) => b.output },
+  {
+    key: 'input',
+    get label() {
+      return tr('session.turnStatsData.message376')
+    },
+    color: 'bg-chart-input',
+    value: (b: UsageBucket) => b.input + b.cacheWrite,
+  },
+  {
+    key: 'cache',
+    get label() {
+      return tr('session.turnStatsData.message381')
+    },
+    color: 'bg-chart-cache',
+    value: (b: UsageBucket) => b.cacheRead,
+  },
+  {
+    key: 'output',
+    get label() {
+      return tr('session.live.SessionStrips.message275')
+    },
+    color: 'bg-chart-output',
+    value: (b: UsageBucket) => b.output,
+  },
 ] as const
 
 const HEIGHT = 140
@@ -17,7 +38,10 @@ const GAP = 2
 
 function bucketLabel(start: number, bucket: 'hour' | 'day'): string {
   const d = new Date(start)
-  return new Intl.DateTimeFormat(getLocale(), bucket === 'hour' ? { hour: 'numeric' } : { month: 'short', day: 'numeric' }).format(d)
+  return new Intl.DateTimeFormat(
+    getLocale(),
+    bucket === 'hour' ? { hour: 'numeric' } : { month: 'short', day: 'numeric' },
+  ).format(d)
 }
 
 /**
@@ -27,13 +51,14 @@ function bucketLabel(start: number, bucket: 'hour' | 'day'): string {
 export function DailyChart({ buckets, bucket }: { buckets: UsageBucket[]; bucket: 'hour' | 'day' }) {
   useI18n()
   const [hover, setHover] = useState<number | null>(null)
-  const totals = buckets.map((b) => SERIES.reduce((sum, s) => sum + s.value(b), 0))
+  const totals = buckets.map(b => SERIES.reduce((sum, s) => sum + s.value(b), 0))
   const max = Math.max(1, ...totals)
   const peak = totals.indexOf(Math.max(...totals))
   const shown = hover ?? null
   const label = (i: number) => bucketLabel(buckets[i].start, bucket)
   // 横轴只标首、中、末三个点（末格是「今天」或「现在」）
-  const ticks = buckets.length > 2 ? [0, Math.floor((buckets.length - 1) / 2), buckets.length - 1] : buckets.map((_, i) => i)
+  const ticks =
+    buckets.length > 2 ? [0, Math.floor((buckets.length - 1) / 2), buckets.length - 1] : buckets.map((_, i) => i)
 
   return (
     <div>
@@ -41,22 +66,31 @@ export function DailyChart({ buckets, bucket }: { buckets: UsageBucket[]; bucket
         {shown !== null ? (
           <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-fg-secondary tabular-nums">
             <span className="font-medium text-fg">{label(shown)}</span>
-            {SERIES.map((s) => (
+            {SERIES.map(s => (
               <span key={s.key} className="flex items-center gap-1">
                 <span className={`size-2 rounded-[2px] ${s.color}`} />
                 {s.label} {formatTokens(s.value(buckets[shown]))}
               </span>
             ))}
-            <span>{tr("settings.replyStats.message851")} {formatTotalCost(buckets[shown])}</span>
-            <span>{tr("settings.usage.DailyChart.message948")} {formatTokens(totals[shown])}</span>
+            <span>
+              {tr('settings.replyStats.message851')} {formatTotalCost(buckets[shown])}
+            </span>
+            <span>
+              {tr('settings.usage.DailyChart.message948')} {formatTokens(totals[shown])}
+            </span>
           </span>
         ) : (
           <span className="text-fg-muted tabular-nums">
-            {totals[peak] > 0 ? tr("settings.usage.DailyChart.message949", { p0: formatTokens(totals[peak]), p1: label(peak) }) : tr("settings.usage.DailyChart.message950")}
+            {totals[peak] > 0
+              ? tr('settings.usage.DailyChart.message949', { p0: formatTokens(totals[peak]), p1: label(peak) })
+              : tr('settings.usage.DailyChart.message950')}
           </span>
         )}
-        <span className="flex shrink-0 items-center gap-3 text-fg-muted" aria-label={tr("settings.usage.DailyChart.message951")}>
-          {SERIES.map((s) => (
+        <span
+          className="flex shrink-0 items-center gap-3 text-fg-muted"
+          aria-label={tr('settings.usage.DailyChart.message951')}
+        >
+          {SERIES.map(s => (
             <span key={s.key} className="flex items-center gap-1">
               <span className={`size-2 rounded-[2px] ${s.color}`} />
               {s.label}
@@ -67,14 +101,17 @@ export function DailyChart({ buckets, bucket }: { buckets: UsageBucket[]; bucket
 
       <div
         role="img"
-        aria-label={tr("settings.usage.DailyChart.message952", { p0: bucket === 'hour' ? '今天每小时' : '每日', p1: formatTokens(totals[peak]) })}
+        aria-label={tr('settings.usage.DailyChart.message952', {
+          p0: bucket === 'hour' ? '今天每小时' : '每日',
+          p1: formatTokens(totals[peak]),
+        })}
         className="flex items-end gap-[2px] border-b border-line"
         style={{ height: HEIGHT }}
         onMouseLeave={() => setHover(null)}
       >
         {buckets.map((b, i) => {
-          const values = SERIES.map((s) => s.value(b))
-          const visible = values.filter((v) => v > 0).length
+          const values = SERIES.map(s => s.value(b))
+          const visible = values.filter(v => v > 0).length
           const usable = Math.max(0, (totals[i] / max) * HEIGHT - GAP * Math.max(0, visible - 1))
           let topIndex = -1
           values.forEach((v, k) => {
@@ -106,7 +143,7 @@ export function DailyChart({ buckets, bucket }: { buckets: UsageBucket[]; bucket
       </div>
 
       <div className="relative mt-1.5 h-4 text-label text-fg-faint tabular-nums">
-        {ticks.map((i) => (
+        {ticks.map(i => (
           <span
             key={i}
             className="absolute top-0 whitespace-nowrap"
@@ -118,7 +155,11 @@ export function DailyChart({ buckets, bucket }: { buckets: UsageBucket[]; bucket
                   : { left: `${((i + 0.5) / buckets.length) * 100}%`, transform: 'translateX(-50%)' }
             }
           >
-            {i === buckets.length - 1 ? (bucket === 'hour' ? tr("settings.usage.DailyChart.message954") : tr("settings.usage.DailyChart.message955")) : label(i)}
+            {i === buckets.length - 1
+              ? bucket === 'hour'
+                ? tr('settings.usage.DailyChart.message954')
+                : tr('settings.usage.DailyChart.message955')
+              : label(i)}
           </span>
         ))}
       </div>

@@ -37,12 +37,27 @@ const listeners = new Set<() => void>()
 
 /** 把用户输入整理成合法的 font-family 片段：逗号分隔，每个名字加引号（通用字体族名除外） */
 export function normalizeFamily(input: string): string {
-  const generic = new Set(['serif', 'sans-serif', 'monospace', 'system-ui', 'ui-monospace', 'ui-sans-serif', 'ui-serif', 'cursive', 'fantasy'])
+  const generic = new Set([
+    'serif',
+    'sans-serif',
+    'monospace',
+    'system-ui',
+    'ui-monospace',
+    'ui-sans-serif',
+    'ui-serif',
+    'cursive',
+    'fantasy',
+  ])
   return input
     .split(/[,，]/)
-    .map((name) => name.trim().replace(/^["']|["']$/g, '').replace(/["\\;{}]/g, ''))
+    .map(name =>
+      name
+        .trim()
+        .replace(/^["']|["']$/g, '')
+        .replace(/["\\;{}]/g, ''),
+    )
     .filter(Boolean)
-    .map((name) => (generic.has(name.toLowerCase()) ? name : `"${name}"`))
+    .map(name => (generic.has(name.toLowerCase()) ? name : `"${name}"`))
     .join(', ')
 }
 
@@ -74,7 +89,7 @@ export function setFontPrefs(patch: Partial<FontPrefs>): void {
   } catch {
     // 忽略
   }
-  listeners.forEach((l) => l())
+  listeners.forEach(l => l())
 }
 
 export function resetFontPrefs(): void {
@@ -109,7 +124,7 @@ export function listLocalFonts(): Promise<string[]> {
     fontListPromise = (async () => {
       if (typeof window.queryLocalFonts !== 'function') return []
       const fonts = await window.queryLocalFonts()
-      return [...new Set(fonts.map((f) => f.family).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh-CN'))
+      return [...new Set(fonts.map(f => f.family).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh-CN'))
     })().catch(() => {
       fontListPromise = null
       return []

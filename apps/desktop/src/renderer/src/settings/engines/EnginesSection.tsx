@@ -17,9 +17,9 @@ import { DefaultBadge, ENGINE_STATUS } from './parts'
 
 export function EnginesSection({ onOpenModels }: { onOpenModels?: () => void }) {
   useI18n()
-  const liveEngines = useEngineState((s) => s.engines)
-  const liveConfig = useEngineState((s) => s.config)
-  const liveDefaults = useEngineState((s) => s.defaults)
+  const liveEngines = useEngineState(s => s.engines)
+  const liveConfig = useEngineState(s => s.config)
+  const liveDefaults = useEngineState(s => s.defaults)
   const engines: EngineLite[] = isLive ? liveEngines : demoEngineStatus
   // 演示模式：配置和默认引擎只在内存里
   const [demoConfig, setDemoConfig] = useState<EngineConfig>(demoEngineConfig)
@@ -34,7 +34,10 @@ export function EnginesSection({ onOpenModels }: { onOpenModels?: () => void }) 
 
   const save = async (engine: EngineId, patch: EngineConfigPatch): Promise<void> => {
     if (!bridge) {
-      setDemoConfig((c) => ({ ...c, [engine]: { ...c[engine], ...patch, defaults: { ...c[engine].defaults, ...(patch.defaults ?? {}) } } }))
+      setDemoConfig(c => ({
+        ...c,
+        [engine]: { ...c[engine], ...patch, defaults: { ...c[engine].defaults, ...(patch.defaults ?? {}) } },
+      }))
       return
     }
     // 主进程会广播 engine_config，store 跟着更新
@@ -44,7 +47,7 @@ export function EnginesSection({ onOpenModels }: { onOpenModels?: () => void }) 
     setError(null)
     if (!bridge) {
       setDemoDefault(engine)
-      setDemoConfig((c) => ({ ...c, [engine]: { ...c[engine], hidden: false } }))
+      setDemoConfig(c => ({ ...c, [engine]: { ...c[engine], hidden: false } }))
       return
     }
     try {
@@ -54,7 +57,7 @@ export function EnginesSection({ onOpenModels }: { onOpenModels?: () => void }) 
     }
   }
 
-  const open = detail ? engines.find((e) => e.id === detail) : undefined
+  const open = detail ? engines.find(e => e.id === detail) : undefined
   if (open && config) {
     return (
       <EngineDetail
@@ -62,7 +65,7 @@ export function EnginesSection({ onOpenModels }: { onOpenModels?: () => void }) 
         engine={open}
         config={config[open.id]}
         isDefault={open.id === defaultEngine}
-        onSave={(patch) => save(open.id, patch)}
+        onSave={patch => save(open.id, patch)}
         onSetDefault={() => setDefault(open.id)}
         onBack={() => openEngineDetail(null)}
         onOpenModels={onOpenModels}
@@ -72,11 +75,15 @@ export function EnginesSection({ onOpenModels }: { onOpenModels?: () => void }) 
 
   return (
     <section>
-      <SectionTitle>{tr("settings.engines.EnginesSection.message779")}</SectionTitle>
-      <p className="-mt-2 mb-5 text-meta text-fg-muted">{tr("settings.engines.EnginesSection.message780")} </p>
+      <SectionTitle>{tr('settings.engines.EnginesSection.message779')}</SectionTitle>
+      <p className="-mt-2 mb-5 text-meta text-fg-muted">{tr('settings.engines.EnginesSection.message780')} </p>
       <div className="flex flex-col gap-2">
-        {engines.length === 0 && <div className="rounded-xl border border-line px-4 py-3 text-meta text-fg-muted">{tr("settings.engines.EnginesSection.message781")}</div>}
-        {engines.map((e) => (
+        {engines.length === 0 && (
+          <div className="rounded-xl border border-line px-4 py-3 text-meta text-fg-muted">
+            {tr('settings.engines.EnginesSection.message781')}
+          </div>
+        )}
+        {engines.map(e => (
           <EngineRow
             key={e.id}
             engine={e}
@@ -116,13 +123,16 @@ function EngineRow({
   return (
     <div
       data-setting-title={e.name}
-      className={cn('flex items-center gap-2 rounded-xl border border-line bg-surface/60 pr-3', !unsupported && 'hover:border-line-strong')}
+      className={cn(
+        'flex items-center gap-2 rounded-xl border border-line bg-surface/60 pr-3',
+        !unsupported && 'hover:border-line-strong',
+      )}
     >
       <button
         type="button"
         disabled={unsupported}
         onClick={onOpen}
-        aria-label={tr("settings.engines.EnginesSection.message782", { p0: e.name })}
+        aria-label={tr('settings.engines.EnginesSection.message782', { p0: e.name })}
         className="flex min-w-0 flex-1 items-center gap-3 rounded-xl py-3 pl-4 text-left disabled:cursor-default"
       >
         <span
@@ -137,14 +147,18 @@ function EngineRow({
           <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <span className={cn('text-ui font-medium', unsupported ? 'text-fg-muted' : 'text-fg')}>{e.name}</span>
             {isDefault && <DefaultBadge />}
-            {hidden && !isDefault && <span className="text-label text-fg-faint">{tr("settings.engines.EnginesSection.message783")}</span>}
+            {hidden && !isDefault && (
+              <span className="text-label text-fg-faint">{tr('settings.engines.EnginesSection.message783')}</span>
+            )}
             {e.status === 'ready' ? (
               <span className="inline-flex items-center gap-1 text-meta text-success">
                 <CircleCheck size={12} />
-                {e.version ?? tr("settings.editor.EditorSection.message709")}
+                {e.version ?? tr('settings.editor.EditorSection.message709')}
               </span>
             ) : (
-              <span className={cn('text-meta', unsupported ? 'text-fg-faint' : 'text-warn')}>{ENGINE_STATUS[e.status] ?? e.status}</span>
+              <span className={cn('text-meta', unsupported ? 'text-fg-faint' : 'text-warn')}>
+                {ENGINE_STATUS[e.status] ?? e.status}
+              </span>
             )}
           </span>
           {e.path && (
@@ -160,7 +174,9 @@ function EngineRow({
           type="button"
           onClick={onSetDefault}
           className="shrink-0 rounded-md border border-line px-2.5 py-1 text-meta text-fg-secondary hover:bg-hover hover:text-fg"
-        >{tr("session.ModelSourceMenu.message304")} </button>
+        >
+          {tr('session.ModelSourceMenu.message304')}{' '}
+        </button>
       )}
     </div>
   )

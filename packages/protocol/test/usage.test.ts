@@ -46,7 +46,11 @@ describe('rangeWindow', () => {
     expect(rangeWindow('today', NOW)).toEqual({ from: MIDNIGHT, to: NOW, prevFrom: MIDNIGHT - DAY, bucket: 'hour' })
   })
   it('7d / 30d / 90d 包含今天，按天，起点是本地零点', () => {
-    for (const [id, days] of [['7d', 7], ['30d', 30], ['90d', 90]] as const) {
+    for (const [id, days] of [
+      ['7d', 7],
+      ['30d', 30],
+      ['90d', 90],
+    ] as const) {
       const w = rangeWindow(id, NOW)
       expect(w.bucket).toBe('day')
       expect(w.to).toBe(NOW)
@@ -139,10 +143,10 @@ describe('summarize', () => {
       rec({ id: 'c', model: 'big', turnId: 't2', input: 1, cacheRead: 0, cacheWrite: 0, output: 1 }),
     ]
     const s = summarize(rs, 'today', {}, NOW)
-    expect(s.groups.model.map((g) => g.key)).toEqual(['big', 'small'])
+    expect(s.groups.model.map(g => g.key)).toEqual(['big', 'small'])
     expect(s.groups.model[0].records).toBe(2)
     expect(s.groups.model[0].turns).toBe(2)
-    expect(s.groups.project.map((g) => g.key)).toEqual(['p1', ''])
+    expect(s.groups.project.map(g => g.key)).toEqual(['p1', ''])
     expect(s.groups.engine).toHaveLength(1)
     expect(s.groups.route[0].key).toBe('cli')
   })
@@ -177,20 +181,20 @@ describe('summarize', () => {
 })
 
 describe('listRecords', () => {
-  const rs = [1, 2, 3, 4, 5].map((n) => rec({ id: `r${n}`, endedAt: NOW - n * 1000 }))
+  const rs = [1, 2, 3, 4, 5].map(n => rec({ id: `r${n}`, endedAt: NOW - n * 1000 }))
   it('最新在前，分页返回总数与偏移', () => {
     const p = listRecords(rs, 'today', {}, NOW, 0, 2)
-    expect(p.records.map((r) => r.id)).toEqual(['r1', 'r2'])
+    expect(p.records.map(r => r.id)).toEqual(['r1', 'r2'])
     expect(p.total).toBe(5)
     expect(p.offset).toBe(0)
-    expect(listRecords(rs, 'today', {}, NOW, 4, 2).records.map((r) => r.id)).toEqual(['r5'])
+    expect(listRecords(rs, 'today', {}, NOW, 4, 2).records.map(r => r.id)).toEqual(['r5'])
     expect(listRecords(rs, 'today', {}, NOW, 10, 2).records).toEqual([])
   })
   it('按范围和筛选过滤，且不改原数组顺序', () => {
     const mixed = [rec({ id: 'x', endedAt: MIDNIGHT - 1 }), rec({ id: 'y', model: 'haiku' }), rec({ id: 'z' })]
     const p = listRecords(mixed, 'today', { model: 'sonnet' }, NOW, 0, 10)
-    expect(p.records.map((r) => r.id)).toEqual(['z'])
-    expect(mixed.map((r) => r.id)).toEqual(['x', 'y', 'z'])
+    expect(p.records.map(r => r.id)).toEqual(['z'])
+    expect(mixed.map(r => r.id)).toEqual(['x', 'y', 'z'])
   })
 })
 
@@ -209,7 +213,13 @@ describe('toCsv', () => {
   })
   it('字段格式：时间、空项目、请求次数缺省、费用位数、耗时、结果文字', () => {
     const csv = toCsv([
-      rec({ endedAt: new Date(2026, 0, 2, 3, 4, 5).getTime(), project: null, costUsd: 0.123456, durationMs: 1500, outcome: 'failed' }),
+      rec({
+        endedAt: new Date(2026, 0, 2, 3, 4, 5).getTime(),
+        project: null,
+        costUsd: 0.123456,
+        durationMs: 1500,
+        outcome: 'failed',
+      }),
       rec({ costUsd: null, costSource: 'platform', requests: 2, outcome: 'interrupted' }),
       rec({ costUsd: 0.5, costSource: 'platform', outcome: 'completed' }),
     ])

@@ -28,7 +28,14 @@ export function NavButton({ id }: { id: NavId }) {
   // 工作台 / 协作频道是两个整页（docs/ui/channels.md §2），其余入口打开弹窗或提示即将推出
   const active = (id === 'workbench' && page === 'workbench') || (id === 'channels' && page === 'channels')
   const badge = id === 'channels' ? (channelUnread > 0 ? channelUnread : undefined) : item.badge
-  const onClick = id === 'workbench' ? showWorkbench : id === 'channels' ? () => setPage('channels') : id === 'machines' ? openMachineManager : () => comingSoon(item.label)
+  const onClick =
+    id === 'workbench'
+      ? showWorkbench
+      : id === 'channels'
+        ? () => setPage('channels')
+        : id === 'machines'
+          ? openMachineManager
+          : () => comingSoon(item.label)
   return (
     <span className="relative inline-flex shrink-0">
       <IconButton

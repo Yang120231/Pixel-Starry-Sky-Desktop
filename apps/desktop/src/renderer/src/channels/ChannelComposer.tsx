@@ -14,7 +14,16 @@ const LINE_HEIGHT = 24
 const MAX_ROWS = 8
 
 /** 频道输入框（docs/ui/channels.md §6）：只有文本和发送；@ 菜单、引用条、按频道保存草稿 */
-export function ChannelComposer({ channel, members, selfId, replyTo, replyAuthor, onSend, onCancelReply, inputRef }: {
+export function ChannelComposer({
+  channel,
+  members,
+  selfId,
+  replyTo,
+  replyAuthor,
+  onSend,
+  onCancelReply,
+  inputRef,
+}: {
   channel: Channel
   /** 这个频道的成员 */
   members: readonly ChannelMember[]
@@ -34,7 +43,10 @@ export function ChannelComposer({ channel, members, selfId, replyTo, replyAuthor
   /** 按 Esc 关掉的那个 @ 的位置；光标移到别的 @ 时菜单重新出现 */
   const [dismissed, setDismissed] = useState<number | null>(null)
   const mention = mentionAt(value, caret)
-  const candidates = useMemo(() => (mention ? filterMentionable(members, mention.query, selfId) : []), [members, mention?.query, mention?.start, selfId])
+  const candidates = useMemo(
+    () => (mention ? filterMentionable(members, mention.query, selfId) : []),
+    [members, mention?.query, mention?.start, selfId],
+  )
   const menuOpen = !!mention && dismissed !== mention.start
   const canSend = value.trim().length > 0
 
@@ -109,9 +121,20 @@ export function ChannelComposer({ channel, members, selfId, replyTo, replyAuthor
           {replyTo && (
             <div className="flex min-w-0 items-center gap-2 border-b border-line-subtle py-1 pr-1.5 pl-3 text-meta text-fg-muted">
               <CornerUpLeft size={13} strokeWidth={1.5} className="shrink-0" />
-              <span className="shrink-0 font-medium">{tr('channels.replyingTo', { name: replyAuthor?.name ?? '?' })}</span>
+              <span className="shrink-0 font-medium">
+                {tr('channels.replyingTo', { name: replyAuthor?.name ?? '?' })}
+              </span>
               <span className="min-w-0 flex-1 truncate text-fg-faint">{excerpt(replyTo.text)}</span>
-              <IconButton icon={X} label={tr('channels.cancelReply')} size={22} iconSize={13} onClick={() => { onCancelReply(); inputRef.current?.focus() }} />
+              <IconButton
+                icon={X}
+                label={tr('channels.cancelReply')}
+                size={22}
+                iconSize={13}
+                onClick={() => {
+                  onCancelReply()
+                  inputRef.current?.focus()
+                }}
+              />
             </div>
           )}
           <div className="flex items-end gap-2 py-2 pr-2 pl-4">
@@ -126,15 +149,27 @@ export function ChannelComposer({ channel, members, selfId, replyTo, replyAuthor
               aria-expanded={menuOpen}
               aria-controls={menuOpen ? menuId : undefined}
               aria-activedescendant={menuOpen && candidates.length ? `${menuId}-${selected}` : undefined}
-              onChange={e => { setValue(e.target.value); setCaret(e.target.selectionStart ?? e.target.value.length) }}
+              onChange={e => {
+                setValue(e.target.value)
+                setCaret(e.target.selectionStart ?? e.target.value.length)
+              }}
               onSelect={syncCaret}
               onKeyUp={syncCaret}
               onClick={syncCaret}
               onKeyDown={onKeyDown}
               className="block max-h-[208px] min-h-8 flex-1 resize-none bg-transparent py-1 text-prose leading-6 text-fg outline-none placeholder:text-fg-faint"
             />
-            <button type="button" aria-label={tr('channels.composer.send')} title={tr('channels.composer.send')} aria-disabled={!canSend} onClick={send}
-              className={cn('no-drag inline-flex size-8 shrink-0 items-center justify-center rounded-full', canSend ? 'press bg-primary text-primary-fg hover:opacity-90' : 'bg-disabled text-disabled-fg')}>
+            <button
+              type="button"
+              aria-label={tr('channels.composer.send')}
+              title={tr('channels.composer.send')}
+              aria-disabled={!canSend}
+              onClick={send}
+              className={cn(
+                'no-drag inline-flex size-8 shrink-0 items-center justify-center rounded-full',
+                canSend ? 'press bg-primary text-primary-fg hover:opacity-90' : 'bg-disabled text-disabled-fg',
+              )}
+            >
               <ArrowUp size={17} strokeWidth={2} />
             </button>
           </div>

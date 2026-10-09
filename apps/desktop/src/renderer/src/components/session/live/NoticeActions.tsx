@@ -7,11 +7,21 @@ import { requestSourceAction, type SourceAction } from '@/engine'
 import { classifyError, type ErrorKind } from './errorKind'
 
 const LABEL: Record<SourceAction, string> = {
-  get 'open-menu'() { return tr("session.live.NoticeActions.message264") },
-  get 'use-self'() { return tr("session.live.NoticeActions.message265") },
-  get 'use-platform'() { return tr("session.live.NoticeActions.message266") },
-  get 'open-account'() { return tr("session.live.NoticeActions.message267") },
-  get 'sign-in'() { return tr("session.live.NoticeActions.message268") },
+  get 'open-menu'() {
+    return tr('session.live.NoticeActions.message264')
+  },
+  get 'use-self'() {
+    return tr('session.live.NoticeActions.message265')
+  },
+  get 'use-platform'() {
+    return tr('session.live.NoticeActions.message266')
+  },
+  get 'open-account'() {
+    return tr('session.live.NoticeActions.message267')
+  },
+  get 'sign-in'() {
+    return tr('session.live.NoticeActions.message268')
+  },
 }
 
 function actionsFor(kind: ErrorKind, platform: boolean, engine: SessionRecord['engine']): SourceAction[] {
@@ -32,7 +42,7 @@ export function NoticeActions({ record, text }: { record: SessionRecord; text: s
   if (actions.length === 0) return null
   return (
     <div className="mt-1.5 flex flex-wrap gap-1.5 pl-[27px]">
-      {actions.map((a) => (
+      {actions.map(a => (
         <button
           key={a}
           type="button"

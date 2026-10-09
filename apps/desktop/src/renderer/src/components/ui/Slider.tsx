@@ -23,7 +23,7 @@ export function Slider({ label, value, min, max, step = 1, onChange, display }: 
         max={max}
         step={step}
         value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
+        onChange={e => onChange(Number(e.target.value))}
         className="h-1.5 w-56 cursor-pointer accent-accent"
       />
       <span className="w-12 text-right text-meta text-fg-muted tabular-nums">{display}</span>

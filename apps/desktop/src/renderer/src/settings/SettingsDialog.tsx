@@ -2,7 +2,25 @@ import { openMachineManager, useMachines } from '@/machines/store'
 import { Button } from '@/components/ui'
 import { tr } from '../i18n/core'
 import { useEffect, useRef, useState } from 'react'
-import { Bell, ChartColumn, CodeXml, Cpu, Info, Keyboard, Monitor, Moon, Palette, Puzzle, Route, Search, Sun, TerminalSquare, UserRound, X, type LucideIcon } from 'lucide-react'
+import {
+  Bell,
+  ChartColumn,
+  CodeXml,
+  Cpu,
+  Info,
+  Keyboard,
+  Monitor,
+  Moon,
+  Palette,
+  Puzzle,
+  Route,
+  Search,
+  Sun,
+  TerminalSquare,
+  UserRound,
+  X,
+  type LucideIcon,
+} from 'lucide-react'
 import { IconButton, Kbd, Segmented, cn } from '@/components/ui'
 import { OPEN_SEARCH, OPEN_SETTINGS, PANE_SHORTCUTS, TOGGLE_PANEL, TOGGLE_SIDEBAR } from '@/shortcuts'
 import { useTheme, type MotionPreference, type ThemePreference } from '@/theme/ThemeProvider'
@@ -29,32 +47,131 @@ import { TerminalSection } from './TerminalSection'
 import { SidebarSettings } from './SidebarSettings'
 import { NotificationsSection } from './NotificationsSection'
 
-export type SectionId = 'account' | 'models' | 'engines' | 'usage' | 'appearance' | 'shortcuts' | 'about' | 'editor' | 'plugins' | 'terminal' | 'machines' | 'notifications'
+export type SectionId =
+  | 'account'
+  | 'models'
+  | 'engines'
+  | 'usage'
+  | 'appearance'
+  | 'shortcuts'
+  | 'about'
+  | 'editor'
+  | 'plugins'
+  | 'terminal'
+  | 'machines'
+  | 'notifications'
 
 const SECTIONS: Array<{ id: SectionId; label: string; icon: LucideIcon }> = [
-  { id: 'machines', get label() { return tr('machines.title') }, icon: Monitor },
-  {id:'plugins',get label(){return tr('plugins.title')},icon:Puzzle},
-  { id: 'terminal', get label() { return tr('terminal.settings') }, icon: TerminalSquare },
-  { id: 'account', get label() { return tr("settings.AboutSection.message626") }, icon: UserRound },
-  { id: 'appearance', get label() { return tr("settings.SettingsDialog.message920") }, icon: Palette },
-  { id: 'notifications', get label() { return tr('notifications.title') }, icon: Bell },
-  { id: 'shortcuts', get label() { return tr("settings.searchIndex.message916") }, icon: Keyboard },
-  { id: 'editor', get label() { return tr("settings.editor.EditorSection.message696") }, icon: CodeXml },
-  { id: 'models', get label() { return tr("settings.models.ModelsSection.message810") }, icon: Route },
-  { id: 'usage', get label() { return tr("nav.TopNav.message60") }, icon: ChartColumn },
-  { id: 'engines', get label() { return tr("settings.engines.EnginesSection.message779") }, icon: Cpu },
-  { id: 'about', get label() { return tr("settings.searchIndex.message918") }, icon: Info },
+  {
+    id: 'machines',
+    get label() {
+      return tr('machines.title')
+    },
+    icon: Monitor,
+  },
+  {
+    id: 'plugins',
+    get label() {
+      return tr('plugins.title')
+    },
+    icon: Puzzle,
+  },
+  {
+    id: 'terminal',
+    get label() {
+      return tr('terminal.settings')
+    },
+    icon: TerminalSquare,
+  },
+  {
+    id: 'account',
+    get label() {
+      return tr('settings.AboutSection.message626')
+    },
+    icon: UserRound,
+  },
+  {
+    id: 'appearance',
+    get label() {
+      return tr('settings.SettingsDialog.message920')
+    },
+    icon: Palette,
+  },
+  {
+    id: 'notifications',
+    get label() {
+      return tr('notifications.title')
+    },
+    icon: Bell,
+  },
+  {
+    id: 'shortcuts',
+    get label() {
+      return tr('settings.searchIndex.message916')
+    },
+    icon: Keyboard,
+  },
+  {
+    id: 'editor',
+    get label() {
+      return tr('settings.editor.EditorSection.message696')
+    },
+    icon: CodeXml,
+  },
+  {
+    id: 'models',
+    get label() {
+      return tr('settings.models.ModelsSection.message810')
+    },
+    icon: Route,
+  },
+  {
+    id: 'usage',
+    get label() {
+      return tr('nav.TopNav.message60')
+    },
+    icon: ChartColumn,
+  },
+  {
+    id: 'engines',
+    get label() {
+      return tr('settings.engines.EnginesSection.message779')
+    },
+    icon: Cpu,
+  },
+  {
+    id: 'about',
+    get label() {
+      return tr('settings.searchIndex.message918')
+    },
+    icon: Info,
+  },
 ]
 
 /** 左侧导航分组（参考 JuCode：按设置作用于什么分组）；label 为 null 的组不显示标题 */
 const NAV_GROUPS: Array<{ label: string | null; ids: SectionId[] }> = [
-  { get label() { return tr("settings.SettingsDialog.message921") }, ids: ['account', 'appearance', 'notifications', 'editor', 'shortcuts', 'machines'] },
-  { get label() { return tr("session.ModelSourceMenu.message291") }, ids: ['models', 'usage'] },
-  { get label() { return tr("session.ModelSourceMenu.message283") }, ids: ['engines','plugins','terminal'] },
+  {
+    get label() {
+      return tr('settings.SettingsDialog.message921')
+    },
+    ids: ['account', 'appearance', 'notifications', 'editor', 'shortcuts', 'machines'],
+  },
+  {
+    get label() {
+      return tr('session.ModelSourceMenu.message291')
+    },
+    ids: ['models', 'usage'],
+  },
+  {
+    get label() {
+      return tr('session.ModelSourceMenu.message283')
+    },
+    ids: ['engines', 'plugins', 'terminal'],
+  },
   { label: null, ids: ['about'] },
 ]
 
-const sectionLabel = (id: SectionId): string => SECTIONS.find((s) => s.id === id)?.label ?? id
+const sectionLabel = (id: SectionId): string => SECTIONS.find(s => s.id === id)?.label ?? id
 
 interface Rect {
   x: number
@@ -115,19 +232,21 @@ export function SettingsDialog({
   const searchRef = useRef<HTMLInputElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const [jump, setJump] = useState<{ title: string; n: number } | null>(null)
-  const hits = searchSettings(query, (id) => text(sectionLabel(id)))
+  const hits = searchSettings(query, id => text(sectionLabel(id)))
   const openHit = (hit: SearchEntry): void => {
     // 本机引擎的详情页里的设置：先打开那个引擎的详情（docs/ui/engine-settings-redesign.md §3.1）
     if (hit.section === 'engines') openEngineDetail(hit.engine ?? null)
     setSection(hit.section)
-    setJump((j) => ({ title: hit.title, n: (j?.n ?? 0) + 1 }))
+    setJump(j => ({ title: hit.title, n: (j?.n ?? 0) + 1 }))
   }
   useEffect(() => {
     if (!jump) return
     // 等新页面渲染出来再找
     const t = setTimeout(() => {
       const root = contentRef.current
-      const el = [...(root?.querySelectorAll<HTMLElement>('[data-setting-title]') ?? [])].find((e) => text(e.dataset.settingTitle ?? '') === text(jump.title))
+      const el = [...(root?.querySelectorAll<HTMLElement>('[data-setting-title]') ?? [])].find(
+        e => text(e.dataset.settingTitle ?? '') === text(jump.title),
+      )
       const target = el ?? root?.querySelector<HTMLElement>('section')
       target?.scrollIntoView({ block: 'center', behavior: 'smooth' })
       el?.animate([{ boxShadow: '0 0 0 2px var(--color-accent)' }, { boxShadow: '0 0 0 2px transparent' }], {
@@ -145,7 +264,7 @@ export function SettingsDialog({
 
   // 主窗口变小时把对话框收回窗口内
   useEffect(() => {
-    const onResize = () => setRect((r) => clampRect(r))
+    const onResize = () => setRect(r => clampRect(r))
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
@@ -207,7 +326,7 @@ export function SettingsDialog({
   return (
     <div
       className="fade-in no-drag fixed inset-0 z-50 bg-scrim"
-      onMouseDown={(e) => {
+      onMouseDown={e => {
         if (e.target === e.currentTarget) onClose()
       }}
     >
@@ -222,7 +341,7 @@ export function SettingsDialog({
       >
         {/* 标题栏空白处按住拖动，移动设置窗口 */}
         <header
-          onMouseDown={(e) => {
+          onMouseDown={e => {
             if ((e.target as HTMLElement).closest('button')) return
             startDrag(e, 'move')
           }}
@@ -237,8 +356,8 @@ export function SettingsDialog({
         {/* 右下角的调整大小手柄：拖动改变宽 / 高（记住尺寸，下次打开沿用） */}
         <div
           aria-hidden
-          title={tr("settings.SettingsDialog.message922")}
-          onMouseDown={(e) => startDrag(e, 'resize')}
+          title={tr('settings.SettingsDialog.message922')}
+          onMouseDown={e => startDrag(e, 'resize')}
           className="absolute right-0 bottom-0 z-10 flex size-5 cursor-se-resize items-end justify-end p-1 text-fg-faint hover:text-fg-muted"
         >
           <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
@@ -247,14 +366,17 @@ export function SettingsDialog({
         </div>
 
         <div className="flex min-h-0 flex-1">
-          <nav aria-label={t('sidebar.SidebarFooter.message408')} className="flex w-[196px] shrink-0 flex-col border-r border-line bg-sidebar p-2">
+          <nav
+            aria-label={t('sidebar.SidebarFooter.message408')}
+            className="flex w-[196px] shrink-0 flex-col border-r border-line bg-sidebar p-2"
+          >
             <label className="mb-2 flex h-8 shrink-0 items-center gap-2 rounded-md border border-line bg-surface px-2.5 focus-within:border-line-strong">
               <Search size={14} className="shrink-0 text-fg-muted" />
               <input
                 ref={searchRef}
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => {
+                onChange={e => setQuery(e.target.value)}
+                onKeyDown={e => {
                   if (e.key === 'Enter' && hits[0]) openHit(hits[0])
                 }}
                 placeholder={text('搜索设置')}
@@ -263,7 +385,12 @@ export function SettingsDialog({
                 className="min-w-0 flex-1 bg-transparent text-ui text-fg outline-none placeholder:text-fg-faint"
               />
               {query && (
-                <button type="button" aria-label={tr("settings.SettingsDialog.message924")} onClick={() => setQuery('')} className="shrink-0 text-fg-faint hover:text-fg">
+                <button
+                  type="button"
+                  aria-label={tr('settings.SettingsDialog.message924')}
+                  onClick={() => setQuery('')}
+                  className="shrink-0 text-fg-faint hover:text-fg"
+                >
                   <X size={13} />
                 </button>
               )}
@@ -274,7 +401,7 @@ export function SettingsDialog({
                   <p className="px-2.5 py-2 text-meta text-fg-faint">{text('没有匹配的设置')}</p>
                 ) : (
                   <ul aria-label={text('搜索结果')} className="flex flex-col gap-0.5">
-                    {hits.map((h) => (
+                    {hits.map(h => (
                       <li key={`${h.section}-${h.title}`}>
                         <button
                           type="button"
@@ -295,8 +422,8 @@ export function SettingsDialog({
                 NAV_GROUPS.map((g, gi) => (
                   <div key={gi} className={cn(gi > 0 && 'mt-2 border-t border-line-subtle pt-2')}>
                     {g.label && <div className="px-2.5 pb-1 text-label font-medium text-fg-faint">{text(g.label)}</div>}
-                    {g.ids.map((id) => {
-                      const { label, icon: Icon } = SECTIONS.find((s) => s.id === id)!
+                    {g.ids.map(id => {
+                      const { label, icon: Icon } = SECTIONS.find(s => s.id === id)!
                       const active = id === section
                       return (
                         <button
@@ -309,7 +436,11 @@ export function SettingsDialog({
                             active ? 'bg-accent-soft font-medium text-accent-fg' : 'text-fg-secondary hover:bg-hover',
                           )}
                         >
-                          <Icon size={16} strokeWidth={1.5} className={cn('shrink-0', active ? 'text-accent-fg' : 'text-fg-muted')} />
+                          <Icon
+                            size={16}
+                            strokeWidth={1.5}
+                            className={cn('shrink-0', active ? 'text-accent-fg' : 'text-fg-muted')}
+                          />
                           {text(label)}
                         </button>
                       )
@@ -336,14 +467,31 @@ export function SettingsDialog({
                 }}
               />
             ) : section === 'plugins' ? (
-              machines.currentId === 'local' ? <PluginsSection /> : <p className="text-ui text-fg-muted">{t('machines.remoteExtensions')}</p>
-            ) : section === 'machines' ? (<section><SectionTitle>{t('machines.title')}</SectionTitle><p className="mb-4 text-meta text-fg-muted">{t('machines.requirements')}</p><Button onClick={() => { onClose(); openMachineManager() }}>{t('machines.title')}</Button></section>) : section === 'terminal' ? (
+              machines.currentId === 'local' ? (
+                <PluginsSection />
+              ) : (
+                <p className="text-ui text-fg-muted">{t('machines.remoteExtensions')}</p>
+              )
+            ) : section === 'machines' ? (
+              <section>
+                <SectionTitle>{t('machines.title')}</SectionTitle>
+                <p className="mb-4 text-meta text-fg-muted">{t('machines.requirements')}</p>
+                <Button
+                  onClick={() => {
+                    onClose()
+                    openMachineManager()
+                  }}
+                >
+                  {t('machines.title')}
+                </Button>
+              </section>
+            ) : section === 'terminal' ? (
               <TerminalSection />
             ) : section === 'engines' ? (
               <EnginesSection onOpenModels={() => setSection('models')} />
             ) : section === 'usage' ? (
               <UsageSection
-                onOpenSession={(sessionId) => {
+                onOpenSession={sessionId => {
                   // 由 App 打开对应会话（docs/ui/usage.md §3）；先关掉设置
                   window.dispatchEvent(new CustomEvent(OPEN_SESSION_EVENT, { detail: { sessionId } }))
                   onClose()
@@ -366,84 +514,205 @@ export function SettingsDialog({
 }
 
 const THEME_OPTIONS: Array<{ value: ThemePreference; label: string; icon: LucideIcon }> = [
-  { value: 'light', get label() { return tr("settings.SettingsDialog.message926") }, icon: Sun },
-  { value: 'dark', get label() { return tr("settings.SettingsDialog.message927") }, icon: Moon },
-  { value: 'system', get label() { return tr("settings.SettingsDialog.message928") }, icon: Monitor },
+  {
+    value: 'light',
+    get label() {
+      return tr('settings.SettingsDialog.message926')
+    },
+    icon: Sun,
+  },
+  {
+    value: 'dark',
+    get label() {
+      return tr('settings.SettingsDialog.message927')
+    },
+    icon: Moon,
+  },
+  {
+    value: 'system',
+    get label() {
+      return tr('settings.SettingsDialog.message928')
+    },
+    icon: Monitor,
+  },
 ]
 
 const MOTION_OPTIONS: Array<{ value: MotionPreference; label: string }> = [
-  { value: 'on', get label() { return tr("settings.SettingsDialog.message929") } },
-  { value: 'system', get label() { return tr("settings.SettingsDialog.message928") } },
-  { value: 'off', get label() { return tr("settings.motion.off") } },
+  {
+    value: 'on',
+    get label() {
+      return tr('settings.SettingsDialog.message929')
+    },
+  },
+  {
+    value: 'system',
+    get label() {
+      return tr('settings.SettingsDialog.message928')
+    },
+  },
+  {
+    value: 'off',
+    get label() {
+      return tr('settings.motion.off')
+    },
+  },
 ]
 
 const PANE_FOCUS_OPTIONS: Array<{ value: PaneFocusMotion; label: string }> = [
-  { value: 'flash', get label() { return tr("settings.SettingsDialog.message930") } },
-  { value: 'slide', get label() { return tr("settings.SettingsDialog.message931") } },
-  { value: 'none', get label() { return tr("settings.SettingsDialog.message932") } },
+  {
+    value: 'flash',
+    get label() {
+      return tr('settings.SettingsDialog.message930')
+    },
+  },
+  {
+    value: 'slide',
+    get label() {
+      return tr('settings.SettingsDialog.message931')
+    },
+  },
+  {
+    value: 'none',
+    get label() {
+      return tr('settings.SettingsDialog.message932')
+    },
+  },
 ]
 
 function AppearanceSection() {
   useI18n()
-  const { preference, setPreference, motion, setMotion, systemReducedMotion, paneFocusMotion, setPaneFocusMotion } = useTheme()
+  const { preference, setPreference, motion, setMotion, systemReducedMotion, paneFocusMotion, setPaneFocusMotion } =
+    useTheme()
   const { locale, setLocale, t, text } = useI18n()
   const motionDisabled = motion === 'off' || (motion === 'system' && systemReducedMotion)
   return (
     <section>
-      <SectionTitle>{tr("settings.SettingsDialog.message920")}</SectionTitle>
-      <SettingRow title={tr("settings.searchIndex.message898")} description={tr("settings.SettingsDialog.message933")}>
-        <Segmented label={text('主题')} options={THEME_OPTIONS.map(option => ({ ...option, label: text(option.label) }))} value={preference} onChange={setPreference} />
-      </SettingRow>
-      <SettingRow title={tr("settings.SettingsDialog.message934")} description={tr("settings.SettingsDialog.message935")}>
-        <Segmented label={t('settings.SettingsDialog.message934')} options={LOCALE_OPTIONS} value={locale} onChange={(value) => setLocale(value as Locale)} />
+      <SectionTitle>{tr('settings.SettingsDialog.message920')}</SectionTitle>
+      <SettingRow title={tr('settings.searchIndex.message898')} description={tr('settings.SettingsDialog.message933')}>
+        <Segmented
+          label={text('主题')}
+          options={THEME_OPTIONS.map(option => ({ ...option, label: text(option.label) }))}
+          value={preference}
+          onChange={setPreference}
+        />
       </SettingRow>
       <SettingRow
-        title={tr("settings.searchIndex.message900")}
-        description={tr("settings.SettingsDialog.message936")}
+        title={tr('settings.SettingsDialog.message934')}
+        description={tr('settings.SettingsDialog.message935')}
+      >
+        <Segmented
+          label={t('settings.SettingsDialog.message934')}
+          options={LOCALE_OPTIONS}
+          value={locale}
+          onChange={value => setLocale(value as Locale)}
+        />
+      </SettingRow>
+      <SettingRow
+        title={tr('settings.searchIndex.message900')}
+        description={tr('settings.SettingsDialog.message936')}
         hint={
           systemReducedMotion
             ? motion === 'on'
-              ? tr("settings.SettingsDialog.message937")
+              ? tr('settings.SettingsDialog.message937')
               : motion === 'system'
-                ? tr("settings.SettingsDialog.message938")
+                ? tr('settings.SettingsDialog.message938')
                 : undefined
             : undefined
         }
       >
-        <Segmented label={text('动画')} options={MOTION_OPTIONS.map(option => ({ ...option, label: text(option.label) }))} value={motion} onChange={setMotion} />
+        <Segmented
+          label={text('动画')}
+          options={MOTION_OPTIONS.map(option => ({ ...option, label: text(option.label) }))}
+          value={motion}
+          onChange={setMotion}
+        />
       </SettingRow>
 
-      <SettingRow title={tr("settings.searchIndex.message902")} description={tr("settings.SettingsDialog.message939")}
-        hint={motionDisabled ? tr("settings.SettingsDialog.message940") : tr("settings.SettingsDialog.message941")}>
-        <Segmented label={text('切换窗格时')} options={PANE_FOCUS_OPTIONS.map(option => ({ ...option, label: text(option.label) }))} value={paneFocusMotion} onChange={setPaneFocusMotion} disabled={motionDisabled} />
+      <SettingRow
+        title={tr('settings.searchIndex.message902')}
+        description={tr('settings.SettingsDialog.message939')}
+        hint={motionDisabled ? tr('settings.SettingsDialog.message940') : tr('settings.SettingsDialog.message941')}
+      >
+        <Segmented
+          label={text('切换窗格时')}
+          options={PANE_FOCUS_OPTIONS.map(option => ({ ...option, label: text(option.label) }))}
+          value={paneFocusMotion}
+          onChange={setPaneFocusMotion}
+          disabled={motionDisabled}
+        />
       </SettingRow>
 
       <SidebarSettings />
 
-      <GroupTitle>{tr("settings.engines.EngineDetail.message742")}</GroupTitle>
+      <GroupTitle>{tr('settings.engines.EngineDetail.message742')}</GroupTitle>
       <ComposerStyleSettings />
       <ReplyStatsSettings />
       <CacheMissSettings />
 
-      <GroupTitle>{tr("settings.SettingsDialog.message942")}</GroupTitle>
+      <GroupTitle>{tr('settings.SettingsDialog.message942')}</GroupTitle>
       <FontSettings />
 
-      <GroupTitle>{tr("settings.searchIndex.message910")}</GroupTitle>
+      <GroupTitle>{tr('settings.searchIndex.message910')}</GroupTitle>
       <WallpaperSettings />
     </section>
   )
 }
 
 const SHORTCUTS: Array<{ label: string; keys: string }> = [
-  { get label() { return tr('terminal.commandPalette') }, keys: 'Ctrl+Shift+P' },
-  { get label() { return tr('terminal.title') }, keys: 'Ctrl+`' },
-  { get label() { return tr('terminal.new') }, keys: 'Ctrl+Shift+`' },
-  { get label() { return tr('terminal.copy') }, keys: 'Ctrl+Shift+C' },
-  { get label() { return tr('terminal.paste') }, keys: 'Ctrl+Shift+V' },
-  { get label() { return tr("settings.SettingsDialog.message943") }, keys: TOGGLE_SIDEBAR.label },
-  { get label() { return tr("settings.SettingsDialog.message944") }, keys: TOGGLE_PANEL.label },
-  { get label() { return tr("settings.SettingsDialog.message945") }, keys: OPEN_SETTINGS.label },
-  { get label() { return tr("search.SearchDialog.message593") }, keys: OPEN_SEARCH.label },
+  {
+    get label() {
+      return tr('terminal.commandPalette')
+    },
+    keys: 'Ctrl+Shift+P',
+  },
+  {
+    get label() {
+      return tr('terminal.title')
+    },
+    keys: 'Ctrl+`',
+  },
+  {
+    get label() {
+      return tr('terminal.new')
+    },
+    keys: 'Ctrl+Shift+`',
+  },
+  {
+    get label() {
+      return tr('terminal.copy')
+    },
+    keys: 'Ctrl+Shift+C',
+  },
+  {
+    get label() {
+      return tr('terminal.paste')
+    },
+    keys: 'Ctrl+Shift+V',
+  },
+  {
+    get label() {
+      return tr('settings.SettingsDialog.message943')
+    },
+    keys: TOGGLE_SIDEBAR.label,
+  },
+  {
+    get label() {
+      return tr('settings.SettingsDialog.message944')
+    },
+    keys: TOGGLE_PANEL.label,
+  },
+  {
+    get label() {
+      return tr('settings.SettingsDialog.message945')
+    },
+    keys: OPEN_SETTINGS.label,
+  },
+  {
+    get label() {
+      return tr('search.SearchDialog.message593')
+    },
+    keys: OPEN_SEARCH.label,
+  },
   ...PANE_SHORTCUTS,
 ]
 
@@ -451,7 +720,7 @@ function ShortcutsSection() {
   useI18n()
   return (
     <section>
-      <SectionTitle>{tr("settings.searchIndex.message916")}</SectionTitle>
+      <SectionTitle>{tr('settings.searchIndex.message916')}</SectionTitle>
       <ul className="overflow-hidden rounded-lg border border-line">
         {SHORTCUTS.map(({ label, keys }) => (
           <li

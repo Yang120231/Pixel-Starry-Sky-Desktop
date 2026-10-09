@@ -10,7 +10,14 @@ import { writeFile } from 'node:fs/promises'
 import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
 import { nativeText } from './ui-language'
 import { EngineHost, searchQuery, type UsageQuery } from '@pixelsky/engine'
-import type { ApprovalDecision, EngineConfigPatch, HostEvent, UsageDimension, UsageFilter, UsageRangeId } from '@pixelsky/protocol'
+import type {
+  ApprovalDecision,
+  EngineConfigPatch,
+  HostEvent,
+  UsageDimension,
+  UsageFilter,
+  UsageRangeId,
+} from '@pixelsky/protocol'
 import type { SessionPatch } from '../preload/engine'
 import { initPlatform, validateQueuedInput } from './platform'
 import { initExtensions, prepareExtensions, setExtensionProjects } from './extensions-ipc'
@@ -33,35 +40,63 @@ let host: EngineHost | null = null
 export const projectToolsHost: import('./project-tools/common').ToolsHost = {
   resolve(ref) {
     const target = resolveWorkspace(ref)
-    const projectId = ref.projectId ?? (machineOf(ref.sessionId) === 'local' ? host?.record(ref.sessionId!) : machines?.record(ref.sessionId!))?.projectId
+    const projectId =
+      ref.projectId ??
+      (machineOf(ref.sessionId) === 'local' ? host?.record(ref.sessionId!) : machines?.record(ref.sessionId!))
+        ?.projectId
     if (!projectId) throw new Error('项目不存在')
     return { projectId, name: target.name, path: target.path }
   },
   plans(projectId) {
     if (!host) return []
-    return host.sessions().filter(s => s.record.projectId === projectId && !s.record.archivedAt).flatMap(s => {
-      const items = host!.open(s.record.id).items.filter((item): item is Extract<import('@pixelsky/protocol').Item, { kind: 'todo' }> => item.kind === 'todo')
-      const item = items.at(-1)
-      return item ? [{ sessionId: s.record.id, title: s.record.title, item }] : []
-    })
+    return host
+      .sessions()
+      .filter(s => s.record.projectId === projectId && !s.record.archivedAt)
+      .flatMap(s => {
+        const items = host!
+          .open(s.record.id)
+          .items.filter(
+            (item): item is Extract<import('@pixelsky/protocol').Item, { kind: 'todo' }> => item.kind === 'todo',
+          )
+        const item = items.at(-1)
+        return item ? [{ sessionId: s.record.id, title: s.record.title, item }] : []
+      })
   },
   sessions(path) {
-    return host?.sessions().filter(s => samePath(s.record.cwd, path)).map(s => ({ id: s.record.id, title: s.record.title, state: s.state })) ?? []
+    return (
+      host
+        ?.sessions()
+        .filter(s => samePath(s.record.cwd, path))
+        .map(s => ({ id: s.record.id, title: s.record.title, state: s.state })) ?? []
+    )
   },
-  create(projectId, cwd) { if (!host) throw new Error('项目尚未加载'); return host.createSession({ projectId }, cwd) },
-  async withStopped(path, action) { if (!host) throw new Error('项目尚未加载'); return host.withWorkspaceStopped(path, action) },
+  create(projectId, cwd) {
+    if (!host) throw new Error('项目尚未加载')
+    return host.createSession({ projectId }, cwd)
+  },
+  async withStopped(path, action) {
+    if (!host) throw new Error('项目尚未加载')
+    return host.withWorkspaceStopped(path, action)
+  },
 }
 
 /** 桌面文件与编辑器只读取已有的目标，不启动或重建会话引擎。 */
-export function resolveWorkspace(ref: import('../preload/workspace').WorkspaceRef): import('../preload/workspace').WorkspaceTarget {
-  if (machineOf(ref.projectId ?? ref.sessionId) !== 'local') { const target = machines?.target(ref); if (target) return target; throw new Error('SSH_NOT_CONNECTED') }
+export function resolveWorkspace(
+  ref: import('../preload/workspace').WorkspaceRef,
+): import('../preload/workspace').WorkspaceTarget {
+  if (machineOf(ref.projectId ?? ref.sessionId) !== 'local') {
+    const target = machines?.target(ref)
+    if (target) return target
+    throw new Error('SSH_NOT_CONNECTED')
+  }
   if (!host) throw new Error('项目尚未加载')
   if (ref.sessionId) {
     const record = host.record(ref.sessionId)
     if (!record) throw new Error('会话已不存在')
     const project = host.projects().find(p => p.id === record.projectId)
-    const durableRef=project&&project.path.toLowerCase()===record.cwd.toLowerCase()?{projectId:project.id}:ref
-    return { ref:durableRef, path: record.cwd, name: project?.name ?? record.cwd.split(/[\\/]/).pop() ?? record.title }
+    const durableRef =
+      project && project.path.toLowerCase() === record.cwd.toLowerCase() ? { projectId: project.id } : ref
+    return { ref: durableRef, path: record.cwd, name: project?.name ?? record.cwd.split(/[\\/]/).pop() ?? record.title }
   }
   const project = host.projects().find(p => p.id === ref.projectId)
   if (!project) throw new Error('项目已不存在')
@@ -95,7 +130,10 @@ function trustedSender(event: IpcMainInvokeEvent): boolean {
 }
 
 function broadcast(e: HostEvent): void {
-  if (machines) { machines.hostEvent(e); return }
+  if (machines) {
+    machines.hostEvent(e)
+    return
+  }
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed() && !win.webContents.isDestroyed()) win.webContents.send('engine:event', e)
   }
@@ -135,19 +173,32 @@ function str(v: unknown, name: string): string {
 
 export async function initEngine(): Promise<void> {
   const sessionEnv = await initPlatform(
-    (id) => machineOf(id) === 'local' ? host?.executionRecord(id) ?? null : machines?.call(machineOf(id), 'platform:record', [id]).catch(() => null) ?? null,
+    id =>
+      machineOf(id) === 'local'
+        ? (host?.executionRecord(id) ?? null)
+        : (machines?.call(machineOf(id), 'platform:record', [id]).catch(() => null) ?? null),
     () => host?.engineConfig().claude.compactModel ?? null,
-    (record) => {
+    record => {
       const machine = machineOf(record.id)
       if (machine === 'local') return host?.platformRequestContext(record)
-      return async (requestId, model) => { if (!machines) throw new Error('SSH_NOT_CONNECTED'); await machines.call(machine, 'platform:request', [record.id, requestId, model]) }
+      return async (requestId, model) => {
+        if (!machines) throw new Error('SSH_NOT_CONNECTED')
+        await machines.call(machine, 'platform:request', [record.id, requestId, model])
+      }
     },
   )
-  const h = new EngineHost({ dataDir: join(app.getPath('userData'), 'engine'), emit: broadcast, sessionEnv, validateInput: validateQueuedInput,extensions:prepareExtensions, platformCharges })
+  const h = new EngineHost({
+    dataDir: join(app.getPath('userData'), 'engine'),
+    emit: broadcast,
+    sessionEnv,
+    validateInput: validateQueuedInput,
+    extensions: prepareExtensions,
+    platformCharges,
+  })
   host = h
   await initMachines(h, sessionEnv)
-  setExtensionProjects(()=>h.projects().map(p=>p.path))
-  initExtensions((engine='claude')=>h.engineConfig()[engine].env)
+  setExtensionProjects(() => h.projects().map(p => p.path))
+  initExtensions((engine = 'claude') => h.engineConfig()[engine].env)
   const shutdownTerminals = await initTerminalIpc(resolveTerminalTarget)
 
   const handle = (channel: string, fn: (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown): void => {
@@ -163,56 +214,83 @@ export async function initEngine(): Promise<void> {
   const searches = new Map<number, { requestId: number; controller: AbortController }>()
   const observedSearchSenders = new Set<number>()
   handle('engine:search', async (event, value) => {
-    const q = searchQuery(value), senderId = event.sender.id
+    const q = searchQuery(value),
+      senderId = event.sender.id
     const old = searches.get(senderId)
-    if (old && old.requestId > q.requestId) return { requestId: q.requestId, results: [], cancelled: true, truncated: false, partial: false, sessionCount: 0 }
+    if (old && old.requestId > q.requestId)
+      return { requestId: q.requestId, results: [], cancelled: true, truncated: false, partial: false, sessionCount: 0 }
     old?.controller.abort()
     const job = { requestId: q.requestId, controller: new AbortController() }
     searches.set(senderId, job)
     if (!observedSearchSenders.has(senderId)) {
       observedSearchSenders.add(senderId)
-      event.sender.once('destroyed', () => { searches.get(senderId)?.controller.abort(); searches.delete(senderId); observedSearchSenders.delete(senderId) })
+      event.sender.once('destroyed', () => {
+        searches.get(senderId)?.controller.abort()
+        searches.delete(senderId)
+        observedSearchSenders.delete(senderId)
+      })
     }
-    try { return await h.search(q, job.controller.signal) }
-    catch (err) {
+    try {
+      return await h.search(q, job.controller.signal)
+    } catch (err) {
       if (!job.controller.signal.aborted) throw err
       return { requestId: q.requestId, results: [], cancelled: true, truncated: false, partial: false, sessionCount: 0 }
-    } finally { if (searches.get(senderId) === job) searches.delete(senderId) }
+    } finally {
+      if (searches.get(senderId) === job) searches.delete(senderId)
+    }
   })
   // 产物面板（docs/ui/artifacts-panel.md §5）：工作区由主进程按会话 / 项目解析，不信任渲染层传来的路径
   const artifactJobs = new Map<number, { requestId: number; controller: AbortController }>()
   handle('engine:artifacts', async (event, input) => {
     const v = (input ?? {}) as { requestId?: unknown; sessionId?: unknown; projectId?: unknown; days?: unknown }
-    const target = projectToolsHost.resolve(workspaceRef(v.sessionId ? { sessionId: v.sessionId } : { projectId: v.projectId }))
-    const requestId = Number(v.requestId), senderId = event.sender.id
+    const target = projectToolsHost.resolve(
+      workspaceRef(v.sessionId ? { sessionId: v.sessionId } : { projectId: v.projectId }),
+    )
+    const requestId = Number(v.requestId),
+      senderId = event.sender.id
     const old = artifactJobs.get(senderId)
-    if (old && old.requestId > requestId) return { requestId, turns: [], delivered: [], outsideCount: 0, truncated: false, partial: false, cancelled: true }
+    if (old && old.requestId > requestId)
+      return { requestId, turns: [], delivered: [], outsideCount: 0, truncated: false, partial: false, cancelled: true }
     old?.controller.abort()
     const job = { requestId, controller: new AbortController() }
     artifactJobs.set(senderId, job)
-    try { return await h.artifacts({ requestId, projectId: target.projectId, days: v.days }, target.path, job.controller.signal) }
-    catch (err) {
+    try {
+      return await h.artifacts(
+        { requestId, projectId: target.projectId, days: v.days },
+        target.path,
+        job.controller.signal,
+      )
+    } catch (err) {
       if (!job.controller.signal.aborted) throw err
       return { requestId, turns: [], delivered: [], outsideCount: 0, truncated: false, partial: false, cancelled: true }
-    } finally { if (artifactJobs.get(senderId) === job) artifactJobs.delete(senderId) }
+    } finally {
+      if (artifactJobs.get(senderId) === job) artifactJobs.delete(senderId)
+    }
   })
-  handle('engine:artifactChange', (_e, input) => { const v = artifactRef(input); return h.artifactItem(v.sessionId, str(v.itemId, 'itemId')) })
+  handle('engine:artifactChange', (_e, input) => {
+    const v = artifactRef(input)
+    return h.artifactItem(v.sessionId, str(v.itemId, 'itemId'))
+  })
   handle('engine:artifactRead', async (_e, input) => {
     const v = artifactRef(input)
     if (!(await h.recordedPath(v.sessionId, v.path))) throw new Error('只能打开 AI 改动记录里的文件')
     return readArtifact(v.path)
   })
   // 用默认应用打开 / 在文件夹中显示：只限本机，只限改动记录里的文件
-  for (const action of ['open', 'reveal'] as const) ipcMain.handle('artifacts:' + action, async (event, input) => {
-    if (!trustedSender(event)) throw new Error('不受信任的页面')
-    const v = artifactRef(input)
-    if (machineOf(v.sessionId) !== 'local') throw new Error('远程机器上的文件只能预览')
-    if (!(await h.recordedPath(v.sessionId, v.path))) throw new Error('只能打开 AI 改动记录里的文件')
-    if (action === 'reveal') { shell.showItemInFolder(v.path); return }
-    if (!openable(v.path)) throw new Error('出于安全考虑，这类文件不能直接打开')
-    const error = await shell.openPath(v.path)
-    if (error) throw new Error(error)
-  })
+  for (const action of ['open', 'reveal'] as const)
+    ipcMain.handle('artifacts:' + action, async (event, input) => {
+      if (!trustedSender(event)) throw new Error('不受信任的页面')
+      const v = artifactRef(input)
+      if (machineOf(v.sessionId) !== 'local') throw new Error('远程机器上的文件只能预览')
+      if (!(await h.recordedPath(v.sessionId, v.path))) throw new Error('只能打开 AI 改动记录里的文件')
+      if (action === 'reveal') {
+        shell.showItemInFolder(v.path)
+        return
+      }
+      if (!openable(v.path)) throw new Error('出于安全考虑，这类文件不能直接打开')
+      const error = await shell.openPath(v.path)
+      if (error) throw new Error(error)
+    })
   handle('engine:cancelSearch', (event, id) => {
     const job = searches.get(event.sender.id)
     if (job && job.requestId === id) job.controller.abort()
@@ -225,7 +303,10 @@ export async function initEngine(): Promise<void> {
     const out: EngineConfigPatch = {}
     if (p.path === null || typeof p.path === 'string') out.path = p.path
     if (p.compactModel === null || typeof p.compactModel === 'string') out.compactModel = p.compactModel
-    if (p.env && typeof p.env === 'object') out.env = Object.fromEntries(Object.entries(p.env as Record<string, unknown>).filter((e): e is [string, string] => typeof e[1] === 'string'))
+    if (p.env && typeof p.env === 'object')
+      out.env = Object.fromEntries(
+        Object.entries(p.env as Record<string, unknown>).filter((e): e is [string, string] => typeof e[1] === 'string'),
+      )
     // 详情页的选项：类型在这里先过一遍，取值范围由 EngineHost 校验（docs/ui/engine-settings-redesign.md）
     if (p.defaults && typeof p.defaults === 'object') out.defaults = p.defaults as EngineConfigPatch['defaults']
     if (p.outputStyle === null || typeof p.outputStyle === 'string') out.outputStyle = p.outputStyle
@@ -249,7 +330,7 @@ export async function initEngine(): Promise<void> {
   handle('engine:retrySettings', () => h.retrySettings())
   handle('engine:setRetrySettings', (_e, maxRetries) => h.setRetrySettings(maxRetries))
   handle('engine:projects', () => h.projects())
-  handle('engine:addProject', async (e) => {
+  handle('engine:addProject', async e => {
     const win = BrowserWindow.fromWebContents(e.sender)
     const opts = { title: nativeText(win, '选择项目文件夹'), properties: ['openDirectory' as const] }
     const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
@@ -260,7 +341,10 @@ export async function initEngine(): Promise<void> {
   handle('engine:renameProject', (_e, id, name) => h.renameProject(str(id, 'id'), name))
   handle('engine:sessions', () => h.sessions())
   handle('engine:createSession', async (_e, opts) => {
-    const o = (opts ?? {}) as Parameters<EngineHost['createSession']>[0] & { copyId?: string | null; workspaceSessionId?: string }
+    const o = (opts ?? {}) as Parameters<EngineHost['createSession']>[0] & {
+      copyId?: string | null
+      workspaceSessionId?: string
+    }
     const origin = o.workspaceSessionId ? h.record(o.workspaceSessionId) : null
     if (o.workspaceSessionId && origin?.projectId !== o.projectId) throw new Error('工作区不属于项目')
     const cwd = o.copyId ? await resolveCopyPath?.(o.projectId, o.copyId) : origin?.cwd
@@ -274,7 +358,9 @@ export async function initEngine(): Promise<void> {
   handle('engine:cancelQueued', (_e, id, q) => h.cancelQueued(str(id, 'id'), str(q, 'queueId')))
   handle('engine:moveQueued', (_e, id, q, to) => h.moveQueued(str(id, 'id'), str(q, 'queueId'), int(to, 0, 100_000)))
   handle('engine:runQueuedNow', (_e, id, q) => h.runQueuedNow(str(id, 'id'), str(q, 'queueId')))
-  handle('engine:steerQueued', (_e, id, q, turn) => h.steerQueued(str(id, 'id'), str(q, 'queueId'), str(turn, 'turnId')))
+  handle('engine:steerQueued', (_e, id, q, turn) =>
+    h.steerQueued(str(id, 'id'), str(q, 'queueId'), str(turn, 'turnId')),
+  )
   handle('engine:resumeQueue', (_e, id) => h.resumeQueue(str(id, 'id')))
   handle('engine:rewind', (_e, id, itemId) => h.rewind(str(id, 'id'), str(itemId, 'itemId')))
   handle('engine:interrupt', (_e, id) => h.interrupt(str(id, 'id')))
@@ -284,14 +370,14 @@ export async function initEngine(): Promise<void> {
   )
   handle('engine:updateSession', (_e, id, patch) => h.update(str(id, 'id'), (patch ?? {}) as SessionPatch))
   handle('engine:deleteSession', (_e, id) => h.deleteSession(str(id, 'id')))
-  handle('engine:renameSession',(_e,id,title)=>h.renameSession(str(id,'id'),title))
-  handle('engine:setSessionBottom',(_e,id,bottomed)=>{
-    if(typeof bottomed!=='boolean')throw new Error('置底值不正确')
-    return h.setSessionBottom(str(id,'id'),bottomed)
+  handle('engine:renameSession', (_e, id, title) => h.renameSession(str(id, 'id'), title))
+  handle('engine:setSessionBottom', (_e, id, bottomed) => {
+    if (typeof bottomed !== 'boolean') throw new Error('置底值不正确')
+    return h.setSessionBottom(str(id, 'id'), bottomed)
   })
-  handle('engine:archiveSession',(_e,id,archived,stopRunning)=>{
-    if(typeof archived!=='boolean')throw new Error('归档值不正确')
-    return h.archiveSession(str(id,'id'),archived,stopRunning===true)
+  handle('engine:archiveSession', (_e, id, archived, stopRunning) => {
+    if (typeof archived !== 'boolean') throw new Error('归档值不正确')
+    return h.archiveSession(str(id, 'id'), archived, stopRunning === true)
   })
   handle('engine:stopTask', (_e, id, taskId) => h.stopTask(str(id, 'id'), str(taskId, 'taskId')))
   handle('engine:taskOutput', (_e, id, taskId) => h.taskOutput(str(id, 'id'), str(taskId, 'taskId')))
@@ -301,7 +387,11 @@ export async function initEngine(): Promise<void> {
   handle('engine:usageSummary', (_e, q) => h.usageSummary(usageQuery(q)))
   handle('engine:usageList', (_e, q) => {
     const o = (q ?? {}) as { offset?: unknown; limit?: unknown }
-    return h.usageList({ ...usageQuery(q), offset: int(o.offset, 0, Number.MAX_SAFE_INTEGER), limit: int(o.limit, 50, 500) })
+    return h.usageList({
+      ...usageQuery(q),
+      offset: int(o.offset, 0, Number.MAX_SAFE_INTEGER),
+      limit: int(o.limit, 50, 500),
+    })
   })
   handle('engine:usageExport', async (e, q) => {
     const query = usageQuery(q)

@@ -82,18 +82,54 @@ export const CYCLE_PANE = {
 /** 当前窗格里切换标签：Ctrl+Tab / Ctrl+Shift+Tab（macOS 也用 Ctrl，和浏览器一致）；返回 1、-1，不匹配返回 0 */
 export const CYCLE_TAB = {
   label: 'Ctrl+Tab',
-  delta: (e: KeyboardEvent): number => (e.key === 'Tab' && e.ctrlKey && !e.altKey && !e.metaKey ? (e.shiftKey ? -1 : 1) : 0),
+  delta: (e: KeyboardEvent): number =>
+    e.key === 'Tab' && e.ctrlKey && !e.altKey && !e.metaKey ? (e.shiftKey ? -1 : 1) : 0,
 }
 
 /** 设置 → 快捷键 里列出的窗格快捷键 */
 export const PANE_SHORTCUTS: Array<{ label: string; keys: string }> = [
-  { get label() { return tr("shortcuts.message1036") }, keys: SPLIT_RIGHT.label },
-  { get label() { return tr("shortcuts.message1037") }, keys: SPLIT_DOWN.label },
-  { get label() { return tr("shortcuts.message1038") }, keys: CLOSE_TAB.label },
-  { get label() { return tr("shortcuts.message1039") }, keys: JUMP_PANE.label },
-  { get label() { return tr("shortcuts.message1040") }, keys: CYCLE_PANE.label },
-  { get label() { return tr("shortcuts.message1041") }, keys: ZOOM_PANE.label },
-  { get label() { return tr("shortcuts.message1042") }, keys: CYCLE_TAB.label + ' / Ctrl+Shift+Tab' },
+  {
+    get label() {
+      return tr('shortcuts.message1036')
+    },
+    keys: SPLIT_RIGHT.label,
+  },
+  {
+    get label() {
+      return tr('shortcuts.message1037')
+    },
+    keys: SPLIT_DOWN.label,
+  },
+  {
+    get label() {
+      return tr('shortcuts.message1038')
+    },
+    keys: CLOSE_TAB.label,
+  },
+  {
+    get label() {
+      return tr('shortcuts.message1039')
+    },
+    keys: JUMP_PANE.label,
+  },
+  {
+    get label() {
+      return tr('shortcuts.message1040')
+    },
+    keys: CYCLE_PANE.label,
+  },
+  {
+    get label() {
+      return tr('shortcuts.message1041')
+    },
+    keys: ZOOM_PANE.label,
+  },
+  {
+    get label() {
+      return tr('shortcuts.message1042')
+    },
+    keys: CYCLE_TAB.label + ' / Ctrl+Shift+Tab',
+  },
 ]
 
 /** 按钮提示文字后面带上快捷键，例如「收起侧边栏（Ctrl+B）」 */

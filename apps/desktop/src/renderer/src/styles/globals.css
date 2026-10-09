@@ -73,8 +73,9 @@
   --shadow-menu: var(--shadow-menu);
 
   /* 用户在设置里选的字体排在最前面（--font-*-user，见 appearance/fonts.ts），后面是默认回退链 */
-  --font-sans: var(--font-sans-user,) 'Inter', 'Segoe UI Variable Text', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', system-ui,
-    sans-serif;
+  --font-sans:
+    var(--font-sans-user,) 'Inter', 'Segoe UI Variable Text', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI',
+    'Microsoft YaHei', system-ui, sans-serif;
   --font-mono: var(--font-mono-user,) 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
 
   /* 字号七级（docs/ui/design-refresh.md §4）：text-title / text-section / text-prose / text-ui / text-list / text-meta / text-label */
@@ -150,14 +151,43 @@
   -webkit-app-region: no-drag;
 }
 
-.terminal-panel { position: relative; }
-.terminal-panel-maximized { position: absolute; inset: 0; z-index: 30; height: auto !important; }
-.terminal-xterm { min-height: 0; width: 100%; }
-.terminal-xterm .xterm { height: 100%; padding: 4px 6px; }
-.terminal-xterm .xterm-viewport { background: var(--terminal-bg) !important; }
-.terminal-resize { position: absolute; left: 0; right: 0; top: -4px; height: 8px; z-index: 35; }
-.terminal-shell-select { width: 28px; min-width: 28px; padding: 0; justify-content: center; }
-.terminal-shell-select > span { display: none; }
+.terminal-panel {
+  position: relative;
+}
+.terminal-panel-maximized {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  height: auto !important;
+}
+.terminal-xterm {
+  min-height: 0;
+  width: 100%;
+}
+.terminal-xterm .xterm {
+  height: 100%;
+  padding: 4px 6px;
+}
+.terminal-xterm .xterm-viewport {
+  background: var(--terminal-bg) !important;
+}
+.terminal-resize {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -4px;
+  height: 8px;
+  z-index: 35;
+}
+.terminal-shell-select {
+  width: 28px;
+  min-width: 28px;
+  padding: 0;
+  justify-content: center;
+}
+.terminal-shell-select > span {
+  display: none;
+}
 @utility titlebar-reserve {
   padding-right: var(--titlebar-reserve);
 }
@@ -172,7 +202,9 @@
   justify-content: center;
   color: var(--text-secondary);
   background: transparent;
-  transition: background-color var(--dur-fast), color var(--dur-fast);
+  transition:
+    background-color var(--dur-fast),
+    color var(--dur-fast);
 }
 .window-controls[data-focused='false'] .window-control:not(:hover):not(:focus-visible) {
   color: var(--text-muted);
@@ -241,8 +273,13 @@
   border-color: var(--accent-border);
   background: var(--accent-soft);
 }
-.window-snap-cell:disabled { opacity: .35; cursor: not-allowed; }
-.window-snap-cell { -webkit-app-region: no-drag; }
+.window-snap-cell:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.window-snap-cell {
+  -webkit-app-region: no-drag;
+}
 .window-snap-label {
   display: block;
   overflow: hidden;
@@ -327,20 +364,38 @@
 .sidebar-history-chevron {
   transition: transform var(--dur-collapse) var(--ease-out);
 }
-.sidebar-history-chevron[data-expanded='true'] { transform: rotate(180deg); }
+.sidebar-history-chevron[data-expanded='true'] {
+  transform: rotate(180deg);
+}
 /* 拖动直接跟手，收起/展开仍使用已有动画。 */
-:root[data-layout-resize] .collapsible-slot { transition: none; }
-:root[data-layout-resize] * { user-select: none !important; }
-:root[data-layout-resize='x'], :root[data-layout-resize='x'] * { cursor: col-resize !important; }
-:root[data-layout-resize='y'], :root[data-layout-resize='y'] * { cursor: row-resize !important; }
+:root[data-layout-resize] .collapsible-slot {
+  transition: none;
+}
+:root[data-layout-resize] * {
+  user-select: none !important;
+}
+:root[data-layout-resize='x'],
+:root[data-layout-resize='x'] * {
+  cursor: col-resize !important;
+}
+:root[data-layout-resize='y'],
+:root[data-layout-resize='y'] * {
+  cursor: row-resize !important;
+}
 .layout-resize-handle {
   position: absolute;
   z-index: 20;
   touch-action: none;
   outline-offset: 0;
 }
-.layout-resize-handle.layout-resize-x { width: 8px; cursor: col-resize; }
-.layout-resize-handle.layout-resize-y { height: 8px; cursor: row-resize; }
+.layout-resize-handle.layout-resize-x {
+  width: 8px;
+  cursor: col-resize;
+}
+.layout-resize-handle.layout-resize-y {
+  height: 8px;
+  cursor: row-resize;
+}
 .layout-resize-handle::after {
   content: '';
   position: absolute;
@@ -349,11 +404,19 @@
   opacity: 0;
   transition: opacity var(--dur-fast) var(--ease-out);
 }
-.layout-resize-handle.layout-resize-x::after { width: 2px; inset: 0 auto 0 3px; }
-.layout-resize-handle.layout-resize-y::after { height: 2px; inset: 3px 0 auto 0; }
+.layout-resize-handle.layout-resize-x::after {
+  width: 2px;
+  inset: 0 auto 0 3px;
+}
+.layout-resize-handle.layout-resize-y::after {
+  height: 2px;
+  inset: 3px 0 auto 0;
+}
 .layout-resize-handle:hover::after,
 .layout-resize-handle:focus-visible::after,
-.layout-resize-handle[data-resizing]::after { opacity: 1; }
+.layout-resize-handle[data-resizing]::after {
+  opacity: 1;
+}
 /* 主区无描边，只在最外层绘制底色，内部不重复叠加壁纸透明底。 */
 .workbench-surface {
   --bg-app: transparent;
@@ -362,16 +425,44 @@
   background: var(--bg-workbench);
 }
 /* 主区直接贴合窗口，拖动边从 48px 顶栏下方的正文开始。 */
-.sidebar-resize { top: 48px; bottom: 0; right: -4px; }
-.composer-resize-left { top: 16px; bottom: 40px; left: -4px; }
-.composer-resize-right { top: 16px; bottom: 40px; right: -4px; }
-.composer-resize-top { top: -4px; left: 16px; right: 16px; }
-:root[data-motion='off'] .layout-resize-handle::after { transition: none; }
+.sidebar-resize {
+  top: 48px;
+  bottom: 0;
+  right: -4px;
+}
+.composer-resize-left {
+  top: 16px;
+  bottom: 40px;
+  left: -4px;
+}
+.composer-resize-right {
+  top: 16px;
+  bottom: 40px;
+  right: -4px;
+}
+.composer-resize-top {
+  top: -4px;
+  left: 16px;
+  right: 16px;
+}
+:root[data-motion='off'] .layout-resize-handle::after {
+  transition: none;
+}
 @media (prefers-reduced-motion: reduce) {
-  :root[data-motion='system'] .layout-resize-handle::after { transition: none; }
+  :root[data-motion='system'] .layout-resize-handle::after {
+    transition: none;
+  }
 }
 /* 关闭动画：设置选「关闭」，或选「跟随系统」且系统要求减少动态效果。默认「始终开启」不受系统影响 */
-:root[data-motion='off'] :is(.collapsible-slot, .sidebar-history-content, .sidebar-history-chevron, .session-header, .composer-card, .pane-divider-line) {
+:root[data-motion='off']
+  :is(
+    .collapsible-slot,
+    .sidebar-history-content,
+    .sidebar-history-chevron,
+    .session-header,
+    .composer-card,
+    .pane-divider-line
+  ) {
   transition: none;
 }
 :root[data-motion='off'] .press:active {
@@ -381,7 +472,15 @@
   animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
-  :root[data-motion='system'] :is(.collapsible-slot, .sidebar-history-content, .sidebar-history-chevron, .session-header, .composer-card, .pane-divider-line) {
+  :root[data-motion='system']
+    :is(
+      .collapsible-slot,
+      .sidebar-history-content,
+      .sidebar-history-chevron,
+      .session-header,
+      .composer-card,
+      .pane-divider-line
+    ) {
     transition: none;
   }
   :root[data-motion='system'] .press:active {
@@ -407,7 +506,9 @@
 /* 键盘焦点环：和胶囊轨道同形状，用强调色（以前是灰色直角框，深色下很突兀） */
 .effort-slider:focus-visible {
   border-radius: 9999px;
-  box-shadow: 0 0 0 2px var(--bg-popover), 0 0 0 4px color-mix(in oklab, var(--effort-accent) 55%, transparent);
+  box-shadow:
+    0 0 0 2px var(--bg-popover),
+    0 0 0 4px color-mix(in oklab, var(--effort-accent) 55%, transparent);
 }
 .effort-slider[aria-disabled='true'] {
   opacity: 0.5;
@@ -644,8 +745,18 @@
   background: #ffffff;
 }
 
-.right-workspace-resize { top: 0; bottom: 0; left: -4px; }
+.right-workspace-resize {
+  top: 0;
+  bottom: 0;
+  left: -4px;
+}
 
-.terminal-project-select { width: 128px; max-width: 26%; flex-shrink: 0; }
+.terminal-project-select {
+  width: 128px;
+  max-width: 26%;
+  flex-shrink: 0;
+}
 
-.collapsible-slot[data-size-changed] { transition: none; }
+.collapsible-slot[data-size-changed] {
+  transition: none;
+}

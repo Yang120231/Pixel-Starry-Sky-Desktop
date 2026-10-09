@@ -16,7 +16,15 @@ export {
   type SourceMenuController,
   type StatusBarController,
 } from './hooks'
-export { bridge, getEngineState, redetectEngines, removeProject, renameProject, setViewingSet, useEngineState } from './store'
+export {
+  bridge,
+  getEngineState,
+  redetectEngines,
+  removeProject,
+  renameProject,
+  setViewingSet,
+  useEngineState,
+} from './store'
 export type { RunStatus, RunStatusItem } from './sidebarData'
 export { OPEN_SESSION_EVENT, useOpenSessionRequests } from './openRequests'
 export { SOURCE_ACTION_EVENT, requestSourceAction, type SourceAction } from './sourceActions'

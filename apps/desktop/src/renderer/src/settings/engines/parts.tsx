@@ -4,17 +4,31 @@ import { tr } from '../../i18n/core'
 import type { EngineId } from '@pixelsky/protocol'
 
 export const ENGINE_STATUS: Record<string, string> = {
-  get unauthenticated() { return tr("sidebar.SidebarFooter.message407") },
-  get missing() { return tr("settings.engines.parts.message784") },
-  get outdated() { return tr("settings.engines.parts.message785") },
-  get error() { return tr("settings.engines.parts.message786") },
-  get unsupported() { return tr("session.ModelSourceMenu.message285") },
+  get unauthenticated() {
+    return tr('sidebar.SidebarFooter.message407')
+  },
+  get missing() {
+    return tr('settings.engines.parts.message784')
+  },
+  get outdated() {
+    return tr('settings.engines.parts.message785')
+  },
+  get error() {
+    return tr('settings.engines.parts.message786')
+  },
+  get unsupported() {
+    return tr('session.ModelSourceMenu.message285')
+  },
 }
 
 /** 详情页头部的一句介绍 */
 export const ENGINE_INTRO: Record<EngineId, string> = {
-  get claude() { return tr("settings.engines.parts.message787") },
-  get codex() { return tr("settings.engines.parts.message788") },
+  get claude() {
+    return tr('settings.engines.parts.message787')
+  },
+  get codex() {
+    return tr('settings.engines.parts.message788')
+  },
 }
 
 export const FIELD =
@@ -22,5 +36,9 @@ export const FIELD =
 
 export function DefaultBadge() {
   useI18n()
-  return <span className="inline-flex h-5 items-center rounded-full bg-accent-soft px-2 text-label font-medium text-accent-fg">{tr("engine.labels.message507")}</span>
+  return (
+    <span className="inline-flex h-5 items-center rounded-full bg-accent-soft px-2 text-label font-medium text-accent-fg">
+      {tr('engine.labels.message507')}
+    </span>
+  )
 }

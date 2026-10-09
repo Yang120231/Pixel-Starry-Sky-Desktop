@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest'
 import type { SkillCommand } from '@pixelsky/protocol'
 import { commandDescription } from './commandDescriptions'
 
-const compact: SkillCommand = { name: 'compact', description: 'Free up context by summarizing the conversation so far', source: 'engine', builtin: true }
+const compact: SkillCommand = {
+  name: 'compact',
+  description: 'Free up context by summarizing the conversation so far',
+  source: 'engine',
+  builtin: true,
+}
 
 describe('Claude Code 命令说明的语言与来源边界', () => {
   it('中文说明覆盖引擎内置提示，英文仍使用 CLI 原始说明', () => {

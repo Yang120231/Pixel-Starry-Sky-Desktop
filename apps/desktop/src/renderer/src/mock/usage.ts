@@ -56,7 +56,9 @@ export function demoUsageRecords(now: number): UsageRecord[] {
       const turnId = `t${day}-${k}`
       const outcome = r() < 0.04 ? 'failed' : r() < 0.06 ? 'interrupted' : 'completed'
       const codex = r() < 0.08
-      const models = codex ? ['gpt-5.5'] : [r() < 0.15 ? 'claude-sonnet-5-5' : 'claude-opus-5-5', ...(r() < 0.3 ? ['claude-haiku-4-5'] : [])]
+      const models = codex
+        ? ['gpt-5.5']
+        : [r() < 0.15 ? 'claude-sonnet-5-5' : 'claude-opus-5-5', ...(r() < 0.3 ? ['claude-haiku-4-5'] : [])]
       for (const model of models) {
         const sub = model === 'claude-haiku-4-5'
         const input = int(300, sub ? 2000 : 6000)

@@ -35,7 +35,8 @@ describe('协作频道演示数据', () => {
   it('「打开会话」只指向演示项目里存在的会话', () => {
     const sessions = new Set(demo.projects.flatMap(p => p.sessions.map(s => s.id)))
     for (const m of messages) if (m.kind === 'task' && m.sessionId) expect(sessions.has(m.sessionId), m.id).toBe(true)
-    for (const m of demo.channelMembers) if (m.kind === 'agent' && m.sessionId) expect(sessions.has(m.sessionId), m.id).toBe(true)
+    for (const m of demo.channelMembers)
+      if (m.kind === 'agent' && m.sessionId) expect(sessions.has(m.sessionId), m.id).toBe(true)
   })
   it('未读合计 3（导航角标），空界面没有频道', () => {
     expect(unreadTotal(demo.channels)).toBe(3)

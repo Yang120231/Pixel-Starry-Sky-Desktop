@@ -26,5 +26,9 @@ export function makeTmp(prefix: string): string {
 export function removeTmp(dir: string): void {
   rmSync(dir, { recursive: true, force: true })
   // 父目录空了就一起删掉，不在 scratch/ 留空目录
-  try { rmdirSync(dirname(dir)) } catch { /* 还有其他测试的目录 */ }
+  try {
+    rmdirSync(dirname(dir))
+  } catch {
+    /* 还有其他测试的目录 */
+  }
 }

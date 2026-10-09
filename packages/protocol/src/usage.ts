@@ -107,7 +107,17 @@ export function rangeWindow(range: UsageRangeId, now: number): TimeWindow {
 }
 
 export function emptyTotals(): UsageTotals {
-  return { input: 0, cacheRead: 0, cacheWrite: 0, output: 0, costUsd: 0, costKnown: 0, records: 0, turns: 0, requests: 0 }
+  return {
+    input: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    output: 0,
+    costUsd: 0,
+    costKnown: 0,
+    records: 0,
+    turns: 0,
+    requests: 0,
+  }
 }
 
 function add(t: UsageTotals, r: UsageRecord, turns: Set<string>): void {
@@ -184,7 +194,9 @@ export function summarize(records: UsageRecord[], range: UsageRangeId, filter: U
     // 找到所在的格子（按天时用本地日期，跨夏令时也正确）
     let i = Math.floor((r.endedAt - w.from) / step)
     if (w.bucket === 'day') {
-      i = buckets.findIndex((b, k) => r.endedAt >= b.start && (k === buckets.length - 1 || r.endedAt < buckets[k + 1].start))
+      i = buckets.findIndex(
+        (b, k) => r.endedAt >= b.start && (k === buckets.length - 1 || r.endedAt < buckets[k + 1].start),
+      )
     }
     if (i >= 0 && i < buckets.length) add(buckets[i], r, bucketTurns[i])
     for (const dim of Object.keys(groupMaps) as UsageDimension[]) {
@@ -199,7 +211,7 @@ export function summarize(records: UsageRecord[], range: UsageRangeId, filter: U
   }
 
   const sortRows = (m: Map<string, { row: UsageGroupRow }>) =>
-    [...m.values()].map((g) => g.row).sort((a, b) => totalTokens(b) - totalTokens(a))
+    [...m.values()].map(g => g.row).sort((a, b) => totalTokens(b) - totalTokens(a))
 
   return {
     totals,
@@ -226,16 +238,35 @@ export function listRecords(
 ): UsagePage {
   const w = rangeWindow(range, now)
   const all = records
-    .filter((r) => r.endedAt >= w.from && r.endedAt <= w.to && matches(r, filter))
+    .filter(r => r.endedAt >= w.from && r.endedAt <= w.to && matches(r, filter))
     .sort((a, b) => b.endedAt - a.endedAt)
   return { records: all.slice(offset, offset + limit), total: all.length, offset }
 }
 
-const OUTCOME_TEXT: Record<UsageRecord['outcome'], string> = { completed: '完成', interrupted: '已中断', failed: '失败' }
+const OUTCOME_TEXT: Record<UsageRecord['outcome'], string> = {
+  completed: '完成',
+  interrupted: '已中断',
+  failed: '失败',
+}
 
 /** CSV（UTF-8 带 BOM，Excel 直接打开不乱码） */
 export function toCsv(records: UsageRecord[]): string {
-  const head = ['时间', '会话', '项目', '引擎', '模型', '线路', '请求次数', '输入', '缓存读', '缓存写', '输出', '费用(USD)', '耗时(秒)', '结果']
+  const head = [
+    '时间',
+    '会话',
+    '项目',
+    '引擎',
+    '模型',
+    '线路',
+    '请求次数',
+    '输入',
+    '缓存读',
+    '缓存写',
+    '输出',
+    '费用(USD)',
+    '耗时(秒)',
+    '结果',
+  ]
   const esc = (v: string | number) => {
     const s = String(v)
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
@@ -245,7 +276,7 @@ export function toCsv(records: UsageRecord[]): string {
     const d = new Date(t)
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
   }
-  const rows = records.map((r) =>
+  const rows = records.map(r =>
     [
       time(r.endedAt),
       r.sessionTitle,

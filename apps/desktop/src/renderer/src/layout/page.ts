@@ -19,7 +19,9 @@ export const showWorkbench = (): void => setPage('workbench')
 
 export function subscribePage(listener: () => void): () => void {
   listeners.add(listener)
-  return () => { listeners.delete(listener) }
+  return () => {
+    listeners.delete(listener)
+  }
 }
 
 export function usePage(): Page {

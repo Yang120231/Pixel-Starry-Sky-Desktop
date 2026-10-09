@@ -2,27 +2,76 @@ import { tr } from '../i18n/core'
 // 回复下方统计的全局显示偏好；所有窗格共用，刷新 / 重启后沿用本机选择。
 import { useSyncExternalStore } from 'react'
 
-export const REPLY_STAT_KEYS = ['elapsed', 'tokens', 'cost', 'model', 'inputTokens', 'outputTokens', 'totalTokens', 'cacheRead', 'cacheWrite', 'cacheHitRate', 'requests'] as const
+export const REPLY_STAT_KEYS = [
+  'elapsed',
+  'tokens',
+  'cost',
+  'model',
+  'inputTokens',
+  'outputTokens',
+  'totalTokens',
+  'cacheRead',
+  'cacheWrite',
+  'cacheHitRate',
+  'requests',
+] as const
 export type ReplyStatKey = (typeof REPLY_STAT_KEYS)[number]
 export const REPLY_STAT_LABELS: Record<ReplyStatKey, string> = {
-  get elapsed() { return tr("session.turnStatsData.message373") },
-  get tokens() { return tr("settings.replyStats.message850") },
-  get cost() { return tr("settings.replyStats.message851") },
-  get model() { return tr("session.ModelSourceMenu.message291") },
-  get inputTokens() { return tr("settings.replyStats.message852") },
-  get outputTokens() { return tr("session.turnStatsData.message378") },
-  get totalTokens() { return tr("settings.replyStats.message853") },
-  get cacheRead() { return tr("session.contextData.message150") },
-  get cacheWrite() { return tr("session.contextData.message151") },
-  get cacheHitRate() { return tr("settings.replyStats.message854") },
-  get requests() { return tr("settings.replyStats.message855") },
+  get elapsed() {
+    return tr('session.turnStatsData.message373')
+  },
+  get tokens() {
+    return tr('settings.replyStats.message850')
+  },
+  get cost() {
+    return tr('settings.replyStats.message851')
+  },
+  get model() {
+    return tr('session.ModelSourceMenu.message291')
+  },
+  get inputTokens() {
+    return tr('settings.replyStats.message852')
+  },
+  get outputTokens() {
+    return tr('session.turnStatsData.message378')
+  },
+  get totalTokens() {
+    return tr('settings.replyStats.message853')
+  },
+  get cacheRead() {
+    return tr('session.contextData.message150')
+  },
+  get cacheWrite() {
+    return tr('session.contextData.message151')
+  },
+  get cacheHitRate() {
+    return tr('settings.replyStats.message854')
+  },
+  get requests() {
+    return tr('settings.replyStats.message855')
+  },
 }
 
 export const DEFAULT_REPLY_STATS: readonly ReplyStatKey[] = ['elapsed', 'tokens', 'cost', 'model']
 export const REPLY_STAT_GROUPS: readonly { label: string; keys: readonly ReplyStatKey[] }[] = [
-  { get label() { return tr("settings.replyStats.message856") }, keys: DEFAULT_REPLY_STATS },
-  { get label() { return tr("settings.replyStats.message857") }, keys: ['inputTokens', 'outputTokens', 'totalTokens', 'cacheRead', 'cacheWrite', 'cacheHitRate'] },
-  { get label() { return tr("settings.replyStats.message858") }, keys: ['requests'] },
+  {
+    get label() {
+      return tr('settings.replyStats.message856')
+    },
+    keys: DEFAULT_REPLY_STATS,
+  },
+  {
+    get label() {
+      return tr('settings.replyStats.message857')
+    },
+    keys: ['inputTokens', 'outputTokens', 'totalTokens', 'cacheRead', 'cacheWrite', 'cacheHitRate'],
+  },
+  {
+    get label() {
+      return tr('settings.replyStats.message858')
+    },
+    keys: ['requests'],
+  },
 ]
 
 export function isDefaultReplyStats(keys: readonly ReplyStatKey[]): boolean {
@@ -37,7 +86,7 @@ function load(): readonly ReplyStatKey[] {
     const saved: unknown = JSON.parse(localStorage.getItem(KEY) ?? 'null')
     if (!Array.isArray(saved)) return DEFAULT_STATS
     // 去重并按显示顺序整理；空数组表示用户主动关闭整行。
-    const valid = REPLY_STAT_KEYS.filter((key) => saved.includes(key))
+    const valid = REPLY_STAT_KEYS.filter(key => saved.includes(key))
     return saved.length > 0 && valid.length === 0 ? DEFAULT_STATS : valid
   } catch {
     return DEFAULT_STATS
@@ -55,11 +104,11 @@ function update(next: readonly ReplyStatKey[]): void {
   } catch {
     // 存储不可用时，当前窗口内仍可正常切换。
   }
-  listeners.forEach((listener) => listener())
+  listeners.forEach(listener => listener())
 }
 
 export function setReplyStat(key: ReplyStatKey, enabled: boolean): void {
-  update(REPLY_STAT_KEYS.filter((k) => (k === key ? enabled : selected.includes(k))))
+  update(REPLY_STAT_KEYS.filter(k => (k === key ? enabled : selected.includes(k))))
 }
 
 export function resetReplyStats(): void {
@@ -69,7 +118,7 @@ export function resetReplyStats(): void {
 function onStorage(event: StorageEvent): void {
   if (event.storageArea !== localStorage || (event.key !== KEY && event.key !== null)) return
   selected = load()
-  listeners.forEach((listener) => listener())
+  listeners.forEach(listener => listener())
 }
 
 function subscribe(listener: () => void): () => void {

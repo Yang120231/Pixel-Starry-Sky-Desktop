@@ -1,7 +1,15 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../i18n/core'
 // 多对话窗格区：顶部栏（跟随当前窗格）+ 按布局树绝对定位的窗格 + 分隔线。规格见 docs/ui/multi-pane.md
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import './panes.css'
 import { SessionHeader } from '@/components/session/SessionHeader'
 import { useHeaderActions } from '@/components/session/SessionView'
@@ -10,7 +18,18 @@ import { isLive, setViewingSet, useEngineState, useSessionTitle } from '@/engine
 import { CLOSE_TAB, CYCLE_PANE, CYCLE_TAB, JUMP_PANE, SPLIT_DOWN, SPLIT_RIGHT, ZOOM_PANE } from '@/shortcuts'
 import { PaneView } from './PaneView'
 import { MIN_PANE, paneActions, usePaneState } from './store'
-import { computeRects, findSplit, focusedTab, isNewTab, isFileTab, parseFileTab, leaves, visibleTabs, type Divider, type Rect } from './tree'
+import {
+  computeRects,
+  findSplit,
+  focusedTab,
+  isNewTab,
+  isFileTab,
+  parseFileTab,
+  leaves,
+  visibleTabs,
+  type Divider,
+  type Rect,
+} from './tree'
 import { useFiles } from '@/files/store'
 import { DragPreview, PaneDragContext, usePaneDrag } from './drag'
 import { useTheme } from '@/theme/ThemeProvider'
@@ -35,23 +54,46 @@ export function WorkspaceHeader({ membersShown = false, ...props }: WorkspacePro
   const current = usePaneState(s => focusedTab(s.layout))
   const sessionId = current && !isNewTab(current) && !isFileTab(current) ? current : null
   const title = useSessionTitle(sessionId)
-  const files = useFiles(), file = files.tabs.find(t => t.id === current), parsed = current ? parseFileTab(current) : null
+  const files = useFiles(),
+    file = files.tabs.find(t => t.id === current),
+    parsed = current ? parseFileTab(current) : null
   const showActions = useHeaderActions(sessionId)
   const page = usePage()
   const channel = useChannels(selectedChannel)
   // 协作频道页沿用同一个顶栏（换组件会丢焦点）：标题是频道名，面板开关控制成员面板（docs/ui/channels.md §2）
   if (page === 'channels') {
-    const toggle = channel ? { open: membersShown, label: tr(membersShown ? 'channels.members.hide' : 'channels.members.show'), onToggle: props.onTogglePanel } : null
-    return <SessionHeader {...props} title={channel ? `# ${channel.name}` : tr('channels.title')} showActions={false} panelOpen={false} filesPanelOpen={false} panelToggle={toggle} />
+    const toggle = channel
+      ? {
+          open: membersShown,
+          label: tr(membersShown ? 'channels.members.hide' : 'channels.members.show'),
+          onToggle: props.onTogglePanel,
+        }
+      : null
+    return (
+      <SessionHeader
+        {...props}
+        title={channel ? `# ${channel.name}` : tr('channels.title')}
+        showActions={false}
+        panelOpen={false}
+        filesPanelOpen={false}
+        panelToggle={toggle}
+      />
+    )
   }
-  return <SessionHeader title={file?.name ?? parsed?.path.split('/').pop() ?? title} showActions={showActions && !parsed} {...props} />
+  return (
+    <SessionHeader
+      title={file?.name ?? parsed?.path.split('/').pop() ?? title}
+      showActions={showActions && !parsed}
+      {...props}
+    />
+  )
 }
 
 export function Workspace(props: WorkspaceProps) {
   useI18n()
-  const layout = usePaneState((s) => s.layout)
-  const closing = usePaneState((s) => s.closing)
-  const notice = usePaneState((s) => s.notice)
+  const layout = usePaneState(s => s.layout)
+  const closing = usePaneState(s => s.closing)
+  const notice = usePaneState(s => s.notice)
   const areaRef = useRef<HTMLDivElement>(null)
   const drag = usePaneDrag(areaRef)
   /** 正在拖动的分隔线（key），拖动时窗格跟手不加过渡、这条线保持高亮 */
@@ -61,23 +103,29 @@ export function Workspace(props: WorkspaceProps) {
   const { panes, dividers } = useMemo(() => computeRects(layout.root), [layout.root])
   const multi = all.length - Object.keys(closing).length > 1 || all.length > 1
   // 只比较几何 / 结构变化，标签文字、流式事件和选中标签都不重启焦点高亮。
-  const focusGeometry = JSON.stringify([layout.maximized, Object.keys(closing), [...panes].map(([id, r]) => [id, r.x, r.y, r.w, r.h])])
+  const focusGeometry = JSON.stringify([
+    layout.maximized,
+    Object.keys(closing),
+    [...panes].map(([id, r]) => [id, r.x, r.y, r.w, r.h]),
+  ])
 
   // 所有窗格里正在显示的会话都算「正在看」，回复完不标新回复
-  const visibleKey = visibleTabs(layout).filter((t) => !isNewTab(t) && !isFileTab(t)).join('|')
+  const visibleKey = visibleTabs(layout)
+    .filter(t => !isNewTab(t) && !isFileTab(t))
+    .join('|')
   // 在协作频道页时没有会话算「正在看」，后台回复完照常标新回复（docs/ui/channels.md §2）
   const page = usePage()
   useEffect(() => setViewingSet(page === 'workbench' && visibleKey ? visibleKey.split('|') : []), [visibleKey, page])
 
   // 真实引擎读出会话列表后，去掉已经不存在的会话标签（只做一次）
-  const ready = useEngineState((s) => s.ready)
-  const sessions = useEngineState((s) => s.sessions)
+  const ready = useEngineState(s => s.ready)
+  const sessions = useEngineState(s => s.sessions)
   const pruned = useRef(false)
   useEffect(() => {
     if (!isLive || !ready || pruned.current) return
     pruned.current = true
-    const ids = new Set(sessions.map((s) => s.record.id))
-    paneActions.prune((tab) => isNewTab(tab) || ids.has(tab))
+    const ids = new Set(sessions.map(s => s.record.id))
+    paneActions.prune(tab => isNewTab(tab) || ids.has(tab))
   }, [ready, sessions])
 
   const areaSize = useCallback(() => {
@@ -88,8 +136,14 @@ export function Workspace(props: WorkspaceProps) {
   // 窗格快捷键（docs/ui/multi-pane.md §4）
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (getPage() !== 'workbench' || e.defaultPrevented || document.querySelector('[role="dialog"][aria-modal="true"]')) return
-      if (document.activeElement instanceof HTMLElement && document.activeElement.closest('[data-terminal-input]')) return
+      if (
+        getPage() !== 'workbench' ||
+        e.defaultPrevented ||
+        document.querySelector('[role="dialog"][aria-modal="true"]')
+      )
+        return
+      if (document.activeElement instanceof HTMLElement && document.activeElement.closest('[data-terminal-input]'))
+        return
       let handled = true
       const jump = JUMP_PANE.index(e)
       const cyclePane = CYCLE_PANE.delta(e)
@@ -148,70 +202,82 @@ export function Workspace(props: WorkspaceProps) {
 
   return (
     <PaneDragContext.Provider value={drag.begin}>
-    <main className="flex min-h-0 min-w-[464px] flex-1 flex-col bg-app">
-      <div ref={areaRef} className="pane-area relative min-h-0 flex-1 overflow-hidden" data-resizing={resizing !== null || undefined}>
-        {all.map((leaf) => {
-          const maximized = layout.maximized === leaf.id
-          const hidden = layout.maximized !== null && !maximized
-          const r = maximized ? full : (panes.get(leaf.id) ?? full)
-          return (
-            <div
-              key={leaf.id}
-              className={cn('pane-box absolute overflow-hidden', maximized && 'z-10', hidden && 'pointer-events-none opacity-0')}
-              style={{ left: pct(r.x), top: pct(r.y), width: pct(r.w), height: pct(r.h) }}
-              inert={hidden || !!closing[leaf.id]}
-            >
-              <PaneView
-                leaf={leaf}
-                focused={leaf.id === layout.focused && multi}
-                showHead={multi}
-                maximized={maximized}
-                areaSize={areaSize}
-                sidebarOpen={props.sidebarOpen}
-                panelOpen={props.panelOpen}
-                onToggleSidebar={props.onToggleSidebar}
-                onTogglePanel={props.onTogglePanel}
-              />
-            </div>
-          )
-        })}
+      <main className="flex min-h-0 min-w-[464px] flex-1 flex-col bg-app">
+        <div
+          ref={areaRef}
+          className="pane-area relative min-h-0 flex-1 overflow-hidden"
+          data-resizing={resizing !== null || undefined}
+        >
+          {all.map(leaf => {
+            const maximized = layout.maximized === leaf.id
+            const hidden = layout.maximized !== null && !maximized
+            const r = maximized ? full : (panes.get(leaf.id) ?? full)
+            return (
+              <div
+                key={leaf.id}
+                className={cn(
+                  'pane-box absolute overflow-hidden',
+                  maximized && 'z-10',
+                  hidden && 'pointer-events-none opacity-0',
+                )}
+                style={{ left: pct(r.x), top: pct(r.y), width: pct(r.w), height: pct(r.h) }}
+                inert={hidden || !!closing[leaf.id]}
+              >
+                <PaneView
+                  leaf={leaf}
+                  focused={leaf.id === layout.focused && multi}
+                  showHead={multi}
+                  maximized={maximized}
+                  areaSize={areaSize}
+                  sidebarOpen={props.sidebarOpen}
+                  panelOpen={props.panelOpen}
+                  onToggleSidebar={props.onToggleSidebar}
+                  onTogglePanel={props.onTogglePanel}
+                />
+              </div>
+            )
+          })}
 
-        {/* 分隔线：窗格之间不留缝，只画一条 1px 实线（样式在 panes.css）；悬停 / 拖动时加粗成强调色；双击均分 */}
-        {dividers.map((d) => {
-          const row = d.dir === 'row'
-          const key = dividerKey(d)
-          const style = row
-            ? { left: pct(d.at), top: pct(d.splitRect.y), height: pct(d.splitRect.h), width: 8, marginLeft: -4 }
-            : { top: pct(d.at), left: pct(d.splitRect.x), width: pct(d.splitRect.w), height: 8, marginTop: -4 }
-          return (
-            <div
-              key={key}
-              role="separator"
-              aria-orientation={row ? 'vertical' : 'horizontal'}
-              aria-label={tr("panes.Workspace.message585")}
-              title={tr("panes.Workspace.message585")}
-              className={cn(
-                'pane-divider absolute z-20',
-                row ? 'cursor-col-resize' : 'cursor-row-resize',
-                layout.maximized && 'pointer-events-none opacity-0',
-              )}
-              data-active={resizing === key || undefined}
-              style={style}
-              onPointerDown={(e) => startDrag(d, e)}
-              onDoubleClick={() => paneActions.equalize(d.splitId)}
-            >
-              <span className="pane-divider-line" />
-            </div>
-          )
-        })}
+          {/* 分隔线：窗格之间不留缝，只画一条 1px 实线（样式在 panes.css）；悬停 / 拖动时加粗成强调色；双击均分 */}
+          {dividers.map(d => {
+            const row = d.dir === 'row'
+            const key = dividerKey(d)
+            const style = row
+              ? { left: pct(d.at), top: pct(d.splitRect.y), height: pct(d.splitRect.h), width: 8, marginLeft: -4 }
+              : { top: pct(d.at), left: pct(d.splitRect.x), width: pct(d.splitRect.w), height: 8, marginTop: -4 }
+            return (
+              <div
+                key={key}
+                role="separator"
+                aria-orientation={row ? 'vertical' : 'horizontal'}
+                aria-label={tr('panes.Workspace.message585')}
+                title={tr('panes.Workspace.message585')}
+                className={cn(
+                  'pane-divider absolute z-20',
+                  row ? 'cursor-col-resize' : 'cursor-row-resize',
+                  layout.maximized && 'pointer-events-none opacity-0',
+                )}
+                data-active={resizing === key || undefined}
+                style={style}
+                onPointerDown={e => startDrag(d, e)}
+                onDoubleClick={() => paneActions.equalize(d.splitId)}
+              >
+                <span className="pane-divider-line" />
+              </div>
+            )
+          })}
 
-        <FocusFrame rect={multi && !layout.maximized ? panes.get(layout.focused) : undefined}
-          focusedId={layout.focused} geometry={focusGeometry} resizing={resizing !== null} />
+          <FocusFrame
+            rect={multi && !layout.maximized ? panes.get(layout.focused) : undefined}
+            focusedId={layout.focused}
+            geometry={focusGeometry}
+            resizing={resizing !== null}
+          />
 
-        <DragPreview visual={drag.visual} area={areaRef} />
-        {notice && <Notice key={notice.id} text={notice.text} />}
-      </div>
-    </main>
+          <DragPreview visual={drag.visual} area={areaRef} />
+          {notice && <Notice key={notice.id} text={notice.text} />}
+        </div>
+      </main>
     </PaneDragContext.Provider>
   )
 }
@@ -220,7 +286,17 @@ export function Workspace(props: WorkspaceProps) {
  * 当前窗格的强调色框（docs/ui/multi-pane.md §3）：画在窗格区这一层、压在分隔线上面，
  * 不在窗格边上就往右 / 往下多占 1px，盖住分隔线；焦点提示与布局伸缩分别处理。
  */
-function FocusFrame({ rect: r, focusedId, geometry, resizing }: { rect: Rect | undefined; focusedId: string; geometry: string; resizing: boolean }) {
+function FocusFrame({
+  rect: r,
+  focusedId,
+  geometry,
+  resizing,
+}: {
+  rect: Rect | undefined
+  focusedId: string
+  geometry: string
+  resizing: boolean
+}) {
   useI18n()
   const frame = useRef<HTMLDivElement>(null)
   const { paneFocusMotion, motion, systemReducedMotion } = useTheme()
@@ -233,7 +309,8 @@ function FocusFrame({ rect: r, focusedId, geometry, resizing }: { rect: Rect | u
     const el = frame.current
     if (!el) return
     el.removeAttribute('data-flash')
-    const switching = before.visible && visible && before.focusedId !== focusedId && before.geometry === geometry && !resizing
+    const switching =
+      before.visible && visible && before.focusedId !== focusedId && before.geometry === geometry && !resizing
     if (!switching) return
     if (paneFocusMotion !== 'slide' || !enabled) {
       // 稳定复用同一个框保留结构动画；仅换焦点的这一帧取消位置过渡。
@@ -254,7 +331,9 @@ function FocusFrame({ rect: r, focusedId, geometry, resizing }: { rect: Rect | u
       aria-hidden
       ref={frame}
       data-focus-pane={focusedId}
-      onAnimationEnd={(e) => { if (e.animationName === 'pane-focus-flash') e.currentTarget.removeAttribute('data-flash') }}
+      onAnimationEnd={e => {
+        if (e.animationName === 'pane-focus-flash') e.currentTarget.removeAttribute('data-flash')
+      }}
       className="pane-focus-frame pointer-events-none absolute z-20 border border-accent/70"
       style={{ left: pct(r.x), top: pct(r.y), width: edge(r.x + r.w, r.w), height: edge(r.y + r.h, r.h) }}
     />
@@ -271,7 +350,10 @@ function Notice({ text }: { text: string }) {
   }, [])
   if (!show) return null
   return (
-    <div role="status" className="pane-notice absolute bottom-24 left-1/2 z-30 -translate-x-1/2 rounded-lg border border-line bg-surface px-4 py-2 text-ui text-fg shadow-popover">
+    <div
+      role="status"
+      className="pane-notice absolute bottom-24 left-1/2 z-30 -translate-x-1/2 rounded-lg border border-line bg-surface px-4 py-2 text-ui text-fg shadow-popover"
+    >
       {text}
     </div>
   )

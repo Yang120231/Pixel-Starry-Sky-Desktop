@@ -50,7 +50,8 @@ export function findRewindAnchor(file: string, userIds: string[]): { at: string 
     if (!line.trim()) continue
     try {
       const e = JSON.parse(line) as { type?: unknown; uuid?: unknown; parentUuid?: unknown; isSidechain?: unknown }
-      if (e.type === 'user' && typeof e.uuid === 'string' && e.isSidechain !== true) parents.set(e.uuid, typeof e.parentUuid === 'string' ? e.parentUuid : null)
+      if (e.type === 'user' && typeof e.uuid === 'string' && e.isSidechain !== true)
+        parents.set(e.uuid, typeof e.parentUuid === 'string' ? e.parentUuid : null)
     } catch {
       // 跳过写坏的行
     }

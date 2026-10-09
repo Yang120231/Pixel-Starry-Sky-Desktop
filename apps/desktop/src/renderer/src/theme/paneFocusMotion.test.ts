@@ -10,11 +10,13 @@ describe('窗格焦点动画偏好', () => {
     for (const value of ['flash', 'slide', 'none']) expect(parsePaneFocusMotion(value)).toBe(value)
   })
   it('读取独立的本机设置键，存储不可用时仍可以启动', () => {
-    const getItem = vi.fn((key: string) => key === PANE_FOCUS_MOTION_KEY ? 'slide' : null)
+    const getItem = vi.fn((key: string) => (key === PANE_FOCUS_MOTION_KEY ? 'slide' : null))
     vi.stubGlobal('localStorage', { getItem })
     expect(readPaneFocusMotion()).toBe('slide')
     expect(getItem).toHaveBeenCalledWith('pixelsky.paneFocusMotion')
-    getItem.mockImplementation(() => { throw new Error('Storage unavailable') })
+    getItem.mockImplementation(() => {
+      throw new Error('Storage unavailable')
+    })
     expect(readPaneFocusMotion()).toBe('flash')
   })
   it('用高亮、窗格或滑动搜索设置时都能找到切换选项', () => {

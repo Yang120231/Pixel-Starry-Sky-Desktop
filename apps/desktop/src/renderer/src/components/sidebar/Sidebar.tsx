@@ -37,7 +37,7 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
   const recentId = useId()
   // 演示模式是 mock 数据，否则是引擎里的真实项目和会话
   const { projects, recent, runStatus } = useSidebarData()
-  const onAddProject = isLive ? () => void addProject() : () => comingSoon(tr("sidebar.Sidebar.message396"))
+  const onAddProject = isLive ? () => void addProject() : () => comingSoon(tr('sidebar.Sidebar.message396'))
   const onNewTask = isLive ? () => onSelectSession(null) : undefined
   const compactSearch = prefs.layout.top.length >= 4
   return (
@@ -60,29 +60,33 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
           {!compactSearch && <span className="truncate">{tr('sidebar.search')}</span>}
         </button>
         {prefs.layout.top.map(action => (
-          <LayoutActionButton key={action} action={action} placement="top" onAddProject={onAddProject} onNewTask={onNewTask} />
+          <LayoutActionButton
+            key={action}
+            action={action}
+            placement="top"
+            onAddProject={onAddProject}
+            onNewTask={onNewTask}
+          />
         ))}
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto px-3 pt-4 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {pinned.length > 0 && (
-          <SidebarSection title={tr("sidebar.Sidebar.message397")}>
+          <SidebarSection title={tr('sidebar.Sidebar.message397')}>
             <PinnedList items={pinned} selectedSessionId={selectedSessionId} onSelectSession={onSelectSession} />
           </SidebarSection>
         )}
 
-        <SidebarSection
-          title={tr("sidebar.Sidebar.message398")}
-        >
+        <SidebarSection title={tr('sidebar.Sidebar.message398')}>
           {projects.length > 0 ? (
             <ProjectTree projects={projects} selectedSessionId={selectedSessionId} onSelectSession={onSelectSession} />
           ) : (
             <>
-              <SidebarEmpty>{tr("sidebar.Sidebar.message399")}</SidebarEmpty>
+              <SidebarEmpty>{tr('sidebar.Sidebar.message399')}</SidebarEmpty>
               {isLive && (
                 <SidebarRow onClick={onAddProject}>
                   <FolderPlus size={16} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
-                  <span className="truncate">{tr("sidebar.Sidebar.message400")}</span>
+                  <span className="truncate">{tr('sidebar.Sidebar.message400')}</span>
                 </SidebarRow>
               )}
             </>
@@ -104,14 +108,31 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
             >
               <span className="shrink-0">{tr('sidebar.Sidebar.message401')}</span>
               <span className="h-px min-w-0 flex-1 bg-line-subtle" />
-              <ChevronDown size={14} strokeWidth={1.5} className="sidebar-history-chevron shrink-0" data-expanded={prefs.recentExpanded} />
+              <ChevronDown
+                size={14}
+                strokeWidth={1.5}
+                className="sidebar-history-chevron shrink-0"
+                data-expanded={prefs.recentExpanded}
+              />
             </button>
           </h3>
-          <div id={recentId} className="sidebar-history-content min-h-0 overflow-hidden" data-expanded={prefs.recentExpanded} aria-hidden={!prefs.recentExpanded} inert={!prefs.recentExpanded}>
+          <div
+            id={recentId}
+            className="sidebar-history-content min-h-0 overflow-hidden"
+            data-expanded={prefs.recentExpanded}
+            aria-hidden={!prefs.recentExpanded}
+            inert={!prefs.recentExpanded}
+          >
             <div className="min-h-0 overflow-x-hidden overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <div className="flex flex-col gap-px">
-                {recent.map((r) => (
-                  <RecentItem key={r.id} item={r} status={r.status} selected={r.id === selectedSessionId} onSelect={onSelectSession} />
+                {recent.map(r => (
+                  <RecentItem
+                    key={r.id}
+                    item={r}
+                    status={r.status}
+                    selected={r.id === selectedSessionId}
+                    onSelect={onSelectSession}
+                  />
                 ))}
               </div>
             </div>

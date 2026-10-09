@@ -1,5 +1,12 @@
 // 协作频道的纯函数（docs/ui/channels.md §5–§6）。不依赖 window，可以直接单测。
-import type { Channel, ChannelEvent, ChannelMember, ChannelMessage, ChannelTask, ChannelTextMessage } from '@/mock/types'
+import type {
+  Channel,
+  ChannelEvent,
+  ChannelMember,
+  ChannelMessage,
+  ChannelTask,
+  ChannelTextMessage,
+} from '@/mock/types'
 
 // ---------------------------------------------------------------------------
 // 时间线
@@ -25,7 +32,10 @@ export function dayStart(at: number): number {
  * 按时间排好的消息 → 时间线的行：跨天插日期分隔，`newFrom` 处插一次「新消息」分隔，
  * 同一作者 gap 内的连续普通消息合并成组；换人、超时、跨天、分隔线、任务卡 / 事件、带引用都会断开。
  */
-export function buildTimeline(messages: readonly ChannelMessage[], opts: { newFrom?: number | null; gapMs?: number } = {}): TimelineRow[] {
+export function buildTimeline(
+  messages: readonly ChannelMessage[],
+  opts: { newFrom?: number | null; gapMs?: number } = {},
+): TimelineRow[] {
   const gap = opts.gapMs ?? GROUP_GAP_MS
   const rows: TimelineRow[] = []
   let lastDay: number | null = null
@@ -59,7 +69,11 @@ export function buildTimeline(messages: readonly ChannelMessage[], opts: { newFr
 }
 
 /** 进入频道前最早一条未读的时间：别人发的（不含事件）里最后 unread 条中的第一条 */
-export function firstUnreadAt(messages: readonly ChannelMessage[], unread: number, selfId: string | null): number | null {
+export function firstUnreadAt(
+  messages: readonly ChannelMessage[],
+  unread: number,
+  selfId: string | null,
+): number | null {
   if (unread <= 0) return null
   const others = messages.filter(m => m.kind !== 'event' && m.authorId !== selfId)
   return others.slice(-unread)[0]?.at ?? null
@@ -85,7 +99,11 @@ export function mentionAt(text: string, caret: number): { start: number; query: 
 }
 
 /** 把 [start, end) 替换成 `@名字 `，返回新文本和光标位置；后面已经是空白时不再多加空格 */
-export function insertMention(text: string, range: { start: number; end: number }, name: string): { text: string; caret: number } {
+export function insertMention(
+  text: string,
+  range: { start: number; end: number },
+  name: string,
+): { text: string; caret: number } {
   const rest = text.slice(range.end)
   const space = /^\s/.test(rest) ? '' : ' '
   const inserted = `@${name}${space}`
@@ -125,9 +143,14 @@ export function parseMentions(text: string, members: readonly Pick<ChannelMember
 }
 
 /** @ 菜单的候选：不含自己，按名字或引擎名过滤，AI 成员在前 */
-export function filterMentionable(members: readonly ChannelMember[], query: string, selfId: string | null): ChannelMember[] {
+export function filterMentionable(
+  members: readonly ChannelMember[],
+  query: string,
+  selfId: string | null,
+): ChannelMember[] {
   const q = query.trim().toLowerCase()
-  const match = (m: ChannelMember) => !q || m.name.toLowerCase().includes(q) || (m.kind === 'agent' && m.engine.includes(q))
+  const match = (m: ChannelMember) =>
+    !q || m.name.toLowerCase().includes(q) || (m.kind === 'agent' && m.engine.includes(q))
   const list = members.filter(m => m.id !== selfId && match(m))
   return [...list.filter(m => m.kind === 'agent'), ...list.filter(m => m.kind === 'human')]
 }
@@ -145,7 +168,10 @@ export function markRead(channels: Channel[], id: string): Channel[] {
   return channels.map(c => (c.id === id ? { ...c, unread: 0, mentioned: false } : c))
 }
 
-export function appendMessage(messages: Record<string, ChannelMessage[]>, message: ChannelMessage): Record<string, ChannelMessage[]> {
+export function appendMessage(
+  messages: Record<string, ChannelMessage[]>,
+  message: ChannelMessage,
+): Record<string, ChannelMessage[]> {
   return { ...messages, [message.channelId]: [...(messages[message.channelId] ?? []), message] }
 }
 
@@ -159,7 +185,17 @@ export function createMessage(input: {
   now: number
 }): ChannelTextMessage {
   const mentions = parseMentions(input.text, input.members).filter(id => id !== input.authorId)
-  return { kind: 'message', id: input.id, channelId: input.channelId, at: input.now, authorId: input.authorId, text: input.text, format: 'plain', replyToId: input.replyToId ?? null, mentions }
+  return {
+    kind: 'message',
+    id: input.id,
+    channelId: input.channelId,
+    at: input.now,
+    authorId: input.authorId,
+    text: input.text,
+    format: 'plain',
+    replyToId: input.replyToId ?? null,
+    mentions,
+  }
 }
 
 /** 引用条、引用块里的一行摘要 */

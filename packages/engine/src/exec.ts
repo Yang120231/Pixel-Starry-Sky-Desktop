@@ -31,8 +31,8 @@ export function dirsOnPath(fileName: string, env: NodeJS.ProcessEnv = process.en
   return raw
     .split(delimiter)
     .filter(Boolean)
-    .map((d) => d.replace(/^"|"$/g, ''))
-    .filter((d) => isFile(join(d, fileName)))
+    .map(d => d.replace(/^"|"$/g, ''))
+    .filter(d => isFile(join(d, fileName)))
 }
 
 export interface ExecResult {
@@ -44,8 +44,13 @@ export interface ExecResult {
 }
 
 /** 跑一次性命令，不经过 shell，不弹窗口 */
-export function run(launcher: Launcher, args: string[], env: NodeJS.ProcessEnv, timeoutMs = 20_000): Promise<ExecResult> {
-  return new Promise((resolve) => {
+export function run(
+  launcher: Launcher,
+  args: string[],
+  env: NodeJS.ProcessEnv,
+  timeoutMs = 20_000,
+): Promise<ExecResult> {
+  return new Promise(resolve => {
     execFile(
       launcher.command,
       [...launcher.args, ...args],
@@ -55,7 +60,11 @@ export function run(launcher: Launcher, args: string[], env: NodeJS.ProcessEnv, 
           ok: !err,
           stdout: String(stdout ?? ''),
           stderr: String(stderr ?? ''),
-          error: err ? ((err as NodeJS.ErrnoException).code === 'ETIMEDOUT' || err.killed ? '超时' : err.message) : null,
+          error: err
+            ? (err as NodeJS.ErrnoException).code === 'ETIMEDOUT' || err.killed
+              ? '超时'
+              : err.message
+            : null,
         })
       },
     )
@@ -64,8 +73,8 @@ export function run(launcher: Launcher, args: string[], env: NodeJS.ProcessEnv, 
 
 /** 比较版本号 a 是否 >= b（只看数字部分） */
 export function versionAtLeast(a: string, b: string): boolean {
-  const pa = a.split('.').map((x) => parseInt(x, 10) || 0)
-  const pb = b.split('.').map((x) => parseInt(x, 10) || 0)
+  const pa = a.split('.').map(x => parseInt(x, 10) || 0)
+  const pb = b.split('.').map(x => parseInt(x, 10) || 0)
   for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
     const d = (pa[i] ?? 0) - (pb[i] ?? 0)
     if (d !== 0) return d > 0

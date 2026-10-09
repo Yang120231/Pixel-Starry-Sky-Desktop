@@ -18,14 +18,22 @@ interface CollapsibleSlotProps {
  */
 export function CollapsibleSlot({ open, width, side, children }: CollapsibleSlotProps) {
   useI18n()
-  const slot = useRef<HTMLDivElement>(null), previousWidth = useRef(width)
+  const slot = useRef<HTMLDivElement>(null),
+    previousWidth = useRef(width)
   useLayoutEffect(() => {
     if (previousWidth.current === width || !slot.current) return
     previousWidth.current = width
     slot.current.dataset.sizeChanged = ''
     let next = 0
-    const frame = requestAnimationFrame(() => { next = requestAnimationFrame(() => { if (slot.current) delete slot.current.dataset.sizeChanged }) })
-    return () => { cancelAnimationFrame(frame); cancelAnimationFrame(next) }
+    const frame = requestAnimationFrame(() => {
+      next = requestAnimationFrame(() => {
+        if (slot.current) delete slot.current.dataset.sizeChanged
+      })
+    })
+    return () => {
+      cancelAnimationFrame(frame)
+      cancelAnimationFrame(next)
+    }
   }, [width])
   return (
     <div

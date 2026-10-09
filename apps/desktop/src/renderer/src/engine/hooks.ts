@@ -6,7 +6,16 @@ import { useEngineCatalog } from './catalog'
 import { useMachines, machineOf } from '@/machines/store'
 import { draftWorkspace } from '@/machines/drafts'
 import { notify } from '@/panes/store'
-import type { Effort, EngineId, EngineInfo, ImageAttachment, PermissionMode, QueuedMessage, QueueSettings, SessionSnapshot } from '@pixelsky/protocol'
+import type {
+  Effort,
+  EngineId,
+  EngineInfo,
+  ImageAttachment,
+  PermissionMode,
+  QueuedMessage,
+  QueueSettings,
+  SessionSnapshot,
+} from '@pixelsky/protocol'
 import {
   projects as demoProjects,
   recent as demoRecent,
@@ -64,7 +73,7 @@ export function useViewing(id: string | null): void {
 }
 
 export function useSession(id: string | null): SessionSnapshot | null {
-  const snap = useEngineState((s) => (id ? (s.snapshots[id] ?? null) : null))
+  const snap = useEngineState(s => (id ? (s.snapshots[id] ?? null) : null))
   useEffect(() => {
     if (id && isLive) void openSession(id).catch(e => notify(e.message))
   }, [id, snap === null])
@@ -72,12 +81,12 @@ export function useSession(id: string | null): SessionSnapshot | null {
 }
 
 export function useSessionTitle(id: string | null): string {
-  const demoChanges=useDemoSessionChanges()
-  const live = useEngineState((s) =>
-    id ? (s.snapshots[id]?.record.title ?? s.sessions.find((x) => x.record.id === id)?.record.title ?? null) : null,
+  const demoChanges = useDemoSessionChanges()
+  const live = useEngineState(s =>
+    id ? (s.snapshots[id]?.record.title ?? s.sessions.find(x => x.record.id === id)?.record.title ?? null) : null,
   )
-  if (!isLive) return (id?demoChanges[id]?.title:undefined)??demoTitle(id)
-  return live ?? tr("engine.hooks.message472")
+  if (!isLive) return (id ? demoChanges[id]?.title : undefined) ?? demoTitle(id)
+  return live ?? tr('engine.hooks.message472')
 }
 
 // ---------------------------------------------------------------------------
@@ -92,11 +101,11 @@ export interface SidebarData {
 
 export function useSidebarData(): SidebarData {
   const machines = useMachines()
-  const demoChanges=useDemoSessionChanges()
+  const demoChanges = useDemoSessionChanges()
   const { locale } = useI18n()
-  const projects = useEngineState((s) => s.projects)
-  const sessions = useEngineState((s) => s.sessions)
-  const unread = useEngineState((s) => s.unread)
+  const projects = useEngineState(s => s.projects)
+  const sessions = useEngineState(s => s.sessions)
+  const unread = useEngineState(s => s.unread)
   // 每分钟刷新一次，让「刚刚 / 5分钟」跟着变
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
@@ -106,9 +115,14 @@ export function useSidebarData(): SidebarData {
   }, [])
 
   return useMemo(() => {
-    if (!isLive) return demoSidebarData(demoProjects,demoRecent,demoRunStatus,demoChanges)
-    return sidebarData(projects.filter(p => machineOf(p.id) === machines.currentId),sessions.filter(s => machineOf(s.record.id) === machines.currentId),unread,stamp=>relativeTime(stamp,now))
-  }, [projects, sessions, unread, now, locale,demoChanges,machines.currentId])
+    if (!isLive) return demoSidebarData(demoProjects, demoRecent, demoRunStatus, demoChanges)
+    return sidebarData(
+      projects.filter(p => machineOf(p.id) === machines.currentId),
+      sessions.filter(s => machineOf(s.record.id) === machines.currentId),
+      unread,
+      stamp => relativeTime(stamp, now),
+    )
+  }, [projects, sessions, unread, now, locale, demoChanges, machines.currentId])
 }
 
 export { addProject }
@@ -168,9 +182,9 @@ export function useDemoSourceController(): SourceMenuController {
     canSwitchEngine: true,
     selectEngine: () => undefined,
     redetect: () => undefined,
-    setSource: async (s) => setDefaultSource(s),
-    setGroup: async (id) => setDefaultGroup(id),
-    setModel: async (m) => (isPlatform && m ? setDefaultModel(m) : setDefaultSelfModel(m)),
+    setSource: async s => setDefaultSource(s),
+    setGroup: async id => setDefaultGroup(id),
+    setModel: async m => (isPlatform && m ? setDefaultModel(m) : setDefaultSelfModel(m)),
     saveAsDefault: () => undefined,
   }
 }
@@ -268,9 +282,9 @@ export function useComposerController(
   draftKey?: string,
 ): ComposerController | undefined {
   const account = useAccount()
-  const engines = useEngineState((s) => s.engines)
-  const defaults = useEngineState((s) => s.defaults)
-  const snap = useEngineState((s) => (sessionId ? (s.snapshots[sessionId] ?? null) : null))
+  const engines = useEngineState(s => s.engines)
+  const defaults = useEngineState(s => s.defaults)
+  const snap = useEngineState(s => (sessionId ? (s.snapshots[sessionId] ?? null) : null))
   const [draft, setDraft] = useState<Draft | null>(null)
   const selectedEngineId = snap?.record.engine ?? draft?.engine ?? defaults?.engine ?? 'claude'
   const platform = usePlatform(selectedEngineId)
@@ -292,8 +306,9 @@ export function useComposerController(
   }
   const record = snap?.record ?? null
   const engineId = record?.engine ?? base.engine
-  const engine = engines.find((e) => e.id === engineId) ?? null
-  const canSwitchEngine = !record || ((snap?.items.length ?? 0) === 0 && (snap?.queue.length ?? 0) === 0 && snap?.state === 'idle')
+  const engine = engines.find(e => e.id === engineId) ?? null
+  const canSwitchEngine =
+    !record || ((snap?.items.length ?? 0) === 0 && (snap?.queue.length ?? 0) === 0 && snap?.state === 'idle')
 
   const patch = (p: Partial<Draft>): void => {
     if (record) void b.updateSession(record.id, p).catch(() => undefined)
@@ -306,24 +321,31 @@ export function useComposerController(
   const groupId = started ? (record?.platform?.groupId ?? null) : source === 'platform' ? platform.groupId : null
   const model = started ? (record?.model ?? null) : source === 'platform' ? platform.model : platform.selfModel
   const isDefault =
-    source === platform.source && (source === 'platform' ? groupId === platform.groupId && model === platform.model : model === platform.selfModel)
+    source === platform.source &&
+    (source === 'platform' ? groupId === platform.groupId && model === platform.model : model === platform.selfModel)
   const platformAvailable = true
   /** 平台模型切到自有时：完整的 Claude 模型名本机也认，其他（别的厂商）换回引擎默认 */
-  const selfModelFrom = (m: string | null): string | null => (m && (engineId === 'codex' ? catalog?.models?.some(model => model.id === m) : /^claude-/.test(m)) ? m : null)
+  const selfModelFrom = (m: string | null): string | null =>
+    m && (engineId === 'codex' ? catalog?.models?.some(model => model.id === m) : /^claude-/.test(m)) ? m : null
 
   let blocker: SourceBlocker | null = null
   if (source === 'platform') {
-    const group = platform.groups.find((g) => g.id === groupId)
+    const group = platform.groups.find(g => g.id === groupId)
     const balance = account.account?.balance ?? null
     if (!platform.email) blocker = { kind: 'signin' }
-    else if (started && record?.platform && record.platform.account !== platform.email) blocker = { kind: 'account', account: record.platform.account }
+    else if (started && record?.platform && record.platform.account !== platform.email)
+      blocker = { kind: 'account', account: record.platform.account }
     else if (!started && platform.loaded && !platform.loading && (!groupId || !model))
-      blocker = { kind: 'no-route', ...noRouteReason(platform, balance), ...(engineId==='codex'&&platform.groups.length===0?{message:tr('codex.noRoutes')}: {}) }
+      blocker = {
+        kind: 'no-route',
+        ...noRouteReason(platform, balance),
+        ...(engineId === 'codex' && platform.groups.length === 0 ? { message: tr('codex.noRoutes') } : {}),
+      }
     else if (needsBalance(group) && balance !== null && balance <= 0) blocker = { kind: 'balance' }
   } else if (engine && engine.status === 'unauthenticated') {
-    blocker = { kind: 'self-auth', message: engine.message ?? tr("engine.hooks.message473", { p0: engine.name }) }
+    blocker = { kind: 'self-auth', message: engine.message ?? tr('engine.hooks.message473', { p0: engine.name }) }
   } else if (engine && engine.status !== 'ready') {
-    blocker = { kind: 'self-missing', message: engine.message ?? tr("engine.hooks.message474", { p0: engine.name }) }
+    blocker = { kind: 'self-missing', message: engine.message ?? tr('engine.hooks.message474', { p0: engine.name }) }
   }
 
   /** 平台的（分组，模型）：优先保住 want 这个模型，否则沿用全局默认 */
@@ -347,9 +369,12 @@ export function useComposerController(
       await b.updateSession(record.id, { platform: null, model: selfModelFrom(record.model) })
       return
     }
-    if (!platform.email) throw new Error(tr("engine.hooks.message475"))
+    if (!platform.email) throw new Error(tr('engine.hooks.message475'))
     const pick = await platformPick(record.model)
-    await b.updateSession(record.id, { platform: { groupId: pick.groupId, account: platform.email }, model: pick.model })
+    await b.updateSession(record.id, {
+      platform: { groupId: pick.groupId, account: platform.email },
+      model: pick.model,
+    })
   }
 
   const setGroup = async (id: string): Promise<void> => {
@@ -357,7 +382,7 @@ export function useComposerController(
       setDefaultGroup(id, engineId)
       return
     }
-    const group = platform.groups.find((g) => g.id === id)
+    const group = platform.groups.find(g => g.id === id)
     if (!record.platform || !group || group.models.length === 0) return
     const m = record.model && group.models.includes(record.model) ? record.model : group.models[0]
     await b.updateSession(record.id, { platform: { groupId: id, account: record.platform.account }, model: m })
@@ -366,7 +391,8 @@ export function useComposerController(
   const setModel = async (m: string | null): Promise<void> => {
     const selected = catalog?.models?.find(model => model.id === (m ?? catalog.currentModel))
     const previousEffort = record?.effort ?? base.effort
-    const effort = selected && previousEffort && !selected.efforts.includes(previousEffort) ? selected.defaultEffort : previousEffort
+    const effort =
+      selected && previousEffort && !selected.efforts.includes(previousEffort) ? selected.defaultEffort : previousEffort
     const effortPatch = effort !== previousEffort ? { effort } : {}
     if (!started || !record) {
       if (source === 'platform' && m) setDefaultModel(m, engineId)
@@ -380,10 +406,14 @@ export function useComposerController(
     }
     if (!m) return
     // 先保模型：当前线路没有这个模型就换到包含它、倍率最低的线路
-    const keep = platform.groups.find((g) => g.id === record.platform?.groupId)?.models.includes(m)
+    const keep = platform.groups.find(g => g.id === record.platform?.groupId)?.models.includes(m)
     const route = keep ? record.platform.groupId : groupsForModel(platform.groups, m)[0]?.id
-    if (!route) throw new Error(tr("engine.hooks.message476"))
-    await b.updateSession(record.id, { platform: { groupId: route, account: record.platform.account }, model: m, ...effortPatch })
+    if (!route) throw new Error(tr('engine.hooks.message476'))
+    await b.updateSession(record.id, {
+      platform: { groupId: route, account: record.platform.account },
+      model: m,
+      ...effortPatch,
+    })
   }
 
   return {
@@ -394,11 +424,17 @@ export function useComposerController(
     turnId: snap?.turnId ?? null,
     steerAvailable: snap?.flags.steerAvailable === true,
     state: snap?.state ?? 'idle',
-    cancelQueued: (id) => record ? b.cancelQueued(record.id, id) : Promise.reject(new Error(tr("engine.hooks.message477"))),
-    moveQueued: (id, index) => record ? b.moveQueued(record.id, id, index) : Promise.reject(new Error(tr("engine.hooks.message477"))),
-    runQueuedNow: (id) => record ? b.runQueuedNow(record.id, id) : Promise.reject(new Error(tr("engine.hooks.message477"))),
-    steerQueued: (id) => record && snap?.turnId ? b.steerQueued(record.id, id, snap.turnId) : Promise.reject(new Error(tr("engine.hooks.message478"))),
-    resumeQueue: () => record ? b.resumeQueue(record.id) : Promise.reject(new Error(tr("engine.hooks.message477"))),
+    cancelQueued: id =>
+      record ? b.cancelQueued(record.id, id) : Promise.reject(new Error(tr('engine.hooks.message477'))),
+    moveQueued: (id, index) =>
+      record ? b.moveQueued(record.id, id, index) : Promise.reject(new Error(tr('engine.hooks.message477'))),
+    runQueuedNow: id =>
+      record ? b.runQueuedNow(record.id, id) : Promise.reject(new Error(tr('engine.hooks.message477'))),
+    steerQueued: id =>
+      record && snap?.turnId
+        ? b.steerQueued(record.id, id, snap.turnId)
+        : Promise.reject(new Error(tr('engine.hooks.message478'))),
+    resumeQueue: () => (record ? b.resumeQueue(record.id) : Promise.reject(new Error(tr('engine.hooks.message477')))),
     started,
     source,
     groupId,
@@ -416,44 +452,51 @@ export function useComposerController(
     engines,
     engine,
     canSwitchEngine,
-    selectEngine: (id) => {
+    selectEngine: id => {
       if (canSwitchEngine) patch({ engine: id, effort: 'high', ultracode: false, fast: false, thinkingSummaries: true })
     },
     effort: record ? record.effort : base.effort,
-    efforts: catalog?.models?.find(m => m.id === (model ?? catalog.currentModel))?.efforts ?? engine?.caps.efforts ?? ['low', 'medium', 'high', 'xhigh', 'max'],
-    setEffort: (effort) => patch({ effort }),
+    efforts: catalog?.models?.find(m => m.id === (model ?? catalog.currentModel))?.efforts ??
+      engine?.caps.efforts ?? ['low', 'medium', 'high', 'xhigh', 'max'],
+    setEffort: effort => patch({ effort }),
     ultracodeSupported: engine?.caps.ultracode ?? false,
     ultracodeAvailable: snap?.flags.ultracodeAvailable ?? null,
     ultracode: record ? record.ultracode : base.ultracode,
-    setUltracode: (ultracode) => patch({ ultracode }),
+    setUltracode: ultracode => patch({ ultracode }),
     fastSupported: engine?.caps.fast ?? false,
     fastAvailable: snap?.flags.fastAvailable ?? null,
-    fastBlocked: snap?.flags.fastBlocked && snap.flags.fastAvailable === false ? fastBlockedText(snap.flags.fastBlocked) : null,
+    fastBlocked:
+      snap?.flags.fastBlocked && snap.flags.fastAvailable === false ? fastBlockedText(snap.flags.fastBlocked) : null,
     fast: record ? record.fast : base.fast,
-    setFast: (fast) => patch({ fast }),
+    setFast: fast => patch({ fast }),
     thinkingSupported: engine?.caps.thinkingSummaries ?? false,
     thinkingSummaries: record ? record.thinkingSummaries : base.thinkingSummaries,
-    setThinkingSummaries: (thinkingSummaries) => patch({ thinkingSummaries }),
+    setThinkingSummaries: thinkingSummaries => patch({ thinkingSummaries }),
     accent: engineAccent(engineId),
     suggestion: snap?.suggestion ?? null,
     permissionMode: record ? record.permissionMode : base.permissionMode,
     permissionModes: engine?.caps.permissionModes ?? ['ask', 'edits', 'plan', 'full'],
-    setPermissionMode: (permissionMode) => patch({ permissionMode }),
+    setPermissionMode: permissionMode => patch({ permissionMode }),
     running: !!snap && snap.state !== 'idle',
-    stop: () => record ? b.interrupt(record.id) : Promise.resolve(),
+    stop: () => (record ? b.interrupt(record.id) : Promise.resolve()),
     redetect: () => void redetectEngines(),
     submit: async (text, clientMessageId = crypto.randomUUID(), attachments = []) => {
-      if (attachments.length && (engine ?? (await b.engines()).find(info => info.id === engineId))?.caps.imageInput !== true) throw new Error(tr('composer.attachment.unsupportedEngine'))
+      if (
+        attachments.length &&
+        (engine ?? (await b.engines()).find(info => info.id === engineId))?.caps.imageInput !== true
+      )
+        throw new Error(tr('composer.attachment.unsupportedEngine'))
       // 平台失败不改用自有（D023）：拦下来让用户自己选
-      if (blocker?.kind === 'signin') throw new Error(tr("engine.hooks.message479"))
-      if (blocker?.kind === 'account') throw new Error(tr("engine.hooks.message480", { p0: blocker.account }))
+      if (blocker?.kind === 'signin') throw new Error(tr('engine.hooks.message479'))
+      if (blocker?.kind === 'account') throw new Error(tr('engine.hooks.message480', { p0: blocker.account }))
       if (blocker?.kind === 'no-route') throw new Error(blocker.message)
       const usePlatform = source === 'platform'
       if (record && started) {
         await b.send(record.id, { text, clientMessageId, attachments })
         return
       }
-      if (usePlatform && (platform.loading || !groupId || !model)) throw new Error(platform.error ?? tr("engine.hooks.message481"))
+      if (usePlatform && (platform.loading || !groupId || !model))
+        throw new Error(platform.error ?? tr('engine.hooks.message481'))
       const sourcePatch = usePlatform
         ? { platform: { groupId: groupId!, account: platform.email! }, model, engine: engineId }
         : { platform: null, model }
@@ -463,12 +506,19 @@ export function useComposerController(
         return
       }
       // 欢迎页：先确认引擎可用、有项目，再创建会话
-      const info = engine ?? (await b.engines()).find((e) => e.id === engineId)
-      if (info && info.status !== 'ready' && !(usePlatform && info.status === 'unauthenticated')) throw new Error(info.message ?? tr("session.ModelSourceMenu.message315", { p0: info.name }))
+      const info = engine ?? (await b.engines()).find(e => e.id === engineId)
+      if (info && info.status !== 'ready' && !(usePlatform && info.status === 'unauthenticated'))
+        throw new Error(info.message ?? tr('session.ModelSourceMenu.message315', { p0: info.name }))
       const workspace = draftKey ? draftWorkspace(draftKey) : null
       const projectId = workspace?.projectId ?? getEngineState().currentProjectId ?? (await addProject())
-      if (!projectId) throw new Error(tr("engine.hooks.message482"))
-      const created = await b.createSession({ projectId, copyId: workspace?.copyId, workspaceSessionId: workspace?.sessionId, ...base, ...sourcePatch })
+      if (!projectId) throw new Error(tr('engine.hooks.message482'))
+      const created = await b.createSession({
+        projectId,
+        copyId: workspace?.copyId,
+        workspaceSessionId: workspace?.sessionId,
+        ...base,
+        ...sourcePatch,
+      })
       try {
         await b.send(created.id, { text, clientMessageId, attachments })
       } catch (err) {
@@ -495,19 +545,32 @@ export interface StatusBarController {
 }
 
 export function useStatusBar(sessionId: string | null, draftKey?: string): StatusBarController | undefined {
-  const projects = useEngineState((s) => s.projects)
-  const currentProjectId = useEngineState((s) => s.currentProjectId)
-  const snap = useEngineState((s) => (sessionId ? (s.snapshots[sessionId] ?? null) : null))
+  const projects = useEngineState(s => s.projects)
+  const currentProjectId = useEngineState(s => s.currentProjectId)
+  const snap = useEngineState(s => (sessionId ? (s.snapshots[sessionId] ?? null) : null))
   if (!isLive) return undefined
   const chosen = draftKey ? draftWorkspace(draftKey) : null
   const pid = chosen?.projectId ?? snap?.record.projectId ?? (sessionId ? null : currentProjectId)
-  const project = projects.find((p) => p.id === pid) ?? null
+  const project = projects.find(p => p.id === pid) ?? null
   return {
-    project: chosen ? { id: chosen.projectId, name: chosen.name, path: chosen.path } : project
-      ? { id: project.id, name: snap && snap.record.cwd.toLowerCase() !== project.path.toLowerCase() ? project.name + ' / ' + (snap.record.cwd.split(/[\\/]/).pop() || '') : project.name, path: snap?.record.cwd ?? project.path }
-      : snap
-        ? { id: snap.record.projectId, name: snap.record.cwd.split(/[\\/]/).pop() || snap.record.cwd, path: snap.record.cwd }
-        : null,
+    project: chosen
+      ? { id: chosen.projectId, name: chosen.name, path: chosen.path }
+      : project
+        ? {
+            id: project.id,
+            name:
+              snap && snap.record.cwd.toLowerCase() !== project.path.toLowerCase()
+                ? project.name + ' / ' + (snap.record.cwd.split(/[\\/]/).pop() || '')
+                : project.name,
+            path: snap?.record.cwd ?? project.path,
+          }
+        : snap
+          ? {
+              id: snap.record.projectId,
+              name: snap.record.cwd.split(/[\\/]/).pop() || snap.record.cwd,
+              path: snap.record.cwd,
+            }
+          : null,
     projects,
     canPickProject: !sessionId,
     selectProject: setCurrentProject,

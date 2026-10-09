@@ -15,7 +15,12 @@ export async function initWorkspace(resolveTarget: TargetResolver): Promise<void
   })
   await editors.init()
   const handle = (name: string, fn: (e: IpcMainInvokeEvent, ...args: any[]) => unknown): void => {
-    ipcMain.handle(name, (e, ...args) => { if (!trustedSender(e)) throw new Error('不允许的调用方'); return machines && (name.startsWith('files:') || name === 'editor:open') ? machines.invoke(name, args, () => fn(e, ...args)) : fn(e, ...args) })
+    ipcMain.handle(name, (e, ...args) => {
+      if (!trustedSender(e)) throw new Error('不允许的调用方')
+      return machines && (name.startsWith('files:') || name === 'editor:open')
+        ? machines.invoke(name, args, () => fn(e, ...args))
+        : fn(e, ...args)
+    })
   }
   handle('files:target', (_e, ref) => files.target(ref))
   handle('files:list', (_e, ref, path) => files.list(workspaceRef(ref), path))
@@ -28,18 +33,31 @@ export async function initWorkspace(resolveTarget: TargetResolver): Promise<void
     const target = files.target(ref)
     const file = await workspacePath(target.path, path)
     if (path) shell.showItemInFolder(file)
-    else { const err = await shell.openPath(file); if (err) throw new Error('打不开项目目录：' + err) }
+    else {
+      const err = await shell.openPath(file)
+      if (err) throw new Error('打不开项目目录：' + err)
+    }
   })
-  handle('files:copyPath', async (_e, ref, path = '') => { clipboard.writeText(await workspacePath(files.target(ref).path, path)) })
+  handle('files:copyPath', async (_e, ref, path = '') => {
+    clipboard.writeText(await workspacePath(files.target(ref).path, path))
+  })
   handle('editor:state', (_e, force) => editors.state(force === true))
   handle('editor:preferences', (_e, patch) => editors.preferences(patch))
-  handle('editor:remove', (_e, id) => { if (typeof id !== 'string') throw new Error('编辑器 ID 不正确'); return editors.remove(id) })
+  handle('editor:remove', (_e, id) => {
+    if (typeof id !== 'string') throw new Error('编辑器 ID 不正确')
+    return editors.remove(id)
+  })
   handle('editor:choose', async (e, kind: EditorKind, name?: string, mode?: 'code' | 'folder') => {
     if (!['vscode', 'cursor', 'windsurf', 'trae-cn', 'trae', 'custom'].includes(kind)) throw new Error('未知编辑器')
-    if (name !== undefined && (typeof name !== 'string' || !name.trim() || name.length > 60)) throw new Error('编辑器名称不正确')
+    if (name !== undefined && (typeof name !== 'string' || !name.trim() || name.length > 60))
+      throw new Error('编辑器名称不正确')
     if (mode !== undefined && mode !== 'code' && mode !== 'folder') throw new Error('打开方式不正确')
     const win = BrowserWindow.fromWebContents(e.sender)
-    const opts = { title: nativeText(win, '选择编辑器程序'), filters: [{ name: nativeText(win, '程序'), extensions: process.platform === 'win32' ? ['exe'] : ['*'] }], properties: ['openFile' as const] }
+    const opts = {
+      title: nativeText(win, '选择编辑器程序'),
+      filters: [{ name: nativeText(win, '程序'), extensions: process.platform === 'win32' ? ['exe'] : ['*'] }],
+      properties: ['openFile' as const],
+    }
     const result = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
     if (result.canceled || !result.filePaths[0]) return null
     return editors.configure(kind, result.filePaths[0], name, mode)

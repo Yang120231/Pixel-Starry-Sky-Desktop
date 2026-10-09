@@ -65,7 +65,7 @@ const listeners = new Set<() => void>()
 
 function setSnapshot(next: Snapshot) {
   snapshot = next
-  listeners.forEach((l) => l())
+  listeners.forEach(l => l())
 }
 
 function errorText(e: unknown, fallback: string): string {
@@ -79,7 +79,7 @@ function start() {
   const bridge = getBridge()
   if (!bridge) return
   try {
-    bridge.onChange((s) => {
+    bridge.onChange(s => {
       gotPush = true
       setSnapshot(toSnapshot(s))
     })
@@ -88,11 +88,11 @@ function start() {
   }
   bridge
     .getState()
-    .then((s) => {
+    .then(s => {
       if (!gotPush) setSnapshot(toSnapshot(s))
     })
-    .catch((e) => {
-      if (!gotPush) setSnapshot({ ...SIGNED_OUT, error: errorText(e, tr("account.useAccount.message16")) })
+    .catch(e => {
+      if (!gotPush) setSnapshot({ ...SIGNED_OUT, error: errorText(e, tr('account.useAccount.message16')) })
     })
 }
 
@@ -132,10 +132,10 @@ function makeAction(name: 'login' | 'cancelLogin' | 'logout' | 'refresh', fallba
   }
 }
 
-const login = makeAction('login', () => tr("account.useAccount.message17"))
-const cancelLogin = makeAction('cancelLogin', () => tr("account.useAccount.message18"))
-const logout = makeAction('logout', () => tr("account.useAccount.message19"))
-const refresh = makeAction('refresh', () => tr("account.useAccount.message20"))
+const login = makeAction('login', () => tr('account.useAccount.message17'))
+const cancelLogin = makeAction('cancelLogin', () => tr('account.useAccount.message18'))
+const logout = makeAction('logout', () => tr('account.useAccount.message19'))
+const refresh = makeAction('refresh', () => tr('account.useAccount.message20'))
 
 /** 账号状态钩子。所有调用方共享同一个 store；操作函数引用稳定、不会抛出 */
 export function useAccount(): UseAccountResult {

@@ -18,14 +18,18 @@ function textOf(node: ElementContent): string {
 function fencedCode(pre: Element | undefined): { code: string; lang: string | null } {
   const code = pre?.children.find((c): c is Element => c.type === 'element' && c.tagName === 'code')
   const classes = code?.properties?.className
-  const langClass = Array.isArray(classes) ? classes.map(String).find((c) => c.startsWith('language-')) : undefined
+  const langClass = Array.isArray(classes) ? classes.map(String).find(c => c.startsWith('language-')) : undefined
   return { code: code ? textOf(code) : '', lang: langClass ? langClass.slice('language-'.length) : null }
 }
 
 /** 链接一律在新窗口打开（主进程会交给系统浏览器，只放行 http / https） */
 const components: Components = {
   a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noreferrer" />,
-  table: ({ node: _node, ...props }) => <div className="my-3 max-w-full overflow-x-auto"><table {...props} /></div>,
+  table: ({ node: _node, ...props }) => (
+    <div className="my-3 max-w-full overflow-x-auto">
+      <table {...props} />
+    </div>
+  ),
   // 代码块：语言标题栏 + 复制按钮 + 语法高亮（docs/ui/code-highlight.md）
   pre: ({ node }) => {
     const { code, lang } = fencedCode(node)

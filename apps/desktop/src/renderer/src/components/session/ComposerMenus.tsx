@@ -3,7 +3,19 @@ import { tr } from '../../i18n/core'
 // 输入框里的弹出菜单：推理强度（滑块 + Ultracode）、权限模式（docs/engines.md §6、§11）。都从下往上弹出。
 // 引擎 / 额度来源 / 模型菜单在 ModelSourceMenu.tsx（docs/ui/source-switch.md）。
 import { useState, type CSSProperties, type ReactNode } from 'react'
-import { Brain, Check, ChevronDown, ListChecks, RotateCcw, Shield, ShieldCheck, ShieldOff, Sparkles, Zap, type LucideIcon } from 'lucide-react'
+import {
+  Brain,
+  Check,
+  ChevronDown,
+  ListChecks,
+  RotateCcw,
+  Shield,
+  ShieldCheck,
+  ShieldOff,
+  Sparkles,
+  Zap,
+  type LucideIcon,
+} from 'lucide-react'
 import type { PermissionMode } from '@pixelsky/protocol'
 import { IconButton, Popover, cn } from '@/components/ui'
 import { DEFAULT_EFFORT, EFFORT_LABEL, PERMISSION_INFO, effortLabel, type ComposerController } from '@/engine'
@@ -61,7 +73,19 @@ export const TRIGGER =
   'press no-drag inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-list text-fg-secondary hover:bg-hover hover:text-fg'
 
 /** 开关（Ultracode 等） */
-export function Switch({ checked, disabled, label, tone, onChange }: { checked: boolean; disabled?: boolean; label: string; tone?: 'ultracode'; onChange: (on: boolean) => void }) {
+export function Switch({
+  checked,
+  disabled,
+  label,
+  tone,
+  onChange,
+}: {
+  checked: boolean
+  disabled?: boolean
+  label: string
+  tone?: 'ultracode'
+  onChange: (on: boolean) => void
+}) {
   useI18n()
   return (
     <button
@@ -133,13 +157,24 @@ export function EffortMenu({ live }: { live: ComposerController }) {
   // 开启的会话开关同步显示在按钮上：Ultracode 用紫色文字，Fast / 思考摘要用强调色图标。
   const fastOn = live.fastSupported && live.fast
   const thinkingOn = live.thinkingSupported && live.thinkingSummaries
-  const modes = [ultracode && 'Ultracode', fastOn && tr("session.ComposerMenus.message128"), thinkingOn && tr("session.ComposerMenus.message132")].filter(Boolean).join(' · ')
-  const title = [tr("session.ComposerMenus.message124", { p0: effortLabel(effort) }), modes && tr("session.ComposerMenus.modesOn", { p0: modes })].filter(Boolean).join(' · ')
+  const modes = [
+    ultracode && 'Ultracode',
+    fastOn && tr('session.ComposerMenus.message128'),
+    thinkingOn && tr('session.ComposerMenus.message132'),
+  ]
+    .filter(Boolean)
+    .join(' · ')
+  const title = [
+    tr('session.ComposerMenus.message124', { p0: effortLabel(effort) }),
+    modes && tr('session.ComposerMenus.modesOn', { p0: modes }),
+  ]
+    .filter(Boolean)
+    .join(' · ')
   return (
     <div className="relative">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen(v => !v)}
         className={cn(TRIGGER, 'gap-1')}
         title={title}
         aria-label={title}
@@ -149,23 +184,34 @@ export function EffortMenu({ live }: { live: ComposerController }) {
         <span key={effort ?? ''} className={cn(top && 'effort-max')} style={accentStyle}>
           {effortLabel(effort)}
         </span>
-        {ultracode && <><span className="text-fg-muted">·</span><span className="effort-max ultracode-glow">Ultracode</span></>}
-        {(fastOn || thinkingOn) && <span className="flex items-center gap-0.5 text-accent" aria-hidden>
-          {fastOn && <Zap size={13} strokeWidth={1.75} />}
-          {thinkingOn && <Brain size={13} strokeWidth={1.75} />}
-        </span>}
+        {ultracode && (
+          <>
+            <span className="text-fg-muted">·</span>
+            <span className="effort-max ultracode-glow">Ultracode</span>
+          </>
+        )}
+        {(fastOn || thinkingOn) && (
+          <span className="flex items-center gap-0.5 text-accent" aria-hidden>
+            {fastOn && <Zap size={13} strokeWidth={1.75} />}
+            {thinkingOn && <Brain size={13} strokeWidth={1.75} />}
+          </span>
+        )}
         <ChevronDown size={14} strokeWidth={1.5} className="text-fg-muted" />
       </button>
       <Popover open={open} onClose={() => setOpen(false)} className="right-0 bottom-full mb-2 w-80 p-3">
         <div className="mb-3 flex h-6 items-center gap-2">
-          <span className="text-ui text-fg-secondary">{tr("session.Composer.message119")}</span>
-          <span key={effort ?? ''} className={cn('text-ui font-semibold text-fg', top && 'effort-max')} style={accentStyle}>
+          <span className="text-ui text-fg-secondary">{tr('session.Composer.message119')}</span>
+          <span
+            key={effort ?? ''}
+            className={cn('text-ui font-semibold text-fg', top && 'effort-max')}
+            style={accentStyle}
+          >
             {effortLabel(effort)}
           </span>
           <span className="flex-1" />
           <IconButton
             icon={RotateCcw}
-            label={tr("session.ComposerMenus.message125", { p0: EFFORT_LABEL[DEFAULT_EFFORT] })}
+            label={tr('session.ComposerMenus.message125', { p0: EFFORT_LABEL[DEFAULT_EFFORT] })}
             size={24}
             iconSize={14}
             disabled={effort === DEFAULT_EFFORT}
@@ -178,10 +224,14 @@ export function EffortMenu({ live }: { live: ComposerController }) {
           <div className="mt-3 flex flex-col border-t border-line-subtle pt-1">
             {ultracodeSupported && (
               <SwitchRow
-                icon={<Sparkles size={14} strokeWidth={1.75} className={ultracode ? 'text-ultracode' : 'text-fg-muted'} />}
+                icon={
+                  <Sparkles size={14} strokeWidth={1.75} className={ultracode ? 'text-ultracode' : 'text-fg-muted'} />
+                }
                 label="Ultracode"
                 tone="ultracode"
-                desc={ultraUnavailable ? tr("session.ComposerMenus.message126") : tr("session.ComposerMenus.message127")}
+                desc={
+                  ultraUnavailable ? tr('session.ComposerMenus.message126') : tr('session.ComposerMenus.message127')
+                }
                 checked={ultracode}
                 disabled={ultraUnavailable && !ultracode}
                 onChange={live.setUltracode}
@@ -190,8 +240,12 @@ export function EffortMenu({ live }: { live: ComposerController }) {
             {live.fastSupported && (
               <SwitchRow
                 icon={<Zap size={14} strokeWidth={1.75} className={live.fast ? 'text-accent' : 'text-fg-muted'} />}
-                label={tr("session.ComposerMenus.message128")}
-                desc={fastUnavailable ? tr("session.ComposerMenus.message129", { p0: live.fastBlocked ?? '原因未知' }) : tr("session.ComposerMenus.message131")}
+                label={tr('session.ComposerMenus.message128')}
+                desc={
+                  fastUnavailable
+                    ? tr('session.ComposerMenus.message129', { p0: live.fastBlocked ?? '原因未知' })
+                    : tr('session.ComposerMenus.message131')
+                }
                 checked={live.fast}
                 disabled={fastUnavailable && !live.fast}
                 onChange={live.setFast}
@@ -199,9 +253,15 @@ export function EffortMenu({ live }: { live: ComposerController }) {
             )}
             {live.thinkingSupported && (
               <SwitchRow
-                icon={<Brain size={14} strokeWidth={1.75} className={live.thinkingSummaries ? 'text-accent' : 'text-fg-muted'} />}
-                label={tr("session.ComposerMenus.message132")}
-                desc={tr("session.ComposerMenus.message133")}
+                icon={
+                  <Brain
+                    size={14}
+                    strokeWidth={1.75}
+                    className={live.thinkingSummaries ? 'text-accent' : 'text-fg-muted'}
+                  />
+                }
+                label={tr('session.ComposerMenus.message132')}
+                desc={tr('session.ComposerMenus.message133')}
                 checked={live.thinkingSummaries}
                 onChange={live.setThinkingSummaries}
               />
@@ -231,11 +291,11 @@ export function PermissionMenu({
     <div className="relative">
       <button
         type="button"
-        title={tr("session.ComposerMenus.message134", { p0: PERMISSION_INFO[mode].label })}
-        aria-label={tr("session.ComposerMenus.message134", { p0: PERMISSION_INFO[mode].label })}
+        title={tr('session.ComposerMenus.message134', { p0: PERMISSION_INFO[mode].label })}
+        aria-label={tr('session.ComposerMenus.message134', { p0: PERMISSION_INFO[mode].label })}
         aria-haspopup="menu"
         aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen(v => !v)}
         className={cn(
           'press no-drag inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-list hover:bg-hover',
           mode === 'full' ? 'text-warn' : 'text-fg-secondary hover:text-fg',
@@ -245,8 +305,8 @@ export function PermissionMenu({
         <span>{PERMISSION_INFO[mode].label}</span>
       </button>
       <Popover open={open} onClose={() => setOpen(false)} className="bottom-full left-0 mb-2 w-72">
-        <MenuTitle>{tr("session.Composer.message118")}</MenuTitle>
-        {(['ask', 'edits', 'plan', 'full'] as const).map((m) => {
+        <MenuTitle>{tr('session.Composer.message118')}</MenuTitle>
+        {(['ask', 'edits', 'plan', 'full'] as const).map(m => {
           const MIcon = PERMISSION_ICON[m]
           const supported = modes.includes(m)
           return (
@@ -256,7 +316,13 @@ export function PermissionMenu({
               disabled={!supported}
               icon={<MIcon size={16} strokeWidth={1.5} className={m === 'full' ? 'text-warn' : 'text-fg-muted'} />}
               title={PERMISSION_INFO[m].label}
-              hint={supported ? engine === 'codex' && m !== 'full' ? tr(`codex.permission.${m}`) : PERMISSION_INFO[m].hint : tr("session.ComposerMenus.message135")}
+              hint={
+                supported
+                  ? engine === 'codex' && m !== 'full'
+                    ? tr(`codex.permission.${m}`)
+                    : PERMISSION_INFO[m].hint
+                  : tr('session.ComposerMenus.message135')
+              }
               onClick={() => {
                 onSelect(m)
                 setOpen(false)

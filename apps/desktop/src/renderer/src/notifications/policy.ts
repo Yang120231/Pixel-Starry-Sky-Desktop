@@ -38,9 +38,11 @@ export function sanitizeNotificationPrefs(raw: unknown): NotificationPrefs {
   const d = DEFAULT_NOTIFICATION_PREFS
   if (!raw || typeof raw !== 'object') return { ...d, schedule: { ...d.schedule } }
   const v = raw as Record<string, unknown>
-  const bool = (key: keyof NotificationPrefs, fallback: boolean) => (typeof v[key] === 'boolean' ? (v[key] as boolean) : fallback)
+  const bool = (key: keyof NotificationPrefs, fallback: boolean) =>
+    typeof v[key] === 'boolean' ? (v[key] as boolean) : fallback
   const s = v.schedule && typeof v.schedule === 'object' ? (v.schedule as Record<string, unknown>) : {}
-  const clock = (value: unknown, fallback: string) => (typeof value === 'string' && CLOCK.test(value) ? value : fallback)
+  const clock = (value: unknown, fallback: string) =>
+    typeof value === 'string' && CLOCK.test(value) ? value : fallback
   return {
     completed: bool('completed', d.completed),
     failed: bool('failed', d.failed),
@@ -48,14 +50,19 @@ export function sanitizeNotificationPrefs(raw: unknown): NotificationPrefs {
     unfocusedOnly: bool('unfocusedOnly', d.unfocusedOnly),
     sound: bool('sound', d.sound),
     dndUntil: typeof v.dndUntil === 'number' && Number.isFinite(v.dndUntil) ? v.dndUntil : null,
-    schedule: { enabled: typeof s.enabled === 'boolean' ? s.enabled : d.schedule.enabled, from: clock(s.from, d.schedule.from), to: clock(s.to, d.schedule.to) },
+    schedule: {
+      enabled: typeof s.enabled === 'boolean' ? s.enabled : d.schedule.enabled,
+      from: clock(s.from, d.schedule.from),
+      to: clock(s.to, d.schedule.to),
+    },
   }
 }
 
 /** 定时勿扰是否覆盖 now（按本地时间）；from > to 表示跨午夜 */
 export function inSchedule(schedule: NotificationPrefs['schedule'], now: Date): boolean {
   if (!schedule.enabled) return false
-  const from = minutesOf(schedule.from), to = minutesOf(schedule.to)
+  const from = minutesOf(schedule.from),
+    to = minutesOf(schedule.to)
   if (from === null || to === null || from === to) return false
   const m = now.getHours() * 60 + now.getMinutes()
   return from < to ? m >= from && m < to : m >= from || m < to
@@ -88,14 +95,31 @@ export function notificationFor(event: HostEvent): NotificationIntent | null {
   if (event.kind !== 'session') return null
   const e = event.event
   if (e.type === 'turn_completed') {
-    if (e.outcome === 'completed') return { kind: 'completed', sessionId: event.sessionId, dedupeKey: `c:${event.sessionId}:${e.turnId}`, detail: null }
-    if (e.outcome === 'failed') return { kind: 'failed', sessionId: event.sessionId, dedupeKey: `f:${event.sessionId}:${e.turnId}`, detail: e.error }
+    if (e.outcome === 'completed')
+      return {
+        kind: 'completed',
+        sessionId: event.sessionId,
+        dedupeKey: `c:${event.sessionId}:${e.turnId}`,
+        detail: null,
+      }
+    if (e.outcome === 'failed')
+      return {
+        kind: 'failed',
+        sessionId: event.sessionId,
+        dedupeKey: `f:${event.sessionId}:${e.turnId}`,
+        detail: e.error,
+      }
     return null
   }
   if (e.type === 'approval_request') {
     const r = e.request
     const detail = r.command?.trim() || r.questions?.[0]?.question?.trim() || r.title
-    return { kind: 'waiting', sessionId: event.sessionId, dedupeKey: `w:${event.sessionId}:${r.requestId}`, detail: detail || null }
+    return {
+      kind: 'waiting',
+      sessionId: event.sessionId,
+      dedupeKey: `w:${event.sessionId}:${r.requestId}`,
+      detail: detail || null,
+    }
   }
   return null
 }
@@ -123,13 +147,18 @@ export type Decision =
  * 决定是否弹出。依次检查：开关 → 去重 → 勿扰 → 前台规则 → 同会话 3 秒限流 → 10 秒内超过 4 条合并成一条摘要。
  * 会修改 state（记录已提醒），调用方只在 show 时真正弹出。
  */
-export function decide(intent: NotificationIntent, ctx: { prefs: NotificationPrefs; focused: boolean; viewing: boolean; now: number }, state: DeliveryState): Decision {
+export function decide(
+  intent: NotificationIntent,
+  ctx: { prefs: NotificationPrefs; focused: boolean; viewing: boolean; now: number },
+  state: DeliveryState,
+): Decision {
   if (!ctx.prefs[intent.kind]) return { show: false, reason: 'disabled' }
   if (state.seen.has(intent.dedupeKey)) return { show: false, reason: 'duplicate' }
   state.seen.add(intent.dedupeKey)
   if (state.seen.size > 500) state.seen.delete(state.seen.values().next().value as string)
   if (isQuiet(ctx.prefs, new Date(ctx.now))) return { show: false, reason: 'quiet' }
-  if (ctx.focused && (ctx.prefs.unfocusedOnly || ctx.viewing)) return { show: false, reason: ctx.prefs.unfocusedOnly ? 'focused' : 'viewing' }
+  if (ctx.focused && (ctx.prefs.unfocusedOnly || ctx.viewing))
+    return { show: false, reason: ctx.prefs.unfocusedOnly ? 'focused' : 'viewing' }
   const last = state.lastBySession.get(intent.sessionId)
   if (last !== undefined && ctx.now - last < SESSION_GAP_MS) return { show: false, reason: 'throttled' }
   state.lastBySession.set(intent.sessionId, ctx.now)

@@ -22,7 +22,12 @@ export interface InboxItem {
 
 /** 命令 / 改文件 / 工具类审批可以在待处理里直接允许或拒绝；提问、计划、表单要到会话里处理 */
 export function canAnswerInline(request: ApprovalRequest | null): request is ApprovalRequest {
-  return !!request && (request.kind === 'command' || request.kind === 'file_change' || request.kind === 'tool') && request.formSchema === undefined && request.canAllow !== false
+  return (
+    !!request &&
+    (request.kind === 'command' || request.kind === 'file_change' || request.kind === 'tool') &&
+    request.formSchema === undefined &&
+    request.canAllow !== false
+  )
 }
 
 /** 队列暂停且还有没失败的排队消息时可以「继续」 */
@@ -39,7 +44,8 @@ export function laneOf(summary: SessionSummary): InboxLane | null {
 
 export function signatureOf(lane: InboxLane, summary: SessionSummary, snapshot: SessionSnapshot | undefined): string {
   const at = summary.record.updatedAt
-  if (lane === 'waiting') return 'w:' + (snapshot?.pending.length ? snapshot.pending.map((p) => p.requestId).join(',') : at)
+  if (lane === 'waiting')
+    return 'w:' + (snapshot?.pending.length ? snapshot.pending.map(p => p.requestId).join(',') : at)
   if (lane === 'failed') return 'f:' + at
   return `p:${at}:${(summary.queue?.queued ?? 0) + (summary.queue?.failed ?? 0)}`
 }
@@ -55,7 +61,7 @@ export function buildInbox(input: {
   onMachine: (sessionId: string) => boolean
   dismissed: Readonly<Record<string, string>>
 }): InboxItem[] {
-  const names = new Map(input.projects.map((p) => [p.id, p.name]))
+  const names = new Map(input.projects.map(p => [p.id, p.name]))
   const items: InboxItem[] = []
   for (const summary of input.sessions) {
     const lane = laneOf(summary)

@@ -7,7 +7,7 @@ import { SessionRow } from './SessionRow'
 /** 最近任务如果同时是某个项目下的会话，就沿用它的状态 */
 function statusOf(id: string): SessionStatus {
   for (const p of projects) {
-    const s = p.sessions.find((x) => x.id === id)
+    const s = p.sessions.find(x => x.id === id)
     if (s) return s.status
   }
   return 'idle'
@@ -31,7 +31,13 @@ export function RecentItem({
   useI18n()
   return (
     <SessionRow
-      target={{id:item.id,title:item.title,bottomed:!!item.bottomedAt,archived:false,running:(status??statusOf(item.id))==='running'}}
+      target={{
+        id: item.id,
+        title: item.title,
+        bottomed: !!item.bottomedAt,
+        archived: false,
+        running: (status ?? statusOf(item.id)) === 'running',
+      }}
       selected={selected}
       onSelect={onSelect}
       trailing={<span className="shrink-0 text-meta text-fg-faint">{item.time}</span>}

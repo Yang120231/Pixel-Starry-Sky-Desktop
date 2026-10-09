@@ -8,6 +8,9 @@ export function parsePaneFocusMotion(value: unknown): PaneFocusMotion {
 }
 
 export function readPaneFocusMotion(): PaneFocusMotion {
-  try { return parsePaneFocusMotion(localStorage.getItem(PANE_FOCUS_MOTION_KEY)) }
-  catch { return DEFAULT_PANE_FOCUS_MOTION }
+  try {
+    return parsePaneFocusMotion(localStorage.getItem(PANE_FOCUS_MOTION_KEY))
+  } catch {
+    return DEFAULT_PANE_FOCUS_MOTION
+  }
 }

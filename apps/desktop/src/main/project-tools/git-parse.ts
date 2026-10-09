@@ -1,5 +1,12 @@
 // Git 面板的解析与错误分类（docs/ui/git-panel.md）。纯函数，不依赖 Electron，SSH 辅助进程也会打包。
-import type { GitAction, GitCode, GitFailure, GitFailureKind, GitFileChange, GitRemedy } from '../../preload/project-tools'
+import type {
+  GitAction,
+  GitCode,
+  GitFailure,
+  GitFailureKind,
+  GitFileChange,
+  GitRemedy,
+} from '../../preload/project-tools'
 
 export const MAX_ENTRIES = 5000
 
@@ -32,11 +39,27 @@ export function localPath(path: string, prefix: string): string | null {
  * 冲突（u）、未跟踪（?）。X ≠ . 进「暂存的更改」，Y ≠ . 进「更改」，同一文件可以两边都有。
  */
 export function parseStatusV2(stdout: string, prefix: string, max = MAX_ENTRIES): ParsedStatus {
-  const result: ParsedStatus = { head: null, initial: false, branch: null, detached: false, upstream: null, ahead: 0, behind: 0, staged: [], unstaged: [], untracked: [], conflicted: [], truncated: false }
+  const result: ParsedStatus = {
+    head: null,
+    initial: false,
+    branch: null,
+    detached: false,
+    upstream: null,
+    ahead: 0,
+    behind: 0,
+    staged: [],
+    unstaged: [],
+    untracked: [],
+    conflicted: [],
+    truncated: false,
+  }
   const tokens = stdout.split('\0')
   let count = 0
   const push = (list: GitFileChange[], entry: Omit<GitFileChange, 'local'>): void => {
-    if (count >= max) { result.truncated = true; return }
+    if (count >= max) {
+      result.truncated = true
+      return
+    }
     count++
     list.push({ ...entry, local: localPath(entry.path, prefix) })
   }
@@ -46,23 +69,37 @@ export function parseStatusV2(stdout: string, prefix: string, max = MAX_ENTRIES)
     if (line.startsWith('# ')) {
       const [key, ...rest] = line.slice(2).split(' ')
       const value = rest.join(' ')
-      if (key === 'branch.oid') { result.initial = value === '(initial)'; result.head = result.initial ? null : value }
-      else if (key === 'branch.head') { result.detached = value === '(detached)'; result.branch = result.detached ? null : value }
-      else if (key === 'branch.upstream') result.upstream = value
+      if (key === 'branch.oid') {
+        result.initial = value === '(initial)'
+        result.head = result.initial ? null : value
+      } else if (key === 'branch.head') {
+        result.detached = value === '(detached)'
+        result.branch = result.detached ? null : value
+      } else if (key === 'branch.upstream') result.upstream = value
       else if (key === 'branch.ab') {
         const m = /^\+(\d+) -(\d+)$/.exec(value)
-        if (m) { result.ahead = Number(m[1]); result.behind = Number(m[2]) }
+        if (m) {
+          result.ahead = Number(m[1])
+          result.behind = Number(m[2])
+        }
       }
       continue
     }
     const type = line[0]
-    if (type === '?') { push(result.untracked, { path: line.slice(2), origPath: null, code: '?', submodule: false }); continue }
+    if (type === '?') {
+      push(result.untracked, { path: line.slice(2), origPath: null, code: '?', submodule: false })
+      continue
+    }
     if (type !== '1' && type !== '2' && type !== 'u') continue
     const parts = line.split(' ')
-    const xy = parts[1] ?? '..', submodule = (parts[2] ?? 'N').startsWith('S')
-    if (type === 'u') { push(result.conflicted, { path: parts.slice(10).join(' '), origPath: null, code: 'U', submodule }); continue }
+    const xy = parts[1] ?? '..',
+      submodule = (parts[2] ?? 'N').startsWith('S')
+    if (type === 'u') {
+      push(result.conflicted, { path: parts.slice(10).join(' '), origPath: null, code: 'U', submodule })
+      continue
+    }
     const path = parts.slice(type === '1' ? 8 : 9).join(' ')
-    const origPath = type === '2' ? tokens[++i] ?? null : null
+    const origPath = type === '2' ? (tokens[++i] ?? null) : null
     const [x, y] = [xy[0], xy[1]]
     if (x && x !== '.') push(result.staged, { path, origPath, code: code(x), submodule })
     if (y && y !== '.') push(result.unstaged, { path, origPath: null, code: code(y), submodule })
@@ -75,9 +112,18 @@ const RULES: Array<[GitFailureKind, RegExp]> = [
   ['rejected', /! \[rejected\]|\(fetch first\)|non-fast-forward|Updates were rejected/i],
   ['diverged', /Not possible to fast-forward|divergent branches|have diverged/i],
   ['conflict', /CONFLICT \(|could not apply|Merge conflict|fix conflicts|unmerged files|You have unmerged paths/i],
-  ['dirty', /would be overwritten|Please commit your changes or stash them|cannot pull with rebase: You have unstaged changes|Your local changes/i],
-  ['auth', /Authentication failed|could not read Username|could not read Password|terminal prompts disabled|Permission denied \(publickey|HTTP Basic: Access denied|The requested URL returned error: 40[13]|Invalid username or password|access denied|Repository not found/i],
-  ['network', /Could not resolve host|Failed to connect|Connection refused|Connection timed out|Connection reset|unable to access|early EOF|Network is unreachable|Could not read from remote repository|SSL|TLS/i],
+  [
+    'dirty',
+    /would be overwritten|Please commit your changes or stash them|cannot pull with rebase: You have unstaged changes|Your local changes/i,
+  ],
+  [
+    'auth',
+    /Authentication failed|could not read Username|could not read Password|terminal prompts disabled|Permission denied \(publickey|HTTP Basic: Access denied|The requested URL returned error: 40[13]|Invalid username or password|access denied|Repository not found/i,
+  ],
+  [
+    'network',
+    /Could not resolve host|Failed to connect|Connection refused|Connection timed out|Connection reset|unable to access|early EOF|Network is unreachable|Could not read from remote repository|SSL|TLS/i,
+  ],
   ['hook', /hook.*(declined|failed|exited)|pre-commit|pre-push|pre-receive hook|commit-msg/i],
   ['identity', /Please tell me who you are|Author identity unknown|empty ident name/i],
   ['noUpstream', /no upstream|has no upstream branch|no tracking information|There is no tracking information/i],
@@ -101,7 +147,10 @@ const REMEDIES: Partial<Record<GitFailureKind, GitRemedy[]>> = {
 }
 
 /** git 的英文输出（运行时设置 LC_ALL=C）→ 失败类型和处理办法 */
-export function classifyGitError(stderr: string, info: { action: GitAction; timedOut?: boolean; missing?: boolean }): GitFailure {
+export function classifyGitError(
+  stderr: string,
+  info: { action: GitAction; timedOut?: boolean; missing?: boolean },
+): GitFailure {
   const detail = stderr.trim().slice(-4000)
   let kind: GitFailureKind = 'unknown'
   if (info.missing) kind = 'missing'

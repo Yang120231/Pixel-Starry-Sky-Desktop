@@ -1,1 +1,1 @@
-export const SESSION_REMOVED_EVENT='pixelsky:session-removed'
+export const SESSION_REMOVED_EVENT = 'pixelsky:session-removed'

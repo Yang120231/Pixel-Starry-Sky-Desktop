@@ -4,7 +4,15 @@ import type { ImageAttachment } from '../src/types'
 import { itemSearchMatch } from '../src/search'
 
 const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWQAAAABJRU5ErkJggg=='
-const fixture = (): ImageAttachment => ({ id: 'image-1', name: '中文图片.png', mediaType: 'image/png', width: 1, height: 1, bytes: png.length / 4 * 3 - 2, dataBase64: png })
+const fixture = (): ImageAttachment => ({
+  id: 'image-1',
+  name: '中文图片.png',
+  mediaType: 'image/png',
+  width: 1,
+  height: 1,
+  bytes: (png.length / 4) * 3 - 2,
+  dataBase64: png,
+})
 describe('图片输入边界', () => {
   it('保留原文件名、校验内容签名，拒绝类型伪装和无效 Base64', () => {
     expect(validateImages([fixture()])[0].name).toBe('中文图片.png')
@@ -36,7 +44,17 @@ describe('图片输入边界', () => {
     bytes.set([137, 80, 78, 71, 13, 10, 26, 10])
     // 大块编码只为边界校验，不代表这份填充数据可作为解码图片。
     const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-    const prefix = Array.from(bytes.slice(0, 9)).reduce((s, _n, i, a) => i % 3 ? s : s + alphabet[a[i] >> 2] + alphabet[((a[i] & 3) << 4) | (a[i + 1] >> 4)] + alphabet[((a[i + 1] & 15) << 2) | (a[i + 2] >> 6)] + alphabet[a[i + 2] & 63], '')
+    const prefix = Array.from(bytes.slice(0, 9)).reduce(
+      (s, _n, i, a) =>
+        i % 3
+          ? s
+          : s +
+            alphabet[a[i] >> 2] +
+            alphabet[((a[i] & 3) << 4) | (a[i + 1] >> 4)] +
+            alphabet[((a[i + 1] & 15) << 2) | (a[i + 2] >> 6)] +
+            alphabet[a[i + 2] & 63],
+      '',
+    )
     const dataBase64 = prefix + 'A'.repeat(Math.ceil(MAX_IMAGE_BYTES / 3) * 4 - prefix.length - 2) + '=='
     const image = { ...fixture(), bytes: MAX_IMAGE_BYTES, dataBase64 }
     expect(validateImages([image])[0].bytes).toBe(MAX_IMAGE_BYTES)

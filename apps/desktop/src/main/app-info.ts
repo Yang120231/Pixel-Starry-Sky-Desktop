@@ -47,7 +47,7 @@ async function open(link: AppLink): Promise<void> {
 }
 
 export function initAppInfo(): void {
-  ipcMain.handle('app:info', (event) => {
+  ipcMain.handle('app:info', event => {
     if (!trustedSender(event)) throw new Error('不允许的调用方')
     return appInfo()
   })

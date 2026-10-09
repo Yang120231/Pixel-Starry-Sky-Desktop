@@ -18,7 +18,7 @@ export function PinnedList({
   const comingSoon = useComingSoon()
   return (
     <>
-      {items.map((item) =>
+      {items.map(item =>
         item.kind === 'board' ? (
           <SidebarRow key={item.id} onClick={() => comingSoon(item.title)} title={item.title}>
             <SquareKanban size={16} strokeWidth={1.5} className="shrink-0 text-fg-muted" />

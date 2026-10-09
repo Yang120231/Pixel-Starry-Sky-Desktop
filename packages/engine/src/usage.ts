@@ -48,7 +48,8 @@ export class UsageStore {
       const key = monthKey(r.endedAt)
       byMonth.set(key, [...(byMonth.get(key) ?? []), JSON.stringify(r)])
     }
-    for (const [key, lines] of byMonth) appendFileSync(join(this.dir, `usage-${key}.jsonl`), lines.join('\n') + '\n', 'utf8')
+    for (const [key, lines] of byMonth)
+      appendFileSync(join(this.dir, `usage-${key}.jsonl`), lines.join('\n') + '\n', 'utf8')
   }
 
   private files(): Array<{ name: string; year: number; month: number }> {
@@ -58,7 +59,7 @@ export class UsageStore {
     } catch {
       return []
     }
-    return names.flatMap((name) => {
+    return names.flatMap(name => {
       const m = FILE.exec(name)
       return m ? [{ name, year: Number(m[1]), month: Number(m[2]) }] : []
     })
@@ -81,7 +82,11 @@ export class UsageStore {
         if (!line.trim()) continue
         try {
           const r = JSON.parse(line) as UsageRecord
-          if (r && typeof r.id === 'string' && r.endedAt >= from) byId.set(r.id, r.route === 'pixelsky' && !r.costSource ? { ...r, costUsd: null, costSource: 'unavailable' } : r)
+          if (r && typeof r.id === 'string' && r.endedAt >= from)
+            byId.set(
+              r.id,
+              r.route === 'pixelsky' && !r.costSource ? { ...r, costUsd: null, costSource: 'unavailable' } : r,
+            )
         } catch {
           // 跳过写坏的行
         }

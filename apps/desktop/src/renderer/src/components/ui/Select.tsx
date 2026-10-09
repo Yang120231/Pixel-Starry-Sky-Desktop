@@ -50,7 +50,7 @@ export function Select<V extends string>({
   const listId = useId()
   const trigger = useRef<HTMLButtonElement>(null)
   const menu = useRef<HTMLDivElement>(null)
-  const selected = options.findIndex((o) => o.value === value)
+  const selected = options.findIndex(o => o.value === value)
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(Math.max(0, selected))
   const [position, setPosition] = useState({ left: 0, top: 0, width: 220, maxHeight: 280 })
@@ -60,7 +60,14 @@ export function Select<V extends string>({
 
   const show = (): void => {
     if (disabled || options.length === 0) return
-    setActive(selected >= 0 && !options[selected].disabled ? selected : Math.max(0, options.findIndex(o => !o.disabled)))
+    setActive(
+      selected >= 0 && !options[selected].disabled
+        ? selected
+        : Math.max(
+            0,
+            options.findIndex(o => !o.disabled),
+          ),
+    )
     setOpen(true)
   }
   const choose = (index: number): void => {
@@ -89,7 +96,14 @@ export function Select<V extends string>({
         if (sample) {
           const style = getComputedStyle(sample)
           const measure = document.createElement('span')
-          Object.assign(measure.style, { position: 'fixed', visibility: 'hidden', whiteSpace: 'pre', width: 'max-content', font: style.font, letterSpacing: style.letterSpacing })
+          Object.assign(measure.style, {
+            position: 'fixed',
+            visibility: 'hidden',
+            whiteSpace: 'pre',
+            width: 'max-content',
+            font: style.font,
+            letterSpacing: style.letterSpacing,
+          })
           document.body.appendChild(measure)
           for (const option of options) {
             measure.textContent = option.label
@@ -98,10 +112,17 @@ export function Select<V extends string>({
           measure.remove()
         }
       }
-      const width = Math.min(Math.max(r.width, fitContent ? Math.ceil(contentWidth) + 64 : 180), fitContent ? 520 : 360, window.innerWidth - 16)
+      const width = Math.min(
+        Math.max(r.width, fitContent ? Math.ceil(contentWidth) + 64 : 180),
+        fitContent ? 520 : 360,
+        window.innerWidth - 16,
+      )
       // Measure wrapped rows at their final width before deciding whether to flip.
       if (fitContent && menu.current) menu.current.style.width = `${width}px`
-      const height = Math.min(320, fitContent ? menu.current?.scrollHeight ?? options.length * ROW + 8 : options.length * ROW + 8)
+      const height = Math.min(
+        320,
+        fitContent ? (menu.current?.scrollHeight ?? options.length * ROW + 8) : options.length * ROW + 8,
+      )
       const below = window.innerHeight - r.bottom - 12
       const above = r.top - 12
       const flip = below < height && above > below
@@ -117,11 +138,15 @@ export function Select<V extends string>({
     const observer = new ResizeObserver(place)
     if (fitContent && menu.current) for (const row of menu.current.children) observer.observe(row)
     window.addEventListener('resize', place)
-    return () => { window.removeEventListener('resize', place); observer.disconnect() }
+    return () => {
+      window.removeEventListener('resize', place)
+      observer.disconnect()
+    }
   }, [open, options, fitContent])
 
   useEffect(() => {
-    if (open) menu.current?.querySelector<HTMLElement>(`[data-index="${activeIndex}"]`)?.scrollIntoView({ block: 'nearest' })
+    if (open)
+      menu.current?.querySelector<HTMLElement>(`[data-index="${activeIndex}"]`)?.scrollIntoView({ block: 'nearest' })
   }, [open, activeIndex])
 
   useEffect(() => {
@@ -170,7 +195,7 @@ export function Select<V extends string>({
       const now = performance.now()
       const text = (now - typeahead.current.at < 700 ? typeahead.current.text + e.key : e.key).toLowerCase()
       typeahead.current = { text, at: now }
-      const index = options.findIndex((o) => !o.disabled && o.label.toLowerCase().startsWith(text))
+      const index = options.findIndex(o => !o.disabled && o.label.toLowerCase().startsWith(text))
       if (index >= 0) {
         e.preventDefault()
         setActive(index)
@@ -221,7 +246,7 @@ export function Select<V extends string>({
             aria-label={label}
             className="pop-in no-drag fixed z-[60] overflow-y-auto rounded-lg border border-line-card bg-popover p-1 shadow-menu"
             style={position}
-            onMouseDown={(e) => e.preventDefault()}
+            onMouseDown={e => e.preventDefault()}
           >
             {options.map((o, i) => (
               <div
@@ -242,11 +267,29 @@ export function Select<V extends string>({
                   i === selected && 'font-medium text-fg',
                 )}
               >
-                <span className="min-w-0 flex-1"><span data-select-label className={cn('block', fitContent ? 'whitespace-normal break-words' : 'truncate', mono && 'font-mono text-meta')}>{o.label}</span>
-                  {o.description && <span className="block whitespace-normal break-words text-label text-fg-muted">{o.description}</span>}
+                <span className="min-w-0 flex-1">
+                  <span
+                    data-select-label
+                    className={cn(
+                      'block',
+                      fitContent ? 'whitespace-normal break-words' : 'truncate',
+                      mono && 'font-mono text-meta',
+                    )}
+                  >
+                    {o.label}
+                  </span>
+                  {o.description && (
+                    <span className="block whitespace-normal break-words text-label text-fg-muted">
+                      {o.description}
+                    </span>
+                  )}
                 </span>
                 {o.hint && <span className="shrink-0 text-meta text-fg-faint">{o.hint}</span>}
-                <Check size={14} strokeWidth={2} className={cn('shrink-0 text-accent-fg', i !== selected && 'invisible')} />
+                <Check
+                  size={14}
+                  strokeWidth={2}
+                  className={cn('shrink-0 text-accent-fg', i !== selected && 'invisible')}
+                />
               </div>
             ))}
           </div>,

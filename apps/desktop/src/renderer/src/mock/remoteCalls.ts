@@ -65,7 +65,9 @@ export function demoRemoteCalls(now: number): RemoteCall[] {
       const cacheWrite = int(0, isError ? 500 : 6000)
       const output = isError ? int(0, 150) : int(100, 3000)
       const p = PRICE[model]
-      const costUsd = isError ? null : (input * p.input + cacheRead * p.cacheRead + cacheWrite * p.cacheWrite + output * p.output) / 1_000_000
+      const costUsd = isError
+        ? null
+        : (input * p.input + cacheRead * p.cacheRead + cacheWrite * p.cacheWrite + output * p.output) / 1_000_000
       const firstTokenMs = r() < 0.15 ? null : int(300, 2600)
       calls.push({
         id: `req_demo_${day}_${k}_${int(0, 9999)}`,

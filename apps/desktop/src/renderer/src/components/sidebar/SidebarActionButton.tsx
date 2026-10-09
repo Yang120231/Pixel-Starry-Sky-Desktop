@@ -14,24 +14,31 @@ export interface SidebarActionCallbacks {
 }
 
 /** 顶部、底部共用的动作入口；移动位置不改变行为与设置分类高亮。 */
-export function SidebarActionButton({ action, onAddProject, onNewTask }: SidebarActionCallbacks & { action: SidebarAction }) {
+export function SidebarActionButton({
+  action,
+  onAddProject,
+  onNewTask,
+}: SidebarActionCallbacks & { action: SidebarAction }) {
   useI18n()
   const { icons } = useSidebarPrefs()
   const settings = useSettings()
 
   if (action === 'newTask') return <NewTaskButton onClick={onNewTask} />
 
-  const label = action === 'addProject'
-    ? tr('sidebar.action.addProject')
-    : action === 'settings'
-      ? withShortcut(tr('sidebar.SidebarFooter.message408'), OPEN_SETTINGS)
-      : action === 'plugins'
-        ? tr('plugins.title')
-        : tr('nav.TopNav.message60')
+  const label =
+    action === 'addProject'
+      ? tr('sidebar.action.addProject')
+      : action === 'settings'
+        ? withShortcut(tr('sidebar.SidebarFooter.message408'), OPEN_SETTINGS)
+        : action === 'plugins'
+          ? tr('plugins.title')
+          : tr('nav.TopNav.message60')
   const section = action === 'plugins' || action === 'usage' ? action : undefined
-  const active = settings.open && (action === 'settings'
-    ? settings.section !== 'plugins' && settings.section !== 'usage'
-    : action !== 'addProject' && settings.section === section)
+  const active =
+    settings.open &&
+    (action === 'settings'
+      ? settings.section !== 'plugins' && settings.section !== 'usage'
+      : action !== 'addProject' && settings.section === section)
 
   return (
     <IconButton

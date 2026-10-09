@@ -53,7 +53,7 @@ export function FontPicker({ label, value, onChange, placeholder, sample }: Font
   }, [open])
 
   const openList = () => {
-    setOpen((v) => !v)
+    setOpen(v => !v)
     setQuery('')
     // 读本机字体需要用户点击触发（浏览器的限制），所以在这里才读
     if (fonts === null) void listLocalFonts().then(setFonts)
@@ -66,7 +66,7 @@ export function FontPicker({ label, value, onChange, placeholder, sample }: Font
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
     const list = fonts ?? []
-    return (q ? list.filter((f) => f.toLowerCase().includes(q)) : list).slice(0, 300)
+    return (q ? list.filter(f => f.toLowerCase().includes(q)) : list).slice(0, 300)
   }, [fonts, query])
 
   return (
@@ -77,9 +77,9 @@ export function FontPicker({ label, value, onChange, placeholder, sample }: Font
           value={draft}
           placeholder={placeholder}
           spellCheck={false}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={e => setDraft(e.target.value)}
           onBlur={commit}
-          onKeyDown={(e) => {
+          onKeyDown={e => {
             if (e.key === 'Enter') commit()
           }}
           className="min-w-0 flex-1 bg-transparent px-3 text-list text-fg outline-none placeholder:text-fg-faint"
@@ -87,7 +87,7 @@ export function FontPicker({ label, value, onChange, placeholder, sample }: Font
         />
         <button
           type="button"
-          aria-label={tr("settings.FontPicker.message789", { p0: label })}
+          aria-label={tr('settings.FontPicker.message789', { p0: label })}
           aria-expanded={open}
           aria-controls={listId}
           onClick={openList}
@@ -106,10 +106,10 @@ export function FontPicker({ label, value, onChange, placeholder, sample }: Font
             <Search size={14} strokeWidth={1.5} className="shrink-0" />
             <input
               autoFocus
-              aria-label={tr("settings.FontPicker.message790")}
+              aria-label={tr('settings.FontPicker.message790')}
               value={query}
-              placeholder={tr("settings.FontPicker.message791")}
-              onChange={(e) => setQuery(e.target.value)}
+              placeholder={tr('settings.FontPicker.message791')}
+              onChange={e => setQuery(e.target.value)}
               className="min-w-0 flex-1 bg-transparent text-list text-fg outline-none placeholder:text-fg-faint"
             />
           </div>
@@ -121,16 +121,18 @@ export function FontPicker({ label, value, onChange, placeholder, sample }: Font
                 setOpen(false)
               }}
             >
-              <span className="text-fg">{tr("settings.FontPicker.message792")}</span>
+              <span className="text-fg">{tr('settings.FontPicker.message792')}</span>
             </FontOption>
-            {fonts === null && <li className="px-2.5 py-2 text-meta text-fg-faint">{tr("settings.FontPicker.message793")}</li>}
+            {fonts === null && (
+              <li className="px-2.5 py-2 text-meta text-fg-faint">{tr('settings.FontPicker.message793')}</li>
+            )}
             {fonts !== null && fonts.length === 0 && (
-              <li className="px-2.5 py-2 text-meta text-fg-faint">{tr("settings.FontPicker.message794")}</li>
+              <li className="px-2.5 py-2 text-meta text-fg-faint">{tr('settings.FontPicker.message794')}</li>
             )}
             {fonts !== null && fonts.length > 0 && shown.length === 0 && (
-              <li className="px-2.5 py-2 text-meta text-fg-faint">{tr("settings.FontPicker.message795")}</li>
+              <li className="px-2.5 py-2 text-meta text-fg-faint">{tr('settings.FontPicker.message795')}</li>
             )}
-            {shown.map((family) => (
+            {shown.map(family => (
               <FontOption
                 key={family}
                 selected={value === family}
@@ -142,7 +144,10 @@ export function FontPicker({ label, value, onChange, placeholder, sample }: Font
                 <span className="min-w-0 truncate text-fg" style={{ fontFamily: `"${family}"` }}>
                   {family}
                 </span>
-                <span className="ml-auto shrink-0 truncate pl-3 text-meta text-fg-faint" style={{ fontFamily: `"${family}"` }}>
+                <span
+                  className="ml-auto shrink-0 truncate pl-3 text-meta text-fg-faint"
+                  style={{ fontFamily: `"${family}"` }}
+                >
                   {sample}
                 </span>
               </FontOption>
@@ -154,7 +159,15 @@ export function FontPicker({ label, value, onChange, placeholder, sample }: Font
   )
 }
 
-function FontOption({ selected, onSelect, children }: { selected: boolean; onSelect: () => void; children: React.ReactNode }) {
+function FontOption({
+  selected,
+  onSelect,
+  children,
+}: {
+  selected: boolean
+  onSelect: () => void
+  children: React.ReactNode
+}) {
   useI18n()
   return (
     <li role="option" aria-selected={selected}>

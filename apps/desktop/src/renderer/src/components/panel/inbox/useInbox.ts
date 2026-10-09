@@ -11,23 +11,40 @@ const KEY = 'pixelsky.inbox.dismissed.v1'
 function load(): Record<string, string> {
   try {
     const raw: unknown = JSON.parse(localStorage.getItem(KEY) ?? '{}')
-    return raw && typeof raw === 'object' && !Array.isArray(raw) ? Object.fromEntries(Object.entries(raw).filter(([, v]) => typeof v === 'string')) as Record<string, string> : {}
-  } catch { return {} }
+    return raw && typeof raw === 'object' && !Array.isArray(raw)
+      ? (Object.fromEntries(Object.entries(raw).filter(([, v]) => typeof v === 'string')) as Record<string, string>)
+      : {}
+  } catch {
+    return {}
+  }
 }
 let dismissed = load()
 let demoItems: InboxItem[] = demoInbox
 const listeners = new Set<() => void>()
 const emit = (): void => listeners.forEach(fn => fn())
-const subscribe = (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn) } }
+const subscribe = (fn: () => void) => {
+  listeners.add(fn)
+  return () => {
+    listeners.delete(fn)
+  }
+}
 function save(next: Record<string, string>): void {
   dismissed = next
-  try { localStorage.setItem(KEY, JSON.stringify(next)) } catch { /* 本次运行仍然有效 */ }
+  try {
+    localStorage.setItem(KEY, JSON.stringify(next))
+  } catch {
+    /* 本次运行仍然有效 */
+  }
   emit()
 }
 
 /** 标记已处理：只记下当时的状态签名，状态再变就重新出现；演示模式直接移除 */
 export function dismissInbox(item: InboxItem): void {
-  if (isDemo) { demoItems = demoItems.filter(i => i.sessionId !== item.sessionId); emit(); return }
+  if (isDemo) {
+    demoItems = demoItems.filter(i => i.sessionId !== item.sessionId)
+    emit()
+    return
+  }
   save({ ...dismissed, [item.sessionId]: item.signature })
 }
 
@@ -48,7 +65,8 @@ export function useInbox(): InboxItem[] {
     if (isDemo) return demo
     // 会话删除后清掉对应的「已处理」记录
     const ids = new Set(sessions.map(s => s.record.id))
-    if (sessions.length && Object.keys(marks).some(id => !ids.has(id))) queueMicrotask(() => save(Object.fromEntries(Object.entries(dismissed).filter(([id]) => ids.has(id)))))
+    if (sessions.length && Object.keys(marks).some(id => !ids.has(id)))
+      queueMicrotask(() => save(Object.fromEntries(Object.entries(dismissed).filter(([id]) => ids.has(id)))))
     return buildInbox({ sessions, snapshots, projects, onMachine: id => machineOf(id) === machine, dismissed: marks })
   }, [sessions, snapshots, projects, machine, marks, demo])
 }

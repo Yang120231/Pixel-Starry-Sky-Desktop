@@ -7,5 +7,9 @@ const args = process.argv.slice(2)
 const demo = args.includes('--demo')
 const env = { ...process.env, PIXELSKY_DEMO: demo ? '1' : '0' }
 delete env.ELECTRON_RUN_AS_NODE
-const child = spawn('electron-vite', ['dev', ...args.filter((a) => a !== '--demo')], { stdio: 'inherit', env, shell: true })
-child.on('exit', (code) => process.exit(code ?? 0))
+const child = spawn('electron-vite', ['dev', ...args.filter(a => a !== '--demo')], {
+  stdio: 'inherit',
+  env,
+  shell: true,
+})
+child.on('exit', code => process.exit(code ?? 0))

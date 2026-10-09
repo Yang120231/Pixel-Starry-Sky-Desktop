@@ -2,7 +2,11 @@
 import type { GitArea, GitFailureKind, GitFileChange, GitStatus } from '../../../../../preload/project-tools'
 import { tr, type TranslationKey } from '../../../i18n/core'
 
-export interface GitSection { area: GitArea; title: TranslationKey; files: GitFileChange[] }
+export interface GitSection {
+  area: GitArea
+  title: TranslationKey
+  files: GitFileChange[]
+}
 
 /** 显示顺序：合并冲突 → 暂存的更改 → 更改 → 未跟踪；空的组不显示 */
 export function gitSections(status: GitStatus): GitSection[] {
@@ -15,10 +19,12 @@ export function gitSections(status: GitStatus): GitSection[] {
   return sections.filter(s => s.files.length > 0)
 }
 
-export const changeCount = (status: GitStatus): number => status.staged.length + status.unstaged.length + status.untracked.length + status.conflicted.length
+export const changeCount = (status: GitStatus): number =>
+  status.staged.length + status.unstaged.length + status.untracked.length + status.conflicted.length
 
 /** 提交时要不要先「提交全部」：没有暂存内容但有其他改动 */
-export const needsCommitAll = (status: GitStatus): boolean => status.staged.length === 0 && status.unstaged.length + status.untracked.length > 0
+export const needsCommitAll = (status: GitStatus): boolean =>
+  status.staged.length === 0 && status.unstaged.length + status.untracked.length > 0
 
 /** 文件名和所在目录 */
 export function splitPath(path: string): { name: string; dir: string } {
@@ -40,11 +46,17 @@ export const failureHint = (kind: GitFailureKind): string => tr(`git.failure.${k
 
 /** 面板窄于这个宽度时并排差异放不下，只用行内 */
 export const SPLIT_MIN_WIDTH = 560
-export const diffMode = (preferred: 'split' | 'inline', width: number): 'split' | 'inline' => (width < SPLIT_MIN_WIDTH ? 'inline' : preferred)
+export const diffMode = (preferred: 'split' | 'inline', width: number): 'split' | 'inline' =>
+  width < SPLIT_MIN_WIDTH ? 'inline' : preferred
 
 /** 下一个要看的文件：同一组里的下一个，到头了换下一组 */
-export function neighbour(sections: GitSection[], area: GitArea, path: string, delta: 1 | -1): { area: GitArea; file: GitFileChange } | null {
+export function neighbour(
+  sections: GitSection[],
+  area: GitArea,
+  path: string,
+  delta: 1 | -1,
+): { area: GitArea; file: GitFileChange } | null {
   const flat = sections.flatMap(s => s.files.map(file => ({ area: s.area, file })))
   const i = flat.findIndex(e => e.area === area && e.file.path === path)
-  return i < 0 ? null : flat[i + delta] ?? null
+  return i < 0 ? null : (flat[i + delta] ?? null)
 }

@@ -8,8 +8,20 @@ export interface SearchQuery {
   scope: SearchScope
   projectId: string | null
 }
-export type SearchKind = 'title' | 'project' | 'user' | 'assistant' | 'notice' | 'command' | 'tool' | 'file_change' | 'todo'
-export interface SearchFragment { text: string; match: boolean }
+export type SearchKind =
+  | 'title'
+  | 'project'
+  | 'user'
+  | 'assistant'
+  | 'notice'
+  | 'command'
+  | 'tool'
+  | 'file_change'
+  | 'todo'
+export interface SearchFragment {
+  text: string
+  match: boolean
+}
 export interface SearchResult {
   id: string
   sessionId: string
@@ -40,9 +52,10 @@ export interface SearchMatch {
 }
 
 // 英文大小写折叠不改变字符串长度，中文、路径与符号保留原样。
-const fold = (s: string) => s.replace(/[A-Z]/g, (c) => c.toLowerCase())
+const fold = (s: string) => s.replace(/[A-Z]/g, c => c.toLowerCase())
 export const searchTerms = (text: string): string[] => [...new Set(fold(text.trim()).split(/\s+/).filter(Boolean))]
-export const containsTerms = (text: string, terms: readonly string[]): boolean => terms.every((term) => fold(text).includes(term))
+export const containsTerms = (text: string, terms: readonly string[]): boolean =>
+  terms.every(term => fold(text).includes(term))
 
 /** 用原文字片段高亮，关键词永远是字面文本。 */
 export function searchSnippet(text: string, terms: readonly string[], limit = 180): SearchFragment[] {
@@ -55,7 +68,10 @@ export function searchSnippet(text: string, terms: readonly string[], limit = 18
   for (const term of terms) {
     if (!term) continue
     let at = normalized.indexOf(term, start)
-    while (at >= 0 && at < end) { ranges.push([at, Math.min(end, at + term.length)]); at = normalized.indexOf(term, at + term.length) }
+    while (at >= 0 && at < end) {
+      ranges.push([at, Math.min(end, at + term.length)])
+      at = normalized.indexOf(term, at + term.length)
+    }
   }
   ranges.sort((a, b) => a[0] - b[0])
   const merged: Array<[number, number]> = []
@@ -68,7 +84,8 @@ export function searchSnippet(text: string, terms: readonly string[], limit = 18
   let at = start
   for (const [a, b] of merged) {
     if (a > at) out.push({ text: text.slice(at, a), match: false })
-    out.push({ text: text.slice(a, b), match: true }); at = b
+    out.push({ text: text.slice(a, b), match: true })
+    at = b
   }
   if (at < end) out.push({ text: text.slice(at, end), match: false })
   if (end < text.length) out.push({ text: '…', match: false })
@@ -77,8 +94,14 @@ export function searchSnippet(text: string, terms: readonly string[], limit = 18
 
 export function titleMatch(title: string, terms: readonly string[], query: string): SearchMatch | null {
   if (!containsTerms(title, terms)) return null
-  const normalized = fold(title), text = fold(query.trim())
-  return { kind: 'title', field: '会话标题', rank: normalized === text ? 0 : normalized.startsWith(text) ? 1 : 2, snippet: searchSnippet(title, terms) }
+  const normalized = fold(title),
+    text = fold(query.trim())
+  return {
+    kind: 'title',
+    field: '会话标题',
+    rank: normalized === text ? 0 : normalized.startsWith(text) ? 1 : 2,
+    snippet: searchSnippet(title, terms),
+  }
 }
 
 /** 只返回一条目的一个命中字段，已完成条目的重复版本由存储层去重。 */
@@ -94,18 +117,23 @@ export function itemSearchMatch(item: Item, terms: readonly string[], scope: Sea
   } else kind = 'tool'
   if (scope === 'all' || scope === 'tools') {
     if (item.kind === 'command') {
-      kind = 'command'; fields.push(['命令', item.command], ['命令说明', item.description], ['命令输出', item.output])
+      kind = 'command'
+      fields.push(['命令', item.command], ['命令说明', item.description], ['命令输出', item.output])
     } else if (item.kind === 'tool') {
-      kind = 'tool'; fields.push(['工具摘要', item.title], ['工具名称', item.name], ['工具输出', item.output])
+      kind = 'tool'
+      fields.push(['工具摘要', item.title], ['工具名称', item.name], ['工具输出', item.output])
     } else if (item.kind === 'file_change') {
       kind = 'file_change'
-      for (const change of Array.isArray(item.changes) ? item.changes : []) fields.push(['修改路径', change.path], ['文件改动', change.diff])
+      for (const change of Array.isArray(item.changes) ? item.changes : [])
+        fields.push(['修改路径', change.path], ['文件改动', change.diff])
     } else if (item.kind === 'todo') {
-      kind = 'todo'; fields.push(['待办', Array.isArray(item.steps) ? item.steps.map(s => s.text).join('\n') : ''])
+      kind = 'todo'
+      fields.push(['待办', Array.isArray(item.steps) ? item.steps.map(s => s.text).join('\n') : ''])
     }
   }
   for (const [field, value] of fields) {
-    if (typeof value === 'string' && value && containsTerms(value, terms)) return { kind, field, rank: 4, snippet: searchSnippet(value, terms) }
+    if (typeof value === 'string' && value && containsTerms(value, terms))
+      return { kind, field, rank: 4, snippet: searchSnippet(value, terms) }
   }
   return null
 }

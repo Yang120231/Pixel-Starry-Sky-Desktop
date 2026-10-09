@@ -1,23 +1,35 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 
-const disk = vi.hoisted(() => ({ files: new Set<string>(), path: [] as string[], installed: '[]', calls: [] as string[][] }))
-vi.mock('node:fs', () => ({ statSync: (path: string) => {
-  if (!disk.files.has(path)) throw Object.assign(new Error('Cannot stat'), { code: 'EACCES' })
-  return { isFile: () => true }
-} }))
-vi.mock('node:child_process', () => ({ execFileSync: (command: string, args: string[]) => {
-  disk.calls.push([command, ...args])
-  if (command === 'where.exe') {
-    if (!disk.path.length) throw new Error('not on PATH')
-    return disk.path.join('\r\n')
-  }
-  return disk.installed
-} }))
+const disk = vi.hoisted(() => ({
+  files: new Set<string>(),
+  path: [] as string[],
+  installed: '[]',
+  calls: [] as string[][],
+}))
+vi.mock('node:fs', () => ({
+  statSync: (path: string) => {
+    if (!disk.files.has(path)) throw Object.assign(new Error('Cannot stat'), { code: 'EACCES' })
+    return { isFile: () => true }
+  },
+}))
+vi.mock('node:child_process', () => ({
+  execFileSync: (command: string, args: string[]) => {
+    disk.calls.push([command, ...args])
+    if (command === 'where.exe') {
+      if (!disk.path.length) throw new Error('not on PATH')
+      return disk.path.join('\r\n')
+    }
+    return disk.installed
+  },
+}))
 import { detectProfiles, executable, powerShell7 } from './profiles'
 
 beforeEach(() => {
-  disk.files.clear(); disk.path = []; disk.installed = '[]'; disk.calls = []
+  disk.files.clear()
+  disk.path = []
+  disk.installed = '[]'
+  disk.calls = []
   vi.stubEnv('SystemRoot', 'C:\\Windows')
   vi.stubEnv('ProgramFiles', 'C:\\Program Files')
   vi.stubEnv('ProgramW6432', 'C:\\Program Files')
@@ -43,7 +55,8 @@ describe('PowerShell installation discovery', () => {
   })
   it('resolves Store or registered custom locations, including Unicode, to the real exe', () => {
     const real = join('D:\\应用程序', 'PowerShell', 'pwsh.exe')
-    disk.files.add(nativeShell); disk.files.add(real)
+    disk.files.add(nativeShell)
+    disk.files.add(real)
     disk.installed = JSON.stringify([real])
     expect(detectProfiles().find(p => p.id === 'pwsh')).toMatchObject({ available: true, command: real })
     const probe = disk.calls.find(call => call[0] === nativeShell)!
@@ -56,7 +69,8 @@ describe('PowerShell installation discovery', () => {
     expect(detectProfiles().find(p => p.id === 'pwsh')?.available).toBe(false)
   })
   it('keeps Windows PowerShell available when PowerShell 7 metadata cannot be read', () => {
-    disk.files.add(nativeShell); disk.installed = 'invalid output'
+    disk.files.add(nativeShell)
+    disk.installed = 'invalid output'
     const profiles = detectProfiles()
     expect(profiles.find(p => p.id === 'pwsh')?.available).toBe(false)
     expect(profiles.find(p => p.id === 'powershell')).toMatchObject({ available: true, command: nativeShell })

@@ -13,7 +13,13 @@ describe('窗格文件标签', () => {
     const layout = openFileLayout(initialLayout('left', 'session'), tab, { width: 1000, height: 600 }, 'right', 'split')
     expect(leaves(layout.root).map(l => l.tabs)).toEqual([['session'], [tab]])
     const second = fileTab({ projectId: 'p' }, 'other.md')
-    const reused = openFileLayout(activateTab(layout, 'left', 'session'), second, { width: 1000, height: 600 }, 'new', 'split2')
+    const reused = openFileLayout(
+      activateTab(layout, 'left', 'session'),
+      second,
+      { width: 1000, height: 600 },
+      'new',
+      'split2',
+    )
     expect(leaves(reused.root)).toHaveLength(2)
     expect(leaves(reused.root)[1].tabs).toEqual([tab, second])
     const focused = openFileLayout(reused, tab, { width: 1000, height: 600 }, 'new', 'split2')

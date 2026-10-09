@@ -52,11 +52,22 @@ export function SessionView(props: SessionViewProps) {
 }
 
 /** 演示模式：照参考图的静态内容（mock/demo.ts） */
-function DemoSessionView({ sessionId, title, sidebarOpen, panelOpen, onToggleSidebar, onTogglePanel, embedded, draftKey }: SessionViewProps) {
+function DemoSessionView({
+  sessionId,
+  title,
+  sidebarOpen,
+  panelOpen,
+  onToggleSidebar,
+  onTogglePanel,
+  embedded,
+  draftKey,
+}: SessionViewProps) {
   useI18n()
   const showConversation = sessionId !== null && hasConversation
   return (
-    <main className={cn('conversation-view flex flex-1 flex-col bg-app', embedded ? 'min-h-0 min-w-0' : 'min-w-[464px]')}>
+    <main
+      className={cn('conversation-view flex flex-1 flex-col bg-app', embedded ? 'min-h-0 min-w-0' : 'min-w-[464px]')}
+    >
       {!embedded && (
         <SessionHeader
           title={title}
@@ -82,7 +93,17 @@ function DemoSessionView({ sessionId, title, sidebarOpen, panelOpen, onToggleSid
 }
 
 /** 真实会话：数据来自引擎（docs/engines.md §11、§15） */
-function LiveSessionView({ sessionId, title, sidebarOpen, panelOpen, onToggleSidebar, onTogglePanel, onOpenSession, embedded, draftKey }: SessionViewProps) {
+function LiveSessionView({
+  sessionId,
+  title,
+  sidebarOpen,
+  panelOpen,
+  onToggleSidebar,
+  onTogglePanel,
+  onOpenSession,
+  embedded,
+  draftKey,
+}: SessionViewProps) {
   useI18n()
   const snapshot = useSession(sessionId)
   const composer = useComposerController(sessionId, onOpenSession, draftKey)
@@ -97,7 +118,7 @@ function LiveSessionView({ sessionId, title, sidebarOpen, panelOpen, onToggleSid
       let focus = target?.agentId ?? null
       if (!focus && target?.toolUseId && runs) {
         // Agent 工具调用 → 它派出的子智能体；Workflow 工具调用 → 总览
-        focus = runs.agents.find((a) => a.toolUseId === target.toolUseId)?.id ?? null
+        focus = runs.agents.find(a => a.toolUseId === target.toolUseId)?.id ?? null
       }
       setTrace({ focus })
     },
@@ -109,22 +130,43 @@ function LiveSessionView({ sessionId, title, sidebarOpen, panelOpen, onToggleSid
   const showStrips = !!sessionId && (subagents.length > 0 || tasks.length > 0 || hasRuns)
 
   // 回退：主进程截断对话后，把原文和图片放回这个窗格的输入框（与撤回排队消息一致，追加到已有草稿后）
-  const busy = !!snapshot && (snapshot.state !== 'idle' || snapshot.queue.some((q) => ['dispatching', 'running', 'delivering'].includes(q.status)))
+  const busy =
+    !!snapshot &&
+    (snapshot.state !== 'idle' || snapshot.queue.some(q => ['dispatching', 'running', 'delivering'].includes(q.status)))
   const rewindSupported = composer?.engine?.caps.rewind === true
   const composerKey = draftKey ?? sessionId ?? ''
-  const messageActions = useMemo<MessageActionsValue | null>(() => !sessionId || !bridge ? null : {
-    rewindDisabledReason: !rewindSupported ? tr('session.message.rewindUnsupported') : busy ? tr('session.message.rewindBusy') : null,
-    rewind: async (item) => {
-      const result = await bridge!.rewind(sessionId, item.id)
-      appendComposerDraft(composerKey, result.text)
-      const images = result.attachments ?? []
-      if (images.length) await updateImages(composerKey, (current) => [...current, ...images.filter((image) => !current.some((c) => c.id === image.id))]).catch(() => undefined)
-    },
-  }, [sessionId, rewindSupported, busy, composerKey])
+  const messageActions = useMemo<MessageActionsValue | null>(
+    () =>
+      !sessionId || !bridge
+        ? null
+        : {
+            rewindDisabledReason: !rewindSupported
+              ? tr('session.message.rewindUnsupported')
+              : busy
+                ? tr('session.message.rewindBusy')
+                : null,
+            rewind: async item => {
+              const result = await bridge!.rewind(sessionId, item.id)
+              appendComposerDraft(composerKey, result.text)
+              const images = result.attachments ?? []
+              if (images.length)
+                await updateImages(composerKey, current => [
+                  ...current,
+                  ...images.filter(image => !current.some(c => c.id === image.id)),
+                ]).catch(() => undefined)
+            },
+          },
+    [sessionId, rewindSupported, busy, composerKey],
+  )
 
   return (
     <TraceContext.Provider value={sessionId ? openTrace : null}>
-      <main className={cn('conversation-view relative flex flex-1 flex-col bg-app', embedded ? 'min-h-0 min-w-0' : 'min-w-[464px]')}>
+      <main
+        className={cn(
+          'conversation-view relative flex flex-1 flex-col bg-app',
+          embedded ? 'min-h-0 min-w-0' : 'min-w-[464px]',
+        )}
+      >
         {!embedded && (
           <SessionHeader
             title={title}
@@ -140,20 +182,22 @@ function LiveSessionView({ sessionId, title, sidebarOpen, panelOpen, onToggleSid
             {showStrips && (
               <div className="conversation-inset conversation-reading conversation-reading-strips shrink-0 pt-3">
                 <div className="conversation-message flex flex-col gap-2">
-                <div className="flex items-start gap-2">
-                  <div className="min-w-0 flex-1">
-                    <SubagentStrip subagents={subagents} />
+                  <div className="flex items-start gap-2">
+                    <div className="min-w-0 flex-1">
+                      <SubagentStrip subagents={subagents} />
+                    </div>
+                    {hasRuns && (
+                      <button
+                        type="button"
+                        onClick={() => openTrace()}
+                        className="press inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-meta text-fg-muted hover:bg-hover hover:text-fg"
+                      >
+                        <Bot size={13} strokeWidth={1.75} />
+                        {tr('session.live.AgentTracePanel.message214')}{' '}
+                      </button>
+                    )}
                   </div>
-                  {hasRuns && (
-                    <button
-                      type="button"
-                      onClick={() => openTrace()}
-                      className="press inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-meta text-fg-muted hover:bg-hover hover:text-fg"
-                    >
-                      <Bot size={13} strokeWidth={1.75} />{tr("session.live.AgentTracePanel.message214")} </button>
-                  )}
-                </div>
-                <TaskStrip sessionId={sessionId} tasks={tasks} />
+                  <TaskStrip sessionId={sessionId} tasks={tasks} />
                 </div>
               </div>
             )}
@@ -162,11 +206,11 @@ function LiveSessionView({ sessionId, title, sidebarOpen, panelOpen, onToggleSid
             </MessageActionsContext.Provider>
             <ComposerArea>
               <RetryStatus sessionId={sessionId} retry={snapshot?.retry} />
-              {snapshot?.pending.map((req) => (
+              {snapshot?.pending.map(req => (
                 <ApprovalCard
                   key={req.requestId}
                   request={req}
-                  onAnswer={(d) => void bridge?.answer(sessionId, req.requestId, d)}
+                  onAnswer={d => void bridge?.answer(sessionId, req.requestId, d)}
                 />
               ))}
               <Composer key={sessionId} live={composer} status={status} draftKey={draftKey} autoFocus />
@@ -176,7 +220,7 @@ function LiveSessionView({ sessionId, title, sidebarOpen, panelOpen, onToggleSid
                 sessionId={sessionId}
                 runs={runs}
                 focus={trace.focus}
-                onFocus={(focus) => setTrace({ focus })}
+                onFocus={focus => setTrace({ focus })}
                 onClose={() => setTrace(null)}
               />
             )}

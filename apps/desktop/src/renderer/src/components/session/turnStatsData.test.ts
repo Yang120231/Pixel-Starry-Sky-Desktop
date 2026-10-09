@@ -14,23 +14,39 @@ const values = (u: TurnUsage) => Object.fromEntries(replyStatParts(u).parts.map(
 describe('每轮回复统计', () => {
   it('多模型先汇总，区分普通输入、含缓存输入、输出和总量', () => {
     expect(values(usage)).toMatchObject({
-      elapsed: '12s', tokens: '↑2k ↓200', inputTokens: '输入 1k', outputTokens: '输出 200',
-      totalTokens: '总计 2.2k', cacheRead: '缓存读 400', cacheWrite: '缓存写 600', requests: '请求 5 次',
+      elapsed: '12s',
+      tokens: '↑2k ↓200',
+      inputTokens: '输入 1k',
+      outputTokens: '输出 200',
+      totalTokens: '总计 2.2k',
+      cacheRead: '缓存读 400',
+      cacheWrite: '缓存写 600',
+      requests: '请求 5 次',
     })
   })
   it('命中率使用总读取 / 总输入，不平均每个模型的命中率', () => {
     expect(values(usage).cacheHitRate).toBe('缓存命中 20%')
   })
   it('零分母隐藏比例，其他已知零值仍显示', () => {
-    const zero: TurnUsage = { durationMs: 0, models: { a: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0, costUsd: 0, requests: 0 } } }
-    expect(values(zero)).toMatchObject({ inputTokens: '输入 0', totalTokens: '总计 0', cacheRead: '缓存读 0', cost: '≈ $0.00', requests: '请求 0 次' })
+    const zero: TurnUsage = {
+      durationMs: 0,
+      models: { a: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0, costUsd: 0, requests: 0 } },
+    }
+    expect(values(zero)).toMatchObject({
+      inputTokens: '输入 0',
+      totalTokens: '总计 0',
+      cacheRead: '缓存读 0',
+      cost: '≈ $0.00',
+      requests: '请求 0 次',
+    })
     expect(values(zero)).not.toHaveProperty('cacheHitRate')
   })
   it('缺失、非数值计数不伪装成零或不完整的合计', () => {
     const incomplete = structuredClone(usage)
     Object.assign(incomplete.models.b, { cacheWrite: undefined, requests: NaN })
     const parts = values(incomplete)
-    for (const key of ['tokens', 'totalTokens', 'cacheWrite', 'cacheHitRate', 'requests']) expect(parts).not.toHaveProperty(key)
+    for (const key of ['tokens', 'totalTokens', 'cacheWrite', 'cacheHitRate', 'requests'])
+      expect(parts).not.toHaveProperty(key)
     expect(parts.inputTokens).toBe('输入 1k')
     expect(parts.outputTokens).toBe('输出 200')
     expect(replyStatParts(incomplete).detail).toContain('缓存写 —')

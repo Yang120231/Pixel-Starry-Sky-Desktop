@@ -1,211 +1,593 @@
 import { randomUUID } from 'node:crypto'
-import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  cpSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { basename, delimiter, dirname, join, relative, resolve } from 'node:path'
-import { contentVersion, digest, effective, expandedMcp, extensionName, files, input, inside, jsonFile, MASKED_SECRET, mcpConfig, object, pluginDirectory, scope, skillFile, text } from '@pixelsky/engine'
-import type { ExtensionCheck, ExtensionEntry, ExtensionImport, ExtensionInput, ExtensionLaunch, ExtensionScope, ExtensionState, McpConfig, SkillCommand } from '@pixelsky/protocol'
+import {
+  contentVersion,
+  digest,
+  effective,
+  expandedMcp,
+  extensionName,
+  files,
+  input,
+  inside,
+  jsonFile,
+  MASKED_SECRET,
+  mcpConfig,
+  object,
+  pluginDirectory,
+  scope,
+  skillFile,
+  text,
+} from '@pixelsky/engine'
+import type {
+  ExtensionCheck,
+  ExtensionEntry,
+  ExtensionImport,
+  ExtensionInput,
+  ExtensionLaunch,
+  ExtensionScope,
+  ExtensionState,
+  McpConfig,
+  SkillCommand,
+} from '@pixelsky/protocol'
 import { checkMcp, launcher, program, runProgram } from './check'
 import { nativeEntries } from './native'
 import { Secrets, type Cipher } from './secrets'
 
-interface Config { version:1; revision:number; entries:ExtensionEntry[] }
+interface Config {
+  version: 1
+  revision: number
+  entries: ExtensionEntry[]
+}
 export class ExtensionService {
-  private config:Config={version:1,revision:0,entries:[]}
-  private readonly secrets:Secrets
-  private warnings:string[]=[]
-  private chain:Promise<unknown>=Promise.resolve()
-  private readonly retired:string[]=[]
-  constructor(readonly dir:string,private readonly cipher:Cipher,private readonly env:()=>NodeJS.ProcessEnv=()=>process.env) {
-    mkdirSync(dir,{recursive:true})
-    const file=join(dir,'config.json')
-    if(existsSync(file)) {const c=jsonFile(file);if(c.version!==1||!Array.isArray(c.entries))throw new Error('扩展配置版本不正确');this.config=c as unknown as Config}
-    this.secrets=new Secrets(dir,cipher)
-    // 只清理由本服务创建的运行配置，遗留包由条目引用关系决定。
-    const runtime=join(dir,'runtime');mkdirSync(runtime,{recursive:true});for(const name of readdirSync(runtime))if(/^mcp-[a-f0-9-]+\.json$/.test(name))rmSync(inside(runtime,join(runtime,name)),{force:true})
-  }
-  private save():void {
-    const next={...this.config,revision:this.config.revision+1},file=join(this.dir,'config.json'),temp=file+'.tmp'
-    writeFileSync(temp,JSON.stringify(next,null,2));renameSync(temp,file);this.config=next
-  }
-  mutate<T>(fn:()=>T|Promise<T>):Promise<T> {const work=this.chain.then(fn);this.chain=work.catch(()=>undefined);return work}
-  private entry(id:string):ExtensionEntry {const e=this.config.entries.find(e=>e.id===id);if(!e)throw new Error('配置已不存在');return e}
-  private native(project:string|null):ReturnType<typeof nativeEntries>{return nativeEntries(project,this.env())}
-  state(project:string|null):ExtensionState {
-    const native=this.native(project)
-    const entries=[...this.config.entries.filter(e=>e.scope.kind==='global'||(project&&resolve(e.scope.path).toLowerCase()===resolve(project).toLowerCase())),...native.entries]
-    const redacted=entries.map(e=>({...e,components:e.components.map(c=>({...c,mcp:c.mcp?this.hide(c.mcp):undefined})),mcp:e.mcp?this.hide(e.mcp):undefined}))
-    return {entries:redacted,warnings:[...this.warnings,...(this.secrets.warning?[this.secrets.warning]:[]),...native.warnings],revision:this.config.revision,secretsPersistent:this.secrets.persistent}
-  }
-  private hide(c:McpConfig):McpConfig {return {...c,env:Object.fromEntries(Object.keys(c.env??{}).map(k=>[k,MASKED_SECRET])),headers:Object.fromEntries(Object.keys(c.headers??{}).map(k=>[k,MASKED_SECRET]))}}
-  private conflict(name:string,kind:ExtensionEntry['kind'],s:ExtensionScope,exclude?:string):void {
-    const same=(e:ExtensionEntry):boolean=>e.id!==exclude&&e.kind===kind&&e.name.toLowerCase()===name.toLowerCase()
-    if(this.config.entries.some(e=>same(e)&&JSON.stringify(e.scope)===JSON.stringify(s)))throw new Error('该范围已有同名配置，请修改名称')
-    const native=this.native(s.kind==='project'?s.path:null).entries
-    if(native.some(same))throw new Error('Claude Code 原生安装已有同名内容，请修改应用副本名称')
-  }
-  private packageDir():string {const path=join(this.dir,'packages',randomUUID());mkdirSync(path,{recursive:true});return path}
-  private skillPackage(root:string,name:string,source:string):ExtensionEntry['components'] {
-    mkdirSync(join(root,'.claude-plugin'),{recursive:true});writeFileSync(join(root,'.claude-plugin/plugin.json'),JSON.stringify({name,description:'像素星空管理的技能'}))
-    const path=join(root,'skills',name);mkdirSync(path,{recursive:true});writeFileSync(join(path,'SKILL.md'),source)
-    const c=skillFile(join(path,'SKILL.md'));return [c]
-  }
-  upsert(raw:unknown):ExtensionEntry {
-    const data=input(raw),existing=data.id?this.entry(data.id):null
-    if(existing&&existing.kind!==data.kind)throw new Error('不能修改配置类型')
-    this.conflict(data.name,data.kind,data.scope,data.id)
-    const e:ExtensionEntry={id:existing?.id??randomUUID(),kind:data.kind,name:data.name,description:data.description??'',scope:data.scope,enabled:data.enabled!==false,origin:'managed',source:existing?.source??{kind:'created',location:''},sourceDigest:existing?.sourceDigest,edited:existing?.edited,components:[],revision:this.config.revision+1,engines:data.engines??existing?.engines??['claude']}
-    if(data.kind==='mcp')e.mcp=this.secrets.put(e.id,data.mcp!)
-    if(data.kind==='cli'){e.command=data.command;e.args=data.args;e.check=existing&&existing.command===e.command&&JSON.stringify(existing.args)===JSON.stringify(e.args)?existing.check:undefined}
-    if(data.kind==='skill') {
-      const old=existing?.components.find(c=>c.kind==='skill')?.path
-      if(old&&data.expectedVersion!==contentVersion(readFileSync(old,'utf8')))throw new Error('技能文件已被外部修改，请重新打开后再保存，当前输入已保留')
-      const root=this.packageDir(),previous=old?readFileSync(old,'utf8'):null
-      if(previous&&data.text!==previous&&existing?.source.kind!=='created')e.edited=true
-      let source=data.text!
-      if(previous){source=source.replace(/^\uFEFF/,'').replace(/\r\n/g,'\n');if(previous.includes('\r\n'))source=source.replace(/\n/g,'\r\n');if(previous.startsWith('\uFEFF'))source='\uFEFF'+source}
-      try{if(old)this.copy(dirname(old),join(root,'skills',e.name));e.components=this.skillPackage(root,e.name,source);e.path=root;e.description=e.description||e.components[0].description;e.digest=digest(root)}catch(error){rmSync(inside(this.dir,root),{recursive:true,force:true});throw error}
-      if(existing?.path)this.retired.push(existing.path)
+  private config: Config = { version: 1, revision: 0, entries: [] }
+  private readonly secrets: Secrets
+  private warnings: string[] = []
+  private chain: Promise<unknown> = Promise.resolve()
+  private readonly retired: string[] = []
+  constructor(
+    readonly dir: string,
+    private readonly cipher: Cipher,
+    private readonly env: () => NodeJS.ProcessEnv = () => process.env,
+  ) {
+    mkdirSync(dir, { recursive: true })
+    const file = join(dir, 'config.json')
+    if (existsSync(file)) {
+      const c = jsonFile(file)
+      if (c.version !== 1 || !Array.isArray(c.entries)) throw new Error('扩展配置版本不正确')
+      this.config = c as unknown as Config
     }
-    const before=this.config.entries
-    this.config.entries=[...before.filter(x=>x.id!==e.id),e]
-    try{this.save()}catch(error){this.config.entries=before;throw error}
+    this.secrets = new Secrets(dir, cipher)
+    // 只清理由本服务创建的运行配置，遗留包由条目引用关系决定。
+    const runtime = join(dir, 'runtime')
+    mkdirSync(runtime, { recursive: true })
+    for (const name of readdirSync(runtime))
+      if (/^mcp-[a-f0-9-]+\.json$/.test(name)) rmSync(inside(runtime, join(runtime, name)), { force: true })
+  }
+  private save(): void {
+    const next = { ...this.config, revision: this.config.revision + 1 },
+      file = join(this.dir, 'config.json'),
+      temp = file + '.tmp'
+    writeFileSync(temp, JSON.stringify(next, null, 2))
+    renameSync(temp, file)
+    this.config = next
+  }
+  mutate<T>(fn: () => T | Promise<T>): Promise<T> {
+    const work = this.chain.then(fn)
+    this.chain = work.catch(() => undefined)
+    return work
+  }
+  private entry(id: string): ExtensionEntry {
+    const e = this.config.entries.find(e => e.id === id)
+    if (!e) throw new Error('配置已不存在')
     return e
   }
-  skillText(id:string,project:string|null):{text:string;version:string;readOnly:boolean} {
-    const e=this.state(project).entries.find(e=>e.id===id),path=e?.components.find(c=>c.kind==='skill')?.path
-    if(!e||!path)throw new Error('找不到技能正文')
-    if(e.origin==='managed')inside(join(this.dir,'packages'),realpathSync(path))
-    if(statSync(path).size>2*1024*1024)throw new Error('文件过大')
-    const source=readFileSync(path,'utf8');return {text:source,version:contentVersion(source),readOnly:e.origin==='native'||e.kind==='plugin'}
+  private native(project: string | null): ReturnType<typeof nativeEntries> {
+    return nativeEntries(project, this.env())
   }
-  toggle(id:string,enabled:boolean):void{const e=this.entry(id);e.enabled=enabled;this.save()}
-  remove(id:string):void {
-    const e=this.entry(id),before=this.config.entries
-    this.config.entries=before.filter(x=>x.id!==id)
-    try{this.save()}catch(error){this.config.entries=before;throw error}
-    this.secrets.remove(id);if(e.path)this.retired.push(inside(join(this.dir,'packages'),e.path))
+  state(project: string | null): ExtensionState {
+    const native = this.native(project)
+    const entries = [
+      ...this.config.entries.filter(
+        e =>
+          e.scope.kind === 'global' ||
+          (project && resolve(e.scope.path).toLowerCase() === resolve(project).toLowerCase()),
+      ),
+      ...native.entries,
+    ]
+    const redacted = entries.map(e => ({
+      ...e,
+      components: e.components.map(c => ({ ...c, mcp: c.mcp ? this.hide(c.mcp) : undefined })),
+      mcp: e.mcp ? this.hide(e.mcp) : undefined,
+    }))
+    return {
+      entries: redacted,
+      warnings: [...this.warnings, ...(this.secrets.warning ? [this.secrets.warning] : []), ...native.warnings],
+      revision: this.config.revision,
+      secretsPersistent: this.secrets.persistent,
+    }
   }
-  private copy(source:string,target:string):void {
+  private hide(c: McpConfig): McpConfig {
+    return {
+      ...c,
+      env: Object.fromEntries(Object.keys(c.env ?? {}).map(k => [k, MASKED_SECRET])),
+      headers: Object.fromEntries(Object.keys(c.headers ?? {}).map(k => [k, MASKED_SECRET])),
+    }
+  }
+  private conflict(name: string, kind: ExtensionEntry['kind'], s: ExtensionScope, exclude?: string): void {
+    const same = (e: ExtensionEntry): boolean =>
+      e.id !== exclude && e.kind === kind && e.name.toLowerCase() === name.toLowerCase()
+    if (this.config.entries.some(e => same(e) && JSON.stringify(e.scope) === JSON.stringify(s)))
+      throw new Error('该范围已有同名配置，请修改名称')
+    const native = this.native(s.kind === 'project' ? s.path : null).entries
+    if (native.some(same)) throw new Error('Claude Code 原生安装已有同名内容，请修改应用副本名称')
+  }
+  private packageDir(): string {
+    const path = join(this.dir, 'packages', randomUUID())
+    mkdirSync(path, { recursive: true })
+    return path
+  }
+  private skillPackage(root: string, name: string, source: string): ExtensionEntry['components'] {
+    mkdirSync(join(root, '.claude-plugin'), { recursive: true })
+    writeFileSync(join(root, '.claude-plugin/plugin.json'), JSON.stringify({ name, description: '像素星空管理的技能' }))
+    const path = join(root, 'skills', name)
+    mkdirSync(path, { recursive: true })
+    writeFileSync(join(path, 'SKILL.md'), source)
+    const c = skillFile(join(path, 'SKILL.md'))
+    return [c]
+  }
+  upsert(raw: unknown): ExtensionEntry {
+    const data = input(raw),
+      existing = data.id ? this.entry(data.id) : null
+    if (existing && existing.kind !== data.kind) throw new Error('不能修改配置类型')
+    this.conflict(data.name, data.kind, data.scope, data.id)
+    const e: ExtensionEntry = {
+      id: existing?.id ?? randomUUID(),
+      kind: data.kind,
+      name: data.name,
+      description: data.description ?? '',
+      scope: data.scope,
+      enabled: data.enabled !== false,
+      origin: 'managed',
+      source: existing?.source ?? { kind: 'created', location: '' },
+      sourceDigest: existing?.sourceDigest,
+      edited: existing?.edited,
+      components: [],
+      revision: this.config.revision + 1,
+      engines: data.engines ?? existing?.engines ?? ['claude'],
+    }
+    if (data.kind === 'mcp') e.mcp = this.secrets.put(e.id, data.mcp!)
+    if (data.kind === 'cli') {
+      e.command = data.command
+      e.args = data.args
+      e.check =
+        existing && existing.command === e.command && JSON.stringify(existing.args) === JSON.stringify(e.args)
+          ? existing.check
+          : undefined
+    }
+    if (data.kind === 'skill') {
+      const old = existing?.components.find(c => c.kind === 'skill')?.path
+      if (old && data.expectedVersion !== contentVersion(readFileSync(old, 'utf8')))
+        throw new Error('技能文件已被外部修改，请重新打开后再保存，当前输入已保留')
+      const root = this.packageDir(),
+        previous = old ? readFileSync(old, 'utf8') : null
+      if (previous && data.text !== previous && existing?.source.kind !== 'created') e.edited = true
+      let source = data.text!
+      if (previous) {
+        source = source.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n')
+        if (previous.includes('\r\n')) source = source.replace(/\n/g, '\r\n')
+        if (previous.startsWith('\uFEFF')) source = '\uFEFF' + source
+      }
+      try {
+        if (old) this.copy(dirname(old), join(root, 'skills', e.name))
+        e.components = this.skillPackage(root, e.name, source)
+        e.path = root
+        e.description = e.description || e.components[0].description
+        e.digest = digest(root)
+      } catch (error) {
+        rmSync(inside(this.dir, root), { recursive: true, force: true })
+        throw error
+      }
+      if (existing?.path) this.retired.push(existing.path)
+    }
+    const before = this.config.entries
+    this.config.entries = [...before.filter(x => x.id !== e.id), e]
+    try {
+      this.save()
+    } catch (error) {
+      this.config.entries = before
+      throw error
+    }
+    return e
+  }
+  skillText(id: string, project: string | null): { text: string; version: string; readOnly: boolean } {
+    const e = this.state(project).entries.find(e => e.id === id),
+      path = e?.components.find(c => c.kind === 'skill')?.path
+    if (!e || !path) throw new Error('找不到技能正文')
+    if (e.origin === 'managed') inside(join(this.dir, 'packages'), realpathSync(path))
+    if (statSync(path).size > 2 * 1024 * 1024) throw new Error('文件过大')
+    const source = readFileSync(path, 'utf8')
+    return { text: source, version: contentVersion(source), readOnly: e.origin === 'native' || e.kind === 'plugin' }
+  }
+  toggle(id: string, enabled: boolean): void {
+    const e = this.entry(id)
+    e.enabled = enabled
+    this.save()
+  }
+  remove(id: string): void {
+    const e = this.entry(id),
+      before = this.config.entries
+    this.config.entries = before.filter(x => x.id !== id)
+    try {
+      this.save()
+    } catch (error) {
+      this.config.entries = before
+      throw error
+    }
+    this.secrets.remove(id)
+    if (e.path) this.retired.push(inside(join(this.dir, 'packages'), e.path))
+  }
+  private copy(source: string, target: string): void {
     files(source)
-    cpSync(source,target,{recursive:true,filter:p=>!relative(source,p).split(/[\\/]/).some(x=>['.git','node_modules'].includes(x))})
+    cpSync(source, target, {
+      recursive: true,
+      filter: p =>
+        !relative(source, p)
+          .split(/[\\/]/)
+          .some(x => ['.git', 'node_modules'].includes(x)),
+    })
   }
-  private async fetch(source:ExtensionImport['source'],location:string,subdir:string,stage:string):Promise<string> {
-    if(source==='local'){const path=realpathSync(location);if(!statSync(path).isDirectory())throw new Error('选择插件或技能所在目录');this.copy(inside(path,join(path,subdir)),stage);return ''}
-    if(!/^https:\/\//i.test(location)&&!/^git@[\w.-]+:[\w./-]+$/.test(location)&&!existsSync(location))throw new Error('Git 来源使用 HTTPS 地址、SSH 仓库地址或本地仓库路径')
-    if(location.startsWith('https://')){const u=new URL(location);if(u.username||u.password)throw new Error('仓库地址不要包含凭据')}
-    const clone=join(this.dir,'downloads',randomUUID());mkdirSync(dirname(clone),{recursive:true})
+  private async fetch(
+    source: ExtensionImport['source'],
+    location: string,
+    subdir: string,
+    stage: string,
+  ): Promise<string> {
+    if (source === 'local') {
+      const path = realpathSync(location)
+      if (!statSync(path).isDirectory()) throw new Error('选择插件或技能所在目录')
+      this.copy(inside(path, join(path, subdir)), stage)
+      return ''
+    }
+    if (!/^https:\/\//i.test(location) && !/^git@[\w.-]+:[\w./-]+$/.test(location) && !existsSync(location))
+      throw new Error('Git 来源使用 HTTPS 地址、SSH 仓库地址或本地仓库路径')
+    if (location.startsWith('https://')) {
+      const u = new URL(location)
+      if (u.username || u.password) throw new Error('仓库地址不要包含凭据')
+    }
+    const clone = join(this.dir, 'downloads', randomUUID())
+    mkdirSync(dirname(clone), { recursive: true })
     try {
-      await runProgram('git',['-c','core.hooksPath=','clone','--depth','1','--',location,clone],this.dir,this.env(),90000)
-      const revision=await runProgram('git',['-C',clone,'rev-parse','HEAD'],this.dir,this.env())
-      this.copy(inside(clone,join(clone,subdir)),stage);return revision
-    }finally{if(existsSync(clone)){
-      const target=inside(join(this.dir,'downloads'),clone)
-      // Windows Git 对象为只读文件；仅处理本服务下载目录内的临时副本。
-      const writable=(p:string):void=>{const stat=lstatSync(p);if(stat.isSymbolicLink())return;if(stat.isDirectory())for(const child of readdirSync(p))writable(join(p,child));chmodSync(p,stat.isDirectory()?0o700:0o600)}
-      writable(target);rmSync(target,{recursive:true,force:true,maxRetries:5,retryDelay:100})
-    }}
-  }
-  async import(raw:unknown):Promise<ExtensionEntry> {
-    const o=object(raw),kind=o.kind,source=o.source
-    if((kind!=='plugin'&&kind!=='skill')||(source!=='local'&&source!=='git'))throw new Error('导入类型不正确')
-    const data:ExtensionImport={kind,source,location:text(o.location,'来源'),subdir:typeof o.subdir==='string'?o.subdir:'',scope:scope(o.scope),name:typeof o.name==='string'&&o.name?extensionName(o.name):undefined}
-    if(data.subdir&&(/^[\\/]/.test(data.subdir)||data.subdir.split(/[\\/]/).includes('..')))throw new Error('子目录必须位于来源目录内')
-    const root=this.packageDir()
-    try {
-      const revision=await this.fetch(source,data.location,data.subdir??'',root)
-      const sourceDigest=digest(root)
-      let e:ExtensionEntry
-      if(kind==='plugin') {
-        const p=pluginDirectory(root),name=data.name??p.name;this.conflict(name,kind,data.scope)
-        if(name!==p.name){const file=join(root,'.claude-plugin/plugin.json');writeFileSync(file,JSON.stringify({...jsonFile(file),name},null,2))}
-        e={id:randomUUID(),kind,name,description:p.description,version:p.version,scope:data.scope,enabled:true,origin:'managed',source:{kind:source,location:data.location,subdir:data.subdir,revision},path:root,components:pluginDirectory(root).components,digest:digest(root)}
-      }else {
-        const path=join(root,'SKILL.md');if(!existsSync(path))throw new Error('选择含 SKILL.md 的目录，可填写仓库内子目录')
-        const c=skillFile(path),name=data.name??c.name;this.conflict(name,kind,data.scope)
-        const pack=this.packageDir(),skillDir=join(pack,'skills',name);this.copy(root,skillDir)
-        mkdirSync(join(pack,'.claude-plugin'),{recursive:true});writeFileSync(join(pack,'.claude-plugin/plugin.json'),JSON.stringify({name}))
-        c.path=join(skillDir,'SKILL.md');e={id:randomUUID(),kind,name,description:c.description,scope:data.scope,enabled:true,origin:'managed',source:{kind:source,location:data.location,subdir:data.subdir,revision},path:pack,components:[c],digest:digest(pack)}
-        rmSync(inside(join(this.dir,'packages'),root),{recursive:true,force:true})
+      await runProgram(
+        'git',
+        ['-c', 'core.hooksPath=', 'clone', '--depth', '1', '--', location, clone],
+        this.dir,
+        this.env(),
+        90000,
+      )
+      const revision = await runProgram('git', ['-C', clone, 'rev-parse', 'HEAD'], this.dir, this.env())
+      this.copy(inside(clone, join(clone, subdir)), stage)
+      return revision
+    } finally {
+      if (existsSync(clone)) {
+        const target = inside(join(this.dir, 'downloads'), clone)
+        // Windows Git 对象为只读文件；仅处理本服务下载目录内的临时副本。
+        const writable = (p: string): void => {
+          const stat = lstatSync(p)
+          if (stat.isSymbolicLink()) return
+          if (stat.isDirectory()) for (const child of readdirSync(p)) writable(join(p, child))
+          chmodSync(p, stat.isDirectory() ? 0o700 : 0o600)
+        }
+        writable(target)
+        rmSync(target, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
       }
-      if (o.engines !== undefined) { if (!Array.isArray(o.engines) || !o.engines.length || o.engines.some(engine=>engine!=='claude'&&engine!=='codex')) throw new Error('适用引擎不正确'); e.engines=kind==='plugin'?['claude']:o.engines as Array<'claude'|'codex'> }
-      e.sourceDigest=sourceDigest;this.config.entries.push(e);this.save();return e
-    }catch(error){if(existsSync(root))rmSync(inside(join(this.dir,'packages'),root),{recursive:true,force:true});throw error}
+    }
   }
-  async update(id:string,apply:boolean):Promise<{changed:boolean;message:string}> {
-    const e=this.entry(id)
-    if(!e.path||!['local','git'].includes(e.source.kind))throw new Error('该条目没有可更新来源')
-    if(e.edited||digest(e.path)!==e.digest)throw new Error('存在本地编辑，已保留；先处理修改后再更新')
-    const stage=this.packageDir()
+  async import(raw: unknown): Promise<ExtensionEntry> {
+    const o = object(raw),
+      kind = o.kind,
+      source = o.source
+    if ((kind !== 'plugin' && kind !== 'skill') || (source !== 'local' && source !== 'git'))
+      throw new Error('导入类型不正确')
+    const data: ExtensionImport = {
+      kind,
+      source,
+      location: text(o.location, '来源'),
+      subdir: typeof o.subdir === 'string' ? o.subdir : '',
+      scope: scope(o.scope),
+      name: typeof o.name === 'string' && o.name ? extensionName(o.name) : undefined,
+    }
+    if (data.subdir && (/^[\\/]/.test(data.subdir) || data.subdir.split(/[\\/]/).includes('..')))
+      throw new Error('子目录必须位于来源目录内')
+    const root = this.packageDir()
     try {
-      const revision=await this.fetch(e.source.kind as 'local'|'git',e.source.location,e.source.subdir??'',stage)
-      const sourceDigest=digest(stage)
-      if(e.kind==='skill') {
-        const file=join(stage,'SKILL.md'),c=skillFile(file),source=readFileSync(file,'utf8')
+      const revision = await this.fetch(source, data.location, data.subdir ?? '', root)
+      const sourceDigest = digest(root)
+      let e: ExtensionEntry
+      if (kind === 'plugin') {
+        const p = pluginDirectory(root),
+          name = data.name ?? p.name
+        this.conflict(name, kind, data.scope)
+        if (name !== p.name) {
+          const file = join(root, '.claude-plugin/plugin.json')
+          writeFileSync(file, JSON.stringify({ ...jsonFile(file), name }, null, 2))
+        }
+        e = {
+          id: randomUUID(),
+          kind,
+          name,
+          description: p.description,
+          version: p.version,
+          scope: data.scope,
+          enabled: true,
+          origin: 'managed',
+          source: { kind: source, location: data.location, subdir: data.subdir, revision },
+          path: root,
+          components: pluginDirectory(root).components,
+          digest: digest(root),
+        }
+      } else {
+        const path = join(root, 'SKILL.md')
+        if (!existsSync(path)) throw new Error('选择含 SKILL.md 的目录，可填写仓库内子目录')
+        const c = skillFile(path),
+          name = data.name ?? c.name
+        this.conflict(name, kind, data.scope)
+        const pack = this.packageDir(),
+          skillDir = join(pack, 'skills', name)
+        this.copy(root, skillDir)
+        mkdirSync(join(pack, '.claude-plugin'), { recursive: true })
+        writeFileSync(join(pack, '.claude-plugin/plugin.json'), JSON.stringify({ name }))
+        c.path = join(skillDir, 'SKILL.md')
+        e = {
+          id: randomUUID(),
+          kind,
+          name,
+          description: c.description,
+          scope: data.scope,
+          enabled: true,
+          origin: 'managed',
+          source: { kind: source, location: data.location, subdir: data.subdir, revision },
+          path: pack,
+          components: [c],
+          digest: digest(pack),
+        }
+        rmSync(inside(join(this.dir, 'packages'), root), { recursive: true, force: true })
+      }
+      if (o.engines !== undefined) {
+        if (
+          !Array.isArray(o.engines) ||
+          !o.engines.length ||
+          o.engines.some(engine => engine !== 'claude' && engine !== 'codex')
+        )
+          throw new Error('适用引擎不正确')
+        e.engines = kind === 'plugin' ? ['claude'] : (o.engines as Array<'claude' | 'codex'>)
+      }
+      e.sourceDigest = sourceDigest
+      this.config.entries.push(e)
+      this.save()
+      return e
+    } catch (error) {
+      if (existsSync(root)) rmSync(inside(join(this.dir, 'packages'), root), { recursive: true, force: true })
+      throw error
+    }
+  }
+  async update(id: string, apply: boolean): Promise<{ changed: boolean; message: string }> {
+    const e = this.entry(id)
+    if (!e.path || !['local', 'git'].includes(e.source.kind)) throw new Error('该条目没有可更新来源')
+    if (e.edited || digest(e.path) !== e.digest) throw new Error('存在本地编辑，已保留；先处理修改后再更新')
+    const stage = this.packageDir()
+    try {
+      const revision = await this.fetch(
+        e.source.kind as 'local' | 'git',
+        e.source.location,
+        e.source.subdir ?? '',
+        stage,
+      )
+      const sourceDigest = digest(stage)
+      if (e.kind === 'skill') {
+        const file = join(stage, 'SKILL.md'),
+          c = skillFile(file),
+          source = readFileSync(file, 'utf8')
         // 保留导入后的命名与所有支持文件。
-        const pack=this.packageDir(),target=join(pack,'skills',e.name);this.copy(stage,target);this.skillPackage(pack,e.name,source)
-        rmSync(inside(this.dir,stage),{recursive:true,force:true});this.copy(pack,stage);rmSync(inside(this.dir,pack),{recursive:true,force:true});void c
-      }else {
-        const file=join(stage,'.claude-plugin/plugin.json');writeFileSync(file,JSON.stringify({...jsonFile(file),name:e.name},null,2))
+        const pack = this.packageDir(),
+          target = join(pack, 'skills', e.name)
+        this.copy(stage, target)
+        this.skillPackage(pack, e.name, source)
+        rmSync(inside(this.dir, stage), { recursive: true, force: true })
+        this.copy(pack, stage)
+        rmSync(inside(this.dir, pack), { recursive: true, force: true })
+        void c
+      } else {
+        const file = join(stage, '.claude-plugin/plugin.json')
+        writeFileSync(file, JSON.stringify({ ...jsonFile(file), name: e.name }, null, 2))
       }
-      const parsed=pluginDirectory(stage),nextDigest=digest(stage),changed=e.sourceDigest?sourceDigest!==e.sourceDigest:nextDigest!==e.digest
-      if(apply&&changed){const next={...e,path:stage,digest:nextDigest,sourceDigest,version:parsed.version,description:parsed.description,components:parsed.components,source:{...e.source,revision}};this.config.entries=this.config.entries.map(x=>x.id===id?next:x);this.save();this.retired.push(e.path);return {changed,message:'已更新，下一轮生效'}}
-      return {changed,message:changed?'发现更新，可点击应用更新':'已是最新版本'}
-    }finally{if(this.config.entries.every(e=>e.path!==stage)&&existsSync(stage))rmSync(inside(this.dir,stage),{recursive:true,force:true})}
+      const parsed = pluginDirectory(stage),
+        nextDigest = digest(stage),
+        changed = e.sourceDigest ? sourceDigest !== e.sourceDigest : nextDigest !== e.digest
+      if (apply && changed) {
+        const next = {
+          ...e,
+          path: stage,
+          digest: nextDigest,
+          sourceDigest,
+          version: parsed.version,
+          description: parsed.description,
+          components: parsed.components,
+          source: { ...e.source, revision },
+        }
+        this.config.entries = this.config.entries.map(x => (x.id === id ? next : x))
+        this.save()
+        this.retired.push(e.path)
+        return { changed, message: '已更新，下一轮生效' }
+      }
+      return { changed, message: changed ? '发现更新，可点击应用更新' : '已是最新版本' }
+    } finally {
+      if (this.config.entries.every(e => e.path !== stage) && existsSync(stage))
+        rmSync(inside(this.dir, stage), { recursive: true, force: true })
+    }
   }
-  importMcp(raw:string,s:ExtensionScope):number {
-    const data=object(JSON.parse(raw)),servers=object(data.mcpServers??data),pairs=Object.entries(servers)
-    if(!pairs.length||pairs.length>100)throw new Error('JSON 需要包含 MCP 服务器配置')
-    const validated=pairs.map(([name,mcp])=>({kind:'mcp' as const,name:extensionName(name),scope:s,mcp:mcpConfig(mcp)}))
-    for(const d of validated)this.conflict(d.name,'mcp',s)
-    const before=this.config.entries.slice()
-    try{for(const d of validated)this.upsert(d)}catch(error){this.config.entries=before;this.save();throw error}
+  importMcp(raw: string, s: ExtensionScope): number {
+    const data = object(JSON.parse(raw)),
+      servers = object(data.mcpServers ?? data),
+      pairs = Object.entries(servers)
+    if (!pairs.length || pairs.length > 100) throw new Error('JSON 需要包含 MCP 服务器配置')
+    const validated = pairs.map(([name, mcp]) => ({
+      kind: 'mcp' as const,
+      name: extensionName(name),
+      scope: s,
+      mcp: mcpConfig(mcp),
+    }))
+    for (const d of validated) this.conflict(d.name, 'mcp', s)
+    const before = this.config.entries.slice()
+    try {
+      for (const d of validated) this.upsert(d)
+    } catch (error) {
+      this.config.entries = before
+      this.save()
+      throw error
+    }
     return validated.length
   }
-  async check(id:string,project:string|null):Promise<ExtensionCheck> {
-    const e=this.entry(id),cwd=e.scope.kind==='project'?e.scope.path:project??this.dir
-    let result:ExtensionCheck
-    if(e.kind==='mcp'){try{const env=this.runtimeEnv(e.scope.kind==='project'?e.scope.path:project);result=await checkMcp(expandedMcp(this.secrets.resolve(id,e.mcp!),env),cwd,12000,env)}catch(error){result={status:'error',message:(error as Error).message,at:Date.now()}}}
-    else if(e.kind==='cli'){try{const output=await runProgram(e.command!,e.args??['--version'],cwd,this.env());result={status:'ready',message:output.slice(0,1200)||'程序可用',at:Date.now()}}catch(error){result={status:'error',message:(error as Error).message,at:Date.now()}}}
-    else throw new Error('该类型无需连接检测')
-    e.check=result;this.save();return result
+  async check(id: string, project: string | null): Promise<ExtensionCheck> {
+    const e = this.entry(id),
+      cwd = e.scope.kind === 'project' ? e.scope.path : (project ?? this.dir)
+    let result: ExtensionCheck
+    if (e.kind === 'mcp') {
+      try {
+        const env = this.runtimeEnv(e.scope.kind === 'project' ? e.scope.path : project)
+        result = await checkMcp(expandedMcp(this.secrets.resolve(id, e.mcp!), env), cwd, 12000, env)
+      } catch (error) {
+        result = { status: 'error', message: (error as Error).message, at: Date.now() }
+      }
+    } else if (e.kind === 'cli') {
+      try {
+        const output = await runProgram(e.command!, e.args ?? ['--version'], cwd, this.env())
+        result = { status: 'ready', message: output.slice(0, 1200) || '程序可用', at: Date.now() }
+      } catch (error) {
+        result = { status: 'error', message: (error as Error).message, at: Date.now() }
+      }
+    } else throw new Error('该类型无需连接检测')
+    e.check = result
+    this.save()
+    return result
   }
-  commands(project:string|null):SkillCommand[] {
-    const managed=effective(this.config.entries,project),native=this.native(project).entries,commands:SkillCommand[]=[]
-    for(const e of [...managed,...native.filter(e=>e.enabled)])for(const c of e.components.filter(c=>c.kind==='skill'&&c.invocable!==false)) {
-      const name=e.origin==='managed'||e.kind==='plugin'?e.name.split('@')[0]+':'+c.name:c.name
-      if(!commands.some(x=>x.name===name))commands.push({name,description:c.description,source:'configured'})
-    }
+  commands(project: string | null): SkillCommand[] {
+    const managed = effective(this.config.entries, project),
+      native = this.native(project).entries,
+      commands: SkillCommand[] = []
+    for (const e of [...managed, ...native.filter(e => e.enabled)])
+      for (const c of e.components.filter(c => c.kind === 'skill' && c.invocable !== false)) {
+        const name = e.origin === 'managed' || e.kind === 'plugin' ? e.name.split('@')[0] + ':' + c.name : c.name
+        if (!commands.some(x => x.name === name))
+          commands.push({ name, description: c.description, source: 'configured' })
+      }
     return commands
   }
-  launch(project:string,engine:'claude'|'codex'='claude',extraEnv:Record<string,string>={}):ExtensionLaunch {
-    project=realpathSync(project)
-    const env={...this.runtimeEnv(project),...extraEnv}
-    const entries=effective(this.config.entries.filter(e=>(e.engines??['claude']).includes(engine)),project),pluginDirs:string[]=[],pathDirs:string[]=[],servers:Record<string,McpConfig>={},skillRoots:string[]=[]
-    for(const e of entries) {
-      if(e.path&&(e.kind==='plugin'||e.kind==='skill')) { if(engine==='claude')pluginDirs.push(e.path);else if(e.kind==='skill')skillRoots.push(...e.components.filter(c=>c.kind==='skill'&&c.path).map(c=>dirname(c.path!))) }
-      if(e.kind==='mcp'){const c=expandedMcp(this.secrets.resolve(e.id,e.mcp!),env);if(c.type==='stdio'){const l=launcher(c.command!,c.args??[],{...env,...c.env});c.command=l.command;c.args=l.args}servers[e.name]=c}
-      if(e.kind==='cli'&&e.check?.status==='ready')pathDirs.push(dirname(program(e.command!,this.env())))
-      for(const c of e.components.filter(c=>c.kind==='cli'&&c.path))pathDirs.push(c.path!)
-    }
-    let file:string|undefined
-    if(engine==='codex') {
-      const codexConfig:Record<string,unknown>={}
-      for(const [name,c] of Object.entries(servers)) {
-        if(c.type==='sse')throw new Error('Codex MCP 仅支持 stdio 或 HTTP，请修改传输方式')
-        codexConfig[`mcp_servers.${JSON.stringify(name)}`]=c.type==='stdio'?{command:c.command,args:c.args??[],env:c.env??{}}:{url:c.url,http_headers:c.headers??{}}
+  launch(
+    project: string,
+    engine: 'claude' | 'codex' = 'claude',
+    extraEnv: Record<string, string> = {},
+  ): ExtensionLaunch {
+    project = realpathSync(project)
+    const env = { ...this.runtimeEnv(project), ...extraEnv }
+    const entries = effective(
+        this.config.entries.filter(e => (e.engines ?? ['claude']).includes(engine)),
+        project,
+      ),
+      pluginDirs: string[] = [],
+      pathDirs: string[] = [],
+      servers: Record<string, McpConfig> = {},
+      skillRoots: string[] = []
+    for (const e of entries) {
+      if (e.path && (e.kind === 'plugin' || e.kind === 'skill')) {
+        if (engine === 'claude') pluginDirs.push(e.path)
+        else if (e.kind === 'skill')
+          skillRoots.push(...e.components.filter(c => c.kind === 'skill' && c.path).map(c => dirname(c.path!)))
       }
-      return {key:JSON.stringify(entries.map(e=>[e.id,e.revision,e.digest,e.enabled,e.mcp,e.command,e.args])),pluginDirs:[],pathDirs:[...new Set(pathDirs)],skillRoots,codexConfig}
+      if (e.kind === 'mcp') {
+        const c = expandedMcp(this.secrets.resolve(e.id, e.mcp!), env)
+        if (c.type === 'stdio') {
+          const l = launcher(c.command!, c.args ?? [], { ...env, ...c.env })
+          c.command = l.command
+          c.args = l.args
+        }
+        servers[e.name] = c
+      }
+      if (e.kind === 'cli' && e.check?.status === 'ready') pathDirs.push(dirname(program(e.command!, this.env())))
+      for (const c of e.components.filter(c => c.kind === 'cli' && c.path)) pathDirs.push(c.path!)
     }
-    if(Object.keys(servers).length){file=join(this.dir,'runtime','mcp-'+randomUUID()+'.json');writeFileSync(file,JSON.stringify({mcpServers:servers}),{mode:0o600})}
-    return {key:JSON.stringify(entries.map(e=>[e.id,e.revision,e.digest,e.enabled,e.mcp,e.command,e.args,e.kind==='cli'?e.check?.status:null])),pluginDirs,pathDirs:[...new Set(pathDirs)],mcpFile:file,dispose:()=>{if(file)rmSync(inside(join(this.dir,'runtime'),file),{force:true})}}
-  }
-  location(id:string,project:string|null):string {const e=this.state(project).entries.find(e=>e.id===id);if(!e)throw new Error('配置已不存在');return e.path??this.dir}
-  private runtimeEnv(project:string|null):NodeJS.ProcessEnv {
-    const env=this.env(),dirs:string[]=[]
-    for(const entry of effective(this.config.entries,project)){
-      if(entry.kind==='cli'&&entry.check?.status==='ready')dirs.push(dirname(program(entry.command!,env)))
-      for(const component of entry.components.filter(c=>c.kind==='cli'&&c.path))dirs.push(component.path!)
+    let file: string | undefined
+    if (engine === 'codex') {
+      const codexConfig: Record<string, unknown> = {}
+      for (const [name, c] of Object.entries(servers)) {
+        if (c.type === 'sse') throw new Error('Codex MCP 仅支持 stdio 或 HTTP，请修改传输方式')
+        codexConfig[`mcp_servers.${JSON.stringify(name)}`] =
+          c.type === 'stdio'
+            ? { command: c.command, args: c.args ?? [], env: c.env ?? {} }
+            : { url: c.url, http_headers: c.headers ?? {} }
+      }
+      return {
+        key: JSON.stringify(entries.map(e => [e.id, e.revision, e.digest, e.enabled, e.mcp, e.command, e.args])),
+        pluginDirs: [],
+        pathDirs: [...new Set(pathDirs)],
+        skillRoots,
+        codexConfig,
+      }
     }
-    return {...env,PATH:[...new Set(dirs),env.PATH??env.Path??''].join(delimiter)}
+    if (Object.keys(servers).length) {
+      file = join(this.dir, 'runtime', 'mcp-' + randomUUID() + '.json')
+      writeFileSync(file, JSON.stringify({ mcpServers: servers }), { mode: 0o600 })
+    }
+    return {
+      key: JSON.stringify(
+        entries.map(e => [
+          e.id,
+          e.revision,
+          e.digest,
+          e.enabled,
+          e.mcp,
+          e.command,
+          e.args,
+          e.kind === 'cli' ? e.check?.status : null,
+        ]),
+      ),
+      pluginDirs,
+      pathDirs: [...new Set(pathDirs)],
+      mcpFile: file,
+      dispose: () => {
+        if (file) rmSync(inside(join(this.dir, 'runtime'), file), { force: true })
+      },
+    }
   }
-  close():void {for(const path of this.retired)if(existsSync(path))rmSync(inside(join(this.dir,'packages'),path),{recursive:true,force:true})}
+  location(id: string, project: string | null): string {
+    const e = this.state(project).entries.find(e => e.id === id)
+    if (!e) throw new Error('配置已不存在')
+    return e.path ?? this.dir
+  }
+  private runtimeEnv(project: string | null): NodeJS.ProcessEnv {
+    const env = this.env(),
+      dirs: string[] = []
+    for (const entry of effective(this.config.entries, project)) {
+      if (entry.kind === 'cli' && entry.check?.status === 'ready') dirs.push(dirname(program(entry.command!, env)))
+      for (const component of entry.components.filter(c => c.kind === 'cli' && c.path)) dirs.push(component.path!)
+    }
+    return { ...env, PATH: [...new Set(dirs), env.PATH ?? env.Path ?? ''].join(delimiter) }
+  }
+  close(): void {
+    for (const path of this.retired)
+      if (existsSync(path)) rmSync(inside(join(this.dir, 'packages'), path), { recursive: true, force: true })
+  }
 }

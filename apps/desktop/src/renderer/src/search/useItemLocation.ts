@@ -4,7 +4,12 @@ import { useToast } from '@/components/ui'
 import { finishItemNavigation, useItemNavigation } from './navigation'
 
 /** 等会话 / 隐藏标签渲染完成后定位，仅执行一次。 */
-export function useItemLocation(sessionId: string | null, scroller: RefObject<HTMLDivElement | null>, ready: boolean, onLocate?: () => void) {
+export function useItemLocation(
+  sessionId: string | null,
+  scroller: RefObject<HTMLDivElement | null>,
+  ready: boolean,
+  onLocate?: () => void,
+) {
   const target = useItemNavigation()
   const latestLocate = useRef(onLocate)
   latestLocate.current = onLocate
@@ -12,12 +17,17 @@ export function useItemLocation(sessionId: string | null, scroller: RefObject<HT
   const toast = useToast()
   useEffect(() => {
     if (!target || target.sessionId !== sessionId || !ready) return
-    let frame = 0, disposed = false
+    let frame = 0,
+      disposed = false
     const deadline = performance.now() + 2500
     const attempt = () => {
       const root = scroller.current
       if (disposed) return
-      const el = root && Array.from(root.querySelectorAll<HTMLElement>('[data-search-item]')).find(e => e.dataset.searchItem === target.itemId)
+      const el =
+        root &&
+        Array.from(root.querySelectorAll<HTMLElement>('[data-search-item]')).find(
+          e => e.dataset.searchItem === target.itemId,
+        )
       if (el && el.getBoundingClientRect().height > 0 && !el.closest('[inert],[aria-hidden="true"]')) {
         latestLocate.current?.()
         el.scrollIntoView({ block: 'center', behavior: 'instant' })
@@ -26,10 +36,16 @@ export function useItemLocation(sessionId: string | null, scroller: RefObject<HT
         return
       }
       if (performance.now() < deadline) frame = requestAnimationFrame(attempt)
-      else { finishItemNavigation(target.token); toast(tr("search.useItemLocation.message611")) }
+      else {
+        finishItemNavigation(target.token)
+        toast(tr('search.useItemLocation.message611'))
+      }
     }
     frame = requestAnimationFrame(attempt)
-    return () => { disposed = true; cancelAnimationFrame(frame) }
+    return () => {
+      disposed = true
+      cancelAnimationFrame(frame)
+    }
   }, [target, sessionId, ready, scroller, toast])
   useEffect(() => {
     if (!highlight) return

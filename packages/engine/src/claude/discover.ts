@@ -30,7 +30,9 @@ export function findClaude(overridePath: string | null, env: NodeJS.ProcessEnv):
     findOnPath(EXE, env),
     join(home, '.local', 'bin', EXE),
     join(home, '.claude', 'local', EXE),
-    IS_WINDOWS && env.APPDATA ? join(env.APPDATA, 'npm', 'node_modules', '@anthropic-ai', 'claude-code', 'bin', EXE) : null,
+    IS_WINDOWS && env.APPDATA
+      ? join(env.APPDATA, 'npm', 'node_modules', '@anthropic-ai', 'claude-code', 'bin', EXE)
+      : null,
   ]
   for (const p of exeCandidates) {
     if (p && isFile(p) && !/\.(cmd|bat|ps1)$/i.test(p)) return { command: p, args: [] }
@@ -76,14 +78,26 @@ export async function discoverClaude(overridePath: string | null, env: NodeJS.Pr
     return {
       launcher,
       projectsDir: null,
-      info: { ...base(), status: 'error', version: null, path, message: `无法运行 Claude Code：${ver.error ?? ver.stderr.trim().slice(0, 200)}` },
+      info: {
+        ...base(),
+        status: 'error',
+        version: null,
+        path,
+        message: `无法运行 Claude Code：${ver.error ?? ver.stderr.trim().slice(0, 200)}`,
+      },
     }
   }
   if (!versionAtLeast(version, CLAUDE_MIN_VERSION)) {
     return {
       launcher,
       projectsDir: null,
-      info: { ...base(), status: 'outdated', version, path, message: `版本太低（需要 ${CLAUDE_MIN_VERSION} 以上）：在终端运行 claude update` },
+      info: {
+        ...base(),
+        status: 'outdated',
+        version,
+        path,
+        message: `版本太低（需要 ${CLAUDE_MIN_VERSION} 以上）：在终端运行 claude update`,
+      },
     }
   }
 
@@ -103,7 +117,13 @@ export async function discoverClaude(overridePath: string | null, env: NodeJS.Pr
     return {
       launcher,
       projectsDir,
-      info: { ...base(), status: 'unauthenticated', version, path, message: '还没登录 Claude Code：在终端运行 claude auth login' },
+      info: {
+        ...base(),
+        status: 'unauthenticated',
+        version,
+        path,
+        message: '还没登录 Claude Code：在终端运行 claude auth login',
+      },
     }
   }
   return { launcher, projectsDir, info: { ...base(), status: 'ready', version, path, message: null } }

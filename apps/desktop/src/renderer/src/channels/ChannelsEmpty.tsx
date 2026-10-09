@@ -15,7 +15,9 @@ export function ChannelsEmpty() {
       <h2 className="mt-4 text-section font-semibold text-fg">{tr('channels.empty.title')}</h2>
       <p className="mt-2 max-w-[480px] text-list text-balance text-fg-muted">{tr('channels.empty.body')}</p>
       <p className="mt-1 max-w-[480px] text-meta text-balance text-fg-faint">{tr('channels.empty.later')}</p>
-      <Button variant="primary" icon={Plus} className="mt-5" onClick={() => comingSoon(tr('channels.new'))}>{tr('channels.new')}</Button>
+      <Button variant="primary" icon={Plus} className="mt-5" onClick={() => comingSoon(tr('channels.new'))}>
+        {tr('channels.new')}
+      </Button>
     </div>
   )
 }

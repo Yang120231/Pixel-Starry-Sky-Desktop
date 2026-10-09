@@ -26,14 +26,27 @@ export function ComposerArea({ children }: { children: ReactNode }) {
   const max = Math.min(2400, available)
   const min = Math.min(320, max)
   const width = Math.max(min, Math.min(preferredWidth, max))
-  return <div ref={container} className="conversation-inset shrink-0 pb-3">
-    <div className="composer-area relative mx-auto min-w-0 max-w-full" style={{ width }}>
-      {children}
-      {(['left', 'right'] as const).map(side => <ResizeHandle key={side} label={side === 'left' ? tr("session.ComposerArea.message121") : tr("session.ComposerArea.message122")} axis="x"
-        className={`composer-resize-${side}`} scale={side === 'left' ? -2 : 2} value={width} min={min} max={max}
-        onChange={v => setLayoutSize('composer', v)} onCommit={v => setLayoutSize('composer', v, true)}
-        onCancel={() => setLayoutSize('composer', preferredWidth, true)}
-        onReset={() => setLayoutSize('composer', DEFAULT_COMPOSER_WIDTH, true)} />)}
+  return (
+    <div ref={container} className="conversation-inset shrink-0 pb-3">
+      <div className="composer-area relative mx-auto min-w-0 max-w-full" style={{ width }}>
+        {children}
+        {(['left', 'right'] as const).map(side => (
+          <ResizeHandle
+            key={side}
+            label={side === 'left' ? tr('session.ComposerArea.message121') : tr('session.ComposerArea.message122')}
+            axis="x"
+            className={`composer-resize-${side}`}
+            scale={side === 'left' ? -2 : 2}
+            value={width}
+            min={min}
+            max={max}
+            onChange={v => setLayoutSize('composer', v)}
+            onCommit={v => setLayoutSize('composer', v, true)}
+            onCancel={() => setLayoutSize('composer', preferredWidth, true)}
+            onReset={() => setLayoutSize('composer', DEFAULT_COMPOSER_WIDTH, true)}
+          />
+        ))}
+      </div>
     </div>
-  </div>
+  )
 }

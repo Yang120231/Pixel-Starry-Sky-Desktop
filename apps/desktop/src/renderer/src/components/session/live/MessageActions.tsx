@@ -18,9 +18,16 @@ export interface MessageActionsValue {
 export const MessageActionsContext = createContext<MessageActionsValue | null>(null)
 
 const SKIP_KEY = 'pixelsky.rewind-confirm-skip'
-const skipConfirm = (): boolean => { try { return localStorage.getItem(SKIP_KEY) === '1' } catch { return false } }
+const skipConfirm = (): boolean => {
+  try {
+    return localStorage.getItem(SKIP_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 
-const ROW = 'flex items-center gap-0.5 opacity-0 transition-opacity duration-(--dur-fast) group-hover/message:opacity-100 group-focus-within/message:opacity-100'
+const ROW =
+  'flex items-center gap-0.5 opacity-0 transition-opacity duration-(--dur-fast) group-hover/message:opacity-100 group-focus-within/message:opacity-100'
 
 export function UserMessageActions({ item }: { item: UserItem }) {
   useI18n()
@@ -33,19 +40,35 @@ export function UserMessageActions({ item }: { item: UserItem }) {
   const reason = actions?.rewindDisabledReason ?? null
   const run = async (): Promise<boolean> => {
     if (!actions) return false
-    setBusy(true); setError(null)
-    try { await actions.rewind(item); return true }
-    catch (err) { setError(translateMessage((err as Error).message)); return false }
-    finally { setBusy(false) }
+    setBusy(true)
+    setError(null)
+    try {
+      await actions.rewind(item)
+      return true
+    } catch (err) {
+      setError(translateMessage((err as Error).message))
+      return false
+    } finally {
+      setBusy(false)
+    }
   }
   const start = (): void => {
-    if (skipConfirm()) { void run(); return }
-    setSkip(false); setError(null); setConfirming(true)
+    if (skipConfirm()) {
+      void run()
+      return
+    }
+    setSkip(false)
+    setError(null)
+    setConfirming(true)
   }
   return (
     <>
       <div className={cn(ROW, 'shrink-0 pb-1', (confirming || error) && 'opacity-100')}>
-        {error && !confirming && <span role="alert" className="mr-1 text-meta text-danger">{error}</span>}
+        {error && !confirming && (
+          <span role="alert" className="mr-1 text-meta text-danger">
+            {error}
+          </span>
+        )}
         {item.text && <CopyButton text={item.text} label={tr('session.message.copy')} iconOnly />}
         {actions && (
           <button
@@ -63,21 +86,37 @@ export function UserMessageActions({ item }: { item: UserItem }) {
       {confirming && (
         <ConfirmDialog
           title={tr('session.message.rewindTitle')}
-          description={<div className="flex flex-col gap-3">
-            <p>{tr('session.message.rewindDesc')}</p>
-            <label className="flex items-center gap-2 text-meta text-fg-muted"><input type="checkbox" checked={skip} onChange={(e) => setSkip(e.target.checked)} />{tr('session.message.rewindSkip')}</label>
-          </div>}
+          description={
+            <div className="flex flex-col gap-3">
+              <p>{tr('session.message.rewindDesc')}</p>
+              <label className="flex items-center gap-2 text-meta text-fg-muted">
+                <input type="checkbox" checked={skip} onChange={e => setSkip(e.target.checked)} />
+                {tr('session.message.rewindSkip')}
+              </label>
+            </div>
+          }
           confirmLabel={tr('session.message.rewindConfirm')}
           cancelLabel={tr('session.message.cancel')}
           danger
           busy={busy}
           error={error}
-          onCancel={() => { setConfirming(false); setError(null) }}
-          onConfirm={() => void run().then((ok) => {
-            if (!ok) return
-            if (skip) { try { localStorage.setItem(SKIP_KEY, '1') } catch { /* 本次已回退 */ } }
+          onCancel={() => {
             setConfirming(false)
-          })}
+            setError(null)
+          }}
+          onConfirm={() =>
+            void run().then(ok => {
+              if (!ok) return
+              if (skip) {
+                try {
+                  localStorage.setItem(SKIP_KEY, '1')
+                } catch {
+                  /* 本次已回退 */
+                }
+              }
+              setConfirming(false)
+            })
+          }
         />
       )}
     </>

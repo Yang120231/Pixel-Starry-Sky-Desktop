@@ -1,13 +1,37 @@
 import { describe, expect, it } from 'vitest'
 import { classifyError, platformNoticeText } from '../components/session/live/errorKind'
-import { formatMultiplier, groupProblem, groupsForModel, noRouteReason, platformModels, resolvePlatform, visibleModels, groupSupportsEngine, type PlatformGroup } from './platform'
+import {
+  formatMultiplier,
+  groupProblem,
+  groupsForModel,
+  noRouteReason,
+  platformModels,
+  resolvePlatform,
+  visibleModels,
+  groupSupportsEngine,
+  type PlatformGroup,
+} from './platform'
 
 function group(id: string, rate: number, models: string[]): PlatformGroup {
-  return { id, name: `g${id}`, description: '', platform: 'anthropic', rate_multiplier: rate, billing_source: 'balance_only', models, modelsError: null }
+  return {
+    id,
+    name: `g${id}`,
+    description: '',
+    platform: 'anthropic',
+    rate_multiplier: rate,
+    billing_source: 'balance_only',
+    models,
+    modelsError: null,
+  }
 }
 
 // 管理员排序：1、2、3
-const groups = [group('1', 1, ['opus', 'sonnet']), group('2', 0.6, ['sonnet', 'haiku']), group('3', 0.6, ['sonnet']), group('4', 0, [])]
+const groups = [
+  group('1', 1, ['opus', 'sonnet']),
+  group('2', 0.6, ['sonnet', 'haiku']),
+  group('3', 0.6, ['sonnet']),
+  group('4', 0, []),
+]
 
 describe('平台目录：先选模型、再选线路（docs/ui/source-switch.md §3.2）', () => {
   it('按声明的协议能力筛选引擎，旧 OpenAI 组只给 Codex，保留有效倍率', () => {
@@ -22,9 +46,9 @@ describe('平台目录：先选模型、再选线路（docs/ui/source-switch.md 
   })
 
   it('线路只列包含该模型的，按倍率从低到高，同倍率按管理员排序；零倍率有效', () => {
-    expect(groupsForModel(groups, 'sonnet').map((g) => g.id)).toEqual(['2', '3', '1'])
-    expect(groupsForModel(groups, 'opus').map((g) => g.id)).toEqual(['1'])
-    expect(groupsForModel([group('9', 0, ['x']), group('8', 1, ['x'])], 'x').map((g) => g.id)).toEqual(['9', '8'])
+    expect(groupsForModel(groups, 'sonnet').map(g => g.id)).toEqual(['2', '3', '1'])
+    expect(groupsForModel(groups, 'opus').map(g => g.id)).toEqual(['1'])
+    expect(groupsForModel([group('9', 0, ['x']), group('8', 1, ['x'])], 'x').map(g => g.id)).toEqual(['9', '8'])
   })
 
   it('对齐：原线路有这个模型就不动；没有就换到倍率最低的线路', () => {
@@ -63,7 +87,11 @@ describe('错误卡片归类（§3.5）', () => {
 })
 
 describe('没有可用线路的原因（余额为 0 时 Sub2api 不给读模型）', () => {
-  const failed = (id: string, billing: string): PlatformGroup => ({ ...group(id, 1, []), billing_source: billing, modelsError: '无法读取该分组的模型' })
+  const failed = (id: string, billing: string): PlatformGroup => ({
+    ...group(id, 1, []),
+    billing_source: billing,
+    modelsError: '无法读取该分组的模型',
+  })
 
   it('余额计费的线路、余额为 0、模型读不出来：提示充值', () => {
     const r = noRouteReason({ groups: [failed('2', 'balance_only')], error: '无法读取该分组的模型' }, 0)
@@ -73,7 +101,10 @@ describe('没有可用线路的原因（余额为 0 时 Sub2api 不给读模型�
   })
 
   it('有余额或订阅线路时按原错误说，不误报余额', () => {
-    expect(noRouteReason({ groups: [failed('2', 'balance_only')], error: null }, 5)).toEqual({ message: '模型读取失败：无法读取该分组的模型', balance: false })
+    expect(noRouteReason({ groups: [failed('2', 'balance_only')], error: null }, 5)).toEqual({
+      message: '模型读取失败：无法读取该分组的模型',
+      balance: false,
+    })
     expect(noRouteReason({ groups: [failed('3', 'plan_only')], error: null }, 0).balance).toBe(false)
     expect(noRouteReason({ groups: [], error: null }, 0).message).toMatch(/^暂无可用线路/)
   })

@@ -8,7 +8,8 @@ import { EngineHost } from '../src'
 
 let root: string
 let events: HostEvent[]
-const makeHost = (): EngineHost => new EngineHost({ dataDir: join(root, 'data'), emit: (e) => events.push(e), adapters: {} })
+const makeHost = (): EngineHost =>
+  new EngineHost({ dataDir: join(root, 'data'), emit: e => events.push(e), adapters: {} })
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'pixelsky-projects-'))

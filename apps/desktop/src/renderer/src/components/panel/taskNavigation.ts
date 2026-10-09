@@ -1,5 +1,9 @@
 import { useSyncExternalStore } from 'react'
-export interface TaskLocation { projectId: string; taskId: string; seq: number }
+export interface TaskLocation {
+  projectId: string
+  taskId: string
+  seq: number
+}
 let current: TaskLocation | null = null
 const listeners = new Set<() => void>()
 export function requestTask(projectId: string, taskId: string): void {
@@ -8,5 +12,11 @@ export function requestTask(projectId: string, taskId: string): void {
   window.dispatchEvent(new CustomEvent('pixelsky:open-task', { detail: current }))
 }
 export function useTaskLocation(): TaskLocation | null {
-  return useSyncExternalStore(cb => { listeners.add(cb); return () => listeners.delete(cb) }, () => current)
+  return useSyncExternalStore(
+    cb => {
+      listeners.add(cb)
+      return () => listeners.delete(cb)
+    },
+    () => current,
+  )
 }

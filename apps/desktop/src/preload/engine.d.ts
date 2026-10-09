@@ -58,7 +58,14 @@ export interface EngineBridge {
   /** 只改显示名，磁盘上的文件夹不变 */
   renameProject(id: string, name: string): Promise<ProjectRecord>
   sessions(): Promise<SessionSummary[]>
-  createSession(opts: { projectId: string; engine?: EngineId; copyId?: string | null; workspaceSessionId?: string } & Partial<SessionSettings>): Promise<SessionRecord>
+  createSession(
+    opts: {
+      projectId: string
+      engine?: EngineId
+      copyId?: string | null
+      workspaceSessionId?: string
+    } & Partial<SessionSettings>,
+  ): Promise<SessionRecord>
   /** 打开会话：返回快照和序号，之后只应用 onEvent 里序号更大的会话事件 */
   openSession(id: string): Promise<OpenedSession>
   send(id: string, input: string | MessageInput): Promise<SendReceipt>
@@ -77,9 +84,9 @@ export interface EngineBridge {
   answer(id: string, requestId: string, decision: ApprovalDecision): Promise<void>
   updateSession(id: string, patch: SessionPatch): Promise<SessionRecord>
   deleteSession(id: string): Promise<void>
-  archiveSession(id:string,archived:boolean,stopRunning?:boolean):Promise<void>
-  renameSession(id:string,title:string):Promise<SessionRecord>
-  setSessionBottom(id:string,bottomed:boolean):Promise<SessionRecord>
+  archiveSession(id: string, archived: boolean, stopRunning?: boolean): Promise<void>
+  renameSession(id: string, title: string): Promise<SessionRecord>
+  setSessionBottom(id: string, bottomed: boolean): Promise<SessionRecord>
   /** 停止一个后台任务 */
   stopTask(id: string, taskId: string): Promise<void>
   /** 读一个后台任务的输出（最后一段） */

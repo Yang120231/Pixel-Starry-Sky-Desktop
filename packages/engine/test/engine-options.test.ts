@@ -20,16 +20,24 @@ function makeHost(): EngineHost {
     launcher: { command: process.execPath, args: [FAKE] },
     projectsDir,
     launchOptions: () => host!.launchOptions('claude'),
-    env: { ...process.env, FAKE_CLAUDE_PROJECTS: projectsDir, FAKE_CLAUDE_LOG: join(root, 'argv.log'), FAKE_CLAUDE_ENV_LOG: join(root, 'env.json') },
+    env: {
+      ...process.env,
+      FAKE_CLAUDE_PROJECTS: projectsDir,
+      FAKE_CLAUDE_LOG: join(root, 'argv.log'),
+      FAKE_CLAUDE_ENV_LOG: join(root, 'env.json'),
+    },
   })
-  host = new EngineHost({ dataDir: join(root, 'data'), emit: (e) => events.push(e), adapters: { claude: adapter } })
+  host = new EngineHost({ dataDir: join(root, 'data'), emit: e => events.push(e), adapters: { claude: adapter } })
   hosts.push(host)
   return host
 }
 
 function spawnArgs(): string[][] {
   try {
-    return readFileSync(join(root, 'argv.log'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as string[])
+    return readFileSync(join(root, 'argv.log'), 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map(l => JSON.parse(l) as string[])
   } catch {
     return []
   }
@@ -43,12 +51,12 @@ async function waitFor<T>(pick: () => T | undefined | null | false, timeoutMs = 
     const v = pick()
     if (v) return v
     if (Date.now() - start > timeoutMs) throw new Error('等待超时')
-    await new Promise((r) => setTimeout(r, 20))
+    await new Promise(r => setTimeout(r, 20))
   }
 }
 
 const turnsDone = (id: string): number =>
-  events.filter((e) => e.kind === 'session' && e.sessionId === id && e.event.type === 'turn_completed').length
+  events.filter(e => e.kind === 'session' && e.sessionId === id && e.event.type === 'turn_completed').length
 
 function project(host: EngineHost) {
   return host.addProject(mkdtempSync(join(root, 'proj-')))
@@ -61,7 +69,7 @@ beforeEach(() => {
 })
 
 afterEach(async () => {
-  await Promise.all(hosts.map((h) => h.shutdown()))
+  await Promise.all(hosts.map(h => h.shutdown()))
   rmSync(root, { recursive: true, force: true })
 })
 
@@ -70,10 +78,28 @@ describe('本机引擎详情设置', () => {
     mkdirSync(join(root, 'data'), { recursive: true })
     writeFileSync(
       join(root, 'data', 'engine-settings.json'),
-      JSON.stringify({ version: 1, defaults: { engine: 'claude', model: 'opus', effort: 'low', permissionMode: 'plan', ultracode: false, fast: true, thinkingSummaries: false } }),
+      JSON.stringify({
+        version: 1,
+        defaults: {
+          engine: 'claude',
+          model: 'opus',
+          effort: 'low',
+          permissionMode: 'plan',
+          ultracode: false,
+          fast: true,
+          thinkingSummaries: false,
+        },
+      }),
     )
     const host = makeHost()
-    expect(host.engineConfig().claude.defaults).toEqual({ model: 'opus', effort: 'low', permissionMode: 'plan', ultracode: false, fast: true, thinkingSummaries: false })
+    expect(host.engineConfig().claude.defaults).toEqual({
+      model: 'opus',
+      effort: 'low',
+      permissionMode: 'plan',
+      ultracode: false,
+      fast: true,
+      thinkingSummaries: false,
+    })
     expect(host.defaults()).toMatchObject({ engine: 'claude', effort: 'low', permissionMode: 'plan' })
   })
 
@@ -86,14 +112,22 @@ describe('本机引擎详情设置', () => {
     await host.update(a.id, { effort: 'low' })
     expect(host.engineConfig().claude.defaults.effort).toBe('low')
     expect(host.defaults()).toMatchObject({ engine: 'claude', effort: 'low', permissionMode: 'full' })
-    await expect(host.setEngineConfig('claude', { defaults: { effort: 'huge' as never } })).rejects.toThrow('默认推理强度不对')
-    await expect(host.setEngineConfig('claude', { defaults: { permissionMode: 'yolo' as never } })).rejects.toThrow('默认权限不对')
+    await expect(host.setEngineConfig('claude', { defaults: { effort: 'huge' as never } })).rejects.toThrow(
+      '默认推理强度不对',
+    )
+    await expect(host.setEngineConfig('claude', { defaults: { permissionMode: 'yolo' as never } })).rejects.toThrow(
+      '默认权限不对',
+    )
   })
 
   it('引擎级选项传给 Claude Code：输出风格、禁用提问、压缩触发点', async () => {
     const host = makeHost()
     await host.setEngineConfig('claude', { outputStyle: 'Explanatory', askQuestions: false, autoCompactPct: 70 })
-    expect(host.engineConfig().claude).toMatchObject({ outputStyle: 'Explanatory', askQuestions: false, autoCompactPct: 70 })
+    expect(host.engineConfig().claude).toMatchObject({
+      outputStyle: 'Explanatory',
+      askQuestions: false,
+      autoCompactPct: 70,
+    })
     const s = host.createSession({ projectId: project(host).id })
     await host.send(s.id, '你好')
     await waitFor(() => turnsDone(s.id) === 1)
@@ -107,7 +141,12 @@ describe('本机引擎详情设置', () => {
 
   it('默认不加任何参数：允许提问、跟随 Claude Code 的输出风格和压缩阈值', async () => {
     const host = makeHost()
-    expect(host.engineConfig().claude).toMatchObject({ outputStyle: null, askQuestions: true, autoCompactPct: null, hidden: false })
+    expect(host.engineConfig().claude).toMatchObject({
+      outputStyle: null,
+      askQuestions: true,
+      autoCompactPct: null,
+      hidden: false,
+    })
     const s = host.createSession({ projectId: project(host).id })
     await host.send(s.id, '你好')
     await waitFor(() => turnsDone(s.id) === 1)
@@ -145,7 +184,7 @@ describe('本机引擎详情设置', () => {
     await expect(host.setEngineConfig('claude', { hidden: true })).rejects.toThrow('默认引擎不能隐藏')
     expect(() => host.setDefaultEngine('codex')).toThrow('这个引擎暂不支持')
     await host.setEngineConfig('claude', { askQuestions: false })
-    expect(events.some((e) => e.kind === 'engine_config' && e.config.claude.askQuestions === false)).toBe(true)
+    expect(events.some(e => e.kind === 'engine_config' && e.config.claude.askQuestions === false)).toBe(true)
   })
 
   it('输出风格列表从 Claude Code 的初始化握手里读（不发消息）', async () => {

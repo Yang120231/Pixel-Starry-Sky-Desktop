@@ -33,7 +33,10 @@ export function Popover({ open, onClose, className, children }: PopoverProps) {
   return (
     <div
       ref={ref}
-      className={cn('pop-in no-drag absolute z-40 min-w-44 rounded-lg border border-line-card bg-popover p-1 shadow-menu', className)}
+      className={cn(
+        'pop-in no-drag absolute z-40 min-w-44 rounded-lg border border-line-card bg-popover p-1 shadow-menu',
+        className,
+      )}
     >
       {children}
     </div>

@@ -57,8 +57,8 @@ function workflowAgent(item: Msg): AgentRun {
 function phasesAndAgents(progress: unknown): Pick<WorkflowRun, 'phases' | 'agents'> {
   const items = arr(progress)
   return {
-    phases: items.filter((i) => i.type === 'workflow_phase').map((i) => ({ index: num(i.index), title: str(i.title) })),
-    agents: items.filter((i) => i.type === 'workflow_agent').map(workflowAgent),
+    phases: items.filter(i => i.type === 'workflow_phase').map(i => ({ index: num(i.index), title: str(i.title) })),
+    agents: items.filter(i => i.type === 'workflow_agent').map(workflowAgent),
   }
 }
 
@@ -67,7 +67,7 @@ function readRows(file: string): Msg[] {
     if (statSync(file).size > MAX_FILE) return []
     return readFileSync(file, 'utf8')
       .split('\n')
-      .flatMap((line) => {
+      .flatMap(line => {
         if (!line.trim()) return []
         try {
           return [JSON.parse(line) as Msg]
@@ -85,7 +85,7 @@ export class Runs {
   private agents: AgentRun[] = []
 
   snapshot(): AgentRuns {
-    return { workflows: this.workflows.map((w) => ({ ...w })), agents: this.agents.map((a) => ({ ...a })) }
+    return { workflows: this.workflows.map(w => ({ ...w })), agents: this.agents.map(a => ({ ...a })) }
   }
 
   get empty(): boolean {
@@ -98,7 +98,7 @@ export class Runs {
     const kind = str(frame.task_type)
     const toolUseId = str(frame.tool_use_id) || null
     if (kind === 'local_workflow') {
-      this.workflows = this.workflows.filter((w) => w.id !== id)
+      this.workflows = this.workflows.filter(w => w.id !== id)
       this.workflows.push({
         id,
         name: str(frame.workflow_name),
@@ -115,7 +115,7 @@ export class Runs {
       return true
     }
     if (kind === 'local_agent') {
-      this.agents = this.agents.filter((a) => a.id !== id)
+      this.agents = this.agents.filter(a => a.id !== id)
       this.agents.push({
         ...emptyAgent(),
         id,
@@ -135,15 +135,16 @@ export class Runs {
   progress(frame: Msg): boolean {
     const id = str(frame.task_id)
     const usage = obj(frame.usage)
-    const w = this.workflows.find((x) => x.id === id)
+    const w = this.workflows.find(x => x.id === id)
     if (w) {
-      if (frame.workflow_progress !== undefined && frame.workflow_progress !== null) Object.assign(w, phasesAndAgents(frame.workflow_progress))
+      if (frame.workflow_progress !== undefined && frame.workflow_progress !== null)
+        Object.assign(w, phasesAndAgents(frame.workflow_progress))
       w.tokens = num(usage.total_tokens) || w.tokens
       w.toolCalls = num(usage.tool_uses) || w.toolCalls
       w.durationMs = num(usage.duration_ms) || w.durationMs
       return true
     }
-    const a = this.agents.find((x) => x.id === id)
+    const a = this.agents.find(x => x.id === id)
     if (a) {
       a.tokens = num(usage.total_tokens) || a.tokens
       a.toolCalls = num(usage.tool_uses) || a.toolCalls
@@ -158,7 +159,8 @@ export class Runs {
   finished(frame: Msg): boolean {
     const id = str(frame.task_id)
     const usage = obj(frame.usage)
-    const run: WorkflowRun | AgentRun | undefined = this.workflows.find((x) => x.id === id) ?? this.agents.find((x) => x.id === id)
+    const run: WorkflowRun | AgentRun | undefined =
+      this.workflows.find(x => x.id === id) ?? this.agents.find(x => x.id === id)
     if (!run) return false
     const status = str(frame.status) || 'completed'
     if ('phases' in run) run.status = status
@@ -176,7 +178,7 @@ export class Runs {
 
   /** Agent 工具的结果（tool_use_result）：补上子智能体的模型和总数 */
   agentResult(result: Msg): boolean {
-    const a = this.agents.find((x) => x.id === str(result.agentId))
+    const a = this.agents.find(x => x.id === str(result.agentId))
     if (!a) return false
     if (str(result.resolvedModel)) a.model = str(result.resolvedModel)
     if (typeof result.totalTokens === 'number') {
@@ -208,10 +210,10 @@ export class Runs {
 
   /** 把以前保存的放在实时数据前面（同 id 以实时的为准） */
   seed(saved: AgentRuns): void {
-    const liveW = new Set(this.workflows.map((w) => w.id))
-    const liveA = new Set(this.agents.map((a) => a.id))
-    this.workflows = [...saved.workflows.filter((w) => !liveW.has(w.id)), ...this.workflows]
-    this.agents = [...saved.agents.filter((a) => !liveA.has(a.id)), ...this.agents]
+    const liveW = new Set(this.workflows.map(w => w.id))
+    const liveA = new Set(this.agents.map(a => a.id))
+    this.workflows = [...saved.workflows.filter(w => !liveW.has(w.id)), ...this.workflows]
+    this.agents = [...saved.agents.filter(a => !liveA.has(a.id)), ...this.agents]
   }
 }
 
@@ -221,7 +223,7 @@ export function loadSavedRuns(sessionDir: string): AgentRuns {
   const wfDir = join(sessionDir, 'workflows')
   let names: string[] = []
   try {
-    names = readdirSync(wfDir).filter((n) => n.endsWith('.json'))
+    names = readdirSync(wfDir).filter(n => n.endsWith('.json'))
   } catch {
     // 没有编排
   }
@@ -252,7 +254,7 @@ export function loadSavedRuns(sessionDir: string): AgentRuns {
     const launched = obj(row.toolUseResult)
     if (launched.taskType !== 'local_workflow') continue
     const call = str(obj(arr(obj(row.message).content)[0]).tool_use_id)
-    const w = workflows.find((x) => x.id === str(launched.taskId))
+    const w = workflows.find(x => x.id === str(launched.taskId))
     if (w && call) w.toolUseId = call
   }
   workflows.sort((a, b) => a.startedAt - b.startedAt)
@@ -265,11 +267,15 @@ export function loadSavedRuns(sessionDir: string): AgentRuns {
     for (const block of arr(obj(row.message).content)) {
       if (block.type === 'tool_use' && (block.name === 'Agent' || block.name === 'Task')) {
         const input = obj(block.input)
-        labels.set(str(block.id), { label: str(input.description), type: str(input.subagent_type), prompt: str(input.prompt) })
+        labels.set(str(block.id), {
+          label: str(input.description),
+          type: str(input.subagent_type),
+          prompt: str(input.prompt),
+        })
       }
       if (block.type !== 'tool_result' || typeof result.totalTokens !== 'number') continue
       const id = str(result.agentId)
-      if (!id || agents.some((a) => a.id === id)) continue
+      if (!id || agents.some(a => a.id === id)) continue
       const call = str(block.tool_use_id)
       const meta = labels.get(call) ?? { label: '', type: '', prompt: '' }
       const duration = num(result.totalDurationMs)
@@ -318,7 +324,7 @@ function taskText(text: string): string {
   return text
     .slice(i + mark.length)
     .split('\n')
-    .map((l) => (l.startsWith('  ') ? l.slice(2) : l))
+    .map(l => (l.startsWith('  ') ? l.slice(2) : l))
     .join('\n')
 }
 
@@ -334,15 +340,26 @@ export function loadSubagentTranscript(sessionDir: string, agentId: string, cwd:
     const content = obj(row.message).content
     if (row.type === 'user') {
       if (typeof content === 'string') {
-        items.push({ kind: 'user', id: id('user'), text: taskText(content), createdAt: Date.parse(str(row.timestamp)) || 0 })
+        items.push({
+          kind: 'user',
+          id: id('user'),
+          text: taskText(content),
+          createdAt: Date.parse(str(row.timestamp)) || 0,
+        })
         continue
       }
       for (const block of arr(content)) {
         if (block.type === 'text' && str(block.text).trim()) {
-          items.push({ kind: 'user', id: id('user'), text: taskText(str(block.text)), createdAt: Date.parse(str(row.timestamp)) || 0 })
+          items.push({
+            kind: 'user',
+            id: id('user'),
+            text: taskText(str(block.text)),
+            createdAt: Date.parse(str(row.timestamp)) || 0,
+          })
         } else if (block.type === 'tool_result') {
           const at = tools.get(str(block.tool_use_id))
-          if (at !== undefined) items[at] = completeToolItem(items[at], block.content, block.is_error === true, row.toolUseResult)
+          if (at !== undefined)
+            items[at] = completeToolItem(items[at], block.content, block.is_error === true, row.toolUseResult)
         }
       }
     } else if (row.type === 'assistant') {

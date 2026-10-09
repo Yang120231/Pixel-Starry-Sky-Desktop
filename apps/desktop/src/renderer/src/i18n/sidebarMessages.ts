@@ -1,6 +1,9 @@
 export const sidebarMessages = {
   'sidebar.layout.title': { zh: '图标位置', en: 'Icon positions' },
-  'sidebar.layout.description': { zh: '拖动下方图标调整左右顺序，或在右上角顶栏、侧栏顶部和底部之间移动。松开后立即生效。', en: 'Drag icons to reorder them or move them between the top bar and the sidebar top and bottom. Drop to apply.' },
+  'sidebar.layout.description': {
+    zh: '拖动下方图标调整左右顺序，或在右上角顶栏、侧栏顶部和底部之间移动。松开后立即生效。',
+    en: 'Drag icons to reorder them or move them between the top bar and the sidebar top and bottom. Drop to apply.',
+  },
   'sidebar.layout.preview': { zh: '调整顶栏和侧边栏图标位置', en: 'Arrange top bar and sidebar icons' },
   'sidebar.layout.header': { zh: '右上角顶栏', en: 'Top bar' },
   'sidebar.layout.top': { zh: '侧栏顶部', en: 'Sidebar top' },
@@ -17,8 +20,14 @@ export const sidebarMessages = {
   'sidebar.layout.right': { zh: '向右移动', en: 'Move right' },
   'sidebar.layout.toPrev': { zh: '上移一排', en: 'Move up a row' },
   'sidebar.layout.toNext': { zh: '下移一排', en: 'Move down a row' },
-  'sidebar.layout.keyboard': { zh: '也可选中图标后使用箭头按钮或键盘方向键；拖动时按 Esc 取消。机器切换、右侧面板开关、搜索与账号位置固定；侧栏每排最多 5 个图标。', en: 'Select an icon and use the arrow buttons or arrow keys. Press Esc to cancel a drag. The machine switcher, right panel toggle, search and account stay fixed. Each sidebar row holds up to 5 icons.' },
-  'sidebar.layout.moved': { zh: '已将{action}移至{row}第 {position} 位', en: '{action} moved to position {position} in {row}' },
+  'sidebar.layout.keyboard': {
+    zh: '也可选中图标后使用箭头按钮或键盘方向键；拖动时按 Esc 取消。机器切换、右侧面板开关、搜索与账号位置固定；侧栏每排最多 5 个图标。',
+    en: 'Select an icon and use the arrow buttons or arrow keys. Press Esc to cancel a drag. The machine switcher, right panel toggle, search and account stay fixed. Each sidebar row holds up to 5 icons.',
+  },
+  'sidebar.layout.moved': {
+    zh: '已将{action}移至{row}第 {position} 位',
+    en: '{action} moved to position {position} in {row}',
+  },
   'sidebar.layout.cancelled': { zh: '已取消移动', en: 'Move cancelled' },
   'sidebar.layout.reset': { zh: '恢复默认位置', en: 'Reset positions' },
   'sidebar.layout.resetDone': { zh: '已恢复默认位置', en: 'Default positions restored' },
@@ -44,9 +53,15 @@ export const sidebarMessages = {
   'sidebar.recent.collapse': { zh: '折叠最近任务', en: 'Collapse recent tasks' },
   'sidebar.settings.title': { zh: '侧边栏', en: 'Sidebar' },
   'sidebar.settings.showRecent': { zh: '显示最近任务', en: 'Show recent tasks' },
-  'sidebar.settings.showRecentDescription': { zh: '在侧边栏显示最近任务；关闭后仍可通过搜索找到会话。', en: 'Show recent tasks in the sidebar. Sessions remain available in search when hidden.' },
+  'sidebar.settings.showRecentDescription': {
+    zh: '在侧边栏显示最近任务；关闭后仍可通过搜索找到会话。',
+    en: 'Show recent tasks in the sidebar. Sessions remain available in search when hidden.',
+  },
   'sidebar.settings.icons': { zh: '侧边栏图标', en: 'Sidebar icons' },
-  'sidebar.settings.iconsDescription': { zh: '选择常用按钮的图标，立即应用并保存在本机。', en: 'Choose icons for sidebar actions. Changes apply immediately and are saved on this device.' },
+  'sidebar.settings.iconsDescription': {
+    zh: '选择常用按钮的图标，立即应用并保存在本机。',
+    en: 'Choose icons for sidebar actions. Changes apply immediately and are saved on this device.',
+  },
   'sidebar.settings.preview': { zh: '侧边栏图标预览', en: 'Sidebar icon preview' },
   'sidebar.settings.reset': { zh: '恢复默认图标', en: 'Reset icons to defaults' },
   'sidebar.settings.chooseIcon': { zh: '{action}：{icon}', en: '{action}: {icon}' },

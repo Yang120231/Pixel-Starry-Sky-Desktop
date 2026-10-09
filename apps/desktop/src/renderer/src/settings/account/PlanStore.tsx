@@ -5,12 +5,22 @@ import { formatAmount, formatPrice } from '@/account'
 import { Button, cn, useComingSoon } from '@/components/ui'
 import { billing, type PlanOffer } from '@/mock/data'
 
-const PERIOD_LABELS: Record<PlanOffer['period'], string> = { get month() { return tr("settings.account.PlanStore.message654") }, get quarter() { return tr("settings.account.PlanStore.message655") }, get year() { return tr("settings.account.PlanStore.message656") } }
+const PERIOD_LABELS: Record<PlanOffer['period'], string> = {
+  get month() {
+    return tr('settings.account.PlanStore.message654')
+  },
+  get quarter() {
+    return tr('settings.account.PlanStore.message655')
+  },
+  get year() {
+    return tr('settings.account.PlanStore.message656')
+  },
+}
 
 const quotaLabels = (): Array<[keyof PlanOffer['quotas'], string]> => [
-  ['daily', tr("settings.account.PlanStore.message657")],
-  ['weekly', tr("settings.account.PlanStore.message658")],
-  ['monthly', tr("settings.account.PlanStore.message659")],
+  ['daily', tr('settings.account.PlanStore.message657')],
+  ['weekly', tr('settings.account.PlanStore.message658')],
+  ['monthly', tr('settings.account.PlanStore.message659')],
 ]
 
 /** 账号 → 订阅套餐：套餐卡片。购买暂未接入，按钮只弹「即将推出」（docs/ui/settings.md §9.4） */
@@ -22,8 +32,8 @@ export function PlanStore({ currentPlan, currency }: { currentPlan: string | nul
   if (plans.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-line-strong px-4 py-10 text-center">
-        <div className="text-ui font-medium text-fg">{tr("settings.account.PlanStore.message660")}</div>
-        <p className="mt-1 text-meta text-fg-muted">{tr("settings.account.PlanStore.message661")}</p>
+        <div className="text-ui font-medium text-fg">{tr('settings.account.PlanStore.message660')}</div>
+        <p className="mt-1 text-meta text-fg-muted">{tr('settings.account.PlanStore.message661')}</p>
       </div>
     )
   }
@@ -31,9 +41,13 @@ export function PlanStore({ currentPlan, currency }: { currentPlan: string | nul
   return (
     <div>
       <div className="grid grid-cols-3 gap-2.5">
-        {plans.map((plan) => {
+        {plans.map(plan => {
           const current = plan.name === currentPlan
-          const action = current ? tr("settings.account.PlanStore.message662") : currentPlan ? tr("settings.account.PlanStore.message663") : tr("settings.account.PlanStore.message664")
+          const action = current
+            ? tr('settings.account.PlanStore.message662')
+            : currentPlan
+              ? tr('settings.account.PlanStore.message663')
+              : tr('settings.account.PlanStore.message664')
           return (
             <div
               key={plan.id}
@@ -45,9 +59,9 @@ export function PlanStore({ currentPlan, currency }: { currentPlan: string | nul
               <div className="flex min-h-5 items-center gap-1.5">
                 <span className="min-w-0 truncate text-ui font-medium text-fg">{plan.name}</span>
                 {current ? (
-                  <Tag>{tr("settings.account.PlanStore.message665")}</Tag>
+                  <Tag>{tr('settings.account.PlanStore.message665')}</Tag>
                 ) : (
-                  plan.recommended && <Tag>{tr("settings.account.PlanStore.message666")}</Tag>
+                  plan.recommended && <Tag>{tr('settings.account.PlanStore.message666')}</Tag>
                 )}
               </div>
 
@@ -64,7 +78,10 @@ export function PlanStore({ currentPlan, currency }: { currentPlan: string | nul
                   if (value === undefined) return null
                   return (
                     <div key={key} className="flex justify-between gap-2">
-                      <dt className="text-fg-muted">{label}{tr("settings.account.PlanStore.message667")}</dt>
+                      <dt className="text-fg-muted">
+                        {label}
+                        {tr('settings.account.PlanStore.message667')}
+                      </dt>
                       <dd className="text-fg tabular-nums">{formatAmount(value, currency)}</dd>
                     </div>
                   )
@@ -72,7 +89,7 @@ export function PlanStore({ currentPlan, currency }: { currentPlan: string | nul
               </dl>
 
               <ul className="mt-3 flex flex-col gap-1 text-meta text-fg-secondary">
-                {plan.features.map((f) => (
+                {plan.features.map(f => (
                   <li key={f} className="flex items-start gap-1.5">
                     <Check size={13} strokeWidth={2} className="mt-0.5 shrink-0 text-accent-fg" />
                     <span className="min-w-0">{f}</span>
@@ -84,7 +101,7 @@ export function PlanStore({ currentPlan, currency }: { currentPlan: string | nul
                 <Button
                   variant={plan.recommended || current ? 'primary' : 'outline'}
                   className="w-full justify-center"
-                  onClick={() => comingSoon(tr("settings.account.PlanStore.message668"))}
+                  onClick={() => comingSoon(tr('settings.account.PlanStore.message668'))}
                 >
                   {action}
                 </Button>
@@ -101,6 +118,8 @@ export function PlanStore({ currentPlan, currency }: { currentPlan: string | nul
 function Tag({ children }: { children: string }) {
   useI18n()
   return (
-    <span className="shrink-0 rounded-sm bg-accent-soft px-1.5 py-px text-label font-medium text-accent-fg">{children}</span>
+    <span className="shrink-0 rounded-sm bg-accent-soft px-1.5 py-px text-label font-medium text-accent-fg">
+      {children}
+    </span>
   )
 }

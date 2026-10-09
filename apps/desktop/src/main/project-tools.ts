@@ -21,9 +21,12 @@ export function toolsSender(event: IpcMainInvokeEvent): boolean {
   const win = BrowserWindow.fromWebContents(event.sender)
   if (!win || win.webContents !== event.sender || event.senderFrame !== event.sender.mainFrame) return false
   try {
-    const url = new URL(event.senderFrame.url), dev = process.env.ELECTRON_RENDERER_URL
+    const url = new URL(event.senderFrame.url),
+      dev = process.env.ELECTRON_RENDERER_URL
     return url.protocol === 'file:' || (!!dev && !app.isPackaged && url.origin === new URL(dev).origin)
-  } catch { return false }
+  } catch {
+    return false
+  }
 }
 export async function initProjectTools(host: ToolsHost): Promise<void> {
   const dir = join(app.getPath('userData'), 'project-tools')
@@ -32,13 +35,20 @@ export async function initProjectTools(host: ToolsHost): Promise<void> {
     if (timer) return
     timer = setTimeout(() => {
       timer = null
-      for (const win of BrowserWindow.getAllWindows()) if (!win.isDestroyed()) win.webContents.send('projectTools:changed')
+      for (const win of BrowserWindow.getAllWindows())
+        if (!win.isDestroyed()) win.webContents.send('projectTools:changed')
     }, 80)
   }
   let copies!: Copies
-  const tasks = new Tasks(dir, host, changed), services = new Services(dir, host, changed, (id, path) => copies.verifyPath(id, path))
+  const tasks = new Tasks(dir, host, changed),
+    services = new Services(dir, host, changed, (id, path) => copies.verifyPath(id, path))
   copies = new Copies(dir, host, changed, path => services.stopPath(path))
-  resolveCopyPath = async (projectId, copyId) => { const copy = copies.get(copyId); if (copy.projectId !== projectId) throw new Error('副本不属于项目'); await copies.verify(copy); return copy.path }
+  resolveCopyPath = async (projectId, copyId) => {
+    const copy = copies.get(copyId)
+    if (copy.projectId !== projectId) throw new Error('副本不属于项目')
+    await copies.verify(copy)
+    return copy.path
+  }
   // Git 面板（docs/ui/git-panel.md）：本机放弃未跟踪文件时移到回收站
   const git = new GitTools(host, changed, { trash: path => shell.trashItem(path) })
   await Promise.all([tasks.init(), copies.init()])
@@ -47,15 +57,31 @@ export async function initProjectTools(host: ToolsHost): Promise<void> {
     if (!toolsSender(event)) throw new Error('不受信任的页面')
     const machine = machineOf(projectId)
     if (machine !== 'local') return machines!.call(machine, 'workspaces', [projectId])
-    const target = host.resolve({ projectId }), info = await gitInfo(target.path)
+    const target = host.resolve({ projectId }),
+      info = await gitInfo(target.path)
     const children = info.root ? await copies.list(projectId) : []
-    return [{ projectId, name: target.name, path: target.path, copyId: null, branch: info.branch, error: null }, ...children.map(copy => ({ projectId, name: copy.name, path: copy.path, copyId: copy.id, branch: copy.branch, error: copy.error }))]
+    return [
+      { projectId, name: target.name, path: target.path, copyId: null, branch: info.branch, error: null },
+      ...children.map(copy => ({
+        projectId,
+        name: copy.name,
+        path: copy.path,
+        copyId: copy.id,
+        branch: copy.branch,
+        error: copy.error,
+      })),
+    ]
   })
   ipcMain.handle('machines:openWorkspace', async (event, choice: WorkspaceChoice) => {
     if (!toolsSender(event)) throw new Error('不受信任的页面')
     const machine = machineOf(choice.projectId)
-    if (machine !== 'local') return machines!.call(machine, 'engine:createSession', [{ projectId: choice.projectId, copyId: choice.copyId }])
-    if (choice.copyId) { const copy = copies.get(choice.copyId); if (copy.projectId !== choice.projectId) throw new Error('副本不属于项目'); return copies.open(choice.copyId) }
+    if (machine !== 'local')
+      return machines!.call(machine, 'engine:createSession', [{ projectId: choice.projectId, copyId: choice.copyId }])
+    if (choice.copyId) {
+      const copy = copies.get(choice.copyId)
+      if (copy.projectId !== choice.projectId) throw new Error('副本不属于项目')
+      return copies.open(choice.copyId)
+    }
     const target = host.resolve({ projectId: choice.projectId })
     return host.create(choice.projectId, target.path)
   })
@@ -68,11 +94,20 @@ export async function initProjectTools(host: ToolsHost): Promise<void> {
   handle('searchTasks', (_, text, projectId) => {
     const query = value(text, 200).toLocaleLowerCase().split(/\s+/).filter(Boolean)
     if (!query.length) return []
-    return tasks.store.data.tasks.filter(task => {
-      if (projectId !== null && task.projectId !== projectId) return false
-      try { host.resolve({ projectId: task.projectId }) } catch { return false }
-      return query.every(term => (task.title + '\n' + task.note + '\n' + task.tags.join(' ')).toLocaleLowerCase().includes(term))
-    }).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 20)
+    return tasks.store.data.tasks
+      .filter(task => {
+        if (projectId !== null && task.projectId !== projectId) return false
+        try {
+          host.resolve({ projectId: task.projectId })
+        } catch {
+          return false
+        }
+        return query.every(term =>
+          (task.title + '\n' + task.note + '\n' + task.tags.join(' ')).toLocaleLowerCase().includes(term),
+        )
+      })
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, 20)
   })
   handle('tasks', (_, id) => tasks.state(value(id, 200, true)))
   handle('createTask', (_, id, input) => tasks.create(value(id, 200, true), input as Partial<ManualTask>))
@@ -96,11 +131,20 @@ export async function initProjectTools(host: ToolsHost): Promise<void> {
   handle('forgetCopy', (_, id) => copies.forget(value(id, 200, true)))
   handle('chooseDirectory', async event => {
     const win = BrowserWindow.fromWebContents(event.sender)!
-    const result = await dialog.showOpenDialog(win, { title: nativeText(win, '选择项目文件夹'), properties: ['openDirectory', 'createDirectory'] })
-    return result.canceled ? null : result.filePaths[0] ?? null
+    const result = await dialog.showOpenDialog(win, {
+      title: nativeText(win, '选择项目文件夹'),
+      properties: ['openDirectory', 'createDirectory'],
+    })
+    return result.canceled ? null : (result.filePaths[0] ?? null)
   })
-  handle('openPath', async (_, ref) => { const error = await shell.openPath(host.resolve(workspaceRef(ref)).path); if (error) throw new Error(error) })
-  handle('revealCopy', async (_, id) => { const error = await shell.openPath(copies.get(value(id, 200, true)).path); if (error) throw new Error(error) })
+  handle('openPath', async (_, ref) => {
+    const error = await shell.openPath(host.resolve(workspaceRef(ref)).path)
+    if (error) throw new Error(error)
+  })
+  handle('revealCopy', async (_, id) => {
+    const error = await shell.openPath(copies.get(value(id, 200, true)).path)
+    if (error) throw new Error(error)
+  })
   handle('openExternal', async (_, input) => {
     const url = new URL(value(input, 4000, true))
     if (!['http:', 'https:'].includes(url.protocol)) throw new Error('只支持 HTTP 或 HTTPS 地址')
@@ -120,5 +164,8 @@ export async function initProjectTools(host: ToolsHost): Promise<void> {
   handle('gitCreateBranch', (_, ref, input) => git.createBranch(workspaceRef(ref), input))
   handle('gitOperation', (_, ref, action) => git.operation(workspaceRef(ref), action))
   await initProjectBrowser(dir, host, toolsSender)
-  registerShutdown(async () => { if (timer) clearTimeout(timer); await services.shutdown() })
+  registerShutdown(async () => {
+    if (timer) clearTimeout(timer)
+    await services.shutdown()
+  })
 }

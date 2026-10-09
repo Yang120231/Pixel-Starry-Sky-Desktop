@@ -1,7 +1,27 @@
 import {
-  Blocks, Bolt, ChartColumn, ChartNoAxesCombined, Cloud, CodeXml, Command, Folder, FolderOpen, FolderPlus,
-  Gauge, GitBranch, LayoutDashboard, MessageSquare, PenLine, Plug, Plus, Puzzle, Settings, SlidersHorizontal, SquarePen,
-  SquareTerminal, type LucideIcon,
+  Blocks,
+  Bolt,
+  ChartColumn,
+  ChartNoAxesCombined,
+  Cloud,
+  CodeXml,
+  Command,
+  Folder,
+  FolderOpen,
+  FolderPlus,
+  Gauge,
+  GitBranch,
+  LayoutDashboard,
+  MessageSquare,
+  PenLine,
+  Plug,
+  Plus,
+  Puzzle,
+  Settings,
+  SlidersHorizontal,
+  SquarePen,
+  SquareTerminal,
+  type LucideIcon,
 } from 'lucide-react'
 
 /** 可替换图标的侧栏动作 */
@@ -9,7 +29,15 @@ export const SIDEBAR_ACTIONS = ['newTask', 'addProject', 'settings', 'plugins', 
 export type SidebarAction = (typeof SIDEBAR_ACTIONS)[number]
 
 /** 原右上角顶栏的工具；图标固定，位置可与侧栏动作互换 */
-export const HEADER_ACTIONS = ['terminal', 'editor', 'commandPalette', 'workbench', 'machines', 'channels', 'git'] as const
+export const HEADER_ACTIONS = [
+  'terminal',
+  'editor',
+  'commandPalette',
+  'workbench',
+  'machines',
+  'channels',
+  'git',
+] as const
 export type HeaderAction = (typeof HEADER_ACTIONS)[number]
 
 /** 图标位置编辑器里可移动的全部入口 */

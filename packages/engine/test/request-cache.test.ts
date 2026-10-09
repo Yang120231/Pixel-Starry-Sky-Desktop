@@ -4,13 +4,27 @@ import { ClaudeTranslator } from '../src/claude/translate'
 
 function make() {
   const events: EngineEvent[] = []
-  const translator = new ClaudeTranslator('D:/work', { emit: e => events.push(e), sessionId: () => {}, permissionMode: () => {}, turnEnded: () => {}, fastState: () => {} })
+  const translator = new ClaudeTranslator('D:/work', {
+    emit: e => events.push(e),
+    sessionId: () => {},
+    permissionMode: () => {},
+    turnEnded: () => {},
+    fastState: () => {},
+  })
   translator.startTurn('turn')
   const requests = () => events.filter(e => e.type === 'request_usage')
   return { events, translator, requests }
 }
-const usage = (input: unknown = 10000, read: unknown = 0, write: unknown = 0) => ({ input_tokens: input, cache_read_input_tokens: read, cache_creation_input_tokens: write })
-const start = (id: string, data: unknown, parent: string | null = null) => ({ type: 'stream_event', parent_tool_use_id: parent, event: { type: 'message_start', message: { id, model: 'opus', usage: data } } })
+const usage = (input: unknown = 10000, read: unknown = 0, write: unknown = 0) => ({
+  input_tokens: input,
+  cache_read_input_tokens: read,
+  cache_creation_input_tokens: write,
+})
+const start = (id: string, data: unknown, parent: string | null = null) => ({
+  type: 'stream_event',
+  parent_tool_use_id: parent,
+  event: { type: 'message_start', message: { id, model: 'opus', usage: data } },
+})
 afterEach(() => vi.restoreAllMocks())
 
 describe('单次请求缓存事件', () => {
@@ -20,14 +34,25 @@ describe('单次请求缓存事件', () => {
     t.handle({ type: 'assistant', message: { id: 'one', model: 'opus', usage: usage(), content: [] } })
     t.handle(start('sub', usage(), 'tool-agent'))
     t.handle({ ...start('replay', usage()), isReplay: true })
-    t.handle({ type: 'result', subtype: 'success', modelUsage: { opus: { inputTokens: 40000, cacheReadInputTokens: 0 } } })
+    t.handle({
+      type: 'result',
+      subtype: 'success',
+      modelUsage: { opus: { inputTokens: 40000, cacheReadInputTokens: 0 } },
+    })
     t.handle(start('late', usage()))
     expect(requests()).toHaveLength(1)
     expect(requests()[0]).toMatchObject({ request: { messageId: 'one', input: 10000, cacheRead: 0, turnId: 'turn' } })
   })
   it('缺失、null、无效数据明确重置，不用零兜底', () => {
     const { translator: t, requests, events } = make()
-    for (const [id, data] of [['a', { input_tokens: 10000 }], ['b', usage(10000, null)], ['c', usage(10000, -1)], ['d', usage(NaN)], ['e', usage(1.5)] ] as const) t.handle(start(id, data))
+    for (const [id, data] of [
+      ['a', { input_tokens: 10000 }],
+      ['b', usage(10000, null)],
+      ['c', usage(10000, -1)],
+      ['d', usage(NaN)],
+      ['e', usage(1.5)],
+    ] as const)
+      t.handle(start(id, data))
     expect(requests()).toHaveLength(0)
     expect(events.some(e => e.type === 'request_cache_reset')).toBe(true)
   })

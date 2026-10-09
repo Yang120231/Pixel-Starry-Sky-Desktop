@@ -14,9 +14,24 @@ import { TopUp } from './TopUp'
 export type AccountTab = 'overview' | 'plans' | 'topup'
 
 const TABS: Array<SegmentedOption<AccountTab>> = [
-  { value: 'overview', get label() { return tr("settings.account.AccountSection.message648") } },
-  { value: 'plans', get label() { return tr("settings.account.AccountSection.message649") } },
-  { value: 'topup', get label() { return tr("settings.account.AccountOverview.message640") } },
+  {
+    value: 'overview',
+    get label() {
+      return tr('settings.account.AccountSection.message648')
+    },
+  },
+  {
+    value: 'plans',
+    get label() {
+      return tr('settings.account.AccountSection.message649')
+    },
+  },
+  {
+    value: 'topup',
+    get label() {
+      return tr('settings.account.AccountOverview.message640')
+    },
+  },
 ]
 
 /** 设置 → 账号：资料、概览、订阅套餐、充值（docs/ui/settings.md §9） */
@@ -29,9 +44,11 @@ export function AccountSection() {
   if (acc.status === 'loading') {
     return (
       <section>
-        <SectionTitle>{tr("settings.AboutSection.message626")}</SectionTitle>
+        <SectionTitle>{tr('settings.AboutSection.message626')}</SectionTitle>
         <div className="flex items-center gap-2 text-ui text-fg-muted">
-          <Spinner />{tr("account.AccountMenu.message25")} </div>
+          <Spinner />
+          {tr('account.AccountMenu.message25')}{' '}
+        </div>
       </section>
     )
   }
@@ -39,7 +56,7 @@ export function AccountSection() {
   if (acc.status !== 'signed-in' || !acc.account || !acc.user) {
     return (
       <section>
-        <SectionTitle>{tr("settings.AboutSection.message626")}</SectionTitle>
+        <SectionTitle>{tr('settings.AboutSection.message626')}</SectionTitle>
         <SignedOutCard />
         <AccountService />
       </section>
@@ -48,7 +65,7 @@ export function AccountSection() {
 
   return (
     <section>
-      <SectionTitle>{tr("settings.AboutSection.message626")}</SectionTitle>
+      <SectionTitle>{tr('settings.AboutSection.message626')}</SectionTitle>
 
       <div className="rounded-lg border border-line bg-surface">
         <div className="flex items-center gap-3.5 p-4">
@@ -58,7 +75,14 @@ export function AccountSection() {
             <div className="selectable truncate text-meta text-fg-muted">{acc.user.email}</div>
           </div>
           {!confirmingLogout && (
-            <Button variant="ghost" icon={LogOut} className="hover:text-danger" onClick={() => setConfirmingLogout(true)}>{tr("account.LogoutConfirm.message50")} </Button>
+            <Button
+              variant="ghost"
+              icon={LogOut}
+              className="hover:text-danger"
+              onClick={() => setConfirmingLogout(true)}
+            >
+              {tr('account.LogoutConfirm.message50')}{' '}
+            </Button>
           )}
         </div>
         {confirmingLogout && (
@@ -71,7 +95,12 @@ export function AccountSection() {
       </div>
 
       <div className="mt-5 mb-4">
-        <Segmented label={tr("settings.account.AccountSection.message650")} options={TABS} value={tab} onChange={setTab} />
+        <Segmented
+          label={tr('settings.account.AccountSection.message650')}
+          options={TABS}
+          value={tab}
+          onChange={setTab}
+        />
       </div>
 
       {tab === 'overview' && (
@@ -110,19 +139,23 @@ function SignedOutCard() {
           {signingIn ? <Spinner /> : <UserRound size={20} strokeWidth={1.5} />}
         </span>
         <div className="min-w-0">
-          <div className="text-section font-semibold text-fg">{signingIn ? tr("account.AccountMenu.message29") : tr("sidebar.SidebarFooter.message407")}</div>
+          <div className="text-section font-semibold text-fg">
+            {signingIn ? tr('account.AccountMenu.message29') : tr('sidebar.SidebarFooter.message407')}
+          </div>
           <p className="mt-0.5 text-meta text-fg-muted">
-            {signingIn
-              ? tr("account.AccountMenu.message30")
-              : tr("settings.account.AccountSection.message651")}
+            {signingIn ? tr('account.AccountMenu.message30') : tr('settings.account.AccountSection.message651')}
           </p>
         </div>
       </div>
       <div>
         {signingIn ? (
-          <Button variant="outline" onClick={() => void acc.cancelLogin()}>{tr("account.AccountMenu.message31")} </Button>
+          <Button variant="outline" onClick={() => void acc.cancelLogin()}>
+            {tr('account.AccountMenu.message31')}{' '}
+          </Button>
         ) : (
-          <Button variant="primary" onClick={() => void acc.login()}>{tr("account.AccountMenu.message28")} </Button>
+          <Button variant="primary" onClick={() => void acc.login()}>
+            {tr('account.AccountMenu.message28')}{' '}
+          </Button>
         )}
       </div>
     </div>
@@ -135,15 +168,15 @@ function AccountService() {
   const [authUrl, setAuthUrl] = useState<string | null>(null)
   useEffect(() => {
     window.pixelsky?.app.getInfo().then(
-      (info) => setAuthUrl(info.authUrl),
+      info => setAuthUrl(info.authUrl),
       () => setAuthUrl(null),
     )
   }, [])
   return (
     <div className="mt-6">
-      <h4 className="mb-2 text-meta font-medium text-fg-muted">{tr("settings.account.AccountSection.message652")}</h4>
+      <h4 className="mb-2 text-meta font-medium text-fg-muted">{tr('settings.account.AccountSection.message652')}</h4>
       <div className="flex min-h-11 items-center gap-4 rounded-lg border border-line px-4 py-1.5">
-        <span className="w-20 shrink-0 text-ui text-fg-muted">{tr("settings.AboutSection.message628")}</span>
+        <span className="w-20 shrink-0 text-ui text-fg-muted">{tr('settings.AboutSection.message628')}</span>
         <span className="selectable min-w-0 flex-1 truncate font-mono text-meta text-fg">
           {authUrl?.replace(/^https?:\/\//, '') ?? '—'}
         </span>
@@ -152,7 +185,9 @@ function AccountService() {
           icon={ExternalLink}
           className="h-7 px-2 text-meta"
           onClick={() => void window.pixelsky?.app.open('auth')}
-        >{tr("settings.account.AccountSection.message653")} </Button>
+        >
+          {tr('settings.account.AccountSection.message653')}{' '}
+        </Button>
       </div>
     </div>
   )

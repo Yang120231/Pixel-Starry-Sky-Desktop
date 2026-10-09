@@ -10,7 +10,8 @@ export function sessionTitle(value: unknown): string {
 
 /** 普通项保持输入顺序；置底项按设置先后排在普通项之后。 */
 export function bottomOrder(a: { bottomedAt?: number | null }, b: { bottomedAt?: number | null }): number {
-  const left = a.bottomedAt ?? 0, right = b.bottomedAt ?? 0
+  const left = a.bottomedAt ?? 0,
+    right = b.bottomedAt ?? 0
   return Number(left > 0) - Number(right > 0) || (left > 0 && right > 0 ? left - right : 0)
 }
 

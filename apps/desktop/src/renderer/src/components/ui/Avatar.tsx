@@ -6,7 +6,10 @@ export function Avatar({ name, size = 28, className }: { name: string; size?: nu
   useI18n()
   return (
     <span
-      className={cn('inline-flex shrink-0 items-center justify-center rounded-full bg-avatar font-medium text-avatar-fg', className)}
+      className={cn(
+        'inline-flex shrink-0 items-center justify-center rounded-full bg-avatar font-medium text-avatar-fg',
+        className,
+      )}
       style={{ width: size, height: size, fontSize: Math.round(size * 0.46) }}
     >
       {name.slice(0, 1)}

@@ -6,14 +6,21 @@ const WEEKDAYS = '日一二三四五六'
 
 /** 日期分隔：今天 / 昨天 / 10月6日 星期一（英文 Mon, Oct 6）；不是今年时带上年份 */
 export function formatDay(at: number, now = Date.now()): string {
-  const day = dayStart(at), today = dayStart(now)
+  const day = dayStart(at),
+    today = dayStart(now)
   if (day === today) return tr('channels.today')
   const yesterday = new Date(today)
   yesterday.setDate(yesterday.getDate() - 1)
   if (day === yesterday.getTime()) return tr('channels.yesterday')
   const d = new Date(at)
   const otherYear = d.getFullYear() !== new Date(now).getFullYear()
-  if (getLocale() === 'en-US') return new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', ...(otherYear ? { year: 'numeric' } : {}) }).format(d)
+  if (getLocale() === 'en-US')
+    return new Intl.DateTimeFormat('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      ...(otherYear ? { year: 'numeric' } : {}),
+    }).format(d)
   return `${otherYear ? `${d.getFullYear()}年` : ''}${d.getMonth() + 1}月${d.getDate()}日 星期${WEEKDAYS[d.getDay()]}`
 }
 

@@ -5,7 +5,10 @@ import { fileTab } from '../../panes/tree'
 describe('right workspace resource layout', () => {
   const file = fileTab({ projectId: 'project-a' }, 'src/main.ts')
   it('restores valid resources and recovers from a removed active tab', () => {
-    expect(parsePanel({ tabs: ['files', null, 'unknown-tool', file, file], active: 'unknown-tool' })).toEqual({ tabs: ['files', file], active: 'files' })
+    expect(parsePanel({ tabs: ['files', null, 'unknown-tool', file, file], active: 'unknown-tool' })).toEqual({
+      tabs: ['files', file],
+      active: 'files',
+    })
     expect(parsePanel({ tabs: [], active: null })).toEqual({ tabs: [], active: null })
   })
   it('reopening the same file activates its existing tab', () => {

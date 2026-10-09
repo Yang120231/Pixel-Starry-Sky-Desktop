@@ -92,7 +92,9 @@ function overrideAllowed(raw: string): boolean {
   try {
     const u = new URL(raw)
     if (u.protocol === 'https:') return true
-    return u.protocol === 'http:' && (u.hostname === '127.0.0.1' || u.hostname === 'localhost' || u.hostname === '[::1]')
+    return (
+      u.protocol === 'http:' && (u.hostname === '127.0.0.1' || u.hostname === 'localhost' || u.hostname === '[::1]')
+    )
   } catch {
     return false
   }
@@ -268,7 +270,8 @@ function parseTokenResponse(body: unknown, previousRefresh?: string): Tokens {
   if (!isObject(body) || typeof body.access_token !== 'string' || !body.access_token) {
     throw new TransientError('服务返回的令牌数据异常')
   }
-  const refreshToken = typeof body.refresh_token === 'string' && body.refresh_token ? body.refresh_token : previousRefresh
+  const refreshToken =
+    typeof body.refresh_token === 'string' && body.refresh_token ? body.refresh_token : previousRefresh
   if (!refreshToken) throw new TransientError('服务返回的令牌数据异常')
   const ttl = typeof body.expires_in === 'number' && body.expires_in > 0 ? body.expires_in : 3600
   return { accessToken: body.access_token, refreshToken, accessExpiresAt: Date.now() + ttl * 1000 }
@@ -352,7 +355,10 @@ export async function platformFetch(path: string, init: RequestInit = {}): Promi
     if (tokens?.accessToken === used) await refreshTokens()
     res = await send()
   }
-  if (epoch !== requestEpoch) { await res.body?.cancel(); throw new Error('账号已退出，请重新登录') }
+  if (epoch !== requestEpoch) {
+    await res.body?.cancel()
+    throw new Error('账号已退出，请重新登录')
+  }
   return res
 }
 
@@ -513,7 +519,10 @@ function base64url(buf: Buffer): string {
 }
 
 function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string)
+  return s.replace(
+    /[&<>"']/g,
+    c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string,
+  )
 }
 
 type ResultKind = 'ok' | 'cancelled' | 'failed'
@@ -537,11 +546,14 @@ const RESULT_ICON: Record<ResultKind, string> = {
 
 function resultPage(kind: ResultKind, reason?: string): string {
   const title = nativeText(null, { ok: '登录成功', cancelled: '已取消授权', failed: '登录失败' }[kind])
-  const text = nativeText(null, {
-    ok: '已回到 Pixel Starry Sky，可以关闭此页面。',
-    cancelled: '没有登录任何账号。需要时可以回到 Pixel Starry Sky 重新登录。',
-    failed: `${reason ?? '未知原因'}。请回到 Pixel Starry Sky 重试。`,
-  }[kind])
+  const text = nativeText(
+    null,
+    {
+      ok: '已回到 Pixel Starry Sky，可以关闭此页面。',
+      cancelled: '没有登录任何账号。需要时可以回到 Pixel Starry Sky 重新登录。',
+      failed: `${reason ?? '未知原因'}。请回到 Pixel Starry Sky 重试。`,
+    }[kind],
+  )
   return (
     `<!doctype html><html lang="${windowLocale()}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
     `<title>${title} · Pixel Starry Sky</title><style>${RESULT_CSS}</style></head><body><main>` +
@@ -591,7 +603,10 @@ async function completeLogin(f: LoginFlow, code: string, verifier: string, redir
       return
     }
     if (res.status !== 200) {
-      failLogin(f, res.status >= 500 ? '登录失败：服务暂时不可用' : `登录失败：${errorText(res.body) || `HTTP ${res.status}`}`)
+      failLogin(
+        f,
+        res.status >= 500 ? '登录失败：服务暂时不可用' : `登录失败：${errorText(res.body) || `HTTP ${res.status}`}`,
+      )
       return
     }
     resetInFlight() // 作废启动时可能还在途中的旧拉取，下面一定要发起新的
@@ -665,7 +680,11 @@ async function login(): Promise<void> {
     }
     const respond = (kind: ResultKind, reason?: string): void => {
       res
-        .writeHead(kind === 'failed' ? 400 : 200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', Connection: 'close' })
+        .writeHead(kind === 'failed' ? 400 : 200, {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-store',
+          Connection: 'close',
+        })
         .end(resultPage(kind, reason))
     }
     // state 不对的请求不是我们发出的授权的回调（别的页面或进程乱撞）：回 400，但不能因此中断真正的登录
@@ -796,7 +815,7 @@ export function initAccount(): void {
 
   // 只响应应用自己的页面；其他来源一律当作未登录 / 忽略
   ipcMain.handle('account:get', (e): AccountState => (trustedSender(e) ? state : { status: 'signed-out' }))
-  ipcMain.handle('account:login', async (e) => {
+  ipcMain.handle('account:login', async e => {
     if (!trustedSender(e)) return
     try {
       await login()
@@ -809,13 +828,13 @@ export function initAccount(): void {
       setState({ status: 'signed-out', error: `登录失败：${describeError(e)}` })
     }
   })
-  ipcMain.handle('account:cancel', (e) => {
+  ipcMain.handle('account:cancel', e => {
     if (trustedSender(e)) cancelLogin()
   })
-  ipcMain.handle('account:logout', async (e) => {
+  ipcMain.handle('account:logout', async e => {
     if (trustedSender(e)) await logout()
   })
-  ipcMain.handle('account:refresh', async (e) => {
+  ipcMain.handle('account:refresh', async e => {
     if (trustedSender(e) && tokens) await fetchAccount().catch(() => undefined)
   })
 

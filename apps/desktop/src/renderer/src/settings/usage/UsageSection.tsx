@@ -17,15 +17,45 @@ import { RecordsTable } from './RecordsTable'
 import { RemoteCallsPlaceholder, RemoteCallsSignInPlaceholder, RemoteCallsTable } from './RemoteCallsTable'
 
 const MODE_OPTIONS: Array<SegmentedOption<'local' | 'account'>> = [
-  { value: 'local', get label() { return tr("settings.usage.UsageSection.message1011") } },
-  { value: 'account', get label() { return tr("settings.usage.RemoteCallsTable.message995") } },
+  {
+    value: 'local',
+    get label() {
+      return tr('settings.usage.UsageSection.message1011')
+    },
+  },
+  {
+    value: 'account',
+    get label() {
+      return tr('settings.usage.RemoteCallsTable.message995')
+    },
+  },
 ]
 
 const RANGE_OPTIONS: Array<SegmentedOption<UsageRangeId>> = [
-  { value: 'today', get label() { return tr("settings.usage.DailyChart.message955") } },
-  { value: '7d', get label() { return tr("settings.usage.UsageSection.message1012") } },
-  { value: '30d', get label() { return tr("settings.usage.UsageSection.message1013") } },
-  { value: '90d', get label() { return tr("settings.usage.UsageSection.message1014") } },
+  {
+    value: 'today',
+    get label() {
+      return tr('settings.usage.DailyChart.message955')
+    },
+  },
+  {
+    value: '7d',
+    get label() {
+      return tr('settings.usage.UsageSection.message1012')
+    },
+  },
+  {
+    value: '30d',
+    get label() {
+      return tr('settings.usage.UsageSection.message1013')
+    },
+  },
+  {
+    value: '90d',
+    get label() {
+      return tr('settings.usage.UsageSection.message1014')
+    },
+  },
 ]
 
 /**
@@ -75,8 +105,13 @@ export function UsageSection({ onOpenSession }: { onOpenSession: (sessionId: str
     <section>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-baseline gap-3">
-          <SectionTitle>{tr("nav.TopNav.message60")}</SectionTitle>
-          <Segmented label={tr("settings.usage.UsageSection.message1015")} options={MODE_OPTIONS} value={mode} onChange={changeMode} />
+          <SectionTitle>{tr('nav.TopNav.message60')}</SectionTitle>
+          <Segmented
+            label={tr('settings.usage.UsageSection.message1015')}
+            options={MODE_OPTIONS}
+            value={mode}
+            onChange={changeMode}
+          />
         </div>
         <div className="-mt-4 flex items-center gap-2">
           <Button
@@ -90,9 +125,15 @@ export function UsageSection({ onOpenSession }: { onOpenSession: (sessionId: str
                 setBusy(false)
               }
             }}
-          >{tr("settings.usage.UsageSection.message1016")} </Button>
+          >
+            {tr('settings.usage.UsageSection.message1016')}{' '}
+          </Button>
           {confirmClear ? (
-            <span className="flex items-center gap-1.5 text-meta text-fg-secondary">{tr("settings.usage.UsageSection.message1017")} <Button variant="ghost" onClick={() => setConfirmClear(false)}>{tr("account.AccountMenu.message31")} </Button>
+            <span className="flex items-center gap-1.5 text-meta text-fg-secondary">
+              {tr('settings.usage.UsageSection.message1017')}{' '}
+              <Button variant="ghost" onClick={() => setConfirmClear(false)}>
+                {tr('account.AccountMenu.message31')}{' '}
+              </Button>
               <Button
                 variant="primary"
                 className="bg-danger!"
@@ -100,7 +141,9 @@ export function UsageSection({ onOpenSession }: { onOpenSession: (sessionId: str
                   setConfirmClear(false)
                   await clear()
                 }}
-              >{tr("files.FileTree.message530")} </Button>
+              >
+                {tr('files.FileTree.message530')}{' '}
+              </Button>
             </span>
           ) : (
             <Button
@@ -108,13 +151,20 @@ export function UsageSection({ onOpenSession }: { onOpenSession: (sessionId: str
               icon={Trash2}
               disabled={(empty && chips.length === 0) || mode !== 'local'}
               onClick={() => setConfirmClear(true)}
-            >{tr("files.FileTree.message530")} </Button>
+            >
+              {tr('files.FileTree.message530')}{' '}
+            </Button>
           )}
         </div>
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Segmented label={tr("settings.usage.UsageSection.message1018")} options={RANGE_OPTIONS} value={range} onChange={changeRange} />
+        <Segmented
+          label={tr('settings.usage.UsageSection.message1018')}
+          options={RANGE_OPTIONS}
+          value={range}
+          onChange={changeRange}
+        />
         {chips.map(([d, v]) => (
           <span
             key={d}
@@ -123,7 +173,7 @@ export function UsageSection({ onOpenSession }: { onOpenSession: (sessionId: str
             {DIMENSION_LABEL[d]}：{dimLabel(d, v)}
             <button
               type="button"
-              aria-label={tr("settings.usage.UsageSection.message1019", { p0: DIMENSION_LABEL[d] })}
+              aria-label={tr('settings.usage.UsageSection.message1019', { p0: DIMENSION_LABEL[d] })}
               onClick={() => changeFilter({ ...filter, [d]: undefined })}
               className="inline-flex size-5 items-center justify-center rounded-full hover:bg-hover"
             >
@@ -132,7 +182,9 @@ export function UsageSection({ onOpenSession }: { onOpenSession: (sessionId: str
           </span>
         ))}
         {chips.length > 1 && (
-          <button type="button" onClick={() => changeFilter({})} className="text-meta text-fg-muted hover:text-fg">{tr("settings.usage.UsageSection.message1020")} </button>
+          <button type="button" onClick={() => changeFilter({})} className="text-meta text-fg-muted hover:text-fg">
+            {tr('settings.usage.UsageSection.message1020')}{' '}
+          </button>
         )}
       </div>
 
@@ -163,13 +215,13 @@ export function UsageSection({ onOpenSession }: { onOpenSession: (sessionId: str
                 onDim={setDim}
                 rows={summary.groups[dim]}
                 activeKey={filter[dim]}
-                onPick={(key) => changeFilter({ ...filter, [dim]: key })}
+                onPick={key => changeFilter({ ...filter, [dim]: key })}
               />
             </Panel>
             <Panel>
               <RecordsTable page={page} pageSize={PAGE_SIZE} onPage={setOffset} onOpenSession={onOpenSession} />
             </Panel>
-            <p className="text-meta text-fg-faint">{tr("settings.usage.UsageSection.message1021")} </p>
+            <p className="text-meta text-fg-faint">{tr('settings.usage.UsageSection.message1021')} </p>
           </div>
         ))
       )}
@@ -198,10 +250,18 @@ function AccountModeBody({
   if (!signedIn) return <RemoteCallsSignInPlaceholder onSignIn={onSignIn} />
   if (!available) return <RemoteCallsPlaceholder onBack={onBack} />
   if (rm.status === 'loading' || rm.page === null) {
-    return <div className="overflow-hidden rounded-lg border border-line bg-surface p-4 text-meta text-fg-muted tabular-nums">{tr("settings.usage.UsageSection.message1022")}</div>
+    return (
+      <div className="overflow-hidden rounded-lg border border-line bg-surface p-4 text-meta text-fg-muted tabular-nums">
+        {tr('settings.usage.UsageSection.message1022')}
+      </div>
+    )
   }
   if (rm.status === 'error') {
-    return <p className="rounded-md border border-line bg-surface px-3 py-2 text-meta text-danger">{translateMessage(rm.error)}</p>
+    return (
+      <p className="rounded-md border border-line bg-surface px-3 py-2 text-meta text-danger">
+        {translateMessage(rm.error)}
+      </p>
+    )
   }
   if (empty) {
     return <EmptyState filtered={false} />
@@ -225,11 +285,11 @@ function EmptyState({ filtered }: { filtered: boolean }) {
       <span className="flex size-11 items-center justify-center rounded-xl bg-subtle text-fg-muted">
         <ChartColumn size={20} strokeWidth={1.5} />
       </span>
-      <div className="mt-3 text-ui font-medium text-fg-secondary">{filtered ? tr("settings.usage.UsageSection.message1023") : tr("settings.usage.UsageSection.message1024")}</div>
+      <div className="mt-3 text-ui font-medium text-fg-secondary">
+        {filtered ? tr('settings.usage.UsageSection.message1023') : tr('settings.usage.UsageSection.message1024')}
+      </div>
       <p className="mt-1 max-w-sm text-meta text-fg-muted">
-        {filtered
-          ? tr("settings.usage.UsageSection.message1025")
-          : tr("settings.usage.UsageSection.message1026")}
+        {filtered ? tr('settings.usage.UsageSection.message1025') : tr('settings.usage.UsageSection.message1026')}
       </p>
     </div>
   )

@@ -8,9 +8,15 @@ import { useAccount } from '@/account'
 import { Button, Logo, useComingSoon } from '@/components/ui'
 
 const CHANNEL_LABELS: Record<AppInfo['channel'], string> = {
-  get dev() { return tr("settings.AboutSection.message612") },
-  get portable() { return tr("settings.AboutSection.message613") },
-  get installed() { return tr("settings.AboutSection.message614") },
+  get dev() {
+    return tr('settings.AboutSection.message612')
+  },
+  get portable() {
+    return tr('settings.AboutSection.message613')
+  },
+  get installed() {
+    return tr('settings.AboutSection.message614')
+  },
 }
 
 /** 开源组件致谢：只列直接依赖的主要部分 */
@@ -28,7 +34,7 @@ export function AboutSection({ onOpenAccount }: { onOpenAccount: () => void }) {
   useEffect(() => {
     const bridge = window.pixelsky?.app
     if (!bridge) {
-      setError(tr("settings.AboutSection.message615"))
+      setError(tr('settings.AboutSection.message615'))
       return
     }
     bridge.getInfo().then(setInfo, (e: unknown) => setError(String((e as Error)?.message ?? e)))
@@ -50,18 +56,18 @@ export function AboutSection({ onOpenAccount }: { onOpenAccount: () => void }) {
       await navigator.clipboard.writeText(diagnostics(info))
       setCopied(true)
     } catch {
-      setError(tr("settings.AboutSection.message616"))
+      setError(tr('settings.AboutSection.message616'))
     }
   }
 
   const accountText =
     acc.status === 'signed-in'
-      ? tr("settings.AboutSection.message617", { p0: acc.user?.email ?? '' })
+      ? tr('settings.AboutSection.message617', { p0: acc.user?.email ?? '' })
       : acc.status === 'signing-in'
-        ? tr("sidebar.SidebarFooter.message405")
+        ? tr('sidebar.SidebarFooter.message405')
         : acc.status === 'loading'
-          ? tr("session.live.SessionStrips.message276")
-          : tr("sidebar.SidebarFooter.message407")
+          ? tr('session.live.SessionStrips.message276')
+          : tr('sidebar.SidebarFooter.message407')
 
   return (
     <section>
@@ -69,68 +75,84 @@ export function AboutSection({ onOpenAccount }: { onOpenAccount: () => void }) {
         <Logo size={56} />
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
-            <h3 className="text-section font-semibold text-fg">{translateText(info?.name ?? tr("ui.Logo.message413"))}</h3>
+            <h3 className="text-section font-semibold text-fg">
+              {translateText(info?.name ?? tr('ui.Logo.message413'))}
+            </h3>
             <span className="text-meta text-fg-muted">{info?.englishName ?? 'Pixel Starry Sky'}</span>
           </div>
           <p className="mt-0.5 text-ui text-fg-secondary tabular-nums">
-            {info ? tr("settings.AboutSection.message618", { p0: info.version, p1: CHANNEL_LABELS[info.channel] }) : tr("settings.AboutSection.message619")}
+            {info
+              ? tr('settings.AboutSection.message618', { p0: info.version, p1: CHANNEL_LABELS[info.channel] })
+              : tr('settings.AboutSection.message619')}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Button icon={RefreshCw} onClick={() => comingSoon(tr("settings.AboutSection.message620"))}>{tr("settings.AboutSection.message620")} </Button>
+          <Button icon={RefreshCw} onClick={() => comingSoon(tr('settings.AboutSection.message620'))}>
+            {tr('settings.AboutSection.message620')}{' '}
+          </Button>
           <Button icon={copied ? Check : Copy} onClick={copyInfo} disabled={!info} aria-live="polite">
-            {copied ? tr("code.CodeBlock.message55") : tr("settings.AboutSection.message621")}
+            {copied ? tr('code.CodeBlock.message55') : tr('settings.AboutSection.message621')}
           </Button>
         </div>
       </div>
 
       {error && <p className="mb-4 rounded-md bg-subtle px-3 py-2 text-meta text-danger">{translateMessage(error)}</p>}
 
-      <Group title={tr("settings.AboutSection.message622")}>
-        <Row label={tr("settings.AboutSection.message623")} value={info?.version} mono />
+      <Group title={tr('settings.AboutSection.message622')}>
+        <Row label={tr('settings.AboutSection.message623')} value={info?.version} mono />
         <Row label="Electron" value={info?.electron} mono />
         <Row label="Chromium" value={info?.chrome} mono />
         <Row label="Node.js" value={info?.node} mono />
-        <Row label={tr("settings.AboutSection.message624")} value={info && `${info.os}（${info.arch}）`} />
+        <Row label={tr('settings.AboutSection.message624')} value={info && `${info.os}（${info.arch}）`} />
       </Group>
 
-      <Group title={tr("settings.AboutSection.message625")}>
+      <Group title={tr('settings.AboutSection.message625')}>
         <Row
-          label={tr("settings.AboutSection.message626")}
+          label={tr('settings.AboutSection.message626')}
           value={accountText}
           action={
             <button
               type="button"
               onClick={onOpenAccount}
               className="press no-drag h-7 shrink-0 rounded-md px-2 text-meta text-fg-secondary hover:bg-hover hover:text-fg"
-            >{tr("settings.AboutSection.message627")} </button>
+            >
+              {tr('settings.AboutSection.message627')}{' '}
+            </button>
           }
         />
         <Row
-          label={tr("settings.AboutSection.message628")}
+          label={tr('settings.AboutSection.message628')}
           value={info?.authUrl.replace(/^https?:\/\//, '')}
           mono
-          action={<LinkButton label={tr("settings.AboutSection.message629")} onClick={() => open('auth')} icon="external" />}
+          action={
+            <LinkButton label={tr('settings.AboutSection.message629')} onClick={() => open('auth')} icon="external" />
+          }
         />
         <Row
-          label={tr("settings.AboutSection.message630")}
+          label={tr('settings.AboutSection.message630')}
           value={info?.dataDir}
           mono
           title={info?.dataDir}
-          action={<LinkButton label={tr("settings.AboutSection.message631")} onClick={() => open('data-dir')} icon="folder" />}
+          action={
+            <LinkButton label={tr('settings.AboutSection.message631')} onClick={() => open('data-dir')} icon="folder" />
+          }
         />
       </Group>
 
-      <Group title={tr("settings.AboutSection.message632")}>
+      <Group title={tr('settings.AboutSection.message632')}>
         <Row
-          label={tr("settings.AboutSection.message633")}
+          label={tr('settings.AboutSection.message633')}
           value={info?.repoUrl.replace(/^https:\/\//, '')}
           mono
-          action={<LinkButton label={tr("settings.AboutSection.message634")} onClick={() => open('repo')} icon="external" />}
+          action={
+            <LinkButton label={tr('settings.AboutSection.message634')} onClick={() => open('repo')} icon="external" />
+          }
         />
       </Group>
 
-      <p className="mt-6 text-meta text-fg-faint">{tr("settings.AboutSection.message635")} {CREDITS.join('、')}{tr("settings.AboutSection.message636")} <br />© 2026 Pixel Starry Sky
+      <p className="mt-6 text-meta text-fg-faint">
+        {tr('settings.AboutSection.message635')} {CREDITS.join('、')}
+        {tr('settings.AboutSection.message636')} <br />© 2026 Pixel Starry Sky
       </p>
     </section>
   )
@@ -142,7 +164,7 @@ function diagnostics(info: AppInfo): string {
     `${translateText(info.name)}（${info.englishName}）${info.version} · ${CHANNEL_LABELS[info.channel]}`,
     `Electron ${info.electron} · Chromium ${info.chrome} · Node.js ${info.node} · V8 ${info.v8}`,
     `${info.os}（${info.arch}）`,
-    tr("settings.AboutSection.message637", { p0: info.authUrl }),
+    tr('settings.AboutSection.message637', { p0: info.authUrl }),
   ].join('\n')
 }
 

@@ -4,9 +4,35 @@ import type { GitFileChange, GitStatus } from '../../../../../preload/project-to
 import { ago, diffMode, gitSections, needsCommitAll, neighbour, splitPath } from './gitModel'
 
 afterEach(() => setCurrentLocale('zh-CN'))
-const f = (path: string, code: GitFileChange['code'] = 'M'): GitFileChange => ({ path, origPath: null, code, local: path, submodule: false })
-const status = (patch: Partial<GitStatus>): GitStatus => ({ repo: true, missing: false, root: 'r', branch: 'main', detached: false, head: 'h', initial: false, upstream: null, ahead: 0, behind: 0, remotes: [],
-  staged: [], unstaged: [], untracked: [], conflicted: [], truncated: false, operation: null, fetchedAt: null, busySessions: 0, ...patch })
+const f = (path: string, code: GitFileChange['code'] = 'M'): GitFileChange => ({
+  path,
+  origPath: null,
+  code,
+  local: path,
+  submodule: false,
+})
+const status = (patch: Partial<GitStatus>): GitStatus => ({
+  repo: true,
+  missing: false,
+  root: 'r',
+  branch: 'main',
+  detached: false,
+  head: 'h',
+  initial: false,
+  upstream: null,
+  ahead: 0,
+  behind: 0,
+  remotes: [],
+  staged: [],
+  unstaged: [],
+  untracked: [],
+  conflicted: [],
+  truncated: false,
+  operation: null,
+  fetchedAt: null,
+  busySessions: 0,
+  ...patch,
+})
 
 describe('Git 面板显示规则', () => {
   it('分组顺序：冲突 → 暂存 → 更改 → 未跟踪，空组不显示；在分组之间切换文件', () => {

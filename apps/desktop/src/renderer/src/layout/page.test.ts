@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // 页面状态是模块级单例，每个用例重新加载
-beforeEach(() => { vi.resetModules() })
+beforeEach(() => {
+  vi.resetModules()
+})
 
 describe('主区页面状态', () => {
   it('默认是工作台；切换时只通知一次，相同的值不通知', async () => {

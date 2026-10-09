@@ -15,10 +15,18 @@ describe('中英文词典', () => {
   it('宿主动态错误可以切回中文，原始引擎输出保持原文', () => {
     expect(translateMessage('工作目录不存在：D:\\中文文件', 'en-US')).toBe('Working directory not found: D:\\中文文件')
     expect(translateMessage('Working directory not found: D:\\中文文件', 'zh-CN')).toBe('工作目录不存在：D:\\中文文件')
-    expect(translateMessage('Unexpected tool failure: EXTERNAL_123', 'en-US')).toBe('Unexpected tool failure: EXTERNAL_123')
+    expect(translateMessage('Unexpected tool failure: EXTERNAL_123', 'en-US')).toBe(
+      'Unexpected tool failure: EXTERNAL_123',
+    )
   })
   it('几乎只有占位符的模板不会改坏引擎原文', () => {
-    for (const text of ['Reconnecting... 3/5', 'stream disconnected', 'Too many requests', 'Bad Gateway: upstream', 'local · main']) {
+    for (const text of [
+      'Reconnecting... 3/5',
+      'stream disconnected',
+      'Too many requests',
+      'Bad Gateway: upstream',
+      'local · main',
+    ]) {
       expect(translateMessage(text, 'zh-CN')).toBe(text)
     }
     expect(translateMessage('3月5日', 'en-US')).toBe('3月5日')

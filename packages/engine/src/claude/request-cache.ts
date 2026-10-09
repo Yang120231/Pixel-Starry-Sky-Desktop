@@ -4,7 +4,12 @@ import { obj, str } from './shape'
 type Raw = Record<string, unknown>
 const KEYS = ['input_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens'] as const
 const count = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0
-interface Pending { id: string; model: string; usage: Raw; emitted: boolean }
+interface Pending {
+  id: string
+  model: string
+  usage: Raw
+  emitted: boolean
+}
 
 /** 不从累计 result 反推缓存。合并同一消息的 start/delta/assistant，严格区分缺失与零。 */
 export class RequestCacheReader {
@@ -32,7 +37,10 @@ export class RequestCacheReader {
   }
 
   private update(id: string, model: string, raw: unknown): void {
-    if (!this.turnId || !id) { this.emit({ type: 'request_cache_reset' }); return }
+    if (!this.turnId || !id) {
+      this.emit({ type: 'request_cache_reset' })
+      return
+    }
     let p = this.pending.get(id)
     // 后续请求开始后才到达的旧完整消息不再作为一次新请求参与比较。
     if (p && id !== this.current) return
@@ -57,13 +65,27 @@ export class RequestCacheReader {
     // 某些代理在 message_start 给全零占位，等真实数据再建立基线。
     if (input + cacheRead + cacheWrite === 0) return
     p.emitted = true
-    const request: RequestCacheUsage = { turnId: this.turnId, messageId: id, model: p.model, input, cacheRead, cacheWrite, observedAt: Date.now() }
+    const request: RequestCacheUsage = {
+      turnId: this.turnId,
+      messageId: id,
+      model: p.model,
+      input,
+      cacheRead,
+      cacheWrite,
+      observedAt: Date.now(),
+    }
     this.emit({ type: 'request_usage', request })
   }
 
   handle(frame: Raw): void {
     if (frame.parent_tool_use_id || frame.isReplay === true || frame.is_replay === true) return
-    if (frame.type === 'system' && (frame.subtype === 'compact_boundary' || (frame.subtype === 'status' && frame.status === 'compacting'))) { this.reset(); return }
+    if (
+      frame.type === 'system' &&
+      (frame.subtype === 'compact_boundary' || (frame.subtype === 'status' && frame.status === 'compacting'))
+    ) {
+      this.reset()
+      return
+    }
     if (!this.turnId) return
     if (frame.type === 'stream_event') {
       const event = obj(frame.event)
@@ -85,5 +107,8 @@ export class RequestCacheReader {
     }
   }
 
-  end(): void { this.finishPending(); this.turnId = null }
+  end(): void {
+    this.finishPending()
+    this.turnId = null
+  }
 }

@@ -5,11 +5,21 @@ import type { AgentRun, WorkflowRun } from '@pixelsky/protocol'
 export type RunState = 'running' | 'done' | 'failed' | 'stopped' | 'queued'
 
 export const RUN_STATE_LABEL: Record<RunState, string> = {
-  get running() { return tr("session.live.agentTrace.message193") },
-  get done() { return tr("session.live.agentTrace.message194") },
-  get failed() { return tr("session.live.agentTrace.message195") },
-  get stopped() { return tr("session.live.agentTrace.message196") },
-  get queued() { return tr("session.live.agentTrace.message197") },
+  get running() {
+    return tr('session.live.agentTrace.message193')
+  },
+  get done() {
+    return tr('session.live.agentTrace.message194')
+  },
+  get failed() {
+    return tr('session.live.agentTrace.message195')
+  },
+  get stopped() {
+    return tr('session.live.agentTrace.message196')
+  },
+  get queued() {
+    return tr('session.live.agentTrace.message197')
+  },
 }
 
 /** 引擎的各种状态词（done、completed、killed、pending …）归成五种 */
@@ -46,12 +56,13 @@ export function elapsed(run: { startedAt: number; durationMs: number }, state: R
 
 /** 1.8 秒、12 秒、2 分 05 秒、1 小时 02 分 */
 export function formatDuration(ms: number): string {
-  if (!ms || ms < 0) return tr("session.live.agentTrace.message198")
+  if (!ms || ms < 0) return tr('session.live.agentTrace.message198')
   const s = ms / 1000
-  if (s < 60) return tr("session.live.agentTrace.message199", { p0: s < 10 ? s.toFixed(1) : Math.round(s) })
+  if (s < 60) return tr('session.live.agentTrace.message199', { p0: s < 10 ? s.toFixed(1) : Math.round(s) })
   const m = Math.floor(s / 60)
-  if (m < 60) return tr("session.live.agentTrace.message200", { p0: m, p1: String(Math.round(s % 60)).padStart(2, '0') })
-  return tr("session.live.agentTrace.message201", { p0: Math.floor(m / 60), p1: String(m % 60).padStart(2, '0') })
+  if (m < 60)
+    return tr('session.live.agentTrace.message200', { p0: m, p1: String(Math.round(s % 60)).padStart(2, '0') })
+  return tr('session.live.agentTrace.message201', { p0: Math.floor(m / 60), p1: String(m % 60).padStart(2, '0') })
 }
 
 /** 28,470 */
@@ -62,11 +73,11 @@ export const shortModel = (model: string): string => model.replace(/^claude-/, '
 
 /** 每个智能体的时间线条在共用时间轴上的位置（百分比） */
 export function timeline(agents: AgentRun[], now: number): Map<string, { left: number; width: number }> {
-  const timed = agents.filter((a) => a.startedAt > 0)
+  const timed = agents.filter(a => a.startedAt > 0)
   const bars = new Map<string, { left: number; width: number }>()
   if (timed.length === 0) return bars
-  const start = Math.min(...timed.map((a) => a.startedAt))
-  const end = Math.max(...timed.map((a) => a.startedAt + elapsed(a, runState(a.state), now)))
+  const start = Math.min(...timed.map(a => a.startedAt))
+  const end = Math.max(...timed.map(a => a.startedAt + elapsed(a, runState(a.state), now)))
   const span = Math.max(1, end - start)
   for (const a of timed) {
     const left = Math.min(((a.startedAt - start) / span) * 100, 99.2)
@@ -78,21 +89,21 @@ export function timeline(agents: AgentRun[], now: number): Map<string, { left: n
 
 /** 编排的智能体按阶段分组（不在任何阶段里的放最后） */
 export function byPhase(run: WorkflowRun): { title: string; agents: AgentRun[] }[] {
-  const groups = run.phases.map((p) => ({ index: p.index, title: p.title, agents: [] as AgentRun[] }))
+  const groups = run.phases.map(p => ({ index: p.index, title: p.title, agents: [] as AgentRun[] }))
   const rest: AgentRun[] = []
   for (const a of run.agents) {
-    const g = groups.find((x) => x.index === a.phase)
+    const g = groups.find(x => x.index === a.phase)
     if (g) g.agents.push(a)
     else rest.push(a)
   }
-  const out = groups.filter((g) => g.agents.length > 0).map(({ title, agents }) => ({ title, agents }))
+  const out = groups.filter(g => g.agents.length > 0).map(({ title, agents }) => ({ title, agents }))
   if (rest.length > 0) out.push({ title: '', agents: rest })
   return out
 }
 
 /** 编排里完成了几个 / 一共几个 */
 export function progress(run: WorkflowRun): { done: number; total: number } {
-  const finished = run.agents.filter((a) => {
+  const finished = run.agents.filter(a => {
     const s = runState(a.state)
     return s !== 'running' && s !== 'queued'
   })
@@ -100,5 +111,5 @@ export function progress(run: WorkflowRun): { done: number; total: number } {
 }
 
 export function anyRunning(workflows: WorkflowRun[], agents: AgentRun[]): boolean {
-  return workflows.some((w) => runState(w.status) === 'running') || agents.some((a) => runState(a.state) === 'running')
+  return workflows.some(w => runState(w.status) === 'running') || agents.some(a => runState(a.state) === 'running')
 }

@@ -48,7 +48,17 @@ interface UsageTableProps<T> {
   onPage: (offset: number) => void
 }
 
-export function UsageTable<T>({ title, rows, rowKey, columns, detail, offset, total, pageSize, onPage }: UsageTableProps<T>) {
+export function UsageTable<T>({
+  title,
+  rows,
+  rowKey,
+  columns,
+  detail,
+  offset,
+  total,
+  pageSize,
+  onPage,
+}: UsageTableProps<T>) {
   useI18n()
   const [open, setOpen] = useState<string | null>(null)
   const from = total === 0 ? 0 : offset + 1
@@ -62,20 +72,30 @@ export function UsageTable<T>({ title, rows, rowKey, columns, detail, offset, to
           <span className="mr-1">
             {from}–{to} / {total}
           </span>
-          <IconButton icon={ChevronLeft} label={tr("settings.usage.UsageTable.message1027")} disabled={offset === 0} onClick={() => onPage(Math.max(0, offset - pageSize))} />
-          <IconButton icon={ChevronRight} label={tr("settings.usage.UsageTable.message1028")} disabled={to >= total} onClick={() => onPage(offset + pageSize)} />
+          <IconButton
+            icon={ChevronLeft}
+            label={tr('settings.usage.UsageTable.message1027')}
+            disabled={offset === 0}
+            onClick={() => onPage(Math.max(0, offset - pageSize))}
+          />
+          <IconButton
+            icon={ChevronRight}
+            label={tr('settings.usage.UsageTable.message1028')}
+            disabled={to >= total}
+            onClick={() => onPage(offset + pageSize)}
+          />
         </div>
       </div>
 
       <table className="w-full table-fixed text-list tabular-nums">
         <colgroup>
-          {columns.map((c) => (
+          {columns.map(c => (
             <col key={c.key} className={cn(c.width, c.hideBelow && HIDE[c.hideBelow])} />
           ))}
         </colgroup>
         <thead>
           <tr className="text-meta text-fg-muted">
-            {columns.map((c) => (
+            {columns.map(c => (
               <th
                 key={c.key}
                 className={cn(
@@ -90,7 +110,7 @@ export function UsageTable<T>({ title, rows, rowKey, columns, detail, offset, to
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => {
+          {rows.map(row => {
             const id = rowKey(row)
             const expanded = open === id
             return (
@@ -100,7 +120,7 @@ export function UsageTable<T>({ title, rows, rowKey, columns, detail, offset, to
                   aria-expanded={expanded}
                   className={cn('cursor-default border-t border-line-subtle hover:bg-hover', expanded && 'bg-hover')}
                 >
-                  {columns.map((c) => (
+                  {columns.map(c => (
                     <td
                       key={c.key}
                       title={c.title?.(row)}
@@ -177,7 +197,9 @@ export function UsageDetailCard({ fields, footer }: { fields: Array<[string, str
           </div>
         ))}
       </dl>
-      <div className="mt-3 flex min-w-0 items-center justify-between gap-3 border-t border-line-subtle pt-2.5">{footer}</div>
+      <div className="mt-3 flex min-w-0 items-center justify-between gap-3 border-t border-line-subtle pt-2.5">
+        {footer}
+      </div>
     </div>
   )
 }

@@ -7,18 +7,38 @@ export const DEMO_FILES: Record<string, string> = {
   'src/styles/session.css': '.session {\n  display: flex;\n  flex-direction: column;\n}\n',
   'package.json': '{\n  "name": "pixel-web",\n  "private": true\n}\n',
 }
-export const DEMO_EDITOR_STATE: EditorState = { items: [], defaultId: null, openWith: 'app', window: 'reuse', checkedAt: 0 }
+export const DEMO_EDITOR_STATE: EditorState = {
+  items: [],
+  defaultId: null,
+  openWith: 'app',
+  window: 'reuse',
+  checkedAt: 0,
+}
 export function demoDirectory(path: string): DirectoryListing {
   const entries = new Map<string, DirectoryListing['entries'][number]>()
   const prefix = path ? path + '/' : ''
   for (const file of Object.keys(DEMO_FILES)) {
     if (!file.startsWith(prefix)) continue
-    const rest = file.slice(prefix.length), name = rest.split('/')[0]
+    const rest = file.slice(prefix.length),
+      name = rest.split('/')[0]
     entries.set(name, { name, path: prefix + name, kind: rest.includes('/') ? 'directory' : 'file' })
   }
-  return { entries: [...entries.values()].sort((a, b) => Number(b.kind === 'directory') - Number(a.kind === 'directory') || a.name.localeCompare(b.name)), truncated: false }
+  return {
+    entries: [...entries.values()].sort(
+      (a, b) => Number(b.kind === 'directory') - Number(a.kind === 'directory') || a.name.localeCompare(b.name),
+    ),
+    truncated: false,
+  }
 }
 export function demoDocument(path: string): FileDocument {
   if (DEMO_FILES[path] === undefined) throw new Error('演示中没有这个文件')
-  return { kind: 'text', path, content: DEMO_FILES[path], version: 'demo', bytes: DEMO_FILES[path].length, bom: false, newline: 'lf' }
+  return {
+    kind: 'text',
+    path,
+    content: DEMO_FILES[path],
+    version: 'demo',
+    bytes: DEMO_FILES[path].length,
+    bom: false,
+    newline: 'lf',
+  }
 }

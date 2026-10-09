@@ -40,7 +40,15 @@ function StateIcon({ state }: { state: string }) {
   return (
     <span className="inline-flex w-4 shrink-0 justify-center" title={RUN_STATE_LABEL[s]}>
       {Icon ? (
-        <Icon size={13} strokeWidth={2} className={cn(s === 'done' && 'text-success', s === 'failed' && 'text-danger', (s === 'stopped' || s === 'queued') && 'text-fg-faint')} />
+        <Icon
+          size={13}
+          strokeWidth={2}
+          className={cn(
+            s === 'done' && 'text-success',
+            s === 'failed' && 'text-danger',
+            (s === 'stopped' || s === 'queued') && 'text-fg-faint',
+          )}
+        />
       ) : (
         <Spinner size={12} />
       )}
@@ -49,7 +57,17 @@ function StateIcon({ state }: { state: string }) {
 }
 
 /** 一行智能体：状态、名字、类型 · 模型、时间线条、耗时、tokens、工具次数 */
-function AgentRow({ a, bar, now, onPick }: { a: AgentRun; bar?: { left: number; width: number }; now: number; onPick: (id: string) => void }) {
+function AgentRow({
+  a,
+  bar,
+  now,
+  onPick,
+}: {
+  a: AgentRun
+  bar?: { left: number; width: number }
+  now: number
+  onPick: (id: string) => void
+}) {
   useI18n()
   const s = runState(a.state)
   return (
@@ -62,8 +80,12 @@ function AgentRow({ a, bar, now, onPick }: { a: AgentRun; bar?: { left: number; 
     >
       <StateIcon state={a.state} />
       <span className="min-w-0">
-        <span className="block truncate text-list text-fg">{a.label || a.id || tr("session.live.AgentTracePanel.message202")}</span>
-        <span className="block truncate text-label text-fg-faint">{[a.type, shortModel(a.model)].filter(Boolean).join(' · ')}</span>
+        <span className="block truncate text-list text-fg">
+          {a.label || a.id || tr('session.live.AgentTracePanel.message202')}
+        </span>
+        <span className="block truncate text-label text-fg-faint">
+          {[a.type, shortModel(a.model)].filter(Boolean).join(' · ')}
+        </span>
       </span>
       <span className="relative h-1.5 rounded-full bg-subtle">
         {bar && (
@@ -91,42 +113,73 @@ function ColumnHead() {
   return (
     <div className="grid grid-cols-[16px_minmax(0,1.3fr)_minmax(0,1fr)_64px_70px_36px] gap-2 px-2 pb-1 text-label text-fg-faint">
       <span />
-      <span>{tr("session.contextData.message145")}</span>
-      <span>{tr("session.live.AgentTracePanel.message203")}</span>
-      <span className="text-right">{tr("session.live.AgentTracePanel.message204")}</span>
+      <span>{tr('session.contextData.message145')}</span>
+      <span>{tr('session.live.AgentTracePanel.message203')}</span>
+      <span className="text-right">{tr('session.live.AgentTracePanel.message204')}</span>
       <span className="text-right">Tokens</span>
-      <span className="text-right">{tr("session.live.AgentTracePanel.message205")}</span>
+      <span className="text-right">{tr('session.live.AgentTracePanel.message205')}</span>
     </div>
   )
 }
 
-function WorkflowSection({ run, open, onToggle, now, onPick }: { run: WorkflowRun; open: boolean; onToggle: () => void; now: number; onPick: (id: string) => void }) {
+function WorkflowSection({
+  run,
+  open,
+  onToggle,
+  now,
+  onPick,
+}: {
+  run: WorkflowRun
+  open: boolean
+  onToggle: () => void
+  now: number
+  onPick: (id: string) => void
+}) {
   useI18n()
   const bars = useMemo(() => timeline(run.agents, now), [run.agents, now])
   const p = progress(run)
   const s = runState(run.status)
   return (
     <section className="rounded-xl border border-line bg-surface shadow-sm">
-      <button type="button" onClick={onToggle} aria-expanded={open} className="flex w-full items-center gap-2 px-3 py-2.5 text-left">
-        <ChevronRight size={14} strokeWidth={1.5} className={cn('shrink-0 text-fg-muted transition-transform duration-(--dur-fast)', open && 'rotate-90')} />
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 px-3 py-2.5 text-left"
+      >
+        <ChevronRight
+          size={14}
+          strokeWidth={1.5}
+          className={cn('shrink-0 text-fg-muted transition-transform duration-(--dur-fast)', open && 'rotate-90')}
+        />
         <Workflow size={15} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-ui font-medium text-fg">{run.name || run.description || run.id}</span>
-          {run.name && run.description && <span className="block truncate text-meta text-fg-muted">{run.description}</span>}
+          {run.name && run.description && (
+            <span className="block truncate text-meta text-fg-muted">{run.description}</span>
+          )}
         </span>
         <StateIcon state={run.status} />
       </button>
       <div className="flex flex-wrap gap-x-3 gap-y-0.5 px-3 pb-2 pl-[52px] text-meta text-fg-muted tabular-nums">
         <span>{RUN_STATE_LABEL[s]}</span>
-        {p.total > 0 && <span>{p.done}/{p.total}{tr("session.live.AgentTracePanel.message206")} </span>}
+        {p.total > 0 && (
+          <span>
+            {p.done}/{p.total}
+            {tr('session.live.AgentTracePanel.message206')}{' '}
+          </span>
+        )}
         <span>{formatDuration(elapsed(run, s, now))}</span>
         <span>{formatCount(run.tokens)} tokens</span>
-        <span>{run.toolCalls}{tr("session.live.AgentTracePanel.message207")} </span>
+        <span>
+          {run.toolCalls}
+          {tr('session.live.AgentTracePanel.message207')}{' '}
+        </span>
       </div>
       {open && (
         <div className="border-t border-line-subtle px-1.5 pt-2 pb-1.5">
           {run.agents.length === 0 ? (
-            <div className="px-2 py-2 text-meta text-fg-faint">{tr("session.live.AgentTracePanel.message208")}</div>
+            <div className="px-2 py-2 text-meta text-fg-faint">{tr('session.live.AgentTracePanel.message208')}</div>
           ) : (
             <>
               <ColumnHead />
@@ -134,7 +187,13 @@ function WorkflowSection({ run, open, onToggle, now, onPick }: { run: WorkflowRu
                 <div key={i}>
                   {g.title && <div className="px-2 pt-1.5 pb-0.5 text-label font-medium text-fg-muted">{g.title}</div>}
                   {g.agents.map((a, j) => (
-                    <AgentRow key={a.id || `${i}-${j}`} a={a} bar={bars.get(a.id || a.label)} now={now} onPick={onPick} />
+                    <AgentRow
+                      key={a.id || `${i}-${j}`}
+                      a={a}
+                      bar={bars.get(a.id || a.label)}
+                      now={now}
+                      onPick={onPick}
+                    />
                   ))}
                 </div>
               ))}
@@ -165,7 +224,19 @@ function TranscriptItem({ item }: { item: Item }) {
 }
 
 /** 一个智能体的详情：任务说明 + 它的对话（只读） */
-function AgentFocus({ sessionId, agent, run, now, onBack }: { sessionId: string; agent: AgentRun; run: WorkflowRun | null; now: number; onBack: () => void }) {
+function AgentFocus({
+  sessionId,
+  agent,
+  run,
+  now,
+  onBack,
+}: {
+  sessionId: string
+  agent: AgentRun
+  run: WorkflowRun | null
+  now: number
+  onBack: () => void
+}) {
   useI18n()
   const [items, setItems] = useState<Item[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -178,7 +249,7 @@ function AgentFocus({ sessionId, agent, run, now, onBack }: { sessionId: string;
     const load = (): void => {
       bridge
         ?.subagentTranscript(sessionId, agent.id)
-        .then((list) => {
+        .then(list => {
           if (cancelled) return
           setItems(list)
           setError(null)
@@ -201,8 +272,14 @@ function AgentFocus({ sessionId, agent, run, now, onBack }: { sessionId: string;
 
   return (
     <div className="flex flex-col gap-3">
-      <button type="button" onClick={onBack} className="inline-flex w-fit items-center gap-1.5 rounded-md px-1.5 py-1 text-meta text-fg-muted hover:bg-hover hover:text-fg">
-        <ArrowLeft size={14} strokeWidth={1.5} />{tr("session.live.AgentTracePanel.message209")} </button>
+      <button
+        type="button"
+        onClick={onBack}
+        className="inline-flex w-fit items-center gap-1.5 rounded-md px-1.5 py-1 text-meta text-fg-muted hover:bg-hover hover:text-fg"
+      >
+        <ArrowLeft size={14} strokeWidth={1.5} />
+        {tr('session.live.AgentTracePanel.message209')}{' '}
+      </button>
       <div>
         <div className="flex items-center gap-2">
           <StateIcon state={agent.state} />
@@ -210,17 +287,32 @@ function AgentFocus({ sessionId, agent, run, now, onBack }: { sessionId: string;
         </div>
         <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 pl-6 text-meta text-fg-muted tabular-nums">
           {run && <span>{run.name || run.description}</span>}
-          {[agent.type, shortModel(agent.model)].filter(Boolean).length > 0 && <span>{[agent.type, shortModel(agent.model)].filter(Boolean).join(' · ')}</span>}
+          {[agent.type, shortModel(agent.model)].filter(Boolean).length > 0 && (
+            <span>{[agent.type, shortModel(agent.model)].filter(Boolean).join(' · ')}</span>
+          )}
           <span>{RUN_STATE_LABEL[s]}</span>
           <span>{formatDuration(elapsed(agent, s, now))}</span>
           <span>{formatCount(agent.tokens)} tokens</span>
-          <span>{agent.toolCalls}{tr("session.live.AgentTracePanel.message207")} </span>
+          <span>
+            {agent.toolCalls}
+            {tr('session.live.AgentTracePanel.message207')}{' '}
+          </span>
         </div>
       </div>
       {task && (
         <section className="rounded-lg border border-line bg-surface">
-          <button type="button" onClick={() => setTaskOpen((v) => !v)} className="flex w-full items-center gap-1.5 px-3 py-2 text-left text-meta font-medium text-fg-secondary">
-            <ChevronRight size={13} strokeWidth={1.5} className={cn('transition-transform duration-(--dur-fast)', taskOpen && 'rotate-90')} />{tr("session.live.AgentTracePanel.message210")} </button>
+          <button
+            type="button"
+            onClick={() => setTaskOpen(v => !v)}
+            className="flex w-full items-center gap-1.5 px-3 py-2 text-left text-meta font-medium text-fg-secondary"
+          >
+            <ChevronRight
+              size={13}
+              strokeWidth={1.5}
+              className={cn('transition-transform duration-(--dur-fast)', taskOpen && 'rotate-90')}
+            />
+            {tr('session.live.AgentTracePanel.message210')}{' '}
+          </button>
           {taskOpen && (
             <div className="border-t border-line-subtle px-3 py-2">
               <Markdown text={task} />
@@ -228,17 +320,24 @@ function AgentFocus({ sessionId, agent, run, now, onBack }: { sessionId: string;
           )}
         </section>
       )}
-      {agent.result && !items?.length && <div className="text-meta text-fg-muted">{tr("session.live.AgentTracePanel.message211")}{agent.result}</div>}
+      {agent.result && !items?.length && (
+        <div className="text-meta text-fg-muted">
+          {tr('session.live.AgentTracePanel.message211')}
+          {agent.result}
+        </div>
+      )}
       <div className="flex flex-col gap-2.5">
         {error ? (
           <div className="text-meta text-fg-faint">{translateMessage(error)}</div>
         ) : items === null ? (
           <div className="flex items-center gap-2 text-meta text-fg-muted">
-            <Spinner size={12} />{tr("session.live.AgentTracePanel.message212")} </div>
+            <Spinner size={12} />
+            {tr('session.live.AgentTracePanel.message212')}{' '}
+          </div>
         ) : rest.length === 0 ? (
-          <div className="text-meta text-fg-faint">{tr("session.live.AgentTracePanel.message213")}</div>
+          <div className="text-meta text-fg-faint">{tr('session.live.AgentTracePanel.message213')}</div>
         ) : (
-          rest.map((it) => <TranscriptItem key={it.id} item={it} />)
+          rest.map(it => <TranscriptItem key={it.id} item={it} />)
         )}
       </div>
     </div>
@@ -266,15 +365,16 @@ export function AgentTracePanel({ sessionId, runs, focus, onFocus, onClose }: Ag
 
   // 运行中的和最新的一个编排默认展开
   const [open, setOpen] = useState<Record<string, boolean>>({})
-  const isOpen = (w: WorkflowRun, i: number) => open[w.id] ?? (runState(w.status) === 'running' || i === runs.workflows.length - 1)
+  const isOpen = (w: WorkflowRun, i: number) =>
+    open[w.id] ?? (runState(w.status) === 'running' || i === runs.workflows.length - 1)
 
   const focused = useMemo(() => {
     if (!focus) return null
     for (const w of runs.workflows) {
-      const a = w.agents.find((x) => x.id === focus)
+      const a = w.agents.find(x => x.id === focus)
       if (a) return { agent: a, run: w }
     }
-    const a = runs.agents.find((x) => x.id === focus)
+    const a = runs.agents.find(x => x.id === focus)
     return a ? { agent: a, run: null } : null
   }, [focus, runs])
 
@@ -292,37 +392,58 @@ export function AgentTracePanel({ sessionId, runs, focus, onFocus, onClose }: Ag
   }, [onClose])
 
   return (
-    <aside className="pop-in absolute top-12 right-0 bottom-0 z-30 flex w-[min(560px,92%)] flex-col border-l border-line bg-app shadow-popover" aria-label={tr("session.live.AgentTracePanel.message214")}>
+    <aside
+      className="pop-in absolute top-12 right-0 bottom-0 z-30 flex w-[min(560px,92%)] flex-col border-l border-line bg-app shadow-popover"
+      aria-label={tr('session.live.AgentTracePanel.message214')}
+    >
       <header className="flex h-11 shrink-0 items-center gap-2 border-b border-line px-4">
         <Bot size={16} strokeWidth={1.5} className="shrink-0 text-fg-secondary" />
-        <span className="text-ui font-medium text-fg">{tr("session.live.AgentTracePanel.message214")}</span>
+        <span className="text-ui font-medium text-fg">{tr('session.live.AgentTracePanel.message214')}</span>
         {!empty && (
           <span className="min-w-0 truncate text-meta text-fg-muted tabular-nums">
-            {runs.workflows.length}{tr("session.live.AgentTracePanel.message215")} {runs.agents.length}{tr("session.live.AgentTracePanel.message216")} {formatCount(totalTokens)} tokens
+            {runs.workflows.length}
+            {tr('session.live.AgentTracePanel.message215')} {runs.agents.length}
+            {tr('session.live.AgentTracePanel.message216')} {formatCount(totalTokens)} tokens
           </span>
         )}
         <span className="flex-1" />
-        <IconButton icon={X} label={tr("session.live.AgentTracePanel.message217")} onClick={onClose} />
+        <IconButton icon={X} label={tr('session.live.AgentTracePanel.message217')} onClick={onClose} />
       </header>
       <div className="selectable min-h-0 flex-1 overflow-y-auto px-4 py-4">
         {focus && focused ? (
-          <AgentFocus key={focused.agent.id} sessionId={sessionId} agent={focused.agent} run={focused.run} now={now} onBack={() => onFocus(null)} />
+          <AgentFocus
+            key={focused.agent.id}
+            sessionId={sessionId}
+            agent={focused.agent}
+            run={focused.run}
+            now={now}
+            onBack={() => onFocus(null)}
+          />
         ) : empty ? (
           <div className="flex flex-col items-center px-6 pt-16 text-center">
             <Bot size={28} strokeWidth={1.25} className="text-fg-faint" />
-            <div className="mt-3 text-ui text-fg">{tr("session.live.AgentTracePanel.message218")}</div>
-            <p className="mt-1.5 max-w-80 text-meta text-fg-muted">{tr("session.live.AgentTracePanel.message219")}</p>
+            <div className="mt-3 text-ui text-fg">{tr('session.live.AgentTracePanel.message218')}</div>
+            <p className="mt-1.5 max-w-80 text-meta text-fg-muted">{tr('session.live.AgentTracePanel.message219')}</p>
           </div>
         ) : (
           <div className="flex flex-col gap-3">
             {runs.workflows.map((w, i) => (
-              <WorkflowSection key={w.id} run={w} open={isOpen(w, i)} onToggle={() => setOpen((o) => ({ ...o, [w.id]: !isOpen(w, i) }))} now={now} onPick={onFocus} />
+              <WorkflowSection
+                key={w.id}
+                run={w}
+                open={isOpen(w, i)}
+                onToggle={() => setOpen(o => ({ ...o, [w.id]: !isOpen(w, i) }))}
+                now={now}
+                onPick={onFocus}
+              />
             ))}
             {runs.agents.length > 0 && (
               <section className="rounded-xl border border-line bg-surface px-1.5 pt-2.5 pb-1.5 shadow-sm">
-                <div className="px-2 pb-2 text-ui font-medium text-fg">{tr("session.live.AgentTracePanel.message220")}</div>
+                <div className="px-2 pb-2 text-ui font-medium text-fg">
+                  {tr('session.live.AgentTracePanel.message220')}
+                </div>
                 <ColumnHead />
-                {runs.agents.map((a) => (
+                {runs.agents.map(a => (
                   <AgentRow key={a.id} a={a} bar={agentBars.get(a.id || a.label)} now={now} onPick={onFocus} />
                 ))}
               </section>

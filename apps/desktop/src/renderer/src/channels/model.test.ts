@@ -1,7 +1,19 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Channel, ChannelMember, ChannelMessage } from '@/mock/types'
 import { setCurrentLocale } from '../i18n/core'
-import { appendMessage, buildTimeline, createMessage, filterMentionable, firstUnreadAt, insertMention, markRead, mentionAt, parseMentions, splitMentions, unreadTotal } from './model'
+import {
+  appendMessage,
+  buildTimeline,
+  createMessage,
+  filterMentionable,
+  firstUnreadAt,
+  insertMention,
+  markRead,
+  mentionAt,
+  parseMentions,
+  splitMentions,
+  unreadTotal,
+} from './model'
 import { formatClock, formatDay } from './format'
 
 afterEach(() => setCurrentLocale('zh-CN'))
@@ -9,13 +21,35 @@ afterEach(() => setCurrentLocale('zh-CN'))
 const DAY1 = new Date(2026, 9, 7).getTime()
 const DAY2 = new Date(2026, 9, 8).getTime()
 const min = (n: number) => n * 60_000
-const text = (id: string, authorId: string, at: number, extra: Partial<Extract<ChannelMessage, { kind: 'message' }>> = {}): ChannelMessage =>
-  ({ kind: 'message', id, channelId: 'c', at, authorId, text: id, format: 'plain', ...extra })
+const text = (
+  id: string,
+  authorId: string,
+  at: number,
+  extra: Partial<Extract<ChannelMessage, { kind: 'message' }>> = {},
+): ChannelMessage => ({ kind: 'message', id, channelId: 'c', at, authorId, text: id, format: 'plain', ...extra })
 
 const members: ChannelMember[] = [
   { id: 'me', kind: 'human', name: '林夏', you: true },
-  { id: 'fe', kind: 'agent', name: '前端助手', engine: 'claude', model: null, machineId: 'local', machine: '这台电脑', status: 'idle' },
-  { id: 'fe2', kind: 'agent', name: '前端', engine: 'codex', model: null, machineId: 'local', machine: '这台电脑', status: 'idle' },
+  {
+    id: 'fe',
+    kind: 'agent',
+    name: '前端助手',
+    engine: 'claude',
+    model: null,
+    machineId: 'local',
+    machine: '这台电脑',
+    status: 'idle',
+  },
+  {
+    id: 'fe2',
+    kind: 'agent',
+    name: '前端',
+    engine: 'codex',
+    model: null,
+    machineId: 'local',
+    machine: '这台电脑',
+    status: 'idle',
+  },
   { id: 'zn', kind: 'human', name: '周宁' },
 ]
 
@@ -27,20 +61,47 @@ describe('频道时间线', () => {
       text('a3', 'me', DAY1 + min(610)),
       text('b1', 'fe', DAY1 + min(611)),
       text('b2', 'fe', DAY1 + min(612), { replyToId: 'a1' }),
-      { kind: 'task', id: 't1', channelId: 'c', at: DAY1 + min(613), authorId: 'me', assigneeId: 'fe', title: 't', status: 'running' },
+      {
+        kind: 'task',
+        id: 't1',
+        channelId: 'c',
+        at: DAY1 + min(613),
+        authorId: 'me',
+        assigneeId: 'fe',
+        title: 't',
+        status: 'running',
+      },
       text('b3', 'fe', DAY1 + min(614)),
     ])
-    expect(rows.map(r => r.kind === 'group' ? r.items.map(i => i.id).join('+') : r.kind)).toEqual(['day', 'a1+a2', 'a3', 'b1', 'b2', 'task', 'b3'])
+    expect(rows.map(r => (r.kind === 'group' ? r.items.map(i => i.id).join('+') : r.kind))).toEqual([
+      'day',
+      'a1+a2',
+      'a3',
+      'b1',
+      'b2',
+      'task',
+      'b3',
+    ])
   })
   it('跨天插日期分隔并断开分组；新消息分隔只插一次', () => {
-    const rows = buildTimeline([
-      text('a1', 'me', DAY1 + min(23 * 60 + 58)),
-      text('a2', 'me', DAY2 + min(1)),
-      text('a3', 'fe', DAY2 + min(10)),
-      text('a4', 'fe', DAY2 + min(11)),
-    ], { newFrom: DAY2 + min(10) })
-    expect(rows.map(r => r.kind === 'group' ? r.items.map(i => i.id).join('+') : r.kind === 'day' ? `day:${r.at === DAY1 ? 1 : 2}` : r.kind))
-      .toEqual(['day:1', 'a1', 'day:2', 'a2', 'new', 'a3+a4'])
+    const rows = buildTimeline(
+      [
+        text('a1', 'me', DAY1 + min(23 * 60 + 58)),
+        text('a2', 'me', DAY2 + min(1)),
+        text('a3', 'fe', DAY2 + min(10)),
+        text('a4', 'fe', DAY2 + min(11)),
+      ],
+      { newFrom: DAY2 + min(10) },
+    )
+    expect(
+      rows.map(r =>
+        r.kind === 'group'
+          ? r.items.map(i => i.id).join('+')
+          : r.kind === 'day'
+            ? `day:${r.at === DAY1 ? 1 : 2}`
+            : r.kind,
+      ),
+    ).toEqual(['day:1', 'a1', 'day:2', 'a2', 'new', 'a3+a4'])
   })
   it('最早未读：只算别人的消息和任务卡，不算事件', () => {
     const list: ChannelMessage[] = [
@@ -68,12 +129,19 @@ describe('@提及', () => {
     expect(mentionAt('没有', 2)).toBeNull()
   })
   it('插入名字后补空格，光标落在空格后；后面已有空白时不重复加', () => {
-    expect(insertMention('请 @前 看看', { start: 2, end: 4 }, '前端助手')).toEqual({ text: '请 @前端助手 看看', caret: 8 })
+    expect(insertMention('请 @前 看看', { start: 2, end: 4 }, '前端助手')).toEqual({
+      text: '请 @前端助手 看看',
+      caret: 8,
+    })
     expect(insertMention('@前', { start: 0, end: 2 }, '前端助手')).toEqual({ text: '@前端助手 ', caret: 6 })
   })
   it('名字长的优先匹配，按出现顺序去重，不认识的 @ 当普通文字', () => {
     expect(parseMentions('@前端助手 和 @前端 还有 @前端助手 以及 @不存在', members)).toEqual(['fe', 'fe2'])
-    expect(splitMentions('请 @周宁 看下', members)).toEqual([{ text: '请 ' }, { text: '@周宁', memberId: 'zn' }, { text: ' 看下' }])
+    expect(splitMentions('请 @周宁 看下', members)).toEqual([
+      { text: '请 ' },
+      { text: '@周宁', memberId: 'zn' },
+      { text: ' 看下' },
+    ])
     expect(parseMentions('mail@周宁', members)).toEqual([])
     expect(parseMentions('好了，@周宁 再看一次', members)).toEqual(['zn'])
   })
@@ -101,7 +169,15 @@ describe('频道状态更新', () => {
     expect(before.c).toHaveLength(0)
   })
   it('新消息记录引用和提到的成员，不把自己算进去', () => {
-    const m = createMessage({ id: 'n', channelId: 'c', authorId: 'me', text: '@前端助手 @林夏 看一下', replyToId: 'x', members, now: 5 })
+    const m = createMessage({
+      id: 'n',
+      channelId: 'c',
+      authorId: 'me',
+      text: '@前端助手 @林夏 看一下',
+      replyToId: 'x',
+      members,
+      now: 5,
+    })
     expect(m).toMatchObject({ kind: 'message', format: 'plain', replyToId: 'x', mentions: ['fe'], at: 5 })
   })
 })

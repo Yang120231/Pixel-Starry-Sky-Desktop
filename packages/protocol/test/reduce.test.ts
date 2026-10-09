@@ -41,7 +41,7 @@ describe('reduce', () => {
       { type: 'item_completed', item: { kind: 'assistant', id: 'a', text: '完整', status: 'completed' } },
       { type: 'item_completed', item: { kind: 'notice', id: 'n', level: 'warn', text: '提示' } },
     ])
-    expect(s.items.map((x) => x.id)).toEqual(['a', 'n'])
+    expect(s.items.map(x => x.id)).toEqual(['a', 'n'])
     expect(s.items[0]).toMatchObject({ text: '完整', status: 'completed' })
   })
 
@@ -65,14 +65,28 @@ describe('reduce', () => {
   it('一轮被中断：进行中的条目标成 interrupted，清空待审批', () => {
     const s = run([
       { type: 'turn_started', turnId: 't1' },
-      { type: 'item_started', item: { kind: 'command', id: 'c', command: 'ls', description: null, output: '', exitCode: null, status: 'running' } },
+      {
+        type: 'item_started',
+        item: {
+          kind: 'command',
+          id: 'c',
+          command: 'ls',
+          description: null,
+          output: '',
+          exitCode: null,
+          status: 'running',
+        },
+      },
       { type: 'item_completed', item: { kind: 'assistant', id: 'a', text: '好', status: 'completed' } },
-      { type: 'approval_request', request: { requestId: 'r', itemId: 'c', kind: 'command', title: '运行命令', alwaysScopes: [] } },
+      {
+        type: 'approval_request',
+        request: { requestId: 'r', itemId: 'c', kind: 'command', title: '运行命令', alwaysScopes: [] },
+      },
       { type: 'turn_completed', turnId: 't1', outcome: 'interrupted', error: null },
     ])
     expect(s.turnId).toBeNull()
     expect(s.pending).toHaveLength(0)
-    expect(s.items.find((x) => x.id === 'c')).toMatchObject({ status: 'interrupted' })
-    expect(s.items.find((x) => x.id === 'a')).toMatchObject({ status: 'completed' })
+    expect(s.items.find(x => x.id === 'c')).toMatchObject({ status: 'interrupted' })
+    expect(s.items.find(x => x.id === 'a')).toMatchObject({ status: 'completed' })
   })
 })

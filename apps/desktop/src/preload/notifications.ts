@@ -9,7 +9,10 @@ export interface NotificationInput {
   /** 窗口不在前台时闪烁任务栏按钮 */
   attention: boolean
 }
-export interface NotificationClick { id: string; sessionId: string | null }
+export interface NotificationClick {
+  id: string
+  sessionId: string | null
+}
 export interface NotificationsBridge {
   supported: () => Promise<boolean>
   show: (input: NotificationInput) => Promise<boolean>

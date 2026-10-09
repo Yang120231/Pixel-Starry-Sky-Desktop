@@ -28,12 +28,12 @@ export function SidebarFooter({ onAddProject, onNewTask }: SidebarActionCallback
   const name = acc.user?.name ?? null
   const subtitle =
     acc.status === 'signed-in'
-      ? tr("sidebar.SidebarFooter.message404", { p0: acc.balanceText ?? '—' })
+      ? tr('sidebar.SidebarFooter.message404', { p0: acc.balanceText ?? '—' })
       : acc.status === 'signing-in'
-        ? tr("sidebar.SidebarFooter.message405")
+        ? tr('sidebar.SidebarFooter.message405')
         : acc.status === 'loading'
           ? tr('account.AccountMenu.message25')
-          : tr("sidebar.SidebarFooter.message406")
+          : tr('sidebar.SidebarFooter.message406')
   const title = name ?? tr('sidebar.SidebarFooter.message407')
   const accountLabel = [title, subtitle].filter(Boolean).join('\n')
   const tools = layout.bottom.length
@@ -52,8 +52,8 @@ export function SidebarFooter({ onAddProject, onNewTask }: SidebarActionCallback
           aria-expanded={open}
           data-sidebar-account
           // 菜单打开时，避免 mousedown 先关闭再被 click 重新打开
-          onMouseDown={(e) => open && e.stopPropagation()}
-          onClick={() => setOpen((v) => !v)}
+          onMouseDown={e => open && e.stopPropagation()}
+          onClick={() => setOpen(v => !v)}
           className={cn(
             'press no-drag flex h-10 min-w-8 items-center gap-2 rounded-md px-1 text-left text-fg-muted hover:bg-hover hover:text-fg',
             showText ? 'min-w-0 flex-1' : 'shrink-0 justify-center',
@@ -72,7 +72,13 @@ export function SidebarFooter({ onAddProject, onNewTask }: SidebarActionCallback
         </button>
         {!showText && <div className="min-w-0 flex-1" />}
         {layout.bottom.map(action => (
-          <LayoutActionButton key={action} action={action} placement="bottom" onAddProject={onAddProject} onNewTask={onNewTask} />
+          <LayoutActionButton
+            key={action}
+            action={action}
+            placement="bottom"
+            onAddProject={onAddProject}
+            onNewTask={onNewTask}
+          />
         ))}
       </div>
       <AccountMenu open={open} onClose={close} className="right-2 bottom-full left-2 mb-1 w-auto!" />

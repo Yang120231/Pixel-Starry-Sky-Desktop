@@ -15,13 +15,14 @@ export function QuotaBar({ label, quota, currency }: { label: string; quota: Quo
       <div className="flex items-baseline justify-between gap-2 text-meta">
         <span className="text-fg-secondary">{label}</span>
         <span className={cn('tabular-nums', danger ? 'text-danger' : 'text-fg-muted')}>
-          {formatAmount(quota.used, currency)} / {unlimited ? tr("account.QuotaBar.message51") : formatAmount(quota.limit, currency)}
+          {formatAmount(quota.used, currency)} /{' '}
+          {unlimited ? tr('account.QuotaBar.message51') : formatAmount(quota.limit, currency)}
         </span>
       </div>
       {!unlimited && (
         <div
           role="progressbar"
-          aria-label={tr("account.QuotaBar.message52", { p0: label })}
+          aria-label={tr('account.QuotaBar.message52', { p0: label })}
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={Math.round(percent)}

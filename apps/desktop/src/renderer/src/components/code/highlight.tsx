@@ -51,25 +51,97 @@ const ALIASES: Record<string, string> = {
 
 /** 文件扩展名 → 语言（给 diff 用） */
 const EXTENSIONS: Record<string, string> = {
-  ts: 'typescript', tsx: 'typescript', mts: 'typescript', cts: 'typescript',
-  js: 'javascript', jsx: 'javascript', mjs: 'javascript', cjs: 'javascript',
-  py: 'python', rs: 'rust', go: 'go', java: 'java', kt: 'kotlin', kts: 'kotlin', swift: 'swift',
-  c: 'c', h: 'c', cc: 'cpp', cpp: 'cpp', cxx: 'cpp', hpp: 'cpp', cs: 'csharp',
-  rb: 'ruby', php: 'php', lua: 'lua', pl: 'perl', r: 'r', scss: 'scss', less: 'less', css: 'css',
-  html: 'xml', htm: 'xml', xml: 'xml', svg: 'xml', vue: 'xml', svelte: 'xml',
-  json: 'json', jsonc: 'json', yml: 'yaml', yaml: 'yaml', toml: 'ini', ini: 'ini', cfg: 'ini',
-  md: 'markdown', markdown: 'markdown', sql: 'sql', graphql: 'graphql', gql: 'graphql',
-  sh: 'bash', bash: 'bash', zsh: 'bash', ps1: 'powershell', psm1: 'powershell',
-  makefile: 'makefile', mk: 'makefile', diff: 'diff', patch: 'diff',
+  ts: 'typescript',
+  tsx: 'typescript',
+  mts: 'typescript',
+  cts: 'typescript',
+  js: 'javascript',
+  jsx: 'javascript',
+  mjs: 'javascript',
+  cjs: 'javascript',
+  py: 'python',
+  rs: 'rust',
+  go: 'go',
+  java: 'java',
+  kt: 'kotlin',
+  kts: 'kotlin',
+  swift: 'swift',
+  c: 'c',
+  h: 'c',
+  cc: 'cpp',
+  cpp: 'cpp',
+  cxx: 'cpp',
+  hpp: 'cpp',
+  cs: 'csharp',
+  rb: 'ruby',
+  php: 'php',
+  lua: 'lua',
+  pl: 'perl',
+  r: 'r',
+  scss: 'scss',
+  less: 'less',
+  css: 'css',
+  html: 'xml',
+  htm: 'xml',
+  xml: 'xml',
+  svg: 'xml',
+  vue: 'xml',
+  svelte: 'xml',
+  json: 'json',
+  jsonc: 'json',
+  yml: 'yaml',
+  yaml: 'yaml',
+  toml: 'ini',
+  ini: 'ini',
+  cfg: 'ini',
+  md: 'markdown',
+  markdown: 'markdown',
+  sql: 'sql',
+  graphql: 'graphql',
+  gql: 'graphql',
+  sh: 'bash',
+  bash: 'bash',
+  zsh: 'bash',
+  ps1: 'powershell',
+  psm1: 'powershell',
+  makefile: 'makefile',
+  mk: 'makefile',
+  diff: 'diff',
+  patch: 'diff',
 }
 
 /** 代码块上显示的语言名 */
 const LABELS: Record<string, string> = {
-  typescript: 'TypeScript', javascript: 'JavaScript', python: 'Python', rust: 'Rust', go: 'Go',
-  bash: 'Shell', powershell: 'PowerShell', json: 'JSON', yaml: 'YAML', xml: 'HTML', css: 'CSS',
-  scss: 'SCSS', sql: 'SQL', markdown: 'Markdown', java: 'Java', kotlin: 'Kotlin', swift: 'Swift',
-  c: 'C', cpp: 'C++', csharp: 'C#', ruby: 'Ruby', php: 'PHP', lua: 'Lua', ini: 'TOML / INI',
-  diff: 'Diff', makefile: 'Makefile', graphql: 'GraphQL', get plaintext() { return tr("code.highlight.message58") },
+  typescript: 'TypeScript',
+  javascript: 'JavaScript',
+  python: 'Python',
+  rust: 'Rust',
+  go: 'Go',
+  bash: 'Shell',
+  powershell: 'PowerShell',
+  json: 'JSON',
+  yaml: 'YAML',
+  xml: 'HTML',
+  css: 'CSS',
+  scss: 'SCSS',
+  sql: 'SQL',
+  markdown: 'Markdown',
+  java: 'Java',
+  kotlin: 'Kotlin',
+  swift: 'Swift',
+  c: 'C',
+  cpp: 'C++',
+  csharp: 'C#',
+  ruby: 'Ruby',
+  php: 'PHP',
+  lua: 'Lua',
+  ini: 'TOML / INI',
+  diff: 'Diff',
+  makefile: 'Makefile',
+  graphql: 'GraphQL',
+  get plaintext() {
+    return tr('code.highlight.message58')
+  },
 }
 
 /** 规范化语言名；highlight.js 不认识时返回 null（按纯文本显示） */
@@ -146,6 +218,14 @@ export function highlightLines(code: string, lang: string | null): ReactNode[] {
   return out.map((segs, i) =>
     segs.length === 0
       ? ''
-      : segs.map((s, j) => (s.className ? <span key={`${i}-${j}`} className={s.className}>{s.text}</span> : s.text)),
+      : segs.map((s, j) =>
+          s.className ? (
+            <span key={`${i}-${j}`} className={s.className}>
+              {s.text}
+            </span>
+          ) : (
+            s.text
+          ),
+        ),
   )
 }

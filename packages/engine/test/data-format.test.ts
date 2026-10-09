@@ -16,15 +16,28 @@ const NOW = 1791201600000 + 60_000 // 夹具里最后一条用量记录之后一
 
 let dir: string
 let hosts: EngineHost[]
-beforeEach(() => { dir = makeTmp('data-format'); cpSync(FIXTURE, join(dir, 'data'), { recursive: true }); hosts = [] })
-afterEach(async () => { await Promise.all(hosts.map(h => h.shutdown())); removeTmp(dir) })
+beforeEach(() => {
+  dir = makeTmp('data-format')
+  cpSync(FIXTURE, join(dir, 'data'), { recursive: true })
+  hosts = []
+})
+afterEach(async () => {
+  await Promise.all(hosts.map(h => h.shutdown()))
+  removeTmp(dir)
+})
 const data = () => join(dir, 'data')
-const makeHost = () => { const h = new EngineHost({ dataDir: data(), emit() {}, adapters: {} }); hosts.push(h); return h }
+const makeHost = () => {
+  const h = new EngineHost({ dataDir: data(), emit() {}, adapters: {} })
+  hosts.push(h)
+  return h
+}
 
 describe('Store 读取 data-v1', () => {
   it('项目与引擎设置', () => {
     const store = new Store(data())
-    expect(store.loadProjects()).toEqual([{ id: 'proj-fixture-1', name: '夹具项目', path: '/fixture/workspace', addedAt: 1791100000000 }])
+    expect(store.loadProjects()).toEqual([
+      { id: 'proj-fixture-1', name: '夹具项目', path: '/fixture/workspace', addedAt: 1791100000000 },
+    ])
     expect(store.loadSettings()).toMatchObject({
       maxRetries: 3,
       defaults: { engine: 'claude', model: 'fixture-model', effort: 'medium', permissionMode: 'plan' },
@@ -38,8 +51,26 @@ describe('Store 读取 data-v1', () => {
   it('会话记录：新字段原样读出，旧记录缺失的字段补默认值', () => {
     const records = new Store(data()).loadRecords().sort((a, b) => a.id.localeCompare(b.id))
     expect(records.map(r => r.id)).toEqual([S1, S2])
-    expect(records[0]).toMatchObject({ title: '夹具会话', engineSessionId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', ultracode: true, titleEdited: true, bottomedAt: 1791150000000, archivedAt: null, lastOutcome: 'completed' })
-    expect(records[1]).toMatchObject({ title: '旧版记录', model: null, effort: null, ultracode: false, fast: false, thinkingSummaries: true, titleEdited: false, bottomedAt: null, archivedAt: null })
+    expect(records[0]).toMatchObject({
+      title: '夹具会话',
+      engineSessionId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      ultracode: true,
+      titleEdited: true,
+      bottomedAt: 1791150000000,
+      archivedAt: null,
+      lastOutcome: 'completed',
+    })
+    expect(records[1]).toMatchObject({
+      title: '旧版记录',
+      model: null,
+      effort: null,
+      ultracode: false,
+      fast: false,
+      thinkingSummaries: true,
+      titleEdited: false,
+      bottomedAt: null,
+      archivedAt: null,
+    })
   })
 
   it('对话条目：同 id 保留首次位置与最后内容，写坏的行跳过', () => {
@@ -47,19 +78,31 @@ describe('Store 读取 data-v1', () => {
     const items = store.loadItems(S1)
     expect(items.map(i => i.id)).toEqual(['u1', 'a1', 'stats-t1', 'u2', 'a2'])
     expect(items.find(i => i.id === 'a2')).toMatchObject({ kind: 'assistant', text: '第二句的回复' })
-    expect(items.find(i => i.id === 'stats-t1')).toMatchObject({ kind: 'turn_stats', usage: { durationMs: 1200, models: { 'fixture-model': { input: 10, output: 5 } } } })
+    expect(items.find(i => i.id === 'stats-t1')).toMatchObject({
+      kind: 'turn_stats',
+      usage: { durationMs: 1200, models: { 'fixture-model': { input: 10, output: 5 } } },
+    })
     expect(store.loadItems(S2)).toEqual([])
   })
 
   it('队列：重启后一律暂停；已开始交付的项变成待核对，不自动重发', () => {
-    const store = new Store(data()), record = store.loadRecords().find(r => r.id === S1)!
+    const store = new Store(data()),
+      record = store.loadRecords().find(r => r.id === S1)!
     const queue = store.loadQueue(record)
     expect(queue.paused).toBe(true)
     expect(queue.receipts).toEqual([{ queueId: 'q-old', status: 'accepted' }])
-    expect(queue.items.map(i => [i.id, i.status, i.mode])).toEqual([['q-running', 'uncertain', 'normal'], ['q-queued', 'queued', 'normal'], ['q-failed', 'failed', 'guidance']])
+    expect(queue.items.map(i => [i.id, i.status, i.mode])).toEqual([
+      ['q-running', 'uncertain', 'normal'],
+      ['q-queued', 'queued', 'normal'],
+      ['q-failed', 'failed', 'guidance'],
+    ])
     expect(queue.items[0].error).toBe('上次退出前已开始交付，请核对后再重试')
     expect(queue.items[2]).toMatchObject({ error: 'boom', settings: { model: null, effort: null, platform: null } })
-    expect(store.loadQueue(store.loadRecords().find(r => r.id === S2)!)).toEqual({ items: [], paused: false, receipts: [] })
+    expect(store.loadQueue(store.loadRecords().find(r => r.id === S2)!)).toEqual({
+      items: [],
+      paused: false,
+      receipts: [],
+    })
   })
 
   it('不打开会话时的队列概况：按文件内容计数，已开始交付的项此时还算排队', () => {
@@ -73,14 +116,33 @@ describe('UsageStore 读取 data-v1', () => {
   it('读出全部记录；平台线路没有费用来源的旧记录标成不可用', () => {
     const rows = new UsageStore(data()).load(0)
     expect(rows.map(r => r.id).sort()).toEqual(['t1', 't2', 't3'].map(t => `${S1}:${t}:fixture-model`))
-    expect(rows.find(r => r.turnId === 't1')).toMatchObject({ route: 'cli', costUsd: 0.01, costSource: 'estimate', input: 10, outcome: 'completed' })
-    expect(rows.find(r => r.turnId === 't3')).toMatchObject({ route: 'pixelsky', costUsd: null, costSource: 'unavailable', outcome: 'failed' })
+    expect(rows.find(r => r.turnId === 't1')).toMatchObject({
+      route: 'cli',
+      costUsd: 0.01,
+      costSource: 'estimate',
+      input: 10,
+      outcome: 'completed',
+    })
+    expect(rows.find(r => r.turnId === 't3')).toMatchObject({
+      route: 'pixelsky',
+      costUsd: null,
+      costSource: 'unavailable',
+      outcome: 'failed',
+    })
   })
 
   it('汇总与分页', () => {
     const usage = new UsageStore(data())
     const sum = usage.summary({ range: '7d', filter: {}, now: NOW })
-    expect(sum.totals).toMatchObject({ input: 31, cacheRead: 272, cacheWrite: 3, output: 19, records: 3, turns: 3, requests: 4 })
+    expect(sum.totals).toMatchObject({
+      input: 31,
+      cacheRead: 272,
+      cacheWrite: 3,
+      output: 19,
+      records: 3,
+      turns: 3,
+      requests: 4,
+    })
     expect(sum.groups.route.map(g => g.key).sort()).toEqual(['cli', 'pixelsky'])
     const page = usage.list({ range: '7d', filter: {}, now: NOW, offset: 0, limit: 2 })
     expect(page).toMatchObject({ total: 3, offset: 0 })
@@ -94,16 +156,24 @@ describe('EngineHost 打开 data-v1', () => {
     const host = makeHost()
     expect(host.projects().map(p => p.name)).toEqual(['夹具项目'])
     expect(host.defaults()).toMatchObject({ model: 'fixture-model', permissionMode: 'plan' })
-    expect(host.sessions().map(s => [s.record.id, s.state])).toEqual([[S1, 'idle'], [S2, 'idle']])
+    expect(host.sessions().map(s => [s.record.id, s.state])).toEqual([
+      [S1, 'idle'],
+      [S2, 'idle'],
+    ])
     expect(host.sessions()[0].queue).toEqual({ queued: 2, failed: 1, paused: true })
     expect(host.sessions()[1].queue).toBeUndefined()
   })
 
   it('打开会话：条目、暂停的队列与回执', () => {
-    const host = makeHost(), snap = host.open(S1)
+    const host = makeHost(),
+      snap = host.open(S1)
     expect(snap.items.map(i => i.id)).toEqual(['u1', 'a1', 'stats-t1', 'u2', 'a2'])
     expect(snap.queuePaused).toBe(true)
-    expect(snap.queue.map(q => [q.id, q.status])).toEqual([['q-running', 'uncertain'], ['q-queued', 'queued'], ['q-failed', 'failed']])
+    expect(snap.queue.map(q => [q.id, q.status])).toEqual([
+      ['q-running', 'uncertain'],
+      ['q-queued', 'queued'],
+      ['q-failed', 'failed'],
+    ])
     expect(host.sessions()[0].queue).toEqual({ queued: 1, failed: 2, paused: true })
     expect(host.open(S2).items).toEqual([])
   })

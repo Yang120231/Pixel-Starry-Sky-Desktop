@@ -26,8 +26,13 @@ export function CopyButton({ text, label, iconOnly }: { text: string; label?: st
   }
 
   const Icon = state === 'copied' ? Check : Copy
-  const status = state === 'copied' ? tr("code.CodeBlock.message55") : state === 'failed' ? tr("code.CodeBlock.message56") : tr("code.CodeBlock.message57")
-  const name = label ?? tr("code.CodeBlock.message57")
+  const status =
+    state === 'copied'
+      ? tr('code.CodeBlock.message55')
+      : state === 'failed'
+        ? tr('code.CodeBlock.message56')
+        : tr('code.CodeBlock.message57')
+  const name = label ?? tr('code.CodeBlock.message57')
   return (
     <button
       type="button"
@@ -41,7 +46,13 @@ export function CopyButton({ text, label, iconOnly }: { text: string; label?: st
       )}
     >
       <Icon size={13} strokeWidth={1.5} />
-      {iconOnly ? <span className="sr-only" aria-live="polite">{state === 'idle' ? '' : status}</span> : <span aria-live="polite">{status}</span>}
+      {iconOnly ? (
+        <span className="sr-only" aria-live="polite">
+          {state === 'idle' ? '' : status}
+        </span>
+      ) : (
+        <span aria-live="polite">{status}</span>
+      )}
     </button>
   )
 }

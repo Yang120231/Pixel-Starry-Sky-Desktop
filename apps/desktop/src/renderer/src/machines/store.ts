@@ -6,15 +6,48 @@ import { refreshTerminals } from '@/terminal/store'
 import { isDemo } from '@/mock/data'
 import { isNewTab } from '@/panes/tree'
 
-export const machineOf = (id: unknown): string => typeof id === 'string' && /^ssh-[a-f0-9-]+~/.test(id) ? id.slice(0, id.indexOf('~')) : 'local'
+export const machineOf = (id: unknown): string =>
+  typeof id === 'string' && /^ssh-[a-f0-9-]+~/.test(id) ? id.slice(0, id.indexOf('~')) : 'local'
 const listeners = new Set<() => void>()
-let state: MachineState = { currentId: 'local', machines: [{ id: 'local', name: '', host: '', port: 0, username: '', auth: 'local', hasSecret: false, status: 'local', error: null, fingerprint: null, platform: window.pixelsky?.platform ?? null, home: null }] }
-let started = false, switching = false
-export function useMachines(): MachineState { return useSyncExternalStore(cb => { listeners.add(cb); return () => { listeners.delete(cb) } }, () => state) }
+let state: MachineState = {
+  currentId: 'local',
+  machines: [
+    {
+      id: 'local',
+      name: '',
+      host: '',
+      port: 0,
+      username: '',
+      auth: 'local',
+      hasSecret: false,
+      status: 'local',
+      error: null,
+      fingerprint: null,
+      platform: window.pixelsky?.platform ?? null,
+      home: null,
+    },
+  ],
+}
+let started = false,
+  switching = false
+export function useMachines(): MachineState {
+  return useSyncExternalStore(
+    cb => {
+      listeners.add(cb)
+      return () => {
+        listeners.delete(cb)
+      }
+    },
+    () => state,
+  )
+}
 export const getMachines = (): MachineState => state
 const set = (value: MachineState) => {
-  const reconnected = value.machines.filter(m => m.status === 'connected' && state.machines.find(old => old.id === m.id)?.status !== 'connected')
-  state = value; listeners.forEach(fn => fn())
+  const reconnected = value.machines.filter(
+    m => m.status === 'connected' && state.machines.find(old => old.id === m.id)?.status !== 'connected',
+  )
+  state = value
+  listeners.forEach(fn => fn())
   for (const machine of reconnected) {
     invalidateRemoteSnapshots(machine.id)
     if (machine.id === state.currentId) void refreshMachineEngine(machine.id).catch(() => {})
@@ -22,10 +55,16 @@ const set = (value: MachineState) => {
 }
 export async function initMachines(): Promise<void> {
   if (started || isDemo || !window.pixelsky) return
-  started = true; window.pixelsky.machines.onChange(set); set(await window.pixelsky.machines.state())
+  started = true
+  window.pixelsky.machines.onChange(set)
+  set(await window.pixelsky.machines.state())
 }
-export function openMachineManager(): void { window.dispatchEvent(new Event('pixelsky:manage-machines')) }
-export function openWorkspacePicker(): void { window.dispatchEvent(new Event('pixelsky:choose-workspace')) }
+export function openMachineManager(): void {
+  window.dispatchEvent(new Event('pixelsky:manage-machines'))
+}
+export function openWorkspacePicker(): void {
+  window.dispatchEvent(new Event('pixelsky:choose-workspace'))
+}
 export async function selectMachine(id: string): Promise<void> {
   if (switching || id === state.currentId) return
   switching = true
@@ -44,14 +83,23 @@ export async function selectMachine(id: string): Promise<void> {
     set(await window.pixelsky!.machines.state())
     await refreshMachineEngine(previous).catch(() => {})
     throw error
-  } finally { switching = false }
+  } finally {
+    switching = false
+  }
 }
 export async function selectWorkspace(choice: WorkspaceChoice): Promise<void> {
   const id = machineOf(choice.projectId)
   if (id !== state.currentId) await selectMachine(id)
   setCurrentProject(choice.projectId)
-  const existing = getEngineState().sessions.find(s => s.record.projectId === choice.projectId && s.record.cwd.replaceAll('\\', '/') === choice.path.replaceAll('\\', '/') && !s.record.archivedAt)
-  const record = existing?.record ?? await window.pixelsky!.machines.openWorkspace(choice)
+  const existing = getEngineState().sessions.find(
+    s =>
+      s.record.projectId === choice.projectId &&
+      s.record.cwd.replaceAll('\\', '/') === choice.path.replaceAll('\\', '/') &&
+      !s.record.archivedAt,
+  )
+  const record = existing?.record ?? (await window.pixelsky!.machines.openWorkspace(choice))
   paneActions.open(record.id)
-  try { localStorage.setItem('pixelsky.last-workspace.' + id, JSON.stringify(choice)) } catch {}
+  try {
+    localStorage.setItem('pixelsky.last-workspace.' + id, JSON.stringify(choice))
+  } catch {}
 }

@@ -36,7 +36,7 @@ export function usageAvailable(): boolean {
 // 本地记录：演示模式是假数据；真实模式在引擎接口实现前为空
 let localRecords: UsageRecord[] = isDemo ? demoUsageRecords(Date.now()) : []
 const listeners = new Set<() => void>()
-const notify = () => listeners.forEach((l) => l())
+const notify = () => listeners.forEach(l => l())
 
 export const PAGE_SIZE = 50
 
@@ -48,9 +48,9 @@ export function useUsage(query: UsageQuery, offset: number) {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const bump = () => setVersion((v) => v + 1)
+    const bump = () => setVersion(v => v + 1)
     listeners.add(bump)
-    const off = bridge()?.onEvent?.((e) => {
+    const off = bridge()?.onEvent?.(e => {
       if (e.kind === 'usage_recorded') bump()
     })
     return () => {

@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest'
 import type { RequestCacheUsage } from '@pixelsky/protocol'
 import { CacheWatch } from '../src/cache-watch'
 
-const request = (input: number, cacheRead: number, at = 1000, model = 'opus', cacheWrite = 0): RequestCacheUsage => ({ turnId: 'turn', messageId: `${at}`, model, input, cacheRead, cacheWrite, observedAt: at })
+const request = (input: number, cacheRead: number, at = 1000, model = 'opus', cacheWrite = 0): RequestCacheUsage => ({
+  turnId: 'turn',
+  messageId: `${at}`,
+  model,
+  input,
+  cacheRead,
+  cacheWrite,
+  observedAt: at,
+})
 
 describe('连续请求的缓存识别', () => {
   it('首个请求建立基线，正常命中和恰好 50% 不提醒', () => {

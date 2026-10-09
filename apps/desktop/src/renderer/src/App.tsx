@@ -35,13 +35,15 @@ const CHANNEL_CENTER_MIN = 360
 const CHANNEL_MEMBERS_WIDTH = 300
 const MEMBERS_KEY = 'pixelsky.channels.members-open'
 function fitsChannels(sidebarOpen: boolean, sidebarWidth: number): boolean {
-  return (sidebarOpen ? sidebarWidth : 0) + CHANNEL_LIST_WIDTH + CHANNEL_CENTER_MIN + CHANNEL_MEMBERS_WIDTH <= window.innerWidth
+  return (
+    (sidebarOpen ? sidebarWidth : 0) + CHANNEL_LIST_WIDTH + CHANNEL_CENTER_MIN + CHANNEL_MEMBERS_WIDTH <=
+    window.innerWidth
+  )
 }
 
 /** 给定侧边栏、右侧面板的开合状态，当前窗口宽度能否放下所有打开的栏 */
 function fits(sidebarOpen: boolean, panelOpen: boolean, sidebarWidth: number, panelWidth = PANEL_WIDTH): boolean {
-  const needed =
-    (sidebarOpen ? sidebarWidth : 0) + SESSION_MIN_WIDTH + (panelOpen ? panelWidth : 0)
+  const needed = (sidebarOpen ? sidebarWidth : 0) + SESSION_MIN_WIDTH + (panelOpen ? panelWidth : 0)
   return needed <= window.innerWidth
 }
 
@@ -58,37 +60,74 @@ export function App() {
   const preferredPanelWidth = useLayoutSize('rightWorkspace')
   const panelMax = Math.max(360, windowWidth - (sidebarOpen ? preferredSidebarWidth : 0) - SESSION_MIN_WIDTH)
   const panelWidth = Math.min(preferredPanelWidth, panelMax)
-  const [panelOpen, setPanelOpen] = useState(() => (localStorage.getItem('pixelsky.right-workspace.open') === 'true' || defaultPanelOpen) && fits(true, true, preferredSidebarWidth, 360))
+  const [panelOpen, setPanelOpen] = useState(
+    () =>
+      (localStorage.getItem('pixelsky.right-workspace.open') === 'true' || defaultPanelOpen) &&
+      fits(true, true, preferredSidebarWidth, 360),
+  )
   // 频道页的最窄情况是 220px 紧凑列表 + 360px 时间线
-  const sidebarMax = Math.max(240, Math.min(480, onWorkbench ? windowWidth - SESSION_MIN_WIDTH - (panelOpen ? panelWidth : 0) : windowWidth - 220 - CHANNEL_CENTER_MIN))
+  const sidebarMax = Math.max(
+    240,
+    Math.min(
+      480,
+      onWorkbench
+        ? windowWidth - SESSION_MIN_WIDTH - (panelOpen ? panelWidth : 0)
+        : windowWidth - 220 - CHANNEL_CENTER_MIN,
+    ),
+  )
   const sidebarWidth = Math.min(preferredSidebarWidth, sidebarMax)
-  const [membersOpen, setMembersOpen] = useState(() => { try { return localStorage.getItem(MEMBERS_KEY) !== 'false' } catch { return true } })
+  const [membersOpen, setMembersOpen] = useState(() => {
+    try {
+      return localStorage.getItem(MEMBERS_KEY) !== 'false'
+    } catch {
+      return true
+    }
+  })
   // 放不下时成员面板自动隐藏，偏好不变
   const membersShown = membersOpen && fitsChannels(sidebarOpen, sidebarWidth)
-  useEffect(() => { try { localStorage.setItem(MEMBERS_KEY, String(membersOpen)) } catch {} }, [membersOpen])
+  useEffect(() => {
+    try {
+      localStorage.setItem(MEMBERS_KEY, String(membersOpen))
+    } catch {}
+  }, [membersOpen])
   // 多对话窗格：第一次渲染前读出保存的布局（没有记录时打开默认会话），docs/ui/multi-pane.md
   useState(() => startPanes(defaultSessionId))
   // 侧栏高亮当前窗格正在显示的会话；新会话（欢迎页）时为 null
-  const current = usePaneState((s) => focusedTab(s.layout))
+  const current = usePaneState(s => focusedTab(s.layout))
   const sessionId = current && !isNewTab(current) && !isFileTab(current) ? current : null
   // 引擎系统：连接主进程（演示模式下什么都不做）；正在看的会话由 Workspace 统一标记
   useEngineBoot()
   // 设置 › 用量 里点「打开这个会话」：和在侧栏点一样，打开到当前窗格
   useOpenSessionRequests(paneActions.open)
-  useEffect(() => { try { localStorage.setItem('pixelsky.right-workspace.open', String(panelOpen)) } catch {} }, [panelOpen])
+  useEffect(() => {
+    try {
+      localStorage.setItem('pixelsky.right-workspace.open', String(panelOpen))
+    } catch {}
+  }, [panelOpen])
   useEffect(() => {
     const reveal = () => {
       showWorkbench()
       setPanelOpen(true)
       if (!fits(sidebarOpen, true, preferredSidebarWidth, 360)) setSidebarOpen(false)
     }
-    const close = () => { setPanelOpen(false); setPanelMaximized(false) }
-    const maximize = () => { showWorkbench(); setPanelOpen(true); setPanelMaximized(v => !v) }
+    const close = () => {
+      setPanelOpen(false)
+      setPanelMaximized(false)
+    }
+    const maximize = () => {
+      showWorkbench()
+      setPanelOpen(true)
+      setPanelMaximized(v => !v)
+    }
     const events = [OPEN_RIGHT_WORKSPACE, OPEN_FILES_EVENT, 'pixelsky:open-browser', 'pixelsky:open-task']
     events.forEach(name => window.addEventListener(name, reveal))
     window.addEventListener('pixelsky:panel-maximize', maximize)
     window.addEventListener('pixelsky:close-right-workspace', close)
-    return () => { events.forEach(name => window.removeEventListener(name, reveal)); window.removeEventListener('pixelsky:panel-maximize', maximize); window.removeEventListener('pixelsky:close-right-workspace', close) }
+    return () => {
+      events.forEach(name => window.removeEventListener(name, reveal))
+      window.removeEventListener('pixelsky:panel-maximize', maximize)
+      window.removeEventListener('pixelsky:close-right-workspace', close)
+    }
   }, [sidebarOpen, preferredSidebarWidth])
 
   useEffect(() => {
@@ -96,7 +135,10 @@ export function App() {
     const togglePanelEvent = () => togglePanel()
     window.addEventListener('pixelsky:toggle-sidebar', toggleSidebarEvent)
     window.addEventListener('pixelsky:toggle-panel', togglePanelEvent)
-    return () => { window.removeEventListener('pixelsky:toggle-sidebar', toggleSidebarEvent); window.removeEventListener('pixelsky:toggle-panel', togglePanelEvent) }
+    return () => {
+      window.removeEventListener('pixelsky:toggle-sidebar', toggleSidebarEvent)
+      window.removeEventListener('pixelsky:toggle-panel', togglePanelEvent)
+    }
   })
 
   // 窗口缩窄到放不下时自动收起右侧面板
@@ -104,7 +146,8 @@ export function App() {
     const onResize = () => {
       setWindowWidth(window.innerWidth)
       // 只在工作台可见时按右侧面板收侧栏；频道页的成员面板放不下时自己隐藏
-      if (onWorkbench && panelOpen && !panelMaximized && !fits(sidebarOpen, true, preferredSidebarWidth, 360)) setSidebarOpen(false)
+      if (onWorkbench && panelOpen && !panelMaximized && !fits(sidebarOpen, true, preferredSidebarWidth, 360))
+        setSidebarOpen(false)
     }
     onResize()
     window.addEventListener('resize', onResize)
@@ -135,7 +178,12 @@ export function App() {
   // 快捷键：Ctrl+B 侧边栏，Ctrl+Alt+B 右侧面板（macOS 用 ⌘），见 shortcuts.ts
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || document.querySelector('[aria-modal="true"]') || document.activeElement instanceof HTMLElement && document.activeElement.closest('[data-terminal-input]')) return
+      if (
+        e.defaultPrevented ||
+        document.querySelector('[aria-modal="true"]') ||
+        (document.activeElement instanceof HTMLElement && document.activeElement.closest('[data-terminal-input]'))
+      )
+        return
       const action = TOGGLE_SIDEBAR.match(e) ? toggleSidebar : TOGGLE_PANEL.match(e) ? togglePanel : null
       if (!action) return
       e.preventDefault()
@@ -155,34 +203,83 @@ export function App() {
       {/* 侧边栏、右侧面板一直挂载，收起 / 展开带滑动动画（docs/ui/workbench.md §4.1） */}
       <div className="relative flex shrink-0">
         <CollapsibleSlot open={sidebarOpen} width={sidebarWidth} side="left">
-          <ToolbarContext.Provider value={{ panelOpen, filesPanelOpen: panelOpen, onCloseFiles: () => setPanelOpen(false) }}>
-            <Sidebar selectedSessionId={onWorkbench ? sessionId : null} onSelectSession={paneActions.open} onCollapse={() => setSidebarOpen(false)} />
+          <ToolbarContext.Provider
+            value={{ panelOpen, filesPanelOpen: panelOpen, onCloseFiles: () => setPanelOpen(false) }}
+          >
+            <Sidebar
+              selectedSessionId={onWorkbench ? sessionId : null}
+              onSelectSession={paneActions.open}
+              onCollapse={() => setSidebarOpen(false)}
+            />
           </ToolbarContext.Provider>
         </CollapsibleSlot>
-        {sidebarOpen && <ResizeHandle label={tr("App.message21")} axis="x" className="sidebar-resize" value={sidebarWidth} min={240} max={sidebarMax}
-          onChange={v => setLayoutSize('sidebar', v)} onCommit={v => setLayoutSize('sidebar', v, true)}
-          onCancel={() => setLayoutSize('sidebar', preferredSidebarWidth, true)}
-          onReset={() => setLayoutSize('sidebar', DEFAULT_SIDEBAR_WIDTH, true)} />}
+        {sidebarOpen && (
+          <ResizeHandle
+            label={tr('App.message21')}
+            axis="x"
+            className="sidebar-resize"
+            value={sidebarWidth}
+            min={240}
+            max={sidebarMax}
+            onChange={v => setLayoutSize('sidebar', v)}
+            onCommit={v => setLayoutSize('sidebar', v, true)}
+            onCancel={() => setLayoutSize('sidebar', preferredSidebarWidth, true)}
+            onReset={() => setLayoutSize('sidebar', DEFAULT_SIDEBAR_WIDTH, true)}
+          />
+        )}
       </div>
       {/* 顶栏、会话与右面板直接拼接侧栏，主区不留外层间距或装饰轮廓。 */}
       <div className="workbench-surface flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <WorkspaceHeader sidebarOpen={sidebarOpen} panelOpen={panelOpen} onToggleSidebar={toggleSidebar} onTogglePanel={togglePanel} filesPanelOpen={panelOpen} onCloseFiles={() => setPanelOpen(false)} membersShown={membersShown} />
+        <WorkspaceHeader
+          sidebarOpen={sidebarOpen}
+          panelOpen={panelOpen}
+          onToggleSidebar={toggleSidebar}
+          onTogglePanel={togglePanel}
+          filesPanelOpen={panelOpen}
+          onCloseFiles={() => setPanelOpen(false)}
+          membersShown={membersShown}
+        />
         <MachineStatus />
         <div className="relative flex min-h-0 flex-1">
-        {/* 频道页叠在工作台上面；工作台只是不可见（不用 display:none），窗格测量、终端、浏览器都保持原样 */}
-        <div className={cn('workbench-content flex min-h-0 min-w-0 flex-1', !onWorkbench && 'invisible')} inert={!onWorkbench} aria-hidden={!onWorkbench || undefined}>
-          <div className={panelMaximized && panelOpen ? "hidden" : "relative flex min-h-0 min-w-0 flex-1 flex-col"}>
-            <Workspace sidebarOpen={sidebarOpen} panelOpen={panelOpen} onToggleSidebar={toggleSidebar} onTogglePanel={togglePanel} />
+          {/* 频道页叠在工作台上面；工作台只是不可见（不用 display:none），窗格测量、终端、浏览器都保持原样 */}
+          <div
+            className={cn('workbench-content flex min-h-0 min-w-0 flex-1', !onWorkbench && 'invisible')}
+            inert={!onWorkbench}
+            aria-hidden={!onWorkbench || undefined}
+          >
+            <div className={panelMaximized && panelOpen ? 'hidden' : 'relative flex min-h-0 min-w-0 flex-1 flex-col'}>
+              <Workspace
+                sidebarOpen={sidebarOpen}
+                panelOpen={panelOpen}
+                onToggleSidebar={toggleSidebar}
+                onTogglePanel={togglePanel}
+              />
+            </div>
+            <div className="relative flex min-h-0 shrink-0">
+              <CollapsibleSlot
+                open={panelOpen}
+                width={panelMaximized ? windowWidth - (sidebarOpen ? sidebarWidth : 0) : panelWidth}
+                side="right"
+              >
+                <RightPanel maximized={panelMaximized} visible={panelOpen} />
+              </CollapsibleSlot>
+              {panelOpen && !panelMaximized && (
+                <ResizeHandle
+                  label={tr('workspace.width')}
+                  axis="x"
+                  scale={-1}
+                  className="right-workspace-resize"
+                  value={panelWidth}
+                  min={360}
+                  max={panelMax}
+                  onChange={v => setLayoutSize('rightWorkspace', v)}
+                  onCommit={v => setLayoutSize('rightWorkspace', v, true)}
+                  onReset={() => setLayoutSize('rightWorkspace', PANEL_WIDTH, true)}
+                />
+              )}
+            </div>
           </div>
-          <div className="relative flex min-h-0 shrink-0">
-          <CollapsibleSlot open={panelOpen} width={panelMaximized ? windowWidth - (sidebarOpen ? sidebarWidth : 0) : panelWidth} side="right">
-            <RightPanel maximized={panelMaximized} visible={panelOpen} />
-          </CollapsibleSlot>
-          {panelOpen && !panelMaximized && <ResizeHandle label={tr('workspace.width')} axis="x" scale={-1} className="right-workspace-resize" value={panelWidth} min={360} max={panelMax}
-            onChange={v => setLayoutSize('rightWorkspace', v)} onCommit={v => setLayoutSize('rightWorkspace', v, true)} onReset={() => setLayoutSize('rightWorkspace', PANEL_WIDTH, true)} />}
-          </div>
-        </div>
-        {page === 'channels' && <ChannelsPage membersShown={membersShown} onToggleMembers={togglePanel} />}
+          {page === 'channels' && <ChannelsPage membersShown={membersShown} onToggleMembers={togglePanel} />}
         </div>
       </div>
       {/* Electron 按 DOM 顺序收集拖动区域；窗口按钮必须在全部 drag 区域之后排除。 */}

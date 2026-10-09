@@ -55,7 +55,7 @@ export class ClaudeAdapter implements EngineAdapter {
     if (this.cached && !force) return Promise.resolve(this.cached)
     if (!this.detecting) {
       this.detecting = discoverClaude(this.opts.overridePath?.() ?? null, this.env())
-        .then((d) => (this.cached = d))
+        .then(d => (this.cached = d))
         .finally(() => {
           this.detecting = null
         })
@@ -93,13 +93,19 @@ export class ClaudeAdapter implements EngineAdapter {
 
   createSession(ctx: SessionContext): EngineSession {
     const d = this.cached
-    if (!d?.launcher || (d.info.status !== 'ready' && !(ctx.record().platform && d.info.status === 'unauthenticated'))) throw new Error(d?.info.message ?? 'Claude Code 不可用')
+    if (!d?.launcher || (d.info.status !== 'ready' && !(ctx.record().platform && d.info.status === 'unauthenticated')))
+      throw new Error(d?.info.message ?? 'Claude Code 不可用')
     const env = this.env()
     const platformEnv = this.opts.sessionEnv?.(ctx.record())
     if (ctx.record().platform) {
       if (!platformEnv) throw new Error('平台代理不可用，请重启应用')
       for (const key of Object.keys(env)) {
-        if (/^(ANTHROPIC_|CLAUDE_CODE_OAUTH_TOKEN|CLAUDE_CODE_USE_BEDROCK|CLAUDE_CODE_USE_VERTEX|CLAUDE_CODE_USE_FOUNDRY)/i.test(key)) delete env[key]
+        if (
+          /^(ANTHROPIC_|CLAUDE_CODE_OAUTH_TOKEN|CLAUDE_CODE_USE_BEDROCK|CLAUDE_CODE_USE_VERTEX|CLAUDE_CODE_USE_FOUNDRY)/i.test(
+            key,
+          )
+        )
+          delete env[key]
       }
       Object.assign(env, platformEnv)
     }
@@ -108,7 +114,8 @@ export class ClaudeAdapter implements EngineAdapter {
     const launch = this.opts.launchOptions?.()
     // 自动压缩触发点（docs/ui/engine-settings-redesign.md §3.2）：上下文用到窗口的这个百分比时压缩
     if (launch?.autoCompactPct) env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE = String(launch.autoCompactPct)
-    if(ctx.extensions?.pathDirs.length)env.PATH=[...ctx.extensions.pathDirs,env.PATH??env.Path??''].join(delimiter)
+    if (ctx.extensions?.pathDirs.length)
+      env.PATH = [...ctx.extensions.pathDirs, env.PATH ?? env.Path ?? ''].join(delimiter)
     return new ClaudeSession(ctx, {
       maxRetries,
       launch: launch ? { outputStyle: launch.outputStyle, askQuestions: launch.askQuestions } : undefined,
@@ -128,7 +135,7 @@ export class ClaudeAdapter implements EngineAdapter {
     if (!force && this.catalogCache && Date.now() - this.catalogCache.at < CATALOG_TTL) return this.catalogCache.value
     if (this.probing) return this.probing
     this.probing = this.probe()
-      .then((value) => {
+      .then(value => {
         this.catalogCache = { at: Date.now(), value }
         return value
       })
@@ -140,7 +147,8 @@ export class ClaudeAdapter implements EngineAdapter {
 
   private async probe(): Promise<EngineCatalog> {
     const d = await this.discover(false)
-    if (!d.launcher || (d.info.status !== 'ready' && d.info.status !== 'unauthenticated')) return { outputStyles: [], currentOutputStyle: null }
+    if (!d.launcher || (d.info.status !== 'ready' && d.info.status !== 'unauthenticated'))
+      return { outputStyles: [], currentOutputStyle: null }
     const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose']
     const proc = new ClaudeProcess(d.launcher, args, homedir(), this.env(), {
       onMessage: () => undefined,
@@ -150,8 +158,13 @@ export class ClaudeAdapter implements EngineAdapter {
     })
     try {
       const init = await proc.request('initialize', {}, 30_000)
-      const styles = Array.isArray(init.available_output_styles) ? init.available_output_styles.filter((x): x is string => typeof x === 'string') : []
-      return { outputStyles: styles, currentOutputStyle: typeof init.output_style === 'string' ? init.output_style : null }
+      const styles = Array.isArray(init.available_output_styles)
+        ? init.available_output_styles.filter((x): x is string => typeof x === 'string')
+        : []
+      return {
+        outputStyles: styles,
+        currentOutputStyle: typeof init.output_style === 'string' ? init.output_style : null,
+      }
     } catch {
       return { outputStyles: [], currentOutputStyle: null }
     } finally {
@@ -167,7 +180,7 @@ export class ClaudeAdapter implements EngineAdapter {
     const output = [r.stdout, r.stderr]
       .join('\n')
       .split(/\r?\n/)
-      .map((l) => l.trim())
+      .map(l => l.trim())
       .filter(Boolean)
       .slice(-6)
       .join('\n')

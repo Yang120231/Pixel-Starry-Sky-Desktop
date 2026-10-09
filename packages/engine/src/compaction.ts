@@ -10,7 +10,13 @@ export const CLAUDE_COMPACT_MARKER = 'You are a helpful AI assistant tasked with
 function systemText(system: unknown): string {
   if (typeof system === 'string') return system
   if (!Array.isArray(system)) return ''
-  return system.map((b) => (b && typeof b === 'object' && typeof (b as { text?: unknown }).text === 'string' ? (b as { text: string }).text : '')).join('\n')
+  return system
+    .map(b =>
+      b && typeof b === 'object' && typeof (b as { text?: unknown }).text === 'string'
+        ? (b as { text: string }).text
+        : '',
+    )
+    .join('\n')
 }
 
 /** 这个请求体是不是 Claude Code 的压缩请求 */
@@ -23,7 +29,11 @@ export function isClaudeCompaction(body: unknown): boolean {
  * 压缩请求换模型：是压缩请求、选了压缩模型、和原模型不同、而且这条线路有这个模型时，返回改过的请求体；
  * 否则返回 null（原样转发）。线路没有这个模型时照常用会话模型，不报错。
  */
-export function rewriteCompaction(raw: string, compactModel: string | null, routeModels: readonly string[]): string | null {
+export function rewriteCompaction(
+  raw: string,
+  compactModel: string | null,
+  routeModels: readonly string[],
+): string | null {
   if (!compactModel || !routeModels.includes(compactModel)) return null
   let body: unknown
   try {

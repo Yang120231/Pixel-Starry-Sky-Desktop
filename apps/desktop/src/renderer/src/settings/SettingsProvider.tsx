@@ -23,14 +23,18 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const triggerRef = useRef<HTMLElement | null>(null)
   const triggerSidebarActionRef = useRef<string | null>(null)
   // 没指定分类时停在「外观」；设置已经打开时也跳过去
-  const openSettings = useCallback((target?: SectionId) => {
-    if (!open) {
-      triggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
-      triggerSidebarActionRef.current = triggerRef.current?.closest('[data-sidebar-action]')?.getAttribute('data-sidebar-action') ?? null
-    }
-    setSection(target ?? 'appearance')
-    setOpen(true)
-  }, [open])
+  const openSettings = useCallback(
+    (target?: SectionId) => {
+      if (!open) {
+        triggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+        triggerSidebarActionRef.current =
+          triggerRef.current?.closest('[data-sidebar-action]')?.getAttribute('data-sidebar-action') ?? null
+      }
+      setSection(target ?? 'appearance')
+      setOpen(true)
+    },
+    [open],
+  )
   const closeSettings = useCallback(() => setOpen(false), [])
 
   useEffect(() => {
@@ -40,16 +44,26 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     triggerRef.current = null
     triggerSidebarActionRef.current = null
     // 在设置中把入口移到另一排后，原按钮已卸载；按动作找到它的新位置。
-    const target = trigger.isConnected ? trigger : sidebarAction
-      ? Array.from(document.querySelectorAll<HTMLElement>('[data-sidebar-action]')).find(button => button.dataset.sidebarAction === sidebarAction)
-      : null
+    const target = trigger.isConnected
+      ? trigger
+      : sidebarAction
+        ? Array.from(document.querySelectorAll<HTMLElement>('[data-sidebar-action]')).find(
+            button => button.dataset.sidebarAction === sidebarAction,
+          )
+        : null
     target?.focus({ preventScroll: true })
   }, [open])
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (!OPEN_SETTINGS.match(e)) return
-      if (e.defaultPrevented || e.isComposing || document.activeElement?.closest('[data-terminal-input]') || document.querySelector('[aria-modal="true"]')) return
+      if (
+        e.defaultPrevented ||
+        e.isComposing ||
+        document.activeElement?.closest('[data-terminal-input]') ||
+        document.querySelector('[aria-modal="true"]')
+      )
+        return
       e.preventDefault()
       openSettings()
     }
@@ -57,7 +71,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [openSettings])
 
-  const value = useMemo(() => ({ open, section, openSettings, closeSettings }), [open, section, openSettings, closeSettings])
+  const value = useMemo(
+    () => ({ open, section, openSettings, closeSettings }),
+    [open, section, openSettings, closeSettings],
+  )
 
   return (
     <SettingsContext.Provider value={value}>
@@ -69,6 +86,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
 export function useSettings(): SettingsContextValue {
   const value = useContext(SettingsContext)
-  if (!value) throw new Error(tr("settings.SettingsProvider.message946"))
+  if (!value) throw new Error(tr('settings.SettingsProvider.message946'))
   return value
 }

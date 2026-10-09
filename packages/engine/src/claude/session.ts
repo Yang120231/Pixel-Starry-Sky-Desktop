@@ -1,7 +1,17 @@
 // 一个会话对应的 Claude Code 进程：启动 / 恢复、发消息、审批、中断、改设置（docs/engines.md §9）
 import { randomUUID } from 'node:crypto'
 import { readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { contextDiagnostic, EMPTY_FLAGS, type ContextDiagnostic, type ApprovalDecision, type ImageAttachment, type PermissionMode, type SessionFlags, type SessionSettings, type TaskOutput } from '@pixelsky/protocol'
+import {
+  contextDiagnostic,
+  EMPTY_FLAGS,
+  type ContextDiagnostic,
+  type ApprovalDecision,
+  type ImageAttachment,
+  type PermissionMode,
+  type SessionFlags,
+  type SessionSettings,
+  type TaskOutput,
+} from '@pixelsky/protocol'
 import { queueSettings } from '../queue'
 import type { EngineSession, Launcher, SessionContext } from '../adapter'
 import { ClaudeProcess, type ControlRequestFromCli } from './process'
@@ -49,7 +59,13 @@ export interface ClaudeLaunchOptions {
   askQuestions: boolean
 }
 
-export function claudeArgs(settings: SessionSettings, sessionId: string, resume: boolean, launch?: ClaudeLaunchOptions, rewindAt?: string | null): string[] {
+export function claudeArgs(
+  settings: SessionSettings,
+  sessionId: string,
+  resume: boolean,
+  launch?: ClaudeLaunchOptions,
+  rewindAt?: string | null,
+): string[] {
   const args = [...BASE_ARGS, '--permission-mode', TO_CLAUDE_MODE[settings.permissionMode]]
   if (settings.model) args.push('--model', settings.model)
   if (settings.effort) args.push('--effort', settings.effort)
@@ -104,9 +120,13 @@ export function fastBlockedText(reason: string | null): string {
  * 用进程级 settings 的 env 覆盖本机配置，同时保留平台回环代理设置。
  * 什么都不用加时原样返回网关配置文件（或 null）；带网关配置时合并结果写进临时文件，只把路径放进 argv。
  */
-export function claudeSettingsArgument(gatewayFile: string | undefined, maxRetries: number | null, extra: Record<string, unknown> = {}): string | null {
+export function claudeSettingsArgument(
+  gatewayFile: string | undefined,
+  maxRetries: number | null,
+  extra: Record<string, unknown> = {},
+): string | null {
   if (maxRetries === null && Object.keys(extra).length === 0) return gatewayFile ?? null
-  const settings = gatewayFile ? JSON.parse(readFileSync(gatewayFile, 'utf8')) as Record<string, unknown> : {}
+  const settings = gatewayFile ? (JSON.parse(readFileSync(gatewayFile, 'utf8')) as Record<string, unknown>) : {}
   const configured = obj(settings.env)
   const env = maxRetries === null ? configured : { ...configured, CLAUDE_CODE_MAX_RETRIES: String(maxRetries) }
   const merged = JSON.stringify({ ...settings, ...extra, ...(Object.keys(env).length > 0 ? { env } : {}) })
@@ -138,7 +158,13 @@ interface PendingApproval {
 }
 
 export class ClaudeSession implements EngineSession {
-  private contextJob: { id: string; value: ContextDiagnostic | null; resolve: (value: ContextDiagnostic) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> } | null = null
+  private contextJob: {
+    id: string
+    value: ContextDiagnostic | null
+    resolve: (value: ContextDiagnostic) => void
+    reject: (error: Error) => void
+    timer: ReturnType<typeof setTimeout>
+  } | null = null
   private retrySettingsFile: string | null = null
   /** 仅显式引导进入 CLI 的队列；普通消息一直留在 EngineHost。 */
   private guidance = new Map<string, { text: string }>()
@@ -158,11 +184,11 @@ export class ClaudeSession implements EngineSession {
     private readonly deps: ClaudeSessionDeps,
   ) {
     this.translator = new ClaudeTranslator(ctx.record().cwd, {
-      emit: (e) => ctx.emit(e),
-      sessionId: (id) => {
+      emit: e => ctx.emit(e),
+      sessionId: id => {
         if (id !== ctx.record().engineSessionId) ctx.setEngineSessionId(id)
       },
-      permissionMode: (mode) => {
+      permissionMode: mode => {
         if (mode !== ctx.record().permissionMode) ctx.setPermissionMode(mode)
       },
       fastState: (state, blocked) => this.onFastState(state, blocked),
@@ -201,7 +227,9 @@ export class ClaudeSession implements EngineSession {
     this.translator.startTurn(turnId)
     this.ensureProcess().then(
       // 启动期间用户已停止时，不让延迟完成的 spawn 再把原文送出。
-      (proc) => { if (!this.closed && this.translator.activeTurn === turnId) proc.sendUserMessage(text, userItemId, attachments) },
+      proc => {
+        if (!this.closed && this.translator.activeTurn === turnId) proc.sendUserMessage(text, userItemId, attachments)
+      },
       (err: Error) => this.translator.abortTurn(`无法启动 Claude Code：${err.message}`),
     )
   }
@@ -232,8 +260,14 @@ export class ClaudeSession implements EngineSession {
       if (job.value) this.translator.context.diagnostic(msg.context_usage)
       return true
     }
-    if (msg.type === 'result' && (msg.local_command === 'context' || msg.user_message_uuid === job.id || (Array.isArray(msg.user_message_uuids) && msg.user_message_uuids.includes(job.id)))) {
-      clearTimeout(job.timer); this.contextJob = null
+    if (
+      msg.type === 'result' &&
+      (msg.local_command === 'context' ||
+        msg.user_message_uuid === job.id ||
+        (Array.isArray(msg.user_message_uuids) && msg.user_message_uuids.includes(job.id)))
+    ) {
+      clearTimeout(job.timer)
+      this.contextJob = null
       if (msg.is_error === true || !job.value) job.reject(new Error(str(msg.result) || '引擎未提供结构化的上下文明细'))
       else job.resolve(job.value)
       return true
@@ -257,21 +291,25 @@ export class ClaudeSession implements EngineSession {
     if (!isDir(rec.cwd)) throw new Error(`工作目录不存在：${rec.cwd}`)
     const sid = rec.engineSessionId ?? rec.id
     const resume = claudeTranscriptExists(this.deps.projectsDir, rec.cwd, sid)
-    const rewindAt = resume ? rec.pendingRewind ?? null : null
+    const rewindAt = resume ? (rec.pendingRewind ?? null) : null
     try {
       return await this.launch(sid, resume, rewindAt)
     } catch (err) {
       if (!(err instanceof StartupError)) throw err
       if (rewindAt) {
         // 截断点在记录里找不到或被 CLI 拒绝：不带回退的上下文不可信，换新的引擎会话
-        this.translator.notice('warn', '无法在 Claude Code 记录中回退到这条消息，已开始新的引擎会话（之前的上下文没有带过去）')
+        this.translator.notice(
+          'warn',
+          '无法在 Claude Code 记录中回退到这条消息，已开始新的引擎会话（之前的上下文没有带过去）',
+        )
         this.ctx.clearPendingRewind?.()
         return await this.launch(randomUUID(), false)
       }
       // 恢复失败（Claude 那边的记录没了）或 id 被占用：换一个新的引擎会话 id 再试一次
       if (!resume && !/already in use/i.test(err.stderr)) throw err
       const fresh = randomUUID()
-      if (resume) this.translator.notice('warn', '无法恢复 Claude Code 的会话记录，已开始新的引擎会话（之前的上下文没有带过去）')
+      if (resume)
+        this.translator.notice('warn', '无法恢复 Claude Code 的会话记录，已开始新的引擎会话（之前的上下文没有带过去）')
       return await this.launch(fresh, false)
     }
   }
@@ -281,9 +319,12 @@ export class ClaudeSession implements EngineSession {
     // 新进程的 modelUsage 从零开始累计，算每轮用量的基线也要清零（docs/ui/usage.md §6.1）
     this.translator.resetUsageBaseline()
     const args = claudeArgs(rec, sid, resume, this.deps.launch, rewindAt)
-    for(const path of this.deps.extensions?.pluginDirs??[])args.push('--plugin-dir',path)
-    if(this.deps.extensions?.mcpFile)args.push('--mcp-config',this.deps.extensions.mcpFile)
-    if (this.retrySettingsFile) { rmSync(this.retrySettingsFile, { force: true }); this.retrySettingsFile = null }
+    for (const path of this.deps.extensions?.pluginDirs ?? []) args.push('--plugin-dir', path)
+    if (this.deps.extensions?.mcpFile) args.push('--mcp-config', this.deps.extensions.mcpFile)
+    if (this.retrySettingsFile) {
+      rmSync(this.retrySettingsFile, { force: true })
+      this.retrySettingsFile = null
+    }
     const gateway = rec.platform ? this.deps.env.PIXELSKY_GATEWAY_SETTINGS : undefined
     const extra = this.deps.launch?.outputStyle ? { outputStyle: this.deps.launch.outputStyle } : {}
     const settingsArg = claudeSettingsArgument(gateway, this.deps.maxRetries ?? null, extra)
@@ -291,24 +332,46 @@ export class ClaudeSession implements EngineSession {
     if (gateway && settingsArg && settingsArg !== gateway) this.retrySettingsFile = settingsArg
     if (settingsArg) args.push('--settings', settingsArg)
     const proc: ClaudeProcess = new ClaudeProcess(this.deps.launcher, args, rec.cwd, this.deps.env, {
-      onMessage: (m) => {
+      onMessage: m => {
         if (this.proc === proc) {
           if (this.contextFrame(m)) return
           this.onInputFrame(m)
           this.translator.handle(m)
         }
       },
-      onControlRequest: (r) => this.onControlRequest(proc, r),
-      onControlCancel: (id) => this.onControlCancel(id),
+      onControlRequest: r => this.onControlRequest(proc, r),
+      onControlCancel: id => this.onControlCancel(id),
       onExit: (code, tail) => this.onExit(proc, code, tail),
     })
     try {
       // 输入建议、子智能体进度摘要、每个后台任务单独停止
-      const init = await proc.request('initialize', { promptSuggestions: true, agentProgressSummaries: true, perTaskStopAffordance: true }, 30_000)
+      const init = await proc.request(
+        'initialize',
+        { promptSuggestions: true, agentProgressSummaries: true, perTaskStopAffordance: true },
+        30_000,
+      )
       const commands = Array.isArray(init.commands) ? init.commands.map(v => str(obj(v).name)) : []
-      this.ctx.emit({type:'commands',commands:Array.isArray(init.commands)?init.commands.flatMap(v=>{const c=obj(v);return typeof c.name==='string'?[{name:c.name,description:str(c.description),source:'engine' as const,...(typeof c.builtin==='boolean'?{builtin:c.builtin}:{})}]:[]}):[]})
+      this.ctx.emit({
+        type: 'commands',
+        commands: Array.isArray(init.commands)
+          ? init.commands.flatMap(v => {
+              const c = obj(v)
+              return typeof c.name === 'string'
+                ? [
+                    {
+                      name: c.name,
+                      description: str(c.description),
+                      source: 'engine' as const,
+                      ...(typeof c.builtin === 'boolean' ? { builtin: c.builtin } : {}),
+                    },
+                  ]
+                : []
+            })
+          : [],
+      })
       this.setFlags({ contextAvailable: commands.includes('context'), compactAvailable: commands.includes('compact') })
-      if (typeof init.fast_mode_state === 'string') this.onFastState(init.fast_mode_state, str(init.fast_mode_disabled_reason))
+      if (typeof init.fast_mode_state === 'string')
+        this.onFastState(init.fast_mode_state, str(init.fast_mode_disabled_reason))
     } catch (err) {
       if (!proc.alive) throw new StartupError(proc.stderrTail || (err as Error).message)
       // 进程还在但没回应 initialize：继续用，真有问题会在发消息时暴露
@@ -319,7 +382,8 @@ export class ClaudeSession implements EngineSession {
     if (rec.pendingRewind) this.ctx.clearPendingRewind?.()
     this.seedRuns()
     // Ultracode / Fast 不是命令行参数，启动后用 flag settings 打开，再确认是否生效
-    if (rec.ultracode) await proc.request('apply_flag_settings', { settings: { ultracode: true } }).catch(() => undefined)
+    if (rec.ultracode)
+      await proc.request('apply_flag_settings', { settings: { ultracode: true } }).catch(() => undefined)
     if (rec.fast) await this.applyFast(proc, true)
     await this.applyThinking(proc, rec.thinkingSummaries)
     await this.syncSettings(proc)
@@ -345,7 +409,9 @@ export class ClaudeSession implements EngineSession {
 
   /** 显示思考摘要：summarized / omitted */
   private async applyThinking(proc: ClaudeProcess, on: boolean): Promise<void> {
-    await proc.request('set_max_thinking_tokens', { thinking_display: on ? 'summarized' : 'omitted' }).catch(() => undefined)
+    await proc
+      .request('set_max_thinking_tokens', { thinking_display: on ? 'summarized' : 'omitted' })
+      .catch(() => undefined)
   }
 
   /** 问 CLI 实际生效的设置（get_settings），同步 Ultracode 的可用性和开关 */
@@ -442,7 +508,8 @@ export class ClaudeSession implements EngineSession {
         response = { behavior: 'allow', updatedInput: { ...a.input, answers: decision.answers }, toolUseID }
         break
       case 'deny': {
-        const fallback = a.toolName === 'ExitPlanMode' ? '用户希望继续完善计划，先不要开始执行。' : '用户拒绝了这次操作。'
+        const fallback =
+          a.toolName === 'ExitPlanMode' ? '用户希望继续完善计划，先不要开始执行。' : '用户拒绝了这次操作。'
         response = { behavior: 'deny', message: decision.message || fallback, toolUseID }
         if (a.toolUseId) this.translator.markDeclined(a.toolUseId)
         break
@@ -454,9 +521,9 @@ export class ClaudeSession implements EngineSession {
 
   private waitTurnEnd(timeoutMs: number): Promise<boolean> {
     if (!this.translator.activeTurn) return Promise.resolve(true)
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       const timer = setTimeout(() => {
-        this.turnWaiters = this.turnWaiters.filter((w) => w !== done)
+        this.turnWaiters = this.turnWaiters.filter(w => w !== done)
         resolve(false)
       }, timeoutMs)
       const done = (): void => {
@@ -476,14 +543,20 @@ export class ClaudeSession implements EngineSession {
       return
     }
     try {
-      const receipt = await proc.request('interrupt', this.capabilities.has('interrupt_cancel_queued_v1') ? { cancel_queued: true } : {}, 5_000)
-      if (Array.isArray(receipt.cancelled)) for (const id of receipt.cancelled) {
-        if (typeof id === 'string' && this.guidance.delete(id)) this.ctx.emit({ type: 'input_ack', id, state: 'cancelled' })
-      }
+      const receipt = await proc.request(
+        'interrupt',
+        this.capabilities.has('interrupt_cancel_queued_v1') ? { cancel_queued: true } : {},
+        5_000,
+      )
+      if (Array.isArray(receipt.cancelled))
+        for (const id of receipt.cancelled) {
+          if (typeof id === 'string' && this.guidance.delete(id))
+            this.ctx.emit({ type: 'input_ack', id, state: 'cancelled' })
+        }
     } catch {
       // 没回应就走下面的强制结束
     }
-    if (await this.waitTurnEnd(5_000) && this.guidance.size === 0) return
+    if ((await this.waitTurnEnd(5_000)) && this.guidance.size === 0) return
     // 5 秒还没结束：强制结束进程，下次发消息时恢复会话
     this.killing = true
     proc.kill()
@@ -498,7 +571,8 @@ export class ClaudeSession implements EngineSession {
     try {
       if ('model' in patch) await proc.request('set_model', { model: patch.model ?? 'default' })
       if (patch.effort) await proc.request('apply_flag_settings', { settings: { effortLevel: patch.effort } })
-      if (patch.permissionMode) await proc.request('set_permission_mode', { mode: TO_CLAUDE_MODE[patch.permissionMode] })
+      if (patch.permissionMode)
+        await proc.request('set_permission_mode', { mode: TO_CLAUDE_MODE[patch.permissionMode] })
       if (patch.ultracode !== undefined) {
         await proc.request('apply_flag_settings', { settings: { ultracode: patch.ultracode } })
       }
@@ -513,7 +587,8 @@ export class ClaudeSession implements EngineSession {
   }
 
   async steer(text: string, userItemId: string, attachments?: ImageAttachment[]): Promise<void> {
-    if (!this.flags.steerAvailable || !this.proc?.alive || !this.translator.activeTurn) throw new Error('当前 Claude 进程尚未通过引导验证')
+    if (!this.flags.steerAvailable || !this.proc?.alive || !this.translator.activeTurn)
+      throw new Error('当前 Claude 进程尚未通过引导验证')
     if (this.guidance.has(userItemId)) return
     this.guidance.set(userItemId, { text })
     // 同一存活进程追加 UUID 输入，不调用 startTurn 清掉当前流式块。
@@ -522,9 +597,16 @@ export class ClaudeSession implements EngineSession {
 
   private onInputFrame(msg: Msg): void {
     if (msg.type === 'system' && msg.subtype === 'init') {
-      this.capabilities = new Set(Array.isArray(msg.capabilities) ? msg.capabilities.filter((x): x is string => typeof x === 'string') : [])
-      this.setFlags({ steerAvailable: this.deps.steeringValidated === true &&
-        ['msg_lifecycle_v1', 'interrupt_receipt_v1', 'interrupt_cancel_queued_v1'].every((c) => this.capabilities.has(c)) })
+      this.capabilities = new Set(
+        Array.isArray(msg.capabilities) ? msg.capabilities.filter((x): x is string => typeof x === 'string') : [],
+      )
+      this.setFlags({
+        steerAvailable:
+          this.deps.steeringValidated === true &&
+          ['msg_lifecycle_v1', 'interrupt_receipt_v1', 'interrupt_cancel_queued_v1'].every(c =>
+            this.capabilities.has(c),
+          ),
+      })
     }
     if (msg.type === 'command_lifecycle') {
       const id = str(msg.command_uuid)
@@ -566,7 +648,14 @@ export class ClaudeSession implements EngineSession {
     this.closed = true
     const starting = this.starting
     if (starting) await starting.catch(() => null)
-    try { await this.proc?.close() }
-    finally { if (this.retrySettingsFile) { rmSync(this.retrySettingsFile, { force: true }); this.retrySettingsFile = null };this.deps.extensions?.dispose?.() }
+    try {
+      await this.proc?.close()
+    } finally {
+      if (this.retrySettingsFile) {
+        rmSync(this.retrySettingsFile, { force: true })
+        this.retrySettingsFile = null
+      }
+      this.deps.extensions?.dispose?.()
+    }
   }
 }

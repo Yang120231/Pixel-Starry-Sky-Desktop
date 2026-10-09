@@ -149,7 +149,6 @@ export function PreviewViewport() {
           </div>
         </div>
       </div>
-
     </div>
   )
 }

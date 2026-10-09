@@ -17,7 +17,10 @@ describe('billing labels', () => {
     expect(formatCost(0.17)).toBe('≈ $0.17')
     expect(formatTotalCost({ costUsd: 0.0034, costKnown: 1, costActual: 1, records: 1 })).toBe('$0.0034')
     expect(formatTotalCost({ costUsd: 0.0034, costKnown: 1, costActual: 1, records: 2 })).toBe('≥ $0.0034')
-    const result = replyStatParts({ durationMs: 1, models: { model: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, costUsd: null, costSource: 'unavailable' } } })
+    const result = replyStatParts({
+      durationMs: 1,
+      models: { model: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, costUsd: null, costSource: 'unavailable' } },
+    })
     expect(result.parts.find(p => p.key === 'cost')).toMatchObject({ text: '—' })
   })
 })

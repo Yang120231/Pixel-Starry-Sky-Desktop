@@ -17,9 +17,21 @@ export interface ChannelsState {
   newFrom: Record<string, number | null>
 }
 
-let state: ChannelsState = { channels, members: channelMembers, messages: channelMessages, selectedId: null, replyTo: {}, newFrom: {} }
+let state: ChannelsState = {
+  channels,
+  members: channelMembers,
+  messages: channelMessages,
+  selectedId: null,
+  replyTo: {},
+  newFrom: {},
+}
 const listeners = new Set<() => void>()
-const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener) } }
+const subscribe = (listener: () => void) => {
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+  }
+}
 function set(next: Partial<ChannelsState>): void {
   state = { ...state, ...next }
   for (const listener of listeners) listener()
@@ -41,7 +53,8 @@ export function selectedChannel(s: ChannelsState): Channel | null {
   return s.channels.find(c => c.id === s.selectedId) ?? s.channels[0] ?? null
 }
 
-export const selfMember = (s: ChannelsState): ChannelMember | null => s.members.find(m => m.kind === 'human' && m.you) ?? null
+export const selfMember = (s: ChannelsState): ChannelMember | null =>
+  s.members.find(m => m.kind === 'human' && m.you) ?? null
 
 export const channelActions = {
   /** 进入频道：记下「新消息」位置并标为已读 */
@@ -49,7 +62,8 @@ export const channelActions = {
     const channel = state.channels.find(c => c.id === id)
     if (!channel) return
     if (state.selectedId === id && channel.unread === 0 && !channel.mentioned) return
-    const newFrom = channel.unread > 0 ? firstUnreadAt(state.messages[id] ?? [], channel.unread, selfMember(state)?.id ?? null) : null
+    const newFrom =
+      channel.unread > 0 ? firstUnreadAt(state.messages[id] ?? [], channel.unread, selfMember(state)?.id ?? null) : null
     set({ selectedId: id, channels: markRead(state.channels, id), newFrom: { ...state.newFrom, [id]: newFrom } })
   },
   setReplyTo(channelId: string, messageId: string | null): void {
@@ -63,7 +77,15 @@ export const channelActions = {
     const channel = state.channels.find(c => c.id === channelId)
     if (!body || !self || !channel) return null
     const members = state.members.filter(m => channel.memberIds.includes(m.id))
-    const message = createMessage({ id: `local-${crypto.randomUUID()}`, channelId, authorId: self.id, text: body, replyToId: state.replyTo[channelId] ?? null, members, now: Date.now() })
+    const message = createMessage({
+      id: `local-${crypto.randomUUID()}`,
+      channelId,
+      authorId: self.id,
+      text: body,
+      replyToId: state.replyTo[channelId] ?? null,
+      members,
+      now: Date.now(),
+    })
     set({ messages: appendMessage(state.messages, message), replyTo: { ...state.replyTo, [channelId]: null } })
     return message
   },

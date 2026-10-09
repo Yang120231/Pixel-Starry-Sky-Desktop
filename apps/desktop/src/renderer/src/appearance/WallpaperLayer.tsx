@@ -55,7 +55,13 @@ export function WallpaperLayer() {
           style={mediaStyle}
         />
       ) : (
-        <img key={wp.url} src={wp.url} alt="" className="absolute inset-0 h-full w-full object-cover" style={mediaStyle} />
+        <img
+          key={wp.url}
+          src={wp.url}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+          style={mediaStyle}
+        />
       )}
       <div className="absolute inset-0 bg-wall-tint" style={{ opacity: tintOpacity }} />
     </div>

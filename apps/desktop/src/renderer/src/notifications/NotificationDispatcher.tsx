@@ -9,14 +9,26 @@ import { createDeliveryState, decide, notificationFor, type NotificationIntent }
 
 const clip = (text: string, max: number): string => (text.length > max ? `${text.slice(0, max - 1)}…` : text)
 
-function payload(intent: NotificationIntent, summary: boolean, count: number): { title: string; body: string; sessionId: string | null } {
-  if (summary) return { title: tr('notifications.title'), body: tr('notifications.body.summary', { count }), sessionId: null }
+function payload(
+  intent: NotificationIntent,
+  summary: boolean,
+  count: number,
+): { title: string; body: string; sessionId: string | null } {
+  if (summary)
+    return { title: tr('notifications.title'), body: tr('notifications.body.summary', { count }), sessionId: null }
   const record = getEngineState().sessions.find(s => s.record.id === intent.sessionId)?.record
   const title = clip(record?.title || tr('notifications.title'), 120)
   const detail = intent.detail ? clip(translateMessage(intent.detail).replace(/\s+/g, ' ').trim(), 120) : ''
-  const body = intent.kind === 'completed' ? tr('notifications.body.completed')
-    : intent.kind === 'failed' ? (detail ? tr('notifications.body.failedWith', { error: detail }) : tr('notifications.failed.title'))
-    : detail ? tr('notifications.body.waitingWith', { detail }) : tr('notifications.waiting.title')
+  const body =
+    intent.kind === 'completed'
+      ? tr('notifications.body.completed')
+      : intent.kind === 'failed'
+        ? detail
+          ? tr('notifications.body.failedWith', { error: detail })
+          : tr('notifications.failed.title')
+        : detail
+          ? tr('notifications.body.waitingWith', { detail })
+          : tr('notifications.waiting.title')
   return { title, body: clip(body, 300), sessionId: intent.sessionId }
 }
 
@@ -29,16 +41,30 @@ export function NotificationDispatcher() {
       const intent = notificationFor(event)
       if (!intent) return
       const prefs = getNotificationPrefs()
-      const decision = decide(intent, { prefs, focused: document.hasFocus(), viewing: isViewingSession(intent.sessionId), now: Date.now() }, state)
+      const decision = decide(
+        intent,
+        { prefs, focused: document.hasFocus(), viewing: isViewingSession(intent.sessionId), now: Date.now() },
+        state,
+      )
       if (!decision.show) return
       const content = payload(intent, decision.summary, state.recent.length)
-      void bridge.notifications.show({ id: decision.summary ? `summary-${Date.now()}` : intent.dedupeKey, ...content, sound: prefs.sound, attention: intent.kind === 'waiting' }).catch(() => {})
+      void bridge.notifications
+        .show({
+          id: decision.summary ? `summary-${Date.now()}` : intent.dedupeKey,
+          ...content,
+          sound: prefs.sound,
+          attention: intent.kind === 'waiting',
+        })
+        .catch(() => {})
     })
     // 点击通知：主进程已经把窗口带到前台，这里打开对应会话（会自动切换机器、切回工作台）
     const offClicks = bridge.notifications.onClick(({ sessionId }) => {
       if (sessionId) window.dispatchEvent(new CustomEvent(OPEN_SESSION_EVENT, { detail: { sessionId } }))
     })
-    return () => { offEvents(); offClicks() }
+    return () => {
+      offEvents()
+      offClicks()
+    }
   }, [])
   return null
 }

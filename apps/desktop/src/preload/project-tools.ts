@@ -2,36 +2,107 @@ import type { SessionRecord, Item } from '@pixelsky/protocol'
 import type { WorkspaceRef } from './workspace'
 
 export interface ManualTask {
-  id: string; projectId: string; title: string; note: string
+  id: string
+  projectId: string
+  title: string
+  note: string
   status: 'pending' | 'in_progress' | 'completed'
   priority: 'low' | 'normal' | 'high'
-  due: string; tags: string[]; order: number; createdAt: number; updatedAt: number
+  due: string
+  tags: string[]
+  order: number
+  createdAt: number
+  updatedAt: number
 }
-export interface AiPlan { sessionId: string; title: string; item: Extract<Item, { kind: 'todo' }> }
-export interface TaskState { tasks: ManualTask[]; plans: AiPlan[] }
+export interface AiPlan {
+  sessionId: string
+  title: string
+  item: Extract<Item, { kind: 'todo' }>
+}
+export interface TaskState {
+  tasks: ManualTask[]
+  plans: AiPlan[]
+}
 export interface ServiceDefinition {
-  id: string; projectId: string; workspacePath: string; name: string; command: string; cwd: string
-  port: number | null; healthUrl: string | null; envNames: string[]; autoStart: boolean
+  id: string
+  projectId: string
+  workspacePath: string
+  name: string
+  command: string
+  cwd: string
+  port: number | null
+  healthUrl: string | null
+  envNames: string[]
+  autoStart: boolean
   status: 'stopped' | 'starting' | 'running' | 'stopping' | 'failed'
-  pid: number | null; output: string; error: string | null; exitCode: number | null; updatedAt: number
+  pid: number | null
+  output: string
+  error: string | null
+  exitCode: number | null
+  updatedAt: number
   health: 'none' | 'checking' | 'healthy' | 'unhealthy'
 }
-export interface ServiceInput { id?: string; name: string; command: string; cwd?: string; port?: number | null; healthUrl?: string | null; envNames?: string[]; autoStart?: boolean }
+export interface ServiceInput {
+  id?: string
+  name: string
+  command: string
+  cwd?: string
+  port?: number | null
+  healthUrl?: string | null
+  envNames?: string[]
+  autoStart?: boolean
+}
 export interface ToolStatus {
-  name: string; version: string | null; path: string | null; expected: string | null
-  status: 'ready' | 'missing' | 'error' | 'mismatch' | 'unknown'; checkedAt: number
+  name: string
+  version: string | null
+  path: string | null
+  expected: string | null
+  status: 'ready' | 'missing' | 'error' | 'mismatch' | 'unknown'
+  checkedAt: number
 }
 export interface EnvironmentState {
-  projectId: string; projectPath: string; gitRoot: string | null; branch: string | null; commit: string | null
-  dirty: boolean; tools: ToolStatus[]; services: ServiceDefinition[]; checkedAt: number; scripts: Record<string, string>
+  projectId: string
+  projectPath: string
+  gitRoot: string | null
+  branch: string | null
+  commit: string | null
+  dirty: boolean
+  tools: ToolStatus[]
+  services: ServiceDefinition[]
+  checkedAt: number
+  scripts: Record<string, string>
 }
 export interface ProjectCopy {
-  id: string; projectId: string; name: string; path: string; branch: string; baseCommit: string; baseBranch: string
-  createdAt: number; updatedAt: number; dirty: boolean; changedCount: number; ahead: number; behind: number
-  sessions: { id: string; title: string; state: string }[]; error: string | null
+  id: string
+  projectId: string
+  name: string
+  path: string
+  branch: string
+  baseCommit: string
+  baseBranch: string
+  createdAt: number
+  updatedAt: number
+  dirty: boolean
+  changedCount: number
+  ahead: number
+  behind: number
+  sessions: { id: string; title: string; state: string }[]
+  error: string | null
 }
-export interface CopyInput { name: string; branch: string; existingBranch: boolean; base: string; directory?: string }
-export interface CopyPreview { input: CopyInput; path: string; commit: string; branch: string; root: string }
+export interface CopyInput {
+  name: string
+  branch: string
+  existingBranch: boolean
+  base: string
+  directory?: string
+}
+export interface CopyPreview {
+  input: CopyInput
+  path: string
+  commit: string
+  branch: string
+  root: string
+}
 // ---------------------------------------------------------------------------
 // Git 面板（docs/ui/git-panel.md）
 // ---------------------------------------------------------------------------
@@ -75,13 +146,59 @@ export interface GitStatus {
   /** 在这个工作区运行中的会话数 */
   busySessions: number
 }
-export interface GitDiff { path: string; original: string | null; modified: string | null; binary: boolean; tooLarge: boolean }
-export interface GitBranch { name: string; remote: boolean; upstream: string | null; current: boolean; /** 被副本（worktree）占用时的目录 */ worktree: string | null; committedAt: number }
-export type GitFailureKind = 'diverged' | 'rejected' | 'conflict' | 'auth' | 'network' | 'timeout' | 'locked' | 'hook' | 'dirty'
-  | 'noUpstream' | 'noRemote' | 'identity' | 'nothing' | 'worktree' | 'busy' | 'missing' | 'notRepo' | 'invalid' | 'unknown'
+export interface GitDiff {
+  path: string
+  original: string | null
+  modified: string | null
+  binary: boolean
+  tooLarge: boolean
+}
+export interface GitBranch {
+  name: string
+  remote: boolean
+  upstream: string | null
+  current: boolean
+  /** 被副本（worktree）占用时的目录 */ worktree: string | null
+  committedAt: number
+}
+export type GitFailureKind =
+  | 'diverged'
+  | 'rejected'
+  | 'conflict'
+  | 'auth'
+  | 'network'
+  | 'timeout'
+  | 'locked'
+  | 'hook'
+  | 'dirty'
+  | 'noUpstream'
+  | 'noRemote'
+  | 'identity'
+  | 'nothing'
+  | 'worktree'
+  | 'busy'
+  | 'missing'
+  | 'notRepo'
+  | 'invalid'
+  | 'unknown'
 export type GitRemedy = 'retry' | 'pullRebase' | 'pullStash' | 'publish' | 'abort' | 'terminal'
-export type GitAction = 'stage' | 'unstage' | 'discard' | 'commit' | 'pull' | 'push' | 'fetch' | 'switch' | 'create' | 'operation'
-export interface GitFailure { kind: GitFailureKind; action: GitAction; /** git 的原始输出末尾（最多 4000 字） */ detail: string; remedies: GitRemedy[] }
+export type GitAction =
+  | 'stage'
+  | 'unstage'
+  | 'discard'
+  | 'commit'
+  | 'pull'
+  | 'push'
+  | 'fetch'
+  | 'switch'
+  | 'create'
+  | 'operation'
+export interface GitFailure {
+  kind: GitFailureKind
+  action: GitAction
+  /** git 的原始输出末尾（最多 4000 字） */ detail: string
+  remedies: GitRemedy[]
+}
 export type GitResult = { ok: true; status: GitStatus } | { ok: false; failure: GitFailure; status: GitStatus | null }
 export type GitPaths = string[] | 'all'
 export type GitPullMode = 'ff-only' | 'rebase' | 'stash'

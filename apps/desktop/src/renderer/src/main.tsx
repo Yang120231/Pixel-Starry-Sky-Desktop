@@ -19,14 +19,22 @@ document.documentElement.dataset.platform = window.pixelsky?.platform ?? 'web'
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <I18nProvider>
-    <ThemeProvider>
-      <WallpaperLayer />
-      <ComingSoonProvider>
-        <SettingsProvider>
-          <SearchProvider><SessionActionsProvider><TerminalProvider><CommandPaletteProvider><App /></CommandPaletteProvider></TerminalProvider></SessionActionsProvider></SearchProvider>
-        </SettingsProvider>
-      </ComingSoonProvider>
-    </ThemeProvider>
+      <ThemeProvider>
+        <WallpaperLayer />
+        <ComingSoonProvider>
+          <SettingsProvider>
+            <SearchProvider>
+              <SessionActionsProvider>
+                <TerminalProvider>
+                  <CommandPaletteProvider>
+                    <App />
+                  </CommandPaletteProvider>
+                </TerminalProvider>
+              </SessionActionsProvider>
+            </SearchProvider>
+          </SettingsProvider>
+        </ComingSoonProvider>
+      </ThemeProvider>
     </I18nProvider>
   </StrictMode>,
 )

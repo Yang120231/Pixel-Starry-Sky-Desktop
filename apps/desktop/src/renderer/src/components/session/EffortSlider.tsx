@@ -75,18 +75,18 @@ export function EffortSlider({
         data-dragging={drag !== null || undefined}
         role="slider"
         tabIndex={disabled ? -1 : 0}
-        aria-label={tr("session.Composer.message119")}
+        aria-label={tr('session.Composer.message119')}
         aria-valuemin={0}
         aria-valuemax={count - 1}
         aria-valuenow={shown}
         aria-valuetext={EFFORT_LABEL[efforts[shown]] ?? ''}
         aria-disabled={disabled}
-        onPointerDown={(e) => {
+        onPointerDown={e => {
           if (disabled || e.button !== 0 || !rail.current) return
           e.currentTarget.setPointerCapture(e.pointerId)
           setDrag(stopFor(e))
         }}
-        onPointerMove={(e) => {
+        onPointerMove={e => {
           if (drag !== null) setDrag(stopFor(e))
         }}
         onPointerUp={() => {
@@ -108,7 +108,12 @@ export function EffortSlider({
           <div className="effort-track" />
           <div className="effort-fill" style={{ width: `calc(${pct(shown)}% + 30px)` }} />
           {efforts.map((e, i) => (
-            <span key={e} className="effort-stop" data-passed={i <= shown || undefined} style={{ left: `${pct(i)}%` }} />
+            <span
+              key={e}
+              className="effort-stop"
+              data-passed={i <= shown || undefined}
+              style={{ left: `${pct(i)}%` }}
+            />
           ))}
           <span className="effort-thumb" style={{ left: `${pct(shown)}%` }} />
         </div>

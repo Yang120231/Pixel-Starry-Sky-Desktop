@@ -10,7 +10,15 @@ import { isDemo, projects } from '@/mock/data'
 import { useState } from 'react'
 
 /** 改动文件卡片；data 不传时用演示数据 */
-export function ChangedFilesCard({ className, data = changedFiles, target }: { className?: string; data?: ChangedFiles | null; target?: WorkspaceRef }) {
+export function ChangedFilesCard({
+  className,
+  data = changedFiles,
+  target,
+}: {
+  className?: string
+  data?: ChangedFiles | null
+  target?: WorkspaceRef
+}) {
   useI18n()
   const comingSoon = useComingSoon()
   const [error, setError] = useState('')
@@ -22,17 +30,35 @@ export function ChangedFilesCard({ className, data = changedFiles, target }: { c
           <FileDiff size={18} strokeWidth={1.5} />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="text-prose leading-snug font-semibold text-fg">{tr("session.ChangedFilesCard.message103")} {data.files.length}{tr("session.ChangedFilesCard.message104")} </div>
+          <div className="text-prose leading-snug font-semibold text-fg">
+            {tr('session.ChangedFilesCard.message103')} {data.files.length}
+            {tr('session.ChangedFilesCard.message104')}{' '}
+          </div>
           <DiffStat added={data.added} removed={data.removed} className="text-meta" />
         </div>
-        <Button variant="ghost" icon={Undo2} onClick={() => comingSoon(tr("session.ChangedFilesCard.message105"))}>{tr("session.ChangedFilesCard.message105")} </Button>
-        <Button variant="outline" pill onClick={() => comingSoon(tr("session.ChangedFilesCard.message106"))}>{tr("session.ChangedFilesCard.message106")} </Button>
+        <Button variant="ghost" icon={Undo2} onClick={() => comingSoon(tr('session.ChangedFilesCard.message105'))}>
+          {tr('session.ChangedFilesCard.message105')}{' '}
+        </Button>
+        <Button variant="outline" pill onClick={() => comingSoon(tr('session.ChangedFilesCard.message106'))}>
+          {tr('session.ChangedFilesCard.message106')}{' '}
+        </Button>
       </div>
       <ul className="px-2 pb-2">
-        {data.files.map((f) => (
-          <li key={f.dir + f.name} className="flex h-[34px] items-center gap-3 rounded-md px-2 text-list hover:bg-hover">
-            <button type="button" className="min-w-0 flex-1 truncate text-left hover:underline" title={tr("session.ChangedFilesCard.message107")}
-              disabled={!target && !isDemo} onClick={() => { const ref = target ?? (isDemo && projects[0] ? { projectId: projects[0].id } : null); if (ref) void openFile(ref, f.dir + f.name, undefined, 1, f.newText).catch(e => setError(e.message)) }}>
+        {data.files.map(f => (
+          <li
+            key={f.dir + f.name}
+            className="flex h-[34px] items-center gap-3 rounded-md px-2 text-list hover:bg-hover"
+          >
+            <button
+              type="button"
+              className="min-w-0 flex-1 truncate text-left hover:underline"
+              title={tr('session.ChangedFilesCard.message107')}
+              disabled={!target && !isDemo}
+              onClick={() => {
+                const ref = target ?? (isDemo && projects[0] ? { projectId: projects[0].id } : null)
+                if (ref) void openFile(ref, f.dir + f.name, undefined, 1, f.newText).catch(e => setError(e.message))
+              }}
+            >
               <span className="text-fg-muted">{f.dir}</span>
               <span className="text-fg">{f.name}</span>
             </button>
@@ -40,7 +66,11 @@ export function ChangedFilesCard({ className, data = changedFiles, target }: { c
           </li>
         ))}
       </ul>
-      {error && <p role="status" className="px-4 pb-3 text-meta text-danger">{translateMessage(error)}</p>}
+      {error && (
+        <p role="status" className="px-4 pb-3 text-meta text-danger">
+          {translateMessage(error)}
+        </p>
+      )}
     </section>
   )
 }

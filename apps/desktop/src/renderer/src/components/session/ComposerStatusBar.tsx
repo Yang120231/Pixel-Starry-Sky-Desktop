@@ -10,12 +10,20 @@ import { openMachineManager, openWorkspacePicker, useMachines } from '@/machines
  */
 export function ComposerStatusBar({ live }: { live?: StatusBarController }) {
   const { text } = useI18n()
-  const machines = useMachines(), machine = machines.machines.find(m => m.id === machines.currentId)
+  const machines = useMachines(),
+    machine = machines.machines.find(m => m.id === machines.currentId)
   return (
-    <div data-composer-workspace className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 px-3 pb-2 text-meta text-fg-faint">
-      <button type="button" onClick={openMachineManager} className="inline-flex shrink-0 items-center gap-1.5 hover:text-fg">
+    <div
+      data-composer-workspace
+      className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 px-3 pb-2 text-meta text-fg-faint"
+    >
+      <button
+        type="button"
+        onClick={openMachineManager}
+        className="inline-flex shrink-0 items-center gap-1.5 hover:text-fg"
+      >
         <Monitor size={13} strokeWidth={1.5} />
-        {live ? machine?.id === 'local' ? text('本机') : machine?.name : text(composerStatus.machine)}
+        {live ? (machine?.id === 'local' ? text('本机') : machine?.name) : text(composerStatus.machine)}
       </button>
       {live ? (
         <ProjectPicker live={live} />
@@ -35,7 +43,17 @@ export function ComposerStatusBar({ live }: { live?: StatusBarController }) {
 function ProjectPicker({ live }: { live: StatusBarController }) {
   const { text } = useI18n()
   const { project } = live
-  return <button type="button" onClick={openWorkspacePicker} title={project?.path} aria-label={text('切换工作区')} className="inline-flex min-w-0 items-center gap-1 rounded px-1 hover:bg-hover hover:text-fg">
-    <Folder size={13} className="shrink-0" /><span className="truncate">{project?.name ?? text('选择项目文件夹')}</span><ChevronDown size={12} className="shrink-0" />
-  </button>
+  return (
+    <button
+      type="button"
+      onClick={openWorkspacePicker}
+      title={project?.path}
+      aria-label={text('切换工作区')}
+      className="inline-flex min-w-0 items-center gap-1 rounded px-1 hover:bg-hover hover:text-fg"
+    >
+      <Folder size={13} className="shrink-0" />
+      <span className="truncate">{project?.name ?? text('选择项目文件夹')}</span>
+      <ChevronDown size={12} className="shrink-0" />
+    </button>
+  )
 }

@@ -22,9 +22,23 @@ import { artifactMessages } from './artifactMessages'
 
 // 与 core.ts 的 allMessages 合并顺序一致
 const dictionaries: Record<string, Record<string, unknown>> = {
-  catalog, systemMessages, pluginMessages, sessionMessages, commandMessages, codexMessages, projectToolsMessages,
-  terminalMessages, sidebarMessages, projectMessages, workspaceMessages, machineMessages, machineErrors,
-  channelMessages, notificationMessages, gitMessages, artifactMessages,
+  catalog,
+  systemMessages,
+  pluginMessages,
+  sessionMessages,
+  commandMessages,
+  codexMessages,
+  projectToolsMessages,
+  terminalMessages,
+  sidebarMessages,
+  projectMessages,
+  workspaceMessages,
+  machineMessages,
+  machineErrors,
+  channelMessages,
+  notificationMessages,
+  gitMessages,
+  artifactMessages,
 }
 
 /** 中英文值不同、需要保持现状的重复 key（当前为空；新增重复必须先说明原因）。 */
@@ -67,29 +81,65 @@ function extractStrings(code: string): Array<{ value: string; start: number }> {
     const start = i
     while (i < code.length) {
       const c = code[i]
-      if (c === '\\') { buf += code.slice(i, i + 2); i += 2; continue }
-      if (c === '`') { result.push({ value: buf, start }); i++; return }
-      if (c === '$' && code[i + 1] === '{') {
-        result.push({ value: buf, start }); i += 2; stack.push('tpl'); return
+      if (c === '\\') {
+        buf += code.slice(i, i + 2)
+        i += 2
+        continue
       }
-      buf += c; i++
+      if (c === '`') {
+        result.push({ value: buf, start })
+        i++
+        return
+      }
+      if (c === '$' && code[i + 1] === '{') {
+        result.push({ value: buf, start })
+        i += 2
+        stack.push('tpl')
+        return
+      }
+      buf += c
+      i++
     }
   }
   while (i < code.length) {
-    const c = code[i], next = code[i + 1]
-    if (c === '/' && next === '/') { while (i < code.length && code[i] !== '\n') i++; continue }
-    if (c === '/' && next === '*') { const end = code.indexOf('*/', i + 2); i = end < 0 ? code.length : end + 2; continue }
-    if (c === '\'' || c === '"') {
-      const start = i; let buf = ''; i++
-      while (i < code.length && code[i] !== c && code[i] !== '\n') {
-        if (code[i] === '\\') { buf += code.slice(i, i + 2); i += 2 } else buf += code[i++]
-      }
-      i++; result.push({ value: buf, start }); continue
+    const c = code[i],
+      next = code[i + 1]
+    if (c === '/' && next === '/') {
+      while (i < code.length && code[i] !== '\n') i++
+      continue
     }
-    if (c === '`') { i++; readTemplate(); continue }
-    if (c === '{') { stack.push('brace'); i++; continue }
+    if (c === '/' && next === '*') {
+      const end = code.indexOf('*/', i + 2)
+      i = end < 0 ? code.length : end + 2
+      continue
+    }
+    if (c === "'" || c === '"') {
+      const start = i
+      let buf = ''
+      i++
+      while (i < code.length && code[i] !== c && code[i] !== '\n') {
+        if (code[i] === '\\') {
+          buf += code.slice(i, i + 2)
+          i += 2
+        } else buf += code[i++]
+      }
+      i++
+      result.push({ value: buf, start })
+      continue
+    }
+    if (c === '`') {
+      i++
+      readTemplate()
+      continue
+    }
+    if (c === '{') {
+      stack.push('brace')
+      i++
+      continue
+    }
     if (c === '}') {
-      const top = stack.pop(); i++
+      const top = stack.pop()
+      i++
       if (top === 'tpl') readTemplate()
       continue
     }
@@ -104,7 +154,10 @@ describe('i18n 防回归', () => {
     for (const [name, dict] of Object.entries(dictionaries)) {
       for (const key of Object.keys(dict)) owners.set(key, [...(owners.get(key) ?? []), name])
     }
-    const duplicates = [...owners].filter(([, names]) => names.length > 1).map(([key]) => key).sort()
+    const duplicates = [...owners]
+      .filter(([, names]) => names.length > 1)
+      .map(([key]) => key)
+      .sort()
     expect(duplicates).toEqual([...ALLOWED_DUPLICATES].sort())
     expect(Object.keys(allMessages).length).toBe(owners.size)
   })
@@ -126,7 +179,8 @@ describe('i18n 防回归', () => {
   })
 
   it('写死的中文字面量不增加', () => {
-    let literals = 0, lookups = 0
+    let literals = 0,
+      lookups = 0
     for (const file of sourceFiles(srcRoot)) {
       const code = readFileSync(file, 'utf8')
       for (const { value, start } of extractStrings(code)) {
@@ -136,7 +190,12 @@ describe('i18n 防回归', () => {
       }
     }
     // 减少后请同步调低基线，避免回升
-    expect(literals, `写死的中文字面量 ${literals} 个，超过基线 ${HARDCODED_CJK_BASELINE}；请改用 tr()`).toBeLessThanOrEqual(HARDCODED_CJK_BASELINE)
-    expect(lookups, `text('中文') 调用 ${lookups} 个，超过基线 ${TEXT_LOOKUP_BASELINE}`).toBeLessThanOrEqual(TEXT_LOOKUP_BASELINE)
+    expect(
+      literals,
+      `写死的中文字面量 ${literals} 个，超过基线 ${HARDCODED_CJK_BASELINE}；请改用 tr()`,
+    ).toBeLessThanOrEqual(HARDCODED_CJK_BASELINE)
+    expect(lookups, `text('中文') 调用 ${lookups} 个，超过基线 ${TEXT_LOOKUP_BASELINE}`).toBeLessThanOrEqual(
+      TEXT_LOOKUP_BASELINE,
+    )
   })
 })

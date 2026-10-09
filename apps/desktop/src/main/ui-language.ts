@@ -6,7 +6,7 @@ import { translateMessage } from '../renderer/src/i18n/core'
 const languages = new WeakMap<BrowserWindow, Locale>()
 let lastLanguage: Locale = 'zh-CN'
 export function windowLocale(win?: BrowserWindow | null): Locale {
-  return win ? languages.get(win) ?? lastLanguage : lastLanguage
+  return win ? (languages.get(win) ?? lastLanguage) : lastLanguage
 }
 export function nativeText(win: BrowserWindow | null | undefined, value: string): string {
   return translateMessage(value, windowLocale(win))

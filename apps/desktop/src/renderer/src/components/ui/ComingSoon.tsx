@@ -16,7 +16,10 @@ export function ComingSoonProvider({ children }: { children: ReactNode }) {
     window.clearTimeout(timer.current)
     timer.current = window.setTimeout(() => setMessage(null), 1600)
   }, [])
-  const show = useCallback((label?: string) => toast(label ? tr("ui.ComingSoon.message412", { p0: label }) : tr("panel.RightPanel.message87")), [toast])
+  const show = useCallback(
+    (label?: string) => toast(label ? tr('ui.ComingSoon.message412', { p0: label }) : tr('panel.RightPanel.message87')),
+    [toast],
+  )
 
   return (
     <ComingSoonContext.Provider value={show}>

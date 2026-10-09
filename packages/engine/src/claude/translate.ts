@@ -89,7 +89,7 @@ const TASK_KIND: Record<string, string> = {
 const TASK_STATUS: Record<string, string> = { completed: '已完成', failed: '失败', stopped: '已停止' }
 
 export function taskKindLabel(kind: string): string {
-  const key = Object.keys(TASK_KIND).find((k) => kind === k || kind.startsWith(k))
+  const key = Object.keys(TASK_KIND).find(k => kind === k || kind.startsWith(k))
   return key ? TASK_KIND[key] : '后台任务'
 }
 
@@ -161,7 +161,7 @@ export class ClaudeTranslator {
     this.turnRequests.clear()
     this.turnStartedAt = Date.now()
     // 新的一轮：子智能体条只留还在跑的
-    const running = this.subagentList.filter((a) => a.status === 'running')
+    const running = this.subagentList.filter(a => a.status === 'running')
     if (running.length !== this.subagentList.length) {
       this.subagentList = running
       this.cb.emit({ type: 'subagents', subagents: [...running] })
@@ -178,8 +178,8 @@ export class ClaudeTranslator {
       this.bgTasks = []
       this.cb.emit({ type: 'tasks', tasks: [] })
     }
-    if (this.subagentList.some((a) => a.status === 'running')) {
-      this.subagentList = this.subagentList.map((a) => (a.status === 'running' ? { ...a, status: 'stopped' } : a))
+    if (this.subagentList.some(a => a.status === 'running')) {
+      this.subagentList = this.subagentList.map(a => (a.status === 'running' ? { ...a, status: 'stopped' } : a))
       this.cb.emit({ type: 'subagents', subagents: [...this.subagentList] })
     }
     if (this.runs.stopAll()) this.emitRuns()
@@ -188,8 +188,15 @@ export class ClaudeTranslator {
   }
 
   private setSubagent(id: string, patch: Partial<SubagentStatus>): void {
-    const i = this.subagentList.findIndex((a) => a.id === id)
-    const next: SubagentStatus = { id, label: '', status: 'running', message: null, ...(i >= 0 ? this.subagentList[i] : {}), ...patch }
+    const i = this.subagentList.findIndex(a => a.id === id)
+    const next: SubagentStatus = {
+      id,
+      label: '',
+      status: 'running',
+      message: null,
+      ...(i >= 0 ? this.subagentList[i] : {}),
+      ...patch,
+    }
     this.subagentList = i >= 0 ? this.subagentList.map((a, j) => (j === i ? next : a)) : [...this.subagentList, next]
     this.cb.emit({ type: 'subagents', subagents: [...this.subagentList] })
   }
@@ -216,7 +223,8 @@ export class ClaudeTranslator {
   handle(msg: Msg): void {
     this.context.handle(msg)
     this.requestCache.handle(msg)
-    if (!msg.parent_tool_use_id && msg.type === 'stream_event' && obj(msg.event).type === 'message_start') this.clearRetry()
+    if (!msg.parent_tool_use_id && msg.type === 'stream_event' && obj(msg.event).type === 'message_start')
+      this.clearRetry()
     if (!msg.parent_tool_use_id && msg.type === 'assistant' && !msg.error) this.clearRetry()
     if (msg.type === 'stream_event') {
       const ev = obj(msg.event)
@@ -243,7 +251,8 @@ export class ClaudeTranslator {
         this.onUser(msg)
         return
       case 'result':
-        if (typeof msg.fast_mode_state === 'string') this.cb.fastState(msg.fast_mode_state, str(msg.fast_mode_disabled_reason))
+        if (typeof msg.fast_mode_state === 'string')
+          this.cb.fastState(msg.fast_mode_state, str(msg.fast_mode_disabled_reason))
         this.onResult(msg)
         return
       case 'prompt_suggestion':
@@ -276,7 +285,10 @@ export class ClaudeTranslator {
         const item = this.subTools.get(id)
         if (!item) continue
         this.subTools.delete(id)
-        this.cb.emit({ type: 'item_completed', item: completeToolItem(item, block.content, block.is_error === true, msg.tool_use_result) })
+        this.cb.emit({
+          type: 'item_completed',
+          item: completeToolItem(item, block.content, block.is_error === true, msg.tool_use_result),
+        })
       }
     }
   }
@@ -295,7 +307,8 @@ export class ClaudeTranslator {
           background: msg.is_backgrounded === true || (kind !== 'local_agent' && msg.is_backgrounded !== false),
         }
         this.taskInfo.set(id, info)
-        if (kind === 'local_agent') this.setSubagent(id, { label: info.description || '子智能体', status: 'running', message: null })
+        if (kind === 'local_agent')
+          this.setSubagent(id, { label: info.description || '子智能体', status: 'running', message: null })
         break
       }
       case 'task_progress': {
@@ -307,7 +320,7 @@ export class ClaudeTranslator {
           if (message) this.setSubagent(id, { message })
         } else {
           const message = str(msg.summary) || str(msg.description) || null
-          this.bgTasks = this.bgTasks.map((t) => (t.id === id ? { ...t, message } : t))
+          this.bgTasks = this.bgTasks.map(t => (t.id === id ? { ...t, message } : t))
           this.cb.emit({ type: 'tasks', tasks: [...this.bgTasks] })
         }
         break
@@ -327,7 +340,10 @@ export class ClaudeTranslator {
         if (background && msg.skip_transcript !== true && msg.ambient !== true) {
           const kind = taskKindLabel(info?.kind ?? '')
           const summary = str(msg.summary)
-          this.notice(status === 'failed' ? 'warn' : 'info', kind + (TASK_STATUS[status] ?? '已结束') + (summary ? '：' + summary : ''))
+          this.notice(
+            status === 'failed' ? 'warn' : 'info',
+            kind + (TASK_STATUS[status] ?? '已结束') + (summary ? '：' + summary : ''),
+          )
         }
         break
       }
@@ -359,7 +375,13 @@ export class ClaudeTranslator {
         if (!this.turnId || msg.parent_tool_use_id) return
         {
           const retry = requestRetryState(msg, this.turnId)
-          const signature = JSON.stringify([retry.turnId, retry.attempt, retry.maxRetries, msg.retry_delay_ms, retry.reason])
+          const signature = JSON.stringify([
+            retry.turnId,
+            retry.attempt,
+            retry.maxRetries,
+            msg.retry_delay_ms,
+            retry.reason,
+          ])
           if (signature === this.retrySignature) return
           this.retrySignature = signature
           this.retry = retry
@@ -376,10 +398,10 @@ export class ClaudeTranslator {
         this.onTask(msg)
         return
       case 'background_tasks_changed': {
-        const prev = new Map(this.bgTasks.map((t) => [t.id, t]))
+        const prev = new Map(this.bgTasks.map(t => [t.id, t]))
         this.bgTasks = (Array.isArray(msg.tasks) ? (msg.tasks as Msg[]) : [])
-          .filter((t) => t.ambient !== true)
-          .map((t) => ({
+          .filter(t => t.ambient !== true)
+          .map(t => ({
             id: str(t.task_id),
             kind: str(t.task_type),
             description: str(t.description),
@@ -412,7 +434,8 @@ export class ClaudeTranslator {
         const delta = obj(ev.delta)
         const open = this.blocks.get(`${this.messageId}:${num(ev.index)}`)
         if (!open || open.done) return
-        const piece = delta.type === 'text_delta' ? str(delta.text) : delta.type === 'thinking_delta' ? str(delta.thinking) : ''
+        const piece =
+          delta.type === 'text_delta' ? str(delta.text) : delta.type === 'thinking_delta' ? str(delta.thinking) : ''
         if (!piece) return
         open.text += piece
         this.cb.emit({ type: 'item_delta', itemId: open.itemId, field: 'text', delta: piece })
@@ -520,19 +543,22 @@ export class ClaudeTranslator {
     this.cb.emit({ type: 'usage', usage: { ...this.usage } })
 
     const terminal = str(msg.terminal_reason)
-    const outcome: TurnOutcome =
-      terminal.startsWith('aborted')
-        ? 'interrupted'
-        : msg.subtype === 'success' && msg.is_error !== true
-          ? 'completed'
-          : 'failed'
+    const outcome: TurnOutcome = terminal.startsWith('aborted')
+      ? 'interrupted'
+      : msg.subtype === 'success' && msg.is_error !== true
+        ? 'completed'
+        : 'failed'
 
     // 收尾：流式中断时可能有没完成的块和工具调用，统一结束掉（持久化只保存完成的条目）
-    const leftover: ItemStatus = outcome === 'completed' ? 'completed' : outcome === 'interrupted' ? 'interrupted' : 'failed'
+    const leftover: ItemStatus =
+      outcome === 'completed' ? 'completed' : outcome === 'interrupted' ? 'interrupted' : 'failed'
     for (const b of this.blocks.values()) if (!b.done) this.finishBlock(b, b.text, leftover)
     this.blocks.clear()
     for (const item of this.tools.values()) {
-      this.cb.emit({ type: 'item_completed', item: completeToolItem(item, '', false, null, leftover === 'completed' ? 'interrupted' : leftover) })
+      this.cb.emit({
+        type: 'item_completed',
+        item: completeToolItem(item, '', false, null, leftover === 'completed' ? 'interrupted' : leftover),
+      })
     }
     this.tools.clear()
     this.declined.clear()
@@ -541,11 +567,16 @@ export class ClaudeTranslator {
     if (outcome === 'failed') {
       const errors = Array.isArray(msg.errors) ? (msg.errors as unknown[]).map(String).filter(Boolean) : []
       error = errors.join('\n') || str(msg.result) || terminal || '这一轮失败了'
-      if (this.retry?.attempt !== null && this.retry?.attempt !== undefined) error += `\n本次请求已重试 ${this.retry.attempt} 次${this.retry.maxRetries !== null && this.retry.attempt >= this.retry.maxRetries ? '，达到重试上限' : ''}。`
+      if (this.retry?.attempt !== null && this.retry?.attempt !== undefined)
+        error += `\n本次请求已重试 ${this.retry.attempt} 次${this.retry.maxRetries !== null && this.retry.attempt >= this.retry.maxRetries ? '，达到重试上限' : ''}。`
       this.notice('error', error)
     }
     const usage = this.turnUsage(msg)
-    this.cb.emit(usage ? { type: 'turn_completed', turnId, outcome, error, usage } : { type: 'turn_completed', turnId, outcome, error })
+    this.cb.emit(
+      usage
+        ? { type: 'turn_completed', turnId, outcome, error, usage }
+        : { type: 'turn_completed', turnId, outcome, error },
+    )
     this.cb.turnEnded(outcome)
   }
 
@@ -564,7 +595,12 @@ export class ClaudeTranslator {
       const prev = this.usageBase.get(model)
       this.usageBase.set(model, now)
       // 累计值变小：说明是新进程而基线没清零，这时整个当前值都算这一轮
-      const shrunk = !!prev && (now.input < prev.input || now.cacheRead < prev.cacheRead || now.cacheWrite < prev.cacheWrite || now.output < prev.output)
+      const shrunk =
+        !!prev &&
+        (now.input < prev.input ||
+          now.cacheRead < prev.cacheRead ||
+          now.cacheWrite < prev.cacheWrite ||
+          now.output < prev.output)
       const base = !prev || shrunk ? ZERO_COUNTERS : prev
       const d = {
         input: now.input - base.input,

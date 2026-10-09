@@ -21,7 +21,12 @@ interface SegmentedProps<T extends string> {
 export function Segmented<T extends string>({ label, options, value, onChange, disabled = false }: SegmentedProps<T>) {
   useI18n()
   return (
-    <div role="radiogroup" aria-label={label} aria-disabled={disabled || undefined} className={cn('inline-flex rounded-lg bg-subtle p-0.5', disabled && 'opacity-45')}>
+    <div
+      role="radiogroup"
+      aria-label={label}
+      aria-disabled={disabled || undefined}
+      className={cn('inline-flex rounded-lg bg-subtle p-0.5', disabled && 'opacity-45')}
+    >
       {options.map(({ value: v, label: text, icon: Icon }) => {
         const selected = v === value
         return (

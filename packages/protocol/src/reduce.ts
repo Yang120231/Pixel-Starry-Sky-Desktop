@@ -2,7 +2,12 @@
 // 纯函数：不修改传入的快照，返回新对象（React 靠引用变化判断要不要重画）。
 import type { EngineEvent, Item, ItemStatus, SessionFlags, SessionRecord, SessionSnapshot } from './types'
 
-export const EMPTY_FLAGS: SessionFlags = { ultracodeAvailable: null, fastAvailable: null, fastState: null, fastBlocked: null }
+export const EMPTY_FLAGS: SessionFlags = {
+  ultracodeAvailable: null,
+  fastAvailable: null,
+  fastState: null,
+  fastBlocked: null,
+}
 
 export function emptySnapshot(record: SessionRecord, items: Item[] = []): SessionSnapshot {
   return {
@@ -32,7 +37,7 @@ function settle(item: Item, status: ItemStatus): Item {
 }
 
 function upsert(items: Item[], item: Item): Item[] {
-  const i = items.findIndex((x) => x.id === item.id)
+  const i = items.findIndex(x => x.id === item.id)
   if (i < 0) return [...items, item]
   const next = items.slice()
   next[i] = item
@@ -51,7 +56,16 @@ export function reduce(s: SessionSnapshot, e: EngineEvent): SessionSnapshot {
     case 'status':
       return s.state === e.state ? s : { ...s, state: e.state }
     case 'record':
-      return { ...s, record: e.record, ...(s.context && (e.record.model !== s.record.model || e.record.engine !== s.record.engine || JSON.stringify(e.record.platform) !== JSON.stringify(s.record.platform)) ? { context: { ...s.context, stale: true, diagnosticStale: true } } : {}) }
+      return {
+        ...s,
+        record: e.record,
+        ...(s.context &&
+        (e.record.model !== s.record.model ||
+          e.record.engine !== s.record.engine ||
+          JSON.stringify(e.record.platform) !== JSON.stringify(s.record.platform))
+          ? { context: { ...s.context, stale: true, diagnosticStale: true } }
+          : {}),
+      }
     case 'turn_started':
       return { ...s, turnId: e.turnId, execution: e.execution ?? null, retry: null }
     case 'execution':
@@ -61,14 +75,14 @@ export function reduce(s: SessionSnapshot, e: EngineEvent): SessionSnapshot {
     case 'input_ack':
       return s
     case 'items_truncated': {
-      const i = s.items.findIndex((x) => x.id === e.fromItemId)
+      const i = s.items.findIndex(x => x.id === e.fromItemId)
       return i < 0 ? s : { ...s, items: s.items.slice(0, i) }
     }
     case 'item_started':
     case 'item_completed':
       return { ...s, items: upsert(s.items, e.item) }
     case 'item_delta': {
-      const i = s.items.findIndex((x) => x.id === e.itemId)
+      const i = s.items.findIndex(x => x.id === e.itemId)
       if (i < 0) return s
       const item = s.items[i]
       let next: Item
@@ -84,9 +98,9 @@ export function reduce(s: SessionSnapshot, e: EngineEvent): SessionSnapshot {
       return { ...s, items }
     }
     case 'approval_request':
-      return { ...s, pending: [...s.pending.filter((p) => p.requestId !== e.request.requestId), e.request] }
+      return { ...s, pending: [...s.pending.filter(p => p.requestId !== e.request.requestId), e.request] }
     case 'approval_resolved':
-      return { ...s, pending: s.pending.filter((p) => p.requestId !== e.requestId) }
+      return { ...s, pending: s.pending.filter(p => p.requestId !== e.requestId) }
     case 'usage':
       return { ...s, usage: e.usage }
     case 'flags':
@@ -100,7 +114,7 @@ export function reduce(s: SessionSnapshot, e: EngineEvent): SessionSnapshot {
     case 'suggestion':
       return s.suggestion === e.text ? s : { ...s, suggestion: e.text }
     case 'commands':
-      return {...s,commands:e.commands}
+      return { ...s, commands: e.commands }
     case 'turn_completed': {
       const status: ItemStatus =
         e.outcome === 'interrupted' ? 'interrupted' : e.outcome === 'failed' ? 'failed' : 'completed'
@@ -110,8 +124,10 @@ export function reduce(s: SessionSnapshot, e: EngineEvent): SessionSnapshot {
         retry: null,
         execution: null,
         pending: [],
-        items: s.items.some((x) => x.kind !== 'user' && x.kind !== 'notice' && x.kind !== 'turn_stats' && x.status === 'running')
-          ? s.items.map((x) => settle(x, status))
+        items: s.items.some(
+          x => x.kind !== 'user' && x.kind !== 'notice' && x.kind !== 'turn_stats' && x.status === 'running',
+        )
+          ? s.items.map(x => settle(x, status))
           : s.items,
       }
     }

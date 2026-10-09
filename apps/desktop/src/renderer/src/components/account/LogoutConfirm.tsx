@@ -14,12 +14,20 @@ export function LogoutConfirm({
 }) {
   useI18n()
   return (
-    <div role="alertdialog" aria-label={tr("account.LogoutConfirm.message47")} className={cn('flex flex-col gap-2', className)}>
-      <div className="text-ui font-medium text-fg">{tr("account.LogoutConfirm.message48")}</div>
-      <p className="text-meta text-fg-muted">{tr("account.LogoutConfirm.message49")}</p>
+    <div
+      role="alertdialog"
+      aria-label={tr('account.LogoutConfirm.message47')}
+      className={cn('flex flex-col gap-2', className)}
+    >
+      <div className="text-ui font-medium text-fg">{tr('account.LogoutConfirm.message48')}</div>
+      <p className="text-meta text-fg-muted">{tr('account.LogoutConfirm.message49')}</p>
       <div className="mt-1 flex justify-end gap-2">
-        <Button variant="outline" autoFocus onClick={onCancel}>{tr("account.AccountMenu.message31")} </Button>
-        <Button variant="primary" className="bg-danger!" onClick={onConfirm}>{tr("account.LogoutConfirm.message50")} </Button>
+        <Button variant="outline" autoFocus onClick={onCancel}>
+          {tr('account.AccountMenu.message31')}{' '}
+        </Button>
+        <Button variant="primary" className="bg-danger!" onClick={onConfirm}>
+          {tr('account.LogoutConfirm.message50')}{' '}
+        </Button>
       </div>
     </div>
   )

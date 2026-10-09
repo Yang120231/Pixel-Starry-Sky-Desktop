@@ -5,8 +5,27 @@ import { fileIndent, linePosition } from './positions'
 
 describe('编辑器语言与定位', () => {
   it('计划内每种扩展名都有语言实现，未知文件保持纯文本', async () => {
-    const cases = { ts: 'TypeScript', tsx: 'TSX', js: 'JavaScript', jsx: 'JSX', json: 'JSON', css: 'CSS', html: 'HTML', md: 'Markdown', py: 'Python', rs: 'Rust', go: 'Go', yaml: 'YAML', toml: 'TOML', sh: 'Shell', sql: 'SQL' }
-    for (const [ext, expected] of Object.entries(cases)) { expect(fileLanguage(`src/FILE.${ext.toUpperCase()}`)).toBe(expected); expect(await loadLanguage(`test.${ext}`)).toBeTruthy() }
+    const cases = {
+      ts: 'TypeScript',
+      tsx: 'TSX',
+      js: 'JavaScript',
+      jsx: 'JSX',
+      json: 'JSON',
+      css: 'CSS',
+      html: 'HTML',
+      md: 'Markdown',
+      py: 'Python',
+      rs: 'Rust',
+      go: 'Go',
+      yaml: 'YAML',
+      toml: 'TOML',
+      sh: 'Shell',
+      sql: 'SQL',
+    }
+    for (const [ext, expected] of Object.entries(cases)) {
+      expect(fileLanguage(`src/FILE.${ext.toUpperCase()}`)).toBe(expected)
+      expect(await loadLanguage(`test.${ext}`)).toBeTruthy()
+    }
     expect(fileLanguage('unknown.xyz')).toBe('纯文本')
     expect(await loadLanguage('unknown')).toEqual([])
   })

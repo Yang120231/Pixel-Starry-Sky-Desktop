@@ -66,7 +66,7 @@ export function getEngineState(): EngineState {
 
 export function useEngineState<T>(selector: (s: EngineState) => T): T {
   return useSyncExternalStore(
-    (cb) => {
+    cb => {
       listeners.add(cb)
       return () => listeners.delete(cb)
     },
@@ -77,8 +77,8 @@ export function useEngineState<T>(selector: (s: EngineState) => T): T {
 /** 默认项目：最近用过的会话所在的项目，没有就用第一个 */
 function pickProject(projects: ProjectRecord[], sessions: SessionSummary[], current: string | null): string | null {
   projects = projects.filter(p => machineOf(p.id) === getMachines().currentId)
-  if (current && projects.some((p) => p.id === current)) return current
-  const recent = sessions.find((s) => projects.some((p) => p.id === s.record.projectId))
+  if (current && projects.some(p => p.id === current)) return current
+  const recent = sessions.find(s => projects.some(p => p.id === s.record.projectId))
   return recent?.record.projectId ?? projects[0]?.id ?? null
 }
 
@@ -103,12 +103,31 @@ function onHostEvent(e: HostEvent): void {
       applySessionEvent(e)
       return
     case 'sessions': {
-      const ids=new Set(e.sessions.map(s=>s.record.id)),archived=new Set(e.sessions.filter(s=>s.record.archivedAt&&!state.sessions.find(old=>old.record.id===s.record.id)?.record.archivedAt).map(s=>s.record.id))
-      const removed=state.sessions.filter(s=>!ids.has(s.record.id)).map(s=>s.record.id),snapshots={...state.snapshots},unread={...state.unread}
-      for(const id of removed){delete snapshots[id];delete unread[id];delete seqs[id]}
-      for(const id of archived)delete unread[id]
-      set({ sessions: e.sessions,snapshots,unread, currentProjectId: pickProject(state.projects, e.sessions, state.currentProjectId) })
-      if(removed.length||archived.size)window.dispatchEvent(new CustomEvent(SESSION_REMOVED_EVENT,{detail:{ids:[...removed,...archived]}}))
+      const ids = new Set(e.sessions.map(s => s.record.id)),
+        archived = new Set(
+          e.sessions
+            .filter(
+              s => s.record.archivedAt && !state.sessions.find(old => old.record.id === s.record.id)?.record.archivedAt,
+            )
+            .map(s => s.record.id),
+        )
+      const removed = state.sessions.filter(s => !ids.has(s.record.id)).map(s => s.record.id),
+        snapshots = { ...state.snapshots },
+        unread = { ...state.unread }
+      for (const id of removed) {
+        delete snapshots[id]
+        delete unread[id]
+        delete seqs[id]
+      }
+      for (const id of archived) delete unread[id]
+      set({
+        sessions: e.sessions,
+        snapshots,
+        unread,
+        currentProjectId: pickProject(state.projects, e.sessions, state.currentProjectId),
+      })
+      if (removed.length || archived.size)
+        window.dispatchEvent(new CustomEvent(SESSION_REMOVED_EVENT, { detail: { ids: [...removed, ...archived] } }))
       return
     }
     case 'projects':
@@ -135,8 +154,8 @@ export function startEngineStore(): void {
   void Promise.all([bridge.projects(), bridge.sessions(), bridge.defaults()]).then(([projects, sessions, defaults]) => {
     set({ ready: true, projects, sessions, defaults, currentProjectId: pickProject(projects, sessions, null) })
   })
-  void bridge.engines().then((engines) => set({ engines }))
-  void bridge.config().then((config) => set({ config }))
+  void bridge.engines().then(engines => set({ engines }))
+  void bridge.config().then(config => set({ config }))
 }
 
 /** 确保会话快照已加载 */
@@ -145,7 +164,7 @@ export async function openSession(id: string): Promise<void> {
   opening[id] = []
   try {
     const { snapshot, seq } = await bridge.openSession(id)
-    if(state.ready&&!state.sessions.some(s=>s.record.id===id))return
+    if (state.ready && !state.sessions.some(s => s.record.id === id)) return
     let snap = snapshot
     let last = seq
     for (const b of opening[id]) {
@@ -156,8 +175,8 @@ export async function openSession(id: string): Promise<void> {
     }
     seqs[id] = last
     set({ snapshots: { ...state.snapshots, [id]: snap } })
-  } catch(error) {
-    if(!state.ready||state.sessions.some(s=>s.record.id===id))throw error
+  } catch (error) {
+    if (!state.ready || state.sessions.some(s => s.record.id === id)) throw error
   } finally {
     delete opening[id]
   }
@@ -174,7 +193,7 @@ export const isViewingSession = (id: string): boolean => viewing.has(id)
 /** 多窗格：所有窗格里正在显示的会话（docs/ui/multi-pane.md §5） */
 export function setViewingSet(ids: string[]): void {
   viewing = new Set(ids)
-  if (ids.some((id) => state.unread[id])) {
+  if (ids.some(id => state.unread[id])) {
     const rest = { ...state.unread }
     for (const id of ids) delete rest[id]
     set({ unread: rest })
@@ -184,7 +203,8 @@ export function setViewingSet(ids: string[]): void {
 /** 重新拉取新会话默认设置（用户在别的会话里改过强度 / 权限后，新会话沿用） */
 export async function refreshDefaults(): Promise<void> {
   if (!bridge) return
-  const machine = getMachines().currentId, defaults = await bridge.defaults()
+  const machine = getMachines().currentId,
+    defaults = await bridge.defaults()
   if (getMachines().currentId === machine) set({ defaults })
 }
 
@@ -193,17 +213,29 @@ export function setCurrentProject(id: string): void {
 }
 export async function refreshMachineEngine(machine: string): Promise<void> {
   if (!bridge) return
-  const [projects, sessions, defaults, engines, config] = await Promise.all([bridge.projects(), bridge.sessions(), bridge.defaults(), bridge.engines(), bridge.config()])
+  const [projects, sessions, defaults, engines, config] = await Promise.all([
+    bridge.projects(),
+    bridge.sessions(),
+    bridge.defaults(),
+    bridge.engines(),
+    bridge.config(),
+  ])
   if (getMachines().currentId !== machine) return
   let current: string | null = null
-  try { current = JSON.parse(localStorage.getItem('pixelsky.last-workspace.' + machine) ?? 'null')?.projectId ?? null } catch {}
+  try {
+    current = JSON.parse(localStorage.getItem('pixelsky.last-workspace.' + machine) ?? 'null')?.projectId ?? null
+  } catch {}
   const allowed = projects.filter(p => machineOf(p.id) === machine)
   set({ projects, sessions, defaults, engines, config, currentProjectId: pickProject(allowed, sessions, current) })
   window.dispatchEvent(new Event('pixelsky:machine-context'))
 }
 export function invalidateRemoteSnapshots(machine: string): void {
   const snapshots = { ...state.snapshots }
-  for (const id of Object.keys(snapshots)) if (machineOf(id) === machine) { delete snapshots[id]; delete seqs[id] }
+  for (const id of Object.keys(snapshots))
+    if (machineOf(id) === machine) {
+      delete snapshots[id]
+      delete seqs[id]
+    }
   set({ snapshots })
 }
 
@@ -216,10 +248,13 @@ export async function redetectEngines(): Promise<void> {
 /** 添加项目；成功后设为当前项目 */
 export async function addProject(): Promise<string | null> {
   if (!bridge) return null
-  if (getMachines().currentId !== 'local') { window.dispatchEvent(new Event('pixelsky:choose-workspace')); return null }
+  if (getMachines().currentId !== 'local') {
+    window.dispatchEvent(new Event('pixelsky:choose-workspace'))
+    return null
+  }
   const p = await bridge.addProject()
   if (!p) return null
-  const projects = state.projects.some((x) => x.id === p.id) ? state.projects : [...state.projects, p]
+  const projects = state.projects.some(x => x.id === p.id) ? state.projects : [...state.projects, p]
   set({ projects, currentProjectId: p.id })
   return p.id
 }

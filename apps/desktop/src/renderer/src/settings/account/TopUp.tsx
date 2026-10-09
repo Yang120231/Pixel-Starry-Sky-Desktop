@@ -27,9 +27,12 @@ export function TopUp({ currency }: { currency: string }) {
     if (customText.trim() === '') {
       credit = null
     } else if (!Number.isFinite(value) || !/^\d+(\.\d{1,2})?$/.test(customText.trim())) {
-      customError = tr("settings.account.TopUp.message669")
+      customError = tr('settings.account.TopUp.message669')
     } else if (customTopUp && (value < customTopUp.min || value > customTopUp.max)) {
-      customError = tr("settings.account.TopUp.message670", { p0: formatAmount(customTopUp.min, currency), p1: formatAmount(customTopUp.max, currency) })
+      customError = tr('settings.account.TopUp.message670', {
+        p0: formatAmount(customTopUp.min, currency),
+        p1: formatAmount(customTopUp.max, currency),
+      })
     } else {
       credit = value
     }
@@ -44,13 +47,15 @@ export function TopUp({ currency }: { currency: string }) {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h4 className="mb-2 text-ui font-medium text-fg">{tr("settings.account.TopUp.message671")}</h4>
-        <div role="radiogroup" aria-label={tr("settings.account.TopUp.message671")} className="grid grid-cols-5 gap-2">
+        <h4 className="mb-2 text-ui font-medium text-fg">{tr('settings.account.TopUp.message671')}</h4>
+        <div role="radiogroup" aria-label={tr('settings.account.TopUp.message671')} className="grid grid-cols-5 gap-2">
           {topUpOptions.map((o, i) => (
             <AmountButton key={o.credit} selected={choice === i} onClick={() => setChoice(i)}>
               <span className="text-ui font-semibold text-fg tabular-nums">{formatAmount(o.credit, currency)}</span>
               {o.bonus ? (
-                <span className="text-label text-accent-fg">{tr("settings.account.TopUp.message672")} {formatAmount(o.bonus, currency)}</span>
+                <span className="text-label text-accent-fg">
+                  {tr('settings.account.TopUp.message672')} {formatAmount(o.bonus, currency)}
+                </span>
               ) : (
                 <span className="text-label text-fg-faint">{formatPrice(o.credit * rate, priceCurrency)}</span>
               )}
@@ -58,8 +63,8 @@ export function TopUp({ currency }: { currency: string }) {
           ))}
           {customTopUp && (
             <AmountButton selected={choice === 'custom'} onClick={() => setChoice('custom')}>
-              <span className="text-ui font-semibold text-fg">{tr("settings.account.TopUp.message673")}</span>
-              <span className="text-label text-fg-faint">{tr("settings.account.TopUp.message674")}</span>
+              <span className="text-ui font-semibold text-fg">{tr('settings.account.TopUp.message673')}</span>
+              <span className="text-label text-fg-faint">{tr('settings.account.TopUp.message674')}</span>
             </AmountButton>
           )}
         </div>
@@ -74,50 +79,55 @@ export function TopUp({ currency }: { currency: string }) {
             >
               <span className="text-ui text-fg-muted">{currency.toUpperCase() === 'USD' ? '$' : currency}</span>
               <input
-                aria-label={tr("settings.account.TopUp.message675")}
+                aria-label={tr('settings.account.TopUp.message675')}
                 inputMode="decimal"
                 autoFocus
                 value={customText}
                 placeholder={`${customTopUp.min} – ${customTopUp.max}`}
-                onChange={(e) => setCustomText(e.target.value.replace(/[^\d.]/g, ''))}
+                onChange={e => setCustomText(e.target.value.replace(/[^\d.]/g, ''))}
                 className="min-w-0 flex-1 bg-transparent text-ui text-fg tabular-nums outline-none placeholder:text-fg-faint"
               />
             </div>
             <p className={cn('mt-1.5 text-meta', customError ? 'text-danger' : 'text-fg-faint')}>
               {customError ??
-                tr("settings.account.TopUp.message676", { p0: formatAmount(customTopUp.min, currency), p1: formatAmount(customTopUp.max, currency) })}
+                tr('settings.account.TopUp.message676', {
+                  p0: formatAmount(customTopUp.min, currency),
+                  p1: formatAmount(customTopUp.max, currency),
+                })}
             </p>
           </div>
         )}
       </div>
 
       <div>
-        <h4 className="mb-2 text-ui font-medium text-fg">{tr("settings.account.TopUp.message677")}</h4>
+        <h4 className="mb-2 text-ui font-medium text-fg">{tr('settings.account.TopUp.message677')}</h4>
         {paymentMethods.length > 0 ? (
           <Segmented
-            label={tr("settings.account.TopUp.message677")}
-            options={paymentMethods.map((m) => ({ value: m.id, label: m.label }))}
+            label={tr('settings.account.TopUp.message677')}
+            options={paymentMethods.map(m => ({ value: m.id, label: m.label }))}
             value={method}
             onChange={setMethod}
           />
         ) : (
-          <p className="text-meta text-fg-muted">{tr("settings.account.TopUp.message678")}</p>
+          <p className="text-meta text-fg-muted">{tr('settings.account.TopUp.message678')}</p>
         )}
       </div>
 
       <div className="rounded-lg border border-line bg-surface p-4">
         <dl className="flex flex-col gap-1.5 text-ui">
           <div className="flex justify-between gap-4">
-            <dt className="text-fg-muted">{tr("settings.account.TopUp.message679")}</dt>
+            <dt className="text-fg-muted">{tr('settings.account.TopUp.message679')}</dt>
             <dd className="text-fg tabular-nums">
               {credit === null ? '—' : formatAmount(credit + bonus, currency)}
               {credit !== null && bonus > 0 && (
-                <span className="ml-1 text-meta text-accent-fg">{tr("settings.account.TopUp.message680")} {formatAmount(bonus, currency)}）</span>
+                <span className="ml-1 text-meta text-accent-fg">
+                  {tr('settings.account.TopUp.message680')} {formatAmount(bonus, currency)}）
+                </span>
               )}
             </dd>
           </div>
           <div className="flex items-baseline justify-between gap-4">
-            <dt className="text-fg-muted">{tr("settings.account.TopUp.message681")}</dt>
+            <dt className="text-fg-muted">{tr('settings.account.TopUp.message681')}</dt>
             <dd className="text-section font-semibold text-fg tabular-nums">
               {credit === null ? '—' : formatPrice(Math.round(credit * rate * 100) / 100, priceCurrency)}
             </dd>
@@ -127,9 +137,14 @@ export function TopUp({ currency }: { currency: string }) {
           <Button
             variant="primary"
             disabled={!canPay}
-            className={cn('px-5', !canPay && 'cursor-not-allowed bg-disabled! text-disabled-fg! shadow-none! hover:opacity-100')}
-            onClick={() => comingSoon(tr("settings.account.TopUp.message682"))}
-          >{tr("settings.account.TopUp.message683")} </Button>
+            className={cn(
+              'px-5',
+              !canPay && 'cursor-not-allowed bg-disabled! text-disabled-fg! shadow-none! hover:opacity-100',
+            )}
+            onClick={() => comingSoon(tr('settings.account.TopUp.message682'))}
+          >
+            {tr('settings.account.TopUp.message683')}{' '}
+          </Button>
         </div>
       </div>
 

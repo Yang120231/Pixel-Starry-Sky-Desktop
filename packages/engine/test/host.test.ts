@@ -14,7 +14,12 @@ let root: string
 let events: HostEvent[]
 let hosts: EngineHost[]
 
-function makeHost(idleMs = 60_000, extraEnv: NodeJS.ProcessEnv = {}, sessionEnv?: (record: SessionRecord) => NodeJS.ProcessEnv, steeringValidated = false): EngineHost {
+function makeHost(
+  idleMs = 60_000,
+  extraEnv: NodeJS.ProcessEnv = {},
+  sessionEnv?: (record: SessionRecord) => NodeJS.ProcessEnv,
+  steeringValidated = false,
+): EngineHost {
   const projectsDir = join(root, 'claude-projects')
   const adapter = new ClaudeAdapter({
     sessionEnv,
@@ -23,14 +28,22 @@ function makeHost(idleMs = 60_000, extraEnv: NodeJS.ProcessEnv = {}, sessionEnv?
     projectsDir,
     env: { ...process.env, FAKE_CLAUDE_PROJECTS: projectsDir, FAKE_CLAUDE_LOG: join(root, 'argv.log'), ...extraEnv },
   })
-  const host = new EngineHost({ dataDir: join(root, 'data'), emit: (e) => events.push(e), idleMs, adapters: { claude: adapter } })
+  const host = new EngineHost({
+    dataDir: join(root, 'data'),
+    emit: e => events.push(e),
+    idleMs,
+    adapters: { claude: adapter },
+  })
   hosts.push(host)
   return host
 }
 
 function permLog(): unknown[] {
   try {
-    return readFileSync(join(root, 'argv.perm.log'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as unknown)
+    return readFileSync(join(root, 'argv.perm.log'), 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map(l => JSON.parse(l) as unknown)
   } catch {
     return []
   }
@@ -46,7 +59,10 @@ function thinkingLog(): string[] {
 
 function spawnArgs(): string[][] {
   try {
-    return readFileSync(join(root, 'argv.log'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as string[])
+    return readFileSync(join(root, 'argv.log'), 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map(l => JSON.parse(l) as string[])
   } catch {
     return []
   }
@@ -58,22 +74,23 @@ async function waitFor<T>(pick: () => T | undefined | null | false, timeoutMs = 
     const v = pick()
     if (v) return v
     if (Date.now() - start > timeoutMs) throw new Error('等待超时')
-    await new Promise((r) => setTimeout(r, 20))
+    await new Promise(r => setTimeout(r, 20))
   }
 }
 
 function sessionEvents(id: string) {
-  return events.flatMap((e) => (e.kind === 'session' && e.sessionId === id ? [e.event] : []))
+  return events.flatMap(e => (e.kind === 'session' && e.sessionId === id ? [e.event] : []))
 }
 
 function turnsDone(id: string): number {
-  return sessionEvents(id).filter((e) => e.type === 'turn_completed').length
+  return sessionEvents(id).filter(e => e.type === 'turn_completed').length
 }
 
 it('worktree sessions keep their own cwd and directory maintenance blocks new writes', async () => {
   const host = makeHost()
   const project = host.addProject(root)
-  const copy = join(root, 'copy-workspace'); mkdirSync(copy)
+  const copy = join(root, 'copy-workspace')
+  mkdirSync(copy)
   const record = host.createSession({ projectId: project.id }, copy)
   expect(record.cwd).toBe(copy)
   expect(host.projects().find(p => p.id === project.id)?.path).toBe(root)
@@ -99,24 +116,46 @@ beforeEach(() => {
 })
 
 afterEach(async () => {
-  await Promise.all(hosts.map((h) => h.shutdown()))
+  await Promise.all(hosts.map(h => h.shutdown()))
   rmSync(root, { recursive: true, force: true })
 })
 
 describe('EngineHost + Claude（假引擎）', () => {
   it('真实 stdin 传图片内容块，纯图片不含空文本块，文字旧格式兼容', async () => {
-    const log = join(root, 'image-metadata.jsonl'), host = makeHost(60_000, { FAKE_CLAUDE_IMAGES: log })
+    const log = join(root, 'image-metadata.jsonl'),
+      host = makeHost(60_000, { FAKE_CLAUDE_IMAGES: log })
     const { record } = setup(host)
     const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWQAAAABJRU5ErkJggg=='
-    const image = { id: 'img', name: '中文截图.png', mediaType: 'image/png' as const, width: 1, height: 1, bytes: Buffer.from(png, 'base64').length, dataBase64: png }
+    const image = {
+      id: 'img',
+      name: '中文截图.png',
+      mediaType: 'image/png' as const,
+      width: 1,
+      height: 1,
+      bytes: Buffer.from(png, 'base64').length,
+      dataBase64: png,
+    }
     await host.send(record.id, { text: '说明', clientMessageId: 'mixed', attachments: [image] })
     await waitFor(() => turnsDone(record.id) === 1)
     await host.send(record.id, { text: '', clientMessageId: 'pure', attachments: [image] })
     await waitFor(() => turnsDone(record.id) === 2)
     await host.send(record.id, '文字')
     await waitFor(() => turnsDone(record.id) === 3)
-    const frames = readFileSync(log, 'utf8').trim().split('\n').map(line => JSON.parse(line))
-    expect(frames[0]).toEqual({ types: ['text', 'image'], text: '说明', images: [{ mediaType: 'image/png', bytes: image.bytes, sha256: createHash('sha256').update(Buffer.from(png, 'base64')).digest('hex') }] })
+    const frames = readFileSync(log, 'utf8')
+      .trim()
+      .split('\n')
+      .map(line => JSON.parse(line))
+    expect(frames[0]).toEqual({
+      types: ['text', 'image'],
+      text: '说明',
+      images: [
+        {
+          mediaType: 'image/png',
+          bytes: image.bytes,
+          sha256: createHash('sha256').update(Buffer.from(png, 'base64')).digest('hex'),
+        },
+      ],
+    })
     expect(frames[1].types).toEqual(['image'])
     expect(frames[2]).toEqual({ types: ['string'], text: '文字', images: [] })
   })
@@ -186,13 +225,18 @@ describe('EngineHost + Claude（假引擎）', () => {
     const host = makeHost(60_000, { FAKE_CLAUDE_GUIDE: 'fold' }, undefined, true)
     const { record } = setup(host)
     await host.send(record.id, '慢慢说')
-    await waitFor(() => host.open(record.id).flags.steerAvailable && sessionEvents(record.id).some(e => e.type === 'item_delta'))
+    await waitFor(
+      () => host.open(record.id).flags.steerAvailable && sessionEvents(record.id).some(e => e.type === 'item_delta'),
+    )
     const originalTurn = host.open(record.id).turnId!
     const guided = await host.send(record.id, '当前轮的补充')
     await host.steerQueued(record.id, guided.queueId, originalTurn)
     await waitFor(() => host.open(record.id).items.some(i => i.id === guided.queueId))
     expect(host.open(record.id).turnId).toBe(originalTurn)
-    expect(host.open(record.id).items.find(i => i.id === guided.queueId)).toMatchObject({ mode: 'guidance', turnId: originalTurn })
+    expect(host.open(record.id).items.find(i => i.id === guided.queueId)).toMatchObject({
+      mode: 'guidance',
+      turnId: originalTurn,
+    })
     expect(host.open(record.id).items.some(i => i.kind === 'assistant' && i.text.length > 0)).toBe(true)
     await host.interrupt(record.id)
     expect(turnsDone(record.id)).toBe(1)
@@ -202,7 +246,9 @@ describe('EngineHost + Claude（假引擎）', () => {
     const host = makeHost(60_000, { FAKE_CLAUDE_GUIDE: '1' }, undefined, true)
     const { record } = setup(host)
     await host.send(record.id, '慢慢说')
-    await waitFor(() => host.open(record.id).flags.steerAvailable && sessionEvents(record.id).some(e => e.type === 'item_delta'))
+    await waitFor(
+      () => host.open(record.id).flags.steerAvailable && sessionEvents(record.id).some(e => e.type === 'item_delta'),
+    )
     const guided = await host.send(record.id, '补充消息')
     await host.steerQueued(record.id, guided.queueId, host.open(record.id).turnId!)
     await host.send(record.id, '普通队列尾部')
@@ -211,7 +257,7 @@ describe('EngineHost + Claude（假引擎）', () => {
     const users = host.open(record.id).items.filter(i => i.kind === 'user')
     expect(users).toHaveLength(3)
     expect(users[1]).toMatchObject({ id: guided.queueId, mode: 'normal' })
-    expect(new Set(users.map(i => i.kind === 'user' ? i.turnId : undefined)).size).toBe(3)
+    expect(new Set(users.map(i => (i.kind === 'user' ? i.turnId : undefined))).size).toBe(3)
   })
 
   it('停止会取消已交给 Claude 但未消费的补充输入，原文回宿主暂停队列', async () => {
@@ -243,7 +289,7 @@ describe('EngineHost + Claude（假引擎）', () => {
     await host.send(record.id, '慢慢说')
     await waitFor(() => host.open(record.id).turnId)
     await host.interrupt(record.id)
-    await new Promise((r) => setTimeout(r, 350))
+    await new Promise(r => setTimeout(r, 350))
     expect(host.open(record.id).state).toBe('idle')
     expect(host.open(record.id).items.some(i => i.kind === 'assistant')).toBe(false)
     await host.send(record.id, '你好')
@@ -253,14 +299,29 @@ describe('EngineHost + Claude（假引擎）', () => {
   it('平台会话使用独立网关设置、保留分组、记录平台用量；开始后可以换分组、切回自有并接上原对话', async () => {
     const settingsFile = join(root, 'gateway.json')
     writeFileSync(settingsFile, '{}')
-    const host = makeHost(60_000, { ANTHROPIC_API_KEY: 'old-local-key', ANTHROPIC_BASE_URL: 'https://local.invalid', FAKE_CLAUDE_ENV_LOG: join(root, 'env.json') }, () => ({ ANTHROPIC_AUTH_TOKEN: 'loopback-only', ANTHROPIC_BASE_URL: 'http://127.0.0.1:1234', PIXELSKY_GATEWAY_SETTINGS: settingsFile }))
+    const host = makeHost(
+      60_000,
+      {
+        ANTHROPIC_API_KEY: 'old-local-key',
+        ANTHROPIC_BASE_URL: 'https://local.invalid',
+        FAKE_CLAUDE_ENV_LOG: join(root, 'env.json'),
+      },
+      () => ({
+        ANTHROPIC_AUTH_TOKEN: 'loopback-only',
+        ANTHROPIC_BASE_URL: 'http://127.0.0.1:1234',
+        PIXELSKY_GATEWAY_SETTINGS: settingsFile,
+      }),
+    )
     const { record } = setup(host)
     await host.update(record.id, { platform: { groupId: '7', account: 'test@example.com' }, model: 'real-model' })
     await host.send(record.id, '平台测试')
     await waitFor(() => turnsDone(record.id) === 1)
     expect(spawnArgs()[0]).toContain('--settings')
     expect(spawnArgs()[0]).toContain(settingsFile)
-    expect(JSON.parse(readFileSync(join(root, 'env.json'), 'utf8'))).toEqual({ base: 'http://127.0.0.1:1234', token: 'loopback-only' })
+    expect(JSON.parse(readFileSync(join(root, 'env.json'), 'utf8'))).toEqual({
+      base: 'http://127.0.0.1:1234',
+      token: 'loopback-only',
+    })
     expect(host.open(record.id).record.platform?.groupId).toBe('7')
     expect(host.usageSummary({ range: 'today', filter: {}, now: Date.now() }).groups.route[0].key).toBe('pixelsky')
 
@@ -287,8 +348,16 @@ describe('EngineHost + Claude（假引擎）', () => {
   it('引擎本机配置：路径、追加的环境变量、压缩模型能保存和读回；变量名不对时拒绝', async () => {
     const host = makeHost()
     expect(host.engineConfig().claude).toMatchObject({ path: null, env: {}, compactModel: null })
-    await host.setEngineConfig('claude', { path: ' C:/tools/claude.exe ', env: { FOO: 'bar', HTTPS_PROXY: 'http://127.0.0.1:7890' }, compactModel: 'claude-sonnet-5-5' })
-    expect(host.engineConfig().claude).toMatchObject({ path: 'C:/tools/claude.exe', env: { FOO: 'bar', HTTPS_PROXY: 'http://127.0.0.1:7890' }, compactModel: 'claude-sonnet-5-5' })
+    await host.setEngineConfig('claude', {
+      path: ' C:/tools/claude.exe ',
+      env: { FOO: 'bar', HTTPS_PROXY: 'http://127.0.0.1:7890' },
+      compactModel: 'claude-sonnet-5-5',
+    })
+    expect(host.engineConfig().claude).toMatchObject({
+      path: 'C:/tools/claude.exe',
+      env: { FOO: 'bar', HTTPS_PROXY: 'http://127.0.0.1:7890' },
+      compactModel: 'claude-sonnet-5-5',
+    })
     await expect(host.setEngineConfig('claude', { env: { 'BAD-NAME': 'x' } })).rejects.toThrow('环境变量名不对')
     // 重启应用后读回
     expect(makeHost().engineConfig().claude.compactModel).toBe('claude-sonnet-5-5')
@@ -305,9 +374,18 @@ describe('EngineHost + Claude（假引擎）', () => {
         extraEnv: () => ({ ANTHROPIC_BASE_URL: 'https://from-settings.invalid' }),
         launcher: { command: process.execPath, args: [FAKE] },
         projectsDir,
-        env: { ...process.env, FAKE_CLAUDE_PROJECTS: projectsDir, FAKE_CLAUDE_LOG: join(root, 'argv.log'), FAKE_CLAUDE_ENV_LOG: envLog },
+        env: {
+          ...process.env,
+          FAKE_CLAUDE_PROJECTS: projectsDir,
+          FAKE_CLAUDE_LOG: join(root, 'argv.log'),
+          FAKE_CLAUDE_ENV_LOG: envLog,
+        },
       })
-      const h = new EngineHost({ dataDir: join(root, 'data'), emit: (e) => events.push(e), adapters: { claude: adapter } })
+      const h = new EngineHost({
+        dataDir: join(root, 'data'),
+        emit: e => events.push(e),
+        adapters: { claude: adapter },
+      })
       hosts.push(h)
       return h
     }
@@ -343,19 +421,21 @@ describe('EngineHost + Claude（假引擎）', () => {
 
     const snap = host.open(record.id)
     expect(snap.state).toBe('idle')
-    expect(snap.items.map((i) => i.kind)).toEqual(['user', 'assistant', 'turn_stats'])
+    expect(snap.items.map(i => i.kind)).toEqual(['user', 'assistant', 'turn_stats'])
     expect(snap.items[1]).toMatchObject({ text: '收到：你好', status: 'completed' })
     expect(snap.record).toMatchObject({ title: '你好', engineSessionId: record.id, lastOutcome: 'completed' })
     expect(snap.usage).toMatchObject({ contextWindow: 200000, contextTokens: 100 })
 
     const args = spawnArgs()[0]
-    expect(args).toEqual(expect.arrayContaining(['--permission-prompt-tool', 'stdio', '--permission-mode', 'default', '--effort', 'high']))
+    expect(args).toEqual(
+      expect.arrayContaining(['--permission-prompt-tool', 'stdio', '--permission-mode', 'default', '--effort', 'high']),
+    )
     expect(args.slice(-2)).toEqual(['--session-id', record.id])
 
     // 新的 host 实例（模拟重启应用）读出同样的会话和条目
     const again = makeHost()
-    expect(again.sessions().map((s) => s.record.title)).toEqual(['你好'])
-    expect(again.open(record.id).items.map((i) => i.kind)).toEqual(['user', 'assistant', 'turn_stats'])
+    expect(again.sessions().map(s => s.record.title)).toEqual(['你好'])
+    expect(again.open(record.id).items.map(i => i.kind)).toEqual(['user', 'assistant', 'turn_stats'])
   })
 
   it('审批：等待中 → 始终允许（本会话）→ 写入成功；之后同类操作不再问', async () => {
@@ -370,14 +450,16 @@ describe('EngineHost + Claude（假引擎）', () => {
     host.answer(record.id, req.requestId, { type: 'allow_always', scope: 'session' })
     await waitFor(() => turnsDone(record.id) === 1)
     const snap = host.open(record.id)
-    expect(snap.items.map((i) => i.kind)).toEqual(['user', 'file_change', 'assistant', 'turn_stats'])
+    expect(snap.items.map(i => i.kind)).toEqual(['user', 'file_change', 'assistant', 'turn_stats'])
     expect(snap.items[1]).toMatchObject({ status: 'completed' })
     expect(snap.record.permissionMode).toBe('ask')
-    expect(permLog()).toEqual([{ type: 'addRules', rules: [{ toolName: 'Write' }], behavior: 'allow', destination: 'session' }])
+    expect(permLog()).toEqual([
+      { type: 'addRules', rules: [{ toolName: 'Write' }], behavior: 'allow', destination: 'session' },
+    ])
 
     await host.send(record.id, '再写文件')
     await waitFor(() => turnsDone(record.id) === 2)
-    expect(sessionEvents(record.id).filter((e) => e.type === 'approval_request')).toHaveLength(1)
+    expect(sessionEvents(record.id).filter(e => e.type === 'approval_request')).toHaveLength(1)
   })
 
   it('审批：始终允许（本项目 / 所有项目）保存到对应的设置文件', async () => {
@@ -411,10 +493,10 @@ describe('EngineHost + Claude（假引擎）', () => {
     const host = makeHost()
     const { record } = setup(host)
     await host.send(record.id, '慢一点数数')
-    await waitFor(() => sessionEvents(record.id).some((e) => e.type === 'item_delta'))
+    await waitFor(() => sessionEvents(record.id).some(e => e.type === 'item_delta'))
     await host.interrupt(record.id)
     await waitFor(() => turnsDone(record.id) === 1)
-    expect(sessionEvents(record.id).find((e) => e.type === 'turn_completed')).toMatchObject({ outcome: 'interrupted' })
+    expect(sessionEvents(record.id).find(e => e.type === 'turn_completed')).toMatchObject({ outcome: 'interrupted' })
 
     await host.send(record.id, '你好')
     await waitFor(() => turnsDone(record.id) === 2)
@@ -426,7 +508,7 @@ describe('EngineHost + Claude（假引擎）', () => {
     const { record } = setup(host)
     await host.send(record.id, '崩溃吧')
     await waitFor(() => turnsDone(record.id) === 1)
-    const done = sessionEvents(record.id).find((e) => e.type === 'turn_completed')
+    const done = sessionEvents(record.id).find(e => e.type === 'turn_completed')
     expect(done).toMatchObject({ outcome: 'failed' })
     expect(done?.type === 'turn_completed' && done.error).toContain('boom')
 
@@ -443,15 +525,17 @@ describe('EngineHost + Claude（假引擎）', () => {
     const { record } = setup(host)
     await host.send(record.id, '崩溃吧')
     await waitFor(() => turnsDone(record.id) === 1)
-    const summary = () => host.sessions().find((s) => s.record.id === record.id)!
+    const summary = () => host.sessions().find(s => s.record.id === record.id)!
     expect(summary().record.lastError).toContain('boom')
     expect(summary().queue).toEqual({ queued: 0, failed: 1, paused: true })
     // 队列进入暂停时广播一次会话列表，待处理不用打开会话就能看到
-    const broadcast = events.filter((e) => e.kind === 'sessions').at(-1)
-    expect(broadcast?.kind === 'sessions' && broadcast.sessions.find((s) => s.record.id === record.id)?.queue?.paused).toBe(true)
+    const broadcast = events.filter(e => e.kind === 'sessions').at(-1)
+    expect(
+      broadcast?.kind === 'sessions' && broadcast.sessions.find(s => s.record.id === record.id)?.queue?.paused,
+    ).toBe(true)
 
     const restarted = makeHost()
-    const cold = restarted.sessions().find((s) => s.record.id === record.id)!
+    const cold = restarted.sessions().find(s => s.record.id === record.id)!
     expect(cold.queue).toEqual({ queued: 0, failed: 1, paused: true })
     expect(cold.record.lastError).toContain('boom')
 
@@ -467,7 +551,7 @@ describe('EngineHost + Claude（假引擎）', () => {
     const { record } = setup(host)
     await host.send(record.id, '第一句')
     await waitFor(() => turnsDone(record.id) === 1)
-    await new Promise((r) => setTimeout(r, 300))
+    await new Promise(r => setTimeout(r, 300))
     await host.send(record.id, '第二句')
     await waitFor(() => turnsDone(record.id) === 2)
     const args = spawnArgs()
@@ -479,7 +563,7 @@ describe('EngineHost + Claude（假引擎）', () => {
     const host = makeHost()
     const { record } = setup(host)
     await host.send(record.id, '慢慢说')
-    await waitFor(() => sessionEvents(record.id).some((e) => e.type === 'item_delta'))
+    await waitFor(() => sessionEvents(record.id).some(e => e.type === 'item_delta'))
     const queued = await host.send(record.id, '插话')
     expect(host.open(record.id).queue.find(q => q.id === queued.queueId)?.status).toBe('queued')
     await host.update(record.id, { permissionMode: 'full' })
@@ -513,7 +597,7 @@ describe('EngineHost + Claude（假引擎）', () => {
     const snap = host.open(record.id)
     expect(snap.flags.ultracodeAvailable).toBe(false)
     expect(snap.record.ultracode).toBe(false)
-    expect(snap.items.some((i) => i.kind === 'notice' && i.text.includes('不支持 Ultracode'))).toBe(true)
+    expect(snap.items.some(i => i.kind === 'notice' && i.text.includes('不支持 Ultracode'))).toBe(true)
   })
 
   it('Fast 模式：能开时打开，引擎报告 on', async () => {
@@ -538,7 +622,7 @@ describe('EngineHost + Claude（假引擎）', () => {
     await host.update(record.id, { fast: true })
     const snap = host.open(record.id)
     expect(snap.record.fast).toBe(false)
-    expect(snap.items.some((i) => i.kind === 'notice' && i.text.includes('只支持 Anthropic 官方接口'))).toBe(true)
+    expect(snap.items.some(i => i.kind === 'notice' && i.text.includes('只支持 Anthropic 官方接口'))).toBe(true)
   })
 
   it('显示思考摘要：启动时按设置发 summarized，关掉后发 omitted', async () => {
@@ -558,12 +642,19 @@ describe('EngineHost + Claude（假引擎）', () => {
     await waitFor(() => turnsDone(record.id) === 1)
     const snap = host.open(record.id)
     expect(snap.subagents).toEqual([{ id: 'agent1', label: '读 README', status: 'completed', message: '读完了' }])
-    const read = snap.items.find((i) => i.kind === 'tool' && i.name === 'Read')
+    const read = snap.items.find(i => i.kind === 'tool' && i.name === 'Read')
     expect(read).toMatchObject({ subagent: '读 README', status: 'completed' })
     expect(snap.runs.agents).toHaveLength(1)
-    expect(snap.runs.agents[0]).toMatchObject({ id: 'agent1', label: '读 README', type: 'general-purpose', model: 'claude-sonnet-5-5', tokens: 1500, state: 'completed' })
+    expect(snap.runs.agents[0]).toMatchObject({
+      id: 'agent1',
+      label: '读 README',
+      type: 'general-purpose',
+      model: 'claude-sonnet-5-5',
+      tokens: 1500,
+      state: 'completed',
+    })
     // 子智能体是前台的，不算后台任务，不插结束提示
-    expect(snap.items.some((i) => i.kind === 'notice')).toBe(false)
+    expect(snap.items.some(i => i.kind === 'notice')).toBe(false)
   })
 
   it('输入建议：一轮结束后出现，发下一条消息时清掉', async () => {
@@ -588,7 +679,7 @@ describe('EngineHost + Claude（假引擎）', () => {
     await host.stopTask(record.id, 'bg1')
     await waitFor(() => host.open(record.id).tasks.length === 0)
     snap = host.open(record.id)
-    expect(snap.items.some((i) => i.kind === 'notice' && i.text === '后台命令已停止：npm run dev')).toBe(true)
+    expect(snap.items.some(i => i.kind === 'notice' && i.text === '后台命令已停止：npm run dev')).toBe(true)
   })
 
   it('智能体追踪：重新打开的会话从保存的文件读出以前的编排和子智能体，能读子智能体的对话', async () => {
@@ -602,37 +693,99 @@ describe('EngineHost + Claude（假引擎）', () => {
     writeFileSync(
       join(sessionDir, 'workflows', 'wf_1.json'),
       JSON.stringify({
-        taskId: 'w1', workflowName: 'review', summary: '审查改动', status: 'completed', startTime: 100, durationMs: 3000,
-        totalTokens: 5000, totalToolCalls: 4,
+        taskId: 'w1',
+        workflowName: 'review',
+        summary: '审查改动',
+        status: 'completed',
+        startTime: 100,
+        durationMs: 3000,
+        totalTokens: 5000,
+        totalToolCalls: 4,
         workflowProgress: [
           { type: 'workflow_phase', index: 1, title: '查找' },
-          { type: 'workflow_agent', agentId: 'a1', label: 'bugs-0', phaseIndex: 1, model: 'claude-sonnet-5-5', state: 'done', startedAt: 100, durationMs: 2000, tokens: 2500, toolCalls: 2, promptPreview: '找 bug' },
+          {
+            type: 'workflow_agent',
+            agentId: 'a1',
+            label: 'bugs-0',
+            phaseIndex: 1,
+            model: 'claude-sonnet-5-5',
+            state: 'done',
+            startedAt: 100,
+            durationMs: 2000,
+            tokens: 2500,
+            toolCalls: 2,
+            promptPreview: '找 bug',
+          },
         ],
       }),
     )
     writeFileSync(
       join(projectsDir, enc, `${record.id}.jsonl`),
       [
-        { type: 'assistant', message: { content: [{ type: 'tool_use', id: 't1', name: 'Agent', input: { description: '读 a.txt', subagent_type: 'general-purpose' } }] } },
-        { type: 'user', timestamp: '2026-10-05T04:51:10.000Z', toolUseResult: { agentId: 'a9', status: 'completed', resolvedModel: 'claude-sonnet-5-5', totalTokens: 300, totalToolUseCount: 1, totalDurationMs: 4000 }, message: { content: [{ type: 'tool_result', tool_use_id: 't1', content: 'alpha' }] } },
-      ].map((r) => JSON.stringify(r)).join('\n') + '\n',
+        {
+          type: 'assistant',
+          message: {
+            content: [
+              {
+                type: 'tool_use',
+                id: 't1',
+                name: 'Agent',
+                input: { description: '读 a.txt', subagent_type: 'general-purpose' },
+              },
+            ],
+          },
+        },
+        {
+          type: 'user',
+          timestamp: '2026-10-05T04:51:10.000Z',
+          toolUseResult: {
+            agentId: 'a9',
+            status: 'completed',
+            resolvedModel: 'claude-sonnet-5-5',
+            totalTokens: 300,
+            totalToolUseCount: 1,
+            totalDurationMs: 4000,
+          },
+          message: { content: [{ type: 'tool_result', tool_use_id: 't1', content: 'alpha' }] },
+        },
+      ]
+        .map(r => JSON.stringify(r))
+        .join('\n') + '\n',
     )
     writeFileSync(
       join(sessionDir, 'subagents', 'workflows', 'wf_1', 'agent-a1.jsonl'),
       [
-        { type: 'user', message: { content: '[Workflow harness]\nThe computed task text follows:\n  找 bug\n  然后汇报' } },
-        { type: 'assistant', message: { content: [{ type: 'thinking', thinking: '看看文件' }, { type: 'tool_use', id: 'r1', name: 'Read', input: { file_path: join(record.cwd, 'a.txt') } }] } },
+        {
+          type: 'user',
+          message: { content: '[Workflow harness]\nThe computed task text follows:\n  找 bug\n  然后汇报' },
+        },
+        {
+          type: 'assistant',
+          message: {
+            content: [
+              { type: 'thinking', thinking: '看看文件' },
+              { type: 'tool_use', id: 'r1', name: 'Read', input: { file_path: join(record.cwd, 'a.txt') } },
+            ],
+          },
+        },
         { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'r1', content: 'alpha' }] } },
         { type: 'assistant', message: { content: [{ type: 'text', text: '没发现问题' }] } },
-      ].map((r) => JSON.stringify(r)).join('\n') + '\n',
+      ]
+        .map(r => JSON.stringify(r))
+        .join('\n') + '\n',
     )
     const again = makeHost()
     const runs = again.open(record.id).runs
-    expect(runs.workflows[0]).toMatchObject({ id: 'w1', name: 'review', tokens: 5000, phases: [{ index: 1, title: '查找' }] })
+    expect(runs.workflows[0]).toMatchObject({
+      id: 'w1',
+      name: 'review',
+      tokens: 5000,
+      phases: [{ index: 1, title: '查找' }],
+    })
     expect(runs.workflows[0].agents[0]).toMatchObject({ id: 'a1', label: 'bugs-0', phase: 1, prompt: '找 bug' })
     expect(runs.agents[0]).toMatchObject({ id: 'a9', label: '读 a.txt', tokens: 300, durationMs: 4000 })
     const items = await again.subagentTranscript(record.id, 'a1')
-    expect(items.map((i) => i.kind)).toEqual(['user', 'reasoning', 'tool', 'assistant'])
+    expect(items.map(i => i.kind)).toEqual(['user', 'reasoning', 'tool', 'assistant'])
     expect(items[0]).toMatchObject({ text: '找 bug\n然后汇报' })
     expect(items[2]).toMatchObject({ name: 'Read', status: 'completed', output: 'alpha' })
     expect(() => again.subagentTranscript(record.id, '../x')).toThrow()
@@ -646,16 +799,22 @@ describe('EngineHost + Claude（假引擎）', () => {
     await host.send(record.id, '第二句')
     await waitFor(() => turnsDone(record.id) === 2)
     // 等空闲回收，第三句在新进程里（累计值从零开始）
-    await new Promise((r) => setTimeout(r, 300))
+    await new Promise(r => setTimeout(r, 300))
     await host.send(record.id, '第三句')
     await waitFor(() => turnsDone(record.id) === 3)
     expect(spawnArgs()).toHaveLength(2)
 
-    const stats = host.open(record.id).items.filter((i) => i.kind === 'turn_stats')
+    const stats = host.open(record.id).items.filter(i => i.kind === 'turn_stats')
     expect(stats).toHaveLength(3)
     for (const s of stats) {
       if (s.kind !== 'turn_stats') continue
-      expect(s.usage.models['fake-model']).toMatchObject({ input: 10, cacheRead: 90, cacheWrite: 0, output: 5, requests: 1 })
+      expect(s.usage.models['fake-model']).toMatchObject({
+        input: 10,
+        cacheRead: 90,
+        cacheWrite: 0,
+        output: 5,
+        requests: 1,
+      })
       expect(s.usage.models['fake-model'].costUsd).toBeCloseTo(0.01)
     }
 
@@ -669,12 +828,18 @@ describe('EngineHost + Claude（假引擎）', () => {
     const page = host.usageList({ range: '7d', filter: { model: 'fake-model' }, now, offset: 0, limit: 2 })
     expect(page).toMatchObject({ total: 3, offset: 0 })
     expect(page.records).toHaveLength(2)
-    expect(page.records[0]).toMatchObject({ sessionId: record.id, engine: 'claude', route: 'cli', outcome: 'completed', sessionTitle: '第一句' })
+    expect(page.records[0]).toMatchObject({
+      sessionId: record.id,
+      engine: 'claude',
+      route: 'cli',
+      outcome: 'completed',
+      sessionTitle: '第一句',
+    })
 
     const csv = host.usageCsv({ range: '30d', filter: {}, now })
     // 表头 + 3 条记录
     expect(csv.split(/\r\n/).filter(Boolean)).toHaveLength(4)
-    expect(events.filter((e) => e.kind === 'usage_recorded')).toHaveLength(3)
+    expect(events.filter(e => e.kind === 'usage_recorded')).toHaveLength(3)
 
     // 重启应用后记录还在；清空后没有了
     const again = makeHost()
@@ -686,20 +851,26 @@ describe('EngineHost + Claude（假引擎）', () => {
 
 describe('回退到某条用户消息之前（Claude 假引擎，模拟真实记录链）', () => {
   const chainLog = () => join(root, 'chain.log')
-  const visible = (): string[][] => readFileSync(chainLog(), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as string[])
+  const visible = (): string[][] =>
+    readFileSync(chainLog(), 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map(l => JSON.parse(l) as string[])
   const chainHost = () => makeHost(60_000, { FAKE_CLAUDE_CHAIN: '1', FAKE_CLAUDE_CHAIN_LOG: chainLog() })
-  const userTexts = (host: EngineHost, id: string) => host.open(id).items.flatMap((i) => i.kind === 'user' ? [i.text] : [])
+  const userTexts = (host: EngineHost, id: string) =>
+    host.open(id).items.flatMap(i => (i.kind === 'user' ? [i.text] : []))
 
   it('移除这条及之后的对话，返回原文，下一轮从它之前的上下文接上', async () => {
-    const host = chainHost(), { record } = setup(host)
+    const host = chainHost(),
+      { record } = setup(host)
     for (const [i, text] of ['一', '二', '三'].entries()) {
       await host.send(record.id, { text, clientMessageId: `m${i}` })
       await waitFor(() => turnsDone(record.id) === i + 1)
     }
-    const second = host.open(record.id).items.find((i) => i.kind === 'user' && i.text === '二')!
+    const second = host.open(record.id).items.find(i => i.kind === 'user' && i.text === '二')!
     await expect(host.rewind(record.id, second.id)).resolves.toEqual({ text: '二' })
     expect(userTexts(host, record.id)).toEqual(['一'])
-    expect(host.open(record.id).items.some((i) => i.kind === 'turn_stats')).toBe(true)
+    expect(host.open(record.id).items.some(i => i.kind === 'turn_stats')).toBe(true)
     expect(host.open(record.id).record.pendingRewind).toBeTruthy()
     // 重启后对话记录仍是截断后的
     const reopened = makeHost(60_000, { FAKE_CLAUDE_CHAIN: '1', FAKE_CLAUDE_CHAIN_LOG: chainLog() })
@@ -707,18 +878,19 @@ describe('回退到某条用户消息之前（Claude 假引擎，模拟真实记
     await host.send(record.id, { text: '改', clientMessageId: 'm3' })
     await waitFor(() => turnsDone(record.id) === 4)
     const args = spawnArgs().at(-1)!
-    expect(args.some((a) => a.startsWith('--resume-session-at='))).toBe(true)
+    expect(args.some(a => a.startsWith('--resume-session-at='))).toBe(true)
     expect(visible().at(-1)).toEqual(['一'])
     expect(host.open(record.id).record.pendingRewind).toBeNull()
     expect(userTexts(host, record.id)).toEqual(['一', '改'])
   })
 
   it('回退第一条消息换新的引擎会话；运行中拒绝；只能回退自己的消息', async () => {
-    const host = chainHost(), { record } = setup(host)
+    const host = chainHost(),
+      { record } = setup(host)
     await host.send(record.id, { text: '一', clientMessageId: 'a' })
     await waitFor(() => turnsDone(record.id) === 1)
     const oldSid = host.open(record.id).record.engineSessionId
-    const assistant = host.open(record.id).items.find((i) => i.kind === 'assistant')!
+    const assistant = host.open(record.id).items.find(i => i.kind === 'assistant')!
     await expect(host.rewind(record.id, assistant.id)).rejects.toThrow('自己发送')
     await host.rewind(record.id, 'a')
     expect(host.open(record.id).items).toEqual([])
@@ -731,7 +903,8 @@ describe('回退到某条用户消息之前（Claude 假引擎，模拟真实记
   })
 
   it('原生记录缺失时清除旧引擎会话，不能默默恢复被回退的上下文', async () => {
-    const host = chainHost(), { record } = setup(host)
+    const host = chainHost(),
+      { record } = setup(host)
     await host.send(record.id, { text: '一', clientMessageId: 'lost-a' })
     await waitFor(() => turnsDone(record.id) === 1)
     const oldSid = host.open(record.id).record.engineSessionId
@@ -739,21 +912,26 @@ describe('回退到某条用户消息之前（Claude 假引擎，模拟真实记
     await host.rewind(record.id, 'lost-a')
     expect(host.open(record.id).record.engineSessionId).not.toBe(oldSid)
     expect(host.open(record.id).record.pendingRewind).toBeNull()
-    expect(host.open(record.id).items.some(i => i.kind === 'notice' && i.text.includes('之前的上下文没有带过去'))).toBe(true)
+    expect(host.open(record.id).items.some(i => i.kind === 'notice' && i.text.includes('之前的上下文没有带过去'))).toBe(
+      true,
+    )
   })
 
   it('截断点在引擎记录里找不到时换新的引擎会话并提示，不再重复失败', async () => {
-    const host = chainHost(), { record } = setup(host)
+    const host = chainHost(),
+      { record } = setup(host)
     await host.send(record.id, { text: '一', clientMessageId: 'a' })
     await waitFor(() => turnsDone(record.id) === 1)
     await host.send(record.id, { text: '二', clientMessageId: 'b' })
     await waitFor(() => turnsDone(record.id) === 2)
     await host.rewind(record.id, 'b')
     await host.update(record.id, {})
-    ;(host as unknown as { runtimes: Map<string, { snapshot: { record: SessionRecord } }> }).runtimes.get(record.id)!.snapshot.record.pendingRewind = 'missing-uuid'
+    ;(host as unknown as { runtimes: Map<string, { snapshot: { record: SessionRecord } }> }).runtimes.get(
+      record.id,
+    )!.snapshot.record.pendingRewind = 'missing-uuid'
     await host.send(record.id, { text: '三', clientMessageId: 'c' })
     await waitFor(() => turnsDone(record.id) === 3)
-    expect(host.open(record.id).items.some((i) => i.kind === 'notice' && i.text.includes('回退'))).toBe(true)
+    expect(host.open(record.id).items.some(i => i.kind === 'notice' && i.text.includes('回退'))).toBe(true)
     expect(host.open(record.id).record.pendingRewind).toBeNull()
   })
 })

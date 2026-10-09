@@ -16,7 +16,13 @@ describe('字面搜索与原文高亮', () => {
   })
   it('多词需要在同一字段命中；完全匹配比前缀和部分标题优先', () => {
     const terms = searchTerms('构建 错误')
-    expect(itemSearchMatch({ kind: 'command', id: 'c', command: '构建', description: null, output: '错误', exitCode: 1, status: 'failed' }, terms, 'tools')).toBeNull()
+    expect(
+      itemSearchMatch(
+        { kind: 'command', id: 'c', command: '构建', description: null, output: '错误', exitCode: 1, status: 'failed' },
+        terms,
+        'tools',
+      ),
+    ).toBeNull()
     expect(titleMatch('Build', searchTerms('build'), 'build')?.rank).toBe(0)
     expect(titleMatch('Build fix', searchTerms('build'), 'build')?.rank).toBe(1)
     expect(titleMatch('Fix Build', searchTerms('build'), 'build')?.rank).toBe(2)

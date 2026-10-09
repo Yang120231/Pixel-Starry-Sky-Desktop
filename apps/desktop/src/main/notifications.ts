@@ -8,14 +8,16 @@ const MAX_LIVE = 20
 const live = new Map<string, Notification>()
 
 function text(value: unknown, max: number, field: string): string {
-  if (typeof value !== 'string' || value.length > max || value.includes('\0')) throw new Error(`通知参数 ${field} 不正确`)
+  if (typeof value !== 'string' || value.length > max || value.includes('\0'))
+    throw new Error(`通知参数 ${field} 不正确`)
   return value
 }
 
 export function parseNotification(raw: unknown): NotificationInput {
   if (!raw || typeof raw !== 'object') throw new Error('通知参数不正确')
   const input = raw as Record<string, unknown>
-  const sessionId = input.sessionId === null || input.sessionId === undefined ? null : text(input.sessionId, 200, 'sessionId')
+  const sessionId =
+    input.sessionId === null || input.sessionId === undefined ? null : text(input.sessionId, 200, 'sessionId')
   return {
     id: text(input.id, 100, 'id'),
     title: text(input.title, 120, 'title'),
@@ -30,7 +32,9 @@ function show(win: BrowserWindow, input: NotificationInput): void {
   live.get(input.id)?.close()
   live.delete(input.id)
   const notification = new Notification({ title: input.title, body: input.body, silent: !input.sound })
-  const forget = (): void => { if (live.get(input.id) === notification) live.delete(input.id) }
+  const forget = (): void => {
+    if (live.get(input.id) === notification) live.delete(input.id)
+  }
   notification.on('click', () => {
     forget()
     if (win.isDestroyed()) return
@@ -50,7 +54,9 @@ function show(win: BrowserWindow, input: NotificationInput): void {
   notification.show()
   if (input.attention && !win.isFocused()) {
     win.flashFrame(true)
-    win.once('focus', () => { if (!win.isDestroyed()) win.flashFrame(false) })
+    win.once('focus', () => {
+      if (!win.isDestroyed()) win.flashFrame(false)
+    })
   }
 }
 
@@ -68,7 +74,9 @@ export function initNotifications(): void {
   if (!app.isPackaged && process.env.PIXELSKY_DEBUG_PORT) {
     ;(globalThis as Record<string, unknown>).__pixelskyNotifications = {
       list: () => [...live.entries()].map(([id, n]) => ({ id, title: n.title, body: n.body, silent: n.silent })),
-      click: (id: string) => { live.get(id)?.emit('click') },
+      click: (id: string) => {
+        live.get(id)?.emit('click')
+      },
     }
   }
 }

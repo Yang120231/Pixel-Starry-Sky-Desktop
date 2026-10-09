@@ -67,7 +67,9 @@ function ItemView({ item, reply }: { item: Item; reply?: string }) {
       return (
         <>
           <Markdown text={item.text} />
-          {item.status === 'interrupted' && <div className="mt-1.5 text-meta text-fg-faint">{tr("session.live.ItemRows.message246")}</div>}
+          {item.status === 'interrupted' && (
+            <div className="mt-1.5 text-meta text-fg-faint">{tr('session.live.ItemRows.message246')}</div>
+          )}
         </>
       )
     case 'reasoning':
@@ -78,7 +80,13 @@ function ItemView({ item, reply }: { item: Item; reply?: string }) {
       return <NoticeRow item={item} />
     case 'turn_stats':
       // 这一轮回复的「复制」放在统计行最前面，不额外占一行
-      return <TurnStats usage={item.usage} className="conversation-message -mt-1 px-0.5" leading={reply ? <AssistantMessageActions text={reply} /> : undefined} />
+      return (
+        <TurnStats
+          usage={item.usage}
+          className="conversation-message -mt-1 px-0.5"
+          leading={reply ? <AssistantMessageActions text={reply} /> : undefined}
+        />
+      )
     default:
       return null
   }
@@ -92,7 +100,10 @@ export function LiveTranscript({ snapshot }: { snapshot: SessionSnapshot | null 
   const scroller = useRef<HTMLDivElement>(null)
   const stick = useRef(true)
   const detached = useRef(false)
-  const detachForSearch = useCallback(() => { stick.current = false; detached.current = true }, [])
+  const detachForSearch = useCallback(() => {
+    stick.current = false
+    detached.current = true
+  }, [])
   const highlight = useItemLocation(snapshot?.record.id ?? null, scroller, !!snapshot, detachForSearch)
   const running = !!snapshot && snapshot.state !== 'idle'
   const items = snapshot?.items ?? []
@@ -114,7 +125,7 @@ export function LiveTranscript({ snapshot }: { snapshot: SessionSnapshot | null 
   const streaming = last && (last.kind === 'assistant' || last.kind === 'reasoning') && last.status === 'running'
   const showThinking = snapshot?.state === 'running' && !streaming
   // 空闲时直接发送的消息在引擎启动期间先显示在对话里（不是排队），开始执行后由正式的用户消息替换
-  const starting = snapshot ? snapshot.queue.filter((q) => isStarting(q, snapshot.queuePaused)) : []
+  const starting = snapshot ? snapshot.queue.filter(q => isStarting(q, snapshot.queuePaused)) : []
 
   // 最近一轮（最后一条用户消息之后）的最后一条错误：给一键按钮（docs/ui/source-switch.md §3.5）
   let actionNoticeId: string | null = null
@@ -143,65 +154,104 @@ export function LiveTranscript({ snapshot }: { snapshot: SessionSnapshot | null 
   return (
     <div
       ref={scroller}
-      onScroll={(e) => {
+      onScroll={e => {
         const el = e.currentTarget
         if (!detached.current) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_PX
       }}
-      onWheel={() => { detached.current = false }}
-      onTouchMove={() => { detached.current = false }}
-      onPointerDown={() => { detached.current = false }}
-      onKeyDown={() => { detached.current = false }}
+      onWheel={() => {
+        detached.current = false
+      }}
+      onTouchMove={() => {
+        detached.current = false
+      }}
+      onPointerDown={() => {
+        detached.current = false
+      }}
+      onKeyDown={() => {
+        detached.current = false
+      }}
       data-search-session={snapshot?.record.id}
       className="conversation-scroller selectable min-h-0 flex-1 overflow-y-auto bg-app"
     >
       <div data-conversation-stream className="conversation-inset conversation-reading flex flex-col gap-3 pt-5 pb-6">
         {!snapshot && (
           <div className="conversation-message flex items-center gap-2 py-8 text-list text-fg-muted">
-            <Spinner size={14} />{tr("session.live.LiveTranscript.message262")} </div>
+            <Spinner size={14} />
+            {tr('session.live.LiveTranscript.message262')}{' '}
+          </div>
         )}
         {blocks.map((b, i) => {
           if (b.type === 'tools') {
             return (
               <div key={b.key} className="conversation-message flex flex-col border-l border-line pl-1.5">
-                {b.items.map((it) => (
-                  <div key={it.id} data-search-item={it.id} className={highlight === it.id ? 'search-hit' : undefined}><ToolItemRow item={it} /></div>
+                {b.items.map(it => (
+                  <div key={it.id} data-search-item={it.id} className={highlight === it.id ? 'search-hit' : undefined}>
+                    <ToolItemRow item={it} />
+                  </div>
                 ))}
               </div>
             )
           }
-          if (b.type === 'changes') return <ChangedFilesCard key={b.key} className="conversation-message" data={b.data} target={snapshot ? { sessionId: snapshot.record.id } : undefined} />
+          if (b.type === 'changes')
+            return (
+              <ChangedFilesCard
+                key={b.key}
+                className="conversation-message"
+                data={b.data}
+                target={snapshot ? { sessionId: snapshot.record.id } : undefined}
+              />
+            )
           // 统计关闭时 TurnStats 不产生 DOM，避免外层空块在 flex 列表里留下间距。
-          if (b.item.kind === 'turn_stats') return <ItemView key={b.item.id} item={b.item} reply={replies.get(b.item.id)} />
+          if (b.item.kind === 'turn_stats')
+            return <ItemView key={b.item.id} item={b.item} reply={replies.get(b.item.id)} />
           const isUser = b.item.kind === 'user'
           const item = b.item
           if (item.kind === 'notice' && item.level === 'error' && snapshot) {
             const text = platformNoticeText(snapshot.record, item.text)
             return (
-              <div key={item.id} data-search-item={item.id} className={['conversation-message', highlight === item.id ? 'search-hit' : ''].join(' ')}>
+              <div
+                key={item.id}
+                data-search-item={item.id}
+                className={['conversation-message', highlight === item.id ? 'search-hit' : ''].join(' ')}
+              >
                 <NoticeRow item={text === item.text ? item : { ...item, text }} />
                 {item.id === actionNoticeId && <NoticeActions record={snapshot.record} text={item.text} />}
               </div>
             )
           }
           return (
-            <div key={item.id} data-search-item={item.id} className={['group/message', isUser ? 'conversation-user-row' : 'conversation-message', isUser && i > 0 ? 'mt-4' : '', highlight === item.id ? 'search-hit' : ''].join(' ')}>
+            <div
+              key={item.id}
+              data-search-item={item.id}
+              className={[
+                'group/message',
+                isUser ? 'conversation-user-row' : 'conversation-message',
+                isUser && i > 0 ? 'mt-4' : '',
+                highlight === item.id ? 'search-hit' : '',
+              ].join(' ')}
+            >
               <ItemView item={item} />
             </div>
           )
         })}
-        {starting.map((q) => (
+        {starting.map(q => (
           <div key={q.id} data-starting-message={q.id} className="flex flex-col gap-3">
             <div className={cn('conversation-user-row', blocks.length > 0 && 'mt-4')}>
-              <UserBubble item={{ kind: 'user', id: q.id, text: q.text, attachments: q.attachments, createdAt: q.createdAt }} />
+              <UserBubble
+                item={{ kind: 'user', id: q.id, text: q.text, attachments: q.attachments, createdAt: q.createdAt }}
+              />
             </div>
             <div className="conversation-message flex h-[30px] items-center gap-2 px-2 text-list text-fg-muted">
-              <Spinner size={13} />{tr('session.queue.starting')}
+              <Spinner size={13} />
+              {tr('session.queue.starting')}
             </div>
           </div>
         ))}
         {showThinking && (
           <div className="conversation-message flex h-[30px] items-center gap-2 px-2 text-list text-fg-muted">
-            <Spinner size={13} />{tr("session.live.LiveTranscript.message263")} </div>
+            <Spinner size={13} />
+            {tr('session.live.LiveTranscript.message263')}{' '}
+          </div>
         )}
       </div>
     </div>

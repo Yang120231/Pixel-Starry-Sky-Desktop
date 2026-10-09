@@ -17,17 +17,35 @@ try {
   if (Number.isInteger(pid) && pid > 0 && pid !== process.pid) {
     try {
       const command = readFileSync(`/proc/${pid}/cmdline`, 'utf8')
-      if (command.includes('/helper-') && command.split('\0').includes(namespace)) { process.kill(pid, 0); process.stderr.write('SSH_ALREADY_CONNECTED'); process.exit(2) }
-    } catch { /* Stale lock or PID reused by another process. */ }
+      if (command.includes('/helper-') && command.split('\0').includes(namespace)) {
+        process.kill(pid, 0)
+        process.stderr.write('SSH_ALREADY_CONNECTED')
+        process.exit(2)
+      }
+    } catch {
+      /* Stale lock or PID reused by another process. */
+    }
   }
   unlinkSync(lock)
 } catch {}
 writeFileSync(lock, String(process.pid), { flag: 'wx', mode: 0o600 })
-process.once('exit', () => { try { if (readFileSync(lock, 'utf8') === String(process.pid)) unlinkSync(lock) } catch {} })
+process.once('exit', () => {
+  try {
+    if (readFileSync(lock, 'utf8') === String(process.pid)) unlinkSync(lock)
+  } catch {}
+})
 const peer = new RpcPeer(process.stdin, process.stdout, async (method, args) => (await runtime).call(method, args))
 const runtime = createRemoteRuntime(peer, dir)
 let closing = false
-const close = () => { if (closing) return; closing = true; void runtime.then(r => r.close()).finally(() => process.exit(0)) }
+const close = () => {
+  if (closing) return
+  closing = true
+  void runtime.then(r => r.close()).finally(() => process.exit(0))
+}
 peer.onClose = close
-process.once('SIGTERM', close); process.once('SIGINT', close)
-process.on('uncaughtException', () => { peer.close(new Error('REMOTE_PROCESS_FAILED')); close() })
+process.once('SIGTERM', close)
+process.once('SIGINT', close)
+process.on('uncaughtException', () => {
+  peer.close(new Error('REMOTE_PROCESS_FAILED'))
+  close()
+})

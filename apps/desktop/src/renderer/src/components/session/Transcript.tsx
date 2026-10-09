@@ -14,11 +14,26 @@ export function Transcript({ sessionId }: { sessionId: string | null }) {
   const scroller = useRef<HTMLDivElement>(null)
   const highlight = useItemLocation(sessionId, scroller, true)
   return (
-    <div ref={scroller} data-search-session={sessionId} className="conversation-scroller selectable min-h-0 flex-1 overflow-y-auto bg-app">
+    <div
+      ref={scroller}
+      data-search-session={sessionId}
+      className="conversation-scroller selectable min-h-0 flex-1 overflow-y-auto bg-app"
+    >
       <div data-conversation-stream className="conversation-inset conversation-reading flex flex-col pt-4 pb-6">
-        {toolCalls.length > 0 && <div className="conversation-message"><ToolGroup calls={toolCalls} searchHighlight={highlight} /></div>}
-        {toolCalls.length > 0 && (assistantReply || changedFiles) && <div className="conversation-message my-4 border-t border-line-subtle" />}
-        <div data-search-item="demo-assistant" className={cn('conversation-message', highlight === 'demo-assistant' && 'search-hit')}><AssistantMessage /></div>
+        {toolCalls.length > 0 && (
+          <div className="conversation-message">
+            <ToolGroup calls={toolCalls} searchHighlight={highlight} />
+          </div>
+        )}
+        {toolCalls.length > 0 && (assistantReply || changedFiles) && (
+          <div className="conversation-message my-4 border-t border-line-subtle" />
+        )}
+        <div
+          data-search-item="demo-assistant"
+          className={cn('conversation-message', highlight === 'demo-assistant' && 'search-hit')}
+        >
+          <AssistantMessage />
+        </div>
         <ChangedFilesCard className={cn('conversation-message', assistantReply && 'mt-4')} />
         {turnUsage && <TurnStats usage={turnUsage} className="conversation-message mt-3" />}
       </div>

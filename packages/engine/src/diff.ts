@@ -61,7 +61,7 @@ export function diffText(oldText: string, newText: string): DiffResult {
 /** 新文件：每行都是新增 */
 export function diffAdded(content: string): DiffResult {
   const lines = splitLines(content)
-  return { diff: lines.map((l) => `+${l}`).join('\n'), added: lines.length, removed: 0 }
+  return { diff: lines.map(l => `+${l}`).join('\n'), added: lines.length, removed: 0 }
 }
 
 export interface PatchHunk {

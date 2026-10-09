@@ -20,7 +20,11 @@ const STATUS_ICON: Record<Exclude<ChannelTaskStatus, 'running'>, { icon: LucideI
 }
 
 /** 派给 AI 成员的一项活（docs/ui/channels.md §5.2），状态变化时原地更新 */
-export function ChannelTaskCard({ task, membersById, onOpenSession }: {
+export function ChannelTaskCard({
+  task,
+  membersById,
+  onOpenSession,
+}: {
   task: ChannelTask
   membersById: ReadonlyMap<string, ChannelMember>
   onOpenSession: (sessionId: string) => void
@@ -32,13 +36,33 @@ export function ChannelTaskCard({ task, membersById, onOpenSession }: {
   const status = task.status === 'running' ? null : STATUS_ICON[task.status]
   return (
     <div className="conversation-message mt-3 pl-10" data-channel-message={task.id}>
-      <article aria-label={`${tr(STATUS_LABEL[task.status])}：${task.title}`}
-        className={cn('max-w-[560px] rounded-lg border border-line-card bg-surface p-3 shadow-sm', task.status === 'waiting' && 'border-warn/40')}>
+      <article
+        aria-label={`${tr(STATUS_LABEL[task.status])}：${task.title}`}
+        className={cn(
+          'max-w-[560px] rounded-lg border border-line-card bg-surface p-3 shadow-sm',
+          task.status === 'waiting' && 'border-warn/40',
+        )}
+      >
         <div className="flex items-center gap-2 text-meta">
-          {status ? <status.icon size={14} strokeWidth={1.75} className={cn('shrink-0', status.className)} /> : <Spinner size={13} />}
-          <span className={cn('shrink-0 font-medium', task.status === 'waiting' ? 'text-warn' : task.status === 'failed' ? 'text-danger' : 'text-fg-muted')}>{tr(STATUS_LABEL[task.status])}</span>
-          <span className="min-w-0 flex-1 truncate text-fg-faint">{tr('channels.task.assigned', { author: author?.name ?? '?', assignee: assignee?.name ?? '?' })}</span>
-          <time dateTime={new Date(task.at).toISOString()} className="shrink-0 text-fg-faint tabular-nums">{formatClock(task.at)}</time>
+          {status ? (
+            <status.icon size={14} strokeWidth={1.75} className={cn('shrink-0', status.className)} />
+          ) : (
+            <Spinner size={13} />
+          )}
+          <span
+            className={cn(
+              'shrink-0 font-medium',
+              task.status === 'waiting' ? 'text-warn' : task.status === 'failed' ? 'text-danger' : 'text-fg-muted',
+            )}
+          >
+            {tr(STATUS_LABEL[task.status])}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-fg-faint">
+            {tr('channels.task.assigned', { author: author?.name ?? '?', assignee: assignee?.name ?? '?' })}
+          </span>
+          <time dateTime={new Date(task.at).toISOString()} className="shrink-0 text-fg-faint tabular-nums">
+            {formatClock(task.at)}
+          </time>
         </div>
         <div className="mt-1.5 text-list font-medium text-fg">{task.title}</div>
         {task.summary && <p className="mt-1 text-list break-words text-fg-secondary">{task.summary}</p>}
@@ -47,7 +71,11 @@ export function ChannelTaskCard({ task, membersById, onOpenSession }: {
             {place && <span className="min-w-0 truncate">{place}</span>}
             {task.diff && <DiffStat added={task.diff.added} removed={task.diff.removed} className="shrink-0" />}
             {task.sessionId && (
-              <Button variant="outline" className="ml-auto h-7 px-2.5 text-meta" onClick={() => onOpenSession(task.sessionId!)}>
+              <Button
+                variant="outline"
+                className="ml-auto h-7 px-2.5 text-meta"
+                onClick={() => onOpenSession(task.sessionId!)}
+              >
                 {tr(task.status === 'waiting' ? 'channels.approve' : 'channels.openSession')}
               </Button>
             )}

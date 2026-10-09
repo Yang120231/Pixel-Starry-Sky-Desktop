@@ -9,12 +9,12 @@ const listeners = new Set<() => void>()
 export function openEngineDetail(id: EngineId | null): void {
   if (detail === id) return
   detail = id
-  listeners.forEach((l) => l())
+  listeners.forEach(l => l())
 }
 
 export function useEngineDetail(): EngineId | null {
   return useSyncExternalStore(
-    (cb) => {
+    cb => {
       listeners.add(cb)
       return () => listeners.delete(cb)
     },

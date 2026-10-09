@@ -101,7 +101,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   // 截图模式（src/main/index.ts）通过这个钩子切换主题
   useEffect(() => {
-    window.__pixelskySetTheme = (theme) => setPreferenceState(theme)
+    window.__pixelskySetTheme = theme => setPreferenceState(theme)
     return () => {
       delete window.__pixelskySetTheme
     }
@@ -111,18 +111,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     () => ({
       preference,
       resolved,
-      setPreference: (next) => {
+      setPreference: next => {
         setPreferenceState(next)
         save(STORAGE_KEY, next)
       },
       motion,
-      setMotion: (next) => {
+      setMotion: next => {
         setMotionState(next)
         save(MOTION_KEY, next)
       },
       systemReducedMotion,
       paneFocusMotion,
-      setPaneFocusMotion: (next) => {
+      setPaneFocusMotion: next => {
         setPaneFocusMotionState(next)
         if (!isDemo) save(PANE_FOCUS_MOTION_KEY, next)
       },
@@ -135,6 +135,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
 export function useTheme(): ThemeContextValue {
   const value = useContext(ThemeContext)
-  if (!value) throw new Error(tr("theme.ThemeProvider.message1043"))
+  if (!value) throw new Error(tr('theme.ThemeProvider.message1043'))
   return value
 }
