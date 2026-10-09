@@ -1,7 +1,7 @@
 // 演示数据：照参考图 docs/reference/workbench-session.jpg 写的，品牌名已替换。
 // 用 `pnpm dev:demo` 启动时显示，用来对照参考图调样式。
 import type { AppData } from './types'
-import { COMPOSER, PANEL_TABS, RAIL_ITEMS } from './shared'
+import { COMPOSER, RAIL_ITEMS } from './shared'
 import { demoChannelMembers, demoChannelMessages, demoChannels } from './channels'
 
 export const demo: AppData = {
@@ -76,8 +76,6 @@ export const demo: AppData = {
   composer: { ...COMPOSER, placeholder: '继续追问或提出修改，@ 添加文件，/ 输入命令' },
   composerStatus: { machine: '这台电脑', branch: 'main', contextPercent: 12 },
   defaultPanelOpen: true,
-  panelTabs: PANEL_TABS.map((tab) => (tab.id === 'files' ? { ...tab, count: 6 } : tab)),
-  defaultPanelTab: 'browser',
   browserPages: [
     { id: 'p-web', kind: 'site', title: 'pixel-web' },
     { id: 'p-learn', kind: 'site', title: 'Features | Learn' },

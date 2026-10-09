@@ -32,8 +32,6 @@ export const {
   composer,
   composerStatus,
   defaultPanelOpen,
-  panelTabs,
-  defaultPanelTab,
   browserPages,
   browserUrl,
   annotations,

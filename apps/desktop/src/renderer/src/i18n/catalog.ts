@@ -304,14 +304,6 @@ export const catalog = {
     "zh": "恢复原窗口大小和位置",
     "en": "Restore previous window size and position"
   },
-  "panel.AnnotationBar.message76": {
-    "zh": "删除批注",
-    "en": "Delete annotation"
-  },
-  "panel.AnnotationBar.message77": {
-    "zh": "把批注发给智能体",
-    "en": "Send annotation to agent"
-  },
   "panel.BrowserTab.message78": {
     "zh": "还没有打开网页",
     "en": "No page open yet"
@@ -336,17 +328,9 @@ export const catalog = {
     "zh": "批注",
     "en": "Annotate"
   },
-  "panel.PanelTabs.message84": {
-    "zh": "面板标签",
-    "en": "Panel tabs"
-  },
   "panel.PanelTabs.message85": {
     "zh": "关闭标签",
     "en": "Close tab"
-  },
-  "panel.PanelTabs.message86": {
-    "zh": "放大面板",
-    "en": "Expand panel"
   },
   "panel.RightPanel.message87": {
     "zh": "即将推出",

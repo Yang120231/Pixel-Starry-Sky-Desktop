@@ -1,6 +1,6 @@
 // 空界面：新用户第一次打开时的样子，没有任何项目、会话或用户数据。默认显示这一套。
 import type { AppData } from './types'
-import { COMPOSER, PANEL_TABS, RAIL_ITEMS } from './shared'
+import { COMPOSER, RAIL_ITEMS } from './shared'
 
 export const empty: AppData = {
   currentUser: null,
@@ -19,8 +19,6 @@ export const empty: AppData = {
   composer: COMPOSER,
   composerStatus: { machine: '这台电脑', branch: null, contextPercent: null },
   defaultPanelOpen: false,
-  panelTabs: PANEL_TABS,
-  defaultPanelTab: 'browser',
   browserPages: [],
   browserUrl: '',
   annotations: [],

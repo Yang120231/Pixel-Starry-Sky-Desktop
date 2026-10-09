@@ -87,14 +87,6 @@ export interface Attachment {
   label: string
 }
 
-export interface PanelTab {
-  id: string
-  kind: 'files' | 'copies' | 'sandbox' | 'browser' | 'tasks'
-  label: string
-  count?: number
-  closable?: boolean
-}
-
 export interface BrowserPage {
   id: string
   kind: 'site' | 'preview'
@@ -166,8 +158,6 @@ export interface AppData {
   composerStatus: { machine: string; branch: string | null; contextPercent: number | null }
   /** 启动时右侧面板是否打开 */
   defaultPanelOpen: boolean
-  panelTabs: PanelTab[]
-  defaultPanelTab: string
   browserPages: BrowserPage[]
   /** 空字符串表示没有打开网页 */
   browserUrl: string
