@@ -3,6 +3,9 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { IPC_CONTRACT, REMOTE_PROTOCOL, type IpcChannelSpec } from '@pixelsky/protocol'
 import { describe, expect, it } from 'vitest'
+import { ENGINE_OPS } from '../core/engine/ops'
+import { PROJECT_TOOL_OPS } from '../core/project-tools/ops'
+import { FILE_OPS } from '../core/workspace/ops'
 
 // 静态扫描 main / preload / 远端运行时的源码，保证它们和 packages/protocol 的 IPC 契约说的是同一个通道集合。
 // 通道名有几种写法（字面量、`'前缀:' + name`、包装函数），扫描器只认下面这几种；出现新写法时「站点数」检查会失败，
@@ -11,6 +14,14 @@ const contract = IPC_CONTRACT as Record<string, IpcChannelSpec>
 const mainDir = fileURLToPath(new URL('..', import.meta.url))
 const preloadDir = fileURLToPath(new URL('../../preload', import.meta.url))
 const contractFile = fileURLToPath(new URL('../../../../../packages/protocol/src/ipc/contract.ts', import.meta.url))
+
+/** core 里以通道名为键的操作表：本机用 `opEntries(X_OPS)` 循环注册，远端用 `...bindOps(X_OPS, …)` 并入方法表 */
+const OP_TABLES: Record<string, object> = { ENGINE_OPS, FILE_OPS, PROJECT_TOOL_OPS }
+const tableKeys = (file: string, text: string, pattern: RegExp): string[] =>
+  [...text.matchAll(pattern)].flatMap(([, name]) => {
+    expect(OP_TABLES[name], `${file}: unknown op table ${name}`).toBeDefined()
+    return Object.keys(OP_TABLES[name])
+  })
 
 /** 远端方法表里不对应任何通道的辅助方法：握手，以及远端 → 本机会话回调用的平台请求。 */
 const HELPER_METHODS = ['hello', 'platform:request', 'platform:record']
@@ -44,6 +55,10 @@ function registeredChannels(): { handle: string[]; on: string[] } {
     const wrapped = names(text, /\bipc\.handle\(\s*(\w+)\s*,/g)
     expect(direct.length + prefixed.length + wrapped.length, `${file}: unrecognised ipc registration`).toBe(sites)
     for (const m of direct) (m[1] === 'handle' ? handle : on).add(m[2])
+    // 操作表：for (const [channel, op] of opEntries(X_OPS)) handle(channel, …)，包装函数原样注册
+    const tables = tableKeys(file, text, /\bopEntries\((\w+)\)/g)
+    if (tables.length) expect(wrapped.length, `${file}: op table without a wrapper`).toBeGreaterThan(0)
+    for (const name of tables) handle.add(name)
     // 包装函数 handle('files:list', …)：名字写全，包装函数原样注册
     const calls = names(text, /\bhandle\(\s*'([^']+)'\s*,/g)
     if (wrapped.length) for (const name of calls) if (name.includes(':')) handle.add(name)
@@ -99,7 +114,9 @@ function remoteMethods(): string[] {
     end = text.indexOf('\n  const methods: Record<', start)
   expect(start).toBeGreaterThan(0)
   expect(end).toBeGreaterThan(start)
-  return [...text.slice(start, end).matchAll(/^ {4}(?:'([^']+)'|(\w+)):/gm)].map(m => m[1] ?? m[2]).sort()
+  const body = text.slice(start, end)
+  const own = [...body.matchAll(/^ {4}(?:'([^']+)'|(\w+)):/gm)].map(m => m[1] ?? m[2])
+  return [...own, ...tableKeys('machines/remote-runtime.ts', body, /^ {4}\.\.\.bindOps\((\w+),/gm)].sort()
 }
 
 describe('IPC contract shape', () => {

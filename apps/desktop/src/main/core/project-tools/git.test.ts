@@ -86,9 +86,11 @@ const fail = (r: GitResult) => {
 }
 const tools = (
   opts: ConstructorParameters<typeof GitTools>[2] = {
-    trash: async p => {
-      trashed.push(p)
-      await rm(p)
+    trash: async files => {
+      for (const { absolute } of files) {
+        trashed.push(absolute)
+        await rm(absolute)
+      }
     },
   },
 ) => new GitTools(host, () => {}, opts)

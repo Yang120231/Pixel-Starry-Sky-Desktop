@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { REMOTE_PROTOCOL } from '@pixelsky/protocol'
@@ -116,5 +116,54 @@ describe('remote runtime', () => {
     await call('projectTools:gitDiscard', ref, { paths: [], untracked: ['new.txt'] })
     expect(existsSync(join(project, 'new.txt'))).toBe(false)
     expect(await readFile(join(project, '.git', 'HEAD'), 'utf8')).toMatch(/ref:/)
+    // 远端没有回收站：移到数据目录的 trash/<时间戳>/，可以找回（P6 前是 git clean 直接删除）
+    const [batch] = await readdir(join(root, 'data', 'trash'))
+    expect(await readFile(join(root, 'data', 'trash', batch, 'new.txt'), 'utf8')).toBe('draft')
+  })
+})
+
+// P6 起远端与本机共用 core 的操作表：下面是 P6 前远端和本机不一致、现在按本机行为的地方（docs/restructure.md §8.5）
+describe('remote runtime follows the local behavior', () => {
+  it('checks arguments like the desktop does', async () => {
+    await expect(call('engine:openSession', '')).rejects.toThrow('参数 id 不对')
+    await expect(call('engine:catalog', 'gpt')).rejects.toThrow('未知引擎')
+    await expect(call('engine:setConfig', 'gpt', {})).rejects.toThrow('未知引擎')
+    await expect(call('engine:archiveSession', 'x', 'yes')).rejects.toThrow('归档值不正确')
+    await expect(call('engine:artifactRead', { sessionId: 's', path: 'relative.txt' })).rejects.toThrow(
+      '文件路径不正确',
+    )
+    await expect(call('projectTools:tasks', '')).rejects.toThrow('内容不能为空')
+    await expect(call('engine:addProject', '  ')).rejects.toThrow('内容不能为空')
+  })
+
+  it('searches tasks by every word, including tags, newest first', async () => {
+    const added = await call('engine:addProject', project)
+    const a = await call('projectTools:createTask', added.id, { title: 'Write tests', tags: ['remote'] })
+    const b = await call('projectTools:createTask', added.id, { title: 'Write docs', note: 'remote helper' })
+    await call('projectTools:updateTask', a.id, { note: 'updated later' })
+    expect((await call('projectTools:searchTasks', 'write remote', null)).map((t: any) => t.id)).toEqual([a.id, b.id])
+    expect(await call('projectTools:searchTasks', '   ', null)).toEqual([])
+    expect(await call('projectTools:searchTasks', 'write', 'other-project')).toEqual([])
+  })
+
+  it('resolves a session in the project folder to the project', async () => {
+    const added = await call('engine:addProject', project)
+    const session = await call('engine:createSession', { projectId: added.id })
+    expect(await call('files:target', { sessionId: session.id })).toEqual({
+      ref: { projectId: added.id },
+      path: project,
+      name: 'project',
+    })
+    await expect(call('files:target', { sessionId: 'missing' })).rejects.toThrow('会话已不存在')
+  })
+
+  it('checks search queries and supports cancelling', async () => {
+    await call('engine:addProject', project)
+    await expect(call('engine:search', { requestId: 2, text: 'x' })).rejects.toThrow('搜索参数无效')
+    const result = await call('engine:search', { requestId: 2, text: 'nothing here', scope: 'all', projectId: null })
+    expect(result).toMatchObject({ requestId: 2 })
+    expect(result.cancelled).toBeFalsy()
+    // engine:cancelSearch 在 P6 前是空操作，现在按请求号取消（没有进行中的查询时不报错）
+    await call('engine:cancelSearch', 2)
   })
 })

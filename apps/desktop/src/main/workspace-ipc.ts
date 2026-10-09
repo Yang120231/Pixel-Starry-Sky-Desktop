@@ -2,6 +2,8 @@ import { app, BrowserWindow, clipboard, dialog, shell, type IpcMainInvokeEvent }
 import { Editors } from './core/editors'
 import * as ipc from './ipc/guard'
 import { WorkspaceFiles, workspacePath, workspaceRef, type TargetResolver } from './core/workspace-files'
+import { FILE_OPS } from './core/workspace/ops'
+import { opEntries } from './core/ops'
 import type { EditorKind } from '../shared/types/workspace'
 import { nativeText } from './ui-language'
 import { machines } from './machines/service'
@@ -24,13 +26,7 @@ export async function initWorkspace(resolveTarget: TargetResolver): Promise<void
       { deny: '不允许的调用方' },
     )
   }
-  handle('files:target', (_e, ref) => files.target(ref))
-  handle('files:list', (_e, ref, path) => files.list(workspaceRef(ref), path))
-  handle('files:search', (_e, ref, name) => files.search(workspaceRef(ref), name))
-  handle('files:status', (_e, ref) => files.status(workspaceRef(ref)))
-  handle('files:read', (_e, ref, path) => files.read(workspaceRef(ref), path))
-  handle('files:headContent', (_e, ref, path) => files.headContent(workspaceRef(ref), path))
-  handle('files:save', (_e, ref, path, text, version) => files.save(workspaceRef(ref), path, text, version))
+  for (const [channel, op] of opEntries(FILE_OPS)) handle(channel, (_e, ...args) => op({ files }, ...args))
   handle('files:reveal', async (_e, ref, path = '') => {
     const target = files.target(ref)
     const file = await workspacePath(target.path, path)

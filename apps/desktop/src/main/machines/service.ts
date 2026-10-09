@@ -14,6 +14,7 @@ import { registerShutdown } from '../shutdown'
 import { FingerprintRequired, SshConnection } from './ssh'
 import { machineOf, remoteIds, remoteArguments, remoteMethod } from './identity'
 import { resolveRoute } from './routing'
+import { addProjectPath } from '../core/engine/ops'
 
 interface StoredMachine extends Omit<MachineInput, 'password' | 'passphrase'> {
   id: string
@@ -420,7 +421,7 @@ export async function initMachines(
     },
     directories: (id, path) => service.call(id, remoteMethod('machines:directories'), [path]),
     addProject: (id, path) =>
-      id === 'local' ? host.addProject(path) : service.call(id, remoteMethod('machines:addProject'), [path]),
+      id === 'local' ? addProjectPath(host, path) : service.call(id, remoteMethod('machines:addProject'), [path]),
   }
   for (const [name, fn] of Object.entries(actions))
     ipc.handle(`machines:${name}` as ipc.InvokeChannel, (_event, ...args) => fn(...args))

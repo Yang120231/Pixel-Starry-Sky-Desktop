@@ -18,6 +18,7 @@ import type {
 import { workspacePath } from '../workspace-files'
 import { value, type ToolsHost } from './common'
 import { classifyGitError, parseStatusV2 } from './git-parse'
+import type { TrashFile } from './trash'
 
 export const DIFF_LIMIT = 2 * 1024 * 1024
 const OUTPUT_LIMIT = 16 * 1024 * 1024
@@ -150,12 +151,15 @@ interface Repo {
   workspace: string
 }
 
+/** 放弃未跟踪文件时的去处：本机进系统回收站，远端移到数据目录的 trash/（docs/ui/git-panel.md §2.4）；不给则用 git clean */
+export type GitTrash = (files: TrashFile[]) => Promise<void>
+
 export class GitTools {
   private locks = new Map<string, Promise<unknown>>()
   constructor(
     private host: ToolsHost,
     private changed: () => void,
-    private opts: { trash?: (absolute: string) => Promise<void>; timeouts?: Partial<typeof GIT_TIMEOUTS> } = {},
+    private opts: { trash?: GitTrash; timeouts?: Partial<typeof GIT_TIMEOUTS> } = {},
   ) {}
 
   private timeout(kind: keyof typeof GIT_TIMEOUTS): number {
@@ -454,9 +458,12 @@ export class GitTools {
       if (!all && remove.length !== untracked.length) throw new Error('文件状态已变化，请刷新后重试')
       if (restore.length) await this.exec(repo, 'discard', ['checkout', '--', ...restore], 'stage')
       if (!remove.length) return
-      if (this.opts.trash)
-        for (const path of remove) await this.opts.trash(await workspacePath(repo.root, path, 'file'))
-      else await this.exec(repo, 'discard', ['clean', '-f', '-q', '--', ...remove], 'stage')
+      if (this.opts.trash) {
+        const files: TrashFile[] = []
+        for (const path of remove)
+          files.push({ absolute: await workspacePath(repo.root, path, 'file'), relative: path })
+        await this.opts.trash(files)
+      } else await this.exec(repo, 'discard', ['clean', '-f', '-q', '--', ...remove], 'stage')
     })
   }
 
