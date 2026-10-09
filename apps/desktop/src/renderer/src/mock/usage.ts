@@ -1,5 +1,5 @@
 // 演示模式的用量记录：按固定种子生成近 90 天的数据（每次打开都一样），只在 pnpm dev:demo 时使用。
-import type { UsageRecord } from '@/usage/types'
+import type { UsageRecord } from '@/features/usage/types'
 
 /** 固定种子的伪随机数（mulberry32） */
 function rng(seed: number): () => number {

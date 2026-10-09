@@ -27,7 +27,7 @@ import type {
 } from '../../../shared/types/project-tools'
 import type { TerminalProfile } from '../../../shared/types/terminal'
 import type { DirectoryListing, EditorState, FileDocument } from '../../../shared/types/workspace'
-import type { InboxItem } from '@/components/panel/inbox/inboxModel'
+import type { InboxItem } from '@/features/panel/inbox/inboxModel'
 import type { AppData, DemoSessionChange, EngineLite } from './types'
 
 /** 是否为演示模式（主进程根据环境变量 PIXELSKY_DEMO=1 或启动参数 --demo 传入） */

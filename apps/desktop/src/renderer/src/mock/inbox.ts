@@ -1,5 +1,5 @@
 // 任务 › 待处理 的演示数据（docs/ui/tasks-inbox.md），只在 `pnpm dev:demo` 显示；三栏各一条
-import type { InboxItem } from '@/components/panel/inbox/inboxModel'
+import type { InboxItem } from '@/features/panel/inbox/inboxModel'
 
 const now = Date.now()
 export const demoInbox: InboxItem[] = [

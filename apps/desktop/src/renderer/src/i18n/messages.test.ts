@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { allMessages, setCurrentLocale, tr, translateText, translateMessage } from './core'
-import { searchSettings } from '../settings/searchIndex'
+import { searchSettings } from '../features/settings/searchIndex'
 
 afterEach(() => setCurrentLocale('zh-CN'))
 describe('中英文词典', () => {

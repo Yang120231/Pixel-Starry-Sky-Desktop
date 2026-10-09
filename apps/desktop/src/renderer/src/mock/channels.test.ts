@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { demo } from './demo'
 import { empty } from '@/data/empty'
-import { unreadTotal } from '../channels/model'
+import { unreadTotal } from '../features/channels/model'
 
 describe('协作频道演示数据', () => {
   const ids = new Set(demo.channelMembers.map(m => m.id))

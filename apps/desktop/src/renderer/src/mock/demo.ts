@@ -129,7 +129,7 @@ export const demo: AppData = {
     ],
     topUpNote: '充值额度不会过期，订阅额度用完后从余额扣除。',
   },
-  // 协作频道的角标由未读数计算（channels/store.ts），不再写在 BADGES 里
+  // 协作频道的角标由未读数计算（features/channels/store.ts），不再写在 BADGES 里
   channels: demoChannels,
   channelMembers: demoChannelMembers,
   channelMessages: demoChannelMessages,

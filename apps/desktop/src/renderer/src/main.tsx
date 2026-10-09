@@ -4,7 +4,7 @@ import { installDemo, isDemo } from './data/demo'
 
 async function boot(): Promise<void> {
   if (isDemo) installDemo((await import('./mock')).demoSource)
-  await import('./start')
+  await import('./app/start')
 }
 
 void boot()

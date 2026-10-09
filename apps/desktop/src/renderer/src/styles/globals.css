@@ -72,7 +72,7 @@
   --shadow-composer: var(--shadow-composer);
   --shadow-menu: var(--shadow-menu);
 
-  /* 用户在设置里选的字体排在最前面（--font-*-user，见 appearance/fonts.ts），后面是默认回退链 */
+  /* 用户在设置里选的字体排在最前面（--font-*-user，见 features/appearance/fonts.ts），后面是默认回退链 */
   --font-sans:
     var(--font-sans-user,) 'Inter', 'Segoe UI Variable Text', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI',
     'Microsoft YaHei', system-ui, sans-serif;
@@ -343,7 +343,7 @@
   }
 }
 
-/* 侧边栏、右侧面板收起 / 展开（components/ui/CollapsibleSlot.tsx）：外层宽度做动画，展开稍慢、收起稍快。
+/* 侧边栏、右侧面板收起 / 展开（ui/CollapsibleSlot.tsx）：外层宽度做动画，展开稍慢、收起稍快。
    会话顶部栏右侧给系统窗口按钮的留白跟着同步过渡，按钮不会跳。
    动画开关由设置里的「动画」决定（<html data-motion>，见 docs/ui/settings.md §3.1）。见 docs/ui/workbench.md §4.1 */
 .collapsible-slot {
@@ -491,7 +491,7 @@
   }
 }
 
-/* 推理强度滑块（components/session/EffortSlider.tsx），配色和 JuCode 桌面版同步（docs/engines.md §15.7）：
+/* 推理强度滑块（features/session/EffortSlider.tsx），配色和 JuCode 桌面版同步（docs/engines.md §15.7）：
    --effort-accent 是引擎的品牌色（Claude：--engine-claude），没有品牌色时用正文色。
    30px 胶囊轨道，已选部分用强调色 30% 填充；停靠点在内侧，圆点始终在胶囊里；
    最高档时填充色流动（22% → 55% → 22%）、圆点发光。 */
@@ -637,7 +637,7 @@
   }
 }
 
-/* 语法高亮：highlight.js 的 token 类名 → 设计变量 --syn-*（components/code/highlight.tsx，docs/ui/code-highlight.md） */
+/* 语法高亮：highlight.js 的 token 类名 → 设计变量 --syn-*（ui/code/highlight.tsx，docs/ui/code-highlight.md） */
 .hljs-comment,
 .hljs-quote {
   color: var(--syn-comment);
@@ -718,7 +718,7 @@
   backdrop-filter: blur(18px) saturate(1.15);
 }
 
-/* 开关（推理强度弹窗里的 Ultracode / Fast / 思考摘要等，components/session/ComposerMenus.tsx）：
+/* 开关（推理强度弹窗里的 Ultracode / Fast / 思考摘要等，features/session/ComposerMenus.tsx）：
    关：淡底 + 细边，圆点白（深色下浅灰）；开：强调色底，圆点用主按钮文字色。浅色深色都看得清 */
 .ui-switch {
   background: var(--bg-selected);

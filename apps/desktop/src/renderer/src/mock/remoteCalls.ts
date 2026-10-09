@@ -1,5 +1,5 @@
 // 演示模式的账号调用记录：固定种子生成近 90 天的数据，只用来搭界面（docs/ui/usage.md §9.4）。
-import type { CallClient, RemoteCall } from '@/usage/remote-types'
+import type { CallClient, RemoteCall } from '@/features/usage/remote-types'
 
 function rng(seed: number): () => number {
   let a = seed
