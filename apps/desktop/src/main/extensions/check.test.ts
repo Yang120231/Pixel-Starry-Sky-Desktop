@@ -9,8 +9,8 @@ beforeEach(() => {
   mkdirSync(scratch, { recursive: true })
   root = mkdtempSync(join(scratch, 'mcp-check-'))
 })
-// Windows 上子进程退出后句柄释放有延迟，重试几次，避免在 scratch 留下空目录
-afterEach(() => rmSync(root, { recursive: true, force: true, maxRetries: 4, retryDelay: 150 }))
+// Windows 上子进程（工作目录就是 root）被结束后句柄释放有延迟，最长重试约 2 秒，避免 EPERM 和在 scratch 留下空目录
+afterEach(() => rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 }))
 const result = (m: Record<string, unknown>): Record<string, unknown> | null =>
   m.method === 'initialize'
     ? {
