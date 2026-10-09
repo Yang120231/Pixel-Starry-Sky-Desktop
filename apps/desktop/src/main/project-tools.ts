@@ -11,7 +11,7 @@ import { registerShutdown } from './shutdown'
 import type { CopyInput, ManualTask, ServiceInput } from '../shared/types/project-tools'
 import { initProjectBrowser } from './project-tools/browser'
 import { machines } from './machines/service'
-import { machineOf } from './machines/identity'
+import { machineOf, remoteMethod } from './machines/identity'
 import { gitInfo } from './project-tools/common'
 import type { WorkspaceChoice } from '../shared/types/machines'
 export let resolveCopyPath: ((projectId: string, copyId: string) => Promise<string>) | undefined
@@ -56,7 +56,7 @@ export async function initProjectTools(host: ToolsHost): Promise<void> {
   ipcMain.handle('machines:workspaces', async (event, projectId: string) => {
     if (!toolsSender(event)) throw new Error('不受信任的页面')
     const machine = machineOf(projectId)
-    if (machine !== 'local') return machines!.call(machine, 'workspaces', [projectId])
+    if (machine !== 'local') return machines!.call(machine, remoteMethod('machines:workspaces'), [projectId])
     const target = host.resolve({ projectId }),
       info = await gitInfo(target.path)
     const children = info.root ? await copies.list(projectId) : []
@@ -76,7 +76,9 @@ export async function initProjectTools(host: ToolsHost): Promise<void> {
     if (!toolsSender(event)) throw new Error('不受信任的页面')
     const machine = machineOf(choice.projectId)
     if (machine !== 'local')
-      return machines!.call(machine, 'engine:createSession', [{ projectId: choice.projectId, copyId: choice.copyId }])
+      return machines!.call(machine, remoteMethod('machines:openWorkspace'), [
+        { projectId: choice.projectId, copyId: choice.copyId },
+      ])
     if (choice.copyId) {
       const copy = copies.get(choice.copyId)
       if (copy.projectId !== choice.projectId) throw new Error('副本不属于项目')

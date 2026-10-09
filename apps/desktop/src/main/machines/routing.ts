@@ -1,3 +1,4 @@
+import { IPC_CONTRACT, type IpcChannelSpec } from '@pixelsky/protocol'
 import { argumentMachine } from './identity'
 
 /** What `Machines.invoke` should do with one IPC call. Pure data: no electron, no I/O. */
@@ -10,39 +11,24 @@ export type Route =
   | { kind: 'picker' }
   | { kind: 'remote'; machine: string }
 
-/** Channels that always run on this computer, whichever machine is selected. */
-const hostOnly = [
-  'files:finishClose',
-  'terminal:clipboardRead',
-  'terminal:clipboardWrite',
-  'terminal:openLink',
-  'projectTools:openExternal',
-]
-/** Channels that need a native folder / file picker, which cannot run for a remote machine. */
-const picker = [
-  'files:reveal',
-  'editor:open',
-  'projectTools:openPath',
-  'projectTools:revealCopy',
-  'projectTools:chooseDirectory',
-  'engine:addProject',
-]
-/** Channels whose parameters name a resource: without a remote id they stay on this computer. */
-const resourceChannel =
-  /^(engine:(openSession|send|context|compact|cancelQueued|moveQueued|runQueuedNow|steerQueued|resumeQueue|rewind|interrupt|interruptTurn|answer|updateSession|deleteSession|renameSession|archiveSession|setSessionBottom|stopTask|taskOutput|subagentTranscript|removeProject|renameProject)|projectTools:(tasks|createTask|updateTask|deleteTask|reorderTasks|copies|branches|previewCopy|createCopy|openCopy|removeCopy|forgetCopy|deleteService|startService|stopService|restartService|revealCopy))$/
+const contract: Readonly<Record<string, IpcChannelSpec>> = IPC_CONTRACT
 
-/** Decide which machine one call goes to. The checks run in a fixed order; keep it. */
+/**
+ * Decide which machine one call goes to, from the channel's IPC contract entry (route / picker / special).
+ * The checks run in a fixed order; keep it. Only argument 0 is looked at (objects by sessionId / projectId / id).
+ * A channel the contract does not list behaves like a plain `selected` one.
+ */
 export function resolveRoute(channel: string, args: unknown[], currentId: string): Route {
-  if (channel === 'engine:projects') return { kind: 'aggregate', what: 'projects' }
-  if (channel === 'engine:sessions') return { kind: 'aggregate', what: 'sessions' }
+  const spec: Partial<IpcChannelSpec> = Object.hasOwn(contract, channel) ? contract[channel] : {}
+  if (spec.route === 'aggregate')
+    return { kind: 'aggregate', what: channel === 'engine:projects' ? 'projects' : 'sessions' }
   const explicit = argumentMachine(args)
   const localRef = !!args[0] && typeof args[0] === 'object' && ('projectId' in args[0] || 'sessionId' in args[0])
-  const resource = resourceChannel.test(channel)
-  const id = explicit ?? (localRef || resource ? 'local' : currentId)
-  if (id === 'local' || hostOnly.includes(channel)) return { kind: 'local' }
-  if (channel === 'files:copyPath') return { kind: 'copyPath' }
-  if (channel === 'files:target') return { kind: 'target' }
-  if (channel === 'engine:usageExport') return { kind: 'usageExport', machine: id }
-  if (picker.includes(channel)) return { kind: 'picker' }
+  const id = explicit ?? (localRef || spec.route === 'resource' ? 'local' : currentId)
+  if (id === 'local' || spec.route === 'hostOnly') return { kind: 'local' }
+  if (spec.special === 'copyPath') return { kind: 'copyPath' }
+  if (spec.special === 'target') return { kind: 'target' }
+  if (spec.special === 'usageExport') return { kind: 'usageExport', machine: id }
+  if (spec.picker) return { kind: 'picker' }
   return { kind: 'remote', machine: id }
 }

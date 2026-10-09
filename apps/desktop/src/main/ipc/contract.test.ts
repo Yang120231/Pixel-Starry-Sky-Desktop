@@ -89,11 +89,11 @@ function preloadChannels(): Record<'invoke' | 'send' | 'sendSync' | 'on', string
   }
 }
 
-/** 远端运行时方法表的键。 */
+/** 远端运行时方法表的键（契约方法表 + 辅助方法表）。 */
 function remoteMethods(): string[] {
   const text = readFileSync(join(mainDir, 'machines/remote-runtime.ts'), 'utf8')
-  const start = text.indexOf('const methods: Record<'),
-    end = text.indexOf('\n  return {', start)
+  const start = text.indexOf('const contractMethods: Record<'),
+    end = text.indexOf('\n  const methods: Record<', start)
   expect(start).toBeGreaterThan(0)
   expect(end).toBeGreaterThan(start)
   return [...text.slice(start, end).matchAll(/^ {4}(?:'([^']+)'|(\w+)):/gm)].map(m => m[1] ?? m[2]).sort()
@@ -177,7 +177,17 @@ describe('IPC contract vs remote runtime', () => {
     for (const { file, text } of sources(mainDir))
       if (!file.endsWith('machines/remote-runtime.ts'))
         for (const name of names(text, /\.call(?:<[^>]*>)?\([^,()]+,\s*'([^']+)'/g)) called.add(name)
-    expect(called.size).toBeGreaterThan(3)
+    expect(called.size).toBeGreaterThan(2)
     for (const name of called) expect(methods, name).toContain(name)
+  })
+  it('maps channels to methods through the contract only', () => {
+    const mapped: string[] = []
+    for (const { file, text } of sources(mainDir))
+      for (const name of names(text, /\bremoteMethod\(\s*'([^']+)'\s*\)/g)) {
+        expect(contract[name]?.remote, `${file}: ${name}`).toBeDefined()
+        mapped.push(contract[name].remote!)
+      }
+    expect(mapped.length).toBeGreaterThanOrEqual(4)
+    for (const method of mapped) expect(methods, method).toContain(method)
   })
 })

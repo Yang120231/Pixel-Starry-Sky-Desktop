@@ -1,7 +1,7 @@
 import { homedir, hostname, platform, arch } from 'node:os'
 import { join, dirname, isAbsolute } from 'node:path'
 import { mkdir, readdir, realpath, writeFile } from 'node:fs/promises'
-import { REMOTE_PROTOCOL, type SessionRecord } from '@pixelsky/protocol'
+import { REMOTE_PROTOCOL, type IPC_CONTRACT, type SessionRecord } from '@pixelsky/protocol'
 import { EngineHost, type EngineHostOptions } from '@pixelsky/engine'
 import { WorkspaceFiles, workspaceRef } from '../workspace-files'
 import { Tasks } from '../project-tools/tasks'
@@ -13,6 +13,13 @@ import { gitInfo, samePath, value, type ToolsHost } from '../project-tools/commo
 import type { CopyInput, ManualTask, ServiceInput } from '../../shared/types/project-tools'
 import type { WorkspaceRef } from '../../shared/types/workspace'
 import type { RpcPeer } from './rpc'
+
+type Handler = (...args: any[]) => unknown
+type RemoteOf<Spec> = Spec extends { readonly remote: infer Method extends string } ? Method : never
+/** Every method name the IPC contract declares in a `remote` field: each one needs an implementation below. */
+type ContractMethod = RemoteOf<(typeof IPC_CONTRACT)[keyof typeof IPC_CONTRACT]>
+/** Methods that serve no channel: the handshake, and the platform requests the helper sends back to the desktop. */
+type HelperMethod = 'hello' | 'platform:request' | 'platform:record'
 
 export async function createRemoteRuntime(
   peer: Pick<RpcPeer, 'call' | 'event'>,
@@ -87,16 +94,7 @@ export async function createRemoteRuntime(
   const git = new GitTools(tools, changed)
   await Promise.all([tasks.init(), copies.init()])
   await services.init()
-  const methods: Record<string, (...args: any[]) => unknown> = {
-    hello: () => ({
-      protocol: REMOTE_PROTOCOL,
-      platform: platform(),
-      arch: arch(),
-      hostname: hostname(),
-      home: homedir(),
-      node: process.versions.node,
-      shell: process.env.SHELL || '/bin/sh',
-    }),
+  const contractMethods: Record<ContractMethod, Handler> = {
     directories: async (input?: string) => {
       const path = await realpath(input ? value(input, 4096, true) : homedir())
       if (!isAbsolute(path)) throw new Error('目录不正确')
@@ -247,12 +245,24 @@ export async function createRemoteRuntime(
         })),
       ]
     },
+  }
+  const helperMethods: Record<HelperMethod, Handler> = {
+    hello: () => ({
+      protocol: REMOTE_PROTOCOL,
+      platform: platform(),
+      arch: arch(),
+      hostname: hostname(),
+      home: homedir(),
+      node: process.versions.node,
+      shell: process.env.SHELL || '/bin/sh',
+    }),
     'platform:request': (id, requestId, model) => {
       const record = host.executionRecord(id)
       if (record) host.platformRequestContext(record)?.(requestId, model)
     },
     'platform:record': id => host.executionRecord(id),
   }
+  const methods: Record<string, Handler> = { ...helperMethods, ...contractMethods }
   return {
     host,
     resolve,

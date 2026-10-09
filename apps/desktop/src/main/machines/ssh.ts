@@ -2,9 +2,12 @@ import { Client, type ClientChannel, type ConnectConfig } from 'ssh2'
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { connect as connectTcp, createServer, type Server } from 'node:net'
+import { REMOTE_PROTOCOL } from '@pixelsky/protocol'
 import { RpcPeer, type RpcHandler } from './rpc'
 import type { MachineInput } from '../../shared/types/machines'
 
+/** Upload directory of the helper on the remote machine; changes together with the protocol version. */
+const REMOTE_DIR = 'v' + REMOTE_PROTOCOL
 export const quoteSh = (value: string): string => "'" + value.replaceAll("'", "'\\''") + "'"
 export interface RemoteHello {
   protocol: number
@@ -108,9 +111,9 @@ export class SshConnection {
     const helper = await readFile(helperPath),
       hash = createHash('sha256').update(helper).digest('hex')
     // Upload through stdin; paths/data never become shell fragments.
-    const install = `const fs=require('node:fs'),p=require('node:path'),c=require('node:crypto');const b=[];process.stdin.on('data',x=>b.push(x));process.stdin.on('end',()=>{const data=Buffer.concat(b);if(c.createHash('sha256').update(data).digest('hex')!==${JSON.stringify(hash)})process.exit(2);const dir=p.join(require('node:os').homedir(),'.local','share','pixelsky','remote','v1');fs.mkdirSync(dir,{recursive:true,mode:448});const file=p.join(dir,${JSON.stringify('helper-' + hash + '.cjs')});fs.writeFileSync(file,data,{mode:384});process.stdout.write(file)})`
+    const install = `const fs=require('node:fs'),p=require('node:path'),c=require('node:crypto');const b=[];process.stdin.on('data',x=>b.push(x));process.stdin.on('end',()=>{const data=Buffer.concat(b);if(c.createHash('sha256').update(data).digest('hex')!==${JSON.stringify(hash)})process.exit(2);const dir=p.join(require('node:os').homedir(),'.local','share','pixelsky','remote',${JSON.stringify(REMOTE_DIR)});fs.mkdirSync(dir,{recursive:true,mode:448});const file=p.join(dir,${JSON.stringify('helper-' + hash + '.cjs')});fs.writeFileSync(file,data,{mode:384});process.stdout.write(file)})`
     const remotePath = (await this.exec('node -e ' + quoteSh(install), helper)).trim()
-    if (!remotePath.startsWith(info.home + '/.local/share/pixelsky/remote/v1/helper-'))
+    if (!remotePath.startsWith(info.home + '/.local/share/pixelsky/remote/' + REMOTE_DIR + '/helper-'))
       throw new Error('SSH_HELPER_PATH_INVALID')
     const namespace = input.id ?? 'default'
     if (!/^(ssh-[a-f0-9-]+|default)$/.test(namespace)) throw new Error('SSH_INVALID_CONFIG')
@@ -132,7 +135,8 @@ export class SshConnection {
       if (diagnostic.includes('SSH_ALREADY_CONNECTED')) throw new Error('SSH_ALREADY_CONNECTED')
       throw error
     }
-    if (this.hello.protocol !== 1 || this.hello.platform !== 'linux') throw new Error('SSH_PROTOCOL_MISMATCH')
+    if (this.hello.protocol !== REMOTE_PROTOCOL || this.hello.platform !== 'linux')
+      throw new Error('SSH_PROTOCOL_MISMATCH')
     return this.hello
   }
   channel(command: string, pty?: { cols: number; rows: number }): Promise<ClientChannel> {

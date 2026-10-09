@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { IPC_CONTRACT, type IpcChannelSpec } from '@pixelsky/protocol'
 import { describe, expect, it } from 'vitest'
-import { argumentMachine, remoteArguments } from './identity'
+import { remoteArguments } from './identity'
 import { resolveRoute, type Route } from './routing'
 
 // 黄金用例：期望值由重构前的 Machines.invoke / remoteArguments 实现生成，再写成字面量。
@@ -431,29 +431,13 @@ describe('remoteArguments golden table', () => {
 })
 
 // ---------------------------------------------------------------------------
-// 契约一致性：packages/protocol 的 IPC_CONTRACT 只声明，这里验证按契约推导的路由与 resolveRoute 完全一致
+// 契约一致性：resolveRoute 和 remoteArguments 都从 packages/protocol 的 IPC_CONTRACT 推导，这里验证契约列出的通道集合与 ids
 // ---------------------------------------------------------------------------
 const contract = IPC_CONTRACT as Record<string, IpcChannelSpec>
 /** 经过 Machines.invoke 的路由档位；local / self / push 的通道不会走到 resolveRoute */
 const invoked = new Set(['aggregate', 'selected', 'resource', 'hostOnly'])
 /** routeChannels 里列出、但实际不经过 Machines.invoke 的通道（workspace-ipc 只让 files:* 和 editor:open 走 invoke） */
 const notInvoked = ['editor:choose', 'editor:preferences', 'editor:remove', 'editor:state']
-
-/** 按契约推导路由：判定顺序与 resolveRoute 相同（先聚合，再看首参数里的机器，再看特判 / 选择器）。 */
-function routeFromContract(channel: string, args: unknown[], currentId: string): Route {
-  const spec = contract[channel]
-  if (spec.route === 'aggregate')
-    return { kind: 'aggregate', what: channel === 'engine:projects' ? 'projects' : 'sessions' }
-  const explicit = argumentMachine(args)
-  const localRef = !!args[0] && typeof args[0] === 'object' && ('projectId' in args[0] || 'sessionId' in args[0])
-  const id = explicit ?? (localRef || spec.route === 'resource' ? 'local' : currentId)
-  if (id === 'local' || spec.route === 'hostOnly') return { kind: 'local' }
-  if (spec.special === 'copyPath') return { kind: 'copyPath' }
-  if (spec.special === 'target') return { kind: 'target' }
-  if (spec.special === 'usageExport') return { kind: 'usageExport', machine: id }
-  if (spec.picker) return { kind: 'picker' }
-  return { kind: 'remote', machine: id }
-}
 
 describe('IPC contract agrees with resolveRoute', () => {
   const routed = Object.keys(contract).filter(channel => invoked.has(contract[channel].route))
@@ -462,15 +446,6 @@ describe('IPC contract agrees with resolveRoute', () => {
     expect(routed.sort()).toEqual(listed.filter(channel => !notInvoked.includes(channel)).sort())
     for (const channel of notInvoked) expect(['local', 'self']).toContain(contract[channel].route)
   })
-  for (const channel of routed) {
-    it(channel, () => {
-      for (const current of currents)
-        for (const args of routeShapes)
-          expect(routeFromContract(channel, copy(args), current), JSON.stringify([current, args])).toEqual(
-            resolveRoute(channel, copy(args), current),
-          )
-    })
-  }
   it('keeps ids in step with remoteArguments for every remote method', () => {
     const remote = Object.entries(contract).filter(([, spec]) => spec.remote)
     expect(remote.length).toBeGreaterThan(80)

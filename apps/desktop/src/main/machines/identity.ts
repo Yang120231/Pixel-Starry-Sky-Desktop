@@ -1,3 +1,5 @@
+import { IPC_CONTRACT, type IpcChannelSpec } from '@pixelsky/protocol'
+
 /** Resource IDs carry machine ownership; user text, file contents and native engine IDs do not. */
 export function machineOf(id: unknown): string {
   return typeof id === 'string' && /^ssh-[a-f0-9-]+~/.test(id) ? id.slice(0, id.indexOf('~')) : 'local'
@@ -55,17 +57,18 @@ export function argumentMachine(args: unknown[]): string | null {
   }
   return null
 }
+const contract: Readonly<Record<string, IpcChannelSpec>> = IPC_CONTRACT
+/** Which argument positions of each remote method hold resource IDs, read from the IPC contract. */
+const idPositions = new Map<string, readonly number[]>()
+for (const spec of Object.values(contract)) if (spec.remote && spec.ids) idPositions.set(spec.remote, spec.ids)
+/** The remote helper method that serves a channel (`machines:workspaces` -> `workspaces`); channels without one keep their own name. */
+export function remoteMethod(channel: string): string {
+  return (Object.hasOwn(contract, channel) ? contract[channel].remote : undefined) ?? channel
+}
 /** Only positional resource parameters are decoded; prompt/title/path strings are user data. */
 export function remoteArguments(method: string, args: unknown[], machine: string): unknown[] {
-  // searchTasks(text, projectId)：第一个参数是用户输入的文字，资源 ID 在第二位
-  const ids = new Set(method === 'projectTools:searchTasks' ? [1] : [0])
-  if (
-    /^engine:(cancelQueued|moveQueued|runQueuedNow|steerQueued|rewind|interruptTurn|answer|stopTask|taskOutput|subagentTranscript)$/.test(
-      method,
-    )
-  )
-    ids.add(1)
-  if (method === 'engine:steerQueued') ids.add(2)
+  // Methods the contract does not list decode the first parameter only.
+  const ids = new Set(idPositions.get(method) ?? [0])
   return args.map((arg, index) =>
     typeof arg === 'string' ? (ids.has(index) ? remoteIds(arg, machine, false) : arg) : remoteIds(arg, machine, false),
   )

@@ -107,6 +107,10 @@ export const machineErrors = {
   },
   SSH_EXTENSIONS_REMOTE: { zh: '远端扩展请在远端 CLI 中管理。', en: 'Manage remote extensions in the remote CLI.' },
   SSH_LINUX_REQUIRED: { zh: '第一期 SSH 连接支持 Linux 主机。', en: 'SSH connections currently support Linux hosts.' },
+  SSH_PROTOCOL_MISMATCH: {
+    zh: '远端辅助进程的协议版本与本机不一致，请重新连接；若仍失败，请确认远端是 Linux 主机。',
+    en: 'The remote helper protocol version does not match this app. Reconnect; if it still fails, make sure the remote is a Linux host.',
+  },
   SSH_DISCONNECT_BEFORE_EDIT: { zh: '请先断开连接再修改配置。', en: 'Disconnect before editing the configuration.' },
   SSH_USE_WORKSPACE_PICKER: {
     zh: '请使用工作区菜单浏览远端目录。',

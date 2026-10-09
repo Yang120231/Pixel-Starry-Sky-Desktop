@@ -12,7 +12,7 @@ import { platformCharges } from '../platformBilling'
 import { validateQueuedInput } from '../platform'
 import { registerShutdown } from '../shutdown'
 import { FingerprintRequired, SshConnection } from './ssh'
-import { machineOf, remoteIds, remoteArguments } from './identity'
+import { machineOf, remoteIds, remoteArguments, remoteMethod } from './identity'
 import { resolveRoute } from './routing'
 
 interface StoredMachine extends Omit<MachineInput, 'password' | 'passphrase'> {
@@ -384,7 +384,7 @@ export class Machines {
       case 'target':
         return this.target(args[0] as WorkspaceRef)
       case 'usageExport': {
-        const csv = await this.call<string>(route.machine, channel, args)
+        const csv = await this.call<string>(route.machine, remoteMethod(channel), args)
         const result = await dialog.showSaveDialog({
           defaultPath: 'pixelsky-remote-usage.csv',
           filters: [{ name: 'CSV', extensions: ['csv'] }],
@@ -396,7 +396,7 @@ export class Machines {
       case 'picker':
         throw new Error('SSH_USE_WORKSPACE_PICKER')
       case 'remote':
-        return this.call(route.machine, channel, args)
+        return this.call(route.machine, remoteMethod(channel), args)
     }
   }
 }
@@ -418,8 +418,9 @@ export async function initMachines(
       const result = await dialog.showOpenDialog({ properties: ['openFile'] })
       return result.canceled ? null : result.filePaths[0]
     },
-    directories: (id, path) => service.call(id, 'directories', [path]),
-    addProject: (id, path) => (id === 'local' ? host.addProject(path) : service.call(id, 'engine:addProject', [path])),
+    directories: (id, path) => service.call(id, remoteMethod('machines:directories'), [path]),
+    addProject: (id, path) =>
+      id === 'local' ? host.addProject(path) : service.call(id, remoteMethod('machines:addProject'), [path]),
   }
   for (const [name, fn] of Object.entries(actions))
     ipcMain.handle('machines:' + name, (event, ...args) => {
