@@ -1,0 +1,35 @@
+/** Platform charges are authoritative; never substitute a CLI estimate. */
+export type CostSource = 'estimate' | 'platform' | 'pending' | 'unavailable'
+export type BillingSource = 'balance' | 'subscription'
+export interface PlatformRequest { id: string; model: string; groupId: string }
+export interface PlatformCharge {
+  requestId: string
+  model: string
+  groupId: string
+  costUsd: number
+  billing: BillingSource
+  rateMultiplier: number
+  input: number
+  output: number
+  cacheRead: number
+  cacheWrite: number
+}
+export interface PlatformSettlement {
+  account: string
+  requests: PlatformRequest[]
+  startedAt: number
+  complete: boolean
+}
+
+export type CallClient = 'pixelsky-desktop' | 'jucode-cli' | 'api' | 'unknown'
+export type CallStatus = 'success' | 'error' | 'rate_limited'
+export interface RemoteCall {
+  id: string; createdAt: number; model: string; client: CallClient
+  device: string | null; keyName: string | null; stream: boolean
+  status: CallStatus; httpStatus: number
+  input: number; cacheRead: number; cacheWrite: number; output: number
+  costUsd: number | null; firstTokenMs: number | null; durationMs: number; turnId: string | null
+  billing?: BillingSource
+}
+export interface RemoteCallPage { calls: RemoteCall[]; total: number; offset: number; nextCursor: string | null }
+export interface RemoteCallsQuery { range: 'today' | '7d' | '30d' | '90d'; model: string | null; offset: number; limit: number; now: number }

@@ -1,0 +1,19 @@
+{
+  "name": "@pixelsky/protocol",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "像素星空统一协议：界面和引擎层共用的类型与 reduce()（docs/engines.md §5）",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  },
+  "author": "xiao_hei"
+}
