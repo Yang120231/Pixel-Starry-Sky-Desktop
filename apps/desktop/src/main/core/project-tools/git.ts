@@ -1,5 +1,5 @@
-// Git 面板的主进程实现（docs/ui/git-panel.md）。不依赖 Electron：本机由 project-tools.ts 注入回收站，
-// SSH 辅助进程直接使用（没有回收站时用 git clean）。所有命令以参数数组执行，路径前一律加 `--`。
+// Git 面板的主进程实现（docs/ui/git-panel.md）。不依赖 Electron：本机由 workspace/project-tools-ipc.ts 注入回收站，
+// SSH 辅助进程注入数据目录下的 trash/（core/project-tools/trash.ts）；都不注入时用 git clean。所有命令以参数数组执行，路径前一律加 `--`。
 import { spawn } from 'node:child_process'
 import { readFile, stat } from 'node:fs/promises'
 import { resolve } from 'node:path'

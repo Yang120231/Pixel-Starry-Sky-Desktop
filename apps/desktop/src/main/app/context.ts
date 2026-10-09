@@ -15,7 +15,7 @@ export interface AppContext {
   engine: EngineHost | null
   /** SSH 机器（machines/service.ts 的 initMachines，在 initEngine 里） */
   machines: Machines | null
-  /** 项目工具（workspace/project-tools.ts 的 initProjectTools） */
+  /** 项目工具（workspace/project-tools-ipc.ts 的 initProjectTools） */
   projectTools: ProjectTools | null
 }
 

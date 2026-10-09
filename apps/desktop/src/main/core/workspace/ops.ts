@@ -1,4 +1,4 @@
-// 项目文件读写（docs/ui/open-in-editor.md）：本机与远端共用的操作表。显示文件夹、复制路径只在本机（workspace-ipc.ts）
+// 项目文件读写（docs/ui/open-in-editor.md）：本机与远端共用的操作表。显示文件夹、复制路径只在本机（workspace/files-ipc.ts）
 import type { OpTable } from '../ops'
 import { workspaceRef, type WorkspaceFiles } from '../workspace-files'
 

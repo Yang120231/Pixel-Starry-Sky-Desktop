@@ -1,5 +1,5 @@
 // 引擎接口（docs/engines.md §3、§5）：本机与远端共用的操作表，参数先校验再交给 EngineHost。
-// 「添加项目」（本机弹对话框）和「导出用量」（本机弹保存框）不在表里，见 engine-ipc.ts / remote-runtime.ts
+// 「添加项目」（本机弹对话框）和「导出用量」（本机弹保存框）不在表里，见 engine/ipc.ts / machines/remote-runtime.ts
 import { searchQuery, type EngineHost } from '@pixelsky/engine'
 import type { ApprovalDecision, SessionRecord } from '@pixelsky/protocol'
 import type { SessionPatch } from '../../../shared/types/engine'

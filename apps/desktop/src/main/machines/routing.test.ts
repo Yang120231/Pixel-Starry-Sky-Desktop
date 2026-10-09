@@ -436,7 +436,7 @@ describe('remoteArguments golden table', () => {
 const contract = IPC_CONTRACT as Record<string, IpcChannelSpec>
 /** 经过 Machines.invoke 的路由档位；local / self / push 的通道不会走到 resolveRoute */
 const invoked = new Set(['aggregate', 'selected', 'resource', 'hostOnly'])
-/** routeChannels 里列出、但实际不经过 Machines.invoke 的通道（workspace-ipc 只让 files:* 和 editor:open 走 invoke） */
+/** routeChannels 里列出、但实际不经过 Machines.invoke 的通道（workspace/files-ipc.ts 只让 files:* 和 editor:open 走 invoke） */
 const notInvoked = ['editor:choose', 'editor:preferences', 'editor:remove', 'editor:state']
 
 describe('IPC contract agrees with resolveRoute', () => {

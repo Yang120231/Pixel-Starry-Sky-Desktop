@@ -1,5 +1,5 @@
 // 项目工具（docs/ui/project-tools.md、git-panel.md）：本机与远端共用的操作表。
-// 选择文件夹、打开目录、打开网址只在本机（project-tools.ts）
+// 选择文件夹、打开目录、打开网址只在本机（workspace/project-tools-ipc.ts）
 import type { WorkspaceChoice } from '../../../shared/types/machines'
 import type { CopyInput, ManualTask, ServiceInput } from '../../../shared/types/project-tools'
 import type { OpTable } from '../ops'

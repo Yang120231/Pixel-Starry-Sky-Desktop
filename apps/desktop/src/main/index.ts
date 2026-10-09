@@ -266,10 +266,10 @@ app.whenReady().then(async () => {
   setAppMenu()
   initUiLanguage(setAppMenu)
   initWindowControls()
-  initNotifications() // 系统通知，见 notifications.ts
-  initAccount() // 账号登录与额度，见 account.ts
-  initAppInfo() // 「关于」页的版本与运行环境，见 app-info.ts
-  await initEngine(ctx) // 引擎系统（Claude Code 等），见 engine-ipc.ts
+  initNotifications() // 系统通知，见 notifications/notifications.ts
+  initAccount() // 账号登录与额度，见 account/account.ts
+  initAppInfo() // 「关于」页的版本与运行环境，见 app/info.ts
+  await initEngine(ctx) // 引擎系统（Claude Code 等），见 engine/ipc.ts
   await initWorkspace(ctx)
   await initProjectTools(ctx)
   createWindow()
