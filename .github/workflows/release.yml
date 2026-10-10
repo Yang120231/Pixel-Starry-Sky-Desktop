@@ -42,7 +42,13 @@ jobs:
           else
             pre=""
             case "$GITHUB_REF_NAME" in *-*) pre="--prerelease" ;; esac
-            gh release create "$GITHUB_REF_NAME" --draft $pre --verify-tag --title "${GITHUB_REF_NAME#v}" --notes ""
+            # 更新说明写在 .github/release-notes/<标签>.md（有就用，没有留空，到 Release 页再写）；应用里的「更新说明」显示的就是这段
+            notes=".github/release-notes/$GITHUB_REF_NAME.md"
+            if [ -f "$notes" ]; then
+              gh release create "$GITHUB_REF_NAME" --draft $pre --verify-tag --title "${GITHUB_REF_NAME#v}" --notes-file "$notes"
+            else
+              gh release create "$GITHUB_REF_NAME" --draft $pre --verify-tag --title "${GITHUB_REF_NAME#v}" --notes ""
+            fi
           fi
       - name: 打包并上传到草稿 Release
         working-directory: apps/desktop
