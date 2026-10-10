@@ -33,8 +33,8 @@ export const SHOWCASE_SESSIONS = [
 
 type SessionId = (typeof SHOWCASE_SESSIONS)[number]['id']
 
-const T0 = Date.now()
-const MIN = 60_000
+export const T0 = Date.now()
+export const MIN = 60_000
 const F = '```'
 
 /** 展示里用到的文件；mock/files.ts 合进演示文件列表，路径链接和改动卡片点得开 */
@@ -133,10 +133,20 @@ export const SHOWCASE_FILES: Record<string, string> = {
 // ---------- 小工具 ----------
 
 function record(id: SessionId, patch: Partial<SessionRecord> = {}): SessionRecord {
-  const title = SHOWCASE_SESSIONS.find(s => s.id === id)!.title
+  return sessionRecord(id, SHOWCASE_SESSIONS.find(s => s.id === id)!.title, SHOWCASE_PROJECT, patch)
+}
+
+// ---------- 下面几个小工具 mock/workbench.ts 也用 ----------
+
+export function sessionRecord(
+  id: string,
+  title: string,
+  projectId: string,
+  patch: Partial<SessionRecord> = {},
+): SessionRecord {
   return {
     id,
-    projectId: SHOWCASE_PROJECT,
+    projectId,
     cwd: 'D:\\work\\pixel-web',
     engine: 'claude',
     engineSessionId: `8f1c2e7a-${id.slice(-4)}-4b1e-9c3d-2a6f0b7d91e4`,
@@ -158,7 +168,7 @@ function record(id: SessionId, patch: Partial<SessionRecord> = {}): SessionRecor
   }
 }
 
-function snapshot(rec: SessionRecord, items: Item[], patch: Partial<SessionSnapshot> = {}): SessionSnapshot {
+export function snapshot(rec: SessionRecord, items: Item[], patch: Partial<SessionSnapshot> = {}): SessionSnapshot {
   return {
     record: rec,
     state: 'idle',
@@ -186,7 +196,7 @@ function snapshot(rec: SessionRecord, items: Item[], patch: Partial<SessionSnaps
   }
 }
 
-const user = (
+export const user = (
   id: string,
   text: string,
   minutesAgo: number,
@@ -198,7 +208,7 @@ const user = (
   createdAt: T0 - minutesAgo * MIN,
   ...extra,
 })
-const assistant = (
+export const assistant = (
   id: string,
   text: string,
   status: Extract<Item, { kind: 'assistant' }>['status'] = 'completed',
@@ -208,13 +218,13 @@ const assistant = (
   text,
   status,
 })
-const reasoning = (id: string, text: string): Item => ({ kind: 'reasoning', id, text, status: 'completed' })
+export const reasoning = (id: string, text: string): Item => ({ kind: 'reasoning', id, text, status: 'completed' })
 
-function stats(id: string, outcome: 'completed' | 'interrupted' | 'failed', usage: TurnUsage): Item {
+export function stats(id: string, outcome: 'completed' | 'interrupted' | 'failed', usage: TurnUsage): Item {
   return { kind: 'turn_stats', id, turnId: `${id}-turn`, outcome, usage }
 }
 
-const opus = (input: number, output: number, cost: number, requests = 1): TurnUsage['models'][string] => ({
+export const opus = (input: number, output: number, cost: number, requests = 1): TurnUsage['models'][string] => ({
   input,
   cacheRead: input * 24,
   cacheWrite: Math.round(input * 1.6),
@@ -224,7 +234,7 @@ const opus = (input: number, output: number, cost: number, requests = 1): TurnUs
 })
 
 /** unified diff 的正文：行首 + / - / 空格，@@ 行照抄 */
-function change(path: string, kind: FileChange['kind'], lines: string[]): FileChange {
+export function change(path: string, kind: FileChange['kind'], lines: string[]): FileChange {
   return {
     path,
     kind,
@@ -242,7 +252,7 @@ const allAdded = (text: string): string[] => [
     .map(l => '+' + l),
 ]
 
-const ESC = '\u001b['
+export const ESC = '\u001b['
 
 // ---------- 1 回复格式 ----------
 
@@ -366,7 +376,7 @@ const markdown = snapshot(record('demo-claude-markdown', { updatedAt: T0 - 3 * M
   stats('m-s1', 'completed', { durationMs: 38_000, models: { 'claude-opus-5-5': opus(2_400, 1_850, 0.1162, 2) } }),
 ])
 
-function numbered(text: string): string {
+export function numbered(text: string): string {
   return text
     .split('\n')
     .slice(0, -1)
@@ -856,7 +866,7 @@ const userMessages = snapshot(record('demo-claude-user', { updatedAt: T0 - 15 * 
 
 // ---------- 4 报错（自有） ----------
 
-const failed = (id: string): Item =>
+export const failed = (id: string): Item =>
   stats(id, 'failed', {
     durationMs: 3_200,
     models: { 'claude-opus-5-5': { input: 0, cacheRead: 0, cacheWrite: 0, output: 0, costUsd: 0, requests: 1 } },

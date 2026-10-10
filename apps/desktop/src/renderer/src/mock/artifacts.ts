@@ -1,10 +1,12 @@
 // 产物面板的演示数据（docs/ui/artifacts-panel.md），只在 `pnpm dev:demo` 显示
 import type { ArtifactResponse, FileChange } from '@pixelsky/protocol'
 import type { ArtifactPreview } from '../../../shared/types/artifacts'
+import { SETTINGS_CHANGES, SIDEBAR_CHANGES, workbenchSnapshots } from './workbench'
 
 const now = Date.now()
 const root = 'D:/pixel-web'
-const file = (local: string, kind: 'add' | 'update' | 'delete', added: number, removed: number, itemId: string) => ({
+/** 产物面板里的文件：增删行数取对话里那次改动（mock/workbench.ts），两边对得上 */
+const file = ({ path: local, kind, added, removed }: FileChange, itemId: string) => ({
   path: local,
   absolute: `${root}/${local}`,
   inside: true,
@@ -27,23 +29,20 @@ export const demoArtifacts: ArtifactResponse = {
       prompt: '把设置页迁到新的表单组件，先做账号和外观两页',
       at: now - 25 * 60_000,
       files: [
-        file('src/settings/AccountForm.tsx', 'update', 18, 12, 'demo-c2'),
-        file('src/settings/fields/useField.ts', 'add', 24, 0, 'demo-c2'),
-        file('src/legacy/OldForm.tsx', 'delete', 0, 41, 'demo-c3'),
+        file(SETTINGS_CHANGES.account, 'demo-c2'),
+        file(SETTINGS_CHANGES.useField, 'demo-c2'),
+        file(SETTINGS_CHANGES.oldForm, 'demo-c3'),
       ],
     },
     {
       sessionId: 's-redesign',
       title: '重构网页版工作台为 Codex 式布局',
-      engine: 'codex',
+      engine: 'claude',
       archived: false,
       userItemId: 'demo-u1',
       prompt: '帮我看一下侧栏改版的整体结构',
       at: now - 26 * 3600_000,
-      files: [
-        file('src/sidebar/Sidebar.tsx', 'update', 42, 10, 'demo-c1'),
-        file('src/sidebar/RecentList.tsx', 'update', 9, 3, 'demo-c1'),
-      ],
+      files: [file(SIDEBAR_CHANGES[0], 'demo-c1'), file(SIDEBAR_CHANGES[1], 'demo-c1')],
     },
   ],
   delivered: [
@@ -105,15 +104,12 @@ export const demoArtifacts: ArtifactResponse = {
   partial: false,
 }
 
+/** 产物面板点开一个文件：取对话里那次改动的 diff */
 export function demoArtifactChange(itemId: string, path: string): FileChange | null {
-  if (!itemId.startsWith('demo-c')) return null
-  return {
-    path,
-    kind: 'update',
-    added: 3,
-    removed: 2,
-    diff: "@@ -1,6 +1,6 @@\n-import { useState } from 'react'\n+import { useField } from './fields/useField'\n \n export function AccountForm() {\n-  const [email, setEmail] = useState('')\n+  const email = useField('', v => v.includes('@') ? null : '请输入有效的邮箱')\n   return (\n-    <input value={email} onChange={e => setEmail(e.target.value)} />\n+    <input {...email.props} />\n",
-  }
+  for (const snap of Object.values(workbenchSnapshots))
+    for (const item of snap.items)
+      if (item.id === itemId && item.kind === 'file_change') return item.changes.find(c => c.path === path) ?? null
+  return null
 }
 
 // 一张 2×2 的小图（演示用）

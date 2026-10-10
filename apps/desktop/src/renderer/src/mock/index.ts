@@ -4,6 +4,7 @@ import { demoAccount } from './account'
 import { demoArtifactChange, demoArtifactPreview, demoArtifacts } from './artifacts'
 import { demoContext } from './context'
 import { showcaseSnapshots, showcaseSubagentTranscript, showcaseTaskOutput } from './conversations'
+import { workbenchSnapshots } from './workbench'
 import { demo } from './demo'
 import { DEMO_EDITOR_STATE, DEMO_FILES, demoDirectory, demoDocument } from './files'
 import { demoGitBranches, demoGitDiff, demoGitStatus } from './git'
@@ -38,7 +39,7 @@ export const demoSource: DemoSource = {
   terminal: { profiles: demoTerminalProfiles, output: demoTerminalOutput },
   sessions: demoSessions,
   conversations: {
-    snapshots: showcaseSnapshots,
+    snapshots: { ...showcaseSnapshots, ...workbenchSnapshots },
     subagentTranscript: showcaseSubagentTranscript,
     taskOutput: showcaseTaskOutput,
   },
