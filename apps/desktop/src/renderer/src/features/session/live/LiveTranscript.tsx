@@ -66,7 +66,7 @@ function ItemView({ item, reply }: { item: Item; reply?: string }) {
       if (!item.text) return null
       return (
         <>
-          <Markdown text={item.text} />
+          <Markdown text={item.text} streaming={item.status === 'running'} />
           {item.status === 'interrupted' && (
             <div className="mt-1.5 text-meta text-fg-faint">{tr('session.live.ItemRows.interrupted')}</div>
           )}

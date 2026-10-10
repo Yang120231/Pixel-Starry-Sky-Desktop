@@ -14,6 +14,7 @@ import { AgentTracePanel } from './live/AgentTracePanel'
 import { TaskStrip } from './live/SessionStrips'
 import { ProgressCard, useProgress } from './live/ProgressCard'
 import { TraceContext, type TraceTarget } from './live/trace'
+import { PathLinksProvider } from '@/features/files/PathLinksProvider'
 import { RetryStatus } from './live/RetryStatus'
 import { MessageActionsContext, type MessageActionsValue } from './live/MessageActions'
 import { appendComposerDraft } from '@/features/engine/drafts'
@@ -163,81 +164,83 @@ function LiveSessionView({
   )
 
   return (
-    <TraceContext.Provider value={sessionId ? openTrace : null}>
-      <main
-        className={cn(
-          'conversation-view relative flex flex-1 flex-col bg-app',
-          embedded ? 'min-h-0 min-w-0' : 'min-w-[464px]',
-        )}
-      >
-        {!embedded && (
-          <SessionHeader
-            title={title}
-            showActions={!!snapshot && snapshot.items.length > 0}
-            sidebarOpen={sidebarOpen}
-            panelOpen={panelOpen}
-            onToggleSidebar={onToggleSidebar}
-            onTogglePanel={onTogglePanel}
-          />
-        )}
-        {sessionId ? (
-          <>
-            <div className="relative flex min-h-0 flex-1 flex-col">
-              {showStrips && (
-                <div className="conversation-inset conversation-reading conversation-reading-strips shrink-0 pt-3">
-                  <div className="conversation-message flex flex-col gap-2">
-                    {traceInStrips && (
-                      <div className="flex justify-end">
-                        <button
-                          type="button"
-                          onClick={() => openTrace()}
-                          className="press inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-meta text-fg-muted hover:bg-hover hover:text-fg"
-                        >
-                          <Bot size={13} strokeWidth={1.75} />
-                          {tr('session.live.AgentTracePanel.agentActivity')}{' '}
-                        </button>
-                      </div>
-                    )}
-                    <TaskStrip sessionId={sessionId} tasks={tasks} />
+    <PathLinksProvider sessionId={sessionId}>
+      <TraceContext.Provider value={sessionId ? openTrace : null}>
+        <main
+          className={cn(
+            'conversation-view relative flex flex-1 flex-col bg-app',
+            embedded ? 'min-h-0 min-w-0' : 'min-w-[464px]',
+          )}
+        >
+          {!embedded && (
+            <SessionHeader
+              title={title}
+              showActions={!!snapshot && snapshot.items.length > 0}
+              sidebarOpen={sidebarOpen}
+              panelOpen={panelOpen}
+              onToggleSidebar={onToggleSidebar}
+              onTogglePanel={onTogglePanel}
+            />
+          )}
+          {sessionId ? (
+            <>
+              <div className="relative flex min-h-0 flex-1 flex-col">
+                {showStrips && (
+                  <div className="conversation-inset conversation-reading conversation-reading-strips shrink-0 pt-3">
+                    <div className="conversation-message flex flex-col gap-2">
+                      {traceInStrips && (
+                        <div className="flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => openTrace()}
+                            className="press inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-meta text-fg-muted hover:bg-hover hover:text-fg"
+                          >
+                            <Bot size={13} strokeWidth={1.75} />
+                            {tr('session.live.AgentTracePanel.agentActivity')}{' '}
+                          </button>
+                        </div>
+                      )}
+                      <TaskStrip sessionId={sessionId} tasks={tasks} />
+                    </div>
                   </div>
-                </div>
-              )}
-              <MessageActionsContext.Provider value={messageActions}>
-                <LiveTranscript snapshot={snapshot} />
-              </MessageActionsContext.Provider>
-              {progress.visible && !trace && (
-                <ProgressCard
-                  key={sessionId}
-                  progress={progress}
-                  onOpenTrace={hasRuns ? () => openTrace() : undefined}
+                )}
+                <MessageActionsContext.Provider value={messageActions}>
+                  <LiveTranscript snapshot={snapshot} />
+                </MessageActionsContext.Provider>
+                {progress.visible && !trace && (
+                  <ProgressCard
+                    key={sessionId}
+                    progress={progress}
+                    onOpenTrace={hasRuns ? () => openTrace() : undefined}
+                  />
+                )}
+              </div>
+              <ComposerArea>
+                <RetryStatus sessionId={sessionId} retry={snapshot?.retry} />
+                {snapshot?.pending.map(req => (
+                  <ApprovalCard
+                    key={req.requestId}
+                    request={req}
+                    onAnswer={d => void bridge?.answer(sessionId, req.requestId, d)}
+                  />
+                ))}
+                <Composer key={sessionId} live={composer} status={status} draftKey={draftKey} autoFocus />
+              </ComposerArea>
+              {trace && runs && (
+                <AgentTracePanel
+                  sessionId={sessionId}
+                  runs={runs}
+                  focus={trace.focus}
+                  onFocus={focus => setTrace({ focus })}
+                  onClose={() => setTrace(null)}
                 />
               )}
-            </div>
-            <ComposerArea>
-              <RetryStatus sessionId={sessionId} retry={snapshot?.retry} />
-              {snapshot?.pending.map(req => (
-                <ApprovalCard
-                  key={req.requestId}
-                  request={req}
-                  onAnswer={d => void bridge?.answer(sessionId, req.requestId, d)}
-                />
-              ))}
-              <Composer key={sessionId} live={composer} status={status} draftKey={draftKey} autoFocus />
-            </ComposerArea>
-            {trace && runs && (
-              <AgentTracePanel
-                sessionId={sessionId}
-                runs={runs}
-                focus={trace.focus}
-                onFocus={focus => setTrace({ focus })}
-                onClose={() => setTrace(null)}
-              />
-            )}
-          </>
-        ) : (
-          <WelcomeView live={composer} status={status} draftKey={draftKey} />
-        )}
-      </main>
-    </TraceContext.Provider>
+            </>
+          ) : (
+            <WelcomeView live={composer} status={status} draftKey={draftKey} />
+          )}
+        </main>
+      </TraceContext.Provider>
+    </PathLinksProvider>
   )
 }

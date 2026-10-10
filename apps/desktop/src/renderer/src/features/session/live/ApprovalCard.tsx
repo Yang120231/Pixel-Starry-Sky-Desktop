@@ -14,6 +14,7 @@ import {
 import type { AlwaysScope, ApprovalDecision, ApprovalRequest } from '@pixelsky/protocol'
 import { Button, DiffStat, Popover, cn } from '@/ui'
 import { DiffView } from '@/ui/code/DiffView'
+import { CommandText } from '@/ui/code/CommandText'
 import { Markdown } from '@/ui/markdown/Markdown'
 
 const ICON: Record<ApprovalRequest['kind'], LucideIcon> = {
@@ -176,7 +177,7 @@ export function ApprovalCard({
                 'rounded-lg border border-line bg-subtle px-3 py-2 font-mono text-[length:calc(12.5px*var(--font-scale,1))] leading-[1.6] whitespace-pre-wrap text-fg',
               )}
             >
-              {request.command}
+              <CommandText command={request.command ?? ''} />
             </pre>
           </>
         )}

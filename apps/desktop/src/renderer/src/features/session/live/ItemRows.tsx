@@ -26,6 +26,7 @@ import {
 import type { FileChange, Item, ItemStatus, ToolKind } from '@pixelsky/protocol'
 import { CopyButton, DiffStat, Spinner, cn } from '@/ui'
 import { DiffView } from '@/ui/code/DiffView'
+import { CommandText } from '@/ui/code/CommandText'
 import { useOpenTrace } from './trace'
 import { StepMark } from './ProgressCard'
 import { useItemNavigation } from '@/features/search/navigation'
@@ -267,7 +268,7 @@ export function ToolItemRow({ item }: { item: ItemOf<'command' | 'file_change' |
             className="truncate rounded-sm bg-subtle px-1.5 py-0.5 font-mono text-[length:calc(12.5px*var(--font-scale,1))] text-fg"
             title={item.description ?? item.command}
           >
-            {item.command}
+            <CommandText command={item.command} />
           </code>
         </Row>
         {open && item.output && (

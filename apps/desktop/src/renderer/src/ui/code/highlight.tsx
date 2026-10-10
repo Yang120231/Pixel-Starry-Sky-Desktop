@@ -186,22 +186,27 @@ export function highlight(code: string, lang: string | null): ReactNode {
   return toJsxRuntime(tree, { Fragment, jsx, jsxs })
 }
 
+/** 高亮结果的一段文字：class 为 highlight.js 的类名（hljs-keyword 等），普通文字为 null */
+export interface Segment {
+  text: string
+  className: string | null
+}
+
 /**
- * 按行高亮：先整段高亮（多行注释、字符串跨行时颜色才对），再按换行切开，每行一个 ReactNode。
- * diff 视图每行有自己的底色，所以需要逐行拿到结果。
+ * 按行切分的高亮片段：先整段高亮（多行注释、字符串跨行时颜色才对），再按换行切开。
+ * diff 要在片段上再叠加词级高亮，所以给出片段而不是 React 元素。lang 为 null 或内容过长时每行一段纯文字。
  */
-export function highlightLines(code: string, lang: string | null): ReactNode[] {
-  const lines = code.split('\n')
-  if (!lang || code.length > MAX_LENGTH) return lines
+export function highlightSegments(code: string, lang: string | null): Segment[][] {
+  const plain = (): Segment[][] => code.split('\n').map(line => (line ? [{ text: line, className: null }] : []))
+  if (!lang || code.length > MAX_LENGTH) return plain()
   let tree: Root
   try {
     tree = lowlight.highlight(lang, code)
   } catch {
-    return lines
+    return plain()
   }
   // 把 hast 拍平成 [文字, 所在 span 的 class] 序列，再按 \n 断行重建
-  type Seg = { text: string; className: string | null }
-  const out: Seg[][] = [[]]
+  const out: Segment[][] = [[]]
   const walk = (node: Root['children'][number], cls: string | null): void => {
     if (node.type === 'text') {
       const parts = node.value.split('\n')
@@ -215,17 +220,37 @@ export function highlightLines(code: string, lang: string | null): ReactNode[] {
     }
   }
   for (const child of tree.children) walk(child, null)
-  return out.map((segs, i) =>
-    segs.length === 0
-      ? ''
-      : segs.map((s, j) =>
-          s.className ? (
-            <span key={`${i}-${j}`} className={s.className}>
-              {s.text}
-            </span>
-          ) : (
-            s.text
-          ),
-        ),
+  return out
+}
+
+/** 一行片段 → React 元素 */
+export function renderSegments(segs: Segment[], key: string | number = 0): ReactNode {
+  if (segs.length === 0) return ''
+  return segs.map((s, j) =>
+    s.className ? (
+      <span key={`${key}-${j}`} className={s.className}>
+        {s.text}
+      </span>
+    ) : (
+      s.text
+    ),
   )
+}
+
+/** 按行高亮，每行一个 ReactNode（diff 视图每行有自己的底色，所以需要逐行拿到结果） */
+export function highlightLines(code: string, lang: string | null): ReactNode[] {
+  if (!lang || code.length > MAX_LENGTH) return code.split('\n')
+  return highlightSegments(code, lang).map((segs, i) => renderSegments(segs, i))
+}
+
+/**
+ * 命令该按哪种 shell 着色（docs/ui/content-highlight.md §2 B）：明显是 PowerShell 的按 PowerShell，其余按 bash。
+ * Claude 在 Windows 上也用 bash 跑命令；Codex 在 Windows 上的命令多半是 powershell 开头。
+ */
+export function shellLanguage(command: string): 'bash' | 'powershell' {
+  const c = command.trimStart()
+  if (/^(?:&\s*)?(?:powershell|pwsh)(?:\.exe)?\b/i.test(c)) return 'powershell'
+  if (/\$env:\w|\b(?:Get|Set|New|Remove|Invoke|Select|Where|ForEach|Write|Test|Start|Stop)-[A-Z]\w+/.test(c))
+    return 'powershell'
+  return 'bash'
 }

@@ -5,6 +5,7 @@ import remarkBreaks from 'remark-breaks'
 import remarkGfm from 'remark-gfm'
 import { cn } from '@/ui'
 import { CodeBlock } from '@/ui/code/CodeBlock'
+import { InlineCode, MarkdownLink, PathLinksContext } from './pathLinks'
 import type { Element, ElementContent } from 'hast'
 
 /** 取出 hast 节点里的全部文字（代码块的原文） */
@@ -22,9 +23,11 @@ function fencedCode(pre: Element | undefined): { code: string; lang: string | nu
   return { code: code ? textOf(code) : '', lang: langClass ? langClass.slice('language-'.length) : null }
 }
 
-/** 链接一律在新窗口打开（主进程会交给系统浏览器，只放行 http / https） */
 const components: Components = {
-  a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noreferrer" />,
+  // 链接：项目里的文件在软件里打开，其余在新窗口打开（主进程交给系统浏览器，只放行 http / https）
+  a: ({ node: _node, ...props }) => <MarkdownLink {...props} />,
+  // 行内代码（代码块由下面的 pre 整个接管）：项目里的文件变成可点击的路径（docs/ui/content-highlight.md §2 A）
+  code: ({ node: _node, className, children }) => <InlineCode className={className}>{children}</InlineCode>,
   table: ({ node: _node, ...props }) => (
     <div className="my-3 max-w-full overflow-x-auto">
       <table {...props} />
@@ -50,6 +53,7 @@ const PROSE = [
   '[&_strong]:font-semibold [&_strong]:text-fg',
   '[&_a]:text-accent-fg [&_a]:underline [&_a]:underline-offset-2',
   '[&_:not(pre)>code]:rounded-sm [&_:not(pre)>code]:bg-code-inline-bg [&_:not(pre)>code]:px-1.5 [&_:not(pre)>code]:py-0.5 [&_:not(pre)>code]:font-mono [&_:not(pre)>code]:text-[0.9em] [&_:not(pre)>code]:text-code-inline',
+  '[&_code[data-path]]:text-code-path [&_code[data-path]]:underline [&_code[data-path]]:decoration-dotted [&_code[data-path]]:underline-offset-2',
   '[&_blockquote]:my-3 [&_blockquote]:border-l-2 [&_blockquote]:border-line-strong [&_blockquote]:pl-3 [&_blockquote]:text-fg-muted',
   '[&_table]:my-3 [&_table]:w-full [&_table]:border-collapse [&_table]:text-list',
   '[&_th]:border [&_th]:border-line [&_th]:bg-subtle [&_th]:px-2.5 [&_th]:py-1.5 [&_th]:text-left [&_th]:font-semibold',
@@ -57,14 +61,26 @@ const PROSE = [
   '[&_hr]:my-4 [&_hr]:border-line',
 ].join(' ')
 
-export const Markdown = memo(function Markdown({ text, className }: { text: string; className?: string }) {
+export const Markdown = memo(function Markdown({
+  text,
+  className,
+  streaming,
+}: {
+  text: string
+  className?: string
+  /** 回复还在输出：先不加路径链接，等这条完成，免得内容变化时闪动 */
+  streaming?: boolean
+}) {
   useI18n()
+  const body = (
+    // remark-breaks：单个换行也换行（聊天回复里一行一个的列表、数字不会挤成一段）
+    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={components}>
+      {text}
+    </ReactMarkdown>
+  )
   return (
     <div className={cn(PROSE, className)}>
-      {/* remark-breaks：单个换行也换行（聊天回复里一行一个的列表、数字不会挤成一段） */}
-      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={components}>
-        {text}
-      </ReactMarkdown>
+      {streaming ? <PathLinksContext.Provider value={null}>{body}</PathLinksContext.Provider> : body}
     </div>
   )
 })
