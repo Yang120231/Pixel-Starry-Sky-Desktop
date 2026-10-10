@@ -1,6 +1,16 @@
 import { translateMessage } from '../../i18n/core'
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
-import { ArrowUp, ChevronDown, Mic, Plus, ShieldOff, Square } from 'lucide-react'
+import {
+  ArrowUp,
+  AtSign,
+  ChevronDown,
+  Image as ImageIcon,
+  Mic,
+  Plus,
+  ShieldOff,
+  Square,
+  SquareSlash,
+} from 'lucide-react'
 import { IconButton, cn, useComingSoon } from '@/ui'
 import { attachments as initialAttachments, composer } from '@/data'
 import {
@@ -28,6 +38,9 @@ import { ComposerStatusBar } from './ComposerStatusBar'
 import { useI18n } from '@/i18n/I18nProvider'
 import { useCommands } from '@/features/settings/plugins/useCommands'
 import { CommandMenu } from './CommandMenu'
+import { MentionMenu, useMentionEntries } from './MentionMenu'
+import { applyMention, insertMention, mentionAt } from './mention'
+import { composerWorkspace } from './composerWorkspace'
 import { escapeStops } from './escapeStop'
 import { tr } from '../../i18n/core'
 import { ImageAttachments } from '@/features/session/attachments/ImageAttachments'
@@ -109,9 +122,22 @@ export function Composer({
     [commands, commandQuery, commandDismissed, commandPrefix],
   )
   const activeCommandIndex = Math.min(commandIndex, Math.max(0, commandMatches.length - 1))
+  // 输入 @ 引用项目文件（docs/ui/workbench-ux-3.md §2.6）：光标前是 @ 词时弹出文件列表
+  const canMention = !!live && !!window.pixelsky?.files
+  const mentionListId = useId()
+  const [caret, setCaret] = useState<number | null>(null)
+  const [mentionDismissed, setMentionDismissed] = useState(false)
+  const [mentionIndex, setMentionIndex] = useState(0)
+  const mentionTarget = canMention ? composerWorkspace(live?.sessionId, status, draftKey) : null
+  const mention =
+    mentionTarget && caret !== null && commandQuery === undefined && !mentionDismissed ? mentionAt(text, caret) : null
+  const mentions = useMentionEntries(mentionTarget, mention?.query ?? null)
+  const activeMentionIndex = Math.min(mentionIndex, Math.max(0, mentions.entries.length - 1))
   useEffect(() => {
     setCommandIndex(0)
     setCommandDismissed(false)
+    setMentionIndex(0)
+    setMentionDismissed(false)
   }, [text])
   useEffect(() => {
     setCommandIndex(index => Math.min(index, Math.max(0, commandMatches.length - 1)))
@@ -123,6 +149,24 @@ export function Composer({
       setCommandDismissed(true)
       ref.current?.focus()
     }
+  }
+
+  /** 改了文字后把光标放到指定位置（等这次渲染把新文字写进输入框） */
+  const placeCaret = (at: number): void => {
+    requestAnimationFrame(() => {
+      const el = ref.current
+      if (!el) return
+      el.focus()
+      el.setSelectionRange(at, at)
+      setCaret(at)
+    })
+  }
+  const chooseMention = (index: number): void => {
+    const entry = mentions.entries[index]
+    if (!entry || !mention || caret === null) return
+    const next = applyMention(text, mention, caret, entry)
+    setText(next.text)
+    placeCaret(next.caret)
   }
 
   const requestSource = (next: CreditSource): void => {
@@ -291,6 +335,22 @@ export function Composer({
         return
       }
     }
+    if (mention) {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        e.stopPropagation()
+        setMentionDismissed(true)
+        return
+      }
+      if (mentions.entries.length && ['ArrowDown', 'ArrowUp', 'Tab', 'Enter'].includes(e.key) && !e.shiftKey) {
+        e.preventDefault()
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          const n = mentions.entries.length
+          setMentionIndex(index => (Math.min(index, n - 1) + (e.key === 'ArrowDown' ? 1 : -1) + n) % n)
+        } else chooseMention(activeMentionIndex)
+        return
+      }
+    }
     // 回复进行中按 Esc 停止，和停止按钮一样（docs/ui/conversation-ux.md §2.5）
     const { isComposing, defaultPrevented } = e.nativeEvent
     if (escapeStops({ key: e.key, isComposing, defaultPrevented }, running)) {
@@ -367,6 +427,15 @@ export function Composer({
               }}
             />
           )}
+          {mention && (
+            <MentionMenu
+              id={mentionListId}
+              entries={mentions.entries}
+              loading={mentions.loading}
+              selected={activeMentionIndex}
+              onChoose={chooseMention}
+            />
+          )}
           <ResizeHandle
             label={translate('调整输入框高度')}
             axis="y"
@@ -429,13 +498,24 @@ export function Composer({
             <textarea
               ref={ref}
               rows={1}
-              aria-controls={commandMatches.length ? listId : undefined}
-              aria-activedescendant={commandMatches.length ? `${listId}-${activeCommandIndex}` : undefined}
+              aria-controls={commandMatches.length ? listId : mention ? mentionListId : undefined}
+              aria-activedescendant={
+                commandMatches.length
+                  ? `${listId}-${activeCommandIndex}`
+                  : mention && mentions.entries.length
+                    ? `${mentionListId}-${activeMentionIndex}`
+                    : undefined
+              }
               value={text}
               autoFocus={autoFocus}
               onChange={e => {
                 setText(e.target.value)
+                setCaret(e.target.selectionStart === e.target.selectionEnd ? e.target.selectionEnd : null)
                 if (error) setError(null)
+              }}
+              onSelect={e => {
+                const el = e.currentTarget
+                setCaret(el.selectionStart === el.selectionEnd ? el.selectionEnd : null)
               }}
               onKeyDown={onKeyDown}
               onPaste={event => {
@@ -519,7 +599,7 @@ export function Composer({
           <span className="relative">
             <IconButton
               icon={Plus}
-              label={tr('composer.attachment.addImageTitle')}
+              label={tr('composer.menu.add')}
               size={32}
               active={addMenu}
               onClick={() => setAddMenu(value => !value)}
@@ -536,9 +616,10 @@ export function Composer({
                 setAddMenu(false)
               }}
             />
-            <Popover open={addMenu} onClose={() => setAddMenu(false)} className="bottom-full left-0 mb-2 w-44">
+            {/* 「+」菜单：图片 / 引用文件（@）/ 命令（/），docs/ui/workbench-ux-3.md §2.6 */}
+            <Popover open={addMenu} onClose={() => setAddMenu(false)} className="bottom-full left-0 mb-2 w-52">
               <PopoverItem
-                icon={<Plus size={15} strokeWidth={1.5} />}
+                icon={<ImageIcon size={15} strokeWidth={1.5} />}
                 onClick={() => {
                   setAddMenu(false)
                   fileInput.current?.click()
@@ -546,6 +627,36 @@ export function Composer({
               >
                 {tr('composer.attachment.addImage')}
               </PopoverItem>
+              {canMention && (
+                <PopoverItem
+                  icon={<AtSign size={15} strokeWidth={1.5} />}
+                  hint="@"
+                  onClick={() => {
+                    setAddMenu(false)
+                    const el = ref.current
+                    const next = insertMention(text, el?.selectionStart ?? text.length, el?.selectionEnd ?? text.length)
+                    setText(next.text)
+                    placeCaret(next.caret)
+                  }}
+                >
+                  {tr('composer.menu.file')}
+                </PopoverItem>
+              )}
+              {commands.length > 0 && (
+                <PopoverItem
+                  icon={<SquareSlash size={15} strokeWidth={1.5} />}
+                  hint="/"
+                  disabled={!!text.trim()}
+                  title={text.trim() ? tr('composer.menu.commandAtStart') : undefined}
+                  onClick={() => {
+                    setAddMenu(false)
+                    setText('/')
+                    placeCaret(1)
+                  }}
+                >
+                  {tr('composer.menu.command')}
+                </PopoverItem>
+              )}
             </Popover>
           </span>
           {live ? (

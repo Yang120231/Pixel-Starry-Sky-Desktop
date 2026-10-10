@@ -4,7 +4,7 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { isDemo } from '@/data'
 import { demo as demoData } from '@/data/demo'
-import { refKey } from '@/features/editor/target'
+import { keyRef, refKey } from '@/features/editor/target'
 import type { GitStatus } from '../../../../../shared/types/project-tools'
 import { summarize, type GitSummary } from './summarize'
 import type { WorkspaceRef } from '../../../../../shared/types/workspace'
@@ -74,10 +74,6 @@ function watch(): void {
     stop = null
   }
 }
-
-/** refKey 的反过来 */
-const keyRef = (key: string): WorkspaceRef =>
-  key.startsWith('s:') ? { sessionId: key.slice(2) } : { projectId: key.slice(2) }
 
 function subscribe(listener: () => void): () => void {
   listeners.add(listener)

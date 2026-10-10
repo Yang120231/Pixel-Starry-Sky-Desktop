@@ -3,13 +3,12 @@ import { Logo } from '@/ui'
 import { isDemo } from '@/data'
 import type { ComposerController, StatusBarController } from '@/features/engine'
 import { useComposerDraft } from '@/features/engine/drafts'
-import { draftWorkspace } from '@/features/machines/drafts'
 import { useGitSummary } from '@/features/panel/git/summary'
 import { tr } from '@/i18n/core'
-import type { WorkspaceRef } from '../../../../shared/types/workspace'
 import { Composer } from './Composer'
 import { ComposerArea } from './ComposerArea'
 import { starters } from './starters'
+import { composerWorkspace } from './composerWorkspace'
 import { useI18n } from '@/i18n/I18nProvider'
 
 /**
@@ -31,7 +30,8 @@ export function WelcomeView({
   const key = draftKey ?? live?.sessionId ?? (live ? 'new-session' : 'demo')
   const [draft, setDraft] = useComposerDraft(key)
   const box = useRef<HTMLDivElement>(null)
-  const ref = welcomeRef(status, draftKey)
+  // 演示模式用演示数据里的 Git 状态
+  const ref = status ? composerWorkspace(live?.sessionId, status, draftKey) : isDemo ? { projectId: 'demo' } : null
   const git = useGitSummary(ref)
   const choose = (prompt: string): void => {
     setDraft(prompt)
@@ -78,12 +78,4 @@ export function WelcomeView({
       </div>
     </div>
   )
-}
-
-/** 起点看的是哪个工作区：选了副本时是副本的会话，否则是选好的项目；没选项目时没有 */
-function welcomeRef(status: StatusBarController | undefined, draftKey: string | undefined): WorkspaceRef | null {
-  if (!status) return isDemo ? { projectId: 'demo' } : null
-  const draft = draftKey ? draftWorkspace(draftKey) : null
-  if (draft?.sessionId) return { sessionId: draft.sessionId }
-  return status.project ? { projectId: status.project.id } : null
 }

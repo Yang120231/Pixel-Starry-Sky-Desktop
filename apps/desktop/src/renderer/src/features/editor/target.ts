@@ -85,3 +85,6 @@ function resolveWorkspace(tab: string | null, state: EngineState, files: FilesSt
   }
 }
 export const refKey = (ref: WorkspaceRef): string => (ref.sessionId ? `s:${ref.sessionId}` : `p:${ref.projectId}`)
+/** refKey 反过来：按 key 写依赖的 effect 里拿回工作区（每次渲染的 ref 都是新对象） */
+export const keyRef = (key: string): WorkspaceRef =>
+  key.startsWith('s:') ? { sessionId: key.slice(2) } : { projectId: key.slice(2) }
