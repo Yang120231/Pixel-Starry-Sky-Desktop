@@ -35,8 +35,9 @@ const components: Components = {
     const kind = node?.properties?.dataAlert
     return isAlertKind(kind) ? <Callout kind={kind}>{children}</Callout> : <blockquote>{children}</blockquote>
   },
+  // 表格（docs/ui/markdown-table.md）：圆角外框按内容宽，最宽整行，再宽在框里横向滚动
   table: ({ node: _node, ...props }) => (
-    <div className="my-3 max-w-full overflow-x-auto">
+    <div className="my-3 w-fit max-w-full overflow-x-auto rounded-lg border border-line-card">
       <table {...props} />
     </div>
   ),
@@ -47,7 +48,7 @@ const components: Components = {
   },
 }
 
-/** 正文 Markdown：14px / 1.7；行内代码偏暖色（参考 Mirasim / Claude）；代码块见 CodeBlock；表格细边框。只用设计变量 */
+/** 正文 Markdown：14px / 1.7；行内代码偏暖色（参考 Mirasim / Claude）；代码块见 CodeBlock；表格圆角外框、只留横线。只用设计变量 */
 const PROSE = [
   'text-prose text-fg-body break-words',
   '[&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
@@ -62,9 +63,10 @@ const PROSE = [
   '[&_:not(pre)>code]:rounded-sm [&_:not(pre)>code]:bg-code-inline-bg [&_:not(pre)>code]:px-1.5 [&_:not(pre)>code]:py-0.5 [&_:not(pre)>code]:font-mono [&_:not(pre)>code]:text-[0.9em] [&_:not(pre)>code]:text-code-inline',
   '[&_code[data-path]]:text-code-path [&_code[data-path]]:underline [&_code[data-path]]:decoration-dotted [&_code[data-path]]:underline-offset-2',
   '[&_blockquote]:my-3 [&_blockquote]:border-l-2 [&_blockquote]:border-line-strong [&_blockquote]:pl-3 [&_blockquote]:text-fg-muted',
-  '[&_table]:my-3 [&_table]:w-full [&_table]:border-collapse [&_table]:text-list',
-  '[&_th]:border [&_th]:border-line [&_th]:bg-subtle [&_th]:px-2.5 [&_th]:py-1.5 [&_th]:text-left [&_th]:font-semibold',
-  '[&_td]:border [&_td]:border-line [&_td]:px-2.5 [&_td]:py-1.5',
+  '[&_table]:border-collapse [&_table]:text-list [&_table]:tabular-nums',
+  '[&_th]:border-b [&_th]:border-line [&_th]:bg-subtle [&_th]:px-3 [&_th]:py-1.5 [&_th]:text-left [&_th]:font-medium [&_th]:whitespace-nowrap [&_th]:text-fg-secondary',
+  '[&_td]:border-b [&_td]:border-line-subtle [&_td]:px-3 [&_td]:py-1.5 [&_td]:align-top',
+  '[&_tbody_tr:last-child_td]:border-b-0 [&_tbody_tr:hover]:bg-hover',
   '[&_hr]:my-4 [&_hr]:border-line',
 ].join(' ')
 
