@@ -2,9 +2,10 @@
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { HostEvent } from '@pixelsky/protocol'
+import type { EngineEvent, HostEvent } from '@pixelsky/protocol'
 import { ClaudeAdapter, EngineHost } from '../src'
 import { errorCodeFromText, friendlyApiError } from '../src/claude/apiError'
+import { ClaudeTranslator } from '../src/claude/translate'
 import { makeTmp, removeTmp } from './helpers/tmp'
 
 const FAKE_CLAUDE = fileURLToPath(new URL('./fakes/fake-claude.mjs', import.meta.url))
@@ -133,10 +134,9 @@ describe('一次报错只提示一次', () => {
 })
 
 describe('不是合成的消息带错误代码', () => {
-  it('max_output_tokens 的回复是真的：照旧显示回复和提示', async () => {
-    const { ClaudeTranslator } = await import('../src/claude/translate')
-    const events: import('@pixelsky/protocol').EngineEvent[] = []
-    const t = new ClaudeTranslator('D:\work', {
+  it('max_output_tokens 的回复是真的：照旧显示回复和提示', () => {
+    const events: EngineEvent[] = []
+    const t = new ClaudeTranslator('D:\\work', {
       emit: e => events.push(e),
       sessionId: () => {},
       permissionMode: () => {},
