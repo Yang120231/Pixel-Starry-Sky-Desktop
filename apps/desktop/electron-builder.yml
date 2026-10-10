@@ -26,10 +26,21 @@ win:
   signExecutable: false
   icon: build/icon.ico
 nsis:
-  # 一键安装到当前用户目录，不要管理员权限；装完自动打开
-  oneClick: true
+  # 安装向导（docs/release-update.md §9）：先选「仅为我 / 所有用户」（默认仅为我，不要管理员），再选安装位置，装完勾选运行
+  oneClick: false
   perMachine: false
+  allowToChangeInstallationDirectory: true
   runAfterFinish: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: ${productName}
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerHeaderIcon: build/icon.ico
+  # 跟系统语言：中文系统显示中文，其余显示英文
+  installerLanguages: [zh_CN, en_US]
+  # build/installer.nsh：安装文件夹名改成 PixelSky；选完位置后补 \PixelSky 子文件夹（卸载删不到别的文件）、检查写权限
+  include: build/installer.nsh
   artifactName: PixelSky-${version}-setup.exe
   uninstallDisplayName: ${productName}
 portable:
