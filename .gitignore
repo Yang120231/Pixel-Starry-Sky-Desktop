@@ -5,9 +5,15 @@ dist/
 release/
 target/
 
-# 临时文件目录：只保留说明文件（规则见 AGENTS.md § 2）
-/scratch/*
-!/scratch/README.md
+# 只在本机的开发资料：规划文档、协作规则、临时文件、云端服务、工作空间配置，不上传
+/docs/
+/AGENTS.md
+/CLAUDE.md
+/scratch/
+/services/
+/.ccpanes/
+/scripts/check-docs.mjs
+/scripts/clean-scratch.mjs
 
 # 系统与编辑器
 .DS_Store

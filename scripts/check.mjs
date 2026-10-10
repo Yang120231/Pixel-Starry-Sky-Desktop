@@ -73,6 +73,8 @@ const selected = steps.filter(step => {
   if (only) return step.name === only || step.group === only
   if (step.group === 'remote') return has('--remote')
   if (step.group === 'build') return has('--build')
+  // 文档只在本机，仓库里没有 check-docs.mjs 时跳过
+  if (step.group === 'docs' && !existsSync(step.script)) return false
   if (has('--fast')) return step.group === 'tsc' || step.group === 'docs'
   return true
 })
