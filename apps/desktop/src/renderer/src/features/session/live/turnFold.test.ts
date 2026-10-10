@@ -73,6 +73,20 @@ describe('每轮的过程收成执行块', () => {
     expect(two.filter(e => e.type === 'process').map(e => e.type === 'process' && e.running)).toEqual([false, true])
   })
 
+  it('回复后面只有思考、信息提示或空白文字时，回复仍然显示在外面', () => {
+    const blank: Item = { kind: 'assistant', id: 'b', text: '\n\n', status: 'completed' }
+    const entries = foldTurns(
+      [user('u1'), think('r1'), run('c1'), say('a'), think('r2'), notice('i', 'info'), blank, stats('s')],
+      false,
+    )
+    expect(shape(entries)).toEqual(['u1', ['r1', 'c1', 'r2', 'i', 'b'], 'a', 's'])
+    // 回复后面又调了工具：回复是过渡话
+    expect(shape(foldTurns([user('u1'), run('c1'), say('a'), think('r'), run('c2')], false))).toEqual([
+      'u1',
+      ['c1', 'a', 'r', 'c2'],
+    ])
+  })
+
   it('只有一段思考或一条提示、没有工具调用时照原样显示；中断的回复算最后的回复', () => {
     expect(shape(foldTurns([user('u1'), think('r'), say('a')], false))).toEqual(['u1', 'r', 'a'])
     expect(shape(foldTurns([user('u1'), run('c1'), say('a', 'interrupted')], false))).toEqual(['u1', ['c1'], 'a'])

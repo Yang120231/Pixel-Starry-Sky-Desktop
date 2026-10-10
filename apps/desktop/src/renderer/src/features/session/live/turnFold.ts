@@ -15,17 +15,24 @@ function alwaysVisible(item: Item): boolean {
   return item.kind === 'notice' && item.level !== 'info'
 }
 
+/** 排在回复后面也不算「回复之后又干了活」的条目：思考（有的模型 / 中转在回复后面还会发一段）、信息提示、只有空白的文字 */
+function trailing(item: Item): boolean {
+  if (alwaysVisible(item) || item.kind === 'reasoning') return true
+  if (item.kind === 'notice') return item.level === 'info'
+  return item.kind === 'assistant' && !item.text.trim()
+}
+
 /** 一轮里的条目 → 显示顺序：执行块放在第一条过程内容的位置，一直显示的按原来的先后排 */
 function foldTurn(turn: Item[], running: boolean): Entry[] {
-  // 最后的回复：最后一段有字的助手文字，后面只剩一直显示的内容
+  // 最后的回复：最后一段有字的助手文字，后面只剩一直显示的内容、思考和信息提示（这些收进执行块）
   let reply = -1
   for (let i = turn.length - 1; i >= 0; i--) {
     const item = turn[i]
-    if (item.kind === 'assistant' && item.text) {
+    if (item.kind === 'assistant' && item.text.trim()) {
       reply = i
       break
     }
-    if (!alwaysVisible(item)) break
+    if (!trailing(item)) break
   }
   const process = turn.filter((item, i) => i !== reply && !alwaysVisible(item))
   // 没有工具调用、只有一条（只有一段思考、一条信息提示）：照原样显示
