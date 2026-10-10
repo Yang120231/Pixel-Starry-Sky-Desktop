@@ -32,7 +32,7 @@ import { useItemLocation } from '@/features/search/useItemLocation'
 import { ExpandScope } from '@/features/search/expand'
 import { DETACH_EVENT } from '@/features/search/navigation'
 import { JumpToLatest } from './JumpToLatest'
-import { contentMark, followResize, nearBottom } from './scrollFollow'
+import { afterResize, contentMark, nearBottom } from './scrollFollow'
 import { changesHeight, itemHeight, toolsHeight } from './blockHeight'
 import { reviewTurn } from '@/features/panel/artifacts/focus'
 import { foldTurns } from './turnFold'
@@ -291,13 +291,14 @@ export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot
     if (!el || !content || typeof ResizeObserver === 'undefined') return
     const observer = new ResizeObserver(() => {
       if (jumping.current) return
-      if (followResize(stick.current, lastInteract.current, performance.now())) {
+      const next = afterResize(el, stick.current, detached.current, lastInteract.current, performance.now())
+      if (next.follow) {
         el.scrollTop = el.scrollHeight
-      } else if (stick.current && !detached.current) {
-        const near = nearBottom(el)
-        stick.current = near
-        setAway(!near)
+        return
       }
+      stick.current = next.stick
+      setAway(next.away)
+      if (!next.away) setUnseen(false)
     })
     observer.observe(content)
     observer.observe(el)

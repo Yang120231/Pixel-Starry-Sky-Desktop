@@ -20,6 +20,24 @@ export const nearBottom = (el: ScrollBox): boolean => el.scrollHeight - el.scrol
 export const followResize = (stick: boolean, lastInteract: number, now: number): boolean =>
   stick && now - lastInteract >= INTERACT_MS
 
+/**
+ * 对话区或对话流的高度变了，怎么处理：follow 滚到底；否则按实际位置重新判断是否离开底部。
+ * 不管原来贴不贴底都要重新判断：离底部一两百像素时，下面的卡片收起、执行块收起会让底部"自己靠过来"，
+ * 这时不一定有滚动事件，不判断的话「回到最新」会留在已经到底的对话上。
+ * detached（搜索跳转后）只更新按钮，不恢复贴底。
+ */
+export function afterResize(
+  el: ScrollBox,
+  stick: boolean,
+  detached: boolean,
+  lastInteract: number,
+  now: number,
+): { follow: true } | { follow: false; stick: boolean; away: boolean } {
+  if (followResize(stick, lastInteract, now)) return { follow: true }
+  const near = nearBottom(el)
+  return { follow: false, stick: detached ? stick : near, away: !near }
+}
+
 /** 一条的文字长度：流式输出时它变长，算有新内容 */
 function grownLength(item: Item | undefined): number {
   switch (item?.kind) {
