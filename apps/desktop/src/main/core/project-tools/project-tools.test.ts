@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, readFile, writeFile, rm, symlink } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
 import { createServer } from 'node:net'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Tasks } from './tasks'
 import { Copies } from './copies'
 import { Services, redact, childEnvironment, portStatus } from './services'
@@ -48,8 +48,11 @@ describe('project tools storage and task operations', () => {
     await tasks.init()
     const a = await tasks.create('p', { title: 'A' }),
       b = await tasks.create('p', { title: 'B' })
+    // 把时钟停住：两个固定落在同一毫秒时（GitHub 的机器上出现过）也要按固定先后排
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000)
     await tasks.pin(b.id, true)
     await tasks.pin(a.id, true)
+    now.mockRestore()
     const first = tasks.pinned()
     expect(first.map(t => t.id)).toEqual([b.id, a.id])
     // 再固定一次不改固定时间（顺序不变），编辑不丢固定

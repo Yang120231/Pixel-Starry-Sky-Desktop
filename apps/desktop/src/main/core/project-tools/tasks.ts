@@ -81,7 +81,9 @@ export class Tasks {
     const result = await this.store.transaction(data => {
       const task = data.tasks.find(t => t.id === id)
       if (!task) throw codedError('tasks.notFound')
-      task.pinnedAt = pinned ? (task.pinnedAt ?? Date.now()) : null
+      // 固定时间严格递增：同一毫秒里连着固定两个时，后固定的仍排在后面
+      const latest = Math.max(0, ...data.tasks.map(t => t.pinnedAt ?? 0))
+      task.pinnedAt = pinned ? (task.pinnedAt ?? Math.max(Date.now(), latest + 1)) : null
       return task
     })
     this.changed()
