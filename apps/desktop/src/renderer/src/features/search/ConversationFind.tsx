@@ -108,12 +108,24 @@ function revealInBoxes(range: Range, scroller: HTMLElement): void {
   }
 }
 
+/** 命中在折叠容器里是否被裁掉了：从命中往上到容器，任何一层裁切（overflow-y: hidden）把它挡住就算 */
+function clipped(range: Range, folded: HTMLElement): boolean {
+  const rect = range.getBoundingClientRect()
+  for (let el = range.startContainer.parentElement; el && el !== folded; el = el.parentElement) {
+    if (getComputedStyle(el).overflowY !== 'hidden') continue
+    const box = el.getBoundingClientRect()
+    if (rect.bottom > box.bottom || rect.top < box.top) return true
+  }
+  return false
+}
+
 /** 把一个命中滚到对话区中间（已经看得见时不动） */
 function reveal(range: Range, scroller: HTMLElement): void {
-  // 命中在折叠起来的长代码块里：先展开（ui/code/CodeBlock.tsx），下一帧再滚过去
+  // 命中在折叠起来的长代码块、长用户消息里，并且被裁掉了：先展开（ui/code/CodeBlock.tsx、
+  // session/live/ItemRows.tsx 的 UserBody），下一帧再滚过去。没被裁掉的命中不展开
   const folded = range.startContainer.parentElement?.closest<HTMLElement>('[data-folded]')
   const expand = folded?.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')
-  if (expand) {
+  if (expand && clipped(range, folded!)) {
     expand.click()
     requestAnimationFrame(() => reveal(range, scroller))
     return

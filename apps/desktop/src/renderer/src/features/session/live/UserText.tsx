@@ -17,10 +17,11 @@ const COMMAND = /^[/$][A-Za-z][\w:.-]*(?=\s|$)/
  */
 const MENTION = /(^|\s)@([^\s@，。；：！？、）】」》]+?)(?=[,.;:!?)\]]*(?:[\s，。；：！？、）】」》]|$))/g
 
-export function userTextParts(text: string): UserTextPart[] {
+/** leading：这段是整条消息的开头（消息被代码块分成几段时，只有第一段认 /命令） */
+export function userTextParts(text: string, leading = true): UserTextPart[] {
   const parts: UserTextPart[] = []
   let rest = text
-  const command = COMMAND.exec(text)
+  const command = leading ? COMMAND.exec(text) : null
   if (command) {
     parts.push({ kind: 'command', text: command[0] })
     rest = text.slice(command[0].length)
@@ -53,10 +54,10 @@ function Mention({ text, path }: { text: string; path: string }) {
   )
 }
 
-export function UserText({ text }: { text: string }) {
+export function UserText({ text, leading = true }: { text: string; leading?: boolean }) {
   return (
     <>
-      {userTextParts(text).map((p, i) =>
+      {userTextParts(text, leading).map((p, i) =>
         p.kind === 'command' ? (
           <span key={i} className="font-medium text-accent-fg">
             {p.text}

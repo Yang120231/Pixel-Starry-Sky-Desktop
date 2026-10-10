@@ -1,13 +1,15 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '../../../i18n/core'
 // 对话流里各种条目的显示（docs/engines.md §5.3、§11）
-import { memo, useEffect, useRef, useState, type ReactNode } from 'react'
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   Ban,
   Bot,
   Brain,
   Check,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   CircleAlert,
   FilePen,
   FilePlus,
@@ -31,6 +33,8 @@ import { AnsiText } from '@/ui/code/AnsiText'
 import { useOpenTrace } from './trace'
 import { StepMark } from './ProgressCard'
 import { UserText } from './UserText'
+import { shouldFoldUser, userBlocks } from './userBlocks'
+import { CodeBlock } from '@/ui/code/CodeBlock'
 import { freshRequest, useExpandRequest } from '@/features/search/expand'
 import { openFile } from '@/features/files/store'
 import { getActiveWorkspace } from '@/features/editor/target'
@@ -51,14 +55,58 @@ export function UserBubble({ item, actions }: { item: ItemOf<'user'>; actions?: 
   return (
     <div className="flex items-end justify-end gap-1">
       {actions}
-      <div className="conversation-user-bubble rounded-2xl rounded-br-md bg-subtle px-4 py-2.5 text-prose break-words whitespace-pre-wrap text-fg">
+      <div className="conversation-user-bubble min-w-0 rounded-2xl rounded-br-md bg-subtle px-4 py-2.5 text-prose break-words whitespace-pre-wrap text-fg">
         {!!item.attachments?.length && (
           <div className="mb-2">
             <ImageAttachments images={item.attachments} />
           </div>
         )}
-        <UserText text={item.text} />
+        <UserBody id={item.id} text={item.text} />
       </div>
+    </div>
+  )
+}
+
+/**
+ * 用户消息正文（docs/ui/conversation-ux-2.md §2.4）：代码块按代码显示；长消息只显示前面一段，底部渐隐。
+ * 折叠时全文仍在页面上（只是被裁掉）：对话内搜索照常能搜到，跳到被裁掉的命中时点 data-folded 里的展开按钮；
+ * 全局搜索跳到这条消息时也展开。
+ */
+function UserBody({ id, text }: { id: string; text: string }) {
+  useI18n()
+  const blocks = useMemo(() => userBlocks(text), [text])
+  const foldable = shouldFoldUser(text)
+  const [expanded, setExpanded] = useState(false)
+  const request = useExpandRequest(id)
+  useEffect(() => {
+    if (freshRequest(request)) setExpanded(true)
+  }, [request])
+  const folded = foldable && !expanded
+  return (
+    <div data-folded={folded || undefined}>
+      <div className={cn('relative', folded && 'max-h-[12lh] overflow-hidden')}>
+        {blocks.map((b, i) =>
+          b.kind === 'code' ? (
+            <CodeBlock key={i} code={b.code} lang={b.lang} className="my-2 whitespace-normal" />
+          ) : (
+            <UserText key={i} text={b.text} leading={i === 0} />
+          ),
+        )}
+        {folded && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-linear-to-t from-subtle to-transparent" />
+        )}
+      </div>
+      {foldable && (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => setExpanded(v => !v)}
+          className="press mt-1 inline-flex items-center gap-1 rounded-md text-meta whitespace-normal text-fg-muted hover:text-fg"
+        >
+          {expanded ? <ChevronUp size={13} strokeWidth={1.75} /> : <ChevronDown size={13} strokeWidth={1.75} />}
+          {expanded ? tr('session.live.UserBody.collapse') : tr('session.live.UserBody.expand')}
+        </button>
+      )}
     </div>
   )
 }

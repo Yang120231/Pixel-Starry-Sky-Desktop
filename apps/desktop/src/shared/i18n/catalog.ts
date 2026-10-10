@@ -944,6 +944,14 @@ export const catalog = {
     "zh": "已引导",
     "en": "Steered"
   },
+  "session.live.UserBody.expand": {
+    "zh": "展开全文",
+    "en": "Show all"
+  },
+  "session.live.UserBody.collapse": {
+    "zh": "收起",
+    "en": "Show less"
+  },
   "session.live.ItemRows.thinking": {
     "zh": "思考中…",
     "en": "Thinking…"
