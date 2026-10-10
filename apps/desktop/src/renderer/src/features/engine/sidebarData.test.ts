@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ProjectRecord, SessionSummary } from '@pixelsky/protocol'
-import { demoSidebarData, sidebarData } from './sidebarData'
+import { demoSidebarData, recentSpansProjects, sidebarData } from './sidebarData'
 describe('侧栏归档分组', () => {
   it('置底在项目尾部；最近先取八条再置底，目标仍可见，普通项顺序稳定', () => {
     const projects: ProjectRecord[] = [{ id: 'p', name: '项目', path: 'test', addedAt: 1 }]
@@ -104,5 +104,23 @@ describe('侧栏归档分组', () => {
     expect(data.projects[0].archived.map(s => s.id)).toEqual(['a'])
     expect(data.recent.map(s => s.id)).toEqual(['b'])
     expect(projects[0].sessions[0].id).toBe('a')
+  })
+})
+
+describe('最近任务只在跨项目时显示（docs/ui/conversation-ux-2.md §2.3）', () => {
+  it('一个项目不显示，两个项目显示；演示数据没有项目 id 时按项目名', () => {
+    const projects: ProjectRecord[] = [
+      { id: 'a', name: 'A', path: 'a', addedAt: 1 },
+      { id: 'b', name: 'B', path: 'b', addedAt: 2 },
+    ]
+    const session = (id: string, projectId: string) =>
+      ({ record: { id, projectId, title: id, updatedAt: 1 }, state: 'idle' }) as SessionSummary
+    const one = sidebarData(projects, [session('s1', 'a'), session('s2', 'a')], {}, String)
+    expect(one.recent.map(r => r.projectId)).toEqual(['a', 'a'])
+    expect(recentSpansProjects(one.recent)).toBe(false)
+    const two = sidebarData(projects, [session('s1', 'a'), session('s2', 'b')], {}, String)
+    expect(recentSpansProjects(two.recent)).toBe(true)
+    expect(recentSpansProjects([{ project: 'A' }, { project: 'B' }])).toBe(true)
+    expect(recentSpansProjects([])).toBe(false)
   })
 })

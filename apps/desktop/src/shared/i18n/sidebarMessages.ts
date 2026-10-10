@@ -54,8 +54,8 @@ export const sidebarMessages = {
   'sidebar.settings.title': { zh: '侧边栏', en: 'Sidebar' },
   'sidebar.settings.showRecent': { zh: '显示最近任务', en: 'Show recent tasks' },
   'sidebar.settings.showRecentDescription': {
-    zh: '在侧边栏显示最近任务；关闭后仍可通过搜索找到会话。',
-    en: 'Show recent tasks in the sidebar. Sessions remain available in search when hidden.',
+    zh: '在侧边栏显示最近任务（来自两个以上项目时才显示，否则和项目列表重复）；关闭后仍可通过搜索找到会话。',
+    en: 'Show recent tasks in the sidebar (only when they come from more than one project; otherwise they repeat the project list). Sessions remain available in search when hidden.',
   },
   'sidebar.settings.icons': { zh: '侧边栏图标', en: 'Sidebar icons' },
   'sidebar.settings.iconsDescription': {

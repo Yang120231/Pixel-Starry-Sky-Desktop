@@ -6,7 +6,7 @@ import { cn, useComingSoon } from '@/ui'
 import { setSidebarPrefs, useSidebarPrefs } from '@/features/appearance/sidebar'
 import { OPEN_SEARCH, withShortcut } from '@/features/layout/shortcuts'
 import { pinned } from '@/data'
-import { addProject, isLive, useSidebarData } from '@/features/engine'
+import { addProject, isLive, recentSpansProjects, useSidebarData } from '@/features/engine'
 import { SidebarHeader } from './SidebarHeader'
 import { LayoutActionButton } from '@/features/layout/LayoutActionButton'
 import { SidebarEmpty, SidebarRow, SidebarSection } from './SidebarSection'
@@ -120,7 +120,8 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
       </div>
 
       <RunStatusPill status={runStatus} selectedSessionId={selectedSessionId} onSelectSession={onSelectSession} />
-      {prefs.showRecent && recent.length > 0 && (
+      {/* 最近任务来自两个以上项目才显示，否则和上面的项目列表完全重复（docs/ui/conversation-ux-2.md §2.3） */}
+      {prefs.showRecent && recentSpansProjects(recent) && (
         <section className="mx-3 flex min-h-0 max-h-[35%] shrink-0 flex-col pb-2" data-sidebar-recent>
           <h3 className="shrink-0">
             <button

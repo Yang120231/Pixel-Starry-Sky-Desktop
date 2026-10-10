@@ -53,7 +53,12 @@ export function sidebarData(
   })
   const recent = active
     .slice(0, 8)
-    .map(s => ({ ...row(s), project: names[s.record.projectId], time: time(s.record.updatedAt) }))
+    .map(s => ({
+      ...row(s),
+      project: names[s.record.projectId],
+      projectId: s.record.projectId,
+      time: time(s.record.updatedAt),
+    }))
     .sort(bottomOrder)
   const running = active.filter(s => s.state !== 'idle').length,
     newReplies = active.filter(s => unread[s.record.id]).length
@@ -70,6 +75,11 @@ export function sidebarData(
     .sort(runOrder)
   return { projects: result, recent, runStatus: running || newReplies ? { running, newReplies, items } : null }
 }
+/** 最近任务来自两个以上项目才显示：只有一个项目时它和项目列表完全重复（docs/ui/conversation-ux-2.md §2.3） */
+export function recentSpansProjects(recent: Array<Pick<RecentItem, 'projectId' | 'project'>>): boolean {
+  return new Set(recent.map(r => r.projectId ?? r.project ?? '')).size > 1
+}
+
 export function demoSidebarData(
   projects: Project[],
   recent: RecentItem[],

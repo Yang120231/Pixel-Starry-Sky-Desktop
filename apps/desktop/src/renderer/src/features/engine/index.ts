@@ -26,6 +26,7 @@ export {
   useEngineState,
 } from './store'
 export type { RunStatus, RunStatusItem } from './sidebarData'
+export { recentSpansProjects } from './sidebarData'
 export { OPEN_SESSION_EVENT, useOpenSessionRequests } from './openRequests'
 export { SOURCE_ACTION_EVENT, requestSourceAction, type SourceAction } from './sourceActions'
 export {

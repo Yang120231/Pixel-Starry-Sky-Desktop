@@ -52,6 +52,8 @@ export interface RecentItem {
   id: string
   title: string
   project?: string
+  /** 所属项目；判断最近任务是否跨项目用（演示数据没有时按项目名） */
+  projectId?: string
   time: string
   /** 右侧绿色 PR 图标 */
   hasPr?: boolean
