@@ -1,6 +1,6 @@
 // 引擎系统在界面这边的数据：引擎状态、项目、会话列表、打开过的会话快照。
 // 数据来自主进程（window.pixelsky.engine），事件用 @pixelsky/protocol 的 reduce() 折叠，和主进程结果一致。
-// 演示模式（--demo）不连接引擎，这里一直是空的，界面照旧显示 mock/demo.ts。
+// 演示模式（--demo）不连接引擎：会话快照一开始装着演示的对话展示（docs/ui/demo-conversation.md），其余一直是空的，界面照旧显示 mock/demo.ts。
 import { useSyncExternalStore } from 'react'
 import {
   reduce,
@@ -13,6 +13,7 @@ import {
   type SessionSummary,
 } from '@pixelsky/protocol'
 import { isDemo } from '@/data'
+import { demo } from '@/data/demo'
 import { SESSION_REMOVED_EVENT } from './sessionLifecycle'
 import { getMachines, machineOf } from '@/features/machines/store'
 
@@ -40,7 +41,7 @@ let state: EngineState = {
   config: null,
   projects: [],
   sessions: [],
-  snapshots: {},
+  snapshots: isDemo ? { ...demo().conversations.snapshots } : {},
   unread: {},
   currentProjectId: null,
 }

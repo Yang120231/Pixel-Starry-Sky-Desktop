@@ -22,7 +22,8 @@ import { RetryStatus } from './live/RetryStatus'
 import { MessageActionsContext, type MessageActionsValue } from './live/MessageActions'
 import { appendComposerDraft } from '@/features/engine/drafts'
 import { updateImages } from '@/features/session/attachments/drafts'
-import { sessionDiff } from '@/data'
+import { isDemo, sessionDiff } from '@/data'
+import { demo } from '@/data/demo'
 import { cn } from '@/ui'
 import { bridge, isLive, useComposerController, useSession, useStatusBar } from '@/features/engine'
 import './conversation.css'
@@ -53,7 +54,9 @@ export function useHeaderActions(sessionId: string | null): boolean {
 /** 会话主区：顶部栏 + 可滚动对话流 + 固定在底部的输入框；没有对话时显示欢迎页 */
 export function SessionView(props: SessionViewProps) {
   useI18n()
-  return isLive ? <LiveSessionView {...props} /> : <DemoSessionView {...props} />
+  // 演示模式里的对话展示用真实会话的视图（docs/ui/demo-conversation.md）
+  const live = isLive || (isDemo && !!props.sessionId && props.sessionId in demo().conversations.snapshots)
+  return live ? <LiveSessionView {...props} /> : <DemoSessionView {...props} />
 }
 
 /** 演示模式：照参考图的静态内容（mock/demo.ts） */

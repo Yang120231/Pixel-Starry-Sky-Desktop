@@ -3,6 +3,7 @@
 import type { AppData } from '@/data/types'
 import { COMPOSER, RAIL_ITEMS } from '@/data/constants'
 import { demoChannelMembers, demoChannelMessages, demoChannels } from './channels'
+import { SHOWCASE_PROJECT, SHOWCASE_SESSIONS, showcaseSnapshots } from './conversations'
 
 export const demo: AppData = {
   currentUser: { name: '林夏' },
@@ -24,6 +25,17 @@ export const demo: AppData = {
         { id: 's-cloud-onboarding', title: '把云主机配置引导改成两步', status: 'idle', time: '3天' },
       ],
       archived: [{ id: 's-archived-demo', title: '已完成的项目检查', status: 'idle', time: '5天', archivedAt: 1 }],
+    },
+    // 对话展示：用真实对话组件显示（docs/ui/demo-conversation.md）
+    {
+      id: SHOWCASE_PROJECT,
+      name: '对话展示（Claude）',
+      expanded: true,
+      sessions: SHOWCASE_SESSIONS.map(s => ({
+        id: s.id,
+        title: s.title,
+        status: showcaseSnapshots[s.id].state === 'idle' ? ('idle' as const) : ('running' as const),
+      })),
     },
     { id: 'pixel-desktop', name: 'pixel-desktop', branch: 'feat/turn-island', sessions: [] },
     { id: 'pixel-channel', name: 'pixel-channel', sessions: [] },

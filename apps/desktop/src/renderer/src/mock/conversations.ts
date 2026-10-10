@@ -1,0 +1,1384 @@
+// 演示模式里的 Claude 对话展示（docs/ui/demo-conversation.md）：和主进程给界面的会话快照同形，
+// 打开这些会话时用真实对话组件显示。一个会话一种状态（空闲 / 运行中 / 正在启动 / 等审批），按内容分开。
+// 工具名、审批标题、报错说法照 packages/engine/src/claude 里的写法。
+import type {
+  AgentRun,
+  ApprovalRequest,
+  FileChange,
+  ImageAttachment,
+  Item,
+  SessionRecord,
+  SessionSnapshot,
+  TaskOutput,
+  TurnUsage,
+} from '@pixelsky/protocol'
+
+export const SHOWCASE_PROJECT = 'claude-showcase'
+
+/** 侧栏里的顺序和标题（mock/demo.ts 用） */
+export const SHOWCASE_SESSIONS = [
+  { id: 'demo-claude-markdown', title: '回复格式：Markdown 全部样式' },
+  { id: 'demo-claude-tools', title: '工具调用：命令、文件、搜索、子智能体' },
+  { id: 'demo-claude-user', title: '用户消息：图片、引用文件、长消息、引导' },
+  { id: 'demo-claude-errors', title: '报错：自有额度' },
+  { id: 'demo-claude-platform', title: '报错：平台余额不足' },
+  { id: 'demo-claude-running', title: '运行中：进度卡片、后台任务、重试' },
+  { id: 'demo-claude-starting', title: '正在启动引擎' },
+  { id: 'demo-claude-approve-command', title: '审批：运行命令' },
+  { id: 'demo-claude-approve-file', title: '审批：修改文件' },
+  { id: 'demo-claude-approve-tool', title: '审批：使用 MCP 工具' },
+  { id: 'demo-claude-question', title: '提问：单选和多选' },
+  { id: 'demo-claude-plan', title: '计划确认' },
+] as const
+
+type SessionId = (typeof SHOWCASE_SESSIONS)[number]['id']
+
+const T0 = Date.now()
+const MIN = 60_000
+const F = '```'
+
+/** 展示里用到的文件；mock/files.ts 合进演示文件列表，路径链接和改动卡片点得开 */
+export const SHOWCASE_FILES: Record<string, string> = {
+  'src/session/useDraft.ts': [
+    "import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'",
+    '',
+    '/** 每个会话一份草稿：内存里立即生效，停顿 300ms 后写进 localStorage */',
+    'const memory = new Map<string, string>()',
+    'const listeners = new Set<() => void>()',
+    '',
+    'export function draftKey(sessionId: string): string {',
+    '  return `draft:${sessionId}`',
+    '}',
+    '',
+    'function read(sessionId: string): string {',
+    '  if (memory.has(sessionId)) return memory.get(sessionId)!',
+    '  try {',
+    "    return localStorage.getItem(draftKey(sessionId)) ?? ''",
+    '  } catch {',
+    "    return ''",
+    '  }',
+    '}',
+    '',
+    'function write(sessionId: string, text: string): void {',
+    '  memory.set(sessionId, text)',
+    '  for (const listener of listeners) listener()',
+    '}',
+    '',
+    'export function clearDraft(sessionId: string): void {',
+    '  memory.delete(sessionId)',
+    '  try {',
+    '    localStorage.removeItem(draftKey(sessionId))',
+    '  } catch {',
+    '    /* 隐私模式下 localStorage 不可用，只清内存 */',
+    '  }',
+    '  for (const listener of listeners) listener()',
+    '}',
+    '',
+    'export function useDraft(sessionId: string): [string, (text: string) => void] {',
+    '  const subscribe = useCallback((listener: () => void) => {',
+    '    listeners.add(listener)',
+    '    return () => listeners.delete(listener)',
+    '  }, [])',
+    '  const text = useSyncExternalStore(subscribe, () => read(sessionId))',
+    '  const timer = useRef<number | undefined>(undefined)',
+    '  useEffect(() => () => window.clearTimeout(timer.current), [])',
+    '  const setText = useCallback(',
+    '    (next: string) => {',
+    '      write(sessionId, next)',
+    '      window.clearTimeout(timer.current)',
+    '      timer.current = window.setTimeout(() => {',
+    '        try {',
+    '          localStorage.setItem(draftKey(sessionId), next)',
+    '        } catch {',
+    '          /* 写满了：草稿只留在内存里 */',
+    '        }',
+    '      }, 300)',
+    '    },',
+    '    [sessionId],',
+    '  )',
+    '  return [text, setText]',
+    '}',
+    '',
+  ].join('\n'),
+  'src/session/__tests__/useDraft.test.ts': [
+    "import { describe, expect, it, vi } from 'vitest'",
+    "import { clearDraft, draftKey } from '../useDraft'",
+    '',
+    "describe('草稿', () => {",
+    "  it('按会话分开存', () => {",
+    "    expect(draftKey('a')).toBe('draft:a')",
+    '  })',
+    "  it('清掉时同时删 localStorage', () => {",
+    "    const remove = vi.spyOn(Storage.prototype, 'removeItem')",
+    "    clearDraft('a')",
+    "    expect(remove).toHaveBeenCalledWith('draft:a')",
+    '  })',
+    '})',
+    '',
+  ].join('\n'),
+  'src/session/SessionView.jsx': [
+    "import { Composer } from './Composer'",
+    '',
+    'export function SessionView({ session }) {',
+    '  return (',
+    '    <main className="session">',
+    '      <Composer sessionId={session.id} />',
+    '    </main>',
+    '  )',
+    '}',
+    '',
+  ].join('\n'),
+}
+
+// ---------- 小工具 ----------
+
+function record(id: SessionId, patch: Partial<SessionRecord> = {}): SessionRecord {
+  const title = SHOWCASE_SESSIONS.find(s => s.id === id)!.title
+  return {
+    id,
+    projectId: SHOWCASE_PROJECT,
+    cwd: 'D:\\work\\pixel-web',
+    engine: 'claude',
+    engineSessionId: `8f1c2e7a-${id.slice(-4)}-4b1e-9c3d-2a6f0b7d91e4`,
+    title,
+    createdAt: T0 - 40 * MIN,
+    updatedAt: T0 - 2 * MIN,
+    lastOutcome: 'completed',
+    lastError: null,
+    archivedAt: null,
+    titleEdited: true,
+    platform: null,
+    model: 'claude-opus-5-5',
+    effort: 'high',
+    permissionMode: 'edits',
+    ultracode: false,
+    fast: false,
+    thinkingSummaries: true,
+    ...patch,
+  }
+}
+
+function snapshot(rec: SessionRecord, items: Item[], patch: Partial<SessionSnapshot> = {}): SessionSnapshot {
+  return {
+    record: rec,
+    state: 'idle',
+    items,
+    pending: [],
+    usage: {
+      inputTokens: 18_400,
+      outputTokens: 6_200,
+      cacheReadTokens: 412_000,
+      cacheWriteTokens: 38_000,
+      contextTokens: 64_000,
+      contextWindow: 200_000,
+      costUsd: 0.86,
+    },
+    flags: { ultracodeAvailable: true, fastAvailable: true, fastState: 'off', fastBlocked: null },
+    tasks: [],
+    subagents: [],
+    runs: { workflows: [], agents: [] },
+    suggestion: null,
+    queue: [],
+    queuePaused: false,
+    execution: null,
+    turnId: null,
+    ...patch,
+  }
+}
+
+const user = (
+  id: string,
+  text: string,
+  minutesAgo: number,
+  extra: Partial<Extract<Item, { kind: 'user' }>> = {},
+): Item => ({
+  kind: 'user',
+  id,
+  text,
+  createdAt: T0 - minutesAgo * MIN,
+  ...extra,
+})
+const assistant = (
+  id: string,
+  text: string,
+  status: Extract<Item, { kind: 'assistant' }>['status'] = 'completed',
+): Item => ({
+  kind: 'assistant',
+  id,
+  text,
+  status,
+})
+const reasoning = (id: string, text: string): Item => ({ kind: 'reasoning', id, text, status: 'completed' })
+
+function stats(id: string, outcome: 'completed' | 'interrupted' | 'failed', usage: TurnUsage): Item {
+  return { kind: 'turn_stats', id, turnId: `${id}-turn`, outcome, usage }
+}
+
+const opus = (input: number, output: number, cost: number, requests = 1): TurnUsage['models'][string] => ({
+  input,
+  cacheRead: input * 24,
+  cacheWrite: Math.round(input * 1.6),
+  output,
+  costUsd: cost,
+  requests,
+})
+
+/** unified diff 的正文：行首 + / - / 空格，@@ 行照抄 */
+function change(path: string, kind: FileChange['kind'], lines: string[]): FileChange {
+  return {
+    path,
+    kind,
+    diff: lines.join('\n'),
+    added: lines.filter(l => l.startsWith('+')).length,
+    removed: lines.filter(l => l.startsWith('-')).length,
+  }
+}
+
+const allAdded = (text: string): string[] => [
+  `@@ -0,0 +1,${text.split('\n').length - 1} @@`,
+  ...text
+    .split('\n')
+    .slice(0, -1)
+    .map(l => '+' + l),
+]
+
+const ESC = '\u001b['
+
+// ---------- 1 回复格式 ----------
+
+const MARKDOWN_REPLY = `## 草稿按会话保存
+
+现在输入框的草稿只有一份，存在 \`src/session/Composer.jsx:4\` 的组件状态里，切换会话就丢了。改成按会话 id 存，读写都放进 [useDraft.ts](src/session/useDraft.ts#L35)，测试在 \`src/session/__tests__/useDraft.test.ts\`。
+
+### 存在哪里
+
+| 位置 | 存什么 | 什么时候清掉 |
+| --- | --- | --- |
+| 内存 | 当前会话的草稿 | 发送成功后 |
+| \`localStorage\` | 所有会话的草稿（\`draft:<会话 id>\`） | 发送成功后、会话删除时 |
+| 不存 | 图片附件 | — |
+
+### 步骤
+
+1. 抽出 \`useDraft(sessionId)\`，返回 \`[text, setText]\`
+2. **输入时**写内存，*停顿 300ms* 后写 \`localStorage\`
+3. 发送成功后删掉这条草稿
+   - 失败时保留，方便重发
+   - ~~发送前先清空~~（会丢内容，不这么做）
+
+- [x] 读写函数
+- [x] 切换会话时换草稿
+- [ ] 会话删除时清理
+
+> 两个窗口打开同一个会话时，后写的为准，不做合并。
+
+> [!NOTE]
+> 草稿只存在这台电脑上，不同步。
+
+> [!TIP]
+> 想清空所有草稿，在设置 › 数据里点「清除本机草稿」。
+
+> [!IMPORTANT]
+> 改完要跑一遍 \`npm test\`。
+
+> [!WARNING]
+> \`localStorage\` 每个站点大约 5MB，写满了会抛 \`QuotaExceededError\`。
+
+> [!CAUTION]
+> 不要把图片的 Base64 放进草稿，几张图就会占满。
+
+### 大小估算
+
+每个字按 UTF-16 存 2 字节，\\(n\\) 条草稿一共占
+
+$$
+S = \\sum_{i=1}^{n} 2 \\cdot \\mathrm{len}(d_i)
+$$
+
+一千条、每条 500 字也只有 \\(2 \\times 500 \\times 1000 = 10^6\\) 字节，约 1MB。
+
+### 代码
+
+键名：
+
+${F}ts
+export function draftKey(sessionId: string): string {
+  return \`draft:\${sessionId}\`
+}
+${F}
+
+存下来的样子：
+
+${F}json
+{ "draft:9f2c": "把输入框的草稿改成按会话保存", "draft:a71e": "" }
+${F}
+
+输入框获得焦点时的样式：
+
+${F}css
+.composer textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+${F}
+
+只跑草稿相关的测试：
+
+${F}bash
+npm test -- src/session --reporter=dot
+${F}
+
+完整的 \`useDraft.ts\`（超过 30 行，默认折叠）：
+
+${F}ts
+${SHOWCASE_FILES['src/session/useDraft.ts'].trimEnd()}
+${F}
+
+没有标语言的代码块：
+
+${F}
+draft:9f2c  41 字
+draft:a71e   0 字
+${F}
+
+参考 React 文档的 [useSyncExternalStore](https://react.dev/reference/react/useSyncExternalStore)。
+
+---
+
+需要的话我接着把「会话删除时清理」也做了。`
+
+const markdown = snapshot(record('demo-claude-markdown', { updatedAt: T0 - 3 * MIN }), [
+  user('m-u1', '把草稿按会话保存的方案整理成一份说明，后面要给其他人看', 6),
+  reasoning(
+    'm-r1',
+    '用户要一份能给别人看的说明。先确认 useDraft.ts 现在的写法，再按「存在哪里 → 步骤 → 注意事项 → 代码」组织，表格放存储位置，提示块放容易踩的坑。',
+  ),
+  {
+    kind: 'tool',
+    id: 'm-t1',
+    tool: 'read',
+    name: 'Read',
+    title: 'src/session/useDraft.ts',
+    output: numbered(SHOWCASE_FILES['src/session/useDraft.ts']),
+    status: 'completed',
+  },
+  assistant('m-a1', MARKDOWN_REPLY),
+  stats('m-s1', 'completed', { durationMs: 38_000, models: { 'claude-opus-5-5': opus(2_400, 1_850, 0.1162, 2) } }),
+])
+
+function numbered(text: string): string {
+  return text
+    .split('\n')
+    .slice(0, -1)
+    .map((line, i) => `${String(i + 1).padStart(6)}\t${line}`)
+    .join('\n')
+}
+
+// ---------- 2 工具调用 ----------
+
+const COMPOSER_DIFF = change('src/session/Composer.jsx', 'update', [
+  '@@ -1,3 +1,6 @@',
+  '-export function Composer() {',
+  '-  return <textarea placeholder="描述你要做的事" />',
+  "+import { useDraft } from './useDraft'",
+  '+',
+  '+export function Composer({ sessionId }) {',
+  '+  const [text, setText] = useDraft(sessionId)',
+  '+  return <textarea value={text} onChange={e => setText(e.target.value)} placeholder="描述你要做的事" />',
+  ' }',
+])
+
+const tools = snapshot(
+  record('demo-claude-tools', { updatedAt: T0 - 8 * MIN }),
+  [
+    user('b-u1', '把输入框的草稿改成按会话保存，切换会话时不要丢；顺便补上测试', 22),
+    reasoning(
+      'b-r1',
+      '先看 Composer 现在怎么存草稿，再找所有用到草稿的地方。改动不大：抽一个 useDraft，Composer 改用它，补测试。localStorage 可能写满，要兜底。',
+    ),
+    assistant('b-a1', '先看看现在草稿是怎么存的，再找找哪些地方用到了。'),
+    {
+      kind: 'tool',
+      id: 'b-t1',
+      tool: 'read',
+      name: 'Read',
+      title: 'src/session/Composer.jsx',
+      output: numbered('export function Composer() {\n  return <textarea placeholder="描述你要做的事" />\n}\n'),
+      status: 'completed',
+    },
+    {
+      kind: 'tool',
+      id: 'b-t2',
+      tool: 'search',
+      name: 'Grep',
+      title: 'draft · src',
+      output: 'src/session/Composer.jsx\nsrc/session/SessionView.jsx\nsrc/styles/session.css',
+      status: 'completed',
+    },
+    {
+      kind: 'tool',
+      id: 'b-t3',
+      tool: 'search',
+      name: 'Glob',
+      title: 'src/**/*.test.{js,jsx,ts}',
+      output: 'No files found',
+      status: 'completed',
+    },
+    {
+      kind: 'tool',
+      id: 'b-t4',
+      tool: 'web',
+      name: 'WebFetch',
+      title: 'https://react.dev/reference/react/useSyncExternalStore',
+      output:
+        'useSyncExternalStore 订阅外部存储：subscribe(callback) 返回取消订阅函数，getSnapshot 必须在存储没变时返回同一个值，否则会无限重渲染。',
+      status: 'completed',
+    },
+    {
+      kind: 'tool',
+      id: 'b-t5',
+      tool: 'web',
+      name: 'WebSearch',
+      title: 'localStorage QuotaExceededError 处理',
+      output:
+        '1. MDN · Storage.setItem() — 存储满时抛出 QuotaExceededError\n2. web.dev · Storage for the web — 各浏览器的配额\n3. Stack Overflow · How to handle localStorage quota exceeded',
+      status: 'completed',
+    },
+    {
+      kind: 'tool',
+      id: 'b-t6',
+      tool: 'mcp',
+      name: 'mcp__github__search_issues',
+      title: 'github · search_issues',
+      output: JSON.stringify(
+        {
+          total_count: 2,
+          items: [
+            { number: 214, title: '切换会话后输入框内容没了', state: 'open' },
+            { number: 187, title: '草稿能不能自动保存', state: 'closed' },
+          ],
+        },
+        null,
+        2,
+      ),
+      status: 'completed',
+    },
+    {
+      kind: 'tool',
+      id: 'b-t7',
+      tool: 'read',
+      name: 'Read',
+      title: 'src/session/draftStore.js',
+      output: 'File does not exist. Current working directory: D:\\work\\pixel-web',
+      status: 'failed',
+    },
+    {
+      kind: 'tool',
+      id: 'b-t8',
+      tool: 'task',
+      name: 'Agent',
+      title: '找出所有用到草稿的地方',
+      output:
+        '用到草稿的只有两处：Composer.jsx 自己的 state，和 SessionView.jsx 切换会话时重新挂载 Composer（这就是草稿丢失的原因）。没有别的地方读写草稿。',
+      status: 'completed',
+    },
+    {
+      kind: 'tool',
+      id: 'b-t9',
+      tool: 'read',
+      name: 'Read',
+      title: 'src/session/SessionView.jsx',
+      output: numbered(SHOWCASE_FILES['src/session/SessionView.jsx']),
+      status: 'completed',
+      subagent: 'Explore',
+    },
+    {
+      kind: 'command',
+      id: 'b-c0',
+      command: 'git log --oneline -3 -- src/session',
+      description: '看看最近谁改过 session 目录',
+      output: 'a41f0c2 输入框支持粘贴图片\n93be1d7 会话页拆出 Composer\n5c02e88 初始化 pixel-web',
+      exitCode: 0,
+      status: 'completed',
+      subagent: 'Explore',
+    },
+    {
+      kind: 'todo',
+      id: 'b-todo1',
+      steps: [
+        { text: '抽出 useDraft，按会话存草稿', status: 'in_progress' },
+        { text: 'Composer 改用 useDraft', status: 'pending' },
+        { text: '补测试', status: 'pending' },
+        { text: '跑测试和 lint', status: 'pending' },
+      ],
+      status: 'completed',
+    },
+    assistant('b-a2', '原因找到了：切换会话时 Composer 重新挂载，组件里的 state 跟着没了。开始改。'),
+    {
+      kind: 'file_change',
+      id: 'b-f1',
+      changes: [change('src/session/useDraft.ts', 'add', allAdded(SHOWCASE_FILES['src/session/useDraft.ts']))],
+      status: 'completed',
+    },
+    { kind: 'file_change', id: 'b-f2', changes: [COMPOSER_DIFF], status: 'completed' },
+    {
+      kind: 'file_change',
+      id: 'b-f3',
+      changes: [
+        change('src/styles/session.css', 'update', [
+          '@@ -1,4 +1,8 @@',
+          ' .session {',
+          '   display: flex;',
+          '   flex-direction: column;',
+          ' }',
+          '+',
+          '+.composer textarea:focus-visible {',
+          '+  outline: 2px solid var(--accent);',
+          '+}',
+        ]),
+        change('README.md', 'update', [
+          '@@ -1,3 +1,5 @@',
+          ' # pixel-web',
+          ' ',
+          '-这是文件面板的演示内容。',
+          '+这是文件面板的演示内容。输入框的草稿按会话保存。',
+          '+',
+          '+草稿只存在这台电脑上，发送成功后清掉。',
+        ]),
+      ],
+      status: 'completed',
+    },
+    {
+      kind: 'file_change',
+      id: 'b-f4',
+      changes: [
+        change('src/session/legacyDraft.js', 'delete', [
+          '@@ -1,4 +0,0 @@',
+          '-// 旧的草稿存储，没人用了',
+          '-export const draft = { text: "" }',
+          '-export const setDraft = text => (draft.text = text)',
+          '-export const getDraft = () => draft.text',
+        ]),
+      ],
+      status: 'completed',
+    },
+    {
+      kind: 'command',
+      id: 'b-c1',
+      command: 'mkdir -p src/session/__tests__',
+      description: '建测试目录',
+      output: '',
+      exitCode: 0,
+      status: 'completed',
+    },
+    {
+      kind: 'file_change',
+      id: 'b-f5',
+      changes: [
+        change(
+          'src/session/__tests__/useDraft.test.ts',
+          'add',
+          allAdded(SHOWCASE_FILES['src/session/__tests__/useDraft.test.ts']),
+        ),
+      ],
+      status: 'completed',
+    },
+    {
+      kind: 'command',
+      id: 'b-c2',
+      command: 'npm test -- src/session',
+      description: '跑草稿相关的测试',
+      output: [
+        '',
+        `${ESC}1m${ESC}46m RUN ${ESC}49m${ESC}22m ${ESC}36mv3.2.4 ${ESC}39m${ESC}90mD:/work/pixel-web${ESC}39m`,
+        '',
+        ` ${ESC}32m✓${ESC}39m src/session/__tests__/useDraft.test.ts ${ESC}2m(2 tests)${ESC}22m ${ESC}33m14${ESC}2mms${ESC}22m${ESC}39m`,
+        '',
+        `${ESC}2m Test Files ${ESC}22m ${ESC}1m${ESC}32m1 passed${ESC}39m${ESC}22m${ESC}90m (1)${ESC}39m`,
+        `${ESC}2m      Tests ${ESC}22m ${ESC}1m${ESC}32m2 passed${ESC}39m${ESC}22m${ESC}90m (2)${ESC}39m`,
+        `${ESC}2m   Duration ${ESC}22m 612ms`,
+      ].join('\n'),
+      exitCode: 0,
+      status: 'completed',
+    },
+    {
+      kind: 'command',
+      id: 'b-c3',
+      command: 'npm run lint',
+      description: '检查代码风格',
+      output: [
+        '> pixel-web@0.1.0 lint',
+        '> eslint src',
+        '',
+        `${ESC}4mD:\\work\\pixel-web\\src\\session\\Composer.jsx${ESC}24m`,
+        `  ${ESC}2m6:38${ESC}22m  ${ESC}31merror${ESC}39m  'e' is defined but never used  ${ESC}2mno-unused-vars${ESC}22m`,
+        `  ${ESC}2m6:78${ESC}22m  ${ESC}33mwarning${ESC}39m  Line exceeds 100 characters  ${ESC}2mmax-len${ESC}22m`,
+        '',
+        `${ESC}31m${ESC}1m✖ 2 problems (1 error, 1 warning)${ESC}22m${ESC}39m`,
+      ].join('\n'),
+      exitCode: 1,
+      status: 'failed',
+    },
+    {
+      kind: 'file_change',
+      id: 'b-f6',
+      changes: [
+        change('src/session/Composer.jsx', 'update', [
+          '@@ -5,2 +5,8 @@',
+          '   const [text, setText] = useDraft(sessionId)',
+          '-  return <textarea value={text} onChange={e => setText(e.target.value)} placeholder="描述你要做的事" />',
+          '+  return (',
+          '+    <textarea',
+          '+      value={text}',
+          '+      onChange={event => setText(event.target.value)}',
+          '+      placeholder="描述你要做的事"',
+          '+    />',
+          '+  )',
+        ]),
+      ],
+      status: 'completed',
+    },
+    {
+      kind: 'command',
+      id: 'b-c4',
+      command: 'Get-ChildItem src\\session -Recurse -Filter *.test.* | Select-Object Name, Length',
+      description: '列出测试文件（PowerShell）',
+      output: 'Name               Length\n----               ------\nuseDraft.test.ts      412',
+      exitCode: 0,
+      status: 'completed',
+    },
+    {
+      kind: 'command',
+      id: 'b-c5',
+      command: 'npm run dev',
+      description: '启动开发服务器看一下效果',
+      output: [
+        '> pixel-web@0.1.0 dev',
+        '> vite',
+        '',
+        `  ${ESC}32m${ESC}1mVITE${ESC}22m v6.3.5${ESC}39m  ${ESC}2mready in ${ESC}0m${ESC}1m312${ESC}22m${ESC}2m${ESC}0m ms${ESC}22m`,
+        '',
+        `  ${ESC}32m➜${ESC}39m  ${ESC}1mLocal${ESC}22m:   ${ESC}36mhttp://localhost:${ESC}1m5173${ESC}22m/${ESC}39m`,
+      ].join('\n'),
+      exitCode: null,
+      status: 'interrupted',
+    },
+    {
+      kind: 'command',
+      id: 'b-c6',
+      command: 'git push origin feat/draft',
+      description: '推送到远端',
+      output: '',
+      exitCode: null,
+      status: 'declined',
+    },
+    {
+      kind: 'tool',
+      id: 'b-o1',
+      tool: 'other',
+      name: 'Skill',
+      title: '{"skill":"verify","args":"src/session"}',
+      output: '已加载技能 verify：改完后在浏览器里打开检查。',
+      status: 'completed',
+    },
+    {
+      kind: 'tool',
+      id: 'b-w1',
+      tool: 'task',
+      name: 'Workflow',
+      title: '三个方向并行审查草稿改动',
+      output: '审查完成：正确性 0 个问题，测试 1 个建议（加一条写满 localStorage 的用例），可读性没有问题。',
+      status: 'completed',
+    },
+    {
+      kind: 'todo',
+      id: 'b-todo2',
+      steps: [
+        { text: '抽出 useDraft，按会话存草稿', status: 'completed' },
+        { text: 'Composer 改用 useDraft', status: 'completed' },
+        { text: '补测试', status: 'completed' },
+        { text: '跑测试和 lint', status: 'completed' },
+      ],
+      status: 'completed',
+    },
+    assistant(
+      'b-a3',
+      '改好了：\n\n- 新增 `src/session/useDraft.ts`，每个会话一份草稿，停顿 300ms 后写进 `localStorage`，写满时只留在内存里；\n- `src/session/Composer.jsx` 改用 `useDraft(sessionId)`，lint 报的未使用变量已改；\n- 删了没人用的 `legacyDraft.js`；\n- 测试 2 个全部通过。\n\n`git push` 被你拒绝了，没有推送。审查建议加一条写满 `localStorage` 的测试，要加的话说一声。',
+    ),
+    stats('b-s1', 'completed', {
+      durationMs: 184_000,
+      models: {
+        'claude-opus-5-5': opus(9_800, 4_100, 0.4831, 14),
+        'claude-haiku-4-5': {
+          input: 3_200,
+          cacheRead: 41_000,
+          cacheWrite: 2_800,
+          output: 900,
+          costUsd: 0.0127,
+          requests: 6,
+        },
+      },
+    }),
+  ],
+  {
+    runs: {
+      agents: [
+        agentRun('agent-explore', '找出所有用到草稿的地方', {
+          type: 'Explore',
+          model: 'claude-haiku-4-5',
+          toolUseId: 'b-t8',
+          prompt: '在 src 里找出所有读写输入框草稿的地方，说明切换会话时草稿为什么会丢。',
+          result: '用到草稿的只有两处：Composer.jsx 自己的 state，和 SessionView.jsx 切换会话时重新挂载 Composer。',
+        }),
+      ],
+      workflows: [
+        {
+          id: 'wf-review',
+          name: 'review',
+          description: '三个方向并行审查草稿改动',
+          status: 'completed',
+          startedAt: T0 - 11 * MIN,
+          durationMs: 52_000,
+          tokens: 61_000,
+          toolCalls: 17,
+          phases: [
+            { index: 1, title: '审查' },
+            { index: 2, title: '核对' },
+          ],
+          agents: [
+            agentRun('wf-correct', '正确性', { phase: 1, result: '没发现问题。' }),
+            agentRun('wf-tests', '测试', { phase: 1, result: '建议加一条写满 localStorage 的用例。' }),
+            agentRun('wf-read', '可读性', { phase: 1, result: '命名清楚，没有问题。' }),
+            agentRun('wf-verify', '核对建议', { phase: 2, result: '测试建议成立，其它两项没有要改的。' }),
+          ],
+          toolUseId: 'b-w1',
+        },
+      ],
+    },
+  },
+)
+
+function agentRun(id: string, label: string, patch: Partial<AgentRun> = {}): AgentRun {
+  return {
+    id,
+    label,
+    type: '',
+    model: 'claude-opus-5-5',
+    state: 'completed',
+    startedAt: T0 - 12 * MIN,
+    durationMs: 18_400,
+    tokens: 12_300,
+    toolCalls: 6,
+    phase: null,
+    prompt: label,
+    result: '',
+    toolUseId: null,
+    ...patch,
+  }
+}
+
+// ---------- 3 用户消息 ----------
+
+function image(id: string, name: string, base64: string, width: number, height: number): ImageAttachment {
+  return {
+    id,
+    name,
+    mediaType: 'image/png',
+    bytes: Math.round((base64.length * 3) / 4),
+    width,
+    height,
+    dataBase64: base64,
+  }
+}
+
+const SCREENSHOT_PNG =
+  'iVBORw0KGgoAAAANSUhEUgAAAPAAAACWCAIAAABvmpKCAAACD0lEQVR42u3dMa6CQBSGURZmYekKaazdC800hMrCgoSGypjYIAkuwUhwyB3Pn28FL6dibnxVP4xSMVX+BAJaAloCWgJaQEtAS0BLQEtAC2gJaAlo6Seg749niKbpJX0MaAENtIAGWkADLaAFNNACGmiFAp3aa/6AFtAS0AIaaAENtIAGWkBLZYI+HE/aN6CBBhpooIEGWkADLaCBBhpooIF2PioBLaCBFtBAC2igBbQEtIAGWs5H3UML6JWg6/NFcQMaaKCBFtBAC2igBbSvHAJaAlpAAy2ggRbQQAtoAe07tLb9Hux8dMvzURaBBlpAAw000EADDbSvHAJaQAMtoIGWhxUvhQJaAlpAAy2ggRbQQAtoCWgBDbSABjp7t3H+h4AGGmiggQYaaKCBBhrovKCdjwINNNBAAw000EALaKCBBhpooIEGGmiggQbaw4qABhpooIEGGmiggQYaaKCBBhpooIEGGmiggQYaaKCBBhpooIEGGmiggZZfTgJae4J2PiqggRbQQAtoCWgBDbSABlpAAy0PKxLQAhpoAQ20gAZaQEtAC2igBTTQAnot6CZ1i5W4JnVAG9BAG9BAG9BAW0bQQc9HgQYaaAMaaAMaaAMaaAPagAbagAbagoD2sGJAA21AA21AAw000AY00AY00AY00Aa0BLSABlpAAy2ggRbQkn8aJKCBFtBAC2ig9X1v0J8iyVot8k4AAAAASUVORK5CYII='
+const ERROR_PNG =
+  'iVBORw0KGgoAAAANSUhEUgAAALQAAAB4CAIAAADUhU+qAAABPklEQVR42u3doQ2AMBRF0Q6EwJCwAEtUM1M1g7ELCCymEMKnnJc7ATnmp4LU9aN0WvIJBIfgEByCQ3AIDsEhOASH4JDgEByCQ3AIDsEhOASH4BAcla3DpMjBITgEh+AQHIJDcMABBxxwwAEHHHDAITj0DRybxR4cBofBYXAYHAaHwQEHHHDAAQcccMARD0fOs+4Hh+AQHHDAAQccrhXXChxwwAEHHAaHwWFw2E9wlLLoCA444IADDjjggAMO14prBQ6Dw+AwOAwOg8PggAMOOOCAAw444IDD4DA4DA6Dw+AwOAwOOOCA4/Je+aMKHHDAAQcccMABBxwGBxxwwAEHHHDAAQcccMBh3lYMDoPD4DA44IADDjjggOMpHGo4OASH4BAcgkNwCA7BITgEh+CQ4BAcgkNwCA7BITgEh5ptBzRKp8XOuWbuAAAAAElFTkSuQmCC'
+
+const LONG_MESSAGE = `测试里这段一直不稳定，大概十次里失败一次：
+
+${F}ts
+it('停顿后写进 localStorage', () => {
+  vi.useFakeTimers()
+  const { result } = renderHook(() => useDraft('a'))
+  act(() => result.current[1]('你好'))
+  vi.advanceTimersByTime(299)
+  expect(localStorage.getItem('draft:a')).toBeNull()
+  vi.advanceTimersByTime(1)
+  expect(localStorage.getItem('draft:a')).toBe('你好')
+})
+${F}
+
+失败时的输出：
+
+${F}
+AssertionError: expected null to be '你好'
+ ❯ src/session/__tests__/useDraft.test.ts:24:41
+${F}
+
+我怀疑是 300ms 的延迟写入和 fake timers 没对上。你看看是不是这样，如果是的话：
+1. 先确认 setTimeout 是在 act 里面还是外面注册的
+2. 延迟改成常量导出，测试里直接用
+3. 别的测试有没有一样的问题
+另外 @README.md 里关于草稿的说明也顺手更新一下。`
+
+const userMessages = snapshot(record('demo-claude-user', { updatedAt: T0 - 15 * MIN }), [
+  user('c-u1', '/review @src/session/Composer.jsx 重点看草稿那块，截图是现在切换会话后的样子', 34, {
+    attachments: [
+      image('img-shot', '切换会话后.png', SCREENSHOT_PNG, 240, 150),
+      image('img-error', '报错弹窗.png', ERROR_PNG, 180, 120),
+    ],
+  }),
+  assistant(
+    'c-a1',
+    '看了截图和 `src/session/Composer.jsx`：切换会话后输入框是空的，因为草稿存在组件 state 里，组件重新挂载就没了。第二张图的报错是另一个问题（保存设置时网络断开），和草稿无关。',
+  ),
+  stats('c-s1', 'completed', { durationMs: 21_000, models: { 'claude-opus-5-5': opus(5_600, 420, 0.0612, 1) } }),
+  user('c-u2', LONG_MESSAGE, 30),
+  reasoning(
+    'c-r2',
+    '看测试：advanceTimersByTime(299) 之后断言为空，再走 1ms 断言有值。setTimeout 在 act 外注册的话，时间对不上。',
+  ),
+  assistant('c-a2', '对，问题在 setTimeout 是在 `act` 外面注册的。先把延迟抽成常量 `DRAFT_DELAY`，再'),
+  user('c-g1', '先别改测试，只改实现', 29, { mode: 'guidance' }),
+  assistant('c-a3', '好的，只改实现：把写入放进 `useEffect`，保证在 `act` 里注册定时器。正在改', 'interrupted'),
+  stats('c-s2', 'interrupted', { durationMs: 47_000, models: { 'claude-opus-5-5': opus(7_100, 680, 0.0874, 2) } }),
+  user('c-u3', '继续', 18),
+  { kind: 'notice', id: 'c-n1', level: 'info', text: '上下文太长，已自动压缩较早的对话' },
+  { kind: 'notice', id: 'c-n2', level: 'warn', text: 'Fast 模式暂时不可用：限流冷却中，稍后会自动恢复' },
+  assistant(
+    'c-a4',
+    '继续改好了：写入放进了 `useEffect`，测试连续跑 50 次都通过。`README.md` 里补了一句草稿只存在本机。',
+  ),
+  stats('c-s3', 'completed', { durationMs: 66_000, models: { 'claude-opus-5-5': opus(6_300, 1_240, 0.1033, 4) } }),
+])
+
+// ---------- 4 报错（自有） ----------
+
+const failed = (id: string): Item =>
+  stats(id, 'failed', {
+    durationMs: 3_200,
+    models: { 'claude-opus-5-5': { input: 0, cacheRead: 0, cacheWrite: 0, output: 0, costUsd: 0, requests: 1 } },
+  })
+
+const errors = snapshot(
+  record('demo-claude-errors', {
+    lastOutcome: 'failed',
+    lastError: '登录已失效：在终端运行 claude auth login 重新登录',
+    updatedAt: T0 - 4 * MIN,
+  }),
+  [
+    user('d-u1', '跑一下测试', 14),
+    {
+      kind: 'notice',
+      id: 'd-n1',
+      level: 'error',
+      text: '服务繁忙，请稍后再试',
+      detail: 'HTTP 529\noverloaded_error: Overloaded\nrequest_id: req_011CWfQ7mZ3yX2sB9uK4pLdE',
+    },
+    failed('d-s1'),
+    user('d-u2', '换成 claude-opus-5-5-preview 再试', 10),
+    {
+      kind: 'notice',
+      id: 'd-n2',
+      level: 'error',
+      text: '找不到所选模型',
+      detail: 'HTTP 404\nnot_found_error: model: claude-opus-5-5-preview',
+    },
+    failed('d-s2'),
+    user('d-u3', '换回 claude-opus-5-5', 5),
+    {
+      kind: 'notice',
+      id: 'd-n3',
+      level: 'error',
+      text: '登录已失效：在终端运行 claude auth login 重新登录',
+      detail:
+        'HTTP 401\nauthentication_error: OAuth token has expired. Please obtain a new token or refresh your existing token.',
+    },
+    failed('d-s3'),
+  ],
+)
+
+// ---------- 5 报错（平台） ----------
+
+const platformRecord = record('demo-claude-platform', {
+  platform: { groupId: '11', account: 'linxia@example.com' },
+  lastOutcome: 'failed',
+  lastError: '账户余额不足，充值后再继续',
+  updatedAt: T0 - 6 * MIN,
+})
+
+const platform = snapshot(platformRecord, [
+  user('e-u1', '总结一下今天草稿相关的改动', 26),
+  assistant(
+    'e-a1',
+    '今天的改动：\n\n1. 新增 `src/session/useDraft.ts`，草稿按会话保存；\n2. `src/session/Composer.jsx` 改用它；\n3. 补了 2 个测试，全部通过。',
+  ),
+  stats('e-s1', 'completed', {
+    durationMs: 14_000,
+    settlement: {
+      account: 'linxia@example.com',
+      requests: [{ id: 'pixelsky-demo-1', model: 'claude-opus-5-5', groupId: '11' }],
+      startedAt: T0 - 26 * MIN,
+      complete: true,
+    },
+    models: { 'claude-opus-5-5': { ...opus(3_100, 360, 0.0418, 1), costSource: 'platform', billing: 'balance' } },
+  }),
+  user('e-u2', '再把写满 localStorage 的测试补上', 7),
+  {
+    kind: 'notice',
+    id: 'e-n1',
+    level: 'error',
+    text: '账户余额不足，充值后再继续',
+    detail: 'HTTP 402\ninsufficient_balance: 余额 $0.00，本次预计 $0.12\n线路：Claude 官方线路（×1）',
+  },
+  failed('e-s2'),
+])
+
+// ---------- 6 运行中 ----------
+
+const RUNNING_TURN = 'f-turn-2'
+
+const running = snapshot(
+  record('demo-claude-running', { lastOutcome: 'completed', updatedAt: T0 }),
+  [
+    user('f-u1', '先看看草稿功能还差什么', 20),
+    assistant('f-a1', '还差三件事：会话删除时清理草稿、写满 `localStorage` 的测试、README 里的说明。'),
+    stats('f-s1', 'completed', { durationMs: 19_000, models: { 'claude-opus-5-5': opus(4_200, 380, 0.0507, 1) } }),
+    user('f-u2', '三件一起做完，测试和文档可以让子智能体并行做', 3, { turnId: RUNNING_TURN }),
+    reasoning('f-r1', '清理我自己做；测试和文档各派一个子智能体并行。先列计划。'),
+    {
+      kind: 'todo',
+      id: 'f-todo',
+      steps: [
+        { text: '会话删除时清理草稿', status: 'completed' },
+        { text: '补写满 localStorage 的测试', status: 'in_progress' },
+        { text: '更新 README', status: 'completed' },
+        { text: '跑全部测试', status: 'pending' },
+      ],
+      status: 'completed',
+    },
+    {
+      kind: 'file_change',
+      id: 'f-f1',
+      changes: [
+        change('src/session/SessionView.jsx', 'update', [
+          '@@ -1,2 +1,3 @@',
+          " import { Composer } from './Composer'",
+          "+import { clearDraft } from './useDraft'",
+          ' ',
+        ]),
+      ],
+      status: 'completed',
+    },
+    {
+      kind: 'tool',
+      id: 'f-t1',
+      tool: 'task',
+      name: 'Agent',
+      title: '补写满 localStorage 的测试',
+      output: '',
+      status: 'running',
+    },
+    {
+      kind: 'tool',
+      id: 'f-t2',
+      tool: 'task',
+      name: 'Agent',
+      title: '更新 README 里的草稿说明',
+      output: 'README 已更新：补了「草稿只存在本机、发送成功后清掉」两句。',
+      status: 'completed',
+    },
+    {
+      kind: 'tool',
+      id: 'f-t3',
+      tool: 'read',
+      name: 'Read',
+      title: 'src/session/__tests__/useDraft.test.ts',
+      output: numbered(SHOWCASE_FILES['src/session/__tests__/useDraft.test.ts']),
+      status: 'completed',
+      subagent: '补写满 localStorage 的测试',
+    },
+    {
+      kind: 'command',
+      id: 'f-c1',
+      command: 'npm test -- src/session --run',
+      description: '跑草稿测试',
+      output: `${ESC}1m${ESC}46m RUN ${ESC}49m${ESC}22m ${ESC}36mv3.2.4${ESC}39m\n\n ${ESC}33m❯${ESC}39m src/session/__tests__/useDraft.test.ts ${ESC}2m0/3${ESC}22m`,
+      exitCode: null,
+      status: 'running',
+      subagent: '补写满 localStorage 的测试',
+    },
+  ],
+  {
+    state: 'running',
+    turnId: RUNNING_TURN,
+    execution: { model: 'claude-opus-5-5', effort: 'high', platform: null },
+    retry: { turnId: RUNNING_TURN, attempt: 2, maxRetries: 10, retryAt: T0 + 30_000, reason: 'HTTP 529' },
+    subagents: [
+      { id: 'agent-tests', label: '补写满 localStorage 的测试', status: 'running', message: '正在运行 npm test' },
+      { id: 'agent-readme', label: '更新 README 里的草稿说明', status: 'completed', message: 'README 已更新' },
+    ],
+    runs: {
+      workflows: [],
+      agents: [
+        agentRun('agent-tests', '补写满 localStorage 的测试', {
+          type: 'general-purpose',
+          state: 'running',
+          startedAt: T0 - 2 * MIN,
+          durationMs: 0,
+          toolUseId: 'f-t1',
+          prompt: '给 useDraft 补一条测试：localStorage.setItem 抛 QuotaExceededError 时草稿仍留在内存里。',
+        }),
+        agentRun('agent-readme', '更新 README 里的草稿说明', {
+          type: 'general-purpose',
+          toolUseId: 'f-t2',
+          durationMs: 24_000,
+          result: 'README 已更新：补了「草稿只存在本机、发送成功后清掉」两句。',
+        }),
+      ],
+    },
+    tasks: [
+      {
+        id: 'task-dev',
+        kind: 'local_bash',
+        description: 'npm run dev',
+        message: 'VITE v6.3.5 ready · http://localhost:5173',
+      },
+      {
+        id: 'task-ci',
+        kind: 'monitor',
+        description: '监视 CI：feat/draft',
+        message: '3 个检查里 2 个通过，1 个在运行',
+      },
+    ],
+  },
+)
+
+// ---------- 7 正在启动 ----------
+
+const starting = snapshot(
+  record('demo-claude-starting', { updatedAt: T0 }),
+  [
+    user('g-u1', '草稿功能合进 main 了吗', 12),
+    assistant('g-a1', '还没有，`feat/draft` 分支比 main 多 6 个提交，CI 全部通过，可以合。'),
+    stats('g-s1', 'completed', { durationMs: 9_000, models: { 'claude-opus-5-5': opus(2_900, 120, 0.0301, 1) } }),
+  ],
+  {
+    state: 'starting',
+    queue: [
+      {
+        id: 'q-start',
+        text: '那就合进去，合完删掉远端分支',
+        createdAt: T0,
+        settings: { model: 'claude-opus-5-5', effort: 'high', platform: null },
+        status: 'dispatching',
+        error: null,
+        mode: 'normal',
+        direct: true,
+      },
+    ],
+  },
+)
+
+// ---------- 8–12 审批与提问 ----------
+
+function waiting(
+  id: SessionId,
+  ask: string,
+  intro: string,
+  item: Item,
+  request: ApprovalRequest,
+  patch: Partial<SessionRecord> = {},
+): SessionSnapshot {
+  const turnId = `${id}-turn`
+  return snapshot(
+    record(id, { updatedAt: T0, ...patch }),
+    [user(`${id}-u`, ask, 1, { turnId }), assistant(`${id}-a`, intro), item],
+    {
+      state: 'waiting',
+      turnId,
+      pending: [request],
+      execution: { model: 'claude-opus-5-5', effort: 'high', platform: null },
+    },
+  )
+}
+
+const ALWAYS: ApprovalRequest['alwaysScopes'] = ['session', 'project', 'user']
+
+const approveCommand = waiting(
+  'demo-claude-approve-command',
+  '测试都过了，推上去吧',
+  '好的，推送 `feat/draft` 并设置上游。',
+  {
+    kind: 'command',
+    id: 'h-c1',
+    command: 'git push -u origin feat/draft',
+    description: '把 feat/draft 推到远端并设置上游',
+    output: '',
+    exitCode: null,
+    status: 'running',
+  },
+  {
+    requestId: 'req-command',
+    itemId: 'h-c1',
+    kind: 'command',
+    title: '运行命令',
+    command: 'git push -u origin feat/draft',
+    description: '把 feat/draft 推到远端并设置上游',
+    alwaysScopes: ALWAYS,
+  },
+)
+
+const PENDING_EDIT = change('src/session/Composer.jsx', 'update', [
+  '@@ -6,7 +6,9 @@',
+  '     <textarea',
+  '       value={text}',
+  '       onChange={event => setText(event.target.value)}',
+  '-      placeholder="描述你要做的事"',
+  '+      placeholder="描述你要做的事，@ 引用文件"',
+  '+      aria-label="输入框"',
+  '+      rows={3}',
+  '     />',
+  '   )',
+  ' }',
+])
+
+const approveFile = waiting(
+  'demo-claude-approve-file',
+  '输入框加上无障碍标签，占位文字提示一下可以 @ 文件',
+  '改 `src/session/Composer.jsx` 的占位文字和 `aria-label`。',
+  { kind: 'file_change', id: 'i-f1', changes: [PENDING_EDIT], status: 'running' },
+  {
+    requestId: 'req-file',
+    itemId: 'i-f1',
+    kind: 'file_change',
+    title: '修改文件',
+    changes: [PENDING_EDIT],
+    alwaysScopes: ALWAYS,
+  },
+  { permissionMode: 'ask' },
+)
+
+const PR_INPUT = {
+  owner: 'pixel',
+  repo: 'pixel-web',
+  title: '输入框草稿按会话保存',
+  head: 'feat/draft',
+  base: 'main',
+  body: '切换会话时草稿不再丢失。\n\n- 新增 useDraft\n- 补测试 3 个',
+}
+
+const approveTool = waiting(
+  'demo-claude-approve-tool',
+  '开个 PR',
+  '用 GitHub 的 MCP 工具开 PR。',
+  {
+    kind: 'tool',
+    id: 'j-t1',
+    tool: 'mcp',
+    name: 'mcp__github__create_pull_request',
+    title: 'github · create_pull_request',
+    output: '',
+    status: 'running',
+  },
+  {
+    requestId: 'req-tool',
+    itemId: 'j-t1',
+    kind: 'tool',
+    title: '使用 mcp__github__create_pull_request',
+    toolName: 'mcp__github__create_pull_request',
+    description: 'github · create_pull_request',
+    input: PR_INPUT,
+    alwaysScopes: ALWAYS,
+  },
+)
+
+const question = waiting(
+  'demo-claude-question',
+  '草稿过期要不要清掉？你定个方案',
+  '有两点需要你决定。',
+  {
+    kind: 'tool',
+    id: 'k-t1',
+    tool: 'other',
+    name: 'AskUserQuestion',
+    title: '向你提问',
+    output: '',
+    status: 'running',
+  },
+  {
+    requestId: 'req-question',
+    itemId: 'k-t1',
+    kind: 'question',
+    title: 'Claude 想问你',
+    alwaysScopes: [],
+    questions: [
+      {
+        header: '过期',
+        question: '草稿放多久没动就清掉？',
+        multiSelect: false,
+        options: [
+          { label: '7 天（推荐）', description: '一周没回来的会话多半不会再用' },
+          { label: '30 天', description: '保守一些，占的空间也不大' },
+          { label: '不清', description: '只在发送成功或删除会话时清' },
+        ],
+      },
+      {
+        header: '提示',
+        question: '恢复草稿时要不要提示？',
+        multiSelect: true,
+        allowOther: true,
+        options: [
+          { label: '输入框上方一行字', description: '「已恢复上次没发出的内容」' },
+          { label: '侧栏会话旁的小圆点', description: '有草稿的会话标出来' },
+        ],
+      },
+    ],
+  },
+)
+
+const PLAN = `## 草稿过期清理
+
+1. \`useDraft.ts\` 存草稿时带上时间：\`{ text, savedAt }\`
+2. 启动时扫一遍 \`draft:*\`，超过 7 天的删掉
+3. 旧格式（纯字符串）当作刚保存，下次写入时换成新格式
+
+**不改**：发送和删除会话时的清理照旧。
+
+测试：新增 2 条（过期删除、旧格式兼容）。`
+
+const plan = waiting(
+  'demo-claude-plan',
+  '按 7 天过期做，先给我看计划',
+  '计划写好了。',
+  { kind: 'tool', id: 'l-t1', tool: 'other', name: 'ExitPlanMode', title: '提交计划', output: '', status: 'running' },
+  {
+    requestId: 'req-plan',
+    itemId: 'l-t1',
+    kind: 'plan',
+    title: '计划已就绪，要开始执行吗？',
+    plan: PLAN,
+    alwaysScopes: [],
+  },
+  { permissionMode: 'plan' },
+)
+
+export const showcaseSnapshots: Record<string, SessionSnapshot> = Object.fromEntries(
+  [
+    markdown,
+    tools,
+    userMessages,
+    errors,
+    platform,
+    running,
+    starting,
+    approveCommand,
+    approveFile,
+    approveTool,
+    question,
+    plan,
+  ].map(s => [s.record.id, s]),
+)
+
+// ---------- 智能体追踪里的子智能体记录、后台任务输出 ----------
+
+const SUBAGENT_ITEMS: Record<string, Item[]> = {
+  'agent-explore': [
+    user('x-u1', '在 src 里找出所有读写输入框草稿的地方，说明切换会话时草稿为什么会丢。', 13),
+    {
+      kind: 'tool',
+      id: 'x-t1',
+      tool: 'search',
+      name: 'Grep',
+      title: 'draft · src',
+      output: 'src/session/Composer.jsx\nsrc/session/SessionView.jsx',
+      status: 'completed',
+    },
+    {
+      kind: 'tool',
+      id: 'x-t2',
+      tool: 'read',
+      name: 'Read',
+      title: 'src/session/SessionView.jsx',
+      output: numbered(SHOWCASE_FILES['src/session/SessionView.jsx']),
+      status: 'completed',
+    },
+    assistant(
+      'x-a1',
+      '用到草稿的只有两处：Composer.jsx 自己的 state，和 SessionView.jsx 切换会话时重新挂载 Composer。',
+    ),
+  ],
+  'agent-tests': [
+    user('y-u1', '给 useDraft 补一条测试：localStorage.setItem 抛 QuotaExceededError 时草稿仍留在内存里。', 2),
+    {
+      kind: 'tool',
+      id: 'y-t1',
+      tool: 'read',
+      name: 'Read',
+      title: 'src/session/__tests__/useDraft.test.ts',
+      output: numbered(SHOWCASE_FILES['src/session/__tests__/useDraft.test.ts']),
+      status: 'completed',
+    },
+    {
+      kind: 'command',
+      id: 'y-c1',
+      command: 'npm test -- src/session --run',
+      description: '跑草稿测试',
+      output: '',
+      exitCode: null,
+      status: 'running',
+    },
+  ],
+  'agent-readme': [
+    user('z-u1', '在 README 里补一段草稿的说明：只存在本机，发送成功后清掉。', 3),
+    {
+      kind: 'file_change',
+      id: 'z-f1',
+      changes: [
+        change('README.md', 'update', [
+          '@@ -1,3 +1,5 @@',
+          ' # pixel-web',
+          ' ',
+          ' 这是文件面板的演示内容。',
+          '+',
+          '+草稿只存在这台电脑上，发送成功后清掉。',
+        ]),
+      ],
+      status: 'completed',
+    },
+    assistant('z-a1', 'README 已更新：补了「草稿只存在本机、发送成功后清掉」两句。'),
+  ],
+}
+
+export function showcaseSubagentTranscript(_sessionId: string, agentId: string): Item[] {
+  const items = SUBAGENT_ITEMS[agentId]
+  if (!items) throw new Error('演示里没有这个智能体的记录')
+  return items
+}
+
+const TASK_OUTPUT: Record<string, TaskOutput> = {
+  'task-dev': {
+    output: [
+      '> pixel-web@0.1.0 dev',
+      '> vite',
+      '',
+      `  ${ESC}32m${ESC}1mVITE${ESC}22m v6.3.5${ESC}39m  ${ESC}2mready in ${ESC}0m${ESC}1m298${ESC}22m${ESC}2m${ESC}0m ms${ESC}22m`,
+      '',
+      `  ${ESC}32m➜${ESC}39m  ${ESC}1mLocal${ESC}22m:   ${ESC}36mhttp://localhost:${ESC}1m5173${ESC}22m/${ESC}39m`,
+      `${ESC}2m10:42:07${ESC}22m ${ESC}36m${ESC}1m[vite]${ESC}22m${ESC}39m ${ESC}32mhmr update ${ESC}39m${ESC}2m/src/session/Composer.jsx${ESC}22m`,
+    ].join('\n'),
+    truncated: false,
+  },
+  'task-ci': {
+    output: '✓ lint        32s\n✓ unit tests  1m 04s\n… e2e         运行中（2m 10s）',
+    truncated: true,
+  },
+}
+
+export function showcaseTaskOutput(_sessionId: string, taskId: string): TaskOutput {
+  const output = TASK_OUTPUT[taskId]
+  if (!output) throw new Error('演示里没有这个任务的输出')
+  return output
+}

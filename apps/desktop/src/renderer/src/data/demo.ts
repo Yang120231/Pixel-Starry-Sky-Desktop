@@ -8,9 +8,12 @@ import type {
   EngineCatalog,
   EngineConfig,
   FileChange,
+  Item,
   RemoteCall,
   SearchQuery,
   SearchResponse,
+  SessionSnapshot,
+  TaskOutput,
   UsageRecord,
 } from '@pixelsky/protocol'
 import type { AccountInfo } from '../../../shared/types/account'
@@ -67,6 +70,12 @@ export interface DemoSource {
   search: { projects: Array<{ id: string; name: string }>; run(query: SearchQuery): SearchResponse }
   terminal: { profiles: TerminalProfile[]; output: string }
   sessions: DemoSessions
+  /** 用真实对话组件显示的演示会话（docs/ui/demo-conversation.md）：会话快照、子智能体记录、后台任务输出 */
+  conversations: {
+    snapshots: Record<string, SessionSnapshot>
+    subagentTranscript(sessionId: string, agentId: string): Item[]
+    taskOutput(sessionId: string, taskId: string): TaskOutput
+  }
 }
 
 let source: DemoSource | null = null

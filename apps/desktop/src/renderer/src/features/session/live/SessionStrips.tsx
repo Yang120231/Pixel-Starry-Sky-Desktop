@@ -7,6 +7,8 @@ import type { BackgroundTask, TaskOutput } from '@pixelsky/protocol'
 import { Spinner, cn } from '@/ui'
 import { AnsiText } from '@/ui/code/AnsiText'
 import { bridge, taskKindLabel } from '@/features/engine'
+import { isDemo } from '@/data'
+import { demo } from '@/data/demo'
 import { useOpenTrace } from './trace'
 
 const LINK = 'shrink-0 rounded px-1.5 py-0.5 text-meta text-fg-muted hover:bg-hover hover:text-fg'
@@ -25,9 +27,12 @@ export function TaskStrip({ sessionId, tasks }: { sessionId: string; tasks: Back
 
   const loadOutput = (taskId: string): void => {
     setOutputs(o => ({ ...o, [taskId]: undefined }))
-    bridge
-      ?.taskOutput(sessionId, taskId)
-      .then(out => setOutputs(o => ({ ...o, [taskId]: out })))
+    // 演示模式从演示数据取（docs/ui/demo-conversation.md）
+    const request = isDemo
+      ? Promise.resolve().then(() => demo().conversations.taskOutput(sessionId, taskId))
+      : bridge?.taskOutput(sessionId, taskId)
+    request
+      ?.then(out => setOutputs(o => ({ ...o, [taskId]: out })))
       .catch((err: Error) => setOutputs(o => ({ ...o, [taskId]: { error: err.message } })))
   }
   const toggleOutput = (taskId: string): void => {

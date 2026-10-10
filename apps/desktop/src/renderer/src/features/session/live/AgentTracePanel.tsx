@@ -9,6 +9,8 @@ import { ArrowLeft, Bot, Check, ChevronRight, CircleDashed, Minus, Workflow, X, 
 import type { AgentRun, AgentRuns, Item, WorkflowRun } from '@pixelsky/protocol'
 import { IconButton, Spinner, cn } from '@/ui'
 import { bridge } from '@/features/engine'
+import { isDemo } from '@/data'
+import { demo } from '@/data/demo'
 import {
   RUN_STATE_LABEL,
   anyRunning,
@@ -247,9 +249,12 @@ function AgentFocus({
   useEffect(() => {
     let cancelled = false
     const load = (): void => {
-      bridge
-        ?.subagentTranscript(sessionId, agent.id)
-        .then(list => {
+      // 演示模式从演示数据取（docs/ui/demo-conversation.md）
+      const request = isDemo
+        ? Promise.resolve().then(() => demo().conversations.subagentTranscript(sessionId, agent.id))
+        : bridge?.subagentTranscript(sessionId, agent.id)
+      request
+        ?.then(list => {
           if (cancelled) return
           setItems(list)
           setError(null)

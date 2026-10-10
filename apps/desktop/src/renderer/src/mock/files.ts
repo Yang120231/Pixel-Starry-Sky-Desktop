@@ -1,4 +1,5 @@
 import type { DirectoryListing, FileDocument, EditorState } from '../../../shared/types/workspace'
+import { SHOWCASE_FILES } from './conversations'
 
 /** 明确标为演示的文件，仅 --demo 使用，不读写磁盘。 */
 export const DEMO_FILES: Record<string, string> = {
@@ -6,6 +7,8 @@ export const DEMO_FILES: Record<string, string> = {
   'src/session/Composer.jsx': 'export function Composer() {\n  return <textarea placeholder="描述你要做的事" />\n}\n',
   'src/styles/session.css': '.session {\n  display: flex;\n  flex-direction: column;\n}\n',
   'package.json': '{\n  "name": "pixel-web",\n  "private": true\n}\n',
+  // 对话展示里提到的文件（mock/conversations.ts），路径链接和改动卡片点得开
+  ...SHOWCASE_FILES,
 }
 export const DEMO_EDITOR_STATE: EditorState = {
   items: [],

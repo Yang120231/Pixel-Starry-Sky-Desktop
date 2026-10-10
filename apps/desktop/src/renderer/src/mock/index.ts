@@ -3,6 +3,7 @@ import type { DemoSource } from '@/data/demo'
 import { demoAccount } from './account'
 import { demoArtifactChange, demoArtifactPreview, demoArtifacts } from './artifacts'
 import { demoContext } from './context'
+import { showcaseSnapshots, showcaseSubagentTranscript, showcaseTaskOutput } from './conversations'
 import { demo } from './demo'
 import { DEMO_EDITOR_STATE, DEMO_FILES, demoDirectory, demoDocument } from './files'
 import { demoGitBranches, demoGitDiff, demoGitStatus } from './git'
@@ -36,4 +37,9 @@ export const demoSource: DemoSource = {
   search: { projects: demoSearchProjects, run: searchDemo },
   terminal: { profiles: demoTerminalProfiles, output: demoTerminalOutput },
   sessions: demoSessions,
+  conversations: {
+    snapshots: showcaseSnapshots,
+    subagentTranscript: showcaseSubagentTranscript,
+    taskOutput: showcaseTaskOutput,
+  },
 }
