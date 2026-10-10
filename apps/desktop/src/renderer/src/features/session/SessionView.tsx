@@ -11,7 +11,8 @@ import { hasConversation } from './conversation'
 import { LiveTranscript } from './live/LiveTranscript'
 import { ApprovalCard } from './live/ApprovalCard'
 import { AgentTracePanel } from './live/AgentTracePanel'
-import { SubagentStrip, TaskStrip } from './live/SessionStrips'
+import { TaskStrip } from './live/SessionStrips'
+import { ProgressCard, useProgress } from './live/ProgressCard'
 import { TraceContext, type TraceTarget } from './live/trace'
 import { RetryStatus } from './live/RetryStatus'
 import { MessageActionsContext, type MessageActionsValue } from './live/MessageActions'
@@ -125,9 +126,11 @@ function LiveSessionView({
     [runs],
   )
   const hasRuns = !!runs && (runs.workflows.length > 0 || runs.agents.length > 0)
-  const subagents = snapshot?.subagents ?? []
   const tasks = snapshot?.tasks ?? []
-  const showStrips = !!sessionId && (subagents.length > 0 || tasks.length > 0 || hasRuns)
+  // 计划和子智能体在右上角的进度卡片里；卡片显示时「智能体活动」也放进卡片（docs/ui/progress-card.md）
+  const progress = useProgress(snapshot)
+  const traceInStrips = hasRuns && !progress.visible
+  const showStrips = !!sessionId && (tasks.length > 0 || traceInStrips)
 
   // 回退：主进程截断对话后，把原文和图片放回这个窗格的输入框（与撤回排队消息一致，追加到已有草稿后）
   const busy =
@@ -179,31 +182,37 @@ function LiveSessionView({
         )}
         {sessionId ? (
           <>
-            {showStrips && (
-              <div className="conversation-inset conversation-reading conversation-reading-strips shrink-0 pt-3">
-                <div className="conversation-message flex flex-col gap-2">
-                  <div className="flex items-start gap-2">
-                    <div className="min-w-0 flex-1">
-                      <SubagentStrip subagents={subagents} />
-                    </div>
-                    {hasRuns && (
-                      <button
-                        type="button"
-                        onClick={() => openTrace()}
-                        className="press inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-meta text-fg-muted hover:bg-hover hover:text-fg"
-                      >
-                        <Bot size={13} strokeWidth={1.75} />
-                        {tr('session.live.AgentTracePanel.agentActivity')}{' '}
-                      </button>
+            <div className="relative flex min-h-0 flex-1 flex-col">
+              {showStrips && (
+                <div className="conversation-inset conversation-reading conversation-reading-strips shrink-0 pt-3">
+                  <div className="conversation-message flex flex-col gap-2">
+                    {traceInStrips && (
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => openTrace()}
+                          className="press inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-meta text-fg-muted hover:bg-hover hover:text-fg"
+                        >
+                          <Bot size={13} strokeWidth={1.75} />
+                          {tr('session.live.AgentTracePanel.agentActivity')}{' '}
+                        </button>
+                      </div>
                     )}
+                    <TaskStrip sessionId={sessionId} tasks={tasks} />
                   </div>
-                  <TaskStrip sessionId={sessionId} tasks={tasks} />
                 </div>
-              </div>
-            )}
-            <MessageActionsContext.Provider value={messageActions}>
-              <LiveTranscript snapshot={snapshot} />
-            </MessageActionsContext.Provider>
+              )}
+              <MessageActionsContext.Provider value={messageActions}>
+                <LiveTranscript snapshot={snapshot} />
+              </MessageActionsContext.Provider>
+              {progress.visible && !trace && (
+                <ProgressCard
+                  key={sessionId}
+                  progress={progress}
+                  onOpenTrace={hasRuns ? () => openTrace() : undefined}
+                />
+              )}
+            </div>
             <ComposerArea>
               <RetryStatus sessionId={sessionId} retry={snapshot?.retry} />
               {snapshot?.pending.map(req => (

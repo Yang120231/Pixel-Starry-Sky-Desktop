@@ -1,52 +1,14 @@
 import { translateMessage } from '../../../i18n/core'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../../i18n/core'
-// 对话流上方的两条：子智能体条、后台任务条（docs/engines.md §15.2、§15.3，参考 JuCode TaskStrip / 子智能体条）
+// 对话流上方的后台任务条（docs/engines.md §15.3，参考 JuCode TaskStrip）；子智能体在进度卡片里（docs/ui/progress-card.md）
 import { useState } from 'react'
-import { Bot, Check, CircleSlash, X } from 'lucide-react'
-import type { BackgroundTask, SubagentStatus, TaskOutput } from '@pixelsky/protocol'
+import type { BackgroundTask, TaskOutput } from '@pixelsky/protocol'
 import { Spinner, cn } from '@/ui'
 import { bridge, taskKindLabel } from '@/features/engine'
-import { RUN_STATE_LABEL, runState } from './agentTrace'
 import { useOpenTrace } from './trace'
 
 const LINK = 'shrink-0 rounded px-1.5 py-0.5 text-meta text-fg-muted hover:bg-hover hover:text-fg'
-
-function StateIcon({ state }: { state: string }) {
-  useI18n()
-  const s = runState(state)
-  if (s === 'running') return <Spinner size={12} />
-  if (s === 'done') return <Check size={12} strokeWidth={2} className="shrink-0 text-success" />
-  if (s === 'failed') return <X size={12} strokeWidth={2} className="shrink-0 text-danger" />
-  return <CircleSlash size={12} strokeWidth={1.75} className="shrink-0 text-fg-muted" />
-}
-
-/** 子智能体条：这一轮派出的子智能体，「名字 · 状态 · 进度」，点击打开追踪 */
-export function SubagentStrip({ subagents }: { subagents: SubagentStatus[] }) {
-  useI18n()
-  const openTrace = useOpenTrace()
-  if (subagents.length === 0) return null
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {subagents.map(a => (
-        <button
-          key={a.id}
-          type="button"
-          onClick={() => openTrace?.({ agentId: a.id })}
-          title={tr('session.live.SessionStrips.viewSubagentConversation')}
-          className="press inline-flex h-7 max-w-full min-w-0 items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 text-meta text-fg-secondary shadow-sm hover:border-line-strong"
-        >
-          <Bot size={13} strokeWidth={1.75} className="shrink-0 text-fg-muted" />
-          <span className="max-w-40 truncate text-fg">{a.label}</span>
-          <span className="shrink-0 text-fg-faint">·</span>
-          <StateIcon state={a.status} />
-          <span className="shrink-0">{RUN_STATE_LABEL[runState(a.status)]}</span>
-          {a.message && <span className="max-w-48 truncate text-fg-faint">{a.message}</span>}
-        </button>
-      ))}
-    </div>
-  )
-}
 
 /** 后台命令、监视任务的输出能读回来 */
 const hasOutput = (kind: string) => kind.startsWith('local_bash') || kind.startsWith('monitor')

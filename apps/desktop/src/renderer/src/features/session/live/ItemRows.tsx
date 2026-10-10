@@ -27,6 +27,7 @@ import type { FileChange, Item, ItemStatus, ToolKind } from '@pixelsky/protocol'
 import { CopyButton, DiffStat, Spinner, cn } from '@/ui'
 import { highlightLines, languageFromPath } from '@/ui/code/highlight'
 import { useOpenTrace } from './trace'
+import { StepMark } from './ProgressCard'
 import { useItemNavigation } from '@/features/search/navigation'
 import { openFile } from '@/features/files/store'
 import { useActiveWorkspace } from '@/features/editor/target'
@@ -438,44 +439,51 @@ export function ToolItemRow({ item }: { item: ItemOf<'command' | 'file_change' |
   )
 }
 
-/** 待办清单（Claude 的 TodoWrite） */
+/** 待办清单（Claude 的 TodoWrite、Codex 的计划）：一行概要，点开看完整列表；当前计划常驻在进度卡片里（docs/ui/progress-card.md §5） */
 export function TodoCard({ item }: { item: ItemOf<'todo'> }) {
   useI18n()
+  const [open, setOpen] = useState(false)
   if (item.steps.length === 0) return null
   const done = item.steps.filter(s => s.status === 'completed').length
+  const current = item.steps.find(s => s.status === 'in_progress')
+  const note = current
+    ? tr('session.todo.current', { text: current.text })
+    : done === item.steps.length
+      ? tr('session.todo.allDone')
+      : null
   return (
-    <div className="rounded-xl border border-line-card bg-surface px-3.5 py-3 shadow-sm">
-      <div className="mb-1.5 flex items-center gap-2 text-list text-fg-secondary">
-        <ListTodo size={15} strokeWidth={1.5} className="text-fg-muted" />
-        <span>{tr('session.live.ItemRows.toDo')}</span>
-        <span className="text-meta text-fg-faint tabular-nums">
+    <div>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen(v => !v)}
+        className="flex h-[30px] max-w-full min-w-0 items-center gap-2 rounded-md px-2 text-list text-fg-muted hover:bg-hover hover:text-fg-secondary"
+      >
+        <ListTodo size={15} strokeWidth={1.5} className="shrink-0" />
+        <span className="shrink-0">{tr('session.live.ItemRows.toDo')}</span>
+        <span className="shrink-0 text-meta text-fg-faint tabular-nums">
           {done}/{item.steps.length}
         </span>
-      </div>
-      <ul className="flex flex-col gap-1">
-        {item.steps.map((s, i) => (
-          <li key={i} className="flex items-start gap-2 text-list">
-            <span
-              className={cn(
-                'mt-[3px] inline-flex size-[14px] shrink-0 items-center justify-center rounded-full border',
-                s.status === 'completed' ? 'border-success bg-success text-surface' : 'border-line-strong',
-                s.status === 'in_progress' && 'border-accent',
-              )}
-            >
-              {s.status === 'completed' && <Check size={10} strokeWidth={3} />}
-              {s.status === 'in_progress' && <span className="size-1.5 rounded-full bg-accent" />}
-            </span>
-            <span
-              className={cn(
-                s.status === 'completed' ? 'text-fg-muted line-through' : 'text-fg',
-                s.status === 'in_progress' && 'font-medium',
-              )}
-            >
-              {s.text}
-            </span>
-          </li>
-        ))}
-      </ul>
+        {note && <span className="min-w-0 truncate text-fg-faint">{note}</span>}
+        <Chevron open={open} />
+      </button>
+      {open && (
+        <ul className="mt-1 ml-[15px] flex flex-col gap-1 border-l border-line pl-3.5">
+          {item.steps.map((s, i) => (
+            <li key={i} className="flex items-start gap-2 text-list">
+              <StepMark status={s.status} />
+              <span
+                className={cn(
+                  s.status === 'completed' ? 'text-fg-muted line-through' : 'text-fg',
+                  s.status === 'in_progress' && 'font-medium',
+                )}
+              >
+                {s.text}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }
