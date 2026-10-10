@@ -1,7 +1,18 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../../i18n/core'
-// 真实会话的对话流：按「轮」排列条目，连续的工具调用串成一组，每轮结束后显示改动文件卡片
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+// 真实会话的对话流：按「轮」排列条目，每轮的过程收成一行「执行」（docs/ui/conversation-concise.md），
+// 里面连续的工具调用串成一组；每轮结束后显示改动文件卡片
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react'
 import type { FileChange, Item, SessionSnapshot } from '@pixelsky/protocol'
 import { Spinner, cn } from '@/ui'
 import { toChangedFiles } from '@/features/engine'
@@ -21,12 +32,16 @@ import { JumpToLatest } from './JumpToLatest'
 import { contentMark, followResize, nearBottom } from './scrollFollow'
 import { changesHeight, itemHeight, toolsHeight } from './blockHeight'
 import { reviewTurn } from '@/features/panel/artifacts/focus'
+import { foldTurns } from './turnFold'
+import { TurnProcess } from './TurnProcess'
 
 type ToolItem = Extract<Item, { kind: 'command' | 'file_change' | 'tool' }>
 
 type Block =
   | { type: 'item'; item: Item }
   | { type: 'tools'; key: string; items: ToolItem[] }
+  /** 一轮的过程：收成一行「执行」，点开看里面的条目 */
+  | { type: 'process'; key: string; items: Item[]; running: boolean; durationMs: number | null }
   /** turnKey：这一轮的用户消息 id，第一条用户消息之前的改动为 'start' */
   | { type: 'changes'; key: string; turnKey: string; data: ChangedFiles }
 
@@ -69,7 +84,17 @@ function toBlocks(items: Item[], running: boolean, cache: ChangesCache): Block[]
     changes = []
     changeItems = []
   }
-  for (const item of items) {
+  for (const entry of foldTurns(items, running)) {
+    if (entry.type === 'process') {
+      for (const item of entry.items)
+        if (item.kind === 'file_change' && item.status === 'completed') {
+          changes.push(...item.changes)
+          changeItems.push(item)
+        }
+      blocks.push(entry)
+      continue
+    }
+    const item = entry.item
     if (item.kind === 'user' && item.mode !== 'guidance') {
       flushChanges()
       turnKey = item.id
@@ -89,6 +114,18 @@ function toBlocks(items: Item[], running: boolean, cache: ChangesCache): Block[]
     }
   }
   if (!running) flushChanges()
+  return blocks
+}
+
+/** 执行块里的条目：连续的工具调用串成一组 */
+function innerBlocks(items: Item[]): Block[] {
+  const blocks: Block[] = []
+  for (const item of items) {
+    const last = blocks[blocks.length - 1]
+    if (!isTool(item)) blocks.push({ type: 'item', item })
+    else if (last?.type === 'tools') last.items.push(item)
+    else blocks.push({ type: 'tools', key: `tools-${item.id}`, items: [item] })
+  }
   return blocks
 }
 
@@ -282,6 +319,70 @@ export function LiveTranscript({ snapshot }: { snapshot: SessionSnapshot | null 
     jumping.current = false
   }
 
+  // 一个显示块；nested：在执行块里面（外面已经有左边线，工具组不再画）
+  const renderBlock = (b: Block, i: number, nested = false): ReactNode => {
+    if (b.type === 'process')
+      return (
+        <div key={b.key} className="conversation-message" style={placeholder(34)}>
+          <TurnProcess
+            items={b.items}
+            running={b.running}
+            durationMs={b.durationMs}
+            render={list => innerBlocks(list).map((inner, j) => renderBlock(inner, j, true))}
+          />
+        </div>
+      )
+
+    if (b.type === 'tools') {
+      return (
+        <div
+          key={b.key}
+          className={cn('conversation-message flex flex-col', !nested && 'border-l border-line pl-1.5')}
+          style={placeholder(toolsHeight(b.items.length))}
+        >
+          {b.items.map(it => (
+            <div key={it.id} data-search-item={it.id} className={highlight === it.id ? 'search-hit' : undefined}>
+              <ToolItemRow item={it} />
+            </div>
+          ))}
+        </div>
+      )
+    }
+    if (b.type === 'changes') return <TurnChanges key={b.key} data={b.data} sessionId={sessionId} turnKey={b.turnKey} />
+    // 统计关闭时 TurnStats 不产生 DOM，避免外层空块在 flex 列表里留下间距。
+    if (b.item.kind === 'turn_stats') return <ItemView key={b.item.id} item={b.item} reply={replies.get(b.item.id)} />
+    const isUser = b.item.kind === 'user'
+    const item = b.item
+    if (item.kind === 'notice' && item.level === 'error' && snapshot) {
+      const text = platformNoticeText(snapshot.record, item.text)
+      return (
+        <div
+          key={item.id}
+          data-search-item={item.id}
+          className={['conversation-message', highlight === item.id ? 'search-hit' : ''].join(' ')}
+        >
+          <NoticeRow item={text === item.text ? item : { ...item, text }} />
+          {item.id === actionNoticeId && <NoticeActions record={snapshot.record} text={item.text} />}
+        </div>
+      )
+    }
+    return (
+      <div
+        key={item.id}
+        data-search-item={item.id}
+        style={placeholder(estimate(item))}
+        className={[
+          'group/message',
+          isUser ? 'conversation-user-row' : 'conversation-message',
+          isUser && i > 0 ? 'mt-4' : '',
+          highlight === item.id ? 'search-hit' : '',
+        ].join(' ')}
+      >
+        <ItemView item={item} />
+      </div>
+    )
+  }
+
   return (
     <ExpandScope.Provider value={snapshot?.record.id ?? null}>
       <div className="relative flex min-h-0 flex-1 flex-col">
@@ -328,62 +429,7 @@ export function LiveTranscript({ snapshot }: { snapshot: SessionSnapshot | null 
                 {tr('session.live.LiveTranscript.openingConversation')}{' '}
               </div>
             )}
-            {blocks.map((b, i) => {
-              if (b.type === 'tools') {
-                return (
-                  <div
-                    key={b.key}
-                    className="conversation-message flex flex-col border-l border-line pl-1.5"
-                    style={placeholder(toolsHeight(b.items.length))}
-                  >
-                    {b.items.map(it => (
-                      <div
-                        key={it.id}
-                        data-search-item={it.id}
-                        className={highlight === it.id ? 'search-hit' : undefined}
-                      >
-                        <ToolItemRow item={it} />
-                      </div>
-                    ))}
-                  </div>
-                )
-              }
-              if (b.type === 'changes')
-                return <TurnChanges key={b.key} data={b.data} sessionId={sessionId} turnKey={b.turnKey} />
-              // 统计关闭时 TurnStats 不产生 DOM，避免外层空块在 flex 列表里留下间距。
-              if (b.item.kind === 'turn_stats')
-                return <ItemView key={b.item.id} item={b.item} reply={replies.get(b.item.id)} />
-              const isUser = b.item.kind === 'user'
-              const item = b.item
-              if (item.kind === 'notice' && item.level === 'error' && snapshot) {
-                const text = platformNoticeText(snapshot.record, item.text)
-                return (
-                  <div
-                    key={item.id}
-                    data-search-item={item.id}
-                    className={['conversation-message', highlight === item.id ? 'search-hit' : ''].join(' ')}
-                  >
-                    <NoticeRow item={text === item.text ? item : { ...item, text }} />
-                    {item.id === actionNoticeId && <NoticeActions record={snapshot.record} text={item.text} />}
-                  </div>
-                )
-              }
-              return (
-                <div
-                  key={item.id}
-                  data-search-item={item.id}
-                  style={placeholder(estimate(item))}
-                  className={[
-                    'group/message',
-                    isUser ? 'conversation-user-row' : 'conversation-message',
-                    isUser && i > 0 ? 'mt-4' : '',
-                    highlight === item.id ? 'search-hit' : '',
-                  ].join(' ')}
-                >
-                  <ItemView item={item} />
-                </div>
-              )
-            })}
+            {blocks.map((b, i) => renderBlock(b, i))}
             {starting.map(q => (
               <div key={q.id} data-starting-message={q.id} className="flex flex-col gap-3">
                 <div className={cn('conversation-user-row', blocks.length > 0 && 'mt-4')}>

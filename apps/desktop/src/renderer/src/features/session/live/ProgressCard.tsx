@@ -48,7 +48,8 @@ export function useProgress(snapshot: SessionSnapshot | null): Progress {
   const key = `${snapshot?.record.id ?? ''}:${items ? turnKey(items) : ''}`
   const [dismissed, setDismissed] = useState<string | null>(null)
   const dismiss = useCallback(() => setDismissed(key), [key])
-  return { plan, agents, visible: dismissed !== key && (!!plan || agents.length > 0), dismiss }
+  // 只在运行中显示：空闲时计划和子智能体都在这一轮收起的执行块里（docs/ui/conversation-concise.md §3 F）
+  return { plan, agents, visible: running && dismissed !== key && (!!plan || agents.length > 0), dismiss }
 }
 
 /** 步骤前的圆圈：完成打勾、进行中主色圆点、未开始空心 */
@@ -185,11 +186,14 @@ function Agents({ agents, divided }: { agents: ProgressAgent[]; divided: boolean
 export function ProgressCard({
   progress,
   belowFind,
+  offset = 0,
   onOpenTrace,
 }: {
   progress: Progress
   /** 对话内搜索条打开着：卡片挪到搜索条下面 */
   belowFind?: boolean
+  /** 上面后台任务条的高度：卡片放到任务条下面，不盖住「输出 / 停止」 */
+  offset?: number
   onOpenTrace?: () => void
 }) {
   useI18n()
@@ -217,9 +221,9 @@ export function ProgressCard({
     <section
       ref={card}
       aria-label={tr('session.progress.title')}
+      style={{ top: (belowFind ? 56 : 12) + offset }}
       className={cn(
         'pop-in absolute right-5 z-20',
-        belowFind ? 'top-14' : 'top-3',
         'flex max-h-[60%] w-[min(22rem,calc(100%-2rem))] flex-col rounded-xl border border-line bg-popover py-2 shadow-popover',
       )}
     >

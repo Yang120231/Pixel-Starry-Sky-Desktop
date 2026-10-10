@@ -68,4 +68,4 @@ export function itemHeight(item: Item): number {
 export const toolsHeight = (count: number): number => ROW * count
 
 /** 改动文件卡片 */
-export const changesHeight = (files: number): number => 76 + 34 * files
+export const changesHeight = (files: number): number => 50 + 34 * files

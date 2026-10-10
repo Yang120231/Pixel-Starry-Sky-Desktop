@@ -400,6 +400,98 @@ export const catalog = {
     "zh": "收起改动",
     "en": "Hide changes"
   },
+  "session.process.title": {
+    "zh": "执行",
+    "en": "Worked"
+  },
+  "session.process.running": {
+    "zh": "正在执行",
+    "en": "Working"
+  },
+  "session.process.steps": {
+    "zh": "{n} 步",
+    "en": "{n} steps"
+  },
+  "session.process.joiner": {
+    "zh": "，",
+    "en": ", "
+  },
+  "session.process.commands": {
+    "zh": "运行 {n} 条命令",
+    "en": "ran {n} commands"
+  },
+  "session.process.commandsOne": {
+    "zh": "运行 {n} 条命令",
+    "en": "ran {n} command"
+  },
+  "session.process.edits": {
+    "zh": "修改 {n} 个文件",
+    "en": "edited {n} files"
+  },
+  "session.process.editsOne": {
+    "zh": "修改 {n} 个文件",
+    "en": "edited {n} file"
+  },
+  "session.process.reads": {
+    "zh": "读取 {n} 次",
+    "en": "{n} reads"
+  },
+  "session.process.readsOne": {
+    "zh": "读取 {n} 次",
+    "en": "{n} read"
+  },
+  "session.process.searches": {
+    "zh": "搜索 {n} 次",
+    "en": "{n} searches"
+  },
+  "session.process.searchesOne": {
+    "zh": "搜索 {n} 次",
+    "en": "{n} search"
+  },
+  "session.process.web": {
+    "zh": "网页 {n} 次",
+    "en": "{n} web requests"
+  },
+  "session.process.webOne": {
+    "zh": "网页 {n} 次",
+    "en": "{n} web request"
+  },
+  "session.process.mcp": {
+    "zh": "MCP {n} 次",
+    "en": "{n} MCP calls"
+  },
+  "session.process.mcpOne": {
+    "zh": "MCP {n} 次",
+    "en": "{n} MCP call"
+  },
+  "session.process.agents": {
+    "zh": "子智能体 {n} 个",
+    "en": "{n} subagents"
+  },
+  "session.process.agentsOne": {
+    "zh": "子智能体 {n} 个",
+    "en": "{n} subagent"
+  },
+  "session.process.other": {
+    "zh": "其它工具 {n} 次",
+    "en": "{n} other tools"
+  },
+  "session.process.otherOne": {
+    "zh": "其它工具 {n} 次",
+    "en": "{n} other tool"
+  },
+  "session.process.failed": {
+    "zh": "{n} 个失败",
+    "en": "{n} failed"
+  },
+  "session.process.expand": {
+    "zh": "展开执行过程",
+    "en": "Show steps"
+  },
+  "session.process.collapse": {
+    "zh": "收起执行过程",
+    "en": "Hide steps"
+  },
   "session.Composer.send": {
     "zh": "发送",
     "en": "Send"

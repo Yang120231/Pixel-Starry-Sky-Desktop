@@ -71,6 +71,10 @@ describe('foldedMatches', () => {
     const all = new Set(items.map(i => i.id))
     expect(foldedMatches(items, term, all)).toEqual({ ids: ['c1', 't1', 'f1', 'r1', 'd1', 'n1'], count: 7 })
   })
+  it('收在执行块里的条目算全部文字（待办进行中的那步、过渡话也算）', () => {
+    const say: Item = { kind: 'assistant', id: 'a1', text: '先看银河，再看银河', status: 'completed' }
+    expect(foldedMatches([todo, say], term, new Set(), new Set(['d1', 'a1']))).toEqual({ ids: ['d1', 'a1'], count: 4 })
+  })
   it('不分大小写，和 Ctrl+F 一致', () => {
     expect(foldedMatches([tool], [searchLiteral('LINE')], new Set(['t1'])).count).toBe(1)
   })

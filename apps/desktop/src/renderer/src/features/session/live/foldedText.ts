@@ -28,18 +28,42 @@ export function foldedText(item: Item): string {
   }
 }
 
+/** 整条都不在页面上（收在执行块里，docs/ui/conversation-concise.md §3）时的全部文字 */
+export function hiddenText(item: Item): string {
+  switch (item.kind) {
+    case 'assistant':
+    case 'user':
+      return item.text
+    case 'command':
+      return [item.command, stripAnsi(item.output)].join('\n')
+    case 'tool':
+      return [item.title, stripAnsi(item.output)].join('\n')
+    case 'file_change':
+      return item.changes.flatMap(c => [c.path, c.diff]).join('\n')
+    case 'todo':
+      return item.steps.map(s => s.text).join('\n')
+    case 'notice':
+      return [item.text, item.detail?.trim() ?? ''].join('\n')
+    default:
+      return foldedText(item)
+  }
+}
+
 /** closed：当前折叠着的条目 id。返回其中有命中的条目和命中总数（terms 已按 protocol 的规则折叠） */
 export function foldedMatches(
   items: readonly Item[],
   terms: readonly string[],
   closed: ReadonlySet<string>,
+  /** 整条收在执行块里、不在页面上的条目：算全部文字 */
+  hidden: ReadonlySet<string> = new Set(),
 ): { ids: string[]; count: number } {
   const ids: string[] = []
   let count = 0
-  if (terms.length === 0 || closed.size === 0) return { ids, count }
+  if (terms.length === 0 || (closed.size === 0 && hidden.size === 0)) return { ids, count }
   for (const item of items) {
-    if (!closed.has(item.id)) continue
-    const n = matchRanges(foldedText(item), terms).length
+    const text = hidden.has(item.id) ? hiddenText(item) : closed.has(item.id) ? foldedText(item) : null
+    if (text === null) continue
+    const n = matchRanges(text, terms).length
     if (n > 0) {
       ids.push(item.id)
       count += n

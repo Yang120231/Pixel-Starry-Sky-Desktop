@@ -1,6 +1,6 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Bot } from 'lucide-react'
 import { SessionHeader } from './SessionHeader'
 import { Transcript } from './Transcript'
@@ -130,12 +130,15 @@ function LiveSessionView({
     term => {
       const stream = mainRef.current?.querySelector('[data-conversation-stream]')
       if (!stream || !items || !sessionId) return { count: 0, expand: () => {} }
-      const closed = new Set<string>()
+      const closed = new Set<string>(),
+        hidden = new Set<string>()
       for (const el of stream.querySelectorAll('[data-fold="closed"]')) {
+        // 收起的执行块：里面的条目整条不在页面上（docs/ui/conversation-concise.md §3）
+        for (const id of el.getAttribute('data-fold-items')?.split(' ') ?? []) if (id) hidden.add(id)
         const id = el.closest<HTMLElement>('[data-search-item]')?.dataset.searchItem
         if (id) closed.add(id)
       }
-      const { ids, count } = foldedMatches(items, [term], closed)
+      const { ids, count } = foldedMatches(items, [term], closed, hidden)
       return { count, expand: () => expandItems(sessionId, ids) }
     },
     [items, sessionId],
@@ -159,6 +162,21 @@ function LiveSessionView({
   const progress = useProgress(snapshot)
   const traceInStrips = hasRuns && !progress.visible
   const showStrips = !!sessionId && (tasks.length > 0 || traceInStrips)
+  // 后台任务条的高度：进度卡片放到它下面（docs/ui/conversation-concise.md §3 F）
+  const strips = useRef<HTMLDivElement>(null)
+  const [stripsHeight, setStripsHeight] = useState(0)
+  useLayoutEffect(() => {
+    const el = strips.current
+    if (!showStrips || !el) {
+      setStripsHeight(0)
+      return
+    }
+    const measure = (): void => setStripsHeight(el.offsetHeight)
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [showStrips])
 
   // 回退：主进程截断对话后，把原文和图片放回这个窗格的输入框（与撤回排队消息一致，追加到已有草稿后）
   const busy =
@@ -214,7 +232,10 @@ function LiveSessionView({
             <>
               <div className="relative flex min-h-0 flex-1 flex-col">
                 {showStrips && (
-                  <div className="conversation-inset conversation-reading conversation-reading-strips shrink-0 pt-3">
+                  <div
+                    ref={strips}
+                    className="conversation-inset conversation-reading conversation-reading-strips shrink-0 pt-3"
+                  >
                     <div className="conversation-message flex flex-col gap-2">
                       {traceInStrips && (
                         <div className="flex justify-end">
@@ -240,6 +261,7 @@ function LiveSessionView({
                     key={sessionId}
                     progress={progress}
                     belowFind={find !== null}
+                    offset={stripsHeight}
                     onOpenTrace={hasRuns ? () => openTrace() : undefined}
                   />
                 )}

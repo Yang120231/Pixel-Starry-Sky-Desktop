@@ -37,6 +37,6 @@ describe('itemHeight', () => {
   })
   it('工具组和改动卡片', () => {
     expect(toolsHeight(3)).toBe(ROW * 3)
-    expect(changesHeight(2)).toBe(76 + 68)
+    expect(changesHeight(2)).toBe(50 + 68)
   })
 })

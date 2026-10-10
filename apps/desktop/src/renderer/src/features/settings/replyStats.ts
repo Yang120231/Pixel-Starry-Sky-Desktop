@@ -52,13 +52,14 @@ export const REPLY_STAT_LABELS: Record<ReplyStatKey, string> = {
   },
 }
 
-export const DEFAULT_REPLY_STATS: readonly ReplyStatKey[] = ['elapsed', 'tokens', 'cost', 'model']
+/** 默认只显示用时，鼠标停上去看全部明细（docs/ui/conversation-concise.md §3 D） */
+export const DEFAULT_REPLY_STATS: readonly ReplyStatKey[] = ['elapsed']
 export const REPLY_STAT_GROUPS: readonly { label: string; keys: readonly ReplyStatKey[] }[] = [
   {
     get label() {
       return tr('settings.replyStats.basicInformation')
     },
-    keys: DEFAULT_REPLY_STATS,
+    keys: ['elapsed', 'tokens', 'cost', 'model'],
   },
   {
     get label() {

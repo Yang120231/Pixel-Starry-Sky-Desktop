@@ -50,3 +50,16 @@ export function useExpandRequest(itemId: string): ExpandRequest | null {
     () => null,
   )
 }
+
+/**
+ * 一组条目里任一条最近的展开请求时间（没有为 0）：执行块里收着的条目被请求展开时，执行块先展开
+ * （docs/ui/conversation-concise.md §3）。返回数字，没变时不重新渲染
+ */
+export function useExpandAny(itemIds: readonly string[]): number {
+  const sessionId = useContext(ExpandScope)
+  return useSyncExternalStore(
+    subscribe,
+    () => Math.max(0, ...itemIds.map(id => expandRequest(sessionId, id)?.at ?? 0)),
+    () => 0,
+  )
+}

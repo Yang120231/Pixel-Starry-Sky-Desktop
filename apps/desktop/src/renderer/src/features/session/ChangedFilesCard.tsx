@@ -36,26 +36,29 @@ export function ChangedFilesCard({
   const review = onReview ?? (isDemo ? () => comingSoon(tr('session.ChangedFilesCard.review')) : null)
   return (
     <section className={cn('rounded-xl border border-line-card bg-surface shadow-sm', className)} style={style}>
-      <div className="flex items-center gap-3 px-4 pt-4 pb-3">
-        <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-md bg-subtle text-fg-secondary">
-          <FileDiff size={18} strokeWidth={1.5} />
+      {/* 一行标题（docs/ui/conversation-concise.md §3 E） */}
+      <div className="flex min-h-10 items-center gap-2 px-4 pt-1.5 pb-0.5">
+        <FileDiff size={15} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
+        <span className="min-w-0 truncate text-list font-medium text-fg">
+          {tr(
+            data.files.length === 1 ? 'session.ChangedFilesCard.editedFile' : 'session.ChangedFilesCard.editedFiles',
+            { n: data.files.length },
+          )}
         </span>
-        <div className="min-w-0 flex-1">
-          <div className="text-prose leading-snug font-semibold text-fg">
-            {tr(
-              data.files.length === 1 ? 'session.ChangedFilesCard.editedFile' : 'session.ChangedFilesCard.editedFiles',
-              { n: data.files.length },
-            )}
-          </div>
-          <DiffStat added={data.added} removed={data.removed} className="text-meta" />
-        </div>
+        <DiffStat added={data.added} removed={data.removed} className="shrink-0 text-meta" />
+        <span className="flex-1" />
         {isDemo && (
-          <Button variant="ghost" icon={Undo2} onClick={() => comingSoon(tr('session.ChangedFilesCard.undo'))}>
+          <Button
+            variant="ghost"
+            icon={Undo2}
+            className="h-7 px-2 text-meta"
+            onClick={() => comingSoon(tr('session.ChangedFilesCard.undo'))}
+          >
             {tr('session.ChangedFilesCard.undo')}
           </Button>
         )}
         {review && (
-          <Button variant="outline" pill onClick={review}>
+          <Button variant="outline" pill className="h-7 px-3 text-meta" onClick={review}>
             {tr('session.ChangedFilesCard.review')}
           </Button>
         )}
