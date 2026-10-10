@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { getEngineState, useEngineState } from '@/features/engine'
 import { getPaneState, usePaneState } from '@/features/panes/store'
 import { focusedTab, isNewTab, parseFileTab } from '@/features/panes/tree'
@@ -18,9 +19,10 @@ type FilesState = ReturnType<typeof getFiles>
 
 export function useActiveWorkspace(): ActiveWorkspace {
   const tab = usePaneState(s => focusedTab(s.layout))
-  const state = useEngineState(s => s)
   const files = useFiles()
-  return resolveWorkspace(tab, state, files)
+  // 结果没变就不重新渲染：流式输出时引擎状态每来一个字都变，这里只用到项目和会话记录（docs/ui/workbench-ux-3.md §2.1）
+  const json = useEngineState(s => JSON.stringify(resolveWorkspace(tab, s, files)))
+  return useMemo(() => JSON.parse(json) as ActiveWorkspace, [json])
 }
 
 /**

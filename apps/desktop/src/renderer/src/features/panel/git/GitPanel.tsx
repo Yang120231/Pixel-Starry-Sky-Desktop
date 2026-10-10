@@ -46,6 +46,7 @@ import {
 } from './gitModel'
 import { GitDiffView } from './GitDiffView'
 import { BranchMenu } from './BranchMenu'
+import { publishGitStatus } from './summary'
 import { demo as demoData } from '@/data/demo'
 
 /** 命令面板触发的 Git 操作（docs/ui/git-panel.md §6）：先打开 Git 页，状态读到后再执行 */
@@ -140,6 +141,10 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
   const last = useRef<(() => Promise<GitResult>) | null>(null)
   const busyRef = useRef(false)
   const remote = machineOf(target.sessionId ?? target.projectId) !== 'local'
+  // 顶栏的分支和新任务起点的改动数跟着 Git 页读到的状态走（./summary.ts）
+  useEffect(() => {
+    if (status && !demo) publishGitStatus(target, status)
+  }, [status, demo, target])
 
   const refresh = useCallback(async () => {
     if (demo || !api) return

@@ -1,4 +1,4 @@
-import { ChevronDown, Ellipsis, PanelLeft, PanelRight } from 'lucide-react'
+import { ChevronDown, Ellipsis, GitBranch, PanelLeft, PanelRight } from 'lucide-react'
 import { IconButton, useComingSoon } from '@/ui'
 import { TOGGLE_PANEL, TOGGLE_SIDEBAR, withShortcut } from '@/features/layout/shortcuts'
 import { useI18n } from '@/i18n/I18nProvider'
@@ -10,9 +10,13 @@ import { tr } from '@/i18n/core'
 import { LayoutActionButton } from '@/features/layout/LayoutActionButton'
 import { ToolbarContext } from '@/features/layout/ToolbarContext'
 import { paneActions } from '@/features/panes/store'
+import { useGitSummary } from '@/features/panel/git/summary'
+import type { ActiveWorkspace } from '@/features/editor/target'
 
 interface SessionHeaderProps {
   title: string
+  /** 工作台：左边显示当前标签所在的工作区「项目 › 分支」，代替标题（标签栏上已经有标题，docs/ui/workbench-ux-3.md §2.1） */
+  workspace?: Pick<ActiveWorkspace, 'name' | 'path' | 'ref'>
   showActions: boolean
   sidebarOpen: boolean
   panelOpen: boolean
@@ -31,6 +35,7 @@ const ACTION =
  *  机器切换和右面板开关固定，中间工具的顺序和去留由图标位置设置决定（docs/ui/sidebar-compact-controls.md）。 */
 export function SessionHeader({
   title,
+  workspace,
   showActions,
   sidebarOpen,
   panelOpen,
@@ -64,9 +69,13 @@ export function SessionHeader({
         />
       )}
       <div className="flex min-w-0 flex-1 items-center gap-1">
-        <h1 title={title} className="min-w-0 truncate text-ui font-medium text-fg-secondary">
-          {title}
-        </h1>
+        {workspace ? (
+          <WorkspaceLocation workspace={workspace} />
+        ) : (
+          <h1 title={title} className="min-w-0 truncate text-ui font-medium text-fg-secondary">
+            {title}
+          </h1>
+        )}
         {showActions && (
           <IconButton icon={Ellipsis} label={text('更多')} size={32} iconSize={16} onClick={commands.open} />
         )}
@@ -123,5 +132,27 @@ export function SessionHeader({
         )}
       </div>
     </header>
+  )
+}
+
+/** 顶栏左边的「项目 › 分支」：不是 Git 仓库、还没读到时只有项目名；分离的 HEAD 显示短 hash */
+function WorkspaceLocation({ workspace }: { workspace: NonNullable<SessionHeaderProps['workspace']> }) {
+  const git = useGitSummary(workspace.ref)
+  const branch = git ? (git.detached ? (git.head ?? '').slice(0, 7) : git.branch) : null
+  if (!workspace.name) return null
+  return (
+    <h1
+      data-header-workspace
+      title={workspace.path || workspace.name}
+      className="flex min-w-0 items-center gap-2 text-ui text-fg-secondary"
+    >
+      <span className="min-w-0 truncate font-medium">{workspace.name}</span>
+      {branch && (
+        <span className="inline-flex min-w-0 shrink-[2] items-center gap-1 text-fg-muted">
+          <GitBranch size={13} strokeWidth={1.5} className="shrink-0" />
+          <span className="truncate font-mono text-meta">{branch}</span>
+        </span>
+      )}
+    </h1>
   )
 }

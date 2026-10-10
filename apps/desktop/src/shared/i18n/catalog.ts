@@ -1600,6 +1600,34 @@ export const catalog = {
     "zh": "在这台电脑上开始一个新任务",
     "en": "Start a new task on this computer"
   },
+  "session.WelcomeView.starters": {
+    "zh": "从这里开始",
+    "en": "Starting points"
+  },
+  "session.WelcomeView.reviewChanges": {
+    "zh": "看看未提交的改动（{n} 个文件）",
+    "en": "Review uncommitted changes ({n} files)"
+  },
+  "session.WelcomeView.reviewChangesPrompt": {
+    "zh": "看看当前未提交的改动：说说改了什么，有没有明显的问题。",
+    "en": "Look at the current uncommitted changes: summarize what changed and point out any obvious problems."
+  },
+  "session.WelcomeView.explainProject": {
+    "zh": "介绍这个项目",
+    "en": "Explain this project"
+  },
+  "session.WelcomeView.explainProjectPrompt": {
+    "zh": "介绍一下这个项目：它是做什么的、目录结构、怎么运行和测试。",
+    "en": "Give me an overview of this project: what it does, how it is organized, and how to run and test it."
+  },
+  "session.WelcomeView.runTests": {
+    "zh": "跑一遍测试",
+    "en": "Run the tests"
+  },
+  "session.WelcomeView.runTestsPrompt": {
+    "zh": "跑一遍这个项目的测试；有失败的话找出原因，先说明再改。",
+    "en": "Run this project's tests. If anything fails, find the cause and explain it before changing any code."
+  },
   "sidebar.NewTaskButton.newTask": {
     "zh": "新建任务",
     "en": "New task"

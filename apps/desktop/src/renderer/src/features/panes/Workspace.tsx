@@ -39,6 +39,7 @@ import {
   type Rect,
 } from './tree'
 import { useFiles } from '@/features/files/store'
+import { useActiveWorkspace } from '@/features/editor/target'
 import { DragPreview, PaneDragContext, usePaneDrag } from './drag'
 import { useTheme } from '@/features/appearance/ThemeProvider'
 import { getPage, usePage } from '@/features/layout/page'
@@ -66,6 +67,8 @@ export function WorkspaceHeader({ membersShown = false, ...props }: WorkspacePro
     file = files.tabs.find(t => t.id === current),
     parsed = current ? parseFileTab(current) : null
   const showActions = useHeaderActions(sessionId)
+  // 标签栏上已经有标题，顶栏改为显示所在的工作区（docs/ui/workbench-ux-3.md §2.1）
+  const workspace = useActiveWorkspace()
   const page = usePage()
   const channel = useChannels(selectedChannel)
   // 协作频道页沿用同一个顶栏（换组件会丢焦点）：标题是频道名，面板开关控制成员面板（docs/ui/channels.md §2）
@@ -91,6 +94,7 @@ export function WorkspaceHeader({ membersShown = false, ...props }: WorkspacePro
   return (
     <SessionHeader
       title={file?.name ?? parsed?.path.split('/').pop() ?? title}
+      workspace={workspace}
       showActions={showActions && !parsed}
       {...props}
     />
