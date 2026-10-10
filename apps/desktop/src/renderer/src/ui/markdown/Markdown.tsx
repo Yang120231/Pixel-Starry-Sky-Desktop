@@ -35,9 +35,9 @@ const components: Components = {
     const kind = node?.properties?.dataAlert
     return isAlertKind(kind) ? <Callout kind={kind}>{children}</Callout> : <blockquote>{children}</blockquote>
   },
-  // 表格（docs/ui/markdown-table.md）：圆角外框按内容宽，最宽整行，再宽在框里横向滚动
+  // 表格（docs/ui/markdown-table.md）：圆角外框占满整行，列宽按内容分；内容更宽时在框里横向滚动
   table: ({ node: _node, ...props }) => (
-    <div className="my-3 w-fit max-w-full overflow-x-auto rounded-lg border border-line-card">
+    <div className="my-3 max-w-full overflow-x-auto rounded-lg border border-line-card">
       <table {...props} />
     </div>
   ),
@@ -63,7 +63,7 @@ const PROSE = [
   '[&_:not(pre)>code]:rounded-sm [&_:not(pre)>code]:bg-code-inline-bg [&_:not(pre)>code]:px-1.5 [&_:not(pre)>code]:py-0.5 [&_:not(pre)>code]:font-mono [&_:not(pre)>code]:text-[0.9em] [&_:not(pre)>code]:text-code-inline',
   '[&_code[data-path]]:text-code-path [&_code[data-path]]:underline [&_code[data-path]]:decoration-dotted [&_code[data-path]]:underline-offset-2',
   '[&_blockquote]:my-3 [&_blockquote]:border-l-2 [&_blockquote]:border-line-strong [&_blockquote]:pl-3 [&_blockquote]:text-fg-muted',
-  '[&_table]:border-collapse [&_table]:text-list [&_table]:tabular-nums',
+  '[&_table]:w-full [&_table]:border-collapse [&_table]:text-list [&_table]:tabular-nums',
   '[&_th]:border-b [&_th]:border-line [&_th]:bg-subtle [&_th]:px-3 [&_th]:py-1.5 [&_th]:text-left [&_th]:font-medium [&_th]:whitespace-nowrap [&_th]:text-fg-secondary',
   '[&_td]:border-b [&_td]:border-line-subtle [&_td]:px-3 [&_td]:py-1.5 [&_td]:align-top',
   '[&_tbody_tr:last-child_td]:border-b-0 [&_tbody_tr:hover]:bg-hover',
