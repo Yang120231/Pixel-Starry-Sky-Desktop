@@ -14,6 +14,7 @@ import { demoToolBrowser, demoToolCopies, demoToolEnvironment, demoToolTasks } f
 import { demoRemoteCalls } from './remoteCalls'
 import { demoSearchProjects, searchDemo } from './search'
 import { demoSessions } from './sessionLifecycle'
+import { demoRewindPreview, demoSideAnswer } from './branch'
 import { demoTerminalOutput, demoTerminalProfiles } from './terminal'
 import { demoUsageRecords } from './usage'
 
@@ -42,5 +43,7 @@ export const demoSource: DemoSource = {
     snapshots: { ...showcaseSnapshots, ...workbenchSnapshots },
     subagentTranscript: showcaseSubagentTranscript,
     taskOutput: showcaseTaskOutput,
+    rewindPreview: demoRewindPreview,
+    sideAnswer: demoSideAnswer,
   },
 }

@@ -98,12 +98,56 @@ export interface SessionRecord extends SessionSettings {
   lastError?: string | null
   /** 回退后尚未生效的引擎截断点（Claude 记录里的条目 uuid）：下次启动引擎时使用，成功启动后清空 */
   pendingRewind?: string | null
+  /** 分叉出来、还没启动过引擎的会话：第一次启动时从原引擎会话的截断点复制（docs/ui/rewind-fork-sidechat.md §2） */
+  pendingFork?: { from: string; at: string } | null
+  /** 从哪个会话分叉出来的（顶部一行「分叉自『…』」） */
+  forkedFrom?: { sessionId: string; title: string } | null
 }
 
-/** 回退结果：被移除的用户消息原文和图片，放回输入框 */
+/** 回退要做什么（docs/ui/rewind-fork-sidechat.md §1）；省略时只回退对话 */
+export interface RewindOptions {
+  conversation: boolean
+  code: boolean
+}
+
+/** 回退前的代码检查：要还原哪些文件；做不了时给原因 */
+export type RewindCodePreview =
+  | {
+      ok: true
+      /** 相对工作目录的路径（工作目录外的保持绝对路径） */
+      files: string[]
+      insertions: number
+      deletions: number
+      /** 还原前能不能先存一份以便撤销（总共不超过 20 MiB） */
+      undoable: boolean
+    }
+  | { ok: false; reason: 'unsupported' | 'no-checkpoint' | 'failed'; message?: string }
+
+export interface RewindPreview {
+  code: RewindCodePreview
+}
+
+/** 回退结果：被移除的用户消息原文和图片，放回输入框（只恢复代码时为空）；能不能撤销 */
 export interface RewindResult {
   text: string
   attachments?: ImageAttachment[]
+  /** 还原了几个文件；没动代码时省略 */
+  filesRestored?: number
+  /** 发新消息或重启前可以撤销 */
+  undoable?: boolean
+}
+
+/** 分叉结果：新会话，以及放进它输入框的原文和图片 */
+export interface ForkResult {
+  record: SessionRecord
+  text: string
+  attachments?: ImageAttachment[]
+}
+
+/** 旁聊里之前的一问一答 */
+export interface SideTurn {
+  question: string
+  answer: string
 }
 
 /**

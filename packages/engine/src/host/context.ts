@@ -15,6 +15,7 @@ import type { Store } from '../store'
 import type { UsageStore } from '../usage'
 import type { HostCache } from './cache'
 import type { HostEvents } from './events'
+import type { HostBranch } from './branch'
 import type { HostGuard } from './guard'
 import type { HostProjects } from './projects'
 import type { HostQuery } from './query'
@@ -74,6 +75,7 @@ export interface HostModules {
   queue: HostQueue
   turn: HostTurn
   sessions: HostSessions
+  branch: HostBranch
 }
 
 export interface HostContext {

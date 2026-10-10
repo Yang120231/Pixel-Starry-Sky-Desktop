@@ -222,7 +222,7 @@ describe('回退到某条用户消息', () => {
     const s = await twoTurns()
     expect(userIds(s)).toEqual(['m1', 'm2'])
     expect(diskUsers(s)).toEqual(['m1', 'm2'])
-    await expect(s.host.rewind(s.record.id, 'm2')).resolves.toEqual({ text: '第二句' })
+    await expect(s.host.rewind(s.record.id, 'm2')).resolves.toEqual({ text: '第二句', undoable: true })
     expect(userIds(s)).toEqual(['m1'])
     expect(diskUsers(s)).toEqual(['m1'])
   })

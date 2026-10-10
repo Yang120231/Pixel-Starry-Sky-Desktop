@@ -108,12 +108,16 @@ export function claudeArgs(
   resume: boolean,
   launch?: ClaudeLaunchOptions,
   rewindAt?: string | null,
+  fork?: { from: string; at: string } | null,
 ): string[] {
   const args = [...BASE_ARGS, '--permission-mode', TO_CLAUDE_MODE[settings.permissionMode]]
   if (settings.model) args.push('--model', settings.model)
   if (settings.effort) args.push('--effort', settings.effort)
   if (launch && !launch.askQuestions) args.push('--disallowedTools', 'AskUserQuestion')
-  args.push(resume ? '--resume' : '--session-id', sessionId)
+  // 分叉：从原会话的截断点复制出一份，用新的 id 保存（docs/ui/rewind-fork-sidechat.md §2）
+  if (!resume && fork)
+    args.push('--resume', fork.from, '--fork-session', '--session-id', sessionId, `--resume-session-at=${fork.at}`)
+  else args.push(resume ? '--resume' : '--session-id', sessionId)
   // 回退：只恢复到这条记录为止，之后的对话不再进入上下文（docs/ui/chat-fixes-queue-actions-cost.md §2.3）
   if (resume && rewindAt) args.push(`--resume-session-at=${rewindAt}`)
   return args
@@ -335,10 +339,18 @@ export class ClaudeSession implements EngineSession {
     const sid = rec.engineSessionId ?? rec.id
     const resume = claudeTranscriptExists(this.deps.projectsDir, rec.cwd, sid)
     const rewindAt = resume ? (rec.pendingRewind ?? null) : null
+    const fork = resume ? null : (rec.pendingFork ?? null)
     try {
-      return await this.launch(sid, resume, rewindAt)
+      return await this.launch(sid, resume, rewindAt, fork)
     } catch (err) {
       if (!(err instanceof StartupError)) throw err
+      // 分叉失败（原会话的记录没了或截断点不认）：用同一个 id 开新会话，提示没带上前文
+      if (fork) {
+        const proc = await this.launch(sid, false)
+        this.ctx.clearPendingFork?.()
+        this.translator.notice('warn', '无法从原会话分叉，已开始新的引擎会话（之前的上下文没有带过去）')
+        return proc
+      }
       // 截断点在记录里找不到或被 CLI 拒绝（不带回退的上下文不可信）、恢复失败（Claude 那边的记录没了）或 id 被占用：
       // 换一个新的引擎会话 id 再试一次
       if (!resume && !/already in use/i.test(err.stderr)) throw err
@@ -356,11 +368,16 @@ export class ClaudeSession implements EngineSession {
     }
   }
 
-  private async launch(sid: string, resume: boolean, rewindAt?: string | null): Promise<ClaudeProcess> {
+  private async launch(
+    sid: string,
+    resume: boolean,
+    rewindAt?: string | null,
+    fork?: { from: string; at: string } | null,
+  ): Promise<ClaudeProcess> {
     const rec = this.ctx.record()
     // 新进程的 modelUsage 从零开始累计，算每轮用量的基线也要清零（docs/ui/usage.md §6.1）
     this.translator.resetUsageBaseline()
-    const args = claudeArgs(rec, sid, resume, this.deps.launch, rewindAt)
+    const args = claudeArgs(rec, sid, resume, this.deps.launch, rewindAt, fork)
     for (const path of this.deps.extensions?.pluginDirs ?? []) args.push('--plugin-dir', path)
     if (this.deps.extensions?.mcpFile) args.push('--mcp-config', this.deps.extensions.mcpFile)
     if (this.retrySettingsFile) {
@@ -423,6 +440,7 @@ export class ClaudeSession implements EngineSession {
     this.proc = proc
     if (sid !== rec.engineSessionId) this.ctx.setEngineSessionId(sid)
     if (rec.pendingRewind) this.ctx.clearPendingRewind?.()
+    if (rec.pendingFork) this.ctx.clearPendingFork?.()
     this.seedRuns()
     // Ultracode / Fast 不是命令行参数，启动后用 flag settings 打开，再确认是否生效
     if (rec.ultracode)

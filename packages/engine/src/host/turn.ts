@@ -104,6 +104,10 @@ export class HostTurn {
             if (rt.execution) rt.execution.pendingRewind = null
             m.events.patchRecord(id, { pendingRewind: null })
           },
+          clearPendingFork: () => {
+            if (rt.execution) rt.execution.pendingFork = null
+            m.events.patchRecord(id, { pendingFork: null })
+          },
         })
         preparedExtensions = undefined
       } else {

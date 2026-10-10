@@ -873,7 +873,7 @@ describe('回退到某条用户消息之前（Claude 假引擎，模拟真实记
       await waitFor(() => turnsDone(record.id) === i + 1)
     }
     const second = host.open(record.id).items.find(i => i.kind === 'user' && i.text === '二')!
-    await expect(host.rewind(record.id, second.id)).resolves.toEqual({ text: '二' })
+    await expect(host.rewind(record.id, second.id)).resolves.toEqual({ text: '二', undoable: true })
     expect(userTexts(host, record.id)).toEqual(['一'])
     expect(host.open(record.id).items.some(i => i.kind === 'turn_stats')).toBe(true)
     expect(host.open(record.id).record.pendingRewind).toBeTruthy()

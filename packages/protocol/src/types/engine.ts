@@ -13,6 +13,12 @@ export interface EngineCaps {
   steer: boolean
   /** 回退到某条用户消息之前（截断对话与引擎上下文） */
   rewind?: boolean
+  /** 回退时能恢复代码（引擎自己的文件检查点） */
+  rewindCode?: boolean
+  /** 从某条用户消息之前分叉出新会话 */
+  fork?: boolean
+  /** 旁聊：带着上下文单独问一次，不进主对话 */
+  sideChat?: boolean
   /** 改模型 / 强度当轮生效（否则下一轮生效） */
   liveModelSwitch: boolean
   livePermissionSwitch: boolean

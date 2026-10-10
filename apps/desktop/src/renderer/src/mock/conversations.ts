@@ -1241,7 +1241,7 @@ const question = waiting(
         multiSelect: true,
         allowOther: true,
         options: [
-          { label: '输入框上方一行字', description: '「已恢复上次没发出的内容」' },
+          { label: '输入框上方一行字（推荐）', description: '「已恢复上次没发出的内容」' },
           { label: '侧栏会话旁的小圆点', description: '有草稿的会话标出来' },
         ],
       },

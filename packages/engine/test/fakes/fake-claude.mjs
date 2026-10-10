@@ -12,6 +12,9 @@
 // 环境变量：
 //   FAKE_CLAUDE_LOG       每次启动把命令行参数追加到这个文件（一行一个 JSON 数组）
 //   FAKE_CLAUDE_PROJECTS  收到消息时在这里创建会话记录文件（模拟 ~/.claude/projects）
+//   FAKE_CLAUDE_REWIND    rewind_files 的模拟：JSON { file, content }，预览时报这个文件，还原时写入 content；
+//                         user_message_id 以 nocp 开头时报没有检查点
+// -p --output-format json（旁聊）：从 stdin 读问题，回一个 result（含问题、--tools、能看到的用户消息）
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
@@ -43,6 +46,8 @@ const arg = name => {
   return i >= 0 ? argv[i + 1] : null
 }
 const sessionId = arg('--session-id') ?? arg('--resume') ?? 'fake-session'
+// 分叉：从 --resume 的记录读，按 --session-id 写
+const forkFrom = argv.includes('--fork-session') ? arg('--resume') : null
 let permissionMode = arg('--permission-mode') ?? 'default'
 let ultracode = false
 let fastMode = false
@@ -68,12 +73,12 @@ let msgSeq = 0
 const runId = process.pid.toString(36)
 let cost = 0
 
-function transcriptFile() {
+function transcriptFile(id = sessionId) {
   const dir = process.env.FAKE_CLAUDE_PROJECTS
   if (!dir) return null
   const sub = join(dir, cwd.replace(/[^A-Za-z0-9]/g, '-'))
   mkdirSync(sub, { recursive: true })
-  return join(sub, `${sessionId}.jsonl`)
+  return join(sub, `${id}.jsonl`)
 }
 
 function touchTranscript() {
@@ -86,7 +91,7 @@ function touchTranscript() {
 const resumeAt = argv.find(a => a.startsWith('--resume-session-at='))?.slice('--resume-session-at='.length) ?? null
 let chainTail = null
 if (process.env.FAKE_CLAUDE_CHAIN) {
-  const file = transcriptFile()
+  const file = transcriptFile(forkFrom ?? sessionId)
   const entries =
     file && existsSync(file)
       ? readFileSync(file, 'utf8')
@@ -103,8 +108,31 @@ if (process.env.FAKE_CLAUDE_CHAIN) {
   const visible = []
   for (let id = chainTail; id; id = byId.get(id)?.parentUuid)
     if (byId.get(id)?.type === 'user') visible.unshift(byId.get(id).text)
-  if (process.env.FAKE_CLAUDE_CHAIN_LOG)
+  if (process.env.FAKE_CLAUDE_CHAIN_LOG && !argv.includes('--no-session-persistence'))
     appendFileSync(process.env.FAKE_CLAUDE_CHAIN_LOG, JSON.stringify(visible) + '\n')
+  // 分叉且要保存：把截断点之前的链复制到新会话的记录里
+  if (forkFrom && !argv.includes('--no-session-persistence')) {
+    const copied = []
+    for (let id = chainTail; id; id = byId.get(id)?.parentUuid) copied.unshift(byId.get(id))
+    writeFileSync(transcriptFile(), copied.map(e => JSON.stringify(e) + '\n').join(''))
+  }
+  if (arg('--output-format') === 'json') {
+    // 旁聊：单次问答
+    let q = ''
+    process.stdin.setEncoding('utf8')
+    process.stdin.on('data', d => (q += d))
+    process.stdin.on('end', () => {
+      const question = q.trim().split('\n').at(-1)
+      process.stdout.write(
+        JSON.stringify({
+          type: 'result',
+          is_error: false,
+          result: `${question}｜工具=[${arg('--tools')}]｜看到=${visible.join(',')}`,
+        }) + '\n',
+      )
+      process.exit(0)
+    })
+  }
 }
 function chain(type, uuid, text) {
   const file = transcriptFile()
@@ -424,16 +452,18 @@ async function runTurn(text) {
 
 let buf = ''
 process.stdin.setEncoding('utf8')
-process.stdin.on('data', chunk => {
-  buf += chunk
-  let i
-  while ((i = buf.indexOf('\n')) >= 0) {
-    const line = buf.slice(0, i)
-    buf = buf.slice(i + 1)
-    if (line.trim()) handle(JSON.parse(line))
-  }
-})
-process.stdin.on('end', () => process.exit(0))
+// 旁聊（-p --output-format json）的 stdin 是问题原文，上面已经单独读了
+if (arg('--output-format') !== 'json')
+  process.stdin.on('data', chunk => {
+    buf += chunk
+    let i
+    while ((i = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, i)
+      buf = buf.slice(i + 1)
+      if (line.trim()) handle(JSON.parse(line))
+    }
+  })
+if (arg('--output-format') !== 'json') process.stdin.on('end', () => process.exit(0))
 
 function respond(requestId, response) {
   out({ type: 'control_response', response: { subtype: 'success', request_id: requestId, response } })
@@ -538,6 +568,19 @@ function handle(msg) {
         respond(msg.request_id, { mode: r.mode })
         out({ type: 'system', subtype: 'status', status: null, permissionMode })
         return
+      case 'rewind_files': {
+        const sim = process.env.FAKE_CLAUDE_REWIND ? JSON.parse(process.env.FAKE_CLAUDE_REWIND) : null
+        if (!sim || String(r.user_message_id).startsWith('nocp')) {
+          respond(msg.request_id, { canRewind: false, error: 'No file checkpoint found for this message.' })
+          return
+        }
+        if (!r.dry_run) writeFileSync(sim.file, sim.content)
+        respond(
+          msg.request_id,
+          r.dry_run ? { canRewind: true, filesChanged: [sim.file], insertions: 1, deletions: 2 } : { canRewind: true },
+        )
+        return
+      }
       default:
         respond(msg.request_id, {})
         return

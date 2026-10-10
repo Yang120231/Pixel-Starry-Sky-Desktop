@@ -22,7 +22,11 @@ import type {
   MessageInput,
   OpenedSession,
   ProjectRecord,
+  ForkResult,
+  RewindOptions,
+  RewindPreview,
   RewindResult,
+  SideTurn,
   SendReceipt,
   SessionRecord,
   SessionSettings,
@@ -36,6 +40,7 @@ import { ClaudeAdapter } from '../claude'
 import { CodexAdapter } from '../codex'
 import { Store } from '../store'
 import { UsageStore, type UsageQuery } from '../usage'
+import { HostBranch } from './branch'
 import { HostCache } from './cache'
 import type { EngineHostOptions, HostContext, HostModules, Runtime } from './context'
 import { HostEvents } from './events'
@@ -104,6 +109,7 @@ export class EngineHost {
       queue: new HostQueue(ctx),
       turn: new HostTurn(ctx),
       sessions: new HostSessions(ctx),
+      branch: new HostBranch(ctx),
     }
     for (const r of store.loadRecords()) ctx.records.set(r.id, r)
     this.ctx = ctx
@@ -338,12 +344,36 @@ export class EngineHost {
     return this.m.sessions.setSessionBottom(id, bottomed)
   }
 
+  /** 回退前检查代码：要还原哪些文件（docs/ui/rewind-fork-sidechat.md §1） */
+  rewindPreview(id: string, userItemId: string): Promise<RewindPreview> {
+    return this.m.branch.rewindPreview(id, userItemId)
+  }
+
   /**
-   * 回退到某条用户消息之前：移除它及之后的全部对话，引擎下次启动时从它之前接上（docs/ui/chat-fixes-queue-actions-cost.md §2.3）。
-   * 只在空闲时可用；返回被移除消息的原文和图片，界面放回输入框。
+   * 回退到某条用户消息之前：对话（移除它及之后的全部对话，引擎下次启动时从它之前接上）和 / 或代码。
+   * 只在空闲时可用；回退对话时返回被移除消息的原文和图片，界面放回输入框。
    */
-  async rewind(id: string, userItemId: string): Promise<RewindResult> {
-    return this.m.sessions.rewind(id, userItemId)
+  rewind(id: string, userItemId: string, options?: RewindOptions): Promise<RewindResult> {
+    return this.m.branch.rewind(id, userItemId, options)
+  }
+
+  /** 撤销最近一次回退（发新消息或重启前） */
+  undoRewind(id: string): Promise<void> {
+    return this.m.branch.undoRewind(id)
+  }
+
+  /** 从某条用户消息之前分叉出新会话（§2） */
+  forkSession(id: string, userItemId: string, title?: string): ForkResult {
+    return this.m.branch.fork(id, userItemId, title)
+  }
+
+  /** 旁聊：单独问一次，不进主对话（§3） */
+  sideQuestion(id: string, question: string, history: SideTurn[]): Promise<string> {
+    return this.m.branch.sideQuestion(id, question, history)
+  }
+
+  cancelSideQuestion(id: string): void {
+    this.m.branch.cancelSideQuestion(id)
   }
 
   async archiveSession(id: string, archived: boolean, stopRunning = false): Promise<void> {

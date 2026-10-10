@@ -1,15 +1,26 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { X } from 'lucide-react'
+import { Pencil, X } from 'lucide-react'
+import { ImageAnnotator } from './ImageAnnotator'
 import type { ImageAttachment } from '@pixelsky/protocol'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import { imageBlob, imageSize } from './images'
 
-function ImageTile({ image, onRemove }: { image: ImageAttachment; onRemove?: (id: string) => void }) {
+function ImageTile({
+  image,
+  onRemove,
+  onReplace,
+}: {
+  image: ImageAttachment
+  onRemove?: (id: string) => void
+  /** 标注后替换这张图（docs/ui/rewind-fork-sidechat.md §6） */
+  onReplace?: (id: string, next: ImageAttachment) => void
+}) {
   useI18n()
   const [url, setUrl] = useState(''),
-    [open, setOpen] = useState(false)
+    [open, setOpen] = useState(false),
+    [annotating, setAnnotating] = useState(false)
   const popup = useRef<HTMLDivElement>(null),
     trigger = useRef<HTMLButtonElement>(null)
   useEffect(() => {
@@ -51,6 +62,17 @@ function ImageTile({ image, onRemove }: { image: ImageAttachment; onRemove?: (id
         >
           {url && <img src={url} alt={image.name} className="size-full object-cover" />}
         </button>
+        {onReplace && (
+          <button
+            type="button"
+            aria-label={`${tr('annotate.open')} ${image.name}`}
+            title={tr('annotate.open')}
+            onClick={() => setAnnotating(true)}
+            className="absolute top-1 left-1 inline-flex size-5 items-center justify-center rounded-full border border-line-card bg-popover text-fg opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-hover"
+          >
+            <Pencil size={11} />
+          </button>
+        )}
         {onRemove && (
           <button
             type="button"
@@ -90,6 +112,19 @@ function ImageTile({ image, onRemove }: { image: ImageAttachment; onRemove?: (id
                 <span className="min-w-0 flex-1 truncate" title={description}>
                   {description}
                 </span>
+                {onReplace && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false)
+                      setAnnotating(true)
+                    }}
+                    className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-meta hover:bg-hover"
+                  >
+                    <Pencil size={13} />
+                    {tr('annotate.open')}
+                  </button>
+                )}
                 <button
                   type="button"
                   aria-label={tr('composer.attachment.closePreview')}
@@ -104,14 +139,32 @@ function ImageTile({ image, onRemove }: { image: ImageAttachment; onRemove?: (id
           </div>,
           document.body,
         )}
+      {annotating && onReplace && (
+        <ImageAnnotator
+          image={image}
+          onClose={() => setAnnotating(false)}
+          onDone={next => {
+            setAnnotating(false)
+            onReplace(image.id, next)
+          }}
+        />
+      )}
     </>
   )
 }
-export function ImageAttachments({ images, onRemove }: { images: ImageAttachment[]; onRemove?: (id: string) => void }) {
+export function ImageAttachments({
+  images,
+  onRemove,
+  onReplace,
+}: {
+  images: ImageAttachment[]
+  onRemove?: (id: string) => void
+  onReplace?: (id: string, next: ImageAttachment) => void
+}) {
   return (
     <div data-image-attachments className="flex max-h-56 min-w-0 flex-wrap gap-2 overflow-y-auto">
       {images.map(image => (
-        <ImageTile key={image.id} image={image} onRemove={onRemove} />
+        <ImageTile key={image.id} image={image} onRemove={onRemove} onReplace={onReplace} />
       ))}
     </div>
   )

@@ -211,6 +211,12 @@
 }
 
 :root {
+  /* 截图标注画进图片里的颜色：是图片内容，深浅主题一样（docs/ui/rewind-fork-sidechat.md §6） */
+  --annotate-red: #e5484d;
+  --annotate-orange: #f76b15;
+  --annotate-yellow: #ffc53d;
+  --annotate-blue: #3e63dd;
+  --annotate-outline: #ffffff;
   /* 窗口按钮占用的宽度（Windows 自绘 3×46px），见 docs/ui/window-controls.md */
   --titlebar-reserve: 140px;
   --window-control-width: 46px;

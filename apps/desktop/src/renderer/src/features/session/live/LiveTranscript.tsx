@@ -187,7 +187,7 @@ const TurnChanges = memo(function TurnChanges({
   )
 })
 
-export function LiveTranscript({ snapshot }: { snapshot: SessionSnapshot | null }) {
+export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot | null; header?: ReactNode }) {
   useI18n()
   const scroller = useRef<HTMLDivElement>(null)
   const stream = useRef<HTMLDivElement>(null)
@@ -429,6 +429,7 @@ export function LiveTranscript({ snapshot }: { snapshot: SessionSnapshot | null 
                 {tr('session.live.LiveTranscript.openingConversation')}{' '}
               </div>
             )}
+            {header}
             {blocks.map((b, i) => renderBlock(b, i))}
             {starting.map(q => (
               <div key={q.id} data-starting-message={q.id} className="flex flex-col gap-3">

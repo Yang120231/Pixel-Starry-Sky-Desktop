@@ -1,5 +1,15 @@
 import { translateMessage } from '../../i18n/core'
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react'
 import {
   ArrowUp,
   AtSign,
@@ -64,11 +74,17 @@ export function Composer({
   status,
   autoFocus,
   draftKey,
+  onSideQuestion,
+  statusExtra,
 }: {
   live?: ComposerController
   status?: StatusBarController
   autoFocus?: boolean
   draftKey?: string
+  /** 「/btw 问题」：交给旁聊，不发进主对话（docs/ui/rewind-fork-sidechat.md §3） */
+  onSideQuestion?: (question: string) => void
+  /** 输入框上方那一行右边的按钮（旁聊） */
+  statusExtra?: ReactNode
 }) {
   useI18n()
   const comingSoon = useComingSoon()
@@ -284,6 +300,12 @@ export function Composer({
   }
 
   const submit = async (): Promise<void> => {
+    const side = onSideQuestion ? /^\/btw\s+([\s\S]+)$/.exec(text.trim()) : null
+    if (side) {
+      onSideQuestion!(side[1].trim())
+      setText('')
+      return
+    }
     if (!live) {
       if (hasContent) comingSoon(translate('发送'))
       return
@@ -391,7 +413,7 @@ export function Composer({
           }}
         />
       )}
-      <ComposerStatusBar live={status} />
+      <ComposerStatusBar live={status} extra={statusExtra} />
       <div data-composer-style={style} className={cn('composer-shell relative', chatgpt && CARD_STYLE)}>
         <div
           ref={cardRef}
@@ -478,6 +500,11 @@ export function Composer({
                 onRemove={id => {
                   void imageDraft
                     .update(current => current.filter(image => image.id !== id))
+                    .catch(error => setError((error as Error).message))
+                }}
+                onReplace={(id, next) => {
+                  void imageDraft
+                    .update(current => current.map(image => (image.id === id ? next : image)))
                     .catch(error => setError((error as Error).message))
                 }}
               />

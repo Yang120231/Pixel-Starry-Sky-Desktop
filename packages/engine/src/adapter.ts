@@ -42,6 +42,8 @@ export interface SessionContext {
   setFast(on: boolean): void
   /** 回退截断点已在新进程生效 */
   clearPendingRewind?(): void
+  /** 分叉第一次启动成功（或改成新会话）后清掉 pendingFork */
+  clearPendingFork?(): void
 }
 
 /** 一个会话对应的引擎连接。进程按需启动；close() 之后这个对象不再使用 */
@@ -87,4 +89,13 @@ export interface EngineAdapter {
    * 返回 null 表示这些消息都没进入引擎上下文；at 为 null 表示回到会话开头（换新的引擎会话）。
    */
   rewindAnchor?(record: SessionRecord, userItemIds: string[]): { at: string | null } | null
+  /** 回退恢复代码：预览或还原到这条用户消息之前的文件（docs/ui/rewind-fork-sidechat.md §1） */
+  rewindFiles?(record: SessionRecord, userItemId: string, dryRun: boolean): Promise<RewindFilesReply>
+  /** 旁聊：带着会话上下文单独问一次，没有工具、不写记录（§3） */
+  sideQuestion?(record: SessionRecord, prompt: string, signal: AbortSignal): Promise<string>
 }
+
+/** 恢复代码的结果；files 是绝对路径 */
+export type RewindFilesReply =
+  | { ok: true; files: string[]; insertions: number; deletions: number }
+  | { ok: false; reason: 'no-checkpoint' | 'failed'; message: string }

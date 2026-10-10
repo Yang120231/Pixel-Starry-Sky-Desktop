@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { ChevronDown, Folder, GitBranch, Monitor } from 'lucide-react'
 import { composerStatus } from '@/data'
 import type { StatusBarController } from '@/features/engine'
@@ -8,7 +9,7 @@ import { openMachineManager, openWorkspacePicker, useMachines } from '@/features
  * 输入框外部左上方的机器与项目 / 分支；欢迎页保留项目选择入口。
  * 传入 live 时显示真实项目（欢迎页可以切换 / 添加项目）；不传时是演示数据。
  */
-export function ComposerStatusBar({ live }: { live?: StatusBarController }) {
+export function ComposerStatusBar({ live, extra }: { live?: StatusBarController; extra?: ReactNode }) {
   const { text } = useI18n()
   const machines = useMachines(),
     machine = machines.machines.find(m => m.id === machines.currentId)
@@ -35,6 +36,7 @@ export function ComposerStatusBar({ live }: { live?: StatusBarController }) {
           </span>
         )
       )}
+      {extra && <span className="ml-auto flex shrink-0 items-center">{extra}</span>}
     </div>
   )
 }

@@ -10,6 +10,7 @@ import type {
   FileChange,
   Item,
   RemoteCall,
+  RewindPreview,
   SearchQuery,
   SearchResponse,
   SessionSnapshot,
@@ -75,6 +76,10 @@ export interface DemoSource {
     snapshots: Record<string, SessionSnapshot>
     subagentTranscript(sessionId: string, agentId: string): Item[]
     taskOutput(sessionId: string, taskId: string): TaskOutput
+    /** 回退前的代码检查（docs/ui/rewind-fork-sidechat.md §1） */
+    rewindPreview(sessionId: string, itemId: string, firstUserId: string | null): RewindPreview
+    /** 旁聊回答（§3） */
+    sideAnswer(question: string): string
   }
 }
 

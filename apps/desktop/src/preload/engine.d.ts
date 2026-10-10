@@ -69,8 +69,21 @@ export interface EngineBridge {
   runQueuedNow(id: string, queueId: string): Promise<void>
   steerQueued(id: string, queueId: string, expectedTurnId: string): Promise<void>
   resumeQueue(id: string): Promise<void>
-  /** 回退到这条用户消息之前，返回它的原文和图片 */
-  rewind(id: string, itemId: string): Promise<import('@pixelsky/protocol').RewindResult>
+  /** 回退前检查代码：要还原哪些文件（docs/ui/rewind-fork-sidechat.md §1） */
+  rewindPreview(id: string, itemId: string): Promise<import('@pixelsky/protocol').RewindPreview>
+  /** 回退到这条用户消息之前（对话和 / 或代码），回退对话时返回它的原文和图片 */
+  rewind(
+    id: string,
+    itemId: string,
+    options?: import('@pixelsky/protocol').RewindOptions,
+  ): Promise<import('@pixelsky/protocol').RewindResult>
+  /** 撤销最近一次回退 */
+  undoRewind(id: string): Promise<void>
+  /** 从这条用户消息之前分叉出新会话（§2） */
+  fork(id: string, itemId: string, title?: string): Promise<import('@pixelsky/protocol').ForkResult>
+  /** 旁聊：单独问一次，不进主对话（§3） */
+  sideQuestion(id: string, question: string, history: import('@pixelsky/protocol').SideTurn[]): Promise<string>
+  cancelSideQuestion(id: string): Promise<void>
   interrupt(id: string): Promise<void>
   /** 提醒专用：轮次已过期时返回 false，不中断或暂停下一轮。 */
   interruptTurn(id: string, expectedTurnId: string): Promise<boolean>

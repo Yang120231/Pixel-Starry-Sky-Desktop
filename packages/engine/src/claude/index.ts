@@ -18,6 +18,7 @@ import { engineEnv } from '../env'
 import { run, startupReason } from '../exec'
 import { engineBase } from '../registry'
 import { customClaude, discoverClaude, type ClaudeDiscovery } from './discover'
+import { rewindFilesOnce, sideQuestionOnce, type HelperTarget, type RewindFilesReply } from './helper'
 import { ClaudeProcess } from './process'
 import { ClaudeSession, reservedClaudeArg, type ClaudeLaunchOptions } from './session'
 import { loadSavedRuns, loadSubagentTranscript } from './runs'
@@ -166,13 +167,15 @@ export class ClaudeAdapter implements EngineAdapter {
     return loadSubagentTranscript(dir, agentId, record.cwd)
   }
 
-  createSession(ctx: SessionContext): EngineSession {
-    const d = this.cached
-    if (!d?.launcher || (d.info.status !== 'ready' && !(ctx.record().platform && d.info.status === 'unauthenticated')))
-      throw new Error(d?.info.message ?? 'Claude Code 不可用')
+  /** 会话进程和辅助进程共用的环境：平台网关变量、重试次数、自动压缩点、文件检查点、插件 PATH */
+  private launchEnv(
+    record: SessionRecord,
+    maxRetries: number | null,
+    pathDirs: readonly string[] = [],
+  ): NodeJS.ProcessEnv {
     const env = this.env()
-    const platformEnv = this.opts.sessionEnv?.(ctx.record())
-    if (ctx.record().platform) {
+    const platformEnv = this.opts.sessionEnv?.(record)
+    if (record.platform) {
       if (!platformEnv) throw new Error('平台代理不可用，请重启应用')
       for (const key of Object.keys(env)) {
         if (
@@ -184,24 +187,67 @@ export class ClaudeAdapter implements EngineAdapter {
       }
       Object.assign(env, platformEnv)
     }
-    const maxRetries = ctx.maxRetries ?? null
     if (maxRetries !== null) env.CLAUDE_CODE_MAX_RETRIES = String(maxRetries)
     const launch = this.opts.launchOptions?.()
     // 自动压缩触发点（docs/ui/engine-settings-redesign.md §3.2）：上下文用到窗口的这个百分比时压缩
     if (launch?.autoCompactPct) env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE = String(launch.autoCompactPct)
-    if (ctx.extensions?.pathDirs.length)
-      env.PATH = [...ctx.extensions.pathDirs, env.PATH ?? env.Path ?? ''].join(delimiter)
+    // 文件检查点：-p 模式默认不记，回退时要靠它恢复代码（docs/ui/rewind-fork-sidechat.md §1）；
+    // 用户设了 CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING 时 Claude Code 自己会关掉
+    env.CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING = 'true'
+    if (pathDirs.length) env.PATH = [...pathDirs, env.PATH ?? env.Path ?? ''].join(delimiter)
+    return env
+  }
+
+  private readyLauncher(record: SessionRecord): Launcher {
+    const d = this.cached
+    if (!d?.launcher || (d.info.status !== 'ready' && !(record.platform && d.info.status === 'unauthenticated')))
+      throw new Error(d?.info.message ?? 'Claude Code 不可用')
+    return d.launcher
+  }
+
+  createSession(ctx: SessionContext): EngineSession {
+    const launcher = this.readyLauncher(ctx.record())
+    const d = this.cached!
+    const maxRetries = ctx.maxRetries ?? null
+    const env = this.launchEnv(ctx.record(), maxRetries, ctx.extensions?.pathDirs)
+    const launch = this.opts.launchOptions?.()
     return new ClaudeSession(ctx, {
       maxRetries,
       launch: launch
         ? { outputStyle: launch.outputStyle, askQuestions: launch.askQuestions, args: launch.args }
         : undefined,
-      launcher: d.launcher,
+      launcher,
       env,
       projectsDir: this.opts.projectsDir ?? d.projectsDir ?? defaultProjectsDir(env),
       steeringValidated: this.opts.steeringValidated,
       extensions: ctx.extensions,
     })
+  }
+
+  /** 辅助进程：--resume 这个会话，平台会话带网关设置 */
+  private helperTarget(record: SessionRecord): HelperTarget {
+    const sid = record.engineSessionId
+    if (!sid || !findClaudeTranscript(this.projectsDir(), record.cwd, sid))
+      throw new Error('这个会话还没有 Claude Code 记录')
+    const env = this.launchEnv(record, null)
+    const gateway = record.platform ? env.PIXELSKY_GATEWAY_SETTINGS : undefined
+    return {
+      launcher: this.readyLauncher(record),
+      cwd: record.cwd,
+      env,
+      resumeArgs: ['--resume', sid, ...(gateway ? ['--settings', gateway] : [])],
+    }
+  }
+
+  /** 回退恢复代码：预览（dryRun）或真的还原到这条用户消息之前（docs/ui/rewind-fork-sidechat.md §1） */
+  async rewindFiles(record: SessionRecord, userItemId: string, dryRun: boolean): Promise<RewindFilesReply> {
+    return rewindFilesOnce(this.helperTarget(record), userItemId, dryRun)
+  }
+
+  /** 旁聊：带着这个会话的上下文单独问一次，没有工具、不写记录（docs/ui/rewind-fork-sidechat.md §3） */
+  async sideQuestion(record: SessionRecord, prompt: string, signal: AbortSignal): Promise<string> {
+    const target = this.helperTarget(record)
+    return sideQuestionOnce(target, prompt, record.model, signal)
   }
 
   /**

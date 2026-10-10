@@ -1,7 +1,7 @@
 // 引擎接口（docs/engines.md §3、§5）：本机与远端共用的操作表，参数先校验再交给 EngineHost。
 // 「添加项目」（本机弹对话框）和「导出用量」（本机弹保存框）不在表里，见 engine/ipc.ts / machines/remote-runtime.ts
 import { searchQuery, type EngineHost } from '@pixelsky/engine'
-import type { ApprovalDecision, SessionRecord } from '@pixelsky/protocol'
+import type { ApprovalDecision, RewindOptions, SessionRecord, SideTurn } from '@pixelsky/protocol'
 import type { SessionPatch } from '../../../shared/types/engine'
 import { artifactRef, engineConfigPatch, engineId, int, str, usageListQuery, usageQuery, value } from '../args'
 import type { OpTable } from '../ops'
@@ -21,6 +21,24 @@ export interface EngineOpContext {
   copyPath(projectId: string, copyId: string): Promise<string | undefined>
   /** 修改会话设置之前（远端：先向桌面端取平台环境变量） */
   beforeUpdate?(record: SessionRecord): Promise<void>
+}
+
+/** 回退选项；旧调用方不传时只回退对话 */
+function rewindOptions(raw: unknown): RewindOptions {
+  if (raw === undefined) return { conversation: true, code: false }
+  const o = (raw ?? {}) as Record<string, unknown>
+  return { conversation: o.conversation === true, code: o.code === true }
+}
+
+/** 旁聊之前的问答：最多 20 轮，每段最多 20000 字 */
+function sideHistory(raw: unknown): SideTurn[] {
+  if (!Array.isArray(raw)) return []
+  return raw.slice(-20).flatMap(t => {
+    const o = (t ?? {}) as Record<string, unknown>
+    return typeof o.question === 'string' && typeof o.answer === 'string'
+      ? [{ question: o.question.slice(0, 20_000), answer: o.answer.slice(0, 20_000) }]
+      : []
+  })
 }
 
 const SEARCH_CANCELLED = { results: [], cancelled: true, truncated: false, partial: false, sessionCount: 0 }
@@ -91,7 +109,14 @@ export const ENGINE_OPS = {
   'engine:runQueuedNow': (c, id, q) => c.host.runQueuedNow(str(id, 'id'), str(q, 'queueId')),
   'engine:steerQueued': (c, id, q, turn) => c.host.steerQueued(str(id, 'id'), str(q, 'queueId'), str(turn, 'turnId')),
   'engine:resumeQueue': (c, id) => c.host.resumeQueue(str(id, 'id')),
-  'engine:rewind': (c, id, itemId) => c.host.rewind(str(id, 'id'), str(itemId, 'itemId')),
+  'engine:rewindPreview': (c, id, itemId) => c.host.rewindPreview(str(id, 'id'), str(itemId, 'itemId')),
+  'engine:rewind': (c, id, itemId, raw) => c.host.rewind(str(id, 'id'), str(itemId, 'itemId'), rewindOptions(raw)),
+  'engine:undoRewind': (c, id) => c.host.undoRewind(str(id, 'id')),
+  'engine:fork': (c, id, itemId, title) =>
+    c.host.forkSession(str(id, 'id'), str(itemId, 'itemId'), typeof title === 'string' ? title : undefined),
+  'engine:sideQuestion': (c, id, question, history) =>
+    c.host.sideQuestion(str(id, 'id'), str(question, 'question'), sideHistory(history)),
+  'engine:cancelSideQuestion': (c, id) => c.host.cancelSideQuestion(str(id, 'id')),
   'engine:interrupt': (c, id) => c.host.interrupt(str(id, 'id')),
   'engine:interruptTurn': (c, id, turnId) => c.host.interruptTurn(str(id, 'id'), str(turnId, 'turnId')),
   'engine:answer': (c, id, requestId, decision) =>

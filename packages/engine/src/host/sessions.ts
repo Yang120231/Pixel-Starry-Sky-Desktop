@@ -5,7 +5,6 @@ import {
   normalizeSessionTitle,
   type EngineId,
   type OpenedSession,
-  type RewindResult,
   type SessionRecord,
   type SessionSettings,
   type SessionSnapshot,
@@ -233,63 +232,6 @@ export class HostSessions {
     const record = this.ctx.m.events.patchRecord(id, { bottomedAt: stamp })
     if (rt.execution) rt.execution = { ...rt.execution, bottomedAt: stamp }
     return record
-  }
-
-  async rewind(id: string, userItemId: string): Promise<RewindResult> {
-    const { ctx } = this
-    const m = ctx.m
-    if (ctx.closing) throw new Error('应用正在退出')
-    if (ctx.changingSessions.has(id)) throw new Error('正在处理这个会话，请稍后重试')
-    const rt = this.runtime(id)
-    if (rt.snapshot.state !== 'idle' || rt.pumping || rt.stopping || rt.activeId || rt.inspectingContext)
-      throw new Error('请先停止当前任务再回退')
-    const record = rt.snapshot.record
-    if (!ENGINES[record.engine].caps.rewind) throw new Error('当前引擎暂不支持回退')
-    const index = rt.snapshot.items.findIndex(item => item.id === userItemId)
-    const target = rt.snapshot.items[index]
-    if (!target || target.kind !== 'user' || target.mode === 'guidance') throw new Error('只能回退到自己发送的消息')
-    const dropped = rt.snapshot.items.slice(index).flatMap(item => (item.kind === 'user' ? [item.id] : []))
-    ctx.changingSessions.add(id)
-    try {
-      // 关掉旧进程：它的上下文里还有要移除的对话
-      const old = rt.session
-      rt.session = null
-      if (rt.idleTimer) {
-        clearTimeout(rt.idleTimer)
-        rt.idleTimer = null
-      }
-      await old?.close()
-      const anchor = record.engineSessionId ? ctx.adapters[record.engine]?.rewindAnchor?.(record, dropped) : null
-      ctx.store.replaceItems(id, rt.snapshot.items.slice(0, index))
-      m.events.apply(id, { type: 'items_truncated', fromItemId: userItemId })
-      m.cache.reset(id)
-      // Missing native records must never silently preserve the discarded context.
-      if (anchor)
-        m.events.patchRecord(
-          id,
-          anchor.at ? { pendingRewind: anchor.at } : { engineSessionId: randomUUID(), pendingRewind: null },
-        )
-      else {
-        m.events.patchRecord(id, { engineSessionId: randomUUID(), pendingRewind: null })
-        if (record.engineSessionId)
-          m.events.apply(id, {
-            type: 'item_completed',
-            item: {
-              kind: 'notice',
-              id: randomUUID(),
-              level: 'warn',
-              text: '无法在 Claude Code 记录中回退到这条消息，已开始新的引擎会话（之前的上下文没有带过去）',
-            },
-          })
-      }
-      if (rt.snapshot.context)
-        m.events.apply(id, { type: 'context', context: { ...rt.snapshot.context, stale: true, diagnosticStale: true } })
-      if (rt.snapshot.suggestion) m.events.apply(id, { type: 'suggestion', text: null })
-      m.events.patchRecord(id, { updatedAt: Date.now() })
-      return { text: target.text, ...(target.attachments?.length ? { attachments: target.attachments } : {}) }
-    } finally {
-      ctx.changingSessions.delete(id)
-    }
   }
 
   async archiveSession(id: string, archived: boolean, stopRunning = false): Promise<void> {

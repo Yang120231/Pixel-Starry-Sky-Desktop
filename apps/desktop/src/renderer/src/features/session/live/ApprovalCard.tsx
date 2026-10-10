@@ -1,4 +1,5 @@
 import { useI18n } from '@/i18n/I18nProvider'
+import { displayLabel, isRecommended, recommendedAnswers } from './questionModel'
 import { tr, translateMessage } from '../../../i18n/core'
 // 审批卡片：引擎等你决定时固定显示在输入框上方（docs/engines.md §5.5）
 import { useState } from 'react'
@@ -146,6 +147,7 @@ export function ApprovalCard({
 
   const questions = request.questions ?? []
   const allAnswered = questions.every(q => (answers[q.question]?.length ?? 0) > 0)
+  const recommended = request.kind === 'question' ? recommendedAnswers(questions) : null
 
   return (
     <section className="pop-in mb-3 rounded-xl border border-line-strong bg-surface shadow-menu" aria-live="polite">
@@ -192,7 +194,7 @@ export function ApprovalCard({
                   </span>
                   <DiffStat added={c.added} removed={c.removed} className="text-meta" />
                 </div>
-                <DiffView diff={c.diff} path={c.path} className="pb-1.5" />
+                <DiffView diff={c.diff} path={c.path} className="pb-1.5" commentable={false} />
               </div>
             ))}
           </div>
@@ -262,7 +264,17 @@ export function ApprovalCard({
                           on ? 'border-accent bg-accent-soft hover:bg-accent-soft' : 'border-line',
                         )}
                       >
-                        <span className={cn('block text-list', on ? 'text-accent-fg' : 'text-fg')}>{o.label}</span>
+                        <span className={cn('flex items-center gap-1.5 text-list', on ? 'text-accent-fg' : 'text-fg')}>
+                          {displayLabel(o.label)}
+                          {isRecommended(o.label) && (
+                            <span
+                              data-recommended
+                              className="rounded-sm bg-accent-soft px-1.5 py-px text-label text-accent-fg"
+                            >
+                              {tr('question.recommended')}
+                            </span>
+                          )}
+                        </span>
                         {o.description && <span className="block text-meta text-fg-muted">{o.description}</span>}
                       </button>
                     )
@@ -290,6 +302,16 @@ export function ApprovalCard({
             >
               {tr('session.live.ApprovalCard.submitAnswers')}{' '}
             </Button>
+            {recommended && (
+              <Button
+                variant="outline"
+                disabled={sent}
+                data-all-recommended
+                onClick={() => answer({ type: 'answer', answers: recommended })}
+              >
+                {tr('question.allRecommended')}
+              </Button>
+            )}
             <Button
               variant="ghost"
               disabled={sent}
