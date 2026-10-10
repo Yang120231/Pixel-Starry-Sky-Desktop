@@ -1,5 +1,5 @@
 // 引擎启动方式（docs/ui/engine-launch.md）：替换的命令怎么解析、找不到不退回，追加的参数怎么校验、放在哪、改了重启
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -155,7 +155,7 @@ describe('像素星空自己控制的参数', () => {
   })
 })
 
-function claudeHost(overridePath?: () => string | null, env?: NodeJS.ProcessEnv) {
+function claudeHost(overridePath?: () => string | null, env?: NodeJS.ProcessEnv, extraEnv: NodeJS.ProcessEnv = {}) {
   const projectsDir = join(root, 'claude-projects')
   const log = join(root, 'claude-argv.log')
   let host: EngineHost | null = null
@@ -164,7 +164,7 @@ function claudeHost(overridePath?: () => string | null, env?: NodeJS.ProcessEnv)
     overridePath,
     projectsDir,
     launchOptions: () => host!.launchOptions('claude'),
-    env: env ?? { ...process.env, FAKE_CLAUDE_PROJECTS: projectsDir, FAKE_CLAUDE_LOG: log },
+    env: env ?? { ...process.env, FAKE_CLAUDE_PROJECTS: projectsDir, FAKE_CLAUDE_LOG: log, ...extraEnv },
   })
   host = new EngineHost({ dataDir: join(root, 'data'), emit: e => events.push(e), adapters: { claude: adapter } })
   hosts.push(host)
@@ -186,7 +186,8 @@ describe('Claude Code：追加参数', () => {
     expect(config.claude.args).toEqual(['--debug', '--add-dir', 'D:\\My Work'])
     await host.send(s.id, '第二条')
     await waitFor(() => turnsDone(s.id) === 2)
-    expect(spawns()).toHaveLength(2)
+    // 改了参数重新检测时握手一次（§9.2），再加上会话重启
+    expect(spawns()).toHaveLength(3)
     const argv = spawns().at(-1)!
     expect(argv).toContain('--resume')
     expect(argv.slice(-3)).toEqual(['--debug', '--add-dir', 'D:\\My Work'])
@@ -212,6 +213,68 @@ describe('Claude Code：追加参数', () => {
       'launch.argsTooLong',
     )
     expect(host.engineConfig().claude.args).toEqual([])
+  })
+
+  it('它不认的参数：检测时握手看得到原因（仍算可用）；参数正常时握手结果当输出风格缓存，不另起进程', async () => {
+    const { host, spawns } = claudeHost()
+    await host.setEngineConfig('claude', { args: ['--fake-bad-arg'] })
+    let [info] = await host.engines()
+    expect(info.status).toBe('ready')
+    expect(info.launchError).toBe("error: unknown option '--fake-bad-arg'\n(Did you mean --fake-good-arg?)")
+
+    await host.setEngineConfig('claude', { args: ['--debug'] })
+    ;[info] = await host.engines()
+    expect(info.launchError).toBeUndefined()
+    let before = spawns().length
+    await host.engineCatalog('claude')
+    expect(spawns()).toHaveLength(before)
+    // 检测还在握手时要输出风格列表：等它做完用它的结果，只启动一次
+    before = spawns().length
+    await Promise.all([host.engines(true), host.engineCatalog('claude')])
+    expect(spawns()).toHaveLength(before + 1)
+
+    // 没追加参数时检测不握手
+    before = spawns().length
+    await host.setEngineConfig('claude', { args: [] })
+    expect(spawns()).toHaveLength(before)
+  })
+})
+
+describe('Claude Code：重启时进程起不来（§9.1）', () => {
+  it('不当成会话记录丢了：不提示「没带过去」，会话 id 和待执行的回退都留着，好了以后照常接上', async () => {
+    const fail = join(root, 'start-fail')
+    const { host, spawns } = claudeHost(undefined, undefined, {
+      FAKE_CLAUDE_CHAIN: '1',
+      FAKE_CLAUDE_CHAIN_LOG: join(root, 'chain.log'),
+      FAKE_CLAUDE_START_FAIL_FILE: fail,
+    })
+    const s = host.createSession({ projectId: host.addProject(projectDir()).id })
+    for (const [i, text] of ['一', '二'].entries()) {
+      await host.send(s.id, { text, clientMessageId: `m${i}` })
+      await waitFor(() => turnsDone(s.id) === i + 1)
+    }
+    // 回退会关掉进程，下一条消息要重新启动并带上回退点
+    const second = host.open(s.id).items.find(i => i.kind === 'user' && i.text === '二')!
+    await host.rewind(s.id, second.id)
+    const { engineSessionId, pendingRewind } = host.open(s.id).record
+    expect(pendingRewind).toBeTruthy()
+
+    writeFileSync(fail, '')
+    await host.send(s.id, { text: '三', clientMessageId: 'm2' })
+    await waitFor(() => turnsDone(s.id) === 3)
+    const notices = () => host.open(s.id).items.flatMap(i => (i.kind === 'notice' ? [i.text] : []))
+    expect(notices().some(t => t.includes('fake startup failure'))).toBe(true)
+    expect(notices().some(t => t.includes('没有带过去'))).toBe(false)
+    expect(host.open(s.id).record).toMatchObject({ engineSessionId, pendingRewind })
+
+    rmSync(fail)
+    await host.send(s.id, { text: '四', clientMessageId: 'm3' })
+    await waitFor(() => turnsDone(s.id) === 4)
+    const argv = spawns().at(-1)!
+    expect(argv[argv.indexOf('--resume') + 1]).toBe(engineSessionId)
+    expect(argv).toContain(`--resume-session-at=${pendingRewind}`)
+    expect(host.open(s.id).record.pendingRewind).toBeNull()
+    expect(notices().some(t => t.includes('没有带过去'))).toBe(false)
   })
 })
 
@@ -297,5 +360,7 @@ describe('Codex：追加参数', () => {
     const [, codex] = await host.engines()
     expect(codex).toMatchObject({ status: 'error' })
     expect(codex.message).toBe("error: unexpected argument '--fake-bad-arg' found\nUsage: codex app-server [OPTIONS]")
+    // 追加了参数：原因也给「启动」卡片显示（§9.3）
+    expect(codex.launchError).toBe(codex.message)
   })
 })

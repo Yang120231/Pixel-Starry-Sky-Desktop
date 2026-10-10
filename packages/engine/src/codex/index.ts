@@ -1,6 +1,7 @@
 import type { EngineAdapter, EngineSession, Launcher, SessionContext } from '../adapter'
 import { codedError, type EngineCatalog, type EngineInfo, type Item, type SessionRecord } from '@pixelsky/protocol'
 import { engineEnv } from '../env'
+import { startupReason } from '../exec'
 import { engineBase } from '../registry'
 import { customCodex, discoverCodex, toolEnvironment } from './discover'
 import { CodexProcess, object } from './process'
@@ -83,17 +84,9 @@ export class CodexAdapter implements EngineAdapter {
       }
     } catch (error) {
       result.info.status = 'error'
-      // 进程起不来时（例如追加了它不认的参数），stderr 开头几行比「进程已退出」有用
-      const reason = stderr
-        // 命令行报错带颜色（\x1b[...m），界面上只要文字
-        // eslint-disable-next-line no-control-regex -- 就是要去掉颜色控制序列
-        .replace(/\x1b\[[0-9;]*m/g, '')
-        .split(/\r?\n/)
-        .map(l => l.trim())
-        .filter(Boolean)
-        .slice(0, 2)
-        .join('\n')
-      result.info.message = reason || (error as Error).message
+      result.info.message = startupReason(stderr) || (error as Error).message
+      // 追加了参数或替换了命令：原因也显示在「启动」卡片上（docs/ui/engine-launch.md §9.3）
+      if (this.launchArgs().length || result.info.launch === 'custom') result.info.launchError = result.info.message
     } finally {
       await proc.close()
     }

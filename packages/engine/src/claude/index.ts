@@ -15,7 +15,7 @@ import {
 } from '@pixelsky/protocol'
 import type { EngineAdapter, EngineSession, Launcher, SessionContext } from '../adapter'
 import { engineEnv } from '../env'
-import { run } from '../exec'
+import { run, startupReason } from '../exec'
 import { engineBase } from '../registry'
 import { customClaude, discoverClaude, type ClaudeDiscovery } from './discover'
 import { ClaudeProcess } from './process'
@@ -87,28 +87,46 @@ export class ClaudeAdapter implements EngineAdapter {
   }
 
   private discover(force: boolean): Promise<ClaudeDiscovery> {
-    if (this.opts.launcher) {
-      const info: EngineInfo = {
-        ...engineBase('claude'),
-        status: 'ready',
-        version: null,
-        path: this.opts.launcher.command,
-        message: null,
-      }
-      this.cached = { info, launcher: this.opts.launcher, projectsDir: this.opts.projectsDir ?? null }
-      return Promise.resolve(this.cached)
-    }
     if (this.cached && !force) return Promise.resolve(this.cached)
     // 重新检测时命令或参数可能变了，输出风格列表也要重新握手
     if (force) this.catalogCache = null
     if (!this.detecting) {
-      this.detecting = discoverClaude(this.opts.overridePath?.() ?? null, this.env())
+      this.detecting = this.detect()
         .then(d => (this.cached = d))
         .finally(() => {
           this.detecting = null
         })
     }
     return this.detecting
+  }
+
+  private async detect(): Promise<ClaudeDiscovery> {
+    const d: ClaudeDiscovery = this.opts.launcher
+      ? {
+          info: {
+            ...engineBase('claude'),
+            status: 'ready',
+            version: null,
+            path: this.opts.launcher.command,
+            message: null,
+          },
+          launcher: this.opts.launcher,
+          projectsDir: this.opts.projectsDir ?? null,
+        }
+      : await discoverClaude(this.opts.overridePath?.() ?? null, this.env())
+    // 追加了参数：再握手一次。--version 不检查其它参数，写错的参数要以会话的方式启动才报（docs/ui/engine-launch.md §9.2）。
+    // 失败只记原因、不标为不可用：这里在主目录启动，相对路径的参数在项目目录里可能是对的
+    if (d.launcher && this.launchArgs().length && (d.info.status === 'ready' || d.info.status === 'unauthenticated')) {
+      const r = await this.handshake(d.launcher)
+      if (r && 'error' in r) d.info.launchError = r.error
+      else if (r) this.catalogCache = { at: Date.now(), value: r.catalog }
+    }
+    return d
+  }
+
+  /** 用户追加的启动参数 */
+  private launchArgs(): string[] {
+    return this.opts.launchOptions?.().args ?? []
   }
 
   async info(force = false): Promise<EngineInfo> {
@@ -193,7 +211,7 @@ export class ClaudeAdapter implements EngineAdapter {
   async catalog(force = false): Promise<EngineCatalog> {
     if (!force && this.catalogCache && Date.now() - this.catalogCache.at < CATALOG_TTL) return this.catalogCache.value
     if (this.probing) return this.probing
-    this.probing = this.probe()
+    this.probing = this.probe(force)
       .then(value => {
         this.catalogCache = { at: Date.now(), value }
         return value
@@ -204,20 +222,24 @@ export class ClaudeAdapter implements EngineAdapter {
     return this.probing
   }
 
-  private async probe(): Promise<EngineCatalog> {
-    const d = await this.discover(false)
-    if (!d.launcher || (d.info.status !== 'ready' && d.info.status !== 'unauthenticated'))
-      return { outputStyles: [], currentOutputStyle: null }
-    const args = [
-      '-p',
-      '--input-format',
-      'stream-json',
-      '--output-format',
-      'stream-json',
-      '--verbose',
-      ...(this.opts.launchOptions?.().args ?? []),
-    ]
-    const proc = new ClaudeProcess(d.launcher, args, homedir(), this.env(), {
+  private async probe(force: boolean): Promise<EngineCatalog> {
+    // 检测正在进行时（追加了参数会握手）等它做完，它的握手结果就是这里要的
+    const d = await (this.detecting ?? this.discover(false))
+    if (!force && this.catalogCache && Date.now() - this.catalogCache.at < CATALOG_TTL) return this.catalogCache.value
+    const r =
+      d.launcher && (d.info.status === 'ready' || d.info.status === 'unauthenticated')
+        ? await this.handshake(d.launcher)
+        : null
+    return r && 'catalog' in r ? r.catalog : { outputStyles: [], currentOutputStyle: null }
+  }
+
+  /**
+   * 以会话的方式启动一个 Claude Code 进程（带上追加的参数），只做初始化握手就结束。
+   * 回应前进程就退出了给出原因；超时或别的失败返回 null。
+   */
+  private async handshake(launcher: Launcher): Promise<{ catalog: EngineCatalog } | { error: string } | null> {
+    const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose']
+    const proc = new ClaudeProcess(launcher, [...args, ...this.launchArgs()], homedir(), this.env(), {
       onMessage: () => undefined,
       onControlRequest: () => undefined,
       onControlCancel: () => undefined,
@@ -229,12 +251,15 @@ export class ClaudeAdapter implements EngineAdapter {
         ? init.available_output_styles.filter((x): x is string => typeof x === 'string')
         : []
       return {
-        outputStyles: styles,
-        currentOutputStyle: typeof init.output_style === 'string' ? init.output_style : null,
-        models: claudeModels(init.models),
+        catalog: {
+          outputStyles: styles,
+          currentOutputStyle: typeof init.output_style === 'string' ? init.output_style : null,
+          models: claudeModels(init.models),
+        },
       }
-    } catch {
-      return { outputStyles: [], currentOutputStyle: null }
+    } catch (err) {
+      if (proc.alive) return null
+      return { error: startupReason(proc.stderrTail) || (err as Error).message }
     } finally {
       proc.kill()
     }

@@ -133,6 +133,23 @@ export function run(
   })
 }
 
+/**
+ * 进程起不来时（例如追加了它不认的参数）给用户看的原因：stderr 开头两行，比「进程已退出」有用。
+ * 命令行报错带颜色（\x1b[...m），界面上只要文字（docs/ui/engine-launch.md §9.2）
+ */
+export function startupReason(stderr: string): string {
+  return (
+    stderr
+      // eslint-disable-next-line no-control-regex -- 就是要去掉颜色控制序列
+      .replace(/\x1b\[[0-9;]*m/g, '')
+      .split(/\r?\n/)
+      .map(l => l.trim())
+      .filter(Boolean)
+      .slice(0, 2)
+      .join('\n')
+  )
+}
+
 /** 比较版本号 a 是否 >= b（只看数字部分） */
 export function versionAtLeast(a: string, b: string): boolean {
   const pa = a.split('.').map(x => parseInt(x, 10) || 0)

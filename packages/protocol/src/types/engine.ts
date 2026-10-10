@@ -72,6 +72,11 @@ export interface EngineInfo {
   message: string | null
   /** 自带程序（自动查找）还是用户替换的命令（docs/ui/engine-launch.md §3）；旧版远端没有这个字段，按自带显示 */
   launch?: 'stock' | 'custom'
+  /**
+   * 用追加的参数（或替换的命令）试启动、握手失败的原因（docs/ui/engine-launch.md §9.2）。
+   * Claude Code 有这个原因时仍算可用：检测在用户主目录里启动，相对路径的参数在项目目录里可能是对的
+   */
+  launchError?: string
   caps: EngineCaps
 }
 

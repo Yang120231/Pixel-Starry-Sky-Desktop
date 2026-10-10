@@ -2,7 +2,8 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '../../../i18n/core'
 // 设置 › 本机引擎 › 详情 › 高级里的「启动」（docs/ui/engine-launch.md §3，参考 Mirasim 的 Launch 卡片）：
 // 收起时一行状态（自带程序 / 已替换 / 找不到 / 版本未知），点「修改」后填命令和参数；
-// 「完成」先交给引擎宿主校验再保存（找不到、不允许的参数留在编辑状态并显示原因），Esc 放弃修改。
+// 「完成」先交给引擎宿主校验再保存（找不到、不允许的参数留在编辑状态并显示原因），Esc 放弃修改；
+// 保存后重新检测，用这些参数试启动失败时卡片上红字写出原因（§9.3）。
 import { Fragment, useState, type KeyboardEvent } from 'react'
 import { joinArgs, splitArgs, type EngineConfigPatch, type EngineLocalConfig } from '@pixelsky/protocol'
 import { Button, cn } from '@/ui'
@@ -92,6 +93,12 @@ export function LaunchCard({
           {!editing && config.args.length > 0 && (
             <p className="selectable mt-0.5 truncate text-meta text-fg-faint" title={joinArgs(config.args)}>
               {tr('settings.engines.LaunchCard.extraArgs')} <span className="font-mono">{joinArgs(config.args)}</span>
+            </p>
+          )}
+          {/* 用这些参数试启动失败的原因（§9.3）：引擎自己的报错，可能有两行 */}
+          {e.launchError && (
+            <p className="selectable mt-1 whitespace-pre-line text-meta text-danger">
+              {tr('settings.engines.LaunchCard.testFailed', { p0: e.launchError })}
             </p>
           )}
         </div>

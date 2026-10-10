@@ -28,6 +28,15 @@ if (process.env.FAKE_CLAUDE_ENV_LOG)
     }),
   )
 if (process.env.FAKE_CLAUDE_LOG) appendFileSync(process.env.FAKE_CLAUDE_LOG, JSON.stringify(argv) + '\n')
+// 像真的 Claude Code 一样拒绝不认识的参数（测试用 --fake-bad-arg）；测试创建开关文件时一启动就报错退出
+if (argv.includes('--fake-bad-arg')) {
+  process.stderr.write("error: unknown option '--fake-bad-arg'\n(Did you mean --fake-good-arg?)\n")
+  process.exit(1)
+}
+if (process.env.FAKE_CLAUDE_START_FAIL_FILE && existsSync(process.env.FAKE_CLAUDE_START_FAIL_FILE)) {
+  process.stderr.write('Error: fake startup failure\n')
+  process.exit(1)
+}
 
 const arg = name => {
   const i = argv.indexOf(name)

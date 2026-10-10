@@ -2873,12 +2873,8 @@ export const catalog = {
     "en": "All engines"
   },
   "settings.engines.EngineDetail.changesTakeEffectImmediately": {
-    "zh": "改了立刻生效。除「新会话默认值」外，对已经开始的会话也生效：下一条消息开始前会用新设置重启",
-    "en": "Changes take effect immediately. Except for new conversation defaults, they also apply to existing conversations: the engine restarts with the new settings before your next message"
-  },
-  "settings.engines.EngineDetail.andResumesConversation": {
-    "zh": "，对话会接上。",
-    "en": "and resumes the conversation."
+    "zh": "改了立刻生效。除「新会话默认值」外，对已经开始的会话也生效：下一条消息开始前会用新设置重启 {p0}，对话会接上。",
+    "en": "Changes take effect immediately. Except for new conversation defaults, they also apply to existing conversations: {p0} restarts with the new settings before your next message and resumes the conversation."
   },
   "settings.engines.EngineDetail.newConversationDefaults": {
     "zh": "新会话默认值",
@@ -3139,6 +3135,10 @@ export const catalog = {
   "settings.engines.LaunchCard.unbalancedQuotes": {
     "zh": "参数里的引号没有配对",
     "en": "The quotes in the arguments don’t match"
+  },
+  "settings.engines.LaunchCard.testFailed": {
+    "zh": "试启动失败：{p0}",
+    "en": "Test launch failed: {p0}"
   },
   "settings.engines.EnginesSection.localEngines": {
     "zh": "本机引擎",

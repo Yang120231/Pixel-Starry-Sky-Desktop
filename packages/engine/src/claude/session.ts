@@ -339,21 +339,20 @@ export class ClaudeSession implements EngineSession {
       return await this.launch(sid, resume, rewindAt)
     } catch (err) {
       if (!(err instanceof StartupError)) throw err
-      if (rewindAt) {
-        // 截断点在记录里找不到或被 CLI 拒绝：不带回退的上下文不可信，换新的引擎会话
+      // 截断点在记录里找不到或被 CLI 拒绝（不带回退的上下文不可信）、恢复失败（Claude 那边的记录没了）或 id 被占用：
+      // 换一个新的引擎会话 id 再试一次
+      if (!resume && !/already in use/i.test(err.stderr)) throw err
+      // 新会话也起不来就不是记录的问题（例如追加了它不认的参数）：直接报这次的错，
+      // 不提示「没带过去」，待执行的回退也留着（launch 成功时才清），改对后照常接上（docs/ui/engine-launch.md §9.1）
+      const proc = await this.launch(randomUUID(), false)
+      if (rewindAt)
         this.translator.notice(
           'warn',
           '无法在 Claude Code 记录中回退到这条消息，已开始新的引擎会话（之前的上下文没有带过去）',
         )
-        this.ctx.clearPendingRewind?.()
-        return await this.launch(randomUUID(), false)
-      }
-      // 恢复失败（Claude 那边的记录没了）或 id 被占用：换一个新的引擎会话 id 再试一次
-      if (!resume && !/already in use/i.test(err.stderr)) throw err
-      const fresh = randomUUID()
-      if (resume)
+      else if (resume)
         this.translator.notice('warn', '无法恢复 Claude Code 的会话记录，已开始新的引擎会话（之前的上下文没有带过去）')
-      return await this.launch(fresh, false)
+      return proc
     }
   }
 
