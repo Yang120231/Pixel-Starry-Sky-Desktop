@@ -203,6 +203,7 @@ export function Composer({
     else if (a === 'use-platform') requestSource('platform')
     else if (a === 'open-account') settings.openSettings('account')
     else if (a === 'sign-in') void account.login()
+    else if (a === 'edit-provider') settings.openSettings('models')
   }
   useEffect(() => {
     if (!sessionId) return

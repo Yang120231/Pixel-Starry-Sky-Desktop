@@ -8,13 +8,15 @@ import { Button, IconButton, Spinner, cn } from '@/ui'
 import { effortLabel, type ComposerController } from '@/features/engine'
 import { ImageAttachments } from '@/features/session/attachments/ImageAttachments'
 import { isSendFailure, isStarting } from './queueView'
+import { useProviders } from '@/features/account/providers'
 
 const same = (a: QueuedMessage['settings'], b: ComposerController['execution']) =>
   !!b &&
   a.model === b.model &&
   a.effort === b.effort &&
   a.platform?.groupId === b.platform?.groupId &&
-  a.platform?.account === b.platform?.account
+  a.platform?.account === b.platform?.account &&
+  (a.provider?.id ?? null) === (b.provider?.id ?? null)
 
 export function QueuedMessages({
   live,
@@ -26,6 +28,7 @@ export function QueuedMessages({
   onPrepareRecall?: (message: QueuedMessage) => Promise<(() => Promise<void>) | void>
 }) {
   useI18n()
+  const providers = useProviders().providers
   const [expanded, setExpanded] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -198,7 +201,11 @@ export function QueuedMessages({
               {q.settings.model ?? tr('session.QueuedMessages.engineDefaultModel')} · {effortLabel(q.settings.effort)} ·{' '}
               {q.settings.platform
                 ? tr('session.QueuedMessages.platformRoute', { p0: q.settings.platform.groupId })
-                : tr('session.QueuedMessages.ownCredits')}
+                : q.settings.provider
+                  ? tr('customApi.queued', {
+                      p0: providers.find(p => p.id === q.settings.provider?.id)?.name ?? q.settings.provider.id,
+                    })
+                  : tr('session.QueuedMessages.ownCredits')}
             </div>
             {/* 原因只显示第一行：完整说明和原文在对话里的错误卡片上（docs/ui/conversation-ux-2.md §2.1） */}
             {q.error && (

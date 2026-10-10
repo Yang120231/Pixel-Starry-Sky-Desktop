@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { realpathSync } from 'node:fs'
-import { app, dialog, safeStorage, shell } from 'electron'
+import { app, dialog, shell } from 'electron'
+import { systemCipher } from '../app/system-cipher'
 import { object, scope, text } from '@pixelsky/engine'
 import type { ExtensionLaunch, ExtensionScope, SessionRecord } from '@pixelsky/protocol'
 import type { WorkspaceRef } from '../../shared/types/workspace'
@@ -24,17 +25,10 @@ export class Extensions {
 
   get(): ExtensionService {
     if (!this.service)
-      this.service = new ExtensionService(
-        join(app.getPath('userData'), 'extensions'),
-        {
-          available: () =>
-            safeStorage.isEncryptionAvailable() &&
-            (process.platform !== 'linux' || safeStorage.getSelectedStorageBackend() !== 'basic_text'),
-          encrypt: value => safeStorage.encryptString(value).toString('base64'),
-          decrypt: value => safeStorage.decryptString(Buffer.from(value, 'base64')),
-        },
-        () => ({ ...process.env, ...this.env() }),
-      )
+      this.service = new ExtensionService(join(app.getPath('userData'), 'extensions'), systemCipher, () => ({
+        ...process.env,
+        ...this.env(),
+      }))
     return this.service
   }
 

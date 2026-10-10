@@ -16,7 +16,8 @@ export function classifyError(text: string): ErrorKind | null {
 }
 
 /** 平台会话里的「登录已失效」不是 Claude Code 自己的登录：换成平台的说法 */
-export function platformNoticeText(record: Pick<SessionRecord, 'platform'>, text: string): string {
+export function platformNoticeText(record: Pick<SessionRecord, 'platform' | 'provider'>, text: string): string {
   if (record.platform && /^登录已失效/.test(text)) return tr('session.live.errorKind.platformSignInExpired')
+  if (record.provider && /^登录已失效/.test(text)) return tr('customApi.keyRejected')
   return text
 }

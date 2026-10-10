@@ -11,6 +11,7 @@ import {
   type SessionFlags,
   type SessionSettings,
   type TaskOutput,
+  viaGateway,
 } from '@pixelsky/protocol'
 import { queueSettings } from '../queue'
 import type { EngineSession, Launcher, SessionContext } from '../adapter'
@@ -384,7 +385,9 @@ export class ClaudeSession implements EngineSession {
       rmSync(this.retrySettingsFile, { force: true })
       this.retrySettingsFile = null
     }
-    const gateway = rec.platform ? this.deps.env.PIXELSKY_GATEWAY_SETTINGS : undefined
+    const gateway = viaGateway(rec) ? this.deps.env.PIXELSKY_GATEWAY_SETTINGS : undefined
+    // 网关模式下凭证只在网关里：没有网关设置文件就不能启动，否则会落到引擎自己的登录上
+    if (viaGateway(rec) && !gateway) throw new Error('本机网关不可用，请重启应用')
     const extra = this.deps.launch?.outputStyle ? { outputStyle: this.deps.launch.outputStyle } : {}
     const settingsArg = claudeSettingsArgument(gateway, this.deps.maxRetries ?? null, extra)
     // 合并网关配置时写了临时文件，进程换掉或退出时删掉

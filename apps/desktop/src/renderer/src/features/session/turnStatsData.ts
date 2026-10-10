@@ -86,7 +86,9 @@ export function replyStatParts(usage: TurnUsage): { parts: StatPart[]; detail: s
       get title() {
         return platform
           ? tr(pending ? 'billing.pending' : costs.length < entries.length ? 'billing.unavailable' : 'billing.actual')
-          : tr('session.turnStatsData.costEngineEstimate')
+          : usage.estimate === 'official'
+            ? tr('customApi.costEstimateShort')
+            : tr('session.turnStatsData.costEngineEstimate')
       },
     })
   parts.push({

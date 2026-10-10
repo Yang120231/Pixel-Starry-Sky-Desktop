@@ -3560,10 +3560,6 @@ export const catalog = {
     "zh": "自定义 API",
     "en": "Custom API"
   },
-  "settings.models.ModelsSection.comingSoonAddYour": {
-    "zh": "即将支持：填自己的 API 地址和 Key（Anthropic / OpenAI 兼容），作为第三种额度来源。",
-    "en": "Coming soon: add your own Anthropic or OpenAI-compatible API URL and key as a third credit source."
-  },
   "settings.models.RequestRetrySettings.maximumAutomaticRetriesFor": {
     "zh": "模型请求遇到临时错误时最多自动重试多少次。0 表示不自动重试；修改后从下一轮生效。",
     "en": "Maximum automatic retries for temporary model request errors. 0 disables retries. Changes apply from the next turn."

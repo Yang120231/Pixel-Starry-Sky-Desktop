@@ -28,6 +28,8 @@ export interface ModelTurnUsage {
 /** 一轮的用量（docs/ui/usage.md §6.1） */
 export interface TurnUsage {
   settlement?: import('../billing').PlatformSettlement
+  /** 'official'：自定义 API 的会话，费用按官方模型定价估算（docs/ui/custom-api.md §4.3） */
+  estimate?: 'official'
   /** 键是模型 id */
   models: Record<string, ModelTurnUsage>
   /** 这一轮总耗时（毫秒） */

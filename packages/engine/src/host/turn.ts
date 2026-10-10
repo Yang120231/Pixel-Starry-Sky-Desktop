@@ -8,6 +8,7 @@ import type {
   SendReceipt,
   TaskOutput,
 } from '@pixelsky/protocol'
+import { sourceKey, viaGateway } from '@pixelsky/protocol'
 import { queueSettings } from '../queue'
 import type { HostContext } from './context'
 import { NEW_TITLE, titleFrom } from './title'
@@ -52,7 +53,7 @@ export class HostTurn {
       const info = await adapter.info()
       if (!stillCurrent()) return
       if (item.attachments?.length && !info.caps.imageInput) throw new Error('当前引擎不支持图片输入')
-      if (info.status !== 'ready' && !(record.platform && info.status === 'unauthenticated'))
+      if (info.status !== 'ready' && !(viaGateway(record) && info.status === 'unauthenticated'))
         throw new Error(info.message ?? `${info.name} 不可用`)
       await ctx.opts.validateInput?.(record)
       if (!stillCurrent()) return
@@ -60,7 +61,7 @@ export class HostTurn {
         clearTimeout(rt.idleTimer)
         rt.idleTimer = null
       }
-      const source = record.platform?.account ?? null
+      const source = sourceKey(record)
       const maxRetries = m.settings.file.maxRetries
       const extensions = (preparedExtensions = ctx.opts.extensions?.(record))
       const launch = m.settings.launchKey(record.engine) + (extensions?.key ?? '')

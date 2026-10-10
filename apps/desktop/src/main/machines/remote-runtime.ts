@@ -1,7 +1,7 @@
 import { homedir, hostname, platform, arch } from 'node:os'
 import { join, dirname, isAbsolute } from 'node:path'
 import { mkdir, readdir, realpath, writeFile } from 'node:fs/promises'
-import { REMOTE_PROTOCOL, type IPC_CONTRACT, type SessionRecord } from '@pixelsky/protocol'
+import { REMOTE_PROTOCOL, viaGateway, type IPC_CONTRACT, type SessionRecord } from '@pixelsky/protocol'
 import { EngineHost, type EngineHostOptions } from '@pixelsky/engine'
 import { WorkspaceFiles } from '../core/workspace-files'
 import { resolveLocalWorkspace } from '../core/workspace/resolve'
@@ -30,7 +30,7 @@ export async function createRemoteRuntime(
 ) {
   const environments = new Map<string, NodeJS.ProcessEnv>()
   const prepare = async (record: SessionRecord) => {
-    if (!record.platform) {
+    if (!viaGateway(record)) {
       environments.delete(record.id)
       return
     }

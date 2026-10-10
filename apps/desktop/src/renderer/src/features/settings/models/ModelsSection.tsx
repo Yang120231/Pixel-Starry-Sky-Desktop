@@ -1,7 +1,7 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../../i18n/core'
 // 设置 › 模型与额度（docs/ui/source-switch.md §3.6）：新任务的默认额度来源、模型、线路；
-// 平台可用线路一览；本机引擎检测结果；自定义 API 占位。已开始的会话在输入框菜单里单独改。
+// 平台可用线路一览；本机引擎检测结果；自定义 API 的接口（docs/ui/custom-api.md）。已开始的会话在输入框菜单里单独改。
 import { useEffect, useRef, useState } from 'react'
 import { Check, LogIn, RefreshCw } from 'lucide-react'
 import { Button, EngineIcon, Segmented, Select, Spinner, cn } from '@/ui'
@@ -18,6 +18,7 @@ import {
   refreshPlatform,
   setDefaultGroup,
   setDefaultModel,
+  setDefaultCustom,
   setDefaultSelfModel,
   setDefaultSource,
   setModelHidden,
@@ -32,6 +33,8 @@ import { Switch } from '@/features/session/ComposerMenus'
 import { takeModelsScroll } from './scroll'
 import { RequestRetrySettings } from './RequestRetrySettings'
 import { demo, isDemo } from '@/data/demo'
+import { providersFor, resolveCustomModel, useProviders } from '@/features/account/providers'
+import { CustomApiSettings } from './CustomApiSettings'
 
 const ENGINE_STATUS: Record<string, string> = {
   get ready() {
@@ -65,6 +68,8 @@ export function ModelsSection({ onOpenEngines }: { onOpenEngines?: () => void })
   const visibilityRef = useRef<HTMLDivElement>(null)
   const [modelQuery, setModelQuery] = useState('')
   const claudeCatalog = useEngineCatalog('claude')
+  const endpoints = providersFor(useProviders().providers, 'claude')
+  const endpoint = endpoints.find(p => p.id === platform.providerId) ?? endpoints[0]
   useEffect(() => {
     if (takeModelsScroll()) visibilityRef.current?.scrollIntoView({ block: 'start' })
   }, [])
@@ -95,11 +100,50 @@ export function ModelsSection({ onOpenEngines }: { onOpenEngines?: () => void })
                 return tr('session.ModelSourceMenu.ownAccount')
               },
             },
+            {
+              value: 'custom',
+              get label() {
+                return tr('customApi.source')
+              },
+            },
           ]}
         />
       </SettingRow>
 
-      {platform.source === 'platform' ? (
+      {platform.source === 'custom' ? (
+        <SettingRow title={tr('customApi.defaultEndpoint')} description={tr('customApi.defaultEndpointHint')}>
+          {endpoints.length === 0 ? (
+            <p className="text-meta text-fg-faint">{tr('customApi.noEndpointForEngine')}</p>
+          ) : (
+            <div className="flex max-w-lg flex-wrap gap-2">
+              <Select
+                label={tr('customApi.defaultEndpoint')}
+                className="min-w-0 flex-1"
+                value={endpoint?.id ?? ''}
+                onChange={id =>
+                  setDefaultCustom(
+                    id,
+                    resolveCustomModel(
+                      endpoints.find(p => p.id === id),
+                      platform.customModel,
+                    ),
+                  )
+                }
+                options={endpoints.map(p => ({ value: p.id, label: p.name }))}
+              />
+              <Select
+                label={tr('settings.models.ModelsSection.defaultModel')}
+                mono
+                className="min-w-0 flex-1"
+                disabled={!endpoint || endpoint.models.length === 0}
+                value={resolveCustomModel(endpoint, platform.customModel) ?? ''}
+                onChange={v => endpoint && setDefaultCustom(endpoint.id, v)}
+                options={(endpoint?.models ?? []).map(m => ({ value: m.id, label: m.id }))}
+              />
+            </div>
+          )}
+        </SettingRow>
+      ) : platform.source === 'platform' ? (
         <>
           <SettingRow
             title={tr('settings.models.ModelsSection.defaultModel')}
@@ -334,13 +378,10 @@ export function ModelsSection({ onOpenEngines }: { onOpenEngines?: () => void })
         )}
       </div>
 
-      {/* 以后：自定义 API（docs/ui/source-switch.md §5） */}
+      <GroupTitle>{tr('settings.models.ModelsSection.customApi')}</GroupTitle>
+      <CustomApiSettings />
       <GroupTitle>{tr('settings.models.ModelsSection.requestRetries')}</GroupTitle>
       <RequestRetrySettings />
-      <GroupTitle>{tr('settings.models.ModelsSection.customApi')}</GroupTitle>
-      <div className="mt-3 rounded-lg border border-dashed border-line px-4 py-4 text-meta text-fg-muted">
-        {tr('settings.models.ModelsSection.comingSoonAddYour')}{' '}
-      </div>
     </section>
   )
 }

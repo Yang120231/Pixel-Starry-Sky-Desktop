@@ -24,7 +24,7 @@ export class HostCache {
 
   check(id: string, rt: Runtime, r: RequestUsage): void {
     const record = rt.execution ?? rt.snapshot.record
-    const route = JSON.stringify([record.engine, record.model, record.platform ?? null])
+    const route = JSON.stringify([record.engine, record.model, record.platform ?? null, record.provider?.id ?? null])
     let watch = this.watches.get(id)
     if (!watch) {
       watch = new CacheWatch()

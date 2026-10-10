@@ -20,6 +20,7 @@ import type {
 import type { AccountInfo } from '../../../shared/types/account'
 import type { ArtifactPreview } from '../../../shared/types/artifacts'
 import type { PlatformGroupInfo } from '../../../shared/types/platform-catalog'
+import type { ProvidersState } from '../../../shared/types/providers'
 import type { BrowserState } from '../../../shared/types/project-browser'
 import type {
   EnvironmentState,
@@ -50,6 +51,8 @@ export interface DemoSource {
   appData: AppData
   account: AccountInfo
   platformGroups: PlatformGroupInfo[]
+  /** 自定义 API 的两条假接口 */
+  providers: ProvidersState
   engines: { status: EngineLite[]; catalog: EngineCatalog; config: EngineConfig }
   artifacts: {
     response: ArtifactResponse

@@ -1,6 +1,7 @@
 import type { EngineHost } from '@pixelsky/engine'
 import type { ProjectTools } from '../core/project-tools/tools'
 import type { Machines } from '../machines/service'
+import type { ProviderStore } from '../core/providers/store'
 import { EventBus } from './events'
 import { Lifecycle } from './lifecycle'
 
@@ -17,10 +18,19 @@ export interface AppContext {
   machines: Machines | null
   /** 项目工具（workspace/project-tools-ipc.ts 的 initProjectTools） */
   projectTools: ProjectTools | null
+  /** 自定义 API 的接口配置（providers/providers.ts 的 initProviders，在 initEngine 里） */
+  providers: ProviderStore | null
 }
 
 export function createAppContext(): AppContext {
-  return { events: new EventBus(), lifecycle: new Lifecycle(), engine: null, machines: null, projectTools: null }
+  return {
+    events: new EventBus(),
+    lifecycle: new Lifecycle(),
+    engine: null,
+    machines: null,
+    projectTools: null,
+    providers: null,
+  }
 }
 
 /** 当前选中的机器（'local' 或 SSH 机器 ID） */

@@ -315,6 +315,47 @@ describe('Claude Code：替换的命令', () => {
 })
 
 describe('Codex：追加参数', () => {
+  it('自定义 API 会话用独立的 pixelsky-custom provider 指向本机网关，清掉用户的 OPENAI_*，重试次数跟着它走', async () => {
+    const argvLog = join(root, 'codex-argv.log')
+    const adapter = new CodexAdapter({
+      launcher: { command: process.execPath, args: [FAKE_CODEX] },
+      env: {
+        ...process.env,
+        OPENAI_API_KEY: 'sk-local',
+        FAKE_CODEX_ARGV: argvLog,
+        FAKE_CODEX_LOG: join(root, 'rpc.jsonl'),
+      },
+      launchOptions: () => ({ askQuestions: true, steeringValidated: true }),
+      sessionEnv: r =>
+        r.provider
+          ? { PIXELSKY_CODEX_BASE_URL: 'http://127.0.0.1:1234/v1', PIXELSKY_CODEX_TOKEN: 'loopback-only' }
+          : {},
+    })
+    const host = new EngineHost({
+      dataDir: join(root, 'data'),
+      emit: e => events.push(e),
+      adapters: { codex: adapter },
+    })
+    hosts.push(host)
+    host.setRetrySettings(2)
+    const s = host.createSession({
+      projectId: host.addProject(projectDir()).id,
+      engine: 'codex',
+      model: 'gpt-5',
+      provider: { id: 'p1' },
+      permissionMode: 'ask',
+    })
+    await host.send(s.id, '你好')
+    await waitFor(() => turnsDone(s.id) === 1)
+    const argv = lines(argvLog).at(-1)!.join(' ')
+    expect(argv).toContain('model_provider="pixelsky-custom"')
+    expect(argv).toContain('model_providers.pixelsky-custom.base_url="http://127.0.0.1:1234/v1"')
+    expect(argv).toContain('model_providers.pixelsky-custom.env_key="PIXELSKY_CODEX_TOKEN"')
+    expect(argv).toContain('model_providers.pixelsky-custom.request_max_retries=2')
+    expect(argv).not.toContain('sk-local')
+    expect(argv).not.toContain('model_providers.pixelsky.')
+  })
+
   it('参数放在 app-server --listen stdio:// 后面、像素星空自己的 -c 前面；检测握手也带上', async () => {
     const argvLog = join(root, 'codex-argv.log')
     let host: EngineHost | null = null

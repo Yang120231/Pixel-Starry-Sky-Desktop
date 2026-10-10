@@ -94,7 +94,9 @@ const ROUTE_LABEL: Record<UsageRoute, string> = {
   get pixelsky() {
     return tr('usage.format.pixelStarrySkyAccount')
   },
-  'api-key': 'API Key',
+  get 'api-key'() {
+    return tr('customApi.route')
+  },
   get unknown() {
     return tr('settings.usage.RemoteCallsTable.unknown')
   },

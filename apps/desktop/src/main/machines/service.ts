@@ -11,6 +11,7 @@ import * as ipc from '../ipc/guard'
 import { platformCharges } from '../platform/billing'
 import { validateQueuedInput } from '../platform/platform'
 import type { AppContext } from '../app/context'
+import type { ProviderStore } from '../core/providers/store'
 import type { EventBus, PushChannel } from '../app/events'
 import { FingerprintRequired, SshConnection } from './ssh'
 import { machineOf, remoteIds, remoteArguments, remoteMethod } from './identity'
@@ -69,6 +70,7 @@ export class Machines {
     private host: EngineHost,
     private environment: (record: SessionRecord) => NodeJS.ProcessEnv,
     private events: EventBus,
+    private providers: () => ProviderStore | null = () => null,
   ) {}
   async init(): Promise<void> {
     try {
@@ -267,7 +269,7 @@ export class Machines {
         async (method, args) => {
           if (method === 'platform:environment') {
             const record = remoteIds(args[0] as SessionRecord, id, true)
-            await validateQueuedInput(record)
+            await validateQueuedInput(record, this.providers())
             state.executions.set(record.id, record)
             const env = this.environment(record)
             for (const key of ['ANTHROPIC_BASE_URL', 'PIXELSKY_CODEX_BASE_URL'])
@@ -404,7 +406,7 @@ export async function initMachines(
   host: EngineHost,
   environment: (record: SessionRecord) => NodeJS.ProcessEnv,
 ): Promise<Machines> {
-  const service = new Machines(host, environment, ctx.events)
+  const service = new Machines(host, environment, ctx.events, () => ctx.providers)
   ctx.machines = service
   await service.init()
   const actions: Record<string, (...args: never[]) => unknown> = {

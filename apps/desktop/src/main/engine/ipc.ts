@@ -15,6 +15,7 @@ import type { HostEvent, SessionRecord } from '@pixelsky/protocol'
 import type { AppContext } from '../app/context'
 import { platformCharges, accountCalls } from '../platform/billing'
 import { initPlatform, validateQueuedInput } from '../platform/platform'
+import { initProviders } from '../providers/providers'
 import { Extensions } from '../extensions/ipc'
 import { initTerminalIpc } from '../terminal/ipc'
 import { initMachines } from '../machines/service'
@@ -27,6 +28,7 @@ import { SearchRegistry } from '../core/search-registry'
 import { usageQuery } from '../core/args'
 
 export async function initEngine(ctx: AppContext): Promise<void> {
+  ctx.providers = initProviders(ctx)
   const sessionEnv = await initPlatform(
     id =>
       machineOf(id) === 'local'
@@ -41,6 +43,7 @@ export async function initEngine(ctx: AppContext): Promise<void> {
         await ctx.machines.call(machine, 'platform:request', [record.id, requestId, model])
       }
     },
+    ctx.providers,
   )
   const extensions = new Extensions(ctx)
   const h = new EngineHost({
@@ -48,7 +51,9 @@ export async function initEngine(ctx: AppContext): Promise<void> {
     // 有 SSH 机器时由它合并本机与远端的项目 / 会话再广播
     emit: (e: HostEvent) => (ctx.machines ? ctx.machines.hostEvent(e) : ctx.events.broadcast('engine:event', e)),
     sessionEnv,
-    validateInput: validateQueuedInput,
+    validateInput: record => validateQueuedInput(record, ctx.providers),
+    priceRef: (record, model) =>
+      record.provider ? ctx.providers?.get(record.provider.id)?.models.find(m => m.id === model)?.priceRef : null,
     extensions: record => extensions.prepare(record),
     platformCharges,
   })

@@ -14,6 +14,8 @@ export type TurnOutcome = 'completed' | 'interrupted' | 'failed'
 export interface SessionSettings {
   /** null/缺省为自有认证；平台记录分组与账号，避免跨账号扣费。 */
   platform?: { groupId: string; account: string } | null
+  /** 自定义 API 的接口（docs/ui/custom-api.md）；模型仍在 model 里。和 platform 不能同时有 */
+  provider?: { id: string } | null
   /** null 表示用引擎自己的默认模型 */
   model: string | null
   /** null 表示用引擎自己的默认强度 */
@@ -30,6 +32,8 @@ export interface SessionSettings {
 /** 入队时固定成本相关设置；权限与会话开关在实际执行时读取。 */
 export type QueueSettings = Pick<SessionSettings, 'model' | 'effort'> & {
   platform: NonNullable<SessionSettings['platform']> | null
+  /** 旧的排队项没有这个字段，按 null 处理 */
+  provider?: NonNullable<SessionSettings['provider']> | null
 }
 
 /** 用户输入的图片。Base64 只保存在本地队列 / 引擎发送链路，不进入搜索正文。 */

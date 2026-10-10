@@ -3,6 +3,7 @@
 import {
   AUTO_COMPACT_PCTS,
   codedError,
+  PROVIDER_ENV,
   EFFORTS,
   PERMISSION_MODES,
   type EngineCatalog,
@@ -115,9 +116,12 @@ export class HostSettings {
     }
     if (patch.env !== undefined) {
       const env: Record<string, string> = {}
+      const before = next.env[engine] ?? {}
       for (const [k, v] of Object.entries(patch.env)) {
         if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(k)) throw new Error(`环境变量名不对：${k}`)
         if (typeof v !== 'string') throw new Error(`环境变量 ${k} 的值不对`)
+        // 接口地址和 Key 改在「自定义 API」里配（docs/ui/custom-api.md §3.4）：已有的照旧生效，只能删除或迁移
+        if (PROVIDER_ENV.includes(k.toUpperCase()) && before[k] !== v) throw codedError('env.reserved', { name: k })
         env[k] = v
       }
       if (Object.keys(env).length > 0) next.env[engine] = env
@@ -207,7 +211,7 @@ export class HostSettings {
 
   setDefaults(patch: Partial<EngineDefaults>): EngineDefaults {
     const engine = patch.engine ?? this.file.defaults.engine
-    const { engine: _engine, platform: _platform, ...rest } = patch
+    const { engine: _engine, platform: _platform, provider: _provider, ...rest } = patch
     const next: SessionDefaults = { ...this.engineDefaults(engine), ...checkDefaults(rest) }
     this.file = { ...this.file, engineDefaults: { ...this.file.engineDefaults, [engine]: next } }
     this.ctx.store.saveSettings(this.file)

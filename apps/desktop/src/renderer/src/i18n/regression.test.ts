@@ -23,6 +23,7 @@ import { errorMessages } from '../../../shared/i18n/errorMessages'
 import { contentMessages } from '../../../shared/i18n/contentMessages'
 import { branchMessages } from '../../../shared/i18n/branchMessages'
 import { updateMessages } from '../../../shared/i18n/updateMessages'
+import { customApiMessages } from '../../../shared/i18n/customApiMessages'
 
 // 与 shared/i18n/translate.ts 的 allMessages 合并顺序一致
 const dictionaries: Record<string, Record<string, unknown>> = {
@@ -47,6 +48,7 @@ const dictionaries: Record<string, Record<string, unknown>> = {
   contentMessages,
   branchMessages,
   updateMessages,
+  customApiMessages,
 }
 
 /** 中英文值不同、需要保持现状的重复 key（当前为空；新增重复必须先说明原因）。 */

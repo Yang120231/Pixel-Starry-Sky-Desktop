@@ -9,6 +9,8 @@ import { Check, ChevronDown, ChevronLeft, ChevronRight, LogIn, RefreshCw } from 
 import type { EngineConfig, EngineId, EngineModel } from '@pixelsky/protocol'
 import { EngineIcon, Popover, Spinner, cn } from '@/ui'
 import { useAccount } from '@/features/account/useAccount'
+import { providersFor, useProviders } from '@/features/account/providers'
+import type { ProviderView } from '../../../../shared/types/providers'
 import {
   billingLabel,
   formatMultiplier,
@@ -34,6 +36,9 @@ const SOURCE_LABEL: Record<CreditSource, string> = {
   },
   get self() {
     return tr('session.ModelSourceMenu.ownAccount')
+  },
+  get custom() {
+    return tr('customApi.source')
   },
 }
 
@@ -85,8 +90,14 @@ function triggerText(
   live: SourceMenuController,
   rate: number | null,
   catalogModels?: EngineModel[],
+  endpointName?: string,
 ): { model: string; source: string } {
   const engineId = live.engine?.id ?? 'claude'
+  if (live.source === 'custom')
+    return {
+      model: live.model ?? endpointName ?? tr('session.ModelSourceMenu.chooseModel'),
+      source: endpointName ? `${tr('customApi.source')} · ${endpointName}` : tr('customApi.source'),
+    }
   if (live.source === 'platform')
     return {
       model: live.model ?? tr('session.ModelSourceMenu.chooseModel'),
@@ -163,7 +174,10 @@ export function ModelSourceMenu({
 
   const engineConfig = useEngineState(s => s.config)
   const group = platform.groups.find(g => g.id === live.groupId)
-  const text = triggerText(live, group ? group.rate_multiplier : null, catalog?.models)
+  const providers = useProviders()
+  const endpoints = providersFor(providers.providers, engineId)
+  const endpoint = providers.providers.find(p => p.id === live.providerId)
+  const text = triggerText(live, group ? group.rate_multiplier : null, catalog?.models, endpoint?.name)
   const notReady = live.blocker !== null && live.blocker.kind !== 'balance'
 
   const run = (fn: () => Promise<void>): void => {
@@ -248,7 +262,7 @@ export function ModelSourceMenu({
                 if (live.started) onOpenChange(false)
                 onRequestSource(s)
               }}
-              options={(['platform', 'self'] as const).map(s => ({
+              options={(['platform', 'self', 'custom'] as const).map(s => ({
                 value: s,
                 label: SOURCE_LABEL[s],
                 disabled: s === 'platform' && !live.platformAvailable,
@@ -264,7 +278,9 @@ export function ModelSourceMenu({
               </p>
             )}
 
-            {live.source === 'platform' ? (
+            {live.source === 'custom' ? (
+              <CustomEndpoints live={live} endpoints={endpoints} run={run} onManage={manageModels} />
+            ) : live.source === 'platform' ? (
               <PlatformRoute live={live} onOpenRoutes={() => setPage('routes')} />
             ) : (
               <SelfStatus live={live} showHelp={showLoginHelp} onToggleHelp={() => setShowLoginHelp(v => !v)} />
@@ -273,7 +289,22 @@ export function ModelSourceMenu({
             {/* 模型 */}
             <div className="mt-2 border-t border-line-subtle pt-1">
               <MenuTitle>{tr('session.ModelSourceMenu.model')}</MenuTitle>
-              {live.source === 'platform' ? (
+              {live.source === 'custom' ? (
+                (endpoint?.models ?? []).length === 0 ? (
+                  <p className="px-2 pb-1.5 text-meta text-fg-faint">
+                    {live.model ? <span className="font-mono">{live.model}</span> : tr('customApi.noEndpointForEngine')}
+                  </p>
+                ) : (
+                  endpoint!.models.map(m => (
+                    <MenuRow
+                      key={m.id}
+                      selected={m.id === live.model}
+                      onClick={() => run(() => live.setModel(m.id))}
+                      title={<span className="font-mono text-meta">{m.id}</span>}
+                    />
+                  ))
+                )
+              ) : live.source === 'platform' ? (
                 platform.email && allModels.length > 0 ? (
                   models.length === 0 ? (
                     <p className="px-2 pb-1.5 text-meta text-fg-faint">
@@ -398,6 +429,43 @@ export function ModelSourceMenu({
           </div>
         )}
       </Popover>
+    </div>
+  )
+}
+
+/** 自定义时额度来源下面：和引擎协议相符的接口；没有时给「添加接口…」（docs/ui/custom-api.md §3.2） */
+function CustomEndpoints({
+  live,
+  endpoints,
+  run,
+  onManage,
+}: {
+  live: SourceMenuController
+  endpoints: ProviderView[]
+  run: (fn: () => Promise<void>) => void
+  onManage: () => void
+}) {
+  useI18n()
+  const deleted = !!live.providerId && !endpoints.some(p => p.id === live.providerId)
+  return (
+    <div className="pt-1">
+      {deleted && <p className="px-2 pb-1 text-meta text-warn">{tr('customApi.endpointDeleted')}</p>}
+      {endpoints.map(p => (
+        <MenuRow
+          key={p.id}
+          selected={p.id === live.providerId}
+          onClick={() => run(() => live.setProvider(p.id))}
+          title={p.name}
+          hint={p.keyHint ? tr('customApi.modelCount', { n: p.models.length }) : tr('customApi.noKey')}
+        />
+      ))}
+      <button
+        type="button"
+        onClick={onManage}
+        className="mx-1 flex h-7 items-center rounded-md px-1.5 text-meta text-fg-muted hover:bg-hover hover:text-fg"
+      >
+        {endpoints.length === 0 ? tr('customApi.addEllipsis') : tr('customApi.manage')}
+      </button>
     </div>
   )
 }

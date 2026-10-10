@@ -39,6 +39,7 @@ import {
   refreshPlatform,
   resolvePlatform,
   saveDefault,
+  setDefaultCustom,
   setDefaultGroup,
   setDefaultModel,
   setDefaultSelfModel,
@@ -46,6 +47,7 @@ import {
   usePlatform,
   type CreditSource,
 } from '@/features/account/platform'
+import { providersFor, resolveCustomModel, useProviders } from '@/features/account/providers'
 import {
   addProject,
   bridge,
@@ -137,8 +139,12 @@ export { addProject }
  * - signin 平台但没登录；account 会话用的平台账号和当前登录的不是同一个
  * - no-route 平台没有可用线路；balance 余额计费的线路但余额 ≤ 0（只提醒，不拦）
  * - self-auth 自有但引擎没登录；self-missing 自有但引擎不可用
+ * - custom-none 自定义但没有这个引擎能用的接口；custom-deleted 会话用的接口删了；custom-key 接口没有 Key
  */
 export type SourceBlocker =
+  | { kind: 'custom-none' }
+  | { kind: 'custom-deleted' }
+  | { kind: 'custom-key'; name: string }
   | { kind: 'signin' }
   | { kind: 'account'; account: string }
   | { kind: 'no-route'; message: string; balance: boolean }
@@ -153,6 +159,7 @@ export type SourceMenuController = Pick<
   | 'started'
   | 'source'
   | 'groupId'
+  | 'providerId'
   | 'model'
   | 'isDefault'
   | 'platformAvailable'
@@ -162,6 +169,7 @@ export type SourceMenuController = Pick<
   | 'redetect'
   | 'setSource'
   | 'setGroup'
+  | 'setProvider'
   | 'setModel'
   | 'saveAsDefault'
 > & { engines: EngineLite[]; engine: EngineLite | null }
@@ -169,12 +177,20 @@ export type SourceMenuController = Pick<
 /** 演示模式的菜单：假目录、假引擎，选择只改内存（features/account/platform.ts） */
 export function useDemoSourceController(): SourceMenuController {
   const platform = usePlatform()
+  const endpoints = providersFor(useProviders().providers, 'claude')
   const isPlatform = platform.source === 'platform'
+  const endpoint =
+    platform.source === 'custom' ? (endpoints.find(p => p.id === platform.providerId) ?? endpoints[0]) : undefined
   return {
     started: false,
     source: platform.source,
     groupId: isPlatform ? platform.groupId : null,
-    model: isPlatform ? platform.model : platform.selfModel,
+    providerId: endpoint?.id ?? null,
+    model: isPlatform
+      ? platform.model
+      : endpoint
+        ? resolveCustomModel(endpoint, platform.customModel)
+        : platform.selfModel,
     isDefault: true,
     platformAvailable: true,
     blocker: null,
@@ -185,7 +201,16 @@ export function useDemoSourceController(): SourceMenuController {
     redetect: () => undefined,
     setSource: async s => setDefaultSource(s),
     setGroup: async id => setDefaultGroup(id),
-    setModel: async m => (isPlatform && m ? setDefaultModel(m) : setDefaultSelfModel(m)),
+    setProvider: async id =>
+      setDefaultCustom(
+        id,
+        resolveCustomModel(
+          endpoints.find(p => p.id === id),
+          null,
+        ),
+      ),
+    setModel: async m =>
+      endpoint ? setDefaultCustom(endpoint.id, m) : isPlatform && m ? setDefaultModel(m) : setDefaultSelfModel(m),
     saveAsDefault: () => undefined,
   }
 }
@@ -210,6 +235,8 @@ export interface ComposerController {
   source: CreditSource
   /** 平台线路（分组 id）；自有时为 null */
   groupId: string | null
+  /** 自定义 API 的接口 id；其他来源为 null */
+  providerId: string | null
   /** 平台：分组里的模型；自有：引擎别名或 null（跟随引擎设置） */
   model: string | null
   /** 已开始的会话的选择和全局默认一样（不一样时菜单里显示「设为默认」） */
@@ -219,6 +246,8 @@ export interface ComposerController {
   /** 改额度来源。已开始的会话要先在界面上确认（会重启引擎并接上原对话） */
   setSource(source: CreditSource): Promise<void>
   setGroup(groupId: string): Promise<void>
+  /** 自定义 API：换接口（已开始的会话等这一轮结束后重启引擎） */
+  setProvider(providerId: string): Promise<void>
   setModel(model: string | null): Promise<void>
   saveAsDefault(): void
   blocker: SourceBlocker | null
@@ -289,6 +318,7 @@ export function useComposerController(
   const [draft, setDraft] = useState<Draft | null>(null)
   const selectedEngineId = snap?.record.engine ?? draft?.engine ?? defaults?.engine ?? 'claude'
   const platform = usePlatform(selectedEngineId)
+  const providers = useProviders()
   const catalog = useEngineCatalog(selectedEngineId)
   useEffect(() => {
     if (isLive && !sessionId) void refreshDefaults()
@@ -318,12 +348,37 @@ export function useComposerController(
 
   // ---- 额度来源（docs/ui/source-switch.md §3.3）：已开始的会话用自己的记录，否则用全局默认 ----
   const started = !canSwitchEngine
-  const source: CreditSource = started ? (record?.platform ? 'platform' : 'self') : platform.source
+  const source: CreditSource = started
+    ? record?.platform
+      ? 'platform'
+      : record?.provider
+        ? 'custom'
+        : 'self'
+    : platform.source
   const groupId = started ? (record?.platform?.groupId ?? null) : source === 'platform' ? platform.groupId : null
-  const model = started ? (record?.model ?? null) : source === 'platform' ? platform.model : platform.selfModel
+  // 自定义 API（docs/ui/custom-api.md §3.2）：只列和引擎协议相符的接口
+  const endpoints = providersFor(providers.providers, engineId)
+  const providerId =
+    source !== 'custom'
+      ? null
+      : started
+        ? (record?.provider?.id ?? null)
+        : ((endpoints.find(p => p.id === platform.providerId) ?? endpoints[0])?.id ?? null)
+  const endpoint = providerId ? providers.providers.find(p => p.id === providerId) : undefined
+  const model = started
+    ? (record?.model ?? null)
+    : source === 'platform'
+      ? platform.model
+      : source === 'custom'
+        ? resolveCustomModel(endpoint, platform.customModel)
+        : platform.selfModel
   const isDefault =
     source === platform.source &&
-    (source === 'platform' ? groupId === platform.groupId && model === platform.model : model === platform.selfModel)
+    (source === 'platform'
+      ? groupId === platform.groupId && model === platform.model
+      : source === 'custom'
+        ? providerId === platform.providerId && model === platform.customModel
+        : model === platform.selfModel)
   const platformAvailable = true
   /** 平台模型切到自有时：完整的 Claude 模型名本机也认，其他（别的厂商）换回引擎默认 */
   const selfModelFrom = (m: string | null): string | null => {
@@ -335,7 +390,17 @@ export function useComposerController(
   }
 
   let blocker: SourceBlocker | null = null
-  if (source === 'platform') {
+  if (source === 'custom') {
+    if (started && providers.loaded && !endpoint) blocker = { kind: 'custom-deleted' }
+    else if (!started && providers.loaded && !endpoint) blocker = { kind: 'custom-none' }
+    else if (endpoint && !endpoint.keyHint) blocker = { kind: 'custom-key', name: endpoint.name }
+    // 自定义 API 不需要引擎登录，但引擎本身要能启动
+    else if (engine && engine.status !== 'ready' && engine.status !== 'unauthenticated')
+      blocker = {
+        kind: 'self-missing',
+        message: engine.message ?? tr('engine.hooks.isUnavailable', { p0: engine.name }),
+      }
+  } else if (source === 'platform') {
     const group = platform.groups.find(g => g.id === groupId)
     const balance = account.account?.balance ?? null
     if (!platform.email) blocker = { kind: 'signin' }
@@ -374,15 +439,36 @@ export function useComposerController(
     }
     if (next === source) return
     if (next === 'self') {
-      await b.updateSession(record.id, { platform: null, model: selfModelFrom(record.model) })
+      await b.updateSession(record.id, { platform: null, provider: null, model: selfModelFrom(record.model) })
+      return
+    }
+    if (next === 'custom') {
+      const pick = endpoints.find(p => p.id === platform.providerId) ?? endpoints[0]
+      if (!pick) throw new Error(tr('customApi.noEndpointForEngine'))
+      await b.updateSession(record.id, {
+        platform: null,
+        provider: { id: pick.id },
+        model: resolveCustomModel(pick, record.model === platform.customModel ? record.model : platform.customModel),
+      })
       return
     }
     if (!platform.email) throw new Error(tr('engine.hooks.signInToPixel'))
     const pick = await platformPick(record.model)
     await b.updateSession(record.id, {
       platform: { groupId: pick.groupId, account: platform.email },
+      provider: null,
       model: pick.model,
     })
+  }
+
+  const setProvider = async (id: string): Promise<void> => {
+    const p = endpoints.find(x => x.id === id)
+    if (!p) return
+    if (!started || !record) {
+      setDefaultCustom(id, resolveCustomModel(p, platform.customModel), engineId)
+      return
+    }
+    await b.updateSession(record.id, { platform: null, provider: { id }, model: resolveCustomModel(p, record.model) })
   }
 
   const setGroup = async (id: string): Promise<void> => {
@@ -403,7 +489,9 @@ export function useComposerController(
       selected && previousEffort && !selected.efforts.includes(previousEffort) ? selected.defaultEffort : previousEffort
     const effortPatch = effort !== previousEffort ? { effort } : {}
     if (!started || !record) {
-      if (source === 'platform' && m) setDefaultModel(m, engineId)
+      if (source === 'custom') {
+        if (providerId) setDefaultCustom(providerId, m, engineId)
+      } else if (source === 'platform' && m) setDefaultModel(m, engineId)
       else setDefaultSelfModel(m, engineId)
       if (effort !== previousEffort) patch(effortPatch)
       return
@@ -447,14 +535,17 @@ export function useComposerController(
     started,
     source,
     groupId,
+    providerId,
     model,
     isDefault,
     platformAvailable,
     setSource,
     setGroup,
+    setProvider,
     setModel,
     saveAsDefault: () => {
       if (source === 'platform') saveDefault({ source, groupId, model }, engineId)
+      else if (source === 'custom') saveDefault({ source, providerId, customModel: model }, engineId)
       else saveDefault({ source, selfModel: model }, engineId)
     },
     blocker,
@@ -500,16 +591,22 @@ export function useComposerController(
       if (blocker?.kind === 'account')
         throw new Error(tr('engine.hooks.thisConversationUsesS', { p0: blocker.account }))
       if (blocker?.kind === 'no-route') throw new Error(blocker.message)
+      if (blocker?.kind === 'custom-none') throw new Error(tr('customApi.noEndpointForEngine'))
+      if (blocker?.kind === 'custom-deleted') throw new Error(tr('customApi.endpointDeleted'))
       const usePlatform = source === 'platform'
+      const useCustom = source === 'custom'
       if (record && started) {
         await b.send(record.id, { text, clientMessageId, attachments })
         return
       }
       if (usePlatform && (platform.loading || !groupId || !model))
         throw new Error(platform.error ?? tr('engine.hooks.platformRoutesAreLoading'))
+      if (useCustom && !providerId) throw new Error(tr('customApi.noEndpointForEngine'))
       const sourcePatch = usePlatform
-        ? { platform: { groupId: groupId!, account: platform.email! }, model, engine: engineId }
-        : { platform: null, model }
+        ? { platform: { groupId: groupId!, account: platform.email! }, provider: null, model, engine: engineId }
+        : useCustom
+          ? { platform: null, provider: { id: providerId! }, model, engine: engineId }
+          : { platform: null, provider: null, model }
       if (record) {
         await b.updateSession(record.id, sourcePatch)
         await b.send(record.id, { text, clientMessageId, attachments })
@@ -517,7 +614,7 @@ export function useComposerController(
       }
       // 欢迎页：先确认引擎可用、有项目，再创建会话
       const info = engine ?? (await b.engines()).find(e => e.id === engineId)
-      if (info && info.status !== 'ready' && !(usePlatform && info.status === 'unauthenticated'))
+      if (info && info.status !== 'ready' && !((usePlatform || useCustom) && info.status === 'unauthenticated'))
         throw new Error(info.message ?? tr('session.ModelSourceMenu.isTemporarilyUnavailable', { p0: info.name }))
       const workspace = draftKey ? draftWorkspace(draftKey) : null
       const projectId = workspace?.projectId ?? getEngineState().currentProjectId ?? (await addProject())

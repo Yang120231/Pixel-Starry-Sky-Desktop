@@ -23,7 +23,12 @@ export class HostEvents {
 
   patchRecord(id: string, patch: Partial<SessionRecord>): SessionRecord {
     const rt = this.ctx.m.sessions.runtime(id)
-    if (patch.model !== undefined || patch.platform !== undefined || patch.engine !== undefined) {
+    if (
+      patch.model !== undefined ||
+      patch.platform !== undefined ||
+      patch.provider !== undefined ||
+      patch.engine !== undefined
+    ) {
       this.ctx.m.cache.reset(id)
       if (rt.snapshot.context)
         this.apply(id, { type: 'context', context: { ...rt.snapshot.context, stale: true, diagnosticStale: true } })

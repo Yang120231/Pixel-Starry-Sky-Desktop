@@ -22,10 +22,24 @@ const LABEL: Record<SourceAction, string> = {
   get 'sign-in'() {
     return tr('session.live.NoticeActions.signInAgain')
   },
+  get 'edit-provider'() {
+    return tr('customApi.editEndpoint')
+  },
 }
 
-function actionsFor(kind: ErrorKind, platform: boolean, engine: SessionRecord['engine']): SourceAction[] {
-  if (platform) {
+function actionsFor(
+  kind: ErrorKind,
+  record: Pick<SessionRecord, 'platform' | 'provider'>,
+  engine: SessionRecord['engine'],
+): SourceAction[] {
+  // 自定义 API（docs/ui/custom-api.md §3.3）：失败不自动改用别的来源，按钮让用户自己选
+  if (record.provider && !record.platform) {
+    const platform: SourceAction[] = ENGINES[engine].caps.platformSwitch ? ['use-platform'] : []
+    if (kind === 'auth') return ['edit-provider', ...platform, 'use-self']
+    if (kind === 'balance' || kind === 'busy') return ['edit-provider', ...platform]
+    return ['open-menu', 'edit-provider']
+  }
+  if (record.platform) {
     if (kind === 'auth') return ['sign-in', 'use-self']
     if (kind === 'balance') return ['open-account', 'open-menu', 'use-self']
     return ['open-menu', 'use-self']
@@ -38,7 +52,7 @@ export function NoticeActions({ record, text }: { record: SessionRecord; text: s
   useI18n()
   const kind = classifyError(text)
   if (!kind) return null
-  const actions = actionsFor(kind, !!record.platform, record.engine)
+  const actions = actionsFor(kind, record, record.engine)
   if (actions.length === 0) return null
   return (
     <div className="mt-1.5 flex flex-wrap gap-1.5 pl-[27px]">

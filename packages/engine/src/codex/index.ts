@@ -1,5 +1,12 @@
 import type { EngineAdapter, EngineSession, Launcher, SessionContext } from '../adapter'
-import { codedError, type EngineCatalog, type EngineInfo, type Item, type SessionRecord } from '@pixelsky/protocol'
+import {
+  codedError,
+  type EngineCatalog,
+  type EngineInfo,
+  type Item,
+  type SessionRecord,
+  viaGateway,
+} from '@pixelsky/protocol'
 import { engineEnv } from '../env'
 import { startupReason } from '../exec'
 import { engineBase } from '../registry'
@@ -120,12 +127,12 @@ export class CodexAdapter implements EngineAdapter {
     const result = this.cached
     if (
       !result?.launcher ||
-      (result.info.status !== 'ready' && !(ctx.record().platform && result.info.status === 'unauthenticated'))
+      (result.info.status !== 'ready' && !(viaGateway(ctx.record()) && result.info.status === 'unauthenticated'))
     )
       throw new Error(result?.info.message ?? 'Codex is unavailable')
     const env = toolEnvironment(result.launcher, this.env())
     env.PIXELSKY_CODEX_PROVIDER = this.catalogCache?.currentProvider ?? 'openai'
-    if (ctx.record().platform) {
+    if (viaGateway(ctx.record())) {
       for (const key of Object.keys(env)) if (/^(OPENAI_|CODEX_ACCESS_TOKEN|CHATGPT_)/i.test(key)) delete env[key]
       Object.assign(env, this.opts.sessionEnv?.(ctx.record()) ?? {})
     }

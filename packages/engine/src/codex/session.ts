@@ -147,19 +147,22 @@ export class CodexSession implements EngineSession {
     const config = (key: string, value: unknown): void => {
       args.push('-c', `${key}=${tomlValue(value)}`)
     }
-    if (record.platform) {
+    // 平台和自定义 API 都经本机网关；provider 名分开，Codex 按 provider 存的状态互不串
+    const gatewayProvider = record.platform ? 'pixelsky' : record.provider ? 'pixelsky-custom' : null
+    if (gatewayProvider) {
       const base = environment.PIXELSKY_CODEX_BASE_URL
-      if (!base || !environment.PIXELSKY_CODEX_TOKEN) throw new Error('Codex platform gateway is unavailable')
-      config('model_provider', 'pixelsky')
-      config('model_providers.pixelsky.name', 'Pixel Starry Sky')
-      config('model_providers.pixelsky.base_url', base)
-      config('model_providers.pixelsky.wire_api', 'responses')
-      config('model_providers.pixelsky.env_key', 'PIXELSKY_CODEX_TOKEN')
-      config('model_providers.pixelsky.requires_openai_auth', false)
-      config('model_providers.pixelsky.supports_websockets', false)
+      if (!base || !environment.PIXELSKY_CODEX_TOKEN) throw new Error('Codex gateway is unavailable')
+      const p = `model_providers.${gatewayProvider}`
+      config('model_provider', gatewayProvider)
+      config(`${p}.name`, record.platform ? 'Pixel Starry Sky' : 'Custom API')
+      config(`${p}.base_url`, base)
+      config(`${p}.wire_api`, 'responses')
+      config(`${p}.env_key`, 'PIXELSKY_CODEX_TOKEN')
+      config(`${p}.requires_openai_auth`, false)
+      config(`${p}.supports_websockets`, false)
     }
     if (this.ctx.maxRetries !== null && this.ctx.maxRetries !== undefined) {
-      const provider = record.platform ? 'pixelsky' : string(environment.PIXELSKY_CODEX_PROVIDER)
+      const provider = gatewayProvider ?? string(environment.PIXELSKY_CODEX_PROVIDER)
       // 两层同时使用 N 会放大为 (N+1)² 次请求。自定义仅控制 HTTP
       // 请求层，禁用整条流重新发起；null 保留原生两层策略。
       if (provider) {

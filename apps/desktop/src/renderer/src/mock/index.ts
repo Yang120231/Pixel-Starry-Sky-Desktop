@@ -9,7 +9,7 @@ import { demo } from './demo'
 import { DEMO_EDITOR_STATE, DEMO_FILES, demoDirectory, demoDocument } from './files'
 import { demoGitBranches, demoGitDiff, demoGitStatus } from './git'
 import { demoInbox } from './inbox'
-import { demoEngineCatalog, demoEngineConfig, demoEngineStatus, demoPlatformGroups } from './platform'
+import { demoEngineCatalog, demoEngineConfig, demoEngineStatus, demoPlatformGroups, demoProviders } from './platform'
 import { demoToolBrowser, demoToolCopies, demoToolEnvironment, demoToolTasks } from './projectTools'
 import { demoRemoteCalls } from './remoteCalls'
 import { demoSearchProjects, searchDemo } from './search'
@@ -22,6 +22,7 @@ export const demoSource: DemoSource = {
   appData: demo,
   account: demoAccount,
   platformGroups: demoPlatformGroups,
+  providers: demoProviders,
   engines: { status: demoEngineStatus, catalog: demoEngineCatalog, config: demoEngineConfig },
   artifacts: { response: demoArtifacts, change: demoArtifactChange, preview: demoArtifactPreview },
   context: demoContext,

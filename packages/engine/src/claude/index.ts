@@ -12,6 +12,7 @@ import {
   type EngineUpdateResult,
   type Item,
   type SessionRecord,
+  viaGateway,
 } from '@pixelsky/protocol'
 import type { EngineAdapter, EngineSession, Launcher, SessionContext } from '../adapter'
 import { engineEnv } from '../env'
@@ -175,8 +176,8 @@ export class ClaudeAdapter implements EngineAdapter {
   ): NodeJS.ProcessEnv {
     const env = this.env()
     const platformEnv = this.opts.sessionEnv?.(record)
-    if (record.platform) {
-      if (!platformEnv) throw new Error('平台代理不可用，请重启应用')
+    if (viaGateway(record)) {
+      if (!platformEnv?.PIXELSKY_GATEWAY_SETTINGS) throw new Error('本机网关不可用，请重启应用')
       for (const key of Object.keys(env)) {
         if (
           /^(ANTHROPIC_|CLAUDE_CODE_OAUTH_TOKEN|CLAUDE_CODE_USE_BEDROCK|CLAUDE_CODE_USE_VERTEX|CLAUDE_CODE_USE_FOUNDRY)/i.test(
@@ -200,7 +201,7 @@ export class ClaudeAdapter implements EngineAdapter {
 
   private readyLauncher(record: SessionRecord): Launcher {
     const d = this.cached
-    if (!d?.launcher || (d.info.status !== 'ready' && !(record.platform && d.info.status === 'unauthenticated')))
+    if (!d?.launcher || (d.info.status !== 'ready' && !(viaGateway(record) && d.info.status === 'unauthenticated')))
       throw new Error(d?.info.message ?? 'Claude Code 不可用')
     return d.launcher
   }
@@ -230,7 +231,7 @@ export class ClaudeAdapter implements EngineAdapter {
     if (!sid || !findClaudeTranscript(this.projectsDir(), record.cwd, sid))
       throw new Error('这个会话还没有 Claude Code 记录')
     const env = this.launchEnv(record, null)
-    const gateway = record.platform ? env.PIXELSKY_GATEWAY_SETTINGS : undefined
+    const gateway = viaGateway(record) ? env.PIXELSKY_GATEWAY_SETTINGS : undefined
     return {
       launcher: this.readyLauncher(record),
       cwd: record.cwd,

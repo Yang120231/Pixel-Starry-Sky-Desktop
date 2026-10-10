@@ -11,6 +11,7 @@ import { useAccount } from '@/features/account/useAccount'
 import { refreshPlatform, usePlatform, type CreditSource } from '@/features/account/platform'
 import { useSettings } from '@/features/settings/SettingsProvider'
 import type { ComposerController } from '@/features/engine'
+import { providersFor, useProviders } from '@/features/account/providers'
 
 function Action({ onClick, children, primary }: { onClick: () => void; children: ReactNode; primary?: boolean }) {
   useI18n()
@@ -84,12 +85,21 @@ export function SourceHintBar({
   const account = useAccount()
   const platform = usePlatform()
   const settings = useSettings()
+  const providers = useProviders()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   if (confirm) {
     const engineName = live.engine?.name ?? 'Claude Code'
     const route = platform.groups.find(g => g.id === (live.groupId ?? platform.groupId))
+    const endpoints = providersFor(providers.providers, live.engine?.id ?? 'claude')
+    const endpoint = endpoints.find(p => p.id === platform.providerId) ?? endpoints[0]
+    const label =
+      confirm === 'self'
+        ? tr('session.ModelSourceMenu.ownAccount')
+        : confirm === 'custom'
+          ? tr('customApi.source')
+          : tr('session.ModelSourceMenu.platform')
     const apply = (): void => {
       setBusy(true)
       setError(null)
@@ -107,20 +117,22 @@ export function SourceHintBar({
           <>
             <Action onClick={onCancelConfirm}>{tr('account.AccountMenu.cancel')}</Action>
             <Action primary onClick={apply}>
-              {busy ? <Spinner /> : tr('session.SourceHintBar.switchTo', { p0: confirm === 'self' ? '自有' : '平台' })}
+              {busy ? <Spinner /> : tr('session.SourceHintBar.switchTo', { p0: label })}
             </Action>
           </>
         }
       >
         <div className="font-medium text-fg">
           {tr('session.SourceHintBar.switchTo2')}
-          {confirm === 'self' ? tr('session.ModelSourceMenu.ownAccount') : tr('session.ModelSourceMenu.platform')}
+          {label}
           {tr('session.SourceHintBar.toContinueThisConversation')}
         </div>
         <div>
           {confirm === 'self'
             ? tr('session.SourceHintBar.futureRequestsAreBilled', { p0: engineName })
-            : tr('session.SourceHintBar.futureRequestsUsePlatform', { p0: route ? `线路「${route.name}」` : '' })}
+            : confirm === 'custom'
+              ? tr('customApi.futureRequests', { p0: endpoint?.name ?? '' })
+              : tr('session.SourceHintBar.futureRequestsUsePlatform', { p0: route ? `线路「${route.name}」` : '' })}
           {tr('session.SourceHintBar.engineRestartsAndResumes')}{' '}
         </div>
         {error && <div className="text-danger">{translateMessage(error)}</div>}
@@ -143,7 +155,48 @@ export function SourceHintBar({
     </Action>
   ) : null
 
+  const openEndpoints = <Action onClick={() => settings.openSettings('models')}>{tr('customApi.manage')}</Action>
   switch (b.kind) {
+    case 'custom-none':
+      return (
+        <Bar
+          tone="warn"
+          icon={<TriangleAlert size={14} />}
+          actions={
+            <>
+              {usePlatformBtn}
+              {openEndpoints}
+            </>
+          }
+        >
+          {tr('customApi.noEndpointForEngine')}
+        </Bar>
+      )
+    case 'custom-deleted':
+      return (
+        <Bar
+          tone="danger"
+          icon={<CircleAlert size={14} />}
+          actions={
+            <>
+              {usePlatformBtn}
+              <Action onClick={onOpenMenu}>{tr('customApi.switchEndpoint')}</Action>
+            </>
+          }
+        >
+          {tr('customApi.endpointDeleted')}
+        </Bar>
+      )
+    case 'custom-key':
+      return (
+        <Bar
+          tone="warn"
+          icon={<TriangleAlert size={14} />}
+          actions={<Action onClick={() => settings.openSettings('models')}>{tr('customApi.editEndpoint')}</Action>}
+        >
+          {b.name} · {tr('customApi.noKey')}
+        </Bar>
+      )
     case 'signin':
       return (
         <Bar

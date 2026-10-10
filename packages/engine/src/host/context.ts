@@ -42,6 +42,8 @@ export interface EngineHostOptions {
   adapters?: Partial<Record<EngineId, EngineAdapter>>
   /** 平台认证 / 路由预检；排队时只保存身份，执行前重新验证。 */
   validateInput?: (record: SessionRecord) => Promise<void>
+  /** 自定义 API 会话：这个模型的计价参照（官方模型名）；不给就按模型名自动对（docs/ui/custom-api.md §4.3） */
+  priceRef?: (record: SessionRecord, model: string) => string | null | undefined
 }
 
 export interface Runtime {

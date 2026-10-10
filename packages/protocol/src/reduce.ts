@@ -62,7 +62,8 @@ export function reduce(s: SessionSnapshot, e: EngineEvent): SessionSnapshot {
         ...(s.context &&
         (e.record.model !== s.record.model ||
           e.record.engine !== s.record.engine ||
-          JSON.stringify(e.record.platform) !== JSON.stringify(s.record.platform))
+          JSON.stringify(e.record.platform) !== JSON.stringify(s.record.platform) ||
+          (e.record.provider?.id ?? null) !== (s.record.provider?.id ?? null))
           ? { context: { ...s.context, stale: true, diagnosticStale: true } }
           : {}),
       }

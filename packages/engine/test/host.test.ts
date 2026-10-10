@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { HostEvent, SessionRecord } from '@pixelsky/protocol'
-import { ClaudeAdapter, EngineHost } from '../src'
+import { ClaudeAdapter, EngineHost, type EngineHostOptions } from '../src'
 
 const FAKE = fileURLToPath(new URL('./fakes/fake-claude.mjs', import.meta.url))
 
@@ -19,6 +19,7 @@ function makeHost(
   extraEnv: NodeJS.ProcessEnv = {},
   sessionEnv?: (record: SessionRecord) => NodeJS.ProcessEnv,
   steeringValidated = false,
+  extra: Partial<EngineHostOptions> = {},
 ): EngineHost {
   const projectsDir = join(root, 'claude-projects')
   const adapter = new ClaudeAdapter({
@@ -33,6 +34,7 @@ function makeHost(
     emit: e => events.push(e),
     idleMs,
     adapters: { claude: adapter },
+    ...extra,
   })
   hosts.push(host)
   return host
@@ -400,7 +402,12 @@ describe('EngineHost + Claude（假引擎）', () => {
     await waitFor(() => turnsDone(a.id) === 1)
     expect(JSON.parse(readFileSync(envLog, 'utf8')).base).toBe('https://from-settings.invalid')
 
-    const plat = make(() => ({ ANTHROPIC_BASE_URL: 'http://127.0.0.1:1234', ANTHROPIC_AUTH_TOKEN: 'loopback-only' }))
+    writeFileSync(join(root, 'gateway.json'), '{}')
+    const plat = make(() => ({
+      ANTHROPIC_BASE_URL: 'http://127.0.0.1:1234',
+      ANTHROPIC_AUTH_TOKEN: 'loopback-only',
+      PIXELSKY_GATEWAY_SETTINGS: join(root, 'gateway.json'),
+    }))
     const b = setup(plat).record
     await plat.update(b.id, { platform: { groupId: '7', account: 'a@example.com' } })
     await plat.send(b.id, '你好')
@@ -408,8 +415,101 @@ describe('EngineHost + Claude（假引擎）', () => {
     expect(JSON.parse(readFileSync(envLog, 'utf8')).base).toBe('http://127.0.0.1:1234')
   })
 
-  it('这一轮还在跑时不能切换额度来源', async () => {
+  it('自定义 API 会话走本机网关：进程里只有本机地址和会话密钥；同一接口换模型不重启，平台 ↔ 自定义切换后 --resume', async () => {
+    const settingsFile = join(root, 'gateway.json')
+    writeFileSync(settingsFile, '{}')
+    const seen: (string | null)[] = []
+    const host = makeHost(
+      60_000,
+      { ANTHROPIC_API_KEY: 'old-local-key', FAKE_CLAUDE_ENV_LOG: join(root, 'env.json') },
+      r => {
+        seen.push(r.provider?.id ?? r.platform?.account ?? null)
+        return {
+          ANTHROPIC_AUTH_TOKEN: 'loopback-only',
+          ANTHROPIC_BASE_URL: 'http://127.0.0.1:1234',
+          PIXELSKY_GATEWAY_SETTINGS: settingsFile,
+        }
+      },
+    )
+    const { record } = setup(host)
+    await expect(host.update(record.id, { provider: { id: '../x' } })).rejects.toThrow('无效的自定义接口')
+    await host.update(record.id, { provider: { id: 'p1' }, model: 'deepseek-chat' })
+    await host.send(record.id, '自定义测试')
+    await waitFor(() => turnsDone(record.id) === 1)
+    expect(spawnArgs()[0]).toContain(settingsFile)
+    expect(JSON.parse(readFileSync(join(root, 'env.json'), 'utf8'))).toEqual({
+      base: 'http://127.0.0.1:1234',
+      token: 'loopback-only',
+    })
+    expect(host.usageSummary({ range: 'today', filter: {}, now: Date.now() }).groups.route[0].key).toBe('api-key')
+    // 引擎报的费用不用：fake-model 对不上官方价格，只留 token
+    const stats = host.open(record.id).items.find(i => i.kind === 'turn_stats')
+    expect(stats?.kind === 'turn_stats' && stats.usage.models['fake-model']).toMatchObject({
+      costUsd: null,
+      costSource: 'estimate',
+    })
+
+    // 同一接口换模型：不重启
+    await host.update(record.id, { model: 'deepseek-reasoner' })
+    await host.send(record.id, '换模型')
+    await waitFor(() => turnsDone(record.id) === 2)
+    expect(spawnArgs()).toHaveLength(1)
+
+    // 换到平台：自定义接口自动清掉，重启并接上原对话
+    await host.update(record.id, { platform: { groupId: '7', account: 'a@example.com' } })
+    expect(host.record(record.id)?.provider).toBeNull()
+    await host.send(record.id, '平台继续')
+    await waitFor(() => turnsDone(record.id) === 3)
+    expect(spawnArgs()[1]).toEqual(expect.arrayContaining(['--resume', record.id, '--settings']))
+
+    // 换回另一个自定义接口：平台清掉，再重启一次
+    await host.update(record.id, { provider: { id: 'p2' } })
+    expect(host.record(record.id)?.platform).toBeNull()
+    await host.send(record.id, '另一个接口')
+    await waitFor(() => turnsDone(record.id) === 4)
+    expect(spawnArgs()).toHaveLength(3)
+    expect(seen).toContain('p1')
+    expect(seen).toContain('p2')
+    await expect(
+      host.update(record.id, { provider: { id: 'p2' }, platform: { groupId: '7', account: 'a@example.com' } }),
+    ).rejects.toThrow('额度来源无效')
+  })
+
+  it('自定义 API 的费用按计价参照的官方模型估算', async () => {
+    writeFileSync(join(root, 'gateway.json'), '{}')
+    const host = makeHost(
+      60_000,
+      {},
+      () => ({ ANTHROPIC_AUTH_TOKEN: 'loopback-only', PIXELSKY_GATEWAY_SETTINGS: join(root, 'gateway.json') }),
+      false,
+      { priceRef: (r, model) => (r.provider?.id === 'p1' && model === 'fake-model' ? 'claude-sonnet-4-5' : null) },
+    )
+    const { record } = setup(host)
+    await host.update(record.id, { provider: { id: 'p1' } })
+    await host.send(record.id, '算钱')
+    await waitFor(() => turnsDone(record.id) === 1)
+    const stats = host.open(record.id).items.find(i => i.kind === 'turn_stats')
+    const m = stats?.kind === 'turn_stats' ? stats.usage.models['fake-model'] : undefined
+    expect(m?.costSource).toBe('estimate')
+    expect(m?.costUsd).toBeCloseTo((m!.input * 3 + m!.output * 15 + m!.cacheRead * 0.3 + m!.cacheWrite * 3.75) / 1e6)
+  })
+
+  it('网关模式没有网关设置文件时不启动，不落到引擎自己的登录上', async () => {
     const host = makeHost(60_000, {}, () => ({ ANTHROPIC_AUTH_TOKEN: 'loopback-only' }))
+    const { record } = setup(host)
+    await host.update(record.id, { provider: { id: 'p1' } })
+    await host.send(record.id, '你好')
+    await waitFor(() => host.open(record.id).queue[0]?.status === 'failed')
+    expect(host.open(record.id).queue[0].error).toContain('本机网关不可用')
+    expect(spawnArgs()).toHaveLength(0)
+  })
+
+  it('这一轮还在跑时不能切换额度来源', async () => {
+    writeFileSync(join(root, 'gateway.json'), '{}')
+    const host = makeHost(60_000, {}, () => ({
+      ANTHROPIC_AUTH_TOKEN: 'loopback-only',
+      PIXELSKY_GATEWAY_SETTINGS: join(root, 'gateway.json'),
+    }))
     const { record } = setup(host)
     await host.update(record.id, { platform: { groupId: '7', account: 'a@example.com' } })
     await host.send(record.id, 'slow 慢一点')

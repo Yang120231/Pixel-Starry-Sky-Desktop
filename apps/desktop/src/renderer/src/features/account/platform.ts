@@ -8,7 +8,11 @@ import type { AccountState } from '../../../../shared/types/account'
 import type { PlatformGroupInfo } from '../../../../shared/types/platform-catalog'
 import { demo } from '@/data/demo'
 
-export type CreditSource = 'platform' | 'self'
+/** 额度来源：平台、自有、自定义 API（docs/ui/custom-api.md） */
+export type CreditSource = 'platform' | 'self' | 'custom'
+
+const creditSource = (v: unknown, fallback: CreditSource): CreditSource =>
+  v === 'platform' || v === 'self' || v === 'custom' ? v : fallback
 
 /** 全局默认（保存在本机） */
 export interface SourcePreference {
@@ -18,6 +22,9 @@ export interface SourcePreference {
   model: string | null
   /** 自有：模型；null 表示跟随引擎自己的默认 */
   selfModel: string | null
+  /** 自定义 API：接口和模型 */
+  providerId: string | null
+  customModel: string | null
 }
 
 /** 目录里的一个分组；models 读失败时 modelsError 有值 */
@@ -41,17 +48,26 @@ export interface PlatformState extends SourcePreference {
 const KEY = 'pixelsky.platform.preference.v1'
 const HIDDEN_KEY = 'pixelsky.platform.hiddenModels'
 const ENGINE_KEY = 'pixelsky.sources.v2'
-let codexPreference: SourcePreference = { source: 'self', groupId: null, model: null, selfModel: null }
+let codexPreference: SourcePreference = {
+  source: 'self',
+  groupId: null,
+  model: null,
+  selfModel: null,
+  providerId: null,
+  customModel: null,
+}
 let codexUnsaved = true
 try {
   const saved = JSON.parse(localStorage.getItem(ENGINE_KEY) ?? '{}').codex
   if (saved) {
     codexUnsaved = false
     codexPreference = {
-      source: saved.source === 'platform' ? 'platform' : 'self',
+      source: creditSource(saved.source, 'self'),
       groupId: typeof saved.groupId === 'string' ? saved.groupId : null,
       model: typeof saved.model === 'string' ? saved.model : null,
       selfModel: typeof saved.selfModel === 'string' ? saved.selfModel : null,
+      providerId: typeof saved.providerId === 'string' ? saved.providerId : null,
+      customModel: typeof saved.customModel === 'string' ? saved.customModel : null,
     }
   }
 } catch {
@@ -92,13 +108,15 @@ function readPreference(): SourcePreference {
     const p = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Record<string, unknown>
     const s = (v: unknown): string | null => (typeof v === 'string' ? v : null)
     return {
-      source: p.source === 'self' ? 'self' : 'platform',
+      source: creditSource(p.source, 'platform'),
       groupId: s(p.groupId),
       model: s(p.model),
       selfModel: s(p.selfModel),
+      providerId: s(p.providerId),
+      customModel: s(p.customModel),
     }
   } catch {
-    return { source: 'platform', groupId: null, model: null, selfModel: null }
+    return { source: 'platform', groupId: null, model: null, selfModel: null, providerId: null, customModel: null }
   }
 }
 
@@ -130,9 +148,9 @@ function set(patch: Partial<PlatformState>, persist = false): void {
   // 演示模式和正式版共用本机存储：演示里的选择只改内存，不覆盖真实的默认设置
   if (persist && !window.pixelsky?.demo) {
     unsaved = false
-    const { source, groupId, model, selfModel } = state
+    const { source, groupId, model, selfModel, providerId, customModel } = state
     try {
-      localStorage.setItem(KEY, JSON.stringify({ source, groupId, model, selfModel }))
+      localStorage.setItem(KEY, JSON.stringify({ source, groupId, model, selfModel, providerId, customModel }))
     } catch {
       /* 存不下也能用当前选择 */
     }
@@ -304,6 +322,13 @@ export function setDefaultGroup(groupId: string, engine: EngineId = 'claude'): v
   else set(patch, true)
 }
 
+/** 自定义 API：换接口或模型 */
+export function setDefaultCustom(providerId: string, customModel: string | null, engine: EngineId = 'claude'): void {
+  const patch = { source: 'custom' as const, providerId, customModel }
+  if (engine === 'codex') saveEnginePreference(patch)
+  else set(patch, true)
+}
+
 export function setDefaultSelfModel(selfModel: string | null, engine: EngineId = 'claude'): void {
   if (engine === 'codex') {
     saveEnginePreference({ source: 'self', selfModel })
@@ -385,11 +410,21 @@ function start(): void {
     generation++
     // 登录默认平台（D023）：这次运行中新登录的账号把默认来源设回平台；启动时读到的已登录状态不改用户的选择。
     // 新装还没选过：没登录就默认自有，免得第一次打开就被「请登录」挡住
+    // 已经选了自定义 API 的不改：自定义 API 不依赖平台账号
     const source: CreditSource | undefined =
       !initial && email ? 'platform' : unsaved ? (email ? 'platform' : 'self') : undefined
-    if (source || codexUnsaved) saveEnginePreference({ source: source ?? (email ? 'platform' : 'self') })
+    if ((source && codexPreference.source !== 'custom') || codexUnsaved)
+      saveEnginePreference({ source: source ?? (email ? 'platform' : 'self') })
+    const claudeSource = state.source === 'custom' ? undefined : source
     set(
-      { email, groups: [], loaded: false, loading: false, error: null, ...(source ? { source } : {}) },
+      {
+        email,
+        groups: [],
+        loaded: false,
+        loading: false,
+        error: null,
+        ...(claudeSource ? { source: claudeSource } : {}),
+      },
       !!email || unsaved,
     )
     if (email) void refreshPlatform()

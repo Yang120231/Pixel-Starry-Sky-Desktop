@@ -2,6 +2,7 @@
 import type { EngineCatalog, EngineConfig, EngineLocalConfig } from '@pixelsky/protocol'
 import type { EngineLite } from '@/data/types'
 import type { PlatformGroupInfo } from '../../../shared/types/platform-catalog'
+import type { ProvidersState } from '../../../shared/types/providers'
 
 export const demoPlatformGroups: PlatformGroupInfo[] = [
   {
@@ -102,3 +103,43 @@ const demoLocal = (): EngineLocalConfig => ({
 
 /** 演示模式下本机引擎的配置（设置 › 本机引擎 › 详情；只改内存） */
 export const demoEngineConfig: EngineConfig = { claude: demoLocal(), codex: demoLocal() }
+
+/** 演示用的两条自定义 API（docs/ui/custom-api.md §5 A4） */
+export const demoProviders: ProvidersState = {
+  persistent: true,
+  warning: null,
+  providers: [
+    {
+      id: 'demo-deepseek',
+      name: 'DeepSeek 兼容',
+      template: 'custom',
+      protocol: 'anthropic',
+      baseUrl: 'https://api.example.com/anthropic',
+      auth: 'x-api-key',
+      models: [{ id: 'deepseek-chat', priceRef: 'claude-haiku-4-5' }, { id: 'deepseek-reasoner' }],
+      smallModel: 'deepseek-chat',
+      modelFallback: true,
+      keyHint: 'a1b2',
+      headerNames: [],
+      insecure: false,
+      createdAt: 1_760_000_000_000,
+      updatedAt: 1_760_000_000_000,
+    },
+    {
+      id: 'demo-gateway',
+      name: '公司网关',
+      template: 'custom',
+      protocol: 'responses',
+      baseUrl: 'http://192.168.1.20:8080/v1',
+      auth: 'bearer',
+      models: [{ id: 'gpt-5' }, { id: 'gpt-5-mini' }],
+      smallModel: null,
+      modelFallback: true,
+      keyHint: '9f3c',
+      headerNames: ['X-Org'],
+      insecure: true,
+      createdAt: 1_760_000_000_000,
+      updatedAt: 1_760_000_000_000,
+    },
+  ],
+}

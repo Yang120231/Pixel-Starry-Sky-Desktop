@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto'
 import {
   emptySnapshot,
   normalizeSessionTitle,
+  PROVIDER_ID,
+  sourceKey,
   type EngineId,
   type OpenedSession,
   type SessionRecord,
@@ -38,6 +40,9 @@ export class HostSessions {
     if (!project) throw new Error('项目不存在')
     if (m.guard.isLocked(workspacePath ?? project.path)) throw new Error('工作目录正在维护，请稍后重试')
     const engine = opts.engine ?? m.settings.file.defaults.engine
+    if (opts.platform && opts.provider) throw new Error('额度来源无效')
+    if (opts.provider && (typeof opts.provider.id !== 'string' || !PROVIDER_ID.test(opts.provider.id)))
+      throw new Error('无效的自定义接口')
     const d = m.settings.engineDefaults(engine)
     const now = Date.now()
     const record: SessionRecord = {
@@ -49,6 +54,7 @@ export class HostSessions {
       title: NEW_TITLE,
       model: opts.model !== undefined ? opts.model : d.model,
       platform: opts.platform ?? null,
+      provider: opts.provider ? { id: opts.provider.id } : null,
       effort: opts.effort !== undefined ? opts.effort : d.effort,
       permissionMode: opts.permissionMode ?? d.permissionMode,
       ultracode: opts.ultracode ?? d.ultracode,
@@ -149,15 +155,24 @@ export class HostSessions {
     const current = rt.snapshot.record
     const next: Partial<SessionRecord> = {}
     let restart = false
-    if (patch.platform !== undefined && JSON.stringify(patch.platform) !== JSON.stringify(current.platform ?? null)) {
-      const before = current.platform ?? null
-      const sameSource = before === null ? patch.platform === null : patch.platform?.account === before.account
+    // 平台和自定义 API 互斥：设了一边就清掉另一边（docs/ui/custom-api.md §4.2）
+    let platform = patch.platform !== undefined ? patch.platform : (current.platform ?? null)
+    let provider = patch.provider !== undefined ? patch.provider : (current.provider ?? null)
+    if (patch.provider && patch.platform === undefined) platform = null
+    if (patch.platform && patch.provider === undefined) provider = null
+    if (platform && provider) throw new Error('额度来源无效')
+    if (provider && (typeof provider.id !== 'string' || !PROVIDER_ID.test(provider.id)))
+      throw new Error('无效的自定义接口')
+    const changed =
+      JSON.stringify(platform) !== JSON.stringify(current.platform ?? null) ||
+      (provider?.id ?? null) !== (current.provider?.id ?? null)
+    if (changed) {
+      // 同一账号换分组、同一来源不变时不用换进程；换了账号或来源种类等这一轮结束后重启
+      const sameSource = sourceKey({ platform, provider }) === sourceKey(current)
       if (!sameSource && (rt.snapshot.state !== 'idle' || rt.pumping)) throw new Error('这一轮结束后再切换额度来源')
-      if (!sameSource && rt.session) {
-        if (rt.snapshot.state !== 'idle') throw new Error('这一轮结束后再切换额度来源')
-        restart = true
-      }
-      next.platform = patch.platform
+      if (!sameSource && rt.session) restart = true
+      next.platform = platform
+      next.provider = provider ? { id: provider.id } : null
     }
     if (patch.title !== undefined) {
       next.title = normalizeSessionTitle(patch.title)

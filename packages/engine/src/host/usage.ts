@@ -10,6 +10,7 @@ import type {
   UsageRecord,
   UsageSummary,
 } from '@pixelsky/protocol'
+import { estimateCost, officialPrice } from '@pixelsky/protocol'
 import { settleUsage } from '../billing'
 import type { UsageQuery } from '../usage'
 import type { HostContext } from './context'
@@ -64,6 +65,7 @@ export class HostUsage {
         false,
       )
     }
+    if (record.provider && !record.platform) usage = this.customEstimate(record, usage)
     this.platformRequests.delete(key)
     const endedAt = Date.now()
     const project = ctx.m.projects.find(record.projectId)?.name ?? null
@@ -80,7 +82,7 @@ export class HostUsage {
       engine: record.engine,
       model,
       // 目前引擎都用命令行自己的登录；像素星空账号网关做好后是 'pixelsky'（Q5）
-      route: record.platform ? 'pixelsky' : 'cli',
+      route: record.platform ? 'pixelsky' : record.provider ? 'api-key' : 'cli',
       requests: m.requests,
       input: m.input,
       cacheRead: m.cacheRead,
@@ -102,6 +104,21 @@ export class HostUsage {
     })
     ctx.opts.emit({ kind: 'usage_recorded' })
     if (usage.settlement) this.startSettlement(id, turnId, outcome, usage)
+  }
+
+  /**
+   * 自定义 API：不用引擎自己报的费用（Claude Code 只认官方模型名，Codex 不报），统一按官方价格表估算；
+   * 对不上价格的只留 token（docs/ui/custom-api.md §4.3）
+   */
+  private customEstimate(record: SessionRecord, usage: TurnUsage): TurnUsage {
+    const models = Object.fromEntries(
+      Object.entries(usage.models).map(([model, m]) => {
+        const price = officialPrice(model, this.ctx.opts.priceRef?.(record, model))
+        const costUsd = estimateCost(m, price)
+        return [model, { ...m, costUsd, costSource: 'estimate' as const }]
+      }),
+    )
+    return { ...usage, models, estimate: 'official' }
   }
 
   /** 已保存的统计里还没结算完的，继续结算（原账号和请求 ID 都已落盘，不按当前路由推断） */

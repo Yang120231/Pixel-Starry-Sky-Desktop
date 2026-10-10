@@ -322,6 +322,19 @@ contextBridge.exposeInMainWorld('pixelsky', {
     groups: () => call('platform:groups'),
     models: (id: string) => call('platform:models', id),
   },
+  providers: {
+    list: () => call('providers:list'),
+    save: input => call('providers:save', input),
+    remove: id => call('providers:remove', id),
+    test: input => call('providers:test', input),
+    models: input => call('providers:models', input),
+    onChange: callback => {
+      const listener = (_e: Electron.IpcRendererEvent, state: import('../shared/types/providers').ProvidersState) =>
+        callback(state)
+      on('providers:changed', listener)
+      return () => ipcRenderer.removeListener('providers:changed', listener)
+    },
+  } satisfies import('./providers').ProvidersBridge,
   engine,
   app: appInfo,
   update,

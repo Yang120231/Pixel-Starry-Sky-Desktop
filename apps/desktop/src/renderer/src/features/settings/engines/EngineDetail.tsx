@@ -20,6 +20,7 @@ import { Switch } from '@/features/session/ComposerMenus'
 import { platformModels, usePlatform } from '@/features/account/platform'
 import { EFFORT_LABEL, PERMISSION_INFO, bridge, isLive, redetectEngines } from '@/features/engine'
 import { envLines, parseEnvLines } from './envLines'
+import { migrateEnv, providerEnvKeys } from './migrateEnv'
 import { LaunchCard } from './LaunchCard'
 import { DefaultBadge, ENGINE_INTRO, ENGINE_STATUS, FIELD } from './parts'
 import { demo, isDemo } from '@/data/demo'
@@ -486,7 +487,18 @@ function LaunchRows({
   useI18n()
   const [env, setEnv] = useState(envLines(config.env))
   const [error, setError] = useState<string | null>(null)
+  const [migrating, setMigrating] = useState(false)
+  const [migrated, setMigrated] = useState<string | null>(null)
   useEffect(() => setEnv(envLines(config.env)), [config.env])
+  const legacy = providerEnvKeys(config.env)
+  const migrate = (): void => {
+    setMigrating(true)
+    setError(null)
+    migrateEnv(e.id, config.env, onSave)
+      .then(view => setMigrated(view?.name ?? null))
+      .catch((err: unknown) => setError((err as Error).message))
+      .finally(() => setMigrating(false))
+  }
 
   const save = (patch: EngineConfigPatch): void => {
     setError(null)
@@ -519,6 +531,22 @@ function LaunchRows({
           spellCheck={false}
         />
       </Row>
+      {legacy.length > 0 && (
+        <div className="-mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-warn/30 bg-warn/5 px-3 py-2 text-meta text-fg-secondary">
+          <span className="min-w-0 flex-1">
+            {tr('customApi.envBanner')}
+            <span className="ml-1 font-mono text-fg-muted">{legacy.join(', ')}</span>
+          </span>
+          <Button variant="outline" disabled={migrating} onClick={migrate}>
+            {migrating ? tr('customApi.envMigrating') : tr('customApi.envMigrate')}
+          </Button>
+        </div>
+      )}
+      {migrated && (
+        <p role="status" className="-mt-1 text-meta text-success">
+          {tr('customApi.envMigrated', { p0: migrated })}
+        </p>
+      )}
       {error && (
         <p role="alert" className="-mt-2 text-meta text-danger">
           {translateMessage(error)}

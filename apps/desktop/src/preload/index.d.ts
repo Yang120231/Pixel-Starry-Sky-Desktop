@@ -3,6 +3,7 @@ import type { AppInfoBridge } from './app-info'
 import type { UpdateBridge } from './update'
 import type { EngineBridge } from './engine'
 import type { PlatformCatalogBridge } from './platform-catalog'
+import type { ProvidersBridge } from './providers'
 import type { EditorBridge, FilesBridge } from './workspace'
 import type { WindowBridge } from './window'
 import type { ExtensionsBridge } from './extensions'
@@ -18,6 +19,7 @@ export type * from './project-tools'
 export type * from './terminal'
 export type * from './notifications'
 export type * from './artifacts'
+export type * from './providers'
 
 export interface PixelskyBridge {
   machines: import('./machines').MachineBridge
@@ -32,6 +34,8 @@ export interface PixelskyBridge {
   /** 引擎系统：项目、会话、对话（docs/engines.md） */
   engine: EngineBridge
   platformCatalog: PlatformCatalogBridge
+  /** 自定义 API 的接口配置（docs/ui/custom-api.md） */
+  providers: ProvidersBridge
   /** 「关于」页：版本与运行环境（docs/ui/settings.md §5） */
   app: AppInfoBridge
   /** 自动更新（docs/release-update.md §7） */

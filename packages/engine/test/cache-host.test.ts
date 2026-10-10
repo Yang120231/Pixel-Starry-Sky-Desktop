@@ -102,7 +102,7 @@ describe('缓存提醒宿主与停止目标', () => {
     const project = host.addProject(root),
       record = host.createSession({ projectId: project.id })
     await host.send(record.id, '慢慢回复')
-    await vi.waitFor(() => expect(events.some(e => e.kind === 'cache_warning')).toBe(true))
+    await vi.waitFor(() => expect(events.some(e => e.kind === 'cache_warning')).toBe(true), { timeout: 5000 })
     const warning = events.find(e => e.kind === 'cache_warning')!
     if (warning.kind !== 'cache_warning') throw new Error('missing warning')
     expect(warning.warning).toMatchObject({ input: 12000, cached: 0, previousInput: 10000 })

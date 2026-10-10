@@ -9,6 +9,7 @@ import { CLAUDE_COMPACT_MARKER, rewriteCompaction } from '@pixelsky/engine'
 import type { PlatformGroupInfo } from '../../shared/types/platform-catalog'
 import { platformFetch, signedInEmail } from '../account/account'
 import * as ipc from '../ipc/guard'
+import type { ProviderStore, ResolvedProvider } from '../core/providers/store'
 
 async function jsonRequest(path: string, method = 'GET'): Promise<unknown> {
   const res = await platformFetch(path, { method, signal: AbortSignal.timeout(30_000) })
@@ -34,8 +35,20 @@ export async function platformGroups(): Promise<PlatformGroupInfo[]> {
   )
 }
 
+/** 自定义 API 会话：接口还在、协议对得上引擎、有 Key（docs/ui/custom-api.md §3.3） */
+export function checkProvider(record: SessionRecord, providers: ProviderStore | null): ResolvedProvider | null {
+  if (!record.provider || record.platform) return null
+  const p = providers?.resolve(record.provider.id)
+  if (!p) throw new Error('这个会话用的自定义接口已删除，请换一个接口')
+  if (p.protocol !== (record.engine === 'codex' ? 'responses' : 'anthropic'))
+    throw new Error('接口协议与当前引擎不兼容')
+  if (!p.apiKey) throw new Error(`自定义接口「${p.name}」还没有 Key，请在设置里填写`)
+  return p
+}
+
 /** 排队任务执行前核对身份、当前目录权限与模型；实际请求还会重新检查。 */
-export async function validateQueuedInput(record: SessionRecord): Promise<void> {
+export async function validateQueuedInput(record: SessionRecord, providers: ProviderStore | null): Promise<void> {
+  checkProvider(record, providers)
   const p = record.platform
   if (!p) return
   if (signedInEmail() !== p.account) throw new Error('平台账号已退出或切换，请登录原账号后重试')
@@ -72,6 +85,8 @@ export async function initPlatform(
   /** Claude Code 压缩上下文用的模型（设置 › 本机引擎）；null 表示跟随会话模型 */
   compactModel: () => string | null = () => null,
   requestContext?: (record: SessionRecord) => ((requestId: string, model: string) => void | Promise<void>) | undefined,
+  /** 自定义 API 的接口配置；网关转发时按会话取真实 Key */
+  providers: ProviderStore | null = null,
 ): Promise<(record: SessionRecord) => NodeJS.ProcessEnv> {
   ipc.handle('platform:groups', () => platformGroups())
   ipc.handle(
@@ -93,10 +108,12 @@ export async function initPlatform(
     account: signedInEmail,
     fetch: platformFetch,
     requestContext,
-    rewrite: async (body, groupId) => {
+    routeModels,
+    provider: id => providers?.resolve(id) ?? null,
+    rewrite: async (body, models) => {
       const model = compactModel()
       return model && body.includes(CLAUDE_COMPACT_MARKER)
-        ? (rewriteCompaction(body, model, await routeModels(groupId)) ?? body)
+        ? (rewriteCompaction(body, model, await models()) ?? body)
         : body
     },
   })
@@ -111,8 +128,9 @@ export async function initPlatform(
     for (const file of settingsFiles) rmSync(file, { force: true })
   })
   return record => {
-    if (!record.platform) return {}
-    if (signedInEmail() !== record.platform.account) throw new Error('请登录此会话使用的平台账号')
+    const provider = checkProvider(record, providers)
+    if (!record.platform && !provider) return {}
+    if (record.platform && signedInEmail() !== record.platform.account) throw new Error('请登录此会话使用的平台账号')
     let entry = sessions.get(record.id)
     if (!entry) {
       entry = { recordId: record.id, secret: randomBytes(32).toString('hex') }
@@ -123,7 +141,7 @@ export async function initPlatform(
         PIXELSKY_CODEX_BASE_URL: `http://127.0.0.1:${address.port}/v1`,
         PIXELSKY_CODEX_TOKEN: entry.secret,
       }
-    const env = {
+    const env: Record<string, string> = {
       ANTHROPIC_BASE_URL: `http://127.0.0.1:${address.port}`,
       ANTHROPIC_AUTH_TOKEN: entry.secret,
       ANTHROPIC_API_KEY: '',
@@ -133,6 +151,21 @@ export async function initPlatform(
       CLAUDE_CODE_USE_FOUNDRY: '0',
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
     }
+    // 自定义 API：Claude Code 的默认模型、sonnet / opus 别名和后台小模型都指向这个接口里的模型，
+    // 免得它去请求接口里没有的官方模型名（网关另有兜底，docs/ui/custom-api.md §4.1）
+    const ids = provider?.models.map(m => m.id) ?? []
+    if (provider && ids.length) {
+      const main = record.model && ids.includes(record.model) ? record.model : ids[0]
+      const small = provider.smallModel ?? ids[0]
+      Object.assign(env, {
+        ANTHROPIC_MODEL: main,
+        ANTHROPIC_DEFAULT_OPUS_MODEL: main,
+        ANTHROPIC_DEFAULT_SONNET_MODEL: main,
+        ANTHROPIC_DEFAULT_HAIKU_MODEL: small,
+        ANTHROPIC_SMALL_FAST_MODEL: small,
+      })
+    }
+    // 真实 Key 不在这里：设置文件和进程环境里只有本机地址和会话密钥。
     // --settings 优先于本机已有的 settings.json，防止其中的 API 地址覆盖平台路由。
     const dir = join(app.getPath('userData'), 'gateway')
     mkdirSync(dir, { recursive: true })
