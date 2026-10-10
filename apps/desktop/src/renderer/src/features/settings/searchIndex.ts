@@ -119,8 +119,14 @@ export const SETTINGS_INDEX: SearchEntry[] = [
   { section: 'appearance', title: '主题', keywords: '浅色 深色 跟随系统 暗色 dark light' },
   {
     section: 'appearance',
+    title: '配色主题',
+    keywords:
+      '配色 主题 皮肤 颜色 暖灰 github solarized nord catppuccin gruvbox tokyo night rose pine rosé palette color scheme skin',
+  },
+  {
+    section: 'appearance',
     title: '强调色',
-    keywords: '主色 主题色 配色 颜色 墨绿 海蓝 靛紫 青碧 琥珀 玫红 石墨 accent color blue purple orange pink',
+    keywords: '主色 主题色 颜色 跟随配色 墨绿 海蓝 靛紫 青碧 琥珀 玫红 石墨 accent color blue purple orange pink',
   },
   { section: 'appearance', title: '动画', keywords: '动效 过渡 减少动画' },
   { section: 'appearance', title: '切换窗格时', keywords: '窗格 分屏 高亮 滑动 焦点 动画' },

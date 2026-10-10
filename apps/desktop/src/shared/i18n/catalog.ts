@@ -2920,21 +2920,37 @@ export const catalog = {
     "zh": "首次请求、模型或线路切换、上下文压缩及长时间停顿后不提醒。提醒出现时，请求已经开始。",
     "en": "No alerts on first requests, model or route changes, compaction, or long pauses. The request has already started when the alert appears."
   },
+  "settings.PaletteSettings.palette": {
+    "zh": "配色主题",
+    "en": "Color theme"
+  },
+  "settings.PaletteSettings.description": {
+    "zh": "整套界面颜色：底色、边框、文字和主色。每套都有浅色和深色，跟上面的主题一起切换；代码高亮和终端的 16 色不变。",
+    "en": "A full set of interface colors: backgrounds, borders, text and accent. Each has a light and a dark version that follows the theme above; code highlighting and the terminal's 16 colors stay the same."
+  },
+  "settings.PaletteSettings.choosePalette": {
+    "zh": "选择配色主题：{p0}",
+    "en": "Choose color theme: {p0}"
+  },
+  "settings.PaletteSettings.default": {
+    "zh": "暖灰（默认）",
+    "en": "Warm gray (default)"
+  },
   "settings.AccentSettings.accent": {
     "zh": "强调色",
     "en": "Accent color"
   },
   "settings.AccentSettings.description": {
-    "zh": "按钮、选中项、链接和进度条用的主色。底色、代码高亮和终端配色不变。",
-    "en": "The main color for buttons, selections, links and progress bars. Backgrounds, code highlighting and terminal colors stay the same."
+    "zh": "按钮、选中项、链接和进度条用的主色。「跟随配色」用配色主题自带的主色（默认配色是墨绿）。",
+    "en": "The main color for buttons, selections, links and progress bars. Match palette uses the color theme's own accent (green for the default palette)."
   },
   "settings.AccentSettings.chooseAccent": {
     "zh": "选择强调色：{p0}",
     "en": "Choose accent color: {p0}"
   },
-  "settings.AccentSettings.green": {
-    "zh": "墨绿",
-    "en": "Green"
+  "settings.AccentSettings.theme": {
+    "zh": "跟随配色",
+    "en": "Match palette"
   },
   "settings.AccentSettings.blue": {
     "zh": "海蓝",

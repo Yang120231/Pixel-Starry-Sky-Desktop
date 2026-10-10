@@ -29,6 +29,7 @@ import { FontSettings } from './FontSettings'
 import { ReplyStatsSettings } from './ReplyStatsSettings'
 import { ComposerStyleSettings } from './ComposerStyleSettings'
 import { AccentSettings } from './AccentSettings'
+import { PaletteSettings } from './PaletteSettings'
 import { TurnRailSettings } from './TurnRailSettings'
 import { CacheMissSettings } from './CacheMissSettings'
 import { WallpaperSettings } from './WallpaperSettings'
@@ -601,6 +602,7 @@ function AppearanceSection() {
           onChange={setPreference}
         />
       </SettingRow>
+      <PaletteSettings />
       <AccentSettings />
       <SettingRow
         title={tr('settings.SettingsDialog.interfaceLanguage')}

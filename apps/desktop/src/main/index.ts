@@ -185,13 +185,16 @@ ipc.on('app:config', event => {
   event.returnValue = { demo: process.env.PIXELSKY_DEMO === '1' || process.argv.includes('--demo') }
 })
 
-ipc.on('theme:set', (event, theme: ResolvedTheme, transparent?: boolean) => {
+ipc.on('theme:set', (event, theme: ResolvedTheme, transparent?: boolean, background?: unknown) => {
   const win = BrowserWindow.fromWebContents(event.sender)
   if (!win || (theme !== 'light' && theme !== 'dark')) return
-  win.setBackgroundColor(TITLE_BAR[theme].color)
+  // 配色主题的实色底（renderer 的 --wall-tint）；格式不对就用默认暖灰
+  const base =
+    typeof background === 'string' && /^#[0-9a-f]{6}$/i.test(background) ? background : TITLE_BAR[theme].color
+  win.setBackgroundColor(base)
   if (process.platform !== 'darwin' && process.platform !== 'win32') {
     // 有壁纸时按钮区透明，按钮直接画在壁纸上（docs/ui/settings.md §6）
-    const color = transparent === true ? '#00000000' : TITLE_BAR[theme].color
+    const color = transparent === true ? '#00000000' : base
     win.setTitleBarOverlay({ ...TITLE_BAR[theme], color, height: TITLE_BAR_HEIGHT })
   }
 })

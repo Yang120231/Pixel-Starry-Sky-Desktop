@@ -6,9 +6,10 @@ import { App } from './App'
 import { ThemeProvider } from '../features/appearance/ThemeProvider'
 import { SettingsProvider } from '../features/settings/SettingsProvider'
 import { ComingSoonProvider } from '../ui'
-// 字体和强调色设置在第一次渲染前就写到 <html> 上，避免启动时先闪一下默认字体
+// 字体、强调色和配色设置在第一次渲染前就写到 <html> 上，避免启动时先闪一下默认字体
 import '../features/appearance/fonts'
 import '../features/appearance/accent'
+import '../features/appearance/palette'
 import { WallpaperLayer } from '../features/appearance/WallpaperLayer'
 import { SearchProvider } from '../features/search/SearchProvider'
 import { I18nProvider } from '../i18n/I18nProvider'

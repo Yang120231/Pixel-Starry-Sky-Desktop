@@ -1,13 +1,16 @@
 // 强调色预设：只换 --accent* 这组界面主色，底色、文字、代码高亮、终端配色不变。颜色定义在 styles/tokens.css。
+// 默认「跟随配色」用当前配色主题自带的主色（默认配色是墨绿）。
 // 设置写成 <html data-accent>，改完立刻生效；保存在 localStorage，多窗口同步。
 import { useSyncExternalStore } from 'react'
 
-export const ACCENTS = ['green', 'blue', 'violet', 'teal', 'amber', 'rose', 'graphite'] as const
+export const ACCENTS = ['theme', 'blue', 'violet', 'teal', 'amber', 'rose', 'graphite'] as const
 export type Accent = (typeof ACCENTS)[number]
-export const DEFAULT_ACCENT: Accent = 'green'
+export const DEFAULT_ACCENT: Accent = 'theme'
 export const ACCENT_KEY = 'pixelsky.accent'
 
 export function parseAccent(value: unknown): Accent {
+  // 第一版的「墨绿」就是默认配色的主色
+  if (value === 'green') return DEFAULT_ACCENT
   return ACCENTS.includes(value as Accent) ? (value as Accent) : DEFAULT_ACCENT
 }
 
@@ -22,7 +25,7 @@ function read(): Accent {
 
 function apply(next: Accent): void {
   if (typeof document === 'undefined') return
-  // 默认墨绿就是 tokens.css 里的基础值，不写属性
+  // 跟随配色是 tokens.css 里的基础值，不写属性
   if (next === DEFAULT_ACCENT) delete document.documentElement.dataset.accent
   else document.documentElement.dataset.accent = next
 }

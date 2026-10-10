@@ -16,24 +16,27 @@ function block(selector: string): Record<string, string> {
 }
 
 describe('强调色预设', () => {
-  it('缺失、旧值或损坏类型回到墨绿，有效值原样保留', () => {
+  it('缺失、旧值或损坏类型回到跟随配色，有效值原样保留', () => {
     for (const value of [undefined, null, '', 'red', {}, 1]) expect(parseAccent(value)).toBe(DEFAULT_ACCENT)
     for (const value of ACCENTS) expect(parseAccent(value)).toBe(value)
   })
 
-  it('每一套在浅色和深色下都定义了全部强调色变量，色块和整页用同一组值', () => {
-    for (const accent of ACCENTS) {
+  it('每一套预设在浅色和深色下都定义了全部强调色变量，色块和整页用同一组值', () => {
+    for (const accent of ACCENTS.filter(a => a !== DEFAULT_ACCENT)) {
       const light = block(`[data-accent-swatch='${accent}'] {`)
       const dark = block(`:root[data-theme='dark'] [data-accent-swatch='${accent}'] {`)
       expect(Object.keys(light).sort(), accent).toEqual([...ACCENT_VARS].sort())
       expect(Object.keys(dark).sort(), accent).toEqual([...ACCENT_VARS].sort())
       expect(light, accent).not.toEqual(dark)
     }
-    // 墨绿色块和基础主题里的值一致
-    expect(block("[data-accent-swatch='green'] {")).toEqual(block(":root[data-theme='light'] {"))
-    expect(block(":root[data-theme='dark'] [data-accent-swatch='green'] {")).toEqual(
-      block(":root[data-theme='dark'] {"),
+    // 跟随配色：--accent* 全部取 --theme-accent*
+    expect(block("[data-accent-swatch='theme'] {")).toEqual(
+      Object.fromEntries(ACCENT_VARS.map(name => [name, `var(${name.replace('--accent', '--theme-accent')})`])),
     )
+  })
+
+  it('第一版保存的墨绿读成跟随配色', () => {
+    expect(parseAccent('green')).toBe('theme')
   })
 
   it('设置搜索能按颜色名找到强调色', () => {

@@ -4,6 +4,7 @@ import { hasWallpaper } from '@/features/appearance/wallpaper'
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { isDemo } from '@/data'
 import { PANE_FOCUS_MOTION_KEY, readPaneFocusMotion, type PaneFocusMotion } from './paneFocusMotion'
+import { usePalette, windowBackground } from './palette'
 
 export type ThemePreference = 'light' | 'dark' | 'system'
 export type ResolvedTheme = 'light' | 'dark'
@@ -93,11 +94,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const resolved: ResolvedTheme = preference === 'system' ? system : preference
+  const palette = usePalette()
 
   useEffect(() => {
     document.documentElement.dataset.theme = resolved
-    window.pixelsky?.setTheme(resolved, hasWallpaper())
-  }, [resolved])
+    // 窗口底色按配色主题的实际底色（换配色也要重新同步）
+    window.pixelsky?.setTheme(resolved, hasWallpaper(), windowBackground())
+  }, [resolved, palette])
 
   // 截图模式（src/main/index.ts）通过这个钩子切换主题
   useEffect(() => {

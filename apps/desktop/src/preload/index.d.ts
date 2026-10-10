@@ -27,7 +27,8 @@ export interface PixelskyBridge {
   platform: NodeJS.Platform | string
   demo: boolean
   /** 同步窗口底色；transparent 仅供其他平台的原生覆盖层使用 */
-  setTheme: (theme: 'light' | 'dark', transparent?: boolean) => void
+  /** background：配色主题的实色底（#rrggbb），不传用默认暖灰 */
+  setTheme: (theme: 'light' | 'dark', transparent?: boolean, background?: string) => void
   setLocale: (locale: 'zh-CN' | 'en-US') => Promise<void>
   /** 账号登录与额度（docs/ui/account.md） */
   account: AccountBridge

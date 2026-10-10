@@ -2,6 +2,7 @@ import { tr } from '../../i18n/core'
 // 壁纸：图片 / 视频铺满窗口，上面盖一层主题底色保证可读。规格见 docs/ui/settings.md §6（参考 Mirasim「背景」扩展）。
 // 文件存在 IndexedDB，设置存在 localStorage，只在本机生效。
 import { useSyncExternalStore } from 'react'
+import { windowBackground } from './palette'
 
 export type WallpaperKind = 'image' | 'video'
 
@@ -96,7 +97,7 @@ function applyRoot(): void {
   if (on) root.dataset.wallpaper = state.kind
   else delete root.dataset.wallpaper
   const theme = root.dataset.theme === 'dark' ? 'dark' : 'light'
-  window.pixelsky?.setTheme(theme, on)
+  window.pixelsky?.setTheme(theme, on, windowBackground())
 }
 
 /** 当前是否有壁纸（ThemeProvider 同步其他平台原生覆盖层时使用） */

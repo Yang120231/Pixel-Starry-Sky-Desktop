@@ -315,7 +315,8 @@ contextBridge.exposeInMainWorld('pixelsky', {
   /** 演示模式：显示照参考图写的演示数据，而不是空界面 */
   demo: config.demo,
   /** 同步窗口底色；transparent 仅供其他平台的原生覆盖层使用。Windows 按钮自绘。 */
-  setTheme: (theme: 'light' | 'dark', transparent = false) => send('theme:set', theme, transparent),
+  setTheme: (theme: 'light' | 'dark', transparent = false, background?: string) =>
+    send('theme:set', theme, transparent, background),
   setLocale: (locale: 'zh-CN' | 'en-US') => call('ui:locale', locale),
   account,
   platformCatalog: {

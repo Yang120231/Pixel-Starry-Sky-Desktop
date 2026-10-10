@@ -6,7 +6,7 @@ import { SettingRow } from './SettingRow'
 import { ACCENTS, setAccent, useAccent, type Accent } from '@/features/appearance/accent'
 
 const LABEL_KEYS = {
-  green: 'settings.AccentSettings.green',
+  theme: 'settings.AccentSettings.theme',
   blue: 'settings.AccentSettings.blue',
   violet: 'settings.AccentSettings.violet',
   teal: 'settings.AccentSettings.teal',
