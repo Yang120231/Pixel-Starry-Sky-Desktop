@@ -198,6 +198,36 @@ describe('EngineHost + Claude（假引擎）', () => {
     expect(host.open(record.id).context).toMatchObject({ stale: true, compacting: false })
   })
 
+  it('支持 get_context_usage 时启动和每轮结束自动取明细，运行中也能刷新且不进队列', async () => {
+    const host = makeHost(60_000, { FAKE_CLAUDE_USAGE: '1' })
+    const { record } = setup(host)
+    await host.send(record.id, '你好')
+    await waitFor(() => turnsDone(record.id) === 1)
+    await waitFor(() => !!host.open(record.id).context?.diagnostic && !host.open(record.id).context?.diagnosticStale)
+    const after = host.open(record.id)
+    expect(after.flags.contextLive).toBe(true)
+    expect(after.context?.diagnostic).toMatchObject({
+      detail: 'summary',
+      window: 1000000,
+      tools: [{ name: 'mcp__browser__open', source: 'browser' }],
+      memory: [{ name: 'CLAUDE.md', source: 'Project' }],
+      skills: [{ name: 'review', source: 'plugin' }],
+    })
+    expect(after.items.some(i => i.kind === 'user' && i.text === '/context')).toBe(false)
+    await host.send(record.id, '慢慢说')
+    await waitFor(() => host.open(record.id).state === 'running')
+    const queued = host.open(record.id).queue.length
+    const detail = await host.inspectContext(record.id, 'full')
+    expect(detail).toMatchObject({ detail: 'full', used: 42000 })
+    expect(host.open(record.id).queue).toHaveLength(queued)
+    expect(host.open(record.id).state).toBe('running')
+    await waitFor(() => turnsDone(record.id) === 2)
+    const log = readFileSync(join(root, 'argv.usage.log'), 'utf8').trim().split(/\r?\n/)
+    expect(log).toContain('full:running')
+    expect(log.filter(l => l.startsWith('summary')).length).toBeGreaterThanOrEqual(2)
+    expect(spawnArgs()).toHaveLength(1)
+  })
+
   it('未启动或旧版引擎的上下文诊断与压缩给出明确不可用原因', async () => {
     const host = makeHost()
     const { record } = setup(host)

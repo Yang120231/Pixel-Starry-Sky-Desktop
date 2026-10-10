@@ -25,7 +25,7 @@ describe('上下文显示', () => {
     expect(contextPercentage({ ...base, stale: true })).toBeNull()
     expect(contextNumber(null)).toBe('—')
     expect(contextNumber(166000)).toBe('166k')
-    expect(contextNumber(1000000)).toBe('1m')
+    expect(contextNumber(1000000)).toBe('1M')
   })
   it('输入三段与剩余构成容量，输出不重复加进条形图', () => {
     const parts = contextSegments(base)

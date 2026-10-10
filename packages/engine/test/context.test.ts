@@ -124,7 +124,7 @@ describe('上下文来自同一主请求', () => {
   })
   it('结构化诊断保留分类与细项；新请求、压缩和重启使旧诊断过期', () => {
     const r = reader()
-    expect(r.instance.diagnostic(fixture())).toBe(true)
+    expect(r.instance.diagnostic(fixture())).not.toBeNull()
     expect(r.last()).toMatchObject({ used: 60000, window: 200000, source: 'diagnostic', diagnosticStale: false })
     r.instance.handle({
       type: 'assistant',
@@ -141,6 +141,60 @@ describe('上下文来自同一主请求', () => {
     expect(r.last()).toMatchObject({ stale: true, compacting: false })
     r.instance.reset()
     expect(r.last().stale).toBe(true)
+  })
+  it('get_context_usage 的驼峰形状：延迟加载分类、记忆文件路径、MCP 服务器、skills 对象都能读出', () => {
+    const d = contextDiagnostic({
+      model: 'claude-opus-5-5',
+      totalTokens: 21252,
+      maxTokens: 1000000,
+      rawMaxTokens: 1000000,
+      categories: [
+        { name: 'System prompt', tokens: 2305, kind: 'used' },
+        { name: 'System tools (deferred)', tokens: 17968, kind: 'deferred', isDeferred: true },
+        { name: 'Free space', tokens: 945748, kind: 'free' },
+      ],
+      memoryFiles: [{ path: 'D:\\PixelSky\\CLAUDE.md', type: 'Project', tokens: 24 }],
+      mcpTools: [{ name: 'mcp__browser__open', serverName: 'browser', tokens: 400, isLoaded: true }],
+      agents: [{ agentType: 'reviewer', source: 'projectSettings', tokens: 80 }],
+      skills: {
+        totalSkills: 1,
+        includedSkills: 1,
+        tokens: 20,
+        skillFrontmatter: [{ name: 'run', source: 'built-in', tokens: 20 }],
+      },
+    })
+    expect(d).toMatchObject({
+      used: 21252,
+      window: 1000000,
+      memory: [{ name: 'D:\\PixelSky\\CLAUDE.md', source: 'Project', tokens: 24 }],
+      tools: [{ name: 'mcp__browser__open', source: 'browser' }],
+      agents: [{ name: 'reviewer', source: 'projectSettings' }],
+      skills: [{ name: 'run', source: 'built-in' }],
+    })
+    expect(d?.categories[1]).toMatchObject({ kind: 'deferred' })
+    const r = reader()
+    expect(r.instance.diagnostic({ ...fixture(), skills: [] }, 'summary')).toMatchObject({ detail: 'summary' })
+    expect(r.last()).toMatchObject({ used: 60000, source: 'diagnostic' })
+    r.instance.handle({
+      type: 'assistant',
+      message: {
+        id: 'req',
+        model: 'main',
+        usage: { input_tokens: 100, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+      },
+    })
+    r.instance.diagnostic(fixture(), 'summary')
+    expect(r.last()).toMatchObject({
+      used: 100,
+      source: 'request',
+      diagnosticStale: false,
+      diagnostic: { used: 60000 },
+    })
+    r.instance.diagnostic(fixture(), 'full')
+    expect(r.last()).toMatchObject({ used: 60000, source: 'diagnostic' })
+    r.instance.handle({ type: 'system', subtype: 'status', status: 'compacting' })
+    expect(r.instance.diagnostic(fixture(), 'summary')).not.toBeNull()
+    expect(r.last()).toMatchObject({ compacting: true, diagnosticStale: true })
   })
   it('拒绝无容量或坏分类，忽略坏明细，不猜测文本诊断', () => {
     expect(contextDiagnostic({ ...fixture(), raw_max_tokens: 0 })).toBeNull()

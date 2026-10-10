@@ -10,6 +10,7 @@
 // usage 用量与结算、events 事件与运行状态、queue 消息队列、turn 一轮对话、sessions 会话。
 import type {
   ApprovalDecision,
+  ContextDetailLevel,
   ContextDiagnostic,
   EngineCatalog,
   EngineConfig,
@@ -263,8 +264,8 @@ export class EngineHost {
     return this.m.queue.send(id, input)
   }
 
-  async inspectContext(id: string): Promise<ContextDiagnostic> {
-    return this.m.turn.inspectContext(id)
+  async inspectContext(id: string, detail?: ContextDetailLevel): Promise<ContextDiagnostic> {
+    return this.m.turn.inspectContext(id, detail)
   }
 
   async compactContext(id: string): Promise<SendReceipt> {

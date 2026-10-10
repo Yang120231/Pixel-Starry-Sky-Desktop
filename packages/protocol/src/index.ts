@@ -81,7 +81,7 @@ export {
   imageMediaType,
   validateImages,
 } from './images'
-export type { ContextDetail, ContextDiagnostic, ContextPart, ContextWindow } from './context'
+export type { ContextDetail, ContextDetailLevel, ContextDiagnostic, ContextPart, ContextWindow } from './context'
 export { contextCount, contextDiagnostic } from './context'
 export type {
   SearchFragment,

@@ -62,7 +62,11 @@ export interface EngineBridge {
   /** 打开会话：返回快照和序号，之后只应用 onEvent 里序号更大的会话事件 */
   openSession(id: string): Promise<OpenedSession>
   send(id: string, input: string | MessageInput): Promise<SendReceipt>
-  context(id: string): Promise<import('@pixelsky/protocol').ContextDiagnostic>
+  /** summary：最近请求加本地估算，不调接口；full（默认）：调 Token 计数接口 */
+  context(
+    id: string,
+    detail?: import('@pixelsky/protocol').ContextDetailLevel,
+  ): Promise<import('@pixelsky/protocol').ContextDiagnostic>
   compact(id: string): Promise<SendReceipt>
   cancelQueued(id: string, queueId: string): Promise<string>
   moveQueued(id: string, queueId: string, toIndex: number): Promise<void>

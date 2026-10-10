@@ -2,6 +2,7 @@
 import { randomUUID } from 'node:crypto'
 import type {
   ApprovalDecision,
+  ContextDetailLevel,
   ContextDiagnostic,
   ExtensionLaunch,
   Item,
@@ -165,19 +166,19 @@ export class HostTurn {
     }
   }
 
-  async inspectContext(id: string): Promise<ContextDiagnostic> {
+  /**
+   * 刷新上下文明细。引擎支持 get_context_usage（flags.contextLive）时运行中也能直接取，不占队列；
+   * 否则（或会话空闲、进程可能要重新启动时）仍按原流程：空闲、无排队，期间暂停派发。
+   */
+  async inspectContext(id: string, detail: ContextDetailLevel = 'full'): Promise<ContextDiagnostic> {
     const { ctx } = this
     const rt = ctx.m.sessions.runtime(id)
-    if (
-      ctx.closing ||
-      rt.snapshot.state !== 'idle' ||
-      rt.snapshot.queue.length ||
-      rt.pumping ||
-      rt.stopping ||
-      rt.inspectingContext
-    )
-      throw new Error('等待当前任务和排队消息结束后刷新明细')
-    if (!rt.session?.context || !rt.snapshot.flags.contextAvailable)
+    const busy =
+      rt.snapshot.state !== 'idle' || rt.snapshot.queue.length || rt.pumping || rt.stopping || rt.inspectingContext
+    if (!ctx.closing && busy && rt.snapshot.flags.contextLive && rt.session?.context && !rt.inspectingContext)
+      return rt.session.context(detail)
+    if (ctx.closing || busy) throw new Error('等待当前任务和排队消息结束后刷新明细')
+    if (!rt.session?.context || !(rt.snapshot.flags.contextAvailable || rt.snapshot.flags.contextLive))
       throw new Error('先运行会话，或升级到支持上下文诊断的 Claude Code')
     if (rt.idleTimer) {
       clearTimeout(rt.idleTimer)
@@ -185,7 +186,7 @@ export class HostTurn {
     }
     rt.inspectingContext = true
     try {
-      return await rt.session.context()
+      return await rt.session.context(detail)
     } finally {
       rt.inspectingContext = false
       ctx.m.events.armIdle(id)

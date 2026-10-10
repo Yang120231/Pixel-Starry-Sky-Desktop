@@ -4,7 +4,7 @@ import { tr } from '../../i18n/core'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronRight, RefreshCw, Scissors, X } from 'lucide-react'
-import type { ContextDetail } from '@pixelsky/protocol'
+import type { ContextDetail, ContextDetailLevel } from '@pixelsky/protocol'
 import { ContextRing, cn } from '@/ui'
 import { bridge, useSession } from '@/features/engine'
 import { isDemo } from '@/data'
@@ -24,13 +24,10 @@ export function ContextWindowButton({ sessionId }: { sessionId: string | null })
     [error, setError] = useState('')
   const trigger = useRef<HTMLButtonElement>(null),
     popup = useRef<HTMLDivElement>(null)
-  const canInspect =
-    !isDemo &&
-    !!sessionId &&
-    !!snapshot?.flags.contextAvailable &&
-    snapshot.state === 'idle' &&
-    !snapshot.queue.length &&
-    !busy
+  // 引擎支持 get_context_usage 时运行中也能取明细；否则只能在空闲、没有排队时发 /context
+  const live = !!snapshot?.flags.contextLive
+  const idle = snapshot?.state === 'idle' && !snapshot.queue.length
+  const canInspect = !isDemo && !!sessionId && !busy && (live || (!!snapshot?.flags.contextAvailable && idle))
   const canCompact =
     !isDemo &&
     !!sessionId &&
@@ -90,18 +87,24 @@ export function ContextWindowButton({ sessionId }: { sessionId: string | null })
     window.addEventListener('pointerdown', down)
     return () => window.removeEventListener('pointerdown', down)
   }, [open])
-  const inspect = async (): Promise<void> => {
+  const inspect = async (detail: ContextDetailLevel): Promise<void> => {
     if (!canInspect || !sessionId) return
     setBusy('inspect')
     setError('')
     try {
-      await bridge?.context(sessionId)
+      await bridge?.context(sessionId, detail)
     } catch (e) {
       setError((e as Error).message)
     } finally {
       setBusy(null)
     }
   }
+  // 运行中每次新请求都会让明细过期：弹窗开着就用 summary 重新取（不调接口）；空闲时每轮结束引擎已经取过
+  const outdated = !diagnostic || !!context?.diagnosticStale
+  useEffect(() => {
+    if (open && live && !idle && outdated && canInspect) void inspect('summary')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, live, idle, outdated])
   const compact = async (): Promise<void> => {
     if (!canCompact || !sessionId) return
     setBusy('compact')
@@ -262,7 +265,7 @@ export function ContextWindowButton({ sessionId }: { sessionId: string | null })
                 aria-expanded={details}
                 onClick={() => {
                   setDetails(v => !v)
-                  if (!details && canInspect && (!diagnostic || context?.diagnosticStale)) void inspect()
+                  if (!details && canInspect && outdated) void inspect(live ? 'summary' : 'full')
                 }}
                 className="flex h-8 w-full items-center gap-1 text-left text-ui text-fg-secondary hover:text-fg"
               >
@@ -274,16 +277,19 @@ export function ContextWindowButton({ sessionId }: { sessionId: string | null })
                   <div className="mb-2 flex items-center gap-2 text-label text-fg-muted">
                     <span className="flex-1">
                       {diagnostic
-                        ? tr('session.ContextWindowButton.engineDiagnosticEstimate', {
-                            p0: context?.diagnosticStale ? '（待刷新）' : '',
-                          })
+                        ? tr(
+                            diagnostic.detail === 'summary'
+                              ? 'session.ContextWindowButton.engineSummaryEstimate'
+                              : 'session.ContextWindowButton.engineDiagnosticEstimate',
+                            { p0: context?.diagnosticStale ? tr('session.ContextWindowButton.refreshNeeded') : '' },
+                          )
                         : tr('session.ContextWindowButton.latestMainRequestCount')}
                     </span>
                     <button
                       type="button"
                       disabled={!canInspect}
                       title={!canInspect ? reason : tr('session.ContextWindowButton.engineDiagnosticsMayQuery')}
-                      onClick={() => void inspect()}
+                      onClick={() => void inspect('full')}
                       className="inline-flex items-center gap-1 text-accent-fg disabled:text-fg-faint"
                     >
                       <RefreshCw size={12} className={busy === 'inspect' ? 'animate-spin' : undefined} />
@@ -300,7 +306,11 @@ export function ContextWindowButton({ sessionId }: { sessionId: string | null })
                             key={i}
                             name={contextLabel(c.name)}
                             value={c.tokens}
-                            percent={diagnostic.window > 0 ? (c.tokens / diagnostic.window) * 100 : null}
+                            percent={
+                              c.kind !== 'deferred' && diagnostic.window > 0
+                                ? (c.tokens / diagnostic.window) * 100
+                                : null
+                            }
                           />
                         ))}
                       </div>
@@ -327,7 +337,11 @@ export function ContextWindowButton({ sessionId }: { sessionId: string | null })
                   </div>
                   <p className="mt-2 text-label text-fg-faint">
                     {diagnostic
-                      ? tr('session.ContextWindowButton.diagnosticsEstimateNewlyAdded')
+                      ? tr(
+                          diagnostic.detail === 'summary'
+                            ? 'session.ContextWindowButton.summaryEstimateNote'
+                            : 'session.ContextWindowButton.diagnosticsEstimateNewlyAdded',
+                        )
                       : tr('session.ContextWindowButton.usageIsSumOf')}
                   </p>
                 </div>

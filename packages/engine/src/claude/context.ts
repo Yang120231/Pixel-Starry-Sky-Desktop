@@ -2,6 +2,8 @@ import {
   contextCount,
   contextDiagnostic,
   officialPrice,
+  type ContextDetailLevel,
+  type ContextDiagnostic,
   type ContextWindow,
   type EngineEvent,
 } from '@pixelsky/protocol'
@@ -56,10 +58,19 @@ export class ContextReader {
     }
     this.publish()
   }
-  diagnostic(raw: unknown): boolean {
-    const diagnostic = contextDiagnostic(raw)
-    if (!diagnostic) return false
+  /** 结构化明细（/context 或 get_context_usage）；正在压缩时只解析不覆盖，压缩完会再取 */
+  diagnostic(raw: unknown, detail?: ContextDetailLevel): ContextDiagnostic | null {
+    const parsed = contextDiagnostic(raw)
+    if (!parsed) return null
+    const diagnostic = detail ? { ...parsed, detail } : parsed
+    if (this.value.compacting) return diagnostic
     this.capacities.set(diagnostic.model, diagnostic.window)
+    // 快速估算只补分类：已有最近请求的真实计数时，占用仍按请求口径（和 Claude Code 状态栏一致）
+    if (detail === 'summary' && this.value.source === 'request' && this.value.used !== null && !this.value.stale) {
+      this.value = { ...this.value, window: diagnostic.window, diagnostic, diagnosticStale: false }
+      this.publish()
+      return diagnostic
+    }
     this.value = {
       ...this.value,
       model: diagnostic.model,
@@ -73,7 +84,7 @@ export class ContextReader {
       diagnosticStale: false,
     }
     this.publish()
-    return true
+    return diagnostic
   }
   private update(id: string, model: unknown, raw: unknown): void {
     if (!id || this.value.compacting || (this.seen.has(id) && this.message !== id)) return

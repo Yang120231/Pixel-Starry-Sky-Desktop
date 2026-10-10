@@ -538,6 +538,41 @@ function handle(msg) {
         respond(msg.request_id, {})
         return
       }
+      case 'get_context_usage':
+        // FAKE_CLAUDE_USAGE=1 才认识这个控制请求（新版 CLI 的形状：驼峰字段、skills 是对象）；否则和旧版一样回空
+        if (process.env.FAKE_CLAUDE_USAGE !== '1') {
+          respond(msg.request_id, {})
+          return
+        }
+        if (process.env.FAKE_CLAUDE_LOG)
+          appendFileSync(
+            process.env.FAKE_CLAUDE_LOG.replace(/\.log$/, '.usage.log'),
+            `${r.detail}:${turn ? 'running' : 'idle'}\n`,
+          )
+        respond(msg.request_id, {
+          model: 'fake-model',
+          totalTokens: r.detail === 'full' ? 42000 : 41000,
+          maxTokens: 1000000,
+          rawMaxTokens: 1000000,
+          categories: [
+            { name: 'System prompt', tokens: 2000, kind: 'used' },
+            { name: 'System tools (deferred)', tokens: 9000, kind: 'deferred', isDeferred: true },
+            { name: 'Skills', tokens: 1000, kind: 'used' },
+            { name: 'Messages', tokens: 38000, kind: 'used' },
+            { name: 'Free space', tokens: 959000, kind: 'free' },
+          ],
+          memoryFiles: [{ path: 'CLAUDE.md', type: 'Project', tokens: 24 }],
+          mcpTools: [{ name: 'mcp__browser__open', serverName: 'browser', tokens: 400 }],
+          agents: [],
+          skills: {
+            totalSkills: 1,
+            includedSkills: 1,
+            tokens: 1000,
+            skillFrontmatter: [{ name: 'review', source: 'plugin', tokens: 1000 }],
+          },
+          gridRows: [],
+        })
+        return
       case 'get_task_output':
         respond(msg.request_id, { output: 'listening on 3000\n', total_bytes: 18, truncated: false })
         return

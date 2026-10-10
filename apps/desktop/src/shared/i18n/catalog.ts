@@ -672,6 +672,14 @@ export const catalog = {
     "zh": "系统工具",
     "en": "System tools"
   },
+  "session.contextData.systemToolsDeferred": {
+    "zh": "系统工具（延迟加载，不占用）",
+    "en": "System tools (deferred, not loaded)"
+  },
+  "session.contextData.mcpToolsDeferred": {
+    "zh": "MCP 工具（延迟加载，不占用）",
+    "en": "MCP tools (deferred, not loaded)"
+  },
   "session.contextData.mcpTools": {
     "zh": "MCP 工具",
     "en": "MCP tools"
@@ -828,6 +836,10 @@ export const catalog = {
     "zh": "引擎诊断估算{p0}",
     "en": "Engine diagnostic estimate{p0}"
   },
+  "session.ContextWindowButton.engineSummaryEstimate": {
+    "zh": "引擎快速估算{p0}",
+    "en": "Engine quick estimate{p0}"
+  },
   "session.ContextWindowButton.refreshNeeded": {
     "zh": "（待刷新）",
     "en": "(refresh needed)"
@@ -859,6 +871,10 @@ export const catalog = {
   "session.ContextWindowButton.diagnosticsEstimateNewlyAdded": {
     "zh": "引擎诊断包含新增消息的估算，可能高于最近请求占用。",
     "en": "Diagnostics estimate newly added messages and may exceed the latest request's usage."
+  },
+  "session.ContextWindowButton.summaryEstimateNote": {
+    "zh": "快速估算按最近一次请求的计数和本地估算分类，不调接口；点「刷新明细」用 Token 计数接口逐类统计。",
+    "en": "The quick estimate splits the latest request's count with local estimates and calls no API; Refresh details counts each category with the token counting API."
   },
   "session.ContextWindowButton.usageIsSumOf": {
     "zh": "占用为最近一次主请求的三种输入总和，缓存已包含在输入内。",

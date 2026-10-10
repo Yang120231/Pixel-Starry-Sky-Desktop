@@ -102,7 +102,7 @@ export const ENGINE_OPS = {
   },
   'engine:openSession': (c, id) => c.host.openSession(str(id, 'id')),
   'engine:send': (c, id, input) => c.host.send(str(id, 'id'), input as Parameters<EngineHost['send']>[1]),
-  'engine:context': (c, id) => c.host.inspectContext(str(id, 'id')),
+  'engine:context': (c, id, detail) => c.host.inspectContext(str(id, 'id'), detail === 'summary' ? 'summary' : 'full'),
   'engine:compact': (c, id) => c.host.compactContext(str(id, 'id')),
   'engine:cancelQueued': (c, id, q) => c.host.cancelQueued(str(id, 'id'), str(q, 'queueId')),
   'engine:moveQueued': (c, id, q, to) => c.host.moveQueued(str(id, 'id'), str(q, 'queueId'), int(to, 0, 100_000)),

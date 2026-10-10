@@ -52,6 +52,8 @@ export type EngineEvent =
 /** 引擎运行时才知道的能力；null 表示还不知道（引擎还没启动） */
 export interface SessionFlags {
   contextAvailable?: boolean
+  /** 引擎支持控制请求 get_context_usage：运行中也能取明细，不进对话、不占队列 */
+  contextLive?: boolean
   compactAvailable?: boolean
   /** 经过验证且当前进程声明所需能力，才能开启引导 */
   steerAvailable?: boolean

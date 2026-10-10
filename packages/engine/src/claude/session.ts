@@ -4,6 +4,7 @@ import { readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import {
   contextDiagnostic,
   EMPTY_FLAGS,
+  type ContextDetailLevel,
   type ContextDiagnostic,
   type ApprovalDecision,
   type ImageAttachment,
@@ -214,6 +215,8 @@ export class ClaudeSession implements EngineSession {
     timer: ReturnType<typeof setTimeout>
   } | null = null
   private retrySettingsFile: string | null = null
+  /** 控制请求 get_context_usage 能不能用；null 是还没试过（旧版 CLI 不认识它，退回 /context） */
+  private usageRequest: boolean | null = null
   /** 仅显式引导进入 CLI 的队列；普通消息一直留在 EngineHost。 */
   private guidance = new Map<string, { text: string }>()
   private capabilities = new Set<string>()
@@ -245,6 +248,8 @@ export class ClaudeSession implements EngineSession {
         const waiters = this.turnWaiters
         this.turnWaiters = []
         for (const w of waiters) w()
+        // 每轮结束顺手取一次明细（summary 不调接口），弹窗打开就有 MCP / Skills 等分类
+        if (this.proc?.alive && this.usageRequest) void this.usage(this.proc, 'summary').catch(() => undefined)
       },
     })
   }
@@ -282,9 +287,18 @@ export class ClaudeSession implements EngineSession {
     )
   }
 
-  async context(): Promise<ContextDiagnostic> {
+  /**
+   * 上下文明细。新版 CLI 用控制请求 get_context_usage：不进对话，运行中也能取（docs/ui/context-window.md §6）；
+   * 旧版退回发 /context，只能在空闲时由宿主调用。
+   */
+  async context(detail: ContextDetailLevel = 'full'): Promise<ContextDiagnostic> {
     if (this.contextJob) throw new Error('上下文明细正在刷新')
     const proc = await this.ensureProcess()
+    if (this.usageRequest !== false) {
+      const diagnostic = await this.usage(proc, detail)
+      if (diagnostic) return diagnostic
+    }
+    if (this.translator.activeTurn) throw new Error('等待当前任务和排队消息结束后刷新明细')
     if (!this.flags.contextAvailable) throw new Error('当前 Claude Code 未提供上下文诊断')
     return new Promise((resolve, reject) => {
       const id = randomUUID()
@@ -298,6 +312,26 @@ export class ClaudeSession implements EngineSession {
       this.contextJob = { id, value: null, resolve, reject, timer }
       proc.sendUserMessage('/context', id)
     })
+  }
+
+  /** 发 get_context_usage；CLI 不认识或回的不是结构化明细时记下来，返回 null 让调用方退回 /context */
+  private async usage(proc: ClaudeProcess, detail: ContextDetailLevel): Promise<ContextDiagnostic | null> {
+    let raw: Msg
+    try {
+      raw = await proc.request('get_context_usage', { detail }, detail === 'full' ? 60_000 : 10_000)
+    } catch (err) {
+      if (!proc.alive || /没有回应/.test((err as Error).message)) throw err
+      this.markUsage(false)
+      return null
+    }
+    const diagnostic = this.translator.context.diagnostic(raw, detail)
+    this.markUsage(!!diagnostic)
+    return diagnostic
+  }
+
+  private markUsage(ok: boolean): void {
+    this.usageRequest = ok
+    this.setFlags({ contextLive: ok })
   }
 
   private contextFrame(msg: Msg): boolean {
@@ -451,6 +485,9 @@ export class ClaudeSession implements EngineSession {
     if (rec.fast) await this.applyFast(proc, true)
     await this.applyThinking(proc, rec.thinkingSummaries)
     await this.syncSettings(proc)
+    // 启动就取一次明细：确认这个版本能不能用 get_context_usage，也让第一轮之前就有系统提示 / 工具 / Skills 的分类
+    this.usageRequest = null
+    void this.usage(proc, 'summary').catch(() => undefined)
     return proc
   }
 

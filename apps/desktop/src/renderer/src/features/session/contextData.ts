@@ -16,7 +16,7 @@ export function contextPercentage(context: ContextWindow | null | undefined): nu
 }
 export function contextNumber(value: number | null | undefined): string {
   if (value === null || value === undefined) return '—'
-  if (value >= 1000000) return `${Number((value / 1000000).toFixed(2))}m`
+  if (value >= 1000000) return `${Number((value / 1000000).toFixed(2))}M`
   if (value >= 1000) return `${Number((value / 1000).toFixed(1))}k`
   return value.toLocaleString('zh-CN')
 }
@@ -26,6 +26,12 @@ const LABELS: Record<string, string> = {
   },
   get 'System tools'() {
     return tr('session.contextData.systemTools')
+  },
+  get 'System tools (deferred)'() {
+    return tr('session.contextData.systemToolsDeferred')
+  },
+  get 'MCP tools (deferred)'() {
+    return tr('session.contextData.mcpToolsDeferred')
   },
   get 'MCP tools'() {
     return tr('session.contextData.mcpTools')
@@ -57,18 +63,21 @@ export const contextLabel = (name: string): string => LABELS[name] ?? name
 export interface ContextSegment {
   name: string
   tokens: number
-  kind: 'used' | 'buffer' | 'free'
+  kind: 'used' | 'buffer' | 'free' | 'deferred'
   color: string
 }
 const COLORS = ['bg-chart-input', 'bg-chart-output', 'bg-chart-cache', 'bg-accent', 'bg-warn', 'bg-ultracode']
 export function contextSegments(context: ContextWindow | null | undefined): ContextSegment[] {
   if (!context || context.stale || context.used === null || !context.window) return []
   if (context.diagnostic && !context.diagnosticStale)
-    return context.diagnostic.categories.map((c, i) => ({
-      ...c,
-      name: contextLabel(c.name),
-      color: c.kind === 'free' ? 'bg-fg-faint/30' : c.kind === 'buffer' ? 'bg-warn' : COLORS[i % COLORS.length],
-    }))
+    // 延迟加载的工具还没放进上下文，不画进占用条
+    return context.diagnostic.categories
+      .filter(c => c.kind !== 'deferred')
+      .map((c, i) => ({
+        ...c,
+        name: contextLabel(c.name),
+        color: c.kind === 'free' ? 'bg-fg-faint/30' : c.kind === 'buffer' ? 'bg-warn' : COLORS[i % COLORS.length],
+      }))
   const data: ContextSegment[] = [
     {
       get name() {

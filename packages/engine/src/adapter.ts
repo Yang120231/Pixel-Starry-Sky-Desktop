@@ -58,8 +58,13 @@ export interface EngineSession {
   /** 改模型 / 强度 / 权限 / 开关：进程在跑就实时生效，否则下次启动时生效 */
   update(patch: Partial<SessionSettings>, strict?: boolean): Promise<void>
   steer?(text: string, userItemId: string, attachments?: ImageAttachment[]): Promise<void>
-  /** 原生本地上下文诊断，仅宿主确认会话空闲后调用。 */
-  context?(): Promise<import('@pixelsky/protocol').ContextDiagnostic>
+  /**
+   * 上下文明细。flags.contextLive 时运行中也可调用；否则仅宿主确认会话空闲后调用。
+   * summary 用最近请求的计数加本地估算，full 调 Token 计数接口。
+   */
+  context?(
+    detail?: import('@pixelsky/protocol').ContextDetailLevel,
+  ): Promise<import('@pixelsky/protocol').ContextDiagnostic>
   /** 停止一个后台任务；没有后台任务的引擎不实现（caps.backgroundTasks 为 false） */
   stopTask?(taskId: string): Promise<void>
   /** 读一个后台任务的输出（只给最后一段）；没有后台任务的引擎不实现 */
