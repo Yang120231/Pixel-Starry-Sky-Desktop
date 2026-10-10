@@ -231,11 +231,20 @@ async function runTurn(text) {
   }
 
   if (text.includes('认证失败')) {
-    result('success', {
-      is_error: true,
-      result:
-        'API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"Invalid bearer token"}}',
+    // 和真的 Claude Code 一样：先发一条合成的报错消息（model 是 <synthetic>，带 error 代码），再发失败结果
+    const reason = 'Invalid API key · Fix external API key'
+    out({
+      type: 'assistant',
+      message: {
+        id: `msg_fake_${runId}_${++msgSeq}`,
+        model: '<synthetic>',
+        role: 'assistant',
+        content: [{ type: 'text', text: reason }],
+      },
+      parent_tool_use_id: null,
+      error: 'authentication_failed',
     })
+    result('success', { is_error: true, result: reason })
     turn = null
     return
   }

@@ -705,6 +705,26 @@ export const systemMessages = {
     "zh": "服务出错",
     "en": "Service error"
   },
+  "system.serviceErrorTemporary": {
+    "zh": "服务出错，通常是暂时的，稍后再试",
+    "en": "The service hit an error. This is usually temporary; try again shortly."
+  },
+  "system.apiKeyInvalid": {
+    "zh": "API Key 无效：检查环境变量里的 ANTHROPIC_API_KEY",
+    "en": "Invalid API key: check ANTHROPIC_API_KEY in your environment variables"
+  },
+  "system.noPermissionForModel": {
+    "zh": "没有权限：当前账号或 API Key 不能用这个模型或资源",
+    "en": "No permission: this account or API key can’t use this model or resource"
+  },
+  "system.modelServiceUnreachable": {
+    "zh": "连不上模型服务：检查网络、代理或防火墙",
+    "en": "Can’t reach the model service. Check your network, proxy or firewall."
+  },
+  "system.contextTooLong": {
+    "zh": "上下文太长：先压缩（/compact）或开一个新会话",
+    "en": "The context is too long. Compact it (/compact) or start a new conversation."
+  },
   "system.replyExceededMaximumLength": {
     "zh": "回复超过了最大长度",
     "en": "Reply exceeded maximum length"

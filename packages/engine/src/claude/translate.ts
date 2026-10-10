@@ -25,6 +25,7 @@ import { RequestCacheReader } from './request-cache'
 import { requestRetryState } from './retry-state'
 import { ContextReader } from './context'
 import { obj, num, str } from './shape'
+import { ERROR_TEXT, friendlyApiError } from './apiError'
 
 type Msg = Record<string, unknown>
 
@@ -44,22 +45,6 @@ export const FROM_CLAUDE_MODE: Record<string, PermissionMode> = {
   acceptEdits: 'edits',
   plan: 'plan',
   bypassPermissions: 'full',
-}
-
-/** assistant 消息里 error 字段的说明 */
-const ERROR_TEXT: Record<string, string> = {
-  authentication_failed: '登录已失效：在终端运行 claude auth login 重新登录',
-  oauth_org_not_allowed: '当前账号的组织不允许使用 Claude Code',
-  account_on_hold: '账号已被暂停',
-  verification_required: '账号需要验证',
-  billing_error: '账户余额或账单有问题',
-  rate_limit: '请求太频繁，已触发限额',
-  overloaded: '服务繁忙，请稍后再试',
-  invalid_request: '请求无效',
-  model_not_found: '找不到所选模型',
-  server_error: '服务出错',
-  max_output_tokens: '回复超过了最大长度',
-  cloud_credential_error: '云服务凭据有问题',
 }
 
 interface OpenBlock {
@@ -121,6 +106,8 @@ export class ClaudeTranslator {
     costUsd: null,
   }
   private retry: RequestRetryState | null = null
+  /** 这一轮收到的合成报错消息（代码和英文原文），等结果一起出一条提示 */
+  private apiError: { code: string; raw: string } | null = null
   private retrySignature = ''
   private seq = 0
   /**
@@ -157,6 +144,7 @@ export class ClaudeTranslator {
     this.requestCache.begin(turnId)
     this.turnId = turnId
     this.retry = null
+    this.apiError = null
     this.retrySignature = ''
     this.turnRequests.clear()
     this.turnStartedAt = Date.now()
@@ -209,8 +197,11 @@ export class ClaudeTranslator {
     return `${prefix}-${Date.now().toString(36)}-${++this.seq}`
   }
 
-  notice(level: 'info' | 'warn' | 'error', text: string): void {
-    this.cb.emit({ type: 'item_completed', item: { kind: 'notice', id: this.nextId('notice'), level, text } })
+  notice(level: 'info' | 'warn' | 'error', text: string, detail?: string | null): void {
+    this.cb.emit({
+      type: 'item_completed',
+      item: { kind: 'notice', id: this.nextId('notice'), level, text, ...(detail ? { detail } : {}) },
+    })
   }
 
   /** 新进程启动时调用：累计用量从零开始 */
@@ -467,6 +458,17 @@ export class ClaudeTranslator {
     const messageId = str(message.id) || this.messageId
     const aborted = msg.aborted === true
     const content = Array.isArray(message.content) ? (message.content as Msg[]) : []
+    if (typeof msg.error === 'string' && msg.error && str(message.model) === '<synthetic>') {
+      // Claude Code 自己合成的报错消息（API 报错时先发它再发失败结果）：不当成回复，
+      // 等这一轮的结果一起出一条提示（docs/ui/conversation-ux-2.md §2.1）
+      const raw = content
+        .filter(b => b.type === 'text')
+        .map(b => str(b.text))
+        .join('\n')
+        .trim()
+      this.apiError = { code: msg.error, raw }
+      return
+    }
     for (const block of content) {
       if (block.type === 'text' || block.type === 'thinking') {
         const kind = block.type === 'text' ? 'assistant' : 'reasoning'
@@ -564,12 +566,21 @@ export class ClaudeTranslator {
     this.declined.clear()
 
     let error: string | null = null
+    const apiError = this.apiError
+    this.apiError = null
     if (outcome === 'failed') {
       const errors = Array.isArray(msg.errors) ? (msg.errors as unknown[]).map(String).filter(Boolean) : []
-      error = errors.join('\n') || str(msg.result) || terminal || '这一轮失败了'
+      const raw = errors.join('\n') || str(msg.result) || apiError?.raw || terminal || '这一轮失败了'
+      // 一次报错只出一条提示：第一行说人话，英文原文放「详情」；认不出的照原文（docs/ui/conversation-ux-2.md §2.1）
+      const friendly = friendlyApiError(apiError?.code ?? null, raw)
+      error = friendly ?? raw
       if (this.retry?.attempt !== null && this.retry?.attempt !== undefined)
         error += `\n本次请求已重试 ${this.retry.attempt} 次${this.retry.maxRetries !== null && this.retry.attempt >= this.retry.maxRetries ? '，达到重试上限' : ''}。`
-      this.notice('error', error)
+      this.notice('error', error, friendly ? raw : null)
+    } else if (apiError) {
+      // 收到报错消息、这一轮却没算失败：也只提示一次
+      const friendly = friendlyApiError(apiError.code, apiError.raw)
+      this.notice('error', friendly ?? apiError.raw, friendly ? apiError.raw : null)
     }
     const usage = this.turnUsage(msg)
     this.cb.emit(
@@ -626,6 +637,7 @@ export class ClaudeTranslator {
     if (!turnId) return
     this.requestCache.end()
     this.turnId = null
+    this.apiError = null
     for (const b of this.blocks.values()) if (!b.done) this.finishBlock(b, b.text, 'failed')
     this.blocks.clear()
     for (const item of this.tools.values()) {

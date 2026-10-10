@@ -200,7 +200,12 @@ export function QueuedMessages({
                 ? tr('session.QueuedMessages.platformRoute', { p0: q.settings.platform.groupId })
                 : tr('session.QueuedMessages.ownCredits')}
             </div>
-            {q.error && <p className="mt-1 text-meta whitespace-pre-wrap text-warn">{translateMessage(q.error)}</p>}
+            {/* 原因只显示第一行：完整说明和原文在对话里的错误卡片上（docs/ui/conversation-ux-2.md §2.1） */}
+            {q.error && (
+              <p className="mt-1 truncate text-meta text-warn" title={translateMessage(q.error)}>
+                {translateMessage(q.error.split('\n')[0])}
+              </p>
+            )}
             {!!q.attachments?.length && (
               <div className="mt-2">
                 <ImageAttachments images={q.attachments} />

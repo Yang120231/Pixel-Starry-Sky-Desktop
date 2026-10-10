@@ -77,6 +77,11 @@ describe('错误卡片归类（§3.5）', () => {
     expect(classifyError('API Error: 403 group not available')).toBe('route')
     expect(classifyError('请求太频繁，已触发限额')).toBe('busy')
     expect(classifyError('工作目录不存在')).toBeNull()
+    // 第二轮的新说法（docs/ui/conversation-ux-2.md §2.1）
+    expect(classifyError('API Key 无效：检查环境变量里的 ANTHROPIC_API_KEY')).toBe('auth')
+    expect(classifyError('没有权限：当前账号或 API Key 不能用这个模型或资源')).toBe('route')
+    expect(classifyError('服务出错，通常是暂时的，稍后再试')).toBe('busy')
+    expect(classifyError('连不上模型服务：检查网络、代理或防火墙')).toBeNull()
   })
 
   it('平台会话的「登录已失效」换成平台的说法，自有会话不变', () => {
