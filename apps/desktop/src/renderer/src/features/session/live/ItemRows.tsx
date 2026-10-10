@@ -31,7 +31,7 @@ import { AnsiText } from '@/ui/code/AnsiText'
 import { useOpenTrace } from './trace'
 import { StepMark } from './ProgressCard'
 import { UserText } from './UserText'
-import { useItemNavigation } from '@/features/search/navigation'
+import { freshRequest, useExpandRequest } from '@/features/search/expand'
 import { openFile } from '@/features/files/store'
 import { useActiveWorkspace } from '@/features/editor/target'
 import { ImageAttachments } from '@/features/session/attachments/ImageAttachments'
@@ -63,6 +63,19 @@ export function UserBubble({ item, actions }: { item: ItemOf<'user'>; actions?: 
   )
 }
 
+/**
+ * 可折叠条目的展开状态：点击切换；对话内搜索的「展开」和搜索跳转也会让它展开（features/search/expand.ts）。
+ * fold 放在条目根元素的 data-fold 上：对话内搜索据此知道哪些条目折叠着（docs/ui/conversation-ux.md §2.6）
+ */
+function useFold(id: string, foldable: boolean): { open: boolean; toggle: () => void; fold?: 'open' | 'closed' } {
+  const [open, setOpen] = useState(false)
+  const request = useExpandRequest(id)
+  useEffect(() => {
+    if (freshRequest(request)) setOpen(true)
+  }, [request])
+  return { open, toggle: () => setOpen(v => !v), fold: foldable ? (open ? 'open' : 'closed') : undefined }
+}
+
 function Chevron({ open }: { open: boolean }) {
   useI18n()
   return (
@@ -77,14 +90,15 @@ function Chevron({ open }: { open: boolean }) {
 /** 思考过程：默认折叠，进行中显示「思考中」 */
 export function ReasoningBlock({ item }: { item: ItemOf<'reasoning'> }) {
   useI18n()
-  const [open, setOpen] = useState(false)
   const running = item.status === 'running'
+  const { open, toggle, fold } = useFold(item.id, !!item.text.trim())
   if (!running && !item.text.trim()) return null
   return (
-    <div>
+    <div data-fold={fold}>
       <button
         type="button"
-        onClick={() => setOpen(v => !v)}
+        aria-expanded={open}
+        onClick={toggle}
         className="flex h-[30px] items-center gap-2 rounded-md px-2 text-list text-fg-muted hover:bg-hover hover:text-fg-secondary"
       >
         <Brain size={15} strokeWidth={1.5} className="shrink-0" />
@@ -174,6 +188,7 @@ function Row({
   const row = (
     <button
       type="button"
+      aria-expanded={expandable ? open : undefined}
       onClick={expandable ? onToggle : undefined}
       className={cn(
         'flex h-[30px] w-full min-w-0 items-center gap-2 rounded-md px-2 text-left text-list text-fg-secondary',
@@ -223,20 +238,12 @@ function fileVerb(changes: FileChange[]): string {
 /** 工具调用的一行：运行命令 / 编辑文件 / 读取 / 搜索 / 网页 / MCP / 子任务；点开看输出或 diff */
 export function ToolItemRow({ item }: { item: ItemOf<'command' | 'file_change' | 'tool'> }) {
   useI18n()
-  const [open, setOpen] = useState(false)
-  const location = useItemNavigation()
+  const foldable = item.kind === 'file_change' ? item.changes.some(c => c.diff) : !!item.output
+  const { open, toggle, fold } = useFold(item.id, foldable)
   const row = useRef<HTMLDivElement>(null)
   const workspace = useActiveWorkspace(),
     [fileError, setFileError] = useState('')
-  useEffect(() => {
-    if (
-      location?.itemId === item.id &&
-      row.current?.closest<HTMLElement>('[data-search-session]')?.dataset.searchSession === location.sessionId
-    )
-      setOpen(true)
-  }, [location, item.id])
   const openTrace = useOpenTrace()
-  const toggle = () => setOpen(v => !v)
   const openChangedFile = (change: FileChange): void => {
     const sessionId = row.current?.closest<HTMLElement>('[data-search-session]')?.dataset.searchSession
     const ref = sessionId ? { sessionId } : workspace.ref
@@ -252,7 +259,7 @@ export function ToolItemRow({ item }: { item: ItemOf<'command' | 'file_change' |
   if (item.kind === 'command') {
     const verb = item.status === 'running' ? tr('session.live.ItemRows.running') : tr('session.live.ItemRows.ran')
     return (
-      <div ref={row}>
+      <div ref={row} data-fold={fold}>
         <Row
           icon={SquareTerminal}
           verb={verb}
@@ -288,7 +295,7 @@ export function ToolItemRow({ item }: { item: ItemOf<'command' | 'file_change' |
     const added = item.changes.reduce((n, c) => n + c.added, 0)
     const removed = item.changes.reduce((n, c) => n + c.removed, 0)
     return (
-      <div ref={row}>
+      <div ref={row} data-fold={fold}>
         <div className="flex min-h-[30px] min-w-0 items-center gap-2 rounded-md px-2 text-list text-fg-secondary">
           {item.changes[0]?.kind === 'add' ? (
             <FilePlus size={15} className="shrink-0 text-fg-muted" />
@@ -312,8 +319,9 @@ export function ToolItemRow({ item }: { item: ItemOf<'command' | 'file_change' |
           {(added > 0 || removed > 0) && <DiffStat added={added} removed={removed} className="text-meta" />}
           <StatusMark status={item.status} okMark={false} />
           <SubagentTag name={item.subagent} />
-          {item.changes.some(c => c.diff) && (
+          {foldable && (
             <button
+              aria-expanded={open}
               aria-label={
                 open ? tr('session.live.ItemRows.collapseFileChanges') : tr('session.live.ItemRows.expandFileChanges')
               }
@@ -347,7 +355,7 @@ export function ToolItemRow({ item }: { item: ItemOf<'command' | 'file_change' |
   // 子任务（Agent 工具）和多智能体编排（Workflow 工具）可以打开智能体追踪
   const traceable = !!openTrace && item.tool === 'task' && !item.subagent
   return (
-    <div ref={row}>
+    <div ref={row} data-fold={fold}>
       <Row
         icon={meta.icon}
         verb={item.name === 'Workflow' ? tr('session.live.ItemRows.orchestration') : meta.verb || item.name}
@@ -388,7 +396,7 @@ export function ToolItemRow({ item }: { item: ItemOf<'command' | 'file_change' |
 /** 待办清单（Claude 的 TodoWrite、Codex 的计划）：一行概要，点开看完整列表；当前计划常驻在进度卡片里（docs/ui/progress-card.md §5） */
 export function TodoCard({ item }: { item: ItemOf<'todo'> }) {
   useI18n()
-  const [open, setOpen] = useState(false)
+  const { open, toggle, fold } = useFold(item.id, item.steps.length > 0)
   if (item.steps.length === 0) return null
   const done = item.steps.filter(s => s.status === 'completed').length
   const current = item.steps.find(s => s.status === 'in_progress')
@@ -398,11 +406,11 @@ export function TodoCard({ item }: { item: ItemOf<'todo'> }) {
       ? tr('session.todo.allDone')
       : null
   return (
-    <div>
+    <div data-fold={fold}>
       <button
         type="button"
         aria-expanded={open}
-        onClick={() => setOpen(v => !v)}
+        onClick={toggle}
         className="flex h-[30px] max-w-full min-w-0 items-center gap-2 rounded-md px-2 text-list text-fg-muted hover:bg-hover hover:text-fg-secondary"
       >
         <ListTodo size={15} strokeWidth={1.5} className="shrink-0" />
@@ -437,13 +445,14 @@ export function TodoCard({ item }: { item: ItemOf<'todo'> }) {
 /** 提示：信息 / 警告 / 错误 */
 export function NoticeRow({ item }: { item: ItemOf<'notice'> }) {
   useI18n()
-  const [open, setOpen] = useState(false)
   const Icon = item.level === 'error' ? CircleAlert : item.level === 'warn' ? TriangleAlert : Info
   const text = translateMessage(item.text)
   // 引擎给了原始报错详情（附加说明、错误类型、HTTP 状态码）时可展开查看和复制
   const detail = item.detail?.trim() || null
+  const { open, toggle, fold } = useFold(item.id, !!detail)
   return (
     <div
+      data-fold={fold}
       data-notice-level={item.level}
       className={cn(
         'rounded-lg px-3 py-2 text-list',
@@ -459,7 +468,7 @@ export function NoticeRow({ item }: { item: ItemOf<'notice'> }) {
           <button
             type="button"
             aria-expanded={open}
-            onClick={() => setOpen(v => !v)}
+            onClick={toggle}
             className="press -my-0.5 inline-flex h-6 shrink-0 items-center gap-0.5 rounded-md px-1.5 text-meta opacity-80 hover:bg-danger/10 hover:opacity-100"
           >
             {tr(open ? 'session.notice.hideDetail' : 'session.notice.showDetail')}

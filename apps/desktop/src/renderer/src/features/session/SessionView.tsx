@@ -15,7 +15,9 @@ import { TaskStrip } from './live/SessionStrips'
 import { ProgressCard, useProgress } from './live/ProgressCard'
 import { TraceContext, type TraceTarget } from './live/trace'
 import { PathLinksProvider } from '@/features/files/PathLinksProvider'
-import { ConversationFind, useFindShortcut } from '@/features/search/ConversationFind'
+import { ConversationFind, useFindShortcut, type FoldedMatches } from '@/features/search/ConversationFind'
+import { expandItems } from '@/features/search/expand'
+import { foldedMatches } from './live/foldedText'
 import { RetryStatus } from './live/RetryStatus'
 import { MessageActionsContext, type MessageActionsValue } from './live/MessageActions'
 import { appendComposerDraft } from '@/features/engine/drafts'
@@ -119,6 +121,22 @@ function LiveSessionView({
   const [find, setFind] = useState<number | null>(null)
   useEffect(() => setFind(null), [sessionId])
   useFindShortcut(mainRef, !!sessionId, () => setFind(n => (n ?? 0) + 1))
+  // 折叠着的条目里的命中（docs/ui/conversation-ux.md §2.6）：哪些折叠着看页面上的 data-fold，文字从会话数据里取
+  const items = snapshot?.items
+  const folded = useCallback<FoldedMatches>(
+    term => {
+      const stream = mainRef.current?.querySelector('[data-conversation-stream]')
+      if (!stream || !items || !sessionId) return { count: 0, expand: () => {} }
+      const closed = new Set<string>()
+      for (const el of stream.querySelectorAll('[data-fold="closed"]')) {
+        const id = el.closest<HTMLElement>('[data-search-item]')?.dataset.searchItem
+        if (id) closed.add(id)
+      }
+      const { ids, count } = foldedMatches(items, [term], closed)
+      return { count, expand: () => expandItems(sessionId, ids) }
+    },
+    [items, sessionId],
+  )
 
   const runs = snapshot?.runs
   const openTrace = useCallback(
@@ -222,7 +240,9 @@ function LiveSessionView({
                     onOpenTrace={hasRuns ? () => openTrace() : undefined}
                   />
                 )}
-                {find !== null && <ConversationFind root={mainRef} focusToken={find} onClose={() => setFind(null)} />}
+                {find !== null && (
+                  <ConversationFind root={mainRef} focusToken={find} onClose={() => setFind(null)} folded={folded} />
+                )}
               </div>
               <ComposerArea>
                 <RetryStatus sessionId={sessionId} retry={snapshot?.retry} />

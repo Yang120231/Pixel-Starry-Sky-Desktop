@@ -15,6 +15,7 @@ import { NoticeActions } from './NoticeActions'
 import { AssistantMessageActions, UserMessageActions } from './MessageActions'
 import { platformNoticeText } from './errorKind'
 import { useItemLocation } from '@/features/search/useItemLocation'
+import { ExpandScope } from '@/features/search/expand'
 import { JumpToLatest } from './JumpToLatest'
 import { contentMark, followResize, nearBottom } from './scrollFollow'
 
@@ -214,130 +215,132 @@ export function LiveTranscript({ snapshot }: { snapshot: SessionSnapshot | null 
   }
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col">
-      <div
-        ref={scroller}
-        onScroll={e => {
-          if (jumping.current) return
-          const near = nearBottom(e.currentTarget)
-          if (!detached.current) stick.current = near
-          setAway(!near)
-          if (near) setUnseen(false)
-        }}
-        onScrollEnd={e => {
-          if (!jumping.current) return
-          jumping.current = false
-          // 平滑滚动期间又来了内容：补到真正的底部
-          const el = e.currentTarget
-          if (stick.current) el.scrollTop = el.scrollHeight
-          const near = nearBottom(el)
-          setAway(!near)
-          if (near) setUnseen(false)
-        }}
-        onWheel={resume}
-        onTouchMove={resume}
-        onPointerDown={() => {
-          resume()
-          lastInteract.current = performance.now()
-        }}
-        onKeyDown={() => {
-          resume()
-          lastInteract.current = performance.now()
-        }}
-        data-search-session={snapshot?.record.id}
-        className="conversation-scroller selectable min-h-0 flex-1 overflow-y-auto bg-app"
-      >
+    <ExpandScope.Provider value={snapshot?.record.id ?? null}>
+      <div className="relative flex min-h-0 flex-1 flex-col">
         <div
-          ref={stream}
-          data-conversation-stream
-          className="conversation-inset conversation-reading flex flex-col gap-3 pt-5 pb-6"
+          ref={scroller}
+          onScroll={e => {
+            if (jumping.current) return
+            const near = nearBottom(e.currentTarget)
+            if (!detached.current) stick.current = near
+            setAway(!near)
+            if (near) setUnseen(false)
+          }}
+          onScrollEnd={e => {
+            if (!jumping.current) return
+            jumping.current = false
+            // 平滑滚动期间又来了内容：补到真正的底部
+            const el = e.currentTarget
+            if (stick.current) el.scrollTop = el.scrollHeight
+            const near = nearBottom(el)
+            setAway(!near)
+            if (near) setUnseen(false)
+          }}
+          onWheel={resume}
+          onTouchMove={resume}
+          onPointerDown={() => {
+            resume()
+            lastInteract.current = performance.now()
+          }}
+          onKeyDown={() => {
+            resume()
+            lastInteract.current = performance.now()
+          }}
+          data-search-session={snapshot?.record.id}
+          className="conversation-scroller selectable min-h-0 flex-1 overflow-y-auto bg-app"
         >
-          {!snapshot && (
-            <div className="conversation-message flex items-center gap-2 py-8 text-list text-fg-muted">
-              <Spinner size={14} />
-              {tr('session.live.LiveTranscript.openingConversation')}{' '}
-            </div>
-          )}
-          {blocks.map((b, i) => {
-            if (b.type === 'tools') {
-              return (
-                <div key={b.key} className="conversation-message flex flex-col border-l border-line pl-1.5">
-                  {b.items.map(it => (
-                    <div
-                      key={it.id}
-                      data-search-item={it.id}
-                      className={highlight === it.id ? 'search-hit' : undefined}
-                    >
-                      <ToolItemRow item={it} />
-                    </div>
-                  ))}
-                </div>
-              )
-            }
-            if (b.type === 'changes')
-              return (
-                <ChangedFilesCard
-                  key={b.key}
-                  className="conversation-message"
-                  data={b.data}
-                  target={snapshot ? { sessionId: snapshot.record.id } : undefined}
-                />
-              )
-            // 统计关闭时 TurnStats 不产生 DOM，避免外层空块在 flex 列表里留下间距。
-            if (b.item.kind === 'turn_stats')
-              return <ItemView key={b.item.id} item={b.item} reply={replies.get(b.item.id)} />
-            const isUser = b.item.kind === 'user'
-            const item = b.item
-            if (item.kind === 'notice' && item.level === 'error' && snapshot) {
-              const text = platformNoticeText(snapshot.record, item.text)
+          <div
+            ref={stream}
+            data-conversation-stream
+            className="conversation-inset conversation-reading flex flex-col gap-3 pt-5 pb-6"
+          >
+            {!snapshot && (
+              <div className="conversation-message flex items-center gap-2 py-8 text-list text-fg-muted">
+                <Spinner size={14} />
+                {tr('session.live.LiveTranscript.openingConversation')}{' '}
+              </div>
+            )}
+            {blocks.map((b, i) => {
+              if (b.type === 'tools') {
+                return (
+                  <div key={b.key} className="conversation-message flex flex-col border-l border-line pl-1.5">
+                    {b.items.map(it => (
+                      <div
+                        key={it.id}
+                        data-search-item={it.id}
+                        className={highlight === it.id ? 'search-hit' : undefined}
+                      >
+                        <ToolItemRow item={it} />
+                      </div>
+                    ))}
+                  </div>
+                )
+              }
+              if (b.type === 'changes')
+                return (
+                  <ChangedFilesCard
+                    key={b.key}
+                    className="conversation-message"
+                    data={b.data}
+                    target={snapshot ? { sessionId: snapshot.record.id } : undefined}
+                  />
+                )
+              // 统计关闭时 TurnStats 不产生 DOM，避免外层空块在 flex 列表里留下间距。
+              if (b.item.kind === 'turn_stats')
+                return <ItemView key={b.item.id} item={b.item} reply={replies.get(b.item.id)} />
+              const isUser = b.item.kind === 'user'
+              const item = b.item
+              if (item.kind === 'notice' && item.level === 'error' && snapshot) {
+                const text = platformNoticeText(snapshot.record, item.text)
+                return (
+                  <div
+                    key={item.id}
+                    data-search-item={item.id}
+                    className={['conversation-message', highlight === item.id ? 'search-hit' : ''].join(' ')}
+                  >
+                    <NoticeRow item={text === item.text ? item : { ...item, text }} />
+                    {item.id === actionNoticeId && <NoticeActions record={snapshot.record} text={item.text} />}
+                  </div>
+                )
+              }
               return (
                 <div
                   key={item.id}
                   data-search-item={item.id}
-                  className={['conversation-message', highlight === item.id ? 'search-hit' : ''].join(' ')}
+                  className={[
+                    'group/message',
+                    isUser ? 'conversation-user-row' : 'conversation-message',
+                    isUser && i > 0 ? 'mt-4' : '',
+                    highlight === item.id ? 'search-hit' : '',
+                  ].join(' ')}
                 >
-                  <NoticeRow item={text === item.text ? item : { ...item, text }} />
-                  {item.id === actionNoticeId && <NoticeActions record={snapshot.record} text={item.text} />}
+                  <ItemView item={item} />
                 </div>
               )
-            }
-            return (
-              <div
-                key={item.id}
-                data-search-item={item.id}
-                className={[
-                  'group/message',
-                  isUser ? 'conversation-user-row' : 'conversation-message',
-                  isUser && i > 0 ? 'mt-4' : '',
-                  highlight === item.id ? 'search-hit' : '',
-                ].join(' ')}
-              >
-                <ItemView item={item} />
+            })}
+            {starting.map(q => (
+              <div key={q.id} data-starting-message={q.id} className="flex flex-col gap-3">
+                <div className={cn('conversation-user-row', blocks.length > 0 && 'mt-4')}>
+                  <UserBubble
+                    item={{ kind: 'user', id: q.id, text: q.text, attachments: q.attachments, createdAt: q.createdAt }}
+                  />
+                </div>
+                <div className="conversation-message flex h-[30px] items-center gap-2 px-2 text-list text-fg-muted">
+                  <Spinner size={13} />
+                  {tr('session.queue.starting')}
+                </div>
               </div>
-            )
-          })}
-          {starting.map(q => (
-            <div key={q.id} data-starting-message={q.id} className="flex flex-col gap-3">
-              <div className={cn('conversation-user-row', blocks.length > 0 && 'mt-4')}>
-                <UserBubble
-                  item={{ kind: 'user', id: q.id, text: q.text, attachments: q.attachments, createdAt: q.createdAt }}
-                />
-              </div>
+            ))}
+            {showThinking && (
               <div className="conversation-message flex h-[30px] items-center gap-2 px-2 text-list text-fg-muted">
                 <Spinner size={13} />
-                {tr('session.queue.starting')}
+                {tr('session.live.LiveTranscript.working')}{' '}
               </div>
-            </div>
-          ))}
-          {showThinking && (
-            <div className="conversation-message flex h-[30px] items-center gap-2 px-2 text-list text-fg-muted">
-              <Spinner size={13} />
-              {tr('session.live.LiveTranscript.working')}{' '}
-            </div>
-          )}
+            )}
+          </div>
         </div>
+        {away && snapshot && <JumpToLatest unseen={unseen} onClick={jumpToLatest} />}
       </div>
-      {away && snapshot && <JumpToLatest unseen={unseen} onClick={jumpToLatest} />}
-    </div>
+    </ExpandScope.Provider>
   )
 }

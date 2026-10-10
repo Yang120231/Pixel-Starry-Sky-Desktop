@@ -7,6 +7,12 @@ export const contentMessages = {
   'content.find.previous': { zh: '上一个（Shift+Enter）', en: 'Previous (Shift+Enter)' },
   'content.find.next': { zh: '下一个（Enter）', en: 'Next (Enter)' },
   'content.find.close': { zh: '关闭（Esc）', en: 'Close (Esc)' },
+  'content.find.expandFoldedOne': { zh: '展开折叠中的 1 处', en: 'Expand 1 hidden match' },
+  'content.find.expandFoldedMany': { zh: '展开折叠中的 {n} 处', en: 'Expand {n} hidden matches' },
+  'content.find.expandFoldedTitle': {
+    zh: '这些命中在折叠起来的工具输出、思考或详情里，点击展开它们',
+    en: 'These matches are in collapsed tool output, reasoning or details. Click to expand them.',
+  },
   'content.alert.note': { zh: '说明', en: 'Note' },
   'content.alert.tip': { zh: '提示', en: 'Tip' },
   'content.alert.important': { zh: '重要', en: 'Important' },

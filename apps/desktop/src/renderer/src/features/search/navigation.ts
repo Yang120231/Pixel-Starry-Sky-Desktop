@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { expandItems } from './expand'
 
 export interface ItemNavigation {
   sessionId: string
@@ -20,6 +21,8 @@ const subscribe = (listener: () => void) => {
 
 export function navigateToItem(sessionId: string, itemId: string, terms: string[] = []): void {
   target = { sessionId, itemId, terms, token: ++sequence }
+  // 命中可能在折叠着的部分（工具输出、待办等）：让这一条展开
+  expandItems(sessionId, [itemId])
   emit()
 }
 export function finishItemNavigation(token: number): void {
