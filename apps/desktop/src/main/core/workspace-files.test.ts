@@ -134,7 +134,8 @@ describe('编辑器参数', () => {
     expect(editorArgs('folder', 'new', 'D:\\项目', 'D:\\项目\\file.txt')).toEqual(['D:\\项目\\file.txt'])
     expect(() => editorArgs('code', 'reuse', root, 'file.ts', -1)).toThrow('行列不正确')
   })
-  it('自定义程序用参数数组启动，偏好重启恢复，不继承 Electron Node 模式', async () => {
+  // 会真的检测已装的编辑器（注册表、PowerShell、PATH 和各盘符），GitHub 的 Windows 机器上要 5 秒以上
+  it('自定义程序用参数数组启动，偏好重启恢复，不继承 Electron Node 模式', { timeout: 30_000 }, async () => {
     const program = join(root, 'launcher.cjs'),
       log = join(folder, 'launch-result.json')
     await writeFile(

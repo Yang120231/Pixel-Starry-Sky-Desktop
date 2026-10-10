@@ -23,7 +23,8 @@ const tsc = (cwd, project) => ({
 const vitest = (cwd, extra = []) => ({
   cwd,
   script: join(cwd, 'node_modules', 'vitest', 'vitest.mjs'),
-  args: ['run', ...extra],
+  // GitHub 的机器比本机慢很多，单个测试默认 5 秒不够（真起进程、查注册表的测试）
+  args: ['run', ...extra, ...(process.env.CI ? ['--testTimeout=20000'] : [])],
 })
 
 const buildDir = join(root, 'scratch', `${new Date().toISOString().slice(0, 10)}-check-build-${process.pid}`)

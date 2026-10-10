@@ -83,11 +83,28 @@ function readJson<T>(file: string): T | null {
   }
 }
 
+/**
+ * 改名替换目标文件。Windows 上目标正被别的句柄打开（同时在读、杀毒软件扫描）时会短暂报 EPERM / EBUSY / EACCES，
+ * 稍等几毫秒重试即可；重试几次还不行再抛出。
+ */
+function replaceFile(tmp: string, file: string): void {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      renameSync(tmp, file)
+      return
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code
+      if (attempt >= 5 || (code !== 'EPERM' && code !== 'EBUSY' && code !== 'EACCES')) throw err
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10 * (attempt + 1))
+    }
+  }
+}
+
 /** 先写临时文件再改名，写到一半断电也不会留下坏文件 */
 function writeJson(file: string, data: unknown): void {
   const tmp = `${file}.tmp`
   writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8')
-  renameSync(tmp, file)
+  replaceFile(tmp, file)
 }
 
 const SAFE_ID = /^[A-Za-z0-9_-]+$/
@@ -226,7 +243,7 @@ export class Store {
     const file = join(dir, 'items.jsonl'),
       tmp = `${file}.tmp`
     writeFileSync(tmp, items.map(item => JSON.stringify(item) + '\n').join(''), 'utf8')
-    renameSync(tmp, file)
+    replaceFile(tmp, file)
   }
 
   /** 读出全部条目；同一个 id 出现多次时保留第一次的位置、最后一次的内容 */
