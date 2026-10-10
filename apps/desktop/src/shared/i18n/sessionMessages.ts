@@ -11,8 +11,6 @@ export const sessionMessages = {
   'turnRail.label': { zh: '轮次跳转', en: 'Jump to turn' },
   'turnRail.turn': { zh: '第 {n} 轮', en: 'Turn {n}' },
   'turnRail.imageOnly': { zh: '（图片）', en: '(image)' },
-  'turnRail.previous': { zh: '上一轮', en: 'Previous turn' },
-  'turnRail.next': { zh: '下一轮', en: 'Next turn' },
   'session.rename': { zh: '重命名', en: 'Rename' },
   'session.renameTitle': { zh: '重命名会话', en: 'Rename session' },
   'session.name': { zh: '会话名称', en: 'Session name' },

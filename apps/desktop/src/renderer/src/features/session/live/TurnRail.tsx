@@ -1,14 +1,16 @@
-// 轮次跳转条（docs/ui/turn-rail.md）：对话区左边或右边一条竖的刻度，每轮一个，点了跳到那一轮
+// 轮次跳转条（docs/ui/turn-rail.md）：对话区左边或右边一列短刻度，每轮一个；
+// 鼠标移上去在旁边展开轮次列表（序号 + 第一行），点刻度或列表项跳到那一轮
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
-import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import { cn } from '@/ui'
 import { currentTurn, maxTicks, sampleTurns, type Turn } from './turnRailModel'
 
-/** 刻度区最大高度占对话区的比例；上下箭头各占 22px */
-const MAX_SHARE = 0.7
-const ARROWS = 44
+/** 刻度区最大高度占对话区的比例 */
+const MAX_SHARE = 0.6
+/** 展开 / 收起列表的延迟：从刻度移到列表的路上不闪 */
+const OPEN_DELAY = 120
+const CLOSE_DELAY = 220
 
 export function TurnRail({
   turns,
@@ -25,8 +27,9 @@ export function TurnRail({
   useI18n()
   const [current, setCurrent] = useState(0)
   const [height, setHeight] = useState(0)
-  const [hover, setHover] = useState<{ index: number; y: number } | null>(null)
-  const ticks = useRef<HTMLDivElement>(null)
+  const [open, setOpen] = useState(false)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const list = useRef<HTMLDivElement>(null)
 
   const elementOf = (id: string): HTMLElement | null =>
     scroller.current?.querySelector<HTMLElement>(`[data-search-item="${CSS.escape(id)}"]`) ?? null
@@ -35,7 +38,7 @@ export function TurnRail({
   useLayoutEffect(() => {
     const el = scroller.current
     if (!el) return
-    const measure = (): void => setHeight(Math.max(0, el.clientHeight * MAX_SHARE - ARROWS))
+    const measure = (): void => setHeight(Math.max(0, el.clientHeight * MAX_SHARE))
     measure()
     const ro = new ResizeObserver(measure)
     ro.observe(el)
@@ -113,101 +116,149 @@ export function TurnRail({
 
   if (turns.length < 2) return null
 
-  const shown = sampleTurns(turns.length, maxTicks(height), current)
-  const gap = Math.min(10, Math.max(3, height / Math.max(1, shown.length)))
-  // 抽样后当前轮所在的刻度
-  const focusIndex = shown.includes(current) ? current : shown[0]
+  const shown = sampleTurns(turns.length, maxTicks(height, 4), current)
+  const gap = Math.min(8, Math.max(4, height / Math.max(1, shown.length)))
 
-  const onKey = (e: KeyboardEvent, index: number): void => {
-    const at = shown.indexOf(index)
+  const later = (next: boolean, delay: number): void => {
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = setTimeout(() => setOpen(next), delay)
+  }
+  const go = (index: number): void => {
+    jump(index)
+    setOpen(false)
+  }
+  const onListKey = (e: KeyboardEvent): void => {
+    const items = [...(list.current?.querySelectorAll<HTMLButtonElement>('[data-turn-item]') ?? [])]
+    const at = items.indexOf(document.activeElement as HTMLButtonElement)
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      e.stopPropagation()
+      setOpen(false)
+      scroller.current?.focus({ preventScroll: true })
+      return
+    }
     const move = e.key === 'ArrowUp' ? -1 : e.key === 'ArrowDown' ? 1 : 0
     if (!move) return
     e.preventDefault()
-    const next = shown[Math.min(shown.length - 1, Math.max(0, at + move))]
-    ticks.current?.querySelector<HTMLButtonElement>(`[data-turn-index="${next}"]`)?.focus()
+    items[Math.min(items.length - 1, Math.max(0, at + move))]?.focus()
   }
-
-  const arrow =
-    'press flex h-[22px] w-5 items-center justify-center rounded text-fg-faint hover:bg-hover hover:text-fg disabled:opacity-30 disabled:hover:bg-transparent'
-  const hovered = hover ? turns[hover.index] : null
 
   return (
     <nav
       data-turn-rail={side}
       aria-label={tr('turnRail.label')}
       className={cn(
-        'absolute top-1/2 z-10 flex -translate-y-1/2 flex-col items-center',
-        side === 'right' ? 'right-[calc(var(--conversation-scrollbar-width)+2px)]' : 'left-0.5',
+        'absolute top-1/2 z-10 -translate-y-1/2',
+        side === 'right' ? 'right-[calc(var(--conversation-scrollbar-width)+4px)]' : 'left-1',
       )}
-      onMouseLeave={() => setHover(null)}
+      onMouseEnter={() => later(true, OPEN_DELAY)}
+      onMouseLeave={() => later(false, CLOSE_DELAY)}
+      onFocus={() => later(true, 0)}
+      onBlur={e => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) later(false, 0)
+      }}
     >
-      <button
-        type="button"
-        aria-label={tr('turnRail.previous')}
-        title={tr('turnRail.previous')}
-        disabled={current <= 0}
-        onClick={() => jump(current - 1)}
-        className={arrow}
+      {/* 刻度：一个可聚焦的入口，聚焦后在列表里用 ↑ / ↓ 选、回车跳 */}
+      <div
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        aria-label={tr('turnRail.label')}
+        data-turn-ticks
+        onKeyDown={e => {
+          if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Enter') return
+          e.preventDefault()
+          setOpen(true)
+          requestAnimationFrame(() => list.current?.querySelector<HTMLButtonElement>('[aria-current]')?.focus())
+        }}
+        className={cn(
+          'group/rail flex w-6 flex-col rounded-md py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-accent',
+          side === 'right' ? 'items-end pr-1' : 'items-start pl-1',
+        )}
       >
-        <ChevronUp size={13} strokeWidth={1.75} />
-      </button>
-      <div ref={ticks} className="relative flex w-5 flex-col">
         {shown.map(index => {
           const active = index === current
           return (
-            <button
+            <span
               key={turns[index].id}
-              type="button"
               data-turn-index={index}
-              tabIndex={index === focusIndex ? 0 : -1}
               aria-current={active ? 'true' : undefined}
-              aria-label={`${tr('turnRail.turn', { n: turns[index].n })} ${turns[index].preview}`}
-              onClick={() => jump(index)}
-              onKeyDown={e => onKey(e, index)}
-              onMouseEnter={e => setHover({ index, y: e.currentTarget.offsetTop + gap / 2 })}
-              onFocus={e => setHover({ index, y: e.currentTarget.offsetTop + gap / 2 })}
-              onBlur={() => setHover(null)}
+              onClick={() => go(index)}
               style={{ height: gap }}
               className={cn(
-                'group/tick flex w-full items-center outline-none',
+                'flex w-full cursor-pointer items-center',
                 side === 'right' ? 'justify-end' : 'justify-start',
               )}
             >
               <span
                 className={cn(
-                  'h-[2px] rounded-full transition-[width,background-color] duration-(--dur-fast)',
-                  active ? 'w-3.5 bg-accent' : 'w-2 bg-line-strong group-hover/tick:w-3.5 group-hover/tick:bg-fg-muted',
-                  'group-focus-visible/tick:w-3.5 group-focus-visible/tick:bg-fg',
+                  'block h-[1.5px] rounded-full transition-[width,background-color,opacity] duration-(--dur-fast)',
+                  active
+                    ? 'w-4 bg-fg opacity-90'
+                    : 'w-2 bg-fg-faint opacity-45 group-hover/rail:w-2.5 group-hover/rail:opacity-80',
                 )}
               />
-            </button>
+            </span>
           )
         })}
-        {hovered && hover && (
-          <div
-            role="tooltip"
-            data-turn-tooltip
-            className={cn(
-              'pointer-events-none absolute z-20 w-max max-w-[280px] -translate-y-1/2 rounded-lg border border-line-card bg-popover px-2.5 py-1.5 text-meta shadow-popover',
-              side === 'right' ? 'right-full mr-2' : 'left-full ml-2',
-            )}
-            style={{ top: hover.y }}
-          >
-            <span className="mr-1.5 text-fg-muted tabular-nums">{tr('turnRail.turn', { n: hovered.n })}</span>
-            <span className="text-fg">{hovered.preview || tr('turnRail.imageOnly')}</span>
-          </div>
-        )}
       </div>
-      <button
-        type="button"
-        aria-label={tr('turnRail.next')}
-        title={tr('turnRail.next')}
-        disabled={current >= turns.length - 1}
-        onClick={() => jump(current + 1)}
-        className={arrow}
-      >
-        <ChevronDown size={13} strokeWidth={1.75} />
-      </button>
+      {open && (
+        <div
+          ref={list}
+          role="menu"
+          data-turn-list
+          onKeyDown={onListKey}
+          className={cn(
+            'pop-in absolute top-1/2 flex max-h-[min(60vh,440px)] w-[280px] -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-line-card bg-popover shadow-popover',
+            side === 'right' ? 'right-full mr-1.5' : 'left-full ml-1.5',
+          )}
+        >
+          <div className="flex shrink-0 items-center justify-between px-3 pt-2.5 pb-1.5 text-label text-fg-faint">
+            <span>{tr('turnRail.label')}</span>
+            <span className="tabular-nums">
+              {current + 1} / {turns.length}
+            </span>
+          </div>
+          <TurnList turns={turns} current={current} onPick={go} />
+        </div>
+      )}
     </nav>
+  )
+}
+
+function TurnList({ turns, current, onPick }: { turns: Turn[]; current: number; onPick: (index: number) => void }) {
+  useI18n()
+  const box = useRef<HTMLDivElement>(null)
+  // 打开时把当前轮滚到列表中间
+  useLayoutEffect(() => {
+    box.current?.querySelector('[aria-current]')?.scrollIntoView({ block: 'center' })
+  }, [])
+  return (
+    <div ref={box} className="min-h-0 overflow-y-auto px-1.5 pb-1.5">
+      {turns.map((t, i) => {
+        const active = i === current
+        return (
+          <button
+            key={t.id}
+            type="button"
+            role="menuitem"
+            data-turn-item={i}
+            aria-current={active ? 'true' : undefined}
+            tabIndex={active ? 0 : -1}
+            onClick={() => onPick(i)}
+            className={cn(
+              'relative flex w-full items-baseline gap-2.5 rounded-lg px-2 py-1.5 text-left text-meta outline-none hover:bg-hover focus-visible:bg-hover',
+              active ? 'bg-hover text-fg' : 'text-fg-secondary',
+            )}
+          >
+            {active && <span className="absolute top-1.5 bottom-1.5 left-0 w-[2px] rounded-full bg-accent" />}
+            <span className={cn('w-5 shrink-0 text-right tabular-nums', active ? 'text-accent-fg' : 'text-fg-faint')}>
+              {t.n}
+            </span>
+            <span className="min-w-0 flex-1 truncate">{t.preview || tr('turnRail.imageOnly')}</span>
+          </button>
+        )
+      })}
+    </div>
   )
 }
