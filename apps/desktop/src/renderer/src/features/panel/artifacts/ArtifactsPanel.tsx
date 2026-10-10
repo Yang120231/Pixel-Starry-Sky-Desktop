@@ -14,7 +14,7 @@ import {
   Sheet,
   type LucideIcon,
 } from 'lucide-react'
-import { cn, DiffStat, EngineIcon, IconButton, Segmented, Spinner } from '@/ui'
+import { cn, DiffStat, EngineIcon, IconButton, Segmented, Spinner, useToast } from '@/ui'
 import { DiffView } from '@/ui/code/DiffView'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '@/i18n/core'
@@ -37,6 +37,15 @@ import { EmptyState, PanelCard } from '../PanelSurface'
 import { groupBySession, splitArtifactPath } from './artifactsModel'
 import { ArtifactPreview } from './ArtifactPreview'
 import { demo as demoData } from '@/data/demo'
+import {
+  FOCUS_OPEN_MAX,
+  findFocusTurn,
+  finishArtifactsFocus,
+  freshFocus,
+  turnKey,
+  useArtifactsFocus,
+  type ArtifactsFocus,
+} from './focus'
 
 const DAYS = 7
 const TYPE_ICON: Record<DeliveryType | 'other', LucideIcon> = {
@@ -86,6 +95,7 @@ function ArtifactsBody({
   const request = useRef(0)
   const [now, setNow] = useState(Date.now)
   const remote = machineOf(target.sessionId ?? target.projectId) !== 'local'
+  const toast = useToast()
 
   const load = async () => {
     if (demo || !window.pixelsky) return
@@ -125,6 +135,35 @@ function ArtifactsBody({
       off()
     }
   }, [active])
+
+  // 「审查」（docs/ui/conversation-ux.md §2.1）：切到「改动」并重新读一次（这一轮可能刚结束，数据还没刷新），
+  // 读完后滚到这一轮、闪一下、展开各文件的 diff；找不到时提示
+  const focus = useArtifactsFocus()
+  const pendingFocus = useRef<{ focus: ArtifactsFocus; after: number } | null>(null)
+  const [focused, setFocused] = useState<{ key: string; token: number } | null>(null)
+  const latest = useRef({ load, setTab })
+  latest.current = { load, setTab }
+  useEffect(() => {
+    if (!active || !freshFocus(focus) || pendingFocus.current?.focus.token === focus.token) return
+    latest.current.setTab('changes')
+    const reload = !demo && !!window.pixelsky
+    pendingFocus.current = { focus, after: request.current + (reload ? 1 : 0) }
+    if (reload) void latest.current.load()
+  }, [focus, active, demo])
+  useEffect(() => {
+    const pending = pendingFocus.current
+    if (!pending || loading || !data || request.current < pending.after) return
+    pendingFocus.current = null
+    finishArtifactsFocus(pending.focus.token)
+    const turn = findFocusTurn(data.turns, pending.focus)
+    if (turn) setFocused({ key: turnKey(turn), token: pending.focus.token })
+    else toast(tr('artifacts.focusMissing'))
+  }, [data, loading, toast])
+  useEffect(() => {
+    if (!focused) return
+    const timer = window.setTimeout(() => setFocused(null), 2000)
+    return () => window.clearTimeout(timer)
+  }, [focused])
 
   const groups = useMemo(() => groupBySession(data?.turns ?? []), [data])
   if (preview)
@@ -214,11 +253,12 @@ function ArtifactsBody({
                 </button>
                 {g.turns.map(turn => (
                   <TurnBlock
-                    key={turn.sessionId + ':' + (turn.userItemId ?? 'start') + ':' + turn.at}
+                    key={turnKey(turn)}
                     turn={turn}
                     target={target}
                     demo={demo}
                     now={now}
+                    focusToken={focused?.key === turnKey(turn) ? focused.token : undefined}
                   />
                 ))}
               </section>
@@ -256,15 +296,26 @@ function TurnBlock({
   target,
   demo,
   now,
+  focusToken,
 }: {
   turn: ArtifactTurn
   target: WorkspaceRef
   demo: boolean
   now: number
+  /** 「审查」定位到这一轮：滚过来、闪一下、展开前几个文件的 diff */
+  focusToken?: number
 }) {
   useI18n()
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (focusToken) ref.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  }, [focusToken])
   return (
-    <div className="border-b border-line-subtle px-1.5 py-1.5 last:border-b-0">
+    <div
+      ref={ref}
+      data-artifact-turn={turnKey(turn)}
+      className={cn('border-b border-line-subtle px-1.5 py-1.5 last:border-b-0', !!focusToken && 'search-hit')}
+    >
       <button
         type="button"
         onClick={() => openSession(turn.sessionId, turn.userItemId)}
@@ -276,8 +327,15 @@ function TurnBlock({
         <span className="shrink-0 text-fg-faint tabular-nums">{relativeTime(turn.at, now)}</span>
       </button>
       <ul className="flex flex-col">
-        {turn.files.map(f => (
-          <FileRow key={f.absolute} file={f} turn={turn} target={target} demo={demo} />
+        {turn.files.map((f, i) => (
+          <FileRow
+            key={f.absolute}
+            file={f}
+            turn={turn}
+            target={target}
+            demo={demo}
+            autoOpen={focusToken && i < FOCUS_OPEN_MAX ? focusToken : undefined}
+          />
         ))}
       </ul>
     </div>
@@ -289,11 +347,14 @@ function FileRow({
   turn,
   target,
   demo,
+  autoOpen,
 }: {
   file: ArtifactFile
   turn: ArtifactTurn
   target: WorkspaceRef
   demo: boolean
+  /** 变成新的数字时展开（「审查」） */
+  autoOpen?: number
 }) {
   useI18n()
   const [open, setOpen] = useState(false)
@@ -304,6 +365,9 @@ function FileRow({
       setOpen(false)
       return
     }
+    await show()
+  }
+  const show = async () => {
     setOpen(true)
     if (change && change !== 'loading') return
     setChange('loading')
@@ -318,6 +382,11 @@ function FileRow({
       setChange(null)
     }
   }
+  const latestShow = useRef(show)
+  latestShow.current = show
+  useEffect(() => {
+    if (autoOpen) void latestShow.current()
+  }, [autoOpen])
   return (
     <li className="group/file">
       <div className="flex h-7 min-w-0 items-center gap-1 rounded-md pr-0.5 hover:bg-hover">

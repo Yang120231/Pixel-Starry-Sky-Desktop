@@ -27,6 +27,10 @@ export const artifactMessages = {
   'artifacts.hideDiff': { zh: '收起差异', en: 'Hide diff' },
   'artifacts.openFile': { zh: '在编辑器中打开', en: 'Open in editor' },
   'artifacts.jump': { zh: '跳到对话', en: 'Go to conversation' },
+  'artifacts.focusMissing': {
+    zh: '产物里找不到这一轮的改动（右侧面板可能是别的项目，或者改动不在工作区里）',
+    en: "Couldn't find this turn's changes in Artifacts (the panel may show another project, or the files are outside the workspace)",
+  },
   'artifacts.outside': { zh: '另有 {count} 个工作区外的文件', en: '{count} more files outside this workspace' },
   'artifacts.truncated': { zh: '内容太多，只列出了一部分', en: 'Too many results; only some are listed' },
   'artifacts.partial': { zh: '有会话记录读取不完整', en: "Some session records couldn't be fully read" },

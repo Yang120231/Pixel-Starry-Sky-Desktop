@@ -20,13 +20,15 @@ import { DETACH_EVENT } from '@/features/search/navigation'
 import { JumpToLatest } from './JumpToLatest'
 import { contentMark, followResize, nearBottom } from './scrollFollow'
 import { changesHeight, itemHeight, toolsHeight } from './blockHeight'
+import { reviewTurn } from '@/features/panel/artifacts/focus'
 
 type ToolItem = Extract<Item, { kind: 'command' | 'file_change' | 'tool' }>
 
 type Block =
   | { type: 'item'; item: Item }
   | { type: 'tools'; key: string; items: ToolItem[] }
-  | { type: 'changes'; key: string; data: ChangedFiles }
+  /** turnKey：这一轮的用户消息 id，第一条用户消息之前的改动为 'start' */
+  | { type: 'changes'; key: string; turnKey: string; data: ChangedFiles }
 
 /**
  * 每轮改动卡片的数据缓存：这一轮的文件改动条目（对象本身）没变就复用上次的数据，
@@ -62,7 +64,7 @@ function toBlocks(items: Item[], running: boolean, cache: ChangesCache): Block[]
     const data = cached && sameItems(cached.items, changeItems) ? cached.data : toChangedFiles(changes)
     if (data) {
       cache.set(key, { items: changeItems, data })
-      blocks.push({ type: 'changes', key, data })
+      blocks.push({ type: 'changes', key, turnKey, data })
     }
     changes = []
     changeItems = []
@@ -127,10 +129,25 @@ const ItemView = memo(function ItemView({ item, reply }: { item: Item; reply?: s
   }
 })
 
-const TurnChanges = memo(function TurnChanges({ data, sessionId }: { data: ChangedFiles; sessionId: string | null }) {
+const TurnChanges = memo(function TurnChanges({
+  data,
+  sessionId,
+  turnKey,
+}: {
+  data: ChangedFiles
+  sessionId: string | null
+  turnKey: string
+}) {
   const target = useMemo(() => (sessionId ? { sessionId } : undefined), [sessionId])
   const style = useMemo(() => placeholder(changesHeight(data.files.length)), [data])
-  return <ChangedFilesCard className="conversation-message" data={data} target={target} style={style} />
+  // 「审查」：在右侧「产物」里打开这一轮的改动（docs/ui/conversation-ux.md §2.1）
+  const review = useMemo(
+    () => (sessionId ? () => reviewTurn(sessionId, turnKey === 'start' ? null : turnKey) : undefined),
+    [sessionId, turnKey],
+  )
+  return (
+    <ChangedFilesCard className="conversation-message" data={data} target={target} style={style} onReview={review} />
+  )
 })
 
 export function LiveTranscript({ snapshot }: { snapshot: SessionSnapshot | null }) {
@@ -331,7 +348,8 @@ export function LiveTranscript({ snapshot }: { snapshot: SessionSnapshot | null 
                   </div>
                 )
               }
-              if (b.type === 'changes') return <TurnChanges key={b.key} data={b.data} sessionId={sessionId} />
+              if (b.type === 'changes')
+                return <TurnChanges key={b.key} data={b.data} sessionId={sessionId} turnKey={b.turnKey} />
               // 统计关闭时 TurnStats 不产生 DOM，避免外层空块在 flex 列表里留下间距。
               if (b.item.kind === 'turn_stats')
                 return <ItemView key={b.item.id} item={b.item} reply={replies.get(b.item.id)} />
