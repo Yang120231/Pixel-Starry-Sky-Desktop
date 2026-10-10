@@ -381,13 +381,15 @@ export function AgentTracePanel({ sessionId, runs, focus, onFocus, onClose, belo
   const agentBars = useMemo(() => timeline(runs.agents, now), [runs.agents, now])
   const empty = runs.workflows.length === 0 && runs.agents.length === 0
 
-  // Esc 关闭
+  // Esc 关闭：在捕获阶段先拿到并标记已处理，输入框就不会再用这次 Esc 停止回复（docs/ui/conversation-ux.md §2.5）
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key !== 'Escape' || e.defaultPrevented) return
+      e.preventDefault()
+      onClose()
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
   }, [onClose])
 
   return (

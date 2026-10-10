@@ -28,6 +28,7 @@ import { ComposerStatusBar } from './ComposerStatusBar'
 import { useI18n } from '@/i18n/I18nProvider'
 import { useCommands } from '@/features/settings/plugins/useCommands'
 import { CommandMenu } from './CommandMenu'
+import { escapeStops } from './escapeStop'
 import { tr } from '../../i18n/core'
 import { ImageAttachments } from '@/features/session/attachments/ImageAttachments'
 import { readImage } from '@/features/session/attachments/images'
@@ -267,6 +268,7 @@ export function Composer({
   }
 
   const suggestion = live && !running && text === '' ? live.suggestion : null
+  const stop = (): void => void live?.stop().catch((err: Error) => setError(err.message))
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
     if (e.nativeEvent.isComposing) return
@@ -288,6 +290,13 @@ export function Composer({
         } else chooseCommand(activeCommandIndex)
         return
       }
+    }
+    // 回复进行中按 Esc 停止，和停止按钮一样（docs/ui/conversation-ux.md §2.5）
+    const { isComposing, defaultPrevented } = e.nativeEvent
+    if (escapeStops({ key: e.key, isComposing, defaultPrevented }, running)) {
+      e.preventDefault()
+      stop()
+      return
     }
     // 输入建议：输入框为空时按 Tab 填入（docs/engines.md §15.5）
     if (e.key === 'Tab' && !e.shiftKey && suggestion) {
@@ -467,8 +476,8 @@ export function Composer({
                   key="stop"
                   type="button"
                   aria-label={translate('停止')}
-                  title={translate('停止当前任务并暂停队列')}
-                  onClick={() => void live?.stop().catch((err: Error) => setError(err.message))}
+                  title={translate('停止当前任务并暂停队列（Esc）')}
+                  onClick={stop}
                   className="press no-drag inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-fg hover:opacity-90"
                 >
                   <Square size={12} strokeWidth={0} fill="currentColor" />

@@ -440,6 +440,10 @@ export const catalog = {
     "zh": "停止当前任务并暂停队列",
     "en": "Stop this task and pause the queue"
   },
+  "session.Composer.stopThisTaskAndEsc": {
+    "zh": "停止当前任务并暂停队列（Esc）",
+    "en": "Stop this task and pause the queue (Esc)"
+  },
   "session.Composer.queueMessage": {
     "zh": "加入队列",
     "en": "Queue message"
@@ -1063,6 +1067,14 @@ export const catalog = {
   "session.live.LiveTranscript.working": {
     "zh": "正在处理…",
     "en": "Working…"
+  },
+  "session.live.LiveTranscript.jumpToLatest": {
+    "zh": "回到最新",
+    "en": "Jump to latest"
+  },
+  "session.live.LiveTranscript.newContent": {
+    "zh": "新内容",
+    "en": "New content"
   },
   "session.live.NoticeActions.changeRoute": {
     "zh": "换线路",
