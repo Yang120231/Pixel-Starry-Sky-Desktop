@@ -1,16 +1,38 @@
-import { useEngineState } from '@/features/engine'
-import { usePaneState } from '@/features/panes/store'
+import { getEngineState, useEngineState } from '@/features/engine'
+import { getPaneState, usePaneState } from '@/features/panes/store'
 import { focusedTab, isNewTab, parseFileTab } from '@/features/panes/tree'
-import { useFiles } from '@/features/files/store'
+import { getFiles, useFiles } from '@/features/files/store'
 import { isDemo, projects } from '@/data'
 import type { WorkspaceRef } from '../../../../shared/types/workspace'
 import { draftWorkspace } from '@/features/machines/drafts'
 
-export function useActiveWorkspace(): { ref: WorkspaceRef | null; name: string; path: string; key: string } {
+export interface ActiveWorkspace {
+  ref: WorkspaceRef | null
+  name: string
+  path: string
+  key: string
+}
+
+type EngineState = ReturnType<typeof getEngineState>
+type FilesState = ReturnType<typeof getFiles>
+
+export function useActiveWorkspace(): ActiveWorkspace {
   const tab = usePaneState(s => focusedTab(s.layout))
   const state = useEngineState(s => s)
-  const files = useFiles(),
-    file = files.tabs.find(t => t.id === tab),
+  const files = useFiles()
+  return resolveWorkspace(tab, state, files)
+}
+
+/**
+ * 不订阅、用的时候读一次。给每一行都有的按钮用（对话里的工具行）：useActiveWorkspace 订阅了整个引擎状态，
+ * 流式输出时每来一个字，上千行都会跟着重新渲染（docs/ui/conversation-ux.md §2.7）
+ */
+export const getActiveWorkspace = (): ActiveWorkspace =>
+  resolveWorkspace(focusedTab(getPaneState().layout), getEngineState(), getFiles())
+
+/** 当前焦点标签对应的工作区 */
+function resolveWorkspace(tab: string | null, state: EngineState, files: FilesState): ActiveWorkspace {
+  const file = files.tabs.find(t => t.id === tab),
     parsed = tab ? parseFileTab(tab) : null
   if (parsed) {
     const ref = file?.ref ?? parsed.ref

@@ -1,7 +1,7 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../../i18n/core'
 // 真实会话的对话流：按「轮」排列条目，连续的工具调用串成一组，每轮结束后显示改动文件卡片
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import type { FileChange, Item, SessionSnapshot } from '@pixelsky/protocol'
 import { Spinner, cn } from '@/ui'
 import { toChangedFiles } from '@/features/engine'
@@ -16,8 +16,10 @@ import { AssistantMessageActions, UserMessageActions } from './MessageActions'
 import { platformNoticeText } from './errorKind'
 import { useItemLocation } from '@/features/search/useItemLocation'
 import { ExpandScope } from '@/features/search/expand'
+import { DETACH_EVENT } from '@/features/search/navigation'
 import { JumpToLatest } from './JumpToLatest'
 import { contentMark, followResize, nearBottom } from './scrollFollow'
+import { changesHeight, itemHeight, toolsHeight } from './blockHeight'
 
 type ToolItem = Extract<Item, { kind: 'command' | 'file_change' | 'tool' }>
 
@@ -26,19 +28,44 @@ type Block =
   | { type: 'tools'; key: string; items: ToolItem[] }
   | { type: 'changes'; key: string; data: ChangedFiles }
 
+/**
+ * 每轮改动卡片的数据缓存：这一轮的文件改动条目（对象本身）没变就复用上次的数据，
+ * 流式输出时卡片的 props 不变，memo 才能跳过它（docs/ui/conversation-ux.md §2.7）
+ */
+type ChangesCache = Map<string, { items: Item[]; data: ChangedFiles }>
+
+const sameItems = (a: readonly Item[], b: readonly Item[]): boolean =>
+  a.length === b.length && a.every((item, i) => item === b[i])
+
+/** 块没渲染过时的占位高度（content-visibility，见 blockHeight.ts）；按条目对象缓存，流式输出时只重算在动的那一条 */
+const heights = new WeakMap<Item, number>()
+function estimate(item: Item): number {
+  let height = heights.get(item)
+  if (height === undefined) heights.set(item, (height = itemHeight(item)))
+  return height
+}
+const placeholder = (px: number): CSSProperties => ({ containIntrinsicBlockSize: `auto ${px}px` })
+
 function isTool(item: Item): item is ToolItem {
   return item.kind === 'command' || item.kind === 'file_change' || item.kind === 'tool'
 }
 
 /** 把条目分成显示块；running 为真时最后一轮还没结束，不显示它的改动卡片 */
-function toBlocks(items: Item[], running: boolean): Block[] {
+function toBlocks(items: Item[], running: boolean, cache: ChangesCache): Block[] {
   const blocks: Block[] = []
   let changes: FileChange[] = []
+  let changeItems: Item[] = []
   let turnKey = 'start'
   const flushChanges = (): void => {
-    const data = toChangedFiles(changes)
-    if (data) blocks.push({ type: 'changes', key: `changes-${turnKey}`, data })
+    const key = `changes-${turnKey}`
+    const cached = cache.get(key)
+    const data = cached && sameItems(cached.items, changeItems) ? cached.data : toChangedFiles(changes)
+    if (data) {
+      cache.set(key, { items: changeItems, data })
+      blocks.push({ type: 'changes', key, data })
+    }
     changes = []
+    changeItems = []
   }
   for (const item of items) {
     if (item.kind === 'user' && item.mode !== 'guidance') {
@@ -47,7 +74,10 @@ function toBlocks(items: Item[], running: boolean): Block[] {
     }
     // 一轮的统计放在这一轮最后（改动文件卡片之后），docs/ui/usage.md §4
     if (item.kind === 'turn_stats') flushChanges()
-    if (item.kind === 'file_change' && item.status === 'completed') changes.push(...item.changes)
+    if (item.kind === 'file_change' && item.status === 'completed') {
+      changes.push(...item.changes)
+      changeItems.push(item)
+    }
     if (isTool(item)) {
       const last = blocks[blocks.length - 1]
       if (last?.type === 'tools') last.items.push(item)
@@ -60,7 +90,9 @@ function toBlocks(items: Item[], running: boolean): Block[] {
   return blocks
 }
 
-function ItemView({ item, reply }: { item: Item; reply?: string }) {
+// 下面几个显示组件都 memo：条目对象没变（protocol 的 reduce 只替换变了的那一条）就不重新渲染，
+// 流式输出时只有最后一条在动（docs/ui/conversation-ux.md §2.7）
+const ItemView = memo(function ItemView({ item, reply }: { item: Item; reply?: string }) {
   useI18n()
   switch (item.kind) {
     case 'user':
@@ -93,7 +125,13 @@ function ItemView({ item, reply }: { item: Item; reply?: string }) {
     default:
       return null
   }
-}
+})
+
+const TurnChanges = memo(function TurnChanges({ data, sessionId }: { data: ChangedFiles; sessionId: string | null }) {
+  const target = useMemo(() => (sessionId ? { sessionId } : undefined), [sessionId])
+  const style = useMemo(() => placeholder(changesHeight(data.files.length)), [data])
+  return <ChangedFilesCard className="conversation-message" data={data} target={target} style={style} />
+})
 
 export function LiveTranscript({ snapshot }: { snapshot: SessionSnapshot | null }) {
   useI18n()
@@ -116,7 +154,12 @@ export function LiveTranscript({ snapshot }: { snapshot: SessionSnapshot | null 
   const highlight = useItemLocation(snapshot?.record.id ?? null, scroller, !!snapshot, detachForSearch)
   const running = !!snapshot && snapshot.state !== 'idle'
   const items = snapshot?.items ?? []
-  const blocks = useMemo(() => toBlocks(items, running), [items, running])
+  const sessionId = snapshot?.record.id ?? null
+  const changesCache = useRef<{ sessionId: string | null; map: ChangesCache }>({ sessionId: null, map: new Map() })
+  const blocks = useMemo(() => {
+    if (changesCache.current.sessionId !== sessionId) changesCache.current = { sessionId, map: new Map() }
+    return toBlocks(items, running, changesCache.current.map)
+  }, [items, running, sessionId])
   // 每轮统计行对应的回复：这一轮最后一段助手文字（中间穿插工具调用的文字段不算）
   const replies = useMemo(() => {
     const map = new Map<string, string>()
@@ -153,6 +196,14 @@ export function LiveTranscript({ snapshot }: { snapshot: SessionSnapshot | null 
     const el = scroller.current
     if (el && stick.current) el.scrollTop = el.scrollHeight
   }, [blocks, showThinking, starting.length])
+
+  // 对话内搜索等程序滚动之前会先发 DETACH_EVENT：和搜索跳转一样暂时不贴底
+  useEffect(() => {
+    const el = scroller.current
+    if (!el) return
+    el.addEventListener(DETACH_EVENT, detachForSearch)
+    return () => el.removeEventListener(DETACH_EVENT, detachForSearch)
+  }, [detachForSearch])
 
   // 切换会话时回到底部
   useLayoutEffect(() => {
@@ -263,7 +314,11 @@ export function LiveTranscript({ snapshot }: { snapshot: SessionSnapshot | null 
             {blocks.map((b, i) => {
               if (b.type === 'tools') {
                 return (
-                  <div key={b.key} className="conversation-message flex flex-col border-l border-line pl-1.5">
+                  <div
+                    key={b.key}
+                    className="conversation-message flex flex-col border-l border-line pl-1.5"
+                    style={placeholder(toolsHeight(b.items.length))}
+                  >
                     {b.items.map(it => (
                       <div
                         key={it.id}
@@ -276,15 +331,7 @@ export function LiveTranscript({ snapshot }: { snapshot: SessionSnapshot | null 
                   </div>
                 )
               }
-              if (b.type === 'changes')
-                return (
-                  <ChangedFilesCard
-                    key={b.key}
-                    className="conversation-message"
-                    data={b.data}
-                    target={snapshot ? { sessionId: snapshot.record.id } : undefined}
-                  />
-                )
+              if (b.type === 'changes') return <TurnChanges key={b.key} data={b.data} sessionId={sessionId} />
               // 统计关闭时 TurnStats 不产生 DOM，避免外层空块在 flex 列表里留下间距。
               if (b.item.kind === 'turn_stats')
                 return <ItemView key={b.item.id} item={b.item} reply={replies.get(b.item.id)} />
@@ -307,6 +354,7 @@ export function LiveTranscript({ snapshot }: { snapshot: SessionSnapshot | null 
                 <div
                   key={item.id}
                   data-search-item={item.id}
+                  style={placeholder(estimate(item))}
                   className={[
                     'group/message',
                     isUser ? 'conversation-user-row' : 'conversation-message',

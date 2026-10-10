@@ -9,6 +9,7 @@ import { searchLiteral } from '@pixelsky/protocol'
 import { IconButton } from '@/ui'
 import { FIND_IN_CONVERSATION } from '@/features/layout/shortcuts'
 import { findRanges, setMarks } from './termMarks'
+import { detachConversation } from './navigation'
 
 /** 最近点过 / 聚焦过的对话区：焦点不在任何输入框时，Ctrl+F 打开在它上面 */
 let lastConversation: HTMLElement | null = null
@@ -121,6 +122,7 @@ function reveal(range: Range, scroller: HTMLElement): void {
   const rect = range.getBoundingClientRect(),
     box = scroller.getBoundingClientRect()
   if (rect.top >= box.top + EDGE && rect.bottom <= box.bottom - EDGE) return
+  detachConversation(scroller)
   scroller.scrollTop += rect.top - box.top - (scroller.clientHeight - rect.height) / 2
 }
 

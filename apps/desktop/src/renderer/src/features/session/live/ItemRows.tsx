@@ -1,7 +1,7 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '../../../i18n/core'
 // 对话流里各种条目的显示（docs/engines.md §5.3、§11）
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { memo, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   Ban,
   Bot,
@@ -33,7 +33,7 @@ import { StepMark } from './ProgressCard'
 import { UserText } from './UserText'
 import { freshRequest, useExpandRequest } from '@/features/search/expand'
 import { openFile } from '@/features/files/store'
-import { useActiveWorkspace } from '@/features/editor/target'
+import { getActiveWorkspace } from '@/features/editor/target'
 import { ImageAttachments } from '@/features/session/attachments/ImageAttachments'
 
 type ItemOf<K extends Item['kind']> = Extract<Item, { kind: K }>
@@ -235,18 +235,17 @@ function fileVerb(changes: FileChange[]): string {
     : tr('session.live.ItemRows.edit')
 }
 
-/** 工具调用的一行：运行命令 / 编辑文件 / 读取 / 搜索 / 网页 / MCP / 子任务；点开看输出或 diff */
-export function ToolItemRow({ item }: { item: ItemOf<'command' | 'file_change' | 'tool'> }) {
+/** 工具调用的一行：运行命令 / 编辑文件 / 读取 / 搜索 / 网页 / MCP / 子任务；点开看输出或 diff。条目没变就不重新渲染 */
+export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'command' | 'file_change' | 'tool'> }) {
   useI18n()
   const foldable = item.kind === 'file_change' ? item.changes.some(c => c.diff) : !!item.output
   const { open, toggle, fold } = useFold(item.id, foldable)
   const row = useRef<HTMLDivElement>(null)
-  const workspace = useActiveWorkspace(),
-    [fileError, setFileError] = useState('')
+  const [fileError, setFileError] = useState('')
   const openTrace = useOpenTrace()
   const openChangedFile = (change: FileChange): void => {
     const sessionId = row.current?.closest<HTMLElement>('[data-search-session]')?.dataset.searchSession
-    const ref = sessionId ? { sessionId } : workspace.ref
+    const ref = sessionId ? { sessionId } : getActiveWorkspace().ref
     if (!ref) return
     const added = change.diff
       .split('\n')
@@ -391,7 +390,7 @@ export function ToolItemRow({ item }: { item: ItemOf<'command' | 'file_change' |
       )}
     </div>
   )
-}
+})
 
 /** 待办清单（Claude 的 TodoWrite、Codex 的计划）：一行概要，点开看完整列表；当前计划常驻在进度卡片里（docs/ui/progress-card.md §5） */
 export function TodoCard({ item }: { item: ItemOf<'todo'> }) {

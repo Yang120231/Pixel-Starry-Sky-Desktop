@@ -7,7 +7,7 @@ import { changedFiles, type ChangedFiles } from '@/data'
 import { openFile } from '@/features/files/store'
 import type { WorkspaceRef } from '../../../../shared/types/workspace'
 import { isDemo, projects } from '@/data'
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 
 /**
  * 改动文件卡片；data 不传时用演示数据。
@@ -18,8 +18,10 @@ export function ChangedFilesCard({
   data = changedFiles,
   target,
   onReview,
+  style,
 }: {
   className?: string
+  style?: CSSProperties
   data?: ChangedFiles | null
   target?: WorkspaceRef
   onReview?: () => void
@@ -30,7 +32,7 @@ export function ChangedFilesCard({
   if (!data) return null
   const review = onReview ?? (isDemo ? () => comingSoon(tr('session.ChangedFilesCard.review')) : null)
   return (
-    <section className={cn('rounded-xl border border-line-card bg-surface shadow-sm', className)}>
+    <section className={cn('rounded-xl border border-line-card bg-surface shadow-sm', className)} style={style}>
       <div className="flex items-center gap-3 px-4 pt-4 pb-3">
         <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-md bg-subtle text-fg-secondary">
           <FileDiff size={18} strokeWidth={1.5} />
