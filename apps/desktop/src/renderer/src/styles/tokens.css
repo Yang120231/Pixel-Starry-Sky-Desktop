@@ -210,6 +210,121 @@
   --shadow-workbench: 0 8px 28px -14px rgba(0, 0, 0, 0.24);
 }
 
+/* 强调色预设（<html data-accent>，features/appearance/accent.ts）：只换 --accent* 这组，默认墨绿就是上面的基础值。
+   浅色写在 :root[data-accent]，深色用 [data-theme='dark'][data-accent] 盖过它。
+   [data-accent-swatch] 让设置页的色块在自己身上取这一套值，不受当前选中的强调色影响（墨绿也要单独写一份）。
+   对比度都过 WCAG AA：--accent-text 在底色 / 卡片 / --accent-soft 上 ≥ 4.5，--accent-on 在 --accent 上 ≥ 4.5。 */
+[data-accent-swatch='green'] {
+  --accent: #2d6151;
+  --accent-on: #ffffff;
+  --accent-soft: #e1eae5;
+  --accent-text: #2d6151;
+  --accent-border: #83a394;
+}
+:root[data-accent='blue'],
+[data-accent-swatch='blue'] {
+  --accent: #2f5f9e;
+  --accent-on: #ffffff;
+  --accent-soft: #e2e9f3;
+  --accent-text: #2f5f9e;
+  --accent-border: #8aa3c4;
+}
+:root[data-accent='violet'],
+[data-accent-swatch='violet'] {
+  --accent: #5b4a9e;
+  --accent-on: #ffffff;
+  --accent-soft: #e8e5f2;
+  --accent-text: #5b4a9e;
+  --accent-border: #a69cc8;
+}
+:root[data-accent='teal'],
+[data-accent-swatch='teal'] {
+  --accent: #1f6a73;
+  --accent-on: #ffffff;
+  --accent-soft: #ddeaeb;
+  --accent-text: #1f6a73;
+  --accent-border: #7fa9ad;
+}
+:root[data-accent='amber'],
+[data-accent-swatch='amber'] {
+  --accent: #9a5a12;
+  --accent-on: #ffffff;
+  --accent-soft: #f2e7d8;
+  --accent-text: #8a5010;
+  --accent-border: #c9a273;
+}
+:root[data-accent='rose'],
+[data-accent-swatch='rose'] {
+  --accent: #a3405a;
+  --accent-on: #ffffff;
+  --accent-soft: #f3e2e6;
+  --accent-text: #a3405a;
+  --accent-border: #cf98a6;
+}
+:root[data-accent='graphite'],
+[data-accent-swatch='graphite'] {
+  --accent: #3d3f3a;
+  --accent-on: #ffffff;
+  --accent-soft: #e6e6e1;
+  --accent-text: #3d3f3a;
+  --accent-border: #a3a39b;
+}
+:root[data-theme='dark'] [data-accent-swatch='green'] {
+  --accent: #7fc4a8;
+  --accent-on: #13261e;
+  --accent-soft: #1e3a30;
+  --accent-text: #8fd0b4;
+  --accent-border: #4f8a73;
+}
+:root[data-theme='dark'][data-accent='blue'],
+:root[data-theme='dark'] [data-accent-swatch='blue'] {
+  --accent: #86aee6;
+  --accent-on: #10213a;
+  --accent-soft: #1d2c42;
+  --accent-text: #96bbee;
+  --accent-border: #4f74a6;
+}
+:root[data-theme='dark'][data-accent='violet'],
+:root[data-theme='dark'] [data-accent-swatch='violet'] {
+  --accent: #b3a3ec;
+  --accent-on: #221a3d;
+  --accent-soft: #2c2640;
+  --accent-text: #bfb1f0;
+  --accent-border: #7666b0;
+}
+:root[data-theme='dark'][data-accent='teal'],
+:root[data-theme='dark'] [data-accent-swatch='teal'] {
+  --accent: #74c2c9;
+  --accent-on: #0f2a2d;
+  --accent-soft: #183538;
+  --accent-text: #86ccd2;
+  --accent-border: #4a8a90;
+}
+:root[data-theme='dark'][data-accent='amber'],
+:root[data-theme='dark'] [data-accent-swatch='amber'] {
+  --accent: #e3a95e;
+  --accent-on: #2e1d07;
+  --accent-soft: #3a2c1a;
+  --accent-text: #e9b571;
+  --accent-border: #9a7340;
+}
+:root[data-theme='dark'][data-accent='rose'],
+:root[data-theme='dark'] [data-accent-swatch='rose'] {
+  --accent: #ec96aa;
+  --accent-on: #3a1520;
+  --accent-soft: #3d2229;
+  --accent-text: #f0a5b6;
+  --accent-border: #a65a6d;
+}
+:root[data-theme='dark'][data-accent='graphite'],
+:root[data-theme='dark'] [data-accent-swatch='graphite'] {
+  --accent: #cfcdc5;
+  --accent-on: #1a1a19;
+  --accent-soft: #33332f;
+  --accent-text: #dcdad3;
+  --accent-border: #6e6c66;
+}
+
 :root {
   /* 截图标注画进图片里的颜色：是图片内容，深浅主题一样（docs/ui/rewind-fork-sidechat.md §6） */
   --annotate-red: #e5484d;

@@ -2920,6 +2920,46 @@ export const catalog = {
     "zh": "首次请求、模型或线路切换、上下文压缩及长时间停顿后不提醒。提醒出现时，请求已经开始。",
     "en": "No alerts on first requests, model or route changes, compaction, or long pauses. The request has already started when the alert appears."
   },
+  "settings.AccentSettings.accent": {
+    "zh": "强调色",
+    "en": "Accent color"
+  },
+  "settings.AccentSettings.description": {
+    "zh": "按钮、选中项、链接和进度条用的主色。底色、代码高亮和终端配色不变。",
+    "en": "The main color for buttons, selections, links and progress bars. Backgrounds, code highlighting and terminal colors stay the same."
+  },
+  "settings.AccentSettings.chooseAccent": {
+    "zh": "选择强调色：{p0}",
+    "en": "Choose accent color: {p0}"
+  },
+  "settings.AccentSettings.green": {
+    "zh": "墨绿",
+    "en": "Green"
+  },
+  "settings.AccentSettings.blue": {
+    "zh": "海蓝",
+    "en": "Blue"
+  },
+  "settings.AccentSettings.violet": {
+    "zh": "靛紫",
+    "en": "Violet"
+  },
+  "settings.AccentSettings.teal": {
+    "zh": "青碧",
+    "en": "Teal"
+  },
+  "settings.AccentSettings.amber": {
+    "zh": "琥珀",
+    "en": "Amber"
+  },
+  "settings.AccentSettings.rose": {
+    "zh": "玫红",
+    "en": "Rose"
+  },
+  "settings.AccentSettings.graphite": {
+    "zh": "石墨",
+    "en": "Graphite"
+  },
   "settings.ComposerStyleSettings.composerStyle": {
     "zh": "对话框风格",
     "en": "Composer style"
