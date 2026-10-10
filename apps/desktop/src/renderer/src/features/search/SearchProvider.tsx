@@ -68,8 +68,3 @@ export function useOpenSearch(): () => void {
   if (!open) throw new Error(tr('search.SearchProvider.searchMustBeUsed'))
   return open.show
 }
-export function useSearchUi() {
-  const value = useContext(SearchContext)
-  if (!value) throw new Error(tr('search.SearchProvider.searchMustBeUsed'))
-  return value
-}

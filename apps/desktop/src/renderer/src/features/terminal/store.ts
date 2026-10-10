@@ -20,7 +20,6 @@ let init: Promise<void> | null = null
 type DataEvent = Extract<TerminalEvent, { type: 'data' }>
 const sinks = new Map<string, (event: DataEvent) => void>()
 const pending = new Map<string, DataEvent[]>()
-const recordListeners = new Set<(record: TerminalRecord) => void>()
 function set(patch: Partial<State>): void {
   state = { ...state, ...patch }
   listeners.forEach(fn => fn())
@@ -34,7 +33,6 @@ export function applyTerminalRecord(record: TerminalRecord): void {
   set({
     terminals: previous ? state.terminals.map(r => (r.id === record.id ? record : r)) : [...state.terminals, record],
   })
-  recordListeners.forEach(fn => fn(record))
 }
 /** 等 shell 第一次输出（提示符）后再写入的命令（docs/ui/files-search-terminal-pins.md §4.3） */
 const readyWaiters = new Map<string, () => void>()
@@ -87,12 +85,6 @@ export function useTerminalStore(): State {
 }
 export function terminalState(): State {
   return state
-}
-export function onTerminalRecord(fn: (r: TerminalRecord) => void): () => void {
-  recordListeners.add(fn)
-  return () => {
-    recordListeners.delete(fn)
-  }
 }
 export function consumeTerminal(id: string, sink: (e: DataEvent) => void): () => void {
   sinks.set(id, sink)

@@ -48,8 +48,6 @@ export async function togglePinnedDone(task: ManualTask): Promise<void> {
   await reloadPinnedTasks()
 }
 
-export const isPinned = (id: string): boolean => pinned.some(t => t.id === id)
-
 export function usePinnedTasks(): ManualTask[] {
   // 固定列表跟着当前机器走：切换机器后重新读
   const machine = useMachines().currentId

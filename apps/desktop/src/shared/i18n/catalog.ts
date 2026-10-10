@@ -236,10 +236,6 @@ export const catalog = {
     "zh": "纯文本",
     "en": "Plain text"
   },
-  "nav.TopNav.mainNavigation": {
-    "zh": "主导航",
-    "en": "Main navigation"
-  },
   "nav.TopNav.usage": {
     "zh": "用量",
     "en": "Usage"
@@ -303,30 +299,6 @@ export const catalog = {
   "nav.WindowControls.restorePreviousWindowSize": {
     "zh": "恢复原窗口大小和位置",
     "en": "Restore previous window size and position"
-  },
-  "panel.BrowserTab.noPageOpenYet": {
-    "zh": "还没有打开网页",
-    "en": "No page open yet"
-  },
-  "panel.BrowserTab.enterUrlAboveOr": {
-    "zh": "在上方输入网址，或让智能体打开预览",
-    "en": "Enter a URL above, or ask the agent to open a preview"
-  },
-  "panel.BrowserToolbar.back": {
-    "zh": "后退",
-    "en": "Back"
-  },
-  "panel.BrowserToolbar.forward": {
-    "zh": "前进",
-    "en": "Forward"
-  },
-  "panel.BrowserToolbar.enterUrl": {
-    "zh": "输入网址",
-    "en": "Enter URL"
-  },
-  "panel.BrowserToolbar.annotate": {
-    "zh": "批注",
-    "en": "Annotate"
   },
   "panel.PanelTabs.closeTab": {
     "zh": "关闭标签",
@@ -480,10 +452,6 @@ export const catalog = {
     "zh": "调整输入框右侧宽度",
     "en": "Resize right composer edge"
   },
-  "session.ComposerMenus.reasoningEffortUltracodeEnabled": {
-    "zh": "推理强度 {p0} · Ultracode 已开启",
-    "en": "Reasoning effort {p0} · Ultracode enabled"
-  },
   "session.ComposerMenus.reasoningEffort": {
     "zh": "推理强度 {p0}",
     "en": "Reasoning effort {p0}"
@@ -551,10 +519,6 @@ export const catalog = {
   "session.ComposerStatusBar.chooseProjectToStart": {
     "zh": "在哪个项目里开始",
     "en": "Choose a project to start in"
-  },
-  "session.ComposerStatusBar.addProjectFolder": {
-    "zh": "添加项目文件夹…",
-    "en": "Add project folder…"
   },
   "session.contextData.systemPrompt": {
     "zh": "系统提示",
@@ -1204,10 +1168,6 @@ export const catalog = {
     "zh": "{p0}{p1} · {p2} 条线路",
     "en": "{p0}{p1} · {p2} routes"
   },
-  "session.ModelSourceMenu.andUp": {
-    "zh": "起",
-    "en": "and up"
-  },
   "session.ModelSourceMenu.modelsAppearAfterRoutes": {
     "zh": "读取线路后显示模型",
     "en": "Models appear after routes load"
@@ -1464,14 +1424,6 @@ export const catalog = {
     "zh": "更多",
     "en": "More"
   },
-  "session.SessionHeader.commit": {
-    "zh": "提交",
-    "en": "Commit"
-  },
-  "session.SessionHeader.moreGitActions": {
-    "zh": "更多 git 操作",
-    "en": "More Git actions"
-  },
   "session.SessionHeader.terminal": {
     "zh": "终端",
     "en": "Terminal"
@@ -1676,14 +1628,6 @@ export const catalog = {
     "zh": "最近任务",
     "en": "Recent tasks"
   },
-  "sidebar.Sidebar.searchTasks": {
-    "zh": "搜索任务",
-    "en": "Search tasks"
-  },
-  "sidebar.Sidebar.noTasksYet": {
-    "zh": "暂无任务",
-    "en": "No tasks yet"
-  },
   "sidebar.SidebarFooter.balance": {
     "zh": "余额 {p0}",
     "en": "Balance {p0}"
@@ -1804,22 +1748,6 @@ export const catalog = {
     "zh": "已请求 {p0} 打开项目",
     "en": "Requested {p0} to open the project"
   },
-  "editor.EditorButton.demoModeCannotAccess": {
-    "zh": "演示模式不操作本机项目",
-    "en": "Demo mode cannot access local projects"
-  },
-  "editor.EditorButton.collapseFileTree": {
-    "zh": "收起文件树",
-    "en": "Collapse file tree"
-  },
-  "editor.EditorButton.openCurrentProjectIn": {
-    "zh": "在像素星空中打开当前项目",
-    "en": "Open current project in Pixel Starry Sky"
-  },
-  "editor.EditorButton.openCurrentProjectWith": {
-    "zh": "用 {p0} 打开当前项目",
-    "en": "Open current project with {p0}"
-  },
   "editor.EditorButton.externalEditor": {
     "zh": "外部编辑器",
     "en": "External editor"
@@ -1828,49 +1756,9 @@ export const catalog = {
     "zh": "先选择项目",
     "en": "Choose a project first"
   },
-  "editor.EditorButton.chooseHowToOpen": {
-    "zh": "选择打开方式",
-    "en": "Choose how to open"
-  },
-  "editor.EditorButton.projectOpeningOptions": {
-    "zh": "项目打开方式",
-    "en": "Project opening options"
-  },
-  "editor.EditorButton.noProjectSelected": {
-    "zh": "未选择项目",
-    "en": "No project selected"
-  },
-  "editor.EditorButton.openInPixelStarry": {
-    "zh": "在像素星空中打开",
-    "en": "Open in Pixel Starry Sky"
-  },
   "editor.EditorButton.unavailable": {
     "zh": "（不可用）",
     "en": "(unavailable)"
-  },
-  "editor.EditorButton.noEditorDetectedSpecify": {
-    "zh": "未检测到编辑器，可在设置中指定",
-    "en": "No editor detected. Specify one in settings."
-  },
-  "editor.EditorButton.detectingEditors": {
-    "zh": "正在检测编辑器…",
-    "en": "Detecting editors…"
-  },
-  "editor.EditorButton.showInFileExplorer": {
-    "zh": "在资源管理器中打开",
-    "en": "Show in File Explorer"
-  },
-  "editor.EditorButton.copyProjectPath": {
-    "zh": "复制项目路径",
-    "en": "Copy project path"
-  },
-  "editor.EditorButton.detectEditorsAgain": {
-    "zh": "重新检测编辑器",
-    "en": "Detect editors again"
-  },
-  "editor.EditorButton.editorSettings": {
-    "zh": "编辑器设置…",
-    "en": "Editor settings…"
   },
   "editor.EditorIcon.registry": {
     "zh": "注册表",
@@ -2171,10 +2059,6 @@ export const catalog = {
   "files.FileTree.refreshFilesAndGit": {
     "zh": "刷新文件与 Git 状态",
     "en": "Refresh files and Git status"
-  },
-  "files.FileTree.collapseAllFolders": {
-    "zh": "收起所有文件夹",
-    "en": "Collapse all folders"
   },
   "files.FileTree.filterFilesByName": {
     "zh": "按名称筛选文件",

@@ -62,7 +62,6 @@ export const sidebarMessages = {
     zh: '选择常用按钮的图标，立即应用并保存在本机。',
     en: 'Choose icons for sidebar actions. Changes apply immediately and are saved on this device.',
   },
-  'sidebar.settings.preview': { zh: '侧边栏图标预览', en: 'Sidebar icon preview' },
   'sidebar.settings.reset': { zh: '恢复默认图标', en: 'Reset icons to defaults' },
   'sidebar.settings.chooseIcon': { zh: '{action}：{icon}', en: '{action}: {icon}' },
   'sidebar.icon.square-pen': { zh: '方框铅笔', en: 'Square pen' },

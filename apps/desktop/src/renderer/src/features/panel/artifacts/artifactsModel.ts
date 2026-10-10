@@ -1,5 +1,5 @@
 // 产物面板的纯函数（docs/ui/artifacts-panel.md）
-import type { ArtifactTurn, DeliveryType } from '@pixelsky/protocol'
+import type { ArtifactTurn } from '@pixelsky/protocol'
 
 export interface SessionGroup {
   sessionId: string
@@ -37,17 +37,6 @@ export function formatBytes(bytes: number | null): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1).replace(/\.0$/, '')} KB`
   return `${(bytes / 1024 / 1024).toFixed(1).replace(/\.0$/, '')} MB`
 }
-
-/** 交付类型（含「其他」） */
-export const ICON_TYPES: readonly (DeliveryType | 'other')[] = [
-  'document',
-  'image',
-  'table',
-  'web',
-  'archive',
-  'media',
-  'other',
-]
 
 /** 路径拆成文件名和目录（兼容 Windows 分隔符） */
 export function splitArtifactPath(path: string): { name: string; dir: string } {

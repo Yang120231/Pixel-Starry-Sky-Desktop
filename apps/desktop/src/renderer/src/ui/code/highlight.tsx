@@ -223,26 +223,6 @@ export function highlightSegments(code: string, lang: string | null): Segment[][
   return out
 }
 
-/** 一行片段 → React 元素 */
-export function renderSegments(segs: Segment[], key: string | number = 0): ReactNode {
-  if (segs.length === 0) return ''
-  return segs.map((s, j) =>
-    s.className ? (
-      <span key={`${key}-${j}`} className={s.className}>
-        {s.text}
-      </span>
-    ) : (
-      s.text
-    ),
-  )
-}
-
-/** 按行高亮，每行一个 ReactNode（diff 视图每行有自己的底色，所以需要逐行拿到结果） */
-export function highlightLines(code: string, lang: string | null): ReactNode[] {
-  if (!lang || code.length > MAX_LENGTH) return code.split('\n')
-  return highlightSegments(code, lang).map((segs, i) => renderSegments(segs, i))
-}
-
 /**
  * 命令该按哪种 shell 着色（docs/ui/content-highlight.md §2 B）：明显是 PowerShell 的按 PowerShell，其余按 bash。
  * Claude 在 Windows 上也用 bash 跑命令；Codex 在 Windows 上的命令多半是 powershell 开头。

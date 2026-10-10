@@ -37,8 +37,6 @@ function set(next: Partial<ChannelsState>): void {
   for (const listener of listeners) listener()
 }
 
-export const getChannelsState = (): ChannelsState => state
-
 /** selector 必须返回 state 里已有的引用（或原始值），派生数据在组件里用 useMemo 算 */
 export function useChannels<T>(selector: (s: ChannelsState) => T): T {
   return useSyncExternalStore(subscribe, () => selector(state))

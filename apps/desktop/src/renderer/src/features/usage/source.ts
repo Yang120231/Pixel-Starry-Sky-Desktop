@@ -28,11 +28,6 @@ function bridge(): UsageBridge | null {
   return engine?.usageSummary ? engine : null
 }
 
-/** 引擎层是否已经提供用量接口（没有时页面提示「引擎还没开始记录」） */
-export function usageAvailable(): boolean {
-  return isDemo || bridge() !== null
-}
-
 // 本地记录：演示模式是假数据；真实模式在引擎接口实现前为空
 let localRecords: UsageRecord[] = isDemo ? demo().usageRecords(Date.now()) : []
 const listeners = new Set<() => void>()
