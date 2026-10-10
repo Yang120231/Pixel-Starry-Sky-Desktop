@@ -97,4 +97,14 @@ describe('对话展示演示数据', () => {
       expect([bytes.readUInt32BE(16), bytes.readUInt32BE(20)], image.name).toEqual([image.width, image.height])
     }
   })
+
+  it('参考图改动卡片的 diff 和卡片上的行数对得上（点文件行能展开）', () => {
+    for (const f of demo.changedFiles!.files) {
+      const lines = f.diffs!.flatMap(d => d.split('\n'))
+      expect(
+        [lines.filter(l => l.startsWith('+')).length, lines.filter(l => l.startsWith('-')).length],
+        f.name,
+      ).toEqual([f.added, f.removed])
+    }
+  })
 })
