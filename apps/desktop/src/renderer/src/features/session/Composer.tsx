@@ -393,6 +393,49 @@ export function Composer({
     void submit()
   }
 
+  // 停止 / 发送：Claude 风格在输入行右边；ChatGPT 风格放在整张卡片（composer-shell）的右下角，和工具行对齐，
+  // 不能放进 composer-core（它也是 relative，按钮会落到输入区底边，比工具行高一截）。
+  const sendControls = (
+    <div
+      className={cn(
+        'composer-send-controls flex shrink-0 items-center gap-1',
+        chatgpt ? 'absolute right-3 bottom-2.5' : 'pr-3 pb-3',
+      )}
+    >
+      {/* 独立 key 保留停止与发送的点击目标语义。 */}
+      {running && (
+        <button
+          key="stop"
+          type="button"
+          aria-label={translate('停止')}
+          title={translate('停止当前任务并暂停队列（Esc）')}
+          onClick={stop}
+          className="press no-drag inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-fg hover:opacity-90"
+        >
+          <Square size={12} strokeWidth={0} fill="currentColor" />
+        </button>
+      )}
+      {(!running || hasContent) && (
+        <button
+          key="send"
+          type="button"
+          aria-label={running ? translate('加入队列') : translate('发送')}
+          aria-disabled={!canSend}
+          title={running ? translate('加入队列（Enter）') : translate('发送（Enter）')}
+          onClick={() => void submit()}
+          className={cn(
+            'no-drag inline-flex size-8 shrink-0 items-center justify-center rounded-full',
+            canSend
+              ? 'press bg-primary text-primary-fg hover:opacity-90'
+              : 'bg-disabled text-disabled-fg transition-colors',
+          )}
+        >
+          <ArrowUp size={17} strokeWidth={2} />
+        </button>
+      )}
+    </div>
+  )
+
   return (
     <>
       {live && (
@@ -572,44 +615,7 @@ export function Composer({
               )}
               style={{ lineHeight: `${LINE_HEIGHT}px` }}
             />
-            <div
-              className={cn(
-                'composer-send-controls flex shrink-0 items-center gap-1',
-                chatgpt ? 'absolute right-3 bottom-2.5' : 'pr-3 pb-3',
-              )}
-            >
-              {/* 独立 key 保留停止与发送的点击目标语义。 */}
-              {running && (
-                <button
-                  key="stop"
-                  type="button"
-                  aria-label={translate('停止')}
-                  title={translate('停止当前任务并暂停队列（Esc）')}
-                  onClick={stop}
-                  className="press no-drag inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-fg hover:opacity-90"
-                >
-                  <Square size={12} strokeWidth={0} fill="currentColor" />
-                </button>
-              )}
-              {(!running || hasContent) && (
-                <button
-                  key="send"
-                  type="button"
-                  aria-label={running ? translate('加入队列') : translate('发送')}
-                  aria-disabled={!canSend}
-                  title={running ? translate('加入队列（Enter）') : translate('发送（Enter）')}
-                  onClick={() => void submit()}
-                  className={cn(
-                    'no-drag inline-flex size-8 shrink-0 items-center justify-center rounded-full',
-                    canSend
-                      ? 'press bg-primary text-primary-fg hover:opacity-90'
-                      : 'bg-disabled text-disabled-fg transition-colors',
-                  )}
-                >
-                  <ArrowUp size={17} strokeWidth={2} />
-                </button>
-              )}
-            </div>
+            {!chatgpt && sendControls}
           </div>
 
           {error && (
@@ -742,6 +748,7 @@ export function Composer({
           )}
           <ContextWindowButton sessionId={sessionId} />
         </div>
+        {chatgpt && sendControls}
       </div>
     </>
   )
