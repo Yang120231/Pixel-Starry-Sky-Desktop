@@ -131,13 +131,15 @@ export function relativeTime(ts: number, now = Date.now()): string {
 /** 统一协议的文件改动 → 「改动文件」卡片的数据（同一个文件多次改动合并） */
 export function toChangedFiles(changes: FileChange[]): ChangedFiles | null {
   if (changes.length === 0) return null
-  const byPath = new Map<string, { added: number; removed: number; newText?: string }>()
+  const byPath = new Map<string, { added: number; removed: number; newText?: string; diffs?: string[] }>()
   for (const c of changes) {
     const prev = byPath.get(c.path) ?? { added: 0, removed: 0 }
+    const diffs = c.diff ? [...(prev.diffs ?? []), c.diff] : prev.diffs
     byPath.set(c.path, {
       added: prev.added + c.added,
       removed: prev.removed + c.removed,
       ...(c.newText ? { newText: c.newText } : prev.newText ? { newText: prev.newText } : {}),
+      ...(diffs ? { diffs } : {}),
     })
   }
   const files = [...byPath].map(([path, n]) => {

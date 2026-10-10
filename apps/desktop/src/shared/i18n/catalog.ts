@@ -388,6 +388,18 @@ export const catalog = {
     "zh": "在像素星空中打开文件",
     "en": "Open file in Pixel Starry Sky"
   },
+  "session.ChangedFilesCard.openInEditor": {
+    "zh": "在编辑器中打开",
+    "en": "Open in editor"
+  },
+  "session.ChangedFilesCard.showChanges": {
+    "zh": "展开改动",
+    "en": "Show changes"
+  },
+  "session.ChangedFilesCard.hideChanges": {
+    "zh": "收起改动",
+    "en": "Hide changes"
+  },
   "session.Composer.send": {
     "zh": "发送",
     "en": "Send"

@@ -19,6 +19,7 @@ import {
   ListTodo,
   Plug,
   Search,
+  SquareArrowOutUpRight,
   SquareTerminal,
   TriangleAlert,
   Wrench,
@@ -26,7 +27,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import type { FileChange, Item, ItemStatus, ToolKind } from '@pixelsky/protocol'
-import { CopyButton, DiffStat, Spinner, cn } from '@/ui'
+import { CopyButton, DiffStat, IconButton, Spinner, cn } from '@/ui'
 import { DiffView } from '@/ui/code/DiffView'
 import { CommandText } from '@/ui/code/CommandText'
 import { AnsiText } from '@/ui/code/AnsiText'
@@ -341,44 +342,79 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
   if (item.kind === 'file_change') {
     const added = item.changes.reduce((n, c) => n + c.added, 0)
     const removed = item.changes.reduce((n, c) => n + c.removed, 0)
+    const single = item.changes.length === 1
+    // 有 diff 时点行展开 / 收起，打开编辑器用单独的图标；没有 diff 时点路径直接打开（docs/ui/changes-inline-diff.md）
+    const openButton = (c: FileChange): ReactNode => (
+      <IconButton
+        icon={SquareArrowOutUpRight}
+        label={tr('session.ChangedFilesCard.openInEditor')}
+        size={24}
+        iconSize={13}
+        onClick={() => openChangedFile(c)}
+      />
+    )
+    const paths = (
+      <div className="flex min-w-0 flex-1 gap-2 overflow-hidden">
+        {item.changes.map(c =>
+          foldable ? (
+            <span key={c.path} className="truncate font-mono text-meta text-code-path">
+              {c.path}
+            </span>
+          ) : (
+            <button
+              key={c.path}
+              type="button"
+              title={tr('session.live.ItemRows.openInPixelStarry', { p0: c.path })}
+              onClick={() => openChangedFile(c)}
+              className="truncate text-left font-mono text-meta text-code-path hover:underline"
+            >
+              {c.path}
+            </button>
+          ),
+        )}
+      </div>
+    )
+    const summary = (
+      <>
+        {item.changes[0]?.kind === 'add' ? (
+          <FilePlus size={15} className="shrink-0 text-fg-muted" />
+        ) : (
+          <FilePen size={15} className="shrink-0 text-fg-muted" />
+        )}
+        <span className="shrink-0">{fileVerb(item.changes)}</span>
+        {paths}
+        {(added > 0 || removed > 0) && <DiffStat added={added} removed={removed} className="text-meta" />}
+        <StatusMark status={item.status} okMark={false} />
+        <SubagentTag name={item.subagent} />
+      </>
+    )
     return (
       <div ref={row} data-fold={fold}>
-        <div className="flex min-h-[30px] min-w-0 items-center gap-2 rounded-md px-2 text-list text-fg-secondary">
-          {item.changes[0]?.kind === 'add' ? (
-            <FilePlus size={15} className="shrink-0 text-fg-muted" />
-          ) : (
-            <FilePen size={15} className="shrink-0 text-fg-muted" />
-          )}
-          <span className="shrink-0">{fileVerb(item.changes)}</span>
-          <div className="flex min-w-0 flex-1 gap-2 overflow-hidden">
-            {item.changes.map(c => (
-              <button
-                key={c.path}
-                type="button"
-                title={tr('session.live.ItemRows.openInPixelStarry', { p0: c.path })}
-                onClick={() => openChangedFile(c)}
-                className="truncate text-left font-mono text-meta text-code-path hover:underline"
-              >
-                {c.path}
-              </button>
-            ))}
-          </div>
-          {(added > 0 || removed > 0) && <DiffStat added={added} removed={removed} className="text-meta" />}
-          <StatusMark status={item.status} okMark={false} />
-          <SubagentTag name={item.subagent} />
-          {foldable && (
+        {foldable ? (
+          <div className="group/file flex min-w-0 items-center gap-1">
             <button
+              type="button"
               aria-expanded={open}
-              aria-label={
-                open ? tr('session.live.ItemRows.collapseFileChanges') : tr('session.live.ItemRows.expandFileChanges')
-              }
+              title={tr(open ? 'session.ChangedFilesCard.hideChanges' : 'session.ChangedFilesCard.showChanges')}
               onClick={toggle}
-              className="rounded-sm p-1 hover:bg-hover"
+              className="flex min-h-[30px] min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left text-list text-fg-secondary hover:bg-hover"
             >
+              {summary}
               <Chevron open={open} />
             </button>
-          )}
-        </div>
+            {single && (
+              <span
+                className={cn('opacity-0 group-hover/file:opacity-100 focus-within:opacity-100', open && 'opacity-100')}
+              >
+                {openButton(item.changes[0])}
+              </span>
+            )}
+          </div>
+        ) : (
+          <div className="flex min-h-[30px] min-w-0 items-center gap-2 rounded-md px-2 text-list text-fg-secondary">
+            {summary}
+          </div>
+        )}
         {fileError && (
           <p role="status" className="px-2 text-meta text-danger">
             {fileError}
@@ -388,7 +424,12 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
           <div className={cn(OUTPUT_BOX, 'bg-surface py-1.5')}>
             {item.changes.map(c => (
               <div key={c.path}>
-                {item.changes.length > 1 && <div className="px-3 pt-1 font-mono text-meta text-fg-muted">{c.path}</div>}
+                {!single && (
+                  <div className="flex items-center gap-1 pr-1.5 pl-3 font-mono text-meta text-fg-muted">
+                    <span className="min-w-0 flex-1 truncate">{c.path}</span>
+                    {openButton(c)}
+                  </div>
+                )}
                 <DiffView diff={c.diff} path={c.path} />
               </div>
             ))}

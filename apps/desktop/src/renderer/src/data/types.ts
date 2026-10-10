@@ -69,6 +69,8 @@ export interface ChangedFile {
   added: number
   removed: number
   newText?: string
+  /** 这一轮对这个文件的各次 diff（按顺序，空的不收）；没有时点文件直接打开编辑器（docs/ui/changes-inline-diff.md） */
+  diffs?: string[]
 }
 
 export interface ChangedFiles {
