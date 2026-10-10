@@ -27,8 +27,10 @@ import type { FileChange, Item, ItemStatus, ToolKind } from '@pixelsky/protocol'
 import { CopyButton, DiffStat, Spinner, cn } from '@/ui'
 import { DiffView } from '@/ui/code/DiffView'
 import { CommandText } from '@/ui/code/CommandText'
+import { AnsiText } from '@/ui/code/AnsiText'
 import { useOpenTrace } from './trace'
 import { StepMark } from './ProgressCard'
+import { UserText } from './UserText'
 import { useItemNavigation } from '@/features/search/navigation'
 import { openFile } from '@/features/files/store'
 import { useActiveWorkspace } from '@/features/editor/target'
@@ -43,7 +45,7 @@ export function UserBubble({ item, actions }: { item: ItemOf<'user'>; actions?: 
     return (
       <div className="border-l border-accent-line pl-3 text-list whitespace-pre-wrap text-fg-muted">
         <span className="mr-2 text-accent-fg">{tr('session.live.ItemRows.steered')}</span>
-        {item.text}
+        <UserText text={item.text} />
       </div>
     )
   return (
@@ -55,7 +57,7 @@ export function UserBubble({ item, actions }: { item: ItemOf<'user'>; actions?: 
             <ImageAttachments images={item.attachments} />
           </div>
         )}
-        {item.text}
+        <UserText text={item.text} />
       </div>
     </div>
   )
@@ -275,7 +277,7 @@ export function ToolItemRow({ item }: { item: ItemOf<'command' | 'file_change' |
           <pre
             className={cn(OUTPUT_BOX, 'p-3 font-mono text-meta leading-[1.6] whitespace-pre-wrap text-fg-secondary')}
           >
-            {item.output}
+            <AnsiText text={item.output} />
           </pre>
         )}
       </div>
@@ -376,7 +378,7 @@ export function ToolItemRow({ item }: { item: ItemOf<'command' | 'file_change' |
       </Row>
       {open && item.output && (
         <pre className={cn(OUTPUT_BOX, 'p-3 font-mono text-meta leading-[1.6] whitespace-pre-wrap text-fg-secondary')}>
-          {item.output}
+          <AnsiText text={item.output} />
         </pre>
       )}
     </div>

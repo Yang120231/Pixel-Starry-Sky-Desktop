@@ -182,7 +182,16 @@ function Agents({ agents, divided }: { agents: ProgressAgent[]; divided: boolean
   )
 }
 
-export function ProgressCard({ progress, onOpenTrace }: { progress: Progress; onOpenTrace?: () => void }) {
+export function ProgressCard({
+  progress,
+  belowFind,
+  onOpenTrace,
+}: {
+  progress: Progress
+  /** 对话内搜索条打开着：卡片挪到搜索条下面 */
+  belowFind?: boolean
+  onOpenTrace?: () => void
+}) {
   useI18n()
   const card = useRef<HTMLElement>(null)
   const [narrow, setNarrow] = useState(false)
@@ -208,7 +217,11 @@ export function ProgressCard({ progress, onOpenTrace }: { progress: Progress; on
     <section
       ref={card}
       aria-label={tr('session.progress.title')}
-      className="pop-in absolute top-3 right-5 z-20 flex max-h-[60%] w-[min(22rem,calc(100%-2rem))] flex-col rounded-xl border border-line bg-popover py-2 shadow-popover"
+      className={cn(
+        'pop-in absolute right-5 z-20',
+        belowFind ? 'top-14' : 'top-3',
+        'flex max-h-[60%] w-[min(22rem,calc(100%-2rem))] flex-col rounded-xl border border-line bg-popover py-2 shadow-popover',
+      )}
     >
       <div className="flex items-center gap-1 pr-1.5 pl-3">
         <span className="text-list font-medium text-fg">{tr('session.progress.title')}</span>

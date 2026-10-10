@@ -22,7 +22,14 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { IconButton, Kbd, Segmented, cn } from '@/ui'
-import { OPEN_SEARCH, OPEN_SETTINGS, PANE_SHORTCUTS, TOGGLE_PANEL, TOGGLE_SIDEBAR } from '@/features/layout/shortcuts'
+import {
+  FIND_IN_CONVERSATION,
+  OPEN_SEARCH,
+  OPEN_SETTINGS,
+  PANE_SHORTCUTS,
+  TOGGLE_PANEL,
+  TOGGLE_SIDEBAR,
+} from '@/features/layout/shortcuts'
 import { useTheme, type MotionPreference, type ThemePreference } from '@/features/appearance/ThemeProvider'
 import { AboutSection } from './AboutSection'
 import { AccountSection } from '../account/settings/AccountSection'
@@ -719,6 +726,12 @@ const SHORTCUTS: Array<{ label: string; keys: string }> = [
       return tr('search.SearchDialog.searchConversationsAndContent')
     },
     keys: OPEN_SEARCH.label,
+  },
+  {
+    get label() {
+      return tr('content.find.label')
+    },
+    keys: FIND_IN_CONVERSATION.label,
   },
   ...PANE_SHORTCUTS,
 ]

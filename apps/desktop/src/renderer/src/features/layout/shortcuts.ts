@@ -32,6 +32,12 @@ export const OPEN_SEARCH = {
   match: (e: KeyboardEvent): boolean => e.code === 'KeyP' && mod(e) && !e.shiftKey && !e.altKey && !e.repeat,
 }
 
+/** 在当前对话里查找：Ctrl+F（macOS ⌘F），docs/ui/content-highlight.md §2 E；终端、编辑器里仍是它们自己的查找 */
+export const FIND_IN_CONVERSATION = {
+  label: isMac ? '⌘F' : 'Ctrl+F',
+  match: (e: KeyboardEvent): boolean => e.code === 'KeyF' && mod(e) && !e.shiftKey && !e.altKey && !e.repeat,
+}
+
 // ---------------------------------------------------------------------------
 // 多对话窗格（与 Mirasim 一致，docs/ui/multi-pane.md §4）
 // ---------------------------------------------------------------------------

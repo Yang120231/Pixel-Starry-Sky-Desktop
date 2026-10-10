@@ -57,19 +57,26 @@ export const searchTerms = (text: string): string[] => [...new Set(fold(text.tri
 export const containsTerms = (text: string, terms: readonly string[]): boolean =>
   terms.every(term => fold(text).includes(term))
 
-/** 用原文字片段高亮，关键词永远是字面文本。 */
-export function searchSnippet(text: string, terms: readonly string[], limit = 180): SearchFragment[] {
-  if (!text) return []
+/** 一个字面搜索词按同样的规则折叠（对话内搜索按整段字面查找，不拆词） */
+export const searchLiteral = (text: string): string => fold(text.trim())
+
+/**
+ * 关键词（已折叠，见 searchTerms / searchLiteral）在原文 [from, to) 里的命中区间，按位置排好、重叠的合并。
+ * 全局搜索的摘要、跳转后的命中标记、对话内搜索共用（docs/ui/content-highlight.md §2 E）。
+ */
+export function matchRanges(
+  text: string,
+  terms: readonly string[],
+  from = 0,
+  to = text.length,
+): Array<[number, number]> {
   const normalized = fold(text)
-  const first = Math.min(...terms.map(t => normalized.indexOf(t)).filter(i => i >= 0))
-  const start = Number.isFinite(first) ? Math.max(0, first - 48) : 0
-  const end = Math.min(text.length, start + limit)
   const ranges: Array<[number, number]> = []
   for (const term of terms) {
     if (!term) continue
-    let at = normalized.indexOf(term, start)
-    while (at >= 0 && at < end) {
-      ranges.push([at, Math.min(end, at + term.length)])
+    let at = normalized.indexOf(term, from)
+    while (at >= 0 && at < to) {
+      ranges.push([at, Math.min(to, at + term.length)])
       at = normalized.indexOf(term, at + term.length)
     }
   }
@@ -80,6 +87,17 @@ export function searchSnippet(text: string, terms: readonly string[], limit = 18
     if (last && last[1] >= r[0]) last[1] = Math.max(last[1], r[1])
     else merged.push([...r])
   }
+  return merged
+}
+
+/** 用原文字片段高亮，关键词永远是字面文本。 */
+export function searchSnippet(text: string, terms: readonly string[], limit = 180): SearchFragment[] {
+  if (!text) return []
+  const normalized = fold(text)
+  const first = Math.min(...terms.map(t => normalized.indexOf(t)).filter(i => i >= 0))
+  const start = Number.isFinite(first) ? Math.max(0, first - 48) : 0
+  const end = Math.min(text.length, start + limit)
+  const merged = matchRanges(text, terms, start, end)
   const out: SearchFragment[] = start ? [{ text: '…', match: false }] : []
   let at = start
   for (const [a, b] of merged) {

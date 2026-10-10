@@ -1,6 +1,6 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Bot } from 'lucide-react'
 import { SessionHeader } from './SessionHeader'
 import { Transcript } from './Transcript'
@@ -15,6 +15,7 @@ import { TaskStrip } from './live/SessionStrips'
 import { ProgressCard, useProgress } from './live/ProgressCard'
 import { TraceContext, type TraceTarget } from './live/trace'
 import { PathLinksProvider } from '@/features/files/PathLinksProvider'
+import { ConversationFind, useFindShortcut } from '@/features/search/ConversationFind'
 import { RetryStatus } from './live/RetryStatus'
 import { MessageActionsContext, type MessageActionsValue } from './live/MessageActions'
 import { appendComposerDraft } from '@/features/engine/drafts'
@@ -113,6 +114,11 @@ function LiveSessionView({
   // 智能体追踪面板：null 表示关着；focus 是定位到的智能体（null 是总览）
   const [trace, setTrace] = useState<{ focus: string | null } | null>(null)
   useEffect(() => setTrace(null), [sessionId])
+  // 对话内搜索（Ctrl+F）：token 每按一次加一，已经打开时重新聚焦（docs/ui/content-highlight.md §2 E）
+  const mainRef = useRef<HTMLElement>(null)
+  const [find, setFind] = useState<number | null>(null)
+  useEffect(() => setFind(null), [sessionId])
+  useFindShortcut(mainRef, !!sessionId, () => setFind(n => (n ?? 0) + 1))
 
   const runs = snapshot?.runs
   const openTrace = useCallback(
@@ -167,6 +173,7 @@ function LiveSessionView({
     <PathLinksProvider sessionId={sessionId}>
       <TraceContext.Provider value={sessionId ? openTrace : null}>
         <main
+          ref={mainRef}
           className={cn(
             'conversation-view relative flex flex-1 flex-col bg-app',
             embedded ? 'min-h-0 min-w-0' : 'min-w-[464px]',
@@ -211,9 +218,11 @@ function LiveSessionView({
                   <ProgressCard
                     key={sessionId}
                     progress={progress}
+                    belowFind={find !== null}
                     onOpenTrace={hasRuns ? () => openTrace() : undefined}
                   />
                 )}
+                {find !== null && <ConversationFind root={mainRef} focusToken={find} onClose={() => setFind(null)} />}
               </div>
               <ComposerArea>
                 <RetryStatus sessionId={sessionId} retry={snapshot?.retry} />

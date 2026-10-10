@@ -70,7 +70,8 @@ export function usePathTarget(text: string | null): PathTarget | null {
   return found && found.text === text ? found.target : null
 }
 
-function useOpen(): ((target: PathTarget) => void) | null {
+/** 打开文件；没有上下文时为 null */
+export function useOpenPath(): ((target: PathTarget) => void) | null {
   return useContext(PathLinksContext)?.open ?? null
 }
 
@@ -80,7 +81,7 @@ const targetTitle = (t: PathTarget): string => t.path + (t.line ? `:${t.line}` :
 export function InlineCode({ children, className }: { children?: ReactNode; className?: string }) {
   const text = typeof children === 'string' ? children : null
   const target = usePathTarget(text)
-  const open = useOpen()
+  const open = useOpenPath()
   if (!target || !open) return <code className={className}>{children}</code>
   return (
     <code
@@ -102,7 +103,7 @@ export function InlineCode({ children, className }: { children?: ReactNode; clas
 /** Markdown 链接：地址是项目里的文件时在软件里打开，其余交给系统浏览器（主进程只放行 http / https） */
 export function MarkdownLink({ href, children, ...rest }: AnchorHTMLAttributes<HTMLAnchorElement>) {
   const target = usePathTarget(linkPathText(href))
-  const open = useOpen()
+  const open = useOpenPath()
   if (target && open)
     return (
       <a

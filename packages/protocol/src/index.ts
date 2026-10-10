@@ -92,6 +92,8 @@ export {
   compareSearchResults,
   containsTerms,
   itemSearchMatch,
+  matchRanges,
+  searchLiteral,
   searchSnippet,
   searchTerms,
   titleMatch,

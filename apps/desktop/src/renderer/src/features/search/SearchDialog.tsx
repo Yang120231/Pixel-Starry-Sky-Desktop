@@ -115,7 +115,9 @@ export function SearchDialog({
       onClose()
       return
     }
-    window.dispatchEvent(new CustomEvent(OPEN_SESSION_EVENT, { detail: { sessionId: r.sessionId, itemId: r.itemId } }))
+    window.dispatchEvent(
+      new CustomEvent(OPEN_SESSION_EVENT, { detail: { sessionId: r.sessionId, itemId: r.itemId, query: text } }),
+    )
     onClose()
   }
   useEffect(() => {

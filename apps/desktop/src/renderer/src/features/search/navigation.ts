@@ -3,6 +3,8 @@ import { useSyncExternalStore } from 'react'
 export interface ItemNavigation {
   sessionId: string
   itemId: string
+  /** 搜索词（已折叠）：定位后在这条里标出命中（docs/ui/content-highlight.md §2 E） */
+  terms: string[]
   token: number
 }
 let target: ItemNavigation | null = null
@@ -16,8 +18,8 @@ const subscribe = (listener: () => void) => {
   }
 }
 
-export function navigateToItem(sessionId: string, itemId: string): void {
-  target = { sessionId, itemId, token: ++sequence }
+export function navigateToItem(sessionId: string, itemId: string, terms: string[] = []): void {
+  target = { sessionId, itemId, terms, token: ++sequence }
   emit()
 }
 export function finishItemNavigation(token: number): void {

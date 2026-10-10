@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { itemSearchMatch, searchSnippet, searchTerms, titleMatch } from '../src/search'
+import { itemSearchMatch, matchRanges, searchLiteral, searchSnippet, searchTerms, titleMatch } from '../src/search'
 
 describe('字面搜索与原文高亮', () => {
   it('方括号、加号、括号和路径不作为正则，片段保留原文大小写', () => {
@@ -26,5 +26,24 @@ describe('字面搜索与原文高亮', () => {
     expect(titleMatch('Build', searchTerms('build'), 'build')?.rank).toBe(0)
     expect(titleMatch('Build fix', searchTerms('build'), 'build')?.rank).toBe(1)
     expect(titleMatch('Fix Build', searchTerms('build'), 'build')?.rank).toBe(2)
+  })
+})
+
+describe('matchRanges', () => {
+  it('不分英文大小写，重叠的合并，按位置排好', () => {
+    expect(matchRanges('Foo foobar FOO', searchTerms('foo'))).toEqual([
+      [0, 3],
+      [4, 7],
+      [11, 14],
+    ])
+    expect(matchRanges('abcdef', ['abc', 'cde'])).toEqual([[0, 5]])
+  })
+
+  it('只在给定范围里找，字面词不拆开', () => {
+    expect(matchRanges('a b a b', ['a'], 2, 5)).toEqual([[4, 5]])
+    expect(matchRanges('Hello World, hello world', [searchLiteral(' Hello World ')])).toEqual([
+      [0, 11],
+      [13, 24],
+    ])
   })
 })

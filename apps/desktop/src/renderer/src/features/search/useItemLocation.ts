@@ -1,7 +1,11 @@
 import { tr } from '../../i18n/core'
-import { useEffect, useRef, useState, type RefObject } from 'react'
+import { useEffect, useId, useRef, useState, type RefObject } from 'react'
 import { useToast } from '@/ui'
 import { finishItemNavigation, useItemNavigation } from './navigation'
+import { findRanges, setMarks } from './termMarks'
+
+/** 跳转后命中的词标多久 */
+const MARK_MS = 3000
 
 /** 等会话 / 隐藏标签渲染完成后定位，仅执行一次。 */
 export function useItemLocation(
@@ -14,6 +18,9 @@ export function useItemLocation(
   const latestLocate = useRef(onLocate)
   latestLocate.current = onLocate
   const [highlight, setHighlight] = useState<string | null>(null)
+  // 定位到的条目和搜索词：单独保存，跳转结束（target 清空）后还要标出命中
+  const [marked, setMarked] = useState<{ el: HTMLElement; terms: string[] } | null>(null)
+  const owner = useId()
   const toast = useToast()
   useEffect(() => {
     if (!target || target.sessionId !== sessionId || !ready) return
@@ -32,6 +39,7 @@ export function useItemLocation(
         latestLocate.current?.()
         el.scrollIntoView({ block: 'center', behavior: 'instant' })
         setHighlight(target.itemId)
+        if (target.terms.length) setMarked({ el, terms: target.terms })
         finishItemNavigation(target.token)
         return
       }
@@ -47,6 +55,19 @@ export function useItemLocation(
       cancelAnimationFrame(frame)
     }
   }, [target, sessionId, ready, scroller, toast])
+  // 命中的词标出来（docs/ui/content-highlight.md §2 E）：工具行会先自动展开，等两帧再找文字，3 秒后清掉
+  useEffect(() => {
+    if (!marked) return
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => setMarks('search-term', owner, findRanges(marked.el, marked.terms)))
+    })
+    const timer = window.setTimeout(() => setMarked(null), MARK_MS)
+    return () => {
+      cancelAnimationFrame(frame)
+      window.clearTimeout(timer)
+      setMarks('search-term', owner, [])
+    }
+  }, [marked, owner])
   useEffect(() => {
     if (!highlight) return
     const timer = window.setTimeout(() => setHighlight(null), 2000)

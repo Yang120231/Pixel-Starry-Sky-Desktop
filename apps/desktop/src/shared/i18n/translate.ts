@@ -15,6 +15,7 @@ import { notificationMessages } from './notificationMessages'
 import { gitMessages } from './gitMessages'
 import { artifactMessages } from './artifactMessages'
 import { errorMessages } from './errorMessages'
+import { contentMessages } from './contentMessages'
 import { replaceCodedErrors } from '@pixelsky/protocol'
 import type { Locale } from './messages'
 
@@ -37,6 +38,7 @@ export const allMessages = {
   ...gitMessages,
   ...artifactMessages,
   ...errorMessages,
+  ...contentMessages,
 }
 export type TranslationKey = keyof typeof allMessages
 

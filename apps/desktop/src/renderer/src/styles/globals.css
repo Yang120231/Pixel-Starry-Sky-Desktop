@@ -774,3 +774,112 @@
 .collapsible-slot[data-size-changed] {
   transition: none;
 }
+
+/* 命令输出的 ANSI 颜色（docs/ui/content-highlight.md §2 D）：用终端调色板；0（黑）和 15（亮白）用正文颜色，两种主题下都看得清 */
+.ansi-fg-0,
+.ansi-fg-15 {
+  color: inherit;
+}
+.ansi-fg-1 {
+  color: var(--terminal-ansi-1);
+}
+.ansi-fg-2 {
+  color: var(--terminal-ansi-2);
+}
+.ansi-fg-3 {
+  color: var(--terminal-ansi-3);
+}
+.ansi-fg-4 {
+  color: var(--terminal-ansi-4);
+}
+.ansi-fg-5 {
+  color: var(--terminal-ansi-5);
+}
+.ansi-fg-6 {
+  color: var(--terminal-ansi-6);
+}
+.ansi-fg-7 {
+  color: var(--terminal-ansi-7);
+}
+.ansi-fg-8 {
+  color: var(--terminal-ansi-8);
+}
+.ansi-fg-9 {
+  color: var(--terminal-ansi-9);
+}
+.ansi-fg-10 {
+  color: var(--terminal-ansi-10);
+}
+.ansi-fg-11 {
+  color: var(--terminal-ansi-11);
+}
+.ansi-fg-12 {
+  color: var(--terminal-ansi-12);
+}
+.ansi-fg-13 {
+  color: var(--terminal-ansi-13);
+}
+.ansi-fg-14 {
+  color: var(--terminal-ansi-14);
+}
+/* 背景色只铺一层淡色，文字仍按前景色显示 */
+.ansi-bg-0 {
+  background-color: color-mix(in srgb, var(--terminal-ansi-0) 30%, transparent);
+}
+.ansi-bg-1 {
+  background-color: color-mix(in srgb, var(--terminal-ansi-1) 30%, transparent);
+}
+.ansi-bg-2 {
+  background-color: color-mix(in srgb, var(--terminal-ansi-2) 30%, transparent);
+}
+.ansi-bg-3 {
+  background-color: color-mix(in srgb, var(--terminal-ansi-3) 30%, transparent);
+}
+.ansi-bg-4 {
+  background-color: color-mix(in srgb, var(--terminal-ansi-4) 30%, transparent);
+}
+.ansi-bg-5 {
+  background-color: color-mix(in srgb, var(--terminal-ansi-5) 30%, transparent);
+}
+.ansi-bg-6 {
+  background-color: color-mix(in srgb, var(--terminal-ansi-6) 30%, transparent);
+}
+.ansi-bg-7 {
+  background-color: color-mix(in srgb, var(--terminal-ansi-7) 30%, transparent);
+}
+.ansi-bg-8 {
+  background-color: color-mix(in srgb, var(--terminal-ansi-8) 30%, transparent);
+}
+.ansi-bg-9 {
+  background-color: color-mix(in srgb, var(--terminal-ansi-9) 30%, transparent);
+}
+.ansi-bg-10 {
+  background-color: color-mix(in srgb, var(--terminal-ansi-10) 30%, transparent);
+}
+.ansi-bg-11 {
+  background-color: color-mix(in srgb, var(--terminal-ansi-11) 30%, transparent);
+}
+.ansi-bg-12 {
+  background-color: color-mix(in srgb, var(--terminal-ansi-12) 30%, transparent);
+}
+.ansi-bg-13 {
+  background-color: color-mix(in srgb, var(--terminal-ansi-13) 30%, transparent);
+}
+.ansi-bg-14 {
+  background-color: color-mix(in srgb, var(--terminal-ansi-14) 30%, transparent);
+}
+.ansi-bg-15 {
+  background-color: color-mix(in srgb, var(--terminal-ansi-15) 30%, transparent);
+}
+
+/* 搜索命中（docs/ui/content-highlight.md §2 E）：CSS Custom Highlight API，不改页面结构。
+   search-term：从全局搜索跳过来时的命中；find-match / find-current：对话内搜索的全部命中 / 当前这个 */
+::highlight(search-term),
+::highlight(find-match) {
+  background-color: var(--accent-soft);
+  color: inherit;
+}
+::highlight(find-current) {
+  background-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  color: var(--text);
+}

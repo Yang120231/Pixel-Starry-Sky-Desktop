@@ -9,6 +9,7 @@ import { projects as demoProjects } from '@/data'
 import { isLive } from './hooks'
 import { getEngineState } from './store'
 import { navigateToItem } from '@/features/search/navigation'
+import { searchTerms } from '@pixelsky/protocol'
 
 export const OPEN_SESSION_EVENT = 'pixelsky:open-session'
 
@@ -23,13 +24,14 @@ export function useOpenSessionRequests(open: (id: string) => void): void {
   openRef.current = open
   useEffect(() => {
     const onRequest = (e: Event): void => {
-      const detail = (e as CustomEvent<{ sessionId?: unknown; itemId?: unknown }>).detail
+      const detail = (e as CustomEvent<{ sessionId?: unknown; itemId?: unknown; query?: unknown }>).detail
       const id = detail?.sessionId
       if (typeof id !== 'string' || !id) return
       if (sessionExists(id)) {
         const show = () => {
           openRef.current(id)
-          if (typeof detail?.itemId === 'string' && detail.itemId) navigateToItem(id, detail.itemId)
+          if (typeof detail?.itemId === 'string' && detail.itemId)
+            navigateToItem(id, detail.itemId, typeof detail.query === 'string' ? searchTerms(detail.query) : [])
         }
         const machine = machineOf(id)
         if (getMachines().currentId !== machine)

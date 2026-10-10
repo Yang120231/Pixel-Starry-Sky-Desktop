@@ -5,6 +5,7 @@ import { tr } from '../../../i18n/core'
 import { useState } from 'react'
 import type { BackgroundTask, TaskOutput } from '@pixelsky/protocol'
 import { Spinner, cn } from '@/ui'
+import { AnsiText } from '@/ui/code/AnsiText'
 import { bridge, taskKindLabel } from '@/features/engine'
 import { useOpenTrace } from './trace'
 
@@ -98,7 +99,7 @@ export function TaskStrip({ sessionId, tasks }: { sessionId: string; tasks: Back
                       </div>
                     )}
                     <pre className="max-h-48 overflow-auto font-mono leading-[1.6] whitespace-pre-wrap text-fg-secondary">
-                      {out.output || tr('session.live.SessionStrips.noOutputYet')}
+                      {out.output ? <AnsiText text={out.output} /> : tr('session.live.SessionStrips.noOutputYet')}
                     </pre>
                     <button type="button" className={cn(LINK, 'mt-1 -ml-1.5')} onClick={() => loadOutput(t.id)}>
                       {tr('account.AccountMenu.refresh')}{' '}
