@@ -1,7 +1,15 @@
-import { contextCount, contextDiagnostic, type ContextWindow, type EngineEvent } from '@pixelsky/protocol'
+import {
+  contextCount,
+  contextDiagnostic,
+  officialPrice,
+  type ContextWindow,
+  type EngineEvent,
+} from '@pixelsky/protocol'
 import { obj } from './shape'
 
 type Frame = Record<string, unknown>
+/** modelUsage 的键可能带 [1m] 之类的后缀，请求里返回的 model 不带 */
+const bare = (model: string): string => model.replace(/\[[^\]]*\]$/, '')
 const empty = (): ContextWindow => ({
   model: null,
   used: null,
@@ -25,6 +33,13 @@ export class ContextReader {
   private capacities = new Map<string, number>()
   private seen = new Set<string>()
   constructor(private emit: (event: EngineEvent) => void) {}
+  /** 容量：先用 Claude Code 报的（每轮 result 才有），再按去掉后缀的名字对，都没有用官方价格表里的上下文长度 */
+  private capacity(model: string): number | null {
+    const exact = this.capacities.get(model)
+    if (exact !== undefined) return exact
+    for (const [name, window] of this.capacities) if (bare(name) === bare(model)) return window
+    return officialPrice(model)?.contextWindow ?? null
+  }
   private publish(): void {
     this.emit({ type: 'context', context: { ...this.value } })
   }
@@ -71,7 +86,7 @@ export class ContextReader {
       this.value = {
         ...empty(),
         model: name,
-        window: this.capacities.get(name) ?? null,
+        window: this.capacity(name),
         diagnostic: this.value.diagnostic,
         diagnosticStale: !!this.value.diagnostic,
       }
@@ -122,8 +137,8 @@ export class ContextReader {
         const window = obj(raw).contextWindow
         if (contextCount(window) && window > 0) this.capacities.set(model, window)
       }
-      const window = this.value.model ? this.capacities.get(this.value.model) : undefined
-      if (window !== undefined && this.value.window !== window) {
+      const window = this.value.model ? this.capacity(this.value.model) : null
+      if (window !== null && this.value.window !== window) {
         this.value = { ...this.value, window }
         this.publish()
       }

@@ -88,6 +88,23 @@ describe('上下文来自同一主请求', () => {
     })
     expect(r.last()).toMatchObject({ used: 100, window: 200000 })
   })
+  it('首轮 result 之前用价格表的上下文长度兜底，result 报的容量优先，带 [1m] 后缀的键也能对上', () => {
+    const r = reader()
+    const assistant = (id: string) => ({
+      type: 'assistant',
+      message: {
+        id,
+        model: 'claude-opus-5-5',
+        usage: { input_tokens: 100, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+      },
+    })
+    r.instance.handle(assistant('a'))
+    expect(r.last().window).toBe(1000000)
+    r.instance.handle({ type: 'result', modelUsage: { 'claude-opus-5-5[1m]': { contextWindow: 400000 } } })
+    expect(r.last().window).toBe(400000)
+    r.instance.handle(assistant('b'))
+    expect(r.last().window).toBe(400000)
+  })
   it('子智能体、旧消息回放与较晚到达的旧 assistant 不替换最新请求', () => {
     const r = reader()
     const assistant = (id: string, input: number) => ({
