@@ -34,7 +34,7 @@ const VERSION = 1
 export interface EngineSettingsFile {
   maxRetries: number | null
   defaults: EngineDefaults
-  /** 各引擎的自定义可执行文件路径 */
+  /** 各引擎替换的命令：绝对路径或 PATH 上的命令名（docs/ui/engine-launch.md） */
   paths: Partial<Record<EngineId, string>>
   /** 各引擎追加的环境变量 */
   env: Partial<Record<EngineId, Record<string, string>>>
@@ -53,6 +53,8 @@ export interface EngineOptions {
   askQuestions?: boolean
   autoCompactPct?: number
   hidden?: boolean
+  /** 每次启动引擎进程时追加的参数（docs/ui/engine-launch.md）；只存非空 */
+  args?: string[]
 }
 
 export const DEFAULT_SETTINGS: EngineSettingsFile = {

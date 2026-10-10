@@ -3,6 +3,7 @@ import { homedir } from 'node:os'
 import { delimiter } from 'node:path'
 import {
   EFFORTS,
+  codedError,
   type AgentRuns,
   type Effort,
   type EngineCatalog,
@@ -16,21 +17,21 @@ import type { EngineAdapter, EngineSession, Launcher, SessionContext } from '../
 import { engineEnv } from '../env'
 import { run } from '../exec'
 import { engineBase } from '../registry'
-import { discoverClaude, type ClaudeDiscovery } from './discover'
+import { customClaude, discoverClaude, type ClaudeDiscovery } from './discover'
 import { ClaudeProcess } from './process'
-import { ClaudeSession, type ClaudeLaunchOptions } from './session'
+import { ClaudeSession, reservedClaudeArg, type ClaudeLaunchOptions } from './session'
 import { loadSavedRuns, loadSubagentTranscript } from './runs'
 import { claudeSessionDir, defaultProjectsDir, findClaudeTranscript, findRewindAnchor } from './transcript'
 
 export interface ClaudeAdapterOptions {
   sessionEnv?: (record: SessionRecord) => NodeJS.ProcessEnv
-  /** 用户在设置里指定的 claude 路径 */
+  /** 用户在设置里替换的命令（绝对路径或 PATH 上的命令名，docs/ui/engine-launch.md） */
   overridePath?: () => string | null
   /** 基础环境变量（默认 process.env，启动前会清理） */
   env?: NodeJS.ProcessEnv
   /** 用户在设置里追加的环境变量（在清理后的基础环境之上；平台会话的网关变量仍然最后覆盖） */
   extraEnv?: () => Record<string, string>
-  /** 设置 › 本机引擎里的引擎级选项（输出风格、允许提问、自动压缩触发点），每次启动进程时读 */
+  /** 设置 › 本机引擎里的引擎级选项（输出风格、允许提问、自动压缩触发点、追加参数），每次启动进程时读 */
   launchOptions?: () => ClaudeLaunchOptions & { autoCompactPct: number | null }
   /** 测试用：直接指定要启动的程序，跳过查找和检测 */
   launcher?: Launcher
@@ -98,6 +99,8 @@ export class ClaudeAdapter implements EngineAdapter {
       return Promise.resolve(this.cached)
     }
     if (this.cached && !force) return Promise.resolve(this.cached)
+    // 重新检测时命令或参数可能变了，输出风格列表也要重新握手
+    if (force) this.catalogCache = null
     if (!this.detecting) {
       this.detecting = discoverClaude(this.opts.overridePath?.() ?? null, this.env())
         .then(d => (this.cached = d))
@@ -110,6 +113,15 @@ export class ClaudeAdapter implements EngineAdapter {
 
   async info(force = false): Promise<EngineInfo> {
     return (await this.discover(force)).info
+  }
+
+  checkLaunch(command: string | null, args: readonly string[]): void {
+    if (command) {
+      const custom = customClaude(command, this.env())
+      if ('error' in custom) throw new Error(custom.error)
+    }
+    const reserved = reservedClaudeArg(args)
+    if (reserved) throw codedError('launch.reserved', { arg: reserved })
   }
 
   private projectsDir(): string {
@@ -163,7 +175,9 @@ export class ClaudeAdapter implements EngineAdapter {
       env.PATH = [...ctx.extensions.pathDirs, env.PATH ?? env.Path ?? ''].join(delimiter)
     return new ClaudeSession(ctx, {
       maxRetries,
-      launch: launch ? { outputStyle: launch.outputStyle, askQuestions: launch.askQuestions } : undefined,
+      launch: launch
+        ? { outputStyle: launch.outputStyle, askQuestions: launch.askQuestions, args: launch.args }
+        : undefined,
       launcher: d.launcher,
       env,
       projectsDir: this.opts.projectsDir ?? d.projectsDir ?? defaultProjectsDir(env),
@@ -194,7 +208,15 @@ export class ClaudeAdapter implements EngineAdapter {
     const d = await this.discover(false)
     if (!d.launcher || (d.info.status !== 'ready' && d.info.status !== 'unauthenticated'))
       return { outputStyles: [], currentOutputStyle: null }
-    const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose']
+    const args = [
+      '-p',
+      '--input-format',
+      'stream-json',
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      ...(this.opts.launchOptions?.().args ?? []),
+    ]
     const proc = new ClaudeProcess(d.launcher, args, homedir(), this.env(), {
       onMessage: () => undefined,
       onControlRequest: () => undefined,

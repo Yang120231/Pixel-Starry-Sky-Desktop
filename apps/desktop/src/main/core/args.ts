@@ -55,6 +55,7 @@ export function engineConfigPatch(patch: unknown): EngineConfigPatch {
   const p = (patch ?? {}) as Record<string, unknown>
   const out: EngineConfigPatch = {}
   if (p.path === null || typeof p.path === 'string') out.path = p.path
+  if (Array.isArray(p.args) && p.args.every(a => typeof a === 'string')) out.args = p.args as string[]
   if (p.compactModel === null || typeof p.compactModel === 'string') out.compactModel = p.compactModel
   if (p.env && typeof p.env === 'object')
     out.env = Object.fromEntries(

@@ -70,6 +70,8 @@ export interface EngineInfo {
   path: string | null
   /** 不可用时告诉用户怎么解决的一句话 */
   message: string | null
+  /** 自带程序（自动查找）还是用户替换的命令（docs/ui/engine-launch.md §3）；旧版远端没有这个字段，按自带显示 */
+  launch?: 'stock' | 'custom'
   caps: EngineCaps
 }
 
@@ -86,7 +88,8 @@ export type SessionDefaults = Pick<
 
 /**
  * 每个引擎的本机配置（设置 › 本机引擎，docs/ui/plan-search-panes-compact.md §1、§3，engine-settings-redesign.md §3.2）：
- * - path：自定义可执行文件路径，覆盖自动查找
+ * - path：替换的命令，绝对路径或 PATH 上的命令名，覆盖自动查找（docs/ui/engine-launch.md）
+ * - args：每次启动引擎进程时追加的参数；像素星空自己控制的参数不能出现
  * - env：在系统环境之上追加的环境变量（平台会话的网关变量仍然最后覆盖）
  * - compactModel：压缩上下文用的模型；null 表示跟随会话模型。目前只对平台会话生效
  * - defaults：新会话的默认值
@@ -99,6 +102,7 @@ export type SessionDefaults = Pick<
  */
 export interface EngineLocalConfig {
   path: string | null
+  args: string[]
   env: Record<string, string>
   compactModel: string | null
   defaults: SessionDefaults

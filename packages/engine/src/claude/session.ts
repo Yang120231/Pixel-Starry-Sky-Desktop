@@ -51,12 +51,55 @@ const BASE_ARGS = [
   '--allow-dangerously-skip-permissions',
 ]
 
+/**
+ * 像素星空自己控制的参数（docs/ui/engine-launch.md §3），用户追加的参数里不能出现：
+ * 协议和流式输出、审批、模型与推理强度（输入框里选）、会话恢复、--settings（输出风格和平台网关用它传）。
+ */
+const CLAUDE_RESERVED = new Set([
+  '-p',
+  '--print',
+  '--input-format',
+  '--output-format',
+  '--verbose',
+  '--include-partial-messages',
+  '--replay-user-messages',
+  '--permission-prompt-tool',
+  '--allow-dangerously-skip-permissions',
+  '--dangerously-skip-permissions',
+  '--permission-mode',
+  '--model',
+  '--effort',
+  '-r',
+  '--resume',
+  '-c',
+  '--continue',
+  '--session-id',
+  '--resume-session-at',
+  '--fork-session',
+  '--settings',
+])
+
+/** 用户追加的参数里第一个由像素星空控制的参数（--x=y 写法、连写的短参数 -pc 也算）；都允许时返回 null */
+export function reservedClaudeArg(args: readonly string[]): string | null {
+  for (const arg of args) {
+    if (arg.startsWith('--')) {
+      const name = arg.split('=')[0]
+      if (CLAUDE_RESERVED.has(name)) return name
+    } else if (/^-[A-Za-z]+$/.test(arg)) {
+      for (const ch of arg.slice(1)) if (CLAUDE_RESERVED.has(`-${ch}`)) return `-${ch}`
+    }
+  }
+  return null
+}
+
 /** 设置 › 本机引擎里对 Claude Code 的引擎级选项（docs/ui/engine-settings-redesign.md §3.2） */
 export interface ClaudeLaunchOptions {
   /** 输出风格；null 跟随 Claude Code 自己的设置 */
   outputStyle: string | null
   /** false 时禁用 AskUserQuestion：遇到需要选择的地方自己拿主意 */
   askQuestions: boolean
+  /** 用户追加的启动参数，放在所有参数最后（docs/ui/engine-launch.md） */
+  args?: string[]
 }
 
 export function claudeArgs(
@@ -331,6 +374,7 @@ export class ClaudeSession implements EngineSession {
     // 合并网关配置时写了临时文件，进程换掉或退出时删掉
     if (gateway && settingsArg && settingsArg !== gateway) this.retrySettingsFile = settingsArg
     if (settingsArg) args.push('--settings', settingsArg)
+    args.push(...(this.deps.launch?.args ?? []))
     const proc: ClaudeProcess = new ClaudeProcess(this.deps.launcher, args, rec.cwd, this.deps.env, {
       onMessage: m => {
         if (this.proc === proc) {

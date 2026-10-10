@@ -1,8 +1,8 @@
 import { homedir } from 'node:os'
 import { dirname, join, delimiter } from 'node:path'
-import type { EngineInfo } from '@pixelsky/protocol'
+import { codedError, type EngineInfo } from '@pixelsky/protocol'
 import type { Launcher } from '../adapter'
-import { isFile, run, versionAtLeast } from '../exec'
+import { isFile, resolveCommand, run, versionAtLeast } from '../exec'
 import { engineBase } from '../registry'
 
 /** app-server 协议仍是实验接口，0.160.0 是实测通过的下限 */
@@ -47,12 +47,32 @@ export function toolEnvironment(launcher: Launcher, env: NodeJS.ProcessEnv): Nod
     key = Object.keys(env).find(k => k.toLowerCase() === 'path') ?? 'PATH'
   return { ...env, [key]: [bin, join(bin, '../path'), env[key]].filter(Boolean).join(delimiter) }
 }
+/**
+ * 用户替换的命令（docs/ui/engine-launch.md §3）：绝对路径或 PATH 上的命令名。
+ * 指到 npm 垫片（.cmd 等）时，和自带程序一样找包里的原生程序；找不到时给出原因（带代码的错误），不退回自带程序。
+ */
+export function customCodex(command: string, env: NodeJS.ProcessEnv): { path: string } | { error: string } {
+  const r = resolveCommand(command, env)
+  if (r.ok) return { path: r.path }
+  if (r.reason === 'script') {
+    const exe = codexExecutable(r.path)
+    if (exe && exe !== r.path) return { path: exe }
+    return { error: codedError('launch.script', { path: r.path }).message }
+  }
+  return { error: codedError(`launch.${r.reason}`, { command: command.trim() }).message }
+}
+
+/** override 为用户替换的命令，null 用自带程序 */
 export async function discoverCodex(
   override: string | null,
   env: NodeJS.ProcessEnv,
 ): Promise<{ info: EngineInfo; launcher: Launcher | null }> {
-  const candidates = override
-    ? [override]
+  const base = { ...engineBase('codex'), launch: override ? ('custom' as const) : ('stock' as const) }
+  const custom = override ? customCodex(override, env) : null
+  if (custom && 'error' in custom)
+    return { info: { ...base, status: 'missing', version: null, path: null, message: custom.error }, launcher: null }
+  const path = custom
+    ? custom.path
     : [
         env.PIXELSKY_CODEX_BIN,
         ...(env.PATH ?? env.Path ?? '')
@@ -60,9 +80,10 @@ export async function discoverCodex(
           .flatMap(dir => ['codex.exe', 'codex.cmd', 'codex'].map(name => join(dir.replace(/^"|"$/g, ''), name))),
         join(homedir(), '.local/bin/codex.exe'),
         join(env.APPDATA ?? join(homedir(), 'AppData/Roaming'), 'npm/codex.cmd'),
-      ].filter((v): v is string => !!v)
-  const path = candidates.map(codexExecutable).find(Boolean)
-  const base = engineBase('codex')
+      ]
+        .filter((v): v is string => !!v)
+        .map(codexExecutable)
+        .find(Boolean)
   if (!path)
     return {
       info: {
@@ -77,9 +98,13 @@ export async function discoverCodex(
   const launcher = { command: path, args: [] },
     result = await run(launcher, ['--version'], toolEnvironment(launcher, env), 12_000)
   const version = result.stdout.match(/\d+\.\d+\.\d+/)?.[0] ?? null
-  const check = result.ok
-    ? codexVersionStatus(version)
-    : { status: 'error' as const, message: 'Codex executable could not start' }
+  // 替换后的程序（套壳脚本等）可能不支持 --version：能启动就照常用，版本未知，不按最低版本拦截
+  const check =
+    custom && result.started && !version
+      ? { status: 'ready' as const, message: null }
+      : result.ok
+        ? codexVersionStatus(version)
+        : { status: 'error' as const, message: 'Codex executable could not start' }
   return {
     info: {
       ...base,

@@ -17,6 +17,25 @@ import { codexChanges, CodexTranslator, tokenCounts } from './translate'
 export interface CodexLaunchOptions {
   askQuestions: boolean
   steeringValidated?: boolean
+  /** 用户追加的启动参数，放在 app-server --listen stdio:// 后面、像素星空自己的 -c 前面（docs/ui/engine-launch.md §3） */
+  args?: string[]
+}
+
+/** 用户追加的参数里第一个由像素星空控制的（docs/ui/engine-launch.md §3）：--listen，改平台线路的 -c；都允许时返回 null */
+export function reservedCodexArg(args: readonly string[]): string | null {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]
+    if (arg === '--listen' || arg.startsWith('--listen=')) return '--listen'
+    let value: string | undefined
+    if (arg === '-c' || arg === '--config') value = args[i + 1]
+    else if (arg.startsWith('--config=')) value = arg.slice('--config='.length)
+    else if (arg.startsWith('-c') && !arg.startsWith('--')) value = arg.slice(2).replace(/^=/, '')
+    if (value === undefined) continue
+    const key = value.split('=')[0].trim()
+    if (key === 'model_provider' || key === 'model_providers' || key.startsWith('model_providers.pixelsky'))
+      return `-c ${key}`
+  }
+  return null
 }
 /** Codex TurnError 里 message 之外的原始信息（附加说明、错误类型、HTTP 状态码），给界面「详情」用；没有时为 null */
 export function turnErrorDetail(raw: unknown, willRetry?: unknown): string | null {
@@ -123,7 +142,8 @@ export class CodexSession implements EngineSession {
   private async connect(): Promise<void> {
     const record = this.ctx.record(),
       environment = { ...this.env },
-      args = ['app-server', '--listen', 'stdio://']
+      // 用户追加的参数放在像素星空自己的 -c 前面：同一个配置项写两次时后写的生效
+      args = ['app-server', '--listen', 'stdio://', ...(this.options.args ?? [])]
     const config = (key: string, value: unknown): void => {
       args.push('-c', `${key}=${tomlValue(value)}`)
     }

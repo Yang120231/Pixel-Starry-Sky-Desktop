@@ -1,15 +1,16 @@
 import type { EngineAdapter, EngineSession, Launcher, SessionContext } from '../adapter'
-import type { EngineCatalog, EngineInfo, Item, SessionRecord } from '@pixelsky/protocol'
+import { codedError, type EngineCatalog, type EngineInfo, type Item, type SessionRecord } from '@pixelsky/protocol'
 import { engineEnv } from '../env'
 import { engineBase } from '../registry'
-import { discoverCodex, toolEnvironment } from './discover'
+import { customCodex, discoverCodex, toolEnvironment } from './discover'
 import { CodexProcess, object } from './process'
 import { codexCatalog } from './catalog'
-import { CodexSession, type CodexLaunchOptions } from './session'
+import { CodexSession, reservedCodexArg, type CodexLaunchOptions } from './session'
 import { CodexTranslator } from './translate'
 import { array } from './process'
 
 export interface CodexAdapterOptions {
+  /** 用户在设置里替换的命令（绝对路径或 PATH 上的命令名，docs/ui/engine-launch.md） */
   overridePath?: () => string | null
   env?: NodeJS.ProcessEnv
   extraEnv?: () => Record<string, string>
@@ -25,6 +26,18 @@ export class CodexAdapter implements EngineAdapter {
     return { ...engineEnv(this.opts.env ?? process.env), ...this.opts.extraEnv?.() }
   }
   constructor(private readonly opts: CodexAdapterOptions = {}) {}
+  checkLaunch(command: string | null, args: readonly string[]): void {
+    if (command) {
+      const custom = customCodex(command, this.env())
+      if ('error' in custom) throw new Error(custom.error)
+    }
+    const reserved = reservedCodexArg(args)
+    if (reserved) throw codedError('launch.reserved', { arg: reserved })
+  }
+  /** 用户追加的启动参数（检测握手、读子智能体记录也带上，参数让进程起不来时检测就能看到） */
+  private launchArgs(): string[] {
+    return this.opts.launchOptions?.().args ?? []
+  }
   async info(force = false): Promise<EngineInfo> {
     if (this.cached && !force) return this.cached.info
     if (this.detecting) return this.detecting
@@ -50,7 +63,7 @@ export class CodexAdapter implements EngineAdapter {
     if (!result.launcher || result.info.status !== 'ready') return result.info
     const proc = new CodexProcess(
       result.launcher,
-      ['app-server', '--listen', 'stdio://'],
+      ['app-server', '--listen', 'stdio://', ...this.launchArgs()],
       process.cwd(),
       toolEnvironment(result.launcher, this.env()),
       { notification() {}, request: id => proc.respondError(id, 'No interactive session'), exit() {} },
@@ -79,7 +92,7 @@ export class CodexAdapter implements EngineAdapter {
     if (!this.cached?.launcher || !/^[A-Za-z0-9-]{1,100}$/.test(agentId)) throw new Error('Invalid Codex subagent')
     const proc = new CodexProcess(
       this.cached.launcher,
-      ['app-server'],
+      ['app-server', ...this.launchArgs()],
       record.cwd,
       toolEnvironment(this.cached.launcher, this.env()),
       { notification() {}, request: id => proc.respondError(id, 'Read-only history'), exit() {} },

@@ -1,10 +1,10 @@
 // 找 Claude Code 可执行文件、检测版本和登录状态（docs/engines.md §7）
 import { homedir } from 'node:os'
-import { join } from 'node:path'
-import type { EngineInfo } from '@pixelsky/protocol'
+import { dirname, join } from 'node:path'
+import { codedError, type EngineInfo } from '@pixelsky/protocol'
 import type { Launcher } from '../adapter'
 import { engineBase } from '../registry'
-import { IS_WINDOWS, dirsOnPath, findOnPath, isFile, run, versionAtLeast } from '../exec'
+import { IS_WINDOWS, dirsOnPath, findOnPath, isFile, resolveCommand, run, versionAtLeast } from '../exec'
 
 /** 用到的参数（--permission-prompt-tool stdio、--effort、control 协议的 apply_flag_settings 等）在这个版本之后都有 */
 export const CLAUDE_MIN_VERSION = '2.1.0'
@@ -19,13 +19,12 @@ export interface ClaudeDiscovery {
 }
 
 /**
- * 按顺序找：用户指定的路径 → PIXELSKY_CLAUDE_BIN → PATH → 官方安装器位置 → npm 全局安装。
+ * 自带程序，按顺序找：PIXELSKY_CLAUDE_BIN → PATH → 官方安装器位置 → npm 全局安装。
  * Windows 上只直接启动 .exe；找到 npm 的 .cmd 垫片时，改用 node 跑包里的 cli.js（不经过 cmd.exe，参数不会被弄坏）。
  */
-export function findClaude(overridePath: string | null, env: NodeJS.ProcessEnv): Launcher | null {
+export function findClaude(env: NodeJS.ProcessEnv): Launcher | null {
   const home = homedir()
   const exeCandidates = [
-    overridePath,
     env.PIXELSKY_CLAUDE_BIN,
     findOnPath(EXE, env),
     join(home, '.local', 'bin', EXE),
@@ -48,18 +47,49 @@ export function findClaude(overridePath: string | null, env: NodeJS.ProcessEnv):
   return null
 }
 
-function base(): Omit<EngineInfo, 'status' | 'version' | 'path' | 'message'> {
-  return engineBase('claude')
+/**
+ * 用户替换的命令（docs/ui/engine-launch.md §3）：绝对路径或 PATH 上的命令名。
+ * 指到 npm 的 .cmd 垫片时，和自带程序一样换成包里的 claude.exe 或用 node 跑 cli.js。
+ * 找不到时给出原因（带代码的错误），不退回自带程序。
+ */
+export function customClaude(command: string, env: NodeJS.ProcessEnv): { launcher: Launcher } | { error: string } {
+  const r = resolveCommand(command, env)
+  if (r.ok) return { launcher: { command: r.path, args: [] } }
+  if (r.reason === 'script') {
+    if (/\.cmd$/i.test(r.path)) {
+      const pkg = join(dirname(r.path), 'node_modules', '@anthropic-ai', 'claude-code')
+      const exe = join(pkg, 'bin', 'claude.exe')
+      if (isFile(exe)) return { launcher: { command: exe, args: [] } }
+      const node = findOnPath('node.exe', env)
+      const cli = join(pkg, 'cli.js')
+      if (node && isFile(cli)) return { launcher: { command: node, args: [cli] } }
+    }
+    return { error: codedError('launch.script', { path: r.path }).message }
+  }
+  return { error: codedError(`launch.${r.reason}`, { command: command.trim() }).message }
 }
 
-export async function discoverClaude(overridePath: string | null, env: NodeJS.ProcessEnv): Promise<ClaudeDiscovery> {
-  const launcher = findClaude(overridePath, env)
+function base(launch: EngineInfo['launch']): Omit<EngineInfo, 'status' | 'version' | 'path' | 'message'> {
+  return { ...engineBase('claude'), launch }
+}
+
+/** command 为用户替换的命令，null 用自带程序 */
+export async function discoverClaude(command: string | null, env: NodeJS.ProcessEnv): Promise<ClaudeDiscovery> {
+  const custom = command ? customClaude(command, env) : null
+  const launch = custom ? 'custom' : 'stock'
+  if (custom && 'error' in custom)
+    return {
+      launcher: null,
+      projectsDir: null,
+      info: { ...base(launch), status: 'missing', version: null, path: null, message: custom.error },
+    }
+  const launcher = custom ? custom.launcher : findClaude(env)
   if (!launcher) {
     return {
       launcher: null,
       projectsDir: null,
       info: {
-        ...base(),
+        ...base(launch),
         status: 'missing',
         version: null,
         path: null,
@@ -73,12 +103,14 @@ export async function discoverClaude(overridePath: string | null, env: NodeJS.Pr
 
   const ver = await run(launcher, ['--version'], env)
   const version = /(\d+\.\d+\.\d+)/.exec(ver.stdout)?.[1] ?? null
-  if (!ver.ok || !version) {
+  // 替换后的程序（套壳脚本等）可能不支持 --version：能启动就照常用，版本未知，不按最低版本拦截
+  const unknownVersion = custom !== null && ver.started && !version
+  if (!unknownVersion && (!ver.ok || !version)) {
     return {
       launcher,
       projectsDir: null,
       info: {
-        ...base(),
+        ...base(launch),
         status: 'error',
         version: null,
         path,
@@ -86,12 +118,12 @@ export async function discoverClaude(overridePath: string | null, env: NodeJS.Pr
       },
     }
   }
-  if (!versionAtLeast(version, CLAUDE_MIN_VERSION)) {
+  if (version && !versionAtLeast(version, CLAUDE_MIN_VERSION)) {
     return {
       launcher,
       projectsDir: null,
       info: {
-        ...base(),
+        ...base(launch),
         status: 'outdated',
         version,
         path,
@@ -117,7 +149,7 @@ export async function discoverClaude(overridePath: string | null, env: NodeJS.Pr
       launcher,
       projectsDir,
       info: {
-        ...base(),
+        ...base(launch),
         status: 'unauthenticated',
         version,
         path,
@@ -125,5 +157,5 @@ export async function discoverClaude(overridePath: string | null, env: NodeJS.Pr
       },
     }
   }
-  return { launcher, projectsDir, info: { ...base(), status: 'ready', version, path, message: null } }
+  return { launcher, projectsDir, info: { ...base(launch), status: 'ready', version, path, message: null } }
 }

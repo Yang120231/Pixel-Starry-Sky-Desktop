@@ -86,7 +86,10 @@ export class EngineHost {
         overridePath: () => settings.file.paths.codex ?? null,
         extraEnv: () => settings.file.env.codex ?? {},
         sessionEnv: opts.sessionEnv,
-        launchOptions: () => ({ askQuestions: settings.launchOptions('codex').askQuestions, steeringValidated: true }),
+        launchOptions: () => {
+          const o = settings.launchOptions('codex')
+          return { askQuestions: o.askQuestions, args: o.args, steeringValidated: true }
+        },
       }),
     }
     const projects = new HostProjects(ctx)
@@ -139,16 +142,17 @@ export class EngineHost {
     outputStyle: string | null
     askQuestions: boolean
     autoCompactPct: number | null
+    args: string[]
   } {
     return this.m.settings.launchOptions(engine)
   }
 
-  /** 各引擎的本机配置：路径、追加的环境变量、压缩模型（设置 › 本机引擎） */
+  /** 各引擎的本机配置：替换的命令、追加的参数和环境变量、压缩模型等（设置 › 本机引擎） */
   engineConfig(): EngineConfig {
     return this.m.settings.engineConfig()
   }
 
-  /** 改一个引擎的本机配置；路径或环境变量变了就重新检测（检测结果会广播） */
+  /** 改一个引擎的本机配置；命令、参数或环境变量变了就重新检测（检测结果会广播） */
   async setEngineConfig(engine: EngineId, patch: EngineConfigPatch): Promise<EngineConfig> {
     return this.m.settings.setEngineConfig(engine, patch)
   }

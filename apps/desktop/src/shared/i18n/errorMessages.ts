@@ -23,4 +23,30 @@ export const errorMessages = {
   'errors.terminal.scriptNotFound': { zh: '找不到脚本：{name}', en: 'Script not found: {name}' },
   'errors.terminal.commandInvalid': { zh: '要运行的命令不正确', en: 'The command to run is invalid' },
   'errors.tasks.notFound': { zh: '任务已不存在', en: 'The task no longer exists' },
+  // 引擎启动方式（docs/ui/engine-launch.md §3）
+  'errors.launch.notFound': {
+    zh: '找不到「{command}」：请填绝对路径或 PATH 上的命令名',
+    en: 'Can’t find “{command}”. Enter an absolute path or a command on PATH',
+  },
+  'errors.launch.notAbsolute': {
+    zh: '「{command}」不是绝对路径：带目录的命令要写完整路径',
+    en: '“{command}” isn’t an absolute path. A command with a folder needs the full path',
+  },
+  'errors.launch.script': {
+    zh: '「{path}」不能直接启动：Windows 上的 .cmd、.bat、.ps1 要经过 cmd.exe，参数会被改坏。请指向 .exe',
+    en: '“{path}” can’t be launched directly. On Windows, .cmd, .bat and .ps1 files run through cmd.exe, which mangles arguments. Point to an .exe instead',
+  },
+  'errors.launch.reserved': {
+    zh: '「{arg}」由像素星空控制，不能在这里改',
+    en: '“{arg}” is controlled by Pixel Starry Sky and can’t be set here',
+  },
+  'errors.launch.firstArg': {
+    zh: '参数要以选项开头（- 或 --），「{arg}」不是选项',
+    en: 'Arguments must start with an option (- or --); “{arg}” isn’t one',
+  },
+  'errors.launch.invalidArgs': { zh: '启动参数的格式不对', en: 'The launch arguments are invalid' },
+  'errors.launch.argsTooLong': {
+    zh: '启动参数太多或太长（最多 100 个，每个不超过 4000 字）',
+    en: 'Too many or too long launch arguments (up to 100, each at most 4000 characters)',
+  },
 } as const

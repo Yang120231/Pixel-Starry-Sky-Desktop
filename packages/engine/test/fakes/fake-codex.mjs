@@ -1,5 +1,7 @@
 import { appendFileSync, existsSync } from 'node:fs'
 import readline from 'node:readline'
+if (process.env.FAKE_CODEX_ARGV)
+  appendFileSync(process.env.FAKE_CODEX_ARGV, JSON.stringify(process.argv.slice(2)) + '\n')
 const out = value => process.stdout.write(JSON.stringify(value) + '\n')
 const emit = (method, params) => out({ method, params })
 /** 测试通过创建这个文件打开「恢复线程失败」开关：thread/resume 报错，thread/start 给新线程 id */

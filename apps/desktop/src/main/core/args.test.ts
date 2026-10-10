@@ -47,6 +47,7 @@ describe('shared argument checks', () => {
     expect(
       engineConfigPatch({
         path: null,
+        args: ['--debug', '--add-dir', 'D:\\x'],
         compactModel: 3,
         env: { A: 'a', B: 2 },
         defaults: { model: 'x' },
@@ -58,12 +59,15 @@ describe('shared argument checks', () => {
       }),
     ).toEqual({
       path: null,
+      args: ['--debug', '--add-dir', 'D:\\x'],
       env: { A: 'a' },
       defaults: { model: 'x' },
       outputStyle: 'brief',
       autoCompactPct: 80,
       hidden: true,
     })
+    expect(engineConfigPatch({ args: ['--x', 1] })).toEqual({})
+    expect(engineConfigPatch({ args: '--debug' })).toEqual({})
     expect(engineConfigPatch(undefined)).toEqual({})
   })
 })

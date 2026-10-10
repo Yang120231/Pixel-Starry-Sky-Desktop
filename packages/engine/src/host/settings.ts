@@ -2,6 +2,7 @@
 // 设置对象每次修改都整体替换；适配器的回调每次都读 this.file，拿到的总是最新值。
 import {
   AUTO_COMPACT_PCTS,
+  codedError,
   EFFORTS,
   PERMISSION_MODES,
   type EngineCatalog,
@@ -57,12 +58,15 @@ export class HostSettings {
     outputStyle: string | null
     askQuestions: boolean
     autoCompactPct: number | null
+    args: string[]
   } {
     const o = this.file.options[engine] ?? {}
     return {
       outputStyle: o.outputStyle ?? null,
       askQuestions: o.askQuestions !== false,
       autoCompactPct: o.autoCompactPct ?? null,
+      // 设置文件是用户可改的 JSON，读出来再过一遍
+      args: Array.isArray(o.args) ? o.args.filter((a): a is string => typeof a === 'string') : [],
     }
   }
 
@@ -95,10 +99,18 @@ export class HostSettings {
     }
     const options = { ...(next.options[engine] ?? {}) }
     let redetect = false
-    if (patch.path !== undefined) {
-      const path = patch.path?.trim() ?? ''
+    // 替换的命令和追加的参数先交给适配器查，找不到、不允许就不保存（docs/ui/engine-launch.md §3）
+    const path = patch.path !== undefined ? (patch.path?.trim() ?? '') : undefined
+    const args = patch.args !== undefined ? checkArgs(patch.args) : undefined
+    if (path || args?.length) this.ctx.adapters[engine]?.checkLaunch?.(path || null, args ?? [])
+    if (path !== undefined) {
       if (path) next.paths[engine] = path
       else delete next.paths[engine]
+      redetect = true
+    }
+    if (args !== undefined) {
+      if (args.length > 0) options.args = args
+      else delete options.args
       redetect = true
     }
     if (patch.env !== undefined) {
@@ -201,6 +213,16 @@ export class HostSettings {
     this.ctx.store.saveSettings(this.file)
     return this.defaults()
   }
+}
+
+/** 追加参数的通用检查（各引擎不允许的参数由适配器的 checkLaunch 查）：字符串数组、不太长、第一个是选项 */
+function checkArgs(value: unknown): string[] {
+  if (!Array.isArray(value) || value.some(a => typeof a !== 'string' || a.includes('\0')))
+    throw codedError('launch.invalidArgs')
+  if (value.length > 100 || value.some(a => a.length > 4000)) throw codedError('launch.argsTooLong')
+  const args = value as string[]
+  if (args.length > 0 && !args[0].startsWith('-')) throw codedError('launch.firstArg', { arg: args[0] })
+  return args
 }
 
 /** 校验新会话默认值的补丁，只留认识的字段 */

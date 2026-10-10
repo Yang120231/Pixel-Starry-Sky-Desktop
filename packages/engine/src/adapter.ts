@@ -68,6 +68,11 @@ export interface EngineSession {
 export interface EngineAdapter {
   /** 检测引擎状态；结果会缓存，force 时重新检测 */
   info(force?: boolean): Promise<EngineInfo>
+  /**
+   * 保存前校验用户替换的命令和追加的参数（docs/ui/engine-launch.md §3）：命令找不到、不能直接启动，
+   * 或参数里有像素星空自己控制的参数时抛出原因。command 为 null 时不查命令。
+   */
+  checkLaunch?(command: string | null, args: readonly string[]): void
   createSession(ctx: SessionContext): EngineSession
   /** 智能体追踪：从引擎保存的文件读出这个会话以前的编排和子智能体（不需要进程在跑） */
   loadRuns?(record: SessionRecord): AgentRuns

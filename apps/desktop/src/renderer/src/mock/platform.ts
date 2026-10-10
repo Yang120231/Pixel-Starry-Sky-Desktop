@@ -83,6 +83,7 @@ export const demoEngineCatalog: EngineCatalog = {
 
 const demoLocal = (): EngineLocalConfig => ({
   path: null,
+  args: [],
   env: {},
   compactModel: null,
   defaults: {

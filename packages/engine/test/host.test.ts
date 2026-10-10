@@ -1,5 +1,5 @@
 // EngineHost + ClaudeSession 的完整流程，引擎用 test/fakes/fake-claude.mjs 代替（不调用真实模型）
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -348,13 +348,18 @@ describe('EngineHost + Claude（假引擎）', () => {
   it('引擎本机配置：路径、追加的环境变量、压缩模型能保存和读回；变量名不对时拒绝', async () => {
     const host = makeHost()
     expect(host.engineConfig().claude).toMatchObject({ path: null, env: {}, compactModel: null })
+    // 替换的命令保存前要能找到（docs/ui/engine-launch.md）
+    const exe = join(root, 'tools', process.platform === 'win32' ? 'claude.exe' : 'claude')
+    mkdirSync(join(root, 'tools'), { recursive: true })
+    writeFileSync(exe, '')
+    chmodSync(exe, 0o755)
     await host.setEngineConfig('claude', {
-      path: ' C:/tools/claude.exe ',
+      path: ` ${exe} `,
       env: { FOO: 'bar', HTTPS_PROXY: 'http://127.0.0.1:7890' },
       compactModel: 'claude-sonnet-5-5',
     })
     expect(host.engineConfig().claude).toMatchObject({
-      path: 'C:/tools/claude.exe',
+      path: exe,
       env: { FOO: 'bar', HTTPS_PROXY: 'http://127.0.0.1:7890' },
       compactModel: 'claude-sonnet-5-5',
     })

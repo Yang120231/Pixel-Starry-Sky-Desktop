@@ -148,6 +148,7 @@ export type { IpcChannelName, IpcChannelSpec, IpcKind, IpcRoute, IpcSpecial, Ipc
 export { IPC_CONTRACT, REMOTE_PROTOCOL } from './ipc/contract'
 export type { EngineDescriptor } from './engines'
 export { ENGINES, ENGINE_ORDER } from './engines'
+export { joinArgs, splitArgs } from './launchArgs'
 export type { CodedErrorInfo, ErrorParams } from './errors'
 export { ERROR_PREFIX, codedError, parseCodedError, replaceCodedErrors } from './errors'
 export type { PackageManager } from './package-manager'
