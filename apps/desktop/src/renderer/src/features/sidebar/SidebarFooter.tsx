@@ -26,6 +26,7 @@ export function SidebarFooter({ onAddProject, onNewTask }: SidebarActionCallback
   }, [])
 
   const name = acc.user?.name ?? null
+  // 没登录时说清楚这是平台账号、只有用平台额度才需要：自己的 Claude Code / Codex 不用登录（docs/ui/workbench-ux-3.md §2.4）
   const subtitle =
     acc.status === 'signed-in'
       ? tr('sidebar.SidebarFooter.balance', { p0: acc.balanceText ?? '—' })
@@ -33,9 +34,13 @@ export function SidebarFooter({ onAddProject, onNewTask }: SidebarActionCallback
         ? tr('sidebar.SidebarFooter.signingIn')
         : acc.status === 'loading'
           ? tr('account.AccountMenu.loadingAccount')
-          : tr('sidebar.SidebarFooter.clickToSignIn')
-  const title = name ?? tr('sidebar.SidebarFooter.notSignedIn')
-  const accountLabel = [title, subtitle].filter(Boolean).join('\n')
+          : tr('sidebar.SidebarFooter.notSignedInShort')
+  const title = name ?? tr('sidebar.SidebarFooter.platformAccount')
+  // 侧栏窄，第二行只写「未登录 · 可选」，鼠标提示里写全
+  const accountLabel = [
+    title,
+    acc.status === 'signed-out' ? tr('sidebar.SidebarFooter.notSignedInOptional') : subtitle,
+  ].join('\n')
   const tools = layout.bottom.length
   const showText = tools < SIDEBAR_ROW_LIMIT
   const showSubtitle = tools < 4

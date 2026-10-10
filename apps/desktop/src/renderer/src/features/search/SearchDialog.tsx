@@ -3,7 +3,7 @@ import { setCurrentProject } from '@/features/engine/store'
 import { paneActions } from '@/features/panes/store'
 import { requestTask } from '@/features/panel/taskNavigation'
 import { useI18n } from '@/i18n/I18nProvider'
-import { tr, translateMessage } from '../../i18n/core'
+import { getLocale, tr, translateMessage } from '../../i18n/core'
 import { Fragment, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { ChevronRight, CornerDownLeft, FileText, Folder, MessageSquare, Search, SquareTerminal, X } from 'lucide-react'
 import type { SearchQuery, SearchResponse, SearchResult, SearchScope } from '@pixelsky/protocol'
@@ -16,6 +16,7 @@ import { openFile } from '@/features/files/store'
 import { useActiveWorkspace } from '@/features/editor/target'
 import { demoFileHits, searchFiles, type FileHit, type FileHits } from './fileSearch'
 import { groupResults, titleFragments, type ResultGroup } from './groupResults'
+import { fieldLabel, projectLabel } from './fieldLabel'
 import type { WorkspaceRef } from '../../../../shared/types/workspace'
 
 /** 「项目文件」只在界面里，不发给会话搜索 */
@@ -419,7 +420,7 @@ export function SearchDialog({
                     )}
                   >
                     <span className="min-w-0 flex-1">
-                      <span className="block text-label text-fg-faint">{h.field}</span>
+                      <span className="block text-label text-fg-faint">{fieldLabel(h.field)}</span>
                       <span className="mt-0.5 block whitespace-pre-wrap break-words text-meta leading-relaxed text-fg-muted">
                         <Fragments parts={h.snippet} />
                       </span>
@@ -466,15 +467,15 @@ export function SearchDialog({
                     {terms.length ? <Fragments parts={titleFragments(r.title, terms)} /> : r.title}
                   </span>
                   <span className="mt-0.5 block truncate text-label text-fg-faint">
-                    {r.projectName} ·{' '}
+                    {projectLabel(r.projectName)} ·{' '}
                     {r.id.startsWith('manual-task:') ? tr('projectTools.myTasks') : ENGINES[r.engine].name} ·{' '}
-                    {new Date(r.updatedAt).toLocaleString('zh-CN', {
+                    {new Date(r.updatedAt).toLocaleString(getLocale(), {
                       month: 'numeric',
                       day: 'numeric',
                       hour: '2-digit',
                       minute: '2-digit',
                     })}{' '}
-                    · {r.field}
+                    · {fieldLabel(r.field)}
                   </span>
                   {text.trim() && (
                     <span className="mt-1 block whitespace-pre-wrap break-words text-meta leading-relaxed text-fg-muted">

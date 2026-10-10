@@ -134,10 +134,13 @@ export function FileTree({
   requested,
   compact = false,
   scoped = false,
+  heading = true,
 }: {
   requested: WorkspaceRef | null
   compact?: boolean
   scoped?: boolean
+  /** 顶上写不写「文件」：右侧「文件」标签页里标签已经写了，不再重复（docs/ui/workbench-ux-3.md §2.3） */
+  heading?: boolean
 }) {
   useI18n()
   const projects = useEngineState(s => s.projects),
@@ -250,7 +253,7 @@ export function FileTree({
           )}
         >
           <div className="flex h-10 shrink-0 items-center gap-1 px-2">
-            <span className="flex-1 px-1 text-ui font-medium text-fg">{tr('files.FileTree.files')}</span>
+            <span className="flex-1 px-1 text-ui font-medium text-fg">{heading && tr('files.FileTree.files')}</span>
             {single && (
               <>
                 <IconButton

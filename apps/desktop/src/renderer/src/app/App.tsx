@@ -13,6 +13,7 @@ import { paneActions, startPanes, usePaneState } from '../features/panes/store'
 import { focusedTab, isNewTab, isFileTab } from '../features/panes/tree'
 import { ResizeHandle } from '../ui/ResizeHandle'
 import { DEFAULT_SIDEBAR_WIDTH, setLayoutSize, useLayoutSize } from '../features/layout/sizes'
+import { autoPanelWidth } from '../features/layout/panelWidth'
 import { CacheMissAlerts } from '../features/session/CacheMissAlerts'
 import { NotificationDispatcher } from '../features/notifications/NotificationDispatcher'
 import { OPEN_FILES_EVENT } from '../features/files/store'
@@ -27,7 +28,6 @@ import { ChannelsPage } from '../features/channels/ChannelsPage'
 
 /** 各栏宽度，需与对应组件的 class 保持一致（docs/ui/workbench.md §2.1） */
 const SESSION_MIN_WIDTH = 464 // SessionView min-w-[464px]
-const PANEL_WIDTH = 720 // RightPanel 外层 CollapsibleSlot
 
 /** 协作频道页：频道列表 + 时间线最小宽 + 成员面板（docs/ui/channels.md §3） */
 const CHANNEL_LIST_WIDTH = 260
@@ -42,7 +42,7 @@ function fitsChannels(sidebarOpen: boolean, sidebarWidth: number): boolean {
 }
 
 /** 给定侧边栏、右侧面板的开合状态，当前窗口宽度能否放下所有打开的栏 */
-function fits(sidebarOpen: boolean, panelOpen: boolean, sidebarWidth: number, panelWidth = PANEL_WIDTH): boolean {
+function fits(sidebarOpen: boolean, panelOpen: boolean, sidebarWidth: number, panelWidth: number): boolean {
   const needed = (sidebarOpen ? sidebarWidth : 0) + SESSION_MIN_WIDTH + (panelOpen ? panelWidth : 0)
   return needed <= window.innerWidth
 }
@@ -57,7 +57,8 @@ export function App() {
   const [windowWidth, setWindowWidth] = useState(window.innerWidth)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [panelMaximized, setPanelMaximized] = useState(false)
-  const preferredPanelWidth = useLayoutSize('rightWorkspace')
+  // 没拖过时按窗口宽度自动算（docs/ui/workbench-ux-3.md §2.3）
+  const preferredPanelWidth = useLayoutSize('rightWorkspace') ?? autoPanelWidth(windowWidth, preferredSidebarWidth)
   const panelMax = Math.max(360, windowWidth - (sidebarOpen ? preferredSidebarWidth : 0) - SESSION_MIN_WIDTH)
   const panelWidth = Math.min(preferredPanelWidth, panelMax)
   const [panelOpen, setPanelOpen] = useState(
@@ -274,7 +275,7 @@ export function App() {
                   max={panelMax}
                   onChange={v => setLayoutSize('rightWorkspace', v)}
                   onCommit={v => setLayoutSize('rightWorkspace', v, true)}
-                  onReset={() => setLayoutSize('rightWorkspace', PANEL_WIDTH, true)}
+                  onReset={() => setLayoutSize('rightWorkspace', null, true)}
                 />
               )}
             </div>

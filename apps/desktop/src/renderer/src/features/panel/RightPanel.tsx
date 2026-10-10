@@ -193,7 +193,12 @@ export function RightPanel({ maximized = false, visible = true }: { maximized?: 
           className={layout.active === 'files' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}
           inert={layout.active !== 'files'}
         >
-          <FileTree key={scope + JSON.stringify(requested)} requested={requested ?? workspace.ref} scoped />
+          <FileTree
+            key={scope + JSON.stringify(requested)}
+            requested={requested ?? workspace.ref}
+            scoped
+            heading={false}
+          />
         </div>
         <TerminalPanel embedded visible={visible && layout.active === 'terminal'} />
         {(['git', 'artifacts', 'tasks', 'sandbox', 'copies', 'browser'] as const).map(

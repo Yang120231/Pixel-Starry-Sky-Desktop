@@ -109,8 +109,8 @@ export const catalog = {
     "en": "Sign in to Pixel Starry Sky"
   },
   "account.AccountMenu.signInToAccess": {
-    "zh": "登录后可以使用账号下的模型，并在这里查看余额和额度。",
-    "en": "Sign in to access your models and view your balance and credits here."
+    "zh": "登录后可以使用账号下的模型，并在这里查看余额和额度。用自己的 Claude Code / Codex 不需要登录。",
+    "en": "Sign in to access your models and view your balance and credits here. You don't need to sign in to use your own Claude Code or Codex."
   },
   "account.AccountMenu.signIn": {
     "zh": "登录",
@@ -1671,10 +1671,6 @@ export const catalog = {
   "sidebar.SidebarFooter.signingIn": {
     "zh": "登录中…",
     "en": "Signing in…"
-  },
-  "sidebar.SidebarFooter.clickToSignIn": {
-    "zh": "点击登录",
-    "en": "Click to sign in"
   },
   "sidebar.SidebarFooter.notSignedIn": {
     "zh": "未登录",
@@ -4267,6 +4263,82 @@ export const catalog = {
   "usage.format.pixelStarrySkyAccount": {
     "zh": "像素星空账号",
     "en": "Pixel Starry Sky account"
+  },
+  "search.field.title": {
+    "zh": "会话标题",
+    "en": "Title"
+  },
+  "search.field.recent": {
+    "zh": "最近会话",
+    "en": "Recent"
+  },
+  "search.field.project": {
+    "zh": "项目",
+    "en": "Project"
+  },
+  "search.field.user": {
+    "zh": "用户消息",
+    "en": "Your message"
+  },
+  "search.field.assistant": {
+    "zh": "助手回复",
+    "en": "Reply"
+  },
+  "search.field.notice": {
+    "zh": "系统提示",
+    "en": "Notice"
+  },
+  "search.field.command": {
+    "zh": "命令",
+    "en": "Command"
+  },
+  "search.field.commandDescription": {
+    "zh": "命令说明",
+    "en": "Command description"
+  },
+  "search.field.commandOutput": {
+    "zh": "命令输出",
+    "en": "Command output"
+  },
+  "search.field.toolSummary": {
+    "zh": "工具摘要",
+    "en": "Tool summary"
+  },
+  "search.field.toolName": {
+    "zh": "工具名称",
+    "en": "Tool name"
+  },
+  "search.field.toolOutput": {
+    "zh": "工具输出",
+    "en": "Tool output"
+  },
+  "search.field.changedPath": {
+    "zh": "修改路径",
+    "en": "Changed path"
+  },
+  "search.field.diff": {
+    "zh": "文件改动",
+    "en": "File changes"
+  },
+  "search.field.todo": {
+    "zh": "待办",
+    "en": "To-do"
+  },
+  "search.field.removedProject": {
+    "zh": "已移除的项目",
+    "en": "Removed project"
+  },
+  "sidebar.SidebarFooter.platformAccount": {
+    "zh": "平台账号",
+    "en": "Platform account"
+  },
+  "sidebar.SidebarFooter.notSignedInShort": {
+    "zh": "未登录 · 可选",
+    "en": "Not signed in · optional"
+  },
+  "sidebar.SidebarFooter.notSignedInOptional": {
+    "zh": "未登录 · 用平台额度时才需要",
+    "en": "Not signed in · only needed for platform credits"
   },
   "usage.format.noProject": {
     "zh": "未归属项目",

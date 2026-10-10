@@ -4,7 +4,8 @@ export const DEFAULT_SIDEBAR_WIDTH = 290
 export const DEFAULT_COMPOSER_WIDTH = 960
 const KEY = 'pixelsky.layout-sizes.v1'
 interface LayoutSizes {
-  rightWorkspace: number
+  /** null：没拖过，按窗口宽度自动算（features/layout/panelWidth.ts） */
+  rightWorkspace: number | null
   sidebar: number
   composer: number
   /** null 使用原有的随内容增高模式；数值是文本输入区高度。 */
@@ -17,14 +18,18 @@ function read(): LayoutSizes {
   try {
     const p = JSON.parse(localStorage.getItem(KEY) ?? '{}')
     return {
-      rightWorkspace: validSize(p.rightWorkspace, 360, 2000, 720),
+      // 以前没拖过也会在保存其它尺寸时一起存下默认的 720，当作没拖过（docs/ui/workbench-ux-3.md §2.3）
+      rightWorkspace:
+        typeof p.rightWorkspace === 'number' && p.rightWorkspace !== 720
+          ? validSize(p.rightWorkspace, 360, 2000, 720)
+          : null,
       sidebar: validSize(p.sidebar, 240, 480, DEFAULT_SIDEBAR_WIDTH),
       composer: validSize(p.composer, 320, 2400, DEFAULT_COMPOSER_WIDTH),
       composerHeight: typeof p.composerHeight === 'number' ? validSize(p.composerHeight, 56, 1200, 56) : null,
     }
   } catch {
     return {
-      rightWorkspace: 720,
+      rightWorkspace: null,
       sidebar: DEFAULT_SIDEBAR_WIDTH,
       composer: DEFAULT_COMPOSER_WIDTH,
       composerHeight: null,
