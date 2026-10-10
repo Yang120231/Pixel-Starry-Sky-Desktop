@@ -1,6 +1,6 @@
 import { translateMessage } from '../../../i18n/core'
 import { useI18n } from '@/i18n/I18nProvider'
-import { tr } from '../../../i18n/core'
+import { tr, type TranslationKey } from '../../../i18n/core'
 // 智能体追踪面板（docs/engines.md §15.4，参考 JuCode AgentRunsPanel）：
 // 会话主区右侧的抽屉。总览：每个多智能体编排一节（按阶段、共用时间轴），再加「子智能体（Agent 工具）」一节；
 // 点一个智能体进入它的会话（只读），还在运行时每 2.5 秒刷新。
@@ -32,6 +32,12 @@ const STATE_ICON: Record<RunState, LucideIcon | null> = {
   stopped: Minus,
   queued: CircleDashed,
 }
+
+/** 带数量的文字：英文 1 个用单数（1 tool call / 12 tool calls），中文两个 key 相同 */
+const countText = (n: number, one: TranslationKey, many: TranslationKey): string => tr(n === 1 ? one : many, { n })
+
+const toolCallsText = (n: number): string =>
+  countText(n, 'session.live.AgentTracePanel.toolCall', 'session.live.AgentTracePanel.toolCalls')
 
 function StateIcon({ state }: { state: string }) {
   useI18n()
@@ -163,18 +169,10 @@ function WorkflowSection({
       </button>
       <div className="flex flex-wrap gap-x-3 gap-y-0.5 px-3 pb-2 pl-[52px] text-meta text-fg-muted tabular-nums">
         <span>{RUN_STATE_LABEL[s]}</span>
-        {p.total > 0 && (
-          <span>
-            {p.done}/{p.total}
-            {tr('session.live.AgentTracePanel.agents')}{' '}
-          </span>
-        )}
+        {p.total > 0 && <span>{tr('session.live.AgentTracePanel.agents', { done: p.done, total: p.total })}</span>}
         <span>{formatDuration(elapsed(run, s, now))}</span>
         <span>{formatCount(run.tokens)} tokens</span>
-        <span>
-          {run.toolCalls}
-          {tr('session.live.AgentTracePanel.toolCalls')}{' '}
-        </span>
+        <span>{toolCallsText(run.toolCalls)}</span>
       </div>
       {open && (
         <div className="border-t border-line-subtle px-1.5 pt-2 pb-1.5">
@@ -295,10 +293,7 @@ function AgentFocus({
           <span>{RUN_STATE_LABEL[s]}</span>
           <span>{formatDuration(elapsed(agent, s, now))}</span>
           <span>{formatCount(agent.tokens)} tokens</span>
-          <span>
-            {agent.toolCalls}
-            {tr('session.live.AgentTracePanel.toolCalls')}{' '}
-          </span>
+          <span>{toolCallsText(agent.toolCalls)}</span>
         </div>
       </div>
       {task && (
@@ -403,9 +398,19 @@ export function AgentTracePanel({ sessionId, runs, focus, onFocus, onClose }: Ag
         <span className="text-ui font-medium text-fg">{tr('session.live.AgentTracePanel.agentActivity')}</span>
         {!empty && (
           <span className="min-w-0 truncate text-meta text-fg-muted tabular-nums">
-            {runs.workflows.length}
-            {tr('session.live.AgentTracePanel.orchestrations')} {runs.agents.length}
-            {tr('session.live.AgentTracePanel.subagentsTotal')} {formatCount(totalTokens)} tokens
+            {[
+              countText(
+                runs.workflows.length,
+                'session.live.AgentTracePanel.orchestration',
+                'session.live.AgentTracePanel.orchestrations',
+              ),
+              countText(
+                runs.agents.length,
+                'session.live.AgentTracePanel.subagent',
+                'session.live.AgentTracePanel.subagents',
+              ),
+              tr('session.live.AgentTracePanel.tokensTotal', { tokens: formatCount(totalTokens) }),
+            ].join(' · ')}
           </span>
         )}
         <span className="flex-1" />

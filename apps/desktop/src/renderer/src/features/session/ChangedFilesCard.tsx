@@ -31,8 +31,10 @@ export function ChangedFilesCard({
         </span>
         <div className="min-w-0 flex-1">
           <div className="text-prose leading-snug font-semibold text-fg">
-            {tr('session.ChangedFilesCard.edited')} {data.files.length}
-            {tr('session.ChangedFilesCard.files')}{' '}
+            {tr(
+              data.files.length === 1 ? 'session.ChangedFilesCard.editedFile' : 'session.ChangedFilesCard.editedFiles',
+              { n: data.files.length },
+            )}
           </div>
           <DiffStat added={data.added} removed={data.removed} className="text-meta" />
         </div>

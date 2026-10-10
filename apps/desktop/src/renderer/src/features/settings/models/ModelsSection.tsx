@@ -296,8 +296,9 @@ export function ModelsSection({ onOpenEngines }: { onOpenEngines?: () => void })
                     {m}
                   </span>
                   <span className="shrink-0 text-meta text-fg-faint">
-                    {lines}
-                    {tr('settings.models.ModelsSection.routes')}{' '}
+                    {tr(lines === 1 ? 'settings.models.ModelsSection.route' : 'settings.models.ModelsSection.routes', {
+                      n: lines,
+                    })}
                   </span>
                   <Switch
                     checked={shown}

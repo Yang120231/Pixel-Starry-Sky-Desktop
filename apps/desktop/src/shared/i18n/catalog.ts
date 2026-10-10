@@ -396,13 +396,13 @@ export const catalog = {
     "zh": "停止本轮",
     "en": "Stop this turn"
   },
-  "session.ChangedFilesCard.edited": {
-    "zh": "编辑了",
-    "en": "Edited"
+  "session.ChangedFilesCard.editedFile": {
+    "zh": "编辑了 {n} 个文件",
+    "en": "Edited {n} file"
   },
-  "session.ChangedFilesCard.files": {
-    "zh": "个文件",
-    "en": "files"
+  "session.ChangedFilesCard.editedFiles": {
+    "zh": "编辑了 {n} 个文件",
+    "en": "Edited {n} files"
   },
   "session.ChangedFilesCard.undo": {
     "zh": "撤销",
@@ -817,12 +817,16 @@ export const catalog = {
     "en": "Tools"
   },
   "session.live.AgentTracePanel.agents": {
-    "zh": "个智能体",
-    "en": "agents"
+    "zh": "{done}/{total} 个智能体",
+    "en": "{done}/{total} agents"
+  },
+  "session.live.AgentTracePanel.toolCall": {
+    "zh": "{n} 次工具调用",
+    "en": "{n} tool call"
   },
   "session.live.AgentTracePanel.toolCalls": {
-    "zh": "次工具调用",
-    "en": "tool calls"
+    "zh": "{n} 次工具调用",
+    "en": "{n} tool calls"
   },
   "session.live.AgentTracePanel.noAgentsDispatchedYet": {
     "zh": "还没有派出智能体",
@@ -852,13 +856,25 @@ export const catalog = {
     "zh": "智能体追踪",
     "en": "Agent activity"
   },
-  "session.live.AgentTracePanel.orchestrations": {
-    "zh": "个编排 ·",
-    "en": "orchestrations ·"
+  "session.live.AgentTracePanel.orchestration": {
+    "zh": "{n} 个编排",
+    "en": "{n} orchestration"
   },
-  "session.live.AgentTracePanel.subagentsTotal": {
-    "zh": "个子智能体 · 共",
-    "en": "subagents · Total"
+  "session.live.AgentTracePanel.orchestrations": {
+    "zh": "{n} 个编排",
+    "en": "{n} orchestrations"
+  },
+  "session.live.AgentTracePanel.subagent": {
+    "zh": "{n} 个子智能体",
+    "en": "{n} subagent"
+  },
+  "session.live.AgentTracePanel.subagents": {
+    "zh": "{n} 个子智能体",
+    "en": "{n} subagents"
+  },
+  "session.live.AgentTracePanel.tokensTotal": {
+    "zh": "共 {tokens} tokens",
+    "en": "{tokens} tokens total"
   },
   "session.live.AgentTracePanel.closeEsc": {
     "zh": "关闭（Esc）",
@@ -3376,9 +3392,13 @@ export const catalog = {
     "zh": "全部显示",
     "en": "Show all"
   },
+  "settings.models.ModelsSection.route": {
+    "zh": "{n} 条线路",
+    "en": "{n} route"
+  },
   "settings.models.ModelsSection.routes": {
-    "zh": "条线路",
-    "en": "routes"
+    "zh": "{n} 条线路",
+    "en": "{n} routes"
   },
   "settings.models.ModelsSection.showInMenu": {
     "zh": "在菜单里显示 {p0}",
