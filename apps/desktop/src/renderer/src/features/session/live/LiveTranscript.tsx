@@ -13,6 +13,9 @@ import {
   type CSSProperties,
   type ReactNode,
 } from 'react'
+import { TurnRail } from './TurnRail'
+import { turnsOf } from './turnRailModel'
+import { useTurnRailSide } from '@/features/settings/turnRail'
 import type { FileChange, Item, SessionSnapshot } from '@pixelsky/protocol'
 import { Spinner, cn } from '@/ui'
 import { toChangedFiles } from '@/features/engine'
@@ -208,6 +211,9 @@ export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot
   const highlight = useItemLocation(snapshot?.record.id ?? null, scroller, !!snapshot, detachForSearch)
   const running = !!snapshot && snapshot.state !== 'idle'
   const items = snapshot?.items ?? []
+  // 轮次跳转条（docs/ui/turn-rail.md）
+  const railSide = useTurnRailSide()
+  const turns = useMemo(() => turnsOf(snapshot?.items ?? []), [snapshot?.items])
   const sessionId = snapshot?.record.id ?? null
   const changesCache = useRef<{ sessionId: string | null; map: ChangesCache }>({ sessionId: null, map: new Map() })
   const blocks = useMemo(() => {
@@ -453,6 +459,9 @@ export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot
           </div>
         </div>
         {away && snapshot && <JumpToLatest unseen={unseen} onClick={jumpToLatest} />}
+        {railSide !== 'off' && snapshot && (
+          <TurnRail turns={turns} scroller={scroller} side={railSide} onBeforeJump={detachForSearch} />
+        )}
       </div>
     </ExpandScope.Provider>
   )

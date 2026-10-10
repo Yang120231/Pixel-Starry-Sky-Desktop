@@ -28,6 +28,7 @@ import { AccountSection } from '../account/settings/AccountSection'
 import { FontSettings } from './FontSettings'
 import { ReplyStatsSettings } from './ReplyStatsSettings'
 import { ComposerStyleSettings } from './ComposerStyleSettings'
+import { TurnRailSettings } from './TurnRailSettings'
 import { CacheMissSettings } from './CacheMissSettings'
 import { WallpaperSettings } from './WallpaperSettings'
 import type { PaneFocusMotion } from '@/features/appearance/paneFocusMotion'
@@ -654,6 +655,7 @@ function AppearanceSection() {
       <GroupTitle>{tr('settings.engines.EngineDetail.conversation')}</GroupTitle>
       <ComposerStyleSettings />
       <ReplyStatsSettings />
+      <TurnRailSettings />
       <CacheMissSettings />
 
       <GroupTitle>{tr('settings.SettingsDialog.fonts')}</GroupTitle>

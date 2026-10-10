@@ -29,6 +29,7 @@ export const SHOWCASE_SESSIONS = [
   { id: 'demo-claude-approve-tool', title: '审批：使用 MCP 工具' },
   { id: 'demo-claude-question', title: '提问：单选和多选' },
   { id: 'demo-claude-plan', title: '计划确认' },
+  { id: 'demo-claude-long', title: '长对话：轮次跳转（30 轮）' },
 ] as const
 
 type SessionId = (typeof SHOWCASE_SESSIONS)[number]['id']
@@ -1275,6 +1276,61 @@ const plan = waiting(
   { permissionMode: 'plan' },
 )
 
+// 长对话（docs/ui/turn-rail.md）：30 轮来回，看轮次跳转条
+const LONG_ASKS = [
+  '先看一下输入框草稿现在是怎么存的',
+  '切换会话时草稿为什么会丢？',
+  '把草稿改成按会话保存',
+  '存的时候带上时间',
+  '启动时清掉 7 天没动的草稿',
+  '旧格式的草稿要兼容',
+  '加两个测试：过期删除、旧格式兼容',
+  '跑一下测试',
+  '恢复草稿时在输入框上方提示一行字',
+  '提示几秒后自动消失',
+  '侧栏有草稿的会话标个小圆点',
+  '小圆点颜色用设计变量',
+  '深色模式下再看一眼',
+  '窄窗格时提示文字截断',
+  '发送成功后清草稿',
+  '删除会话时也清掉',
+  '多窗口同时开同一个会话会怎样？',
+  '用 storage 事件同步',
+  '写一下这块的说明文档',
+  '文档里加一张存储位置的表',
+  '检查一遍有没有遗漏的地方',
+  '粘贴大段文字时草稿会卡吗？',
+  '存之前加 300ms 防抖',
+  '防抖期间关窗口会丢吗？',
+  '关窗口前立即写一次',
+  '再跑一遍全部测试',
+  '构建一下',
+  '总结一下这次改了什么',
+  '列一下还没做的',
+  '好，先这样，提交吧',
+]
+const long = snapshot(
+  record('demo-claude-long', { updatedAt: T0 - 1 * MIN }),
+  LONG_ASKS.flatMap((ask, i) => [
+    user(`lg-u${i}`, ask, 90 - i * 3),
+    assistant(
+      `lg-a${i}`,
+      [
+        `第 ${i + 1} 轮：${ask.replace(/[？?]$/, '')}，已处理。`,
+        '',
+        '- 改动在 `src/session/useDraft.ts`',
+        '- 相关测试 `useDraft.test.ts` 通过',
+        '',
+        '下一步可以继续。',
+      ].join('\n'),
+    ),
+    stats(`lg-s${i}`, 'completed', {
+      durationMs: 8_000 + i * 700,
+      models: { 'claude-opus-5-5': opus(900, 320, 0.03) },
+    }),
+  ]),
+)
+
 export const showcaseSnapshots: Record<string, SessionSnapshot> = Object.fromEntries(
   [
     markdown,
@@ -1289,6 +1345,7 @@ export const showcaseSnapshots: Record<string, SessionSnapshot> = Object.fromEnt
     approveTool,
     question,
     plan,
+    long,
   ].map(s => [s.record.id, s]),
 )
 

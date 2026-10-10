@@ -1,4 +1,18 @@
 export const sessionMessages = {
+  // 轮次跳转条（docs/ui/turn-rail.md）
+  'turnRail.setting': { zh: '轮次跳转条', en: 'Turn navigator' },
+  'turnRail.settingHint': {
+    zh: '对话边上每一轮一个刻度，点一下跳到那一轮',
+    en: 'A tick for each turn along the conversation edge; click one to jump to it',
+  },
+  'turnRail.left': { zh: '左侧', en: 'Left' },
+  'turnRail.right': { zh: '右侧', en: 'Right' },
+  'turnRail.off': { zh: '关闭', en: 'Off' },
+  'turnRail.label': { zh: '轮次跳转', en: 'Jump to turn' },
+  'turnRail.turn': { zh: '第 {n} 轮', en: 'Turn {n}' },
+  'turnRail.imageOnly': { zh: '（图片）', en: '(image)' },
+  'turnRail.previous': { zh: '上一轮', en: 'Previous turn' },
+  'turnRail.next': { zh: '下一轮', en: 'Next turn' },
   'session.rename': { zh: '重命名', en: 'Rename' },
   'session.renameTitle': { zh: '重命名会话', en: 'Rename session' },
   'session.name': { zh: '会话名称', en: 'Session name' },
