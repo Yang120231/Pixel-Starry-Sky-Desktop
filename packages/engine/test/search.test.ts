@@ -208,3 +208,17 @@ describe('本机会话搜索', () => {
     expect(() => searchQuery({ ...query('text'), text: 'a'.repeat(201) })).toThrow('无效')
   })
 })
+
+describe('按会话合并要用的命中总数（docs/ui/conversation-ux-2.md §2.5）', () => {
+  it('每个会话最多带最近 3 处，同时给出总数；这不算结果太多', async () => {
+    const r = record(
+      '五处',
+      [1, 2, 3, 4, 5].map(i => reply(`a${i}`, `第 ${i} 处关键字`)),
+    )
+    await reopen()
+    const res = await host.search(query('关键字'))
+    expect(res.results.map(x => x.itemId).sort()).toEqual(['a3', 'a4', 'a5'])
+    expect(res.results.every(x => x.sessionId === r.id && x.sessionMatches === 5)).toBe(true)
+    expect(res.truncated).toBe(false)
+  })
+})

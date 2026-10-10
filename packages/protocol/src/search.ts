@@ -35,6 +35,11 @@ export interface SearchResult {
   updatedAt: number
   snippet: SearchFragment[]
   rank: number
+  /**
+   * 这个会话一共有几处对话内容命中（结果里每个会话最多只带最近 3 处，界面按会话合并时显示总数，
+   * docs/ui/conversation-ux-2.md §2.5）。标题、项目命中和旧版远端没有
+   */
+  sessionMatches?: number
 }
 export interface SearchResponse {
   requestId: number

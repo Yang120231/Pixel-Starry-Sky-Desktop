@@ -170,8 +170,10 @@ export async function searchSessions(
             if (++liveCount % 128 === 0) await yieldThread()
           }
         }
-        if (matches.size > 3) truncated = true
-        for (const [id, match] of [...matches].slice(-3).reverse()) perSession.push(result(record, match, id))
+        // 每个会话只带最近 3 处，同时给出总数：界面按会话合并后写「另有 N 处」（不再算作「结果太多」）
+        const sessionMatches = matches.size
+        for (const [id, match] of [...matches].slice(-3).reverse())
+          perSession.push({ ...result(record, match, id), sessionMatches })
       }
       if (source.exists(record.id)) results.push(...perSession)
       // 始终只保留全局最优的 51 条摘要，但继续扫描确保较旧标题优先于新正文。

@@ -2416,6 +2416,26 @@ export const catalog = {
     "zh": "↑↓ 选择",
     "en": "↑↓ Select"
   },
+  "search.SearchDialog.expandHint": {
+    "zh": "→ 展开",
+    "en": "→ Expand"
+  },
+  "search.SearchDialog.moreMatches": {
+    "zh": "另有 {n} 处",
+    "en": "{n} more"
+  },
+  "search.SearchDialog.showMatches": {
+    "zh": "展开这个会话的其它命中",
+    "en": "Show other matches in this conversation"
+  },
+  "search.SearchDialog.hideMatches": {
+    "zh": "收起这个会话的其它命中",
+    "en": "Hide other matches in this conversation"
+  },
+  "search.SearchDialog.unlistedMatches": {
+    "zh": "还有 {n} 处没列出，打开会话后按 Ctrl+F 查找",
+    "en": "{n} more not listed. Open the conversation and press Ctrl+F to find them."
+  },
   "search.SearchDialog.enterOpen": {
     "zh": "Enter 打开",
     "en": "Enter Open"

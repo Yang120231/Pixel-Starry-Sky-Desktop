@@ -4,8 +4,8 @@ import { paneActions } from '@/features/panes/store'
 import { requestTask } from '@/features/panel/taskNavigation'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '../../i18n/core'
-import { useEffect, useRef, useState, type RefObject } from 'react'
-import { CornerDownLeft, FileText, Folder, MessageSquare, Search, SquareTerminal, X } from 'lucide-react'
+import { Fragment, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { ChevronRight, CornerDownLeft, FileText, Folder, MessageSquare, Search, SquareTerminal, X } from 'lucide-react'
 import type { SearchQuery, SearchResponse, SearchResult, SearchScope } from '@pixelsky/protocol'
 import { IconButton, Spinner, cn } from '@/ui'
 import { OPEN_SESSION_EVENT, bridge, useEngineState } from '@/features/engine'
@@ -15,6 +15,7 @@ import { demo } from '@/data/demo'
 import { openFile } from '@/features/files/store'
 import { useActiveWorkspace } from '@/features/editor/target'
 import { demoFileHits, searchFiles, type FileHit, type FileHits } from './fileSearch'
+import { groupResults, titleFragments, type ResultGroup } from './groupResults'
 import type { WorkspaceRef } from '../../../../shared/types/workspace'
 
 /** 「项目文件」只在界面里，不发给会话搜索 */
@@ -53,6 +54,12 @@ const SCOPES: Array<{ id: Scope; name: string }> = [
   },
 ]
 const noFiles: FileHits = { hits: [], truncated: false }
+
+const caretAtEnd = (input: HTMLInputElement | null): boolean =>
+  !!input && input.selectionStart === input.selectionEnd && input.selectionEnd === input.value.length
+
+/** 结果列表里的一行：一个会话（或项目、手动任务），或展开后它下面的一处命中 */
+type ResultRow = { kind: 'group'; group: ResultGroup } | { kind: 'hit'; group: ResultGroup; hit: SearchResult }
 let requestSequence = 0
 const emptyResponse: SearchResponse = { requestId: 0, results: [], truncated: false, partial: false, sessionCount: 0 }
 
@@ -102,10 +109,39 @@ export function SearchDialog({
     void openFile(hit.ref, hit.path, hit.line ?? undefined, hit.column ?? 1).catch(() => undefined)
     onClose()
   }
-  const total = fileHits.hits.length + response.results.length
+  // 会话结果按会话合并成一行，展开后下面列出其它命中（docs/ui/conversation-ux-2.md §2.5）
+  const terms = useMemo(() => searchTerms(text), [text])
+  const groups = useMemo(() => groupResults(response.results), [response])
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set())
+  const rows: ResultRow[] = useMemo(
+    () =>
+      groups.flatMap(group => [
+        { kind: 'group' as const, group },
+        ...(expanded.has(group.key) ? group.rest.map(hit => ({ kind: 'hit' as const, group, hit })) : []),
+      ]),
+    [groups, expanded],
+  )
+  const total = fileHits.hits.length + rows.length
   const activateIndex = (i: number) => {
     if (i < fileHits.hits.length) openHit(fileHits.hits[i])
-    else if (response.results[i - fileHits.hits.length]) activate(response.results[i - fileHits.hits.length])
+    else {
+      const row = rows[i - fileHits.hits.length]
+      if (row) activate(row.kind === 'group' ? row.group.head : row.hit)
+    }
+  }
+  /** 展开 / 收起一个会话的命中；收起时选中项落回这个会话那一行 */
+  const toggleGroup = (key: string, open: boolean) => {
+    const at = fileHits.hits.length + rows.findIndex(r => r.kind === 'group' && r.group.key === key)
+    const shown = rows.filter(r => r.kind === 'hit' && r.group.key === key).length
+    const extra = groups.find(g => g.key === key)?.rest.length ?? 0
+    setExpanded(prev => {
+      const next = new Set(prev)
+      if (open) next.add(key)
+      else next.delete(key)
+      return next
+    })
+    // 下面的行跟着挪：展开时往后移，收起时往前移，原来选在收起的命中上就落回会话那一行
+    setSelected(i => (i <= at ? i : open ? i + extra : i <= at + shown ? at : i - shown))
   }
   const activate = (r: SearchResult) => {
     if (r.id.startsWith('manual-task:')) {
@@ -131,6 +167,7 @@ export function SearchDialog({
     setResponse(emptyResponse)
     setFileHits(noFiles)
     setSelected(0)
+    setExpanded(new Set())
     if (composing) return
     let disposed = false
     const timer = window.setTimeout(
@@ -231,6 +268,18 @@ export function SearchDialog({
           } else if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && total) {
             e.preventDefault()
             setSelected(i => (i + (e.key === 'ArrowDown' ? 1 : -1) + total) % total)
+          } else if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && caretAtEnd(inputRef.current)) {
+            // 光标在输入框末尾时，右键展开选中会话的命中、左键收起；光标在中间时照常移动光标
+            const row = rows[selected - fileHits.hits.length]
+            if (!row) return
+            const open = expanded.has(row.group.key)
+            if (e.key === 'ArrowRight' && row.kind === 'group' && row.group.rest.length && !open) {
+              e.preventDefault()
+              toggleGroup(row.group.key, true)
+            } else if (e.key === 'ArrowLeft' && open) {
+              e.preventDefault()
+              toggleGroup(row.group.key, false)
+            }
           } else if (e.key === 'Enter' && e.target === inputRef.current && selected < total && !loading) {
             e.preventDefault()
             activateIndex(selected)
@@ -348,8 +397,46 @@ export function SearchDialog({
               {i === selected && <CornerDownLeft size={13} className="mt-1 shrink-0 text-fg-faint" />}
             </button>
           ))}
-          {response.results.map((r, n) => {
+          {rows.map((row, n) => {
             const i = n + fileHits.hits.length
+            if (row.kind === 'hit') {
+              const h = row.hit
+              // 展开后的最后一处下面写明还有几处没列出（搜索每个会话最多只带最近 3 处）
+              const unlisted = h === row.group.rest.at(-1) ? row.group.total - 1 - row.group.rest.length : 0
+              return (
+                <Fragment key={h.id}>
+                  <div
+                    id={`search-result-${i}`}
+                    role="option"
+                    aria-selected={i === selected}
+                    tabIndex={-1}
+                    data-result-index={i}
+                    onMouseEnter={() => setSelected(i)}
+                    onClick={() => activate(h)}
+                    className={cn(
+                      'ml-7 flex cursor-default items-start gap-2 rounded-lg px-3 py-2 text-left',
+                      i === selected ? 'bg-selected' : 'hover:bg-hover',
+                    )}
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-label text-fg-faint">{h.field}</span>
+                      <span className="mt-0.5 block whitespace-pre-wrap break-words text-meta leading-relaxed text-fg-muted">
+                        <Fragments parts={h.snippet} />
+                      </span>
+                    </span>
+                    {i === selected && <CornerDownLeft size={13} className="mt-1 shrink-0 text-fg-faint" />}
+                  </div>
+                  {unlisted > 0 && (
+                    <p className="ml-7 px-3 pt-0.5 pb-1.5 text-label text-fg-faint">
+                      {tr('search.SearchDialog.unlistedMatches', { n: unlisted })}
+                    </p>
+                  )}
+                </Fragment>
+              )
+            }
+            const r = row.group.head
+            const more = row.group.total - 1
+            const open = expanded.has(row.group.key)
             const Icon = r.itemId
               ? ['command', 'tool', 'file_change'].includes(r.kind)
                 ? SquareTerminal
@@ -358,24 +445,26 @@ export function SearchDialog({
                 ? Folder
                 : MessageSquare
             return (
-              <button
-                key={r.id}
+              <div
+                key={row.group.key}
                 id={`search-result-${i}`}
-                type="button"
                 role="option"
                 aria-selected={i === selected}
+                aria-expanded={more ? open : undefined}
                 tabIndex={-1}
                 data-result-index={i}
                 onMouseEnter={() => setSelected(i)}
                 onClick={() => activate(r)}
                 className={cn(
-                  'flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left',
+                  'flex w-full cursor-default items-start gap-3 rounded-lg px-3 py-2.5 text-left',
                   i === selected ? 'bg-selected' : 'hover:bg-hover',
                 )}
               >
                 <Icon size={16} strokeWidth={1.5} className="mt-0.5 shrink-0 text-fg-muted" />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-ui font-medium text-fg">{r.title}</span>
+                  <span className="block truncate text-ui font-medium text-fg">
+                    {terms.length ? <Fragments parts={titleFragments(r.title, terms)} /> : r.title}
+                  </span>
                   <span className="mt-0.5 block truncate text-label text-fg-faint">
                     {r.projectName} ·{' '}
                     {r.id.startsWith('manual-task:') ? tr('projectTools.myTasks') : ENGINES[r.engine].name} ·{' '}
@@ -393,8 +482,32 @@ export function SearchDialog({
                     </span>
                   )}
                 </span>
+                {more > 0 && !row.group.rest.length && (
+                  <span className="shrink-0 px-1.5 text-label text-fg-muted">
+                    {tr('search.SearchDialog.moreMatches', { n: more })}
+                  </span>
+                )}
+                {more > 0 && !!row.group.rest.length && (
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    aria-label={tr(open ? 'search.SearchDialog.hideMatches' : 'search.SearchDialog.showMatches')}
+                    onClick={e => {
+                      e.stopPropagation()
+                      toggleGroup(row.group.key, !open)
+                    }}
+                    className="-my-0.5 inline-flex h-6 shrink-0 items-center gap-0.5 rounded-md px-1.5 text-label text-fg-muted hover:bg-hover hover:text-fg"
+                  >
+                    {tr('search.SearchDialog.moreMatches', { n: more })}
+                    <ChevronRight
+                      size={13}
+                      strokeWidth={1.5}
+                      className={cn('transition-transform duration-(--dur-fast)', open && 'rotate-90')}
+                    />
+                  </button>
+                )}
                 {i === selected && <CornerDownLeft size={13} className="mt-1 shrink-0 text-fg-faint" />}
-              </button>
+              </div>
             )
           })}
           {!total && (
@@ -437,6 +550,7 @@ export function SearchDialog({
             {text.trim() ? tr('search.SearchDialog.localSearch') : tr('search.SearchDialog.recentConversations')}
           </span>
           <span>{tr('search.SearchDialog.select')}</span>
+          {groups.some(g => g.rest.length > 0) && <span>{tr('search.SearchDialog.expandHint')}</span>}
           <span>{tr('search.SearchDialog.enterOpen')}</span>
           <span>{tr('search.SearchDialog.escClose')}</span>
         </footer>
