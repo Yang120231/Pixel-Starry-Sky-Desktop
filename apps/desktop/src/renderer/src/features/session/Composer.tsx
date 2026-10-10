@@ -583,12 +583,15 @@ export function Composer({
               </button>
             </>
           )}
-          <IconButton
-            icon={Mic}
-            label={translate('语音输入')}
-            size={32}
-            onClick={() => comingSoon(translate('语音输入'))}
-          />
+          {/* 语音输入还没做：只在演示模式按参考图显示（docs/ui/conversation-ux.md §2.3） */}
+          {!live && (
+            <IconButton
+              icon={Mic}
+              label={translate('语音输入')}
+              size={32}
+              onClick={() => comingSoon(translate('语音输入'))}
+            />
+          )}
           <ContextWindowButton sessionId={sessionId} />
         </div>
       </div>

@@ -242,6 +242,7 @@ function LiveSessionView({
                   focus={trace.focus}
                   onFocus={focus => setTrace({ focus })}
                   onClose={() => setTrace(null)}
+                  belowHeader={!embedded}
                 />
               )}
             </>

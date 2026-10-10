@@ -348,9 +348,11 @@ export interface AgentTracePanelProps {
   focus: string | null
   onFocus: (agentId: string | null) => void
   onClose: () => void
+  /** 主区顶部有会话顶部栏（不在窗格里）时让开它；窗格里顶部栏在主区外面，面板从顶上开始 */
+  belowHeader?: boolean
 }
 
-export function AgentTracePanel({ sessionId, runs, focus, onFocus, onClose }: AgentTracePanelProps) {
+export function AgentTracePanel({ sessionId, runs, focus, onFocus, onClose, belowHeader }: AgentTracePanelProps) {
   useI18n()
   const [now, setNow] = useState(() => Date.now())
   const running = anyRunning(runs.workflows, runs.agents)
@@ -390,7 +392,11 @@ export function AgentTracePanel({ sessionId, runs, focus, onFocus, onClose }: Ag
 
   return (
     <aside
-      className="pop-in absolute top-12 right-0 bottom-0 z-30 flex w-[min(560px,92%)] flex-col border-l border-line bg-app shadow-popover"
+      // 底色用卡片色：工作台里 --bg-app 是透明的，用它会透出下面的对话（docs/ui/conversation-ux.md §2.2）
+      className={cn(
+        'pop-in absolute right-0 bottom-0 z-30 flex w-[min(560px,92%)] flex-col border-l border-line bg-surface shadow-popover',
+        belowHeader ? 'top-12' : 'top-0',
+      )}
       aria-label={tr('session.live.AgentTracePanel.agentActivity')}
     >
       <header className="flex h-11 shrink-0 items-center gap-2 border-b border-line px-4">

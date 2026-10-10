@@ -9,20 +9,26 @@ import type { WorkspaceRef } from '../../../../shared/types/workspace'
 import { isDemo, projects } from '@/data'
 import { useState } from 'react'
 
-/** 改动文件卡片；data 不传时用演示数据 */
+/**
+ * 改动文件卡片；data 不传时用演示数据。
+ * 真实会话里没做好的按钮不显示（docs/ui/conversation-ux.md §2.1）：「撤销」只在演示模式出现，「审查」要传 onReview。
+ */
 export function ChangedFilesCard({
   className,
   data = changedFiles,
   target,
+  onReview,
 }: {
   className?: string
   data?: ChangedFiles | null
   target?: WorkspaceRef
+  onReview?: () => void
 }) {
   useI18n()
   const comingSoon = useComingSoon()
   const [error, setError] = useState('')
   if (!data) return null
+  const review = onReview ?? (isDemo ? () => comingSoon(tr('session.ChangedFilesCard.review')) : null)
   return (
     <section className={cn('rounded-xl border border-line-card bg-surface shadow-sm', className)}>
       <div className="flex items-center gap-3 px-4 pt-4 pb-3">
@@ -38,12 +44,16 @@ export function ChangedFilesCard({
           </div>
           <DiffStat added={data.added} removed={data.removed} className="text-meta" />
         </div>
-        <Button variant="ghost" icon={Undo2} onClick={() => comingSoon(tr('session.ChangedFilesCard.undo'))}>
-          {tr('session.ChangedFilesCard.undo')}{' '}
-        </Button>
-        <Button variant="outline" pill onClick={() => comingSoon(tr('session.ChangedFilesCard.review'))}>
-          {tr('session.ChangedFilesCard.review')}{' '}
-        </Button>
+        {isDemo && (
+          <Button variant="ghost" icon={Undo2} onClick={() => comingSoon(tr('session.ChangedFilesCard.undo'))}>
+            {tr('session.ChangedFilesCard.undo')}
+          </Button>
+        )}
+        {review && (
+          <Button variant="outline" pill onClick={review}>
+            {tr('session.ChangedFilesCard.review')}
+          </Button>
+        )}
       </div>
       <ul className="px-2 pb-2">
         {data.files.map(f => (
