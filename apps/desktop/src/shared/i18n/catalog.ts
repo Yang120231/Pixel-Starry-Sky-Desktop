@@ -4064,6 +4064,42 @@ export const catalog = {
     "zh": "useSettings 必须在 SettingsProvider 内使用",
     "en": "useSettings must be used within SettingsProvider"
   },
+  "settings.usage.UsageChart.style": {
+    "zh": "图表样式",
+    "en": "Chart style"
+  },
+  "settings.usage.UsageChart.line": {
+    "zh": "折线节点图",
+    "en": "Line chart"
+  },
+  "settings.usage.UsageChart.bar": {
+    "zh": "堆叠柱状图",
+    "en": "Stacked bar chart"
+  },
+  "settings.usage.UsageChart.lineAria": {
+    "zh": "{p0}用量折线图，峰值 {p1}",
+    "en": "{p0} usage line chart, peak {p1}"
+  },
+  "settings.usage.UsageChart.keyboardHint": {
+    "zh": "按 ← / → 逐格查看，Home / End 跳到首尾",
+    "en": "Use ← / → to step through, Home / End to jump to the ends"
+  },
+  "settings.usage.UsageChart.toggleSeries": {
+    "zh": "显示 / 隐藏「{p0}」，纵轴按显示的系列取整",
+    "en": "Show / hide {p0}; the axis rescales to the visible series"
+  },
+  "settings.usage.UsageChart.keepOne": {
+    "zh": "至少保留一个系列",
+    "en": "Keep at least one series"
+  },
+  "settings.usage.UsageChart.inProgress": {
+    "zh": "进行中",
+    "en": "In progress"
+  },
+  "settings.usage.UsageChart.cacheWriteIncluded": {
+    "zh": "缓存写（含在输入里）",
+    "en": "Cache write (in input)"
+  },
   "settings.usage.DailyChart.text": {
     "zh": "{p0}月{p1}日",
     "en": "{p0}/{p1}"

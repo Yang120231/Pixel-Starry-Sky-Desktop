@@ -738,6 +738,14 @@
   --wall-sidebar: #16141f;
 }
 
+/* 用量图表色在 Nord 深色卡片底（#3b4252，比别的深色底亮）上对比度不到 3:1，单独提一级；
+   用 dataviz 的 validate_palette.js 对 16 种卡片底色逐个校验过，其余都用默认值（docs/ui/usage-chart-style.md §3.6）。 */
+:root[data-theme='dark'][data-palette='nord'] {
+  --chart-input: #cd7f28;
+  --chart-cache: #6591e4;
+  --chart-output: #23a776;
+}
+
 /* 强调色预设（<html data-accent>，features/appearance/accent.ts）：只换 --accent* 这组。
    默认「跟随配色」取当前配色的 --theme-accent*。浅色写在 :root[data-accent]，深色用 [data-theme='dark'][data-accent] 盖过它。
    [data-accent-swatch] 让设置页的色块在自己身上取这一套值，不受当前选中的强调色影响。

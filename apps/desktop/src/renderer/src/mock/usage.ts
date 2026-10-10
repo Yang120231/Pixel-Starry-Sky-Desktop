@@ -33,6 +33,39 @@ const SESSIONS: Array<{ title: string; project: string }> = [
 
 const DAY = 24 * 60 * 60 * 1000
 
+/** 一次很长的 Opus 任务：40 轮、缓存读占绝大部分 */
+function spike(start: number): UsageRecord[] {
+  return Array.from({ length: 40 }, (_, k) => {
+    const startedAt = start + k * 90_000
+    const input = 1800
+    const cacheRead = 260_000 + (k % 7) * 9000
+    const cacheWrite = 3000
+    const output = 2400
+    const p = PRICE['claude-opus-5-5']
+    return {
+      v: 1,
+      id: `demo-s1:spike-${k}:claude-opus-5-5`,
+      sessionId: 'demo-s1',
+      turnId: `spike-${k}`,
+      startedAt,
+      endedAt: startedAt + 80_000,
+      durationMs: 80_000,
+      sessionTitle: SESSIONS[1].title,
+      project: SESSIONS[1].project,
+      engine: 'claude',
+      model: 'claude-opus-5-5',
+      route: 'cli',
+      requests: 6,
+      input,
+      cacheRead,
+      cacheWrite,
+      output,
+      costUsd: (input * p.input + cacheRead * p.cacheRead + cacheWrite * p.cacheWrite + output * p.output) / 1_000_000,
+      outcome: 'completed',
+    }
+  })
+}
+
 export function demoUsageRecords(now: number): UsageRecord[] {
   const r = rng(20261006)
   const int = (min: number, max: number) => Math.floor(min + r() * (max - min + 1))
@@ -46,6 +79,8 @@ export function demoUsageRecords(now: number): UsageRecord[] {
     const weekend = weekday === 0 || weekday === 6
     // 越近的日子用得越多，周末少一些
     const turns = Math.max(0, Math.round((weekend ? 3 : 9) * (0.4 + 0.6 * (1 - day / 90)) + int(-3, 4)))
+    // 两天前有一次长任务：缓存读特别多，其他天在同一纵轴上几乎贴底（docs/ui/usage-chart-style.md §5）
+    if (day === 2) records.push(...spike(date + 15 * 3600_000))
     for (let k = 0; k < turns; k++) {
       const startedAt = date + int(9, 22) * 3600_000 + int(0, 59) * 60_000
       if (startedAt > now) continue

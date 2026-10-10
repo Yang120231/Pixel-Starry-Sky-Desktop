@@ -10,7 +10,7 @@ import { remoteCallsAvailable, useRemoteCalls } from '@/features/usage/remote'
 import { DIMENSION_LABEL, dimLabel } from '@/features/usage/format'
 import type { UsageDimension, UsageFilter, UsageRangeId } from '@/features/usage/types'
 import { SectionTitle } from '../../settings/SettingRow'
-import { DailyChart } from './DailyChart'
+import { UsageChart } from './UsageChart'
 import { Distribution } from './Distribution'
 import { KpiCards } from './KpiCards'
 import { RecordsTable } from './RecordsTable'
@@ -207,7 +207,7 @@ export function UsageSection({ onOpenSession }: { onOpenSession: (sessionId: str
           <div className="flex flex-col gap-4">
             <KpiCards totals={summary.totals} prev={summary.prevTotals} />
             <Panel>
-              <DailyChart buckets={summary.buckets} bucket={summary.bucket} />
+              <UsageChart buckets={summary.buckets} bucket={summary.bucket} />
             </Panel>
             <Panel>
               <Distribution

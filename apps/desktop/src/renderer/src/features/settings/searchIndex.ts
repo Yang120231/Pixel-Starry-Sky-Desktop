@@ -115,6 +115,11 @@ export const SETTINGS_INDEX: SearchEntry[] = [
   },
 
   { section: 'usage', title: '用量', keywords: '调用记录 token 费用 导出 csv 账号调用 本机记录 统计' },
+  {
+    section: 'usage',
+    title: '用量图表样式',
+    keywords: '图表 折线 节点 柱状 堆叠 趋势 图例 隐藏系列 chart line bar trend legend',
+  },
 
   { section: 'appearance', title: '主题', keywords: '浅色 深色 跟随系统 暗色 dark light' },
   {
