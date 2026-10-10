@@ -20,7 +20,15 @@ export function scratchRoot(): string {
 
 /** 新建一个临时目录，返回路径；用完调用 removeTmp */
 export function makeTmp(prefix: string): string {
-  return mkdtempSync(join(scratchRoot(), `${prefix}-`))
+  // 测试文件并行跑：别的文件 removeTmp 时可能正好把空了的父目录删掉（在这里 mkdir 和 mkdtemp 之间），
+  // 遇到父目录不存在就重建再试
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return mkdtempSync(join(scratchRoot(), `${prefix}-`))
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT' || attempt >= 4) throw error
+    }
+  }
 }
 
 export function removeTmp(dir: string): void {
