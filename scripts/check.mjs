@@ -24,7 +24,7 @@ const vitest = (cwd, extra = []) => ({
   cwd,
   script: join(cwd, 'node_modules', 'vitest', 'vitest.mjs'),
   // GitHub 的机器比本机慢很多，单个测试默认 5 秒不够（真起进程、查注册表的测试）
-  args: ['run', ...extra, ...(process.env.CI ? ['--testTimeout=20000'] : [])],
+  args: ['run', ...extra, ...(process.env.CI ? ['--testTimeout=20000', '--hookTimeout=30000'] : [])],
 })
 
 const buildDir = join(root, 'scratch', `${new Date().toISOString().slice(0, 10)}-check-build-${process.pid}`)
@@ -133,6 +133,19 @@ for (const step of selected) {
         .map(line => `    ${line}`)
         .join('\n'),
     )
+    // GitHub Actions：把失败输出写成错误标注，运行页上直接看得到（不登录也能读到）
+    if (process.env.GITHUB_ACTIONS) {
+      const text = lines
+        .slice(-60)
+        .join('\n')
+        // 去掉终端颜色码
+        // eslint-disable-next-line no-control-regex
+        .replace(/\x1b\[[0-9;]*m/g, '')
+        .replace(/%/g, '%25')
+        .replace(/\r/g, '%0D')
+        .replace(/\n/g, '%0A')
+      console.log(`::error title=检查失败：${step.name}::${text}`)
+    }
     failed.push(step.name)
   }
 }

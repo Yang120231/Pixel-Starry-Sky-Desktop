@@ -39,7 +39,8 @@ beforeEach(async () => {
   }
 })
 afterEach(async () => {
-  await rm(root, { recursive: true, force: true, maxRetries: 4, retryDelay: 150 })
+  // 卡住的 hook 被结束后，Git 自带 sh 起的子进程（sleep）在有的机器上不会一起结束，会短暂占着目录：多等一会儿再删
+  await rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 500 })
 })
 
 async function init(dir = project): Promise<void> {
@@ -261,7 +262,7 @@ describe('Git 面板：失败分类', () => {
     const hooked = fail(await tools().commit(ref, { message: 'm', all: true, push: false }))
     expect(hooked.kind).toBe('hook')
     expect(hooked.detail).toContain('hook says no')
-    await writeFile(join(project, '.git', 'hooks', 'pre-commit'), '#!/bin/sh\nsleep 30\n', { mode: 0o755 })
+    await writeFile(join(project, '.git', 'hooks', 'pre-commit'), '#!/bin/sh\nsleep 5\n', { mode: 0o755 })
     const started = Date.now()
     expect(
       fail(await tools({ timeouts: { commit: 1500 } }).commit(ref, { message: 'm', all: true, push: false })).kind,
