@@ -8,7 +8,7 @@ import { consumeTerminal, demoWrite, terminalError } from './store'
 import { screens } from './screens'
 import { isDemo } from '@/data'
 import { openFile } from '@/features/files/store'
-import { findPathMatches } from './terminalLinks'
+import { findPathMatches } from '@/features/files/pathMatch'
 import { terminalFilePath } from './fileLinks'
 import { useI18n } from '@/i18n/I18nProvider'
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { findPathMatches, projectPath } from './terminalLinks'
+import { findPathMatches, projectPath } from './pathMatch'
 
 const paths = (text: string) => findPathMatches(text).map(m => [m.raw, m.line, m.column])
 

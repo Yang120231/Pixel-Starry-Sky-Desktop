@@ -13,8 +13,8 @@ import {
 } from 'lucide-react'
 import type { AlwaysScope, ApprovalDecision, ApprovalRequest } from '@pixelsky/protocol'
 import { Button, DiffStat, Popover, cn } from '@/ui'
-import { DiffView } from './ItemRows'
-import { Markdown } from './Markdown'
+import { DiffView } from '@/ui/code/DiffView'
+import { Markdown } from '@/ui/markdown/Markdown'
 
 const ICON: Record<ApprovalRequest['kind'], LucideIcon> = {
   command: SquareTerminal,

@@ -15,7 +15,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { cn, DiffStat, EngineIcon, IconButton, Segmented, Spinner } from '@/ui'
-import { DiffView } from '@/features/session/live/ItemRows'
+import { DiffView } from '@/ui/code/DiffView'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '@/i18n/core'
 import { OPEN_SESSION_EVENT } from '@/features/engine/openRequests'

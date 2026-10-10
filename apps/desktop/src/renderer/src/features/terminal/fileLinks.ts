@@ -2,7 +2,7 @@
 // 目录列表缓存几秒，鼠标划过同一屏输出时不会反复读盘。
 import { machineOf } from '@/features/machines/store'
 import type { TerminalRecord } from '../../../../shared/types/terminal'
-import { projectPath } from './terminalLinks'
+import { projectPath } from '@/features/files/pathMatch'
 
 const LIST_TTL = 5000
 const roots = new Map<string, Promise<string | null>>()

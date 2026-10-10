@@ -22,7 +22,7 @@ import {
   timeline,
   type RunState,
 } from './agentTrace'
-import { Markdown } from './Markdown'
+import { Markdown } from '@/ui/markdown/Markdown'
 import { ReasoningBlock, ToolItemRow, UserBubble } from './ItemRows'
 
 const STATE_ICON: Record<RunState, LucideIcon | null> = {

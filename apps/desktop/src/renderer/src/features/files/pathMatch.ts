@@ -1,5 +1,5 @@
-// 终端输出里的文件路径（docs/ui/files-search-terminal-pins.md §4.2）：找出候选路径和行列，
-// 换成相对项目根目录的路径；项目外或解析不了的不标链接，不猜。
+// 文字里的文件路径（终端输出 docs/ui/files-search-terminal-pins.md §4.2，对话 docs/ui/content-highlight.md §2 A）：
+// 找出候选路径和行列，换成相对项目根目录的路径；项目外或解析不了的不标链接，不猜。
 
 export interface PathMatch {
   /** 在这一行文字里的起止（0 起，end 不含） */

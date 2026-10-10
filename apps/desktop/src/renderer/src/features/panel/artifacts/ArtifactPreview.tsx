@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ArrowLeft, Copy, ExternalLink, FileCode2, FolderOpen } from 'lucide-react'
 import { IconButton, Segmented, Spinner } from '@/ui'
-import { Markdown } from '@/features/session/live/Markdown'
+import { Markdown } from '@/ui/markdown/Markdown'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '@/i18n/core'
 import type { ArtifactDelivery } from '@pixelsky/protocol'
