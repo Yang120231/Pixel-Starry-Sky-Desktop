@@ -2,6 +2,13 @@ import { appendFileSync, existsSync } from 'node:fs'
 import readline from 'node:readline'
 if (process.env.FAKE_CODEX_ARGV)
   appendFileSync(process.env.FAKE_CODEX_ARGV, JSON.stringify(process.argv.slice(2)) + '\n')
+// 像真的 codex 一样拒绝不认识的参数（测试用 --fake-bad-arg）：stderr 报错后退出
+if (process.argv.includes('--fake-bad-arg')) {
+  process.stderr.write(
+    "\x1b[1m\x1b[31merror:\x1b[0m unexpected argument '--fake-bad-arg' found\n\nUsage: codex app-server [OPTIONS]\n",
+  )
+  process.exit(2)
+}
 const out = value => process.stdout.write(JSON.stringify(value) + '\n')
 const emit = (method, params) => out({ method, params })
 /** 测试通过创建这个文件打开「恢复线程失败」开关：thread/resume 报错，thread/start 给新线程 id */

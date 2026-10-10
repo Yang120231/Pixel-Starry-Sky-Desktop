@@ -3072,18 +3072,6 @@ export const catalog = {
     "zh": "这一行不是 KEY=VALUE：{p0}",
     "en": "This line is not KEY=VALUE: {p0}"
   },
-  "settings.engines.EngineDetail.executablePath": {
-    "zh": "可执行文件路径",
-    "en": "Executable path"
-  },
-  "settings.engines.EngineDetail.overrideDetectedExecutableLeave": {
-    "zh": "覆盖自动查找到的程序；留空就自动查找。改了会重新检测。",
-    "en": "Override the detected executable. Leave blank to detect automatically. Changes trigger detection again."
-  },
-  "settings.engines.EngineDetail.executablePath2": {
-    "zh": "{p0} 可执行文件路径",
-    "en": "{p0} executable path"
-  },
   "settings.engines.EngineDetail.environmentVariables": {
     "zh": "环境变量",
     "en": "Environment variables"
@@ -3091,6 +3079,66 @@ export const catalog = {
   "settings.engines.EngineDetail.oneKeyValuePer": {
     "zh": "KEY=VALUE 每行一条，在系统环境之上追加。平台会话的网关地址和凭据仍以平台为准，这里的同名变量不生效。",
     "en": "One KEY=VALUE per line, added to system variables. Platform gateway URLs and credentials take precedence over matching values here."
+  },
+  "settings.engines.LaunchCard.title": {
+    "zh": "启动",
+    "en": "Launch"
+  },
+  "settings.engines.LaunchCard.modified": {
+    "zh": "已修改",
+    "en": "Modified"
+  },
+  "settings.engines.LaunchCard.stock": {
+    "zh": "自带程序",
+    "en": "Stock executable"
+  },
+  "settings.engines.LaunchCard.replaced": {
+    "zh": "已替换",
+    "en": "Replaced"
+  },
+  "settings.engines.LaunchCard.unknownVersion": {
+    "zh": "版本未知",
+    "en": "Unknown version"
+  },
+  "settings.engines.LaunchCard.notFound": {
+    "zh": "找不到「{p0}」",
+    "en": "Can’t find “{p0}”"
+  },
+  "settings.engines.LaunchCard.extraArgs": {
+    "zh": "追加参数",
+    "en": "Extra arguments"
+  },
+  "settings.engines.LaunchCard.edit": {
+    "zh": "修改",
+    "en": "Edit"
+  },
+  "settings.engines.LaunchCard.done": {
+    "zh": "完成",
+    "en": "Done"
+  },
+  "settings.engines.LaunchCard.cancel": {
+    "zh": "取消",
+    "en": "Cancel"
+  },
+  "settings.engines.LaunchCard.checking": {
+    "zh": "正在检查…",
+    "en": "Checking…"
+  },
+  "settings.engines.LaunchCard.command": {
+    "zh": "命令",
+    "en": "Command"
+  },
+  "settings.engines.LaunchCard.arguments": {
+    "zh": "参数",
+    "en": "Arguments"
+  },
+  "settings.engines.LaunchCard.note": {
+    "zh": "替换要启动的程序：填绝对路径或 PATH 上的命令名，留空用自带程序。参数追加在每次启动的命令后面；像素星空自己控制的参数（输出格式、权限、模型、推理强度、会话恢复等）不能填。替换后的程序如果自己改了模型请求的去向，平台线路和用量统计会失效。",
+    "en": "Replaces the executable to launch: an absolute path or a command on PATH. Leave it empty to use the stock executable. Arguments are appended every time the engine starts; arguments Pixel Starry Sky controls (output format, permissions, model, reasoning effort, session resume and so on) aren’t allowed. If the replacement redirects model traffic on its own, platform routing and usage metering stop working."
+  },
+  "settings.engines.LaunchCard.unbalancedQuotes": {
+    "zh": "参数里的引号没有配对",
+    "en": "The quotes in the arguments don’t match"
   },
   "settings.engines.EnginesSection.localEngines": {
     "zh": "本机引擎",

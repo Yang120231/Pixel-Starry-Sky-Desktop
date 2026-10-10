@@ -59,6 +59,13 @@ function touch(path: string): string {
 
 const codeOf = (err: unknown): string | undefined => parseCodedError((err as Error).message)?.code
 
+/** 测试用的项目目录，放在本次的临时目录里，测试结束一起删掉 */
+function projectDir(): string {
+  const dir = join(root, `proj-${Math.random().toString(36).slice(2, 8)}`)
+  mkdirSync(dir, { recursive: true })
+  return dir
+}
+
 describe('替换的命令怎么解析', () => {
   it('绝对路径、PATH 上的命令名；带路径但不是绝对路径的拒绝；找不到的报原因', () => {
     const a = join(root, 'a'),
@@ -170,7 +177,7 @@ const turnsDone = (id: string): number =>
 describe('Claude Code：追加参数', () => {
   it('参数放在最后；改了参数，已开始的会话在下一条消息前重启并接上；清空后不再带', async () => {
     const { host, spawns } = claudeHost()
-    const s = host.createSession({ projectId: host.addProject(makeTmp('engine-launch-proj')).id })
+    const s = host.createSession({ projectId: host.addProject(projectDir()).id })
     await host.send(s.id, '第一条')
     await waitFor(() => turnsDone(s.id) === 1)
     expect(spawns()).toHaveLength(1)
@@ -271,7 +278,7 @@ describe('Codex：追加参数', () => {
     ])
 
     const s = host.createSession({
-      projectId: host.addProject(makeTmp('engine-launch-proj')).id,
+      projectId: host.addProject(projectDir()).id,
       engine: 'codex',
       model: 'fake-codex',
       effort: 'high',
@@ -284,5 +291,11 @@ describe('Codex：追加参数', () => {
     expect(argv.slice(0, 3)).toEqual(['app-server', '--listen', 'stdio://'])
     expect(user).toBe(4)
     expect(argv.findIndex(a => a.includes('request_max_retries'))).toBeGreaterThan(user)
+
+    // 它不认的参数让进程起不来：检测时显示为出错，原因是 Codex 自己的报错
+    await host.setEngineConfig('codex', { args: ['--fake-bad-arg'] })
+    const [, codex] = await host.engines()
+    expect(codex).toMatchObject({ status: 'error' })
+    expect(codex.message).toBe("error: unexpected argument '--fake-bad-arg' found\nUsage: codex app-server [OPTIONS]")
   })
 })

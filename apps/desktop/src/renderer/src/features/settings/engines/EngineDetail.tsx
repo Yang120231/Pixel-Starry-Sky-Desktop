@@ -20,6 +20,7 @@ import { Switch } from '@/features/session/ComposerMenus'
 import { platformModels, usePlatform } from '@/features/account/platform'
 import { EFFORT_LABEL, PERMISSION_INFO, bridge, isLive, redetectEngines } from '@/features/engine'
 import { envLines, parseEnvLines } from './envLines'
+import { LaunchCard } from './LaunchCard'
 import { DefaultBadge, ENGINE_INTRO, ENGINE_STATUS, FIELD } from './parts'
 import { demo, isDemo } from '@/data/demo'
 import type { EngineLite } from '@/data/types'
@@ -473,7 +474,7 @@ function CompactModelRow({
   )
 }
 
-/** 启动方式：可执行文件路径（失焦 / 回车保存）、追加的环境变量（失焦保存） */
+/** 启动方式：「启动」卡片（替换的命令和追加的参数，docs/ui/engine-launch.md）、追加的环境变量（失焦保存） */
 function LaunchRows({
   engine: e,
   config,
@@ -484,18 +485,13 @@ function LaunchRows({
   onSave: (patch: EngineConfigPatch) => Promise<void>
 }) {
   useI18n()
-  const [path, setPath] = useState(config.path ?? '')
   const [env, setEnv] = useState(envLines(config.env))
   const [error, setError] = useState<string | null>(null)
-  useEffect(() => setPath(config.path ?? ''), [config.path])
   useEffect(() => setEnv(envLines(config.env)), [config.env])
 
   const save = (patch: EngineConfigPatch): void => {
     setError(null)
     onSave(patch).catch((err: unknown) => setError((err as Error).message))
-  }
-  const savePath = (): void => {
-    if (path.trim() !== (config.path ?? '')) save({ path: path.trim() || null })
   }
   const saveEnv = (): void => {
     const { env: parsed, bad } = parseEnvLines(env)
@@ -508,21 +504,7 @@ function LaunchRows({
 
   return (
     <>
-      <Row
-        title={tr('settings.engines.EngineDetail.executablePath')}
-        description={tr('settings.engines.EngineDetail.overrideDetectedExecutableLeave')}
-      >
-        <input
-          value={path}
-          onChange={ev => setPath(ev.target.value)}
-          onBlur={savePath}
-          onKeyDown={ev => ev.key === 'Enter' && savePath()}
-          placeholder={e.path ?? tr('settings.engines.EngineDetail.executablePath2', { p0: e.id })}
-          aria-label={tr('settings.engines.EngineDetail.executablePath')}
-          className={cn(FIELD, 'font-mono text-meta')}
-          spellCheck={false}
-        />
-      </Row>
+      <LaunchCard engine={e} config={config} onSave={onSave} />
       <Row
         title={tr('settings.engines.EngineDetail.environmentVariables')}
         description={tr('settings.engines.EngineDetail.oneKeyValuePer')}

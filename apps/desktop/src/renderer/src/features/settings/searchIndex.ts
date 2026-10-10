@@ -101,7 +101,12 @@ export const SETTINGS_INDEX: SearchEntry[] = [
   },
   { section: 'engines', title: '压缩上下文用的模型', keywords: '压缩 compact 摘要 上下文 压缩模型', engine: 'claude' },
   { section: 'engines', title: '在引擎菜单中显示', keywords: '隐藏 引擎 菜单 显示', engine: 'claude' },
-  { section: 'engines', title: '可执行文件路径', keywords: '路径 claude.exe 自动查找 覆盖 启动方式', engine: 'claude' },
+  {
+    section: 'engines',
+    title: '启动',
+    keywords: '启动方式 命令 参数 可执行文件 路径 claude.exe PATH 替换 自带程序 自动查找 launch command arguments flag',
+    engine: 'claude',
+  },
   {
     section: 'engines',
     title: '环境变量',

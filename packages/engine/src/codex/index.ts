@@ -61,12 +61,17 @@ export class CodexAdapter implements EngineAdapter {
       : await discoverCodex(this.opts.overridePath?.() ?? null, this.env())
     this.cached = result
     if (!result.launcher || result.info.status !== 'ready') return result.info
+    let stderr = ''
     const proc = new CodexProcess(
       result.launcher,
       ['app-server', '--listen', 'stdio://', ...this.launchArgs()],
       process.cwd(),
       toolEnvironment(result.launcher, this.env()),
-      { notification() {}, request: id => proc.respondError(id, 'No interactive session'), exit() {} },
+      {
+        notification() {},
+        request: id => proc.respondError(id, 'No interactive session'),
+        exit: (_code, tail) => (stderr = tail),
+      },
     )
     try {
       await proc.initialize()
@@ -78,7 +83,17 @@ export class CodexAdapter implements EngineAdapter {
       }
     } catch (error) {
       result.info.status = 'error'
-      result.info.message = (error as Error).message
+      // 进程起不来时（例如追加了它不认的参数），stderr 开头几行比「进程已退出」有用
+      const reason = stderr
+        // 命令行报错带颜色（\x1b[...m），界面上只要文字
+        // eslint-disable-next-line no-control-regex -- 就是要去掉颜色控制序列
+        .replace(/\x1b\[[0-9;]*m/g, '')
+        .split(/\r?\n/)
+        .map(l => l.trim())
+        .filter(Boolean)
+        .slice(0, 2)
+        .join('\n')
+      result.info.message = reason || (error as Error).message
     } finally {
       await proc.close()
     }
