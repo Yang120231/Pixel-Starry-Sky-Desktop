@@ -1,6 +1,6 @@
 {
   "name": "@pixelsky/desktop",
-  "version": "0.1.0-beta.2",
+  "version": "0.1.1-beta.1",
   "private": true,
   "description": "像素星空桌面端",
   "main": "./out/main/index.js",

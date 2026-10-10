@@ -67,7 +67,8 @@ export function platformGateway(options: {
       const out: Record<string, string> = {}
       for (const name of responses
         ? ['session_id', 'conversation_id', 'originator', 'openai-beta']
-        : ['anthropic-version', 'anthropic-beta']) {
+        : // Claude Code 的身份头：Sub2api「仅限 Claude Code」的分组靠 User-Agent / X-App / anthropic-beta 认终端
+          ['anthropic-version', 'anthropic-beta', 'user-agent', 'x-app', 'anthropic-dangerous-direct-browser-access']) {
         const value = req.headers[name]
         if (typeof value === 'string') out[name] = value
       }

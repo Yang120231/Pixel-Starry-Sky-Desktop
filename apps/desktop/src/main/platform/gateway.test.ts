@@ -65,6 +65,38 @@ describe('平台代理按引擎隔离 Responses 与 Messages', () => {
     expect(tracked).toHaveLength(1)
     expect(tracked[0]).toMatch(/^pixelsky-[a-f0-9-]{36}$/)
   })
+
+  it('Messages 把 Claude Code 的身份头带给云端（Sub2api「仅限 Claude Code」分组靠它认终端）', async () => {
+    let forwarded: Headers | null = null
+    server = platformGateway({
+      sessions: new Map([['s', { recordId: 's', secret: 'local-secret' }]]),
+      record: () => ({ id: 's', engine: 'claude', platform: { groupId: '2', account: 'user' } }) as SessionRecord,
+      account: () => 'user',
+      fetch: async (_path, init) => {
+        forwarded = new Headers(init.headers)
+        return new Response('event: message_stop\ndata: {}\n\n')
+      },
+    })
+    server.listen(0, '127.0.0.1')
+    await once(server, 'listening')
+    const base = 'http://127.0.0.1:' + (server.address() as { port: number }).port
+    const identity = {
+      'user-agent': 'claude-cli/2.1.0 (external, cli)',
+      'x-app': 'cli',
+      'anthropic-beta': 'claude-code-20250219',
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    }
+    const res = await fetch(base + '/v1/messages', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer local-secret', ...identity },
+      body: JSON.stringify({ model: 'claude-sonnet-5' }),
+    })
+    expect(res.status).toBe(200)
+    await res.text()
+    expect(Object.fromEntries(forwarded!)).toMatchObject(identity)
+    expect(forwarded!.get('authorization')).toBeNull()
+  })
 })
 
 it('waits for remote billing correlation before forwarding and fails closed on disconnect', async () => {
@@ -158,7 +190,13 @@ describe('自定义 API 经本机网关（docs/ui/custom-api.md §4.1）', () =>
     const send = (model: string, path = '/v1/messages', token = 'local-secret') =>
       fetch(base + path, {
         method: 'POST',
-        headers: { 'x-api-key': token, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'b1' },
+        headers: {
+          'x-api-key': token,
+          'anthropic-version': '2023-06-01',
+          'anthropic-beta': 'b1',
+          'user-agent': 'claude-cli/2.1.0 (external, cli)',
+          'x-app': 'cli',
+        },
         body: JSON.stringify({ model, max_tokens: 5 }),
       })
 
@@ -174,6 +212,8 @@ describe('自定义 API 经本机网关（docs/ui/custom-api.md §4.1）', () =>
       'X-Org': 'org-1',
       'anthropic-version': '2023-06-01',
       'anthropic-beta': 'b1',
+      'user-agent': 'claude-cli/2.1.0 (external, cli)',
+      'x-app': 'cli',
     })
     expect(JSON.stringify(headers)).not.toContain('local-secret')
     expect(JSON.parse(String(first.init.body)).model).toBe('deepseek-chat')
