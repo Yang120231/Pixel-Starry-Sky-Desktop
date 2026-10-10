@@ -488,6 +488,46 @@ export const catalog = {
     "zh": "展开执行过程",
     "en": "Show steps"
   },
+  "settings.shortcuts.hint": {
+    "zh": "点组合键可以修改：按下新的组合键就保存，Esc 取消。要带 Ctrl 或 Alt（macOS 上是 ⌘ 或 ⌥），也可以用 F1–F12。",
+    "en": "Click a shortcut to change it: press the new combination to save, Esc to cancel. Include Ctrl or Alt (⌘ or ⌥ on macOS), or use F1–F12."
+  },
+  "settings.shortcuts.recording": {
+    "zh": "按下新的快捷键…",
+    "en": "Press new shortcut…"
+  },
+  "settings.shortcuts.edit": {
+    "zh": "修改「{name}」的快捷键",
+    "en": "Change shortcut for “{name}”"
+  },
+  "settings.shortcuts.reset": {
+    "zh": "恢复默认",
+    "en": "Reset to default"
+  },
+  "settings.shortcuts.resetAll": {
+    "zh": "全部恢复默认",
+    "en": "Reset all"
+  },
+  "settings.shortcuts.fixed": {
+    "zh": "固定的快捷键",
+    "en": "Fixed shortcuts"
+  },
+  "settings.shortcuts.fixedHint": {
+    "zh": "一组键和终端里的复制粘贴不能修改。",
+    "en": "Key groups and terminal copy / paste can’t be changed."
+  },
+  "settings.shortcuts.needsModifier": {
+    "zh": "要带 Ctrl 或 Alt（macOS 上是 ⌘ 或 ⌥），或者用 F1–F12，否则会挡住打字",
+    "en": "Include Ctrl or Alt (⌘ or ⌥ on macOS), or use F1–F12, so it doesn’t block typing"
+  },
+  "settings.shortcuts.reserved": {
+    "zh": "这是复制、粘贴等编辑用的组合，换一个",
+    "en": "That’s an editing shortcut (copy, paste…). Choose another"
+  },
+  "settings.shortcuts.conflict": {
+    "zh": "和「{name}」冲突，换一个",
+    "en": "Conflicts with “{name}”. Choose another"
+  },
   "session.process.collapse": {
     "zh": "收起执行过程",
     "en": "Hide steps"

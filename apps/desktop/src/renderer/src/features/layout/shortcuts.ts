@@ -1,70 +1,49 @@
-import { tr } from '../../i18n/core'
 /** 全局快捷键。macOS 用 ⌘，其他平台用 Ctrl。列表见 docs/ui/workbench.md §7 */
 
-const isMac = window.pixelsky?.platform === 'darwin'
+import { isMac, labelOf, matchesAction, type ActionId } from './keybindings'
 
-/** 收起 / 展开侧边栏：Ctrl+B（macOS ⌘B），和 Mirasim、VS Code 一致 */
-export const TOGGLE_SIDEBAR = {
-  label: isMac ? '⌘B' : 'Ctrl+B',
-  match: (e: KeyboardEvent): boolean =>
-    // 用 e.code 判断按键位置，中文输入法开着时 e.key 可能是 'Process'
-    e.code === 'KeyB' && (isMac ? e.metaKey : e.ctrlKey) && !e.shiftKey && !e.altKey && !e.repeat,
+/** 可以自定义的快捷键（docs/ui/custom-shortcuts.md）：显示文字和判断都按当前设置，调用的地方不用改 */
+function action(id: ActionId): { readonly label: string; match: (e: KeyboardEvent) => boolean } {
+  return {
+    get label() {
+      return labelOf(id)
+    },
+    match: e => matchesAction(id, e),
+  }
 }
 
-/** 收起 / 展开右侧面板：Ctrl+Alt+B（macOS ⌥⌘B），和 VS Code 的辅助侧栏一致，与 Ctrl+B 成对好记 */
-export const TOGGLE_PANEL = {
-  label: isMac ? '⌥⌘B' : 'Ctrl+Alt+B',
-  match: (e: KeyboardEvent): boolean =>
-    e.code === 'KeyB' && (isMac ? e.metaKey : e.ctrlKey) && e.altKey && !e.shiftKey && !e.repeat,
-}
-
-/** 打开设置：Ctrl+,（macOS ⌘,），和 VS Code、Claude 桌面版一致 */
-export const OPEN_SETTINGS = {
-  label: isMac ? '⌘,' : 'Ctrl+,',
-  match: (e: KeyboardEvent): boolean =>
-    e.code === 'Comma' && (isMac ? e.metaKey : e.ctrlKey) && !e.shiftKey && !e.altKey && !e.repeat,
-}
+/** 收起 / 展开侧边栏：默认 Ctrl+B（macOS ⌘B），和 Mirasim、VS Code 一致 */
+export const TOGGLE_SIDEBAR = action('toggleSidebar')
+/** 收起 / 展开右侧面板：默认 Ctrl+Alt+B（macOS ⌥⌘B），和 VS Code 的辅助侧栏一致 */
+export const TOGGLE_PANEL = action('togglePanel')
+/** 打开设置：默认 Ctrl+,（macOS ⌘,） */
+export const OPEN_SETTINGS = action('openSettings')
+export const OPEN_SEARCH = action('openSearch')
+/** 在当前对话里查找：默认 Ctrl+F，docs/ui/content-highlight.md §2 E；终端、编辑器里仍是它们自己的查找 */
+export const FIND_IN_CONVERSATION = action('findInConversation')
+/** 命令面板：默认 Ctrl+Shift+P */
+export const COMMAND_PALETTE = action('commandPalette')
+/** 显示 / 隐藏终端：默认 Ctrl+`；新建终端：默认 Ctrl+Shift+` */
+export const TOGGLE_TERMINAL = action('toggleTerminal')
+export const NEW_TERMINAL = action('newTerminal')
 
 const mod = (e: KeyboardEvent): boolean => (isMac ? e.metaKey : e.ctrlKey)
-
-export const OPEN_SEARCH = {
-  label: isMac ? '⌘P' : 'Ctrl+P',
-  match: (e: KeyboardEvent): boolean => e.code === 'KeyP' && mod(e) && !e.shiftKey && !e.altKey && !e.repeat,
-}
-
-/** 在当前对话里查找：Ctrl+F（macOS ⌘F），docs/ui/content-highlight.md §2 E；终端、编辑器里仍是它们自己的查找 */
-export const FIND_IN_CONVERSATION = {
-  label: isMac ? '⌘F' : 'Ctrl+F',
-  match: (e: KeyboardEvent): boolean => e.code === 'KeyF' && mod(e) && !e.shiftKey && !e.altKey && !e.repeat,
-}
 
 // ---------------------------------------------------------------------------
 // 多对话窗格（与 Mirasim 一致，docs/ui/multi-pane.md §4）
 // ---------------------------------------------------------------------------
 
-/** 向右拆分：Ctrl+D */
-export const SPLIT_RIGHT = {
-  label: isMac ? '⌘D' : 'Ctrl+D',
-  match: (e: KeyboardEvent): boolean => e.code === 'KeyD' && mod(e) && !e.shiftKey && !e.altKey && !e.repeat,
-}
+/** 向右拆分：默认 Ctrl+D */
+export const SPLIT_RIGHT = action('splitRight')
 
-/** 向下拆分：Ctrl+Shift+D */
-export const SPLIT_DOWN = {
-  label: isMac ? '⇧⌘D' : 'Ctrl+Shift+D',
-  match: (e: KeyboardEvent): boolean => e.code === 'KeyD' && mod(e) && e.shiftKey && !e.altKey && !e.repeat,
-}
+/** 向下拆分：默认 Ctrl+Shift+D */
+export const SPLIT_DOWN = action('splitDown')
 
 /** 关闭当前标签，窗格空了就关窗格：Ctrl+W（主进程的菜单里去掉了「关闭窗口」，见 main/index.ts） */
-export const CLOSE_TAB = {
-  label: isMac ? '⌘W' : 'Ctrl+W',
-  match: (e: KeyboardEvent): boolean => e.code === 'KeyW' && mod(e) && !e.shiftKey && !e.altKey && !e.repeat,
-}
+export const CLOSE_TAB = action('closeTab')
 
-/** 放大 / 还原当前窗格：Ctrl+Shift+Enter */
-export const ZOOM_PANE = {
-  label: isMac ? '⇧⌘↩' : 'Ctrl+Shift+Enter',
-  match: (e: KeyboardEvent): boolean => e.key === 'Enter' && mod(e) && e.shiftKey && !e.altKey && !e.repeat,
-}
+/** 放大 / 还原当前窗格：默认 Ctrl+Shift+Enter */
+export const ZOOM_PANE = action('zoomPane')
 
 /** 跳到第 N 个窗格：Alt+1…6；返回窗格序号（从 0 开始），不匹配返回 -1 */
 export const JUMP_PANE = {
@@ -91,52 +70,6 @@ export const CYCLE_TAB = {
   delta: (e: KeyboardEvent): number =>
     e.key === 'Tab' && e.ctrlKey && !e.altKey && !e.metaKey ? (e.shiftKey ? -1 : 1) : 0,
 }
-
-/** 设置 → 快捷键 里列出的窗格快捷键 */
-export const PANE_SHORTCUTS: Array<{ label: string; keys: string }> = [
-  {
-    get label() {
-      return tr('shortcuts.splitPaneRight')
-    },
-    keys: SPLIT_RIGHT.label,
-  },
-  {
-    get label() {
-      return tr('shortcuts.splitPaneDown')
-    },
-    keys: SPLIT_DOWN.label,
-  },
-  {
-    get label() {
-      return tr('shortcuts.closeTabClosePane')
-    },
-    keys: CLOSE_TAB.label,
-  },
-  {
-    get label() {
-      return tr('shortcuts.jumpToPaneN')
-    },
-    keys: JUMP_PANE.label,
-  },
-  {
-    get label() {
-      return tr('shortcuts.switchToPreviousNext')
-    },
-    keys: CYCLE_PANE.label,
-  },
-  {
-    get label() {
-      return tr('shortcuts.expandRestoreCurrentPane')
-    },
-    keys: ZOOM_PANE.label,
-  },
-  {
-    get label() {
-      return tr('shortcuts.switchTabsInPane')
-    },
-    keys: CYCLE_TAB.label + ' / Ctrl+Shift+Tab',
-  },
-]
 
 /** 按钮提示文字后面带上快捷键，例如「收起侧边栏（Ctrl+B）」 */
 export function withShortcut(label: string, shortcut: { label: string }): string {

@@ -21,15 +21,7 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react'
-import { IconButton, Kbd, Segmented, cn } from '@/ui'
-import {
-  FIND_IN_CONVERSATION,
-  OPEN_SEARCH,
-  OPEN_SETTINGS,
-  PANE_SHORTCUTS,
-  TOGGLE_PANEL,
-  TOGGLE_SIDEBAR,
-} from '@/features/layout/shortcuts'
+import { IconButton, Segmented, cn } from '@/ui'
 import { useTheme, type MotionPreference, type ThemePreference } from '@/features/appearance/ThemeProvider'
 import { AboutSection } from './AboutSection'
 import { AccountSection } from '../account/settings/AccountSection'
@@ -53,6 +45,7 @@ import { LOCALE_OPTIONS, type Locale } from '../../../../shared/i18n/messages'
 import { TerminalSection } from './TerminalSection'
 import { SidebarSettings } from './SidebarSettings'
 import { NotificationsSection } from './NotificationsSection'
+import { ShortcutsSettings } from './ShortcutsSettings'
 
 export type SectionId =
   | 'account'
@@ -509,7 +502,7 @@ export function SettingsDialog({
             ) : section === 'appearance' ? (
               <AppearanceSection />
             ) : section === 'shortcuts' ? (
-              <ShortcutsSection />
+              <ShortcutsSettings />
             ) : (
               <AboutSection onOpenAccount={() => setSection('account')} />
             )}
@@ -668,90 +661,6 @@ function AppearanceSection() {
 
       <GroupTitle>{tr('settings.searchIndex.wallpaper')}</GroupTitle>
       <WallpaperSettings />
-    </section>
-  )
-}
-
-const SHORTCUTS: Array<{ label: string; keys: string }> = [
-  {
-    get label() {
-      return tr('terminal.commandPalette')
-    },
-    keys: 'Ctrl+Shift+P',
-  },
-  {
-    get label() {
-      return tr('terminal.title')
-    },
-    keys: 'Ctrl+`',
-  },
-  {
-    get label() {
-      return tr('terminal.new')
-    },
-    keys: 'Ctrl+Shift+`',
-  },
-  {
-    get label() {
-      return tr('terminal.copy')
-    },
-    keys: 'Ctrl+Shift+C',
-  },
-  {
-    get label() {
-      return tr('terminal.paste')
-    },
-    keys: 'Ctrl+Shift+V',
-  },
-  {
-    get label() {
-      return tr('settings.SettingsDialog.toggleSidebar')
-    },
-    keys: TOGGLE_SIDEBAR.label,
-  },
-  {
-    get label() {
-      return tr('settings.SettingsDialog.toggleRightPanel')
-    },
-    keys: TOGGLE_PANEL.label,
-  },
-  {
-    get label() {
-      return tr('settings.SettingsDialog.openSettings')
-    },
-    keys: OPEN_SETTINGS.label,
-  },
-  {
-    get label() {
-      return tr('search.SearchDialog.searchConversationsAndContent')
-    },
-    keys: OPEN_SEARCH.label,
-  },
-  {
-    get label() {
-      return tr('content.find.label')
-    },
-    keys: FIND_IN_CONVERSATION.label,
-  },
-  ...PANE_SHORTCUTS,
-]
-
-function ShortcutsSection() {
-  useI18n()
-  return (
-    <section>
-      <SectionTitle>{tr('settings.searchIndex.shortcuts')}</SectionTitle>
-      <ul className="overflow-hidden rounded-lg border border-line">
-        {SHORTCUTS.map(({ label, keys }) => (
-          <li
-            key={label}
-            className="flex h-11 items-center justify-between border-b border-line-subtle px-4 text-ui text-fg last:border-b-0"
-          >
-            {label}
-            <Kbd className="rounded-sm border border-line bg-subtle px-1.5 py-0.5 text-fg-secondary">{keys}</Kbd>
-          </li>
-        ))}
-      </ul>
     </section>
   )
 }

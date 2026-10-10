@@ -21,6 +21,7 @@ import { openRightTab } from '@/features/panel/workspaceStore'
 import { workspaceTerminals } from './workspace'
 import { getMachines, machineOf, selectMachine } from '@/features/machines/store'
 import { getPage, showWorkbench } from '@/features/layout/page'
+import { NEW_TERMINAL, TOGGLE_TERMINAL } from '@/features/layout/shortcuts'
 
 type Action = 'rename' | 'close' | 'restart' | 'search' | 'clear'
 /** 左右分屏（docs/ui/files-search-terminal-pins.md §4.1）：两个终端 id 和左边所占比例 */
@@ -318,18 +319,17 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   }
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
+      // 显示 / 隐藏终端、新建终端：可以自定义（docs/ui/custom-shortcuts.md）
+      const isNew = NEW_TERMINAL.match(event)
       if (
-        event.code !== 'Backquote' ||
-        !(event.ctrlKey || event.metaKey) ||
-        event.altKey ||
-        event.repeat ||
+        (!isNew && !TOGGLE_TERMINAL.match(event)) ||
         event.isComposing ||
         document.querySelector('[aria-modal="true"]')
       )
         return
       event.preventDefault()
       event.stopPropagation()
-      if (event.shiftKey)
+      if (isNew)
         void create(
           document.activeElement?.closest('[data-terminal-input]') && ui.projectId
             ? { projectId: ui.projectId }

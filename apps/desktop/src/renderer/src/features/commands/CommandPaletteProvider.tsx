@@ -31,6 +31,7 @@ import { terminalState } from '@/features/terminal/store'
 import { useActiveWorkspace } from '@/features/editor/target'
 import { cn, Kbd, useToast } from '@/ui'
 import {
+  COMMAND_PALETTE,
   OPEN_SEARCH,
   SPLIT_DOWN,
   SPLIT_RIGHT,
@@ -512,7 +513,7 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
   }
   useEffect(() => {
     const key = (e: KeyboardEvent): void => {
-      if (e.code === 'KeyP' && (e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && !e.repeat && !e.isComposing) {
+      if (COMMAND_PALETTE.match(e) && !e.isComposing) {
         e.preventDefault()
         e.stopPropagation()
         show()
