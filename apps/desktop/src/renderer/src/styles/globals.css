@@ -874,11 +874,12 @@
 
 /* 搜索命中（docs/ui/content-highlight.md §2 E）：CSS Custom Highlight API，不改页面结构。
    search-term：从全局搜索跳过来时的命中；find-match / find-current：对话内搜索的全部命中 / 当前这个 */
-::highlight(search-term),
 ::highlight(find-match) {
   background-color: var(--accent-soft);
   color: inherit;
 }
+/* 跳转过来的条目整块已经是 accent-soft 底（.search-hit），命中的词要更深才看得出 */
+::highlight(search-term),
 ::highlight(find-current) {
   background-color: color-mix(in srgb, var(--accent) 45%, transparent);
   color: var(--text);

@@ -1,11 +1,13 @@
 import { useI18n } from '@/i18n/I18nProvider'
-import { memo } from 'react'
+import { memo, useMemo } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkBreaks from 'remark-breaks'
 import remarkGfm from 'remark-gfm'
 import { cn } from '@/ui'
 import { CodeBlock } from '@/ui/code/CodeBlock'
 import { InlineCode, MarkdownLink, PathLinksContext } from './pathLinks'
+import { Callout, isAlertKind, remarkAlerts } from './alerts'
+import { hasMath, normalizeMath, useMathPlugins, type PluggableList } from './math'
 import type { Element, ElementContent } from 'hast'
 
 /** 取出 hast 节点里的全部文字（代码块的原文） */
@@ -28,6 +30,11 @@ const components: Components = {
   a: ({ node: _node, ...props }) => <MarkdownLink {...props} />,
   // 行内代码（代码块由下面的 pre 整个接管）：项目里的文件变成可点击的路径（docs/ui/content-highlight.md §2 A）
   code: ({ node: _node, className, children }) => <InlineCode className={className}>{children}</InlineCode>,
+  // 引用块：带 [!NOTE] 等标记的画成提示块（docs/ui/content-highlight.md §2 G）
+  blockquote: ({ node, children }) => {
+    const kind = node?.properties?.dataAlert
+    return isAlertKind(kind) ? <Callout kind={kind}>{children}</Callout> : <blockquote>{children}</blockquote>
+  },
   table: ({ node: _node, ...props }) => (
     <div className="my-3 max-w-full overflow-x-auto">
       <table {...props} />
@@ -68,14 +75,21 @@ export const Markdown = memo(function Markdown({
 }: {
   text: string
   className?: string
-  /** 回复还在输出：先不加路径链接，等这条完成，免得内容变化时闪动 */
+  /** 回复还在输出：先不加路径链接和公式，等这条完成，免得内容变化时闪动 */
   streaming?: boolean
 }) {
   useI18n()
+  // 公式：有公式标记时才加载 KaTeX，加载好之前按原文显示（docs/ui/content-highlight.md §2 I）
+  const math = useMathPlugins(!streaming && hasMath(text))
+  const source = useMemo(() => (math ? normalizeMath(text) : text), [math, text])
+  // 提示块要在 remark-breaks 之前认出标记；remark-breaks：单个换行也换行（一行一个的列表、数字不会挤成一段）
+  const remarkPlugins = useMemo<PluggableList>(
+    () => [remarkAlerts, remarkGfm, ...(math?.remark ?? []), remarkBreaks],
+    [math],
+  )
   const body = (
-    // remark-breaks：单个换行也换行（聊天回复里一行一个的列表、数字不会挤成一段）
-    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={components}>
-      {text}
+    <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={math?.rehype} components={components}>
+      {source}
     </ReactMarkdown>
   )
   return (

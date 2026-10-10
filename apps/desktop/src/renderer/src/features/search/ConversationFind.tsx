@@ -53,6 +53,14 @@ export function useFindShortcut(main: RefObject<HTMLElement | null>, enabled: bo
 
 /** 把一个命中滚到对话区中间（已经看得见时不动） */
 function reveal(range: Range, scroller: HTMLElement): void {
+  // 命中在折叠起来的长代码块里：先展开（ui/code/CodeBlock.tsx），下一帧再滚过去
+  const folded = range.startContainer.parentElement?.closest<HTMLElement>('[data-folded]')
+  const expand = folded?.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')
+  if (expand) {
+    expand.click()
+    requestAnimationFrame(() => reveal(range, scroller))
+    return
+  }
   const rect = range.getBoundingClientRect(),
     box = scroller.getBoundingClientRect()
   if (rect.top >= box.top + 32 && rect.bottom <= box.bottom - 32) return
