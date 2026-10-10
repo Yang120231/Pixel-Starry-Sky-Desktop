@@ -5,6 +5,7 @@ import { app, BrowserWindow, dialog, Menu, nativeTheme, shell, type MenuItemCons
 import { initAccount } from './account/account'
 import * as ipc from './ipc/guard'
 import { initAppInfo } from './app/info'
+import { initUpdater } from './app/updater'
 import { initEngine } from './engine/ipc'
 import { initWorkspace } from './workspace/files-ipc'
 import { initWindowControls, observeWindowControls } from './app/window-controls'
@@ -110,6 +111,8 @@ function createWindow(): BrowserWindow {
     minHeight: 700,
     show: false,
     title: '像素星空',
+    // 打包后 Windows 用 exe 自带的图标；开发模式用 build/icon.png
+    ...(!app.isPackaged && { icon: join(__dirname, '../../build/icon.png') }),
     backgroundColor: TITLE_BAR[initial].color,
     ...(process.platform === 'win32'
       ? { frame: false }
@@ -269,6 +272,7 @@ app.whenReady().then(async () => {
   initNotifications() // 系统通知，见 notifications/notifications.ts
   initAccount() // 账号登录与额度，见 account/account.ts
   initAppInfo() // 「关于」页的版本与运行环境，见 app/info.ts
+  initUpdater(ctx) // 自动更新（GitHub Releases），见 app/updater.ts
   await initEngine(ctx) // 引擎系统（Claude Code 等），见 engine/ipc.ts
   await initWorkspace(ctx)
   await initProjectTools(ctx)

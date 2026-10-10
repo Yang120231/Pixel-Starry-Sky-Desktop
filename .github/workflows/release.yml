@@ -1,0 +1,38 @@
+# 发版：推 v* 标签（如 v0.1.0-beta.1）→ 在 Windows 上检查、打包，把安装版、便携版和更新文件上传到草稿 Release。
+# 在 GitHub 的 Releases 页检查草稿、写好更新说明（测试版勾上 Set as a pre-release）后点发布，用户那边才会收到更新。
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      # 按根目录 package.json 的 packageManager 装 pnpm
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: 标签和版本号一致
+        shell: bash
+        run: |
+          version="v$(node -p "require('./apps/desktop/package.json').version")"
+          if [ "$version" != "$GITHUB_REF_NAME" ]; then
+            echo "标签 $GITHUB_REF_NAME 和 apps/desktop/package.json 的版本 $version 不一致"
+            exit 1
+          fi
+      - name: 检查（类型、测试、ESLint、Prettier）
+        run: node scripts/check.mjs
+      - name: 打包并上传到草稿 Release
+        working-directory: apps/desktop
+        run: pnpm build && pnpm exec electron-builder --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

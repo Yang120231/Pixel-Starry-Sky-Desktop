@@ -3,6 +3,8 @@ import type { HostEvent, IpcChannelName } from '@pixelsky/protocol'
 import type { AccountState } from '../shared/types/account'
 import type { AccountBridge } from './account'
 import type { AppInfoBridge } from './app-info'
+import type { UpdateBridge } from './update'
+import type { UpdateState } from '../shared/types/update'
 import type { EngineBridge } from './engine'
 import type { FilesBridge, EditorBridge } from './workspace'
 import type { WindowState } from '../shared/types/window'
@@ -119,6 +121,22 @@ const engine: EngineBridge = {
 const appInfo: AppInfoBridge = {
   getInfo: () => call('app:info'),
   open: link => call('app:open', link),
+}
+
+// 自动更新（docs/release-update.md §7）
+const update: UpdateBridge = {
+  state: () => call('update:state'),
+  check: () => call('update:check'),
+  install: () => call('update:install'),
+  download: () => call('update:download'),
+  setBeta: beta => call('update:setBeta', beta),
+  onChange: callback => {
+    const listener = (_e: Electron.IpcRendererEvent, state: UpdateState): void => callback(state)
+    on('update:changed', listener)
+    return () => {
+      ipcRenderer.removeListener('update:changed', listener)
+    }
+  },
 }
 
 // 渲染进程能用的能力只通过这里暴露，统一挂在 window.pixelsky 上
@@ -306,6 +324,7 @@ contextBridge.exposeInMainWorld('pixelsky', {
   },
   engine,
   app: appInfo,
+  update,
   files,
   editor,
   window: windowControls,

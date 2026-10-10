@@ -5,11 +5,11 @@ import type { AppInfo, AppLink } from '../../shared/types/app-info'
 import { baseUrl } from '../account/account'
 import * as ipc from '../ipc/guard'
 
-const REPO_URL = 'https://github.com/xiaoheoxo/Pixel-Starry-Sky-Desktop'
+export const REPO_URL = 'https://github.com/xiaoheoxo/Pixel-Starry-Sky-Desktop'
 
 const OS_NAMES: Record<string, string> = { win32: 'Windows', darwin: 'macOS', linux: 'Linux' }
 
-function channel(): AppInfo['channel'] {
+export function channel(): AppInfo['channel'] {
   if (!app.isPackaged) return 'dev'
   // electron-builder 的便携版启动时会带上这个环境变量（解压后的真实 exe 位置）
   return process.env.PORTABLE_EXECUTABLE_FILE ? 'portable' : 'installed'

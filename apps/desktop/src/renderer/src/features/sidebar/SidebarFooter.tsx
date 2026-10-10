@@ -7,6 +7,7 @@ import { AccountMenu } from '@/features/account/AccountMenu'
 import { Avatar, cn } from '@/ui'
 import { SIDEBAR_ROW_LIMIT, useSidebarPrefs } from '@/features/appearance/sidebar'
 import { LayoutActionButton } from '@/features/layout/LayoutActionButton'
+import { UpdateNotice } from '@/features/update/UpdateNotice'
 import type { SidebarActionCallbacks } from './SidebarActionButton'
 
 /**
@@ -47,6 +48,7 @@ export function SidebarFooter({ onAddProject, onNewTask }: SidebarActionCallback
 
   return (
     <footer className="relative shrink-0 px-2 py-2">
+      <UpdateNotice />
       <div className="flex items-center gap-1" data-sidebar-footer>
         <button
           ref={accountButtonRef}

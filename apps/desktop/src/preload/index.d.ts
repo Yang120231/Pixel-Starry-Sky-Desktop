@@ -1,5 +1,6 @@
 import type { AccountBridge } from './account'
 import type { AppInfoBridge } from './app-info'
+import type { UpdateBridge } from './update'
 import type { EngineBridge } from './engine'
 import type { PlatformCatalogBridge } from './platform-catalog'
 import type { EditorBridge, FilesBridge } from './workspace'
@@ -33,6 +34,8 @@ export interface PixelskyBridge {
   platformCatalog: PlatformCatalogBridge
   /** 「关于」页：版本与运行环境（docs/ui/settings.md §5） */
   app: AppInfoBridge
+  /** 自动更新（docs/release-update.md §7） */
+  update: UpdateBridge
   files: FilesBridge
   editor: EditorBridge
   window: WindowBridge

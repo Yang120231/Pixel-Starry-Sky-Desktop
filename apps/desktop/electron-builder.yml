@@ -16,10 +16,28 @@ asar: true
 # 强制重编译会失败。Electron 44 已通过实际 PTY 输入 / resize / 退出验证。
 npmRebuild: false
 win:
+  # 安装版（能自动更新）+ 便携版（不能自动更新，只提示去下载）。docs/release-update.md §7
   target:
+    - target: nsis
+      arch: x64
     - target: portable
       arch: x64
-  # 暂不签名（首次运行 SmartScreen 会提示“未知发布者”），但仍写入产品名、版本等文件信息；暂用 Electron 默认图标
+  # 暂不签名（首次运行 SmartScreen 会提示“未知发布者”），但仍写入产品名、版本等文件信息
   signExecutable: false
+  icon: build/icon.ico
+nsis:
+  # 一键安装到当前用户目录，不要管理员权限；装完自动打开
+  oneClick: true
+  perMachine: false
+  runAfterFinish: true
+  artifactName: PixelSky-${version}-setup.exe
+  uninstallDisplayName: ${productName}
 portable:
   artifactName: PixelSky-${version}-portable.exe
+# 更新源：GitHub Releases（CI 推 v* 标签时上传；本机 pnpm dist 不上传）
+publish:
+  provider: github
+  owner: xiaoheoxo
+  repo: Pixel-Starry-Sky-Desktop
+  releaseType: draft
+# 测试版也只生成 latest.yml：electron-updater 在测试版 Release 里找不到 beta.yml 时会回落到 latest.yml
