@@ -97,6 +97,26 @@ describe('平台代理按引擎隔离 Responses 与 Messages', () => {
     expect(Object.fromEntries(forwarded!)).toMatchObject(identity)
     expect(forwarded!.get('authorization')).toBeNull()
   })
+
+  it('平台账号登录失效（过期或被吊销）：回 401 和原因，不是 502', async () => {
+    server = platformGateway({
+      sessions: new Map([['s', { recordId: 's', secret: 'local-secret' }]]),
+      record: () => ({ id: 's', engine: 'claude', platform: { groupId: '2', account: 'user' } }) as SessionRecord,
+      account: () => 'user',
+      fetch: async () => {
+        throw Object.assign(new Error('登录已失效（已过期或被吊销），请重新登录'), { code: 'AUTH_EXPIRED' })
+      },
+    })
+    server.listen(0, '127.0.0.1')
+    await once(server, 'listening')
+    const res = await fetch('http://127.0.0.1:' + (server.address() as { port: number }).port + '/v1/messages', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer local-secret' },
+      body: JSON.stringify({ model: 'claude-sonnet-5' }),
+    })
+    expect(res.status).toBe(401)
+    expect(await res.json()).toMatchObject({ error: { message: expect.stringContaining('请重新登录') } })
+  })
 })
 
 it('waits for remote billing correlation before forwarding and fails closed on disconnect', async () => {

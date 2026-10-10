@@ -202,7 +202,9 @@ export function platformGateway(options: {
       })
       await pipe(upstream)
     } catch (error) {
-      if (!res.headersSent) fail(502, (error as Error).message)
+      // 平台账号的登录失效（过期或被吊销）：401 加上原因，引擎不会当成暂时故障反复重试
+      if (!res.headersSent)
+        fail((error as { code?: unknown }).code === 'AUTH_EXPIRED' ? 401 : 502, (error as Error).message)
       else res.destroy()
     }
   })

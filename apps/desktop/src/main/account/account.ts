@@ -5,6 +5,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { createServer, type Server, type ServerResponse } from 'node:http'
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { hostname, release } from 'node:os'
 import { join } from 'node:path'
 import { app, BrowserWindow, safeStorage, shell } from 'electron'
 import { nativeText, windowLocale } from '../app/ui-language'
@@ -39,6 +40,8 @@ interface Tokens {
 
 /** 刷新令牌被服务端拒绝（或访问令牌换新后仍 401）：只能重新登录 */
 class AuthExpiredError extends Error {}
+/** 登录过期和被管理员吊销在客户端看来一样：刷新令牌被拒 */
+const SIGNED_OUT_MESSAGE = '登录已失效（已过期或被吊销），请重新登录'
 /** 网络错误、超时、5xx 等暂时性故障：保持登录，只提示 */
 class TransientError extends Error {}
 
@@ -99,6 +102,23 @@ function overrideAllowed(raw: string): boolean {
   } catch {
     return false
   }
+}
+
+/** 授权时报给云端的设备名（管理页的登录会话、托管 Key 的名字里显示），如「DESKTOP-01 · Windows 11」 */
+export function deviceName(): string {
+  const build = Number(release().split('.')[2])
+  const os =
+    process.platform === 'win32'
+      ? build >= 22000
+        ? 'Windows 11'
+        : 'Windows 10'
+      : process.platform === 'darwin'
+        ? 'macOS'
+        : process.platform === 'linux'
+          ? 'Linux'
+          : process.platform
+  const host = hostname().trim()
+  return host ? `${host} · ${os}` : os
 }
 
 /** 认证服务地址（「关于」页也显示它） */
@@ -284,7 +304,12 @@ async function doRefresh(): Promise<void> {
   if (!current) throw new AuthExpiredError()
   const myEpoch = epoch
   const res = await http('POST', '/v1/oauth/token', {
-    body: { grant_type: 'refresh_token', client_id: CLIENT_ID, refresh_token: current.refreshToken },
+    body: {
+      grant_type: 'refresh_token',
+      client_id: CLIENT_ID,
+      refresh_token: current.refreshToken,
+      client_version: app.getVersion(),
+    },
   })
   if (myEpoch !== epoch) {
     // 期间已退出或重新登录，丢弃结果；服务端已轮换出新令牌，没人持有它，要撤销掉
@@ -330,7 +355,19 @@ export async function platformFetch(path: string, init: RequestInit = {}): Promi
   if (!path.startsWith('/v1/platform/') && !path.startsWith('/v1/oauth/usage/calls?')) throw new Error('无效的平台接口')
   if (!tokens) throw new Error('请先登录像素星空账号')
   const requestEpoch = epoch
-  if (tokens.accessExpiresAt - Date.now() < REFRESH_SKEW_MS) await refreshTokens()
+  // 刷新令牌被拒（登录过期，或在云端管理页被吊销）：马上退出登录，不等下一次拉取账号数据
+  const signedOut = (): Error => {
+    if (epoch === requestEpoch) clearSession(SIGNED_OUT_MESSAGE)
+    return Object.assign(new Error(SIGNED_OUT_MESSAGE), { code: 'AUTH_EXPIRED' })
+  }
+  const refresh = async (): Promise<void> => {
+    try {
+      await refreshTokens()
+    } catch (e) {
+      throw e instanceof AuthExpiredError ? signedOut() : e
+    }
+  }
+  if (tokens.accessExpiresAt - Date.now() < REFRESH_SKEW_MS) await refresh()
   const send = async (): Promise<Response> => {
     if (!tokens || epoch !== requestEpoch) throw new Error('账号已退出，请重新登录')
     const headers = new Headers(init.headers)
@@ -341,8 +378,12 @@ export async function platformFetch(path: string, init: RequestInit = {}): Promi
   let res = await send()
   if (res.status === 401) {
     await res.body?.cancel()
-    if (tokens?.accessToken === used) await refreshTokens()
+    if (tokens?.accessToken === used) await refresh()
     res = await send()
+    if (res.status === 401) {
+      await res.body?.cancel()
+      throw signedOut()
+    }
   }
   if (epoch !== requestEpoch) {
     await res.body?.cancel()
@@ -484,7 +525,7 @@ async function doFetchAccount(): Promise<void> {
         removeStoreFile()
         return
       }
-      clearSession('登录已过期，请重新登录')
+      clearSession(SIGNED_OUT_MESSAGE)
       return
     }
     const message = e instanceof TransientError ? e.message : `网络错误：${describeError(e)}`
@@ -578,6 +619,7 @@ async function completeLogin(f: LoginFlow, code: string, verifier: string, redir
         code,
         code_verifier: verifier,
         redirect_uri: redirectUri,
+        client_version: app.getVersion(),
       },
     })
     if (flow !== f) {
@@ -742,6 +784,7 @@ async function login(): Promise<void> {
     code_challenge_method: 'S256',
     state: expectedState,
     auth_code: authCode,
+    device_name: deviceName(),
   }).toString()
 
   if (process.env.PIXELSKY_AUTH_NO_BROWSER === '1') {

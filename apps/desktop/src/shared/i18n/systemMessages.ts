@@ -79,6 +79,10 @@ export const systemMessages = {
     "zh": "登录已过期，请重新登录",
     "en": "Sign-in expired. Sign in again."
   },
+  "system.signInInvalidSign": {
+    "zh": "登录已失效（已过期或被吊销），请重新登录",
+    "en": "Sign-in is no longer valid (expired or revoked). Sign in again."
+  },
   "system.signedInSuccessfully": {
     "zh": "登录成功",
     "en": "Signed in successfully"
