@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { ExtensionService } from './service'
+import { codexMcp, ExtensionService } from './service'
 import { MASKED_SECRET } from '@pixelsky/engine'
 import type { ExtensionScope } from '@pixelsky/protocol'
 let root: string, service: ExtensionService, project: string
@@ -48,8 +48,12 @@ describe('管理配置与凭据', () => {
     expect(cx.skillRoots).toHaveLength(1)
     expect(cx.codexConfig?.['mcp_servers."codex-tools"']).toMatchObject({
       command: process.execPath,
-      env: { TOKEN: 'private-codex' },
+      env: {},
+      env_vars: ['TOKEN'],
     })
+    // 凭据只进 Codex 进程环境，不进 -c 命令行
+    expect(cx.env).toEqual({ TOKEN: 'private-codex' })
+    expect(JSON.stringify(cx.codexConfig)).not.toContain('private-codex')
     expect(cc.pluginDirs).toEqual([])
     expect(cc.mcpFile).toBeUndefined()
     expect(readFileSync(join(service.dir, 'config.json'), 'utf8')).not.toContain('private-codex')
@@ -168,5 +172,30 @@ describe('管理配置与凭据', () => {
       ),
     ).toThrow()
     expect(service.state(null).entries).toEqual([])
+  })
+})
+
+describe('codexMcp', () => {
+  it('HTTP 请求头按变量名引用；stdio 同名不同值时留在配置里', () => {
+    const r = codexMcp(
+      {
+        a: { type: 'stdio', command: 'a', env: { SHARED: '1', ONLY_A: 'x', HOME_X: 'mine' } },
+        b: { type: 'stdio', command: 'b', env: { SHARED: '2' } },
+        h: { type: 'http', url: 'https://m.example/mcp', headers: { Authorization: 'Bearer s3cret' } },
+      },
+      { HOME_X: 'theirs' },
+    )
+    expect(r.codexConfig['mcp_servers."a"']).toEqual({
+      command: 'a',
+      args: [],
+      env: { SHARED: '1', HOME_X: 'mine' },
+      env_vars: ['ONLY_A'],
+    })
+    expect(r.codexConfig['mcp_servers."b"']).toEqual({ command: 'b', args: [], env: { SHARED: '2' } })
+    expect(r.codexConfig['mcp_servers."h"']).toEqual({
+      url: 'https://m.example/mcp',
+      env_http_headers: { Authorization: 'PIXELSKY_MCP_SECRET_0' },
+    })
+    expect(r.env).toEqual({ ONLY_A: 'x', PIXELSKY_MCP_SECRET_0: 'Bearer s3cret' })
   })
 })

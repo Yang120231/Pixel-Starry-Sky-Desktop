@@ -530,20 +530,14 @@ export class ExtensionService {
     }
     let file: string | undefined
     if (engine === 'codex') {
-      const codexConfig: Record<string, unknown> = {}
-      for (const [name, c] of Object.entries(servers)) {
-        if (c.type === 'sse') throw new Error('Codex MCP 仅支持 stdio 或 HTTP，请修改传输方式')
-        codexConfig[`mcp_servers.${JSON.stringify(name)}`] =
-          c.type === 'stdio'
-            ? { command: c.command, args: c.args ?? [], env: c.env ?? {} }
-            : { url: c.url, http_headers: c.headers ?? {} }
-      }
+      const { codexConfig, env: secretEnv } = codexMcp(servers, env)
       return {
         key: JSON.stringify(entries.map(e => [e.id, e.revision, e.digest, e.enabled, e.mcp, e.command, e.args])),
         pluginDirs: [],
         pathDirs: [...new Set(pathDirs)],
         skillRoots,
         codexConfig,
+        env: secretEnv,
       }
     }
     if (Object.keys(servers).length) {
@@ -589,4 +583,64 @@ export class ExtensionService {
     for (const path of this.retired)
       if (existsSync(path)) rmSync(inside(join(this.dir, 'packages'), path), { recursive: true, force: true })
   }
+}
+
+/**
+ * Codex 的 MCP 配置经 `-c` 进命令行，进程列表、崩溃报告都看得到；凭据（stdio 的 env、HTTP 的请求头）
+ * 改成放进 Codex 进程的环境，配置里只写变量名（`env_vars` / `env_http_headers`）。
+ * stdio 的变量名必须和服务要的一致：和别的服务或已有环境同名不同值时，这一个仍写在配置里，不去改别人看到的值。
+ */
+export function codexMcp(
+  servers: Record<string, McpConfig>,
+  base: NodeJS.ProcessEnv,
+): { codexConfig: Record<string, unknown>; env: Record<string, string> } {
+  const codexConfig: Record<string, unknown> = {},
+    env: Record<string, string> = {},
+    owner = new Map<string, string>()
+  const existing = (name: string): string | undefined => {
+    const key = Object.keys(base).find(k =>
+      process.platform === 'win32' ? k.toUpperCase() === name.toUpperCase() : k === name,
+    )
+    return key === undefined ? undefined : base[key]
+  }
+  // 同名变量的值在所有服务里都一样、也不和已有环境冲突，才能放进环境
+  for (const c of Object.values(servers))
+    for (const [name, value] of Object.entries(c.type === 'stdio' ? (c.env ?? {}) : {})) {
+      const seen = owner.get(name)
+      owner.set(name, seen === undefined || seen === value ? value : '\0conflict')
+    }
+  let header = 0
+  for (const [name, c] of Object.entries(servers)) {
+    if (c.type === 'sse') throw new Error('Codex MCP 仅支持 stdio 或 HTTP，请修改传输方式')
+    if (c.type === 'stdio') {
+      const inline: Record<string, string> = {},
+        forwarded: string[] = []
+      for (const [k, v] of Object.entries(c.env ?? {})) {
+        const now = existing(k)
+        if (owner.get(k) === v && (now === undefined || now === v)) {
+          env[k] = v
+          forwarded.push(k)
+        } else inline[k] = v
+      }
+      codexConfig[`mcp_servers.${JSON.stringify(name)}`] = {
+        command: c.command,
+        args: c.args ?? [],
+        env: inline,
+        ...(forwarded.length ? { env_vars: forwarded } : {}),
+      }
+    } else {
+      // 变量名带 SECRET：Codex 默认不把名字含 KEY / SECRET / TOKEN 的变量传给它跑的命令
+      const headers: Record<string, string> = {}
+      for (const [k, v] of Object.entries(c.headers ?? {})) {
+        const variable = `PIXELSKY_MCP_SECRET_${header++}`
+        env[variable] = v
+        headers[k] = variable
+      }
+      codexConfig[`mcp_servers.${JSON.stringify(name)}`] = {
+        url: c.url,
+        ...(Object.keys(headers).length ? { env_http_headers: headers } : {}),
+      }
+    }
+  }
+  return { codexConfig, env }
 }

@@ -76,6 +76,8 @@ export interface ExtensionImport {
 }
 export interface ExtensionLaunch {
   codexConfig?: Record<string, unknown>
+  /** 只加进引擎进程环境的变量（MCP 凭据），配置里按名字引用，不进命令行 */
+  env?: Record<string, string>
   skillRoots?: string[]
   key: string
   pluginDirs: string[]
