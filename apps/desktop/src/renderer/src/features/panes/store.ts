@@ -12,7 +12,7 @@ import { confirmFiles } from '@/features/files/FileConfirm'
 import { getFiles, removeFile } from '@/features/files/store'
 import { bindDraftWorkspace, draftWorkspace } from '@/features/machines/drafts'
 import { getEngineState, setCurrentProject } from '@/features/engine/store'
-import { hasImageDraft } from '@/features/session/attachments/drafts'
+import { hasAttachmentDraft } from '@/features/session/attachments/drafts'
 import type { SessionRecord } from '@pixelsky/protocol'
 import type { WorkspaceChoice } from '../../../../shared/types/machines'
 import { getMachines } from '@/features/machines/store'
@@ -234,7 +234,7 @@ export const paneActions = {
         setCurrentProject(opts.project)
         return
       }
-      if (!composerDraft(current).trim() && !hasImageDraft(current)) {
+      if (!composerDraft(current).trim() && !hasAttachmentDraft(current)) {
         bindNewTab(current, null, opts.project, true)
         return
       }

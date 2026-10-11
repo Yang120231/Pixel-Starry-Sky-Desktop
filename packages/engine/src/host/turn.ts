@@ -9,7 +9,7 @@ import type {
   SendReceipt,
   TaskOutput,
 } from '@pixelsky/protocol'
-import { sourceKey, viaGateway } from '@pixelsky/protocol'
+import { messageWithFiles, sourceKey, viaGateway } from '@pixelsky/protocol'
 import { queueSettings } from '../queue'
 import type { HostContext } from './context'
 import { NEW_TITLE, titleFrom } from './title'
@@ -129,6 +129,7 @@ export class HostTurn {
           id: userItemId,
           text: item.text,
           attachments: item.attachments,
+          ...(item.files ? { files: item.files } : {}),
           createdAt: Date.now(),
           mode: 'normal',
           turnId,
@@ -138,14 +139,14 @@ export class HostTurn {
       m.events.patchRecord(id, {
         title:
           !latest.titleEdited && latest.title === NEW_TITLE
-            ? titleFrom(item.text || item.attachments?.[0]?.name || NEW_TITLE)
+            ? titleFrom(item.text || item.files?.[0]?.name || item.attachments?.[0]?.name || NEW_TITLE)
             : latest.title,
         updatedAt: Date.now(),
       })
       if (rt.snapshot.suggestion) m.events.apply(id, { type: 'suggestion', text: null })
       m.events.apply(id, { type: 'status', state: 'running' })
       m.events.apply(id, { type: 'turn_started', turnId, execution: queueSettings(rt.execution) })
-      rt.session.send(item.text, turnId, userItemId, item.attachments)
+      rt.session.send(messageWithFiles(item.text, item.files), turnId, userItemId, item.attachments)
     } catch (err) {
       if (ctx.runtimes.get(id) !== rt) return
       m.queue.changeQueue(id, item.id, { status: 'failed', error: (err as Error).message })

@@ -1,5 +1,5 @@
 import type { MessageInput, QueuedMessage, QueueSettings, SendReceipt, SessionRecord } from '@pixelsky/protocol'
-import { EFFORTS, PROVIDER_ID, validateImages } from '@pixelsky/protocol'
+import { EFFORTS, PROVIDER_ID, validateFiles, validateImages } from '@pixelsky/protocol'
 
 export interface QueueFile {
   items: QueuedMessage[]
@@ -27,7 +27,9 @@ export function messageInput(
 ): MessageInput & { settings: QueueSettings } {
   const v = typeof input === 'string' ? { text: input, clientMessageId: newId() } : input
   const attachments = validateImages(v?.attachments)
-  if (!v || typeof v.text !== 'string' || (!v.text.trim() && attachments.length === 0)) throw new Error('消息不能为空')
+  const files = validateFiles(v?.files)
+  if (!v || typeof v.text !== 'string' || (!v.text.trim() && attachments.length === 0 && files.length === 0))
+    throw new Error('消息不能为空')
   if (v.text.length > 1_000_000) throw new Error('消息过长，请拆分后发送')
   if (typeof v.clientMessageId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(v.clientMessageId))
     throw new Error('消息 ID 无效')
@@ -51,6 +53,7 @@ export function messageInput(
     text: v.text.trim(),
     clientMessageId: v.clientMessageId,
     ...(attachments.length ? { attachments } : {}),
+    ...(files.length ? { files } : {}),
     settings: {
       model: s.model,
       effort: s.effort,

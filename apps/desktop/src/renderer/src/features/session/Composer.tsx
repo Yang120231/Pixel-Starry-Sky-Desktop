@@ -10,17 +10,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react'
-import {
-  ArrowUp,
-  AtSign,
-  ChevronDown,
-  Image as ImageIcon,
-  Mic,
-  Plus,
-  ShieldOff,
-  Square,
-  SquareSlash,
-} from 'lucide-react'
+import { ArrowUp, AtSign, ChevronDown, Mic, Paperclip, Plus, ShieldOff, Square, SquareSlash } from 'lucide-react'
 import { IconButton, cn, useComingSoon } from '@/ui'
 import { attachments as initialAttachments, composer } from '@/data'
 import {
@@ -30,7 +20,7 @@ import {
   type SourceAction,
   type StatusBarController,
 } from '@/features/engine'
-import { MAX_IMAGE_COUNT, MAX_IMAGE_TOTAL } from '@pixelsky/protocol'
+import { MAX_FILE_BYTES, MAX_FILE_COUNT, MAX_IMAGE_COUNT, MAX_IMAGE_TOTAL } from '@pixelsky/protocol'
 import { useAccount } from '@/features/account/useAccount'
 import type { CreditSource } from '@/features/account/platform'
 import { useSettings } from '@/features/settings/SettingsProvider'
@@ -54,8 +44,10 @@ import { composerWorkspace } from './composerWorkspace'
 import { escapeStops } from './escapeStop'
 import { tr } from '../../i18n/core'
 import { ImageAttachments } from '@/features/session/attachments/ImageAttachments'
+import { FileAttachments } from '@/features/session/attachments/FileAttachments'
 import { readImage } from '@/features/session/attachments/images'
-import { updateImages, useImageDraft } from '@/features/session/attachments/drafts'
+import { isImageFile, readTextFile } from '@/features/session/attachments/files'
+import { updateFiles, updateImages, useFileDraft, useImageDraft } from '@/features/session/attachments/drafts'
 import { Popover, PopoverItem } from '@/ui'
 
 /** text-prose 是 14px / 1.7，行高取整成 24px，增高计算和样式共用 */
@@ -96,6 +88,8 @@ export function Composer({
   const key = draftKey ?? live?.sessionId ?? (live ? 'new-session' : 'demo')
   const imageDraft = useImageDraft(key)
   const images = imageDraft.images
+  const fileDraft = useFileDraft(key)
+  const textFiles = fileDraft.files
   const [reading, setReading] = useState(0)
   const adding = useRef(Promise.resolve())
   const pendingReads = useRef(0)
@@ -256,11 +250,50 @@ export function Composer({
   const modes = items.filter(a => a.kind === 'mode')
   const hasText = text.trim().length > 0
   const running = !!live?.running
-  const hasContent = hasText || images.length > 0
-  const canSend = hasContent && !busy && !reading && !imageDraft.loading
+  const hasContent = hasText || images.length > 0 || textFiles.length > 0
+  const canSend = hasContent && !busy && !reading && !imageDraft.loading && !fileDraft.loading
 
-  const addImages = (files: FileList | File[]): void => {
+  /** 读附件排队进行，读的时候发送键不可用 */
+  const read = (work: () => Promise<void>): void => {
+    setReading(n => n + 1)
+    pendingReads.current++
+    adding.current = adding.current.then(async () => {
+      try {
+        await work()
+        setError(null)
+      } catch (error) {
+        setError((error as Error).message)
+      } finally {
+        pendingReads.current--
+        setReading(n => n - 1)
+      }
+    })
+    void adding.current
+  }
+
+  /** 拖进来、粘贴、从「+」选的文件：图片走图片附件，其余按文本文件读（docs/ui/composer-file-attachments.md） */
+  const addFiles = (files: FileList | File[]): void => {
     const list = [...files]
+    const pictures = list.filter(isImageFile),
+      others = list.filter(file => !isImageFile(file))
+    if (pictures.length) addImages(pictures)
+    if (!others.length) return
+    if (textFiles.length + others.length > MAX_FILE_COUNT) {
+      setError(tr('composer.file.tooMany'))
+      return
+    }
+    const large = others.find(file => file.size > MAX_FILE_BYTES)
+    if (large) {
+      setError(tr('composer.file.tooLarge', { p0: large.name }))
+      return
+    }
+    read(async () => {
+      const loaded = await Promise.all(others.map(readTextFile))
+      await updateFiles(key, current => [...current, ...loaded])
+    })
+  }
+
+  const addImages = (list: File[]): void => {
     if (list.length === 0) return
     if (live?.engine && live.engine.caps.imageInput !== true) {
       setError(tr('composer.attachment.unsupportedEngine'))
@@ -277,27 +310,16 @@ export function Composer({
       setError(tr('composer.attachment.totalTooLarge'))
       return
     }
-    setReading(n => n + 1)
-    pendingReads.current++
-    adding.current = adding.current.then(async () => {
-      try {
-        const loaded = await Promise.all(list.map(readImage))
-        await updateImages(key, current => [...current, ...loaded])
-        setError(null)
-      } catch (error) {
-        setError((error as Error).message)
-      } finally {
-        pendingReads.current--
-        setReading(n => n - 1)
-      }
+    read(async () => {
+      const loaded = await Promise.all(list.map(readImage))
+      await updateImages(key, current => [...current, ...loaded])
     })
-    void adding.current
   }
 
   const onDrop = (event: DragEvent<HTMLDivElement>): void => {
     event.preventDefault()
     setDraggingImages(false)
-    addImages(event.dataTransfer.files)
+    addFiles(event.dataTransfer.files)
   }
 
   const submit = async (): Promise<void> => {
@@ -314,16 +336,17 @@ export function Composer({
     if (!canSend || submitting.current || pendingReads.current) return
     submitting.current = true
     const sent = text
-    const imageSignature = images.map(image => image.id).join(',')
+    const imageSignature = [...images, ...textFiles].map(attachment => attachment.id).join(',')
     if (submission.current?.text !== sent || submission.current.images !== imageSignature)
       submission.current = { text: sent, images: imageSignature, id: crypto.randomUUID() }
     setBusy(true)
     setError(null)
     try {
-      await live.submit(sent, submission.current.id, images)
+      await live.submit(sent, submission.current.id, images, textFiles)
       setText(current => (current === sent ? '' : current))
-      const sentIds = new Set(images.map(image => image.id))
+      const sentIds = new Set([...images, ...textFiles].map(attachment => attachment.id))
       if (images.length) await updateImages(key, current => current.filter(image => !sentIds.has(image.id)))
+      if (textFiles.length) await updateFiles(key, current => current.filter(file => !sentIds.has(file.id)))
       submission.current = null
     } catch (err) {
       setError((err as Error).message)
@@ -442,14 +465,24 @@ export function Composer({
         <QueuedMessages
           live={live}
           onPrepareRecall={async recalled => {
-            if (!recalled.attachments?.length) return
+            if (!recalled.attachments?.length && !recalled.files?.length) return
             const restored = new Set<string>()
-            await updateImages(key, current => {
-              const added = recalled.attachments!.filter(image => !current.some(existing => existing.id === image.id))
-              added.forEach(image => restored.add(image.id))
-              return [...current, ...added]
-            })
-            return () => updateImages(key, current => current.filter(image => !restored.has(image.id)))
+            if (recalled.attachments?.length)
+              await updateImages(key, current => {
+                const added = recalled.attachments!.filter(image => !current.some(existing => existing.id === image.id))
+                added.forEach(image => restored.add(image.id))
+                return [...current, ...added]
+              })
+            if (recalled.files?.length)
+              await updateFiles(key, current => {
+                const added = recalled.files!.filter(file => !current.some(existing => existing.id === file.id))
+                added.forEach(file => restored.add(file.id))
+                return [...current, ...added]
+              })
+            return async () => {
+              await updateImages(key, current => current.filter(image => !restored.has(image.id)))
+              await updateFiles(key, current => current.filter(file => !restored.has(file.id)))
+            }
           }}
           onRecall={recalled => {
             setText(current => (current && recalled ? `${current}\n${recalled}` : current || recalled))
@@ -478,7 +511,7 @@ export function Composer({
         >
           {draggingImages && (
             <div className="pointer-events-none absolute inset-1 z-20 flex items-center justify-center rounded-xl border-2 border-dashed border-accent-line bg-accent-soft/80 text-ui font-medium text-accent-fg">
-              {tr('composer.attachment.drop')}
+              {tr('composer.file.drop')}
             </div>
           )}
           {commandQuery !== undefined && !commandDismissed && (
@@ -554,14 +587,26 @@ export function Composer({
               />
             </div>
           )}
+          {textFiles.length > 0 && (
+            <div className="px-4 pt-3.5">
+              <FileAttachments
+                files={textFiles}
+                onRemove={id => {
+                  void fileDraft
+                    .update(current => current.filter(file => file.id !== id))
+                    .catch(error => setError((error as Error).message))
+                }}
+              />
+            </div>
+          )}
           {!!reading && (
             <p role="status" className="px-4 pt-2 text-meta text-fg-muted">
               {tr('composer.attachment.loading')}
             </p>
           )}
-          {imageDraft.error && (
+          {(imageDraft.error || fileDraft.error) && (
             <p role="status" className="px-4 pt-2 text-meta text-danger">
-              {translateMessage(imageDraft.error)}
+              {translateMessage(imageDraft.error ?? fileDraft.error)}
             </p>
           )}
 
@@ -594,7 +639,7 @@ export function Composer({
                 const files = [...event.clipboardData.files]
                 if (files.length) {
                   event.preventDefault()
-                  addImages(files)
+                  addFiles(files)
                   const pasted = event.clipboardData.getData('text/plain')
                   if (pasted) {
                     const start = event.currentTarget.selectionStart,
@@ -642,25 +687,24 @@ export function Composer({
             <input
               ref={fileInput}
               type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif"
               multiple
               hidden
               onChange={event => {
-                if (event.currentTarget.files) addImages(event.currentTarget.files)
+                if (event.currentTarget.files) addFiles(event.currentTarget.files)
                 event.currentTarget.value = ''
                 setAddMenu(false)
               }}
             />
-            {/* 「+」菜单：图片 / 引用文件（@）/ 命令（/），docs/ui/workbench-ux-3.md §2.6 */}
+            {/* 「+」菜单：图片或文件 / 引用文件（@）/ 命令（/），docs/ui/workbench-ux-3.md §2.6 */}
             <Popover open={addMenu} onClose={() => setAddMenu(false)} className="bottom-full left-0 mb-2 w-52">
               <PopoverItem
-                icon={<ImageIcon size={15} strokeWidth={1.5} />}
+                icon={<Paperclip size={15} strokeWidth={1.5} />}
                 onClick={() => {
                   setAddMenu(false)
                   fileInput.current?.click()
                 }}
               >
-                {tr('composer.attachment.addImage')}
+                {tr('composer.file.add')}
               </PopoverItem>
               {canMention && (
                 <PopoverItem

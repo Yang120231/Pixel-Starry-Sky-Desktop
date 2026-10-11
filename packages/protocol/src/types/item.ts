@@ -1,4 +1,4 @@
-import type { ImageAttachment, TurnOutcome } from './session'
+import type { FileAttachment, ImageAttachment, TurnOutcome } from './session'
 import type { TurnUsage } from './usage'
 
 export type ItemStatus = 'running' | 'completed' | 'failed' | 'declined' | 'interrupted'
@@ -27,6 +27,8 @@ export type Item =
       id: string
       text: string
       attachments?: ImageAttachment[]
+      /** 带的文本文件（text 是用户写的话，不含文件内容） */
+      files?: FileAttachment[]
       createdAt: number
       turnId?: string
       mode?: 'normal' | 'guidance'

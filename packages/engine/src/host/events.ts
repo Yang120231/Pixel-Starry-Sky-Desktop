@@ -137,6 +137,7 @@ export class HostEvents {
                 id: input.id,
                 text: input.text,
                 attachments: input.attachments,
+                ...(input.files ? { files: input.files } : {}),
                 createdAt: Date.now(),
                 mode: event.mode ?? 'guidance',
                 turnId: rt.snapshot.turnId ?? undefined,

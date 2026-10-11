@@ -7,16 +7,17 @@ import { useComingSoon } from '@/ui'
 import { demo, isDemo } from '@/data/demo'
 import { bridge } from '@/features/engine'
 import { appendComposerDraft, removeComposerDraftTail } from '@/features/engine/drafts'
-import { updateImages } from '@/features/session/attachments/drafts'
+import { updateFiles, updateImages } from '@/features/session/attachments/drafts'
 import { paneActions } from '@/features/panes/store'
 import type { MessageActionsValue } from './live/MessageActions'
 import type { RewindDone } from './ComposerNotices'
 import type { SideAsk, SideCancel } from './sidechat/store'
 
 interface UndoState extends RewindDone {
-  /** 回退放进输入框的原文和图片：撤销时拿掉 */
+  /** 回退放进输入框的原文、图片和文件：撤销时拿掉 */
   text: string
   imageIds: string[]
+  fileIds: string[]
 }
 
 export function useBranchActions(sessionId: string | null, snapshot: SessionSnapshot | null, composerKey: string) {
@@ -47,17 +48,29 @@ export function useBranchActions(sessionId: string | null, snapshot: SessionSnap
       rewind: async (item, options) => {
         if (!bridge) {
           // 演示：只显示撤销栏
-          setUndo({ conversation: options.conversation, files: options.code ? 3 : null, text: '', imageIds: [] })
+          setUndo({
+            conversation: options.conversation,
+            files: options.code ? 3 : null,
+            text: '',
+            imageIds: [],
+            fileIds: [],
+          })
           return
         }
         const result = await bridge.rewind(sessionId, item.id, options)
-        const images = result.attachments ?? []
+        const images = result.attachments ?? [],
+          files = result.files ?? []
         if (options.conversation) {
           appendComposerDraft(composerKey, result.text)
           if (images.length)
             await updateImages(composerKey, current => [
               ...current,
               ...images.filter(image => !current.some(c => c.id === image.id)),
+            ]).catch(() => undefined)
+          if (files.length)
+            await updateFiles(composerKey, current => [
+              ...current,
+              ...files.filter(file => !current.some(c => c.id === file.id)),
             ]).catch(() => undefined)
         }
         setUndo(
@@ -67,6 +80,7 @@ export function useBranchActions(sessionId: string | null, snapshot: SessionSnap
                 files: result.filesRestored ?? null,
                 text: options.conversation ? result.text : '',
                 imageIds: images.map(i => i.id),
+                fileIds: files.map(f => f.id),
               }
             : null,
         )
@@ -81,6 +95,7 @@ export function useBranchActions(sessionId: string | null, snapshot: SessionSnap
             const key = result.record.id
             appendComposerDraft(key, result.text)
             if (result.attachments?.length) await updateImages(key, () => result.attachments!).catch(() => undefined)
+            if (result.files?.length) await updateFiles(key, () => result.files!).catch(() => undefined)
             paneActions.open(key)
           }
         : null,
@@ -94,6 +109,10 @@ export function useBranchActions(sessionId: string | null, snapshot: SessionSnap
     if (undo.imageIds.length) {
       const ids = new Set(undo.imageIds)
       await updateImages(composerKey, current => current.filter(i => !ids.has(i.id))).catch(() => undefined)
+    }
+    if (undo.fileIds.length) {
+      const ids = new Set(undo.fileIds)
+      await updateFiles(composerKey, current => current.filter(f => !ids.has(f.id))).catch(() => undefined)
     }
     setUndo(null)
   }

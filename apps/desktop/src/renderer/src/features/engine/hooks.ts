@@ -12,6 +12,7 @@ import {
   type EffortPanelDefaults,
   type EngineId,
   type EngineInfo,
+  type FileAttachment,
   type ImageAttachment,
   type PermissionMode,
   type QueuedMessage,
@@ -295,7 +296,12 @@ export interface ComposerController {
   running: boolean
   stop(): Promise<void>
   /** 发送；失败时抛出给用户看的错误 */
-  submit(text: string, clientMessageId?: string, attachments?: ImageAttachment[]): Promise<void>
+  submit(
+    text: string,
+    clientMessageId?: string,
+    attachments?: ImageAttachment[],
+    files?: FileAttachment[],
+  ): Promise<void>
   redetect(): void
 }
 
@@ -599,7 +605,8 @@ export function useComposerController(
     running: !!snap && snap.state !== 'idle',
     stop: () => (record ? b.interrupt(record.id) : Promise.resolve()),
     redetect: () => void redetectEngines(),
-    submit: async (text, clientMessageId = crypto.randomUUID(), attachments = []) => {
+    submit: async (text, clientMessageId = crypto.randomUUID(), attachments = [], files = []) => {
+      const input = { text, clientMessageId, attachments, ...(files.length ? { files } : {}) }
       if (
         attachments.length &&
         (engine ?? (await b.engines()).find(info => info.id === engineId))?.caps.imageInput !== true
@@ -615,7 +622,7 @@ export function useComposerController(
       const usePlatform = source === 'platform'
       const useCustom = source === 'custom'
       if (record && started) {
-        await b.send(record.id, { text, clientMessageId, attachments })
+        await b.send(record.id, input)
         return
       }
       if (usePlatform && (platform.loading || !groupId || !model))
@@ -628,7 +635,7 @@ export function useComposerController(
           : { platform: null, provider: null, model }
       if (record) {
         await b.updateSession(record.id, sourcePatch)
-        await b.send(record.id, { text, clientMessageId, attachments })
+        await b.send(record.id, input)
         return
       }
       // 欢迎页：先确认引擎可用、有项目，再创建会话
@@ -646,7 +653,7 @@ export function useComposerController(
         ...sourcePatch,
       })
       try {
-        await b.send(created.id, { text, clientMessageId, attachments })
+        await b.send(created.id, input)
       } catch (err) {
         await b.deleteSession(created.id).catch(() => undefined)
         throw err

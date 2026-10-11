@@ -480,7 +480,14 @@ export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot
               <div key={q.id} data-starting-message={q.id} className="flex flex-col gap-3">
                 <div className={cn('conversation-user-row', blocks.length > 0 && 'mt-4')}>
                   <UserBubble
-                    item={{ kind: 'user', id: q.id, text: q.text, attachments: q.attachments, createdAt: q.createdAt }}
+                    item={{
+                      kind: 'user',
+                      id: q.id,
+                      text: q.text,
+                      attachments: q.attachments,
+                      files: q.files,
+                      createdAt: q.createdAt,
+                    }}
                   />
                 </div>
                 <div className="conversation-message flex h-[30px] items-center gap-2 px-2 text-list text-fg-muted">

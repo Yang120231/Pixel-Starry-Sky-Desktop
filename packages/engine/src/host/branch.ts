@@ -146,6 +146,7 @@ export class HostBranch {
       return {
         text: options.conversation ? target.text : '',
         ...(options.conversation && target.attachments?.length ? { attachments: target.attachments } : {}),
+        ...(options.conversation && target.files?.length ? { files: target.files } : {}),
         ...(files ? { filesRestored: files.length } : {}),
         undoable: !options.code || files !== null,
       }
@@ -301,6 +302,7 @@ export class HostBranch {
       record,
       text: target.text,
       ...(target.attachments?.length ? { attachments: target.attachments } : {}),
+      ...(target.files?.length ? { files: target.files } : {}),
     }
   }
 

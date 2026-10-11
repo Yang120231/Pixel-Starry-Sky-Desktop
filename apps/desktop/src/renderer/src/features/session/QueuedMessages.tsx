@@ -7,6 +7,7 @@ import type { QueuedMessage } from '@pixelsky/protocol'
 import { Button, IconButton, Spinner, cn } from '@/ui'
 import { effortLabel, type ComposerController } from '@/features/engine'
 import { ImageAttachments } from '@/features/session/attachments/ImageAttachments'
+import { FileAttachments } from '@/features/session/attachments/FileAttachments'
 import { isSendFailure, isStarting } from './queueView'
 import { useProviders } from '@/features/account/providers'
 
@@ -216,6 +217,11 @@ export function QueuedMessages({
             {!!q.attachments?.length && (
               <div className="mt-2">
                 <ImageAttachments images={q.attachments} />
+              </div>
+            )}
+            {!!q.files?.length && (
+              <div className="mt-2">
+                <FileAttachments files={q.files} />
               </div>
             )}
             {(q.text.length > 60 || q.text.includes('\n')) && (

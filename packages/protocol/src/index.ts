@@ -20,6 +20,7 @@ export type {
   EngineStatus,
   EngineUpdateResult,
   FileChange,
+  FileAttachment,
   HostEvent,
   ImageAttachment,
   Item,
@@ -81,6 +82,19 @@ export {
   imageMediaType,
   validateImages,
 } from './images'
+export {
+  FILE_ENCODINGS,
+  FILE_HEAD_BYTES,
+  FILE_INLINE_BYTES,
+  FILE_TAIL_BYTES,
+  MAX_FILE_BYTES,
+  MAX_FILE_COUNT,
+  MAX_FILE_TEXT_TOTAL,
+  fileAttachmentBlock,
+  fileShownLines,
+  messageWithFiles,
+  validateFiles,
+} from './files'
 export type { ContextDetail, ContextDetailLevel, ContextDiagnostic, ContextPart, ContextWindow } from './context'
 export { contextCount, contextDiagnostic } from './context'
 export type {

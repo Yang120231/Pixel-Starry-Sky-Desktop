@@ -40,6 +40,7 @@ import { freshRequest, useExpandRequest } from '@/features/search/expand'
 import { openFile } from '@/features/files/store'
 import { getActiveWorkspace } from '@/features/editor/target'
 import { ImageAttachments } from '@/features/session/attachments/ImageAttachments'
+import { FileAttachments } from '@/features/session/attachments/FileAttachments'
 import { Markdown } from '@/ui/markdown/Markdown'
 import { formatDuration } from './agentTrace'
 
@@ -58,6 +59,11 @@ export function UserBubble({ item, actions }: { item: ItemOf<'user'>; actions?: 
             <ImageAttachments images={item.attachments} />
           </div>
         )}
+        {!!item.files?.length && (
+          <div className="mt-2 whitespace-normal">
+            <FileAttachments files={item.files} />
+          </div>
+        )}
       </div>
     )
   return (
@@ -67,6 +73,11 @@ export function UserBubble({ item, actions }: { item: ItemOf<'user'>; actions?: 
         {!!item.attachments?.length && (
           <div className="mb-2">
             <ImageAttachments images={item.attachments} />
+          </div>
+        )}
+        {!!item.files?.length && (
+          <div className="mb-2 whitespace-normal">
+            <FileAttachments files={item.files} />
           </div>
         )}
         <UserBody id={item.id} text={item.text} />

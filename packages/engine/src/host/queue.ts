@@ -2,6 +2,7 @@
 import { randomUUID } from 'node:crypto'
 import { statSync } from 'node:fs'
 import type { MessageInput, QueuedMessage, QueueSummary, SendReceipt } from '@pixelsky/protocol'
+import { messageWithFiles } from '@pixelsky/protocol'
 import { messageInput, queueSettings, sameQueueSettings } from '../queue'
 import { ENGINES } from '../registry'
 import type { HostContext } from './context'
@@ -50,6 +51,7 @@ export class HostQueue {
       id: v.clientMessageId,
       text: v.text,
       attachments: v.attachments,
+      ...(v.files ? { files: v.files } : {}),
       settings: v.settings,
       createdAt: Date.now(),
       status: 'queued',
@@ -179,7 +181,7 @@ export class HostQueue {
       throw new Error('设置与当前任务不同，可等待或插队')
     this.changeQueue(id, queueId, { status: 'delivering', mode: 'guidance' })
     try {
-      await rt.session.steer(item.text, item.id, item.attachments)
+      await rt.session.steer(messageWithFiles(item.text, item.files), item.id, item.attachments)
     } catch (err) {
       this.changeQueue(id, queueId, { status: 'uncertain', error: `引导交付结果待核对：${(err as Error).message}` })
       rt.snapshot = { ...rt.snapshot, queuePaused: true }

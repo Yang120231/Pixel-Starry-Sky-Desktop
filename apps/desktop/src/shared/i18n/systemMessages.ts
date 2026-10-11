@@ -1,7 +1,7 @@
 // 宿主错误及原生窗口文案；CLI 原始输出和用户内容保持原文。
 export const systemMessages = {
   "composer.attachment.closePreview": { "zh": "关闭图片预览", "en": "Close image preview" },
-  "composer.attachment.loading": { "zh": "正在读取图片…", "en": "Reading images…" },
+  "composer.attachment.loading": { "zh": "正在读取附件…", "en": "Reading attachments…" },
   "composer.attachment.saveError": { "zh": "图片草稿保存失败，当前图片仍保留，请重试", "en": "Could not save the image draft. Your images are preserved; please retry" },
   "composer.attachment.restoreError": { "zh": "图片草稿读取失败，请重新打开或添加图片", "en": "Could not restore image drafts. Reopen the conversation or add images again" },
   "composer.attachment.invalid": { "zh": "图片附件格式不正确", "en": "Invalid image attachment format" },

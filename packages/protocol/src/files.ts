@@ -1,0 +1,106 @@
+// 输入框里的文本文件附件（日志、文本、代码、配置等，docs/ui/composer-file-attachments.md）：
+// 读成文字后跟消息一起发给引擎；太大的只带开头和结尾。
+import type { FileAttachment } from './types'
+
+export const FILE_ENCODINGS = ['utf-8', 'utf-16le', 'utf-16be', 'gb18030'] as const
+/** 能添加的原文件大小上限：再大的只读开头和结尾也意义不大，而且数行数要读完整个文件 */
+export const MAX_FILE_BYTES = 50 * 1024 * 1024
+/** 不超过这么大的整个发 */
+export const FILE_INLINE_BYTES = 100 * 1024
+/** 更大的只带开头这么多、结尾这么多（日志最新的部分在结尾） */
+export const FILE_HEAD_BYTES = 10 * 1024
+export const FILE_TAIL_BYTES = 90 * 1024
+export const MAX_FILE_COUNT = 10
+/** 一条消息里所有文件带上的文字合计（字符） */
+export const MAX_FILE_TEXT_TOTAL = 300 * 1024
+/** 一个文件带上的文字（字符）：解码后的字符数不会超过读的字节数 */
+const MAX_FILE_TEXT = FILE_INLINE_BYTES
+
+/** 共用校验：草稿恢复、IPC 入队和重启后读队列时再检查一次 */
+export function validateFiles(value: unknown): FileAttachment[] {
+  if (value === undefined) return []
+  if (!Array.isArray(value)) throw new Error('文件附件格式不正确')
+  if (value.length > MAX_FILE_COUNT) throw new Error('一条消息最多添加 10 个文件')
+  let total = 0
+  const ids = new Set<string>()
+  return value.map(raw => {
+    if (!raw || typeof raw !== 'object') throw new Error('文件附件格式不正确')
+    const file = raw as FileAttachment
+    const truncated = file.tail !== undefined || file.omitted !== undefined
+    if (
+      typeof file.id !== 'string' ||
+      !/^[A-Za-z0-9_-]{1,128}$/.test(file.id) ||
+      ids.has(file.id) ||
+      typeof file.name !== 'string' ||
+      !file.name ||
+      file.name.length > 512 ||
+      !FILE_ENCODINGS.includes(file.encoding) ||
+      !Number.isInteger(file.bytes) ||
+      file.bytes < 0 ||
+      file.bytes > MAX_FILE_BYTES ||
+      !Number.isInteger(file.lines) ||
+      file.lines < 0 ||
+      typeof file.text !== 'string' ||
+      file.text.length > MAX_FILE_TEXT ||
+      (truncated &&
+        (typeof file.tail !== 'string' ||
+          file.tail.length > MAX_FILE_TEXT ||
+          !Number.isInteger(file.omitted) ||
+          file.omitted! < 0 ||
+          file.omitted! > file.lines))
+    )
+      throw new Error('文件附件格式不正确')
+    total += file.text.length + (file.tail?.length ?? 0)
+    if (total > MAX_FILE_TEXT_TOTAL) throw new Error('文件内容合计不能超过 300 KB，请移除一些文件')
+    ids.add(file.id)
+    return {
+      id: file.id,
+      name: file.name,
+      bytes: file.bytes,
+      lines: file.lines,
+      encoding: file.encoding,
+      text: file.text,
+      ...(truncated ? { tail: file.tail, omitted: file.omitted } : {}),
+    }
+  })
+}
+
+/** 开头、结尾各有几行（截断时开头以换行结束，结尾从一行的开头起） */
+export function fileShownLines(file: FileAttachment): { head: number; tail: number } {
+  const count = (text: string): number => {
+    let n = 0
+    for (let i = text.indexOf('\n'); i >= 0; i = text.indexOf('\n', i + 1)) n++
+    return n
+  }
+  if (file.tail === undefined) return { head: file.lines, tail: 0 }
+  return { head: count(file.text), tail: file.lines - count(file.text) - (file.omitted ?? 0) }
+}
+
+const attr = (value: string): string =>
+  value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+/** 正文里出现结束标记时改写，免得被当成文件结束 */
+const body = (text: string): string => text.replace(/<\/attached_file/gi, '<\\/attached_file')
+
+/** 发给引擎的样子：每个文件一段 <attached_file>，截断时标出带了哪几行、中间省略了多少 */
+export function fileAttachmentBlock(file: FileAttachment): string {
+  const size =
+    file.bytes >= 1024 * 1024 ? `${(file.bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.ceil(file.bytes / 1024)} KB`
+  const head = `<attached_file name="${attr(file.name)}" size="${size}" lines="${file.lines}"`
+  if (file.tail === undefined)
+    return `${head}>\n${body(file.text)}${file.text.endsWith('\n') ? '' : '\n'}</attached_file>`
+  const shown = fileShownLines(file)
+  const from = file.lines - shown.tail + 1
+  return (
+    `${head} shown="1-${shown.head}, ${from}-${file.lines}">\n` +
+    body(file.text) +
+    `[... ${file.omitted} lines omitted (${shown.head + 1}-${from - 1}) ...]\n` +
+    body(file.tail ?? '') +
+    `${file.tail?.endsWith('\n') ? '' : '\n'}</attached_file>`
+  )
+}
+
+/** 消息正文加上文件：先是用户写的话（开头的 /命令、$技能 照常生效），后面接各个文件 */
+export function messageWithFiles(text: string, files: FileAttachment[] | undefined): string {
+  if (!files?.length) return text
+  return [text.trim(), ...files.map(fileAttachmentBlock)].filter(Boolean).join('\n\n')
+}

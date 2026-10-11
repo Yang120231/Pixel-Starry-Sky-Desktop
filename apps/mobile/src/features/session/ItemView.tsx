@@ -8,6 +8,7 @@ import {
   ChevronRight,
   CircleAlert,
   FileDiff,
+  FileText,
   Image as ImageIcon,
   Info,
   ListTodo,
@@ -60,12 +61,20 @@ export function TurnBlock({ turn, running, waiting, truncated, onDetail }: Props
 function UserBubble({ item, more }: { item: Extract<Item, { kind: 'user' }>; more: ReactNode }) {
   return (
     <div className="flex flex-col items-end pl-10">
-      <div className="rounded-2xl rounded-br-md bg-subtle px-3.5 py-2.5 text-prose break-words whitespace-pre-wrap text-fg">
-        {item.text}
-      </div>
+      {(item.text || !item.files?.length) && (
+        <div className="rounded-2xl rounded-br-md bg-subtle px-3.5 py-2.5 text-prose break-words whitespace-pre-wrap text-fg">
+          {item.text}
+        </div>
+      )}
       {!!item.attachments?.length && (
         <span className="mt-1 flex items-center gap-1 text-meta text-fg-muted">
           <ImageIcon size={14} /> {item.attachments.length} 张图片
+        </span>
+      )}
+      {!!item.files?.length && (
+        <span className="mt-1 flex max-w-full items-center gap-1 text-meta text-fg-muted">
+          <FileText size={14} className="shrink-0" />
+          <span className="truncate">{item.files.map(f => f.name).join('、')}</span>
         </span>
       )}
       {more}

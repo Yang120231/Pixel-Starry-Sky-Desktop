@@ -2,7 +2,14 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { EngineEvent, EngineInfo, ImageAttachment, SessionRecord, SessionSettings } from '@pixelsky/protocol'
+import type {
+  EngineEvent,
+  EngineInfo,
+  FileAttachment,
+  ImageAttachment,
+  SessionRecord,
+  SessionSettings,
+} from '@pixelsky/protocol'
 import type { EngineAdapter, EngineSession, SessionContext } from '../src/adapter'
 import { EngineHost, type EngineHostOptions } from '../src/host'
 import { ENGINES } from '../src/registry'
@@ -110,6 +117,31 @@ describe('消息队列：调度与恢复', () => {
     expect(resumed.open(record.id).items.find(i => i.kind === 'user')).toMatchObject({ attachments: [image] })
     expect(resumed.cancelQueued(record.id, 'image-only')).toBe('')
     expect(resumed.open(record.id).queue).toEqual([])
+  })
+  it('文本文件：接在消息后面发给引擎，对话和队列里单独保留，重启恢复不丢', async () => {
+    const { host, adapter, record } = setup()
+    const file: FileAttachment = {
+      id: 'file-1',
+      name: 'app.log',
+      bytes: 12,
+      lines: 1,
+      encoding: 'utf-8',
+      text: 'ERROR boom\n',
+    }
+    await host.send(record.id, { text: '', clientMessageId: 'file-only', files: [file] })
+    await until(() => !!adapter.sessions[0]?.active)
+    expect(adapter.sessions[0].inputs[0].text).toBe(
+      '<attached_file name="app.log" size="1 KB" lines="1">\nERROR boom\n</attached_file>',
+    )
+    const user = host.open(record.id).items.find(i => i.kind === 'user')
+    expect(user).toMatchObject({ text: '', files: [file] })
+    expect(host.open(record.id).record.title).toBe('app.log')
+    adapter.sessions[0].finish('failed')
+    await host.shutdown()
+    const resumed = new EngineHost({ dataDir: join(root, 'data'), adapters: { claude: adapter }, emit() {} })
+    hosts.push(resumed)
+    expect(resumed.open(record.id).queue[0]).toMatchObject({ files: [file], status: 'failed' })
+    expect(resumed.open(record.id).items.find(i => i.kind === 'user')).toMatchObject({ files: [file] })
   })
   it('并发入队与重复请求只有一个首轮，之后依次执行，每条只出现一次', async () => {
     const { host, adapter, record, send } = setup()

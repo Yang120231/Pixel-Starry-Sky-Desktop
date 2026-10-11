@@ -47,10 +47,30 @@ export interface ImageAttachment {
   dataBase64: string
 }
 
+/**
+ * 用户添加的文本文件（日志、文本、代码、配置，docs/ui/composer-file-attachments.md）：已解码成文字。
+ * 不超过 100 KB 的整个带上；更大的 text 是开头（以换行结束），tail 是结尾，omitted 是中间省略的行数。
+ * 发给引擎时接在消息后面（messageWithFiles），对话里显示成文件卡片。
+ */
+export interface FileAttachment {
+  id: string
+  name: string
+  /** 原文件大小 */
+  bytes: number
+  /** 原文件行数 */
+  lines: number
+  /** 原文件的编码（都已转成文字） */
+  encoding: 'utf-8' | 'utf-16le' | 'utf-16be' | 'gb18030'
+  text: string
+  tail?: string
+  omitted?: number
+}
+
 export interface MessageInput {
   text: string
   clientMessageId: string
   attachments?: ImageAttachment[]
+  files?: FileAttachment[]
   settings?: QueueSettings
 }
 
@@ -60,6 +80,7 @@ export interface QueuedMessage {
   id: string
   text: string
   attachments?: ImageAttachment[]
+  files?: FileAttachment[]
   createdAt: number
   settings: QueueSettings
   status: QueueStatus
@@ -135,6 +156,7 @@ export interface RewindPreview {
 export interface RewindResult {
   text: string
   attachments?: ImageAttachment[]
+  files?: FileAttachment[]
   /** 还原了几个文件；没动代码时省略 */
   filesRestored?: number
   /** 发新消息或重启前可以撤销 */
@@ -146,6 +168,7 @@ export interface ForkResult {
   record: SessionRecord
   text: string
   attachments?: ImageAttachment[]
+  files?: FileAttachment[]
 }
 
 /** 旁聊里之前的一问一答 */

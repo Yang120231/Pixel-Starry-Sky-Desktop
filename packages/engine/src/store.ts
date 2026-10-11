@@ -202,7 +202,13 @@ export class Store {
     const items = raw.items.flatMap(item => {
       try {
         const input = messageInput(
-          { text: item.text, clientMessageId: item.id, attachments: item.attachments, settings: item.settings },
+          {
+            text: item.text,
+            clientMessageId: item.id,
+            attachments: item.attachments,
+            files: item.files,
+            settings: item.settings,
+          },
           record,
           () => item.id,
         )
@@ -212,6 +218,7 @@ export class Store {
             ...item,
             id: input.clientMessageId,
             text: input.text,
+            files: input.files,
             settings: input.settings,
             status: settled ? item.status : ('uncertain' as const),
             mode: item.mode === 'guidance' ? ('guidance' as const) : ('normal' as const),
