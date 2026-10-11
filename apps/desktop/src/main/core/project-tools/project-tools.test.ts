@@ -169,7 +169,8 @@ describe('local services', () => {
     const service = await services.save({ projectId: 'p' }, { name: 'test', command: 'node service.cjs' })
     const started = await services.start(service.id)
     expect(started.status).toBe('running')
-    const until = Date.now() + 6000
+    // GitHub 的 Windows 机器上启动 node 偶尔要好几秒（0.1.5-beta 发版时 6 秒内还没退出），多等一会儿
+    const until = Date.now() + 20_000
     while (services.get(service.id).status === 'running' && Date.now() < until)
       await new Promise(r => setTimeout(r, 50))
     expect(services.get(service.id)).toMatchObject({ status: 'stopped', exitCode: 0, pid: null })
@@ -179,5 +180,5 @@ describe('local services', () => {
     managers.push(restored)
     await restored.init()
     expect(restored.list({ projectId: 'p' })[0]).toMatchObject({ name: 'test', status: 'stopped' })
-  })
+  }, 30_000)
 })
