@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { HostEvent, SessionRecord } from '@pixelsky/protocol'
-import { ClaudeAdapter, EngineHost, type EngineHostOptions } from '../src'
+import { ClaudeAdapter, EngineHost, LONG_CONTEXT_ENV, type EngineHostOptions } from '../src'
 
 const FAKE = fileURLToPath(new URL('./fakes/fake-claude.mjs', import.meta.url))
 
@@ -504,6 +504,32 @@ describe('EngineHost + Claude（假引擎）', () => {
     await plat.send(b.id, '你好')
     await waitFor(() => turnsDone(b.id) === 1)
     expect(JSON.parse(readFileSync(envLog, 'utf8')).base).toBe('http://127.0.0.1:1234')
+  })
+
+  it('上下文超过 200K 的自定义模型：启动、换模型时模型名带 [1m]，没在名单里的不带（docs/ui/custom-api.md §10）', async () => {
+    const settingsFile = join(root, 'gateway.json')
+    writeFileSync(settingsFile, '{}')
+    const modelLog = join(root, 'models.log')
+    const host = makeHost(60_000, { FAKE_CLAUDE_MODEL_LOG: modelLog }, () => ({
+      ANTHROPIC_AUTH_TOKEN: 'loopback-only',
+      ANTHROPIC_BASE_URL: 'http://127.0.0.1:1234',
+      PIXELSKY_GATEWAY_SETTINGS: settingsFile,
+      [LONG_CONTEXT_ENV]: JSON.stringify(['anthropic/claude-v4.1flash']),
+    }))
+    const { record } = setup(host)
+    await host.update(record.id, { provider: { id: 'p1' }, model: 'anthropic/claude-v4.1flash' })
+    await host.send(record.id, '你好')
+    await waitFor(() => turnsDone(record.id) === 1)
+    const args = spawnArgs()[0]
+    expect(args[args.indexOf('--model') + 1]).toBe('anthropic/claude-v4.1flash[1m]')
+    expect(host.record(record.id)?.model).toBe('anthropic/claude-v4.1flash')
+    await host.update(record.id, { model: 'deepseek-chat' })
+    await host.update(record.id, { model: 'anthropic/claude-v4.1flash' })
+    await waitFor(() => readFileSync(modelLog, 'utf8').trim().split('\n').length === 2)
+    expect(readFileSync(modelLog, 'utf8').trim().split('\n')).toEqual([
+      'deepseek-chat',
+      'anthropic/claude-v4.1flash[1m]',
+    ])
   })
 
   it('自定义 API 会话走本机网关：进程里只有本机地址和会话密钥；同一接口换模型不重启，平台 ↔ 自定义切换后 --resume', async () => {

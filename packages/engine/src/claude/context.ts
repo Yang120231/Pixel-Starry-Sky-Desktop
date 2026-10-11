@@ -33,17 +33,22 @@ export class ContextReader {
   private value = empty()
   private message = ''
   private capacities = new Map<string, number>()
+  /** get_context_usage 报的窗口：Claude Code 实际按它算（自定义模型的配置值）；比 result 里的优先，
+   * 带 [1m] 的自定义模型 result 一律报 1M（docs/ui/custom-api.md §10） */
+  private diagnosed = new Map<string, number>()
   private seen = new Set<string>()
   constructor(private emit: (event: EngineEvent) => void) {}
   /** 最近一次知道的上下文占用（压缩开始时拿来当「压缩前」） */
   get used(): number | null {
     return this.value.used
   }
-  /** 容量：先用 Claude Code 报的（每轮 result 才有），再按去掉后缀的名字对，都没有用官方价格表里的上下文长度 */
+  /** 容量：先用 get_context_usage 报的，再用 result 报的，各自再按去掉后缀的名字对，都没有用官方价格表里的上下文长度 */
   private capacity(model: string): number | null {
-    const exact = this.capacities.get(model)
-    if (exact !== undefined) return exact
-    for (const [name, window] of this.capacities) if (bare(name) === bare(model)) return window
+    for (const known of [this.diagnosed, this.capacities]) {
+      const exact = known.get(model)
+      if (exact !== undefined) return exact
+      for (const [name, window] of known) if (bare(name) === bare(model)) return window
+    }
     return officialPrice(model)?.contextWindow ?? null
   }
   private publish(): void {
@@ -52,7 +57,10 @@ export class ContextReader {
   reset(compacting = false, forgetWindow = false): void {
     this.message = ''
     this.seen.clear()
-    if (forgetWindow) this.capacities.clear()
+    if (forgetWindow) {
+      this.capacities.clear()
+      this.diagnosed.clear()
+    }
     this.value = {
       ...this.value,
       ...(forgetWindow ? { window: null } : {}),
@@ -68,7 +76,7 @@ export class ContextReader {
     if (!parsed) return null
     const diagnostic = detail ? { ...parsed, detail } : parsed
     if (this.value.compacting) return diagnostic
-    this.capacities.set(diagnostic.model, diagnostic.window)
+    this.diagnosed.set(diagnostic.model, diagnostic.window)
     // 快速估算只补分类：已有最近请求的真实计数时，占用仍按请求口径（和 Claude Code 状态栏一致）
     if (detail === 'summary' && this.value.source === 'request' && this.value.used !== null && !this.value.stale) {
       this.value = { ...this.value, window: diagnostic.window, diagnostic, diagnosticStale: false }

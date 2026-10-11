@@ -24,6 +24,7 @@ import { ClaudeProcess } from './process'
 import { ClaudeSession, reservedClaudeArg, type ClaudeLaunchOptions } from './session'
 import { loadSavedRuns, loadSubagentTranscript } from './runs'
 import { claudeSessionDir, defaultProjectsDir, findClaudeTranscript, findRewindAnchor } from './transcript'
+import { claudeModelName } from './long-context'
 
 export interface ClaudeAdapterOptions {
   sessionEnv?: (record: SessionRecord) => NodeJS.ProcessEnv
@@ -255,7 +256,7 @@ export class ClaudeAdapter implements EngineAdapter {
   /** 旁聊：带着这个会话的上下文单独问一次，没有工具、不写记录（docs/ui/rewind-fork-sidechat.md §3） */
   async sideQuestion(record: SessionRecord, prompt: string, signal: AbortSignal): Promise<string> {
     const target = this.helperTarget(record)
-    return sideQuestionOnce(target, prompt, record.model, signal)
+    return sideQuestionOnce(target, prompt, record.model && claudeModelName(record.model, target.env), signal)
   }
 
   /**

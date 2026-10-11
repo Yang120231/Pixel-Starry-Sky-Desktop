@@ -13,6 +13,16 @@ export const MODEL_SETTINGS_ENV = 'PIXELSKY_GATEWAY_MODEL_SETTINGS'
 
 export type ModelSettings = Record<string, { autoCompactWindow: number }>
 
+/** Claude Code 对不认识的模型名最多按这么大算；超过的要带 [1m] 启动才放得开（§10） */
+export const UNKNOWN_MODEL_WINDOW = 200_000
+
+/** 上下文长度超过 200K 的模型：以 [1m] 启动，窗口再由 modelSettings 收到配置值（§10） */
+export function longContextModels(models: readonly ProviderModel[]): string[] {
+  return models
+    .filter(m => typeof m.contextWindow === 'number' && m.contextWindow > UNKNOWN_MODEL_WINDOW)
+    .map(m => m.id)
+}
+
 /** 填了上下文长度的模型；都没填时为 null */
 export function compactWindows(models: readonly ProviderModel[]): ModelSettings | null {
   const out: ModelSettings = {}

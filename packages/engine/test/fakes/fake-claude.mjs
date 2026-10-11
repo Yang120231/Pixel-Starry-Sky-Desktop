@@ -12,6 +12,7 @@
 //   其他       → 回复「收到：<消息>」
 // 环境变量：
 //   FAKE_CLAUDE_LOG       每次启动把命令行参数追加到这个文件（一行一个 JSON 数组）
+//   FAKE_CLAUDE_MODEL_LOG 收到 set_model 时把模型名追加到这个文件（一行一个）
 //   FAKE_CLAUDE_PROJECTS  收到消息时在这里创建会话记录文件（模拟 ~/.claude/projects）
 //   FAKE_CLAUDE_REWIND    rewind_files 的模拟：JSON { file, content }，预览时报这个文件，还原时写入 content；
 //                         user_message_id 以 nocp 开头时报没有检查点
@@ -705,6 +706,10 @@ function handle(msg) {
         )
         return
       }
+      case 'set_model':
+        if (process.env.FAKE_CLAUDE_MODEL_LOG) appendFileSync(process.env.FAKE_CLAUDE_MODEL_LOG, r.model + '\n')
+        respond(msg.request_id, {})
+        return
       default:
         respond(msg.request_id, {})
         return

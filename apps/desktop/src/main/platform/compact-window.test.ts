@@ -1,6 +1,6 @@
 // 自定义 API 的上下文长度 → Claude Code 的自动压缩窗口（docs/ui/custom-api.md §9）
 import { describe, expect, it } from 'vitest'
-import { MODEL_SETTINGS_ENV, compactWindows, gatewaySettings } from './compact-window'
+import { MODEL_SETTINGS_ENV, compactWindows, gatewaySettings, longContextModels } from './compact-window'
 
 describe('自定义 API 的自动压缩窗口', () => {
   it('只给填了上下文长度的模型；夹到 Claude Code 接受的 100K–1M', () => {
@@ -33,5 +33,16 @@ describe('自定义 API 的自动压缩窗口', () => {
     expect(gatewaySettings({ ANTHROPIC_MODEL: 'm', [MODEL_SETTINGS_ENV]: 'oops' })).toEqual({
       env: { ANTHROPIC_MODEL: 'm' },
     })
+  })
+
+  it('超过 200K 的模型要带 [1m] 启动；200K 及以下、没填的不用（§10）', () => {
+    expect(
+      longContextModels([
+        { id: 'big', contextWindow: 272_000 },
+        { id: 'exact', contextWindow: 200_000 },
+        { id: 'small', contextWindow: 128_000 },
+        { id: 'plain' },
+      ]),
+    ).toEqual(['big'])
   })
 })

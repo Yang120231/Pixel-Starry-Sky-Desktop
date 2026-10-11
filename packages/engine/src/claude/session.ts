@@ -22,6 +22,7 @@ import { alwaysPermissions, approvalFor } from './tools'
 import { claudeSessionDir, claudeTranscriptExists } from './transcript'
 import { ClaudeTranslator } from './translate'
 import { obj, str } from './shape'
+import { claudeModelName } from './long-context'
 
 type Msg = Record<string, unknown>
 
@@ -412,7 +413,9 @@ export class ClaudeSession implements EngineSession {
     const rec = this.ctx.record()
     // 新进程的 modelUsage 从零开始累计，算每轮用量的基线也要清零（docs/ui/usage.md §6.1）
     this.translator.resetUsageBaseline()
-    const args = claudeArgs(rec, sid, resume, this.deps.launch, rewindAt, fork)
+    // 上下文超过 200K 的自定义模型带 [1m] 启动（docs/ui/custom-api.md §10）
+    const model = rec.model ? claudeModelName(rec.model, this.deps.env) : rec.model
+    const args = claudeArgs({ ...rec, model }, sid, resume, this.deps.launch, rewindAt, fork)
     for (const path of this.deps.extensions?.pluginDirs ?? []) args.push('--plugin-dir', path)
     if (this.deps.extensions?.mcpFile) args.push('--mcp-config', this.deps.extensions.mcpFile)
     if (this.retrySettingsFile) {
@@ -670,7 +673,10 @@ export class ClaudeSession implements EngineSession {
     if (!proc?.alive) return // 下次启动时按新设置启动
     if ('model' in patch || 'platform' in patch) this.translator.context.reset(false, true)
     try {
-      if ('model' in patch) await proc.request('set_model', { model: patch.model ?? 'default' })
+      if ('model' in patch)
+        await proc.request('set_model', {
+          model: patch.model ? claudeModelName(patch.model, this.deps.env) : 'default',
+        })
       if (patch.effort) await proc.request('apply_flag_settings', { settings: { effortLevel: patch.effort } })
       if (patch.permissionMode)
         await proc.request('set_permission_mode', { mode: TO_CLAUDE_MODE[patch.permissionMode] })

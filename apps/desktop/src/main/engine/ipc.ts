@@ -60,7 +60,10 @@ export async function initEngine(ctx: AppContext): Promise<void> {
     sessionEnv,
     validateInput: record => validateQueuedInput(record, ctx.providers),
     priceRef: (record, model) =>
-      record.provider ? ctx.providers?.get(record.provider.id)?.models.find(m => m.id === model)?.priceRef : null,
+      // 上下文超过 200K 的自定义模型在 Claude Code 里叫「模型名[1m]」（docs/ui/custom-api.md §10）
+      record.provider
+        ? ctx.providers?.get(record.provider.id)?.models.find(m => m.id === model.replace(/\[1m\]$/i, ''))?.priceRef
+        : null,
     extensions: record => extensions.prepare(record),
     platformCharges,
     latestVersion: npmLatest,

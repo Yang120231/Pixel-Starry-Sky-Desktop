@@ -1,12 +1,12 @@
 import { randomBytes } from 'node:crypto'
 import { platformGateway } from './gateway'
-import { compactWindows } from './compact-window'
+import { compactWindows, longContextModels } from './compact-window'
 import { once } from 'node:events'
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
 import type { SessionRecord } from '@pixelsky/protocol'
-import { CLAUDE_COMPACT_MARKER, rewriteCompaction } from '@pixelsky/engine'
+import { CLAUDE_COMPACT_MARKER, LONG_CONTEXT_ENV, claudeModelName, rewriteCompaction } from '@pixelsky/engine'
 import type { PlatformGroupInfo } from '../../shared/types/platform-catalog'
 import { platformFetch, signedInEmail } from '../account/account'
 import * as ipc from '../ipc/guard'
@@ -158,8 +158,11 @@ export async function initPlatform(
     // 免得它去请求接口里没有的官方模型名（网关另有兜底，docs/ui/custom-api.md §4.1）
     const ids = provider?.models.map(m => m.id) ?? []
     if (provider && ids.length) {
-      const main = record.model && ids.includes(record.model) ? record.model : ids[0]
-      const small = provider.smallModel ?? ids[0]
+      // 上下文超过 200K 的模型带 [1m]，不然 Claude Code 最多按 200K 算（docs/ui/custom-api.md §10）
+      const long = longContextModels(provider.models)
+      if (long.length) env[LONG_CONTEXT_ENV] = JSON.stringify(long)
+      const main = claudeModelName(record.model && ids.includes(record.model) ? record.model : ids[0], env)
+      const small = claudeModelName(provider.smallModel ?? ids[0], env)
       Object.assign(env, {
         ANTHROPIC_MODEL: main,
         ANTHROPIC_DEFAULT_OPUS_MODEL: main,
