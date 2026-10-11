@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { platformGateway } from './gateway'
+import { compactWindows } from './compact-window'
 import { once } from 'node:events'
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -172,7 +173,9 @@ export async function initPlatform(
     const dir = join(app.getPath('userData'), 'gateway')
     mkdirSync(dir, { recursive: true })
     const file = join(dir, `${randomBytes(12).toString('hex')}.json`)
-    writeFileSync(file, JSON.stringify({ env }), { mode: 0o600 })
+    // 填了上下文长度的模型按它自动压缩（docs/ui/custom-api.md §9）
+    const modelSettings = provider ? compactWindows(provider.models) : null
+    writeFileSync(file, JSON.stringify(modelSettings ? { env, modelSettings } : { env }), { mode: 0o600 })
     settingsFiles.add(file)
     return { ...env, PIXELSKY_GATEWAY_SETTINGS: file }
   }

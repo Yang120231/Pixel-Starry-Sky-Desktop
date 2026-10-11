@@ -167,7 +167,7 @@ function ContextWindowInput({
     <input
       aria-label={tr('customApi.contextWindow')}
       aria-invalid={invalid}
-      title={invalid ? tr('customApi.contextWindowHint') : tr('customApi.contextWindow')}
+      title={invalid ? tr('customApi.contextWindowHint') : tr('customApi.contextWindowTip')}
       placeholder={tr('customApi.contextWindowPlaceholder')}
       value={draft}
       onFocus={() => {

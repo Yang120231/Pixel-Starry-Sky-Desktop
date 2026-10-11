@@ -9,7 +9,8 @@ import type { MachineInfo, MachineInput, MachineState } from '../../shared/types
 import type { WorkspaceRef, WorkspaceTarget } from '../../shared/types/workspace'
 import * as ipc from '../ipc/guard'
 import { platformCharges } from '../platform/billing'
-import { validateQueuedInput } from '../platform/platform'
+import { checkProvider, validateQueuedInput } from '../platform/platform'
+import { MODEL_SETTINGS_ENV, compactWindows } from '../platform/compact-window'
 import type { AppContext } from '../app/context'
 import type { ProviderStore } from '../core/providers/store'
 import type { EventBus, PushChannel } from '../app/events'
@@ -272,6 +273,10 @@ export class Machines {
             await validateQueuedInput(record, this.providers())
             state.executions.set(record.id, record)
             const env = this.environment(record)
+            // 网关设置文件在远端写：自定义接口按模型的压缩窗口借环境变量带过去（docs/ui/custom-api.md §9）
+            const provider = record.engine === 'claude' ? checkProvider(record, this.providers()) : null
+            const windows = provider ? compactWindows(provider.models) : null
+            if (windows) env[MODEL_SETTINGS_ENV] = JSON.stringify(windows)
             for (const key of ['ANTHROPIC_BASE_URL', 'PIXELSKY_CODEX_BASE_URL'])
               if (env[key]) {
                 const url = new URL(env[key]!),

@@ -13,6 +13,7 @@ import { moveToTrash } from '../core/project-tools/trash'
 import { SearchRegistry } from '../core/search-registry'
 import { bindOps } from '../core/ops'
 import { value } from '../core/args'
+import { gatewaySettings } from '../platform/compact-window'
 import type { WorkspaceRef } from '../../shared/types/workspace'
 import type { RpcPeer } from './rpc'
 
@@ -34,13 +35,14 @@ export async function createRemoteRuntime(
       environments.delete(record.id)
       return
     }
-    const env = await peer.call<NodeJS.ProcessEnv>('platform:environment', [record])
+    let env = await peer.call<NodeJS.ProcessEnv>('platform:environment', [record])
     if (record.engine === 'claude') {
       const file = join(dataDir, 'gateway', record.id + '.json')
       delete env.PIXELSKY_GATEWAY_SETTINGS
+      const settings = gatewaySettings(env)
       await mkdir(dirname(file), { recursive: true, mode: 0o700 })
-      await writeFile(file, JSON.stringify({ env }), { mode: 0o600 })
-      env.PIXELSKY_GATEWAY_SETTINGS = file
+      await writeFile(file, JSON.stringify(settings), { mode: 0o600 })
+      env = { ...settings.env, PIXELSKY_GATEWAY_SETTINGS: file }
     }
     environments.set(record.id, env)
   }

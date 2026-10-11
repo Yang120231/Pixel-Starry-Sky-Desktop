@@ -59,6 +59,10 @@ export const customApiMessages = {
   'customApi.modelPlaceholder': { zh: '模型名，回车添加', en: 'Model name, press Enter to add' },
   'customApi.contextWindow': { zh: '上下文长度', en: 'Context window' },
   'customApi.contextWindowPlaceholder': { zh: '上下文长度，如 1M', en: 'Context, e.g. 1M' },
+  'customApi.contextWindowTip': {
+    zh: '上下文长度：Claude Code 按它提前自动压缩，不填按 200K 算',
+    en: 'Context window: Claude Code compacts ahead of it; 200K if empty',
+  },
   'customApi.contextWindowHint': {
     zh: '写数字或带单位，如 200000、200K、1M（1K 到 100M）',
     en: 'A number or with a unit, e.g. 200000, 200K, 1M (1K to 100M)',
