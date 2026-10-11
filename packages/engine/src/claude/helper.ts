@@ -4,7 +4,7 @@
 import { spawn } from 'node:child_process'
 import type { Launcher, RewindFilesReply } from '../adapter'
 export type { RewindFilesReply }
-import { IS_WINDOWS } from '../exec'
+import { IS_WINDOWS, killTree } from '../exec'
 import { ClaudeProcess } from './process'
 
 export interface HelperTarget {
@@ -93,21 +93,13 @@ export function sideQuestionOnce(
         env: target.env,
         stdio: ['pipe', 'pipe', 'pipe'],
         windowsHide: true,
+        detached: !IS_WINDOWS,
       },
     )
     let out = '',
       err = ''
     const kill = (): void => {
-      try {
-        if (IS_WINDOWS && child.pid)
-          spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }).on(
-            'error',
-            () => child.kill(),
-          )
-        else child.kill()
-      } catch {
-        // 已经退出
-      }
+      killTree(child)
     }
     const onAbort = (): void => {
       kill()

@@ -248,7 +248,7 @@ function UpdateGroup({ update }: { update: UpdateState }) {
     status === 'ready'
       ? tr('update.readyHint')
       : status === 'available'
-        ? tr('update.portableHint')
+        ? tr(update.channel === 'portable' ? 'update.portableHint' : 'update.manualHint')
         : status === 'downloading'
           ? tr('update.downloadingHint')
           : null

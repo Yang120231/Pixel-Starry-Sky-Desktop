@@ -1,5 +1,6 @@
 import { ChevronDown, Ellipsis, GitBranch, PanelLeft, PanelRight } from 'lucide-react'
-import { IconButton, useComingSoon } from '@/ui'
+import { cn, IconButton, useComingSoon } from '@/ui'
+import { isMac } from '@/features/layout/keybindings'
 import { TOGGLE_PANEL, TOGGLE_SIDEBAR, withShortcut } from '@/features/layout/shortcuts'
 import { useI18n } from '@/i18n/I18nProvider'
 import { useCommandPalette } from '@/features/commands/CommandPaletteProvider'
@@ -56,7 +57,11 @@ export function SessionHeader({
   const onNewTask = isLive ? () => paneActions.open(null) : undefined
   return (
     <header
-      className="session-header drag @container flex h-12 shrink-0 items-center gap-2 pl-4"
+      // macOS 侧边栏收起时左上角是红绿灯（index.ts 的 trafficLightPosition），让开
+      className={cn(
+        'session-header drag @container flex h-12 shrink-0 items-center gap-2',
+        isMac && !sidebarOpen ? 'pl-20' : 'pl-4',
+      )}
       style={{ paddingRight: 'calc(var(--titlebar-reserve) + 12px)' }}
     >
       {!sidebarOpen && (

@@ -33,7 +33,9 @@ export function UpdateNotice() {
           <X size={14} strokeWidth={1.5} />
         </button>
       </div>
-      <p className="mt-0.5 text-meta text-fg-muted">{tr(ready ? 'update.readyHint' : 'update.portableHint')}</p>
+      <p className="mt-0.5 text-meta text-fg-muted">
+        {tr(ready ? 'update.readyHint' : update.channel === 'portable' ? 'update.portableHint' : 'update.manualHint')}
+      </p>
       <Button
         variant="primary"
         icon={ready ? RotateCw : ArrowDownToLine}

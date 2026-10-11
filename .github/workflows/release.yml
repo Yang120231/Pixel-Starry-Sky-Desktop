@@ -1,16 +1,18 @@
-# 发版：推 v* 标签（如 v0.1.0-beta.1）→ 在 Windows 上检查、打包，把安装版、便携版和更新文件上传到草稿 Release。
+# 发版：推 v* 标签（如 v0.1.0-beta.1）→ 在 Windows 上检查、建草稿 Release → Windows、macOS、Linux 各自打包，上传到同一个草稿。
 # 在 GitHub 的 Releases 页检查草稿、写好更新说明后点发布，用户那边才会收到更新（版本号带 - 的测试版自动标成预发布）。
+# 试打包：Actions 页手动运行（workflow_dispatch），三个系统照样检查、打包，安装包放在这次运行的 Artifacts 里，不建 Release。
 name: release
 
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  release:
+  check:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
@@ -22,6 +24,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: 标签和版本号一致
+        if: github.ref_type == 'tag'
         shell: bash
         run: |
           version="v$(node -p "require('./apps/desktop/package.json').version")"
@@ -31,8 +34,9 @@ jobs:
           fi
       - name: 检查（类型、测试、ESLint、Prettier）
         run: node scripts/check.mjs
-      # 先建好草稿：安装版和便携版是同时上传的，Release 不存在时两边会各建一个草稿、文件分在两边
+      # 先建好草稿：三个系统的安装包同时上传，Release 不存在时会各建一个草稿、文件分在几处
       - name: 建草稿 Release
+        if: github.ref_type == 'tag'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -50,8 +54,57 @@ jobs:
               gh release create "$GITHUB_REF_NAME" --draft $pre --verify-tag --title "${GITHUB_REF_NAME#v}" --notes ""
             fi
           fi
+
+  package:
+    needs: check
+    strategy:
+      # 一个系统打包失败不影响其他系统的上传，草稿里少了的到 Actions 页重跑那一个
+      fail-fast: false
+      matrix:
+        include:
+          # 安装版 + 便携版 + latest.yml
+          - os: windows-latest
+            args: --win
+          # Intel 和 Apple 芯片一起打：分开打的话两边各传一份 latest-mac.yml，后传的会盖掉先传的
+          - os: macos-latest
+            args: --mac --x64 --arm64
+          # AppImage（能自动更新）+ deb + latest-linux.yml
+          - os: ubuntu-latest
+            args: --linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      # node-pty 没有 Linux 的预编译文件，安装时要现场编译
+      - name: Linux 编译工具
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y python3 make g++
+      - run: pnpm install --frozen-lockfile
+      - name: node-pty 能加载
+        shell: bash
+        working-directory: apps/desktop
+        run: node -e "require('node-pty'); console.log('node-pty ok')"
       - name: 打包并上传到草稿 Release
         working-directory: apps/desktop
-        run: pnpm build && pnpm exec electron-builder --win --publish always
+        run: pnpm build && pnpm exec electron-builder ${{ matrix.args }} --publish ${{ github.ref_type == 'tag' && 'always' || 'never' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 没有 Apple 开发者证书：不去钥匙串里找，只做 ad-hoc 签名（electron-builder.yml 的 mac.identity）
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: 试打包的安装包
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pixelsky-${{ runner.os }}
+          path: |
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.deb
+            apps/desktop/release/*.yml
+          retention-days: 7

@@ -33,9 +33,14 @@ export function initUpdater(ctx: AppContext): void {
   const feed = process.env.PIXELSKY_UPDATE_FEED
   const supported = app.isPackaged || !!feed
   const runAs = channel()
-  // 便携版没法替换自己：只检查，不下载
-  const portable = runAs === 'portable'
-  let state: UpdateState = { status: supported ? 'idle' : 'unsupported', channel: runAs, beta: readBeta() }
+  // 便携版没法替换自己；macOS 版没有签名，系统不让自动更新替换：都只检查、提示去下载
+  const portable = runAs === 'portable' || process.platform === 'darwin'
+  let state: UpdateState = {
+    status: supported ? 'idle' : 'unsupported',
+    channel: runAs,
+    manual: portable,
+    beta: readBeta(),
+  }
   const set = (patch: Partial<UpdateState>): void => {
     state = { ...state, ...patch }
     ctx.events.broadcast('update:changed', state)

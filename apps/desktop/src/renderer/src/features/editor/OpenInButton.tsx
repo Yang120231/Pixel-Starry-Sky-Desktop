@@ -17,8 +17,14 @@ import { useActiveWorkspace } from './target'
 type Choice = { kind: 'editor'; item: EditorItem } | { kind: 'tool'; tool: OpenTool }
 
 const choiceId = (c: Choice): string => (c.kind === 'editor' ? c.item.id : c.tool.id)
-/** 程序名：文件资源管理器按界面语言显示，其余用程序自己的名字 */
-export const toolName = (tool: OpenTool): string => (tool.id === 'explorer' ? tr('openWith.explorer') : tool.name)
+/** 程序名：文件管理器和系统终端按界面语言显示，其余用程序自己的名字 */
+export const toolName = (tool: OpenTool): string => {
+  const platform = window.pixelsky?.platform
+  if (tool.id === 'explorer')
+    return tr(platform === 'darwin' ? 'openWith.finder' : platform === 'linux' ? 'openWith.files' : 'openWith.explorer')
+  if (tool.id === 'terminal' && platform === 'darwin') return tr('openWith.terminal')
+  return tool.name
+}
 const choiceName = (c: Choice): string => (c.kind === 'editor' ? editorLabel(c.item) : toolName(c.tool))
 
 function ChoiceIcon({ choice }: { choice: Choice | null }) {

@@ -32,6 +32,10 @@ export function findClaude(env: NodeJS.ProcessEnv): Launcher | null {
     IS_WINDOWS && env.APPDATA
       ? join(env.APPDATA, 'npm', 'node_modules', '@anthropic-ai', 'claude-code', 'bin', EXE)
       : null,
+    // macOS / Linux：Homebrew、npm 全局（从程序坞启动、没读到登录 shell 的 PATH 时）
+    ...(IS_WINDOWS
+      ? []
+      : ['/opt/homebrew/bin/claude', '/usr/local/bin/claude', join(home, '.npm-global', 'bin', 'claude')]),
   ]
   for (const p of exeCandidates) {
     if (p && isFile(p) && !/\.(cmd|bat|ps1)$/i.test(p)) return { command: p, args: [] }

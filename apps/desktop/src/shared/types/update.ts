@@ -20,6 +20,8 @@ export interface UpdateState {
   status: UpdateStatus
   /** 运行方式：安装版自动下载，便携版只提示 */
   channel: 'dev' | 'portable' | 'installed'
+  /** 要自己下载新版本（便携版、没签名的 macOS 版）：有新版只提示去下载 */
+  manual?: boolean
   /** 是否接收测试版（预发布） */
   beta: boolean
   /** 新版本号（available / downloading / ready） */

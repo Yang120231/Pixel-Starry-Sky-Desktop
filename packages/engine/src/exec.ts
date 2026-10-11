@@ -1,11 +1,34 @@
 // 找可执行文件、跑一次性命令（--version 之类）
-import { execFile } from 'node:child_process'
+import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { accessSync, constants, existsSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { delimiter, extname, isAbsolute, join } from 'node:path'
 import type { Launcher } from './adapter'
 
 export const IS_WINDOWS = process.platform === 'win32'
+
+/**
+ * 强制结束进程和它启动的子进程（正在跑的命令、MCP 服务等）。Windows 用 taskkill /T；
+ * macOS / Linux 上进程要用 detached 启动（自成一个进程组），这里给整组发 SIGKILL。
+ */
+export function killTree(child: ChildProcess): void {
+  try {
+    if (IS_WINDOWS && child.pid)
+      spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }).on(
+        'error',
+        () => child.kill(),
+      )
+    else if (child.pid) {
+      try {
+        process.kill(-child.pid, 'SIGKILL')
+      } catch {
+        child.kill('SIGKILL')
+      }
+    } else child.kill()
+  } catch {
+    // 已经退出
+  }
+}
 
 export function isFile(p: string): boolean {
   try {

@@ -66,7 +66,15 @@ export interface EditorState {
   /** 「打开方式」按钮直接点时用哪个（编辑器或程序的 id）；没选过时为 null，用默认编辑器 */
   workspaceId: string | null
 }
-export type OpenToolId = 'explorer' | 'git-bash' | 'windows-terminal' | 'pwsh' | 'powershell'
+export type OpenToolId =
+  | 'explorer'
+  | 'git-bash'
+  | 'windows-terminal'
+  | 'pwsh'
+  | 'powershell'
+  /** macOS 的「终端」、Linux 的默认终端 */
+  | 'terminal'
+  | 'iterm'
 export interface OpenTool {
   id: OpenToolId
   name: string

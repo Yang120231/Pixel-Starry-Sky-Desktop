@@ -38,7 +38,8 @@ type Text = (key: TranslationKey, params?: Record<string, string | number>) => s
 
 /** 菜单里每组最多列几个会话 */
 export const TRAY_LIST_MAX = 5
-export const DEFAULT_TRAY_PREFS: TrayPrefs = { closeToTray: true }
+// Linux 上很多桌面（GNOME 没装 AppIndicator 扩展）根本没有托盘区，关到托盘就找不回窗口了，默认直接退出
+export const DEFAULT_TRAY_PREFS: TrayPrefs = { closeToTray: process.platform !== 'linux' }
 
 export function trayText(locale: Locale): Text {
   return (key, params) =>

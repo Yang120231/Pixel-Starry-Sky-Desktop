@@ -2,24 +2,31 @@
 // Git Bash、终端这些只能打开文件夹的程序。只认本机装了的；找的地方：卸载信息、常见安装目录、PATH。
 import { execFile, spawn } from 'node:child_process'
 import { lstat, readdir, stat } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { basename, delimiter, dirname, join, resolve } from 'node:path'
 import type { OpenTool, OpenToolId } from '../../shared/types/workspace'
 
 /** JetBrains 的 IDE：bin 目录里的启动程序 → 显示名 */
 export const JETBRAINS = [
-  { exe: 'idea64.exe', name: 'IntelliJ IDEA' },
-  { exe: 'webstorm64.exe', name: 'WebStorm' },
-  { exe: 'pycharm64.exe', name: 'PyCharm' },
-  { exe: 'goland64.exe', name: 'GoLand' },
-  { exe: 'clion64.exe', name: 'CLion' },
-  { exe: 'phpstorm64.exe', name: 'PhpStorm' },
-  { exe: 'rider64.exe', name: 'Rider' },
-  { exe: 'rubymine64.exe', name: 'RubyMine' },
-  { exe: 'rustrover64.exe', name: 'RustRover' },
-  { exe: 'datagrip64.exe', name: 'DataGrip' },
-  { exe: 'dataspell64.exe', name: 'DataSpell' },
-  { exe: 'studio64.exe', name: 'Android Studio' },
+  { exe: 'idea64.exe', cmd: 'idea', name: 'IntelliJ IDEA' },
+  { exe: 'webstorm64.exe', cmd: 'webstorm', name: 'WebStorm' },
+  { exe: 'pycharm64.exe', cmd: 'pycharm', name: 'PyCharm' },
+  { exe: 'goland64.exe', cmd: 'goland', name: 'GoLand' },
+  { exe: 'clion64.exe', cmd: 'clion', name: 'CLion' },
+  { exe: 'phpstorm64.exe', cmd: 'phpstorm', name: 'PhpStorm' },
+  { exe: 'rider64.exe', cmd: 'rider', name: 'Rider' },
+  { exe: 'rubymine64.exe', cmd: 'rubymine', name: 'RubyMine' },
+  { exe: 'rustrover64.exe', cmd: 'rustrover', name: 'RustRover' },
+  { exe: 'datagrip64.exe', cmd: 'datagrip', name: 'DataGrip' },
+  { exe: 'dataspell64.exe', cmd: 'dataspell', name: 'DataSpell' },
+  { exe: 'studio64.exe', cmd: 'studio', name: 'Android Studio' },
 ] as const
+
+/** 启动程序的文件名 → 哪个 IDE：Windows 的 idea64.exe，macOS / Linux 的 idea、idea.sh */
+const productOf = (path: string): (typeof JETBRAINS)[number] | undefined => {
+  const file = basename(path).toLowerCase()
+  return JETBRAINS.find(j => j.exe === file || j.cmd === file || `${j.cmd}.sh` === file)
+}
 
 export interface JetBrainsFound {
   path: string
@@ -45,6 +52,13 @@ const isFileOrAlias = async (path: string): Promise<boolean> => {
     return false
   }
 }
+const isDir = async (path: string): Promise<boolean> => {
+  try {
+    return (await stat(path)).isDirectory()
+  } catch {
+    return false
+  }
+}
 const subdirs = async (dir: string): Promise<string[]> => {
   try {
     return (await readdir(dir, { withFileTypes: true })).filter(d => d.isDirectory()).map(d => join(dir, d.name))
@@ -55,7 +69,7 @@ const subdirs = async (dir: string): Promise<string[]> => {
 
 /** 产品名和版本：版本从卸载信息的显示名或安装目录名（如「IntelliJ IDEA 2026.2.1」）里取 */
 export function jetbrainsName(exePath: string, displayName?: string): { name: string; version?: string } {
-  const name = JETBRAINS.find(j => j.exe === basename(exePath).toLowerCase())?.name ?? basename(exePath, '.exe')
+  const name = productOf(exePath)?.name ?? basename(exePath, '.exe')
   const version = (s: string | undefined): string | undefined =>
     s?.toLowerCase().startsWith(name.toLowerCase()) ? /\b(\d{4}\.\d+(?:\.\d+)?)\b/.exec(s)?.[1] : undefined
   return { name, version: version(displayName) ?? version(basename(dirname(dirname(exePath)))) }
@@ -82,7 +96,7 @@ export function jetbrainsFromUninstall(output: string): { path: string; name: st
 
 /** 本机装了的 JetBrains IDE（同一个 exe 只留一个，卸载信息里的优先） */
 export async function detectJetBrains(uninstallOutputs: string[]): Promise<JetBrainsFound[]> {
-  if (process.platform !== 'win32') return []
+  if (process.platform !== 'win32') return detectJetBrainsPosix()
   const candidates: JetBrainsFound[] = uninstallOutputs.flatMap(out =>
     jetbrainsFromUninstall(out).map(c => ({ ...c, source: 'registry' as const })),
   )
@@ -118,6 +132,48 @@ export async function detectJetBrains(uninstallOutputs: string[]): Promise<JetBr
   return out
 }
 
+/**
+ * macOS：/Applications、~/Applications 里的 <IDE>.app（Contents/MacOS/<命令>）；
+ * macOS / Linux：Toolbox 生成的启动脚本、PATH 上的命令、Linux 常见的 /opt、snap 安装位置
+ */
+async function detectJetBrainsPosix(): Promise<JetBrainsFound[]> {
+  const home = homedir()
+  const candidates: JetBrainsFound[] = []
+  const add = (path: string, source: JetBrainsFound['source'], name = ''): void => {
+    candidates.push({ path, name, source })
+  }
+  if (process.platform === 'darwin') {
+    for (const root of ['/Applications', join(home, 'Applications')]) {
+      let apps: string[] = []
+      try {
+        apps = await readdir(root)
+      } catch {
+        continue
+      }
+      for (const j of JETBRAINS)
+        for (const app of apps.filter(a => a.startsWith(j.name) && a.endsWith('.app')))
+          add(join(root, app, 'Contents', 'MacOS', j.cmd), 'location', app.replace(/\.app$/, ''))
+    }
+  } else {
+    for (const dir of [...(await subdirs('/opt')), ...(await subdirs(join(home, '.local', 'share', 'JetBrains')))])
+      for (const j of JETBRAINS) add(join(dir, 'bin', `${j.cmd}.sh`), 'location', basename(dir))
+    for (const j of JETBRAINS) add(join('/snap/bin', j.cmd), 'location')
+  }
+  const toolbox =
+    process.platform === 'darwin'
+      ? join(home, 'Library', 'Application Support', 'JetBrains', 'Toolbox', 'scripts')
+      : join(home, '.local', 'share', 'JetBrains', 'Toolbox', 'scripts')
+  for (const j of JETBRAINS) add(join(toolbox, j.cmd), 'location')
+  for (const bin of (process.env.PATH ?? '').split(delimiter).filter(Boolean))
+    for (const j of JETBRAINS) add(join(bin, j.cmd), 'path')
+  const out: JetBrainsFound[] = []
+  for (const c of candidates) {
+    if (!(await isFile(c.path)) || out.some(o => o.path === c.path)) continue
+    out.push({ ...c, ...jetbrainsName(c.path, c.name || undefined) })
+  }
+  return out
+}
+
 function gitForWindows(): Promise<string | null> {
   return new Promise(done =>
     execFile(
@@ -136,8 +192,34 @@ const first = async (paths: string[], check = isFile): Promise<string | null> =>
 
 /** 文件资源管理器、Git Bash、Windows Terminal、PowerShell：只列装了的（文件资源管理器一直有） */
 export async function detectTools(): Promise<OpenTool[]> {
+  if (process.platform === 'darwin') {
+    const tools: OpenTool[] = [
+      { id: 'explorer', name: 'Finder', path: '' },
+      { id: 'terminal', name: 'Terminal', path: '' },
+    ]
+    for (const root of ['/Applications', join(homedir(), 'Applications')])
+      if (await isDir(join(root, 'iTerm.app'))) {
+        tools.push({ id: 'iterm', name: 'iTerm', path: join(root, 'iTerm.app') })
+        break
+      }
+    return tools
+  }
   if (process.platform !== 'win32') {
-    return [{ id: 'explorer', name: process.platform === 'darwin' ? 'Finder' : '文件管理器', path: '' }]
+    const tools: OpenTool[] = [{ id: 'explorer', name: 'Files', path: '' }]
+    const pathDirs = (process.env.PATH ?? '/usr/bin').split(delimiter).filter(Boolean)
+    // 当前桌面自带的终端优先，没有就用 Debian 系的 x-terminal-emulator
+    const kde = (process.env.XDG_CURRENT_DESKTOP ?? '').toLowerCase().includes('kde')
+    const names = kde
+      ? ['konsole', 'gnome-terminal', 'x-terminal-emulator', 'xterm']
+      : ['gnome-terminal', 'konsole', 'xfce4-terminal', 'x-terminal-emulator', 'xterm']
+    for (const name of names) {
+      const found = await first(pathDirs.map(d => join(d, name)))
+      if (found) {
+        tools.push({ id: 'terminal', name: TERMINAL_NAMES[name] ?? name, path: found })
+        break
+      }
+    }
+    return tools
   }
   const windir = process.env.SystemRoot ?? process.env.windir ?? 'C:\\Windows'
   const local = process.env.LOCALAPPDATA ?? ''
@@ -174,6 +256,22 @@ export async function detectTools(): Promise<OpenTool[]> {
   return tools
 }
 
+const TERMINAL_NAMES: Record<string, string> = {
+  'gnome-terminal': 'GNOME Terminal',
+  konsole: 'Konsole',
+  'xfce4-terminal': 'Xfce Terminal',
+  'x-terminal-emulator': 'Terminal',
+  xterm: 'xterm',
+}
+
+/** Linux 各终端指定起始目录的参数；x-terminal-emulator 不知道指向哪个，只靠工作目录 */
+export function linuxTerminalArgs(path: string, root: string): string[] {
+  const name = basename(path)
+  if (name === 'gnome-terminal' || name === 'xfce4-terminal') return [`--working-directory=${root}`]
+  if (name === 'konsole') return ['--workdir', root]
+  return []
+}
+
 /** 打开文件夹的命令行：Git Bash 用 --cd，Windows Terminal 用 -d，PowerShell 在新窗口里停在这个目录 */
 export function toolCommand(tool: OpenTool, root: string): { file: string; args: string[]; console: boolean } {
   const ids: Record<OpenToolId, () => { file: string; args: string[]; console: boolean }> = {
@@ -181,6 +279,11 @@ export function toolCommand(tool: OpenTool, root: string): { file: string; args:
       process.platform === 'win32'
         ? { file: tool.path || 'explorer.exe', args: [root], console: false }
         : { file: process.platform === 'darwin' ? 'open' : 'xdg-open', args: [root], console: false },
+    terminal: () =>
+      process.platform === 'darwin'
+        ? { file: 'open', args: ['-a', 'Terminal', root], console: false }
+        : { file: tool.path, args: linuxTerminalArgs(tool.path, root), console: false },
+    iterm: () => ({ file: 'open', args: ['-a', tool.path || 'iTerm', root], console: false }),
     'git-bash': () => ({ file: tool.path, args: [`--cd=${root}`], console: false }),
     'windows-terminal': () => ({ file: tool.path, args: ['-d', root], console: false }),
     pwsh: () => ({ file: tool.path, args: ['-NoExit', '-WorkingDirectory', root], console: true }),

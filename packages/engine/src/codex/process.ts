@@ -4,6 +4,7 @@ import type { Launcher } from '../adapter'
 import { TailBuffer } from '../jsonl'
 import { logger, redact } from '../log'
 import { logProcess } from '../process-log'
+import { killTree } from '../exec'
 
 export { redact }
 const log = logger('engine.codex')
@@ -33,7 +34,14 @@ export class CodexProcess {
   readonly exitPromise: Promise<void>
 
   constructor(launcher: Launcher, args: string[], cwd: string, env: NodeJS.ProcessEnv, handlers: RpcHandlers) {
-    this.child = spawn(launcher.command, [...launcher.args, ...args], { cwd, env, windowsHide: true, stdio: 'pipe' })
+    this.child = spawn(launcher.command, [...launcher.args, ...args], {
+      cwd,
+      env,
+      windowsHide: true,
+      stdio: 'pipe',
+      // macOS / Linux：自成进程组，强制结束时连同它启动的命令一起结束
+      detached: process.platform !== 'win32',
+    })
     this.child.stdin.on('error', () => {})
     this.child.stderr.on('data', (data: Buffer) => this.stderr.push(redact(data.toString('utf8'))))
     logProcess(
@@ -142,11 +150,6 @@ export class CodexProcess {
   kill(): void {
     if (!this.alive) return
     this.stopping = true
-    if (process.platform === 'win32' && this.child.pid)
-      spawn('taskkill', ['/pid', String(this.child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }).on(
-        'error',
-        () => this.child.kill(),
-      )
-    else this.child.kill()
+    killTree(this.child)
   }
 }

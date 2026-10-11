@@ -7,12 +7,16 @@ export function executable(value: string): string | null {
   try {
     const candidates = isAbsolute(value)
       ? [value]
-      : execFileSync('where.exe', [value], {
-          encoding: 'utf8',
-          timeout: 2000,
-          windowsHide: true,
-          stdio: ['ignore', 'pipe', 'ignore'],
-        })
+      : execFileSync(
+          process.platform === 'win32' ? 'where.exe' : 'which',
+          process.platform === 'win32' ? [value] : ['-a', value],
+          {
+            encoding: 'utf8',
+            timeout: 2000,
+            windowsHide: true,
+            stdio: ['ignore', 'pipe', 'ignore'],
+          },
+        )
           .trim()
           .split(/\r?\n/)
     for (const path of candidates) {
@@ -100,7 +104,32 @@ ConvertTo-Json -InputObject @($valid) -Compress
   }
   return null
 }
+/** macOS / Linux：登录 shell（$SHELL）排第一，再是装了的 zsh / bash / fish / sh；都用登录模式，读得到用户的 PATH */
+function posixProfiles(): Omit<TerminalProfile, 'available'>[] {
+  const login = process.env.SHELL && isAbsolute(process.env.SHELL) ? process.env.SHELL : null
+  const shells = [
+    { id: 'zsh', label: 'zsh', paths: ['/bin/zsh', '/usr/bin/zsh'] },
+    { id: 'bash', label: 'bash', paths: ['/bin/bash', '/usr/bin/bash'] },
+    { id: 'fish', label: 'fish', paths: ['/opt/homebrew/bin/fish', '/usr/local/bin/fish', '/usr/bin/fish'] },
+    { id: 'sh', label: 'sh', paths: ['/bin/sh'] },
+  ]
+  const found = shells.flatMap(s => {
+    const command = s.paths.find(path => executable(path))
+    return command ? [{ id: s.id, label: s.label, command, args: s.id === 'sh' ? [] : ['-l'] }] : []
+  })
+  const name = login?.split('/').pop() ?? ''
+  const same = found.find(s => s.id === name)
+  if (login && !same) found.unshift({ id: 'login', label: name || 'shell', command: login, args: ['-l'] })
+  else if (same) found.splice(0, 0, ...found.splice(found.indexOf(same), 1))
+  return found.length ? found : [{ id: 'sh', label: 'sh', command: '/bin/sh', args: [] }]
+}
+
 export function detectProfiles(custom: TerminalProfile[] = []): TerminalProfile[] {
+  if (process.platform !== 'win32')
+    return [...posixProfiles(), ...custom].map(profile => {
+      const command = executable(profile.command)
+      return { ...profile, command: command ?? profile.command, available: !!command }
+    })
   const root = process.env.SystemRoot ?? 'C:\\Windows'
   const git = [
     join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Git', 'bin', 'bash.exe'),
@@ -166,5 +195,7 @@ export function terminalEnvironment(source: NodeJS.ProcessEnv): Record<string, s
     env[key] = value
   }
   env.TERM = 'xterm-256color'
+  // 从程序坞 / Finder 启动的没有 LANG，zsh / bash 显示中文会乱
+  if (process.platform === 'darwin' && !env.LANG && !env.LC_ALL) env.LANG = 'en_US.UTF-8'
   return env
 }

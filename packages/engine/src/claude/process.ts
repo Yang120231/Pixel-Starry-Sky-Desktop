@@ -6,7 +6,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import type { Launcher } from '../adapter'
-import { IS_WINDOWS } from '../exec'
+import { IS_WINDOWS, killTree } from '../exec'
 import { TailBuffer, readJsonLines } from '../jsonl'
 import { logger } from '../log'
 import { logProcess } from '../process-log'
@@ -54,6 +54,8 @@ export class ClaudeProcess {
       env,
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
+      // macOS / Linux：自成进程组，强制结束时连同它启动的命令一起结束
+      detached: !IS_WINDOWS,
     })
     this.child.stdin.on('error', () => {}) // 进程已退出时写入会报 EPIPE，退出事件里统一处理
     this.child.stderr.on('data', (d: Buffer) => this.stderr.push(d.toString('utf8')))
@@ -184,21 +186,10 @@ export class ClaudeProcess {
     clearTimeout(timer)
   }
 
-  /** 强制结束；Windows 上连同它启动的子进程（正在跑的命令）一起结束 */
+  /** 强制结束，连同它启动的子进程（正在跑的命令）一起结束 */
   kill(): void {
     if (this.exited) return
     this.stopping = true
-    try {
-      if (IS_WINDOWS && this.child.pid) {
-        spawn('taskkill', ['/pid', String(this.child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }).on(
-          'error',
-          () => this.child.kill(),
-        )
-      } else {
-        this.child.kill()
-      }
-    } catch {
-      // 已经退出
-    }
+    killTree(this.child)
   }
 }

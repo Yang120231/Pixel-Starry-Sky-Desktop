@@ -16,6 +16,7 @@ import * as ipc from './ipc/guard'
 import { initAppInfo } from './app/info'
 import { initUpdater } from './app/updater'
 import { initEngine } from './engine/ipc'
+import { loadShellEnv } from './app/shell-env'
 import { initMobile } from './mobile/ipc'
 import { initWorkspace } from './workspace/files-ipc'
 import { initWindowControls, observeWindowControls } from './app/window-controls'
@@ -160,8 +161,10 @@ function createWindow(): BrowserWindow {
     minHeight: 700,
     show: false,
     title: '像素星空',
-    // 打包后 Windows 用 exe 自带的图标；开发模式用 build/icon.png
-    ...(!app.isPackaged && { icon: join(__dirname, '../../build/icon.png') }),
+    // 打包后 Windows、macOS 用程序自带的图标，Linux 用 resources/icon.png（electron-builder.yml）；开发模式用 build/icon.png
+    ...(!app.isPackaged
+      ? { icon: join(__dirname, '../../build/icon.png') }
+      : process.platform === 'linux' && { icon: join(process.resourcesPath, 'icon.png') }),
     backgroundColor: TITLE_BAR[initial].color,
     ...(process.platform === 'win32'
       ? { frame: false }
@@ -311,9 +314,12 @@ function setAppMenu(locale: Locale = 'zh-CN'): void {
     { role: 'viewMenu' },
     {
       label: locale === 'en-US' ? 'Window' : '窗口',
+      ...(process.platform === 'darwin' && { role: 'windowMenu' as const }),
       submenu: [
         { role: 'minimize' },
-        ...(process.platform === 'darwin' ? [{ role: 'zoom' } as MenuItemConstructorOptions] : []),
+        ...(process.platform === 'darwin'
+          ? ([{ role: 'zoom' }, { type: 'separator' }, { role: 'front' }] satisfies MenuItemConstructorOptions[])
+          : []),
       ],
     },
   ]
@@ -339,6 +345,7 @@ app.whenReady().then(async () => {
   initAppInfo() // 「关于」页的版本与运行环境，见 app/info.ts
   initLogIpc() // 设置 › 日志，见 app/logging.ts
   initUpdater(ctx) // 自动更新（GitHub Releases），见 app/updater.ts
+  await loadShellEnv() // macOS / Linux 从程序坞、桌面菜单启动时补回登录 shell 的 PATH，见 app/shell-env.ts
   await initEngine(ctx) // 引擎系统（Claude Code 等），见 engine/ipc.ts
   initMobile(ctx) // 手机远程连接（默认关），见 mobile/ipc.ts
   initSettingsSync(ctx) // 设置云同步，见 account/settings-sync.ts
@@ -351,8 +358,10 @@ app.whenReady().then(async () => {
       createWindow,
       quit: () => app.quit(),
     })
+  // macOS 点程序坞图标：没有窗口就开一个；窗口关到托盘（隐藏）了就拿回来
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    else if (!BrowserWindow.getAllWindows().some(w => w.isVisible())) tray?.showWindow()
   })
 })
 

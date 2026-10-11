@@ -1,3 +1,4 @@
+import { realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, delimiter } from 'node:path'
 import { codedError, type EngineInfo } from '@pixelsky/protocol'
@@ -20,6 +21,13 @@ export function codexVersionStatus(version: string | null): { status: EngineInfo
 
 /** npm shim 只用于找安装目录；协议子进程直接启动原生二进制。 */
 export function codexExecutable(path: string): string | null {
+  // macOS / Linux 上 npm 的 codex 是指向 bin/codex.js 的链接（没有扩展名），先看它实际指着哪
+  if (process.platform !== 'win32')
+    try {
+      path = realpathSync(path)
+    } catch {
+      return null
+    }
   if (isFile(path) && !/\.(?:cmd|ps1|js)$/i.test(path)) return path
   const bases = [dirname(path), join(dirname(path), '..'), path]
   const triplet =
@@ -78,8 +86,18 @@ export async function discoverCodex(
         ...(env.PATH ?? env.Path ?? '')
           .split(delimiter)
           .flatMap(dir => ['codex.exe', 'codex.cmd', 'codex'].map(name => join(dir.replace(/^"|"$/g, ''), name))),
-        join(homedir(), '.local/bin/codex.exe'),
-        join(env.APPDATA ?? join(homedir(), 'AppData/Roaming'), 'npm/codex.cmd'),
+        ...(process.platform === 'win32'
+          ? [
+              join(homedir(), '.local/bin/codex.exe'),
+              join(env.APPDATA ?? join(homedir(), 'AppData/Roaming'), 'npm/codex.cmd'),
+            ]
+          : // 从程序坞启动、没读到登录 shell 的 PATH 时：Homebrew、npm 全局、官方安装脚本的位置
+            [
+              '/opt/homebrew/bin/codex',
+              '/usr/local/bin/codex',
+              join(homedir(), '.local/bin/codex'),
+              join(homedir(), '.npm-global/bin/codex'),
+            ]),
       ]
         .filter((v): v is string => !!v)
         .map(codexExecutable)

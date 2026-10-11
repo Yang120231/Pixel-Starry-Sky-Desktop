@@ -1,18 +1,53 @@
 import { spawn, execFile } from 'node:child_process'
-import { readFile, mkdir, writeFile, rename, stat } from 'node:fs/promises'
-import { delimiter, join, resolve } from 'node:path'
+import { readFile, readdir, mkdir, writeFile, rename, realpath, stat } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { delimiter, join, posix, resolve } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import type { EditorItem, EditorKind, EditorState, OpenTool, WorkspaceRef } from '../../shared/types/workspace'
 import { workspacePath, type TargetResolver } from './workspace-files'
 import { detectJetBrains, detectTools, launchTool } from './open-tools'
 
 export const EDITORS = [
-  { id: 'vscode', name: 'VS Code', exe: 'Code.exe', dir: 'Microsoft VS Code', command: 'code' },
-  { id: 'cursor', name: 'Cursor', exe: 'Cursor.exe', dir: 'cursor', command: 'cursor' },
-  { id: 'windsurf', name: 'Windsurf', exe: 'Windsurf.exe', dir: 'Windsurf', command: 'windsurf' },
-  { id: 'trae-cn', name: 'Trae CN', exe: 'Trae CN.exe', dir: 'Trae CN', command: 'trae-cn' },
-  { id: 'trae', name: 'Trae', exe: 'Trae.exe', dir: 'Trae', command: 'trae' },
+  {
+    id: 'vscode',
+    name: 'VS Code',
+    exe: 'Code.exe',
+    dir: 'Microsoft VS Code',
+    command: 'code',
+    app: 'Visual Studio Code',
+  },
+  { id: 'cursor', name: 'Cursor', exe: 'Cursor.exe', dir: 'cursor', command: 'cursor', app: 'Cursor' },
+  { id: 'windsurf', name: 'Windsurf', exe: 'Windsurf.exe', dir: 'Windsurf', command: 'windsurf', app: 'Windsurf' },
+  { id: 'trae-cn', name: 'Trae CN', exe: 'Trae CN.exe', dir: 'Trae CN', command: 'trae-cn', app: 'Trae CN' },
+  { id: 'trae', name: 'Trae', exe: 'Trae.exe', dir: 'Trae', command: 'trae', app: 'Trae' },
 ] as const
+
+/**
+ * macOS / Linux 上找的是编辑器自带的命令行（code、cursor 等脚本，参数和 Windows 的 exe 一样）：
+ * macOS 在 <应用>.app/Contents/Resources/app/bin 里，Linux 在 PATH、/usr/share/<目录>/bin、snap 里
+ */
+export function posixEditorPaths(
+  kind: (typeof EDITORS)[number],
+  platform: NodeJS.Platform,
+  home: string,
+  pathDirs: string[],
+): { path: string; source: 'location' | 'path' }[] {
+  const located =
+    platform === 'darwin'
+      ? ['/Applications', posix.join(home, 'Applications')].map(root =>
+          posix.join(root, `${kind.app}.app`, 'Contents', 'Resources', 'app', 'bin', kind.command),
+        )
+      : [
+          posix.join('/usr/share', kind.command, 'bin', kind.command),
+          posix.join('/opt', kind.app, 'bin', kind.command),
+          posix.join('/opt', kind.command, 'bin', kind.command),
+          posix.join('/snap/bin', kind.command),
+        ]
+  return [
+    ...located.map(path => ({ path, source: 'location' as const })),
+    ...pathDirs.map(dir => ({ path: posix.join(dir, kind.command), source: 'path' as const })),
+  ]
+}
 interface Prefs {
   defaultId: string | null
   openWith: string
@@ -23,6 +58,23 @@ interface Prefs {
 }
 const DEFAULTS: Prefs = { defaultId: null, openWith: 'app', window: 'reuse', custom: [], workspaceId: null }
 const KINDS = [...EDITORS.map(e => e.id), 'jetbrains', 'custom']
+/** <应用>.app 里能启动的程序：VS Code 一类用 Contents/Resources/app/bin/<命令>，其余用 Contents/MacOS 里和应用同名的程序 */
+async function macAppProgram(app: string, kind: EditorKind): Promise<string | null> {
+  const builtin = EDITORS.find(e => e.id === kind)
+  const root = app.replace(/\/$/, '')
+  if (builtin) {
+    const cli = join(root, 'Contents', 'Resources', 'app', 'bin', builtin.command)
+    if (await exists(cli)) return cli
+  }
+  try {
+    const names = await readdir(join(root, 'Contents', 'MacOS'))
+    const stem = root.replace(/^.*\//, '').replace(/\.app$/, '')
+    const name = names.find(n => n === stem) ?? names[0]
+    return name ? join(root, 'Contents', 'MacOS', name) : null
+  } catch {
+    return null
+  }
+}
 const exists = async (path: string): Promise<boolean> => {
   try {
     return (await stat(path)).isFile()
@@ -278,14 +330,23 @@ export class Editors {
         for (const bin of (process.env.PATH ?? '').split(delimiter).filter(Boolean)) {
           inPath.push(resolve(bin, '../../..', kind.exe), resolve(bin, '..', kind.exe), join(bin, kind.exe))
         }
-        const candidates = [
-          ...registered.map(path => ({ path, source: 'registry' as const })),
-          ...locations.map(path => ({ path, source: 'location' as const })),
-          ...inPath.map(path => ({ path, source: 'path' as const })),
-        ]
+        const candidates =
+          process.platform === 'win32'
+            ? [
+                ...registered.map(path => ({ path, source: 'registry' as const })),
+                ...locations.map(path => ({ path, source: 'location' as const })),
+                ...inPath.map(path => ({ path, source: 'path' as const })),
+              ]
+            : posixEditorPaths(
+                kind,
+                process.platform,
+                homedir(),
+                (process.env.PATH ?? '').split(delimiter).filter(Boolean),
+              )
         const checks = await Promise.all(candidates.map(async c => ({ ...c, available: await exists(c.path) })))
         for (const candidate of checks.filter(c => c.available)) {
-          const path = resolve(candidate.path),
+          // macOS / Linux 上 /usr/local/bin/code 是指向应用里命令行的链接：按实际位置去重
+          const path = process.platform === 'win32' ? resolve(candidate.path) : await realpath(candidate.path),
             normalized = path.toLowerCase()
           if (found.some(e => e.path.toLowerCase() === normalized)) continue
           const id = found.some(e => e.id === kind.id)
@@ -396,6 +457,8 @@ export class Editors {
   }
   async configure(kind: EditorKind, path: string, name?: string, mode?: 'code' | 'folder'): Promise<EditorState> {
     if (!KINDS.includes(kind)) throw new Error('未知编辑器')
+    // macOS 选的是 .app：换成里面的命令行（VS Code 一类）或主程序
+    if (process.platform === 'darwin' && /\.app\/?$/.test(path)) path = (await macAppProgram(path, kind)) ?? path
     if (!(await exists(path)) || (process.platform === 'win32' && !path.toLowerCase().endsWith('.exe')))
       throw new Error('请选择编辑器的 exe 程序')
     const builtin = EDITORS.find(e => e.id === kind)

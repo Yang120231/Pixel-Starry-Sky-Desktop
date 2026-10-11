@@ -1,7 +1,7 @@
 // 「打开方式」里的 JetBrains IDE 和文件夹 / 终端程序（GitHub #12）
 import { describe, expect, it } from 'vitest'
-import { editorArgs } from './editors'
-import { jetbrainsFromUninstall, jetbrainsName, toolCommand } from './open-tools'
+import { EDITORS, editorArgs, posixEditorPaths } from './editors'
+import { jetbrainsFromUninstall, jetbrainsName, linuxTerminalArgs, toolCommand } from './open-tools'
 
 const uninstall = String.raw`
 HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Uninstall\IntelliJ IDEA 2026.2.1
@@ -82,5 +82,31 @@ describe('文件夹和终端', () => {
       console: true,
     })
     expect(toolCommand(tool('powershell'), 'D:\\p')).toMatchObject({ args: ['-NoExit'], console: true })
+  })
+})
+
+describe('macOS / Linux', () => {
+  it('JetBrains 认 macOS / Linux 的启动程序名', () => {
+    expect(jetbrainsName('/Applications/IntelliJ IDEA.app/Contents/MacOS/idea', 'IntelliJ IDEA 2026.2').name).toBe(
+      'IntelliJ IDEA',
+    )
+    expect(jetbrainsName('/opt/pycharm-2025.3/bin/pycharm.sh').name).toBe('PyCharm')
+    expect(jetbrainsName('/home/me/.local/share/JetBrains/Toolbox/scripts/webstorm').name).toBe('WebStorm')
+  })
+
+  it('VS Code 一类找自带的命令行：macOS 在 .app 里，Linux 在 /usr/share、snap，再是 PATH', () => {
+    const vscode = EDITORS[0]
+    expect(posixEditorPaths(vscode, 'darwin', '/Users/me', ['/opt/homebrew/bin']).map(c => c.path)).toEqual([
+      '/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code',
+      '/Users/me/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code',
+      '/opt/homebrew/bin/code',
+    ])
+    expect(posixEditorPaths(vscode, 'linux', '/home/me', []).map(c => c.path)).toContain('/usr/share/code/bin/code')
+  })
+
+  it('Linux 终端按各自的参数停在工作区目录', () => {
+    expect(linuxTerminalArgs('/usr/bin/gnome-terminal', '/p')).toEqual(['--working-directory=/p'])
+    expect(linuxTerminalArgs('/usr/bin/konsole', '/p')).toEqual(['--workdir', '/p'])
+    expect(linuxTerminalArgs('/usr/bin/x-terminal-emulator', '/p')).toEqual([])
   })
 })

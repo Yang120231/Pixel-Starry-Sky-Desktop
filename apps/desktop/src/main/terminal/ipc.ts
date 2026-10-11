@@ -98,7 +98,7 @@ export async function initTerminalIpc(
     const result = await dialog.showOpenDialog(win, {
       title: nativeText(win, '选择 Shell 程序'),
       properties: ['openFile'],
-      filters: [{ name: 'Shell', extensions: ['exe'] }],
+      ...(process.platform === 'win32' && { filters: [{ name: 'Shell', extensions: ['exe'] }] }),
     })
     return result.canceled ? null : (result.filePaths[0] ?? null)
   })

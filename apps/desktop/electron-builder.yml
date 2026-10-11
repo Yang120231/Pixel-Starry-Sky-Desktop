@@ -1,4 +1,5 @@
-# 打包配置（electron-builder）。用法：仓库根目录执行 pnpm dist，产物在 apps/desktop/release/
+# 打包配置（electron-builder）。用法：仓库根目录执行 pnpm dist（Windows），产物在 apps/desktop/release/。
+# macOS（dmg + zip，Intel 和 Apple 芯片）只能在 Mac 上打，Linux（AppImage + deb）在 Linux 上打：CI 里各用一台机器（.github/workflows/release.yml）
 appId: com.pixelsky.desktop
 productName: 像素星空
 # 下载 Electron 运行时用国内镜像（electron-builder 也认 ELECTRON_MIRROR 环境变量，可覆盖）
@@ -12,12 +13,18 @@ files:
   - out/**
   - package.json
 asar: true
+# node-pty 的原生模块和 macOS 的 spawn-helper 要放在 asar 外面才能加载、执行
+asarUnpack:
+  - '**/node_modules/node-pty/**'
+# macOS 的 spawn-helper 要有执行权限（build/after-pack.cjs）
+afterPack: build/after-pack.cjs
 # 托盘图标（docs/ui/tray.md §2.5）：运行时从 resources/tray 读，不进 asar
 extraResources:
   - from: build/tray
     to: tray
-# node-pty 使用其自带的 win32-x64 N-API 预编译文件；本机构建工具未安装 Spectre 缓解库，
-# 强制重编译会失败。Electron 44 已通过实际 PTY 输入 / resize / 退出验证。
+# node-pty 用自带的 N-API 预编译文件（win32-x64、darwin-x64 / arm64），N-API 不分 Electron 版本，不用重编译；
+# 本机构建工具未安装 Spectre 缓解库，强制重编译会失败。Electron 44 已通过实际 PTY 输入 / resize / 退出验证。
+# Linux 没有预编译文件：pnpm install 时按 Node 编译出 build/Release/pty.node（N-API，Electron 一样能用）
 npmRebuild: false
 win:
   # 安装版（能自动更新）+ 便携版（不能自动更新，只提示去下载）。docs/release-update.md §7
@@ -49,6 +56,65 @@ nsis:
   uninstallDisplayName: ${productName}
 portable:
   artifactName: PixelSky-${version}-portable.exe
+mac:
+  # 文件名不能有中文：GitHub 会改掉 Release 里的中文文件名，latest-mac.yml 里的地址就对不上了
+  artifactName: PixelSky-${version}-mac-${arch}.${ext}
+  # dmg 给人下载安装；zip 是 electron-updater 在 macOS 上用的格式
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+    - target: zip
+      arch: [x64, arm64]
+  category: public.app-category.developer-tools
+  icon: build/icon.png
+  # 暂不签名、不公证：只做 ad-hoc 签名（Apple 芯片上不签名根本打不开）。
+  # 第一次打开系统会拦，要在「系统设置 › 隐私与安全性」里点「仍要打开」；也不能自动更新（只提示去下载）
+  identity: '-'
+  hardenedRuntime: false
+  # 不带 Windows 的东西
+  files:
+    - '!**/node_modules/node-pty/prebuilds/win32-*/**'
+dmg:
+  artifactName: PixelSky-${version}-mac-${arch}.${ext}
+  title: ${productName} ${version}
+linux:
+  artifactName: PixelSky-${version}-linux-${arch}.${ext}
+  target:
+    - target: AppImage
+      arch: x64
+    - target: deb
+      arch: x64
+  # 命令名、.desktop 文件名用英文
+  executableName: pixelsky
+  category: Development
+  icon: build/icon.png
+  synopsis: Claude Code / Codex 桌面工作台
+  maintainer: xiaoheoxo <xiaoheoxo@users.noreply.github.com>
+  vendor: xiaoheoxo
+  desktop:
+    entry:
+      Name: 像素星空
+      GenericName: AI Coding Workbench
+      StartupWMClass: 像素星空
+  files:
+    - '!**/node_modules/node-pty/prebuilds/**'
+  # 窗口图标（Linux 不从程序文件里取）
+  extraResources:
+    - from: build/icon.png
+      to: icon.png
+deb:
+  packageName: pixelsky
+  # 用到的系统库（Electron 的常规依赖，Ubuntu / Debian 桌面版都有）
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libuuid1
+    - libsecret-1-0
 # 更新源：GitHub Releases（CI 推 v* 标签时上传；本机 pnpm dist 不上传）
 publish:
   provider: github
