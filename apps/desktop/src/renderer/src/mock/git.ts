@@ -306,19 +306,33 @@ const byHash = (h: string) => HISTORY.find(c => c.hash === h)
 function demoLog(query: GitLogQuery): GitLogPage {
   // 自动范围不含远端发布分支独有的提交（这里没有），全部 / 自选都用整份
   const q = query.search?.trim().toLowerCase() ?? ''
+  // 单文件历史（§9.15）：改过这个文件的提交（演示数据里跟着 src/lazy.ts ← src/loadable.ts 的改名）
+  const path = query.path?.replace(/\\/g, '/')
+  const names = new Set(path ? [path] : [])
+  const source: DemoCommit[] = path
+    ? HISTORY.flatMap(c => {
+        const f = c.files.find(x => names.has(x.path))
+        if (!f) return []
+        if (f.origPath) names.add(f.origPath)
+        return [{ ...c, file: f }]
+      })
+    : HISTORY
   const list = q
-    ? HISTORY.filter(
+    ? source.filter(
         c =>
           c.subject.toLowerCase().includes(q) ||
           c.body.toLowerCase().includes(q) ||
           c.author.toLowerCase().includes(q) ||
           c.hash.startsWith(q),
       )
-    : HISTORY
+    : source
   return {
-    commits: list.slice(query.skip, query.skip + query.limit).map(strip),
+    commits: list
+      .slice(query.skip, query.skip + query.limit)
+      .map(c => ({ ...strip(c), ...(path ? { stat: null } : {}) })),
     more: list.length > query.skip + query.limit,
     shallow: false,
+    ...(path ? { path } : {}),
   }
 }
 

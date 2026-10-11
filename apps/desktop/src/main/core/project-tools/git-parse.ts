@@ -147,8 +147,38 @@ function parseShortStat(text: string): GitCommit['stat'] {
   }
 }
 
+/** 单文件历史里 --name-status 的一行：`M\tpath`、`R100\told\tnew` */
+function parseFileStatus(text: string): GitCommitFile | undefined {
+  for (const line of text.split('\n')) {
+    const m = /^([AMDRCT])\d*\t([^\t]+)(?:\t([^\t]+))?$/.exec(line.replace(/\r$/, ''))
+    if (!m) continue
+    const renamed = m[1] === 'R' || m[1] === 'C'
+    return {
+      path: renamed && m[3] ? m[3] : m[2],
+      origPath: renamed && m[3] ? m[2] : null,
+      code: m[1] as GitCommitCode,
+      insertions: null,
+      deletions: null,
+    }
+  }
+  return undefined
+}
+
+/** 单文件历史里 --numstat 的输出（和 LOG_FORMAT 同格式）→ 每个提交的增删行数；二进制为 null */
+export function parseLogNumstat(stdout: string): Map<string, [number | null, number | null]> {
+  const out = new Map<string, [number | null, number | null]>()
+  for (const record of stdout.split('\x1e')) {
+    const end = record.lastIndexOf('\x1d')
+    if (end < 0) continue
+    const hash = record.slice(0, record.indexOf('\x1f'))
+    const m = /^(-|\d+)\t(-|\d+)\t/m.exec(record.slice(end + 1))
+    if (m) out.set(hash, [m[1] === '-' ? null : Number(m[1]), m[2] === '-' ? null : Number(m[2])])
+  }
+  return out
+}
+
 /**
- * 解析 LOG_FORMAT + --shortstat 的输出。没有统计行的提交（空提交、合并提交）记作 0；
+ * 解析 LOG_FORMAT + --shortstat 的输出（单文件历史是 --name-status，记到 file 上）。没有统计行的提交（空提交、合并提交）记作 0；
  * mergeStats 为假（旧版 git 不支持 --diff-merges）时合并提交记作 null。
  */
 export function parseLog(stdout: string, mergeStats = true): GitCommit[] {
@@ -163,7 +193,9 @@ export function parseLog(stdout: string, mergeStats = true): GitCommit[] {
     const message = fields.slice(7).join('\x1f').replace(/\r\n/g, '\n').replace(/\s+$/, '')
     const newline = message.indexOf('\n')
     const parentList = parents.split(' ').filter(Boolean)
-    const stat = parseShortStat(record.slice(end + 1))
+    const trailer = record.slice(end + 1)
+    const stat = parseShortStat(trailer)
+    const file = parseFileStatus(trailer)
     commits.push({
       hash,
       parents: parentList,
@@ -174,7 +206,10 @@ export function parseLog(stdout: string, mergeStats = true): GitCommit[] {
       subject: (newline < 0 ? message : message.slice(0, newline)).trim(),
       body: newline < 0 ? '' : message.slice(newline + 1).replace(/^\n+/, ''),
       refs: parseDecorations(refs),
-      stat: stat ?? (parentList.length > 1 && !mergeStats ? null : { files: 0, insertions: 0, deletions: 0 }),
+      stat: file
+        ? null
+        : (stat ?? (parentList.length > 1 && !mergeStats ? null : { files: 0, insertions: 0, deletions: 0 })),
+      ...(file ? { file } : {}),
     })
   }
   return commits

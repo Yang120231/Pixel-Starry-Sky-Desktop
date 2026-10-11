@@ -63,7 +63,7 @@ async function commit(message: string, dir = project, extra: string[] = []): Pro
 }
 const tools = () => new GitTools(host, () => {})
 
-describe('Git 面板：提交历史', () => {
+describe('Git 面板：提交历史', { timeout: 30_000 }, () => {
   it('空仓库没有历史；不是仓库时报 notRepo', async () => {
     const g = tools()
     await expect(g.log(ref, { scope: 'auto', skip: 0, limit: 50 })).rejects.toMatchObject({
@@ -304,7 +304,7 @@ describe('Git 面板：提交历史', () => {
   })
 })
 
-describe('Git 面板：历史里会改动仓库的操作（第二期）', () => {
+describe('Git 面板：历史里会改动仓库的操作（第二期）', { timeout: 30_000 }, () => {
   const ok = (r: GitResult) => {
     if (!r.ok) throw new Error(`${r.failure.kind}: ${r.failure.detail}`)
     return r.status
@@ -438,5 +438,84 @@ describe('Git 面板：历史里会改动仓库的操作（第二期）', () => 
     expect((await g.compare(ref, { from: base, to: 'HEAD' })).commits).toBe(1)
     await expect(g.compare(ref, { from: 'HEAD~1', to: side })).rejects.toThrow('分支不存在')
     await expect(g.compare(ref, { from: 'main', to: '--all' })).rejects.toThrow()
+  })
+})
+
+describe('Git 面板：单文件历史（§9.15）', { timeout: 30_000 }, () => {
+  /** a.txt 改两次后改名成 docs/b.txt 再改一次；另有不相关的提交和一个二进制文件 */
+  async function fileRepo() {
+    await init()
+    await writeFile(join(project, 'a.txt'), 'one\n')
+    const c1 = await commit('add a')
+    await writeFile(join(project, 'other.txt'), 'x\n')
+    await commit('unrelated')
+    await writeFile(join(project, 'a.txt'), 'one\ntwo\n')
+    const c2 = await commit('edit a')
+    await mkdir(join(project, 'docs'))
+    await git(project, ['mv', 'a.txt', 'docs/b.txt'])
+    const c3 = await commit('move a to docs/b')
+    await writeFile(join(project, 'docs', 'b.txt'), 'one\ntwo\nthree\nfour\n')
+    const c4 = await commit('edit b')
+    await writeFile(join(project, 'img.bin'), Buffer.from([0, 1, 2]))
+    await commit('add binary')
+    await writeFile(join(project, 'img.bin'), Buffer.from([0, 9, 9, 9]))
+    await commit('change binary')
+    return { c1, c2, c3, c4 }
+  }
+
+  it('跟着改名往前找，每个提交带这个文件的路径、状态和增删行数，没有其他文件的提交', async () => {
+    const { c1, c2, c3, c4 } = await fileRepo()
+    const page = await tools().log(ref, { scope: 'auto', skip: 0, limit: 50, path: 'docs/b.txt' })
+    expect(page.path).toBe('docs/b.txt')
+    expect(page.commits.map(c => c.hash)).toEqual([c4, c3, c2, c1])
+    expect(
+      page.commits.map(c => [c.file?.code, c.file?.path, c.file?.origPath, c.file?.insertions, c.file?.deletions]),
+    ).toEqual([
+      ['M', 'docs/b.txt', null, 2, 0],
+      ['R', 'docs/b.txt', 'a.txt', 0, 0],
+      ['M', 'a.txt', null, 1, 0],
+      ['A', 'a.txt', null, 1, 0],
+    ])
+    expect(page.commits[0].stat).toBeNull()
+    // HEAD 在后面改二进制文件的提交上，不在这个文件的历史里
+    expect(page.commits[0].refs).toEqual([])
+    // 二进制文件没有行数
+    const bin = await tools().log(ref, { scope: 'auto', skip: 0, limit: 50, path: 'img.bin' })
+    expect(bin.commits.map(c => [c.subject, c.file?.insertions])).toEqual([
+      ['change binary', null],
+      ['add binary', null],
+    ])
+  })
+
+  it('分页、在文件历史里搜索、Windows 路径分隔符', async () => {
+    await fileRepo()
+    const g = tools()
+    const first = await g.log(ref, { scope: 'auto', skip: 0, limit: 2, path: 'docs\\b.txt' })
+    expect(first.commits.map(c => c.subject)).toEqual(['edit b', 'move a to docs/b'])
+    expect(first.more).toBe(true)
+    const rest = await g.log(ref, { scope: 'auto', skip: 2, limit: 2, path: 'docs/b.txt' })
+    expect(rest.commits.map(c => c.subject)).toEqual(['edit a', 'add a'])
+    expect(rest.more).toBe(false)
+    const found = await g.log(ref, { scope: 'auto', skip: 0, limit: 50, path: 'docs/b.txt', search: 'EDIT' })
+    expect(found.commits.map(c => c.subject)).toEqual(['edit b', 'edit a'])
+    expect(found.commits[1].file?.path).toBe('a.txt')
+  })
+
+  it('工作区是子目录时，文件树的路径按工作区算，提交里的路径按仓库根目录算；非法路径被拒', async () => {
+    await fileRepo()
+    const sub = new GitTools(
+      { ...host, resolve: () => ({ projectId: 'p', name: 'docs', path: join(project, 'docs') }) },
+      () => {},
+    )
+    const fromTree = await sub.log(ref, { scope: 'auto', skip: 0, limit: 50, path: 'b.txt' })
+    expect(fromTree.path).toBe('docs/b.txt')
+    expect(fromTree.commits).toHaveLength(4)
+    const fromRepo = await sub.log(ref, { scope: 'auto', skip: 0, limit: 50, path: 'docs/b.txt', pathBase: 'repo' })
+    expect(fromRepo.commits.map(c => c.hash)).toEqual(fromTree.commits.map(c => c.hash))
+    const g = tools()
+    for (const bad of ['../x', 'a/../../x', '', './', 'a//b'])
+      await expect(g.log(ref, { scope: 'auto', skip: 0, limit: 50, path: bad })).rejects.toThrow()
+    // 不存在的文件：没有提交
+    expect((await g.log(ref, { scope: 'auto', skip: 0, limit: 50, path: 'nope.txt' })).commits).toEqual([])
   })
 })

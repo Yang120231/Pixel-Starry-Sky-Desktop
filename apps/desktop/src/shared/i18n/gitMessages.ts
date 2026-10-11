@@ -429,4 +429,27 @@ export const gitMessages = {
   'git.history.done.switch': { zh: '已切换到 {name}', en: 'Switched to {name}' },
   'git.history.done.deleteBranch': { zh: '已删除分支「{name}」', en: 'Deleted branch "{name}"' },
   'git.history.done.deleteTag': { zh: '已删除标签「{name}」', en: 'Deleted tag "{name}"' },
+  // 单文件历史（docs/ui/git-panel.md §9.15）
+  'git.history.file.show': { zh: '查看文件历史', en: 'View file history' },
+  'git.history.file.title': { zh: '文件历史', en: 'File history' },
+  'git.history.file.close': { zh: '退出文件历史', en: 'Close file history' },
+  'git.history.file.empty': {
+    zh: '这个文件没有提交记录（可能还没提交过）',
+    en: 'No commits for this file (it may not be committed yet)',
+  },
+  'git.history.file.renamedFrom': { zh: '改名前：{path}', en: 'Renamed from {path}' },
+  'git.history.file.diffPrev': { zh: '和上一版本比较', en: 'Compare with previous version' },
+  'git.history.file.pin': { zh: '选为比较的一端', en: 'Select for compare' },
+  'git.history.file.pinned': {
+    zh: '已选 {hash}，在另一个版本上右键「和 {hash} 比较这个文件」',
+    en: 'Selected {hash}. Right-click another version and choose "Compare file with {hash}"',
+  },
+  'git.history.file.pinnedBadge': { zh: '已选', en: 'Selected' },
+  'git.history.file.compareWith': { zh: '和 {hash} 比较这个文件', en: 'Compare file with {hash}' },
+  'git.history.file.versions': { zh: '{from} → {to}', en: '{from} → {to}' },
+  'git.history.file.showCommit': { zh: '查看这个提交的全部改动', en: 'Show all changes in this commit' },
+  'git.history.file.otherProject': {
+    zh: 'Git 面板显示的是另一个工作区，先切到这个项目再看文件历史',
+    en: 'The Git panel shows another workspace. Switch to this project first to see the file history',
+  },
 } as const

@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ClipboardCopy,
   Copy,
+  FileClock,
   GitBranchPlus,
   GitCommitHorizontal,
   GitCompare,
@@ -76,6 +77,13 @@ const LOAD_AHEAD = 240
 const BODY_LINES = 8
 
 type CommitDiffInput = Extract<GitDiffInput, { area: 'commit' }>
+/** 差异视图里的一项：一个文件在两个提交之间；caption 写在文件名下面 */
+interface DiffItem {
+  file: GitCommitFile
+  from: string | null
+  to: string
+  caption?: string
+}
 type Detail =
   | { state: 'loading' }
   | { state: 'error'; message: string }
@@ -121,6 +129,7 @@ export function GitHistory({
   reloadKey,
   onStatus,
   onFailure,
+  fileRequest,
 }: {
   target: WorkspaceRef
   demo: boolean
@@ -131,6 +140,8 @@ export function GitHistory({
   onStatus: (status: GitStatus) => void
   /** 冲突这类要在面板上处理的失败（带「中止」等按钮），交给面板的失败卡片 */
   onFailure: (failure: GitFailure) => void
+  /** 打开某个文件的历史（§9.15）：nonce 变了就换成这个文件 */
+  fileRequest?: { path: string; base: 'workspace' | 'repo'; nonce: number } | null
 }) {
   useI18n()
   const api = useHistoryApi(target, demo)
@@ -150,9 +161,14 @@ export function GitHistory({
   const [stale, setStale] = useState(false)
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set())
   const [details, setDetails] = useState<Record<string, Detail>>({})
-  const [diff, setDiff] = useState<{ files: GitCommitFile[]; index: number; from: string | null; to: string } | null>(
-    null,
+  const [diff, setDiff] = useState<{ items: DiffItem[]; index: number } | null>(null)
+  /** 单文件历史（§9.15）：只列改过这个文件的提交；filePath 是查到的仓库内路径 */
+  const [file, setFile] = useState<{ path: string; base: 'workspace' | 'repo' } | null>(
+    fileRequest ? { path: fileRequest.path, base: fileRequest.base } : null,
   )
+  const [filePath, setFilePath] = useState<string | null>(null)
+  /** 单文件历史里选为比较一端的版本 */
+  const [pinned, setPinned] = useState<GitCommit | null>(null)
   const [menu, setMenu] = useState<{ x: number; y: number; commit: GitCommit } | null>(null)
   const [scopeMenu, setScopeMenu] = useState<{ x: number; y: number } | null>(null)
   const [picking, setPicking] = useState(false)
@@ -174,6 +190,23 @@ export function GitHistory({
     if (!diff && list.current) list.current.scrollTop = scrollBack.current
   }, [diff])
 
+  const lastNonce = useRef(fileRequest?.nonce)
+  useEffect(() => {
+    if (!fileRequest || fileRequest.nonce === lastNonce.current) return
+    lastNonce.current = fileRequest.nonce
+    setFile({ path: fileRequest.path, base: fileRequest.base })
+    setDiff(null)
+  }, [fileRequest])
+  const openFileHistory = (path: string) => {
+    setDiff(null)
+    setFile({ path, base: 'repo' })
+  }
+  useEffect(() => {
+    setPinned(null)
+    setFilePath(null)
+    list.current?.scrollTo({ top: 0 })
+  }, [file])
+
   useEffect(() => {
     const t = window.setTimeout(() => setQuery(search.trim()), 300)
     return () => window.clearTimeout(t)
@@ -190,7 +223,13 @@ export function GitHistory({
       try {
         const skip = reset ? 0 : commitsRef.current.length
         const [page, nextRefs] = await Promise.all([
-          api.log({ scope, search: query || undefined, skip, limit: PAGE }),
+          api.log({
+            scope,
+            search: query || undefined,
+            skip,
+            limit: PAGE,
+            ...(file ? { path: file.path, pathBase: file.base } : {}),
+          }),
           reset ? api.refs() : Promise.resolve(null),
         ])
         if (id !== token.current) return
@@ -205,6 +244,7 @@ export function GitHistory({
           })
         setMore(page.more)
         setShallow(page.shallow)
+        setFilePath(page.path ?? null)
         if (nextRefs) setRefs(nextRefs)
       } catch (e) {
         if (id === token.current) setError(errorText(e))
@@ -212,7 +252,7 @@ export function GitHistory({
         if (id === token.current) setLoading(null)
       }
     },
-    [api, scope, query],
+    [api, scope, query, file],
   )
 
   // 打开、换范围 / 搜索、点顶部刷新：重新加载第一页
@@ -234,7 +274,8 @@ export function GitHistory({
     }
   }, [headKey, refKey])
 
-  const rows = useMemo(() => (query ? null : layoutGraph(commits)), [commits, query])
+  // 搜索和单文件历史不画分支线（列出的提交不连续）
+  const rows = useMemo(() => (query || file ? null : layoutGraph(commits)), [commits, query, file])
   const lanes = useMemo(() => Math.max(1, ...(rows ?? []).map(r => r.width)), [rows])
   const entries = useMemo(
     () =>
@@ -405,8 +446,34 @@ export function GitHistory({
         })
     }
     if (refActions.length) refActions[0] = { ...refActions[0], section: tr('git.history.section.refs') }
+    const fileActions: MenuAction[] =
+      file && c.file
+        ? [
+            { label: tr('git.history.file.diffPrev'), icon: FileClock, run: () => openVersion(c) },
+            pinned && pinned.hash !== c.hash && pinned.file
+              ? {
+                  label: tr('git.history.file.compareWith', { hash: shortHash(pinned.hash) }),
+                  icon: GitCompare,
+                  run: () => compareVersions(pinned, c),
+                }
+              : {
+                  label: tr('git.history.file.pin'),
+                  icon: GitCompare,
+                  run: () => {
+                    setPinned(c)
+                    toast(tr('git.history.file.pinned', { hash: shortHash(c.hash) }))
+                  },
+                },
+            {
+              label: tr('git.history.file.showCommit'),
+              icon: ChevronDown,
+              run: () => toggleCommit(c),
+            },
+          ]
+        : []
     return [
-      { label: tr('git.history.copyHash'), icon: Copy, run: () => copy(c.hash) },
+      ...fileActions,
+      { label: tr('git.history.copyHash'), icon: Copy, separator: fileActions.length > 0, run: () => copy(c.hash) },
       { label: tr('git.history.copyMessage'), icon: ClipboardCopy, run: () => copy(fullMessage(c)) },
       { label: tr('git.history.reference'), icon: MessageSquarePlus, separator: true, run: () => reference(c) },
       { label: tr('git.history.review'), icon: Sparkles, run: () => review(c) },
@@ -453,7 +520,7 @@ export function GitHistory({
       : scope === 'all'
         ? tr('git.history.scope.all')
         : tr('git.history.scope.picked', { n: scope.length })
-  const base = !query && refs?.base && refs.branch && refs.head ? refs.base : null
+  const base = !query && !file && refs?.base && refs.branch && refs.head ? refs.base : null
 
   const renderDetail = (key: string, body: (data: GitChangeSet, commits?: number) => ReactNode) => {
     const detail = details[key]
@@ -472,10 +539,11 @@ export function GitHistory({
       <>
         <ChangedFiles
           files={set.files}
+          onHistory={index => openFileHistory(set.files[index].path)}
           onOpen={index => {
             hideHover()
             scrollBack.current = list.current?.scrollTop ?? 0
-            setDiff({ files: set.files, index, from: set.from, to: set.to })
+            setDiff({ items: set.files.map(f => ({ file: f, from: set.from, to: set.to })), index })
           }}
         />
         {set.truncated && <p className="px-1.5 text-meta text-warn">{tr('git.history.truncated')}</p>}
@@ -498,6 +566,51 @@ export function GitHistory({
         {files(set)}
       </div>
     ))
+
+  /** 单文件历史里一个提交的这个文件：和上一版本（第一父提交）比较 */
+  const versionItem = (c: GitCommit): DiffItem | null =>
+    c.file
+      ? {
+          file: c.file,
+          from: c.file.code === 'A' ? null : (c.parents[0] ?? null),
+          to: c.hash,
+          caption: `${shortHash(c.hash)} · ${c.subject}`,
+        }
+      : null
+  /** 点一行：看这个文件在这个提交里的改动；上一个 / 下一个文件换成更新 / 更早的版本 */
+  const openVersion = (c: GitCommit) => {
+    const items = commits.flatMap(x => {
+      const item = versionItem(x)
+      return item ? [item] : []
+    })
+    const index = items.findIndex(item => item.to === c.hash)
+    if (index < 0) return
+    hideHover()
+    scrollBack.current = list.current?.scrollTop ?? 0
+    setDiff({ items, index })
+  }
+  /** 任意两个版本之间这个文件的差异：旧的在左 */
+  const compareVersions = (a: GitCommit, b: GitCommit) => {
+    const [older, newer] = commits.indexOf(a) > commits.indexOf(b) ? [a, b] : [b, a]
+    if (!older.file || !newer.file) return
+    hideHover()
+    scrollBack.current = list.current?.scrollTop ?? 0
+    setDiff({
+      items: [
+        {
+          file: {
+            ...newer.file,
+            code: 'M',
+            origPath: older.file.path !== newer.file.path ? older.file.path : null,
+          },
+          from: older.hash,
+          to: newer.hash,
+          caption: tr('git.history.file.versions', { from: shortHash(older.hash), to: shortHash(newer.hash) }),
+        },
+      ],
+      index: 0,
+    })
+  }
 
   const renderEntry = (entry: HistoryEntry) => {
     const graph: GraphRow = entry.graph ?? { lane: 0, color: 0, lines: [], width: 1, merge: false }
@@ -553,11 +666,12 @@ export function GitHistory({
             tabIndex={0}
             aria-expanded={expanded}
             aria-label={`${c.subject} · ${shortHash(c.hash)}`}
-            onClick={() => toggleCommit(c)}
+            onClick={() => (file && c.file ? openVersion(c) : toggleCommit(c))}
             onKeyDown={e => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault()
-                toggleCommit(c)
+                if (file && c.file) openVersion(c)
+                else toggleCommit(c)
               } else if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
                 e.preventDefault()
                 const r = e.currentTarget.getBoundingClientRect()
@@ -599,6 +713,26 @@ export function GitHistory({
               <span className="min-w-0 truncate">{c.author}</span>
               <span aria-hidden>·</span>
               <span className="shrink-0 tabular-nums">{commitTime(c.committedAt)}</span>
+              {c.file && (
+                <>
+                  {c.file.insertions !== null && (
+                    <span className="shrink-0 font-mono text-[11px] tabular-nums">
+                      <span className="text-success">+{c.file.insertions}</span>{' '}
+                      <span className="text-danger">−{c.file.deletions}</span>
+                    </span>
+                  )}
+                  {(c.file.path !== filePath || c.file.origPath) && (
+                    <span className="min-w-0 truncate" title={c.file.origPath ?? c.file.path}>
+                      · {c.file.origPath ? tr('git.history.file.renamedFrom', { path: c.file.origPath }) : c.file.path}
+                    </span>
+                  )}
+                </>
+              )}
+              {pinned?.hash === c.hash && (
+                <span className="shrink-0 rounded-full border border-accent-line px-1.5 text-[11px] text-accent-fg">
+                  {tr('git.history.file.pinnedBadge')}
+                </span>
+              )}
             </div>
           </div>
           {expanded &&
@@ -620,18 +754,19 @@ export function GitHistory({
   }
 
   if (diff) {
-    const file = diff.files[diff.index]
+    const item = diff.items[diff.index]
+    const f = item.file
     return (
       <GitDiffView
-        key={`${diff.to}:${file.path}`}
-        file={{ path: file.path, origPath: file.origPath, code: file.code, local: null, submodule: false }}
+        key={`${item.from}:${item.to}:${f.path}`}
+        file={{ path: f.path, origPath: f.origPath, code: f.code, local: null, submodule: false }}
         area="commit"
         busy={false}
-        load={() =>
-          api.diff({ area: 'commit', path: file.path, origPath: file.origPath, from: diff.from, to: diff.to })
-        }
+        caption={item.caption}
+        load={() => api.diff({ area: 'commit', path: f.path, origPath: f.origPath, from: item.from, to: item.to })}
         onBack={() => setDiff(null)}
-        onNeighbour={delta => setDiff(d => d && { ...d, index: (d.index + delta + d.files.length) % d.files.length })}
+        onNeighbour={delta => setDiff(d => d && { ...d, index: (d.index + delta + d.items.length) % d.items.length })}
+        onHistory={file ? undefined : () => openFileHistory(f.path)}
       />
     )
   }
@@ -706,6 +841,25 @@ export function GitHistory({
           )}
         </div>
       </div>
+      {file && (
+        <div
+          data-history-file
+          className="flex shrink-0 items-center gap-2 border-b border-line-subtle bg-accent-soft/40 py-1 pr-1.5 pl-3"
+        >
+          <FileClock size={13} className="shrink-0 text-accent-fg" />
+          <span className="shrink-0 text-meta text-fg-muted">{tr('git.history.file.title')}</span>
+          <span className="min-w-0 flex-1 truncate text-list text-fg" title={filePath ?? file.path}>
+            {filePath ?? file.path}
+          </span>
+          <IconButton
+            icon={X}
+            label={tr('git.history.file.close')}
+            size={22}
+            iconSize={12}
+            onClick={() => setFile(null)}
+          />
+        </div>
+      )}
       {stale && (
         <button
           type="button"
@@ -785,8 +939,10 @@ export function GitHistory({
           </div>
         ) : !commits.length ? (
           <div className="py-6 text-center">
-            <p className="text-list text-fg-muted">{tr(query ? 'git.history.noMatch' : 'git.history.empty')}</p>
-            {!query && <p className="mt-1 text-meta text-fg-faint">{tr('git.history.emptyHint')}</p>}
+            <p className="text-list text-fg-muted">
+              {tr(query ? 'git.history.noMatch' : file ? 'git.history.file.empty' : 'git.history.empty')}
+            </p>
+            {!query && !file && <p className="mt-1 text-meta text-fg-faint">{tr('git.history.emptyHint')}</p>}
           </div>
         ) : (
           <div role="list" aria-label={tr('git.tab.history')} className={cn(loading === 'first' && 'opacity-60')}>

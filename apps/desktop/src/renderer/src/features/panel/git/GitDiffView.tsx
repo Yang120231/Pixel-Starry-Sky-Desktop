@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  FileClock,
   FileCode2,
   Minus,
   Plus,
@@ -104,6 +105,8 @@ export function GitDiffView({
   onUnstage,
   onDiscard,
   onOpen,
+  onHistory,
+  caption,
   busy,
 }: {
   file: GitFileChange
@@ -116,6 +119,10 @@ export function GitDiffView({
   onUnstage?: () => void
   onDiscard?: () => void
   onOpen?: () => void
+  /** 看这个文件的历史（docs/ui/git-panel.md §9.15） */
+  onHistory?: () => void
+  /** 文件名下面的说明（历史里写是哪个提交 / 哪两个版本）；没有时写目录 */
+  caption?: string
   busy: boolean
 }) {
   useI18n()
@@ -167,11 +174,17 @@ export function GitDiffView({
           <div className="truncate text-list font-medium text-fg" title={file.path}>
             {name}
           </div>
-          {(dir || file.origPath) && (
-            <div className="truncate text-meta text-fg-faint">
-              {file.origPath ? `${file.origPath} → ` : ''}
-              {dir}
+          {caption ? (
+            <div className="truncate text-meta text-fg-faint" title={caption}>
+              {caption}
             </div>
+          ) : (
+            (dir || file.origPath) && (
+              <div className="truncate text-meta text-fg-faint">
+                {file.origPath ? `${file.origPath} → ` : ''}
+                {dir}
+              </div>
+            )
           )}
         </div>
         <IconButton
@@ -220,6 +233,15 @@ export function GitDiffView({
           onClick={() => onNeighbour(1)}
         />
         {onOpen && <IconButton icon={FileCode2} label={tr('git.open')} size={26} iconSize={14} onClick={onOpen} />}
+        {onHistory && (
+          <IconButton
+            icon={FileClock}
+            label={tr('git.history.file.show')}
+            size={26}
+            iconSize={14}
+            onClick={onHistory}
+          />
+        )}
         {onStage && (
           <IconButton icon={Plus} label={tr('git.stage')} size={26} iconSize={14} disabled={busy} onClick={onStage} />
         )}

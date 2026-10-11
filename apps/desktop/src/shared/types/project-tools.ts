@@ -232,8 +232,10 @@ export interface GitCommit {
   /** 第一行以外的提交信息 */
   body: string
   refs: GitRefLabel[]
-  /** 改动统计（合并提交按第一父提交算；旧版 git 不支持时为 null） */
+  /** 改动统计（合并提交按第一父提交算；旧版 git 不支持时、单文件历史里为 null） */
   stat: { files: number; insertions: number; deletions: number } | null
+  /** 单文件历史（§9.15）：这个文件在这个提交里的路径、状态和增删行数（改过名时 origPath 是改名前） */
+  file?: GitCommitFile
 }
 /** auto：当前分支 + 上游 + 基础分支；all：全部分支和标签；数组：自选的引用（短名） */
 export type GitLogScope = 'auto' | 'all' | string[]
@@ -241,6 +243,10 @@ export interface GitLogQuery {
   scope: GitLogScope
   /** 按提交信息、作者、哈希前缀搜索；有搜索词时按提交时间排，没有分支线 */
   search?: string
+  /** 单文件历史（§9.15）：只列改过这个文件的提交，跟着改名往前找；没有分支线 */
+  path?: string
+  /** path 相对哪里：工作区（文件树）或仓库根目录（提交里的文件），默认工作区 */
+  pathBase?: 'workspace' | 'repo'
   skip: number
   limit: number
 }
@@ -250,6 +256,8 @@ export interface GitLogPage {
   more: boolean
   /** 浅克隆：更早的历史没有下载 */
   shallow: boolean
+  /** 单文件历史查的路径（相对仓库根目录） */
+  path?: string
 }
 export interface GitRefs {
   /** 当前提交；还没有提交时为 null */

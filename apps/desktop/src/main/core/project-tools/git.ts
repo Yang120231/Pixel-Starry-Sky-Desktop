@@ -25,7 +25,15 @@ import type {
 } from '../../../shared/types/project-tools'
 import { workspacePath } from '../workspace-files'
 import { value, type ToolsHost } from './common'
-import { classifyGitError, isHash, LOG_FORMAT, parseCommitFiles, parseLog, parseStatusV2 } from './git-parse'
+import {
+  classifyGitError,
+  isHash,
+  LOG_FORMAT,
+  parseCommitFiles,
+  parseLog,
+  parseLogNumstat,
+  parseStatusV2,
+} from './git-parse'
 import type { TrashFile } from './trash'
 
 export const DIFF_LIMIT = 2 * 1024 * 1024
@@ -505,6 +513,7 @@ export class GitTools {
       throw new Error('参数不正确')
     const search = q.search === undefined || q.search === null ? '' : value(q.search, 200).trim()
     const repo = await this.historyRepo(ref)
+    const filePath = q.path === undefined || q.path === null ? null : this.historyPath(repo, q.path, q.pathBase)
     const refs = await this.refs(ref)
     const { options, revs } = this.revisions(refs, q.scope ?? 'auto')
     const [mergeStats, shallow] = await Promise.all([
@@ -525,16 +534,45 @@ export class GitTools {
       commits,
       more,
       shallow: shallow === 'true',
+      ...(filePath ? { path: filePath } : {}),
     })
     if (!revs.length && !options.length) return page([], false)
-    const read = async (args: string[]): Promise<GitCommit[]> =>
-      parseLog(
-        await this.exec(repo, 'history', [...base, ...args, ...options, '--end-of-options', ...revs], 'read'),
-        mergeStats,
-      )
+    const tail = [...options, '--end-of-options', ...revs, ...(filePath ? ['--', filePath] : [])]
+    const read = async (args: string[]): Promise<GitCommit[]> => {
+      if (!filePath) return parseLog(await this.exec(repo, 'history', [...base, ...args, ...tail], 'read'), mergeStats)
+      // 单文件历史（§9.15）：跟着改名往前找；状态和路径、增删行数分两次取（--name-status 会盖过 --numstat）
+      const fileBase = base.filter(a => a !== '--shortstat' && !a.startsWith('--diff-merges'))
+      const [named, counted] = await Promise.all([
+        this.exec(repo, 'history', [...fileBase, '--follow', '-M', '--name-status', ...args, ...tail], 'read'),
+        this.exec(repo, 'history', [...fileBase, '--follow', '-M', '--numstat', ...args, ...tail], 'read'),
+      ])
+      const counts = parseLogNumstat(counted)
+      return parseLog(named, mergeStats).map(c => {
+        const [insertions, deletions] = counts.get(c.hash) ?? [null, null]
+        return c.file ? { ...c, file: { ...c.file, insertions, deletions } } : c
+      })
+    }
     if (!search) {
+      // --follow 配 --skip 时，跳过的范围跨过改名就跟丢了（git 2.55 实测）：单文件历史从头取再切
+      if (filePath) {
+        const commits = await read([`-n${skip + limit + 1}`])
+        return page(commits.slice(skip, skip + limit), commits.length > skip + limit)
+      }
       const commits = await read(['--topo-order', `-n${skip + limit + 1}`, `--skip=${skip}`])
       return page(commits.slice(0, limit), commits.length > limit)
+    }
+    // 单文件历史里搜索：--grep 会把改名那个提交也筛掉，--follow 就跟丢了；取这个文件的全部历史（最多 5000）再筛
+    if (filePath) {
+      const needle = search.toLowerCase()
+      const all = await read(['-n5000'])
+      const found = all.filter(
+        c =>
+          c.subject.toLowerCase().includes(needle) ||
+          c.body.toLowerCase().includes(needle) ||
+          c.author.toLowerCase().includes(needle) ||
+          c.hash.startsWith(needle),
+      )
+      return page(found.slice(skip, skip + limit), found.length > skip + limit)
     }
     // 搜索：提交信息、作者分开查（git 会把两者按「且」组合），哈希前缀单独解析；合并去重后按提交时间排
     const want = skip + limit + 1
@@ -556,6 +594,17 @@ export class GitTools {
       c => !seen.has(c.hash) && !!seen.add(c.hash),
     )
     return page(merged.slice(skip, skip + limit), merged.length > skip + limit)
+  }
+
+  /** 单文件历史的路径 → 相对仓库根目录；不接受 .. 和 . 段 */
+  private historyPath(repo: Repo, path: unknown, base: unknown): string {
+    const p = value(path, 4096, true)
+      .replace(/\\/g, '/')
+      .replace(/^(\.\/)+/, '')
+      .replace(/^\/+/, '')
+      .replace(/\/+$/, '')
+    if (!p || p.split('/').some(seg => !seg || seg === '..' || seg === '.')) throw new Error('参数不正确')
+    return base === 'repo' ? p : repo.prefix + p
   }
 
   /** 两个提交之间的改动文件；from 为 null 时是根提交（和空树比） */

@@ -7,6 +7,7 @@ import {
   Folder,
   FolderOpen,
   File,
+  FileClock,
   FilePlus,
   FolderPlus,
   RefreshCw,
@@ -26,6 +27,7 @@ import { useActiveWorkspace } from '@/features/editor/target'
 import { OPEN_FILES_EVENT, dirtyFile, openFile, openFilesUnder, removeFile, renameOpenFiles, useFiles } from './store'
 import type { DirectoryListing, FileEntry, WorkspaceRef } from '../../../../shared/types/workspace'
 import { demo } from '@/data/demo'
+import { requestFileHistory } from '@/features/panel/git/fileHistory'
 const pathKey = (path: string): string => {
   const p = path.replaceAll('\\', '/').replace(/\/$/, '')
   return window.pixelsky?.platform === 'win32' ? p.toLowerCase() : p
@@ -793,10 +795,20 @@ function FileRow({
               danger: true,
               run: () => ops.remove(refTarget, entry),
             },
+            ...(entry.kind === 'directory'
+              ? []
+              : [
+                  {
+                    label: tr('git.history.file.show'),
+                    icon: FileClock,
+                    separator: true,
+                    run: () => requestFileHistory({ ref: refTarget, path: entry.path, base: 'workspace' }),
+                  },
+                ]),
             {
               label: tr('panes.PaneView.copyFilePath'),
               icon: Copy,
-              separator: true,
+              separator: entry.kind === 'directory',
               run: () => {
                 if (!isDemo) void window.pixelsky!.files.copyPath(refTarget, entry.path).catch(e => setError(e.message))
               },

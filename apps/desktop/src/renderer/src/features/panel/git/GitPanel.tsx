@@ -4,6 +4,7 @@ import {
   ArrowUp,
   ChevronDown,
   CloudDownload,
+  FileClock,
   FileCode2,
   GitBranch,
   Minus,
@@ -47,6 +48,7 @@ import {
 import { GitDiffView } from './GitDiffView'
 import { BranchMenu } from './BranchMenu'
 import { GitHistory } from './GitHistory'
+import { FILE_HISTORY_EVENT, takeFileHistory } from './fileHistory'
 import { publishGitStatus } from './summary'
 import { demo as demoData } from '@/data/demo'
 
@@ -148,6 +150,26 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
     'changes',
   )
   const [historyKey, setHistoryKey] = useState(0)
+  // 单文件历史（§9.15）：文件树等地方发来的请求，或者在「更改」里点文件的历史
+  const [fileRequest, setFileRequest] = useState<{
+    path: string
+    base: 'workspace' | 'repo'
+    nonce: number
+  } | null>(null)
+  const showFileHistory = (path: string, base: 'workspace' | 'repo') => {
+    setSelected(null)
+    setView('history')
+    setFileRequest({ path, base, nonce: Date.now() })
+  }
+  useEffect(() => {
+    const consume = () => {
+      const request = takeFileHistory(target, demo)
+      if (request) showFileHistory(request.path, request.base)
+    }
+    consume()
+    window.addEventListener(FILE_HISTORY_EVENT, consume)
+    return () => window.removeEventListener(FILE_HISTORY_EVENT, consume)
+  }, [])
   // 顶栏的分支和新任务起点的改动数跟着 Git 页读到的状态走（./summary.ts）
   useEffect(() => {
     if (status && !demo) publishGitStatus(target, status)
@@ -425,6 +447,11 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
               : api!.gitDiff(target, { path: selectedFile.path, area: selected.area, origPath: selectedFile.origPath })
           }
           onBack={() => setSelected(null)}
+          onHistory={
+            selected.area !== 'untracked' && selectedFile.code !== 'A'
+              ? () => showFileHistory(selectedFile.path, 'repo')
+              : undefined
+          }
           onNeighbour={delta => {
             const next = neighbour(sections, selected.area, selected.path, delta)
             if (next) setSelected({ area: next.area, path: next.file.path })
@@ -641,6 +668,7 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
             reloadKey={historyKey}
             onStatus={setStatus}
             onFailure={setFailure}
+            fileRequest={fileRequest}
           />
         </>
       ) : (
@@ -783,6 +811,15 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
                             size={22}
                             iconSize={12}
                             onClick={actions.onOpen}
+                          />
+                        )}
+                        {section.area !== 'untracked' && file.code !== 'A' && (
+                          <IconButton
+                            icon={FileClock}
+                            label={tr('git.history.file.show')}
+                            size={22}
+                            iconSize={12}
+                            onClick={() => showFileHistory(file.path, 'repo')}
                           />
                         )}
                         {actions.onDiscard && (

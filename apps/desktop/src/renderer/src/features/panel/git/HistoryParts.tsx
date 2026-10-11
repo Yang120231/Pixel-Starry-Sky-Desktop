@@ -1,6 +1,6 @@
 // 提交历史的小部件（docs/ui/git-panel.md §9.3–9.5）：分支线单元格、引用标记、改动文件列表
-import { Cloud, GitBranch, GitCommitHorizontal, Tag } from 'lucide-react'
-import { cn } from '@/ui'
+import { Cloud, FileClock, GitBranch, GitCommitHorizontal, Tag } from 'lucide-react'
+import { cn, IconButton } from '@/ui'
 import { tr } from '@/i18n/core'
 import type { GitCommitFile } from '../../../../../shared/types/project-tools'
 import type { GraphRow } from './graph'
@@ -177,19 +177,27 @@ const CODE_COLOR: Record<GitCommitFile['code'], string> = {
   T: 'text-warn',
 }
 
-/** 一个提交 / 一段比较里改动的文件：状态字母、文件名、目录、+/−；点了看差异 */
-export function ChangedFiles({ files, onOpen }: { files: GitCommitFile[]; onOpen: (index: number) => void }) {
+/** 一个提交 / 一段比较里改动的文件：状态字母、文件名、目录、+/−；点了看差异，悬停可以看这个文件的历史 */
+export function ChangedFiles({
+  files,
+  onOpen,
+  onHistory,
+}: {
+  files: GitCommitFile[]
+  onOpen: (index: number) => void
+  onHistory?: (index: number) => void
+}) {
   return (
     <ul className="flex flex-col">
       {files.map((file, i) => {
         const { name, dir } = splitPath(file.path)
         return (
-          <li key={file.path}>
+          <li key={file.path} className="group/file flex min-w-0 items-center rounded-md hover:bg-hover">
             <button
               type="button"
               onClick={() => onOpen(i)}
               title={`${tr('git.viewDiff')} · ${file.origPath ? file.origPath + ' → ' : ''}${file.path}`}
-              className="flex h-7 w-full min-w-0 items-center gap-2 rounded-md px-1.5 text-left hover:bg-hover"
+              className="flex h-7 min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 text-left"
             >
               <span
                 className={cn('w-3 shrink-0 text-center font-mono text-[11px] font-semibold', CODE_COLOR[file.code])}
@@ -215,6 +223,17 @@ export function ChangedFiles({ files, onOpen }: { files: GitCommitFile[]; onOpen
                 </span>
               )}
             </button>
+            {onHistory && file.code !== 'D' && (
+              <span className="shrink-0 opacity-0 group-hover/file:opacity-100 group-focus-within/file:opacity-100">
+                <IconButton
+                  icon={FileClock}
+                  label={tr('git.history.file.show')}
+                  size={22}
+                  iconSize={12}
+                  onClick={() => onHistory(i)}
+                />
+              </span>
+            )}
           </li>
         )
       })}
