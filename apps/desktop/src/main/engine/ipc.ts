@@ -40,9 +40,9 @@ export async function initEngine(ctx: AppContext): Promise<void> {
     record => {
       const machine = machineOf(record.id)
       if (machine === 'local') return ctx.engine?.platformRequestContext(record)
-      return async (requestId, model) => {
+      return async (requestId, model, chargeId) => {
         if (!ctx.machines) throw new Error('SSH_NOT_CONNECTED')
-        await ctx.machines.call(machine, 'platform:request', [record.id, requestId, model])
+        await ctx.machines.call(machine, 'platform:request', [record.id, requestId, model, chargeId])
       }
     },
     ctx.providers,

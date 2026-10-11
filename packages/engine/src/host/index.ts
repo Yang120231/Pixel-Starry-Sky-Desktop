@@ -119,7 +119,9 @@ export class EngineHost {
   }
 
   /** Capture the execution before the gateway awaits I/O; late requests cannot move to a later turn. */
-  platformRequestContext(record: SessionRecord): ((requestId: string, model: string) => void) | undefined {
+  platformRequestContext(
+    record: SessionRecord,
+  ): ((requestId: string, model: string, chargeId?: string) => void) | undefined {
     return this.m.usage.platformRequestContext(record)
   }
 

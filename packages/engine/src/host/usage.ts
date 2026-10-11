@@ -23,17 +23,28 @@ export class HostUsage {
 
   constructor(private readonly ctx: HostContext) {}
 
-  /** Capture the execution before the gateway awaits I/O; late requests cannot move to a later turn. */
-  platformRequestContext(record: SessionRecord): ((requestId: string, model: string) => void) | undefined {
+  /**
+   * Capture the execution before the gateway awaits I/O; late requests cannot move to a later turn.
+   * 网关发请求前用自己的 ID 调一次；收到响应后带上 Sub2api 回传的 chargeId 再调一次，补到同一条上。
+   */
+  platformRequestContext(
+    record: SessionRecord,
+  ): ((requestId: string, model: string, chargeId?: string) => void) | undefined {
     const rt = this.ctx.runtimes.get(record.id),
       turnId = rt?.snapshot.turnId
     if (!rt || !turnId || !record.platform) return
     const key = `${record.id}:${turnId}`,
       groupId = record.platform.groupId
-    return (requestId, model) => {
+    return (requestId, model, chargeId) => {
       if (rt.snapshot.turnId !== turnId || this.ctx.closing) return
       const requests = this.platformRequests.get(key) ?? []
-      requests.push({ id: requestId, model, groupId })
+      const charge = typeof chargeId === 'string' && /^[a-f0-9-]{36}$/.test(chargeId) ? chargeId : undefined
+      const known = requests.find(r => r.id === requestId)
+      if (known) {
+        if (charge) known.chargeId = charge
+        return
+      }
+      requests.push({ id: requestId, ...(charge ? { chargeId: charge } : {}), model, groupId })
       this.platformRequests.set(key, requests)
     }
   }

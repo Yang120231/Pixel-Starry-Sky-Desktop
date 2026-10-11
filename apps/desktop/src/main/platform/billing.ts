@@ -22,7 +22,7 @@ export async function platformCharges(settlement: PlatformSettlement, signal: Ab
     const params = new URLSearchParams({
       request_ids: settlement.requests
         .slice(offset, offset + 100)
-        .map(r => r.id)
+        .map(r => r.chargeId ?? r.id)
         .join(','),
       start_date: date(settlement.startedAt - 86400000),
     })

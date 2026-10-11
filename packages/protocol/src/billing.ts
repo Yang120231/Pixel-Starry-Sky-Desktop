@@ -2,7 +2,13 @@
 export type CostSource = 'estimate' | 'platform' | 'pending' | 'unavailable'
 export type BillingSource = 'balance' | 'subscription'
 export interface PlatformRequest {
+  /** 本机网关生成的 ID（pixelsky-UUID），发请求前就记下，用来把请求固定到这一轮 */
   id: string
+  /**
+   * Sub2api 给这次请求生成的 ID（云端回传的响应头 X-Client-Request-ID），按它查实扣金额；
+   * 没有时（旧云端、旧记录）按 id 查（docs/cloud-service.md §4.9）
+   */
+  chargeId?: string
   model: string
   groupId: string
 }

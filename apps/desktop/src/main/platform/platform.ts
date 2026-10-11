@@ -84,7 +84,9 @@ export async function initPlatform(
   getRecord: (id: string) => SessionRecord | null | Promise<SessionRecord | null>,
   /** Claude Code 压缩上下文用的模型（设置 › 本机引擎）；null 表示跟随会话模型 */
   compactModel: () => string | null = () => null,
-  requestContext?: (record: SessionRecord) => ((requestId: string, model: string) => void | Promise<void>) | undefined,
+  requestContext?: (
+    record: SessionRecord,
+  ) => ((requestId: string, model: string, chargeId?: string) => void | Promise<void>) | undefined,
   /** 自定义 API 的接口配置；网关转发时按会话取真实 Key */
   providers: ProviderStore | null = null,
 ): Promise<(record: SessionRecord) => NodeJS.ProcessEnv> {

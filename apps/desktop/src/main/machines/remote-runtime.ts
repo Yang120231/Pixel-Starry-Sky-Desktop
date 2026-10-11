@@ -107,9 +107,9 @@ export async function createRemoteRuntime(
       node: process.versions.node,
       shell: process.env.SHELL || '/bin/sh',
     }),
-    'platform:request': (id, requestId, model) => {
+    'platform:request': (id, requestId, model, chargeId) => {
       const record = host.executionRecord(id)
-      if (record) host.platformRequestContext(record)?.(requestId, model)
+      if (record) host.platformRequestContext(record)?.(requestId, model, chargeId)
     },
     'platform:record': id => host.executionRecord(id),
   }

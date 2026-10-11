@@ -20,13 +20,15 @@ describe('平台代理按引擎隔离 Responses 与 Messages', () => {
     } as SessionRecord
     let account: string | null = 'user'
     const tracked: string[] = []
+    const charged: Array<[string, string | undefined]> = []
     const calls: Array<{ path: string; group: string | null; body: unknown }> = []
     server = platformGateway({
       sessions: new Map([['session', { recordId: 'session', secret: 'local-secret' }]]),
       record: () => record,
       account: () => account,
-      requestContext: () => id => {
-        tracked.push(id)
+      requestContext: () => (id, _model, chargeId) => {
+        if (chargeId) charged.push([id, chargeId])
+        else tracked.push(id)
       },
       fetch: async (path, init) => {
         expect(new Headers(init.headers).get('X-Client-Request-ID')).toBe(tracked.at(-1))
@@ -36,7 +38,12 @@ describe('平台代理按引擎隔离 Responses 与 Messages', () => {
           body: JSON.parse(String(init.body)),
         })
         return new Response('event: response.completed\ndata: {}\n\n', {
-          headers: { 'Content-Type': 'text/event-stream', 'Retry-After': '5' },
+          // 云端回传 Sub2api 生成的请求 ID（docs/cloud-service.md §4.9）
+          headers: {
+            'Content-Type': 'text/event-stream',
+            'Retry-After': '5',
+            'X-Client-Request-ID': '0b8f6d1e-4c3a-4e7b-9d2f-5a6b7c8d9e0f',
+          },
         })
       },
     })
@@ -65,6 +72,8 @@ describe('平台代理按引擎隔离 Responses 与 Messages', () => {
     expect(calls).toHaveLength(1)
     expect(tracked).toHaveLength(1)
     expect(tracked[0]).toMatch(/^pixelsky-[a-f0-9-]{36}$/)
+    // 收到响应后把 Sub2api 的 ID 补到同一条上
+    expect(charged).toEqual([[tracked[0], '0b8f6d1e-4c3a-4e7b-9d2f-5a6b7c8d9e0f']])
   })
 
   it('Messages 把 Claude Code 的身份头带给云端（Sub2api「仅限 Claude Code」分组靠它认终端）', async () => {

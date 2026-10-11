@@ -7,7 +7,7 @@ export function settleUsage(original: TurnUsage, charges: PlatformCharge[], fina
   const models: Record<string, ModelTurnUsage> = {}
   let missing = 0
   for (const request of settlement.requests) {
-    const c = byId.get(request.id)
+    const c = byId.get(request.chargeId ?? request.id)
     const valid =
       c &&
       c.groupId === request.groupId &&

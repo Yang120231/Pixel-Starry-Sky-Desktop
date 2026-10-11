@@ -42,7 +42,10 @@ export function platformGateway(options: {
   provider?: (id: string) => ResolvedProvider | null
   /** 直接发往自定义接口的 fetch（测试时替换） */
   upstream?: Fetch
-  requestContext?: (record: SessionRecord) => ((requestId: string, model: string) => void | Promise<void>) | undefined
+  /** 发请求前用本机 ID 记一次；收到响应后带上 Sub2api 回传的 chargeId 再记一次（docs/cloud-service.md §4.9） */
+  requestContext?: (
+    record: SessionRecord,
+  ) => ((requestId: string, model: string, chargeId?: string) => void | Promise<void>) | undefined
 }): Server {
   return createServer(async (req, res) => {
     const abort = new AbortController()
@@ -249,17 +252,22 @@ export function platformGateway(options: {
       if (!responses && options.rewrite)
         body = await options.rewrite(body, () => options.routeModels?.(platform.groupId) ?? Promise.resolve([]))
       requestId = `pixelsky-${randomUUID()}`
+      const model = String((JSON.parse(body) as { model?: string }).model ?? record.model ?? 'unknown')
       headers.set('X-Client-Request-ID', requestId)
-      await trackRequest?.(
-        requestId,
-        String((JSON.parse(body) as { model?: string }).model ?? record.model ?? 'unknown'),
-      )
+      // 先记下再发：记不上（SSH 断了）就不发，免得扣了费却对不上这一轮
+      await trackRequest?.(requestId, model)
       const upstream = await options.fetch(responses ? '/v1/platform/responses' : '/v1/platform/messages', {
         method: 'POST',
         headers,
         body,
         signal: abort.signal,
       })
+      // Sub2api 不认我们的 ID，调用记录按它自己生成、回在响应头里的 ID 记（docs/cloud-service.md §4.9）
+      const chargeId = upstream.headers.get('x-client-request-id')
+      if (chargeId && chargeId !== requestId && /^[a-f0-9-]{36}$/.test(chargeId))
+        await Promise.resolve(trackRequest?.(requestId, model, chargeId)).catch(error =>
+          log.warn('记不上平台请求的计费 ID', { ...trace(error), chargeId }),
+        )
       await pipe(upstream)
     } catch (error) {
       if (abort.signal.aborted) log.info('引擎先断开了连接', trace(error))

@@ -392,6 +392,56 @@ describe('platform settlement lifecycle', () => {
       usage: { models: { alpha: { costUsd: 0.0034 } } },
     })
   })
+  it('收到 Sub2api 回传的 ID 后补到同一条请求上，按它查实扣（docs/cloud-service.md §4.9）', async () => {
+    const upstream = '0b8f6d1e-4c3a-4e7b-9d2f-5a6b7c8d9e0f'
+    let asked: string[] = []
+    const { host, adapter, record, send } = setup({
+      settlementDelays: [5],
+      platformCharges: async s => {
+        asked = s.requests.map(r => r.chargeId ?? r.id)
+        return [
+          {
+            requestId: upstream,
+            model: 'alpha',
+            groupId: '7',
+            costUsd: 0.0021,
+            billing: 'balance',
+            rateMultiplier: 1,
+            input: 4,
+            output: 5,
+            cacheRead: 0,
+            cacheWrite: 0,
+          },
+        ]
+      },
+    })
+    await host.update(record.id, { platform: { account: 'alice', groupId: '7' } })
+    await send('bill-c')
+    await until(() => !!adapter.sessions[0]?.active)
+    const session = adapter.sessions[0],
+      turnId = session.active!
+    const track = host.platformRequestContext(host.executionRecord(record.id)!)!
+    track('pixelsky-local', 'alpha')
+    // 格式不对的 chargeId 不收
+    track('pixelsky-local', 'alpha', 'not-a-uuid')
+    track('pixelsky-local', 'alpha', upstream)
+    session.ctx.emit({
+      type: 'turn_completed',
+      turnId,
+      outcome: 'completed',
+      error: null,
+      usage: { durationMs: 50, models: { alpha: { input: 1, output: 2, cacheRead: 0, cacheWrite: 0, costUsd: 99 } } },
+    })
+    await until(() => host.open(record.id).items.some(i => i.kind === 'turn_stats' && i.usage.settlement?.complete))
+    expect(asked).toEqual([upstream])
+    const stats = host.open(record.id).items.find(i => i.kind === 'turn_stats')
+    expect(stats).toMatchObject({
+      usage: {
+        settlement: { requests: [{ id: 'pixelsky-local', chargeId: upstream }] },
+        models: { alpha: { costUsd: 0.0021 } },
+      },
+    })
+  })
   it('does not resurrect deleted sessions or cleared usage when a delayed query finishes', async () => {
     let finish!: () => void
     const { host, adapter, record, send } = setup({

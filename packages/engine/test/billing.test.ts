@@ -56,4 +56,19 @@ describe('authoritative platform settlement', () => {
         .costUsd,
     ).toBeNull()
   })
+  it('有 chargeId 时按 Sub2api 的 ID 对账，本机 ID 对不上也算（docs/cloud-service.md §4.9）', () => {
+    const upstream = '0b8f6d1e-4c3a-4e7b-9d2f-5a6b7c8d9e0f'
+    const withCharge: TurnUsage = {
+      ...original,
+      settlement: {
+        ...original.settlement!,
+        requests: [{ id: 'pixelsky-local', chargeId: upstream, model: 'model', groupId: '7' }],
+      },
+    }
+    // 只有本机 ID 的记录（Sub2api 从没记过）对不上
+    expect(settleUsage(withCharge, [charge('pixelsky-local')], true).models.model.costSource).toBe('unavailable')
+    const settled = settleUsage(withCharge, [charge(upstream)], true)
+    expect(settled.models.model).toMatchObject({ costUsd: 0.0034, costSource: 'platform' })
+    expect(settled.settlement?.complete).toBe(true)
+  })
 })
