@@ -22,6 +22,24 @@ const CJK = /[一-鿿]/
 const UNREACHABLE =
   /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|ECONNRESET|EAI_AGAIN|connection (?:refused|error|reset)|fetch failed|network error/i
 const PERMISSION = /\b403\b|permission/i
+/**
+ * 接口返回的流不合规（第三方中转常见，docs/ui/error-retry.md §10）：思考增量发到了不是思考的内容块上、
+ * 压缩请求拿到空的总结、回复没发完（缺少结束标记）就断了。按原文认，不管错误代码（这类常是 unknown）。
+ */
+const STREAM_FORMAT: Array<[RegExp, string]> = [
+  [
+    /not a thinking block|signature_delta/i,
+    '接口返回的思考内容格式不对（第三方中转常见）：对这个接口关掉思考，或者换一个接口',
+  ],
+  [
+    /automatic compaction failed[^]*(empty response|never arrived)/i,
+    '上下文太长，自动压缩也没成功：接口给压缩请求返回了空内容或没发完。可以开一个新会话，或换一个接口再压缩（/compact）',
+  ],
+  [
+    /never arrived|response above may be incomplete/i,
+    '接口的回复没发完就断了，上面的内容可能不完整；可以重试，反复出现就换一个接口',
+  ],
+]
 
 /** 没有合成消息时（例如旧版本只给结果原文），从原文认出同样的错误类型；不像 API 报错的返回 null */
 export function errorCodeFromText(raw: string): string | null {
@@ -42,6 +60,8 @@ export function errorCodeFromText(raw: string): string | null {
  */
 export function friendlyApiError(code: string | null, raw: string): string | null {
   if (CJK.test(raw)) return null
+  const format = STREAM_FORMAT.find(([re]) => re.test(raw))
+  if (format) return format[1]
   const c = code || errorCodeFromText(raw)
   if (!c) return null
   switch (c) {

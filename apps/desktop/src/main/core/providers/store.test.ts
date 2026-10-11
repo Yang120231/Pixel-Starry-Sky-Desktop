@@ -52,6 +52,14 @@ describe('自定义 API 配置存储（docs/ui/custom-api.md §4.2）', () => {
     expect(again.resolve(view.id)).toMatchObject({ apiKey: KEY, headers: { 'X-Org': 'org-secret-9' } })
   })
 
+  it('测试连接 / 读取模型用的草稿不要求名称；保存仍然要名称', () => {
+    const store = new ProviderStore(dir, cipher())
+    expect(store.draft({ ...input, name: '' })).toMatchObject({ name: '未命名接口', apiKey: KEY })
+    expect(store.draft({ ...input, name: undefined as never }).name).toBe('未命名接口')
+    expect(store.draft(input).name).toBe('DeepSeek 兼容')
+    expect(() => store.save({ ...input, name: '  ' })).toThrow('请填写名称')
+  })
+
   it('编辑时 Key 留空不改、请求头打码不改，没列出的请求头删掉；不能换协议', () => {
     const store = new ProviderStore(dir, cipher())
     const { id } = store.save(input)

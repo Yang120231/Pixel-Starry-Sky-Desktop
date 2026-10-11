@@ -402,7 +402,10 @@ export class ClaudeTranslator {
         const background = !info || info.background
         if (background && msg.skip_transcript !== true && msg.ambient !== true) {
           const kind = taskKindLabel(info?.kind ?? '')
-          const summary = str(msg.summary)
+          // 子智能体因 API 报错提前结束：报错部分和主会话一样说人话
+          const raw = str(msg.summary)
+          const apiRaw = status === 'failed' ? /API error:\s*([^]*)$/i.exec(raw)?.[1] : undefined
+          const summary = (apiRaw && friendlyApiError(null, apiRaw)) || raw
           this.notice(
             status === 'failed' ? 'warn' : 'info',
             kind + (TASK_STATUS[status] ?? '已结束') + (summary ? '：' + summary : ''),

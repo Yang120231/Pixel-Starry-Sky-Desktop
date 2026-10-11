@@ -375,6 +375,70 @@ describe('自定义 API 经本机网关（docs/ui/custom-api.md §4.1）', () =>
     expect(calls).toHaveLength(6)
   })
 
+  it('接口没有计数接口：记一次 INFO，之后同一个地址在本机直接回 404、不再发出去也不记警告；换地址重新试', async () => {
+    const record = {
+      id: 's',
+      engine: 'claude',
+      model: 'deepseek-chat',
+      platform: null,
+      provider: { id: 'p1' },
+    } as SessionRecord
+    let current: ResolvedProvider = provider()
+    const calls: string[] = []
+    const logs: { level: string; message: string }[] = []
+    setLogSink({ enabled: () => true, write: (level, _scope, message) => logs.push({ level, message }) })
+    try {
+      server = platformGateway({
+        sessions: new Map([['s', { recordId: 's', secret: 'local-secret' }]]),
+        record: () => record,
+        account: () => null,
+        fetch: async () => {
+          throw new Error('platform fetch must not be used')
+        },
+        provider: () => current,
+        upstream: async url => {
+          calls.push(url)
+          if (url.endsWith('/count_tokens'))
+            return new Response('{"error":"not found"}', {
+              status: 404,
+              headers: { 'Content-Type': 'application/json' },
+            })
+          return new Response('event: message_stop\ndata: {}\n\n', { headers: { 'Content-Type': 'text/event-stream' } })
+        },
+      })
+      server.listen(0, '127.0.0.1')
+      await once(server, 'listening')
+      const base = 'http://127.0.0.1:' + (server.address() as { port: number }).port
+      const count = () =>
+        fetch(base + '/v1/messages/count_tokens', {
+          method: 'POST',
+          headers: { 'x-api-key': 'local-secret' },
+          body: JSON.stringify({ model: 'deepseek-chat', messages: [] }),
+        })
+      expect((await count()).status).toBe(404)
+      const local = await count()
+      expect(local.status).toBe(404)
+      expect(await local.json()).toMatchObject({ type: 'error', error: { type: 'not_found_error' } })
+      await count()
+      expect(calls).toEqual(['https://relay.example.com/anthropic/v1/messages/count_tokens'])
+      expect(logs.filter(l => l.level === 'warn')).toEqual([])
+      expect(logs.filter(l => l.message.includes('没有计数接口'))).toHaveLength(1)
+      // 正常的消息请求不受影响
+      await fetch(base + '/v1/messages', {
+        method: 'POST',
+        headers: { 'x-api-key': 'local-secret' },
+        body: JSON.stringify({ model: 'deepseek-chat' }),
+      })
+      expect(calls).toHaveLength(2)
+      // 换了接口地址：重新问一次
+      current = provider({ baseUrl: 'https://other.example.com/anthropic' })
+      await count()
+      expect(calls.at(-1)).toBe('https://other.example.com/anthropic/v1/messages/count_tokens')
+    } finally {
+      setLogSink(null)
+    }
+  })
+
   it('Codex + Responses 接口：Bearer 认证，网关的 /v1/responses 拼到带 /v1 的地址上', async () => {
     const record = { id: 's', engine: 'codex', model: 'gpt-5', platform: null, provider: { id: 'p2' } } as SessionRecord
     const calls: { url: string; init: RequestInit }[] = []

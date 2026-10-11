@@ -20,6 +20,10 @@ const midStreamError = `event: error\ndata: ${JSON.stringify({
   error: { type: 'api_error', message: '上游连接中途断开，这次请求已停止（不自动反复重试，避免重复计费）' },
 })}\n\n`
 
+/** 计数接口这些状态码当作「没有这个接口」 */
+const COUNT_TOKENS_MISSING = new Set([404, 405, 501])
+const COUNT_TOKENS_RECHECK_MS = 60 * 60_000
+
 export interface GatewaySession {
   secret: string
   recordId: string
@@ -47,6 +51,8 @@ export function platformGateway(options: {
     record: SessionRecord,
   ) => ((requestId: string, model: string, chargeId?: string) => void | Promise<void>) | undefined
 }): Server {
+  /** 没有计数接口的自定义接口地址 → 发现的时间；过一小时再试一次（接口可能补上了） */
+  const noCountTokens = new Map<string, number>()
   return createServer(async (req, res) => {
     const abort = new AbortController()
     res.on('close', () => abort.abort())
@@ -58,6 +64,8 @@ export function platformGateway(options: {
     let bytes = 0
     let requestId: string | null = null
     let sessionId: string | null = null
+    /** 已知的、不用每次记警告的失败（自定义接口没有计数接口） */
+    let quiet = false
     const trace = (error?: unknown) => ({
       path,
       ...(sessionId ? { sessionId } : {}),
@@ -121,7 +129,7 @@ export function platformGateway(options: {
       if (tail.length) res.write(tail)
       res.end()
       if (abort.signal.aborted) log.info('引擎先断开了连接', trace())
-      else if (upstream.status >= 400) log.warn('上游返回错误', trace())
+      else if (upstream.status >= 400 && !quiet) log.warn('上游返回错误', trace())
       else log.debug('请求完成', trace())
     }
     const passthrough = (): Record<string, string> => {
@@ -161,6 +169,19 @@ export function platformGateway(options: {
         ...passthrough(),
       })
       const url = upstreamUrl(p, path)
+      // 很多第三方接口没有计数接口：Claude Code 一次连发好几个，每次都 404。记住这个地址，之后在本机直接回 404
+      // （它照样改用估算），不再发出去，也不再每次记警告（docs/ui/custom-api.md §8）
+      if (countTokens) {
+        const since = noCountTokens.get(url)
+        if (since !== undefined && Date.now() - since < COUNT_TOKENS_RECHECK_MS) {
+          status = 404
+          res
+            .writeHead(404, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+            .end(JSON.stringify({ type: 'error', error: { type: 'not_found_error', message: 'Not Found' } }))
+          log.debug('计数接口不可用，本机直接回复', trace())
+          return
+        }
+      }
       let upstream: Response
       try {
         upstream = await (options.upstream ?? fetch)(url, {
@@ -175,6 +196,16 @@ export function platformGateway(options: {
         log.warn('连不上自定义接口', trace(error))
         fail(502, classifyError(error, url).message)
         return
+      }
+      if (countTokens && COUNT_TOKENS_MISSING.has(upstream.status)) {
+        quiet = true
+        if (!noCountTokens.has(url) || Date.now() - noCountTokens.get(url)! >= COUNT_TOKENS_RECHECK_MS)
+          log.info('自定义接口没有计数接口，之后在本机直接回复', {
+            ...trace(),
+            status: upstream.status,
+            provider: p.name,
+          })
+        noCountTokens.set(url, Date.now())
       }
       await pipe(upstream)
     }

@@ -297,7 +297,9 @@ export class ProviderStore {
     const now = this.now()
     const next: StoredProvider = {
       id: existing?.id ?? randomBytes(8).toString('hex'),
-      name: text(input.name, '名称', 60),
+      // 测试连接、读取模型列表用的草稿不需要名称（还没填名称就先点「获取模型」很常见）
+      name:
+        draft && (typeof input.name !== 'string' || !input.name.trim()) ? '未命名接口' : text(input.name, '名称', 60),
       template,
       protocol,
       baseUrl: normalizeBaseUrl(input.baseUrl, protocol),

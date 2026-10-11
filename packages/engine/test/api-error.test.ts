@@ -64,6 +64,63 @@ describe('报错归类', () => {
     for (const [code, raw, want] of cases) expect(friendlyApiError(code, raw)).toBe(want)
   })
 
+  it('接口返回的流不合规（第三方中转常见）：思考块格式、压缩拿到空总结、回复没发完；不管错误代码', () => {
+    expect(friendlyApiError('unknown', 'API Error: Content block is not a thinking block')).toBe(
+      '接口返回的思考内容格式不对（第三方中转常见）：对这个接口关掉思考，或者换一个接口',
+    )
+    const compact =
+      '上下文太长，自动压缩也没成功：接口给压缩请求返回了空内容或没发完。可以开一个新会话，或换一个接口再压缩（/compact）'
+    expect(
+      friendlyApiError(
+        'invalid_request',
+        'Prompt is too long · automatic compaction failed: summarization produced empty response',
+      ),
+    ).toBe(compact)
+    expect(
+      friendlyApiError(
+        null,
+        'Prompt is too long · automatic compaction failed: API Error: Part of the response never arrived. The response above may be incomplete.',
+      ),
+    ).toBe(compact)
+    expect(
+      friendlyApiError(null, 'API Error: Part of the response never arrived. The response above may be incomplete.'),
+    ).toBe('接口的回复没发完就断了，上面的内容可能不完整；可以重试，反复出现就换一个接口')
+    // 只是上下文太长（压缩没失败）：照旧
+    expect(friendlyApiError('invalid_request', 'Prompt is too long')).toBe(
+      '上下文太长：先压缩（/compact）或开一个新会话',
+    )
+  })
+
+  it('子智能体因 API 报错提前结束：警告里的报错也说人话', () => {
+    const events: EngineEvent[] = []
+    const t = new ClaudeTranslator('D:\\work', {
+      emit: e => events.push(e),
+      sessionId: () => {},
+      permissionMode: () => {},
+      turnEnded: () => {},
+      fastState: () => {},
+    })
+    t.startTurn('turn-1')
+    t.handle({
+      type: 'system',
+      subtype: 'task_started',
+      task_id: 'a1',
+      task_type: 'local_agent',
+      description: 'x',
+      is_backgrounded: true,
+    })
+    t.handle({
+      type: 'system',
+      subtype: 'task_notification',
+      task_id: 'a1',
+      status: 'failed',
+      summary: 'Agent terminated early due to an API error: Content block is not a thinking block (error type unknown)',
+    })
+    const notices = events.flatMap(e => (e.type === 'item_completed' && e.item.kind === 'notice' ? [e.item.text] : []))
+    expect(notices.some(text => text.includes('接口返回的思考内容格式不对'))).toBe(true)
+    expect(notices.some(text => text.includes('Content block'))).toBe(false)
+  })
+
   it('没有合成消息时从原文认出类型；不像 API 报错的照原文', () => {
     expect(errorCodeFromText('API Error: 401 {"type":"error","error":{"type":"authentication_error"}}')).toBe(
       'authentication_failed',
