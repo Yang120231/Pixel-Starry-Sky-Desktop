@@ -4,6 +4,7 @@ import { app, shell } from 'electron'
 import type { AppInfo, AppLink } from '../../shared/types/app-info'
 import { baseUrl } from '../account/account'
 import * as ipc from '../ipc/guard'
+import { WhatsNewStore } from './whats-new'
 
 export const REPO_URL = 'https://github.com/xiaoheoxo/Pixel-Starry-Sky-Desktop'
 
@@ -44,6 +45,8 @@ async function open(link: AppLink): Promise<void> {
       return shell.openExternal(REPO_URL)
     case 'auth':
       return shell.openExternal(baseUrl())
+    case 'releases':
+      return shell.openExternal(`${REPO_URL}/releases`)
   }
 }
 
@@ -53,8 +56,25 @@ export function initAppInfo(): void {
   ipc.handle(
     'app:open',
     (_event, link: unknown) => {
-      if (link !== 'data-dir' && link !== 'repo' && link !== 'auth') throw new Error('未知的链接')
+      if (link !== 'data-dir' && link !== 'repo' && link !== 'auth' && link !== 'releases')
+        throw new Error('未知的链接')
       return open(link)
+    },
+    deny,
+  )
+  // 更新后的「更新内容」（GitHub #13）：开发模式下不弹
+  const whatsNew = new WhatsNewStore(app.getPath('userData'), app.getVersion())
+  ipc.handle(
+    'app:whatsNew',
+    () => ({ pending: channel() === 'dev' ? null : whatsNew.pending, muted: whatsNew.muted }),
+    deny,
+  )
+  ipc.handle(
+    'app:whatsNewSet',
+    (_event, raw: unknown) => {
+      const patch = (raw ?? {}) as { seen?: unknown; muted?: unknown }
+      if (typeof patch.muted === 'boolean') whatsNew.setMuted(patch.muted)
+      if (patch.seen === true) whatsNew.done()
     },
     deny,
   )

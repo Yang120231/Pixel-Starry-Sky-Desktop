@@ -129,6 +129,8 @@ const engine: EngineBridge = {
 const appInfo: AppInfoBridge = {
   getInfo: () => call('app:info'),
   open: link => call('app:open', link),
+  whatsNew: () => call('app:whatsNew'),
+  setWhatsNew: patch => call('app:whatsNewSet', patch),
 }
 
 // 本机日志（docs/ui/logging.md §4.7）：实时条目只在有页面订阅时才让主进程推过来

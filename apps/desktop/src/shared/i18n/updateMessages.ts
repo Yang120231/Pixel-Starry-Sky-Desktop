@@ -37,4 +37,17 @@ export const updateMessages = {
     en: 'GitHub is limiting requests right now. Try again later',
   },
   'update.err.notReady': { zh: '新版本还没有下载好', en: "The new version hasn't finished downloading" },
+  // 更新后的「更新内容」弹窗（GitHub #13）；说明正文只有中文
+  'whatsNew.title': { zh: '像素星空已更新到 {p0}', en: 'Pixel Starry Sky updated to {p0}' },
+  'whatsNew.from': { zh: '上次用的是 {p0}', en: 'You were on {p0}' },
+  'whatsNew.fullLog': { zh: '查看完整更新日志', en: 'Full changelog' },
+  'whatsNew.mute': { zh: '不再提示', en: "Don't show again" },
+  'whatsNew.done': { zh: '知道了', en: 'Got it' },
+  'whatsNew.close': { zh: '关闭', en: 'Close' },
+  'whatsNew.show': { zh: '本版更新内容', en: "What's new" },
+  'whatsNew.setting': { zh: '更新后显示更新内容', en: "Show what's new after updating" },
+  'whatsNew.settingHint': {
+    zh: '更新到新版本后第一次打开时，弹窗说明这次更新了什么',
+    en: 'After an update, the first launch shows what changed in this version',
+  },
 } as const

@@ -22,6 +22,7 @@ import { FileConfirm } from '../features/files/FileConfirm'
 import { WindowControls } from '../features/layout/WindowControls'
 import { OPEN_RIGHT_WORKSPACE } from '../features/panel/workspaceStore'
 import { MachineDialogs } from '../features/machines/MachineDialogs'
+import { WhatsNewDialog } from '../features/update/WhatsNewDialog'
 import { MachineStatus } from '../features/machines/MachineStatus'
 import { showWorkbench, usePage } from '../features/layout/page'
 import { ChannelsPage } from '../features/channels/ChannelsPage'
@@ -199,6 +200,7 @@ export function App() {
       <CacheMissAlerts />
       <NotificationDispatcher />
       <MachineDialogs />
+      <WhatsNewDialog />
       <FileLifecycle />
       <FileConfirm />
       {/* 侧边栏、右侧面板一直挂载，收起 / 展开带滑动动画（docs/ui/workbench.md §4.1） */}

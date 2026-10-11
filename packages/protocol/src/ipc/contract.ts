@@ -58,6 +58,8 @@ export const IPC_CONTRACT = {
   'app:config': { kind: 'sendSync', route: 'local', trust: 'none' },
   'app:info': { kind: 'invoke', route: 'local', trust: 'sender' },
   'app:open': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'app:whatsNew': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'app:whatsNewSet': { kind: 'invoke', route: 'local', trust: 'sender' },
   'artifacts:open': { kind: 'invoke', route: 'local', trust: 'sender' },
   'artifacts:reveal': { kind: 'invoke', route: 'local', trust: 'sender' },
   'editor:choose': { kind: 'invoke', route: 'local', trust: 'sender' },

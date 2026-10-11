@@ -7,7 +7,9 @@ import type { AppInfo, AppLink } from '../../../../shared/types/app-info'
 import { useAccount } from '@/features/account'
 import { Button, Logo, cn } from '@/ui'
 import { updateActions, useUpdateState } from '@/features/update/store'
+import { RELEASE_NOTES, useWhatsNew, whatsNewActions } from '@/features/update/whatsNew'
 import type { UpdateState } from '../../../../shared/types/update'
+import { Toggle } from './SettingRow'
 
 const CHANNEL_LABELS: Record<AppInfo['channel'], string> = {
   get dev() {
@@ -101,7 +103,23 @@ export function AboutSection({ onOpenAccount }: { onOpenAccount: () => void }) {
       {update && <UpdateGroup update={update} />}
 
       <Group title={tr('settings.AboutSection.runtimeEnvironment')}>
-        <Row label={tr('settings.AboutSection.applicationVersion')} value={info?.version} mono />
+        <Row
+          label={tr('settings.AboutSection.applicationVersion')}
+          value={info?.version}
+          mono
+          action={
+            info && RELEASE_NOTES[info.version] ? (
+              <button
+                type="button"
+                data-whats-new-open
+                onClick={() => whatsNewActions.show(info.version)}
+                className="press no-drag h-7 shrink-0 rounded-md px-2 text-meta text-fg-secondary hover:bg-hover hover:text-fg"
+              >
+                {tr('whatsNew.show')}
+              </button>
+            ) : undefined
+          }
+        />
         <Row label="Electron" value={info?.electron} mono />
         <Row label="Chromium" value={info?.chrome} mono />
         <Row label="Node.js" value={info?.node} mono />
@@ -258,6 +276,7 @@ function UpdateGroup({ update }: { update: UpdateState }) {
           )}
         </div>
       )}
+      <WhatsNewToggle />
       <div className="flex min-h-10 items-center gap-4 px-4 py-2">
         <div className="min-w-0 flex-1">
           <p className="text-ui text-fg">{tr('update.beta')}</p>
@@ -282,6 +301,21 @@ function UpdateGroup({ update }: { update: UpdateState }) {
         </button>
       </div>
     </Group>
+  )
+}
+
+/** 「更新后显示更新内容」：关掉就是弹窗里的「不再提示」 */
+function WhatsNewToggle() {
+  useI18n()
+  const { muted } = useWhatsNew()
+  return (
+    <div className="flex min-h-10 items-center gap-4 border-b border-line-subtle px-4 py-2">
+      <div className="min-w-0 flex-1">
+        <p className="text-ui text-fg">{tr('whatsNew.setting')}</p>
+        <p className="text-meta text-fg-muted">{tr('whatsNew.settingHint')}</p>
+      </div>
+      <Toggle label={tr('whatsNew.setting')} checked={!muted} onChange={on => whatsNewActions.setMuted(!on)} />
+    </div>
   )
 }
 
