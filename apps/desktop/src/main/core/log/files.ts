@@ -1,9 +1,17 @@
 // 日志文件（docs/ui/logging.md §4.2）：main-YYYY-MM-DD.log，超过上限换 .1.log、.2.log…；
 // 保留 7 天、总量 100 MB。异步追加写入，退出和崩溃时可以同步写完。不依赖 Electron。
 import { appendFileSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs'
-import { appendFile, readFile } from 'node:fs/promises'
+import { appendFile, open } from 'node:fs/promises'
 import { join } from 'node:path'
-import { logTime, matchesLogQuery, parseLogLine, type LogEntry, type LogQuery } from '@pixelsky/protocol'
+import {
+  LOG_LEVEL_RANK,
+  logTime,
+  matchesLogQuery,
+  parseLogLine,
+  type LogEntry,
+  type LogLevel,
+  type LogQuery,
+} from '@pixelsky/protocol'
 
 export interface LogFile {
   name: string
@@ -174,28 +182,99 @@ export class LogFiles {
     }
   }
 
-  /** 从新到旧读，取符合条件的最新 limit 条，按时间先后返回 */
+  /**
+   * 从新到旧读，取符合条件的最新 limit 条，按时间先后返回。
+   * 文件从末尾按块倒着读，够数就停（不筛选时只读最新的一两块）；每块之间让出主进程（docs/ui/performance.md §4）。
+   * 先用 roughMatch 在原文上粗筛，可能符合的行才解析。
+   */
   async read(query: LogQuery, limit: number): Promise<LogEntry[]> {
     await this.flush()
     const sinceDay = query.since !== undefined ? dayOf(query.since) : null
     const untilDay = query.until !== undefined ? dayOf(query.until) : null
+    const rough = roughMatcher(query)
     const out: LogEntry[] = []
     for (const f of this.list().reverse()) {
       if (sinceDay && f.day < sinceDay) break
       if (untilDay && f.day > untilDay) continue
-      let text: string
       try {
-        text = await readFile(f.path, 'utf8')
+        for await (const lines of linesFromEnd(f.path)) {
+          for (let i = lines.length - 1; i >= 0 && out.length < limit; i--) {
+            if (!rough(lines[i])) continue
+            const entry = parseLogLine(lines[i])
+            if (entry && matchesLogQuery(entry, query)) out.push(entry)
+          }
+          if (out.length >= limit) break
+        }
       } catch {
         continue
-      }
-      const lines = text.split('\n')
-      for (let i = lines.length - 1; i >= 0 && out.length < limit; i--) {
-        const entry = parseLogLine(lines[i])
-        if (entry && matchesLogQuery(entry, query)) out.push(entry)
       }
       if (out.length >= limit) break
     }
     return out.reverse()
+  }
+}
+
+/** 一次倒着读多少字节 */
+const CHUNK = 1024 * 1024
+
+/** 从文件末尾按块倒着给出行（每块里的行按原来的先后顺序）；块之间是真正的异步读，主进程可以去做别的 */
+export async function* linesFromEnd(path: string, chunk = CHUNK): AsyncGenerator<string[]> {
+  const file = await open(path, 'r')
+  try {
+    let pos = (await file.stat()).size
+    let rest: Buffer = Buffer.alloc(0)
+    while (pos > 0) {
+      const len = Math.min(chunk, pos)
+      pos -= len
+      const buf = Buffer.allocUnsafe(len)
+      await file.read(buf, 0, len, pos)
+      const data = rest.length ? Buffer.concat([buf, rest]) : buf
+      // 还没读到文件开头：第一个换行之前可能是半行，留给下一块拼上（按字节切，不会切坏 UTF-8）
+      const first = pos > 0 ? data.indexOf(0x0a) : -1
+      if (pos > 0 && first < 0) {
+        rest = data
+        continue
+      }
+      rest = pos > 0 ? data.subarray(0, first) : Buffer.alloc(0)
+      yield (pos > 0 ? data.subarray(first + 1) : data).toString('utf8').split('\n')
+    }
+  } finally {
+    await file.close()
+  }
+}
+
+const LEVEL_OF: Record<string, LogLevel> = { DEBUG: 'debug', INFO: 'info', WARN: 'warn', ERROR: 'error' }
+/** 行首的时间（logTime 的格式） */
+const STAMP = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d/
+
+/**
+ * 在原文上粗筛：明显不符合的行不用解析。只会多放行、不会漏（放行的行还要过 matchesLogQuery）：
+ * 级别和模块看行里第二、三个词；搜索词看整行（转义过的反斜杠、换行另说，这时不粗筛）。
+ */
+export function roughMatcher(query: LogQuery): (line: string) => boolean {
+  const min = query.minLevel ? LOG_LEVEL_RANK[query.minLevel] : 0
+  const needle = query.text && !/[\\\r\n]/.test(query.text) ? query.text.toLowerCase() : null
+  const session = query.sessionId ?? null
+  if (!min && !query.scope && !needle && !session) return () => true
+  return line => {
+    if (min || query.scope) {
+      const a = line.indexOf(' ')
+      const b = a < 0 ? -1 : line.indexOf(' ', a + 1)
+      // 第一个词是时间、第二个是级别才算格式对；格式不对的行解析出来是 info、模块 -（见 parseLogLine）
+      let level = b < 0 || !STAMP.test(line) ? undefined : LEVEL_OF[line.slice(a + 1, b)]
+      const c = level && query.scope ? line.indexOf(' ', b + 1) : -1
+      let scope = level ? line.slice(b + 1, c < 0 ? undefined : c) : '-'
+      const reject = (min && LOG_LEVEL_RANK[level ?? 'info'] < min) || (query.scope && scope !== query.scope)
+      // 要丢掉之前确认时间真能解析（形状对、日期不对的行也按格式不对算），免得漏掉
+      if (reject && level && Number.isNaN(Date.parse(line.slice(0, a)))) {
+        level = undefined
+        scope = '-'
+      }
+      if (min && LOG_LEVEL_RANK[level ?? 'info'] < min) return false
+      if (query.scope && scope !== query.scope) return false
+    }
+    if (session && !line.includes(session)) return false
+    if (needle && !line.toLowerCase().includes(needle)) return false
+    return true
   }
 }

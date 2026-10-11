@@ -1,12 +1,12 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '../../i18n/core'
 // 设置 › 日志（docs/ui/logging.md §3.1）：读最近的条目、实时追加、筛选；打开文件夹、复制错误、导出诊断文件、详细日志
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ChevronRight, ClipboardCopy, FileDown, FolderOpen, Search, X } from 'lucide-react'
 import { formatLogLine, type LogEntry, type LogLevel, type LogQuery, type LogSettings } from '@pixelsky/protocol'
 import { Button, CopyButton, Segmented, Select, Spinner, cn } from '@/ui'
 import { SectionTitle, SettingRow, Toggle } from '../settings/SettingRow'
-import { MAX_ENTRIES, appendLive, recentProblems, remaining, scopesOf, shortTime } from './logView'
+import { MAX_ENTRIES, appendLive, entryKey, recentProblems, remaining, scopesOf, shortTime } from './logView'
 import { onLogFocus, takeLogFocus, type LogFocus } from './focus'
 
 type LevelFilter = 'all' | 'warn' | 'error'
@@ -75,10 +75,22 @@ export function LogsSection() {
     let live: LogEntry[] = []
     let loaded = false
     setLoading(true)
+    // 实时条目攒 100ms 一起加：日志来得密的时候（会话在跑、详细日志）不至于每条都重画一次列表
+    let batch: LogEntry[] = []
+    let timer = 0
+    const flush = () => {
+      timer = 0
+      const add = batch
+      batch = []
+      if (!cancelled && add.length) setEntries(list => add.reduce((acc, e) => appendLive(acc, e, query), list))
+    }
     const off = bridge.onEntry(entry => {
       if (cancelled) return
       if (!loaded) live.push(entry)
-      else setEntries(list => appendLive(list, entry, query))
+      else {
+        batch.push(entry)
+        if (!timer) timer = window.setTimeout(flush, 100)
+      }
     })
     bridge.read(query).then(
       list => {
@@ -100,6 +112,7 @@ export function LogsSection() {
     )
     return () => {
       cancelled = true
+      window.clearTimeout(timer)
       off()
     }
   }, [bridge, query])
@@ -267,14 +280,8 @@ export function LogsSection() {
         ) : entries.length === 0 ? (
           <div className="flex h-full items-center justify-center text-fg-muted">{tr('logs.empty')}</div>
         ) : (
-          entries.map((entry, i) => (
-            <LogRow
-              key={`${entry.ts}-${i}`}
-              entry={entry}
-              now={now}
-              open={open.has(entry)}
-              onToggle={() => toggleOpen(entry)}
-            />
+          entries.map(entry => (
+            <LogRow key={entryKey(entry)} entry={entry} now={now} open={open.has(entry)} onToggle={toggleOpen} />
           ))
         )}
       </div>
@@ -285,17 +292,39 @@ export function LogsSection() {
   )
 }
 
-function LogRow({ entry, now, open, onToggle }: { entry: LogEntry; now: number; open: boolean; onToggle: () => void }) {
+/**
+ * 一条日志。用 memo：新来一条只画新的这一行（原来每条都把 1000 行重画一遍，一次 70ms 左右，docs/ui/performance.md §4）。
+ * 屏幕外的行 content-visibility: auto，浏览器不排版、不绘制。
+ */
+const LogRow = memo(function LogRow({
+  entry,
+  now,
+  open,
+  onToggle,
+}: {
+  entry: LogEntry
+  now: number
+  open: boolean
+  onToggle: (entry: LogEntry) => void
+}) {
   const hasFields = !!entry.fields
   const multiline = entry.message.includes('\n')
   const expandable = hasFields || multiline
   return (
-    <div className={cn('border-b border-line-subtle last:border-b-0', open && 'bg-subtle')}>
+    <div
+      className={cn(
+        'border-b border-line-subtle [contain-intrinsic-size:auto_26px] [content-visibility:auto] last:border-b-0',
+        open && 'bg-subtle',
+      )}
+    >
       <button
         type="button"
-        onClick={expandable ? onToggle : undefined}
+        onClick={expandable ? () => onToggle(entry) : undefined}
         aria-expanded={expandable ? open : undefined}
-        title={new Date(entry.ts).toLocaleString()}
+        // 完整时间第一次悬停时再算：1000 行一起算本地化时间也要几十毫秒
+        onPointerEnter={e => {
+          if (!e.currentTarget.title) e.currentTarget.title = new Date(entry.ts).toLocaleString()
+        }}
         className={cn(
           'flex w-full items-start gap-2 px-2 py-1 text-left',
           expandable ? 'cursor-pointer hover:bg-hover' : 'cursor-text',
@@ -330,4 +359,4 @@ function LogRow({ entry, now, open, onToggle }: { entry: LogEntry; now: number; 
       )}
     </div>
   )
-}
+})

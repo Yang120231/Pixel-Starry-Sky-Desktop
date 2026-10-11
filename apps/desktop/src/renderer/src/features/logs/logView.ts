@@ -7,6 +7,15 @@ export const MAX_ENTRIES = 1000
 /** 常见模块：下拉里总是列出，读到的其他模块追加在后面 */
 const KNOWN_SCOPES = ['app', 'gateway', 'session', 'engine.claude', 'engine.codex', 'renderer', 'crash', 'console']
 
+/** 列表的 key：每条日志一个固定的编号。不能用下标——满 1000 条后每来一条都从头丢一条，下标全变、整个列表重建 */
+const keys = new WeakMap<LogEntry, number>()
+let nextKey = 0
+export function entryKey(entry: LogEntry): number {
+  let key = keys.get(entry)
+  if (key === undefined) keys.set(entry, (key = nextKey++))
+  return key
+}
+
 /** 实时条目符合当前条件就追加到末尾，超出上限从最旧的丢 */
 export function appendLive(entries: readonly LogEntry[], entry: LogEntry, query: LogQuery): LogEntry[] {
   if (!matchesLogQuery(entry, query)) return entries as LogEntry[]

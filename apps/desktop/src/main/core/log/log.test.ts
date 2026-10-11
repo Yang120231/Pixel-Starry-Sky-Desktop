@@ -3,8 +3,8 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSy
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { logTime, type LogEntry } from '@pixelsky/protocol'
-import { LogFiles } from './files'
+import { formatLogLine, logTime, matchesLogQuery, parseLogLine, type LogEntry, type LogQuery } from '@pixelsky/protocol'
+import { LogFiles, linesFromEnd, roughMatcher } from './files'
 import { LogService, VERBOSE_MS } from './service'
 import { logHostEvent } from './host-events'
 import { setLogSink } from '@pixelsky/engine'
@@ -64,6 +64,69 @@ describe('日志文件', () => {
     expect((await svc.read({ limit: 2 })).map(e => e.message)).toEqual(['今天', '出错'])
     expect((await svc.read({ minLevel: 'warn', sessionId: 's1' })).map(e => e.message)).toEqual(['昨天', '出错'])
     expect((await svc.read({ since: t0 })).map(e => e.message)).toEqual(['今天', '出错'])
+  })
+})
+
+describe('读日志不卡主进程（docs/ui/performance.md §4）', () => {
+  it('倒着按块读：块边界切在多字节字符中间、半行跨块都能拼回来，顺序不乱', async () => {
+    const path = join(dir, 'x.log')
+    const lines = Array.from({ length: 200 }, (_, i) => `第${i}行 ${'像素星空'.repeat(i % 7)}`)
+    writeFileSync(path, lines.join('\n') + '\n')
+    for (const chunk of [7, 13, 64, 1 << 20]) {
+      const got: string[] = []
+      for await (const block of linesFromEnd(path, chunk)) got.unshift(...block)
+      expect(got.filter(Boolean)).toEqual(lines)
+    }
+  })
+
+  it('粗筛只会多放行、不会漏：和 matchesLogQuery 对一批行逐条比', () => {
+    const entries: LogEntry[] = [
+      { ts: t0, level: 'info', scope: 'app', message: '应用启动' },
+      { ts: t0, level: 'warn', scope: 'gateway', message: 'Retry 请求', fields: { sessionId: 's1', ms: 3 } },
+      { ts: t0, level: 'error', scope: 'engine.claude', message: '多行\n第二行 a\b', fields: { sessionId: 's2' } },
+      { ts: t0, level: 'debug', scope: 'session', message: '细节 {不是字段' },
+    ]
+    const lines = [
+      ...entries.map(formatLogLine),
+      '格式不对的一行 WARN app',
+      '2026-13-45T99:99:99.000+08:00 DEBUG app 日期不对',
+      '',
+    ]
+    const queries: LogQuery[] = [
+      {},
+      { minLevel: 'info' },
+      { minLevel: 'warn' },
+      { minLevel: 'error' },
+      { scope: 'gateway' },
+      { scope: '-' },
+      { text: 'retry' },
+      { text: 'GATEWAY 请求' },
+      { text: '第二行' },
+      { text: 'a\b' },
+      { text: '"ms":3' },
+      { sessionId: 's1' },
+      { minLevel: 'warn', scope: 'engine.claude', text: '多行' },
+    ]
+    for (const q of queries) {
+      const rough = roughMatcher(q)
+      for (const line of lines) {
+        const entry = parseLogLine(line)
+        if (entry && matchesLogQuery(entry, q)) expect(rough(line), `${JSON.stringify(q)} ${line}`).toBe(true)
+      }
+    }
+    expect(roughMatcher({ minLevel: 'error' })(lines[0]!)).toBe(false)
+    expect(roughMatcher({ text: '找不到' })(lines[1]!)).toBe(false)
+  })
+
+  it('读大文件：不筛选时只取最新的；筛选、搜不到时把全部文件扫完', async () => {
+    const svc = new LogService({ dir, now: () => t0 })
+    const big = Array.from({ length: 30_000 }, (_, i) => `${logTime(t0 + i)} INFO app 第${i}条 ${'x'.repeat(40)}`)
+    big[100] = `${logTime(t0 + 100)} ERROR gateway 很早的错误`
+    writeFileSync(join(dir, `main-${day(t0)}.log`), big.join('\n') + '\n')
+    const latest = await svc.read({ limit: 3 })
+    expect(latest.map(e => e.message.split(' ')[0])).toEqual(['第29997条', '第29998条', '第29999条'])
+    expect((await svc.read({ minLevel: 'error' })).map(e => e.message)).toEqual(['很早的错误'])
+    expect(await svc.read({ text: '找不到的字' })).toEqual([])
   })
 })
 
