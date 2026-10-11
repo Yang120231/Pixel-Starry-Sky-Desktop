@@ -1,4 +1,5 @@
 // 找 Claude Code 可执行文件、检测版本和登录状态（docs/engines.md §7）
+import { realpathSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { codedError, type EngineInfo } from '@pixelsky/protocol'
@@ -38,16 +39,48 @@ export function findClaude(env: NodeJS.ProcessEnv): Launcher | null {
       : ['/opt/homebrew/bin/claude', '/usr/local/bin/claude', join(home, '.npm-global', 'bin', 'claude')]),
   ]
   for (const p of exeCandidates) {
-    if (p && isFile(p) && !/\.(cmd|bat|ps1)$/i.test(p)) return { command: p, args: [] }
+    if (p && isNative(p) && !/\.(cmd|bat|ps1)$/i.test(p)) return { command: p, args: [] }
   }
-  // npm 全局安装（旧版是 node 脚本）：claude.cmd 旁边的 node_modules/@anthropic-ai/claude-code/cli.js
-  if (IS_WINDOWS) {
-    const node = findOnPath('node.exe', env)
-    for (const dir of dirsOnPath('claude.cmd', env)) {
-      const cli = join(dir, 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js')
-      if (node && isFile(cli)) return { command: node, args: [cli] }
-    }
+  return IS_WINDOWS ? npmOnPath(env) : null
+}
+
+/** npm 全局安装：PATH 上 claude.cmd 所在的目录（npm 默认的 %APPDATA%\npm，或 nvm-windows / nvm4w、fnm、Volta 等换过的位置） */
+export function npmOnPath(env: NodeJS.ProcessEnv): Launcher | null {
+  for (const dir of dirsOnPath('claude.cmd', env)) {
+    const found = npmClaude(join(dir, 'node_modules', '@anthropic-ai', 'claude-code'), env)
+    if (found) return found
   }
+  return null
+}
+
+/**
+ * 不是 npm 包里占位的小脚本：新版 npm 包的 bin/claude.exe 装完后由 postinstall 换成原生程序（上百 MB），
+ * 没跑 postinstall（--ignore-scripts）时还是 500 字节的占位脚本，启动只会报错
+ */
+function isNative(path: string): boolean {
+  try {
+    const s = statSync(path)
+    // macOS / Linux 上 PATH 里的 claude 是指向 bin/claude.exe 的链接，按实际文件判断
+    return s.isFile() && (!/claude\.exe$/i.test(realpathSync(path)) || s.size > 64 * 1024)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * npm 装的 Claude Code 包目录 → 启动方式。新版（2.1.x 起）：bin/claude.exe 是原生程序；
+ * 没跑 postinstall 时直接用对应平台的可选依赖包里的原生程序；旧版：用 node 跑包里的 cli.js
+ */
+export function npmClaude(pkg: string, env: NodeJS.ProcessEnv): Launcher | null {
+  // 包里的命令在各系统上都叫 bin/claude.exe（package.json 的 bin）
+  const exe = join(pkg, 'bin', 'claude.exe')
+  if (isNative(exe)) return { command: exe, args: [] }
+  const platform = `claude-code-${process.platform}-${process.arch}`
+  for (const native of [join(pkg, 'node_modules', '@anthropic-ai', platform, EXE), join(pkg, '..', platform, EXE)])
+    if (isNative(native)) return { command: native, args: [] }
+  const cli = join(pkg, 'cli.js')
+  const node = findOnPath(IS_WINDOWS ? 'node.exe' : 'node', env)
+  if (node && isFile(cli)) return { command: node, args: [cli] }
   return null
 }
 
@@ -61,12 +94,8 @@ export function customClaude(command: string, env: NodeJS.ProcessEnv): { launche
   if (r.ok) return { launcher: { command: r.path, args: [] } }
   if (r.reason === 'script') {
     if (/\.cmd$/i.test(r.path)) {
-      const pkg = join(dirname(r.path), 'node_modules', '@anthropic-ai', 'claude-code')
-      const exe = join(pkg, 'bin', 'claude.exe')
-      if (isFile(exe)) return { launcher: { command: exe, args: [] } }
-      const node = findOnPath('node.exe', env)
-      const cli = join(pkg, 'cli.js')
-      if (node && isFile(cli)) return { launcher: { command: node, args: [cli] } }
+      const launcher = npmClaude(join(dirname(r.path), 'node_modules', '@anthropic-ai', 'claude-code'), env)
+      if (launcher) return { launcher }
     }
     return { error: codedError('launch.script', { path: r.path }).message }
   }
