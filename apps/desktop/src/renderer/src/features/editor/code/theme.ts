@@ -3,7 +3,17 @@ import { EditorView } from '@codemirror/view'
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
 
+/**
+ * 有选区时给编辑器加 cm-has-selection，不显示当前行高亮：当前行的背景画在选区上面，
+ * 多行选中时光标那一行会变成一条横穿选区的浅色带（issue #4）
+ */
+export const selectionMarker = EditorView.editorAttributes.compute(
+  ['selection'],
+  (state): Record<string, string> => (state.selection.ranges.some(r => !r.empty) ? { class: 'cm-has-selection' } : {}),
+)
+
 export const editorTheme = [
+  selectionMarker,
   EditorView.theme({
     '&': { height: '100%', color: 'var(--text)', backgroundColor: 'var(--bg-app)', fontSize: 'var(--text-meta)' },
     '.cm-scroller': { overflow: 'auto', fontFamily: 'var(--font-mono)', lineHeight: '1.65' },
@@ -11,10 +21,16 @@ export const editorTheme = [
     '.cm-line': { padding: '0 14px' },
     '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--accent)' },
     '&.cm-focused': { outline: 'none' },
-    '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': {
-      backgroundColor: 'var(--bg-selected)',
+    // 选区和应用里其他地方选中文字同色（globals.css 的 ::selection）。CodeMirror 自带的选区色（聚焦时是浅色主题的淡紫，
+    // 深色主题下字看不清）选择器更具体，所以这里多写一个 .cm-editor 才盖得住
+    '&.cm-editor .cm-selectionBackground, .cm-content ::selection': {
+      backgroundColor: 'color-mix(in srgb, var(--accent) 14%, transparent)',
+    },
+    '&.cm-editor.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground': {
+      backgroundColor: 'color-mix(in srgb, var(--accent) 22%, transparent)',
     },
     '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: 'var(--bg-hover)' },
+    '&.cm-has-selection .cm-activeLine, &.cm-has-selection .cm-activeLineGutter': { backgroundColor: 'transparent' },
     '.cm-gutters': {
       color: 'var(--text-faint)',
       backgroundColor: 'var(--bg-app)',

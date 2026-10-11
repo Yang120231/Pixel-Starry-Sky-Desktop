@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import { EditorSelection, EditorState } from '@codemirror/state'
+import { EditorView } from '@codemirror/view'
 import { changedLines } from './gutter'
 import { fileLanguage, loadLanguage } from './languages'
 import { fileIndent, linePosition } from './positions'
+import { selectionMarker } from './theme'
 
 describe('编辑器语言与定位', () => {
   it('计划内每种扩展名都有语言实现，未知文件保持纯文本', async () => {
@@ -52,5 +55,23 @@ describe('Git 行标记', () => {
     expect(changedLines('a\r\nb', 'a\nb')).toEqual([])
     expect(changedLines('a', '')).toEqual([{ line: 1, kind: 'deleted' }])
     expect(changedLines('', 'a')).toEqual([{ line: 1, kind: 'added' }])
+  })
+})
+describe('选区显示', () => {
+  it('有非空选区时编辑器带 cm-has-selection（不显示当前行高亮），只有光标时不带', () => {
+    const classes = (selection: EditorSelection) =>
+      EditorState.create({
+        doc: 'a\nb\nc',
+        selection,
+        extensions: [selectionMarker, EditorState.allowMultipleSelections.of(true)],
+      })
+        .facet(EditorView.editorAttributes)
+        .map(a => (typeof a === 'function' ? undefined : a.class))
+        .filter(Boolean)
+    expect(classes(EditorSelection.single(1))).toEqual([])
+    expect(classes(EditorSelection.single(0, 4))).toEqual(['cm-has-selection'])
+    expect(classes(EditorSelection.create([EditorSelection.cursor(0), EditorSelection.range(2, 3)]))).toEqual([
+      'cm-has-selection',
+    ])
   })
 })
