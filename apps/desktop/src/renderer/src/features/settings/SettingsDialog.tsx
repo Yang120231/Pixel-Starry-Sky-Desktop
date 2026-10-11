@@ -71,11 +71,15 @@ export type SectionId =
   | 'logs'
   | 'mobile'
 
-const SECTIONS: Array<{ id: SectionId; label: string; icon: LucideIcon }> = [
+/** label 用在页面标题和搜索结果；nav 是左侧导航里的短名（英文放不下时才给），没有就用 label */
+const SECTIONS: Array<{ id: SectionId; label: string; nav?: string; icon: LucideIcon }> = [
   {
     id: 'machines',
     get label() {
       return tr('machines.title')
+    },
+    get nav() {
+      return tr('settings.SettingsDialog.nav.machines')
     },
     icon: Monitor,
   },
@@ -97,6 +101,9 @@ const SECTIONS: Array<{ id: SectionId; label: string; icon: LucideIcon }> = [
     id: 'terminal',
     get label() {
       return tr('terminal.settings')
+    },
+    get nav() {
+      return tr('settings.SettingsDialog.nav.terminal')
     },
     icon: TerminalSquare,
   },
@@ -139,6 +146,9 @@ const SECTIONS: Array<{ id: SectionId; label: string; icon: LucideIcon }> = [
     id: 'models',
     get label() {
       return tr('settings.models.ModelsSection.modelsCredits')
+    },
+    get nav() {
+      return tr('settings.SettingsDialog.nav.models')
     },
     icon: Route,
   },
@@ -403,7 +413,7 @@ export function SettingsDialog({
                 onKeyDown={e => {
                   if (e.key === 'Enter' && hits[0]) openHit(hits[0])
                 }}
-                placeholder={text('搜索设置')}
+                placeholder={tr('settings.SettingsDialog.nav.search')}
                 aria-label={`${text('搜索设置')}（Ctrl+F）`}
                 spellCheck={false}
                 className="min-w-0 flex-1 bg-transparent text-ui text-fg outline-none placeholder:text-fg-faint"
@@ -447,13 +457,14 @@ export function SettingsDialog({
                   <div key={gi} className={cn(gi > 0 && 'mt-2 border-t border-line-subtle pt-2')}>
                     {g.label && <div className="px-2.5 pb-1 text-label font-medium text-fg-faint">{text(g.label)}</div>}
                     {g.ids.map(id => {
-                      const { label, icon: Icon } = SECTIONS.find(s => s.id === id)!
+                      const { label, nav, icon: Icon } = SECTIONS.find(s => s.id === id)!
                       const active = id === section
                       return (
                         <button
                           key={id}
                           type="button"
                           aria-current={active ? 'page' : undefined}
+                          title={text(label)}
                           onClick={() => setSection(id)}
                           className={cn(
                             'press flex h-[34px] w-full items-center gap-2.5 rounded-md px-2.5 text-left text-ui',
@@ -465,7 +476,8 @@ export function SettingsDialog({
                             strokeWidth={1.5}
                             className={cn('shrink-0', active ? 'text-accent-fg' : 'text-fg-muted')}
                           />
-                          {text(label)}
+                          {/* 一行放不下（别的语言、等宽字体）就省略，不折行撑破行高；悬停看全名 */}
+                          <span className="min-w-0 truncate">{text(nav ?? label)}</span>
                         </button>
                       )
                     })}

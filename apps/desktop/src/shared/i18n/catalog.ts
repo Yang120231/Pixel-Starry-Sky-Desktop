@@ -4004,6 +4004,22 @@ export const catalog = {
     "zh": "外观",
     "en": "Appearance"
   },
+  "settings.SettingsDialog.nav.machines": {
+    "zh": "机器与连接",
+    "en": "Machines"
+  },
+  "settings.SettingsDialog.nav.models": {
+    "zh": "模型与额度",
+    "en": "Models"
+  },
+  "settings.SettingsDialog.nav.terminal": {
+    "zh": "终端设置",
+    "en": "Terminal"
+  },
+  "settings.SettingsDialog.nav.search": {
+    "zh": "搜索设置",
+    "en": "Search"
+  },
   "settings.SettingsDialog.application": {
     "zh": "应用",
     "en": "Application"
