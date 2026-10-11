@@ -40,7 +40,20 @@ export interface PairRequest {
   mac: string
 }
 
-export type PairStatus = 'pending' | 'accepted' | 'rejected' | 'expired'
+/**
+ * 配对结果帧（明文、经云端，不可信）：只能用来更新界面和决定何时重试，不能据此删掉已配好的电脑。
+ * - unknown：电脑上没有这部手机（被移除或电脑重装）；真被移除时云端会以 4001 关连接
+ * - unavailable：电脑暂时拿不到自己的密钥（系统加密不可用）
+ * - handshake_failed：握手消息解不开，带上电脑的 LINK_VERSION 供手机判断版本不一致
+ */
+export type PairStatus =
+  | 'pending'
+  | 'accepted'
+  | 'rejected'
+  | 'expired'
+  | 'unknown'
+  | 'unavailable'
+  | 'handshake_failed'
 
 const LABEL = utf8('pixelsky-pair/1')
 const NAME_LIMIT = 64

@@ -34,7 +34,7 @@ export function TaskList({
           <Laptop size={14} />
           <span className="max-w-48 truncate">{pairing.desktopName}</span>
           <Dot
-            tone={ready ? 'online' : state === 'removed' ? 'danger' : 'muted'}
+            tone={ready ? 'online' : state === 'removed' || state === 'incompatible' ? 'danger' : 'muted'}
             pulse={state === 'connecting' || state === 'handshaking'}
           />
           <span className="text-fg-muted">{state ? linkStateText[state] : ''}</span>
@@ -47,6 +47,14 @@ export function TaskList({
     >
       {state === 'removed' ? (
         <Empty icon={ShieldOff} title="已被电脑移除" body="到「我的」里删掉这台电脑，再在电脑上重新扫码配对。" />
+      ) : state === 'incompatible' && !loaded ? (
+        <Empty icon={ShieldOff} title="版本不一致" body="电脑版和手机版的连接协议不一样，把两边都更新到最新版再试。" />
+      ) : state === 'unrecognized' && !loaded ? (
+        <Empty
+          icon={ShieldOff}
+          title="电脑上找不到配对"
+          body="电脑可能已移除这部手机，或重装过。会自动再试；也可以到「我的」里删掉这台电脑后重新扫码。"
+        />
       ) : state === 'desktop_offline' && !loaded ? (
         <Empty
           icon={CloudOff}

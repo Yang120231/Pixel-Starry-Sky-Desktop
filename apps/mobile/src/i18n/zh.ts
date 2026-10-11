@@ -8,6 +8,8 @@ export const linkStateText: Record<LinkState, string> = {
   handshaking: '正在建立加密连接…',
   ready: '已连接',
   removed: '已被电脑移除',
+  unrecognized: '电脑上找不到这部手机的配对，可重新扫码',
+  incompatible: '电脑版和手机版版本不一致，请更新',
   offline: '没有网络，稍后重试',
 }
 

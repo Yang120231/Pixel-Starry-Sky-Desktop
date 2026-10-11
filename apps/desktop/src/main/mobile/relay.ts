@@ -28,6 +28,8 @@ const CLOSE_UNAUTHORIZED = 4001
 
 const MIN_DELAY = 1000
 const MAX_DELAY = 30_000
+/** 云端每 20 秒发一条文本心跳 tick；收到过之后这么久什么都没收到，就当连接已经死了（睡眠唤醒、NAT 丢连接） */
+export const DEAD_AFTER = 60_000
 
 export function relayUrl(base: string, desktopId: string): string {
   const url = new URL(base)
@@ -120,15 +122,32 @@ export class RelayLink {
     this.ws = ws
     // 中转先接受连接再核对令牌：连上 10 秒没被关才算稳定，才把退避清零（不然令牌一直不对时会飞快重连）
     let stable: ReturnType<typeof setTimeout> | null = null
+    // 老版本云端不发 tick：没收到过就不判断
+    let lastSeen = 0
+    const watchdog = setInterval(() => {
+      // stop() 换掉了这条连接（它会清掉 onclose）：这里自己停
+      if (this.ws !== ws) return clearInterval(watchdog)
+      if (!lastSeen || Date.now() - lastSeen <= DEAD_AFTER) return
+      // 死连接上 close 可能要等很久才触发 onclose：先当作断开，马上按退避重连
+      clearInterval(watchdog)
+      if (stable) clearTimeout(stable)
+      this.ws = null
+      ws.close()
+      if (this.stopped) return
+      this.o.onStatus('error', 'MOBILE_RELAY_OFFLINE')
+      this.retry()
+    }, DEAD_AFTER / 4)
     ws.onopen = () => {
       stable = setTimeout(() => (this.delay = MIN_DELAY), 10_000)
       this.o.onStatus('online', null)
     }
     ws.onmessage = event => {
+      if (lastSeen) lastSeen = Date.now()
       if (typeof event.data === 'string') {
         try {
-          const notice = JSON.parse(event.data) as RelayNotice
-          if (notice && typeof notice.type === 'string') this.o.onNotice(notice)
+          const notice = JSON.parse(event.data) as RelayNotice | { type: 'tick' }
+          if (notice?.type === 'tick') lastSeen = Date.now()
+          else if (notice && typeof notice.type === 'string') this.o.onNotice(notice)
         } catch {}
         return
       }
@@ -137,6 +156,7 @@ export class RelayLink {
     }
     ws.onerror = () => {}
     ws.onclose = event => {
+      clearInterval(watchdog)
       if (stable) clearTimeout(stable)
       if (this.ws !== ws) return
       this.ws = null

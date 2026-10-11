@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   FrameType,
   Initiator,
+  LINK_VERSION,
   PROLOGUE,
   RpcCore,
   SecureChannel,
@@ -183,12 +184,19 @@ describe('MobileGateway pairing', () => {
     expect(t.cloudCalls.at(-1)).toBe('remove p1')
   })
 
-  it('tells an unknown phone to pair again instead of shaking hands', async () => {
+  it('tells an unknown phone it is not paired here (a hint, not a removal) instead of shaking hands', async () => {
     const t = setup()
     const p = t.phone('stranger')
     expect(await p.connect(t.desktop.publicKey)).toBe(false)
-    expect(p.results).toEqual([{ status: 'rejected' }])
+    expect(p.results).toEqual([{ status: 'unknown' }])
     expect(t.gateway.online('stranger')).toBe(false)
+  })
+
+  it('answers a handshake it cannot read with handshake_failed and its link version', async () => {
+    const t = setup()
+    const p = await paired(t)
+    t.gateway.receive(p.id, encodeFrame(FrameType.Handshake1, new Uint8Array(10)))
+    expect(p.results.at(-1)).toEqual({ status: 'handshake_failed', v: LINK_VERSION })
   })
 })
 

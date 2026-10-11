@@ -222,7 +222,13 @@ export class MobileGateway {
 
   private pairResult(phone: string, status: PairStatus): void {
     try {
-      this.d.send(phone, encodeFrame(FrameType.PairResult, encodeJson({ status })))
+      this.d.send(
+        phone,
+        encodeFrame(
+          FrameType.PairResult,
+          encodeJson(status === 'handshake_failed' ? { status, v: LINK_VERSION } : { status }),
+        ),
+      )
     } catch {}
   }
 
@@ -264,18 +270,17 @@ export class MobileGateway {
   private onHandshake(phone: string, body: Uint8Array): void {
     const device = this.d.store.device(phone),
       key = this.d.store.keypair()
-    if (!device || !key) {
-      // 电脑这边没有这部手机（被吊销、电脑重装）：告诉手机重新配对
-      this.pairResult(phone, 'rejected')
-      return
-    }
+    // 只是提示：结果帧不加密，手机不会因此删掉配对
+    if (!key) return this.pairResult(phone, 'unavailable')
+    if (!device) return this.pairResult(phone, 'unknown')
     let message: Uint8Array, keys
     try {
       const responder = new Responder({ local: key, remote: fromBase64Url(device.publicKey), prologue: PROLOGUE })
       responder.readMessage1(body)
       ;({ message, result: keys } = responder.writeMessage2())
     } catch {
-      return
+      // 解不开（密钥对不上或版本不一致）：回一声，手机不用干等
+      return this.pairResult(phone, 'handshake_failed')
     }
     this.drop(phone)
     let rpc: RpcCore | null = null

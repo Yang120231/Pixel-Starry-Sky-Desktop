@@ -23,7 +23,15 @@ export function MeScreen({ tabBar, onAdd }: { tabBar: ReactNode; onAdd?: () => v
                 title={p.desktopName}
                 subtitle={
                   <span className="inline-flex items-center gap-1.5">
-                    <Dot tone={state === 'ready' ? 'online' : state === 'removed' ? 'danger' : 'muted'} />
+                    <Dot
+                      tone={
+                        state === 'ready'
+                          ? 'online'
+                          : state === 'removed' || state === 'incompatible'
+                            ? 'danger'
+                            : 'muted'
+                      }
+                    />
                     {state ? linkStateText[state] : ''}
                   </span>
                 }
