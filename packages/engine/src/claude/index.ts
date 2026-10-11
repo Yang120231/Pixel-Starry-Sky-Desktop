@@ -76,6 +76,9 @@ export function claudeModels(raw: unknown): EngineModel[] {
   return out
 }
 
+/** 平台线路在请求重试设置为「跟随引擎」时的上限；自定义了就按自定义（docs/ui/error-retry.md） */
+export const PLATFORM_MAX_RETRIES = 3
+
 export class ClaudeAdapter implements EngineAdapter {
   private cached: ClaudeDiscovery | null = null
   private detecting: Promise<ClaudeDiscovery> | null = null
@@ -209,7 +212,9 @@ export class ClaudeAdapter implements EngineAdapter {
   createSession(ctx: SessionContext): EngineSession {
     const launcher = this.readyLauncher(ctx.record())
     const d = this.cached!
-    const maxRetries = ctx.maxRetries ?? null
+    // 设置是「跟随引擎」时，平台线路也只重试 PLATFORM_MAX_RETRIES 次：Claude Code 自己默认约 10 次，
+    // 网络中途断开时每次都重发整段上下文、重新计费（压缩请求不走缓存，一次就要几毛钱）
+    const maxRetries = ctx.maxRetries ?? (ctx.record().platform ? PLATFORM_MAX_RETRIES : null)
     const env = this.launchEnv(ctx.record(), maxRetries, ctx.extensions?.pathDirs)
     const launch = this.opts.launchOptions?.()
     return new ClaudeSession(ctx, {

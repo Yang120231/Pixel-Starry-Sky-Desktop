@@ -348,8 +348,10 @@ describe('EngineHost + Claude（假引擎）', () => {
     await host.update(record.id, { platform: { groupId: '7', account: 'test@example.com' }, model: 'real-model' })
     await host.send(record.id, '平台测试')
     await waitFor(() => turnsDone(record.id) === 1)
-    expect(spawnArgs()[0]).toContain('--settings')
-    expect(spawnArgs()[0]).toContain(settingsFile)
+    // 重试设置是「跟随引擎」：平台线路默认只重试 3 次，合并进网关设置的副本
+    const settingsArg = spawnArgs()[0][spawnArgs()[0].indexOf('--settings') + 1]
+    expect(settingsArg.startsWith(settingsFile + '.retry-')).toBe(true)
+    expect(JSON.parse(readFileSync(settingsArg, 'utf8')).env.CLAUDE_CODE_MAX_RETRIES).toBe('3')
     expect(JSON.parse(readFileSync(join(root, 'env.json'), 'utf8'))).toEqual({
       base: 'http://127.0.0.1:1234',
       token: 'loopback-only',
