@@ -3,6 +3,7 @@ import {
   codedError,
   type EngineCatalog,
   type EngineInfo,
+  type EngineUpdateResult,
   type Item,
   type SessionRecord,
   viaGateway,
@@ -15,6 +16,7 @@ import { CodexProcess, object } from './process'
 import { codexCatalog } from './catalog'
 import { CodexSession, reservedCodexArg, type CodexLaunchOptions } from './session'
 import { CodexTranslator } from './translate'
+import { CODEX_NPM_PACKAGE, updateCodexWithNpm } from './update'
 import { array } from './process'
 
 export interface CodexAdapterOptions {
@@ -30,6 +32,8 @@ export class CodexAdapter implements EngineAdapter {
   private cached: { info: EngineInfo; launcher: Launcher | null } | null = null
   private detecting: Promise<EngineInfo> | null = null
   private catalogCache: EngineCatalog | null = null
+  readonly npmPackage = CODEX_NPM_PACKAGE
+  readonly updateNeedsIdle = true
   private env(): NodeJS.ProcessEnv {
     return { ...engineEnv(this.opts.env ?? process.env), ...this.opts.extraEnv?.() }
   }
@@ -45,6 +49,15 @@ export class CodexAdapter implements EngineAdapter {
   /** 用户追加的启动参数（检测握手、读子智能体记录也带上，参数让进程起不来时检测就能看到） */
   private launchArgs(): string[] {
     return this.opts.launchOptions?.().args ?? []
+  }
+  /** 一键更新：npm 全局装的用 npm install -g（docs/ui/engine-update.md）；宿主随后重新检测 */
+  async update(): Promise<EngineUpdateResult> {
+    await this.info()
+    const exe = this.cached?.info.path
+    if (!exe) throw new Error(this.cached?.info.message ?? '没找到 Codex')
+    const result = await updateCodexWithNpm(exe, this.env())
+    this.catalogCache = null
+    return result
   }
   async info(force = false): Promise<EngineInfo> {
     if (this.cached && !force) return this.cached.info

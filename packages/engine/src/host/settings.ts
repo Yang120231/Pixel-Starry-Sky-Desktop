@@ -19,20 +19,25 @@ import {
 import { ENGINE_ORDER, unsupportedInfo } from '../registry'
 import { retryLimit } from '../retry'
 import type { EngineSettingsFile } from '../store'
-import type { HostContext } from './context'
+import type { HostContext, Runtime } from './context'
 
 export class HostSettings {
   /** 当前设置；只整体替换，不原地修改 */
   file: EngineSettingsFile
+  /** npm 上查到的最新版本（checkEngineUpdates），engines() 带进引擎信息 */
+  private readonly latest: Partial<Record<EngineId, string>> = {}
+  private readonly updating = new Set<EngineId>()
 
   constructor(private readonly ctx: HostContext) {
     this.file = ctx.store.loadSettings()
   }
 
   async engines(force = false): Promise<EngineInfo[]> {
-    const list = await Promise.all(
-      ENGINE_ORDER.map(id => this.ctx.adapters[id]?.info(force) ?? Promise.resolve(unsupportedInfo(id))),
-    )
+    const list = (
+      await Promise.all(
+        ENGINE_ORDER.map(id => this.ctx.adapters[id]?.info(force) ?? Promise.resolve(unsupportedInfo(id))),
+      )
+    ).map(info => (this.latest[info.id] ? { ...info, latestVersion: this.latest[info.id] } : info))
     if (force) this.ctx.opts.emit({ kind: 'engines', engines: list })
     return list
   }
@@ -190,9 +195,56 @@ export class HostSettings {
   async updateEngine(engine: EngineId): Promise<EngineUpdateResult> {
     const adapter = this.ctx.adapters[engine]
     if (!adapter?.update) throw new Error('这个引擎不支持在软件里更新')
-    const result = await adapter.update()
-    const list = await this.engines(true)
-    return { ...result, version: list.find(e => e.id === engine)?.version ?? null }
+    if (this.updating.has(engine)) throw new Error('正在更新，请稍候')
+    this.updating.add(engine)
+    try {
+      if (adapter.updateNeedsIdle) await this.releaseIdleProcesses(engine)
+      const result = await adapter.update()
+      const list = await this.engines(true)
+      return { ...result, version: list.find(e => e.id === engine)?.version ?? null }
+    } finally {
+      this.updating.delete(engine)
+    }
+  }
+
+  /** 更新前关掉这个引擎空闲的进程（和空闲超时一样，下一条消息时接上原对话）；有任务在跑就不更新 */
+  private async releaseIdleProcesses(engine: EngineId): Promise<void> {
+    const idle: Runtime[] = []
+    for (const rt of this.ctx.runtimes.values()) {
+      if (!rt.session || (rt.execution ?? rt.snapshot.record).engine !== engine) continue
+      if (rt.snapshot.state !== 'idle') throw new Error('有这个引擎的任务正在运行，等它们结束后再更新')
+      idle.push(rt)
+    }
+    await Promise.all(
+      idle.map(rt => {
+        if (rt.idleTimer) clearTimeout(rt.idleTimer)
+        rt.idleTimer = null
+        const s = rt.session!
+        rt.session = null
+        return s.close().catch(() => undefined)
+      }),
+    )
+  }
+
+  /**
+   * 查各引擎在 npm 上的最新版本（宿主选项 latestVersion，桌面端定时调用）；有变化时广播引擎列表。
+   * 查不到的保留上次的结果
+   */
+  async checkEngineUpdates(): Promise<void> {
+    const fetchLatest = this.ctx.opts.latestVersion
+    if (!fetchLatest) return
+    let changed = false
+    await Promise.all(
+      ENGINE_ORDER.map(async id => {
+        const pkg = this.ctx.adapters[id]?.npmPackage
+        const version = pkg ? await fetchLatest(pkg).catch(() => null) : null
+        if (version && version !== this.latest[id]) {
+          this.latest[id] = version
+          changed = true
+        }
+      }),
+    )
+    if (changed && !this.ctx.closing) this.ctx.opts.emit({ kind: 'engines', engines: await this.engines() })
   }
 
   retrySettings(): { maxRetries: number | null } {

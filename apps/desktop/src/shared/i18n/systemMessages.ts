@@ -927,6 +927,26 @@ export const systemMessages = {
     "zh": "这个引擎暂不支持",
     "en": "This engine is not supported yet"
   },
+  "system.engineUpdateInProgress": {
+    "zh": "正在更新，请稍候",
+    "en": "Already updating, please wait"
+  },
+  "system.engineUpdateBusy": {
+    "zh": "有这个引擎的任务正在运行，等它们结束后再更新",
+    "en": "Tasks are running on this engine. Update after they finish"
+  },
+  "system.codexNotNpmInstall": {
+    "zh": "这个 Codex 不是用 npm 全局安装的，请用原来安装它的方式更新",
+    "en": "This Codex was not installed globally with npm. Update it the way you installed it"
+  },
+  "system.codexNpmNotFound": {
+    "zh": "没找到 node / npm，请在终端运行 npm i -g @openai/codex@latest",
+    "en": "node / npm not found. Run npm i -g @openai/codex@latest in a terminal"
+  },
+  "system.codexNotFound": {
+    "zh": "没找到 Codex",
+    "en": "Codex not found"
+  },
   "system.thisEngineCannotUpdate": {
     "zh": "这个引擎不支持在软件里更新",
     "en": "This engine cannot update within the app"

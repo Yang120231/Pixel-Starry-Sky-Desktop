@@ -3252,6 +3252,34 @@ export const catalog = {
     "zh": "默认引擎不能隐藏，先把别的引擎设为默认。",
     "en": "The default engine cannot be hidden. Set another engine as default first."
   },
+  "settings.engines.engineUpdate.newVersion": {
+    "zh": "有新版本 {p0}",
+    "en": "Update {p0}"
+  },
+  "settings.engines.engineUpdate.newVersionAvailable": {
+    "zh": "有新版本 {p0}（当前 {p1}），点「更新」就会自动下载安装，不用自己输命令。",
+    "en": "Version {p0} is available (you have {p1}). Click Update to download and install it — no commands needed."
+  },
+  "settings.engines.engineUpdate.update": {
+    "zh": "更新",
+    "en": "Update"
+  },
+  "settings.engines.engineUpdate.updateTo": {
+    "zh": "更新到 {p0}",
+    "en": "Update to {p0}"
+  },
+  "settings.engines.engineUpdate.updating": {
+    "zh": "正在更新，可能要一两分钟…",
+    "en": "Updating, this may take a minute or two…"
+  },
+  "settings.engines.engineUpdate.updatingShort": {
+    "zh": "更新中",
+    "en": "Updating"
+  },
+  "settings.engines.engineUpdate.runningNpmUpdate": {
+    "zh": "正在用 npm 更新 Codex，可能要一两分钟；空闲的 Codex 会话已先关掉进程，发下一条消息时会接上原对话…",
+    "en": "Updating Codex with npm. This may take a minute or two; idle Codex sessions were stopped first and resume with your next message…"
+  },
   "settings.engines.EngineDetail.demoModeCannotUpdate": {
     "zh": "演示模式不更新本机程序",
     "en": "Demo mode cannot update local programs"

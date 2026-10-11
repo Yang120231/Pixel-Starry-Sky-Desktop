@@ -84,6 +84,8 @@ export class ClaudeAdapter implements EngineAdapter {
   private detecting: Promise<ClaudeDiscovery> | null = null
   private catalogCache: { at: number; value: EngineCatalog } | null = null
   private probing: Promise<EngineCatalog> | null = null
+  /** 原生安装器和 npm 装的版本号一致，都按这个包查最新版本 */
+  readonly npmPackage = '@anthropic-ai/claude-code'
 
   constructor(private readonly opts: ClaudeAdapterOptions = {}) {}
 

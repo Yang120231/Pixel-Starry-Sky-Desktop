@@ -77,7 +77,8 @@ export const ENGINES: Record<EngineId, EngineDescriptor> = {
       promptSuggestions: false,
       alwaysScopes: ['session'],
       costUsd: false,
-      selfUpdate: false,
+      // npm 装的 Codex 用 npm install -g 更新（其他装法给出原因）
+      selfUpdate: true,
       launchSettings: false,
       pluginCommands: false,
       platformSwitch: false,
@@ -91,3 +92,18 @@ export const ENGINES: Record<EngineId, EngineDescriptor> = {
 }
 
 export const ENGINE_ORDER: readonly EngineId[] = ['claude', 'codex']
+
+/** 版本号 a 是否比 b 新（按点分的数字逐段比，-beta 之类的后缀不计） */
+export function isNewerVersion(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return false
+  const pa = a
+    .split(/[.-]/)
+    .slice(0, 3)
+    .map(x => parseInt(x, 10) || 0)
+  const pb = b
+    .split(/[.-]/)
+    .slice(0, 3)
+    .map(x => parseInt(x, 10) || 0)
+  for (let i = 0; i < 3; i++) if (pa[i] !== pb[i]) return pa[i] > pb[i]
+  return false
+}

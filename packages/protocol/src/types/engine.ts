@@ -83,6 +83,11 @@ export interface EngineInfo {
    * Claude Code 有这个原因时仍算可用：检测在用户主目录里启动，相对路径的参数在项目目录里可能是对的
    */
   launchError?: string
+  /**
+   * npm 上的最新版本（宿主定时查，docs/ui/engine-update.md）；没查过、查不到或不支持时没有这个字段。
+   * 比 version 新时界面提示「有新版本」
+   */
+  latestVersion?: string
   caps: EngineCaps
 }
 

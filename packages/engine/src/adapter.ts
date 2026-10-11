@@ -87,8 +87,15 @@ export interface EngineAdapter {
   subagentTranscript?(record: SessionRecord, agentId: string): Item[] | Promise<Item[]>
   /** 引擎实际报上来的可选项（输出风格等）；不发消息、不花钱，force 时不用缓存 */
   catalog?(force?: boolean): Promise<EngineCatalog>
-  /** 检查更新并安装（Claude Code：claude update）；宿主随后重新检测 */
+  /** 检查更新并安装（Claude Code：claude update；Codex：npm install -g）；宿主随后重新检测 */
   update?(): Promise<EngineUpdateResult>
+  /** npm 上的包名：宿主定时查最新版本，界面提示「有新版本」（docs/ui/engine-update.md） */
+  readonly npmPackage?: string
+  /**
+   * 更新要替换正在用的程序（Windows 上 npm 换不了被占用的 codex.exe）：宿主先关掉这个引擎空闲的进程，
+   * 有任务在跑就不更新
+   */
+  readonly updateNeedsIdle?: boolean
   /**
    * 回退：按要移除的用户消息（按顺序）在引擎记录里找截断点。
    * 返回 null 表示这些消息都没进入引擎上下文；at 为 null 表示回到会话开头（换新的引擎会话）。

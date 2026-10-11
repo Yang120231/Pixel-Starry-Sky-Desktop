@@ -271,7 +271,7 @@ export type ChannelMessage = ChannelTextMessage | ChannelTask | ChannelEvent
 /** 设置 › 本机引擎用到的引擎信息（真实数据是 EngineInfo，演示数据只填这些） */
 export type EngineLite = Pick<
   import('@pixelsky/protocol').EngineInfo,
-  'id' | 'name' | 'status' | 'version' | 'message' | 'path' | 'launch' | 'launchError'
+  'id' | 'name' | 'status' | 'version' | 'message' | 'path' | 'launch' | 'launchError' | 'latestVersion'
 > & {
   caps: Pick<
     import('@pixelsky/protocol').EngineCaps,

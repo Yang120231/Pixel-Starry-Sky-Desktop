@@ -26,6 +26,7 @@ import { ENGINE_OPS, type EngineOpContext } from '../core/engine/ops'
 import { opEntries } from '../core/ops'
 import { SearchRegistry } from '../core/search-registry'
 import { usageQuery } from '../core/args'
+import { npmLatest, scheduleEngineUpdateChecks } from './npm-latest'
 import { logHostEvent } from '../core/log/host-events'
 
 export async function initEngine(ctx: AppContext): Promise<void> {
@@ -61,8 +62,11 @@ export async function initEngine(ctx: AppContext): Promise<void> {
       record.provider ? ctx.providers?.get(record.provider.id)?.models.find(m => m.id === model)?.priceRef : null,
     extensions: record => extensions.prepare(record),
     platformCharges,
+    latestVersion: npmLatest,
   })
   ctx.engine = h
+  // 引擎有新版本时设置 › 本机引擎提示「更新」（docs/ui/engine-update.md）
+  scheduleEngineUpdateChecks(() => h.checkEngineUpdates())
   const machines = await initMachines(ctx, h, sessionEnv)
   extensions.register()
   const shutdownTerminals = await initTerminalIpc(machines, ref => resolveTerminalTarget(ctx, ref))

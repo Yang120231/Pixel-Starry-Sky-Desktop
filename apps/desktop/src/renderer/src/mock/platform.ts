@@ -41,6 +41,8 @@ export const demoEngineStatus: EngineLite[] = [
     name: 'Claude Code',
     status: 'ready',
     version: '2.1.291',
+    // 演示「有新版本」提示（docs/ui/engine-update.md）
+    latestVersion: '2.1.300',
     message: null,
     path: 'C:\\Users\\linxia\\.local\\bin\\claude.exe',
     caps: {

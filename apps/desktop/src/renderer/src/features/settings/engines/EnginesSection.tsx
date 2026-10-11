@@ -5,14 +5,15 @@ import { tr } from '../../../i18n/core'
 // 列表页每个引擎一行（状态、版本、默认、设为默认），点进去是详情页（EngineDetail）。
 // 真实数据：配置在引擎 store（主进程改了会广播 engine_config）；演示模式只改内存。
 import { useEffect, useState } from 'react'
-import { ChevronRight, CircleCheck } from 'lucide-react'
+import { CircleArrowUp, ChevronRight, CircleCheck, Download, Loader2 } from 'lucide-react'
 import type { EngineConfig, EngineConfigPatch, EngineId } from '@pixelsky/protocol'
-import { EngineIcon, cn } from '@/ui'
+import { Button, EngineIcon, cn } from '@/ui'
 import { bridge, isLive, useEngineState } from '@/features/engine'
 import { SectionTitle } from '../SettingRow'
 import { EngineDetail } from './EngineDetail'
 import { openEngineDetail, useEngineDetail } from './nav'
 import { DefaultBadge, ENGINE_STATUS } from './parts'
+import { hasNewer, outcomeTitle, updateEngine, useEngineUpdate } from './engineUpdate'
 import { demo, isDemo } from '@/data/demo'
 import type { EngineLite } from '@/data/types'
 
@@ -126,6 +127,8 @@ function EngineRow({
   useI18n()
   const unsupported = e.status === 'unsupported'
   const canDefault = !isDefault && !unsupported && e.status !== 'missing'
+  const { updating, result } = useEngineUpdate(e.id)
+  const newer = hasNewer(e)
   return (
     <div
       data-setting-title={e.name}
@@ -166,15 +169,51 @@ function EngineRow({
                 {ENGINE_STATUS[e.status] ?? e.status}
               </span>
             )}
+            {newer && !updating && !result && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-1.5 text-label text-accent-fg">
+                <CircleArrowUp size={11} />
+                {tr('settings.engines.engineUpdate.newVersion', { p0: e.latestVersion })}
+              </span>
+            )}
           </span>
           {e.path && (
             <span className="mt-0.5 block truncate font-mono text-meta text-fg-muted" title={e.path}>
               {e.path}
             </span>
           )}
+          {/* 一键更新的进度和结果（完整输出在详情页） */}
+          {(updating || result) && (
+            <span
+              role="status"
+              className={cn(
+                'mt-0.5 block truncate text-meta',
+                updating
+                  ? 'text-fg-muted'
+                  : result && ('error' in result || !result.ok)
+                    ? 'text-danger'
+                    : 'text-success',
+              )}
+            >
+              {updating
+                ? tr('settings.engines.engineUpdate.updating')
+                : result && ('error' in result ? translateMessage(result.error) : outcomeTitle(result))}
+            </span>
+          )}
         </span>
         {!unsupported && <ChevronRight size={16} className="shrink-0 text-fg-faint" />}
       </button>
+      {(newer || updating) && (
+        <Button
+          variant="primary"
+          icon={updating ? Loader2 : Download}
+          className={cn('h-7 shrink-0 px-2.5 text-meta', updating && '[&_svg]:animate-spin')}
+          disabled={updating}
+          title={tr('settings.engines.engineUpdate.updateTo', { p0: e.latestVersion })}
+          onClick={() => void updateEngine(e)}
+        >
+          {updating ? tr('settings.engines.engineUpdate.updatingShort') : tr('settings.engines.engineUpdate.update')}
+        </Button>
+      )}
       {canDefault && (
         <button
           type="button"

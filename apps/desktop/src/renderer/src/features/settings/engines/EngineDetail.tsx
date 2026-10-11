@@ -12,7 +12,6 @@ import {
   type EngineCatalog,
   type EngineConfigPatch,
   type EngineLocalConfig,
-  type EngineUpdateResult,
   type PermissionMode,
 } from '@pixelsky/protocol'
 import { Button, EngineIcon, Select, cn } from '@/ui'
@@ -23,6 +22,7 @@ import { envLines, parseEnvLines } from './envLines'
 import { migrateEnv, providerEnvKeys } from './migrateEnv'
 import { LaunchCard } from './LaunchCard'
 import { DefaultBadge, ENGINE_INTRO, ENGINE_STATUS, FIELD } from './parts'
+import { canUpdate, hasNewer, outcomeTitle, updateEngine, useEngineUpdate, type UpdateOutcome } from './engineUpdate'
 import { demo, isDemo } from '@/data/demo'
 import type { EngineLite } from '@/data/types'
 
@@ -239,32 +239,10 @@ function Header({
   onSetDefault: () => Promise<void>
 }) {
   useI18n()
-  const [updating, setUpdating] = useState(false)
-  const [result, setResult] = useState<(EngineUpdateResult & { before: string | null }) | { error: string } | null>(
-    null,
-  )
+  // 和列表那一行共用（engineUpdate.ts）：在列表点了「更新」，进详情也看得到进度和结果
+  const { updating, result } = useEngineUpdate(e.id)
   const [redetecting, setRedetecting] = useState(false)
-
-  const update = async (): Promise<void> => {
-    if (!bridge) {
-      setResult({
-        get error() {
-          return tr('settings.engines.EngineDetail.demoModeCannotUpdate')
-        },
-      })
-      return
-    }
-    setUpdating(true)
-    setResult(null)
-    const before = e.version
-    try {
-      setResult({ ...(await bridge.updateEngine(e.id)), before })
-    } catch (err) {
-      setResult({ error: (err as Error).message })
-    } finally {
-      setUpdating(false)
-    }
-  }
+  const newer = hasNewer(e)
   const redetect = async (): Promise<void> => {
     if (!isLive) return
     setRedetecting(true)
@@ -276,7 +254,6 @@ function Header({
   }
 
   const ready = e.status === 'ready'
-  const canUpdate = e.caps.selfUpdate && e.status !== 'missing' && e.status !== 'unsupported'
   return (
     <div>
       <div data-setting-title={e.name} className="flex flex-wrap items-start gap-x-4 gap-y-3">
@@ -317,18 +294,22 @@ function Header({
           >
             {redetecting ? tr('settings.engines.EngineDetail.detecting') : tr('session.SourceHintBar.detectAgain')}
           </Button>
-          {canUpdate && (
+          {canUpdate(e) && (
             <span data-setting-title="检查更新" className="rounded-md">
               <Button
-                variant="outline"
+                variant={newer ? 'primary' : 'outline'}
                 icon={Download}
                 className="h-8 px-3 text-meta"
                 disabled={updating}
-                onClick={() => void update()}
+                onClick={() => void updateEngine(e)}
               >
                 {updating
-                  ? tr('settings.engines.EngineDetail.checkingForUpdates')
-                  : tr('settings.AboutSection.checkForUpdates')}
+                  ? newer
+                    ? tr('settings.engines.engineUpdate.updatingShort')
+                    : tr('settings.engines.EngineDetail.checkingForUpdates')
+                  : newer
+                    ? tr('settings.engines.engineUpdate.updateTo', { p0: e.latestVersion })
+                    : tr('settings.AboutSection.checkForUpdates')}
               </Button>
             </span>
           )}
@@ -339,15 +320,24 @@ function Header({
           {translateMessage(e.message)}
         </p>
       )}
+      {newer && !updating && !result && (
+        <p className="mt-3 text-meta text-fg-secondary">
+          {tr('settings.engines.engineUpdate.newVersionAvailable', { p0: e.latestVersion, p1: e.version })}
+        </p>
+      )}
       {updating && (
-        <p className="mt-3 text-meta text-fg-muted">{tr('settings.engines.EngineDetail.runningClaudeUpdateThis')}</p>
+        <p className="mt-3 text-meta text-fg-muted">
+          {e.id === 'codex'
+            ? tr('settings.engines.engineUpdate.runningNpmUpdate')
+            : tr('settings.engines.EngineDetail.runningClaudeUpdateThis')}
+        </p>
       )}
       {result && <UpdateResult result={result} />}
     </div>
   )
 }
 
-function UpdateResult({ result }: { result: (EngineUpdateResult & { before: string | null }) | { error: string } }) {
+function UpdateResult({ result }: { result: UpdateOutcome }) {
   useI18n()
   if ('error' in result) {
     return (
@@ -357,11 +347,7 @@ function UpdateResult({ result }: { result: (EngineUpdateResult & { before: stri
     )
   }
   const changed = result.version && result.before && result.version !== result.before
-  const title = !result.ok
-    ? tr('settings.engines.EngineDetail.updateDidNotComplete')
-    : changed
-      ? tr('settings.engines.EngineDetail.updatedToPreviously', { p0: result.version, p1: result.before })
-      : tr('settings.engines.EngineDetail.alreadyUpToDate', { p0: result.version ? `（${result.version}）` : '' })
+  const title = outcomeTitle(result)
   return (
     <div role="status" className="mt-3 rounded-lg border border-line px-3 py-2">
       <p className={cn('text-meta', result.ok ? 'text-fg' : 'text-danger')}>{title}</p>

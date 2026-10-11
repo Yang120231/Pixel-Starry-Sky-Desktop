@@ -179,6 +179,11 @@ export class EngineHost {
     return this.m.settings.updateEngine(engine)
   }
 
+  /** 查各引擎在 npm 上的最新版本，有变化时广播引擎列表（桌面端定时调用） */
+  checkEngineUpdates(): Promise<void> {
+    return this.m.settings.checkEngineUpdates()
+  }
+
   retrySettings(): { maxRetries: number | null } {
     return this.m.settings.retrySettings()
   }
