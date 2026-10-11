@@ -254,6 +254,11 @@ const projectTools: ProjectToolsBridge = {
   gitSwitch: (ref, input) => call('projectTools:gitSwitch', ref, input),
   gitCreateBranch: (ref, input) => call('projectTools:gitCreateBranch', ref, input),
   gitOperation: (ref, action) => call('projectTools:gitOperation', ref, action),
+  gitLog: (ref, query) => call('projectTools:gitLog', ref, query),
+  gitRefs: ref => call('projectTools:gitRefs', ref),
+  gitShow: (ref, hash) => call('projectTools:gitShow', ref, hash),
+  gitCompare: (ref, kind) => call('projectTools:gitCompare', ref, kind),
+  gitHistoryAction: (ref, action) => call('projectTools:gitHistoryAction', ref, action),
   onChange: cb => {
     const listener = (): void => cb()
     on('projectTools:changed', listener)

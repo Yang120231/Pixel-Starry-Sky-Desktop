@@ -93,7 +93,7 @@ function DiffEditor({
   )
 }
 
-/** Git 面板里点进去看一个文件的差异（docs/ui/git-panel.md §2.5） */
+/** Git 面板里点进去看一个文件的差异（docs/ui/git-panel.md §2.5、§9.5） */
 export function GitDiffView({
   file,
   area,
@@ -107,7 +107,8 @@ export function GitDiffView({
   busy,
 }: {
   file: GitFileChange
-  area: GitArea
+  /** commit：历史里一个提交的文件（docs/ui/git-panel.md §9.5） */
+  area: GitArea | 'commit'
   load: () => Promise<GitDiff>
   onBack: () => void
   onNeighbour: (delta: 1 | -1) => void

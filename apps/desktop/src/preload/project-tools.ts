@@ -9,7 +9,14 @@ import type {
   ProjectCopy,
   CopyInput,
   CopyPreview,
-  GitArea,
+  GitCommitDetail,
+  GitCompareResult,
+  GitCompareTarget,
+  GitHistoryAction,
+  GitDiffInput,
+  GitLogPage,
+  GitLogQuery,
+  GitRefs,
   GitStatus,
   GitDiff,
   GitBranch,
@@ -49,7 +56,7 @@ export interface ProjectToolsBridge {
   revealCopy(id: string): Promise<void>
   openExternal(url: string): Promise<void>
   gitStatus(ref: WorkspaceRef): Promise<GitStatus>
-  gitDiff(ref: WorkspaceRef, input: { path: string; area: GitArea; origPath?: string | null }): Promise<GitDiff>
+  gitDiff(ref: WorkspaceRef, input: GitDiffInput): Promise<GitDiff>
   gitBranches(ref: WorkspaceRef): Promise<GitBranch[]>
   gitStage(ref: WorkspaceRef, paths: GitPaths): Promise<GitResult>
   gitUnstage(ref: WorkspaceRef, paths: GitPaths): Promise<GitResult>
@@ -59,7 +66,15 @@ export interface ProjectToolsBridge {
   gitPush(ref: WorkspaceRef, input: { publish: boolean }): Promise<GitResult>
   gitFetch(ref: WorkspaceRef): Promise<GitResult>
   gitSwitch(ref: WorkspaceRef, input: { branch: string; remote: boolean }): Promise<GitResult>
-  gitCreateBranch(ref: WorkspaceRef, input: { name: string }): Promise<GitResult>
+  /** start：在这个提交上新建（docs/ui/git-panel.md §9.6），switch 为真时切过去 */
+  gitCreateBranch(ref: WorkspaceRef, input: { name: string; start?: string; switch?: boolean }): Promise<GitResult>
   gitOperation(ref: WorkspaceRef, action: 'abort' | 'continue'): Promise<GitResult>
+  /** 提交历史（docs/ui/git-panel.md §9） */
+  gitLog(ref: WorkspaceRef, query: GitLogQuery): Promise<GitLogPage>
+  gitRefs(ref: WorkspaceRef): Promise<GitRefs>
+  gitShow(ref: WorkspaceRef, hash: string): Promise<GitCommitDetail>
+  gitCompare(ref: WorkspaceRef, target: GitCompareTarget): Promise<GitCompareResult>
+  /** 历史里会改动仓库的操作（§9.6 第二期） */
+  gitHistoryAction(ref: WorkspaceRef, action: GitHistoryAction): Promise<GitResult>
   onChange(cb: () => void): () => void
 }

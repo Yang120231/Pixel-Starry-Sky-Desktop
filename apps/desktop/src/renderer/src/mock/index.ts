@@ -7,7 +7,7 @@ import { animateCompaction, showcaseSnapshots, showcaseSubagentTranscript, showc
 import { workbenchSnapshots } from './workbench'
 import { demo } from './demo'
 import { DEMO_EDITOR_STATE, DEMO_FILES, demoDirectory, demoDocument } from './files'
-import { demoGitBranches, demoGitDiff, demoGitStatus } from './git'
+import { demoGitBranches, demoGitDiff, demoGitHistory, demoGitStatus } from './git'
 import { demoInbox } from './inbox'
 import { demoEngineCatalog, demoEngineConfig, demoEngineStatus, demoPlatformGroups, demoProviders } from './platform'
 import { demoToolBrowser, demoToolCopies, demoToolEnvironment, demoToolTasks } from './projectTools'
@@ -27,7 +27,7 @@ export const demoSource: DemoSource = {
   artifacts: { response: demoArtifacts, change: demoArtifactChange, preview: demoArtifactPreview },
   context: demoContext,
   files: { contents: DEMO_FILES, editorState: DEMO_EDITOR_STATE, directory: demoDirectory, document: demoDocument },
-  git: { status: demoGitStatus, branches: demoGitBranches, diff: demoGitDiff },
+  git: { status: demoGitStatus, branches: demoGitBranches, diff: demoGitDiff, history: demoGitHistory },
   inbox: demoInbox,
   projectTools: {
     tasks: demoToolTasks,

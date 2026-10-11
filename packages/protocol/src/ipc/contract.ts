@@ -416,6 +416,13 @@ export const IPC_CONTRACT = {
     remote: 'projectTools:gitCommit',
     trust: 'window',
   },
+  'projectTools:gitCompare': {
+    kind: 'invoke',
+    route: 'selected',
+    ids: [0],
+    remote: 'projectTools:gitCompare',
+    trust: 'window',
+  },
   'projectTools:gitCreateBranch': {
     kind: 'invoke',
     route: 'selected',
@@ -444,6 +451,20 @@ export const IPC_CONTRACT = {
     remote: 'projectTools:gitFetch',
     trust: 'window',
   },
+  'projectTools:gitHistoryAction': {
+    kind: 'invoke',
+    route: 'selected',
+    ids: [0],
+    remote: 'projectTools:gitHistoryAction',
+    trust: 'window',
+  },
+  'projectTools:gitLog': {
+    kind: 'invoke',
+    route: 'selected',
+    ids: [0],
+    remote: 'projectTools:gitLog',
+    trust: 'window',
+  },
   'projectTools:gitOperation': {
     kind: 'invoke',
     route: 'selected',
@@ -463,6 +484,20 @@ export const IPC_CONTRACT = {
     route: 'selected',
     ids: [0],
     remote: 'projectTools:gitPush',
+    trust: 'window',
+  },
+  'projectTools:gitRefs': {
+    kind: 'invoke',
+    route: 'selected',
+    ids: [0],
+    remote: 'projectTools:gitRefs',
+    trust: 'window',
+  },
+  'projectTools:gitShow': {
+    kind: 'invoke',
+    route: 'selected',
+    ids: [0],
+    remote: 'projectTools:gitShow',
     trust: 'window',
   },
   'projectTools:gitStage': {

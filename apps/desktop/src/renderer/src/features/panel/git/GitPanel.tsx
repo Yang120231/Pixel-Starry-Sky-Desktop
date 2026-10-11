@@ -13,7 +13,7 @@ import {
   Undo2,
   X,
 } from 'lucide-react'
-import { Button, cn, IconButton, Spinner } from '@/ui'
+import { Button, cn, IconButton, Segmented, Spinner } from '@/ui'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
@@ -21,7 +21,7 @@ import { openFile } from '@/features/files/store'
 import { machineOf } from '@/features/machines/store'
 import { useProjectContext } from '../projectContext'
 import { openRightTab } from '../workspaceStore'
-import { NoProject } from '../ToolsUi'
+import { NoProject, useRemember } from '../ToolsUi'
 import { EmptyState, PanelCard } from '../PanelSurface'
 import type {
   GitArea,
@@ -46,11 +46,12 @@ import {
 } from './gitModel'
 import { GitDiffView } from './GitDiffView'
 import { BranchMenu } from './BranchMenu'
+import { GitHistory } from './GitHistory'
 import { publishGitStatus } from './summary'
 import { demo as demoData } from '@/data/demo'
 
-/** 命令面板触发的 Git 操作（docs/ui/git-panel.md §6）：先打开 Git 页，状态读到后再执行 */
-export type GitPaletteAction = 'pull' | 'push' | 'fetch' | 'branch'
+/** 命令面板触发的 Git 操作（docs/ui/git-panel.md §6）：先打开 Git 页，状态读到后再执行；history 切到「历史」（§9.1） */
+export type GitPaletteAction = 'pull' | 'push' | 'fetch' | 'branch' | 'history'
 const GIT_ACTION_EVENT = 'pixelsky:git-action'
 let pendingAction: GitPaletteAction | null = null
 export function requestGitAction(action: GitPaletteAction): void {
@@ -141,6 +142,12 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
   const last = useRef<(() => Promise<GitResult>) | null>(null)
   const busyRef = useRef(false)
   const remote = machineOf(target.sessionId ?? target.projectId) !== 'local'
+  // 「更改 | 历史」（docs/ui/git-panel.md §9.1）：每个项目记住上次看的
+  const [view, setView] = useRemember<'changes' | 'history'>(
+    `pixelsky.git.view:${target.sessionId ?? target.projectId ?? ''}`,
+    'changes',
+  )
+  const [historyKey, setHistoryKey] = useState(0)
   // 顶栏的分支和新任务起点的改动数跟着 Git 页读到的状态走（./summary.ts）
   useEffect(() => {
     if (status && !demo) publishGitStatus(target, status)
@@ -273,7 +280,10 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
       if (action === 'pull') void pull('ff-only')
       else if (action === 'push') void push(!status.upstream)
       else if (action === 'fetch') void fetch()
-      else void openBranches()
+      else if (action === 'history') {
+        setSelected(null)
+        setView('history')
+      } else void openBranches()
     }
     consume()
     window.addEventListener(GIT_ACTION_EVENT, consume)
@@ -426,6 +436,78 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
   }
 
   const total = changeCount(status)
+  // 合并 / 变基 / cherry-pick / revert 没结束：更改和历史两页都显示（历史里的 cherry-pick 冲突后在这里中止或继续）
+  const operationBanner = status.operation && (
+    <div role="status" className="shrink-0 rounded-lg border border-warn/40 bg-surface p-2.5">
+      <div className="flex items-center gap-2 text-list font-medium text-warn">
+        <TriangleAlert size={14} />
+        {tr(`git.operation.${status.operation}`)}
+      </div>
+      <p className="mt-1 text-meta text-fg-muted">{tr('git.operation.hint')}</p>
+      <div className="mt-2 flex gap-1.5">
+        <Button
+          className="h-7 px-2.5 text-meta"
+          disabled={busy}
+          onClick={() => void perform(() => api!.gitOperation(target, 'abort'))}
+        >
+          {tr('git.operation.abort')}
+        </Button>
+        <Button
+          variant="primary"
+          className="h-7 px-2.5 text-meta"
+          disabled={busy || status.conflicted.length > 0}
+          onClick={() => void perform(() => api!.gitOperation(target, 'continue'))}
+        >
+          {tr('git.operation.continue')}
+        </Button>
+      </div>
+    </div>
+  )
+  const failureCard = failure && (
+    <div
+      role="alert"
+      data-git-failure={failure.kind}
+      className="shrink-0 rounded-lg border border-danger/40 bg-surface p-2.5"
+    >
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="text-meta text-fg-faint">{tr(`git.action.${failure.action}`)}</p>
+          <p className="text-list font-medium text-danger">{failureTitle(failure.kind)}</p>
+          <p className="mt-0.5 text-meta text-fg-muted">{failureHint(failure.kind)}</p>
+        </div>
+        <IconButton
+          icon={X}
+          label={tr('git.failure.dismiss')}
+          size={24}
+          iconSize={13}
+          onClick={() => setFailure(null)}
+        />
+      </div>
+      {failure.detail && (
+        <details className="mt-1.5">
+          <summary className="cursor-pointer text-meta text-fg-muted">{tr('git.failure.detail')}</summary>
+          <pre className="mt-1 max-h-40 overflow-auto rounded-md bg-subtle p-2 font-mono text-[11px] whitespace-pre-wrap text-fg-secondary">
+            {failure.detail}
+          </pre>
+        </details>
+      )}
+      {failure.remedies.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {failure.remedies.map((r, i) => (
+            <Button
+              key={r}
+              variant={i === 0 ? 'primary' : 'outline'}
+              className="h-7 px-2.5 text-meta"
+              disabled={busy}
+              onClick={() => remedy(r)}
+            >
+              {tr(`git.remedy.${r}`)}
+            </Button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
   const canCommit = !!message.trim() && !busy && total > 0 && !status.conflicted.length
   const commitAll = needsCommitAll(status)
   return (
@@ -486,7 +568,10 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
             size={28}
             iconSize={14}
             disabled={busy}
-            onClick={() => void refresh()}
+            onClick={() => {
+              void refresh()
+              if (view === 'history') setHistoryKey(k => k + 1)
+            }}
           />
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -525,256 +610,220 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
           )}
           {busy && <Spinner size={13} />}
         </div>
+        <div className="flex">
+          <Segmented
+            label={tr('git.tab.label')}
+            value={view}
+            onChange={v => {
+              setSelected(null)
+              setView(v)
+            }}
+            options={[
+              { value: 'changes', label: tr('git.tab.changes') + (total ? ` ${total}` : '') },
+              { value: 'history', label: tr('git.tab.history') },
+            ]}
+          />
+        </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-3">
-        {status.operation && (
-          <div role="status" className="shrink-0 rounded-lg border border-warn/40 bg-surface p-2.5">
-            <div className="flex items-center gap-2 text-list font-medium text-warn">
-              <TriangleAlert size={14} />
-              {tr(`git.operation.${status.operation}`)}
+      {view === 'history' ? (
+        <>
+          {(failure || status.operation) && (
+            <div className="flex shrink-0 flex-col gap-2 px-3 pt-2">
+              {operationBanner}
+              {failure && failureCard}
             </div>
-            <p className="mt-1 text-meta text-fg-muted">{tr('git.operation.hint')}</p>
-            <div className="mt-2 flex gap-1.5">
-              <Button
-                className="h-7 px-2.5 text-meta"
-                disabled={busy}
-                onClick={() => void perform(() => api!.gitOperation(target, 'abort'))}
-              >
-                {tr('git.operation.abort')}
-              </Button>
+          )}
+          <GitHistory
+            target={target}
+            demo={demo}
+            status={status}
+            reloadKey={historyKey}
+            onStatus={setStatus}
+            onFailure={setFailure}
+          />
+        </>
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-3">
+          {operationBanner}
+          {failure && failureCard}
+          {status.busySessions > 0 && (
+            <p className="shrink-0 rounded-md bg-subtle px-2.5 py-1.5 text-meta text-fg-muted">{tr('git.busy')}</p>
+          )}
+
+          {/* 提交 */}
+          <div className="shrink-0">
+            <textarea
+              value={message}
+              onChange={e => setMessage(e.target.value)}
+              rows={2}
+              aria-label={tr('git.commit.label')}
+              placeholder={tr('git.commit.placeholder')}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.nativeEvent.isComposing) {
+                  e.preventDefault()
+                  if (canCommit) commit(false)
+                }
+              }}
+              className="block max-h-40 min-h-14 w-full resize-y rounded-md border border-line bg-surface px-2.5 py-2 text-list text-fg outline-none placeholder:text-fg-faint focus-visible:border-accent"
+            />
+            <div className="mt-1.5 flex gap-1.5">
               <Button
                 variant="primary"
-                className="h-7 px-2.5 text-meta"
-                disabled={busy || status.conflicted.length > 0}
-                onClick={() => void perform(() => api!.gitOperation(target, 'continue'))}
+                className="h-7 flex-1 justify-center px-2.5 text-meta"
+                disabled={!canCommit}
+                onClick={() => commit(false)}
               >
-                {tr('git.operation.continue')}
+                {tr(commitAll ? 'git.commitAll' : 'git.commit')}
+              </Button>
+              <Button
+                className="h-7 flex-1 justify-center px-2.5 text-meta"
+                disabled={!canCommit || !status.remotes.length || status.detached}
+                onClick={() => commit(true)}
+              >
+                {tr(commitAll ? 'git.commitAllPush' : 'git.commitPush')}
               </Button>
             </div>
           </div>
-        )}
-        {failure && (
-          <div
-            role="alert"
-            data-git-failure={failure.kind}
-            className="shrink-0 rounded-lg border border-danger/40 bg-surface p-2.5"
-          >
-            <div className="flex items-start gap-2">
-              <div className="min-w-0 flex-1">
-                <p className="text-meta text-fg-faint">{tr(`git.action.${failure.action}`)}</p>
-                <p className="text-list font-medium text-danger">{failureTitle(failure.kind)}</p>
-                <p className="mt-0.5 text-meta text-fg-muted">{failureHint(failure.kind)}</p>
-              </div>
-              <IconButton
-                icon={X}
-                label={tr('git.failure.dismiss')}
-                size={24}
-                iconSize={13}
-                onClick={() => setFailure(null)}
-              />
+
+          {total === 0 && (
+            <div className="py-6 text-center">
+              <p className="text-list text-fg-muted">{tr('git.clean')}</p>
+              <p className="mt-1 text-meta text-fg-faint">{tr('git.cleanHint')}</p>
             </div>
-            {failure.detail && (
-              <details className="mt-1.5">
-                <summary className="cursor-pointer text-meta text-fg-muted">{tr('git.failure.detail')}</summary>
-                <pre className="mt-1 max-h-40 overflow-auto rounded-md bg-subtle p-2 font-mono text-[11px] whitespace-pre-wrap text-fg-secondary">
-                  {failure.detail}
-                </pre>
-              </details>
-            )}
-            {failure.remedies.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {failure.remedies.map((r, i) => (
-                  <Button
-                    key={r}
-                    variant={i === 0 ? 'primary' : 'outline'}
-                    className="h-7 px-2.5 text-meta"
-                    disabled={busy}
-                    onClick={() => remedy(r)}
-                  >
-                    {tr(`git.remedy.${r}`)}
-                  </Button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-        {status.busySessions > 0 && (
-          <p className="shrink-0 rounded-md bg-subtle px-2.5 py-1.5 text-meta text-fg-muted">{tr('git.busy')}</p>
-        )}
-
-        {/* 提交 */}
-        <div className="shrink-0">
-          <textarea
-            value={message}
-            onChange={e => setMessage(e.target.value)}
-            rows={2}
-            aria-label={tr('git.commit.label')}
-            placeholder={tr('git.commit.placeholder')}
-            onKeyDown={e => {
-              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.nativeEvent.isComposing) {
-                e.preventDefault()
-                if (canCommit) commit(false)
-              }
-            }}
-            className="block max-h-40 min-h-14 w-full resize-y rounded-md border border-line bg-surface px-2.5 py-2 text-list text-fg outline-none placeholder:text-fg-faint focus-visible:border-accent"
-          />
-          <div className="mt-1.5 flex gap-1.5">
-            <Button
-              variant="primary"
-              className="h-7 flex-1 justify-center px-2.5 text-meta"
-              disabled={!canCommit}
-              onClick={() => commit(false)}
-            >
-              {tr(commitAll ? 'git.commitAll' : 'git.commit')}
-            </Button>
-            <Button
-              className="h-7 flex-1 justify-center px-2.5 text-meta"
-              disabled={!canCommit || !status.remotes.length || status.detached}
-              onClick={() => commit(true)}
-            >
-              {tr(commitAll ? 'git.commitAllPush' : 'git.commitPush')}
-            </Button>
-          </div>
-        </div>
-
-        {total === 0 && (
-          <div className="py-6 text-center">
-            <p className="text-list text-fg-muted">{tr('git.clean')}</p>
-            <p className="mt-1 text-meta text-fg-faint">{tr('git.cleanHint')}</p>
-          </div>
-        )}
-        {status.truncated && <p className="shrink-0 text-meta text-warn">{tr('git.truncated')}</p>}
-        {sections.map(section => (
-          <section key={section.area} data-git-section={section.area} className="shrink-0">
-            <div className="group/section flex h-7 items-center gap-1 pr-0.5">
-              <h3
-                className={cn(
-                  'min-w-0 flex-1 truncate text-label font-medium',
-                  section.area === 'conflicted' ? 'text-danger' : 'text-fg-muted',
-                )}
-              >
-                {tr(section.title)} <span className="tabular-nums text-fg-faint">{section.files.length}</span>
-              </h3>
-              {section.area === 'staged' ? (
-                <IconButton
-                  icon={Minus}
-                  label={tr('git.unstageAll')}
-                  size={24}
-                  iconSize={13}
-                  disabled={busy}
-                  onClick={() => void unstage('all')}
-                />
-              ) : (
-                <>
-                  {section.area !== 'conflicted' && (
-                    <IconButton
-                      icon={Undo2}
-                      label={tr('git.discardAll')}
-                      size={24}
-                      iconSize={13}
-                      disabled={busy}
-                      onClick={() => discardSection(section)}
-                    />
+          )}
+          {status.truncated && <p className="shrink-0 text-meta text-warn">{tr('git.truncated')}</p>}
+          {sections.map(section => (
+            <section key={section.area} data-git-section={section.area} className="shrink-0">
+              <div className="group/section flex h-7 items-center gap-1 pr-0.5">
+                <h3
+                  className={cn(
+                    'min-w-0 flex-1 truncate text-label font-medium',
+                    section.area === 'conflicted' ? 'text-danger' : 'text-fg-muted',
                   )}
+                >
+                  {tr(section.title)} <span className="tabular-nums text-fg-faint">{section.files.length}</span>
+                </h3>
+                {section.area === 'staged' ? (
                   <IconButton
-                    icon={Plus}
-                    label={tr('git.stageAll')}
+                    icon={Minus}
+                    label={tr('git.unstageAll')}
                     size={24}
                     iconSize={13}
                     disabled={busy}
-                    onClick={() => void stage(section.files.map(f => f.path))}
+                    onClick={() => void unstage('all')}
                   />
-                </>
-              )}
-            </div>
-            <ul className="flex flex-col">
-              {section.files.map(file => {
-                const { name, dir } = splitPath(file.path)
-                const actions = fileActions(file, section.area)
-                return (
-                  <li
-                    key={section.area + ':' + file.path}
-                    className="group/file flex h-7 min-w-0 items-center gap-1 rounded-md pr-0.5 hover:bg-hover"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setSelected({ area: section.area, path: file.path })}
-                      title={`${tr('git.viewDiff')} · ${file.origPath ? file.origPath + ' → ' : ''}${file.path}`}
-                      className="flex h-full min-w-0 flex-1 items-center gap-2 rounded-md pl-2 text-left"
+                ) : (
+                  <>
+                    {section.area !== 'conflicted' && (
+                      <IconButton
+                        icon={Undo2}
+                        label={tr('git.discardAll')}
+                        size={24}
+                        iconSize={13}
+                        disabled={busy}
+                        onClick={() => discardSection(section)}
+                      />
+                    )}
+                    <IconButton
+                      icon={Plus}
+                      label={tr('git.stageAll')}
+                      size={24}
+                      iconSize={13}
+                      disabled={busy}
+                      onClick={() => void stage(section.files.map(f => f.path))}
+                    />
+                  </>
+                )}
+              </div>
+              <ul className="flex flex-col">
+                {section.files.map(file => {
+                  const { name, dir } = splitPath(file.path)
+                  const actions = fileActions(file, section.area)
+                  return (
+                    <li
+                      key={section.area + ':' + file.path}
+                      className="group/file flex h-7 min-w-0 items-center gap-1 rounded-md pr-0.5 hover:bg-hover"
                     >
-                      <span
-                        className={cn(
-                          'w-3 shrink-0 text-center font-mono text-[11px] font-semibold',
-                          file.code === 'D'
-                            ? 'text-danger'
-                            : file.code === 'A' || file.code === '?'
-                              ? 'text-success'
-                              : file.code === 'U'
-                                ? 'text-danger'
-                                : 'text-warn',
-                        )}
+                      <button
+                        type="button"
+                        onClick={() => setSelected({ area: section.area, path: file.path })}
+                        title={`${tr('git.viewDiff')} · ${file.origPath ? file.origPath + ' → ' : ''}${file.path}`}
+                        className="flex h-full min-w-0 flex-1 items-center gap-2 rounded-md pl-2 text-left"
                       >
-                        {file.code}
-                      </span>
-                      <span
-                        className={cn(
-                          'shrink-0 truncate text-list',
-                          file.code === 'D' ? 'text-fg-muted line-through' : 'text-fg',
+                        <span
+                          className={cn(
+                            'w-3 shrink-0 text-center font-mono text-[11px] font-semibold',
+                            file.code === 'D'
+                              ? 'text-danger'
+                              : file.code === 'A' || file.code === '?'
+                                ? 'text-success'
+                                : file.code === 'U'
+                                  ? 'text-danger'
+                                  : 'text-warn',
+                          )}
+                        >
+                          {file.code}
+                        </span>
+                        <span
+                          className={cn(
+                            'shrink-0 truncate text-list',
+                            file.code === 'D' ? 'text-fg-muted line-through' : 'text-fg',
+                          )}
+                        >
+                          {name}
+                        </span>
+                        {dir && <span className="min-w-0 truncate text-meta text-fg-faint">{dir}</span>}
+                      </button>
+                      <span className="flex shrink-0 items-center opacity-0 group-hover/file:opacity-100 group-focus-within/file:opacity-100">
+                        {actions.onOpen && (
+                          <IconButton
+                            icon={FileCode2}
+                            label={tr('git.open')}
+                            size={22}
+                            iconSize={12}
+                            onClick={actions.onOpen}
+                          />
                         )}
-                      >
-                        {name}
+                        {actions.onDiscard && (
+                          <IconButton
+                            icon={Undo2}
+                            label={tr('git.discard')}
+                            size={22}
+                            iconSize={12}
+                            disabled={busy}
+                            onClick={actions.onDiscard}
+                          />
+                        )}
+                        {actions.onStage && (
+                          <IconButton
+                            icon={Plus}
+                            label={tr('git.stage')}
+                            size={22}
+                            iconSize={12}
+                            disabled={busy}
+                            onClick={actions.onStage}
+                          />
+                        )}
+                        {actions.onUnstage && (
+                          <IconButton
+                            icon={Minus}
+                            label={tr('git.unstage')}
+                            size={22}
+                            iconSize={12}
+                            disabled={busy}
+                            onClick={actions.onUnstage}
+                          />
+                        )}
                       </span>
-                      {dir && <span className="min-w-0 truncate text-meta text-fg-faint">{dir}</span>}
-                    </button>
-                    <span className="flex shrink-0 items-center opacity-0 group-hover/file:opacity-100 group-focus-within/file:opacity-100">
-                      {actions.onOpen && (
-                        <IconButton
-                          icon={FileCode2}
-                          label={tr('git.open')}
-                          size={22}
-                          iconSize={12}
-                          onClick={actions.onOpen}
-                        />
-                      )}
-                      {actions.onDiscard && (
-                        <IconButton
-                          icon={Undo2}
-                          label={tr('git.discard')}
-                          size={22}
-                          iconSize={12}
-                          disabled={busy}
-                          onClick={actions.onDiscard}
-                        />
-                      )}
-                      {actions.onStage && (
-                        <IconButton
-                          icon={Plus}
-                          label={tr('git.stage')}
-                          size={22}
-                          iconSize={12}
-                          disabled={busy}
-                          onClick={actions.onStage}
-                        />
-                      )}
-                      {actions.onUnstage && (
-                        <IconButton
-                          icon={Minus}
-                          label={tr('git.unstage')}
-                          size={22}
-                          iconSize={12}
-                          disabled={busy}
-                          onClick={actions.onUnstage}
-                        />
-                      )}
-                    </span>
-                  </li>
-                )
-              })}
-            </ul>
-          </section>
-        ))}
-      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            </section>
+          ))}
+        </div>
+      )}
       {overlay}
     </div>
   )

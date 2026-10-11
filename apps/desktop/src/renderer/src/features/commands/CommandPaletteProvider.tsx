@@ -206,6 +206,7 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
       t('terminal.chooseProject'),
     )
     for (const [action, key] of [
+      ['history', 'git.palette.history'],
       ['pull', 'git.palette.pull'],
       ['push', 'git.palette.push'],
       ['fetch', 'git.palette.fetch'],

@@ -69,6 +69,11 @@ export const PROJECT_TOOL_OPS = {
   'projectTools:gitSwitch': (c, ref, input) => c.tools.git.switchBranch(workspaceRef(ref), input),
   'projectTools:gitCreateBranch': (c, ref, input) => c.tools.git.createBranch(workspaceRef(ref), input),
   'projectTools:gitOperation': (c, ref, action) => c.tools.git.operation(workspaceRef(ref), action),
+  'projectTools:gitLog': (c, ref, query) => c.tools.git.log(workspaceRef(ref), query),
+  'projectTools:gitRefs': (c, ref) => c.tools.git.refs(workspaceRef(ref)),
+  'projectTools:gitShow': (c, ref, hash) => c.tools.git.show(workspaceRef(ref), hash),
+  'projectTools:gitCompare': (c, ref, kind) => c.tools.git.compare(workspaceRef(ref), kind),
+  'projectTools:gitHistoryAction': (c, ref, input) => c.tools.git.historyAction(workspaceRef(ref), input),
 } satisfies OpTable<ToolsOpContext>
 
 /** 新建会话时可选的工作区：项目本身 + 它的 Git 副本（docs/ui/machines-workspaces.md） */

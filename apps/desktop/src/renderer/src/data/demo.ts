@@ -25,7 +25,14 @@ import type { BrowserState } from '../../../shared/types/project-browser'
 import type {
   EnvironmentState,
   GitBranch,
+  GitCommitDetail,
+  GitCompareTarget,
+  GitCompareResult,
   GitDiff,
+  GitDiffInput,
+  GitLogPage,
+  GitLogQuery,
+  GitRefs,
   GitStatus,
   ProjectCopy,
   TaskState,
@@ -66,7 +73,19 @@ export interface DemoSource {
     directory(path: string): DirectoryListing
     document(path: string): FileDocument
   }
-  git: { status: GitStatus; branches: GitBranch[]; diff(path: string): GitDiff }
+  git: {
+    status: GitStatus
+    branches: GitBranch[]
+    diff(path: string): GitDiff
+    /** 提交历史（docs/ui/git-panel.md §9） */
+    history: {
+      refs: GitRefs
+      log(query: GitLogQuery): GitLogPage
+      show(hash: string): GitCommitDetail
+      compare(target: GitCompareTarget): GitCompareResult
+      diff(input: Extract<GitDiffInput, { area: 'commit' }>): GitDiff
+    }
+  }
   inbox: InboxItem[]
   projectTools: { tasks: TaskState; environment: EnvironmentState; copies: ProjectCopy[]; browser: BrowserState }
   remoteCalls(now: number): RemoteCall[]
