@@ -457,8 +457,8 @@ export class ClaudeSession implements EngineSession {
     fork?: { from: string; at: string } | null,
   ): Promise<ClaudeProcess> {
     const rec = this.ctx.record()
-    // 新进程的 modelUsage 从零开始累计，算每轮用量的基线也要清零（docs/ui/usage.md §6.1）
-    this.translator.resetUsageBaseline()
+    // 新进程的 modelUsage 重新累计，算每轮用量的基线也要清零；--resume 时 Claude Code 可能恢复旧的累计值（docs/ui/usage.md §6.1）
+    this.translator.resetUsageBaseline(resume || !!fork)
     // 上下文超过 200K 的自定义模型带 [1m] 启动（docs/ui/custom-api.md §10）
     const model = rec.model ? claudeModelName(rec.model, this.deps.env) : rec.model
     const args = claudeArgs({ ...rec, model }, sid, resume, this.deps.launch, rewindAt, fork)

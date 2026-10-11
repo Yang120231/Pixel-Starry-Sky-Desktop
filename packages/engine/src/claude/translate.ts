@@ -19,6 +19,7 @@ import type {
   Usage,
   RequestRetryState,
 } from '@pixelsky/protocol'
+import { estimateCost, officialPrice } from '@pixelsky/protocol'
 import { Runs } from './runs'
 import { completeToolItem, toolItem } from './tools'
 import { RequestCacheReader } from './request-cache'
@@ -123,6 +124,17 @@ export class ClaudeTranslator {
    * 每一轮的用量 = 这次的累计 - 上次的累计。进程重启（空闲回收、崩溃、强制中断后 --resume）时必须清零。
    */
   private usageBase = new Map<string, UsageCounters>()
+  /**
+   * --resume 起的新进程：Claude Code 会把上次存在项目配置里的累计用量（lastModelUsage，按 lastSessionId）
+   * 恢复进来，第一次 result 的累计值可能包含以前所有进程的用量。这时这一轮按逐条请求的用量算，不用累计值。
+   */
+  private usageRestored = false
+  /** 这一轮逐条请求的用量（按消息 ID 去重，取各字段见到的最大值），包括子智能体的请求 */
+  private turnTokens = new Map<
+    string,
+    { model: string; input: number; cacheRead: number; cacheWrite: number; output: number }
+  >()
+  private lastMessageId = ''
   /** 这一轮每个模型的请求次数（数 message_start，包括子智能体的请求） */
   private turnRequests = new Map<string, number>()
   private turnStartedAt = 0
@@ -178,6 +190,7 @@ export class ClaudeTranslator {
     this.apiError = null
     this.retrySignature = ''
     this.turnRequests.clear()
+    this.turnTokens.clear()
     this.turnStartedAt = Date.now()
     // 新的一轮：子智能体条只留还在跑的
     const running = this.subagentList.filter(a => a.status === 'running')
@@ -265,10 +278,11 @@ export class ClaudeTranslator {
     })
   }
 
-  /** 新进程启动时调用：累计用量从零开始 */
-  resetUsageBaseline(): void {
+  /** 新进程启动时调用：累计用量从零开始；resumed 时第一次累计值可能带着恢复的旧用量 */
+  resetUsageBaseline(resumed = false): void {
     this.context.reset(false, true)
     this.usageBase.clear()
+    this.usageRestored = resumed
     this.requestCache.reset()
   }
 
@@ -288,9 +302,15 @@ export class ClaudeTranslator {
     if (msg.type === 'stream_event') {
       const ev = obj(msg.event)
       if (ev.type === 'message_start') {
-        const model = str(obj(ev.message).model)
+        const message = obj(ev.message)
+        const model = str(message.model)
         if (model) this.turnRequests.set(model, (this.turnRequests.get(model) ?? 0) + 1)
-      }
+        this.lastMessageId = str(message.id)
+        this.requestTokens(this.lastMessageId, model, message.usage)
+      } else if (ev.type === 'message_delta') this.requestTokens(this.lastMessageId, '', ev.usage)
+    } else if (msg.type === 'assistant') {
+      const message = obj(msg.message)
+      this.requestTokens(str(message.id), str(message.model), message.usage)
     }
     if (msg.parent_tool_use_id && msg.type !== 'system' && msg.type !== 'result') {
       this.onSubagentFrame(msg, str(msg.parent_tool_use_id))
@@ -775,9 +795,38 @@ export class ClaudeTranslator {
     this.cb.turnEnded(outcome)
   }
 
+  private requestTokens(id: string, model: string, raw: unknown): void {
+    if (!this.turnId || !id) return
+    const u = obj(raw)
+    const t = this.turnTokens.get(id) ?? { model: '', input: 0, cacheRead: 0, cacheWrite: 0, output: 0 }
+    if (model) t.model = model
+    t.input = Math.max(t.input, num(u.input_tokens))
+    t.cacheRead = Math.max(t.cacheRead, num(u.cache_read_input_tokens))
+    t.cacheWrite = Math.max(t.cacheWrite, num(u.cache_creation_input_tokens))
+    t.output = Math.max(t.output, num(u.output_tokens))
+    this.turnTokens.set(id, t)
+  }
+
+  /** 这一轮这个模型逐条请求加起来的用量；一条都没有返回 null */
+  private requestSum(model: string): Omit<UsageCounters, 'cost'> | null {
+    let found = false
+    const sum = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 }
+    for (const t of this.turnTokens.values()) {
+      if (t.model !== model) continue
+      found = true
+      sum.input += t.input
+      sum.cacheRead += t.cacheRead
+      sum.cacheWrite += t.cacheWrite
+      sum.output += t.output
+    }
+    return found ? sum : null
+  }
+
   /** 这一轮每个模型的用量（docs/ui/usage.md §6.1）；没有任何 token 时返回 null */
   private turnUsage(msg: Msg): TurnUsage | null {
     const models: Record<string, ModelTurnUsage> = {}
+    const restored = this.usageRestored
+    this.usageRestored = false
     for (const [model, raw] of Object.entries(obj(msg.modelUsage))) {
       const m = obj(raw)
       const now: UsageCounters = {
@@ -789,6 +838,22 @@ export class ClaudeTranslator {
       }
       const prev = this.usageBase.get(model)
       this.usageBase.set(model, now)
+      if (restored && !prev) {
+        // 累计值里可能有恢复的旧用量：明显多于这一轮逐条请求的总和时按逐条请求算，费用按官方价估算；
+        // 看不到逐条请求的模型（如后台的小模型）不记，宁少勿多
+        const d = this.requestSum(model)
+        if (!d) continue
+        const total = (c: Omit<UsageCounters, 'cost'>) => c.input + c.cacheRead + c.cacheWrite + c.output
+        if (total(d) <= 0) continue
+        if (total(now) > total(d) * 1.05 + 10_000) {
+          models[model] = {
+            ...d,
+            costUsd: estimateCost(d, officialPrice(model)),
+            requests: Math.max(1, this.turnRequests.get(model) ?? 0),
+          }
+          continue
+        }
+      }
       // 累计值变小：说明是新进程而基线没清零，这时整个当前值都算这一轮
       const shrunk =
         !!prev &&

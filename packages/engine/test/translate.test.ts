@@ -174,6 +174,76 @@ describe('ClaudeTranslator（真实录像）', () => {
     expect(turn('claude-interrupt', 't3')?.models['claude-sonnet-5-5'].input).toBe(1198)
   })
 
+  it('--resume 的新进程：第一次累计值带着恢复的旧用量时，这一轮按逐条请求算，下一轮照常求差', () => {
+    const events: EngineEvent[] = []
+    const t = new ClaudeTranslator('D:\work', {
+      emit: e => events.push(e),
+      sessionId: () => {},
+      permissionMode: () => {},
+      turnEnded: () => {},
+      fastState: () => {},
+    })
+    const model = 'claude-opus-5-5'
+    const request = (id: string, cacheRead: number, output: number) => {
+      t.handle({
+        type: 'stream_event',
+        event: {
+          type: 'message_start',
+          message: {
+            id,
+            model,
+            usage: { input_tokens: 10, cache_read_input_tokens: cacheRead, cache_creation_input_tokens: 100 },
+          },
+        },
+      })
+      t.handle({ type: 'stream_event', event: { type: 'message_delta', usage: { output_tokens: output } } })
+      // 完整消息重复带同一份用量：按消息 ID 去重
+      t.handle({
+        type: 'assistant',
+        message: {
+          id,
+          model,
+          content: [{ type: 'text', text: 'ok' }],
+          usage: {
+            input_tokens: 10,
+            cache_read_input_tokens: cacheRead,
+            cache_creation_input_tokens: 100,
+            output_tokens: output,
+          },
+        },
+      })
+    }
+    const result = (cacheRead: number, output: number, costUSD: number) => {
+      t.handle({
+        type: 'result',
+        subtype: 'success',
+        modelUsage: {
+          [model]: {
+            inputTokens: 1000,
+            cacheReadInputTokens: cacheRead,
+            cacheCreationInputTokens: 5000,
+            outputTokens: output,
+            costUSD,
+          },
+        },
+      })
+      const done = events.filter(e => e.type === 'turn_completed').at(-1)
+      return done?.type === 'turn_completed' ? done.usage?.models[model] : undefined
+    }
+    t.resetUsageBaseline(true)
+    t.startTurn('t1')
+    request('m1', 50_000, 300)
+    request('m2', 60_000, 200)
+    // 累计值里有恢复的 3 亿缓存读：不能算进这一轮
+    const first = result(300_000_000, 800_000, 120)
+    expect(first).toMatchObject({ input: 20, cacheRead: 110_000, cacheWrite: 200, output: 500, requests: 2 })
+    expect(first?.costUsd).toBeCloseTo((20 * 4 + 500 * 20 + 110_000 * 0.2 + 200 * 5) / 1e6)
+    // 同一进程的下一轮：照常按累计值求差（包括 Claude 自己算的费用）
+    t.startTurn('t2')
+    request('m3', 70_000, 100)
+    expect(result(300_070_000, 800_100, 120.5)).toMatchObject({ cacheRead: 70_000, output: 100, costUsd: 0.5 })
+  })
+
   describe('压缩上下文（docs/ui/compaction.md）', () => {
     const setup = () => {
       const events: EngineEvent[] = []
