@@ -2,8 +2,9 @@ import { spawn, execFile } from 'node:child_process'
 import { readFile, mkdir, writeFile, rename, stat } from 'node:fs/promises'
 import { delimiter, join, resolve } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
-import type { EditorItem, EditorKind, EditorState, WorkspaceRef } from '../../shared/types/workspace'
+import type { EditorItem, EditorKind, EditorState, OpenTool, WorkspaceRef } from '../../shared/types/workspace'
 import { workspacePath, type TargetResolver } from './workspace-files'
+import { detectJetBrains, detectTools, launchTool } from './open-tools'
 
 export const EDITORS = [
   { id: 'vscode', name: 'VS Code', exe: 'Code.exe', dir: 'Microsoft VS Code', command: 'code' },
@@ -17,9 +18,11 @@ interface Prefs {
   openWith: string
   window: 'reuse' | 'new'
   custom: EditorItem[]
+  /** 「打开方式」按钮直接点时用哪个（GitHub #12） */
+  workspaceId: string | null
 }
-const DEFAULTS: Prefs = { defaultId: null, openWith: 'app', window: 'reuse', custom: [] }
-const KINDS = [...EDITORS.map(e => e.id), 'custom']
+const DEFAULTS: Prefs = { defaultId: null, openWith: 'app', window: 'reuse', custom: [], workspaceId: null }
+const KINDS = [...EDITORS.map(e => e.id), 'jetbrains', 'custom']
 const exists = async (path: string): Promise<boolean> => {
   try {
     return (await stat(path)).isFile()
@@ -37,6 +40,22 @@ export function editorArgs(
   column?: number,
 ): string[] {
   if (mode === 'folder') return [file ?? root]
+  const position = (): void => {
+    if (
+      line !== undefined &&
+      (!Number.isInteger(line) ||
+        line <= 0 ||
+        line > 10000000 ||
+        (column !== undefined && (!Number.isInteger(column) || column <= 0 || column > 10000000)))
+    )
+      throw new Error('文件行列不正确')
+  }
+  // JetBrains：项目目录在前，文件前面跟 --line / --column（项目没开时一起打开）
+  if (mode === 'jetbrains') {
+    if (!file) return [root]
+    position()
+    return [root, ...(line !== undefined ? ['--line', String(line), '--column', String(column ?? 1)] : []), file]
+  }
   const args = [windowMode === 'new' ? '--new-window' : '--reuse-window']
   if (file) {
     args.push(root)
@@ -155,6 +174,7 @@ async function versions(items: EditorItem[]): Promise<Record<string, string>> {
 export class Editors {
   private prefs: Prefs = { ...DEFAULTS, custom: [] }
   private items: EditorItem[] = []
+  private tools: OpenTool[] = []
   private checkedAt = 0
   private detecting: Promise<EditorState> | null = null
   private saving: Promise<void> = Promise.resolve()
@@ -170,6 +190,7 @@ export class Editors {
         defaultId: typeof p.defaultId === 'string' ? p.defaultId : null,
         openWith: typeof p.openWith === 'string' ? p.openWith : 'app',
         window: p.window === 'new' ? 'new' : 'reuse',
+        workspaceId: typeof p.workspaceId === 'string' ? p.workspaceId : null,
         custom: Array.isArray(p.custom)
           ? p.custom
               .filter(
@@ -195,6 +216,8 @@ export class Editors {
       openWith: this.prefs.openWith,
       window: this.prefs.window,
       checkedAt: this.checkedAt,
+      tools: this.tools.map(t => ({ ...t })),
+      workspaceId: this.prefs.workspaceId,
     }
   }
   private persist(): Promise<void> {
@@ -225,7 +248,9 @@ export class Editors {
     const appPaths = Promise.all(
       EDITORS.map(kind => Promise.all([registryPath(kind.exe, 'HKCU'), registryPath(kind.exe, 'HKLM')])),
     )
+    const toolsPromise = detectTools().catch(() => [] as OpenTool[])
     const [registryOutput, pathsByKind] = await Promise.all([registryOutputPromise, appPaths])
+    const jetbrainsPromise = detectJetBrains(registryOutput).catch(() => [])
     for (const manual of this.prefs.custom)
       found.push({ ...manual, available: await exists(manual.path), manual: true, source: 'manual' })
     await Promise.all(
@@ -279,6 +304,29 @@ export class Editors {
         }
       }),
     )
+    for (const ide of await jetbrainsPromise) {
+      const normalized = ide.path.toLowerCase()
+      if (found.some(e => e.path.toLowerCase() === normalized)) continue
+      const stem = ide.path
+        .replace(/^.*[\\/]/, '')
+        .replace(/64\.exe$/i, '')
+        .toLowerCase()
+      const id = found.some(e => e.id === `jetbrains:${stem}`)
+        ? `jetbrains:${stem}:${createHash('sha256').update(normalized).digest('hex').slice(0, 12)}`
+        : `jetbrains:${stem}`
+      found.push({
+        id,
+        kind: 'jetbrains',
+        name: ide.name,
+        version: ide.version,
+        path: ide.path,
+        source: ide.source,
+        mode: 'jetbrains',
+        available: true,
+        manual: false,
+      })
+    }
+    this.tools = await toolsPromise
     if (this.prefs.defaultId && !found.some(e => e.id === this.prefs.defaultId)) {
       const old = this.items.find(e => e.id === this.prefs.defaultId)
       const builtin = EDITORS.find(e => e.id === this.prefs.defaultId)
@@ -300,7 +348,9 @@ export class Editors {
     const metadata = await versions(found)
     await Promise.all(
       found.map(async item => {
-        item.version = metadata[item.path.toLowerCase()]
+        // JetBrains 的 exe 版本信息是构建号（262.9437.185.0-IU），用安装目录名里的版本（2026.2.1）
+        item.version =
+          item.kind === 'jetbrains' && item.version ? item.version : (metadata[item.path.toLowerCase()] ?? item.version)
         if (item.available && this.getIcon) item.icon = await this.getIcon(item.path).catch(() => undefined)
       }),
     )
@@ -327,6 +377,15 @@ export class Editors {
     if (patch.window !== undefined) {
       if (patch.window !== 'reuse' && patch.window !== 'new') throw new Error('窗口方式不正确')
       this.prefs.window = patch.window
+    }
+    if (patch.workspaceId !== undefined) {
+      if (
+        patch.workspaceId !== null &&
+        !this.items.some(e => e.id === patch.workspaceId) &&
+        !this.tools.some(t => t.id === patch.workspaceId)
+      )
+        throw new Error('打开方式不存在')
+      this.prefs.workspaceId = patch.workspaceId
     }
     if (patch.openWith !== undefined) {
       if (patch.openWith !== 'app' && !this.items.some(e => e.id === patch.openWith)) throw new Error('打开方式不存在')
@@ -374,6 +433,14 @@ export class Editors {
     const root = await workspacePath(target.path, '', 'directory')
     const file = path ? await workspacePath(root, path, 'file') : undefined
     const state = await this.state()
+    // 文件资源管理器、Git Bash、终端：只能打开整个文件夹（GitHub #12）
+    const tool = !file ? state.tools.find(t => t.id === editorId) : undefined
+    if (tool) {
+      const env = { ...process.env }
+      delete env.ELECTRON_RUN_AS_NODE
+      await launchTool(tool, root, env)
+      return { editor: tool.name, target: root }
+    }
     const editor = state.items.find(e => e.id === (editorId ?? state.defaultId))
     if (!editor) throw new Error('先选择默认编辑器')
     if (!editor.available || !editor.path || !(await exists(editor.path))) {

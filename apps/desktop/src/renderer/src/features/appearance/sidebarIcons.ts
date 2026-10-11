@@ -9,6 +9,7 @@ import {
   FolderPlus,
   Gauge,
   GitBranch,
+  SquareArrowOutUpRight,
   LayoutDashboard,
   MessageSquare,
   PenLine,
@@ -30,7 +31,7 @@ export type SidebarAction = (typeof SIDEBAR_ACTIONS)[number]
  * 终端、编辑器（</>）、命令面板已于 2026-10-10 移除（D066）：终端和文件在右侧工作区，命令面板用 Ctrl+Shift+P；
  * 保存的布局里如果还有它们，读取时自动丢弃。
  */
-export const HEADER_ACTIONS = ['workbench', 'machines', 'channels', 'git'] as const
+export const HEADER_ACTIONS = ['workbench', 'machines', 'channels', 'git', 'openIn'] as const
 export type HeaderAction = (typeof HEADER_ACTIONS)[number]
 
 /** 图标位置编辑器里可移动的全部入口 */
@@ -42,6 +43,7 @@ const HEADER_ICONS: Record<HeaderAction, LucideIcon> = {
   machines: Cloud,
   channels: MessageSquare,
   git: GitBranch,
+  openIn: SquareArrowOutUpRight,
 }
 
 export function isSidebarAction(action: LayoutAction): action is SidebarAction {

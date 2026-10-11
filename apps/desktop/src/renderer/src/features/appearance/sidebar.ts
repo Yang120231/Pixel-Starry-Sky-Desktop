@@ -31,7 +31,7 @@ export interface SidebarPrefs {
 
 export const SIDEBAR_PREFS_KEY = 'pixelsky.sidebar'
 export const DEFAULT_SIDEBAR_LAYOUT: SidebarLayout = {
-  header: ['workbench', 'machines', 'channels', 'git'],
+  header: ['workbench', 'machines', 'channels', 'git', 'openIn'],
   top: ['addProject', 'newTask'],
   bottom: ['usage', 'plugins', 'settings'],
 }

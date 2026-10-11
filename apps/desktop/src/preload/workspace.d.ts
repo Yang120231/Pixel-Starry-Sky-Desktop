@@ -36,7 +36,13 @@ export interface FilesBridge {
 }
 export interface EditorBridge {
   state(force?: boolean): Promise<EditorState>
-  preferences(patch: { defaultId?: string | null; openWith?: string; window?: 'reuse' | 'new' }): Promise<EditorState>
+  preferences(patch: {
+    defaultId?: string | null
+    openWith?: string
+    window?: 'reuse' | 'new'
+    /** 「打开方式」按钮直接点时用哪个（编辑器或程序的 id） */
+    workspaceId?: string | null
+  }): Promise<EditorState>
   choose(kind: EditorKind, name?: string, mode?: 'code' | 'folder'): Promise<EditorState | null>
   remove(id: string): Promise<EditorState>
   open(

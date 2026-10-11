@@ -322,7 +322,7 @@ describe('侧边栏外观偏好', () => {
       layout = moveSidebarActionInLayout(layout, action, 'top', 99)
     expect(layout.top).toEqual(['addProject', 'newTask', 'channels', 'machines', 'workbench'])
     expect(moveSidebarActionInLayout(layout, 'usage', 'top', 0)).toEqual(layout)
-    expect(layout.header).toEqual(['usage'])
+    expect(layout.header).toEqual(['usage', 'openIn'])
   })
 
   it('侧栏一排最多 5 个，排满时拒绝移入但允许排内换序；顶栏不限', () => {
@@ -339,6 +339,18 @@ describe('侧边栏外观偏好', () => {
     expect(isRowFull(layout, 'header')).toBe(false)
   })
 
+  it('旧偏好里没有「打开方式」（GitHub #12）：读取时补到顶栏最后', () => {
+    const prefs = parseSidebarPrefs({
+      version: 4,
+      layout: {
+        header: ['git', 'workbench'],
+        top: ['addProject', 'newTask'],
+        bottom: ['usage', 'plugins', 'settings'],
+      },
+    })
+    expect(prefs.layout.header).toEqual(['git', 'workbench', 'machines', 'channels', 'openIn'])
+  })
+
   it('终端、编辑器、命令面板已从图标位置移除（D066），旧偏好里的位置读取时丢弃', () => {
     const prefs = parseSidebarPrefs({
       version: 4,
@@ -353,7 +365,7 @@ describe('侧边栏外观偏好', () => {
     expect(prefs.layout.header[0]).toBe('workbench')
     expect(prefs.layout.top.slice(0, 1)).toEqual(['newTask'])
     expect(all.sort()).toEqual([...LAYOUT_ACTIONS].sort())
-    expect(DEFAULT_SIDEBAR_LAYOUT.header).toEqual(['workbench', 'machines', 'channels', 'git'])
+    expect(DEFAULT_SIDEBAR_LAYOUT.header).toEqual(['workbench', 'machines', 'channels', 'git', 'openIn'])
   })
 
   it('旧偏好里的自动化原位换成 Git（D061），不重复、不丢位置', () => {

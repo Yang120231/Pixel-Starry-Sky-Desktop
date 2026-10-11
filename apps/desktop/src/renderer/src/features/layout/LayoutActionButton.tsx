@@ -9,10 +9,12 @@ import { openRightTab, useActivePanelTab } from '@/features/panel/workspaceStore
 import { usePage } from '@/features/layout/page'
 import { tr } from '@/i18n/core'
 import { useToolbarState } from './ToolbarContext'
+import { OpenInButton } from '@/features/editor/OpenInButton'
 
 /** 图标位置设置里的任一入口；顶栏、侧栏顶部、侧栏底部共用，挪位置不改变行为。 */
 export function LayoutActionButton({
   action,
+  placement,
   onAddProject,
   onNewTask,
 }: SidebarActionCallbacks & { action: LayoutAction; placement: SidebarPlacement }) {
@@ -23,6 +25,8 @@ export function LayoutActionButton({
         <SidebarActionButton action={action} onAddProject={onAddProject} onNewTask={onNewTask} />
       ) : action === 'git' ? (
         <GitButton />
+      ) : action === 'openIn' ? (
+        <OpenInButton placement={placement} />
       ) : (
         <NavButton id={action} />
       )}

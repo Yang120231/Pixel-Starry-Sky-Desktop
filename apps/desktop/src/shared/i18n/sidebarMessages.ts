@@ -44,6 +44,7 @@ export const sidebarMessages = {
   'sidebar.action.machines': { zh: '云主机', en: 'Cloud machines' },
   'sidebar.action.channels': { zh: '协作频道', en: 'Channels' },
   'sidebar.action.git': { zh: 'Git', en: 'Git' },
+  'sidebar.action.openIn': { zh: '打开方式', en: 'Open with' },
   'sidebar.runStatus.expand': { zh: '展开运行中和有新回复的会话', en: 'Show running sessions and new replies' },
   'sidebar.runStatus.collapse': { zh: '收起运行状态', en: 'Hide run status' },
   'sidebar.runStatus.list': { zh: '运行中和有新回复的会话', en: 'Running sessions and new replies' },

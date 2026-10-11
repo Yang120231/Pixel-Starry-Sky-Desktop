@@ -11,6 +11,8 @@ export const DEMO_FILES: Record<string, string> = {
   ...SHOWCASE_FILES,
 }
 export const DEMO_EDITOR_STATE: EditorState = {
+  tools: [],
+  workspaceId: null,
   items: [],
   defaultId: null,
   openWith: 'app',
