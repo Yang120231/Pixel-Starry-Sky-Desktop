@@ -57,6 +57,9 @@ function hydrate(key: string): Promise<void> {
   loads.set(key, work)
   return work
 }
+/** 这个输入框已经加了图片（只看已经读进来的草稿：可见的输入框都读过） */
+export const hasImageDraft = (key: string): boolean => (drafts.get(key)?.images.length ?? 0) > 0
+
 export async function updateImages(
   key: string,
   update: (previous: ImageAttachment[]) => ImageAttachment[],

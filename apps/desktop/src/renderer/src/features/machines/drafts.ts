@@ -5,8 +5,8 @@ try {
   targets = JSON.parse(localStorage.getItem(KEY) ?? '{}')
 } catch {}
 export const draftWorkspace = (tab: string): WorkspaceChoice | null => targets[tab] ?? null
-export function bindDraftWorkspace(tab: string, workspace: WorkspaceChoice): void {
-  if (targets[tab]) return
+export function bindDraftWorkspace(tab: string, workspace: WorkspaceChoice, replace = false): void {
+  if (targets[tab] && !replace) return
   targets = { ...targets, [tab]: workspace }
   try {
     localStorage.setItem(KEY, JSON.stringify(targets))

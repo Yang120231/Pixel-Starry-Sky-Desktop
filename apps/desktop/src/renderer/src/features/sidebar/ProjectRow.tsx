@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { Ellipsis, FolderOpen, PencilLine, SquareArrowOutUpRight, Trash2, type LucideIcon } from 'lucide-react'
+import { Ellipsis, FolderOpen, PencilLine, Plus, SquareArrowOutUpRight, Trash2, type LucideIcon } from 'lucide-react'
 import { normalizeProjectName, PROJECT_NAME_LIMIT } from '@pixelsky/protocol'
 import { cn, useToast } from '@/ui'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
@@ -8,10 +8,12 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { translateMessage } from '@/i18n/core'
 import { isLive, removeProject, renameProject } from '@/features/engine'
 import { machineOf } from '@/features/machines/store'
+import { paneActions } from '@/features/panes/store'
 import type { Project } from '@/data'
 
 /**
  * 侧栏项目行：点击展开 / 收起；右键、⋯ 按钮、ContextMenu 键或 Shift+F10 打开项目菜单。
+ * 悬停（或键盘聚焦到这一行）时 ⋯ 右边出现「+」，在这个项目下新建会话（issue #5）；菜单里也有这一项。
  * 重命名只改显示名，移除只把项目移出列表（磁盘文件和会话记录保留）。见 docs/ui/sidebar-compact-controls.md §9。
  */
 export function ProjectRow({
@@ -85,8 +87,14 @@ export function ProjectRow({
   }
   const external = (task: () => Promise<unknown>): void =>
     run(() => void task().catch(error => toast(translateMessage((error as Error).message) || t('project.retry'))))
+  const newSession = (): void => {
+    close(false)
+    paneActions.open(null, { project: project.id })
+  }
   const item =
     'flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-ui hover:bg-hover disabled:opacity-40 disabled:hover:bg-transparent'
+  const action =
+    'flex size-6 items-center justify-center rounded-md text-fg-muted hover:bg-selected hover:text-fg focus-visible:ring-2 focus-visible:ring-accent'
 
   return (
     <div
@@ -115,7 +123,14 @@ export function ProjectRow({
         <Icon size={16} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
         <span className="min-w-0 flex-1 truncate">{project.name}</span>
       </button>
-      <div className="relative flex h-full min-w-6 shrink-0 items-center justify-end pr-1">
+      {/* 悬停时右边放 ⋯ 和 +：这一块变宽只是项目名更早截断，行高和左边的图标、名字位置都不动 */}
+      <div
+        className={cn(
+          'relative flex h-full min-w-6 shrink-0 items-center justify-end pr-1',
+          'group-hover/project:min-w-[56px] group-focus-within/project:min-w-[56px]',
+          position && 'min-w-[56px]',
+        )}
+      >
         <span
           className={cn(
             'flex items-center group-hover/project:invisible group-focus-within/project:invisible',
@@ -124,20 +139,34 @@ export function ProjectRow({
         >
           {trailing}
         </span>
-        <button
-          type="button"
-          aria-haspopup="menu"
-          aria-expanded={!!position}
-          aria-label={t('project.actions', { name: project.name })}
-          title={t('project.menu')}
-          onClick={() => (position ? close() : show())}
+        <div
           className={cn(
-            'absolute right-1 flex size-6 items-center justify-center rounded-md text-fg-muted hover:bg-selected hover:text-fg focus-visible:ring-2 focus-visible:ring-accent',
+            'absolute right-1 flex items-center gap-0.5',
             position ? 'visible' : 'invisible group-hover/project:visible group-focus-within/project:visible',
           )}
         >
-          <Ellipsis size={16} strokeWidth={1.5} />
-        </button>
+          <button
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={!!position}
+            aria-label={t('project.actions', { name: project.name })}
+            title={t('project.menu')}
+            onClick={() => (position ? close() : show())}
+            className={action}
+          >
+            <Ellipsis size={16} strokeWidth={1.5} />
+          </button>
+          <button
+            type="button"
+            data-project-new-session
+            aria-label={t('project.newSessionIn', { name: project.name })}
+            title={t('project.newSessionIn', { name: project.name })}
+            onClick={newSession}
+            className={action}
+          >
+            <Plus size={16} strokeWidth={1.5} />
+          </button>
+        </div>
       </div>
       {position &&
         createPortal(
@@ -176,6 +205,11 @@ export function ProjectRow({
               }
             }}
           >
+            <button role="menuitem" onClick={newSession} className={item}>
+              <Plus size={15} strokeWidth={1.5} />
+              {t('project.newSession')}
+            </button>
+            <div role="separator" className="my-1 border-t border-line-subtle" />
             <button role="menuitem" onClick={() => run(() => setDialog('rename'))} className={item}>
               <PencilLine size={15} strokeWidth={1.5} />
               {t('project.rename')}

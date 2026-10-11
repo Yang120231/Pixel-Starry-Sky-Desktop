@@ -2,7 +2,7 @@ import { tr } from '../../i18n/core'
 // 多对话窗格的状态：布局树 + 关闭中 / 拖动中的标记，存 localStorage，重启恢复。规格见 docs/ui/multi-pane.md
 import { useSyncExternalStore } from 'react'
 import { isDemo } from '@/data'
-import { migrateNewComposerDraft } from '@/features/engine/drafts'
+import { composerDraft, migrateNewComposerDraft } from '@/features/engine/drafts'
 import { cssDuration, motionEnabled } from './motion'
 import * as T from './tree'
 import type { Dir, Layout } from './tree'
@@ -10,8 +10,11 @@ import { dropLayout, dropProblem, MIN_PANE, type DropTarget } from './drop'
 import { openFileLayout } from './file-layout'
 import { confirmFiles } from '@/features/files/FileConfirm'
 import { getFiles, removeFile } from '@/features/files/store'
-import { bindDraftWorkspace } from '@/features/machines/drafts'
-import { getEngineState } from '@/features/engine/store'
+import { bindDraftWorkspace, draftWorkspace } from '@/features/machines/drafts'
+import { getEngineState, setCurrentProject } from '@/features/engine/store'
+import { hasImageDraft } from '@/features/session/attachments/drafts'
+import type { SessionRecord } from '@pixelsky/protocol'
+import type { WorkspaceChoice } from '../../../../shared/types/machines'
 import { getMachines } from '@/features/machines/store'
 import { showWorkbench } from '@/features/layout/page'
 
@@ -115,6 +118,35 @@ export function notify(text: string): void {
   emit()
 }
 
+/**
+ * 新会话标签用哪个项目、哪个工作目录：从会话里新开的沿用那个会话的目录；
+ * 否则用这台机器上次选的工作目录（同一个项目时），再不然用项目目录。
+ */
+function bindNewTab(tab: string, record: SessionRecord | null, projectId: string | null, explicit: boolean): void {
+  const engine = getEngineState()
+  const project = engine.projects.find(p => p.id === projectId)
+  if (!project) return
+  let chosen: WorkspaceChoice | null = null
+  try {
+    chosen = JSON.parse(localStorage.getItem('pixelsky.last-workspace.' + getMachines().currentId) ?? 'null')
+  } catch {}
+  bindDraftWorkspace(
+    tab,
+    {
+      projectId: project.id,
+      name: project.name,
+      path: record?.cwd ?? (chosen?.projectId === project.id ? chosen.path : project.path),
+      copyId: chosen?.projectId === project.id && (!record || chosen.path === record.cwd) ? chosen.copyId : null,
+      branch: chosen?.branch ?? null,
+      error: null,
+      sessionId: record?.id,
+    },
+    explicit,
+  )
+  // 指定了项目（侧栏项目行）：当前项目也换过去，欢迎页跟着变（它订阅的是当前项目）
+  if (explicit) setCurrentProject(project.id)
+}
+
 export const paneActions = {
   switchMachine(id: string): void {
     window.clearTimeout(saveTimer)
@@ -181,8 +213,12 @@ export const paneActions = {
     setLayout(T.cycleFocus(state.layout, delta))
   },
 
-  /** 打开会话（侧栏点击）；null 表示新会话（欢迎页） */
-  open(sessionId: string | null): void {
+  /**
+   * 打开会话（侧栏点击）；null 表示新会话（欢迎页）。
+   * project：在这个项目下新建会话（侧栏项目行的「新建会话」）。当前窗格是还没写东西的新会话时直接换到这个项目，
+   * 写了东西的另开一个，免得草稿跟着换了项目。
+   */
+  open(sessionId: string | null, opts: { project?: string } = {}): void {
     // 在协作频道页打开会话 / 新任务时先切回工作台（docs/ui/channels.md §2）
     showWorkbench()
     const { layout } = state
@@ -190,30 +226,27 @@ export const paneActions = {
       setLayout(T.openTab(layout, sessionId))
       return
     }
-    // 当前窗格已经在显示一个新会话：不再多开一个
     const current = T.focusedTab(layout)
-    if (current && T.isNewTab(current)) return
+    if (current && T.isNewTab(current)) {
+      // 当前窗格已经在显示一个新会话：不再多开一个
+      if (!opts.project || isDemo) return
+      if (draftWorkspace(current)?.projectId === opts.project) {
+        setCurrentProject(opts.project)
+        return
+      }
+      if (!composerDraft(current).trim() && !hasImageDraft(current)) {
+        bindNewTab(current, null, opts.project, true)
+        return
+      }
+    }
     const tab = newId(T.NEW_TAB_PREFIX)
     if (!isDemo) {
       const engine = getEngineState(),
-        record = current
-          ? (engine.snapshots[current]?.record ?? engine.sessions.find(s => s.record.id === current)?.record)
-          : null
-      let chosen: import('../../../../shared/types/machines').WorkspaceChoice | null = null
-      try {
-        chosen = JSON.parse(localStorage.getItem('pixelsky.last-workspace.' + getMachines().currentId) ?? 'null')
-      } catch {}
-      const project = engine.projects.find(p => p.id === (record?.projectId ?? engine.currentProjectId))
-      if (project)
-        bindDraftWorkspace(tab, {
-          projectId: project.id,
-          name: project.name,
-          path: record?.cwd ?? (chosen?.projectId === project.id ? chosen.path : project.path),
-          copyId: chosen?.projectId === project.id && (!record || chosen.path === record.cwd) ? chosen.copyId : null,
-          branch: chosen?.branch ?? null,
-          error: null,
-          sessionId: record?.id,
-        })
+        record =
+          current && !opts.project
+            ? (engine.snapshots[current]?.record ?? engine.sessions.find(s => s.record.id === current)?.record)
+            : null
+      bindNewTab(tab, record ?? null, opts.project ?? record?.projectId ?? engine.currentProjectId, !!opts.project)
     }
     if (!isDemo) migrateNewComposerDraft(tab)
     setLayout(T.openTab(layout, tab))

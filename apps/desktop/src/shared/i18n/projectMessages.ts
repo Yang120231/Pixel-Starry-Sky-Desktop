@@ -1,6 +1,8 @@
 export const projectMessages = {
   'project.menu': { zh: '项目操作', en: 'Project actions' },
   'project.actions': { zh: '「{name}」的操作', en: 'Actions for {name}' },
+  'project.newSession': { zh: '新建会话', en: 'New session' },
+  'project.newSessionIn': { zh: '在「{name}」新建会话', en: 'New session in {name}' },
   'project.rename': { zh: '重命名', en: 'Rename' },
   'project.reveal': { zh: '打开文件夹', en: 'Open folder' },
   'project.openEditor': { zh: '在编辑器中打开', en: 'Open in editor' },

@@ -49,6 +49,9 @@ export function useComposerDraft(key: string): [string, (value: string | ((previ
   return [value, set]
 }
 
+/** 某个输入框现在的草稿（不在输入框组件里读，例如侧栏判断新会话标签里写没写东西） */
+export const composerDraft = (key: string): string => drafts[key] ?? ''
+
 /** 不在输入框组件里时追加草稿（回退把原文放回发起窗格的输入框）；已有内容时换行追加。 */
 export function appendComposerDraft(key: string, text: string): void {
   if (!text) return
