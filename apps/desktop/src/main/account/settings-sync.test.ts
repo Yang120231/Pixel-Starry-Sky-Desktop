@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -6,14 +6,16 @@ vi.mock('electron', () => ({ app: { getPath: () => '' } }))
 vi.mock('./account', () => ({ settingsFetch: vi.fn(), signedInEmail: () => 'alice@example.com' }))
 const { MAX_KEYS, checkChanges, parseCloudSettings, readSettingsResponse } = await import('./settings-sync')
 
-// 云端的契约样例（services/cloud/testdata/contract，docs/cloud-service.md §4.2.10）
+// 云端的契约样例（services/cloud/testdata/contract，docs/cloud-service.md §4.2.10）。services/ 是单独的仓库、
+// 不在这个仓库里（GitHub 上的检查也没有）：有这份目录时才用样例测，其余测试不依赖它
 const contractDir = fileURLToPath(new URL('../../../../../services/cloud/testdata/contract/', import.meta.url))
+const hasContract = existsSync(contractDir)
 const sample = (name: string) =>
   JSON.parse(readFileSync(contractDir + name, 'utf8')) as { status: number; body: unknown }
 const response = (s: { status: number; body: unknown }) =>
   new Response(JSON.stringify(s.body), { status: s.status, headers: { 'Content-Type': 'application/json' } })
 
-describe('设置云同步：云端的设置', () => {
+describe.skipIf(!hasContract)('设置云同步：云端的契约样例', () => {
   it('桌面端的契约样例能解析，值原样保留（文本或对象）', async () => {
     const settings = await readSettingsResponse(response(sample('desktop/settings-put.json')))
     expect(Object.keys(settings).sort()).toEqual(['desktop.engine.options', 'desktop.engine.retries', 'desktop.theme'])
@@ -21,9 +23,17 @@ describe('设置云同步：云端的设置', () => {
     expect(settings['desktop.engine.retries'].value).toBe(3)
   })
 
-  it('旧版客户端的键（theme、ui.*）不读', async () => {
-    const legacy = await readSettingsResponse(response(sample('legacy/settings-get.json')))
-    expect(legacy).toEqual({})
+  it('旧版客户端的样例（theme 等）一个都不读', async () => {
+    expect(await readSettingsResponse(response(sample('legacy/settings-get.json')))).toEqual({})
+  })
+
+  it('云端回 400 时报出状态', async () => {
+    await expect(readSettingsResponse(response(sample('desktop/settings-put-invalid.json')))).rejects.toThrow('400')
+  })
+})
+
+describe('设置云同步：云端的设置', () => {
+  it('只留 desktop.* 键和格式对的条目', () => {
     expect(
       parseCloudSettings({
         settings: {
@@ -36,8 +46,8 @@ describe('设置云同步：云端的设置', () => {
     ).toEqual({ 'desktop.ok': { value: 1, updatedAt: 2 } })
   })
 
-  it('云端回 400 时报出状态，5xx 时说连不上', async () => {
-    await expect(readSettingsResponse(response(sample('desktop/settings-put-invalid.json')))).rejects.toThrow('400')
+  it('云端出错时：4xx 报状态，5xx 说连不上', async () => {
+    await expect(readSettingsResponse(new Response('x', { status: 400 }))).rejects.toThrow('400')
     await expect(readSettingsResponse(new Response('x', { status: 502 }))).rejects.toThrow('云端服务暂时连不上')
   })
 })
