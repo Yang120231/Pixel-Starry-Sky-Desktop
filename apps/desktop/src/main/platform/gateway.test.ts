@@ -2,6 +2,7 @@ import { once } from 'node:events'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Server } from 'node:http'
 import type { SessionRecord } from '@pixelsky/protocol'
+import { setLogSink } from '@pixelsky/engine'
 import { eventEnd, platformGateway } from './gateway'
 import type { ResolvedProvider } from '../core/providers/store'
 let server: Server
@@ -117,6 +118,61 @@ describe('平台代理按引擎隔离 Responses 与 Messages', () => {
     expect(res.status).toBe(401)
     expect(await res.json()).toMatchObject({ error: { message: expect.stringContaining('请重新登录') } })
   })
+})
+
+it('上游输出到一半断开：记一条日志，带请求 ID、状态码、已转发字节和错误码链（docs/ui/logging.md §4.5）', async () => {
+  const logs: { level: string; message: string; fields?: Record<string, unknown> }[] = []
+  setLogSink({ enabled: () => true, write: (level, _scope, message, fields) => logs.push({ level, message, fields }) })
+  try {
+    server = platformGateway({
+      sessions: new Map([['s', { recordId: 's', secret: 'local-secret' }]]),
+      record: () => ({ id: 's', engine: 'claude', platform: { groupId: '2', account: 'user' } }) as SessionRecord,
+      account: () => 'user',
+      fetch: async () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('event: message_start\n\n'))
+              setTimeout(
+                () =>
+                  controller.error(
+                    new TypeError('terminated', {
+                      cause: Object.assign(new Error('other side closed'), { code: 'UND_ERR_SOCKET' }),
+                    }),
+                  ),
+                20,
+              )
+            },
+          }),
+          { headers: { 'Content-Type': 'text/event-stream' } },
+        ),
+    })
+    server.listen(0, '127.0.0.1')
+    await once(server, 'listening')
+    const res = await fetch('http://127.0.0.1:' + (server.address() as { port: number }).port + '/v1/messages', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer local-secret' },
+      body: JSON.stringify({ model: 'claude-sonnet-5' }),
+    })
+    expect(res.status).toBe(200)
+    // 不掐断连接：已转发的完整事件之后接一个 error 事件正常结束（Claude Code 不会反复重试）
+    const text = await res.text()
+    expect(text.startsWith('event: message_start\n\nevent: error\n')).toBe(true)
+    expect(JSON.parse(text.split('data: ')[1])).toMatchObject({ type: 'error', error: { type: 'api_error' } })
+    const broken = logs.find(l => l.message === '上游连接中途断开')
+    expect(broken?.level).toBe('warn')
+    expect(broken?.fields).toMatchObject({
+      path: '/v1/messages',
+      sessionId: 's',
+      requestId: expect.stringMatching(/^pixelsky-/),
+      status: 200,
+      bytes: 22,
+      error: 'TypeError terminated ← UND_ERR_SOCKET other side closed',
+    })
+    expect(broken?.fields?.streamMs).toEqual(expect.any(Number))
+  } finally {
+    setLogSink(null)
+  }
 })
 
 it('中途断开时丢掉不完整的事件再接 error 事件；完整结束时原样转发（含不完整的结尾）', async () => {

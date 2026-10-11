@@ -11,6 +11,7 @@ import type { ProjectToolsBridge } from './project-tools'
 import type { TerminalBridge } from './terminal'
 import type { NotificationsBridge } from './notifications'
 import type { ArtifactsBridge } from './artifacts'
+import type { LogBridge } from './log'
 
 export type * from './account'
 export type * from './app-info'
@@ -20,6 +21,7 @@ export type * from './terminal'
 export type * from './notifications'
 export type * from './artifacts'
 export type * from './providers'
+export type * from './log'
 
 export interface PixelskyBridge {
   machines: import('./machines').MachineBridge
@@ -39,6 +41,8 @@ export interface PixelskyBridge {
   providers: ProvidersBridge
   /** 「关于」页：版本与运行环境（docs/ui/settings.md §5） */
   app: AppInfoBridge
+  /** 本机日志（docs/ui/logging.md） */
+  log: LogBridge
   /** 自动更新（docs/release-update.md §7） */
   update: UpdateBridge
   files: FilesBridge

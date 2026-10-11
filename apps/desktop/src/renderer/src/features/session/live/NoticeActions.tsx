@@ -4,6 +4,8 @@ import { tr } from '../../../i18n/core'
 // 按钮只发请求（features/engine/sourceActions.ts），切换额度来源的确认由同一会话的输入框负责。不会自动切换。
 import { ENGINES, type SessionRecord } from '@pixelsky/protocol'
 import { requestSourceAction, type SourceAction } from '@/features/engine'
+import { useSettings } from '@/features/settings/SettingsProvider'
+import { requestLogFocus } from '@/features/logs/focus'
 import { classifyError, type ErrorKind } from './errorKind'
 
 const LABEL: Record<SourceAction, string> = {
@@ -48,12 +50,25 @@ function actionsFor(
   return ENGINES[engine].caps.platformSwitch ? ['use-platform'] : []
 }
 
-export function NoticeActions({ record, text }: { record: SessionRecord; text: string }) {
+/** 卡片下面最后一个按钮「查看日志」：打开设置 › 日志，筛到这个会话这一轮（docs/ui/logging.md §3.2） */
+export function NoticeActions({
+  record,
+  text,
+  turnStart,
+}: {
+  record: SessionRecord
+  text: string
+  /** 这一轮用户消息的时间；没有时按十分钟前 */
+  turnStart: number | null
+}) {
   useI18n()
+  const settings = useSettings()
   const kind = classifyError(text)
-  if (!kind) return null
-  const actions = actionsFor(kind, record, record.engine)
-  if (actions.length === 0) return null
+  const actions = kind ? actionsFor(kind, record, record.engine) : []
+  const viewLogs = () => {
+    requestLogFocus(record.id, turnStart ?? Date.now() - 10 * 60_000)
+    settings.openSettings('logs')
+  }
   return (
     <div className="mt-1.5 flex flex-wrap gap-1.5 pl-[27px]">
       {actions.map(a => (
@@ -66,6 +81,13 @@ export function NoticeActions({ record, text }: { record: SessionRecord; text: s
           {LABEL[a]}
         </button>
       ))}
+      <button
+        type="button"
+        onClick={viewLogs}
+        className="press h-7 rounded-md px-2.5 text-meta text-fg-muted hover:bg-hover hover:text-fg"
+      >
+        {tr('logs.viewLogs')}
+      </button>
     </div>
   )
 }

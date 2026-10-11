@@ -2,13 +2,17 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { StringDecoder } from 'node:string_decoder'
 import type { Launcher } from '../adapter'
 import { TailBuffer } from '../jsonl'
+import { logger, redact } from '../log'
+import { logProcess } from '../process-log'
+
+export { redact }
+const log = logger('engine.codex')
 
 export type Message = Record<string, unknown>
 export const object = (v: unknown): Message => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Message) : {})
 export const string = (v: unknown): string => (typeof v === 'string' ? v : '')
 export const array = (v: unknown): unknown[] => (Array.isArray(v) ? v : [])
 export const number = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, v) : 0)
-export const redact = (text: string): string => text.replace(/(?:sk-[A-Za-z0-9_-]+|Bearer\s+[^\s"']+)/gi, '[redacted]')
 
 export interface RpcHandlers {
   notification(method: string, params: Message): void
@@ -24,18 +28,28 @@ export class CodexProcess {
   private readonly stderr = new TailBuffer()
   private sequence = 0
   private exited = false
+  /** close() / kill() 之后为真：退出不算异常（日志用） */
+  private stopping = false
   readonly exitPromise: Promise<void>
 
   constructor(launcher: Launcher, args: string[], cwd: string, env: NodeJS.ProcessEnv, handlers: RpcHandlers) {
     this.child = spawn(launcher.command, [...launcher.args, ...args], { cwd, env, windowsHide: true, stdio: 'pipe' })
     this.child.stdin.on('error', () => {})
     this.child.stderr.on('data', (data: Buffer) => this.stderr.push(redact(data.toString('utf8'))))
+    logProcess(
+      log,
+      this.child,
+      { command: launcher.command, cwd },
+      () => this.stderr.toString(),
+      () => this.stopping,
+    )
     const decoder = new StringDecoder('utf8')
     let buffer = ''
     this.child.stdout.on('data', (data: Buffer) => {
       buffer += decoder.write(data)
       if (buffer.length > 40 * 1024 * 1024) {
         this.stderr.push('Codex protocol frame exceeds limit')
+        log.warn('协议帧超过上限，结束进程', { pid: this.child.pid })
         this.kill()
         return
       }
@@ -119,6 +133,7 @@ export class CodexProcess {
   }
   async close(): Promise<void> {
     if (!this.alive) return
+    this.stopping = true
     this.child.stdin.end()
     const timer = setTimeout(() => this.kill(), 2000)
     await this.exitPromise
@@ -126,6 +141,7 @@ export class CodexProcess {
   }
   kill(): void {
     if (!this.alive) return
+    this.stopping = true
     if (process.platform === 'win32' && this.child.pid)
       spawn('taskkill', ['/pid', String(this.child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }).on(
         'error',

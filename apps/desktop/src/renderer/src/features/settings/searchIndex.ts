@@ -158,6 +158,8 @@ export const SETTINGS_INDEX: SearchEntry[] = [
   { section: 'appearance', title: '模糊', keywords: '壁纸 虚化 blur' },
 
   { section: 'shortcuts', title: '快捷键', keywords: '键盘 ctrl 分屏 侧边栏 面板 搜索' },
+  { section: 'logs', title: '日志', keywords: '日志 诊断 排查 报错 错误 导出 log logs diagnostics debug' },
+  { section: 'logs', title: '详细日志', keywords: '日志 调试 详细 verbose debug stderr' },
   { section: 'about', title: '关于', keywords: '版本 更新 数据目录 运行环境 链接' },
 ]
 

@@ -16,10 +16,13 @@ import { I18nProvider } from '../i18n/I18nProvider'
 import { SessionActionsProvider } from '../features/sidebar/SessionActions'
 import { TerminalProvider } from '../features/terminal/TerminalProvider'
 import { CommandPaletteProvider } from '../features/commands/CommandPaletteProvider'
+import { installRendererErrorLog, reactRootErrorOptions } from '../features/logs/rendererErrors'
 
 document.documentElement.dataset.platform = window.pixelsky?.platform ?? 'web'
+// 页面报错、未处理的 Promise 拒绝写进本机日志（docs/ui/logging.md §4.5）
+installRendererErrorLog()
 
-createRoot(document.getElementById('root')!).render(
+createRoot(document.getElementById('root')!, reactRootErrorOptions).render(
   <StrictMode>
     <I18nProvider>
       <ThemeProvider>

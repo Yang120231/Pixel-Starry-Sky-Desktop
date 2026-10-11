@@ -15,7 +15,7 @@ export function channel(): AppInfo['channel'] {
   return process.env.PORTABLE_EXECUTABLE_FILE ? 'portable' : 'installed'
 }
 
-function appInfo(): AppInfo {
+export function appInfo(): AppInfo {
   return {
     name: '像素星空',
     englishName: 'Pixel Starry Sky',

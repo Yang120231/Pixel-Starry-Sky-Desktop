@@ -1,9 +1,12 @@
 import { createServer, type Server } from 'node:http'
 import { once } from 'node:events'
 import { randomUUID } from 'node:crypto'
+import { describeError, logger } from '@pixelsky/engine'
 import type { SessionRecord } from '@pixelsky/protocol'
 import type { ResolvedProvider } from '../core/providers/store'
 import { classifyError, providerHeaders, upstreamUrl, type Fetch } from '../core/providers/upstream'
+
+const log = logger('gateway')
 
 /** buf 里最后一个完整 SSE 事件结束的位置（事件以空行结尾，\n\n 或 \r\n\r\n）；一个都没有时是 0 */
 export function eventEnd(buf: Buffer): number {
@@ -45,6 +48,23 @@ export function platformGateway(options: {
     const abort = new AbortController()
     res.on('close', () => abort.abort())
     const path = req.url?.split('?')[0] ?? ''
+    // 日志（docs/ui/logging.md §4.5）：断在哪一段、什么时候、转发了多少
+    const started = Date.now()
+    let headersAt: number | null = null
+    let status: number | null = null
+    let bytes = 0
+    let requestId: string | null = null
+    let sessionId: string | null = null
+    const trace = (error?: unknown) => ({
+      path,
+      ...(sessionId ? { sessionId } : {}),
+      ...(requestId ? { requestId } : {}),
+      status,
+      elapsedMs: Date.now() - started,
+      streamMs: headersAt === null ? null : Date.now() - headersAt,
+      bytes,
+      ...(error === undefined ? {} : { error: describeError(error) }),
+    })
     const responses = path === '/v1/responses'
     const countTokens = path === '/v1/messages/count_tokens'
     const fail = (status: number, message: string): void => {
@@ -67,6 +87,8 @@ export function platformGateway(options: {
         const value = upstream.headers.get(name)
         if (value) output[name] = value
       }
+      status = upstream.status
+      headersAt = Date.now()
       res.writeHead(upstream.status, output)
       // Messages 的 SSE 只按完整事件转发：上游中途断开时能接一个 error 事件收尾，而不是掐断连接
       const sse = !responses && output['Content-Type'].includes('text/event-stream')
@@ -75,6 +97,7 @@ export function platformGateway(options: {
         if (upstream.body)
           for await (const chunk of upstream.body) {
             if (abort.signal.aborted) break
+            bytes += chunk.length
             let out = Buffer.from(chunk)
             if (sse) {
               const all = tail.length ? Buffer.concat([tail, out]) : out
@@ -88,11 +111,15 @@ export function platformGateway(options: {
         if (!sse || abort.signal.aborted) throw error
         // 掐断连接的话 Claude Code 当成网络抖动，最多重试十几次，每次都重发整段上下文、重新计费（压缩时尤其贵）；
         // 回 error 事件：普通请求它只改用非流式再试一次，压缩直接失败
+        log.warn('上游连接中途断开', trace(error))
         res.end(midStreamError)
         return
       }
       if (tail.length) res.write(tail)
       res.end()
+      if (abort.signal.aborted) log.info('引擎先断开了连接', trace())
+      else if (upstream.status >= 400) log.warn('上游返回错误', trace())
+      else log.debug('请求完成', trace())
     }
     const passthrough = (): Record<string, string> => {
       const out: Record<string, string> = {}
@@ -142,6 +169,7 @@ export function platformGateway(options: {
         })
       } catch (error) {
         if (abort.signal.aborted) throw error
+        log.warn('连不上自定义接口', trace(error))
         fail(502, classifyError(error, url).message)
         return
       }
@@ -156,6 +184,7 @@ export function platformGateway(options: {
       const token = req.headers.authorization?.replace(/^Bearer /i, '') ?? req.headers['x-api-key']
       const session = [...options.sessions.values()].find(entry => entry.secret === token)
       const record = session ? await options.record(session.recordId) : null
+      sessionId = record?.id ?? null
       let provider: ResolvedProvider | null = null
       if (record?.provider && !record.platform) {
         provider = options.provider?.(record.provider.id) ?? null
@@ -219,7 +248,7 @@ export function platformGateway(options: {
       for (const [name, value] of Object.entries(passthrough())) headers.set(name, value)
       if (!responses && options.rewrite)
         body = await options.rewrite(body, () => options.routeModels?.(platform.groupId) ?? Promise.resolve([]))
-      const requestId = `pixelsky-${randomUUID()}`
+      requestId = `pixelsky-${randomUUID()}`
       headers.set('X-Client-Request-ID', requestId)
       await trackRequest?.(
         requestId,
@@ -233,6 +262,9 @@ export function platformGateway(options: {
       })
       await pipe(upstream)
     } catch (error) {
+      if (abort.signal.aborted) log.info('引擎先断开了连接', trace(error))
+      else if (res.headersSent) log.warn('上游连接中途断开', trace(error))
+      else if ((error as { code?: unknown }).code !== 'AUTH_EXPIRED') log.warn('上游请求失败', trace(error))
       // 平台账号的登录失效（过期或被吊销）：401 加上原因，引擎不会当成暂时故障反复重试
       if (!res.headersSent)
         fail((error as { code?: unknown }).code === 'AUTH_EXPIRED' ? 401 : 502, (error as Error).message)

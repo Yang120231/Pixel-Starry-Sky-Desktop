@@ -15,6 +15,7 @@ import type { ProjectToolsBridge } from './project-tools'
 import type { NotificationClick } from '../shared/types/notifications'
 import type { NotificationsBridge } from './notifications'
 import type { ArtifactsBridge } from './artifacts'
+import type { LogBridge } from './log'
 
 // 通道名一律用契约键约束：拼错或未登记的通道在这里就是类型错误
 type Listener = Parameters<typeof ipcRenderer.on>[1]
@@ -121,6 +122,33 @@ const engine: EngineBridge = {
 const appInfo: AppInfoBridge = {
   getInfo: () => call('app:info'),
   open: link => call('app:open', link),
+}
+
+// 本机日志（docs/ui/logging.md §4.7）：实时条目只在有页面订阅时才让主进程推过来
+const logListeners = new Set<(entry: import('@pixelsky/protocol').LogEntry) => void>()
+const log: LogBridge = {
+  read: query => call('log:read', query),
+  onEntry: callback => {
+    if (logListeners.size === 0) {
+      on('log:entry', logEntryListener)
+      void invoke('log:watch', true)
+    }
+    logListeners.add(callback)
+    return () => {
+      logListeners.delete(callback)
+      if (logListeners.size > 0) return
+      ipcRenderer.removeListener('log:entry', logEntryListener)
+      void invoke('log:watch', false)
+    }
+  },
+  settings: () => call('log:settings'),
+  setVerbose: enabled => call('log:setVerbose', enabled),
+  openFolder: () => call('log:open'),
+  exportDiagnostics: () => call('log:export'),
+  write: (level, message, fields) => send('log:write', { level, message, fields }),
+}
+function logEntryListener(_e: Electron.IpcRendererEvent, entry: import('@pixelsky/protocol').LogEntry): void {
+  for (const listener of logListeners) listener(entry)
 }
 
 // 自动更新（docs/release-update.md §7）
@@ -338,6 +366,7 @@ contextBridge.exposeInMainWorld('pixelsky', {
   } satisfies import('./providers').ProvidersBridge,
   engine,
   app: appInfo,
+  log,
   update,
   files,
   editor,

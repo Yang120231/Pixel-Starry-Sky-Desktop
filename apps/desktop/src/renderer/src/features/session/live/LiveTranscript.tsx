@@ -244,6 +244,7 @@ export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot
 
   // 最近一轮（最后一条用户消息之后）的最后一条错误：给一键按钮（docs/ui/source-switch.md §3.5）
   let actionNoticeId: string | null = null
+  let turnStart: number | null = null
   if (!running) {
     for (let i = items.length - 1; i >= 0; i--) {
       const it = items[i]
@@ -253,6 +254,15 @@ export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot
         break
       }
     }
+    // 「查看日志」从这一轮的用户消息时间筛起（docs/ui/logging.md §3.2）
+    if (actionNoticeId)
+      for (let i = items.length - 1; i >= 0; i--) {
+        const it = items[i]
+        if (it.kind === 'user' && it.mode !== 'guidance') {
+          turnStart = it.createdAt
+          break
+        }
+      }
   }
 
   useLayoutEffect(() => {
@@ -372,7 +382,9 @@ export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot
           className={['conversation-message', highlight === item.id ? 'search-hit' : ''].join(' ')}
         >
           <NoticeRow item={text === item.text ? item : { ...item, text }} />
-          {item.id === actionNoticeId && <NoticeActions record={snapshot.record} text={item.text} />}
+          {item.id === actionNoticeId && (
+            <NoticeActions record={snapshot.record} text={item.text} turnStart={turnStart} />
+          )}
         </div>
       )
     }

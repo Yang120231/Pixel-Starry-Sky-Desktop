@@ -10,6 +10,7 @@ import {
   Info,
   Keyboard,
   Monitor,
+  ScrollText,
   Moon,
   Palette,
   Puzzle,
@@ -49,6 +50,7 @@ import { TerminalSection } from './TerminalSection'
 import { SidebarSettings } from './SidebarSettings'
 import { NotificationsSection } from './NotificationsSection'
 import { ShortcutsSettings } from './ShortcutsSettings'
+import { LogsSection } from '../logs/LogsSection'
 
 export type SectionId =
   | 'account'
@@ -63,6 +65,7 @@ export type SectionId =
   | 'terminal'
   | 'machines'
   | 'notifications'
+  | 'logs'
 
 const SECTIONS: Array<{ id: SectionId; label: string; icon: LucideIcon }> = [
   {
@@ -143,6 +146,13 @@ const SECTIONS: Array<{ id: SectionId; label: string; icon: LucideIcon }> = [
     icon: Cpu,
   },
   {
+    id: 'logs',
+    get label() {
+      return tr('logs.title')
+    },
+    icon: ScrollText,
+  },
+  {
     id: 'about',
     get label() {
       return tr('settings.searchIndex.about')
@@ -171,7 +181,7 @@ const NAV_GROUPS: Array<{ label: string | null; ids: SectionId[] }> = [
     },
     ids: ['engines', 'plugins', 'terminal'],
   },
-  { label: null, ids: ['about'] },
+  { label: null, ids: ['logs', 'about'] },
 ]
 
 const sectionLabel = (id: SectionId): string => SECTIONS.find(s => s.id === id)?.label ?? id
@@ -506,6 +516,8 @@ export function SettingsDialog({
               <AppearanceSection />
             ) : section === 'shortcuts' ? (
               <ShortcutsSettings />
+            ) : section === 'logs' ? (
+              <LogsSection />
             ) : (
               <AboutSection onOpenAccount={() => setSection('account')} />
             )}

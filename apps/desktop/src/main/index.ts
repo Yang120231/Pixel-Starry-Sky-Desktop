@@ -14,6 +14,7 @@ import { initProjectTools } from './workspace/project-tools-ipc'
 import { initNotifications } from './notifications/notifications'
 import { confirmTerminalClose, closeWindowTerminals } from './terminal/ipc'
 import { createAppContext } from './app/context'
+import { initLogIpc, initLogging } from './app/logging'
 import type { Locale } from '../shared/i18n/messages'
 
 type ResolvedTheme = 'light' | 'dark'
@@ -31,6 +32,7 @@ const captureDir = process.env.PIXELSKY_CAPTURE
 const debugPort = app.isPackaged ? undefined : process.env.PIXELSKY_DEBUG_PORT
 /** 主进程共用的状态：事件、退出任务、引擎 / SSH 机器 / 项目工具（app/context.ts） */
 const ctx = createAppContext()
+initLogging(ctx) // 本机日志，见 app/logging.ts（越早越好：后面初始化出的错也要记下来）
 const closingAllowed = new WeakSet<BrowserWindow>()
 const finishing = new WeakSet<BrowserWindow>()
 let quitRequested = false
@@ -275,6 +277,7 @@ app.whenReady().then(async () => {
   initNotifications() // 系统通知，见 notifications/notifications.ts
   initAccount() // 账号登录与额度，见 account/account.ts
   initAppInfo() // 「关于」页的版本与运行环境，见 app/info.ts
+  initLogIpc() // 设置 › 日志，见 app/logging.ts
   initUpdater(ctx) // 自动更新（GitHub Releases），见 app/updater.ts
   await initEngine(ctx) // 引擎系统（Claude Code 等），见 engine/ipc.ts
   await initWorkspace(ctx)

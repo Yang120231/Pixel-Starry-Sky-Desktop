@@ -9,6 +9,19 @@ export { searchQuery } from './search'
 export { artifactQuery, collectArtifacts, recordedIn, sessionArtifacts, within } from './artifacts'
 export { UsageStore, USAGE_RETENTION_DAYS, type UsageQuery } from './usage'
 export {
+  LOG_LEVELS,
+  REDACTED,
+  describeError,
+  logger,
+  redact,
+  sanitizeFields,
+  setLogSink,
+  type LogFields,
+  type LogLevel,
+  type LogSink,
+  type Logger,
+} from './log'
+export {
   MASKED_SECRET,
   contentVersion,
   dictionary,

@@ -61,3 +61,33 @@ export function SettingRow({
     </div>
   )
 }
+
+/** 开关（role=switch） */
+export function Toggle({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string
+  checked: boolean
+  onChange: (value: boolean) => void
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-label={label}
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={cn(
+        'no-drag relative inline-flex h-6 w-10 shrink-0 items-center rounded-full p-0.5',
+        checked ? 'bg-primary' : 'bg-subtle ring-1 ring-inset ring-line-strong',
+      )}
+    >
+      <span
+        aria-hidden
+        className={cn('size-5 rounded-full bg-surface shadow-sm', checked ? 'translate-x-4' : 'translate-x-0')}
+      />
+    </button>
+  )
+}

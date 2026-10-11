@@ -26,6 +26,7 @@ import { ENGINE_OPS, type EngineOpContext } from '../core/engine/ops'
 import { opEntries } from '../core/ops'
 import { SearchRegistry } from '../core/search-registry'
 import { usageQuery } from '../core/args'
+import { logHostEvent } from '../core/log/host-events'
 
 export async function initEngine(ctx: AppContext): Promise<void> {
   ctx.providers = initProviders(ctx)
@@ -49,7 +50,11 @@ export async function initEngine(ctx: AppContext): Promise<void> {
   const h = new EngineHost({
     dataDir: join(app.getPath('userData'), 'engine'),
     // 有 SSH 机器时由它合并本机与远端的项目 / 会话再广播
-    emit: (e: HostEvent) => (ctx.machines ? ctx.machines.hostEvent(e) : ctx.events.broadcast('engine:event', e)),
+    emit: (e: HostEvent) => {
+      logHostEvent(e)
+      if (ctx.machines) ctx.machines.hostEvent(e)
+      else ctx.events.broadcast('engine:event', e)
+    },
     sessionEnv,
     validateInput: record => validateQueuedInput(record, ctx.providers),
     priceRef: (record, model) =>

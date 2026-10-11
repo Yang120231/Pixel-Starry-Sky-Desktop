@@ -8,7 +8,11 @@ import { randomUUID } from 'node:crypto'
 import type { Launcher } from '../adapter'
 import { IS_WINDOWS } from '../exec'
 import { TailBuffer, readJsonLines } from '../jsonl'
+import { logger } from '../log'
+import { logProcess } from '../process-log'
 import type { ImageAttachment } from '@pixelsky/protocol'
+
+const log = logger('engine.claude')
 
 export interface ControlRequestFromCli {
   requestId: string
@@ -34,6 +38,8 @@ export class ClaudeProcess {
   private readonly stderr = new TailBuffer()
   private nextId = 0
   private exited = false
+  /** close() / kill() 之后为真：退出不算异常（日志用） */
+  private stopping = false
   readonly exitPromise: Promise<void>
 
   constructor(
@@ -51,6 +57,13 @@ export class ClaudeProcess {
     })
     this.child.stdin.on('error', () => {}) // 进程已退出时写入会报 EPIPE，退出事件里统一处理
     this.child.stderr.on('data', (d: Buffer) => this.stderr.push(d.toString('utf8')))
+    logProcess(
+      log,
+      this.child,
+      { command: launcher.command, cwd },
+      () => this.stderr.toString(),
+      () => this.stopping,
+    )
     readJsonLines(this.child.stdout, msg => this.dispatch(msg))
     this.exitPromise = new Promise(resolve => {
       const done = (code: number | null): void => {
@@ -164,6 +177,7 @@ export class ClaudeProcess {
   /** 关掉 stdin 让进程自己退出；超时还没退就强制结束 */
   async close(timeoutMs = 5_000): Promise<void> {
     if (this.exited) return
+    this.stopping = true
     this.child.stdin.end()
     const timer = setTimeout(() => this.kill(), timeoutMs)
     await this.exitPromise
@@ -173,6 +187,7 @@ export class ClaudeProcess {
   /** 强制结束；Windows 上连同它启动的子进程（正在跑的命令）一起结束 */
   kill(): void {
     if (this.exited) return
+    this.stopping = true
     try {
       if (IS_WINDOWS && this.child.pid) {
         spawn('taskkill', ['/pid', String(this.child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }).on(

@@ -788,8 +788,9 @@ async function login(): Promise<void> {
   }).toString()
 
   if (process.env.PIXELSKY_AUTH_NO_BROWSER === '1') {
-    // 自动化测试用：不开浏览器，把授权地址打印出来由测试脚本去访问
-    console.log(`[account] authorize URL: ${authorize.toString()}`)
+    // 自动化测试用：不开浏览器，把授权地址打印出来由测试脚本去访问。
+    // 直接写 stdout，不经过 console：console 会同时写进日志文件，授权地址带 PKCE 参数
+    process.stdout.write(`[account] authorize URL: ${authorize.toString()}\n`)
   } else {
     try {
       await shell.openExternal(authorize.toString())
