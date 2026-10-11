@@ -1,10 +1,11 @@
 // 项目工具（docs/ui/project-tools.md、git-panel.md）：本机与远端共用的操作表。
 // 选择文件夹、打开目录、打开网址只在本机（workspace/project-tools-ipc.ts）
+import { isAbsolute, relative } from 'node:path'
 import type { WorkspaceChoice } from '../../../shared/types/machines'
 import type { CopyInput, ManualTask, ServiceInput } from '../../../shared/types/project-tools'
 import type { OpTable } from '../ops'
 import { workspaceRef } from '../workspace-files'
-import { gitInfo, value, type ToolsHost } from './common'
+import { gitWorktrees, samePath, value, type GitWorktree, type ToolsHost } from './common'
 import type { GitTools } from './git'
 import { portStatus } from './services'
 import type { ProjectTools } from './tools'
@@ -76,21 +77,34 @@ export const PROJECT_TOOL_OPS = {
   'projectTools:gitHistoryAction': (c, ref, input) => c.tools.git.historyAction(workspaceRef(ref), input),
 } satisfies OpTable<ToolsOpContext>
 
-/** 新建会话时可选的工作区：项目本身 + 它的 Git 副本（docs/ui/machines-workspaces.md） */
+/**
+ * 新建会话时可选的工作区：项目本身 + 它的 Git 副本（docs/ui/machines-workspaces.md）。
+ * 列表只显示名称、路径、分支，所以只跑一条 `git worktree list`：项目和副本的分支、副本还在不在都从这里来，
+ * 不再逐个跑 git status / rev-list（issue #11：每次打开都要等半秒以上，副本越多越慢）。
+ */
 export async function listWorkspaces(c: ToolsOpContext, projectId: string) {
-  const target = c.host.resolve({ projectId }),
-    info = await gitInfo(target.path)
-  const children = info.root ? await c.tools.copies.list(projectId) : []
+  const target = c.host.resolve({ projectId })
+  const trees = await gitWorktrees(target.path)
+  /** 项目是这个工作树里的子目录 */
+  const inside = (tree: GitWorktree) => {
+    const rel = relative(tree.path, target.path)
+    return !rel.startsWith('..') && !isAbsolute(rel)
+  }
+  const main = trees && (trees.find(t => samePath(t.path, target.path)) ?? trees.find(inside) ?? trees[0])
+  const copies = trees ? c.tools.copies.store.data.copies.filter(copy => copy.projectId === projectId) : []
   return [
-    { projectId, name: target.name, path: target.path, copyId: null, branch: info.branch, error: null },
-    ...children.map(copy => ({
-      projectId,
-      name: copy.name,
-      path: copy.path,
-      copyId: copy.id,
-      branch: copy.branch,
-      error: copy.error,
-    })),
+    { projectId, name: target.name, path: target.path, copyId: null, branch: main?.branch ?? null, error: null },
+    ...copies.map(copy => {
+      const tree = trees!.find(t => samePath(t.path, copy.path))
+      return {
+        projectId,
+        name: copy.name,
+        path: copy.path,
+        copyId: copy.id,
+        branch: tree?.branch ?? copy.branch,
+        error: tree && !samePath(copy.path, target.path) ? null : '工作树不存在或不是 Git 工作树',
+      }
+    }),
   ]
 }
 

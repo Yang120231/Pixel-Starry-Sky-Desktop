@@ -41,10 +41,21 @@ export function ComposerStatusBar({ live, extra }: { live?: StatusBarController;
   )
 }
 
-/** All project entry points share the same directory / Git worktree picker. */
+/**
+ * All project entry points share the same directory / Git worktree picker.
+ * 已经开始的会话绑定在创建时的工作区：只显示是哪个，不能在这里换（issue #11；在这里选别的工作区并不会挪会话，
+ * 而是另开一个会话，容易误会）。换工作区在新会话或侧栏里做。
+ */
 function ProjectPicker({ live }: { live: StatusBarController }) {
   const { text } = useI18n()
   const { project } = live
+  if (!live.canPickProject)
+    return (
+      <span data-composer-project title={project?.path} className="inline-flex min-w-0 items-center gap-1 px-1">
+        <Folder size={13} className="shrink-0" />
+        <span className="truncate">{project?.name ?? text('选择项目文件夹')}</span>
+      </span>
+    )
   return (
     <button
       type="button"

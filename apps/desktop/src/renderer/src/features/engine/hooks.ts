@@ -698,7 +698,8 @@ export function useStatusBar(sessionId: string | null, draftKey?: string): Statu
             }
           : null,
     projects,
-    canPickProject: !sessionId,
+    // 新会话，或者从工作区选择里刚打开、还没发过消息的会话（显示欢迎页）才能换；已经开始的会话只显示（issue #11）
+    canPickProject: !sessionId || (!!snap && snap.items.length === 0 && snap.state === 'idle'),
     selectProject: setCurrentProject,
     addProject: () => void addProject(),
   }

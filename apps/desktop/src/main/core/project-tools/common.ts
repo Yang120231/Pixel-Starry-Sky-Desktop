@@ -62,6 +62,29 @@ export async function optional(program: string, args: string[], cwd?: string): P
 export async function git(path: string, args: string[]): Promise<string> {
   return run('git', ['-C', path, ...args], undefined, 120_000)
 }
+/** `git worktree list --porcelain -z` 的一项：路径和分支（分离 HEAD 时为 'HEAD'） */
+export interface GitWorktree {
+  path: string
+  branch: string | null
+}
+
+export function parseWorktrees(out: string): GitWorktree[] {
+  const trees: GitWorktree[] = []
+  for (const line of out.split('\0')) {
+    if (line.startsWith('worktree ')) trees.push({ path: line.slice(9), branch: null })
+    else if (!trees.length) continue
+    else if (line.startsWith('branch ')) trees[trees.length - 1].branch = line.slice(7).replace(/^refs\/heads\//, '')
+    else if (line === 'detached') trees[trees.length - 1].branch = 'HEAD'
+  }
+  return trees
+}
+
+/** 项目本身和它的副本一次读出（工作区选择用，docs/ui/machines-workspaces.md §8）；不是 Git 仓库时为 null */
+export async function gitWorktrees(path: string): Promise<GitWorktree[] | null> {
+  const out = await optional('git', ['-C', path, 'worktree', 'list', '--porcelain', '-z'])
+  return out === null ? null : parseWorktrees(out)
+}
+
 export async function gitInfo(path: string) {
   const root = await optional('git', ['-C', path, 'rev-parse', '--show-toplevel'])
   if (!root) return { root: null, branch: null, commit: null, dirty: false, changedCount: 0 }

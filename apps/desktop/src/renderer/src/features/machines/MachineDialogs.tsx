@@ -10,6 +10,7 @@ import { useEngineState, addProject } from '@/features/engine'
 import { useActiveWorkspace } from '@/features/editor/target'
 import { openRightTab } from '@/features/panel/workspaceStore'
 import { initMachines, machineOf, selectMachine, selectWorkspace, useMachines } from './store'
+import { cachedWorkspaces, loadWorkspaces } from './workspaceList'
 import { isDemo } from '@/data'
 import { getFiles } from '@/features/files/store'
 import { confirmFiles } from '@/features/files/FileConfirm'
@@ -77,28 +78,38 @@ export function MachineDialogs() {
       window.removeEventListener('pixelsky:choose-workspace', workspace)
     }
   }, [])
+  // 工作区列表（issue #11）：有上次读到的就直接显示，在后台刷新后替换，不清空、不显示「正在读取」；
+  // 只有从没读过时才显示。项目工具变化时（revision）合并成一次后台刷新
   useEffect(() => {
     if (view !== 'workspaces' || isDemo) return
     let gone = false
     const list = projects.filter(p => machineOf(p.id) === state.currentId)
-    setLoading(true)
-    setWorkspaces([])
-    void Promise.all(
-      list.map(p =>
-        window
-          .pixelsky!.machines.workspaces(p.id)
-          .catch(e => [{ projectId: p.id, name: p.name, path: p.path, copyId: null, branch: null, error: message(e) }]),
-      ),
-    ).then(rows => {
-      if (!gone) {
-        setWorkspaces(rows.flat())
-        setLoading(false)
-      }
-    })
+    const cached = cachedWorkspaces(state.currentId, list)
+    setWorkspaces(cached ?? [])
+    setLoading(!cached)
+    const timer = window.setTimeout(
+      () =>
+        void loadWorkspaces(state.currentId, list, message).then(rows => {
+          if (!gone) {
+            setWorkspaces(rows)
+            setLoading(false)
+          }
+        }),
+      cached ? 250 : 0,
+    )
     return () => {
       gone = true
+      window.clearTimeout(timer)
     }
   }, [view, state.currentId, projects, revision])
+  // 启动后空闲时预读一次：第一次打开也直接有列表
+  useEffect(() => {
+    if (isDemo || !window.pixelsky) return
+    const list = projects.filter(p => machineOf(p.id) === state.currentId)
+    if (!list.length || cachedWorkspaces(state.currentId, list)) return
+    const timer = window.setTimeout(() => void loadWorkspaces(state.currentId, list, message).catch(() => {}), 3000)
+    return () => window.clearTimeout(timer)
+  }, [state.currentId, projects])
   const connect = async (id: string, fingerprint?: string) => {
     const result = await window.pixelsky!.machines.connect(id, fingerprint)
     if (!result.connected && result.fingerprint)
