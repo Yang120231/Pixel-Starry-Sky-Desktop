@@ -96,6 +96,15 @@ export function resetFontPrefs(): void {
   setFontPrefs({ ...DEFAULT_FONTS })
 }
 
+// 其他窗口或设置云同步改了字体（docs/ui/settings-sync.md）：重新读、重新套上
+if (typeof window !== 'undefined')
+  window.addEventListener('storage', e => {
+    if (e.storageArea !== localStorage || (e.key !== KEY && e.key !== null)) return
+    prefs = load()
+    apply(prefs)
+    listeners.forEach(l => l())
+  })
+
 function subscribe(listener: () => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)

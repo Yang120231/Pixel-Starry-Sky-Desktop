@@ -138,6 +138,34 @@ let state: PlatformState = {
   hiddenModels: readHidden(),
 }
 const listeners = new Set<() => void>()
+// 其他窗口或设置云同步改了默认来源 / 线路 / 模型（docs/ui/settings-sync.md）：重新读，线路不可用时照常回到默认
+if (typeof window !== 'undefined')
+  window.addEventListener('storage', e => {
+    if (e.storageArea !== localStorage) return
+    if (e.key === KEY) {
+      unsaved = e.newValue === null
+      state = { ...state, ...readPreference() }
+    } else if (e.key === HIDDEN_KEY) state = { ...state, hiddenModels: readHidden() }
+    else if (e.key === ENGINE_KEY) {
+      try {
+        const saved = JSON.parse(e.newValue ?? '{}').codex
+        codexUnsaved = !saved
+        if (saved)
+          codexPreference = {
+            source: creditSource(saved.source, 'self'),
+            groupId: typeof saved.groupId === 'string' ? saved.groupId : null,
+            model: typeof saved.model === 'string' ? saved.model : null,
+            selfModel: typeof saved.selfModel === 'string' ? saved.selfModel : null,
+            providerId: typeof saved.providerId === 'string' ? saved.providerId : null,
+            customModel: typeof saved.customModel === 'string' ? saved.customModel : null,
+          }
+      } catch {
+        return
+      }
+    } else return
+    projections = {}
+    listeners.forEach(fn => fn())
+  })
 let started = false
 /** 账号变了就加一，丢掉旧账号还没回来的请求 */
 let generation = 0

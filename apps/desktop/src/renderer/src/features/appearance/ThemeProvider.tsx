@@ -78,6 +78,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return () => media.removeEventListener('change', onChange)
   }, [])
 
+  // 其他窗口或设置云同步改了主题 / 动画（docs/ui/settings-sync.md）：重新读
+  useEffect(() => {
+    const onStorage = (e: StorageEvent): void => {
+      if (e.storageArea !== localStorage) return
+      if (e.key === STORAGE_KEY || e.key === null) setPreferenceState(readPreference())
+      if (e.key === MOTION_KEY || e.key === null) setMotionState(readMotion())
+      if (e.key === PANE_FOCUS_MOTION_KEY || e.key === null) setPaneFocusMotionState(readPaneFocusMotion())
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
+
   // globals.css 按 data-motion 决定是否关闭动画
   useEffect(() => {
     document.documentElement.dataset.motion = motion

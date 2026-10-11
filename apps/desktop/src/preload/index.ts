@@ -17,6 +17,7 @@ import type { NotificationsBridge } from './notifications'
 import type { ArtifactsBridge } from './artifacts'
 import type { LogBridge } from './log'
 import type { TrayBridge } from './tray'
+import type { SettingsSyncBridge } from './settings-sync'
 import type { TrayCommand } from '../shared/types/tray'
 
 // 通道名一律用契约键约束：拼错或未登记的通道在这里就是类型错误
@@ -332,8 +333,16 @@ const tray: TrayBridge = {
   prefs: () => call('tray:prefs'),
   setPrefs: patch => call('tray:setPrefs', patch),
 }
+// 设置云同步（docs/ui/settings-sync.md §5.1）
+const settingsSync: SettingsSyncBridge = {
+  pull: () => call('settings:pull'),
+  push: changes => call('settings:push', changes),
+  engine: () => call('settings:engine'),
+  applyEngine: (key, value) => call('settings:applyEngine', key, value),
+}
 contextBridge.exposeInMainWorld('pixelsky', {
   tray,
+  settingsSync,
   machines: {
     state: () => call('machines:state'),
     save: input => call('machines:save', input),

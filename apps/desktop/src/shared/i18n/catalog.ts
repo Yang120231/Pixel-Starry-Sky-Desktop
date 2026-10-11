@@ -4108,6 +4108,78 @@ export const catalog = {
     "zh": "useSettings 必须在 SettingsProvider 内使用",
     "en": "useSettings must be used within SettingsProvider"
   },
+  "settings.sync.title": {
+    "zh": "设置云同步",
+    "en": "Sync settings"
+  },
+  "settings.sync.description": {
+    "zh": "在登录同一账号的电脑之间同步偏好设置。只同步偏好设置，不同步密钥、会话和本机路径。",
+    "en": "Sync preferences across computers signed in to this account. Only preferences are synced — never keys, sessions or local paths."
+  },
+  "settings.sync.appearance": {
+    "zh": "外观",
+    "en": "Appearance"
+  },
+  "settings.sync.display": {
+    "zh": "对话显示",
+    "en": "Conversation display"
+  },
+  "settings.sync.notifications": {
+    "zh": "通知",
+    "en": "Notifications"
+  },
+  "settings.sync.keybindings": {
+    "zh": "快捷键",
+    "en": "Shortcuts"
+  },
+  "settings.sync.platform": {
+    "zh": "模型与线路",
+    "en": "Models & routes"
+  },
+  "settings.sync.engine": {
+    "zh": "引擎",
+    "en": "Engines"
+  },
+  "settings.sync.syncing": {
+    "zh": "正在同步…",
+    "en": "Syncing…"
+  },
+  "settings.sync.lastSync": {
+    "zh": "上次同步：{p0}",
+    "en": "Last synced {p0}"
+  },
+  "settings.sync.notYet": {
+    "zh": "还没有同步过",
+    "en": "Not synced yet"
+  },
+  "settings.sync.now": {
+    "zh": "立即同步",
+    "en": "Sync now"
+  },
+  "settings.sync.justNow": {
+    "zh": "刚刚",
+    "en": "just now"
+  },
+  "settings.sync.minutesAgo": {
+    "zh": "{p0} 分钟前",
+    "en": "{p0} min ago"
+  },
+  "settings.sync.hoursAgo": {
+    "zh": "{p0} 小时前",
+    "en": "{p0} h ago"
+  },
+  "settings.sync.restored": {
+    "zh": "已从云端恢复设置",
+    "en": "Settings restored from the cloud"
+  },
+  "settings.sync.undo": {
+    "zh": "撤销",
+    "en": "Undo"
+  },
+  "settings.sync.close": {
+    "zh": "关闭",
+    "en": "Close"
+  },
   "settings.usage.UsageChart.style": {
     "zh": "图表样式",
     "en": "Chart style"

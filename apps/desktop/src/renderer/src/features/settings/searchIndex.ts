@@ -58,6 +58,11 @@ export const SETTINGS_INDEX: SearchEntry[] = [
   { section: 'editor', title: '指定程序路径', keywords: '编辑器 程序 路径 exe 检测' },
   { section: 'editor', title: '自定义编辑器', keywords: '编辑器 文件夹 参数 添加' },
   { section: 'account', title: '账号', keywords: '登录 退出登录 余额 套餐 订阅 充值 额度 限额' },
+  {
+    section: 'account',
+    title: '设置云同步',
+    keywords: '同步 云端 多台电脑 换电脑 备份 偏好 sync cloud settings',
+  },
 
   { section: 'models', title: '默认额度来源', keywords: '平台 自有 额度 扣费 来源' },
   { section: 'models', title: '默认模型', keywords: '模型 新任务 claude opus sonnet haiku' },

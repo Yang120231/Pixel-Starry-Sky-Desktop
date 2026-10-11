@@ -615,6 +615,11 @@ export const IPC_CONTRACT = {
   'terminal:state': { kind: 'invoke', route: 'self', trust: 'window' },
   'terminal:write': { kind: 'invoke', route: 'self', trust: 'window' },
   'theme:set': { kind: 'send', route: 'local', trust: 'none' },
+  // 设置云同步（docs/ui/settings-sync.md §5.1）：读写云端 desktop.* 设置；本机引擎设置里可以同步的几项
+  'settings:applyEngine': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'settings:engine': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'settings:pull': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'settings:push': { kind: 'invoke', route: 'local', trust: 'sender' },
   // 系统托盘（docs/ui/tray.md）：托盘菜单让窗口新建任务 / 打开会话 / 切勿扰；窗口报告勿扰状态；「关闭主窗口时」的设置在主进程
   'tray:command': { kind: 'push', route: 'push', trust: 'none' },
   'tray:dnd': { kind: 'send', route: 'local', trust: 'sender' },

@@ -50,11 +50,12 @@ import { HostProjects } from './projects'
 import { HostQuery } from './query'
 import { HostQueue } from './queue'
 import { HostSessions } from './sessions'
-import { HostSettings } from './settings'
+import { HostSettings, type SyncableEngineSettings } from './settings'
 import { HostTurn } from './turn'
 import { HostUsage } from './usage'
 
 export type { EngineHostOptions } from './context'
+export type { SyncableEngineSettings } from './settings'
 
 export class EngineHost {
   private readonly ctx: HostContext
@@ -179,6 +180,16 @@ export class EngineHost {
   /** 检查更新：交给引擎自己的更新命令，结束后重新检测并广播 */
   async updateEngine(engine: EngineId): Promise<EngineUpdateResult> {
     return this.m.settings.updateEngine(engine)
+  }
+
+  /** 设置云同步：引擎设置里可以同步的几项（不含命令路径、参数、环境变量） */
+  syncableSettings(): SyncableEngineSettings {
+    return this.m.settings.syncable()
+  }
+
+  /** 设置云同步：把云端的一项写回本机（走设置页同样的校验） */
+  applySyncableSetting(key: string, value: unknown): Promise<void> {
+    return this.m.settings.applySyncable(key, value)
   }
 
   /** 查各引擎在 npm 上的最新版本，有变化时广播引擎列表（桌面端定时调用） */

@@ -1,4 +1,4 @@
-export { EngineHost, type EngineHostOptions } from './host'
+export { EngineHost, type EngineHostOptions, type SyncableEngineSettings } from './host'
 export type { EngineAdapter, EngineSession, Launcher, SessionContext } from './adapter'
 export { ClaudeAdapter, type ClaudeAdapterOptions } from './claude'
 export { ENGINES, ENGINE_ORDER } from './registry'

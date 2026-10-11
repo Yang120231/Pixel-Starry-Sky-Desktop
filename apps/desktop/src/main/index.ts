@@ -16,6 +16,7 @@ import { confirmTerminalClose, closeWindowTerminals } from './terminal/ipc'
 import { createAppContext } from './app/context'
 import { initLogIpc, initLogging } from './app/logging'
 import { initTray, type TrayController } from './app/tray'
+import { initSettingsSync } from './account/settings-sync'
 import type { Locale } from '../shared/i18n/messages'
 
 type ResolvedTheme = 'light' | 'dark'
@@ -321,6 +322,7 @@ app.whenReady().then(async () => {
   initLogIpc() // 设置 › 日志，见 app/logging.ts
   initUpdater(ctx) // 自动更新（GitHub Releases），见 app/updater.ts
   await initEngine(ctx) // 引擎系统（Claude Code 等），见 engine/ipc.ts
+  initSettingsSync(ctx) // 设置云同步，见 account/settings-sync.ts
   await initWorkspace(ctx)
   await initProjectTools(ctx)
   createWindow()

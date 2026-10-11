@@ -947,6 +947,38 @@ export const systemMessages = {
     "zh": "没找到 Codex",
     "en": "Codex not found"
   },
+  "system.settingsSyncCloudDown": {
+    "zh": "云端服务暂时连不上，稍后自动重试",
+    "en": "The cloud service is unreachable right now. Retrying later"
+  },
+  "system.settingsSyncFailed": {
+    "zh": "设置同步失败（{p0}）",
+    "en": "Settings sync failed ({p0})"
+  },
+  "system.settingsSyncBadArgs": {
+    "zh": "同步参数不对",
+    "en": "Invalid sync request"
+  },
+  "system.settingsSyncTooMany": {
+    "zh": "一次同步的设置太多",
+    "en": "Too many settings in one sync"
+  },
+  "system.settingsSyncBadKey": {
+    "zh": "设置名不对：{p0}",
+    "en": "Invalid setting name: {p0}"
+  },
+  "system.settingsSyncBadValue": {
+    "zh": "设置 {p0} 的值不能同步",
+    "en": "Setting {p0} cannot be synced"
+  },
+  "system.settingsSyncTooBig": {
+    "zh": "设置 {p0} 太大",
+    "en": "Setting {p0} is too large"
+  },
+  "system.settingsSyncNotEngine": {
+    "zh": "不是引擎设置",
+    "en": "Not an engine setting"
+  },
   "system.thisEngineCannotUpdate": {
     "zh": "这个引擎不支持在软件里更新",
     "en": "This engine cannot update within the app"

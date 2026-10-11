@@ -353,6 +353,20 @@ async function authedGet(path: string): Promise<HttpResult> {
 /** 平台网络请求只在主进程内使用令牌，不把凭据发给渲染层或引擎。 */
 export async function platformFetch(path: string, init: RequestInit = {}): Promise<Response> {
   if (!path.startsWith('/v1/platform/') && !path.startsWith('/v1/oauth/usage/calls?')) throw new Error('无效的平台接口')
+  return authedFetch(path, init)
+}
+
+/** 设置云同步（docs/ui/settings-sync.md §5.1）：只能读写 /v1/oauth/settings，不放宽 platformFetch 的白名单 */
+export async function settingsFetch(method: 'GET' | 'PUT', body?: unknown): Promise<Response> {
+  return authedFetch('/v1/oauth/settings', {
+    method,
+    ...(method === 'PUT' && { body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }),
+    signal: AbortSignal.timeout(20_000),
+  })
+}
+
+/** 带登录令牌的请求：快过期先刷新，401 刷新后重试一次，刷新被拒就退出登录 */
+async function authedFetch(path: string, init: RequestInit): Promise<Response> {
   if (!tokens) throw new Error('请先登录像素星空账号')
   const requestEpoch = epoch
   // 刷新令牌被拒（登录过期，或在云端管理页被吊销）：马上退出登录，不等下一次拉取账号数据

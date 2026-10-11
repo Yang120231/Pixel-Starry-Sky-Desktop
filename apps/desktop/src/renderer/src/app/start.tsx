@@ -17,6 +17,7 @@ import { SessionActionsProvider } from '../features/sidebar/SessionActions'
 import { TerminalProvider } from '../features/terminal/TerminalProvider'
 import { CommandPaletteProvider } from '../features/commands/CommandPaletteProvider'
 import { installRendererErrorLog, reactRootErrorOptions } from '../features/logs/rendererErrors'
+import { SettingsSyncRunner } from '../features/settings/sync/RestoreNotice'
 
 document.documentElement.dataset.platform = window.pixelsky?.platform ?? 'web'
 // 页面报错、未处理的 Promise 拒绝写进本机日志（docs/ui/logging.md §4.5）
@@ -27,6 +28,7 @@ createRoot(document.getElementById('root')!, reactRootErrorOptions).render(
     <I18nProvider>
       <ThemeProvider>
         <WallpaperLayer />
+        <SettingsSyncRunner />
         <ComingSoonProvider>
           <SettingsProvider>
             <SearchProvider>

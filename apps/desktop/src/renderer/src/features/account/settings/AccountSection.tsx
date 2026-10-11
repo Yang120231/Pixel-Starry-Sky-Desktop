@@ -7,6 +7,7 @@ import { useAccount } from '@/features/account'
 import { LogoutConfirm } from '@/features/account/LogoutConfirm'
 import { Avatar, Button, Segmented, Spinner, type SegmentedOption } from '@/ui'
 import { SectionTitle } from '../../settings/SettingRow'
+import { SyncSettings } from '../../settings/sync/SyncSettings'
 import { AccountOverview } from './AccountOverview'
 import { PlanStore } from './PlanStore'
 import { TopUp } from './TopUp'
@@ -113,6 +114,7 @@ export function AccountSection() {
             onRefresh={() => void acc.refresh()}
             onNavigate={setTab}
           />
+          <SyncSettings />
           <AccountService />
         </>
       )}

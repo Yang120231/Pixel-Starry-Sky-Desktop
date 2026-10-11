@@ -18,7 +18,7 @@ import {
 } from '@pixelsky/protocol'
 import { ENGINE_ORDER, unsupportedInfo } from '../registry'
 import { retryLimit } from '../retry'
-import type { EngineSettingsFile } from '../store'
+import { DEFAULT_SETTINGS, type EngineSettingsFile } from '../store'
 import type { HostContext, Runtime } from './context'
 
 export class HostSettings {
@@ -247,6 +247,82 @@ export class HostSettings {
     if (changed && !this.ctx.closing) this.ctx.opts.emit({ kind: 'engines', engines: await this.engines() })
   }
 
+  /**
+   * 设置云同步（docs/ui/settings-sync.md §3）：只交出白名单里的字段——默认引擎、各引擎的新会话默认值和压缩模型、
+   * 输出风格 / 提问 / 自动压缩 / 菜单里隐藏、请求重试。命令路径、追加参数、环境变量（可能有密钥）出不去。
+   */
+  syncable(): SyncableEngineSettings {
+    const engines = <T>(pick: (id: EngineId) => T): Partial<Record<EngineId, T>> =>
+      Object.fromEntries(ENGINE_ORDER.filter(id => this.ctx.adapters[id]).map(id => [id, pick(id)]))
+    return {
+      'desktop.engine.defaults': {
+        engine: this.file.defaults.engine,
+        engines: engines(id => ({
+          defaults: this.engineDefaults(id),
+          compactModel: this.file.compactModels[id] ?? null,
+        })),
+      },
+      'desktop.engine.options': {
+        engines: engines(id => {
+          const o = this.file.options[id] ?? {}
+          return {
+            outputStyle: o.outputStyle ?? null,
+            askQuestions: o.askQuestions !== false,
+            autoCompactPct: o.autoCompactPct ?? null,
+            hidden: o.hidden === true,
+          }
+        }),
+      },
+      'desktop.engine.retries': this.file.maxRetries,
+    }
+  }
+
+  /**
+   * 把云端的值写回本机：走和设置页一样的校验（setEngineConfig / setDefaultEngine / setRetrySettings），
+   * 哪一项不合法就跳过那一项、保留本机的值。null 表示云端删了这个键：恢复默认。
+   */
+  async applySyncable(key: string, value: unknown): Promise<void> {
+    const obj = (v: unknown): Record<string, unknown> =>
+      v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {}
+    const each = async (patchOf: (raw: Record<string, unknown>) => EngineConfigPatch): Promise<void> => {
+      const engines = obj(obj(value).engines)
+      for (const id of ENGINE_ORDER) {
+        if (!this.ctx.adapters[id]) continue
+        try {
+          await this.setEngineConfig(id, patchOf(obj(engines[id])))
+        } catch {
+          /* 这台电脑上不合法（例如默认引擎不能隐藏）：保留本机的 */
+        }
+      }
+    }
+    if (key === 'desktop.engine.defaults') {
+      const engine = obj(value).engine
+      if (value !== null && typeof engine === 'string' && (ENGINE_ORDER as readonly string[]).includes(engine))
+        try {
+          if (engine !== this.file.defaults.engine) this.setDefaultEngine(engine as EngineId)
+        } catch {
+          /* 这台电脑没有这个引擎 */
+        }
+      await each(raw => ({
+        defaults: value === null ? { ...DEFAULT_SETTINGS.defaults } : (obj(raw.defaults) as Partial<SessionDefaults>),
+        compactModel: typeof raw.compactModel === 'string' ? raw.compactModel : null,
+      }))
+    } else if (key === 'desktop.engine.options') {
+      await each(raw => ({
+        outputStyle: typeof raw.outputStyle === 'string' ? raw.outputStyle : null,
+        askQuestions: raw.askQuestions !== false,
+        autoCompactPct: typeof raw.autoCompactPct === 'number' ? raw.autoCompactPct : null,
+        hidden: raw.hidden === true,
+      }))
+    } else if (key === 'desktop.engine.retries') {
+      try {
+        this.setRetrySettings(value)
+      } catch {
+        /* 不合法的次数：保留本机的 */
+      }
+    }
+  }
+
   retrySettings(): { maxRetries: number | null } {
     return { maxRetries: this.file.maxRetries }
   }
@@ -302,4 +378,21 @@ function checkDefaults(patch: Partial<SessionDefaults>): Partial<SessionDefaults
     out[key] = patch[key]
   }
   return out
+}
+
+/** 设置云同步里引擎的三个键（docs/ui/settings-sync.md §3） */
+export interface SyncableEngineSettings {
+  'desktop.engine.defaults': {
+    engine: EngineId
+    engines: Partial<Record<EngineId, { defaults: SessionDefaults; compactModel: string | null }>>
+  }
+  'desktop.engine.options': {
+    engines: Partial<
+      Record<
+        EngineId,
+        { outputStyle: string | null; askQuestions: boolean; autoCompactPct: number | null; hidden: boolean }
+      >
+    >
+  }
+  'desktop.engine.retries': number | null
 }
