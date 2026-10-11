@@ -17,12 +17,15 @@ import { SessionActionsProvider } from '../features/sidebar/SessionActions'
 import { TerminalProvider } from '../features/terminal/TerminalProvider'
 import { CommandPaletteProvider } from '../features/commands/CommandPaletteProvider'
 import { installRendererErrorLog, reactRootErrorOptions } from '../features/logs/rendererErrors'
+import { installLongTaskLog } from '../features/logs/longTasks'
 import { SettingsSyncRunner } from '../features/settings/sync/RestoreNotice'
 import { startWindowActivity } from '../features/layout/windowActivity'
 
 document.documentElement.dataset.platform = window.pixelsky?.platform ?? 'web'
 // 页面报错、未处理的 Promise 拒绝写进本机日志（docs/ui/logging.md §4.5）
 installRendererErrorLog()
+// 界面一次卡住超过 2 秒记一条（docs/ui/logging.md §4.9）
+installLongTaskLog()
 // 窗口不在前台时暂停循环动画（docs/ui/performance.md）
 startWindowActivity()
 

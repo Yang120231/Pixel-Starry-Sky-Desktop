@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { IPC_CONTRACT, type IpcChannelName, type IpcChannelSpec, type IpcTrust } from '@pixelsky/protocol'
+import { logger } from '@pixelsky/engine'
 
 /**
  * 主进程 IPC 注册的唯一入口：按契约（packages/protocol/src/ipc/contract.ts）里每个通道的 `trust` 档位校验调用方，
@@ -38,6 +39,33 @@ export interface HandleOptions extends OnOptions {
 }
 
 const registered = new Set<string>()
+
+// 卡顿诊断（docs/ui/logging.md §4.9）：处理函数的同步部分占住主进程太久就记一条；
+// 还没处理完的 invoke 请求在主进程卡住时一起记下，看那会儿在忙什么
+const perf = logger('perf')
+/** 同步部分超过这么久就记：这段时间主进程什么都做不了（窗口拖不动、引擎的输出也收不到） */
+const SLOW_SYNC_MS = 500
+const inFlight = new Map<number, { channel: string; at: number }>()
+let lastCall = 0
+
+function timed<T>(channel: string, run: () => T): T {
+  const start = performance.now()
+  try {
+    return run()
+  } finally {
+    const ms = performance.now() - start
+    if (ms >= SLOW_SYNC_MS) perf.warn('IPC 处理占住了主进程', { channel, ms: Math.round(ms) })
+  }
+}
+
+/** 还没处理完的 invoke 请求，最近开始的在前（最多 10 个） */
+export function ipcInFlight(): { channel: string; ms: number }[] {
+  const now = performance.now()
+  return [...inFlight.values()]
+    .sort((a, b) => b.at - a.at)
+    .slice(0, 10)
+    .map(c => ({ channel: c.channel, ms: Math.round(now - c.at) }))
+}
 const contract: Readonly<Record<string, IpcChannelSpec>> = IPC_CONTRACT
 
 function trustOf(channel: string, kinds: readonly IpcChannelSpec['kind'][]): IpcTrust {
@@ -93,7 +121,18 @@ export function handle(
       if (opts.onUntrusted) return opts.onUntrusted()
       throw new Error(opts.deny ?? DEFAULT_DENY)
     }
-    return fn(event, ...(args as never[]))
+    const id = ++lastCall
+    inFlight.set(id, { channel, at: performance.now() })
+    let result: unknown
+    try {
+      result = timed(channel, () => fn(event, ...(args as never[])))
+    } catch (err) {
+      inFlight.delete(id)
+      throw err
+    }
+    if (result instanceof Promise) return result.finally(() => inFlight.delete(id))
+    inFlight.delete(id)
+    return result
   })
 }
 
@@ -105,6 +144,6 @@ export function on(
 ): void {
   const trust = trustOf(channel, ['send', 'sendSync'])
   ipcMain.on(channel, (event, ...args) => {
-    if (check(event, trust, opts) === 'ok') fn(event, ...(args as never[]))
+    if (check(event, trust, opts) === 'ok') timed(channel, () => fn(event, ...(args as never[])))
   })
 }

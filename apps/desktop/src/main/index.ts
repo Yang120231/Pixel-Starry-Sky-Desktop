@@ -1,7 +1,16 @@
 import { join } from 'node:path'
 import { mkdirSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
-import { app, BrowserWindow, dialog, Menu, nativeTheme, shell, type MenuItemConstructorOptions } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  Menu,
+  nativeTheme,
+  session,
+  shell,
+  type MenuItemConstructorOptions,
+} from 'electron'
 import { initAccount } from './account/account'
 import * as ipc from './ipc/guard'
 import { initAppInfo } from './app/info'
@@ -16,6 +25,7 @@ import { initNotifications } from './notifications/notifications'
 import { confirmTerminalClose, closeWindowTerminals } from './terminal/ipc'
 import { createAppContext } from './app/context'
 import { initLogIpc, initLogging } from './app/logging'
+import { allowCallStacks, enableCallStacks, watchMainLoop, watchMemory, watchWindow } from './app/responsiveness'
 import { initTray, type TrayController } from './app/tray'
 import { initSettingsSync } from './account/settings-sync'
 import type { Locale } from '../shared/i18n/messages'
@@ -115,6 +125,8 @@ app.on('before-quit', event => {
   })
 })
 if (debugPort) app.commandLine.appendSwitch('remote-debugging-port', debugPort)
+// 窗口没响应时能取到页面正在跑的 JS 调用栈（app/responsiveness.ts）
+enableCallStacks()
 
 function isWebUrl(url: string): boolean {
   try {
@@ -166,6 +178,7 @@ function createWindow(): BrowserWindow {
   })
 
   observeWindowControls(win)
+  watchWindow(win)
   win.once('ready-to-show', () => {
     if (!captureDir) win.show()
   })
@@ -311,6 +324,10 @@ function setAppMenu(locale: Locale = 'zh-CN'): void {
 if (process.platform === 'win32') app.setAppUserModelId(app.isPackaged ? 'com.pixelsky.desktop' : process.execPath)
 
 app.whenReady().then(async () => {
+  // 卡顿诊断：窗口没响应、主进程卡住、内存过高时写日志（docs/ui/logging.md §4.9）
+  allowCallStacks(session.defaultSession, isAppUrl)
+  watchMainLoop()
+  watchMemory()
   setAppMenu()
   initUiLanguage(locale => {
     setAppMenu(locale)

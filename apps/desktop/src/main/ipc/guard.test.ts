@@ -276,3 +276,56 @@ describe('注册', () => {
       }
   })
 })
+
+describe('卡顿诊断（docs/ui/logging.md §4.9）', () => {
+  async function sink() {
+    const lines: { level: string; scope: string; message: string; fields?: Record<string, unknown> }[] = []
+    const engine = await import('@pixelsky/engine')
+    engine.setLogSink({
+      enabled: () => true,
+      write: (level, scope, message, fields) => lines.push({ level, scope, message, fields }),
+    })
+    return lines
+  }
+
+  it('没处理完的 invoke 请求列在 ipcInFlight 里，处理完（成功或失败）就去掉', async () => {
+    let finish!: (v: string) => void
+    guard.handle('platform:groups', () => new Promise<string>(r => (finish = r)))
+    guard.handle('platform:models', () => Promise.reject(new Error('坏了')))
+    const pending = mocks.handlers.get('platform:groups')!(scene()) as Promise<string>
+    expect(guard.ipcInFlight().map(c => c.channel)).toEqual(['platform:groups'])
+    await expect(mocks.handlers.get('platform:models')!(scene(), '1') as Promise<unknown>).rejects.toThrow('坏了')
+    expect(guard.ipcInFlight().map(c => c.channel)).toEqual(['platform:groups'])
+    finish('ok')
+    await expect(pending).resolves.toBe('ok')
+    expect(guard.ipcInFlight()).toEqual([])
+  })
+
+  it('处理函数同步部分超过 500 毫秒记一条 warn；快的不记', async () => {
+    const lines = await sink()
+    let clock = 0
+    const now = vi.spyOn(performance, 'now').mockImplementation(() => clock)
+    try {
+      guard.handle('platform:groups', () => {
+        clock += 800
+        return 'slow'
+      })
+      guard.on('log:write', () => {
+        clock += 10
+      })
+      expect(mocks.handlers.get('platform:groups')!(scene())).toBe('slow')
+      mocks.listeners.get('log:write')!(scene())
+    } finally {
+      now.mockRestore()
+    }
+    expect(lines).toEqual([
+      {
+        level: 'warn',
+        scope: 'perf',
+        message: 'IPC 处理占住了主进程',
+        fields: { channel: 'platform:groups', ms: 800 },
+      },
+    ])
+    expect(guard.ipcInFlight()).toEqual([])
+  })
+})
