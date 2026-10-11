@@ -27,11 +27,9 @@ extraResources:
 # Linux 没有预编译文件：pnpm install 时按 Node 编译出 build/Release/pty.node（N-API，Electron 一样能用）
 npmRebuild: false
 win:
-  # 安装版（能自动更新）+ 便携版（不能自动更新，只提示去下载）。docs/release-update.md §7
+  # 只出安装版（能自动更新）。便携版 0.2.5-beta 起不再提供：还在用旧便携版的，有新版时提示去下载安装版。docs/release-update.md §7
   target:
     - target: nsis
-      arch: x64
-    - target: portable
       arch: x64
   # 暂不签名（首次运行 SmartScreen 会提示“未知发布者”），但仍写入产品名、版本等文件信息
   signExecutable: false
@@ -54,8 +52,6 @@ nsis:
   include: build/installer.nsh
   artifactName: PixelSky-${version}-setup.exe
   uninstallDisplayName: ${productName}
-portable:
-  artifactName: PixelSky-${version}-portable.exe
 mac:
   # 文件名不能有中文：GitHub 会改掉 Release 里的中文文件名，latest-mac.yml 里的地址就对不上了
   artifactName: PixelSky-${version}-mac-${arch}.${ext}

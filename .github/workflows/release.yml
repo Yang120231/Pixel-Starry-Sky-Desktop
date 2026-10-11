@@ -62,7 +62,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # 安装版 + 便携版 + latest.yml
+          # 安装版 + latest.yml
           - os: windows-latest
             args: --win
           # Intel 和 Apple 芯片一起打：分开打的话两边各传一份 latest-mac.yml，后传的会盖掉先传的

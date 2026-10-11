@@ -15,8 +15,8 @@ export const updateMessages = {
     en: "Restart to install it now, or it'll install the next time you quit",
   },
   'update.portableHint': {
-    zh: '便携版不能自动更新，下载新版本替换现在的 exe 即可',
-    en: "The portable version can't update itself. Download the new version and replace this exe",
+    zh: '便携版不能自动更新、以后也不再提供，请下载安装版（以后能自动更新）',
+    en: "The portable version can't update itself and is no longer offered. Download the installer, which updates automatically",
   },
   'update.manualHint': {
     zh: 'macOS 版暂不能自动更新，下载新版本拖进「应用程序」替换即可',
