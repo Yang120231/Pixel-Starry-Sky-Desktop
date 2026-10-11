@@ -35,7 +35,7 @@ const statusOf = (value: unknown, complete: boolean): ItemStatus =>
 /** 当前 thread 的条目转换；原生用户消息由宿主负责，只用于输入确认。 */
 export class CodexTranslator {
   readonly items = new Map<string, Item>()
-  private readonly agents = new Map<string, AgentRun>()
+  readonly agents = new Map<string, AgentRun>()
   /** 压缩完了还没有压缩后的大小：等下一次用量更新补上（docs/ui/compaction.md） */
   private compactionSize: string | null = null
   constructor(

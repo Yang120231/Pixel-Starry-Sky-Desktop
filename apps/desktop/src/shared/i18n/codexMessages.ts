@@ -47,6 +47,21 @@ export const codexMessages = {
   'codex.permissionApproval': { zh: 'Codex 权限申请', en: 'Codex permission request' },
   'codex.question': { zh: 'Codex 提问', en: 'Codex question' },
   'codex.mcpApproval': { zh: 'MCP 输入请求', en: 'MCP input request' },
+  'codex.subagentCommandApproval': {
+    zh: 'Codex 子智能体 {agent} 命令审批',
+    en: 'Codex subagent {agent} command approval',
+  },
+  'codex.subagentFileApproval': { zh: 'Codex 子智能体 {agent} 文件修改', en: 'Codex subagent {agent} file changes' },
+  'codex.subagentNetworkApproval': {
+    zh: 'Codex 子智能体 {agent} 网络访问',
+    en: 'Codex subagent {agent} network access',
+  },
+  'codex.subagentPermissionApproval': {
+    zh: 'Codex 子智能体 {agent} 权限申请',
+    en: 'Codex subagent {agent} permission request',
+  },
+  'codex.subagentQuestion': { zh: 'Codex 子智能体 {agent} 提问', en: 'Codex subagent {agent} question' },
+  'codex.subagentMcpApproval': { zh: 'MCP 输入请求（子智能体 {agent}）', en: 'MCP input request (subagent {agent})' },
   'codex.processExit': { zh: 'Codex 进程已退出', en: 'Codex process exited' },
   'codex.imageUnsupported': { zh: '此 Codex 模型不支持图片', en: 'This Codex model does not support images' },
   'codex.effortUnsupported': {

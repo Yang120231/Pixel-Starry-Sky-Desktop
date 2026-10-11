@@ -175,6 +175,16 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
         })
         return
       }
+      if (text.includes('子智能体审批')) {
+        // 子智能体在自己的线程和轮次里请求审批
+        pending = 'approve'
+        out({
+          id: 'approve',
+          method: 'item/commandExecution/requestApproval',
+          params: { threadId: 'fake-sub-thread', turnId: 'sub-turn-1', itemId: 'sub-cmd', command: 'npm test' },
+        })
+        return
+      }
       if (text.includes('审批')) {
         pending = 'approve'
         out({

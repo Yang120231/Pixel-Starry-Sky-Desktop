@@ -207,6 +207,20 @@ describe('Codex app-server adapter', () => {
     await wait(() => host!.open(session.id).state === 'idle')
     expect(host!.open(session.id).pending).toEqual([])
   })
+  it('子智能体（别的线程）的审批照常弹卡，标题带子智能体', async () => {
+    const { session, messages } = setup()
+    await host!.send(session.id, '子智能体审批')
+    await wait(() => host!.open(session.id).pending.length === 1)
+    expect(host!.open(session.id).pending[0]).toMatchObject({
+      requestId: 'approve',
+      itemId: null,
+      title: 'Codex subagent fake-sub command approval',
+      command: 'npm test',
+    })
+    host!.answer(session.id, 'approve', { type: 'allow' })
+    await wait(() => host!.open(session.id).state === 'idle')
+    expect(messages().find(m => m.id === 'approve' && m.result)?.result).toEqual({ decision: 'accept' })
+  })
   it('Codex 版本检查：读不到为 error，低于下限为 outdated，达到下限为 ready', () => {
     expect(codexVersionStatus(null)).toEqual({ status: 'error', message: 'Could not read the Codex version' })
     expect(codexVersionStatus('0.159.9')).toEqual({

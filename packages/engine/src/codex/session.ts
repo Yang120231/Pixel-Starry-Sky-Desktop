@@ -173,6 +173,7 @@ export class CodexSession implements EngineSession {
         config(`model_providers.${provider}.stream_max_retries`, 0)
       }
     }
+    Object.assign(environment, this.ctx.extensions?.env)
     if (this.ctx.extensions?.pathDirs.length) {
       const key = Object.keys(environment).find(k => k.toLowerCase() === 'path') ?? 'PATH'
       environment[key] = [...this.ctx.extensions.pathDirs, environment[key] ?? ''].join(delimiter)
@@ -409,13 +410,14 @@ export class CodexSession implements EngineSession {
     if (this.guidance.delete(id)) this.ctx.emit({ type: 'input_ack', id, state: 'consumed', mode: 'guidance' })
   }
   private notification(method: string, params: Message): void {
-    const eventThread = string(params.threadId)
-    if (eventThread && this.threadId && eventThread !== this.threadId) return
+    // 子智能体的审批也在这里结束，先于按线程过滤
     if (method === 'serverRequest/resolved') {
       const id = String(params.requestId)
       if (this.approvals.delete(id)) this.ctx.emit({ type: 'approval_resolved', requestId: id })
       return
     }
+    const eventThread = string(params.threadId)
+    if (eventThread && this.threadId && eventThread !== this.threadId) return
     if (!this.active) return
     const eventTurn = string(params.turnId || object(params.turn).id)
     if (eventTurn && this.finishedTurns.has(eventTurn)) return
@@ -509,23 +511,27 @@ export class CodexSession implements EngineSession {
     }
   }
   private request(id: string | number, method: string, params: Message): void {
-    if (
-      !this.active ||
-      (params.threadId && params.threadId !== this.threadId) ||
-      (params.turnId && this.nativeTurnId && params.turnId !== this.nativeTurnId)
-    ) {
+    // 每个会话一个 app-server 进程，里面别的线程只能是这一轮派出的子智能体：照常弹审批，标题带上是哪个
+    const thread = string(params.threadId),
+      subagent = !!thread && !!this.threadId && thread !== this.threadId
+    if (!this.active || (!subagent && params.turnId && this.nativeTurnId && params.turnId !== this.nativeTurnId)) {
       this.proc?.respondError(id, 'No matching active turn')
       return
     }
+    const agent = this.translator.agents.get(thread)?.label ?? thread.slice(0, 8)
+    const title = (main: string, sub: string): string => (subagent ? sub.replace('{agent}', agent) : main)
     const key = String(id),
-      itemId = params.itemId ? 'cx-' + string(params.itemId) : null
+      // 子智能体的条目不在主对话里，卡片不挂到条目上
+      itemId = params.itemId && !subagent ? 'cx-' + string(params.itemId) : null
     let request: ApprovalRequest
     if (method === 'item/commandExecution/requestApproval')
       request = {
         requestId: key,
         itemId,
         kind: 'command',
-        title: params.networkApprovalContext ? 'Codex network access' : 'Codex command approval',
+        title: params.networkApprovalContext
+          ? title('Codex network access', 'Codex subagent {agent} network access')
+          : title('Codex command approval', 'Codex subagent {agent} command approval'),
         command: string(params.command),
         description: string(params.reason),
         input: params.networkApprovalContext,
@@ -536,7 +542,7 @@ export class CodexSession implements EngineSession {
         requestId: key,
         itemId,
         kind: 'file_change',
-        title: 'Codex file changes',
+        title: title('Codex file changes', 'Codex subagent {agent} file changes'),
         changes: codexChanges(params.changes ?? (itemId && object(this.translator.items.get(itemId)).changes)),
         description: string(params.reason),
         alwaysScopes: ['session'],
@@ -550,7 +556,7 @@ export class CodexSession implements EngineSession {
         requestId: key,
         itemId,
         kind: 'question',
-        title: 'Codex question',
+        title: title('Codex question', 'Codex subagent {agent} question'),
         questions: array(params.questions).map(raw => {
           const question = object(raw)
           return {
@@ -573,7 +579,9 @@ export class CodexSession implements EngineSession {
         requestId: key,
         itemId,
         kind: 'tool',
-        title: method.includes('permissions') ? 'Codex permission request' : 'MCP input request',
+        title: method.includes('permissions')
+          ? title('Codex permission request', 'Codex subagent {agent} permission request')
+          : title('MCP input request', 'MCP input request (subagent {agent})'),
         toolName: string(params.serverName) || 'Codex',
         input: params.permissions ?? params,
         description: string(params.reason || params.message),
