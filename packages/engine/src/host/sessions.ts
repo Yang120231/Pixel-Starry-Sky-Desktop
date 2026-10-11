@@ -27,7 +27,14 @@ export class HostSessions {
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .map(record => {
         const queue = ctx.m.queue.queueSummary(record.id)
-        return { record, state: ctx.runtimes.get(record.id)?.snapshot.state ?? 'idle', ...(queue ? { queue } : {}) }
+        const snapshot = ctx.runtimes.get(record.id)?.snapshot
+        const background = snapshot?.background ?? 0
+        return {
+          record,
+          state: snapshot?.state ?? 'idle',
+          ...(background ? { background } : {}),
+          ...(queue ? { queue } : {}),
+        }
       })
   }
 

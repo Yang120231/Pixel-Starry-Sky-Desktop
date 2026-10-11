@@ -5,6 +5,7 @@
 //   含「慢」    → 慢慢输出 100 段文字（给中断测试用）
 //   含「崩溃」  → 往 stderr 写 boom 然后退出码 3
 //   含「子任务」→ 派一个子智能体（task_* 帧 + 子智能体调用 Read）
+//   含「派出」  → 派一个后台子智能体，这一轮先结束，子智能体跑完后引擎自己接着汇总一轮
 //   含「后台」  → 起一个后台命令（background_tasks_changed），等 stop_task 才结束
 //   一轮成功结束后发一条 prompt_suggestion
 //   FAKE_CLAUDE_FAST_BLOCKED  Fast 模式开不了的原因（不设时可以开）
@@ -405,6 +406,55 @@ async function runTurn(text) {
     await streamText('子任务完成', ['子任务完成'])
     result('success')
     out({ type: 'prompt_suggestion', suggestion: '再读一遍', session_id: sessionId })
+    turn = null
+    return
+  }
+
+  if (text.includes('派出')) {
+    // 派一个后台子智能体：Agent 工具马上回「已在后台启动」，这一轮说完就结束；FAKE_CLAUDE_AGENT_MS 后子智能体跑完，
+    // 引擎没等用户发消息就接着干（汇总），再结束一轮
+    const toolUseId = `toolu_fake_${++msgSeq}`
+    out({
+      type: 'assistant',
+      message: {
+        id: `msg_fake_${runId}_${msgSeq}`,
+        content: [
+          { type: 'tool_use', id: toolUseId, name: 'Agent', input: { description: '对比', run_in_background: true } },
+        ],
+      },
+      parent_tool_use_id: null,
+    })
+    out({
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: toolUseId, content: 'Async agent launched' }],
+      },
+      parent_tool_use_id: null,
+      tool_use_result: { isAsync: true, status: 'async_launched', agentId: 'bga1', description: '对比' },
+    })
+    out({
+      type: 'system',
+      subtype: 'task_started',
+      task_id: 'bga1',
+      task_type: 'local_agent',
+      description: '对比',
+      tool_use_id: toolUseId,
+      is_backgrounded: true,
+    })
+    bgTasks.set('bga1', { task_id: 'bga1', task_type: 'local_agent', description: '对比' })
+    out({ type: 'system', subtype: 'background_tasks_changed', tasks: [...bgTasks.values()] })
+    await streamText('都派出去了', ['都派出去了'])
+    result('success')
+    turn = null
+    await sleep(Number(process.env.FAKE_CLAUDE_AGENT_MS ?? 300))
+    bgTasks.delete('bga1')
+    out({ type: 'system', subtype: 'background_tasks_changed', tasks: [...bgTasks.values()] })
+    out({ type: 'system', subtype: 'task_notification', task_id: 'bga1', status: 'completed', summary: '对比完了' })
+    if (process.env.FAKE_CLAUDE_AGENT_NO_WAKE === '1') return
+    turn = { aborted: false }
+    await streamText('汇总完成', ['汇总完成'])
+    result('success')
     turn = null
     return
   }

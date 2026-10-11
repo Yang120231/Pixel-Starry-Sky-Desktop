@@ -37,6 +37,11 @@ export type EngineEvent =
   | { type: 'tasks'; tasks: BackgroundTask[] }
   /** 子智能体条变了（整个列表） */
   | { type: 'subagents'; subagents: SubagentStatus[] }
+  /**
+   * 还在后台跑、跑完会叫醒主线的子智能体和编排有几个（后台命令、监视器不算）：一轮结束时它们可能还在跑，
+   * 这时会话不算做完，不发完成通知、不关进程（docs/ui/notifications.md §7）
+   */
+  | { type: 'background'; count: number }
   /** 智能体追踪数据变了（整份） */
   | { type: 'runs'; runs: AgentRuns }
   /** 输入建议；null 表示清掉 */
@@ -46,8 +51,15 @@ export type EngineEvent =
   | { type: 'commands'; commands: import('../extensions').SkillCommand[] }
   | { type: 'queue'; items: QueuedMessage[]; paused: boolean }
   | { type: 'input_ack'; id: string; state: 'consumed' | 'cancelled' | 'uncertain'; mode?: 'normal' | 'guidance' }
-  /** usage：这一轮的用量（引擎报告了才有，docs/ui/usage.md §6.1） */
-  | { type: 'turn_completed'; turnId: string; outcome: TurnOutcome; error: string | null; usage?: TurnUsage }
+  /** usage：这一轮的用量（引擎报告了才有，docs/ui/usage.md §6.1）；background：结束时还在后台跑的（见 background 事件） */
+  | {
+      type: 'turn_completed'
+      turnId: string
+      outcome: TurnOutcome
+      error: string | null
+      usage?: TurnUsage
+      background?: number
+    }
 
 /** 引擎运行时才知道的能力；null 表示还不知道（引擎还没启动） */
 export interface SessionFlags {
@@ -81,6 +93,8 @@ export interface SessionSnapshot {
   flags: SessionFlags
   tasks: BackgroundTask[]
   subagents: SubagentStatus[]
+  /** 还在后台跑、跑完会叫醒主线的子智能体和编排数；没有时省略或为 0 */
+  background?: number
   runs: AgentRuns
   /** 输入建议；没有时为 null */
   suggestion: string | null

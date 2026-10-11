@@ -112,6 +112,8 @@ export function reduce(s: SessionSnapshot, e: EngineEvent): SessionSnapshot {
       return { ...s, tasks: e.tasks }
     case 'subagents':
       return { ...s, subagents: e.subagents }
+    case 'background':
+      return (s.background ?? 0) === e.count ? s : { ...s, background: e.count }
     case 'runs':
       return { ...s, runs: e.runs }
     case 'suggestion':

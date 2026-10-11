@@ -73,6 +73,8 @@ const TASK_KIND: Record<string, string> = {
   monitor: '监视任务',
 }
 const TASK_STATUS: Record<string, string> = { completed: '已完成', failed: '失败', stopped: '已停止' }
+/** 跑完会叫醒主线接着干的后台任务；后台命令、监视器可能一直开着（例如开发服务器），不算（docs/ui/notifications.md §7） */
+const WAKES_MAIN = ['local_agent', 'local_workflow', 'remote_agent']
 
 export function taskKindLabel(kind: string): string {
   const key = Object.keys(TASK_KIND).find(k => kind === k || kind.startsWith(k))
@@ -137,6 +139,8 @@ export class ClaudeTranslator {
   /** system/task_* 里的任务 */
   private taskInfo = new Map<string, TaskInfo>()
   private bgTasks: BackgroundTask[] = []
+  /** 上次报给宿主的后台工作数（background 事件） */
+  private backgroundCount = 0
   private subagentList: SubagentStatus[] = []
   /** 这次压缩（docs/ui/compaction.md）：status 'compacting' 时开始；结果和 compact_boundary 先后不定，都到了才算完 */
   private compaction: CompactionItem | null = null
@@ -183,6 +187,20 @@ export class ClaudeTranslator {
     }
   }
 
+  /**
+   * 还在后台跑、跑完会叫醒主线的子智能体和编排数，变了就告诉宿主。两处来源取大的：CLI 的后台任务列表
+   * （没有 background_tasks_changed 的旧版本为空）和还没等到 task_notification 的后台 Agent 工具行
+   */
+  private syncBackground(): number {
+    const tasks = this.bgTasks.filter(t => WAKES_MAIN.some(k => t.kind.startsWith(k))).length
+    const count = Math.max(tasks, this.asyncAgents.size)
+    if (count !== this.backgroundCount) {
+      this.backgroundCount = count
+      this.cb.emit({ type: 'background', count })
+    }
+    return count
+  }
+
   private emitRuns(): void {
     this.cb.emit({ type: 'runs', runs: this.runs.snapshot() })
   }
@@ -203,6 +221,7 @@ export class ClaudeTranslator {
     for (const item of this.asyncAgents.values())
       this.cb.emit({ type: 'item_completed', item: { ...item, status: 'interrupted' } as Item })
     this.asyncAgents.clear()
+    this.syncBackground()
   }
 
   /** 子智能体的工具没等到结果就结束了（这一轮中断、进程退出、子智能体都结束了） */
@@ -383,6 +402,7 @@ export class ClaudeTranslator {
         const launched = call ? this.asyncAgents.get(call) : undefined
         if (call && launched) {
           this.asyncAgents.delete(call)
+          this.syncBackground()
           const summary = str(msg.summary)
           this.cb.emit({
             type: 'item_completed',
@@ -527,6 +547,7 @@ export class ClaudeTranslator {
             message: prev.get(str(t.task_id))?.message ?? null,
           }))
         this.cb.emit({ type: 'tasks', tasks: [...this.bgTasks] })
+        this.syncBackground()
         return
       }
     }
@@ -651,6 +672,7 @@ export class ClaudeTranslator {
         } as Item
         this.asyncAgents.set(id, running)
         this.cb.emit({ type: 'item_started', item: running })
+        this.syncBackground()
         continue
       }
       this.cb.emit({
@@ -740,11 +762,16 @@ export class ClaudeTranslator {
       this.notice('error', friendly ?? apiError.raw, friendly ? apiError.raw : null)
     }
     const usage = this.turnUsage(msg)
-    this.cb.emit(
-      usage
-        ? { type: 'turn_completed', turnId, outcome, error, usage }
-        : { type: 'turn_completed', turnId, outcome, error },
-    )
+    // 这一轮说完了，派出去的后台子智能体可能还在跑：带上个数，宿主和通知按「还没做完」处理
+    const background = this.syncBackground()
+    this.cb.emit({
+      type: 'turn_completed',
+      turnId,
+      outcome,
+      error,
+      ...(usage ? { usage } : {}),
+      ...(background ? { background } : {}),
+    })
     this.cb.turnEnded(outcome)
   }
 

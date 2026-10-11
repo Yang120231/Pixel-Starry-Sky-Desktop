@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { HostEvent } from '@pixelsky/protocol'
 import {
+  backgroundChange,
   createDeliveryState,
   decide,
   DEFAULT_NOTIFICATION_PREFS,
@@ -9,6 +10,7 @@ import {
   nextMorning,
   notificationFor,
   sanitizeNotificationPrefs,
+  settledIntent,
   type NotificationIntent,
   type NotificationPrefs,
 } from './policy'
@@ -152,5 +154,33 @@ describe('是否弹出', () => {
       show: true,
       summary: false,
     })
+  })
+})
+
+describe('后台子智能体还在跑（docs/ui/notifications.md §7）', () => {
+  it('这一轮说完了但后台还在跑：不提醒完成；失败照常提醒', () => {
+    expect(
+      notificationFor(
+        session({ type: 'turn_completed', turnId: 't', outcome: 'completed', error: null, background: 3 }),
+      ),
+    ).toBeNull()
+    expect(
+      notificationFor(session({ type: 'turn_completed', turnId: 't', outcome: 'failed', error: 'x', background: 1 })),
+    ).toMatchObject({ kind: 'failed' })
+  })
+
+  it('后台跑完、会话空着才开始等；引擎接着干或又有后台在跑就不用补', () => {
+    const idle = () => true
+    expect(backgroundChange(session({ type: 'background', count: 0 }), idle)).toEqual({
+      sessionId: 's1',
+      change: 'settled',
+    })
+    expect(backgroundChange(session({ type: 'background', count: 0 }), () => false)).toMatchObject({
+      change: 'busy',
+    })
+    expect(backgroundChange(session({ type: 'background', count: 2 }), idle)).toMatchObject({ change: 'busy' })
+    expect(backgroundChange(session({ type: 'turn_started', turnId: 't2' }), idle)).toMatchObject({ change: 'busy' })
+    expect(backgroundChange(session({ type: 'status', state: 'idle' }), idle)).toBeNull()
+    expect(settledIntent('s1', 5)).toEqual({ kind: 'completed', sessionId: 's1', dedupeKey: 'b:s1:5', detail: null })
   })
 })

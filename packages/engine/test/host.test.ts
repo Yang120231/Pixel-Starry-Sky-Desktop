@@ -249,6 +249,44 @@ describe('EngineHost + Claude（假引擎）', () => {
     expect(again.open(record.id).items.map(i => i.kind)).toEqual(snap.items.map(i => i.kind))
   })
 
+  it('这一轮说完了、后台子智能体还在跑：轮结束带上个数，会话列表标出来，空闲定时器不关进程；跑完接着的那一轮正常收尾', async () => {
+    const host = makeHost(60, { FAKE_CLAUDE_AGENT_MS: '400' })
+    const { record } = setup(host)
+    await host.send(record.id, '派出')
+    await waitFor(() => turnsDone(record.id) === 1)
+    const first = sessionEvents(record.id).find(e => e.type === 'turn_completed')
+    expect(first).toMatchObject({ outcome: 'completed', background: 1 })
+    expect(host.open(record.id)).toMatchObject({ state: 'idle', background: 1 })
+    expect(host.sessions().find(s => s.record.id === record.id)).toMatchObject({ state: 'idle', background: 1 })
+    // 超过空闲时间（60ms）好几倍：进程还在，子智能体跑完后引擎接着汇总
+    await waitFor(() => turnsDone(record.id) === 2)
+    const last = sessionEvents(record.id)
+      .filter(e => e.type === 'turn_completed')
+      .at(-1)
+    expect(last).toMatchObject({ outcome: 'completed' })
+    expect(last).not.toHaveProperty('background')
+    expect(host.open(record.id).background).toBe(0)
+    expect(host.sessions().find(s => s.record.id === record.id)).not.toHaveProperty('background')
+    expect(host.open(record.id).items.some(i => i.kind === 'assistant' && i.text === '汇总完成')).toBe(true)
+    expect(spawnArgs()).toHaveLength(1)
+  })
+
+  it('后台子智能体都跑完、引擎没接着干：这时才开始空闲计时，到点关进程', async () => {
+    const host = makeHost(60, { FAKE_CLAUDE_AGENT_MS: '300', FAKE_CLAUDE_AGENT_NO_WAKE: '1' })
+    const { record } = setup(host)
+    await host.send(record.id, '派出')
+    await waitFor(() => turnsDone(record.id) === 1)
+    await new Promise(r => setTimeout(r, 150))
+    // 空闲时间早过了，但子智能体还在跑：没关（关了的话进程退出会把个数清零）
+    expect(host.open(record.id).background).toBe(1)
+    await waitFor(() => host.open(record.id).background === 0)
+    await new Promise(r => setTimeout(r, 200))
+    await host.send(record.id, '你好')
+    await waitFor(() => turnsDone(record.id) === 2)
+    // 子智能体跑完后空闲到点关了进程，这句在新进程里
+    expect(spawnArgs()).toHaveLength(2)
+  })
+
   it('未启动或旧版引擎的上下文诊断与压缩给出明确不可用原因', async () => {
     const host = makeHost()
     const { record } = setup(host)

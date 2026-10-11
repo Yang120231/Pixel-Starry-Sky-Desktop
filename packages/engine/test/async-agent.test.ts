@@ -68,6 +68,42 @@ describe('后台子智能体的 Agent 工具行', () => {
     expect(row('agent-1')).toMatchObject({ status: 'completed', output: '找到了两处超时' })
   })
 
+  it('这一轮结束时后台子智能体还在跑：轮结束带上个数；跑完、进程退出时个数回到 0', () => {
+    const { t, events } = make()
+    t.startTurn('turn-1')
+    launch(t)
+    t.handle({ type: 'result', subtype: 'success', modelUsage: {} })
+    const counts = () => events.flatMap(e => (e.type === 'background' ? [e.count] : []))
+    expect(counts()).toEqual([1])
+    expect(events.find(e => e.type === 'turn_completed')).toMatchObject({ outcome: 'completed', background: 1 })
+    // CLI 的后台任务列表也报了它：不重复算
+    t.handle({
+      type: 'system',
+      subtype: 'background_tasks_changed',
+      tasks: [
+        { task_id: 'a1', task_type: 'local_agent', description: '查超时' },
+        { task_id: 'b1', task_type: 'local_bash', description: 'npm run dev' },
+      ],
+    })
+    expect(counts()).toEqual([1])
+    t.handle({ type: 'system', subtype: 'task_notification', task_id: 'a1', status: 'completed', summary: '' })
+    t.handle({
+      type: 'system',
+      subtype: 'background_tasks_changed',
+      tasks: [{ task_id: 'b1', task_type: 'local_bash', description: 'npm run dev' }],
+    })
+    // 后台命令（开发服务器）不算：跑完会叫醒主线的才算
+    expect(counts()).toEqual([1, 0])
+    t.startTurn('turn-2')
+    t.handle({ type: 'result', subtype: 'success', modelUsage: {} })
+    expect(events.filter(e => e.type === 'turn_completed').at(-1)).not.toHaveProperty('background')
+    const gone = make()
+    gone.t.startTurn('turn-1')
+    launch(gone.t)
+    gone.t.processGone()
+    expect(gone.events.flatMap(e => (e.type === 'background' ? [e.count] : []))).toEqual([1, 0])
+  })
+
   it('失败的子智能体标失败，进程退出时还没结束的标已中断', () => {
     const failed = make()
     failed.t.startTurn('turn-1')

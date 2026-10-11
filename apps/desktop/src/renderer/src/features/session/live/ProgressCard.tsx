@@ -32,6 +32,8 @@ function saveCollapsed(collapsed: boolean): void {
 export interface Progress {
   plan: Plan | null
   agents: ProgressAgent[]
+  /** 这一轮说完了，子智能体还在后台跑 */
+  background: boolean
   visible: boolean
   dismiss: () => void
 }
@@ -40,6 +42,8 @@ export interface Progress {
 export function useProgress(snapshot: SessionSnapshot | null): Progress {
   const items = snapshot?.items
   const running = !!snapshot && snapshot.state !== 'idle'
+  // 这一轮说完了但后台子智能体还在跑：卡片留着显示它们（docs/ui/notifications.md §7）
+  const background = !!snapshot?.background
   const plan = useMemo(() => (items ? currentPlan(items, running) : null), [items, running])
   const agents = useMemo(
     () => progressAgents(snapshot?.subagents ?? [], snapshot?.runs),
@@ -49,7 +53,13 @@ export function useProgress(snapshot: SessionSnapshot | null): Progress {
   const [dismissed, setDismissed] = useState<string | null>(null)
   const dismiss = useCallback(() => setDismissed(key), [key])
   // 只在运行中显示：空闲时计划和子智能体都在这一轮收起的执行块里（docs/ui/conversation-concise.md §3 F）
-  return { plan, agents, visible: running && dismissed !== key && (!!plan || agents.length > 0), dismiss }
+  return {
+    plan,
+    agents,
+    background: background && !running,
+    visible: dismissed !== key && ((running && (!!plan || agents.length > 0)) || (background && agents.length > 0)),
+    dismiss,
+  }
 }
 
 /** 步骤前的圆圈：完成打勾、进行中主色圆点、未开始空心 */
@@ -229,6 +239,9 @@ export function ProgressCard({
     >
       <div className="flex items-center gap-1 pr-1.5 pl-3">
         <span className="text-list font-medium text-fg">{tr('session.progress.title')}</span>
+        {progress.background && (
+          <span className="ml-1 truncate text-meta text-fg-muted">{tr('session.progress.background')}</span>
+        )}
         <span className="flex-1" />
         {onOpenTrace && (
           <IconButton

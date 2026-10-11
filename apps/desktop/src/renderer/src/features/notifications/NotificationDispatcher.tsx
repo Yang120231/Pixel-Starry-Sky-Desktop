@@ -5,7 +5,15 @@ import { tr, translateMessage } from '../../i18n/core'
 import { getEngineState, isViewingSession } from '@/features/engine/store'
 import { OPEN_SESSION_EVENT } from '@/features/engine/openRequests'
 import { getNotificationPrefs, useNotificationPrefs } from '@/features/settings/notifications'
-import { createDeliveryState, decide, notificationFor, type NotificationIntent } from './policy'
+import {
+  BACKGROUND_SETTLE_MS,
+  backgroundChange,
+  createDeliveryState,
+  decide,
+  notificationFor,
+  settledIntent,
+  type NotificationIntent,
+} from './policy'
 
 const clip = (text: string, max: number): string => (text.length > max ? `${text.slice(0, max - 1)}…` : text)
 
@@ -42,9 +50,7 @@ export function NotificationDispatcher() {
     const bridge = window.pixelsky
     if (!bridge || bridge.demo) return
     const state = createDeliveryState()
-    const offEvents = bridge.engine.onEvent(event => {
-      const intent = notificationFor(event)
-      if (!intent) return
+    const deliver = (intent: NotificationIntent) => {
       const prefs = getNotificationPrefs()
       const decision = decide(
         intent,
@@ -61,6 +67,27 @@ export function NotificationDispatcher() {
           attention: intent.kind === 'waiting',
         })
         .catch(() => {})
+    }
+    // 后台子智能体跑完后引擎通常马上接着开一轮，那一轮结束时提醒；一直没接着干就补一条（docs/ui/notifications.md §7）
+    const settling = new Map<string, ReturnType<typeof setTimeout>>()
+    const summaryOf = (id: string) => getEngineState().sessions.find(s => s.record.id === id)
+    const offEvents = bridge.engine.onEvent(event => {
+      const bg = backgroundChange(event, id => summaryOf(id)?.state === 'idle')
+      if (bg) {
+        clearTimeout(settling.get(bg.sessionId))
+        settling.delete(bg.sessionId)
+        if (bg.change === 'settled')
+          settling.set(
+            bg.sessionId,
+            setTimeout(() => {
+              settling.delete(bg.sessionId)
+              const s = summaryOf(bg.sessionId)
+              if (s?.state === 'idle' && !s.background) deliver(settledIntent(bg.sessionId, Date.now()))
+            }, BACKGROUND_SETTLE_MS),
+          )
+      }
+      const intent = notificationFor(event)
+      if (intent) deliver(intent)
     })
     // 点击通知：主进程已经把窗口带到前台，这里打开对应会话（会自动切换机器、切回工作台）
     const offClicks = bridge.notifications.onClick(({ sessionId }) => {
@@ -69,6 +96,7 @@ export function NotificationDispatcher() {
     return () => {
       offEvents()
       offClicks()
+      for (const timer of settling.values()) clearTimeout(timer)
     }
   }, [])
   return null

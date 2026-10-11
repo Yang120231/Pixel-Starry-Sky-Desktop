@@ -95,7 +95,8 @@ export function notificationFor(event: HostEvent): NotificationIntent | null {
   if (event.kind !== 'session') return null
   const e = event.event
   if (e.type === 'turn_completed') {
-    if (e.outcome === 'completed')
+    // 说完了但派出去的后台子智能体还在跑：还没做完，等它们跑完、引擎接着的那一轮结束再提醒（§7）
+    if (e.outcome === 'completed' && !e.background)
       return {
         kind: 'completed',
         sessionId: event.sessionId,
@@ -123,6 +124,31 @@ export function notificationFor(event: HostEvent): NotificationIntent | null {
   }
   return null
 }
+
+/** 后台都跑完、会话空着，这么久引擎还没自己接着开一轮：补一条完成提醒（§7） */
+export const BACKGROUND_SETTLE_MS = 60_000
+
+/**
+ * 后台工作的变化：'settled' 后台刚跑完、会话空着，开始等引擎接着干；'busy' 引擎接着干了或又有后台在跑，不用补提醒
+ */
+export function backgroundChange(
+  event: HostEvent,
+  idle: (sessionId: string) => boolean,
+): { sessionId: string; change: 'settled' | 'busy' } | null {
+  if (event.kind !== 'session') return null
+  const e = event.event
+  if (e.type === 'turn_started') return { sessionId: event.sessionId, change: 'busy' }
+  if (e.type !== 'background') return null
+  return { sessionId: event.sessionId, change: e.count === 0 && idle(event.sessionId) ? 'settled' : 'busy' }
+}
+
+/** 补发的完成提醒 */
+export const settledIntent = (sessionId: string, now: number): NotificationIntent => ({
+  kind: 'completed',
+  sessionId,
+  dedupeKey: `b:${sessionId}:${now}`,
+  detail: null,
+})
 
 export interface DeliveryState {
   /** 已经提醒过的 dedupeKey */

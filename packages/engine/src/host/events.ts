@@ -26,6 +26,7 @@ export class HostEvents {
     }
     ctx.opts.emit({ kind: 'session', sessionId: id, seq: rt.seq, event })
     if (event.type === 'status' || event.type === 'record') this.broadcastSessions()
+    else if (event.type === 'background' && rt.snapshot.state === 'idle') this.broadcastSessions()
   }
 
   patchRecord(id: string, patch: Partial<SessionRecord>): SessionRecord {
@@ -111,6 +112,20 @@ export class HostEvents {
         if (rt.snapshot.queuePaused || rt.snapshot.queue.length === 0) this.armIdle(id)
         break
       }
+      case 'background':
+        // 后台子智能体还在跑时不关进程（关了它们就一起没了）；都结束了、会话也空着，再开始计时
+        if (event.count > 0) {
+          if (rt.idleTimer) {
+            clearTimeout(rt.idleTimer)
+            rt.idleTimer = null
+          }
+        } else if (
+          rt.snapshot.state === 'idle' &&
+          !rt.idleTimer &&
+          (rt.snapshot.queuePaused || rt.snapshot.queue.length === 0)
+        )
+          this.armIdle(id)
+        break
       case 'input_ack': {
         const input = rt.snapshot.queue.find(q => q.id === event.id && q.mode === 'guidance')
         if (input) {
@@ -142,11 +157,11 @@ export class HostEvents {
 
   armIdle(id: string): void {
     const rt = this.ctx.runtimes.get(id)
-    if (!rt) return
+    if (!rt || rt.snapshot.background) return
     if (rt.idleTimer) clearTimeout(rt.idleTimer)
     rt.idleTimer = setTimeout(() => {
       rt.idleTimer = null
-      if (rt.snapshot.state !== 'idle' || !rt.session) return
+      if (rt.snapshot.state !== 'idle' || rt.snapshot.background || !rt.session) return
       const s = rt.session
       rt.session = null
       void s.close()

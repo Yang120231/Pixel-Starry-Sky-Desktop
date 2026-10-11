@@ -6,6 +6,7 @@ import { Columns2, Ellipsis, FileText, Maximize2, Minimize2, MousePointerClick, 
 import { IconButton, Popover, PopoverItem, Spinner, cn } from '@/ui'
 import { SessionView } from '@/features/session/SessionView'
 import { isLive, useEngineState, useSessionTitle } from '@/features/engine'
+import { busy } from '@/features/engine/sidebarData'
 import { SPLIT_DOWN, SPLIT_RIGHT, ZOOM_PANE, withShortcut } from '@/features/layout/shortcuts'
 import { fadeIn, flipFrom } from './motion'
 import { notify, paneActions, usePaneState } from './store'
@@ -45,7 +46,7 @@ function useTabInfo(tab: string | null): TabInfo {
     ? 'idle'
     : pending > 0 || summary?.state === 'waiting'
       ? 'waiting'
-      : summary && summary.state !== 'idle'
+      : summary && busy(summary)
         ? 'running'
         : unread
           ? 'unread'

@@ -14,6 +14,8 @@ export interface RunStatus {
   newReplies: number
   items: RunStatusItem[]
 }
+/** 运行中，或这一轮说完了但后台子智能体还在跑（docs/ui/notifications.md §7） */
+export const busy = (s: SessionSummary): boolean => s.state !== 'idle' || !!s.background
 const runOrder = (a: RunStatusItem, b: RunStatusItem) =>
   (a.status === 'running' ? 0 : 1) - (b.status === 'running' ? 0 : 1)
 export function sidebarData(
@@ -22,8 +24,7 @@ export function sidebarData(
   unread: Record<string, boolean>,
   time: (stamp: number) => string,
 ): { projects: Project[]; recent: Array<RecentItem & { status: SessionStatus }>; runStatus: RunStatus | null } {
-  const status = (s: SessionSummary): SessionStatus =>
-    s.state !== 'idle' ? 'running' : unread[s.record.id] ? 'unread' : 'idle'
+  const status = (s: SessionSummary): SessionStatus => (busy(s) ? 'running' : unread[s.record.id] ? 'unread' : 'idle')
   const row = (s: SessionSummary) => ({
     id: s.record.id,
     title: s.record.title,
@@ -40,7 +41,7 @@ export function sidebarData(
       id: p.id,
       name: p.name,
       expanded: true,
-      running: list.some(s => !s.record.archivedAt && s.state !== 'idle'),
+      running: list.some(s => !s.record.archivedAt && busy(s)),
       sessions: list
         .filter(s => !s.record.archivedAt)
         .map(row)
@@ -60,7 +61,7 @@ export function sidebarData(
       time: time(s.record.updatedAt),
     }))
     .sort(bottomOrder)
-  const running = active.filter(s => s.state !== 'idle').length,
+  const running = active.filter(busy).length,
     newReplies = active.filter(s => unread[s.record.id]).length
   const items = active
     .map(s => ({ s, status: status(s) }))

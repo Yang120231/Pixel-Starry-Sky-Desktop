@@ -124,3 +124,19 @@ describe('最近任务只在跨项目时显示（docs/ui/conversation-ux-2.md §
     expect(recentSpansProjects([])).toBe(false)
   })
 })
+
+describe('后台子智能体还在跑', () => {
+  it('会话空着但后台还在跑：算运行中（不显示成有新回复），项目和运行条都算上', () => {
+    const projects: ProjectRecord[] = [{ id: 'p', name: '项目', path: 'test', addedAt: 1 }]
+    const sessions = [
+      { record: { id: 'a', projectId: 'p', title: 'A', updatedAt: 2 }, state: 'idle', background: 3 },
+      { record: { id: 'b', projectId: 'p', title: 'B', updatedAt: 1 }, state: 'idle' },
+    ] as SessionSummary[]
+    const data = sidebarData(projects, sessions, { a: true, b: true }, String)
+    expect(data.projects[0].running).toBe(true)
+    expect(data.projects[0].sessions.map(s => [s.id, s.status])).toEqual([
+      ['a', 'running'],
+      ['b', 'unread'],
+    ])
+  })
+})

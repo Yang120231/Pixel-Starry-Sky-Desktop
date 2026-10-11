@@ -90,6 +90,7 @@ export const sessionMessages = {
   'billing.invalidQuery': { zh: '无效的调用记录查询', en: 'Invalid account calls query' },
   'billing.invalidData': { zh: '平台费用数据不可用', en: 'Platform billing data is unavailable' },
   'session.progress.title': { zh: '进度', en: 'Progress' },
+  'session.progress.background': { zh: '后台还在运行', en: 'Still running in background' },
   'session.progress.steps': { zh: '{done}/{total} 步完成', en: '{done} of {total} steps done' },
   'session.progress.agentsRunning': { zh: '{n} 个子智能体运行中', en: 'Subagents running: {n}' },
   'session.progress.agents': { zh: '{n} 个子智能体', en: 'Subagents: {n}' },

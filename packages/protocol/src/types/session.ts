@@ -167,6 +167,8 @@ export type SessionState = 'idle' | 'starting' | 'running' | 'waiting'
 export interface SessionSummary {
   record: SessionRecord
   state: SessionState
+  /** 空闲但后台还有子智能体 / 编排在跑：有几个（docs/ui/notifications.md §7）；没有时省略 */
+  background?: number
   /** 消息队列概况：有排队消息时才有（任务 › 待处理用，docs/ui/tasks-inbox.md）。queued 不含失败项 */
   queue?: QueueSummary
 }
