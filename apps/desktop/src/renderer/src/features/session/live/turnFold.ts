@@ -22,50 +22,96 @@ function trailing(item: Item): boolean {
   return item.kind === 'assistant' && !item.text.trim()
 }
 
-/** 一轮里的条目 → 显示顺序：执行块放在第一条过程内容的位置，一直显示的按原来的先后排 */
-function foldTurn(turn: Item[], running: boolean): Entry[] {
-  // 最后的回复：最后一段有字的助手文字，后面只剩一直显示的内容、思考和信息提示（这些收进执行块）
-  let reply = -1
+/** 最后的回复在这一轮里的位置：最后一段有字的助手文字，后面只剩一直显示的内容、思考和信息提示；没有时 -1 */
+function replyIndex(turn: Item[]): number {
   for (let i = turn.length - 1; i >= 0; i--) {
     const item = turn[i]
-    if (item.kind === 'assistant' && item.text.trim()) {
-      reply = i
-      break
-    }
-    if (!trailing(item)) break
+    if (item.kind === 'assistant' && item.text.trim()) return i
+    if (!trailing(item)) return -1
+  }
+  return -1
+}
+
+/** 打断执行块的条目：引导、警告和错误、压缩。执行块在这里断开，看得出它们是在哪一步之后发生的 */
+const interrupts = (item: Item): boolean => alwaysVisible(item) && item.kind !== 'turn_stats' && !isTurnUser(item)
+const isTurnUser = (item: Item): boolean => item.kind === 'user' && item.mode !== 'guidance'
+
+/**
+ * 一轮里的条目 → 显示顺序：过程条目按先后收成执行块，被引导 / 警告 / 错误 / 压缩打断时分成几段；
+ * 最后的回复、统计行一直显示。运行中正在输出、前面已经有过程的文字先留在执行块里（不然一调工具它就从外面跳进去），
+ * 这一轮结束后才作为最后的回复显示在外面
+ */
+function foldTurn(turn: Item[], running: boolean): Entry[] {
+  let reply = replyIndex(turn)
+  const candidate = turn[reply]
+  if (running && candidate?.kind === 'assistant' && candidate.status === 'running') {
+    const before = turn.slice(0, reply).some(item => !alwaysVisible(item))
+    if (before) reply = -1
   }
   const process = turn.filter((item, i) => i !== reply && !alwaysVisible(item))
   // 没有工具调用、只有一条（只有一段思考、一条信息提示）：照原样显示
   if (process.length === 0 || (process.length === 1 && !isTool(process[0])))
     return turn.map(item => ({ type: 'item', item }))
-  const stats = turn.find(item => item.kind === 'turn_stats')
-  const block: Entry = {
-    type: 'process',
-    key: `process-${process[0].id}`,
-    items: process,
-    running,
-    durationMs: stats?.kind === 'turn_stats' ? stats.usage.durationMs : null,
-  }
-  const out: Entry[] = []
-  let placed = false
+  const out: (Entry | { type: 'segment'; items: Item[] })[] = []
+  let segment: { type: 'segment'; items: Item[] } | null = null
   turn.forEach((item, i) => {
-    if (i === reply || alwaysVisible(item)) out.push({ type: 'item', item })
-    else if (!placed) {
-      out.push(block)
-      placed = true
+    if (i === reply || alwaysVisible(item)) {
+      if (interrupts(item)) segment = null
+      out.push({ type: 'item', item })
+    } else if (segment) segment.items.push(item)
+    else {
+      segment = { type: 'segment', items: [item] }
+      out.push(segment)
     }
   })
-  return out
+  const stats = turn.find(item => item.kind === 'turn_stats')
+  const segments = out.filter(e => e.type === 'segment')
+  const last = segments[segments.length - 1]
+  return out.map((e): Entry => {
+    if (e.type !== 'segment') return e
+    // 被打断后只剩一条、又不是工具调用的一段：照原样显示
+    if (e.items.length === 1 && !isTool(e.items[0])) return { type: 'item', item: e.items[0] }
+    return {
+      type: 'process',
+      key: `process-${e.items[0].id}`,
+      items: e.items,
+      running: running && e === last,
+      // 用时是整轮的：放在最后一段上
+      durationMs: e === last && stats?.kind === 'turn_stats' ? stats.usage.durationMs : null,
+    }
+  })
 }
 
-/** running：会话还在进行，最后一轮没结束 */
+/**
+ * running：会话还在进行，最后一轮没结束。
+ * 按用户消息分轮；一轮的统计行之后、没等用户发消息引擎就接着干的活（后台任务完成的通知等）另算一段，
+ * 不然前一轮的回答后面跟了工具调用，会被当成过渡话收进执行块。
+ */
 export function foldTurns(items: readonly Item[], running: boolean): Entry[] {
+  const turns = splitTurns(items)
+  return turns.flatMap((turn, i) => foldTurn(turn, running && i === turns.length - 1))
+}
+
+function splitTurns(items: readonly Item[]): Item[][] {
   const turns: Item[][] = [[]]
   for (const item of items) {
-    if (item.kind === 'user' && item.mode !== 'guidance' && turns[turns.length - 1].length > 0) turns.push([])
+    const current = turns[turns.length - 1]
+    const newTurn = item.kind === 'user' && item.mode !== 'guidance'
+    if (current.length > 0 && (newTurn || current[current.length - 1].kind === 'turn_stats')) turns.push([])
     turns[turns.length - 1].push(item)
   }
-  return turns.flatMap((turn, i) => foldTurn(turn, running && i === turns.length - 1))
+  return turns
+}
+
+/** 每一轮统计行 id → 这一轮显示在外面的最后回复（「复制」用它；这一轮以工具调用结尾时没有，不拿过渡话充数） */
+export function turnReplies(items: readonly Item[]): Map<string, string> {
+  const map = new Map<string, string>()
+  for (const turn of splitTurns(items)) {
+    const stats = turn.find(item => item.kind === 'turn_stats')
+    const reply = turn[replyIndex(turn)]
+    if (stats && reply?.kind === 'assistant') map.set(stats.id, reply.text)
+  }
+  return map
 }
 
 export interface ProcessSummary {

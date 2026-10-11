@@ -28,8 +28,8 @@ const start = (id: string, data: unknown, parent: string | null = null) => ({
 afterEach(() => vi.restoreAllMocks())
 
 describe('单次请求缓存事件', () => {
-  it('流式及完整消息去重，子智能体、回放和累计结果不当成新请求', () => {
-    const { translator: t, requests } = make()
+  it('流式及完整消息去重，子智能体、回放和累计结果不当成新请求；这一轮结束后的新请求算引擎自己开的一轮', () => {
+    const { translator: t, requests, events } = make()
     t.handle(start('one', usage()))
     t.handle({ type: 'assistant', message: { id: 'one', model: 'opus', usage: usage(), content: [] } })
     t.handle(start('sub', usage(), 'tool-agent'))
@@ -39,9 +39,14 @@ describe('单次请求缓存事件', () => {
       subtype: 'success',
       modelUsage: { opus: { inputTokens: 40000, cacheReadInputTokens: 0 } },
     })
-    t.handle(start('late', usage()))
     expect(requests()).toHaveLength(1)
     expect(requests()[0]).toMatchObject({ request: { messageId: 'one', input: 10000, cacheRead: 0, turnId: 'turn' } })
+    t.handle(start('late', usage()))
+    const auto = events.find(e => e.type === 'turn_started')
+    expect(auto).toBeDefined()
+    expect(requests()[1]).toMatchObject({
+      request: { messageId: 'late', turnId: auto?.type === 'turn_started' ? auto.turnId : '' },
+    })
   })
   it('缺失、null、无效数据明确重置，不用零兜底', () => {
     const { translator: t, requests, events } = make()

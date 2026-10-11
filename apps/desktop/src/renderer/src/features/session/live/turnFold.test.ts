@@ -1,7 +1,7 @@
 // 每轮的过程收成「执行」一行（docs/ui/conversation-concise.md §3）
 import { describe, expect, it } from 'vitest'
 import type { Item } from '@pixelsky/protocol'
-import { foldTurns, summarize, type Entry } from './turnFold'
+import { foldTurns, summarize, turnReplies, type Entry } from './turnFold'
 
 const user = (id: string, mode?: 'guidance'): Item => ({ kind: 'user', id, text: id, createdAt: 0, mode })
 const say = (id: string, status: 'completed' | 'running' | 'interrupted' = 'completed'): Item => ({
@@ -55,19 +55,42 @@ describe('每轮的过程收成执行块', () => {
     expect(entries[1]).toMatchObject({ running: false, durationMs: 1234 })
   })
 
-  it('引导、警告和错误一直显示，排在执行块后面；信息提示收进去', () => {
+  it('引导、警告和错误按发生的先后显示，执行块在那里断开；信息提示收进去；用时放在最后一段', () => {
     const entries = foldTurns(
-      [user('u1'), run('c1'), user('g', 'guidance'), notice('i', 'info'), run('c2'), notice('e', 'error'), say('a')],
+      [
+        user('u1'),
+        run('c1'),
+        user('g', 'guidance'),
+        notice('i', 'info'),
+        run('c2'),
+        notice('e', 'error'),
+        say('a'),
+        stats('s'),
+      ],
       false,
     )
-    expect(shape(entries)).toEqual(['u1', ['c1', 'i', 'c2'], 'g', 'e', 'a'])
+    expect(shape(entries)).toEqual(['u1', ['c1'], 'g', ['i', 'c2'], 'e', 'a', 's'])
+    expect(entries.filter(e => e.type === 'process').map(e => e.type === 'process' && e.durationMs)).toEqual([
+      null,
+      1234,
+    ])
+    // 被打断后只剩一条思考：照原样显示
+    expect(shape(foldTurns([user('u1'), think('r'), user('g', 'guidance'), run('c1'), say('a')], false))).toEqual([
+      'u1',
+      'r',
+      'g',
+      ['c1'],
+      'a',
+    ])
   })
 
-  it('运行中：最后是工具调用时没有最后的回复，正在输出的文字留在外面', () => {
+  it('运行中：正在输出、前面已有过程的文字留在执行块里，结束后才出来；没有过程的照常在外面', () => {
     expect(shape(foldTurns([user('u1'), say('a1'), run('c1', 'running')], true))).toEqual(['u1', ['a1', 'c1']])
     const streaming = foldTurns([user('u1'), run('c1'), say('a2', 'running')], true)
-    expect(shape(streaming)).toEqual(['u1', ['c1'], 'a2'])
+    expect(shape(streaming)).toEqual(['u1', ['c1', 'a2']])
     expect(streaming[1]).toMatchObject({ running: true })
+    expect(shape(foldTurns([user('u1'), run('c1'), say('a2')], false))).toEqual(['u1', ['c1'], 'a2'])
+    expect(shape(foldTurns([user('u1'), say('a', 'running')], true))).toEqual(['u1', 'a'])
     // 只有最后一轮算运行中
     const two = foldTurns([user('u1'), run('c1'), say('a'), user('u2'), run('c2', 'running')], true)
     expect(two.filter(e => e.type === 'process').map(e => e.type === 'process' && e.running)).toEqual([false, true])
@@ -87,10 +110,64 @@ describe('每轮的过程收成执行块', () => {
     ])
   })
 
+  it('统计行之后引擎自己接着干的活（后台任务通知）另算一段，前一轮的回答留在外面', () => {
+    const entries = foldTurns(
+      [
+        user('u1'),
+        run('c1'),
+        say('answer'),
+        stats('s'),
+        notice('bg', 'info'),
+        think('r'),
+        say('cleaning'),
+        run('c2'),
+        run('c3'),
+        say('done'),
+        user('u2'),
+      ],
+      false,
+    )
+    expect(shape(entries)).toEqual(['u1', ['c1'], 'answer', 's', ['bg', 'r', 'cleaning', 'c2', 'c3'], 'done', 'u2'])
+    // 后续那段没有自己的统计行：执行块不带用时；会话还在跑时它算运行中
+    expect(entries[4]).toMatchObject({ durationMs: null })
+    const live = foldTurns([user('u1'), run('c1'), say('answer'), stats('s'), run('c2', 'running')], true)
+    expect(shape(live)).toEqual(['u1', ['c1'], 'answer', 's', ['c2']])
+    expect(live.filter(e => e.type === 'process').map(e => e.type === 'process' && e.running)).toEqual([false, true])
+    // 统计行后面只有一条提示：照原样显示
+    expect(shape(foldTurns([user('u1'), run('c1'), say('a'), stats('s'), notice('w', 'warn')], false))).toEqual([
+      'u1',
+      ['c1'],
+      'a',
+      's',
+      'w',
+    ])
+  })
+
   it('只有一段思考或一条提示、没有工具调用时照原样显示；中断的回复算最后的回复', () => {
     expect(shape(foldTurns([user('u1'), think('r'), say('a')], false))).toEqual(['u1', 'r', 'a'])
     expect(shape(foldTurns([user('u1'), run('c1'), say('a', 'interrupted')], false))).toEqual(['u1', ['c1'], 'a'])
     expect(shape(foldTurns([user('u1'), notice('e', 'error'), stats('s')], false))).toEqual(['u1', 'e', 's'])
+  })
+})
+
+describe('每轮「复制」的回复', () => {
+  it('取显示在外面的最后回复；以工具调用结尾的一轮没有回复，不拿过渡话；后续那段有自己的', () => {
+    const map = turnReplies([
+      user('u1'),
+      say('过渡'),
+      run('c1'),
+      say('答案'),
+      stats('s1'),
+      user('u2'),
+      say('先看看'),
+      run('c2'),
+      stats('s2'),
+      notice('bg', 'info'),
+      run('c3'),
+      say('清理完了'),
+      stats('s3'),
+    ])
+    expect(Object.fromEntries(map)).toEqual({ s1: '答案', s3: '清理完了' })
   })
 })
 

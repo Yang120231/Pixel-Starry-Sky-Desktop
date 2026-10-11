@@ -1,5 +1,15 @@
 import { useI18n } from '@/i18n/I18nProvider'
-import { displayLabel, isRecommended, recommendedAnswers } from './questionModel'
+import {
+  EMPTY_DRAFT,
+  canWriteIn,
+  collectAnswers,
+  displayLabel,
+  isRecommended,
+  pickOption,
+  recommendedAnswers,
+  toggleOther,
+  type QuestionDraft,
+} from './questionModel'
 import { tr, translateMessage } from '../../../i18n/core'
 // 审批卡片：引擎等你决定时固定显示在输入框上方（docs/engines.md §5.5）
 import { useState } from 'react'
@@ -12,7 +22,7 @@ import {
   Wrench,
   type LucideIcon,
 } from 'lucide-react'
-import type { AlwaysScope, ApprovalDecision, ApprovalRequest } from '@pixelsky/protocol'
+import type { AlwaysScope, ApprovalDecision, ApprovalRequest, Question } from '@pixelsky/protocol'
 import { Button, DiffStat, Popover, cn } from '@/ui'
 import { DiffView } from '@/ui/code/DiffView'
 import { CommandText } from '@/ui/code/CommandText'
@@ -116,12 +126,14 @@ export function ApprovalCard({
   onAnswer,
 }: {
   request: ApprovalRequest
-  onAnswer: (d: ApprovalDecision) => void
+  /** 返回 Promise 时等它结果：失败了卡片恢复可点并显示原因，不会卡住 */
+  onAnswer: (d: ApprovalDecision) => void | Promise<unknown>
 }) {
   useI18n()
   const Icon = ICON[request.kind]
-  const [answers, setAnswers] = useState<Record<string, string[]>>({})
+  const [drafts, setDrafts] = useState<Record<string, QuestionDraft>>({})
   const [sent, setSent] = useState(false)
+  const [failure, setFailure] = useState<string | null>(null)
   const [formText, setFormText] = useState('{}')
   let formContent: Record<string, unknown> | null = null
   try {
@@ -134,19 +146,20 @@ export function ApprovalCard({
   const answer = (d: ApprovalDecision): void => {
     if (sent) return
     setSent(true)
-    onAnswer(d)
-  }
-
-  const toggle = (question: string, label: string, multi: boolean): void => {
-    setAnswers(prev => {
-      const cur = prev[question] ?? []
-      const next = multi ? (cur.includes(label) ? cur.filter(x => x !== label) : [...cur, label]) : [label]
-      return { ...prev, [question]: next }
-    })
+    setFailure(null)
+    void Promise.resolve()
+      .then(() => onAnswer(d))
+      .catch((e: unknown) => {
+        setSent(false)
+        setFailure(e instanceof Error ? e.message : String(e))
+      })
   }
 
   const questions = request.questions ?? []
-  const allAnswered = questions.every(q => (answers[q.question]?.length ?? 0) > 0)
+  const draft = (q: Question): QuestionDraft => drafts[q.question] ?? EMPTY_DRAFT
+  const update = (q: Question, next: (d: QuestionDraft) => QuestionDraft): void =>
+    setDrafts(prev => ({ ...prev, [q.question]: next(prev[q.question] ?? EMPTY_DRAFT) }))
+  const answers = collectAnswers(questions, drafts)
   const recommended = request.kind === 'question' ? recommendedAnswers(questions) : null
 
   return (
@@ -238,27 +251,14 @@ export function ApprovalCard({
                   )}
                 </div>
                 <div className="flex flex-col gap-1">
-                  {(q.options.length === 0 || q.allowOther) && (
-                    <input
-                      type={q.secret ? 'password' : 'text'}
-                      aria-label={q.question}
-                      className="rounded-md border border-line bg-subtle px-3 py-2 text-list text-fg"
-                      value={answers[q.question]?.[0] ?? ''}
-                      onChange={event =>
-                        setAnswers(current => ({
-                          ...current,
-                          [q.question]: event.target.value ? [event.target.value] : [],
-                        }))
-                      }
-                    />
-                  )}
                   {q.options.map(o => {
-                    const on = answers[q.question]?.includes(o.label) ?? false
+                    const on = draft(q).picks.includes(o.label)
                     return (
                       <button
                         key={o.label}
                         type="button"
-                        onClick={() => toggle(q.question, o.label, q.multiSelect)}
+                        aria-pressed={on}
+                        onClick={() => update(q, d => pickOption(q, d, o.label))}
                         className={cn(
                           'rounded-lg border px-3 py-2 text-left hover:bg-hover',
                           on ? 'border-accent bg-accent-soft hover:bg-accent-soft' : 'border-line',
@@ -279,6 +279,42 @@ export function ApprovalCard({
                       </button>
                     )
                   })}
+                  {canWriteIn(q) && q.options.length > 0 && (
+                    <button
+                      type="button"
+                      aria-pressed={draft(q).other}
+                      data-question-other
+                      onClick={() => update(q, d => toggleOther(q, d))}
+                      className={cn(
+                        'rounded-lg border px-3 py-2 text-left text-list hover:bg-hover',
+                        draft(q).other
+                          ? 'border-accent bg-accent-soft text-accent-fg hover:bg-accent-soft'
+                          : 'border-line text-fg',
+                      )}
+                    >
+                      {tr('question.other')}
+                    </button>
+                  )}
+                  {canWriteIn(q) && (q.options.length === 0 || draft(q).other) && (
+                    <input
+                      type={q.secret ? 'password' : 'text'}
+                      aria-label={q.question}
+                      placeholder={tr('question.otherPlaceholder')}
+                      autoFocus={q.options.length > 0}
+                      className="rounded-md border border-line bg-subtle px-3 py-2 text-list text-fg placeholder:text-fg-faint"
+                      value={draft(q).text}
+                      onChange={event => {
+                        const text = event.target.value
+                        update(q, d => ({ ...d, text }))
+                      }}
+                      onKeyDown={event => {
+                        if (event.key === 'Enter' && !event.nativeEvent.isComposing && answers && !sent) {
+                          event.preventDefault()
+                          answer({ type: 'answer', answers })
+                        }
+                      }}
+                    />
+                  )}
                 </div>
               </div>
             ))}
@@ -286,19 +322,19 @@ export function ApprovalCard({
         )}
       </div>
 
+      {failure && (
+        <p role="alert" className="px-4 pb-2 text-meta text-danger">
+          {tr('session.live.ApprovalCard.sendFailed', { p0: translateMessage(failure) })}
+        </p>
+      )}
       <footer className="flex flex-wrap items-center gap-2 rounded-b-xl border-t border-line-subtle bg-wall-tint px-4 py-2.5">
         {request.kind === 'question' ? (
           <>
             <Button
               variant="primary"
-              disabled={!allAnswered || sent}
+              disabled={!answers || sent}
               className="disabled:opacity-50"
-              onClick={() =>
-                answer({
-                  type: 'answer',
-                  answers: Object.fromEntries(Object.entries(answers).map(([k, v]) => [k, v.join(', ')])),
-                })
-              }
+              onClick={() => answers && answer({ type: 'answer', answers })}
             >
               {tr('session.live.ApprovalCard.submitAnswers')}{' '}
             </Button>

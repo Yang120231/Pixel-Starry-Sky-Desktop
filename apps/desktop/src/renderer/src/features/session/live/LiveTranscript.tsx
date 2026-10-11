@@ -36,7 +36,7 @@ import { JumpToLatest } from './JumpToLatest'
 import { afterResize, contentMark, nearBottom } from './scrollFollow'
 import { changesHeight, itemHeight, toolsHeight } from './blockHeight'
 import { reviewTurn } from '@/features/panel/artifacts/focus'
-import { foldTurns } from './turnFold'
+import { foldTurns, turnReplies } from './turnFold'
 import { TurnProcess } from './TurnProcess'
 
 type ToolItem = Extract<Item, { kind: 'command' | 'file_change' | 'tool' }>
@@ -193,6 +193,36 @@ const TurnChanges = memo(function TurnChanges({
   )
 })
 
+/**
+ * 执行块：里面的条目对象都没变（流式输出时只有最后一轮在变）就不重新渲染。
+ * render 每次都是新函数，不比较；里面的显示只依赖条目和搜索高亮
+ */
+const ProcessBlock = memo(
+  function ProcessBlock({
+    items,
+    running,
+    durationMs,
+    render,
+  }: {
+    items: Item[]
+    running: boolean
+    durationMs: number | null
+    highlight: string | null
+    render: (items: Item[]) => ReactNode
+  }) {
+    return (
+      <div className="conversation-message" style={placeholder(34)}>
+        <TurnProcess items={items} running={running} durationMs={durationMs} render={render} />
+      </div>
+    )
+  },
+  (a, b) =>
+    a.running === b.running &&
+    a.durationMs === b.durationMs &&
+    a.highlight === b.highlight &&
+    sameItems(a.items, b.items),
+)
+
 export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot | null; header?: ReactNode }) {
   useI18n()
   const scroller = useRef<HTMLDivElement>(null)
@@ -223,22 +253,15 @@ export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot
     if (changesCache.current.sessionId !== sessionId) changesCache.current = { sessionId, map: new Map() }
     return toBlocks(items, running, changesCache.current.map)
   }, [items, running, sessionId])
-  // 每轮统计行对应的回复：这一轮最后一段助手文字（中间穿插工具调用的文字段不算）
-  const replies = useMemo(() => {
-    const map = new Map<string, string>()
-    let last: string | null = null
-    for (const item of items) {
-      if (item.kind === 'user' && item.mode !== 'guidance') last = null
-      else if (item.kind === 'assistant' && item.text) last = item.text
-      else if (item.kind === 'turn_stats' && last) map.set(item.id, last)
-    }
-    return map
-  }, [items])
+  // 每轮统计行对应的回复：和显示在外面的「最后的回复」是同一段（中间穿插工具调用的过渡话不算）
+  const replies = useMemo(() => turnReplies(items), [items])
 
-  // 最后一块不是正在流式输出的文字时，显示「思考中」
+  // 最后一块不是正在流式输出的文字、也不是转着圈的执行块时，显示「处理中」（不然几个转圈同时出现）
   const last = items[items.length - 1]
   const streaming = last && (last.kind === 'assistant' || last.kind === 'reasoning') && last.status === 'running'
-  const showThinking = snapshot?.state === 'running' && !streaming
+  const lastBlock = blocks[blocks.length - 1]
+  const busyBlock = lastBlock?.type === 'process' && lastBlock.running
+  const showThinking = snapshot?.state === 'running' && !streaming && !busyBlock
   // 空闲时直接发送的消息在引擎启动期间先显示在对话里（不是排队），开始执行后由正式的用户消息替换
   const starting = snapshot ? snapshot.queue.filter(q => isStarting(q, snapshot.queuePaused)) : []
 
@@ -343,14 +366,14 @@ export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot
   const renderBlock = (b: Block, i: number, nested = false): ReactNode => {
     if (b.type === 'process')
       return (
-        <div key={b.key} className="conversation-message" style={placeholder(34)}>
-          <TurnProcess
-            items={b.items}
-            running={b.running}
-            durationMs={b.durationMs}
-            render={list => innerBlocks(list).map((inner, j) => renderBlock(inner, j, true))}
-          />
-        </div>
+        <ProcessBlock
+          key={b.key}
+          items={b.items}
+          running={b.running}
+          durationMs={b.durationMs}
+          highlight={highlight}
+          render={list => innerBlocks(list).map((inner, j) => renderBlock(inner, j, true))}
+        />
       )
 
     if (b.type === 'tools') {

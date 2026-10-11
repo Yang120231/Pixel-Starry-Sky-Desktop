@@ -10,9 +10,16 @@ export class HostEvents {
     const { ctx } = this
     const rt = ctx.runtimes.get(id)
     if (!rt) return
+    const before = rt.snapshot.items
     rt.snapshot = reduce(rt.snapshot, event)
     rt.seq++
-    if (event.type === 'item_completed') ctx.store.appendItem(id, event.item)
+    // 开始时也写一次：重开会话时条目按开始的先后排（和实时一致），没等到完成的也不会丢（读出时标成已中断）
+    if (event.type === 'item_completed' || event.type === 'item_started') ctx.store.appendItem(id, event.item)
+    // 一轮结束时收尾的条目（还在跑的标成完成 / 中断 / 失败）也要落盘，不然重开后状态不一致
+    if (event.type === 'turn_completed' && rt.snapshot.items !== before) {
+      const old = new Map(before.map(item => [item.id, item]))
+      for (const item of rt.snapshot.items) if (old.get(item.id) !== item) ctx.store.appendItem(id, item)
+    }
     if (event.type === 'record') {
       ctx.records.set(id, event.record)
       ctx.store.saveRecord(event.record)
@@ -63,6 +70,12 @@ export class HostEvents {
     this.apply(id, event)
     switch (event.type) {
       case 'turn_started':
+        // 适配器自己开的一轮（后台任务通知后引擎接着干活，没有用户消息）：和普通的一轮一样算运行中，
+        // 空闲定时器不能在这时关掉进程
+        if (rt.idleTimer) {
+          clearTimeout(rt.idleTimer)
+          rt.idleTimer = null
+        }
         this.apply(id, { type: 'status', state: 'running' })
         break
       case 'approval_request':

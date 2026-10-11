@@ -107,4 +107,23 @@ export const sessionMessages = {
   'session.compaction.took': { zh: '用时 {time}', en: '{time}' },
   'session.compaction.before': { zh: '压缩前 {n} tokens', en: 'Before: {n} tokens' },
   'session.compaction.after': { zh: '压缩后 {n} tokens', en: 'After: {n} tokens' },
+  // 对话里的工具行和思考（docs/ui/conversation-review-2026-10-11.md B7–B13）
+  'session.live.exitCode': { zh: '退出码 {n}', en: 'exit {n}' },
+  'session.live.outputShowAll': {
+    zh: '显示全部 {n} 行（中间省略了 {m} 行）',
+    en: 'Show all {n} lines ({m} hidden)',
+  },
+  'session.live.outputCollapse': { zh: '收起中间部分', en: 'Collapse the middle' },
+  'session.live.thoughtFor': { zh: '思考了 {time}', en: 'Thought for {time}' },
+  'session.live.thinkingFor': { zh: '思考中 · {time}', en: 'Thinking · {time}' },
+  'session.live.tool.AskUserQuestion': { zh: '提问', en: 'Asked' },
+  'session.live.tool.ExitPlanMode': { zh: '提交计划', en: 'Proposed a plan' },
+  'session.live.tool.EnterPlanMode': { zh: '进入计划模式', en: 'Entered plan mode' },
+  'session.live.tool.Skill': { zh: '使用技能', en: 'Used skill' },
+  'session.live.tool.BashOutput': { zh: '查看后台输出', en: 'Checked background output' },
+  'session.live.tool.KillShell': { zh: '停止后台命令', en: 'Stopped background command' },
+  'session.live.tool.ToolSearch': { zh: '查找工具', en: 'Searched tools' },
+  'session.live.tool.ListMcpResourcesTool': { zh: '列出 MCP 资源', en: 'Listed MCP resources' },
+  'session.live.tool.ReadMcpResourceTool': { zh: '读取 MCP 资源', en: 'Read MCP resource' },
+  'session.live.viewedImages': { zh: '{n} 张图片', en: '{n} images' },
 } as const

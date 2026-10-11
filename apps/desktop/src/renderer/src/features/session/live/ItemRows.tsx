@@ -1,5 +1,5 @@
 import { useI18n } from '@/i18n/I18nProvider'
-import { tr, translateMessage } from '../../../i18n/core'
+import { tr, translateMessage, type TranslationKey } from '../../../i18n/core'
 // 对话流里各种条目的显示（docs/engines.md §5.3、§11）
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
@@ -40,6 +40,8 @@ import { freshRequest, useExpandRequest } from '@/features/search/expand'
 import { openFile } from '@/features/files/store'
 import { getActiveWorkspace } from '@/features/editor/target'
 import { ImageAttachments } from '@/features/session/attachments/ImageAttachments'
+import { Markdown } from '@/ui/markdown/Markdown'
+import { formatDuration } from './agentTrace'
 
 type ItemOf<K extends Item['kind']> = Extract<Item, { kind: K }>
 
@@ -51,6 +53,11 @@ export function UserBubble({ item, actions }: { item: ItemOf<'user'>; actions?: 
       <div className="border-l border-accent-line pl-3 text-list whitespace-pre-wrap text-fg-muted">
         <span className="mr-2 text-accent-fg">{tr('session.live.ItemRows.steered')}</span>
         <UserText text={item.text} />
+        {!!item.attachments?.length && (
+          <div className="mt-2">
+            <ImageAttachments images={item.attachments} />
+          </div>
+        )}
       </div>
     )
   return (
@@ -136,12 +143,45 @@ function Chevron({ open }: { open: boolean }) {
   )
 }
 
-/** 思考过程：默认折叠，进行中显示「思考中」 */
+/** 这次打开应用里看到的思考：开始时间、用时（只在内存里，重开会话后没有用时就显示「思考过程」） */
+const thinkingStart = new Map<string, number>()
+const thinkingTook = new Map<string, number>()
+
+/**
+ * 思考过程：默认折叠；进行中显示「思考中 · 用时」，结束后「思考了 N 秒」（参照 Claude 桌面版）。
+ * 思考内容被隐藏（显示思考摘要关着）时结束后仍留一行「思考了 N 秒」，不会出现又消失
+ */
 export function ReasoningBlock({ item }: { item: ItemOf<'reasoning'> }) {
   useI18n()
   const running = item.status === 'running'
-  const { open, toggle, fold } = useFold(item.id, !!item.text.trim())
-  if (!running && !item.text.trim()) return null
+  const hasText = !!item.text.trim()
+  const { open, toggle, fold } = useFold(item.id, hasText)
+  const [, tick] = useState(0)
+  useEffect(() => {
+    if (!running) return
+    const timer = setInterval(() => tick(n => n + 1), 1000)
+    return () => clearInterval(timer)
+  }, [running])
+  if (running && !thinkingStart.has(item.id)) thinkingStart.set(item.id, Date.now())
+  const started = thinkingStart.get(item.id)
+  if (!running && started !== undefined && !thinkingTook.has(item.id)) thinkingTook.set(item.id, Date.now() - started)
+  const took = thinkingTook.get(item.id) ?? null
+  if (!running && !hasText && took === null) return null
+  const elapsed = running && started !== undefined ? Date.now() - started : 0
+  const label = running
+    ? elapsed >= 1000
+      ? tr('session.live.thinkingFor', { time: formatDuration(elapsed) })
+      : tr('session.live.ItemRows.thinking')
+    : took !== null
+      ? tr('session.live.thoughtFor', { time: formatDuration(took) })
+      : tr('session.live.ItemRows.thinking2')
+  if (!running && !hasText)
+    return (
+      <div className="flex h-[30px] items-center gap-2 px-2 text-list text-fg-muted">
+        <Brain size={15} strokeWidth={1.5} className="shrink-0" />
+        <span>{label}</span>
+      </div>
+    )
   return (
     <div data-fold={fold}>
       <button
@@ -151,7 +191,7 @@ export function ReasoningBlock({ item }: { item: ItemOf<'reasoning'> }) {
         className="flex h-[30px] items-center gap-2 rounded-md px-2 text-list text-fg-muted hover:bg-hover hover:text-fg-secondary"
       >
         <Brain size={15} strokeWidth={1.5} className="shrink-0" />
-        <span>{running ? tr('session.live.ItemRows.thinking') : tr('session.live.ItemRows.thinking2')}</span>
+        <span className="tabular-nums">{label}</span>
         {running ? <Spinner size={13} /> : <Chevron open={open} />}
       </button>
       {open && item.text && (
@@ -278,6 +318,56 @@ function SubagentTag({ name }: { name?: string }) {
 
 const OUTPUT_BOX = 'mt-1 mb-1.5 ml-[23px] max-h-72 overflow-auto rounded-lg border border-line-card bg-subtle'
 
+/** 长输出默认只显示头尾这么多行（参照 Codex / Claude Code 的「… +N 行」） */
+const OUTPUT_HEAD = 120
+const OUTPUT_TAIL = 120
+
+/** 工具输出：太长时中间折起来，点一下看全部 */
+function LongOutput({ text }: { text: string }) {
+  useI18n()
+  const [all, setAll] = useState(false)
+  const lines = useMemo(() => text.split('\n'), [text])
+  const hidden = lines.length - OUTPUT_HEAD - OUTPUT_TAIL
+  const button = (label: string, onClick: () => void): ReactNode => (
+    <button
+      type="button"
+      onClick={onClick}
+      className="my-1 block w-full rounded-md py-1 text-center font-sans text-meta text-accent-fg hover:bg-hover"
+    >
+      {label}
+    </button>
+  )
+  if (hidden <= 20) return <AnsiText text={text} />
+  if (all)
+    return (
+      <>
+        <AnsiText text={text} />
+        {button(tr('session.live.outputCollapse'), () => setAll(false))}
+      </>
+    )
+  return (
+    <>
+      <AnsiText text={lines.slice(0, OUTPUT_HEAD).join('\n')} />
+      {button(tr('session.live.outputShowAll', { n: lines.length, m: hidden }), () => setAll(true))}
+      <AnsiText text={lines.slice(-OUTPUT_TAIL).join('\n')} />
+    </>
+  )
+}
+
+/** 没有分类图标的工具：按工具名给本地化的动作（标题放内容），认不出的才显示原始工具名 */
+const NAMED_VERBS: Record<string, TranslationKey> = {
+  AskUserQuestion: 'session.live.tool.AskUserQuestion',
+  ExitPlanMode: 'session.live.tool.ExitPlanMode',
+  EnterPlanMode: 'session.live.tool.EnterPlanMode',
+  Skill: 'session.live.tool.Skill',
+  BashOutput: 'session.live.tool.BashOutput',
+  KillShell: 'session.live.tool.KillShell',
+  KillBash: 'session.live.tool.KillShell',
+  ToolSearch: 'session.live.tool.ToolSearch',
+  ListMcpResourcesTool: 'session.live.tool.ListMcpResourcesTool',
+  ReadMcpResourceTool: 'session.live.tool.ReadMcpResourceTool',
+}
+
 function fileVerb(changes: FileChange[]): string {
   return changes.length === 1 && changes[0].kind === 'add'
     ? tr('session.live.ItemRows.create')
@@ -287,7 +377,8 @@ function fileVerb(changes: FileChange[]): string {
 /** 工具调用的一行：运行命令 / 编辑文件 / 读取 / 搜索 / 网页 / MCP / 子任务；点开看输出或 diff。条目没变就不重新渲染 */
 export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'command' | 'file_change' | 'tool'> }) {
   useI18n()
-  const foldable = item.kind === 'file_change' ? item.changes.some(c => c.diff) : !!item.output
+  const images = item.kind === 'tool' ? (item.images ?? []) : []
+  const foldable = item.kind === 'file_change' ? item.changes.some(c => c.diff) : !!item.output || images.length > 0
   const { open, toggle, fold } = useFold(item.id, foldable)
   const row = useRef<HTMLDivElement>(null)
   const [fileError, setFileError] = useState('')
@@ -317,6 +408,11 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
           trailing={
             <>
               <StatusMark status={item.status} />
+              {item.status !== 'running' && item.exitCode !== null && item.exitCode !== 0 && (
+                <span className="shrink-0 text-meta text-danger tabular-nums">
+                  {tr('session.live.exitCode', { n: item.exitCode })}
+                </span>
+              )}
               <SubagentTag name={item.subagent} />
             </>
           }
@@ -332,7 +428,7 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
           <pre
             className={cn(OUTPUT_BOX, 'p-3 font-mono text-meta leading-[1.6] whitespace-pre-wrap text-fg-secondary')}
           >
-            <AnsiText text={item.output} />
+            <LongOutput text={item.output} />
           </pre>
         )}
       </div>
@@ -442,17 +538,27 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
   const meta = TOOL_META[item.tool]
   // 子任务（Agent 工具）和多智能体编排（Workflow 工具）可以打开智能体追踪
   const traceable = !!openTrace && item.tool === 'task' && !item.subagent
+  const named = NAMED_VERBS[item.name]
+  const verb =
+    item.name === 'Workflow' ? tr('session.live.ItemRows.orchestration') : named ? tr(named) : meta.verb || item.name
+  // 提交计划：展开看的是计划正文（Markdown），批准之后对话里还在
+  const plan = item.name === 'ExitPlanMode'
   return (
     <div ref={row} data-fold={fold}>
       <Row
-        icon={meta.icon}
-        verb={item.name === 'Workflow' ? tr('session.live.ItemRows.orchestration') : meta.verb || item.name}
-        expandable={!!item.output}
+        icon={plan ? ListTodo : meta.icon}
+        verb={verb}
+        expandable={foldable}
         open={open}
         onToggle={toggle}
         trailing={
           <>
             <StatusMark status={item.status} okMark={false} />
+            {images.length > 0 && (
+              <span className="shrink-0 text-meta text-fg-faint">
+                {tr('session.live.viewedImages', { n: images.length })}
+              </span>
+            )}
             <SubagentTag name={item.subagent} />
           </>
         }
@@ -472,10 +578,23 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
           {item.title}
         </span>
       </Row>
-      {open && item.output && (
-        <pre className={cn(OUTPUT_BOX, 'p-3 font-mono text-meta leading-[1.6] whitespace-pre-wrap text-fg-secondary')}>
-          <AnsiText text={item.output} />
-        </pre>
+      {open &&
+        item.output &&
+        (plan ? (
+          <div className={cn(OUTPUT_BOX, 'max-h-[28rem] bg-surface px-4 py-3')}>
+            <Markdown text={item.output} />
+          </div>
+        ) : (
+          <pre
+            className={cn(OUTPUT_BOX, 'p-3 font-mono text-meta leading-[1.6] whitespace-pre-wrap text-fg-secondary')}
+          >
+            <LongOutput text={item.output} />
+          </pre>
+        ))}
+      {open && images.length > 0 && (
+        <div className="mt-1 mb-1.5 ml-[23px]">
+          <ImageAttachments images={images} />
+        </div>
       )}
     </div>
   )

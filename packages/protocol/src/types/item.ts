@@ -46,8 +46,17 @@ export type Item =
       status: ItemStatus
       /** 是哪个子智能体调用的（名字）；主智能体调用时没有 */
       subagent?: string
+      /** 后台子智能体的工具：这一轮结束时还在跑，不跟着这一轮收尾 */
+      background?: boolean
     }
-  | { kind: 'file_change'; id: string; changes: FileChange[]; status: ItemStatus; subagent?: string }
+  | {
+      kind: 'file_change'
+      id: string
+      changes: FileChange[]
+      status: ItemStatus
+      subagent?: string
+      background?: boolean
+    }
   | {
       kind: 'tool'
       id: string
@@ -59,6 +68,9 @@ export type Item =
       output: string
       status: ItemStatus
       subagent?: string
+      background?: boolean
+      /** 结果里的图片（例如 Read 了一张图片），有大小上限；超出的只在 output 里留「[图片]」 */
+      images?: ImageAttachment[]
     }
   | { kind: 'todo'; id: string; steps: TodoStep[]; status: ItemStatus }
   /** detail：引擎给出的原始报错详情（附加说明、错误类型、HTTP 状态码等），界面默认折叠 */

@@ -437,6 +437,45 @@ async function runTurn(text) {
     return
   }
 
+  if (text.includes('后续')) {
+    // 这一轮结束后，后台任务完成的通知让引擎没等用户发消息就接着干：先一条通知，再一次模型请求和一个结果
+    await streamText('先回答', ['先回答'])
+    result('success')
+    turn = null
+    await sleep(40)
+    out({
+      type: 'system',
+      subtype: 'task_notification',
+      task_id: 'bg-late',
+      status: 'completed',
+      summary: '后台命令跑完了',
+    })
+    turn = { aborted: false }
+    const id = `toolu_fake_${++msgSeq}`
+    stream({
+      type: 'message_start',
+      message: { id: `msg_fake_${runId}_${++msgSeq}`, model: 'fake-model', usage: { input_tokens: 10 } },
+    })
+    out({
+      type: 'assistant',
+      message: {
+        id: `msg_fake_${runId}_${msgSeq}`,
+        content: [{ type: 'tool_use', id, name: 'Bash', input: { command: 'echo cleanup' } }],
+      },
+      parent_tool_use_id: null,
+    })
+    out({
+      type: 'user',
+      message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: 'cleanup' }] },
+      parent_tool_use_id: null,
+    })
+    await sleep(Number(process.env.FAKE_CLAUDE_CONTINUE_MS ?? 0))
+    await streamText('清理完了', ['清理完了'])
+    result('success')
+    turn = null
+    return
+  }
+
   const pieces = text.includes('慢') ? Array.from({ length: 100 }, (_, i) => `${i} `) : ['收到：', text]
   const full = pieces.join('')
   const ok = await streamText(full, pieces)

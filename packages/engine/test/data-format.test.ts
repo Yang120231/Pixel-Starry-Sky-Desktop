@@ -85,6 +85,30 @@ describe('Store 读取 data-v1', () => {
     expect(store.loadItems(S2)).toEqual([])
   })
 
+  it('对话条目：开始时写的位置为准；没等到完成的（包括后台子智能体的）读出时标成已中断', () => {
+    const store = new Store(data())
+    const S3 = '33333333-3333-4333-8333-333333333333'
+    const tool = (id: string, status: 'running' | 'completed', background?: boolean) =>
+      ({
+        kind: 'tool',
+        id,
+        tool: 'read',
+        name: 'Read',
+        title: id,
+        output: '',
+        status,
+        ...(background ? { background } : {}),
+      }) as const
+    store.appendItem(S3, tool('task', 'running'))
+    store.appendItem(S3, tool('sub', 'running', true))
+    store.appendItem(S3, tool('quick', 'running'))
+    store.appendItem(S3, tool('quick', 'completed'))
+    store.appendItem(S3, tool('task', 'completed'))
+    const items = store.loadItems(S3)
+    expect(items.map(i => i.id)).toEqual(['task', 'sub', 'quick'])
+    expect(items.map(i => (i.kind === 'tool' ? i.status : ''))).toEqual(['completed', 'interrupted', 'completed'])
+  })
+
   it('队列：重启后一律暂停；已开始交付的项变成待核对，不自动重发', () => {
     const store = new Store(data()),
       record = store.loadRecords().find(r => r.id === S1)!

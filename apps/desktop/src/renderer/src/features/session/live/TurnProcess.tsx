@@ -51,7 +51,12 @@ export function TurnProcess({
     if (requested && Date.now() - requested < REQUEST_MS) setOpen(true)
   }, [requested])
   const summary = useMemo(() => summarize(items), [items])
-  const tail = running && !open ? items.slice(-TAIL) : []
+  // 隐藏了内容的思考（只剩「思考了 N 秒」或什么都不显示）不算步数，也不占运行中露出的那几条
+  const shown = useMemo(
+    () => items.filter(i => !(i.kind === 'reasoning' && i.status !== 'running' && !i.text.trim())),
+    [items],
+  )
+  const tail = running && !open ? shown.slice(-TAIL) : []
   // 收起时不在页面上的条目：对话内搜索算进「折叠中还有 N 处」
   const hidden = open ? [] : ids.slice(0, ids.length - tail.length)
   return (
@@ -70,7 +75,7 @@ export function TurnProcess({
         <span aria-hidden className="shrink-0 text-fg-faint">
           ·
         </span>
-        <span className="min-w-0 truncate">{summaryText(summary, items.length)}</span>
+        <span className="min-w-0 truncate">{summaryText(summary, shown.length)}</span>
         {summary.failed > 0 && (
           <span className="shrink-0 text-danger">
             <span aria-hidden className="mr-1.5 text-fg-faint">

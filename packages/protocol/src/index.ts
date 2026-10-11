@@ -131,7 +131,7 @@ export type { OfficialPrice } from './pricing'
 export type { SourceKind } from './source'
 export { cacheHitRate, dimValue, emptyTotals, listRecords, rangeWindow, summarize, toCsv, totalTokens } from './usage'
 export type { TimeWindow } from './usage'
-export { EMPTY_FLAGS, emptySnapshot, reduce } from './reduce'
+export { EMPTY_FLAGS, emptySnapshot, reduce, settle } from './reduce'
 export { AUTO_COMPACT_PCTS, EFFORTS, PERMISSION_MODES, diffStat } from './util'
 export type {
   ExtensionCheck,

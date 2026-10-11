@@ -24,6 +24,27 @@ function run(events: EngineEvent[], start: SessionSnapshot = emptySnapshot(recor
 }
 
 describe('reduce', () => {
+  it('一轮结束时收尾还在跑的条目，后台子智能体的工具留着等它自己的结果', () => {
+    const tool = (id: string, background?: boolean) =>
+      ({
+        kind: 'tool',
+        id,
+        tool: 'read',
+        name: 'Read',
+        title: id,
+        output: '',
+        status: 'running',
+        ...(background ? { background } : {}),
+      }) as const
+    const s = run([
+      { type: 'turn_started', turnId: 't1' },
+      { type: 'item_started', item: tool('main') },
+      { type: 'item_started', item: tool('bg', true) },
+      { type: 'turn_completed', turnId: 't1', outcome: 'completed', error: null },
+    ])
+    expect(s.items.map(i => (i.kind === 'tool' ? i.status : ''))).toEqual(['completed', 'running'])
+  })
+
   it('流式正文按 id 追加', () => {
     const s = run([
       { type: 'turn_started', turnId: 't1' },

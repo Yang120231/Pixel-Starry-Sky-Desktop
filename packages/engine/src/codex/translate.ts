@@ -1,13 +1,17 @@
 import type { AgentRun, EngineEvent, FileChange, Item, ItemStatus } from '@pixelsky/protocol'
 import { array, object, string, number, type Message } from './process'
+import { diffAdded } from '../diff'
+import { MAX_OUTPUT, clip } from '../output'
 
 export function codexChanges(value: unknown): FileChange[] {
   return array(value)
     .map((raw): FileChange => {
-      const change = object(raw),
-        diff = string(change.diff),
-        lines = diff.split('\n')
+      const change = object(raw)
       const kind = string(object(change.kind).type || change.kind)
+      // 新建文件时 Codex 给的可能是文件原文而不是 diff：换成全是 + 的 diff，行数才对
+      const original = string(change.diff)
+      const diff = kind === 'add' && original && !/^[+@-]/m.test(original) ? diffAdded(original).diff : original,
+        lines = diff.split('\n')
       return {
         path: string(change.path),
         kind: kind === 'add' ? 'add' : kind === 'delete' ? 'delete' : 'update',
@@ -64,8 +68,9 @@ export class CodexTranslator {
         kind: 'command',
         id,
         command: string(raw.command),
-        description: string(raw.cwd) || null,
-        output: string(raw.aggregatedOutput) || (prior?.kind === 'command' ? prior.output : ''),
+        // description 是命令说明（悬停时显示）；Codex 没有说明，不能放工作目录
+        description: null,
+        output: clip(string(raw.aggregatedOutput)) || (prior?.kind === 'command' ? prior.output : ''),
         exitCode: typeof raw.exitCode === 'number' ? raw.exitCode : null,
         status,
       }
@@ -101,7 +106,9 @@ export class CodexTranslator {
         tool,
         name: type === 'mcpToolCall' ? `${string(raw.server)} / ${string(raw.tool)}` : type,
         title: string(raw.command || raw.query || raw.prompt || raw.path || raw.tool || raw.name) || type,
-        output: raw.error ? JSON.stringify(raw.error) : raw.result ? JSON.stringify(raw.result) : string(raw.output),
+        output: clip(
+          raw.error ? JSON.stringify(raw.error) : raw.result ? JSON.stringify(raw.result) : string(raw.output),
+        ),
         status,
       }
     }
@@ -164,7 +171,11 @@ export class CodexTranslator {
     const delta = string(params.delta)
     if (!delta) return
     if ('text' in item && field === 'text') this.items.set(id, { ...item, text: item.text + delta })
-    else if ('output' in item) this.items.set(id, { ...item, output: item.output + delta })
+    else if ('output' in item) {
+      // 输出超过上限就不再追加（完成时 aggregatedOutput 会按头尾截好）
+      if (item.output.length >= MAX_OUTPUT) return
+      this.items.set(id, { ...item, output: item.output + delta })
+    }
     this.emit({ type: 'item_delta', itemId: id, field, delta })
   }
   plan(params: Message): void {

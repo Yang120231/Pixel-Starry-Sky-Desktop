@@ -106,6 +106,12 @@ export const branchMessages = {
   // 提问卡片
   'question.recommended': { zh: '推荐', en: 'Recommended' },
   'question.allRecommended': { zh: '都按推荐', en: 'Use all recommendations' },
+  'question.other': { zh: '其他…', en: 'Other…' },
+  'question.otherPlaceholder': { zh: '输入你的回答', en: 'Type your answer' },
+  'session.live.ApprovalCard.sendFailed': {
+    zh: '没发出去：{p0}。可以再点一次。',
+    en: 'Not sent: {p0}. You can try again.',
+  },
 
   // 截图标注
   'annotate.open': { zh: '标注', en: 'Annotate' },

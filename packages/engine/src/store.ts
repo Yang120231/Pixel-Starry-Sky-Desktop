@@ -3,9 +3,10 @@
 // <dataDir>/projects.json              项目列表
 // <dataDir>/engine-settings.json       新会话默认设置、各引擎的路径 / 环境变量 / 默认值 / 选项
 // <dataDir>/sessions/<id>/record.json  会话记录
-// <dataDir>/sessions/<id>/items.jsonl  已完成的条目，每行一个，只追加
+// <dataDir>/sessions/<id>/items.jsonl  对话条目，每行一个，只追加：开始时写一次，完成（或一轮结束收尾）时再写一次，
+//                                      读出时同一 id 取第一次的位置、最后一次的内容
 //
-// 写入都是同步的小文件操作：保证顺序，量也很小（只在条目完成时写，不写流式增量）。
+// 写入都是同步的小文件操作：保证顺序，量也很小（只在条目开始 / 完成时写，不写流式增量）。
 import {
   appendFileSync,
   existsSync,
@@ -260,7 +261,12 @@ export class Store {
         // 跳过写坏的行（例如写到一半断电）
       }
     }
-    return [...byId.values()]
+    // 没等到完成的条目（进程退出、应用关闭，包括后台子智能体的）：标成已中断
+    return [...byId.values()].map(item =>
+      item.kind !== 'user' && item.kind !== 'notice' && item.kind !== 'turn_stats' && item.status === 'running'
+        ? { ...item, status: 'interrupted' }
+        : item,
+    )
   }
 
   deleteSession(id: string): void {

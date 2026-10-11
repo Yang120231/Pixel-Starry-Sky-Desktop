@@ -4,6 +4,7 @@ import type {
   AlwaysScope,
   ApprovalRequest,
   FileChange,
+  ImageAttachment,
   Item,
   ItemStatus,
   Question,
@@ -11,18 +12,12 @@ import type {
   ToolKind,
 } from '@pixelsky/protocol'
 import { diffAdded, diffFromHunks, diffText, type PatchHunk } from '../diff'
+import { MAX_OUTPUT, clip } from '../output'
 import { str } from './shape'
 
+export { clip }
+
 type Input = Record<string, unknown>
-
-/** 输出最多保留这么多字符（头尾各一半），太长的命令输出不全放进内存和磁盘 */
-const MAX_OUTPUT = 40_000
-
-export function clip(text: string): string {
-  if (text.length <= MAX_OUTPUT) return text
-  const half = MAX_OUTPUT / 2
-  return `${text.slice(0, half)}\n…（中间省略 ${text.length - MAX_OUTPUT} 个字符）…\n${text.slice(-half)}`
-}
 
 /** 工作目录里的文件显示相对路径 */
 export function displayPath(p: string, cwd: string): string {
@@ -83,10 +78,23 @@ function toolTitle(name: string, input: Input, cwd: string): { tool: ToolKind; t
       return { tool: 'task', title: str(input.description) || str(input.subagent_type) || '子任务' }
     case 'Workflow':
       return { tool: 'task', title: str(input.description) || str(input.name) || '多智能体编排' }
+    case 'Skill':
+      return { tool: 'other', title: [str(input.skill), str(input.args)].filter(Boolean).join(' · ') }
+    // 动作（提问 / 提交计划）由界面按工具名翻译，标题放内容：第一个问题、计划的第一行
     case 'AskUserQuestion':
-      return { tool: 'other', title: '向你提问' }
+      return {
+        tool: 'other',
+        title: str((Array.isArray(input.questions) ? (input.questions[0] as Input) : {})?.question),
+      }
     case 'ExitPlanMode':
-      return { tool: 'other', title: '提交计划' }
+      return {
+        tool: 'other',
+        title:
+          str(input.plan)
+            .split('\n')
+            .map(l => l.replace(/^#+\s*/, '').trim())
+            .find(Boolean) ?? '',
+      }
   }
   if (name.startsWith('mcp__')) {
     const [, server = '', tool = ''] = name.split('__')
@@ -131,7 +139,45 @@ function baseToolItem(id: string, name: string, input: Input, cwd: string): Item
     return { kind: 'todo', id, steps: todoSteps(input), status: 'running' }
   }
   const { tool, title } = toolTitle(name, input, cwd)
-  return { kind: 'tool', id, tool, name, title, output: '', status: 'running' }
+  // 提交计划：计划正文留在这一行里，批准之后对话里还能展开看
+  const output = name === 'ExitPlanMode' ? str(input.plan) : ''
+  return { kind: 'tool', id, tool, name, title, output, status: 'running' }
+}
+
+const IMAGE_TYPES = new Set<string>(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
+/** 工具结果里的图片最多带这么多（base64 字符，所有图片合计）；超出的仍只显示「[图片]」 */
+const MAX_RESULT_IMAGES = 3_000_000
+
+/** tool_result 里的图片（例如 Read 了一张图片）：对话里显示缩略图 */
+export function resultImages(content: unknown, id: string): ImageAttachment[] {
+  if (!Array.isArray(content)) return []
+  const images: ImageAttachment[] = []
+  let total = 0
+  for (const block of content as Input[]) {
+    if (block?.type !== 'image') continue
+    const source = (block.source ?? {}) as Input
+    const mediaType = str(source.media_type)
+    const data = str(source.data)
+    if (source.type !== 'base64' || !IMAGE_TYPES.has(mediaType) || !data || total + data.length > MAX_RESULT_IMAGES)
+      continue
+    total += data.length
+    images.push({
+      id: `${id}-img${images.length}`,
+      name: '',
+      mediaType: mediaType as ImageAttachment['mediaType'],
+      bytes: Math.floor((data.length * 3) / 4),
+      width: 0,
+      height: 0,
+      dataBase64: data,
+    })
+  }
+  return images
+}
+
+/** Claude 的命令失败时，结果正文第一行是「Exit code N」 */
+function exitCodeOf(text: string): number | null {
+  const m = /^Exit code (\d+)/.exec(text)
+  return m ? Number(m[1]) : null
 }
 
 /** tool_result 的 content：字符串，或 [{type:'text',text}, {type:'image',…}] */
@@ -167,7 +213,8 @@ export function completeToolItem(
       const stdout = str(r.stdout)
       const stderr = str(r.stderr)
       const output = stdout || stderr ? clip([stdout, stderr].filter(Boolean).join('\n')) : text
-      return { ...item, output, status: finalStatus }
+      const exitCode = isError ? exitCodeOf(text) : finalStatus === 'completed' ? 0 : item.exitCode
+      return { ...item, output, exitCode, status: finalStatus }
     }
     case 'file_change': {
       if (isError) return { ...item, status: finalStatus }
@@ -183,8 +230,12 @@ export function completeToolItem(
       }
       return { ...item, status: finalStatus }
     }
-    case 'tool':
-      return { ...item, output: text, status: finalStatus }
+    case 'tool': {
+      const images = resultImages(content, item.id)
+      // 提交计划的结果只是「已批准」之类的话：保留计划正文
+      const output = item.name === 'ExitPlanMode' && item.output ? item.output : text
+      return { ...item, output, status: finalStatus, ...(images.length ? { images } : {}) }
+    }
     case 'todo':
       return { ...item, status: finalStatus }
     default:
@@ -198,6 +249,8 @@ function questionsFromInput(input: Input): Question[] {
     question: str(q.question),
     header: str(q.header),
     multiSelect: q.multiSelect === true,
+    // Claude Code 自己的界面每题都带「其他」可以自由输入，模型发问也按这个前提
+    allowOther: true,
     options: Array.isArray(q.options)
       ? (q.options as Input[]).map(o => ({ label: str(o.label), description: str(o.description) }))
       : [],

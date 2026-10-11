@@ -123,6 +123,10 @@ export class ClaudeTranslator {
   private toolInputs = new Map<string, Msg>()
   /** 子智能体调用中的工具 */
   private subTools = new Map<string, Item>()
+  /** 强制结束过这一轮（进程被杀 / 意外退出）：之后迟到的帧不能自己开一轮，等下一次 startTurn */
+  private halted = false
+  /** 子智能体工具 → 派出它的 Task / Agent 工具调用 */
+  private subParent = new Map<string, string>()
   /** system/task_* 里的任务 */
   private taskInfo = new Map<string, TaskInfo>()
   private bgTasks: BackgroundTask[] = []
@@ -145,9 +149,20 @@ export class ClaudeTranslator {
     return this.turnId
   }
 
+  /**
+   * 没有用户消息、引擎自己接着干活（后台任务完成的通知等）：主线开始新的模型请求或开始压缩时，自己开一轮并告诉宿主，
+   * 这样状态、统计行、用量和收尾都和普通的一轮一样（docs/ui/conversation-review-2026-10-11.md A1）
+   */
+  private beginAutoTurn(): void {
+    const turnId = this.nextId('turn')
+    this.startTurn(turnId)
+    this.cb.emit({ type: 'turn_started', turnId })
+  }
+
   startTurn(turnId: string): void {
     this.requestCache.begin(turnId)
     this.turnId = turnId
+    this.halted = false
     this.retry = null
     this.apiError = null
     this.retrySignature = ''
@@ -177,7 +192,19 @@ export class ClaudeTranslator {
     }
     if (this.runs.stopAll()) this.emitRuns()
     this.taskInfo.clear()
-    this.subTools.clear()
+    for (const id of [...this.subTools.keys()]) this.settleSubTool(id, 'interrupted')
+  }
+
+  /** 子智能体的工具没等到结果就结束了（这一轮中断、进程退出、子智能体都结束了） */
+  private settleSubTool(id: string, status: ItemStatus): void {
+    const item = this.subTools.get(id)
+    if (!item) return
+    this.subTools.delete(id)
+    this.subParent.delete(id)
+    this.cb.emit({
+      type: 'item_completed',
+      item: completeToolItem(item, '', false, null, status === 'completed' ? 'interrupted' : status),
+    })
   }
 
   private setSubagent(id: string, patch: Partial<SubagentStatus>): void {
@@ -217,6 +244,13 @@ export class ClaudeTranslator {
   }
 
   handle(msg: Msg): void {
+    if (!this.turnId && !this.halted && !msg.parent_tool_use_id && msg.isReplay !== true && msg.is_replay !== true) {
+      const event = obj(msg.event)
+      const starts =
+        (msg.type === 'stream_event' && event.type === 'message_start') ||
+        (msg.type === 'system' && msg.subtype === 'status' && msg.status === 'compacting')
+      if (starts) this.beginAutoTurn()
+    }
     this.context.handle(msg)
     this.requestCache.handle(msg)
     if (!msg.parent_tool_use_id && msg.type === 'stream_event' && obj(msg.event).type === 'message_start')
@@ -272,6 +306,7 @@ export class ClaudeTranslator {
         if (!id || this.subTools.has(id)) continue
         const item = toolItem(id, str(block.name), obj(block.input), this.cwd, label)
         this.subTools.set(id, item)
+        this.subParent.set(id, parent)
         this.cb.emit({ type: 'item_started', item })
       }
     } else if (msg.type === 'user') {
@@ -281,6 +316,7 @@ export class ClaudeTranslator {
         const item = this.subTools.get(id)
         if (!item) continue
         this.subTools.delete(id)
+        this.subParent.delete(id)
         this.cb.emit({
           type: 'item_completed',
           item: completeToolItem(item, block.content, block.is_error === true, msg.tool_use_result),
@@ -331,7 +367,12 @@ export class ClaudeTranslator {
         const info = this.taskInfo.get(id)
         this.taskInfo.delete(id)
         const status = str(msg.status) || 'completed'
-        if (info?.kind === 'local_agent') this.setSubagent(id, { status, message: str(msg.summary) || null })
+        if (info?.kind === 'local_agent') {
+          this.setSubagent(id, { status, message: str(msg.summary) || null })
+          // 子智能体都结束了：还挂着的工具不会再有结果
+          if (!this.subagentList.some(a => a.status === 'running'))
+            for (const toolId of [...this.subTools.keys()]) this.settleSubTool(toolId, 'interrupted')
+        }
         const background = !info || info.background
         if (background && msg.skip_transcript !== true && msg.ambient !== true) {
           const kind = taskKindLabel(info?.kind ?? '')
@@ -549,8 +590,13 @@ export class ClaudeTranslator {
         this.cb.emit({ type: 'item_started', item })
       }
     }
+    // 带报错代码的回复：先记下，等这一轮的结果一起出一条（失败的结果本身也会报错，原来会出两条）；
+    // 不在一轮里（零散消息）时马上提示
     if (typeof msg.error === 'string' && msg.error) {
-      this.notice('error', ERROR_TEXT[msg.error] ?? `请求出错（${msg.error}）`)
+      if (!this.turnId) this.notice('error', ERROR_TEXT[msg.error] ?? `请求出错（${msg.error}）`)
+      // 这条消息的文字是真的回复（例如写到上限被截断），不当报错原文
+      else if (!this.apiError)
+        this.apiError = { code: msg.error, raw: ERROR_TEXT[msg.error] ?? `请求出错（${msg.error}）` }
     }
   }
 
@@ -628,6 +674,14 @@ export class ClaudeTranslator {
     }
     this.tools.clear()
     this.declined.clear()
+    // 子智能体的工具：正常结束时还在跑的属于后台子智能体，标成后台、等它自己的结果；中断 / 失败时一起收尾
+    for (const [id, item] of this.subTools) {
+      if (outcome === 'completed') {
+        const background = { ...item, background: true } as Item
+        this.subTools.set(id, background)
+        this.cb.emit({ type: 'item_started', item: background })
+      } else this.settleSubTool(id, leftover)
+    }
 
     let error: string | null = null
     const apiError = this.apiError
@@ -698,6 +752,7 @@ export class ClaudeTranslator {
   /** 进程意外退出：结束这一轮 */
   abortTurn(reason: string): void {
     const turnId = this.turnId
+    this.halted = true
     if (!turnId) return
     this.requestCache.end()
     this.turnId = null
@@ -717,6 +772,7 @@ export class ClaudeTranslator {
   /** 强制中断后（进程被杀，没有 result）：结束这一轮 */
   interruptTurn(): void {
     const turnId = this.turnId
+    this.halted = true
     if (!turnId) return
     this.requestCache.end()
     this.turnId = null

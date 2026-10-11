@@ -279,7 +279,7 @@ function LiveSessionView({
                     <ApprovalCard
                       key={req.requestId}
                       request={req}
-                      onAnswer={d => void bridge?.answer(sessionId, req.requestId, d)}
+                      onAnswer={d => bridge?.answer(sessionId, req.requestId, d)}
                     />
                   ))}
                   {branch.undo && (

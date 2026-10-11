@@ -228,6 +228,27 @@ describe('EngineHost + Claude（假引擎）', () => {
     expect(spawnArgs()).toHaveLength(1)
   })
 
+  it('一轮结束后引擎自己接着干（后台任务通知）：算新的一轮，有运行状态、统计行和用量，空闲定时器不关进程', async () => {
+    const host = makeHost(60, { FAKE_CLAUDE_CONTINUE_MS: '200' })
+    const { record } = setup(host)
+    await host.send(record.id, '有后续')
+    await waitFor(() => turnsDone(record.id) === 1)
+    await waitFor(() => host.open(record.id).state === 'running')
+    // 后续这一轮在跑：超过空闲时间也不能关掉进程
+    await new Promise(r => setTimeout(r, 120))
+    await waitFor(() => turnsDone(record.id) === 2)
+    const snap = host.open(record.id)
+    expect(snap.state).toBe('idle')
+    const kinds = snap.items.map(i => (i.kind === 'assistant' ? `assistant:${i.text}` : i.kind))
+    expect(kinds.filter(k => k === 'turn_stats')).toHaveLength(2)
+    expect(kinds.indexOf('assistant:先回答')).toBeLessThan(kinds.indexOf('assistant:清理完了'))
+    expect(snap.items.find(i => i.kind === 'command')).toMatchObject({ status: 'completed' })
+    expect(spawnArgs()).toHaveLength(1)
+    // 重开：两轮的统计行和顺序都在
+    const again = makeHost(60_000, { FAKE_CLAUDE_CONTINUE_MS: '200' })
+    expect(again.open(record.id).items.map(i => i.kind)).toEqual(snap.items.map(i => i.kind))
+  })
+
   it('未启动或旧版引擎的上下文诊断与压缩给出明确不可用原因', async () => {
     const host = makeHost()
     const { record } = setup(host)

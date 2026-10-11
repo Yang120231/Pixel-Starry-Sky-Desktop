@@ -31,8 +31,10 @@ export function emptySnapshot(record: SessionRecord, items: Item[] = []): Sessio
 }
 
 /** 一轮异常结束时，还在进行中的条目统一改成这个状态 */
-function settle(item: Item, status: ItemStatus): Item {
+/** 一轮结束时把还在跑的条目收尾；后台子智能体的工具不跟着这一轮结束 */
+export function settle(item: Item, status: ItemStatus): Item {
   if (item.kind === 'user' || item.kind === 'notice' || item.kind === 'turn_stats') return item
+  if ((item.kind === 'command' || item.kind === 'tool' || item.kind === 'file_change') && item.background) return item
   return item.status === 'running' ? { ...item, status } : item
 }
 
@@ -125,11 +127,7 @@ export function reduce(s: SessionSnapshot, e: EngineEvent): SessionSnapshot {
         retry: null,
         execution: null,
         pending: [],
-        items: s.items.some(
-          x => x.kind !== 'user' && x.kind !== 'notice' && x.kind !== 'turn_stats' && x.status === 'running',
-        )
-          ? s.items.map(x => settle(x, status))
-          : s.items,
+        items: s.items.some(x => settle(x, status) !== x) ? s.items.map(x => settle(x, status)) : s.items,
       }
     }
   }
