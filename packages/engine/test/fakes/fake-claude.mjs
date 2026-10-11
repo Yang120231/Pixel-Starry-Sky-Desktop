@@ -102,7 +102,9 @@ if (process.env.FAKE_CLAUDE_CHAIN) {
           .map(l => JSON.parse(l))
       : []
   const byId = new Map(entries.map(e => [e.uuid, e]))
-  if (resumeAt && !byId.has(resumeAt)) {
+  // 像真实 CLI：只加载最近一次压缩之后的部分，更早的截断点也找不到
+  const boundary = entries.findLastIndex(e => e.type === 'system' && e.subtype === 'compact_boundary')
+  if (resumeAt && entries.findIndex(e => e.uuid === resumeAt) <= boundary) {
     process.stderr.write(`No message found with uuid ${resumeAt}\n`)
     process.exit(1)
   }

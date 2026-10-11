@@ -162,6 +162,10 @@ export const branchMessages = {
     zh: '无法从原会话分叉，已开始新的引擎会话（之前的上下文没有带过去）',
     en: 'Could not fork from the original session. Started a new engine session without the previous context.',
   },
+  'branch.compactedAnchor': {
+    zh: '这条消息在上下文压缩之前，Claude Code 没法从这里接着，已开始新的引擎会话（之前的上下文没有带过去）',
+    en: 'This message is from before a context compaction, so Claude Code cannot continue from here. Started a new engine session without the previous context.',
+  },
   'branch.forkMissing': {
     zh: '无法在 Claude Code 记录中找到这条消息，分叉出的会话没有带上之前的上下文',
     en: 'Could not find this message in Claude Code history; the forked session does not include the previous context',

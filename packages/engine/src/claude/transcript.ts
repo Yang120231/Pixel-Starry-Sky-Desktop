@@ -1,9 +1,9 @@
 // Claude Code 自己的会话记录文件：<CLAUDE_CONFIG_DIR 或 ~/.claude>/projects/<编码后的工作目录>/<session_id>.jsonl
 // 编码规则：工作目录里不是字母数字的字符都换成 '-'（例如 D:\像素星空 → D------）。
 // 很长的路径会被截断并加哈希，所以按规则找不到时，再在所有项目目录里找一遍。
-import { readFileSync, readdirSync } from 'node:fs'
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { isFile } from '../exec'
 
 export function defaultProjectsDir(env: NodeJS.ProcessEnv): string {
@@ -57,5 +57,54 @@ export function findRewindAnchor(file: string, userIds: string[]): { at: string 
     }
   }
   for (const id of userIds) if (parents.has(id)) return { at: parents.get(id) ?? null }
+  return null
+}
+
+/**
+ * 截断点在记录里的位置。Claude Code 恢复会话时只加载最近一次压缩之后的部分，更早的条目
+ * 用 --resume-session-at 找不到（报 No message found…，docs/ui/rewind-fork-sidechat.md §2.4）。
+ * 'loaded'：在最近一次压缩之后；'compacted'：在它之前；null：记录里没有。
+ */
+export function anchorPosition(file: string, at: string): 'loaded' | 'compacted' | null {
+  let index = -1
+  let boundary = -1
+  readFileSync(file, 'utf8')
+    .split('\n')
+    .forEach((line, i) => {
+      if (!line.trim()) return
+      try {
+        const e = JSON.parse(line) as { type?: unknown; subtype?: unknown; uuid?: unknown; isSidechain?: unknown }
+        if (e.uuid === at && index < 0) index = i
+        if (e.type === 'system' && e.subtype === 'compact_boundary' && e.isSidechain !== true) boundary = i
+      } catch {
+        // 跳过写坏的行
+      }
+    })
+  if (index < 0) return null
+  return index > boundary ? 'loaded' : 'compacted'
+}
+
+/**
+ * 把记录复制到截断点为止（含截断点），存成同目录下 <sessionId>.jsonl，返回新文件路径；截断点不在记录里时返回 null。
+ * 截断点是最后一条，Claude Code 用 --resume 加载时从它往回接，之前的压缩摘要照常生效（§2.4）。
+ */
+export function copyTranscriptUntil(file: string, at: string, sessionId: string): string | null {
+  const out: string[] = []
+  for (const line of readFileSync(file, 'utf8').split('\n')) {
+    if (!line.trim()) continue
+    let e: Record<string, unknown>
+    try {
+      e = JSON.parse(line) as Record<string, unknown>
+    } catch {
+      continue
+    }
+    if (typeof e.sessionId === 'string') e.sessionId = sessionId
+    out.push(JSON.stringify(e))
+    if (e.uuid === at) {
+      const path = join(dirname(file), `${sessionId}.jsonl`)
+      writeFileSync(path, out.join('\n') + '\n', { flag: 'wx' })
+      return path
+    }
+  }
   return null
 }

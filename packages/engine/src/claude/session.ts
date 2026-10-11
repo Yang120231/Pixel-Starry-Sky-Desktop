@@ -19,7 +19,13 @@ import type { EngineSession, Launcher, SessionContext } from '../adapter'
 import { ClaudeProcess, type ControlRequestFromCli } from './process'
 import { loadSavedRuns } from './runs'
 import { alwaysPermissions, approvalFor } from './tools'
-import { claudeSessionDir, claudeTranscriptExists } from './transcript'
+import {
+  anchorPosition,
+  claudeSessionDir,
+  claudeTranscriptExists,
+  copyTranscriptUntil,
+  findClaudeTranscript,
+} from './transcript'
 import { ClaudeTranslator } from './translate'
 import { obj, str } from './shape'
 import { claudeModelName } from './long-context'
@@ -138,6 +144,10 @@ export interface ClaudeSessionDeps {
 }
 
 /** 进程在回应 initialize 之前就退出了 */
+/** 截断点在上下文压缩之前、又没能复制记录时的提示（docs/ui/rewind-fork-sidechat.md §2.4） */
+const COMPACTED_NOTICE =
+  '这条消息在上下文压缩之前，Claude Code 没法从这里接着，已开始新的引擎会话（之前的上下文没有带过去）'
+
 class StartupError extends Error {
   constructor(readonly stderr: string) {
     super(lastLines(stderr) || 'Claude Code 启动失败')
@@ -376,15 +386,21 @@ export class ClaudeSession implements EngineSession {
     const resume = claudeTranscriptExists(this.deps.projectsDir, rec.cwd, sid)
     const rewindAt = resume ? (rec.pendingRewind ?? null) : null
     const fork = resume ? null : (rec.pendingFork ?? null)
+    const copy = this.copyCompacted(rec.cwd, sid, rewindAt, fork)
     try {
-      return await this.launch(sid, resume, rewindAt, fork)
+      if (copy === 'failed') throw new StartupError(COMPACTED_NOTICE)
+      return copy ? await this.launch(copy.sid, true) : await this.launch(sid, resume, rewindAt, fork)
     } catch (err) {
       if (!(err instanceof StartupError)) throw err
+      if (copy && copy !== 'failed') rmSync(copy.file, { force: true })
       // 分叉失败（原会话的记录没了或截断点不认）：用同一个 id 开新会话，提示没带上前文
       if (fork) {
         const proc = await this.launch(sid, false)
         this.ctx.clearPendingFork?.()
-        this.translator.notice('warn', '无法从原会话分叉，已开始新的引擎会话（之前的上下文没有带过去）')
+        this.translator.notice(
+          'warn',
+          copy ? COMPACTED_NOTICE : '无法从原会话分叉，已开始新的引擎会话（之前的上下文没有带过去）',
+        )
         return proc
       }
       // 截断点在记录里找不到或被 CLI 拒绝（不带回退的上下文不可信）、恢复失败（Claude 那边的记录没了）或 id 被占用：
@@ -396,11 +412,41 @@ export class ClaudeSession implements EngineSession {
       if (rewindAt)
         this.translator.notice(
           'warn',
-          '无法在 Claude Code 记录中回退到这条消息，已开始新的引擎会话（之前的上下文没有带过去）',
+          copy
+            ? COMPACTED_NOTICE
+            : '无法在 Claude Code 记录中回退到这条消息，已开始新的引擎会话（之前的上下文没有带过去）',
         )
       else if (resume)
         this.translator.notice('warn', '无法恢复 Claude Code 的会话记录，已开始新的引擎会话（之前的上下文没有带过去）')
       return proc
+    }
+  }
+
+  /**
+   * 分叉 / 回退的截断点在最近一次压缩之前：Claude Code 加载不到那里（--resume-session-at 报找不到），
+   * 自己把记录复制到截断点为止，存成新的引擎会话再 --resume（docs/ui/rewind-fork-sidechat.md §2.4）。
+   * 分叉用分支自己的 id，回退换一个新 id（原会话的记录不动）。不需要复制时返回 null，复制不成返回 'failed'。
+   */
+  private copyCompacted(
+    cwd: string,
+    sid: string,
+    rewindAt: string | null,
+    fork: { from: string; at: string } | null,
+  ): { sid: string; file: string } | 'failed' | null {
+    const at = fork?.at ?? rewindAt
+    const source = fork
+      ? findClaudeTranscript(this.deps.projectsDir, cwd, fork.from)
+      : rewindAt
+        ? findClaudeTranscript(this.deps.projectsDir, cwd, sid)
+        : null
+    if (!at || !source) return null
+    try {
+      if (anchorPosition(source, at) !== 'compacted') return null
+      const target = fork ? sid : randomUUID()
+      const file = copyTranscriptUntil(source, at, target)
+      return file ? { sid: target, file } : 'failed'
+    } catch {
+      return 'failed'
     }
   }
 

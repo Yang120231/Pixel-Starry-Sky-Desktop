@@ -1,5 +1,5 @@
 // 回退恢复代码 / 撤销、分叉、旁聊（docs/ui/rewind-fork-sidechat.md），用假 Claude（模拟记录链和 rewind_files）
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -73,6 +73,16 @@ async function conversation(host: EngineHost, texts: string[]) {
     await waitFor(() => turnsDone(record.id) === i + 1)
   }
   return { record, cwd: project.path }
+}
+
+/** 在记录末尾加一条压缩分界，之前的条目 Claude Code 就加载不到了；返回记录文件 */
+function compact(cwd: string, sid: string): string {
+  const file = join(root, 'claude-projects', cwd.replace(/[^A-Za-z0-9]/g, '-'), `${sid}.jsonl`)
+  appendFileSync(
+    file,
+    JSON.stringify({ type: 'system', subtype: 'compact_boundary', uuid: 'b1', parentUuid: null }) + '\n',
+  )
+  return file
 }
 
 beforeEach(() => {
@@ -189,6 +199,23 @@ describe('回退：对话 / 代码 / 两者，撤销', () => {
     expect(userTexts(host, record.id)).toEqual(['一', '二'])
   })
 
+  it('截断点在上下文压缩之前：复制记录到截断点，换新的引擎会话接上，原记录不动（§2.4）', async () => {
+    const host = makeHost()
+    const { record, cwd } = await conversation(host, ['一', '二', '三'])
+    const sid = host.open(record.id).record.engineSessionId!
+    const source = compact(cwd, sid)
+    const before = readFileSync(source, 'utf8')
+    await host.rewind(record.id, 'm1')
+    await host.send(record.id, { text: '改', clientMessageId: 'x' })
+    await waitFor(() => turnsDone(record.id) === 4)
+    expect(visible().at(-1)).toEqual(['一'])
+    const after = host.open(record.id)
+    expect(after.record.engineSessionId).not.toBe(sid)
+    expect(after.record.pendingRewind).toBeNull()
+    expect(after.items.some(i => i.kind === 'notice')).toBe(false)
+    expect(readFileSync(source, 'utf8')).toBe(before)
+  })
+
   it('回退后发了新消息就不能撤销', async () => {
     const host = makeHost()
     const { record } = await conversation(host, ['一', '二'])
@@ -220,6 +247,26 @@ describe('分叉', () => {
     expect(visible().at(-1)).toEqual(['一', '二'])
     expect(host.open(forked.record.id).record.pendingFork).toBeNull()
     expect(userTexts(host, forked.record.id)).toEqual(['一', '二', '另一条路'])
+  })
+
+  it('截断点在上下文压缩之前：自己复制记录到截断点，用 --resume 接上（§2.4）', async () => {
+    const host = makeHost()
+    const { record, cwd } = await conversation(host, ['一', '二', '三'])
+    const source = compact(cwd, host.open(record.id).record.engineSessionId!)
+    const before = readFileSync(source, 'utf8')
+    const forked = host.forkSession(record.id, 'm2')
+    await host.send(forked.record.id, { text: '另一条路', clientMessageId: 'f1' })
+    await waitFor(() => turnsDone(forked.record.id) === 1)
+    const args = spawnArgs().at(-1)!
+    expect(args).not.toContain('--fork-session')
+    expect(args.slice(args.indexOf('--resume'), args.indexOf('--resume') + 2)).toEqual([
+      '--resume',
+      forked.record.engineSessionId,
+    ])
+    expect(visible().at(-1)).toEqual(['一', '二'])
+    expect(host.open(forked.record.id).record.pendingFork).toBeNull()
+    expect(host.open(forked.record.id).items.some(i => i.kind === 'notice')).toBe(false)
+    expect(readFileSync(source, 'utf8')).toBe(before)
   })
 
   it('分叉第一条消息：空的新会话，不带截断点', async () => {
