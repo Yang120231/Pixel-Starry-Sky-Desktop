@@ -3685,8 +3685,8 @@ export const catalog = {
     "en": "Up to {p0} retries after failure; at most {p1} attempts in total"
   },
   "settings.models.RequestRetrySettings.useEnginesCurrentRetry": {
-    "zh": "使用引擎当前的默认重试策略",
-    "en": "Use the engine's current retry policy"
+    "zh": "使用引擎当前的默认重试策略；像素星空平台线路最多重试 3 次，避免网络中途断开时反复重发、重复计费",
+    "en": "Use the engine's current retry policy; PixelSky platform routes retry at most 3 times so a dropped connection doesn't resend and rebill repeatedly"
   },
   "settings.models.RequestRetrySettings.resetToDefault": {
     "zh": "恢复默认",

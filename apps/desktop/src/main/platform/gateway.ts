@@ -5,6 +5,18 @@ import type { SessionRecord } from '@pixelsky/protocol'
 import type { ResolvedProvider } from '../core/providers/store'
 import { classifyError, providerHeaders, upstreamUrl, type Fetch } from '../core/providers/upstream'
 
+/** buf 里最后一个完整 SSE 事件结束的位置（事件以空行结尾，\n\n 或 \r\n\r\n）；一个都没有时是 0 */
+export function eventEnd(buf: Buffer): number {
+  const lf = buf.lastIndexOf('\n\n'),
+    crlf = buf.lastIndexOf('\r\n\r\n')
+  return Math.max(lf < 0 ? 0 : lf + 2, crlf < 0 ? 0 : crlf + 4)
+}
+
+const midStreamError = `event: error\ndata: ${JSON.stringify({
+  type: 'error',
+  error: { type: 'api_error', message: '上游连接中途断开，这次请求已停止（不自动反复重试，避免重复计费）' },
+})}\n\n`
+
 export interface GatewaySession {
   secret: string
   recordId: string
@@ -56,11 +68,30 @@ export function platformGateway(options: {
         if (value) output[name] = value
       }
       res.writeHead(upstream.status, output)
-      if (upstream.body)
-        for await (const chunk of upstream.body) {
-          if (abort.signal.aborted) break
-          if (!res.write(chunk)) await once(res, 'drain', { signal: abort.signal })
-        }
+      // Messages 的 SSE 只按完整事件转发：上游中途断开时能接一个 error 事件收尾，而不是掐断连接
+      const sse = !responses && output['Content-Type'].includes('text/event-stream')
+      let tail: Buffer = Buffer.alloc(0)
+      try {
+        if (upstream.body)
+          for await (const chunk of upstream.body) {
+            if (abort.signal.aborted) break
+            let out = Buffer.from(chunk)
+            if (sse) {
+              const all = tail.length ? Buffer.concat([tail, out]) : out
+              const end = eventEnd(all)
+              out = all.subarray(0, end)
+              tail = all.subarray(end)
+            }
+            if (out.length && !res.write(out)) await once(res, 'drain', { signal: abort.signal })
+          }
+      } catch (error) {
+        if (!sse || abort.signal.aborted) throw error
+        // 掐断连接的话 Claude Code 当成网络抖动，最多重试十几次，每次都重发整段上下文、重新计费（压缩时尤其贵）；
+        // 回 error 事件：普通请求它只改用非流式再试一次，压缩直接失败
+        res.end(midStreamError)
+        return
+      }
+      if (tail.length) res.write(tail)
       res.end()
     }
     const passthrough = (): Record<string, string> => {

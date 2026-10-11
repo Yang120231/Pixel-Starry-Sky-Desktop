@@ -2,7 +2,7 @@ import { once } from 'node:events'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Server } from 'node:http'
 import type { SessionRecord } from '@pixelsky/protocol'
-import { platformGateway } from './gateway'
+import { eventEnd, platformGateway } from './gateway'
 import type { ResolvedProvider } from '../core/providers/store'
 let server: Server
 afterEach(() => {
@@ -117,6 +117,45 @@ describe('平台代理按引擎隔离 Responses 与 Messages', () => {
     expect(res.status).toBe(401)
     expect(await res.json()).toMatchObject({ error: { message: expect.stringContaining('请重新登录') } })
   })
+})
+
+it('中途断开时丢掉不完整的事件再接 error 事件；完整结束时原样转发（含不完整的结尾）', async () => {
+  const broken = (parts: string[], fail: boolean) =>
+    new Response(
+      new ReadableStream({
+        async start(controller) {
+          for (const part of parts) {
+            controller.enqueue(new TextEncoder().encode(part))
+            await new Promise(r => setTimeout(r, 5))
+          }
+          if (fail) controller.error(new TypeError('terminated'))
+          else controller.close()
+        },
+      }),
+      { headers: { 'Content-Type': 'text/event-stream' } },
+    )
+  let next: () => Response = () => broken([], false)
+  server = platformGateway({
+    sessions: new Map([['s', { recordId: 's', secret: 'local-secret' }]]),
+    record: () => ({ id: 's', engine: 'claude', platform: { groupId: '2', account: 'user' } }) as SessionRecord,
+    account: () => 'user',
+    fetch: async () => next(),
+  })
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  const post = () =>
+    fetch('http://127.0.0.1:' + (server.address() as { port: number }).port + '/v1/messages', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer local-secret' },
+      body: JSON.stringify({ model: 'claude-sonnet-5' }),
+    })
+  next = () => broken(['event: a\ndata: {}\n\nevent: b\nda', 'ta: {"x":1}\n\nevent: c\ndata: {"half'], true)
+  const cut = await (await post()).text()
+  expect(cut.startsWith('event: a\ndata: {}\n\nevent: b\ndata: {"x":1}\n\nevent: error\n')).toBe(true)
+  expect(cut).not.toContain('half')
+  next = () => broken(['event: a\r\ndata: {}\r\n\r\nevent: b\ndata: {"tail', '":1}'], false)
+  expect(await (await post()).text()).toBe('event: a\r\ndata: {}\r\n\r\nevent: b\ndata: {"tail":1}')
+  expect(eventEnd(Buffer.from('no boundary'))).toBe(0)
 })
 
 it('waits for remote billing correlation before forwarding and fails closed on disconnect', async () => {
