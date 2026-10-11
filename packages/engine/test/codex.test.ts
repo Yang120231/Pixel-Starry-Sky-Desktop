@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { CodexAdapter, EngineHost } from '../src'
-import type { HostEvent } from '@pixelsky/protocol'
+import type { EngineEvent, HostEvent } from '@pixelsky/protocol'
 import { codexPermission, turnErrorDetail } from '../src/codex/session'
 import { CODEX_MIN_VERSION, codexVersionStatus } from '../src/codex/discover'
 import { CodexTranslator, tokenCounts } from '../src/codex/translate'
@@ -236,5 +236,22 @@ describe('Codex app-server adapter', () => {
       tokenCounts({ inputTokens: 100, cachedInputTokens: 40, cacheWriteInputTokens: 10, outputTokens: 20 }),
     ).toMatchObject({ input: 50, cacheRead: 40, cacheWrite: 10, output: 20 })
     expect(codexPermission('plan').sandboxPolicy).toEqual({ type: 'readOnly', networkAccess: false })
+  })
+  it('压缩上下文：开始带压缩前大小，完成后用下一次用量补上压缩后大小', () => {
+    const events: EngineEvent[] = []
+    let used: number | null = 120_000
+    const translator = new CodexTranslator(
+      e => events.push(e),
+      () => used,
+    )
+    translator.item({ type: 'contextCompaction', id: 'c1' }, false)
+    expect(translator.items.get('cx-c1')).toMatchObject({ kind: 'compaction', status: 'running', preTokens: 120_000 })
+    used = 130_000
+    translator.item({ type: 'contextCompaction', id: 'c1' }, true)
+    expect(translator.items.get('cx-c1')).toMatchObject({ status: 'completed', preTokens: 120_000, postTokens: null })
+    expect(translator.items.get('cx-c1')).toHaveProperty('durationMs', expect.any(Number))
+    translator.usage(15_000)
+    translator.usage(16_000)
+    expect(translator.items.get('cx-c1')).toMatchObject({ postTokens: 15_000 })
   })
 })

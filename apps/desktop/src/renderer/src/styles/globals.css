@@ -637,6 +637,124 @@
   }
 }
 
+/* 压缩上下文（features/session/live/CompactionRow.tsx，docs/ui/compaction.md）：
+   图标上下挤压、标题上流过一道光、进度条反复收窄；结束时「−93%」弹出 */
+.compaction-icon {
+  animation: compaction-press 1.4s var(--ease-out) infinite;
+}
+@keyframes compaction-press {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+  45% {
+    transform: scaleY(0.55);
+  }
+}
+.compaction-text {
+  background: linear-gradient(
+    90deg,
+    var(--text-muted) 0%,
+    var(--text-muted) 35%,
+    var(--text) 50%,
+    var(--text-muted) 65%,
+    var(--text-muted) 100%
+  );
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: effort-sweep 2.2s linear infinite;
+}
+.compaction-squeeze {
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--accent) 45%, transparent),
+    var(--accent),
+    color-mix(in oklab, var(--accent) 45%, transparent)
+  );
+  background-size: 200% 100%;
+  animation:
+    compaction-squeeze 1.8s var(--ease-out) infinite,
+    effort-sweep 1.8s linear infinite;
+}
+@keyframes compaction-squeeze {
+  0% {
+    width: 100%;
+  }
+  60% {
+    width: 22%;
+  }
+  100% {
+    width: 100%;
+  }
+}
+.compaction-saved {
+  animation: compaction-pop 360ms var(--ease-out);
+}
+@keyframes compaction-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  70% {
+    transform: scale(1.08);
+  }
+}
+/* 进行中的胶囊：边框上转着一道强调色的光，外面一圈很淡的光晕 */
+.compaction-pill-running {
+  border-color: transparent;
+  background:
+    linear-gradient(var(--bg-surface), var(--bg-surface)) padding-box,
+    linear-gradient(
+        90deg,
+        var(--border) 0%,
+        var(--border) 32%,
+        var(--accent) 50%,
+        var(--border) 68%,
+        var(--border) 100%
+      )
+      border-box;
+  background-size:
+    100% 100%,
+    300% 100%;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 9%, transparent);
+  animation: compaction-border 2.4s linear infinite;
+}
+@keyframes compaction-border {
+  from {
+    background-position:
+      0 0,
+      100% 0;
+  }
+  to {
+    background-position:
+      0 0,
+      0% 0;
+  }
+}
+:root[data-motion='off']
+  :is(.compaction-icon, .compaction-text, .compaction-squeeze, .compaction-saved, .compaction-pill-running) {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-motion='system']
+    :is(.compaction-icon, .compaction-text, .compaction-squeeze, .compaction-saved, .compaction-pill-running) {
+    animation: none;
+  }
+}
+/* 动画关闭时标题照常显示 */
+:root[data-motion='off'] .compaction-text {
+  color: inherit;
+  background: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-motion='system'] .compaction-text {
+    color: inherit;
+    background: none;
+  }
+}
+
 /* 语法高亮：highlight.js 的 token 类名 → 设计变量 --syn-*（ui/code/highlight.tsx，docs/ui/code-highlight.md） */
 .hljs-comment,
 .hljs-quote {

@@ -83,6 +83,8 @@ export interface DemoSource {
     rewindPreview(sessionId: string, itemId: string, firstUserId: string | null): RewindPreview
     /** 旁聊回答（§3） */
     sideAnswer(question: string): string
+    /** 会动的演示（压缩上下文循环播放，docs/ui/compaction.md）：update 换掉某个会话的条目 */
+    animate?(update: (sessionId: string, items: (items: Item[]) => Item[]) => void): void
   }
 }
 

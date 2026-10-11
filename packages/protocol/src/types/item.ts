@@ -63,6 +63,21 @@ export type Item =
   | { kind: 'todo'; id: string; steps: TodoStep[]; status: ItemStatus }
   /** detail：引擎给出的原始报错详情（附加说明、错误类型、HTTP 状态码等），界面默认折叠 */
   | { kind: 'notice'; id: string; level: 'info' | 'warn' | 'error'; text: string; detail?: string | null }
+  /**
+   * 压缩上下文（docs/ui/compaction.md）：进行中显示动画和计时，结束后显示「压缩前 → 压缩后」和用时。
+   * trigger：手动 /compact 还是自动；引擎没说时为 null。几个大小、用时拿不到时为 null
+   */
+  | {
+      kind: 'compaction'
+      id: string
+      status: ItemStatus
+      trigger: 'manual' | 'auto' | null
+      startedAt: number
+      durationMs: number | null
+      preTokens: number | null
+      postTokens: number | null
+      error?: string | null
+    }
   /** 一轮结束后的统计（耗时、token、费用、模型），显示在这一轮回复下方（docs/ui/usage.md §4） */
   | { kind: 'turn_stats'; id: string; turnId: string; outcome: TurnOutcome; usage: TurnUsage }
 

@@ -11,7 +11,7 @@ const isTool = (item: Item): boolean => item.kind === 'command' || item.kind ===
 
 /** 一直显示的条目（不看位置）：最后的回复另外判断 */
 function alwaysVisible(item: Item): boolean {
-  if (item.kind === 'user' || item.kind === 'turn_stats') return true
+  if (item.kind === 'user' || item.kind === 'turn_stats' || item.kind === 'compaction') return true
   return item.kind === 'notice' && item.level !== 'info'
 }
 

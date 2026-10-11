@@ -173,4 +173,101 @@ describe('ClaudeTranslator（真实录像）', () => {
     t.resetUsageBaseline()
     expect(turn('claude-interrupt', 't3')?.models['claude-sonnet-5-5'].input).toBe(1198)
   })
+
+  describe('压缩上下文（docs/ui/compaction.md）', () => {
+    const setup = () => {
+      const events: EngineEvent[] = []
+      const t = new ClaudeTranslator('D:\work', {
+        emit: e => events.push(e),
+        sessionId: () => {},
+        permissionMode: () => {},
+        turnEnded: () => {},
+        fastState: () => {},
+      })
+      t.startTurn('t1')
+      const compactions = () =>
+        events.flatMap(e =>
+          (e.type === 'item_started' || e.type === 'item_completed') && e.item.kind === 'compaction'
+            ? [{ type: e.type, ...e.item }]
+            : [],
+        )
+      const request = (id: string, input: number) => {
+        const usage = { input_tokens: input, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
+        t.handle({
+          type: 'stream_event',
+          event: { type: 'message_start', message: { id, model: 'claude-sonnet-5-5', usage } },
+        })
+        t.handle({ type: 'stream_event', event: { type: 'message_delta', usage: { ...usage, output_tokens: 10 } } })
+      }
+      return { t, events, compactions, request }
+    }
+
+    it('开始时带压缩前的大小，compact_boundary 补上压缩后大小、用时和触发方式', () => {
+      const { t, compactions, request } = setup()
+      request('m1', 150_000)
+      t.handle({ type: 'system', subtype: 'status', status: 'compacting' })
+      t.handle({ type: 'system', subtype: 'status', status: 'compacting' })
+      expect(compactions()).toEqual([
+        expect.objectContaining({ type: 'item_started', status: 'running', preTokens: 150_000 }),
+      ])
+      t.handle({
+        type: 'system',
+        subtype: 'compact_boundary',
+        compact_metadata: { trigger: 'auto', pre_tokens: 160_000, post_tokens: 12_000, duration_ms: 31_000 },
+      })
+      t.handle({ type: 'system', subtype: 'status', status: null, compact_result: 'success' })
+      const all = compactions()
+      expect(all).toHaveLength(2)
+      expect(all[1]).toMatchObject({
+        type: 'item_completed',
+        id: all[0].id,
+        status: 'completed',
+        trigger: 'auto',
+        preTokens: 160_000,
+        postTokens: 12_000,
+        durationMs: 31_000,
+      })
+    })
+
+    it('结果先到、没有压缩后大小：先完成，再用下一次请求的占用补上', () => {
+      const { t, compactions, request } = setup()
+      request('m1', 90_000)
+      t.handle({ type: 'system', subtype: 'status', status: 'compacting' })
+      t.handle({ type: 'system', subtype: 'status', status: null, compact_result: 'success' })
+      t.handle({
+        type: 'system',
+        subtype: 'compact_boundary',
+        compact_metadata: { trigger: 'manual', pre_tokens: 90_000 },
+      })
+      request('m2', 8_000)
+      request('m3', 9_000)
+      const all = compactions()
+      expect(all.map(c => c.status)).toEqual(['running', 'completed', 'completed', 'completed'])
+      expect(new Set(all.map(c => c.id)).size).toBe(1)
+      expect(all.at(-1)).toMatchObject({ trigger: 'manual', preTokens: 90_000, postTokens: 8_000 })
+    })
+
+    it('压缩失败带原因；这一轮中断时进行中的压缩标成中断', () => {
+      const { t, compactions } = setup()
+      t.handle({ type: 'system', subtype: 'status', status: 'compacting' })
+      t.handle({ type: 'system', subtype: 'status', status: null, compact_result: 'failed', compact_error: 'too long' })
+      expect(compactions().at(-1)).toMatchObject({ status: 'failed', error: 'too long' })
+      t.handle({ type: 'system', subtype: 'status', status: 'compacting' })
+      t.interruptTurn()
+      expect(compactions().at(-1)).toMatchObject({ status: 'interrupted' })
+      expect(compactions().at(-1)?.durationMs).toEqual(expect.any(Number))
+    })
+
+    it('旧版 CLI 只有 compact_boundary：直接记一条完成的', () => {
+      const { t, compactions } = setup()
+      t.handle({
+        type: 'system',
+        subtype: 'compact_boundary',
+        compact_metadata: { trigger: 'auto', pre_tokens: 50_000 },
+      })
+      expect(compactions()).toEqual([
+        expect.objectContaining({ type: 'item_completed', status: 'completed', preTokens: 50_000, postTokens: null }),
+      ])
+    })
+  })
 })

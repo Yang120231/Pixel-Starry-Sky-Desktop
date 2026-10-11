@@ -35,6 +35,10 @@ export class ContextReader {
   private capacities = new Map<string, number>()
   private seen = new Set<string>()
   constructor(private emit: (event: EngineEvent) => void) {}
+  /** 最近一次知道的上下文占用（压缩开始时拿来当「压缩前」） */
+  get used(): number | null {
+    return this.value.used
+  }
   /** 容量：先用 Claude Code 报的（每轮 result 才有），再按去掉后缀的名字对，都没有用官方价格表里的上下文长度 */
   private capacity(model: string): number | null {
     const exact = this.capacities.get(model)

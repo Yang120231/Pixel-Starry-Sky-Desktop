@@ -128,7 +128,10 @@ export class CodexSession implements EngineSession {
     private readonly options: CodexLaunchOptions,
   ) {
     this.settings = { ...ctx.record() }
-    this.translator = new CodexTranslator(event => this.ctx.emit(event))
+    this.translator = new CodexTranslator(
+      event => this.ctx.emit(event),
+      () => this.last.total || null,
+    )
   }
   private async open(): Promise<void> {
     if (this.closed) throw new Error('Codex session is closed')
@@ -314,7 +317,10 @@ export class CodexSession implements EngineSession {
       usageSeen: false,
       activity: false,
     }
-    this.translator = new CodexTranslator(event => this.ctx.emit(event))
+    this.translator = new CodexTranslator(
+      event => this.ctx.emit(event),
+      () => this.last.total || null,
+    )
     this.nativeTurnId = null
     this.reportedError = null
     const active = this.active
@@ -446,6 +452,7 @@ export class CodexSession implements EngineSession {
       const usage = object(params.tokenUsage)
       this.totals = tokenCounts(usage.total)
       this.last = tokenCounts(usage.last)
+      this.translator.usage(this.last.total)
       if (!this.active.activity) {
         this.active.baseline = { ...this.totals }
         this.active.usageSeen = true

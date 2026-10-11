@@ -99,4 +99,12 @@ export const sessionMessages = {
   'session.progress.dismiss': { zh: '这一轮不再显示', en: 'Hide for this turn' },
   'session.todo.current': { zh: '当前：{text}', en: 'Now: {text}' },
   'session.todo.allDone': { zh: '全部完成', en: 'All done' },
+  'session.compaction.running': { zh: '正在压缩上下文', en: 'Compacting context' },
+  'session.compaction.done': { zh: '已压缩上下文', en: 'Context compacted' },
+  'session.compaction.autoDone': { zh: '已自动压缩上下文', en: 'Context auto-compacted' },
+  'session.compaction.interrupted': { zh: '压缩已中断', en: 'Compaction interrupted' },
+  'session.compaction.failed': { zh: '压缩失败', en: 'Compaction failed' },
+  'session.compaction.took': { zh: '用时 {time}', en: '{time}' },
+  'session.compaction.before': { zh: '压缩前 {n} tokens', en: 'Before: {n} tokens' },
+  'session.compaction.after': { zh: '压缩后 {n} tokens', en: 'After: {n} tokens' },
 } as const

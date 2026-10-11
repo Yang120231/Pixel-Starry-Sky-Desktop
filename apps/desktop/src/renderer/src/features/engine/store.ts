@@ -61,6 +61,13 @@ function set(patch: Partial<EngineState>): void {
   for (const l of listeners) l()
 }
 
+// 演示模式里会动的会话（压缩上下文循环播放）
+if (isDemo)
+  demo().conversations.animate?.((id, change) => {
+    const snap = state.snapshots[id]
+    if (snap) set({ snapshots: { ...state.snapshots, [id]: { ...snap, items: change(snap.items) } } })
+  })
+
 export function getEngineState(): EngineState {
   return state
 }

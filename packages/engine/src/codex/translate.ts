@@ -32,7 +32,13 @@ const statusOf = (value: unknown, complete: boolean): ItemStatus =>
 export class CodexTranslator {
   readonly items = new Map<string, Item>()
   private readonly agents = new Map<string, AgentRun>()
-  constructor(private readonly emit: (event: EngineEvent) => void) {}
+  /** 压缩完了还没有压缩后的大小：等下一次用量更新补上（docs/ui/compaction.md） */
+  private compactionSize: string | null = null
+  constructor(
+    private readonly emit: (event: EngineEvent) => void,
+    /** 当前上下文占用（最近一次请求），压缩开始时当「压缩前」 */
+    private readonly contextTokens: () => number | null = () => null,
+  ) {}
   item(raw: Message, complete: boolean): void {
     const id = 'cx-' + string(raw.id),
       type = string(raw.type),
@@ -64,14 +70,21 @@ export class CodexTranslator {
         status,
       }
     else if (type === 'fileChange') item = { kind: 'file_change', id, changes: codexChanges(raw.changes), status }
-    else if (type === 'contextCompaction')
+    else if (type === 'contextCompaction') {
+      const before = prior?.kind === 'compaction' ? prior : null
+      const startedAt = before?.startedAt ?? Date.now()
       item = {
-        kind: 'notice',
+        kind: 'compaction',
         id,
-        level: 'info',
-        text: complete ? 'Codex context compaction completed' : 'Codex is compacting context',
+        status,
+        trigger: null,
+        startedAt,
+        durationMs: status !== 'running' && before ? Date.now() - startedAt : null,
+        preTokens: before ? before.preTokens : this.contextTokens(),
+        postTokens: null,
       }
-    else if (type !== 'userMessage') {
+      if (status === 'completed') this.compactionSize = id
+    } else if (type !== 'userMessage') {
       const tool =
         type === 'mcpToolCall'
           ? 'mcp'
@@ -171,10 +184,24 @@ export class CodexTranslator {
     this.items.set(id, item)
     this.emit({ type: 'item_completed', item })
   }
+  /** 用量更新：刚压缩完的那条补上压缩后的大小（比压缩前小才算，没重新计数时不改） */
+  usage(contextTokens: number): void {
+    const id = this.compactionSize
+    const item = id ? this.items.get(id) : null
+    if (!id || item?.kind !== 'compaction' || contextTokens <= 0) return
+    this.compactionSize = null
+    if (item.preTokens !== null && contextTokens >= item.preTokens) return
+    const next = { ...item, postTokens: contextTokens }
+    this.items.set(id, next)
+    this.emit({ type: 'item_completed', item: next })
+  }
   finish(outcome: ItemStatus): void {
     for (const item of this.items.values())
       if ('status' in item && item.status === 'running') {
-        const finished = { ...item, status: outcome }
+        const finished =
+          item.kind === 'compaction'
+            ? { ...item, status: outcome, durationMs: Date.now() - item.startedAt }
+            : { ...item, status: outcome }
         this.items.set(item.id, finished)
         this.emit({ type: 'item_completed', item: finished })
       }

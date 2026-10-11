@@ -23,6 +23,8 @@ export const SHOWCASE_SESSIONS = [
   { id: 'demo-claude-errors', title: '报错：自有额度' },
   { id: 'demo-claude-platform', title: '报错：平台余额不足' },
   { id: 'demo-claude-running', title: '运行中：进度卡片、后台任务、重试' },
+  { id: 'demo-claude-compacting', title: '运行中：压缩上下文（循环播放）' },
+  { id: 'demo-claude-compactions', title: '压缩上下文：各种结果' },
   { id: 'demo-claude-starting', title: '正在启动引擎' },
   { id: 'demo-claude-approve-command', title: '审批：运行命令' },
   { id: 'demo-claude-approve-file', title: '审批：修改文件' },
@@ -856,7 +858,17 @@ const userMessages = snapshot(record('demo-claude-user', { updatedAt: T0 - 15 * 
   assistant('c-a3', '好的，只改实现：把写入放进 `useEffect`，保证在 `act` 里注册定时器。正在改', 'interrupted'),
   stats('c-s2', 'interrupted', { durationMs: 47_000, models: { 'claude-opus-5-5': opus(7_100, 680, 0.0874, 2) } }),
   user('c-u3', '继续', 18),
-  { kind: 'notice', id: 'c-n1', level: 'info', text: '上下文太长，已自动压缩较早的对话' },
+  {
+    kind: 'compaction',
+    id: 'c-n1',
+    status: 'completed',
+    trigger: 'auto',
+    startedAt: 0,
+    durationMs: 31_400,
+    preTokens: 184_213,
+    postTokens: 12_480,
+  },
+  { kind: 'notice', id: 'c-n3', level: 'info', text: '后台命令已完成：pnpm test --watch' },
   { kind: 'notice', id: 'c-n2', level: 'warn', text: 'Fast 模式暂时不可用：限流冷却中，稍后会自动恢复' },
   assistant(
     'c-a4',
@@ -1066,6 +1078,105 @@ const running = snapshot(
     ],
   },
 )
+
+// ---------- 6b 压缩上下文（docs/ui/compaction.md） ----------
+
+const COMPACT_TURN = 'cp-turn-2'
+const COMPACT_LIVE = 'cp-c2'
+
+const compactionItem = (
+  id: string,
+  patch: Partial<Extract<Item, { kind: 'compaction' }>>,
+): Extract<Item, { kind: 'compaction' }> => ({
+  kind: 'compaction',
+  id,
+  status: 'completed',
+  trigger: 'auto',
+  startedAt: T0 - MIN,
+  durationMs: 24_600,
+  preTokens: 182_904,
+  postTokens: 9_870,
+  ...patch,
+})
+
+/** 正在压缩：开着这个会话时由 animateCompaction 循环「压缩中 7 秒 → 压完（数字递减）→ 停 6 秒」 */
+const compacting = snapshot(
+  record('demo-claude-compacting', { lastOutcome: 'completed', updatedAt: T0 }),
+  [
+    user('cp-u1', '把草稿功能的实现和测试从头过一遍', 40),
+    assistant('cp-a1', '过完了：实现和测试都对得上，`useDraft` 的防抖和清理时机都有测试覆盖。'),
+    stats('cp-s1', 'completed', { durationMs: 212_000, models: { 'claude-opus-5-5': opus(176_000, 6_800, 1.32, 14) } }),
+    user('cp-u3', '接着把草稿同步到云端也做了', 0, { turnId: COMPACT_TURN }),
+    reasoning('cp-r1', '先看现有的同步接口，再决定草稿走哪条路。'),
+    compactionItem(COMPACT_LIVE, {
+      status: 'running',
+      trigger: null,
+      startedAt: T0 - 3_000,
+      durationMs: null,
+      preTokens: 171_350,
+      postTokens: null,
+    }),
+  ],
+  {
+    state: 'running',
+    turnId: COMPACT_TURN,
+    execution: { model: 'claude-opus-5-5', effort: 'high', platform: null },
+  },
+)
+
+/** 演示模式下让「正在压缩」的那条循环播放；update 换掉某个会话的条目 */
+export function animateCompaction(update: (sessionId: string, items: (items: Item[]) => Item[]) => void): void {
+  const set = (patch: Partial<Extract<Item, { kind: 'compaction' }>>): void =>
+    update('demo-claude-compacting', items =>
+      items.map(item => (item.id === COMPACT_LIVE && item.kind === 'compaction' ? { ...item, ...patch } : item)),
+    )
+  const cycle = (): void => {
+    const startedAt = Date.now()
+    set({ status: 'running', trigger: null, startedAt, durationMs: null, postTokens: null })
+    window.setTimeout(() => {
+      set({ status: 'completed', trigger: 'auto', durationMs: Date.now() - startedAt, postTokens: 11_234 })
+      window.setTimeout(cycle, 6_000)
+    }, 7_000)
+  }
+  cycle()
+}
+
+/** 各种结果放在一起对照样式 */
+const compactions = snapshot(record('demo-claude-compactions', { lastOutcome: 'completed', updatedAt: T0 - 2 * MIN }), [
+  user('cq-u1', '/compact', 30, { turnId: 'cq-t1' }),
+  compactionItem('cq-c1', { trigger: 'manual', durationMs: 24_600, preTokens: 182_904, postTokens: 9_870 }),
+  user('cq-u2', '继续把同步做完', 25, { turnId: 'cq-t2' }),
+  assistant('cq-a1', '同步接口改好了，正在补测试。'),
+  compactionItem('cq-c2', { durationMs: 41_300, preTokens: 196_420, postTokens: 14_212 }),
+  assistant('cq-a2', '测试补完了，全部通过。'),
+  stats('cq-s2', 'completed', { durationMs: 318_000, models: { 'claude-opus-5-5': opus(352_000, 9_400, 2.41, 22) } }),
+  user('cq-u3', '/compact', 18, { turnId: 'cq-t3' }),
+  compactionItem('cq-c3', {
+    status: 'failed',
+    trigger: 'manual',
+    durationMs: 8_200,
+    preTokens: 201_877,
+    postTokens: null,
+    error: 'Conversation too long. Press esc twice to go up a few messages and try again.',
+  }),
+  stats('cq-s3', 'failed', { durationMs: 8_400, models: { 'claude-opus-5-5': opus(1_200, 40, 0.02, 1) } }),
+  user('cq-u4', '/compact', 12, { turnId: 'cq-t4' }),
+  compactionItem('cq-c4', {
+    status: 'interrupted',
+    trigger: null,
+    durationMs: 5_100,
+    preTokens: 201_877,
+    postTokens: null,
+  }),
+  stats('cq-s4', 'interrupted', { durationMs: 5_300, models: { 'claude-opus-5-5': opus(800, 20, 0.01, 1) } }),
+  user('cq-u5', '再试一次压缩', 8, { turnId: 'cq-t5' }),
+  // 旧版 Claude Code：只有压缩前大小，没有用时和压缩后大小
+  compactionItem('cq-c5', { durationMs: null, preTokens: 201_877, postTokens: null }),
+  assistant('cq-a5', '压缩好了，可以继续。'),
+  // 压缩后几乎没变小（只有压缩后不比压缩前小时才不显示百分比）
+  user('cq-u6', '/compact', 2, { turnId: 'cq-t6' }),
+  compactionItem('cq-c6', { trigger: 'manual', durationMs: 3_900, preTokens: 12_480, postTokens: 12_310 }),
+])
 
 // ---------- 7 正在启动 ----------
 
@@ -1339,6 +1450,8 @@ export const showcaseSnapshots: Record<string, SessionSnapshot> = Object.fromEnt
     errors,
     platform,
     running,
+    compacting,
+    compactions,
     starting,
     approveCommand,
     approveFile,

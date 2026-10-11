@@ -28,6 +28,7 @@ import { obj, num, str } from './shape'
 import { ERROR_TEXT, friendlyApiError } from './apiError'
 
 type Msg = Record<string, unknown>
+type CompactionItem = Extract<Item, { kind: 'compaction' }>
 
 /** 一个模型的累计用量（Claude modelUsage 里的数字） */
 interface UsageCounters {
@@ -126,6 +127,10 @@ export class ClaudeTranslator {
   private taskInfo = new Map<string, TaskInfo>()
   private bgTasks: BackgroundTask[] = []
   private subagentList: SubagentStatus[] = []
+  /** 这次压缩（docs/ui/compaction.md）：status 'compacting' 时开始；结果和 compact_boundary 先后不定，都到了才算完 */
+  private compaction: CompactionItem | null = null
+  /** 压缩完了但 Claude Code 没给压缩后的大小：用下一次请求的上下文占用补上 */
+  private compactionSize: CompactionItem | null = null
   readonly runs = new Runs()
 
   constructor(
@@ -342,6 +347,55 @@ export class ClaudeTranslator {
     if (traced) this.emitRuns()
   }
 
+  private compactionStarted(): void {
+    if (this.compaction?.status === 'running') return
+    this.compactionSize = null
+    this.compaction = {
+      kind: 'compaction',
+      id: this.nextId('compact'),
+      status: 'running',
+      trigger: null,
+      startedAt: Date.now(),
+      durationMs: null,
+      preTokens: this.context.used,
+      postTokens: null,
+    }
+    this.cb.emit({ type: 'item_started', item: this.compaction })
+  }
+
+  /** 压缩结束（结果帧、这一轮结束）；成功时留着等 compact_boundary 补上大小 */
+  private settleCompaction(status: ItemStatus, error: string | null = null): void {
+    const current = this.compaction
+    if (current?.status !== 'running') return
+    const item: CompactionItem = {
+      ...current,
+      status,
+      durationMs: Date.now() - current.startedAt,
+      ...(error ? { error } : {}),
+    }
+    this.compaction = status === 'completed' ? item : null
+    this.cb.emit({ type: 'item_completed', item })
+  }
+
+  /** compact_boundary：带压缩前后的大小和用时；旧版 CLI 没有前面的 status 帧，直接记一条完成的 */
+  private compactionBoundary(meta: Msg): void {
+    const current = this.compaction
+    this.compaction = null
+    const startedAt = current?.startedAt ?? Date.now()
+    const item: CompactionItem = {
+      kind: 'compaction',
+      id: current?.id ?? this.nextId('compact'),
+      status: 'completed',
+      trigger: meta.trigger === 'manual' || meta.trigger === 'auto' ? meta.trigger : null,
+      startedAt,
+      durationMs: num(meta.duration_ms) || current?.durationMs || (current ? Date.now() - startedAt : null),
+      preTokens: num(meta.pre_tokens) || current?.preTokens || null,
+      postTokens: typeof meta.post_tokens === 'number' && meta.post_tokens >= 0 ? meta.post_tokens : null,
+    }
+    this.compactionSize = item.postTokens === null ? item : null
+    this.cb.emit({ type: 'item_completed', item })
+  }
+
   private clearRetry(): void {
     if (!this.retry) return
     this.retry = null
@@ -361,6 +415,10 @@ export class ClaudeTranslator {
         if (typeof msg.permissionMode === 'string' && FROM_CLAUDE_MODE[msg.permissionMode]) {
           this.cb.permissionMode(FROM_CLAUDE_MODE[msg.permissionMode])
         }
+        if (msg.parent_tool_use_id) return
+        if (msg.status === 'compacting') this.compactionStarted()
+        else if (msg.compact_result === 'failed') this.settleCompaction('failed', str(msg.compact_error) || null)
+        else if (msg.compact_result === 'success') this.settleCompaction('completed')
         return
       case 'api_retry':
         if (!this.turnId || msg.parent_tool_use_id) return
@@ -380,7 +438,7 @@ export class ClaudeTranslator {
         }
         return
       case 'compact_boundary':
-        this.notice('info', '上下文太长，已自动压缩较早的对话')
+        if (!msg.parent_tool_use_id) this.compactionBoundary(obj(msg.compact_metadata))
         return
       case 'task_started':
       case 'task_progress':
@@ -531,6 +589,11 @@ export class ClaudeTranslator {
       // result 里的 usage 是整轮累计，不能当作当前上下文大小；只有每次请求的 message_delta 才是
       contextTokens: final ? this.usage.contextTokens : input + cacheRead + cacheWrite,
     }
+    const size = this.compactionSize
+    if (!final && size && this.usage.contextTokens > 0) {
+      this.compactionSize = null
+      this.cb.emit({ type: 'item_completed', item: { ...size, postTokens: this.usage.contextTokens } })
+    }
   }
 
   private onResult(msg: Msg): void {
@@ -556,6 +619,7 @@ export class ClaudeTranslator {
       outcome === 'completed' ? 'completed' : outcome === 'interrupted' ? 'interrupted' : 'failed'
     for (const b of this.blocks.values()) if (!b.done) this.finishBlock(b, b.text, leftover)
     this.blocks.clear()
+    this.settleCompaction(leftover)
     for (const item of this.tools.values()) {
       this.cb.emit({
         type: 'item_completed',
@@ -640,6 +704,7 @@ export class ClaudeTranslator {
     this.apiError = null
     for (const b of this.blocks.values()) if (!b.done) this.finishBlock(b, b.text, 'failed')
     this.blocks.clear()
+    this.settleCompaction('failed')
     for (const item of this.tools.values()) {
       this.cb.emit({ type: 'item_completed', item: completeToolItem(item, '', true, null, 'failed') })
     }
@@ -657,6 +722,7 @@ export class ClaudeTranslator {
     this.turnId = null
     for (const b of this.blocks.values()) if (!b.done) this.finishBlock(b, b.text, 'interrupted')
     this.blocks.clear()
+    this.settleCompaction('interrupted')
     for (const item of this.tools.values()) {
       this.cb.emit({ type: 'item_completed', item: completeToolItem(item, '', false, null, 'interrupted') })
     }

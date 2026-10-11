@@ -51,6 +51,7 @@ describe('对话展示演示数据', () => {
       'tool',
       'todo',
       'notice',
+      'compaction',
       'turn_stats',
     ]
     for (const kind of every) expect(kinds(kind).length, kind).toBeGreaterThan(0)
@@ -63,6 +64,9 @@ describe('对话展示演示数据', () => {
     )
     expect(kinds('file_change').some(f => f.changes.length > 1)).toBe(true)
     expect(new Set(kinds('notice').map(n => n.level))).toEqual(new Set(['info', 'warn', 'error']))
+    expect(new Set(kinds('compaction').map(c => c.status))).toEqual(
+      new Set(['running', 'completed', 'failed', 'interrupted']),
+    )
     expect(new Set(kinds('turn_stats').map(t => t.outcome))).toEqual(new Set(['completed', 'interrupted', 'failed']))
     expect(kinds('assistant').some(a => a.status === 'interrupted')).toBe(true)
     expect(kinds('user').some(u => u.mode === 'guidance')).toBe(true)

@@ -59,6 +59,8 @@ export function itemHeight(item: Item): number {
       return markdownHeight(item.text)
     case 'notice':
       return 40
+    case 'compaction':
+      return 44
     default:
       return ROW
   }

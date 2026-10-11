@@ -24,6 +24,7 @@ import { ChangedFilesCard } from '../ChangedFilesCard'
 import { TurnStats } from '../TurnStats'
 import { Markdown } from '@/ui/markdown/Markdown'
 import { NoticeRow, ReasoningBlock, TodoCard, ToolItemRow, UserBubble } from './ItemRows'
+import { CompactionRow } from './CompactionRow'
 import { isStarting } from '../queueView'
 import { NoticeActions } from './NoticeActions'
 import { AssistantMessageActions, UserMessageActions } from './MessageActions'
@@ -155,6 +156,8 @@ const ItemView = memo(function ItemView({ item, reply }: { item: Item; reply?: s
       return <TodoCard item={item} />
     case 'notice':
       return <NoticeRow item={item} />
+    case 'compaction':
+      return <CompactionRow item={item} />
     case 'turn_stats':
       // 这一轮回复的「复制」放在统计行最前面，不额外占一行
       return (
