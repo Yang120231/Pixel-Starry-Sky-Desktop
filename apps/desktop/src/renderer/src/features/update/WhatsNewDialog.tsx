@@ -1,25 +1,50 @@
-// 更新后的「更新内容」弹窗（GitHub #13，docs/release-update.md §8）：每个版本只弹一次；「不再提示」以后都不弹，关于页能再打开
-import { useEffect, useId, useRef } from 'react'
+// 更新后的「更新内容」弹窗（GitHub #13，docs/release-update.md §8）：每个版本只弹一次；「不再提示」以后都不弹，关于页能再打开。
+// 说明按「新功能 / 改动 / 修复」分组，每条开头加粗的一句当标题；跳过了几版时最新的展开、其余折叠；更早的版本在底下能翻
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { ExternalLink, X } from 'lucide-react'
+import { ChevronRight, ExternalLink, RefreshCw, Sparkles, Wrench, X, type LucideIcon } from 'lucide-react'
+import { cn } from '@/ui'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import { Markdown } from '@/ui/markdown/Markdown'
-import { notesFor, startWhatsNew, useWhatsNew, whatsNewActions } from './whatsNew'
+import {
+  countKinds,
+  issueUrl,
+  notesFor,
+  olderNotes,
+  parseNotes,
+  startWhatsNew,
+  useWhatsNew,
+  whatsNewActions,
+  type NoteItem,
+  type NoteSection,
+  type SectionKind,
+  type VersionNotes,
+} from './whatsNew'
+
+const KIND_STYLE: Record<SectionKind, { icon: LucideIcon; tone: string }> = {
+  feature: { icon: Sparkles, tone: 'text-accent-fg bg-accent-soft' },
+  change: { icon: RefreshCw, tone: 'text-warn bg-warn/10' },
+  fix: { icon: Wrench, tone: 'text-fg-secondary bg-subtle' },
+  other: { icon: ChevronRight, tone: 'text-fg-muted bg-subtle' },
+}
+const ORDER: SectionKind[] = ['feature', 'change', 'fix', 'other']
 
 export function WhatsNewDialog() {
   useI18n()
-  const { open } = useWhatsNew()
+  const { open, manual } = useWhatsNew()
   useEffect(startWhatsNew, [])
   if (!open) return null
-  return <Dialog version={open.version} previous={open.previous} />
+  return <Dialog key={open.version} version={open.version} previous={open.previous} manual={manual} />
 }
 
-function Dialog({ version, previous }: { version: string; previous: string | null }) {
+function Dialog({ version, previous, manual }: { version: string; previous: string | null; manual: boolean }) {
   const ref = useRef<HTMLDivElement>(null),
     done = useRef<HTMLButtonElement>(null),
     titleId = useId()
-  const notes = notesFor({ version, previous })
+  const notes = useMemo(() => notesFor({ version, previous }), [version, previous])
+  const older = useMemo(() => olderNotes({ version, previous }), [version, previous])
+  const total = useMemo(() => countKinds(notes.flatMap(n => parseNotes(n.text))), [notes])
   useEffect(() => {
     const before = document.activeElement as HTMLElement | null
     done.current?.focus({ preventScroll: true })
@@ -49,6 +74,12 @@ function Dialog({ version, previous }: { version: string; previous: string | nul
       if (before?.isConnected) before.focus({ preventScroll: true })
     }
   }, [])
+  const subtitle =
+    notes.length > 1
+      ? tr('whatsNew.included', { p0: notes.length })
+      : previous && previous !== version
+        ? tr('whatsNew.from', { p0: previous })
+        : null
   return createPortal(
     <div
       className="fixed inset-0 z-[80] flex items-center justify-center bg-scrim p-6"
@@ -63,67 +94,208 @@ function Dialog({ version, previous }: { version: string; previous: string | nul
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="pop-in flex max-h-[min(640px,85vh)] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-line-card bg-popover text-fg shadow-popover outline-none"
+        className="pop-in flex max-h-[min(720px,88vh)] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-line-card bg-popover text-fg shadow-popover outline-none"
       >
-        <div className="flex shrink-0 items-start gap-3 px-5 pt-5 pb-3">
+        <div className="flex shrink-0 items-start gap-3 px-6 pt-5 pb-4">
           <div className="min-w-0 flex-1">
             <h3 id={titleId} className="text-section font-semibold">
-              {tr('whatsNew.title', { p0: version })}
+              {tr(manual ? 'whatsNew.history' : 'whatsNew.title', { p0: version })}
             </h3>
-            {previous && previous !== version && (
-              <p className="mt-0.5 text-meta text-fg-muted">{tr('whatsNew.from', { p0: previous })}</p>
-            )}
+            {subtitle && <p className="mt-0.5 text-meta text-fg-muted">{subtitle}</p>}
+            <KindCounts counts={total} className="mt-2.5" />
           </div>
           <button
             type="button"
             aria-label={tr('whatsNew.close')}
             title={tr('whatsNew.close')}
             onClick={() => whatsNewActions.close()}
-            className="press no-drag -mt-1 -mr-1 flex size-7 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-hover hover:text-fg"
+            className="press no-drag -mt-1 -mr-2 flex size-7 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-hover hover:text-fg"
           >
             <X size={16} strokeWidth={1.5} />
           </button>
         </div>
-        <div className="selectable min-h-0 flex-1 overflow-y-auto border-y border-line-subtle px-5 py-3">
-          {notes.map(n => (
-            <section key={n.version} data-whats-new-version={n.version} className="mb-6 last:mb-0">
-              {notes.length > 1 && (
-                <h4 className="mb-2 border-b border-line-subtle pb-1.5 text-section font-semibold text-fg">
-                  {n.version}
-                </h4>
-              )}
-              <Markdown text={n.text} className="text-list" />
-            </section>
-          ))}
+        <div className="selectable min-h-0 flex-1 overflow-y-auto border-y border-line-subtle px-6 py-4">
+          {notes.map((n, i) =>
+            notes.length > 1 ? (
+              <VersionBlock key={n.version} notes={n} current={n.version === version} initiallyOpen={i === 0} />
+            ) : (
+              <Sections key={n.version} version={n.version} sections={parseNotes(n.text)} />
+            ),
+          )}
+          {older.length > 0 && (
+            <div data-whats-new-older className="mt-6">
+              <p className="mb-1 text-label font-medium text-fg-faint">{tr('whatsNew.older')}</p>
+              {older.map(n => (
+                <VersionBlock key={n.version} notes={n} current={false} initiallyOpen={false} />
+              ))}
+            </div>
+          )}
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2 px-5 py-3">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 px-6 py-3">
           <button
             type="button"
             onClick={() => void window.pixelsky?.app.open('releases')}
-            className="press no-drag inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-meta text-fg-secondary hover:bg-hover hover:text-fg"
+            className="press no-drag -ml-2 inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-meta text-fg-secondary hover:bg-hover hover:text-fg"
           >
             <ExternalLink size={13} strokeWidth={1.5} />
             {tr('whatsNew.fullLog')}
           </button>
           <div className="flex-1" />
-          <button
-            type="button"
-            onClick={() => whatsNewActions.close(true)}
-            className="press rounded-md px-3 py-2 text-ui text-fg-secondary hover:bg-hover hover:text-fg"
-          >
-            {tr('whatsNew.mute')}
-          </button>
+          {!manual && (
+            <button
+              type="button"
+              onClick={() => whatsNewActions.close(true)}
+              className="press rounded-md px-3 py-2 text-ui text-fg-secondary hover:bg-hover hover:text-fg"
+            >
+              {tr('whatsNew.mute')}
+            </button>
+          )}
           <button
             ref={done}
             type="button"
             onClick={() => whatsNewActions.close()}
             className="press rounded-md bg-primary px-3 py-2 text-ui font-medium text-primary-fg"
           >
-            {tr('whatsNew.done')}
+            {tr(manual ? 'whatsNew.close' : 'whatsNew.done')}
           </button>
         </div>
       </div>
     </div>,
     document.body,
+  )
+}
+
+/** 「3 项新功能 · 5 项修复」 */
+function KindCounts({ counts, className }: { counts: Partial<Record<SectionKind, number>>; className?: string }) {
+  const kinds = ORDER.filter(k => counts[k])
+  if (!kinds.length) return null
+  return (
+    <div className={cn('flex flex-wrap items-center gap-1.5', className)}>
+      {kinds.map(kind => {
+        const { icon: Icon, tone } = KIND_STYLE[kind]
+        return (
+          <span
+            key={kind}
+            className={cn('inline-flex h-5 items-center gap-1 rounded-full px-2 text-label font-medium', tone)}
+          >
+            <Icon size={11} strokeWidth={2} />
+            {tr(`whatsNew.count.${kind}`, { p0: counts[kind] })}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
+/** 一版：标题行点开 / 收起；收起时显示各组条数 */
+function VersionBlock({
+  notes,
+  current,
+  initiallyOpen,
+}: {
+  notes: VersionNotes
+  current: boolean
+  initiallyOpen: boolean
+}) {
+  const [open, setOpen] = useState(initiallyOpen)
+  const sections = useMemo(() => parseNotes(notes.text), [notes.text])
+  return (
+    <section data-whats-new-version={notes.version} className="border-b border-line-subtle last:border-b-0">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen(value => !value)}
+        className="press flex h-10 w-full items-center gap-2 rounded-md text-left hover:bg-hover"
+      >
+        <ChevronRight
+          size={14}
+          strokeWidth={1.75}
+          className={cn('shrink-0 text-fg-muted transition-transform', open && 'rotate-90')}
+        />
+        <span className="text-ui font-semibold text-fg">{notes.version}</span>
+        {current && (
+          <span className="rounded-full bg-accent-soft px-1.5 text-label font-medium text-accent-fg">
+            {tr('whatsNew.current')}
+          </span>
+        )}
+        <span className="flex-1" />
+        {!open && <KindCounts counts={countKinds(sections)} className="mr-1" />}
+      </button>
+      {open && (
+        <div className="pt-1 pb-4 pl-6">
+          <Sections version={notes.version} sections={sections} />
+        </div>
+      )}
+    </section>
+  )
+}
+
+function Sections({ version, sections }: { version: string; sections: NoteSection[] }) {
+  return (
+    <div data-whats-new-notes={version} className="space-y-5">
+      {sections.map((section, i) => (
+        <Section key={`${section.heading}-${i}`} section={section} />
+      ))}
+    </div>
+  )
+}
+
+function Section({ section }: { section: NoteSection }) {
+  const { icon: Icon, tone } = KIND_STYLE[section.kind]
+  return (
+    <div data-whats-new-section={section.kind}>
+      {section.heading && (
+        <h4 className="mb-2 flex items-center gap-1.5">
+          <span className={cn('inline-flex size-5 items-center justify-center rounded-md', tone)}>
+            <Icon size={12} strokeWidth={2} />
+          </span>
+          <span className="text-ui font-semibold text-fg">
+            {section.kind === 'other' ? section.heading : tr(`whatsNew.kind.${section.kind}`)}
+          </span>
+          <span className="text-meta text-fg-faint tabular-nums">{section.items.length}</span>
+        </h4>
+      )}
+      <ul className="space-y-2.5">
+        {section.items.map((item, i) => (
+          <Item key={i} item={item} />
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function Item({ item }: { item: NoteItem }) {
+  const issues: ReactNode = item.issues.map(n => (
+    <a
+      key={n}
+      href={issueUrl(n)}
+      target="_blank"
+      rel="noreferrer"
+      title={tr('whatsNew.issue', { p0: n })}
+      className="ml-1.5 inline-flex h-[18px] items-center rounded-full border border-line-card px-1.5 align-[1px] text-label font-normal text-fg-muted no-underline hover:border-line-strong hover:text-fg"
+    >
+      #{n}
+    </a>
+  ))
+  return (
+    <li className="relative pl-3.5 before:absolute before:top-[0.6em] before:left-0 before:size-1 before:rounded-full before:bg-fg-faint">
+      {item.title && (
+        <p className="text-ui leading-relaxed font-medium text-fg">
+          {item.title}
+          {issues}
+        </p>
+      )}
+      {item.body && (
+        <Markdown
+          text={item.body}
+          className={cn(
+            'text-list leading-relaxed',
+            item.title ? 'mt-0.5 text-fg-secondary' : 'text-fg-body',
+            '[&_li]:my-0.5 [&_p]:my-0 [&_ul]:my-1',
+          )}
+        />
+      )}
+      {!item.title && item.issues.length > 0 && <p className="-mt-0.5">{issues}</p>}
+    </li>
   )
 }
