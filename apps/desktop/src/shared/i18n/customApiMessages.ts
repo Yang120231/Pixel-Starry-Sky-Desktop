@@ -58,6 +58,11 @@ export const customApiMessages = {
   'customApi.addModel': { zh: '添加', en: 'Add' },
   'customApi.modelPlaceholder': { zh: '模型名，回车添加', en: 'Model name, press Enter to add' },
   'customApi.contextWindow': { zh: '上下文长度', en: 'Context window' },
+  'customApi.contextWindowPlaceholder': { zh: '上下文长度，如 1M', en: 'Context, e.g. 1M' },
+  'customApi.contextWindowHint': {
+    zh: '写数字或带单位，如 200000、200K、1M（1K 到 100M）',
+    en: 'A number or with a unit, e.g. 200000, 200K, 1M (1K to 100M)',
+  },
   'customApi.priceRef': { zh: '计价参照', en: 'Pricing reference' },
   'customApi.priceAuto': { zh: '自动：{p0}', en: 'Auto: {p0}' },
   'customApi.priceNone': { zh: '只显示 token', en: 'Tokens only' },
