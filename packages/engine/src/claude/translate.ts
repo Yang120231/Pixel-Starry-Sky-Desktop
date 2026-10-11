@@ -83,7 +83,12 @@ interface TaskInfo {
   kind: string
   description: string
   background: boolean
+  /** 派出它的 Task / Agent 工具调用 */
+  toolUseId: string | null
 }
+
+/** 子智能体结束的状态 → 工具行的状态 */
+const AGENT_STATUS: Record<string, ItemStatus> = { completed: 'completed', failed: 'failed' }
 
 export class ClaudeTranslator {
   readonly context: ContextReader
@@ -125,6 +130,8 @@ export class ClaudeTranslator {
   private subTools = new Map<string, Item>()
   /** 强制结束过这一轮（进程被杀 / 意外退出）：之后迟到的帧不能自己开一轮，等下一次 startTurn */
   private halted = false
+  /** 在后台跑的子智能体的 Agent 工具行：key = tool_use.id；「已在后台启动」不算完成，等它的 task_notification */
+  private asyncAgents = new Map<string, Item>()
   /** 子智能体工具 → 派出它的 Task / Agent 工具调用 */
   private subParent = new Map<string, string>()
   /** system/task_* 里的任务 */
@@ -193,6 +200,9 @@ export class ClaudeTranslator {
     if (this.runs.stopAll()) this.emitRuns()
     this.taskInfo.clear()
     for (const id of [...this.subTools.keys()]) this.settleSubTool(id, 'interrupted')
+    for (const item of this.asyncAgents.values())
+      this.cb.emit({ type: 'item_completed', item: { ...item, status: 'interrupted' } as Item })
+    this.asyncAgents.clear()
   }
 
   /** 子智能体的工具没等到结果就结束了（这一轮中断、进程退出、子智能体都结束了） */
@@ -337,6 +347,7 @@ export class ClaudeTranslator {
           kind,
           description: str(msg.description),
           background: msg.is_backgrounded === true || (kind !== 'local_agent' && msg.is_backgrounded !== false),
+          toolUseId: str(msg.tool_use_id) || null,
         }
         this.taskInfo.set(id, info)
         if (kind === 'local_agent')
@@ -367,6 +378,21 @@ export class ClaudeTranslator {
         const info = this.taskInfo.get(id)
         this.taskInfo.delete(id)
         const status = str(msg.status) || 'completed'
+        // 后台子智能体真正结束了：它的 Agent 工具行这时才收尾
+        const call = info?.toolUseId ?? (str(msg.tool_use_id) || null)
+        const launched = call ? this.asyncAgents.get(call) : undefined
+        if (call && launched) {
+          this.asyncAgents.delete(call)
+          const summary = str(msg.summary)
+          this.cb.emit({
+            type: 'item_completed',
+            item: {
+              ...launched,
+              status: AGENT_STATUS[status] ?? 'interrupted',
+              ...(summary && launched.kind === 'tool' ? { output: summary } : {}),
+            } as Item,
+          })
+        }
         if (info?.kind === 'local_agent') {
           this.setSubagent(id, { status, message: str(msg.summary) || null })
           // 子智能体都结束了：还挂着的工具不会再有结果
@@ -614,6 +640,16 @@ export class ClaudeTranslator {
       if (str(result.agentId) && this.runs.agentResult(result)) this.emitRuns()
       const status: ItemStatus | undefined = isError && this.declined.has(id) ? 'declined' : undefined
       this.declined.delete(id)
+      // 后台子智能体：工具马上返回「已在后台启动」，子智能体还在干活，这一行保持运行中（不随这一轮收尾）
+      if (!isError && (result.isAsync === true || result.status === 'async_launched')) {
+        const running = {
+          ...completeToolItem(item, block.content, false, msg.tool_use_result, 'running'),
+          background: true,
+        } as Item
+        this.asyncAgents.set(id, running)
+        this.cb.emit({ type: 'item_started', item: running })
+        continue
+      }
       this.cb.emit({
         type: 'item_completed',
         item: completeToolItem(item, block.content, isError, msg.tool_use_result, status),
