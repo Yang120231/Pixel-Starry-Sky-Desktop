@@ -615,6 +615,11 @@ export const IPC_CONTRACT = {
   'terminal:state': { kind: 'invoke', route: 'self', trust: 'window' },
   'terminal:write': { kind: 'invoke', route: 'self', trust: 'window' },
   'theme:set': { kind: 'send', route: 'local', trust: 'none' },
+  // 系统托盘（docs/ui/tray.md）：托盘菜单让窗口新建任务 / 打开会话 / 切勿扰；窗口报告勿扰状态；「关闭主窗口时」的设置在主进程
+  'tray:command': { kind: 'push', route: 'push', trust: 'none' },
+  'tray:dnd': { kind: 'send', route: 'local', trust: 'sender' },
+  'tray:prefs': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'tray:setPrefs': { kind: 'invoke', route: 'local', trust: 'sender' },
   'ui:locale': { kind: 'invoke', route: 'local', trust: 'frame' },
   'update:changed': { kind: 'push', route: 'push', trust: 'none' },
   'update:check': { kind: 'invoke', route: 'local', trust: 'sender' },

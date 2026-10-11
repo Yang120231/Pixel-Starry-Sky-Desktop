@@ -15,6 +15,7 @@ import { initNotifications } from './notifications/notifications'
 import { confirmTerminalClose, closeWindowTerminals } from './terminal/ipc'
 import { createAppContext } from './app/context'
 import { initLogIpc, initLogging } from './app/logging'
+import { initTray, type TrayController } from './app/tray'
 import type { Locale } from '../shared/i18n/messages'
 
 type ResolvedTheme = 'light' | 'dark'
@@ -37,12 +38,35 @@ const closingAllowed = new WeakSet<BrowserWindow>()
 const finishing = new WeakSet<BrowserWindow>()
 let quitRequested = false
 let quitReady = false
+/** 正在退出整个应用（菜单、托盘、自动更新）：这时 × 不再隐藏到托盘 */
+let quitting = false
+/** 系统托盘（app/tray.ts）；截图模式不建 */
+let tray: TrayController | null = null
+
+// 只开一份（docs/ui/tray.md §2.4）：再次启动时唤回已有的窗口（窗口可能藏在托盘里）。
+// 锁按数据目录算，演示 / 测试用别的 --user-data-dir 时互不影响；截图模式不加锁
+if (!captureDir && !app.requestSingleInstanceLock()) {
+  app.exit(0)
+}
+app.on('second-instance', () => {
+  if (!app.isReady()) return
+  if (tray) tray.showWindow()
+  else {
+    const win = BrowserWindow.getAllWindows()[0]
+    if (win) {
+      if (win.isMinimized()) win.restore()
+      win.show()
+      win.focus()
+    }
+  }
+})
 async function finishWindowClose(win: BrowserWindow): Promise<void> {
   if (finishing.has(win) || win.isDestroyed()) return
   finishing.add(win)
   try {
     if (!(await confirmTerminalClose(win))) {
       quitRequested = false
+      quitting = false
       return
     }
     await closeWindowTerminals(win)
@@ -69,7 +93,16 @@ app.on('before-quit', event => {
   const windows = BrowserWindow.getAllWindows()
   if (windows.length && !captureDir) {
     quitRequested = true
-    for (const win of windows) win.close()
+    quitting = true
+    // 藏在托盘里的窗口先显示出来：未保存文件、终端还在运行的确认要看得见
+    for (const win of windows) {
+      if (!win.isVisible()) win.show()
+      win.close()
+    }
+    // 窗口里选了「返回保存」时界面不会告诉主进程：过一会儿恢复成平时的 ×（真正退出时窗口已经一个个关掉，不受影响）
+    setTimeout(() => {
+      quitting = false
+    }, 10_000).unref()
     quitRequested = false
     return
   }
@@ -137,6 +170,11 @@ function createWindow(): BrowserWindow {
   win.on('close', event => {
     if (captureDir || closingAllowed.has(win) || win.webContents.isDestroyed()) return
     event.preventDefault()
+    // 关闭最后一个看得见的窗口：按设置隐藏到托盘，任务继续（docs/ui/tray.md §2.3）
+    if (!quitting && tray?.shouldHideOnClose(win)) {
+      tray.hide(win)
+      return
+    }
     if (win.webContents.isCrashed()) {
       void finishWindowClose(win)
       return
@@ -272,7 +310,10 @@ if (process.platform === 'win32') app.setAppUserModelId(app.isPackaged ? 'com.pi
 
 app.whenReady().then(async () => {
   setAppMenu()
-  initUiLanguage(setAppMenu)
+  initUiLanguage(locale => {
+    setAppMenu(locale)
+    tray?.refresh()
+  })
   initWindowControls()
   initNotifications() // 系统通知，见 notifications/notifications.ts
   initAccount() // 账号登录与额度，见 account/account.ts
@@ -283,6 +324,12 @@ app.whenReady().then(async () => {
   await initWorkspace(ctx)
   await initProjectTools(ctx)
   createWindow()
+  // 系统托盘（docs/ui/tray.md）：通知区域图标、右键菜单、关闭时隐藏到托盘
+  if (!captureDir)
+    tray = initTray(ctx, {
+      createWindow,
+      quit: () => app.quit(),
+    })
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })

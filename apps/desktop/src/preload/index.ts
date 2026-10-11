@@ -16,6 +16,8 @@ import type { NotificationClick } from '../shared/types/notifications'
 import type { NotificationsBridge } from './notifications'
 import type { ArtifactsBridge } from './artifacts'
 import type { LogBridge } from './log'
+import type { TrayBridge } from './tray'
+import type { TrayCommand } from '../shared/types/tray'
 
 // 通道名一律用契约键约束：拼错或未登记的通道在这里就是类型错误
 type Listener = Parameters<typeof ipcRenderer.on>[1]
@@ -319,7 +321,19 @@ const notifications: NotificationsBridge = {
     return () => ipcRenderer.removeListener('notify:clicked', listener)
   },
 }
+// 系统托盘：托盘菜单的命令、勿扰状态、关闭主窗口时的行为（docs/ui/tray.md）
+const tray: TrayBridge = {
+  onCommand: cb => {
+    const listener = (_event: Electron.IpcRendererEvent, value: TrayCommand): void => cb(value)
+    on('tray:command', listener)
+    return () => ipcRenderer.removeListener('tray:command', listener)
+  },
+  reportDnd: until => send('tray:dnd', until),
+  prefs: () => call('tray:prefs'),
+  setPrefs: patch => call('tray:setPrefs', patch),
+}
 contextBridge.exposeInMainWorld('pixelsky', {
+  tray,
   machines: {
     state: () => call('machines:state'),
     save: input => call('machines:save', input),

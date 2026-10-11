@@ -31,6 +31,7 @@ import { ReplyStatsSettings } from './ReplyStatsSettings'
 import { ComposerStyleSettings } from './ComposerStyleSettings'
 import { AccentSettings } from './AccentSettings'
 import { PaletteSettings } from './PaletteSettings'
+import { CloseActionSettings } from './CloseActionSettings'
 import { TurnRailSettings } from './TurnRailSettings'
 import { CacheMissSettings } from './CacheMissSettings'
 import { WallpaperSettings } from './WallpaperSettings'
@@ -665,6 +666,7 @@ function AppearanceSection() {
           disabled={motionDisabled}
         />
       </SettingRow>
+      <CloseActionSettings />
 
       <SidebarSettings />
 

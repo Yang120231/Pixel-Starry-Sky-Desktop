@@ -135,6 +135,11 @@ export const SETTINGS_INDEX: SearchEntry[] = [
   },
   { section: 'appearance', title: '动画', keywords: '动效 过渡 减少动画' },
   { section: 'appearance', title: '切换窗格时', keywords: '窗格 分屏 高亮 滑动 焦点 动画' },
+  {
+    section: 'appearance',
+    title: '关闭主窗口时',
+    keywords: '托盘 通知区域 后台 最小化 隐藏 退出 关闭 tray background minimize close quit',
+  },
   { section: 'appearance', title: '侧边栏', keywords: '侧栏 历史 最近任务 图标 sidebar history recent icons toolbar' },
   {
     section: 'appearance',

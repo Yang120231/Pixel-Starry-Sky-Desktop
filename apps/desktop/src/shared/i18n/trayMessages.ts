@@ -1,0 +1,36 @@
+// 系统托盘（docs/ui/tray.md）：主进程的托盘提示、右键菜单、隐藏到托盘的通知，和设置里的「关闭主窗口时」
+export const trayMessages = {
+  'tray.app': { zh: '像素星空', en: 'Pixel Starry Sky' },
+  'tray.running': { zh: '{p0} 个任务运行中', en: '{p0} running' },
+  'tray.waiting': { zh: '{p0} 个等你处理', en: '{p0} waiting for you' },
+  'tray.show': { zh: '显示像素星空', en: 'Show Pixel Starry Sky' },
+  'tray.newTask': { zh: '新建任务', en: 'New task' },
+  'tray.runningMenu': { zh: '运行中（{p0}）', en: 'Running ({p0})' },
+  'tray.waitingMenu': { zh: '等你处理（{p0}）', en: 'Waiting for you ({p0})' },
+  'tray.more': { zh: '还有 {p0} 个…', en: '{p0} more…' },
+  'tray.untitled': { zh: '未命名任务', en: 'Untitled task' },
+  'tray.dndHour': { zh: '勿扰 1 小时', en: 'Do not disturb for 1 hour' },
+  'tray.dndEnd': { zh: '结束勿扰', en: 'Turn off Do not disturb' },
+  'tray.checkUpdate': { zh: '检查更新…', en: 'Check for updates…' },
+  'tray.quit': { zh: '退出像素星空', en: 'Quit Pixel Starry Sky' },
+  'tray.quitTitle': { zh: '还有任务在运行', en: 'Tasks are still running' },
+  'tray.quitMessage': {
+    zh: '有 {p0} 个任务正在运行，退出会停止它们。',
+    en: '{p0} tasks are running. Quitting will stop them.',
+  },
+  'tray.quitCancel': { zh: '取消', en: 'Cancel' },
+  'tray.quitConfirm': { zh: '停止任务并退出', en: 'Stop tasks and quit' },
+  'tray.hiddenTitle': { zh: '像素星空还在后台运行', en: 'Pixel Starry Sky is still running' },
+  'tray.hiddenBody': {
+    zh: '任务会继续运行。点通知区域的图标打开；想直接退出，可以在设置 › 外观里改。',
+    en: 'Tasks keep running. Click the icon in the notification area to open it, or change this in Settings › Appearance.',
+  },
+  'tray.overlay': { zh: '有任务等你处理', en: 'A task is waiting for you' },
+  'tray.closeAction': { zh: '关闭主窗口时', en: 'When closing the main window' },
+  'tray.closeActionDescription': {
+    zh: '隐藏到托盘时任务继续运行，点通知区域的图标重新打开；选「退出」会停止正在运行的任务。',
+    en: 'Hidden in the tray, tasks keep running; click the notification area icon to reopen. Quit stops running tasks.',
+  },
+  'tray.closeHide': { zh: '隐藏到托盘', en: 'Hide to tray' },
+  'tray.closeQuit': { zh: '退出', en: 'Quit' },
+}

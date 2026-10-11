@@ -12,6 +12,10 @@ files:
   - out/**
   - package.json
 asar: true
+# 托盘图标（docs/ui/tray.md §2.5）：运行时从 resources/tray 读，不进 asar
+extraResources:
+  - from: build/tray
+    to: tray
 # node-pty 使用其自带的 win32-x64 N-API 预编译文件；本机构建工具未安装 Spectre 缓解库，
 # 强制重编译会失败。Electron 44 已通过实际 PTY 输入 / resize / 退出验证。
 npmRebuild: false

@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 import { tr, translateMessage } from '../../i18n/core'
 import { getEngineState, isViewingSession } from '@/features/engine/store'
 import { OPEN_SESSION_EVENT } from '@/features/engine/openRequests'
-import { getNotificationPrefs } from '@/features/settings/notifications'
+import { getNotificationPrefs, useNotificationPrefs } from '@/features/settings/notifications'
 import { createDeliveryState, decide, notificationFor, type NotificationIntent } from './policy'
 
 const clip = (text: string, max: number): string => (text.length > max ? `${text.slice(0, max - 1)}…` : text)
@@ -33,6 +33,11 @@ function payload(
 }
 
 export function NotificationDispatcher() {
+  // 托盘菜单显示「勿扰 1 小时」还是「结束勿扰」（docs/ui/tray.md §2.2）
+  const { dndUntil } = useNotificationPrefs()
+  useEffect(() => {
+    if (!window.pixelsky?.demo) window.pixelsky?.tray?.reportDnd(dndUntil)
+  }, [dndUntil])
   useEffect(() => {
     const bridge = window.pixelsky
     if (!bridge || bridge.demo) return

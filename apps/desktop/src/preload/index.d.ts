@@ -53,6 +53,8 @@ export interface PixelskyBridge {
   terminal: TerminalBridge
   /** 系统通知（docs/ui/notifications.md） */
   notifications: NotificationsBridge
+  /** 系统托盘（docs/ui/tray.md） */
+  tray: import('./tray').TrayBridge
   /** 产物面板（docs/ui/artifacts-panel.md） */
   artifacts: ArtifactsBridge
 }

@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import { useI18n } from '@/i18n/I18nProvider'
 import { useSettings } from '@/features/settings/SettingsProvider'
+import { OPEN_SESSION_EVENT } from '@/features/engine/openRequests'
 import type { SectionId } from '@/features/settings/SettingsDialog'
 import { useOpenSearch } from '@/features/search/SearchProvider'
 import { useTerminalUi } from '@/features/terminal/TerminalProvider'
@@ -530,6 +531,30 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (open) input.current?.focus()
   }, [open])
+  // 系统托盘菜单交给窗口的事（docs/ui/tray.md §2.2）：主进程已经把窗口带到前台
+  const latestBuild = useRef(build)
+  latestBuild.current = build
+  useEffect(() => {
+    const bridge = window.pixelsky
+    if (!bridge?.tray) return
+    const run = (id: string): void =>
+      void latestBuild
+        .current()
+        .find(item => item.id === id)
+        ?.run()
+    return bridge.tray.onCommand(command => {
+      if (command.kind === 'newTask') {
+        run('nav.workbench')
+        run('task.new')
+      } else if (command.kind === 'openSession')
+        window.dispatchEvent(new CustomEvent(OPEN_SESSION_EVENT, { detail: { sessionId: command.sessionId } }))
+      else if (command.kind === 'dnd') setNotificationPrefs({ dndUntil: command.until })
+      else if (command.kind === 'checkUpdate') {
+        settings.openSettings('about')
+        void bridge.update.check().catch(() => undefined)
+      }
+    })
+  }, [settings])
   const visible = rankCommands(commands, query, recent)
   const index = Math.min(selected, Math.max(0, visible.length - 1))
   useEffect(() => {

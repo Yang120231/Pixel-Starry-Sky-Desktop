@@ -1,4 +1,5 @@
 import type { EngineHost } from '@pixelsky/engine'
+import type { HostEvent } from '@pixelsky/protocol'
 import type { ProjectTools } from '../core/project-tools/tools'
 import type { Machines } from '../machines/service'
 import type { ProviderStore } from '../core/providers/store'
@@ -12,6 +13,8 @@ import { Lifecycle } from './lifecycle'
 export interface AppContext {
   readonly events: EventBus
   readonly lifecycle: Lifecycle
+  /** 本机引擎宿主的事件，主进程里想跟着会话状态变的模块订阅（托盘，app/tray.ts） */
+  readonly hostListeners: Set<(event: HostEvent) => void>
   /** 本机引擎宿主（engine/ipc.ts 的 initEngine） */
   engine: EngineHost | null
   /** SSH 机器（machines/service.ts 的 initMachines，在 initEngine 里） */
@@ -26,6 +29,7 @@ export function createAppContext(): AppContext {
   return {
     events: new EventBus(),
     lifecycle: new Lifecycle(),
+    hostListeners: new Set(),
     engine: null,
     machines: null,
     projectTools: null,
