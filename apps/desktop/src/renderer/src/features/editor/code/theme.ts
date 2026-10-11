@@ -1,6 +1,7 @@
 import { tr } from '../../../i18n/core'
 import { EditorView } from '@codemirror/view'
-import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
+import { HighlightStyle, syntaxHighlighting, type Language } from '@codemirror/language'
+import type { Extension } from '@codemirror/state'
 import { tags } from '@lezer/highlight'
 
 /**
@@ -74,13 +75,23 @@ export const editorTheme = [
       { tag: [tags.comment], color: 'var(--syn-comment)' },
       { tag: [tags.keyword, tags.operator], color: 'var(--syn-keyword)' },
       { tag: [tags.string, tags.regexp], color: 'var(--syn-string)' },
-      { tag: [tags.number, tags.bool, tags.null], color: 'var(--syn-number)' },
+      { tag: [tags.character], color: 'var(--syn-string)' },
+      { tag: [tags.number, tags.bool, tags.null, tags.atom], color: 'var(--syn-number)' },
       { tag: [tags.function(tags.variableName), tags.function(tags.propertyName)], color: 'var(--syn-func)' },
+      { tag: [tags.heading], color: 'var(--syn-func)' },
       { tag: [tags.typeName, tags.className], color: 'var(--syn-type)' },
+      // 注解（Java 的 @Override、Python 的装饰器）在各语言里都是 meta
       { tag: [tags.meta, tags.tagName, tags.attributeName], color: 'var(--syn-meta)' },
     ]),
   ),
 ]
+
+/**
+ * 键名上色（JSON、YAML、properties 的键），和对话里代码块的属性名同色（--syn-type）。
+ * 只在传入的语言里生效：TS / JS 的成员访问也是属性名，全局上色会满屏都是这个颜色
+ */
+export const keyHighlight = (language: Language): Extension =>
+  syntaxHighlighting(HighlightStyle.define([{ tag: tags.propertyName, color: 'var(--syn-type)' }], { scope: language }))
 
 export const editorPhrases = {
   get Find() {
