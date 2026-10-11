@@ -126,4 +126,37 @@ export const sessionMessages = {
   'session.live.tool.ListMcpResourcesTool': { zh: '列出 MCP 资源', en: 'Listed MCP resources' },
   'session.live.tool.ReadMcpResourceTool': { zh: '读取 MCP 资源', en: 'Read MCP resource' },
   'session.live.viewedImages': { zh: '{n} 张图片', en: '{n} images' },
+  // 推理强度那几项的默认值（GitHub #6，docs/ui/engine-settings-redesign.md §3.2）
+  'effortDefaults.default': { zh: '默认 {p0}', en: 'Default {p0}' },
+  'effortDefaults.temporary': { zh: '仅本会话', en: 'This session only' },
+  'effortDefaults.temporaryHint': {
+    zh: '和新会话的默认值不同，只影响这个会话',
+    en: 'Differs from the new-session default and only affects this session',
+  },
+  'effortDefaults.reset': { zh: '恢复成默认', en: 'Reset to default' },
+  'effortDefaults.save': { zh: '设为默认', en: 'Set as default' },
+  'effortDefaults.saveHint': {
+    zh: '把推理强度和下面的开关记成 {p0} 新会话的默认值',
+    en: 'Use this effort and these switches for new {p0} sessions',
+  },
+  'effortDefaults.isDefault': { zh: '已是默认', en: 'Already the default' },
+  'effortDefaults.saveFailed': { zh: '没有设成默认：{p0}', en: 'Could not set as default: {p0}' },
+  'engineDefaults.note': {
+    zh: '对之后新建的会话生效。会话里改模型、权限会记到这里；推理强度、Ultracode、Fast、思考摘要在会话里改只影响那个会话，要在输入框的推理强度菜单里点「设为默认」。',
+    en: 'Applies to sessions created from now on. Model and permission changes made in a session are saved here; effort, Ultracode, Fast and thinking summaries changed in a session only affect that session unless you choose "Set as default" in the composer’s effort menu.',
+  },
+  'engineDefaults.noteRemember': {
+    zh: '对之后新建的会话生效；会话里改过的选择也会记到这里。',
+    en: 'Applies to sessions created from now on; choices changed in a session are saved here too.',
+  },
+  'engineDefaults.remember': { zh: '记住会话里的选择', en: 'Remember choices made in sessions' },
+  'engineDefaults.rememberDesc': {
+    zh: '在会话里改推理强度、Ultracode、Fast、思考摘要时，同时记成新会话的默认值',
+    en: 'When you change effort, Ultracode, Fast or thinking summaries in a session, also use them for new sessions',
+  },
+  'engineDefaults.factory': { zh: '恢复出厂设置', en: 'Restore factory defaults' },
+  'engineDefaults.factoryHint': {
+    zh: '推理强度 High，Ultracode、Fast 关，显示思考摘要开',
+    en: 'Effort High, Ultracode and Fast off, thinking summaries on',
+  },
 } as const

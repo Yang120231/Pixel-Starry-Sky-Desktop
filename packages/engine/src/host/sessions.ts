@@ -1,6 +1,7 @@
 // 会话：创建、打开（懒创建运行时）、改设置、改名、置底、回退、归档、删除
 import { randomUUID } from 'node:crypto'
 import {
+  EFFORT_PANEL_KEYS,
   emptySnapshot,
   normalizeSessionTitle,
   PROVIDER_ID,
@@ -69,6 +70,12 @@ export class HostSessions {
     }
     ctx.records.set(record.id, record)
     ctx.store.saveRecord(record)
+    // 打开了「记住会话里的选择」：新会话界面上（发第一条消息前）改的推理强度那几项也记成默认值（GitHub #6）
+    if (m.settings.remembersChoices(engine)) {
+      const picked: Partial<SessionSettings> = {}
+      for (const k of EFFORT_PANEL_KEYS) Object.assign(picked, { [k]: record[k] })
+      m.settings.setDefaults({ ...picked, engine })
+    }
     m.events.broadcastSessions()
     return record
   }
@@ -218,8 +225,11 @@ export class HostSessions {
       await s.close()
     }
     if (Object.keys(settings).length > 0) {
-      // 记住用户的选择，作为以后新会话的默认值
-      m.settings.setDefaults({ ...settings, engine: record.engine })
+      // 模型和权限记住用户的选择，作为以后新会话的默认值；推理强度那几项只影响这个会话，
+      // 要「设为默认」才改默认值，除非这个引擎打开了「记住会话里的选择」（GitHub #6）
+      const remembered: Partial<SessionSettings> = { ...settings }
+      if (!m.settings.remembersChoices(record.engine)) for (const k of EFFORT_PANEL_KEYS) delete remembered[k]
+      if (Object.keys(remembered).length > 0) m.settings.setDefaults({ ...remembered, engine: record.engine })
       await rt.session?.update(settings)
     }
     return record

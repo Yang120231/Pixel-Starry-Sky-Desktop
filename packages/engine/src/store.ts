@@ -56,6 +56,8 @@ export interface EngineOptions {
   hidden?: boolean
   /** 每次启动引擎进程时追加的参数（docs/ui/engine-launch.md）；只存非空 */
   args?: string[]
+  /** 会话里改推理强度那几项时也记成默认值（GitHub #6）；只存 true */
+  rememberChoices?: boolean
 }
 
 export const DEFAULT_SETTINGS: EngineSettingsFile = {

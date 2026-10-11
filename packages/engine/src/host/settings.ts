@@ -60,6 +60,11 @@ export class HostSettings {
     return { ...legacy, ...(this.file.engineDefaults[engine] ?? {}) }
   }
 
+  /** 会话里改推理强度那几项时是否也记成新会话的默认值（GitHub #6，默认不记） */
+  remembersChoices(engine: EngineId): boolean {
+    return this.file.options[engine]?.rememberChoices === true
+  }
+
   launchOptions(engine: EngineId): {
     outputStyle: string | null
     askQuestions: boolean
@@ -89,6 +94,7 @@ export class HostSettings {
       defaults: this.engineDefaults(id),
       ...this.launchOptions(id),
       hidden: this.file.options[id]?.hidden === true && id !== this.file.defaults.engine,
+      rememberChoices: this.remembersChoices(id),
     })
     return Object.fromEntries(ENGINE_ORDER.map(id => [id, one(id)])) as EngineConfig
   }
@@ -162,6 +168,11 @@ export class HostSettings {
       if (patch.hidden && engine === this.file.defaults.engine) throw new Error('默认引擎不能隐藏，先换一个默认引擎')
       if (patch.hidden) options.hidden = true
       else delete options.hidden
+    }
+    if (patch.rememberChoices !== undefined) {
+      if (typeof patch.rememberChoices !== 'boolean') throw new Error('「记住会话里的选择」的值不对')
+      if (patch.rememberChoices) options.rememberChoices = true
+      else delete options.rememberChoices
     }
     if (Object.keys(options).length > 0) next.options[engine] = options
     else delete next.options[engine]
@@ -270,6 +281,7 @@ export class HostSettings {
             askQuestions: o.askQuestions !== false,
             autoCompactPct: o.autoCompactPct ?? null,
             hidden: o.hidden === true,
+            rememberChoices: o.rememberChoices === true,
           }
         }),
       },
@@ -313,6 +325,7 @@ export class HostSettings {
         askQuestions: raw.askQuestions !== false,
         autoCompactPct: typeof raw.autoCompactPct === 'number' ? raw.autoCompactPct : null,
         hidden: raw.hidden === true,
+        rememberChoices: raw.rememberChoices === true,
       }))
     } else if (key === 'desktop.engine.retries') {
       try {
@@ -343,6 +356,8 @@ export class HostSettings {
     const next: SessionDefaults = { ...this.engineDefaults(engine), ...checkDefaults(rest) }
     this.file = { ...this.file, engineDefaults: { ...this.file.engineDefaults, [engine]: next } }
     this.ctx.store.saveSettings(this.file)
+    // 输入框里的「默认：…」读的是引擎配置，记住选择以后跟着变
+    this.ctx.opts.emit({ kind: 'engine_config', config: this.engineConfig() })
     return this.defaults()
   }
 }
@@ -390,7 +405,13 @@ export interface SyncableEngineSettings {
     engines: Partial<
       Record<
         EngineId,
-        { outputStyle: string | null; askQuestions: boolean; autoCompactPct: number | null; hidden: boolean }
+        {
+          outputStyle: string | null
+          askQuestions: boolean
+          autoCompactPct: number | null
+          hidden: boolean
+          rememberChoices: boolean
+        }
       >
     >
   }

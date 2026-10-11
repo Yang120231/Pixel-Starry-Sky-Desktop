@@ -1,5 +1,5 @@
 import { useI18n } from '@/i18n/I18nProvider'
-import { tr } from '../../i18n/core'
+import { tr, translateMessage } from '../../i18n/core'
 // 输入框里的弹出菜单：推理强度（滑块 + Ultracode）、权限模式（docs/engines.md §6、§11）。都从下往上弹出。
 // 引擎 / 额度来源 / 模型菜单在 ModelSourceMenu.tsx（docs/ui/source-switch.md）。
 import { useState, type CSSProperties, type ReactNode } from 'react'
@@ -17,16 +17,10 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import type { PermissionMode } from '@pixelsky/protocol'
-import { IconButton, Popover, cn } from '@/ui'
-import {
-  DEFAULT_EFFORT,
-  EFFORT_LABEL,
-  PERMISSION_HINTS,
-  PERMISSION_INFO,
-  effortLabel,
-  type ComposerController,
-} from '@/features/engine'
+import { IconButton, Popover, cn, useToast } from '@/ui'
+import { PERMISSION_HINTS, PERMISSION_INFO, effortLabel, type ComposerController } from '@/features/engine'
 import { EffortSlider } from './EffortSlider'
+import { effortDiff } from '@/features/engine/effortDefaults'
 
 export const PERMISSION_ICON: Record<PermissionMode, LucideIcon> = {
   ask: Shield,
@@ -160,6 +154,23 @@ export function EffortMenu({ live }: { live: ComposerController }) {
   const ultraUnavailable = ultracodeAvailable === false
   const fastUnavailable = live.fastAvailable === false
   const accentStyle = { '--effort-accent': accent || 'var(--text)' } as CSSProperties
+  const toast = useToast()
+  const [saving, setSaving] = useState(false)
+  // 和这个引擎新会话的默认值比：只比引擎支持的那几项
+  const d = live.effortDefaults
+  const diff = effortDiff({ effort, ultracode, fast: live.fast, thinkingSummaries: live.thinkingSummaries }, d, {
+    effort: efforts.length > 0,
+    ultracode: ultracodeSupported,
+    fast: live.fastSupported,
+    thinkingSummaries: live.thinkingSupported,
+  })
+  const differs = diff.length > 0
+  const resetToDefaults = (): void => {
+    if (diff.includes('effort') && d.effort) live.setEffort(d.effort)
+    if (diff.includes('ultracode')) live.setUltracode(d.ultracode)
+    if (diff.includes('fast')) live.setFast(d.fast)
+    if (diff.includes('thinkingSummaries')) live.setThinkingSummaries(d.thinkingSummaries)
+  }
   const hasSwitches = ultracodeSupported || live.fastSupported || live.thinkingSupported
   // 开启的会话开关同步显示在按钮上：Ultracode 用紫色文字，Fast / 思考摘要用强调色图标。
   const fastOn = live.fastSupported && live.fast
@@ -215,15 +226,27 @@ export function EffortMenu({ live }: { live: ComposerController }) {
           >
             {effortLabel(effort)}
           </span>
+          {differs && (
+            <span
+              data-effort-temporary
+              title={tr('effortDefaults.temporaryHint')}
+              className="rounded-sm bg-subtle px-1.5 text-label leading-5 text-fg-muted"
+            >
+              {tr('effortDefaults.temporary')}
+            </span>
+          )}
           <span className="flex-1" />
+          <span className="text-meta text-fg-faint" data-effort-default>
+            {tr('effortDefaults.default', { p0: effortLabel(d.effort) })}
+          </span>
           <IconButton
             icon={RotateCcw}
-            label={tr('session.ComposerMenus.resetToDefault', { p0: EFFORT_LABEL[DEFAULT_EFFORT] })}
+            label={tr('effortDefaults.reset')}
             size={24}
             iconSize={14}
-            disabled={effort === DEFAULT_EFFORT || efforts.length === 0}
+            disabled={!differs}
             className="-mr-1 disabled:opacity-40"
-            onClick={() => live.setEffort(DEFAULT_EFFORT)}
+            onClick={resetToDefaults}
           />
         </div>
         {/* 引擎目录说这个模型没有强度档位（例如 Haiku 4.5）：不画空滑块，只给一句说明 */}
@@ -282,6 +305,27 @@ export function EffortMenu({ live }: { live: ComposerController }) {
             )}
           </div>
         )}
+        {/* 会话里调整只影响这个会话；要改新会话的默认值点这里（GitHub #6） */}
+        <div className="mt-2 flex items-center justify-end border-t border-line-subtle pt-2">
+          <button
+            type="button"
+            data-effort-save-default
+            disabled={!differs || saving}
+            title={tr('effortDefaults.saveHint', { p0: live.engine?.name ?? '' })}
+            onClick={() => {
+              setSaving(true)
+              live
+                .saveEffortDefaults()
+                .catch((e: unknown) =>
+                  toast(tr('effortDefaults.saveFailed', { p0: translateMessage((e as Error).message) })),
+                )
+                .finally(() => setSaving(false))
+            }}
+            className="rounded-md px-2 py-1 text-meta text-fg-secondary hover:bg-hover hover:text-fg disabled:text-fg-faint disabled:hover:bg-transparent"
+          >
+            {tr(differs ? 'effortDefaults.save' : 'effortDefaults.isDefault')}
+          </button>
+        </div>
       </Popover>
     </div>
   )

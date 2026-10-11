@@ -9,6 +9,7 @@ import { notify } from '@/features/panes/store'
 import {
   ENGINES,
   type Effort,
+  type EffortPanelDefaults,
   type EngineId,
   type EngineInfo,
   type ImageAttachment,
@@ -28,6 +29,7 @@ import {
   type SessionStatus,
 } from '@/data'
 import { engineAccent, fastBlockedText, relativeTime } from './labels'
+import { effortDefaultsFor } from './effortDefaults'
 import { sidebarData, demoSidebarData, type RunStatus } from './sidebarData'
 import { useAccount } from '@/features/account/useAccount'
 import {
@@ -278,6 +280,10 @@ export interface ComposerController {
   thinkingSupported: boolean
   thinkingSummaries: boolean
   setThinkingSummaries(on: boolean): void
+  /** 这个引擎新会话的默认值（推理强度、Ultracode、Fast、思考摘要；GitHub #6） */
+  effortDefaults: EffortPanelDefaults
+  /** 把当前这几项设为这个引擎新会话的默认值 */
+  saveEffortDefaults(): Promise<void>
   /** 推理强度的强调色（引擎品牌色的 CSS 值）；没有品牌色时为空字符串 */
   accent: string
   /** 输入建议（输入框为空时显示，Tab 填入） */
@@ -314,6 +320,7 @@ export function useComposerController(
   const account = useAccount()
   const engines = useEngineState(s => s.engines)
   const defaults = useEngineState(s => s.defaults)
+  const config = useEngineState(s => s.config)
   const snap = useEngineState(s => (sessionId ? (s.snapshots[sessionId] ?? null) : null))
   const [draft, setDraft] = useState<Draft | null>(null)
   const selectedEngineId = snap?.record.engine ?? draft?.engine ?? defaults?.engine ?? 'claude'
@@ -327,13 +334,12 @@ export function useComposerController(
   if (!isLive || !bridge) return undefined
   const b = bridge
 
+  const panelDefaults = (id: EngineId): EffortPanelDefaults => effortDefaultsFor(config, defaults, id)
+  const baseEngine = defaults?.engine ?? 'claude'
   const base: Draft = draft ?? {
-    engine: defaults?.engine ?? 'claude',
-    effort: defaults?.effort ?? 'high',
+    engine: baseEngine,
     permissionMode: defaults?.permissionMode ?? 'edits',
-    ultracode: defaults?.ultracode ?? false,
-    fast: defaults?.fast ?? false,
-    thinkingSummaries: defaults?.thinkingSummaries ?? true,
+    ...panelDefaults(baseEngine),
   }
   const record = snap?.record ?? null
   const engineId = record?.engine ?? base.engine
@@ -553,7 +559,7 @@ export function useComposerController(
     engine,
     canSwitchEngine,
     selectEngine: id => {
-      if (canSwitchEngine) patch({ engine: id, effort: 'high', ultracode: false, fast: false, thinkingSummaries: true })
+      if (canSwitchEngine) patch({ engine: id, ...panelDefaults(id) })
     },
     effort: record ? record.effort : base.effort,
     efforts: catalog?.models?.find(m => m.id === (model ?? catalog.currentModel))?.efforts ??
@@ -572,6 +578,19 @@ export function useComposerController(
     thinkingSupported: engine?.caps.thinkingSummaries ?? false,
     thinkingSummaries: record ? record.thinkingSummaries : base.thinkingSummaries,
     setThinkingSummaries: thinkingSummaries => patch({ thinkingSummaries }),
+    effortDefaults: panelDefaults(engineId),
+    saveEffortDefaults: async () => {
+      const current = record ?? base
+      // 主进程会广播 engine_config，「默认」标记跟着更新
+      await b.setConfig(engineId, {
+        defaults: {
+          effort: current.effort,
+          ultracode: current.ultracode,
+          fast: current.fast,
+          thinkingSummaries: current.thinkingSummaries,
+        },
+      })
+    },
     accent: engineAccent(engineId),
     suggestion: snap?.suggestion ?? null,
     permissionMode: record ? record.permissionMode : base.permissionMode,

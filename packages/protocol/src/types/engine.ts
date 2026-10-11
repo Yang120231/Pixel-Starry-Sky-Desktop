@@ -113,6 +113,7 @@ export type SessionDefaults = Pick<
  * - askQuestions：允许中途向用户提问（Claude 的 AskUserQuestion）；关掉时禁用这个工具
  * - autoCompactPct：上下文用到窗口的这个百分比时自动压缩；null 表示引擎内置阈值
  * - hidden：不在输入框的引擎菜单里显示（默认引擎不能隐藏）
+ * - rememberChoices：会话里改推理强度、Ultracode、Fast、思考摘要时同时记成新会话的默认值（旧版的行为，默认关；GitHub #6）
  *
  * 除 defaults 外，改了对已开始的会话也生效：下一条消息开始前用新设置重启引擎进程并接上原对话。
  */
@@ -126,6 +127,7 @@ export interface EngineLocalConfig {
   askQuestions: boolean
   autoCompactPct: number | null
   hidden: boolean
+  rememberChoices: boolean
 }
 
 export type EngineConfig = Record<EngineId, EngineLocalConfig>

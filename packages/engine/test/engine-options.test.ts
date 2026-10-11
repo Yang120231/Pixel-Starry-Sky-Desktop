@@ -103,20 +103,50 @@ describe('本机引擎详情设置', () => {
     expect(host.defaults()).toMatchObject({ engine: 'claude', effort: 'low', permissionMode: 'plan' })
   })
 
-  it('新会话默认值改了立刻用于新会话；会话里改的选择记到所属引擎名下', async () => {
+  it('新会话默认值改了立刻用于新会话；会话里改权限记到所属引擎名下，推理强度那几项只影响这个会话（GitHub #6）', async () => {
     const host = makeHost()
     const p = project(host)
     await host.setEngineConfig('claude', { defaults: { effort: 'max', permissionMode: 'full' } })
     const a = host.createSession({ projectId: p.id })
     expect(a).toMatchObject({ engine: 'claude', effort: 'max', permissionMode: 'full' })
-    await host.update(a.id, { effort: 'low' })
-    expect(host.engineConfig().claude.defaults.effort).toBe('low')
-    expect(host.defaults()).toMatchObject({ engine: 'claude', effort: 'low', permissionMode: 'full' })
+    await host.update(a.id, { effort: 'low', fast: true, ultracode: true, thinkingSummaries: false })
+    expect(host.engineConfig().claude.defaults).toMatchObject({
+      effort: 'max',
+      fast: false,
+      ultracode: false,
+      thinkingSummaries: true,
+    })
+    await host.update(a.id, { permissionMode: 'plan' })
+    expect(host.defaults()).toMatchObject({ engine: 'claude', effort: 'max', permissionMode: 'plan' })
+    expect(host.createSession({ projectId: p.id })).toMatchObject({ effort: 'max', permissionMode: 'plan' })
     await expect(host.setEngineConfig('claude', { defaults: { effort: 'huge' as never } })).rejects.toThrow(
       '默认推理强度不对',
     )
     await expect(host.setEngineConfig('claude', { defaults: { permissionMode: 'yolo' as never } })).rejects.toThrow(
       '默认权限不对',
+    )
+  })
+
+  it('打开「记住会话里的选择」：会话里和新会话界面上改的推理强度那几项都记成默认值，配置随之广播、可以同步', async () => {
+    const host = makeHost()
+    const p = project(host)
+    expect(host.engineConfig().claude.rememberChoices).toBe(false)
+    await host.setEngineConfig('claude', { rememberChoices: true })
+    expect(host.engineConfig().claude.rememberChoices).toBe(true)
+    const a = host.createSession({ projectId: p.id, effort: 'low', fast: true })
+    expect(host.engineConfig().claude.defaults).toMatchObject({ effort: 'low', fast: true })
+    events = []
+    await host.update(a.id, { effort: 'xhigh', thinkingSummaries: false })
+    expect(host.engineConfig().claude.defaults).toMatchObject({ effort: 'xhigh', thinkingSummaries: false })
+    expect(events.some(e => e.kind === 'engine_config' && e.config.claude.defaults.effort === 'xhigh')).toBe(true)
+    expect(host.syncableSettings()['desktop.engine.options'].engines.claude?.rememberChoices).toBe(true)
+    await host.applySyncableSetting('desktop.engine.options', { engines: { claude: {} } })
+    expect(host.engineConfig().claude.rememberChoices).toBe(false)
+    // 关掉以后又只影响会话
+    await host.update(a.id, { effort: 'low' })
+    expect(host.engineConfig().claude.defaults.effort).toBe('xhigh')
+    await expect(host.setEngineConfig('claude', { rememberChoices: 'yes' as never })).rejects.toThrow(
+      '记住会话里的选择',
     )
   })
 

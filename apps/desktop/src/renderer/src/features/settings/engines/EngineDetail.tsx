@@ -8,6 +8,8 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { ChevronLeft, CircleCheck, Download, RefreshCw } from 'lucide-react'
 import {
   AUTO_COMPACT_PCTS,
+  EFFORT_PANEL_FACTORY,
+  EFFORT_PANEL_KEYS,
   type Effort,
   type EngineCatalog,
   type EngineConfigPatch,
@@ -75,7 +77,7 @@ export function EngineDetail({
 
       <Group
         title={tr('settings.engines.EngineDetail.newConversationDefaults')}
-        note={tr('settings.engines.EngineDetail.appliesToNewConversations')}
+        note={tr(config.rememberChoices ? 'engineDefaults.noteRemember' : 'engineDefaults.note')}
       >
         <Row
           title={tr('session.Composer.reasoningEffort')}
@@ -159,6 +161,31 @@ export function EngineDetail({
             }
           />
         )}
+        <Row
+          title={tr('engineDefaults.remember')}
+          description={tr('engineDefaults.rememberDesc')}
+          control={
+            <Switch
+              checked={config.rememberChoices}
+              label={tr('engineDefaults.remember')}
+              onChange={on => run({ rememberChoices: on })}
+            />
+          }
+        />
+        <Row
+          title={tr('engineDefaults.factory')}
+          description={tr('engineDefaults.factoryHint')}
+          control={
+            <Button
+              variant="outline"
+              className="h-7 px-2.5 text-meta"
+              disabled={EFFORT_PANEL_KEYS.every(k => d[k] === EFFORT_PANEL_FACTORY[k])}
+              onClick={() => run({ defaults: { ...EFFORT_PANEL_FACTORY } })}
+            >
+              {tr('engineDefaults.factory')}
+            </Button>
+          }
+        />
       </Group>
 
       {e.caps.launchSettings && (
