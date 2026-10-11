@@ -61,6 +61,13 @@ export interface EngineBridge {
   ): Promise<SessionRecord>
   /** 打开会话：返回快照和序号，之后只应用 onEvent 里序号更大的会话事件 */
   openSession(id: string): Promise<OpenedSession>
+  /** 只取最后一段条目（手机端用，docs/mobile-remote.md §5.2） */
+  openSessionTail(
+    id: string,
+    opts?: { limit?: number; before?: string },
+  ): Promise<import('../shared/types/mobile').SessionTail>
+  /** 一条的完整内容；会话或条目不存在时为 null */
+  itemDetail(id: string, itemId: string): Promise<import('../shared/types/mobile').ItemDetail | null>
   send(id: string, input: string | MessageInput): Promise<SendReceipt>
   /** summary：最近请求加本地估算，不调接口；full（默认）：调 Token 计数接口 */
   context(

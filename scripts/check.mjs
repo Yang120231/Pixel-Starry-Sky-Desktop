@@ -15,6 +15,8 @@ const strict = has('--strict')
 const desktop = join(root, 'apps', 'desktop')
 const engine = join(root, 'packages', 'engine')
 const protocol = join(root, 'packages', 'protocol')
+const link = join(root, 'packages', 'link')
+const mobile = join(root, 'apps', 'mobile')
 const tsc = (cwd, project) => ({
   cwd,
   script: join(cwd, 'node_modules', 'typescript', 'bin', 'tsc'),
@@ -35,6 +37,8 @@ const steps = [
   { name: 'tsc:desktop-node', group: 'tsc', ...tsc(desktop, 'tsconfig.node.json') },
   { name: 'tsc:engine', group: 'tsc', ...tsc(engine, 'tsconfig.json') },
   { name: 'tsc:protocol', group: 'tsc', ...tsc(protocol, 'tsconfig.json') },
+  { name: 'tsc:link', group: 'tsc', ...tsc(link, 'tsconfig.json') },
+  { name: 'tsc:mobile', group: 'tsc', ...tsc(mobile, 'tsconfig.json') },
   {
     name: 'test:desktop',
     group: 'test',
@@ -42,6 +46,8 @@ const steps = [
   },
   { name: 'test:engine', group: 'test', ...vitest(engine) },
   { name: 'test:protocol', group: 'test', ...vitest(protocol) },
+  { name: 'test:link', group: 'test', ...vitest(link) },
+  { name: 'test:mobile', group: 'test', ...vitest(mobile) },
   { name: 'docs', group: 'docs', cwd: root, script: join(root, 'scripts', 'check-docs.mjs'), args: [] },
   {
     name: 'eslint',

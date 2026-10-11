@@ -57,6 +57,8 @@ export interface PixelskyBridge {
   settingsSync: import('./settings-sync').SettingsSyncBridge
   /** 系统托盘（docs/ui/tray.md） */
   tray: import('./tray').TrayBridge
+  /** 手机远程连接（docs/mobile-remote.md） */
+  mobile: import('./mobile').MobileBridge
   /** 产物面板（docs/ui/artifacts-panel.md） */
   artifacts: ArtifactsBridge
 }

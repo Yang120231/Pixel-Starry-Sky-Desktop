@@ -136,11 +136,23 @@ describe('IPC contract shape', () => {
       if (spec.ids) expect(spec.ids.every(index => Number.isInteger(index) && index >= 0)).toBe(true)
     }
   })
+  it('lets the phone reach only engine operations that also run on SSH machines', () => {
+    const mobile = Object.entries(contract).filter(([, spec]) => spec.mobile)
+    expect(mobile.length).toBeGreaterThan(10)
+    for (const [channel, spec] of mobile) {
+      expect(spec.kind, channel).toBe('invoke')
+      // 跟着参数里的会话 / 项目 ID 走，不跟着电脑上当前选中的机器；新建任务的参数是 { projectId }，同样按它路由
+      if (channel === 'engine:createSession') expect(spec.route).toBe('selected')
+      else expect(['resource', 'aggregate'], `${channel}: route`).toContain(spec.route)
+      expect(spec.remote, `${channel}: remote`).toBe(channel)
+      expect(Object.keys(ENGINE_OPS), `${channel}: op`).toContain(channel)
+    }
+  })
   it('is pure data: no imports', () => {
     expect(readFileSync(contractFile, 'utf8')).not.toMatch(/^\s*import\s/m)
   })
   it('exports the remote protocol version', () => {
-    expect(REMOTE_PROTOCOL).toBe(3)
+    expect(REMOTE_PROTOCOL).toBe(4)
     const runtime = readFileSync(join(mainDir, 'machines/remote-runtime.ts'), 'utf8')
     expect(runtime).not.toMatch(/export const REMOTE_PROTOCOL/)
     expect(runtime).toMatch(/protocol: REMOTE_PROTOCOL/)

@@ -11,6 +11,7 @@ import {
   Keyboard,
   Monitor,
   ScrollText,
+  Smartphone,
   Moon,
   Palette,
   Puzzle,
@@ -52,6 +53,7 @@ import { SidebarSettings } from './SidebarSettings'
 import { NotificationsSection } from './NotificationsSection'
 import { ShortcutsSettings } from './ShortcutsSettings'
 import { LogsSection } from '../logs/LogsSection'
+import { MobileSection } from '../mobile/settings/MobileSection'
 
 export type SectionId =
   | 'account'
@@ -67,6 +69,7 @@ export type SectionId =
   | 'machines'
   | 'notifications'
   | 'logs'
+  | 'mobile'
 
 const SECTIONS: Array<{ id: SectionId; label: string; icon: LucideIcon }> = [
   {
@@ -75,6 +78,13 @@ const SECTIONS: Array<{ id: SectionId; label: string; icon: LucideIcon }> = [
       return tr('machines.title')
     },
     icon: Monitor,
+  },
+  {
+    id: 'mobile',
+    get label() {
+      return tr('mobile.title')
+    },
+    icon: Smartphone,
   },
   {
     id: 'plugins',
@@ -168,7 +178,7 @@ const NAV_GROUPS: Array<{ label: string | null; ids: SectionId[] }> = [
     get label() {
       return tr('settings.SettingsDialog.application')
     },
-    ids: ['account', 'appearance', 'notifications', 'editor', 'shortcuts', 'machines'],
+    ids: ['account', 'appearance', 'notifications', 'editor', 'shortcuts', 'machines', 'mobile'],
   },
   {
     get label() {
@@ -499,6 +509,8 @@ export function SettingsDialog({
                   {t('machines.title')}
                 </Button>
               </section>
+            ) : section === 'mobile' ? (
+              <MobileSection />
             ) : section === 'terminal' ? (
               <TerminalSection />
             ) : section === 'engines' ? (

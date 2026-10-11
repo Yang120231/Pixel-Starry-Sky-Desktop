@@ -21,6 +21,7 @@ import { updateMessages } from './updateMessages'
 import { customApiMessages } from './customApiMessages'
 import { logMessages } from './logMessages'
 import { trayMessages } from './trayMessages'
+import { mobileMessages } from './mobileMessages'
 import { replaceCodedErrors } from '@pixelsky/protocol'
 import type { Locale } from './messages'
 
@@ -49,6 +50,7 @@ export const allMessages = {
   ...customApiMessages,
   ...logMessages,
   ...trayMessages,
+  ...mobileMessages,
 }
 export type TranslationKey = keyof typeof allMessages
 

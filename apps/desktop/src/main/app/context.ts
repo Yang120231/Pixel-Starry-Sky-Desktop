@@ -23,7 +23,14 @@ export interface AppContext {
   projectTools: ProjectTools | null
   /** 自定义 API 的接口配置（providers/providers.ts 的 initProviders，在 initEngine 里） */
   providers: ProviderStore | null
+  /**
+   * 不经过窗口调用引擎操作表（engine/ipc.ts 的 initEngine）：和窗口的调用走同一层路由（含 SSH 机器），
+   * owner 是搜索 / 产物扫描的分桶。手机端（main/mobile/）用它
+   */
+  engineCall: EngineCall | null
 }
+
+export type EngineCall = (channel: string, args: unknown[], owner: string) => Promise<unknown>
 
 export function createAppContext(): AppContext {
   return {
@@ -34,6 +41,7 @@ export function createAppContext(): AppContext {
     machines: null,
     projectTools: null,
     providers: null,
+    engineCall: null,
   }
 }
 

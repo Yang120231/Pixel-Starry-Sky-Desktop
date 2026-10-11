@@ -17,6 +17,8 @@
  * - `picker`：需要本机的文件夹 / 文件选择对话框，选中了远端机器时报 `SSH_USE_WORKSPACE_PICKER`。
  * - `special`：`Machines.invoke` 对选中远端机器时的特殊处理（`files:copyPath`、`files:target`、`engine:usageExport`）。
  * - `remote`：远端辅助进程方法表里的方法名；只有确有远端实现的通道才写（可能与通道名不同）。
+ * - `mobile`：手机能不能调（docs/mobile-remote.md §5.1）：`view` 只读，`act` 会让电脑做事（发消息、审批、停止…）。
+ *   不写就是手机不能调；`hostOnly`、`self`、`push` 和 `local` 的通道不能写。
  * - `trust`：调用方校验的最低档位。`none` 不校验；`sender` 只验来源页面是应用自己的页面；
  *   `frame` 再验是顶层主框架；`window` 再验调用窗口存在，默认还要求与 webContents 一致——
  *   终端与 `window:*` 在注册点用 `looseOwner` 放宽为只要窗口存在，`window:*` 另用 `noWindow` 抛「窗口已经关闭」。
@@ -25,6 +27,7 @@ export type IpcKind = 'invoke' | 'send' | 'sendSync' | 'push'
 export type IpcRoute = 'local' | 'selected' | 'resource' | 'aggregate' | 'hostOnly' | 'self' | 'push'
 export type IpcSpecial = 'copyPath' | 'target' | 'usageExport'
 export type IpcTrust = 'none' | 'sender' | 'frame' | 'window'
+export type MobileAccess = 'view' | 'act'
 export interface IpcChannelSpec {
   readonly kind: IpcKind
   readonly route: IpcRoute
@@ -32,6 +35,7 @@ export interface IpcChannelSpec {
   readonly picker?: true
   readonly special?: IpcSpecial
   readonly remote?: string
+  readonly mobile?: MobileAccess
   readonly trust: IpcTrust
 }
 
@@ -39,8 +43,9 @@ export interface IpcChannelSpec {
  * 本机与远端辅助进程的协议版本；`hello` 返回它，连接时必须一致。
  * 2（2026-10-09，结构重整 P6）：远端方法改用 main/core 的操作表，参数校验与本机一致，放弃未跟踪文件移到 trash/。
  * 3（2026-10-10）：文件新建 / 重命名 / 删除 / 内容搜索，终端创建可带初始命令，固定任务（docs/ui/files-search-terminal-pins.md）。
+ * 4（2026-10-11）：手机端取会话尾部和单条完整内容（engine:openSessionTail、engine:itemDetail，docs/mobile-remote.md §5.2）。
  */
-export const REMOTE_PROTOCOL = 3
+export const REMOTE_PROTOCOL = 4
 
 export const IPC_CONTRACT = {
   'account:calls': { kind: 'invoke', route: 'local', trust: 'sender' },
@@ -68,7 +73,14 @@ export const IPC_CONTRACT = {
     remote: 'engine:addProject',
     trust: 'sender',
   },
-  'engine:answer': { kind: 'invoke', route: 'resource', ids: [0, 1], remote: 'engine:answer', trust: 'sender' },
+  'engine:answer': {
+    kind: 'invoke',
+    route: 'resource',
+    ids: [0, 1],
+    remote: 'engine:answer',
+    mobile: 'act',
+    trust: 'sender',
+  },
   'engine:archiveSession': {
     kind: 'invoke',
     route: 'resource',
@@ -96,6 +108,7 @@ export const IPC_CONTRACT = {
     route: 'resource',
     ids: [0, 1],
     remote: 'engine:cancelQueued',
+    mobile: 'act',
     trust: 'sender',
   },
   'engine:cancelSearch': {
@@ -114,6 +127,7 @@ export const IPC_CONTRACT = {
     route: 'selected',
     ids: [0],
     remote: 'engine:createSession',
+    mobile: 'act',
     trust: 'sender',
   },
   'engine:defaults': { kind: 'invoke', route: 'selected', ids: [0], remote: 'engine:defaults', trust: 'sender' },
@@ -126,17 +140,55 @@ export const IPC_CONTRACT = {
   },
   'engine:engines': { kind: 'invoke', route: 'selected', ids: [0], remote: 'engine:engines', trust: 'sender' },
   'engine:event': { kind: 'push', route: 'push', trust: 'none' },
-  'engine:interrupt': { kind: 'invoke', route: 'resource', ids: [0], remote: 'engine:interrupt', trust: 'sender' },
+  'engine:itemDetail': {
+    kind: 'invoke',
+    route: 'resource',
+    ids: [0, 1],
+    remote: 'engine:itemDetail',
+    mobile: 'view',
+    trust: 'sender',
+  },
+  'engine:interrupt': {
+    kind: 'invoke',
+    route: 'resource',
+    ids: [0],
+    remote: 'engine:interrupt',
+    mobile: 'act',
+    trust: 'sender',
+  },
   'engine:interruptTurn': {
     kind: 'invoke',
     route: 'resource',
     ids: [0, 1],
     remote: 'engine:interruptTurn',
+    mobile: 'act',
     trust: 'sender',
   },
-  'engine:moveQueued': { kind: 'invoke', route: 'resource', ids: [0, 1], remote: 'engine:moveQueued', trust: 'sender' },
+  'engine:moveQueued': {
+    kind: 'invoke',
+    route: 'resource',
+    ids: [0, 1],
+    remote: 'engine:moveQueued',
+    mobile: 'act',
+    trust: 'sender',
+  },
   'engine:openSession': { kind: 'invoke', route: 'resource', ids: [0], remote: 'engine:openSession', trust: 'sender' },
-  'engine:projects': { kind: 'invoke', route: 'aggregate', ids: [0], remote: 'engine:projects', trust: 'sender' },
+  'engine:openSessionTail': {
+    kind: 'invoke',
+    route: 'resource',
+    ids: [0],
+    remote: 'engine:openSessionTail',
+    mobile: 'view',
+    trust: 'sender',
+  },
+  'engine:projects': {
+    kind: 'invoke',
+    route: 'aggregate',
+    ids: [0],
+    remote: 'engine:projects',
+    mobile: 'view',
+    trust: 'sender',
+  },
   'engine:removeProject': {
     kind: 'invoke',
     route: 'resource',
@@ -158,7 +210,14 @@ export const IPC_CONTRACT = {
     remote: 'engine:renameSession',
     trust: 'sender',
   },
-  'engine:resumeQueue': { kind: 'invoke', route: 'resource', ids: [0], remote: 'engine:resumeQueue', trust: 'sender' },
+  'engine:resumeQueue': {
+    kind: 'invoke',
+    route: 'resource',
+    ids: [0],
+    remote: 'engine:resumeQueue',
+    mobile: 'act',
+    trust: 'sender',
+  },
   'engine:retrySettings': {
     kind: 'invoke',
     route: 'selected',
@@ -195,11 +254,19 @@ export const IPC_CONTRACT = {
     route: 'resource',
     ids: [0, 1],
     remote: 'engine:runQueuedNow',
+    mobile: 'act',
     trust: 'sender',
   },
   'engine:search': { kind: 'invoke', route: 'selected', ids: [0], remote: 'engine:search', trust: 'sender' },
-  'engine:send': { kind: 'invoke', route: 'resource', ids: [0], remote: 'engine:send', trust: 'sender' },
-  'engine:sessions': { kind: 'invoke', route: 'aggregate', ids: [0], remote: 'engine:sessions', trust: 'sender' },
+  'engine:send': { kind: 'invoke', route: 'resource', ids: [0], remote: 'engine:send', mobile: 'act', trust: 'sender' },
+  'engine:sessions': {
+    kind: 'invoke',
+    route: 'aggregate',
+    ids: [0],
+    remote: 'engine:sessions',
+    mobile: 'view',
+    trust: 'sender',
+  },
   'engine:setConfig': { kind: 'invoke', route: 'selected', ids: [0], remote: 'engine:setConfig', trust: 'sender' },
   'engine:setDefaultEngine': {
     kind: 'invoke',
@@ -227,6 +294,7 @@ export const IPC_CONTRACT = {
     route: 'resource',
     ids: [0, 1, 2],
     remote: 'engine:steerQueued',
+    mobile: 'act',
     trust: 'sender',
   },
   'engine:stopTask': { kind: 'invoke', route: 'resource', ids: [0, 1], remote: 'engine:stopTask', trust: 'sender' },
@@ -325,6 +393,15 @@ export const IPC_CONTRACT = {
   'machines:select': { kind: 'invoke', route: 'self', trust: 'sender' },
   'machines:state': { kind: 'invoke', route: 'self', trust: 'sender' },
   'machines:workspaces': { kind: 'invoke', route: 'self', ids: [0], remote: 'workspaces', trust: 'window' },
+  // 手机端（docs/mobile-remote.md §5.4）：设置 › 手机。只在本机
+  'mobile:changed': { kind: 'push', route: 'push', trust: 'none' },
+  'mobile:pairCancel': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'mobile:pairDecide': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'mobile:pairStart': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'mobile:revoke': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'mobile:setAccess': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'mobile:setPrefs': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'mobile:state': { kind: 'invoke', route: 'local', trust: 'sender' },
   'notify:clicked': { kind: 'push', route: 'push', trust: 'none' },
   'notify:show': { kind: 'invoke', route: 'local', trust: 'sender' },
   'notify:supported': { kind: 'invoke', route: 'local', trust: 'sender' },

@@ -1,0 +1,25 @@
+{
+  "name": "@pixelsky/link",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "手机和电脑之间的加密连接：Noise KK 握手、帧格式、配对校验、加密通道、RPC（docs/mobile-remote.md §8.5.2）。不依赖 electron、Node 专有模块和 DOM",
+  "exports": {
+    ".": "./src/index.ts",
+    "./rpc": "./src/rpc.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@noble/ciphers": "^2.4.0",
+    "@noble/curves": "^2.4.0",
+    "@noble/hashes": "^2.4.0"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  },
+  "author": "xiao_hei"
+}

@@ -1,0 +1,43 @@
+{
+  "name": "@pixelsky/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "像素星空手机端（网页版先行，之后用 Capacitor 包成 App；docs/mobile-remote.md §8）",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "build:app": "vite build --mode app",
+    "android:sync": "vite build --mode app && cap sync android",
+    "android:apk": "node scripts/android-build.mjs"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/local-notifications": "^8.3.1",
+    "@capawesome-team/capacitor-android-foreground-service": "^8.1.0",
+    "@pixelsky/link": "workspace:*",
+    "@pixelsky/protocol": "workspace:*",
+    "jsqr": "^1.4.0",
+    "lucide-react": "^1.52.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.3",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3"
+  },
+  "author": "xiao_hei"
+}

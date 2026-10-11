@@ -16,3 +16,7 @@
 *.woff2 binary
 *.ttf binary
 *.sqlite binary
+
+# Windows 批处理要 CRLF（安卓工程的 gradlew.bat）
+*.bat text eol=crlf
+*.jar binary

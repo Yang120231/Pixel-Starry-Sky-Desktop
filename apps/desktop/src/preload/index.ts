@@ -17,6 +17,8 @@ import type { NotificationsBridge } from './notifications'
 import type { ArtifactsBridge } from './artifacts'
 import type { LogBridge } from './log'
 import type { TrayBridge } from './tray'
+import type { MobileBridge } from './mobile'
+import type { MobileState } from '../shared/types/mobile'
 import type { SettingsSyncBridge } from './settings-sync'
 import type { TrayCommand } from '../shared/types/tray'
 
@@ -83,6 +85,8 @@ const engine: EngineBridge = {
   sessions: () => call('engine:sessions'),
   createSession: opts => call('engine:createSession', opts),
   openSession: id => call('engine:openSession', id),
+  openSessionTail: (id, opts) => call('engine:openSessionTail', id, opts),
+  itemDetail: (id, itemId) => call('engine:itemDetail', id, itemId),
   send: (id, text) => call('engine:send', id, text),
   context: (id, detail) => call('engine:context', id, detail),
   compact: id => call('engine:compact', id),
@@ -338,6 +342,21 @@ const tray: TrayBridge = {
   prefs: () => call('tray:prefs'),
   setPrefs: patch => call('tray:setPrefs', patch),
 }
+// 手机远程连接：设置 › 手机（docs/mobile-remote.md §5.4）
+const mobile: MobileBridge = {
+  state: () => call('mobile:state'),
+  setPrefs: patch => call('mobile:setPrefs', patch),
+  pairStart: () => call('mobile:pairStart'),
+  pairCancel: () => call('mobile:pairCancel'),
+  pairDecide: accept => call('mobile:pairDecide', accept),
+  revoke: id => call('mobile:revoke', id),
+  setAccess: (id, access) => call('mobile:setAccess', id, access),
+  onChange: cb => {
+    const listener = (_event: Electron.IpcRendererEvent, value: MobileState): void => cb(value)
+    on('mobile:changed', listener)
+    return () => ipcRenderer.removeListener('mobile:changed', listener)
+  },
+}
 // 设置云同步（docs/ui/settings-sync.md §5.1）
 const settingsSync: SettingsSyncBridge = {
   pull: () => call('settings:pull'),
@@ -347,6 +366,7 @@ const settingsSync: SettingsSyncBridge = {
 }
 contextBridge.exposeInMainWorld('pixelsky', {
   tray,
+  mobile,
   settingsSync,
   machines: {
     state: () => call('machines:state'),

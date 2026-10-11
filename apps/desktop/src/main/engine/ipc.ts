@@ -23,7 +23,7 @@ import { machineOf } from '../machines/identity'
 import { initArtifacts } from '../artifacts/ipc'
 import { resolveTerminalTarget, workspaceToolsHost } from '../workspace/resolve'
 import { ENGINE_OPS, type EngineOpContext } from '../core/engine/ops'
-import { opEntries } from '../core/ops'
+import { opEntries, type InvokeName, type OpTable } from '../core/ops'
 import { SearchRegistry } from '../core/search-registry'
 import { usageQuery } from '../core/args'
 import { npmLatest, scheduleEngineUpdateChecks } from './npm-latest'
@@ -107,6 +107,14 @@ export async function initEngine(ctx: AppContext): Promise<void> {
   }
   for (const [channel, op] of opEntries(ENGINE_OPS))
     handle(channel, (event, ...args) => op({ ...context, owner: owner(event) }, ...args))
+  // 手机端（main/mobile/）的调用：同一张操作表、同一层路由，按调用方分桶
+  const ops: OpTable<EngineOpContext> = ENGINE_OPS
+  ctx.engineCall = async (channel, args, caller) => {
+    const op = Object.hasOwn(ops, channel) ? ops[channel as InvokeName] : undefined
+    if (!op) throw new Error('UNSUPPORTED: ' + channel)
+    const run = () => op({ ...context, owner: caller }, ...args)
+    return ctx.machines ? ctx.machines.invoke(channel, args, run) : run()
+  }
   initArtifacts(h)
   handle('engine:addProject', async e => {
     const win = BrowserWindow.fromWebContents(e.sender)

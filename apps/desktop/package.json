@@ -37,6 +37,7 @@
     "@lezer/highlight": "^1.2.5",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@pixelsky/engine": "workspace:*",
+    "@pixelsky/link": "workspace:*",
     "@pixelsky/protocol": "workspace:*",
     "@tailwindcss/vite": "^4.3.3",
     "@types/hast": "^3.0.5",
@@ -72,6 +73,7 @@
     "@xterm/xterm": "^5.5.0",
     "electron-updater": "^6.8.9",
     "node-pty": "^1.1.0",
-    "ssh2": "^1.17.0"
+    "ssh2": "^1.17.0",
+    "uqr": "^0.1.3"
   }
 }

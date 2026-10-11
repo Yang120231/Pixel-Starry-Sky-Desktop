@@ -1,0 +1,306 @@
+/* 设计变量：桌面端 apps/desktop/src/renderer/src/styles/tokens.css 的默认配色（浅色 / 深色）和 globals.css 的 @theme 映射的临时副本。
+   packages/ui 抽出后改为共用（docs/mobile-remote.md §8.2、M3 交付记录）；改这里之前先改桌面端那份。 */
+
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --ink: #20211f;
+
+  --bg-rail: #efefec;
+  --bg-sidebar: #f2f2ef;
+  --bg-app: #f8f8f6;
+  --bg-panel: #f8f8f6;
+  --bg-surface: #ffffff;
+  /* 弹出菜单：浅色和卡片一样白；深色比卡片 / 输入框亮一级，压在输入框上也分得清 */
+  --bg-popover: #ffffff;
+  --bg-workbench: #ffffff;
+  --bg-subtle: color-mix(in srgb, var(--ink) 4%, transparent);
+  --bg-hover: color-mix(in srgb, var(--ink) 4.5%, transparent);
+  --bg-selected: color-mix(in srgb, var(--ink) 7%, transparent);
+
+  --border: #e2e2dc;
+  --border-subtle: #eaeae5;
+  --border-strong: #cfcfc6;
+  /* 工作台的边缘层次：布局线最淡，卡片单层细描边，输入框聚焦时才稍强。 */
+  --border-layout: color-mix(in srgb, var(--ink) 6%, transparent);
+  --border-card: color-mix(in srgb, var(--ink) 10%, transparent);
+  --border-composer: color-mix(in srgb, var(--ink) 12%, transparent);
+  --border-composer-focus: color-mix(in srgb, var(--ink) 20%, transparent);
+  --composer-focus-ring: color-mix(in srgb, var(--ink) 4%, transparent);
+
+  --text: #20211f;
+  --text-secondary: #4a4c47;
+  --text-muted: #777872;
+  --text-faint: #a3a39b;
+  --text-body: #20211f;
+
+  /* 配色自带的主色；强调色选「跟随配色」时 --accent* 就取这一组 */
+  --theme-accent: #2d6151;
+  --theme-accent-on: #ffffff;
+  --theme-accent-soft: #e1eae5;
+  --theme-accent-text: #2d6151;
+  --theme-accent-border: #83a394;
+  --status-online: #4d8a75;
+  --code-path: #3e6a5c;
+
+  /* 代码语法高亮（参考 Mirasim / One Light，按暖灰底调低了饱和度），见 docs/ui/design-tokens.md §1.7 */
+  --syn-comment: #8b8a82;
+  --syn-keyword: #9b3f92;
+  --syn-string: #3f7f3b;
+  --syn-number: #9c6114;
+  --syn-func: #2f62c4;
+  --syn-type: #946a0e;
+  --syn-meta: #1b7a96;
+  --code-inline-text: #a8402f;
+  --code-inline-bg: rgba(168, 64, 47, 0.07);
+  --success: #2f7d4f;
+  --danger: #b8463f;
+  --notify: #d2483f;
+  --warn: #b97a36;
+
+  --btn-primary-bg: #20211f;
+  --btn-primary-text: #ffffff;
+  --btn-disabled-bg: #dcdcd5;
+  --btn-disabled-text: #ffffff;
+  --engine-chip-bg: #20211f;
+  --engine-chip-text: #ffffff;
+  /* 引擎（模型）品牌色：推理强度滑块、强度名的强调色（和 JuCode 一致，见 design-tokens.md） */
+  --engine-claude: #d97757;
+  --ultracode: #7c3aed;
+  --avatar-bg: #f0e2d6;
+  --avatar-text: #7a5a43;
+
+  --scrim: rgba(32, 33, 31, 0.28);
+  /* 主题的实色底（不受壁纸影响）：壁纸遮罩、Logo 里的星星、角标描边；以及有壁纸时侧栏、卡片的底色来源（docs/ui/settings.md §6） */
+  --wall-tint: #f8f8f6;
+  /* 用量图表三个系列（已用 dataviz 校验脚本验证色盲区分度、对比度，docs/ui/usage.md） */
+  --chart-input: #c26f12;
+  --chart-cache: #3a6fd0;
+  --chart-output: #0f8456;
+  --wall-sidebar: #f2f2ef;
+  --wall-surface: #ffffff;
+  --terminal-bg: #ffffff;
+  --terminal-fg: #20211f;
+  --terminal-cursor: #2d6151;
+  --terminal-selection: rgba(143, 208, 180, 0.28);
+  --terminal-ansi-0: #20211f;
+  --terminal-ansi-1: #b8463f;
+  --terminal-ansi-2: #2f7d4f;
+  --terminal-ansi-3: #946a0e;
+  --terminal-ansi-4: #2f62c4;
+  --terminal-ansi-5: #9b3f92;
+  --terminal-ansi-6: #1b7a96;
+  --terminal-ansi-7: #777872;
+  --terminal-ansi-8: #777872;
+  --terminal-ansi-9: #b8463f;
+  --terminal-ansi-10: #2f7d4f;
+  --terminal-ansi-11: #946a0e;
+  --terminal-ansi-12: #2f62c4;
+  --terminal-ansi-13: #9b3f92;
+  --terminal-ansi-14: #1b7a96;
+  --terminal-ansi-15: #ecebe7;
+
+  --shadow-sm: 0 1px 2px rgba(32, 33, 31, 0.04);
+  --shadow-float: 0 1px 2px rgba(32, 33, 31, 0.04), 0 8px 24px -6px rgba(32, 33, 31, 0.1);
+  --shadow-popover: 0 4px 12px rgba(32, 33, 31, 0.08), 0 16px 40px rgba(32, 33, 31, 0.14);
+  --shadow-composer: 0 2px 4px -2px rgba(32, 33, 31, 0.04), 0 8px 24px -8px rgba(32, 33, 31, 0.08);
+  --shadow-menu: 0 2px 8px -2px rgba(32, 33, 31, 0.06), 0 12px 24px -8px rgba(32, 33, 31, 0.1);
+  --shadow-workbench: 0 6px 24px -12px rgba(32, 33, 31, 0.08);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --ink: #faf9f5;
+
+  --bg-rail: #141413;
+  --bg-sidebar: #1a1a19;
+  --bg-app: #1f1f1e;
+  --bg-panel: #1f1f1e;
+  --bg-surface: #262624;
+  --bg-popover: #2e2e2b;
+  --bg-workbench: #242422;
+  --bg-subtle: color-mix(in srgb, var(--ink) 5%, transparent);
+  --bg-hover: color-mix(in srgb, var(--ink) 6%, transparent);
+  --bg-selected: color-mix(in srgb, var(--ink) 10%, transparent);
+
+  --border: #33332f;
+  --border-subtle: #2a2a28;
+  --border-strong: #45443f;
+  --border-layout: color-mix(in srgb, var(--ink) 5%, transparent);
+  --border-card: color-mix(in srgb, var(--ink) 8%, transparent);
+  --border-composer: color-mix(in srgb, var(--ink) 9%, transparent);
+  --border-composer-focus: color-mix(in srgb, var(--ink) 16%, transparent);
+  --composer-focus-ring: color-mix(in srgb, var(--ink) 5%, transparent);
+
+  --text: #ecebe7;
+  --text-secondary: #c2c0b6;
+  --text-muted: #9c9a92;
+  --text-faint: #6e6c66;
+  --text-body: #dcdad3;
+  --terminal-bg: #171716;
+  --terminal-fg: #ecebe7;
+  --terminal-cursor: #8fd0b4;
+  --terminal-selection: rgba(143, 208, 180, 0.32);
+  --terminal-ansi-0: #20211f;
+  --terminal-ansi-1: #f0857d;
+  --terminal-ansi-2: #6fcf97;
+  --terminal-ansi-3: #e0a86a;
+  --terminal-ansi-4: #82aaff;
+  --terminal-ansi-5: #c792ea;
+  --terminal-ansi-6: #89ddff;
+  --terminal-ansi-7: #c2c0b6;
+  --terminal-ansi-8: #9c9a92;
+  --terminal-ansi-9: #f0857d;
+  --terminal-ansi-10: #6fcf97;
+  --terminal-ansi-11: #e0a86a;
+  --terminal-ansi-12: #82aaff;
+  --terminal-ansi-13: #c792ea;
+  --terminal-ansi-14: #89ddff;
+  --terminal-ansi-15: #ecebe7;
+
+  /* 配色自带的主色；强调色选「跟随配色」时 --accent* 就取这一组 */
+  --theme-accent: #7fc4a8;
+  --theme-accent-on: #13261e;
+  --theme-accent-soft: #1e3a30;
+  --theme-accent-text: #8fd0b4;
+  --theme-accent-border: #4f8a73;
+  --status-online: #6fbf9c;
+  --code-path: #9cc7b5;
+
+  /* 代码语法高亮（参考 Mirasim / One Dark，按暖灰底调低了饱和度） */
+  --syn-comment: #84837c;
+  --syn-keyword: #c993da;
+  --syn-string: #a6c98d;
+  --syn-number: #dba579;
+  --syn-func: #82b2ea;
+  --syn-type: #e0c28d;
+  --syn-meta: #7cc3cd;
+  --code-inline-text: #ec9a87;
+  --code-inline-bg: rgba(236, 154, 135, 0.1);
+  --success: #6fcf97;
+  --danger: #f0857d;
+  --notify: #f0675e;
+  --warn: #e0a86a;
+
+  --btn-primary-bg: #ecebe7;
+  --btn-primary-text: #1a1a19;
+  --btn-disabled-bg: #3a3936;
+  --btn-disabled-text: #77756e;
+  --engine-chip-bg: #d6d4cc;
+  --engine-chip-text: #1a1a19;
+  --engine-claude: #d97757;
+  --ultracode: #c4a7ff;
+  --avatar-bg: #3a332d;
+  --avatar-text: #e8d9cb;
+
+  --scrim: rgba(0, 0, 0, 0.55);
+  --wall-tint: #1f1f1e;
+  --chart-input: #c77a22;
+  --chart-cache: #4f83e0;
+  --chart-output: #1e9a6c;
+  --wall-sidebar: #1a1a19;
+  --wall-surface: #262624;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-float: 0 0 0 1px rgba(250, 249, 245, 0.04), 0 10px 30px -6px rgba(0, 0, 0, 0.45);
+  --shadow-popover: 0 0 0 1px rgba(250, 249, 245, 0.06), 0 12px 32px rgba(0, 0, 0, 0.5);
+  /* 只有柔影，不再加第二道亮色描边。 */
+  --shadow-composer: 0 2px 6px rgba(0, 0, 0, 0.14), 0 12px 28px -10px rgba(0, 0, 0, 0.32);
+  --shadow-menu: 0 4px 12px rgba(0, 0, 0, 0.2), 0 12px 32px -8px rgba(0, 0, 0, 0.35);
+  --shadow-workbench: 0 8px 28px -14px rgba(0, 0, 0, 0.24);
+}
+
+@theme inline {
+  --color-app: var(--bg-app);
+  --color-panel: var(--bg-panel);
+  --color-sidebar: var(--bg-sidebar);
+  --color-rail: var(--bg-rail);
+  --color-surface: var(--bg-surface);
+  --color-popover: var(--bg-popover);
+  --color-subtle: var(--bg-subtle);
+  --color-hover: var(--bg-hover);
+  --color-selected: var(--bg-selected);
+
+  --color-line: var(--border);
+  --color-line-subtle: var(--border-subtle);
+  --color-line-strong: var(--border-strong);
+  --color-line-layout: var(--border-layout);
+  --color-line-card: var(--border-card);
+  --color-line-composer: var(--border-composer);
+  --color-line-composer-focus: var(--border-composer-focus);
+  --color-composer-ring: var(--composer-focus-ring);
+
+  --color-fg: var(--text);
+  --color-fg-secondary: var(--text-secondary);
+  --color-fg-muted: var(--text-muted);
+  --color-fg-faint: var(--text-faint);
+  --color-fg-body: var(--text-body);
+
+  --color-accent: var(--accent);
+  --color-accent-on: var(--accent-on);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-fg: var(--accent-text);
+  --color-accent-line: var(--accent-border);
+  --color-online: var(--status-online);
+  --color-code-path: var(--code-path);
+  --color-code-inline: var(--code-inline-text);
+  --color-code-inline-bg: var(--code-inline-bg);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+  --color-notify: var(--notify);
+  --color-warn: var(--warn);
+
+  --color-primary: var(--btn-primary-bg);
+  --color-primary-fg: var(--btn-primary-text);
+  --color-disabled: var(--btn-disabled-bg);
+  --color-disabled-fg: var(--btn-disabled-text);
+  --color-engine-chip: var(--engine-chip-bg);
+  --color-engine-chip-fg: var(--engine-chip-text);
+  --color-engine-claude: var(--engine-claude);
+  --color-ultracode: var(--ultracode);
+  --color-avatar: var(--avatar-bg);
+  --color-avatar-fg: var(--avatar-text);
+  --color-scrim: var(--scrim);
+  --color-wall-tint: var(--wall-tint);
+  --color-chart-input: var(--chart-input);
+  --color-chart-cache: var(--chart-cache);
+  --color-chart-output: var(--chart-output);
+  --color-terminal: var(--terminal-bg);
+
+  --shadow-sm: var(--shadow-sm);
+  --shadow-float: var(--shadow-float);
+  --shadow-popover: var(--shadow-popover);
+  --shadow-composer: var(--shadow-composer);
+  --shadow-menu: var(--shadow-menu);
+
+  --font-sans:
+    'Inter', 'Segoe UI Variable Text', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', system-ui,
+    sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+
+  /* 字号七级（docs/ui/design-refresh.md §4）：text-title / text-section / text-prose / text-ui / text-list / text-meta / text-label */
+  --text-title: calc(28px * var(--font-scale, 1));
+  --text-title--line-height: 1.2;
+  --text-title--letter-spacing: -0.02em;
+  --text-title--font-weight: 600;
+  --text-section: calc(16px * var(--font-scale, 1));
+  --text-section--line-height: 1.4;
+  --text-prose: calc(14px * var(--font-scale, 1));
+  --text-prose--line-height: 1.7;
+  --text-ui: calc(13.5px * var(--font-scale, 1));
+  --text-ui--line-height: 1.4;
+  --text-list: calc(13px * var(--font-scale, 1));
+  --text-list--line-height: 1.4;
+  --text-meta: calc(12px * var(--font-scale, 1));
+  --text-meta--line-height: 1.4;
+  --text-label: calc(11px * var(--font-scale, 1));
+  --text-label--line-height: 1.3;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+  --radius-2xl: 16px;
+}

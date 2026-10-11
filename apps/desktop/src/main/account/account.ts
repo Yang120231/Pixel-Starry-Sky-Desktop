@@ -83,8 +83,16 @@ let initialized = false
 /** 令牌已换到、正在拉取账号数据（此时 flow 已为 null，但状态仍是 signing-in） */
 let finishing = false
 
+/** 主进程里跟着登录状态变的模块（手机中转，main/mobile/） */
+const stateListeners = new Set<(state: AccountState) => void>()
+export function onAccountChange(listener: (state: AccountState) => void): () => void {
+  stateListeners.add(listener)
+  return () => stateListeners.delete(listener)
+}
+
 function setState(next: AccountState): void {
   state = next
+  for (const listener of stateListeners) listener(next)
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed() && !win.webContents.isDestroyed()) win.webContents.send('account:changed', state)
   }
@@ -404,6 +412,34 @@ async function authedFetch(path: string, init: RequestInit): Promise<Response> {
     throw new Error('账号已退出，请重新登录')
   }
   return res
+}
+
+/** 手机中转（docs/mobile-remote.md §6）：只能调 /v1/bridge/ 下的接口，不放宽 platformFetch 的白名单 */
+export async function bridgeFetch(method: 'POST' | 'DELETE', path: string, body?: unknown): Promise<Response> {
+  if (!path.startsWith('/v1/bridge/')) throw new Error('无效的中转接口')
+  return authedFetch(path, {
+    method,
+    ...(body !== undefined && { body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }),
+    signal: AbortSignal.timeout(20_000),
+  })
+}
+
+/**
+ * 连中转用的访问令牌（WebSocket 不能走 authedFetch）：快过期或中转说令牌失效（force）时先刷新。
+ * 没登录、刷新被拒（同时退出登录）时返回 null。
+ */
+export async function bridgeToken(force = false): Promise<string | null> {
+  const used = tokens?.accessToken
+  if (!tokens || !used) return null
+  if (force || tokens.accessExpiresAt - Date.now() < REFRESH_SKEW_MS) {
+    try {
+      if (tokens?.accessToken === used) await refreshTokens()
+    } catch (e) {
+      if (e instanceof AuthExpiredError) clearSession(SIGNED_OUT_MESSAGE)
+      return null
+    }
+  }
+  return tokens?.accessToken ?? null
 }
 
 export function signedInEmail(): string | null {
