@@ -1,0 +1,127 @@
+name: 问题反馈（Bug）
+description: 软件出错、显示不对、和预期不一致
+title: '[Bug] '
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！**一个 issue 只写一个问题**，几个问题请分开提，方便逐个跟进和关闭。
+        提交前请先搜一下 [已有的 issue](https://github.com/xiaoheoxo/Pixel-Starry-Sky-Desktop/issues?q=is%3Aissue)，避免重复。
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 出问题的地方
+      options:
+        - 对话（消息、执行过程、输入框）
+        - 代码编辑器
+        - Git
+        - 终端
+        - 文件树 / 文件预览
+        - 远程机器（SSH / 云端机器）
+        - 账号、平台线路与用量
+        - 设置 / 外观
+        - 安装、更新、启动
+        - 其他
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: 现象
+      description: 发生了什么？
+      placeholder: 例如：选中连续多行代码时，选区中间出现横向白线。
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 怎样能让这个问题再出现一次？能稳定复现就写「每次都会」，偶尔出现也请说明。
+      placeholder: |
+        1. 打开任意代码文件
+        2. 从上到下选中 3 行以上
+        3. 观察选中区域
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际结果
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望结果
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 截图或录屏
+      description: 直接把图片 / 视频拖进来。显示类的问题请尽量附上。
+
+  - type: input
+    id: version
+    attributes:
+      label: 像素星空版本
+      description: 在「设置 › 关于」里能看到
+      placeholder: 例如 0.1.6-beta
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: 系统
+      placeholder: 例如 Windows 11 24H2，显示缩放 125%
+    validations:
+      required: true
+
+  - type: dropdown
+    id: engine
+    attributes:
+      label: 使用的引擎
+      description: 和引擎无关的问题（例如编辑器、Git）可以不选
+      options:
+        - 和引擎无关
+        - Claude Code
+        - Codex
+        - 两个都有
+
+  - type: input
+    id: setup
+    attributes:
+      label: 相关设置（可选）
+      description: 外观、线路等可能有关的设置
+      placeholder: 例如 浅色主题、配色「默认」、强调色「紫」、自动换行开、平台线路
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志（可选）
+      description: 在「设置 › 日志」点「复制最近的错误」粘贴到这里；需要更多信息时可以点「导出诊断文件」作为附件上传。日志在写入前已去掉密钥和令牌。
+      render: text
+
+  - type: textarea
+    id: cause
+    attributes:
+      label: 可能的原因（可选）
+      description: 如果你有猜测或已经定位到代码，写在这里
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 确认
+      options:
+        - label: 我已搜索过已有的 issue，没有重复
+          required: true
+        - label: 这个 issue 只包含一个问题
+          required: true

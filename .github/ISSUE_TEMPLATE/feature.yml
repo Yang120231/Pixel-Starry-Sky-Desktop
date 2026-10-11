@@ -1,0 +1,84 @@
+name: 功能请求
+description: 想要新功能，或改进现有功能
+title: '[功能] '
+labels: ['enhancement']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢建议！**一个 issue 只写一个功能**（一个功能可以分几个小点）。
+        提交前请先搜一下 [已有的 issue](https://github.com/xiaoheoxo/Pixel-Starry-Sky-Desktop/issues?q=is%3Aissue)，已经有人提过的话，在那里点 👍 或补充就好。
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 相关的地方
+      options:
+        - 对话（消息、执行过程、输入框）
+        - 代码编辑器
+        - Git
+        - 终端
+        - 文件树 / 文件预览
+        - 远程机器（SSH / 云端机器）
+        - 账号、平台线路与用量
+        - 设置 / 外观
+        - 安装、更新、启动
+        - 新的模块
+        - 其他
+    validations:
+      required: true
+
+  - type: textarea
+    id: background
+    attributes:
+      label: 背景
+      description: 你在做什么事情时遇到了不方便？现在要怎样绕过去？
+      placeholder: 例如：排查「某行代码是哪次改动引入的」时，只能离开软件去命令行或 GitHub 网页查。
+    validations:
+      required: true
+
+  - type: textarea
+    id: current
+    attributes:
+      label: 现状（可选）
+      description: 现在的界面能做到哪些、缺了哪些
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 期望的功能
+      description: 希望怎么用？有多个小点时请按优先级排列，最重要的放前面。
+      placeholder: |
+        1. 提交历史列表：显示作者、日期、提交信息，可以按分支 / 作者筛选
+        2. 点开一个提交，列出改动的文件并查看 diff
+        3. ……
+    validations:
+      required: true
+
+  - type: textarea
+    id: reference
+    attributes:
+      label: 参考（可选）
+      description: 其他软件里类似的做法（例如 VS Code、IDEA、Cursor、Claude、Codex），可以附截图或链接
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 怎样算做好了（可选）
+      description: 列几条可以逐项检查的标准
+      placeholder: |
+        - [ ] 界面里能查看当前分支的提交历史
+        - [ ] 点击任意提交能看到改动的文件和 diff
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 截图或草图（可选）
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 确认
+      options:
+        - label: 我已搜索过已有的 issue，没有重复
+          required: true
