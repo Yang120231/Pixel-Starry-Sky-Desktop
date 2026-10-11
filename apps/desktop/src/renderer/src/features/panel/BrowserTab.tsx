@@ -94,7 +94,11 @@ function BrowserBody({
   }, [requested, state?.scope])
   useEffect(() => {
     if (demo || !page) return
+    // 网页视图是盖在窗口上的原生视图，要跟着占位框的位置走。原来每一帧都量一次：窗口因此按屏幕刷新率一直重绘
+    // （docs/ui/performance.md）。现在只在可能挪动的时候量：占位框或窗口大小变了、弹窗开关、拖动和过渡动画期间
+    // 逐帧跟一小段；另外每半秒兜底量一次（不请求重绘）
     let frame = 0,
+      until = 0,
       prior = '',
       stopped = false
     const sync = () => {
@@ -119,12 +123,50 @@ function BrowserBody({
           if (!stopped) setError(e.message)
         })
       }
-      frame = requestAnimationFrame(sync)
     }
+    const loop = () => {
+      sync()
+      frame = !stopped && performance.now() < until ? requestAnimationFrame(loop) : 0
+    }
+    /** 接下来 ms 毫秒里每帧跟一次（0：下一帧量一次） */
+    const follow = (ms = 0) => {
+      until = Math.max(until, performance.now() + ms)
+      if (!frame) frame = requestAnimationFrame(loop)
+    }
+    const once = () => follow()
+    const transition = () => follow(700)
+    const pointer = (e: PointerEvent) => {
+      if (e.buttons) follow(150)
+    }
+    const resize = new ResizeObserver(once)
+    if (viewport.current) resize.observe(viewport.current)
+    resize.observe(document.body)
+    // 菜单、对话框都挂在 body 下面
+    const portals = new MutationObserver(once)
+    portals.observe(document.body, { childList: true })
+    const events: [EventTarget, string, EventListener][] = [
+      [window, 'resize', once],
+      [document, 'visibilitychange', once],
+      [document, 'pointerdown', once],
+      [document, 'pointerup', once],
+      [document, 'pointermove', pointer as EventListener],
+      [document, 'keydown', once],
+      [document, 'scroll', once],
+      [document, 'transitionrun', transition],
+      [document, 'transitionend', once],
+      [document, 'animationstart', transition],
+      [document, 'animationend', once],
+    ]
+    for (const [t, name, fn] of events) t.addEventListener(name, fn, { capture: true, passive: true })
+    const fallback = window.setInterval(sync, 500)
     sync()
     return () => {
       stopped = true
       cancelAnimationFrame(frame)
+      window.clearInterval(fallback)
+      resize.disconnect()
+      portals.disconnect()
+      for (const [t, name, fn] of events) t.removeEventListener(name, fn, { capture: true })
       void window.pixelsky?.projectBrowser.viewport(target, null).catch(() => {})
     }
   }, [page?.id, demo])

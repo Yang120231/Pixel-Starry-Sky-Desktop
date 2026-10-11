@@ -1002,3 +1002,26 @@
   background-color: color-mix(in srgb, var(--accent) 45%, transparent);
   color: var(--text);
 }
+
+/* 循环动画的开销（docs/ui/performance.md）：只要有一个东西在动，整个窗口就按屏幕刷新率（144 / 170Hz）一直重绘，
+   GPU 进程和页面各占掉一截 CPU，和动的东西有几个关系不大。
+   - 加载转圈改成一步一步跳（12 步一圈，每秒不到 10 次），看起来还是在转，重绘少很多；
+   - 窗口不在前台（失去焦点、最小化、收进托盘）时，循环动画全部暂停，回到前台接着动。
+     只停循环的：弹出、淡入这类一次性的动画照常播完，后台弹出来的卡片不会卡在半透明。 */
+.animate-spin {
+  animation-timing-function: steps(12, end);
+}
+:root[data-window-idle]
+  :is(
+    .animate-spin,
+    .animate-pulse,
+    .animate-ping,
+    .effort-max,
+    .effort-slider[data-top] .effort-fill,
+    .compaction-icon,
+    .compaction-text,
+    .compaction-squeeze,
+    .compaction-pill-running
+  ) {
+  animation-play-state: paused;
+}
