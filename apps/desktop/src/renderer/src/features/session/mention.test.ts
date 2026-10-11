@@ -1,7 +1,7 @@
 // 输入框里的 @ 引用文件（docs/ui/workbench-ux-3.md §2.6）
 import { describe, expect, it } from 'vitest'
 import type { FileEntry } from '../../../../shared/types/workspace'
-import { applyMention, insertMention, mentionAt, rankEntries, splitQuery } from './mention'
+import { applyMention, folderMention, insertAt, insertMention, mentionAt, rankEntries, splitQuery } from './mention'
 
 const file = (path: string, kind: FileEntry['kind'] = 'file'): FileEntry => ({
   name: path.split('/').pop()!,
@@ -54,5 +54,26 @@ describe('@ 引用文件', () => {
       'src/deep/app.ts',
       'src/mapper.ts',
     ])
+  })
+})
+
+describe('拖进来的文件夹（GitHub #15）', () => {
+  it('工作目录里的写相对路径（末尾带 /），外面的写绝对路径', () => {
+    expect(folderMention('D:\\proj\\src\\utils', 'D:\\proj')).toBe('@src/utils/ ')
+    expect(folderMention('d:\\PROJ\\src', 'D:\\proj\\')).toBe('@src/ ')
+    expect(folderMention('D:\\other\\logs\\', 'D:\\proj')).toBe('@D:\\other\\logs ')
+    expect(folderMention('D:\\project2', 'D:\\proj')).toBe('@D:\\project2 ')
+    expect(folderMention('/home/me/proj/lib', '/home/me/proj')).toBe('@lib/ ')
+    expect(folderMention('D:\\proj', 'D:\\proj')).toBe('@D:\\proj ')
+  })
+
+  it('路径有空格时加引号，引号前不留反斜杠；没有工作目录时写绝对路径', () => {
+    expect(folderMention('D:\\My Docs\\notes', null)).toBe('@"D:\\My Docs\\notes" ')
+    expect(folderMention('D:\\proj\\my dir', 'D:\\proj')).toBe('@"my dir/" ')
+  })
+
+  it('插在光标处，前面不是空白时补空格', () => {
+    expect(insertAt('看下', 2, 2, '@src/ ')).toEqual({ text: '看下 @src/ ', caret: 9 })
+    expect(insertAt('', 0, 0, '@src/ ')).toEqual({ text: '@src/ ', caret: 6 })
   })
 })

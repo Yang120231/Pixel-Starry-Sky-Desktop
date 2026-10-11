@@ -54,3 +54,27 @@ export function rankEntries(entries: readonly FileEntry[], dir: string, name: st
     .map(x => x.e)
     .slice(0, MENTION_LIMIT)
 }
+
+/**
+ * 从资源管理器拖进来 / 粘贴的文件夹（GitHub #15）：在工作目录里的写成相对路径（和 @ 选出来的一样用 /），
+ * 外面的写绝对路径（末尾不加分隔符：加引号时 \" 会被当成转义的引号）；路径里有空格时加引号，后面补一个空格
+ */
+export function folderMention(path: string, cwd: string | null | undefined): string {
+  const norm = (p: string) => p.replace(/[\\/]+$/, '')
+  const target = norm(path)
+  const root = cwd ? norm(cwd) : ''
+  const windows = /^[a-z]:[\\/]|^\\\\/i.test(target)
+  const inside =
+    root &&
+    (windows ? target.toLowerCase().startsWith(root.toLowerCase()) : target.startsWith(root)) &&
+    /^[\\/]/.test(target.slice(root.length))
+  const shown = inside ? target.slice(root.length + 1).replace(/\\/g, '/') + '/' : target
+  return /\s/.test(shown) ? `@"${shown}" ` : `@${shown} `
+}
+
+/** 在光标处插入几段文字（拖进来的文件夹）：前面不是空白时先补一个空格 */
+export function insertAt(text: string, from: number, to: number, insert: string): { text: string; caret: number } {
+  const before = text.slice(0, from)
+  const add = (before && !/\s$/.test(before) ? ' ' : '') + insert
+  return { text: before + add + text.slice(to), caret: from + add.length }
+}

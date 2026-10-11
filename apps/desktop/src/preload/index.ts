@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { HostEvent, IpcChannelName } from '@pixelsky/protocol'
 import type { AccountState } from '../shared/types/account'
 import type { AccountBridge } from './account'
@@ -390,6 +390,14 @@ contextBridge.exposeInMainWorld('pixelsky', {
     },
   } satisfies import('./machines').MachineBridge,
   platform: process.platform,
+  /** 拖进来 / 粘贴的文件在磁盘上的路径（GitHub #15）；不是本机文件时为空字符串 */
+  pathForFile: (file: File) => {
+    try {
+      return webUtils.getPathForFile(file)
+    } catch {
+      return ''
+    }
+  },
   /** 演示模式：显示照参考图写的演示数据，而不是空界面 */
   demo: config.demo,
   /** 同步窗口底色；transparent 仅供其他平台的原生覆盖层使用。Windows 按钮自绘。 */

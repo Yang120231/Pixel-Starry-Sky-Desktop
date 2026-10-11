@@ -27,6 +27,8 @@ export interface PixelskyBridge {
   machines: import('./machines').MachineBridge
   extensions: ExtensionsBridge
   platform: NodeJS.Platform | string
+  /** 拖进来 / 粘贴的文件在磁盘上的路径（GitHub #15）；不是本机文件时为空字符串 */
+  pathForFile(file: File): string
   demo: boolean
   /** 同步窗口底色；transparent 仅供其他平台的原生覆盖层使用 */
   /** background：配色主题的实色底（#rrggbb），不传用默认暖灰 */

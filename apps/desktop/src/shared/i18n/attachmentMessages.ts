@@ -46,4 +46,13 @@ export const attachmentMessages = {
   'composer.file.remove': { zh: '移除文件', en: 'Remove file' },
   'composer.file.closePreview': { zh: '关闭预览', en: 'Close preview' },
   'composer.file.encoding': { zh: '编码 {p0}', en: 'Encoding {p0}' },
+  // 拖进来的文件夹（GitHub #15）
+  'composer.folder.remote': {
+    zh: '这个会话在远程机器上，看不到本机的文件夹；可以用 @ 引用远程机器上的文件',
+    en: 'This conversation runs on a remote machine and can’t see folders on this computer. Use @ to reference files on the remote machine',
+  },
+  'composer.folder.noPath': {
+    zh: '拿不到这个文件夹在磁盘上的路径，请从资源管理器拖进来，或用 @ 引用',
+    en: 'Couldn’t get this folder’s path on disk. Drag it from File Explorer, or reference it with @',
+  },
 } as const

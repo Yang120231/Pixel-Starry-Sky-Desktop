@@ -39,7 +39,8 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { useCommands } from '@/features/settings/plugins/useCommands'
 import { CommandMenu } from './CommandMenu'
 import { MentionMenu, useMentionEntries } from './MentionMenu'
-import { applyMention, insertMention, mentionAt } from './mention'
+import { applyMention, folderMention, insertAt, insertMention, mentionAt } from './mention'
+import { machineOf } from '@/features/machines/store'
 import { composerWorkspace } from './composerWorkspace'
 import { escapeStops } from './escapeStop'
 import { tr } from '../../i18n/core'
@@ -316,10 +317,47 @@ export function Composer({
     })
   }
 
+  /** 拖进来 / 粘贴的东西里分出文件夹（GitHub #15）：文件夹插成 @路径，其余照常当附件。要在事件里同步读 */
+  const splitFolders = (transfer: DataTransfer): { folders: string[]; files: File[] } => {
+    const folders: string[] = [],
+      files: File[] = []
+    const items = [...transfer.items].filter(item => item.kind === 'file')
+    if (!items.length) return { folders, files: [...transfer.files] }
+    for (const item of items) {
+      const file = item.getAsFile()
+      if (!file) continue
+      if (item.webkitGetAsEntry()?.isDirectory) folders.push(window.pixelsky?.pathForFile(file) ?? '')
+      else files.push(file)
+    }
+    return { folders, files }
+  }
+
+  /** 文件夹写成 @路径 插到光标处：工作目录里的用相对路径；远程机器上的会话看不到本机文件夹 */
+  const addFolders = (paths: string[]): void => {
+    if (!paths.length) return
+    const workspace = composerWorkspace(live?.sessionId, status, draftKey)
+    if (machineOf(workspace?.sessionId ?? workspace?.projectId) !== 'local') {
+      setError(tr('composer.folder.remote'))
+      return
+    }
+    if (paths.some(path => !path)) {
+      setError(tr('composer.folder.noPath'))
+      return
+    }
+    const insert = paths.map(path => folderMention(path, status?.project?.path)).join('')
+    const el = ref.current
+    const next = insertAt(text, el?.selectionStart ?? text.length, el?.selectionEnd ?? text.length, insert)
+    setText(next.text)
+    setError(null)
+    placeCaret(next.caret)
+  }
+
   const onDrop = (event: DragEvent<HTMLDivElement>): void => {
     event.preventDefault()
     setDraggingImages(false)
-    addFiles(event.dataTransfer.files)
+    const { folders, files } = splitFolders(event.dataTransfer)
+    addFolders(folders)
+    addFiles(files)
   }
 
   const submit = async (): Promise<void> => {
@@ -636,9 +674,10 @@ export function Composer({
               }}
               onKeyDown={onKeyDown}
               onPaste={event => {
-                const files = [...event.clipboardData.files]
-                if (files.length) {
+                const { folders, files } = splitFolders(event.clipboardData)
+                if (files.length || folders.length) {
                   event.preventDefault()
+                  addFolders(folders)
                   addFiles(files)
                   const pasted = event.clipboardData.getData('text/plain')
                   if (pasted) {
