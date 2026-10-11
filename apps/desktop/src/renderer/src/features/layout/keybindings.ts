@@ -29,6 +29,8 @@ export const ACTIONS = [
   { id: 'splitDown', label: 'shortcuts.splitPaneDown', binding: key('KeyD', { shift: true }) },
   { id: 'closeTab', label: 'shortcuts.closeTabClosePane', binding: key('KeyW') },
   { id: 'zoomPane', label: 'shortcuts.expandRestoreCurrentPane', binding: key('Enter', { shift: true }) },
+  // 编辑器里把选中的代码引用到对话（docs/ui/editor-quote.md）；只在编辑器里生效，终端里的 Ctrl+L 照旧清屏
+  { id: 'quoteSelection', label: 'editor.quote.action', binding: key('KeyL') },
 ] as const satisfies readonly { id: string; label: TranslationKey; binding: Binding }[]
 
 export type ActionId = (typeof ACTIONS)[number]['id']

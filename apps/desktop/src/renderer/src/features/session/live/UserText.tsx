@@ -1,13 +1,15 @@
 // 用户消息的文字（docs/ui/content-highlight.md §2 F）：开头的 /命令、$技能 显示成主色；
-// @路径 是项目里存在的文件时显示成文件标签，点击打开（判断和打开由 PathLinksProvider 提供）。
+// @路径 是项目里存在的文件时显示成文件标签，点击打开（判断和打开由 PathLinksProvider 提供）；
+// 从编辑器引用的代码（docs/ui/editor-quote.md）开头那行「路径#L12-18」和 @路径#L12-18 也是文件标签，带行号，点击跳到第一行。
 import { FileText } from 'lucide-react'
 import { useOpenPath, usePathTarget } from '@/ui/markdown/pathLinks'
+import { quoteHeading } from '../quote'
 
 export type UserTextPart =
   | { kind: 'text'; text: string }
   | { kind: 'command'; text: string }
-  /** text 是带 @ 的原文，path 是 @ 后面的路径 */
-  | { kind: 'mention'; text: string; path: string }
+  /** text 是原文，path 是文件路径（@ 后面的部分，不含 #L 行号）；lines 是 #L 写的行号范围 */
+  | { kind: 'mention'; text: string; path: string; lines?: { start: number; end: number } }
 
 /** 开头的 /命令 或 $技能（Codex），名字里可以有 : . - */
 const COMMAND = /^[/$][A-Za-z][\w:.-]*(?=\s|$)/
@@ -26,19 +28,42 @@ export function userTextParts(text: string, leading = true): UserTextPart[] {
     parts.push({ kind: 'command', text: command[0] })
     rest = text.slice(command[0].length)
   }
-  let at = 0
-  for (const m of rest.matchAll(MENTION)) {
-    const start = m.index + m[1].length
-    if (start > at) parts.push({ kind: 'text', text: rest.slice(at, start) })
-    parts.push({ kind: 'mention', text: '@' + m[2], path: m[2] })
-    at = start + 1 + m[2].length
+  const pushText = (value: string) => {
+    const last = parts[parts.length - 1]
+    if (last?.kind === 'text') last.text += value
+    else if (value) parts.push({ kind: 'text', text: value })
   }
-  if (at < rest.length) parts.push({ kind: 'text', text: rest.slice(at) })
+  rest.split('\n').forEach((line, i) => {
+    if (i) pushText('\n')
+    const heading = quoteHeading(line)
+    if (heading) {
+      parts.push({
+        kind: 'mention',
+        text: line,
+        path: heading.path,
+        lines: { start: heading.startLine, end: heading.endLine },
+      })
+      return
+    }
+    let at = 0
+    for (const m of line.matchAll(MENTION)) {
+      const start = m.index + m[1].length
+      if (start > at) pushText(line.slice(at, start))
+      const ref = quoteHeading(m[2])
+      parts.push(
+        ref
+          ? { kind: 'mention', text: '@' + m[2], path: ref.path, lines: { start: ref.startLine, end: ref.endLine } }
+          : { kind: 'mention', text: '@' + m[2], path: m[2] },
+      )
+      at = start + 1 + m[2].length
+    }
+    if (at < line.length) pushText(line.slice(at))
+  })
   return parts
 }
 
-function Mention({ text, path }: { text: string; path: string }) {
-  const target = usePathTarget(path)
+function Mention({ text, path, lines }: { text: string; path: string; lines?: { start: number; end: number } }) {
+  const target = usePathTarget(lines ? `${path}:${lines.start}` : path)
   const open = useOpenPath()
   if (!target || !open) return <>{text}</>
   return (
@@ -50,6 +75,12 @@ function Mention({ text, path }: { text: string; path: string }) {
     >
       <FileText size={12} strokeWidth={1.75} className="shrink-0 self-center" />
       <span className="truncate">{path}</span>
+      {lines && (
+        <span className="-ml-1 shrink-0 text-fg-muted">
+          :{lines.start}
+          {lines.end > lines.start && `-${lines.end}`}
+        </span>
+      )}
     </button>
   )
 }
@@ -63,7 +94,7 @@ export function UserText({ text, leading = true }: { text: string; leading?: boo
             {p.text}
           </span>
         ) : p.kind === 'mention' ? (
-          <Mention key={i} text={p.text} path={p.path} />
+          <Mention key={i} text={p.text} path={p.path} lines={p.lines} />
         ) : (
           p.text
         ),

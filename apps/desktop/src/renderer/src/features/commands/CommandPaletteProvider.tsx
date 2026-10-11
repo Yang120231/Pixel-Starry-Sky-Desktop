@@ -12,6 +12,7 @@ import {
   ListChecks,
   Package,
   MessageSquare,
+  MessageSquareQuote,
   PanelLeft,
   PanelRight,
   Palette,
@@ -34,6 +35,7 @@ import { cn, Kbd, useToast } from '@/ui'
 import {
   COMMAND_PALETTE,
   OPEN_SEARCH,
+  QUOTE_SELECTION,
   SPLIT_DOWN,
   SPLIT_RIGHT,
   TOGGLE_PANEL,
@@ -51,6 +53,7 @@ import { useSessionActions, type SessionTarget } from '@/features/sidebar/Sessio
 import { getEngineState } from '@/features/engine/store'
 import { getPanelLayout, getPanelScope, openRightTab } from '@/features/panel/workspaceStore'
 import { getFiles, saveFile, showFiles } from '@/features/files/store'
+import { quoteSelection } from '@/features/editor/code/CodeEditor'
 import { isDemo, projects } from '@/data'
 import { rankCommands } from './rank'
 import { demoSessionChanges } from '@/data/demo'
@@ -328,6 +331,20 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
       () => saveFile(file!.id),
       'Ctrl+S',
       () => hasFile() && file?.document?.kind === 'text' && !file.document.readonly,
+      t('palette.noFile'),
+    )
+    // 把选中的代码引用到对话（docs/ui/editor-quote.md）
+    add(
+      'file.quote',
+      'editor.quote.palette',
+      'palette.files',
+      MessageSquareQuote,
+      () => {
+        const error = quoteSelection(file!.id)
+        if (error) toast(error)
+      },
+      QUOTE_SELECTION.label,
+      () => hasFile() && file?.document?.kind === 'text',
       t('palette.noFile'),
     )
     add(

@@ -568,6 +568,7 @@ export function Composer({
           <div className="composer-input-row flex min-w-0 items-end">
             <textarea
               ref={ref}
+              data-composer-key={key}
               rows={1}
               aria-controls={commandMatches.length ? listId : mention ? mentionListId : undefined}
               aria-activedescendant={

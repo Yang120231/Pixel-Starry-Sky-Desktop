@@ -31,6 +31,29 @@ describe('userTextParts', () => {
     ])
   })
 
+  it('从编辑器引用的代码：单独一行的「路径#L12-18」是带行号的文件标签', () => {
+    expect(userTextParts('src/Main.java#L12-18\n这里为什么会空指针？')).toEqual([
+      { kind: 'mention', text: 'src/Main.java#L12-18', path: 'src/Main.java', lines: { start: 12, end: 18 } },
+      { kind: 'text', text: '\n这里为什么会空指针？' },
+    ])
+    expect(userTextParts('看 src/a.ts#L3 这行')).toEqual([{ kind: 'text', text: '看 src/a.ts#L3 这行' }])
+  })
+
+  it('@路径#L12-18 也带行号', () => {
+    expect(userTextParts('解释 @src/a.ts#L3-5。')).toEqual([
+      { kind: 'text', text: '解释 ' },
+      { kind: 'mention', text: '@src/a.ts#L3-5', path: 'src/a.ts', lines: { start: 3, end: 5 } },
+      { kind: 'text', text: '。' },
+    ])
+  })
+
+  it('多行消息里的 @文件 照常拆出来', () => {
+    expect(userTextParts('第一行\n改 @a.ts')).toEqual([
+      { kind: 'text', text: '第一行\n改 ' },
+      { kind: 'mention', text: '@a.ts', path: 'a.ts' },
+    ])
+  })
+
   it('命令后面跟着 @文件', () => {
     expect(userTextParts('/review @a.ts')).toEqual([
       { kind: 'command', text: '/review' },

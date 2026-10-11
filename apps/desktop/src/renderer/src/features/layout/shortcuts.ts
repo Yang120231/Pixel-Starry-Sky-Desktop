@@ -26,6 +26,8 @@ export const COMMAND_PALETTE = action('commandPalette')
 /** 显示 / 隐藏终端：默认 Ctrl+`；新建终端：默认 Ctrl+Shift+` */
 export const TOGGLE_TERMINAL = action('toggleTerminal')
 export const NEW_TERMINAL = action('newTerminal')
+/** 编辑器里把选中的代码引用到对话：默认 Ctrl+L（macOS ⌘L），docs/ui/editor-quote.md */
+export const QUOTE_SELECTION = action('quoteSelection')
 
 const mod = (e: KeyboardEvent): boolean => (isMac ? e.metaKey : e.ctrlKey)
 

@@ -17,6 +17,12 @@ describe('新会话标题', () => {
     expect(titleFrom('```ts\nconst a = 1\n```\n为什么报错')).toBe('const a = 1')
   })
 
+  it('从编辑器引用的代码（路径#L 行和后面的代码块）跳过，用后面的问题；只有引用时用路径', () => {
+    expect(titleFrom('src/A.java#L12-18\n```java\nint a = 1;\n```\n为什么空指针')).toBe('为什么空指针')
+    expect(titleFrom('src/A.java#L3\n````md\n```\nx\n```\n````\n看看这段\nb.ts#L1\n```ts\ny\n```')).toBe('看看这段')
+    expect(titleFrom('src/A.java#L12\n```java\nint a = 1;\n```')).toBe('src/A.java#L12')
+  })
+
   it('不是记号的星号、井号保留；截到 30 个字；空的用默认标题', () => {
     expect(titleFrom('算一下 2*3*4')).toBe('算一下 2*3*4')
     expect(titleFrom('#123 这个 issue 怎么修')).toBe('#123 这个 issue 怎么修')

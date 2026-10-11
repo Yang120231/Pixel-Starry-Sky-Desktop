@@ -1,6 +1,6 @@
 import { useI18n } from '@/i18n/I18nProvider'
-import { useEffect, useLayoutEffect, useRef } from 'react'
-import { Compartment, EditorState, Transaction } from '@codemirror/state'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Compartment, EditorSelection, EditorState, Prec, Transaction } from '@codemirror/state'
 import {
   EditorView,
   drawSelection,
@@ -22,8 +22,24 @@ import {
   searchKeymap,
   selectNextOccurrence,
 } from '@codemirror/search'
+import { ClipboardPaste, Copy, MessageSquareQuote, Scissors, TextSelect } from 'lucide-react'
 import { FILE_CLOSED_EVENT, getFiles, saveFile, updateFile, type OpenFile } from '@/features/files/store'
 import { motionEnabled } from '@/features/panes/motion'
+import { appendComposerDraft } from '@/features/engine/drafts'
+import { QUOTE_SELECTION } from '@/features/layout/shortcuts'
+import { composerTarget, focusComposer } from '@/features/session/composerTarget'
+import {
+  QUOTE_MAX_CHARS,
+  QUOTE_MAX_LINES,
+  quotePath,
+  quoteRange,
+  quoteText,
+  quoteTooLong,
+} from '@/features/session/quote'
+import { isDemo } from '@/data'
+import { tr } from '@/i18n/core'
+import { useToast } from '@/ui'
+import { ActionMenu, type MenuAction } from '@/ui/ActionMenu'
 import { changeGutter, changedLines, setExternalLines, setGitChanges } from './gutter'
 import { loadLanguage } from './languages'
 import { editorPhrases, editorTheme } from './theme'
@@ -63,9 +79,90 @@ function recalc(id: string, runtime: Runtime): void {
     ),
   })
 }
+/**
+ * 把这个文件里选中的几行（没有选中时是光标所在行）引用到会话输入框，光标跟过去（docs/ui/editor-quote.md）。
+ * 成功返回 null；没有会话、太长时返回要提示的话
+ */
+export function quoteSelection(tabId: string): string | null {
+  const runtime = runtimes.get(tabId),
+    tab = getFiles().tabs.find(t => t.id === tabId)
+  if (!runtime || !tab) return null
+  const target = composerTarget()
+  if (!target) return tr('editor.quote.noSession')
+  const { state } = runtime.view
+  const range = quoteRange(state.doc, state.selection.main.from, state.selection.main.to)
+  const size = quoteTooLong(range)
+  if (size)
+    return tr('editor.quote.tooLong', {
+      lines: size.lines,
+      chars: size.chars,
+      maxLines: QUOTE_MAX_LINES,
+      maxChars: QUOTE_MAX_CHARS,
+    })
+  // 末尾换行：接着写问题时另起一行
+  appendComposerDraft(target.key, quoteText(quotePath(tab, target.cwd), range) + '\n')
+  focusComposer(target.key)
+  return null
+}
+
+const clipboardWrite = (text: string): Promise<unknown> =>
+  isDemo ? navigator.clipboard.writeText(text) : window.pixelsky!.terminal.clipboardWrite(text)
+const clipboardRead = (): Promise<string> =>
+  isDemo ? navigator.clipboard.readText() : window.pixelsky!.terminal.clipboardRead()
+
+/** 右键菜单：引用到对话，再加上剪切、复制、粘贴、全选（编辑器原来没有右键菜单） */
+function menuActions(tabId: string, view: EditorView, toast: (message: string) => void): MenuAction[] {
+  const { state } = view
+  const selected = state.selection.ranges.filter(r => !r.empty)
+  const text = selected.map(r => state.sliceDoc(r.from, r.to)).join(state.lineBreak)
+  const readonly = state.readOnly
+  return [
+    {
+      label: tr('editor.quote.action'),
+      icon: MessageSquareQuote,
+      run: () => {
+        const error = quoteSelection(tabId)
+        if (error) toast(error)
+      },
+    },
+    {
+      label: tr('editor.menu.cut'),
+      icon: Scissors,
+      separator: true,
+      disabled: readonly || !text,
+      run: () => {
+        void clipboardWrite(text).then(() => view.dispatch(state.replaceSelection(''), { userEvent: 'delete.cut' }))
+      },
+    },
+    { label: tr('editor.menu.copy'), icon: Copy, disabled: !text, run: () => void clipboardWrite(text) },
+    {
+      label: tr('editor.menu.paste'),
+      icon: ClipboardPaste,
+      disabled: readonly,
+      run: () => {
+        void clipboardRead().then(value => {
+          if (value)
+            view.dispatch(view.state.replaceSelection(value), { userEvent: 'input.paste', scrollIntoView: true })
+          view.focus()
+        })
+      },
+    },
+    {
+      label: tr('editor.menu.selectAll'),
+      icon: TextSelect,
+      run: () => {
+        view.dispatch({ selection: EditorSelection.single(0, state.doc.length) })
+        view.focus()
+      },
+    },
+  ]
+}
+
 export function CodeEditor({ tab, active, wordWrap = false }: { tab: OpenFile; active: boolean; wordWrap?: boolean }) {
   const { locale } = useI18n()
+  const toast = useToast()
   const host = useRef<HTMLDivElement>(null)
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   useLayoutEffect(() => {
     if (!host.current) return
     let runtime = runtimes.get(tab.id)
@@ -89,6 +186,18 @@ export function CodeEditor({ tab, active, wordWrap = false }: { tab: OpenFile; a
             dropCursor(),
             rectangularSelection(),
             EditorView.clickAddsSelectionRange.of(e => e.altKey || e.ctrlKey || e.metaKey),
+            // 引用到对话（默认 Ctrl+L）：放在快捷键表前面，盖过 CodeMirror 自带的 Ctrl+L（选中整行）；改了快捷键后 Ctrl+L 恢复选中整行
+            Prec.high(
+              EditorView.domEventHandlers({
+                keydown(e) {
+                  if (!QUOTE_SELECTION.match(e)) return false
+                  e.preventDefault()
+                  const error = quoteSelection(tab.id)
+                  if (error) toast(error)
+                  return true
+                },
+              }),
+            ),
             history(),
             indentOnInput(),
             bracketMatching(),
@@ -223,5 +332,27 @@ export function CodeEditor({ tab, active, wordWrap = false }: { tab: OpenFile; a
       runtime.view.focus()
     }
   }, [tab.id, tab.reveal, active])
-  return <div ref={host} data-code-editor={tab.id} className="min-h-0 min-w-0 flex-1 overflow-hidden" />
+  const runtime = runtimes.get(tab.id)
+  return (
+    <>
+      <div
+        ref={host}
+        data-code-editor={tab.id}
+        className="min-h-0 min-w-0 flex-1 overflow-hidden"
+        onContextMenu={e => {
+          e.preventDefault()
+          setMenu({ x: e.clientX, y: e.clientY })
+        }}
+      />
+      {menu && runtime && (
+        <ActionMenu
+          x={menu.x}
+          y={menu.y}
+          label={tr('editor.menu.label')}
+          actions={menuActions(tab.id, runtime.view, toast)}
+          onClose={() => setMenu(null)}
+        />
+      )}
+    </>
+  )
 }
