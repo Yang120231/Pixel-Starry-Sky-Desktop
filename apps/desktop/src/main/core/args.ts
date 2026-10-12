@@ -66,5 +66,18 @@ export function engineConfigPatch(patch: unknown): EngineConfigPatch {
   if (typeof p.askQuestions === 'boolean') out.askQuestions = p.askQuestions
   if (p.autoCompactPct === null || typeof p.autoCompactPct === 'number') out.autoCompactPct = p.autoCompactPct
   if (typeof p.hidden === 'boolean') out.hidden = p.hidden
+  if (typeof p.rememberChoices === 'boolean') out.rememberChoices = p.rememberChoices
+  // 每个模型的上下文窗口（GitHub #20）：只留 { platform | self: { 模型: 数字 | null } } 的形状，范围由 EngineHost 查
+  if (p.contextWindows && typeof p.contextWindows === 'object' && !Array.isArray(p.contextWindows)) {
+    const windows: NonNullable<EngineConfigPatch['contextWindows']> = {}
+    for (const source of ['platform', 'self'] as const) {
+      const list = (p.contextWindows as Record<string, unknown>)[source]
+      if (!list || typeof list !== 'object' || Array.isArray(list)) continue
+      windows[source] = Object.fromEntries(
+        Object.entries(list).filter((e): e is [string, number | null] => e[1] === null || typeof e[1] === 'number'),
+      )
+    }
+    out.contextWindows = windows
+  }
   return out
 }

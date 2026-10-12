@@ -502,7 +502,7 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
         <div className="min-w-0 flex-1">
           <p className="text-meta text-fg-faint">{tr(`git.action.${failure.action}`)}</p>
           <p className="text-list font-medium text-danger">{failureTitle(failure.kind)}</p>
-          <p className="mt-0.5 text-meta text-fg-muted">{failureHint(failure.kind)}</p>
+          <p className="mt-0.5 text-meta text-fg-muted">{failureHint(failure.kind, failure.action)}</p>
         </div>
         <IconButton
           icon={X}

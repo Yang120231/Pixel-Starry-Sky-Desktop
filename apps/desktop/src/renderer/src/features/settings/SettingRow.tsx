@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { cn } from '@/ui'
+import { cn, Switch } from '@/ui'
 import { useI18n } from '@/i18n/I18nProvider'
 
 export function SectionTitle({ children }: { children: ReactNode }) {
@@ -62,7 +62,7 @@ export function SettingRow({
   )
 }
 
-/** 开关（role=switch） */
+/** 设置页的开关（ui/Switch，md） */
 export function Toggle({
   label,
   checked,
@@ -72,22 +72,5 @@ export function Toggle({
   checked: boolean
   onChange: (value: boolean) => void
 }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-label={label}
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className={cn(
-        'no-drag relative inline-flex h-6 w-10 shrink-0 items-center rounded-full p-0.5',
-        checked ? 'bg-primary' : 'bg-subtle ring-1 ring-inset ring-line-strong',
-      )}
-    >
-      <span
-        aria-hidden
-        className={cn('size-5 rounded-full bg-surface shadow-sm', checked ? 'translate-x-4' : 'translate-x-0')}
-      />
-    </button>
-  )
+  return <Switch checked={checked} label={label} onChange={onChange} />
 }

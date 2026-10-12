@@ -32,6 +32,8 @@ export class CodexAdapter implements EngineAdapter {
   private cached: { info: EngineInfo; launcher: Launcher | null } | null = null
   private detecting: Promise<EngineInfo> | null = null
   private catalogCache: EngineCatalog | null = null
+  /** Codex 报过的各模型窗口（GitHub #20）：设了自动压缩、没填窗口时按它算 token 数 */
+  private readonly knownWindows = new Map<string, number>()
   readonly npmPackage = CODEX_NPM_PACKAGE
   readonly updateNeedsIdle = true
   private env(): NodeJS.ProcessEnv {
@@ -155,6 +157,10 @@ export class CodexAdapter implements EngineAdapter {
       for (const key of Object.keys(env)) if (/^(OPENAI_|CODEX_ACCESS_TOKEN|CHATGPT_)/i.test(key)) delete env[key]
       Object.assign(env, this.opts.sessionEnv?.(ctx.record()) ?? {})
     }
-    return new CodexSession(result.launcher, env, ctx, this.opts.launchOptions?.() ?? { askQuestions: true })
+    return new CodexSession(result.launcher, env, ctx, {
+      ...(this.opts.launchOptions?.() ?? { askQuestions: true }),
+      defaultModel: () => this.catalogCache?.currentModel ?? null,
+      knownWindows: this.knownWindows,
+    })
   }
 }

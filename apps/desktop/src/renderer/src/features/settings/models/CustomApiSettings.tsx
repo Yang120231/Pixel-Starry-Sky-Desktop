@@ -1,12 +1,11 @@
 // 设置 › 模型与额度 › 自定义 API（docs/ui/custom-api.md §3.1）：接口列表、添加 / 编辑对话框、测试连接、读取模型、计价参照。
 // Key 只进不出：对话框里 Key 留空表示不改，附加请求头已保存的值显示为打码
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertTriangle, CheckCircle2, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 import { officialModels, officialPrice } from '@pixelsky/protocol'
-import { Button, IconButton, Select, Spinner, cn } from '@/ui'
+import { Button, IconButton, Select, Spinner, Switch, cn } from '@/ui'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
-import { Switch } from '@/features/session/ComposerMenus'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '@/i18n/core'
 import {
@@ -26,7 +25,7 @@ import type {
   ProviderView,
 } from '../../../../../shared/types/providers'
 import { FIELD } from '../engines/parts'
-import { formatTokens, parseTokens } from './tokenCount'
+import { ContextWindowInput } from './ContextWindowInput'
 
 /** 打码的请求头值，和主进程 MASKED_SECRET 一致 */
 const MASKED = '••••••••'
@@ -138,59 +137,6 @@ export function parseHeaderLines(text: string): { headers: Record<string, string
     headers[name] = line.slice(i + 1).trim()
   }
   return { headers, bad: null }
-}
-
-/**
- * 上下文长度：可以写 1m、200k、200000；离开时显示成 1M / 200K。
- * 输入中不标红（打 5000 会经过 5、50、500）；离开时认不出或超出范围就保留原文、标红，并告诉对话框不能保存
- */
-function ContextWindowInput({
-  value,
-  onChange,
-  onValidity,
-}: {
-  value: number | null
-  onChange(value: number | null): void
-  onValidity(ok: boolean): void
-}) {
-  useI18n()
-  const [draft, setDraft] = useState(value === null ? '' : formatTokens(value))
-  const [editing, setEditing] = useState(false)
-  const editingRef = useRef(false)
-  // 外面改了值（例如从接口读取模型）且没在输入时，跟着显示
-  useEffect(() => {
-    if (!editingRef.current) setDraft(value === null ? '' : formatTokens(value))
-  }, [value])
-  const parsed = parseTokens(draft)
-  const invalid = !editing && parsed === undefined
-  return (
-    <input
-      aria-label={tr('customApi.contextWindow')}
-      aria-invalid={invalid}
-      title={invalid ? tr('customApi.contextWindowHint') : tr('customApi.contextWindowTip')}
-      placeholder={tr('customApi.contextWindowPlaceholder')}
-      value={draft}
-      onFocus={() => {
-        editingRef.current = true
-        setEditing(true)
-      }}
-      onChange={e => {
-        setDraft(e.target.value)
-        const next = parseTokens(e.target.value)
-        if (next !== undefined) onChange(next)
-      }}
-      onBlur={() => {
-        editingRef.current = false
-        setEditing(false)
-        onValidity(parsed !== undefined)
-        if (parsed !== undefined) setDraft(parsed === null ? '' : formatTokens(parsed))
-      }}
-      className={cn(
-        'h-7 w-28 rounded-md border bg-subtle px-2 text-meta tabular-nums text-fg outline-none placeholder:text-fg-faint',
-        invalid ? 'border-danger' : 'border-line focus:border-line-strong',
-      )}
-    />
-  )
 }
 
 function Field({ label, hint, children }: { label: string; hint?: ReactNode; children: ReactNode }) {

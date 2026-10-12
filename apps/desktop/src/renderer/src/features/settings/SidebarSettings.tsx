@@ -1,5 +1,5 @@
 import { RotateCcw } from 'lucide-react'
-import { Button, cn } from '@/ui'
+import { Button, Switch } from '@/ui'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import { resetSidebarIcons, setSidebarIcon, setSidebarPrefs, useSidebarPrefs } from '@/features/appearance/sidebar'
@@ -24,25 +24,11 @@ export function SidebarSettings() {
         title={tr('sidebar.settings.showRecent')}
         description={tr('sidebar.settings.showRecentDescription')}
         control={
-          <button
-            type="button"
-            role="switch"
-            aria-label={tr('sidebar.settings.showRecent')}
-            aria-checked={prefs.showRecent}
-            onClick={() => setSidebarPrefs({ showRecent: !prefs.showRecent })}
-            className={cn(
-              'no-drag relative inline-flex h-6 w-10 shrink-0 items-center rounded-full p-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
-              prefs.showRecent ? 'bg-primary' : 'bg-subtle ring-1 ring-inset ring-line-strong',
-            )}
-          >
-            <span
-              aria-hidden="true"
-              className={cn(
-                'size-5 rounded-full bg-surface shadow-sm',
-                prefs.showRecent ? 'translate-x-4' : 'translate-x-0',
-              )}
-            />
-          </button>
+          <Switch
+            checked={prefs.showRecent}
+            label={tr('sidebar.settings.showRecent')}
+            onChange={showRecent => setSidebarPrefs({ showRecent })}
+          />
         }
       />
       <SettingRow title={tr('sidebar.layout.title')} description={tr('sidebar.layout.description')}>

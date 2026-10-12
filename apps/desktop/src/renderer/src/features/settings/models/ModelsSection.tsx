@@ -1,10 +1,11 @@
 import { useI18n } from '@/i18n/I18nProvider'
-import { tr } from '../../../i18n/core'
+import { tr, translateMessage } from '../../../i18n/core'
 // 设置 › 模型与额度（docs/ui/source-switch.md §3.6）：新任务的默认额度来源、模型、线路；
 // 平台可用线路一览；本机引擎检测结果；自定义 API 的接口（docs/ui/custom-api.md）。已开始的会话在输入框菜单里单独改。
+import type { EngineId } from '@pixelsky/protocol'
 import { useEffect, useRef, useState } from 'react'
 import { Check, LogIn, RefreshCw } from 'lucide-react'
-import { Button, EngineIcon, Segmented, Select, Spinner, cn } from '@/ui'
+import { Button, EngineIcon, Segmented, Select, Spinner, Switch, cn } from '@/ui'
 import { useAccount } from '@/features/account/useAccount'
 import {
   billingLabel,
@@ -29,13 +30,14 @@ import {
 import { isLive, selfModelOptions, useEngineState } from '@/features/engine'
 import { useEngineCatalog } from '@/features/engine/catalog'
 import { GroupTitle, SectionTitle, SettingRow } from '../SettingRow'
-import { Switch } from '@/features/session/ComposerMenus'
 import { takeModelsScroll } from './scroll'
 import { RequestRetrySettings } from './RequestRetrySettings'
 import { demo, isDemo } from '@/data/demo'
 import { providersFor, resolveCustomModel, useProviders } from '@/features/account/providers'
 import { CustomApiSettings } from './CustomApiSettings'
 import { AiCommitSettings } from './AiCommitSettings'
+import { ContextWindowInput } from './ContextWindowInput'
+import { setContextWindow, useContextWindows } from './contextWindows'
 
 const ENGINE_STATUS: Record<string, string> = {
   get ready() {
@@ -64,7 +66,24 @@ export function ModelsSection({ onOpenEngines }: { onOpenEngines?: () => void })
   const account = useAccount()
   const liveEngines = useEngineState(s => s.engines)
   const engines = isLive ? liveEngines : isDemo ? demo().engines.status : []
-  const models = platformModels(platform.groups)
+  const codexPlatform = usePlatform('codex')
+  const claudeModels = platformModels(platform.groups)
+  const codexModels = platformModels(codexPlatform.groups)
+  // 菜单里显示的模型和上下文窗口：Claude Code 和 Codex 两边的模型合在一起（GitHub #20）
+  const models = [...claudeModels, ...codexModels.filter(m => !claudeModels.includes(m))]
+  const claudeWindows = useContextWindows('claude').platform
+  const codexWindows = useContextWindows('codex').platform
+  const [windowError, setWindowError] = useState<string | null>(null)
+  const saveWindow = (model: string, value: number | null): void => {
+    setWindowError(null)
+    const engines: EngineId[] = [
+      ...(claudeModels.includes(model) ? (['claude'] as const) : []),
+      ...(codexModels.includes(model) ? (['codex'] as const) : []),
+    ]
+    Promise.all(engines.map(engine => setContextWindow(engine, 'platform', model, value))).catch((e: unknown) =>
+      setWindowError((e as Error).message),
+    )
+  }
   const routes = groupsForModel(platform.groups, platform.model)
   const visibilityRef = useRef<HTMLDivElement>(null)
   const [modelQuery, setModelQuery] = useState('')
@@ -305,6 +324,12 @@ export function ModelsSection({ onOpenEngines }: { onOpenEngines?: () => void })
               <p className="mt-1 text-meta text-fg-muted">
                 {tr('settings.models.ModelsSection.hiddenModelsAreRemoved')}
               </p>
+              <p className="mt-1 text-meta text-fg-muted">{tr('contextWindow.platformHint')}</p>
+              {windowError && (
+                <p role="alert" className="mt-1 text-meta text-danger">
+                  {translateMessage(windowError)}
+                </p>
+              )}
             </div>
             {platform.hiddenModels.some(m => models.includes(m)) && (
               <button
@@ -332,19 +357,31 @@ export function ModelsSection({ onOpenEngines }: { onOpenEngines?: () => void })
             )}
             {matchModels(models, modelQuery).map(m => {
               const shown = !platform.hiddenModels.includes(m)
-              const lines = groupsForModel(platform.groups, m).length
+              const lines =
+                groupsForModel(platform.groups, m).length +
+                (claudeModels.includes(m) ? 0 : groupsForModel(codexPlatform.groups, m).length)
               return (
                 <div key={m} className="flex items-center gap-3 border-t border-line-subtle px-4 py-2 first:border-t-0">
                   <span
-                    className={cn('min-w-0 flex-1 truncate font-mono text-meta', shown ? 'text-fg' : 'text-fg-faint')}
+                    className={cn(
+                      'flex min-w-0 flex-1 items-center gap-1.5 font-mono text-meta',
+                      shown ? 'text-fg' : 'text-fg-faint',
+                    )}
                   >
-                    {m}
+                    {!claudeModels.includes(m) && <EngineIcon engine="codex" size={12} />}
+                    <span className="truncate">{m}</span>
                   </span>
                   <span className="shrink-0 text-meta text-fg-faint">
                     {tr(lines === 1 ? 'settings.models.ModelsSection.route' : 'settings.models.ModelsSection.routes', {
                       n: lines,
                     })}
                   </span>
+                  <ContextWindowInput
+                    value={claudeWindows[m] ?? codexWindows[m] ?? null}
+                    label={tr('contextWindow.of', { model: m })}
+                    commit="blur"
+                    onChange={value => saveWindow(m, value)}
+                  />
                   <Switch
                     checked={shown}
                     label={tr('settings.models.ModelsSection.showInMenu', { p0: m })}

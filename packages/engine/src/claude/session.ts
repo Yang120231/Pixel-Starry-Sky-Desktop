@@ -28,7 +28,7 @@ import {
 } from './transcript'
 import { ClaudeTranslator } from './translate'
 import { obj, str } from './shape'
-import { claudeModelName } from './long-context'
+import { claudeModelName, type ModelSettings } from './long-context'
 
 type Msg = Record<string, unknown>
 
@@ -109,6 +109,8 @@ export interface ClaudeLaunchOptions {
   askQuestions: boolean
   /** 用户追加的启动参数，放在所有参数最后（docs/ui/engine-launch.md） */
   args?: string[]
+  /** 云端 / 本机模型填了上下文窗口时按模型的自动压缩窗口，进 --settings（GitHub #20） */
+  modelSettings?: ModelSettings | null
 }
 
 export function claudeArgs(
@@ -189,7 +191,14 @@ export function claudeSettingsArgument(
   const settings = gatewayFile ? (JSON.parse(readFileSync(gatewayFile, 'utf8')) as Record<string, unknown>) : {}
   const configured = obj(settings.env)
   const env = maxRetries === null ? configured : { ...configured, CLAUDE_CODE_MAX_RETRIES: String(maxRetries) }
-  const merged = JSON.stringify({ ...settings, ...extra, ...(Object.keys(env).length > 0 ? { env } : {}) })
+  // modelSettings 按模型合并：网关文件里自定义 API 的和设置里云端 / 本机的各管各的模型
+  const models = { ...obj(settings.modelSettings), ...obj(extra.modelSettings) }
+  const merged = JSON.stringify({
+    ...settings,
+    ...extra,
+    ...(Object.keys(models).length > 0 ? { modelSettings: models } : {}),
+    ...(Object.keys(env).length > 0 ? { env } : {}),
+  })
   if (!gatewayFile) return merged
   // 平台配置含本机回环凭据，只把文件路径放进 argv。
   const retryFile = `${gatewayFile}.retry-${randomUUID()}.json`
@@ -471,7 +480,10 @@ export class ClaudeSession implements EngineSession {
     const gateway = viaGateway(rec) ? this.deps.env.PIXELSKY_GATEWAY_SETTINGS : undefined
     // 网关模式下凭证只在网关里：没有网关设置文件就不能启动，否则会落到引擎自己的登录上
     if (viaGateway(rec) && !gateway) throw new Error('本机网关不可用，请重启应用')
-    const extra = this.deps.launch?.outputStyle ? { outputStyle: this.deps.launch.outputStyle } : {}
+    const extra = {
+      ...(this.deps.launch?.outputStyle ? { outputStyle: this.deps.launch.outputStyle } : {}),
+      ...(this.deps.launch?.modelSettings ? { modelSettings: this.deps.launch.modelSettings } : {}),
+    }
     const settingsArg = claudeSettingsArgument(gateway, this.deps.maxRetries ?? null, extra)
     // 合并网关配置时写了临时文件，进程换掉或退出时删掉
     if (gateway && settingsArg && settingsArg !== gateway) this.retrySettingsFile = settingsArg

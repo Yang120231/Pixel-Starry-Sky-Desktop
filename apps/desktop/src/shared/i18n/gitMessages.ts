@@ -80,6 +80,14 @@ export const gitMessages = {
   'git.branch.create': { zh: '新建分支「{name}」', en: 'Create branch "{name}"' },
   'git.branch.empty': { zh: '没有匹配的分支', en: 'No matching branches' },
   'git.branch.current': { zh: '当前分支', en: 'Current branch' },
+  'git.header.openPanel': { zh: '打开 Git 面板', en: 'Open Git panel' },
+  'git.header.cancel': { zh: '取消', en: 'Cancel' },
+  'git.header.switchAnyway': { zh: '仍然切换', en: 'Switch anyway' },
+  'git.header.dirtyTitle': { zh: '有 {n} 个文件没提交', en: '{n} uncommitted files' },
+  'git.header.dirtyBody': {
+    zh: '切换时会把这些改动带到「{branch}」。和「{branch}」冲突时 git 会拒绝切换，改动不会丢。',
+    en: 'These changes will come with you to "{branch}". If they conflict with "{branch}", git refuses to switch and nothing is lost.',
+  },
   'git.operation.merge': { zh: '正在合并', en: 'Merge in progress' },
   'git.operation.rebase': { zh: '正在变基', en: 'Rebase in progress' },
   'git.operation.cherry-pick': { zh: '正在拣选提交', en: 'Cherry-pick in progress' },
@@ -175,6 +183,10 @@ export const gitMessages = {
   'git.failure.dirty.hint': {
     zh: '可以先暂存（stash）本地改动，拉取完成后再放回来。',
     en: 'You can stash local changes, pull, and then restore them.',
+  },
+  'git.failure.dirty.switchHint': {
+    zh: '先提交或暂存（stash）这些改动，再切换分支。',
+    en: 'Commit or stash these changes first, then switch branches.',
   },
   'git.failure.noUpstream.title': { zh: '当前分支没有上游分支', en: 'The current branch has no upstream' },
   'git.failure.noUpstream.hint': {

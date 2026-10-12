@@ -5,6 +5,7 @@ import {
   EFFORTS,
   codedError,
   type AgentRuns,
+  type ContextWindows,
   type Effort,
   type EngineCatalog,
   type EngineInfo,
@@ -24,7 +25,7 @@ import { ClaudeProcess } from './process'
 import { ClaudeSession, reservedClaudeArg, type ClaudeLaunchOptions } from './session'
 import { loadSavedRuns, loadSubagentTranscript } from './runs'
 import { claudeSessionDir, defaultProjectsDir, findClaudeTranscript, findRewindAnchor } from './transcript'
-import { claudeModelName } from './long-context'
+import { LONG_CONTEXT_ENV, claudeModelName, windowSettings } from './long-context'
 
 export interface ClaudeAdapterOptions {
   sessionEnv?: (record: SessionRecord) => NodeJS.ProcessEnv
@@ -35,7 +36,7 @@ export interface ClaudeAdapterOptions {
   /** 用户在设置里追加的环境变量（在清理后的基础环境之上；平台会话的网关变量仍然最后覆盖） */
   extraEnv?: () => Record<string, string>
   /** 设置 › 本机引擎里的引擎级选项（输出风格、允许提问、自动压缩触发点、追加参数），每次启动进程时读 */
-  launchOptions?: () => ClaudeLaunchOptions & { autoCompactPct: number | null }
+  launchOptions?: () => ClaudeLaunchOptions & { autoCompactPct: number | null; contextWindows?: ContextWindows }
   /** 测试用：直接指定要启动的程序，跳过查找和检测 */
   launcher?: Launcher
   /** 测试用：Claude 会话记录目录 */
@@ -198,11 +199,26 @@ export class ClaudeAdapter implements EngineAdapter {
     const launch = this.opts.launchOptions?.()
     // 自动压缩触发点（docs/ui/engine-settings-redesign.md §3.2）：上下文用到窗口的这个百分比时压缩
     if (launch?.autoCompactPct) env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE = String(launch.autoCompactPct)
+    // 云端 / 本机模型填的上下文窗口超过 200K 时带 [1m]（GitHub #20）；自定义 API 的名单由网关给
+    const long = this.windows(record)?.long ?? []
+    if (long.length) env[LONG_CONTEXT_ENV] = JSON.stringify(long)
     // 文件检查点：-p 模式默认不记，回退时要靠它恢复代码（docs/ui/rewind-fork-sidechat.md §1）；
     // 用户设了 CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING 时 Claude Code 自己会关掉
     env.CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING = 'true'
     if (pathDirs.length) env.PATH = [...pathDirs, env.PATH ?? env.Path ?? ''].join(delimiter)
     return env
+  }
+
+  /** 这个会话的来源（云端 / 本机）在设置里填的模型窗口；自定义 API 的在接口配置里，由网关处理 */
+  private windows(record: SessionRecord): ReturnType<typeof windowSettings> | null {
+    if (record.provider) return null
+    const windows = this.opts.launchOptions?.().contextWindows
+    if (!windows) return null
+    const list = { ...windows[record.platform ? 'platform' : 'self'] }
+    // 本机模型列表里是别名（opus）：按别名指向的完整模型名也写一份，Claude Code 按哪个名字查都对得上
+    for (const m of this.catalogCache?.value.models ?? [])
+      if (m.resolved && list[m.id] && !(m.resolved in list)) list[m.resolved] = list[m.id]
+    return windowSettings(list)
   }
 
   private readyLauncher(record: SessionRecord): Launcher {
@@ -223,7 +239,12 @@ export class ClaudeAdapter implements EngineAdapter {
     return new ClaudeSession(ctx, {
       maxRetries,
       launch: launch
-        ? { outputStyle: launch.outputStyle, askQuestions: launch.askQuestions, args: launch.args }
+        ? {
+            outputStyle: launch.outputStyle,
+            askQuestions: launch.askQuestions,
+            args: launch.args,
+            modelSettings: this.windows(ctx.record())?.modelSettings ?? null,
+          }
         : undefined,
       launcher,
       env,

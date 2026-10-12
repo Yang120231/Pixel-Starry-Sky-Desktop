@@ -66,6 +66,14 @@ describe('shared argument checks', () => {
       autoCompactPct: 80,
       hidden: true,
     })
+    // 记住会话里的选择（GitHub #6）、每个模型的上下文窗口（GitHub #20）也要过得去
+    expect(
+      engineConfigPatch({
+        rememberChoices: true,
+        contextWindows: { platform: { a: 200_000, b: null, c: '1m' }, self: [], other: { x: 1 } },
+      }),
+    ).toEqual({ rememberChoices: true, contextWindows: { platform: { a: 200_000, b: null } } })
+    expect(engineConfigPatch({ rememberChoices: 'yes', contextWindows: [1] })).toEqual({})
     expect(engineConfigPatch({ args: ['--x', 1] })).toEqual({})
     expect(engineConfigPatch({ args: '--debug' })).toEqual({})
     expect(engineConfigPatch(undefined)).toEqual({})

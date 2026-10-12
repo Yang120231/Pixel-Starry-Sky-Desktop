@@ -6,7 +6,13 @@ import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
 import type { SessionRecord } from '@pixelsky/protocol'
-import { CLAUDE_COMPACT_MARKER, LONG_CONTEXT_ENV, claudeModelName, rewriteCompaction } from '@pixelsky/engine'
+import {
+  CLAUDE_COMPACT_MARKER,
+  CODEX_WINDOW_ENV,
+  LONG_CONTEXT_ENV,
+  claudeModelName,
+  rewriteCompaction,
+} from '@pixelsky/engine'
 import type { PlatformGroupInfo } from '../../shared/types/platform-catalog'
 import { platformFetch, signedInEmail } from '../account/account'
 import * as ipc from '../ipc/guard'
@@ -139,11 +145,15 @@ export async function initPlatform(
       entry = { recordId: record.id, secret: randomBytes(32).toString('hex') }
       sessions.set(record.id, entry)
     }
-    if (record.engine === 'codex')
+    if (record.engine === 'codex') {
+      // 自定义 API 里这个模型填的上下文窗口，Codex 启动时带上（GitHub #20）；换模型时宿主会重启进程、重新取
+      const window = provider?.models.find(m => m.id === record.model)?.contextWindow
       return {
         PIXELSKY_CODEX_BASE_URL: `http://127.0.0.1:${address.port}/v1`,
         PIXELSKY_CODEX_TOKEN: entry.secret,
+        ...(window ? { [CODEX_WINDOW_ENV]: String(window) } : {}),
       }
+    }
     const env: Record<string, string> = {
       ANTHROPIC_BASE_URL: `http://127.0.0.1:${address.port}`,
       ANTHROPIC_AUTH_TOKEN: entry.secret,

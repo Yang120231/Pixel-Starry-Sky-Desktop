@@ -15,6 +15,7 @@ import { openEngineDetail, useEngineDetail } from './nav'
 import { DefaultBadge, ENGINE_STATUS } from './parts'
 import { canInstall, hasNewer, installEngine, outcomeTitle, updateEngine, useEngineUpdate } from './engineUpdate'
 import { JobProgress } from './JobProgress'
+import { mergeContextWindows } from '../models/contextWindows'
 import { demo, isDemo } from '@/data/demo'
 import type { EngineLite } from '@/data/types'
 
@@ -41,7 +42,14 @@ export function EnginesSection({ onOpenModels }: { onOpenModels?: () => void }) 
         c =>
           c && {
             ...c,
-            [engine]: { ...c[engine], ...patch, defaults: { ...c[engine].defaults, ...(patch.defaults ?? {}) } },
+            [engine]: {
+              ...c[engine],
+              ...patch,
+              defaults: { ...c[engine].defaults, ...(patch.defaults ?? {}) },
+              contextWindows: patch.contextWindows
+                ? mergeContextWindows(c[engine].contextWindows, patch.contextWindows)
+                : c[engine].contextWindows,
+            },
           },
       )
       return

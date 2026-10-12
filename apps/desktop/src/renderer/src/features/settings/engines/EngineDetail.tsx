@@ -16,8 +16,7 @@ import {
   type EngineLocalConfig,
   type PermissionMode,
 } from '@pixelsky/protocol'
-import { Button, EngineIcon, Select, cn } from '@/ui'
-import { Switch } from '@/features/session/ComposerMenus'
+import { Button, EngineIcon, Select, Switch, cn } from '@/ui'
 import { platformModels, usePlatform } from '@/features/account/platform'
 import { EFFORT_LABEL, PERMISSION_INFO, bridge, isLive, redetectEngines } from '@/features/engine'
 import { envLines, parseEnvLines } from './envLines'
@@ -35,6 +34,8 @@ import {
   type UpdateOutcome,
 } from './engineUpdate'
 import { JobProgress } from './JobProgress'
+import { ContextWindowInput } from '../models/ContextWindowInput'
+import { useEngineCatalog } from '@/features/engine/catalog'
 import { demo, isDemo } from '@/data/demo'
 import type { EngineLite } from '@/data/types'
 
@@ -216,34 +217,41 @@ export function EngineDetail({
       )}
 
       {!e.caps.launchSettings && <p className="mt-4 text-meta text-fg-muted">{tr('codex.nativeSettings')}</p>}
-      {e.caps.launchSettings && (
-        <Group title={tr('session.ContextWindowButton.context2')}>
-          <Row
-            title={tr('settings.engines.EngineDetail.autocompactThreshold')}
-            description={tr('settings.engines.EngineDetail.automaticallyCompactAtThis')}
-            control={
-              <Select
-                label={tr('settings.engines.EngineDetail.autocompactThreshold')}
-                value={config.autoCompactPct === null ? '' : String(config.autoCompactPct)}
-                onChange={v => run({ autoCompactPct: v ? Number(v) : null })}
-                options={[
-                  {
-                    value: '',
-                    get label() {
-                      return tr('settings.engines.EngineDetail.defaultBuiltInThreshold')
-                    },
+      {/* 上下文（GitHub #20）：Codex 也有自动压缩和模型窗口；压缩用的模型只有 Claude Code 能换 */}
+      <Group title={tr('session.ContextWindowButton.context2')}>
+        <Row
+          title={tr('settings.engines.EngineDetail.autocompactThreshold')}
+          description={tr('settings.engines.EngineDetail.automaticallyCompactAtThis')}
+          hint={e.id === 'codex' ? tr('contextWindow.codexCompactHint') : undefined}
+          control={
+            <Select
+              label={tr('settings.engines.EngineDetail.autocompactThreshold')}
+              value={config.autoCompactPct === null ? '' : String(config.autoCompactPct)}
+              onChange={v => run({ autoCompactPct: v ? Number(v) : null })}
+              options={[
+                {
+                  value: '',
+                  get label() {
+                    return tr('settings.engines.EngineDetail.defaultBuiltInThreshold')
                   },
-                  ...AUTO_COMPACT_PCTS.map(p => ({
-                    value: String(p),
-                    label: tr('settings.engines.EngineDetail.atUsage', { p0: p }),
-                  })),
-                ]}
-              />
-            }
-          />
+                },
+                ...AUTO_COMPACT_PCTS.map(p => ({
+                  value: String(p),
+                  label: tr('settings.engines.EngineDetail.atUsage', { p0: p }),
+                })),
+              ]}
+            />
+          }
+        />
+        {e.caps.launchSettings && (
           <CompactModelRow engine={e} value={config.compactModel} onChange={compactModel => run({ compactModel })} />
-        </Group>
-      )}
+        )}
+        <ModelWindowsRow
+          engine={e}
+          windows={config.contextWindows.self}
+          onChange={(model, value) => run({ contextWindows: { self: { [model]: value } } })}
+        />
+      </Group>
 
       <Group title={tr('settings.engines.EngineDetail.advanced')}>
         <Row
@@ -470,6 +478,56 @@ function OutputStyleRow({
         />
       }
     />
+  )
+}
+
+/**
+ * 用自己账号时每个模型的上下文窗口（GitHub #20，docs/ui/context-settings-branch-switch.md §2.2）：
+ * 列出引擎自己报的模型，再加上填过、但现在列表里没有的（好清掉）
+ */
+function ModelWindowsRow({
+  engine: e,
+  windows,
+  onChange,
+}: {
+  engine: EngineLite
+  windows: Record<string, number>
+  onChange: (model: string, value: number | null) => void
+}) {
+  useI18n()
+  const live = useEngineCatalog(e.id)
+  const catalog = isLive ? live : isDemo && e.id === 'claude' ? demo().engines.catalog : null
+  const listed = (catalog?.models ?? []).map(m => ({ id: m.id, label: m.label }))
+  const extra = Object.keys(windows)
+    .filter(id => !listed.some(m => m.id === id))
+    .map(id => ({ id, label: id }))
+  const models = [...listed, ...extra]
+  return (
+    <Row title={tr('contextWindow.engineTitle')} description={tr('contextWindow.engineHint', { engine: e.name })}>
+      {models.length === 0 ? (
+        <p className="text-meta text-fg-faint">{tr('contextWindow.noModels', { engine: e.name })}</p>
+      ) : (
+        <div data-model-windows className="overflow-hidden rounded-lg border border-line-subtle">
+          {models.map(m => (
+            <div
+              key={m.id}
+              className="flex items-center gap-3 border-t border-line-subtle px-3 py-1.5 first:border-t-0"
+            >
+              <span className="min-w-0 flex-1 truncate text-meta text-fg">
+                {m.label}
+                {m.label !== m.id && <span className="ml-2 font-mono text-fg-faint">{m.id}</span>}
+              </span>
+              <ContextWindowInput
+                value={windows[m.id] ?? null}
+                label={tr('contextWindow.of', { model: m.id })}
+                commit="blur"
+                onChange={value => onChange(m.id, value)}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </Row>
   )
 }
 

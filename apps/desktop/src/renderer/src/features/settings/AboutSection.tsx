@@ -5,7 +5,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { ArrowDownToLine, Check, Copy, ExternalLink, FolderOpen, RefreshCw, RotateCw } from 'lucide-react'
 import type { AppInfo, AppLink } from '../../../../shared/types/app-info'
 import { useAccount } from '@/features/account'
-import { Button, Logo, cn } from '@/ui'
+import { Button, Logo, Switch, cn } from '@/ui'
 import { updateActions, useUpdateState } from '@/features/update/store'
 import { RELEASE_NOTES, useWhatsNew, whatsNewActions } from '@/features/update/whatsNew'
 import type { UpdateState } from '../../../../shared/types/update'
@@ -287,23 +287,12 @@ function UpdateGroup({ update }: { update: UpdateState }) {
           <p className="text-ui text-fg">{tr('update.beta')}</p>
           <p className="text-meta text-fg-muted">{tr('update.betaHint')}</p>
         </div>
-        <button
-          type="button"
-          role="switch"
-          aria-label={tr('update.beta')}
-          aria-checked={update.beta}
+        <Switch
+          checked={update.beta}
           disabled={status === 'unsupported'}
-          onClick={() => void updateActions.setBeta(!update.beta)}
-          className={cn(
-            'no-drag relative inline-flex h-6 w-10 shrink-0 items-center rounded-full p-0.5 disabled:opacity-50',
-            update.beta ? 'bg-primary' : 'bg-subtle ring-1 ring-inset ring-line-strong',
-          )}
-        >
-          <span
-            aria-hidden
-            className={cn('size-5 rounded-full bg-surface shadow-sm', update.beta ? 'translate-x-4' : 'translate-x-0')}
-          />
-        </button>
+          label={tr('update.beta')}
+          onChange={on => void updateActions.setBeta(on)}
+        />
       </div>
     </Group>
   )

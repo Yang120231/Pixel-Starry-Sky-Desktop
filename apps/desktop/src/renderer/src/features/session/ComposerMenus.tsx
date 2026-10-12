@@ -17,7 +17,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import type { PermissionMode } from '@pixelsky/protocol'
-import { IconButton, Popover, cn, useToast } from '@/ui'
+import { IconButton, Popover, Switch, cn, useToast } from '@/ui'
 import { PERMISSION_HINTS, PERMISSION_INFO, effortLabel, type ComposerController } from '@/features/engine'
 import { EffortSlider } from './EffortSlider'
 import { effortDiff } from '@/features/engine/effortDefaults'
@@ -73,42 +73,6 @@ export function MenuRow({
 export const TRIGGER =
   'press no-drag inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-list text-fg-secondary hover:bg-hover hover:text-fg'
 
-/** 开关（Ultracode 等） */
-export function Switch({
-  checked,
-  disabled,
-  label,
-  tone,
-  onChange,
-}: {
-  checked: boolean
-  disabled?: boolean
-  label: string
-  tone?: 'ultracode'
-  onChange: (on: boolean) => void
-}) {
-  useI18n()
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      data-tone={tone}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-      className="ui-switch relative inline-flex h-5 w-[34px] shrink-0 items-center rounded-full transition-colors duration-(--dur-base) disabled:opacity-50"
-    >
-      <span
-        className={cn(
-          'ui-switch-knob inline-block size-4 rounded-full transition-transform duration-(--dur-base) ease-(--ease-out)',
-          checked ? 'translate-x-[16px]' : 'translate-x-[2px]',
-        )}
-      />
-    </button>
-  )
-}
-
 /** 开关一行：名字 + 说明 + 开关 */
 function SwitchRow({
   icon,
@@ -137,7 +101,7 @@ function SwitchRow({
         </span>
         <span className="mt-0.5 block text-meta text-fg-muted">{desc}</span>
       </span>
-      <Switch checked={checked} disabled={disabled} label={label} tone={tone} onChange={onChange} />
+      <Switch checked={checked} disabled={disabled} label={label} size="sm" tone={tone} onChange={onChange} />
     </div>
   )
 }

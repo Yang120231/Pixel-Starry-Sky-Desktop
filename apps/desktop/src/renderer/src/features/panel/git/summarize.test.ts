@@ -1,7 +1,7 @@
 // 顶栏分支与新任务起点用的 Git 摘要（docs/ui/workbench-ux-3.md §2.1）
 import { describe, expect, it } from 'vitest'
 import type { GitFileChange, GitStatus } from '../../../../../shared/types/project-tools'
-import { summarize } from './summarize'
+import { beforeSwitch, summarize } from './summarize'
 
 const change = (path: string): GitFileChange => ({ path, origPath: null, code: 'M', local: path, submodule: false })
 const status = (patch: Partial<GitStatus>): GitStatus => ({
@@ -46,5 +46,20 @@ describe('Git 摘要', () => {
       head: 'abcdef1234567890',
     })
     expect(summarize(status({ repo: false }))).toBeNull()
+  })
+})
+
+describe('顶栏切换分支前', () => {
+  it('没有改动直接切；有改动先确认，带上文件数', () => {
+    expect(beforeSwitch(status({}))).toEqual({ kind: 'go' })
+    expect(beforeSwitch(status({ unstaged: [change('a.ts')], untracked: [change('b.ts')] }))).toEqual({
+      kind: 'confirm',
+      changed: 2,
+    })
+  })
+
+  it('AI 在这个工作区运行时拒绝，不管有没有改动', () => {
+    expect(beforeSwitch(status({ busySessions: 1 }))).toEqual({ kind: 'busy' })
+    expect(beforeSwitch(status({ busySessions: 2, unstaged: [change('a.ts')] }))).toEqual({ kind: 'busy' })
   })
 })

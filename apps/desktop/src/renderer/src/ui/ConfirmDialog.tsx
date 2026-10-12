@@ -11,6 +11,7 @@ export function ConfirmDialog({
   danger,
   focusInput,
   confirmDisabled,
+  extra,
   onConfirm,
   onCancel,
 }: {
@@ -23,6 +24,8 @@ export function ConfirmDialog({
   danger?: boolean
   focusInput?: boolean
   confirmDisabled?: boolean
+  /** 取消和确认之间的第三个按钮（比如「打开 Git 面板」） */
+  extra?: { label: string; onClick: () => void }
   onConfirm: () => void
   onCancel: () => void
 }) {
@@ -113,6 +116,15 @@ export function ConfirmDialog({
           >
             {cancelLabel}
           </button>
+          {extra && (
+            <button
+              disabled={busy}
+              onClick={extra.onClick}
+              className="press rounded-md border border-line px-3 py-2 text-ui hover:bg-hover disabled:opacity-50"
+            >
+              {extra.label}
+            </button>
+          )}
           <button
             disabled={busy || confirmDisabled}
             onClick={onConfirm}

@@ -82,6 +82,27 @@ export const demoEngineStatus: EngineLite[] = [
 export const demoEngineCatalog: EngineCatalog = {
   outputStyles: ['default', 'Proactive', 'Concise', 'Explanatory', 'Learning'],
   currentOutputStyle: 'default',
+  // 设置 › 本机引擎 › 上下文里的模型窗口列表
+  models: [
+    {
+      id: 'opus',
+      label: 'Opus',
+      resolved: 'claude-opus-5-5',
+      efforts: [],
+      defaultEffort: null,
+      inputModalities: [],
+      isDefault: true,
+    },
+    {
+      id: 'sonnet',
+      label: 'Sonnet',
+      resolved: 'claude-sonnet-5-5',
+      efforts: [],
+      defaultEffort: null,
+      inputModalities: [],
+      isDefault: false,
+    },
+  ],
 }
 
 const demoLocal = (): EngineLocalConfig => ({
@@ -98,6 +119,7 @@ const demoLocal = (): EngineLocalConfig => ({
     thinkingSummaries: true,
   },
   outputStyle: null,
+  contextWindows: { platform: {}, self: {} },
   askQuestions: true,
   autoCompactPct: null,
   hidden: false,

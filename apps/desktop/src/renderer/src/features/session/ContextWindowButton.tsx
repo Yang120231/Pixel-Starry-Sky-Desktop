@@ -23,6 +23,8 @@ import {
 } from './contextData'
 import { displayMemoryPath, splitFileName, type MemoryPathBase } from './memoryPath'
 import { demo } from '@/data/demo'
+import { useSettings } from '@/features/settings/SettingsProvider'
+import { openContextSettings } from '@/features/settings/models/contextWindows'
 
 /** 刷新图标转一圈的时长；明细通常几十毫秒就回来，至少转完一圈（docs/ui/context-window.md §7） */
 const SPIN_MS = 700
@@ -57,6 +59,7 @@ function demoRefreshed(context: ContextWindow, n: number): ContextWindow {
 export function ContextWindowButton({ sessionId }: { sessionId: string | null }) {
   useI18n()
   const toast = useToast()
+  const settings = useSettings()
   const snapshot = useSession(isDemo ? null : sessionId)
   const [demoRefreshes, setDemoRefreshes] = useState(0)
   const context = isDemo ? demoRefreshed(demo().context, demoRefreshes) : snapshot?.context
@@ -545,15 +548,29 @@ export function ContextWindowButton({ sessionId }: { sessionId: string | null })
                 </div>
               </div>
             </div>
-            <p className="mt-2 truncate text-label text-fg-faint" title={context?.model ?? ''}>
-              {context?.model ?? tr('session.ContextWindowButton.modelNotReportedYet')}
-              {context?.observedAt
-                ? tr('session.ContextWindowButton.updated', {
-                    p0: new Date(context.observedAt).toLocaleTimeString('zh-CN'),
-                  })
-                : ''}
-              {isDemo ? tr('session.ContextWindowButton.demoData') : ''}
-            </p>
+            <div className="mt-2 flex items-center gap-3">
+              <p className="min-w-0 flex-1 truncate text-label text-fg-faint" title={context?.model ?? ''}>
+                {context?.model ?? tr('session.ContextWindowButton.modelNotReportedYet')}
+                {context?.observedAt
+                  ? tr('session.ContextWindowButton.updated', {
+                      p0: new Date(context.observedAt).toLocaleTimeString('zh-CN'),
+                    })
+                  : ''}
+                {isDemo ? tr('session.ContextWindowButton.demoData') : ''}
+              </p>
+              {/* 按这个会话的来源跳到填上下文窗口的地方（GitHub #20） */}
+              <button
+                type="button"
+                data-context-settings
+                onClick={() => {
+                  setOpen(false)
+                  openContextSettings(snapshot?.record ?? null, settings.openSettings)
+                }}
+                className="shrink-0 text-label text-accent-fg hover:underline"
+              >
+                {tr('contextWindow.settings')}
+              </button>
+            </div>
           </div>,
           document.body,
         )}

@@ -12,6 +12,7 @@ import { LayoutActionButton } from '@/features/layout/LayoutActionButton'
 import { ToolbarContext } from '@/features/layout/ToolbarContext'
 import { paneActions } from '@/features/panes/store'
 import { useGitSummary } from '@/features/panel/git/summary'
+import { HeaderBranch } from './HeaderBranch'
 import type { ActiveWorkspace } from '@/features/editor/target'
 
 interface SessionHeaderProps {
@@ -140,24 +141,25 @@ export function SessionHeader({
   )
 }
 
-/** 顶栏左边的「项目 › 分支」：不是 Git 仓库、还没读到时只有项目名；分离的 HEAD 显示短 hash */
+/** 顶栏左边的「项目 › 分支」：不是 Git 仓库、还没读到时只有项目名；分离的 HEAD 显示短 hash。分支名点开能切换（HeaderBranch） */
 function WorkspaceLocation({ workspace }: { workspace: NonNullable<SessionHeaderProps['workspace']> }) {
   const git = useGitSummary(workspace.ref)
   const branch = git ? (git.detached ? (git.head ?? '').slice(0, 7) : git.branch) : null
   if (!workspace.name) return null
   return (
-    <h1
-      data-header-workspace
-      title={workspace.path || workspace.name}
-      className="flex min-w-0 items-center gap-2 text-ui text-fg-secondary"
-    >
-      <span className="min-w-0 truncate font-medium">{workspace.name}</span>
-      {branch && (
-        <span className="inline-flex min-w-0 shrink-[2] items-center gap-1 text-fg-muted">
-          <GitBranch size={13} strokeWidth={1.5} className="shrink-0" />
-          <span className="truncate font-mono text-meta">{branch}</span>
-        </span>
-      )}
-    </h1>
+    <div data-header-workspace className="flex min-w-0 items-center gap-1.5 text-ui text-fg-secondary">
+      <h1 title={workspace.path || workspace.name} className="min-w-0 truncate font-medium">
+        {workspace.name}
+      </h1>
+      {branch &&
+        (workspace.ref ? (
+          <HeaderBranch workspace={workspace.ref} label={branch} />
+        ) : (
+          <span className="inline-flex min-w-0 shrink-[2] items-center gap-1 text-fg-muted">
+            <GitBranch size={13} strokeWidth={1.5} className="shrink-0" />
+            <span className="truncate font-mono text-meta">{branch}</span>
+          </span>
+        ))}
+    </div>
   )
 }

@@ -21,8 +21,8 @@ export const codexMessages = {
     en: 'Codex supports standalone skills, stdio / HTTP MCP and CLI tools; Claude plugins remain engine-specific',
   },
   'codex.nativeSettings': {
-    zh: '使用本机 Codex 登录及 provider 配置；输出风格、提问开关和压缩阈值由原生配置管理。',
-    en: 'Use your local Codex sign-in and provider configuration. Output styles, question controls and compaction thresholds are managed by native config.',
+    zh: '使用本机 Codex 登录及 provider 配置；输出风格和提问开关由原生配置管理。',
+    en: 'Use your local Codex sign-in and provider configuration. Output styles and question controls are managed by native config.',
   },
   'codex.mcpInput': { zh: '填写 MCP 请求的数据（JSON）', en: 'Enter the data requested by MCP (JSON)' },
   'codex.mcpInputInvalid': { zh: '请输入有效的 JSON 对象', en: 'Enter a valid JSON object' },

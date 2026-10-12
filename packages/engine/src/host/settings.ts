@@ -2,10 +2,13 @@
 // 设置对象每次修改都整体替换；适配器的回调每次都读 this.file，拿到的总是最新值。
 import {
   AUTO_COMPACT_PCTS,
+  CONTEXT_WINDOW_MAX,
+  CONTEXT_WINDOW_MIN,
   codedError,
   PROVIDER_ENV,
   EFFORTS,
   PERMISSION_MODES,
+  type ContextWindows,
   type EngineCatalog,
   type EngineConfig,
   type EngineConfigPatch,
@@ -16,11 +19,70 @@ import {
   type EngineLocalConfig,
   type EngineUpdateResult,
   type SessionDefaults,
+  type SessionRecord,
 } from '@pixelsky/protocol'
 import { ENGINE_ORDER, unsupportedInfo } from '../registry'
 import { retryLimit } from '../retry'
 import { DEFAULT_SETTINGS, type EngineSettingsFile } from '../store'
 import type { HostContext, Runtime } from './context'
+
+const WINDOW_SOURCES = ['platform', 'self'] as const
+/** 每个来源最多记这么多个模型，防止设置文件被同步写坏后无限变大 */
+const MAX_WINDOW_MODELS = 500
+
+/** 设置文件里读出的窗口：用户可改的 JSON，再过一遍，不合法的项丢掉 */
+export function readContextWindows(raw: unknown): ContextWindows {
+  const out: ContextWindows = { platform: {}, self: {} }
+  const o = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  for (const source of WINDOW_SOURCES) {
+    const list = o[source]
+    if (!list || typeof list !== 'object' || Array.isArray(list)) continue
+    for (const [model, n] of Object.entries(list).slice(0, MAX_WINDOW_MODELS))
+      if (validWindowModel(model) && validWindow(n)) out[source][model] = n
+  }
+  return out
+}
+
+function validWindowModel(model: string): boolean {
+  return model.trim() === model && model.length > 0 && model.length <= 200
+}
+
+function validWindow(n: unknown): n is number {
+  return typeof n === 'number' && Number.isInteger(n) && n >= CONTEXT_WINDOW_MIN && n <= CONTEXT_WINDOW_MAX
+}
+
+/** 改窗口：按模型合并，null 删掉；不合法就整个不保存 */
+function patchContextWindows(
+  current: ContextWindows,
+  patch: NonNullable<EngineConfigPatch['contextWindows']>,
+): ContextWindows {
+  const next: ContextWindows = { platform: { ...current.platform }, self: { ...current.self } }
+  if (!patch || typeof patch !== 'object') throw new Error('上下文窗口的设置不对')
+  for (const source of WINDOW_SOURCES) {
+    const list = patch[source]
+    if (list === undefined) continue
+    if (!list || typeof list !== 'object' || Array.isArray(list)) throw new Error('上下文窗口的设置不对')
+    for (const [model, n] of Object.entries(list)) {
+      if (!validWindowModel(model)) throw new Error('模型名不对')
+      if (n === null) delete next[source][model]
+      else if (validWindow(n)) next[source][model] = n
+      else throw new Error(`模型 ${model} 的上下文窗口不对`)
+    }
+    if (Object.keys(next[source]).length > MAX_WINDOW_MODELS) throw new Error('上下文窗口设置的模型太多')
+  }
+  return next
+}
+
+/** 同步收到的整份窗口换掉本机的：本机有、云端没有的模型删掉 */
+function replaceContextWindows(current: ContextWindows, incoming: ContextWindows): EngineConfigPatch['contextWindows'] {
+  const patch: Record<string, Record<string, number | null>> = {}
+  for (const source of WINDOW_SOURCES) {
+    const list: Record<string, number | null> = { ...incoming[source] }
+    for (const model of Object.keys(current[source])) if (!(model in list)) list[model] = null
+    patch[source] = list
+  }
+  return patch
+}
 
 const PHASE_ORDER: EngineJob['phase'][] = ['prepare', 'download', 'install']
 
@@ -84,6 +146,7 @@ export class HostSettings {
     outputStyle: string | null
     askQuestions: boolean
     autoCompactPct: number | null
+    contextWindows: ContextWindows
     args: string[]
   } {
     const o = this.file.options[engine] ?? {}
@@ -91,6 +154,7 @@ export class HostSettings {
       outputStyle: o.outputStyle ?? null,
       askQuestions: o.askQuestions !== false,
       autoCompactPct: o.autoCompactPct ?? null,
+      contextWindows: readContextWindows(o.contextWindows),
       // 设置文件是用户可改的 JSON，读出来再过一遍
       args: Array.isArray(o.args) ? o.args.filter((a): a is string => typeof a === 'string') : [],
     }
@@ -99,6 +163,17 @@ export class HostSettings {
   /** 启动进程要用到的全部引擎级设置；和进程启动时的不同，就在下一条消息前重启进程（--resume 接上原对话） */
   launchKey(engine: EngineId): string {
     return JSON.stringify([this.file.paths[engine] ?? null, this.file.env[engine] ?? {}, this.launchOptions(engine)])
+  }
+
+  /**
+   * Codex 的窗口和自动压缩在启动进程时按模型定下（GitHub #20）：用到它们时换模型也要换进程。
+   * Claude Code 按模型的设置一次全写进 --settings，换模型不用重启
+   */
+  modelLaunchKey(record: Pick<SessionRecord, 'engine' | 'model' | 'platform' | 'provider'>): string {
+    if (record.engine !== 'codex') return ''
+    const o = this.launchOptions('codex')
+    const windows = o.contextWindows[record.platform ? 'platform' : 'self']
+    return record.provider || o.autoCompactPct || Object.keys(windows).length ? `|${record.model ?? ''}` : ''
   }
 
   engineConfig(): EngineConfig {
@@ -177,6 +252,14 @@ export class HostSettings {
       if (pct !== null && !(AUTO_COMPACT_PCTS as readonly number[]).includes(pct)) throw new Error('自动压缩触发点不对')
       if (pct === null) delete options.autoCompactPct
       else options.autoCompactPct = pct
+    }
+    if (patch.contextWindows !== undefined) {
+      const windows = patchContextWindows(readContextWindows(options.contextWindows), patch.contextWindows)
+      const kept = Object.fromEntries(
+        WINDOW_SOURCES.filter(k => Object.keys(windows[k]).length).map(k => [k, windows[k]]),
+      )
+      if (Object.keys(kept).length) options.contextWindows = kept
+      else delete options.contextWindows
     }
     if (patch.hidden !== undefined) {
       if (typeof patch.hidden !== 'boolean') throw new Error('「在菜单中显示」的值不对')
@@ -338,6 +421,7 @@ export class HostSettings {
             outputStyle: o.outputStyle ?? null,
             askQuestions: o.askQuestions !== false,
             autoCompactPct: o.autoCompactPct ?? null,
+            contextWindows: readContextWindows(o.contextWindows),
             hidden: o.hidden === true,
             rememberChoices: o.rememberChoices === true,
           }
@@ -354,12 +438,12 @@ export class HostSettings {
   async applySyncable(key: string, value: unknown): Promise<void> {
     const obj = (v: unknown): Record<string, unknown> =>
       v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {}
-    const each = async (patchOf: (raw: Record<string, unknown>) => EngineConfigPatch): Promise<void> => {
+    const each = async (patchOf: (raw: Record<string, unknown>, id: EngineId) => EngineConfigPatch): Promise<void> => {
       const engines = obj(obj(value).engines)
       for (const id of ENGINE_ORDER) {
         if (!this.ctx.adapters[id]) continue
         try {
-          await this.setEngineConfig(id, patchOf(obj(engines[id])))
+          await this.setEngineConfig(id, patchOf(obj(engines[id]), id))
         } catch {
           /* 这台电脑上不合法（例如默认引擎不能隐藏）：保留本机的 */
         }
@@ -378,10 +462,14 @@ export class HostSettings {
         compactModel: typeof raw.compactModel === 'string' ? raw.compactModel : null,
       }))
     } else if (key === 'desktop.engine.options') {
-      await each(raw => ({
+      await each((raw, id) => ({
         outputStyle: typeof raw.outputStyle === 'string' ? raw.outputStyle : null,
         askQuestions: raw.askQuestions !== false,
         autoCompactPct: typeof raw.autoCompactPct === 'number' ? raw.autoCompactPct : null,
+        contextWindows: replaceContextWindows(
+          readContextWindows(this.file.options[id]?.contextWindows),
+          readContextWindows(raw.contextWindows),
+        ),
         hidden: raw.hidden === true,
         rememberChoices: raw.rememberChoices === true,
       }))
@@ -467,6 +555,7 @@ export interface SyncableEngineSettings {
           outputStyle: string | null
           askQuestions: boolean
           autoCompactPct: number | null
+          contextWindows: ContextWindows
           hidden: boolean
           rememberChoices: boolean
         }

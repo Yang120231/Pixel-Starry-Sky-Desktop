@@ -2,6 +2,7 @@ import { delimiter } from 'node:path'
 import type {
   ApprovalDecision,
   ApprovalRequest,
+  ContextWindows,
   EngineCatalog,
   ImageAttachment,
   SessionSettings,
@@ -13,12 +14,21 @@ import { QUICK_CLOSE_MS, type CloseOptions, type EngineSession, type Launcher, t
 import { CodexProcess, array, object, string, type Message } from './process'
 import { codexCatalog } from './catalog'
 import { codexChanges, CodexTranslator, tokenCounts } from './translate'
+import { CODEX_WINDOW_ENV, codexContextConfig } from './context-config'
 
 export interface CodexLaunchOptions {
   askQuestions: boolean
   steeringValidated?: boolean
   /** 用户追加的启动参数，放在 app-server --listen stdio:// 后面、像素星空自己的 -c 前面（docs/ui/engine-launch.md §3） */
   args?: string[]
+  /** 自动压缩触发点（百分比）；null 用 Codex 自己的（GitHub #20） */
+  autoCompactPct?: number | null
+  /** 云端 / 本机模型填的上下文窗口 */
+  contextWindows?: ContextWindows
+  /** 会话用默认模型时，Codex 报的当前模型 */
+  defaultModel?: () => string | null
+  /** Codex 报过的各模型窗口（没改窗口时记下），算自动压缩的 token 数用 */
+  knownWindows?: Map<string, number>
 }
 
 /** 用户追加的参数里第一个由像素星空控制的（docs/ui/engine-launch.md §3）：--listen，改平台线路的 -c；都允许时返回 null */
@@ -118,6 +128,8 @@ export class CodexSession implements EngineSession {
   private reportedError: string | null = null
   /** 同一毫秒内的多条报错也要各自保留，id 不能只靠时间戳 */
   private noticeSeq = 0
+  /** 启动时带了 model_context_window：报上来的窗口是设置的值，不记成 Codex 自己的 */
+  private windowOverridden = false
   /** 已经发过的配置类警告（Codex 每轮都发一次），同一会话只出一次 */
   private readonly quietShown = new Set<string>()
   /** 停止后等待 turn/completed 的回调，finish() 时统一唤醒 */
@@ -182,6 +194,20 @@ export class CodexSession implements EngineSession {
     }
     const ext = this.ctx.extensions
     for (const [key, value] of Object.entries(ext?.codexConfig ?? {})) config(key, value)
+    // 上下文窗口和自动压缩（GitHub #20）：放在用户追加的参数后面，同一项以设置为准
+    const model = record.model ?? this.options.defaultModel?.() ?? null
+    const context = codexContextConfig({
+      record,
+      model,
+      windows: this.options.contextWindows,
+      autoCompactPct: this.options.autoCompactPct,
+      providerWindow: environment[CODEX_WINDOW_ENV],
+      known: model ? this.options.knownWindows?.get(model) : null,
+    })
+    delete environment[CODEX_WINDOW_ENV]
+    if (context.window) config('model_context_window', context.window)
+    if (context.limit) config('model_auto_compact_token_limit', context.limit)
+    this.windowOverridden = !!context.window
     const proc = new CodexProcess(this.launcher, args, record.cwd, environment, {
       notification: (method, params) => this.notification(method, params),
       request: (id, method, params) => this.request(id, method, params),
@@ -467,6 +493,8 @@ export class CodexSession implements EngineSession {
       }
       const window = typeof usage.modelContextWindow === 'number' ? usage.modelContextWindow : null
       this.contextWindow = window
+      if (window && !this.windowOverridden && this.active.model)
+        this.options.knownWindows?.set(this.active.model, window)
       this.ctx.emit({
         type: 'usage',
         usage: {

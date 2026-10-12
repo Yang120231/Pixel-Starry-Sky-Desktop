@@ -892,14 +892,15 @@
   backdrop-filter: blur(18px) saturate(1.15);
 }
 
-/* 开关（推理强度弹窗里的 Ultracode / Fast / 思考摘要等，features/session/ComposerMenus.tsx）：
-   关：淡底 + 细边，圆点白（深色下浅灰）；开：强调色底，圆点用主按钮文字色。浅色深色都看得清 */
+/* 开关（ui/Switch.tsx，设置页和推理强度弹窗共用）：
+   关：淡底 + 细边，圆点是卡片底色；开：中性色（主按钮底色），不用强调色（design-tokens.md §1.5）。
+   只有 Ultracode 开着是紫色，和它的星芒、名称流光一致 */
 .ui-switch {
-  background: var(--bg-selected);
-  box-shadow: inset 0 0 0 1px var(--border);
+  background: var(--bg-subtle);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 .ui-switch[aria-checked='true'] {
-  background: var(--accent);
+  background: var(--btn-primary-bg);
   box-shadow: none;
 }
 .ui-switch[data-tone='ultracode'][aria-checked='true'] {
@@ -908,15 +909,6 @@
 .ui-switch-knob {
   background: var(--bg-surface);
   box-shadow: var(--shadow-sm);
-}
-:root[data-theme='dark'] .ui-switch-knob {
-  background: var(--text-muted);
-}
-.ui-switch[aria-checked='true'] .ui-switch-knob {
-  background: var(--btn-primary-text);
-}
-:root[data-theme='light'] .ui-switch[aria-checked='true'] .ui-switch-knob {
-  background: #ffffff;
 }
 
 /* 所有开关（role=switch）的动画：圆点带一点弹性地滑过去，底色跟着渐变；按住时圆点朝要去的方向拉长一点。

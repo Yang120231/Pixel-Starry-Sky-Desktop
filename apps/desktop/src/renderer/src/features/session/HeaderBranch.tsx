@@ -1,0 +1,197 @@
+import { useCallback, useEffect, useState } from 'react'
+import { ChevronDown, GitBranch } from 'lucide-react'
+import { cn } from '@/ui'
+import { ConfirmDialog } from '@/ui/ConfirmDialog'
+import { useI18n } from '@/i18n/I18nProvider'
+import { tr } from '@/i18n/core'
+import { isDemo } from '@/data'
+import { demo as demoData } from '@/data/demo'
+import { BranchMenu } from '@/features/panel/git/BranchMenu'
+import { failureHint, failureTitle } from '@/features/panel/git/gitModel'
+import { publishGitStatus } from '@/features/panel/git/summary'
+import { beforeSwitch, type SwitchCheck } from '@/features/panel/git/summarize'
+import { openRightTab } from '@/features/panel/workspaceStore'
+import type { GitBranch as Branch, GitFailure, GitResult } from '../../../../shared/types/project-tools'
+import type { WorkspaceRef } from '../../../../shared/types/workspace'
+
+/**
+ * 顶栏「项目 › 分支」里的分支名（GitHub #21，docs/ui/context-settings-branch-switch.md §3）：
+ * 点开是 Git 面板同一个分支菜单；有没提交的改动时先确认；失败时写原因，可以去 Git 面板处理
+ */
+export function HeaderBranch({ workspace: target, label }: { workspace: WorkspaceRef; label: string }) {
+  useI18n()
+  const api = window.pixelsky?.projectTools
+  const [menu, setMenu] = useState(false)
+  const [branches, setBranches] = useState<Branch[]>([])
+  const [loading, setLoading] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [confirm, setConfirm] = useState<{ branch: Branch; changed: number } | null>(null)
+  const [failure, setFailure] = useState<GitFailure | null>(null)
+
+  const open = async () => {
+    setFailure(null)
+    // 不显示上次读到的列表：当前分支可能已经变了，点上去会点错
+    setBranches([])
+    setMenu(true)
+    if (isDemo) {
+      setBranches(demoData().git.branches)
+      return
+    }
+    if (!api) return
+    setLoading(true)
+    try {
+      setBranches(await api.gitBranches(target))
+    } catch (e) {
+      setMenu(false)
+      setFailure({ kind: 'invalid', action: 'switch', detail: (e as Error).message, remedies: [] })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const perform = async (fn: () => Promise<GitResult>) => {
+    setBusy(true)
+    try {
+      const result = await fn()
+      if (result.status) publishGitStatus(target, result.status)
+      if (!result.ok) setFailure(result.failure)
+    } catch (e) {
+      setFailure({ kind: 'invalid', action: 'switch', detail: (e as Error).message, remedies: [] })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const switchTo = (branch: Branch) =>
+    perform(() => api!.gitSwitch(target, { branch: branch.name, remote: branch.remote }))
+
+  /** 切换前读一次最新状态：AI 在运行时直接说明，有改动时先确认 */
+  const choose = async (branch: Branch) => {
+    setMenu(false)
+    if (isDemo || !api) return
+    setBusy(true)
+    let check: SwitchCheck = { kind: 'go' }
+    try {
+      const status = await api.gitStatus(target)
+      publishGitStatus(target, status)
+      check = beforeSwitch(status)
+    } catch {
+      // 读不到状态时交给切换本身报错
+    } finally {
+      setBusy(false)
+    }
+    if (check.kind === 'busy') setFailure({ kind: 'busy', action: 'switch', detail: '', remedies: [] })
+    else if (check.kind === 'confirm') setConfirm({ branch, changed: check.changed })
+    else await switchTo(branch)
+  }
+
+  // 新分支从当前提交建，改动原样带过去，不会冲突，不用确认
+  const create = (name: string) => {
+    setMenu(false)
+    if (isDemo || !api) return
+    void perform(() => api.gitCreateBranch(target, { name }))
+  }
+
+  const openGit = () => {
+    setConfirm(null)
+    setFailure(null)
+    openRightTab('git')
+  }
+  const close = useCallback(() => setMenu(false), [])
+
+  // 失败提示：Esc 或点外面关掉
+  useEffect(() => {
+    if (!failure) return
+    const down = (e: MouseEvent) => {
+      if (!(e.target as Element).closest?.('[data-header-branch-failure]')) setFailure(null)
+    }
+    const key = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFailure(null)
+    }
+    document.addEventListener('mousedown', down)
+    document.addEventListener('keydown', key)
+    return () => {
+      document.removeEventListener('mousedown', down)
+      document.removeEventListener('keydown', key)
+    }
+  }, [failure])
+
+  return (
+    <span className="relative inline-flex min-w-0 shrink-[2]">
+      <button
+        type="button"
+        data-header-branch
+        aria-haspopup="dialog"
+        aria-expanded={menu}
+        aria-label={`${tr('git.branch.menu')} · ${label}`}
+        title={tr('git.branch.menu')}
+        disabled={busy}
+        onClick={() => (menu ? setMenu(false) : void open())}
+        className={cn(
+          'press no-drag inline-flex h-7 min-w-0 items-center gap-1 rounded-md px-1.5 text-fg-muted hover:bg-hover hover:text-fg',
+          menu && 'bg-hover text-fg',
+          busy && 'opacity-60',
+        )}
+      >
+        <GitBranch size={13} strokeWidth={1.5} className="shrink-0" />
+        <span className="truncate font-mono text-meta">{label}</span>
+        <ChevronDown size={12} strokeWidth={1.5} className="shrink-0" />
+      </button>
+      {menu && (
+        <BranchMenu
+          branches={branches}
+          loading={loading}
+          onClose={close}
+          onSwitch={b => void choose(b)}
+          onCreate={create}
+        />
+      )}
+      {failure && (
+        <div
+          role="alert"
+          data-header-branch-failure={failure.kind}
+          className="pop-in no-drag absolute top-full left-0 z-40 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-line-card bg-popover p-3 shadow-menu"
+        >
+          <p className="text-meta text-fg-faint">{tr('git.action.switch')}</p>
+          <p className="text-list font-medium text-danger">{failureTitle(failure.kind)}</p>
+          <p className="mt-0.5 text-meta text-fg-muted">{failureHint(failure.kind, failure.action)}</p>
+          {failure.detail && (
+            <p className="mt-1.5 line-clamp-3 font-mono text-meta break-words text-fg-muted">{failure.detail}</p>
+          )}
+          <div className="mt-2.5 flex justify-end gap-1.5">
+            <button
+              type="button"
+              onClick={() => setFailure(null)}
+              className="press rounded-md border border-line px-2.5 py-1 text-meta hover:bg-hover"
+            >
+              {tr('git.failure.dismiss')}
+            </button>
+            <button
+              type="button"
+              onClick={openGit}
+              className="press rounded-md bg-primary px-2.5 py-1 text-meta font-medium text-primary-fg"
+            >
+              {tr('git.header.openPanel')}
+            </button>
+          </div>
+        </div>
+      )}
+      {confirm && (
+        <ConfirmDialog
+          title={tr('git.header.dirtyTitle', { n: confirm.changed })}
+          description={tr('git.header.dirtyBody', { branch: confirm.branch.name })}
+          confirmLabel={tr('git.header.switchAnyway')}
+          cancelLabel={tr('git.header.cancel')}
+          busy={busy}
+          extra={{ label: tr('git.header.openPanel'), onClick: openGit }}
+          onCancel={() => setConfirm(null)}
+          onConfirm={() => {
+            const branch = confirm.branch
+            setConfirm(null)
+            void switchTo(branch)
+          }}
+        />
+      )}
+    </span>
+  )
+}

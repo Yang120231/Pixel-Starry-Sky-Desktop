@@ -54,6 +54,8 @@ export interface EngineOptions {
   /** 只存 false（关掉提问） */
   askQuestions?: boolean
   autoCompactPct?: number
+  /** 每个模型的上下文窗口，按额度来源分开（GitHub #20）；只存填了的 */
+  contextWindows?: { platform?: Record<string, number>; self?: Record<string, number> }
   hidden?: boolean
   /** 每次启动引擎进程时追加的参数（docs/ui/engine-launch.md）；只存非空 */
   args?: string[]

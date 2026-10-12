@@ -6,6 +6,7 @@ export type {
   ApprovalRequest,
   BackgroundTask,
   CacheWarning,
+  ContextWindows,
   Effort,
   EngineCaps,
   EngineCatalog,
@@ -147,6 +148,7 @@ export type { SourceKind } from './source'
 export { cacheHitRate, dimValue, emptyTotals, listRecords, rangeWindow, summarize, toCsv, totalTokens } from './usage'
 export type { TimeWindow } from './usage'
 export { EMPTY_FLAGS, emptySnapshot, reduce, settle } from './reduce'
+export { CONTEXT_WINDOW_MAX, CONTEXT_WINDOW_MIN } from './types/engine'
 export { AUTO_COMPACT_PCTS, EFFORTS, EFFORT_PANEL_FACTORY, EFFORT_PANEL_KEYS, PERMISSION_MODES, diffStat } from './util'
 export type { EffortPanelDefaults } from './util'
 export type {

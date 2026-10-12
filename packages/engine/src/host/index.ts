@@ -95,7 +95,13 @@ export class EngineHost {
         sessionEnv: opts.sessionEnv,
         launchOptions: () => {
           const o = settings.launchOptions('codex')
-          return { askQuestions: o.askQuestions, args: o.args, steeringValidated: true }
+          return {
+            askQuestions: o.askQuestions,
+            args: o.args,
+            autoCompactPct: o.autoCompactPct,
+            contextWindows: o.contextWindows,
+            steeringValidated: true,
+          }
         },
       }),
     }
@@ -148,12 +154,7 @@ export class EngineHost {
   }
 
   /** 设置 › 本机引擎里的引擎级选项，启动引擎进程时读（自带的适配器自动接上；测试里自己建的适配器也可以接它） */
-  launchOptions(engine: EngineId): {
-    outputStyle: string | null
-    askQuestions: boolean
-    autoCompactPct: number | null
-    args: string[]
-  } {
+  launchOptions(engine: EngineId): ReturnType<HostSettings['launchOptions']> {
     return this.m.settings.launchOptions(engine)
   }
 

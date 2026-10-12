@@ -1,6 +1,6 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
-import { cn } from '@/ui'
+import { Switch } from '@/ui'
 import { SettingRow } from './SettingRow'
 import { setCacheMissAlert, useCacheMissAlert } from './cacheMiss'
 
@@ -13,22 +13,11 @@ export function CacheMissSettings() {
       description={tr('settings.CacheMissSettings.getAlertWhenConsecutive')}
       hint={tr('settings.CacheMissSettings.noAlertsOnFirst')}
       control={
-        <button
-          type="button"
-          role="switch"
-          aria-label={tr('settings.CacheMissSettings.cacheMissAlerts')}
-          aria-checked={enabled}
-          onClick={() => setCacheMissAlert(!enabled)}
-          className={cn(
-            'no-drag relative inline-flex h-6 w-10 shrink-0 items-center rounded-full p-0.5',
-            enabled ? 'bg-primary' : 'bg-subtle ring-1 ring-inset ring-line-strong',
-          )}
-        >
-          <span
-            aria-hidden
-            className={cn('size-5 rounded-full bg-surface shadow-sm', enabled ? 'translate-x-4' : 'translate-x-0')}
-          />
-        </button>
+        <Switch
+          checked={enabled}
+          label={tr('settings.CacheMissSettings.cacheMissAlerts')}
+          onChange={setCacheMissAlert}
+        />
       }
     />
   )

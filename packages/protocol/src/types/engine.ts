@@ -114,6 +114,7 @@ export type SessionDefaults = Pick<
  * - outputStyle：输出风格；null 表示跟随引擎自己的设置
  * - askQuestions：允许中途向用户提问（Claude 的 AskUserQuestion）；关掉时禁用这个工具
  * - autoCompactPct：上下文用到窗口的这个百分比时自动压缩；null 表示引擎内置阈值
+ * - contextWindows：每个模型的上下文窗口，按额度来源分开（GitHub #20，docs/ui/context-settings-branch-switch.md §2）
  * - hidden：不在输入框的引擎菜单里显示（默认引擎不能隐藏）
  * - rememberChoices：会话里改推理强度、Ultracode、Fast、思考摘要时同时记成新会话的默认值（旧版的行为，默认关；GitHub #6）
  *
@@ -128,13 +129,31 @@ export interface EngineLocalConfig {
   outputStyle: string | null
   askQuestions: boolean
   autoCompactPct: number | null
+  contextWindows: ContextWindows
   hidden: boolean
   rememberChoices: boolean
 }
 
+/**
+ * 每个模型的上下文窗口（token）：platform 是像素星空云端的模型，self 是本机自己的账号；
+ * 自定义 API 的存在接口配置里。没写的模型用引擎自己知道的窗口
+ */
+export interface ContextWindows {
+  platform: Record<string, number>
+  self: Record<string, number>
+}
+
+/** 上下文窗口的取值范围，和自定义 API 的检查一样 */
+export const CONTEXT_WINDOW_MIN = 1000
+export const CONTEXT_WINDOW_MAX = 100_000_000
+
 export type EngineConfig = Record<EngineId, EngineLocalConfig>
 
-export type EngineConfigPatch = Partial<Omit<EngineLocalConfig, 'defaults'>> & { defaults?: Partial<SessionDefaults> }
+/** contextWindows 按模型合并：值为 null 时删掉这个模型的设置 */
+export type EngineConfigPatch = Partial<Omit<EngineLocalConfig, 'defaults' | 'contextWindows'>> & {
+  defaults?: Partial<SessionDefaults>
+  contextWindows?: Partial<Record<keyof ContextWindows, Record<string, number | null>>>
+}
 
 /** 引擎实际报上来的可选项（目前是输出风格），从引擎的初始化握手里读，读不到为空 */
 export interface EngineCatalog {

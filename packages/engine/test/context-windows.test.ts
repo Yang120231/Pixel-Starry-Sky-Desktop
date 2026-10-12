@@ -1,0 +1,296 @@
+// 云端 / 本机模型的上下文窗口、Codex 的自动压缩（GitHub #20，docs/ui/context-settings-branch-switch.md §2）
+import { mkdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import type { HostEvent } from '@pixelsky/protocol'
+import { ClaudeAdapter, CodexAdapter, EngineHost } from '../src'
+import { windowSettings } from '../src/claude/long-context'
+import { claudeSettingsArgument } from '../src/claude/session'
+import { codexContextConfig } from '../src/codex/context-config'
+import { makeTmp, removeTmp } from './helpers/tmp'
+
+const FAKE_CLAUDE = fileURLToPath(new URL('./fakes/fake-claude.mjs', import.meta.url))
+const FAKE_CODEX = fileURLToPath(new URL('./fakes/fake-codex.mjs', import.meta.url))
+
+let root: string
+let events: HostEvent[]
+let hosts: EngineHost[]
+
+beforeEach(() => {
+  root = makeTmp('context-windows')
+  events = []
+  hosts = []
+})
+
+afterEach(async () => {
+  await Promise.all(hosts.map(h => h.shutdown()))
+  removeTmp(root)
+})
+
+async function waitFor<T>(pick: () => T | undefined | null | false, timeoutMs = 10_000): Promise<T> {
+  const start = Date.now()
+  for (;;) {
+    const v = pick()
+    if (v) return v
+    if (Date.now() - start > timeoutMs) throw new Error('等待超时')
+    await new Promise(r => setTimeout(r, 20))
+  }
+}
+
+const lines = (file: string): string[][] => {
+  try {
+    return readFileSync(file, 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map(l => JSON.parse(l) as string[])
+  } catch {
+    return []
+  }
+}
+
+/** 建一个项目目录 */
+function dir(name: string): string {
+  const path = join(root, name)
+  mkdirSync(path, { recursive: true })
+  return path
+}
+
+const turnsDone = (id: string): number =>
+  events.filter(e => e.kind === 'session' && e.sessionId === id && e.event.type === 'turn_completed').length
+
+function codexHost(sessionEnv?: (r: { provider?: unknown; model?: string | null }) => NodeJS.ProcessEnv) {
+  const argvLog = join(root, 'codex-argv.log')
+  let host: EngineHost | null = null
+  const adapter = new CodexAdapter({
+    launcher: { command: process.execPath, args: [FAKE_CODEX] },
+    env: { ...process.env, FAKE_CODEX_ARGV: argvLog, FAKE_CODEX_LOG: join(root, 'rpc.jsonl') },
+    sessionEnv: r => ({
+      ...(r.platform || r.provider
+        ? { PIXELSKY_CODEX_BASE_URL: 'http://127.0.0.1:1234/v1', PIXELSKY_CODEX_TOKEN: 'loopback-only' }
+        : {}),
+      ...(sessionEnv?.(r) ?? {}),
+    }),
+    launchOptions: () => {
+      const o = host!.launchOptions('codex')
+      return {
+        askQuestions: o.askQuestions,
+        args: o.args,
+        autoCompactPct: o.autoCompactPct,
+        contextWindows: o.contextWindows,
+        steeringValidated: true,
+      }
+    },
+  })
+  host = new EngineHost({ dataDir: join(root, 'data'), emit: e => events.push(e), adapters: { codex: adapter } })
+  hosts.push(host)
+  const project = host.addProject(dir('project-' + hosts.length))
+  /** 最近一次启动会话进程的参数（检测握手不带 -c 的上下文项，按 app-server 后面有没有会话设置区分不了，取最后一次） */
+  const launches = (): string[] => lines(argvLog).map(a => a.join(' '))
+  return { host, project, launches }
+}
+
+describe('设置：每个模型的上下文窗口', () => {
+  it('按模型合并、null 清掉；范围和模型名不对就整个不保存；会广播', async () => {
+    const { host } = codexHost()
+    await host.setEngineConfig('codex', { contextWindows: { platform: { 'gpt-5': 400_000 }, self: { o3: 200_000 } } })
+    await host.setEngineConfig('codex', { contextWindows: { self: { 'gpt-5': 272_000 } } })
+    expect(host.engineConfig().codex.contextWindows).toEqual({
+      platform: { 'gpt-5': 400_000 },
+      self: { o3: 200_000, 'gpt-5': 272_000 },
+    })
+    await host.setEngineConfig('codex', { contextWindows: { self: { o3: null } } })
+    expect(host.engineConfig().codex.contextWindows.self).toEqual({ 'gpt-5': 272_000 })
+    await expect(host.setEngineConfig('codex', { contextWindows: { self: { x: 999 } } })).rejects.toThrow(
+      '上下文窗口不对',
+    )
+    await expect(host.setEngineConfig('codex', { contextWindows: { self: { x: 100_000_001 } } })).rejects.toThrow()
+    await expect(host.setEngineConfig('codex', { contextWindows: { self: { ' x': 200_000 } } })).rejects.toThrow(
+      '模型名不对',
+    )
+    expect(host.engineConfig().codex.contextWindows.self).toEqual({ 'gpt-5': 272_000 })
+    expect(
+      events.some(e => e.kind === 'engine_config' && e.config.codex.contextWindows.platform['gpt-5'] === 400_000),
+    ).toBe(true)
+    // 全清掉后设置文件里不留空对象
+    await host.setEngineConfig('codex', { contextWindows: { platform: { 'gpt-5': null }, self: { 'gpt-5': null } } })
+    const file = JSON.parse(readFileSync(join(root, 'data', 'engine-settings.json'), 'utf8'))
+    expect(file.options?.codex?.contextWindows).toBeUndefined()
+  })
+
+  it('设置云同步带上窗口，收到时整份换掉本机的', async () => {
+    const a = codexHost().host
+    await a.setEngineConfig('codex', { contextWindows: { platform: { 'gpt-5': 400_000 } }, autoCompactPct: 80 })
+    const synced = a.syncableSettings()['desktop.engine.options']
+    expect(synced.engines.codex).toMatchObject({
+      autoCompactPct: 80,
+      contextWindows: { platform: { 'gpt-5': 400_000 }, self: {} },
+    })
+    const b = codexHost().host
+    await b.setEngineConfig('codex', { contextWindows: { self: { o3: 200_000 } } })
+    await b.applySyncableSetting('desktop.engine.options', synced)
+    expect(b.engineConfig().codex.contextWindows).toEqual({ platform: { 'gpt-5': 400_000 }, self: {} })
+    expect(b.engineConfig().codex.autoCompactPct).toBe(80)
+  })
+})
+
+describe('Codex：窗口和自动压缩的启动参数', () => {
+  it('没设时不带；本机模型带窗口和按百分比算的 token 数，放在用户参数后面', async () => {
+    const { host, project, launches } = codexHost()
+    const s = host.createSession({ projectId: project.id, engine: 'codex', model: 'gpt-5', permissionMode: 'ask' })
+    await host.send(s.id, '一')
+    await waitFor(() => turnsDone(s.id) === 1)
+    expect(launches().at(-1)).not.toContain('model_context_window')
+    expect(launches().at(-1)).not.toContain('model_auto_compact_token_limit')
+
+    await host.setEngineConfig('codex', {
+      args: ['-c', 'model_context_window=1'],
+      contextWindows: { self: { 'gpt-5': 300_000 } },
+      autoCompactPct: 80,
+    })
+    await host.send(s.id, '二')
+    await waitFor(() => turnsDone(s.id) === 2)
+    const argv = launches().at(-1)!
+    expect(argv).toContain('model_context_window=300000')
+    expect(argv).toContain('model_auto_compact_token_limit=240000')
+    // 后写的生效：设置的窗口在用户参数后面
+    expect(argv.indexOf('model_context_window=300000')).toBeGreaterThan(argv.indexOf('model_context_window=1'))
+  })
+
+  it('云端模型用 platform 那一份；只设百分比时按价格表的窗口算', async () => {
+    const { host, project, launches } = codexHost()
+    await host.setEngineConfig('codex', { contextWindows: { platform: { 'gpt-5-mini': 150_000 } }, autoCompactPct: 60 })
+    const s = host.createSession({
+      projectId: project.id,
+      engine: 'codex',
+      model: 'gpt-5-mini',
+      platform: { groupId: '7', account: 'a@example.com' },
+      permissionMode: 'ask',
+    })
+    await host.send(s.id, '一')
+    await waitFor(() => turnsDone(s.id) === 1)
+    expect(launches().at(-1)).toContain('model_context_window=150000')
+    expect(launches().at(-1)).toContain('model_auto_compact_token_limit=90000')
+
+    // 本机模型没填窗口：gpt-5 在价格表里是 272K
+    const own = host.createSession({ projectId: project.id, engine: 'codex', model: 'gpt-5', permissionMode: 'ask' })
+    await host.send(own.id, '一')
+    await waitFor(() => turnsDone(own.id) === 1)
+    expect(launches().at(-1)).not.toContain('model_context_window')
+    expect(launches().at(-1)).toContain('model_auto_compact_token_limit=163200')
+  })
+
+  it('不知道窗口时先不带；Codex 报过窗口后按它算', async () => {
+    const { host, project, launches } = codexHost()
+    await host.setEngineConfig('codex', { autoCompactPct: 80 })
+    const s = host.createSession({ projectId: project.id, engine: 'codex', permissionMode: 'ask' })
+    await host.send(s.id, '一')
+    await waitFor(() => turnsDone(s.id) === 1)
+    expect(launches().at(-1)).not.toContain('model_auto_compact_token_limit')
+    // 假 Codex 的当前模型是 fake-codex，报的窗口是 128000
+    await host.setEngineConfig('codex', { autoCompactPct: 90 })
+    await host.send(s.id, '二')
+    await waitFor(() => turnsDone(s.id) === 2)
+    expect(launches().at(-1)).toContain('model_auto_compact_token_limit=115200')
+  })
+
+  it('自定义 API 的窗口经环境变量带来，不留在进程环境里；换模型时重启进程按新模型取', async () => {
+    const windows: Record<string, number> = { 'deepseek-chat': 64_000, 'kimi-k2': 256_000 }
+    const { host, project, launches } = codexHost(r =>
+      r.provider && r.model && windows[r.model] ? { PIXELSKY_CODEX_CONTEXT_WINDOW: String(windows[r.model]) } : {},
+    )
+    await host.setEngineConfig('codex', { autoCompactPct: 70 })
+    const s = host.createSession({
+      projectId: project.id,
+      engine: 'codex',
+      model: 'deepseek-chat',
+      provider: { id: 'p1' },
+      permissionMode: 'ask',
+    })
+    await host.send(s.id, '一')
+    await waitFor(() => turnsDone(s.id) === 1)
+    expect(launches().at(-1)).toContain('model_context_window=64000')
+    expect(launches().at(-1)).toContain('model_auto_compact_token_limit=44800')
+    const count = launches().length
+    await host.update(s.id, { model: 'kimi-k2' })
+    await host.send(s.id, '二')
+    await waitFor(() => turnsDone(s.id) === 2)
+    expect(launches().length).toBe(count + 1)
+    expect(launches().at(-1)).toContain('model_context_window=256000')
+  })
+})
+
+describe('Claude Code：云端 / 本机模型的窗口', () => {
+  it('本机会话：超过 200K 的模型名带 [1m]，--settings 里按模型写自动压缩窗口（别名和完整名都写）', async () => {
+    const projectsDir = join(root, 'claude-projects')
+    let host: EngineHost | null = null
+    const adapter = new ClaudeAdapter({
+      launcher: { command: process.execPath, args: [FAKE_CLAUDE] },
+      projectsDir,
+      launchOptions: () => host!.launchOptions('claude'),
+      env: { ...process.env, FAKE_CLAUDE_PROJECTS: projectsDir, FAKE_CLAUDE_LOG: join(root, 'argv.log') },
+    })
+    host = new EngineHost({ dataDir: join(root, 'data'), emit: e => events.push(e), adapters: { claude: adapter } })
+    hosts.push(host)
+    // 先读一次模型列表：别名 opus 指向的完整模型名
+    const catalog = await host.engineCatalog('claude')
+    const opus = catalog.models?.find(m => m.id === 'opus')
+    await host.setEngineConfig('claude', { contextWindows: { self: { opus: 1_000_000, haiku: 150_000 } } })
+    const s = host.createSession({ projectId: host.addProject(dir('p')).id, model: 'opus' })
+    await host.send(s.id, '你好')
+    await waitFor(() => turnsDone(s.id) === 1)
+    const args = lines(join(root, 'argv.log')).at(-1)!
+    expect(args[args.indexOf('--model') + 1]).toBe('opus[1m]')
+    const settings = JSON.parse(args[args.indexOf('--settings') + 1])
+    expect(settings.modelSettings).toMatchObject({
+      opus: { autoCompactWindow: 1_000_000 },
+      haiku: { autoCompactWindow: 150_000 },
+    })
+    if (opus?.resolved) expect(settings.modelSettings[opus.resolved]).toEqual({ autoCompactWindow: 1_000_000 })
+  })
+})
+
+describe('纯函数', () => {
+  it('Codex：窗口依次取填的、报过的、价格表；没有百分比不算 token 数', () => {
+    const windows = { platform: { a: 100_000 }, self: { a: 200_000 } }
+    expect(codexContextConfig({ record: {}, model: 'a', windows, autoCompactPct: 80 })).toEqual({
+      window: 200_000,
+      limit: 160_000,
+    })
+    expect(codexContextConfig({ record: { platform: { groupId: 'g', account: 'x' } }, model: 'a', windows })).toEqual({
+      window: 100_000,
+      limit: null,
+    })
+    expect(codexContextConfig({ record: {}, model: 'b', windows, autoCompactPct: 50, known: 90_000 })).toEqual({
+      window: null,
+      limit: 45_000,
+    })
+    expect(codexContextConfig({ record: {}, model: null, windows, autoCompactPct: 50 })).toEqual({
+      window: null,
+      limit: null,
+    })
+    // 自定义 API 不看设置里的，只看带来的
+    expect(
+      codexContextConfig({ record: { provider: { id: 'p' } }, model: 'a', windows, providerWindow: 'oops' }),
+    ).toEqual({ window: null, limit: null })
+  })
+
+  it('Claude：窗口夹在 Claude Code 接受的 100K–1M 之间，超过 200K 的进 [1m] 名单', () => {
+    expect(windowSettings({ a: 50_000, b: 300_000, c: 5_000_000 })).toEqual({
+      long: ['b', 'c'],
+      modelSettings: {
+        a: { autoCompactWindow: 100_000 },
+        b: { autoCompactWindow: 300_000 },
+        c: { autoCompactWindow: 1_000_000 },
+      },
+    })
+    expect(windowSettings({})).toEqual({ long: [], modelSettings: null })
+  })
+
+  it('--settings：网关文件里自定义 API 的和设置里的按模型合并', () => {
+    const merged = claudeSettingsArgument(undefined, null, {
+      modelSettings: { opus: { autoCompactWindow: 300_000 } },
+    })
+    expect(JSON.parse(merged!)).toEqual({ modelSettings: { opus: { autoCompactWindow: 300_000 } } })
+  })
+})

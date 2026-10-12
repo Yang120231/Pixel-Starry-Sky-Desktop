@@ -16,3 +16,12 @@ export function summarize(status: GitStatus): GitSummary | null {
   )
   return { branch: status.branch, detached: status.detached, head: status.head, changed: paths.size }
 }
+
+/** 顶栏切换分支前（docs/ui/context-settings-branch-switch.md §3.2）：AI 在运行时拒绝；有改动时先确认；否则直接切 */
+export type SwitchCheck = { kind: 'busy' } | { kind: 'confirm'; changed: number } | { kind: 'go' }
+
+export function beforeSwitch(status: GitStatus): SwitchCheck {
+  if (status.busySessions > 0) return { kind: 'busy' }
+  const changed = summarize(status)?.changed ?? 0
+  return changed > 0 ? { kind: 'confirm', changed } : { kind: 'go' }
+}

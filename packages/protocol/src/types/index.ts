@@ -22,6 +22,7 @@ export type {
   TurnOutcome,
 } from './session'
 export type {
+  ContextWindows,
   EngineCaps,
   EngineCatalog,
   EngineConfig,

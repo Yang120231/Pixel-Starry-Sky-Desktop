@@ -42,7 +42,11 @@ export function ago(at: number, now = Date.now()): string {
 }
 
 export const failureTitle = (kind: GitFailureKind): string => tr(`git.failure.${kind}.title` as TranslationKey)
-export const failureHint = (kind: GitFailureKind): string => tr(`git.failure.${kind}.hint` as TranslationKey)
+/** 切换分支时改动会被覆盖：拉取那一套说法（拉完再放回来）不对，换成切换的 */
+export const failureHint = (kind: GitFailureKind, action?: string): string =>
+  kind === 'dirty' && (action === 'switch' || action === 'create')
+    ? tr('git.failure.dirty.switchHint')
+    : tr(`git.failure.${kind}.hint` as TranslationKey)
 
 /** 面板窄于这个宽度时并排差异放不下，只用行内 */
 export const SPLIT_MIN_WIDTH = 560

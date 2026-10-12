@@ -65,7 +65,7 @@ export class HostTurn {
       const source = sourceKey(record)
       const maxRetries = m.settings.file.maxRetries
       const extensions = (preparedExtensions = ctx.opts.extensions?.(record))
-      const launch = m.settings.launchKey(record.engine) + (extensions?.key ?? '')
+      const launch = m.settings.launchKey(record.engine) + m.settings.modelLaunchKey(record) + (extensions?.key ?? '')
       // 额度来源、重试次数或引擎级设置（输出风格、允许提问、压缩触发点、路径、环境变量）变了：换一个进程，--resume 接上原对话
       if (
         rt.session &&

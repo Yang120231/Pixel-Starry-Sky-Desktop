@@ -20,7 +20,7 @@ import {
   type ExtensionScope,
   type ExtensionState,
 } from '@pixelsky/protocol'
-import { Button, cn, IconButton } from '@/ui'
+import { Button, cn, IconButton, Switch } from '@/ui'
 import { useActiveWorkspace } from '@/features/editor/target'
 import { usePluginText } from './text'
 import { ExtensionForm, type FormTarget } from './ExtensionForm'
@@ -497,21 +497,12 @@ export function PluginsSection() {
                       )}
                     </span>
                     {origin === 'managed' && !row.component ? (
-                      <button
-                        role="switch"
-                        aria-checked={e.enabled}
-                        aria-label={`${e.name} · ${t('已启用')}`}
+                      <Switch
+                        checked={e.enabled}
                         disabled={busy}
-                        onClick={() => void act(() => bridge!.toggle(e.id, !e.enabled))}
-                        className="ui-switch relative inline-flex h-5 w-9 shrink-0 items-center rounded-full disabled:opacity-40"
-                      >
-                        <span
-                          className={cn(
-                            'ui-switch-knob absolute left-0.5 size-4 rounded-full transition-transform',
-                            e.enabled && 'translate-x-4',
-                          )}
-                        />
-                      </button>
+                        label={`${e.name} · ${t('已启用')}`}
+                        onChange={on => void act(() => bridge!.toggle(e.id, on))}
+                      />
                     ) : (
                       <span className="text-label text-fg-faint">{t(row.component ? '随插件启用' : '只读')}</span>
                     )}
