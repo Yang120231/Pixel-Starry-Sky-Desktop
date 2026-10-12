@@ -7,6 +7,7 @@ import type {
   FileChange,
   ImageAttachment,
   Item,
+  QueuedMessage,
   SessionRecord,
   SessionSnapshot,
   TaskOutput,
@@ -22,6 +23,7 @@ export const SHOWCASE_SESSIONS = [
   { id: 'demo-claude-user', title: '用户消息：图片、引用文件、长消息、引导' },
   { id: 'demo-claude-errors', title: '报错：自有额度' },
   { id: 'demo-claude-platform', title: '报错：平台余额不足' },
+  { id: 'demo-claude-send-failed', title: '报错：发送失败（消息队列）' },
   { id: 'demo-claude-running', title: '运行中：进度卡片、后台任务、重试' },
   { id: 'demo-claude-compacting', title: '运行中：压缩上下文（循环播放）' },
   { id: 'demo-claude-compactions', title: '压缩上下文：各种结果' },
@@ -959,6 +961,61 @@ const platform = snapshot(platformRecord, [
   failed('e-s2'),
 ])
 
+// ---------- 5b 发送失败：消息没能开始，留在消息队列里（重试 / 撤回） ----------
+
+const sendFailed = (
+  id: string,
+  text: string,
+  minutesAgo: number,
+  error: string,
+  extra: Partial<QueuedMessage> = {},
+): QueuedMessage => ({
+  id,
+  text,
+  createdAt: T0 - minutesAgo * MIN,
+  settings: { model: 'claude-opus-5-5', effort: 'xhigh', platform: { groupId: '1', account: 'linxia@example.com' } },
+  status: 'failed',
+  error,
+  mode: 'normal',
+  direct: true,
+  ...extra,
+})
+
+const sendFailures = snapshot(
+  record('demo-claude-send-failed', {
+    platform: { groupId: '1', account: 'linxia@example.com' },
+    lastOutcome: 'completed',
+    updatedAt: T0 - 4 * MIN,
+  }),
+  [
+    user('sf-u1', '把草稿清理的逻辑也放进会话删除流程里', 32),
+    assistant('sf-a1', '改好了：删除会话时一并清掉它的草稿和附件缓存，补了 1 个测试，全部通过。'),
+    stats('sf-s1', 'completed', { durationMs: 41_000, models: { 'claude-opus-5-5': opus(6_200, 540, 0.0731, 2) } }),
+  ],
+  {
+    queuePaused: true,
+    queue: [
+      sendFailed(
+        'sf-q1',
+        '照截图把设置页的间距也统一一下，然后继续',
+        9,
+        'API Error: 502 无法连接上游：Post "http://s2amt-app:8080/v1/messages": net/http: timeout awaiting response headers. This is a server-side issue, usually temporary — try again in a moment.',
+        { attachments: [image('sf-img', '设置页.png', SCREENSHOT_PNG, 240, 150)] },
+      ),
+      sendFailed('sf-q2', '继续', 6, '没有权限：当前账号或 API Key 不能用这个模型或资源'),
+      sendFailed('sf-q3', '顺便把 README 里草稿那节也更新了', 5, '没有权限：当前账号或 API Key 不能用这个模型或资源'),
+      // 换过线路的一条：设置和别的不一样，各行分别显示设置
+      sendFailed('sf-q4', '改完跑一遍全部测试', 4, '余额不足，这条线路按余额计费', {
+        settings: {
+          model: 'claude-opus-5-5',
+          effort: 'high',
+          platform: { groupId: '2', account: 'linxia@example.com' },
+        },
+      }),
+    ],
+  },
+)
+
 // ---------- 6 运行中 ----------
 
 const RUNNING_TURN = 'f-turn-2'
@@ -1458,6 +1515,7 @@ export const showcaseSnapshots: Record<string, SessionSnapshot> = Object.fromEnt
     userMessages,
     errors,
     platform,
+    sendFailures,
     running,
     compacting,
     compactions,

@@ -11,6 +11,7 @@ export {
   useStatusBar,
   useViewing,
   type ComposerController,
+  type QueueController,
   type SidebarData,
   type SourceBlocker,
   type SourceMenuController,
@@ -29,6 +30,7 @@ export type { RunStatus, RunStatusItem } from './sidebarData'
 export { recentSpansProjects } from './sidebarData'
 export { OPEN_SESSION_EVENT, useOpenSessionRequests } from './openRequests'
 export { SOURCE_ACTION_EVENT, requestSourceAction, type SourceAction } from './sourceActions'
+export { demoRetry, useDemoQueueController } from './demoQueue'
 export {
   DEFAULT_EFFORT,
   EFFORT_LABEL,

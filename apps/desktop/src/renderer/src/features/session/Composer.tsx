@@ -17,6 +17,7 @@ import {
   SOURCE_ACTION_EVENT,
   useDemoSourceController,
   type ComposerController,
+  type QueueController,
   type SourceAction,
   type StatusBarController,
 } from '@/features/engine'
@@ -69,8 +70,11 @@ export function Composer({
   draftKey,
   onSideQuestion,
   statusExtra,
+  demoQueue,
 }: {
   live?: ComposerController
+  /** 演示模式没有 live，消息队列面板用演示的（features/engine/demoQueue.ts） */
+  demoQueue?: QueueController
   status?: StatusBarController
   autoFocus?: boolean
   draftKey?: string
@@ -509,9 +513,9 @@ export function Composer({
 
   return (
     <>
-      {live && (
+      {(live ?? demoQueue) && (
         <QueuedMessages
-          live={live}
+          live={(live ?? demoQueue)!}
           onPrepareRecall={async recalled => {
             if (!recalled.attachments?.length && !recalled.files?.length) return
             const restored = new Set<string>()

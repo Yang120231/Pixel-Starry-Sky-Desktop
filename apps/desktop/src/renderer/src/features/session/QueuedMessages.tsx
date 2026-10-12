@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import type { QueuedMessage } from '@pixelsky/protocol'
 import { Button, IconButton, Spinner, cn } from '@/ui'
-import { effortLabel, type ComposerController } from '@/features/engine'
+import { effortLabel, type ComposerController, type QueueController } from '@/features/engine'
 import { ImageAttachments } from '@/features/session/attachments/ImageAttachments'
 import { FileAttachments } from '@/features/session/attachments/FileAttachments'
 import { isSendFailure, isStarting } from './queueView'
@@ -41,7 +41,7 @@ export function QueuedMessages({
   onRecall,
   onPrepareRecall,
 }: {
-  live: ComposerController
+  live: QueueController
   onRecall: (text: string) => void
   onPrepareRecall?: (message: QueuedMessage) => Promise<(() => Promise<void>) | void>
 }) {
@@ -54,7 +54,6 @@ export function QueuedMessages({
   const [root, setRoot] = useState<HTMLElement | null>(null)
   const [viewHeight, setViewHeight] = useState<number | null>(null)
   const [open, setOpen] = useState(false)
-  const [scrolled, setScrolled] = useState(false)
   useLayoutEffect(() => {
     const view = root?.closest<HTMLElement>('.conversation-view')
     if (!view) return
@@ -83,6 +82,18 @@ export function QueuedMessages({
   const held = items.some(q => q.held)
   const paused = live.queuePaused || held
   const onlyFailures = items.every(isSendFailure)
+  // 模型 · 强度 · 线路：大家都一样时只在标题行写一次，否则写在各自那一行
+  const settingsOf = (q: QueuedMessage): string =>
+    `${q.settings.model ?? tr('session.QueuedMessages.engineDefaultModel')} · ${effortLabel(q.settings.effort)} · ${
+      q.settings.platform
+        ? tr('session.QueuedMessages.platformRoute', { p0: q.settings.platform.groupId })
+        : q.settings.provider
+          ? tr('customApi.queued', {
+              p0: providers.find(p => p.id === q.settings.provider?.id)?.name ?? q.settings.provider.id,
+            })
+          : tr('session.QueuedMessages.ownCredits')
+    }`
+  const common = items.every(q => settingsOf(q) === settingsOf(items[0])) ? settingsOf(items[0]) : null
   const short = viewHeight !== null && viewHeight < SHORT_VIEW_PX
   const collapsed = short && !open
   const title = (
@@ -98,7 +109,7 @@ export function QueuedMessages({
   return (
     <section
       ref={setRoot}
-      className="mb-2 flex flex-col gap-1.5"
+      className="@container/queue mb-2 flex flex-col gap-1.5"
       aria-label={tr('session.QueuedMessages.messageQueue')}
     >
       <div className="flex shrink-0 items-center gap-2 px-1 text-meta text-fg-muted">
@@ -115,6 +126,11 @@ export function QueuedMessages({
           </button>
         ) : (
           <span className="shrink-0">{title}</span>
+        )}
+        {common && (
+          <span className="min-w-0 truncate text-fg-faint" title={tr('session.QueuedMessages.modelEffortAndCredit')}>
+            · {common}
+          </span>
         )}
         {paused && !onlyFailures && live.state === 'idle' && (
           <span className="min-w-0 truncate text-fg-faint">{tr('session.QueuedMessages.heldHint')}</span>
@@ -138,14 +154,10 @@ export function QueuedMessages({
         )}
       </div>
       {!collapsed && (
+        // 一个框里按行列出、细线分隔；框本身滚动，滚动时被切开的那行上面始终有框的边
         <div
-          onScroll={e => setScrolled(e.currentTarget.scrollTop > 0)}
           style={viewHeight === null ? undefined : { maxHeight: queueListMaxHeight(viewHeight) }}
-          className={cn(
-            // 滚动后上沿加一条线，被切开的卡片不会像少了边框
-            'flex max-h-64 min-h-0 flex-col gap-1.5 overflow-y-auto border-t',
-            scrolled ? 'border-line' : 'border-transparent',
-          )}
+          className="flex max-h-64 min-h-0 flex-col divide-y divide-line-card overflow-y-auto rounded-lg border border-line-card bg-surface"
         >
           {visible.map(q => {
             const pending = q.status === 'dispatching' || q.status === 'delivering'
@@ -175,17 +187,29 @@ export function QueuedMessages({
                         ? tr('session.QueuedMessages.held')
                         : tr('session.live.agentTrace.queued')
             return (
-              <div key={q.id} data-queue-id={q.id} className="rounded-lg border border-line-card bg-surface px-3 py-2">
+              <div key={q.id} data-queue-id={q.id} className="shrink-0 px-3 py-1.5 transition-colors hover:bg-hover/40">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   {pending || busy === q.id ? (
                     <Spinner size={11} />
                   ) : (
                     <span className={cn('size-1.5 rounded-full', q.error ? 'bg-warn' : 'bg-fg-faint')} />
                   )}
-                  <span className={cn('shrink-0 text-meta', q.error ? 'text-warn' : 'text-fg-muted')}>{label}</span>
+                  {/* 全是发送失败时标题行已经写了，每行不再重复 */}
+                  {!onlyFailures && (
+                    <span className={cn('shrink-0 text-meta', q.error ? 'text-warn' : 'text-fg-muted')}>{label}</span>
+                  )}
                   <span className="min-w-20 flex-1 truncate text-list text-fg-secondary" title={q.text}>
                     {q.text}
                   </span>
+                  {/* 各条设置不一样时：宽的时候放在按钮左边排成一列，窄的时候放到错误原因后面 */}
+                  {!common && (
+                    <span
+                      className="hidden shrink-0 text-label text-fg-faint tabular-nums @min-[600px]/queue:inline"
+                      title={tr('session.QueuedMessages.modelEffortAndCredit')}
+                    >
+                      {settingsOf(q)}
+                    </span>
+                  )}
                   <div className="flex shrink-0 items-center gap-0.5">
                     {q.status === 'queued' && (
                       <>
@@ -257,33 +281,33 @@ export function QueuedMessages({
                     )}
                   </div>
                 </div>
-                <div
-                  className="mt-0.5 pl-3.5 text-label text-fg-faint"
-                  title={tr('session.QueuedMessages.modelEffortAndCredit')}
-                >
-                  {q.settings.model ?? tr('session.QueuedMessages.engineDefaultModel')} ·{' '}
-                  {effortLabel(q.settings.effort)} ·{' '}
-                  {q.settings.platform
-                    ? tr('session.QueuedMessages.platformRoute', { p0: q.settings.platform.groupId })
-                    : q.settings.provider
-                      ? tr('customApi.queued', {
-                          p0: providers.find(p => p.id === q.settings.provider?.id)?.name ?? q.settings.provider.id,
-                        })
-                      : tr('session.QueuedMessages.ownCredits')}
-                </div>
-                {/* 原因只显示第一行：完整说明和原文在对话里的错误卡片上（docs/ui/conversation-ux-2.md §2.1） */}
-                {q.error && (
-                  <p className="mt-1 truncate text-meta text-warn" title={translateMessage(q.error)}>
-                    {translateMessage(q.error.split('\n')[0])}
+                {/* 原因只显示第一行：完整说明和原文在对话里的错误卡片上（docs/ui/conversation-ux-2.md §2.1）；
+                    窄的时候设置跟在后面 */}
+                {(q.error || !common) && (
+                  <p className={cn('truncate pl-3.5 text-meta', !q.error && '@min-[600px]/queue:hidden')}>
+                    {q.error && (
+                      <span className="text-warn" title={translateMessage(q.error)}>
+                        {translateMessage(q.error.split('\n')[0])}
+                      </span>
+                    )}
+                    {q.error && !common && <span className="text-fg-faint @min-[600px]/queue:hidden"> · </span>}
+                    {!common && (
+                      <span
+                        className="text-label text-fg-faint @min-[600px]/queue:hidden"
+                        title={tr('session.QueuedMessages.modelEffortAndCredit')}
+                      >
+                        {settingsOf(q)}
+                      </span>
+                    )}
                   </p>
                 )}
                 {!!q.attachments?.length && (
-                  <div className="mt-2">
-                    <ImageAttachments images={q.attachments} />
+                  <div className="mt-1.5 pl-3.5">
+                    <ImageAttachments images={q.attachments} compact />
                   </div>
                 )}
                 {!!q.files?.length && (
-                  <div className="mt-2">
+                  <div className="mt-1.5 pl-3.5">
                     <FileAttachments files={q.files} />
                   </div>
                 )}
@@ -298,12 +322,12 @@ export function QueuedMessages({
               </div>
             )
           })}
-          {error && (
-            <p role="alert" className="px-1 text-meta whitespace-pre-wrap text-danger">
-              {translateMessage(error)}
-            </p>
-          )}
         </div>
+      )}
+      {error && (
+        <p role="alert" className="px-1 text-meta whitespace-pre-wrap text-danger">
+          {translateMessage(error)}
+        </p>
       )}
     </section>
   )

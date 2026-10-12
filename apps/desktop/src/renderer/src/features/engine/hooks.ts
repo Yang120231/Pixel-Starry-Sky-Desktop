@@ -218,6 +218,21 @@ export function useDemoSourceController(): SourceMenuController {
   }
 }
 
+/** 消息队列面板要用的那部分（QueuedMessages）；演示模式用 demoQueue.ts 给的假的 */
+export type QueueController = Pick<
+  ComposerController,
+  | 'queue'
+  | 'queuePaused'
+  | 'execution'
+  | 'state'
+  | 'steerAvailable'
+  | 'cancelQueued'
+  | 'moveQueued'
+  | 'runQueuedNow'
+  | 'steerQueued'
+  | 'resumeQueue'
+>
+
 export interface ComposerController {
   queue: QueuedMessage[]
   queuePaused: boolean

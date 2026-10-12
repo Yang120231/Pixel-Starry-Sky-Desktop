@@ -68,6 +68,12 @@ if (isDemo)
     if (snap) set({ snapshots: { ...state.snapshots, [id]: { ...snap, items: change(snap.items) } } })
   })
 
+/** 演示模式里改一个会话的快照（演示的消息队列、错误卡片的「重试」用）；不是演示模式时什么都不做 */
+export function updateDemoSnapshot(id: string, change: (snap: SessionSnapshot) => SessionSnapshot): void {
+  const snap = state.snapshots[id]
+  if (isDemo && snap) set({ snapshots: { ...state.snapshots, [id]: change(snap) } })
+}
+
 export function getEngineState(): EngineState {
   return state
 }

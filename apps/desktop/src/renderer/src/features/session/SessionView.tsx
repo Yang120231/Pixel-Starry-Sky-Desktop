@@ -29,7 +29,14 @@ import { paneActions } from '@/features/panes/store'
 import { isDemo, sessionDiff } from '@/data'
 import { demo } from '@/data/demo'
 import { cn } from '@/ui'
-import { bridge, isLive, useComposerController, useSession, useStatusBar } from '@/features/engine'
+import {
+  bridge,
+  isLive,
+  useComposerController,
+  useDemoQueueController,
+  useSession,
+  useStatusBar,
+} from '@/features/engine'
 import './conversation.css'
 
 export interface SessionViewProps {
@@ -119,6 +126,7 @@ function LiveSessionView({
   useI18n()
   const snapshot = useSession(sessionId)
   const composer = useComposerController(sessionId, onOpenSession, draftKey)
+  const demoQueue = useDemoQueueController(composer ? null : sessionId)
   const status = useStatusBar(sessionId, draftKey)
   // 智能体追踪面板：null 表示关着；focus 是定位到的智能体（null 是总览）
   const [trace, setTrace] = useState<{ focus: string | null } | null>(null)
@@ -298,6 +306,7 @@ function LiveSessionView({
                   <Composer
                     key={sessionId}
                     live={composer}
+                    demoQueue={demoQueue}
                     status={status}
                     draftKey={draftKey}
                     autoFocus

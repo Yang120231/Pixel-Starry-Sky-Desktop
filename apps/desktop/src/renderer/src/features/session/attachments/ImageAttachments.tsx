@@ -6,13 +6,17 @@ import type { ImageAttachment } from '@pixelsky/protocol'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import { imageBlob, imageSize } from './images'
+import { cn } from '@/ui'
 
 function ImageTile({
   image,
   onRemove,
   onReplace,
+  compact = false,
 }: {
   image: ImageAttachment
+  /** 小缩略图、不显示文件名（消息队列里用；文件名在悬停提示里） */
+  compact?: boolean
   onRemove?: (id: string) => void
   /** 标注后替换这张图（docs/ui/rewind-fork-sidechat.md §6） */
   onReplace?: (id: string, next: ImageAttachment) => void
@@ -50,7 +54,10 @@ function ImageTile({
     <>
       <div
         data-image-attachment={image.id}
-        className="group relative h-24 w-24 overflow-hidden rounded-lg border border-line-card bg-subtle"
+        className={cn(
+          'group relative overflow-hidden border border-line-card bg-subtle',
+          compact ? 'size-10 rounded-md' : 'h-24 w-24 rounded-lg',
+        )}
       >
         <button
           ref={trigger}
@@ -84,9 +91,11 @@ function ImageTile({
             <X size={12} />
           </button>
         )}
-        <span className="pointer-events-none absolute right-0 bottom-0 left-0 truncate border-t border-line-card bg-popover px-1 py-0.5 text-label text-fg-secondary">
-          {image.name}
-        </span>
+        {!compact && (
+          <span className="pointer-events-none absolute right-0 bottom-0 left-0 truncate border-t border-line-card bg-popover px-1 py-0.5 text-label text-fg-secondary">
+            {image.name}
+          </span>
+        )}
       </div>
       {open &&
         createPortal(
@@ -156,15 +165,17 @@ export function ImageAttachments({
   images,
   onRemove,
   onReplace,
+  compact,
 }: {
   images: ImageAttachment[]
+  compact?: boolean
   onRemove?: (id: string) => void
   onReplace?: (id: string, next: ImageAttachment) => void
 }) {
   return (
     <div data-image-attachments className="flex max-h-56 min-w-0 flex-wrap gap-2 overflow-y-auto">
       {images.map(image => (
-        <ImageTile key={image.id} image={image} onRemove={onRemove} onReplace={onReplace} />
+        <ImageTile key={image.id} image={image} onRemove={onRemove} onReplace={onReplace} compact={compact} />
       ))}
     </div>
   )

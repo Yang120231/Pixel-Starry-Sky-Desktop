@@ -3,7 +3,8 @@ import { tr } from '../../../i18n/core'
 // 错误卡片下面的一键按钮（docs/ui/source-switch.md §3.5）：只给最近一轮的错误，按错误类型和会话的额度来源给下一步。
 // 按钮只发请求（features/engine/sourceActions.ts），切换额度来源的确认由同一会话的输入框负责。不会自动切换。
 import { ENGINES, type SessionRecord } from '@pixelsky/protocol'
-import { requestSourceAction, type SourceAction } from '@/features/engine'
+import { demoRetry, requestSourceAction, type SourceAction } from '@/features/engine'
+import { isDemo } from '@/data'
 import { useSettings } from '@/features/settings/SettingsProvider'
 import { requestLogFocus } from '@/features/logs/focus'
 import { classifyError, type ErrorKind } from './errorKind'
@@ -84,7 +85,7 @@ export function NoticeActions({
         <button
           key={a}
           type="button"
-          onClick={() => requestSourceAction(record.id, a)}
+          onClick={() => (a === 'retry' && isDemo ? demoRetry(record.id) : requestSourceAction(record.id, a))}
           className="press h-7 rounded-md border border-line bg-surface px-2.5 text-meta text-fg-secondary hover:bg-hover hover:text-fg"
         >
           {LABEL[a]}
