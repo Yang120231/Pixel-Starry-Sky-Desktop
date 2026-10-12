@@ -24,6 +24,7 @@ import { initWorkspace } from './workspace/files-ipc'
 import { initWindowControls, observeWindowControls } from './app/window-controls'
 import { initUiLanguage, nativeText } from './app/ui-language'
 import { initProjectTools } from './workspace/project-tools-ipc'
+import { initChannels } from './channels/ipc'
 import { initNotifications } from './notifications/notifications'
 import { confirmTerminalClose, closeWindowTerminals } from './terminal/ipc'
 import { createAppContext } from './app/context'
@@ -353,6 +354,7 @@ app.whenReady().then(async () => {
   initSettingsSync(ctx) // 设置云同步，见 account/settings-sync.ts
   await initWorkspace(ctx)
   await initProjectTools(ctx)
+  await initChannels(ctx) // 协作频道（本机 AI 协作），见 channels/ipc.ts
   createWindow()
   // 系统托盘（docs/ui/tray.md）：通知区域图标、右键菜单、关闭时隐藏到托盘
   if (!captureDir)

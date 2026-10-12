@@ -1,4 +1,5 @@
 // 界面数据的类型。组件只依赖这里的类型和 data/index.ts 导出的值。
+import type { Channel, ChannelMember, ChannelMessage } from '../../../shared/types/channels'
 
 export interface CurrentUser {
   name: string
@@ -179,98 +180,19 @@ export interface AppData {
   channelMessages: Record<string, ChannelMessage[]>
 }
 
-// ---------------------------------------------------------------------------
-// 协作频道（docs/ui/channels.md §9）。Phase B 时迁到 packages/protocol。
-// ---------------------------------------------------------------------------
-
-export type ChannelAgentStatus = 'idle' | 'running' | 'waiting' | 'offline'
-
-export interface HumanMember {
-  id: string
-  kind: 'human'
-  name: string
-  /** 当前用户自己 */
-  you?: boolean
-  role?: 'owner' | 'member'
-  /** Phase C：平台用户 */
-  userId?: string
-}
-
-export interface AgentMember {
-  id: string
-  kind: 'agent'
-  name: string
-  engine: import('@pixelsky/protocol').EngineId
-  model: string | null
-  /** 'local' 或 ssh-…（D055） */
-  machineId: string
-  /** 机器显示名 */
-  machine: string
-  project?: string | null
-  status: ChannelAgentStatus
-  /** 当前任务标题 */
-  task?: string | null
-  /** 绑定的会话 */
-  sessionId?: string | null
-  /** Phase C：AI 成员属于哪个真人 */
-  ownerId?: string
-}
-
-export type ChannelMember = HumanMember | AgentMember
-
-export interface Channel {
-  id: string
-  name: string
-  topic: string | null
-  project?: string | null
-  /** local = 本机 AI 协作；team = 团队频道（Phase C） */
-  scope: 'local' | 'team'
-  memberIds: string[]
-  unread: number
-  /** 未读里有人 @你 */
-  mentioned?: boolean
-  createdAt: number
-}
-
-export type ChannelTaskStatus = 'queued' | 'running' | 'waiting' | 'done' | 'failed'
-
-interface ChannelMessageBase {
-  id: string
-  channelId: string
-  /** 毫秒时间戳 */
-  at: number
-}
-
-export interface ChannelTextMessage extends ChannelMessageBase {
-  kind: 'message'
-  authorId: string
-  text: string
-  format: 'plain' | 'markdown'
-  replyToId?: string | null
-  mentions?: string[]
-}
-
-/** 派给 AI 成员的一项活；状态变化时原地更新，不追加新消息 */
-export interface ChannelTask extends ChannelMessageBase {
-  kind: 'task'
-  authorId: string
-  assigneeId: string
-  title: string
-  status: ChannelTaskStatus
-  sessionId?: string | null
-  summary?: string | null
-  diff?: { added: number; removed: number } | null
-}
-
-export interface ChannelEvent extends ChannelMessageBase {
-  kind: 'event'
-  event: 'joined' | 'added' | 'renamed' | 'topic'
-  actorId: string
-  targetId?: string | null
-  value?: string | null
-}
-
-export type ChannelMessage = ChannelTextMessage | ChannelTask | ChannelEvent
+// 协作频道（docs/ui/channels.md §9）：类型和主进程共用
+export type {
+  AgentMember,
+  Channel,
+  ChannelAgentStatus,
+  ChannelEvent,
+  ChannelMember,
+  ChannelMessage,
+  ChannelTask,
+  ChannelTaskStatus,
+  ChannelTextMessage,
+  HumanMember,
+} from '../../../shared/types/channels'
 
 /** 设置 › 本机引擎用到的引擎信息（真实数据是 EngineInfo，演示数据只填这些） */
 export type EngineLite = Pick<

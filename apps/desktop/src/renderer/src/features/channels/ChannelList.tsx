@@ -4,15 +4,20 @@ import { useMemo, useState } from 'react'
 import { AtSign, Hash, Plus, Search, Users } from 'lucide-react'
 import { cn, CountBadge, IconButton, useComingSoon } from '@/ui'
 import { SidebarEmpty, SidebarSection } from '@/features/sidebar/SidebarSection'
-import type { Channel } from '@/data/types'
+import type { AgentMember, Channel } from '@/data/types'
+import { channelsLive } from './store'
+import { ChannelDialog } from './ChannelDialogs'
 
 /** 频道列表（docs/ui/channels.md §4）：搜索、频道行（未读 / @你）、新建频道 */
 export function ChannelList({
   channels,
   selectedId,
   onSelect,
+  agents,
 }: {
   channels: readonly Channel[]
+  /** 新建频道时可以一起加进来的 AI 成员 */
+  agents: readonly AgentMember[]
   selectedId: string
   onSelect: (id: string) => void
 }) {
@@ -23,7 +28,8 @@ export function ChannelList({
     const q = query.trim().toLowerCase()
     return q ? channels.filter(c => c.name.toLowerCase().includes(q) || c.topic?.toLowerCase().includes(q)) : channels
   }, [channels, query])
-  const create = () => comingSoon(tr('channels.new'))
+  const [creating, setCreating] = useState(false)
+  const create = () => (channelsLive ? setCreating(true) : comingSoon(tr('channels.new')))
   return (
     <nav
       aria-label={tr('channels.list')}
@@ -90,6 +96,7 @@ export function ChannelList({
           <span className="truncate">{tr('channels.new')}</span>
         </button>
       </div>
+      {creating && <ChannelDialog channel={null} agents={agents} onClose={() => setCreating(false)} />}
     </nav>
   )
 }

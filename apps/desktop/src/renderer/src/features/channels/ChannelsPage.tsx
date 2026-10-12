@@ -1,9 +1,11 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { useEffect, useMemo, useRef } from 'react'
 import { CollapsibleSlot } from '@/ui'
-import { OPEN_SESSION_EVENT } from '@/features/engine'
-import type { ChannelTextMessage } from '@/data/types'
-import { channelActions, selectedChannel, selfMember, useChannels } from './store'
+import { OPEN_SESSION_EVENT, bridge as engineBridge } from '@/features/engine'
+import type { AgentMember, ChannelTask } from '@/data/types'
+import { channelActions, channelsLive, selectedChannel, selfMember, useChannels } from './store'
+import type { Quotable } from './ChannelMessage'
+import type { TaskCardActions } from './ChannelTaskCard'
 import { ChannelList } from './ChannelList'
 import { ChannelTimeline } from './ChannelTimeline'
 import { ChannelComposer } from './ChannelComposer'
@@ -35,6 +37,7 @@ export function ChannelsPage({
   const messageMap = useChannels(s => s.messages)
   const replyMap = useChannels(s => s.replyTo)
   const newFromMap = useChannels(s => s.newFrom)
+  const moreMap = useChannels(s => s.more)
   const channel = useChannels(selectedChannel)
   const self = useChannels(selfMember)
   const messages = (channel && messageMap[channel.id]) || NO_MESSAGES
@@ -44,12 +47,17 @@ export function ChannelsPage({
   )
   const replyId = channel ? (replyMap[channel.id] ?? null) : null
   const replyTo = useMemo(
-    () =>
-      replyId
-        ? (messages.find((m): m is ChannelTextMessage => m.kind === 'message' && m.id === replyId) ?? null)
-        : null,
+    () => (replyId ? (messages.find((m): m is Quotable => m.kind !== 'event' && m.id === replyId) ?? null) : null),
     [messages, replyId],
   )
+  const agents = useMemo(() => members.filter((m): m is AgentMember => m.kind === 'agent'), [members])
+  // 引用任务卡 / 任务结果 = 给那项活追加要求（docs/ui/channels-phase-b.md §7.1）
+  const followUp = useMemo(() => {
+    if (!channelsLive || !replyTo) return null
+    const taskId = replyTo.kind === 'task' ? replyTo.id : replyTo.taskId
+    const task = taskId ? messages.find((m): m is ChannelTask => m.kind === 'task' && m.id === taskId) : undefined
+    return task ? { assignee: members.find(m => m.id === task.assigneeId)?.name ?? '?', title: task.title } : null
+  }, [replyTo, messages, members])
 
   // 进入页面或切换频道：标为已读，记下「新消息」位置
   useEffect(() => {
@@ -67,7 +75,7 @@ export function ChannelsPage({
   if (!channel)
     return (
       <div className="absolute inset-0 flex min-w-0">
-        <ChannelsEmpty />
+        <ChannelsEmpty agents={agents} />
       </div>
     )
 
@@ -75,13 +83,26 @@ export function ChannelsPage({
     channelActions.setReplyTo(channel.id, id)
     composer.current?.focus()
   }
+  const taskActions: TaskCardActions = {
+    onOpenSession: openSession,
+    ...(channelsLive
+      ? {
+          onAction: channelActions.task,
+          onAnswer: async (task: ChannelTask, allow: boolean) => {
+            if (!task.sessionId || !task.request || !engineBridge) return
+            await engineBridge.answer(task.sessionId, task.request.requestId, { type: allow ? 'allow' : 'deny' })
+          },
+          onFollowUp: reply,
+        }
+      : {}),
+  }
   const closeMembers = () => {
     onToggleMembers()
     composer.current?.focus()
   }
   return (
     <div className="@container absolute inset-0 flex min-w-0" data-channels-page>
-      <ChannelList channels={channels} selectedId={channel.id} onSelect={channelActions.select} />
+      <ChannelList channels={channels} selectedId={channel.id} onSelect={channelActions.select} agents={agents} />
       <section aria-label={`# ${channel.name}`} className="conversation-view flex min-w-[360px] flex-1 flex-col">
         <ChannelTimeline
           channel={channel}
@@ -89,8 +110,10 @@ export function ChannelsPage({
           members={members}
           channelMembers={channelMembers}
           newFrom={newFromMap[channel.id] ?? null}
+          more={!!moreMap[channel.id]}
+          onLoadOlder={() => channelActions.loadOlder(channel.id)}
           onReply={reply}
-          onOpenSession={openSession}
+          taskActions={taskActions}
         />
         <ChannelComposer
           key={channel.id}
@@ -98,14 +121,25 @@ export function ChannelsPage({
           members={channelMembers}
           selfId={self?.id ?? null}
           replyTo={replyTo}
-          replyAuthor={replyTo ? members.find(m => m.id === replyTo.authorId) : undefined}
+          replyAuthor={
+            replyTo
+              ? members.find(m => m.id === (replyTo.kind === 'task' ? replyTo.assigneeId : replyTo.authorId))
+              : undefined
+          }
+          followUp={followUp}
           onSend={text => channelActions.send(channel.id, text)}
           onCancelReply={() => channelActions.setReplyTo(channel.id, null)}
           inputRef={composer}
         />
       </section>
       <CollapsibleSlot open={membersShown} width={MEMBERS_WIDTH} side="right">
-        <ChannelMembers channel={channel} members={channelMembers} onClose={closeMembers} onOpenSession={openSession} />
+        <ChannelMembers
+          channel={channel}
+          members={channelMembers}
+          allMembers={members}
+          onClose={closeMembers}
+          onOpenSession={openSession}
+        />
       </CollapsibleSlot>
     </div>
   )

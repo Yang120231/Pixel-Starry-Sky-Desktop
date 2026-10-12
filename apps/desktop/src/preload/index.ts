@@ -21,6 +21,8 @@ import type { MobileBridge } from './mobile'
 import type { MobileState } from '../shared/types/mobile'
 import type { SettingsSyncBridge } from './settings-sync'
 import type { TrayCommand } from '../shared/types/tray'
+import type { ChannelsBridge } from './channels'
+import type { ChannelMessagePush, ChannelsSnapshot } from '../shared/types/channels'
 
 // 通道名一律用契约键约束：拼错或未登记的通道在这里就是类型错误
 type Listener = Parameters<typeof ipcRenderer.on>[1]
@@ -350,6 +352,31 @@ const tray: TrayBridge = {
   prefs: () => call('tray:prefs'),
   setPrefs: patch => call('tray:setPrefs', patch),
 }
+// 协作频道（docs/ui/channels-phase-b.md §11）
+const channels: ChannelsBridge = {
+  state: () => call('channels:state'),
+  messages: (id, before) => call('channels:messages', id, before),
+  create: input => call('channels:create', input),
+  update: (id, patch) => call('channels:update', id, patch),
+  delete: id => call('channels:delete', id),
+  post: (id, input) => call('channels:post', id, input),
+  markRead: id => call('channels:markRead', id),
+  saveMember: (channelId, input) => call('channels:saveMember', channelId, input),
+  addMember: (channelId, memberId) => call('channels:addMember', channelId, memberId),
+  removeMember: (channelId, memberId) => call('channels:removeMember', channelId, memberId),
+  deleteMember: memberId => call('channels:deleteMember', memberId),
+  task: (taskId, action) => call('channels:task', taskId, action),
+  onChange: cb => {
+    const listener = (_e: Electron.IpcRendererEvent, state: ChannelsSnapshot): void => cb(state)
+    on('channels:changed', listener)
+    return () => ipcRenderer.removeListener('channels:changed', listener)
+  },
+  onMessage: cb => {
+    const listener = (_e: Electron.IpcRendererEvent, push: ChannelMessagePush): void => cb(push)
+    on('channels:message', listener)
+    return () => ipcRenderer.removeListener('channels:message', listener)
+  },
+}
 // 手机远程连接：设置 › 手机（docs/mobile-remote.md §5.4）
 const mobile: MobileBridge = {
   state: () => call('mobile:state'),
@@ -374,6 +401,7 @@ const settingsSync: SettingsSyncBridge = {
 }
 contextBridge.exposeInMainWorld('pixelsky', {
   tray,
+  channels,
   mobile,
   settingsSync,
   machines: {

@@ -59,11 +59,13 @@ describe('main process structure', () => {
     expect(cycles).toEqual([])
   })
 
+  // shared/ 是主进程和渲染层共用的纯代码（类型、文案、频道的 @ 解析），不算应用层
   it('keeps core free of electron and of the app layer', () => {
     for (const file of files.filter(f => name(f).startsWith('core/'))) {
       const text = readFileSync(file, 'utf8')
       expect(text, name(file)).not.toMatch(/from 'electron'/)
-      for (const dep of imports(file)) expect(name(dep), `${name(file)} imports ${name(dep)}`).toMatch(/^core\//)
+      for (const dep of imports(file))
+        expect(name(dep), `${name(file)} imports ${name(dep)}`).toMatch(/^(core|\.\.\/shared)\//)
     }
   })
 })

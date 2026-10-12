@@ -1,9 +1,10 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { CornerUpLeft } from 'lucide-react'
 import { Avatar, cn, CopyButton, EngineIcon, IconButton } from '@/ui'
 import { Markdown } from '@/ui/markdown/Markdown'
-import type { ChannelMember, ChannelTextMessage } from '@/data/types'
+import type { ChannelMember, ChannelTask, ChannelTextMessage } from '@/data/types'
 import { excerpt, splitMentions } from './model'
 import { formatClock } from './format'
 
@@ -34,10 +35,65 @@ export function MemberAvatar({
   return <Avatar name={member?.name ?? '?'} size={size} className={className} />
 }
 
+/** 机器显示名：本机（主进程不给名字）显示「这台电脑」 */
+export function machineLabel(member: ChannelMember | undefined): string {
+  if (member?.kind !== 'agent') return ''
+  return member.machine || (member.machineId === 'local' ? tr('channels.thisComputer') : member.machineId)
+}
+
 /** 模型 · 机器（AI 成员）；真人没有 */
 export function agentMeta(member: ChannelMember | undefined): string | null {
   if (member?.kind !== 'agent') return null
-  return [member.model, member.machine].filter(Boolean).join(' · ')
+  return [member.model, machineLabel(member)].filter(Boolean).join(' · ')
+}
+
+/** 项目 · 机器（任务卡底部） */
+export function agentPlace(member: ChannelMember | undefined): string {
+  if (member?.kind !== 'agent') return ''
+  return [member.project, machineLabel(member)].filter(Boolean).join(' · ')
+}
+
+/** 可以被引用的消息：普通消息和任务卡 */
+export type Quotable = ChannelTextMessage | ChannelTask
+
+/** AI 的长回复超过 12 行时折叠（docs/ui/channels-phase-b.md §5.2） */
+const FOLD_PX = 12 * 26
+function Folded({ text }: { text: string }) {
+  useI18n()
+  const box = useRef<HTMLDivElement>(null)
+  const [tall, setTall] = useState(false)
+  const [open, setOpen] = useState(false)
+  useLayoutEffect(() => {
+    const el = box.current
+    if (el) setTall(el.scrollHeight > FOLD_PX + 40)
+  }, [text])
+  return (
+    <div>
+      <div
+        ref={box}
+        className={cn('relative', tall && !open && 'overflow-hidden')}
+        style={tall && !open ? { maxHeight: FOLD_PX } : undefined}
+      >
+        <Markdown text={text} />
+        {tall && !open && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-surface to-transparent"
+          />
+        )}
+      </div>
+      {tall && (
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen(v => !v)}
+          className="mt-1 text-meta font-medium text-accent-fg hover:underline"
+        >
+          {tr(open ? 'channels.showLess' : 'channels.showMore')}
+        </button>
+      )}
+    </div>
+  )
 }
 
 /** 作者行：名字、（你）、AI 标签、模型 · 机器、时间 */
@@ -90,7 +146,7 @@ function QuoteBlock({
   author,
   onJump,
 }: {
-  quoted: ChannelTextMessage | undefined
+  quoted: Quotable | undefined
   author: ChannelMember | undefined
   onJump: (id: string) => void
 }) {
@@ -109,7 +165,7 @@ function QuoteBlock({
       className="mb-1 flex w-full min-w-0 items-baseline gap-1.5 border-l-2 border-line-strong pl-2 text-left text-meta text-fg-muted hover:border-accent hover:text-fg"
     >
       <span className="shrink-0 font-medium">{author?.name ?? '?'}</span>
-      <span className="min-w-0 truncate">{excerpt(quoted.text)}</span>
+      <span className="min-w-0 truncate">{excerpt(quoted.kind === 'task' ? quoted.title : quoted.text)}</span>
     </button>
   )
 }
@@ -120,7 +176,7 @@ export interface MessageGroupProps {
   membersById: ReadonlyMap<string, ChannelMember>
   /** 这个频道的成员，用来高亮 @ */
   channelMembers: readonly ChannelMember[]
-  messagesById: ReadonlyMap<string, ChannelTextMessage>
+  messagesById: ReadonlyMap<string, Quotable>
   highlight: string | null
   onReply: (id: string) => void
   onJump: (id: string) => void
@@ -168,12 +224,14 @@ export function MessageGroup({
               {m.replyToId && (
                 <QuoteBlock
                   quoted={quoted}
-                  author={quoted ? membersById.get(quoted.authorId) : undefined}
+                  author={
+                    quoted ? membersById.get(quoted.kind === 'task' ? quoted.assigneeId : quoted.authorId) : undefined
+                  }
                   onJump={onJump}
                 />
               )}
               {m.format === 'markdown' ? (
-                <Markdown text={m.text} />
+                <Folded text={m.text} />
               ) : (
                 <MentionText text={m.text} members={channelMembers} />
               )}

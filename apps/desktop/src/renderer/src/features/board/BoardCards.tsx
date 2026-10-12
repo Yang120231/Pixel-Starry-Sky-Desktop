@@ -18,6 +18,7 @@ import { canAnswerInline, canResume } from '@/features/panel/inbox/inboxModel'
 import type { ManualTask } from '../../../../shared/types/project-tools'
 import { overdue } from './boardModel'
 import type { SessionCard, SessionLane } from './sessionLanes'
+import { useSessionChannel } from '@/features/channels/store'
 
 const CARD =
   'group relative flex w-full flex-col gap-1 rounded-lg border border-line-card bg-surface px-3 py-2.5 text-left shadow-sm outline-none transition-colors hover:border-line-strong focus-visible:ring-2 focus-visible:ring-accent'
@@ -229,6 +230,7 @@ export function AiCard({
   onResume: () => void
 }) {
   const lane = LANE[card.lane]
+  const channel = useSessionChannel(card.id)
   const reason = reasonOf(card)
   const inline = card.lane === 'waiting' && canAnswerInline(card.request)
   const stop = (fn: () => void) => (e: MouseEvent) => {
@@ -263,6 +265,7 @@ export function AiCard({
       <div className="flex min-w-0 items-center gap-1.5 pl-6 text-meta text-fg-faint">
         <span className={cn('shrink-0', lane.tone)}>{tr(lane.label)}</span>
         {card.project && <span className="min-w-0 truncate">· {card.project}</span>}
+        {channel && <span className="min-w-0 truncate">· # {channel}</span>}
         <span className="shrink-0 tabular-nums">· {relativeTime(card.at, now)}</span>
       </div>
       {reason && (

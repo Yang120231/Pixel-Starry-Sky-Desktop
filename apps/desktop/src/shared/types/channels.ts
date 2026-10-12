@@ -1,0 +1,192 @@
+// 协作频道的数据类型（docs/ui/channels.md §9，Phase B 的改动见 docs/ui/channels-phase-b.md §10.1）。
+// 主进程（main/core/channels/）和渲染层共用；演示数据（mock/channels.ts）只填界面要用的字段。
+import type { ApprovalRequest, EngineId, SessionSettings } from '@pixelsky/protocol'
+
+export type ChannelAgentStatus = 'idle' | 'running' | 'waiting' | 'offline'
+
+export interface HumanMember {
+  id: string
+  kind: 'human'
+  name: string
+  /** 当前用户自己 */
+  you?: boolean
+  role?: 'owner' | 'member'
+  /** Phase C：平台用户 */
+  userId?: string
+}
+
+/** AI 成员派活时用的会话设置；没写的用引擎默认值 */
+export type AgentSettings = Partial<Pick<SessionSettings, 'model' | 'effort' | 'permissionMode'>>
+
+/** AI 成员的配置（全局，可以加进多个频道；docs/ui/channels-phase-b.md §2.2），存在 members.json */
+export interface AgentConfig {
+  id: string
+  name: string
+  engine: EngineId
+  /** 'local' 或 ssh-…（D055）；和 projectId 的机器前缀一致 */
+  machineId: string
+  projectId: string
+  /** 项目的 Git 副本；null 是主工作树 */
+  copyId: string | null
+  settings: AgentSettings
+  /** 职责说明，每次派活都带上 */
+  instructions: string
+  /** per-task：每项活新开会话；shared：一直用同一个会话 */
+  mode: 'per-task' | 'shared'
+  /** mode=shared 时用的会话 */
+  sharedSessionId: string | null
+  createdAt: number
+}
+
+export interface AgentMember {
+  id: string
+  kind: 'agent'
+  name: string
+  engine: EngineId
+  model: string | null
+  /** 'local' 或 ssh-…（D055） */
+  machineId: string
+  /** 机器显示名 */
+  machine: string
+  /** 项目显示名 */
+  project?: string | null
+  status: ChannelAgentStatus
+  /** 当前任务标题 */
+  task?: string | null
+  /** 当前任务的会话 */
+  sessionId?: string | null
+  /** Phase C：AI 成员属于哪个真人 */
+  ownerId?: string
+  // 以下只有真实数据才有（主进程按任务汇总后推过来）
+  config?: AgentConfig
+  /** 当前任务之外还在排队的活 */
+  queued?: number
+  /** 成员配置有问题（项目不存在等），派活会直接失败 */
+  warning?: string | null
+  /** 最近一项结束的活 */
+  last?: { status: ChannelTaskStatus; at: number } | null
+  /** 最近 30 天 */
+  stats?: { total: number; done: number; failed: number }
+  /** 和这些成员用同一个工作目录（同时改文件可能冲突） */
+  sharesDirWith?: string[]
+}
+
+export type ChannelMember = HumanMember | AgentMember
+
+export interface Channel {
+  id: string
+  name: string
+  topic: string | null
+  /** 默认项目的显示名 */
+  project?: string | null
+  /** 默认项目：添加 AI 成员时预选（只有真实数据有） */
+  projectId?: string | null
+  /** local = 本机 AI 协作；team = 团队频道（Phase C） */
+  scope: 'local' | 'team'
+  memberIds: string[]
+  unread: number
+  /** 未读里有人 @你 */
+  mentioned?: boolean
+  createdAt: number
+  /** 最后一条消息的时间，列表按它排序（只有真实数据有） */
+  lastAt?: number
+}
+
+export type ChannelTaskStatus = 'queued' | 'running' | 'waiting' | 'done' | 'failed' | 'stopped'
+
+interface ChannelMessageBase {
+  id: string
+  channelId: string
+  /** 毫秒时间戳 */
+  at: number
+}
+
+export interface ChannelTextMessage extends ChannelMessageBase {
+  kind: 'message'
+  authorId: string
+  text: string
+  format: 'plain' | 'markdown'
+  replyToId?: string | null
+  mentions?: string[]
+  /** AI 成员发回的任务结果：对应的任务卡 */
+  taskId?: string | null
+}
+
+/** 派给 AI 成员的一项活；状态变化时原地更新，不追加新消息 */
+export interface ChannelTask extends ChannelMessageBase {
+  kind: 'task'
+  authorId: string
+  assigneeId: string
+  title: string
+  status: ChannelTaskStatus
+  sessionId?: string | null
+  summary?: string | null
+  diff?: { added: number; removed: number } | null
+  // 以下只有真实数据才有
+  /** 派活的那条消息 */
+  sourceMessageId?: string
+  /** 第几轮，从 1 开始；追加要求、重试时加 1 */
+  round?: number
+  /** 失败原因（第一行） */
+  error?: string | null
+  /** stopped 的补充：cancelled = 还没开始就取消了 */
+  note?: 'cancelled' | null
+  /** 回复里「需要你决定：」那一行 */
+  decision?: string | null
+  /** 等你确认的请求（waiting 时） */
+  request?: ApprovalRequest | null
+  /** 进行中这一轮的计划进度 */
+  progress?: { done: number; total: number } | null
+  /** 排队中：同一个成员前面还有几项活 */
+  ahead?: number
+  /** 机器断开了，重连后继续跟踪 */
+  disconnected?: boolean
+  /** 这一轮结束的时间 */
+  endedAt?: number | null
+}
+
+export interface ChannelEvent extends ChannelMessageBase {
+  kind: 'event'
+  event: 'joined' | 'added' | 'removed' | 'renamed' | 'topic'
+  actorId: string
+  targetId?: string | null
+  value?: string | null
+}
+
+export type ChannelMessage = ChannelTextMessage | ChannelTask | ChannelEvent
+
+/** 主进程推给渲染层的频道状态（channels:state / channels:changed） */
+export interface ChannelsSnapshot {
+  self: HumanMember
+  channels: Channel[]
+  /** 自己 + 所有 AI 成员（包括不在任何频道里的） */
+  members: ChannelMember[]
+  /** 频道开出来的会话 → 频道名（侧栏、看板上显示 `# 频道名`） */
+  sessionChannels: Record<string, string>
+}
+
+/** channels:message 推送：新消息或任务卡更新 */
+export interface ChannelMessagePush {
+  channelId: string
+  message: ChannelMessage
+}
+
+export interface ChannelInput {
+  name: string
+  topic?: string | null
+  projectId?: string | null
+  /** 新建时加进来的已有 AI 成员 */
+  memberIds?: string[]
+}
+
+/** machineId 由主进程按 projectId 推出来 */
+export type AgentInput = Omit<AgentConfig, 'id' | 'createdAt' | 'sharedSessionId' | 'machineId'> & { id?: string }
+
+export interface PostInput {
+  text: string
+  replyToId?: string | null
+  /** 防止重复发送 */
+  clientId: string
+}
+
+export type ChannelTaskAction = 'cancel' | 'stop' | 'retry'

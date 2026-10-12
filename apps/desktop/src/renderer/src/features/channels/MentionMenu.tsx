@@ -68,6 +68,18 @@ export function MentionMenu({
               <MemberAvatar member={member} size={22} />
               <span className="shrink-0 font-medium text-fg">{member.name}</span>
               {meta && <span className="min-w-0 truncate text-meta text-fg-faint">{meta}</span>}
+              {member.kind === 'agent' && member.config && (
+                <span
+                  className={cn(
+                    'ml-auto shrink-0 text-meta',
+                    member.status === 'waiting' ? 'text-warn' : 'text-fg-faint',
+                  )}
+                >
+                  {member.status === 'running' || member.status === 'waiting'
+                    ? tr('channels.mention.busy', { count: (member.task ? 1 : 0) + (member.queued ?? 0) })
+                    : tr(member.status === 'offline' ? 'channels.status.offline' : 'channels.status.idle')}
+                </span>
+              )}
             </button>
           )
         })}

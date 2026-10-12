@@ -1,13 +1,13 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Hash, Info, UserPlus, Users } from 'lucide-react'
+import { Hash, Info, UserMinus, UserPlus, Users } from 'lucide-react'
 import { Spinner } from '@/ui'
-import type { Channel, ChannelEvent, ChannelMember, ChannelMessage, ChannelTextMessage } from '@/data/types'
+import type { Channel, ChannelEvent, ChannelMember, ChannelMessage } from '@/data/types'
 import { buildTimeline } from './model'
 import { formatDay } from './format'
-import { MessageGroup } from './ChannelMessage'
-import { ChannelTaskCard } from './ChannelTaskCard'
+import { MessageGroup, type Quotable } from './ChannelMessage'
+import { ChannelTaskCard, type TaskCardActions } from './ChannelTaskCard'
 
 /** 离底部这么近时，新消息到来自动跟到底部 */
 const STICK_PX = 80
@@ -18,6 +18,8 @@ function eventText(event: ChannelEvent, name: (id: string | null | undefined) =>
       return tr('channels.event.joined', { name: name(event.actorId) })
     case 'added':
       return tr('channels.event.added', { actor: name(event.actorId), name: name(event.targetId) })
+    case 'removed':
+      return tr('channels.event.removed', { actor: name(event.actorId), name: name(event.targetId) })
     case 'renamed':
       return tr('channels.event.renamed', { actor: name(event.actorId), value: event.value ?? '' })
     case 'topic':
@@ -44,16 +46,21 @@ export function ChannelTimeline({
   members,
   channelMembers,
   newFrom,
+  more,
+  onLoadOlder,
   onReply,
-  onOpenSession,
+  taskActions,
 }: {
   channel: Channel
   messages: readonly ChannelMessage[]
   members: readonly ChannelMember[]
   channelMembers: readonly ChannelMember[]
   newFrom: number | null
+  /** 前面还有更早的消息（正式模式分页） */
+  more?: boolean
+  onLoadOlder?: () => Promise<void>
   onReply: (id: string) => void
-  onOpenSession: (sessionId: string) => void
+  taskActions: TaskCardActions
 }) {
   useI18n()
   const scroller = useRef<HTMLDivElement>(null)
@@ -62,9 +69,23 @@ export function ChannelTimeline({
   const rows = useMemo(() => buildTimeline(messages, { newFrom }), [messages, newFrom])
   const membersById = useMemo(() => new Map(members.map(m => [m.id, m])), [members])
   const messagesById = useMemo(
-    () => new Map(messages.filter((m): m is ChannelTextMessage => m.kind === 'message').map(m => [m.id, m])),
+    () => new Map(messages.filter((m): m is Quotable => m.kind !== 'event').map(m => [m.id, m])),
     [messages],
   )
+  const [loadingOlder, setLoadingOlder] = useState(false)
+  const loadOlder = () => {
+    const el = scroller.current
+    if (!onLoadOlder || !el || loadingOlder) return
+    const from = el.scrollHeight - el.scrollTop
+    setLoadingOlder(true)
+    void onLoadOlder().finally(() => {
+      setLoadingOlder(false)
+      // 读进更早的消息后保持原来看到的位置
+      requestAnimationFrame(() => {
+        if (scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight - from
+      })
+    })
+  }
   const name = (id: string | null | undefined) => (id ? membersById.get(id)?.name : undefined) ?? '?'
   const working = channelMembers.filter(m => m.kind === 'agent' && m.status === 'running')
   const now = Date.now()
@@ -79,13 +100,23 @@ export function ChannelTimeline({
     setHighlight(null)
   }, [channel.id])
 
-  // 新消息：原本就在底部附近，或是自己刚发的，就跟到底部
+  // 新消息：原本就在底部附近，或是自己刚发的，就跟到底部。
+  // 正式模式进入频道后消息才读进来（0 → N 条）：和换频道一样，停在新消息分隔线或底部
+  const lastCount = useRef(messages.length)
   useLayoutEffect(() => {
     const el = scroller.current,
       last = messages[messages.length - 1]
+    const first = lastCount.current === 0
+    lastCount.current = messages.length
+    if (!el) return
+    const divider = first ? el.querySelector<HTMLElement>('[data-new-divider]') : null
+    if (divider) {
+      el.scrollTop = Math.max(0, divider.offsetTop - 24)
+      return
+    }
     const author = last?.kind === 'message' ? membersById.get(last.authorId) : undefined
     const mine = author?.kind === 'human' && !!author.you
-    if (el && (nearBottom.current || mine)) el.scrollTop = el.scrollHeight
+    if (first || nearBottom.current || mine) el.scrollTop = el.scrollHeight
   }, [messages.length])
 
   useEffect(() => {
@@ -125,6 +156,19 @@ export function ChannelTimeline({
           {channel.topic && <p className="text-list text-fg-muted">{channel.topic}</p>}
           {messages.length === 0 && <p className="text-list text-fg-faint">{tr('channels.intro.noMessages')}</p>}
         </header>
+        {more && (
+          <div className="conversation-message mb-2 flex justify-center">
+            <button
+              type="button"
+              onClick={loadOlder}
+              disabled={loadingOlder}
+              className="inline-flex h-7 items-center gap-2 rounded-md px-3 text-meta text-fg-muted hover:bg-hover hover:text-fg disabled:opacity-60"
+            >
+              {loadingOlder && <Spinner size={11} />}
+              {tr('channels.loadOlder')}
+            </button>
+          </div>
+        )}
         {rows.map(row => {
           switch (row.kind) {
             case 'day':
@@ -144,6 +188,8 @@ export function ChannelTimeline({
                 >
                   {row.message.event === 'joined' || row.message.event === 'added' ? (
                     <UserPlus size={13} strokeWidth={1.5} />
+                  ) : row.message.event === 'removed' ? (
+                    <UserMinus size={13} strokeWidth={1.5} />
                   ) : (
                     <Info size={13} strokeWidth={1.5} />
                   )}
@@ -151,14 +197,7 @@ export function ChannelTimeline({
                 </div>
               )
             case 'task':
-              return (
-                <ChannelTaskCard
-                  key={row.key}
-                  task={row.message}
-                  membersById={membersById}
-                  onOpenSession={onOpenSession}
-                />
-              )
+              return <ChannelTaskCard key={row.key} task={row.message} membersById={membersById} {...taskActions} />
             case 'group':
               return (
                 <MessageGroup

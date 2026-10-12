@@ -40,7 +40,7 @@ export class HostQueue {
     if (ctx.changingSessions.has(id)) throw new Error('正在处理这个会话，请稍后重试')
     const rt = m.sessions.runtime(id)
     if (m.guard.isLocked(rt.snapshot.record.cwd)) throw new Error('工作目录正在维护，请稍后重试')
-    if (!statSync(rt.snapshot.record.cwd).isDirectory()) throw new Error('项目目录不存在')
+    if (!statSync(rt.snapshot.record.cwd, { throwIfNoEntry: false })?.isDirectory()) throw new Error('项目目录不存在')
     const v = messageInput(input, rt.snapshot.record, randomUUID)
     if (v.attachments?.length && !ENGINES[rt.snapshot.record.engine].caps.imageInput)
       throw new Error('当前引擎不支持图片输入')

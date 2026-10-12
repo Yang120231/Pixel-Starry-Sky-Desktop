@@ -2,6 +2,7 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { Dot, Spinner, cn } from '@/ui'
 import type { Session } from '@/data'
 import { SessionRow } from './SessionRow'
+import { useSessionChannel } from '@/features/channels/store'
 
 /** 项目下面缩进的会话：文字与项目名对齐 */
 export function SessionItem({
@@ -16,6 +17,8 @@ export function SessionItem({
   useI18n()
   const running = session.status === 'running'
   const unread = session.status === 'unread'
+  // 协作频道派活开出来的会话（docs/ui/channels-phase-b.md §2.4）
+  const channel = useSessionChannel(session.id)
   return (
     <SessionRow
       target={{
@@ -39,7 +42,10 @@ export function SessionItem({
         </>
       }
     >
-      <span className={cn('min-w-0 flex-1 truncate', unread && 'font-semibold text-fg')}>{session.title}</span>
+      <span className={cn('min-w-0 truncate', !channel && 'flex-1', unread && 'font-semibold text-fg')}>
+        {session.title}
+      </span>
+      {channel && <span className="max-w-[45%] shrink-0 truncate text-meta text-fg-faint"># {channel}</span>}
     </SessionRow>
   )
 }

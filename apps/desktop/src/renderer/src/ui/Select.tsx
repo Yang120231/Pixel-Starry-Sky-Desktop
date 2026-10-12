@@ -244,7 +244,7 @@ export function Select<V extends string>({
             id={listId}
             role="listbox"
             aria-label={label}
-            className="pop-in no-drag fixed z-[60] overflow-y-auto rounded-lg border border-line-card bg-popover p-1 shadow-menu"
+            className="pop-in no-drag fixed z-[90] overflow-y-auto rounded-lg border border-line-card bg-popover p-1 shadow-menu"
             style={position}
             onMouseDown={e => e.preventDefault()}
           >

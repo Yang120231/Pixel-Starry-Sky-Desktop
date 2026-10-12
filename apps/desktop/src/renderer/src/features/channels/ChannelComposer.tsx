@@ -1,12 +1,14 @@
 import { useI18n } from '@/i18n/I18nProvider'
-import { tr } from '../../i18n/core'
+import { tr, translateMessage } from '../../i18n/core'
 import { useId, useLayoutEffect, useMemo, useState, type KeyboardEvent, type Ref, type RefObject } from 'react'
 import { ArrowUp, CornerUpLeft, X } from 'lucide-react'
-import { cn, IconButton } from '@/ui'
+import { cn, IconButton, useToast } from '@/ui'
 import { CARD_STYLE } from '@/features/session/Composer'
 import { useComposerDraft } from '@/features/engine/drafts'
 import { isDemo } from '@/data'
-import type { Channel, ChannelMember, ChannelTextMessage } from '@/data/types'
+import type { Channel, ChannelMember } from '@/data/types'
+import type { Quotable } from './ChannelMessage'
+import { channelsLive } from './store'
 import { excerpt, filterMentionable, insertMention, mentionAt } from './model'
 import { MentionMenu } from './MentionMenu'
 
@@ -20,6 +22,7 @@ export function ChannelComposer({
   selfId,
   replyTo,
   replyAuthor,
+  followUp,
   onSend,
   onCancelReply,
   inputRef,
@@ -28,9 +31,12 @@ export function ChannelComposer({
   /** 这个频道的成员 */
   members: readonly ChannelMember[]
   selfId: string | null
-  replyTo: ChannelTextMessage | null
+  replyTo: Quotable | null
   replyAuthor: ChannelMember | undefined
-  onSend: (text: string) => void
+  /** 引用的是任务卡或任务结果：这条消息是给那项活追加要求（docs/ui/channels-phase-b.md §7.1） */
+  followUp: { assignee: string; title: string } | null
+  /** 发出去了才清空输入框；失败时抛出原因 */
+  onSend: (text: string) => Promise<void>
   onCancelReply: () => void
   inputRef: RefObject<HTMLTextAreaElement | null>
 }) {
@@ -48,7 +54,10 @@ export function ChannelComposer({
     [members, mention?.query, mention?.start, selfId],
   )
   const menuOpen = !!mention && dismissed !== mention.start
-  const canSend = value.trim().length > 0
+  const toast = useToast()
+  const [sending, setSending] = useState(false)
+  const canSend = value.trim().length > 0 && !sending
+  const hasAgents = members.some(m => m.kind === 'agent')
 
   // 自动增高，最多 8 行
   useLayoutEffect(() => {
@@ -73,10 +82,15 @@ export function ChannelComposer({
 
   const send = () => {
     if (!canSend) return
+    setSending(true)
     onSend(value)
-    setValue('')
-    setCaret(0)
-    setDismissed(null)
+      .then(() => {
+        setValue('')
+        setCaret(0)
+        setDismissed(null)
+      })
+      .catch(error => toast(tr('channels.composer.sendFailed', { error: translateMessage((error as Error).message) })))
+      .finally(() => setSending(false))
   }
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -122,9 +136,13 @@ export function ChannelComposer({
             <div className="flex min-w-0 items-center gap-2 border-b border-line-subtle py-1 pr-1.5 pl-3 text-meta text-fg-muted">
               <CornerUpLeft size={13} strokeWidth={1.5} className="shrink-0" />
               <span className="shrink-0 font-medium">
-                {tr('channels.replyingTo', { name: replyAuthor?.name ?? '?' })}
+                {followUp
+                  ? tr('channels.followUpTo', { name: followUp.assignee })
+                  : tr('channels.replyingTo', { name: replyAuthor?.name ?? '?' })}
               </span>
-              <span className="min-w-0 flex-1 truncate text-fg-faint">{excerpt(replyTo.text)}</span>
+              <span className="min-w-0 flex-1 truncate text-fg-faint">
+                {excerpt(followUp ? followUp.title : replyTo.kind === 'task' ? replyTo.title : replyTo.text)}
+              </span>
               <IconButton
                 icon={X}
                 label={tr('channels.cancelReply')}
@@ -143,7 +161,10 @@ export function ChannelComposer({
               rows={1}
               value={value}
               aria-label={tr('channels.composer.label')}
-              placeholder={tr('channels.composer.placeholder', { name: channel.name })}
+              placeholder={tr(
+                channelsLive && !hasAgents ? 'channels.composer.placeholderNoAgents' : 'channels.composer.placeholder',
+                { name: channel.name },
+              )}
               role="combobox"
               aria-autocomplete="list"
               aria-expanded={menuOpen}

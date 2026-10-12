@@ -7,6 +7,9 @@ import type {
   ChannelTask,
   ChannelTextMessage,
 } from '@/data/types'
+import { mentionBoundary, parseMentions } from '../../../../shared/channels/mentions'
+
+export { excerpt, parseMentions, splitMentions } from '../../../../shared/channels/mentions'
 
 // ---------------------------------------------------------------------------
 // 时间线
@@ -85,9 +88,6 @@ export function firstUnreadAt(
 
 const MAX_QUERY = 32
 
-/** @ 前面是英文字母、数字或 _ . - 时不算提及（例如邮箱 a@b.com）；中文里「请@某人」「，@某人」都算 */
-const mentionBoundary = (text: string, i: number): boolean => i === 0 || !/[A-Za-z0-9_.-]/.test(text[i - 1])
-
 /** 光标前正在输入的 @提及：@ 前面不能紧跟英文字母 / 数字，@ 到光标之间不能有空白 */
 export function mentionAt(text: string, caret: number): { start: number; query: string } | null {
   for (let i = caret - 1; i >= 0 && caret - i <= MAX_QUERY + 1; i--) {
@@ -108,38 +108,6 @@ export function insertMention(
   const space = /^\s/.test(rest) ? '' : ' '
   const inserted = `@${name}${space}`
   return { text: text.slice(0, range.start) + inserted + rest, caret: range.start + inserted.length + (space ? 0 : 1) }
-}
-
-type MentionSegment = { text: string; memberId?: string }
-
-/** 文本 → 普通片段和 @成员 片段；名字长的优先匹配（「前端助手」不会被「前端」截断），不认识的 @ 当普通文字 */
-export function splitMentions(text: string, members: readonly Pick<ChannelMember, 'id' | 'name'>[]): MentionSegment[] {
-  const byLength = [...members].sort((a, b) => b.name.length - a.name.length)
-  const segments: MentionSegment[] = []
-  let plain = ''
-  let i = 0
-  while (i < text.length) {
-    const atBoundary = text[i] === '@' && mentionBoundary(text, i)
-    const member = atBoundary ? byLength.find(m => m.name && text.startsWith(m.name, i + 1)) : undefined
-    if (member) {
-      if (plain) segments.push({ text: plain })
-      plain = ''
-      segments.push({ text: `@${member.name}`, memberId: member.id })
-      i += member.name.length + 1
-    } else {
-      plain += text[i]
-      i++
-    }
-  }
-  if (plain) segments.push({ text: plain })
-  return segments
-}
-
-/** 文本里提到的成员 id，按出现顺序去重 */
-export function parseMentions(text: string, members: readonly Pick<ChannelMember, 'id' | 'name'>[]): string[] {
-  const ids: string[] = []
-  for (const s of splitMentions(text, members)) if (s.memberId && !ids.includes(s.memberId)) ids.push(s.memberId)
-  return ids
 }
 
 /** @ 菜单的候选：不含自己，按名字或引擎名过滤，AI 成员在前 */
@@ -196,10 +164,4 @@ export function createMessage(input: {
     replyToId: input.replyToId ?? null,
     mentions,
   }
-}
-
-/** 引用条、引用块里的一行摘要 */
-export function excerpt(text: string, max = 80): string {
-  const line = text.replace(/\s+/g, ' ').trim()
-  return line.length > max ? `${line.slice(0, max)}…` : line
 }

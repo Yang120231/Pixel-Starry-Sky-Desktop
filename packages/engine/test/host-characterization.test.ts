@@ -1,6 +1,6 @@
 // EngineHost 特征化测试：补现有 host / queue / session-lifecycle 测试没覆盖的路径。
 // 期望值以当前行为为准（重构前的安全网），不是对行为的规定。
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { EngineInfo, HostEvent, ImageAttachment, SessionSettings, TurnUsage } from '@pixelsky/protocol'
@@ -375,5 +375,17 @@ describe('用量记录写入', () => {
     s.adapter.sessions[0].finish('completed', usage)
     await until(() => thisMonthFile(s.dataDir).length === 1)
     expect(s.host.usageList({ range: 'today', now: Date.now() + 10, filter: {}, offset: 0, limit: 10 }).total).toBe(1)
+  })
+})
+
+describe('发送前检查', () => {
+  it('项目目录被删掉后发送报「项目目录不存在」，不是原始的 ENOENT', async () => {
+    const s = setup()
+    const dir = join(root, 'gone')
+    mkdirSync(dir)
+    const project = s.host.addProject(dir),
+      record = s.host.createSession({ projectId: project.id })
+    rmSync(dir, { recursive: true })
+    await expect(s.host.send(record.id, { text: 'x', clientMessageId: 'x' })).rejects.toThrow('项目目录不存在')
   })
 })
