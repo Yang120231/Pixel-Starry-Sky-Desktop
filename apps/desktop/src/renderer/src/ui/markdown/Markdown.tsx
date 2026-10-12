@@ -5,7 +5,7 @@ import remarkBreaks from 'remark-breaks'
 import remarkGfm from 'remark-gfm'
 import { cn } from '@/ui'
 import { CodeBlock } from '@/ui/code/CodeBlock'
-import { InlineCode, MarkdownLink, PathLinksContext } from './pathLinks'
+import { InlineCode, MarkdownLink, PathLinksContext, keepLocalPaths } from './pathLinks'
 import { Callout, isAlertKind, remarkAlerts } from './alerts'
 import { hasMath, normalizeMath, useMathPlugins, type PluggableList } from './math'
 import type { Element, ElementContent } from 'hast'
@@ -90,7 +90,12 @@ export const Markdown = memo(function Markdown({
     [math],
   )
   const body = (
-    <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={math?.rehype} components={components}>
+    <ReactMarkdown
+      remarkPlugins={remarkPlugins}
+      rehypePlugins={math?.rehype}
+      components={components}
+      urlTransform={keepLocalPaths}
+    >
       {source}
     </ReactMarkdown>
   )

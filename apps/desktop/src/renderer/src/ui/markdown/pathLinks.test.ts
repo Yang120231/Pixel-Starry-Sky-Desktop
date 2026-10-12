@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { linkPathText, maybePath } from './pathLinks'
+import { keepLocalPaths, linkPathText, maybePath } from './pathLinks'
 
 describe('maybePath', () => {
   it('像文件路径的行内代码才去查', () => {
@@ -36,5 +36,19 @@ describe('linkPathText', () => {
     expect(linkPathText('#section')).toBeNull()
     expect(linkPathText('//cdn.example.com/a.js')).toBeNull()
     expect(linkPathText(undefined)).toBeNull()
+  })
+})
+
+describe('keepLocalPaths', () => {
+  it('盘符路径、file: 原样留下，网址按默认放行，其他协议清掉', () => {
+    expect(keepLocalPaths(String.raw`D:\PixelSky\a.png`)).toBe(String.raw`D:\PixelSky\a.png`)
+    // Markdown 解析后 \ 变成 %5C：保留，再还原成和行内代码一样的路径去查
+    expect(keepLocalPaths('D:%5CPixelSky%5Cdocs%5Ca.png')).toBe('D:%5CPixelSky%5Cdocs%5Ca.png')
+    expect(linkPathText('D:%5CPixelSky%5Cdocs%5Ca.png')).toBe(String.raw`D:\PixelSky\docs\a.png`)
+    expect(keepLocalPaths('C:/x/a.ts')).toBe('C:/x/a.ts')
+    expect(keepLocalPaths('file:///D:/x/a.ts')).toBe('file:///D:/x/a.ts')
+    expect(keepLocalPaths('https://example.com/a')).toBe('https://example.com/a')
+    expect(keepLocalPaths('src/a.ts#L3')).toBe('src/a.ts#L3')
+    expect(keepLocalPaths('javascript:alert(1)')).toBe('')
   })
 })

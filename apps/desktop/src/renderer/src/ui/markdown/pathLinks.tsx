@@ -1,6 +1,7 @@
 // 正文里的文件路径链接（docs/ui/content-highlight.md §2 A、F）。这里只定义接口和显示：
 // 判断文件是否存在、怎么打开由 features/files/PathLinksProvider.tsx 注入（ui/ 不读文件）。
 import { createContext, useContext, useEffect, useState, type AnchorHTMLAttributes, type ReactNode } from 'react'
+import { defaultUrlTransform } from 'react-markdown'
 import { cn } from '@/ui'
 
 export interface PathTarget {
@@ -38,7 +39,7 @@ export function linkPathText(href: string | undefined): string | null {
   if (!href || href.startsWith('#') || href.startsWith('//')) return null
   let value = href
   if (/^file:/i.test(value)) value = value.replace(/^file:\/*/i, /^file:\/*[A-Za-z]:/i.test(value) ? '' : '/')
-  else if (/^[a-z][\w+.-]*:/i.test(value) && !/^[A-Za-z]:[\\/]/.test(value)) return null
+  else if (/^[a-z][\w+.-]*:/i.test(value) && !DRIVE.test(value)) return null
   const [rawPath, hash = ''] = value.split('#', 2)
   let path: string
   try {
@@ -50,6 +51,31 @@ export function linkPathText(href: string | undefined): string | null {
   const lines = /^L(\d+)(?:C(\d+))?(?:-L?\d+(?:C\d+)?)?$/.exec(hash)
   if (lines) return `${path}:${lines[1]}${lines[2] ? `:${lines[2]}` : ''}`
   return path
+}
+
+/**
+ * Markdown 链接地址的过滤（react-markdown 的 urlTransform）：默认只放行 http、https、mailto 等，
+ * `D:\a\b.png` 会被当成 D: 协议、`file:///` 不认，地址被清空，链接点了没反应。
+ * 本地路径原样留下（是项目里的文件时在软件里打开，见 MarkdownLink），其余仍按默认过滤。
+ * 解析 Markdown 时地址里的 \ 已经转成 %5C（D:%5Ca%5Cb.png），两种写法都认
+ */
+export function keepLocalPaths(url: string): string {
+  return DRIVE.test(url) || /^file:/i.test(url) ? url : defaultUrlTransform(url)
+}
+
+/** 盘符开头的 Windows 路径：D:\、D:/，或转义过的 D:%5C */
+const DRIVE = /^[A-Za-z]:(?:[\\/]|%5C)/i
+
+/** 本地路径（盘符、file:、/ 开头的绝对路径）：不是项目里的文件时不交给浏览器打开 */
+const isLocalHref = (href: string): boolean => DRIVE.test(href) || /^(?:file:|\/(?!\/))/i.test(href)
+
+/** 提示里显示的路径：把 %5C、中文等转义还原 */
+const readable = (href: string): string => {
+  try {
+    return decodeURIComponent(href)
+  } catch {
+    return href
+  }
 }
 
 /** 文字对应项目里存在的文件时返回目标；还在查、不是路径或没有上下文时为 null */
@@ -119,6 +145,8 @@ export function MarkdownLink({ href, children, ...rest }: AnchorHTMLAttributes<H
         {children}
       </a>
     )
+  // 本地路径但不是项目里的文件（或还在查）：只显示文字，不当网址打开
+  if (href && isLocalHref(href)) return <span title={readable(href)}>{children}</span>
   return (
     <a {...rest} href={href} target="_blank" rel="noreferrer">
       {children}

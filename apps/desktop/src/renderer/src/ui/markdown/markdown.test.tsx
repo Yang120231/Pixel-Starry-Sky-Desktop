@@ -73,3 +73,17 @@ describe('长代码块折叠', () => {
     expect(out).toContain('line 40')
   })
 })
+
+describe('链接地址', () => {
+  it('本地路径的链接保留地址（原来被当成 D: 协议清空、点了没反应）；不是项目里的文件时只显示文字', () => {
+    const out = html(String.raw`[截图](D:\PixelSky\docs\a.png) 和 [文件](file:///D:/x/a.ts)`)
+    expect(out).toContain(String.raw`title="D:\PixelSky\docs\a.png"`)
+    expect(out).toContain('title="file:///D:/x/a.ts"')
+    expect(out).not.toContain('<a')
+  })
+
+  it('网址照常是链接，危险的协议仍被清掉', () => {
+    expect(html('[站点](https://example.com)')).toContain('href="https://example.com"')
+    expect(html('[坏](javascript:alert(1))')).not.toContain('javascript:')
+  })
+})
