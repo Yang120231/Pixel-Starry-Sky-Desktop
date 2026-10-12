@@ -17,6 +17,7 @@ import { isDemo, projects } from '@/data'
 import { useSessionActions } from '@/features/sidebar/SessionActions'
 import { openRightTab } from '@/features/panel/workspaceStore'
 import { useBeginTabDrag } from './drag'
+import { useTabStripScroll } from './tabScroll'
 import { dropProblem, type DropTarget } from './drop'
 
 type TabStatus = 'running' | 'waiting' | 'unread' | 'idle'
@@ -266,6 +267,9 @@ function TabStrip({ leaf, dim, areaSize }: { leaf: Leaf; dim: boolean; areaSize:
   const prev = useRef(new Map<string, number>())
   const seen = useRef(new Set(leaf.tabs))
   const [menu, setMenu] = useState<{ tab: string; x: number; y: number } | null>(null)
+  // 滚轮横向滚、中键 / 空白处拖动平移、当前标签滚进可视区、两头淡出（GitHub #16，tabScroll.ts）
+  const strip = useRef<HTMLDivElement>(null)
+  useTabStripScroll(strip, leaf.active, leaf.tabs)
 
   useLayoutEffect(() => {
     const next = new Map<string, number>()
@@ -285,41 +289,44 @@ function TabStrip({ leaf, dim, areaSize }: { leaf: Leaf; dim: boolean; areaSize:
   }
 
   return (
-    <div
-      data-tab-strip
-      role="tablist"
-      aria-label={tr('panes.PaneView.conversationTabsDragTo')}
-      className={cn(
-        'pane-head-content flex items-center gap-1 overflow-x-auto px-2 pt-1 pb-1.5 [scrollbar-width:none]',
-        dim && 'opacity-55',
-      )}
-    >
-      {leaf.tabs.map(tab => (
-        <Tab
-          key={tab}
-          tab={tab}
-          leafId={leaf.id}
-          active={tab === leaf.active}
-          entering={isNew(tab)}
-          onMenu={(x, y) => setMenu({ tab, x, y })}
-          refCb={el => {
-            if (el) refs.current.set(tab, el)
-            else refs.current.delete(tab)
-          }}
-        />
-      ))}
-      <button
-        type="button"
-        aria-label={tr('panes.PaneView.newConversationInThis')}
-        title={tr('panes.PaneView.newConversationInThis')}
-        onClick={() => {
-          paneActions.focus(leaf.id)
-          paneActions.open(null)
-        }}
-        className="press flex size-7 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-hover hover:text-fg"
+    <div className={cn('pane-head-content flex items-center pr-2', dim && 'opacity-55')}>
+      <div
+        ref={strip}
+        data-tab-strip
+        role="tablist"
+        aria-label={tr('panes.PaneView.conversationTabsDragTo')}
+        className="pane-tab-strip relative flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-2 pt-1 pb-1.5 [scrollbar-width:none]"
       >
-        <Plus size={14} strokeWidth={1.5} />
-      </button>
+        {leaf.tabs.map(tab => (
+          <Tab
+            key={tab}
+            tab={tab}
+            leafId={leaf.id}
+            active={tab === leaf.active}
+            entering={isNew(tab)}
+            onMenu={(x, y) => setMenu({ tab, x, y })}
+            refCb={el => {
+              if (el) refs.current.set(tab, el)
+              else refs.current.delete(tab)
+            }}
+          />
+        ))}
+      </div>
+      {/* 新建按钮固定在标签栏右边，标签多了也不会被挤出去；上下留白和标签栏一样，和标签对齐 */}
+      <span className="flex shrink-0 pt-1 pb-1.5">
+        <button
+          type="button"
+          aria-label={tr('panes.PaneView.newConversationInThis')}
+          title={tr('panes.PaneView.newConversationInThis')}
+          onClick={() => {
+            paneActions.focus(leaf.id)
+            paneActions.open(null)
+          }}
+          className="press flex size-7 items-center justify-center rounded-md text-fg-muted hover:bg-hover hover:text-fg"
+        >
+          <Plus size={14} strokeWidth={1.5} />
+        </button>
+      </span>
       {menu && (
         <TabMenu
           leaf={leaf}
@@ -389,7 +396,7 @@ function Tab({
       onClick={() => paneActions.activate(leafId, tab)}
       onAuxClick={e => e.button === 1 && paneActions.closeTab(leafId, tab)}
       className={cn(
-        'group/tab flex h-7 max-w-[min(36rem,80vw)] shrink-0 cursor-grab touch-none items-center gap-1.5 rounded-md border pr-1 pl-2 text-meta select-none transition-colors',
+        'group/tab flex h-7 max-w-60 shrink-0 cursor-grab touch-none items-center gap-1.5 rounded-md border pr-1 pl-2 text-meta select-none transition-colors',
         active
           ? 'border-line bg-surface text-fg shadow-sm'
           : 'border-transparent text-fg-muted hover:bg-hover hover:text-fg',

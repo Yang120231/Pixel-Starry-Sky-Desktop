@@ -140,3 +140,18 @@
     animation: none;
   }
 }
+
+/* 会话标签栏（tabScroll.ts）：两头还有没露出来的标签时淡出；拖动平移时整条显示抓手 */
+.pane-tab-strip[data-fade-left] {
+  mask-image: linear-gradient(to right, transparent, #000 24px);
+}
+.pane-tab-strip[data-fade-right] {
+  mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+}
+.pane-tab-strip[data-fade-left][data-fade-right] {
+  mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+}
+.pane-tab-strip[data-panning],
+.pane-tab-strip[data-panning] * {
+  cursor: grabbing;
+}
