@@ -204,7 +204,7 @@ export class HostUsage {
   }
 
   /**
-   * 旧的云端记录（没拿到 Sub2api 请求 ID，按 ID 永远查不到）按时间对账号调用补录实扣（docs/ui/usage.md §9.5）。
+   * 旧的云端记录（没拿到 Sub2api 请求 ID，按 ID 永远查不到）按时间对账号调用补录实扣（docs/ui/usage.md §11.2）。
    * 只看 90 天内、10 分钟前结束、还没对过的；对过的（不管对没对上）都标上 costMatch，下次不再读。
    * 返回补上实扣的轮次数。
    */

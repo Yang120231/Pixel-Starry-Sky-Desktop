@@ -4420,9 +4420,13 @@ export const catalog = {
     "zh": "持平",
     "en": "Unchanged"
   },
-  "settings.usage.KpiCards.recordsWithoutReportedCost": {
-    "zh": "{p0} 条未报告费用",
-    "en": "{p0} records without reported cost"
+  "settings.usage.KpiCards.missingCost": {
+    "zh": "{p0} 条没有费用",
+    "en": "{p0} records without a recorded cost"
+  },
+  "settings.usage.Distribution.missingCost": {
+    "zh": "{p0} 条没有费用，分布表切到「费用情况」看原因",
+    "en": "{p0} records without a recorded cost; switch the distribution to Cost status to see why"
   },
   "settings.usage.KpiCards.estimateReportedByEngine": {
     "zh": "引擎报告的估算值",

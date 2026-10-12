@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   cacheHitRate,
+  costState,
   dimValue,
   emptyTotals,
   listRecords,
@@ -177,6 +178,54 @@ describe('summarize', () => {
     const s = summarize([], 'today', {}, NOW)
     expect(s.totals).toEqual(emptyTotals())
     expect(s.totals.costActual).toBeUndefined()
+  })
+})
+
+describe('costState / 费用情况维度（GitHub #22）', () => {
+  const none = { costUsd: null }
+  it('按 route / costSource / costMatch / token 推出没有费用的原因', () => {
+    expect(costState(rec())).toBe('known')
+    expect(costState(rec({ costUsd: 0, route: 'pixelsky', costSource: 'platform' }))).toBe('known')
+    expect(costState(rec({ ...none, route: 'pixelsky', costSource: 'pending' }))).toBe('pending')
+    // 补录对过没对上的 pending 行不再算结算中
+    expect(costState(rec({ ...none, route: 'pixelsky', costSource: 'pending', costMatch: 'none' }))).toBe('platform')
+    expect(costState(rec({ ...none, route: 'pixelsky', costSource: 'unavailable' }))).toBe('platform')
+    // 补录过没对上的 unavailable 行（旧记录在 UsageStore.load 里改成 unavailable，见 engine data-format.test）
+    expect(costState(rec({ ...none, route: 'pixelsky', costSource: 'unavailable', costMatch: 'none' }))).toBe(
+      'platform',
+    )
+    expect(costState(rec({ ...none, route: 'api-key', costSource: 'estimate' }))).toBe('no-price')
+    expect(costState(rec({ ...none, engine: 'codex' }))).toBe('engine')
+    expect(costState(rec({ ...none, route: 'unknown' }))).toBe('engine')
+    const zero = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 }
+    expect(costState(rec({ ...none, ...zero, route: 'api-key' }))).toBe('empty')
+    // 平台线路没收到 token 也可能扣了费，不算「没用到 token」
+    expect(costState(rec({ ...none, ...zero, route: 'pixelsky', costSource: 'unavailable' }))).toBe('platform')
+    expect(costState(rec({ ...none, ...zero, engine: 'codex' }))).toBe('empty')
+    expect(costState(rec({ ...none, ...zero, route: 'pixelsky', costSource: 'pending' }))).toBe('pending')
+    expect(dimValue(rec({ ...none, route: 'api-key' }), 'cost')).toBe('no-price')
+  })
+  const rs = [
+    rec({ id: 'a' }),
+    rec({ id: 'b', ...none, route: 'api-key', model: 'anthropic/claude-v4.1flash' }),
+    rec({ id: 'c', ...none, route: 'api-key', model: 'anthropic/claude-v4.1flash', turnId: 't2' }),
+    rec({ id: 'd', ...none, route: 'pixelsky', costSource: 'unavailable', turnId: 't3' }),
+    rec({ id: 'e', ...none, engine: 'codex', model: 'gpt-5.5', turnId: 't4' }),
+  ]
+  it('分组 cost：各原因条数，没有费用的合计等于 records − costKnown', () => {
+    const s = summarize(rs, 'today', {}, NOW)
+    const by = Object.fromEntries(s.groups.cost.map(g => [g.key, g.records]))
+    expect(by).toEqual({ known: 1, 'no-price': 2, platform: 1, engine: 1 })
+    const missing = s.groups.cost.filter(g => g.key !== 'known').reduce((n, g) => n + g.records, 0)
+    expect(missing).toBe(s.totals.records - s.totals.costKnown)
+  })
+  it('筛选 missing = 所有没有费用的；具体原因可以和别的维度叠加', () => {
+    expect(listRecords(rs, 'today', { cost: 'missing' }, NOW, 0, 10).total).toBe(4)
+    expect(summarize(rs, 'today', { cost: 'missing' }, NOW).totals.costKnown).toBe(0)
+    const p = listRecords(rs, 'today', { cost: 'no-price', model: 'anthropic/claude-v4.1flash' }, NOW, 0, 10)
+    expect(p.records.map(r => r.id).sort()).toEqual(['b', 'c'])
+    expect(summarize(rs, 'today', { cost: 'known' }, NOW).totals.records).toBe(1)
+    expect(listRecords(rs, 'today', { cost: 'platform', engine: 'codex' }, NOW, 0, 10).total).toBe(0)
   })
 })
 

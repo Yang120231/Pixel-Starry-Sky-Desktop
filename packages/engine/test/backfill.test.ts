@@ -87,7 +87,7 @@ const calls = [
 ]
 const turns = [t1, t2, t3, t4].map(r => turnOf([r]))
 
-describe('旧云端记录按时间补录实扣（docs/ui/usage.md §9.5）', () => {
+describe('旧云端记录按时间补录实扣（docs/ui/usage.md §11.2）', () => {
   it('从 token 完全一样的调用量出时钟差', () => {
     expect(clockOffset(turns, calls)).toBeGreaterThanOrEqual(35_000)
     expect(clockOffset(turns, calls)).toBeLessThan(37_000)

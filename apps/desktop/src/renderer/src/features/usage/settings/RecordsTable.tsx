@@ -2,8 +2,16 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../../i18n/core'
 import { ExternalLink } from 'lucide-react'
 import { Button } from '@/ui'
-import { cacheHitRate } from '@/features/usage/aggregate'
-import { dimLabel, formatCost, formatDuration, formatPercent, formatTime, formatTokens } from '@/features/usage/format'
+import { cacheHitRate, costState } from '@/features/usage/aggregate'
+import {
+  costHint,
+  dimLabel,
+  formatDuration,
+  formatPercent,
+  formatRecordCost,
+  formatTime,
+  formatTokens,
+} from '@/features/usage/format'
 import type { UsagePage, UsageRecord } from '@/features/usage/types'
 import { ModelCell, TIME_COL_WIDTH, TimeCell, UsageDetailCard, UsageTable, type UsageColumn } from './UsageTable'
 
@@ -98,7 +106,9 @@ const COLUMNS: Array<UsageColumn<UsageRecord>> = [
     },
     width: 'w-[5.6em]',
     align: 'right',
-    render: r => formatCost(r.costUsd, r.costSource, r.billing),
+    render: r => formatRecordCost(r),
+    // 没有费用时悬停说明原因（GitHub #22）
+    title: r => (r.costUsd === null ? costHint(costState(r)) : undefined),
   },
   {
     key: 'requests',
@@ -180,7 +190,8 @@ function RecordDetail({ r, onOpenSession }: { r: UsageRecord; onOpenSession: (id
         [tr('session.turnStatsData.cacheWrite'), formatTokens(r.cacheWrite)],
         [tr('session.turnStatsData.cacheRead'), formatTokens(r.cacheRead)],
         [tr('session.live.SessionStrips.output'), formatTokens(r.output)],
-        [tr('settings.replyStats.cost'), formatCost(r.costUsd, r.costSource, r.billing)],
+        [tr('settings.replyStats.cost'), formatRecordCost(r)],
+        ...(r.costUsd === null ? [[tr('usageCost.reason'), costHint(costState(r))] as [string, string]] : []),
         [tr('settings.usage.KpiCards.cacheHit'), formatPercent(cacheHitRate(r))],
         [tr('session.live.AgentTracePanel.duration'), formatDuration(r.durationMs)],
         [tr('settings.usage.RecordsTable.started'), new Date(r.startedAt).toLocaleString('zh-CN')],

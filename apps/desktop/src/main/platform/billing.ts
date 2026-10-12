@@ -71,7 +71,7 @@ export async function accountCalls(value: unknown): Promise<RemoteCallPage> {
   return page
 }
 
-/** 这个账号在这段时间的全部调用（旧记录按时间补录实扣用，docs/ui/usage.md §9.5），最多 3000 条 */
+/** 这个账号在这段时间的全部调用（旧记录按时间补录实扣用，docs/ui/usage.md §11.2），最多 3000 条 */
 export async function platformCalls(
   q: { account: string; from: number; to: number },
   signal: AbortSignal,

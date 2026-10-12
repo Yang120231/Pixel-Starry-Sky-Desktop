@@ -41,6 +41,7 @@ describe('account usage summary', () => {
     expect(s.buckets[4]).toMatchObject({ costUsd: 0.5, costKnown: 2, costActual: 2, records: 2, input: 20 })
     expect(s.groups.model.map(r => r.key)).toEqual(['big', 'small'])
     expect(s.groups.project).toEqual([])
+    expect(s.groups.cost).toEqual([])
     expect(s.totals).toMatchObject({ requests: 4, turns: 4, costKnown: 4, costActual: 4 })
     expect(s.prevTotals.requests).toBe(2)
     // 实扣金额不带 ≈ / ≥；空的格子显示 —

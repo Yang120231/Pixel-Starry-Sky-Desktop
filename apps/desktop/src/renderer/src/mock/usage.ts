@@ -128,5 +128,39 @@ export function demoUsageRecords(now: number): UsageRecord[] {
       }
     }
   }
+  records.push(...noCost(today.getTime() - DAY, now))
   return records
+}
+
+/** 几条没有费用的记录，演示「N 条没有费用」和费用情况分布（GitHub #22）：自定义 API 对不上价格、平台账单没对上 */
+function noCost(date: number, now: number): UsageRecord[] {
+  const base = (k: number, model: string, route: UsageRecord['route']) => {
+    const startedAt = Math.min(date + (14 + k) * 3600_000, now - 60_000)
+    return {
+      v: 1 as const,
+      id: `demo-s7:nc-${k}:${model}`,
+      sessionId: 'demo-s7',
+      turnId: `nc-${k}`,
+      startedAt,
+      endedAt: startedAt + 40_000,
+      durationMs: 40_000,
+      sessionTitle: SESSIONS[7].title,
+      project: SESSIONS[7].project,
+      engine: 'claude',
+      model,
+      route,
+      requests: 3,
+      input: 1200 + k * 300,
+      cacheRead: 18_000,
+      cacheWrite: 2000,
+      output: 900,
+      costUsd: null,
+      outcome: 'completed' as const,
+    }
+  }
+  return [
+    { ...base(0, 'anthropic/claude-v4.1flash', 'api-key'), costSource: 'estimate' },
+    { ...base(1, 'anthropic/claude-v4.1flash', 'api-key'), costSource: 'estimate' },
+    { ...base(2, 'claude-sonnet-5-5', 'pixelsky'), costSource: 'unavailable' },
+  ]
 }

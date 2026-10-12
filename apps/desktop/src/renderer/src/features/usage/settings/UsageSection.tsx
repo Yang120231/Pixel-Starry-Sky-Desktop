@@ -7,6 +7,7 @@ import { Button, Segmented, type SegmentedOption } from '@/ui'
 import { useAccount } from '@/features/account'
 import { PAGE_SIZE, useUsage, useUsageActions } from '@/features/usage/source'
 import { remoteCallsAvailable, useRemoteCalls, useRemoteSummary } from '@/features/usage/remote'
+import { COST_MISSING } from '@pixelsky/protocol'
 import { DIMENSION_LABEL, dimLabel } from '@/features/usage/format'
 import type { UsageDimension, UsageFilter, UsageRangeId } from '@/features/usage/types'
 import { SectionTitle } from '../../settings/SettingRow'
@@ -98,7 +99,10 @@ export function UsageSection({ onOpenSession }: { onOpenSession: (sessionId: str
     setConfirmClear(false)
   }
 
-  const chips = Object.entries(filter).filter(([, v]) => v !== undefined) as Array<[UsageDimension, string]>
+  // 账号调用只认模型筛选，别的圆片先不显示（切回本机记录还在）
+  const chips = (Object.entries(filter) as Array<[UsageDimension, string | undefined]>).filter(
+    (e): e is [UsageDimension, string] => e[1] !== undefined && (mode === 'local' || e[0] === 'model'),
+  )
   const empty = mode === 'local' && summary !== null && summary.totals.records === 0
   const accountEmpty = mode === 'account' && rm.page !== null && rm.page.total === 0
 
@@ -209,7 +213,20 @@ export function UsageSection({ onOpenSession }: { onOpenSession: (sessionId: str
           <EmptyState filtered={chips.length > 0} />
         ) : (
           <div className="flex flex-col gap-4">
-            <KpiCards totals={summary.totals} prev={summary.prevTotals} />
+            <KpiCards
+              totals={summary.totals}
+              prev={summary.prevTotals}
+              routes={summary.groups.route}
+              // 没有费用的记录：只看这些，分布表按原因分开（GitHub #22）；旧版远端电脑没有这个维度，不能点
+              onShowMissing={
+                summary.groups.cost
+                  ? () => {
+                      if (filter.cost === undefined) changeFilter({ ...filter, cost: COST_MISSING })
+                      setDim('cost')
+                    }
+                  : undefined
+              }
+            />
             <Panel>
               <UsageChart buckets={summary.buckets} bucket={summary.bucket} />
             </Panel>
@@ -217,7 +234,7 @@ export function UsageSection({ onOpenSession }: { onOpenSession: (sessionId: str
               <Distribution
                 dim={dim}
                 onDim={setDim}
-                rows={summary.groups[dim]}
+                rows={summary.groups[dim] ?? []}
                 activeKey={filter[dim]}
                 onPick={key => changeFilter({ ...filter, [dim]: key })}
               />

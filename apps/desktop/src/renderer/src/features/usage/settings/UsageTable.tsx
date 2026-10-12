@@ -23,7 +23,7 @@ export interface UsageColumn<T> {
   cellClass?: (row: T) => string
   render: (row: T) => ReactNode
   /** 悬停提示（截断时看完整内容） */
-  title?: (row: T) => string
+  title?: (row: T) => string | undefined
 }
 
 const HIDE: Record<NonNullable<UsageColumn<unknown>['hideBelow']>, string> = {

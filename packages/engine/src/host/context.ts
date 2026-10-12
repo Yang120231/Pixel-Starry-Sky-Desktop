@@ -29,7 +29,7 @@ import type { HostUsage } from './usage'
 export interface EngineHostOptions {
   platformCharges?: (settlement: PlatformSettlement, signal: AbortSignal) => Promise<PlatformCharge[]>
   settlementDelays?: number[]
-  /** 这个账号在这段时间的全部调用（旧记录按时间补录实扣用，docs/ui/usage.md §9.5）；账号已切换时抛错 */
+  /** 这个账号在这段时间的全部调用（旧记录按时间补录实扣用，docs/ui/usage.md §11.2）；账号已切换时抛错 */
   platformCalls?: (q: { account: string; from: number; to: number }, signal: AbortSignal) => Promise<RemoteCall[]>
   /** 按项目准备插件 / MCP 配置；返回的临时资源由引擎连接关闭时释放。 */
   extensions?: (record: SessionRecord) => ExtensionLaunch

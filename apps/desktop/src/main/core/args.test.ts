@@ -35,6 +35,15 @@ describe('shared argument checks', () => {
     expect(usageListQuery(null)).toMatchObject({ offset: 0, limit: 50 })
   })
 
+  it('keeps the cost filter only for known values (GitHub #22)', () => {
+    expect(usageQuery({ filter: { cost: 'missing', model: 'm' }, now: 1 }).filter).toEqual({
+      cost: 'missing',
+      model: 'm',
+    })
+    expect(usageQuery({ filter: { cost: 'no-price' }, now: 1 }).filter).toEqual({ cost: 'no-price' })
+    expect(usageQuery({ filter: { cost: 'bogus', route: 'cli' }, now: 1 }).filter).toEqual({ route: 'cli' })
+  })
+
   it('checks artifact references', () => {
     const abs = process.platform === 'win32' ? 'C:\\a\\b.txt' : '/a/b.txt'
     expect(artifactRef({ sessionId: 's', path: abs, itemId: 'i' })).toEqual({ sessionId: 's', path: abs, itemId: 'i' })

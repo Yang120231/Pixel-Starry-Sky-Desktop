@@ -1,6 +1,7 @@
 // 渲染进程 / 远端调用传来的参数校验：本机 IPC 和远端辅助进程共用同一份（docs/restructure.md §8.3 P6）
 import { isAbsolute } from 'node:path'
 import type { UsageQuery } from '@pixelsky/engine'
+import { COST_MISSING, COST_STATES } from '@pixelsky/protocol'
 import type { EngineConfigPatch, EngineId, UsageDimension, UsageFilter, UsageRangeId } from '@pixelsky/protocol'
 
 export { value } from './project-tools/common'
@@ -22,7 +23,9 @@ export function engineId(v: unknown): EngineId {
 }
 
 const RANGES: readonly UsageRangeId[] = ['today', '7d', '30d', '90d']
-const DIMENSIONS: readonly UsageDimension[] = ['model', 'project', 'engine', 'route']
+const DIMENSIONS: readonly UsageDimension[] = ['model', 'project', 'engine', 'route', 'cost']
+/** 费用情况只认这几个值（docs/ui/usage.md §12） */
+const COST_VALUES: readonly string[] = [COST_MISSING, ...COST_STATES]
 
 /** 用量查询参数（docs/ui/usage.md §6.3）：只取认识的字段 */
 export function usageQuery(v: unknown): UsageQuery {
@@ -31,6 +34,7 @@ export function usageQuery(v: unknown): UsageQuery {
   const filter: UsageFilter = {}
   const raw = (q.filter ?? {}) as Record<string, unknown>
   for (const d of DIMENSIONS) if (typeof raw[d] === 'string') filter[d] = raw[d] as string
+  if (filter.cost !== undefined && !COST_VALUES.includes(filter.cost)) delete filter.cost
   const now = typeof q.now === 'number' && Number.isFinite(q.now) ? q.now : Date.now()
   return { range, filter, now }
 }

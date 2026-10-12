@@ -50,7 +50,7 @@ export function toUsageSummary(remote: RemoteUsageSummary, range: UsageRangeId, 
     prevTotals: statTotals(remote.prevTotal),
     bucket: grid.bucket,
     buckets,
-    groups: { model: models, project: [], engine: [], route: [] },
+    groups: { model: models, project: [], engine: [], route: [], cost: [] },
   }
 }
 

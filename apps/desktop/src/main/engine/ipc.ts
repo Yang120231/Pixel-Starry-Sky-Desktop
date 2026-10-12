@@ -155,7 +155,7 @@ export async function initEngine(ctx: AppContext): Promise<void> {
 }
 
 /**
- * 旧的云端记录按时间补录实扣（docs/ui/usage.md §9.5）：登录状态下启动后 30 秒跑一次，
+ * 旧的云端记录按时间补录实扣（docs/ui/usage.md §11.2）：登录状态下启动后 30 秒跑一次，
  * 之后每换一次登录账号再跑一次；失败只记日志，下次启动再试
  */
 function backfillAfterSignIn(h: EngineHost): void {

@@ -1,6 +1,7 @@
-import { tr, getLocale } from '../../i18n/core'
+import { tr, getLocale, type TranslationKey } from '../../i18n/core'
 // 用量相关的数字格式（docs/ui/usage.md）：「不知道」显示「—」，估算加「≈」，有缺失加「≥」
-import type { UsageDimension, UsageRoute, UsageTotals } from './types'
+import { costState, type CostState } from '@pixelsky/protocol'
+import type { UsageDimension, UsageGroupRow, UsageRecord, UsageRoute, UsageTotals } from './types'
 
 /** 1234 → 1.2k，3456789 → 3.5M */
 export function formatTokens(n: number): string {
@@ -27,6 +28,45 @@ export function formatCost(
     return `${billing === 'subscription' ? tr('billing.subscription') + ' ' : ''}${actualMoney(usd)}`
   if (usd > 0 && usd < 0.01) return '≈ <$0.01'
   return `≈ $${usd.toFixed(2)}`
+}
+
+/** 明细里一条记录的费用：没有费用时按原因显示（结算中 / 「—」），见 costState */
+export function formatRecordCost(r: UsageRecord): string {
+  const state = costState(r)
+  if (state === 'pending') return tr('billing.pending')
+  if (state !== 'known') return '—'
+  return formatCost(r.costUsd, r.costSource, r.billing)
+}
+
+/** 费用情况（docs/ui/usage.md §12）：短名 + 一句说明；'missing' 是「所有没有费用的」 */
+const COST_TEXT: Record<CostState | 'missing', [TranslationKey, TranslationKey]> = {
+  missing: ['usageCost.missing', 'usageCost.missingHint'],
+  known: ['usageCost.known', 'usageCost.knownHint'],
+  pending: ['usageCost.pending', 'usageCost.pendingHint'],
+  empty: ['usageCost.empty', 'usageCost.emptyHint'],
+  platform: ['usageCost.platform', 'usageCost.platformHint'],
+  'no-price': ['usageCost.noPrice', 'usageCost.noPriceHint'],
+  engine: ['usageCost.engine', 'usageCost.engineHint'],
+}
+
+/** 费用情况的说明（分布表、明细里的悬停提示）；不认识的值返回空串 */
+export function costHint(key: string): string {
+  const t = COST_TEXT[key as CostState]
+  return t ? tr(t[1]) : ''
+}
+
+/**
+ * 费用卡副标题写什么：有没有费用的记录 → missing（可以点开）；全是实扣 → actual；
+ * 有费用的全是自定义 API 按官方价格估算 → official；其余 → engine（引擎报告的估算值）
+ */
+export function costSubtitle(
+  t: Pick<UsageTotals, 'costKnown' | 'records' | 'costActual'>,
+  routes?: Array<Pick<UsageGroupRow, 'key' | 'costKnown'>>,
+): 'missing' | 'actual' | 'official' | 'engine' {
+  if (t.costKnown < t.records) return 'missing'
+  if (t.costKnown > 0 && t.costActual === t.costKnown) return 'actual'
+  if (t.costKnown > 0 && routes?.every(r => r.costKnown === 0 || r.key === 'api-key')) return 'official'
+  return 'engine'
 }
 
 /** 合计费用：一条都不知道 → 「—」；部分不知道 → 「≥」 */
@@ -85,6 +125,9 @@ export const DIMENSION_LABEL: Record<UsageDimension, string> = {
   get route() {
     return tr('session.ModelSourceMenu.route')
   },
+  get cost() {
+    return tr('usageCost.dimension')
+  },
 }
 
 const ROUTE_LABEL: Record<UsageRoute, string> = {
@@ -109,6 +152,10 @@ export function dimLabel(dim: UsageDimension, key: string): string {
   if (dim === 'route') return ROUTE_LABEL[key as UsageRoute] ?? key
   if (dim === 'engine') return ENGINE_LABEL[key] ?? key
   if (dim === 'project') return key || tr('usage.format.noProject')
+  if (dim === 'cost') {
+    const t = COST_TEXT[key as CostState]
+    return t ? tr(t[0]) : key
+  }
   return key
 }
 

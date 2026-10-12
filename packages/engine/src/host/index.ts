@@ -421,7 +421,7 @@ export class EngineHost {
     return this.m.usage.usageSummary(q)
   }
 
-  /** 旧的云端记录按时间补录实扣（docs/ui/usage.md §9.5）；返回补上的轮次数 */
+  /** 旧的云端记录按时间补录实扣（docs/ui/usage.md §11.2）；返回补上的轮次数 */
   backfillPlatformCosts(account: string, signal: AbortSignal): Promise<number> {
     return this.m.usage.backfillPlatformCosts(account, signal)
   }

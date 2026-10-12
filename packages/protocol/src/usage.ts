@@ -31,7 +31,7 @@ export interface UsageRecord {
   /** 引擎报告的费用（美元）；不报告时为 null */
   costUsd: number | null
   /**
-   * 旧的云端记录没有请求 ID 对不上实扣，事后按时间对账号调用补录（docs/ui/usage.md §9.5）：
+   * 旧的云端记录没有请求 ID 对不上实扣，事后按时间对账号调用补录（docs/ui/usage.md §11.2）：
    * 'time' = 按时间对上，金额是实扣；'none' = 对过但没对上，不再重试
    */
   costMatch?: 'time' | 'none'
@@ -39,10 +39,34 @@ export interface UsageRecord {
 }
 
 export type UsageRangeId = 'today' | '7d' | '30d' | '90d'
-export type UsageDimension = 'model' | 'project' | 'engine' | 'route'
+export type UsageDimension = 'model' | 'project' | 'engine' | 'route' | 'cost'
 
-/** 筛选条件：每个维度一个值，可以叠加 */
+/** 筛选条件：每个维度一个值，可以叠加；费用情况（cost）多一个值 'missing' = 所有没有费用的记录 */
 export type UsageFilter = Partial<Record<UsageDimension, string>>
+
+/**
+ * 费用情况（docs/ui/usage.md §12，GitHub #22）：没有费用的记录为什么没有。
+ * 不写盘，读取时从 route / costSource / costMatch / token 推出来，旧记录也能归类。
+ * - known：有费用
+ * - pending：平台线路等结算（补录对过没对上的不算，见 platform）
+ * - empty：没用到 token（一开始就中断或出错）；平台线路不算这个（平台可能照样扣了费），归 platform
+ * - platform：平台线路在账单里没对上（重试完没查到、旧记录还没补录、补录没对上）；不拿估算代替（D052）
+ * - no-price：自定义 API 的模型对不上官方价格，也没选计价参照
+ * - engine：引擎没报费用（例如 Codex）
+ */
+export type CostState = 'known' | 'pending' | 'empty' | 'platform' | 'no-price' | 'engine'
+export const COST_STATES: readonly CostState[] = ['known', 'pending', 'empty', 'platform', 'no-price', 'engine']
+/** 费用情况筛选里「所有没有费用的记录」 */
+export const COST_MISSING = 'missing'
+
+export function costState(r: UsageRecord): CostState {
+  if (r.costUsd !== null) return 'known'
+  if (r.route === 'pixelsky' && r.costSource === 'pending' && r.costMatch !== 'none') return 'pending'
+  if (r.route === 'pixelsky') return 'platform'
+  if (totalTokens(r) === 0) return 'empty'
+  if (r.route === 'api-key') return 'no-price'
+  return 'engine'
+}
 
 export interface UsageTotals {
   /** Known charges supplied by the platform, without estimation. */
@@ -146,7 +170,8 @@ function add(t: UsageTotals, r: UsageRecord, turns: Set<string>): void {
 
 function matches(r: UsageRecord, filter: UsageFilter): boolean {
   for (const [dim, value] of Object.entries(filter) as Array<[UsageDimension, string | undefined]>) {
-    if (value !== undefined && dimValue(r, dim) !== value) return false
+    if (value === undefined) continue
+    if (dim === 'cost' && value === COST_MISSING ? r.costUsd !== null : dimValue(r, dim) !== value) return false
   }
   return true
 }
@@ -154,6 +179,7 @@ function matches(r: UsageRecord, filter: UsageFilter): boolean {
 /** 记录在某个维度上的值；项目为空时归为「未归属项目」 */
 export function dimValue(r: UsageRecord, dim: UsageDimension): string {
   if (dim === 'project') return r.project ?? ''
+  if (dim === 'cost') return costState(r)
   return r[dim]
 }
 
@@ -189,6 +215,7 @@ export function summarize(records: UsageRecord[], range: UsageRangeId, filter: U
     project: new Map(),
     engine: new Map(),
     route: new Map(),
+    cost: new Map(),
   }
 
   for (const r of records) {
@@ -228,6 +255,7 @@ export function summarize(records: UsageRecord[], range: UsageRangeId, filter: U
       project: sortRows(groupMaps.project),
       engine: sortRows(groupMaps.engine),
       route: sortRows(groupMaps.route),
+      cost: sortRows(groupMaps.cost),
     },
   }
 }

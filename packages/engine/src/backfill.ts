@@ -1,4 +1,4 @@
-// 旧云端记录补录实扣（docs/ui/usage.md §9.5）：桌面端 0.2.8 以前没拿到 Sub2api 的请求 ID，
+// 旧云端记录补录实扣（docs/ui/usage.md §11.2）：桌面端 0.2.8 以前没拿到 Sub2api 的请求 ID，
 // 这些轮次按 ID 永远查不到实扣，只能按时间把账号调用对回到轮次上。纯函数，HostUsage 负责读写。
 import type { BillingSource, RemoteCall, UsageRecord } from '@pixelsky/protocol'
 
