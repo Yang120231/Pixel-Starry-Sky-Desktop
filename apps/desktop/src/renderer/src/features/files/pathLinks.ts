@@ -29,9 +29,11 @@ function namesIn(ref: WorkspaceRef, dir: string, windows: boolean): Promise<Set<
     cached = listings.get(key)
   if (cached && Date.now() - cached.at < LIST_TTL) return cached.names
   const names = window
-    .pixelsky!.files.list(ref, dir)
-    .then(
-      list => new Set(list.entries.filter(e => e.kind === 'file').map(e => (windows ? e.name.toLowerCase() : e.name))),
+    .pixelsky!.files.listExisting(ref, dir)
+    .then(list =>
+      list
+        ? new Set(list.entries.filter(e => e.kind === 'file').map(e => (windows ? e.name.toLowerCase() : e.name)))
+        : null,
     )
     .catch(() => null)
   listings.set(key, { at: Date.now(), names })

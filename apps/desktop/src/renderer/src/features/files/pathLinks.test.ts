@@ -4,14 +4,19 @@ vi.mock('@/features/machines/store', () => ({ machineOf: () => 'local' }))
 
 // 项目根目录 D:/repo（会话的工作目录也是它），只有 src/a.ts 和 README.md 两个文件
 const files: Record<string, string[]> = { '': ['README.md'], src: ['a.ts'] }
-const list = vi.fn(async (_ref: unknown, dir: string) => ({
-  entries: (files[dir] ?? []).map(name => ({ name, path: dir ? `${dir}/${name}` : name, kind: 'file' })),
-  truncated: false,
-}))
+// 目录不存在时 listExisting 返回 null，不报错（报错的话主进程会把每一次都记成 ERROR）
+const list = vi.fn(async (_ref: unknown, dir: string) =>
+  files[dir]
+    ? {
+        entries: files[dir].map(name => ({ name, path: dir ? `${dir}/${name}` : name, kind: 'file' })),
+        truncated: false,
+      }
+    : null,
+)
 vi.stubGlobal('window', {
   pixelsky: {
     platform: 'win32',
-    files: { target: async () => ({ path: 'D:\\repo' }), list },
+    files: { target: async () => ({ path: 'D:\\repo' }), listExisting: list },
   },
 })
 
@@ -30,6 +35,7 @@ describe('workspaceFilePath', () => {
   it('不存在、在项目外的为 null', async () => {
     const ref = { sessionId: 's2' }
     expect(await workspaceFilePath(ref, 'src/missing.ts')).toBeNull()
+    expect(await workspaceFilePath(ref, 'not/created/yet.ts')).toBeNull()
     expect(await workspaceFilePath(ref, '../other/a.ts')).toBeNull()
     expect(await workspaceFilePath(ref, 'C:/elsewhere/a.ts')).toBeNull()
   })

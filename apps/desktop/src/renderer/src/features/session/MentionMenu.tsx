@@ -25,7 +25,7 @@ export function useMentionEntries(
       try {
         entries = name
           ? rankEntries((await files.search(ref, name)).entries, dir, name)
-          : (await files.list(ref, dir)).entries.slice(0, MENTION_LIMIT)
+          : ((await files.listExisting(ref, dir))?.entries.slice(0, MENTION_LIMIT) ?? [])
       } catch {
         // 目录不存在、远端断开：当作没有匹配
       }

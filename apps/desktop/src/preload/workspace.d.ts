@@ -11,6 +11,8 @@ import type {
 export interface FilesBridge {
   target(ref: WorkspaceRef): Promise<WorkspaceTarget>
   list(ref: WorkspaceRef, path: string): Promise<DirectoryListing>
+  /** 同 list，目录不存在时返回 null 而不是报错（路径链接、@ 菜单问一下有没有用） */
+  listExisting(ref: WorkspaceRef, path: string): Promise<DirectoryListing | null>
   search(ref: WorkspaceRef, name: string): Promise<DirectoryListing>
   /** 内容搜索（docs/ui/files-search-terminal-pins.md §2） */
   grep(ref: WorkspaceRef, query: string): Promise<GrepResult>

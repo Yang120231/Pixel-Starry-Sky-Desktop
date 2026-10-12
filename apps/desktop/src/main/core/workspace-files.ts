@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process'
 import { lstat, mkdir, readdir, realpath, stat, open, rename, unlink } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep, extname } from 'node:path'
-import { codedError } from '@pixelsky/protocol'
+import { codedError, parseCodedError } from '@pixelsky/protocol'
 import { grepWorkspace } from './workspace-grep'
 import type {
   DirectoryListing,
@@ -249,6 +249,19 @@ export class WorkspaceFiles {
       }),
     )
     return { entries, truncated: all.length > PAGE_LIMIT }
+  }
+
+  /**
+   * 同 list，但目录不存在时返回 null、不报错：对话和终端里的路径链接、输入框的 @ 菜单只是问一下有没有，
+   * 不存在是常事。报错的话 Electron 会把每一次都当错误打到控制台、进日志（ERROR console … files.notFound）
+   */
+  async listExisting(ref: WorkspaceRef, path: string): Promise<DirectoryListing | null> {
+    try {
+      return await this.list(ref, path)
+    } catch (err) {
+      if (parseCodedError(err instanceof Error ? err.message : null)?.code === 'files.notFound') return null
+      throw err
+    }
   }
 
   async search(ref: WorkspaceRef, name: string): Promise<DirectoryListing> {

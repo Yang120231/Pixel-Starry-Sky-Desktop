@@ -180,6 +180,7 @@ const update: UpdateBridge = {
 const files: FilesBridge = {
   target: ref => call('files:target', ref),
   list: (ref, path) => call('files:list', ref, path),
+  listExisting: (ref, path) => call('files:list', ref, path, true),
   search: (ref, name) => call('files:search', ref, name),
   grep: (ref, query) => call('files:grep', ref, query),
   create: (ref, path, kind) => call('files:create', ref, path, kind),

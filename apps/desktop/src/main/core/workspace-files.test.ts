@@ -31,6 +31,14 @@ describe('项目文件', () => {
     expect((await service.list(ref, '')).entries.map(e => e.path)).toEqual(['src', 'README.md'])
     expect((await service.search(ref, 'main')).entries).toMatchObject([{ path: 'src/main.ts', kind: 'file' }])
   })
+  it('只问有没有（路径链接、@ 菜单）：目录不存在返回 null、不报错；其他错误照常报', async () => {
+    await mkdir(join(root, 'src'))
+    await writeFile(join(root, 'src', 'main.ts'), '')
+    expect((await service.listExisting(ref, 'src'))?.entries.map(e => e.path)).toEqual(['src/main.ts'])
+    expect(await service.listExisting(ref, 'not/created/yet')).toBeNull()
+    await expect(service.list(ref, 'not/created/yet')).rejects.toThrow('files.notFound')
+    await expect(service.listExisting(ref, '../outside')).rejects.toThrow('files.outsideProject')
+  })
   it('保存保留 UTF-8 BOM 和 CRLF；过期版本及同时保存不覆盖', async () => {
     const file = join(root, '文本 & 文件.txt')
     await writeFile(file, Buffer.concat([Buffer.from([239, 187, 191]), Buffer.from('旧内容\r\n')]))
