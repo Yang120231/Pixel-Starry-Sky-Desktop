@@ -134,13 +134,15 @@ export const sessionMessages = {
   'session.live.tool.ReadMcpResourceTool': { zh: '读取 MCP 资源', en: 'Read MCP resource' },
   'session.live.viewedImages': { zh: '{n} 张图片', en: '{n} images' },
   // 推理强度那几项的默认值（GitHub #6，docs/ui/engine-settings-redesign.md §3.2）
-  'effortDefaults.default': { zh: '默认 {p0}', en: 'Default {p0}' },
-  'effortDefaults.temporary': { zh: '仅本会话', en: 'This session only' },
+  'effortDefaults.temporary': { zh: '仅本会话', en: 'Session only' },
   'effortDefaults.temporaryHint': {
     zh: '和新会话的默认值不同，只影响这个会话',
     en: 'Differs from the new-session default and only affects this session',
   },
   'effortDefaults.reset': { zh: '恢复成默认', en: 'Reset to default' },
+  'effortDefaults.resetTo': { zh: '恢复成默认（{p0}）', en: 'Reset to default ({p0})' },
+  // 滑块上新会话默认档位下面的小字
+  'effortDefaults.marker': { zh: '默认', en: 'Default' },
   'effortDefaults.save': { zh: '设为默认', en: 'Set as default' },
   'effortDefaults.saveHint': {
     zh: '把推理强度和下面的开关记成 {p0} 新会话的默认值',

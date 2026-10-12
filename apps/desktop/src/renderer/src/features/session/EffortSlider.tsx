@@ -37,6 +37,7 @@ export function EffortSlider({
   onChange,
   disabled = false,
   accent = '',
+  defaultEffort = null,
 }: {
   efforts: readonly Effort[]
   /** 当前强度；null（引擎默认）时圆点停在第一档之前的位置 = 第一档 */
@@ -45,6 +46,8 @@ export function EffortSlider({
   disabled?: boolean
   /** 引擎品牌色（CSS 值），空字符串时用正文色（和 JuCode 一致） */
   accent?: string
+  /** 新会话的默认档位：在它的档位名下面写一行小字「默认」（不在档位里时不写） */
+  defaultEffort?: Effort | null
 }) {
   useI18n()
   const rail = useRef<HTMLDivElement>(null)
@@ -55,6 +58,7 @@ export function EffortSlider({
   const last = Math.max(1, count - 1)
   const pct = (i: number) => (count > 1 ? (i / last) * 100 : 0)
   const top = count > 1 && shown === count - 1
+  const defaultIdx = defaultEffort ? efforts.indexOf(defaultEffort) : -1
 
   const commit = (i: number) => {
     const e = efforts[i]
@@ -138,6 +142,16 @@ export function EffortSlider({
           </button>
         ))}
       </div>
+      {defaultIdx >= 0 && (
+        <div className="relative mx-[15px] h-3.5" data-effort-default={efforts[defaultIdx]}>
+          <span
+            className="absolute -translate-x-1/2 text-[10px] leading-3.5 whitespace-nowrap text-fg-faint"
+            style={{ left: `${pct(defaultIdx)}%` }}
+          >
+            {tr('effortDefaults.marker')}
+          </span>
+        </div>
+      )}
     </div>
   )
 }

@@ -136,7 +136,7 @@ export function EffortMenu({ live }: { live: ComposerController }) {
     if (diff.includes('thinkingSummaries')) live.setThinkingSummaries(d.thinkingSummaries)
   }
   const hasSwitches = ultracodeSupported || live.fastSupported || live.thinkingSupported
-  // 开启的会话开关同步显示在按钮上：Ultracode 用紫色文字，Fast / 思考摘要用强调色图标。
+  // 开启的会话开关同步显示在按钮上，都用图标：Ultracode 紫色 ✦，Fast / 思考摘要强调色；名字在悬停提示里。
   const fastOn = live.fastSupported && live.fast
   const thinkingOn = live.thinkingSupported && live.thinkingSummaries
   const modes = [
@@ -166,14 +166,9 @@ export function EffortMenu({ live }: { live: ComposerController }) {
         <span key={effort ?? ''} className={cn(top && 'effort-max')} style={accentStyle}>
           {effortLabel(effort)}
         </span>
-        {ultracode && (
-          <>
-            <span className="text-fg-muted">·</span>
-            <span className="effort-max ultracode-glow">Ultracode</span>
-          </>
-        )}
-        {(fastOn || thinkingOn) && (
+        {(ultracode || fastOn || thinkingOn) && (
           <span className="flex items-center gap-0.5 text-accent" aria-hidden>
+            {ultracode && <Sparkles size={13} strokeWidth={1.75} className="text-ultracode" />}
             {fastOn && <Zap size={13} strokeWidth={1.75} />}
             {thinkingOn && <Brain size={13} strokeWidth={1.75} />}
           </span>
@@ -181,11 +176,13 @@ export function EffortMenu({ live }: { live: ComposerController }) {
         <ChevronDown size={14} strokeWidth={1.5} className="text-fg-muted" />
       </button>
       <Popover open={open} onClose={() => setOpen(false)} className="right-0 bottom-full mb-2 w-80 p-3">
-        <div className="mb-3 flex h-6 items-center gap-2">
-          <span className="text-ui text-fg-secondary">{tr('session.Composer.reasoningEffort')}</span>
+        <div className="mb-3 flex h-6 min-w-0 items-center gap-2">
+          <span className="shrink-0 text-ui whitespace-nowrap text-fg-secondary">
+            {tr('session.Composer.reasoningEffort')}
+          </span>
           <span
             key={effort ?? ''}
-            className={cn('text-ui font-semibold text-fg', top && 'effort-max')}
+            className={cn('shrink-0 text-ui font-semibold whitespace-nowrap text-fg', top && 'effort-max')}
             style={accentStyle}
           >
             {effortLabel(effort)}
@@ -194,18 +191,15 @@ export function EffortMenu({ live }: { live: ComposerController }) {
             <span
               data-effort-temporary
               title={tr('effortDefaults.temporaryHint')}
-              className="rounded-sm bg-subtle px-1.5 text-label leading-5 text-fg-muted"
+              className="min-w-0 truncate rounded-sm bg-subtle px-1.5 text-label leading-5 text-fg-muted"
             >
               {tr('effortDefaults.temporary')}
             </span>
           )}
           <span className="flex-1" />
-          <span className="text-meta text-fg-faint" data-effort-default>
-            {tr('effortDefaults.default', { p0: effortLabel(d.effort) })}
-          </span>
           <IconButton
             icon={RotateCcw}
-            label={tr('effortDefaults.reset')}
+            label={d.effort ? tr('effortDefaults.resetTo', { p0: effortLabel(d.effort) }) : tr('effortDefaults.reset')}
             size={24}
             iconSize={14}
             disabled={!differs}
@@ -215,7 +209,13 @@ export function EffortMenu({ live }: { live: ComposerController }) {
         </div>
         {/* 引擎目录说这个模型没有强度档位（例如 Haiku 4.5）：不画空滑块，只给一句说明 */}
         {efforts.length > 0 ? (
-          <EffortSlider efforts={efforts} effort={effort} onChange={live.setEffort} accent={accent} />
+          <EffortSlider
+            efforts={efforts}
+            effort={effort}
+            onChange={live.setEffort}
+            accent={accent}
+            defaultEffort={d.effort}
+          />
         ) : (
           <p className="text-meta text-fg-muted">{tr('session.ComposerMenus.modelHasNoEffortLevels')}</p>
         )}
