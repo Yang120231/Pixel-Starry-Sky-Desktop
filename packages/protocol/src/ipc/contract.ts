@@ -55,6 +55,7 @@ export const IPC_CONTRACT = {
   'account:login': { kind: 'invoke', route: 'local', trust: 'sender' },
   'account:logout': { kind: 'invoke', route: 'local', trust: 'sender' },
   'account:refresh': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'account:summary': { kind: 'invoke', route: 'local', trust: 'sender' },
   'app:config': { kind: 'sendSync', route: 'local', trust: 'none' },
   'app:info': { kind: 'invoke', route: 'local', trust: 'sender' },
   'app:open': { kind: 'invoke', route: 'local', trust: 'sender' },

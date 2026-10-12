@@ -40,6 +40,7 @@ const config = sendSync('app:config') as { demo: boolean }
 // 账号登录与额度：所有网络请求都在主进程，这里只转发 IPC（规格见 docs/ui/account.md §4.2）
 const account: AccountBridge = {
   listCalls: query => invoke('account:calls', query),
+  summary: query => invoke('account:summary', query),
   getState: () => invoke('account:get'),
   login: () => invoke('account:login'),
   cancelLogin: () => invoke('account:cancel'),

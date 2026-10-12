@@ -12,16 +12,21 @@ const DIM_OPTIONS: Array<SegmentedOption<UsageDimension>> = (['model', 'project'
   }),
 )
 
-/** 分布表：按模型 / 项目 / 引擎 / 线路切换；点一行把它加为筛选条件 */
+/**
+ * 分布表：按模型 / 项目 / 引擎 / 线路切换；点一行把它加为筛选条件。
+ * 账号调用（account）只有按模型一个维度，不显示切换；最后一列是请求数。
+ */
 export function Distribution({
   dim,
   onDim,
   rows,
   activeKey,
   onPick,
+  account = false,
 }: {
   dim: UsageDimension
   onDim: (d: UsageDimension) => void
+  account?: boolean
   rows: UsageGroupRow[]
   /** 这个维度当前的筛选值（有筛选时只剩这一行） */
   activeKey: string | undefined
@@ -33,12 +38,14 @@ export function Distribution({
     <div className="@container min-w-0">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h4 className="text-ui font-medium text-fg">{tr('settings.usage.Distribution.distribution')}</h4>
-        <Segmented
-          label={tr('settings.usage.Distribution.distributionDimension')}
-          options={DIM_OPTIONS}
-          value={dim}
-          onChange={onDim}
-        />
+        {!account && (
+          <Segmented
+            label={tr('settings.usage.Distribution.distributionDimension')}
+            options={DIM_OPTIONS}
+            value={dim}
+            onChange={onDim}
+          />
+        )}
       </div>
       {rows.length === 0 ? (
         <p className="py-4 text-center text-meta text-fg-faint">{tr('settings.usage.Distribution.noData')}</p>
@@ -54,7 +61,7 @@ export function Distribution({
               </th>
               <th className="w-[15%] pb-2 text-right font-normal">{tr('settings.replyStats.cost')}</th>
               <th className="w-[10%] pb-2 text-right font-normal @max-[520px]:hidden">
-                {tr('settings.usage.Distribution.turns')}
+                {account ? tr('settings.usage.Distribution.requests') : tr('settings.usage.Distribution.turns')}
               </th>
             </tr>
           </thead>

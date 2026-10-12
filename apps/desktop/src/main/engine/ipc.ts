@@ -13,7 +13,9 @@ import { nativeText } from '../app/ui-language'
 import { EngineHost } from '@pixelsky/engine'
 import type { HostEvent, SessionRecord } from '@pixelsky/protocol'
 import type { AppContext } from '../app/context'
-import { platformCharges, accountCalls } from '../platform/billing'
+import { platformCalls, platformCharges, accountCalls, accountSummary } from '../platform/billing'
+import { onAccountChange, signedInEmail } from '../account/account'
+import { logger } from '@pixelsky/engine'
 import { initPlatform, validateQueuedInput } from '../platform/platform'
 import { initProviders } from '../providers/providers'
 import { initAi } from '../ai/ipc'
@@ -68,9 +70,11 @@ export async function initEngine(ctx: AppContext): Promise<void> {
         : null,
     extensions: record => extensions.prepare(record),
     platformCharges,
+    platformCalls,
     latestVersion: npmLatest,
   })
   ctx.engine = h
+  backfillAfterSignIn(h)
   // 引擎有新版本时设置 › 本机引擎提示「更新」（docs/ui/engine-update.md）
   scheduleEngineUpdateChecks(() => h.checkEngineUpdates())
   const machines = await initMachines(ctx, h, sessionEnv)
@@ -86,6 +90,7 @@ export async function initEngine(ctx: AppContext): Promise<void> {
   }
 
   handle('account:calls', (_e, query) => accountCalls(query))
+  handle('account:summary', (_e, query) => accountSummary(query))
   // 搜索 / 产物扫描按窗口分桶；窗口关闭时中止它还没跑完的查询
   const searches = new SearchRegistry(),
     scans = new SearchRegistry()
@@ -147,4 +152,35 @@ export async function initEngine(ctx: AppContext): Promise<void> {
 
   ctx.lifecycle.onShutdown(shutdownTerminals)
   ctx.lifecycle.onShutdown(() => h.shutdown())
+}
+
+/**
+ * 旧的云端记录按时间补录实扣（docs/ui/usage.md §9.5）：登录状态下启动后 30 秒跑一次，
+ * 之后每换一次登录账号再跑一次；失败只记日志，下次启动再试
+ */
+function backfillAfterSignIn(h: EngineHost): void {
+  const log = logger('usage')
+  let done: string | null = null
+  let timer: NodeJS.Timeout | null = null
+  const run = () => {
+    timer = null
+    const account = signedInEmail()
+    if (!account || account === done) return
+    done = account
+    h.backfillPlatformCosts(account, AbortSignal.timeout(120_000)).then(
+      turns => turns > 0 && log.info('旧记录已按时间补录实扣', { turns }),
+      (e: unknown) => {
+        done = null
+        log.warn('旧记录补录实扣失败', { error: String((e as Error)?.message ?? e) })
+      },
+    )
+  }
+  const schedule = () => {
+    if (!timer && signedInEmail() && signedInEmail() !== done) {
+      timer = setTimeout(run, 30_000)
+      timer.unref()
+    }
+  }
+  onAccountChange(schedule)
+  schedule()
 }

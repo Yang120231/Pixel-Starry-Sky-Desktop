@@ -66,3 +66,26 @@ export interface RemoteCallsQuery {
   limit: number
   now: number
 }
+
+/** 账号调用的合计（云端 /v1/oauth/usage/summary，docs/cloud-service.md §4.13）；金额是实扣 */
+export interface RemoteUsageStat {
+  requests: number
+  input: number
+  output: number
+  cacheRead: number
+  cacheWrite: number
+  costUsd: number
+}
+export interface RemoteUsageSummary {
+  /** 「今天」按小时、其余按天；start 是格子开始的毫秒，没有调用的格子不出现 */
+  buckets: Array<RemoteUsageStat & { start: number }>
+  models: Array<RemoteUsageStat & { model: string }>
+  total: RemoteUsageStat
+  /** 上一个同样长度的时间段的合计，用于 ▲ / ▼ 比较 */
+  prevTotal: RemoteUsageStat
+}
+export interface RemoteUsageQuery {
+  range: 'today' | '7d' | '30d' | '90d'
+  model: string | null
+  now: number
+}

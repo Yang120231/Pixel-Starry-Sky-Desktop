@@ -12,8 +12,11 @@ import type {
 } from '@pixelsky/protocol'
 import { estimateCost, officialPrice } from '@pixelsky/protocol'
 import { settleUsage } from '../billing'
+import { backfillRows, clockOffset, matchCalls, type BackfillTurn } from '../backfill'
 import type { UsageQuery } from '../usage'
 import type { HostContext } from './context'
+
+const DAY = 24 * 60 * 60 * 1000
 
 export class HostUsage {
   private readonly platformRequests = new Map<string, PlatformRequest[]>()
@@ -184,7 +187,9 @@ export class HostUsage {
           ctx.usage.append(
             rows.map(row => {
               const model = usage.models[row.model]
-              return model ? { ...row, ...model } : row
+              // 已经按时间补录过实扣的，按 ID 还是查不到时不改回「—」
+              if (!model || (row.costMatch === 'time' && model.costSource !== 'platform')) return row
+              return { ...row, ...model, costMatch: undefined }
             }),
           )
           ctx.opts.emit({ kind: 'usage_recorded' })
@@ -196,6 +201,98 @@ export class HostUsage {
       .finally(() => {
         if (this.settlements.get(key) === controller) this.settlements.delete(key)
       })
+  }
+
+  /**
+   * 旧的云端记录（没拿到 Sub2api 请求 ID，按 ID 永远查不到）按时间对账号调用补录实扣（docs/ui/usage.md §9.5）。
+   * 只看 90 天内、10 分钟前结束、还没对过的；对过的（不管对没对上）都标上 costMatch，下次不再读。
+   * 返回补上实扣的轮次数。
+   */
+  async backfillPlatformCosts(account: string, signal: AbortSignal): Promise<number> {
+    const { ctx } = this
+    if (!ctx.opts.platformCalls) return 0
+    const now = Date.now()
+    const turns = new Map<string, BackfillTurn>()
+    for (const row of ctx.usage.load(now - 90 * DAY)) {
+      const key = `${row.sessionId}:${row.turnId}`
+      if (
+        row.route !== 'pixelsky' ||
+        row.costSource === 'platform' ||
+        row.costMatch ||
+        row.endedAt > now - 10 * 60_000 ||
+        this.settlements.has(key)
+      )
+        continue
+      const turn = turns.get(key)
+      if (turn) {
+        turn.rows.push(row)
+        turn.startedAt = Math.min(turn.startedAt, row.startedAt)
+        turn.endedAt = Math.max(turn.endedAt, row.endedAt)
+      } else turns.set(key, { key, startedAt: row.startedAt, endedAt: row.endedAt, rows: [row] })
+    }
+    // 记着别的账号的轮次不动
+    const stats = new Map<string, Extract<Item, { kind: 'turn_stats' }>>()
+    const items = new Map<string, readonly Item[]>()
+    for (const turn of [...turns.values()]) {
+      const { sessionId, turnId } = turn.rows[0]
+      if (!items.has(sessionId))
+        items.set(sessionId, ctx.runtimes.get(sessionId)?.snapshot.items ?? ctx.store.loadItems(sessionId))
+      const item = items.get(sessionId)!.find(i => i.kind === 'turn_stats' && i.turnId === turnId)
+      if (item?.kind === 'turn_stats') stats.set(turn.key, item)
+      const owner = item?.kind === 'turn_stats' ? item.usage.settlement?.account : undefined
+      if (owner && owner !== account) turns.delete(turn.key)
+    }
+    if (!turns.size) return 0
+    const list = [...turns.values()]
+    const epoch = this.epoch
+    const calls = await ctx.opts.platformCalls(
+      {
+        account,
+        from: Math.min(...list.map(t => t.startedAt)) - DAY,
+        to: Math.min(now, Math.max(...list.map(t => t.endedAt)) + DAY),
+      },
+      signal,
+    )
+    if (signal.aborted || ctx.closing || epoch !== this.epoch) return 0
+    const charges = matchCalls(list, calls, clockOffset(list, calls))
+    const rows: UsageRecord[] = []
+    let settledTurns = 0
+    for (const turn of list) {
+      const next = backfillRows(turn, charges.get(turn.key))
+      rows.push(...next)
+      if (!next.some(r => r.costMatch === 'time')) continue
+      settledTurns++
+      const item = stats.get(turn.key)
+      if (!item) continue
+      // 回复下方的统计也换成实扣；结算标成完成，打开会话时不再按 ID 重查
+      const usage: TurnUsage = {
+        ...item.usage,
+        models: Object.fromEntries(
+          next.map(r => [
+            r.model,
+            {
+              input: r.input,
+              output: r.output,
+              cacheRead: r.cacheRead,
+              cacheWrite: r.cacheWrite,
+              requests: r.requests,
+              costUsd: r.costUsd,
+              costSource: r.costSource,
+              ...(r.billing ? { billing: r.billing } : {}),
+            },
+          ]),
+        ),
+        ...(item.usage.settlement ? { settlement: { ...item.usage.settlement, complete: true } } : {}),
+      }
+      const updated = { ...item, usage }
+      const id = turn.rows[0].sessionId
+      if (ctx.runtimes.get(id)?.snapshot.items.some(i => i.id === item.id))
+        ctx.m.events.apply(id, { type: 'item_completed', item: updated })
+      else if (ctx.records.has(id)) ctx.store.appendItem(id, updated)
+    }
+    ctx.usage.append(rows)
+    ctx.opts.emit({ kind: 'usage_recorded' })
+    return settledTurns
   }
 
   /** 退出应用：停掉所有进行中的结算 */

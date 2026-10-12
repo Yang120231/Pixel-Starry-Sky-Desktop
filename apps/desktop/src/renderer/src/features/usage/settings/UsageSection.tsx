@@ -6,7 +6,7 @@ import { ChartColumn, Download, Trash2, X } from 'lucide-react'
 import { Button, Segmented, type SegmentedOption } from '@/ui'
 import { useAccount } from '@/features/account'
 import { PAGE_SIZE, useUsage, useUsageActions } from '@/features/usage/source'
-import { remoteCallsAvailable, useRemoteCalls } from '@/features/usage/remote'
+import { remoteCallsAvailable, useRemoteCalls, useRemoteSummary } from '@/features/usage/remote'
 import { DIMENSION_LABEL, dimLabel } from '@/features/usage/format'
 import type { UsageDimension, UsageFilter, UsageRangeId } from '@/features/usage/types'
 import { SectionTitle } from '../../settings/SettingRow'
@@ -79,6 +79,7 @@ export function UsageSection({ onOpenSession }: { onOpenSession: (sessionId: str
   const remoteQuery = { range, model: filter.model ?? null, offset: accountOffset, limit: PAGE_SIZE }
   // mode === 'local' 时也传同一个查询形，hook 内部自己判断要不要读，避免条件调用 hook
   const rm = useRemoteCalls(remoteQuery)
+  const rs = useRemoteSummary({ range, model: filter.model ?? null })
 
   const changeRange = (r: UsageRangeId) => {
     setRange(r)
@@ -191,6 +192,9 @@ export function UsageSection({ onOpenSession }: { onOpenSession: (sessionId: str
       {mode === 'account' ? (
         <AccountModeBody
           rm={rm}
+          rs={rs}
+          model={filter.model}
+          onPickModel={model => changeFilter({ ...filter, model })}
           empty={accountEmpty}
           signedIn={signedIn}
           available={remoteCallsAvailable()}
@@ -231,6 +235,9 @@ export function UsageSection({ onOpenSession }: { onOpenSession: (sessionId: str
 
 function AccountModeBody({
   rm,
+  rs,
+  model,
+  onPickModel,
   empty,
   signedIn,
   available,
@@ -239,6 +246,9 @@ function AccountModeBody({
   onBack,
 }: {
   rm: ReturnType<typeof useRemoteCalls>
+  rs: ReturnType<typeof useRemoteSummary>
+  model: string | undefined
+  onPickModel: (model: string) => void
   empty: boolean
   signedIn: boolean
   available: boolean
@@ -266,10 +276,41 @@ function AccountModeBody({
   if (empty) {
     return <EmptyState filtered={false} />
   }
+  // 和本机记录同样的卡片、图表、分布表；合计读不到时只显示明细
+  const summary = rs.summary
   return (
-    <Panel>
-      <RemoteCallsTable page={rm.page} pageSize={PAGE_SIZE} onPage={onPage} />
-    </Panel>
+    <div className="flex flex-col gap-4">
+      {summary ? (
+        <>
+          <KpiCards
+            totals={summary.totals}
+            prev={summary.prevTotals}
+            account={{ models: summary.groups.model.length }}
+          />
+          <Panel>
+            <UsageChart buckets={summary.buckets} bucket={summary.bucket} />
+          </Panel>
+          <Panel>
+            <Distribution
+              account
+              dim="model"
+              onDim={() => {}}
+              rows={summary.groups.model}
+              activeKey={model}
+              onPick={onPickModel}
+            />
+          </Panel>
+        </>
+      ) : (
+        rs.status === 'unavailable' && (
+          <p className="text-meta text-fg-muted">{tr('settings.usage.UsageSection.accountTotalsUnavailable')}</p>
+        )
+      )}
+      <Panel>
+        <RemoteCallsTable page={rm.page} pageSize={PAGE_SIZE} onPage={onPage} />
+      </Panel>
+      <p className="text-meta text-fg-faint">{tr('settings.usage.UsageSection.accountRecordsNote')}</p>
+    </div>
   )
 }
 

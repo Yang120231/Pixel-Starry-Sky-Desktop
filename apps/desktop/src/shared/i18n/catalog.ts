@@ -4628,6 +4628,30 @@ export const catalog = {
     "zh": "记录只保存在这台电脑上，保留 90 天，只有时间、模型、token 数、费用和耗时，不含对话内容。费用是引擎报告的估算值，可能和实际账单不同。",
     "en": "Records stay on this computer for 90 days. They include time, model, token counts, cost and duration, but no conversation content. Costs are engine estimates and may differ from actual bills."
   },
+  "settings.usage.KpiCards.accountRequests": {
+    "zh": "调用次数",
+    "en": "Requests"
+  },
+  "settings.usage.KpiCards.callsUnit": {
+    "zh": "次",
+    "en": "calls"
+  },
+  "settings.usage.KpiCards.models": {
+    "zh": "{p0} 个模型",
+    "en": "{p0} models"
+  },
+  "settings.usage.Distribution.requests": {
+    "zh": "请求",
+    "en": "Requests"
+  },
+  "settings.usage.UsageSection.accountTotalsUnavailable": {
+    "zh": "暂时读不到合计，下面是逐条明细。",
+    "en": "Totals aren't available right now. The list below shows each request."
+  },
+  "settings.usage.UsageSection.accountRecordsNote": {
+    "zh": "账号调用来自平台账单，每次模型请求一条，费用是实际扣除的金额。用 Claude Code / Codex 自带登录的调用不在这里。",
+    "en": "Account requests come from the platform's billing, one per model request. Costs are the amounts actually charged. Requests made with Claude Code or Codex's own sign-in aren't listed here."
+  },
   "settings.usage.UsageSection.loadingAccountRequests": {
     "zh": "正在读取账号调用…",
     "en": "Loading account requests…"

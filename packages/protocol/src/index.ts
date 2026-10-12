@@ -75,6 +75,9 @@ export type {
   RemoteCall,
   RemoteCallPage,
   RemoteCallsQuery,
+  RemoteUsageQuery,
+  RemoteUsageStat,
+  RemoteUsageSummary,
 } from './billing'
 export {
   IMAGE_MEDIA_TYPES,

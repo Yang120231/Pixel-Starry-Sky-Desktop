@@ -5,6 +5,9 @@
 import { useEffect, useState } from 'react'
 import { isDemo } from '@/data'
 import type { RemoteCallPage } from './remote-types'
+import type { RemoteUsageQuery, RemoteUsageSummary } from '@pixelsky/protocol'
+import { summarizeCalls, toUsageSummary } from './remoteSummary'
+import type { UsageSummary } from './types'
 import type { UsageRangeId } from './types'
 import { demo } from '@/data/demo'
 
@@ -21,6 +24,8 @@ export interface RemoteCallsQuery {
 /** 兼容旧 preload；新版本通过 AccountBridge.listCalls 读取。 */
 interface RemoteCallsBridge {
   listCalls?: (q: RemoteCallsQuery & { now: number }) => Promise<RemoteCallPage>
+  /** 旧 preload 没有；云端没有这个接口时会报错，页面只显示明细 */
+  summary?: (q: RemoteUsageQuery) => Promise<RemoteUsageSummary>
 }
 
 function bridge(): RemoteCallsBridge | null {
@@ -97,6 +102,42 @@ export function useRemoteCalls(query: RemoteCallsQuery): RemoteCallsResult {
       cancelled = true
     }
     // key 代替 query 对象做依赖
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key])
+
+  return result
+}
+
+export interface RemoteSummaryResult {
+  summary: UsageSummary | null
+  status: 'ready' | 'unavailable' | 'loading'
+}
+
+/** 读取账号调用的合计（卡片、图表、按模型分布）；读不到时不挡住明细表 */
+export function useRemoteSummary(query: { range: UsageRangeId; model: string | null }): RemoteSummaryResult {
+  const [result, setResult] = useState<RemoteSummaryResult>({ summary: null, status: 'loading' })
+  const key = JSON.stringify(query)
+
+  useEffect(() => {
+    let cancelled = false
+    const now = Date.now()
+    if (isDemo) {
+      const remote = summarizeCalls(demo().remoteCalls(now), query.range, query.model, now)
+      setResult({ summary: toUsageSummary(remote, query.range, now), status: 'ready' })
+      return
+    }
+    const summary = bridge()?.summary
+    if (!summary) {
+      setResult({ summary: null, status: 'unavailable' })
+      return
+    }
+    setResult(r => ({ summary: r.summary, status: 'loading' }))
+    summary({ ...query, now })
+      .then(s => !cancelled && setResult({ summary: toUsageSummary(s, query.range, now), status: 'ready' }))
+      .catch(() => !cancelled && setResult({ summary: null, status: 'unavailable' }))
+    return () => {
+      cancelled = true
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key])
 

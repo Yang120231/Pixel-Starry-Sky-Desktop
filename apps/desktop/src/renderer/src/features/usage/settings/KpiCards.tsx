@@ -4,8 +4,19 @@ import { cacheHitRate, totalTokens } from '@/features/usage/aggregate'
 import { formatDelta, formatPercent, formatTokens, formatTotalCost } from '@/features/usage/format'
 import type { UsageTotals } from '@/features/usage/types'
 
-/** 4 个统计卡：调用轮次、Token、缓存命中、费用；都和上一个同样长度的时间段比较 */
-export function KpiCards({ totals, prev }: { totals: UsageTotals; prev: UsageTotals }) {
+/**
+ * 4 个统计卡：调用轮次、Token、缓存命中、费用；都和上一个同样长度的时间段比较。
+ * 账号调用（account）没有轮次，第一张卡改成调用次数，副标题是用到的模型数。
+ */
+export function KpiCards({
+  totals,
+  prev,
+  account,
+}: {
+  totals: UsageTotals
+  prev: UsageTotals
+  account?: { models: number }
+}) {
   useI18n()
   const hit = cacheHitRate(totals)
   const prevHit = cacheHitRate(prev)
@@ -14,13 +25,23 @@ export function KpiCards({ totals, prev }: { totals: UsageTotals; prev: UsageTot
 
   return (
     <div className="grid grid-cols-4 gap-3 @max-[700px]:grid-cols-2">
-      <Card
-        label={tr('settings.usage.KpiCards.conversationTurns')}
-        value={`${totals.turns}`}
-        unit={tr('settings.usage.KpiCards.turns')}
-        sub={tr('settings.usage.KpiCards.requests', { p0: totals.requests })}
-        delta={formatDelta(totals.turns, prev.turns)}
-      />
+      {account ? (
+        <Card
+          label={tr('settings.usage.KpiCards.accountRequests')}
+          value={`${totals.requests}`}
+          unit={tr('settings.usage.KpiCards.callsUnit')}
+          sub={tr('settings.usage.KpiCards.models', { p0: account.models })}
+          delta={formatDelta(totals.requests, prev.requests)}
+        />
+      ) : (
+        <Card
+          label={tr('settings.usage.KpiCards.conversationTurns')}
+          value={`${totals.turns}`}
+          unit={tr('settings.usage.KpiCards.turns')}
+          sub={tr('settings.usage.KpiCards.requests', { p0: totals.requests })}
+          delta={formatDelta(totals.turns, prev.turns)}
+        />
+      )}
       <Card
         label="Token"
         value={formatTokens(totalTokens(totals))}

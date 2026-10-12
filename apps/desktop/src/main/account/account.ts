@@ -360,7 +360,12 @@ async function authedGet(path: string): Promise<HttpResult> {
 
 /** 平台网络请求只在主进程内使用令牌，不把凭据发给渲染层或引擎。 */
 export async function platformFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  if (!path.startsWith('/v1/platform/') && !path.startsWith('/v1/oauth/usage/calls?')) throw new Error('无效的平台接口')
+  if (
+    !path.startsWith('/v1/platform/') &&
+    !path.startsWith('/v1/oauth/usage/calls?') &&
+    !path.startsWith('/v1/oauth/usage/summary?')
+  )
+    throw new Error('无效的平台接口')
   return authedFetch(path, init)
 }
 

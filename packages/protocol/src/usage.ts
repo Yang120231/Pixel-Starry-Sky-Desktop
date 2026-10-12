@@ -30,6 +30,11 @@ export interface UsageRecord {
   output: number
   /** 引擎报告的费用（美元）；不报告时为 null */
   costUsd: number | null
+  /**
+   * 旧的云端记录没有请求 ID 对不上实扣，事后按时间对账号调用补录（docs/ui/usage.md §9.5）：
+   * 'time' = 按时间对上，金额是实扣；'none' = 对过但没对上，不再重试
+   */
+  costMatch?: 'time' | 'none'
   outcome: UsageOutcome
 }
 
