@@ -55,7 +55,8 @@ export async function initWorkspace(ctx: AppContext): Promise<void> {
     return editors.remove(id)
   })
   handle('editor:choose', async (e, kind: EditorKind, name?: string, mode?: 'code' | 'folder') => {
-    if (!['vscode', 'cursor', 'windsurf', 'trae-cn', 'trae', 'custom'].includes(kind)) throw new Error('未知编辑器')
+    if (!['vscode', 'cursor', 'windsurf', 'trae-cn', 'trae', 'jetbrains', 'custom'].includes(kind))
+      throw new Error('未知编辑器')
     if (name !== undefined && (typeof name !== 'string' || !name.trim() || name.length > 60))
       throw new Error('编辑器名称不正确')
     if (mode !== undefined && mode !== 'code' && mode !== 'folder') throw new Error('打开方式不正确')

@@ -3224,6 +3224,10 @@ export const catalog = {
     "zh": "普通文件夹参数",
     "en": "Folder argument"
   },
+  "settings.editor.EditorSection.jetbrainsHint": {
+    "zh": "JetBrains IDE 选 bin 里的启动程序（idea64.exe、pycharm64.exe 这类，macOS 选 .app）。打开文件时会跳到所在行。",
+    "en": "For a JetBrains IDE, choose the launcher in its bin folder (idea64.exe, pycharm64.exe and the like; the .app on macOS). Files open at their line."
+  },
   "settings.editor.EditorSection.vsCodeCompatible": {
     "zh": "VS Code 兼容",
     "en": "VS Code compatible"

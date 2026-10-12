@@ -44,6 +44,45 @@ describe('Trae 检测与启动', () => {
   })
 })
 
+describe('手动指定 JetBrains IDE（GitHub #30）', () => {
+  it('认 bin 里的启动程序：名字、版本从安装目录名看，按 JetBrains 方式打开；同一个程序再选一次不重复；能移除', async () => {
+    const root = temp()
+    const exe = join(root, 'IntelliJ IDEA 2026.2.1', 'bin', process.platform === 'win32' ? 'idea64.exe' : 'idea')
+    mkdirSync(join(exe, '..'), { recursive: true })
+    writeFileSync(exe, '')
+    const data = temp()
+    const editors = new Editors(data, noWorkspace)
+    await editors.init()
+    const state = await editors.configure('jetbrains', exe)
+    const item = state.items.find(i => i.path === exe)
+    expect(item).toMatchObject({
+      kind: 'jetbrains',
+      name: 'IntelliJ IDEA',
+      version: '2026.2.1',
+      mode: 'jetbrains',
+      manual: true,
+      available: true,
+    })
+    expect(item!.id).toMatch(/^custom:/)
+    const again = await editors.configure('jetbrains', exe)
+    expect(again.items.filter(i => i.path === exe)).toHaveLength(1)
+    // 重启后读回来还是 JetBrains 方式
+    const reloaded = new Editors(data, noWorkspace)
+    await reloaded.init()
+    expect((await reloaded.state()).items.find(i => i.path === exe)).toMatchObject({ mode: 'jetbrains' })
+    expect((await editors.remove(item!.id)).items.some(i => i.path === exe)).toBe(false)
+  })
+  it('不是 JetBrains 的启动程序不收', async () => {
+    const root = temp()
+    const exe = join(root, 'bin', process.platform === 'win32' ? 'helper.exe' : 'helper')
+    mkdirSync(join(exe, '..'), { recursive: true })
+    writeFileSync(exe, '')
+    const editors = new Editors(temp(), noWorkspace)
+    await editors.init()
+    await expect(editors.configure('jetbrains', exe)).rejects.toThrow('JetBrains')
+  })
+})
+
 describe('检测', () => {
   it.runIf(process.platform === 'win32')(
     '装在别处的编辑器靠快捷方式找到，来源是快捷方式，版本读 exe；Trae CN 没选过默认时用它',

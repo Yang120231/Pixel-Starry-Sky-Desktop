@@ -6,7 +6,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { logger } from '@pixelsky/engine'
 import type { EditorItem, EditorKind, EditorState, OpenTool, WorkspaceRef } from '../../shared/types/workspace'
 import { workspacePath, type TargetResolver } from './workspace-files'
-import { detectJetBrains, detectTools, launchTool } from './open-tools'
+import { detectJetBrains, detectTools, jetbrainsName, launchTool, productOf } from './open-tools'
 import { exeVersion } from './exe-version'
 import { findShortcuts } from './shortcuts'
 
@@ -161,7 +161,7 @@ export class Editors {
                   typeof e.name === 'string' &&
                   typeof e.path === 'string' &&
                   KINDS.includes(e.kind) &&
-                  ['code', 'folder'].includes(e.mode),
+                  ['code', 'folder', 'jetbrains'].includes(e.mode),
               )
               .map((e: EditorItem) => ({ ...e, available: false, manual: true, source: 'manual' }))
           : [],
@@ -381,6 +381,26 @@ export class Editors {
     if (process.platform === 'darwin' && /\.app\/?$/.test(path)) path = (await macAppProgram(path, kind)) ?? path
     if (!(await exists(path)) || (process.platform === 'win32' && !path.toLowerCase().endsWith('.exe')))
       throw new Error('请选择编辑器的 exe 程序')
+    // JetBrains（GitHub #30）：认 bin 里的启动程序（idea64.exe、pycharm64.exe…），名字和版本从文件名、安装目录名里看
+    if (kind === 'jetbrains') {
+      if (!productOf(path))
+        throw new Error('请选择 JetBrains IDE 的启动程序（bin 里的 idea64.exe、pycharm64.exe 这类）')
+      const { name: ideName, version } = jetbrainsName(path)
+      const known = this.prefs.custom.find(e => e.kind === 'jetbrains' && e.path.toLowerCase() === path.toLowerCase())
+      const ide: EditorItem = {
+        id: known?.id ?? 'custom:' + randomUUID(),
+        kind,
+        name: ideName,
+        ...(version ? { version } : {}),
+        path,
+        mode: 'jetbrains',
+        available: true,
+        manual: true,
+      }
+      this.prefs.custom = [...this.prefs.custom.filter(e => e.id !== ide.id), ide]
+      await this.persist()
+      return this.state(true)
+    }
     const builtin = EDITORS.find(e => e.id === kind)
     const id = builtin?.id ?? 'custom:' + randomUUID()
     const item: EditorItem = {

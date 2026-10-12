@@ -2,7 +2,7 @@
 // Git Bash、终端这些只能打开文件夹的程序。只认本机装了的；找的地方：开始菜单和桌面的快捷方式、常见安装目录、PATH。
 // 检测不开任何进程：Windows 上开进程是在主线程上同步做的，被安全软件拖慢时整个应用会卡住。
 import { spawn } from 'node:child_process'
-import { lstat, readdir, stat } from 'node:fs/promises'
+import { lstat, readFile, readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, delimiter, dirname, join, resolve } from 'node:path'
 import type { OpenTool, OpenToolId } from '../../shared/types/workspace'
@@ -25,7 +25,7 @@ export const JETBRAINS = [
 ] as const
 
 /** 启动程序的文件名 → 哪个 IDE：Windows 的 idea64.exe，macOS / Linux 的 idea、idea.sh */
-const productOf = (path: string): (typeof JETBRAINS)[number] | undefined => {
+export const productOf = (path: string): (typeof JETBRAINS)[number] | undefined => {
   const file = basename(path).toLowerCase()
   return JETBRAINS.find(j => j.exe === file || j.cmd === file || `${j.cmd}.sh` === file)
 }
@@ -77,6 +77,37 @@ export function jetbrainsName(exePath: string, displayName?: string): { name: st
   return { name, version: version(displayName) ?? version(basename(dirname(dirname(exePath)))) }
 }
 
+/**
+ * Toolbox 设置里改过的安装目录（.settings.json 的 install_location，GitHub #30）：没改过、没装 Toolbox、读不出来都返回 null。
+ * 只读文件，不开进程。
+ */
+export async function toolboxInstallLocation(settingsFile: string): Promise<string | null> {
+  try {
+    const value = (JSON.parse(await readFile(settingsFile, 'utf8')) as { install_location?: unknown }).install_location
+    return typeof value === 'string' && value.trim() ? value.trim() : null
+  } catch {
+    return null
+  }
+}
+
+/** Toolbox 的设置文件在哪 */
+function toolboxSettingsFile(): string | null {
+  if (process.platform === 'win32')
+    return process.env.LOCALAPPDATA ? join(process.env.LOCALAPPDATA, 'JetBrains', 'Toolbox', '.settings.json') : null
+  const home = homedir()
+  return process.platform === 'darwin'
+    ? join(home, 'Library', 'Application Support', 'JetBrains', 'Toolbox', '.settings.json')
+    : join(home, '.local', 'share', 'JetBrains', 'Toolbox', '.settings.json')
+}
+
+/** 装在某个目录下的 IDE 的 bin 目录：新版 Toolbox / 自己解压的 <目录>\<IDE>\bin，旧版 Toolbox 的 apps\<产品>\ch-0\<版本>\bin */
+async function binsUnder(root: string): Promise<string[]> {
+  const bins = (await subdirs(root)).map(ide => join(ide, 'bin'))
+  for (const app of await subdirs(join(root, 'apps')))
+    for (const channel of await subdirs(app)) for (const build of await subdirs(channel)) bins.push(join(build, 'bin'))
+  return bins
+}
+
 /** 本机装了的 JetBrains IDE（同一个 exe 只留一个，快捷方式指着的优先） */
 export async function detectJetBrains(shortcuts: ShortcutTarget[] = []): Promise<JetBrainsFound[]> {
   if (process.platform !== 'win32') return detectJetBrainsPosix()
@@ -86,12 +117,20 @@ export async function detectJetBrains(shortcuts: ShortcutTarget[] = []): Promise
   const bins: string[] = []
   const local = process.env.LOCALAPPDATA
   const roots = [process.env.ProgramFiles, process.env['ProgramFiles(x86)']].filter((p): p is string => !!p)
-  for (let drive = 65; drive <= 90; drive++) roots.push(`${String.fromCharCode(drive)}:\\Program Files`)
+  const drives: string[] = []
+  for (let drive = 65; drive <= 90; drive++) drives.push(`${String.fromCharCode(drive)}:\\`)
+  for (const drive of drives) roots.push(join(drive, 'Program Files'))
   // 独立安装：<Program Files>\JetBrains\<IDE 版本>\bin；Android Studio：<Program Files>\Android\Android Studio\bin
   for (const root of new Set(roots)) {
     for (const ide of await subdirs(join(root, 'JetBrains'))) bins.push(join(ide, 'bin'))
     bins.push(join(root, 'Android', 'Android Studio', 'bin'))
   }
+  // 装在盘根目录（D:\JetBrains\<IDE 版本>\bin，自定义安装目录或解压版，GitHub #30）
+  for (const drive of drives) for (const ide of await subdirs(join(drive, 'JetBrains'))) bins.push(join(ide, 'bin'))
+  // Toolbox 设置里改过安装目录
+  const settings = toolboxSettingsFile()
+  const custom = settings ? await toolboxInstallLocation(settings) : null
+  if (custom) bins.push(...(await binsUnder(custom)))
   if (local) {
     // Toolbox 2.x 装在 %LOCALAPPDATA%\Programs\<IDE>\bin；老版本在 Toolbox\apps\<产品>\ch-0\<版本>\bin
     for (const ide of await subdirs(join(local, 'Programs'))) bins.push(join(ide, 'bin'))
@@ -147,6 +186,18 @@ async function detectJetBrainsPosix(): Promise<JetBrainsFound[]> {
       ? join(home, 'Library', 'Application Support', 'JetBrains', 'Toolbox', 'scripts')
       : join(home, '.local', 'share', 'JetBrains', 'Toolbox', 'scripts')
   for (const j of JETBRAINS) add(join(toolbox, j.cmd), 'location')
+  // Toolbox 设置里改过安装目录（GitHub #30）：macOS 是里面的 <IDE>.app，Linux 是 <IDE>/bin/<命令>.sh
+  const settings = toolboxSettingsFile()
+  const custom = settings ? await toolboxInstallLocation(settings) : null
+  if (custom) {
+    if (process.platform === 'darwin') {
+      for (const app of (await subdirs(custom)).filter(a => a.endsWith('.app')))
+        for (const j of JETBRAINS.filter(j => basename(app).startsWith(j.name)))
+          add(join(app, 'Contents', 'MacOS', j.cmd), 'location', basename(app).replace(/\.app$/, ''))
+    } else
+      for (const bin of await binsUnder(custom))
+        for (const j of JETBRAINS) add(join(bin, `${j.cmd}.sh`), 'location', basename(dirname(bin)))
+  }
   for (const bin of (process.env.PATH ?? '').split(delimiter).filter(Boolean))
     for (const j of JETBRAINS) add(join(bin, j.cmd), 'path')
   const out: JetBrainsFound[] = []

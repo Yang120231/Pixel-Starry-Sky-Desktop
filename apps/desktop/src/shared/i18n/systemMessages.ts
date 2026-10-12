@@ -191,6 +191,10 @@ export const systemMessages = {
     "zh": "请选择编辑器的 exe 程序",
     "en": "Choose the editor's executable"
   },
+  "system.chooseJetBrainsLauncher": {
+    "zh": "请选择 JetBrains IDE 的启动程序（bin 里的 idea64.exe、pycharm64.exe 这类）",
+    "en": "Choose the JetBrains IDE launcher (idea64.exe, pycharm64.exe and the like in its bin folder)"
+  },
   "system.customEditor": {
     "zh": "自定义编辑器",
     "en": "Custom editor"

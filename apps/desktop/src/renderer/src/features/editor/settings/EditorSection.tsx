@@ -172,7 +172,7 @@ export function EditorSection() {
                 onClick={() => void run(async () => setEditors(await window.pixelsky!.editor.remove(item.id)))}
                 className="mt-2 text-meta text-accent-fg hover:underline"
               >
-                {item.kind === 'custom'
+                {item.kind === 'custom' || item.kind === 'jetbrains'
                   ? tr('settings.editor.EditorSection.removeConfiguration')
                   : tr('settings.editor.EditorSection.restoreAutomaticDetection')}
               </button>
@@ -193,7 +193,11 @@ export function EditorSection() {
             {tr('settings.editor.EditorSection.executable')}{' '}
           </Button>
         ))}
+        <Button disabled={busy || isDemo} onClick={() => choose('jetbrains')}>
+          {tr('settings.editor.EditorSection.choose')} JetBrains IDE{tr('settings.editor.EditorSection.executable')}
+        </Button>
       </div>
+      <p className="mt-2 text-meta text-fg-muted">{tr('settings.editor.EditorSection.jetbrainsHint')}</p>
       <GroupTitle>{tr('settings.editor.EditorSection.customEditor')}</GroupTitle>
       <label className="mb-3 flex items-center gap-3 text-ui text-fg-secondary">
         {tr('settings.editor.EditorSection.name')}

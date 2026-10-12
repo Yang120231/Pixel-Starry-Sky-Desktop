@@ -4,7 +4,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { EDITORS, editorArgs, posixEditorPaths } from './editors'
-import { detectJetBrains, detectTools, jetbrainsName, linuxTerminalArgs, toolCommand } from './open-tools'
+import {
+  detectJetBrains,
+  detectTools,
+  jetbrainsName,
+  linuxTerminalArgs,
+  toolboxInstallLocation,
+  toolCommand,
+} from './open-tools'
 
 /** 临时目录里放几个假的程序，快捷方式指着它们 */
 function installed(...paths: string[]): { root: string; at: (path: string) => string } {
@@ -34,6 +41,49 @@ describe('JetBrains IDE', () => {
         ])
         expect(found.indexOf(ours[0])).toBe(0)
       } finally {
+        rmSync(dir.root, { recursive: true, force: true })
+      }
+    },
+  )
+
+  it('Toolbox 设置里的安装目录：有就返回，没有、空的、文件坏了都是 null（GitHub #30）', async () => {
+    const dir = installed()
+    try {
+      const file = join(dir.root, '.settings.json')
+      writeFileSync(file, JSON.stringify({ install_location: ' D:\\JB ', update: {} }))
+      expect(await toolboxInstallLocation(file)).toBe('D:\\JB')
+      writeFileSync(file, JSON.stringify({ install_location: '' }))
+      expect(await toolboxInstallLocation(file)).toBeNull()
+      writeFileSync(file, '{坏了')
+      expect(await toolboxInstallLocation(file)).toBeNull()
+      expect(await toolboxInstallLocation(join(dir.root, 'none.json'))).toBeNull()
+    } finally {
+      rmSync(dir.root, { recursive: true, force: true })
+    }
+  })
+
+  it.runIf(process.platform === 'win32')(
+    'Toolbox 改过安装目录：新版 <目录>\\<IDE>\\bin 和旧版 apps\\<产品>\\ch-0\\<版本>\\bin 都找得到（GitHub #30）',
+    async () => {
+      const dir = installed(
+        'local\\JetBrains\\Toolbox\\.settings.json',
+        'tools\\IntelliJ IDEA Ultimate\\bin\\idea64.exe',
+        'tools\\apps\\PyCharm-P\\ch-0\\253.1\\bin\\pycharm64.exe',
+      )
+      writeFileSync(
+        dir.at('local\\JetBrains\\Toolbox\\.settings.json'),
+        JSON.stringify({ install_location: dir.at('tools') }),
+      )
+      const local = process.env.LOCALAPPDATA
+      process.env.LOCALAPPDATA = dir.at('local')
+      try {
+        const found = (await detectJetBrains()).filter(f => f.path.startsWith(dir.root))
+        expect(found.map(f => [f.name, f.source])).toEqual([
+          ['IntelliJ IDEA', 'location'],
+          ['PyCharm', 'location'],
+        ])
+      } finally {
+        process.env.LOCALAPPDATA = local
         rmSync(dir.root, { recursive: true, force: true })
       }
     },
