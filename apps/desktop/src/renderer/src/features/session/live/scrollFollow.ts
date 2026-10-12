@@ -20,22 +20,54 @@ export const nearBottom = (el: ScrollBox): boolean => el.scrollHeight - el.scrol
 export const followResize = (stick: boolean, lastInteract: number, now: number): boolean =>
   stick && now - lastInteract >= INTERACT_MS
 
+export interface ScrollPos {
+  top: number
+  height: number
+}
+
+/**
+ * 两次滚动事件之间，用户把对话往上滚了：位置往上走，而且对话流没有变矮。
+ * 对话流变矮（下面的卡片收起）时浏览器也会把位置往上夹，那不算用户往上滚
+ */
+export const scrolledUp = (prev: ScrollPos | null, now: ScrollPos): boolean =>
+  !!prev && now.top < prev.top - 1 && now.height >= prev.height
+
+const UP_KEYS = new Set(['ArrowUp', 'PageUp', 'Home'])
+
+/** 往上滚的按键：↑、PageUp、Home、Shift+空格 */
+export const scrollUpKey = (e: { key: string; shiftKey: boolean }): boolean =>
+  UP_KEYS.has(e.key) || (e.key === ' ' && e.shiftKey)
+
+/**
+ * 滚轮落在对话里一个自己能往上滚的框里（命令输出、代码块等）：这一格滚的是那个框，不是对话，
+ * 不算离开底部。target 往上找到 root（不含）为止
+ */
+export function innerCanScrollUp(target: Element | null, root: Element): boolean {
+  for (let el = target; el && el !== root; el = el.parentElement) {
+    if (el.scrollTop <= 0 || el.scrollHeight <= el.clientHeight + 1) continue
+    const overflow = getComputedStyle(el).overflowY
+    if (overflow === 'auto' || overflow === 'scroll') return true
+  }
+  return false
+}
+
 /**
  * 对话区或对话流的高度变了，怎么处理：follow 滚到底；否则按实际位置重新判断是否离开底部。
  * 不管原来贴不贴底都要重新判断：离底部一两百像素时，下面的卡片收起、执行块收起会让底部"自己靠过来"，
  * 这时不一定有滚动事件，不判断的话「回到最新」会留在已经到底的对话上。
- * detached（搜索跳转后）只更新按钮，不恢复贴底。
+ * hold（搜索跳转后，或用户自己往上滚了）只更新按钮，不恢复贴底：用户往上滚了 30px、还在 80px 以内时，
+ * 新内容进来不能又把它拉回底部
  */
 export function afterResize(
   el: ScrollBox,
   stick: boolean,
-  detached: boolean,
+  hold: boolean,
   lastInteract: number,
   now: number,
 ): { follow: true } | { follow: false; stick: boolean; away: boolean } {
   if (followResize(stick, lastInteract, now)) return { follow: true }
   const near = nearBottom(el)
-  return { follow: false, stick: detached ? stick : near, away: !near }
+  return { follow: false, stick: hold ? stick : near, away: !near }
 }
 
 /** 一条的文字长度：流式输出时它变长，算有新内容 */

@@ -1,6 +1,16 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Item } from '@pixelsky/protocol'
-import { INTERACT_MS, STICK_PX, afterResize, contentMark, followResize, nearBottom } from './scrollFollow'
+import {
+  INTERACT_MS,
+  STICK_PX,
+  afterResize,
+  contentMark,
+  followResize,
+  innerCanScrollUp,
+  nearBottom,
+  scrollUpKey,
+  scrolledUp,
+} from './scrollFollow'
 
 describe('nearBottom', () => {
   it('离底部不到 STICK_PX 算在底部', () => {
@@ -77,5 +87,75 @@ describe('contentMark', () => {
   })
   it('空会话', () => {
     expect(contentMark([])).toBe('0::0')
+  })
+})
+
+// AI 输出时滚不上去（用户反馈）：往上滚一点就松开，不等滚出 STICK_PX
+describe('用户往上滚', () => {
+  it('位置往上走、对话流没变矮才算往上滚', () => {
+    expect(scrolledUp(null, { top: 500, height: 2000 })).toBe(false)
+    expect(scrolledUp({ top: 500, height: 2000 }, { top: 492, height: 2000 })).toBe(true)
+    // 新内容让对话流变高，同时往上滚
+    expect(scrolledUp({ top: 500, height: 2000 }, { top: 495, height: 2030 })).toBe(true)
+    // 往下滚、不动、1px 以内的抖动都不算
+    expect(scrolledUp({ top: 500, height: 2000 }, { top: 560, height: 2000 })).toBe(false)
+    expect(scrolledUp({ top: 500, height: 2000 }, { top: 499.5, height: 2000 })).toBe(false)
+    // 下面的卡片收起、对话流变矮，浏览器把位置往上夹：不算
+    expect(scrolledUp({ top: 500, height: 2000 }, { top: 380, height: 1880 })).toBe(false)
+  })
+
+  it('往上滚的按键', () => {
+    for (const key of ['ArrowUp', 'PageUp', 'Home']) expect(scrollUpKey({ key, shiftKey: false })).toBe(true)
+    expect(scrollUpKey({ key: ' ', shiftKey: true })).toBe(true)
+    expect(scrollUpKey({ key: ' ', shiftKey: false })).toBe(false)
+    expect(scrollUpKey({ key: 'ArrowDown', shiftKey: false })).toBe(false)
+    expect(scrollUpKey({ key: 'End', shiftKey: false })).toBe(false)
+  })
+
+  it('松开以后（hold）内容变高不跟到底，离底部还在 STICK_PX 以内也不恢复贴底', () => {
+    const near = { scrollHeight: 1030, scrollTop: 500, clientHeight: 500 }
+    expect(afterResize(near, false, true, 0, 10_000)).toEqual({ follow: false, stick: false, away: false })
+    // 没松开时按位置重新判断，在底部附近就恢复贴底
+    expect(afterResize(near, false, false, 0, 10_000)).toEqual({ follow: false, stick: true, away: false })
+  })
+})
+
+describe('innerCanScrollUp', () => {
+  afterEach(() => vi.unstubAllGlobals())
+  type Box = {
+    scrollTop: number
+    scrollHeight: number
+    clientHeight: number
+    parentElement: Box | null
+    overflow: string
+  }
+  const box = (patch: Partial<Box>, parent: Box | null): Box => ({
+    scrollTop: 0,
+    scrollHeight: 100,
+    clientHeight: 100,
+    overflow: 'visible',
+    parentElement: parent,
+    ...patch,
+  })
+  const run = (target: Box, root: Box): boolean => {
+    vi.stubGlobal('getComputedStyle', (el: Box) => ({ overflowY: el.overflow }))
+    return innerCanScrollUp(target as unknown as Element, root as unknown as Element)
+  }
+
+  it('滚轮落在能往上滚的输出框里：滚的是那个框', () => {
+    const root = box({ scrollTop: 900, scrollHeight: 2000, clientHeight: 500, overflow: 'auto' }, null)
+    const output = box({ scrollTop: 40, scrollHeight: 400, clientHeight: 200, overflow: 'auto' }, root)
+    const line = box({}, output)
+    expect(run(line, root)).toBe(true)
+  })
+
+  it('框已经在最上面、框不能滚、或者只是 overflow 隐藏：滚的是对话', () => {
+    const root = box({ scrollTop: 900, scrollHeight: 2000, clientHeight: 500, overflow: 'auto' }, null)
+    expect(run(box({ scrollTop: 0, scrollHeight: 400, clientHeight: 200, overflow: 'auto' }, root), root)).toBe(false)
+    expect(run(box({ scrollTop: 10, overflow: 'auto' }, root), root)).toBe(false)
+    expect(run(box({ scrollTop: 40, scrollHeight: 400, clientHeight: 200, overflow: 'hidden' }, root), root)).toBe(
+      false,
+    )
+    expect(run(box({}, root), root)).toBe(false)
   })
 })

@@ -33,7 +33,15 @@ import { useItemLocation } from '@/features/search/useItemLocation'
 import { ExpandScope } from '@/features/search/expand'
 import { DETACH_EVENT } from '@/features/search/navigation'
 import { JumpToLatest } from './JumpToLatest'
-import { afterResize, contentMark, nearBottom } from './scrollFollow'
+import {
+  afterResize,
+  contentMark,
+  innerCanScrollUp,
+  nearBottom,
+  scrollUpKey,
+  scrolledUp,
+  type ScrollPos,
+} from './scrollFollow'
 import { changesHeight, itemHeight, toolsHeight } from './blockHeight'
 import { reviewTurn } from '@/features/panel/artifacts/focus'
 import { foldTurns, turnReplies } from './turnFold'
@@ -243,6 +251,15 @@ export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot
   const lastInteract = useRef(0)
   // 点「回到最新」后的平滑滚动期间，不按中途位置改 stick
   const jumping = useRef(false)
+  // released：用户自己往上滚了（滚轮、触控板、按键、拖滚动条）。一往上就不再跟到底，哪怕还在离底部 80px 以内——
+  // 否则 AI 输出时每一格滚轮还没滚出 80px 就被新内容拽回底部，表现成「滑不上去」。
+  // 用户往下滚回底部附近、点「回到最新」、切换会话时才恢复
+  const released = useRef(false)
+  const lastPos = useRef<ScrollPos | null>(null)
+  const release = (): void => {
+    released.current = true
+    stick.current = false
+  }
   const detachForSearch = useCallback(() => {
     stick.current = false
     detached.current = true
@@ -313,6 +330,8 @@ export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot
   // 切换会话时回到底部
   useLayoutEffect(() => {
     stick.current = true
+    released.current = false
+    lastPos.current = null
     detached.current = false
     jumping.current = false
     setAway(false)
@@ -336,7 +355,13 @@ export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot
     if (!el || !content || typeof ResizeObserver === 'undefined') return
     const observer = new ResizeObserver(() => {
       if (jumping.current) return
-      const next = afterResize(el, stick.current, detached.current, lastInteract.current, performance.now())
+      const next = afterResize(
+        el,
+        stick.current,
+        detached.current || released.current,
+        lastInteract.current,
+        performance.now(),
+      )
       if (next.follow) {
         el.scrollTop = el.scrollHeight
         return
@@ -354,6 +379,7 @@ export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot
     const el = scroller.current
     if (!el) return
     stick.current = true
+    released.current = false
     detached.current = false
     setUnseen(false)
     // 离得很远时直接跳过去：平滑滚过一长段对话既慢，又要把沿途的内容都排版一遍
@@ -449,9 +475,16 @@ export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot
         <div
           ref={scroller}
           onScroll={e => {
+            const el = e.currentTarget
+            const pos = { top: el.scrollTop, height: el.scrollHeight }
+            const up = scrolledUp(lastPos.current, pos)
+            lastPos.current = pos
             if (jumping.current) return
-            const near = nearBottom(e.currentTarget)
-            if (!detached.current) stick.current = near
+            const near = nearBottom(el)
+            // 往上滚了就松开；往下滚回底部附近（或内容变短、底部自己靠过来）才重新贴底
+            if (up) released.current = true
+            else if (near) released.current = false
+            if (!detached.current) stick.current = near && !released.current
             setAway(!near)
             if (near) setUnseen(false)
           }}
@@ -465,15 +498,22 @@ export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot
             setAway(!near)
             if (near) setUnseen(false)
           }}
-          onWheel={resume}
+          onWheel={e => {
+            resume()
+            // 往上滚的第一下就松开，不等滚动事件：平滑滚动的前几帧只挪几像素，等它的话新内容已经把位置拽回去了
+            const el = e.currentTarget
+            if (e.deltaY < 0 && el.scrollTop > 0 && !innerCanScrollUp(e.target as Element, el)) release()
+          }}
           onTouchMove={resume}
           onPointerDown={() => {
             resume()
             lastInteract.current = performance.now()
           }}
-          onKeyDown={() => {
+          onKeyDown={e => {
             resume()
             lastInteract.current = performance.now()
+            const target = e.target as HTMLElement
+            if (scrollUpKey(e) && !target.closest('input, textarea, select, [contenteditable="true"]')) release()
           }}
           data-search-session={snapshot?.record.id}
           className="conversation-scroller selectable min-h-0 flex-1 overflow-y-auto bg-app"
