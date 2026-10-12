@@ -1,40 +1,55 @@
 // 「打开方式」里的 JetBrains IDE 和文件夹 / 终端程序（GitHub #12）
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { EDITORS, editorArgs, posixEditorPaths } from './editors'
-import { jetbrainsFromUninstall, jetbrainsName, linuxTerminalArgs, toolCommand } from './open-tools'
+import { detectJetBrains, detectTools, jetbrainsName, linuxTerminalArgs, toolCommand } from './open-tools'
 
-const uninstall = String.raw`
-HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Uninstall\IntelliJ IDEA 2026.2.1
-    DisplayName    REG_SZ    IntelliJ IDEA 2026.2.1
-    InstallLocation    REG_SZ    D:\Program Files\JetBrains\IntelliJ IDEA 2026.2.1
-    DisplayIcon    REG_SZ    D:\Program Files\JetBrains\IntelliJ IDEA 2026.2.1\bin\idea64.exe
-    Publisher    REG_SZ    JetBrains s.r.o.
-
-HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Uninstall\PyCharm Community Edition 2025.3
-    DisplayName    REG_SZ    PyCharm Community Edition 2025.3
-    InstallLocation    REG_SZ    "C:\Program Files\JetBrains\PyCharm Community Edition 2025.3"
-    Publisher    REG_SZ    JetBrains s.r.o.
-
-HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Uninstall\Fake
-    DisplayName    REG_SZ    IntelliJ IDEA helper
-    Publisher    REG_SZ    Someone else
-`
+/** 临时目录里放几个假的程序，快捷方式指着它们 */
+function installed(...paths: string[]): { root: string; at: (path: string) => string } {
+  const root = mkdtempSync(join(tmpdir(), 'open-tools-'))
+  for (const path of paths) {
+    mkdirSync(join(root, path, '..'), { recursive: true })
+    writeFileSync(join(root, path), '')
+  }
+  return { root, at: path => join(root, path) }
+}
 
 describe('JetBrains IDE', () => {
-  it('从卸载信息里认出来：DisplayIcon 指着 exe 时用它，不然用 InstallLocation\\bin；别家的同名程序不算', () => {
-    expect(jetbrainsFromUninstall(uninstall)).toEqual([
-      {
-        path: 'D:\\Program Files\\JetBrains\\IntelliJ IDEA 2026.2.1\\bin\\idea64.exe',
-        name: 'IntelliJ IDEA 2026.2.1',
-      },
-      {
-        path: 'C:\\Program Files\\JetBrains\\PyCharm Community Edition 2025.3\\bin\\pycharm64.exe',
-        name: 'PyCharm Community Edition 2025.3',
-      },
-    ])
+  it.runIf(process.platform === 'win32')(
+    '从快捷方式认出来：名字和版本按快捷方式名，别的程序不算，排在其他来源前面',
+    async () => {
+      const dir = installed('IDEA\\bin\\idea64.exe', 'PyCharm CE\\bin\\pycharm64.exe', 'Other\\bin\\helper.exe')
+      try {
+        const found = await detectJetBrains([
+          { name: 'IntelliJ IDEA 2026.2.1', target: dir.at('IDEA\\bin\\idea64.exe') },
+          { name: 'PyCharm Community Edition 2025.3', target: dir.at('PyCharm CE\\bin\\pycharm64.exe') },
+          { name: 'IntelliJ IDEA helper', target: dir.at('Other\\bin\\helper.exe') },
+        ])
+        const ours = found.filter(f => f.path.startsWith(dir.root))
+        expect(ours).toEqual([
+          { path: dir.at('IDEA\\bin\\idea64.exe'), name: 'IntelliJ IDEA', version: '2026.2.1', source: 'shortcut' },
+          { path: dir.at('PyCharm CE\\bin\\pycharm64.exe'), name: 'PyCharm', version: '2025.3', source: 'shortcut' },
+        ])
+        expect(found.indexOf(ours[0])).toBe(0)
+      } finally {
+        rmSync(dir.root, { recursive: true, force: true })
+      }
+    },
+  )
+
+  it.runIf(process.platform === 'win32')('Git Bash 先用快捷方式指着的那个', async () => {
+    const dir = installed('Git\\git-bash.exe')
+    try {
+      const tools = await detectTools([{ name: 'Git Bash', target: dir.at('Git\\git-bash.exe') }])
+      expect(tools.find(t => t.id === 'git-bash')?.path).toBe(dir.at('Git\\git-bash.exe'))
+    } finally {
+      rmSync(dir.root, { recursive: true, force: true })
+    }
   })
 
-  it('名字是产品名，版本从显示名或安装目录名里取', () => {
+  it('名字是产品名，版本从快捷方式名或安装目录名里取', () => {
     expect(jetbrainsName('D:\\JB\\IntelliJ IDEA 2026.2.1\\bin\\idea64.exe')).toEqual({
       name: 'IntelliJ IDEA',
       version: '2026.2.1',

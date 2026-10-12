@@ -1960,9 +1960,9 @@ export const catalog = {
     "zh": "（不可用）",
     "en": "(unavailable)"
   },
-  "editor.EditorIcon.registry": {
-    "zh": "注册表",
-    "en": "Registry"
+  "editor.EditorIcon.shortcut": {
+    "zh": "快捷方式",
+    "en": "Shortcut"
   },
   "editor.EditorIcon.defaultLocation": {
     "zh": "默认位置",

@@ -52,7 +52,7 @@ export interface EditorItem {
   available: boolean
   manual: boolean
   version?: string
-  source?: 'registry' | 'location' | 'path' | 'manual'
+  source?: 'shortcut' | 'location' | 'path' | 'manual'
   icon?: string
 }
 export interface EditorState {

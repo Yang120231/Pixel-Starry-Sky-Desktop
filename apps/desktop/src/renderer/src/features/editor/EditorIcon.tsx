@@ -13,8 +13,8 @@ export function EditorIcon({ item }: { item: EditorItem }) {
 export const editorLabel = (item: EditorItem): string => [item.name, item.version].filter(Boolean).join(' ')
 export const editorSource = (item: EditorItem): string =>
   ({
-    get registry() {
-      return tr('editor.EditorIcon.registry')
+    get shortcut() {
+      return tr('editor.EditorIcon.shortcut')
     },
     get location() {
       return tr('editor.EditorIcon.defaultLocation')

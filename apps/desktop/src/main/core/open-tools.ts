@@ -1,10 +1,12 @@
 // 「打开方式」里 VS Code 一类以外的程序（GitHub #12，docs/ui/open-with.md）：JetBrains 的 IDE，和文件资源管理器、
-// Git Bash、终端这些只能打开文件夹的程序。只认本机装了的；找的地方：卸载信息、常见安装目录、PATH。
-import { execFile, spawn } from 'node:child_process'
+// Git Bash、终端这些只能打开文件夹的程序。只认本机装了的；找的地方：开始菜单和桌面的快捷方式、常见安装目录、PATH。
+// 检测不开任何进程：Windows 上开进程是在主线程上同步做的，被安全软件拖慢时整个应用会卡住。
+import { spawn } from 'node:child_process'
 import { lstat, readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, delimiter, dirname, join, resolve } from 'node:path'
 import type { OpenTool, OpenToolId } from '../../shared/types/workspace'
+import type { ShortcutTarget } from './shortcuts'
 
 /** JetBrains 的 IDE：bin 目录里的启动程序 → 显示名 */
 export const JETBRAINS = [
@@ -31,9 +33,9 @@ const productOf = (path: string): (typeof JETBRAINS)[number] | undefined => {
 export interface JetBrainsFound {
   path: string
   name: string
-  /** 从卸载信息或安装目录名里看出的版本（如 2026.2.1）；看不出时省略，之后再读 exe 的版本信息 */
+  /** 从快捷方式名或安装目录名里看出的版本（如 2026.2.1）；看不出时省略，之后再读 exe 的版本信息 */
   version?: string
-  source: 'registry' | 'location' | 'path'
+  source: 'shortcut' | 'location' | 'path'
 }
 
 const isFile = async (path: string): Promise<boolean> => {
@@ -67,7 +69,7 @@ const subdirs = async (dir: string): Promise<string[]> => {
   }
 }
 
-/** 产品名和版本：版本从卸载信息的显示名或安装目录名（如「IntelliJ IDEA 2026.2.1」）里取 */
+/** 产品名和版本：版本从快捷方式名或安装目录名（如「IntelliJ IDEA 2026.2.1」）里取 */
 export function jetbrainsName(exePath: string, displayName?: string): { name: string; version?: string } {
   const name = productOf(exePath)?.name ?? basename(exePath, '.exe')
   const version = (s: string | undefined): string | undefined =>
@@ -75,31 +77,12 @@ export function jetbrainsName(exePath: string, displayName?: string): { name: st
   return { name, version: version(displayName) ?? version(basename(dirname(dirname(exePath)))) }
 }
 
-/** 卸载信息里 JetBrains 的条目：InstallLocation\bin\<exe> 或 DisplayIcon 指着的 exe */
-export function jetbrainsFromUninstall(output: string): { path: string; name: string }[] {
-  const found: { path: string; name: string }[] = []
-  for (const block of output.split(/(?=HKEY_)/)) {
-    const value = (name: string): string =>
-      new RegExp(`^\\s+${name}\\s+REG_(?:EXPAND_)?SZ\\s+(.+)$`, 'mi').exec(block)?.[1]?.trim() ?? ''
-    const name = value('DisplayName')
-    const product = JETBRAINS.find(j => name.toLowerCase().startsWith(j.name.toLowerCase()))
-    if (!product || !/JetBrains|Google/i.test(value('Publisher'))) continue
-    const icon = value('DisplayIcon')
-      .replace(/,\s*-?\d+$/, '')
-      .replace(/^"|"$/g, '')
-    const dir = value('InstallLocation').replace(/^"|"$/g, '')
-    if (basename(icon).toLowerCase() === product.exe) found.push({ path: icon, name })
-    else if (dir) found.push({ path: join(dir, 'bin', product.exe), name })
-  }
-  return found
-}
-
-/** 本机装了的 JetBrains IDE（同一个 exe 只留一个，卸载信息里的优先） */
-export async function detectJetBrains(uninstallOutputs: string[]): Promise<JetBrainsFound[]> {
+/** 本机装了的 JetBrains IDE（同一个 exe 只留一个，快捷方式指着的优先） */
+export async function detectJetBrains(shortcuts: ShortcutTarget[] = []): Promise<JetBrainsFound[]> {
   if (process.platform !== 'win32') return detectJetBrainsPosix()
-  const candidates: JetBrainsFound[] = uninstallOutputs.flatMap(out =>
-    jetbrainsFromUninstall(out).map(c => ({ ...c, source: 'registry' as const })),
-  )
+  const candidates: JetBrainsFound[] = shortcuts
+    .filter(s => productOf(s.target))
+    .map(s => ({ path: s.target, name: s.name, source: 'shortcut' as const }))
   const bins: string[] = []
   const local = process.env.LOCALAPPDATA
   const roots = [process.env.ProgramFiles, process.env['ProgramFiles(x86)']].filter((p): p is string => !!p)
@@ -174,24 +157,13 @@ async function detectJetBrainsPosix(): Promise<JetBrainsFound[]> {
   return out
 }
 
-function gitForWindows(): Promise<string | null> {
-  return new Promise(done =>
-    execFile(
-      'reg.exe',
-      ['query', 'HKLM\\SOFTWARE\\GitForWindows', '/v', 'InstallPath'],
-      { timeout: 1500, windowsHide: true, encoding: 'utf8' },
-      (err, out) => done(err ? null : (/InstallPath\s+REG_SZ\s+(.+)/.exec(out)?.[1]?.trim() ?? null)),
-    ),
-  )
-}
-
 const first = async (paths: string[], check = isFile): Promise<string | null> => {
   for (const path of paths) if (await check(path)) return path
   return null
 }
 
 /** 文件资源管理器、Git Bash、Windows Terminal、PowerShell：只列装了的（文件资源管理器一直有） */
-export async function detectTools(): Promise<OpenTool[]> {
+export async function detectTools(shortcuts: ShortcutTarget[] = []): Promise<OpenTool[]> {
   if (process.platform === 'darwin') {
     const tools: OpenTool[] = [
       { id: 'explorer', name: 'Finder', path: '' },
@@ -226,9 +198,8 @@ export async function detectTools(): Promise<OpenTool[]> {
   const pathDirs = (process.env.PATH ?? '').split(delimiter).filter(Boolean)
   const programFiles = [process.env.ProgramFiles, process.env['ProgramFiles(x86)']].filter((p): p is string => !!p)
   const tools: OpenTool[] = [{ id: 'explorer', name: '文件资源管理器', path: join(windir, 'explorer.exe') }]
-  const gitRoot = await gitForWindows()
   const bash = await first([
-    ...(gitRoot ? [join(gitRoot, 'git-bash.exe')] : []),
+    ...shortcuts.filter(s => basename(s.target).toLowerCase() === 'git-bash.exe').map(s => s.target),
     ...programFiles.map(p => join(p, 'Git', 'git-bash.exe')),
     ...(local ? [join(local, 'Programs', 'Git', 'git-bash.exe')] : []),
     // PATH 里的 Git\cmd、Git\bin、Git\mingw64\bin

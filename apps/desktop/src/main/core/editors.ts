@@ -1,11 +1,18 @@
-import { spawn, execFile } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { readFile, readdir, mkdir, writeFile, rename, realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { delimiter, join, posix, resolve } from 'node:path'
+import { basename, delimiter, join, posix, resolve } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
+import { logger } from '@pixelsky/engine'
 import type { EditorItem, EditorKind, EditorState, OpenTool, WorkspaceRef } from '../../shared/types/workspace'
 import { workspacePath, type TargetResolver } from './workspace-files'
 import { detectJetBrains, detectTools, launchTool } from './open-tools'
+import { exeVersion } from './exe-version'
+import { findShortcuts } from './shortcuts'
+
+const perf = logger('perf')
+/** 检测超过这么久就记一条，看慢在哪 */
+const SLOW_DETECT_MS = 2000
 
 export const EDITORS = [
   {
@@ -125,104 +132,6 @@ export function editorArgs(
   return args
 }
 
-function registryPath(exe: string, hive: 'HKCU' | 'HKLM'): Promise<string | null> {
-  if (process.platform !== 'win32') return Promise.resolve(null)
-  return new Promise(done =>
-    execFile(
-      'reg.exe',
-      ['query', `${hive}\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\${exe}`, '/ve'],
-      { timeout: 1500, windowsHide: true, encoding: 'utf8', maxBuffer: 32000 },
-      (err, out) => {
-        done(err ? null : (/REG_(?:EXPAND_)?SZ\s+(.+)/.exec(out)?.[1]?.trim().replace(/^"|"$/g, '') ?? null))
-      },
-    ),
-  )
-}
-
-export function uninstallLocations(output: string, editor: (typeof EDITORS)[number]): string[] {
-  const paths: string[] = []
-  for (const block of output.split(/(?=HKEY_)/)) {
-    const value = (name: string): string =>
-      new RegExp(`^\\s+${name}\\s+REG_(?:EXPAND_)?SZ\\s+(.+)$`, 'mi').exec(block)?.[1]?.trim() ?? ''
-    const name = value('DisplayName')
-    const matches =
-      editor.id === 'trae-cn'
-        ? /^Trae(?:Code)?\s+CN\b/i.test(name)
-        : editor.id === 'trae'
-          ? /^Trae(?:Code)?\b/i.test(name) && !/\bCN\b/i.test(name)
-          : editor.id === 'vscode'
-            ? /^(?:Microsoft )?Visual Studio Code\b/i.test(name)
-            : new RegExp(`^${editor.name}\\b`, 'i').test(name)
-    if (!matches) continue
-    const icon = value('DisplayIcon')
-      .replace(/,\s*-?\d+$/, '')
-      .replace(/^"|"$/g, '')
-    const dir = value('InstallLocation').replace(/^"|"$/g, '')
-    if (icon.toLowerCase().endsWith('.exe')) paths.push(icon)
-    if (dir) paths.push(join(dir, editor.exe))
-  }
-  return paths
-}
-
-function uninstallRegistry(): Promise<string[]> {
-  if (process.platform !== 'win32') return Promise.resolve([])
-  return Promise.all(
-    ['HKCU', 'HKLM'].flatMap(hive =>
-      ['', '\\WOW6432Node'].map(
-        wow =>
-          new Promise<string>(done => {
-            execFile(
-              'reg.exe',
-              ['query', `${hive}\\Software${wow}\\Microsoft\\Windows\\CurrentVersion\\Uninstall`, '/s'],
-              { windowsHide: true, timeout: 1000, maxBuffer: 4 * 1024 * 1024, encoding: 'utf8' },
-              (_err, out) => done(out ?? ''),
-            )
-          }),
-      ),
-    ),
-  )
-}
-
-async function versions(items: EditorItem[]): Promise<Record<string, string>> {
-  if (process.platform !== 'win32' || !items.length) return {}
-  const paths = items
-    .filter(e => e.available)
-    .map(e => `'${e.path.replaceAll("'", "''")}'`)
-    .join(',')
-  if (!paths) return {}
-  return new Promise(done =>
-    execFile(
-      'powershell.exe',
-      [
-        '-NoProfile',
-        '-NonInteractive',
-        '-Command',
-        `[Console]::OutputEncoding=[Text.Encoding]::UTF8; @(${paths}) | ForEach-Object { $item=Get-Item -LiteralPath $_ -ErrorAction SilentlyContinue; if($item){ [pscustomobject]@{path=$item.FullName; version=$item.VersionInfo.ProductVersion} } } | ConvertTo-Json -Compress`,
-      ],
-      { windowsHide: true, timeout: 1500, maxBuffer: 128000, encoding: 'utf8' },
-      (err, out) => {
-        try {
-          if (err) {
-            done({})
-            return
-          }
-          const parsed = JSON.parse(out),
-            rows = Array.isArray(parsed) ? parsed : [parsed]
-          done(
-            Object.fromEntries(
-              rows
-                .filter(r => typeof r.path === 'string' && typeof r.version === 'string')
-                .map(r => [r.path.toLowerCase(), r.version]),
-            ),
-          )
-        } catch {
-          done({})
-        }
-      },
-    ),
-  )
-}
-
 export class Editors {
   private prefs: Prefs = { ...DEFAULTS, custom: [] }
   private items: EditorItem[] = []
@@ -294,24 +203,27 @@ export class Editors {
       this.detecting = null
     }
   }
-  private async detect(): Promise<EditorState> {
+  /** 打开程序、改默认值时用现有结果，不因为过了 60 秒先重新检测；一次都没检测过才等检测 */
+  private current(): Promise<EditorState> {
+    return this.checkedAt ? Promise.resolve(this.snapshot()) : this.state()
+  }
+  /**
+   * 检测不开任何进程（docs/ui/open-with.md）：Windows 上开进程是在主线程上同步做的，被安全软件拖慢时整个应用卡住。
+   * 装在别处（如 D 盘）的程序靠开始菜单和桌面的快捷方式找，版本直接读 exe 里的版本信息。
+   */
+  protected async detect(): Promise<EditorState> {
+    const started = performance.now()
     const found: EditorItem[] = []
-    const registryOutputPromise = uninstallRegistry()
-    const appPaths = Promise.all(
-      EDITORS.map(kind => Promise.all([registryPath(kind.exe, 'HKCU'), registryPath(kind.exe, 'HKLM')])),
-    )
-    const toolsPromise = detectTools().catch(() => [] as OpenTool[])
-    const [registryOutput, pathsByKind] = await Promise.all([registryOutputPromise, appPaths])
-    const jetbrainsPromise = detectJetBrains(registryOutput).catch(() => [])
+    const shortcuts = await findShortcuts().catch(() => [])
+    const toolsPromise = detectTools(shortcuts).catch(() => [] as OpenTool[])
+    const jetbrainsPromise = detectJetBrains(shortcuts).catch(() => [])
     for (const manual of this.prefs.custom)
       found.push({ ...manual, available: await exists(manual.path), manual: true, source: 'manual' })
     await Promise.all(
-      EDITORS.map(async (kind, index) => {
-        const registry = pathsByKind[index]
-        const registered = [
-          ...registry.filter((p): p is string => !!p),
-          ...registryOutput.flatMap(out => uninstallLocations(out, kind)),
-        ]
+      EDITORS.map(async kind => {
+        const linked = shortcuts
+          .filter(s => basename(s.target).toLowerCase() === kind.exe.toLowerCase())
+          .map(s => s.target)
         const locations = [
           ...[process.env.LOCALAPPDATA, process.env.ProgramFiles, process.env['ProgramFiles(x86)']]
             .filter((p): p is string => !!p)
@@ -333,7 +245,7 @@ export class Editors {
         const candidates =
           process.platform === 'win32'
             ? [
-                ...registered.map(path => ({ path, source: 'registry' as const })),
+                ...linked.map(path => ({ path, source: 'shortcut' as const })),
                 ...locations.map(path => ({ path, source: 'location' as const })),
                 ...inPath.map(path => ({ path, source: 'path' as const })),
               ]
@@ -406,31 +318,39 @@ export class Editors {
               },
         )
     }
-    const metadata = await versions(found)
     await Promise.all(
       found.map(async item => {
-        // JetBrains 的 exe 版本信息是构建号（262.9437.185.0-IU），用安装目录名里的版本（2026.2.1）
-        item.version =
-          item.kind === 'jetbrains' && item.version ? item.version : (metadata[item.path.toLowerCase()] ?? item.version)
-        if (item.available && this.getIcon) item.icon = await this.getIcon(item.path).catch(() => undefined)
+        if (!item.available) return
+        // JetBrains 的 exe 版本信息是构建号（262.9437.185.0-IU），用快捷方式名或安装目录名里的版本（2026.2.1）
+        if (process.platform === 'win32' && !(item.kind === 'jetbrains' && item.version))
+          item.version = (await exeVersion(item.path)) ?? item.version
+        if (this.getIcon) item.icon = await this.getIcon(item.path).catch(() => undefined)
       }),
     )
     const rank = (e: EditorItem): number =>
-      e.source === 'registry' ? 0 : e.source === 'manual' ? 1 : e.source === 'location' ? 2 : 3
+      e.source === 'shortcut' ? 0 : e.source === 'manual' ? 1 : e.source === 'location' ? 2 : 3
     this.items = found.sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name))
     this.checkedAt = Date.now()
     if (!this.prefs.defaultId && this.items.some(e => e.available)) {
       this.prefs.defaultId =
-        this.items.find(e => e.kind === 'trae-cn' && e.source === 'registry' && e.available)?.id ??
+        this.items.find(e => e.kind === 'trae-cn' && e.source === 'shortcut' && e.available)?.id ??
         this.items.find(e => e.available)!.id
       await this.persist()
     }
+    const ms = performance.now() - started
+    if (ms > SLOW_DETECT_MS)
+      perf.warn('编辑器检测很慢', {
+        ms: Math.round(ms),
+        shortcuts: shortcuts.length,
+        items: this.items.length,
+        tools: this.tools.length,
+      })
     return this.snapshot()
   }
   async preferences(value: unknown): Promise<EditorState> {
     const patch = value as Partial<Prefs>
     if (!patch || typeof patch !== 'object') throw new Error('编辑器设置不正确')
-    await this.state()
+    await this.current()
     if (patch.defaultId !== undefined) {
       if (patch.defaultId !== null && !this.items.some(e => e.id === patch.defaultId)) throw new Error('编辑器不存在')
       this.prefs.defaultId = patch.defaultId
@@ -495,7 +415,7 @@ export class Editors {
     const target = this.target(ref)
     const root = await workspacePath(target.path, '', 'directory')
     const file = path ? await workspacePath(root, path, 'file') : undefined
-    const state = await this.state()
+    const state = await this.current()
     // 文件资源管理器、Git Bash、终端：只能打开整个文件夹（GitHub #12）
     const tool = !file ? state.tools.find(t => t.id === editorId) : undefined
     if (tool) {
