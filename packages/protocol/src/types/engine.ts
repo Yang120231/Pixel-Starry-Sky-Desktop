@@ -76,6 +76,8 @@ export interface EngineInfo {
   path: string | null
   /** 不可用时告诉用户怎么解决的一句话 */
   message: string | null
+  /** 没装时能在软件里一键安装（设置 › 本机引擎的「安装」按钮）；旧版远端没有这个字段，按不能安装 */
+  installable?: boolean
   /** 自带程序（自动查找）还是用户替换的命令（docs/ui/engine-launch.md §3）；旧版远端没有这个字段，按自带显示 */
   launch?: 'stock' | 'custom'
   /**
@@ -160,6 +162,20 @@ export interface EngineModel {
 }
 
 /** 检查更新的结果 */
+/**
+ * 正在安装 / 更新引擎（docs/ui/engine-update.md）：拿不到真实百分比，只报阶段和最后一行输出，界面据此显示模拟进度。
+ * prepare 还没有输出；download / install 按输出里的关键词猜；verify 跑完后重新检测；done / failed 结束
+ */
+export interface EngineJob {
+  engine: EngineId
+  action: 'install' | 'update'
+  phase: 'prepare' | 'download' | 'install' | 'verify' | 'done' | 'failed'
+  startedAt: number
+  /** 引擎输出的最后一行（去掉颜色） */
+  line: string | null
+  error: string | null
+}
+
 export interface EngineUpdateResult {
   ok: boolean
   /** 引擎输出的最后几行，给用户看 */

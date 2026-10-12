@@ -16,7 +16,7 @@ import { CodexProcess, object } from './process'
 import { codexCatalog } from './catalog'
 import { CodexSession, reservedCodexArg, type CodexLaunchOptions } from './session'
 import { CodexTranslator } from './translate'
-import { CODEX_NPM_PACKAGE, updateCodexWithNpm } from './update'
+import { CODEX_NPM_PACKAGE, installCodexWithNpm, updateCodexWithNpm } from './update'
 import { array } from './process'
 
 export interface CodexAdapterOptions {
@@ -51,11 +51,17 @@ export class CodexAdapter implements EngineAdapter {
     return this.opts.launchOptions?.().args ?? []
   }
   /** 一键更新：npm 全局装的用 npm install -g（docs/ui/engine-update.md）；宿主随后重新检测 */
-  async update(): Promise<EngineUpdateResult> {
+  async update(onLine?: (line: string) => void): Promise<EngineUpdateResult> {
     await this.info()
     const exe = this.cached?.info.path
     if (!exe) throw new Error(this.cached?.info.message ?? '没找到 Codex')
-    const result = await updateCodexWithNpm(exe, this.env())
+    const result = await updateCodexWithNpm(exe, this.env(), onLine)
+    this.catalogCache = null
+    return result
+  }
+  /** 一键安装：npm install -g（找得到 npm 时 info.installable 才为真） */
+  async install(onLine: (line: string) => void = () => undefined): Promise<EngineUpdateResult> {
+    const result = await installCodexWithNpm(this.env(), onLine)
     this.catalogCache = null
     return result
   }

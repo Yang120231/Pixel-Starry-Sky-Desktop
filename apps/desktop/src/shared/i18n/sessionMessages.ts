@@ -110,6 +110,7 @@ export const sessionMessages = {
   'session.compaction.autoDone': { zh: '已自动压缩上下文', en: 'Context auto-compacted' },
   'session.compaction.interrupted': { zh: '压缩已中断', en: 'Compaction interrupted' },
   'session.compaction.failed': { zh: '压缩失败', en: 'Compaction failed' },
+  'session.compaction.slow': { zh: '比平时慢', en: 'Slower than usual' },
   'session.compaction.took': { zh: '用时 {time}', en: '{time}' },
   'session.compaction.before': { zh: '压缩前 {n} tokens', en: 'Before: {n} tokens' },
   'session.compaction.after': { zh: '压缩后 {n} tokens', en: 'After: {n} tokens' },

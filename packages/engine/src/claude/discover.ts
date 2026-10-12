@@ -102,6 +102,31 @@ export function customClaude(command: string, env: NodeJS.ProcessEnv): { launche
   return { error: codedError(`launch.${r.reason}`, { command: command.trim() }).message }
 }
 
+/**
+ * 一键安装用的官方安装器（和「没找到」时提示的命令一样）：Windows 用 PowerShell 跑 install.ps1，
+ * 其他系统用 bash 跑 curl 下来的 install.sh。PIXELSKY_CLAUDE_INSTALLER 指向一个本地脚本时改跑它（测试用）。
+ * 系统里没有 PowerShell / curl 时返回 null，界面不给「安装」按钮
+ */
+export function claudeInstaller(env: NodeJS.ProcessEnv): Launcher | null {
+  const script = env.PIXELSKY_CLAUDE_INSTALLER
+  if (IS_WINDOWS) {
+    const ps =
+      findOnPath('powershell.exe', env) ??
+      [join(env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')].find(isFile)
+    if (!ps) return null
+    const head = [ps, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass']] as const
+    return script
+      ? { command: head[0], args: [...head[1], '-File', script] }
+      : { command: head[0], args: [...head[1], '-Command', 'irm https://claude.ai/install.ps1 | iex'] }
+  }
+  const bash = findOnPath('bash', env) ?? ['/bin/bash'].find(isFile)
+  if (!bash) return null
+  if (script) return { command: bash, args: [script] }
+  return findOnPath('curl', env)
+    ? { command: bash, args: ['-c', 'curl -fsSL https://claude.ai/install.sh | bash'] }
+    : null
+}
+
 function base(launch: EngineInfo['launch']): Omit<EngineInfo, 'status' | 'version' | 'path' | 'message'> {
   return { ...engineBase('claude'), launch }
 }
@@ -126,6 +151,7 @@ export async function discoverClaude(command: string | null, env: NodeJS.Process
         status: 'missing',
         version: null,
         path: null,
+        installable: !custom && claudeInstaller(env) !== null,
         message: IS_WINDOWS
           ? '没找到 Claude Code。安装：在 PowerShell 运行 irm https://claude.ai/install.ps1 | iex'
           : '没找到 Claude Code。安装：在终端运行 curl -fsSL https://claude.ai/install.sh | bash',

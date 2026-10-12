@@ -74,6 +74,7 @@ const engine: EngineBridge = {
   setDefaultEngine: engine => call('engine:setDefaultEngine', engine),
   catalog: (engine, force) => call('engine:catalog', engine, force),
   updateEngine: engine => call('engine:update', engine),
+  installEngine: engine => call('engine:install', engine),
   retrySettings: () => call('engine:retrySettings'),
   setRetrySettings: maxRetries => call('engine:setRetrySettings', maxRetries),
   engines: force => call('engine:engines', !!force),

@@ -182,6 +182,11 @@ export class EngineHost {
     return this.m.settings.updateEngine(engine)
   }
 
+  /** 一键安装：跑引擎的官方安装方式，过程推 engine_job，结束后重新检测并广播 */
+  async installEngine(engine: EngineId): Promise<EngineUpdateResult> {
+    return this.m.settings.installEngine(engine)
+  }
+
   /** 设置云同步：引擎设置里可以同步的几项（不含命令路径、参数、环境变量） */
   syncableSettings(): SyncableEngineSettings {
     return this.m.settings.syncable()

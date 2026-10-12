@@ -1,12 +1,15 @@
 // 压缩上下文（docs/ui/compaction.md）：对话流里的一条分隔线。
-// 进行中：图标和进度条在动，计时每秒走；结束：「压缩前 → 压缩后」、减少的比例和用时。
-// 在页面上看着它压完时，进度条从满格缩到压缩后的比例、数字从压缩前递减到压缩后；翻历史时直接显示结果
+// 进行中：图标在动，计时每秒走，进度条按本机以往的用时模拟着从满格往「预计压缩后」缩（compactionEstimate.ts）；
+// 结束：「压缩前 → 压缩后」、减少的比例和用时。
+// 在页面上看着它压完时，进度条从停下的位置接着缩到压缩后的比例、数字从压缩前递减到压缩后；翻历史时直接显示结果
 import { useEffect, useRef, useState } from 'react'
 import { FoldVertical } from 'lucide-react'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '@/i18n/core'
 import { cn } from '@/ui'
-import { useTheme } from '@/features/appearance/ThemeProvider'
+import { simulated, useSimulatedProgress } from '@/ui/simulatedProgress'
+import { isDemo } from '@/data'
+import { useReducedMotion } from '@/features/appearance/ThemeProvider'
 import { formatTokens } from '@/features/usage/format'
 import { formatDuration } from './agentTrace'
 import {
@@ -17,13 +20,9 @@ import {
   easeTokens,
   type CompactionItem,
 } from './compaction'
+import { expectedDuration, expectedRatio, loadSamples, recordSample } from './compactionEstimate'
 
 const SHRINK_MS = 900
-
-function useReducedMotion(): boolean {
-  const { motion } = useTheme()
-  return motion === 'off' || (motion === 'system' && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
-}
 
 /** 进行中每秒刷新 */
 function useClock(active: boolean): number {
@@ -37,8 +36,8 @@ function useClock(active: boolean): number {
   return now
 }
 
-/** 刚在页面上压完：0→1 的进度，驱动数字递减；其它情况直接是 1 */
-function useShrink(item: CompactionItem, reduced: boolean): number {
+/** 刚在页面上压完：0→1 的进度，驱动数字递减；其它情况直接是 1。watched：在页面上看着它压的 */
+function useShrink(item: CompactionItem, reduced: boolean): { t: number; watched: boolean } {
   // 挂上时还在压缩：说明用户看着它压完。压缩后的大小可能晚一点才到（下一次请求补上），到了再播
   const watched = useRef(item.status === 'running')
   const [t, setT] = useState(0)
@@ -58,7 +57,7 @@ function useShrink(item: CompactionItem, reduced: boolean): number {
     })
     return () => cancelAnimationFrame(frame)
   }, [item.status, animate])
-  return animate ? t : 1
+  return { t: animate ? t : 1, watched: watched.current }
 }
 
 export function CompactionRow({ item }: { item: CompactionItem }) {
@@ -66,11 +65,24 @@ export function CompactionRow({ item }: { item: CompactionItem }) {
   const reduced = useReducedMotion()
   const running = item.status === 'running'
   const now = useClock(running)
-  const progress = useShrink(item, reduced)
+  const { t: progress, watched } = useShrink(item, reduced)
   const ratio = compactionRatio(item)
   const saved = compactionSaved(item)
   const pre = item.preTokens,
     post = item.postTokens
+  // 模拟进度：样本在挂上时读一次，进行中和压完接着缩用的是同一套估计
+  const [samples] = useState(loadSamples)
+  const expected = expectedDuration(pre, samples)
+  const target = expectedRatio(samples)
+  const sim = useSimulatedProgress(item.startedAt, expected, running, reduced)
+  const widthAt = (p: number): number => 1 - (1 - target) * p
+  // 压完 / 失败那一刻进度条停在哪（看着它压的才有）
+  const stopped = watched && !running && item.durationMs !== null ? widthAt(simulated(item.durationMs, expected)) : null
+  useEffect(() => {
+    if (isDemo || !watched || item.status !== 'completed' || pre === null || post === null || item.durationMs === null)
+      return
+    recordSample({ id: item.id, preTokens: pre, durationMs: item.durationMs, ratio: post / pre })
+  }, [watched, item.status, item.id, item.durationMs, pre, post])
   const shownPost = pre !== null && post !== null ? easeTokens(pre, post, progress) : post
 
   const title = running
@@ -94,7 +106,12 @@ export function CompactionRow({ item }: { item: CompactionItem }) {
     .join('\n')
 
   const tone = running ? 'running' : failed ? 'failed' : item.status === 'interrupted' ? 'muted' : 'done'
-  const meter = running || ratio !== null
+  const meter = running || ratio !== null || stopped !== null
+  const width = running
+    ? widthAt(sim.value)
+    : ratio !== null
+      ? (stopped ?? 1) - ((stopped ?? 1) - ratio) * easeOut(progress)
+      : stopped
   return (
     <div
       data-compaction={item.status}
@@ -134,13 +151,13 @@ export function CompactionRow({ item }: { item: CompactionItem }) {
                   <span
                     className={cn(
                       'absolute inset-y-0 left-0 rounded-full',
-                      running ? 'compaction-squeeze w-full' : 'bg-accent',
+                      running
+                        ? 'compaction-squeeze transition-[width] duration-200 ease-linear'
+                        : item.status === 'completed'
+                          ? 'bg-accent'
+                          : 'bg-fg-faint/50',
                     )}
-                    style={
-                      running || ratio === null
-                        ? undefined
-                        : { width: `${(1 - (1 - ratio) * easeOut(progress)) * 100}%` }
-                    }
+                    style={width === null ? undefined : { width: `${width * 100}%` }}
                   />
                 </span>
               )}
@@ -156,6 +173,7 @@ export function CompactionRow({ item }: { item: CompactionItem }) {
             <>
               <span className="h-3 w-px shrink-0 bg-line" />
               <span className="shrink-0 text-fg-faint tabular-nums">{time}</span>
+              {running && sim.slow && <span className="shrink-0 text-fg-faint">{tr('session.compaction.slow')}</span>}
             </>
           )}
         </div>

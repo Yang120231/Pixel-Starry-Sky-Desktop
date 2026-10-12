@@ -153,3 +153,9 @@ export function useTheme(): ThemeContextValue {
   if (!value) throw new Error(tr('theme.ThemeProvider.usethemeMustBeUsed'))
   return value
 }
+
+/** 动画关了（设置里关掉，或跟随系统且系统要求减少动态效果） */
+export function useReducedMotion(): boolean {
+  const { motion, systemReducedMotion } = useTheme()
+  return motion === 'off' || (motion === 'system' && systemReducedMotion)
+}

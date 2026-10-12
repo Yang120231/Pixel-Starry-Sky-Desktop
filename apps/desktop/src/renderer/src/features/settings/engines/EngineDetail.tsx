@@ -24,7 +24,17 @@ import { envLines, parseEnvLines } from './envLines'
 import { migrateEnv, providerEnvKeys } from './migrateEnv'
 import { LaunchCard } from './LaunchCard'
 import { DefaultBadge, ENGINE_INTRO, ENGINE_STATUS, FIELD } from './parts'
-import { canUpdate, hasNewer, outcomeTitle, updateEngine, useEngineUpdate, type UpdateOutcome } from './engineUpdate'
+import {
+  canInstall,
+  canUpdate,
+  hasNewer,
+  installEngine,
+  outcomeTitle,
+  updateEngine,
+  useEngineUpdate,
+  type UpdateOutcome,
+} from './engineUpdate'
+import { JobProgress } from './JobProgress'
 import { demo, isDemo } from '@/data/demo'
 import type { EngineLite } from '@/data/types'
 
@@ -267,9 +277,10 @@ function Header({
 }) {
   useI18n()
   // 和列表那一行共用（engineUpdate.ts）：在列表点了「更新」，进详情也看得到进度和结果
-  const { updating, result } = useEngineUpdate(e.id)
+  const { updating, action, job, result } = useEngineUpdate(e.id)
   const [redetecting, setRedetecting] = useState(false)
   const newer = hasNewer(e)
+  const installable = canInstall(e)
   const redetect = async (): Promise<void> => {
     if (!isLive) return
     setRedetecting(true)
@@ -321,6 +332,18 @@ function Header({
           >
             {redetecting ? tr('settings.engines.EngineDetail.detecting') : tr('session.SourceHintBar.detectAgain')}
           </Button>
+          {(installable || (updating && action === 'install')) && (
+            <Button
+              variant="primary"
+              icon={Download}
+              className="h-8 px-3 text-meta"
+              disabled={updating}
+              title={tr('engineJob.installTitle', { p0: e.name })}
+              onClick={() => void installEngine(e)}
+            >
+              {updating ? tr('engineJob.installing') : tr('engineJob.install')}
+            </Button>
+          )}
           {canUpdate(e) && (
             <span data-setting-title="检查更新" className="rounded-md">
               <Button
@@ -342,18 +365,20 @@ function Header({
           )}
         </div>
       </div>
-      {!ready && e.message && (
-        <p className="mt-3 whitespace-pre-line rounded-lg border border-line px-3 py-2 text-meta text-warn">
-          {translateMessage(e.message)}
-        </p>
+      {!ready && e.message && !(updating && action === 'install') && (
+        <div className="mt-3 rounded-lg border border-line px-3 py-2 text-meta">
+          <p className="whitespace-pre-line text-warn">{translateMessage(e.message)}</p>
+          {installable && <p className="mt-1 text-fg-secondary">{tr('engineJob.installHint')}</p>}
+        </div>
       )}
       {newer && !updating && !result && (
         <p className="mt-3 text-meta text-fg-secondary">
           {tr('settings.engines.engineUpdate.newVersionAvailable', { p0: e.latestVersion, p1: e.version })}
         </p>
       )}
-      {updating && (
-        <p className="mt-3 text-meta text-fg-muted">
+      {updating && job && <JobProgress job={job} />}
+      {updating && action === 'update' && (
+        <p className="mt-2 text-meta text-fg-muted">
           {e.id === 'codex'
             ? tr('settings.engines.engineUpdate.runningNpmUpdate')
             : tr('settings.engines.EngineDetail.runningClaudeUpdateThis')}

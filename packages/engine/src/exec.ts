@@ -156,6 +156,89 @@ export function run(
   })
 }
 
+/** 安装 / 更新命令输出的最后几行（给用户看）；没有输出时用错误原因 */
+export function outputTail(r: ExecResult, count = 6): string {
+  const lines = [r.stdout, r.stderr]
+    .join('\n')
+    .split(/\r?\n|\r/)
+    .map(plainLine)
+    .filter(Boolean)
+  return lines.slice(-count).join('\n') || (r.error ?? '')
+}
+
+/** 一行输出给界面看：去掉颜色控制序列和首尾空白 */
+export function plainLine(line: string): string {
+  // eslint-disable-next-line no-control-regex -- 就是要去掉颜色和光标控制序列
+  return line.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').trim()
+}
+
+/**
+ * 跑一个要好一会儿的命令（安装、更新），边跑边把每一行输出交给 onLine（\r 刷新的进度行也算一行）。
+ * 不经过 shell，不弹窗口；超时连同子进程一起结束。结果和 run() 一样
+ */
+export function runStream(
+  launcher: Launcher,
+  args: string[],
+  env: NodeJS.ProcessEnv,
+  timeoutMs: number,
+  onLine: (line: string) => void,
+): Promise<ExecResult> {
+  return new Promise(resolve => {
+    let child: ChildProcess
+    try {
+      child = spawn(launcher.command, [...launcher.args, ...args], {
+        env,
+        windowsHide: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        detached: !IS_WINDOWS,
+      })
+    } catch (err) {
+      resolve({ ok: false, started: false, stdout: '', stderr: '', error: (err as Error).message })
+      return
+    }
+    const out = { stdout: '', stderr: '' }
+    const pending = { stdout: '', stderr: '' }
+    const LIMIT = 256 * 1024
+    let timedOut = false
+    const take = (key: 'stdout' | 'stderr', chunk: string, flush = false): void => {
+      if (out[key].length < LIMIT) out[key] += chunk
+      const parts = (pending[key] + chunk).split(/\r\n|\r|\n/)
+      pending[key] = flush ? '' : (parts.pop() ?? '')
+      for (const part of parts) {
+        const line = plainLine(part)
+        if (line) onLine(line)
+      }
+    }
+    child.stdout!.setEncoding('utf8').on('data', (chunk: string) => take('stdout', chunk))
+    child.stderr!.setEncoding('utf8').on('data', (chunk: string) => take('stderr', chunk))
+    const timer = setTimeout(() => {
+      timedOut = true
+      killTree(child)
+    }, timeoutMs)
+    let settled = false
+    const done = (result: ExecResult): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve(result)
+    }
+    child.on('error', err =>
+      done({ ok: false, started: false, stdout: out.stdout, stderr: out.stderr, error: err.message }),
+    )
+    child.on('close', code => {
+      take('stdout', '', true)
+      take('stderr', '', true)
+      done({
+        ok: code === 0 && !timedOut,
+        started: true,
+        stdout: out.stdout,
+        stderr: out.stderr,
+        error: timedOut ? '超时' : code === 0 ? null : `退出码 ${code ?? '?'}`,
+      })
+    })
+  })
+}
+
 /**
  * 进程起不来时（例如追加了它不认的参数）给用户看的原因：stderr 开头两行，比「进程已退出」有用。
  * 命令行报错带颜色（\x1b[...m），界面上只要文字（docs/ui/engine-launch.md §9.2）

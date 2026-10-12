@@ -1,5 +1,24 @@
 // 自动更新（docs/release-update.md §7）
 export const updateMessages = {
+  // 设置 › 本机引擎：一键安装 / 更新的进度（docs/ui/engine-update.md）
+  'engineJob.install': { zh: '安装', en: 'Install' },
+  'engineJob.installTitle': { zh: '在软件里下载并安装 {p0}', en: 'Download and install {p0} in the app' },
+  'engineJob.installHint': {
+    zh: '点「安装」会运行官方安装方式，装好后自动检测，不用自己输命令。',
+    en: 'Install runs the official installer and re-detects when it finishes — no commands needed.',
+  },
+  'engineJob.installing': { zh: '安装中', en: 'Installing' },
+  'engineJob.updating': { zh: '更新中', en: 'Updating' },
+  'engineJob.phase.prepare': { zh: '准备中', en: 'Preparing' },
+  'engineJob.phase.download': { zh: '正在下载', en: 'Downloading' },
+  'engineJob.phase.install': { zh: '正在安装', en: 'Installing' },
+  'engineJob.phase.verify': { zh: '正在检测版本', en: 'Checking version' },
+  'engineJob.phase.done': { zh: '完成', en: 'Done' },
+  'engineJob.phase.failed': { zh: '没有完成', en: 'Did not complete' },
+  'engineJob.slow': { zh: '比平时慢，可能是网络慢', en: 'Slower than usual — the network may be slow' },
+  'engineJob.installed': { zh: '已安装 {p0}', en: 'Installed {p0}' },
+  'engineJob.installFailed': { zh: '安装没有完成', en: 'Install did not complete' },
+  'engineJob.demo': { zh: '演示模式不安装本机程序', en: 'Demo mode cannot install local programs' },
   'update.group': { zh: '更新', en: 'Updates' },
   'update.checking': { zh: '正在检查…', en: 'Checking…' },
   'update.latest': { zh: '已是最新版本', en: "You're up to date" },

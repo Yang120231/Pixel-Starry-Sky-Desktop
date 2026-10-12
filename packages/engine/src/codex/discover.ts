@@ -4,6 +4,7 @@ import { dirname, join, delimiter } from 'node:path'
 import { codedError, type EngineInfo } from '@pixelsky/protocol'
 import type { Launcher } from '../adapter'
 import { isFile, resolveCommand, run, versionAtLeast } from '../exec'
+import { globalNpm } from './update'
 import { engineBase } from '../registry'
 
 /** app-server 协议仍是实验接口，0.160.0 是实测通过的下限 */
@@ -109,6 +110,7 @@ export async function discoverCodex(
         status: 'missing',
         version: null,
         path: null,
+        installable: !override && globalNpm(env) !== null,
         message: 'Codex executable not found. Install Codex CLI or choose its path.',
       },
       launcher: null,

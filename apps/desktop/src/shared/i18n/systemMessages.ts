@@ -1226,5 +1226,11 @@ export const systemMessages = {
   "system.noBackgroundTasks": {
     "zh": "这个引擎没有后台任务",
     "en": "This engine has no background tasks"
-  }
+  },
+  "system.engineInstallUnsupported": { "zh": "这个引擎不支持在软件里安装", "en": "This engine can't be installed from the app" },
+  "system.engineAlreadyInstalled": { "zh": "已经装好了，请刷新", "en": "Already installed. Refresh to see it" },
+  "system.engineCannotInstallHere": { "zh": "这台电脑上没法一键安装，请按提示在终端安装", "en": "One-click install isn't available on this computer. Install it from a terminal as shown" },
+  "system.engineInstallInProgress": { "zh": "正在安装，请稍候", "en": "Already installing, please wait" },
+  "system.claudeInstallerMissing": { "zh": "没找到 PowerShell / curl，请按提示在终端安装 Claude Code", "en": "PowerShell / curl not found. Install Claude Code from a terminal as shown" },
+  "system.engineJobNoSuccess": { "zh": "没有成功，请看输出", "en": "It didn't succeed. See the output" }
 } as const

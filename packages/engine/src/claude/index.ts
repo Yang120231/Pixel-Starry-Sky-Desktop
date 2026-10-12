@@ -16,9 +16,9 @@ import {
 } from '@pixelsky/protocol'
 import type { EngineAdapter, EngineSession, Launcher, SessionContext } from '../adapter'
 import { engineEnv } from '../env'
-import { run, startupReason } from '../exec'
+import { outputTail, runStream, startupReason } from '../exec'
 import { engineBase } from '../registry'
-import { customClaude, discoverClaude, type ClaudeDiscovery } from './discover'
+import { claudeInstaller, customClaude, discoverClaude, type ClaudeDiscovery } from './discover'
 import { rewindFilesOnce, sideQuestionOnce, type HelperTarget, type RewindFilesReply } from './helper'
 import { ClaudeProcess } from './process'
 import { ClaudeSession, reservedClaudeArg, type ClaudeLaunchOptions } from './session'
@@ -321,19 +321,21 @@ export class ClaudeAdapter implements EngineAdapter {
   }
 
   /** 检查更新：运行 claude update（最多 5 分钟） */
-  async update(): Promise<EngineUpdateResult> {
+  async update(onLine: (line: string) => void = () => undefined): Promise<EngineUpdateResult> {
     const d = await this.discover(false)
     if (!d.launcher) throw new Error(d.info.message ?? '没找到 Claude Code')
-    const r = await run(d.launcher, ['update'], this.env(), 5 * 60_000)
-    const output = [r.stdout, r.stderr]
-      .join('\n')
-      .split(/\r?\n/)
-      .map(l => l.trim())
-      .filter(Boolean)
-      .slice(-6)
-      .join('\n')
+    const r = await runStream(d.launcher, ['update'], this.env(), 5 * 60_000, onLine)
     this.catalogCache = null
     // 版本由宿主重新检测后填上（重新检测会广播给界面）
-    return { ok: r.ok, output: output || (r.error ?? ''), version: null }
+    return { ok: r.ok, output: outputTail(r), version: null }
+  }
+
+  /** 一键安装：跑官方安装器（最多 10 分钟），装到 ~/.local/bin，检测本来就会找那里 */
+  async install(onLine: (line: string) => void = () => undefined): Promise<EngineUpdateResult> {
+    const installer = claudeInstaller(this.env())
+    if (!installer) throw new Error('没找到 PowerShell / curl，请按提示在终端安装 Claude Code')
+    const r = await runStream(installer, [], this.env(), 10 * 60_000, onLine)
+    this.catalogCache = null
+    return { ok: r.ok, output: outputTail(r), version: null }
   }
 }

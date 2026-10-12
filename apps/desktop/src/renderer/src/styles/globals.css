@@ -712,20 +712,8 @@
     color-mix(in oklab, var(--accent) 45%, transparent)
   );
   background-size: 200% 100%;
-  animation:
-    compaction-squeeze 1.8s var(--ease-out) infinite,
-    effort-sweep 1.8s linear infinite;
-}
-@keyframes compaction-squeeze {
-  0% {
-    width: 100%;
-  }
-  60% {
-    width: 22%;
-  }
-  100% {
-    width: 100%;
-  }
+  /* 宽度是模拟进度（CompactionRow），这里只让颜色流动 */
+  animation: effort-sweep 1.8s linear infinite;
 }
 .compaction-saved {
   animation: compaction-pop 360ms var(--ease-out);

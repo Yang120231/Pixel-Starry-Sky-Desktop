@@ -13,7 +13,8 @@ import { SectionTitle } from '../SettingRow'
 import { EngineDetail } from './EngineDetail'
 import { openEngineDetail, useEngineDetail } from './nav'
 import { DefaultBadge, ENGINE_STATUS } from './parts'
-import { hasNewer, outcomeTitle, updateEngine, useEngineUpdate } from './engineUpdate'
+import { canInstall, hasNewer, installEngine, outcomeTitle, updateEngine, useEngineUpdate } from './engineUpdate'
+import { JobProgress } from './JobProgress'
 import { demo, isDemo } from '@/data/demo'
 import type { EngineLite } from '@/data/types'
 
@@ -127,101 +128,108 @@ function EngineRow({
   useI18n()
   const unsupported = e.status === 'unsupported'
   const canDefault = !isDefault && !unsupported && e.status !== 'missing'
-  const { updating, result } = useEngineUpdate(e.id)
+  const { updating, action, job, result } = useEngineUpdate(e.id)
   const newer = hasNewer(e)
+  const installable = canInstall(e)
   return (
     <div
       data-setting-title={e.name}
-      className={cn(
-        'flex items-center gap-2 rounded-xl border border-line bg-surface/60 pr-3',
-        !unsupported && 'hover:border-line-strong',
-      )}
+      className={cn('rounded-xl border border-line bg-surface/60', !unsupported && 'hover:border-line-strong')}
     >
-      <button
-        type="button"
-        disabled={unsupported}
-        onClick={onOpen}
-        aria-label={tr('settings.engines.EnginesSection.settings', { p0: e.name })}
-        className="flex min-w-0 flex-1 items-center gap-3 rounded-xl py-3 pl-4 text-left disabled:cursor-default"
-      >
-        <span
-          className={cn(
-            'flex size-9 shrink-0 items-center justify-center rounded-lg border border-line bg-subtle',
-            unsupported && 'opacity-60',
-          )}
+      <div className="flex items-center gap-2 pr-3">
+        <button
+          type="button"
+          disabled={unsupported}
+          onClick={onOpen}
+          aria-label={tr('settings.engines.EnginesSection.settings', { p0: e.name })}
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-xl py-3 pl-4 text-left disabled:cursor-default"
         >
-          <EngineIcon engine={e.id} size={18} />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            <span className={cn('text-ui font-medium', unsupported ? 'text-fg-muted' : 'text-fg')}>{e.name}</span>
-            {isDefault && <DefaultBadge />}
-            {hidden && !isDefault && (
-              <span className="text-label text-fg-faint">{tr('settings.engines.EnginesSection.hiddenFromMenu')}</span>
+          <span
+            className={cn(
+              'flex size-9 shrink-0 items-center justify-center rounded-lg border border-line bg-subtle',
+              unsupported && 'opacity-60',
             )}
-            {e.status === 'ready' ? (
-              <span className="inline-flex items-center gap-1 text-meta text-success">
-                <CircleCheck size={12} />
-                {e.version ?? tr('settings.editor.EditorSection.available')}
-              </span>
-            ) : (
-              <span className={cn('text-meta', unsupported ? 'text-fg-faint' : 'text-warn')}>
-                {ENGINE_STATUS[e.status] ?? e.status}
+          >
+            <EngineIcon engine={e.id} size={18} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+              <span className={cn('text-ui font-medium', unsupported ? 'text-fg-muted' : 'text-fg')}>{e.name}</span>
+              {isDefault && <DefaultBadge />}
+              {hidden && !isDefault && (
+                <span className="text-label text-fg-faint">{tr('settings.engines.EnginesSection.hiddenFromMenu')}</span>
+              )}
+              {e.status === 'ready' ? (
+                <span className="inline-flex items-center gap-1 text-meta text-success">
+                  <CircleCheck size={12} />
+                  {e.version ?? tr('settings.editor.EditorSection.available')}
+                </span>
+              ) : (
+                <span className={cn('text-meta', unsupported ? 'text-fg-faint' : 'text-warn')}>
+                  {ENGINE_STATUS[e.status] ?? e.status}
+                </span>
+              )}
+              {newer && !updating && !result && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-1.5 text-label text-accent-fg">
+                  <CircleArrowUp size={11} />
+                  {tr('settings.engines.engineUpdate.newVersion', { p0: e.latestVersion })}
+                </span>
+              )}
+            </span>
+            {e.path && (
+              <span className="mt-0.5 block truncate font-mono text-meta text-fg-muted" title={e.path}>
+                {e.path}
               </span>
             )}
-            {newer && !updating && !result && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-1.5 text-label text-accent-fg">
-                <CircleArrowUp size={11} />
-                {tr('settings.engines.engineUpdate.newVersion', { p0: e.latestVersion })}
+            {/* 一键安装 / 更新的结果（进度条在这一行下面，完整输出在详情页） */}
+            {!updating && result && (
+              <span
+                role="status"
+                className={cn(
+                  'mt-0.5 block truncate text-meta',
+                  'error' in result || !result.ok ? 'text-danger' : 'text-success',
+                )}
+              >
+                {'error' in result ? translateMessage(result.error) : outcomeTitle(result)}
               </span>
             )}
           </span>
-          {e.path && (
-            <span className="mt-0.5 block truncate font-mono text-meta text-fg-muted" title={e.path}>
-              {e.path}
-            </span>
-          )}
-          {/* 一键更新的进度和结果（完整输出在详情页） */}
-          {(updating || result) && (
-            <span
-              role="status"
-              className={cn(
-                'mt-0.5 block truncate text-meta',
-                updating
-                  ? 'text-fg-muted'
-                  : result && ('error' in result || !result.ok)
-                    ? 'text-danger'
-                    : 'text-success',
-              )}
-            >
-              {updating
-                ? tr('settings.engines.engineUpdate.updating')
-                : result && ('error' in result ? translateMessage(result.error) : outcomeTitle(result))}
-            </span>
-          )}
-        </span>
-        {!unsupported && <ChevronRight size={16} className="shrink-0 text-fg-faint" />}
-      </button>
-      {(newer || updating) && (
-        <Button
-          variant="primary"
-          icon={updating ? Loader2 : Download}
-          className={cn('h-7 shrink-0 px-2.5 text-meta', updating && '[&_svg]:animate-spin')}
-          disabled={updating}
-          title={tr('settings.engines.engineUpdate.updateTo', { p0: e.latestVersion })}
-          onClick={() => void updateEngine(e)}
-        >
-          {updating ? tr('settings.engines.engineUpdate.updatingShort') : tr('settings.engines.engineUpdate.update')}
-        </Button>
-      )}
-      {canDefault && (
-        <button
-          type="button"
-          onClick={onSetDefault}
-          className="shrink-0 rounded-md border border-line px-2.5 py-1 text-meta text-fg-secondary hover:bg-hover hover:text-fg"
-        >
-          {tr('session.ModelSourceMenu.setAsDefault')}{' '}
+          {!unsupported && <ChevronRight size={16} className="shrink-0 text-fg-faint" />}
         </button>
+        {(newer || installable || updating) && (
+          <Button
+            variant="primary"
+            icon={updating ? Loader2 : Download}
+            className={cn('h-7 shrink-0 px-2.5 text-meta', updating && '[&_svg]:animate-spin')}
+            disabled={updating}
+            title={
+              installable
+                ? tr('engineJob.installTitle', { p0: e.name })
+                : tr('settings.engines.engineUpdate.updateTo', { p0: e.latestVersion })
+            }
+            onClick={() => void (installable ? installEngine(e) : updateEngine(e))}
+          >
+            {updating
+              ? tr(action === 'install' ? 'engineJob.installing' : 'engineJob.updating')
+              : installable
+                ? tr('engineJob.install')
+                : tr('settings.engines.engineUpdate.update')}
+          </Button>
+        )}
+        {canDefault && (
+          <button
+            type="button"
+            onClick={onSetDefault}
+            className="shrink-0 rounded-md border border-line px-2.5 py-1 text-meta text-fg-secondary hover:bg-hover hover:text-fg"
+          >
+            {tr('session.ModelSourceMenu.setAsDefault')}{' '}
+          </button>
+        )}
+      </div>
+      {updating && job && (
+        <div className="px-4 pb-3">
+          <JobProgress job={job} compact />
+        </div>
       )}
     </div>
   )

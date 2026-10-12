@@ -84,6 +84,7 @@ export const ENGINE_OPS = {
   'engine:setDefaultEngine': (c, engine) => c.host.setDefaultEngine(engineId(engine)),
   'engine:catalog': (c, engine, force) => c.host.engineCatalog(engineId(engine), force === true),
   'engine:update': (c, engine) => c.host.updateEngine(engineId(engine)),
+  'engine:install': (c, engine) => c.host.installEngine(engineId(engine)),
   'engine:retrySettings': c => c.host.retrySettings(),
   'engine:setRetrySettings': (c, maxRetries) => c.host.setRetrySettings(maxRetries as number),
   'engine:projects': c => c.host.projects(),

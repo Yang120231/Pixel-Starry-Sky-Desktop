@@ -18,6 +18,7 @@ export type {
   EngineLocalConfig,
   EngineModel,
   EngineStatus,
+  EngineJob,
   EngineUpdateResult,
   FileChange,
   FileAttachment,

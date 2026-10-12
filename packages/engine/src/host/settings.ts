@@ -12,6 +12,7 @@ import {
   type EngineDefaults,
   type EngineId,
   type EngineInfo,
+  type EngineJob,
   type EngineLocalConfig,
   type EngineUpdateResult,
   type SessionDefaults,
@@ -21,12 +22,26 @@ import { retryLimit } from '../retry'
 import { DEFAULT_SETTINGS, type EngineSettingsFile } from '../store'
 import type { HostContext, Runtime } from './context'
 
+const PHASE_ORDER: EngineJob['phase'][] = ['prepare', 'download', 'install']
+
+/** 按一行输出猜安装 / 更新走到哪一步了（下载 → 安装）；只往前走，认不出时保持原样 */
+export function jobPhase(line: string, current: EngineJob['phase']): EngineJob['phase'] {
+  const guess = /install|extract|unpack|setting up|added \d+ package|changed \d+ package|安装|解压/i.test(line)
+    ? 'install'
+    : /download|fetch|http|下载/i.test(line)
+      ? 'download'
+      : null
+  if (!guess) return current === 'prepare' ? 'download' : current
+  return PHASE_ORDER.indexOf(guess) > PHASE_ORDER.indexOf(current) ? guess : current
+}
+
 export class HostSettings {
   /** 当前设置；只整体替换，不原地修改 */
   file: EngineSettingsFile
   /** npm 上查到的最新版本（checkEngineUpdates），engines() 带进引擎信息 */
   private readonly latest: Partial<Record<EngineId, string>> = {}
-  private readonly updating = new Set<EngineId>()
+  /** 正在安装 / 更新的引擎 → 在做哪一种 */
+  private readonly updating = new Map<EngineId, EngineJob['action']>()
 
   constructor(private readonly ctx: HostContext) {
     this.file = ctx.store.loadSettings()
@@ -206,13 +221,56 @@ export class HostSettings {
   async updateEngine(engine: EngineId): Promise<EngineUpdateResult> {
     const adapter = this.ctx.adapters[engine]
     if (!adapter?.update) throw new Error('这个引擎不支持在软件里更新')
-    if (this.updating.has(engine)) throw new Error('正在更新，请稍候')
-    this.updating.add(engine)
-    try {
+    return this.runJob(engine, 'update', async onLine => {
       if (adapter.updateNeedsIdle) await this.releaseIdleProcesses(engine)
-      const result = await adapter.update()
+      return adapter.update!(onLine)
+    })
+  }
+
+  /** 一键安装：只有检测结果说能装（installable）时才跑，装完重新检测 */
+  async installEngine(engine: EngineId): Promise<EngineUpdateResult> {
+    const adapter = this.ctx.adapters[engine]
+    if (!adapter?.install) throw new Error('这个引擎不支持在软件里安装')
+    const info = await adapter.info()
+    if (info.status !== 'missing') throw new Error('已经装好了，请刷新')
+    if (!info.installable) throw new Error(info.message ?? '这台电脑上没法一键安装，请按提示在终端安装')
+    return this.runJob(engine, 'install', onLine => adapter.install!(onLine))
+  }
+
+  /**
+   * 安装和更新共用：同一个引擎同时只跑一个；过程推 engine_job（阶段 + 最后一行输出，最多每 250 ms 一次），
+   * 结束（成功或失败）都重新检测并广播引擎列表
+   */
+  private async runJob(
+    engine: EngineId,
+    action: EngineJob['action'],
+    work: (onLine: (line: string) => void) => Promise<EngineUpdateResult>,
+  ): Promise<EngineUpdateResult> {
+    const busy = this.updating.get(engine)
+    if (busy) throw new Error(busy === 'install' ? '正在安装，请稍候' : '正在更新，请稍候')
+    this.updating.set(engine, action)
+    let job: EngineJob = { engine, action, phase: 'prepare', startedAt: Date.now(), line: null, error: null }
+    let sentAt = 0
+    const emit = (next: EngineJob, force = false): void => {
+      const changed = next.phase !== job.phase
+      job = next
+      if (!force && !changed && Date.now() - sentAt < 250) return
+      sentAt = Date.now()
+      if (!this.ctx.closing) this.ctx.opts.emit({ kind: 'engine_job', job })
+    }
+    emit(job, true)
+    try {
+      const result = await work(line => emit({ ...job, phase: jobPhase(line, job.phase), line }))
+      emit({ ...job, phase: 'verify' }, true)
       const list = await this.engines(true)
-      return { ...result, version: list.find(e => e.id === engine)?.version ?? null }
+      const version = list.find(e => e.id === engine)?.version ?? null
+      const ok = result.ok && (action === 'update' || list.find(e => e.id === engine)?.status !== 'missing')
+      const error = ok ? null : result.output.split('\n').pop() || '没有成功，请看输出'
+      emit({ ...job, phase: ok ? 'done' : 'failed', error }, true)
+      return { ...result, ok, version }
+    } catch (err) {
+      emit({ ...job, phase: 'failed', error: (err as Error).message }, true)
+      throw err
     } finally {
       this.updating.delete(engine)
     }

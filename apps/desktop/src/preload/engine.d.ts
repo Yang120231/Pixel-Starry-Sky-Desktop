@@ -38,6 +38,8 @@ export interface EngineBridge {
   catalog(engine: EngineId, force?: boolean): Promise<EngineCatalog>
   /** 检查更新（Claude Code：claude update），结束后重新检测 */
   updateEngine(engine: EngineId): Promise<EngineUpdateResult>
+  /** 一键安装（只在 EngineInfo.installable 时可用）；过程看 engine:event 的 engine_job */
+  installEngine(engine: EngineId): Promise<EngineUpdateResult>
   retrySettings(): Promise<{ maxRetries: number | null }>
   setRetrySettings(maxRetries: number | null): Promise<{ maxRetries: number | null }>
   /** 引擎列表和状态；force 时重新检测 */

@@ -87,8 +87,13 @@ export interface EngineAdapter {
   subagentTranscript?(record: SessionRecord, agentId: string): Item[] | Promise<Item[]>
   /** 引擎实际报上来的可选项（输出风格等）；不发消息、不花钱，force 时不用缓存 */
   catalog?(force?: boolean): Promise<EngineCatalog>
-  /** 检查更新并安装（Claude Code：claude update；Codex：npm install -g）；宿主随后重新检测 */
-  update?(): Promise<EngineUpdateResult>
+  /** 检查更新并安装（Claude Code：claude update；Codex：npm install -g）；宿主随后重新检测。onLine 收每一行输出 */
+  update?(onLine?: (line: string) => void): Promise<EngineUpdateResult>
+  /**
+   * 没装时一键安装（Claude Code：官方安装器；Codex：npm install -g），只在 info.installable 为真时调用；
+   * 宿主随后重新检测。onLine 收每一行输出
+   */
+  install?(onLine?: (line: string) => void): Promise<EngineUpdateResult>
   /** npm 上的包名：宿主定时查最新版本，界面提示「有新版本」（docs/ui/engine-update.md） */
   readonly npmPackage?: string
   /**
