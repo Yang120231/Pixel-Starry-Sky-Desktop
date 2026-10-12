@@ -64,6 +64,6 @@ describe('task groups', () => {
     expect(g.waiting.map(x => x.record.id)).toEqual(['b'])
     expect(g.running.map(x => x.record.id)).toEqual(['d', 'c'])
     expect(g.recent.map(x => x.record.id)).toEqual(['e', 'a'])
-    expect(taskTitle(s('x', 'idle', 1))).toBe('未命名任务')
+    expect(taskTitle(s('x', 'idle', 1))).toBe('未命名会话')
   })
 })

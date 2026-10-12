@@ -1,7 +1,7 @@
 // 手机端的通用小组件。只用设计变量（styles/tokens.css），不导入 features / data / connection。
 // packages/ui 抽出后，和桌面端相同的部分改用那里的。
-import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react'
-import { ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react'
+import { useSyncExternalStore, type ButtonHTMLAttributes, type ReactNode, type Ref } from 'react'
+import { ChevronLeft, ChevronRight, Menu, type LucideIcon } from 'lucide-react'
 
 export const cn = (...parts: (string | false | null | undefined)[]): string => parts.filter(Boolean).join(' ')
 
@@ -57,14 +57,55 @@ export function IconButton({
   )
 }
 
+/** 宽屏（平板、电脑浏览器）：抽屉常驻左边（docs/mobile-remote.md §18.3） */
+export const WIDE = '(min-width: 900px)'
+/** 再宽：工具面板放在最右边一栏 */
+export const WIDER = '(min-width: 1280px)'
+/** 有实体键盘、精确指针（电脑浏览器）：回车发送 */
+export const FINE_POINTER = '(hover: hover) and (pointer: fine)'
+
+/** 媒体查询（窗口大小变了跟着变） */
+export function useMedia(query: string): boolean {
+  return useSyncExternalStore(
+    listener => {
+      const m = matchMedia(query)
+      m.addEventListener('change', listener)
+      return () => m.removeEventListener('change', listener)
+    },
+    () => matchMedia(query).matches,
+    () => false,
+  )
+}
+
+/** 左上角打开抽屉的按钮（窄屏才有），角标是等你处理的数量 */
+export function MenuButton({ badge, onClick }: { badge?: number; onClick(): void }) {
+  return (
+    <button
+      type="button"
+      aria-label={badge ? `打开菜单（${badge} 个等你处理）` : '打开菜单'}
+      onClick={onClick}
+      className="relative flex size-11 shrink-0 items-center justify-center rounded-full text-fg-secondary active:bg-hover min-[900px]:hidden"
+    >
+      <Menu size={22} strokeWidth={1.75} />
+      {!!badge && (
+        <span className="absolute top-1 right-0.5 min-w-4.5 rounded-full bg-danger px-1 text-center text-label leading-4.5 text-accent-on">
+          {badge > 99 ? '99+' : badge}
+        </span>
+      )}
+    </button>
+  )
+}
+
 /**
- * 一页：顶栏（可选返回、操作）+ 内容 + 可选底栏；顶部和底部留出刘海 / 手势条的安全区。
+ * 一页：顶栏（可选返回或菜单按钮、操作）+ 内容 + 可选底栏；顶部和底部留出刘海 / 手势条的安全区。
  * large：一级页面用大标题（标题在内容区顶部，跟着滚动）。scroll=false 时内容自己处理滚动（会话页）。
+ * leading：没有返回按钮时放在左上角的（抽屉按钮）。
  */
 export function Screen({
   title,
   subtitle,
   onBack,
+  leading,
   actions,
   children,
   footer,
@@ -74,6 +115,7 @@ export function Screen({
   title: ReactNode
   subtitle?: ReactNode
   onBack?: () => void
+  leading?: ReactNode
   actions?: ReactNode
   children: ReactNode
   footer?: ReactNode
@@ -81,14 +123,19 @@ export function Screen({
   scroll?: boolean
 }) {
   return (
-    <div className="flex h-dvh flex-col bg-app text-fg">
+    <div className="flex h-dvh min-w-0 flex-1 flex-col bg-app text-fg">
       <header
         className={cn(
           'flex shrink-0 items-center gap-1 bg-app/95 px-1 pt-[env(safe-area-inset-top)] backdrop-blur',
           !large && 'border-b border-line-subtle',
         )}
       >
-        {onBack ? <IconButton label="返回" icon={ChevronLeft} onClick={onBack} /> : <span className="w-3" />}
+        {onBack ? (
+          <IconButton label="返回" icon={ChevronLeft} onClick={onBack} />
+        ) : (
+          (leading ?? <span className="w-3" />)
+        )}
+        {!onBack && leading && <span className="hidden w-3 min-[900px]:block" />}
         <div className="min-w-0 flex-1 py-2">
           {!large && <div className="truncate text-section font-semibold">{title}</div>}
           {!large && subtitle && <div className="truncate text-meta text-fg-muted">{subtitle}</div>}
@@ -106,38 +153,6 @@ export function Screen({
       </main>
       {footer && <div className="shrink-0 bg-panel pb-[env(safe-area-inset-bottom)]">{footer}</div>}
     </div>
-  )
-}
-
-/** 底部标签栏（一级页面） */
-export function TabBar({
-  items,
-}: {
-  items: { key: string; label: string; icon: LucideIcon; active: boolean; badge?: number; onClick(): void }[]
-}) {
-  return (
-    <nav className="flex border-t border-line-subtle">
-      {items.map(({ key, label, icon: Icon, active, badge, onClick }) => (
-        <button
-          key={key}
-          type="button"
-          onClick={onClick}
-          aria-current={active ? 'page' : undefined}
-          className={cn(
-            'relative flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5',
-            active ? 'text-fg' : 'text-fg-faint',
-          )}
-        >
-          <Icon size={22} strokeWidth={active ? 2 : 1.75} />
-          <span className="text-label">{label}</span>
-          {!!badge && (
-            <span className="absolute top-1.5 left-1/2 ml-2 min-w-4.5 rounded-full bg-danger px-1 text-center text-label leading-4.5 text-accent-on">
-              {badge}
-            </span>
-          )}
-        </button>
-      ))}
-    </nav>
   )
 }
 

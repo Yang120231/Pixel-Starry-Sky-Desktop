@@ -1,28 +1,35 @@
 // 会话页：按轮显示对话（向上加载更早的）、审批 / 提问卡片、停止、回到最新；输入框由 App 传进来（features 之间不互相导入）。
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+// 输入框上面是消息队列；点图片全屏看；最近一轮出错可以「重试」（docs/mobile-remote.md §17）。
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ArrowDown, Square } from 'lucide-react'
 import type { ApprovalDecision } from '@pixelsky/protocol'
 import type { Pairing } from '@/connection'
 import { useDesktop, useSession } from '@/data/hooks'
-import { groupTurns } from '@/data/turns'
+import { RETRY_MESSAGE, groupTurns, retryNoticeId } from '@/data/turns'
 import { linkStateText, sessionStateText } from '@/i18n/zh'
 import { Banner, Dot, Screen, Spinner, cn } from '@/ui'
+import { ImageViewer } from '@/ui/images'
 import { ApprovalCard } from './ApprovalCard'
-import { TurnBlock } from './ItemView'
+import { TurnBlock, type TurnActions } from './ItemView'
+import { QueuePanel } from './QueuePanel'
 
 export function SessionScreen({
   pairing,
   sessionId,
-  onBack,
+  leading,
   composer,
+  onRecall,
 }: {
   pairing: Pairing
   sessionId: string
-  onBack(): void
+  /** 窄屏左上角的抽屉按钮（宽屏抽屉常驻，按钮自己藏起来） */
+  leading?: ReactNode
   composer: ReactNode
+  /** 队列里撤回的消息：文字放回输入框 */
+  onRecall(text: string): void
 }) {
   const { link, state, sessions, projects } = useDesktop(pairing.deviceId)
-  const { view, error, loadOlder, detail } = useSession(pairing.deviceId, sessionId)
+  const { view, error, loadOlder, detail, image } = useSession(pairing.deviceId, sessionId)
   const summary = sessions.find(s => s.record.id === sessionId)
   const snapshot = view.snapshot
   const running = snapshot ? !!snapshot.turnId : summary?.state === 'running'
@@ -63,10 +70,26 @@ export function SessionScreen({
     if (link && pending) await link.call('engine:answer', sessionId, pending.requestId, d)
   }
 
+  // 全屏看图、出错后重试（连点只发一次）
+  const [viewing, setViewing] = useState<string | null>(null)
+  const [retrying, setRetrying] = useState(false)
+  const [retryError, setRetryError] = useState<string | null>(null)
+  const retryId = canAct && snapshot ? retryNoticeId(snapshot.items, running, snapshot.queue.length) : null
+  const retry = useCallback(() => {
+    if (!link || retrying) return
+    setRetrying(true)
+    setRetryError(null)
+    link
+      .call('engine:send', sessionId, { text: RETRY_MESSAGE, clientMessageId: crypto.randomUUID() })
+      .catch((e: Error) => setRetryError(e.message))
+      .finally(() => setRetrying(false))
+  }, [link, retrying, sessionId])
+  const actions: TurnActions = { sessionId, image, view: setViewing, retryId, retrying, retry }
+
   return (
     <Screen
       scroll={false}
-      title={record?.title || '任务'}
+      title={record?.title || '会话'}
       subtitle={
         <span className="flex items-center gap-1.5">
           <Dot
@@ -77,7 +100,7 @@ export function SessionScreen({
           {project && <span className="truncate text-fg-faint">· {project}</span>}
         </span>
       }
-      onBack={onBack}
+      leading={leading}
       actions={
         running && (
           <button
@@ -92,22 +115,31 @@ export function SessionScreen({
         )
       }
       footer={
-        pending ? (
-          <ApprovalCard key={pending.requestId} request={pending} canAct={canAct} onAnswer={answer} />
-        ) : (
-          composer
-        )
+        // 宽屏：对话和输入框都在中间一栏，不铺满整个窗口
+        <div className="mx-auto w-full max-w-3xl">
+          {pending ? (
+            <ApprovalCard key={pending.requestId} request={pending} canAct={canAct} onAnswer={answer} />
+          ) : (
+            <>
+              {snapshot && (
+                <QueuePanel link={link} sessionId={sessionId} snapshot={snapshot} canAct={canAct} onRecall={onRecall} />
+              )}
+              {composer}
+            </>
+          )}
+        </div>
       }
     >
       <div className="relative min-h-0 flex-1">
         <div ref={scroller} className="h-full overflow-y-auto overscroll-contain">
-          <div className="flex flex-col gap-6 px-4 pt-3 pb-6">
+          <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 pt-3 pb-6">
             {state !== 'ready' && state && (
               <Banner tone="warn" icon={<Spinner size={14} />}>
                 {linkStateText[state]}
               </Banner>
             )}
             {error && <Banner tone="danger">{error}</Banner>}
+            {retryError && <Banner tone="danger">{retryError}</Banner>}
             {!snapshot && !error && (
               <div className="flex items-center justify-center gap-2 py-16 text-meta text-fg-muted">
                 <Spinner /> 正在加载…
@@ -130,6 +162,7 @@ export function SessionScreen({
                 waiting={!!pending && i === turns.length - 1}
                 truncated={view.truncated}
                 onDetail={id => void detail(id)}
+                actions={actions}
               />
             ))}
           </div>
@@ -146,6 +179,7 @@ export function SessionScreen({
           <ArrowDown size={18} />
         </button>
       </div>
+      {viewing && <ImageViewer src={viewing} onClose={() => setViewing(null)} />}
     </Screen>
   )
 }

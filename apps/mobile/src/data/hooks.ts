@@ -1,7 +1,18 @@
 // 界面用的数据钩子：电脑列表、某台电脑的任务和项目、某个会话。只经 connection/ 拿数据。
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import type { EngineEvent, HostEvent, Item, ProjectRecord, SessionSummary } from '@pixelsky/protocol'
+import type {
+  EngineEvent,
+  EngineId,
+  HostEvent,
+  ImageAttachment,
+  Item,
+  ProjectRecord,
+  SearchResult,
+  SessionSummary,
+} from '@pixelsky/protocol'
 import { connections, type DesktopLink, type LinkState, type Pairing } from '@/connection'
+import { desktopLists, NO_LISTS } from './desktop'
+import { imageDataUrl, imageKey, rememberImage } from './images'
 import { applyEvent, applyTail, emptyView, prependOlder, replaceItem, type SessionView, type Tail } from './session'
 
 /** 配对过的电脑和当前选中的那台；连接状态变化时刷新 */
@@ -45,37 +56,15 @@ export interface DesktopData {
   loaded: boolean
 }
 
-/** 一台电脑的任务列表和项目：连上时拉一次，之后跟着推送更新 */
+/** 一台电脑的任务列表和项目（全应用一份，见 desktop.ts） */
 export function useDesktop(deviceId: string | undefined): DesktopData {
   const state = useLinkState(deviceId)
   const link = deviceId ? connections.link(deviceId) : undefined
-  const [sessions, setSessions] = useState<SessionSummary[]>([])
-  const [projects, setProjects] = useState<ProjectRecord[]>([])
-  const [loaded, setLoaded] = useState(false)
-  useEffect(() => {
-    if (state !== 'ready' || !link) return
-    let alive = true
-    void Promise.all([
-      link.call<SessionSummary[]>('engine:sessions'),
-      link.call<ProjectRecord[]>('engine:projects'),
-    ]).then(
-      ([s, p]) => {
-        if (!alive) return
-        setSessions(s)
-        setProjects(p)
-        setLoaded(true)
-      },
-      () => undefined,
-    )
-    return () => {
-      alive = false
-    }
-  }, [state, link])
-  useEvents(deviceId, event => {
-    if (event.kind === 'sessions') setSessions(event.sessions)
-    else if (event.kind === 'projects') setProjects(event.projects)
-  })
-  return { link, state, sessions, projects, loaded }
+  const lists = useSyncExternalStore(
+    l => desktopLists.subscribe(l),
+    () => (deviceId ? desktopLists.get(deviceId) : NO_LISTS),
+  )
+  return { link, state, ...lists }
 }
 
 export interface SessionData {
@@ -83,6 +72,8 @@ export interface SessionData {
   error: string | null
   loadOlder(): Promise<void>
   detail(itemId: string): Promise<void>
+  /** 取一条消息里的第 index 张图（电脑太大的先缩小），返回能放进 <img> 的地址 */
+  image(itemId: string, index: number): Promise<string>
 }
 
 /** 一个会话：连上（或重连）时取尾部快照，之后按 seq 应用事件；seq 接不上就重新取 */
@@ -131,5 +122,72 @@ export function useSession(deviceId: string, sessionId: string): SessionData {
     [link, sessionId],
   )
 
-  return { view, error, loadOlder, detail }
+  const image = useCallback(
+    async (itemId: string, index: number) => {
+      if (!link) throw new Error('还没连上电脑')
+      const got = await link.call<ImageAttachment>('image', sessionId, itemId, index)
+      const url = imageDataUrl(got)
+      rememberImage(imageKey(sessionId, itemId, index), url)
+      return url
+    },
+    [link, sessionId],
+  )
+
+  return { view, error, loadOlder, detail, image }
+}
+
+/** 新建任务的默认引擎：电脑上设的那个（网关的 defaults）；电脑版太旧时为 null */
+export function useDefaultEngine(deviceId: string | undefined): EngineId | null {
+  const state = useLinkState(deviceId)
+  const link = deviceId ? connections.link(deviceId) : undefined
+  const [engine, setEngine] = useState<EngineId | null>(null)
+  useEffect(() => {
+    if (state !== 'ready' || !link) return
+    let alive = true
+    link.call<{ engine: EngineId | null }>('defaults').then(
+      r => alive && setEngine(r.engine),
+      () => undefined,
+    )
+    return () => {
+      alive = false
+    }
+  }, [state, link])
+  return engine
+}
+
+export interface ContentSearch {
+  results: SearchResult[]
+  truncated: boolean
+  loading: boolean
+  /** 电脑版太旧，不能搜对话内容 */
+  unsupported: boolean
+}
+
+const NO_RESULTS: ContentSearch = { results: [], truncated: false, loading: false, unsupported: false }
+
+/** 搜对话内容（只搜电脑本机的会话）：停止输入 350 毫秒后再问电脑，新的搜索会取消上一次 */
+export function useContentSearch(deviceId: string | undefined, text: string, projectId: string | null): ContentSearch {
+  const state = useLinkState(deviceId)
+  const link = deviceId ? connections.link(deviceId) : undefined
+  const [result, setResult] = useState<ContentSearch>(NO_RESULTS)
+  const query = text.trim()
+  useEffect(() => {
+    if (state !== 'ready' || !link || !query) {
+      setResult(NO_RESULTS)
+      return
+    }
+    let alive = true
+    setResult(r => ({ ...r, loading: true }))
+    const timer = setTimeout(() => {
+      link.call<{ results: SearchResult[]; truncated: boolean }>('search', query, projectId).then(
+        r => alive && setResult({ results: r.results, truncated: r.truncated, loading: false, unsupported: false }),
+        (e: Error) => alive && setResult({ ...NO_RESULTS, unsupported: e.message.includes('MOBILE_UNSUPPORTED') }),
+      )
+    }, 350)
+    return () => {
+      alive = false
+      clearTimeout(timer)
+    }
+  }, [state, link, query, projectId])
+  return result
 }

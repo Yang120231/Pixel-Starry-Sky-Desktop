@@ -225,9 +225,15 @@ importers:
       '@pixelsky/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+      hast-util-to-jsx-runtime:
+        specifier: ^2.3.6
+        version: 2.3.6
       jsqr:
         specifier: ^1.4.0
         version: 1.4.0
+      lowlight:
+        specifier: ^3.3.0
+        version: 3.3.0
       lucide-react:
         specifier: ^1.52.0
         version: 1.52.0(@types/react@19.3.0)(react@19.3.0)

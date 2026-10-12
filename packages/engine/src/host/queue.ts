@@ -18,10 +18,12 @@ export class HostQueue {
   queueSummary(id: string): QueueSummary | null {
     const rt = this.ctx.runtimes.get(id)
     if (rt) {
+      // queued 只数还在等的：正在执行、正在交付的那条不算（手机任务列表的「排队 n」，docs/mobile-remote.md §17）
       const queue = rt.snapshot.queue
-      if (!queue.length) return null
+      const queued = queue.filter(q => q.status === 'queued').length
       const failed = queue.filter(q => q.status === 'failed' || q.status === 'uncertain').length
-      return { queued: queue.length - failed, failed, paused: rt.snapshot.queuePaused }
+      if (!queued && !failed) return null
+      return { queued, failed, paused: rt.snapshot.queuePaused }
     }
     if (!this.queueHints.has(id)) this.queueHints.set(id, this.ctx.store.peekQueue(id))
     return this.queueHints.get(id) ?? null

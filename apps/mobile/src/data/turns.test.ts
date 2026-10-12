@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Item } from '@pixelsky/protocol'
-import { groupTurns, processSummary, stepTitle, turnDuration } from './turns'
+import { groupTurns, processSummary, retryNoticeId, stepTitle, turnDuration } from './turns'
 
 const user = (id: string): Item => ({ kind: 'user', id, text: id, createdAt: 0 })
 const say = (id: string): Item => ({ kind: 'assistant', id, text: id, status: 'completed' })
@@ -40,5 +40,22 @@ describe('groupTurns', () => {
     expect(processSummary([])).toBe('')
     expect(stepTitle(cmd('x', '列出文件'))).toBe('列出文件')
     expect(stepTitle(cmd('x'))).toBe('ls')
+  })
+})
+
+describe('retryNoticeId', () => {
+  const error = (id: string): Item => ({ kind: 'notice', id, level: 'error', text: '出错了' })
+  const warn = (id: string): Item => ({ kind: 'notice', id, level: 'warn', text: '注意' })
+
+  it('gives the last error of the latest turn, only when idle with an empty queue', () => {
+    const items = [user('u1'), error('e1'), say('a1'), error('e2'), warn('w1')]
+    expect(retryNoticeId(items, false, 0)).toBe('e2')
+    expect(retryNoticeId(items, true, 0)).toBeNull()
+    expect(retryNoticeId(items, false, 1)).toBeNull()
+  })
+
+  it('ignores errors from earlier turns', () => {
+    expect(retryNoticeId([user('u1'), error('e1'), user('u2'), say('a2')], false, 0)).toBeNull()
+    expect(retryNoticeId([], false, 0)).toBeNull()
   })
 })

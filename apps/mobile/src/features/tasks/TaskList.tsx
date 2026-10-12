@@ -1,34 +1,48 @@
-// 首页：当前电脑的任务，分「等你处理 / 运行中 / 最近」（docs/mobile-remote.md §8.3）
-import type { ReactNode } from 'react'
-import { CloudOff, Inbox, Laptop, Plus, ShieldOff, WifiOff } from 'lucide-react'
+// 概览：当前电脑所有项目的会话，分「等你处理 / 运行中 / 最近」（docs/mobile-remote.md §8.3、§18.3）。
+// 搜索（标题在手机上筛，对话内容问电脑）、按项目筛、「最近」显示更多（§17 第 6 项）。
+// 按项目看在抽屉的「工作区」里；左上角的菜单按钮由 App 传进来。
+import { useState, type ReactNode } from 'react'
+import { CloudOff, Inbox, Laptop, Plus, SearchX, ShieldOff, WifiOff } from 'lucide-react'
 import { ENGINES, type SessionSummary } from '@pixelsky/protocol'
 import type { Pairing } from '@/connection'
-import { useDesktop } from '@/data/hooks'
-import { ago, groupTasks, taskTitle } from '@/data/tasks'
+import { useContentSearch, useDesktop } from '@/data/hooks'
+import { RECENT_STEP, ago, filterTasks, groupTasks, recentCount, taskProjects, taskTitle } from '@/data/tasks'
 import { linkStateText } from '@/i18n/zh'
 import { Badge, Banner, Button, Dot, Empty, IconButton, Screen, Section, Spinner, cn } from '@/ui'
+import { Chips, ContentResults, SearchField } from '@/ui/search'
 
 export function TaskList({
   pairing,
-  tabBar,
+  menu,
   onOpen,
   onNew,
 }: {
   pairing: Pairing
-  tabBar: ReactNode
+  menu: ReactNode
   onOpen(sessionId: string): void
   onNew(): void
 }) {
   const { state, sessions, projects, loaded } = useDesktop(pairing.deviceId)
-  const groups = groupTasks(sessions)
+  const [query, setQuery] = useState('')
+  const [project, setProject] = useState('')
+  const [recentLimit, setRecentLimit] = useState(RECENT_STEP)
   const projectName = (s: SessionSummary) => projects.find(p => p.id === s.record.projectId)?.name ?? ''
+  const withTasks = taskProjects(sessions, projects)
+  // 筛的项目没有任务了（被删、归档）就回到全部
+  const projectId = withTasks.some(p => p.id === project) ? project : null
+  const filtered = filterTasks(sessions, query, projectId, projectName)
+  const groups = groupTasks(filtered, recentLimit)
+  const moreRecent = recentCount(filtered) - groups.recent.length
+  const searching = !!query.trim()
+  const content = useContentSearch(pairing.deviceId, query, projectId)
   const ready = state === 'ready'
   const canAct = ready && pairing.status === 'paired'
 
   return (
     <Screen
       large
-      title="任务"
+      title="概览"
+      leading={menu}
       subtitle={
         <span className="inline-flex items-center gap-1.5 rounded-full bg-subtle px-2.5 py-1 text-meta text-fg-secondary">
           <Laptop size={14} />
@@ -41,9 +55,8 @@ export function TaskList({
         </span>
       }
       actions={
-        <IconButton label="新建任务" icon={Plus} disabled={!canAct} onClick={onNew} className="disabled:opacity-40" />
+        <IconButton label="新建会话" icon={Plus} disabled={!canAct} onClick={onNew} className="disabled:opacity-40" />
       }
-      footer={tabBar}
     >
       {state === 'removed' ? (
         <Empty icon={ShieldOff} title="已被电脑移除" body="到「我的」里删掉这台电脑，再在电脑上重新扫码配对。" />
@@ -77,19 +90,61 @@ export function TaskList({
           {sessions.length === 0 ? (
             <Empty
               icon={Inbox}
-              title="还没有任务"
+              title="还没有会话"
               body="在手机上给电脑派个活儿，结果和改动都能在这里看。"
               action={
                 <Button variant="primary" disabled={!canAct} onClick={onNew} className="mt-2">
-                  <Plus size={18} /> 新建任务
+                  <Plus size={18} /> 新建会话
                 </Button>
               }
             />
           ) : (
             <>
+              <div className="flex flex-col gap-2.5">
+                <SearchField value={query} onChange={setQuery} placeholder="搜索会话标题、项目、对话内容" />
+                {withTasks.length > 1 && (
+                  <Chips
+                    value={projectId ?? ''}
+                    onChange={setProject}
+                    items={[{ value: '', label: '全部项目' }, ...withTasks.map(p => ({ value: p.id, label: p.name }))]}
+                  />
+                )}
+              </div>
               <Group title="等你处理" tone="danger" list={groups.waiting} project={projectName} onOpen={onOpen} />
               <Group title="运行中" tone="online" list={groups.running} project={projectName} onOpen={onOpen} />
-              <Group title="最近" list={groups.recent} project={projectName} onOpen={onOpen} />
+              <Group
+                title={searching ? '标题匹配' : '最近'}
+                list={groups.recent}
+                project={projectName}
+                onOpen={onOpen}
+                more={
+                  moreRecent > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setRecentLimit(n => n + RECENT_STEP)}
+                      className="flex min-h-12 w-full items-center justify-center border-t border-line-subtle text-meta text-accent-fg active:bg-hover"
+                    >
+                      显示更多（还有 {moreRecent} 个）
+                    </button>
+                  )
+                }
+              />
+              {searching && !content.unsupported && (
+                <ContentResults
+                  results={content.results}
+                  loading={content.loading}
+                  truncated={content.truncated}
+                  when={ago}
+                  onOpen={onOpen}
+                />
+              )}
+              {searching && !filtered.length && !content.loading && !content.results.length && (
+                <Empty
+                  icon={SearchX}
+                  title="没有找到"
+                  body={content.unsupported ? '电脑上的像素星空版本较旧，只能搜标题和项目名。' : '换个关键词试试。'}
+                />
+              )}
             </>
           )}
         </div>
@@ -104,12 +159,14 @@ function Group({
   list,
   project,
   onOpen,
+  more,
 }: {
   title: string
   tone?: 'danger' | 'online'
   list: SessionSummary[]
   project(s: SessionSummary): string
   onOpen(id: string): void
+  more?: ReactNode
 }) {
   if (!list.length) return null
   return (
@@ -154,6 +211,7 @@ function Group({
           </span>
         </button>
       ))}
+      {more}
     </Section>
   )
 }

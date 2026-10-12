@@ -107,9 +107,29 @@ body {
   animation: sheet-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+/* 窄屏的抽屉从左边滑出来，后面的遮罩渐显（docs/mobile-remote.md §18.3） */
+@keyframes drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+.drawer-in {
+  animation: drawer-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.fade-in {
+  animation: fade-in 220ms ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .typing-dot,
-  .sheet-in {
+  .sheet-in,
+  .drawer-in,
+  .fade-in {
     animation: none;
   }
 }
@@ -134,4 +154,67 @@ body {
 }
 .markdown hr {
   border-color: var(--border);
+}
+
+/* 代码块（ui/code.tsx）：外框和标题栏由组件画，这里去掉 .markdown pre 的底色和边框 */
+.markdown .code-block pre {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  margin: 0;
+}
+
+/* 语法高亮：highlight.js 的类名 → 设计变量 --syn-*（和桌面 globals.css 一样，ui/highlight.ts） */
+.hljs-comment,
+.hljs-quote {
+  color: var(--syn-comment);
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-name,
+.hljs-tag {
+  color: var(--syn-keyword);
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-symbol,
+.hljs-char.escape_,
+.hljs-meta .hljs-string {
+  color: var(--syn-string);
+}
+.hljs-number,
+.hljs-literal,
+.hljs-variable.constant_,
+.hljs-template-variable {
+  color: var(--syn-number);
+}
+.hljs-title,
+.hljs-title.function_,
+.hljs-section {
+  color: var(--syn-func);
+}
+.hljs-title.class_,
+.hljs-type,
+.hljs-built_in,
+.hljs-attr,
+.hljs-attribute,
+.hljs-property,
+.hljs-selector-class,
+.hljs-selector-id,
+.hljs-selector-pseudo {
+  color: var(--syn-type);
+}
+.hljs-meta,
+.hljs-meta .hljs-keyword,
+.hljs-doctag,
+.hljs-bullet,
+.hljs-operator {
+  color: var(--syn-meta);
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 600;
 }

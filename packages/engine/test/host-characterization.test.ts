@@ -180,17 +180,16 @@ describe('队列：调序 / 撤回', () => {
     expect(s.diskQueue()).toEqual(['b', 'd'])
   })
 
-  it('撤回最后一条排队项后队列文件仍在，摘要只剩正在运行的那条', async () => {
+  it('撤回最后一条排队项后队列文件仍在（只剩正在运行的那条），摘要里没有排队', async () => {
     const s = setup()
     await s.send('a')
     await until(() => !!s.adapter.sessions[0]?.active)
     await s.send('b')
+    const summary = () => s.host.sessions().find(x => x.record.id === s.record.id)?.queue
+    // 正在运行的那条不算排队（手机任务列表的「排队 n」，docs/mobile-remote.md §17）
+    expect(summary()).toEqual({ queued: 1, failed: 0, paused: false })
     s.host.cancelQueued(s.record.id, 'b')
-    expect(s.host.sessions().find(x => x.record.id === s.record.id)?.queue).toEqual({
-      queued: 1,
-      failed: 0,
-      paused: false,
-    })
+    expect(summary()).toBeUndefined()
     expect(s.diskQueue()).toEqual(['a'])
   })
 })

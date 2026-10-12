@@ -18,8 +18,17 @@ import {
   type Codec,
   type Keypair,
 } from '@pixelsky/link'
-import type { SessionSummary } from '@pixelsky/protocol'
-import { MobileGateway, PAIRING_TTL, phoneSessions, sanitize, type GatewayDeps } from './gateway'
+import type { ImageAttachment, SearchResult, SessionSummary } from '@pixelsky/protocol'
+import {
+  IMAGE_INLINE,
+  MobileGateway,
+  PAIRING_TTL,
+  PHONE_TEXT_LIMIT,
+  phoneSessions,
+  sanitize,
+  type GatewayDeps,
+  type PhoneSearch,
+} from './gateway'
 import type { StoredDevice } from './store'
 
 const codec: Codec = {
@@ -84,7 +93,27 @@ class Phone {
   }
 }
 
-function setup() {
+const picture = (dataBase64: string): ImageAttachment => ({
+  id: 'img',
+  name: 'a.png',
+  mediaType: 'image/png',
+  bytes: 3,
+  width: 4000,
+  height: 3000,
+  dataBase64,
+})
+/** 会话里一条带两张图的用户消息（一小一大）和一条带图的工具结果 */
+const withImages = {
+  snapshot: {
+    items: [
+      { kind: 'user', id: 'u1', text: '', attachments: [picture('QUJD'), picture('A'.repeat(IMAGE_INLINE + 4))] },
+      { kind: 'tool', id: 't1', images: [picture('REVG')] },
+    ],
+  },
+  seq: 3,
+}
+
+function setup(extra: Partial<GatewayDeps> = {}) {
   const desktop = generateKeypair()
   const devices: StoredDevice[] = []
   const calls: [string, unknown[], string][] = []
@@ -109,6 +138,7 @@ function setup() {
       calls.push([channel, args, owner])
       if (channel === 'engine:sessions') return [summary('old', 1), summary('archived', 9, 5), summary('new', 3)]
       if (channel === 'engine:openSessionTail') return { snapshot: { items: [] }, seq: 1 }
+      if (channel === 'engine:openSession') return withImages
       return { ok: channel }
     },
     send: (phone, frame) => phones.get(phone)?.deliver(frame),
@@ -120,6 +150,7 @@ function setup() {
     },
     changed: () => {},
     now: () => now,
+    ...extra,
   }
   const gateway = new MobileGateway(deps)
   const phone = (id: string) => {
@@ -206,7 +237,7 @@ describe('MobileGateway calls', () => {
     gateways.push(t.gateway)
     const p = await paired(t)
     expect(t.gateway.online('p1')).toBe(true)
-    expect(await p.call('hello')).toEqual({ version: 1, name: '测试电脑', access: 'act' })
+    expect(await p.call('hello')).toEqual({ version: 1, name: '测试电脑', access: 'act', tools: true })
     const sessions = (await p.call('engine:sessions')) as SessionSummary[]
     expect(sessions.map(s => s.record.id)).toEqual(['new', 'old'])
     await p.call('engine:createSession', { projectId: 'proj', engine: 'codex', permissionMode: 'full', platform: {} })
@@ -217,7 +248,171 @@ describe('MobileGateway calls', () => {
     ])
     await expect(p.call('engine:deleteSession', 's1')).rejects.toThrow('MOBILE_UNSUPPORTED')
     await expect(p.call('engine:updateSession', 's1', { permissionMode: 'full' })).rejects.toThrow('MOBILE_UNSUPPORTED')
-    await expect(p.call('files:read', {})).rejects.toThrow('MOBILE_UNSUPPORTED')
+    await expect(p.call('projectTools:gitDiscard', { projectId: 'proj' }, 'all')).rejects.toThrow('MOBILE_UNSUPPORTED')
+  })
+
+  it('serves the tools with rebuilt arguments and phone-sized results', async () => {
+    const calls: [string, unknown[], string][] = []
+    const long = Array.from({ length: 40_000 }, (_, i) => `${i} ${'x'.repeat(20)}`).join('\n')
+    const t = setup({
+      call: async (channel, args, owner) => {
+        calls.push([channel, args, owner])
+        if (channel === 'projectTools:gitDiff')
+          return { path: 'a.ts', original: 'a\nb\nc\n', modified: 'a\nB\nc\n', binary: false, tooLarge: false }
+        if (channel === 'files:read')
+          return args[1] === 'big.txt'
+            ? {
+                kind: 'text',
+                path: 'big.txt',
+                content: long,
+                version: 'v',
+                bytes: long.length,
+                bom: false,
+                newline: 'lf',
+              }
+            : {
+                kind: 'image',
+                path: 'p.png',
+                dataUrl: 'data:image/png;base64,' + 'A'.repeat(IMAGE_INLINE + 10),
+                bytes: 1,
+              }
+        if (channel === 'engine:artifacts')
+          return { requestId: 1, turns: Array.from({ length: 120 }, () => ({})), delivered: [], truncated: false }
+        return { ok: channel }
+      },
+      shrinkImage: image => ({ ...image, mediaType: 'image/jpeg', dataBase64: 'SMALL' }),
+    })
+    gateways.push(t.gateway)
+    const p = await paired(t)
+    const ref = { projectId: 'proj', extra: 'x' }
+    expect(await p.call('projectTools:gitDiff', ref, { path: 'a.ts', area: 'unstaged', to: 'HEAD' })).toEqual({
+      path: 'a.ts',
+      binary: false,
+      tooLarge: false,
+      diff: '@@ -1,3 +1,3 @@\n a\n-b\n+B\n c',
+      added: 1,
+      removed: 1,
+      cut: false,
+    })
+    const big = (await p.call('files:read', ref, 'big.txt')) as { content: string; cut?: boolean; readonly?: boolean }
+    expect(big).toMatchObject({ cut: true, readonly: true })
+    expect(big.content.length).toBeLessThanOrEqual(PHONE_TEXT_LIMIT)
+    expect(big.content.endsWith('\n')).toBe(true)
+    expect(await p.call('files:read', { sessionId: 's1' }, 'p.png')).toMatchObject({
+      kind: 'image',
+      dataUrl: 'data:image/jpeg;base64,SMALL',
+    })
+    const artifacts = (await p.call('engine:artifacts', { projectId: 'proj', days: 99, workspace: 'C:/' })) as {
+      turns: unknown[]
+      truncated: boolean
+    }
+    expect(artifacts.turns).toHaveLength(100)
+    expect(artifacts.truncated).toBe(true)
+    await p.call('projectTools:gitCommit', ref, { message: '修复', all: true, push: true, amend: true })
+    await p.call('projectTools:gitPush', ref, { publish: true, force: true })
+    await p.call('projectTools:gitStage', ref, ['a.ts'])
+    await p.call('projectTools:createTask', 'proj', { title: '写测试', status: 'pending', order: 5, projectId: 'x' })
+    await p.call('projectTools:updateTask', 't1', { status: 'completed', pinnedAt: 1 })
+    expect(calls.map(c => [c[0], c[1]])).toEqual([
+      ['projectTools:gitDiff', [{ projectId: 'proj' }, { path: 'a.ts', area: 'unstaged' }]],
+      ['files:read', [{ projectId: 'proj' }, 'big.txt']],
+      ['files:read', [{ sessionId: 's1' }, 'p.png']],
+      ['engine:artifacts', [{ projectId: 'proj', days: 30, requestId: 1 }]],
+      ['projectTools:gitCommit', [{ projectId: 'proj' }, { message: '修复', all: true, push: true }]],
+      ['projectTools:gitPush', [{ projectId: 'proj' }, { publish: true }]],
+      ['projectTools:gitStage', [{ projectId: 'proj' }, ['a.ts']]],
+      ['projectTools:createTask', ['proj', { title: '写测试', status: 'pending' }]],
+      ['projectTools:updateTask', ['t1', { status: 'completed' }]],
+    ])
+    expect(calls.every(c => c[2] === 'mobile:p1')).toBe(true)
+    // 只能看的手机：能看，不能写
+    t.devices[0].access = 'view'
+    expect(await p.call('projectTools:gitStatus', ref)).toEqual({ ok: 'projectTools:gitStatus' })
+    await expect(p.call('projectTools:gitCommit', ref, { message: 'x' })).rejects.toThrow('MOBILE_FORBIDDEN')
+    await expect(p.call('projectTools:createTask', 'proj', { title: 'x' })).rejects.toThrow('MOBILE_FORBIDDEN')
+    // 参数不对的不发给电脑
+    await expect(p.call('projectTools:gitDiff', ref, { path: 'a', area: 'commit' })).rejects.toThrow(
+      'MOBILE_BAD_ARGUMENT',
+    )
+    await expect(p.call('files:list', {}, '')).rejects.toThrow('MOBILE_BAD_ARGUMENT')
+    expect(calls).toHaveLength(10)
+  })
+
+  it('lists folders and adds projects on this computer for phones that can act', async () => {
+    const listed: (string | null)[] = []
+    const t = setup({
+      local: {
+        defaultEngine: () => 'claude',
+        search: async () => ({ requestId: 1, results: [], truncated: false, partial: false, sessionCount: 0 }),
+        directories: async path => (
+          listed.push(path),
+          { path: path ?? 'C:/Users/me', parent: null, directories: ['code'] }
+        ),
+        addProject: path => ({ id: 'proj-2', name: 'code', path, addedAt: 1 }),
+      },
+    })
+    gateways.push(t.gateway)
+    const p = await paired(t)
+    expect(await p.call('directories')).toMatchObject({ path: 'C:/Users/me', directories: ['code'] })
+    expect(await p.call('directories', 'C:/Users/me/code')).toMatchObject({ path: 'C:/Users/me/code' })
+    expect(listed).toEqual([null, 'C:/Users/me/code'])
+    expect(await p.call('addProject', 'C:/Users/me/code')).toMatchObject({ id: 'proj-2' })
+    t.devices[0].access = 'view'
+    await expect(p.call('directories')).rejects.toThrow('MOBILE_FORBIDDEN')
+    await expect(p.call('addProject', 'C:/x')).rejects.toThrow('MOBILE_FORBIDDEN')
+  })
+
+  it('answers its own calls: default engine, content search (newest cancels the last), images', async () => {
+    const searched: [string, string | null][] = []
+    const signals: AbortSignal[] = []
+    const t = setup({
+      local: {
+        defaultEngine: () => 'codex',
+        search: async (text, projectId, signal) => {
+          searched.push([text, projectId])
+          signals.push(signal)
+          if (text === '慢') await wait(30)
+          const results = Array.from({ length: 40 }, (_, i) => ({ id: 'r' + i }) as SearchResult)
+          return { requestId: 1, results, truncated: false, partial: false, sessionCount: 3 }
+        },
+      },
+      // 1600 以下才缩到放得下一帧
+      shrinkImage: (image, edge) => ({
+        ...image,
+        mediaType: 'image/jpeg',
+        dataBase64: edge <= 1600 ? 'R0hJ' : image.dataBase64,
+      }),
+    })
+    gateways.push(t.gateway)
+    const p = await paired(t)
+    t.devices[0].access = 'view'
+    expect(await p.call('defaults')).toEqual({ engine: 'codex' })
+    const slow = p.call('search', '慢')
+    const found = (await p.call('search', '  登录页  ', 'proj-1')) as PhoneSearch
+    await slow
+    expect(searched).toEqual([
+      ['慢', null],
+      ['登录页', 'proj-1'],
+    ])
+    expect(signals[0].aborted).toBe(true)
+    expect(found.results).toHaveLength(30)
+    expect(found.truncated).toBe(true)
+    expect(await p.call('search', '   ')).toEqual({ results: [], truncated: false })
+    expect(await p.call('image', 's1', 'u1', 0)).toMatchObject({ mediaType: 'image/png', dataBase64: 'QUJD' })
+    expect(await p.call('image', 's1', 'u1', 1)).toMatchObject({ mediaType: 'image/jpeg', dataBase64: 'R0hJ' })
+    expect(await p.call('image', 's1', 't1', 0)).toMatchObject({ dataBase64: 'REVG' })
+    expect(t.calls.at(-1)).toEqual(['engine:openSession', ['s1'], 'mobile:p1'])
+    await expect(p.call('image', 's1', 'u1', 2)).rejects.toThrow('MOBILE_NOT_FOUND')
+    await expect(p.call('image', 's1', 'u1', -1)).rejects.toThrow('MOBILE_BAD_ARGUMENT')
+  })
+
+  it('without local queries or a shrinker: no default engine, no content search, big images refused', async () => {
+    const t = setup()
+    gateways.push(t.gateway)
+    const p = await paired(t)
+    expect(await p.call('defaults')).toEqual({ engine: null })
+    await expect(p.call('search', '登录页')).rejects.toThrow('MOBILE_UNSUPPORTED')
+    await expect(p.call('image', 's1', 'u1', 1)).rejects.toThrow('MOBILE_TOO_LARGE')
   })
 
   it('lets a view-only phone read but not act, and cuts off a revoked phone', async () => {
@@ -234,7 +429,7 @@ describe('MobileGateway calls', () => {
     expect(t.gateway.online('p1')).toBe(false)
   })
 
-  it('pushes events only for watched sessions and throttles the session list', async () => {
+  it('pushes events only for watched sessions, throttles the session list and passes on tool changes', async () => {
     const t = setup()
     gateways.push(t.gateway)
     const p = await paired(t)
@@ -260,6 +455,11 @@ describe('MobileGateway calls', () => {
     t.gateway.hostEvent('engine:event', [event('s1', 'y')])
     await wait(20)
     expect(p.events).toHaveLength(2)
+    // 任务、Git 变了：只说一声，手机上开着的工具页重新取
+    t.gateway.hostEvent('projectTools:changed', [])
+    await wait(20)
+    expect(p.events).toHaveLength(3)
+    expect(p.events[2]).toEqual({ kind: 'tools' })
   })
 
   it('tells a removed phone before disconnecting it', async () => {

@@ -42,8 +42,8 @@ function slim<T>(value: T, cut: number, hit: { cut: boolean }, keepImages = fals
     const out: Record<string, unknown> = {}
     for (const [key, v] of Object.entries(value)) {
       if (key === 'dataBase64' && typeof v === 'string') {
-        // 图片要么整张带上，要么换成占位（bytes / width / height 等字段保留，手机显示尺寸，点开再取）；不截断
-        if (v && !keepImages) hit.cut = true
+        // 图片要么整张带上，要么换成占位（bytes / width / height 等字段保留，手机显示尺寸，点开时经网关的 image 取，
+        // docs/mobile-remote.md §17）；去掉图片不算截断，「查看完整」只管文字
         out[key] = keepImages ? v : ''
       } else out[key] = slim(v, cut, hit, keepImages)
     }

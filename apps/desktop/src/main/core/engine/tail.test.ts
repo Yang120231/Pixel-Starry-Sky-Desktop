@@ -55,7 +55,8 @@ describe('sessionTail', () => {
     const [u, a] = all.snapshot.items as [Extract<Item, { kind: 'user' }>, Extract<Item, { kind: 'assistant' }>]
     expect(u.attachments?.[0]).toMatchObject({ dataBase64: '', bytes: 5000, width: 10 })
     expect(a.text).toHaveLength(4096)
-    expect(all.truncated).toEqual(['u1', 'a1'])
+    // 去掉图片不算截断（图片由手机点开时另取），只有被截的文字算
+    expect(all.truncated).toEqual(['a1'])
     expect(JSON.stringify(tail.snapshot.queue)).not.toContain('AAAA')
   })
 
@@ -69,14 +70,14 @@ describe('sessionTail', () => {
 })
 
 describe('itemDetail', () => {
-  it('returns the full item, with images only when they fit in one frame', () => {
+  it('returns the full item, with images only when they fit in one frame (a dropped image is not a cut)', () => {
     const user = { kind: 'user', id: 'u1', text: 'hi', attachments: [image(1000)] } as unknown as Item
     const big = { kind: 'user', id: 'u2', text: 'hi', attachments: [image(900_000)] } as unknown as Item
     const snapshot = opened([user, big, assistant(1, 'w'.repeat(300_000))]).snapshot
     expect(itemDetail(snapshot, 'u1')).toEqual({ item: user, truncated: false })
     const second = itemDetail(snapshot, 'u2')!
     expect(JSON.stringify(second.item)).not.toContain('AAAA')
-    expect(second.truncated).toBe(true)
+    expect(second.truncated).toBe(false)
     const long = itemDetail(snapshot, 'a1')!
     expect((long.item as { text: string }).text).toHaveLength(256 * 1024)
     expect(itemDetail(snapshot, 'missing')).toBeNull()

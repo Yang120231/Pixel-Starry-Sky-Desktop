@@ -3,7 +3,22 @@
 // - 握手：只和已配对的手机做 Noise KK，之后一部手机一条加密通道 + 一个 RpcCore；
 // - 调用：只放行契约里标了 mobile 的通道，「只看」的手机不能调 act 的；参数先清洗（不能放宽权限、改线路）；
 // - 事件：和窗口看到的同一份；会话事件只推给打开着这个会话的手机，会话列表合并节流。
-import { IPC_CONTRACT, type HostEvent, type IpcChannelSpec, type SessionSummary } from '@pixelsky/protocol'
+// - 网关自己的几个调用（不在契约里）：hello、unwatch、defaults、search、image（docs/mobile-remote.md §17）；
+//   工具（Git / 文件 / 产物 / 任务）和加项目也由网关放行（PHONE_TOOLS、directories、addProject，§18.4）。
+import {
+  IPC_CONTRACT,
+  type EngineId,
+  type HostEvent,
+  type ImageAttachment,
+  type ArtifactResponse,
+  type IpcChannelSpec,
+  type Item,
+  type OpenedSession,
+  type ProjectRecord,
+  type SearchResponse,
+  type SearchResult,
+  type SessionSummary,
+} from '@pixelsky/protocol'
 import {
   FrameType,
   LINK_VERSION,
@@ -25,11 +40,16 @@ import {
   type PairStatus,
 } from '@pixelsky/link'
 import type { EngineCall } from '../app/context'
+import type { DirectoryChoices } from '../core/directories'
 import { slimForPhone } from '../core/engine/tail'
 import type { MobilePairing } from '../../shared/types/mobile'
+import type { GitDiff } from '../../shared/types/project-tools'
+import type { FileDocument } from '../../shared/types/workspace'
+import { phoneDiff, PHONE_DIFF_LIMIT, type PhoneDiff } from './diff'
 import type { MobileStore } from './store'
 
 const contract: Readonly<Record<string, IpcChannelSpec>> = IPC_CONTRACT
+type MobileAccess = NonNullable<IpcChannelSpec['mobile']>
 
 /** 二维码有效期 */
 export const PAIRING_TTL = 5 * 60_000
@@ -39,6 +59,16 @@ const MAX_WATCHED = 4
 const SESSIONS_THROTTLE = 500
 /** 推给手机的会话列表最多几条（去掉归档，按更新时间） */
 const MAX_SESSIONS = 200
+/** 搜索对话内容最多回几条 */
+const MAX_SEARCH = 30
+/** 单张图片的 base64 不超过这么长才整张发（单帧 1 MB，压缩加密后留余量）；更大的先缩小 */
+export const IMAGE_INLINE = 700_000
+/** 缩小图片时依次试的长边 */
+const SHRINK_EDGES = [2048, 1600, 1200, 800]
+/** 手机打开的文本文件最多发这么多字符（按行截断） */
+export const PHONE_TEXT_LIMIT = 500_000
+/** 产物最多回几轮、几个交付 */
+const MAX_ARTIFACTS = 100
 
 export interface GatewayDeps {
   store: Pick<MobileStore, 'desktopId' | 'device' | 'addDevice' | 'touch' | 'keypair'>
@@ -58,6 +88,28 @@ export interface GatewayDeps {
   /** 配对状态、在线状态变了（设置页刷新） */
   changed(): void
   now?(): number
+  /**
+   * 本机引擎宿主上的只读查询（手机的「默认引擎」「搜索对话内容」）。契约里的 engine:defaults、engine:search
+   * 跟着电脑界面当前选中的机器走，手机没法指定，所以只查本机；没有时手机退回自己的做法。
+   */
+  local?: LocalQueries | null
+  /** 把一张图缩小成 JPEG（Electron 的 nativeImage）；解不开时返回 null。没有时取不到超过单帧的图 */
+  shrinkImage?(image: ImageAttachment, maxEdge: number): ImageAttachment | null
+}
+
+export interface LocalQueries {
+  defaultEngine(): EngineId
+  search(text: string, projectId: string | null, signal: AbortSignal): Promise<SearchResponse>
+  /** 加项目时列这台电脑上的目录（不传时从主目录开始） */
+  directories?(path: string | null): Promise<DirectoryChoices>
+  /** 把这台电脑上的一个目录加成项目 */
+  addProject?(path: string): ProjectRecord | Promise<ProjectRecord>
+}
+
+/** 手机搜索对话内容的结果 */
+export interface PhoneSearch {
+  results: SearchResult[]
+  truncated: boolean
 }
 
 export interface CloudDevices {
@@ -71,6 +123,8 @@ interface Peer {
   channel: SecureChannel
   rpc: RpcCore
   watching: string[]
+  /** 进行中的搜索：新的搜索来了就取消它 */
+  search?: AbortController
   /** 电脑上已经吊销：回完这一次就断开 */
   revoked?: boolean
 }
@@ -94,6 +148,112 @@ export function phoneSessions(list: readonly SessionSummary[]): SessionSummary[]
 const asString = (v: unknown, max = 200): string => {
   if (typeof v !== 'string' || !v || v.length > max) throw new Error('MOBILE_BAD_ARGUMENT')
   return v
+}
+
+// ---------------------------------------------------------------------------
+// 工具（docs/mobile-remote.md §18.4）
+// ---------------------------------------------------------------------------
+
+/** 项目或会话（第一个参数）：只认 { projectId } / { sessionId }，跟着它所在的机器走 */
+function workspaceArg(v: unknown): { projectId: string } | { sessionId: string } {
+  const o = (v ?? {}) as Record<string, unknown>
+  return typeof o.sessionId === 'string' ? { sessionId: asString(o.sessionId) } : { projectId: asString(o.projectId) }
+}
+
+/** 项目里的相对路径，根目录是空字符串（越界由文件 / Git 那一层按项目目录校验） */
+function relativePath(v: unknown): string {
+  if (v === undefined || v === null) return ''
+  if (typeof v !== 'string' || v.length > 4096) throw new Error('MOBILE_BAD_ARGUMENT')
+  return v
+}
+
+function pathsArg(v: unknown): string[] | 'all' {
+  if (v === 'all') return 'all'
+  if (!Array.isArray(v) || !v.length || v.length > 1000) throw new Error('MOBILE_BAD_ARGUMENT')
+  return v.map(p => asString(p, 4096))
+}
+
+const field = (o: Record<string, unknown>, key: string, max: number): Record<string, string> =>
+  typeof o[key] === 'string' && (o[key] as string).length <= max ? { [key]: o[key] as string } : {}
+
+/** 任务的字段：标题、说明、状态、优先级、截止日期（其余的不让手机改） */
+function taskArg(v: unknown): Record<string, string> {
+  const o = (v ?? {}) as Record<string, unknown>
+  return {
+    ...field(o, 'title', 200),
+    ...field(o, 'note', 4000),
+    ...field(o, 'status', 20),
+    ...field(o, 'priority', 20),
+    ...field(o, 'due', 10),
+  }
+}
+
+interface PhoneTool {
+  access: MobileAccess
+  /** 按手机能给的重新拼参数 */
+  args(args: unknown[]): unknown[]
+}
+
+/**
+ * 手机能用的工具。契约里这些通道跟着电脑界面选中的机器走，不能标 mobile，所以由网关放行：
+ * 参数按这里重新拼，第一个参数是项目 / 会话（和窗口同一层路由，只查它所在的机器）。
+ * 写操作只有暂存、取消暂存、提交、推送（不强推）、新建 / 改任务；放弃改动、删分支、改写历史都不放行（§18.7）。
+ */
+export const PHONE_TOOLS: Readonly<Record<string, PhoneTool>> = {
+  'files:list': { access: 'view', args: a => [workspaceArg(a[0]), relativePath(a[1])] },
+  'files:read': { access: 'view', args: a => [workspaceArg(a[0]), relativePath(a[1])] },
+  'projectTools:gitStatus': { access: 'view', args: a => [workspaceArg(a[0])] },
+  'projectTools:gitDiff': {
+    access: 'view',
+    args: a => {
+      const o = (a[1] ?? {}) as Record<string, unknown>
+      if (!['staged', 'unstaged', 'untracked', 'conflicted'].includes(o.area as string))
+        throw new Error('MOBILE_BAD_ARGUMENT')
+      const origPath = typeof o.origPath === 'string' ? { origPath: asString(o.origPath, 4096) } : {}
+      return [workspaceArg(a[0]), { path: asString(o.path, 4096), area: o.area, ...origPath }]
+    },
+  },
+  'projectTools:tasks': { access: 'view', args: a => [asString(a[0])] },
+  'engine:artifacts': {
+    access: 'view',
+    args: a => {
+      const o = (a[0] ?? {}) as Record<string, unknown>
+      const days = typeof o.days === 'number' && Number.isInteger(o.days) ? Math.min(30, Math.max(1, o.days)) : 7
+      return [{ ...workspaceArg(o), days }]
+    },
+  },
+  'engine:artifactChange': {
+    access: 'view',
+    args: a => {
+      const o = (a[0] ?? {}) as Record<string, unknown>
+      return [{ sessionId: asString(o.sessionId), itemId: asString(o.itemId) }]
+    },
+  },
+  'projectTools:gitStage': { access: 'act', args: a => [workspaceArg(a[0]), pathsArg(a[1])] },
+  'projectTools:gitUnstage': { access: 'act', args: a => [workspaceArg(a[0]), pathsArg(a[1])] },
+  'projectTools:gitCommit': {
+    access: 'act',
+    args: a => {
+      const o = (a[1] ?? {}) as Record<string, unknown>
+      return [workspaceArg(a[0]), { message: asString(o.message, 20_000), all: o.all === true, push: o.push === true }]
+    },
+  },
+  'projectTools:gitPush': {
+    access: 'act',
+    args: a => [workspaceArg(a[0]), { publish: (a[1] as { publish?: unknown } | null)?.publish === true }],
+  },
+  'projectTools:createTask': { access: 'act', args: a => [asString(a[0]), taskArg(a[1])] },
+  'projectTools:updateTask': { access: 'act', args: a => [asString(a[0]), taskArg(a[1])] },
+}
+
+/** 手机看的 Git 改动：电脑上比好，只发改动和前后几行 */
+export type PhoneGitDiff = Pick<GitDiff, 'path' | 'binary' | 'tooLarge'> & PhoneDiff
+
+/** 文本按行截断到 limit 以内 */
+function cutText(text: string, limit: number): string {
+  if (text.length <= limit) return text
+  const end = text.lastIndexOf('\n', limit)
+  return text.slice(0, end > 0 ? end + 1 : limit)
 }
 
 /** 手机传来的参数：只留手机该给的字段，其余由电脑上的设置决定（权限模式、线路、模型都用电脑上的） */
@@ -127,6 +287,8 @@ export class MobileGateway {
   private pairing: Pairing | null = null
   private sessionsTimer: ReturnType<typeof setTimeout> | null = null
   private latestSessions: SessionSummary[] | null = null
+  /** 产物扫描的请求号 */
+  private scans = 0
 
   constructor(private readonly d: GatewayDeps) {}
 
@@ -324,10 +486,24 @@ export class MobileGateway {
       peer.revoked = true
       throw new Error('MOBILE_REVOKED')
     }
-    if (method === 'hello') return { version: LINK_VERSION, name: this.d.desktopName(), access: device.access }
+    // tools：这台电脑能给手机用工具和加项目（§18.4），旧版没有这个字段
+    if (method === 'hello')
+      return { version: LINK_VERSION, name: this.d.desktopName(), access: device.access, tools: true }
     if (method === 'unwatch') {
       peer.watching = peer.watching.filter(id => id !== args[0])
       return null
+    }
+    if (method === 'defaults') return { engine: this.d.local?.defaultEngine() ?? null }
+    if (method === 'search') return this.search(peer, args)
+    if (method === 'image') return this.image(peer, args)
+    if (method === 'directories' || method === 'addProject') return this.project(device.access, method, args)
+    const tool = Object.hasOwn(PHONE_TOOLS, method) ? PHONE_TOOLS[method] : undefined
+    if (tool) {
+      if (tool.access === 'act' && device.access !== 'act') throw new Error('MOBILE_FORBIDDEN')
+      const clean = tool.args(args)
+      // 产物扫描按调用方分桶，同一部手机新的会取消上一次
+      if (method === 'engine:artifacts') clean[0] = { ...(clean[0] as object), requestId: ++this.scans }
+      return this.toolResult(method, await this.d.call(method, clean, 'mobile:' + peer.phone))
     }
     const spec = Object.hasOwn(contract, method) ? contract[method] : undefined
     if (!spec?.mobile) throw new Error('MOBILE_UNSUPPORTED')
@@ -344,13 +520,123 @@ export class MobileGateway {
     return result
   }
 
+  /** 工具的结果放进一帧：Git 改动比成 diff、大文件截断、大图缩小、产物只留最近的 */
+  private toolResult(method: string, result: unknown): unknown {
+    if (method === 'projectTools:gitDiff') {
+      const r = result as GitDiff
+      return { path: r.path, binary: r.binary, tooLarge: r.tooLarge, ...phoneDiff(r.original, r.modified) }
+    }
+    if (method === 'files:read') return this.phoneFile(result as FileDocument)
+    if (method === 'engine:artifacts') {
+      const r = result as ArtifactResponse
+      return {
+        ...r,
+        turns: r.turns.slice(0, MAX_ARTIFACTS),
+        delivered: r.delivered.slice(0, MAX_ARTIFACTS),
+        truncated: r.truncated || r.turns.length > MAX_ARTIFACTS || r.delivered.length > MAX_ARTIFACTS,
+      }
+    }
+    if (method === 'engine:artifactChange' && result) {
+      const item = result as Extract<Item, { kind: 'file_change' }>
+      const each = Math.floor(PHONE_DIFF_LIMIT / Math.max(1, item.changes.length))
+      return { ...item, changes: item.changes.map(c => ({ ...c, diff: cutText(c.diff, each) })) }
+    }
+    return result
+  }
+
+  /** 手机打开的文件：长文本截断（标 cut），大图缩小，缩不了就说太大 */
+  private phoneFile(doc: FileDocument): FileDocument | (FileDocument & { cut: true }) {
+    if (doc.kind === 'text' && doc.content.length > PHONE_TEXT_LIMIT)
+      return { ...doc, content: cutText(doc.content, PHONE_TEXT_LIMIT), readonly: true, cut: true }
+    if (doc.kind !== 'image' || doc.dataUrl.length <= IMAGE_INLINE) return doc
+    const m = /^data:([^;,]+);base64,(.*)$/s.exec(doc.dataUrl)
+    const image: ImageAttachment | null = m && {
+      id: 'file',
+      name: doc.path,
+      mediaType: m[1] as ImageAttachment['mediaType'],
+      bytes: doc.bytes,
+      width: 0,
+      height: 0,
+      dataBase64: m[2],
+    }
+    for (const edge of image ? SHRINK_EDGES : []) {
+      const small = this.d.shrinkImage?.(image!, edge)
+      if (!small) break
+      if (small.dataBase64.length <= IMAGE_INLINE)
+        return { ...doc, dataUrl: `data:${small.mediaType};base64,${small.dataBase64}` }
+    }
+    return { kind: 'unsupported', path: doc.path, reason: '图片太大，请到电脑上看', bytes: doc.bytes }
+  }
+
+  /** 加项目：列这台电脑上的目录、把选的目录加成项目（只在这台电脑上，不经 SSH 机器） */
+  private async project(access: MobileAccess, method: string, args: unknown[]): Promise<unknown> {
+    if (access !== 'act') throw new Error('MOBILE_FORBIDDEN')
+    const local = this.d.local
+    if (method === 'directories') {
+      if (!local?.directories) throw new Error('MOBILE_UNSUPPORTED')
+      return local.directories(args[0] ? asString(args[0], 4096) : null)
+    }
+    if (!local?.addProject) throw new Error('MOBILE_UNSUPPORTED')
+    return local.addProject(asString(args[0], 4096))
+  }
+
+  /** 搜索本机会话的对话内容（标题在手机上自己筛）；同一部手机新的搜索会取消上一次 */
+  private async search(peer: Peer, args: unknown[]): Promise<PhoneSearch> {
+    const local = this.d.local
+    if (!local) throw new Error('MOBILE_UNSUPPORTED')
+    const text = typeof args[0] === 'string' ? args[0].trim().slice(0, 200) : ''
+    const projectId = typeof args[1] === 'string' && args[1] ? asString(args[1]) : null
+    peer.search?.abort()
+    peer.search = undefined
+    if (!text) return { results: [], truncated: false }
+    const controller = new AbortController()
+    peer.search = controller
+    try {
+      const r = await local.search(text, projectId, controller.signal)
+      return { results: r.results.slice(0, MAX_SEARCH), truncated: r.truncated || r.results.length > MAX_SEARCH }
+    } finally {
+      if (peer.search === controller) peer.search = undefined
+    }
+  }
+
+  /**
+   * 一条消息里的一张图（用户发的图、工具结果里的图）：会话尾部和推送事件里图片都被去掉了，点开时再取。
+   * 放得下一帧就整张发，放不下就缩小成 JPEG；缩小不了报 MOBILE_TOO_LARGE。
+   */
+  private async image(peer: Peer, args: unknown[]): Promise<ImageAttachment> {
+    const sessionId = asString(args[0]),
+      itemId = asString(args[1]),
+      index = args[2]
+    if (typeof index !== 'number' || !Number.isInteger(index) || index < 0 || index > 100)
+      throw new Error('MOBILE_BAD_ARGUMENT')
+    const opened = (await this.d.call('engine:openSession', [sessionId], 'mobile:' + peer.phone)) as OpenedSession
+    const item = opened.snapshot.items.find(i => i.id === itemId)
+    const images = item?.kind === 'user' ? item.attachments : item?.kind === 'tool' ? item.images : undefined
+    const image = images?.[index]
+    if (!image?.dataBase64) throw new Error('MOBILE_NOT_FOUND')
+    if (image.dataBase64.length <= IMAGE_INLINE) return image
+    for (const edge of SHRINK_EDGES) {
+      const small = this.d.shrinkImage?.(image, edge)
+      if (!small) break
+      if (small.dataBase64.length <= IMAGE_INLINE) return small
+    }
+    throw new Error('MOBILE_TOO_LARGE')
+  }
+
   // -------------------------------------------------------------------------
   // 事件、断开
   // -------------------------------------------------------------------------
 
   /** EventBus 的 tap：窗口收到什么，这里就看到什么 */
   hostEvent(channel: string, args: unknown[]): void {
-    if (channel !== 'engine:event' || !this.peers.size) return
+    if (!this.peers.size) return
+    // 任务、Git 状态变了（电脑上已经合并过）：手机上开着的工具页重新取。
+    // 手机只看事件内容不看通道名，旧版手机认不得 kind: 'tools'，会直接忽略
+    if (channel === 'projectTools:changed') {
+      for (const peer of this.peers.values()) peer.rpc.event('projectTools:changed', { kind: 'tools' })
+      return
+    }
+    if (channel !== 'engine:event') return
     const event = args[0] as HostEvent
     if (event.kind === 'session') {
       let slim: HostEvent | null = null
@@ -393,6 +679,7 @@ export class MobileGateway {
     const peer = this.peers.get(phone)
     if (!peer || (only && peer !== only)) return
     this.peers.delete(phone)
+    peer.search?.abort()
     peer.channel.fail(new Error('MOBILE_DISCONNECTED'))
     peer.rpc.close()
     this.d.changed()

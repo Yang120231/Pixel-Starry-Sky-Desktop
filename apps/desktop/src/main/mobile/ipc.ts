@@ -4,17 +4,43 @@
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { deflateRawSync, inflateRawSync } from 'node:zlib'
-import { app, powerSaveBlocker } from 'electron'
+import { app, nativeImage, powerSaveBlocker } from 'electron'
 import { fingerprint, fromBase64Url, type Codec } from '@pixelsky/link'
+import type { ImageAttachment } from '@pixelsky/protocol'
 import * as ipc from '../ipc/guard'
 import type { AppContext } from '../app/context'
 import { systemCipher } from '../app/system-cipher'
 import { trayStatus } from '../app/tray'
 import type { MobileLinkStatus, MobilePrefs, MobileState } from '../../shared/types/mobile'
+import { listDirectories } from '../core/directories'
+import { addProjectPath } from '../core/engine/ops'
 import { baseUrl, bridgeFetch, bridgeToken, onAccountChange, signedInEmail } from '../account/account'
 import { MobileGateway, type CloudDevices } from './gateway'
 import { RelayLink } from './relay'
 import { MobileStore } from './store'
+
+/** 手机看大图：缩小到长边 maxEdge 以内、转成 JPEG（docs/mobile-remote.md §17）；解不开返回 null */
+export function shrinkImage(image: ImageAttachment, maxEdge: number): ImageAttachment | null {
+  const source = nativeImage.createFromBuffer(Buffer.from(image.dataBase64, 'base64'))
+  if (source.isEmpty()) return null
+  const { width, height } = source.getSize()
+  const scale = Math.min(1, maxEdge / Math.max(width, height))
+  const out =
+    scale < 1
+      ? source.resize({ width: Math.round(width * scale), height: Math.round(height * scale), quality: 'good' })
+      : source
+  const jpeg = out.toJPEG(82)
+  const size = out.getSize()
+  return {
+    ...image,
+    name: image.name.replace(/.[^.]*$/, '') + '.jpg',
+    mediaType: 'image/jpeg',
+    bytes: jpeg.length,
+    width: size.width,
+    height: size.height,
+    dataBase64: jpeg.toString('base64'),
+  }
+}
 
 /** 电脑这边用 zlib；手机用 CompressionStream，格式都是 deflate-raw（M0 核对过互通） */
 export const zlibCodec: Codec = {
@@ -93,12 +119,16 @@ export function initMobile(ctx: AppContext): void {
     remove: async phone => void (await cloudCall('DELETE', `/v1/bridge/devices/${encodeURIComponent(phone)}`)),
   }
 
+  let searchSeq = 0
   const gateway = new MobileGateway({
     store,
     desktopName: () => hostname(),
     relay: relayUrl,
     web: () => webUrl(relayUrl()) || null,
-    call: (channel, args, owner) => {
+    call: async (channel, args, owner) => {
+      // 文件、项目工具（手机的 Git / 文件 / 任务）：和窗口同一层路由，参数里的项目在哪台机器就在哪台跑
+      const tool = ctx.toolOps.get(channel)
+      if (tool) return ctx.machines ? ctx.machines.invoke(channel, args, () => tool(args)) : tool(args)
       if (!ctx.engineCall) throw new Error('项目尚未加载')
       return ctx.engineCall(channel, args, owner)
     },
@@ -109,6 +139,19 @@ export function initMobile(ctx: AppContext): void {
     codec: zlibCodec,
     cloud,
     changed,
+    local: {
+      defaultEngine: () => ctx.engine?.defaults().engine ?? 'claude',
+      search: async (text, projectId, signal) => {
+        if (!ctx.engine) throw new Error('项目尚未加载')
+        return ctx.engine.search({ requestId: ++searchSeq, text, scope: 'all', projectId }, signal)
+      },
+      directories: path => listDirectories(path),
+      addProject: path => {
+        if (!ctx.engine) throw new Error('项目尚未加载')
+        return addProjectPath(ctx.engine, path)
+      },
+    },
+    shrinkImage,
   })
 
   // 有任务在运行时不让电脑睡眠（只看本机会话，和托盘一样）

@@ -1,5 +1,6 @@
 // 对话流（参考桌面端 docs/ui/conversation-concise.md）：一轮 = 用户消息 + 过程收成一行 + 回复和改动展开。
 // 运行中的一轮露出最近 2 步；点开过程能看每一步，命令和工具再点开看输出。
+// 图片点开再向电脑取；回复可以复制；最近一轮出错时错误下面有「重试」（docs/mobile-remote.md §17）。
 import { useState, type ReactNode } from 'react'
 import {
   Brain,
@@ -9,17 +10,33 @@ import {
   CircleAlert,
   FileDiff,
   FileText,
-  Image as ImageIcon,
   Info,
+  RotateCcw,
   ListTodo,
   SquareTerminal,
   Wrench,
   X,
 } from 'lucide-react'
-import type { Item } from '@pixelsky/protocol'
+import type { ImageAttachment, Item } from '@pixelsky/protocol'
+import { imageError, imageKey, knownImage } from '@/data/images'
 import { processSummary, stepTitle, turnDuration, type TurnView } from '@/data/turns'
-import { DiffView, Dot, Spinner, Typing, cn } from '@/ui'
+import { Button, DiffView, Dot, Spinner, Typing, cn } from '@/ui'
+import { CopyButton } from '@/ui/code'
+import { ImageTiles } from '@/ui/images'
 import { MarkdownText } from '@/ui/Markdown'
+
+/** 对话里要用到的操作（会话页传进来） */
+export interface TurnActions {
+  sessionId: string
+  /** 向电脑取第 index 张图，返回地址 */
+  image(itemId: string, index: number): Promise<string>
+  /** 全屏看图 */
+  view(src: string): void
+  /** 挂「重试」的那条错误 */
+  retryId: string | null
+  retrying: boolean
+  retry(): void
+}
 
 interface Props {
   turn: TurnView
@@ -28,9 +45,10 @@ interface Props {
   waiting: boolean
   truncated: string[]
   onDetail(itemId: string): void
+  actions: TurnActions
 }
 
-export function TurnBlock({ turn, running, waiting, truncated, onDetail }: Props) {
+export function TurnBlock({ turn, running, waiting, truncated, onDetail, actions }: Props) {
   const more = (id: string) =>
     truncated.includes(id) && (
       <button type="button" onClick={() => onDetail(id)} className="mt-1.5 text-meta font-medium text-accent-fg">
@@ -38,14 +56,20 @@ export function TurnBlock({ turn, running, waiting, truncated, onDetail }: Props
       </button>
     )
   const lastIsAnswer = turn.output.at(-1)?.kind === 'assistant'
+  // 一轮最后那段回复下面放「复制」（被截断的先「查看完整」再复制，免得复制不全）
+  const answer = turn.output.findLast(i => i.kind === 'assistant')
+  const copyId =
+    answer?.kind === 'assistant' && answer.status !== 'running' && answer.text && !truncated.includes(answer.id)
+      ? answer.id
+      : null
   return (
     <div className="flex flex-col gap-3">
-      {turn.user && <UserBubble item={turn.user} more={more(turn.user.id)} />}
+      {turn.user && <UserBubble item={turn.user} more={more(turn.user.id)} actions={actions} />}
       {(turn.process.length > 0 || (running && !lastIsAnswer)) && (
-        <Process items={turn.process} running={running} waiting={waiting} more={more} />
+        <Process items={turn.process} running={running} waiting={waiting} more={more} actions={actions} />
       )}
       {turn.output.map(item => (
-        <Output key={item.id} item={item} more={more(item.id)} />
+        <Output key={item.id} item={item} more={more(item.id)} copy={item.id === copyId} actions={actions} />
       ))}
       {!running && turn.stats && (
         <div className="flex items-center gap-1.5 text-label text-fg-faint">
@@ -58,18 +82,76 @@ export function TurnBlock({ turn, running, waiting, truncated, onDetail }: Props
   )
 }
 
-function UserBubble({ item, more }: { item: Extract<Item, { kind: 'user' }>; more: ReactNode }) {
+/** 消息里的图片：有的直接显示，没有的显示尺寸，点了向电脑取 */
+function MessageImages({
+  itemId,
+  images,
+  actions,
+  align,
+}: {
+  itemId: string
+  images: ImageAttachment[]
+  actions: TurnActions
+  align?: 'start' | 'end'
+}) {
+  const [urls, setUrls] = useState<(string | null)[]>(() =>
+    images.map((img, i) => knownImage(img, imageKey(actions.sessionId, itemId, i))),
+  )
+  const [loading, setLoading] = useState<number | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const open = async (i: number) => {
+    const have = urls[i] ?? knownImage(images[i], imageKey(actions.sessionId, itemId, i))
+    if (have) return actions.view(have)
+    if (loading !== null) return
+    setLoading(i)
+    setError(null)
+    try {
+      const url = await actions.image(itemId, i)
+      setUrls(list => list.map((x, j) => (j === i ? url : x)))
+      actions.view(url)
+    } catch (e) {
+      setError(imageError(e))
+    } finally {
+      setLoading(null)
+    }
+  }
+  return (
+    <div className={cn('flex flex-col gap-1', align === 'end' && 'items-end')}>
+      <ImageTiles
+        align={align}
+        onOpen={i => void open(i)}
+        tiles={images.map((img, i) => ({
+          key: img.id + '/' + i,
+          src: urls[i],
+          label: img.width && img.height ? `${img.width}×${img.height}` : '图片',
+          loading: loading === i,
+        }))}
+      />
+      {error && <span className="text-label text-danger">{error}</span>}
+    </div>
+  )
+}
+
+function UserBubble({
+  item,
+  more,
+  actions,
+}: {
+  item: Extract<Item, { kind: 'user' }>
+  more: ReactNode
+  actions: TurnActions
+}) {
   return (
     <div className="flex flex-col items-end pl-10">
-      {(item.text || !item.files?.length) && (
+      {(item.text || (!item.files?.length && !item.attachments?.length)) && (
         <div className="rounded-2xl rounded-br-md bg-subtle px-3.5 py-2.5 text-prose break-words whitespace-pre-wrap text-fg">
           {item.text}
         </div>
       )}
       {!!item.attachments?.length && (
-        <span className="mt-1 flex items-center gap-1 text-meta text-fg-muted">
-          <ImageIcon size={14} /> {item.attachments.length} 张图片
-        </span>
+        <div className="mt-1.5">
+          <MessageImages itemId={item.id} images={item.attachments} actions={actions} align="end" />
+        </div>
       )}
       {!!item.files?.length && (
         <span className="mt-1 flex max-w-full items-center gap-1 text-meta text-fg-muted">
@@ -100,11 +182,13 @@ function Process({
   running,
   waiting,
   more,
+  actions,
 }: {
   items: Item[]
   running: boolean
   waiting: boolean
   more(id: string): ReactNode
+  actions: TurnActions
 }) {
   const [open, setOpen] = useState(false)
   const steps = items.filter(i => i.kind !== 'reasoning' || i.text.trim())
@@ -140,7 +224,7 @@ function Process({
       {shown.length > 0 && (
         <div className="ml-1.5 flex flex-col gap-1.5 border-l-2 border-line-subtle pl-3">
           {shown.map(item => (
-            <Step key={item.id} item={item} more={more(item.id)} />
+            <Step key={item.id} item={item} more={more(item.id)} actions={actions} />
           ))}
         </div>
       )}
@@ -148,7 +232,7 @@ function Process({
   )
 }
 
-function Step({ item, more }: { item: Item; more: ReactNode }) {
+function Step({ item, more, actions }: { item: Item; more: ReactNode; actions: TurnActions }) {
   const [open, setOpen] = useState(false)
   const body =
     item.kind === 'command' ? (
@@ -157,7 +241,14 @@ function Step({ item, more }: { item: Item; more: ReactNode }) {
         <Pre text={item.output} />
       </>
     ) : item.kind === 'tool' ? (
-      <Pre text={item.output} />
+      <>
+        <Pre text={item.output} />
+        {!!item.images?.length && (
+          <div className="px-3 pb-2">
+            <MessageImages itemId={item.id} images={item.images} actions={actions} />
+          </div>
+        )}
+      </>
     ) : item.kind === 'reasoning' ? (
       <p className="px-3 py-2 text-meta whitespace-pre-wrap text-fg-muted">{item.text}</p>
     ) : null
@@ -200,7 +291,18 @@ function Pre({ text }: { text: string }) {
   )
 }
 
-function Output({ item, more }: { item: Item; more: ReactNode }) {
+function Output({
+  item,
+  more,
+  copy,
+  actions,
+}: {
+  item: Item
+  more: ReactNode
+  /** 下面放「复制」 */
+  copy: boolean
+  actions: TurnActions
+}) {
   switch (item.kind) {
     case 'assistant':
       return (
@@ -212,6 +314,7 @@ function Output({ item, more }: { item: Item; more: ReactNode }) {
             </div>
           )}
           {more}
+          {copy && <CopyButton text={item.text} label="复制回复" className="mt-0.5 -ml-2" />}
         </div>
       )
     case 'file_change':
@@ -265,7 +368,16 @@ function Output({ item, more }: { item: Item; more: ReactNode }) {
           ) : (
             <CircleAlert size={15} className="mt-0.5 shrink-0" />
           )}
-          <span className="min-w-0 break-words">{item.text}</span>
+          <span className="min-w-0 flex-1 break-words">
+            {item.text}
+            {item.id === actions.retryId && (
+              <span className="mt-2 flex">
+                <Button size="sm" disabled={actions.retrying} onClick={actions.retry}>
+                  {actions.retrying ? <Spinner size={12} /> : <RotateCcw size={14} />} 重试
+                </Button>
+              </span>
+            )}
+          </span>
         </div>
       )
     default:

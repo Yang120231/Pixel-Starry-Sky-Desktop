@@ -7,11 +7,11 @@ import { linkStateText } from '@/i18n/zh'
 import { Dot, Row, Screen, Section, Segmented } from '@/ui'
 import { THEMES, useThemePreference } from './theme'
 
-export function MeScreen({ tabBar, onAdd }: { tabBar: ReactNode; onAdd?: () => void }) {
+export function MeScreen({ menu, onAdd }: { menu: ReactNode; onAdd?: () => void }) {
   const { list, active } = useConnections()
   const [theme, setTheme] = useThemePreference()
   return (
-    <Screen large title="我的" footer={tabBar}>
+    <Screen large title="我的" leading={menu}>
       <div className="flex flex-col gap-6 pb-8">
         <Section title="电脑">
           {list.map(p => {

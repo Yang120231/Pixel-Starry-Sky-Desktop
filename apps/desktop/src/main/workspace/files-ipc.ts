@@ -31,7 +31,11 @@ export async function initWorkspace(ctx: AppContext): Promise<void> {
       { deny: '不允许的调用方' },
     )
   }
-  for (const [channel, op] of opEntries(FILE_OPS)) handle(channel, (_e, ...args) => op({ files }, ...args))
+  for (const [channel, op] of opEntries(FILE_OPS)) {
+    const run = (args: unknown[]) => op({ files }, ...args)
+    ctx.toolOps.set(channel, run)
+    handle(channel, (_e, ...args) => run(args))
+  }
   handle('files:reveal', async (_e, ref, path = '') => {
     const target = files.target(ref)
     const file = await workspacePath(target.path, path)

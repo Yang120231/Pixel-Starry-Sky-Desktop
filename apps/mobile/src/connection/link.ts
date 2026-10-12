@@ -42,6 +42,8 @@ export interface Hello {
   version: number
   name: string
   access: 'view' | 'act'
+  /** 电脑能给手机用 Git / 文件 / 产物 / 任务工具、加项目（docs/mobile-remote.md §18.4）；旧版电脑没有 */
+  tools?: boolean
 }
 
 export interface LinkHooks {

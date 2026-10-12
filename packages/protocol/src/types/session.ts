@@ -194,7 +194,10 @@ export interface SessionSummary {
   state: SessionState
   /** 空闲但后台还有子智能体 / 编排在跑：有几个（docs/ui/notifications.md §7）；没有时省略 */
   background?: number
-  /** 消息队列概况：有排队消息时才有（任务 › 待处理用，docs/ui/tasks-inbox.md）。queued 不含失败项 */
+  /**
+   * 消息队列概况：有排队或失败的消息时才有（任务 › 待处理、手机任务列表用，docs/ui/tasks-inbox.md）。
+   * queued 只数还在等的：不含失败项，也不含正在执行、正在交付的那条。没打开过的会话按磁盘上的队列文件计数
+   */
   queue?: QueueSummary
 }
 

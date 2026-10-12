@@ -1,6 +1,6 @@
 import { homedir, hostname, platform, arch } from 'node:os'
-import { join, dirname, isAbsolute } from 'node:path'
-import { mkdir, readdir, realpath, writeFile } from 'node:fs/promises'
+import { join, dirname } from 'node:path'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { REMOTE_PROTOCOL, viaGateway, type IPC_CONTRACT, type SessionRecord } from '@pixelsky/protocol'
 import { EngineHost, type EngineHostOptions } from '@pixelsky/engine'
 import { WorkspaceFiles } from '../core/workspace-files'
@@ -12,7 +12,7 @@ import { ProjectTools, createToolsHost } from '../core/project-tools/tools'
 import { moveToTrash } from '../core/project-tools/trash'
 import { SearchRegistry } from '../core/search-registry'
 import { bindOps } from '../core/ops'
-import { value } from '../core/args'
+import { listDirectories } from '../core/directories'
 import { gatewaySettings } from '../platform/compact-window'
 import type { WorkspaceRef } from '../../shared/types/workspace'
 import type { RpcPeer } from './rpc'
@@ -85,16 +85,7 @@ export async function createRemoteRuntime(
     }),
     ...bindOps(FILE_OPS, { files }),
     ...bindOps(PROJECT_TOOL_OPS, toolsContext),
-    directories: async (input?: string) => {
-      const path = await realpath(input ? value(input, 4096, true) : homedir())
-      if (!isAbsolute(path)) throw new Error('目录不正确')
-      const directories = (await readdir(path, { withFileTypes: true }))
-        .filter(e => e.isDirectory())
-        .map(e => e.name)
-        .sort()
-        .slice(0, 2000)
-      return { path, parent: dirname(path) === path ? null : dirname(path), directories }
-    },
+    directories: (input?: string) => listDirectories(input),
     workspaces: projectId => listWorkspaces(toolsContext, projectId),
     'engine:addProject': path => addProjectPath(host, path),
     'engine:usageExport': q => usageCsv(host, q),

@@ -129,7 +129,7 @@ export function PairScreen({ offer, error, onDone }: { offer: Offer | null; erro
               </Button>
               <p className="flex items-start gap-2 text-meta text-fg-muted">
                 <ShieldCheck size={16} className="mt-0.5 shrink-0" />
-                连上后，这部手机能看到电脑上的所有任务，能审批、发消息。内容端到端加密，中转服务器看不到。
+                连上后，这部手机能看到电脑上的所有会话，能审批、发消息。内容端到端加密，中转服务器看不到。
               </p>
             </div>
           </>
@@ -139,7 +139,7 @@ export function PairScreen({ offer, error, onDone }: { offer: Offer | null; erro
               <ShieldCheck size={22} /> 已配对
             </div>
             <Button variant="primary" className="w-full" onClick={onDone}>
-              查看任务
+              开始使用
             </Button>
           </div>
         ) : current.status === 'removed' ? (

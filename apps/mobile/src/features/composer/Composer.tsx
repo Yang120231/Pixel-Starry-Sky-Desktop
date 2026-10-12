@@ -1,49 +1,88 @@
-// 输入框：运行中发的消息由电脑排队（docs/ui/message-queue.md）。图片附件 M3 先不做（单帧 1 MB，要先压缩）。
-import { useState } from 'react'
+// 输入框：运行中发的消息由电脑排队（docs/ui/message-queue.md）。可以带图片（拍照 / 相册，在手机上压缩，
+// docs/mobile-remote.md §17 第 1 项）。草稿由外面管：队列里撤回的消息会放回这里。
+// 电脑浏览器、接了键盘的平板（精确指针）：回车发送、Shift+回车换行（§18.3）；手机软键盘的回车是换行。
 import { ArrowUp } from 'lucide-react'
+import { useRef, useState } from 'react'
 import type { DesktopLink } from '@/connection'
-import { Spinner, cn } from '@/ui'
+import { imageDataUrl, usePendingImages } from '@/data/images'
+import { FINE_POINTER, Spinner, cn, useMedia } from '@/ui'
+import { AttachButton, AttachmentStrip } from '@/ui/images'
 
 export function Composer({
   link,
   sessionId,
   canAct,
   running,
+  draft,
+  onDraft,
 }: {
   link: DesktopLink | undefined
   sessionId: string
   canAct: boolean
   running: boolean
+  draft: string
+  onDraft(text: string): void
 }) {
-  const [text, setText] = useState('')
+  const images = usePendingImages()
+  const enterSends = useMedia(FINE_POINTER)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const ready = canAct && !!text.trim() && !busy
+  // 发送中又输入了新的话：发完只清掉发出去的那句和那几张图，不清新输入的
+  const latest = useRef(draft)
+  latest.current = draft
+  const ready = canAct && (!!draft.trim() || images.images.length > 0) && !busy && !images.busy
   const send = async () => {
-    const value = text.trim()
-    if (!link || !value) return
+    const sent = draft,
+      value = draft.trim(),
+      attachments = images.images
+    if (!link || (!value && !attachments.length)) return
     setBusy(true)
     setError(null)
     try {
-      await link.call('engine:send', sessionId, { text: value, clientMessageId: crypto.randomUUID() })
-      setText('')
+      await link.call('engine:send', sessionId, {
+        text: value,
+        clientMessageId: crypto.randomUUID(),
+        ...(attachments.length ? { attachments } : {}),
+      })
+      if (latest.current === sent) onDraft('')
+      images.discard(attachments.map(i => i.id))
     } catch (e) {
       setError((e as Error).message === 'MOBILE_FORBIDDEN' ? '这部手机是「只看」。' : (e as Error).message)
     } finally {
       setBusy(false)
     }
   }
+  const shownError = error ?? images.error
   return (
     <div className="border-t border-line-subtle px-3 pt-2 pb-2">
-      {error && <p className="px-1 pb-1.5 text-meta text-danger">{error}</p>}
-      <div className="flex items-end gap-2 rounded-3xl border border-line-composer bg-surface py-1.5 pr-1.5 pl-4 shadow-composer focus-within:border-line-composer-focus">
+      {shownError && <p className="px-1 pb-1.5 text-meta text-danger">{shownError}</p>}
+      <AttachmentStrip
+        images={images.images.map(i => ({ id: i.id, src: imageDataUrl(i) }))}
+        busy={images.busy}
+        onRemove={images.remove}
+      />
+      <div className="flex items-end gap-1 rounded-3xl border border-line-composer bg-surface py-1.5 pr-1.5 pl-1.5 shadow-composer focus-within:border-line-composer-focus">
+        <AttachButton disabled={!canAct || busy} onFiles={files => void images.add(files)} />
         <textarea
-          value={text}
-          onChange={e => setText(e.target.value)}
+          value={draft}
+          onChange={e => onDraft(e.target.value)}
+          onKeyDown={e => {
+            if (!enterSends || e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return
+            e.preventDefault()
+            if (ready) void send()
+          }}
           rows={1}
           disabled={!canAct}
           enterKeyHint="send"
-          placeholder={!canAct ? '连接后才能发消息' : running ? '补充说明（会排在后面）…' : '回复…'}
+          placeholder={
+            !canAct
+              ? '连接后才能发消息'
+              : running
+                ? '补充说明（会排在后面）…'
+                : enterSends
+                  ? '回复…（回车发送，Shift+回车换行）'
+                  : '回复…'
+          }
           className="field-sizing-content max-h-40 min-h-9 flex-1 resize-none bg-transparent py-1.5 text-prose text-fg outline-none placeholder:text-fg-faint"
         />
         <button
