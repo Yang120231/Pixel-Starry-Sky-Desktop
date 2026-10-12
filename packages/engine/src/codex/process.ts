@@ -139,11 +139,11 @@ export class CodexProcess {
     this.notify('initialized')
     return result
   }
-  async close(): Promise<void> {
+  async close(timeoutMs = 2_000): Promise<void> {
     if (!this.alive) return
     this.stopping = true
     this.child.stdin.end()
-    const timer = setTimeout(() => this.kill(), 2000)
+    const timer = setTimeout(() => this.kill(), timeoutMs)
     await this.exitPromise
     clearTimeout(timer)
   }

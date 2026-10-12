@@ -72,3 +72,44 @@ Function pixelskyCheckDir
   Abort
 FunctionEnd
 !macroend
+
+; ---------- 自动更新时显示安装进度（docs/release-update.md §11） ----------
+; 应用内「重启并安装」不再静默安装：显示安装程序的进度条，装完自动打开新版本。
+; 带 --updated 时一路不停：不问「仅为我 / 所有用户」（沿用原来的方式），不停在完成页。
+
+; 「仅为我 / 所有用户」：更新时按原来装的方式，不显示这一页（multiUserUi.nsh 在这一页的进入函数里展开这个宏）
+!macro customInstallMode
+  ${if} ${isUpdated}
+    ${if} $hasPerMachineInstallation == "1"
+    ${andIf} $hasPerUserInstallation == "0"
+      StrCpy $isForceMachineInstall "1"
+    ${else}
+      StrCpy $isForceCurrentInstall "1"
+    ${endif}
+  ${endif}
+!macroend
+
+; 完成页：和默认的一样（勾选「运行」），只是更新时跳过这一页、直接打开新版本，安装程序随即关闭。
+; 不带界面的更新（/S --force-run）由模板的安装段打开应用，不经过这里
+!macro customFinishPage
+  Function StartApp
+    ${if} ${isUpdated}
+      StrCpy $1 "--updated"
+    ${else}
+      StrCpy $1 ""
+    ${endif}
+    ${StdUtils.ExecShellAsUser} $0 "$launchLink" "open" "$1"
+  FunctionEnd
+
+  Function pixelskySkipFinish
+    ${if} ${isUpdated}
+      Call StartApp
+      Abort
+    ${endif}
+  FunctionEnd
+
+  !define MUI_PAGE_CUSTOMFUNCTION_PRE pixelskySkipFinish
+  !define MUI_FINISHPAGE_RUN
+  !define MUI_FINISHPAGE_RUN_FUNCTION "StartApp"
+  !insertmacro MUI_PAGE_FINISH
+!macroend

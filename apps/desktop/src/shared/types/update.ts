@@ -33,4 +33,6 @@ export interface UpdateState {
   error?: string
   /** 上次检查完成的时间（毫秒） */
   checkedAt?: number
+  /** 点了「重启以更新」、正在退出去安装：按钮显示「正在重启…」 */
+  installing?: boolean
 }

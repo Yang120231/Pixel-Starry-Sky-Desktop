@@ -69,8 +69,16 @@ export interface EngineSession {
   stopTask?(taskId: string): Promise<void>
   /** 读一个后台任务的输出（只给最后一段）；没有后台任务的引擎不实现 */
   taskOutput?(taskId: string): Promise<TaskOutput>
-  close(): Promise<void>
+  /** quick：应用正在退出（包括更新重启），只给进程很短的时间自己退，不等它收尾（docs/release-update.md §11） */
+  close(opts?: CloseOptions): Promise<void>
 }
+
+export interface CloseOptions {
+  quick?: boolean
+}
+
+/** 应用退出时给引擎进程自己退出的时间：Claude Code 空闲时关掉 stdin 约 0.6 秒就退，在忙时常常 5 秒也不退 */
+export const QUICK_CLOSE_MS = 1_000
 
 export interface EngineAdapter {
   /** 检测引擎状态；结果会缓存，force 时重新检测 */

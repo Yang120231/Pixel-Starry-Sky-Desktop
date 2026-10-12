@@ -24,14 +24,15 @@ export const updateMessages = {
   'update.latest': { zh: '已是最新版本', en: "You're up to date" },
   'update.downloading': { zh: '正在下载 {p0}%', en: 'Downloading {p0}%' },
   'update.restart': { zh: '重启以更新', en: 'Restart to update' },
+  'update.restarting': { zh: '正在重启…', en: 'Restarting…' },
   'update.download': { zh: '去下载', en: 'Download' },
   'update.unsupported': { zh: '开发模式不检查更新', en: 'Updates are off in development mode' },
   'update.readyTitle': { zh: '新版本 {p0} 已下载好', en: 'Version {p0} is ready' },
   'update.availableTitle': { zh: '有新版本 {p0}', en: 'Version {p0} is available' },
   'update.downloadingTitle': { zh: '正在下载新版本 {p0}', en: 'Downloading version {p0}' },
   'update.readyHint': {
-    zh: '重启后自动安装；不重启的话，下次退出时安装',
-    en: "Restart to install it now, or it'll install the next time you quit",
+    zh: '重启时显示安装进度，装完自动打开；不重启的话，下次退出时安装',
+    en: "Restart to install it now (you'll see the progress and it reopens when done), or it'll install the next time you quit",
   },
   'update.portableHint': {
     zh: '便携版不能自动更新、以后也不再提供，请下载安装版（以后能自动更新）',

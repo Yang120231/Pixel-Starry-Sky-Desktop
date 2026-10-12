@@ -228,6 +228,18 @@ describe('EngineHost + Claude（假引擎）', () => {
     expect(spawnArgs()).toHaveLength(1)
   })
 
+  it('退出应用时不等引擎收尾：关了 stdin 也不退的进程 1 秒左右就被强制结束（原来等满 5 秒，更新重启时白等）', async () => {
+    const host = makeHost(60_000, { FAKE_CLAUDE_LINGER: '1' })
+    const { record } = setup(host)
+    await host.send(record.id, '你好')
+    await waitFor(() => turnsDone(record.id) === 1)
+    const start = Date.now()
+    await host.shutdown()
+    const took = Date.now() - start
+    expect(took).toBeGreaterThanOrEqual(900)
+    expect(took).toBeLessThan(3_000)
+  })
+
   it('一轮结束后引擎自己接着干（后台任务通知）：算新的一轮，有运行状态、统计行和用量，空闲定时器不关进程', async () => {
     // 空闲时间 600ms：假引擎在第一轮结束 40ms 后发通知接着干。空闲短了（原来 60ms、后来 150ms）整套检查并行跑、
     // CPU 占满时假引擎的 40ms 会拖到空闲之后，进程被关，后续那一轮不来，测试等到超时

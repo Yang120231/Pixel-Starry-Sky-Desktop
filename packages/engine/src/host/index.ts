@@ -438,6 +438,7 @@ export class EngineHost {
     this.m.usage.abortSettlements()
     const all = [...this.runtimes.values()]
     for (const rt of all) if (rt.idleTimer) clearTimeout(rt.idleTimer)
-    await Promise.all(all.map(rt => rt.session?.close().catch(() => undefined)))
+    // 退出时不等引擎收尾：最多等 1 秒就强制结束（原来 Claude 等满 5 秒，更新重启时白等）
+    await Promise.all(all.map(rt => rt.session?.close({ quick: true }).catch(() => undefined)))
   }
 }

@@ -555,7 +555,9 @@ if (arg('--output-format') !== 'json')
       if (line.trim()) handle(JSON.parse(line))
     }
   })
-if (arg('--output-format') !== 'json') process.stdin.on('end', () => process.exit(0))
+// FAKE_CLAUDE_LINGER=1：像忙着的真实 CLI 一样，stdin 关了也不退（只能被强制结束）
+if (process.env.FAKE_CLAUDE_LINGER === '1') setInterval(() => {}, 1000)
+else if (arg('--output-format') !== 'json') process.stdin.on('end', () => process.exit(0))
 
 function respond(requestId, response) {
   out({ type: 'control_response', response: { subtype: 'success', request_id: requestId, response } })

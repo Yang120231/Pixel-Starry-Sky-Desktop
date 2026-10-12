@@ -40,9 +40,10 @@ export function UpdateNotice() {
         variant="primary"
         icon={ready ? RotateCw : ArrowDownToLine}
         className="mt-2 h-7 w-full px-2 text-meta"
+        disabled={update.installing}
         onClick={() => void (ready ? updateActions.install() : updateActions.download())}
       >
-        {tr(ready ? 'update.restart' : 'update.download')}
+        {tr(ready ? (update.installing ? 'update.restarting' : 'update.restart') : 'update.download')}
       </Button>
     </div>
   )

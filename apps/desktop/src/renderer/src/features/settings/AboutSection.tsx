@@ -196,8 +196,13 @@ function UpdateButton({ update }: { update: UpdateState | null }) {
   const status = update?.status
   if (status === 'ready')
     return (
-      <Button variant="primary" icon={RotateCw} onClick={() => void updateActions.install()}>
-        {tr('update.restart')}
+      <Button
+        variant="primary"
+        icon={RotateCw}
+        disabled={update?.installing}
+        onClick={() => void updateActions.install()}
+      >
+        {tr(update?.installing ? 'update.restarting' : 'update.restart')}
       </Button>
     )
   if (status === 'available')

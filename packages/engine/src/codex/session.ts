@@ -9,7 +9,7 @@ import type {
   TurnOutcome,
 } from '@pixelsky/protocol'
 import { EMPTY_FLAGS, isQuietWarning } from '@pixelsky/protocol'
-import type { EngineSession, Launcher, SessionContext } from '../adapter'
+import { QUICK_CLOSE_MS, type CloseOptions, type EngineSession, type Launcher, type SessionContext } from '../adapter'
 import { CodexProcess, array, object, string, type Message } from './process'
 import { codexCatalog } from './catalog'
 import { codexChanges, CodexTranslator, tokenCounts } from './translate'
@@ -756,10 +756,10 @@ export class CodexSession implements EngineSession {
       this.finish('interrupted', null)
     }
   }
-  async close(): Promise<void> {
+  async close(opts: CloseOptions = {}): Promise<void> {
     this.closed = true
     await this.interrupt()
-    await this.proc?.close()
+    await this.proc?.close(opts.quick ? QUICK_CLOSE_MS : undefined)
     this.ctx.extensions?.dispose?.()
   }
 }

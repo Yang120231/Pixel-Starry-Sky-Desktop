@@ -15,7 +15,7 @@ import {
   viaGateway,
 } from '@pixelsky/protocol'
 import { queueSettings } from '../queue'
-import type { EngineSession, Launcher, SessionContext } from '../adapter'
+import { QUICK_CLOSE_MS, type CloseOptions, type EngineSession, type Launcher, type SessionContext } from '../adapter'
 import { ClaudeProcess, type ControlRequestFromCli } from './process'
 import { loadSavedRuns } from './runs'
 import { alwaysPermissions, approvalFor } from './tools'
@@ -797,12 +797,12 @@ export class ClaudeSession implements EngineSession {
     return { output: str(r.output), truncated: r.truncated === true }
   }
 
-  async close(): Promise<void> {
+  async close(opts: CloseOptions = {}): Promise<void> {
     this.closed = true
     const starting = this.starting
     if (starting) await starting.catch(() => null)
     try {
-      await this.proc?.close()
+      await this.proc?.close(opts.quick ? QUICK_CLOSE_MS : undefined)
     } finally {
       if (this.retrySettingsFile) {
         rmSync(this.retrySettingsFile, { force: true })

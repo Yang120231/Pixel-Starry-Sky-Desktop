@@ -105,8 +105,14 @@ export function initUpdater(ctx: AppContext): void {
     'update:install',
     () => {
       if (state.status !== 'ready') throw new Error('新版本还没有下载好')
-      // 静默安装，装完自动重新打开
-      setImmediate(() => autoUpdater.quitAndInstall(true, true))
+      if (state.installing) return
+      // 先让按钮变成「正在重启…」再退出。显示安装程序的进度条（不静默），装完自动打开新版本：
+      // 原来静默安装的十几秒里什么都看不见，像是没反应（docs/release-update.md §11）。
+      // 带 --updated 时安装程序不问安装方式、不停在完成页（build/installer.nsh）
+      set({ installing: true })
+      setTimeout(() => autoUpdater.quitAndInstall(false, true), 150)
+      // 退出被拦下（有没保存的文件时选了返回）：过一会儿按钮恢复
+      setTimeout(() => set({ installing: false }), 15_000).unref()
     },
     deny,
   )
