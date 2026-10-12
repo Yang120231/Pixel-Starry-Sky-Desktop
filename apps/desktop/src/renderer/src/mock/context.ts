@@ -29,7 +29,12 @@ export const demoContext: ContextWindow = {
       { name: 'Free space', tokens: 21000, kind: 'free' },
     ],
     tools: [{ name: '文件与浏览器工具', tokens: 5000 }],
-    memory: [{ name: 'CLAUDE.md', tokens: 3000 }],
+    // 记忆文件是引擎给的绝对路径：项目里的、用户目录下的（演示的项目在 D:\pixel-web，用户目录 C:\Users\linxia）
+    memory: [
+      { name: 'D:\\pixel-web\\CLAUDE.md', tokens: 1800, source: 'Project' },
+      { name: 'C:\\Users\\linxia\\.claude\\CLAUDE.md', tokens: 900, source: 'User' },
+      { name: 'C:\\Users\\linxia\\.claude\\projects\\D--pixel-web\\memory\\MEMORY.md', tokens: 300, source: 'AutoMem' },
+    ],
     agents: [],
     skills: [{ name: '演示项目技能', tokens: 5000, source: 'workspace' }],
   },

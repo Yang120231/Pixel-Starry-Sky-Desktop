@@ -206,6 +206,7 @@ const editor: EditorBridge = {
   choose: (kind, name, mode) => call('editor:choose', kind, name, mode),
   remove: id => call('editor:remove', id),
   open: (ref, id, path, line, col) => call('editor:open', ref, id, path, line, col),
+  openMemory: (sessionId, path, action) => call('editor:openMemory', sessionId, path, action),
 }
 const windowControls: WindowBridge = {
   getState: () => call('window:getState'),

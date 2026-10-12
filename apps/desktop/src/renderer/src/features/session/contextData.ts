@@ -1,5 +1,27 @@
 import { tr } from '../../i18n/core'
-import type { ContextWindow } from '@pixelsky/protocol'
+import type { ContextDiagnostic, ContextWindow } from '@pixelsky/protocol'
+
+/** 明细里每一行（分类、各分组的条目）→ Token 数：刷新前后对比，找出变了的行 */
+export function diagnosticValues(d: ContextDiagnostic | null | undefined): Map<string, number> {
+  const values = new Map<string, number>()
+  if (!d) return values
+  for (const c of d.categories) values.set(`category:${c.name}`, c.tokens)
+  for (const group of ['tools', 'memory', 'agents', 'skills'] as const)
+    for (const row of d[group]) values.set(`${group}:${row.name}`, row.tokens)
+  return values
+}
+
+/** 刷新后变了的行：数字不一样的、新出现的 */
+export function changedRows(before: Map<string, number>, after: Map<string, number>): Set<string> {
+  const changed = new Set<string>()
+  for (const [key, value] of after) if (before.get(key) !== value) changed.add(key)
+  return changed
+}
+
+/** 刷新按钮的图标至少转完整的一圈：已经转了 elapsed 毫秒，还要转多久才停在一圈的末尾 */
+export function spinRemaining(elapsed: number, period: number): number {
+  return Math.ceil(Math.max(1, elapsed) / period) * period - elapsed
+}
 
 export function contextPercentage(context: ContextWindow | null | undefined): number | null {
   if (

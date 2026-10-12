@@ -430,17 +430,35 @@ export class Editors {
       this.checkedAt = 0
       throw new Error('默认编辑器不可用，请重新检测或指定路径')
     }
-    const args = editorArgs(editor.mode, this.prefs.window, root, file, line, column)
-    const env = { ...process.env }
-    delete env.ELECTRON_RUN_AS_NODE
-    await new Promise<void>((done, fail) => {
-      const child = spawn(editor.path, args, { shell: false, windowsHide: true, detached: true, stdio: 'ignore', env })
-      child.once('error', e => fail(new Error('编辑器启动失败：' + e.message)))
-      child.once('spawn', () => {
-        child.unref()
-        done()
-      })
-    })
+    await launch(editor.path, editorArgs(editor.mode, this.prefs.window, root, file, line, column))
     return { editor: editor.name, target: file ?? root }
   }
+
+  /**
+   * 用默认编辑器打开项目外的一个文件（上下文明细里的记忆文件，docs/ui/context-window.md §7）：
+   * 不经过项目目录检查，调用方先确认这个路径可以打开。没有可用的默认编辑器时返回 null
+   */
+  async openFile(file: string): Promise<{ editor: string; target: string } | null> {
+    const state = await this.current()
+    const editor = state.items.find(e => e.id === state.defaultId)
+    if (!editor?.available || !editor.path || !(await exists(editor.path))) return null
+    const args =
+      editor.mode === 'code' ? [this.prefs.window === 'new' ? '--new-window' : '--reuse-window', file] : [file]
+    await launch(editor.path, args)
+    return { editor: editor.name, target: file }
+  }
+}
+
+/** 启动编辑器，不等它退出 */
+async function launch(program: string, args: string[]): Promise<void> {
+  const env = { ...process.env }
+  delete env.ELECTRON_RUN_AS_NODE
+  await new Promise<void>((done, fail) => {
+    const child = spawn(program, args, { shell: false, windowsHide: true, detached: true, stdio: 'ignore', env })
+    child.once('error', e => fail(new Error('编辑器启动失败：' + e.message)))
+    child.once('spawn', () => {
+      child.unref()
+      done()
+    })
+  })
 }

@@ -367,6 +367,40 @@
 .sidebar-history-chevron[data-expanded='true'] {
   transform: rotate(180deg);
 }
+/* 弹窗里的展开 / 收起（上下文窗口的「查看详细占用」和各分组，docs/ui/context-window.md §7）：
+   高度和透明度一起过渡，内容一直挂着（收起时 inert）；箭头转 90°。外层不能有 padding / margin，放在里层 */
+.disclosure {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows var(--dur-collapse) var(--ease-out),
+    opacity var(--dur-collapse) var(--ease-out);
+}
+.disclosure[data-open] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition-duration: var(--dur-expand);
+}
+.disclosure > * {
+  min-height: 0;
+  overflow: hidden;
+}
+.disclosure-chevron {
+  transition: transform var(--dur-collapse) var(--ease-out);
+}
+.disclosure-chevron[data-open] {
+  transform: rotate(90deg);
+}
+/* 刷新后变了的数字：底色亮一下再褪掉 */
+.value-flash {
+  animation: value-flash 900ms var(--ease-out);
+}
+@keyframes value-flash {
+  from {
+    background: color-mix(in oklab, var(--accent) 22%, transparent);
+  }
+}
 /* 拖动直接跟手，收起/展开仍使用已有动画。 */
 :root[data-layout-resize] .collapsible-slot {
   transition: none;
@@ -459,6 +493,8 @@
     .collapsible-slot,
     .sidebar-history-content,
     .sidebar-history-chevron,
+    .disclosure,
+    .disclosure-chevron,
     .session-header,
     .composer-card,
     .pane-divider-line
@@ -468,7 +504,7 @@
 :root[data-motion='off'] .press:active {
   transform: none;
 }
-:root[data-motion='off'] :is(.pop-in, .fade-in, .usage-expand) {
+:root[data-motion='off'] :is(.pop-in, .fade-in, .usage-expand, .value-flash) {
   animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -477,6 +513,8 @@
       .collapsible-slot,
       .sidebar-history-content,
       .sidebar-history-chevron,
+      .disclosure,
+      .disclosure-chevron,
       .session-header,
       .composer-card,
       .pane-divider-line
@@ -486,7 +524,7 @@
   :root[data-motion='system'] .press:active {
     transform: none;
   }
-  :root[data-motion='system'] :is(.pop-in, .fade-in, .usage-expand) {
+  :root[data-motion='system'] :is(.pop-in, .fade-in, .usage-expand, .value-flash) {
     animation: none;
   }
 }

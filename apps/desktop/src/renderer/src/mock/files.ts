@@ -4,6 +4,8 @@ import { SHOWCASE_FILES } from './conversations'
 /** 明确标为演示的文件，仅 --demo 使用，不读写磁盘。 */
 export const DEMO_FILES: Record<string, string> = {
   'README.md': '# pixel-web\n\n这是文件面板的演示内容。\n',
+  // 上下文明细里的记忆文件（mock/context.ts）点得开
+  'CLAUDE.md': '# pixel-web\n\n- 界面文字用中文\n- 改完跑 pnpm test\n',
   'src/session/Composer.jsx': 'export function Composer() {\n  return <textarea placeholder="描述你要做的事" />\n}\n',
   'src/styles/session.css': '.session {\n  display: flex;\n  flex-direction: column;\n}\n',
   'package.json': '{\n  "name": "pixel-web",\n  "private": true\n}\n',

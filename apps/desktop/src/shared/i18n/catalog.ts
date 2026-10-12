@@ -860,6 +860,26 @@ export const catalog = {
     "zh": "刷新明细",
     "en": "Refresh details"
   },
+  "session.ContextWindowButton.refreshed": {
+    "zh": "已刷新",
+    "en": "Refreshed"
+  },
+  "session.ContextWindowButton.openMemoryFile": {
+    "zh": "打开 {p0}",
+    "en": "Open {p0}"
+  },
+  "session.ContextWindowButton.revealMemoryFile": {
+    "zh": "在文件夹中显示",
+    "en": "Show in folder"
+  },
+  "session.ContextWindowButton.demoLocalFile": {
+    "zh": "演示模式不会打开本机文件",
+    "en": "Demo mode doesn't open files on this computer"
+  },
+  "session.ContextWindowButton.remoteMemoryFile": {
+    "zh": "远程机器上项目外的文件打不开",
+    "en": "Files outside the project can't be opened on a remote machine"
+  },
   "session.ContextWindowButton.contentCategoriesAreNot": {
     "zh": "内容分类尚未获取；可在会话空闲后刷新引擎诊断。",
     "en": "Content categories are not available yet. Refresh engine diagnostics when the conversation is idle."

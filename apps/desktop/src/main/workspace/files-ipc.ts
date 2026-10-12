@@ -8,6 +8,8 @@ import { FILE_OPS } from '../core/workspace/ops'
 import { opEntries } from '../core/ops'
 import type { EditorKind } from '../../shared/types/workspace'
 import { nativeText } from '../app/ui-language'
+import { memoryFile } from '../core/memory-files'
+import { machineOf } from '../machines/identity'
 
 export async function initWorkspace(ctx: AppContext): Promise<void> {
   const resolveTarget: TargetResolver = ref => resolveWorkspace(ctx, ref)
@@ -64,4 +66,15 @@ export async function initWorkspace(ctx: AppContext): Promise<void> {
     return editors.configure(kind, result.filePaths[0], name, mode)
   })
   handle('editor:open', (_e, ref, id, path, line, col) => editors.open(workspaceRef(ref), id, path, line, col))
+  // 上下文明细里项目外的记忆文件（docs/ui/context-window.md §7）：只开本机会话诊断里列出的文件；
+  // 有默认编辑器就用它打开，没有用系统默认程序；reveal 在文件夹里显示
+  handle('editor:openMemory', async (_e, sessionId: unknown, path: unknown, action: unknown) => {
+    if (typeof sessionId !== 'string' || machineOf(sessionId) !== 'local') throw new Error('只能打开本机上的记忆文件')
+    const listed = ctx.engine?.open(sessionId).context?.diagnostic?.memory ?? []
+    const file = await memoryFile(listed, path)
+    if (action === 'reveal') return void shell.showItemInFolder(file)
+    if (await editors.openFile(file)) return
+    const err = await shell.openPath(file)
+    if (err) throw new Error('打不开这个文件：' + err)
+  })
 }

@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { contextNumber, contextPercentage, contextSegments } from './contextData'
-import type { ContextWindow } from '@pixelsky/protocol'
+import {
+  changedRows,
+  contextNumber,
+  contextPercentage,
+  contextSegments,
+  diagnosticValues,
+  spinRemaining,
+} from './contextData'
+import type { ContextDiagnostic, ContextWindow } from '@pixelsky/protocol'
 const base: ContextWindow = {
   model: 'main',
   used: 160000,
@@ -32,5 +39,37 @@ describe('上下文显示', () => {
     expect(parts.map(p => p.tokens)).toEqual([10000, 140000, 10000, 40000])
     expect(parts.reduce((sum, p) => sum + p.tokens, 0)).toBe(200000)
     expect(contextSegments({ ...base, stale: true })).toEqual([])
+  })
+  it('刷新前后对比：数字变了的行、新出现的行', () => {
+    const diagnostic = (messages: number, memory: { name: string; tokens: number }[]): ContextDiagnostic => ({
+      model: 'main',
+      used: 1,
+      window: 200000,
+      observedAt: 1,
+      categories: [
+        { name: 'System prompt', tokens: 7000, kind: 'used' },
+        { name: 'Messages', tokens: messages, kind: 'used' },
+      ],
+      tools: [],
+      memory,
+      agents: [],
+      skills: [],
+    })
+    const before = diagnosticValues(diagnostic(100, [{ name: 'a.md', tokens: 5 }]))
+    const after = diagnosticValues(
+      diagnostic(120, [
+        { name: 'a.md', tokens: 5 },
+        { name: 'b.md', tokens: 3 },
+      ]),
+    )
+    expect([...changedRows(before, after)]).toEqual(['category:Messages', 'memory:b.md'])
+    expect(changedRows(after, after).size).toBe(0)
+    expect(diagnosticValues(null).size).toBe(0)
+  })
+  it('刷新图标至少转完一圈、停在一圈的末尾', () => {
+    expect(spinRemaining(40, 700)).toBe(660)
+    expect(spinRemaining(700, 700)).toBe(0)
+    expect(spinRemaining(900, 700)).toBe(500)
+    expect(spinRemaining(0, 700)).toBe(700)
   })
 })

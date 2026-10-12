@@ -64,6 +64,7 @@ export const IPC_CONTRACT = {
   'artifacts:reveal': { kind: 'invoke', route: 'local', trust: 'sender' },
   'editor:choose': { kind: 'invoke', route: 'local', trust: 'sender' },
   'editor:open': { kind: 'invoke', route: 'selected', picker: true, trust: 'sender' },
+  'editor:openMemory': { kind: 'invoke', route: 'local', trust: 'sender' },
   'editor:preferences': { kind: 'invoke', route: 'local', trust: 'sender' },
   'editor:remove': { kind: 'invoke', route: 'local', trust: 'sender' },
   'editor:state': { kind: 'invoke', route: 'local', trust: 'sender' },
