@@ -27,6 +27,9 @@ const LABEL: Record<SourceAction, string> = {
   get 'edit-provider'() {
     return tr('customApi.editEndpoint')
   },
+  get retry() {
+    return tr('session.live.NoticeActions.retry')
+  },
 }
 
 function actionsFor(
@@ -55,16 +58,22 @@ export function NoticeActions({
   record,
   text,
   turnStart,
+  retry = false,
 }: {
   record: SessionRecord
   text: string
+  /** 给「重试」：会话空闲、队列也空着时（没发出去的消息在队列里有自己的重试） */
+  retry?: boolean
   /** 这一轮用户消息的时间；没有时按十分钟前 */
   turnStart: number | null
 }) {
   useI18n()
   const settings = useSettings()
   const kind = classifyError(text)
-  const actions = kind ? actionsFor(kind, record, record.engine) : []
+  const actions: SourceAction[] = [
+    ...(retry ? (['retry'] as const) : []),
+    ...(kind ? actionsFor(kind, record, record.engine) : []),
+  ]
   const viewLogs = () => {
     requestLogFocus(record.id, turnStart ?? Date.now() - 10 * 60_000)
     settings.openSettings('logs')

@@ -192,8 +192,18 @@ export function Composer({
 
   // 对话流里错误卡片的按钮（features/engine/sourceActions.ts）：只处理发给这个会话的
   const actionRef = useRef<(a: SourceAction) => void>(() => undefined)
+  const retrying = useRef(false)
   actionRef.current = a => {
-    if (a === 'open-menu') setMenuOpen(true)
+    // 重试：用输入框现在选的模型和线路发一条「继续」，接着出错前的上下文做；连点只发一次
+    if (a === 'retry') {
+      if (!live || live.running || retrying.current) return
+      retrying.current = true
+      setError(null)
+      void live
+        .submit(tr('session.live.NoticeActions.retryMessage'))
+        .catch((e: unknown) => setError((e as Error).message))
+        .finally(() => (retrying.current = false))
+    } else if (a === 'open-menu') setMenuOpen(true)
     else if (a === 'use-self') requestSource('self')
     else if (a === 'use-platform') requestSource('platform')
     else if (a === 'open-account') settings.openSettings('account')

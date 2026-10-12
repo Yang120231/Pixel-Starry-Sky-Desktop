@@ -23,6 +23,18 @@
 .conversation-reading-strips {
   width: calc(100% - 2 * var(--conversation-scrollbar-width));
 }
+/* 对话区（输入框上面那块）：窗格很矮时被压扁，顶上的任务条 / 智能体活动、轮次导航不能漏到输入区上面；
+   矮到放不下时先收起这两样 */
+.conversation-body {
+  container-name: conversation-body;
+  container-type: size;
+}
+@container conversation-body (height < 160px) {
+  .conversation-reading-strips,
+  [data-turn-rail] {
+    display: none;
+  }
+}
 /* 长会话（docs/ui/conversation-ux.md §2.7）：看不见的块跳过排版和绘制。
    auto 记住渲染过的真实高度；没渲染过的按 LiveTranscript 给的估计（blockHeight.ts），没给的按一行估；
    它带绘制裁剪，overflow-clip-margin 给块边缘的焦点框、搜索命中的描边留出位置 */

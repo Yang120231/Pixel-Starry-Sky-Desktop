@@ -5,6 +5,7 @@ import {
   collapseLeaf,
   computeRects,
   cycleFocus,
+  dragDivider,
   equalize,
   findSplit,
   focusIndex,
@@ -211,6 +212,28 @@ describe('焦点与放大', () => {
     expect(l.maximized).toBe('L1')
     expect(cycleFocus(l, 1).maximized).toBeNull()
     expect(toggleMaximize(l, 'L1').maximized).toBeNull()
+  })
+
+  it('拖分隔线：两边不小于最小尺寸；拖过最小尺寸到头时给出要放大的窗格', () => {
+    // 上下两块占比各 1，共 1000px（一份占比 = 500px），最小 0.6（300px）
+    const l = splitLeaf(base(), 'L1', 'col', 'L2', 'S1')
+    const split = findSplit(l.root, 'S1')!
+    const drag = (a: number) => dragDivider(split, 0, a, 0.6, 500)
+    expect(drag(0.8)).toEqual({ sizes: [0.8, 1.2], maximize: null })
+    // 往上拖过最小尺寸，但没超过 80px：只停在最小尺寸
+    expect(drag(0.5)).toEqual({ sizes: [0.6, 1.4], maximize: null })
+    // 往上拖到头：放大下面的；往下拖到头：放大上面的
+    expect(drag(0.4)).toEqual({ sizes: [0.6, 1.4], maximize: 'L2' })
+    expect(drag(1.7).maximize).toBe('L1')
+  })
+
+  it('拖到头时被挤的一边是多个窗格的，不放大', () => {
+    let l = splitLeaf(base(), 'L1', 'col', 'L2', 'S1')
+    l = splitLeaf(l, 'L2', 'row', 'L3', 'S2')
+    const split = findSplit(l.root, 'S1')!
+    expect(split.children[1].type).toBe('split')
+    expect(dragDivider(split, 0, 0, 0.6, 500).maximize).toBeNull()
+    expect(dragDivider(split, 0, 2, 0.6, 500).maximize).toBe('L1')
   })
 
   it('visibleTabs 是每个窗格的当前标签', () => {

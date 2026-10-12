@@ -28,6 +28,7 @@ import { PaneView } from './PaneView'
 import { MIN_PANE, paneActions, usePaneState } from './store'
 import {
   computeRects,
+  dragDivider,
   findSplit,
   focusedTab,
   isNewTab,
@@ -56,6 +57,13 @@ export interface WorkspaceProps {
 
 const pct = (v: number): string => `${v * 100}%`
 const dividerKey = (d: Divider): string => `${d.splitId}-${d.index}`
+/** 分隔线拖到头时的预览：盖在要放大的窗格上，四边各缩进 4px */
+const snapStyle = (r: Rect) => ({
+  left: `calc(${pct(r.x)} + 4px)`,
+  top: `calc(${pct(r.y)} + 4px)`,
+  width: `calc(${pct(r.w)} - 8px)`,
+  height: `calc(${pct(r.h)} - 8px)`,
+})
 
 /** 全局顶栏跨过会话区与右侧面板，右侧工具位置不随面板开合移动。 */
 export function WorkspaceHeader({ membersShown = false, ...props }: WorkspaceProps & { membersShown?: boolean }) {
@@ -110,6 +118,8 @@ export function Workspace(props: WorkspaceProps) {
   const drag = usePaneDrag(areaRef)
   /** 正在拖动的分隔线（key），拖动时窗格跟手不加过渡、这条线保持高亮 */
   const [resizing, setResizing] = useState<string | null>(null)
+  /** 分隔线拖到头时，松手要放大的窗格（显示预览） */
+  const [snapTarget, setSnapTarget] = useState<string | null>(null)
 
   const all = useMemo(() => leaves(layout.root), [layout.root])
   const { panes, dividers } = useMemo(() => computeRects(layout.root), [layout.root])
@@ -174,7 +184,7 @@ export function Workspace(props: WorkspaceProps) {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [areaSize])
 
-  // 拖动分隔线：跟手改占比，相邻两块各自不小于最小尺寸
+  // 拖动分隔线：跟手改占比，相邻两块各自不小于最小尺寸；拖过最小尺寸到头时松手放大另一边（比例回到拖之前）
   const startDrag = (d: Divider, e: ReactPointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return
     const split = findSplit(layout.root, d.splitId)
@@ -186,24 +196,29 @@ export function Workspace(props: WorkspaceProps) {
     setResizing(dividerKey(d))
     const total = split.sizes.reduce((a, b) => a + b, 0)
     const span = d.dir === 'row' ? d.splitRect.w * area.width : d.splitRect.h * area.height
+    const pxPerUnit = span / total
     const minPx = d.dir === 'row' ? MIN_PANE.width : MIN_PANE.height
     const pair = split.sizes[d.index] + split.sizes[d.index + 1]
-    const minUnit = Math.min((minPx / span) * total, pair / 2)
+    const minUnit = Math.min(minPx / pxPerUnit, pair / 2)
     const startA = split.sizes[d.index]
     const start = d.dir === 'row' ? e.clientX : e.clientY
+    let snap: string | null = null
     const move = (ev: PointerEvent) => {
-      const delta = (((d.dir === 'row' ? ev.clientX : ev.clientY) - start) / span) * total
-      const a = Math.min(Math.max(startA + delta, minUnit), pair - minUnit)
-      const sizes = [...split.sizes]
-      sizes[d.index] = a
-      sizes[d.index + 1] = pair - a
-      paneActions.setSizes(split.id, sizes)
+      const delta = ((d.dir === 'row' ? ev.clientX : ev.clientY) - start) / pxPerUnit
+      const next = dragDivider(split, d.index, startA + delta, minUnit, pxPerUnit)
+      paneActions.setSizes(split.id, next.sizes)
+      if (next.maximize !== snap) setSnapTarget((snap = next.maximize))
     }
-    const up = () => {
+    const up = (ev: PointerEvent) => {
       el.removeEventListener('pointermove', move)
       el.removeEventListener('pointerup', up)
       el.removeEventListener('pointercancel', up)
       setResizing(null)
+      setSnapTarget(null)
+      if (snap && ev.type === 'pointerup') {
+        paneActions.setSizes(split.id, split.sizes)
+        paneActions.toggleMaximize(snap)
+      }
     }
     el.addEventListener('pointermove', move)
     el.addEventListener('pointerup', up)
@@ -286,6 +301,17 @@ export function Workspace(props: WorkspaceProps) {
             resizing={resizing !== null}
           />
 
+          {snapTarget && panes.has(snapTarget) && (
+            <div
+              data-snap-preview
+              className="pointer-events-none absolute z-30 flex items-center justify-center rounded-lg border-2 border-accent bg-accent-soft/60"
+              style={snapStyle(panes.get(snapTarget)!)}
+            >
+              <span className="mx-4 rounded-md bg-popover px-3 py-2 text-center text-ui text-fg shadow-menu">
+                {tr('panes.Workspace.releaseToMaximize')}
+              </span>
+            </div>
+          )}
           <DragPreview visual={drag.visual} area={areaRef} />
           {notice && <Notice key={notice.id} text={notice.text} />}
         </div>

@@ -410,6 +410,31 @@ function normalize(node: PaneNode): PaneNode {
   return { ...node, children, sizes }
 }
 
+/** 分隔线拖过最小尺寸这么多像素就算「拖到头」，松手放大另一边（docs/ui/multi-pane.md §3） */
+export const SNAP_MAXIMIZE_PX = 80
+
+/**
+ * 拖动分隔线：a 是拖到的位置（children[index] 的占比，还没限制），两边各自不小于 minUnit；pxPerUnit 是占比换算成像素。
+ * 往一边拖过最小尺寸 SNAP_MAXIMIZE_PX 以上、被挤的另一边是单个窗格时，maximize 是松手要放大的那个窗格。
+ */
+export function dragDivider(
+  split: Split,
+  index: number,
+  a: number,
+  minUnit: number,
+  pxPerUnit: number,
+): { sizes: number[]; maximize: string | null } {
+  const pair = split.sizes[index] + split.sizes[index + 1]
+  const clamped = Math.min(Math.max(a, minUnit), pair - minUnit)
+  const sizes = [...split.sizes]
+  sizes[index] = clamped
+  sizes[index + 1] = pair - clamped
+  const over = (a - clamped) * pxPerUnit
+  const grow =
+    over <= -SNAP_MAXIMIZE_PX ? split.children[index + 1] : over >= SNAP_MAXIMIZE_PX ? split.children[index] : null
+  return { sizes, maximize: grow?.type === 'leaf' ? grow.id : null }
+}
+
 export function toggleMaximize(layout: Layout, leafId: string): Layout {
   if (leaves(layout.root).length < 2) return { ...layout, maximized: null }
   return { ...layout, focused: leafId, maximized: layout.maximized === leafId ? null : leafId }

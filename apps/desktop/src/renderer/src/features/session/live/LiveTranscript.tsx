@@ -406,7 +406,12 @@ export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot
         >
           <NoticeRow item={text === item.text ? item : { ...item, text }} />
           {item.id === actionNoticeId && (
-            <NoticeActions record={snapshot.record} text={item.text} turnStart={turnStart} />
+            <NoticeActions
+              record={snapshot.record}
+              text={item.text}
+              turnStart={turnStart}
+              retry={snapshot.queue.length === 0}
+            />
           )}
         </div>
       )

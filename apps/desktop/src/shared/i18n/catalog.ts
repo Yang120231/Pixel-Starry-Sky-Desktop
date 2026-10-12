@@ -1208,6 +1208,14 @@ export const catalog = {
     "zh": "新内容",
     "en": "New content"
   },
+  "session.live.NoticeActions.retry": {
+    "zh": "重试",
+    "en": "Try again"
+  },
+  "session.live.NoticeActions.retryMessage": {
+    "zh": "继续",
+    "en": "Try again"
+  },
   "session.live.NoticeActions.changeRoute": {
     "zh": "换线路",
     "en": "Change route"
@@ -2485,8 +2493,12 @@ export const catalog = {
     "en": "Not enough space for more panes. Close a pane or collapse the sidebar."
   },
   "panes.Workspace.dragToResizePanes": {
-    "zh": "拖动调整窗格大小，双击均分",
-    "en": "Drag to resize panes; double-click to distribute evenly"
+    "zh": "拖动调整窗格大小，拖到头放大另一边，双击均分",
+    "en": "Drag to resize panes, drag all the way to maximize the other pane, double-click to distribute evenly"
+  },
+  "panes.Workspace.releaseToMaximize": {
+    "zh": "松开放大这个窗格",
+    "en": "Release to maximize this pane"
   },
   "search.ProjectFilter.filterProjects": {
     "zh": "筛选项目：{p0}",
