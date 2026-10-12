@@ -7,9 +7,11 @@ import { cacheHitRate } from '@/features/usage/aggregate'
 import { formatPercent, formatTokens, formatTotalCost } from '@/features/usage/format'
 import type { UsageBucket } from '@/features/usage/types'
 import {
+  BAR_COLOR,
   SERIES_COLOR,
   SERIES_KEYS,
   SERIES_VALUE,
+  axisTicks,
   columnCenter,
   lineMax,
   nearestColumn,
@@ -74,7 +76,9 @@ export function UsageChart({ buckets, bucket }: { buckets: UsageBucket[]; bucket
   const peak = totals.indexOf(Math.max(0, ...totals))
   const scale = niceMax(style === 'line' ? lineMax(buckets, keys) : stackMax(buckets, keys))
   const label = (i: number) => bucketLabel(buckets[i].start, bucket)
-  const ticks = n > 2 ? [0, Math.floor(last / 2), last] : buckets.map((_, i) => i)
+  const ticks = axisTicks(n, width, bucket)
+  // 柱状图用同一色系的三档（参考图），折线图三个系列颜色分得开；图例、浮动明细跟着当前样式
+  const colors = style === 'bar' ? BAR_COLOR : SERIES_COLOR
   const period =
     bucket === 'hour' ? tr('settings.usage.DailyChart.todayByHour') : tr('settings.account.PlanStore.daily')
 
@@ -124,7 +128,7 @@ export function UsageChart({ buckets, bucket }: { buckets: UsageBucket[]; bucket
                     locked && 'cursor-default hover:bg-transparent',
                   )}
                 >
-                  <span className="size-2 rounded-[2px]" style={{ background: SERIES_COLOR[k] }} />
+                  <span className="size-2 rounded-[2px]" style={{ background: colors[k] }} />
                   {SERIES_LABEL[k]()}
                 </button>
               )
@@ -158,22 +162,11 @@ export function UsageChart({ buckets, bucket }: { buckets: UsageBucket[]; bucket
         </div>
       </div>
 
-      <div className="flex gap-2">
-        {/* 纵轴：0、一半、最大三格 */}
-        <div
-          aria-hidden
-          className="relative w-9 shrink-0 text-right text-label text-fg-faint tabular-nums"
-          style={{ height: HEIGHT }}
-        >
-          {scale > 0 &&
-            [1, 0.5].map(f => (
-              <span key={f} className="absolute right-0 -translate-y-1/2" style={{ top: (1 - f) * HEIGHT }}>
-                {formatTokens(scale * f)}
-              </span>
-            ))}
-          <span className="absolute right-0 bottom-0 translate-y-1/2">0</span>
-        </div>
-
+      {/* 纵轴只在右上角写最大值（参考图），不占左边的宽度 */}
+      <div aria-hidden className="h-4 text-right text-label text-fg-faint tabular-nums">
+        {scale > 0 && formatTokens(scale)}
+      </div>
+      <div>
         <div
           ref={plotRef}
           role="img"
@@ -193,24 +186,23 @@ export function UsageChart({ buckets, bucket }: { buckets: UsageBucket[]; bucket
           onBlur={() => setHover(null)}
           onKeyDown={move}
         >
-          {/* 网格线：最大、一半淡线，底边实线 */}
-          {scale > 0 &&
-            [0, 0.5].map(f => (
-              <span
-                key={f}
-                aria-hidden
-                className="absolute inset-x-0 border-t border-line-subtle"
-                style={{ top: f * HEIGHT }}
-              />
-            ))}
+          {/* 网格线：一半处一条很淡的线，底边实线 */}
+          {scale > 0 && (
+            <span
+              aria-hidden
+              className="absolute inset-x-0 border-t border-dashed border-line-subtle opacity-70"
+              style={{ top: HEIGHT / 2 }}
+            />
+          )}
           <span aria-hidden className="absolute inset-x-0 bottom-0 border-t border-line" />
           {style === 'line' ? (
             <LinePlot buckets={buckets} keys={keys} scale={scale} width={width} height={HEIGHT} hover={hover} />
           ) : (
-            <BarPlot buckets={buckets} keys={keys} scale={scale} height={HEIGHT} hover={hover} />
+            <BarPlot buckets={buckets} keys={keys} scale={scale} width={width} height={HEIGHT} hover={hover} />
           )}
           {hover !== null && width > 0 && buckets[hover] && (
             <Tooltip
+              colors={colors}
               bucket={buckets[hover]}
               title={label(hover)}
               current={hover === last}
@@ -221,7 +213,7 @@ export function UsageChart({ buckets, bucket }: { buckets: UsageBucket[]; bucket
         </div>
       </div>
 
-      <div className="relative mt-1.5 ml-11 h-4 text-label text-fg-faint tabular-nums">
+      <div className="relative mt-1.5 h-4 text-label text-fg-faint tabular-nums">
         {ticks.map(i => (
           <span
             key={i}
@@ -263,12 +255,14 @@ function summary(b: UsageBucket, title: string, current: boolean): string {
 
 /** 浮动明细：数值用正文色，系列只靠左边的色块区分；靠右半边时翻到左侧 */
 function Tooltip({
+  colors,
   bucket: b,
   title,
   current,
   x,
   flip,
 }: {
+  colors: Record<SeriesKey, string>
   bucket: UsageBucket
   title: string
   current: boolean
@@ -296,7 +290,7 @@ function Tooltip({
         )}
       </div>
       <div className="flex flex-col gap-0.5">
-        {SERIES_KEYS.map(k => row(SERIES_LABEL[k](), formatTokens(SERIES_VALUE[k](b)), SERIES_COLOR[k]))}
+        {SERIES_KEYS.map(k => row(SERIES_LABEL[k](), formatTokens(SERIES_VALUE[k](b)), colors[k]))}
       </div>
       {/* 不画在图上的几项：两列排，明细不至于比图还高 */}
       <div className="mt-1.5 grid grid-cols-[auto_auto] gap-x-4 gap-y-0.5 border-t border-line-subtle pt-1.5">

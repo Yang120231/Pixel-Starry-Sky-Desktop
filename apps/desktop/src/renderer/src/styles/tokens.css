@@ -79,6 +79,10 @@
   --chart-input: #c26f12;
   --chart-cache: #3a6fd0;
   --chart-output: #0f8456;
+  /* 柱状图：同一冷色系三档明暗（缓存读最深、输入居中、输出最浅），7 种浅色卡片底色上用 dataviz 校验脚本（全部两两比较）都通过 */
+  --chart-bar-input: #5081fc;
+  --chart-bar-cache: #2a5f92;
+  --chart-bar-output: #c690c9;
   --wall-sidebar: #f2f2ef;
   --wall-surface: #ffffff;
   --terminal-bg: #ffffff;
@@ -202,6 +206,10 @@
   --chart-input: #c77a22;
   --chart-cache: #4f83e0;
   --chart-output: #1e9a6c;
+  /* 柱状图：8 种深色卡片底色上都通过（深色的明暗范围更窄，缓存读和底色的对比度低，靠悬停明细和表格看数值） */
+  --chart-bar-input: #5081fb;
+  --chart-bar-cache: #0c60a3;
+  --chart-bar-output: #b974bd;
   --wall-sidebar: #1a1a19;
   --wall-surface: #262624;
 
