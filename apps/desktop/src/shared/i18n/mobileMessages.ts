@@ -44,6 +44,13 @@ export const mobileMessages = {
     zh: '二维码 {p0} 后失效。扫码后要在这台电脑上确认。',
     en: 'The code expires in {p0}. You will confirm on this computer after scanning.',
   },
+  'mobile.pairCopy': { zh: '复制配对链接', en: 'Copy pairing link' },
+  'mobile.pairCopied': { zh: '已复制', en: 'Copied' },
+  'mobile.pairCopyFailed': { zh: '复制失败', en: 'Copy failed' },
+  'mobile.pairCopyHint': {
+    zh: '把链接发到要添加的手机上，在像素星空的「添加电脑」里粘贴；不要在电脑上打开它。5 分钟内有效，只能用一次。',
+    en: 'Send the link to the phone you are adding and paste it in Add computer in PixelSky; do not open it on this computer. Valid for 5 minutes, single use.',
+  },
   'mobile.pairExpired': { zh: '二维码已过期。', en: 'The code has expired.' },
   'mobile.pairRetry': { zh: '重新生成', en: 'New code' },
   'mobile.pairCancel': { zh: '取消', en: 'Cancel' },

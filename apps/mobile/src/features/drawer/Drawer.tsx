@@ -56,7 +56,7 @@ export interface DrawerProps {
   onHome(): void
   onMe(): void
   /** 扫码加电脑（能扫码时才有） */
-  onAddComputer?: () => void
+  onAddComputer(): void
 }
 
 export function Drawer(props: DrawerProps) {
@@ -204,7 +204,7 @@ function FooterButton({
 }
 
 /** 电脑切换：名字、状态；点开列出配对过的电脑和「添加电脑」 */
-function ComputerSwitcher({ deviceId, onAdd }: { deviceId: string; onAdd?: () => void }) {
+function ComputerSwitcher({ deviceId, onAdd }: { deviceId: string; onAdd(): void }) {
   const { list } = useConnections()
   const [open, setOpen] = useState(false)
   const active = list.find(p => p.deviceId === deviceId)
@@ -250,17 +250,14 @@ function ComputerSwitcher({ deviceId, onAdd }: { deviceId: string; onAdd?: () =>
           })}
           <button
             type="button"
-            disabled={!onAdd}
             onClick={() => {
               setOpen(false)
-              onAdd?.()
+              onAdd()
             }}
-            className="flex min-h-12 w-full items-center gap-2.5 border-t border-line-subtle px-3.5 text-left text-ui text-accent-fg active:bg-hover disabled:text-fg-muted"
+            className="flex min-h-12 w-full items-center gap-2.5 border-t border-line-subtle px-3.5 text-left text-ui text-accent-fg active:bg-hover"
           >
             <Plus size={17} className="shrink-0" />
-            <span className="min-w-0 flex-1">
-              {onAdd ? '添加电脑' : '添加电脑：电脑上 设置 › 手机 › 添加手机，用相机扫码'}
-            </span>
+            <span className="min-w-0 flex-1">添加电脑</span>
           </button>
         </div>
       )}

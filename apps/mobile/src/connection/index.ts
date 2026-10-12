@@ -1,47 +1,23 @@
 // 连接层的入口：配对（扫码 → 用配对码换设备令牌）和每台电脑一条连接。界面只通过这里接触 packages/link。
 import {
   bridgeApiBase,
-  decodeOffer,
   fingerprint,
   fromBase64Url,
   generateKeypair,
   keypairFrom,
   pairRequest,
   toBase64Url,
-  type PairingOffer,
 } from '@pixelsky/link'
 import { inApp } from '@/platform'
+import { type Offer } from './offer'
 import { DesktopLink, type LinkHooks, type LinkState } from './link'
 import { activeDevice, loadPairings, savePairings, setActiveDevice, type Pairing } from './storage'
 
 export type { Hello, LinkState } from './link'
 export type { Pairing } from './storage'
 export { DesktopLink } from './link'
+export { findOffer, parseOffer, readOffer, type Offer } from './offer'
 export { activeDevice, setActiveDevice } from './storage'
-
-/** 二维码里的电脑信息（给配对页显示） */
-export interface Offer {
-  raw: PairingOffer
-  desktopName: string
-  fingerprint: string
-  expired: boolean
-}
-
-/** 读网页地址里的 #pair=…；不是配对链接返回 null，格式不对抛错 */
-export function readOffer(href: string): Offer | null {
-  return /#pair=/.test(href) ? parseOffer(href) : null
-}
-
-/** 扫到的二维码文字（网页链接或 pixelsky://pair?d=…）；格式不对抛错 */
-export function parseOffer(text: string): Offer {
-  const raw = decodeOffer(text)
-  return {
-    raw,
-    desktopName: raw.name,
-    fingerprint: fingerprint(fromBase64Url(raw.key)),
-    expired: Date.now() > raw.expires,
-  }
-}
 
 const PAIR_ERRORS: Record<string, string> = {
   invalid_code: '二维码已过期或已经用过，请在电脑上重新生成。',
@@ -156,7 +132,12 @@ class Connections {
   }
 
   add(p: Pairing): void {
-    this.pairings = [...this.pairings.filter(x => x.desktopId !== p.desktopId || x.status !== 'removed'), p]
+    // 同一台电脑重新配对：旧记录（不管是否已被移除）换成新的，不留两条
+    for (const old of this.pairings.filter(x => x.desktopId === p.desktopId && x.deviceId !== p.deviceId)) {
+      this.links.get(old.deviceId)?.stop()
+      this.links.delete(old.deviceId)
+    }
+    this.pairings = [...this.pairings.filter(x => x.desktopId !== p.desktopId), p]
     savePairings(this.pairings)
     setActiveDevice(p.deviceId)
     this.linkOf(p)

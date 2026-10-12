@@ -269,12 +269,50 @@ function Pairing({
             <p className="mt-1 mb-4 text-meta text-fg-muted">
               {t('mobile.pairHint', { p0: `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` })}
             </p>
-            <Button variant="ghost" onClick={onCancel}>
-              {t('mobile.pairCancel')}
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <CopyLinkButton text={pairing.offer} />
+              <Button variant="ghost" onClick={onCancel}>
+                {t('mobile.pairCancel')}
+              </Button>
+            </div>
+            <p className="mt-2 text-meta text-fg-muted">{t('mobile.pairCopyHint')}</p>
           </div>
         </div>
       )}
     </div>
+  )
+}
+
+/** 复制配对链接（和二维码同一段文字）；走主进程剪贴板，和终端 / 编辑器一致 */
+function CopyLinkButton({ text }: { text: string }) {
+  const { t } = useI18n()
+  const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle')
+  useEffect(() => {
+    if (state === 'idle') return
+    const timer = setTimeout(() => setState('idle'), 2000)
+    return () => clearTimeout(timer)
+  }, [state])
+  const copy = () => {
+    const write = window.pixelsky?.terminal
+      ? window.pixelsky.terminal.clipboardWrite(text)
+      : navigator.clipboard.writeText(text)
+    void Promise.resolve(write).then(
+      () => setState('copied'),
+      () => setState('failed'),
+    )
+  }
+  return (
+    <>
+      <Button onClick={copy}>
+        {state === 'copied'
+          ? t('mobile.pairCopied')
+          : state === 'failed'
+            ? t('mobile.pairCopyFailed')
+            : t('mobile.pairCopy')}
+      </Button>
+      <span className="sr-only" role="status" aria-live="polite">
+        {state === 'copied' ? t('mobile.pairCopied') : state === 'failed' ? t('mobile.pairCopyFailed') : ''}
+      </span>
+    </>
   )
 }

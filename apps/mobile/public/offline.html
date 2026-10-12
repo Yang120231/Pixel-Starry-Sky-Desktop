@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <title>没有网络 · 像素星空</title>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        padding: 24px;
+        box-sizing: border-box;
+        text-align: center;
+        font-family:
+          system-ui,
+          -apple-system,
+          'PingFang SC',
+          'Microsoft YaHei',
+          sans-serif;
+        background: #f8f8f6;
+        color: #1f1f1e;
+      }
+      h1 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 600;
+      }
+      p {
+        margin: 0;
+        max-width: 22em;
+        font-size: 14px;
+        line-height: 1.6;
+        color: #6b6b68;
+      }
+      button {
+        min-height: 48px;
+        margin-top: 8px;
+        padding: 0 28px;
+        border: 0;
+        border-radius: 12px;
+        font: inherit;
+        font-size: 16px;
+        font-weight: 500;
+        background: #1f1f1e;
+        color: #f8f8f6;
+      }
+      button:active {
+        opacity: 0.7;
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: #1f1f1e;
+          color: #ececea;
+        }
+        p {
+          color: #a3a3a0;
+        }
+        button {
+          background: #ececea;
+          color: #1f1f1e;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>没有网络</h1>
+    <p>连不上像素星空。检查一下手机的网络，好了再点重试。已经配好的电脑不会丢。</p>
+    <button type="button" onclick="location.reload()">重试</button>
+  </body>
+</html>

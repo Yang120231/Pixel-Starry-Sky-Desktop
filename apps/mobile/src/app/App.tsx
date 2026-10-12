@@ -1,9 +1,9 @@
 // 组装（docs/mobile-remote.md §18.3）：左边抽屉 + 主区。窄屏抽屉从左边拉出来（左上角按钮或从左边缘右滑），
 // 宽屏（≥ 900px）常驻左边；再宽（≥ 1280px）时在会话旁边打开的工具放在右边一栏。
-// 主区的页面：概览、会话、新建会话、工具、加项目、我的；配对和扫码是整页。打开 #pair=… 的链接时先进配对页。
+// 主区的页面：概览、会话、新建会话、工具、加项目、我的；配对、添加电脑和扫码是整页。打开 #pair=… 的链接时先进配对页。
 // 用浏览器历史做返回：手机上的返回手势 / 返回键能回到上一页（抽屉开着时先关抽屉）。
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { ScanLine, Smartphone } from 'lucide-react'
+import { Plus, Smartphone } from 'lucide-react'
 import type { ProjectRecord } from '@pixelsky/protocol'
 import { connections, parseOffer, readOffer, type Offer } from '@/connection'
 import { useConnections, useDesktop } from '@/data/hooks'
@@ -12,9 +12,11 @@ import type { ToolId } from '@/data/tools'
 import { currentProject, rememberProject, rememberedProject } from '@/data/workspace'
 import { Composer } from '@/features/composer/Composer'
 import { Drawer } from '@/features/drawer/Drawer'
+import { AddToHome } from '@/features/me/AddToHome'
 import { MeScreen } from '@/features/me/MeScreen'
+import { AddComputer } from '@/features/pairing/AddComputer'
 import { PairScreen } from '@/features/pairing/PairScreen'
-import { ScanScreen, canScan } from '@/features/pairing/ScanScreen'
+import { ScanScreen } from '@/features/pairing/ScanScreen'
 import { AddProject } from '@/features/projects/AddProject'
 import { SessionScreen } from '@/features/session/SessionScreen'
 import { NewTask } from '@/features/tasks/NewTask'
@@ -37,6 +39,8 @@ type Route =
   | { page: 'me' }
   | { page: 'pair' }
   | { page: 'scan' }
+  | { page: 'add' }
+  | { page: 'install' }
 
 /** 右边一栏的工具（宽屏、开着会话时）：自己记下一级，不进浏览历史 */
 interface Panel {
@@ -113,7 +117,7 @@ export function App() {
     if (lastDevice.current === deviceId) return
     lastDevice.current = deviceId
     setPanel(null)
-    if (route.page !== 'pair' && route.page !== 'scan') replace({ page: 'home' })
+    if (route.page !== 'pair' && route.page !== 'scan' && route.page !== 'add') replace({ page: 'home' })
   }, [deviceId, route.page, replace])
 
   // 当前项目：会话页是会话的项目，工具页是工具的项目，否则上次选的
@@ -178,31 +182,38 @@ export function App() {
     }
     replace({ page: 'pair' })
   }
-  const scan = canScan() ? () => go({ page: 'scan' }) : undefined
+  const add = () => go({ page: 'add' })
+  const install = () => go({ page: 'install' })
+  const offered = (offer: Offer) => {
+    setPair({ offer, error: null })
+    replace({ page: 'pair' })
+  }
 
   if (route.page === 'pair')
     return (
       <PairScreen offer={pair?.offer ?? null} error={pair?.error ?? null} onDone={() => replace({ page: 'home' })} />
     )
-  if (route.page === 'scan') return <ScanScreen onBack={back} onResult={scanned} />
+  if (route.page === 'scan')
+    return <ScanScreen onBack={back} onResult={scanned} onPaste={() => replace({ page: 'add' })} />
+  if (route.page === 'add')
+    return <AddComputer onBack={back} onScan={() => replace({ page: 'scan' })} onOffer={offered} />
+  if (route.page === 'install') return <AddToHome onBack={back} />
 
   const menu = <MenuButton badge={waiting} onClick={() => setDrawer(true)} />
 
   if (!active)
     return route.page === 'me' ? (
-      <MeScreen menu={null} onAdd={scan} />
+      <MeScreen menu={null} onAdd={add} onInstall={install} />
     ) : (
       <Screen large title="像素星空">
         <Empty
           icon={Smartphone}
           title="还没有连接电脑"
-          body="在电脑上打开像素星空 › 设置 › 手机 › 添加手机，用手机相机或微信扫屏幕上的二维码。"
+          body="在电脑上打开像素星空 › 设置 › 手机 › 添加手机，扫屏幕上的二维码，或复制配对链接粘贴过来。"
           action={
-            scan && (
-              <Button variant="primary" onClick={scan} className="mt-2">
-                <ScanLine size={18} /> 扫码连接电脑
-              </Button>
-            )
+            <Button variant="primary" onClick={add} className="mt-2">
+              <Plus size={18} /> 添加电脑
+            </Button>
           }
         />
       </Screen>
@@ -235,7 +246,7 @@ export function App() {
   })
 
   let main: ReactNode
-  if (route.page === 'me') main = <MeScreen menu={menu} onAdd={scan} />
+  if (route.page === 'me') main = <MeScreen menu={menu} onAdd={add} onInstall={install} />
   else if (route.page === 'new')
     main = (
       <NewTask
@@ -305,7 +316,7 @@ export function App() {
       onAddProject={() => go({ page: 'addProject' })}
       onHome={() => top('home')}
       onMe={() => top('me')}
-      onAddComputer={scan}
+      onAddComputer={add}
     />
   )
 

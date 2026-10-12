@@ -1,17 +1,25 @@
 // 扫码（App 里，或 https 的网页版）：相机画面 + jsQR 逐帧识别。局域网 http 下浏览器不给相机，这时提示用系统相机扫。
 import { useEffect, useRef, useState } from 'react'
 import jsQR from 'jsqr'
-import { CameraOff, ScanLine } from 'lucide-react'
-import { Empty, Screen } from '@/ui'
+import { CameraOff, ClipboardPaste, ScanLine } from 'lucide-react'
+import { Button, Empty, Screen } from '@/ui'
 
 /** 能不能在页面里开相机（安全上下文 + 有 mediaDevices） */
 export const canScan = () =>
   typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia && isSecureContext
 
-export function ScanScreen({ onBack, onResult }: { onBack(): void; onResult(text: string): void }) {
+export function ScanScreen({
+  onBack,
+  onResult,
+  onPaste,
+}: {
+  onBack(): void
+  onResult(text: string): void
+  onPaste?: () => void
+}) {
   const video = useRef<HTMLVideoElement>(null)
   const [error, setError] = useState<string | null>(
-    canScan() ? null : '这里打不开相机。用手机自带的相机或微信扫电脑上的二维码。',
+    canScan() ? null : '这里打不开相机。可以粘贴电脑上复制的配对链接，或用手机自带的相机 / 微信扫二维码。',
   )
   const done = useRef(false)
 
@@ -49,7 +57,7 @@ export function ScanScreen({ onBack, onResult }: { onBack(): void; onResult(text
         }
         frame = requestAnimationFrame(tick)
       })
-      .catch(() => setError('没有相机权限。到系统设置里允许像素星空使用相机，或用手机自带的相机扫码。'))
+      .catch(() => setError('没有相机权限。到系统设置里允许使用相机，或改用粘贴配对链接。'))
     return () => {
       cancelAnimationFrame(frame)
       stream?.getTracks().forEach(t => t.stop())
@@ -59,7 +67,18 @@ export function ScanScreen({ onBack, onResult }: { onBack(): void; onResult(text
   return (
     <Screen title="扫码连接电脑" onBack={onBack}>
       {error ? (
-        <Empty icon={CameraOff} title="打不开相机" body={error} />
+        <Empty
+          icon={CameraOff}
+          title="打不开相机"
+          body={error}
+          action={
+            onPaste && (
+              <Button variant="primary" onClick={onPaste} className="mt-2">
+                <ClipboardPaste size={18} /> 粘贴配对链接
+              </Button>
+            )
+          }
+        />
       ) : (
         <div className="flex flex-col items-center gap-5 px-6 py-6">
           <div className="relative aspect-square w-full max-w-sm overflow-hidden rounded-3xl bg-subtle">
@@ -71,7 +90,8 @@ export function ScanScreen({ onBack, onResult }: { onBack(): void; onResult(text
             />
           </div>
           <p className="text-center text-meta text-fg-muted">
-            在电脑上打开像素星空 › 设置 › 手机 › 添加手机，把二维码放进框里。
+            在电脑上打开像素星空 › 设置 › 手机 ›
+            添加手机，把二维码放进框里。二维码就在这台设备的屏幕上时，改用粘贴配对链接。
           </p>
         </div>
       )}

@@ -1,15 +1,17 @@
 // 我的：配对过的电脑（切换、在手机上删掉）、主题、关于
 import type { ReactNode } from 'react'
-import { Check, Laptop, Plus, ShieldCheck, Trash2 } from 'lucide-react'
+import { Check, Laptop, Plus, ShieldCheck, SquarePlus, Trash2 } from 'lucide-react'
 import { connections, phoneFingerprint } from '@/connection'
 import { useConnections } from '@/data/hooks'
 import { linkStateText } from '@/i18n/zh'
+import { promptInstall, useInstallEntry } from '@/platform/pwa'
 import { Dot, Row, Screen, Section, Segmented } from '@/ui'
 import { THEMES, useThemePreference } from './theme'
 
-export function MeScreen({ menu, onAdd }: { menu: ReactNode; onAdd?: () => void }) {
+export function MeScreen({ menu, onAdd, onInstall }: { menu: ReactNode; onAdd: () => void; onInstall: () => void }) {
   const { list, active } = useConnections()
   const [theme, setTheme] = useThemePreference()
+  const install = useInstallEntry()
   return (
     <Screen large title="我的" leading={menu}>
       <div className="flex flex-col gap-6 pb-8">
@@ -43,13 +45,23 @@ export function MeScreen({ menu, onAdd }: { menu: ReactNode; onAdd?: () => void 
           <Row
             icon={<Plus size={22} strokeWidth={1.5} />}
             title="添加电脑"
-            subtitle={
-              onAdd ? '电脑上 设置 › 手机 › 添加手机，在这里扫码' : '电脑上 设置 › 手机 › 添加手机，用手机相机扫码'
-            }
+            subtitle="扫码，或粘贴电脑上复制的配对链接"
             onClick={onAdd}
-            chevron={!!onAdd}
+            chevron
           />
         </Section>
+
+        {install > 0 && (
+          <Section>
+            <Row
+              icon={<SquarePlus size={22} strokeWidth={1.5} />}
+              title="添加到主屏幕"
+              subtitle="像 App 一样从桌面图标打开，没有地址栏"
+              onClick={() => (install === 2 ? void promptInstall() : onInstall())}
+              chevron={install === 1}
+            />
+          </Section>
+        )}
 
         {active && (
           <Section title="安全">
