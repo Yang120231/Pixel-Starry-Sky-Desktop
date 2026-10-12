@@ -38,6 +38,9 @@ import { changesHeight, itemHeight, toolsHeight } from './blockHeight'
 import { reviewTurn } from '@/features/panel/artifacts/focus'
 import { foldTurns, turnReplies } from './turnFold'
 import { TurnProcess } from './TurnProcess'
+import { WAIT_CLOCK_MS, clockText, waitingFor } from './currentStep'
+import { useSince } from './stepClock'
+import { formatDuration } from './agentTrace'
 
 type ToolItem = Extract<Item, { kind: 'command' | 'file_change' | 'tool' }>
 
@@ -201,23 +204,26 @@ const ProcessBlock = memo(
   function ProcessBlock({
     items,
     running,
+    live,
     durationMs,
     render,
   }: {
     items: Item[]
     running: boolean
+    live: boolean
     durationMs: number | null
     highlight: string | null
     render: (items: Item[]) => ReactNode
   }) {
     return (
       <div className="conversation-message" style={placeholder(34)}>
-        <TurnProcess items={items} running={running} durationMs={durationMs} render={render} />
+        <TurnProcess items={items} running={running} live={live} durationMs={durationMs} render={render} />
       </div>
     )
   },
   (a, b) =>
     a.running === b.running &&
+    a.live === b.live &&
     a.durationMs === b.durationMs &&
     a.highlight === b.highlight &&
     sameItems(a.items, b.items),
@@ -262,6 +268,9 @@ export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot
   const lastBlock = blocks[blocks.length - 1]
   const busyBlock = lastBlock?.type === 'process' && lastBlock.running
   const showThinking = snapshot?.state === 'running' && !streaming && !busyBlock
+  // 写具体在等什么（刚发消息：正在思考；工具刚结束：正在看结果），等久了带上秒数（docs/ui/conversation-concise.md §7）
+  const waiting = showThinking ? waitingFor(items) : null
+  const waitedMs = useSince(waiting ? `wait:${last?.id ?? 'start'}:${waiting}` : null, showThinking)
   // 空闲时直接发送的消息在引擎启动期间先显示在对话里（不是排队），开始执行后由正式的用户消息替换
   const starting = snapshot ? snapshot.queue.filter(q => isStarting(q, snapshot.queuePaused)) : []
 
@@ -370,6 +379,7 @@ export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot
           key={b.key}
           items={b.items}
           running={b.running}
+          live={b.running && snapshot?.state === 'running'}
           durationMs={b.durationMs}
           highlight={highlight}
           render={list => innerBlocks(list).map((inner, j) => renderBlock(inner, j, true))}
@@ -504,7 +514,10 @@ export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot
             {showThinking && (
               <div className="conversation-message flex h-[30px] items-center gap-2 px-2 text-list text-fg-muted">
                 <Spinner size={13} />
-                {tr('session.live.LiveTranscript.working')}{' '}
+                <span className="tabular-nums">
+                  {waiting ? tr(`session.wait.${waiting}`) : tr('session.live.LiveTranscript.working')}
+                  {waitedMs >= WAIT_CLOCK_MS && ` · ${clockText(waitedMs, formatDuration)}`}
+                </span>
               </div>
             )}
           </div>

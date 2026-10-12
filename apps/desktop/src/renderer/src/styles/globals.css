@@ -781,6 +781,36 @@
   }
 }
 
+/* 运行中的工具调用（features/session/live/ItemRows.tsx，docs/ui/conversation-concise.md §7）：动作上流过一道很淡的光，
+   比压缩标题的那道更淡（只在正文色和次要色之间）；关闭动画时只是正文色 */
+.step-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--text-secondary) 0%,
+    var(--text-secondary) 38%,
+    var(--text) 50%,
+    var(--text-secondary) 62%,
+    var(--text-secondary) 100%
+  );
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: effort-sweep 2.4s linear infinite;
+}
+:root[data-motion='off'] .step-shimmer {
+  animation: none;
+  color: inherit;
+  background: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-motion='system'] .step-shimmer {
+    animation: none;
+    color: inherit;
+    background: none;
+  }
+}
+
 /* 语法高亮：highlight.js 的 token 类名 → 设计变量 --syn-*（ui/code/highlight.tsx，docs/ui/code-highlight.md） */
 .hljs-comment,
 .hljs-quote {
@@ -1086,7 +1116,8 @@
     .compaction-icon,
     .compaction-text,
     .compaction-squeeze,
-    .compaction-pill-running
+    .compaction-pill-running,
+    .step-shimmer
   ) {
   animation-play-state: paused;
 }

@@ -61,11 +61,11 @@ function set(patch: Partial<EngineState>): void {
   for (const l of listeners) l()
 }
 
-// 演示模式里会动的会话（压缩上下文循环播放）
+// 演示模式里会动的会话（压缩上下文、当前步骤循环播放）
 if (isDemo)
-  demo().conversations.animate?.((id, change) => {
+  demo().conversations.animate?.((id, change, patch) => {
     const snap = state.snapshots[id]
-    if (snap) set({ snapshots: { ...state.snapshots, [id]: { ...snap, items: change(snap.items) } } })
+    if (snap) set({ snapshots: { ...state.snapshots, [id]: { ...snap, ...patch, items: change(snap.items) } } })
   })
 
 /** 演示模式里改一个会话的快照（演示的消息队列、错误卡片的「重试」用）；不是演示模式时什么都不做 */

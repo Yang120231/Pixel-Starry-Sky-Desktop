@@ -53,6 +53,13 @@ export interface DemoSessions {
   subscribe(listener: () => void): () => void
 }
 
+/** 会动的演示改一个会话：change 换掉条目，patch 同时改快照的其它字段（运行状态等） */
+export type DemoUpdate = (
+  sessionId: string,
+  change: (items: Item[]) => Item[],
+  patch?: Partial<Omit<SessionSnapshot, 'items'>>,
+) => void
+
 /** 全部演示数据。新增演示内容先在这里加字段，再在 mock/index.ts 填上 */
 export interface DemoSource {
   /** 侧边栏、对话、输入框等界面数据（与 data/empty.ts 同形） */
@@ -105,8 +112,8 @@ export interface DemoSource {
     rewindPreview(sessionId: string, itemId: string, firstUserId: string | null): RewindPreview
     /** 旁聊回答（§3） */
     sideAnswer(question: string): string
-    /** 会动的演示（压缩上下文循环播放，docs/ui/compaction.md）：update 换掉某个会话的条目 */
-    animate?(update: (sessionId: string, items: (items: Item[]) => Item[]) => void): void
+    /** 会动的演示（压缩上下文、当前步骤循环播放，docs/ui/compaction.md）：update 换掉某个会话的条目，patch 改运行状态等 */
+    animate?(update: DemoUpdate): void
   }
 }
 

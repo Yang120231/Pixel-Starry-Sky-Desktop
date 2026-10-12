@@ -8,6 +8,8 @@ import { Spinner, cn } from '@/ui'
 import { REQUEST_MS, useExpandAny } from '@/features/search/expand'
 import { formatDuration } from './agentTrace'
 import { summarize, type ProcessSummary } from './turnFold'
+import { STEP_CLOCK_MS, WAIT_CLOCK_MS, clockText, currentStep, stepText, waitingFor } from './currentStep'
+import { useSince } from './stepClock'
 
 /** 运行中收起时露出的最近几条 */
 const TAIL = 2
@@ -30,19 +32,48 @@ function summaryText(s: ProcessSummary, steps: number): string {
   return parts.length ? parts.join(tr('session.process.joiner')) : tr('session.process.steps', { n: steps })
 }
 
+/**
+ * 运行中「执行」行写现在在干什么（docs/ui/conversation-concise.md §7），代替累计的概要：
+ * 有在跑的一步就写这一步（超过 3 秒带用时，并行的写「等 N 项」）；两步之间写在等什么（超过 5 秒带已等的时间）；
+ * 正在输出文字、等你批准时照旧写累计概要。结束后写最终概要
+ */
+function useActivity(items: Item[], running: boolean, live: boolean): string | null {
+  const step = running ? currentStep(items) : null
+  const last = items[items.length - 1]
+  const writing = last?.kind === 'assistant' && last.status === 'running'
+  const waiting = running && live && !step && !writing ? waitingFor(items) : null
+  const key = step ? `step:${step.item.id}` : waiting ? `wait:${last?.id ?? ''}:${waiting}` : null
+  const since = useSince(key, running)
+  if (step) {
+    const parts = [stepText(step.item)]
+    if (step.more > 0) parts.push(tr('session.step.more', { n: step.more }))
+    if (since >= STEP_CLOCK_MS) parts.push(clockText(since, formatDuration))
+    return parts.join(' · ')
+  }
+  if (waiting) {
+    const text = tr(`session.wait.${waiting}`)
+    return since >= WAIT_CLOCK_MS ? `${text} · ${clockText(since, formatDuration)}` : text
+  }
+  return null
+}
+
 export function TurnProcess({
   items,
   running,
+  live = running,
   durationMs,
   render,
 }: {
   items: Item[]
   running: boolean
+  /** 引擎正在干活（不是在等你批准 / 回答）：只有这时两步之间才写「正在看结果」这类等待 */
+  live?: boolean
   durationMs: number | null
   /** 显示一组过程条目（LiveTranscript 的工具行分组、思考、待办、过渡话） */
   render: (items: Item[]) => ReactNode
 }) {
   useI18n()
+  const activity = useActivity(items, running, live)
   const [open, setOpen] = useState(false)
   // 对话内搜索的「展开」、全局搜索跳到里面的条目：执行块先展开，里面的条目自己再展开
   const ids = useMemo(() => items.map(i => i.id), [items])
@@ -75,7 +106,13 @@ export function TurnProcess({
         <span aria-hidden className="shrink-0 text-fg-faint">
           ·
         </span>
-        <span className="min-w-0 truncate">{summaryText(summary, shown.length)}</span>
+        <span
+          data-activity={activity ? '' : undefined}
+          className={cn('min-w-0 truncate', activity && 'text-fg-secondary tabular-nums')}
+          title={activity ?? undefined}
+        >
+          {activity ?? summaryText(summary, shown.length)}
+        </span>
         {summary.failed > 0 && (
           <span className="shrink-0 text-danger">
             <span aria-hidden className="mr-1.5 text-fg-faint">

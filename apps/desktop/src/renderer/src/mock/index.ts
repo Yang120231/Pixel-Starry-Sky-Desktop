@@ -3,7 +3,13 @@ import type { DemoSource } from '@/data/demo'
 import { demoAccount } from './account'
 import { demoArtifactChange, demoArtifactPreview, demoArtifacts } from './artifacts'
 import { demoContext } from './context'
-import { animateCompaction, showcaseSnapshots, showcaseSubagentTranscript, showcaseTaskOutput } from './conversations'
+import {
+  animateCompaction,
+  animateSteps,
+  showcaseSnapshots,
+  showcaseSubagentTranscript,
+  showcaseTaskOutput,
+} from './conversations'
 import { workbenchSnapshots } from './workbench'
 import { demo } from './demo'
 import { DEMO_EDITOR_STATE, DEMO_FILES, demoDirectory, demoDocument } from './files'
@@ -48,6 +54,9 @@ export const demoSource: DemoSource = {
     taskOutput: showcaseTaskOutput,
     rewindPreview: demoRewindPreview,
     sideAnswer: demoSideAnswer,
-    animate: animateCompaction,
+    animate: update => {
+      animateCompaction(update)
+      animateSteps(update)
+    },
   },
 }

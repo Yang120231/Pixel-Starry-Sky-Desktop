@@ -860,6 +860,70 @@ export const catalog = {
     "zh": "刷新明细",
     "en": "Refresh details"
   },
+  "session.step.command": {
+    "zh": "运行 {text}",
+    "en": "Running {text}"
+  },
+  "session.step.edit": {
+    "zh": "修改 {name}",
+    "en": "Editing {name}"
+  },
+  "session.step.create": {
+    "zh": "新建 {name}",
+    "en": "Creating {name}"
+  },
+  "session.step.files": {
+    "zh": "修改 {n} 个文件",
+    "en": "Editing {n} files"
+  },
+  "session.step.read": {
+    "zh": "读取 {text}",
+    "en": "Reading {text}"
+  },
+  "session.step.search": {
+    "zh": "搜索 {text}",
+    "en": "Searching {text}"
+  },
+  "session.step.web": {
+    "zh": "浏览 {text}",
+    "en": "Browsing {text}"
+  },
+  "session.step.mcp": {
+    "zh": "MCP {text}",
+    "en": "MCP {text}"
+  },
+  "session.step.agent": {
+    "zh": "子智能体：{text}",
+    "en": "Subagent: {text}"
+  },
+  "session.step.tool": {
+    "zh": "{name} {text}",
+    "en": "{name} {text}"
+  },
+  "session.step.thinking": {
+    "zh": "思考中",
+    "en": "Thinking"
+  },
+  "session.step.more": {
+    "zh": "等 {n} 项",
+    "en": "+{n} more"
+  },
+  "session.step.seconds": {
+    "zh": "{n}s",
+    "en": "{n}s"
+  },
+  "session.wait.result": {
+    "zh": "正在看结果…",
+    "en": "Reading the result…"
+  },
+  "session.wait.next": {
+    "zh": "正在准备下一步…",
+    "en": "Preparing the next step…"
+  },
+  "session.wait.thinking": {
+    "zh": "正在思考…",
+    "en": "Thinking…"
+  },
   "session.ContextWindowButton.refreshed": {
     "zh": "已刷新",
     "en": "Refreshed"

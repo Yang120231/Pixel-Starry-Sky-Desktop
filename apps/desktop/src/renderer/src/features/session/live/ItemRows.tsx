@@ -43,6 +43,8 @@ import { ImageAttachments } from '@/features/session/attachments/ImageAttachment
 import { FileAttachments } from '@/features/session/attachments/FileAttachments'
 import { Markdown } from '@/ui/markdown/Markdown'
 import { formatDuration } from './agentTrace'
+import { STEP_CLOCK_MS, clockText } from './currentStep'
+import { useSince } from './stepClock'
 
 type ItemOf<K extends Item['kind']> = Extract<Item, { kind: K }>
 
@@ -218,7 +220,8 @@ function StatusMark({ status, okMark = true }: { status: ItemStatus; okMark?: bo
   useI18n()
   switch (status) {
     case 'running':
-      return <Spinner size={13} />
+      // 运行中的转圈在行首（RunningIcon），行尾不再放一个
+      return null
     case 'completed':
       return okMark ? <Check size={14} strokeWidth={2} className="shrink-0 text-success" /> : null
     case 'failed':
@@ -264,9 +267,30 @@ const TOOL_META: Record<ToolKind, { icon: LucideIcon; verb: string }> = {
   other: { icon: Wrench, verb: '' },
 }
 
+/**
+ * 运行中的工具调用（docs/ui/conversation-concise.md §7）：行首的图标换成转圈，动作上流过一道很淡的光，
+ * 超过 3 秒在后面写用时；结束后换回原来的图标和颜色
+ */
+function RunningIcon({ icon: Icon, running }: { icon: LucideIcon; running: boolean }) {
+  return running ? (
+    <span className="flex w-[15px] shrink-0 justify-center">
+      <Spinner size={13} />
+    </span>
+  ) : (
+    <Icon size={15} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
+  )
+}
+function StepClock({ id }: { id: string }) {
+  const since = useSince(`step:${id}`, true)
+  if (since < STEP_CLOCK_MS) return null
+  return <span className="shrink-0 text-meta text-fg-faint tabular-nums">{clockText(since, formatDuration)}</span>
+}
+
 function Row({
-  icon: Icon,
+  id,
+  icon,
   verb,
+  running = false,
   children,
   trailing,
   expandable,
@@ -274,8 +298,10 @@ function Row({
   onToggle,
   action,
 }: {
+  id: string
   icon: LucideIcon
   verb: string
+  running?: boolean
   children: ReactNode
   trailing?: ReactNode
   expandable: boolean
@@ -289,15 +315,18 @@ function Row({
     <button
       type="button"
       aria-expanded={expandable ? open : undefined}
+      aria-busy={running || undefined}
       onClick={expandable ? onToggle : undefined}
       className={cn(
-        'flex h-[30px] w-full min-w-0 items-center gap-2 rounded-md px-2 text-left text-list text-fg-secondary',
+        'flex h-[30px] w-full min-w-0 items-center gap-2 rounded-md px-2 text-left text-list',
+        running ? 'text-fg' : 'text-fg-secondary',
         expandable ? 'hover:bg-hover' : 'cursor-default',
       )}
     >
-      <Icon size={15} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
-      {verb && <span className="shrink-0">{verb}</span>}
+      <RunningIcon icon={icon} running={running} />
+      {verb && <span className={cn('shrink-0', running && 'step-shimmer')}>{verb}</span>}
       {children}
+      {running && <StepClock id={id} />}
       {trailing}
       <span className="flex-1" />
       {expandable && <Chevron open={open} />}
@@ -411,8 +440,10 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
     return (
       <div ref={row} data-fold={fold}>
         <Row
+          id={item.id}
           icon={SquareTerminal}
           verb={verb}
+          running={item.status === 'running'}
           expandable={!!item.output}
           open={open}
           onToggle={toggle}
@@ -481,15 +512,13 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
         )}
       </div>
     )
+    const editing = item.status === 'running'
     const summary = (
       <>
-        {item.changes[0]?.kind === 'add' ? (
-          <FilePlus size={15} className="shrink-0 text-fg-muted" />
-        ) : (
-          <FilePen size={15} className="shrink-0 text-fg-muted" />
-        )}
-        <span className="shrink-0">{fileVerb(item.changes)}</span>
+        <RunningIcon icon={item.changes[0]?.kind === 'add' ? FilePlus : FilePen} running={editing} />
+        <span className={cn('shrink-0', editing && 'step-shimmer')}>{fileVerb(item.changes)}</span>
         {paths}
+        {editing && <StepClock id={item.id} />}
         {(added > 0 || removed > 0) && <DiffStat added={added} removed={removed} className="text-meta" />}
         <StatusMark status={item.status} okMark={false} />
         <SubagentTag name={item.subagent} />
@@ -557,8 +586,10 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
   return (
     <div ref={row} data-fold={fold}>
       <Row
+        id={item.id}
         icon={plan ? ListTodo : meta.icon}
         verb={verb}
+        running={item.status === 'running'}
         expandable={foldable}
         open={open}
         onToggle={toggle}

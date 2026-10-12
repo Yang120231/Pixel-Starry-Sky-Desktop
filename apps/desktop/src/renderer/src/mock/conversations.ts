@@ -13,6 +13,7 @@ import type {
   TaskOutput,
   TurnUsage,
 } from '@pixelsky/protocol'
+import type { DemoUpdate } from '@/data/demo'
 
 export const SHOWCASE_PROJECT = 'claude-showcase'
 
@@ -26,6 +27,7 @@ export const SHOWCASE_SESSIONS = [
   { id: 'demo-claude-send-failed', title: '报错：发送失败（消息队列）' },
   { id: 'demo-claude-running', title: '运行中：进度卡片、后台任务、重试' },
   { id: 'demo-claude-compacting', title: '运行中：压缩上下文（循环播放）' },
+  { id: 'demo-claude-steps', title: '运行中：当前步骤（循环播放）' },
   { id: 'demo-claude-compactions', title: '压缩上下文：各种结果' },
   { id: 'demo-claude-starting', title: '正在启动引擎' },
   { id: 'demo-claude-approve-command', title: '审批：运行命令' },
@@ -1182,7 +1184,7 @@ const compacting = snapshot(
 )
 
 /** 演示模式下让「正在压缩」的那条循环播放；update 换掉某个会话的条目 */
-export function animateCompaction(update: (sessionId: string, items: (items: Item[]) => Item[]) => void): void {
+export function animateCompaction(update: DemoUpdate): void {
   const set = (patch: Partial<Extract<Item, { kind: 'compaction' }>>): void =>
     update('demo-claude-compacting', items =>
       items.map(item => (item.id === COMPACT_LIVE && item.kind === 'compaction' ? { ...item, ...patch } : item)),
@@ -1194,6 +1196,105 @@ export function animateCompaction(update: (sessionId: string, items: (items: Ite
       set({ status: 'completed', trigger: 'auto', durationMs: Date.now() - startedAt, postTokens: 11_234 })
       window.setTimeout(cycle, 6_000)
     }, 7_000)
+  }
+  cycle()
+}
+
+// ---------- 运行中：当前步骤（docs/ui/conversation-concise.md §7） ----------
+
+const STEPS_ID = 'demo-claude-steps'
+const STEPS_TURN = 'st-turn'
+const stepsStart: Item[] = [user('st-u1', '把草稿同步到云端，改完跑一遍测试', 0, { turnId: STEPS_TURN })]
+
+/** 开着这个会话时由 animateSteps 一步步往下放：思考 → 长命令（计时）→ 看结果 → 说一句 → 改文件 → 两个子智能体并行 → 回复，停一会儿重来 */
+const steps = snapshot(record(STEPS_ID, { lastOutcome: 'completed', updatedAt: T0 }), stepsStart, {
+  state: 'running',
+  turnId: STEPS_TURN,
+  execution: { model: 'claude-opus-5-5', effort: 'high', platform: null },
+})
+
+export function animateSteps(update: DemoUpdate): void {
+  const at = (ms: number, fn: () => void) => window.setTimeout(fn, ms)
+  const put = (id: string, item: Item): void =>
+    update(STEPS_ID, items =>
+      items.some(i => i.id === id) ? items.map(i => (i.id === id ? item : i)) : [...items, item],
+    )
+  const cmd = (status: 'running' | 'completed'): Item => ({
+    kind: 'command',
+    id: 'st-c1',
+    command: 'pnpm test --filter sync',
+    description: null,
+    output:
+      status === 'running' ? '' : ' ✓ draftSync.test.ts (12)\n Test Files  1 passed (1)\n      Tests  12 passed (12)',
+    exitCode: status === 'running' ? null : 0,
+    status,
+  })
+  const edit = (status: 'running' | 'completed'): Item => ({
+    kind: 'file_change',
+    id: 'st-f1',
+    changes: [
+      change('src/sync/draftSync.ts', 'update', [
+        '@@ -12,3 +12,5 @@',
+        ' export function syncDraft(id) {',
+        '+  if (!id) return',
+        '+  queue.push(id)',
+        ' }',
+      ]),
+    ],
+    status,
+  })
+  const agent = (id: string, title: string, status: 'running' | 'completed'): Item => ({
+    kind: 'tool',
+    id,
+    tool: 'task',
+    name: 'Agent',
+    title,
+    output: status === 'running' ? '' : '没有发现问题。',
+    status,
+  })
+  const cycle = (): void => {
+    update(STEPS_ID, () => stepsStart, { state: 'running' })
+    // 刚发消息：底部「正在思考…」
+    at(2_000, () =>
+      put('st-r1', {
+        kind: 'reasoning',
+        id: 'st-r1',
+        text: '先跑一遍同步相关的测试，看现在的状态。',
+        status: 'running',
+      }),
+    )
+    at(5_000, () => {
+      put('st-r1', {
+        kind: 'reasoning',
+        id: 'st-r1',
+        text: '先跑一遍同步相关的测试，看现在的状态。',
+        status: 'completed',
+      })
+      put('st-c1', cmd('running'))
+    })
+    // 命令跑 7 秒（3 秒后行上开始计时），跑完看结果 6 秒（5 秒后带上已等的时间）
+    at(12_000, () => put('st-c1', cmd('completed')))
+    at(18_000, () => put('st-a1', assistant('st-a1', '测试都过了，接着把同步接口改成按会话排队。')))
+    at(21_000, () => put('st-f1', edit('running')))
+    at(24_000, () => {
+      put('st-f1', edit('completed'))
+      put('st-t1', agent('st-t1', '审查同步改动', 'running'))
+      put('st-t2', agent('st-t2', '补充离线测试', 'running'))
+    })
+    at(29_000, () => put('st-t2', agent('st-t2', '补充离线测试', 'completed')))
+    at(31_000, () => put('st-t1', agent('st-t1', '审查同步改动', 'completed')))
+    at(33_000, () => {
+      put('st-a2', assistant('st-a2', '草稿同步做好了：按会话排队上传，离线时先存本地，测试全部通过。'))
+      put(
+        'st-s1',
+        stats('st-s1', 'completed', {
+          durationMs: 33_000,
+          models: { 'claude-opus-5-5': opus(42_000, 2_100, 0.38, 6) },
+        }),
+      )
+      update(STEPS_ID, items => items, { state: 'idle' })
+    })
+    at(40_000, cycle)
   }
   cycle()
 }
@@ -1518,6 +1619,7 @@ export const showcaseSnapshots: Record<string, SessionSnapshot> = Object.fromEnt
     sendFailures,
     running,
     compacting,
+    steps,
     compactions,
     starting,
     approveCommand,
