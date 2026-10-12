@@ -1,3 +1,5 @@
+// 开发版用自己的数据目录（app/data-dir.ts），要在其他模块之前
+import './app/data-dir'
 import { join } from 'node:path'
 import { mkdirSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
