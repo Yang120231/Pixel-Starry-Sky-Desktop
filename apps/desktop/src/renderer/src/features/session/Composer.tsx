@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from 'react'
 import { ArrowUp, AtSign, ChevronDown, Mic, Paperclip, Plus, ShieldOff, Square, SquareSlash } from 'lucide-react'
+import { settledResizeObserver } from '@/features/panes/motion'
 import { IconButton, cn, useComingSoon } from '@/ui'
 import { attachments as initialAttachments, composer } from '@/data'
 import {
@@ -237,7 +238,8 @@ export function Composer({
       setCardWidth(card.clientWidth)
     }
     measure()
-    const observer = new ResizeObserver(measure)
+    // 窗格过渡期间不量，结束后补一次（不然每帧重渲染输入框）
+    const observer = settledResizeObserver(measure)
     observer.observe(card)
     observer.observe(pane)
     if (toolbarRef.current) observer.observe(toolbarRef.current)

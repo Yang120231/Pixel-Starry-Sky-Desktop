@@ -4,14 +4,13 @@ import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Columns2, Ellipsis, FileText, Maximize2, Minimize2, MousePointerClick, Plus, Rows2, X } from 'lucide-react'
 import { IconButton, Popover, PopoverItem, Spinner, cn } from '@/ui'
-import { SessionView } from '@/features/session/SessionView'
 import { isLive, useEngineState, useSessionTitle } from '@/features/engine'
 import { busy } from '@/features/engine/sidebarData'
 import { SPLIT_DOWN, SPLIT_RIGHT, ZOOM_PANE, withShortcut } from '@/features/layout/shortcuts'
-import { fadeIn, flipFrom } from './motion'
+import { flipFrom } from './motion'
+import { TabSlot } from './tabHost'
 import { notify, paneActions, usePaneState } from './store'
 import { isNewTab, isFileTab, parseFileTab, leaves, type Leaf } from './tree'
-import { FileEditor } from '@/features/editor/FileEditor'
 import { dirtyFile, showFiles, useFiles } from '@/features/files/store'
 import { isDemo, projects } from '@/data'
 import { useSessionActions } from '@/features/sidebar/SessionActions'
@@ -86,13 +85,12 @@ export interface PaneViewProps {
   maximized: boolean
   /** 窗格区的像素尺寸，拆分前检查放不放得下 */
   areaSize: () => { width: number; height: number }
-  sidebarOpen: boolean
-  panelOpen: boolean
-  onToggleSidebar: () => void
-  onTogglePanel: () => void
 }
 
-/** 一个窗格：窗格头 + 标签条 + 当前标签的会话（其他标签保持挂载，只是隐藏，滚动位置和草稿都还在） */
+/**
+ * 一个窗格：窗格头 + 标签条 + 各标签的插槽。标签内容由 Workspace 的 TabHosts 渲染、搬进插槽（tabHost.tsx），
+ * 其他标签保持挂载、只是隐藏，滚动位置和草稿都还在；标签换窗格时也不重建
+ */
 export const PaneView = memo(function PaneView(props: PaneViewProps) {
   useI18n()
   const { leaf, focused, showHead, maximized } = props
@@ -204,61 +202,11 @@ export const PaneView = memo(function PaneView(props: PaneViewProps) {
       )}
 
       <div data-pane-content className="relative min-h-0 flex-1">
-        {leaf.tabs.length === 0 ? (
-          <EmptyPane />
-        ) : (
-          leaf.tabs.map(tab => <TabBody key={tab} tab={tab} active={tab === leaf.active} {...props} />)
-        )}
+        {leaf.tabs.length === 0 ? <EmptyPane /> : leaf.tabs.map(tab => <TabSlot key={tab} tab={tab} />)}
       </div>
     </div>
   )
 })
-
-/** 一个标签的内容：不是当前标签时隐藏但保持挂载；切过来时淡入 */
-function TabBody({
-  tab,
-  active,
-  sidebarOpen,
-  panelOpen,
-  onToggleSidebar,
-  onTogglePanel,
-}: { tab: string; active: boolean } & PaneViewProps) {
-  useI18n()
-  const ref = useRef<HTMLDivElement>(null)
-  const wasActive = useRef(active)
-  const sessionId = isNewTab(tab) || isFileTab(tab) ? null : tab
-  const title = useSessionTitle(sessionId)
-
-  useLayoutEffect(() => {
-    if (active && !wasActive.current && ref.current) fadeIn(ref.current)
-    wasActive.current = active
-  }, [active])
-
-  return (
-    <div
-      ref={ref}
-      className={cn('absolute inset-0 flex', !active && 'invisible')}
-      aria-hidden={!active || undefined}
-      inert={!active}
-    >
-      {isFileTab(tab) ? (
-        <FileEditor id={tab} active={active} />
-      ) : (
-        <SessionView
-          embedded
-          sessionId={sessionId}
-          draftKey={isLive ? tab : `demo:${tab}`}
-          title={title}
-          sidebarOpen={sidebarOpen}
-          panelOpen={panelOpen}
-          onToggleSidebar={onToggleSidebar}
-          onTogglePanel={onTogglePanel}
-          onOpenSession={id => paneActions.replace(tab, id)}
-        />
-      )}
-    </div>
-  )
-}
 
 /** 标签条：标签增减、位置变化时其余标签平滑移位（FLIP） */
 function TabStrip({ leaf, dim, areaSize }: { leaf: Leaf; dim: boolean; areaSize: PaneViewProps['areaSize'] }) {

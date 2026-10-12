@@ -3,6 +3,7 @@ import { tr } from '../../../i18n/core'
 // 进度卡片：浮在对话区右上角，显示当前计划和子智能体（docs/ui/progress-card.md，参考 Claude 桌面版）
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Bot, Check, ChevronDown, ChevronUp, CircleSlash, X } from 'lucide-react'
+import { settledResizeObserver } from '@/features/panes/motion'
 import type { SessionSnapshot, TodoStep } from '@pixelsky/protocol'
 import { IconButton, Spinner, cn } from '@/ui'
 import { elapsed, formatDuration, shortModel, type RunState } from './agentTrace'
@@ -217,7 +218,7 @@ export function ProgressCard({
     if (!box) return
     const measure = (): void => setNarrow(box.clientWidth < NARROW_PX)
     measure()
-    const ro = new ResizeObserver(measure)
+    const ro = settledResizeObserver(measure)
     ro.observe(box)
     return () => ro.disconnect()
   }, [])

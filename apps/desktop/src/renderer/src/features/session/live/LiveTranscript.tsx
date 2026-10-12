@@ -284,7 +284,9 @@ export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot
   const streaming = last && (last.kind === 'assistant' || last.kind === 'reasoning') && last.status === 'running'
   const lastBlock = blocks[blocks.length - 1]
   const busyBlock = lastBlock?.type === 'process' && lastBlock.running
-  const showThinking = snapshot?.state === 'running' && !streaming && !busyBlock
+  // 正在压缩时压缩条自己带计时，不再叠一行「正在思考 · 53s」
+  const compacting = last?.kind === 'compaction' && last.status === 'running'
+  const showThinking = snapshot?.state === 'running' && !streaming && !busyBlock && !compacting
   // 写具体在等什么（刚发消息：正在思考；工具刚结束：正在看结果），等久了带上秒数（docs/ui/conversation-concise.md §7）
   const waiting = showThinking ? waitingFor(items) : null
   const waitedMs = useSince(waiting ? `wait:${last?.id ?? 'start'}:${waiting}` : null, showThinking)

@@ -2,6 +2,7 @@ import { translateMessage } from '../../i18n/core'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
 import { useLayoutEffect, useState } from 'react'
+import { settledResizeObserver } from '@/features/panes/motion'
 import {
   ArrowDown,
   ArrowUp,
@@ -59,7 +60,7 @@ export function QueuedMessages({
     if (!view) return
     const measure = (): void => setViewHeight(view.clientHeight)
     measure()
-    const ro = new ResizeObserver(measure)
+    const ro = settledResizeObserver(measure)
     ro.observe(view)
     return () => ro.disconnect()
   }, [root])

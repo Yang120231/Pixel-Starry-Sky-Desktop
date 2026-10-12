@@ -1,6 +1,7 @@
 // 轮次跳转条（docs/ui/turn-rail.md）：对话区左边或右边一列短刻度，每轮一个；
 // 鼠标移上去在旁边展开轮次列表（序号 + 第一行），点刻度或列表项跳到那一轮
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
+import { onPaneSettled, paneMoving, settledResizeObserver } from '@/features/panes/motion'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import { cn } from '@/ui'
@@ -40,7 +41,7 @@ export function TurnRail({
     if (!el) return
     const measure = (): void => setHeight(Math.max(0, el.clientHeight * MAX_SHARE))
     measure()
-    const ro = new ResizeObserver(measure)
+    const ro = settledResizeObserver(measure)
     ro.observe(el)
     return () => ro.disconnect()
   }, [scroller])
@@ -49,7 +50,8 @@ export function TurnRail({
   useEffect(() => {
     const el = scroller.current
     if (!el) return
-    let frame = 0
+    let frame = 0,
+      pending = false
     const update = (): void => {
       frame = 0
       const base = el.getBoundingClientRect().top - el.scrollTop
@@ -61,12 +63,20 @@ export function TurnRail({
       const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 4
       setCurrent(atBottom ? turns.length - 1 : currentTurn(tops, el.scrollTop))
     }
+    // 窗格过渡期间贴底的对话每帧都在滚：先不算（要量每一轮的位置），结束后补一次
     const onScroll = (): void => {
-      if (!frame) frame = requestAnimationFrame(update)
+      if (paneMoving(el)) pending = true
+      else if (!frame) frame = requestAnimationFrame(update)
     }
+    const off = onPaneSettled(() => {
+      if (!pending) return
+      pending = false
+      update()
+    })
     update()
     el.addEventListener('scroll', onScroll, { passive: true })
     return () => {
+      off()
       el.removeEventListener('scroll', onScroll)
       if (frame) cancelAnimationFrame(frame)
     }

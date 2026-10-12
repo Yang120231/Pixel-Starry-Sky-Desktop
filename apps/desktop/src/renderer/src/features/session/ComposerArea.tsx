@@ -2,6 +2,7 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { ResizeHandle } from '@/ui/ResizeHandle'
+import { settledResizeObserver } from '@/features/panes/motion'
 import { DEFAULT_COMPOSER_WIDTH, setLayoutSize, useLayoutSize } from '@/features/layout/sizes'
 
 /** 输入框卡片的圆角（rounded-2xl）：左右拖动条只画在两条竖边的直线部分，不伸进圆角 */
@@ -22,7 +23,7 @@ export function ComposerArea({ children }: { children: ReactNode }) {
       if (width > 0) setAvailable(width)
     }
     update()
-    const observer = new ResizeObserver(update)
+    const observer = settledResizeObserver(update)
     observer.observe(el)
     return () => observer.disconnect()
   }, [])
@@ -41,7 +42,7 @@ export function ComposerArea({ children }: { children: ReactNode }) {
       setEdge(prev => (prev && prev.top === next.top && prev.bottom === next.bottom ? prev : next))
     }
     update()
-    const observer = new ResizeObserver(update)
+    const observer = settledResizeObserver(update)
     observer.observe(el)
     const card = el.querySelector<HTMLElement>('.composer-card')
     if (card) observer.observe(card)

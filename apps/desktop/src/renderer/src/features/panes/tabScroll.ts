@@ -1,7 +1,7 @@
 // 会话标签栏的滚动（GitHub #16，docs/ui/multi-pane.md）：竖直滚轮横向滚、中键 / 空白处按住拖动平移、
 // 当前标签自动滚进可视区、两头还有内容时淡出。标签本身左键拖动仍是排序 / 移到别的窗格（drag.tsx）。
 import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
-import { motionEnabled } from './motion'
+import { motionEnabled, settledResizeObserver } from './motion'
 
 /** deltaMode 为「行」时一行算多少像素 */
 const LINE_PX = 16
@@ -164,7 +164,7 @@ export function useTabStripScroll(ref: RefObject<HTMLElement | null>, active: st
       if (e.button === 1) e.preventDefault()
     }
 
-    const resize = new ResizeObserver(() => {
+    const resize = settledResizeObserver(() => {
       edges()
       reveal(el, false)
     })

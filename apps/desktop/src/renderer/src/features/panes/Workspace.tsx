@@ -25,6 +25,8 @@ import {
   ZOOM_PANE,
 } from '@/features/layout/shortcuts'
 import { PaneView } from './PaneView'
+import { TabHosts } from './tabHost'
+import { PANE_SETTLED, cssDuration } from './motion'
 import { MIN_PANE, paneActions, usePaneState } from './store'
 import {
   computeRects,
@@ -56,6 +58,8 @@ export interface WorkspaceProps {
 }
 
 const pct = (v: number): string => `${v * 100}%`
+/** 窗格的这几个属性在过渡时算「窗格在动」（opacity 不算） */
+const GEOMETRY = new Set(['left', 'top', 'width', 'height'])
 const dividerKey = (d: Divider): string => `${d.splitId}-${d.index}`
 /** 分隔线拖到头时的预览：盖在要放大的窗格上，四边各缩进 4px */
 const snapStyle = (r: Rect) => ({
@@ -161,6 +165,57 @@ export function Workspace(props: WorkspaceProps) {
     const ids = new Set(sessions.map(s => s.record.id))
     paneActions.prune(tab => isNewTab(tab) || ids.has(tab))
   }, [ready, sessions])
+
+  // 窗格位置 / 大小的过渡期间在窗格区上标 data-pane-moving，结束后发 PANE_SETTLED（motion.ts）。
+  // 直接改 DOM 属性，不走 state：标记本身不该引起重渲染
+  useEffect(() => {
+    const area = areaRef.current
+    if (!area) return
+    const running = new Map<EventTarget, Set<string>>()
+    let timer = 0,
+      frame = 0
+    const settle = (): void => {
+      window.clearTimeout(timer)
+      cancelAnimationFrame(frame)
+      running.clear()
+      if (!area.hasAttribute('data-pane-moving')) return
+      area.removeAttribute('data-pane-moving')
+      area.dispatchEvent(new CustomEvent(PANE_SETTLED, { bubbles: true }))
+    }
+    const geometry = (e: TransitionEvent): boolean =>
+      e.target instanceof HTMLElement && e.target.classList.contains('pane-box') && GEOMETRY.has(e.propertyName)
+    const run = (e: TransitionEvent): void => {
+      if (!geometry(e)) return
+      const props = running.get(e.target!) ?? new Set<string>()
+      props.add(e.propertyName)
+      running.set(e.target!, props)
+      cancelAnimationFrame(frame)
+      area.setAttribute('data-pane-moving', '')
+      // 窗格在过渡中途被移除时收不到结束事件：最多等过渡时长再多一点就当结束
+      window.clearTimeout(timer)
+      timer = window.setTimeout(settle, cssDuration('--dur-expand', 240) + 200)
+    }
+    const end = (e: TransitionEvent): void => {
+      if (!geometry(e)) return
+      const props = running.get(e.target!)
+      props?.delete(e.propertyName)
+      if (props && !props.size) running.delete(e.target!)
+      // 中途改目标时先取消旧过渡、再开始新的：等一帧，没有新的再算结束
+      if (!running.size) {
+        cancelAnimationFrame(frame)
+        frame = requestAnimationFrame(settle)
+      }
+    }
+    area.addEventListener('transitionrun', run)
+    area.addEventListener('transitionend', end)
+    area.addEventListener('transitioncancel', end)
+    return () => {
+      area.removeEventListener('transitionrun', run)
+      area.removeEventListener('transitionend', end)
+      area.removeEventListener('transitioncancel', end)
+      settle()
+    }
+  }, [])
 
   const areaSize = useCallback(() => {
     const r = areaRef.current?.getBoundingClientRect()
@@ -268,14 +323,18 @@ export function Workspace(props: WorkspaceProps) {
                   showHead={multi}
                   maximized={maximized}
                   areaSize={areaSize}
-                  sidebarOpen={props.sidebarOpen}
-                  panelOpen={props.panelOpen}
-                  onToggleSidebar={props.onToggleSidebar}
-                  onTogglePanel={props.onTogglePanel}
                 />
               </div>
             )
           })}
+          {/* 各标签的内容：渲染在自己的容器里再搬进所在窗格，换窗格不重建；要排在窗格后面（tabHost.tsx） */}
+          <TabHosts
+            leaves={all}
+            sidebarOpen={props.sidebarOpen}
+            panelOpen={props.panelOpen}
+            onToggleSidebar={props.onToggleSidebar}
+            onTogglePanel={props.onTogglePanel}
+          />
 
           {/* 分隔线：窗格之间不留缝，只画一条 1px 实线（样式在 panes.css）；悬停 / 拖动时加粗成强调色；双击均分 */}
           {dividers.map(d => {
