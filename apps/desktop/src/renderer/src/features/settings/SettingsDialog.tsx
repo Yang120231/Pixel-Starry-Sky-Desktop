@@ -34,6 +34,7 @@ import { AccentSettings } from './AccentSettings'
 import { PaletteSettings } from './PaletteSettings'
 import { CloseActionSettings } from './CloseActionSettings'
 import { TurnRailSettings } from './TurnRailSettings'
+import { MessageActionsSettings } from './MessageActionsSettings'
 import { CacheMissSettings } from './CacheMissSettings'
 import { WallpaperSettings } from './WallpaperSettings'
 import type { PaneFocusMotion } from '@/features/appearance/paneFocusMotion'
@@ -698,6 +699,7 @@ function AppearanceSection() {
       <ComposerStyleSettings />
       <ReplyStatsSettings />
       <TurnRailSettings />
+      <MessageActionsSettings />
       <CacheMissSettings />
 
       <GroupTitle>{tr('settings.SettingsDialog.fonts')}</GroupTitle>

@@ -161,6 +161,11 @@ export const SETTINGS_INDEX: SearchEntry[] = [
       '侧栏 图标 自定义 替换 恢复 新建任务 添加项目 设置 插件 用量 sidebar icons customize replace reset new task add project settings plugins usage',
   },
   { section: 'appearance', title: '回复下方的统计', keywords: '统计行 耗时 token 费用 回复' },
+  {
+    section: 'appearance',
+    title: '消息操作按钮',
+    keywords: '复制 分叉 分支 回退 撤回 按钮 位置 左侧 下方 message actions copy fork rewind position below left',
+  },
   { section: 'appearance', title: '缓存未命中提醒', keywords: '缓存 命中率 提醒 停止' },
   { section: 'appearance', title: '界面字体', keywords: '字体 font' },
   { section: 'appearance', title: '代码字体', keywords: '等宽 字体 mono' },

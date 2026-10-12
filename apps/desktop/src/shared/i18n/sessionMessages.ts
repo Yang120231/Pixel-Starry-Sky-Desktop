@@ -8,6 +8,14 @@ export const sessionMessages = {
   'turnRail.left': { zh: '左侧', en: 'Left' },
   'turnRail.right': { zh: '右侧', en: 'Right' },
   'turnRail.off': { zh: '关闭', en: 'Off' },
+  // 你发的消息上的操作按钮放在哪里（GitHub #28）
+  'messageActions.setting': { zh: '消息操作按钮', en: 'Message actions' },
+  'messageActions.settingHint': {
+    zh: '你发的消息上的复制、分叉、回退按钮放在气泡左侧还是下方，鼠标移上去才显示',
+    en: 'Where the copy, fork and rewind buttons on your messages go; they show on hover',
+  },
+  'messageActions.left': { zh: '左侧', en: 'Left' },
+  'messageActions.below': { zh: '下方', en: 'Below' },
   'turnRail.label': { zh: '轮次跳转', en: 'Jump to turn' },
   'turnRail.turn': { zh: '第 {n} 轮', en: 'Turn {n}' },
   'turnRail.imageOnly': { zh: '（图片）', en: '(image)' },

@@ -42,15 +42,20 @@ import { getActiveWorkspace } from '@/features/editor/target'
 import { ImageAttachments } from '@/features/session/attachments/ImageAttachments'
 import { FileAttachments } from '@/features/session/attachments/FileAttachments'
 import { Markdown } from '@/ui/markdown/Markdown'
+import { useMessageActionsPosition } from '@/features/settings/messageActions'
 import { formatDuration } from './agentTrace'
 import { STEP_CLOCK_MS, clockText } from './currentStep'
 import { useSince } from './stepClock'
 
 type ItemOf<K extends Item['kind']> = Extract<Item, { kind: K }>
 
-/** actions：气泡左侧、底部对齐的操作（悬停显示），不额外占行高 */
+/**
+ * actions：消息操作（悬停显示）。按设置放在气泡左侧（底部对齐，不额外占行高）
+ * 或气泡下方（右对齐的一行，不占正文宽度；GitHub #28）
+ */
 export function UserBubble({ item, actions }: { item: ItemOf<'user'>; actions?: ReactNode }) {
   useI18n()
+  const position = useMessageActionsPosition()
   if (item.mode === 'guidance')
     return (
       <div className="border-l border-accent-line pl-3 text-list whitespace-pre-wrap text-fg-muted">
@@ -68,22 +73,33 @@ export function UserBubble({ item, actions }: { item: ItemOf<'user'>; actions?: 
         )}
       </div>
     )
+  const bubble = (
+    <div className="conversation-user-bubble min-w-0 rounded-2xl rounded-br-md bg-subtle px-4 py-2.5 text-prose break-words whitespace-pre-wrap text-fg">
+      {!!item.attachments?.length && (
+        <div className="mb-2">
+          <ImageAttachments images={item.attachments} />
+        </div>
+      )}
+      {!!item.files?.length && (
+        <div className="mb-2 whitespace-normal">
+          <FileAttachments files={item.files} />
+        </div>
+      )}
+      <UserBody id={item.id} text={item.text} />
+    </div>
+  )
+  // 下方：行高一直留着（对话块有绘制裁剪，按钮不能伸进消息之间的空隙），悬停时只是显示出来，不会把下面的内容顶下去
+  if (actions && position === 'below')
+    return (
+      <div className="flex flex-col items-end" data-message-actions="below">
+        {bubble}
+        <div className="mt-1 flex min-h-6 justify-end">{actions}</div>
+      </div>
+    )
   return (
     <div className="flex items-end justify-end gap-1">
       {actions}
-      <div className="conversation-user-bubble min-w-0 rounded-2xl rounded-br-md bg-subtle px-4 py-2.5 text-prose break-words whitespace-pre-wrap text-fg">
-        {!!item.attachments?.length && (
-          <div className="mb-2">
-            <ImageAttachments images={item.attachments} />
-          </div>
-        )}
-        {!!item.files?.length && (
-          <div className="mb-2 whitespace-normal">
-            <FileAttachments files={item.files} />
-          </div>
-        )}
-        <UserBody id={item.id} text={item.text} />
-      </div>
+      {bubble}
     </div>
   )
 }

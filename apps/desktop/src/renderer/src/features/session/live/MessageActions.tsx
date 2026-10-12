@@ -7,6 +7,7 @@ import { GitBranch, Undo2 } from 'lucide-react'
 import type { Item, RewindOptions, RewindPreview } from '@pixelsky/protocol'
 import { CopyButton, cn } from '@/ui'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
+import { useMessageActionsPosition } from '@/features/settings/messageActions'
 
 type UserItem = Extract<Item, { kind: 'user' }>
 
@@ -50,6 +51,7 @@ export function UserMessageActions({ item }: { item: UserItem }) {
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const position = useMessageActionsPosition()
   if (item.mode === 'guidance') return null
   const reason = actions?.rewindDisabledReason ?? null
   const run = async (task: () => Promise<void>): Promise<boolean> => {
@@ -77,7 +79,8 @@ export function UserMessageActions({ item }: { item: UserItem }) {
   }
   return (
     <>
-      <div className={cn(ROW, 'shrink-0 pb-1', (confirming || error) && 'opacity-100')}>
+      {/* 左侧时和气泡底部对齐；下方时是气泡下面右对齐的一行（ItemRows 的 UserBubble 摆位置） */}
+      <div className={cn(ROW, position === 'left' && 'shrink-0 pb-1', (confirming || error) && 'opacity-100')}>
         {error && !confirming && (
           <span role="alert" className="mr-1 text-meta text-danger">
             {error}
