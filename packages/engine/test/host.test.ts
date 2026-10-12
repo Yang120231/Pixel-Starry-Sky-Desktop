@@ -229,13 +229,15 @@ describe('EngineHost + Claude（假引擎）', () => {
   })
 
   it('一轮结束后引擎自己接着干（后台任务通知）：算新的一轮，有运行状态、统计行和用量，空闲定时器不关进程', async () => {
-    const host = makeHost(60, { FAKE_CLAUDE_CONTINUE_MS: '200' })
+    // 空闲时间 150ms：假引擎在第一轮结束 40ms 后发通知接着干，原来空闲 60ms 只差 20ms，
+    // Windows 计时器精度约 15.6ms，偶尔空闲先到、进程被关，后续那一轮不来，测试等到超时
+    const host = makeHost(150, { FAKE_CLAUDE_CONTINUE_MS: '400' })
     const { record } = setup(host)
     await host.send(record.id, '有后续')
     await waitFor(() => turnsDone(record.id) === 1)
     await waitFor(() => host.open(record.id).state === 'running')
-    // 后续这一轮在跑：超过空闲时间也不能关掉进程
-    await new Promise(r => setTimeout(r, 120))
+    // 后续这一轮在跑（400ms）：超过空闲时间也不能关掉进程
+    await new Promise(r => setTimeout(r, 220))
     await waitFor(() => turnsDone(record.id) === 2)
     const snap = host.open(record.id)
     expect(snap.state).toBe('idle')
