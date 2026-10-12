@@ -1,7 +1,5 @@
 import { ENGINES, searchSnippet, searchTerms } from '@pixelsky/protocol'
-import { setCurrentProject } from '@/features/engine/store'
-import { paneActions } from '@/features/panes/store'
-import { requestTask } from '@/features/panel/taskNavigation'
+import { openTask } from '@/features/panel/openTask'
 import { useI18n } from '@/i18n/I18nProvider'
 import { getLocale, tr, translateMessage } from '../../i18n/core'
 import { Fragment, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
@@ -146,9 +144,7 @@ export function SearchDialog({
   }
   const activate = (r: SearchResult) => {
     if (r.id.startsWith('manual-task:')) {
-      setCurrentProject(r.projectId)
-      paneActions.open(null)
-      requestTask(r.projectId, r.itemId!)
+      openTask(r.projectId, r.itemId!)
       onClose()
       return
     }

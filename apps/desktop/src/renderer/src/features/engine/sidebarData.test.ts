@@ -48,7 +48,6 @@ describe('侧栏归档分组', () => {
         { id: 'a', title: 'A', time: '' },
         { id: 'c', title: 'C', time: '' },
       ],
-      null,
       {
         a: { archivedAt: null, deleted: false, stopped: false, title: '已改名', bottomedAt: 2 },
         b: { archivedAt: 1, deleted: false, stopped: false, title: '归档名称', bottomedAt: 3 },
@@ -58,6 +57,45 @@ describe('侧栏归档分组', () => {
     expect(data.recent.map(s => s.title)).toEqual(['C', '已改名'])
     expect(data.projects[0].archived[0].title).toBe('归档名称')
     expect(projects[0].sessions[0].title).toBe('A')
+  })
+  it('置顶的会话只在置顶分组（后置顶的在前、带项目名），归档的不算；演示的置顶改动同样生效', () => {
+    const projects: ProjectRecord[] = [
+      { id: 'p', name: '项目', path: 'test', addedAt: 1 },
+      { id: 'q', name: '另一个', path: 'test2', addedAt: 2 },
+    ]
+    const sessions = [
+      { record: { id: 'a', projectId: 'p', title: 'A', updatedAt: 3, pinnedAt: 5 }, state: 'idle' },
+      { record: { id: 'b', projectId: 'p', title: 'B', updatedAt: 2 }, state: 'idle' },
+      { record: { id: 'c', projectId: 'q', title: 'C', updatedAt: 1, pinnedAt: 9 }, state: 'running' },
+      { record: { id: 'd', projectId: 'q', title: 'D', updatedAt: 0, pinnedAt: 7, archivedAt: 4 }, state: 'idle' },
+    ] as SessionSummary[]
+    const data = sidebarData(projects, sessions, {}, String)
+    expect(data.pinned.map(s => [s.id, s.project, s.status])).toEqual([
+      ['c', '另一个', 'running'],
+      ['a', '项目', 'idle'],
+    ])
+    expect(data.projects.map(p => p.sessions.map(s => s.id))).toEqual([['b'], []])
+    expect(data.projects[1].archived?.map(s => s.id)).toEqual(['d'])
+
+    const demo = demoSidebarData(
+      [
+        {
+          id: 'p',
+          name: '项目',
+          sessions: [
+            { id: 'a', title: 'A', status: 'idle' as const, pinnedAt: 1 },
+            { id: 'b', title: 'B', status: 'running' as const },
+          ],
+        },
+      ],
+      [],
+      {
+        a: { archivedAt: null, deleted: false, stopped: false, pinnedAt: null },
+        b: { archivedAt: null, deleted: false, stopped: false, pinnedAt: 3 },
+      },
+    )
+    expect(demo.pinned.map(s => s.id)).toEqual(['b'])
+    expect(demo.projects[0].sessions.map(s => s.id)).toEqual(['a'])
   })
   it('先过滤归档再取最近八条，项目保留归档入口', () => {
     const projects: ProjectRecord[] = [{ id: 'p', name: '项目', path: 'test', addedAt: 1 }]
@@ -69,23 +107,6 @@ describe('侧栏归档分组', () => {
     expect(data.recent).toHaveLength(8)
     expect(data.recent[0].id).toBe('s3')
     expect(data.projects[0].archived).toHaveLength(3)
-    expect(data.runStatus?.newReplies).toBe(1)
-  })
-  it('运行状态列出未归档的运行中与新回复会话，运行中在前', () => {
-    const projects: ProjectRecord[] = [{ id: 'p', name: '项目', path: 'test', addedAt: 1 }]
-    const sessions = [
-      { record: { id: 'a', projectId: 'p', title: '空闲', updatedAt: 5 }, state: 'idle' },
-      { record: { id: 'b', projectId: 'p', title: '有回复', updatedAt: 4 }, state: 'idle' },
-      { record: { id: 'c', projectId: 'p', title: '运行', updatedAt: 3 }, state: 'running' },
-      { record: { id: 'd', projectId: 'p', title: '已归档', updatedAt: 2, archivedAt: 1 }, state: 'running' },
-    ] as SessionSummary[]
-    const data = sidebarData(projects, sessions, { b: true, d: true }, String)
-    expect(data.runStatus).toMatchObject({ running: 1, newReplies: 1 })
-    expect(data.runStatus?.items.map(i => [i.id, i.status, i.project])).toEqual([
-      ['c', 'running', '项目'],
-      ['b', 'unread', '项目'],
-    ])
-    expect(sidebarData(projects, sessions.slice(0, 1), {}, String).runStatus).toBeNull()
   })
   it('演示归档、恢复与删除仅根据内存覆盖，不改原始数据', () => {
     const projects = [
@@ -96,7 +117,7 @@ describe('侧栏归档分组', () => {
         archived: [{ id: 'b', title: 'B', status: 'idle' as const, archivedAt: 1 }],
       },
     ]
-    const data = demoSidebarData(projects, [{ id: 'a', title: 'A', time: '' }], null, {
+    const data = demoSidebarData(projects, [{ id: 'a', title: 'A', time: '' }], {
       a: { archivedAt: 2, deleted: false, stopped: true },
       b: { archivedAt: null, deleted: false, stopped: true },
     })

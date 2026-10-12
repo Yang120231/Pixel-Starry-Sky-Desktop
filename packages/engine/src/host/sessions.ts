@@ -73,6 +73,7 @@ export class HostSessions {
       lastOutcome: null,
       archivedAt: null,
       bottomedAt: null,
+      pinnedAt: null,
       titleEdited: false,
     }
     ctx.records.set(record.id, record)
@@ -261,8 +262,27 @@ export class HostSessions {
           Date.now(),
         )
       : null
-    const record = this.ctx.m.events.patchRecord(id, { bottomedAt: stamp })
-    if (rt.execution) rt.execution = { ...rt.execution, bottomedAt: stamp }
+    // 置底和置顶互斥：置底时取消置顶
+    const patch = { bottomedAt: stamp, ...(bottomed ? { pinnedAt: null } : {}) }
+    const record = this.ctx.m.events.patchRecord(id, patch)
+    if (rt.execution) rt.execution = { ...rt.execution, ...patch }
+    return record
+  }
+
+  setSessionPinned(id: string, pinned: boolean): SessionRecord {
+    if (this.ctx.changingSessions.has(id)) throw new Error('正在处理这个会话，请稍后重试')
+    const rt = this.runtime(id)
+    if (Boolean(rt.snapshot.record.pinnedAt) === pinned) return rt.snapshot.record
+    // 时间戳只增不减，同一毫秒里连着置顶几个也分得出先后
+    const stamp = pinned
+      ? [...this.ctx.records.values()].reduce(
+          (latest, record) => Math.max(latest, (record.pinnedAt ?? 0) + 1),
+          Date.now(),
+        )
+      : null
+    const patch = { pinnedAt: stamp, ...(pinned ? { bottomedAt: null } : {}) }
+    const record = this.ctx.m.events.patchRecord(id, patch)
+    if (rt.execution) rt.execution = { ...rt.execution, ...patch }
     return record
   }
 

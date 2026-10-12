@@ -26,6 +26,7 @@ import { WhatsNewDialog } from '../features/update/WhatsNewDialog'
 import { MachineStatus } from '../features/machines/MachineStatus'
 import { showWorkbench, usePage } from '../features/layout/page'
 import { ChannelsPage } from '../features/channels/ChannelsPage'
+import { TaskBoardPage } from '../features/board/TaskBoardPage'
 
 /** 各栏宽度，需与对应组件的 class 保持一致（docs/ui/workbench.md §2.1） */
 const SESSION_MIN_WIDTH = 464 // SessionView min-w-[464px]
@@ -33,6 +34,8 @@ const SESSION_MIN_WIDTH = 464 // SessionView min-w-[464px]
 /** 协作频道页：频道列表 + 时间线最小宽 + 成员面板（docs/ui/channels.md §3） */
 const CHANNEL_LIST_WIDTH = 260
 const CHANNEL_CENTER_MIN = 360
+/** 任务看板最窄：再窄就横向滚动（每列最窄 260px） */
+const BOARD_MIN_WIDTH = 560
 const CHANNEL_MEMBERS_WIDTH = 300
 const MEMBERS_KEY = 'pixelsky.channels.members-open'
 function fitsChannels(sidebarOpen: boolean, sidebarWidth: number): boolean {
@@ -74,7 +77,9 @@ export function App() {
       480,
       onWorkbench
         ? windowWidth - SESSION_MIN_WIDTH - (panelOpen ? panelWidth : 0)
-        : windowWidth - 220 - CHANNEL_CENTER_MIN,
+        : page === 'board'
+          ? windowWidth - BOARD_MIN_WIDTH
+          : windowWidth - 220 - CHANNEL_CENTER_MIN,
     ),
   )
   const sidebarWidth = Math.min(preferredSidebarWidth, sidebarMax)
@@ -158,6 +163,8 @@ export function App() {
 
   // 窄窗口下侧边栏和右侧面板不同时打开：打开一个时如果放不下，就收起另一个
   const togglePanel = () => {
+    // 任务看板没有右侧面板（docs/ui/task-board.md §2）
+    if (page === 'board') return
     // 频道页：面板开关和 Ctrl+Alt+B 开合成员面板，放不下时先收起侧栏
     if (!onWorkbench) {
       const next = !membersShown
@@ -283,6 +290,7 @@ export function App() {
             </div>
           </div>
           {page === 'channels' && <ChannelsPage membersShown={membersShown} onToggleMembers={togglePanel} />}
+          {page === 'board' && <TaskBoardPage />}
         </div>
       </div>
       {/* Electron 按 DOM 顺序收集拖动区域；窗口按钮必须在全部 drag 区域之后排除。 */}

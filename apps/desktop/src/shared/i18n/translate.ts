@@ -24,6 +24,7 @@ import { trayMessages } from './trayMessages'
 import { mobileMessages } from './mobileMessages'
 import { editorMessages } from './editorMessages'
 import { attachmentMessages } from './attachmentMessages'
+import { boardMessages } from './boardMessages'
 import { replaceCodedErrors } from '@pixelsky/protocol'
 import type { Locale } from './messages'
 
@@ -55,6 +56,7 @@ export const allMessages = {
   ...mobileMessages,
   ...editorMessages,
   ...attachmentMessages,
+  ...boardMessages,
 }
 export type TranslationKey = keyof typeof allMessages
 

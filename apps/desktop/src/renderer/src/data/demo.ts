@@ -34,6 +34,7 @@ import type {
   GitLogQuery,
   GitRefs,
   GitStatus,
+  ManualTask,
   ProjectCopy,
   TaskState,
 } from '../../../shared/types/project-tools'
@@ -88,6 +89,8 @@ export interface DemoSource {
   }
   inbox: InboxItem[]
   projectTools: { tasks: TaskState; environment: EnvironmentState; copies: ProjectCopy[]; browser: BrowserState }
+  /** 任务看板的演示任务（几个演示项目都有，docs/ui/task-board.md §7）；now 是打开看板的时间 */
+  boardTasks(now: number): ManualTask[]
   remoteCalls(now: number): RemoteCall[]
   usageRecords(now: number): UsageRecord[]
   search: { projects: Array<{ id: string; name: string }>; run(query: SearchQuery): SearchResponse }

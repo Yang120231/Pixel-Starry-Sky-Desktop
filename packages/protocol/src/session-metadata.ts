@@ -16,6 +16,11 @@ export function bottomOrder(a: { bottomedAt?: number | null }, b: { bottomedAt?:
   return Number(left > 0) - Number(right > 0) || (left > 0 && right > 0 ? left - right : 0)
 }
 
+/** 置顶分组的顺序：后置顶的在上面 */
+export function pinnedOrder(a: { pinnedAt?: number | null }, b: { pinnedAt?: number | null }): number {
+  return (b.pinnedAt ?? 0) - (a.pinnedAt ?? 0)
+}
+
 export const PROJECT_NAME_LIMIT = 100
 
 /** 项目显示名：只影响侧栏显示，不改磁盘上的文件夹名 */

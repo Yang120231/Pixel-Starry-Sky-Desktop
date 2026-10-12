@@ -5,7 +5,6 @@ import { ChevronDown, FolderPlus, Search } from 'lucide-react'
 import { cn, useComingSoon } from '@/ui'
 import { setSidebarPrefs, useSidebarPrefs } from '@/features/appearance/sidebar'
 import { OPEN_SEARCH, withShortcut } from '@/features/layout/shortcuts'
-import { pinned } from '@/data'
 import { addProject, isLive, recentSpansProjects, useSidebarData } from '@/features/engine'
 import { SidebarHeader } from './SidebarHeader'
 import { LayoutActionButton } from '@/features/layout/LayoutActionButton'
@@ -38,7 +37,7 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
   const prefs = useSidebarPrefs()
   const recentId = useId()
   // 演示模式是 mock 数据，否则是引擎里的真实项目和会话
-  const { projects, recent, runStatus } = useSidebarData()
+  const { projects, pinned: pinnedSessions, recent } = useSidebarData()
   const onAddProject = isLive ? () => void addProject() : () => comingSoon(tr('sidebar.Sidebar.addProject'))
   const onNewTask = isLive ? () => onSelectSession(null) : undefined
   const compactSearch = prefs.layout.top.length >= 4
@@ -94,11 +93,14 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto px-3 pt-4 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {pinned.length > 0 && (
-          <SidebarSection title={tr('sidebar.Sidebar.pinned')}>
-            <PinnedList items={pinned} selectedSessionId={selectedSessionId} onSelectSession={onSelectSession} />
-          </SidebarSection>
-        )}
+        {/* 置顶：任务看板入口 + 置顶的会话（docs/ui/task-board.md §2） */}
+        <SidebarSection title={tr('sidebar.Sidebar.pinned')}>
+          <PinnedList
+            sessions={pinnedSessions}
+            selectedSessionId={selectedSessionId}
+            onSelectSession={onSelectSession}
+          />
+        </SidebarSection>
 
         <PinnedTasks dropping={dropping} />
 
@@ -119,7 +121,7 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
         </SidebarSection>
       </div>
 
-      <RunStatusPill status={runStatus} selectedSessionId={selectedSessionId} onSelectSession={onSelectSession} />
+      <RunStatusPill selectedSessionId={selectedSessionId} onSelectSession={onSelectSession} />
       {/* 最近任务来自两个以上项目才显示，否则和上面的项目列表完全重复（docs/ui/conversation-ux-2.md §2.3） */}
       {prefs.showRecent && recentSpansProjects(recent) && (
         <section className="mx-3 flex min-h-0 max-h-[35%] shrink-0 flex-col pb-2" data-sidebar-recent>

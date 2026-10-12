@@ -23,7 +23,6 @@ import {
   isDemo,
   projects as demoProjects,
   recent as demoRecent,
-  runStatus as demoRunStatus,
   sessionTitle as demoTitle,
   type Project,
   type RecentItem,
@@ -31,7 +30,7 @@ import {
 } from '@/data'
 import { engineAccent, fastBlockedText, relativeTime } from './labels'
 import { effortDefaultsFor } from './effortDefaults'
-import { sidebarData, demoSidebarData, type RunStatus } from './sidebarData'
+import { sidebarData, demoSidebarData, type PinnedSession } from './sidebarData'
 import { useAccount } from '@/features/account/useAccount'
 import {
   getPlatformState,
@@ -101,8 +100,9 @@ export function useSessionTitle(id: string | null): string {
 
 export interface SidebarData {
   projects: Project[]
+  /** 置顶的会话（侧栏最上面的「置顶」分组），后置顶的在前 */
+  pinned: PinnedSession[]
   recent: Array<RecentItem & { status?: SessionStatus }>
-  runStatus: RunStatus | null
 }
 
 export function useSidebarData(): SidebarData {
@@ -121,7 +121,7 @@ export function useSidebarData(): SidebarData {
   }, [])
 
   return useMemo(() => {
-    if (!isLive) return demoSidebarData(demoProjects, demoRecent, demoRunStatus, demoChanges)
+    if (!isLive) return demoSidebarData(demoProjects, demoRecent, demoChanges)
     return sidebarData(
       projects.filter(p => machineOf(p.id) === machines.currentId),
       sessions.filter(s => machineOf(s.record.id) === machines.currentId),

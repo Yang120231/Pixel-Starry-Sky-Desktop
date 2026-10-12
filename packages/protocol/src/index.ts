@@ -165,6 +165,7 @@ export {
   SESSION_TITLE_LIMIT,
   sessionTitle as normalizeSessionTitle,
   bottomOrder,
+  pinnedOrder,
   PROJECT_NAME_LIMIT,
   projectName as normalizeProjectName,
 } from './session-metadata'

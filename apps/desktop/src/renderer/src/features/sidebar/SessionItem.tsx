@@ -22,6 +22,7 @@ export function SessionItem({
         id: session.id,
         title: session.title,
         bottomed: !!session.bottomedAt,
+        pinned: !!session.pinnedAt,
         archived: !!session.archivedAt,
         running,
       }}

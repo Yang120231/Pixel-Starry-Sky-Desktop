@@ -279,6 +279,7 @@ export class HostBranch {
       lastError: null,
       archivedAt: null,
       bottomedAt: null,
+      pinnedAt: null,
       pendingRewind: null,
       pendingFork: anchor?.at && source.engineSessionId ? { from: source.engineSessionId, at: anchor.at } : null,
       forkedFrom: { sessionId: source.id, title: source.title },

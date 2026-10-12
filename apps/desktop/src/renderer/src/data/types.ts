@@ -18,6 +18,8 @@ export type SessionStatus = 'idle' | 'running' | 'unread'
 
 export interface Session {
   bottomedAt?: number | null
+  /** 置顶：显示在侧栏最上面的「置顶」分组，不再列在项目下面 */
+  pinnedAt?: number | null
   archivedAt?: number | null
   id: string
   title: string
@@ -38,6 +40,7 @@ export interface Project {
 
 export interface PinnedItem {
   id: string
+  /** 置顶的会话来自会话记录（useSidebarData 的 pinned），这里只剩任务看板这类固定入口 */
   kind: 'board' | 'session'
   title: string
   /** 标题后面的灰色说明，例如「7 项进行中」 */
@@ -49,6 +52,7 @@ export interface PinnedItem {
 
 export interface RecentItem {
   bottomedAt?: number | null
+  pinnedAt?: number | null
   id: string
   title: string
   project?: string
@@ -287,11 +291,12 @@ export type EngineLite = Pick<
   >
 }
 
-/** 演示模式下对会话的改动（归档、删除、停止、改名、置底），只在内存里 */
+/** 演示模式下对会话的改动（归档、删除、停止、改名、置底、置顶），只在内存里 */
 export interface DemoSessionChange {
   archivedAt: number | null
   deleted: boolean
   stopped: boolean
   title?: string
   bottomedAt?: number | null
+  pinnedAt?: number | null
 }

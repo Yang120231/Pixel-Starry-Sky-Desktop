@@ -17,8 +17,9 @@ export interface SessionTarget {
   archived: boolean
   running: boolean
   bottomed?: boolean
+  pinned?: boolean
 }
-type Action = 'archive' | 'restore' | 'delete' | 'rename' | 'bottom'
+type Action = 'archive' | 'restore' | 'delete' | 'rename' | 'bottom' | 'pin'
 interface Context {
   request: (action: Action, target: SessionTarget) => void
   requestResult: (action: Action, target: SessionTarget) => Promise<boolean>
@@ -34,7 +35,7 @@ interface Request {
   action: 'archive' | 'delete'
   target: SessionTarget
 }
-type ToastKind = 'archive' | 'restore' | 'delete' | 'error' | 'rename' | 'bottom' | 'unbottom'
+type ToastKind = 'archive' | 'restore' | 'delete' | 'error' | 'rename' | 'bottom' | 'unbottom' | 'pin' | 'unpin'
 interface Toast {
   kind: ToastKind
   id: string
@@ -49,6 +50,8 @@ const TOAST_KEYS = {
   rename: 'session.renamedToast',
   bottom: 'session.bottomToast',
   unbottom: 'session.unbottomToast',
+  pin: 'session.pinToast',
+  unpin: 'session.unpinToast',
 } as const
 export function SessionActionsProvider({ children }: { children: ReactNode }) {
   const { t } = useI18n(),
@@ -88,6 +91,7 @@ export function SessionActionsProvider({ children }: { children: ReactNode }) {
         ...target,
         title: change?.title ?? target.title,
         bottomed: change?.bottomedAt === undefined ? target.bottomed : !!change.bottomedAt,
+        pinned: change?.pinnedAt === undefined ? target.pinned : !!change.pinnedAt,
         archived: change ? !!change.archivedAt : target.archived,
         running: change?.stopped ? false : target.running,
       }
@@ -101,6 +105,7 @@ export function SessionActionsProvider({ children }: { children: ReactNode }) {
           id: record.id,
           title: record.title,
           bottomed: !!record.bottomedAt,
+          pinned: !!record.pinnedAt,
           archived: !!record.archivedAt,
           running: (snapshot?.state ?? summary?.state ?? 'idle') !== 'idle',
         }
@@ -127,26 +132,36 @@ export function SessionActionsProvider({ children }: { children: ReactNode }) {
           retainSessionFiles(current.id)
           await bridge.deleteSession(current.id)
         } else if (action === 'bottom') await bridge.setSessionBottom(current.id, !current.bottomed)
+        else if (action === 'pin') await bridge.setSessionPinned(current.id, !current.pinned)
         else await bridge.archiveSession(current.id, action === 'archive', allowRunning)
       } else
         demo().sessions.change(
           current.id,
+          // 置顶和置底互斥，和主进程一样
           action === 'bottom'
             ? {
                 bottomedAt: current.bottomed ? null : Date.now(),
+                ...(current.bottomed ? {} : { pinnedAt: null }),
                 archivedAt: current.archived ? (demoSessionChanges()[current.id]?.archivedAt ?? 1) : null,
               }
-            : action === 'delete'
-              ? { deleted: true, stopped: true }
-              : {
-                  archivedAt: action === 'archive' ? Date.now() : null,
-                  stopped: action === 'archive' || demoSessionChanges()[current.id]?.stopped === true,
-                },
+            : action === 'pin'
+              ? {
+                  pinnedAt: current.pinned ? null : Date.now(),
+                  ...(current.pinned ? {} : { bottomedAt: null }),
+                  archivedAt: current.archived ? (demoSessionChanges()[current.id]?.archivedAt ?? 1) : null,
+                }
+              : action === 'delete'
+                ? { deleted: true, stopped: true }
+                : {
+                    archivedAt: action === 'archive' ? Date.now() : null,
+                    stopped: action === 'archive' || demoSessionChanges()[current.id]?.stopped === true,
+                  },
         )
       if (action === 'archive' || action === 'delete') paneActions.closeSessions(new Set([current.id]))
       setConfirm(null)
       setToast({
-        kind: action === 'bottom' && current.bottomed ? 'unbottom' : action,
+        kind:
+          action === 'bottom' && current.bottomed ? 'unbottom' : action === 'pin' && current.pinned ? 'unpin' : action,
         id: current.id,
         title: current.title,
         at: Date.now(),

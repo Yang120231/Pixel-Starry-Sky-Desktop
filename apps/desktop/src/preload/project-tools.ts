@@ -31,6 +31,8 @@ export interface ProjectToolsBridge {
   pinTask(id: string, pinned: boolean): Promise<ManualTask>
   /** 当前机器上所有已固定的任务 */
   pinnedTasks(): Promise<ManualTask[]>
+  /** 当前机器上所有项目的任务（任务看板） */
+  allTasks(): Promise<ManualTask[]>
   tasks(projectId: string): Promise<TaskState>
   createTask(projectId: string, input: Partial<ManualTask>): Promise<ManualTask>
   updateTask(id: string, patch: Partial<ManualTask>): Promise<ManualTask>

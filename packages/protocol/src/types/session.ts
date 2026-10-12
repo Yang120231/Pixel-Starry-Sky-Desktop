@@ -103,6 +103,8 @@ export interface SendReceipt {
 export interface SessionRecord extends SessionSettings {
   /** 持久化的列表置底偏好，旧记录为 null。 */
   bottomedAt?: number | null
+  /** 置顶的时间：置顶的会话显示在侧栏最上面的「置顶」分组（和置底互斥），旧记录为 null。 */
+  pinnedAt?: number | null
   /** 用户显式改名后，不再生成首条消息的默认标题。 */
   titleEdited?: boolean
   /** 旧调用方可缺失，读取与新建时统一为 null；归档保留会话内容。 */

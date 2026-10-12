@@ -89,10 +89,7 @@ const SESSION_CSS_DIFFS = [
 export const demo: AppData = {
   currentUser: { name: '林夏' },
   railItems: RAIL_ITEMS,
-  pinned: [
-    { id: 'board', kind: 'board', title: '任务看板', meta: '7 项进行中', trailing: '3 等你' },
-    { id: 's-redesign-pinned', kind: 'session', title: '重构网页版工作台为 Codex 式布局', unread: true },
-  ],
+  pinned: [],
   projects: [
     {
       id: 'pixel-web',
@@ -101,7 +98,7 @@ export const demo: AppData = {
       expanded: true,
       sessions: [
         { id: 's-hhh', title: 'hhh', status: 'idle', time: '刚刚' },
-        { id: 's-redesign', title: '重构网页版工作台为 Codex 式布局', status: 'unread' },
+        { id: 's-redesign', title: '重构网页版工作台为 Codex 式布局', status: 'unread', pinnedAt: 1 },
         { id: 's-settings-form', title: '设置页迁移到新的表单组件', status: 'running' },
         { id: 's-cloud-onboarding', title: '把云主机配置引导改成两步', status: 'idle', time: '3天' },
       ],

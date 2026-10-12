@@ -14,6 +14,8 @@ export interface ManualTask {
   updatedAt: number
   /** 固定到左侧栏的时间；没固定为 null 或没有（旧数据）（docs/ui/files-search-terminal-pins.md §5） */
   pinnedAt?: number | null
+  /** 改成已完成的时间；没完成为 null，旧数据没有（任务看板「已完成」按它算最近 7 天，没有时用 updatedAt） */
+  completedAt?: number | null
 }
 export interface AiPlan {
   sessionId: string

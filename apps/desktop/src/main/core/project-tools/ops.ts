@@ -40,6 +40,7 @@ export const PROJECT_TOOL_OPS = {
   'projectTools:deleteTask': (c, id) => c.tools.tasks.remove(value(id, 200, true)),
   'projectTools:pinTask': (c, id, pinned) => c.tools.tasks.pin(value(id, 200, true), pinned === true),
   'projectTools:pinnedTasks': c => c.tools.tasks.pinned(),
+  'projectTools:allTasks': c => c.tools.tasks.all(),
   'projectTools:reorderTasks': (c, id, ids) => c.tools.tasks.reorder(value(id, 200, true), ids as string[]),
   'projectTools:environment': (c, ref, force) => c.tools.services.environment(workspaceRef(ref), force === true),
   'projectTools:services': (c, ref) => c.tools.services.list(workspaceRef(ref)),

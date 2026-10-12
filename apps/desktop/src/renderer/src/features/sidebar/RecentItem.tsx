@@ -35,6 +35,7 @@ export function RecentItem({
         id: item.id,
         title: item.title,
         bottomed: !!item.bottomedAt,
+        pinned: !!item.pinnedAt,
         archived: false,
         running: (status ?? statusOf(item.id)) === 'running',
       }}

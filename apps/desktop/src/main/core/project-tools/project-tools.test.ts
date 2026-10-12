@@ -71,6 +71,28 @@ describe('project tools storage and task operations', () => {
     restored.store.data.tasks[1].projectId = 'gone'
     expect(restored.pinned()).toEqual([])
   })
+  it('lists every task for the board and records when a task was completed', async () => {
+    const tasks = new Tasks(root, host, () => {})
+    await tasks.init()
+    const a = await tasks.create('p', { title: 'A' }),
+      b = await tasks.create('p', { title: 'B', status: 'completed' })
+    expect(a.completedAt).toBeNull()
+    expect(b.completedAt).toBeGreaterThan(0)
+    const now = vi.spyOn(Date, 'now').mockReturnValue(5_000)
+    await tasks.update(a.id, { status: 'completed' })
+    now.mockReturnValue(6_000)
+    // 已完成的再编辑不改完成时间；改回未完成清掉
+    await tasks.update(a.id, { title: 'A2' })
+    expect(tasks.all().find(t => t.id === a.id)).toMatchObject({ title: 'A2', completedAt: 5_000 })
+    await tasks.update(b.id, { status: 'in_progress' })
+    now.mockRestore()
+    expect(tasks.all().map(t => [t.id, t.completedAt])).toEqual([
+      [a.id, 5_000],
+      [b.id, null],
+    ])
+    tasks.store.data.tasks[1].projectId = 'gone'
+    expect(tasks.all().map(t => t.id)).toEqual([a.id])
+  })
   it('failed snapshots restore state and keep live object references', async () => {
     const store = new JsonStore(join(root, 'data.json'), { tasks: [{ id: 'a', title: 'before' }] })
     await store.init()

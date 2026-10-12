@@ -140,6 +140,10 @@ export const ENGINE_OPS = {
     if (typeof bottomed !== 'boolean') throw new Error('置底值不正确')
     return c.host.setSessionBottom(str(id, 'id'), bottomed)
   },
+  'engine:setSessionPinned': (c, id, pinned) => {
+    if (typeof pinned !== 'boolean') throw new Error('置顶值不正确')
+    return c.host.setSessionPinned(str(id, 'id'), pinned)
+  },
   'engine:archiveSession': (c, id, archived, stopRunning) => {
     if (typeof archived !== 'boolean') throw new Error('归档值不正确')
     return c.host.archiveSession(str(id, 'id'), archived, stopRunning === true)

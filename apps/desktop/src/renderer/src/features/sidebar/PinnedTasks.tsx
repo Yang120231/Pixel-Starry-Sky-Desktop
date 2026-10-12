@@ -8,25 +8,19 @@ import { ActionMenu } from '@/ui/ActionMenu'
 import { cn } from '@/ui'
 import { isDemo, projects as demoProjects } from '@/data'
 import { useEngineState } from '@/features/engine'
-import { setCurrentProject } from '@/features/engine/store'
-import { paneActions } from '@/features/panes/store'
-import { requestTask } from '@/features/panel/taskNavigation'
+import { openTask as openTaskIn } from '@/features/panel/openTask'
 import { pinTask, togglePinnedDone, usePinnedTasks } from '@/features/panel/pinnedTasks'
 import type { ManualTask } from '../../../../shared/types/project-tools'
 import { SidebarSection } from './SidebarSection'
+
+/** 打开任务：右侧打开「任务」并定位，尽量不新开标签（features/panel/openTask.ts） */
+const openTask = (task: ManualTask): void => openTaskIn(task.projectId, task.id)
 
 const statusKey = {
   pending: 'projectTools.pending',
   in_progress: 'projectTools.inProgress',
   completed: 'projectTools.completed',
 } as const
-
-/** 打开任务：切到它的项目，右侧打开「任务」并定位（和全局搜索里打开任务一样） */
-export function openTask(task: ManualTask): void {
-  setCurrentProject(task.projectId)
-  paneActions.open(null)
-  requestTask(task.projectId, task.id)
-}
 
 export function PinnedTasks({ dropping }: { dropping: boolean }) {
   useI18n()

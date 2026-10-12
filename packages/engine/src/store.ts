@@ -173,6 +173,8 @@ export class Store {
             typeof rec.bottomedAt === 'number' && Number.isFinite(rec.bottomedAt) && rec.bottomedAt > 0
               ? rec.bottomedAt
               : null,
+          pinnedAt:
+            typeof rec.pinnedAt === 'number' && Number.isFinite(rec.pinnedAt) && rec.pinnedAt > 0 ? rec.pinnedAt : null,
           titleEdited: rec.titleEdited === true,
           archivedAt: typeof rec.archivedAt === 'number' && Number.isFinite(rec.archivedAt) ? rec.archivedAt : null,
           ultracode: rec.ultracode === true,

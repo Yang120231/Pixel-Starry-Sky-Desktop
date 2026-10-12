@@ -84,6 +84,18 @@ function resolveWorkspace(tab: string | null, state: EngineState, files: FilesSt
     key: project?.id ?? '',
   }
 }
+/** 某个标签属于哪个项目（会话、文件、新会话标签都算）；看不出来时为 null。不订阅，用的时候读一次 */
+export function projectOfTab(tab: string): string | null {
+  const state = getEngineState()
+  const ref = resolveWorkspace(tab, state, getFiles()).ref
+  if (!ref) return null
+  if (ref.projectId) return ref.projectId
+  if (isDemo) return projects.find(p => p.sessions.some(s => s.id === ref.sessionId))?.id ?? null
+  const record =
+    state.snapshots[ref.sessionId!]?.record ?? state.sessions.find(s => s.record.id === ref.sessionId)?.record
+  return record?.projectId ?? null
+}
+
 export const refKey = (ref: WorkspaceRef): string => (ref.sessionId ? `s:${ref.sessionId}` : `p:${ref.projectId}`)
 /** refKey 反过来：按 key 写依赖的 effect 里拿回工作区（每次渲染的 ref 都是新对象） */
 export const keyRef = (key: string): WorkspaceRef =>

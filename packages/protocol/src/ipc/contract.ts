@@ -291,6 +291,13 @@ export const IPC_CONTRACT = {
     remote: 'engine:setSessionBottom',
     trust: 'sender',
   },
+  'engine:setSessionPinned': {
+    kind: 'invoke',
+    route: 'resource',
+    ids: [0],
+    remote: 'engine:setSessionPinned',
+    trust: 'sender',
+  },
   'engine:steerQueued': {
     kind: 'invoke',
     route: 'resource',
@@ -671,6 +678,13 @@ export const IPC_CONTRACT = {
     route: 'selected',
     ids: [0],
     remote: 'projectTools:pinnedTasks',
+    trust: 'window',
+  },
+  'projectTools:allTasks': {
+    kind: 'invoke',
+    route: 'selected',
+    ids: [0],
+    remote: 'projectTools:allTasks',
     trust: 'window',
   },
   'projectTools:searchTasks': {

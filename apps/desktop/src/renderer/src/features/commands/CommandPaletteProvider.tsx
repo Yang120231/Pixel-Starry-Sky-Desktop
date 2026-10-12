@@ -19,6 +19,7 @@ import {
   Search,
   Settings,
   Split,
+  SquareKanban,
   TerminalSquare,
   X,
   type LucideIcon,
@@ -184,6 +185,7 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
     )
     add('nav.workbench', 'nav.workbench', 'terminal.categoryWorkbench', LayoutDashboard, showWorkbench)
     add('nav.channels', 'nav.channels', 'terminal.categoryWorkbench', MessageSquare, () => setPage('channels'))
+    add('board.open', 'board.open', 'terminal.categoryWorkbench', SquareKanban, () => setPage('board'))
     add('inbox.open', 'projectTools.inbox.palette', 'terminal.categoryWorkbench', ListChecks, () =>
       openRightTab('tasks'),
     )

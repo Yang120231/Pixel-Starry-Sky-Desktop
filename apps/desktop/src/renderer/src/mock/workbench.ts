@@ -508,7 +508,6 @@ export const workbenchSnapshots: Record<string, SessionSnapshot> = Object.fromEn
   [
     hhh(),
     redesign('s-redesign'),
-    redesign('s-redesign-pinned'),
     settingsForm(),
     cloudOnboarding(),
     archived(),

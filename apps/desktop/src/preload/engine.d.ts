@@ -104,6 +104,7 @@ export interface EngineBridge {
   archiveSession(id: string, archived: boolean, stopRunning?: boolean): Promise<void>
   renameSession(id: string, title: string): Promise<SessionRecord>
   setSessionBottom(id: string, bottomed: boolean): Promise<SessionRecord>
+  setSessionPinned(id: string, pinned: boolean): Promise<SessionRecord>
   /** 停止一个后台任务 */
   stopTask(id: string, taskId: string): Promise<void>
   /** 读一个后台任务的输出（最后一段） */

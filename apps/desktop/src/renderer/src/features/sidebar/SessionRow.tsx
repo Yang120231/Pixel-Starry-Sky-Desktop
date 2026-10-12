@@ -1,6 +1,16 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { Archive, ArchiveRestore, ArrowDownToLine, ArrowUpFromLine, Ellipsis, PencilLine, Trash2 } from 'lucide-react'
+import {
+  Archive,
+  ArchiveRestore,
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  Ellipsis,
+  PencilLine,
+  Pin,
+  PinOff,
+  Trash2,
+} from 'lucide-react'
 import { cn } from '@/ui'
 import { useI18n } from '@/i18n/I18nProvider'
 import { useSessionActions, type SessionTarget } from './SessionActions'
@@ -167,6 +177,18 @@ export function SessionRow({
             >
               <PencilLine size={15} strokeWidth={1.5} />
               {t('session.rename')}
+            </button>
+            <button
+              role="menuitem"
+              disabled={actions.busy}
+              onClick={() => {
+                close(false)
+                actions.request('pin', target)
+              }}
+              className="flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-ui hover:bg-hover disabled:opacity-40"
+            >
+              {target.pinned ? <PinOff size={15} strokeWidth={1.5} /> : <Pin size={15} strokeWidth={1.5} />}{' '}
+              {t(target.pinned ? 'session.unpin' : 'session.pin')}
             </button>
             <button
               role="menuitem"

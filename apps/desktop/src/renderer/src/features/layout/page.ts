@@ -1,7 +1,7 @@
-// 主区当前显示的页面（docs/ui/channels.md §2）。只存在内存里，每次启动都是工作台。
+// 主区当前显示的页面（docs/ui/channels.md §2；任务看板 docs/ui/task-board.md §2）。只存在内存里，每次启动都是工作台。
 import { useSyncExternalStore } from 'react'
 
-export type Page = 'workbench' | 'channels'
+export type Page = 'workbench' | 'channels' | 'board'
 
 let page: Page = 'workbench'
 const listeners = new Set<() => void>()

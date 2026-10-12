@@ -363,6 +363,10 @@ export class EngineHost {
     return this.m.sessions.setSessionBottom(id, bottomed)
   }
 
+  setSessionPinned(id: string, pinned: boolean): SessionRecord {
+    return this.m.sessions.setSessionPinned(id, pinned)
+  }
+
   /** 回退前检查代码：要还原哪些文件（docs/ui/rewind-fork-sidechat.md §1） */
   rewindPreview(id: string, userItemId: string): Promise<RewindPreview> {
     return this.m.branch.rewindPreview(id, userItemId)

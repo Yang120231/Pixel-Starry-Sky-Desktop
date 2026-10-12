@@ -135,6 +135,31 @@ describe('归档与删除生命周期', () => {
     expect(host.record(record.id)?.title).toBe('新会话')
     expect(host.renameSession(record.id, '星'.repeat(200)).title).toHaveLength(200)
   })
+  it('置顶持久化、和置底互斥，后置顶的时间更晚；旧记录为 null', () => {
+    const { host, record, dataDir } = setup(),
+      second = host.createSession({ projectId: record.projectId }),
+      updatedAt = record.updatedAt
+    expect(record.pinnedAt).toBeNull()
+    host.setSessionBottom(record.id, true)
+    const pinned = host.setSessionPinned(record.id, true)
+    expect(pinned).toMatchObject({ bottomedAt: null, updatedAt })
+    expect(pinned.pinnedAt).toBeGreaterThan(0)
+    expect(host.setSessionPinned(record.id, true).pinnedAt).toBe(pinned.pinnedAt)
+    expect(host.setSessionPinned(second.id, true).pinnedAt).toBeGreaterThan(pinned.pinnedAt!)
+    const reopened = new EngineHost({ dataDir, adapters: { claude: new Adapter() }, emit: () => {} })
+    hosts.push(reopened)
+    expect(reopened.record(record.id)?.pinnedAt).toBe(pinned.pinnedAt)
+    // 置底时取消置顶
+    expect(reopened.setSessionBottom(record.id, true)).toMatchObject({ pinnedAt: null })
+    expect(reopened.setSessionPinned(second.id, false).pinnedAt).toBeNull()
+    const file = join(dataDir, 'sessions', second.id, 'record.json'),
+      old = JSON.parse(readFileSync(file, 'utf8'))
+    delete old.pinnedAt
+    writeFileSync(file, JSON.stringify(old))
+    const legacy = new EngineHost({ dataDir, adapters: { claude: new Adapter() }, emit: () => {} })
+    hosts.push(legacy)
+    expect(legacy.record(second.id)?.pinnedAt).toBeNull()
+  })
   it('归档恢复保留置底顺序，后置底的排在前次之后', async () => {
     const { host, record } = setup(),
       second = host.createSession({ projectId: record.projectId })

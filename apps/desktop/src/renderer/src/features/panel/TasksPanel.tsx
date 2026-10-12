@@ -46,7 +46,12 @@ export function TasksPanel() {
 }
 function TasksBody({ projectId, name, demo }: { projectId: string; name: string; demo: boolean }) {
   useI18n()
-  const [data, setData] = useState<TaskState>(demo ? structuredClone(demoData().projectTools.tasks) : EMPTY)
+  // 演示的任务算在当前显示的项目下（固定到侧栏后点开能回到这个项目）
+  const [data, setData] = useState<TaskState>(() => {
+    if (!demo) return EMPTY
+    const tasks = structuredClone(demoData().projectTools.tasks)
+    return { ...tasks, tasks: tasks.tasks.map(task => ({ ...task, projectId })) }
+  })
   const [loaded, setLoaded] = useState(demo)
   const [filter, setFilter] = useRemember('pixelsky.tasks.filter:' + projectId, 'all')
   const [source, setSource] = useRemember('pixelsky.tasks.source:' + projectId, 'all')

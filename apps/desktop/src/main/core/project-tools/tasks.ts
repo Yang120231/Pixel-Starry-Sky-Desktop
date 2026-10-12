@@ -58,7 +58,9 @@ export class Tasks {
           order: data.tasks.length,
           createdAt: now,
           updatedAt: now,
+          completedAt: null,
         }
+      if (task.status === 'completed') task.completedAt = now
       data.tasks.push(task)
       return task
     })
@@ -70,7 +72,12 @@ export class Tasks {
       const task = data.tasks.find(t => t.id === id)
       if (!task) throw new Error('任务不存在')
       this.host.resolve({ projectId: task.projectId })
-      Object.assign(task, this.fields(input, task), { updatedAt: Date.now() })
+      const next = this.fields(input, task),
+        now = Date.now()
+      // 完成时间：改成已完成时记下，改回去清掉；本来就是已完成的保持原样
+      const completedAt =
+        next.status !== 'completed' ? null : task.status === 'completed' ? (task.completedAt ?? null) : now
+      Object.assign(task, next, { updatedAt: now, completedAt })
       return task
     })
     this.changed()
@@ -88,6 +95,18 @@ export class Tasks {
     })
     this.changed()
     return result
+  }
+  /** 当前机器所有项目的任务（任务看板用，docs/ui/task-board.md §7）；项目已移除的不列 */
+  all(): ManualTask[] {
+    return this.store.data.tasks.filter(task => this.known(task.projectId)).sort((a, b) => a.order - b.order)
+  }
+  private known(projectId: string): boolean {
+    try {
+      this.host.resolve({ projectId })
+      return true
+    } catch {
+      return false
+    }
   }
   /** 所有项目里已固定的任务，按固定时间排；项目已移除的不列 */
   pinned(): ManualTask[] {
