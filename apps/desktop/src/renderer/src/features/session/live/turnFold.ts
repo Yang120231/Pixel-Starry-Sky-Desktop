@@ -44,7 +44,10 @@ const isTurnUser = (item: Item): boolean => item.kind === 'user' && item.mode !=
 function foldTurn(turn: Item[], running: boolean): Entry[] {
   let reply = replyIndex(turn)
   const candidate = turn[reply]
-  if (running && candidate?.kind === 'assistant' && candidate.status === 'running') {
+  // 不只看这段文字是不是还在输出：一段话说完、下一个工具调用还没到的那一会儿，它也要留在执行块里，
+  // 不然先跳到外面（和执行块里的条目不对齐）、工具一来又跳回去。有了统计行才算这一轮结束
+  const ended = turn.some(item => item.kind === 'turn_stats')
+  if (running && !ended && candidate?.kind === 'assistant') {
     const before = turn.slice(0, reply).some(item => !alwaysVisible(item))
     if (before) reply = -1
   }

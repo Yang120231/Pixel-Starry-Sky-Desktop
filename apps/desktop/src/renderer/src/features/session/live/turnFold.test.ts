@@ -91,6 +91,12 @@ describe('每轮的过程收成执行块', () => {
     expect(streaming[1]).toMatchObject({ running: true })
     expect(shape(foldTurns([user('u1'), run('c1'), say('a2')], false))).toEqual(['u1', ['c1'], 'a2'])
     expect(shape(foldTurns([user('u1'), say('a', 'running')], true))).toEqual(['u1', 'a'])
+    // 一段话已经说完、下一个工具调用还没到：仍留在执行块里，不先跳到外面再跳回去
+    const between = foldTurns([user('u1'), run('c1'), say('a2')], true)
+    expect(shape(between)).toEqual(['u1', ['c1', 'a2']])
+    expect(between[1]).toMatchObject({ running: true })
+    // 这一轮有了统计行就算结束：回复显示在外面
+    expect(shape(foldTurns([user('u1'), run('c1'), say('a2'), stats('s')], true))).toEqual(['u1', ['c1'], 'a2', 's'])
     // 只有最后一轮算运行中
     const two = foldTurns([user('u1'), run('c1'), say('a'), user('u2'), run('c2', 'running')], true)
     expect(two.filter(e => e.type === 'process').map(e => e.type === 'process' && e.running)).toEqual([false, true])
