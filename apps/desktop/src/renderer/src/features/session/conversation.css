@@ -6,6 +6,16 @@
 }
 .conversation-scroller {
   scrollbar-gutter: stable both-edges;
+  /* 底部 16px 渐隐（GitHub #23）：没滚到底时文字慢慢淡出，不再被输入框上面「本机 · 项目」那一行硬切、贴在一起；
+     滚到底时落在列表最后的留白里（对话 24px、频道 16px），看不出来。右边的滚动条那一列不渐隐 */
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent), linear-gradient(#000, #000);
+  mask-size:
+    calc(100% - var(--conversation-scrollbar-width)) 100%,
+    var(--conversation-scrollbar-width) 100%;
+  mask-position:
+    left top,
+    right top;
+  mask-repeat: no-repeat;
 }
 .conversation-scroller::-webkit-scrollbar {
   width: var(--conversation-scrollbar-width);

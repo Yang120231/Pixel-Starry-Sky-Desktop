@@ -16,7 +16,7 @@ export function ComposerStatusBar({ live, extra }: { live?: StatusBarController;
   return (
     <div
       data-composer-workspace
-      className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 px-3 pb-2 text-meta text-fg-faint"
+      className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 px-3 pt-1.5 pb-2 text-meta text-fg-faint"
     >
       <button
         type="button"
