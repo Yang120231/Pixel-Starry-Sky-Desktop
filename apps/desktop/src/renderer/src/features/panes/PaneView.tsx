@@ -9,8 +9,8 @@ import { busy } from '@/features/engine/sidebarData'
 import { SPLIT_DOWN, SPLIT_RIGHT, ZOOM_PANE, withShortcut } from '@/features/layout/shortcuts'
 import { flipFrom } from './motion'
 import { TabSlot } from './tabHost'
-import { notify, paneActions, usePaneState } from './store'
-import { isNewTab, isFileTab, parseFileTab, leaves, type Leaf } from './tree'
+import { notify, paneActions, tabInUse, usePaneState } from './store'
+import { isNewTab, isFileTab, parseFileTab, leaves, tabsToClose, type BulkClose, type Leaf } from './tree'
 import { dirtyFile, showFiles, useFiles } from '@/features/files/store'
 import { isDemo, projects } from '@/data'
 import { useSessionActions } from '@/features/sidebar/SessionActions'
@@ -174,6 +174,21 @@ export const PaneView = memo(function PaneView(props: PaneViewProps) {
                 >
                   {tr('panes.PaneView.splitDown')} {SPLIT_DOWN.label}）
                 </PopoverItem>
+                {leaf.tabs.length > 0 &&
+                  (['all', 'inactive'] as const).map(kind => (
+                    <PopoverItem
+                      key={kind}
+                      icon={<span className="size-[15px] shrink-0" />}
+                      disabled={kind === 'inactive' && !tabsToClose(leaf, kind, null, tabInUse).length}
+                      title={kind === 'inactive' ? tr('panes.PaneView.closeInactiveHint') : undefined}
+                      onClick={() => {
+                        setMenuOpen(false)
+                        void paneActions.closeTabs(leaf.id, kind)
+                      }}
+                    >
+                      {BULK_LABEL[kind]()}
+                    </PopoverItem>
+                  ))}
                 <PopoverItem
                   icon={<X size={15} strokeWidth={1.5} className="text-fg-secondary" />}
                   onClick={() => {
@@ -215,6 +230,8 @@ function TabStrip({ leaf, dim, areaSize }: { leaf: Leaf; dim: boolean; areaSize:
   const prev = useRef(new Map<string, number>())
   const seen = useRef(new Set(leaf.tabs))
   const [menu, setMenu] = useState<{ tab: string; x: number; y: number } | null>(null)
+  // 标签栏空白处右键：关闭所有 / 不活跃的标签页（GitHub #32）
+  const [blankMenu, setBlankMenu] = useState<{ x: number; y: number } | null>(null)
   // 滚轮横向滚、中键 / 空白处拖动平移、当前标签滚进可视区、两头淡出（GitHub #16，tabScroll.ts）
   const strip = useRef<HTMLDivElement>(null)
   useTabStripScroll(strip, leaf.active, leaf.tabs)
@@ -244,6 +261,10 @@ function TabStrip({ leaf, dim, areaSize }: { leaf: Leaf; dim: boolean; areaSize:
         role="tablist"
         aria-label={tr('panes.PaneView.conversationTabsDragTo')}
         className="pane-tab-strip relative flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-2 pt-1 pb-1.5 [scrollbar-width:none]"
+        onContextMenu={e => {
+          e.preventDefault()
+          setBlankMenu({ x: e.clientX, y: e.clientY })
+        }}
       >
         {leaf.tabs.map(tab => (
           <Tab
@@ -275,6 +296,9 @@ function TabStrip({ leaf, dim, areaSize }: { leaf: Leaf; dim: boolean; areaSize:
           <Plus size={14} strokeWidth={1.5} />
         </button>
       </span>
+      {blankMenu && (
+        <BulkMenu leaf={leaf} at={blankMenu} kinds={['all', 'inactive']} onClose={() => setBlankMenu(null)} />
+      )}
       {menu && (
         <TabMenu
           leaf={leaf}
@@ -599,6 +623,103 @@ function TabMenu({
       >
         {tr('panel.PanelTabs.closeTab')}
       </button>
+      <BulkItems leaf={leaf} anchor={menu.tab} kinds={['others', 'right', 'all', 'inactive']} onClose={onClose} />
+    </div>,
+    document.body,
+  )
+}
+
+const BULK_LABEL: Record<BulkClose, () => string> = {
+  others: () => tr('panes.PaneView.closeOtherTabs'),
+  right: () => tr('panes.PaneView.closeTabsToRight'),
+  all: () => tr('panes.PaneView.closeAllTabs'),
+  inactive: () => tr('panes.PaneView.closeInactiveTabs'),
+}
+
+/** 批量关闭的几项（GitHub #32）：没有可关的标签时灰掉 */
+function BulkItems({
+  leaf,
+  anchor,
+  kinds,
+  onClose,
+}: {
+  leaf: Leaf
+  anchor: string | null
+  kinds: BulkClose[]
+  onClose: () => void
+}) {
+  useI18n()
+  return (
+    <>
+      {kinds.map(kind => (
+        <button
+          key={kind}
+          role="menuitem"
+          type="button"
+          disabled={!tabsToClose(leaf, kind, anchor, tabInUse).length}
+          title={kind === 'inactive' ? tr('panes.PaneView.closeInactiveHint') : undefined}
+          className="flex h-8 w-full items-center rounded-md px-2 text-left text-ui text-fg hover:bg-hover disabled:cursor-default disabled:text-fg-faint disabled:hover:bg-transparent"
+          onClick={() => {
+            onClose()
+            void paneActions.closeTabs(leaf.id, kind, anchor)
+          }}
+        >
+          {BULK_LABEL[kind]()}
+        </button>
+      ))}
+    </>
+  )
+}
+
+/** 标签栏空白处右键的菜单（和标签右键菜单一样是独立浮层） */
+function BulkMenu({
+  leaf,
+  at,
+  kinds,
+  onClose,
+}: {
+  leaf: Leaf
+  at: { x: number; y: number }
+  kinds: BulkClose[]
+  onClose: () => void
+}) {
+  useI18n()
+  const ref = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    el.style.left = `${Math.max(8, Math.min(at.x, window.innerWidth - r.width - 8))}px`
+    el.style.top = `${Math.max(8, Math.min(at.y, window.innerHeight - r.height - 8))}px`
+    el.querySelector<HTMLElement>('button:not(:disabled)')?.focus()
+  }, [at.x, at.y])
+  useEffect(() => {
+    const close = (e: PointerEvent) => {
+      if (!ref.current?.contains(e.target as Node)) onClose()
+    }
+    window.addEventListener('pointerdown', close)
+    window.addEventListener('blur', onClose)
+    return () => {
+      window.removeEventListener('pointerdown', close)
+      window.removeEventListener('blur', onClose)
+    }
+  }, [onClose])
+  return createPortal(
+    <div
+      ref={ref}
+      role="menu"
+      aria-label={tr('panes.PaneView.conversationTabsDragTo')}
+      className="pop-in no-drag fixed z-50 min-w-48 rounded-lg border border-line-card bg-popover p-1 shadow-menu"
+      style={{ left: at.x, top: at.y }}
+      onKeyDown={e => {
+        if (e.key === 'Escape' || e.key === 'Tab') {
+          e.preventDefault()
+          onClose()
+        }
+        e.stopPropagation()
+      }}
+    >
+      <BulkItems leaf={leaf} anchor={null} kinds={kinds} onClose={onClose} />
     </div>,
     document.body,
   )

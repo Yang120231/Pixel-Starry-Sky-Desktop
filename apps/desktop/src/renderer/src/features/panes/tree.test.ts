@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   activateTab,
   closeTab,
+  closeTabs,
   collapseLeaf,
   computeRects,
   cycleFocus,
@@ -20,6 +21,7 @@ import {
   replaceTab,
   splitLeaf,
   splitStart,
+  tabsToClose,
   toggleMaximize,
   visibleTabs,
   type Layout,
@@ -297,5 +299,34 @@ describe('读取保存的布局', () => {
     expect(findSplit(p.root, 'S')!.sizes).toEqual([1, 1])
     expect(leaves(p.root)[0]).toMatchObject({ tabs: ['a'], active: 'a' })
     expect(p.focused).toBe('A')
+  })
+})
+
+describe('批量关闭（GitHub #32）', () => {
+  const leaf = { tabs: ['a', 'b', 'c', 'd'], active: 'c' }
+  const none = () => false
+  it('其他 / 右侧 / 全部按右键点的标签算；点的是最后一个时右侧没有可关的', () => {
+    expect(tabsToClose(leaf, 'others', 'b', none)).toEqual(['a', 'c', 'd'])
+    expect(tabsToClose(leaf, 'right', 'b', none)).toEqual(['c', 'd'])
+    expect(tabsToClose(leaf, 'right', 'd', none)).toEqual([])
+    expect(tabsToClose(leaf, 'all', null, none)).toEqual(['a', 'b', 'c', 'd'])
+    expect(tabsToClose(leaf, 'others', 'x', none)).toEqual([])
+  })
+  it('不活跃：留下当前标签和在用的', () => {
+    expect(tabsToClose(leaf, 'inactive', null, t => t === 'a')).toEqual(['b', 'd'])
+    expect(tabsToClose({ tabs: ['a'], active: 'a' }, 'inactive', null, none)).toEqual([])
+  })
+  it('一次关掉几个：当前标签被关时换成右边最近留下的，没有就左边的；全关了当前为空', () => {
+    let l = openTab(openTab(openTab(base(), 's2'), 's3'), 's4')
+    l = activateTab(l, 'L1', 's2')
+    const one = closeTabs(l, 'L1', ['s2', 's3'])
+    expect(leaves(one.root)[0]).toMatchObject({ tabs: ['s1', 's4'], active: 's4' })
+    const left = closeTabs(activateTab(l, 'L1', 's4'), 'L1', ['s3', 's4'])
+    expect(leaves(left.root)[0]).toMatchObject({ tabs: ['s1', 's2'], active: 's2' })
+    const kept = closeTabs(l, 'L1', ['s1'])
+    expect(leaves(kept.root)[0]).toMatchObject({ tabs: ['s2', 's3', 's4'], active: 's2' })
+    const all = closeTabs(l, 'L1', ['s1', 's2', 's3', 's4'])
+    expect(leaves(all.root)[0]).toMatchObject({ tabs: [], active: null })
+    expect(closeTabs(l, 'L1', ['nope'])).toEqual(l)
   })
 })

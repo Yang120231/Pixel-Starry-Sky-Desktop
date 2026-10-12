@@ -238,6 +238,47 @@ export function closeTab(layout: Layout, leafId: string, tab: string): Layout {
   })
 }
 
+/** 批量关闭（GitHub #32）：其他 / 右侧 / 全部 / 不活跃 */
+export type BulkClose = 'others' | 'right' | 'all' | 'inactive'
+
+/**
+ * 批量关闭要关哪些标签：others 是除了 anchor 的全部，right 是 anchor 右边的，all 是全部；
+ * inactive 留下当前标签和 inUse 认为在用的（对话在运行、文件没保存这类）
+ */
+export function tabsToClose(
+  leaf: Pick<Leaf, 'tabs' | 'active'>,
+  kind: BulkClose,
+  anchor: string | null,
+  inUse: (tab: string) => boolean,
+): string[] {
+  if (kind === 'all') return [...leaf.tabs]
+  if (kind === 'inactive') return leaf.tabs.filter(t => t !== leaf.active && !inUse(t))
+  const i = anchor === null ? -1 : leaf.tabs.indexOf(anchor)
+  if (i < 0) return []
+  return kind === 'right' ? leaf.tabs.slice(i + 1) : leaf.tabs.filter(t => t !== anchor)
+}
+
+/** 一次关掉几个标签：当前标签被关时，换成它右边最近的留下的，没有就左边最近的 */
+export function closeTabs(layout: Layout, leafId: string, tabs: string[]): Layout {
+  const drop = new Set(tabs)
+  return mapLeaf(layout, leafId, l => {
+    const left = l.tabs.filter(t => !drop.has(t))
+    if (left.length === l.tabs.length) return l
+    let active = l.active
+    if (active !== null && drop.has(active)) {
+      const i = l.tabs.indexOf(active)
+      active =
+        l.tabs.slice(i + 1).find(t => !drop.has(t)) ??
+        l.tabs
+          .slice(0, i)
+          .reverse()
+          .find(t => !drop.has(t)) ??
+        null
+    }
+    return { ...l, tabs: left, active }
+  })
+}
+
 /** index 是目标标签栏移除源标签前的插入缝；移动不复制标签，移空的源窗格立即合并。 */
 export function moveTab(layout: Layout, tab: string, targetId: string, index: number): Layout {
   const source = leafOfTab(layout.root, tab)

@@ -2572,6 +2572,30 @@ export const catalog = {
     "zh": "移动标签",
     "en": "Move tab"
   },
+  "panes.store.closedRunning": {
+    "zh": "{p0} 个对话还在后台运行，可以在侧栏里打开",
+    "en": "{p0} conversations are still running in the background; open them from the sidebar"
+  },
+  "panes.PaneView.closeOtherTabs": {
+    "zh": "关闭其他标签页",
+    "en": "Close other tabs"
+  },
+  "panes.PaneView.closeTabsToRight": {
+    "zh": "关闭右侧标签页",
+    "en": "Close tabs to the right"
+  },
+  "panes.PaneView.closeAllTabs": {
+    "zh": "关闭所有标签页",
+    "en": "Close all tabs"
+  },
+  "panes.PaneView.closeInactiveTabs": {
+    "zh": "关闭不活跃的标签页",
+    "en": "Close inactive tabs"
+  },
+  "panes.PaneView.closeInactiveHint": {
+    "zh": "留下正在运行、等你确认、有新回复的对话，没保存的文件，和当前标签",
+    "en": "Keeps running, waiting and unread conversations, unsaved files and the current tab"
+  },
   "panes.store.notEnoughSpaceFor": {
     "zh": "窗口放不下更多窗格了，关掉一个，或收起侧边栏腾出位置",
     "en": "Not enough space for more panes. Close a pane or collapse the sidebar."

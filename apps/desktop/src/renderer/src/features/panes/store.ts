@@ -1,7 +1,7 @@
 import { tr } from '../../i18n/core'
 // 多对话窗格的状态：布局树 + 关闭中 / 拖动中的标记，存 localStorage，重启恢复。规格见 docs/ui/multi-pane.md
 import { useSyncExternalStore } from 'react'
-import { isDemo } from '@/data'
+import { isDemo, projects } from '@/data'
 import { composerDraft, migrateNewComposerDraft } from '@/features/engine/drafts'
 import { cssDuration, motionEnabled } from './motion'
 import * as T from './tree'
@@ -9,7 +9,7 @@ import type { Dir, Layout } from './tree'
 import { dropLayout, dropProblem, MIN_PANE, type DropTarget } from './drop'
 import { openFileLayout } from './file-layout'
 import { confirmFiles } from '@/features/files/FileConfirm'
-import { getFiles, removeFile } from '@/features/files/store'
+import { dirtyFile, getFiles, removeFile } from '@/features/files/store'
 import { bindDraftWorkspace, draftWorkspace } from '@/features/machines/drafts'
 import { getEngineState, setCurrentProject } from '@/features/engine/store'
 import { hasAttachmentDraft } from '@/features/session/attachments/drafts'
@@ -116,6 +116,29 @@ export function usePaneState<T>(selector: (s: PaneState) => T): T {
 export function notify(text: string): void {
   state = { ...state, notice: { id: (state.notice?.id ?? 0) + 1, text } }
   emit()
+}
+
+/** 这个对话标签的任务还在跑（运行中、等你确认、有后台任务）：关掉标签不会停它 */
+function sessionRunning(tab: string): boolean {
+  if (T.isFileTab(tab) || T.isNewTab(tab)) return false
+  const engine = getEngineState()
+  const summary = engine.sessions.find(s => s.record.id === tab)
+  if (summary)
+    return summary.state !== 'idle' || !!summary.background || (engine.snapshots[tab]?.pending.length ?? 0) > 0
+  return isDemo && projects.some(p => p.sessions.some(s => s.id === tab && s.status === 'running'))
+}
+
+/**
+ * 标签在用吗（「关闭不活跃的标签页」留下这些，GitHub #32）：对话在运行 / 等你确认 / 有没看的回复，
+ * 文件有没保存的改动，新对话的输入框里有草稿
+ */
+export function tabInUse(tab: string): boolean {
+  if (T.isFileTab(tab)) {
+    const file = getFiles().tabs.find(t => t.id === tab)
+    return !!file && dirtyFile(file)
+  }
+  if (T.isNewTab(tab)) return !!composerDraft(tab).trim() || hasAttachmentDraft(tab)
+  return sessionRunning(tab) || !!getEngineState().unread[tab]
 }
 
 /**
@@ -314,6 +337,31 @@ export const paneActions = {
       return
     }
     setLayout(next)
+  },
+
+  /**
+   * 批量关闭（GitHub #32）：没保存的文件整批确认一次；一次改完布局；窗格关空了、还有别的窗格时连窗格一起关。
+   * 关掉的对话标签里有还在跑的，提示一句（关标签不停任务）
+   */
+  async closeTabs(leafId: string, kind: T.BulkClose, anchor: string | null = null): Promise<void> {
+    const leaf = T.findLeaf(state.layout.root, leafId)
+    if (!leaf) return
+    const targets = T.tabsToClose(leaf, kind, anchor, tabInUse)
+    if (!targets.length) return
+    const files = targets.filter(T.isFileTab)
+    if (files.length && !(await confirmFiles(files))) return
+    const current = T.findLeaf(state.layout.root, leafId)
+    const closing = targets.filter(t => current?.tabs.includes(t))
+    if (!closing.length) return
+    const running = closing.filter(sessionRunning).length
+    const next = T.closeTabs(state.layout, leafId, closing)
+    for (const tab of closing) if (T.isFileTab(tab)) removeFile(tab)
+    const after = T.findLeaf(next.root, leafId)
+    if (after && after.tabs.length === 0 && T.leaves(next.root).length > 1) {
+      state = { ...state, layout: next }
+      paneActions.closePane(leafId)
+    } else setLayout(next)
+    if (running) notify(tr('panes.store.closedRunning', { p0: running }))
   },
 
   /** Ctrl+W：关当前窗格的当前标签；窗格是空的就关窗格 */
