@@ -9,6 +9,7 @@ import type {
   GitBranch,
   GitChangeSet,
   GitCommit,
+  GitCommitContext,
   GitCommitDetail,
   GitCompareResult,
   GitDiff,
@@ -35,6 +36,7 @@ import {
   parseStatusV2,
 } from './git-parse'
 import type { TrashFile } from './trash'
+import { collectCommitContext } from './commit-context'
 
 export const DIFF_LIMIT = 2 * 1024 * 1024
 const OUTPUT_LIMIT = 16 * 1024 * 1024
@@ -369,6 +371,18 @@ export class GitTools {
     const binary = !tooLarge && ((!!a && isBinary(a)) || (!!b && isBinary(b)))
     if (tooLarge || binary) return { path, original: null, modified: null, binary, tooLarge }
     return { path, original: a ? lf(text(a)) : null, modified: b ? lf(text(b)) : null, binary: false, tooLarge: false }
+  }
+
+  /** AI 写提交信息要发给模型的改动（docs/ui/ai-commit-codex-warnings-history.md §2.2）：只读，按上限截好 */
+  async commitContext(ref: WorkspaceRef, input: unknown): Promise<GitCommitContext> {
+    const scope = (input as { scope?: unknown } | null)?.scope
+    if (scope !== 'staged' && scope !== 'all') throw new Error('参数不正确')
+    const repo = await this.repo(ref)
+    if (!repo || repo === 'missing') throw new Error('当前项目不是可用的 Git 仓库')
+    return collectCommitContext(repo.root, scope, async (args, opts) => {
+      const run = await runGit(repo.root, args, { timeout: this.timeout('diff'), ...opts })
+      return { ok: run.code === 0 && !run.timedOut, stdout: run.stdout }
+    })
   }
 
   async branches(ref: WorkspaceRef): Promise<GitBranch[]> {

@@ -128,6 +128,20 @@ describe('Codex app-server adapter', () => {
     expect(host!.open(session.id).items.filter(i => i.kind === 'user' && i.text === '追加要求')).toHaveLength(1)
     await host!.interrupt(session.id)
   })
+  it('config.toml 引起的警告降成灰色提示、同一会话只出一次；别的警告照常每次都显示', async () => {
+    const { session } = setup()
+    await host!.send(session.id, '警告')
+    await wait(() => host!.open(session.id).items.some(i => i.kind === 'turn_stats'))
+    await host!.send(session.id, '警告')
+    await wait(() => host!.open(session.id).items.filter(i => i.kind === 'turn_stats').length === 2)
+    const notices = host!.open(session.id).items.flatMap(i => (i.kind === 'notice' ? [[i.level, i.text]] : []))
+    expect(notices).toEqual([
+      ['info', expect.stringMatching(/^Codex is ignoring 2 unrecognized configuration settings/)],
+      ['info', expect.stringMatching(/^Under-development features enabled/)],
+      ['warn', 'Model metadata for `fake-model` not found.'],
+      ['warn', 'Model metadata for `fake-model` not found.'],
+    ])
+  })
   it('原生压缩走方法而非 turn/start 的普通提示', async () => {
     const { session, messages } = setup()
     await host!.send(session.id, 'hello')

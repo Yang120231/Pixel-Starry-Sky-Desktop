@@ -559,7 +559,7 @@ export function GitHistory({
           <span className="min-w-0 flex-1 truncate">
             {tr('git.history.commits', { n })} · {tr('git.history.stat', statOf(set))}
           </span>
-          <SmallAction icon={Sparkles} onClick={() => reviewRange(what, set, n)}>
+          <SmallAction icon={Sparkles} outline={false} onClick={() => reviewRange(what, set, n)}>
             {tr('git.history.reviewChanges')}
           </SmallAction>
         </div>
@@ -1056,44 +1056,51 @@ function CommitDetail({
   const lines = c.body.split('\n')
   const long = lines.length > BODY_LINES
   return (
-    <div data-commit-detail className="pr-2 pb-2 pl-1">
-      {c.body && (
-        <p className="mt-0.5 text-meta break-words whitespace-pre-wrap text-fg-secondary">
-          {long && !full ? lines.slice(0, BODY_LINES).join('\n') + '…' : c.body}
-        </p>
-      )}
-      {long && (
-        <button type="button" onClick={() => setFull(!full)} className="text-meta text-accent-fg hover:underline">
-          {tr(full ? 'git.history.collapseMessage' : 'git.history.expandMessage')}
-        </button>
-      )}
-      <dl className="mt-1.5 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-0.5 text-meta">
-        <dt className="text-fg-faint">{tr('git.history.author')}</dt>
-        <dd className="truncate text-fg-secondary" title={`${c.author} <${c.email}>`}>
-          {c.author} <span className="text-fg-faint">&lt;{c.email}&gt;</span>
-        </dd>
-        <dt className="text-fg-faint">{tr('git.history.date')}</dt>
-        <dd className="text-fg-secondary tabular-nums">{fullTime(c.committedAt)}</dd>
-        {c.parents.length > 0 && (
-          <>
-            <dt className="text-fg-faint">{tr('git.history.parents')}</dt>
-            <dd className="flex flex-wrap gap-1.5">
-              {c.parents.map(p => (
-                <button
-                  key={p}
-                  type="button"
-                  title={tr('git.history.jumpParent', { hash: shortHash(p) })}
-                  onClick={() => onJump(p)}
-                  className="font-mono text-[11px] text-accent-fg hover:underline"
-                >
-                  {shortHash(p)}
-                </button>
-              ))}
-            </dd>
-          </>
+    <div data-commit-detail className="flex flex-col gap-1.5 pt-1 pr-2 pb-2 pl-1">
+      {/* 三块分开（GitHub #19）：信息卡（浅底）、描边按钮、文件卡（描边 + 浅底标题行） */}
+      <div className="rounded-lg bg-subtle px-2.5 py-2">
+        {c.body && (
+          <p className="mb-1.5 text-meta break-words whitespace-pre-wrap text-fg-secondary">
+            {long && !full ? lines.slice(0, BODY_LINES).join('\n') + '…' : c.body}
+          </p>
         )}
-      </dl>
-      <div className="mt-1.5 -ml-1.5 flex flex-wrap gap-0.5">
+        {long && (
+          <button
+            type="button"
+            onClick={() => setFull(!full)}
+            className="mb-1.5 -mt-1 text-meta text-accent-fg hover:underline"
+          >
+            {tr(full ? 'git.history.collapseMessage' : 'git.history.expandMessage')}
+          </button>
+        )}
+        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-0.5 text-meta">
+          <dt className="text-fg-faint">{tr('git.history.author')}</dt>
+          <dd className="truncate text-fg-secondary" title={`${c.author} <${c.email}>`}>
+            {c.author} <span className="text-fg-faint">&lt;{c.email}&gt;</span>
+          </dd>
+          <dt className="text-fg-faint">{tr('git.history.date')}</dt>
+          <dd className="text-fg-secondary tabular-nums">{fullTime(c.committedAt)}</dd>
+          {c.parents.length > 0 && (
+            <>
+              <dt className="text-fg-faint">{tr('git.history.parents')}</dt>
+              <dd className="flex flex-wrap gap-1.5">
+                {c.parents.map(p => (
+                  <button
+                    key={p}
+                    type="button"
+                    title={tr('git.history.jumpParent', { hash: shortHash(p) })}
+                    onClick={() => onJump(p)}
+                    className="font-mono text-[11px] text-accent-fg hover:underline"
+                  >
+                    {shortHash(p)}
+                  </button>
+                ))}
+              </dd>
+            </>
+          )}
+        </dl>
+      </div>
+      <div className="flex flex-wrap gap-1">
         <SmallAction icon={Copy} onClick={() => onCopy(c.hash)}>
           {tr('git.history.copyHash')}
         </SmallAction>
@@ -1107,30 +1114,37 @@ function CommitDetail({
           {tr('git.history.createBranch')}
         </SmallAction>
       </div>
-      <p className="mt-2 px-1.5 text-meta text-fg-muted">
-        {tr('git.history.stat', statOf(set))}
-        {c.parents.length > 1 && <span className="text-fg-faint"> · {tr('git.history.mergeNote')}</span>}
-      </p>
-      {files}
+      <div className="overflow-hidden rounded-lg border border-line-card">
+        <p className="border-b border-line-subtle bg-subtle px-2.5 py-1 text-meta text-fg-muted">
+          {tr('git.history.stat', statOf(set))}
+          {c.parents.length > 1 && <span className="text-fg-faint"> · {tr('git.history.mergeNote')}</span>}
+        </p>
+        <div className="p-0.5">{files}</div>
+      </div>
     </div>
   )
 }
 
-/** 详情里的小按钮：窄面板里一行放得下几个 */
+/** 详情里的小按钮：窄面板里一行放得下几个；outline 是提交详情里的描边样式（GitHub #19），比较那一行的保持文字按钮 */
 function SmallAction({
   icon: Icon,
   onClick,
+  outline = true,
   children,
 }: {
   icon: typeof Copy
   onClick: () => void
+  outline?: boolean
   children: ReactNode
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-meta text-fg-secondary hover:bg-hover hover:text-fg"
+      className={cn(
+        'inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-meta text-fg-secondary hover:bg-hover hover:text-fg',
+        outline && 'border border-line bg-surface px-2',
+      )}
     >
       <Icon size={12} className="shrink-0" />
       {children}

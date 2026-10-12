@@ -259,6 +259,7 @@ const projectTools: ProjectToolsBridge = {
   gitUnstage: (ref, paths) => call('projectTools:gitUnstage', ref, paths),
   gitDiscard: (ref, input) => call('projectTools:gitDiscard', ref, input),
   gitCommit: (ref, input) => call('projectTools:gitCommit', ref, input),
+  gitCommitContext: (ref, input) => call('projectTools:gitCommitContext', ref, input),
   gitPull: (ref, mode) => call('projectTools:gitPull', ref, mode),
   gitPush: (ref, input) => call('projectTools:gitPush', ref, input),
   gitFetch: ref => call('projectTools:gitFetch', ref),
@@ -427,6 +428,11 @@ contextBridge.exposeInMainWorld('pixelsky', {
       return () => ipcRenderer.removeListener('providers:changed', listener)
     },
   } satisfies import('./providers').ProvidersBridge,
+  ai: {
+    commitMessage: request => call('ai:commitMessage', request),
+    cancel: requestId => call('ai:cancel', requestId),
+    commitCharge: requestId => call('ai:commitCharge', requestId),
+  } satisfies import('./ai').AiBridge,
   engine,
   app: appInfo,
   log,

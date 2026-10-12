@@ -1,5 +1,5 @@
 // 会话事件记进日志（docs/ui/logging.md §4.5「session」）：请求重试、警告和错误提示、一轮结束
-import type { HostEvent } from '@pixelsky/protocol'
+import { isQuietWarning, type HostEvent } from '@pixelsky/protocol'
 import { logger } from '@pixelsky/engine'
 
 const log = logger('session')
@@ -37,8 +37,13 @@ export function logHostEvent(e: HostEvent): void {
     }
     case 'item_completed': {
       const item = event.item
-      if (item.kind !== 'notice' || item.level === 'info') return
+      if (item.kind !== 'notice') return
       const fields = { sessionId, text: item.text, ...(item.detail ? { detail: item.detail } : {}) }
+      // 降成灰色提示的配置类警告（ai-commit-codex-warnings-history.md §3）界面上不显眼，日志里照常留一条
+      if (item.level === 'info') {
+        if (isQuietWarning(item.text)) log.info('引擎配置警告', fields)
+        return
+      }
       if (item.level === 'error') log.error('错误提示', fields)
       else log.warn('警告提示', fields)
       return

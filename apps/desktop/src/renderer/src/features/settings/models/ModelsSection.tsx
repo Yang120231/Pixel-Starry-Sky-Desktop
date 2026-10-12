@@ -35,6 +35,7 @@ import { RequestRetrySettings } from './RequestRetrySettings'
 import { demo, isDemo } from '@/data/demo'
 import { providersFor, resolveCustomModel, useProviders } from '@/features/account/providers'
 import { CustomApiSettings } from './CustomApiSettings'
+import { AiCommitSettings } from './AiCommitSettings'
 
 const ENGINE_STATUS: Record<string, string> = {
   get ready() {
@@ -378,6 +379,8 @@ export function ModelsSection({ onOpenEngines }: { onOpenEngines?: () => void })
         )}
       </div>
 
+      <GroupTitle>{tr('aiCommit.settings.title')}</GroupTitle>
+      <AiCommitSettings />
       <GroupTitle>{tr('settings.models.ModelsSection.customApi')}</GroupTitle>
       <CustomApiSettings />
       <GroupTitle>{tr('settings.models.ModelsSection.requestRetries')}</GroupTitle>

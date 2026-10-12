@@ -418,6 +418,9 @@ export const IPC_CONTRACT = {
   'notify:supported': { kind: 'invoke', route: 'local', trust: 'sender' },
   'platform:groups': { kind: 'invoke', route: 'local', trust: 'sender' },
   'platform:models': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'ai:cancel': { kind: 'invoke', route: 'local', trust: 'window' },
+  'ai:commitCharge': { kind: 'invoke', route: 'local', trust: 'window' },
+  'ai:commitMessage': { kind: 'invoke', route: 'local', trust: 'window' },
   'providers:changed': { kind: 'push', route: 'push', trust: 'none' },
   'providers:list': { kind: 'invoke', route: 'local', trust: 'sender' },
   'providers:models': { kind: 'invoke', route: 'local', trust: 'sender' },
@@ -502,6 +505,13 @@ export const IPC_CONTRACT = {
     route: 'selected',
     ids: [0],
     remote: 'projectTools:gitCommit',
+    trust: 'window',
+  },
+  'projectTools:gitCommitContext': {
+    kind: 'invoke',
+    route: 'selected',
+    ids: [0],
+    remote: 'projectTools:gitCommitContext',
     trust: 'window',
   },
   'projectTools:gitCompare': {

@@ -109,6 +109,23 @@ describe('Store 读取 data-v1', () => {
     expect(items.map(i => (i.kind === 'tool' ? i.status : ''))).toEqual(['completed', 'interrupted', 'completed'])
   })
 
+  it('对话条目：以前存下的 Codex 配置类警告读出时变成灰色提示，同样的只留第一条；别的警告不变', () => {
+    const store = new Store(data())
+    const S4 = '44444444-4444-4444-8444-444444444444'
+    const notice = (id: string, text: string) => ({ kind: 'notice', id, level: 'warn', text }) as const
+    const ignoring = 'Codex is ignoring 1 unrecognized configuration setting. Check for typos.'
+    store.appendItem(S4, notice('a', ignoring))
+    store.appendItem(S4, notice('b', 'Under-development features enabled: x.'))
+    store.appendItem(S4, notice('c', 'Model metadata not found.'))
+    store.appendItem(S4, notice('d', ignoring))
+    const items = store.loadItems(S4)
+    expect(items.map(i => (i.kind === 'notice' ? [i.id, i.level] : []))).toEqual([
+      ['a', 'info'],
+      ['b', 'info'],
+      ['c', 'warn'],
+    ])
+  })
+
   it('队列：重启后一律暂停；已开始交付的项变成待核对，不自动重发', () => {
     const store = new Store(data()),
       record = store.loadRecords().find(r => r.id === S1)!

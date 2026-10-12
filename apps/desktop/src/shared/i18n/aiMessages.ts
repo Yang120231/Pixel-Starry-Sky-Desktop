@@ -1,0 +1,85 @@
+// AI 写提交信息（docs/ui/ai-commit-codex-warnings-history.md §2）：Git 面板的按钮和提示、出错的说法、设置页
+export const aiMessages = {
+  'aiCommit.button': { zh: 'AI 写提交信息', en: 'Write commit message with AI' },
+  'aiCommit.stopHint': { zh: '停止生成', en: 'Stop generating' },
+  'aiCommit.writing': { zh: 'AI 正在看这次的改动…', en: 'AI is reading the changes…' },
+  'aiCommit.writtenBy': { zh: 'AI 写的', en: 'Written by AI' },
+  'aiCommit.undo': { zh: '撤销', en: 'Undo' },
+  'aiCommit.undoHint': { zh: '换回原来的提交信息', en: 'Restore the previous message' },
+  'aiCommit.cost': { zh: '本次 {cost}', en: 'This call {cost}' },
+  'aiCommit.charged': { zh: '本次扣费 {cost}', en: 'Charged {cost}' },
+  'aiCommit.partialFiles': {
+    zh: '{n} 个文件太长，只给 AI 看了一部分',
+    en: '{n} files were too long; AI saw only part of them',
+  },
+  'aiCommit.demoMessage': {
+    zh: 'feat: 演示：AI 写的提交信息\n\n- 这是演示模式，没有发请求',
+    en: 'feat: demo commit message written by AI\n\n- Demo mode, no request was sent',
+  },
+
+  'aiCommit.problem.signedOut': { zh: '没有登录像素星空账号', en: 'Not signed in to your PixelSky account' },
+  'aiCommit.problem.balance': { zh: '账号余额不足', en: 'Your account balance is too low' },
+  'aiCommit.problem.route': {
+    zh: '这条线路不能用于写提交信息，换一条线路试试',
+    en: "This route can't be used for commit messages. Try another route.",
+  },
+  'aiCommit.problem.noModel': {
+    zh: '你的线路里没有 {model}，换个模型或指定线路',
+    en: 'None of your routes offers {model}. Pick another model or route.',
+  },
+  'aiCommit.problem.rateLimit': {
+    zh: '请求太频繁或额度用完了，稍后再试',
+    en: 'Too many requests or quota used up. Try again later.',
+  },
+  'aiCommit.problem.noEndpoint': {
+    zh: '还没有带模型的自定义 API，先在设置里添加',
+    en: 'No custom API with models yet. Add one in Settings.',
+  },
+  'aiCommit.problem.noKey': {
+    zh: '这个自定义接口还没有 Key，请在设置里填写',
+    en: 'This endpoint has no key yet. Add it in Settings.',
+  },
+  'aiCommit.problem.network': { zh: '连不上，稍后再试', en: "Couldn't connect. Try again later." },
+  'aiCommit.problem.timeout': { zh: '等太久没有回应，稍后再试', en: 'No response in time. Try again later.' },
+  'aiCommit.problem.empty': { zh: 'AI 没有写出内容，再试一次', en: 'AI returned nothing. Try again.' },
+  'aiCommit.problem.nothing': { zh: '没有要提交的改动', en: 'Nothing to commit' },
+  'aiCommit.problem.failed': { zh: '没写成', en: "Couldn't write it" },
+  'aiCommit.problemDetail': { zh: '{text}：{detail}', en: '{text}: {detail}' },
+  'aiCommit.signIn': { zh: '登录', en: 'Sign in' },
+  'aiCommit.openSettings': { zh: '设置', en: 'Settings' },
+
+  'aiCommit.settings.title': { zh: 'AI 写提交信息', en: 'AI commit messages' },
+  'aiCommit.settings.enabled': { zh: '在提交栏显示 AI 按钮', en: 'Show the AI button in the commit box' },
+  'aiCommit.settings.enabledHint': {
+    zh: '只在点按钮时把这次要提交的改动发给 AI。锁文件只列名字，可能有密钥的文件（.env、私钥等）不发内容。',
+    en: 'Changes are sent to AI only when you click the button. Lock files are listed by name only; files that may hold secrets (.env, private keys) are never sent.',
+  },
+  'aiCommit.settings.source': { zh: '用哪里的模型', en: 'Model source' },
+  'aiCommit.settings.sourceHint': {
+    zh: '云端照常按线路倍率从账号余额扣费。这一项不属于任何会话，不计入「用量」页，账号调用明细里有。',
+    en: 'The cloud bills your account balance at the route rate as usual. These calls belong to no session, so they are not on the Usage page; they appear in your account call log.',
+  },
+  'aiCommit.settings.platform': { zh: '像素星空云端', en: 'PixelSky cloud' },
+  'aiCommit.settings.custom': { zh: '自定义接口', en: 'Custom endpoint' },
+  'aiCommit.settings.model': { zh: '模型', en: 'Model' },
+  'aiCommit.settings.route': { zh: '线路', en: 'Route' },
+  'aiCommit.settings.routeAuto': { zh: '自动（默认线路优先）', en: 'Automatic (default route first)' },
+  'aiCommit.settings.signInFirst': { zh: '登录后可选', en: 'Available after you sign in' },
+  'aiCommit.settings.endpoint': { zh: '接口和模型', en: 'Endpoint and model' },
+  'aiCommit.settings.noEndpoint': { zh: '先在下面添加自定义 API', en: 'Add a custom API below first' },
+  'aiCommit.settings.language': { zh: '语言', en: 'Language' },
+  'aiCommit.settings.languageAuto': { zh: '跟随仓库最近的提交', en: 'Follow recent commits' },
+  'aiCommit.settings.chinese': { zh: '中文', en: 'Chinese' },
+  'aiCommit.settings.english': { zh: 'English', en: 'English' },
+  'aiCommit.settings.style': { zh: '写法', en: 'Format' },
+  'aiCommit.settings.styleSubject': { zh: '只写一行标题', en: 'Subject line only' },
+  'aiCommit.settings.styleBody': {
+    zh: '标题加简短正文（改动多时）',
+    en: 'Subject, plus a short body for larger changes',
+  },
+  'aiCommit.settings.instructions': { zh: '额外要求', en: 'Extra instructions' },
+  'aiCommit.settings.instructionsPlaceholder': {
+    zh: '例如：用 Conventional Commits，标题用英文',
+    en: 'e.g. Use Conventional Commits',
+  },
+} as const

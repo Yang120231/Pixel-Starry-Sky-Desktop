@@ -9,7 +9,9 @@ import type {
   ProjectCopy,
   CopyInput,
   CopyPreview,
+  GitCommitContext,
   GitCommitDetail,
+  GitCommitScope,
   GitCompareResult,
   GitCompareTarget,
   GitHistoryAction,
@@ -64,6 +66,8 @@ export interface ProjectToolsBridge {
   gitUnstage(ref: WorkspaceRef, paths: GitPaths): Promise<GitResult>
   gitDiscard(ref: WorkspaceRef, input: { paths: string[]; untracked: string[] } | 'all'): Promise<GitResult>
   gitCommit(ref: WorkspaceRef, input: { message: string; all: boolean; push: boolean }): Promise<GitResult>
+  /** AI 写提交信息要发给模型的改动（docs/ui/ai-commit-codex-warnings-history.md §2.2）；界面不直接用，主进程按项目所在机器取 */
+  gitCommitContext(ref: WorkspaceRef, input: { scope: GitCommitScope }): Promise<GitCommitContext>
   gitPull(ref: WorkspaceRef, mode: GitPullMode): Promise<GitResult>
   gitPush(ref: WorkspaceRef, input: { publish: boolean }): Promise<GitResult>
   gitFetch(ref: WorkspaceRef): Promise<GitResult>

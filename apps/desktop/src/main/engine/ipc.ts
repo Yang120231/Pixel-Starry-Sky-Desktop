@@ -16,6 +16,7 @@ import type { AppContext } from '../app/context'
 import { platformCharges, accountCalls } from '../platform/billing'
 import { initPlatform, validateQueuedInput } from '../platform/platform'
 import { initProviders } from '../providers/providers'
+import { initAi } from '../ai/ipc'
 import { Extensions } from '../extensions/ipc'
 import { initTerminalIpc } from '../terminal/ipc'
 import { initMachines } from '../machines/service'
@@ -31,6 +32,7 @@ import { logHostEvent } from '../core/log/host-events'
 
 export async function initEngine(ctx: AppContext): Promise<void> {
   ctx.providers = initProviders(ctx)
+  initAi(ctx)
   const sessionEnv = await initPlatform(
     id =>
       machineOf(id) === 'local'

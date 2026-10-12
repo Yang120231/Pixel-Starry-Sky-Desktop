@@ -27,6 +27,7 @@ import type {
   SessionDefaults,
   SessionRecord,
 } from '@pixelsky/protocol'
+import { isQuietWarning } from '@pixelsky/protocol'
 import { messageInput, type QueueFile } from './queue'
 import { retryLimit } from './retry'
 
@@ -272,12 +273,25 @@ export class Store {
         // 跳过写坏的行（例如写到一半断电）
       }
     }
-    // 没等到完成的条目（进程退出、应用关闭，包括后台子智能体的）：标成已中断
-    return [...byId.values()].map(item =>
-      item.kind !== 'user' && item.kind !== 'notice' && item.kind !== 'turn_stats' && item.status === 'running'
-        ? { ...item, status: 'interrupted' }
-        : item,
-    )
+    // 没等到完成的条目（进程退出、应用关闭，包括后台子智能体的）：标成已中断。
+    // 以前存下的配置类警告（docs/ui/ai-commit-codex-warnings-history.md §3）按现在的规则：灰色提示，同样的只留第一条
+    const quiet = new Set<string>()
+    const items: Item[] = []
+    for (const item of byId.values()) {
+      if (item.kind === 'notice' && item.level === 'warn' && isQuietWarning(item.text)) {
+        if (quiet.has(item.text)) continue
+        quiet.add(item.text)
+        items.push({ ...item, level: 'info' })
+      } else if (
+        item.kind !== 'user' &&
+        item.kind !== 'notice' &&
+        item.kind !== 'turn_stats' &&
+        item.status === 'running'
+      )
+        items.push({ ...item, status: 'interrupted' })
+      else items.push(item)
+    }
+    return items
   }
 
   deleteSession(id: string): void {

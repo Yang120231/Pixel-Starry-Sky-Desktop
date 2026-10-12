@@ -8,7 +8,7 @@ import type {
   SkillCommand,
   TurnOutcome,
 } from '@pixelsky/protocol'
-import { EMPTY_FLAGS } from '@pixelsky/protocol'
+import { EMPTY_FLAGS, isQuietWarning } from '@pixelsky/protocol'
 import type { EngineSession, Launcher, SessionContext } from '../adapter'
 import { CodexProcess, array, object, string, type Message } from './process'
 import { codexCatalog } from './catalog'
@@ -118,6 +118,8 @@ export class CodexSession implements EngineSession {
   private reportedError: string | null = null
   /** 同一毫秒内的多条报错也要各自保留，id 不能只靠时间戳 */
   private noticeSeq = 0
+  /** 已经发过的配置类警告（Codex 每轮都发一次），同一会话只出一次 */
+  private readonly quietShown = new Set<string>()
   /** 停止后等待 turn/completed 的回调，finish() 时统一唤醒 */
   private turnWaiters: Array<() => void> = []
 
@@ -498,12 +500,16 @@ export class CodexSession implements EngineSession {
     } else if (method === 'error' || method === 'warning') {
       const text = string(object(params.error).message || params.message)
       if (method === 'error') this.reportedError = text
+      // 用户 config.toml 引起、不影响使用的警告：灰色提示，同一会话只出一次（docs/ui/ai-commit-codex-warnings-history.md §3）
+      const quiet = method === 'warning' && isQuietWarning(text)
+      if (quiet && this.quietShown.has(text)) return
+      if (quiet) this.quietShown.add(text)
       this.ctx.emit({
         type: 'item_completed',
         item: {
           kind: 'notice',
           id: `cx-${method}-${Date.now()}-${++this.noticeSeq}`,
-          level: method === 'error' ? 'error' : 'warn',
+          level: method === 'error' ? 'error' : quiet ? 'info' : 'warn',
           text,
           detail: turnErrorDetail(params.error, params.willRetry),
         },

@@ -146,6 +146,19 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
       emit('item/started', { threadId: thread, turnId: id, item: { type: 'agentMessage', id: turn.item, text: '' } })
       emit('item/agentMessage/delta', { threadId: thread, turnId: id, itemId: turn.item, delta: turn.text })
       response(m, { turn: { id, status: 'inProgress' } })
+      if (text.includes('警告')) {
+        // 用户 config.toml 引起的警告（每轮都发）和一条真正的警告；不带线程和轮次，和真 Codex 一样
+        emit('warning', {
+          message:
+            'Codex is ignoring 2 unrecognized configuration settings. Check for typos or deprecated settings.\n' +
+            '  user (C:\\Users\\x\\.codex\\config.toml): `disable_response_storage` is ignored.',
+        })
+        emit('warning', {
+          message:
+            'Under-development features enabled: local_thread_store_compaction. To suppress this warning, set `suppress_unstable_features_warning = true`.',
+        })
+        emit('warning', { message: 'Model metadata for `fake-model` not found.' })
+      }
       if (text.includes('崩溃')) {
         process.exit(3)
         return

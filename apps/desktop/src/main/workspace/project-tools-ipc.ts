@@ -51,7 +51,11 @@ export async function initProjectTools(ctx: AppContext): Promise<void> {
       return ctx.machines ? ctx.machines.invoke(channel, args, () => fn(event, ...args)) : fn(event, ...args)
     })
   }
-  for (const [channel, op] of opEntries(PROJECT_TOOL_OPS)) handle(channel, (_event, ...args) => op(context, ...args))
+  for (const [channel, op] of opEntries(PROJECT_TOOL_OPS)) {
+    const run = (args: unknown[]) => op(context, ...args)
+    ctx.toolOps.set(channel, run)
+    handle(channel, (_event, ...args) => run(args))
+  }
   // 以下只在本机：系统对话框、打开目录、打开网址
   handle('projectTools:chooseDirectory', async event => {
     const win = BrowserWindow.fromWebContents(event.sender)!

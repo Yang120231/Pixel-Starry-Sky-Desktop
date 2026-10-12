@@ -46,6 +46,7 @@ import {
   type GitSection,
 } from './gitModel'
 import { GitDiffView } from './GitDiffView'
+import { AiCommitButton, AiCommitNote, useAiCommit } from './AiCommit'
 import { BranchMenu } from './BranchMenu'
 import { GitHistory } from './GitHistory'
 import { FILE_HISTORY_EVENT, takeFileHistory } from './fileHistory'
@@ -134,6 +135,7 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
   const [failure, setFailure] = useState<GitFailure | null>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
+  const ai = useAiCommit({ target, demo, message, setMessage })
   const [selected, setSelected] = useState<{ area: GitArea; path: string } | null>(null)
   const [menu, setMenu] = useState(false)
   const [branches, setBranches] = useState<Branch[]>([])
@@ -535,7 +537,7 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
       )}
     </div>
   )
-  const canCommit = !!message.trim() && !busy && total > 0 && !status.conflicted.length
+  const canCommit = !!message.trim() && !busy && !ai.running && total > 0 && !status.conflicted.length
   const commitAll = needsCommitAll(status)
   return (
     <div data-git-panel className="flex min-h-0 flex-1 flex-col">
@@ -679,22 +681,37 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
             <p className="shrink-0 rounded-md bg-subtle px-2.5 py-1.5 text-meta text-fg-muted">{tr('git.busy')}</p>
           )}
 
-          {/* 提交 */}
+          {/* 提交；右上角是 AI 写提交信息（docs/ui/ai-commit-codex-warnings-history.md §2） */}
           <div className="shrink-0">
-            <textarea
-              value={message}
-              onChange={e => setMessage(e.target.value)}
-              rows={2}
-              aria-label={tr('git.commit.label')}
-              placeholder={tr('git.commit.placeholder')}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.nativeEvent.isComposing) {
-                  e.preventDefault()
-                  if (canCommit) commit(false)
-                }
-              }}
-              className="block max-h-40 min-h-14 w-full resize-y rounded-md border border-line bg-surface px-2.5 py-2 text-list text-fg outline-none placeholder:text-fg-faint focus-visible:border-accent"
-            />
+            <div className="relative">
+              <textarea
+                value={message}
+                onChange={e => setMessage(e.target.value)}
+                // 多行的提交信息（AI 写的标题加正文）跟着变高，最多 7 行，再多就滚动
+                rows={Math.min(7, Math.max(2, message.split('\n').length))}
+                readOnly={ai.running}
+                aria-label={tr('git.commit.label')}
+                placeholder={tr(ai.running ? 'aiCommit.writing' : 'git.commit.placeholder')}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.nativeEvent.isComposing) {
+                    e.preventDefault()
+                    if (canCommit) commit(false)
+                  }
+                }}
+                className={cn(
+                  'block max-h-40 min-h-14 w-full resize-y rounded-md border border-line bg-surface px-2.5 py-2 text-list text-fg outline-none placeholder:text-fg-faint focus-visible:border-accent',
+                  ai.enabled && 'pr-8',
+                )}
+              />
+              {ai.enabled && (
+                <AiCommitButton
+                  ai={ai}
+                  scope={commitAll ? 'all' : 'staged'}
+                  disabled={busy || total === 0 || status.conflicted.length > 0}
+                />
+              )}
+            </div>
+            <AiCommitNote ai={ai} />
             <div className="mt-1.5 flex gap-1.5">
               <Button
                 variant="primary"

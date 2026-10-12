@@ -308,3 +308,26 @@ export interface GitCompareResult extends GitChangeSet {
   /** 涉及的提交数 */
   commits: number
 }
+/** AI 写提交信息要提交的范围：有暂存只看暂存；all 是全部改动（含未跟踪），和「提交全部」一致 */
+export type GitCommitScope = 'staged' | 'all'
+/**
+ * 一个文件的改动放进去了多少（docs/ui/ai-commit-codex-warnings-history.md §2.2）：
+ * diff 全部；cut 太长只放了开头；listed 锁文件 / 压缩文件只列名字；secret 可能有密钥，连改动行都不发；
+ * binary 二进制；omitted 超出总上限或拆不出这个文件的正文
+ */
+export type GitContextContent = 'diff' | 'cut' | 'listed' | 'secret' | 'binary' | 'omitted'
+export interface GitContextFile extends GitCommitFile {
+  content: GitContextContent
+}
+export interface GitCommitContext {
+  scope: GitCommitScope
+  /** 当前分支；分离 HEAD 时为 null */
+  branch: string | null
+  files: GitContextFile[]
+  /** 放进去的改动正文（unified diff，上下文 3 行），按文件顺序 */
+  patch: string
+  /** 最近的提交标题，新的在前（不含合并提交）；还没有提交时为空 */
+  recent: string[]
+  /** 文件太多，只列出了前一部分 */
+  truncated: boolean
+}

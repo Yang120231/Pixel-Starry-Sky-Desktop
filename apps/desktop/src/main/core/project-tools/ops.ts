@@ -65,6 +65,7 @@ export const PROJECT_TOOL_OPS = {
   'projectTools:gitUnstage': (c, ref, paths) => c.tools.git.unstage(workspaceRef(ref), paths),
   'projectTools:gitDiscard': (c, ref, input) => c.tools.git.discard(workspaceRef(ref), input),
   'projectTools:gitCommit': (c, ref, input) => c.tools.git.commit(workspaceRef(ref), input),
+  'projectTools:gitCommitContext': (c, ref, input) => c.tools.git.commitContext(workspaceRef(ref), input),
   'projectTools:gitPull': (c, ref, mode) => c.tools.git.pull(workspaceRef(ref), mode),
   'projectTools:gitPush': (c, ref, input) => c.tools.git.push(workspaceRef(ref), input),
   'projectTools:gitFetch': (c, ref) => c.tools.git.fetch(workspaceRef(ref)),

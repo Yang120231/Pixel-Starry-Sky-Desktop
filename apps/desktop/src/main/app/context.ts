@@ -28,6 +28,11 @@ export interface AppContext {
    * owner 是搜索 / 产物扫描的分桶。手机端（main/mobile/）用它
    */
   engineCall: EngineCall | null
+  /**
+   * 文件、项目工具操作表（workspace/files-ipc.ts、project-tools-ipc.ts 注册）：通道名 → 不经过窗口的调用，
+   * 路由和窗口一样由调用方经 ctx.machines 处理。手机的 Git / 文件 / 任务工具用它（docs/mobile-remote.md §18.4）
+   */
+  readonly toolOps: Map<string, (args: unknown[]) => unknown>
 }
 
 export type EngineCall = (channel: string, args: unknown[], owner: string) => Promise<unknown>
@@ -42,6 +47,7 @@ export function createAppContext(): AppContext {
     projectTools: null,
     providers: null,
     engineCall: null,
+    toolOps: new Map(),
   }
 }
 
