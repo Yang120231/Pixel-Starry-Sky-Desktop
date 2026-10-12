@@ -863,6 +863,45 @@
   background: #ffffff;
 }
 
+/* 所有开关（role=switch）的动画：圆点带一点弹性地滑过去，底色跟着渐变；按住时圆点朝要去的方向拉长一点。
+   各处开关的结构都是 <button role=switch><span 圆点/></button>，圆点的位置用 Tailwind 的 translate-x-* */
+[role='switch'] {
+  transition:
+    background-color var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out),
+    opacity var(--dur-base) var(--ease-out);
+}
+[role='switch'] > span {
+  transform-origin: left center;
+  transition:
+    translate var(--dur-switch) var(--ease-spring),
+    scale var(--dur-switch) var(--ease-spring),
+    background-color var(--dur-base) var(--ease-out);
+}
+[role='switch'][aria-checked='true'] > span {
+  transform-origin: right center;
+}
+[role='switch']:active:not(:disabled) > span {
+  scale: 1.18 1;
+  transition-duration: var(--dur-base);
+}
+:root[data-motion='off'] [role='switch'],
+:root[data-motion='off'] [role='switch'] > span {
+  transition: none;
+}
+:root[data-motion='off'] [role='switch']:active > span {
+  scale: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-motion='system'] [role='switch'],
+  :root[data-motion='system'] [role='switch'] > span {
+    transition: none;
+  }
+  :root[data-motion='system'] [role='switch']:active > span {
+    scale: none;
+  }
+}
+
 .right-workspace-resize {
   top: 0;
   bottom: 0;
