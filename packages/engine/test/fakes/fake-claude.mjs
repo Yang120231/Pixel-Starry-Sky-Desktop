@@ -1,6 +1,9 @@
 // 假的 Claude Code：说 stream-json + control 协议，用来测 EngineHost / ClaudeSession，不调用真实模型。
 //
 // 根据用户消息内容决定行为：
+//   含「思考」→ 先发 thinking 块，停 1.5 秒再回正文
+//   含「表格」→ 回很宽的 Markdown 表格（8 列 5 行）
+//   含「计划」→ 发 TodoWrite（5 项）再回正文
 //   含「写文件」→ 调用 Write 工具，先发 can_use_tool 等审批，允许就「写入」，拒绝就报错
 //   含「慢」    → 慢慢输出 100 段文字（给中断测试用）
 //   含「崩溃」  → 往 stderr 写 boom 然后退出码 3
@@ -289,6 +292,99 @@ async function runTurn(text) {
   if (text.includes('崩溃')) {
     process.stderr.write('boom\n')
     process.exit(3)
+  }
+
+  if (text.includes('思考')) {
+    // 先一个 thinking 块（真实格式：thinking 文本 + signature），停一会儿再出正文
+    out({
+      type: 'assistant',
+      message: {
+        id: `msg_fake_${runId}_${++msgSeq}`,
+        model: 'fake-model',
+        role: 'assistant',
+        content: [
+          {
+            type: 'thinking',
+            thinking: '用户想让我想一想。先把问题拆开：确认前提，再逐条比较，最后给出结论。',
+            signature: 'ErUBCkYIARgCIkB0ZmFrZXNpZ25hdHVyZQ==',
+          },
+        ],
+      },
+      parent_tool_use_id: null,
+    })
+    await sleep(1500)
+    await streamText('想好了：先确认前提，再逐条比较，结论是可以做。', [
+      '想好了：',
+      '先确认前提，再逐条比较，结论是可以做。',
+    ])
+    result('success')
+    turn = null
+    return
+  }
+
+  if (text.includes('表格')) {
+    // 很宽的表格（8 列 5 行，单元格很长），手机屏幕放不下，测横向滚动
+    const cols = [
+      '模块名称',
+      '负责人员',
+      '当前状态',
+      '预计完成时间',
+      '涉及的主要文件',
+      '依赖的其他模块',
+      '风险与注意事项',
+      '验收标准说明',
+    ]
+    const rows = Array.from({ length: 5 }, (_, r) => cols.map(c => `${c}第${r + 1}行的内容比较长用来撑宽`))
+    const table = [
+      `| ${cols.join(' | ')} |`,
+      `| ${cols.map(() => '---').join(' | ')} |`,
+      ...rows.map(row => `| ${row.join(' | ')} |`),
+    ].join('\n')
+    const full = `下面是汇总表：\n\n${table}\n\n以上就是全部内容。`
+    await streamText(full, [full])
+    result('success')
+    turn = null
+    return
+  }
+
+  if (text.includes('计划')) {
+    // TodoWrite：5 项（2 完成、1 进行中、2 待办）
+    const toolUseId = `toolu_fake_${++msgSeq}`
+    const todos = [
+      { content: '读现有代码', status: 'completed', activeForm: '正在读现有代码' },
+      { content: '设计方案', status: 'completed', activeForm: '正在设计方案' },
+      { content: '实现功能', status: 'in_progress', activeForm: '正在实现功能' },
+      { content: '补测试', status: 'pending', activeForm: '正在补测试' },
+      { content: '更新文档', status: 'pending', activeForm: '正在更新文档' },
+    ]
+    out({
+      type: 'assistant',
+      message: {
+        id: `msg_fake_${runId}_${msgSeq}`,
+        content: [{ type: 'tool_use', id: toolUseId, name: 'TodoWrite', input: { todos } }],
+      },
+      parent_tool_use_id: null,
+    })
+    out({
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: toolUseId,
+            content:
+              'Todos have been modified successfully. Ensure that you continue to use the todo list to track your progress.',
+          },
+        ],
+      },
+      parent_tool_use_id: null,
+      tool_use_result: { oldTodos: [], newTodos: todos },
+    })
+    await streamText('计划列好了，先做第三项。', ['计划列好了，先做第三项。'])
+    result('success')
+    turn = null
+    return
   }
 
   if (text.includes('写文件')) {

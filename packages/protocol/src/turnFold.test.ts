@@ -1,7 +1,7 @@
 // 每轮的过程收成「执行」一行（docs/ui/conversation-concise.md §3）
 import { describe, expect, it } from 'vitest'
-import type { Item } from '@pixelsky/protocol'
-import { foldTurns, summarize, turnReplies, type Entry } from './turnFold'
+import type { Item } from './types'
+import { foldTurns, summarizeProcess, turnReplies, type TurnEntry } from './turnFold'
 
 const user = (id: string, mode?: 'guidance'): Item => ({ kind: 'user', id, text: id, createdAt: 0, mode })
 const say = (id: string, status: 'completed' | 'running' | 'interrupted' = 'completed'): Item => ({
@@ -45,7 +45,7 @@ const stats = (id: string): Item => ({
 })
 
 /** 显示顺序：条目写 id，执行块写 [里面的 id] */
-const shape = (entries: Entry[]): (string | string[])[] =>
+const shape = (entries: TurnEntry[]): (string | string[])[] =>
   entries.map(e => (e.type === 'item' ? e.item.id : e.items.map(i => i.id)))
 
 describe('每轮的过程收成执行块', () => {
@@ -180,7 +180,7 @@ describe('每轮「复制」的回复', () => {
 describe('执行行的概要', () => {
   it('按类数，同一个文件算一次，失败的单独数', () => {
     expect(
-      summarize([
+      summarizeProcess([
         run('c1'),
         run('c2', 'failed'),
         read('t1'),
@@ -189,5 +189,111 @@ describe('执行行的概要', () => {
         edit('f3', 'b.ts'),
       ]),
     ).toMatchObject({ commands: 2, reads: 1, edits: 2, failed: 1 })
+  })
+})
+
+// 子智能体显示成小框（docs/ui/subagent-box.md §4）
+describe('子智能体：box / inline', () => {
+  const agent = (id: string): Item => ({
+    kind: 'tool',
+    id,
+    tool: 'task',
+    name: 'Agent',
+    title: id,
+    output: '',
+    status: 'running',
+  })
+  /** 子智能体自己调用的工具 */
+  const sub = (item: Item): Item => ({ ...item, subagent: 'C1', subagentCall: 'ag1' }) as Item
+  const done = (id: string): Item => ({
+    kind: 'notice',
+    id,
+    level: 'info',
+    text: id,
+    task: { kind: 'agent', status: 'completed', label: id },
+  })
+  const box = { subagents: 'box' } as const
+
+  it('派发是单独的小框，执行块在它前后断开', () => {
+    const items = [user('u'), run('c1'), read('r1'), agent('ag1'), run('c2'), read('r2'), say('a'), stats('s')]
+    expect(shape(foldTurns(items, false, box))).toEqual(['u', ['c1', 'r1'], 'ag1', ['c2', 'r2'], 'a', 's'])
+    // inline：派发和别的工具一起收在执行块里（和以前完全一样）
+    expect(shape(foldTurns(items, false))).toEqual(['u', ['c1', 'r1', 'ag1', 'c2', 'r2'], 'a', 's'])
+    expect(shape(foldTurns(items, false, { subagents: 'inline' }))).toEqual(shape(foldTurns(items, false)))
+  })
+
+  it('连着派几个：几个小框相邻，中间没有执行块', () => {
+    const items = [user('u'), agent('ag1'), agent('ag2'), agent('ag3'), say('a'), stats('s')]
+    expect(shape(foldTurns(items, false, box))).toEqual(['u', 'ag1', 'ag2', 'ag3', 'a', 's'])
+  })
+
+  it('子智能体自己的工具调用不进主对话，也不计数；inline 里照旧都在', () => {
+    const items = [
+      user('u'),
+      agent('ag1'),
+      sub(run('sc1')),
+      sub(edit('sf1', 'x.ts')),
+      sub(read('sr1')),
+      run('c1'),
+      say('a'),
+      stats('s'),
+    ]
+    const entries = foldTurns(items, false, box)
+    expect(shape(entries)).toEqual(['u', 'ag1', ['c1'], 'a', 's'])
+    const process = entries.find(e => e.type === 'process')
+    expect(process?.type === 'process' && summarizeProcess(process.items)).toMatchObject({
+      commands: 1,
+      edits: 0,
+      reads: 0,
+    })
+    expect(shape(foldTurns(items, false))).toEqual(['u', ['ag1', 'sc1', 'sf1', 'sr1', 'c1'], 'a', 's'])
+  })
+
+  it('只剩子智能体的工具调用的一段不出现空的执行块', () => {
+    const items = [user('u'), agent('ag1'), sub(run('sc1')), sub(read('sr1')), say('a'), stats('s')]
+    expect(shape(foldTurns(items, false, box))).toEqual(['u', 'ag1', 'a', 's'])
+  })
+
+  it('后台子智能体完成：带 task 的提示是完成小框，接着主智能体那一轮的回复；没有 task 的提示照旧', () => {
+    const items = [
+      user('u'),
+      agent('ag1'),
+      say('a1'),
+      stats('s1'),
+      done('n1'),
+      run('c1'),
+      say('a2'),
+      stats('s2'),
+      notice('old', 'info'),
+      run('c2'),
+      say('a3'),
+      stats('s3'),
+    ]
+    expect(shape(foldTurns(items, false, box))).toEqual([
+      'u',
+      'ag1',
+      'a1',
+      's1',
+      'n1',
+      ['c1'],
+      'a2',
+      's2',
+      ['old', 'c2'],
+      'a3',
+      's3',
+    ])
+    // inline：完成提示收在执行块里
+    expect(shape(foldTurns(items, false))).toContainEqual(['n1', 'c1'])
+  })
+
+  it('运行中：小框在执行块外面，最后一段执行块才是运行中', () => {
+    const entries = foldTurns([user('u'), run('c1'), agent('ag1'), run('c2', 'running')], true, box)
+    expect(shape(entries)).toEqual(['u', ['c1'], 'ag1', ['c2']])
+    expect(entries.filter(e => e.type === 'process').map(e => e.type === 'process' && e.running)).toEqual([false, true])
+  })
+
+  it('每轮「复制」的回复：box 下藏起来的子智能体条目不影响取到哪一段', () => {
+    const items = [user('u'), say('a'), sub(run('sc1')), stats('s')]
+    expect([...turnReplies(items, box)]).toEqual([['s', 'a']])
   })
 })

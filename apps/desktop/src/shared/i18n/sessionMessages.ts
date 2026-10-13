@@ -95,6 +95,7 @@ export const sessionMessages = {
   },
   'session.notice.showDetail': { zh: '详情', en: 'Details' },
   'session.notice.hideDetail': { zh: '收起', en: 'Hide' },
+  'session.notice.showAll': { zh: '展开', en: 'Show all' },
   'session.notice.copyDetail': { zh: '复制报错', en: 'Copy error' },
   'session.queue.sendFailed': { zh: '发送失败', en: 'Send failed' },
   'session.queue.starting': { zh: '正在启动…', en: 'Starting…' },

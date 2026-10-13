@@ -38,7 +38,7 @@ export type {
   SessionDefaults,
 } from './engine'
 export type { CacheWarning, ModelTurnUsage, RequestCacheUsage, RequestRetryState, TurnUsage, Usage } from './usage'
-export type { FileChange, Item, ItemKind, ItemStatus, TodoStep, ToolKind } from './item'
+export type { FileChange, Item, ItemKind, ItemStatus, NoticeTask, TodoStep, ToolKind } from './item'
 export type { ApprovalDecision, ApprovalRequest, Question, QuestionOption } from './approval'
 export type { AgentRun, AgentRuns, BackgroundTask, SubagentStatus, TaskOutput, WorkflowRun } from './agents'
 export type { EngineEvent, HostEvent, OpenedSession, SessionFlags, SessionSnapshot } from './events'

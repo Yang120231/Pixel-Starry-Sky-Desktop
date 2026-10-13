@@ -1,6 +1,6 @@
 // 对话流的显示块（从 LiveTranscript 抽出来，方便测试）：每轮的过程收成一行「执行」，连续的工具调用串成一组；
 // 一轮（一条用户消息到下一条）的文件改动合成一张卡片，有子智能体改的按来源分组（docs/ui/subagent-changes.md）
-import type { Item } from '@pixelsky/protocol'
+import { isSubagentCall, isSubagentWork, type FoldOptions, type Item } from '@pixelsky/protocol'
 import type { ChangedFileGroup, ChangedFiles } from '@/data'
 import { toChangedFiles } from '@/features/engine/labels'
 import { foldTurns } from './turnFold'
@@ -62,9 +62,21 @@ export function roundChangedFiles(items: readonly FileChangeItem[]): ChangedFile
 /**
  * 把条目分成显示块。改动卡片一轮一张：放在这一轮最后一个结束点（统计行之前；空闲时尾部还有改动就放最后），
  * 后台子智能体跑完、主智能体被唤醒又结束一次时，卡片移到新的结束点并带上新的改动。
- * running 为真时最后一个结束点之后、正在跑的部分不算进卡片
+ * running 为真时最后一个结束点之后、正在跑的部分不算进卡片。
+ * subagents: 'box'（docs/ui/subagent-box.md）：子智能体自己的条目不进对话流，但它们改的文件照旧算进改动卡片；
+ * 派发子智能体的调用单独成块（显示成小框），不并进工具组
  */
-export function toBlocks(items: Item[], running: boolean, cache: ChangesCache): Block[] {
+export function toBlocks(items: Item[], running: boolean, cache: ChangesCache, options: FoldOptions = {}): Block[] {
+  const box = options.subagents === 'box'
+  // box：藏起来的子智能体文件改动，记在它前面最后一条显示出来的条目后面（key 为 '' 的在最前面），顺序和 inline 时一样
+  const hiddenChanges = new Map<string, FileChangeItem[]>()
+  if (box) {
+    let prev = ''
+    for (const item of items) {
+      if (!isSubagentWork(item)) prev = item.id
+      else if (completedChange(item)) hiddenChanges.set(prev, [...(hiddenChanges.get(prev) ?? []), item])
+    }
+  }
   const blocks: Block[] = []
   let turnKey = 'start'
   /** 这一轮已完成的文件改动条目 */
@@ -92,9 +104,17 @@ export function toBlocks(items: Item[], running: boolean, cache: ChangesCache): 
     cache.set(key, { items: counted, data })
     blocks[card] = { type: 'changes', key, turnKey, data }
   }
-  for (const entry of foldTurns(items, running)) {
+  const flushHidden = (id: string): void => {
+    const list = hiddenChanges.get(id)
+    if (list) round.push(...list)
+  }
+  flushHidden('')
+  for (const entry of foldTurns(items, running, options)) {
     if (entry.type === 'process') {
-      for (const item of entry.items) if (completedChange(item)) round.push(item)
+      for (const item of entry.items) {
+        if (completedChange(item)) round.push(item)
+        flushHidden(item.id)
+      }
       blocks.push(entry)
       continue
     }
@@ -111,13 +131,14 @@ export function toBlocks(items: Item[], running: boolean, cache: ChangesCache): 
     // 一轮的统计放在这一轮最后（改动文件卡片之后），docs/ui/usage.md §4
     if (item.kind === 'turn_stats') placeCard()
     if (completedChange(item)) round.push(item)
-    if (isTool(item)) {
+    if (isTool(item) && !(box && isSubagentCall(item))) {
       const last = blocks[blocks.length - 1]
       if (last?.type === 'tools') last.items.push(item)
       else blocks.push({ type: 'tools', key: `tools-${item.id}`, items: [item] })
     } else {
       blocks.push({ type: 'item', item })
     }
+    flushHidden(item.id)
   }
   if (!running) placeCard()
   finishRound()

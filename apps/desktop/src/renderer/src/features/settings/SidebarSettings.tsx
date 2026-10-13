@@ -1,5 +1,6 @@
-import { RotateCcw } from 'lucide-react'
-import { Button, Switch } from '@/ui'
+import { useRef, useState } from 'react'
+import { Check, ChevronDown, RotateCcw } from 'lucide-react'
+import { Button, Popover, PopoverItem, Switch } from '@/ui'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import { resetSidebarIcons, setSidebarIcon, setSidebarPrefs, useSidebarPrefs } from '@/features/appearance/sidebar'
@@ -8,6 +9,8 @@ import {
   SIDEBAR_ACTIONS,
   SIDEBAR_ICON_OPTIONS,
   getSidebarIcon,
+  type SidebarAction,
+  type SidebarIcons,
 } from '@/features/appearance/sidebarIcons'
 import { GroupTitle, SettingRow } from './SettingRow'
 import { SidebarLayoutEditor } from './SidebarLayoutEditor'
@@ -34,62 +37,87 @@ export function SidebarSettings() {
       <SettingRow title={tr('sidebar.layout.title')} description={tr('sidebar.layout.description')}>
         <SidebarLayoutEditor />
       </SettingRow>
-      <SettingRow title={tr('sidebar.settings.icons')} description={tr('sidebar.settings.iconsDescription')}>
-        <div className="space-y-2">
+      <SettingRow
+        title={tr('sidebar.settings.icons')}
+        description={tr('sidebar.settings.iconsDescription')}
+        control={
+          <Button variant="ghost" icon={RotateCcw} disabled={isDefault} onClick={resetSidebarIcons}>
+            {tr('sidebar.settings.reset')}
+          </Button>
+        }
+      >
+        {/* 两列，每个入口一格：平时只显示当前图标和名字，点开挑样式（docs/ui/layout-v2.md §18） */}
+        <div className="grid grid-cols-2 gap-2">
           {SIDEBAR_ACTIONS.map(action => (
-            <fieldset
-              key={action}
-              className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-md border border-line px-3 py-2"
-            >
-              <legend className="sr-only">{tr(`sidebar.action.${action}`)}</legend>
-              <span className="text-ui text-fg-secondary" aria-hidden="true">
-                {tr(`sidebar.action.${action}`)}
-              </span>
-              <div className="flex shrink-0 items-center gap-1">
-                {SIDEBAR_ICON_OPTIONS[action].map(id => {
-                  const Icon = getSidebarIcon(action, { ...prefs.icons, [action]: id })
-                  const label = tr('sidebar.settings.chooseIcon', {
-                    action: tr(`sidebar.action.${action}`),
-                    icon: tr(`sidebar.icon.${id}`),
-                  })
-                  return (
-                    <label
-                      key={id}
-                      title={label}
-                      className="relative inline-flex size-9 cursor-pointer items-center justify-center"
-                    >
-                      <input
-                        type="radio"
-                        name={`sidebar-icon-${action}`}
-                        aria-label={label}
-                        value={id}
-                        checked={prefs.icons[action] === id}
-                        onChange={() => setSidebarIcon(action, id)}
-                        className="peer absolute inset-0 size-full cursor-pointer appearance-none rounded-md border border-transparent hover:bg-hover checked:border-accent checked:bg-accent-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                      />
-                      <Icon
-                        size={17}
-                        strokeWidth={1.5}
-                        aria-hidden="true"
-                        className="pointer-events-none relative text-fg-muted peer-checked:text-accent"
-                      />
-                    </label>
-                  )
-                })}
-              </div>
-            </fieldset>
+            <IconPicker key={action} action={action} icons={prefs.icons} />
           ))}
         </div>
-        <Button
-          variant="ghost"
-          icon={RotateCcw}
-          className="mt-3 -ml-3"
-          disabled={isDefault}
-          onClick={resetSidebarIcons}
-        >
-          {tr('sidebar.settings.reset')}
-        </Button>
       </SettingRow>
     </>
+  )
+}
+
+/** 一个入口：当前图标 + 名字 + ▾，点开列出全部样式（带名字），选中即关；焦点落在当前样式上，上下键移动，Esc 关闭 */
+function IconPicker({ action, icons }: { action: SidebarAction; icons: SidebarIcons }) {
+  useI18n()
+  const [open, setOpen] = useState(false)
+  const trigger = useRef<HTMLButtonElement>(null)
+  const name = tr(`sidebar.action.${action}`)
+  const Current = getSidebarIcon(action, icons)
+  const close = () => {
+    setOpen(false)
+    trigger.current?.focus()
+  }
+  return (
+    <div className="relative min-w-0">
+      <button
+        ref={trigger}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={tr('sidebar.settings.chooseIcon', { action: name, icon: tr(`sidebar.icon.${icons[action]}`) })}
+        onClick={() => setOpen(o => !o)}
+        className="flex h-10 w-full min-w-0 items-center gap-2.5 rounded-md border border-line px-3 text-left hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent aria-expanded:border-accent"
+      >
+        <Current size={16} strokeWidth={1.5} aria-hidden="true" className="shrink-0 text-fg-muted" />
+        <span className="min-w-0 flex-1 truncate text-ui text-fg-secondary">{name}</span>
+        <ChevronDown size={14} aria-hidden="true" className="shrink-0 text-fg-faint" />
+      </button>
+      <Popover open={open} onClose={close} className="top-full left-0 mt-1 w-full">
+        <div
+          role="menu"
+          aria-label={name}
+          ref={el => el?.querySelector<HTMLElement>('[aria-checked=true]')?.focus()}
+          onKeyDown={e => {
+            if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+            e.preventDefault()
+            const items = [...e.currentTarget.querySelectorAll<HTMLElement>('[data-menu-item]')]
+            const i = items.indexOf(document.activeElement as HTMLElement)
+            items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus()
+          }}
+        >
+          {SIDEBAR_ICON_OPTIONS[action].map(id => {
+            const Icon = getSidebarIcon(action, { ...icons, [action]: id })
+            const checked = icons[action] === id
+            return (
+              <PopoverItem
+                key={id}
+                role="menuitemradio"
+                checked={checked}
+                selected={checked}
+                icon={<Icon size={16} strokeWidth={1.5} aria-hidden="true" className="shrink-0 text-fg-muted" />}
+                hint={checked ? <Check size={14} aria-hidden="true" className="text-accent" /> : undefined}
+                onClick={() => {
+                  setSidebarIcon(action, id)
+                  close()
+                }}
+              >
+                {tr(`sidebar.icon.${id}`)}
+              </PopoverItem>
+            )
+          })}
+        </div>
+      </Popover>
+    </div>
   )
 }

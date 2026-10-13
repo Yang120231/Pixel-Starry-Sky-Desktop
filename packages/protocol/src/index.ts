@@ -60,6 +60,7 @@ export type {
   TaskOutput,
   TodoStep,
   ToolKind,
+  NoticeTask,
   TurnOutcome,
   TurnUsage,
   Usage,
@@ -201,3 +202,14 @@ export type { PackageManager } from './package-manager'
 export { LOCKFILE_NAMES, detectPackageManager, scriptCommand } from './package-manager'
 export type { LogEntry, LogLevel, LogQuery, LogSettings } from './log'
 export { LOG_LEVEL_RANK, formatLogLine, logTime, matchesLogQuery, parseLogLine } from './log'
+export {
+  foldTurns,
+  turnReplies,
+  splitTurns,
+  summarizeProcess,
+  isSubagentCall,
+  isSubagentWork,
+  isTaskNotice,
+  isSubagentBox,
+} from './turnFold'
+export type { TurnEntry, ProcessSummary, FoldOptions } from './turnFold'

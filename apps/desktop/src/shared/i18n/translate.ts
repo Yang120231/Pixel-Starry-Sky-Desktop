@@ -35,6 +35,9 @@ import { tabMenuMessages } from './tabMenuMessages'
 import { minimalModeMessages } from './minimalModeMessages'
 import { htmlPreviewMessages } from './htmlPreviewMessages'
 import { recoveryMessages } from './recoveryMessages'
+import { pathClickMessages } from './pathClickMessages'
+import { subagentMessages } from './subagentMessages'
+import { traceHistoryMessages } from './traceHistoryMessages'
 import { replaceCodedErrors } from '@pixelsky/protocol'
 import type { Locale } from './messages'
 
@@ -77,6 +80,9 @@ export const allMessages = {
   ...minimalModeMessages,
   ...htmlPreviewMessages,
   ...recoveryMessages,
+  ...pathClickMessages,
+  ...subagentMessages,
+  ...traceHistoryMessages,
 }
 export type TranslationKey = keyof typeof allMessages
 

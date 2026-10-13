@@ -59,6 +59,13 @@ describe('foldedText', () => {
     expect(foldedText({ kind: 'assistant', id: 'a', text: '银河', status: 'completed' })).toBe('')
     expect(foldedText({ kind: 'notice', id: 'n2', level: 'info', text: '银河' })).toBe('')
   })
+  it('长提示折着时前 3 行在页面上，其余的行算折叠部分', () => {
+    const text = '子智能体已完成：改好了\n\n**1. a.ts**\n```ts\n银河\n```'
+    expect(foldedText({ kind: 'notice', id: 'n3', level: 'info', text })).toBe('```ts\n银河\n```')
+    expect(foldedText({ kind: 'notice', id: 'n4', level: 'error', text, detail: '详情' })).toBe(
+      '```ts\n银河\n```\n详情',
+    )
+  })
 })
 
 describe('foldedMatches', () => {

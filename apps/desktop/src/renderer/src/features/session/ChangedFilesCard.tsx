@@ -2,15 +2,17 @@ import { translateMessage } from '../../i18n/core'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
 import { ChevronRight, FileDiff, SquareArrowOutUpRight, Undo2 } from 'lucide-react'
-import { Button, DiffStat, IconButton, cn, useComingSoon } from '@/ui'
+import { Button, DiffStat, IconButton, cn, useComingSoon, useToast } from '@/ui'
 import { DiffView } from '@/ui/code/DiffView'
 import { changedFiles, type ChangedFile, type ChangedFiles } from '@/data'
 import { openFile } from '@/features/files/store'
+import { pathClickHandlers } from '@/ui/pathClick'
+import { isRemoteRef, pathHint, revealPath } from '@/features/files/reveal'
 import type { WorkspaceRef } from '../../../../shared/types/workspace'
 import { isDemo, projects } from '@/data'
+import { useState, type CSSProperties } from 'react'
 import { useAppMode } from '@/features/coding/mode'
 import { openCodeDiff } from '@/features/coding/editor'
-import { useState, type CSSProperties } from 'react'
 
 /**
  * 改动文件卡片；data 不传时用演示数据。
@@ -35,9 +37,10 @@ export function ChangedFilesCard({
 }) {
   useI18n()
   const comingSoon = useComingSoon()
+  const toast = useToast()
+  const code = useAppMode() === 'code'
   const [error, setError] = useState('')
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set())
-  const code = useAppMode() === 'code'
   if (!data) return null
   const codeRef = target ?? (isDemo && projects[0] ? { projectId: projects[0].id } : null)
   const firstDiff = data.files.find(f => f.diffs?.length) ?? data.files[0]
@@ -54,11 +57,10 @@ export function ChangedFilesCard({
     const openInEditor = (): void => {
       if (ref) void openFile(ref, path, undefined, 1, f.newText).catch(e => setError(e.message))
     }
+    // 单击：有对比的展开 / 收起，否则打开文件；双击在文件夹中显示。第二下点击 detail > 1 不算单击，对比不会开了又关
+    // （docs/ui/path-click.md）。远程机器双击只提示不能在本机文件夹中显示
+    const reveal = ref ? () => void revealPath(ref, path, toast) : null
     const diffs = f.diffs ?? []
-    // 代码模式：有 diff 的行不在卡片里展开，直接打开中栏的变更
-    const openDiff = (): void => {
-      if (ref) void openCodeDiff(ref, path).catch(e => setError(e.message))
-    }
     const openKey = prefix + path
     const expanded = diffs.length > 0 && open.has(openKey)
     const toggle = (): void =>
@@ -67,6 +69,15 @@ export function ChangedFilesCard({
         if (!next.delete(openKey)) next.add(openKey)
         return next
       })
+    // 代码模式：有 diff 的行不在卡片里展开，直接打开中栏的变更
+    const openDiff = (): void => {
+      if (ref) void openCodeDiff(ref, path).catch(e => setError(e.message))
+    }
+    const rowClick = pathClickHandlers({
+      open: diffs.length ? (code && ref ? openDiff : toggle) : openInEditor,
+      reveal,
+    })
+    const iconClick = pathClickHandlers({ open: openInEditor, reveal })
     return (
       <li key={path}>
         <div
@@ -79,11 +90,12 @@ export function ChangedFilesCard({
             aria-expanded={diffs.length ? expanded : undefined}
             title={
               diffs.length
-                ? tr(expanded ? 'session.ChangedFilesCard.hideChanges' : 'session.ChangedFilesCard.showChanges')
-                : tr('session.ChangedFilesCard.openFileInPixel')
+                ? `${tr(expanded ? 'session.ChangedFilesCard.hideChanges' : 'session.ChangedFilesCard.showChanges')}
+${path}${ref && !isRemoteRef(ref) ? `\n${tr('path.hintDiff')}` : ''}`
+                : pathHint(ref, path)
             }
             disabled={!diffs.length && !ref}
-            onClick={diffs.length ? (code && ref ? openDiff : toggle) : openInEditor}
+            {...rowClick}
           >
             {diffs.length > 0 && (
               <ChevronRight
@@ -105,9 +117,10 @@ export function ChangedFilesCard({
             <IconButton
               icon={SquareArrowOutUpRight}
               label={tr('session.ChangedFilesCard.openInEditor')}
+              title={pathHint(ref, path)}
               size={26}
               iconSize={14}
-              onClick={openInEditor}
+              {...iconClick}
               className={cn(
                 'opacity-0 group-hover/file:opacity-100 focus-visible:opacity-100',
                 expanded && 'opacity-100',

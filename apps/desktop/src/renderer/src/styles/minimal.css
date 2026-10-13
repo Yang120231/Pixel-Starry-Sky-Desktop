@@ -77,6 +77,11 @@
   height: 24px;
   min-height: 24px;
 }
+:root[data-minimal='on'] [data-trace-history-row] {
+  height: 28px;
+  min-height: 28px;
+  padding-block: 0;
+}
 :root[data-minimal='on'] [data-tool-verb] {
   color: var(--text-muted);
 }
@@ -86,6 +91,15 @@
   font-family: var(--font-mono);
   font-size: var(--text-meta);
   color: var(--text-secondary);
+}
+
+/* 子智能体小框（docs/ui/subagent-box.md §5）：高 28、字小一号、任务名等宽，和工具行一致 */
+:root[data-minimal='on'] [data-subagent-box] {
+  height: 28px;
+  font-size: var(--text-meta);
+}
+:root[data-minimal='on'] [data-subagent-box] [data-box-label] {
+  font-family: var(--font-mono);
 }
 
 /* 用户消息的操作按钮浮在块的右上角（ItemRows 的 UserBubble），按钮条自己带底色和细边 */

@@ -49,6 +49,10 @@ function groups(): { title: string; rows: Row[] }[] {
       ],
     },
     {
+      title: tr('path.groupConversation'),
+      rows: [fixedRow('path.shortcutReveal', isMac ? `⇧${enter}` : `Shift+${enter}`)],
+    },
+    {
       title: tr('shortcuts.help.groupMenus'),
       rows: [
         fixedRow('shortcuts.help.menuMove', '↑ / ↓'),

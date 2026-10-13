@@ -62,15 +62,30 @@ interface PopoverItemProps {
   disabled?: boolean
   /** 鼠标提示（不可点时说明原因） */
   title?: string
+  /** 单选列表里用 menuitemradio + checked，读屏会念「已选中」 */
+  role?: 'menuitem' | 'menuitemradio'
+  checked?: boolean
   children: ReactNode
 }
 
-export function PopoverItem({ icon, selected, onClick, hint, disabled, title, children }: PopoverItemProps) {
+export function PopoverItem({
+  icon,
+  selected,
+  onClick,
+  hint,
+  disabled,
+  title,
+  role,
+  checked,
+  children,
+}: PopoverItemProps) {
   useI18n()
   return (
     <button
       type="button"
       data-menu-item
+      role={role}
+      aria-checked={role === 'menuitemradio' ? !!checked : undefined}
       onClick={onClick}
       disabled={disabled}
       title={title}

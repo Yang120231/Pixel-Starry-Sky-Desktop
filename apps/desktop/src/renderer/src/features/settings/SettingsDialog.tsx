@@ -37,6 +37,7 @@ import { MinimalModeSettings } from './MinimalModeSettings'
 import { CloseActionSettings } from './CloseActionSettings'
 import { TurnRailSettings } from './TurnRailSettings'
 import { LongConversationSettings } from './LongConversationSettings'
+import { SubagentViewSettings } from './SubagentViewSettings'
 import { MessageActionsSettings } from './MessageActionsSettings'
 import { CacheMissSettings } from './CacheMissSettings'
 import { WallpaperSettings } from './WallpaperSettings'
@@ -720,6 +721,7 @@ function AppearanceSection() {
       <ReplyStatsSettings />
       <TurnRailSettings />
       <LongConversationSettings />
+      <SubagentViewSettings />
       <MessageActionsSettings />
       <CacheMissSettings />
 

@@ -117,3 +117,63 @@ describe('后台子智能体的 Agent 工具行', () => {
     expect(gone.row('agent-1')).toMatchObject({ status: 'interrupted' })
   })
 })
+
+describe('后台任务结束提示的结构化信息（docs/ui/subagent-box.md §4.4）', () => {
+  const notices = (events: EngineEvent[]) =>
+    events.flatMap(e => (e.type === 'item_completed' && e.item.kind === 'notice' ? [e.item] : []))
+  const background = (t: ClaudeTranslator, kind: string) =>
+    t.handle({
+      type: 'system',
+      subtype: 'task_started',
+      task_id: 'a1',
+      task_type: kind,
+      description: '查超时',
+      tool_use_id: 'agent-1',
+      is_backgrounded: true,
+    })
+
+  it('后台子智能体完成：text 照旧，带 task（toolUseId、kind、status、label、summary）', () => {
+    const { t, events } = make()
+    t.startTurn('turn-1')
+    background(t, 'local_agent')
+    t.handle({
+      type: 'system',
+      subtype: 'task_notification',
+      task_id: 'a1',
+      status: 'completed',
+      summary: '找到了两处',
+    })
+    expect(notices(events)).toMatchObject([
+      {
+        level: 'info',
+        text: '子智能体已完成：找到了两处',
+        task: { toolUseId: 'agent-1', kind: 'agent', status: 'completed', label: '查超时', summary: '找到了两处' },
+      },
+    ])
+  })
+
+  it('失败是 warn；被停止或别的结束状态记成 stopped；没有摘要时不带 summary', () => {
+    const failed = make()
+    failed.t.startTurn('turn-1')
+    background(failed.t, 'local_workflow')
+    failed.t.handle({ type: 'system', subtype: 'task_notification', task_id: 'a1', status: 'failed', summary: '' })
+    const [warn] = notices(failed.events)
+    expect(warn).toMatchObject({ level: 'warn', task: { kind: 'workflow', status: 'failed' } })
+    expect(warn.kind === 'notice' && warn.task).not.toHaveProperty('summary')
+    const killed = make()
+    killed.t.startTurn('turn-1')
+    background(killed.t, 'local_bash')
+    killed.t.handle({ type: 'system', subtype: 'task_notification', task_id: 'a1', status: 'killed', summary: '' })
+    expect(notices(killed.events)).toMatchObject([{ task: { kind: 'bash', status: 'stopped' } }])
+  })
+
+  it('认不出的任务类型不带 task，界面照旧显示文字', () => {
+    const { t, events } = make()
+    t.startTurn('turn-1')
+    background(t, 'something_new')
+    t.handle({ type: 'system', subtype: 'task_notification', task_id: 'a1', status: 'completed', summary: '好了' })
+    const [notice] = notices(events)
+    expect(notice).toMatchObject({ text: '后台任务已完成：好了' })
+    expect(notice).not.toHaveProperty('task')
+  })
+})

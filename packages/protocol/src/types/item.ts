@@ -21,6 +21,15 @@ export interface TodoStep {
 
 export type ToolKind = 'read' | 'search' | 'web' | 'mcp' | 'task' | 'other'
 
+/** 后台任务结束提示的结构化信息；label 是任务说明（可能为空），summary 是结束时的摘要 */
+export interface NoticeTask {
+  toolUseId?: string
+  kind: 'agent' | 'workflow' | 'bash' | 'monitor' | 'remote_agent'
+  status: 'completed' | 'failed' | 'stopped'
+  label: string
+  summary?: string
+}
+
 export type Item =
   | {
       kind: 'user'
@@ -80,7 +89,18 @@ export type Item =
     }
   | { kind: 'todo'; id: string; steps: TodoStep[]; status: ItemStatus }
   /** detail：引擎给出的原始报错详情（附加说明、错误类型、HTTP 状态码等），界面默认折叠 */
-  | { kind: 'notice'; id: string; level: 'info' | 'warn' | 'error'; text: string; detail?: string | null }
+  /**
+   * task：后台任务（子智能体、编排、后台命令……）结束的提示带的结构化信息，界面据此画完成小框（docs/ui/subagent-box.md §4.4）；
+   * 没有这个字段的（旧会话、旧引擎）只显示 text
+   */
+  | {
+      kind: 'notice'
+      id: string
+      level: 'info' | 'warn' | 'error'
+      text: string
+      detail?: string | null
+      task?: NoticeTask
+    }
   /**
    * 压缩上下文（docs/ui/compaction.md）：进行中显示动画和计时，结束后显示「压缩前 → 压缩后」和用时。
    * trigger：手动 /compact 还是自动；引擎没说时为 null。几个大小、用时拿不到时为 null

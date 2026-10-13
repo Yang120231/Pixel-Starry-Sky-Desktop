@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState, type AnchorHTMLAttributes, type ReactNode } from 'react'
 import { defaultUrlTransform } from 'react-markdown'
 import { cn } from '@/ui'
+import { pathClickHandlers } from '@/ui/pathClick'
 
 export interface PathTarget {
   /** 相对项目根目录，用 / 分隔 */
@@ -15,6 +16,10 @@ export interface PathLinks {
   /** 一段文字恰好是项目里存在的文件（可带 :行 / :行:列）时给出目标，否则 null */
   resolve(text: string): Promise<PathTarget | null>
   open(target: PathTarget): void
+  /** 在系统文件管理器里显示（双击 / Shift+Enter）；远程机器等不能显示时为 null（docs/ui/path-click.md） */
+  reveal: ((target: PathTarget) => void) | null
+  /** 悬停提示：单击 / 双击说明 + 完整路径 */
+  hint(path: string): string
 }
 
 /** 没有提供时（频道、产物预览、演示模式）不加链接 */
@@ -101,25 +106,35 @@ export function useOpenPath(): ((target: PathTarget) => void) | null {
   return useContext(PathLinksContext)?.open ?? null
 }
 
+/** 路径的点击处理和悬停提示：单击打开、双击在文件夹中显示；没有上下文时为 null */
+export function usePathClick(
+  target: PathTarget | null,
+): { handlers: ReturnType<typeof pathClickHandlers>; title: string } | null {
+  const links = useContext(PathLinksContext)
+  if (!links || !target) return null
+  const { reveal } = links
+  return {
+    handlers: pathClickHandlers({ open: () => links.open(target), reveal: reveal && (() => reveal(target)) }),
+    title: links.hint(targetTitle(target)),
+  }
+}
+
 const targetTitle = (t: PathTarget): string => t.path + (t.line ? `:${t.line}` : '') + (t.column ? `:${t.column}` : '')
 
 /** Markdown 的行内代码：是项目里的文件时变成可点击的路径 */
 export function InlineCode({ children, className }: { children?: ReactNode; className?: string }) {
   const text = typeof children === 'string' ? children : null
   const target = usePathTarget(text)
-  const open = useOpenPath()
-  if (!target || !open) return <code className={className}>{children}</code>
+  const click = usePathClick(target)
+  if (!click) return <code className={className}>{children}</code>
   return (
     <code
       data-path=""
       role="link"
       tabIndex={0}
-      title={targetTitle(target)}
+      title={click.title}
       className={cn(className, 'cursor-pointer')}
-      onClick={() => open(target)}
-      onKeyDown={e => {
-        if (e.key === 'Enter') open(target)
-      }}
+      {...click.handlers}
     >
       {children}
     </code>
@@ -129,17 +144,18 @@ export function InlineCode({ children, className }: { children?: ReactNode; clas
 /** Markdown 链接：地址是项目里的文件时在软件里打开，其余交给系统浏览器（主进程只放行 http / https） */
 export function MarkdownLink({ href, children, ...rest }: AnchorHTMLAttributes<HTMLAnchorElement>) {
   const target = usePathTarget(linkPathText(href))
-  const open = useOpenPath()
-  if (target && open)
+  const click = usePathClick(target)
+  if (click)
     return (
       <a
         {...rest}
         href={href}
         data-path=""
-        title={targetTitle(target)}
+        title={click.title}
+        {...click.handlers}
         onClick={e => {
           e.preventDefault()
-          open(target)
+          click.handlers.onClick(e)
         }}
       >
         {children}

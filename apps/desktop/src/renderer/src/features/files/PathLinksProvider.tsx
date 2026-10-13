@@ -9,6 +9,7 @@ import { openFile } from './store'
 import { wholeTextFile } from './pathLinks'
 import { findPathMatches } from './pathMatch'
 import { isHtmlPath, previewHtml } from './htmlPreview'
+import { pathHint, revealPath } from './reveal'
 
 export function PathLinksProvider({ sessionId, children }: { sessionId: string | null; children: ReactNode }) {
   const toast = useToast()
@@ -26,6 +27,9 @@ export function PathLinksProvider({ sessionId, children }: { sessionId: string |
             : source()
         void run.catch((e: Error) => toast(e.message))
       },
+      // 双击 / Shift+Enter：在文件夹中显示；远程机器 revealPath 会提示不能显示（提示文字只写单击打开）
+      reveal: target => void revealPath(ref, target.path, toast),
+      hint: path => pathHint(ref, path),
     }
   }, [sessionId, toast])
   return <PathLinksContext.Provider value={value}>{children}</PathLinksContext.Provider>

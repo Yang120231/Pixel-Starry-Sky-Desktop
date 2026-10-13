@@ -2,6 +2,7 @@
 // 和 ItemRows 的显示一一对应：这些文字只有展开以后才在页面上，折叠时 Ctrl+F 在 DOM 里搜不到
 import { matchRanges, type Item } from '@pixelsky/protocol'
 import { stripAnsi } from '@/ui/code/ansi'
+import { foldNotice } from './noticeFold'
 
 export function foldedText(item: Item): string {
   switch (item.kind) {
@@ -22,7 +23,8 @@ export function foldedText(item: Item): string {
         .join('\n')
     }
     case 'notice':
-      return item.detail?.trim() ?? ''
+      // 长提示折着时前几行在页面上，其余的行和报错详情不在
+      return [foldNotice(item.text)?.rest ?? '', item.detail?.trim() ?? ''].filter(Boolean).join('\n')
     default:
       return ''
   }

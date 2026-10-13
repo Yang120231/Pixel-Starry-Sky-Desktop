@@ -1,0 +1,30 @@
+// 子智能体显示成小框（docs/ui/subagent-box.md，D128，GitHub #41）
+export const subagentMessages = {
+  'subagent.setting': { zh: '子智能体', en: 'Subagents' },
+  'subagent.settingHint': {
+    zh: '小框：派发和完成各显示一个小框，子智能体自己的工具调用点小框查看；展开在执行里：子智能体的工具调用和其他命令一起放在「执行」里（0.3.1 之前的样子）',
+    en: 'Boxes: each dispatch and completion shows as one box, click it to see the subagent’s own tool calls. Inside Worked: the subagent’s tool calls sit with the other commands in the “Worked” row (as before 0.3.1)',
+  },
+  'subagent.searchKeywords': {
+    zh: '子智能体 子代理 小框 派发 展开 执行 subagent agent task box dispatch inline',
+    en: 'subagent agent task box dispatch inline expand worked 子智能体 子代理 小框 派发',
+  },
+  'subagent.box': { zh: '小框', en: 'Boxes' },
+  'subagent.inline': { zh: '展开在执行里', en: 'Inside Worked' },
+  'subagent.box.untitled': { zh: '子任务', en: 'Subagent' },
+  'subagent.box.workflow': { zh: '多智能体编排', en: 'Multi-agent workflow' },
+  'subagent.box.agents': { zh: '{n} 个智能体', en: '{n} agents' },
+  'subagent.box.approval': { zh: '等你批准', en: 'Needs approval' },
+  'subagent.box.bash': { zh: '后台命令', en: 'Background command' },
+  'subagent.box.monitor': { zh: '监视任务', en: 'Monitor' },
+  'subagent.notice.agent': { zh: '子智能体', en: 'Subagent' },
+  'subagent.notice.workflow': { zh: '多智能体编排', en: 'Multi-agent workflow' },
+  'subagent.notice.bash': { zh: '后台命令', en: 'Background command' },
+  'subagent.notice.monitor': { zh: '监视任务', en: 'Monitor' },
+  'subagent.notice.remote_agent': { zh: '后台任务', en: 'Background task' },
+  'subagent.notice.completed': { zh: '{kind}已完成', en: '{kind} completed' },
+  'subagent.notice.failed': { zh: '{kind}失败', en: '{kind} failed' },
+  'subagent.notice.stopped': { zh: '{kind}已停止', en: '{kind} stopped' },
+  'subagent.notice.withSummary': { zh: '{text}：{summary}', en: '{text}: {summary}' },
+  'subagent.box.other': { zh: '后台任务', en: 'Background task' },
+} as const

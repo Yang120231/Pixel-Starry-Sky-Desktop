@@ -25,7 +25,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import type { FileChange, Item, ItemStatus, ToolKind } from '@pixelsky/protocol'
-import { CopyButton, DiffStat, IconButton, cn } from '@/ui'
+import { CopyButton, DiffStat, IconButton, cn, useToast } from '@/ui'
 import { DiffView } from '@/ui/code/DiffView'
 import { CommandText } from '@/ui/code/CommandText'
 import { AnsiText } from '@/ui/code/AnsiText'
@@ -37,9 +37,13 @@ import { shouldFoldUser, userBlocks } from './userBlocks'
 import { CodeBlock } from '@/ui/code/CodeBlock'
 import { freshRequest, useExpandRequest } from '@/features/search/expand'
 import { openFile } from '@/features/files/store'
-import { getActiveWorkspace } from '@/features/editor/target'
 import { useAppMode } from '@/features/coding/mode'
 import { revealAiCommand } from '@/features/coding/bottom'
+import { pathClickHandlers } from '@/ui/pathClick'
+import { pathHint, revealPath } from '@/features/files/reveal'
+import { taskNoticeText } from './subagentBoxModel'
+import { foldNotice } from './noticeFold'
+import { getActiveWorkspace } from '@/features/editor/target'
 import { ImageAttachments } from '@/features/session/attachments/ImageAttachments'
 import { FileAttachments } from '@/features/session/attachments/FileAttachments'
 import { Markdown } from '@/ui/markdown/Markdown'
@@ -465,10 +469,14 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
   const row = useRef<HTMLDivElement>(null)
   const [fileError, setFileError] = useState('')
   const openTrace = useOpenTrace()
+  const toast = useToast()
   const code = useAppMode() === 'code'
-  const openChangedFile = (change: FileChange): void => {
+  const changedRef = () => {
     const sessionId = row.current?.closest<HTMLElement>('[data-search-session]')?.dataset.searchSession
-    const ref = sessionId ? { sessionId } : getActiveWorkspace().ref
+    return sessionId ? { sessionId } : getActiveWorkspace().ref
+  }
+  const openChangedFile = (change: FileChange): void => {
+    const ref = changedRef()
     if (!ref) return
     const added = change.diff
       .split('\n')
@@ -476,6 +484,15 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
       .map(l => l.slice(1))
       .join('\n')
     void openFile(ref, change.path, undefined, 1, change.newText || added).catch(e => setFileError(e.message))
+  }
+  /** 单击打开、双击在文件夹中显示（docs/ui/path-click.md）；远程机器不能显示，提示只写单击打开 */
+  const changedClick = (change: FileChange) => {
+    const ref = changedRef()
+    const reveal = ref ? () => void revealPath(ref, change.path, toast) : null
+    return {
+      title: pathHint(ref, change.path),
+      ...pathClickHandlers({ open: () => openChangedFile(change), reveal }),
+    }
   }
 
   if (item.kind === 'command') {
@@ -495,7 +512,8 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
               <button
                 type="button"
                 onClick={() => {
-                  const sessionId = row.current?.closest<HTMLElement>('[data-search-session]')?.dataset.searchSession
+                  const ref = changedRef()
+                  const sessionId = ref && 'sessionId' in ref ? ref.sessionId : undefined
                   if (sessionId) revealAiCommand(sessionId, item.id)
                 }}
                 className="shrink-0 rounded-md px-2 py-1 text-meta text-accent-fg hover:bg-hover"
@@ -546,7 +564,7 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
         label={tr('session.ChangedFilesCard.openInEditor')}
         size={24}
         iconSize={13}
-        onClick={() => openChangedFile(c)}
+        {...changedClick(c)}
       />
     )
     const paths = (
@@ -560,8 +578,7 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
             <button
               key={c.path}
               type="button"
-              title={tr('session.live.ItemRows.openInPixelStarry', { p0: c.path })}
-              onClick={() => openChangedFile(c)}
+              {...changedClick(c)}
               className="truncate text-left font-mono text-meta text-code-path hover:underline"
             >
               {c.path}
@@ -762,10 +779,13 @@ export function TodoCard({ item }: { item: ItemOf<'todo'> }) {
 export function NoticeRow({ item }: { item: ItemOf<'notice'> }) {
   useI18n()
   const Icon = item.level === 'error' ? CircleAlert : item.level === 'warn' ? TriangleAlert : Info
-  const text = translateMessage(item.text)
+  // 后台任务结束的提示带结构化信息时按界面语言重新拼（引擎的 text 是中文）
+  const text = item.task ? taskNoticeText(item.task) : translateMessage(item.text)
   // 引擎给了原始报错详情（附加说明、错误类型、HTTP 状态码）时可展开查看和复制
   const detail = item.detail?.trim() || null
-  const { open, toggle, fold } = useFold(item.id, !!detail)
+  // 很长的提示（子智能体带回的整份报告）只显示前几行，展开后按 Markdown 显示（docs/ui/minimal-mode.md §7）
+  const long = foldNotice(text)
+  const { open, toggle, fold } = useFold(item.id, !!detail || !!long)
   return (
     <div
       data-fold={fold}
@@ -779,15 +799,24 @@ export function NoticeRow({ item }: { item: ItemOf<'notice'> }) {
     >
       <div className="flex items-start gap-2">
         <Icon size={15} strokeWidth={1.5} className="mt-[2px] shrink-0" />
-        <span className="min-w-0 flex-1 break-words whitespace-pre-wrap">{text}</span>
-        {detail && (
+        {long ? (
+          <Markdown text={open ? text : long.preview} className="selectable min-w-0 flex-1 text-fg-secondary" />
+        ) : (
+          <span className="min-w-0 flex-1 break-words whitespace-pre-wrap">{text}</span>
+        )}
+        {(detail || long) && (
           <button
             type="button"
             aria-expanded={open}
             onClick={toggle}
-            className="press -my-0.5 inline-flex h-6 shrink-0 items-center gap-0.5 rounded-md px-1.5 text-meta opacity-80 hover:bg-danger/10 hover:opacity-100"
+            className={cn(
+              'press -my-0.5 inline-flex h-6 shrink-0 items-center gap-0.5 rounded-md px-1.5 text-meta opacity-80 hover:opacity-100',
+              item.level === 'error' ? 'hover:bg-danger/10' : 'hover:bg-hover',
+            )}
           >
-            {tr(open ? 'session.notice.hideDetail' : 'session.notice.showDetail')}
+            {open
+              ? tr('session.notice.hideDetail')
+              : tr(detail ? 'session.notice.showDetail' : 'session.notice.showAll')}
             <ChevronRight
               size={13}
               strokeWidth={1.5}

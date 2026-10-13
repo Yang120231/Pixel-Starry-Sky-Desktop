@@ -14,9 +14,12 @@ import {
   type ReactNode,
 } from 'react'
 import { TurnRail } from './TurnRail'
+import { markTurnReviewed, useTurnReviewed } from '@/features/coding/review'
 import { turnsOf } from './turnRailModel'
 import { useTurnRailOn } from '@/features/settings/turnRail'
 import { useTranscriptWindowSize } from '@/features/settings/longConversation'
+import { useSubagentView } from '@/features/settings/subagentView'
+import { useMinimal } from '@/features/appearance/ThemeProvider'
 import { hiddenCount, initialHidden, revealEarlier, revealFor, startIndex, turnStarts } from './transcriptWindow'
 import {
   anchorOf,
@@ -28,8 +31,7 @@ import {
   type TranscriptPlace,
 } from './transcriptPlaces'
 import { useLightweight } from '@/features/recovery/lightweight'
-import { markTurnReviewed, useTurnReviewed } from '@/features/coding/review'
-import type { Item, SessionSnapshot } from '@pixelsky/protocol'
+import { isSubagentCall, isSubagentWork, type Item, type SessionSnapshot } from '@pixelsky/protocol'
 import { Spinner, cn } from '@/ui'
 import type { ChangedFiles } from '@/data'
 import { ChangedFilesCard } from '../ChangedFilesCard'
@@ -59,6 +61,8 @@ import { reviewTurn } from '@/features/panel/artifacts/focus'
 import { turnReplies } from './turnFold'
 import { innerBlocks, sameItems, toBlocks, type Block, type ChangesCache } from './changeBlocks'
 import { TurnProcess } from './TurnProcess'
+import { SubagentCompletionBox, SubagentDispatchBox } from './SubagentBox'
+import { approvalWaiting } from './subagentBoxModel'
 import { WAIT_CLOCK_MS, clockText, waitingFor } from './currentStep'
 import { useSince } from './stepClock'
 import { formatDuration } from './agentTrace'
@@ -134,11 +138,11 @@ const TurnChanges = memo(function TurnChanges({
     () => (sessionId ? () => reviewTurn(sessionId, turnKey === 'start' ? null : turnKey) : undefined),
     [sessionId, turnKey],
   )
-  // 代码模式「全部保留」：整轮标记为已审查，点过后按钮收起
   const keepAll = useMemo(
     () => (sessionId ? () => markTurnReviewed(sessionId, turnKey) : undefined),
     [sessionId, turnKey],
   )
+  // 点过「全部保留」后按钮收起
   const kept = useTurnReviewed(sessionId, turnKey)
   return (
     <ChangedFilesCard
@@ -184,6 +188,8 @@ const ProcessBlock = memo(
     a.highlight === b.highlight &&
     sameItems(a.items, b.items),
 )
+
+const NO_ITEMS: readonly Item[] = []
 
 export function LiveTranscript({
   snapshot,
@@ -269,24 +275,41 @@ export function LiveTranscript({
     const list = turnsOf(shownItems)
     return hiddenTurns > 0 ? list.map(t => ({ ...t, n: t.n + hiddenTurns })) : list
   }, [shownItems, hiddenTurns])
+  // 子智能体显示成小框，还是展开在执行里（docs/ui/subagent-box.md）
+  const subagents = useSubagentView()
+  const minimal = useMinimal()
   const changesCache = useRef<{ sessionId: string | null; map: ChangesCache }>({ sessionId: null, map: new Map() })
   const blocks = useMemo(() => {
     if (changesCache.current.sessionId !== sessionId) changesCache.current = { sessionId, map: new Map() }
-    return toBlocks(shownItems, running, changesCache.current.map)
-  }, [shownItems, running, sessionId])
+    return toBlocks(shownItems, running, changesCache.current.map, { subagents })
+  }, [shownItems, running, sessionId, subagents])
   // 每轮统计行对应的回复：和显示在外面的「最后的回复」是同一段（中间穿插工具调用的过渡话不算）
-  const replies = useMemo(() => turnReplies(shownItems), [shownItems])
+  const replies = useMemo(() => turnReplies(shownItems, { subagents }), [shownItems, subagents])
+  // 子智能体要批准时，它的小框写「等你批准」
+  const pending = snapshot?.pending
+  const approving = useMemo(
+    () => (subagents === 'box' && pending?.length ? approvalWaiting(shownItems, pending) : null),
+    [subagents, shownItems, pending],
+  )
 
   // 最后一块不是正在流式输出的文字、也不是转着圈的执行块时，显示「处理中」（不然几个转圈同时出现）
-  const last = items[items.length - 1]
+  // 小框模式下子智能体自己的工具调用不显示，判断「最后一条」时也要跳过；最后一条是还在跑的派发小框时，小框自己转圈
+  const shownAll = snapshot?.items ?? NO_ITEMS
+  const visible = useMemo(
+    () => (subagents === 'box' ? shownAll.filter(it => !isSubagentWork(it)) : shownAll),
+    [shownAll, subagents],
+  )
+  const last = visible[visible.length - 1]
   const streaming = last && (last.kind === 'assistant' || last.kind === 'reasoning') && last.status === 'running'
   const lastBlock = blocks[blocks.length - 1]
-  const busyBlock = lastBlock?.type === 'process' && lastBlock.running
+  const busyBlock =
+    (lastBlock?.type === 'process' && lastBlock.running) ||
+    (subagents === 'box' && last?.kind === 'tool' && isSubagentCall(last) && last.status === 'running')
   // 正在压缩时压缩条自己带计时，不再叠一行「正在思考 · 53s」
   const compacting = last?.kind === 'compaction' && last.status === 'running'
   const showThinking = snapshot?.state === 'running' && !streaming && !busyBlock && !compacting
   // 写具体在等什么（刚发消息：正在思考；工具刚结束：正在看结果），等久了带上秒数（docs/ui/conversation-concise.md §7）
-  const waiting = showThinking ? waitingFor(items) : null
+  const waiting = showThinking ? waitingFor(visible) : null
   const waitedMs = useSince(waiting ? `wait:${last?.id ?? 'start'}:${waiting}` : null, showThinking)
   // 空闲时直接发送的消息在引擎启动期间先显示在对话里（不是排队），开始执行后由正式的用户消息替换
   const starting = snapshot ? snapshot.queue.filter(q => isStarting(q, snapshot.queuePaused)) : []
@@ -517,6 +540,23 @@ export function LiveTranscript({
         </div>
       )
     }
+    // 小框（docs/ui/subagent-box.md）：派发子智能体的调用、后台子智能体完成的提示
+    const boxed =
+      subagents === 'box' && (item.kind === 'tool' ? isSubagentCall(item) : item.kind === 'notice' && !!item.task)
+    if (boxed)
+      return (
+        <div
+          key={item.id}
+          data-search-item={item.id}
+          style={placeholder(minimal ? 28 : 36)}
+          className={['conversation-message', highlight === item.id ? 'search-hit' : ''].join(' ')}
+        >
+          {item.kind === 'tool' && (
+            <SubagentDispatchBox item={item} runs={snapshot?.runs} approval={!!approving?.has(item.id)} />
+          )}
+          {item.kind === 'notice' && item.task && <SubagentCompletionBox task={item.task} runs={snapshot?.runs} />}
+        </div>
+      )
     return (
       <div
         key={item.id}

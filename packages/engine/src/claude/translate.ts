@@ -12,6 +12,7 @@ import type {
   Item,
   ItemStatus,
   ModelTurnUsage,
+  NoticeTask,
   PermissionMode,
   SubagentStatus,
   TurnOutcome,
@@ -76,6 +77,19 @@ const TASK_KIND: Record<string, string> = {
 const TASK_STATUS: Record<string, string> = { completed: '已完成', failed: '失败', stopped: '已停止' }
 /** 跑完会叫醒主线接着干的后台任务；后台命令、监视器可能一直开着（例如开发服务器），不算（docs/ui/notifications.md §7） */
 const WAKES_MAIN = ['local_agent', 'local_workflow', 'remote_agent']
+
+/** 后台任务类型 → 结束提示里结构化信息的 kind；认不出的类型不带结构化信息，界面照旧显示文字 */
+function noticeTaskKind(kind: string): NoticeTask['kind'] | null {
+  const key = Object.keys(NOTICE_TASK_KIND).find(k => kind === k || kind.startsWith(k))
+  return key ? NOTICE_TASK_KIND[key] : null
+}
+const NOTICE_TASK_KIND: Record<string, NoticeTask['kind']> = {
+  local_agent: 'agent',
+  local_workflow: 'workflow',
+  local_bash: 'bash',
+  monitor: 'monitor',
+  remote_agent: 'remote_agent',
+}
 
 export function taskKindLabel(kind: string): string {
   const key = Object.keys(TASK_KIND).find(k => kind === k || kind.startsWith(k))
@@ -271,10 +285,17 @@ export class ClaudeTranslator {
     return `${prefix}-${Date.now().toString(36)}-${++this.seq}`
   }
 
-  notice(level: 'info' | 'warn' | 'error', text: string, detail?: string | null): void {
+  notice(level: 'info' | 'warn' | 'error', text: string, detail?: string | null, task?: NoticeTask): void {
     this.cb.emit({
       type: 'item_completed',
-      item: { kind: 'notice', id: this.nextId('notice'), level, text, ...(detail ? { detail } : {}) },
+      item: {
+        kind: 'notice',
+        id: this.nextId('notice'),
+        level,
+        text,
+        ...(detail ? { detail } : {}),
+        ...(task ? { task } : {}),
+      },
     })
   }
 
@@ -446,9 +467,22 @@ export class ClaudeTranslator {
           const raw = str(msg.summary)
           const apiRaw = status === 'failed' ? /API error:\s*([^]*)$/i.exec(raw)?.[1] : undefined
           const summary = (apiRaw && friendlyApiError(null, apiRaw)) || raw
+          // 结构化信息给界面画完成小框（docs/ui/subagent-box.md §4.4）；text 照旧，旧界面、导出、通知还用它
+          const taskKind = noticeTaskKind(info?.kind ?? '')
+          const task: NoticeTask | undefined = taskKind
+            ? {
+                ...(call ? { toolUseId: call } : {}),
+                kind: taskKind,
+                status: status === 'completed' || status === 'failed' ? status : 'stopped',
+                label: info?.description ?? '',
+                ...(summary ? { summary } : {}),
+              }
+            : undefined
           this.notice(
             status === 'failed' ? 'warn' : 'info',
             kind + (TASK_STATUS[status] ?? '已结束') + (summary ? '：' + summary : ''),
+            null,
+            task,
           )
         }
         break

@@ -117,3 +117,63 @@ describe('按子智能体分组', () => {
     expect(agentFileCount(counts, null, 'Nobody')).toBe(0)
   })
 })
+
+describe('子智能体显示成小框（docs/ui/subagent-box.md）', () => {
+  const agent = (id: string): Item =>
+    ({ kind: 'tool', id, tool: 'task', name: 'Agent', title: id, output: '', status: 'completed' }) as Item
+  const cmd = (id: string, sub?: boolean): Item =>
+    ({
+      kind: 'command',
+      id,
+      command: id,
+      description: null,
+      output: '',
+      exitCode: 0,
+      status: 'completed',
+      ...(sub ? { subagent: 'C1', subagentCall: 'ag1' } : {}),
+    }) as Item
+  const C1 = { name: 'C1', call: 'ag1' }
+  const items = [
+    user('u1'),
+    cmd('c1'),
+    agent('ag1'),
+    cmd('sc1', true),
+    edit('e1', 'src/a.ts', C1),
+    edit('e2', 'src/main.ts'),
+    reply('r1'),
+    stats('s1'),
+  ]
+  const box = { subagents: 'box' } as const
+  const shape = (blocks: Block[]) =>
+    blocks.map(b =>
+      b.type === 'process'
+        ? b.items.map(i => i.id)
+        : b.type === 'tools'
+          ? b.items.map(i => i.id)
+          : b.type === 'item'
+            ? b.item.id
+            : b.type,
+    )
+
+  it('box：派发单独成块，执行块在它前后断开，子智能体的条目不在对话流里', () => {
+    expect(shape(toBlocks(items, false, new Map(), box))).toEqual(['u1', ['c1'], 'ag1', ['e2'], 'r1', 'changes', 's1'])
+  })
+
+  it('box：改动卡片不变，子智能体改的文件照旧在卡片里按来源分组', () => {
+    const inline = cards(toBlocks(items, false, new Map()))[0]
+    const boxed = cards(toBlocks(items, false, new Map(), box))[0]
+    expect(boxed).toEqual(inline)
+    expect(boxed.type === 'changes' && boxed.data.groups?.map(g => g.key)).toEqual(['main', 'ag1'])
+  })
+
+  it('box：运行中最后一个结束点之后藏起来的改动同样不算进卡片', () => {
+    const running = [...items.slice(0, 8), edit('e3', 'src/b.ts', C1)]
+    expect(cards(toBlocks(running, true, new Map(), box))).toEqual(cards(toBlocks(running, true, new Map())))
+  })
+
+  it('inline：和不传选项完全一样，派发留在执行块里', () => {
+    const plain = toBlocks(items, false, new Map())
+    expect(toBlocks(items, false, new Map(), { subagents: 'inline' })).toEqual(plain)
+    expect(shape(plain)).toEqual(['u1', ['c1', 'ag1', 'sc1', 'e1', 'e2'], 'r1', 'changes', 's1'])
+  })
+})

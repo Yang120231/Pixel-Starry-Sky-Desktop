@@ -10,7 +10,9 @@ import {
   Bot,
   Check,
   ChevronRight,
+  CircleCheck,
   CircleDashed,
+  History,
   Minus,
   PanelRight,
   PictureInPicture2,
@@ -42,6 +44,8 @@ import { useDockFloat, type DragKind } from './useDockFloat'
 import { ChangedFilesCard } from '../ChangedFilesCard'
 import { agentFileCount, filesByAgent } from './changeBlocks'
 import type { ResizeDir } from './traceWindow'
+import { ago, endedAt, partitionRuns, turnToolUseIds, type TraceEntry } from './traceHistory'
+import { clearHistory, markSeen, restoreHistory, setOnlyTurn, useTraceHistoryState } from './traceHistoryStore'
 
 /** 会话顶部栏高度（top-12）和面板标题栏高度（h-11） */
 const SESSION_HEADER = 48
@@ -158,6 +162,15 @@ function AgentRow({
   )
 }
 
+function UnseenTag() {
+  useI18n()
+  return (
+    <span className="shrink-0 rounded-full bg-warn/15 px-1.5 text-label font-medium text-warn">
+      {tr('trace.history.unseen')}
+    </span>
+  )
+}
+
 function ColumnHead() {
   useI18n()
   return (
@@ -178,19 +191,22 @@ function WorkflowSection({
   onToggle,
   now,
   onPick,
+  unseen,
 }: {
   run: WorkflowRun
   open: boolean
   onToggle: () => void
   now: number
   onPick: (id: string) => void
+  /** 「需要看一眼」里还没看过的：橙色细边框 + 小标签 */
+  unseen?: boolean
 }) {
   useI18n()
   const bars = useMemo(() => timeline(run.agents, now), [run.agents, now])
   const p = progress(run)
   const s = runState(run.status)
   return (
-    <section className="rounded-xl border border-line bg-surface shadow-sm">
+    <section className={cn('rounded-xl border bg-surface shadow-sm', unseen ? 'border-warn/35' : 'border-line')}>
       <button
         type="button"
         onClick={onToggle}
@@ -209,6 +225,7 @@ function WorkflowSection({
             <span className="block truncate text-meta text-fg-muted">{run.description}</span>
           )}
         </span>
+        {unseen && <UnseenTag />}
         <StateIcon state={run.status} />
       </button>
       <div className="flex flex-wrap gap-x-3 gap-y-0.5 px-3 pb-2 pl-[52px] text-meta text-fg-muted tabular-nums">
@@ -246,6 +263,172 @@ function WorkflowSection({
         </div>
       )}
     </section>
+  )
+}
+
+/** 历史里的一行：状态、名字、几个智能体 / 子智能体、耗时、tokens、多久前 */
+function HistoryRow({ entry, now, onClick }: { entry: TraceEntry; now: number; onClick: () => void }) {
+  useI18n()
+  const { run } = entry
+  const wf = entry.kind === 'workflow'
+  const state = entry.kind === 'workflow' ? entry.run.status : entry.run.state
+  const s = runState(state)
+  const name =
+    entry.kind === 'workflow'
+      ? entry.run.name || entry.run.description || entry.run.id
+      : entry.run.label || entry.run.id
+  const kind =
+    entry.kind === 'workflow'
+      ? countText(entry.run.agents.length, 'trace.history.agentsOne', 'trace.history.agentsMany')
+      : tr('trace.history.subagent')
+  return (
+    <button
+      type="button"
+      data-trace-history-row
+      aria-expanded={wf ? false : undefined}
+      onClick={onClick}
+      disabled={!run.id}
+      title={name}
+      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-meta hover:bg-hover disabled:cursor-default disabled:hover:bg-transparent"
+    >
+      <StateIcon state={state} />
+      <span className="min-w-0 flex-1 truncate text-list text-fg">{name}</span>
+      <span className="shrink-0 text-label text-fg-faint">{kind}</span>
+      <span className="w-14 shrink-0 text-right text-fg-muted tabular-nums">
+        {formatDuration(elapsed(run, s, now))}
+      </span>
+      <span className="w-16 shrink-0 text-right text-fg-muted tabular-nums">{formatCount(run.tokens)}</span>
+      <span className="w-14 shrink-0 text-right text-fg-faint tabular-nums">
+        {endedAt(run) > 0 ? ago(endedAt(run), now) : ''}
+      </span>
+      <ChevronRight size={13} strokeWidth={1.5} className="shrink-0 text-fg-faint" />
+    </button>
+  )
+}
+
+/** 历史：默认折叠成一行虚线框，展开后一行一个；编排点开就地变卡片，子智能体进详情 */
+function TraceHistory({
+  sessionId,
+  entries,
+  clearedCount,
+  onlyTurn,
+  now,
+  onPick,
+}: {
+  sessionId: string
+  entries: TraceEntry[]
+  clearedCount: number
+  onlyTurn: boolean
+  now: number
+  onPick: (id: string) => void
+}) {
+  useI18n()
+  const [open, setOpen] = useState(false)
+  const [cards, setCards] = useState<Record<string, boolean>>({})
+  const tokens = entries.reduce((n, e) => n + e.run.tokens, 0)
+  const allCleared = entries.length === 0 && clearedCount > 0
+  const summary = [
+    onlyTurn
+      ? tr('trace.history.thisTurn', { n: entries.length })
+      : tr('trace.history.completed', { n: entries.length }),
+    tr('session.live.AgentTracePanel.tokensTotal', { tokens: formatCount(tokens) }),
+  ].join(' · ')
+  const small =
+    'shrink-0 rounded-md px-2 py-0.5 text-label text-fg-muted hover:bg-hover hover:text-fg focus-visible:outline-2 focus-visible:outline-accent'
+  return (
+    <div
+      data-trace-history
+      role="group"
+      aria-label={tr('trace.history.sectionHistory')}
+      className="flex flex-col gap-1"
+    >
+      <div
+        data-trace-history-row
+        className="flex items-center gap-1 rounded-lg border border-dashed border-line px-2 py-1.5"
+      >
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-label={open ? tr('trace.history.collapse') : tr('trace.history.expand')}
+          onClick={() => setOpen(v => !v)}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left text-meta text-fg-muted"
+        >
+          <History size={14} strokeWidth={1.5} className="shrink-0" />
+          <span className="min-w-0 truncate tabular-nums">
+            {allCleared ? tr('trace.history.cleared', { n: clearedCount }) : summary}
+          </span>
+          <ChevronRight
+            size={13}
+            strokeWidth={1.5}
+            className={cn('shrink-0 transition-transform duration-(--dur-fast)', open && 'rotate-90')}
+          />
+        </button>
+        {clearedCount > 0 && (
+          <span className="flex shrink-0 items-center gap-1 text-label text-fg-faint">
+            {!allCleared && tr('trace.history.cleared', { n: clearedCount })}
+            <button
+              type="button"
+              aria-label={tr('trace.history.show')}
+              onClick={() => restoreHistory(sessionId)}
+              className="rounded-md px-1 text-accent hover:bg-hover"
+            >
+              {tr('trace.history.show')}
+            </button>
+          </span>
+        )}
+        <button
+          type="button"
+          aria-pressed={onlyTurn}
+          aria-label={tr('trace.history.onlyTurn')}
+          title={tr('trace.history.onlyTurnHint')}
+          onClick={() => setOnlyTurn(!onlyTurn)}
+          className={cn(small, onlyTurn && 'bg-selected text-fg')}
+        >
+          {tr('trace.history.onlyTurn')}
+        </button>
+        {entries.length > 0 && (
+          <button
+            type="button"
+            aria-label={tr('trace.history.clear')}
+            title={tr('trace.history.clearHint')}
+            onClick={() => clearHistory(sessionId, Date.now())}
+            className={small}
+          >
+            {tr('trace.history.clear')}
+          </button>
+        )}
+      </div>
+      {open &&
+        (entries.length === 0 ? (
+          <div className="px-2 py-1 text-meta text-fg-faint">
+            {onlyTurn ? tr('trace.history.empty') : tr('trace.history.emptyAll')}
+          </div>
+        ) : (
+          entries.map((e, i) => {
+            const id = e.run.id
+            if (e.kind === 'workflow' && cards[id]) {
+              return (
+                <WorkflowSection
+                  key={`w-${id || i}`}
+                  run={e.run}
+                  open
+                  onToggle={() => setCards(c => ({ ...c, [id]: false }))}
+                  now={now}
+                  onPick={onPick}
+                />
+              )
+            }
+            return (
+              <HistoryRow
+                key={`${e.kind}-${id || i}`}
+                entry={e}
+                now={now}
+                onClick={() => (e.kind === 'workflow' ? setCards(c => ({ ...c, [id]: true })) : onPick(id))}
+              />
+            )
+          })
+        ))}
+    </div>
   )
 }
 
@@ -421,10 +604,8 @@ export function AgentTracePanel({ sessionId, runs, focus, onFocus, onClose, belo
     return () => window.clearInterval(t)
   }, [running])
 
-  // 运行中的和最新的一个编排默认展开
+  // 正在跑的编排默认展开；需要看一眼的默认收起
   const [open, setOpen] = useState<Record<string, boolean>>({})
-  const isOpen = (w: WorkflowRun, i: number) =>
-    open[w.id] ?? (runState(w.status) === 'running' || i === runs.workflows.length - 1)
 
   const focused = useMemo(() => {
     if (!focus) return null
@@ -439,9 +620,45 @@ export function AgentTracePanel({ sessionId, runs, focus, onFocus, onClose, belo
   // 子智能体改了几个文件：主会话里它的工具条目带着派出它的 Agent 调用 id
   const sessionItems = useEngineState(s => s.snapshots[sessionId]?.items)
   const fileCounts = useMemo(() => filesByAgent(sessionItems ?? []), [sessionItems])
-  const totalTokens = [...runs.workflows, ...runs.agents].reduce((n, r) => n + r.tokens, 0)
-  const agentBars = useMemo(() => timeline(runs.agents, now), [runs.agents, now])
+  const turnIds = useMemo(() => turnToolUseIds(sessionItems ?? []), [sessionItems])
+  const hist = useTraceHistoryState(sessionId)
+  // 在「需要看一眼」里展开过的编排：已记为看过，但这次打开期间先留在原地，免得点开就消失
+  const [held, setHeld] = useState<ReadonlySet<string>>(() => new Set())
+  const seen = useMemo(() => {
+    if (held.size === 0) return hist.seen
+    const next = new Set(hist.seen)
+    for (const id of held) next.delete(id)
+    return next
+  }, [hist.seen, held])
+  const part = useMemo(
+    () =>
+      partitionRuns(runs, {
+        now,
+        seen,
+        clearedAt: hist.clearedAt,
+        onlyTurn: hist.onlyTurn,
+        turnToolUseIds: turnIds,
+      }),
+    [runs, now, seen, hist.clearedAt, hist.onlyTurn, turnIds],
+  )
+  const runningCount = part.running.workflows.length + part.running.agents.length
+  const agentBars = useMemo(() => timeline(part.running.agents, now), [part.running.agents, now])
   const empty = runs.workflows.length === 0 && runs.agents.length === 0
+  const allDone = !empty && runningCount === 0 && part.attention.length === 0
+  const showHistory = part.history.length > 0 || part.clearedCount > 0 || hist.onlyTurn
+
+  // 看过：进了子智能体详情，或在「需要看一眼」里展开了编排（别在 render 里写 localStorage）
+  // 只记失败 / 停止的：还在跑的先别记，免得之后失败了直接进历史；在编排里的子智能体连带记它所属的编排
+  const bad = (s: string | undefined) => s !== undefined && ['failed', 'stopped'].includes(runState(s))
+  const focusedId = focused && bad(focused.agent.state) ? focused.agent.id : undefined
+  const focusedWfId = focused?.run && bad(focused.run.status) ? focused.run.id : undefined
+  useEffect(() => {
+    if (focusedId) markSeen(sessionId, focusedId)
+    if (focusedWfId) markSeen(sessionId, focusedWfId)
+  }, [sessionId, focusedId, focusedWfId])
+  useEffect(() => {
+    for (const id of held) markSeen(sessionId, id)
+  }, [sessionId, held])
 
   // 停靠 / 浮动：量面板的父元素（会话主区），位置计算见 traceWindow.ts
   const rootRef = useRef<HTMLElement>(null)
@@ -544,19 +761,17 @@ export function AgentTracePanel({ sessionId, runs, focus, onFocus, onClose, belo
         </span>
         {!empty && (
           <span className="min-w-0 truncate text-meta text-fg-muted tabular-nums">
-            {[
-              countText(
-                runs.workflows.length,
-                'session.live.AgentTracePanel.orchestration',
-                'session.live.AgentTracePanel.orchestrations',
-              ),
-              countText(
-                runs.agents.length,
-                'session.live.AgentTracePanel.subagent',
-                'session.live.AgentTracePanel.subagents',
-              ),
-              tr('session.live.AgentTracePanel.tokensTotal', { tokens: formatCount(totalTokens) }),
-            ].join(' · ')}
+            {runningCount > 0 ? (
+              <span className="text-warn">{tr('trace.history.running', { n: runningCount })}</span>
+            ) : part.attention.length > 0 ? (
+              <span className="text-warn">{tr('trace.history.attention', { n: part.attention.length })}</span>
+            ) : (
+              <span className="text-success">{tr('trace.history.allDone')}</span>
+            )}
+            {' · '}
+            {tr('trace.history.historyCount', { n: part.history.length })}
+            {' · '}
+            {tr('session.live.AgentTracePanel.tokensTotal', { tokens: formatCount(part.totalTokens) })}
           </span>
         )}
         <span className="flex-1" />
@@ -583,33 +798,100 @@ export function AgentTracePanel({ sessionId, runs, focus, onFocus, onClose, belo
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {runs.workflows.map((w, i) => (
-              <WorkflowSection
-                key={w.id}
-                run={w}
-                open={isOpen(w, i)}
-                onToggle={() => setOpen(o => ({ ...o, [w.id]: !isOpen(w, i) }))}
-                now={now}
-                onPick={onFocus}
-              />
-            ))}
-            {runs.agents.length > 0 && (
-              <section className="rounded-xl border border-line bg-surface px-1.5 pt-2.5 pb-1.5 shadow-sm">
-                <div className="px-2 pb-2 text-ui font-medium text-fg">
-                  {tr('session.live.AgentTracePanel.subagentsAgentTool')}
-                </div>
-                <ColumnHead />
-                {runs.agents.map(a => (
-                  <AgentRow
-                    key={a.id}
-                    a={a}
-                    bar={agentBars.get(a.id || a.label)}
+            {runningCount > 0 && (
+              <>
+                <div className="px-0.5 text-label font-medium text-fg-muted">{tr('trace.history.sectionRunning')}</div>
+                {part.running.workflows.map(w => (
+                  <WorkflowSection
+                    key={w.id}
+                    run={w}
+                    open={open[w.id] ?? true}
+                    onToggle={() => setOpen(o => ({ ...o, [w.id]: !(o[w.id] ?? true) }))}
                     now={now}
-                    files={agentFileCount(fileCounts, a.toolUseId, a.label)}
                     onPick={onFocus}
                   />
                 ))}
-              </section>
+                {part.running.agents.length > 0 && (
+                  <section className="rounded-xl border border-line bg-surface px-1.5 pt-2.5 pb-1.5 shadow-sm">
+                    <div className="px-2 pb-2 text-ui font-medium text-fg">
+                      {tr('session.live.AgentTracePanel.subagentsAgentTool')}
+                    </div>
+                    <ColumnHead />
+                    {part.running.agents.map(a => (
+                      <AgentRow
+                        key={a.id}
+                        a={a}
+                        bar={agentBars.get(a.id || a.label)}
+                        now={now}
+                        files={agentFileCount(fileCounts, a.toolUseId, a.label)}
+                        onPick={onFocus}
+                      />
+                    ))}
+                  </section>
+                )}
+              </>
+            )}
+            {part.attention.length > 0 && (
+              <>
+                <div className="px-0.5 text-label font-medium text-fg-muted">
+                  {tr('trace.history.sectionAttention')}
+                </div>
+                {part.attention.map(e =>
+                  e.kind === 'workflow' ? (
+                    <WorkflowSection
+                      key={`w-${e.run.id}`}
+                      run={e.run}
+                      unseen
+                      open={open[e.run.id] ?? false}
+                      onToggle={() => {
+                        const w = e.run
+                        // 展开时留在原地；收起就放走，已记为看过的这时才挪进历史
+                        setHeld(h => {
+                          const next = new Set(h)
+                          if (open[w.id] ?? false) next.delete(w.id)
+                          else next.add(w.id)
+                          return next
+                        })
+                        setOpen(o => ({ ...o, [w.id]: !(o[w.id] ?? false) }))
+                      }}
+                      now={now}
+                      onPick={onFocus}
+                    />
+                  ) : (
+                    <section
+                      key={`a-${e.run.id}`}
+                      className="flex items-center gap-1 rounded-xl border border-warn/35 bg-surface px-1.5 py-1 shadow-sm"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <AgentRow
+                          a={e.run}
+                          now={now}
+                          files={agentFileCount(fileCounts, e.run.toolUseId, e.run.label)}
+                          onPick={onFocus}
+                        />
+                      </div>
+                      <UnseenTag />
+                    </section>
+                  ),
+                )}
+              </>
+            )}
+            {allDone && (
+              <div className="flex flex-col items-center px-6 py-6 text-center">
+                <CircleCheck size={26} strokeWidth={1.5} className="text-success" />
+                <div className="mt-2 text-ui text-fg">{tr('trace.history.allDone')}</div>
+                <p className="mt-1 text-meta text-fg-muted">{tr('trace.history.allDoneDetail')}</p>
+              </div>
+            )}
+            {showHistory && (
+              <TraceHistory
+                sessionId={sessionId}
+                entries={part.history}
+                clearedCount={part.clearedCount}
+                onlyTurn={hist.onlyTurn}
+                now={now}
+                onPick={onFocus}
+              />
             )}
           </div>
         )}

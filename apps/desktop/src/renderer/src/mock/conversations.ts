@@ -874,7 +874,13 @@ const userMessages = snapshot(record('demo-claude-user', { updatedAt: T0 - 15 * 
     preTokens: 184_213,
     postTokens: 12_480,
   },
-  { kind: 'notice', id: 'c-n3', level: 'info', text: '后台命令已完成：pnpm test --watch' },
+  {
+    kind: 'notice',
+    id: 'c-n3',
+    level: 'info',
+    text: '后台命令已完成：pnpm test --watch',
+    task: { kind: 'bash', status: 'completed', label: 'pnpm test --watch' },
+  },
   { kind: 'notice', id: 'c-n2', level: 'warn', text: 'Fast 模式暂时不可用：限流冷却中，稍后会自动恢复' },
   assistant(
     'c-a4',
@@ -1641,6 +1647,9 @@ const BG_AGENTS = [
   { id: 'agent-bg-tests', call: 'bg-t3', label: '补齐草稿的测试' },
 ] as const
 
+const BG_FAILED = { id: 'agent-bg-lint', call: 'bg-t4', label: '跑全量 lint' } as const
+const BG_STOPPED_WF_CALL = 'bg-w1'
+
 const bgEdit = (id: string, agent: (typeof BG_AGENTS)[number] | null, path: string, lines: string[]): Item => ({
   kind: 'file_change',
   id,
@@ -1649,7 +1658,7 @@ const bgEdit = (id: string, agent: (typeof BG_AGENTS)[number] | null, path: stri
   ...(agent ? { subagent: agent.label, subagentCall: agent.call } : {}),
 })
 
-const bgAgentCall = (agent: (typeof BG_AGENTS)[number], output: string): Item => ({
+const bgAgentCall = (agent: { call: string; label: string }, output: string): Item => ({
   kind: 'tool',
   id: agent.call,
   tool: 'task',
@@ -1710,37 +1719,94 @@ const subagents = snapshot(
     bgAgentCall(BG_AGENTS[0], '已在后台启动'),
     bgAgentCall(BG_AGENTS[1], '已在后台启动'),
     bgAgentCall(BG_AGENTS[2], '已在后台启动'),
+    // 追踪历史演示：一个失败的子智能体、一个被停掉的编排（只有调用，没有改动）
+    bgAgentCall(BG_FAILED, '已在后台启动'),
+    {
+      kind: 'tool',
+      id: BG_STOPPED_WF_CALL,
+      tool: 'task',
+      name: 'Workflow',
+      title: '迁移前后对比',
+      output: '已在后台启动',
+      status: 'completed',
+    },
     assistant('bg-a1', '先把 `useDraft` 从入口导出，三个子智能体已在后台开始，完成后我逐个汇报。'),
     stats('bg-s1', 'completed', { durationMs: 21_000, models: { 'claude-opus-5-5': opus(1_900, 620, 0.0451) } }),
     // 子智能体 1 跑完：它的改动在主会话里，带名字和派出它的调用 id；主智能体被唤醒说一句
     bgEdit('bg-f1', BG_AGENTS[0], 'src/session/Composer.jsx', BG_EDITS.composerState),
     bgEdit('bg-f2', BG_AGENTS[0], 'src/session/SessionView.jsx', BG_EDITS.composerHook),
-    { kind: 'notice', id: 'bg-n1', level: 'info', text: '子智能体已完成：拆分 Composer 的状态' },
+    {
+      kind: 'notice',
+      id: 'bg-n1',
+      level: 'info',
+      text: '子智能体已完成：拆分 Composer 的状态',
+      task: { toolUseId: BG_AGENTS[0].call, kind: 'agent', status: 'completed', label: '拆分 Composer 的状态' },
+    },
     assistant('bg-a2', '「拆分 Composer 的状态」完成：状态挪进了 `useComposerState`，`SessionView.jsx` 改成传草稿。'),
     stats('bg-s2', 'completed', { durationMs: 3_400, models: { 'claude-opus-5-5': opus(2_100, 140, 0.0213) } }),
     // 子智能体 2：也改了 Composer.jsx（同一个文件在两组里，标题只算一个）
     bgEdit('bg-f3', BG_AGENTS[1], 'src/session/useDraft.ts', BG_EDITS.draftStore),
     bgEdit('bg-f4', BG_AGENTS[1], 'src/session/Composer.jsx', BG_EDITS.draftComposer),
-    { kind: 'notice', id: 'bg-n2', level: 'info', text: '子智能体已完成：草稿改用 IndexedDB' },
+    {
+      kind: 'notice',
+      id: 'bg-n2',
+      level: 'info',
+      text: '子智能体已完成：草稿改用 IndexedDB',
+      task: { toolUseId: BG_AGENTS[1].call, kind: 'agent', status: 'completed', label: '草稿改用 IndexedDB' },
+    },
     assistant('bg-a3', '「草稿改用 IndexedDB」完成，`useDraft.ts` 改成读写 IndexedDB。'),
     stats('bg-s3', 'completed', { durationMs: 2_900, models: { 'claude-opus-5-5': opus(2_300, 120, 0.0198) } }),
     bgEdit('bg-f5', BG_AGENTS[2], 'src/session/__tests__/useDraft.test.ts', BG_EDITS.draftTest),
-    { kind: 'notice', id: 'bg-n3', level: 'info', text: '子智能体已完成：补齐草稿的测试' },
+    {
+      kind: 'notice',
+      id: 'bg-n3',
+      level: 'info',
+      text: '子智能体已完成：补齐草稿的测试',
+      task: { toolUseId: BG_AGENTS[2].call, kind: 'agent', status: 'completed', label: '补齐草稿的测试' },
+    },
     assistant('bg-a4', '三个都完成了：测试补了 IndexedDB 不可用时的退路。改动在下面按子智能体分好组了。'),
     stats('bg-s4', 'completed', { durationMs: 3_100, models: { 'claude-opus-5-5': opus(2_500, 160, 0.0236) } }),
   ],
   {
     runs: {
-      workflows: [],
-      agents: BG_AGENTS.map((a, i) =>
-        agentRun(a.id, a.label, {
+      workflows: [
+        {
+          id: 'wf-compare',
+          name: 'compare',
+          description: '迁移前后对比草稿读写',
+          status: 'stopped',
+          startedAt: T0 - 7 * MIN,
+          durationMs: 38_000,
+          tokens: 27_000,
+          toolCalls: 8,
+          phases: [{ index: 1, title: '对比' }],
+          agents: [
+            agentRun('wf-cmp-old', '旧读写路径', { phase: 1, durationMs: 21_000, result: '旧路径梳理完成。' }),
+            agentRun('wf-cmp-new', '新读写路径', { phase: 1, durationMs: 24_000, result: '新路径梳理完成。' }),
+            agentRun('wf-cmp-diff', '逐项对比', { phase: 1, state: 'stopped', durationMs: 9_000, result: '' }),
+          ],
+          toolUseId: BG_STOPPED_WF_CALL,
+        },
+      ],
+      agents: [
+        ...BG_AGENTS.map((a, i) =>
+          agentRun(a.id, a.label, {
+            type: 'general-purpose',
+            toolUseId: a.call,
+            startedAt: T0 - (9 - i) * MIN,
+            durationMs: (3 + i) * 60_000,
+            result: `${a.label}：完成`,
+          }),
+        ),
+        agentRun(BG_FAILED.id, BG_FAILED.label, {
           type: 'general-purpose',
-          toolUseId: a.call,
-          startedAt: T0 - (9 - i) * MIN,
-          durationMs: (3 + i) * 60_000,
-          result: `${a.label}：完成`,
+          state: 'failed',
+          toolUseId: BG_FAILED.call,
+          startedAt: T0 - 3 * MIN,
+          durationMs: 47_000,
+          result: 'eslint exited with code 2: out of memory while linting src/',
         }),
-      ),
+      ],
     },
   },
 )
@@ -1850,6 +1916,8 @@ for (const [i, agent] of BG_AGENTS.entries()) {
     assistant(`bg-xa${i}`, `${agent.label}：完成`),
   ]
 }
+
+SUBAGENT_ITEMS[BG_FAILED.id] = [user('bg-xf0', BG_FAILED.label, 3), assistant('bg-xfa', '失败：eslint 内存不足退出。')]
 
 export function showcaseSubagentTranscript(_sessionId: string, agentId: string): Item[] {
   const items = SUBAGENT_ITEMS[agentId]

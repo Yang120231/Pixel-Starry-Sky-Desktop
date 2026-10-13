@@ -3,7 +3,7 @@
 // （它们会带 data-setting-title），点搜索结果时按标题找到那一行、滚过去并高亮。改设置页时同步改这里。
 import type { EngineId } from '@pixelsky/protocol'
 import type { SectionId } from './SettingsDialog'
-import { translateText } from '../../i18n/core'
+import { tr, translateText } from '../../i18n/core'
 
 export interface SearchEntry {
   section: SectionId
@@ -50,6 +50,16 @@ export const SETTINGS_INDEX: SearchEntry[] = [
     section: 'appearance',
     title: '长对话先显示最近',
     keywords: '长对话 最近 轮 折叠 隐藏 更早 显示全部 conversation long recent turns fold hide',
+  },
+  // 用 tr() 取标题和关键词（getter，随界面语言），不新增写死的中文
+  {
+    section: 'appearance',
+    get title() {
+      return tr('subagent.setting')
+    },
+    get keywords() {
+      return tr('subagent.searchKeywords')
+    },
   },
   { section: 'appearance', title: '对话框风格', keywords: '输入框 风格 样式 布局 chatgpt claude 工具框内 框外' },
   {
