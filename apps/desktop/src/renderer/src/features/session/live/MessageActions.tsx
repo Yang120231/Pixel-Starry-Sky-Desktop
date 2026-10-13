@@ -2,7 +2,7 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '../../../i18n/core'
 // 消息下方的操作：我方消息「复制 / 分叉 / 回退」，助手回复「复制」
 // （docs/ui/chat-fixes-queue-actions-cost.md §2、docs/ui/rewind-fork-sidechat.md §1–§2）
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { GitBranch, Undo2 } from 'lucide-react'
 import type { Item, RewindOptions, RewindPreview } from '@pixelsky/protocol'
 import { CopyButton, cn } from '@/ui'
@@ -141,7 +141,13 @@ export function UserMessageActions({ item }: { item: UserItem }) {
   )
 }
 
-/** 回退确认：先检查代码，再选「代码和对话 / 只对话 / 只代码」 */
+/** 自动换成「恢复代码和对话」后这么久不能点回退，免得点到没看清的选项 */
+const SETTLE_MS = 700
+
+/**
+ * 回退确认：选「代码和对话 / 只对话 / 只代码」。代码在后台检查（GitHub #35）：只恢复对话不用等，
+ * 查到有文件要还原、而且还没动过选项时，默认换成「恢复代码和对话」
+ */
 function RewindDialog({
   item,
   actions,
@@ -161,6 +167,9 @@ function RewindDialog({
   const [preview, setPreview] = useState<RewindPreview | null>(null)
   const [choice, setChoice] = useState<Choice>('conversation')
   const [skip, setSkip] = useState(false)
+  const touched = useRef(false)
+  const [settling, setSettling] = useState(false)
+  const [elapsed, setElapsed] = useState(0)
   useEffect(() => {
     if (!actions.rewindCode) return
     let alive = true
@@ -169,13 +178,28 @@ function RewindDialog({
       .then(p => {
         if (!alive) return
         setPreview(p)
-        if (p.code.ok && p.code.files.length > 0) setChoice('both')
+        if (p.code.ok && p.code.files.length > 0 && !touched.current) {
+          setChoice('both')
+          setSettling(true)
+        }
       })
       .catch((err: Error) => alive && setPreview({ code: { ok: false, reason: 'failed', message: err.message } }))
     return () => {
       alive = false
     }
   }, [actions, item])
+  useEffect(() => {
+    if (!settling) return
+    const timer = setTimeout(() => setSettling(false), SETTLE_MS)
+    return () => clearTimeout(timer)
+  }, [settling])
+  // 检查了几秒
+  useEffect(() => {
+    if (preview || !actions.rewindCode) return
+    const started = Date.now()
+    const timer = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 500)
+    return () => clearInterval(timer)
+  }, [preview, actions.rewindCode])
 
   // 不能恢复代码的引擎：保持原来的简单确认
   if (!actions.rewindCode)
@@ -225,7 +249,10 @@ function RewindDialog({
                     className="mt-1"
                     checked={choice === c}
                     disabled={disabled}
-                    onChange={() => setChoice(c)}
+                    onChange={() => {
+                      touched.current = true
+                      setChoice(c)
+                    }}
                   />
                   <span className="flex min-w-0 flex-col">
                     <span className={cn('text-list', choice === c ? 'text-accent-fg' : 'text-fg')}>
@@ -237,7 +264,7 @@ function RewindDialog({
               )
             })}
           </div>
-          <CodeSummary preview={preview} />
+          <CodeSummary preview={preview} elapsed={elapsed} />
           {choice === 'conversation' ? (
             <SkipBox checked={skip} onChange={setSkip} label={tr('rewind.skip')} />
           ) : (
@@ -250,20 +277,23 @@ function RewindDialog({
       danger
       busy={busy}
       error={error}
-      confirmDisabled={actions.rewindCode && !preview}
+      confirmDisabled={settling || (choice !== 'conversation' && !preview)}
       onCancel={onCancel}
       onConfirm={() => onConfirm(choice, choice === 'conversation' && skip)}
     />
   )
 }
 
-function CodeSummary({ preview }: { preview: RewindPreview | null }) {
+function CodeSummary({ preview, elapsed }: { preview: RewindPreview | null; elapsed: number }) {
   useI18n()
   const box = 'rounded-lg border border-line-subtle bg-subtle px-3 py-2 text-meta'
   if (!preview)
     return (
-      <div className={cn(box, 'text-fg-muted')} data-rewind-code="checking">
-        {tr('rewind.checking')}
+      <div className={cn(box, 'flex flex-col gap-0.5 text-fg-muted')} data-rewind-code="checking">
+        <span className="tabular-nums">
+          {elapsed >= 1 ? tr('rewind.checkingFor', { n: elapsed }) : tr('rewind.checking')}
+        </span>
+        <span className="text-fg-faint">{tr('rewind.checkingNoWait')}</span>
       </div>
     )
   const code = preview.code

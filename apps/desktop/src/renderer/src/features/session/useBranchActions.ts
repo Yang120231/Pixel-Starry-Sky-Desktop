@@ -41,10 +41,12 @@ export function useBranchActions(sessionId: string | null, snapshot: SessionSnap
     return {
       rewindDisabledReason: busy ? tr('session.message.rewindBusy') : null,
       rewindCode: caps.rewindCode === true,
-      rewindPreview: async item =>
-        bridge
-          ? bridge.rewindPreview(sessionId, item.id)
-          : demo().conversations.rewindPreview(sessionId, item.id, firstUserId),
+      rewindPreview: async item => {
+        if (bridge) return bridge.rewindPreview(sessionId, item.id)
+        // 演示：像真的辅助进程一样等一会儿，看得到「正在检查」时也能只恢复对话（GitHub #35）
+        await new Promise(resolve => setTimeout(resolve, 1500))
+        return demo().conversations.rewindPreview(sessionId, item.id, firstUserId)
+      },
       rewind: async (item, options) => {
         if (!bridge) {
           // 演示：只显示撤销栏

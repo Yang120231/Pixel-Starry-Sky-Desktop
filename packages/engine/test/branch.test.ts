@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { HostEvent } from '@pixelsky/protocol'
 import { ClaudeAdapter, EngineHost } from '../src'
-import { parseRewindReply, parseSideAnswer, sideQuestionArgs } from '../src/claude/helper'
+import { helpersExited, parseRewindReply, parseSideAnswer, sideQuestionArgs } from '../src/claude/helper'
 import { claudeArgs } from '../src/claude/session'
 import { sidePrompt } from '../src/host/branch'
 
@@ -93,6 +93,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   await Promise.all(hosts.map(h => h.shutdown()))
+  await helpersExited()
   rmSync(root, { recursive: true, force: true })
 })
 
@@ -176,6 +177,29 @@ describe('回退：对话 / 代码 / 两者，撤销', () => {
     expect(visible().at(-1)).toEqual(['一', '二', '三'])
     await expect(host.undoRewind(record.id)).rejects.toThrow('不能撤销')
   })
+
+  it('辅助进程不加载 hook / 插件 / MCP；还原只起一个进程；拿到回复就返回，不等进程退出（GitHub #35）', async () => {
+    const file = join(root, 'c.txt')
+    const host = makeHost({
+      FAKE_CLAUDE_REWIND: JSON.stringify({ file, content: 'old' }),
+      FAKE_CLAUDE_HELPER_LINGER: '1',
+    })
+    const { record } = await conversation(host, ['一', '二'])
+    writeFileSync(file, 'new')
+    const helpers = (): string[][] => spawnArgs().filter(a => a.includes('--bare'))
+    const started = Date.now()
+    await expect(host.rewindPreview(record.id, 'm1')).resolves.toMatchObject({ code: { ok: true, files: [file] } })
+    // 辅助进程关了 stdin 也不退（3 秒后才被强制结束），预览不等它
+    expect(Date.now() - started).toBeLessThan(2_500)
+    expect(helpers()).toHaveLength(1)
+    expect(helpers()[0]).toEqual(expect.arrayContaining(['--strict-mcp-config', '--resume']))
+    const result = await host.rewind(record.id, 'm1', { conversation: false, code: true })
+    expect(result).toMatchObject({ filesRestored: 1, undoable: true })
+    expect(readFileSync(file, 'utf8')).toBe('old')
+    expect(helpers()).toHaveLength(2)
+    await host.undoRewind(record.id)
+    expect(readFileSync(file, 'utf8')).toBe('new')
+  }, 20_000)
 
   it('只恢复代码：对话不动；还原时文件不存在，撤销时删掉', async () => {
     const file = join(root, 'b.txt')

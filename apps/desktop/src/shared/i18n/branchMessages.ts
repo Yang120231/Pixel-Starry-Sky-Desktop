@@ -22,6 +22,11 @@ export const branchMessages = {
     en: 'Keep the conversation; only put files back as they were before this message',
   },
   'rewind.checking': { zh: '正在检查代码改动…', en: 'Checking code changes…' },
+  'rewind.checkingFor': { zh: '正在检查代码改动… {n} 秒', en: 'Checking code changes… {n}s' },
+  'rewind.checkingNoWait': {
+    zh: '只恢复对话不用等检查，可以直接回退',
+    en: 'Restoring only the conversation does not wait for the check',
+  },
   'rewind.files': { zh: '还原 {n} 个文件', en: 'Restore {n} files' },
   'rewind.filesOne': { zh: '还原 1 个文件', en: 'Restore 1 file' },
   'rewind.more': { zh: '等 {n} 个', en: 'and {n} more' },

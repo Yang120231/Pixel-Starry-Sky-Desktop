@@ -270,8 +270,13 @@ export class ClaudeAdapter implements EngineAdapter {
   }
 
   /** 回退恢复代码：预览（dryRun）或真的还原到这条用户消息之前（docs/ui/rewind-fork-sidechat.md §1） */
-  async rewindFiles(record: SessionRecord, userItemId: string, dryRun: boolean): Promise<RewindFilesReply> {
-    return rewindFilesOnce(this.helperTarget(record), userItemId, dryRun)
+  async rewindFiles(
+    record: SessionRecord,
+    userItemId: string,
+    dryRun: boolean,
+    beforeRestore?: (files: string[]) => void,
+  ): Promise<RewindFilesReply> {
+    return rewindFilesOnce(this.helperTarget(record), userItemId, dryRun, beforeRestore)
   }
 
   /** 旁聊：带着这个会话的上下文单独问一次，没有工具、不写记录（docs/ui/rewind-fork-sidechat.md §3） */

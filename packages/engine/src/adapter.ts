@@ -114,8 +114,16 @@ export interface EngineAdapter {
    * 返回 null 表示这些消息都没进入引擎上下文；at 为 null 表示回到会话开头（换新的引擎会话）。
    */
   rewindAnchor?(record: SessionRecord, userItemIds: string[]): { at: string | null } | null
-  /** 回退恢复代码：预览或还原到这条用户消息之前的文件（docs/ui/rewind-fork-sidechat.md §1） */
-  rewindFiles?(record: SessionRecord, userItemId: string, dryRun: boolean): Promise<RewindFilesReply>
+  /**
+   * 回退恢复代码：预览或还原到这条用户消息之前的文件（docs/ui/rewind-fork-sidechat.md §1）。
+   * 还原时先预览，把要动的文件交给 beforeRestore（存一份当前内容），再还原；返回预览出的文件列表
+   */
+  rewindFiles?(
+    record: SessionRecord,
+    userItemId: string,
+    dryRun: boolean,
+    beforeRestore?: (files: string[]) => void,
+  ): Promise<RewindFilesReply>
   /** 旁聊：带着会话上下文单独问一次，没有工具、不写记录（§3） */
   sideQuestion?(record: SessionRecord, prompt: string, signal: AbortSignal): Promise<string>
 }

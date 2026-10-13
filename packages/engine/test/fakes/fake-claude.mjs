@@ -555,8 +555,13 @@ if (arg('--output-format') !== 'json')
       if (line.trim()) handle(JSON.parse(line))
     }
   })
-// FAKE_CLAUDE_LINGER=1：像忙着的真实 CLI 一样，stdin 关了也不退（只能被强制结束）
-if (process.env.FAKE_CLAUDE_LINGER === '1') setInterval(() => {}, 1000)
+// FAKE_CLAUDE_LINGER=1：像忙着的真实 CLI 一样，stdin 关了也不退（只能被强制结束）；
+// FAKE_CLAUDE_HELPER_LINGER=1 只对恢复代码的辅助进程（带 --bare）这样，像真实 CLI 退出要再等一会儿
+if (
+  process.env.FAKE_CLAUDE_LINGER === '1' ||
+  (process.env.FAKE_CLAUDE_HELPER_LINGER === '1' && argv.includes('--bare'))
+)
+  setInterval(() => {}, 1000)
 else if (arg('--output-format') !== 'json') process.stdin.on('end', () => process.exit(0))
 
 function respond(requestId, response) {

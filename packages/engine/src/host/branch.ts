@@ -160,18 +160,20 @@ export class HostBranch {
     const adapter = this.ctx.adapters[record.engine]
     if (!ENGINES[record.engine].caps.rewindCode || !adapter?.rewindFiles || !record.engineSessionId)
       throw new Error('这条消息没有代码检查点，代码保持不变')
-    const preview = await adapter.rewindFiles(record, userItemId, true)
-    if (!preview.ok)
-      throw new Error(preview.reason === 'no-checkpoint' ? '这条消息没有代码检查点，代码保持不变' : preview.message)
+    // 一个辅助进程里先预览、存一份当前内容、再还原（GitHub #35：原来预览和还原各起一次进程）
     let size = 0
     const saved: { path: string; data: Buffer | null }[] = []
-    for (const path of preview.files) {
-      const data = existsSync(path) ? readFileSync(path) : null
-      size += data?.length ?? 0
-      saved.push({ path, data })
-    }
-    const done = await adapter.rewindFiles(record, userItemId, false)
-    if (!done.ok) throw new Error(done.message || '没能还原代码')
+    const done = await adapter.rewindFiles(record, userItemId, false, files => {
+      for (const path of files) {
+        const data = existsSync(path) ? readFileSync(path) : null
+        size += data?.length ?? 0
+        saved.push({ path, data })
+      }
+    })
+    if (!done.ok)
+      throw new Error(
+        done.reason === 'no-checkpoint' ? '这条消息没有代码检查点，代码保持不变' : done.message || '没能还原代码',
+      )
     return size <= UNDO_LIMIT ? saved : null
   }
 

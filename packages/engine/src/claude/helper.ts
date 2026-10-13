@@ -5,7 +5,10 @@ import { spawn } from 'node:child_process'
 import type { Launcher, RewindFilesReply } from '../adapter'
 export type { RewindFilesReply }
 import { IS_WINDOWS, killTree } from '../exec'
+import { logger } from '../log'
 import { ClaudeProcess } from './process'
+
+const log = logger('engine.claude')
 
 export interface HelperTarget {
   launcher: Launcher
@@ -16,6 +19,20 @@ export interface HelperTarget {
 }
 
 const STREAM_ARGS = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose']
+/**
+ * 恢复代码的辅助进程不调用模型，只读记录和检查点（GitHub #35）：--bare 不加载 hook、插件、LSP、CLAUDE.md、后台预取，
+ * --strict-mcp-config 不起 MCP 服务器。Claude Code 2.1.296 实测预览和还原的结果和不带时一样
+ */
+export const REWIND_ARGS = [...STREAM_ARGS, '--bare', '--strict-mcp-config']
+/** 预览 / 还原超过这么久记一条，看慢在哪 */
+const SLOW_REWIND_MS = 3_000
+
+/** 还在退出的辅助进程：拿到回复就返回，进程在后台关（实测退出要再等约 2 秒） */
+const exiting = new Set<Promise<void>>()
+/** 等后台的辅助进程都退出（测试删临时目录前用：Windows 上进程还在时工作目录删不掉） */
+export async function helpersExited(): Promise<void> {
+  await Promise.all([...exiting])
+}
 
 /** rewind_files 的回复 → 结果；canRewind 为 false 时多半是这条消息没有检查点 */
 export function parseRewindReply(raw: Record<string, unknown>): RewindFilesReply {
@@ -30,12 +47,20 @@ export function parseRewindReply(raw: Record<string, unknown>): RewindFilesReply
   return { ok: true, files, insertions: num(raw.insertions), deletions: num(raw.deletions) }
 }
 
+/**
+ * 预览（dryRun）或还原。还原在同一个进程里先预览、调 beforeRestore（存一份当前内容）、再真的还原，只起一次进程；
+ * 返回预览出的文件列表（还原的回复里没有）。预览没成功就不还原
+ */
 export async function rewindFilesOnce(
   target: HelperTarget,
   userMessageId: string,
   dryRun: boolean,
+  beforeRestore?: (files: string[]) => void,
 ): Promise<RewindFilesReply> {
-  const proc = new ClaudeProcess(target.launcher, [...STREAM_ARGS, ...target.resumeArgs], target.cwd, target.env, {
+  const started = performance.now()
+  const ms = (): number => Math.round(performance.now() - started)
+  const timing: Record<string, number> = {}
+  const proc = new ClaudeProcess(target.launcher, [...REWIND_ARGS, ...target.resumeArgs], target.cwd, target.env, {
     onMessage: () => undefined,
     onControlRequest: () => undefined,
     onControlCancel: () => undefined,
@@ -43,12 +68,16 @@ export async function rewindFilesOnce(
   })
   try {
     await proc.request('initialize', {}, 30_000)
-    const raw = await proc.request(
-      'rewind_files',
-      { user_message_id: userMessageId, ...(dryRun ? { dry_run: true } : {}) },
-      60_000,
+    timing.initMs = ms()
+    const preview = parseRewindReply(
+      await proc.request('rewind_files', { user_message_id: userMessageId, dry_run: true }, 60_000),
     )
-    return parseRewindReply(raw)
+    timing.previewMs = ms()
+    if (dryRun || !preview.ok) return preview
+    beforeRestore?.(preview.files)
+    const done = parseRewindReply(await proc.request('rewind_files', { user_message_id: userMessageId }, 60_000))
+    timing.restoreMs = ms()
+    return done.ok ? preview : done
   } catch (err) {
     return {
       ok: false,
@@ -56,8 +85,11 @@ export async function rewindFilesOnce(
       message: proc.alive ? (err as Error).message : proc.stderrTail.trim() || (err as Error).message,
     }
   } finally {
-    // 等它退出（Windows 上进程还在时工作目录删不掉）
-    await proc.close(3_000)
+    const total = ms()
+    if (total > SLOW_REWIND_MS) log.warn('恢复代码的辅助进程很慢', { dryRun, ...timing, ms: total })
+    else log.info('恢复代码的辅助进程', { dryRun, ...timing, ms: total })
+    const closing = proc.close(3_000).finally(() => exiting.delete(closing))
+    exiting.add(closing)
   }
 }
 
