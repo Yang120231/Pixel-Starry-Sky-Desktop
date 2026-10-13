@@ -1,20 +1,16 @@
-import { Fragment, useState } from 'react'
-import { Ellipsis, EllipsisVertical, PanelLeft, PanelRight } from 'lucide-react'
-import { cn, IconButton, Popover, useComingSoon } from '@/ui'
+import { Ellipsis, PanelLeft, PanelRight } from 'lucide-react'
+import { cn, IconButton, SEGMENT_ICON, SEGMENT_TRACK } from '@/ui'
 import { isMac } from '@/features/layout/keybindings'
 import { TOGGLE_PANEL, TOGGLE_SIDEBAR, withShortcut } from '@/features/layout/shortcuts'
 import { useI18n } from '@/i18n/I18nProvider'
 import { useCommandPalette } from '@/features/commands/CommandPaletteProvider'
-import { MachineMenu } from '@/features/machines/MachineMenu'
-import { useNarrowWindow } from '@/features/layout/narrowWindow'
-import { useSidebarPrefs, type LayoutAction } from '@/features/appearance/sidebar'
-import { addProject, isLive } from '@/features/engine'
+import { MachineSwitch } from '@/features/machines/MachineSwitch'
+import { useSidebarPrefs } from '@/features/appearance/sidebar'
+import { useChannelUnreadTotal } from '@/features/channels/store'
 import { tr } from '@/i18n/core'
 import { LayoutActionButton } from '@/features/layout/LayoutActionButton'
-import { ToolbarContext, type ToolbarState } from '@/features/layout/ToolbarContext'
-import { paneActions } from '@/features/panes/store'
+import { ToolbarContext } from '@/features/layout/ToolbarContext'
 import type { ActiveWorkspace } from '@/features/editor/target'
-import { useMinimal } from '@/features/appearance/ThemeProvider'
 
 interface SessionHeaderProps {
   title: string
@@ -29,24 +25,6 @@ interface SessionHeaderProps {
   onCloseFiles?: () => void
   /** 替换最右的面板开关（协作频道页控制成员面板）；null 时不显示，不传时是右侧面板开关 */
   panelToggle?: { open: boolean; label: string; onToggle: () => void } | null
-}
-
-const ACTION =
-  'press no-drag inline-flex h-8 shrink-0 items-center justify-center gap-1 rounded-md px-2 text-fg-muted hover:bg-hover hover:text-fg'
-
-/** 窗口窄时从顶栏收进「更多工具」的（docs/ui/ui-polish-2026-10-13.md §6） */
-const COLLAPSIBLE: readonly LayoutAction[] = ['git', 'openIn']
-const PAGES: readonly LayoutAction[] = ['workbench', 'channels']
-
-/** 顶栏这一排：工作台、协作频道挨着时包成一个两段切换 */
-function groupHeader(actions: LayoutAction[]): LayoutAction[][] {
-  const out: LayoutAction[][] = []
-  for (const action of actions) {
-    const last = out.at(-1)
-    if (last?.length === 1 && PAGES.includes(last[0]) && PAGES.includes(action)) last.push(action)
-    else out.push([action])
-  }
-  return out
 }
 
 /** 跨会话区和右面板的顶栏：标题在左，工具在右侧连续排列。
@@ -64,16 +42,10 @@ export function SessionHeader({
   panelToggle,
 }: SessionHeaderProps) {
   const { text } = useI18n()
-  const minimal = useMinimal()
   const commands = useCommandPalette()
-  const comingSoon = useComingSoon()
   const { layout } = useSidebarPrefs()
-  const narrow = useNarrowWindow()
-  const header = narrow ? layout.header.filter(a => !COLLAPSIBLE.includes(a)) : layout.header
-  const more = [...(narrow ? layout.header.filter(a => COLLAPSIBLE.includes(a)) : []), ...layout.more]
-  const onAddProject = isLive ? () => void addProject() : () => comingSoon(tr('sidebar.Sidebar.addProject'))
-  const onNewTask = isLive ? () => paneActions.open(null) : undefined
-  const callbacks = { onAddProject, onNewTask }
+  // 侧栏收起时看不到「频道」行的未读，改在「展开侧栏」按钮上显示一个点（docs/ui/layout-v2.md §8）
+  const channelUnread = useChannelUnreadTotal()
   return (
     <header
       // macOS 侧边栏收起时左上角是红绿灯（index.ts 的 trafficLightPosition），让开
@@ -84,148 +56,92 @@ export function SessionHeader({
       style={{ paddingRight: 'calc(var(--titlebar-reserve) + 12px)' }}
     >
       {!sidebarOpen && (
-        <IconButton
-          icon={PanelLeft}
-          label={withShortcut(text('展开侧边栏'), TOGGLE_SIDEBAR)}
-          size={32}
-          iconSize={16}
-          onClick={onToggleSidebar}
-        />
+        <span className="relative inline-flex shrink-0">
+          <IconButton
+            icon={PanelLeft}
+            label={[
+              withShortcut(text('展开侧边栏'), TOGGLE_SIDEBAR),
+              channelUnread > 0 ? tr('sidebar.channelsUnread', { n: channelUnread }) : '',
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+            size={32}
+            iconSize={16}
+            onClick={onToggleSidebar}
+          />
+          {channelUnread > 0 && (
+            <span
+              data-channel-unread
+              className="pointer-events-none absolute top-1 right-1 size-1.5 rounded-full bg-accent"
+            />
+          )}
+        </span>
       )}
       <div className="flex min-w-0 flex-1 items-center gap-1">
-        {minimal && workspace && title ? (
-          // 极简模式：标签栏只有一个标签时不显示（minimal.css），顶栏写对话标题 + 项目（参考 Factory）
+        {workspace?.name || title ? (
+          // 标题 + 项目名（两种模式一样，docs/ui/layout-v2.md §4）；新对话标签没有标题，只写项目名
           <div data-header-workspace className="flex min-w-0 items-baseline gap-2">
-            <h1 title={title} className="min-w-0 truncate text-ui font-semibold text-fg">
-              {title}
-            </h1>
-            {workspace.name && (
-              <span title={workspace.path || workspace.name} className="shrink-0 truncate text-meta text-fg-muted">
-                {workspace.name}
-              </span>
+            {title && (
+              <h1 title={title} className="min-w-0 truncate text-ui font-semibold text-fg">
+                {title}
+              </h1>
             )}
+            {workspace?.name &&
+              (title ? (
+                <span title={workspace.path || workspace.name} className="shrink-0 truncate text-meta text-fg-muted">
+                  {workspace.name}
+                </span>
+              ) : (
+                <h1 title={workspace.path || workspace.name} className="min-w-0 truncate text-ui font-semibold text-fg">
+                  {workspace.name}
+                </h1>
+              ))}
           </div>
-        ) : workspace ? (
-          <WorkspaceLocation workspace={workspace} />
-        ) : (
-          <h1 title={title} className="min-w-0 truncate text-ui font-medium text-fg-secondary">
-            {title}
-          </h1>
-        )}
+        ) : null}
         {showActions && (
-          <IconButton icon={Ellipsis} label={text('更多')} size={32} iconSize={16} onClick={commands.open} />
+          // 平时透明，鼠标移到顶栏或键盘焦点到它时显示（globals.css [data-header-more]）
+          <span data-header-more className="inline-flex shrink-0">
+            <IconButton icon={Ellipsis} label={text('更多')} size={32} iconSize={16} onClick={commands.open} />
+          </span>
         )}
       </div>
       <div className="header-tools no-drag ml-auto flex shrink-0 items-center gap-0.5">
-        <MachineMenu className={ACTION} />
-        <ToolbarContext.Provider value={{ panelOpen, filesPanelOpen, onCloseFiles }}>
-          {groupHeader(header).map(group =>
-            group.length > 1 ? (
-              <div
-                key={group.join()}
-                role="group"
-                aria-label={tr('sidebar.pages')}
-                data-header-pages
-                className="mx-0.5 inline-flex shrink-0 items-center rounded-lg bg-subtle p-0.5"
-              >
-                {group.map(action => (
-                  <LayoutActionButton key={action} action={action} placement="header" {...callbacks} />
-                ))}
-              </div>
+        <MachineSwitch />
+        {/* 打开方式等工具和右侧面板开关收进一个细边框轨道，和「本机 | 云端」同一套样子（docs/ui/layout-v2.md §4） */}
+        {(layout.header.length > 0 || panelToggle !== null) && (
+          <div data-header-group className={SEGMENT_TRACK}>
+            <ToolbarContext.Provider value={{ panelOpen, filesPanelOpen, onCloseFiles }}>
+              {layout.header.map(action => (
+                <LayoutActionButton key={action} action={action} placement="header" />
+              ))}
+            </ToolbarContext.Provider>
+            {layout.header.length > 0 && panelToggle !== null && (
+              <span aria-hidden className="mx-0.5 h-3.5 w-px shrink-0 bg-line" />
+            )}
+            {panelToggle === undefined ? (
+              <IconButton
+                icon={PanelRight}
+                label={withShortcut(panelOpen ? text('收起右侧面板') : text('展开右侧面板'), TOGGLE_PANEL)}
+                style={SEGMENT_ICON}
+                active={panelOpen}
+                aria-expanded={panelOpen}
+                onClick={onTogglePanel}
+              />
             ) : (
-              <Fragment key={group[0]}>
-                <LayoutActionButton action={group[0]} placement="header" {...callbacks} />
-              </Fragment>
-            ),
-          )}
-          {more.length > 0 && (
-            <MoreTools actions={more} toolbar={{ panelOpen, filesPanelOpen, onCloseFiles }} {...callbacks} />
-          )}
-        </ToolbarContext.Provider>
-        {panelToggle === undefined ? (
-          <IconButton
-            icon={PanelRight}
-            label={withShortcut(panelOpen ? text('收起右侧面板') : text('展开右侧面板'), TOGGLE_PANEL)}
-            size={32}
-            iconSize={16}
-            active={panelOpen}
-            aria-expanded={panelOpen}
-            onClick={onTogglePanel}
-          />
-        ) : (
-          panelToggle && (
-            <IconButton
-              icon={PanelRight}
-              label={withShortcut(panelToggle.label, TOGGLE_PANEL)}
-              size={32}
-              iconSize={16}
-              active={panelToggle.open}
-              aria-expanded={panelToggle.open}
-              onClick={panelToggle.onToggle}
-            />
-          )
+              panelToggle && (
+                <IconButton
+                  icon={PanelRight}
+                  label={withShortcut(panelToggle.label, TOGGLE_PANEL)}
+                  style={SEGMENT_ICON}
+                  active={panelToggle.open}
+                  aria-expanded={panelToggle.open}
+                  onClick={panelToggle.onToggle}
+                />
+              )
+            )}
+          </div>
         )}
       </div>
     </header>
-  )
-}
-
-/** 顶栏「⋮ 更多工具」：图标位置里放进「更多」的，加上窗口窄时收起来的 Git、打开方式；每项一行带文字 */
-function MoreTools({
-  actions,
-  toolbar,
-  onAddProject,
-  onNewTask,
-}: {
-  actions: LayoutAction[]
-  toolbar: ToolbarState
-  onAddProject: () => void
-  onNewTask?: () => void
-}) {
-  useI18n()
-  const [open, setOpen] = useState(false)
-  return (
-    <span className="relative inline-flex shrink-0">
-      <IconButton
-        icon={EllipsisVertical}
-        label={tr('sidebar.moreTools')}
-        size={32}
-        iconSize={16}
-        active={open}
-        data-more-tools
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onMouseDown={e => open && e.stopPropagation()}
-        onClick={() => setOpen(v => !v)}
-      />
-      <Popover open={open} onClose={() => setOpen(false)} className="top-full right-0 mt-1 w-56">
-        <ToolbarContext.Provider value={{ ...toolbar, closeMenu: () => setOpen(false) }}>
-          {actions.map(action => (
-            <LayoutActionButton
-              key={action}
-              action={action}
-              placement="more"
-              onAddProject={onAddProject}
-              onNewTask={onNewTask}
-            />
-          ))}
-        </ToolbarContext.Provider>
-      </Popover>
-    </span>
-  )
-}
-
-/**
- * 顶栏左边的项目名。分支 2026-10-13 挪到了每个输入框上方那一行（docs/ui/composer-git.md）：
- * 分屏时每个窗格的仓库可能不一样，顶栏只有一条，只能跟着当前窗格
- */
-function WorkspaceLocation({ workspace }: { workspace: NonNullable<SessionHeaderProps['workspace']> }) {
-  if (!workspace.name) return null
-  return (
-    <div data-header-workspace className="flex min-w-0 items-center gap-1.5 text-ui text-fg-secondary">
-      <h1 title={workspace.path || workspace.name} className="min-w-0 truncate font-medium">
-        {workspace.name}
-      </h1>
-    </div>
   )
 }

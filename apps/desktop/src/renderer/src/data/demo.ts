@@ -17,6 +17,7 @@ import type {
   TaskOutput,
   UsageRecord,
 } from '@pixelsky/protocol'
+import type { MachineState } from '../../../shared/types/machines'
 import type { AccountInfo, StoreCatalog } from '../../../shared/types/account'
 import type { ArtifactPreview } from '../../../shared/types/artifacts'
 import type { PlatformGroupInfo } from '../../../shared/types/platform-catalog'
@@ -97,6 +98,8 @@ export interface DemoSource {
     }
   }
   inbox: InboxItem[]
+  /** 演示用的云端机器（顶栏「本机 | 云端」），machines/store.ts 演示时用它当初始状态 */
+  machines?: MachineState
   projectTools: { tasks: TaskState; environment: EnvironmentState; copies: ProjectCopy[]; browser: BrowserState }
   /** 任务看板的演示任务（几个演示项目都有，docs/ui/task-board.md §7）；now 是打开看板的时间 */
   boardTasks(now: number): ManualTask[]

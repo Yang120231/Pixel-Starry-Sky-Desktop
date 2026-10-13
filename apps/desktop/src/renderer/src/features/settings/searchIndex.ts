@@ -32,7 +32,7 @@ export const SETTINGS_INDEX: SearchEntry[] = [
     section: 'appearance',
     title: '图标位置',
     keywords:
-      '侧边栏 图标 拖动 位置 排序 上下 顶部 底部 顶栏 右上角 工具栏 终端 编辑器 命令面板 工作台 云主机 频道 Git git sidebar icons drag position reorder top bottom toolbar top bar header terminal editor',
+      '侧边栏 图标 拖动 位置 排序 上下 底部 顶栏 右上角 工具栏 不显示 隐藏 Git git sidebar icons drag position reorder bottom toolbar top bar header hidden hide',
   },
   { section: 'terminal', title: '终端设置', keywords: '终端 shell powershell cmd git bash 交互 terminal' },
   { section: 'terminal', title: '默认 Shell', keywords: '默认 shell powershell cmd git bash' },

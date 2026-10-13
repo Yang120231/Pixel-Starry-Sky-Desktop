@@ -1,14 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   DEFAULT_SIDEBAR_ICONS,
+  FOOTER_ACTIONS,
   HEADER_ACTIONS,
   LAYOUT_ACTIONS,
   SIDEBAR_ACTIONS,
   getLayoutIcon,
   getSidebarIcon,
+  type LayoutAction,
 } from './sidebarIcons'
 import {
   DEFAULT_SIDEBAR_LAYOUT,
+  LAYOUT_PLACEMENTS,
+  canPlace,
   isRowFull,
   moveSidebarActionInLayout,
   parseSidebarPrefs,
@@ -20,7 +24,8 @@ import { searchSettings } from '../settings/searchIndex'
 import { setCurrentLocale } from '../../i18n/core'
 
 const H = DEFAULT_SIDEBAR_LAYOUT.header
-const M = DEFAULT_SIDEBAR_LAYOUT.more
+const B = DEFAULT_SIDEBAR_LAYOUT.bottom
+const X = DEFAULT_SIDEBAR_LAYOUT.hidden
 const UPGRADES = ['header-git-to-more']
 
 afterEach(() => {
@@ -41,7 +46,23 @@ function mockStorage(initial: Record<string, string> = {}) {
   return { storage, data }
 }
 
+const everything = (layout: SidebarLayout): string[] => [...layout.header, ...layout.bottom, ...layout.hidden].sort()
+
 describe('侧边栏外观偏好', () => {
+  it('常量：能挪的入口、三排顺序和默认布局（docs/ui/layout-v2.md §7.1）', () => {
+    expect([...HEADER_ACTIONS]).toEqual(['git', 'openIn'])
+    expect([...FOOTER_ACTIONS]).toEqual(['settings', 'plugins', 'usage'])
+    expect([...LAYOUT_ACTIONS]).toEqual(['settings', 'plugins', 'usage', 'git', 'openIn'])
+    expect([...SIDEBAR_ACTIONS]).toEqual(['newTask', 'addProject', 'settings', 'plugins', 'usage'])
+    expect([...LAYOUT_PLACEMENTS]).toEqual(['header', 'bottom', 'hidden'])
+    expect(DEFAULT_SIDEBAR_LAYOUT).toEqual({
+      header: ['openIn'],
+      bottom: ['usage', 'plugins', 'settings'],
+      hidden: ['git'],
+    })
+    expect(everything(DEFAULT_SIDEBAR_LAYOUT)).toEqual([...LAYOUT_ACTIONS].sort())
+  })
+
   it('旧默认工具组自动换序，自定义布局保留，新版可再次自定义成旧顺序', () => {
     const oldLayout = { top: ['addProject', 'newTask'], bottom: ['settings', 'plugins', 'usage'] }
     const oldPrefs = {
@@ -55,14 +76,32 @@ describe('侧边栏外观偏好', () => {
     expect(migrated).toMatchObject({
       version: 4,
       upgrades: UPGRADES,
-      layout: { header: H, more: M, top: ['addProject', 'newTask'], bottom: ['usage', 'plugins', 'settings'] },
+      layout: { header: H, bottom: B, hidden: X },
       showRecent: false,
       recentExpanded: false,
       icons: { usage: 'gauge' },
     })
+    // 自己排过的：底部先读、旧顶部的设置 / 用量接在后面
     const custom = { top: ['usage', 'addProject', 'newTask'], bottom: ['settings', 'plugins'] }
-    expect(parseSidebarPrefs({ ...oldPrefs, layout: custom }).layout).toEqual({ header: H, more: M, ...custom })
-    expect(parseSidebarPrefs({ ...oldPrefs, version: 3 }).layout).toEqual({ header: H, more: M, ...oldLayout })
+    expect(parseSidebarPrefs({ ...oldPrefs, layout: custom }).layout).toEqual({
+      header: H,
+      bottom: ['settings', 'plugins', 'usage'],
+      hidden: X,
+    })
+    // v3 里 v2 的旧默认位置不换（只有 v2 换）
+    expect(parseSidebarPrefs({ ...oldPrefs, version: 3 }).layout).toEqual({
+      header: H,
+      bottom: ['settings', 'plugins', 'usage'],
+      hidden: X,
+    })
+  })
+
+  it('v2 旧默认位置（读原始数据比对）整份换成新默认', () => {
+    const v2 = parseSidebarPrefs({
+      version: 2,
+      layout: { top: ['addProject', 'newTask'], bottom: ['settings', 'plugins', 'usage'] },
+    })
+    expect(v2.layout).toEqual(DEFAULT_SIDEBAR_LAYOUT)
   })
 
   it('默认显示并展开最近任务，无法识别的版本和损坏内容安全回退', () => {
@@ -128,83 +167,53 @@ describe('侧边栏外观偏好', () => {
       icons: { ...DEFAULT_SIDEBAR_ICONS, settings: 'bolt', newTask: 'plus' },
       layout: DEFAULT_SIDEBAR_LAYOUT,
     })
-    sidebar.moveSidebarAction('settings', 'top', 0)
+    sidebar.moveSidebarAction('settings', 'header', 0)
     expect(JSON.parse(data.get(SIDEBAR_PREFS_KEY)!)).toEqual(sidebar.getSidebarPrefs())
-    expect(sidebar.getSidebarPrefs().layout.top).toEqual(['settings', 'addProject', 'newTask'])
+    expect(sidebar.getSidebarPrefs().layout.header).toEqual(['settings', 'openIn'])
   })
 
   it('损坏布局保留合法顺序、跨排去重，并按默认排补齐缺失入口', () => {
     const prefs = parseSidebarPrefs({
       version: 3,
       layout: {
-        top: ['usage', 'usage', 'unknown', null, '__proto__', 'newTask'],
-        bottom: ['usage', 'settings', 'settings', 0],
+        bottom: ['usage', 'usage', 'unknown', null, '__proto__', 'newTask', 'settings', 0],
       },
     })
-    expect(prefs.layout).toEqual({
-      header: H,
-      more: M,
-      top: ['usage', 'newTask', 'addProject'],
-      bottom: ['settings', 'plugins'],
-    })
-    expect(parseSidebarPrefs({ version: 3, layout: { top: 'settings', bottom: ['newTask'] } }).layout).toEqual({
-      header: H,
-      more: M,
-      top: ['addProject'],
-      bottom: ['newTask', 'usage', 'plugins', 'settings'],
-    })
-    for (const layout of [null, [], {}, 'broken', { top: [], bottom: [] }]) {
+    expect(prefs.layout).toEqual({ header: H, bottom: ['usage', 'settings', 'plugins'], hidden: X })
+    expect(parseSidebarPrefs({ version: 3, layout: { top: 'settings', bottom: ['newTask'] } }).layout).toEqual(
+      DEFAULT_SIDEBAR_LAYOUT,
+    )
+    for (const layout of [null, [], {}, 'broken', { top: [], bottom: [], more: [], hidden: [] }]) {
       expect(parseSidebarPrefs({ version: 3, layout }).layout).toEqual(DEFAULT_SIDEBAR_LAYOUT)
     }
   })
 
   it('同排移动以移除原位置后的索引插入，跨排移动保留其他图标顺序', () => {
     const layout = structuredClone(DEFAULT_SIDEBAR_LAYOUT)
-    expect(moveSidebarActionInLayout(layout, 'settings', 'bottom', 2)).toEqual({
-      header: H,
-      more: M,
-      top: ['addProject', 'newTask'],
-      bottom: ['usage', 'plugins', 'settings'],
-    })
-    expect(moveSidebarActionInLayout(layout, 'usage', 'bottom', 0)).toEqual({
-      header: H,
-      more: M,
-      top: ['addProject', 'newTask'],
-      bottom: ['usage', 'plugins', 'settings'],
-    })
-    expect(moveSidebarActionInLayout(layout, 'plugins', 'top', 1)).toEqual({
-      header: H,
-      more: M,
-      top: ['addProject', 'plugins', 'newTask'],
+    expect(moveSidebarActionInLayout(layout, 'settings', 'bottom', 2)).toEqual(layout)
+    expect(moveSidebarActionInLayout(layout, 'usage', 'bottom', 0)).toEqual(layout)
+    expect(moveSidebarActionInLayout(layout, 'settings', 'bottom', 0).bottom).toEqual(['settings', 'usage', 'plugins'])
+    expect(moveSidebarActionInLayout(layout, 'plugins', 'header', 0)).toEqual({
+      header: ['plugins', 'openIn'],
       bottom: ['usage', 'settings'],
+      hidden: X,
     })
-    expect(moveSidebarActionInLayout(layout, 'newTask', 'top', 1)).toEqual(layout)
+    expect(moveSidebarActionInLayout(layout, 'plugins', 'hidden', 99)).toEqual({
+      header: H,
+      bottom: ['usage', 'settings'],
+      hidden: ['git', 'plugins'],
+    })
     expect(layout).toEqual(DEFAULT_SIDEBAR_LAYOUT)
   })
 
-  it('允许所有入口在同一排，空目标排和越界索引不丢失任何入口', () => {
-    let layout = structuredClone(DEFAULT_SIDEBAR_LAYOUT)
-    for (const action of ['settings', 'plugins', 'usage'] as const) {
-      layout = moveSidebarActionInLayout(layout, action, 'top', Number.POSITIVE_INFINITY)
-    }
-    expect(layout).toEqual({
-      header: H,
-      more: M,
-      top: ['addProject', 'newTask', 'settings', 'plugins', 'usage'],
-      bottom: [],
-    })
-    layout = moveSidebarActionInLayout(layout, 'newTask', 'bottom', 999)
-    expect(layout.bottom).toEqual(['newTask'])
-    layout = moveSidebarActionInLayout(layout, 'settings', 'bottom', -99)
-    expect(layout.bottom).toEqual(['settings', 'newTask'])
-    for (const row of ['top', 'bottom'] as const) {
-      for (const action of SIDEBAR_ACTIONS) {
+  it('越界、NaN 索引不丢失任何入口', () => {
+    const layout = structuredClone(DEFAULT_SIDEBAR_LAYOUT)
+    for (const row of LAYOUT_PLACEMENTS) {
+      for (const action of LAYOUT_ACTIONS) {
         for (const index of [-1, 0, 1, 99, Number.NaN, Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY]) {
           const moved = moveSidebarActionInLayout(layout, action, row, index)
-          expect([...moved.header, ...moved.more, ...moved.top, ...moved.bottom].sort()).toEqual(
-            [...LAYOUT_ACTIONS].sort(),
-          )
-          expect(moved[row]).toContain(action)
+          expect(everything(moved)).toEqual([...LAYOUT_ACTIONS].sort())
+          if (canPlace(layout, row, action)) expect(moved[row]).toContain(action)
         }
       }
     }
@@ -217,10 +226,9 @@ describe('侧边栏外观偏好', () => {
     sidebar.setSidebarPrefs({ showRecent: false, recentExpanded: false })
     sidebar.setSidebarIcon('newTask', 'plus')
     sidebar.setSidebarLayout({
-      header: H,
-      more: M,
-      top: ['settings'],
-      bottom: ['newTask', 'usage', 'plugins', 'addProject'],
+      header: ['git', 'openIn'],
+      bottom: ['settings', 'usage'],
+      hidden: ['plugins'],
     })
     vi.resetModules()
     sidebar = await import('./sidebar')
@@ -228,7 +236,7 @@ describe('侧边栏外观偏好', () => {
       showRecent: false,
       recentExpanded: false,
       icons: { newTask: 'plus' },
-      layout: { top: ['settings'], bottom: ['newTask', 'usage', 'plugins', 'addProject'] },
+      layout: { header: ['git', 'openIn'], bottom: ['settings', 'usage'], hidden: ['plugins'] },
     })
     sidebar.setSidebarPrefs({ showRecent: true })
     expect(sidebar.getSidebarPrefs().recentExpanded).toBe(false)
@@ -243,13 +251,8 @@ describe('侧边栏外观偏好', () => {
     sidebar.setSidebarPrefs({ showRecent: false, recentExpanded: false })
     sidebar.setSidebarIcon('plugins', 'plug')
     sidebar.setSidebarIcon('usage', 'gauge')
-    sidebar.moveSidebarAction('usage', 'top', 0)
-    const movedLayout = {
-      header: H,
-      more: M,
-      top: ['usage', 'addProject', 'newTask'],
-      bottom: ['plugins', 'settings'],
-    }
+    sidebar.moveSidebarAction('usage', 'header', 0)
+    const movedLayout = { header: ['usage', 'openIn'], bottom: ['plugins', 'settings'], hidden: X }
     sidebar.resetSidebarIcons()
     expect(sidebar.getSidebarPrefs()).toEqual({
       version: 4,
@@ -287,9 +290,9 @@ describe('侧边栏外观偏好', () => {
     })
     expect(() => sidebar.setSidebarPrefs({ showRecent: false })).not.toThrow()
     sidebar.setSidebarIcon('settings', 'bolt')
-    sidebar.moveSidebarAction('usage', 'top', 0)
+    sidebar.moveSidebarAction('usage', 'header', 0)
     expect(sidebar.getSidebarPrefs()).toMatchObject({ showRecent: false, icons: { settings: 'bolt' } })
-    expect(sidebar.getSidebarPrefs().layout.top).toEqual(['usage', 'addProject', 'newTask'])
+    expect(sidebar.getSidebarPrefs().layout.header).toEqual(['usage', 'openIn'])
     sidebar.resetSidebarIcons()
     sidebar.resetSidebarLayout()
     expect(sidebar.getSidebarPrefs()).toMatchObject({ showRecent: false, icons: DEFAULT_SIDEBAR_ICONS })
@@ -300,24 +303,18 @@ describe('侧边栏外观偏好', () => {
     mockStorage()
     vi.resetModules()
     const sidebar = await import('./sidebar')
-    const layout: SidebarLayout = {
-      header: [...H],
-      more: [...M],
-      top: ['usage'],
-      bottom: ['settings', 'newTask', 'plugins', 'addProject'],
-    }
+    const layout: SidebarLayout = { header: [...H], bottom: [...B], hidden: [...X] }
     sidebar.setSidebarLayout(layout)
-    layout.top.length = 0
-    expect(sidebar.getSidebarPrefs().layout.top).toEqual(['usage'])
-    const preview = sidebar.moveSidebarActionInLayout(sidebar.getSidebarPrefs().layout, 'usage', 'bottom', 0)
-    preview.bottom.length = 0
-    expect(sidebar.getSidebarPrefs().layout.top).toEqual(['usage'])
-    sidebar.setSidebarLayout({ top: ['usage', 'usage'], bottom: ['unknown'] } as unknown as SidebarLayout)
+    layout.bottom.length = 0
+    expect(sidebar.getSidebarPrefs().layout.bottom).toEqual(B)
+    const preview = sidebar.moveSidebarActionInLayout(sidebar.getSidebarPrefs().layout, 'usage', 'header', 0)
+    preview.header.length = 0
+    expect(sidebar.getSidebarPrefs().layout.bottom).toEqual(B)
+    sidebar.setSidebarLayout({ header: ['usage', 'usage'], bottom: ['unknown'] } as unknown as SidebarLayout)
     expect(sidebar.getSidebarPrefs().layout).toEqual({
-      header: H,
-      more: M,
-      top: ['usage', 'addProject', 'newTask'],
+      header: ['usage', 'openIn'],
       bottom: ['plugins', 'settings'],
+      hidden: X,
     })
   })
 
@@ -331,98 +328,244 @@ describe('侧边栏外观偏好', () => {
     expect(sidebar.getSidebarPrefs().icons.addProject).toBe('folder-open')
   })
 
-  it('v3 升级到 v4 时补上默认顶栏排，保留自定义侧栏顺序', () => {
-    const custom = { top: ['settings', 'newTask'], bottom: ['addProject', 'usage', 'plugins'] }
-    const prefs = parseSidebarPrefs({ version: 3, showRecent: true, recentExpanded: true, layout: custom })
-    expect(prefs).toMatchObject({ version: 4, layout: { header: H, more: M, ...custom } })
-    expect([...H, ...M].sort()).toEqual([...HEADER_ACTIONS].sort())
-  })
-
-  it('顶栏工具与侧栏动作可在三排之间互相移动，图标随入口走', () => {
+  it('顶栏工具与底部动作可在三排之间互相移动，图标随入口走', () => {
     let layout = moveSidebarActionInLayout(DEFAULT_SIDEBAR_LAYOUT, 'git', 'bottom', 0)
-    expect(layout.header).not.toContain('git')
+    expect(layout.hidden).toEqual([])
     expect(layout.bottom).toEqual(['git', 'usage', 'plugins', 'settings'])
     layout = moveSidebarActionInLayout(layout, 'usage', 'header', 0)
     expect(layout.header[0]).toBe('usage')
     expect(layout.bottom).toEqual(['git', 'plugins', 'settings'])
-    layout = moveSidebarActionInLayout(layout, 'channels', 'top', 99)
-    expect(layout.top).toEqual(['addProject', 'newTask', 'channels'])
     expect(getLayoutIcon('usage', DEFAULT_SIDEBAR_ICONS)).toBe(getSidebarIcon('usage', DEFAULT_SIDEBAR_ICONS))
     expect(getLayoutIcon('git', DEFAULT_SIDEBAR_ICONS)).toBeTruthy()
-    // 顶栏工具放进侧栏后照样受每排上限约束；机器切换和右面板开关固定，不在布局里
-    for (const action of ['openIn', 'workbench'] as const) layout = moveSidebarActionInLayout(layout, action, 'top', 99)
-    expect(layout.top).toEqual(['addProject', 'newTask', 'channels', 'openIn', 'workbench'])
-    expect(moveSidebarActionInLayout(layout, 'usage', 'top', 0)).toEqual(layout)
-    expect(layout.header).toEqual(['usage'])
+    expect(getLayoutIcon('openIn', DEFAULT_SIDEBAR_ICONS)).toBeTruthy()
   })
 
-  it('侧栏一排最多 5 个，排满时拒绝移入但允许排内换序；顶栏不限', () => {
+  it('「设置」不能放进「不显示」（它是改回来的入口）；别的入口可以', () => {
+    expect(canPlace(DEFAULT_SIDEBAR_LAYOUT, 'hidden', 'settings')).toBe(false)
+    expect(canPlace(DEFAULT_SIDEBAR_LAYOUT, 'hidden', 'plugins')).toBe(true)
+    expect(moveSidebarActionInLayout(DEFAULT_SIDEBAR_LAYOUT, 'settings', 'hidden', 0)).toEqual(DEFAULT_SIDEBAR_LAYOUT)
+    const moved = moveSidebarActionInLayout(DEFAULT_SIDEBAR_LAYOUT, 'plugins', 'hidden', 0)
+    expect(moved.hidden).toEqual(['plugins', 'git'])
+    // 存的数据里「设置」在 hidden（手改或坏数据）：读出来在底部
+    const prefs = parseSidebarPrefs({
+      version: 4,
+      upgrades: UPGRADES,
+      layout: { header: ['openIn'], bottom: ['usage'], hidden: ['settings', 'git'] },
+    })
+    expect(prefs.layout).toEqual({ header: H, bottom: ['usage', 'settings', 'plugins'], hidden: ['git'] })
+  })
+
+  it('底部一排最多 5 个，排满时拒绝移入但允许排内换序；顶栏和「不显示」不限', () => {
+    expect(SIDEBAR_ROW_LIMIT).toBe(5)
     let layout = DEFAULT_SIDEBAR_LAYOUT
-    for (const action of ['workbench', 'channels', 'git'] as const)
-      layout = moveSidebarActionInLayout(layout, action, 'top', 99)
-    expect(layout.top).toHaveLength(SIDEBAR_ROW_LIMIT)
-    expect(isRowFull(layout, 'top')).toBe(true)
-    expect(isRowFull(layout, 'top', 'newTask')).toBe(false)
-    expect(moveSidebarActionInLayout(layout, 'settings', 'top', 0)).toEqual(layout)
-    expect(moveSidebarActionInLayout(layout, 'newTask', 'top', 0).top[0]).toBe('newTask')
-    for (const action of SIDEBAR_ACTIONS) layout = moveSidebarActionInLayout(layout, action, 'header', 0)
-    expect(layout.header).toHaveLength(LAYOUT_ACTIONS.length - layout.top.length)
+    for (const action of ['git', 'openIn'] as const) layout = moveSidebarActionInLayout(layout, action, 'bottom', 99)
+    expect(layout.bottom).toHaveLength(SIDEBAR_ROW_LIMIT)
+    expect(layout.header).toEqual([])
+    expect(isRowFull(layout, 'bottom')).toBe(true)
+    expect(isRowFull(layout, 'bottom', 'git')).toBe(false)
     expect(isRowFull(layout, 'header')).toBe(false)
+    expect(isRowFull(layout, 'hidden')).toBe(false)
+    expect(canPlace(layout, 'bottom', 'git')).toBe(true)
+    // 排内换序可以
+    expect(moveSidebarActionInLayout(layout, 'git', 'bottom', 0).bottom[0]).toBe('git')
+    // 一排已有 5 个、再来一个别的入口：放不下（用越界的入口模拟第 6 个）
+    expect(canPlace(layout, 'bottom', 'extra' as LayoutAction)).toBe(false)
+    expect(canPlace(layout, 'header', 'extra' as LayoutAction)).toBe(true)
   })
 
-  it('旧偏好里没有「打开方式」（GitHub #12）：读取时补到顶栏最后', () => {
+  it('旧偏好里没有「打开方式」（GitHub #12）：读取时补到顶栏', () => {
+    const prefs = parseSidebarPrefs({
+      version: 4,
+      upgrades: UPGRADES,
+      layout: { header: ['git', 'workbench'], bottom: ['usage', 'plugins', 'settings'] },
+    })
+    expect(prefs.layout.header).toEqual(['git', 'openIn'])
+  })
+
+  it('工作台、频道、新建任务、添加项目在任何一排都丢掉', () => {
     const prefs = parseSidebarPrefs({
       version: 4,
       upgrades: UPGRADES,
       layout: {
-        header: ['git', 'workbench'],
-        top: ['addProject', 'newTask'],
-        bottom: ['usage', 'plugins', 'settings'],
+        header: ['workbench', 'openIn', 'channels'],
+        bottom: ['newTask', 'usage', 'channels', 'plugins', 'settings'],
+        hidden: ['addProject', 'git', 'workbench'],
+        top: ['addProject', 'newTask', 'channels'],
+        more: ['workbench'],
       },
     })
-    expect(prefs.layout.header).toEqual(['git', 'workbench', 'channels', 'openIn'])
+    expect(prefs.layout).toEqual(DEFAULT_SIDEBAR_LAYOUT)
   })
 
-  it('终端、编辑器、命令面板已从图标位置移除（D066），旧偏好里的位置读取时丢弃', () => {
+  it('终端、编辑器、命令面板、云主机已移除，旧偏好里的位置读取时丢弃', () => {
     const prefs = parseSidebarPrefs({
       version: 4,
       upgrades: UPGRADES,
       layout: {
-        header: ['terminal', 'editor', 'commandPalette', 'workbench'],
-        top: ['commandPalette', 'newTask'],
+        header: ['terminal', 'editor', 'commandPalette', 'machines', 'git'],
+        top: ['commandPalette', 'settings'],
         bottom: ['editor', 'usage'],
       },
     })
-    const all = [...prefs.layout.header, ...prefs.layout.more, ...prefs.layout.top, ...prefs.layout.bottom]
-    for (const gone of ['terminal', 'editor', 'commandPalette']) expect(all).not.toContain(gone)
-    expect(prefs.layout.header[0]).toBe('workbench')
-    expect(prefs.layout.top.slice(0, 1)).toEqual(['newTask'])
-    expect(all.sort()).toEqual([...LAYOUT_ACTIONS].sort())
-    expect(DEFAULT_SIDEBAR_LAYOUT.header).toEqual(['workbench', 'channels', 'openIn'])
+    expect(prefs.layout).toEqual({ header: ['git', 'openIn'], bottom: ['usage', 'settings', 'plugins'], hidden: [] })
+    expect(everything(prefs.layout)).toEqual([...LAYOUT_ACTIONS].sort())
   })
 
   it('旧偏好里的自动化原位换成 Git（D061），不重复、不丢位置', () => {
     const prefs = parseSidebarPrefs({
       version: 4,
       upgrades: UPGRADES,
-      layout: { header: ['terminal', 'workbench'], top: ['automation', 'newTask'], bottom: ['usage'] },
+      layout: { header: ['terminal', 'workbench'], bottom: ['automation', 'usage'] },
     })
-    expect(prefs.layout.top.slice(0, 2)).toEqual(['git', 'newTask'])
-    const all = [...prefs.layout.header, ...prefs.layout.more, ...prefs.layout.top, ...prefs.layout.bottom]
-    expect(all.filter(a => a === 'git')).toHaveLength(1)
-    expect(all).not.toContain('automation')
-    expect(
-      parseSidebarPrefs({ version: 4, layout: { header: ['automation', 'git'] } }).layout.header.slice(0, 1),
-    ).toEqual(['git'])
+    expect(prefs.layout.bottom.slice(0, 2)).toEqual(['git', 'usage'])
+    expect(everything(prefs.layout).filter(a => a === 'git')).toHaveLength(1)
+    expect(everything(prefs.layout)).not.toContain('automation')
+    expect(parseSidebarPrefs({ version: 4, layout: { header: ['automation', 'git'] } }).layout.header[0]).toBe('git')
   })
 
-  it('损坏数据里超出上限的侧栏入口溢出到顶栏，不丢入口', () => {
-    const prefs = parseSidebarPrefs({ version: 4, layout: { header: [], top: [...LAYOUT_ACTIONS], bottom: [] } })
-    expect(prefs.layout.top).toEqual(LAYOUT_ACTIONS.slice(0, SIDEBAR_ROW_LIMIT))
-    expect([...prefs.layout.header, ...prefs.layout.more, ...prefs.layout.top, ...prefs.layout.bottom].sort()).toEqual(
-      [...LAYOUT_ACTIONS].sort(),
-    )
-    expect(prefs.layout.bottom).toEqual([])
+  it('旧 top 里的设置 / 插件 / 用量进底部，缺的入口按默认补', () => {
+    const prefs = parseSidebarPrefs({
+      version: 4,
+      upgrades: UPGRADES,
+      layout: {
+        header: ['workbench', 'channels', 'openIn'],
+        more: [],
+        top: ['addProject', 'newTask', 'settings'],
+        bottom: ['usage', 'plugins'],
+      },
+    })
+    expect(prefs.layout).toEqual({ header: H, bottom: ['usage', 'plugins', 'settings'], hidden: ['git'] })
+  })
+
+  it('旧 more 里的入口进「不显示」，其中的设置进底部', () => {
+    const prefs = parseSidebarPrefs({
+      version: 4,
+      upgrades: UPGRADES,
+      layout: {
+        header: ['workbench', 'channels', 'openIn'],
+        more: ['plugins', 'settings'],
+        top: [],
+        bottom: ['usage'],
+      },
+    })
+    expect(prefs.layout).toEqual({ header: H, bottom: ['usage', 'settings'], hidden: ['plugins', 'git'] })
+  })
+
+  it('旧默认 v4 → 顶栏只剩打开方式、底部照旧、Git 不显示', () => {
+    const prefs = parseSidebarPrefs({
+      version: 4,
+      upgrades: UPGRADES,
+      layout: {
+        header: ['workbench', 'channels', 'openIn'],
+        more: ['git'],
+        top: ['addProject', 'newTask'],
+        bottom: ['usage', 'plugins', 'settings'],
+      },
+    })
+    expect(prefs.layout).toEqual(DEFAULT_SIDEBAR_LAYOUT)
+  })
+
+  it('自己把 Git 放在顶栏的保留', () => {
+    const prefs = parseSidebarPrefs({
+      version: 4,
+      upgrades: UPGRADES,
+      layout: { header: ['git', 'workbench', 'channels', 'openIn'], more: [], top: [], bottom: B },
+    })
+    expect(prefs.layout).toEqual({ header: ['git', 'openIn'], bottom: B, hidden: [] })
+  })
+
+  it('旧偏好是 v1/v2/v3/坏数据时都不崩，读出来的入口一个不少', () => {
+    const inputs: unknown[] = [
+      { version: 1, layout: { top: ['usage'] } },
+      { version: 2, layout: { top: [1, 2], bottom: 'x' } },
+      { version: 3, layout: { top: ['settings'], bottom: ['plugins'] } },
+      { version: 4, layout: { header: 5, more: {}, top: null, bottom: [{}] } },
+      { version: 4, layout: { header: [], top: [...LAYOUT_ACTIONS], bottom: [] } },
+      { version: 4, layout: { hidden: [...LAYOUT_ACTIONS] } },
+    ]
+    for (const input of inputs) {
+      const prefs = parseSidebarPrefs(input)
+      expect(everything(prefs.layout)).toEqual([...LAYOUT_ACTIONS].sort())
+      expect(prefs.layout.bottom.length).toBeLessThanOrEqual(SIDEBAR_ROW_LIMIT)
+      expect(prefs.layout.hidden).not.toContain('settings')
+    }
+  })
+
+  it('parse(parse(x)) 等于 parse(x)', () => {
+    const inputs: unknown[] = [
+      null,
+      { version: 1 },
+      { version: 2, layout: { top: ['addProject', 'newTask'], bottom: ['settings', 'plugins', 'usage'] } },
+      { version: 3, layout: { top: ['usage', 'settings'], bottom: ['plugins'] } },
+      {
+        version: 4,
+        layout: {
+          header: ['workbench', 'channels', 'git', 'openIn'],
+          more: [],
+          top: ['addProject', 'newTask'],
+          bottom: B,
+        },
+      },
+      {
+        version: 4,
+        upgrades: UPGRADES,
+        layout: { header: ['workbench', 'openIn'], more: ['git', 'plugins', 'settings'] },
+      },
+      { version: 4, layout: { hidden: ['settings', 'plugins'], bottom: [], header: [] } },
+    ]
+    for (const input of inputs) {
+      const once = parseSidebarPrefs(input)
+      expect(parseSidebarPrefs(once)).toEqual(once)
+    }
+  })
+
+  it('新版写出的数据按旧版规则读（补回工作台 / 频道 / Git）再按新版读，结果不变', () => {
+    // 旧版只认 header / more / top / bottom：忽略 hidden，缺的按它的默认补
+    const oldRound = (layout: SidebarLayout) => {
+      const header = [...layout.header, ...['workbench', 'channels'].filter(a => !layout.header.includes(a as never))]
+      const gitSeen = [...layout.header, ...layout.bottom].includes('git')
+      return { header, more: gitSeen ? [] : ['git'], top: ['addProject', 'newTask'], bottom: layout.bottom }
+    }
+    const layouts: SidebarLayout[] = [
+      DEFAULT_SIDEBAR_LAYOUT,
+      { header: ['git', 'openIn'], bottom: ['usage', 'settings', 'plugins'], hidden: [] },
+      { header: ['openIn'], bottom: ['settings'], hidden: ['git'] },
+    ].map(l => parseSidebarPrefs({ version: 4, upgrades: UPGRADES, layout: l }).layout)
+    for (const layout of layouts) {
+      const back = parseSidebarPrefs({ version: 4, upgrades: UPGRADES, layout: oldRound(layout) }).layout
+      // 旧版会把 hidden 里的插件 / 用量补回底部，所以只比较 Git 之外的排没有被它改过的情况
+      if (layout.hidden.every(a => a === 'git')) expect(back).toEqual(layout)
+    }
+  })
+
+  it('没做过 header-git-to-more 的旧默认顶栏读出来 Git 在「不显示」（读原始数据，不是解析结果）', () => {
+    const old = { top: ['addProject', 'newTask'], bottom: ['usage', 'plugins', 'settings'] }
+    const migrated = parseSidebarPrefs({
+      version: 4,
+      layout: { header: ['workbench', 'channels', 'git', 'openIn'], ...old },
+    })
+    expect(migrated.layout).toEqual(DEFAULT_SIDEBAR_LAYOUT)
+    expect(migrated.upgrades).toEqual(UPGRADES)
+    // 自己排过的顶栏不动：Git 还在顶栏
+    const custom = parseSidebarPrefs({
+      version: 4,
+      layout: { header: ['git', 'workbench', 'channels', 'openIn'], ...old },
+    })
+    expect(custom.layout.header).toEqual(['git', 'openIn'])
+    expect(custom.layout.hidden).toEqual([])
+    // 升级过之后再把 Git 挪回顶栏，不会又被收起
+    const back = parseSidebarPrefs({
+      version: 4,
+      upgrades: UPGRADES,
+      layout: { header: ['workbench', 'channels', 'git', 'openIn'], more: [], ...old },
+    })
+    expect(back.layout.header).toEqual(['git', 'openIn'])
+    // 旧默认顶栏但「更多工具」里已经有东西：当成自己排过的
+    const withMore = parseSidebarPrefs({
+      version: 4,
+      layout: { header: ['workbench', 'channels', 'git', 'openIn'], more: ['plugins'], ...old },
+    })
+    expect(withMore.layout.header).toEqual(['git', 'openIn'])
   })
 
   it('恢复默认位置同时恢复顶栏排', async () => {
@@ -446,7 +589,7 @@ describe('侧边栏外观偏好', () => {
           ),
         ).toBe(true)
       }
-      for (const query of ['顶栏', '右上角', 'toolbar', 'top bar']) {
+      for (const query of ['顶栏', '右上角', '不显示', '隐藏', 'toolbar', 'top bar', 'hidden']) {
         expect(searchSettings(query, s => s).some(e => e.section === 'appearance' && e.title === '图标位置')).toBe(true)
       }
       for (const query of ['图标', '自定义', '替换', 'icons', 'customize', 'reset']) {
@@ -455,56 +598,5 @@ describe('侧边栏外观偏好', () => {
         )
       }
     }
-  })
-
-  it('云主机并进机器菜单（D114 §6）：旧偏好里的位置读取时丢弃，别的不动', () => {
-    const prefs = parseSidebarPrefs({
-      version: 4,
-      layout: {
-        header: ['machines', 'workbench', 'channels', 'git', 'openIn'],
-        top: ['addProject', 'machines', 'newTask'],
-        bottom: ['usage', 'plugins', 'settings'],
-      },
-    })
-    expect(prefs.layout).toEqual({ ...DEFAULT_SIDEBAR_LAYOUT })
-    expect([...LAYOUT_ACTIONS]).not.toContain('machines')
-  })
-
-  it('「更多工具」一排（D114 §6）：旧偏好没有时为空；能放进去、能挪出来，不限个数', () => {
-    expect(parseSidebarPrefs({ version: 4, upgrades: UPGRADES, layout: { header: H } }).layout.more).toEqual(['git'])
-    let layout = moveSidebarActionInLayout(DEFAULT_SIDEBAR_LAYOUT, 'openIn', 'more', 0)
-    expect(layout.header).toEqual(['workbench', 'channels'])
-    expect(layout.more).toEqual(['openIn', 'git'])
-    for (const action of SIDEBAR_ACTIONS) layout = moveSidebarActionInLayout(layout, action, 'more', 99)
-    expect(layout.more).toHaveLength(SIDEBAR_ACTIONS.length + 2)
-    expect(isRowFull(layout, 'more')).toBe(false)
-    expect(parseSidebarPrefs({ version: 4, layout }).layout).toEqual(layout)
-    layout = moveSidebarActionInLayout(layout, 'git', 'header', 99)
-    expect(layout.header.at(-1)).toBe('git')
-    expect(layout.more).not.toContain('git')
-  })
-
-  it('顶栏的 Git 默认收进「更多工具」（composer-git）：只改没动过的旧默认顶栏，只做一次', () => {
-    const old = { top: ['addProject', 'newTask'], bottom: ['usage', 'plugins', 'settings'] }
-    const migrated = parseSidebarPrefs({
-      version: 4,
-      layout: { header: ['workbench', 'channels', 'git', 'openIn'], ...old },
-    })
-    expect(migrated.layout).toEqual(DEFAULT_SIDEBAR_LAYOUT)
-    expect(migrated.upgrades).toEqual(UPGRADES)
-    // 自己排过的顶栏不动
-    const custom = parseSidebarPrefs({
-      version: 4,
-      layout: { header: ['git', 'workbench', 'channels', 'openIn'], ...old },
-    })
-    expect(custom.layout.header).toEqual(['git', 'workbench', 'channels', 'openIn'])
-    expect(custom.layout.more).toEqual([])
-    // 升级过之后再把 Git 挪回顶栏，不会又被收进去
-    const back = parseSidebarPrefs({
-      version: 4,
-      upgrades: UPGRADES,
-      layout: { header: ['workbench', 'channels', 'git', 'openIn'], more: [], ...old },
-    })
-    expect(back.layout.header).toEqual(['workbench', 'channels', 'git', 'openIn'])
   })
 })

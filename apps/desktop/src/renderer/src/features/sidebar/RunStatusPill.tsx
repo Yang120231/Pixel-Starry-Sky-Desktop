@@ -1,9 +1,7 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
-import { SquareKanban } from 'lucide-react'
 import { cn, Dot } from '@/ui'
 import { StatusDot } from '@/features/session/live/StatusDot'
-import { setPage } from '@/features/layout/page'
 import { laneCounts, type SessionCard, type SessionLane } from '@/features/board/sessionLanes'
 import type { RunFilter } from './runFilter'
 
@@ -24,8 +22,8 @@ export const LANE_TONE: Record<SessionLane, string> = {
 
 /**
  * 底部「N 运行中 · N 等你」胶囊（docs/ui/task-board.md §2.1）：只管会话，和任务看板的「进行中」AI 卡片、「等你」列同一套分类。
- * 两个都是 0 时不显示。点一个数字把上面的置顶和项目筛成这类会话，再点一次取消（参考 Claude Desktop 侧栏按状态筛选）；
- * 右边的图标打开任务看板。
+ * 两个都是 0 时不显示。点一个数字把上面的置顶和项目筛成这类会话，再点一次取消（参考 Claude Desktop 侧栏按状态筛选）。
+ 看板入口在侧栏顶部 SidebarNav。
  */
 export function RunStatusPill({
   cards,
@@ -88,17 +86,6 @@ export function RunStatusPill({
         {half('running', running)}
         <span aria-hidden className="h-4 w-px shrink-0 bg-line" />
         {half('waiting', waiting)}
-        {/* 看板入口和两半隔开：两半一样宽、字在各自中间 */}
-        <span aria-hidden className="h-4 w-px shrink-0 bg-line" />
-        <button
-          type="button"
-          aria-label={tr('sidebar.runStatus.openBoard')}
-          title={tr('sidebar.runStatus.openBoard')}
-          onClick={() => setPage('board')}
-          className="press flex size-8 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-hover hover:text-fg"
-        >
-          <SquareKanban size={15} strokeWidth={1.5} />
-        </button>
       </div>
     </div>
   )

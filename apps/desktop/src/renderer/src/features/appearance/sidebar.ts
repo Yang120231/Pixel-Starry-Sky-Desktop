@@ -12,14 +12,13 @@ import {
 
 export type { HeaderAction, LayoutAction, SidebarAction, SidebarIconId, SidebarIcons } from './sidebarIcons'
 
-/** header 是窗口右上角顶栏，more 是顶栏「⋮ 更多工具」菜单里（docs/ui/ui-polish-2026-10-13.md §6），top / bottom 是侧栏顶部和底部 */
-export type SidebarPlacement = 'header' | 'more' | 'top' | 'bottom'
+/** header 是窗口右上角顶栏，bottom 是侧栏底部，hidden 是不显示（docs/ui/layout-v2.md §7.1） */
+export type SidebarPlacement = 'header' | 'bottom' | 'hidden'
 
 export interface SidebarLayout {
   header: LayoutAction[]
-  more: LayoutAction[]
-  top: LayoutAction[]
   bottom: LayoutAction[]
+  hidden: LayoutAction[]
 }
 
 export interface SidebarPrefs {
@@ -34,15 +33,26 @@ export interface SidebarPrefs {
 
 export const SIDEBAR_PREFS_KEY = 'pixelsky.sidebar'
 export const DEFAULT_SIDEBAR_LAYOUT: SidebarLayout = {
-  header: ['workbench', 'channels', 'openIn'],
-  more: ['git'],
-  top: ['addProject', 'newTask'],
+  header: ['openIn'],
   bottom: ['usage', 'plugins', 'settings'],
+  hidden: ['git'],
 }
-/** 侧栏最窄 240px 时一排放得下的可移动图标（顶部还有搜索、底部还有账号各占一格）；顶栏和更多菜单不限 */
+/** 侧栏最窄 240px 时底部一排放得下的可移动图标（账号还占一格）；顶栏和「不显示」不限 */
 export const SIDEBAR_ROW_LIMIT = 5
 
-export const LAYOUT_PLACEMENTS: readonly SidebarPlacement[] = ['header', 'more', 'top', 'bottom']
+export const LAYOUT_PLACEMENTS: readonly SidebarPlacement[] = ['header', 'bottom', 'hidden']
+
+/**
+ * 读保存数据时的排序和去向：旧的「侧栏顶部」(top) 并进底部，旧的「更多工具」(more) 并进不显示。
+ * 顺序固定为 header → bottom → hidden → top → more，所以旧数据里的 top / more 排在新排之后
+ */
+const READ_ORDER: readonly (readonly [string, SidebarPlacement])[] = [
+  ['header', 'header'],
+  ['bottom', 'bottom'],
+  ['hidden', 'hidden'],
+  ['top', 'bottom'],
+  ['more', 'hidden'],
+]
 
 /** 改名的入口：自动化换成了 Git（D061），保存的位置原样沿用 */
 const RENAMED: Record<string, LayoutAction> = { automation: 'git' }
@@ -52,22 +62,29 @@ function isLayoutAction(value: unknown): value is LayoutAction {
 }
 
 export function isRowFull(layout: SidebarLayout, row: SidebarPlacement, moving?: LayoutAction): boolean {
-  return (row === 'top' || row === 'bottom') && layout[row].filter(item => item !== moving).length >= SIDEBAR_ROW_LIMIT
+  return row === 'bottom' && layout[row].filter(item => item !== moving).length >= SIDEBAR_ROW_LIMIT
 }
 
-/** 先保留三排已有的合法顺序，再把缺失入口补回默认排；侧栏排满时溢出到顶栏。 */
+/** 能不能把入口放进这一排：「设置」不能进「不显示」（它是改回来的入口），底部排满也不行。落点判断、移动、读取都只调它 */
+export function canPlace(layout: SidebarLayout, row: SidebarPlacement, action: LayoutAction): boolean {
+  return !(row === 'hidden' && action === 'settings') && !isRowFull(layout, row, action)
+}
+
+/** 先保留各排已有的合法顺序，再把缺失入口补回默认排；放不下的先试底部、再溢出到顶栏。 */
 function parseSidebarLayout(value: unknown): SidebarLayout {
-  const result: SidebarLayout = { header: [], more: [], top: [], bottom: [] }
+  const result: SidebarLayout = { header: [], bottom: [], hidden: [] }
   const seen = new Set<LayoutAction>()
   const place = (row: SidebarPlacement, action: LayoutAction): void => {
-    result[isRowFull(result, row) ? 'header' : row].push(action)
+    const target = ([row, 'bottom', 'header'] as const).find(r => canPlace(result, r, action)) ?? 'header'
+    result[target].push(action)
     seen.add(action)
   }
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     const saved = value as Record<string, unknown>
-    for (const row of LAYOUT_PLACEMENTS) {
-      if (!Array.isArray(saved[row])) continue
-      for (const raw of saved[row]) {
+    for (const [key, row] of READ_ORDER) {
+      const items = saved[key]
+      if (!Array.isArray(items)) continue
+      for (const raw of items) {
         const item = typeof raw === 'string' ? (RENAMED[raw] ?? raw) : raw
         if (isLayoutAction(item) && !seen.has(item)) place(row, item)
       }
@@ -84,6 +101,19 @@ function parseSidebarLayout(value: unknown): SidebarLayout {
 const GIT_TO_MORE = 'header-git-to-more'
 /** 2026-10-13 之前的默认顶栏（云主机已在读取时丢掉） */
 const OLD_HEADER = 'workbench,channels,git,openIn'
+/** 早已删掉的入口，读原始数据比对时也要先去掉 */
+const REMOVED = ['terminal', 'editor', 'commandPalette', 'machines']
+
+/** 原始数据里某一排的名字（只认字符串，非数组为空），用来判断是不是旧默认，不依赖解析后的结果 */
+function rawRow(layout: unknown, key: string): string[] {
+  if (!layout || typeof layout !== 'object' || Array.isArray(layout)) return []
+  const row = (layout as Record<string, unknown>)[key]
+  if (!Array.isArray(row)) return []
+  return row
+    .filter((item): item is string => typeof item === 'string')
+    .map(item => (RENAMED[item] as string | undefined) ?? item)
+    .filter(item => !REMOVED.includes(item))
+}
 
 function defaults(): SidebarPrefs {
   return {
@@ -112,19 +142,27 @@ export function parseSidebarPrefs(value: unknown): SidebarPrefs {
   }
   if (saved.version === 2 || saved.version === 3 || saved.version === 4) {
     result.layout = parseSidebarLayout(saved.layout)
-    // Git 的常用操作挪到输入框上方后（docs/ui/composer-git.md），顶栏的 Git 默认收进「更多工具」；
-    // 只改没动过的旧默认顶栏，自己排过的不动；只做一次，之后挪回顶栏不会再被改
+    // Git 的常用操作挪到输入框上方后（docs/ui/composer-git.md），顶栏的 Git 默认收起（现在是「不显示」）；
+    // 只改没动过的旧默认顶栏，自己排过的不动；只做一次，之后挪回顶栏不会再被改。
+    // 判断看保存的原始数据：解析后工作台、频道已被丢掉，永远等不于 OLD_HEADER（docs/ui/layout-v2.md §7.2）
     const upgrades = Array.isArray(saved.upgrades) ? saved.upgrades.filter(u => typeof u === 'string') : []
     if (!upgrades.includes(GIT_TO_MORE)) {
-      if (result.layout.header.join() === OLD_HEADER && !result.layout.more.length)
-        result.layout = { ...result.layout, header: [...DEFAULT_SIDEBAR_LAYOUT.header], more: ['git'] }
+      if (rawRow(saved.layout, 'header').join() === OLD_HEADER && !rawRow(saved.layout, 'more').length) {
+        const { header, hidden } = result.layout
+        result.layout = {
+          ...result.layout,
+          header: header.filter(a => a !== 'git'),
+          hidden: ['git', ...hidden.filter(a => a !== 'git')],
+        }
+      }
       upgrades.push(GIT_TO_MORE)
     }
     result.upgrades = upgrades
+    // v2 的旧默认位置整份换成新默认；同样看原始数据（解析后 top 已并进底部）
     if (
       saved.version === 2 &&
-      result.layout.top.join() === 'addProject,newTask' &&
-      result.layout.bottom.join() === 'settings,plugins,usage'
+      rawRow(saved.layout, 'top').join() === 'addProject,newTask' &&
+      rawRow(saved.layout, 'bottom').join() === 'settings,plugins,usage'
     ) {
       result.layout = parseSidebarLayout(null)
     }
@@ -173,7 +211,7 @@ export function resetSidebarLayout(): void {
   setSidebarLayout(DEFAULT_SIDEBAR_LAYOUT)
 }
 
-/** index 是先移除原位置后，在目标排中的插入索引；目标侧栏排已满时不移动。不修改传入布局。 */
+/** index 是先移除原位置后，在目标排中的插入索引；目标排放不下（底部已满、设置进不显示）时不移动。不修改传入布局。 */
 export function moveSidebarActionInLayout(
   layout: SidebarLayout,
   action: LayoutAction,
@@ -181,7 +219,7 @@ export function moveSidebarActionInLayout(
   index: number,
 ): SidebarLayout {
   const result = parseSidebarLayout(layout)
-  if (!isLayoutAction(action) || !LAYOUT_PLACEMENTS.includes(row) || isRowFull(result, row, action)) return result
+  if (!isLayoutAction(action) || !LAYOUT_PLACEMENTS.includes(row) || !canPlace(result, row, action)) return result
   for (const placement of LAYOUT_PLACEMENTS) result[placement] = result[placement].filter(item => item !== action)
   const target = result[row]
   const insertion = Number.isNaN(index) ? 0 : Math.max(0, Math.min(target.length, Math.trunc(index)))

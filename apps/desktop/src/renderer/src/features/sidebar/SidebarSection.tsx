@@ -53,7 +53,7 @@ export function SidebarRow({
   className?: string
   children: ReactNode
   title?: string
-} & Pick<AriaAttributes, 'aria-expanded'>) {
+} & Pick<AriaAttributes, 'aria-expanded' | 'aria-current' | 'aria-haspopup'>) {
   useI18n()
   return (
     <button

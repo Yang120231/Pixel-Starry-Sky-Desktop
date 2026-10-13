@@ -32,7 +32,7 @@ export function ComposerStatusBar({
     >
       <button
         type="button"
-        onClick={openMachineManager}
+        onClick={() => openMachineManager()}
         className="inline-flex shrink-0 items-center gap-1.5 hover:text-fg"
       >
         <Monitor size={13} strokeWidth={1.5} />

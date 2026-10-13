@@ -2,6 +2,12 @@ export const machineMessages = {
   'machines.title': { zh: '机器与连接', en: 'Machines & connections' },
   'machines.switch': { zh: '切换机器', en: 'Switch machine' },
   'machines.manage': { zh: '管理机器…', en: 'Manage machines…' },
+  // 顶栏「本机 | 云端」（docs/ui/layout-v2.md §4）
+  'machines.group': { zh: '机器', en: 'Machine' },
+  'machines.cloud': { zh: '云端', en: 'Cloud' },
+  'machines.cloudCurrent': { zh: '云端 · {name}', en: 'Cloud · {name}' },
+  'machines.cloudList': { zh: '云端机器', en: 'Cloud machines' },
+  'machines.cloudEmpty': { zh: '还没有云端机器', en: 'No cloud machines yet' },
   // 输入框上方的文件夹菜单，对话已经开始时（docs/ui/machines-workspaces.md §9）
   'machines.folder.fixed': {
     zh: '这个对话固定在 {path}，换文件夹会开新对话',

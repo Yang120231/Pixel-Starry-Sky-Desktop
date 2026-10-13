@@ -123,24 +123,11 @@ export function OpenInButton({ placement }: { placement: SidebarPlacement | 'com
     : current
       ? tr('openWith.openWith', { p0: choiceName(current), p1: workspace.name })
       : tr('openWith.choose')
-  // 在「更多工具」菜单里时列表从左边弹出（菜单贴着窗口右边）
-  const asRow = placement === 'more' || placement === 'composer'
-  const side =
-    placement === 'composer'
-      ? '-bottom-1'
-      : placement === 'more'
-        ? '-top-1'
-        : placement === 'bottom'
-          ? 'bottom-full mb-1'
-          : 'top-full mt-1'
-  const align =
-    placement === 'composer'
-      ? 'left-full ml-2'
-      : placement === 'more'
-        ? 'right-full mr-2'
-        : placement === 'header'
-          ? 'right-0'
-          : 'left-0'
+  // 输入框上方的菜单里是一行，列表从右边弹出
+  const asRow = placement === 'composer'
+  const inTrack = placement === 'header'
+  const side = placement === 'composer' ? '-bottom-1' : placement === 'bottom' ? 'bottom-full mb-1' : 'top-full mt-1'
+  const align = placement === 'composer' ? 'left-full ml-2' : placement === 'header' ? 'right-0' : 'left-0'
 
   const row = (choice: Choice) => {
     const id = choiceId(choice),
@@ -201,7 +188,9 @@ export function OpenInButton({ placement }: { placement: SidebarPlacement | 'com
       {trigger ?? (
         <span
           className={cn(
-            'inline-flex h-8 items-center rounded-md',
+            'group/open inline-flex items-center rounded-md',
+            // 顶栏里在细边框轨道内，和右侧面板开关一样 24px 高（docs/ui/layout-v2.md §4）
+            inTrack ? 'h-6' : 'h-8',
             menu && 'bg-active',
             !!disabledReason && 'opacity-40',
           )}
@@ -212,9 +201,24 @@ export function OpenInButton({ placement }: { placement: SidebarPlacement | 'com
             title={label}
             disabled={!!disabledReason || busy}
             onClick={() => (current ? void open(current) : showMenu())}
-            className="press no-drag inline-flex h-8 items-center gap-1.5 rounded-l-md pr-1 pl-2 text-fg-secondary hover:bg-hover hover:text-fg disabled:hover:bg-transparent"
+            className={cn(
+              'press no-drag inline-flex h-full items-center gap-1.5 rounded-l-md text-fg-secondary hover:bg-hover hover:text-fg disabled:hover:bg-transparent',
+              inTrack ? 'pr-0.5 pl-1.5' : 'pr-1 pl-2',
+            )}
           >
-            <ChoiceIcon choice={current} />
+            {/* 顶栏里编辑器的彩色图标平时去色，鼠标移上去、键盘焦点或菜单打开时才显示原色，整排只剩黑白灰；
+                文件管理器、终端和默认的「↗」本来就是单色线条图标，不动 */}
+            <span
+              className={cn(
+                'inline-flex',
+                inTrack &&
+                  !menu &&
+                  current?.kind === 'editor' &&
+                  'opacity-75 grayscale group-focus-within/open:opacity-100 group-focus-within/open:grayscale-0 group-hover/open:opacity-100 group-hover/open:grayscale-0',
+              )}
+            >
+              <ChoiceIcon choice={current} />
+            </span>
           </button>
           <button
             type="button"
@@ -224,9 +228,12 @@ export function OpenInButton({ placement }: { placement: SidebarPlacement | 'com
             aria-expanded={menu}
             disabled={!!disabledReason}
             onClick={showMenu}
-            className="press no-drag inline-flex h-8 w-5 items-center justify-center rounded-r-md text-fg-muted hover:bg-hover hover:text-fg disabled:hover:bg-transparent"
+            className={cn(
+              'press no-drag inline-flex h-full items-center justify-center rounded-r-md text-fg-muted hover:bg-hover hover:text-fg disabled:hover:bg-transparent',
+              inTrack ? 'w-4' : 'w-5',
+            )}
           >
-            <ChevronDown size={13} strokeWidth={1.5} />
+            <ChevronDown size={inTrack ? 12 : 13} strokeWidth={1.5} />
           </button>
         </span>
       )}

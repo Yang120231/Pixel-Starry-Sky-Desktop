@@ -19,6 +19,8 @@ export const TOGGLE_PANEL = action('togglePanel')
 /** 打开设置：默认 Ctrl+,（macOS ⌘,） */
 export const OPEN_SETTINGS = action('openSettings')
 export const OPEN_SEARCH = action('openSearch')
+/** 新建任务：默认 Ctrl+N（macOS ⌘N），docs/ui/layout-v2.md §9 */
+export const NEW_TASK = action('newTask')
 /** 在当前对话里查找：默认 Ctrl+F，docs/ui/content-highlight.md §2 E；终端、编辑器里仍是它们自己的查找 */
 export const FIND_IN_CONVERSATION = action('findInConversation')
 /** 命令面板：默认 Ctrl+Shift+P */

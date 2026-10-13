@@ -84,9 +84,9 @@ const dictionaries: Record<string, Record<string, unknown>> = {
 /** 中英文值不同、需要保持现状的重复 key（当前为空；新增重复必须先说明原因）。 */
 const ALLOWED_DUPLICATES: string[] = []
 /** renderer/src 下含 CJK 的字符串字面量个数基线；减少后请同步调低。 */
-const HARDCODED_CJK_BASELINE = 373
+const HARDCODED_CJK_BASELINE = 352
 /** text('中文') 反查词典调用个数基线；减少后请同步调低。 */
-const TEXT_LOOKUP_BASELINE = 42
+const TEXT_LOOKUP_BASELINE = 35
 
 const srcRoot = join(__dirname, '..')
 const mainRoot = join(__dirname, '..', '..', '..', 'main')

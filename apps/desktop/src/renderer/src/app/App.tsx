@@ -5,9 +5,9 @@ import { Sidebar } from '../features/sidebar/Sidebar'
 import { ToolbarContext } from '../features/layout/ToolbarContext'
 import { RightPanel } from '../features/panel/RightPanel'
 import { defaultPanelOpen, defaultSessionId } from '../data'
-import { TOGGLE_PANEL, TOGGLE_SIDEBAR } from '../features/layout/shortcuts'
-import { cn, CollapsibleSlot } from '../ui'
-import { useEngineBoot, useOpenSessionRequests } from '../features/engine'
+import { NEW_TASK, TOGGLE_PANEL, TOGGLE_SIDEBAR } from '../features/layout/shortcuts'
+import { cn, CollapsibleSlot, useComingSoon } from '../ui'
+import { isLive, useEngineBoot, useOpenSessionRequests } from '../features/engine'
 import { Workspace, WorkspaceHeader } from '../features/panes/Workspace'
 import { paneActions, startPanes, usePaneState } from '../features/panes/store'
 import { focusedTab, isNewTab, isFileTab } from '../features/panes/tree'
@@ -58,6 +58,7 @@ export function App() {
   // 主区显示工作台还是协作频道（docs/ui/channels.md §2）；工作台在频道页期间保持挂载
   const page = usePage()
   const onWorkbench = page === 'workbench'
+  const comingSoon = useComingSoon()
   const preferredSidebarWidth = useLayoutSize('sidebar')
   const [windowWidth, setWindowWidth] = useState(window.innerWidth)
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -194,7 +195,14 @@ export function App() {
         (document.activeElement instanceof HTMLElement && document.activeElement.closest('[data-terminal-input]'))
       )
         return
-      const action = TOGGLE_SIDEBAR.match(e) ? toggleSidebar : TOGGLE_PANEL.match(e) ? togglePanel : null
+      // 新建任务 Ctrl+N：任务看板页里它是「新建卡片」，由看板自己处理（docs/ui/layout-v2.md §9）；演示模式弹「即将推出」
+      const newTask =
+        page !== 'board' && NEW_TASK.match(e)
+          ? isLive
+            ? () => paneActions.open(null)
+            : () => comingSoon(tr('sidebar.NewTaskButton.newTask'))
+          : null
+      const action = TOGGLE_SIDEBAR.match(e) ? toggleSidebar : TOGGLE_PANEL.match(e) ? togglePanel : newTask
       if (!action) return
       e.preventDefault()
       action()

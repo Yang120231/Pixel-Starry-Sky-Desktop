@@ -44,9 +44,9 @@
   opacity: 1;
 }
 
-/* 顶栏导航只留图标，名字在悬停提示里（按钮本来就有 title） */
-:root[data-minimal='on'] [data-nav-label] {
-  display: none;
+/* 侧栏顶部四行（docs/ui/layout-v2.md §8）和会话行一样 28px */
+:root[data-minimal='on'] [data-sidebar-nav] > button {
+  height: 28px;
 }
 
 /* 侧栏：行高 32 → 28，收起最近任务，底部胶囊去掉外框只剩一行字 */

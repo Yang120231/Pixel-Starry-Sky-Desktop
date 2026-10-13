@@ -11,7 +11,7 @@ export function MachineStatus() {
       className="flex shrink-0 items-center gap-3 border-b border-line bg-subtle px-4 py-2 text-meta text-warn"
     >
       <span className="flex-1">{t('machines.unknownRunState')}</span>
-      <button onClick={openMachineManager} className="shrink-0 underline">
+      <button onClick={() => openMachineManager()} className="shrink-0 underline">
         {t('machines.reconnect')}
       </button>
     </div>

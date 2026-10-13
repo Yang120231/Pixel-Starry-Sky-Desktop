@@ -118,7 +118,10 @@ export function WorkspaceHeader({ membersShown = false, ...props }: WorkspacePro
   }
   return (
     <SessionHeader
-      title={file?.name ?? parsed?.path.split('/').pop() ?? title}
+      // 新对话标签没有标题，顶栏只写项目名（docs/ui/layout-v2.md §4）
+      title={
+        file?.name ?? parsed?.path.split('/').pop() ?? (current && isNewTab(current) && workspace?.name ? '' : title)
+      }
       workspace={workspace}
       showActions={showActions && !parsed}
       {...props}

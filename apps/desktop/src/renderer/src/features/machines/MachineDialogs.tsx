@@ -60,10 +60,10 @@ export function MachineDialogs() {
   }, [])
   useEffect(() => {
     void initMachines().catch(e => setError(message(e)))
-    const machines = () => {
+    const machines = (e: Event) => {
       setView('machines')
       setError('')
-      setForm(null)
+      setForm((e as CustomEvent<{ add?: boolean } | null>).detail?.add && !isDemo ? { ...fresh } : null)
       setDirectory(null)
       setQuery('')
     }

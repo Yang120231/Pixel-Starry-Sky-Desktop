@@ -10,11 +10,12 @@ import { paneActions } from '@/features/panes/store'
 import { refreshTerminals } from '@/features/terminal/store'
 import { isDemo } from '@/data'
 import { isNewTab } from '@/features/panes/tree'
+import { demo } from '@/data/demo'
 
 export const machineOf = (id: unknown): string =>
   typeof id === 'string' && /^ssh-[a-f0-9-]+~/.test(id) ? id.slice(0, id.indexOf('~')) : 'local'
 const listeners = new Set<() => void>()
-let state: MachineState = {
+let state: MachineState = (isDemo ? demo().machines : undefined) ?? {
   currentId: 'local',
   machines: [
     {
@@ -64,8 +65,9 @@ export async function initMachines(): Promise<void> {
   window.pixelsky.machines.onChange(set)
   set(await window.pixelsky.machines.state())
 }
-export function openMachineManager(): void {
-  window.dispatchEvent(new Event('pixelsky:manage-machines'))
+/** add：直接打开管理窗口的新建表单（顶栏云端菜单的「添加 SSH 机器」） */
+export function openMachineManager(opts: { add?: boolean } = {}): void {
+  window.dispatchEvent(new CustomEvent('pixelsky:manage-machines', { detail: { add: opts.add === true } }))
 }
 /** fresh：选了一定开新对话（输入框上方文件夹菜单的「在别的文件夹开新对话…」），不跳到那个文件夹已有的对话 */
 export function openWorkspacePicker(opts: { fresh?: boolean } = {}): void {
@@ -76,7 +78,11 @@ export async function selectMachine(id: string): Promise<void> {
   switching = true
   const previous = state.currentId
   try {
-    if (isDemo) return
+    if (isDemo) {
+      // 演示里只改当前机器，不调主进程、不刷新引擎
+      set({ ...state, currentId: id })
+      return
+    }
     await window.pixelsky!.machines.select(id)
     set(await window.pixelsky!.machines.state())
     await refreshMachineEngine(id)

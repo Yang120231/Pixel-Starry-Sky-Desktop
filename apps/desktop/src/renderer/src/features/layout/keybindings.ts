@@ -17,6 +17,8 @@ const key = (code: string, { shift = false, alt = false, mod = true } = {}): Bin
 
 /** 能改的动作，按设置页里的顺序 */
 export const ACTIONS = [
+  // 新建任务（docs/ui/layout-v2.md §9）；终端输入里不抢，任务看板页里仍是它自己的「新建卡片」
+  { id: 'newTask', label: 'sidebar.action.newTask', binding: key('KeyN') },
   { id: 'commandPalette', label: 'terminal.commandPalette', binding: key('KeyP', { shift: true }) },
   { id: 'toggleTerminal', label: 'terminal.title', binding: key('Backquote') },
   { id: 'newTerminal', label: 'terminal.new', binding: key('Backquote', { shift: true }) },

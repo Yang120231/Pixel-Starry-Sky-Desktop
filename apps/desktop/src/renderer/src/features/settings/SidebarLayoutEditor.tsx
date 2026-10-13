@@ -1,24 +1,13 @@
 import { useEffect, useRef, useState, type PointerEvent, type KeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
-import {
-  ArrowDown,
-  ArrowLeft,
-  ArrowRight,
-  ArrowUp,
-  ChevronDown,
-  EllipsisVertical,
-  PanelRight,
-  RotateCcw,
-  Search,
-  UserRound,
-} from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Monitor, PanelRight, RotateCcw, UserRound } from 'lucide-react'
 import { Button, IconButton, cn } from '@/ui'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import {
   DEFAULT_SIDEBAR_LAYOUT,
   LAYOUT_PLACEMENTS,
-  isRowFull,
+  canPlace,
   moveSidebarActionInLayout,
   resetSidebarLayout,
   setSidebarLayout,
@@ -29,6 +18,7 @@ import {
 } from '@/features/appearance/sidebar'
 import { getLayoutIcon } from '@/features/appearance/sidebarIcons'
 
+/** full：落点放不下（底部排满，或设置不能进「不显示」） */
 type Drop = { row: SidebarPlacement; index: number; x: number; y: number; height: number; full: boolean }
 type Gesture = {
   action: LayoutAction
@@ -45,14 +35,22 @@ const rowOf = (layout: SidebarLayout, action: LayoutAction): SidebarPlacement =>
 const neighbour = (row: SidebarPlacement, step: -1 | 1): SidebarPlacement | undefined =>
   LAYOUT_PLACEMENTS[LAYOUT_PLACEMENTS.indexOf(row) + step]
 
-/** 顶栏 + 侧栏两排的布局编辑；只在松开有效落点时提交，预览按钮不会执行真实动作。 */
+/** 顶栏 / 侧栏底部 / 不显示三排的布局编辑；只在松开有效落点时提交，预览按钮不会执行真实动作。 */
+
+/** 落点放不下时的提示：设置不能隐藏，其余是这一排满了 */
+function refusal(row: SidebarPlacement, action: LayoutAction): string {
+  return row === 'hidden' && action === 'settings'
+    ? tr('sidebar.layout.settingsRequired')
+    : tr('sidebar.layout.full', { row: tr(`sidebar.layout.${row}`) })
+}
+
 export function SidebarLayoutEditor() {
   useI18n()
   const prefs = useSidebarPrefs()
   const root = useRef<HTMLDivElement>(null)
   const gesture = useRef<Gesture | null>(null)
   const suppressClick = useRef(false)
-  const [selected, setSelected] = useState<LayoutAction>('newTask')
+  const [selected, setSelected] = useState<LayoutAction>('settings')
   const [drag, setDrag] = useState<{ action: LayoutAction; x: number; y: number; drop: Drop | null } | null>(null)
   const [announcement, setAnnouncement] = useState('')
   const row = rowOf(prefs.layout, selected)
@@ -60,7 +58,7 @@ export function SidebarLayoutEditor() {
   const prev = neighbour(row, -1),
     next = neighbour(row, 1)
   const canMove = (target: SidebarPlacement | undefined): target is SidebarPlacement =>
-    !!target && !isRowFull(prefs.layout, target, selected)
+    !!target && canPlace(prefs.layout, target, selected)
   const isDefault = LAYOUT_PLACEMENTS.every(r => prefs.layout[r].join() === DEFAULT_SIDEBAR_LAYOUT[r].join())
 
   function focusAction(action: LayoutAction) {
@@ -72,8 +70,8 @@ export function SidebarLayoutEditor() {
   }
 
   function commit(action: LayoutAction, target: SidebarPlacement, at: number, layout = prefs.layout) {
-    if (isRowFull(layout, target, action)) {
-      setAnnouncement(tr('sidebar.layout.full', { row: tr(`sidebar.layout.${target}`) }))
+    if (!canPlace(layout, target, action)) {
+      setAnnouncement(refusal(target, action))
       return
     }
     const next = moveSidebarActionInLayout(layout, action, target, at)
@@ -127,7 +125,7 @@ export function SidebarLayoutEditor() {
         x: next ? next.left - 2 : last ? last.right + 2 : group.left,
         y: beside ? beside.top : rect.top + 7,
         height: beside ? beside.height : rect.height - 14,
-        full: isRowFull(layout, row, action),
+        full: !canPlace(layout, row, action),
       }
     }
     return null
@@ -203,33 +201,15 @@ export function SidebarLayoutEditor() {
                 'flex min-h-12 items-center gap-1 rounded-md px-1',
                 drag?.drop?.row === placement && (drag.drop.full ? 'bg-hover' : 'bg-accent-soft'),
               )}
-              title={
-                drag?.drop?.row === placement && drag.drop.full
-                  ? tr('sidebar.layout.full', { row: tr(`sidebar.layout.${placement}`) })
-                  : undefined
-              }
+              title={drag?.drop?.row === placement && drag.drop.full ? refusal(placement, drag.action) : undefined}
             >
               {placement === 'header' && (
                 <span
                   title={tr('sidebar.layout.machineFixed')}
                   className="inline-flex h-8 shrink-0 items-center gap-1 px-1 text-meta text-fg-faint"
                 >
-                  <span className="size-1.5 rounded-full bg-current" />
+                  <Monitor size={14} strokeWidth={1.5} />
                   {tr('sidebar.layout.machine')}
-                  <ChevronDown size={13} strokeWidth={1.5} />
-                </span>
-              )}
-              {placement === 'more' && (
-                <span className="inline-flex size-8 shrink-0 items-center justify-center text-fg-faint">
-                  <EllipsisVertical size={16} strokeWidth={1.5} />
-                </span>
-              )}
-              {placement === 'top' && (
-                <span
-                  title={tr('sidebar.layout.searchFixed')}
-                  className="inline-flex size-8 shrink-0 items-center justify-center text-fg-faint"
-                >
-                  <Search size={16} strokeWidth={1.5} />
                 </span>
               )}
               {placement === 'bottom' && (
@@ -243,13 +223,10 @@ export function SidebarLayoutEditor() {
               )}
               <div
                 data-layout-items
-                className={cn(
-                  'flex min-h-8 min-w-1 flex-wrap items-center gap-1',
-                  (placement === 'top' || placement === 'bottom') && 'ml-auto',
-                )}
+                className={cn('flex min-h-8 min-w-1 flex-wrap items-center gap-1', placement === 'bottom' && 'ml-auto')}
               >
-                {placement === 'more' && !prefs.layout.more.length && (
-                  <span className="px-1 text-meta text-fg-faint">{tr('sidebar.layout.moreEmpty')}</span>
+                {placement === 'hidden' && !prefs.layout.hidden.length && (
+                  <span className="px-1 text-meta text-fg-faint">{tr('sidebar.layout.hiddenEmpty')}</span>
                 )}
                 {prefs.layout[placement].map(action => {
                   const Icon = getLayoutIcon(action, prefs.icons)

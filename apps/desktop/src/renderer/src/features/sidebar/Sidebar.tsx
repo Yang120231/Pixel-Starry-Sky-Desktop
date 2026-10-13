@@ -1,13 +1,13 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { ChevronDown, FolderPlus, Plus, Search, X } from 'lucide-react'
-import { cn, useComingSoon } from '@/ui'
+import { ChevronDown, FolderPlus, X } from 'lucide-react'
+import { IconButton, cn, useComingSoon } from '@/ui'
 import { setSidebarPrefs, useSidebarPrefs } from '@/features/appearance/sidebar'
-import { OPEN_SEARCH, withShortcut } from '@/features/layout/shortcuts'
+import { getSidebarIcon } from '@/features/appearance/sidebarIcons'
 import { addProject, isLive, recentSpansProjects, useSidebarData } from '@/features/engine'
 import { SidebarHeader } from './SidebarHeader'
-import { LayoutActionButton } from '@/features/layout/LayoutActionButton'
+import { SidebarNav } from './SidebarNav'
 import { SidebarEmpty, SidebarRow, SidebarSection } from './SidebarSection'
 import { PinnedList } from './PinnedList'
 import { PinnedTasks } from './PinnedTasks'
@@ -18,8 +18,6 @@ import { RunStatusPill } from './RunStatusPill'
 import { filterProjects, filterSessions, lanesOf, useScrollFade, type RunFilter } from './runFilter'
 import { useSessionCards } from '@/features/board/useSessionCards'
 import { SidebarFooter } from './SidebarFooter'
-import { useOpenSearch } from '@/features/search/SearchProvider'
-import { useMinimal } from '@/features/appearance/ThemeProvider'
 
 export interface SidebarProps {
   selectedSessionId: string | null
@@ -36,15 +34,13 @@ export interface SidebarProps {
 export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: SidebarProps) {
   useI18n()
   const comingSoon = useComingSoon()
-  const openSearch = useOpenSearch()
   const prefs = useSidebarPrefs()
-  const minimal = useMinimal()
   const recentId = useId()
   // 演示模式是 mock 数据，否则是引擎里的真实项目和会话
   const { projects, pinned: pinnedSessions, recent } = useSidebarData()
   const onAddProject = isLive ? () => void addProject() : () => comingSoon(tr('sidebar.Sidebar.addProject'))
   const onNewTask = isLive ? () => onSelectSession(null) : undefined
-  const compactSearch = prefs.layout.top.length >= 4
+  const AddProjectIcon = getSidebarIcon('addProject', prefs.icons)
   // 把任务清单里的任务拖到侧栏任意位置松开：固定到「固定任务」（docs/ui/files-search-terminal-pins.md §5）
   const [dropping, setDropping] = useState(false)
   const taskDrag = (e: React.DragEvent): boolean => e.dataTransfer.types.includes(TASK_DRAG_TYPE)
@@ -81,68 +77,7 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
     >
       <SidebarHeader onCollapse={onCollapse} />
 
-      {minimal ? (
-        // 极简模式（docs/ui/minimal-mode.md §4，参考 Factory）：「新建任务」「搜索」各一行，添加项目放在第一行右边
-        <div className="no-drag flex shrink-0 flex-col px-3 pt-1" data-sidebar-actions data-sidebar-minimal-actions>
-          <div className="flex items-center">
-            <button
-              type="button"
-              onClick={onNewTask ?? (() => comingSoon(tr('sidebar.NewTaskButton.newTask')))}
-              className="press flex h-7 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-list text-fg-secondary hover:bg-hover hover:text-fg"
-            >
-              <Plus size={15} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
-              <span className="truncate">{tr('sidebar.action.newTask')}</span>
-            </button>
-            {prefs.layout.top
-              .filter(action => action !== 'newTask')
-              .map(action => (
-                <LayoutActionButton
-                  key={action}
-                  action={action}
-                  placement="top"
-                  onAddProject={onAddProject}
-                  onNewTask={onNewTask}
-                />
-              ))}
-          </div>
-          <button
-            type="button"
-            aria-haspopup="dialog"
-            title={withShortcut(tr('sidebar.search'), OPEN_SEARCH)}
-            onClick={openSearch}
-            className="press flex h-7 min-w-0 items-center gap-2 rounded-md px-2 text-list text-fg-secondary hover:bg-hover hover:text-fg"
-          >
-            <Search size={15} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
-            <span className="truncate">{tr('sidebar.search')}</span>
-          </button>
-        </div>
-      ) : (
-        <div className="no-drag flex shrink-0 items-center gap-1 px-3 pt-1" data-sidebar-actions>
-          <button
-            type="button"
-            aria-label={tr('sidebar.search')}
-            aria-haspopup="dialog"
-            title={withShortcut(tr('sidebar.search'), OPEN_SEARCH)}
-            onClick={openSearch}
-            className={cn(
-              'press flex h-8 min-w-0 items-center gap-2 rounded-md px-2 text-ui text-fg-muted hover:bg-hover hover:text-fg',
-              compactSearch ? 'w-8 shrink-0 justify-center' : 'flex-1',
-            )}
-          >
-            <Search size={16} strokeWidth={1.5} className="shrink-0" />
-            {!compactSearch && <span className="truncate">{tr('sidebar.search')}</span>}
-          </button>
-          {prefs.layout.top.map(action => (
-            <LayoutActionButton
-              key={action}
-              action={action}
-              placement="top"
-              onAddProject={onAddProject}
-              onNewTask={onNewTask}
-            />
-          ))}
-        </div>
-      )}
+      <SidebarNav onNewTask={onNewTask} />
 
       <div
         ref={scroller}
@@ -165,8 +100,8 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
             </button>
           </div>
         )}
-        {/* 置顶：任务看板入口 + 置顶的会话（docs/ui/task-board.md §2）；筛选时只列符合的，没有就不显示这一组 */}
-        {(!runFilter || shownPinned.length > 0) && (
+        {/* 置顶的会话；筛选时只列符合的，没有置顶会话就不显示这一组（看板入口在顶部四行） */}
+        {shownPinned.length > 0 && (
           <SidebarSection title={tr('sidebar.Sidebar.pinned')}>
             <PinnedList
               sessions={shownPinned}
@@ -179,7 +114,18 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
 
         {!runFilter && <PinnedTasks dropping={dropping} />}
 
-        <SidebarSection title={tr('sidebar.Sidebar.projects')}>
+        <SidebarSection
+          title={tr('sidebar.Sidebar.projects')}
+          action={
+            <IconButton
+              icon={AddProjectIcon}
+              label={tr('sidebar.action.addProject')}
+              size={22}
+              iconSize={14}
+              onClick={onAddProject}
+            />
+          }
+        >
           {runFilter && shownProjects.length === 0 ? (
             <SidebarEmpty>
               {tr(runFilter === 'running' ? 'sidebar.runStatus.noneRunning' : 'sidebar.runStatus.noneWaiting')}
@@ -205,7 +151,6 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
         </SidebarSection>
       </div>
 
-      <RunStatusPill cards={cards} filter={runFilter} onFilter={setRunFilter} />
       {/* 最近任务来自两个以上项目才显示，否则和上面的项目列表完全重复（docs/ui/conversation-ux-2.md §2.3） */}
       {!runFilter && prefs.showRecent && recentSpansProjects(recent) && (
         <section className="mx-3 flex min-h-0 max-h-[35%] shrink-0 flex-col pb-2" data-sidebar-recent>
@@ -252,7 +197,9 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
         </section>
       )}
 
-      <SidebarFooter onAddProject={onAddProject} onNewTask={onNewTask} />
+      {/* 胶囊在最近任务下面、账号行上面（docs/ui/layout-v2.md §3） */}
+      <RunStatusPill cards={cards} filter={runFilter} onFilter={setRunFilter} />
+      <SidebarFooter />
     </aside>
   )
 }

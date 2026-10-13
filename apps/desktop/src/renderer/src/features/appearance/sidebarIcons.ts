@@ -9,8 +9,6 @@ import {
   Gauge,
   GitBranch,
   SquareArrowOutUpRight,
-  LayoutDashboard,
-  MessageSquare,
   PenLine,
   Plug,
   Plus,
@@ -25,28 +23,30 @@ import {
 export const SIDEBAR_ACTIONS = ['newTask', 'addProject', 'settings', 'plugins', 'usage'] as const
 export type SidebarAction = (typeof SIDEBAR_ACTIONS)[number]
 
+/** 能放在侧栏底部的动作（可换图标）；新建任务、添加项目固定在侧栏里，只能换图标（docs/ui/layout-v2.md §7.1） */
+export const FOOTER_ACTIONS = ['settings', 'plugins', 'usage'] as const
+export type FooterAction = (typeof FOOTER_ACTIONS)[number]
+
 /**
- * 原右上角顶栏的工具；图标固定，位置可与侧栏动作互换。
+ * 原右上角顶栏的工具；图标固定，位置可与底部动作互换。
  * 终端、编辑器（</>）、命令面板已于 2026-10-10 移除（D066）：终端和文件在右侧工作区，命令面板用 Ctrl+Shift+P；
- * 云主机 2026-10-13 并进顶栏的机器菜单（「本机 ▾」›「管理机器…」，docs/ui/ui-polish-2026-10-13.md §6）。
+ * 云主机 2026-10-13 并进顶栏的机器切换；工作台、频道同日不再是顶栏按钮，频道在侧栏第四行（docs/ui/layout-v2.md）。
  * 保存的布局里如果还有它们，读取时自动丢弃。
  */
-export const HEADER_ACTIONS = ['workbench', 'channels', 'git', 'openIn'] as const
+export const HEADER_ACTIONS = ['git', 'openIn'] as const
 export type HeaderAction = (typeof HEADER_ACTIONS)[number]
 
 /** 图标位置编辑器里可移动的全部入口 */
-export const LAYOUT_ACTIONS = [...SIDEBAR_ACTIONS, ...HEADER_ACTIONS] as const
+export const LAYOUT_ACTIONS = [...FOOTER_ACTIONS, ...HEADER_ACTIONS] as const
 export type LayoutAction = (typeof LAYOUT_ACTIONS)[number]
 
 const HEADER_ICONS: Record<HeaderAction, LucideIcon> = {
-  workbench: LayoutDashboard,
-  channels: MessageSquare,
   git: GitBranch,
   openIn: SquareArrowOutUpRight,
 }
 
-export function isSidebarAction(action: LayoutAction): action is SidebarAction {
-  return (SIDEBAR_ACTIONS as readonly string[]).includes(action)
+export function isFooterAction(action: LayoutAction): action is FooterAction {
+  return (FOOTER_ACTIONS as readonly string[]).includes(action)
 }
 
 /** 显式引用候选图标；本机偏好只保存 ID，不保存组件或导入整个图标库。 */
@@ -98,5 +98,5 @@ export function getSidebarIcon(action: SidebarAction, icons: SidebarIcons): Luci
 
 /** 任意入口的当前图标：侧栏动作按用户选择，顶栏工具固定 */
 export function getLayoutIcon(action: LayoutAction, icons: SidebarIcons): LucideIcon {
-  return isSidebarAction(action) ? getSidebarIcon(action, icons) : HEADER_ICONS[action]
+  return isFooterAction(action) ? getSidebarIcon(action, icons) : HEADER_ICONS[action]
 }

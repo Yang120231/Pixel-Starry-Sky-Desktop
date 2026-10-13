@@ -8,14 +8,13 @@ import { Avatar, cn } from '@/ui'
 import { SIDEBAR_ROW_LIMIT, useSidebarPrefs } from '@/features/appearance/sidebar'
 import { LayoutActionButton } from '@/features/layout/LayoutActionButton'
 import { UpdateNotice } from '@/features/update/UpdateNotice'
-import type { SidebarActionCallbacks } from './SidebarActionButton'
 
 /**
  * 固定底部工具栏：账号（头像 + 名字 + 余额）在左并占满剩余宽度，用户选择的动作整体靠右。
  * 工具多时先收起余额行，排满时只留头像。
  * 菜单向上弹出、宽度与侧边栏内容相同，因为外层 CollapsibleSlot 会裁掉超出侧边栏的部分。
  */
-export function SidebarFooter({ onAddProject, onNewTask }: SidebarActionCallbacks) {
+export function SidebarFooter() {
   useI18n()
   const acc = useAccount()
   const { layout } = useSidebarPrefs()
@@ -79,13 +78,7 @@ export function SidebarFooter({ onAddProject, onNewTask }: SidebarActionCallback
         </button>
         {!showText && <div className="min-w-0 flex-1" />}
         {layout.bottom.map(action => (
-          <LayoutActionButton
-            key={action}
-            action={action}
-            placement="bottom"
-            onAddProject={onAddProject}
-            onNewTask={onNewTask}
-          />
+          <LayoutActionButton key={action} action={action} placement="bottom" />
         ))}
       </div>
       <AccountMenu open={open} onClose={close} className="right-2 bottom-full left-2 mb-1 w-auto!" />

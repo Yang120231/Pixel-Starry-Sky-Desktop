@@ -58,7 +58,6 @@ export const boardMessages = {
   'board.cardActions': { zh: '更多操作', en: 'More actions' },
   'board.columnLabel': { zh: '{name}，{n} 项', en: '{name}, {n} items' },
   'sidebar.runStatus.waiting': { zh: '等你', en: 'waiting' },
-  'sidebar.runStatus.openBoard': { zh: '打开任务看板', en: 'Open task board' },
   'sidebar.runStatus.filterRunning': { zh: '只看运行中的会话', en: 'Show only running sessions' },
   'sidebar.runStatus.filterWaiting': { zh: '只看等你的会话', en: 'Show only sessions waiting on you' },
   'sidebar.runStatus.clearFilter': { zh: '显示全部会话', en: 'Show all sessions' },
