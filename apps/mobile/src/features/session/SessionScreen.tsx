@@ -1,16 +1,19 @@
-// 会话页：按轮显示对话（向上加载更早的）、审批 / 提问卡片、停止、回到最新；输入框由 App 传进来（features 之间不互相导入）。
-// 输入框上面是消息队列；点图片全屏看；最近一轮出错可以「重试」（docs/mobile-remote.md §17）。
+// 会话页（AI 聊天样子，docs/mobile-remote.md §21.12）：顶栏是引擎头像 + 标题 + 状态；对话按 foldTurns 折好的条目显示（向上加载更早的）、
+// 两轮相隔久了插时间；审批 / 提问卡片替换输入框；停止键在输入框里；回到最新。输入框由 App 传进来（features 之间不互相导入）。
+// 输入框上面是消息队列和只读的模式胶囊；点图片全屏看；最近一轮出错可以「重试」（§17）。
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ArrowDown, Square } from 'lucide-react'
-import type { ApprovalDecision } from '@pixelsky/protocol'
+import { foldTurns, type ApprovalDecision } from '@pixelsky/protocol'
 import type { Pairing } from '@/connection'
 import { useDesktop, useSession } from '@/data/hooks'
-import { RETRY_MESSAGE, groupTurns, retryNoticeId } from '@/data/turns'
-import { linkStateText, sessionStateText } from '@/i18n/zh'
-import { Banner, Dot, Screen, Spinner, cn } from '@/ui'
+import { RETRY_MESSAGE, retryNoticeId, timeDividers } from '@/data/turns'
+import { linkStateText } from '@/i18n/zh'
+import { Banner, Screen, Spinner, cn } from '@/ui'
+import { EngineAvatar } from '@/ui/EngineAvatar'
 import { ImageViewer } from '@/ui/images'
 import { ApprovalCard } from './ApprovalCard'
-import { TurnBlock, type TurnActions } from './ItemView'
+import { EntryView, ThinkingRow, type TurnActions } from './ItemView'
+import { ModeChip } from './ModeChip'
 import { QueuePanel } from './QueuePanel'
 
 export function SessionScreen({
@@ -24,7 +27,8 @@ export function SessionScreen({
   sessionId: string
   /** 窄屏左上角的抽屉按钮（宽屏抽屉常驻，按钮自己藏起来） */
   leading?: ReactNode
-  composer: ReactNode
+  /** 输入框；running 是会话页算好的「正在跑」（含启动中），停止键 / 占位字都跟它走 */
+  composer(running: boolean): ReactNode
   /** 队列里撤回的消息：文字放回输入框 */
   onRecall(text: string): void
 }) {
@@ -32,13 +36,23 @@ export function SessionScreen({
   const { view, error, loadOlder, detail, image } = useSession(pairing.deviceId, sessionId)
   const summary = sessions.find(s => s.record.id === sessionId)
   const snapshot = view.snapshot
-  const running = snapshot ? !!snapshot.turnId : summary?.state === 'running'
+  // 有快照看有没有在跑的一轮；没快照时认 running 和 starting（启动中也要显示停止键）
+  const running = snapshot ? !!snapshot.turnId : summary?.state === 'running' || summary?.state === 'starting'
   const canAct = state === 'ready' && link?.hello?.access === 'act'
   const pending = snapshot?.pending[0]
-  const turns = useMemo(() => groupTurns(snapshot?.items ?? []), [snapshot?.items])
+  const items = snapshot?.items
+  const entries = useMemo(() => foldTurns(items ?? [], running), [items, running])
+  const dividers = useMemo(() => timeDividers(items ?? []), [items])
   const record = snapshot?.record ?? summary?.record
   const project = projects.find(p => p.id === record?.projectId)?.name
-  const sessionState = pending ? 'waiting' : running ? 'running' : (summary?.state ?? 'idle')
+  const engine = record?.engine ?? 'claude'
+  const status = pending
+    ? { text: '等你允许', tone: 'danger' as const }
+    : running
+      ? { text: '正在回复…', tone: 'online' as const }
+      : record?.lastOutcome === 'failed'
+        ? { text: '出错了', tone: 'warn' as const }
+        : { text: '等你回复', tone: 'muted' as const }
 
   // 新内容到了、而且本来就在底部时，跟着滚到底；不在底部时显示「回到最新」
   const scroller = useRef<HTMLDivElement>(null)
@@ -89,50 +103,50 @@ export function SessionScreen({
   return (
     <Screen
       scroll={false}
-      title={record?.title || '会话'}
-      subtitle={
-        <span className="flex items-center gap-1.5">
-          <Dot
-            tone={sessionState === 'waiting' ? 'danger' : sessionState === 'running' ? 'online' : 'muted'}
-            pulse={sessionState === 'running'}
-          />
-          {sessionStateText[sessionState]}
-          {project && <span className="truncate text-fg-faint">· {project}</span>}
-        </span>
+      centered
+      footerBg="bg-chat"
+      title={
+        <>
+          <EngineAvatar engine={engine} size={36} status={{ tone: status.tone, pulse: running && !pending }} />
+          <span className="max-w-full truncate">{record?.title || '会话'}</span>
+        </>
       }
+      subtitle={`${status.text}${project ? ` · ${project}` : ''}`}
       leading={leading}
-      actions={
-        running && (
-          <button
-            type="button"
-            disabled={!canAct}
-            aria-label="停止"
-            onClick={() => void link?.call('engine:interrupt', sessionId).catch(() => undefined)}
-            className="mr-2 flex min-h-9 items-center gap-1.5 rounded-full border border-line-strong bg-surface px-3 text-meta font-medium text-fg disabled:opacity-40"
-          >
-            <Square size={11} className="fill-danger text-danger" /> 停止
-          </button>
-        )
-      }
+      actions={<span className="w-11 shrink-0 min-[900px]:w-6" />}
       footer={
         // 宽屏：对话和输入框都在中间一栏，不铺满整个窗口
         <div className="mx-auto w-full max-w-3xl">
           {pending ? (
-            <ApprovalCard key={pending.requestId} request={pending} canAct={canAct} onAnswer={answer} />
+            <>
+              <ApprovalCard key={pending.requestId} request={pending} canAct={canAct} onAnswer={answer} />
+              {/* 等审批时输入框不显示，停止键放在审批卡下面，不然这一轮没法从手机打断 */}
+              {running && canAct && (
+                <button
+                  type="button"
+                  aria-label="停止"
+                  onClick={() => void link?.call('engine:interrupt', sessionId).catch(() => undefined)}
+                  className="mx-auto mb-3 flex min-h-11 items-center justify-center gap-1.5 rounded-full px-4 text-meta text-fg-secondary active:bg-hover"
+                >
+                  <Square size={14} /> 停止
+                </button>
+              )}
+            </>
           ) : (
             <>
               {snapshot && (
                 <QueuePanel link={link} sessionId={sessionId} snapshot={snapshot} canAct={canAct} onRecall={onRecall} />
               )}
-              {composer}
+              {record && <ModeChip record={record} />}
+              {composer(running)}
             </>
           )}
         </div>
       }
     >
-      <div className="relative min-h-0 flex-1">
+      <div className="relative min-h-0 flex-1 bg-chat">
         <div ref={scroller} className="h-full overflow-y-auto overscroll-contain">
-          <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 pt-3 pb-6">
+          <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 pt-3 pb-6">
             {state !== 'ready' && state && (
               <Banner tone="warn" icon={<Spinner size={14} />}>
                 {linkStateText[state]}
@@ -154,19 +168,31 @@ export function SessionScreen({
                 加载更早的消息
               </button>
             )}
-            {turns.map((turn, i) => (
-              <TurnBlock
-                key={turn.id}
-                turn={turn}
-                running={running && i === turns.length - 1}
-                waiting={!!pending && i === turns.length - 1}
-                truncated={view.truncated}
-                onDetail={id => void detail(id)}
-                actions={actions}
-              />
-            ))}
+            {entries.map((entry, i) => {
+              const user = entry.type === 'item' && entry.item.kind === 'user' ? entry.item : null
+              const divider = user && dividers.get(user.id)
+              return (
+                // 每一轮从你的消息开始：和上一轮之间多留一点空；包一层让条目自己的 self-center 等对齐生效
+                <div
+                  key={entry.type === 'item' ? entry.item.id : entry.key}
+                  className={cn('flex flex-col gap-3', user && user.mode !== 'guidance' && i > 0 && 'mt-3')}
+                >
+                  {divider && <div className="self-center text-label text-fg-faint">{divider}</div>}
+                  <EntryView
+                    entry={entry}
+                    last={i === entries.length - 1}
+                    waiting={!!pending}
+                    truncated={view.truncated}
+                    onDetail={id => void detail(id)}
+                    actions={actions}
+                  />
+                </div>
+              )
+            })}
+            {running && !pending && items?.at(-1)?.kind === 'user' && <ThinkingRow />}
           </div>
         </div>
+        <div className="chat-fade" />
         <button
           type="button"
           aria-label="回到最新"

@@ -111,6 +111,8 @@ export function Screen({
   footer,
   large,
   scroll = true,
+  centered,
+  footerBg = 'bg-panel',
 }: {
   title: ReactNode
   subtitle?: ReactNode
@@ -121,6 +123,10 @@ export function Screen({
   footer?: ReactNode
   large?: boolean
   scroll?: boolean
+  /** 顶栏中间竖排放 title（头像 + 标题）和 subtitle（状态行），居中；会话页用 */
+  centered?: boolean
+  /** 底栏背景类，默认 bg-panel；聊天页传 'bg-chat'，和滚动区同色，底下的渐隐遮罩才接得上 */
+  footerBg?: string
 }) {
   return (
     <div className="flex h-dvh min-w-0 flex-1 flex-col bg-app text-fg">
@@ -136,10 +142,17 @@ export function Screen({
           (leading ?? <span className="w-3" />)
         )}
         {!onBack && leading && <span className="hidden w-3 min-[900px]:block" />}
-        <div className="min-w-0 flex-1 py-2">
-          {!large && <div className="truncate text-section font-semibold">{title}</div>}
-          {!large && subtitle && <div className="truncate text-meta text-fg-muted">{subtitle}</div>}
-        </div>
+        {centered && !large ? (
+          <div className="flex min-w-0 flex-1 flex-col items-center py-1.5 text-center">
+            <div className="flex max-w-full flex-col items-center gap-0.5 text-ui font-semibold">{title}</div>
+            {subtitle && <div className="max-w-full truncate text-label text-fg-muted">{subtitle}</div>}
+          </div>
+        ) : (
+          <div className="min-w-0 flex-1 py-2">
+            {!large && <div className="truncate text-section font-semibold">{title}</div>}
+            {!large && subtitle && <div className="truncate text-meta text-fg-muted">{subtitle}</div>}
+          </div>
+        )}
         {actions}
       </header>
       <main className={cn('min-h-0 flex-1', scroll ? 'overflow-y-auto' : 'flex flex-col overflow-hidden')}>
@@ -151,7 +164,7 @@ export function Screen({
         )}
         {children}
       </main>
-      {footer && <div className="shrink-0 bg-panel pb-[env(safe-area-inset-bottom)]">{footer}</div>}
+      {footer && <div className={cn('shrink-0 pb-[env(safe-area-inset-bottom)]', footerBg)}>{footer}</div>}
     </div>
   )
 }

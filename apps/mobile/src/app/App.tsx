@@ -357,7 +357,6 @@ function Session({ deviceId, sessionId, leading }: { deviceId: string; sessionId
   const { link, state, sessions } = useDesktop(deviceId)
   const canAct = state === 'ready' && link?.hello?.access === 'act'
   const s = sessions.find(x => x.record.id === sessionId)
-  const running = s?.state === 'running' || s?.state === 'starting'
   // 草稿放在这里：队列里撤回的消息放回输入框（已经写了东西就接在后面）
   const [draft, setDraft] = useState('')
   return (
@@ -366,16 +365,17 @@ function Session({ deviceId, sessionId, leading }: { deviceId: string; sessionId
       sessionId={sessionId}
       leading={leading}
       onRecall={text => setDraft(d => (d.trim() ? d.trimEnd() + '\n' + text : text))}
-      composer={
+      composer={running => (
         <Composer
           link={link}
           sessionId={sessionId}
+          engine={s?.record.engine ?? 'claude'}
           canAct={canAct}
           running={running}
           draft={draft}
           onDraft={setDraft}
         />
-      }
+      )}
     />
   )
 }

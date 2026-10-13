@@ -63,15 +63,16 @@ body {
   text-decoration: underline;
 }
 .markdown table {
-  display: block;
-  overflow-x: auto;
   border-collapse: collapse;
+  border: 1px solid var(--border);
 }
 .markdown th,
 .markdown td {
-  border-bottom: 1px solid var(--border);
-  padding: 0.3em 0.6em;
+  border: 1px solid var(--border);
+  padding: 0.4em 0.7em;
   text-align: left;
+  /* 列太多时保持最小宽度，由外面 Markdown 的 div.overflow-x-auto 横向滚动，不把中文挤成一字一行 */
+  min-width: 7em;
 }
 .markdown blockquote {
   border-left: 3px solid var(--border-strong);
@@ -113,6 +114,14 @@ body {
     transform: translateX(-100%);
   }
 }
+@keyframes panel-in {
+  from {
+    transform: translateX(100%);
+  }
+}
+.panel-in {
+  animation: panel-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
 @keyframes fade-in {
   from {
     opacity: 0;
@@ -128,6 +137,7 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .typing-dot,
   .sheet-in,
+  .panel-in,
   .drawer-in,
   .fade-in {
     animation: none;
@@ -137,6 +147,7 @@ body {
 /* 正文：标题层级、代码块圆角、列表间距 */
 .markdown {
   overflow-wrap: anywhere;
+  line-height: 1.7;
 }
 .markdown h1 {
   font-size: 1.25em;
@@ -217,4 +228,14 @@ body {
 }
 .hljs-strong {
   font-weight: 600;
+}
+
+/* 会话滚动区底部、输入框上方的渐隐遮罩：从透明到聊天底色（放在 relative 的滚动区容器里） */
+.chat-fade {
+  pointer-events: none;
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 28px;
+  background: linear-gradient(to bottom, transparent, var(--bg-chat));
 }

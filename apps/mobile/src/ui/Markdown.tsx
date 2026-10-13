@@ -1,5 +1,6 @@
 // 回复正文：和桌面端用同一套库（react-markdown + remark-gfm）；代码块带复制和高亮（ui/code.tsx），还没有公式
 // （packages/ui 抽出后换成共用的）。
+import { memo } from 'react'
 import Markdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { CodeBlock } from './code'
@@ -23,9 +24,18 @@ const components: Components = {
     const lang = classes.find(c => c.startsWith('language-'))?.slice('language-'.length) || null
     return <CodeBlock code={textOf(code).replace(/\n$/, '')} lang={lang} />
   },
+  // 表格太宽时在自己的容器里横向滚动，不把整页撑宽
+  table({ children }) {
+    return (
+      <div className="overflow-x-auto">
+        <table>{children}</table>
+      </div>
+    )
+  },
 }
 
-export function MarkdownText({ text }: { text: string }) {
+// 流式输出时每个事件都会重渲整页，正文没变的条目直接跳过
+export const MarkdownText = memo(function MarkdownText({ text }: { text: string }) {
   return (
     <div className="markdown text-prose text-fg-body">
       <Markdown remarkPlugins={[remarkGfm]} components={components}>
@@ -33,4 +43,4 @@ export function MarkdownText({ text }: { text: string }) {
       </Markdown>
     </div>
   )
-}
+})

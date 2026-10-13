@@ -10,6 +10,10 @@
   --bg-rail: #efefec;
   --bg-sidebar: #f2f2ef;
   --bg-app: #f8f8f6;
+  --bubble-user: color-mix(in srgb, var(--engine-claude) 14%, var(--bg-surface));
+  --bubble-user-fg: var(--text);
+  --card-assistant: #ffffff;
+  --bg-chat: #f7f5f0;
   --bg-panel: #f8f8f6;
   --bg-surface: #ffffff;
   /* 弹出菜单：浅色和卡片一样白；深色比卡片 / 输入框亮一级，压在输入框上也分得清 */
@@ -117,6 +121,10 @@
   --bg-rail: #141413;
   --bg-sidebar: #1a1a19;
   --bg-app: #1f1f1e;
+  --bubble-user: color-mix(in srgb, var(--engine-claude) 22%, var(--bg-surface));
+  --bubble-user-fg: var(--text);
+  --card-assistant: var(--bg-surface);
+  --bg-chat: var(--bg-app);
   --bg-panel: #1f1f1e;
   --bg-surface: #262624;
   --bg-popover: #2e2e2b;
@@ -214,6 +222,10 @@
 
 @theme inline {
   --color-app: var(--bg-app);
+  --color-bubble-user: var(--bubble-user);
+  --color-bubble-user-fg: var(--bubble-user-fg);
+  --color-card-assistant: var(--card-assistant);
+  --color-chat: var(--bg-chat);
   --color-panel: var(--bg-panel);
   --color-sidebar: var(--bg-sidebar);
   --color-rail: var(--bg-rail);

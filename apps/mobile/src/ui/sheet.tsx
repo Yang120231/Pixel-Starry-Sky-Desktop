@@ -1,6 +1,7 @@
 // 底部弹出的操作菜单（队列里一条消息能做的事、加图片选拍照还是相册）
-import { useEffect, type ReactNode } from 'react'
-import { cn } from './index'
+import { useEffect, useId, useRef, type ReactNode } from 'react'
+import { X } from 'lucide-react'
+import { WIDE, cn, useMedia } from './index'
 
 export interface SheetAction {
   label: string
@@ -109,6 +110,89 @@ export function ConfirmSheet({
         >
           取消
         </button>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * 通用面板：窄屏从底部弹出（最高 85dvh，内容区自己滚动），宽屏（WIDE）改成右侧 420px 的覆盖面板。
+ * Esc、点遮罩、右上角关闭都会调 onClose；children 放内容，footer 固定在底部。
+ */
+export function Sheet({
+  title,
+  children,
+  footer,
+  onClose,
+}: {
+  title: ReactNode
+  children: ReactNode
+  footer?: ReactNode
+  onClose(): void
+}) {
+  const wide = useMedia(WIDE)
+  const titleId = useId()
+  const dialog = useRef<HTMLDivElement>(null)
+  // 打开时焦点进面板、关闭时还给打开它的元素；Tab 只在面板里转
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    dialog.current?.focus()
+    return () => opener?.focus()
+  }, [])
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') return onClose()
+      if (e.key !== 'Tab' || !dialog.current) return
+      const items = [
+        ...dialog.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, textarea, select, [tabindex]:not([tabindex="-1"])',
+        ),
+      ].filter(el => !el.hasAttribute('disabled'))
+      const first = items[0]
+      const lastEl = items.at(-1)
+      const active = document.activeElement
+      if (!first || !lastEl) return e.preventDefault()
+      if (e.shiftKey && (active === first || active === dialog.current)) (e.preventDefault(), lastEl.focus())
+      else if (!e.shiftKey && active === lastEl) (e.preventDefault(), first.focus())
+      else if (!dialog.current.contains(active)) (e.preventDefault(), first.focus())
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+  return (
+    <div
+      className={cn('fixed inset-0 z-40 flex bg-black/40', wide ? 'justify-end' : 'flex-col justify-end')}
+      onClick={onClose}
+    >
+      <div
+        ref={dialog}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className={cn(
+          'flex min-h-0 flex-col bg-popover shadow-popover outline-none',
+          wide
+            ? 'panel-in h-full w-[420px] max-w-full border-l border-line-subtle'
+            : 'sheet-in max-h-[85dvh] w-full rounded-t-2xl pb-[env(safe-area-inset-bottom)]',
+        )}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex shrink-0 items-center gap-2 border-b border-line-subtle py-1 pr-1 pl-4">
+          <div id={titleId} className="min-w-0 flex-1 truncate text-ui font-medium">
+            {title}
+          </div>
+          <button
+            type="button"
+            aria-label="关闭"
+            onClick={onClose}
+            className="flex size-11 shrink-0 items-center justify-center rounded-full text-fg-secondary active:bg-hover"
+          >
+            <X size={20} strokeWidth={1.75} />
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{children}</div>
+        {footer && <div className="shrink-0 border-t border-line-subtle">{footer}</div>}
       </div>
     </div>
   )
