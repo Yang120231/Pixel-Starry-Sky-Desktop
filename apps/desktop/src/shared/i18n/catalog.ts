@@ -2968,10 +2968,6 @@ export const catalog = {
     "zh": "每月",
     "en": "Monthly"
   },
-  "settings.account.PlanStore.noPlansAvailableFor": {
-    "zh": "暂时没有可购买的套餐",
-    "en": "No plans available for purchase yet"
-  },
   "settings.account.PlanStore.plansWillAppearHere": {
     "zh": "套餐上架后会显示在这里。",
     "en": "Plans will appear here when published."
@@ -2980,45 +2976,17 @@ export const catalog = {
     "zh": "续费",
     "en": "Renew"
   },
-  "settings.account.PlanStore.change": {
-    "zh": "更换",
-    "en": "Change"
-  },
-  "settings.account.PlanStore.subscribe": {
-    "zh": "订阅",
-    "en": "Subscribe"
-  },
   "settings.account.PlanStore.current": {
     "zh": "当前",
     "en": "Current"
-  },
-  "settings.account.PlanStore.recommended": {
-    "zh": "推荐",
-    "en": "Recommended"
   },
   "settings.account.PlanStore.credits": {
     "zh": "额度",
     "en": "Credits"
   },
-  "settings.account.PlanStore.purchaseOnline": {
-    "zh": "在线购买",
-    "en": "Purchase online"
-  },
   "settings.account.TopUp.enterAmountWithUp": {
     "zh": "请输入金额，最多两位小数",
     "en": "Enter an amount with up to two decimal places"
-  },
-  "settings.account.TopUp.amountRange": {
-    "zh": "金额范围 {p0} – {p1}",
-    "en": "Amount range: {p0} – {p1}"
-  },
-  "settings.account.TopUp.creditAmount": {
-    "zh": "充值金额",
-    "en": "Credit amount"
-  },
-  "settings.account.TopUp.bonus": {
-    "zh": "送",
-    "en": "Bonus"
   },
   "settings.account.TopUp.custom": {
     "zh": "自定义",
@@ -3028,10 +2996,6 @@ export const catalog = {
     "zh": "任意金额",
     "en": "Any amount"
   },
-  "settings.account.TopUp.customCreditAmount": {
-    "zh": "自定义充值金额",
-    "en": "Custom credit amount"
-  },
   "settings.account.TopUp.range": {
     "zh": "范围 {p0} – {p1}",
     "en": "Range: {p0} – {p1}"
@@ -3039,10 +3003,6 @@ export const catalog = {
   "settings.account.TopUp.paymentMethod": {
     "zh": "支付方式",
     "en": "Payment method"
-  },
-  "settings.account.TopUp.onlinePaymentsAreNot": {
-    "zh": "在线支付暂未开放。",
-    "en": "Online payments are not available yet."
   },
   "settings.account.TopUp.creditsReceived": {
     "zh": "到账额度",
@@ -3056,13 +3016,117 @@ export const catalog = {
     "zh": "应付",
     "en": "Amount due"
   },
-  "settings.account.TopUp.onlinePayment": {
-    "zh": "在线支付",
-    "en": "Online payment"
-  },
   "settings.account.TopUp.pay": {
     "zh": "去支付",
     "en": "Pay"
+  },
+  "settings.account.PlanStore.fiveHour": {
+    "zh": "5 小时",
+    "en": "5-hour"
+  },
+  "settings.account.PlanStore.days": {
+    "zh": "{p0} 天",
+    "en": "{p0} days"
+  },
+  "settings.account.PlanStore.oneDay": {
+    "zh": "1 天",
+    "en": "1 day"
+  },
+  "settings.account.PlanStore.purchase": {
+    "zh": "购买",
+    "en": "Buy"
+  },
+  "settings.account.PlanStore.group": {
+    "zh": "分组",
+    "en": "Group"
+  },
+  "settings.account.PlanStore.noPlansOnPanel": {
+    "zh": "Sub2api 还没有上架套餐",
+    "en": "Sub2api has no plans on sale yet"
+  },
+  "settings.account.Store.loading": {
+    "zh": "正在读取套餐和充值信息…",
+    "en": "Loading plans and top-up info…"
+  },
+  "settings.account.Store.loadFailed": {
+    "zh": "读取套餐和充值信息失败",
+    "en": "Could not load plans and top-up info"
+  },
+  "settings.account.Store.retry": {
+    "zh": "重试",
+    "en": "Retry"
+  },
+  "settings.account.Store.staleHint": {
+    "zh": "刷新失败，显示的是上次读到的内容。",
+    "en": "Refresh failed. Showing the last loaded data."
+  },
+  "settings.account.Store.openPanel": {
+    "zh": "打开网页面板",
+    "en": "Open web panel"
+  },
+  "settings.account.Store.openFailed": {
+    "zh": "无法打开面板页",
+    "en": "Could not open the panel page"
+  },
+  "settings.account.Store.paidHint": {
+    "zh": "在浏览器里完成付款后回到这里",
+    "en": "Finish paying in the browser, then come back here"
+  },
+  "settings.account.Store.paidRefresh": {
+    "zh": "我已付款，刷新",
+    "en": "I have paid, refresh"
+  },
+  "settings.account.TopUp.rechargeClosed": {
+    "zh": "Sub2api 没有开放在线充值",
+    "en": "Sub2api has not opened online top-up"
+  },
+  "settings.account.TopUp.rechargeClosedHint": {
+    "zh": "可以在网页面板里查看，或用兑换码充值。",
+    "en": "Check the web panel, or top up with a redeem code."
+  },
+  "settings.account.TopUp.redeemCode": {
+    "zh": "使用兑换码",
+    "en": "Use a redeem code"
+  },
+  "settings.account.TopUp.payAmount": {
+    "zh": "充值金额（支付）",
+    "en": "Top-up amount (to pay)"
+  },
+  "settings.account.TopUp.minAmount": {
+    "zh": "最低 {p0}",
+    "en": "Minimum {p0}"
+  },
+  "settings.account.TopUp.maxAmount": {
+    "zh": "最高 {p0}",
+    "en": "Maximum {p0}"
+  },
+  "settings.account.TopUp.multiplier": {
+    "zh": "每付 {p0} 到账 {p1} 额度",
+    "en": "Every {p0} paid credits {p1}"
+  },
+  "settings.account.TopUp.bonusRules": {
+    "zh": "赠送规则",
+    "en": "Bonus rules"
+  },
+  "settings.account.TopUp.discountRules": {
+    "zh": "折扣规则",
+    "en": "Discount rules"
+  },
+  "settings.account.TopUp.bonusTier": {
+    "zh": "单笔满 {p0}，多送 {p1}% 额度",
+    "en": "Pay {p0} or more: {p1}% extra credits"
+  },
+  "settings.account.TopUp.discountTier": {
+    "zh": "单笔满 {p0}，实付立减 {p1}%",
+    "en": "Pay {p0} or more: {p1}% off"
+  },
+  "settings.account.TopUp.chooseInBrowser": {
+    "zh": "支付方式和金额在浏览器里的面板中确认。",
+    "en": "Confirm the payment method and amount in the browser panel."
+  },
+  "settings.account.TopUp.includingFee": {
+    "zh": "（含手续费 {p0}）",
+    "en": "(incl. {p0} fee)"
   },
   "settings.CacheMissSettings.cacheMissAlerts": {
     "zh": "缓存未命中提醒",
@@ -4237,8 +4301,8 @@ export const catalog = {
     "en": "System animations are disabled, so app animations are currently hidden."
   },
   "settings.SettingsDialog.highlightBrieflyLightsUp": {
-    "zh": "高亮会在新窗格周围短暂亮起；滑动会将焦点框移过去；无则直接切换。",
-    "en": "Highlight briefly lights up the new pane; Slide moves the focus frame; None switches immediately."
+    "zh": "高亮会在新窗格周围短暂亮起；滑动会将焦点框移过去；无则不显示焦点框。",
+    "en": "Highlight briefly lights up the new pane; Slide moves the focus frame; None hides the focus frame."
   },
   "settings.SettingsDialog.motionIsDisabledPane": {
     "zh": "动画已关闭，切换窗格时直接跳过去",

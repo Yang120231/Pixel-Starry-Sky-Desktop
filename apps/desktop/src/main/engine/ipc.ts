@@ -15,6 +15,7 @@ import type { HostEvent, SessionRecord } from '@pixelsky/protocol'
 import type { AppContext } from '../app/context'
 import { platformCalls, platformCharges, accountCalls, accountSummary } from '../platform/billing'
 import { onAccountChange, signedInEmail } from '../account/account'
+import { fetchStore, openStore } from '../account/store'
 import { logger } from '@pixelsky/engine'
 import { initPlatform, validateQueuedInput } from '../platform/platform'
 import { initProviders } from '../providers/providers'
@@ -91,6 +92,8 @@ export async function initEngine(ctx: AppContext): Promise<void> {
 
   handle('account:calls', (_e, query) => accountCalls(query))
   handle('account:summary', (_e, query) => accountSummary(query))
+  handle('account:store', () => fetchStore())
+  handle('account:openStore', (_e, kind, params) => openStore(kind, params))
   // 搜索 / 产物扫描按窗口分桶；窗口关闭时中止它还没跑完的查询
   const searches = new SearchRegistry(),
     scans = new SearchRegistry()

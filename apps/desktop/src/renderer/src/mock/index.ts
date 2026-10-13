@@ -23,11 +23,13 @@ import { demoSearchProjects, searchDemo } from './search'
 import { demoSessions } from './sessionLifecycle'
 import { demoRewindPreview, demoSideAnswer } from './branch'
 import { demoTerminalOutput, demoTerminalProfiles } from './terminal'
+import { demoStore } from './store'
 import { demoUsageRecords } from './usage'
 
 export const demoSource: DemoSource = {
   appData: demo,
   account: demoAccount,
+  store: demoStore,
   platformGroups: demoPlatformGroups,
   providers: demoProviders,
   engines: { status: demoEngineStatus, catalog: demoEngineCatalog, config: demoEngineConfig },

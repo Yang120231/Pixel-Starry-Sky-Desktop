@@ -33,7 +33,6 @@ export const {
   browserPages,
   browserUrl,
   annotations,
-  billing,
   channels,
   channelMembers,
   channelMessages,

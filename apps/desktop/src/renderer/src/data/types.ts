@@ -119,41 +119,6 @@ export interface Annotation {
 }
 
 /** 一整套界面数据。empty.ts 是新用户的空界面，demo.ts 是照参考图写的演示数据 */
-/** 可购买的订阅套餐（docs/ui/settings.md §9.6） */
-export interface PlanOffer {
-  id: string
-  /** 与账号的 plan.name 相同即视为当前套餐 */
-  name: string
-  /** 售价，单位是 BillingCatalog.priceCurrency */
-  price: number
-  period: 'month' | 'quarter' | 'year'
-  /** 套餐额度，单位是账号币种；缺省表示不限 / 不显示 */
-  quotas: { daily?: number; weekly?: number; monthly?: number }
-  features: string[]
-  recommended?: boolean
-}
-
-/** 充值选项：到账额度 + 赠送额度（账号币种） */
-export interface TopUpOption {
-  credit: number
-  bonus?: number
-}
-
-/** 购买订阅、充值用的商品数据；接入真实接口时只换这里 */
-export interface BillingCatalog {
-  /** 售价货币，例如 CNY */
-  priceCurrency: string
-  /** 1 单位额度 = 多少售价货币 */
-  rate: number
-  plans: PlanOffer[]
-  planNote: string | null
-  topUpOptions: TopUpOption[]
-  /** 自定义金额范围，null 表示不支持自定义 */
-  customTopUp: { min: number; max: number } | null
-  paymentMethods: Array<{ id: string; label: string }>
-  topUpNote: string | null
-}
-
 export interface AppData {
   /** 当前用户，null 表示未登录 */
   currentUser: CurrentUser | null
@@ -182,8 +147,6 @@ export interface AppData {
   /** 空字符串表示没有打开网页 */
   browserUrl: string
   annotations: Annotation[]
-  /** 设置 → 账号里的订阅套餐、充值选项 */
-  billing: BillingCatalog
   /** 协作频道（docs/ui/channels.md §9）；空界面没有频道 */
   channels: Channel[]
   channelMembers: ChannelMember[]

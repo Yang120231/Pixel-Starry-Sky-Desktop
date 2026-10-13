@@ -39,6 +39,7 @@ vi.mock('../account/account', () => ({
 
 const { platformGroups } = await import('./platform')
 const { accountCalls, platformCharges } = await import('./billing')
+const { fetchStore } = await import('../account/store')
 
 function serve(path: string, s: Sample): void {
   mocks.responses.set(path, { status: s.status, body: s.body })
@@ -143,5 +144,91 @@ describe.skipIf(!hasSamples)('云端契约样例：调用明细', () => {
     await expect(accountCalls({ range: '7d', now: Date.now(), offset: 0, limit: 50, model: null })).rejects.toThrow(
       '暂时无法读取账号调用记录',
     )
+  })
+})
+
+describe.skipIf(!hasSamples)('云端契约样例：订阅套餐与充值（§4.16）', () => {
+  it('支付开着：套餐、充值规则、支付方式逐项对上样例', async () => {
+    const s = sample('desktop/store-open.json')
+    serve('/v1/platform/store', s)
+    const body = s.body as {
+      plans: Array<Record<string, unknown>>
+      recharge: Record<string, unknown>
+      methods: Array<{ type: string; label: string }>
+      help_text: string
+      purchase_url: string
+      redeem_url: string
+    }
+    const store = await fetchStore()
+    expect(mocks.paths).toEqual(['/v1/platform/store'])
+    expect(store.enabled).toBe(true)
+    expect(store.currency).toBe('CNY')
+    expect(store.plans).toHaveLength(body.plans.length)
+    // 按 sort 排：GPT 周卡（sort 10，id 3）在 Claude 周卡（sort 20，id 1）前
+    expect(store.plans.map(p => p.id)).toEqual([3, 1])
+    const claude = store.plans.find(p => p.id === 1)!
+    expect(claude).toMatchObject({
+      name: 'Claude 周卡',
+      price: 30,
+      originalPrice: 40,
+      validityDays: 7,
+      groupName: 'Claude Sub',
+      features: ['不限次数', '优先通道'],
+      quotas: { fiveHour: 8, daily: 10, weekly: 50, monthly: null },
+    })
+    expect(store.plans.find(p => p.id === 3)!.originalPrice).toBeNull()
+    expect(store.plans.find(p => p.id === 3)!.quotas).toEqual({
+      fiveHour: null,
+      daily: null,
+      weekly: null,
+      monthly: null,
+    })
+    expect(store.recharge).toEqual({
+      enabled: true,
+      min: 5,
+      max: 500,
+      multiplier: 1.5,
+      feeRate: 2,
+      bonusMode: 'bonus',
+      bonusTiers: [
+        { minAmount: 100, bonusPercent: 5 },
+        { minAmount: 500, bonusPercent: 10 },
+      ],
+      usdToCnyRate: 7.2,
+    })
+    expect(store.methods).toEqual(body.methods)
+    expect(store.helpText).toBe(body.help_text)
+    expect(store.purchaseUrl).toBe(body.purchase_url)
+    expect(store.redeemUrl).toBe(body.redeem_url)
+  })
+
+  it('支付关着：enabled=false，套餐、支付方式、档位全空', async () => {
+    serve('/v1/platform/store', sample('desktop/store-closed.json'))
+    const store = await fetchStore()
+    expect(store.enabled).toBe(false)
+    expect(store.plans).toEqual([])
+    expect(store.methods).toEqual([])
+    expect(store.recharge.enabled).toBe(false)
+    expect(store.recharge.bonusTiers).toEqual([])
+  })
+
+  it('没有在售套餐：空套餐、充值关闭，但档位和帮助文字保留', async () => {
+    serve('/v1/platform/store', sample('desktop/store-empty.json'))
+    const store = await fetchStore()
+    expect(store.enabled).toBe(true)
+    expect(store.plans).toEqual([])
+    expect(store.recharge.enabled).toBe(false)
+    expect(store.recharge.bonusTiers).toHaveLength(2)
+    expect(store.helpText).toBe('充值遇到问题请联系客服')
+  })
+
+  it('401 invalid_token 和 502 都报错，502 带云端给的提示', async () => {
+    mocks.responses.set('/v1/platform/store', {
+      status: 502,
+      body: { error: '暂时读不到订阅套餐和充值信息，请稍后重试' },
+    })
+    await expect(fetchStore()).rejects.toThrow('暂时读不到订阅套餐和充值信息，请稍后重试')
+    mocks.responses.set('/v1/platform/store', { status: 401, body: { error: 'invalid_token' } })
+    await expect(fetchStore()).rejects.toThrow('invalid_token')
   })
 })

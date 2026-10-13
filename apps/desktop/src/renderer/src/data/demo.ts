@@ -17,7 +17,7 @@ import type {
   TaskOutput,
   UsageRecord,
 } from '@pixelsky/protocol'
-import type { AccountInfo } from '../../../shared/types/account'
+import type { AccountInfo, StoreCatalog } from '../../../shared/types/account'
 import type { ArtifactPreview } from '../../../shared/types/artifacts'
 import type { PlatformGroupInfo } from '../../../shared/types/platform-catalog'
 import type { ProvidersState } from '../../../shared/types/providers'
@@ -65,6 +65,8 @@ export interface DemoSource {
   /** 侧边栏、对话、输入框等界面数据（与 data/empty.ts 同形） */
   appData: AppData
   account: AccountInfo
+  /** 设置 → 账号里的订阅套餐、充值（形状同云端 /v1/platform/store） */
+  store: StoreCatalog
   platformGroups: PlatformGroupInfo[]
   /** 自定义 API 的两条假接口 */
   providers: ProvidersState

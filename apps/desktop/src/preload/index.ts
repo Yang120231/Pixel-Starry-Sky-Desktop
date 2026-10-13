@@ -48,6 +48,8 @@ const account: AccountBridge = {
   cancelLogin: () => invoke('account:cancel'),
   logout: () => invoke('account:logout'),
   refresh: () => invoke('account:refresh'),
+  store: () => invoke('account:store'),
+  openStore: (kind, params) => invoke('account:openStore', kind, params),
   onChange: cb => {
     const listener = (_event: Electron.IpcRendererEvent, s: AccountState): void => cb(s)
     on('account:changed', listener)

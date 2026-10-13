@@ -9,8 +9,7 @@ import { Avatar, Button, Segmented, Spinner, type SegmentedOption } from '@/ui'
 import { SectionTitle } from '../../settings/SettingRow'
 import { SyncSettings } from '../../settings/sync/SyncSettings'
 import { AccountOverview } from './AccountOverview'
-import { PlanStore } from './PlanStore'
-import { TopUp } from './TopUp'
+import { StorePages } from './StorePages'
 
 export type AccountTab = 'overview' | 'plans' | 'topup'
 
@@ -118,8 +117,15 @@ export function AccountSection() {
           <AccountService />
         </>
       )}
-      {tab === 'plans' && <PlanStore currentPlan={acc.account.plan?.name ?? null} currency={acc.account.currency} />}
-      {tab === 'topup' && <TopUp currency={acc.account.currency} />}
+      {tab !== 'overview' && (
+        <StorePages
+          tab={tab}
+          currentPlan={acc.account.plan?.name ?? null}
+          currency={acc.account.currency}
+          updatedAt={acc.account.updatedAt}
+          onRefreshAccount={acc.refresh}
+        />
+      )}
     </section>
   )
 }
