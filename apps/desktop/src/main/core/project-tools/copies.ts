@@ -1,8 +1,39 @@
 import { randomUUID, createHash } from 'node:crypto'
-import { mkdir, realpath, lstat } from 'node:fs/promises'
+import { mkdir, readdir, realpath, rm, rmdir } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import type { CopyInput, CopyPreview, ProjectCopy } from '../../../shared/types/project-tools'
-import { JsonStore, git, gitInfo, samePath, value, type ToolsHost } from './common'
+import { JsonStore, git, gitInfo, inside, samePath, value, type ToolsHost } from './common'
+
+/** 副本目录删不掉时的提示（目录被终端或别的程序当作当前目录） */
+const busyMessage = (path: string): string =>
+  `副本目录被占用，没删掉：${path}。关掉在这个目录里打开的终端或程序后再删除。`
+/** 渲染层靠这段文字识别「残留目录不是空的」并弹出二次确认，不要改 */
+export const LEFTOVER_MARK = '残留目录不是空的'
+
+type DirState = 'missing' | 'empty' | 'full'
+async function dirState(path: string): Promise<DirState> {
+  try {
+    return (await readdir(path)).length ? 'full' : 'empty'
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'ENOENT') return 'missing'
+    if (code === 'ENOTDIR') return 'full'
+    throw error
+  }
+}
+/** 删空目录：Windows 上刚释放占用时可能还要等一会儿，重试几次 */
+async function removeEmptyDir(path: string, tries = 5, delay = 300): Promise<boolean> {
+  for (let i = 0; i < tries; i++) {
+    try {
+      await rmdir(path)
+      return true
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return true
+    }
+    if (i < tries - 1) await new Promise(r => setTimeout(r, delay))
+  }
+  return (await dirState(path)) === 'missing'
+}
 
 export class Copies {
   readonly store: JsonStore<{ version: 1; copies: ProjectCopy[] }>
@@ -51,12 +82,9 @@ export class Copies {
     const defaultBase = join(dirname(info.root), '.pixelsky', 'worktrees', basename(info.root) + '-' + hash)
     const path = input.directory ? resolve(value(input.directory, 1000, true)) : join(defaultBase, name)
     if (!isAbsolute(path) || samePath(path, info.root)) throw new Error('副本目录不正确')
-    try {
-      await lstat(path)
-      throw new Error('目标目录已经存在')
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-    }
+    // 上次删除没清干净的登记先清掉；空目录可以直接用（git worktree add 支持空目录）
+    await git(info.root, ['worktree', 'prune']).catch(() => '')
+    if ((await dirState(path)) === 'full') throw new Error('目标目录已经存在，可能是上次删除没清干净：' + path)
     return {
       input: { name, branch, existingBranch: input.existingBranch === true, base, directory: path },
       path,
@@ -169,10 +197,33 @@ export class Copies {
     this.changed()
     return record
   }
+  private async registered(projectPath: string, path: string): Promise<boolean> {
+    const list = await git(projectPath, ['worktree', 'list', '--porcelain', '-z'])
+    return list
+      .split('\0')
+      .filter(part => part.startsWith('worktree '))
+      .some(part => samePath(part.slice(9), path))
+  }
   async remove(id: string, force = false): Promise<void> {
     await this.store.transaction(async data => {
       const copy = this.get(id)
-      await this.verify(copy)
+      const target = this.host.resolve({ projectId: copy.projectId })
+      // 只删记录里的副本目录：不能是项目目录，也不能包住项目目录
+      // Windows 路径不分大小写，比较前统一成小写
+      const fold = (p: string): string => (process.platform === 'win32' ? p.toLowerCase() : p)
+      if (samePath(copy.path, target.path) || inside(fold(copy.path), fold(target.path)))
+        throw new Error('副本目录不正确')
+      let valid = true
+      try {
+        await this.verify(copy)
+      } catch {
+        valid = false
+      }
+      if (!valid) {
+        await this.removeLeftover(copy, target.path, force)
+        data.copies = data.copies.filter(c => c.id !== id)
+        return
+      }
       const current = await this.status(copy)
       if (current.dirty && !force) throw new Error('副本有未提交修改，请再次确认删除')
       await this.host.withStopped(copy.path, async () => {
@@ -180,12 +231,39 @@ export class Copies {
         // Recheck after stopping active writers.
         const after = await gitInfo(copy.path)
         if (after.dirty && !force) throw new Error('副本有未提交修改，请再次确认删除')
-        const target = this.host.resolve({ projectId: copy.projectId })
-        await git(target.path, ['worktree', 'remove', ...(force ? ['--force'] : []), '--', copy.path])
+        try {
+          await git(target.path, ['worktree', 'remove', ...(force ? ['--force'] : []), '--', copy.path])
+        } catch (error) {
+          // 目录被别的进程占着时 git 会删掉文件、注销工作树，但删不掉目录本身
+          if (await this.registered(target.path, copy.path)) throw error
+          const state = await dirState(copy.path)
+          if (state !== 'missing' && !(state === 'empty' && (await removeEmptyDir(copy.path))))
+            throw new Error(busyMessage(copy.path))
+        }
         data.copies = data.copies.filter(c => c.id !== id)
       })
     })
     this.changed()
+  }
+  /** 副本已经不是有效的工作树（git 已注销、或目录被外部删除）：清理残留目录 */
+  private async removeLeftover(copy: ProjectCopy, projectPath: string, force: boolean): Promise<void> {
+    await git(projectPath, ['worktree', 'prune']).catch(() => '')
+    if (await this.registered(projectPath, copy.path)) throw new Error('工作树仍在 Git 登记中，无法清理：' + copy.path)
+    const state = await dirState(copy.path)
+    if (state === 'missing') return
+    if (state === 'full' && !force) throw new Error(`${LEFTOVER_MARK}：${copy.path}，确认后会连同里面的文件一起删除`)
+    await this.host.withStopped(copy.path, async () => {
+      await this.stopServices(copy.path)
+      if (state === 'empty') {
+        if (!(await removeEmptyDir(copy.path))) throw new Error(busyMessage(copy.path))
+        return
+      }
+      try {
+        await rm(copy.path, { recursive: true, force: true, maxRetries: 4, retryDelay: 300 })
+      } catch {
+        throw new Error(busyMessage(copy.path))
+      }
+    })
   }
   async forget(id: string): Promise<void> {
     await this.store.transaction(data => {

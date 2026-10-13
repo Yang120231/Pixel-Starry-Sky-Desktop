@@ -143,6 +143,10 @@ export async function initTerminalIpc(
     await remote?.shutdown()
   }
 }
+/** 删除副本前关掉工作目录在其中的终端（project-tools-ipc 用） */
+export async function stopTerminalsUnder(path: string): Promise<void> {
+  await manager?.stopUnder(path)
+}
 export async function confirmTerminalClose(win: BrowserWindow): Promise<boolean> {
   if (!manager?.hasRunning(win.webContents.id) && !remote?.hasRunning(win.webContents.id)) return true
   const result = await dialog.showMessageBox(win, {

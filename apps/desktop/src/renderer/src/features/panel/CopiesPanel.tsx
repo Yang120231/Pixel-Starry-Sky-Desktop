@@ -25,7 +25,12 @@ function CopiesBody({ projectId, name, demo }: { projectId: string; name: string
     [branches, setBranches] = useState<string[]>([])
   const [form, setForm] = useState<CopyInput | null>(null),
     [preview, setPreview] = useState<CopyPreview | null>(null)
-  const [removing, setRemoving] = useState<{ copy: ProjectCopy; forget: boolean; force: boolean } | null>(null)
+  const [removing, setRemoving] = useState<{
+    copy: ProjectCopy
+    forget: boolean
+    force: boolean
+    leftover?: boolean
+  } | null>(null)
   const { busy, error, setError, run } = useOperation()
   const load = async () => {
     if (!demo) setCopies(await window.pixelsky!.projectTools.copies(projectId))
@@ -120,6 +125,8 @@ function CopiesBody({ projectId, name, demo }: { projectId: string; name: string
         } catch (e) {
           if ((e as Error).message.includes('未提交'))
             setRemoving({ copy: { ...copy, dirty: true }, forget: false, force: false })
+          else if ((e as Error).message.includes('残留目录不是空的'))
+            setRemoving({ copy, forget: false, force: false, leftover: true })
           throw e
         }
         await load()
@@ -317,14 +324,17 @@ function CopiesBody({ projectId, name, demo }: { projectId: string; name: string
               <p>{removing.copy.path}</p>
               <p>{removing.copy.branch}</p>
               <p>{tr(removing.forget ? 'projectTools.confirmForgetCopy' : 'projectTools.confirmRemoveCopy')}</p>
-              {removing.copy.dirty && !removing.forget && (
+              {removing.leftover && !removing.forget && (
+                <p className="text-danger">{tr('projectTools.leftoverWarning')}</p>
+              )}
+              {(removing.copy.dirty || removing.leftover) && !removing.forget && (
                 <label className="flex items-center gap-2">
                   <input
                     type="checkbox"
                     checked={removing.force}
                     onChange={e => setRemoving({ ...removing, force: e.target.checked })}
                   />
-                  {tr('projectTools.discardCopyChanges')}
+                  {tr(removing.leftover ? 'projectTools.deleteLeftoverFiles' : 'projectTools.discardCopyChanges')}
                 </label>
               )}
             </div>
@@ -333,7 +343,7 @@ function CopiesBody({ projectId, name, demo }: { projectId: string; name: string
           cancelLabel={tr('projectTools.cancel')}
           danger
           busy={busy}
-          confirmDisabled={removing.copy.dirty && !removing.forget && !removing.force}
+          confirmDisabled={(removing.copy.dirty || removing.leftover) && !removing.forget && !removing.force}
           error={error}
           onConfirm={() => void remove()}
           onCancel={() => setRemoving(null)}

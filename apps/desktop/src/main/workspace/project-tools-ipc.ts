@@ -9,6 +9,7 @@ import { workspaceRef } from '../core/workspace-files'
 import { nativeText } from '../app/ui-language'
 import type { AppContext } from '../app/context'
 import { workspaceToolsHost } from './resolve'
+import { stopTerminalsUnder } from '../terminal/ipc'
 import { initProjectBrowser } from './browser'
 import { machineOf, remoteMethod } from '../machines/identity'
 import type { WorkspaceChoice } from '../../shared/types/machines'
@@ -26,6 +27,7 @@ export async function initProjectTools(ctx: AppContext): Promise<void> {
   }
   // Git 面板（docs/ui/git-panel.md）：本机放弃未跟踪文件时移到回收站
   const tools = new ProjectTools(dir, host, changed, {
+    stopTerminals: stopTerminalsUnder,
     trash: async files => {
       for (const file of files) await shell.trashItem(file.absolute)
     },

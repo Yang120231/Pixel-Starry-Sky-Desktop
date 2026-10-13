@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile, rename } from 'node:fs/promises'
 import { statSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import * as pty from 'node-pty'
 import type {
@@ -380,6 +380,16 @@ export class TerminalManager {
     } finally {
       this.busy.delete(id)
     }
+  }
+  /** 停掉工作目录在 path 里（含 path 本身）的运行中终端，保留终端记录（删除副本前释放目录占用，GitHub #37） */
+  async stopUnder(path: string): Promise<void> {
+    const fold = (v: string): string => (process.platform === 'win32' ? resolve(v).toLowerCase() : resolve(v))
+    const root = fold(path)
+    const runs = [...this.running.values()].filter(run => {
+      const rel = relative(root, fold(run.record.cwd))
+      return !isAbsolute(rel) && rel !== '..' && !rel.startsWith('..' + sep)
+    })
+    await Promise.all(runs.map(run => this.stop(run)))
   }
   hasRunning(owner?: number): boolean {
     return [...this.running.values()].some(run => owner === undefined || run.owner === owner)

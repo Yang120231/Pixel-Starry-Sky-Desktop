@@ -14,11 +14,19 @@ export class ProjectTools {
   readonly copies: Copies
   readonly git: GitTools
 
-  constructor(dir: string, host: ToolsHost, changed: () => void, opts: { trash?: GitTrash } = {}) {
+  constructor(
+    dir: string,
+    host: ToolsHost,
+    changed: () => void,
+    opts: { trash?: GitTrash; stopTerminals?: (path: string) => Promise<void> } = {},
+  ) {
     this.tasks = new Tasks(dir, host, changed)
     // 服务和副本互相引用：删除副本前先停它目录里的服务，启动服务前核对副本
     this.services = new Services(dir, host, changed, (id, path) => this.copies.verifyPath(id, path))
-    this.copies = new Copies(dir, host, changed, path => this.services.stopPath(path))
+    this.copies = new Copies(dir, host, changed, async path => {
+      await opts.stopTerminals?.(path)
+      await this.services.stopPath(path)
+    })
     this.git = new GitTools(host, changed, { trash: opts.trash })
   }
 

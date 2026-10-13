@@ -181,6 +181,14 @@ export const projectToolsMessages = {
     zh: '确认丢弃此副本的所有未提交修改',
     en: 'Discard all uncommitted changes in this copy',
   },
+  'projectTools.leftoverWarning': {
+    zh: '这个目录已经不是 Git 工作树，里面还有文件。继续删除会连同这些文件一起删掉。',
+    en: 'This directory is no longer a Git worktree but still contains files. Deleting it removes those files too.',
+  },
+  'projectTools.deleteLeftoverFiles': {
+    zh: '确认删除目录里的所有文件',
+    en: 'Delete all files in this directory',
+  },
   'projectTools.closePage': { zh: '关闭网页标签', en: 'Close web tab' },
   'projectTools.newPage': { zh: '新建网页标签', en: 'New web tab' },
   'projectTools.annotationMessage': { zh: '网页批注\n网址：{p0}\n{p1}', en: 'Page annotation\nURL: {p0}\n{p1}' },
