@@ -11,6 +11,7 @@ import {
 } from '@pixelsky/protocol'
 import { tr } from '@/i18n/core'
 import { containerOf, readDocument } from './extract'
+import { readPdf } from './extract/pdf'
 
 type Encoding = FileAttachment['encoding']
 
@@ -99,7 +100,7 @@ export async function readTextFile(file: File): Promise<FileAttachment> {
   // 扩展名是 Office 文档、内容却不是 zip：多半被加密软件加过密（透明加密），或者坏了
   if ((kind === 'binary' || kind === 'image') && OFFICE_EXT.test(file.name))
     throw new Error(tr('composer.file.notDocument', { p0: file.name }))
-  if (kind === 'pdf') throw new Error(tr('composer.file.pdf', { p0: file.name }))
+  if (kind === 'pdf') return readPdf(file)
   if (kind === 'binary' || kind === 'image') throw new Error(tr('composer.file.binary', { p0: file.name }))
   const base = { id: crypto.randomUUID(), name: file.name || 'file.txt', bytes: file.size }
   if (whole) {

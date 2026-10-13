@@ -6,13 +6,9 @@ export const attachmentMessages = {
     zh: '{p0} 太大，文件不能超过 50 MB',
     en: '{p0} is too large. Files must be 50 MB or smaller',
   },
-  'composer.file.pdf': {
-    zh: '{p0} 是 PDF，暂时不能直接添加；可以复制里面的文字粘贴进来',
-    en: '{p0} is a PDF, which can’t be added yet. Copy its text and paste it instead',
-  },
   'composer.file.binary': {
-    zh: '{p0} 不能直接发给智能体（支持文本、日志、代码、配置文件，以及 Word、Excel、PPT 文档）',
-    en: '{p0} can’t be sent to the agent (text, logs, code, config files and Word, Excel and PowerPoint documents are supported)',
+    zh: '{p0} 不能直接发给智能体（支持文本、日志、代码、配置文件，以及 Word、Excel、PPT、PDF 文档）',
+    en: '{p0} can’t be sent to the agent (text, logs, code, config files and Word, Excel, PowerPoint and PDF documents are supported)',
   },
   // 从文档提取文字（docs/ui/composer-file-attachments.md §7）
   'composer.file.legacyOffice': {
@@ -54,6 +50,16 @@ export const attachmentMessages = {
   'composer.file.source.epub': { zh: 'EPUB 电子书', en: 'EPUB book' },
   'composer.file.source.html': { zh: '网页', en: 'web page' },
   'composer.file.source.ipynb': { zh: 'Jupyter 笔记本', en: 'Jupyter notebook' },
+  'composer.file.scanned': {
+    zh: '{p0} 是扫描的图片，提取不到文字；可以截图后当图片添加',
+    en: '{p0} is a scanned image with no text to extract. Take a screenshot and add it as an image',
+  },
+  'composer.extract.page': { zh: '第 {p0} 页', en: 'Page {p0}' },
+  'composer.extract.noTextPage': { zh: '（这一页没有文字）', en: '(no text on this page)' },
+  'composer.extract.pdfPartial': {
+    zh: '（一共 {p0} 页，内容太长，只读了前 {p1} 页）',
+    en: '({p0} pages in total; too long, so only the first {p1} were read)',
+  },
   'composer.extract.comments': { zh: '批注', en: 'Comments' },
   'composer.extract.sheet': { zh: '工作表「{p0}」', en: 'Sheet "{p0}"' },
   'composer.extract.sheetSize': { zh: '{p0} 行 × {p1} 列', en: '{p0} rows × {p1} columns' },
