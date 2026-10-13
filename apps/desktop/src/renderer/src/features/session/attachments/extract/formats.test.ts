@@ -133,9 +133,11 @@ describe('压缩包', () => {
 
 describe('解压后太大', () => {
   it('按包里写的原始大小算，超过 256 MB 不解，说清楚', async () => {
-    // 300 MB 的 0 压缩后不到 1 MB
-    const huge = zipSync({ 'word/document.xml': new Uint8Array(300 * 1024 * 1024) }, { level: 9 })
-    expect(huge.length).toBeLessThan(2 * 1024 * 1024)
+    // 真做一个 300 MB 的包太慢：小包里把中央目录写的原始大小改成 300 MB（解不解看的就是这个数）
+    const huge = zipSync({ 'word/document.xml': strToU8('<w:document/>') })
+    const view = new DataView(huge.buffer)
+    const cd = huge.findIndex((_, i) => view.getUint32(i, true) === 0x02014b50)
+    view.setUint32(cd + 24, 300 * 1024 * 1024, true)
     expect(await error(new File([huge], '炸弹.docx'))).toBe('炸弹.docx 解压后超过 256 MB，太大了读不了')
   })
 })
