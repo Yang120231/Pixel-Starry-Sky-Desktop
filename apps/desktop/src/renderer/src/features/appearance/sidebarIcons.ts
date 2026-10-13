@@ -8,6 +8,15 @@ import {
   FolderPlus,
   Gauge,
   GitBranch,
+  Hash,
+  Kanban,
+  ListTodo,
+  MessageSquare,
+  MessagesSquare,
+  ScanSearch,
+  Search,
+  SquareKanban,
+  TextSearch,
   SquareArrowOutUpRight,
   PenLine,
   Plug,
@@ -19,8 +28,17 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
-/** 可替换图标的侧栏动作 */
-export const SIDEBAR_ACTIONS = ['newTask', 'addProject', 'settings', 'plugins', 'usage'] as const
+/** 可替换图标的侧栏动作，按侧栏从上到下排（设置页照这个顺序列，docs/ui/layout-v2.md §17） */
+export const SIDEBAR_ACTIONS = [
+  'newTask',
+  'search',
+  'board',
+  'channels',
+  'addProject',
+  'settings',
+  'plugins',
+  'usage',
+] as const
 export type SidebarAction = (typeof SIDEBAR_ACTIONS)[number]
 
 /** 能放在侧栏底部的动作（可换图标）；新建任务、添加项目固定在侧栏里，只能换图标（docs/ui/layout-v2.md §7.1） */
@@ -54,6 +72,15 @@ const ICONS = {
   'square-pen': SquarePen,
   'pen-line': PenLine,
   plus: Plus,
+  search: Search,
+  'text-search': TextSearch,
+  'scan-search': ScanSearch,
+  'square-kanban': SquareKanban,
+  kanban: Kanban,
+  'list-todo': ListTodo,
+  'message-square': MessageSquare,
+  'messages-square': MessagesSquare,
+  hash: Hash,
   'folder-plus': FolderPlus,
   'folder-open': FolderOpen,
   folder: Folder,
@@ -73,6 +100,9 @@ export type SidebarIcons = Record<SidebarAction, SidebarIconId>
 
 export const SIDEBAR_ICON_OPTIONS: Record<SidebarAction, readonly SidebarIconId[]> = {
   newTask: ['square-pen', 'pen-line', 'plus'],
+  search: ['search', 'text-search', 'scan-search'],
+  board: ['square-kanban', 'kanban', 'list-todo'],
+  channels: ['message-square', 'messages-square', 'hash'],
   addProject: ['folder-plus', 'folder-open', 'folder'],
   settings: ['settings', 'sliders-horizontal', 'bolt'],
   plugins: ['puzzle', 'blocks', 'plug'],
@@ -81,6 +111,9 @@ export const SIDEBAR_ICON_OPTIONS: Record<SidebarAction, readonly SidebarIconId[
 
 export const DEFAULT_SIDEBAR_ICONS: SidebarIcons = {
   newTask: 'square-pen',
+  search: 'search',
+  board: 'square-kanban',
+  channels: 'message-square',
   addProject: 'folder-plus',
   settings: 'settings',
   plugins: 'puzzle',

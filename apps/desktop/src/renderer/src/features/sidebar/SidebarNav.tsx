@@ -1,6 +1,5 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
-import { MessageSquare, Search, SquareKanban } from 'lucide-react'
 import { useComingSoon } from '@/ui'
 import { useSidebarPrefs } from '@/features/appearance/sidebar'
 import { getSidebarIcon } from '@/features/appearance/sidebarIcons'
@@ -27,6 +26,8 @@ function BoardEntry() {
     isLive ? projects.filter(p => machineOf(p.id) === machine).map(p => p.id) : demoProjects.map(p => p.id),
   )
   const todo = tasks.filter(t => t.status !== 'completed' && known.has(t.projectId)).length
+  const { icons } = useSidebarPrefs()
+  const Icon = getSidebarIcon('board', icons)
   return (
     <SidebarRow
       selected={page === 'board'}
@@ -34,7 +35,7 @@ function BoardEntry() {
       title={tr('board.open')}
       aria-current={page === 'board' ? 'page' : undefined}
     >
-      <SquareKanban size={16} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
+      <Icon size={16} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
       <span className="min-w-0 flex-1 truncate">{tr('board.title')}</span>
       {todo > 0 && <span className={HINT}>{tr('board.todoCount', { n: todo })}</span>}
     </SidebarRow>
@@ -46,6 +47,8 @@ function ChannelsEntry() {
   const page = usePage()
   const unread = useChannelUnreadTotal()
   const unreadText = tr('sidebar.channelsUnread', { n: unread })
+  const { icons } = useSidebarPrefs()
+  const Icon = getSidebarIcon('channels', icons)
   return (
     <SidebarRow
       selected={page === 'channels'}
@@ -53,7 +56,7 @@ function ChannelsEntry() {
       title={unread > 0 ? `${tr('channels.section')} · ${unreadText}` : tr('channels.section')}
       aria-current={page === 'channels' ? 'page' : undefined}
     >
-      <MessageSquare size={16} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
+      <Icon size={16} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
       <span className="min-w-0 flex-1 truncate">{tr('channels.section')}</span>
       {unread > 0 && <span role="img" aria-label={unreadText} className="size-1.5 shrink-0 rounded-full bg-accent" />}
     </SidebarRow>
@@ -70,6 +73,7 @@ export function SidebarNav({ onNewTask }: { onNewTask?: () => void }) {
   const openSearch = useOpenSearch()
   const { icons } = useSidebarPrefs()
   const NewTaskIcon = getSidebarIcon('newTask', icons)
+  const SearchIcon = getSidebarIcon('search', icons)
   return (
     <nav className="no-drag flex shrink-0 flex-col gap-px px-3 pt-1" data-sidebar-nav>
       {/* 演示模式没有 onNewTask：沿用「即将推出」 */}
@@ -79,7 +83,7 @@ export function SidebarNav({ onNewTask }: { onNewTask?: () => void }) {
         <span className={HINT}>{NEW_TASK.label}</span>
       </SidebarRow>
       <SidebarRow onClick={openSearch} aria-haspopup="dialog" title={withShortcut(tr('sidebar.search'), OPEN_SEARCH)}>
-        <Search size={16} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
+        <SearchIcon size={16} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
         <span className="min-w-0 flex-1 truncate">{tr('sidebar.search')}</span>
         <span className={HINT}>{OPEN_SEARCH.label}</span>
       </SidebarRow>

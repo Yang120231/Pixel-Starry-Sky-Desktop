@@ -53,7 +53,16 @@ describe('侧边栏外观偏好', () => {
     expect([...HEADER_ACTIONS]).toEqual(['git', 'openIn'])
     expect([...FOOTER_ACTIONS]).toEqual(['settings', 'plugins', 'usage'])
     expect([...LAYOUT_ACTIONS]).toEqual(['settings', 'plugins', 'usage', 'git', 'openIn'])
-    expect([...SIDEBAR_ACTIONS]).toEqual(['newTask', 'addProject', 'settings', 'plugins', 'usage'])
+    expect([...SIDEBAR_ACTIONS]).toEqual([
+      'newTask',
+      'search',
+      'board',
+      'channels',
+      'addProject',
+      'settings',
+      'plugins',
+      'usage',
+    ])
     expect([...LAYOUT_PLACEMENTS]).toEqual(['header', 'bottom', 'hidden'])
     expect(DEFAULT_SIDEBAR_LAYOUT).toEqual({
       header: ['openIn'],
@@ -145,6 +154,19 @@ describe('侧边栏外观偏好', () => {
     expect(getSidebarIcon('usage', { ...prefs.icons, usage: 'missing' as never })).toBe(
       getSidebarIcon('usage', DEFAULT_SIDEBAR_ICONS),
     )
+  })
+
+  it('搜索、任务看板、频道的图标（layout-v2.md §17）：旧数据里没有时取默认，能存能读，不收别的入口的候选', () => {
+    expect(DEFAULT_SIDEBAR_ICONS).toMatchObject({
+      search: 'search',
+      board: 'square-kanban',
+      channels: 'message-square',
+    })
+    const prefs = parseSidebarPrefs({
+      version: 4,
+      icons: { search: 'scan-search', board: 'list-todo', channels: 'plus' },
+    })
+    expect(prefs.icons).toMatchObject({ search: 'scan-search', board: 'list-todo', channels: 'message-square' })
   })
 
   it('v1 自动采用默认位置并保留已有图标和历史选择，下次修改保存 v4', async () => {
