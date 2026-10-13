@@ -4,10 +4,12 @@ import { cn } from './cn'
 
 interface CollapsibleSlotProps {
   open: boolean
-  /** 展开时的宽度（px），里面的内容始终保持这个宽度 */
-  width: number
-  /** 贴在窗口哪一侧：左侧栏向左滑出，右侧面板向右滑出 */
-  side: 'left' | 'right'
+  /** 展开时的宽度（px），里面的内容始终保持这个宽度（left / right 用） */
+  width?: number
+  /** 展开时的高度（px），里面的内容始终保持这个高度（bottom 用） */
+  size?: number
+  /** 贴在窗口哪一侧：左侧栏向左滑出，右侧面板向右滑出；bottom 是代码模式的底部面板，向下滑出 */
+  side: 'left' | 'right' | 'bottom'
   children: ReactNode
 }
 
@@ -16,8 +18,10 @@ interface CollapsibleSlotProps {
  * 贴着窗口边缘被裁切，所以是整体滑出 / 滑入，不会被挤压换行。
  * 内容一直挂载（保留滚动位置等状态），收起时设为 inert。动画样式见 globals.css .collapsible-slot。
  */
-export function CollapsibleSlot({ open, width, side, children }: CollapsibleSlotProps) {
+export function CollapsibleSlot({ open, width: widthProp = 0, size = 0, side, children }: CollapsibleSlotProps) {
   useI18n()
+  const bottom = side === 'bottom',
+    width = bottom ? size : widthProp
   const slot = useRef<HTMLDivElement>(null),
     previousWidth = useRef(width)
   useLayoutEffect(() => {
@@ -38,13 +42,21 @@ export function CollapsibleSlot({ open, width, side, children }: CollapsibleSlot
   return (
     <div
       ref={slot}
-      className={cn('collapsible-slot flex h-full shrink-0 overflow-hidden', side === 'right' && 'justify-end')}
-      style={{ width: open ? width : 0 }}
+      className={cn(
+        'collapsible-slot flex shrink-0 overflow-hidden',
+        bottom ? 'w-full' : 'h-full',
+        side === 'right' && 'justify-end',
+      )}
+      style={bottom ? { height: open ? width : 0 } : { width: open ? width : 0 }}
+      data-side={bottom ? 'bottom' : undefined}
       data-open={open || undefined}
       aria-hidden={!open || undefined}
       inert={!open}
     >
-      <div className="flex h-full shrink-0" style={{ width }}>
+      <div
+        className={bottom ? 'flex w-full shrink-0' : 'flex h-full shrink-0'}
+        style={bottom ? { height: width } : { width }}
+      >
         {children}
       </div>
     </div>

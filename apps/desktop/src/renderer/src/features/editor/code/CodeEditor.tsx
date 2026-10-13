@@ -1,6 +1,6 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Compartment, EditorSelection, EditorState, Prec, Transaction } from '@codemirror/state'
+import { Compartment, EditorSelection, EditorState, Prec, Transaction, type Extension } from '@codemirror/state'
 import {
   EditorView,
   drawSelection,
@@ -51,6 +51,8 @@ type Runtime = {
   language: Compartment
   phrases: Compartment
   wrap: Compartment
+  /** 代码模式的审查、透镜等扩展；对话模式挂载时清回 EMPTY */
+  extra: Compartment
   large: boolean
   timer?: number
   flashTimer?: number
@@ -58,6 +60,18 @@ type Runtime = {
   changed: number
 }
 const runtimes = new Map<string, Runtime>()
+const EMPTY: readonly Extension[] = []
+/** 取某个文件标签的 EditorView（代码模式的审查、状态栏用）；没有时 null */
+export const getEditorView = (tabId: string): EditorView | null => runtimes.get(tabId)?.view ?? null
+/** 释放编辑器实例；还挂在界面上（dom 已连接）时什么都不做 */
+export function releaseEditor(tabId: string): void {
+  const runtime = runtimes.get(tabId)
+  if (!runtime || runtime.view.dom.isConnected) return
+  window.clearTimeout(runtime.timer)
+  window.clearTimeout(runtime.flashTimer)
+  runtime.view.destroy()
+  runtimes.delete(tabId)
+}
 /** 编辑器实例数（内存遥测用） */
 export const editorCount = (): number => runtimes.size
 window.addEventListener(FILE_CLOSED_EVENT, e => {
@@ -160,7 +174,17 @@ function menuActions(tabId: string, view: EditorView, toast: (message: string) =
   ]
 }
 
-export function CodeEditor({ tab, active, wordWrap = false }: { tab: OpenFile; active: boolean; wordWrap?: boolean }) {
+export function CodeEditor({
+  tab,
+  active,
+  wordWrap = false,
+  extensions,
+}: {
+  tab: OpenFile
+  active: boolean
+  wordWrap?: boolean
+  extensions?: readonly Extension[]
+}) {
   const { locale } = useI18n()
   const toast = useToast()
   const host = useRef<HTMLDivElement>(null)
@@ -172,7 +196,8 @@ export function CodeEditor({ tab, active, wordWrap = false }: { tab: OpenFile; a
       const language = new Compartment(),
         readonly = new Compartment(),
         phrases = new Compartment(),
-        wrap = new Compartment()
+        wrap = new Compartment(),
+        extra = new Compartment()
       const view = new EditorView({
         parent: host.current,
         state: EditorState.create({
@@ -208,6 +233,7 @@ export function CodeEditor({ tab, active, wordWrap = false }: { tab: OpenFile; a
             highlightSelectionMatches(),
             search({ top: true }),
             changeGutter,
+            extra.of(EMPTY),
             indentUnit.of(fileIndent(tab.draft).unit),
             EditorState.allowMultipleSelections.of(true),
             language.of([]),
@@ -256,6 +282,7 @@ export function CodeEditor({ tab, active, wordWrap = false }: { tab: OpenFile; a
         language,
         phrases,
         wrap,
+        extra,
         large: !!(tab.document?.kind === 'text' && tab.document.readonly),
         revealSeq: -1,
         changed: tab.changed,
@@ -280,6 +307,12 @@ export function CodeEditor({ tab, active, wordWrap = false }: { tab: OpenFile; a
     const runtime = runtimes.get(tab.id)
     runtime?.view.dispatch({ effects: runtime.wrap.reconfigure(wordWrap ? EditorView.lineWrapping : []) })
   }, [tab.id, wordWrap])
+  // 每次挂载都执行一次：runtime 比组件活得久，回到对话模式时要把代码模式的扩展清掉
+  const extra = extensions ?? EMPTY
+  useEffect(() => {
+    const runtime = runtimes.get(tab.id)
+    runtime?.view.dispatch({ effects: runtime.extra.reconfigure(extra) })
+  }, [tab.id, extra])
   useEffect(() => {
     const runtime = runtimes.get(tab.id)
     runtime?.view.dispatch({ effects: runtime.phrases.reconfigure(EditorState.phrases.of({ ...editorPhrases })) })

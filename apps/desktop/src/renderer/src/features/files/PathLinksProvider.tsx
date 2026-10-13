@@ -19,7 +19,7 @@ export function PathLinksProvider({ sessionId, children }: { sessionId: string |
       resolve: isDemo ? async text => demoTextFile(text) : text => wholeTextFile(ref, text),
       // HTML 没带行号时在右侧浏览器里看效果（本机项目），其余照旧在编辑器里打开
       open: target => {
-        const source = (): Promise<void> => openFile(ref, target.path, target.line ?? undefined, target.column ?? 1)
+        const source = (): Promise<unknown> => openFile(ref, target.path, target.line ?? undefined, target.column ?? 1)
         const run =
           isHtmlPath(target.path) && !target.line
             ? previewHtml(ref, target.path).then(shown => (shown ? undefined : source()))

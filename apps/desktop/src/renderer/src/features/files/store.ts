@@ -133,8 +133,9 @@ export async function loadFile(id: string): Promise<void> {
       loading: false,
     })
     if (document.kind === 'text' && !document.readonly) {
+      // 演示模式：有 git 对比的文件用 HEAD 版本，让 gutter 和「对比 HEAD」有内容（D12）
       const head = isDemo
-        ? document.content.replace(/\r\n/g, '\n')
+        ? (demo().git.diff(tab.path)?.original ?? document.content).replace(/\r\n/g, '\n')
         : await window.pixelsky!.files.headContent(tab.ref, tab.path).catch(() => null)
       updateFile(id, { head })
     } else updateFile(id, { head: null })
@@ -180,13 +181,25 @@ export async function ensureFile(id: string): Promise<void> {
   }
   await loadFile(id)
 }
+export type FileOpenTarget = 'auto' | 'panel' | 'code'
+export interface OpenFileOptions {
+  target?: FileOpenTarget
+}
+let codeOpener: ((id: string) => void) | null = null
+/** 代码模式注册自己的打开方式；null 表示回到右侧工作区 */
+export function setCodeOpener(opener: ((id: string) => void) | null): void {
+  codeOpener = opener
+}
+export const hasCodeOpener = (): boolean => codeOpener !== null
+/** 返回打开的文件 id；打不开时 null */
 export async function openFile(
   ref: WorkspaceRef,
   path: string,
   line?: number,
   column = 1,
   searchText?: string,
-): Promise<void> {
+  options: OpenFileOptions = {},
+): Promise<string | null> {
   const panelScope = getPanelScope()
   const normalized = path.replaceAll('\\', '/').replace(/^\.\//, '')
   const demoProject = isDemo
@@ -218,9 +231,16 @@ export async function openFile(
   updateFile(id, {
     reveal: { line: Math.max(1, line ?? 1), column: Math.max(1, column), seq: (current?.reveal?.seq ?? 0) + 1 },
   })
-  paneActions.detachFileTab(id)
-  openRightTab(id, panelScope)
-  activateFile(id)
+  const target0 = options.target ?? 'auto'
+  if ((target0 === 'code' || target0 === 'auto') && codeOpener) {
+    codeOpener(id)
+    activateFile(id)
+  } else {
+    paneActions.detachFileTab(id)
+    openRightTab(id, panelScope)
+    activateFile(id)
+  }
+  return id
 }
 export async function checkFile(id: string): Promise<void> {
   const tab = state.tabs.find(t => t.id === id)

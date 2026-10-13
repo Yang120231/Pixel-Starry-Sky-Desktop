@@ -1,0 +1,205 @@
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Columns2, Ellipsis, Sparkles, X } from 'lucide-react'
+import { IconButton, SEGMENT_TRACK, cn, segmentItem, useComingSoon } from '@/ui'
+import { ActionMenu, type MenuAction } from '@/ui/ActionMenu'
+import { useI18n } from '@/i18n/I18nProvider'
+import { tr } from '@/i18n/core'
+import type { EditorViewMode } from '../types'
+import type { ViewAvailability } from './viewModel'
+
+export interface TabItem {
+  id: string
+  name: string
+  /** 完整路径，给悬停提示用 */
+  title: string
+  dirty: boolean
+  ai: boolean
+}
+
+const hint = (avail: ViewAvailability, mode: EditorViewMode): string | undefined => {
+  if (mode === 'code') return undefined
+  if (avail.reason === 'noHead') return tr('coding.editor.view.noHead')
+  if (avail.reason === 'binary') return tr('coding.editor.view.binary')
+  if (avail.reason === 'noChange') return tr('coding.editor.view.noChange')
+  if (mode === 'split' && avail.narrow) return tr('coding.editor.view.narrow')
+  return undefined
+}
+
+/** 代码 | 变更 | 并排 */
+function ViewSwitch({
+  mode,
+  avail,
+  onChange,
+}: {
+  mode: EditorViewMode
+  avail: ViewAvailability
+  onChange(mode: EditorViewMode): void
+}) {
+  useI18n()
+  const items: { value: EditorViewMode; label: string; enabled: boolean }[] = [
+    { value: 'code', label: tr('coding.editor.view.code'), enabled: true },
+    { value: 'diff', label: tr('coding.editor.view.diff'), enabled: avail.diff },
+    { value: 'split', label: tr('coding.editor.view.split'), enabled: avail.split },
+  ]
+  return (
+    <div role="group" aria-label={tr('coding.editor.view')} className={SEGMENT_TRACK} data-editor-view-switch>
+      {items.map(item => (
+        <button
+          key={item.value}
+          type="button"
+          aria-pressed={mode === item.value}
+          disabled={!item.enabled}
+          title={item.enabled ? undefined : hint(avail, item.value)}
+          className={cn(
+            segmentItem(mode === item.value),
+            'px-2 text-meta disabled:opacity-40 disabled:hover:bg-transparent',
+          )}
+          onClick={() => onChange(item.value)}
+        >
+          {item.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/** 中栏顶部：文件标签、视图切换、向右分屏（桩）、更多菜单 */
+export function CodeTabs({
+  tabs,
+  active,
+  mode,
+  avail,
+  onActivate,
+  onClose,
+  onMode,
+  menu,
+}: {
+  tabs: TabItem[]
+  active: string | null
+  mode: EditorViewMode
+  avail: ViewAvailability | null
+  onActivate(id: string): void
+  onClose(id: string): void
+  onMode(mode: EditorViewMode): void
+  /** 「⋯」菜单里的动作；没有标签时不显示按钮 */
+  menu: MenuAction[]
+}): ReactNode {
+  useI18n()
+  const comingSoon = useComingSoon()
+  const [open, setOpen] = useState<{ x: number; y: number } | null>(null)
+  const list = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!active) return
+    for (const el of list.current?.querySelectorAll<HTMLElement>('[data-code-tab]') ?? [])
+      if (el.dataset.codeTab === active) el.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [active])
+  return (
+    <div data-coding-tabs className="flex h-10 shrink-0 items-center gap-1 border-b border-line-layout bg-sidebar pr-2">
+      <div
+        ref={list}
+        role="tablist"
+        aria-label={tr('coding.editor.tabs')}
+        className="flex h-full min-w-0 flex-1 items-end overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {tabs.map(tab => (
+          <div
+            key={tab.id}
+            role="tab"
+            aria-selected={tab.id === active}
+            data-code-tab={tab.id}
+            title={tab.title}
+            tabIndex={0}
+            className={cn(
+              'group/tab press relative flex h-full max-w-48 min-w-0 shrink-0 cursor-default items-center gap-1.5 border-r border-line-layout pr-1 pl-3 text-ui select-none',
+              tab.id === active
+                ? 'bg-app text-fg after:absolute after:inset-x-0 after:top-0 after:h-0.5 after:bg-accent'
+                : 'text-fg-muted hover:bg-hover hover:text-fg',
+            )}
+            onMouseDown={e => {
+              if (e.button === 1) e.preventDefault()
+            }}
+            onClick={() => onActivate(tab.id)}
+            onAuxClick={e => {
+              if (e.button === 1) {
+                e.preventDefault()
+                onClose(tab.id)
+              }
+            }}
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                onActivate(tab.id)
+              }
+            }}
+          >
+            <span className="truncate">{tab.name}</span>
+            {tab.ai && (
+              <Sparkles
+                size={12}
+                strokeWidth={1.5}
+                className="shrink-0 text-accent"
+                aria-label={tr('coding.editor.tab.ai')}
+              />
+            )}
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={tr('coding.editor.tab.close', { name: tab.name })}
+              className="press relative flex size-5 shrink-0 items-center justify-center rounded text-fg-muted hover:bg-active hover:text-fg"
+              onClick={e => {
+                e.stopPropagation()
+                onClose(tab.id)
+              }}
+            >
+              {tab.dirty && (
+                <span
+                  aria-label={tr('coding.editor.tab.unsaved')}
+                  className="absolute size-1.5 rounded-full bg-fg-muted group-hover/tab:hidden"
+                />
+              )}
+              <X
+                size={14}
+                strokeWidth={1.5}
+                className={cn(
+                  'shrink-0',
+                  tab.dirty ? 'hidden group-hover/tab:block' : 'opacity-0 group-hover/tab:opacity-100',
+                )}
+              />
+            </button>
+          </div>
+        ))}
+      </div>
+      {avail && <ViewSwitch mode={mode} avail={avail} onChange={onMode} />}
+      <IconButton
+        icon={Columns2}
+        size={28}
+        iconSize={15}
+        label={tr('coding.editor.splitRight')}
+        onClick={() => comingSoon(tr('coding.editor.splitRight'))}
+      />
+      {tabs.length > 0 && (
+        <IconButton
+          icon={Ellipsis}
+          size={28}
+          iconSize={15}
+          label={tr('coding.editor.more')}
+          aria-haspopup="menu"
+          aria-expanded={open !== null}
+          onClick={e => {
+            const rect = e.currentTarget.getBoundingClientRect()
+            setOpen({ x: rect.right - 192, y: rect.bottom + 4 })
+          }}
+        />
+      )}
+      {open && (
+        <ActionMenu
+          x={open.x}
+          y={open.y}
+          label={tr('coding.editor.more')}
+          actions={menu}
+          onClose={() => setOpen(null)}
+        />
+      )}
+    </div>
+  )
+}

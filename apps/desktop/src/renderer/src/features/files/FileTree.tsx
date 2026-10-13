@@ -34,6 +34,12 @@ const pathKey = (path: string): string => {
 }
 
 const TreeExpansion = createContext({ version: 0, expanded: false })
+/** 状态上色方式：default 只有字母着色（原样）；vscode 文件名也上色，目录名后加小点（代码模式） */
+export type FileTreeStatusColors = 'default' | 'vscode'
+const TreeColors = createContext<FileTreeStatusColors>('default')
+/** 状态字母的颜色：M 黄、A 和 ? 绿、D 和 ! 红 */
+const statusTone = (status: string): string =>
+  status === 'M' ? 'text-warn' : status === 'D' || status === '!' ? 'text-danger' : 'text-success'
 /** 在项目根目录新建时，让折叠的 ProjectRoot 展开（detail 是 refKey） */
 const EXPAND_ROOT_EVENT = 'pixelsky:file-tree-expand-root'
 
@@ -137,12 +143,20 @@ export function FileTree({
   compact = false,
   scoped = false,
   heading = true,
+  refreshKey = 0,
+  statusColors = 'default',
+  statuses: externalStatuses,
 }: {
   requested: WorkspaceRef | null
   compact?: boolean
   scoped?: boolean
   /** 顶上写不写「文件」：右侧「文件」标签页里标签已经写了，不再重复（docs/ui/workbench-ux-3.md §2.3） */
   heading?: boolean
+  /** 外部触发刷新：和内部的 revision 一起放进读目录和读状态的依赖里 */
+  refreshKey?: number
+  statusColors?: FileTreeStatusColors
+  /** 外部传入的状态表（路径到状态字母）；传了就不再自己去读（演示模式不读状态） */
+  statuses?: Record<string, string>
 }) {
   useI18n()
   const projects = useEngineState(s => s.projects),
@@ -199,6 +213,7 @@ export function FileTree({
     [deleteBusy, setDeleteBusy] = useState(false),
     [opError, setOpError] = useState('')
   const refresh = (): void => setRevision(n => n + 1)
+  const rev = revision + refreshKey
   const startEdit = (next: EditState | null): void => {
     setOpError('')
     if (next && isDemo) return setOpError(tr('workspace.demoCannotModify'))
@@ -246,121 +261,126 @@ export function FileTree({
   const dirtyCount = deleting ? openFilesUnder(deleting.ref, deleting.entry.path).filter(dirtyFile).length : 0
   return (
     <TreeExpansion.Provider value={{ version: collapsed, expanded: expandAll }}>
-      <TreeOps.Provider value={{ editing, edit: startEdit, submit, remove }}>
-        <div
-          data-file-tree
-          className={cn(
-            'flex min-h-0 flex-1 flex-col',
-            compact && 'w-52 shrink-0 flex-none border-r border-line-layout',
-          )}
-        >
-          <div className="flex h-10 shrink-0 items-center gap-1 px-2">
-            <span className="flex-1 px-1 text-ui font-medium text-fg">{heading && tr('files.FileTree.files')}</span>
-            {single && (
-              <>
-                <IconButton
-                  icon={FilePlus}
-                  size={26}
-                  iconSize={14}
-                  label={tr('workspace.newFile')}
-                  onClick={() => startEdit({ mode: 'file', ref: single, parent: '' })}
-                />
-                <IconButton
-                  icon={FolderPlus}
-                  size={26}
-                  iconSize={14}
-                  label={tr('workspace.newFolder')}
-                  onClick={() => startEdit({ mode: 'folder', ref: single, parent: '' })}
-                />
-              </>
+      <TreeColors.Provider value={statusColors}>
+        <TreeOps.Provider value={{ editing, edit: startEdit, submit, remove }}>
+          <div
+            data-file-tree
+            className={cn(
+              'flex min-h-0 flex-1 flex-col',
+              compact && 'w-52 shrink-0 flex-none border-r border-line-layout',
             )}
-            <IconButton
-              icon={RefreshCw}
-              size={26}
-              iconSize={14}
-              label={tr('files.FileTree.refreshFilesAndGit')}
-              onClick={() => setRevision(n => n + 1)}
-            />
-            <IconButton
-              icon={ChevronsDownUp}
-              size={26}
-              iconSize={14}
-              label={tr(expandAll ? 'workspace.collapseAll' : 'workspace.expandAll')}
-              onClick={() => {
-                setExpandAll(v => !v)
-                setCollapsed(n => n + 1)
+          >
+            <div className="flex h-10 shrink-0 items-center gap-1 px-2">
+              <span className="flex-1 px-1 text-ui font-medium text-fg">{heading && tr('files.FileTree.files')}</span>
+              {single && (
+                <>
+                  <IconButton
+                    icon={FilePlus}
+                    size={26}
+                    iconSize={14}
+                    label={tr('workspace.newFile')}
+                    onClick={() => startEdit({ mode: 'file', ref: single, parent: '' })}
+                  />
+                  <IconButton
+                    icon={FolderPlus}
+                    size={26}
+                    iconSize={14}
+                    label={tr('workspace.newFolder')}
+                    onClick={() => startEdit({ mode: 'folder', ref: single, parent: '' })}
+                  />
+                </>
+              )}
+              <IconButton
+                icon={RefreshCw}
+                size={26}
+                iconSize={14}
+                label={tr('files.FileTree.refreshFilesAndGit')}
+                onClick={() => setRevision(n => n + 1)}
+              />
+              <IconButton
+                icon={ChevronsDownUp}
+                size={26}
+                iconSize={14}
+                label={tr(expandAll ? 'workspace.collapseAll' : 'workspace.expandAll')}
+                onClick={() => {
+                  setExpandAll(v => !v)
+                  setCollapsed(n => n + 1)
+                }}
+              />
+            </div>
+            <label className="mx-2 mb-2 flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-line bg-subtle px-2">
+              <Search size={14} className="shrink-0 text-fg-muted" />
+              <input
+                aria-label={tr('files.FileTree.filterFilesByName')}
+                placeholder={tr('files.FileTree.filterFilesByName2')}
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                className="min-w-0 flex-1 bg-transparent text-meta text-fg outline-none"
+              />
+              {query && (
+                <button
+                  type="button"
+                  aria-label={tr('files.FileTree.clearFileFilter')}
+                  onClick={() => setQuery('')}
+                  className="text-meta text-fg-muted"
+                >
+                  {tr('files.FileTree.clear')}
+                </button>
+              )}
+            </label>
+            {opError && !deleting && (
+              <p role="alert" className="mx-3 mb-2 text-label text-danger">
+                {translateMessage(opError)}
+              </p>
+            )}
+            <div data-file-tree-scroll className="min-h-0 flex-1 overflow-auto pb-3">
+              {roots.length ? (
+                roots.map(project => (
+                  <ProjectRoot
+                    key={project.id}
+                    name={project.name}
+                    refTarget={rootRef(project)}
+                    autoOpen={
+                      scoped ||
+                      pathKey(project.path) === pathKey(chosenPath) ||
+                      (isDemo && (requested?.projectId ?? active.ref?.projectId) === project.id)
+                    }
+                    query={query}
+                    revision={rev}
+                    collapsed={collapsed}
+                    externalStatuses={externalStatuses}
+                  />
+                ))
+              ) : (
+                <p className="px-4 py-6 text-meta text-fg-muted">{tr('files.FileTree.noProjectYetAdd')}</p>
+              )}
+            </div>
+          </div>
+          {deleting && (
+            <ConfirmDialog
+              title={tr('workspace.deleteTitle', { name: deleting.entry.name })}
+              description={
+                <div className="flex flex-col gap-2">
+                  <p>{tr('workspace.deleteHint')}</p>
+                  {dirtyCount > 0 && (
+                    <p className="text-danger">{tr('workspace.deleteDirty', { count: dirtyCount })}</p>
+                  )}
+                </div>
+              }
+              confirmLabel={deleteBusy ? tr('workspace.deleting') : tr('workspace.deleteEntry')}
+              cancelLabel={tr('workspace.cancel')}
+              busy={deleteBusy}
+              error={opError ? translateMessage(opError) : null}
+              danger
+              onConfirm={() => void confirmDelete()}
+              onCancel={() => {
+                setDeleting(null)
+                setOpError('')
               }}
             />
-          </div>
-          <label className="mx-2 mb-2 flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-line bg-subtle px-2">
-            <Search size={14} className="shrink-0 text-fg-muted" />
-            <input
-              aria-label={tr('files.FileTree.filterFilesByName')}
-              placeholder={tr('files.FileTree.filterFilesByName2')}
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              className="min-w-0 flex-1 bg-transparent text-meta text-fg outline-none"
-            />
-            {query && (
-              <button
-                type="button"
-                aria-label={tr('files.FileTree.clearFileFilter')}
-                onClick={() => setQuery('')}
-                className="text-meta text-fg-muted"
-              >
-                {tr('files.FileTree.clear')}
-              </button>
-            )}
-          </label>
-          {opError && !deleting && (
-            <p role="alert" className="mx-3 mb-2 text-label text-danger">
-              {translateMessage(opError)}
-            </p>
           )}
-          <div data-file-tree-scroll className="min-h-0 flex-1 overflow-auto pb-3">
-            {roots.length ? (
-              roots.map(project => (
-                <ProjectRoot
-                  key={project.id}
-                  name={project.name}
-                  refTarget={rootRef(project)}
-                  autoOpen={
-                    scoped ||
-                    pathKey(project.path) === pathKey(chosenPath) ||
-                    (isDemo && (requested?.projectId ?? active.ref?.projectId) === project.id)
-                  }
-                  query={query}
-                  revision={revision}
-                  collapsed={collapsed}
-                />
-              ))
-            ) : (
-              <p className="px-4 py-6 text-meta text-fg-muted">{tr('files.FileTree.noProjectYetAdd')}</p>
-            )}
-          </div>
-        </div>
-        {deleting && (
-          <ConfirmDialog
-            title={tr('workspace.deleteTitle', { name: deleting.entry.name })}
-            description={
-              <div className="flex flex-col gap-2">
-                <p>{tr('workspace.deleteHint')}</p>
-                {dirtyCount > 0 && <p className="text-danger">{tr('workspace.deleteDirty', { count: dirtyCount })}</p>}
-              </div>
-            }
-            confirmLabel={deleteBusy ? tr('workspace.deleting') : tr('workspace.deleteEntry')}
-            cancelLabel={tr('workspace.cancel')}
-            busy={deleteBusy}
-            error={opError ? translateMessage(opError) : null}
-            danger
-            onConfirm={() => void confirmDelete()}
-            onCancel={() => {
-              setDeleting(null)
-              setOpError('')
-            }}
-          />
-        )}
-      </TreeOps.Provider>
+        </TreeOps.Provider>
+      </TreeColors.Provider>
     </TreeExpansion.Provider>
   )
 }
@@ -372,6 +392,7 @@ function ProjectRoot({
   query,
   revision,
   collapsed,
+  externalStatuses,
 }: {
   name: string
   refTarget: WorkspaceRef
@@ -379,13 +400,16 @@ function ProjectRoot({
   query: string
   revision: number
   collapsed: number
+  externalStatuses?: Record<string, string>
 }) {
   useI18n()
   const [expanded, setExpanded] = useState(autoOpen),
-    [statuses, setStatuses] = useState<Record<string, string>>({}),
+    [fetchedStatuses, setStatuses] = useState<Record<string, string>>({}),
     [results, setResults] = useState<DirectoryListing | null>(null),
     [error, setError] = useState(''),
     [searching, setSearching] = useState(false)
+  const statuses = externalStatuses ?? fetchedStatuses,
+    hasExternal = !!externalStatuses
   const expansion = useContext(TreeExpansion),
     ops = useContext(TreeOps)
   const [menu, setMenu] = useState<{ x: number; y: number; trigger: HTMLElement } | null>(null)
@@ -407,7 +431,7 @@ function ProjectRoot({
   }, [collapsed])
   useEffect(() => {
     let cancelled = false
-    if (!expanded || isDemo) return
+    if (!expanded || isDemo || externalStatuses) return
     void window.pixelsky!.files.status(refTarget).then(
       s => {
         if (!cancelled) setStatuses(s)
@@ -419,7 +443,7 @@ function ProjectRoot({
     return () => {
       cancelled = true
     }
-  }, [expanded, revision, refTarget.projectId, refTarget.sessionId])
+  }, [expanded, revision, hasExternal, refTarget.projectId, refTarget.sessionId])
   useEffect(() => {
     let cancelled = false
     setError('')
@@ -632,6 +656,7 @@ function FileRow({
 }) {
   useI18n()
   const expansion = useContext(TreeExpansion)
+  const vscode = useContext(TreeColors) === 'vscode'
   const [expanded, setExpanded] = useState(
       expansion.expanded && entry.kind === 'directory' && !entry.linked && depth < 20,
     ),
@@ -720,7 +745,11 @@ function FileRow({
             }
             className={cn(
               'flex min-h-7 min-w-0 flex-1 items-center gap-1.5 rounded-sm py-1 text-left text-meta',
-              active?.path === entry.path && sameRef ? 'text-accent-fg' : 'text-fg-secondary',
+              active?.path === entry.path && sameRef
+                ? 'text-accent-fg'
+                : vscode && status && entry.kind !== 'directory'
+                  ? statusTone(status)
+                  : 'text-fg-secondary',
             )}
           >
             <ChevronRight
@@ -728,11 +757,23 @@ function FileRow({
               className={cn('shrink-0', entry.kind !== 'directory' && 'invisible', expanded && 'rotate-90')}
             />
             <Icon size={14} className="shrink-0 text-fg-muted" />
-            <span className="min-w-0 flex-1 truncate">{showPath ? entry.path : entry.name}</span>
-            {status && (
+            <span className={cn('min-w-0 truncate', !(vscode && entry.kind === 'directory' && status) && 'flex-1')}>
+              {showPath ? entry.path : entry.name}
+            </span>
+            {vscode && entry.kind === 'directory' && status && (
+              <span
+                aria-hidden
+                title={tr('files.FileTree.gitStatus', { p0: status })}
+                className="mr-auto size-1.5 shrink-0 rounded-full bg-warn"
+              />
+            )}
+            {status && !(vscode && entry.kind === 'directory') && (
               <span
                 title={tr('files.FileTree.gitStatus', { p0: status })}
-                className={cn('shrink-0 text-label', status === 'D' || status === '!' ? 'text-danger' : 'text-success')}
+                className={cn(
+                  'shrink-0 text-label',
+                  vscode ? statusTone(status) : status === 'D' || status === '!' ? 'text-danger' : 'text-success',
+                )}
               >
                 {status}
               </span>

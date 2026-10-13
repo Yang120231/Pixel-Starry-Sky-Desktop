@@ -1,0 +1,51 @@
+import type { DiffBase, EditorViewMode } from '../types'
+
+export interface ViewInput {
+  /** HEAD 里的内容；null 表示没有（未跟踪或不是仓库） */
+  head: string | null
+  draft: string
+  /** 文本文件才能看差异 */
+  text: boolean
+  /** 这一轮开始前的内容；算不出来是 null */
+  turnBaseline: string | null
+  /** 中栏宽度 */
+  width: number
+  /** 并排至少需要的宽度 */
+  splitMinWidth: number
+}
+
+export interface ViewAvailability {
+  code: true
+  diff: boolean
+  split: boolean
+  /** 能算出「只看这一轮」的基准 */
+  turn: boolean
+  /** 「变更」「并排」不可用的原因（给提示用） */
+  reason: 'binary' | 'noHead' | 'noChange' | null
+  /** 并排因为太窄不可用 */
+  narrow: boolean
+}
+
+/** 「变更」「并排」能不能点 */
+export function viewAvailability(input: ViewInput): ViewAvailability {
+  const turn = input.turnBaseline !== null
+  let reason: ViewAvailability['reason'] = null
+  if (!input.text) reason = 'binary'
+  else if (input.head === null) reason = 'noHead'
+  else if (input.draft === input.head && !turn) reason = 'noChange'
+  const diff = reason === null
+  const narrow = input.width < input.splitMinWidth
+  return { code: true, diff, split: diff && !narrow, turn, reason, narrow }
+}
+
+/** 保存的视图在当前条件下不可用时退回「代码」 */
+export function effectiveMode(mode: EditorViewMode, avail: ViewAvailability): EditorViewMode {
+  if (mode === 'diff') return avail.diff ? 'diff' : 'code'
+  if (mode === 'split') return avail.split ? 'split' : avail.diff ? 'diff' : 'code'
+  return 'code'
+}
+
+/** 「只看这一轮」算不出基准时退回 HEAD */
+export function effectiveBase(base: DiffBase, avail: ViewAvailability): DiffBase {
+  return base === 'turn' && !avail.turn ? 'head' : base
+}

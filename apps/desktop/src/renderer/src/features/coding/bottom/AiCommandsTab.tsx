@@ -1,0 +1,120 @@
+import { useMemo } from 'react'
+import { Play } from 'lucide-react'
+import { Button, cn } from '@/ui'
+import { stripAnsi } from '@/ui/code/ansi'
+import { useI18n } from '@/i18n/I18nProvider'
+import { tr } from '@/i18n/core'
+import { useTerminalUi } from '@/features/terminal/TerminalProvider'
+import { terminalRunWhenReady, terminalState } from '@/features/terminal/store'
+import { codingLayout } from '../layoutStore'
+import { selectAiCommand, setOutputSource, useBottomState } from './aiCommands'
+import { commandTone, type AiCommandEntry } from './aiCommandsModel'
+
+const TONE_COLOR = { running: 'bg-warn', failed: 'bg-danger', done: 'bg-success' } as const
+
+/** AI 命令页：左边命令列表，右边选中命令的只读输出 */
+export function AiCommandsTab({
+  sessionId,
+  commands,
+}: {
+  sessionId: string | null
+  commands: readonly AiCommandEntry[]
+}) {
+  useI18n()
+  const ui = useTerminalUi()
+  const { selected } = useBottomState()
+  const current =
+    selected && selected.sessionId === sessionId ? commands.find(c => c.id === selected.itemId) : undefined
+  // 没选过时默认看最后一条
+  const entry = current ?? commands[commands.length - 1]
+  const text = useMemo(() => (entry ? stripAnsi(entry.output) : ''), [entry])
+
+  const rerun = async (command: string): Promise<void> => {
+    const before = new Set(terminalState().terminals.map(t => t.id))
+    const ok = await ui.create()
+    const record = terminalState().terminals.find(t => !before.has(t.id))
+    if (!ok || !record) return
+    terminalRunWhenReady(record.id, command)
+    setOutputSource({ kind: 'terminal', id: record.id })
+    codingLayout.showBottom('terminal')
+  }
+
+  return (
+    <div
+      role="tabpanel"
+      id="coding-bottom-page-aiCommands"
+      aria-labelledby="coding-bottom-tab-aiCommands"
+      className="flex min-h-0 min-w-0 flex-1"
+    >
+      {!sessionId || commands.length === 0 || !entry ? (
+        <div className="flex flex-1 items-center justify-center px-6 text-center text-meta text-fg-faint">
+          {tr(sessionId ? 'coding.bottom.ai.empty' : 'coding.bottom.ai.noSession')}
+        </div>
+      ) : (
+        <>
+          <ul
+            aria-label={tr('coding.bottom.ai.list')}
+            className="flex w-72 shrink-0 flex-col overflow-y-auto border-r border-line-layout py-1"
+          >
+            {commands.map(command => (
+              <li key={command.id}>
+                <button
+                  type="button"
+                  data-coding-ai-command={command.id}
+                  aria-current={command.id === entry.id}
+                  onClick={() => selectAiCommand(sessionId, command.id)}
+                  className={cn(
+                    'press no-drag flex w-full items-start gap-2 px-3 py-1.5 text-left',
+                    command.id === entry.id ? 'bg-selected' : 'hover:bg-hover',
+                  )}
+                >
+                  <span
+                    aria-hidden
+                    className={cn(
+                      'mt-1.5 inline-block size-1.5 shrink-0 rounded-full',
+                      TONE_COLOR[commandTone(command)],
+                    )}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-mono text-meta text-fg">{command.command}</span>
+                    {command.description && (
+                      <span className="block truncate text-label text-fg-faint">{command.description}</span>
+                    )}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <div className="flex shrink-0 items-center gap-2 px-4 pt-2 pb-1">
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-mono text-meta text-fg">{entry.command}</div>
+                <div className="flex gap-2 truncate text-label text-fg-faint">
+                  <span>{tr(`coding.bottom.ai.status.${entry.status}`)}</span>
+                  {entry.exitCode !== null && <span>{tr('coding.bottom.ai.exitCode', { code: entry.exitCode })}</span>}
+                  {entry.subagent && <span>{tr('coding.bottom.ai.subagent', { name: entry.subagent })}</span>}
+                </div>
+              </div>
+              <Button onClick={() => void rerun(entry.command)}>
+                <Play size={14} strokeWidth={1.5} className="shrink-0" />
+                {tr('coding.bottom.ai.rerun')}
+              </Button>
+            </div>
+            {entry.status === 'running' && !text && (
+              <div className="px-4 pb-1 text-meta text-fg-muted">{tr('coding.bottom.ai.runningNote')}</div>
+            )}
+            {text ? (
+              <pre className="min-h-0 flex-1 overflow-auto px-4 pb-3 font-mono text-meta leading-5 whitespace-pre-wrap text-fg-body select-text">
+                {text}
+              </pre>
+            ) : (
+              entry.status !== 'running' && (
+                <div className="px-4 text-meta text-fg-faint">{tr('coding.bottom.ai.noOutput')}</div>
+              )
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}

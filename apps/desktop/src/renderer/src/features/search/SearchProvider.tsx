@@ -3,6 +3,7 @@ import { tr } from '../../i18n/core'
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { OPEN_SEARCH } from '@/features/layout/shortcuts'
 import { SearchDialog } from './SearchDialog'
+import { getSearchShortcutOverride } from './shortcutOverride'
 
 const SearchContext = createContext<{ open: boolean; show(): void; toggle(): void } | null>(null)
 
@@ -38,6 +39,11 @@ export function SearchProvider({ children }: { children: ReactNode }) {
         return
       e.preventDefault()
       e.stopPropagation()
+      const override = getSearchShortcutOverride()
+      if (override) {
+        override()
+        return
+      }
       openSearch()
     }
     window.addEventListener('keydown', onKey, true)

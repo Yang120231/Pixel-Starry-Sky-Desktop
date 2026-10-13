@@ -39,6 +39,16 @@ function groups(): { title: string; rows: Row[] }[] {
       ],
     },
     {
+      title: tr('coding.shell.help.group'),
+      rows: [
+        { label: tr('coding.shell.help.ctrlP'), keys: labelOf('openSearch') },
+        { label: tr('coding.shell.help.ctrlB'), keys: labelOf('toggleSidebar') },
+        { label: tr('coding.shell.help.ctrlAltB'), keys: labelOf('togglePanel') },
+        { label: tr('coding.shell.help.ctrlJ'), keys: labelOf('toggleBottomPanel') },
+        fixedRow('coding.shell.help.hashChat', '#'),
+      ],
+    },
+    {
       title: tr('shortcuts.help.groupMenus'),
       rows: [
         fixedRow('shortcuts.help.menuMove', '↑ / ↓'),

@@ -8,6 +8,8 @@ import { changedFiles, type ChangedFile, type ChangedFiles } from '@/data'
 import { openFile } from '@/features/files/store'
 import type { WorkspaceRef } from '../../../../shared/types/workspace'
 import { isDemo, projects } from '@/data'
+import { useAppMode } from '@/features/coding/mode'
+import { openCodeDiff } from '@/features/coding/editor'
 import { useState, type CSSProperties } from 'react'
 
 /**
@@ -20,6 +22,7 @@ export function ChangedFilesCard({
   data = changedFiles,
   target,
   onReview,
+  onKeepAll,
   style,
 }: {
   className?: string
@@ -27,13 +30,23 @@ export function ChangedFilesCard({
   data?: ChangedFiles | null
   target?: WorkspaceRef
   onReview?: () => void
+  /** 代码模式：整轮标记为已审查 */
+  onKeepAll?: () => void
 }) {
   useI18n()
   const comingSoon = useComingSoon()
   const [error, setError] = useState('')
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set())
+  const code = useAppMode() === 'code'
   if (!data) return null
-  const review = onReview ?? (isDemo ? () => comingSoon(tr('session.ChangedFilesCard.review')) : null)
+  const codeRef = target ?? (isDemo && projects[0] ? { projectId: projects[0].id } : null)
+  const firstDiff = data.files.find(f => f.diffs?.length) ?? data.files[0]
+  // 代码模式：「审查」打开第一个文件的变更（中栏）
+  const codeReview =
+    code && codeRef && firstDiff
+      ? () => void openCodeDiff(codeRef, firstDiff.dir + firstDiff.name).catch(e => setError(e.message))
+      : null
+  const review = codeReview ?? onReview ?? (isDemo ? () => comingSoon(tr('session.ChangedFilesCard.review')) : null)
   /** 一个文件一行；prefix 区分分组（同一个文件可能在两组里），展开状态按它记 */
   const fileRow = (f: ChangedFile, prefix: string) => {
     const path = f.dir + f.name
@@ -42,6 +55,10 @@ export function ChangedFilesCard({
       if (ref) void openFile(ref, path, undefined, 1, f.newText).catch(e => setError(e.message))
     }
     const diffs = f.diffs ?? []
+    // 代码模式：有 diff 的行不在卡片里展开，直接打开中栏的变更
+    const openDiff = (): void => {
+      if (ref) void openCodeDiff(ref, path).catch(e => setError(e.message))
+    }
     const openKey = prefix + path
     const expanded = diffs.length > 0 && open.has(openKey)
     const toggle = (): void =>
@@ -66,7 +83,7 @@ export function ChangedFilesCard({
                 : tr('session.ChangedFilesCard.openFileInPixel')
             }
             disabled={!diffs.length && !ref}
-            onClick={diffs.length ? toggle : openInEditor}
+            onClick={diffs.length ? (code && ref ? openDiff : toggle) : openInEditor}
           >
             {diffs.length > 0 && (
               <ChevronRight
@@ -138,6 +155,11 @@ export function ChangedFilesCard({
             onClick={() => comingSoon(tr('session.ChangedFilesCard.undo'))}
           >
             {tr('session.ChangedFilesCard.undo')}
+          </Button>
+        )}
+        {code && onKeepAll && (
+          <Button variant="ghost" className="h-7 px-2 text-meta" onClick={onKeepAll}>
+            {tr('coding.review.bar.keepAll')}
           </Button>
         )}
         {review && (

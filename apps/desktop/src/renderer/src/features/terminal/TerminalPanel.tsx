@@ -32,7 +32,16 @@ import { workspaceTerminals } from './workspace'
 import { demo } from '@/data/demo'
 import { scriptCommand } from '@pixelsky/protocol'
 
-export function TerminalPanel({ embedded = false, visible = true }: { embedded?: boolean; visible?: boolean }) {
+export function TerminalPanel({
+  embedded = false,
+  visible = true,
+  chrome = 'full',
+}: {
+  embedded?: boolean
+  visible?: boolean
+  /** 'bare' 不画自己的标题栏、边框和高度拖动条，给代码模式底部面板用（新建、分屏等按钮由底部面板提供） */
+  chrome?: 'full' | 'bare'
+}) {
   const { t, text } = useI18n(),
     ui = useTerminalUi(),
     state = useTerminalStore(),
@@ -160,21 +169,23 @@ export function TerminalPanel({ embedded = false, visible = true }: { embedded?:
     if (active && query) setFound(screens.get(active.id)?.find(query, backwards) ?? false)
   }
   const projectOptions = [{ value: '', label: t('terminal.chooseProject') }, ...visibleProjects]
+  const bare = chrome === 'bare'
   return (
     <section
       ref={panel}
       data-terminal-panel
-      hidden={!(embedded ? visible : ui.open)}
-      inert={!(embedded ? visible : ui.open)}
+      hidden={!(embedded || bare ? visible : ui.open)}
+      inert={!(embedded || bare ? visible : ui.open)}
       className={cn(
-        'terminal-panel min-h-0 shrink-0 flex-col border-t border-line-layout bg-panel',
-        (embedded ? visible : ui.open) ? 'flex' : 'hidden',
-        embedded && 'flex-1',
+        'terminal-panel min-h-0 shrink-0 flex-col bg-panel',
+        !bare && 'border-t border-line-layout',
+        (embedded || bare ? visible : ui.open) ? 'flex' : 'hidden',
+        (embedded || bare) && 'flex-1',
         !embedded && ui.maximized && 'terminal-panel-maximized',
       )}
-      style={{ height: embedded || ui.maximized ? undefined : Math.min(ui.height, maxHeight) }}
+      style={{ height: embedded || bare || ui.maximized ? undefined : Math.min(ui.height, maxHeight) }}
     >
-      {!embedded && !ui.maximized && (
+      {!embedded && !bare && !ui.maximized && (
         <ResizeHandle
           axis="y"
           scale={-1}
@@ -188,7 +199,10 @@ export function TerminalPanel({ embedded = false, visible = true }: { embedded?:
           onReset={() => ui.setHeight(280)}
         />
       )}
-      <header className="flex h-10 shrink-0 items-center gap-1 border-b border-line-layout px-3">
+      <header
+        hidden={bare}
+        className={cn('h-10 shrink-0 items-center gap-1 border-b border-line-layout px-3', bare ? 'hidden' : 'flex')}
+      >
         <Select
           label={t('terminal.project')}
           value={ui.projectId ?? ''}
@@ -432,7 +446,7 @@ export function TerminalPanel({ embedded = false, visible = true }: { embedded?:
             >
               <TerminalView
                 record={record}
-                visible={(embedded ? visible : ui.open) && shown}
+                visible={(embedded || bare ? visible : ui.open) && shown}
                 onPaste={ui.paste}
                 onFind={() => void ui.request('search', record.id)}
                 onCycle={cycle}

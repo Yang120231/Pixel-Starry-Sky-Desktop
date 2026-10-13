@@ -47,7 +47,6 @@ export const sidebarMessages = {
   'sidebar.mode.group': { zh: '界面模式', en: 'Layout mode' },
   'sidebar.mode.chat': { zh: '对话', en: 'Chat' },
   'sidebar.mode.code': { zh: '代码', en: 'Code' },
-  'sidebar.mode.codeWip': { zh: '代码模式制作中…', en: 'Code mode is in progress…' },
   'sidebar.runStatus.expand': { zh: '展开运行中和有新回复的会话', en: 'Show running sessions and new replies' },
   'sidebar.runStatus.list': { zh: '运行中和有新回复的会话', en: 'Running sessions and new replies' },
   'sidebar.runStatus.running': { zh: '运行中', en: 'Running' },

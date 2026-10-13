@@ -1,4 +1,5 @@
 import type { DirectoryListing, FileDocument, EditorState } from '../../../shared/types/workspace'
+import { CODING_FILES } from './coding'
 import { SHOWCASE_FILES } from './conversations'
 
 /** 明确标为演示的文件，仅 --demo 使用，不读写磁盘。 */
@@ -11,6 +12,8 @@ export const DEMO_FILES: Record<string, string> = {
   'package.json': '{\n  "name": "pixel-web",\n  "private": true\n}\n',
   // 对话展示里提到的文件（mock/conversations.ts），路径链接和改动卡片点得开
   ...SHOWCASE_FILES,
+  // 代码模式演示（mock/coding.ts）：编辑器里看到的是 AI 改完以后的内容
+  ...Object.fromEntries(Object.entries(CODING_FILES).map(([path, { after }]) => [path, after])),
 }
 export const DEMO_EDITOR_STATE: EditorState = {
   tools: [],

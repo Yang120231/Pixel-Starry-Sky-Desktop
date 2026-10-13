@@ -154,3 +154,19 @@
   height: 24px;
   border-radius: 4px;
 }
+
+/* 代码模式（docs/ui/coding-mode-impl.md §7 W3b）：极简下去阴影、小圆角 */
+:root[data-minimal='on'] [data-coding-topbar],
+:root[data-minimal='on'] [data-coding-stripe],
+:root[data-minimal='on'] [data-coding-status] {
+  box-shadow: none;
+  border-radius: 4px;
+}
+:root[data-minimal='on'] [data-ai-review-bar],
+:root[data-minimal='on'] [data-command-center] {
+  box-shadow: none;
+}
+:root[data-minimal='on'] [data-coding-stripe-button],
+:root[data-minimal='on'] [data-command-center-button] {
+  border-radius: 4px;
+}

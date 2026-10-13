@@ -24,6 +24,8 @@ export const ACTIONS = [
   { id: 'newTerminal', label: 'terminal.new', binding: key('Backquote', { shift: true }) },
   { id: 'toggleSidebar', label: 'settings.SettingsDialog.toggleSidebar', binding: key('KeyB') },
   { id: 'togglePanel', label: 'settings.SettingsDialog.toggleRightPanel', binding: key('KeyB', { alt: true }) },
+  // 代码模式的底部面板（docs/ui/coding-mode-impl.md）；对话模式里不处理
+  { id: 'toggleBottomPanel', label: 'coding.shell.toggleBottomPanel', binding: key('KeyJ') },
   { id: 'openSettings', label: 'settings.SettingsDialog.openSettings', binding: key('Comma') },
   { id: 'openSearch', label: 'search.SearchDialog.searchConversationsAndContent', binding: key('KeyP') },
   { id: 'findInConversation', label: 'content.find.label', binding: key('KeyF') },

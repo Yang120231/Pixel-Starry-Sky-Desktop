@@ -22,6 +22,8 @@ import { workspaceTerminals } from './workspace'
 import { getMachines, machineOf, selectMachine } from '@/features/machines/store'
 import { getPage, showWorkbench } from '@/features/layout/page'
 import { NEW_TERMINAL, TOGGLE_TERMINAL } from '@/features/layout/shortcuts'
+import { getAppMode } from '@/features/coding/mode'
+import { codingLayout, getCodingLayout } from '@/features/coding/layoutStore'
 
 type Action = 'rename' | 'close' | 'restart' | 'search' | 'clear'
 /** 左右分屏（docs/ui/files-search-terminal-pins.md §4.1）：两个终端 id 和左边所占比例 */
@@ -208,7 +210,16 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     if (ui.activeId) requestAnimationFrame(() => screens.get(ui.activeId!)?.focus())
   }
   const toggle = (): void => {
-    if (ui.open) {
+    // 代码模式：底栏开着而且停在终端标签时收起底栏；否则往下走「选中或新建」，openRightTab 会路由成 showBottom
+    const code = getAppMode() === 'code'
+    if (code) {
+      const bottom = getCodingLayout().bottom
+      if (bottom.open && bottom.tab === 'terminal') {
+        codingLayout.setOpen('bottom', false)
+        return
+      }
+    }
+    if (ui.open && !code) {
       setUi(v => ({ ...v, open: false }))
       setMaximized(false)
       window.dispatchEvent(new Event('pixelsky:hide-terminal'))

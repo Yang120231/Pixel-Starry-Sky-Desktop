@@ -15,7 +15,7 @@ import { SessionHeader } from '@/features/session/SessionHeader'
 import { useHeaderActions } from '@/features/session/SessionView'
 import { cn } from '@/ui'
 import { Toast } from '@/ui/Toast'
-import { isLive, setViewingSet, useEngineState, useSessionTitle } from '@/features/engine'
+import { useSessionTitle } from '@/features/engine'
 import {
   CLOSE_TAB,
   CYCLE_PANE,
@@ -38,7 +38,6 @@ import {
   isFileTab,
   parseFileTab,
   leaves,
-  visibleTabs,
   type Divider,
   type Rect,
 } from './tree'
@@ -150,25 +149,6 @@ export function Workspace(props: WorkspaceProps) {
     Object.keys(closing),
     [...panes].map(([id, r]) => [id, r.x, r.y, r.w, r.h]),
   ])
-
-  // 所有窗格里正在显示的会话都算「正在看」，回复完不标新回复
-  const visibleKey = visibleTabs(layout)
-    .filter(t => !isNewTab(t) && !isFileTab(t))
-    .join('|')
-  // 在协作频道页时没有会话算「正在看」，后台回复完照常标新回复（docs/ui/channels.md §2）
-  const page = usePage()
-  useEffect(() => setViewingSet(page === 'workbench' && visibleKey ? visibleKey.split('|') : []), [visibleKey, page])
-
-  // 真实引擎读出会话列表后，去掉已经不存在的会话标签（只做一次）
-  const ready = useEngineState(s => s.ready)
-  const sessions = useEngineState(s => s.sessions)
-  const pruned = useRef(false)
-  useEffect(() => {
-    if (!isLive || !ready || pruned.current) return
-    pruned.current = true
-    const ids = new Set(sessions.map(s => s.record.id))
-    paneActions.prune(tab => isNewTab(tab) || ids.has(tab))
-  }, [ready, sessions])
 
   // 窗格位置 / 大小的过渡期间在窗格区上标 data-pane-moving，结束后发 PANE_SETTLED（motion.ts）。
   // 直接改 DOM 属性，不走 state：标记本身不该引起重渲染

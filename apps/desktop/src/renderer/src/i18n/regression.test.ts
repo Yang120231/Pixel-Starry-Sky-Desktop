@@ -29,6 +29,7 @@ import { feedbackMessages } from '../../../shared/i18n/feedbackMessages'
 import { trayMessages } from '../../../shared/i18n/trayMessages'
 import { mobileMessages } from '../../../shared/i18n/mobileMessages'
 import { editorMessages } from '../../../shared/i18n/editorMessages'
+import { codingDictionaries } from '../../../shared/i18n/codingMessages'
 import { attachmentMessages } from '../../../shared/i18n/attachmentMessages'
 import { boardMessages } from '../../../shared/i18n/boardMessages'
 import { aiMessages } from '../../../shared/i18n/aiMessages'
@@ -69,6 +70,7 @@ const dictionaries: Record<string, Record<string, unknown>> = {
   trayMessages,
   mobileMessages,
   editorMessages,
+  ...codingDictionaries,
   attachmentMessages,
   boardMessages,
   aiMessages,

@@ -16,6 +16,8 @@ function action(id: ActionId): { readonly label: string; match: (e: KeyboardEven
 export const TOGGLE_SIDEBAR = action('toggleSidebar')
 /** 收起 / 展开右侧面板：默认 Ctrl+Alt+B（macOS ⌥⌘B），和 VS Code 的辅助侧栏一致 */
 export const TOGGLE_PANEL = action('togglePanel')
+/** 收起 / 展开代码模式的底部面板：默认 Ctrl+J（macOS ⌘J），只在代码模式生效 */
+export const TOGGLE_BOTTOM_PANEL = action('toggleBottomPanel')
 /** 打开设置：默认 Ctrl+,（macOS ⌘,） */
 export const OPEN_SETTINGS = action('openSettings')
 export const OPEN_SEARCH = action('openSearch')

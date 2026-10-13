@@ -10,6 +10,7 @@ import {
   showcaseSubagentTranscript,
   showcaseTaskOutput,
 } from './conversations'
+import { codingSnapshots } from './coding'
 import { workbenchSnapshots } from './workbench'
 import { demo } from './demo'
 import { DEMO_EDITOR_STATE, DEMO_FILES, demoDirectory, demoDocument } from './files'
@@ -53,7 +54,7 @@ export const demoSource: DemoSource = {
   terminal: { profiles: demoTerminalProfiles, output: demoTerminalOutput },
   sessions: demoSessions,
   conversations: {
-    snapshots: { ...showcaseSnapshots, ...workbenchSnapshots },
+    snapshots: { ...showcaseSnapshots, ...workbenchSnapshots, ...codingSnapshots },
     subagentTranscript: showcaseSubagentTranscript,
     taskOutput: showcaseTaskOutput,
     rewindPreview: demoRewindPreview,

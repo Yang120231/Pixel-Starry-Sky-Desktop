@@ -14,6 +14,7 @@ import type {
   GitRefs,
   GitStatus,
 } from '../../../shared/types/project-tools'
+import { CODING_FILES } from './coding'
 
 const file = (path: string, code: GitFileChange['code'], origPath: string | null = null): GitFileChange => ({
   path,
@@ -41,8 +42,10 @@ export const demoGitStatus: GitStatus = {
     file('src/settings/AccountForm.tsx', 'M'),
     file('src/settings/AppearanceForm.tsx', 'M'),
     file('src/legacy/OldForm.tsx', 'D'),
+    file('src/session/SessionHeader.tsx', 'M'),
+    file('src/machines/store.ts', 'M'),
   ],
-  untracked: [file('docs/表单迁移.md', '?')],
+  untracked: [file('docs/表单迁移.md', '?'), file('src/machines/MachineSwitch.tsx', '?')],
   truncated: false,
   operation: null,
   fetchedAt: Date.now() - 6 * 60_000,
@@ -124,6 +127,8 @@ export function AccountForm() {
 }
 `
 export function demoGitDiff(path: string): GitDiff {
+  const coding = CODING_FILES[path]
+  if (coding) return { path, original: coding.before, modified: coding.after, binary: false, tooLarge: false }
   if (path.endsWith('AccountForm.tsx'))
     return { path, original: before, modified: after, binary: false, tooLarge: false }
   if (path.endsWith('useField.ts'))

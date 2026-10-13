@@ -24,6 +24,7 @@ import { feedbackMessages } from './feedbackMessages'
 import { trayMessages } from './trayMessages'
 import { mobileMessages } from './mobileMessages'
 import { editorMessages } from './editorMessages'
+import { codingMessages } from './codingMessages'
 import { attachmentMessages } from './attachmentMessages'
 import { boardMessages } from './boardMessages'
 import { aiMessages } from './aiMessages'
@@ -65,6 +66,7 @@ export const allMessages = {
   ...trayMessages,
   ...mobileMessages,
   ...editorMessages,
+  ...codingMessages,
   ...attachmentMessages,
   ...boardMessages,
   ...aiMessages,

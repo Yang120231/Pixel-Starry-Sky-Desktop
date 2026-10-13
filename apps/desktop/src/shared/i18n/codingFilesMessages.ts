@@ -1,0 +1,21 @@
+export const codingFilesMessages = {
+  'coding.files.title': { zh: '文件', en: 'Files' },
+  'coding.files.openSearch': { zh: '搜索', en: 'Search' },
+  'coding.files.noProject': { zh: '还没有项目', en: 'No project yet' },
+  'coding.files.aiTurn': { zh: 'AI 这一轮改的', en: 'Changed by AI this turn' },
+  'coding.files.aiTurnRunning': { zh: '进行中', en: 'In progress' },
+  'coding.files.aiTurnOpen': { zh: '查看 {name} 的改动', en: 'View changes in {name}' },
+  'coding.files.search.placeholder': { zh: '在项目里搜索', en: 'Search in project' },
+  'coding.files.search.scope': { zh: '搜索范围', en: 'Search scope' },
+  'coding.files.search.scopeName': { zh: '文件名', en: 'File name' },
+  'coding.files.search.scopeContent': { zh: '内容', en: 'Content' },
+  'coding.files.search.clear': { zh: '清除', en: 'Clear' },
+  'coding.files.search.searching': { zh: '正在搜索…', en: 'Searching...' },
+  'coding.files.search.empty': { zh: '输入关键字开始搜索', en: 'Type to search' },
+  'coding.files.search.noMatch': { zh: '没有找到匹配项', en: 'No matches' },
+  'coding.files.search.truncated': {
+    zh: '结果太多，只显示一部分，请缩小范围',
+    en: 'Too many results; showing part of them',
+  },
+  'coding.files.search.failed': { zh: '搜索失败：{message}', en: 'Search failed: {message}' },
+}

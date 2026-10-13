@@ -9,6 +9,7 @@ import type { WorkspaceRef } from '../../../../shared/types/workspace'
 import { isDemo, projects } from '@/data'
 import { translateMessage, tr } from '@/i18n/core'
 import { demo } from '@/data/demo'
+import { createHistory, HISTORY_LIMIT_BYTES, type DataEvent, type TerminalHistory } from './history'
 
 interface State extends TerminalState {
   ready: boolean
@@ -17,9 +18,25 @@ interface State extends TerminalState {
 let state: State = { profiles: [], defaultProfileId: '', terminals: [], ready: false, error: null }
 const listeners = new Set<() => void>()
 let init: Promise<void> | null = null
-type DataEvent = Extract<TerminalEvent, { type: 'data' }>
 const sinks = new Map<string, (event: DataEvent) => void>()
 const pending = new Map<string, DataEvent[]>()
+/** 每个终端最近 512 KiB 的输出，视图（含代码模式底部）挂上时整段重放 */
+const histories = new Map<string, TerminalHistory>()
+const historyListeners = new Set<() => void>()
+let historyTimer: ReturnType<typeof setTimeout> | null = null
+function notifyHistory(): void {
+  if (historyTimer) return
+  historyTimer = setTimeout(() => {
+    historyTimer = null
+    historyListeners.forEach(fn => fn())
+  }, 500)
+}
+function recordHistory(value: DataEvent): void {
+  let history = histories.get(value.terminalId)
+  if (!history) histories.set(value.terminalId, (history = createHistory(HISTORY_LIMIT_BYTES)))
+  history.push(value)
+  notifyHistory()
+}
 function set(patch: Partial<State>): void {
   state = { ...state, ...patch }
   listeners.forEach(fn => fn())
@@ -48,6 +65,7 @@ function event(value: TerminalEvent): void {
     readyWaiters.delete(value.terminalId)
     waiter()
   }
+  recordHistory(value)
   const sink = sinks.get(value.terminalId)
   if (sink) sink(value)
   else {
@@ -88,9 +106,9 @@ export function terminalState(): State {
 }
 export function consumeTerminal(id: string, sink: (e: DataEvent) => void): () => void {
   sinks.set(id, sink)
-  const queue = pending.get(id)
+  // pending 里的数据在到达时已经写进历史，所以只重放历史；视图按 seq 去重，重复 ack 是安全的
   pending.delete(id)
-  queue?.forEach(sink)
+  histories.get(id)?.events().slice().forEach(sink)
   return () => {
     if (sinks.get(id) === sink) sinks.delete(id)
   }
@@ -157,6 +175,8 @@ export async function terminalRename(id: string, title: string): Promise<void> {
 export async function terminalClose(id: string, force = false): Promise<void> {
   if (!isDemo) await window.pixelsky!.terminal.close(id, force)
   pending.delete(id)
+  histories.delete(id)
+  notifyHistory()
   seenOutput.delete(id)
   readyWaiters.delete(id)
   set({ terminals: state.terminals.filter(r => r.id !== id) })
@@ -196,4 +216,16 @@ export function terminalRunWhenReady(id: string, command: string): void {
 export function demoWrite(id: string, data: string): void {
   const record = state.terminals.find(r => r.id === id)
   if (record) event({ type: 'data', terminalId: id, generation: record.generation, seq: Date.now(), data })
+}
+
+/** 终端的滚动历史文本（已去掉 ANSI），给「AI 命令」「输出」等只读视图用 */
+export function terminalHistoryText(id: string): string {
+  return histories.get(id)?.text() ?? ''
+}
+/** 历史变化时通知（节流 500ms）；返回退订函数 */
+export function subscribeTerminalHistory(fn: () => void): () => void {
+  historyListeners.add(fn)
+  return () => {
+    historyListeners.delete(fn)
+  }
 }

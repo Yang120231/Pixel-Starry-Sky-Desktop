@@ -28,6 +28,7 @@ import {
   type TranscriptPlace,
 } from './transcriptPlaces'
 import { useLightweight } from '@/features/recovery/lightweight'
+import { markTurnReviewed, useTurnReviewed } from '@/features/coding/review'
 import type { Item, SessionSnapshot } from '@pixelsky/protocol'
 import { Spinner, cn } from '@/ui'
 import type { ChangedFiles } from '@/data'
@@ -133,8 +134,21 @@ const TurnChanges = memo(function TurnChanges({
     () => (sessionId ? () => reviewTurn(sessionId, turnKey === 'start' ? null : turnKey) : undefined),
     [sessionId, turnKey],
   )
+  // 代码模式「全部保留」：整轮标记为已审查，点过后按钮收起
+  const keepAll = useMemo(
+    () => (sessionId ? () => markTurnReviewed(sessionId, turnKey) : undefined),
+    [sessionId, turnKey],
+  )
+  const kept = useTurnReviewed(sessionId, turnKey)
   return (
-    <ChangedFilesCard className="conversation-message" data={data} target={target} style={style} onReview={review} />
+    <ChangedFilesCard
+      className="conversation-message"
+      data={data}
+      target={target}
+      style={style}
+      onReview={review}
+      onKeepAll={kept ? undefined : keepAll}
+    />
   )
 })
 

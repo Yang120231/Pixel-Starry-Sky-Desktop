@@ -56,6 +56,8 @@
   --code-inline-text: #a8402f;
   --code-inline-bg: rgba(168, 64, 47, 0.07);
   --success: #2f7d4f;
+  /* 代码模式 Git 颜色里的「已修改」蓝（A 绿 / D 红沿用 success / danger） */
+  --diff-modified: #6f93c9;
   /* 进行中（工具调用、待办、子智能体的橙色圆点）；和主色分开，各配色通用 */
   --active: #d9730d;
   --danger: #b8463f;
@@ -188,6 +190,7 @@
   --code-inline-text: #ec9a87;
   --code-inline-bg: rgba(236, 154, 135, 0.1);
   --success: #6fcf97;
+  --diff-modified: #6b8fc4;
   --active: #f0883e;
   --danger: #f0857d;
   --notify: #f0675e;

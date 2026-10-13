@@ -2,6 +2,7 @@ import { translateMessage } from '../../i18n/core'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import type { Extension } from '@codemirror/state'
 import { Eye, FileText, Globe, RefreshCw, Save, FolderTree, WrapText, Columns2 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -32,11 +33,20 @@ export function FileEditor({
   active,
   explorer,
   onMoveToChat,
+  extensions,
+  footer = true,
+  crumbExtra,
 }: {
   id: string
   active: boolean
   explorer?: ReactNode
   onMoveToChat?: () => void
+  /** 代码模式的审查、透镜等扩展，原样传给 CodeEditor */
+  extensions?: readonly Extension[]
+  /** 为 false 时隐藏页脚（代码模式由状态栏代替） */
+  footer?: boolean
+  /** 面包屑后面的附加内容（代码模式的符号和问题计数） */
+  crumbExtra?: ReactNode
 }) {
   useI18n()
   const [treeOpen, setTreeOpen] = useState(() => localStorage.getItem('pixelsky.editor.tree') !== 'false')
@@ -88,6 +98,7 @@ export function FileEditor({
     >
       <div className="flex h-10 shrink-0 items-center gap-1 border-b border-line-layout px-3">
         <FileBreadcrumbs tab={tab} />
+        {crumbExtra}
         {fileLanguage(tab.path) === 'Markdown' && (
           <IconButton
             icon={Eye}
@@ -220,7 +231,7 @@ export function FileEditor({
           {doc?.kind === 'text' ? (
             <>
               <div className={preview ? 'hidden' : 'flex min-h-0 flex-1'} inert={preview}>
-                <CodeEditor tab={tab} active={active && !preview} wordWrap={wordWrap} />
+                <CodeEditor tab={tab} active={active && !preview} wordWrap={wordWrap} extensions={extensions} />
               </div>
               {preview && (
                 <div
@@ -230,18 +241,20 @@ export function FileEditor({
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{tab.draft}</ReactMarkdown>
                 </div>
               )}
-              <footer className="flex min-h-7 shrink-0 flex-wrap items-center justify-end gap-x-3 border-t border-line-layout px-3 py-1 text-label text-fg-muted">
-                {tab.saving && <span className="mr-auto">{tr('editor.FileEditor.saving')}</span>}
-                {dirtyFile(tab) && !tab.saving && <span className="mr-auto">{tr('editor.FileEditor.unsaved')}</span>}
-                <span>
-                  {tr('editor.FileEditor.ln')} {tab.cursor.line}
-                  {tr('editor.FileEditor.col')} {tab.cursor.column}
-                </span>
-                <span>{fileLanguage(tab.path)}</span>
-                <span>UTF-8{doc.bom ? ' BOM' : ''}</span>
-                <span>{doc.newline.toUpperCase()}</span>
-                <span>{fileIndent(tab.draft).label}</span>
-              </footer>
+              {footer && (
+                <footer className="flex min-h-7 shrink-0 flex-wrap items-center justify-end gap-x-3 border-t border-line-layout px-3 py-1 text-label text-fg-muted">
+                  {tab.saving && <span className="mr-auto">{tr('editor.FileEditor.saving')}</span>}
+                  {dirtyFile(tab) && !tab.saving && <span className="mr-auto">{tr('editor.FileEditor.unsaved')}</span>}
+                  <span>
+                    {tr('editor.FileEditor.ln')} {tab.cursor.line}
+                    {tr('editor.FileEditor.col')} {tab.cursor.column}
+                  </span>
+                  <span>{fileLanguage(tab.path)}</span>
+                  <span>UTF-8{doc.bom ? ' BOM' : ''}</span>
+                  <span>{doc.newline.toUpperCase()}</span>
+                  <span>{fileIndent(tab.draft).label}</span>
+                </footer>
+              )}
             </>
           ) : doc?.kind === 'image' ? (
             <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-4">

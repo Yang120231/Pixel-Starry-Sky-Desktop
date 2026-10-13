@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { isDemo } from '@/data'
+import { getAppMode } from '@/features/coding/mode'
 import {
   activatePanelTab,
   emptyPanel,
@@ -97,6 +98,11 @@ export function replacePanelFile(from: string, to: string): void {
   emit()
 }
 export function openRightTab(id: string | ToolId, scope = currentScope): void {
+  // 代码模式：只发事件，由 coding/routing.ts 落到对应的栏；不动对话模式右栏的标签和开合状态
+  if (getAppMode() === 'code') {
+    window.dispatchEvent(new CustomEvent(OPEN_RIGHT_WORKSPACE, { detail: { id, scope } }))
+    return
+  }
   if (id.startsWith('file:'))
     contexts = Object.fromEntries(
       Object.entries(contexts).map(([key, layout]) => [key, key === scope ? layout : removePanelTabs(layout, [id])]),

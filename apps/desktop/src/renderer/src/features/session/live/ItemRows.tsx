@@ -38,6 +38,8 @@ import { CodeBlock } from '@/ui/code/CodeBlock'
 import { freshRequest, useExpandRequest } from '@/features/search/expand'
 import { openFile } from '@/features/files/store'
 import { getActiveWorkspace } from '@/features/editor/target'
+import { useAppMode } from '@/features/coding/mode'
+import { revealAiCommand } from '@/features/coding/bottom'
 import { ImageAttachments } from '@/features/session/attachments/ImageAttachments'
 import { FileAttachments } from '@/features/session/attachments/FileAttachments'
 import { Markdown } from '@/ui/markdown/Markdown'
@@ -463,6 +465,7 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
   const row = useRef<HTMLDivElement>(null)
   const [fileError, setFileError] = useState('')
   const openTrace = useOpenTrace()
+  const code = useAppMode() === 'code'
   const openChangedFile = (change: FileChange): void => {
     const sessionId = row.current?.closest<HTMLElement>('[data-search-session]')?.dataset.searchSession
     const ref = sessionId ? { sessionId } : getActiveWorkspace().ref
@@ -487,6 +490,20 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
           expandable={!!item.output}
           open={open}
           onToggle={toggle}
+          action={
+            code && (
+              <button
+                type="button"
+                onClick={() => {
+                  const sessionId = row.current?.closest<HTMLElement>('[data-search-session]')?.dataset.searchSession
+                  if (sessionId) revealAiCommand(sessionId, item.id)
+                }}
+                className="shrink-0 rounded-md px-2 py-1 text-meta text-accent-fg hover:bg-hover"
+              >
+                {tr('coding.shell.viewInTerminal')}
+              </button>
+            )
+          }
           trailing={
             <>
               <StatusMark status={item.status} />

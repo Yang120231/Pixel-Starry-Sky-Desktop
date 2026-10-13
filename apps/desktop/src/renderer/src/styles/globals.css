@@ -46,6 +46,7 @@
   --color-code-inline: var(--code-inline-text);
   --color-code-inline-bg: var(--code-inline-bg);
   --color-success: var(--success);
+  --color-diff-modified: var(--diff-modified);
   --color-active: var(--active);
   --color-danger: var(--danger);
   --color-notify: var(--notify);
@@ -354,6 +355,10 @@
 }
 .collapsible-slot[data-open] {
   transition-duration: var(--dur-expand);
+}
+/* 代码模式的底部面板：同一个容器改高度动画（ui/CollapsibleSlot.tsx side="bottom"） */
+.collapsible-slot[data-side='bottom'] {
+  transition-property: height;
 }
 .sidebar-history-content {
   display: grid;

@@ -4,6 +4,7 @@ import type { AppData } from '@/data/types'
 import { COMPOSER, RAIL_ITEMS } from '@/data/constants'
 import { demoChannelMembers, demoChannelMessages, demoChannels } from './channels'
 import { SHOWCASE_PROJECT, SHOWCASE_SESSIONS, showcaseSnapshots } from './conversations'
+import { CODING_SESSION } from './coding'
 
 // 参考图改动卡片里两个文件的 diff（点文件行展开，docs/ui/changes-inline-diff.md）；行数和卡片上的 +27 −8、+15 −2 对得上
 const COMPOSER_DIFFS = [
@@ -97,6 +98,7 @@ export const demo: AppData = {
       running: true,
       expanded: true,
       sessions: [
+        CODING_SESSION,
         { id: 's-hhh', title: 'hhh', status: 'idle', time: '刚刚' },
         { id: 's-redesign', title: '重构网页版工作台为 Codex 式布局', status: 'unread', pinnedAt: 1 },
         { id: 's-settings-form', title: '设置页迁移到新的表单组件', status: 'running' },

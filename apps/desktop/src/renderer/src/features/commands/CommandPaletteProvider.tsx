@@ -4,6 +4,7 @@ import { createPortal, flushSync } from 'react-dom'
 import {
   Bell,
   BellOff,
+  Code2,
   Command,
   File,
   FolderOpen,
@@ -60,6 +61,8 @@ import { getFiles, saveFile, showFiles } from '@/features/files/store'
 import { quoteSelection } from '@/features/editor/code/CodeEditor'
 import { isDemo, projects } from '@/data'
 import { rankCommands } from './rank'
+import { getAppMode, setAppMode } from '@/features/coding/mode'
+import { codingLayout } from '@/features/coding/layoutStore'
 import { demoSessionChanges } from '@/data/demo'
 
 interface CommandItem {
@@ -73,6 +76,7 @@ interface CommandItem {
   valid?: () => boolean
   run: () => void | boolean | Promise<unknown>
 }
+const PANE_COMMANDS = new Set(['pane.right', 'pane.down', 'pane.maximize', 'pane.close', 'pane.next'])
 const Context = createContext<{ open(): void; isOpen: boolean } | null>(null)
 const HISTORY_KEY = isDemo ? 'pixelsky.command-history.demo' : 'pixelsky.command-history'
 function history(): string[] {
@@ -521,6 +525,39 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
       ['system', 'palette.system'],
     ] as const)
       add('theme.' + mode, key, 'terminal.categorySettings', Palette, () => theme.setPreference(mode))
+    // 代码模式（docs/ui/coding-mode-impl.md §7 W3a）
+    const code = getAppMode() === 'code'
+    add(
+      'mode.switch',
+      code ? 'coding.shell.cmd.modeChat' : 'coding.shell.cmd.modeCode',
+      'terminal.categoryWorkbench',
+      code ? MessageSquare : Code2,
+      () => setAppMode(code ? 'chat' : 'code'),
+    )
+    if (code) {
+      const cat = 'terminal.categoryWorkbench'
+      add('coding.toggleLeft', 'coding.shell.cmd.toggleLeft', cat, PanelLeft, () => codingLayout.toggle('left'))
+      add('coding.toggleRight', 'coding.shell.cmd.toggleRight', cat, PanelRight, () => codingLayout.toggle('right'))
+      add(
+        'coding.toggleBottom',
+        'coding.shell.toggleBottomPanel',
+        cat,
+        TerminalSquare,
+        () => codingLayout.toggle('bottom'),
+        'Ctrl+J',
+      )
+      add('coding.viewFiles', 'coding.shell.cmd.viewFiles', cat, FolderOpen, () => codingLayout.showLeft('files'))
+      add('coding.viewSearch', 'coding.shell.cmd.viewSearch', cat, Search, () => codingLayout.showLeft('search'))
+      add('coding.viewGit', 'coding.shell.cmd.viewGit', cat, GitBranch, () => codingLayout.showLeft('git'))
+      add('coding.viewConversations', 'coding.shell.cmd.viewConversations', cat, MessageSquare, () =>
+        codingLayout.showLeft('conversations'),
+      )
+      add('coding.aiCommands', 'coding.shell.cmd.aiCommands', cat, TerminalSquare, () =>
+        codingLayout.showBottom('aiCommands'),
+      )
+      // 代码模式没有窗格，分屏 / 缩放 / 关闭窗格的命令不显示
+      return items.filter(item => !PANE_COMMANDS.has(item.id))
+    }
     return items
   }
   const close = useCallback((restore = true): void => {
