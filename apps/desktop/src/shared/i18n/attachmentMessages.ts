@@ -7,8 +7,8 @@ export const attachmentMessages = {
     en: '{p0} is too large. Files must be 50 MB or smaller',
   },
   'composer.file.binary': {
-    zh: '{p0} 不能直接发给智能体（支持文本、日志、代码、配置文件，以及 Word、Excel、PPT、PDF 文档）',
-    en: '{p0} can’t be sent to the agent (text, logs, code, config files and Word, Excel, PowerPoint and PDF documents are supported)',
+    zh: '{p0} 不能直接发给智能体（支持文本、日志、代码、配置文件，以及 Word、Excel、PPT、PDF、OpenDocument、RTF、EPUB 文档）',
+    en: '{p0} can’t be sent to the agent (text, logs, code, config files and Word, Excel, PowerPoint, PDF, OpenDocument, RTF and EPUB documents are supported)',
   },
   // 从文档提取文字（docs/ui/composer-file-attachments.md §7）
   'composer.file.legacyOffice': {
@@ -23,6 +23,8 @@ export const attachmentMessages = {
     zh: '{p0} 是压缩包，不能直接添加；解压后把需要的文件拖进来',
     en: '{p0} is an archive and can’t be added. Extract it and add the files you need',
   },
+  'composer.file.archiveList': { zh: '里面有 {p0} 个文件：{p1}', en: '{p0} files inside: {p1}' },
+  'composer.file.listSep': { zh: '、', en: ', ' },
   'composer.file.notDocument': {
     zh: '{p0} 不是能读的 Office 文件：可能被公司的文档加密软件加过密，或者文件坏了。用 Word / Excel / PowerPoint 打开后另存一份再添加',
     en: '{p0} isn’t a readable Office file: it may be protected by document-encryption software, or damaged. Open it and save a copy, then add that',
@@ -70,6 +72,9 @@ export const attachmentMessages = {
   'composer.extract.emptySheet': { zh: '（空表）', en: '(empty)' },
   'composer.extract.slide': { zh: '第 {p0} 页', en: 'Slide {p0}' },
   'composer.extract.notes': { zh: '备注', en: 'Notes' },
+  'composer.extract.output': { zh: '输出', en: 'Output' },
+  'composer.extract.outputCut': { zh: '…（输出太长，后面没带）', en: '… (output too long; the rest is left out)' },
+  'composer.extract.imageOutput': { zh: '（图片输出，没带）', en: '(image output, not included)' },
   'composer.file.tooMany': { zh: '一条消息最多添加 10 个文件', en: 'You can add up to 10 files per message' },
   'composer.file.totalTooLarge': {
     zh: '文件内容合计不能超过 300 KB，请移除一些文件',

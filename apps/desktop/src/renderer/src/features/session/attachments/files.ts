@@ -10,13 +10,16 @@ import {
   type FileAttachment,
 } from '@pixelsky/protocol'
 import { tr } from '@/i18n/core'
-import { containerOf, readDocument } from './extract'
+import { containerOf, documentAttachment, readDocument } from './extract'
+import { htmlTitle, htmlToText } from './extract/html'
+import { ipynbText } from './extract/ipynb'
 import { readPdf } from './extract/pdf'
+import { isRtf, readRtf } from './extract/rtf'
 
 type Encoding = FileAttachment['encoding']
 
 const IMAGE_EXT = /\.(png|jpe?g|webp|gif)$/i
-const OFFICE_EXT = /\.(docx|xlsx|pptx|docm|xlsm|pptm)$/i
+const OFFICE_EXT = /\.(docx|xlsx|pptx|docm|xlsm|pptm|odt|ods|odp|epub)$/i
 /** 按类型和扩展名分：图片走图片附件，其余当文本文件读（读的时候再按内容判断） */
 export const isImageFile = (file: File): boolean =>
   (IMAGE_MEDIA_TYPES as readonly string[]).includes(file.type) || (!file.type && IMAGE_EXT.test(file.name))
@@ -96,12 +99,24 @@ export async function readTextFile(file: File): Promise<FileAttachment> {
   // Word / Excel / PPT 这类：提取文字（docs/ui/composer-file-attachments.md §7）
   const container = containerOf(head)
   if (container) return readDocument(file, container)
+  if (isRtf(head)) return readRtf(file)
   const kind = sniff(head.subarray(0, 8192))
   // 扩展名是 Office 文档、内容却不是 zip：多半被加密软件加过密（透明加密），或者坏了
   if ((kind === 'binary' || kind === 'image') && OFFICE_EXT.test(file.name))
     throw new Error(tr('composer.file.notDocument', { p0: file.name }))
   if (kind === 'pdf') return readPdf(file)
   if (kind === 'binary' || kind === 'image') throw new Error(tr('composer.file.binary', { p0: file.name }))
+  // 是文字、但发原样不划算的（§7.3）：笔记本按单元格写；网页太大（原样会被截断）时只留正文
+  const wholeText = async (): Promise<string> => decodeAll([new Uint8Array(await file.arrayBuffer())], kind).texts[0]
+  if (/\.ipynb$/i.test(file.name)) {
+    const text = ipynbText(await wholeText())
+    if (text !== null) return documentAttachment(file, 'ipynb', text)
+  }
+  if (/\.(html?|xhtml)$/i.test(file.name) && file.size > FILE_INLINE_BYTES) {
+    const html = await wholeText()
+    const title = htmlTitle(html)
+    return documentAttachment(file, 'html', `${title ? `# ${title}\n\n` : ''}${htmlToText(html)}`)
+  }
   const base = { id: crypto.randomUUID(), name: file.name || 'file.txt', bytes: file.size }
   if (whole) {
     const { encoding, texts } = decodeAll([head], kind)

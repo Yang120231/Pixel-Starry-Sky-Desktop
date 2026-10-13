@@ -1,8 +1,11 @@
 // 不是纯文本的文件：提取文字当文本附件发（docs/ui/composer-file-attachments.md §7）。按文件开头的字节认：
-// zip 包里有 word/ xl/ ppt/ 的是 Word / Excel / PPT；OLE 复合文档是旧版 Office 或加了密码的新版 Office
+// zip 包里有 word/ xl/ ppt/ 的是 Word / Excel / PPT，mimetype 写着 OpenDocument / EPUB 的是那两种，其余是普通压缩包；
+// OLE 复合文档是旧版 Office 或加了密码的新版 Office
 import type { FileAttachment, FileSource } from '@pixelsky/protocol'
 import { tr } from '@/i18n/core'
 import { DOCX_PARTS, docxText } from './docx'
+import { EPUB_PARTS, epubText, isEpub } from './epub'
+import { ODF_PARTS, odfEncrypted, odfKind, odfText } from './odf'
 import { PPTX_PARTS, pptxText } from './pptx'
 import { XLSX_PARTS, xlsxText } from './xlsx'
 import { unzipEntries } from './zip'
@@ -27,7 +30,18 @@ const LEGACY: Record<string, [app: string, to: string]> = {
   ppt: ['PowerPoint', '.pptx'],
 }
 
-const wanted = (name: string): boolean => DOCX_PARTS.includes(name) || XLSX_PARTS(name) || PPTX_PARTS(name)
+const wanted = (name: string): boolean =>
+  DOCX_PARTS.includes(name) || XLSX_PARTS(name) || PPTX_PARTS(name) || ODF_PARTS.includes(name) || EPUB_PARTS(name)
+
+/** 普通压缩包：说清楚不能直接加，列出里面前 50 个文件，方便知道该解压哪几个 */
+export const ARCHIVE_LIST_LIMIT = 50
+function archiveError(name: string, files: string[]): Error {
+  const shown = files.slice(0, ARCHIVE_LIST_LIMIT).join(tr('composer.file.listSep'))
+  const list = files.length
+    ? `\n${tr('composer.file.archiveList', { p0: files.length, p1: shown + (files.length > ARCHIVE_LIST_LIMIT ? '…' : '') })}`
+    : ''
+  return new Error(tr('composer.file.archive', { p0: name }) + list)
+}
 
 /** 认出来、提取；认不出的格式给出能看懂的说法 */
 export async function readDocument(file: File, container: Container): Promise<FileAttachment> {
@@ -57,5 +71,9 @@ export async function readDocument(file: File, container: Container): Promise<Fi
   if (zip.has('word/document.xml')) return extract('docx', () => docxText(zip))
   if (zip.has('xl/workbook.xml')) return extract('xlsx', () => xlsxText(zip))
   if (zip.has('ppt/presentation.xml')) return extract('pptx', () => pptxText(zip))
-  throw new Error(tr('composer.file.archive', { p0: file.name }))
+  const odf = odfKind(zip)
+  if (odf && odfEncrypted(zip)) throw new Error(tr('composer.file.encrypted', { p0: file.name }))
+  if (odf) return extract(odf, () => odfText(zip, odf))
+  if (isEpub(zip)) return extract('epub', () => epubText(zip))
+  throw archiveError(file.name, zip.all)
 }

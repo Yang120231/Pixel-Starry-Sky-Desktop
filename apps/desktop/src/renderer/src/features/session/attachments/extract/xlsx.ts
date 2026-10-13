@@ -76,8 +76,12 @@ export function sheetRows(sheet: XmlNode, strings: string[], dates: Kind[]): str
     }
     rows[r] = cells
   }
-  // 去掉整行空的、整列空的
-  const filled = rows.filter(r => r?.some(v => v?.trim()))
+  return compactRows(rows)
+}
+
+/** 去掉整行空的、整列空的 */
+export function compactRows(rows: (string[] | undefined)[]): string[][] {
+  const filled = rows.filter((r): r is string[] => !!r?.some(v => v?.trim()))
   const width = Math.max(0, ...filled.map(r => r.length))
   const used = Array.from({ length: width }, (_, i) => filled.some(r => r[i]?.trim()))
   return filled.map(r => used.flatMap((u, i) => (u ? [r[i] ?? ''] : [])))
@@ -106,22 +110,23 @@ export function xlsxText(zip: ZipEntries): string {
     const path = rels.get(sheet.attrs.id)
     const xml = path && zip.text(path)
     if (!xml) continue
-    const rows = sheetRows(parseXml(xml), strings, dates)
-    const name = sheet.attrs.name ?? ''
-    if (!rows.length) {
-      sections.push(`## ${tr('composer.extract.sheet', { p0: name })}\n${tr('composer.extract.emptySheet')}`)
-      continue
-    }
-    const shown = rows.slice(0, SHEET_ROW_LIMIT)
-    const note =
-      rows.length > SHEET_ROW_LIMIT
-        ? `\n${tr('composer.extract.sheetLimit', { p0: SHEET_ROW_LIMIT, p1: rows.length })}`
-        : ''
-    sections.push(
-      `## ${tr('composer.extract.sheet', { p0: name })}（${tr('composer.extract.sheetSize', { p0: rows.length, p1: rows[0].length })}）\n` +
-        shown.map(r => r.map(csvCell).join(',')).join('\n') +
-        note,
-    )
+    sections.push(sheetSection(sheet.attrs.name ?? '', sheetRows(parseXml(xml), strings, dates)))
   }
   return sections.join('\n\n')
+}
+
+/** 一个表一节：名字、几行几列、CSV；最多带 200 行，写明一共多少行（OpenDocument 表格也用） */
+export function sheetSection(name: string, rows: string[][]): string {
+  const title = `## ${tr('composer.extract.sheet', { p0: name })}`
+  if (!rows.length) return `${title}\n${tr('composer.extract.emptySheet')}`
+  const shown = rows.slice(0, SHEET_ROW_LIMIT)
+  const note =
+    rows.length > SHEET_ROW_LIMIT
+      ? `\n${tr('composer.extract.sheetLimit', { p0: SHEET_ROW_LIMIT, p1: rows.length })}`
+      : ''
+  return (
+    `${title}（${tr('composer.extract.sheetSize', { p0: rows.length, p1: rows[0].length })}）\n` +
+    shown.map(r => r.map(csvCell).join(',')).join('\n') +
+    note
+  )
 }
