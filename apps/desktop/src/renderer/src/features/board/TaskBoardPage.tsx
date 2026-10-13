@@ -124,7 +124,7 @@ export function TaskBoardPage() {
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'n') {
         e.preventDefault()
         startCreate()
-      } else if (e.key === '/' && !typing) {
+      } else if (e.key === '/' && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault()
         search.current?.focus()
       }

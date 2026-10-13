@@ -1,6 +1,7 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { useEffect, useRef, type ReactNode } from 'react'
 import { cn } from './cn'
+import { isTypingTarget, pickByDigit } from './menuDigit'
 
 interface PopoverProps {
   open: boolean
@@ -10,7 +11,7 @@ interface PopoverProps {
   children: ReactNode
 }
 
-/** 简单弹出层：点外面或按 Esc 关闭 */
+/** 简单弹出层：点外面或按 Esc 关闭；焦点不在输入框里时按 1–9 选第 N 个菜单项（带 data-menu-item 的，PopoverItem 自带） */
 export function Popover({ open, onClose, className, children }: PopoverProps) {
   useI18n()
   const ref = useRef<HTMLDivElement>(null)
@@ -21,6 +22,8 @@ export function Popover({ open, onClose, className, children }: PopoverProps) {
     }
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
+      else if (!e.defaultPrevented && ref.current && !isTypingTarget(document.activeElement))
+        pickByDigit(e, [...ref.current.querySelectorAll<HTMLElement>('[data-menu-item]:not(:disabled)')])
     }
     document.addEventListener('mousedown', onDown)
     document.addEventListener('keydown', onKey)
@@ -60,6 +63,7 @@ export function PopoverItem({ icon, selected, onClick, hint, disabled, title, ch
   return (
     <button
       type="button"
+      data-menu-item
       onClick={onClick}
       disabled={disabled}
       title={title}

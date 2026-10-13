@@ -8,6 +8,7 @@ import {
   File,
   FolderOpen,
   GitBranch,
+  Keyboard,
   LayoutDashboard,
   ListChecks,
   Package,
@@ -37,6 +38,7 @@ import {
   COMMAND_PALETTE,
   OPEN_SEARCH,
   QUOTE_SELECTION,
+  SHORTCUTS_HELP,
   SPLIT_DOWN,
   SPLIT_RIGHT,
   TOGGLE_PANEL,
@@ -44,6 +46,7 @@ import {
   ZOOM_PANE,
 } from '@/features/layout/shortcuts'
 import { getPaneState, paneActions } from '@/features/panes/store'
+import { SHORTCUTS_HELP_EVENT } from '@/features/layout/ShortcutsHelp'
 import { getPage, setPage, showWorkbench } from '@/features/layout/page'
 import { getNotificationPrefs, setNotificationPrefs } from '@/features/settings/notifications'
 import { requestGitAction } from '@/features/panel/git/GitPanel'
@@ -479,6 +482,14 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
       add('settings.' + section, key, 'terminal.categorySettings', Settings, () =>
         settings.openSettings(section as SectionId),
       )
+    add(
+      'help.shortcuts',
+      'shortcuts.help.action',
+      'terminal.categorySettings',
+      Keyboard,
+      () => void window.dispatchEvent(new Event(SHORTCUTS_HELP_EVENT)),
+      SHORTCUTS_HELP.label,
+    )
     add(
       'settings.open',
       'terminal.openSettings',

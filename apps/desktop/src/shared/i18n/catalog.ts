@@ -4788,6 +4788,94 @@ export const catalog = {
     "zh": "切换窗格里的标签",
     "en": "Switch tabs in pane"
   },
+  "shortcuts.help.action": {
+    "zh": "快捷键一览",
+    "en": "Show keyboard shortcuts"
+  },
+  "shortcuts.help.title": {
+    "zh": "快捷键",
+    "en": "Keyboard shortcuts"
+  },
+  "shortcuts.help.search": {
+    "zh": "搜索快捷键",
+    "en": "Search shortcuts"
+  },
+  "shortcuts.help.none": {
+    "zh": "没有符合的快捷键",
+    "en": "No matching shortcuts"
+  },
+  "shortcuts.help.customize": {
+    "zh": "自定义快捷键…",
+    "en": "Customize shortcuts…"
+  },
+  "shortcuts.help.groupGeneral": {
+    "zh": "常用（可以改）",
+    "en": "General (customizable)"
+  },
+  "shortcuts.help.groupPanes": {
+    "zh": "窗格和终端",
+    "en": "Panes and terminal"
+  },
+  "shortcuts.help.groupComposer": {
+    "zh": "输入框",
+    "en": "Message box"
+  },
+  "shortcuts.help.groupMenus": {
+    "zh": "菜单",
+    "en": "Menus"
+  },
+  "shortcuts.help.groupBoard": {
+    "zh": "任务看板",
+    "en": "Task board"
+  },
+  "shortcuts.help.send": {
+    "zh": "发送",
+    "en": "Send"
+  },
+  "shortcuts.help.newline": {
+    "zh": "换行",
+    "en": "New line"
+  },
+  "shortcuts.help.stop": {
+    "zh": "停止正在进行的回复",
+    "en": "Stop the reply in progress"
+  },
+  "shortcuts.help.mention": {
+    "zh": "添加文件",
+    "en": "Add a file"
+  },
+  "shortcuts.help.command": {
+    "zh": "输入命令",
+    "en": "Run a command"
+  },
+  "shortcuts.help.suggestion": {
+    "zh": "填入灰色的建议",
+    "en": "Fill in the suggestion"
+  },
+  "shortcuts.help.menuMove": {
+    "zh": "上下移动",
+    "en": "Move up and down"
+  },
+  "shortcuts.help.menuSub": {
+    "zh": "打开 / 退出子菜单",
+    "en": "Open / leave a submenu"
+  },
+  "shortcuts.help.menuPick": {
+    "zh": "直接选第 N 项",
+    "en": "Pick item N"
+  },
+  "shortcuts.help.menuClose": {
+    "zh": "关闭菜单",
+    "en": "Close the menu"
+  },
+  "shortcuts.help.boardNew": {
+    "zh": "新任务",
+    "en": "New task"
+  },
+  "shortcuts.help.boardSearch": {
+    "zh": "搜索任务",
+    "en": "Search tasks"
+  },
   "theme.ThemeProvider.usethemeMustBeUsed": {
     "zh": "useTheme 必须在 ThemeProvider 内使用",
     "en": "useTheme must be used within ThemeProvider"

@@ -53,6 +53,7 @@ export function MenuRow({
   return (
     <button
       type="button"
+      data-menu-item
       disabled={disabled}
       onClick={onClick}
       className={cn(

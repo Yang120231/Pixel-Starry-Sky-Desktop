@@ -16,6 +16,7 @@ import { I18nProvider } from '../i18n/I18nProvider'
 import { SessionActionsProvider } from '../features/sidebar/SessionActions'
 import { TerminalProvider } from '../features/terminal/TerminalProvider'
 import { CommandPaletteProvider } from '../features/commands/CommandPaletteProvider'
+import { ShortcutsHelp } from '../features/layout/ShortcutsHelp'
 import { installRendererErrorLog, reactRootErrorOptions } from '../features/logs/rendererErrors'
 import { installLongTaskLog } from '../features/logs/longTasks'
 import { SettingsSyncRunner } from '../features/settings/sync/RestoreNotice'
@@ -42,6 +43,7 @@ createRoot(document.getElementById('root')!, reactRootErrorOptions).render(
                 <TerminalProvider>
                   <CommandPaletteProvider>
                     <App />
+                    <ShortcutsHelp />
                   </CommandPaletteProvider>
                 </TerminalProvider>
               </SessionActionsProvider>

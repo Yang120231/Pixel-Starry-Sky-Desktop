@@ -121,6 +121,7 @@ export function OpenInButton({ placement }: { placement: SidebarPlacement }) {
       <div key={id} data-open-with={id} className="group flex h-8 items-center rounded-md hover:bg-hover">
         <button
           type="button"
+          data-menu-item
           disabled={busy}
           onClick={() => void open(choice)}
           title={choice.kind === 'editor' ? choice.item.path : choice.tool.path}
@@ -198,6 +199,7 @@ export function OpenInButton({ placement }: { placement: SidebarPlacement }) {
         <div role="separator" className="my-1 border-t border-line-subtle" />
         <button
           type="button"
+          data-menu-item
           onClick={() => {
             setMenu(false)
             settings.openSettings('editor')

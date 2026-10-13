@@ -28,6 +28,8 @@ export const TOGGLE_TERMINAL = action('toggleTerminal')
 export const NEW_TERMINAL = action('newTerminal')
 /** 编辑器里把选中的代码引用到对话：默认 Ctrl+L（macOS ⌘L），docs/ui/editor-quote.md */
 export const QUOTE_SELECTION = action('quoteSelection')
+/** 快捷键一览：默认 Ctrl+/（macOS ⌘/），docs/ui/ui-polish-2026-10-13.md §5 */
+export const SHORTCUTS_HELP = action('shortcutsHelp')
 
 const mod = (e: KeyboardEvent): boolean => (isMac ? e.metaKey : e.ctrlKey)
 

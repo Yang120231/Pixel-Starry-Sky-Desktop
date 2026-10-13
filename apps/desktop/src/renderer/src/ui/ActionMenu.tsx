@@ -2,6 +2,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState, type KeyboardEv
 import { createPortal } from 'react-dom'
 import { Check, ChevronRight, type LucideIcon } from 'lucide-react'
 import { cn } from './cn'
+import { pickByDigit } from './menuDigit'
 
 export interface MenuAction {
   label: string
@@ -56,7 +57,7 @@ function moveFocus(e: KeyboardEvent, root: HTMLElement | null): boolean {
   return true
 }
 
-/** Shared context menu, outside scroll containers, with keyboard navigation. */
+/** Shared context menu, outside scroll containers, with keyboard navigation (arrows, Home / End, 1–9). */
 export function ActionMenu({
   x,
   y,
@@ -124,7 +125,7 @@ export function ActionMenu({
             onClose()
             return
           }
-          if (moveFocus(e, ref.current)) return
+          if (moveFocus(e, ref.current) || pickByDigit(e.nativeEvent, enabledItems(ref.current))) return
           const index = Number((document.activeElement as HTMLElement | null)?.dataset.menuIndex)
           if (e.key === 'ArrowRight' && actions[index]?.children) {
             e.preventDefault()
@@ -200,7 +201,7 @@ function SubMenu({
         } else if (e.key === 'Tab') {
           e.preventDefault()
           onClose()
-        } else moveFocus(e, menuRef.current)
+        } else if (!moveFocus(e, menuRef.current)) pickByDigit(e.nativeEvent, enabledItems(menuRef.current))
       }}
     >
       <Items
