@@ -3,6 +3,8 @@ import { ChevronDown, Folder, Monitor } from 'lucide-react'
 import { composerStatus } from '@/data'
 import type { WorkspaceRef } from '../../../../shared/types/workspace'
 import { ComposerGit } from './ComposerGit'
+import { FolderMenu } from './FolderMenu'
+import { useActiveWorkspace } from '@/features/editor/target'
 import type { StatusBarController } from '@/features/engine'
 import { useI18n } from '@/i18n/I18nProvider'
 import { openMachineManager, openWorkspacePicker, useMachines } from '@/features/machines/store'
@@ -36,7 +38,7 @@ export function ComposerStatusBar({
         <Monitor size={13} strokeWidth={1.5} />
         {live ? (machine?.id === 'local' ? text('本机') : machine?.name) : text(composerStatus.machine)}
       </button>
-      {live && <ProjectPicker live={live} />}
+      {live ? <ProjectPicker live={live} target={git ?? null} /> : <DemoFolder />}
       {(git ?? (!live && composerStatus.branch !== null ? DEMO_TARGET : null)) && (
         <span data-composer-git className="-ml-2 inline-flex min-w-0 flex-wrap items-center gap-x-1">
           <ComposerGit target={git ?? DEMO_TARGET} />
@@ -49,25 +51,27 @@ export function ComposerStatusBar({
 
 const DEMO_TARGET: WorkspaceRef = { projectId: 'demo' }
 
+/** 演示模式：当前标签所在的演示项目，点开同一个文件夹菜单 */
+function DemoFolder() {
+  const workspace = useActiveWorkspace()
+  if (!workspace.name) return null
+  return <FolderMenu name={workspace.name} path={workspace.path} target={workspace.ref} />
+}
+
 /**
  * All project entry points share the same directory / Git worktree picker.
- * 已经开始的会话绑定在创建时的工作区：只显示是哪个，不能在这里换（issue #11；在这里选别的工作区并不会挪会话，
- * 而是另开一个会话，容易误会）。换工作区在新会话或侧栏里做。
+ * 已经开始的会话绑定在创建时的工作区，不能在这里换（issue #11；在这里选别的工作区并不会挪会话，
+ * 而是另开一个会话，容易误会）：点开是文件夹菜单（FolderMenu），换文件夹都是明说的「开新对话」。
  */
-function ProjectPicker({ live }: { live: StatusBarController }) {
+function ProjectPicker({ live, target }: { live: StatusBarController; target: WorkspaceRef | null }) {
   const { text } = useI18n()
   const { project } = live
   if (!live.canPickProject)
-    return (
-      <span data-composer-project title={project?.path} className="inline-flex min-w-0 items-center gap-1 px-1">
-        <Folder size={13} className="shrink-0" />
-        <span className="truncate">{project?.name ?? text('选择项目文件夹')}</span>
-      </span>
-    )
+    return <FolderMenu name={project?.name ?? text('选择项目文件夹')} path={project?.path ?? ''} target={target} />
   return (
     <button
       type="button"
-      onClick={openWorkspacePicker}
+      onClick={() => openWorkspacePicker()}
       title={project?.path}
       aria-label={text('切换工作区')}
       className="inline-flex min-w-0 items-center gap-1 rounded px-1 hover:bg-hover hover:text-fg"

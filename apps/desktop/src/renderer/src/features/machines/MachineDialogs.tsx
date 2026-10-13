@@ -23,6 +23,8 @@ export function MachineDialogs() {
     state = useMachines(),
     active = useActiveWorkspace()
   const projects = useEngineState(s => s.projects)
+  // 从输入框上方文件夹菜单来的：选了一定开新对话
+  const [freshPick, setFreshPick] = useState(false)
   const [view, setView] = useState<'machines' | 'workspaces' | null>(null),
     [form, setForm] = useState<MachineInput | null>(null)
   const [busy, setBusy] = useState(false),
@@ -65,7 +67,8 @@ export function MachineDialogs() {
       setDirectory(null)
       setQuery('')
     }
-    const workspace = () => {
+    const workspace = (e: Event) => {
+      setFreshPick(!!(e as CustomEvent<{ fresh?: boolean } | null>).detail?.fresh)
       setView('workspaces')
       setError('')
       setQuery('')
@@ -126,7 +129,13 @@ export function MachineDialogs() {
   return (
     <>
       <MachineModal
-        title={t(view === 'machines' ? 'machines.title' : 'machines.workspace')}
+        title={t(
+          view === 'machines'
+            ? 'machines.title'
+            : freshPick
+              ? 'machines.folder.newElsewhereTitle'
+              : 'machines.workspace',
+        )}
         busy={busy}
         close={() => {
           if (!trust && !confirm) setView(null)
@@ -424,7 +433,7 @@ export function MachineDialogs() {
                         className="block w-full rounded-lg border border-line bg-surface px-3 py-2 text-left hover:bg-hover disabled:opacity-50"
                         onClick={() =>
                           void run(async () => {
-                            await selectWorkspace(w)
+                            await selectWorkspace(w, freshPick)
                             setView(null)
                           })
                         }

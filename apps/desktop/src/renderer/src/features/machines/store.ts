@@ -67,8 +67,9 @@ export async function initMachines(): Promise<void> {
 export function openMachineManager(): void {
   window.dispatchEvent(new Event('pixelsky:manage-machines'))
 }
-export function openWorkspacePicker(): void {
-  window.dispatchEvent(new Event('pixelsky:choose-workspace'))
+/** fresh：选了一定开新对话（输入框上方文件夹菜单的「在别的文件夹开新对话…」），不跳到那个文件夹已有的对话 */
+export function openWorkspacePicker(opts: { fresh?: boolean } = {}): void {
+  window.dispatchEvent(new CustomEvent('pixelsky:choose-workspace', { detail: opts }))
 }
 export async function selectMachine(id: string): Promise<void> {
   if (switching || id === state.currentId) return
@@ -92,16 +93,18 @@ export async function selectMachine(id: string): Promise<void> {
     switching = false
   }
 }
-export async function selectWorkspace(choice: WorkspaceChoice): Promise<void> {
+export async function selectWorkspace(choice: WorkspaceChoice, fresh = false): Promise<void> {
   const id = machineOf(choice.projectId)
   if (id !== state.currentId) await selectMachine(id)
   setCurrentProject(choice.projectId)
-  const existing = getEngineState().sessions.find(
-    s =>
-      s.record.projectId === choice.projectId &&
-      s.record.cwd.replaceAll('\\', '/') === choice.path.replaceAll('\\', '/') &&
-      !s.record.archivedAt,
-  )
+  const existing = fresh
+    ? undefined
+    : getEngineState().sessions.find(
+        s =>
+          s.record.projectId === choice.projectId &&
+          s.record.cwd.replaceAll('\\', '/') === choice.path.replaceAll('\\', '/') &&
+          !s.record.archivedAt,
+      )
   const record = existing?.record ?? (await window.pixelsky!.machines.openWorkspace(choice))
   paneActions.open(record.id)
   try {

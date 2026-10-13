@@ -61,7 +61,8 @@ export function defaultChoice(state: EditorState | null): Choice | null {
   return all.find(c => choiceId(c) === state?.workspaceId) ?? all.find(c => choiceId(c) === state?.defaultId) ?? null
 }
 
-export function OpenInButton({ placement }: { placement: SidebarPlacement }) {
+/** composer：输入框上方文件夹菜单里的一行（docs/ui/machines-workspaces.md §9），列表往右边弹 */
+export function OpenInButton({ placement }: { placement: SidebarPlacement | 'composer' }) {
   useI18n()
   const toast = useToast()
   const settings = useSettings()
@@ -123,8 +124,23 @@ export function OpenInButton({ placement }: { placement: SidebarPlacement }) {
       ? tr('openWith.openWith', { p0: choiceName(current), p1: workspace.name })
       : tr('openWith.choose')
   // 在「更多工具」菜单里时列表从左边弹出（菜单贴着窗口右边）
-  const side = placement === 'more' ? '-top-1' : placement === 'bottom' ? 'bottom-full mb-1' : 'top-full mt-1'
-  const align = placement === 'more' ? 'right-full mr-2' : placement === 'header' ? 'right-0' : 'left-0'
+  const asRow = placement === 'more' || placement === 'composer'
+  const side =
+    placement === 'composer'
+      ? '-bottom-1'
+      : placement === 'more'
+        ? '-top-1'
+        : placement === 'bottom'
+          ? 'bottom-full mb-1'
+          : 'top-full mt-1'
+  const align =
+    placement === 'composer'
+      ? 'left-full ml-2'
+      : placement === 'more'
+        ? 'right-full mr-2'
+        : placement === 'header'
+          ? 'right-0'
+          : 'left-0'
 
   const row = (choice: Choice) => {
     const id = choiceId(choice),
@@ -160,26 +176,25 @@ export function OpenInButton({ placement }: { placement: SidebarPlacement }) {
     )
   }
 
-  const trigger =
-    placement === 'more' ? (
-      <button
-        type="button"
-        data-menu-item
-        aria-haspopup="menu"
-        aria-expanded={menu}
-        title={disabledReason ?? undefined}
-        disabled={!!disabledReason}
-        onClick={showMenu}
-        className={cn(
-          'flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-ui text-fg hover:bg-hover disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent',
-          menu && 'bg-hover',
-        )}
-      >
-        <SquareArrowOutUpRight size={15} strokeWidth={1.5} className="shrink-0 text-fg-secondary" />
-        <span className="flex-1">{tr('sidebar.action.openIn')}</span>
-        <ChevronRight size={14} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
-      </button>
-    ) : null
+  const trigger = asRow ? (
+    <button
+      type="button"
+      data-menu-item
+      aria-haspopup="menu"
+      aria-expanded={menu}
+      title={disabledReason ?? undefined}
+      disabled={!!disabledReason}
+      onClick={showMenu}
+      className={cn(
+        'flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-ui text-fg hover:bg-hover disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent',
+        menu && 'bg-hover',
+      )}
+    >
+      <SquareArrowOutUpRight size={15} strokeWidth={1.5} className="shrink-0 text-fg-secondary" />
+      <span className="flex-1">{tr('sidebar.action.openIn')}</span>
+      <ChevronRight size={14} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
+    </button>
+  ) : null
 
   return (
     <span data-open-in className={cn('relative shrink-0 items-center', trigger ? 'flex w-full' : 'inline-flex')}>

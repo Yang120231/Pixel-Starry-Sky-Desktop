@@ -234,7 +234,7 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
         t('terminal.chooseProject'),
       )
     add('machines.switch', 'machines.switch', 'terminal.categoryWorkbench', TerminalSquare, openMachineManager)
-    add('workspace.switch', 'machines.workspace', 'terminal.categoryWorkbench', FolderOpen, openWorkspacePicker)
+    add('workspace.switch', 'machines.workspace', 'terminal.categoryWorkbench', FolderOpen, () => openWorkspacePicker())
     add('search.open', 'terminal.openSearch', 'terminal.categoryWorkbench', Search, openSearch, OPEN_SEARCH.label)
     add(
       'sidebar.toggle',

@@ -13,6 +13,15 @@ vi.mock('@/features/machines/store', () => ({
 }))
 // 输入框上方的 Git 那几项（docs/ui/composer-git.md）不在这里测：它导入的账号模块要真的 window
 vi.mock('@/features/session/ComposerGit', () => ({ ComposerGit: () => null }))
+// 已开始会话的文件夹菜单（docs/ui/machines-workspaces.md §9）同理换成只带参数的壳，这里只看给它的名字和路径
+vi.mock('@/features/session/FolderMenu', () => ({
+  FolderMenu: ({ name, path }: { name: string; path: string }) => (
+    <span data-composer-project data-folder-menu title={path}>
+      {name}
+    </span>
+  ),
+}))
+vi.mock('@/features/editor/target', () => ({ useActiveWorkspace: () => ({ name: '', path: '', ref: null, key: '' }) }))
 import { I18nProvider } from '@/i18n/I18nProvider'
 import type { StatusBarController } from '@/features/engine'
 import type { WorkspaceChoice } from '../../../../shared/types/machines'
@@ -113,9 +122,10 @@ describe('输入框上方的工作区', () => {
     expect(out).toContain('我的项目')
   })
 
-  it('已经开始的会话：只显示是哪个工作区（悬停看路径），不能点', () => {
+  it('已经开始的会话：不能换工作区，是文件夹菜单（悬停看路径）', () => {
     const out = html(false)
     expect(out).not.toContain('aria-label="切换工作区"')
+    expect(out).toContain('data-folder-menu')
     expect(out).toContain('data-composer-project')
     expect(out).toContain('title="D:/a"')
     expect(out).toContain('我的项目')

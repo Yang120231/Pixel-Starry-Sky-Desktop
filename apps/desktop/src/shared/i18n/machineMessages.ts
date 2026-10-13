@@ -2,6 +2,17 @@ export const machineMessages = {
   'machines.title': { zh: '机器与连接', en: 'Machines & connections' },
   'machines.switch': { zh: '切换机器', en: 'Switch machine' },
   'machines.manage': { zh: '管理机器…', en: 'Manage machines…' },
+  // 输入框上方的文件夹菜单，对话已经开始时（docs/ui/machines-workspaces.md §9）
+  'machines.folder.fixed': {
+    zh: '这个对话固定在 {path}，换文件夹会开新对话',
+    en: 'This conversation stays in {path}; another folder starts a new conversation',
+  },
+  'machines.folder.newElsewhere': { zh: '在别的文件夹开新对话…', en: 'New conversation in another folder…' },
+  'machines.folder.newElsewhereTitle': { zh: '在别的文件夹开新对话', en: 'New conversation in another folder' },
+  'machines.folder.newHere': { zh: '用这个文件夹开新对话', en: 'New conversation in this folder' },
+  'machines.folder.showFiles': { zh: '在文件树里显示', en: 'Show in file tree' },
+  'machines.folder.copyPath': { zh: '复制路径', en: 'Copy path' },
+  'machines.folder.copied': { zh: '已复制路径', en: 'Path copied' },
   'machines.local': { zh: '本机', en: 'This computer' },
   'machines.add': { zh: '添加 SSH 机器', en: 'Add SSH machine' },
   'machines.edit': { zh: '编辑连接', en: 'Edit connection' },

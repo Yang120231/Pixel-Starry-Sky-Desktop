@@ -51,7 +51,10 @@ export function MachineMenu({ className }: { className: string }) {
                 if (m.id === state.currentId) return
                 if (!usable(m.status)) openMachineManager()
                 else
-                  void selectMachine(m.id).then(openWorkspacePicker, (e: Error) => toast(translateMessage(e.message)))
+                  void selectMachine(m.id).then(
+                    () => openWorkspacePicker(),
+                    (e: Error) => toast(translateMessage(e.message)),
+                  )
               }}
             >
               <span className="block truncate">{nameOf(m)}</span>
