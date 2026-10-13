@@ -29,6 +29,10 @@ export const attachmentMessages = {
     zh: '{p0} 不是能读的 Office 文件：可能被公司的文档加密软件加过密，或者文件坏了。用 Word / Excel / PowerPoint 打开后另存一份再添加',
     en: '{p0} isn’t a readable Office file: it may be protected by document-encryption software, or damaged. Open it and save a copy, then add that',
   },
+  'composer.file.unzipTooLarge': {
+    zh: '{p0} 解压后超过 256 MB，太大了读不了',
+    en: '{p0} is over 256 MB once unpacked, too large to read',
+  },
   'composer.file.broken': { zh: '{p0} 打不开，文件可能损坏了', en: '{p0} couldn’t be opened; the file may be damaged' },
   'composer.file.noText': { zh: '{p0} 里没有能提取的文字', en: 'No text could be extracted from {p0}' },
   'composer.file.textOnly': { zh: '只带文字', en: 'Text only' },

@@ -245,10 +245,18 @@ function CommitBox({ target, status, onDone }: { target: WorkspaceRef; status: G
 
   const commit = (push: boolean): void => {
     if (!(push ? canPush : canCommit)) return
+    let result: GitResult | undefined
     void git
-      .run(() => api!.gitCommit(target, { message, all, push }), ['commit', { all, push }])
+      .run(async () => (result = await api!.gitCommit(target, { message, all, push })), ['commit', { all, push }])
       .then(ok => {
-        if (!ok) return
+        if (!ok) {
+          // 提交成了、推送失败：改动已经是 0，提交框跟着「N 个改动」一起收起，失败原因就看不到了，改用提示说
+          if (push && result && !result.ok && result.status && changeCount(result.status) === 0) {
+            drafts.delete(key)
+            toast(tr('git.composer.pushFailedAfterCommit', { p0: failureTitle(result.failure.kind) }))
+          }
+          return
+        }
         drafts.delete(key)
         toast(tr(push ? 'git.composer.committedPushed' : 'git.composer.committed'))
         onDone()

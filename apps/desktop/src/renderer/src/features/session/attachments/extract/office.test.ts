@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { strToU8, zipSync } from 'fflate'
 import { fileAttachmentBlock, FILE_INLINE_BYTES, validateFiles } from '@pixelsky/protocol'
 import { readTextFile } from '../files'
-import { columnIndex, excelDate } from './xlsx'
+import { columnIndex, compactRows, excelDate, widest } from './xlsx'
 import { documentAttachment } from './index'
 import { parseXml, textOf } from './xml'
 
@@ -145,6 +145,13 @@ describe('Excel', () => {
     expect(columnIndex('A1')).toBe(0)
     expect(columnIndex('AB12')).toBe(27)
     expect(excelDate(45352)).toBe('2024-03-01')
+    // 设成日期格式的长编号超出日期范围：原样写，不让整本报坏
+    expect(excelDate(1234567890123)).toBe('1234567890123')
+  })
+  it('几十万行也不会因为展开参数报错', () => {
+    const rows = Array.from({ length: 300_000 }, (_, i) => [String(i), i % 2 ? 'x' : ''])
+    expect(compactRows(rows)).toHaveLength(300_000)
+    expect(widest(rows)).toBe(2)
   })
 })
 

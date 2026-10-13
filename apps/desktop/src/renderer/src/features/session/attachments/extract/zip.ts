@@ -19,19 +19,34 @@ export class ZipEntries {
   }
 }
 
-/** 解压：pick 决定要哪些文件（不解出图片、字体这些用不上的大块） */
+/** 要解出来的文件解压后合计不能超过这么多：压缩比极高的包（zip 炸弹）会把界面撑爆 */
+export const MAX_UNZIPPED_BYTES = 256 * 1024 * 1024
+
+export class UnzipTooLarge extends Error {}
+
+/** 解压：pick 决定要哪些文件（不解出图片、字体这些用不上的大块）；按包里写的原始大小先算合计，超了不解 */
 export function unzipEntries(bytes: Uint8Array, pick: (name: string) => boolean): Promise<ZipEntries> {
   const all: string[] = []
+  let total = 0,
+    tooLarge = false
   return new Promise((resolve, reject) =>
     unzip(
       bytes,
       {
+        // 每个文件解压前先过这里（原始大小来自包里的目录）：超了的那个和后面的都不解
         filter: f => {
           if (!f.name.endsWith('/')) all.push(f.name)
-          return pick(f.name)
+          if (tooLarge || !pick(f.name)) return false
+          total += f.originalSize
+          if (total > MAX_UNZIPPED_BYTES) tooLarge = true
+          return !tooLarge
         },
       },
-      (error, files) => (error ? reject(error) : resolve(new ZipEntries(files, all))),
+      (error, files) => {
+        if (tooLarge) reject(new UnzipTooLarge())
+        else if (error) reject(error)
+        else resolve(new ZipEntries(files, all))
+      },
     ),
   )
 }

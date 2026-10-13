@@ -20,10 +20,18 @@ export function columnIndex(ref: string): number {
   return n - 1
 }
 
-/** Excel 日期序号 → 2024-03-01（带时间时加上 hh:mm） */
+/** 最长的一行有几格：行数可能有十几万，不能 Math.max(...) 展开成参数 */
+export function widest(rows: readonly { length: number }[]): number {
+  let width = 0
+  for (const r of rows) if (r.length > width) width = r.length
+  return width
+}
+
+/** Excel 日期序号 → 2024-03-01（带时间时加上 hh:mm）；超出日期范围的（设成日期格式的长编号）原样写 */
 export function excelDate(serial: number): string {
-  const ms = Math.round((serial - 25569) * 86400 * 1000)
-  const iso = new Date(ms).toISOString()
+  const date = new Date(Math.round((serial - 25569) * 86400 * 1000))
+  if (Number.isNaN(date.getTime())) return String(serial)
+  const iso = date.toISOString()
   return serial % 1 ? `${iso.slice(0, 10)} ${iso.slice(11, 16)}` : iso.slice(0, 10)
 }
 
@@ -82,7 +90,7 @@ export function sheetRows(sheet: XmlNode, strings: string[], dates: Kind[]): str
 /** 去掉整行空的、整列空的 */
 export function compactRows(rows: (string[] | undefined)[]): string[][] {
   const filled = rows.filter((r): r is string[] => !!r?.some(v => v?.trim()))
-  const width = Math.max(0, ...filled.map(r => r.length))
+  const width = widest(filled)
   const used = Array.from({ length: width }, (_, i) => filled.some(r => r[i]?.trim()))
   return filled.map(r => used.flatMap((u, i) => (u ? [r[i] ?? ''] : [])))
 }

@@ -8,7 +8,7 @@ import { EPUB_PARTS, epubText, isEpub } from './epub'
 import { ODF_PARTS, odfEncrypted, odfKind, odfText } from './odf'
 import { PPTX_PARTS, pptxText } from './pptx'
 import { XLSX_PARTS, xlsxText } from './xlsx'
-import { unzipEntries } from './zip'
+import { UnzipTooLarge, unzipEntries } from './zip'
 import { documentAttachment } from './document'
 
 export { documentAttachment }
@@ -56,7 +56,8 @@ export async function readDocument(file: File, container: Container): Promise<Fi
   let zip
   try {
     zip = await unzipEntries(new Uint8Array(await file.arrayBuffer()), wanted)
-  } catch {
+  } catch (e) {
+    if (e instanceof UnzipTooLarge) throw new Error(tr('composer.file.unzipTooLarge', { p0: file.name }))
     throw new Error(tr('composer.file.broken', { p0: file.name }))
   }
   const extract = (source: FileSource, fn: () => string): FileAttachment => {

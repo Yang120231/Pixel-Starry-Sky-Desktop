@@ -2,6 +2,7 @@
 // 脚注；批注列在最后。图片、页眉页脚、排版不带
 import { tr } from '@/i18n/core'
 import { child, elements, first, parseXml, type XmlNode } from './xml'
+import { widest } from './xlsx'
 import type { ZipEntries } from './zip'
 
 export const DOCX_PARTS = [
@@ -83,7 +84,7 @@ const cell = (text: string): string =>
 
 /** 表格 → Markdown 表格，第一行当表头；合并单元格按出现的格子排 */
 export function markdownTable(rows: string[][]): string {
-  const width = Math.max(...rows.map(r => r.length))
+  const width = widest(rows)
   if (!rows.length || !width) return ''
   const line = (r: string[]): string => `| ${Array.from({ length: width }, (_, i) => cell(r[i] ?? '')).join(' | ')} |`
   return [line(rows[0]), `| ${Array(width).fill('---').join(' | ')} |`, ...rows.slice(1).map(line)].join('\n')

@@ -131,6 +131,15 @@ describe('压缩包', () => {
   })
 })
 
+describe('解压后太大', () => {
+  it('按包里写的原始大小算，超过 256 MB 不解，说清楚', async () => {
+    // 300 MB 的 0 压缩后不到 1 MB
+    const huge = zipSync({ 'word/document.xml': new Uint8Array(300 * 1024 * 1024) }, { level: 9 })
+    expect(huge.length).toBeLessThan(2 * 1024 * 1024)
+    expect(await error(new File([huge], '炸弹.docx'))).toBe('炸弹.docx 解压后超过 256 MB，太大了读不了')
+  })
+})
+
 describe('RTF', () => {
   it("去掉控制字和字体表、样式表、图片；段落、制表、表格；\\uN 和 GBK 的 \\'hh 都解出来", () => {
     const rtf =

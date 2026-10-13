@@ -85,6 +85,10 @@ export const gitMessages = {
   },
   'git.composer.committed': { zh: '已提交', en: 'Committed' },
   'git.composer.committedPushed': { zh: '已提交并推送', en: 'Committed and pushed' },
+  'git.composer.pushFailedAfterCommit': {
+    zh: '已提交，但推送失败：{p0}。可以点 ↑ 再推送',
+    en: 'Committed, but the push failed: {p0}. Use ↑ to push again',
+  },
   'git.fetchedAt': { zh: '{ago}检查过远端', en: 'Checked remote {ago}' },
   'git.fetchedNever': { zh: '尚未检查过远端', en: 'Remote not checked yet' },
   'git.noRemoteShort': { zh: '没有远端', en: 'No remote' },

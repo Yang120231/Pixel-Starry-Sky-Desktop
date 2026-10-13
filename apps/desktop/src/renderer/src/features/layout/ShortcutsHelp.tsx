@@ -77,6 +77,12 @@ export function ShortcutsHelp() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
+      // 焦点不在对话框里（点了列表的空白处，焦点落到 body）时 Esc 也要能关
+      if (e.key === 'Escape' && latest.current.open && !e.defaultPrevented && !e.isComposing) {
+        e.preventDefault()
+        latest.current.close()
+        return
+      }
       if (!SHORTCUTS_HELP.match(e) || e.defaultPrevented || e.isComposing) return
       if (latest.current.open) {
         e.preventDefault()
