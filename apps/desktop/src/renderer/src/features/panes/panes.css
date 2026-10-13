@@ -86,6 +86,10 @@
 :root[data-pane-focus='flash'] .pane-focus-frame[data-flash] {
   animation: pane-focus-flash var(--dur-pane-focus) var(--ease-out);
 }
+/* 「切换窗格时：无」不画焦点框，当前窗格只靠窗格头区分 */
+:root[data-pane-focus='none'] .pane-focus-frame {
+  display: none;
+}
 
 /* 窗格头：切换当前窗格时底色、透明度平滑变化 */
 .pane-head {
