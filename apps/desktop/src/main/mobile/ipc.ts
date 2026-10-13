@@ -4,11 +4,11 @@
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { deflateRawSync, inflateRawSync } from 'node:zlib'
-import { app, nativeImage, powerSaveBlocker } from 'electron'
+import { app, powerSaveBlocker } from 'electron'
 import { fingerprint, fromBase64Url, type Codec } from '@pixelsky/link'
-import type { ImageAttachment } from '@pixelsky/protocol'
 import * as ipc from '../ipc/guard'
 import type { AppContext } from '../app/context'
+import { shrinkImage } from '../app/images'
 import { systemCipher } from '../app/system-cipher'
 import { trayStatus } from '../app/tray'
 import type { MobileLinkStatus, MobilePrefs, MobileState } from '../../shared/types/mobile'
@@ -18,29 +18,6 @@ import { baseUrl, bridgeFetch, bridgeToken, onAccountChange, signedInEmail } fro
 import { MobileGateway, type CloudDevices } from './gateway'
 import { RelayLink } from './relay'
 import { MobileStore } from './store'
-
-/** 手机看大图：缩小到长边 maxEdge 以内、转成 JPEG（docs/mobile-remote.md §17）；解不开返回 null */
-export function shrinkImage(image: ImageAttachment, maxEdge: number): ImageAttachment | null {
-  const source = nativeImage.createFromBuffer(Buffer.from(image.dataBase64, 'base64'))
-  if (source.isEmpty()) return null
-  const { width, height } = source.getSize()
-  const scale = Math.min(1, maxEdge / Math.max(width, height))
-  const out =
-    scale < 1
-      ? source.resize({ width: Math.round(width * scale), height: Math.round(height * scale), quality: 'good' })
-      : source
-  const jpeg = out.toJPEG(82)
-  const size = out.getSize()
-  return {
-    ...image,
-    name: image.name.replace(/.[^.]*$/, '') + '.jpg',
-    mediaType: 'image/jpeg',
-    bytes: jpeg.length,
-    width: size.width,
-    height: size.height,
-    dataBase64: jpeg.toString('base64'),
-  }
-}
 
 /** 电脑这边用 zlib；手机用 CompressionStream，格式都是 deflate-raw（M0 核对过互通） */
 export const zlibCodec: Codec = {

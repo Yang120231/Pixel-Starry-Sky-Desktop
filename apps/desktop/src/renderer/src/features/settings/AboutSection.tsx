@@ -10,6 +10,8 @@ import { updateActions, useUpdateState } from '@/features/update/store'
 import { RELEASE_NOTES, useWhatsNew, whatsNewActions } from '@/features/update/whatsNew'
 import type { UpdateState } from '../../../../shared/types/update'
 import { Toggle } from './SettingRow'
+import { useSettings } from './SettingsProvider'
+import { requestFeedback } from '../feedback/focus'
 
 const CHANNEL_LABELS: Record<AppInfo['channel'], string> = {
   get dev() {
@@ -34,6 +36,7 @@ export function AboutSection({ onOpenAccount }: { onOpenAccount: () => void }) {
   const [copied, setCopied] = useState(false)
   const update = useUpdateState()
   const acc = useAccount()
+  const settings = useSettings()
 
   useEffect(() => {
     const bridge = window.pixelsky?.app
@@ -178,6 +181,22 @@ export function AboutSection({ onOpenAccount }: { onOpenAccount: () => void }) {
               onClick={() => open('repo')}
               icon="external"
             />
+          }
+        />
+        <Row
+          label={tr('feedback.aboutTitle')}
+          value={tr('feedback.aboutDesc')}
+          action={
+            <button
+              type="button"
+              onClick={() => {
+                requestFeedback({})
+                settings.openSettings('feedback')
+              }}
+              className="press no-drag h-7 shrink-0 rounded-md px-2 text-meta text-fg-secondary hover:bg-hover hover:text-fg"
+            >
+              {tr('feedback.send')}
+            </button>
           }
         />
       </Group>

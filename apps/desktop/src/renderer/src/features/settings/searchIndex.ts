@@ -178,6 +178,12 @@ export const SETTINGS_INDEX: SearchEntry[] = [
   { section: 'shortcuts', title: '快捷键', keywords: '键盘 ctrl 分屏 侧边栏 面板 搜索' },
   { section: 'logs', title: '日志', keywords: '日志 诊断 排查 报错 错误 导出 log logs diagnostics debug' },
   { section: 'logs', title: '详细日志', keywords: '日志 调试 详细 verbose debug stderr' },
+  {
+    section: 'feedback',
+    title: '提交反馈',
+    keywords: '反馈 问题 bug 建议 报错 联系 客服 意见 提交 feedback issue suggestion contact support',
+  },
+  { section: 'feedback', title: '我的反馈', keywords: '反馈 回复 团队 问题 建议 bug feedback reply ticket' },
   { section: 'about', title: '关于', keywords: '版本 更新 数据目录 运行环境 链接' },
 ]
 

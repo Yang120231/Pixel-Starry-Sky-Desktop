@@ -9,6 +9,7 @@ import {
   Cpu,
   Info,
   Keyboard,
+  MessageSquareText,
   Monitor,
   ScrollText,
   Smartphone,
@@ -23,7 +24,7 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react'
-import { IconButton, Segmented, cn } from '@/ui'
+import { Dot, IconButton, Segmented, cn } from '@/ui'
 import { useTheme, type MotionPreference, type ThemePreference } from '@/features/appearance/ThemeProvider'
 import { AboutSection } from './AboutSection'
 import { AccountSection } from '../account/settings/AccountSection'
@@ -54,6 +55,8 @@ import { SidebarSettings } from './SidebarSettings'
 import { NotificationsSection } from './NotificationsSection'
 import { ShortcutsSettings } from './ShortcutsSettings'
 import { LogsSection } from '../logs/LogsSection'
+import { FeedbackSection } from '../feedback/FeedbackSection'
+import { useFeedbackUnread } from '../feedback/store'
 import { MobileSection } from '../mobile/settings/MobileSection'
 
 export type SectionId =
@@ -70,6 +73,7 @@ export type SectionId =
   | 'machines'
   | 'notifications'
   | 'logs'
+  | 'feedback'
   | 'mobile'
 
 /** label 用在页面标题和搜索结果；nav 是左侧导航里的短名（英文放不下时才给），没有就用 label */
@@ -175,6 +179,13 @@ const SECTIONS: Array<{ id: SectionId; label: string; nav?: string; icon: Lucide
     icon: ScrollText,
   },
   {
+    id: 'feedback',
+    get label() {
+      return tr('feedback.title')
+    },
+    icon: MessageSquareText,
+  },
+  {
     id: 'about',
     get label() {
       return tr('settings.searchIndex.about')
@@ -203,7 +214,7 @@ const NAV_GROUPS: Array<{ label: string | null; ids: SectionId[] }> = [
     },
     ids: ['engines', 'plugins', 'terminal'],
   },
-  { label: null, ids: ['logs', 'about'] },
+  { label: null, ids: ['logs', 'feedback', 'about'] },
 ]
 
 const sectionLabel = (id: SectionId): string => SECTIONS.find(s => s.id === id)?.label ?? id
@@ -262,6 +273,7 @@ export function SettingsDialog({
 }) {
   const { text, t } = useI18n()
   const machines = useMachines()
+  const feedbackUnread = useFeedbackUnread()
   // 设置搜索（docs/ui/plan-search-panes-compact.md §1）：结果替换左侧导航，点一条跳到那一页并高亮那一行
   const [query, setQuery] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
@@ -479,6 +491,9 @@ export function SettingsDialog({
                           />
                           {/* 一行放不下（别的语言、等宽字体）就省略，不折行撑破行高；悬停看全名 */}
                           <span className="min-w-0 truncate">{text(nav ?? label)}</span>
+                          {id === 'feedback' && feedbackUnread > 0 && (
+                            <Dot tone="notify" size={7} className="ml-auto" />
+                          )}
                         </button>
                       )
                     })}
@@ -542,6 +557,8 @@ export function SettingsDialog({
               <AppearanceSection />
             ) : section === 'shortcuts' ? (
               <ShortcutsSettings />
+            ) : section === 'feedback' ? (
+              <FeedbackSection />
             ) : section === 'logs' ? (
               <LogsSection />
             ) : (

@@ -20,6 +20,7 @@ import { branchMessages } from './branchMessages'
 import { updateMessages } from './updateMessages'
 import { customApiMessages } from './customApiMessages'
 import { logMessages } from './logMessages'
+import { feedbackMessages } from './feedbackMessages'
 import { trayMessages } from './trayMessages'
 import { mobileMessages } from './mobileMessages'
 import { editorMessages } from './editorMessages'
@@ -55,6 +56,7 @@ export const allMessages = {
   ...updateMessages,
   ...customApiMessages,
   ...logMessages,
+  ...feedbackMessages,
   ...trayMessages,
   ...mobileMessages,
   ...editorMessages,

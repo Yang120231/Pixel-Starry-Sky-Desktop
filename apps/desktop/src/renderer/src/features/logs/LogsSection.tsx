@@ -2,12 +2,14 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '../../i18n/core'
 // 设置 › 日志（docs/ui/logging.md §3.1）：读最近的条目、实时追加、筛选；打开文件夹、复制错误、导出诊断文件、详细日志
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ChevronRight, ClipboardCopy, FileDown, FolderOpen, Search, X } from 'lucide-react'
+import { ChevronRight, ClipboardCopy, FileDown, FolderOpen, MessageSquareText, Search, X } from 'lucide-react'
 import { formatLogLine, type LogEntry, type LogLevel, type LogQuery, type LogSettings } from '@pixelsky/protocol'
 import { Button, CopyButton, Segmented, Select, Spinner, cn } from '@/ui'
 import { SectionTitle, SettingRow, Toggle } from '../settings/SettingRow'
 import { MAX_ENTRIES, appendLive, entryKey, recentProblems, remaining, scopesOf, shortTime } from './logView'
 import { onLogFocus, takeLogFocus, type LogFocus } from './focus'
+import { requestFeedback } from '../feedback/focus'
+import { useSettings } from '../settings/SettingsProvider'
 
 type LevelFilter = 'all' | 'warn' | 'error'
 
@@ -21,6 +23,7 @@ const LEVEL_TONE: Record<LogLevel, string> = {
 export function LogsSection() {
   useI18n()
   const bridge = window.pixelsky?.log
+  const appSettings = useSettings()
   const [settings, setSettings] = useState<LogSettings | null>(null)
   const [entries, setEntries] = useState<LogEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -185,6 +188,15 @@ export function LogsSection() {
         </Button>
         <Button icon={FileDown} onClick={exportFile} disabled={!bridge}>
           {tr('logs.export')}
+        </Button>
+        <Button
+          icon={MessageSquareText}
+          onClick={() => {
+            requestFeedback({ type: 'bug', logs: true })
+            appSettings.openSettings('feedback')
+          }}
+        >
+          {tr('feedback.logsSubmit')}
         </Button>
       </div>
 

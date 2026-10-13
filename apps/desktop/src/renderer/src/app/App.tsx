@@ -16,6 +16,7 @@ import { DEFAULT_SIDEBAR_WIDTH, setLayoutSize, useLayoutSize } from '../features
 import { autoPanelWidth } from '../features/layout/panelWidth'
 import { CacheMissAlerts } from '../features/session/CacheMissAlerts'
 import { NotificationDispatcher } from '../features/notifications/NotificationDispatcher'
+import { FeedbackNotifier } from '../features/feedback/FeedbackNotifier'
 import { OPEN_FILES_EVENT } from '../features/files/store'
 import { FileLifecycle } from '../features/files/FileLifecycle'
 import { FileConfirm } from '../features/files/FileConfirm'
@@ -206,6 +207,7 @@ export function App() {
     <div className="flex h-full w-full overflow-hidden bg-app text-fg">
       <CacheMissAlerts />
       <NotificationDispatcher />
+      <FeedbackNotifier />
       <MachineDialogs />
       <WhatsNewDialog />
       <FileLifecycle />

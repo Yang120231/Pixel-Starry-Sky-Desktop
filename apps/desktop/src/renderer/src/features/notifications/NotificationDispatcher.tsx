@@ -1,10 +1,13 @@
 // 系统通知调度（docs/ui/notifications.md §3–§4）：监听所有机器的引擎事件，按偏好决定是否让主进程弹出。
 // 窗口级挂载一次，不渲染任何内容；演示模式不工作。
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { tr, translateMessage } from '../../i18n/core'
 import { getEngineState, isViewingSession } from '@/features/engine/store'
 import { OPEN_SESSION_EVENT } from '@/features/engine/openRequests'
 import { getNotificationPrefs, useNotificationPrefs } from '@/features/settings/notifications'
+import { useSettings } from '@/features/settings/SettingsProvider'
+import { requestFeedback } from '@/features/feedback/focus'
+import { threadOfNotification } from '@/features/feedback/logic'
 import {
   BACKGROUND_SETTLE_MS,
   backgroundChange,
@@ -43,6 +46,9 @@ function payload(
 export function NotificationDispatcher() {
   // 托盘菜单显示「勿扰 1 小时」还是「结束勿扰」（docs/ui/tray.md §2.2）
   const { dndUntil } = useNotificationPrefs()
+  const { openSettings } = useSettings()
+  const openSettingsRef = useRef(openSettings)
+  openSettingsRef.current = openSettings
   useEffect(() => {
     if (!window.pixelsky?.demo) window.pixelsky?.tray?.reportDnd(dndUntil)
   }, [dndUntil])
@@ -90,7 +96,14 @@ export function NotificationDispatcher() {
       if (intent) deliver(intent)
     })
     // 点击通知：主进程已经把窗口带到前台，这里打开对应会话（会自动切换机器、切回工作台）
-    const offClicks = bridge.notifications.onClick(({ sessionId }) => {
+    const offClicks = bridge.notifications.onClick(({ id, sessionId }) => {
+      // 团队回复了反馈：打开设置 › 反馈 › 那一条（docs/ui/feedback.md §2.5）
+      const threadId = threadOfNotification(id)
+      if (threadId) {
+        requestFeedback({ threadId })
+        openSettingsRef.current('feedback')
+        return
+      }
       if (sessionId) window.dispatchEvent(new CustomEvent(OPEN_SESSION_EVENT, { detail: { sessionId } }))
     })
     return () => {

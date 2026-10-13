@@ -1,6 +1,7 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
-import { IconButton, PopoverItem, useComingSoon } from '@/ui'
+import { Dot, IconButton, PopoverItem, useComingSoon } from '@/ui'
+import { useFeedbackUnread } from '@/features/feedback/store'
 import { useToolbarState } from '@/features/layout/ToolbarContext'
 import { useSidebarPrefs, type SidebarAction } from '@/features/appearance/sidebar'
 import { getSidebarIcon } from '@/features/appearance/sidebarIcons'
@@ -26,6 +27,9 @@ export function SidebarActionButton({
   const settings = useSettings()
   const { closeMenu } = useToolbarState()
   const comingSoon = useComingSoon()
+  // 团队回复了反馈、还没看：设置按钮上一个红点（docs/ui/feedback.md §2.6）
+  const unread = useFeedbackUnread()
+  const dot = action === 'settings' && unread > 0
 
   if (action === 'newTask' && !row) return <NewTaskButton onClick={onNewTask} />
 
@@ -65,10 +69,11 @@ export function SidebarActionButton({
         }}
       >
         {tr(`sidebar.action.${action}`)}
+        {dot && <Dot tone="notify" size={6} className="ml-2 align-middle" />}
       </PopoverItem>
     )
 
-  return (
+  const button = (
     <IconButton
       data-sidebar-action={action}
       icon={Icon}
@@ -78,5 +83,12 @@ export function SidebarActionButton({
       aria-haspopup={action === 'addProject' ? undefined : 'dialog'}
       onClick={onClick}
     />
+  )
+  if (action !== 'settings') return button
+  return (
+    <span className="relative inline-flex shrink-0">
+      {button}
+      {dot && <Dot tone="notify" size={6} className="pointer-events-none absolute top-1 right-1" />}
+    </span>
   )
 }

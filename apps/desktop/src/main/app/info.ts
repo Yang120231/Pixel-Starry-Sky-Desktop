@@ -47,6 +47,8 @@ async function open(link: AppLink): Promise<void> {
       return shell.openExternal(baseUrl())
     case 'releases':
       return shell.openExternal(`${REPO_URL}/releases`)
+    case 'issues':
+      return shell.openExternal(`${REPO_URL}/issues/new/choose`)
   }
 }
 
@@ -56,7 +58,7 @@ export function initAppInfo(): void {
   ipc.handle(
     'app:open',
     (_event, link: unknown) => {
-      if (link !== 'data-dir' && link !== 'repo' && link !== 'auth' && link !== 'releases')
+      if (link !== 'data-dir' && link !== 'repo' && link !== 'auth' && link !== 'releases' && link !== 'issues')
         throw new Error('未知的链接')
       return open(link)
     },

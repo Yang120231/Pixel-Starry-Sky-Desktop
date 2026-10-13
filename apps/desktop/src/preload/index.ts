@@ -20,6 +20,8 @@ import type { TrayBridge } from './tray'
 import type { MobileBridge } from './mobile'
 import type { MobileState } from '../shared/types/mobile'
 import type { SettingsSyncBridge } from './settings-sync'
+import type { FeedbackBridge } from './feedback'
+import type { FeedbackChange } from '../shared/types/feedback'
 import type { TrayCommand } from '../shared/types/tray'
 import type { ChannelsBridge } from './channels'
 import type { ChannelMessagePush, ChannelsSnapshot } from '../shared/types/channels'
@@ -400,8 +402,26 @@ const settingsSync: SettingsSyncBridge = {
   engine: () => call('settings:engine'),
   applyEngine: (key, value) => call('settings:applyEngine', key, value),
 }
+// 设置 › 反馈（docs/ui/feedback.md §5）
+const feedback: FeedbackBridge = {
+  state: () => call('feedback:state'),
+  refresh: () => call('feedback:refresh'),
+  list: before => call('feedback:list', before),
+  get: id => call('feedback:get', id),
+  create: input => call('feedback:create', input),
+  reply: (id, input) => call('feedback:reply', id, input),
+  close: id => call('feedback:close', id),
+  preview: query => call('feedback:preview', query),
+  attachment: (threadId, attachmentId) => call('feedback:attachment', threadId, attachmentId),
+  onChange: cb => {
+    const listener = (_event: Electron.IpcRendererEvent, value: FeedbackChange): void => cb(value)
+    on('feedback:changed', listener)
+    return () => ipcRenderer.removeListener('feedback:changed', listener)
+  },
+}
 contextBridge.exposeInMainWorld('pixelsky', {
   tray,
+  feedback,
   channels,
   mobile,
   settingsSync,

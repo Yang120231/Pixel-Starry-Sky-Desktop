@@ -32,6 +32,7 @@ import { initLogIpc, initLogging } from './app/logging'
 import { allowCallStacks, enableCallStacks, watchMainLoop, watchMemory, watchWindow } from './app/responsiveness'
 import { initTray, type TrayController } from './app/tray'
 import { initSettingsSync } from './account/settings-sync'
+import { initFeedback } from './feedback/feedback'
 import type { Locale } from '../shared/i18n/messages'
 
 type ResolvedTheme = 'light' | 'dark'
@@ -352,6 +353,7 @@ app.whenReady().then(async () => {
   await initEngine(ctx) // 引擎系统（Claude Code 等），见 engine/ipc.ts
   initMobile(ctx) // 手机远程连接（默认关），见 mobile/ipc.ts
   initSettingsSync(ctx) // 设置云同步，见 account/settings-sync.ts
+  initFeedback(ctx) // 设置 › 反馈（云端工单、回复提醒），见 feedback/feedback.ts
   await initWorkspace(ctx)
   await initProjectTools(ctx)
   await initChannels(ctx) // 协作频道（本机 AI 协作），见 channels/ipc.ts

@@ -478,6 +478,7 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
       ['models', 'palette.models'],
       ['shortcuts', 'terminal.openShortcuts'],
       ['notifications', 'notifications.palette.open'],
+      ['feedback', 'feedback.palette.open'],
     ] as const)
       add('settings.' + section, key, 'terminal.categorySettings', Settings, () =>
         settings.openSettings(section as SectionId),

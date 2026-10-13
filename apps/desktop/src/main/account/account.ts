@@ -429,6 +429,21 @@ export async function bridgeFetch(method: 'POST' | 'DELETE', path: string, body?
   })
 }
 
+/** 设置 › 反馈（docs/ui/feedback.md §5）：只能调 /v1/feedback 下的接口，不放宽其他白名单 */
+export async function feedbackFetch(
+  method: 'GET' | 'POST',
+  path: string,
+  body?: unknown,
+  timeoutMs = 20_000,
+): Promise<Response> {
+  if (!/^\/v1\/feedback(\/|\?|$)/.test(path)) throw new Error('无效的反馈接口')
+  return authedFetch(path, {
+    method,
+    ...(body !== undefined && { body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }),
+    signal: AbortSignal.timeout(timeoutMs),
+  })
+}
+
 /**
  * 连中转用的访问令牌（WebSocket 不能走 authedFetch）：快过期或中转说令牌失效（force）时先刷新。
  * 没登录、刷新被拒（同时退出登录）时返回 null。

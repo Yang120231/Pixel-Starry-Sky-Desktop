@@ -22,6 +22,7 @@ export type * from './notifications'
 export type * from './artifacts'
 export type * from './providers'
 export type * from './log'
+export type * from './feedback'
 
 export interface PixelskyBridge {
   machines: import('./machines').MachineBridge
@@ -59,6 +60,8 @@ export interface PixelskyBridge {
   notifications: NotificationsBridge
   /** 设置云同步（docs/ui/settings-sync.md） */
   settingsSync: import('./settings-sync').SettingsSyncBridge
+  /** 设置 › 反馈（docs/ui/feedback.md） */
+  feedback: import('./feedback').FeedbackBridge
   /** 系统托盘（docs/ui/tray.md） */
   tray: import('./tray').TrayBridge
   /** 手机远程连接（docs/mobile-remote.md） */

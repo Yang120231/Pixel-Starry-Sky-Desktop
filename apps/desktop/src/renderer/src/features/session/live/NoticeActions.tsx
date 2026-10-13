@@ -7,6 +7,7 @@ import { demoRetry, requestSourceAction, type SourceAction } from '@/features/en
 import { isDemo } from '@/data'
 import { useSettings } from '@/features/settings/SettingsProvider'
 import { requestLogFocus } from '@/features/logs/focus'
+import { requestFeedback } from '@/features/feedback/focus'
 import { classifyError, type ErrorKind } from './errorKind'
 
 const LABEL: Record<SourceAction, string> = {
@@ -79,6 +80,15 @@ export function NoticeActions({
     requestLogFocus(record.id, turnStart ?? Date.now() - 10 * 60_000)
     settings.openSettings('logs')
   }
+  // 反馈：预填报错文字、会话编号，日志取这一轮开始前 1 分钟起（docs/ui/feedback.md §2.5）
+  const sendFeedback = () => {
+    requestFeedback({
+      type: 'bug',
+      error: { text, sessionId: record.id, at: Date.now() },
+      logsSince: (turnStart ?? Date.now() - 10 * 60_000) - 60_000,
+    })
+    settings.openSettings('feedback')
+  }
   return (
     <div className="mt-1.5 flex flex-wrap gap-1.5 pl-[27px]">
       {actions.map(a => (
@@ -97,6 +107,13 @@ export function NoticeActions({
         className="press h-7 rounded-md px-2.5 text-meta text-fg-muted hover:bg-hover hover:text-fg"
       >
         {tr('logs.viewLogs')}
+      </button>
+      <button
+        type="button"
+        onClick={sendFeedback}
+        className="press h-7 rounded-md px-2.5 text-meta text-fg-muted hover:bg-hover hover:text-fg"
+      >
+        {tr('feedback.noticeAction')}
       </button>
     </div>
   )

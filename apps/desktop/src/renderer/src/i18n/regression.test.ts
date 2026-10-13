@@ -25,6 +25,7 @@ import { branchMessages } from '../../../shared/i18n/branchMessages'
 import { updateMessages } from '../../../shared/i18n/updateMessages'
 import { customApiMessages } from '../../../shared/i18n/customApiMessages'
 import { logMessages } from '../../../shared/i18n/logMessages'
+import { feedbackMessages } from '../../../shared/i18n/feedbackMessages'
 import { trayMessages } from '../../../shared/i18n/trayMessages'
 import { mobileMessages } from '../../../shared/i18n/mobileMessages'
 import { editorMessages } from '../../../shared/i18n/editorMessages'
@@ -59,6 +60,7 @@ const dictionaries: Record<string, Record<string, unknown>> = {
   updateMessages,
   customApiMessages,
   logMessages,
+  feedbackMessages,
   trayMessages,
   mobileMessages,
   editorMessages,
