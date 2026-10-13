@@ -63,8 +63,15 @@ export interface TrackerDeps {
   list(): Promise<FeedbackList>
   store: NotifiedStore
   emit(change: FeedbackChange): void
+  /** 检查失败（登录过期除外）：同一个原因连续失败只报一次 */
+  onError?(error: { code: string | null; message: string }): void
   now?: () => number
 }
+
+/** 平时每 10 分钟检查一次；提交 / 补充之后的 30 分钟里每 2 分钟一次（团队多半这时候回复） */
+export const POLL_INTERVAL_MS = 10 * 60_000
+export const ACTIVE_POLL_INTERVAL_MS = 2 * 60_000
+export const ACTIVE_WINDOW_MS = 30 * 60_000
 
 type Failure = { code?: string; message?: string }
 
@@ -85,6 +92,10 @@ export class FeedbackTracker {
   /** 登录状态变化就加一，作废还在途中的检查 */
   private epoch = 0
   private lastPollAt = 0
+  /** 上次提交 / 补充反馈的时间 */
+  private activeAt = 0
+  /** 上次报过的失败原因；检查成功后清掉 */
+  private lastError: string | null = null
   private readonly now: () => number
 
   constructor(private readonly deps: TrackerDeps) {
@@ -95,9 +106,27 @@ export class FeedbackTracker {
     return this.current
   }
 
-  /** 距上次检查多久（毫秒）；从没检查过是 Infinity */
+  /** 距上次检查多久（毫秒）；从没检查过、或者系统时间往回调过，是 Infinity（马上可以再查） */
   sinceLastPoll(): number {
-    return this.lastPollAt ? this.now() - this.lastPollAt : Infinity
+    const elapsed = this.now() - this.lastPollAt
+    return this.lastPollAt && elapsed >= 0 ? elapsed : Infinity
+  }
+
+  /** 提交或补充了反馈：接下来一段时间检查得勤一些 */
+  markActive(): void {
+    this.activeAt = this.now()
+  }
+
+  /** 现在该隔多久检查一次 */
+  pollInterval(): number {
+    const elapsed = this.now() - this.activeAt
+    // 系统时间往回调过（elapsed < 0）当作已经过了这段时间
+    return this.activeAt && elapsed >= 0 && elapsed < ACTIVE_WINDOW_MS ? ACTIVE_POLL_INTERVAL_MS : POLL_INTERVAL_MS
+  }
+
+  /** 定时器每次醒来问一下：到时间了就检查 */
+  due(): boolean {
+    return this.sinceLastPoll() >= this.pollInterval()
   }
 
   /** 登录账号变化（null 表示没登录）。换账号 / 退出登录先清空，登录后马上检查一次 */
@@ -107,6 +136,8 @@ export class FeedbackTracker {
     this.inflight = null
     this.again = false
     this.lastPollAt = 0
+    this.activeAt = 0
+    this.lastError = null
     if (!email) {
       this.current = SIGNED_OUT
       this.deps.emit({ state: this.current, fresh: [] })
@@ -155,6 +186,7 @@ export class FeedbackTracker {
   }
 
   private apply(email: string, list: FeedbackList): void {
+    this.lastError = null
     const notified = this.deps.store.get(email)
     // 未读的团队回复，且这个版本的回复还没提醒过
     const fresh: FeedbackSummary[] = list.threads.filter(t => t.unread && notified[t.id] !== t.updatedAt)
@@ -174,6 +206,12 @@ export class FeedbackTracker {
 
   private fail(e: Failure): void {
     if (e.code === 'AUTH_EXPIRED') return // 账号状态会变成未登录，由 setAccount 收尾
+    const message = e.message || '检查反馈失败'
+    const key = `${e.code ?? ''}:${message}`
+    if (key !== this.lastError) {
+      this.lastError = key
+      this.deps.onError?.({ code: e.code ?? null, message })
+    }
     if (e.code === 'NOT_DEPLOYED') {
       this.current = {
         ...this.current,
@@ -185,7 +223,7 @@ export class FeedbackTracker {
         checkedAt: this.now(),
       }
     } else {
-      this.current = { ...this.current, status: 'error', error: e.message || '检查反馈失败', checkedAt: this.now() }
+      this.current = { ...this.current, status: 'error', error: message, checkedAt: this.now() }
     }
     this.deps.emit({ state: this.current, fresh: [] })
   }

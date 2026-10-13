@@ -36,8 +36,10 @@ import {
 import { buildAttachFields, buildDiagnostics, buildLogs, checkBody, checkTitle, type MessageDeps } from './attachments'
 import { FeedbackTracker, FileNotifiedStore } from './tracker'
 
-const POLL_INTERVAL_MS = 10 * 60_000
-const FOCUS_MIN_INTERVAL_MS = 60_000
+/** 定时器多久醒一次，看要不要检查（只比时间，不发请求）；真正的间隔由 tracker.pollInterval() 决定 */
+const TICK_MS = 30_000
+/** 切回窗口时，离上次检查至少这么久才再查 */
+const FOCUS_MIN_INTERVAL_MS = 15_000
 /** 预览日志的默认时间窗 */
 const DEFAULT_LOG_WINDOW_MS = 2 * 3_600_000
 
@@ -71,6 +73,7 @@ export function initFeedback(ctx: AppContext): void {
     list: () => listFeedback(null),
     store: new FileNotifiedStore(join(app.getPath('userData'), 'feedback.json')),
     emit: change => ctx.events.broadcast('feedback:changed', change),
+    onError: e => log.warn('检查反馈失败', e),
   })
 
   async function engineBriefs(): Promise<{ name: string; version: string | null; status: string }[]> {
@@ -113,7 +116,9 @@ export function initFeedback(ctx: AppContext): void {
   onAccountChange(trackSignIn)
   trackSignIn()
 
-  setInterval(() => void tracker.poll().catch(() => undefined), POLL_INTERVAL_MS).unref()
+  setInterval(() => {
+    if (tracker.due()) void tracker.poll().catch(() => undefined)
+  }, TICK_MS).unref()
   app.on('browser-window-focus', () => {
     if (tracker.sinceLastPoll() >= FOCUS_MIN_INTERVAL_MS) void tracker.poll().catch(() => undefined)
   })
@@ -151,6 +156,7 @@ export function initFeedback(ctx: AppContext): void {
       const fields = await buildAttachFields(input, deps)
       const detail = await createFeedback({ type, title, body, ...fields })
       log.info('提交反馈', { type, attachments: fields.attachments.length })
+      tracker.markActive()
       return afterAction(detail)
     },
     deny,
@@ -165,6 +171,7 @@ export function initFeedback(ctx: AppContext): void {
       const fields = await buildAttachFields(input, deps)
       const detail = await replyFeedback(threadId, { body, ...fields })
       log.info('补充反馈', { attachments: fields.attachments.length })
+      tracker.markActive()
       return afterAction(detail)
     },
     deny,

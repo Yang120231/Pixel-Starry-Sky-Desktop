@@ -45,6 +45,8 @@ export const codingBottomMessages = {
   'coding.bottom.ai.exitCode': { zh: '退出码 {code}', en: 'Exit code {code}' },
   'coding.bottom.ai.subagent': { zh: '子智能体 {name}', en: 'Subagent {name}' },
   'coding.bottom.ai.rerun': { zh: '在新终端里运行', en: 'Run in new terminal' },
+  'coding.bottom.ai.expandCommand': { zh: '展开完整命令', en: 'Show full command' },
+  'coding.bottom.ai.collapseCommand': { zh: '收起命令', en: 'Collapse command' },
   'coding.bottom.output.copy': { zh: '复制', en: 'Copy' },
   'coding.bottom.output.copied': { zh: '已复制', en: 'Copied' },
   'coding.bottom.output.empty': {

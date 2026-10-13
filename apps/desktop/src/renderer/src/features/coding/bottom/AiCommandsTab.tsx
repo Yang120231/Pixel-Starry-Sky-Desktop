@@ -1,5 +1,5 @@
-import { useMemo } from 'react'
-import { Play } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { ChevronDown, Play } from 'lucide-react'
 import { Button, cn } from '@/ui'
 import { stripAnsi } from '@/ui/code/ansi'
 import { useI18n } from '@/i18n/I18nProvider'
@@ -11,6 +11,14 @@ import { selectAiCommand, setOutputSource, useBottomState } from './aiCommands'
 import { commandTone, type AiCommandEntry } from './aiCommandsModel'
 
 const TONE_COLOR = { running: 'bg-warn', failed: 'bg-danger', done: 'bg-success' } as const
+
+/** 鼠标悬停时显示的完整命令（列表和标题都截断成一行） */
+const fullTitle = (command: AiCommandEntry): string =>
+  command.description
+    ? `${command.command}
+
+${command.description}`
+    : command.command
 
 /** AI 命令页：左边命令列表，右边选中命令的只读输出 */
 export function AiCommandsTab({
@@ -61,6 +69,7 @@ export function AiCommandsTab({
                 <button
                   type="button"
                   data-coding-ai-command={command.id}
+                  title={fullTitle(command)}
                   aria-current={command.id === entry.id}
                   onClick={() => selectAiCommand(sessionId, command.id)}
                   className={cn(
@@ -88,7 +97,7 @@ export function AiCommandsTab({
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <div className="flex shrink-0 items-center gap-2 px-4 pt-2 pb-1">
               <div className="min-w-0 flex-1">
-                <div className="truncate font-mono text-meta text-fg">{entry.command}</div>
+                <CommandTitle key={entry.id} command={entry} />
                 <div className="flex gap-2 truncate text-label text-fg-faint">
                   <span>{tr(`coding.bottom.ai.status.${entry.status}`)}</span>
                   {entry.exitCode !== null && <span>{tr('coding.bottom.ai.exitCode', { code: entry.exitCode })}</span>}
@@ -115,6 +124,40 @@ export function AiCommandsTab({
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+/** 右边的命令标题：平时一行，悬停显示完整命令，点一下展开成多行（可选中复制），再点收起 */
+function CommandTitle({ command }: { command: AiCommandEntry }) {
+  useI18n()
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="flex min-w-0 items-start gap-1">
+      <div
+        data-coding-ai-title
+        title={open ? undefined : fullTitle(command)}
+        onClick={() => {
+          // 展开后拖选文字不收起
+          if (!open || !window.getSelection()?.toString()) setOpen(v => !v)
+        }}
+        className={cn(
+          'min-w-0 flex-1 cursor-pointer font-mono text-meta text-fg',
+          open ? 'max-h-40 overflow-y-auto break-all whitespace-pre-wrap select-text' : 'truncate',
+        )}
+      >
+        {command.command}
+      </div>
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-label={tr(open ? 'coding.bottom.ai.collapseCommand' : 'coding.bottom.ai.expandCommand')}
+        title={tr(open ? 'coding.bottom.ai.collapseCommand' : 'coding.bottom.ai.expandCommand')}
+        onClick={() => setOpen(v => !v)}
+        className="press no-drag -my-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded text-fg-faint hover:bg-hover hover:text-fg"
+      >
+        <ChevronDown size={13} strokeWidth={1.5} className={cn('transition-transform', open && 'rotate-180')} />
+      </button>
     </div>
   )
 }

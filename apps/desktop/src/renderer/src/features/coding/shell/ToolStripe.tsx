@@ -20,6 +20,7 @@ import { tr, type TranslationKey } from '@/i18n/core'
 import { Avatar, CountBadge, Dot, IconButton, cn } from '@/ui'
 import { useAccount } from '@/features/account'
 import { useSettings } from '@/features/settings/SettingsProvider'
+import { useFeedbackUnread } from '@/features/feedback/store'
 import { useInbox } from '@/features/panel/inbox/useInbox'
 import { OPEN_SETTINGS, TOGGLE_TERMINAL, withShortcut } from '@/features/layout/shortcuts'
 import { setPage, showWorkbench, usePage } from '@/features/layout/page'
@@ -87,6 +88,8 @@ function LeftStripe() {
   const gitBadge = useGitBadge()
   const conversationsDot = useConversationsBadge()
   const problems = useProblems(useProjectContext().ref)
+  // 团队回复了反馈、还没看：设置按钮上一个红点（docs/ui/feedback.md §2.6）。大小、位置跟这条工具条上别的角标一致
+  const feedbackUnread = useFeedbackUnread()
   const onWorkbench = page === 'workbench'
   const badgeOf = (view: LeftView): ReactNode =>
     view === 'git' && gitBadge > 0 ? (
@@ -151,6 +154,7 @@ function LeftStripe() {
         icon={Settings}
         label={withShortcut(tr('coding.shell.settings'), OPEN_SETTINGS)}
         active={settings.open && settings.section !== 'account'}
+        badge={feedbackUnread > 0 ? <Dot tone="notify" size={7} /> : null}
         onClick={() => settings.openSettings()}
       />
       <button

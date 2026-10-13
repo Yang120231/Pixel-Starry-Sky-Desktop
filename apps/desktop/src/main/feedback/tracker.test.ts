@@ -3,7 +3,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { FeedbackChange, FeedbackList, FeedbackSummary } from '../../shared/types/feedback'
-import { FeedbackTracker, FileNotifiedStore, type NotifiedStore } from './tracker'
+import {
+  ACTIVE_POLL_INTERVAL_MS,
+  ACTIVE_WINDOW_MS,
+  FeedbackTracker,
+  FileNotifiedStore,
+  POLL_INTERVAL_MS,
+  type NotifiedStore,
+} from './tracker'
 
 const thread = (id: string, over: Partial<FeedbackSummary> = {}): FeedbackSummary => ({
   id,
@@ -133,6 +140,76 @@ describe('FeedbackTracker', () => {
     expect(tracker.state()).toMatchObject({ status: 'error', error: '服务暂时不可用', threads: [t1], unreadCount: 1 })
     await tracker.poll()
     expect(tracker.state()).toMatchObject({ status: 'not-deployed', threads: [], unreadCount: 0 })
+  })
+
+  it('平时 10 分钟一次；提交 / 补充后的 30 分钟里 2 分钟一次；换账号回到平时', async () => {
+    let now = 1_000_000
+    const tracker = new FeedbackTracker({
+      list: () => Promise.resolve(page([])),
+      store: memoryStore(),
+      emit: () => {},
+      now: () => now,
+    })
+    expect(tracker.due()).toBe(true) // 从没检查过
+    await tracker.setAccount('a@x')
+    expect(tracker.pollInterval()).toBe(POLL_INTERVAL_MS)
+    now += ACTIVE_POLL_INTERVAL_MS
+    expect(tracker.due()).toBe(false)
+    tracker.markActive()
+    expect(tracker.pollInterval()).toBe(ACTIVE_POLL_INTERVAL_MS)
+    expect(tracker.due()).toBe(true)
+    await tracker.poll()
+    now += ACTIVE_POLL_INTERVAL_MS - 1
+    expect(tracker.due()).toBe(false)
+    now += ACTIVE_WINDOW_MS
+    expect(tracker.pollInterval()).toBe(POLL_INTERVAL_MS)
+    tracker.markActive()
+    await tracker.setAccount('b@x')
+    expect(tracker.pollInterval()).toBe(POLL_INTERVAL_MS)
+  })
+
+  it('系统时间往回调：马上可以再查，不会停到时间追上来', async () => {
+    let now = 10_000_000
+    const tracker = new FeedbackTracker({
+      list: () => Promise.resolve(page([])),
+      store: memoryStore(),
+      emit: () => {},
+      now: () => now,
+    })
+    await tracker.setAccount('a@x')
+    tracker.markActive()
+    expect(tracker.due()).toBe(false)
+    now -= 3_600_000
+    expect(tracker.sinceLastPoll()).toBe(Infinity)
+    expect(tracker.due()).toBe(true)
+    expect(tracker.pollInterval()).toBe(POLL_INTERVAL_MS)
+  })
+
+  it('检查失败报一次（同一原因连续失败不重复，成功后再失败再报）；登录过期不报', async () => {
+    const fail = (code: string, message: string) => () => Promise.reject(Object.assign(new Error(message), { code }))
+    const errors: unknown[] = []
+    const queue = [
+      ok([]),
+      fail('UNAVAILABLE', '服务暂时不可用'),
+      fail('UNAVAILABLE', '服务暂时不可用'),
+      fail('NETWORK', '连不上'),
+      ok([]),
+      fail('NETWORK', '连不上'),
+      fail('AUTH_EXPIRED', '登录过期'),
+    ]
+    const tracker = new FeedbackTracker({
+      list: () => queue.shift()!(),
+      store: memoryStore(),
+      emit: () => {},
+      onError: e => errors.push(e),
+    })
+    await tracker.setAccount('a@x')
+    for (let i = 0; i < 6; i++) await tracker.poll()
+    expect(errors).toEqual([
+      { code: 'UNAVAILABLE', message: '服务暂时不可用' },
+      { code: 'NETWORK', message: '连不上' },
+      { code: 'NETWORK', message: '连不上' },
+    ])
   })
 })
 
