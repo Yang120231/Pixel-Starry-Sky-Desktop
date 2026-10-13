@@ -175,7 +175,7 @@ export const PaneView = memo(function PaneView(props: PaneViewProps) {
                   {tr('panes.PaneView.splitDown')} {SPLIT_DOWN.label}）
                 </PopoverItem>
                 {leaf.tabs.length > 0 &&
-                  (['all', 'inactive'] as const).map(kind => (
+                  (['inactive', 'all'] as const).map(kind => (
                     <PopoverItem
                       key={kind}
                       icon={<span className="size-[15px] shrink-0" />}
@@ -301,7 +301,7 @@ function TabStrip({ leaf, dim, areaSize }: { leaf: Leaf; dim: boolean; areaSize:
           x={blankMenu.x}
           y={blankMenu.y}
           label={tr('panes.PaneView.conversationTabsDragTo')}
-          actions={bulkActions(leaf, null, ['all', 'inactive'])}
+          actions={bulkActions(leaf, null, ['inactive', 'all'])}
           onClose={() => setBlankMenu(null)}
         />
       )}
@@ -405,8 +405,9 @@ function Tab({
 }
 
 /**
- * 标签右键菜单（docs/ui/ui-polish-2026-10-13.md §4）：独立浮层，不被窄窗格或标签栏的滚动裁切。
- * 顺序：重命名 → 文件标签的几项 → 移动到… › → 关闭（单个 + 批量）→ 最下面单独一组的删除，免得和重命名挨着点错
+ * 标签右键菜单（docs/ui/ui-polish-2026-10-13.md §4、§7）：独立浮层，不被窄窗格或标签栏的滚动裁切。
+ * 按作用对象分组：对话（重命名、归档；文件标签是文件的几项）→ 布局（分屏到 ›、标签位置 ›）→ 关闭（范围从小到大）
+ * → 最下面单独一组红色的「删除对话」
  */
 function TabMenu({
   leaf,
@@ -437,64 +438,44 @@ function TabMenu({
         }
       : null
   const index = leaf.tabs.indexOf(menu.tab)
-  const choices: { label: string; target: DropTarget; disabled?: boolean }[] = [
+  type Choice = { label: string; target: DropTarget; disabled?: boolean; separator?: boolean }
+  // 分屏到 ›：四个方向 | 移到别的窗格
+  const splits: Choice[] = [
+    { label: tr('tabMenu.splitLeft'), target: { leafId: leaf.id, edge: 'left' } },
+    { label: tr('tabMenu.splitRight'), target: { leafId: leaf.id, edge: 'right' } },
+    { label: tr('tabMenu.splitUp'), target: { leafId: leaf.id, edge: 'top' } },
+    { label: tr('tabMenu.splitDown'), target: { leafId: leaf.id, edge: 'bottom' } },
+    ...all
+      .map((l, i) => ({ l, i }))
+      .filter(({ l }) => l.id !== leaf.id && !closing[l.id])
+      .map(({ l, i }, n) => ({
+        label: tr('panes.PaneView.moveToPane', { p0: i + 1 }),
+        target: { leafId: l.id, index: l.tabs.length },
+        separator: n === 0,
+      })),
+  ]
+  // 标签位置 ›：在标签栏里左右挪
+  const positions: Choice[] = [
+    { label: tr('tabMenu.moveLeft'), target: { leafId: leaf.id, index: index - 1 }, disabled: index <= 0 },
     {
-      get label() {
-        return tr('panes.PaneView.moveTabLeft')
-      },
-      target: { leafId: leaf.id, index: index - 1 },
-      disabled: index <= 0,
-    },
-    {
-      get label() {
-        return tr('panes.PaneView.moveTabRight')
-      },
+      label: tr('tabMenu.moveRight'),
       target: { leafId: leaf.id, index: index + 2 },
       disabled: index >= leaf.tabs.length - 1,
     },
-    {
-      get label() {
-        return tr('panes.drag.splitToLeft')
-      },
-      target: { leafId: leaf.id, edge: 'left' },
-    },
-    {
-      get label() {
-        return tr('panes.drag.splitToRight')
-      },
-      target: { leafId: leaf.id, edge: 'right' },
-    },
-    {
-      get label() {
-        return tr('panes.drag.splitAbove')
-      },
-      target: { leafId: leaf.id, edge: 'top' },
-    },
-    {
-      get label() {
-        return tr('panes.drag.splitBelow')
-      },
-      target: { leafId: leaf.id, edge: 'bottom' },
-    },
-    ...all.flatMap((l, i) =>
-      l.id === leaf.id || closing[l.id]
-        ? []
-        : [{ label: tr('panes.PaneView.moveToPane', { p0: i + 1 }), target: { leafId: l.id, index: l.tabs.length } }],
-    ),
   ]
   if (index < 0) return null
-  const move: MenuAction[] = choices.map((choice, i) => {
+  const toAction = (choice: Choice): MenuAction => {
     const problem = choice.disabled ? null : dropProblem(layout, menu.tab, choice.target, areaSize())
     return {
       label: choice.label,
       disabled: choice.disabled || !!problem,
       title: problem ?? undefined,
-      // 左右移动 | 四个方向拆分 | 移到别的窗格，各一组
-      separator: i === 2 || i === 6,
+      separator: choice.separator,
       run: () => paneActions.dropTab(menu.tab, choice.target, areaSize()),
     }
-  })
+  }
   const file = parseFileTab(menu.tab)
+  // 按动作作用的对象分组：对话本身（文件标签是文件的几项）→ 布局 → 关闭 → 危险操作（D116）
   const actions: MenuAction[] = [
     ...(sessionTarget
       ? [
@@ -502,6 +483,11 @@ function TabMenu({
             label: tr('session.rename'),
             disabled: sessionActions.busy,
             run: () => sessionActions.request('rename', sessionTarget),
+          },
+          {
+            label: tr(sessionTarget.archived ? 'session.restore' : 'session.archive'),
+            disabled: sessionActions.busy,
+            run: () => sessionActions.request(sessionTarget.archived ? 'restore' : 'archive', sessionTarget),
           },
         ]
       : []),
@@ -530,13 +516,15 @@ function TabMenu({
           },
         ]
       : []),
-    { label: tr('panes.PaneView.moveTo'), separator: true, children: move },
-    { label: tr('panel.PanelTabs.closeTab'), separator: true, run: () => void paneActions.closeTab(leaf.id, menu.tab) },
-    ...bulkActions(leaf, menu.tab, ['others', 'right', 'all', 'inactive']),
+    { label: tr('tabMenu.splitTo'), separator: true, children: splits.map(toAction) },
+    { label: tr('tabMenu.tabPosition'), children: positions.map(toAction) },
+    { label: tr('tabMenu.close'), separator: true, run: () => void paneActions.closeTab(leaf.id, menu.tab) },
+    // 范围从小到大，「关闭所有」放最后
+    ...bulkActions(leaf, menu.tab, ['others', 'right', 'inactive', 'all']),
     ...(sessionTarget
       ? [
           {
-            label: tr('session.delete'),
+            label: tr('tabMenu.deleteConversation'),
             danger: true,
             separator: true,
             disabled: sessionActions.busy,
