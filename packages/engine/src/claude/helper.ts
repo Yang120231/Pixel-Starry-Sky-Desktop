@@ -47,6 +47,9 @@ export function parseRewindReply(raw: Record<string, unknown>): RewindFilesReply
   return { ok: true, files, insertions: num(raw.insertions), deletions: num(raw.deletions) }
 }
 
+/** Claude Code 自己启动就可能要 30 秒；代码检查不再挡着「只恢复对话」，宁可多等也别超时失败 */
+const REWIND_INIT_TIMEOUT_MS = 90_000
+
 /**
  * 预览（dryRun）或还原。还原在同一个进程里先预览、调 beforeRestore（存一份当前内容）、再真的还原，只起一次进程；
  * 返回预览出的文件列表（还原的回复里没有）。预览没成功就不还原
@@ -67,7 +70,7 @@ export async function rewindFilesOnce(
     onExit: () => undefined,
   })
   try {
-    await proc.request('initialize', {}, 30_000)
+    await proc.request('initialize', {}, REWIND_INIT_TIMEOUT_MS)
     timing.initMs = ms()
     const preview = parseRewindReply(
       await proc.request('rewind_files', { user_message_id: userMessageId, dry_run: true }, 60_000),

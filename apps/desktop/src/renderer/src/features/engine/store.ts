@@ -56,9 +56,28 @@ let viewing = new Set<string>()
 
 export const bridge = isDemo ? undefined : window.pixelsky?.engine
 
-function set(patch: Partial<EngineState>): void {
-  state = { ...state, ...patch }
+let pendingRaf: number | undefined
+let pendingTimer: ReturnType<typeof setTimeout> | undefined
+
+function notifyNow(): void {
+  if (pendingRaf !== undefined) cancelAnimationFrame(pendingRaf)
+  if (pendingTimer !== undefined) clearTimeout(pendingTimer)
+  pendingRaf = pendingTimer = undefined
   for (const l of listeners) l()
+}
+
+// 状态总是立刻更新（读 getEngineState() 的人拿到的永远是最新）；notify = false 时只把通知推迟到下一帧。
+// 输出很快时一帧里会来几百个增量，每个都通知会让所有订阅者和正在流式的消息重渲染几百次；
+// 合并后每帧最多一次，渲染忙时 rAF 自然更晚，等于自动限流。窗口隐藏 / 最小化时 rAF 不触发，所以再挂一个定时器兜底。
+function set(patch: Partial<EngineState>, notify = true): void {
+  state = { ...state, ...patch }
+  if (notify) {
+    notifyNow()
+    return
+  }
+  if (pendingRaf !== undefined) return
+  pendingRaf = requestAnimationFrame(notifyNow)
+  pendingTimer = setTimeout(notifyNow, 100)
 }
 
 // 演示模式里会动的会话（压缩上下文、当前步骤循环播放）
@@ -78,14 +97,13 @@ export function getEngineState(): EngineState {
   return state
 }
 
+export function subscribeEngine(cb: () => void): () => void {
+  listeners.add(cb)
+  return () => listeners.delete(cb)
+}
+
 export function useEngineState<T>(selector: (s: EngineState) => T): T {
-  return useSyncExternalStore(
-    cb => {
-      listeners.add(cb)
-      return () => listeners.delete(cb)
-    },
-    () => selector(state),
-  )
+  return useSyncExternalStore(subscribeEngine, () => selector(state))
 }
 
 /** 默认项目：最近用过的会话所在的项目，没有就用第一个 */
@@ -108,7 +126,8 @@ function applySessionEvent(e: HostEvent & { kind: 'session' }): void {
   const next = reduce(snap, e.event)
   const unread =
     e.event.type === 'turn_completed' && !viewing.has(id) ? { ...state.unread, [id]: true as const } : state.unread
-  set({ snapshots: { ...state.snapshots, [id]: next }, unread })
+  // 流式增量合并通知，其余事件（开始 / 完成 / 状态 / 审批…）照旧立刻通知
+  set({ snapshots: { ...state.snapshots, [id]: next }, unread }, e.event.type !== 'item_delta')
 }
 
 function onHostEvent(e: HostEvent): void {

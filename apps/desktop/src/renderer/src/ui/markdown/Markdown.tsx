@@ -1,5 +1,5 @@
 import { useI18n } from '@/i18n/I18nProvider'
-import { memo, useMemo } from 'react'
+import { memo, useMemo, useRef } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkBreaks from 'remark-breaks'
 import remarkGfm from 'remark-gfm'
@@ -8,6 +8,7 @@ import { CodeBlock } from '@/ui/code/CodeBlock'
 import { InlineCode, MarkdownLink, PathLinksContext, keepLocalPaths } from './pathLinks'
 import { Callout, isAlertKind, remarkAlerts } from './alerts'
 import { hasMath, normalizeMath, useMathPlugins, type PluggableList } from './math'
+import { createStreamSplitter } from './streamBlocks'
 import type { Element, ElementContent } from 'hast'
 
 /** 取出 hast 节点里的全部文字（代码块的原文） */
@@ -70,6 +71,49 @@ const PROSE = [
   '[&_hr]:my-4 [&_hr]:border-line',
 ].join(' ')
 
+/** 流式时不带公式和路径链接，插件固定不变 */
+const STREAM_REMARK_PLUGINS: PluggableList = [remarkAlerts, remarkGfm, remarkBreaks]
+
+/**
+ * 流式时一块（空行之间的一段）超过这个长度就不解析 Markdown，按纯文字显示。
+ * 没有空行的退化输出（一行重复几千遍）整段是一块，每来一点字都重新解析会卡死界面；
+ * 正常的一段话远不到这个长度，这条回复完成后整条按 Markdown 重画。
+ */
+const STREAM_MARKDOWN_LIMIT = 8000
+
+/** 流式时一个已写完的块：文字不变就不重新解析；超长的块按纯文字显示 */
+const StreamChunk = memo(function StreamChunk({ text }: { text: string }) {
+  if (text.length > STREAM_MARKDOWN_LIMIT) return <p className="whitespace-pre-wrap">{text}</p>
+  return (
+    <ReactMarkdown remarkPlugins={STREAM_REMARK_PLUGINS} components={components} urlTransform={keepLocalPaths}>
+      {text}
+    </ReactMarkdown>
+  )
+})
+
+/**
+ * 流式输出：已写完的块各自 memo，只有尾巴随新文字重新解析；切块接着上次的位置扫，每次的开销和新增文字成正比。
+ * 尾巴超长时只显示最后一段（整段每次都排版也会拖慢），完成后显示全文
+ */
+function StreamingBody({ text }: { text: string }) {
+  const splitter = useRef<ReturnType<typeof createStreamSplitter> | null>(null)
+  splitter.current ??= createStreamSplitter()
+  const split = splitter.current
+  const { completed, tail } = useMemo(() => split(text), [split, text])
+  return (
+    <PathLinksContext.Provider value={null}>
+      {completed.map((block, i) => (
+        <StreamChunk key={i} text={block} />
+      ))}
+      {tail.trim() === '' ? null : tail.length <= STREAM_MARKDOWN_LIMIT ? (
+        <StreamChunk text={tail} />
+      ) : (
+        <p className="whitespace-pre-wrap">…{tail.slice(-STREAM_MARKDOWN_LIMIT)}</p>
+      )}
+    </PathLinksContext.Provider>
+  )
+}
+
 export const Markdown = memo(function Markdown({
   text,
   className,
@@ -77,31 +121,32 @@ export const Markdown = memo(function Markdown({
 }: {
   text: string
   className?: string
-  /** 回复还在输出：先不加路径链接和公式，等这条完成，免得内容变化时闪动 */
+  /** 回复还在输出：先不加路径链接和公式，等这条完成，免得内容变化时闪动；按空行分块，已写完的块不重新解析 */
   streaming?: boolean
 }) {
   useI18n()
-  // 公式：有公式标记时才加载 KaTeX，加载好之前按原文显示（docs/ui/content-highlight.md §2 I）
-  const math = useMathPlugins(!streaming && hasMath(text))
+  // 公式：有公式标记时才加载 KaTeX，加载好之前按原文显示（docs/ui/content-highlight.md §2 I）；流式时不扫全文
+  const math = useMathPlugins(streaming ? false : hasMath(text))
   const source = useMemo(() => (math ? normalizeMath(text) : text), [math, text])
   // 提示块要在 remark-breaks 之前认出标记；remark-breaks：单个换行也换行（一行一个的列表、数字不会挤成一段）
   const remarkPlugins = useMemo<PluggableList>(
     () => [remarkAlerts, remarkGfm, ...(math?.remark ?? []), remarkBreaks],
     [math],
   )
-  const body = (
-    <ReactMarkdown
-      remarkPlugins={remarkPlugins}
-      rehypePlugins={math?.rehype}
-      components={components}
-      urlTransform={keepLocalPaths}
-    >
-      {source}
-    </ReactMarkdown>
-  )
   return (
     <div className={cn(PROSE, className)}>
-      {streaming ? <PathLinksContext.Provider value={null}>{body}</PathLinksContext.Provider> : body}
+      {streaming ? (
+        <StreamingBody text={text} />
+      ) : (
+        <ReactMarkdown
+          remarkPlugins={remarkPlugins}
+          rehypePlugins={math?.rehype}
+          components={components}
+          urlTransform={keepLocalPaths}
+        >
+          {source}
+        </ReactMarkdown>
+      )}
     </div>
   )
 })

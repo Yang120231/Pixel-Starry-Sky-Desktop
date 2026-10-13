@@ -2,12 +2,27 @@
 import { reduce, type EngineEvent, type SessionRecord } from '@pixelsky/protocol'
 import type { HostContext } from './context'
 
+type DeltaEvent = Extract<EngineEvent, { type: 'item_delta' }>
+
 export class HostEvents {
+  /** 每个会话一条还没应用的文字增量（同一条目同一字段的连续增量合并在这里） */
+  private readonly pendingDelta = new Map<string, DeltaEvent>()
+
   constructor(private readonly ctx: HostContext) {}
+
+  /** 把合并好的增量应用出去；先删再应用，apply 里再调用也不会递归 */
+  private flushDelta(id: string): void {
+    const pending = this.pendingDelta.get(id)
+    if (!pending) return
+    this.pendingDelta.delete(id)
+    this.apply(id, pending)
+  }
 
   /** 应用一个事件：更新快照、保存、广播 */
   apply(id: string, event: EngineEvent): void {
     const { ctx } = this
+    // 其他事件不能越过还没应用的文字，先把它应用掉
+    if (event.type !== 'item_delta') this.flushDelta(id)
     const rt = ctx.runtimes.get(id)
     if (!rt) return
     const before = rt.snapshot.items
@@ -66,6 +81,19 @@ export class HostEvents {
       const r = event.request
       if (rt.snapshot.turnId !== r.turnId || rt.snapshot.state === 'idle' || rt.stopping) return
       m.cache.check(id, rt, r)
+      return
+    }
+    if (event.type === 'item_delta') {
+      // 同一块 stdout 的事件是同步处理的，微任务会在任何别的宏任务（如 IPC 取快照）之前应用，快照和广播保持一致；
+      // 输出快时一块里几百个增量合成一条，慢时仍然逐个到达
+      const pending = this.pendingDelta.get(id)
+      if (pending && pending.itemId === event.itemId && pending.field === event.field) {
+        pending.delta += event.delta
+        return
+      }
+      this.flushDelta(id)
+      this.pendingDelta.set(id, { ...event })
+      queueMicrotask(() => this.flushDelta(id))
       return
     }
     this.apply(id, event)

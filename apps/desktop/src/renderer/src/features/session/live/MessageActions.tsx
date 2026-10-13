@@ -170,11 +170,16 @@ function RewindDialog({
   const touched = useRef(false)
   const [settling, setSettling] = useState(false)
   const [elapsed, setElapsed] = useState(0)
+  // actions 和 item 每次快照更新都会换新对象；依赖它们会在对话框开着时重复检查、多起辅助进程，所以只经 ref 读最新值
+  const actionsRef = useRef(actions)
+  const itemRef = useRef(item)
+  actionsRef.current = actions
+  itemRef.current = item
   useEffect(() => {
     if (!actions.rewindCode) return
     let alive = true
-    actions
-      .rewindPreview(item)
+    actionsRef.current
+      .rewindPreview(itemRef.current)
       .then(p => {
         if (!alive) return
         setPreview(p)
@@ -187,7 +192,8 @@ function RewindDialog({
     return () => {
       alive = false
     }
-  }, [actions, item])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 有意只按消息 id 和能否恢复代码重跑
+  }, [item.id, actions.rewindCode])
   useEffect(() => {
     if (!settling) return
     const timer = setTimeout(() => setSettling(false), SETTLE_MS)
