@@ -16,6 +16,8 @@ import {
 import { TurnRail } from './TurnRail'
 import { turnsOf } from './turnRailModel'
 import { useTurnRailOn } from '@/features/settings/turnRail'
+import { useTranscriptWindowSize } from '@/features/settings/longConversation'
+import { hiddenCount, initialHidden, revealEarlier, revealFor, startIndex, turnStarts } from './transcriptWindow'
 import type { Item, SessionSnapshot } from '@pixelsky/protocol'
 import { Spinner, cn } from '@/ui'
 import type { ChangedFiles } from '@/data'
@@ -30,7 +32,7 @@ import { AssistantMessageActions, UserMessageActions } from './MessageActions'
 import { platformNoticeText } from './errorKind'
 import { useItemLocation } from '@/features/search/useItemLocation'
 import { ExpandScope } from '@/features/search/expand'
-import { DETACH_EVENT } from '@/features/search/navigation'
+import { DETACH_EVENT, useItemNavigation } from '@/features/search/navigation'
 import { JumpToLatest } from './JumpToLatest'
 import {
   afterResize,
@@ -191,15 +193,34 @@ export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot
   const items = snapshot?.items ?? []
   // 轮次跳转条（docs/ui/turn-rail.md）
   const showTurns = useTurnRailOn()
-  const turns = useMemo(() => turnsOf(snapshot?.items ?? []), [snapshot?.items])
   const sessionId = snapshot?.record.id ?? null
+
+  // 长对话只显示最近几轮（docs/ui/turn-rail.md §9）：win.hidden 是从头隐藏了几轮。
+  // 打开这个会话时按设置算一次，之后只会变少（点「显示更早的」、跳转到隐藏的内容），新的轮次往后加不会把已显示的藏回去
+  const windowSize = useTranscriptWindowSize()
+  const [win, setWin] = useState<{ sessionId: string | null; hidden: number } | null>(null)
+  const starts = useMemo(() => turnStarts(snapshot?.items ?? []), [snapshot?.items])
+  const wanted = snapshot && snapshot.items.length > 0 ? initialHidden(starts.length, windowSize) : 0
+  const opened = !!win && win.sessionId === sessionId
+  if (snapshot && snapshot.items.length > 0 && !opened) setWin({ sessionId, hidden: wanted })
+  const hidden = opened && windowSize !== null ? win.hidden : opened ? 0 : wanted
+  const hiddenTurns = hiddenCount(starts.length, hidden)
+  const firstShown = startIndex(starts, hidden)
+  const shownItems = useMemo(
+    () => (firstShown > 0 && snapshot ? snapshot.items.slice(firstShown) : (snapshot?.items ?? [])),
+    [snapshot, firstShown],
+  )
+  const turns = useMemo(() => {
+    const list = turnsOf(shownItems)
+    return hiddenTurns > 0 ? list.map(t => ({ ...t, n: t.n + hiddenTurns })) : list
+  }, [shownItems, hiddenTurns])
   const changesCache = useRef<{ sessionId: string | null; map: ChangesCache }>({ sessionId: null, map: new Map() })
   const blocks = useMemo(() => {
     if (changesCache.current.sessionId !== sessionId) changesCache.current = { sessionId, map: new Map() }
-    return toBlocks(items, running, changesCache.current.map)
-  }, [items, running, sessionId])
+    return toBlocks(shownItems, running, changesCache.current.map)
+  }, [shownItems, running, sessionId])
   // 每轮统计行对应的回复：和显示在外面的「最后的回复」是同一段（中间穿插工具调用的过渡话不算）
-  const replies = useMemo(() => turnReplies(items), [items])
+  const replies = useMemo(() => turnReplies(shownItems), [shownItems])
 
   // 最后一块不是正在流式输出的文字、也不是转着圈的执行块时，显示「处理中」（不然几个转圈同时出现）
   const last = items[items.length - 1]
@@ -242,6 +263,45 @@ export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot
     const el = scroller.current
     if (el && stick.current) el.scrollTop = el.scrollHeight
   }, [blocks, showThinking, starting.length])
+
+  // 显示更早的一批：补出来的内容在上面，屏幕上正在看的位置不动。
+  // 记下补之前最上面那条可见条目的位置，补完在布局阶段把滚动位置加上它挪动的距离（不依赖浏览器自己的滚动锚定）
+  const keepPlace = useRef<{ el: HTMLElement; top: number } | null>(null)
+  const showEarlier = (step: number | null): void => {
+    const el = scroller.current
+    if (!el || hidden <= 0) return
+    const next = revealEarlier(hidden, step)
+    if (next === hidden) return
+    const box = el.getBoundingClientRect()
+    for (const row of el.querySelectorAll<HTMLElement>('[data-search-item]')) {
+      const rect = row.getBoundingClientRect()
+      if (rect.bottom > box.top + 1) {
+        keepPlace.current = { el: row, top: rect.top - box.top }
+        break
+      }
+    }
+    // 先不贴底：补出来的内容会让对话流变高，不能被当成新内容又拽回底部
+    detachForSearch()
+    setWin({ sessionId, hidden: next })
+  }
+  useLayoutEffect(() => {
+    const place = keepPlace.current
+    const el = scroller.current
+    if (!place || !el) return
+    keepPlace.current = null
+    if (place.el.isConnected)
+      el.scrollTop += place.el.getBoundingClientRect().top - el.getBoundingClientRect().top - place.top
+  }, [firstShown])
+
+  // 要跳到的条目在隐藏的部分（全局搜索、从别处打开对话并定位）：先展开到它所在那一轮，再由 useItemLocation 找它
+  const navigation = useItemNavigation()
+  useLayoutEffect(() => {
+    if (!navigation || navigation.sessionId !== sessionId || !snapshot || hidden <= 0) return
+    const next = revealFor(snapshot.items, starts, hidden, navigation.itemId)
+    if (next === hidden) return
+    detachForSearch()
+    setWin({ sessionId, hidden: next })
+  }, [navigation, sessionId, snapshot, starts, hidden, detachForSearch])
 
   // 对话内搜索等程序滚动之前会先发 DETACH_EVENT：和搜索跳转一样暂时不贴底
   useEffect(() => {
@@ -455,6 +515,35 @@ export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot
               </div>
             )}
             {header}
+            {hiddenTurns > 0 && (
+              <div
+                data-transcript-hidden
+                data-hidden-turns={hiddenTurns}
+                className="conversation-message flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-line bg-subtle px-3 py-2 text-meta text-fg-muted"
+              >
+                <span className="tabular-nums">{tr('longConversation.hidden', { n: hiddenTurns })}</span>
+                <span className="ml-auto flex items-center gap-1.5">
+                  {windowSize !== null && (
+                    <button
+                      type="button"
+                      data-transcript-show-earlier
+                      onClick={() => showEarlier(windowSize)}
+                      className="press rounded-md px-2 py-1 text-fg-secondary outline-none hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-accent"
+                    >
+                      {tr('longConversation.showEarlier', { n: Math.min(windowSize, hiddenTurns) })}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    data-transcript-show-all
+                    onClick={() => showEarlier(null)}
+                    className="press rounded-md px-2 py-1 text-fg-secondary outline-none hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-accent"
+                  >
+                    {tr('longConversation.showAll')}
+                  </button>
+                </span>
+              </div>
+            )}
             {blocks.map((b, i) => renderBlock(b, i))}
             {starting.map(q => (
               <div key={q.id} data-starting-message={q.id} className="flex flex-col gap-3">
@@ -490,7 +579,14 @@ export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot
         {away && snapshot && <JumpToLatest unseen={unseen} onClick={jumpToLatest} />}
         {/* 滚动条和轮次刻度合成一条（docs/ui/turn-rail.md §8）；设置里关掉轮次时只剩滚动条 */}
         {snapshot && (
-          <TurnRail turns={turns} scroller={scroller} showTurns={showTurns} onBeforeJump={detachForSearch} />
+          <TurnRail
+            turns={turns}
+            scroller={scroller}
+            showTurns={showTurns}
+            onBeforeJump={detachForSearch}
+            hiddenTurns={hiddenTurns}
+            onShowEarlier={windowSize !== null ? () => showEarlier(windowSize) : undefined}
+          />
         )}
       </div>
     </ExpandScope.Provider>

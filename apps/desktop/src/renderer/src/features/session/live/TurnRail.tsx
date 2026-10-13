@@ -35,6 +35,8 @@ export function TurnRail({
   scroller,
   showTurns,
   onBeforeJump,
+  hiddenTurns = 0,
+  onShowEarlier,
 }: {
   turns: Turn[]
   scroller: RefObject<HTMLDivElement | null>
@@ -42,6 +44,10 @@ export function TurnRail({
   showTurns: boolean
   /** 跳转前：暂停「贴底跟随」，不然新内容会把视口拉回底部 */
   onBeforeJump: () => void
+  /** 上面还有几轮没显示（docs/ui/turn-rail.md §9）：滑轨顶部的小标记、列表第一行；turns 只含显示出来的轮 */
+  hiddenTurns?: number
+  /** 点标记或列表第一行：显示更早的一批 */
+  onShowEarlier?: () => void
 }) {
   useI18n()
   const rail = useRef<HTMLElement>(null)
@@ -181,6 +187,10 @@ export function TurnRail({
     jump(index)
     setOpen(false)
   }
+  const showEarlier = (): void => {
+    setOpen(false)
+    onShowEarlier?.()
+  }
   const railY = (clientY: number): number => clientY - (rail.current?.getBoundingClientRect().top ?? 0) - PAD
 
   const onPointerDown = (e: PointerEvent<HTMLElement>): void => {
@@ -268,31 +278,60 @@ export function TurnRail({
         onWheel={e => scroller.current?.scrollBy({ top: e.deltaY })}
         className="absolute inset-0 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
+        {/* 有刻度时滑块是刻度后面的一块淡底色（看得到的这几轮），刻度画在上面、不被压着；只有滚动条时还是细滑块 */}
         <span
           data-rail-thumb
           aria-hidden
           style={{ top: PAD + thumb.top, height: thumb.height }}
           className={cn(
-            'absolute right-[6px] rounded-full transition-[width,background-color] duration-(--dur-fast)',
-            dragging ? 'w-2 bg-fg-faint' : 'w-1 bg-selected group-hover/rail:w-2 group-hover/rail:bg-fg-faint/50',
+            'absolute transition-[width,background-color] duration-(--dur-fast)',
+            withTurns
+              ? cn(
+                  'right-[2px] w-[14px] rounded-[4px]',
+                  dragging ? 'bg-fg-faint/40' : 'bg-selected group-hover/rail:bg-fg-faint/25',
+                )
+              : cn(
+                  'right-[6px] rounded-full',
+                  dragging ? 'w-2 bg-fg-faint' : 'w-1 bg-selected group-hover/rail:w-2 group-hover/rail:bg-fg-faint/50',
+                ),
           )}
         />
-        {ticks.map(tick => (
-          <span
-            key={turns[tick.index].id}
-            data-turn-index={tick.index}
-            aria-hidden
-            aria-current={tick.current ? 'true' : undefined}
-            style={{ top: PAD + tick.y }}
-            className={cn(
-              'pointer-events-none absolute right-[5px] h-[1.5px] -translate-y-1/2 rounded-full transition-[width,opacity] duration-(--dur-fast)',
-              tick.current
-                ? 'w-3 bg-fg opacity-90'
-                : 'w-1.5 bg-fg-faint opacity-60 group-hover/rail:w-2 group-hover/rail:opacity-90',
-            )}
-          />
-        ))}
+        {ticks.map(tick => {
+          // 底色里的几轮（屏幕上看得到的）亮一些；刻度都以底色的中线居中
+          const inView = tick.y >= thumb.top && tick.y <= thumb.top + thumb.height
+          return (
+            <span
+              key={turns[tick.index].id}
+              data-turn-index={tick.index}
+              aria-hidden
+              aria-current={tick.current ? 'true' : undefined}
+              style={{ top: PAD + tick.y }}
+              className={cn(
+                'pointer-events-none absolute h-[1.5px] -translate-y-1/2 rounded-full transition-[width,opacity] duration-(--dur-fast)',
+                tick.current
+                  ? 'right-[3px] w-3 bg-fg opacity-90'
+                  : cn(
+                      'right-[6px] w-1.5 bg-fg-faint group-hover/rail:right-[5px] group-hover/rail:w-2 group-hover/rail:opacity-90',
+                      inView ? 'opacity-90' : 'opacity-60',
+                    ),
+              )}
+            />
+          )
+        })}
       </div>
+      {/* 上面还有没显示的轮：滑轨顶部一个淡淡的小标记，在滑块左边、不挡着拖；点它显示更早的一批 */}
+      {withTurns && hiddenTurns > 0 && onShowEarlier && (
+        <button
+          type="button"
+          data-turn-earlier-marker
+          aria-label={tr('turnRail.earlierItem', { n: hiddenTurns })}
+          title={tr('turnRail.earlierItem', { n: hiddenTurns })}
+          onClick={showEarlier}
+          className="absolute top-[3px] right-[18px] rounded px-0.5 text-[10px] leading-none whitespace-nowrap tabular-nums text-fg-faint opacity-60 outline-none hover:opacity-100 focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          {tr('turnRail.earlierMarker', { n: hiddenTurns })}
+        </button>
+      )}
       {open && withTurns && (
         <div
           ref={list}
@@ -304,10 +343,16 @@ export function TurnRail({
           <div className="flex shrink-0 items-center justify-between px-3 pt-2.5 pb-1.5 text-label text-fg-faint">
             <span>{tr('turnRail.label')}</span>
             <span className="tabular-nums">
-              {current + 1} / {turns.length}
+              {hiddenTurns + current + 1} / {hiddenTurns + turns.length}
             </span>
           </div>
-          <TurnList turns={turns} current={current} onPick={go} />
+          <TurnList
+            turns={turns}
+            current={current}
+            onPick={go}
+            hiddenTurns={hiddenTurns}
+            onShowEarlier={onShowEarlier ? showEarlier : undefined}
+          />
         </div>
       )}
     </nav>
@@ -326,7 +371,19 @@ function scrollToward(el: HTMLElement, top: number, after?: () => void): void {
   if (after) el.addEventListener('scrollend', after, { once: true })
 }
 
-function TurnList({ turns, current, onPick }: { turns: Turn[]; current: number; onPick: (index: number) => void }) {
+function TurnList({
+  turns,
+  current,
+  onPick,
+  hiddenTurns,
+  onShowEarlier,
+}: {
+  turns: Turn[]
+  current: number
+  onPick: (index: number) => void
+  hiddenTurns: number
+  onShowEarlier?: () => void
+}) {
   useI18n()
   const box = useRef<HTMLDivElement>(null)
   // 打开时把当前轮滚到列表中间
@@ -335,6 +392,20 @@ function TurnList({ turns, current, onPick }: { turns: Turn[]; current: number; 
   }, [])
   return (
     <div ref={box} className="min-h-0 overflow-y-auto px-1.5 pb-1.5">
+      {hiddenTurns > 0 && onShowEarlier && (
+        <button
+          type="button"
+          role="menuitem"
+          data-turn-item="earlier"
+          data-turn-earlier-item
+          tabIndex={-1}
+          onClick={onShowEarlier}
+          className="flex w-full items-baseline gap-2.5 rounded-lg px-2 py-1.5 text-left text-meta text-fg-faint outline-none hover:bg-hover hover:text-fg-secondary focus-visible:bg-hover"
+        >
+          <span className="w-5 shrink-0 text-right">↑</span>
+          <span className="min-w-0 flex-1 truncate">{tr('turnRail.earlierItem', { n: hiddenTurns })}</span>
+        </button>
+      )}
       {turns.map((t, i) => {
         const active = i === current
         return (

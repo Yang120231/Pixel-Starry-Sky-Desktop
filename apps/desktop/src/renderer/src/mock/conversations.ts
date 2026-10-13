@@ -36,6 +36,7 @@ export const SHOWCASE_SESSIONS = [
   { id: 'demo-claude-question', title: '提问：单选和多选' },
   { id: 'demo-claude-plan', title: '计划确认' },
   { id: 'demo-claude-long', title: '长对话：轮次跳转（30 轮）' },
+  { id: 'demo-claude-long-120', title: '长对话：只显示最近 20 轮（120 轮）' },
   { id: 'demo-claude-subagents', title: '后台子智能体：改动按子智能体分组' },
 ] as const
 
@@ -1610,6 +1611,28 @@ const long = snapshot(
   ]),
 )
 
+// 超长对话（docs/ui/turn-rail.md §9）：120 轮，打开时只显示最近 20 轮；第 3 轮有一条可搜索的独特词，第 60 轮带一条引导消息
+const long120 = snapshot(
+  record('demo-claude-long-120', { updatedAt: T0 - 1 * MIN }),
+  Array.from({ length: 120 }, (_, i) => {
+    const ask = `${LONG_ASKS[i % LONG_ASKS.length]}（第 ${i + 1} 轮${i === 2 ? '，暗号：蓝鲸夜航' : ''}）`
+    return [
+      user(`l120-u${i}`, ask, 400 - i * 3),
+      ...(i === 59 ? [user('l120-g59', '补充一句：别动旧格式', 400 - i * 3 - 1, { mode: 'guidance' })] : []),
+      assistant(
+        `l120-a${i}`,
+        [`第 ${i + 1} 轮：${LONG_ASKS[i % LONG_ASKS.length]}，已处理。`, '', '- 改动在 `src/session/useDraft.ts`'].join(
+          '\n',
+        ),
+      ),
+      stats(`l120-s${i}`, 'completed', {
+        durationMs: 8_000 + i * 100,
+        models: { 'claude-opus-5-5': opus(900, 320, 0.03) },
+      }),
+    ]
+  }).flat(),
+)
+
 // ---------- 后台子智能体：一轮一张改动卡片，按子智能体分组（GitHub #40，docs/ui/subagent-changes.md） ----------
 
 const BG_AGENTS = [
@@ -1741,6 +1764,7 @@ export const showcaseSnapshots: Record<string, SessionSnapshot> = Object.fromEnt
     question,
     plan,
     long,
+    long120,
     subagents,
   ].map(s => [s.record.id, s]),
 )

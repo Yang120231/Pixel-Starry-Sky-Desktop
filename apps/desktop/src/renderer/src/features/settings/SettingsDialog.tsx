@@ -35,6 +35,7 @@ import { AccentSettings } from './AccentSettings'
 import { PaletteSettings } from './PaletteSettings'
 import { CloseActionSettings } from './CloseActionSettings'
 import { TurnRailSettings } from './TurnRailSettings'
+import { LongConversationSettings } from './LongConversationSettings'
 import { MessageActionsSettings } from './MessageActionsSettings'
 import { CacheMissSettings } from './CacheMissSettings'
 import { WallpaperSettings } from './WallpaperSettings'
@@ -716,6 +717,7 @@ function AppearanceSection() {
       <ComposerStyleSettings />
       <ReplyStatsSettings />
       <TurnRailSettings />
+      <LongConversationSettings />
       <MessageActionsSettings />
       <CacheMissSettings />
 

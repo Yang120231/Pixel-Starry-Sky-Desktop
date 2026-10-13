@@ -46,6 +46,11 @@ export const SETTINGS_INDEX: SearchEntry[] = [
     title: '界面语言',
     keywords: '语言 中文 英文 简体 language Chinese English locale localization',
   },
+  {
+    section: 'appearance',
+    title: '长对话先显示最近',
+    keywords: '长对话 最近 轮 折叠 隐藏 更早 显示全部 conversation long recent turns fold hide',
+  },
   { section: 'appearance', title: '对话框风格', keywords: '输入框 风格 样式 布局 chatgpt claude 工具框内 框外' },
   {
     section: 'editor',
