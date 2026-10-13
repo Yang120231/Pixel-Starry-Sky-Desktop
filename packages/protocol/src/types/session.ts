@@ -62,9 +62,14 @@ export interface FileAttachment {
   /** 原文件的编码（都已转成文字） */
   encoding: 'utf-8' | 'utf-16le' | 'utf-16be' | 'gb18030'
   text: string
+  /** 截断时的结尾部分；从文档提取的（有 source）只留开头，tail 是空串 */
   tail?: string
   omitted?: number
+  /** 不是纯文本、是从这种文件里提取的文字（docs/ui/composer-file-attachments.md §7）；没有就是文本文件 */
+  source?: FileSource
 }
+
+export type FileSource = 'docx' | 'xlsx' | 'pptx' | 'odt' | 'ods' | 'odp' | 'pdf' | 'rtf' | 'epub' | 'html' | 'ipynb'
 
 export interface MessageInput {
   text: string

@@ -23,6 +23,7 @@ export type {
   EngineUpdateResult,
   FileChange,
   FileAttachment,
+  FileSource,
   HostEvent,
   ImageAttachment,
   Item,
@@ -89,6 +90,7 @@ export {
 } from './images'
 export {
   FILE_ENCODINGS,
+  FILE_SOURCES,
   FILE_HEAD_BYTES,
   FILE_INLINE_BYTES,
   FILE_TAIL_BYTES,

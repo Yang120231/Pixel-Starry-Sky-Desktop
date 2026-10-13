@@ -1,13 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { FileText, X } from 'lucide-react'
-import { fileShownLines, type FileAttachment } from '@pixelsky/protocol'
+import { FileSpreadsheet, FileText, Presentation, X, type LucideIcon } from 'lucide-react'
+import { fileShownLines, type FileAttachment, type FileSource } from '@pixelsky/protocol'
 import { cn } from '@/ui'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import { estimateTokens, fileSize, looksSecret } from './files'
 
 const count = (n: number): string => n.toLocaleString()
+const sourceName = (source: FileSource): string => tr(`composer.file.source.${source}`)
+const ICON: Partial<Record<FileSource, LucideIcon>> = {
+  xlsx: FileSpreadsheet,
+  ods: FileSpreadsheet,
+  pptx: Presentation,
+  odp: Presentation,
+}
 const tokens = (n: number): string => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k` : String(n))
 
 /** 预览：发给智能体的正文，截断处标出省略了多少行 */
@@ -47,7 +54,9 @@ function FilePreview({ file, onClose }: { file: FileAttachment; onClose: () => v
         <div className="flex shrink-0 items-center gap-3 px-4 py-2 text-meta text-fg-secondary">
           <span className="min-w-0 flex-1 truncate">
             <span className="text-fg">{file.name}</span> · {tr('composer.file.previewHint')} ·{' '}
-            {tr('composer.file.encoding', { p0: file.encoding.toUpperCase() })}
+            {file.source
+              ? tr('composer.file.textOnlyHint', { p0: sourceName(file.source) })
+              : tr('composer.file.encoding', { p0: file.encoding.toUpperCase() })}
           </span>
           <button
             type="button"
@@ -62,7 +71,7 @@ function FilePreview({ file, onClose }: { file: FileAttachment; onClose: () => v
           {file.text}
           {file.tail !== undefined && (
             <span className="my-1 block text-center text-fg-muted select-none">
-              {tr('composer.file.omitted', { p0: count(file.omitted ?? 0) })}
+              {tr(file.tail ? 'composer.file.omitted' : 'composer.file.headOnly', { p0: count(file.omitted ?? 0) })}
             </span>
           )}
           {file.tail}
@@ -83,13 +92,16 @@ function FileCard({ file, onRemove }: { file: FileAttachment; onRemove?: (id: st
   const estimate = estimateTokens(file.text) + estimateTokens(file.tail ?? '')
   const meta = [fileSize(file.bytes), tr('composer.file.lines', { p0: count(file.lines) })]
   if (onRemove) meta.push(tr('composer.file.tokens', { p0: tokens(estimate) }))
-  const hint = truncated
-    ? tr('composer.file.truncatedHint', {
-        p0: count(shown.head),
-        p1: count(shown.tail),
-        p2: count(file.omitted ?? 0),
-      })
-    : undefined
+  const hint = !truncated
+    ? undefined
+    : file.tail
+      ? tr('composer.file.truncatedHint', {
+          p0: count(shown.head),
+          p1: count(shown.tail),
+          p2: count(file.omitted ?? 0),
+        })
+      : tr('composer.file.headOnlyHint', { p0: count(shown.head), p1: count(file.omitted ?? 0) })
+  const Icon = (file.source && ICON[file.source]) ?? FileText
   return (
     <div
       data-file-attachment={file.id}
@@ -102,14 +114,22 @@ function FileCard({ file, onRemove }: { file: FileAttachment; onRemove?: (id: st
         type="button"
         className="flex min-w-0 flex-1 items-center gap-2 text-left"
         aria-label={`${tr('composer.file.preview')} ${file.name}`}
-        title={[file.name, hint, secret && tr('composer.file.secretHint')].filter(Boolean).join('\n')}
+        title={[
+          file.name,
+          file.source && tr('composer.file.textOnlyHint', { p0: sourceName(file.source) }),
+          hint,
+          secret && tr('composer.file.secretHint'),
+        ]
+          .filter(Boolean)
+          .join('\n')}
         onClick={() => setOpen(true)}
       >
-        <FileText size={18} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
+        <Icon size={18} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
         <span className="flex min-w-0 flex-col">
           <span className="truncate text-list text-fg">{file.name}</span>
           <span className="flex min-w-0 items-center gap-1.5 text-label text-fg-muted">
             <span className="truncate">{meta.join(' · ')}</span>
+            {file.source && <span className="shrink-0">{tr('composer.file.textOnly')}</span>}
             {truncated && <span className="shrink-0 text-warn">{tr('composer.file.truncated')}</span>}
             {secret && <span className="shrink-0 text-warn">{tr('composer.file.secret')}</span>}
           </span>

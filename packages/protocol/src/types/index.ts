@@ -1,6 +1,7 @@
 export type { AlwaysScope, Effort, EngineId, PermissionMode } from './base'
 export type {
   FileAttachment,
+  FileSource,
   ImageAttachment,
   MessageInput,
   ProjectRecord,

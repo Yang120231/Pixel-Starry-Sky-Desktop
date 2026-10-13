@@ -305,8 +305,12 @@ export function Composer({
       return
     }
     read(async () => {
-      const loaded = await Promise.all(others.map(readTextFile))
-      await updateFiles(key, current => [...current, ...loaded])
+      // 一个读不了不耽误别的：读成的照常加进来，读不了的说原因
+      const results = await Promise.allSettled(others.map(readTextFile))
+      const loaded = results.flatMap(r => (r.status === 'fulfilled' ? [r.value] : []))
+      if (loaded.length) await updateFiles(key, current => [...current, ...loaded])
+      const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected')
+      if (failed) throw failed.reason
     })
   }
 

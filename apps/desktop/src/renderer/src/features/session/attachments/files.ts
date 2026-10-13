@@ -10,10 +10,12 @@ import {
   type FileAttachment,
 } from '@pixelsky/protocol'
 import { tr } from '@/i18n/core'
+import { containerOf, readDocument } from './extract'
 
 type Encoding = FileAttachment['encoding']
 
 const IMAGE_EXT = /\.(png|jpe?g|webp|gif)$/i
+const OFFICE_EXT = /\.(docx|xlsx|pptx|docm|xlsm|pptm)$/i
 /** 按类型和扩展名分：图片走图片附件，其余当文本文件读（读的时候再按内容判断） */
 export const isImageFile = (file: File): boolean =>
   (IMAGE_MEDIA_TYPES as readonly string[]).includes(file.type) || (!file.type && IMAGE_EXT.test(file.name))
@@ -90,7 +92,13 @@ export async function readTextFile(file: File): Promise<FileAttachment> {
   if (file.size > MAX_FILE_BYTES) throw new Error(tr('composer.file.tooLarge', { p0: file.name }))
   const whole = file.size <= FILE_INLINE_BYTES
   const head = new Uint8Array(await file.slice(0, whole ? file.size : FILE_HEAD_BYTES).arrayBuffer())
+  // Word / Excel / PPT 这类：提取文字（docs/ui/composer-file-attachments.md §7）
+  const container = containerOf(head)
+  if (container) return readDocument(file, container)
   const kind = sniff(head.subarray(0, 8192))
+  // 扩展名是 Office 文档、内容却不是 zip：多半被加密软件加过密（透明加密），或者坏了
+  if ((kind === 'binary' || kind === 'image') && OFFICE_EXT.test(file.name))
+    throw new Error(tr('composer.file.notDocument', { p0: file.name }))
   if (kind === 'pdf') throw new Error(tr('composer.file.pdf', { p0: file.name }))
   if (kind === 'binary' || kind === 'image') throw new Error(tr('composer.file.binary', { p0: file.name }))
   const base = { id: crypto.randomUUID(), name: file.name || 'file.txt', bytes: file.size }

@@ -1,8 +1,36 @@
 // 输入框里的文本文件附件（日志、文本、代码、配置等，docs/ui/composer-file-attachments.md）：
 // 读成文字后跟消息一起发给引擎；太大的只带开头和结尾。
-import type { FileAttachment } from './types'
+import type { FileAttachment, FileSource } from './types'
 
 export const FILE_ENCODINGS = ['utf-8', 'utf-16le', 'utf-16be', 'gb18030'] as const
+/** 能提取文字的文件（docs/ui/composer-file-attachments.md §7） */
+export const FILE_SOURCES: readonly FileSource[] = [
+  'docx',
+  'xlsx',
+  'pptx',
+  'odt',
+  'ods',
+  'odp',
+  'pdf',
+  'rtf',
+  'epub',
+  'html',
+  'ipynb',
+]
+/** 发给引擎时写在 <attached_file> 上的说明：原文件是什么、只带了文字 */
+const SOURCE_NOTE: Record<FileSource, string> = {
+  docx: 'Word document',
+  xlsx: 'Excel workbook',
+  pptx: 'PowerPoint presentation',
+  odt: 'OpenDocument text',
+  ods: 'OpenDocument spreadsheet',
+  odp: 'OpenDocument presentation',
+  pdf: 'PDF document',
+  rtf: 'RTF document',
+  epub: 'EPUB book',
+  html: 'HTML page',
+  ipynb: 'Jupyter notebook',
+}
 /** 能添加的原文件大小上限：再大的只读开头和结尾也意义不大，而且数行数要读完整个文件 */
 export const MAX_FILE_BYTES = 50 * 1024 * 1024
 /** 不超过这么大的整个发 */
@@ -42,6 +70,7 @@ export function validateFiles(value: unknown): FileAttachment[] {
       file.lines < 0 ||
       typeof file.text !== 'string' ||
       file.text.length > MAX_FILE_TEXT ||
+      (file.source !== undefined && !FILE_SOURCES.includes(file.source)) ||
       (truncated &&
         (typeof file.tail !== 'string' ||
           file.tail.length > MAX_FILE_TEXT ||
@@ -61,6 +90,7 @@ export function validateFiles(value: unknown): FileAttachment[] {
       encoding: file.encoding,
       text: file.text,
       ...(truncated ? { tail: file.tail, omitted: file.omitted } : {}),
+      ...(file.source ? { source: file.source } : {}),
     }
   })
 }
@@ -85,10 +115,21 @@ const body = (text: string): string => text.replace(/<\/attached_file/gi, '<\\/a
 export function fileAttachmentBlock(file: FileAttachment): string {
   const size =
     file.bytes >= 1024 * 1024 ? `${(file.bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.ceil(file.bytes / 1024)} KB`
-  const head = `<attached_file name="${attr(file.name)}" size="${size}" lines="${file.lines}"`
-  if (file.tail === undefined)
-    return `${head}>\n${body(file.text)}${file.text.endsWith('\n') ? '' : '\n'}</attached_file>`
+  const source = file.source
+    ? ` source="${SOURCE_NOTE[file.source]}" note="text extracted by the app; images and layout are not included"`
+    : ''
+  const head = `<attached_file name="${attr(file.name)}" size="${size}" lines="${file.lines}"${source}`
+  const end = (text: string): string => (text.endsWith('\n') ? '' : '\n')
+  if (file.tail === undefined) return `${head}>\n${body(file.text)}${end(file.text)}</attached_file>`
   const shown = fileShownLines(file)
+  // 只留开头（文档）：后面省略了多少行
+  if (!file.tail)
+    return (
+      `${head} shown="1-${shown.head}">\n` +
+      body(file.text) +
+      end(file.text) +
+      `[... ${file.omitted} more lines omitted (${shown.head + 1}-${file.lines}) ...]\n</attached_file>`
+    )
   const from = file.lines - shown.tail + 1
   return (
     `${head} shown="1-${shown.head}, ${from}-${file.lines}">\n` +
