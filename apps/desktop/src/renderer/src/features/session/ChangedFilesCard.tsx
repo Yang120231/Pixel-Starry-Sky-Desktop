@@ -52,7 +52,10 @@ export function ChangedFilesCard({
       })
     return (
       <li key={path}>
-        <div className="group/file flex h-[34px] items-center gap-1 rounded-md pr-1 pl-2 text-list hover:bg-hover">
+        <div
+          data-change-row
+          className="group/file flex h-[34px] items-center gap-1 rounded-md pr-1 pl-2 text-list hover:bg-hover"
+        >
           <button
             type="button"
             className="flex h-full min-w-0 flex-1 items-center gap-2 text-left disabled:cursor-default"
@@ -75,7 +78,7 @@ export function ChangedFilesCard({
                 )}
               />
             )}
-            <span className={cn('min-w-0 flex-1 truncate', !diffs.length && 'hover:underline')}>
+            <span data-file-path className={cn('min-w-0 flex-1 truncate', !diffs.length && 'hover:underline')}>
               <span className="text-fg-muted">{f.dir}</span>
               <span className="text-fg">{f.name}</span>
             </span>
@@ -111,7 +114,11 @@ export function ChangedFilesCard({
     )
   }
   return (
-    <section className={cn('rounded-xl border border-line-card bg-surface shadow-sm', className)} style={style}>
+    <section
+      data-changes-card
+      className={cn('rounded-xl border border-line-card bg-surface shadow-sm', className)}
+      style={style}
+    >
       {/* 一行标题（docs/ui/conversation-concise.md §3 E） */}
       <div className="flex min-h-10 items-center gap-2 px-4 pt-1.5 pb-0.5">
         <FileDiff size={15} strokeWidth={1.5} className="shrink-0 text-fg-muted" />

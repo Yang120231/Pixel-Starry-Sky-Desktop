@@ -1,7 +1,8 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
 import { SquareKanban } from 'lucide-react'
-import { cn, Dot, Spinner } from '@/ui'
+import { cn, Dot } from '@/ui'
+import { StatusDot } from '@/features/session/live/StatusDot'
 import { setPage } from '@/features/layout/page'
 import { laneCounts, type SessionCard, type SessionLane } from '@/features/board/sessionLanes'
 import type { RunFilter } from './runFilter'
@@ -61,7 +62,7 @@ export function RunStatusPill({
         {/* 图标都占 14px 宽，两半的字对得齐 */}
         <span className="flex size-3.5 shrink-0 items-center justify-center">
           {kind === 'running' && running > 0 ? (
-            <Spinner size={14} />
+            <StatusDot status="running" />
           ) : (
             <Dot tone="accent" size={6} className={cn(!count && 'opacity-40')} />
           )}

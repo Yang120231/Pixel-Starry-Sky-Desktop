@@ -1,6 +1,7 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
-import { Dot, Spinner, cn } from '@/ui'
+import { cn } from '@/ui'
+import { SessionLead, SessionMarks } from './SessionMarks'
 import type { SessionLane } from '@/features/board/sessionLanes'
 import { LANE_LABEL, LANE_TONE } from './RunStatusPill'
 import type { Session } from '@/data'
@@ -42,16 +43,11 @@ export function SessionItem({
         lane ? (
           <span className={cn('shrink-0 text-meta', LANE_TONE[lane])}>{tr(LANE_LABEL[lane])}</span>
         ) : (
-          <>
-            {unread && <Dot tone="accent" className="mr-0.5" />}
-            {running && <Spinner size={14} />}
-            {!unread && !running && session.time && (
-              <span className="shrink-0 text-meta text-fg-faint">{session.time}</span>
-            )}
-          </>
+          <SessionMarks running={running} unread={unread} time={session.time} />
         )
       }
     >
+      <SessionLead running={running} unread={unread} />
       <span className={cn('min-w-0 truncate', !channel && 'flex-1', unread && 'font-semibold text-fg')}>
         {session.title}
       </span>

@@ -13,6 +13,8 @@ import { ApprovalCard } from './live/ApprovalCard'
 import { AgentTracePanel } from './live/AgentTracePanel'
 import { TaskStrip } from './live/SessionStrips'
 import { ProgressCard, useProgress } from './live/ProgressCard'
+import { InlinePlan } from './live/InlinePlan'
+import { useMinimal } from '@/features/appearance/ThemeProvider'
 import { TraceContext, type TraceTarget } from './live/trace'
 import { PathLinksProvider } from '@/features/files/PathLinksProvider'
 import { ConversationFind, useFindShortcut, type FoldedMatches } from '@/features/search/ConversationFind'
@@ -171,7 +173,14 @@ function LiveSessionView({
   const hasRuns = !!runs && (runs.workflows.length > 0 || runs.agents.length > 0)
   const tasks = snapshot?.tasks ?? []
   // 计划和子智能体在右上角的进度卡片里；卡片显示时「智能体活动」也放进卡片（docs/ui/progress-card.md）
-  const progress = useProgress(snapshot)
+  const fullProgress = useProgress(snapshot)
+  // 极简模式：计划写在对话末尾，浮动卡片只剩子智能体（docs/ui/minimal-mode.md §3）
+  const minimal = useMinimal()
+  const inlinePlan = minimal && !!snapshot && snapshot.state !== 'idle' ? fullProgress.plan : null
+  const progress =
+    minimal && fullProgress.plan
+      ? { ...fullProgress, plan: null, visible: fullProgress.visible && fullProgress.agents.length > 0 }
+      : fullProgress
   const traceInStrips = hasRuns && !progress.visible
   const showStrips = !!sessionId && (tasks.length > 0 || traceInStrips)
   // 后台任务条的高度：进度卡片放到它下面（docs/ui/conversation-concise.md §3 F）
@@ -253,6 +262,7 @@ function LiveSessionView({
                   <MessageActionsContext.Provider value={branch.messageActions}>
                     <LiveTranscript
                       snapshot={snapshot}
+                      footer={inlinePlan && <InlinePlan plan={inlinePlan} />}
                       header={
                         forkedFrom && (
                           <button

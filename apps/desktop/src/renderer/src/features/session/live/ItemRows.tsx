@@ -45,6 +45,7 @@ import { useMessageActionsPosition } from '@/features/settings/messageActions'
 import { formatDuration } from './agentTrace'
 import { STEP_CLOCK_MS, clockText } from './currentStep'
 import { useSince } from './stepClock'
+import { useMinimal } from '@/features/appearance/ThemeProvider'
 
 type ItemOf<K extends Item['kind']> = Extract<Item, { kind: K }>
 
@@ -55,6 +56,7 @@ type ItemOf<K extends Item['kind']> = Extract<Item, { kind: K }>
 export function UserBubble({ item, actions }: { item: ItemOf<'user'>; actions?: ReactNode }) {
   useI18n()
   const position = useMessageActionsPosition()
+  const minimal = useMinimal()
   if (item.mode === 'guidance')
     return (
       <div className="border-l border-accent-line pl-3 text-list whitespace-pre-wrap text-fg-muted">
@@ -87,6 +89,18 @@ export function UserBubble({ item, actions }: { item: ItemOf<'user'>; actions?: 
       <UserBody id={item.id} text={item.text} />
     </div>
   )
+  // 极简模式：消息是整行的块，操作按钮浮在块的右上角，不占宽度也不占行高（docs/ui/minimal-mode.md）
+  if (minimal)
+    return (
+      <div className="relative flex" data-message-actions="overlay">
+        {bubble}
+        {actions && (
+          <div data-overlay-actions className="absolute -top-3 right-2">
+            {actions}
+          </div>
+        )}
+      </div>
+    )
   // 下方：行高一直留着（对话块有绘制裁剪，按钮不能伸进消息之间的空隙），悬停时只是显示出来，不会把下面的内容顶下去
   if (actions && position === 'below')
     return (
@@ -205,7 +219,7 @@ export function ReasoningBlock({ item }: { item: ItemOf<'reasoning'> }) {
       : tr('session.live.ItemRows.thinking2')
   if (!running && !hasText)
     return (
-      <div className="flex h-[30px] items-center gap-2 px-2 text-list text-fg-muted">
+      <div data-step-row className="flex h-[30px] items-center gap-2 px-2 text-list text-fg-muted">
         <StatusDot status="none" />
         <Brain size={15} strokeWidth={1.5} className="shrink-0" />
         <span>{label}</span>
@@ -217,6 +231,7 @@ export function ReasoningBlock({ item }: { item: ItemOf<'reasoning'> }) {
         type="button"
         aria-expanded={open}
         onClick={toggle}
+        data-step-row
         className="flex h-[30px] items-center gap-2 rounded-md px-2 text-list text-fg-muted hover:bg-hover hover:text-fg-secondary"
       >
         {/* 思考完不打勾（每轮好几段，满屏绿勾太吵），只留位置让图标和工具行对齐 */}
@@ -337,6 +352,7 @@ function Row({
       aria-expanded={expandable ? open : undefined}
       aria-busy={running || undefined}
       onClick={expandable ? onToggle : undefined}
+      data-step-row
       className={cn(
         'flex h-[30px] w-full min-w-0 items-center gap-2 rounded-md px-2 text-left text-list',
         running ? 'text-fg' : 'text-fg-secondary',
@@ -344,7 +360,11 @@ function Row({
       )}
     >
       <RunningIcon icon={icon} status={status} />
-      {verb && <span className={cn('shrink-0', running && 'step-shimmer')}>{verb}</span>}
+      {verb && (
+        <span data-tool-verb className={cn('shrink-0', running && 'step-shimmer')}>
+          {verb}
+        </span>
+      )}
       {children}
       {running && <StepClock id={id} />}
       {trailing}
@@ -480,6 +500,7 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
           }
         >
           <code
+            data-tool-arg
             className="truncate rounded-sm bg-subtle px-1.5 py-0.5 font-mono text-[length:calc(12.5px*var(--font-scale,1))] text-fg"
             title={item.description ?? item.command}
           >
@@ -536,7 +557,9 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
     const summary = (
       <>
         <RunningIcon icon={item.changes[0]?.kind === 'add' ? FilePlus : FilePen} status={item.status} />
-        <span className={cn('shrink-0', editing && 'step-shimmer')}>{fileVerb(item.changes)}</span>
+        <span data-tool-verb className={cn('shrink-0', editing && 'step-shimmer')}>
+          {fileVerb(item.changes)}
+        </span>
         {paths}
         {editing && <StepClock id={item.id} />}
         {(added > 0 || removed > 0) && <DiffStat added={added} removed={removed} className="text-meta" />}
@@ -553,6 +576,7 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
               aria-expanded={open}
               title={tr(open ? 'session.ChangedFilesCard.hideChanges' : 'session.ChangedFilesCard.showChanges')}
               onClick={toggle}
+              data-step-row
               className="flex min-h-[30px] min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left text-list text-fg-secondary hover:bg-hover"
             >
               {summary}
@@ -567,7 +591,10 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
             )}
           </div>
         ) : (
-          <div className="flex min-h-[30px] min-w-0 items-center gap-2 rounded-md px-2 text-list text-fg-secondary">
+          <div
+            data-step-row
+            className="flex min-h-[30px] min-w-0 items-center gap-2 rounded-md px-2 text-list text-fg-secondary"
+          >
             {summary}
           </div>
         )}
@@ -636,7 +663,7 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
           ) : undefined
         }
       >
-        <span className="truncate text-fg-muted" title={item.title}>
+        <span data-tool-arg className="truncate text-fg-muted" title={item.title}>
           {item.title}
         </span>
       </Row>
@@ -680,6 +707,7 @@ export function TodoCard({ item }: { item: ItemOf<'todo'> }) {
         type="button"
         aria-expanded={open}
         onClick={toggle}
+        data-step-row
         className="flex h-[30px] max-w-full min-w-0 items-center gap-2 rounded-md px-2 text-list text-fg-muted hover:bg-hover hover:text-fg-secondary"
       >
         {/* 历史里的待办只是当时的快照，不标「进行中」；正在做的看「正在执行」那一行和进度卡片 */}

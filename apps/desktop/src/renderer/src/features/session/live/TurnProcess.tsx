@@ -11,6 +11,7 @@ import { formatDuration } from './agentTrace'
 import { summarize, type ProcessSummary } from './turnFold'
 import { STEP_CLOCK_MS, WAIT_CLOCK_MS, clockText, currentStep, stepText, waitingFor } from './currentStep'
 import { useSince } from './stepClock'
+import { useMinimal } from '@/features/appearance/ThemeProvider'
 
 /** 运行中收起时露出的最近几条 */
 const TAIL = 2
@@ -75,12 +76,18 @@ export function TurnProcess({
 }) {
   useI18n()
   const activity = useActivity(items, running, live)
-  const [open, setOpen] = useState(false)
+  // 极简模式（docs/ui/minimal-mode.md §3）：运行中这一轮一条一行全部展开，跑完收回一行；点过就按点的来，这一轮结束时清掉
+  const minimal = useMinimal()
+  const [toggled, setToggled] = useState<boolean | null>(null)
+  const open = toggled ?? (minimal && running)
+  useEffect(() => {
+    if (!running) setToggled(t => (t === true && minimal ? null : t))
+  }, [running, minimal])
   // 对话内搜索的「展开」、全局搜索跳到里面的条目：执行块先展开，里面的条目自己再展开
   const ids = useMemo(() => items.map(i => i.id), [items])
   const requested = useExpandAny(ids)
   useEffect(() => {
-    if (requested && Date.now() - requested < REQUEST_MS) setOpen(true)
+    if (requested && Date.now() - requested < REQUEST_MS) setToggled(true)
   }, [requested])
   const summary = useMemo(() => summarize(items), [items])
   // 隐藏了内容的思考（只剩「思考了 N 秒」或什么都不显示）不算步数，也不占运行中露出的那几条
@@ -97,7 +104,7 @@ export function TurnProcess({
         type="button"
         aria-expanded={open}
         title={tr(open ? 'session.process.collapse' : 'session.process.expand')}
-        onClick={() => setOpen(v => !v)}
+        onClick={() => setToggled(!open)}
         className="flex h-[30px] max-w-full min-w-0 items-center gap-1.5 rounded-md px-2 text-list text-fg-muted hover:bg-hover hover:text-fg-secondary"
       >
         {running ? (
@@ -141,7 +148,7 @@ export function TurnProcess({
         />
       </button>
       {(open || tail.length > 0) && (
-        <div className="mt-1 ml-[15px] flex flex-col gap-3 border-l border-line-subtle pl-3">
+        <div data-process-rows className="mt-1 ml-[15px] flex flex-col gap-3 border-l border-line-subtle pl-3">
           {render(open ? items : tail)}
         </div>
       )}

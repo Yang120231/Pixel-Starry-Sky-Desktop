@@ -8,4 +8,7 @@ export const minimalModeMessages = {
   'minimal.on': { zh: '开启', en: 'On' },
   'minimal.off': { zh: '关闭', en: 'Off' },
   'minimal.paletteMidnight': { zh: '极夜', en: 'Midnight' },
+  'minimal.plan.title': { zh: '正在进行… {done}/{total}', en: 'In progress… {done}/{total}' },
+  'minimal.plan.pressBefore': { zh: '按', en: 'Press' },
+  'minimal.plan.pressAfter': { zh: '中断', en: 'to interrupt' },
 } as const

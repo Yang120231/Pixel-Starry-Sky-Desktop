@@ -174,3 +174,8 @@ export function useReducedMotion(): boolean {
   const { motion, systemReducedMotion } = useTheme()
   return motion === 'off' || (motion === 'system' && systemReducedMotion)
 }
+
+/** 极简模式开着（docs/ui/minimal-mode.md）：样式在 styles/minimal.css，结构上的差别用这个判断 */
+export function useMinimal(): boolean {
+  return useTheme().minimal === 'on'
+}

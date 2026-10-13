@@ -161,7 +161,16 @@ const ProcessBlock = memo(
     sameItems(a.items, b.items),
 )
 
-export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot | null; header?: ReactNode }) {
+export function LiveTranscript({
+  snapshot,
+  header,
+  footer,
+}: {
+  snapshot: SessionSnapshot | null
+  header?: ReactNode
+  /** 对话末尾（最后一轮后面）：极简模式下运行中的计划（InlinePlan） */
+  footer?: ReactNode
+}) {
   useI18n()
   const scroller = useRef<HTMLDivElement>(null)
   const stream = useRef<HTMLDivElement>(null)
@@ -545,6 +554,7 @@ export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot
               </div>
             )}
             {blocks.map((b, i) => renderBlock(b, i))}
+            {footer}
             {starting.map(q => (
               <div key={q.id} data-starting-message={q.id} className="flex flex-col gap-3">
                 <div className={cn('conversation-user-row', blocks.length > 0 && 'mt-4')}>

@@ -62,3 +62,54 @@
   background: transparent;
   box-shadow: none;
 }
+
+/* 对话里的过程（docs/ui/minimal-mode.md §3）：执行块里一条一行、行高 24、不画左边的竖线，参数用等宽字、去掉底色 */
+:root[data-minimal='on'] [data-process-rows] {
+  gap: 0;
+  border-left-color: transparent;
+  padding-left: 4px;
+}
+/* 执行块里夹着的过渡话（不是一行一行的步骤）上下留点空，不贴着工具行 */
+:root[data-minimal='on'] [data-process-rows] > :not([data-step-row]):not(:has([data-step-row])) {
+  margin-block: 6px;
+}
+:root[data-minimal='on'] [data-step-row] {
+  height: 24px;
+  min-height: 24px;
+}
+:root[data-minimal='on'] [data-tool-verb] {
+  color: var(--text-muted);
+}
+:root[data-minimal='on'] [data-tool-arg] {
+  background: transparent;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  color: var(--text-secondary);
+}
+
+/* 用户消息的操作按钮浮在块的右上角（ItemRows 的 UserBubble），按钮条自己带底色和细边 */
+:root[data-minimal='on'] [data-overlay-actions] > * {
+  border: 1px solid var(--border-card);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  padding: 0 2px;
+}
+
+/* 改动卡片：行高收紧、路径等宽 */
+:root[data-minimal='on'] [data-change-row] {
+  height: 26px;
+}
+:root[data-minimal='on'] [data-changes-card] [data-file-path] {
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+}
+
+/* 输入框下面一排：每个按钮一圈细框的小标签（Factory 那种） */
+:root[data-minimal='on'] .composer-toolbar > button,
+:root[data-minimal='on'] .composer-toolbar > * > button {
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: var(--text-label);
+}

@@ -1,7 +1,8 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import { Pin, SquareKanban } from 'lucide-react'
-import { Dot, Spinner, cn } from '@/ui'
+import { cn } from '@/ui'
+import { SessionMarks } from './SessionMarks'
 import type { PinnedSession } from '@/features/engine/sidebarData'
 import { setPage, usePage } from '@/features/layout/page'
 import { useBoardTasks } from '@/features/board/boardTasks'
@@ -68,13 +69,7 @@ export function PinnedList({
               lane ? (
                 <span className={cn('shrink-0 text-meta', LANE_TONE[lane])}>{tr(LANE_LABEL[lane])}</span>
               ) : (
-                <>
-                  {unread && <Dot tone="accent" className="mr-0.5" />}
-                  {running && <Spinner size={14} />}
-                  {!unread && !running && session.time && (
-                    <span className="shrink-0 text-meta text-fg-faint">{session.time}</span>
-                  )}
-                </>
+                <SessionMarks running={running} unread={unread} time={session.time} lead={false} />
               )
             }
           >
