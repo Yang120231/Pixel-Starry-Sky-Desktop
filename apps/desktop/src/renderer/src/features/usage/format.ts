@@ -74,10 +74,22 @@ export function actualMoney(usd: number): string {
   return usd > 0 && usd < 0.000001 ? '<$0.000001' : '$' + usd.toFixed(6).replace(/(\.\d*?[1-9])0+$|\.0+$/, '$1')
 }
 
-export function formatTotalCost(t: Pick<UsageTotals, 'costUsd' | 'costKnown' | 'records' | 'costActual'>): string {
+type CostTotals = Pick<UsageTotals, 'costUsd' | 'costKnown' | 'records' | 'costActual'>
+const costPrefix = (t: CostTotals): string =>
+  t.costKnown < t.records ? '≥ ' : t.costActual === t.costKnown ? '' : '≈ '
+
+export function formatTotalCost(t: CostTotals): string {
   if (t.costKnown === 0) return '—'
-  const v = actualMoney(t.costUsd)
-  return t.costKnown < t.records ? `≥ ${v}` : t.costActual === t.costKnown ? v : `≈ ${v}`
+  return costPrefix(t) + actualMoney(t.costUsd)
+}
+
+/**
+ * 费用卡上的大数字（docs/ui/ui-polish-2026-10-13.md §3）：满 1 美元只留 2 位小数（「≥ $10.58」），
+ * 不到 1 美元照合计的精度（小额才看得出差别）；完整金额放悬停提示，分布表、明细、导出不变
+ */
+export function formatCardCost(t: CostTotals): string {
+  if (t.costKnown === 0 || t.costUsd < 1) return formatTotalCost(t)
+  return `${costPrefix(t)}$${t.costUsd.toFixed(2)}`
 }
 
 export function formatDuration(ms: number): string {

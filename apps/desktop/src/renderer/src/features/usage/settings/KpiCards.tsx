@@ -1,7 +1,14 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../../i18n/core'
 import { cacheHitRate, totalTokens } from '@/features/usage/aggregate'
-import { costSubtitle, formatDelta, formatPercent, formatTokens, formatTotalCost } from '@/features/usage/format'
+import {
+  costSubtitle,
+  formatCardCost,
+  formatDelta,
+  formatPercent,
+  formatTokens,
+  formatTotalCost,
+} from '@/features/usage/format'
 import type { UsageGroupRow, UsageTotals } from '@/features/usage/types'
 
 /**
@@ -76,7 +83,8 @@ export function KpiCards({
       />
       <Card
         label={tr('settings.replyStats.cost')}
-        value={formatTotalCost(totals)}
+        value={formatCardCost(totals)}
+        valueTitle={formatTotalCost(totals)}
         sub={
           costSub === 'missing'
             ? tr('settings.usage.KpiCards.missingCost', { p0: missingCost })
@@ -97,6 +105,7 @@ export function KpiCards({
 function Card({
   label,
   value,
+  valueTitle,
   unit,
   sub,
   delta,
@@ -105,6 +114,8 @@ function Card({
 }: {
   label: string
   value: string
+  /** 大数字的悬停提示（费用卡放完整金额） */
+  valueTitle?: string
   unit?: string
   sub: string
   delta: { text: string; up: boolean } | null
@@ -123,7 +134,10 @@ function Card({
           </span>
         )}
       </div>
-      <div className="mt-1 truncate text-[calc(22px*var(--font-scale,1))] leading-tight font-semibold text-fg tabular-nums">
+      <div
+        className="mt-1 truncate text-[calc(22px*var(--font-scale,1))] leading-tight font-semibold text-fg tabular-nums"
+        title={valueTitle !== value ? valueTitle : undefined}
+      >
         {value}
         {unit && <span className="ml-1 text-meta font-normal text-fg-muted">{unit}</span>}
       </div>

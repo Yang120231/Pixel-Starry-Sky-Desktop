@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { costHint, costSubtitle, dimLabel, formatCost, formatRecordCost, formatTotalCost } from './format'
+import {
+  costHint,
+  costSubtitle,
+  dimLabel,
+  formatCardCost,
+  formatCost,
+  formatRecordCost,
+  formatTotalCost,
+} from './format'
 import type { UsageRecord } from './types'
 import { setCurrentLocale } from '../../i18n/core'
 import { replyStatParts } from '../session/turnStatsData'
@@ -70,5 +78,13 @@ describe('billing labels', () => {
     expect(costSubtitle({ costKnown: 2, records: 2 }, routes(['api-key', 'cli']))).toBe('engine')
     expect(costSubtitle({ costKnown: 2, records: 2 })).toBe('engine')
     expect(costSubtitle({ costKnown: 0, records: 0 }, [])).toBe('engine')
+  })
+  it('费用卡大数字：满 1 美元两位小数，不到 1 美元照合计精度（D114 §3）', () => {
+    expect(formatCardCost({ costUsd: 10.582741, costKnown: 3, records: 4 })).toBe('≥ $10.58')
+    expect(formatCardCost({ costUsd: 10.582741, costKnown: 4, records: 4, costActual: 4 })).toBe('$10.58')
+    expect(formatCardCost({ costUsd: 2.5, costKnown: 4, records: 4 })).toBe('≈ $2.50')
+    expect(formatCardCost({ costUsd: 0.003412, costKnown: 2, records: 2, costActual: 2 })).toBe('$0.003412')
+    expect(formatCardCost({ costUsd: 0, costKnown: 0, records: 3 })).toBe('—')
+    expect(formatTotalCost({ costUsd: 10.582741, costKnown: 3, records: 4 })).toBe('≥ $10.582741')
   })
 })
