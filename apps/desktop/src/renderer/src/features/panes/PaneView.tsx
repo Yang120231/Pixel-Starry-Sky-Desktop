@@ -153,7 +153,7 @@ export const PaneView = memo(function PaneView(props: PaneViewProps) {
                 onMouseDown={e => menuOpen && e.stopPropagation()}
                 onClick={() => setMenuOpen(v => !v)}
               />
-              <Popover open={menuOpen} onClose={() => setMenuOpen(false)} className="top-full right-0 mt-1">
+              <Popover open={menuOpen} onClose={() => setMenuOpen(false)} align="end">
                 <PopoverItem
                   icon={<Columns2 size={15} strokeWidth={1.5} className="text-fg-secondary" />}
                   onClick={() => {

@@ -210,7 +210,7 @@ export function ModelSourceMenu({
         <span className="shrink-0 text-meta text-fg-muted">· {text.source}</span>
         <ChevronDown size={14} strokeWidth={1.5} className="text-fg-muted" />
       </button>
-      <Popover open={open} onClose={() => onOpenChange(false)} className="right-0 bottom-full mb-2 w-80">
+      <Popover open={open} onClose={() => onOpenChange(false)} side="top" align="end" offset={8} className="w-80">
         {page === 'routes' ? (
           <RoutesPage
             live={live}

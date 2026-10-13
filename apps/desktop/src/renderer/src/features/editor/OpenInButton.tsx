@@ -126,8 +126,8 @@ export function OpenInButton({ placement }: { placement: SidebarPlacement | 'com
   // 输入框上方的菜单里是一行，列表从右边弹出
   const asRow = placement === 'composer'
   const inTrack = placement === 'header'
-  const side = placement === 'composer' ? '-bottom-1' : placement === 'bottom' ? 'bottom-full mb-1' : 'top-full mt-1'
-  const align = placement === 'composer' ? 'left-full ml-2' : placement === 'header' ? 'right-0' : 'left-0'
+  const side = placement === 'composer' ? 'right' : placement === 'bottom' ? 'top' : 'bottom'
+  const align = placement === 'composer' || placement === 'header' ? 'end' : 'start'
 
   const row = (choice: Choice) => {
     const id = choiceId(choice),
@@ -237,7 +237,14 @@ export function OpenInButton({ placement }: { placement: SidebarPlacement | 'com
           </button>
         </span>
       )}
-      <Popover open={menu} onClose={() => setMenu(false)} className={cn(side, align, 'max-h-96 w-64 overflow-auto')}>
+      <Popover
+        open={menu}
+        onClose={() => setMenu(false)}
+        side={side}
+        align={align}
+        offset={placement === 'composer' ? 8 : 4}
+        className="max-h-96 w-64 overflow-auto"
+      >
         <p className="px-2 pt-1 pb-1.5 text-meta text-fg-muted">
           {tr('openWith.title', { p0: workspace.name || tr('openWith.workspace') })}
         </p>

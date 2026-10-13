@@ -2,7 +2,7 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { ChevronDown, Search } from 'lucide-react'
-import { cn } from '@/ui'
+import { Popover, cn } from '@/ui'
 import { listLocalFonts } from '@/features/appearance/fonts'
 
 interface FontPickerProps {
@@ -32,24 +32,17 @@ export function FontPicker({ label, value, onChange, placeholder, sample }: Font
 
   useEffect(() => setDraft(value), [value])
 
-  // 点外面或按 Esc 关闭列表
+  // 按 Esc 关闭列表（点外面由 Popover 处理）
   useEffect(() => {
     if (!open) return
-    const onDown = (e: MouseEvent) => {
-      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false)
-    }
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation()
         setOpen(false)
       }
     }
-    document.addEventListener('mousedown', onDown)
     document.addEventListener('keydown', onKey, true)
-    return () => {
-      document.removeEventListener('mousedown', onDown)
-      document.removeEventListener('keydown', onKey, true)
-    }
+    return () => document.removeEventListener('keydown', onKey, true)
   }, [open])
 
   const openList = () => {
@@ -97,11 +90,15 @@ export function FontPicker({ label, value, onChange, placeholder, sample }: Font
         </button>
       </div>
 
-      {open && (
-        <div
-          id={listId}
-          className="pop-in absolute top-full right-0 left-0 z-10 mt-1 flex max-h-72 flex-col overflow-hidden rounded-lg border border-line bg-surface shadow-popover"
-        >
+      <Popover
+        open={open}
+        onClose={() => setOpen(false)}
+        anchor={boxRef}
+        matchWidth
+        bare
+        className="flex max-h-72 flex-col overflow-hidden"
+      >
+        <div id={listId} className="flex min-h-0 flex-1 flex-col">
           <div className="flex h-9 shrink-0 items-center gap-2 border-b border-line-subtle px-3 text-fg-muted">
             <Search size={14} strokeWidth={1.5} className="shrink-0" />
             <input
@@ -154,7 +151,7 @@ export function FontPicker({ label, value, onChange, placeholder, sample }: Font
             ))}
           </ul>
         </div>
-      )}
+      </Popover>
     </div>
   )
 }

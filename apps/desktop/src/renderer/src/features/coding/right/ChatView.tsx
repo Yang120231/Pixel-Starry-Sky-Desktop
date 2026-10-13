@@ -54,7 +54,7 @@ export function ChatView({ visible }: { visible: boolean }) {
               aria-expanded={menu}
               onClick={() => setMenu(v => !v)}
             />
-            <Popover open={menu} onClose={() => setMenu(false)} className="top-full right-0 mt-1">
+            <Popover open={menu} onClose={() => setMenu(false)} align="end">
               <PopoverItem
                 icon={<Copy size={16} strokeWidth={1.5} className="shrink-0" />}
                 disabled={!sessionId}

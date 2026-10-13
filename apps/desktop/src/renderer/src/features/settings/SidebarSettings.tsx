@@ -83,7 +83,7 @@ function IconPicker({ action, icons }: { action: SidebarAction; icons: SidebarIc
         <span className="min-w-0 flex-1 truncate text-ui text-fg-secondary">{name}</span>
         <ChevronDown size={14} aria-hidden="true" className="shrink-0 text-fg-faint" />
       </button>
-      <Popover open={open} onClose={close} className="top-full left-0 mt-1 w-full">
+      <Popover open={open} onClose={close} matchWidth>
         <div
           role="menu"
           aria-label={name}

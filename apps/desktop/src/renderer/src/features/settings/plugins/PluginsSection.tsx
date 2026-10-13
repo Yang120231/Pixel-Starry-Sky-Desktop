@@ -20,7 +20,7 @@ import {
   type ExtensionScope,
   type ExtensionState,
 } from '@pixelsky/protocol'
-import { Button, cn, IconButton, Switch } from '@/ui'
+import { Button, cn, IconButton, Popover, Switch } from '@/ui'
 import { useActiveWorkspace } from '@/features/editor/target'
 import { usePluginText } from './text'
 import { ExtensionForm, type FormTarget } from './ExtensionForm'
@@ -231,30 +231,28 @@ export function PluginsSection() {
           <Button variant="primary" icon={Plus} onClick={() => setAdding(!adding)}>
             {t('添加')}
           </Button>
-          {adding && (
-            <div className="absolute top-full right-0 z-20 mt-1 flex min-w-44 flex-col gap-1 rounded-lg border border-line-card bg-popover p-1 shadow-menu">
-              {(tab === 'mcp' || tab === 'cli' || tab === 'skill') && (
-                <Button variant="ghost" onClick={() => open({ kind: tab, mode: 'save' })}>
-                  {t(tab === 'mcp' ? '添加 MCP' : tab === 'cli' ? '添加命令行工具' : '新建技能')}
+          <Popover open={adding} onClose={() => setAdding(false)} align="end" className="flex flex-col gap-1">
+            {(tab === 'mcp' || tab === 'cli' || tab === 'skill') && (
+              <Button variant="ghost" onClick={() => open({ kind: tab, mode: 'save' })}>
+                {t(tab === 'mcp' ? '添加 MCP' : tab === 'cli' ? '添加命令行工具' : '新建技能')}
+              </Button>
+            )}
+            {tab === 'mcp' && (
+              <Button variant="ghost" onClick={() => open({ kind: 'mcp', mode: 'json' })}>
+                {t('导入 MCP JSON')}
+              </Button>
+            )}
+            {(tab === 'plugin' || tab === 'skill') && (
+              <>
+                <Button variant="ghost" onClick={() => open({ kind: tab, mode: 'local' })}>
+                  {t('导入本地目录')}
                 </Button>
-              )}
-              {tab === 'mcp' && (
-                <Button variant="ghost" onClick={() => open({ kind: 'mcp', mode: 'json' })}>
-                  {t('导入 MCP JSON')}
+                <Button variant="ghost" onClick={() => open({ kind: tab, mode: 'git' })}>
+                  {t('从 Git 导入')}
                 </Button>
-              )}
-              {(tab === 'plugin' || tab === 'skill') && (
-                <>
-                  <Button variant="ghost" onClick={() => open({ kind: tab, mode: 'local' })}>
-                    {t('导入本地目录')}
-                  </Button>
-                  <Button variant="ghost" onClick={() => open({ kind: tab, mode: 'git' })}>
-                    {t('从 Git 导入')}
-                  </Button>
-                </>
-              )}
-            </div>
-          )}
+              </>
+            )}
+          </Popover>
         </div>
       </div>
       {message && (

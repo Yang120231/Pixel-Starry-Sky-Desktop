@@ -39,7 +39,7 @@ describe('parseAppMode', () => {
 
 describe('clampPanel', () => {
   it('夹到上下限，坏值退回初始', () => {
-    expect(clampPanel('left', 10)).toBe(200)
+    expect(clampPanel('left', 10)).toBe(240)
     expect(clampPanel('left', 9999)).toBe(520)
     expect(clampPanel('right', 333.4)).toBe(333)
     expect(clampPanel('bottom', Number.NaN)).toBe(PANEL_LIMITS.bottom.initial)
@@ -58,7 +58,7 @@ describe('parseCodingLayout', () => {
       right: { open: 'x', size: 500, view: 'browser' },
       bottom: { tab: 'problems', maximized: true, size: 'a' },
     })
-    expect(p.left).toEqual({ open: false, size: 200, view: 'files' })
+    expect(p.left).toEqual({ open: false, size: 240, view: 'files' })
     expect(p.right).toEqual({ open: true, size: 500, view: 'browser' })
     expect(p.bottom).toEqual({ open: true, size: 260, tab: 'problems', maximized: true })
   })

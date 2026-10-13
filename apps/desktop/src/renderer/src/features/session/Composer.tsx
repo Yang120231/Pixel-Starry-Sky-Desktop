@@ -765,7 +765,7 @@ export function Composer({
               }}
             />
             {/* 「+」菜单：图片或文件 / 引用文件（@）/ 命令（/），docs/ui/workbench-ux-3.md §2.6 */}
-            <Popover open={addMenu} onClose={() => setAddMenu(false)} className="bottom-full left-0 mb-2 w-52">
+            <Popover open={addMenu} onClose={() => setAddMenu(false)} side="top" offset={8} className="w-52">
               <PopoverItem
                 icon={<Paperclip size={15} strokeWidth={1.5} />}
                 onClick={() => {

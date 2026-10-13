@@ -14,17 +14,20 @@ import { QuotaBar } from './QuotaBar'
 interface AccountMenuProps {
   open: boolean
   onClose: () => void
-  /** 弹出位置类名，例如 "bottom-full left-0 mb-2"。父元素需要 relative */
+  /** 放在父元素的哪一边，默认下方 */
+  side?: 'bottom' | 'top'
+  /** 宽度跟父元素一样宽（侧栏底部），否则固定 w-72 */
+  fill?: boolean
   className?: string
 }
 
 /** 账号菜单：未登录 / 登录中 / 已登录（余额、套餐、额度）。规格见 docs/ui/account.md §4.4 */
-export function AccountMenu({ open, onClose, className }: AccountMenuProps) {
+export function AccountMenu({ open, onClose, side, fill, className }: AccountMenuProps) {
   useI18n()
   const acc = useAccount()
   const settings = useSettings()
   return (
-    <Popover open={open} onClose={onClose} className={cn('w-72', className)}>
+    <Popover open={open} onClose={onClose} side={side} matchWidth={fill} className={cn(!fill && 'w-72', className)}>
       {acc.status === 'loading' && (
         <div className="flex items-center gap-2 px-3 py-3 text-ui text-fg-muted">
           <Spinner />

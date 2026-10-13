@@ -63,6 +63,8 @@ export function requestGitAction(action: GitPaletteAction): void {
   window.dispatchEvent(new Event(GIT_ACTION_EVENT))
 }
 
+/** 面板宽度低于它就用紧凑样式（图标按钮、竖排提交、短占位符、隐藏目录） */
+const COMPACT_MAX = 280
 const POLL_MS = 15_000
 const AUTO_FETCH_MS = 10 * 60_000
 
@@ -93,10 +95,22 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
   const ai = useAiCommit({ target, demo, message, setMessage })
   const [selected, setSelected] = useState<{ area: GitArea; path: string } | null>(null)
   const [menu, setMenu] = useState(false)
+  const branchTrigger = useRef<HTMLButtonElement>(null)
   const [branches, setBranches] = useState<Branch[]>([])
   const [branchesLoading, setBranchesLoading] = useState(false)
   const [confirm, setConfirm] = useState<Confirm | null>(null)
   const [now, setNow] = useState(Date.now)
+  // 面板窄于 280px（代码模式左栏、大字号 / 宽衬线字体）时进入紧凑样式；按面板自身宽度判断，和字体无关
+  const [rootEl, setRootEl] = useState<HTMLDivElement | null>(null)
+  const [compact, setCompact] = useState(false)
+  useEffect(() => {
+    if (!rootEl) return
+    const measure = () => setCompact(rootEl.clientWidth > 0 && rootEl.clientWidth < COMPACT_MAX)
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(rootEl)
+    return () => ro.disconnect()
+  }, [rootEl])
   const authPaused = useRef(false)
   const last = useRef<(() => Promise<GitResult>) | null>(null)
   const busyRef = useRef(false)
@@ -499,12 +513,13 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
   const canCommit = !!message.trim() && !busy && !ai.running && total > 0 && !status.conflicted.length
   const commitAll = needsCommitAll(status)
   return (
-    <div data-git-panel className="flex min-h-0 flex-1 flex-col">
+    <div ref={setRootEl} data-git-panel className="@container flex min-h-0 min-w-0 flex-1 flex-col">
       {/* 顶部：分支、领先落后、拉取推送、远端检查 */}
       <div className="flex shrink-0 flex-col gap-1.5 border-b border-line-subtle px-3 py-2">
         <div className="flex items-center gap-1.5">
           <div className="relative min-w-0 flex-1">
             <button
+              ref={branchTrigger}
               type="button"
               aria-haspopup="dialog"
               aria-expanded={menu}
@@ -520,6 +535,7 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
             </button>
             {menu && (
               <BranchMenu
+                anchor={branchTrigger}
                 branches={branches}
                 loading={branchesLoading}
                 onClose={() => setMenu(false)}
@@ -562,24 +578,28 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
             }}
           />
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex items-center gap-1.5">
           <Button
-            className="h-7 px-2.5 text-meta"
+            className="h-7 shrink-0 whitespace-nowrap px-2.5 text-meta @max-[280px]:px-2"
             icon={ArrowDown}
+            title={compact ? tr('git.pull') : undefined}
+            aria-label={compact ? tr('git.pull') : undefined}
             disabled={busy || !status.upstream}
             onClick={() => void pull('ff-only')}
           >
-            {tr('git.pull')}
+            {!compact && tr('git.pull')}
           </Button>
           <Button
-            className="h-7 px-2.5 text-meta"
+            className="h-7 shrink-0 whitespace-nowrap px-2.5 text-meta @max-[280px]:px-2"
             icon={ArrowUp}
+            title={compact ? tr(status.upstream ? 'git.push' : 'git.publish') : undefined}
+            aria-label={compact ? tr(status.upstream ? 'git.push' : 'git.publish') : undefined}
             disabled={busy || status.detached || !status.remotes.length}
             onClick={() => void push(!status.upstream)}
           >
-            {tr(status.upstream ? 'git.push' : 'git.publish')}
+            {!compact && tr(status.upstream ? 'git.push' : 'git.publish')}
           </Button>
-          <span className="min-w-0 flex-1 truncate text-right text-meta text-fg-faint">
+          <span className="min-w-0 flex-1 truncate whitespace-nowrap text-right text-meta text-fg-faint">
             {!status.remotes.length
               ? tr('git.noRemoteShort')
               : status.fetchedAt
@@ -596,9 +616,9 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
               onClick={() => void fetch()}
             />
           )}
-          {busy && <Spinner size={13} />}
+          {busy && <Spinner size={13} className="shrink-0" />}
         </div>
-        <div className="flex">
+        <div className="flex min-w-0">
           <Segmented
             label={tr('git.tab.label')}
             value={view}
@@ -650,7 +670,10 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
                 rows={Math.min(7, Math.max(2, message.split('\n').length))}
                 readOnly={ai.running}
                 aria-label={tr('git.commit.label')}
-                placeholder={tr(ai.running ? 'aiCommit.writing' : 'git.commit.placeholder')}
+                title={tr('git.commit.placeholder')}
+                placeholder={tr(
+                  ai.running ? 'aiCommit.writing' : compact ? 'git.commit.placeholderShort' : 'git.commit.placeholder',
+                )}
                 onKeyDown={e => {
                   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.nativeEvent.isComposing) {
                     e.preventDefault()
@@ -671,17 +694,17 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
               )}
             </div>
             <AiCommitNote ai={ai} />
-            <div className="mt-1.5 flex gap-1.5">
+            <div className="mt-1.5 flex gap-1.5 @max-[280px]:flex-col">
               <Button
                 variant="primary"
-                className="h-7 flex-1 justify-center px-2.5 text-meta"
+                className="h-7 min-w-0 flex-1 justify-center truncate whitespace-nowrap px-2.5 text-meta @max-[280px]:flex-none"
                 disabled={!canCommit}
                 onClick={() => commit(false)}
               >
                 {tr(commitAll ? 'git.commitAll' : 'git.commit')}
               </Button>
               <Button
-                className="h-7 flex-1 justify-center px-2.5 text-meta"
+                className="h-7 min-w-0 flex-1 justify-center truncate whitespace-nowrap px-2.5 text-meta @max-[280px]:flex-none"
                 disabled={!canCommit || !status.remotes.length || status.detached}
                 onClick={() => commit(true)}
               >
@@ -771,13 +794,17 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
                         </span>
                         <span
                           className={cn(
-                            'shrink-0 truncate text-list',
+                            'min-w-0 truncate whitespace-nowrap text-list',
                             file.code === 'D' ? 'text-fg-muted line-through' : 'text-fg',
                           )}
                         >
                           {name}
                         </span>
-                        {dir && <span className="min-w-0 truncate text-meta text-fg-faint">{dir}</span>}
+                        {dir && !compact && (
+                          <span className="min-w-0 shrink-[3] truncate whitespace-nowrap text-meta text-fg-faint">
+                            {dir}
+                          </span>
+                        )}
                       </button>
                       <span className="flex shrink-0 items-center opacity-0 group-hover/file:opacity-100 group-focus-within/file:opacity-100">
                         {actions.onOpen && (

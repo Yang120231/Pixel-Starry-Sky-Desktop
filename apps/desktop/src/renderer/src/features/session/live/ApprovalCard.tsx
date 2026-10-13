@@ -98,7 +98,7 @@ function AlwaysAllowButton({
         {tr('session.live.ApprovalCard.alwaysAllow2')}{' '}
         <ChevronDown size={14} strokeWidth={1.5} className="text-fg-muted" />
       </Button>
-      <Popover open={open} onClose={() => setOpen(false)} className="bottom-full left-0 mb-2 w-72">
+      <Popover open={open} onClose={() => setOpen(false)} side="top" offset={8} className="w-72">
         <div className="px-2 pt-1.5 pb-1 text-label font-medium text-fg-faint">
           {tr('session.live.ApprovalCard.alwaysAllowScope')}
         </div>

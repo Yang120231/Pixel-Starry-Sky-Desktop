@@ -145,7 +145,7 @@ export function RunWidget() {
           <RotateCw size={12} strokeWidth={1.5} />
         </button>
       </div>
-      <Popover open={open} onClose={() => setOpen(false)} className="right-0 top-full mt-1 w-72">
+      <Popover open={open} onClose={() => setOpen(false)} align="end" className="w-72">
         {services.map(s => {
           const a = serviceActions(s.status)
           return (

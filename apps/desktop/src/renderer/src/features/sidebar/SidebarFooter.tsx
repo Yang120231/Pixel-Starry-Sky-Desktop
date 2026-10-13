@@ -81,7 +81,7 @@ export function SidebarFooter() {
           <LayoutActionButton key={action} action={action} placement="bottom" />
         ))}
       </div>
-      <AccountMenu open={open} onClose={close} className="right-2 bottom-full left-2 mb-1 w-auto!" />
+      <AccountMenu open={open} onClose={close} side="top" fill />
     </footer>
   )
 }

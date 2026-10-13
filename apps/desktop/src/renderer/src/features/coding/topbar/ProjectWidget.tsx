@@ -45,7 +45,7 @@ export function ProjectWidget() {
         <span className="truncate">{name || tr('coding.top.project.none')}</span>
         <ChevronDown size={14} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
       </button>
-      <Popover open={open} onClose={() => setOpen(false)} className="left-0 top-full mt-1 w-60">
+      <Popover open={open} onClose={() => setOpen(false)} className="w-60">
         {projects.map(p => (
           <PopoverItem key={p.id} selected={p.id === projectId} onClick={() => choose(p.id)}>
             <span className="truncate">{p.name}</span>

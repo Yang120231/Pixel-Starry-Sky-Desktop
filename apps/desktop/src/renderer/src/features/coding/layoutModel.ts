@@ -7,7 +7,7 @@ export const STATUSBAR_HEIGHT = 24
 export const CENTER_MIN_WIDTH = 420
 export const EDITOR_MIN_HEIGHT = 160
 export const PANEL_LIMITS: Record<CodingPanel, { min: number; max: number; initial: number }> = {
-  left: { min: 200, max: 520, initial: 280 },
+  left: { min: 240, max: 520, initial: 280 },
   right: { min: 320, max: 720, initial: 420 },
   bottom: { min: 120, max: 900, initial: 260 },
 }

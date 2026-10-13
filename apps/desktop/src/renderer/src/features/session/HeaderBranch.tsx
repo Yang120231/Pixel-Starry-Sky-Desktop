@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronDown, GitBranch } from 'lucide-react'
 import { cn } from '@/ui'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
@@ -32,6 +32,7 @@ export function HeaderBranch({
   useI18n()
   const api = window.pixelsky?.projectTools
   const [menu, setMenu] = useState(false)
+  const trigger = useRef<HTMLButtonElement>(null)
   const [branches, setBranches] = useState<Branch[]>([])
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -129,6 +130,7 @@ export function HeaderBranch({
   return (
     <span className="relative inline-flex min-w-0 shrink-[2]">
       <button
+        ref={trigger}
         type="button"
         data-header-branch
         aria-haspopup="dialog"
@@ -153,7 +155,8 @@ export function HeaderBranch({
           branches={branches}
           loading={loading}
           onClose={close}
-          up={up}
+          anchor={trigger}
+          side={up ? 'top' : 'bottom'}
           onSwitch={b => void choose(b)}
           onCreate={create}
         />

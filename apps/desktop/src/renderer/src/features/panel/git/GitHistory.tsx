@@ -22,7 +22,7 @@ import {
   Undo2,
   X,
 } from 'lucide-react'
-import { Button, cn, IconButton, Spinner, useToast } from '@/ui'
+import { Button, cn, IconButton, Popover, Spinner, useToast } from '@/ui'
 import { ActionMenu, type MenuAction } from '@/ui/ActionMenu'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
 import { useI18n } from '@/i18n/I18nProvider'
@@ -1240,23 +1240,16 @@ function ScopePicker({
 }) {
   const [q, setQ] = useState('')
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set(initial))
-  const box = useRef<HTMLDivElement>(null)
+  // Esc 只关菜单，不再往外传（点外面由 Popover 处理）
   useEffect(() => {
-    const down = (e: MouseEvent) => {
-      if (!box.current?.contains(e.target as Node)) onClose()
-    }
     const key = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation()
         onClose()
       }
     }
-    document.addEventListener('mousedown', down)
     document.addEventListener('keydown', key, true)
-    return () => {
-      document.removeEventListener('mousedown', down)
-      document.removeEventListener('keydown', key, true)
-    }
+    return () => document.removeEventListener('keydown', key, true)
   }, [onClose])
   const match = (name: string) => name.toLowerCase().includes(q.trim().toLowerCase())
   const groups: Array<[string, string[]]> = [
@@ -1265,11 +1258,14 @@ function ScopePicker({
     [tr('git.history.scope.tags'), refs.tags.filter(match)],
   ]
   return (
-    <div
-      ref={box}
+    <Popover
+      open
+      onClose={onClose}
+      align="end"
+      bare
       role="dialog"
       aria-label={single ?? tr('git.history.scope.pick')}
-      className="pop-in no-drag absolute top-full right-0 z-40 mt-1 flex max-h-80 w-64 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg border border-line-card bg-popover shadow-menu"
+      className="flex max-h-80 w-64 flex-col overflow-hidden"
     >
       <div className="shrink-0 border-b border-line-subtle p-2">
         <input
@@ -1337,7 +1333,7 @@ function ScopePicker({
           {tr('git.history.scope.apply')}
         </Button>
       </div>
-    </div>
+    </Popover>
   )
 }
 

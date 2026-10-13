@@ -176,7 +176,7 @@ export function EffortMenu({ live }: { live: ComposerController }) {
         )}
         <ChevronDown size={14} strokeWidth={1.5} className="text-fg-muted" />
       </button>
-      <Popover open={open} onClose={() => setOpen(false)} className="right-0 bottom-full mb-2 w-80 p-3">
+      <Popover open={open} onClose={() => setOpen(false)} side="top" align="end" offset={8} className="w-80 p-3">
         <div className="mb-3 flex h-6 min-w-0 items-center gap-2">
           <span className="shrink-0 text-ui whitespace-nowrap text-fg-secondary">
             {tr('session.Composer.reasoningEffort')}
@@ -327,7 +327,7 @@ export function PermissionMenu({
         <Icon size={16} strokeWidth={1.5} />
         <span>{PERMISSION_INFO[mode].label}</span>
       </button>
-      <Popover open={open} onClose={() => setOpen(false)} className="bottom-full left-0 mb-2 w-72">
+      <Popover open={open} onClose={() => setOpen(false)} side="top" offset={8} className="w-72">
         <MenuTitle>{tr('session.Composer.permissionMode')}</MenuTitle>
         {(['ask', 'edits', 'plan', 'full'] as const).map(m => {
           const MIcon = PERMISSION_ICON[m]

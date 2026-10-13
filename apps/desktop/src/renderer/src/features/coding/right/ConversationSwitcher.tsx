@@ -38,7 +38,7 @@ export function ConversationSwitcher({ sessionId }: { sessionId: string | null }
         <span className="min-w-0 truncate">{title}</span>
         <ChevronDown size={14} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
       </button>
-      <Popover open={open} onClose={close} className="top-full left-0 mt-1 w-72 max-w-[calc(100vw-32px)]">
+      <Popover open={open} onClose={close} className="w-72">
         <div className="max-h-72 overflow-y-auto">
           {entries.length === 0 ? (
             <div className="px-2 py-2 text-ui text-fg-faint">{t('coding.right.chat.empty')}</div>

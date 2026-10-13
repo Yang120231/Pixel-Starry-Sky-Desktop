@@ -62,7 +62,7 @@ export function MachineSwitch() {
         <span className="max-w-40 truncate @max-[680px]:hidden">{cloudLabel}</span>
         <ChevronDown size={12} strokeWidth={1.5} className="-ml-0.5 text-fg-faint @max-[680px]:hidden" />
       </button>
-      <Popover open={open} onClose={() => setOpen(false)} className="top-full right-0 mt-1 w-72">
+      <Popover open={open} onClose={() => setOpen(false)} align="end" className="w-72">
         <p className="px-2 pt-1 pb-1.5 text-meta text-fg-muted">{t('machines.cloudList')}</p>
         {cloud.length === 0 && <p className="px-2 py-1.5 text-ui text-fg-faint">{t('machines.cloudEmpty')}</p>}
         {cloud.map(m => {

@@ -25,6 +25,7 @@ export const gitMessages = {
   'git.open': { zh: '打开文件', en: 'Open file' },
   'git.viewDiff': { zh: '查看差异', en: 'View diff' },
   'git.refresh': { zh: '刷新', en: 'Refresh' },
+  'git.commit.placeholderShort': { zh: '提交说明', en: 'Commit message' },
   'git.commit.placeholder': { zh: '提交信息（Ctrl+Enter 提交）', en: 'Commit message (Ctrl+Enter to commit)' },
   'git.commit.label': { zh: '提交信息', en: 'Commit message' },
   'git.commit': { zh: '提交', en: 'Commit' },

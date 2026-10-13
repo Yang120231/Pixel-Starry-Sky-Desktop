@@ -148,7 +148,7 @@ function SyncButton({ target, status }: { target: WorkspaceRef; status: GitStatu
       >
         {label}
       </button>
-      <Popover open={open} onClose={close} className="bottom-full left-0 mb-2 w-60">
+      <Popover open={open} onClose={close} side="top" offset={8} className="w-60">
         <PopoverItem
           icon={<ArrowDown size={15} strokeWidth={1.5} className="text-fg-secondary" />}
           hint={status.behind > 0 ? `↓${status.behind}` : undefined}
@@ -203,7 +203,7 @@ function CommitButton({ target, status }: { target: WorkspaceRef; status: GitSta
         <GitCommitHorizontal size={13} strokeWidth={1.5} />
         {tr('git.composer.commit')}
       </button>
-      <Popover open={open} onClose={() => setOpen(false)} className="bottom-full left-0 mb-2 w-80 p-3">
+      <Popover open={open} onClose={() => setOpen(false)} side="top" offset={8} className="w-80 p-3">
         {open && <CommitBox target={target} status={status} onDone={() => setOpen(false)} />}
       </Popover>
     </span>
@@ -290,7 +290,8 @@ function CommitBox({ target, status, onDone }: { target: WorkspaceRef; status: G
           rows={Math.min(7, Math.max(3, message.split('\n').length))}
           readOnly={ai.running}
           aria-label={tr('git.commit.label')}
-          placeholder={tr(ai.running ? 'aiCommit.writing' : 'git.commit.placeholder')}
+          placeholder={tr(ai.running ? 'aiCommit.writing' : 'git.commit.placeholderShort')}
+          title={tr('git.commit.placeholder')}
           onKeyDown={e => {
             if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.nativeEvent.isComposing) {
               e.preventDefault()

@@ -49,7 +49,7 @@ export function ExternalFileButton({ tab }: { tab: OpenFile }) {
           }
         }}
       />
-      <Popover open={menu} onClose={() => setMenu(false)} className="top-full right-0 mt-1 max-h-64 w-72 overflow-auto">
+      <Popover open={menu} onClose={() => setMenu(false)} align="end" className="max-h-64 w-72 overflow-auto">
         {editors?.items
           .filter(e => e.available)
           .map(item => (

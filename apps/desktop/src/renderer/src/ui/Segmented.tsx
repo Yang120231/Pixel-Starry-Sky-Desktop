@@ -52,7 +52,7 @@ export function Segmented<T extends string>({ label, options, value, onChange, d
             disabled={disabled}
             onClick={() => onChange(v)}
             className={cn(
-              'press flex h-8 items-center gap-1.5 rounded-md border px-3 text-ui',
+              'press flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md border px-3 text-ui',
               selected
                 ? 'border-line bg-surface font-medium text-fg shadow-sm'
                 : 'border-transparent text-fg-muted hover:text-fg',

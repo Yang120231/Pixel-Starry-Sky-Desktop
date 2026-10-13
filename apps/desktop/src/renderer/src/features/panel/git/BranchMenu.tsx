@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState, type RefObject } from 'react'
 import { Check, GitBranch, Plus } from 'lucide-react'
-import { cn } from '@/ui'
+import { Popover, cn } from '@/ui'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import type { GitBranch as Branch } from '../../../../../shared/types/project-tools'
@@ -12,10 +12,13 @@ export function BranchMenu({
   onSwitch,
   onCreate,
   onClose,
-  up = false,
+  anchor,
+  side = 'bottom',
 }: {
-  /** 往上弹（输入框上方那一行，docs/ui/composer-git.md） */
-  up?: boolean
+  /** 触发按钮：点它算「里面」，由按钮自己的 onClick 切换；窄栏里菜单渲染到 body，不会被裁掉，放不下自动翻面 */
+  anchor?: RefObject<HTMLElement | null>
+  /** 优先放哪一边（输入框上方那一行用 top，docs/ui/composer-git.md） */
+  side?: 'top' | 'bottom'
   branches: Branch[]
   loading: boolean
   onSwitch: (branch: Branch) => void
@@ -24,23 +27,16 @@ export function BranchMenu({
 }) {
   useI18n()
   const [query, setQuery] = useState('')
-  const box = useRef<HTMLDivElement>(null)
+  // Esc 只关菜单，不再往外传（点外面由 Popover 处理）
   useEffect(() => {
-    const down = (e: MouseEvent) => {
-      if (!box.current?.contains(e.target as Node)) onClose()
-    }
     const key = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation()
         onClose()
       }
     }
-    document.addEventListener('mousedown', down)
     document.addEventListener('keydown', key, true)
-    return () => {
-      document.removeEventListener('mousedown', down)
-      document.removeEventListener('keydown', key, true)
-    }
+    return () => document.removeEventListener('keydown', key, true)
   }, [onClose])
   const q = query.trim()
   const shown = useMemo(() => branches.filter(b => b.name.toLowerCase().includes(q.toLowerCase())), [branches, q])
@@ -50,14 +46,15 @@ export function BranchMenu({
     [tr('git.branch.remote'), shown.filter(b => b.remote)],
   ]
   return (
-    <div
-      ref={box}
+    <Popover
+      open
+      onClose={onClose}
+      anchor={anchor}
+      side={side}
+      bare
       role="dialog"
       aria-label={tr('git.branch.menu')}
-      className={cn(
-        'pop-in no-drag absolute left-0 z-40 flex max-h-80 w-72 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg border border-line-card bg-popover shadow-menu',
-        up ? 'bottom-full mb-1' : 'top-full mt-1',
-      )}
+      className="flex max-h-80 w-72 flex-col overflow-hidden"
     >
       <div className="shrink-0 border-b border-line-subtle p-2">
         <input
@@ -126,6 +123,6 @@ export function BranchMenu({
             ),
         )}
       </div>
-    </div>
+    </Popover>
   )
 }
