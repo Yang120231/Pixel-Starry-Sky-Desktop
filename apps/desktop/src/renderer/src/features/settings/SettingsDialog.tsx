@@ -33,6 +33,7 @@ import { ReplyStatsSettings } from './ReplyStatsSettings'
 import { ComposerStyleSettings } from './ComposerStyleSettings'
 import { AccentSettings } from './AccentSettings'
 import { PaletteSettings } from './PaletteSettings'
+import { MinimalModeSettings } from './MinimalModeSettings'
 import { CloseActionSettings } from './CloseActionSettings'
 import { TurnRailSettings } from './TurnRailSettings'
 import { LongConversationSettings } from './LongConversationSettings'
@@ -660,6 +661,7 @@ function AppearanceSection() {
       </SettingRow>
       <PaletteSettings />
       <AccentSettings />
+      <MinimalModeSettings />
       <SettingRow
         title={tr('settings.SettingsDialog.interfaceLanguage')}
         description={tr('settings.SettingsDialog.chooseLanguageUsedBy')}

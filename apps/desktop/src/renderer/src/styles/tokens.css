@@ -748,6 +748,82 @@
   --terminal-selection: rgba(235, 188, 186, 0.22);
   --wall-sidebar: #16141f;
 }
+/* 极夜（参考 Factory，docs/ui/minimal-mode.md）：深色纯黑底、近乎看不见的边框、只剩灰阶，主色沿用默认的薄荷绿；
+   浅色是纯白底 + 同一套中性灰 */
+:root[data-palette='midnight'],
+[data-palette-preview='midnight'] {
+  --ink: #111111;
+  --bg-rail: #f0f0f0;
+  --bg-sidebar: #f7f7f7;
+  --bg-app: #ffffff;
+  --bg-panel: #ffffff;
+  --wall-tint: #ffffff;
+  --bg-surface: #ffffff;
+  --wall-surface: #ffffff;
+  --bg-popover: #ffffff;
+  --bg-workbench: #ffffff;
+  --border: #e5e5e5;
+  --border-subtle: #ededed;
+  --border-strong: #d0d0d0;
+  --text: #111111;
+  --text-secondary: #3d3d3d;
+  --text-muted: #6b6b6b;
+  --text-faint: #a1a1a1;
+  --text-body: #111111;
+  --theme-accent: #2d6151;
+  --theme-accent-on: #ffffff;
+  --theme-accent-soft: #e1eae5;
+  --theme-accent-text: #2d6151;
+  --theme-accent-border: #83a394;
+  --btn-primary-bg: #111111;
+  --btn-primary-text: #ffffff;
+  --btn-disabled-bg: #e0e0e0;
+  --btn-disabled-text: #ffffff;
+  --engine-chip-bg: #111111;
+  --engine-chip-text: #ffffff;
+  --terminal-bg: #ffffff;
+  --terminal-fg: #111111;
+  --terminal-cursor: #2d6151;
+  --terminal-selection: rgba(143, 208, 180, 0.28);
+  --wall-sidebar: #f7f7f7;
+}
+:root[data-theme='dark'][data-palette='midnight'],
+:root[data-theme='dark'] [data-palette-preview='midnight'] {
+  --ink: #ededed;
+  --bg-rail: #000000;
+  --bg-sidebar: #050505;
+  --bg-app: #000000;
+  --bg-panel: #000000;
+  --wall-tint: #000000;
+  --bg-surface: #0c0c0c;
+  --wall-surface: #0c0c0c;
+  --bg-popover: #161616;
+  --bg-workbench: #000000;
+  --border: #222222;
+  --border-subtle: #1a1a1a;
+  --border-strong: #333333;
+  --text: #ededed;
+  --text-secondary: #c4c4c4;
+  --text-muted: #8a8a8a;
+  --text-faint: #5c5c5c;
+  --text-body: #dedede;
+  --theme-accent: #7fc4a8;
+  --theme-accent-on: #13261e;
+  --theme-accent-soft: #1e3a30;
+  --theme-accent-text: #8fd0b4;
+  --theme-accent-border: #4f8a73;
+  --btn-primary-bg: #ededed;
+  --btn-primary-text: #000000;
+  --btn-disabled-bg: #1f1f1f;
+  --btn-disabled-text: #5c5c5c;
+  --engine-chip-bg: #d4d4d4;
+  --engine-chip-text: #000000;
+  --terminal-bg: #000000;
+  --terminal-fg: #ededed;
+  --terminal-cursor: #8fd0b4;
+  --terminal-selection: rgba(143, 208, 180, 0.3);
+  --wall-sidebar: #050505;
+}
 
 /* 用量图表色在 Nord 深色卡片底（#3b4252，比别的深色底亮）上对比度不到 3:1，单独提一级；
    用 dataviz 的 validate_palette.js 对 16 种卡片底色逐个校验过，其余都用默认值（docs/ui/usage-chart-style.md §3.6）。 */

@@ -1,0 +1,64 @@
+/* 极简模式（docs/ui/minimal-mode.md，参考 Factory）：设置 › 外观打开后写 <html data-minimal="on">，关掉时这里一条都不生效。
+   只改密度和装饰，不改颜色（配色另选，「极夜」最像 Factory）。不放 @layer，压得过 Tailwind 的工具类。 */
+
+:root[data-minimal='on'] {
+  /* 字小一号：globals.css 的 --text-* 都乘了 --density（--font-scale 是 fonts.ts 写在行内样式上的，盖不掉，所以另乘一个） */
+  --density: 0.92;
+  /* 去阴影；浮在内容上的东西换成一圈细线，弹出菜单保留阴影（不然压在输入框上分不清） */
+  --shadow-sm: none;
+  --shadow-float: 0 0 0 1px var(--border-card);
+  --shadow-composer: none;
+  --shadow-workbench: none;
+}
+
+/* 圆角收小：大卡片 8px、中等 6px（Tailwind 用 @theme inline，改 --radius-* 不生效，只能盖类名） */
+:root[data-minimal='on'] :is(.rounded-xl, .rounded-2xl, .rounded-3xl) {
+  border-radius: 8px;
+}
+:root[data-minimal='on'] .rounded-lg {
+  border-radius: 6px;
+}
+
+/* 用户消息：整行浅色块，不靠右、不限宽 */
+:root[data-minimal='on'] .conversation-user-bubble {
+  flex: 1 1 auto;
+  align-self: stretch;
+  max-width: none;
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+/* 输入框：方一点；下面一排模型 / 线路 / 推理强度 / 模式用等宽字 */
+:root[data-minimal='on'] .composer-card {
+  border-radius: 8px;
+}
+:root[data-minimal='on'] .composer-toolbar button {
+  font-family: var(--font-mono);
+}
+/* 输入框上方的机器、项目、Git：鼠标移到输入框区域（或键盘焦点在里面）才显示，位置一直留着，不会跳 */
+:root[data-minimal='on'] .composer-area [data-composer-workspace] {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+:root[data-minimal='on'] .composer-area:is(:hover, :focus-within) [data-composer-workspace] {
+  opacity: 1;
+}
+
+/* 顶栏导航只留图标，名字在悬停提示里（按钮本来就有 title） */
+:root[data-minimal='on'] [data-nav-label] {
+  display: none;
+}
+
+/* 侧栏：行高 32 → 28，收起最近任务，底部胶囊去掉外框只剩一行字 */
+:root[data-minimal='on'] [data-session-row] {
+  height: 28px;
+}
+:root[data-minimal='on'] [data-sidebar-recent] {
+  display: none;
+}
+:root[data-minimal='on'] [data-run-status] > div {
+  height: 32px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}

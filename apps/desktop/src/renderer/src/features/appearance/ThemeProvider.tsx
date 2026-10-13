@@ -4,6 +4,7 @@ import { hasWallpaper } from '@/features/appearance/wallpaper'
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { isDemo } from '@/data'
 import { PANE_FOCUS_MOTION_KEY, readPaneFocusMotion, type PaneFocusMotion } from './paneFocusMotion'
+import { MINIMAL_MODE_KEY, readMinimalMode, type MinimalMode } from './minimalMode'
 import { usePalette, windowBackground } from './palette'
 
 export type ThemePreference = 'light' | 'dark' | 'system'
@@ -19,6 +20,9 @@ interface ThemeContextValue {
   setMotion: (motion: MotionPreference) => void
   paneFocusMotion: PaneFocusMotion
   setPaneFocusMotion: (motion: PaneFocusMotion) => void
+  /** 极简模式（docs/ui/minimal-mode.md） */
+  minimal: MinimalMode
+  setMinimal: (minimal: MinimalMode) => void
   /** 系统是否要求减少动态效果（Windows「动画效果」关闭时为 true） */
   systemReducedMotion: boolean
 }
@@ -69,6 +73,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [system, setSystem] = useState<ResolvedTheme>(systemTheme)
   const [motion, setMotionState] = useState<MotionPreference>(readMotion)
   const [paneFocusMotion, setPaneFocusMotionState] = useState<PaneFocusMotion>(readPaneFocusMotion)
+  const [minimal, setMinimalState] = useState<MinimalMode>(readMinimalMode)
   const [systemReducedMotion, setSystemReducedMotion] = useState(() => window.matchMedia(REDUCED_MOTION).matches)
 
   useEffect(() => {
@@ -85,6 +90,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       if (e.key === STORAGE_KEY || e.key === null) setPreferenceState(readPreference())
       if (e.key === MOTION_KEY || e.key === null) setMotionState(readMotion())
       if (e.key === PANE_FOCUS_MOTION_KEY || e.key === null) setPaneFocusMotionState(readPaneFocusMotion())
+      if (e.key === MINIMAL_MODE_KEY || e.key === null) setMinimalState(readMinimalMode())
     }
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
@@ -97,6 +103,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     document.documentElement.dataset.paneFocus = paneFocusMotion
   }, [paneFocusMotion])
+  // styles/minimal.css 全部挂在 data-minimal='on' 下
+  useEffect(() => {
+    document.documentElement.dataset.minimal = minimal
+  }, [minimal])
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)')
@@ -141,8 +151,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         setPaneFocusMotionState(next)
         if (!isDemo) save(PANE_FOCUS_MOTION_KEY, next)
       },
+      minimal,
+      setMinimal: next => {
+        setMinimalState(next)
+        if (!isDemo) save(MINIMAL_MODE_KEY, next)
+      },
     }),
-    [preference, resolved, motion, systemReducedMotion, paneFocusMotion],
+    [preference, resolved, motion, systemReducedMotion, paneFocusMotion, minimal],
   )
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>

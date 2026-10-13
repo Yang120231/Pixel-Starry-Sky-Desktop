@@ -104,6 +104,7 @@ export const SYNC_ENTRIES: readonly SyncEntry[] = [
   storageEntry('desktop.accent', 'appearance', 'pixelsky.accent'),
   storageEntry('desktop.motion', 'appearance', 'pixelsky.motion'),
   storageEntry('desktop.paneFocusMotion', 'appearance', 'pixelsky.paneFocusMotion'),
+  storageEntry('desktop.minimal', 'appearance', 'pixelsky.minimal'),
   storageEntry('desktop.locale', 'appearance', 'pixelsky.locale'),
   storageEntry('desktop.fonts', 'appearance', 'pixelsky.fonts'),
   storageEntry('desktop.sidebar', 'appearance', 'pixelsky.sidebar'),

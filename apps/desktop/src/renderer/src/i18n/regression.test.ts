@@ -36,6 +36,7 @@ import { contextMessages } from '../../../shared/i18n/contextMessages'
 import { costMessages } from '../../../shared/i18n/costMessages'
 import { longConversationMessages } from '../../../shared/i18n/longConversationMessages'
 import { tabMenuMessages } from '../../../shared/i18n/tabMenuMessages'
+import { minimalModeMessages } from '../../../shared/i18n/minimalModeMessages'
 
 // 与 shared/i18n/translate.ts 的 allMessages 合并顺序一致
 const dictionaries: Record<string, Record<string, unknown>> = {
@@ -73,6 +74,7 @@ const dictionaries: Record<string, Record<string, unknown>> = {
   costMessages,
   longConversationMessages,
   tabMenuMessages,
+  minimalModeMessages,
 }
 
 /** 中英文值不同、需要保持现状的重复 key（当前为空；新增重复必须先说明原因）。 */

@@ -5,6 +5,7 @@ import { useSyncExternalStore } from 'react'
 
 export const PALETTES = [
   'default',
+  'midnight',
   'github',
   'solarized',
   'nord',

@@ -75,7 +75,9 @@ export function NavButton({ id, placement }: { id: NavId; placement: SidebarPlac
         )}
       >
         <Icon size={15} strokeWidth={1.5} className="shrink-0" />
-        <span className="@max-[680px]:hidden">{SHORT_LABEL[id]()}</span>
+        <span data-nav-label className="@max-[680px]:hidden">
+          {SHORT_LABEL[id]()}
+        </span>
         {badge !== undefined && <CountBadge count={badge} className="pointer-events-none" />}
         {item.notify && <Dot tone="notify" size={6} className="pointer-events-none" />}
       </button>

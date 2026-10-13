@@ -5,9 +5,10 @@ import { cn } from '@/ui'
 import { SettingRow } from './SettingRow'
 import { PALETTES, setPalette, usePalette, type Palette } from '@/features/appearance/palette'
 
-/** 第三方配色用原名，不翻译 */
+/** 第三方配色用原名，不翻译；自己的（null）走翻译 */
 const NAMES: Record<Palette, string | null> = {
   default: null,
+  midnight: null,
   github: 'GitHub',
   solarized: 'Solarized',
   nord: 'Nord',
@@ -16,7 +17,8 @@ const NAMES: Record<Palette, string | null> = {
   tokyonight: 'Tokyo Night',
   rosepine: 'Rosé Pine',
 }
-const paletteName = (value: Palette): string => NAMES[value] ?? tr('settings.PaletteSettings.default')
+const paletteName = (value: Palette): string =>
+  NAMES[value] ?? (value === 'midnight' ? tr('minimal.paletteMidnight') : tr('settings.PaletteSettings.default'))
 
 /** 配色主题：每张卡片按当前浅色 / 深色画出这套配色的缩略界面（tokens.css 的 [data-palette-preview]） */
 export function PaletteSettings() {

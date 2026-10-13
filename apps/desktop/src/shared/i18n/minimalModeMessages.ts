@@ -1,0 +1,11 @@
+// 极简模式和「极夜」配色（docs/ui/minimal-mode.md）
+export const minimalModeMessages = {
+  'minimal.setting': { zh: '极简模式', en: 'Minimal mode' },
+  'minimal.settingHint': {
+    zh: '去掉阴影和多余装饰，字小一号、行距更紧；用户消息改成整行浅色块，顶栏导航只留图标，侧栏收起最近任务，输入框上方的项目和 Git 鼠标移过去才显示。配色另选，搭配「极夜」最像 Factory',
+    en: 'Drops shadows and extra decoration, with slightly smaller text and tighter spacing. Your messages become full-width blocks, top bar navigation shows icons only, the sidebar hides recent tasks, and the project and Git bar above the composer appears on hover. Pick a palette separately; Midnight looks closest to Factory',
+  },
+  'minimal.on': { zh: '开启', en: 'On' },
+  'minimal.off': { zh: '关闭', en: 'Off' },
+  'minimal.paletteMidnight': { zh: '极夜', en: 'Midnight' },
+} as const

@@ -31,6 +31,7 @@ import { contextMessages } from './contextMessages'
 import { costMessages } from './costMessages'
 import { longConversationMessages } from './longConversationMessages'
 import { tabMenuMessages } from './tabMenuMessages'
+import { minimalModeMessages } from './minimalModeMessages'
 import { replaceCodedErrors } from '@pixelsky/protocol'
 import type { Locale } from './messages'
 
@@ -69,6 +70,7 @@ export const allMessages = {
   ...costMessages,
   ...longConversationMessages,
   ...tabMenuMessages,
+  ...minimalModeMessages,
 }
 export type TranslationKey = keyof typeof allMessages
 
