@@ -6,7 +6,6 @@ import {
   Ban,
   Bot,
   Brain,
-  Check,
   ChevronDown,
   ChevronRight,
   ChevronUp,
@@ -23,16 +22,16 @@ import {
   SquareTerminal,
   TriangleAlert,
   Wrench,
-  X,
   type LucideIcon,
 } from 'lucide-react'
 import type { FileChange, Item, ItemStatus, ToolKind } from '@pixelsky/protocol'
-import { CopyButton, DiffStat, IconButton, Spinner, cn } from '@/ui'
+import { CopyButton, DiffStat, IconButton, cn } from '@/ui'
 import { DiffView } from '@/ui/code/DiffView'
 import { CommandText } from '@/ui/code/CommandText'
 import { AnsiText } from '@/ui/code/AnsiText'
 import { useOpenTrace } from './trace'
 import { StepMark } from './ProgressCard'
+import { StatusDot } from './StatusDot'
 import { UserText } from './UserText'
 import { shouldFoldUser, userBlocks } from './userBlocks'
 import { CodeBlock } from '@/ui/code/CodeBlock'
@@ -207,6 +206,7 @@ export function ReasoningBlock({ item }: { item: ItemOf<'reasoning'> }) {
   if (!running && !hasText)
     return (
       <div className="flex h-[30px] items-center gap-2 px-2 text-list text-fg-muted">
+        <StatusDot status="none" />
         <Brain size={15} strokeWidth={1.5} className="shrink-0" />
         <span>{label}</span>
       </div>
@@ -219,9 +219,11 @@ export function ReasoningBlock({ item }: { item: ItemOf<'reasoning'> }) {
         onClick={toggle}
         className="flex h-[30px] items-center gap-2 rounded-md px-2 text-list text-fg-muted hover:bg-hover hover:text-fg-secondary"
       >
-        <Brain size={15} strokeWidth={1.5} className="shrink-0" />
+        {/* 思考完不打勾（每轮好几段，满屏绿勾太吵），只留位置让图标和工具行对齐 */}
+        <StatusDot status={running ? 'running' : 'none'} />
+        <Brain size={15} strokeWidth={1.5} className={cn('shrink-0', running && 'text-active')} />
         <span className="tabular-nums">{label}</span>
-        {running ? <Spinner size={13} /> : <Chevron open={open} />}
+        {!running && <Chevron open={open} />}
       </button>
       {open && item.text && (
         <div className="mt-1 ml-[15px] border-l border-line pl-3.5 text-meta leading-relaxed whitespace-pre-wrap text-fg-muted">
@@ -232,16 +234,14 @@ export function ReasoningBlock({ item }: { item: ItemOf<'reasoning'> }) {
   )
 }
 
-function StatusMark({ status, okMark = true }: { status: ItemStatus; okMark?: boolean }) {
+/** 行尾的说明：进行中、完成、失败在行首的状态点上（StatusDot），这里只写被拒绝、中断 */
+function StatusMark({ status }: { status: ItemStatus }) {
   useI18n()
   switch (status) {
     case 'running':
-      // 运行中的转圈在行首（RunningIcon），行尾不再放一个
-      return null
     case 'completed':
-      return okMark ? <Check size={14} strokeWidth={2} className="shrink-0 text-success" /> : null
     case 'failed':
-      return <X size={14} strokeWidth={2} className="shrink-0 text-danger" />
+      return null
     case 'declined':
       return (
         <span className="inline-flex shrink-0 items-center gap-1 text-meta text-fg-muted">
@@ -284,16 +284,19 @@ const TOOL_META: Record<ToolKind, { icon: LucideIcon; verb: string }> = {
 }
 
 /**
- * 运行中的工具调用（docs/ui/conversation-concise.md §7）：行首的图标换成转圈，动作上流过一道很淡的光，
- * 超过 3 秒在后面写用时；结束后换回原来的图标和颜色
+ * 工具调用的行首（docs/ui/conversation-concise.md §7、§7.1）：状态点（橙色进行中、绿勾完成、红叉失败、空心被拒绝 / 中断）
+ * 加类型图标；进行中图标也是橙色，动作上流过一道很淡的光，超过 3 秒在后面写用时
  */
-function RunningIcon({ icon: Icon, running }: { icon: LucideIcon; running: boolean }) {
-  return running ? (
-    <span className="flex w-[15px] shrink-0 justify-center">
-      <Spinner size={13} />
-    </span>
-  ) : (
-    <Icon size={15} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
+function RunningIcon({ icon: Icon, status }: { icon: LucideIcon; status: ItemStatus }) {
+  return (
+    <>
+      <StatusDot status={status} />
+      <Icon
+        size={15}
+        strokeWidth={1.5}
+        className={cn('shrink-0', status === 'running' ? 'text-active' : 'text-fg-muted')}
+      />
+    </>
   )
 }
 function StepClock({ id }: { id: string }) {
@@ -306,7 +309,7 @@ function Row({
   id,
   icon,
   verb,
-  running = false,
+  status,
   children,
   trailing,
   expandable,
@@ -317,7 +320,7 @@ function Row({
   id: string
   icon: LucideIcon
   verb: string
-  running?: boolean
+  status: ItemStatus
   children: ReactNode
   trailing?: ReactNode
   expandable: boolean
@@ -327,6 +330,7 @@ function Row({
   action?: ReactNode
 }) {
   useI18n()
+  const running = status === 'running'
   const row = (
     <button
       type="button"
@@ -339,7 +343,7 @@ function Row({
         expandable ? 'hover:bg-hover' : 'cursor-default',
       )}
     >
-      <RunningIcon icon={icon} running={running} />
+      <RunningIcon icon={icon} status={status} />
       {verb && <span className={cn('shrink-0', running && 'step-shimmer')}>{verb}</span>}
       {children}
       {running && <StepClock id={id} />}
@@ -459,7 +463,7 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
           id={item.id}
           icon={SquareTerminal}
           verb={verb}
-          running={item.status === 'running'}
+          status={item.status}
           expandable={!!item.output}
           open={open}
           onToggle={toggle}
@@ -531,12 +535,12 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
     const editing = item.status === 'running'
     const summary = (
       <>
-        <RunningIcon icon={item.changes[0]?.kind === 'add' ? FilePlus : FilePen} running={editing} />
+        <RunningIcon icon={item.changes[0]?.kind === 'add' ? FilePlus : FilePen} status={item.status} />
         <span className={cn('shrink-0', editing && 'step-shimmer')}>{fileVerb(item.changes)}</span>
         {paths}
         {editing && <StepClock id={item.id} />}
         {(added > 0 || removed > 0) && <DiffStat added={added} removed={removed} className="text-meta" />}
-        <StatusMark status={item.status} okMark={false} />
+        <StatusMark status={item.status} />
         <SubagentTag name={item.subagent} />
       </>
     )
@@ -605,13 +609,13 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
         id={item.id}
         icon={plan ? ListTodo : meta.icon}
         verb={verb}
-        running={item.status === 'running'}
+        status={item.status}
         expandable={foldable}
         open={open}
         onToggle={toggle}
         trailing={
           <>
-            <StatusMark status={item.status} okMark={false} />
+            <StatusMark status={item.status} />
             {images.length > 0 && (
               <span className="shrink-0 text-meta text-fg-faint">
                 {tr('session.live.viewedImages', { n: images.length })}
@@ -678,6 +682,8 @@ export function TodoCard({ item }: { item: ItemOf<'todo'> }) {
         onClick={toggle}
         className="flex h-[30px] max-w-full min-w-0 items-center gap-2 rounded-md px-2 text-list text-fg-muted hover:bg-hover hover:text-fg-secondary"
       >
+        {/* 历史里的待办只是当时的快照，不标「进行中」；正在做的看「正在执行」那一行和进度卡片 */}
+        <StatusDot status={done === item.steps.length ? 'completed' : 'pending'} />
         <ListTodo size={15} strokeWidth={1.5} className="shrink-0" />
         <span className="shrink-0">{tr('session.live.ItemRows.toDo')}</span>
         <span className="shrink-0 text-meta text-fg-faint tabular-nums">

@@ -4,7 +4,8 @@ import { tr, type TranslationKey } from '../../../i18n/core'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ChevronRight, Layers } from 'lucide-react'
 import type { Item } from '@pixelsky/protocol'
-import { Spinner, cn } from '@/ui'
+import { cn } from '@/ui'
+import { StatusDot } from './StatusDot'
 import { REQUEST_MS, useExpandAny } from '@/features/search/expand'
 import { formatDuration } from './agentTrace'
 import { summarize, type ProcessSummary } from './turnFold'
@@ -99,7 +100,11 @@ export function TurnProcess({
         onClick={() => setOpen(v => !v)}
         className="flex h-[30px] max-w-full min-w-0 items-center gap-1.5 rounded-md px-2 text-list text-fg-muted hover:bg-hover hover:text-fg-secondary"
       >
-        {running ? <Spinner size={13} /> : <Layers size={15} strokeWidth={1.5} className="mr-0.5 shrink-0" />}
+        {running ? (
+          <StatusDot status="running" className="mr-0.5" />
+        ) : (
+          <Layers size={15} strokeWidth={1.5} className="mr-0.5 shrink-0" />
+        )}
         <span className="shrink-0 text-fg-secondary">
           {tr(running ? 'session.process.running' : 'session.process.title')}
         </span>

@@ -45,6 +45,7 @@
   --color-code-inline: var(--code-inline-text);
   --color-code-inline-bg: var(--code-inline-bg);
   --color-success: var(--success);
+  --color-active: var(--active);
   --color-danger: var(--danger);
   --color-notify: var(--notify);
   --color-warn: var(--warn);

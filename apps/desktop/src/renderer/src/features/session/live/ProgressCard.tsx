@@ -5,7 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { Bot, Check, ChevronDown, ChevronUp, CircleSlash, X } from 'lucide-react'
 import { settledResizeObserver } from '@/features/panes/motion'
 import type { SessionSnapshot, TodoStep } from '@pixelsky/protocol'
-import { IconButton, Spinner, cn } from '@/ui'
+import { IconButton, cn } from '@/ui'
 import { elapsed, formatDuration, shortModel, type RunState } from './agentTrace'
 import { activeStep, currentPlan, progressAgents, turnKey, type Plan, type ProgressAgent } from './progressData'
 import { useOpenTrace } from './trace'
@@ -63,25 +63,25 @@ export function useProgress(snapshot: SessionSnapshot | null): Progress {
   }
 }
 
-/** 步骤前的圆圈：完成打勾、进行中主色圆点、未开始空心 */
+/** 步骤前的圆圈：完成绿底打勾、进行中橙色圆点、未开始空心（和工具调用行首的状态点同一套颜色） */
 export function StepMark({ status }: { status: TodoStep['status'] }) {
   return (
     <span
       className={cn(
         'mt-[3px] inline-flex size-[14px] shrink-0 items-center justify-center rounded-full border',
         status === 'completed' && 'border-success bg-success text-surface',
-        status === 'in_progress' && 'border-accent',
+        status === 'in_progress' && 'border-active',
         status === 'pending' && 'border-line-strong',
       )}
     >
       {status === 'completed' && <Check size={10} strokeWidth={3} />}
-      {status === 'in_progress' && <span className="size-1.5 animate-pulse rounded-full bg-accent" />}
+      {status === 'in_progress' && <span className="size-1.5 animate-pulse rounded-full bg-active" />}
     </span>
   )
 }
 
 function StateIcon({ state }: { state: RunState }) {
-  if (state === 'running') return <Spinner size={12} className="mt-[3px]" />
+  if (state === 'running') return <span className="mt-[6px] size-[7px] shrink-0 animate-pulse rounded-full bg-active" />
   if (state === 'done') return <Check size={12} strokeWidth={2} className="mt-[3px] shrink-0 text-success" />
   if (state === 'failed') return <X size={12} strokeWidth={2} className="mt-[3px] shrink-0 text-danger" />
   return <CircleSlash size={12} strokeWidth={1.75} className="mt-[3px] shrink-0 text-fg-muted" />
