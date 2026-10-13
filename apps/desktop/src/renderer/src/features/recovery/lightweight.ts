@@ -2,11 +2,17 @@
 // 只在内存里，本次加载有效，不改用户设置；刷新页面就回到设置里的值。
 import { useSyncExternalStore } from 'react'
 import { DEFAULT_KEEP_ALIVE, setKeepAliveLimit } from '@/features/panes/keepAlive'
-import { recovered } from './recovered'
+import { recovered, type Recovered } from './recovered'
 
 export { capTurns } from './turns'
 
-let on = recovered !== null
+/** 界面出错（react-crash）不是内存问题，前 3 次不开轻量模式；第 4 次起对话框的按钮写的是轻量模式，要开 */
+export function wantsLightweight(r: Recovered | null): boolean {
+  if (!r) return false
+  return r.reason !== 'react-crash' || r.n >= 4
+}
+
+let on = wantsLightweight(recovered)
 if (on) setKeepAliveLimit(0)
 const listeners = new Set<() => void>()
 

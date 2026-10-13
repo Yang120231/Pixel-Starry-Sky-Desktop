@@ -76,10 +76,10 @@ class FakeWin extends EventEmitter {
 function setup(prompt?: CrashDeps['prompt']) {
   const win = new FakeWin()
   const deps = { load: vi.fn(() => Promise.resolve()), openLogs: vi.fn(), quit: vi.fn(), prompt }
-  watchCrashes(win.asWindow(), deps)
+  const watch = watchCrashes(win.asWindow(), deps)
   const wc = win.webContents
   const crash = (reason = 'crashed') => wc.emit('render-process-gone', {}, { reason, exitCode: 1 })
-  return { win, wc, deps, crash, contents: wc as unknown as Parameters<typeof canSend>[0] }
+  return { win, wc, deps, crash, watch, contents: wc as unknown as Parameters<typeof canSend>[0] }
 }
 
 describe('watchCrashes', () => {
@@ -116,6 +116,33 @@ describe('watchCrashes', () => {
       { reason: 'oom', n: 2, delayMs: 2000 },
       { reason: 'crashed', n: 3, delayMs: 5000 },
     ])
+  })
+
+  it('界面组件崩溃（react-crash）：和真崩溃同一个 10 分钟窗口里计数，带 recovered=react-crash 重新加载', () => {
+    const t = setup()
+    t.crash('oom')
+    vi.advanceTimersByTime(1000)
+    t.watch.failed('react-crash')
+    expect(canSend(t.contents)).toBe(false)
+    vi.advanceTimersByTime(2000)
+    expect(t.deps.load).toHaveBeenLastCalledWith(t.win, { recovered: 'react-crash', n: '2' })
+    expect(lines.filter(l => l.message === '界面自动重新加载').map(l => l.fields)).toEqual([
+      { reason: 'oom', n: 1, delayMs: 1000 },
+      { reason: 'react-crash', n: 2, delayMs: 2000 },
+    ])
+  })
+
+  it('界面组件崩溃第 4 次弹对话框，原因是 react-crash', async () => {
+    const prompt = vi.fn<NonNullable<CrashDeps['prompt']>>().mockResolvedValue('reload')
+    const t = setup(prompt)
+    for (let i = 0; i < 3; i++) {
+      t.crash()
+      vi.advanceTimersByTime(5000)
+    }
+    t.watch.failed('react-crash')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(prompt.mock.calls[0][1]).toMatchObject({ reason: 'react-crash', n: 4 })
+    expect(t.deps.load).toHaveBeenLastCalledWith(t.win, { recovered: 'react-crash', n: '4' })
   })
 
   it('等待重新加载时窗口关了就不加载', () => {

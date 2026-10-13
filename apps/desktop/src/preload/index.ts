@@ -165,6 +165,7 @@ const log: LogBridge = {
   openFolder: () => call('log:open'),
   exportDiagnostics: () => call('log:export'),
   write: (level, message, fields) => send('log:write', { level, message, fields }),
+  uncaught: () => send('log:uncaught'),
   sample: sample => call('log:sample', sample),
 }
 function logEntryListener(_e: Electron.IpcRendererEvent, entry: import('@pixelsky/protocol').LogEntry): void {

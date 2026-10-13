@@ -6,6 +6,8 @@ import { memo, useEffect, useLayoutEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useI18n } from '@/i18n/I18nProvider'
 import { cn } from '@/ui'
+import { ErrorBoundary } from '@/ui/ErrorBoundary'
+import { reportRendererError } from '@/features/logs/rendererErrors'
 import { SessionView } from '@/features/session/SessionView'
 import { isLive, useSessionTitle } from '@/features/engine'
 import { noteTabSessions } from '@/features/engine/store'
@@ -172,21 +174,29 @@ const TabBody = memo(function TabBody({
       // portal 里的 React 事件不经过 PaneView，点内容时在这里把所在窗格设为当前窗格
       onPointerDownCapture={() => paneActions.focus(leafId)}
     >
-      {isFileTab(tab) ? (
-        <FileEditor id={tab} active={active} />
-      ) : (
-        <SessionView
-          embedded
-          sessionId={sessionId}
-          draftKey={isLive ? tab : `demo:${tab}`}
-          title={title}
-          sidebarOpen={sidebarOpen}
-          panelOpen={panelOpen}
-          onToggleSidebar={onToggleSidebar}
-          onTogglePanel={onTogglePanel}
-          onOpenSession={id => paneActions.replace(tab, id)}
-        />
-      )}
+      <ErrorBoundary
+        resetKeys={[tab, sessionId]}
+        label="tab"
+        onError={(error, componentStack, boundary) =>
+          reportRendererError('react.boundary', error, { ...(componentStack ? { componentStack } : {}), boundary })
+        }
+      >
+        {isFileTab(tab) ? (
+          <FileEditor id={tab} active={active} />
+        ) : (
+          <SessionView
+            embedded
+            sessionId={sessionId}
+            draftKey={isLive ? tab : `demo:${tab}`}
+            title={title}
+            sidebarOpen={sidebarOpen}
+            panelOpen={panelOpen}
+            onToggleSidebar={onToggleSidebar}
+            onTogglePanel={onTogglePanel}
+            onOpenSession={id => paneActions.replace(tab, id)}
+          />
+        )}
+      </ErrorBoundary>
     </div>
   )
 })

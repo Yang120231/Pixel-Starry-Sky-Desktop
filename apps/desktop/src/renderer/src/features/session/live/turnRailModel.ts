@@ -84,3 +84,22 @@ export function currentTurn(tops: readonly number[], viewTop: number, slack = 48
   for (let i = 0; i < tops.length; i++) if (tops[i] <= viewTop + slack) current = i
   return current
 }
+
+/** 把下标夹进 [0, length-1]；没有轮时是 0 */
+export function clampIndex(index: number, length: number): number {
+  if (!Number.isFinite(index)) return 0
+  return Math.max(0, Math.min(Math.trunc(index), length - 1, Math.max(0, length - 1)))
+}
+
+/**
+ * 量到的位置按轮的 id 对回当前的轮：回退后 turns 变短 / 换了一批 id 时，上一次量的结果（比 turns 长、
+ * 或属于别的轮）不能直接用。返回和 turns 等长的数组，对不上的是 Infinity（画刻度时跳过）
+ */
+export function topsFor(
+  turns: readonly { id: string }[],
+  measured: { ids: readonly string[]; tops: readonly number[] },
+): number[] {
+  const byId = new Map<string, number>()
+  measured.ids.forEach((id, i) => byId.set(id, measured.tops[i] ?? Number.POSITIVE_INFINITY))
+  return turns.map(t => byId.get(t.id) ?? Number.POSITIVE_INFINITY)
+}

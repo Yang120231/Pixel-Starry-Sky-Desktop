@@ -14,7 +14,7 @@ import { onPaneSettled, paneMoving, settledResizeObserver } from '@/features/pan
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import { cn } from '@/ui'
-import { currentTurn, placeTicks, thumbOf, tickAt, type Turn } from './turnRailModel'
+import { clampIndex, currentTurn, placeTicks, thumbOf, tickAt, topsFor, type Turn } from './turnRailModel'
 
 /** 滑轨上下留的空 */
 const PAD = 4
@@ -55,8 +55,10 @@ export function TurnRail({
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const drag = useRef<{ pointer: number; y: number; top: number } | null>(null)
   const [metrics, setMetrics] = useState<Metrics>({ scrollTop: 0, view: 0, content: 0, track: 0 })
-  const [tops, setTops] = useState<number[]>([])
-  const [current, setCurrent] = useState(0)
+  // 量到的位置连同它们对应的轮 id 一起存：turns 缩短 / 换批（回退）后，渲染时按 id 对回当前的轮，不会越界
+  const [measured, setMeasured] = useState<{ ids: string[]; tops: number[] }>({ ids: [], tops: [] })
+  const [rawCurrent, setCurrent] = useState(0)
+  const current = clampIndex(rawCurrent, turns.length)
   const [open, setOpen] = useState(false)
   const [dragging, setDragging] = useState(false)
   const withTurns = showTurns && turns.length >= 2
@@ -72,13 +74,16 @@ export function TurnRail({
     const measure = (): void => {
       frame = 0
       const base = el.getBoundingClientRect().top - el.scrollTop
-      setTops(
+      setMeasured(
         withTurns
-          ? turns.map(t => {
-              const row = elementOf(t.id)
-              return row ? row.getBoundingClientRect().top - base : Number.POSITIVE_INFINITY
-            })
-          : [],
+          ? {
+              ids: turns.map(t => t.id),
+              tops: turns.map(t => {
+                const row = elementOf(t.id)
+                return row ? row.getBoundingClientRect().top - base : Number.POSITIVE_INFINITY
+              }),
+            }
+          : { ids: [], tops: [] },
       )
       setMetrics({
         scrollTop: el.scrollTop,
@@ -145,11 +150,11 @@ export function TurnRail({
 
   const jump = (index: number): void => {
     const el = scroller.current
-    const turn = turns[index]
+    const turn = turns[clampIndex(index, turns.length)]
     const row = turn && elementOf(turn.id)
     if (!el || !row) return
     onBeforeJump()
-    setCurrent(index)
+    setCurrent(clampIndex(index, turns.length))
     const targetTop = (): number => row.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop - 12
     // 上面没排版过的块高度是估的，滚到后才算出真实高度、把目标顶走：之后 0.8 秒内每帧对齐一次，用户自己滚动就停
     const settle = (): void => {
@@ -177,7 +182,7 @@ export function TurnRail({
 
   const thumb = thumbOf(metrics.scrollTop, metrics.view, metrics.content, metrics.track)
   if (!thumb) return null
-  const ticks = withTurns ? placeTicks(tops, metrics.content, metrics.track, current) : []
+  const ticks = withTurns ? placeTicks(topsFor(turns, measured), metrics.content, metrics.track, current) : []
 
   const later = (next: boolean, delay: number): void => {
     if (timer.current) clearTimeout(timer.current)
@@ -301,7 +306,7 @@ export function TurnRail({
           const inView = tick.y >= thumb.top && tick.y <= thumb.top + thumb.height
           return (
             <span
-              key={turns[tick.index].id}
+              key={turns[tick.index]?.id ?? tick.index}
               data-turn-index={tick.index}
               aria-hidden
               aria-current={tick.current ? 'true' : undefined}

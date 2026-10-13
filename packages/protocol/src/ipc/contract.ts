@@ -415,6 +415,7 @@ export const IPC_CONTRACT = {
   'log:sample': { kind: 'invoke', route: 'local', trust: 'sender' },
   'log:setVerbose': { kind: 'invoke', route: 'local', trust: 'sender' },
   'log:settings': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'log:uncaught': { kind: 'send', route: 'local', trust: 'sender' },
   'log:watch': { kind: 'invoke', route: 'local', trust: 'sender' },
   'log:write': { kind: 'send', route: 'local', trust: 'sender' },
   'machines:addProject': { kind: 'invoke', route: 'self', ids: [0], remote: 'engine:addProject', trust: 'sender' },

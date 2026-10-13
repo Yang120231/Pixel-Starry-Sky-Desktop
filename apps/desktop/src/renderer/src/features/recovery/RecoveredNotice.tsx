@@ -24,7 +24,13 @@ export function RecoveredNotice() {
   }, [])
   if (!recovered || !open) return null
   const lines = [
-    tr(recovered.reason === 'oom' ? 'recovery.notice.oom' : 'recovery.notice.other'),
+    tr(
+      recovered.reason === 'oom'
+        ? 'recovery.notice.oom'
+        : recovered.reason === 'react-crash'
+          ? 'recovery.notice.react'
+          : 'recovery.notice.other',
+    ),
     ...(terminals ? [tr('recovery.notice.terminals')] : []),
     ...(lightweight ? [tr('recovery.notice.lightweight')] : []),
   ]

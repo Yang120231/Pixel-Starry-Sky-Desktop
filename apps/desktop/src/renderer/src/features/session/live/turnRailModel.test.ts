@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Item } from '@pixelsky/protocol'
-import { currentTurn, placeTicks, thumbOf, tickAt, turnsOf } from './turnRailModel'
+import { clampIndex, currentTurn, placeTicks, thumbOf, tickAt, topsFor, turnsOf } from './turnRailModel'
 
 const user = (id: string, text: string, mode?: 'guidance'): Item => ({ kind: 'user', id, text, createdAt: 0, mode })
 
@@ -56,5 +56,30 @@ describe('轮次跳转条', () => {
     expect(currentTurn([0, 500, 1200], 480)).toBe(1)
     expect(currentTurn([0, 500, 1200], 2000)).toBe(2)
     expect(currentTurn([100, 500], 0)).toBe(0)
+  })
+})
+
+describe('回退后轮次变少', () => {
+  it('topsFor 按 id 对回当前的轮：旧位置比 turns 长时只留在范围内的刻度', () => {
+    const measured = { ids: ['a', 'b', 'c', 'd'], tops: [0, 100, 200, 300] }
+    const turns = [{ id: 'a' }, { id: 'b' }]
+    const tops = topsFor(turns, measured)
+    expect(tops).toEqual([0, 100])
+    const ticks = placeTicks(tops, 1000, 100, 0)
+    expect(ticks.every(t => t.index < turns.length)).toBe(true)
+  })
+
+  it('同样长度但 id 变了：对不上的轮不画刻度', () => {
+    const tops = topsFor([{ id: 'a' }, { id: 'x' }], { ids: ['a', 'b'], tops: [0, 100] })
+    expect(tops).toEqual([0, Number.POSITIVE_INFINITY])
+    expect(placeTicks(tops, 1000, 100, 0)).toHaveLength(1)
+  })
+
+  it('clampIndex 夹进 [0, length-1]', () => {
+    expect(clampIndex(5, 3)).toBe(2)
+    expect(clampIndex(-1, 3)).toBe(0)
+    expect(clampIndex(1, 3)).toBe(1)
+    expect(clampIndex(4, 0)).toBe(0)
+    expect(clampIndex(Number.NaN, 3)).toBe(0)
   })
 })

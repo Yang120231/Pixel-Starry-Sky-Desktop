@@ -13,6 +13,7 @@ import {
   shell,
   type MenuItemConstructorOptions,
 } from 'electron'
+import { logger } from '@pixelsky/engine'
 import { initAccount } from './account/account'
 import * as ipc from './ipc/guard'
 import { initAppInfo } from './app/info'
@@ -38,7 +39,7 @@ import {
   watchWindow,
 } from './app/responsiveness'
 import { initMemory, memoryTick, noteLoaded } from './app/memory'
-import { loadApp as loadAppPage, watchCrashes } from './app/crashRecovery'
+import { loadApp as loadAppPage, REACT_CRASH, watchCrashes, type CrashWatch } from './app/crashRecovery'
 import { canSend, markReady } from './app/rendererHealth'
 import { initTray, type TrayController } from './app/tray'
 import { initSettingsSync } from './account/settings-sync'
@@ -173,6 +174,11 @@ function loadApp(win: BrowserWindow, query?: Record<string, string>): Promise<vo
   )
 }
 
+const log = logger('app')
+
+/** 各窗口的崩溃监听，log:uncaught 按发送方找到对应的那个 */
+const crashWatches = new Map<Electron.WebContents, CrashWatch>()
+
 function createWindow(): BrowserWindow {
   const initial: ResolvedTheme = nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
   const win = new BrowserWindow({
@@ -206,7 +212,7 @@ function createWindow(): BrowserWindow {
   observeWindowControls(win)
   watchWindow(win)
   // 界面崩溃后自动重新加载，反复崩溃时弹对话框（app/crashRecovery.ts）
-  watchCrashes(win, {
+  const crashWatch = watchCrashes(win, {
     load: (target, query) => loadApp(target, query),
     openLogs: async () => {
       const dir = logService()?.files.dir
@@ -214,6 +220,10 @@ function createWindow(): BrowserWindow {
     },
     quit: () => app.quit(),
   })
+  // 窗口销毁后不能再读 win.webContents，先存下来
+  const wc = win.webContents
+  crashWatches.set(wc, crashWatch)
+  win.once('closed', () => crashWatches.delete(wc))
   win.webContents.on('did-finish-load', () => noteLoaded(win.webContents))
   win.once('ready-to-show', () => {
     if (!captureDir) win.show()
@@ -267,6 +277,17 @@ function createWindow(): BrowserWindow {
   if (captureDir) void capture(win, captureDir)
   return win
 }
+
+// 界面里的 React 根被未接住的错误卸载（白屏、渲染进程还活着）：按崩溃处理，自动重新加载（docs/ui/renderer-memory.md §3.1.7）
+ipc.on('log:uncaught', event => {
+  const watch = crashWatches.get(event.sender)
+  if (!watch) {
+    log.warn('收到非主窗口的界面崩溃报告，忽略', { window: event.sender.id })
+    return
+  }
+  log.info('界面组件崩溃，自动重新加载', { window: event.sender.id })
+  watch.failed(REACT_CRASH)
+})
 
 // 演示模式：PIXELSKY_DEMO=1 或启动参数带 --demo 时界面显示演示数据（pnpm dev:demo / 打包版 exe --demo），否则是空界面
 ipc.on('app:config', event => {

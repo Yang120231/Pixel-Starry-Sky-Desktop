@@ -48,7 +48,16 @@ export const reactRootErrorOptions = {
   onUncaughtError: (error: unknown, info: { componentStack?: string }) => {
     console.error(error)
     reportRendererError('react.uncaught', error, componentStack(info))
+    requestReload()
   },
+}
+
+let reloadRequested = false
+/** 未接住的错误会卸载整个 React 根（白屏，渲染进程还活着，崩溃恢复不会触发）：通知主进程自动重新加载，每次页面加载只报一次 */
+function requestReload(): void {
+  if (reloadRequested) return
+  reloadRequested = true
+  window.pixelsky?.log?.uncaught?.()
 }
 
 function componentStack(info: { componentStack?: string }): Record<string, unknown> {

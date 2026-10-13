@@ -18,6 +18,9 @@ export const LOAD_TIMEOUT_MS = 30_000
 /** ERR_ABORTED：被新的加载顶掉时也会报，不算失败 */
 const ERR_ABORTED = -3
 
+/** 界面里的 React 根被未接住的错误卸载（白屏但渲染进程还活着）时的原因，渲染进程经 log:uncaught 报来 */
+export const REACT_CRASH = 'react-crash'
+
 export type RecoveryAction = { kind: 'reload'; delayMs: number } | { kind: 'ask' }
 
 /** 丢掉 10 分钟以前的记录，加上这次，按次数给出动作 */
@@ -85,9 +88,11 @@ async function promptRecovery(win: BrowserWindow, info: CrashInfo): Promise<Reco
   const reason =
     info.reason === 'oom'
       ? t('recovery.reason.oom')
-      : t('recovery.reason.other', {
-          code: info.exitCode === undefined ? info.reason : `${info.reason} ${info.exitCode}`,
-        })
+      : info.reason === REACT_CRASH
+        ? t('recovery.reason.react')
+        : t('recovery.reason.other', {
+            code: info.exitCode === undefined ? info.reason : `${info.reason} ${info.exitCode}`,
+          })
   showWindow(win)
   const { response } = await dialog.showMessageBox(win, {
     type: 'warning',
@@ -116,8 +121,13 @@ export interface CrashDeps {
   prompt?: (win: BrowserWindow, info: CrashInfo) => Promise<RecoveryChoice>
 }
 
+export interface CrashWatch {
+  /** 渲染进程没退出但界面已经坏了（React 根被卸载）：和崩溃走同一套计数、延迟和对话框 */
+  failed(reason: string): void
+}
+
 /** 挂在主窗口上：渲染进程退出、恢复中加载失败都按 recoveryStep 处理 */
-export function watchCrashes(win: BrowserWindow, deps: CrashDeps): void {
+export function watchCrashes(win: BrowserWindow, deps: CrashDeps): CrashWatch {
   const wc = win.webContents
   const prompt = deps.prompt ?? promptRecovery
   let times: number[] = []
@@ -209,4 +219,5 @@ export function watchCrashes(win: BrowserWindow, deps: CrashDeps): void {
     timer = null
     clearLoadTimer()
   })
+  return { failed: reason => crashed(reason) }
 }

@@ -8,6 +8,10 @@ export const recoveryMessages = {
     zh: '界面刚才意外退出，已经重新加载。正在运行的对话没有中断。',
     en: 'The window stopped unexpectedly and has been reloaded. Running conversations were not interrupted.',
   },
+  'recovery.notice.react': {
+    zh: '界面刚才出错了，已经自动重新加载。正在运行的对话没有中断。',
+    en: 'The window hit an error and has been reloaded automatically. Running conversations were not interrupted.',
+  },
   'recovery.notice.terminals': {
     zh: '终端里的程序已经结束，需要的话在终端里点「重新启动」。',
     en: 'Programs in the terminals were stopped. Use Restart in a terminal if you need it again.',
@@ -31,5 +35,14 @@ export const recoveryMessages = {
   'recovery.dialog.openLogs': { zh: '打开日志文件夹', en: 'Open logs folder' },
   'recovery.dialog.quit': { zh: '退出', en: 'Quit' },
   'recovery.reason.oom': { zh: '内存不足', en: 'out of memory' },
+  'recovery.reason.react': { zh: '界面出错', en: 'interface error' },
   'recovery.reason.other': { zh: '意外退出（{code}）', en: 'unexpected exit ({code})' },
+  // 局部错误边界：某块界面出错时显示，其余界面照常
+  'recovery.boundary.title': { zh: '这里出错了', en: 'Something went wrong here' },
+  'recovery.boundary.body': {
+    zh: '这块界面遇到了问题，其他对话和正在运行的任务不受影响。已经记进日志。',
+    en: 'This part of the window hit a problem. Other conversations and running tasks are not affected. The error was logged.',
+  },
+  'recovery.boundary.retry': { zh: '重试', en: 'Try again' },
+  'recovery.boundary.reload': { zh: '重新加载界面', en: 'Reload window' },
 }
