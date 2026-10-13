@@ -14,6 +14,7 @@ import { LayoutActionButton } from '@/features/layout/LayoutActionButton'
 import { ToolbarContext, type ToolbarState } from '@/features/layout/ToolbarContext'
 import { paneActions } from '@/features/panes/store'
 import type { ActiveWorkspace } from '@/features/editor/target'
+import { useMinimal } from '@/features/appearance/ThemeProvider'
 
 interface SessionHeaderProps {
   title: string
@@ -63,6 +64,7 @@ export function SessionHeader({
   panelToggle,
 }: SessionHeaderProps) {
   const { text } = useI18n()
+  const minimal = useMinimal()
   const commands = useCommandPalette()
   const comingSoon = useComingSoon()
   const { layout } = useSidebarPrefs()
@@ -91,7 +93,19 @@ export function SessionHeader({
         />
       )}
       <div className="flex min-w-0 flex-1 items-center gap-1">
-        {workspace ? (
+        {minimal && workspace && title ? (
+          // 极简模式：标签栏只有一个标签时不显示（minimal.css），顶栏写对话标题 + 项目（参考 Factory）
+          <div data-header-workspace className="flex min-w-0 items-baseline gap-2">
+            <h1 title={title} className="min-w-0 truncate text-ui font-semibold text-fg">
+              {title}
+            </h1>
+            {workspace.name && (
+              <span title={workspace.path || workspace.name} className="shrink-0 truncate text-meta text-fg-muted">
+                {workspace.name}
+              </span>
+            )}
+          </div>
+        ) : workspace ? (
           <WorkspaceLocation workspace={workspace} />
         ) : (
           <h1 title={title} className="min-w-0 truncate text-ui font-medium text-fg-secondary">

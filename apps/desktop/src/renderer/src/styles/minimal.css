@@ -105,11 +105,52 @@
   font-size: var(--text-meta);
 }
 
-/* 输入框下面一排：每个按钮一圈细框的小标签（Factory 那种） */
-:root[data-minimal='on'] .composer-toolbar > button,
-:root[data-minimal='on'] .composer-toolbar > * > button {
-  height: 24px;
+/* 输入框下面一排（docs/ui/minimal-mode.md §4）：每个按钮都是一样高（24px）、一圈细框的小标签，图标按钮也一样；
+   不管弹出菜单里的按钮。IconButton 的宽高写在行内样式上，只能 !important */
+:root[data-minimal='on'] .composer-toolbar button:not([data-popover] button) {
+  height: 24px !important;
+  min-width: 24px;
+  width: auto !important;
+  padding-inline: 6px;
+  gap: 4px;
   border: 1px solid var(--border);
   border-radius: 4px;
+  font-family: var(--font-mono);
   font-size: var(--text-label);
+}
+:root[data-minimal='on'] .composer-toolbar button:not([data-popover] button) svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* 标签栏：只有一个标签时不显示（顶栏写着对话标题）；多个时标签不要底框和阴影 */
+:root[data-minimal='on'] [data-tab-bar][data-tab-count='1'] {
+  display: none;
+}
+:root[data-minimal='on'] [data-tab-strip] [role='tab'] {
+  height: 24px;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* 底部账号行：只留头像、名字和余额，设置等图标鼠标移过去才显示（图标外面包的是 display: contents，透明度要设在按钮上） */
+:root[data-minimal='on'] [data-sidebar-footer] > :not([data-sidebar-account]) button {
+  opacity: 0;
+}
+:root[data-minimal='on'] footer:is(:hover, :focus-within) [data-sidebar-footer] button {
+  opacity: 1;
+}
+
+/* 输入框：一行高，发送 / 停止是右下角的小方块 */
+:root[data-minimal='on'] .composer-input-row textarea {
+  min-height: 40px;
+  padding: 10px 12px;
+}
+:root[data-minimal='on'] .composer-send-controls {
+  padding: 0 8px 8px 0;
+}
+:root[data-minimal='on'] .composer-send-controls button {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
 }

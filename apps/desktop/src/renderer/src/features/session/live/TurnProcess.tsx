@@ -76,13 +76,10 @@ export function TurnProcess({
 }) {
   useI18n()
   const activity = useActivity(items, running, live)
-  // 极简模式（docs/ui/minimal-mode.md §3）：运行中这一轮一条一行全部展开，跑完收回一行；点过就按点的来，这一轮结束时清掉
+  // 极简模式（docs/ui/minimal-mode.md §3、§4）：和 Factory 一样每一步都摊开，一条一行；点过就按点的来
   const minimal = useMinimal()
   const [toggled, setToggled] = useState<boolean | null>(null)
-  const open = toggled ?? (minimal && running)
-  useEffect(() => {
-    if (!running) setToggled(t => (t === true && minimal ? null : t))
-  }, [running, minimal])
+  const open = toggled ?? minimal
   // 对话内搜索的「展开」、全局搜索跳到里面的条目：执行块先展开，里面的条目自己再展开
   const ids = useMemo(() => items.map(i => i.id), [items])
   const requested = useExpandAny(ids)

@@ -1,7 +1,7 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { ChevronDown, FolderPlus, Search, X } from 'lucide-react'
+import { ChevronDown, FolderPlus, Plus, Search, X } from 'lucide-react'
 import { cn, useComingSoon } from '@/ui'
 import { setSidebarPrefs, useSidebarPrefs } from '@/features/appearance/sidebar'
 import { OPEN_SEARCH, withShortcut } from '@/features/layout/shortcuts'
@@ -19,6 +19,7 @@ import { filterProjects, filterSessions, lanesOf, useScrollFade, type RunFilter 
 import { useSessionCards } from '@/features/board/useSessionCards'
 import { SidebarFooter } from './SidebarFooter'
 import { useOpenSearch } from '@/features/search/SearchProvider'
+import { useMinimal } from '@/features/appearance/ThemeProvider'
 
 export interface SidebarProps {
   selectedSessionId: string | null
@@ -37,6 +38,7 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
   const comingSoon = useComingSoon()
   const openSearch = useOpenSearch()
   const prefs = useSidebarPrefs()
+  const minimal = useMinimal()
   const recentId = useId()
   // 演示模式是 mock 数据，否则是引擎里的真实项目和会话
   const { projects, pinned: pinnedSessions, recent } = useSidebarData()
@@ -79,31 +81,68 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
     >
       <SidebarHeader onCollapse={onCollapse} />
 
-      <div className="no-drag flex shrink-0 items-center gap-1 px-3 pt-1" data-sidebar-actions>
-        <button
-          type="button"
-          aria-label={tr('sidebar.search')}
-          aria-haspopup="dialog"
-          title={withShortcut(tr('sidebar.search'), OPEN_SEARCH)}
-          onClick={openSearch}
-          className={cn(
-            'press flex h-8 min-w-0 items-center gap-2 rounded-md px-2 text-ui text-fg-muted hover:bg-hover hover:text-fg',
-            compactSearch ? 'w-8 shrink-0 justify-center' : 'flex-1',
-          )}
-        >
-          <Search size={16} strokeWidth={1.5} className="shrink-0" />
-          {!compactSearch && <span className="truncate">{tr('sidebar.search')}</span>}
-        </button>
-        {prefs.layout.top.map(action => (
-          <LayoutActionButton
-            key={action}
-            action={action}
-            placement="top"
-            onAddProject={onAddProject}
-            onNewTask={onNewTask}
-          />
-        ))}
-      </div>
+      {minimal ? (
+        // 极简模式（docs/ui/minimal-mode.md §4，参考 Factory）：「新建任务」「搜索」各一行，添加项目放在第一行右边
+        <div className="no-drag flex shrink-0 flex-col px-3 pt-1" data-sidebar-actions data-sidebar-minimal-actions>
+          <div className="flex items-center">
+            <button
+              type="button"
+              onClick={onNewTask ?? (() => comingSoon(tr('sidebar.NewTaskButton.newTask')))}
+              className="press flex h-7 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-list text-fg-secondary hover:bg-hover hover:text-fg"
+            >
+              <Plus size={15} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
+              <span className="truncate">{tr('sidebar.action.newTask')}</span>
+            </button>
+            {prefs.layout.top
+              .filter(action => action !== 'newTask')
+              .map(action => (
+                <LayoutActionButton
+                  key={action}
+                  action={action}
+                  placement="top"
+                  onAddProject={onAddProject}
+                  onNewTask={onNewTask}
+                />
+              ))}
+          </div>
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            title={withShortcut(tr('sidebar.search'), OPEN_SEARCH)}
+            onClick={openSearch}
+            className="press flex h-7 min-w-0 items-center gap-2 rounded-md px-2 text-list text-fg-secondary hover:bg-hover hover:text-fg"
+          >
+            <Search size={15} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
+            <span className="truncate">{tr('sidebar.search')}</span>
+          </button>
+        </div>
+      ) : (
+        <div className="no-drag flex shrink-0 items-center gap-1 px-3 pt-1" data-sidebar-actions>
+          <button
+            type="button"
+            aria-label={tr('sidebar.search')}
+            aria-haspopup="dialog"
+            title={withShortcut(tr('sidebar.search'), OPEN_SEARCH)}
+            onClick={openSearch}
+            className={cn(
+              'press flex h-8 min-w-0 items-center gap-2 rounded-md px-2 text-ui text-fg-muted hover:bg-hover hover:text-fg',
+              compactSearch ? 'w-8 shrink-0 justify-center' : 'flex-1',
+            )}
+          >
+            <Search size={16} strokeWidth={1.5} className="shrink-0" />
+            {!compactSearch && <span className="truncate">{tr('sidebar.search')}</span>}
+          </button>
+          {prefs.layout.top.map(action => (
+            <LayoutActionButton
+              key={action}
+              action={action}
+              placement="top"
+              onAddProject={onAddProject}
+              onNewTask={onNewTask}
+            />
+          ))}
+        </div>
+      )}
 
       <div
         ref={scroller}
