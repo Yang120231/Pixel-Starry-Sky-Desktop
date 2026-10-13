@@ -29,6 +29,8 @@ import { boardMessages } from './boardMessages'
 import { aiMessages } from './aiMessages'
 import { contextMessages } from './contextMessages'
 import { costMessages } from './costMessages'
+import { longConversationMessages } from './longConversationMessages'
+import { tabMenuMessages } from './tabMenuMessages'
 import { replaceCodedErrors } from '@pixelsky/protocol'
 import type { Locale } from './messages'
 
@@ -65,6 +67,8 @@ export const allMessages = {
   ...aiMessages,
   ...contextMessages,
   ...costMessages,
+  ...longConversationMessages,
+  ...tabMenuMessages,
 }
 export type TranslationKey = keyof typeof allMessages
 
