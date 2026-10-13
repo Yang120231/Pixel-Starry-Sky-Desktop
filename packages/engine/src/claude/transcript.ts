@@ -1,7 +1,16 @@
 // Claude Code 自己的会话记录文件：<CLAUDE_CONFIG_DIR 或 ~/.claude>/projects/<编码后的工作目录>/<session_id>.jsonl
 // 编码规则：工作目录里不是字母数字的字符都换成 '-'（例如 D:\像素星空 → D------）。
 // 很长的路径会被截断并加哈希，所以按规则找不到时，再在所有项目目录里找一遍。
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import {
+  appendFileSync,
+  closeSync,
+  openSync,
+  readFileSync,
+  readSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { isFile } from '../exec'
@@ -38,6 +47,59 @@ export function claudeTranscriptExists(projectsDir: string, cwd: string, session
 export function claudeSessionDir(projectsDir: string, cwd: string, sessionId: string): string | null {
   const file = findClaudeTranscript(projectsDir, cwd, sessionId)
   return file ? file.slice(0, -'.jsonl'.length) : null
+}
+
+/** 从记录末尾往前找第一条让 pick 返回值的条目；记录很大时也只读最后一段 */
+function scanBack<T>(file: string, pick: (entry: Record<string, unknown>) => T | null): T | null {
+  const size = statSync(file).size
+  for (let chunk = 256 * 1024; ; chunk *= 4) {
+    const start = Math.max(0, size - chunk)
+    const buffer = Buffer.alloc(size - start)
+    const fd = openSync(file, 'r')
+    try {
+      readSync(fd, buffer, 0, buffer.length, start)
+    } finally {
+      closeSync(fd)
+    }
+    const lines = buffer.toString('utf8').split('\n')
+    // 不是从文件开头读的：第一行多半是半截
+    if (start > 0) lines.shift()
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (!lines[i].trim()) continue
+      try {
+        const found = pick(JSON.parse(lines[i]) as Record<string, unknown>)
+        if (found !== null) return found
+      } catch {
+        // 跳过写坏的行
+      }
+    }
+    if (start === 0) return null
+  }
+}
+
+/** 当前分支的最后一条消息：主线上（不是子智能体）最后写进记录的 user / assistant 条目的 uuid，没有时 null */
+export function currentLeaf(file: string): string | null {
+  return scanBack(file, e =>
+    (e.type === 'user' || e.type === 'assistant') && typeof e.uuid === 'string' && e.isSidechain !== true
+      ? e.uuid
+      : null,
+  )
+}
+
+/**
+ * 让另起的 --resume 进程读当前分支（GitHub #82）。Claude Code 恢复会话时，最后一条 last-prompt 记的 leafUuid
+ * 还是分支末端就从它接着读；这条只在会话进程退出时写。回退时进程退出，记下的是回退前那条分支的末端，
+ * 之后接着聊（进程还开着）的新分支就被它盖住：恢复代码的辅助进程、旁聊读到旧分支，新消息找不到检查点。
+ * 记的不是当前末端时，按 Claude Code 自己的格式补一条指向当前末端的 last-prompt（--resume-session-at 换不了分支，
+ * 只能在它读到的那条分支里截断）。会话进程之后退出时会照常再写一条，和这条一致
+ */
+export function pointLastPrompt(file: string, sessionId: string): void {
+  const leaf = currentLeaf(file)
+  if (!leaf) return
+  const last = scanBack(file, e => (e.type === 'last-prompt' ? e : null))
+  if (last?.leafUuid === leaf) return
+  const lastPrompt = typeof last?.lastPrompt === 'string' ? last.lastPrompt : ''
+  appendFileSync(file, JSON.stringify({ type: 'last-prompt', lastPrompt, leafUuid: leaf, sessionId }) + '\n')
 }
 
 /**

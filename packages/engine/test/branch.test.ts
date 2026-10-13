@@ -213,14 +213,77 @@ describe('回退：对话 / 代码 / 两者，撤销', () => {
     expect(existsSync(file)).toBe(false)
   })
 
-  it('没有检查点：预览说明原因，要求恢复代码时报错且什么都不改', async () => {
+  it('没有检查点：预览说明原因；只恢复代码时报错且什么都不改，同时回退对话时对话照样回退（GitHub #82）', async () => {
     const host = makeHost()
     const { record } = await conversation(host, ['一', '二'])
     await expect(host.rewindPreview(record.id, 'm1')).resolves.toMatchObject({
       code: { ok: false, reason: 'no-checkpoint' },
     })
-    await expect(host.rewind(record.id, 'm1', { conversation: true, code: true })).rejects.toThrow('检查点')
+    await expect(host.rewind(record.id, 'm1', { conversation: false, code: true })).rejects.toThrow('检查点')
     expect(userTexts(host, record.id)).toEqual(['一', '二'])
+    const result = await host.rewind(record.id, 'm1', { conversation: true, code: true })
+    expect(result).toMatchObject({ text: '二', undoable: true, codeSkipped: expect.stringContaining('检查点') })
+    expect(result.filesRestored).toBeUndefined()
+    expect(userTexts(host, record.id)).toEqual(['一'])
+    await host.undoRewind(record.id)
+    expect(userTexts(host, record.id)).toEqual(['一', '二'])
+  })
+
+  it('辅助进程按当前分支读：记录的 last-prompt 指向当前末端；回退了还没发时截到回退点（GitHub #82）', async () => {
+    const file = join(root, 'd.txt')
+    const host = makeHost({ FAKE_CLAUDE_REWIND: JSON.stringify({ file, content: 'old' }) })
+    const { record, cwd } = await conversation(host, ['一', '二', '三'])
+    const sid = host.open(record.id).record.engineSessionId!
+    const transcript = join(root, 'claude-projects', cwd.replace(/[^A-Za-z0-9]/g, '-'), `${sid}.jsonl`)
+    const entries = (): { type?: string; uuid?: string; leafUuid?: string; lastPrompt?: string }[] =>
+      readFileSync(transcript, 'utf8')
+        .split('\n')
+        .filter(Boolean)
+        .map(l => JSON.parse(l))
+    const leaf = (): string => entries().findLast(e => e.type === 'user' || e.type === 'assistant')!.uuid!
+    const lastPrompts = () => entries().filter(e => e.type === 'last-prompt')
+    const atArg = (): string | undefined =>
+      spawnArgs()
+        .filter(a => a.includes('--bare'))
+        .at(-1)
+        ?.find(a => a.startsWith('--resume-session-at='))
+
+    await host.rewindPreview(record.id, 'm2')
+    expect(atArg()).toBeUndefined()
+    expect(lastPrompts().at(-1)).toMatchObject({ leafUuid: leaf(), sessionId: sid })
+    // 已经指着当前末端：不重复写
+    await host.rewindPreview(record.id, 'm1')
+    expect(lastPrompts()).toHaveLength(1)
+
+    // 回退了还没发：截到回退点，不动 last-prompt（回退时会话进程退出，自己记了一条旧分支的末端）
+    await host.rewind(record.id, 'm1')
+    const pending = host.open(record.id).record.pendingRewind!
+    const written = lastPrompts().length
+    await host.rewindPreview(record.id, 'm0')
+    expect(atArg()).toBe(`--resume-session-at=${pending}`)
+    expect(lastPrompts()).toHaveLength(written)
+
+    // 接着聊（会话进程还开着）：新分支写在旧分支后面，last-prompt 改指新分支的末端
+    await host.send(record.id, { text: '六', clientMessageId: 'm6' })
+    await waitFor(() => turnsDone(record.id) === 4)
+    await host.rewindPreview(record.id, 'm6')
+    expect(atArg()).toBeUndefined()
+    expect(lastPrompts().at(-1)?.leafUuid).toBe(leaf())
+    expect(lastPrompts()).toHaveLength(written + 1)
+  })
+
+  it('这条消息在上下文压缩之前：预览写明是压缩的缘故，同时回退对话时对话照样回退（GitHub #82）', async () => {
+    const host = makeHost()
+    const { record, cwd } = await conversation(host, ['一', '二'])
+    const file = compact(cwd, host.open(record.id).record.engineSessionId!)
+    // 压缩之后 Claude Code 会接着写一条摘要
+    appendFileSync(file, JSON.stringify({ type: 'user', uuid: 's1', parentUuid: 'b1', isCompactSummary: true }) + '\n')
+    await expect(host.rewindPreview(record.id, 'm0')).resolves.toMatchObject({
+      code: { ok: false, reason: 'compacted' },
+    })
+    const result = await host.rewind(record.id, 'm1', { conversation: true, code: true })
+    expect(result.codeSkipped).toContain('上下文压缩之前')
+    expect(userTexts(host, record.id)).toEqual(['一'])
   })
 
   it('截断点在上下文压缩之前：复制记录到截断点，换新的引擎会话接上，原记录不动（§2.4）', async () => {
@@ -237,7 +300,9 @@ describe('回退：对话 / 代码 / 两者，撤销', () => {
     expect(after.record.engineSessionId).not.toBe(sid)
     expect(after.record.pendingRewind).toBeNull()
     expect(after.items.some(i => i.kind === 'notice')).toBe(false)
-    expect(readFileSync(source, 'utf8')).toBe(before)
+    // 原记录的消息一条不动（会话进程退出时 Claude Code 自己会在末尾记一条 last-prompt）
+    const messages = (text: string): string[] => text.split('\n').filter(l => l && !l.includes('"last-prompt"'))
+    expect(messages(readFileSync(source, 'utf8'))).toEqual(messages(before))
   })
 
   it('回退后发了新消息就不能撤销', async () => {
@@ -312,6 +377,16 @@ describe('旁聊', () => {
     expect(host.open(record.id).items).toHaveLength(before)
     const args = spawnArgs().at(-1)!
     expect(args).toEqual(expect.arrayContaining(['--fork-session', '--no-session-persistence', '--tools', '']))
+  })
+
+  it('回退后接着聊、会话进程还开着时，看到的是新分支（GitHub #82）', async () => {
+    const host = makeHost()
+    const { record } = await conversation(host, ['一', '二', '三'])
+    await host.rewind(record.id, 'm1')
+    await host.send(record.id, { text: '六', clientMessageId: 'm6' })
+    await waitFor(() => turnsDone(record.id) === 4)
+    const answer = await host.sideQuestion(record.id, '现在呢', [])
+    expect(answer).toBe('问：现在呢｜工具=[]｜看到=一,六')
   })
 
   it('还没发过消息时不能用', async () => {

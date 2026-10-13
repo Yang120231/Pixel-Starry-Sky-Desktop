@@ -35,6 +35,19 @@ export const branchMessages = {
     zh: '这条消息没有代码检查点（这次更新之前的消息，或者不是 AI 改的），代码保持不变',
     en: 'This message has no code checkpoint (sent before this update, or the files were not changed by the AI); the code stays as it is',
   },
+  // GitHub #82：压缩过的会话，压缩之前的消息没有代码检查点
+  'rewind.compacted': {
+    zh: '这条消息在上下文压缩之前：Claude Code 只保留压缩之后的代码检查点，只能恢复对话，代码保持不变',
+    en: 'This message is from before the context was compacted. Claude Code only keeps code checkpoints after the latest compaction, so only the conversation can be restored and the code stays as it is',
+  },
+  'rewind.codeSkipped': {
+    zh: '对话已回退，代码没有恢复：{reason}',
+    en: 'The conversation was rewound, but the code was not restored: {reason}',
+  },
+  'branch.compactedNoCheckpoint': {
+    zh: '这条消息在上下文压缩之前，Claude Code 只保留压缩之后的代码检查点，代码保持不变',
+    en: 'This message is from before the context was compacted; Claude Code only keeps code checkpoints after the latest compaction, so the code stays as it is',
+  },
   'rewind.unsupportedCode': { zh: '这个引擎不能还原代码', en: 'This engine cannot restore code' },
   'rewind.codeFailed': { zh: '无法检查代码改动：{reason}', en: 'Could not check code changes: {reason}' },
   'rewind.overwrite': {

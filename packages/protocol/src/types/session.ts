@@ -153,7 +153,8 @@ export type RewindCodePreview =
       /** 还原前能不能先存一份以便撤销（总共不超过 20 MiB） */
       undoable: boolean
     }
-  | { ok: false; reason: 'unsupported' | 'no-checkpoint' | 'failed'; message?: string }
+  /** compacted：没有检查点，而且这条消息在上下文压缩之前（Claude Code 只保留压缩之后的检查点，GitHub #82） */
+  | { ok: false; reason: 'unsupported' | 'no-checkpoint' | 'compacted' | 'failed'; message?: string }
 
 export interface RewindPreview {
   code: RewindCodePreview
@@ -168,6 +169,8 @@ export interface RewindResult {
   filesRestored?: number
   /** 发新消息或重启前可以撤销 */
   undoable?: boolean
+  /** 同时选了恢复对话和代码、代码没能恢复时：对话照样回退了，这里是代码没恢复的原因（GitHub #82） */
+  codeSkipped?: string
 }
 
 /** 分叉结果：新会话，以及放进它输入框的原文和图片 */

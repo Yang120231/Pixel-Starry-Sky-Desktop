@@ -108,7 +108,12 @@ if (process.env.FAKE_CLAUDE_CHAIN) {
     process.stderr.write(`No message found with uuid ${resumeAt}\n`)
     process.exit(1)
   }
-  chainTail = resumeAt ?? entries.at(-1)?.uuid ?? null
+  // 像真实 CLI 选从哪条接着读：最后一条 last-prompt 的 leafUuid 还是分支末端（没有子条目）就用它，
+  // 否则用最后写进去的消息（GitHub #82）
+  const messages = entries.filter(e => e.uuid)
+  const leaf = entries.findLast(e => e.type === 'last-prompt')?.leafUuid
+  const isLeaf = leaf && byId.has(leaf) && !messages.some(e => e.parentUuid === leaf)
+  chainTail = resumeAt ?? (isLeaf ? leaf : (messages.at(-1)?.uuid ?? null))
   const visible = []
   for (let id = chainTail; id; id = byId.get(id)?.parentUuid)
     if (byId.get(id)?.type === 'user') visible.unshift(byId.get(id).text)
@@ -562,7 +567,17 @@ if (
   (process.env.FAKE_CLAUDE_HELPER_LINGER === '1' && argv.includes('--bare'))
 )
   setInterval(() => {}, 1000)
-else if (arg('--output-format') !== 'json') process.stdin.on('end', () => process.exit(0))
+else if (arg('--output-format') !== 'json')
+  process.stdin.on('end', () => {
+    // 像真实 CLI：会话进程退出时记下这次读到的末端（下次 --resume 从这里接着读，GitHub #82）
+    const file = transcriptFile()
+    if (process.env.FAKE_CLAUDE_CHAIN && file && chainTail && !argv.includes('--bare'))
+      appendFileSync(
+        file,
+        JSON.stringify({ type: 'last-prompt', lastPrompt: '', leafUuid: chainTail, sessionId }) + '\n',
+      )
+    process.exit(0)
+  })
 
 function respond(requestId, response) {
   out({ type: 'control_response', response: { subtype: 'success', request_id: requestId, response } })

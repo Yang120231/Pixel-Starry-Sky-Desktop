@@ -306,11 +306,13 @@ function CodeSummary({ preview, elapsed }: { preview: RewindPreview | null; elap
   if (!code.ok)
     return (
       <div className={cn(box, 'text-fg-muted')} data-rewind-code={code.reason}>
-        {code.reason === 'no-checkpoint'
-          ? tr('rewind.noCheckpoint')
-          : code.reason === 'unsupported'
-            ? tr('rewind.unsupportedCode')
-            : tr('rewind.codeFailed', { reason: translateMessage(code.message ?? '') })}
+        {code.reason === 'compacted'
+          ? tr('rewind.compacted')
+          : code.reason === 'no-checkpoint'
+            ? tr('rewind.noCheckpoint')
+            : code.reason === 'unsupported'
+              ? tr('rewind.unsupportedCode')
+              : tr('rewind.codeFailed', { reason: translateMessage(code.message ?? '') })}
       </div>
     )
   if (code.files.length === 0)

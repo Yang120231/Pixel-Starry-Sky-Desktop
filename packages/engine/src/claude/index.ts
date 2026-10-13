@@ -24,7 +24,14 @@ import { rewindFilesOnce, sideQuestionOnce, type HelperTarget, type RewindFilesR
 import { ClaudeProcess } from './process'
 import { ClaudeSession, reservedClaudeArg, type ClaudeLaunchOptions } from './session'
 import { loadSavedRuns, loadSubagentTranscript } from './runs'
-import { claudeSessionDir, defaultProjectsDir, findClaudeTranscript, findRewindAnchor } from './transcript'
+import {
+  anchorPosition,
+  claudeSessionDir,
+  defaultProjectsDir,
+  findClaudeTranscript,
+  findRewindAnchor,
+  pointLastPrompt,
+} from './transcript'
 import { LONG_CONTEXT_ENV, claudeModelName, windowSettings } from './long-context'
 
 export interface ClaudeAdapterOptions {
@@ -169,6 +176,11 @@ export class ClaudeAdapter implements EngineAdapter {
     return file ? findRewindAnchor(file, userItemIds) : null
   }
 
+  beforeCompaction(record: SessionRecord, userItemId: string): boolean {
+    const file = findClaudeTranscript(this.projectsDir(), record.cwd, record.engineSessionId ?? record.id)
+    return !!file && anchorPosition(file, userItemId) === 'compacted'
+  }
+
   subagentTranscript(record: SessionRecord, agentId: string): Item[] {
     const dir = this.sessionDir(record)
     if (!dir) throw new Error('这个会话还没有保存记录')
@@ -254,18 +266,35 @@ export class ClaudeAdapter implements EngineAdapter {
     })
   }
 
-  /** 辅助进程：--resume 这个会话，平台会话带网关设置 */
+  /**
+   * 辅助进程：--resume 这个会话，平台会话带网关设置。要读当前分支（GitHub #82）：回退了还没发新消息时
+   * 用 --resume-session-at 截到回退点（和主会话下次启动一样）；否则先让记录的 last-prompt 指向当前末端（pointLastPrompt）
+   */
   private helperTarget(record: SessionRecord): HelperTarget {
     const sid = record.engineSessionId
-    if (!sid || !findClaudeTranscript(this.projectsDir(), record.cwd, sid))
-      throw new Error('这个会话还没有 Claude Code 记录')
+    const file = sid ? findClaudeTranscript(this.projectsDir(), record.cwd, sid) : null
+    if (!sid || !file) throw new Error('这个会话还没有 Claude Code 记录')
+    // 回退点在压缩之前时 Claude Code 读不到那里（主会话下次启动会自己复制记录接上），辅助进程就按默认的读
+    const pending =
+      record.pendingRewind && anchorPosition(file, record.pendingRewind) === 'loaded' ? record.pendingRewind : null
+    if (!record.pendingRewind)
+      try {
+        pointLastPrompt(file, sid)
+      } catch {
+        // 写不了就按 Claude Code 默认的读
+      }
     const env = this.launchEnv(record, null)
     const gateway = viaGateway(record) ? env.PIXELSKY_GATEWAY_SETTINGS : undefined
     return {
       launcher: this.readyLauncher(record),
       cwd: record.cwd,
       env,
-      resumeArgs: ['--resume', sid, ...(gateway ? ['--settings', gateway] : [])],
+      resumeArgs: [
+        '--resume',
+        sid,
+        ...(pending ? [`--resume-session-at=${pending}`] : []),
+        ...(gateway ? ['--settings', gateway] : []),
+      ],
     }
   }
 

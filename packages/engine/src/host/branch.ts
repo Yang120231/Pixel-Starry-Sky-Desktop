@@ -71,9 +71,27 @@ export class HostBranch {
 
   /** 回退前检查代码：要还原哪些文件 */
   async rewindPreview(id: string, userItemId: string): Promise<RewindPreview> {
-    const record = this.ctx.m.sessions.runtime(id).snapshot.record
-    this.userItem(id, userItemId)
-    return { code: await this.codePreview(record, userItemId) }
+    const snapshot = this.ctx.m.sessions.runtime(id).snapshot
+    const { index } = this.userItem(id, userItemId)
+    const code = await this.codePreview(snapshot.record, userItemId)
+    // 没有检查点、而且这条在压缩之前：说清楚是压缩的缘故（GitHub #82）
+    if (!code.ok && code.reason === 'no-checkpoint' && this.beforeCompaction(id, index, userItemId))
+      return { code: { ...code, reason: 'compacted' } }
+    return { code }
+  }
+
+  /**
+   * 这条用户消息在上下文压缩之前：对话里它后面有压缩，或者引擎记录里它排在最近一次压缩之前
+   * （回退把对话里的压缩条目截掉以后，只能看记录）
+   */
+  private beforeCompaction(id: string, index: number, userItemId: string): boolean {
+    const snapshot = this.ctx.m.sessions.runtime(id).snapshot
+    if (compactedAfter(snapshot.items, index)) return true
+    try {
+      return this.ctx.adapters[snapshot.record.engine]?.beforeCompaction?.(snapshot.record, userItemId) ?? false
+    } catch {
+      return false
+    }
   }
 
   private async codePreview(record: SessionRecord, userItemId: string): Promise<RewindCodePreview> {
@@ -126,7 +144,17 @@ export class HostBranch {
     try {
       await this.closeProcess(id)
       let files: UndoEntry['files'] = null
-      if (options.code) files = await this.restoreCode(record, userItemId)
+      let codeSkipped: string | undefined
+      if (options.code)
+        try {
+          files = await this.restoreCode(record, userItemId)
+        } catch (err) {
+          // 只恢复代码时照旧报错；同时回退对话时对话照样回退，告诉界面代码没恢复（GitHub #82）
+          if (!options.conversation) throw err
+          codeSkipped = this.beforeCompaction(id, index, userItemId)
+            ? '这条消息在上下文压缩之前，Claude Code 只保留压缩之后的代码检查点，代码保持不变'
+            : (err as Error).message
+        }
       const removed = options.conversation ? rt.snapshot.items.slice(index) : []
       if (options.conversation) this.truncate(id, index, userItemId)
       const now = m.sessions.runtime(id).snapshot
@@ -148,7 +176,8 @@ export class HostBranch {
         ...(options.conversation && target.attachments?.length ? { attachments: target.attachments } : {}),
         ...(options.conversation && target.files?.length ? { files: target.files } : {}),
         ...(files ? { filesRestored: files.length } : {}),
-        undoable: !options.code || files !== null,
+        ...(codeSkipped ? { codeSkipped } : {}),
+        undoable: !options.code || files !== null || codeSkipped !== undefined,
       }
     } finally {
       ctx.changingSessions.delete(id)
@@ -332,6 +361,11 @@ export class HostBranch {
     this.sideQuestions.get(id)?.abort()
     this.sideQuestions.delete(id)
   }
+}
+
+/** 第 index 条之后压缩过上下文（Claude Code 只保留最近一次压缩之后的代码检查点，GitHub #82） */
+export function compactedAfter(items: readonly Item[], index: number): boolean {
+  return items.slice(index + 1).some(item => item.kind === 'compaction' && item.status === 'completed')
 }
 
 function displayPath(cwd: string, file: string): string {

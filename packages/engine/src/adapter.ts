@@ -124,6 +124,11 @@ export interface EngineAdapter {
     dryRun: boolean,
     beforeRestore?: (files: string[]) => void,
   ): Promise<RewindFilesReply>
+  /**
+   * 这条用户消息在引擎记录里排在最近一次上下文压缩之前（Claude Code 只保留压缩之后的代码检查点，GitHub #82）；
+   * 用来把「没有检查点」说清楚
+   */
+  beforeCompaction?(record: SessionRecord, userItemId: string): boolean
   /** 旁聊：带着会话上下文单独问一次，没有工具、不写记录（§3） */
   sideQuestion?(record: SessionRecord, prompt: string, signal: AbortSignal): Promise<string>
 }

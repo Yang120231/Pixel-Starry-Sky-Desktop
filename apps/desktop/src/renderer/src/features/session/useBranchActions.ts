@@ -2,8 +2,8 @@
 // 桌面版走引擎；演示模式用演示数据，只演示样子，不改任何东西
 import { useEffect, useMemo, useState } from 'react'
 import { ENGINES, type SessionSnapshot } from '@pixelsky/protocol'
-import { tr } from '@/i18n/core'
-import { useComingSoon } from '@/ui'
+import { tr, translateMessage } from '@/i18n/core'
+import { useComingSoon, useToast } from '@/ui'
 import { demo, isDemo } from '@/data/demo'
 import { bridge } from '@/features/engine'
 import { appendComposerDraft, removeComposerDraftTail } from '@/features/engine/drafts'
@@ -22,6 +22,7 @@ interface UndoState extends RewindDone {
 
 export function useBranchActions(sessionId: string | null, snapshot: SessionSnapshot | null, composerKey: string) {
   const comingSoon = useComingSoon()
+  const toast = useToast()
   const caps = snapshot ? ENGINES[snapshot.record.engine]?.caps : undefined
   const busy =
     !!snapshot &&
@@ -60,6 +61,8 @@ export function useBranchActions(sessionId: string | null, snapshot: SessionSnap
           return
         }
         const result = await bridge.rewind(sessionId, item.id, options)
+        // 选了对话和代码、代码没恢复（压缩之前的消息等，GitHub #82）：对话照样回退了，说一声
+        if (result.codeSkipped) toast(tr('rewind.codeSkipped', { reason: translateMessage(result.codeSkipped) }))
         const images = result.attachments ?? [],
           files = result.files ?? []
         if (options.conversation) {
@@ -102,7 +105,7 @@ export function useBranchActions(sessionId: string | null, snapshot: SessionSnap
           }
         : null,
     }
-  }, [sessionId, caps, busy, composerKey, firstUserId, title, comingSoon])
+  }, [sessionId, caps, busy, composerKey, firstUserId, title, comingSoon, toast])
 
   const undoRewind = async (): Promise<void> => {
     if (!sessionId || !undo) return
