@@ -193,3 +193,13 @@ export function decide(
   if (state.recent.length > BURST_LIMIT + 1) return { show: false, reason: 'throttled' }
   return { show: true, summary: state.recent.length === BURST_LIMIT + 1 }
 }
+
+/**
+ * 界面崩溃重新加载期间主进程丢掉了引擎事件，其中的审批请求没提醒过：新页面拿到会话列表后，
+ * 对还在等你处理的会话补一条（详情拿不到，用通用文案）。完成 / 出错没有可查的状态，补不了
+ */
+export function recoveredIntents(sessions: readonly { record: { id: string }; state: string }[]): NotificationIntent[] {
+  return sessions
+    .filter(s => s.state === 'waiting')
+    .map(s => ({ kind: 'waiting', sessionId: s.record.id, dedupeKey: `w:${s.record.id}:recovered`, detail: null }))
+}

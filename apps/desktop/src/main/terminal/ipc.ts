@@ -7,6 +7,7 @@ import { nativeText } from '../app/ui-language'
 import type { Machines } from '../machines/service'
 import { machineOf, argumentMachine } from '../machines/identity'
 import { RemoteTerminals } from './remote'
+import { sendTo } from '../app/rendererHealth'
 
 let manager: TerminalManager | undefined
 let remote: RemoteTerminals | undefined
@@ -29,14 +30,14 @@ export async function initTerminalIpc(
 ): Promise<() => Promise<void>> {
   const service = new TerminalManager(app.getPath('userData'), resolve, (owner, event) => {
     const target = webContents.fromId(owner)
-    if (target && !target.isDestroyed()) target.send('terminal:event', event)
+    if (target) sendTo(target, 'terminal:event', event)
   })
   manager = service
   await service.init()
   if (machines) {
     remote = new RemoteTerminals(machines, app.getPath('userData'), (owner, event) => {
       const target = webContents.fromId(owner)
-      if (target && !target.isDestroyed()) target.send('terminal:event', event)
+      if (target) sendTo(target, 'terminal:event', event)
     })
     await remote.init()
   }

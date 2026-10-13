@@ -58,6 +58,8 @@ type Runtime = {
   changed: number
 }
 const runtimes = new Map<string, Runtime>()
+/** 编辑器实例数（内存遥测用） */
+export const editorCount = (): number => runtimes.size
 window.addEventListener(FILE_CLOSED_EVENT, e => {
   const id = (e as CustomEvent<string>).detail,
     runtime = runtimes.get(id)

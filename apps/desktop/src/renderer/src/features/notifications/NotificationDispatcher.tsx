@@ -2,10 +2,11 @@
 // 窗口级挂载一次，不渲染任何内容；演示模式不工作。
 import { useEffect, useRef } from 'react'
 import { tr, translateMessage } from '../../i18n/core'
-import { getEngineState, isViewingSession } from '@/features/engine/store'
+import { getEngineState, isViewingSession, subscribeEngine } from '@/features/engine/store'
 import { OPEN_SESSION_EVENT } from '@/features/engine/openRequests'
 import { getNotificationPrefs, useNotificationPrefs } from '@/features/settings/notifications'
 import { useSettings } from '@/features/settings/SettingsProvider'
+import { recovered } from '@/features/recovery/recovered'
 import { requestFeedback } from '@/features/feedback/focus'
 import { threadOfNotification } from '@/features/feedback/logic'
 import {
@@ -14,6 +15,7 @@ import {
   createDeliveryState,
   decide,
   notificationFor,
+  recoveredIntents,
   settledIntent,
   type NotificationIntent,
 } from './policy'
@@ -95,6 +97,17 @@ export function NotificationDispatcher() {
       const intent = notificationFor(event)
       if (intent) deliver(intent)
     })
+    // 崩溃后重新加载：恢复期间丢掉的审批请求，等会话列表到了补一次（只补一次）
+    let offRecovered: (() => void) | undefined
+    if (recovered) {
+      const catchUp = () => {
+        if (!getEngineState().ready) return
+        offRecovered?.()
+        for (const intent of recoveredIntents(getEngineState().sessions)) deliver(intent)
+      }
+      offRecovered = subscribeEngine(catchUp)
+      catchUp()
+    }
     // 点击通知：主进程已经把窗口带到前台，这里打开对应会话（会自动切换机器、切回工作台）
     const offClicks = bridge.notifications.onClick(({ id, sessionId }) => {
       // 团队回复了反馈：打开设置 › 反馈 › 那一条（docs/ui/feedback.md §2.5）
@@ -108,6 +121,7 @@ export function NotificationDispatcher() {
     })
     return () => {
       offEvents()
+      offRecovered?.()
       offClicks()
       for (const timer of settling.values()) clearTimeout(timer)
     }

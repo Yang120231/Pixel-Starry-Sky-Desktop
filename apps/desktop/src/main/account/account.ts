@@ -9,6 +9,7 @@ import { hostname, release } from 'node:os'
 import { join } from 'node:path'
 import { app, BrowserWindow, safeStorage, shell } from 'electron'
 import { nativeText, windowLocale } from '../app/ui-language'
+import { sendTo } from '../app/rendererHealth'
 import * as ipc from '../ipc/guard'
 import type { AccountInfo, AccountPlan, AccountState, Quota } from '../../shared/types/account'
 
@@ -94,7 +95,7 @@ function setState(next: AccountState): void {
   state = next
   for (const listener of stateListeners) listener(next)
   for (const win of BrowserWindow.getAllWindows()) {
-    if (!win.isDestroyed() && !win.webContents.isDestroyed()) win.webContents.send('account:changed', state)
+    if (!win.isDestroyed()) sendTo(win.webContents, 'account:changed', state)
   }
 }
 

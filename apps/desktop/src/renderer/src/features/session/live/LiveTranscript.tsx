@@ -18,6 +18,16 @@ import { turnsOf } from './turnRailModel'
 import { useTurnRailOn } from '@/features/settings/turnRail'
 import { useTranscriptWindowSize } from '@/features/settings/longConversation'
 import { hiddenCount, initialHidden, revealEarlier, revealFor, startIndex, turnStarts } from './transcriptWindow'
+import {
+  anchorOf,
+  placeOf,
+  registerTranscriptView,
+  restoredHidden,
+  savePlace,
+  scrollToPlace,
+  type TranscriptPlace,
+} from './transcriptPlaces'
+import { useLightweight } from '@/features/recovery/lightweight'
 import type { Item, SessionSnapshot } from '@pixelsky/protocol'
 import { Spinner, cn } from '@/ui'
 import type { ChangedFiles } from '@/data'
@@ -209,11 +219,33 @@ export function LiveTranscript({
   const windowSize = useTranscriptWindowSize()
   const [win, setWin] = useState<{ sessionId: string | null; hidden: number } | null>(null)
   const starts = useMemo(() => turnStarts(snapshot?.items ?? []), [snapshot?.items])
-  const wanted = snapshot && snapshot.items.length > 0 ? initialHidden(starts.length, windowSize) : 0
+  // 标签卸载过再挂载：沿用卸载前显示的轮数（transcriptPlaces.ts）；轻量模式下最多只显示设置的轮数
+  const capped = useLightweight()
+  const wanted =
+    snapshot && snapshot.items.length > 0
+      ? restoredHidden(placeOf(sessionId)?.hidden ?? null, initialHidden(starts.length, windowSize), windowSize, capped)
+      : 0
   const opened = !!win && win.sessionId === sessionId
   if (snapshot && snapshot.items.length > 0 && !opened) setWin({ sessionId, hidden: wanted })
   const hidden = opened && windowSize !== null ? win.hidden : opened ? 0 : wanted
   const hiddenTurns = hiddenCount(starts.length, hidden)
+  // 卸载前的位置：不能卸载时再读 DOM（标签已经隐藏），所以滚动停下后记锚点，卸载时只写最后记下的
+  const placeRef = useRef<
+    { sessionId: string | null; hidden: number; atBottom: boolean } & Pick<TranscriptPlace, 'anchor' | 'scrollTop'>
+  >({
+    sessionId: null,
+    hidden: 0,
+    atBottom: true,
+    anchor: null,
+    scrollTop: 0,
+  })
+  const shownTurns = useRef(0)
+  shownTurns.current = Math.max(0, starts.length - hiddenTurns)
+  // 内容还没到（快照在拉）时 hidden 只是占位的 0：沿用已保存的位置，等内容到了再更新，免得此时切走把它覆盖掉
+  if (placeRef.current.sessionId !== sessionId)
+    placeRef.current = { hidden, atBottom: true, anchor: null, scrollTop: 0, ...placeOf(sessionId), sessionId }
+  if (opened) placeRef.current.hidden = hidden
+  const placeTimer = useRef<number>(0)
   const firstShown = startIndex(starts, hidden)
   const shownItems = useMemo(
     () => (firstShown > 0 && snapshot ? snapshot.items.slice(firstShown) : (snapshot?.items ?? [])),
@@ -330,6 +362,32 @@ export function LiveTranscript({
     setAway(false)
     setUnseen(false)
   }, [snapshot?.record.id])
+
+  // 标签卸载后重新挂载：第一次拿到这个会话的内容时，不在底部的回到卸载前的位置（在底部的照旧贴底）。
+  // 要排在上面「贴底」和「切换会话」两个 effect 后面；正在有搜索跳转时让跳转优先
+  const restoredFor = useRef<string | null>(null)
+  useLayoutEffect(() => {
+    if (!opened || !sessionId || restoredFor.current === sessionId) return
+    restoredFor.current = sessionId
+    const place = placeOf(sessionId),
+      el = scroller.current
+    if (!place || place.atBottom || !el || navigation?.sessionId === sessionId) return
+    scrollToPlace(el, place)
+    stick.current = false
+    released.current = true
+    setAway(true)
+  }, [opened, sessionId, navigation])
+
+  // 卸载时把最后记下的位置写进去；挂着期间登记给内存遥测
+  useEffect(() => {
+    const unregister = registerTranscriptView(() => shownTurns.current)
+    return () => {
+      unregister()
+      window.clearTimeout(placeTimer.current)
+      const last = placeRef.current
+      if (last.sessionId) savePlace(last.sessionId, last)
+    }
+  }, [])
 
   // 离开底部期间条目增加或最后一条变长：「回到最新」变成「新内容」
   const mark = contentMark(items)
@@ -480,6 +538,14 @@ export function LiveTranscript({
             if (!detached.current) stick.current = near && !released.current
             setAway(!near)
             if (near) setUnseen(false)
+            // 滚动停下 200 毫秒后记一次位置（标签已经隐藏就不记，那时量出来的不准）
+            window.clearTimeout(placeTimer.current)
+            placeTimer.current = window.setTimeout(() => {
+              if (el.closest('[aria-hidden="true"]')) return
+              placeRef.current.atBottom = nearBottom(el)
+              placeRef.current.anchor = anchorOf(el)
+              placeRef.current.scrollTop = el.scrollTop
+            }, 200)
           }}
           onScrollEnd={e => {
             if (!jumping.current) return

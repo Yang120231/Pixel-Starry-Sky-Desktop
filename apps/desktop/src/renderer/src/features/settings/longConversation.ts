@@ -1,5 +1,6 @@
 // 长对话先显示最近几轮（docs/ui/turn-rail.md §9，D121）：20 轮 / 50 轮 / 全部，保存在本机，多窗口同步
 import { useSyncExternalStore } from 'react'
+import { capTurns, useLightweight } from '@/features/recovery/lightweight'
 
 export type LongConversationChoice = '20' | '50' | 'all'
 export const LONG_CONVERSATION_KEY = 'pixelsky.long-conversation'
@@ -58,5 +59,6 @@ export function useLongConversation(): LongConversationChoice {
 /** 先显示最近几轮，也是每次「显示更早的」补几轮；null：全部显示，不折叠 */
 export function useTranscriptWindowSize(): number | null {
   const value = useLongConversation()
-  return value === 'all' ? null : Number(value)
+  // 崩溃恢复后的轻量模式：不管设置是 50 还是全部，最多 20 轮（不改设置）
+  return capTurns(value === 'all' ? null : Number(value), useLightweight())
 }

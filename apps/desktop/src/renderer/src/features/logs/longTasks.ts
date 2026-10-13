@@ -6,6 +6,9 @@ const LONG_TASK_MS = 2_000
 /** Chromium 才有的 performance.memory */
 type HeapInfo = { usedJSHeapSize: number; jsHeapSizeLimit: number }
 
+/** 页面元素数：「界面卡住」和内存采样用同一个数法 */
+export const pageElements = (): number => document.getElementsByTagName('*').length
+
 const mb = (bytes: number): number => Math.round(bytes / 1048576)
 
 /**
@@ -54,7 +57,7 @@ export function installLongTaskLog(): () => void {
         '界面卡住',
         longTaskFields(task, at, {
           hidden: document.hidden,
-          elements: document.getElementsByTagName('*').length,
+          elements: pageElements(),
           ...(heap ? { heap } : {}),
         }),
       )

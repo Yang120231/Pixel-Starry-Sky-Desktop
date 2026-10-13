@@ -438,6 +438,17 @@ export class EngineHost {
     this.m.usage.usageClear()
   }
 
+  /** 内存遥测用的计数（docs/ui/renderer-memory.md §3.2.3）：只算本机，SSH 机器上的不算 */
+  memoryStats(): { runtimes: number; processes: number; running: number } {
+    let processes = 0
+    let running = 0
+    for (const rt of this.runtimes.values()) {
+      if (rt.session !== null) processes++
+      if (rt.snapshot.state !== 'idle') running++
+    }
+    return { runtimes: this.runtimes.size, processes, running }
+  }
+
   /** 退出应用：关掉所有引擎进程 */
   async shutdown(): Promise<void> {
     this.ctx.closing = true

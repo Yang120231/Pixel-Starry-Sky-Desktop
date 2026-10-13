@@ -2,6 +2,7 @@
 import { app, BrowserWindow, Notification } from 'electron'
 import * as ipc from '../ipc/guard'
 import type { NotificationInput } from '../../shared/types/notifications'
+import { sendWhenReady } from '../app/rendererHealth'
 
 const MAX_LIVE = 20
 /** 已弹出的通知要保留引用，否则被回收后点击回调不再触发 */
@@ -41,7 +42,8 @@ function show(win: BrowserWindow, input: NotificationInput): void {
     if (win.isMinimized()) win.restore()
     win.show()
     win.focus()
-    win.webContents.send('notify:clicked', { id: input.id, sessionId: input.sessionId })
+    // 界面崩溃重新加载中也不丢：等新页面报到后再发
+    sendWhenReady(win.webContents, 'notify:clicked', { id: input.id, sessionId: input.sessionId })
   })
   notification.on('close', forget)
   notification.on('failed', forget)

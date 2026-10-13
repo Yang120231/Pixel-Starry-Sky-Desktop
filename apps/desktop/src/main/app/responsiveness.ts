@@ -155,12 +155,12 @@ export function memoryLevel(workingSetMb: number): number {
   return workingSetMb < MEMORY_WARN_MB ? 0 : Math.floor((workingSetMb - MEMORY_WARN_MB) / MEMORY_STEP_MB) + 1
 }
 
-/** 每分钟看一次各进程的内存，涨到新的一档就记一条 */
-export function watchMemory(): void {
+/** 各进程内存涨到新的一档就记一条；返回的函数每次喂一份 getAppMetrics() 的结果 */
+export function memoryChecker(): (metrics: ReturnType<typeof app.getAppMetrics>) => void {
   const logged = new Map<number, number>()
-  setInterval(() => {
+  return metrics => {
     const alive = new Set<number>()
-    for (const p of app.getAppMetrics()) {
+    for (const p of metrics) {
       alive.add(p.pid)
       const workingSetMb = mb(p.memory.workingSetSize)
       const level = memoryLevel(workingSetMb)
@@ -178,5 +178,10 @@ export function watchMemory(): void {
       } else if (workingSetMb < MEMORY_WARN_MB - MEMORY_STEP_MB) logged.delete(p.pid)
     }
     for (const pid of logged.keys()) if (!alive.has(pid)) logged.delete(pid)
-  }, MEMORY_EVERY_MS).unref()
+  }
+}
+
+/** 每分钟取一次各进程的内存交给 onTick；不传就只做「内存占用高」的分档（app/memory.ts 的 memoryTick 在里面也做这件事） */
+export function watchMemory(onTick: (metrics: ReturnType<typeof app.getAppMetrics>) => void = memoryChecker()): void {
+  setInterval(() => onTick(app.getAppMetrics()), MEMORY_EVERY_MS).unref()
 }

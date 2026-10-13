@@ -216,6 +216,7 @@ export function TerminalView({
       copy,
       paste: (text: string) => term.paste(text),
       bottom: () => term.scrollToBottom(),
+      lines: () => term.buffer.normal.length,
     }
     screens.set(record.id, screen)
     const contextMenu = (event: MouseEvent): void => {

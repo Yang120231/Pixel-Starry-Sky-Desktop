@@ -19,6 +19,7 @@ import { allMessages, type TranslationKey } from '../../shared/i18n/translate'
 import type { Locale } from '../../shared/i18n/messages'
 import type { TrayCommand, TrayPrefs } from '../../shared/types/tray'
 import { windowLocale } from './ui-language'
+import { sendWhenReady } from './rendererHealth'
 import type { AppContext } from './context'
 
 // ---------------------------------------------------------------------------
@@ -203,10 +204,8 @@ export function initTray(ctx: AppContext, deps: TrayDeps): TrayController {
   }
   const command = (cmd: TrayCommand): void => {
     const win = showWindow()
-    const send = (): void => win.webContents.send('tray:command', cmd)
-    // 刚新建的窗口还没加载完，等页面好了再发
-    if (win.webContents.isLoading()) win.webContents.once('did-finish-load', send)
-    else send()
+    // 刚新建的窗口还没加载完、界面崩溃重新加载中：等页面好了再发，只留最后一条（app/rendererHealth.ts）
+    sendWhenReady(win.webContents, 'tray:command', cmd)
   }
 
   let dndUntil: number | null = null

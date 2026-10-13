@@ -140,6 +140,7 @@ const appInfo: AppInfoBridge = {
   open: link => call('app:open', link),
   whatsNew: () => call('app:whatsNew'),
   setWhatsNew: patch => call('app:whatsNewSet', patch),
+  ready: () => call('app:ready'),
 }
 
 // 本机日志（docs/ui/logging.md §4.7）：实时条目只在有页面订阅时才让主进程推过来
@@ -164,6 +165,7 @@ const log: LogBridge = {
   openFolder: () => call('log:open'),
   exportDiagnostics: () => call('log:export'),
   write: (level, message, fields) => send('log:write', { level, message, fields }),
+  sample: sample => call('log:sample', sample),
 }
 function logEntryListener(_e: Electron.IpcRendererEvent, entry: import('@pixelsky/protocol').LogEntry): void {
   for (const listener of logListeners) listener(entry)

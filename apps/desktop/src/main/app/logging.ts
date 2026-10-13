@@ -10,6 +10,9 @@ import { LogService } from '../core/log/service'
 import * as ipc from '../ipc/guard'
 import type { AppContext } from './context'
 import { appInfo } from './info'
+import { crashFields, onRendererSample, systemNow } from './memory'
+import { sendTo } from './rendererHealth'
+import { recoveryStep } from './crashRecovery'
 
 let service: LogService | null = null
 
@@ -56,9 +59,20 @@ function captureCrashes(svc: LogService): void {
     log.error('未处理的 Promise 拒绝', { error: reason instanceof Error ? reason : describeError(reason) })
     process.stderr.write(`Unhandled rejection: ${format(reason)}\n`)
   })
+  const crashTimes = new WeakMap<WebContents, number[]>()
   app.on('render-process-gone', (_event, contents, details) => {
     if (details.reason === 'clean-exit') return
-    log.error('渲染进程退出', { reason: details.reason, exitCode: details.exitCode, url: contents.getURL() })
+    // 主窗口的界面进程：带上崩溃前最近的内存采样和这一刻的整机内存（docs/ui/renderer-memory.md §3.2.5）；内置浏览器的页面不带
+    const isWindow = BrowserWindow.fromWebContents(contents) !== null
+    let extra: Record<string, unknown> = {}
+    if (isWindow) {
+      const step = recoveryStep(crashTimes.get(contents) ?? [], Date.now())
+      crashTimes.set(contents, step.times)
+      extra = { ...crashFields(contents), recoveries: step.n }
+    }
+    log.error('渲染进程退出', { reason: details.reason, exitCode: details.exitCode, url: contents.getURL(), ...extra })
+    // 崩溃后用户可能直接关掉程序
+    if (isWindow) svc.flushSync()
   })
   app.on('child-process-gone', (_event, details) => {
     if (details.reason === 'clean-exit') return
@@ -68,6 +82,7 @@ function captureCrashes(svc: LogService): void {
       exitCode: details.exitCode,
       ...(details.serviceName ? { serviceName: details.serviceName } : {}),
       ...(details.name ? { name: details.name } : {}),
+      ...(details.type === 'GPU' ? { system: systemNow() } : {}),
     })
   })
 }
@@ -122,21 +137,40 @@ export function initLogIpc(): void {
   const svc = service
   if (!svc) return
   const log = logger('app')
-  const watchers = new Set<WebContents>()
+  /** 在看实时日志的页面 → 取消它身上的监听 */
+  const watchers = new Map<WebContents, () => void>()
   svc.subscribe(entry => {
-    for (const contents of watchers) if (!contents.isDestroyed()) contents.send('log:entry', entry)
+    for (const contents of watchers.keys()) sendTo(contents, 'log:entry', entry)
   })
+  const unwatch = (contents: WebContents): void => {
+    watchers.get(contents)?.()
+    watchers.delete(contents)
+  }
   ipc.handle('log:read', (_event, query: unknown) => svc.read(parseQuery(query)))
   ipc.handle('log:watch', (event, on: unknown) => {
     const contents = event.sender
     if (on !== true) {
-      watchers.delete(contents)
+      unwatch(contents)
       return
     }
     if (watchers.has(contents)) return
-    watchers.add(contents)
-    contents.once('destroyed', () => watchers.delete(contents))
+    // 页面重新加载（导航）或界面崩溃后，页面里已经没有监听：删掉，要看日志的页面会重新 log:watch
+    const onNavigate = (_event: unknown, _url: string, _inPlace: boolean, isMain: boolean): void => {
+      if (isMain) unwatch(contents)
+    }
+    const drop = (): void => unwatch(contents)
+    contents.on('did-start-navigation', onNavigate)
+    contents.on('render-process-gone', drop)
+    contents.on('destroyed', drop)
+    watchers.set(contents, () => {
+      if (contents.isDestroyed()) return
+      contents.removeListener('did-start-navigation', onNavigate)
+      contents.removeListener('render-process-gone', drop)
+      contents.removeListener('destroyed', drop)
+    })
   })
+  // 内存采样（docs/ui/renderer-memory.md §3.2.2）：界面报来的数，回复下一次采样的间隔；不占 log:write 的限额
+  ipc.handle('log:sample', (event, raw: unknown) => onRendererSample(event.sender, raw))
   ipc.handle('log:settings', () => svc.settings())
   ipc.handle('log:setVerbose', (_event, on: unknown) => {
     const next = svc.setVerbose(on === true)

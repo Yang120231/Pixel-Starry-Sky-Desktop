@@ -108,6 +108,9 @@ export function TaskBoardPage() {
   const fetched = useRef(new Set<string>())
   useEffect(() => {
     if (isDemo) return
+    // 不再等你处理的会话忘掉：快照可能已被释放，下次又等你处理时要再读一次
+    const waiting = new Set(sessions.filter(card => card.lane === 'waiting').map(card => card.id))
+    for (const id of fetched.current) if (!waiting.has(id)) fetched.current.delete(id)
     for (const card of sessions) {
       if (card.lane !== 'waiting' || snapshots[card.id] || fetched.current.has(card.id)) continue
       if (fetched.current.size >= MAX_PREFETCH) break

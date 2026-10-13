@@ -9,6 +9,7 @@ import {
   isQuiet,
   nextMorning,
   notificationFor,
+  recoveredIntents,
   sanitizeNotificationPrefs,
   settledIntent,
   type NotificationIntent,
@@ -182,5 +183,18 @@ describe('后台子智能体还在跑（docs/ui/notifications.md §7）', () => 
     expect(backgroundChange(session({ type: 'turn_started', turnId: 't2' }), idle)).toMatchObject({ change: 'busy' })
     expect(backgroundChange(session({ type: 'status', state: 'idle' }), idle)).toBeNull()
     expect(settledIntent('s1', 5)).toEqual({ kind: 'completed', sessionId: 's1', dedupeKey: 'b:s1:5', detail: null })
+  })
+})
+
+describe('recoveredIntents', () => {
+  it('只给还在等你处理的会话补提醒', () => {
+    const sessions = [
+      { record: { id: 'a' }, state: 'waiting' },
+      { record: { id: 'b' }, state: 'running' },
+      { record: { id: 'c' }, state: 'idle' },
+    ]
+    expect(recoveredIntents(sessions)).toEqual([
+      { kind: 'waiting', sessionId: 'a', dedupeKey: 'w:a:recovered', detail: null },
+    ])
   })
 })

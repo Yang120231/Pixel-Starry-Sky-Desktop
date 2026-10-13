@@ -19,6 +19,8 @@ import { CommandPaletteProvider } from '../features/commands/CommandPaletteProvi
 import { ShortcutsHelp } from '../features/layout/ShortcutsHelp'
 import { installRendererErrorLog, reactRootErrorOptions } from '../features/logs/rendererErrors'
 import { installLongTaskLog } from '../features/logs/longTasks'
+import { installMemorySampler } from '../features/logs/memorySampler'
+import { RecoveredNotice } from '../features/recovery/RecoveredNotice'
 import { SettingsSyncRunner } from '../features/settings/sync/RestoreNotice'
 import { startWindowActivity } from '../features/layout/windowActivity'
 
@@ -27,6 +29,8 @@ document.documentElement.dataset.platform = window.pixelsky?.platform ?? 'web'
 installRendererErrorLog()
 // 界面一次卡住超过 2 秒记一条（docs/ui/logging.md §4.9）
 installLongTaskLog()
+// 每隔一阵把界面的内存数报给主进程，写进本机日志（docs/ui/renderer-memory.md §3.2）
+installMemorySampler()
 // 窗口不在前台时暂停循环动画（docs/ui/performance.md）
 startWindowActivity()
 
@@ -44,6 +48,7 @@ createRoot(document.getElementById('root')!, reactRootErrorOptions).render(
                   <CommandPaletteProvider>
                     <App />
                     <ShortcutsHelp />
+                    <RecoveredNotice />
                   </CommandPaletteProvider>
                 </TerminalProvider>
               </SessionActionsProvider>

@@ -55,6 +55,8 @@ import {
   bridge,
   getEngineState,
   openSession,
+  releaseSession,
+  retainSession,
   redetectEngines,
   refreshDefaults,
   setCurrentProject,
@@ -79,6 +81,12 @@ export function useViewing(id: string | null): void {
 
 export function useSession(id: string | null): SessionSnapshot | null {
   const snap = useEngineState(s => (id ? (s.snapshots[id] ?? null) : null))
+  // 引用计数：没人用了的会话快照过一会儿会被释放（store.ts），再用时 snap 变回 null，下面的 effect 重新打开
+  useEffect(() => {
+    if (!id) return
+    retainSession(id)
+    return () => releaseSession(id)
+  }, [id])
   useEffect(() => {
     if (id && isLive) void openSession(id).catch(e => notify(e.message))
   }, [id, snap === null])

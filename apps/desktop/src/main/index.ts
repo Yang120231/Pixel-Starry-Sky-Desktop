@@ -28,8 +28,18 @@ import { initChannels } from './channels/ipc'
 import { initNotifications } from './notifications/notifications'
 import { confirmTerminalClose, closeWindowTerminals } from './terminal/ipc'
 import { createAppContext } from './app/context'
-import { initLogIpc, initLogging } from './app/logging'
-import { allowCallStacks, enableCallStacks, watchMainLoop, watchMemory, watchWindow } from './app/responsiveness'
+import { initLogIpc, initLogging, logService } from './app/logging'
+import {
+  allowCallStacks,
+  enableCallStacks,
+  memoryChecker,
+  watchMainLoop,
+  watchMemory,
+  watchWindow,
+} from './app/responsiveness'
+import { initMemory, memoryTick, noteLoaded } from './app/memory'
+import { loadApp as loadAppPage, watchCrashes } from './app/crashRecovery'
+import { canSend, markReady } from './app/rendererHealth'
 import { initTray, type TrayController } from './app/tray'
 import { initSettingsSync } from './account/settings-sync'
 import { initFeedback } from './feedback/feedback'
@@ -154,6 +164,15 @@ function isAppUrl(url: string): boolean {
   }
 }
 
+/** 加载界面页面；query 是崩溃恢复时带给界面的 recovered、n（docs/ui/renderer-memory.md §3.1） */
+function loadApp(win: BrowserWindow, query?: Record<string, string>): Promise<void> {
+  return loadAppPage(
+    win,
+    { devUrl: process.env.ELECTRON_RENDERER_URL, file: join(__dirname, '../renderer/index.html') },
+    query,
+  )
+}
+
 function createWindow(): BrowserWindow {
   const initial: ResolvedTheme = nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
   const win = new BrowserWindow({
@@ -186,6 +205,16 @@ function createWindow(): BrowserWindow {
 
   observeWindowControls(win)
   watchWindow(win)
+  // 界面崩溃后自动重新加载，反复崩溃时弹对话框（app/crashRecovery.ts）
+  watchCrashes(win, {
+    load: (target, query) => loadApp(target, query),
+    openLogs: async () => {
+      const dir = logService()?.files.dir
+      if (dir) await shell.openPath(dir)
+    },
+    quit: () => app.quit(),
+  })
+  win.webContents.on('did-finish-load', () => noteLoaded(win.webContents))
   win.once('ready-to-show', () => {
     if (!captureDir) win.show()
   })
@@ -197,7 +226,8 @@ function createWindow(): BrowserWindow {
       tray.hide(win)
       return
     }
-    if (win.webContents.isCrashed()) {
+    // 界面不可用（崩溃、重新加载还没报到）时收不到 files:beforeClose，直接走关闭流程
+    if (!canSend(win.webContents)) {
       void finishWindowClose(win)
       return
     }
@@ -232,11 +262,7 @@ function createWindow(): BrowserWindow {
     if (isWebUrl(url)) void shell.openExternal(url)
   })
 
-  if (process.env.ELECTRON_RENDERER_URL) {
-    void win.loadURL(process.env.ELECTRON_RENDERER_URL)
-  } else {
-    void win.loadFile(join(__dirname, '../renderer/index.html'))
-  }
+  void loadApp(win)
 
   if (captureDir) void capture(win, captureDir)
   return win
@@ -246,6 +272,9 @@ function createWindow(): BrowserWindow {
 ipc.on('app:config', event => {
   event.returnValue = { demo: process.env.PIXELSKY_DEMO === '1' || process.argv.includes('--demo') }
 })
+
+// 新页面报到（界面订阅好引擎事件之后、拉列表和快照之前调）：结束「恢复中」，之后的推送才会送到；不在恢复中时什么都不做
+ipc.handle('app:ready', event => markReady(event.sender), { deny: '不允许的调用方' })
 
 ipc.on('theme:set', (event, theme: ResolvedTheme, transparent?: boolean, background?: unknown) => {
   const win = BrowserWindow.fromWebContents(event.sender)
@@ -337,7 +366,16 @@ app.whenReady().then(async () => {
   // 卡顿诊断：窗口没响应、主进程卡住、内存过高时写日志（docs/ui/logging.md §4.9）
   allowCallStacks(session.defaultSession, isAppUrl)
   watchMainLoop()
-  watchMemory()
+  // 内存：界面每次 log.sample() 进来时取主进程这边的数；这个每分钟的定时器兼做「内存占用高」分档和界面不报时的看门狗
+  initMemory({
+    engine: () => ctx.engine?.memoryStats() ?? { runtimes: 0, processes: 0, running: 0 },
+    check: memoryChecker(),
+    rendererPid: () => {
+      const win = BrowserWindow.getAllWindows().find(w => !w.isDestroyed())
+      return win ? win.webContents.getOSProcessId() : null
+    },
+  })
+  watchMemory(memoryTick)
   setAppMenu()
   initUiLanguage(locale => {
     setAppMenu(locale)

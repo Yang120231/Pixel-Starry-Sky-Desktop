@@ -1,11 +1,28 @@
 import { tr } from '../../i18n/core'
 import { useEffect, useId, useRef, useState, type RefObject } from 'react'
 import { useToast } from '@/ui'
-import { finishItemNavigation, useItemNavigation } from './navigation'
+import { expandItems } from './expand'
+import { finishItemNavigation, useItemNavigation, type ItemNavigation } from './navigation'
 import { findRanges, setMarks } from './termMarks'
 
 /** 跳转后命中的词标多久 */
 const MARK_MS = 3000
+
+/**
+ * 该不该开始定位：目标是这个会话、内容就绪才开始。开始时对同一个目标再请求一次展开，
+ * 把请求时间刷新成现在——标签先要挂载、快照可能还要重新拉，navigateToItem 时的请求可能已经过期
+ * （docs/ui/renderer-memory.md §3.3.3）
+ */
+export function beginLocate(
+  target: ItemNavigation | null,
+  sessionId: string | null,
+  ready: boolean,
+  now?: number,
+): boolean {
+  if (!target || target.sessionId !== sessionId || !ready) return false
+  expandItems(target.sessionId, [target.itemId], now)
+  return true
+}
 
 /** 等会话 / 隐藏标签渲染完成后定位，仅执行一次。 */
 export function useItemLocation(
@@ -23,7 +40,7 @@ export function useItemLocation(
   const owner = useId()
   const toast = useToast()
   useEffect(() => {
-    if (!target || target.sessionId !== sessionId || !ready) return
+    if (!target || !beginLocate(target, sessionId, ready)) return
     let frame = 0,
       disposed = false
     const deadline = performance.now() + 2500

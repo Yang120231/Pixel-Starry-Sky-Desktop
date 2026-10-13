@@ -9,4 +9,6 @@ export interface AppInfoBridge {
   whatsNew(): Promise<WhatsNewState>
   /** seen：这一版看过了；muted：「不再提示」开关 */
   setWhatsNew(patch: { seen?: true; muted?: boolean }): Promise<void>
+  /** 新页面报到（docs/ui/renderer-memory.md §3.1.2）：在订阅引擎事件之后、拉列表和快照之前调；主进程收到后才恢复往这个页面推送 */
+  ready(): Promise<void>
 }

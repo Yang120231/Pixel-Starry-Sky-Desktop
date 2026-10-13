@@ -1,5 +1,6 @@
 import { BrowserWindow, screen, type IpcMainInvokeEvent } from 'electron'
 import * as ipc from '../ipc/guard'
+import { sendTo } from './rendererHealth'
 import type { WindowSnapLayout, WindowState } from '../../shared/types/window'
 
 interface Zone {
@@ -107,7 +108,7 @@ export function initWindowControls(): void {
       // 布局模式允许小于普通窗口的 1100×700；最小保持单窗格可用的 400×300。
       win.setMinimumSize(400, 300)
       win.setBounds(bounds)
-      win.webContents.send('window:state', state(win))
+      sendTo(win.webContents, 'window:state', state(win))
     },
     callerOnly,
   )
@@ -135,7 +136,7 @@ export function initWindowControls(): void {
       snappedWindows.delete(win)
       win.setMinimumSize(saved.minimum[0], saved.minimum[1])
       win.setBounds(saved.bounds)
-      win.webContents.send('window:state', state(win))
+      sendTo(win.webContents, 'window:state', state(win))
     },
     callerOnly,
   )
@@ -151,7 +152,7 @@ export function initWindowControls(): void {
 
 export function observeWindowControls(win: BrowserWindow): void {
   const publish = (): void => {
-    if (!win.isDestroyed() && !win.webContents.isDestroyed()) win.webContents.send('window:state', state(win))
+    if (!win.isDestroyed()) sendTo(win.webContents, 'window:state', state(win))
   }
   win.on('maximize', publish)
   win.on('unmaximize', publish)

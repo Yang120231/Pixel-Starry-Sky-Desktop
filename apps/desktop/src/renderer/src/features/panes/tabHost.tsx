@@ -8,10 +8,17 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { cn } from '@/ui'
 import { SessionView } from '@/features/session/SessionView'
 import { isLive, useSessionTitle } from '@/features/engine'
+import { noteTabSessions } from '@/features/engine/store'
 import { FileEditor } from '@/features/editor/FileEditor'
 import { fadeIn } from './motion'
+import { noteMounted, useKeepMounted } from './keepAlive'
 import { paneActions } from './store'
 import { isFileTab, isNewTab, type Leaf } from './tree'
+
+const SEP = '\n'
+
+/** 卸载过内容的标签：再挂载时就算是当前标签也淡入一次 */
+const unloaded = new Set<string>()
 
 interface Host {
   el: HTMLDivElement
@@ -81,10 +88,26 @@ export interface TabHostsProps {
 
 /** 所有窗格里所有标签的内容。必须排在窗格后面（见 TabSlot） */
 export function TabHosts({ leaves, ...rest }: TabHostsProps) {
+  const keep = useKeepMounted(leaves)
+  // 布局里所有对话标签的会话（不论挂没挂载）报给引擎 store：没挂载、没快照的会话跑完照样标「有新回复」
+  const sessions = leaves
+    .flatMap(leaf => leaf.tabs)
+    .filter(tab => !isNewTab(tab) && !isFileTab(tab))
+    .join(SEP)
+  useEffect(() => noteTabSessions(sessions ? sessions.split(SEP) : []), [sessions])
   return (
     <>
       {leaves.flatMap(leaf =>
-        leaf.tabs.map(tab => <TabHost key={tab} tab={tab} leafId={leaf.id} active={tab === leaf.active} {...rest} />),
+        leaf.tabs.map(tab => (
+          <TabHost
+            key={tab}
+            tab={tab}
+            leafId={leaf.id}
+            active={tab === leaf.active}
+            mounted={keep.has(tab)}
+            {...rest}
+          />
+        )),
       )}
     </>
   )
@@ -92,7 +115,7 @@ export function TabHosts({ leaves, ...rest }: TabHostsProps) {
 
 type TabProps = { tab: string; leafId: string; active: boolean } & Omit<TabHostsProps, 'leaves'>
 
-function TabHost(props: TabProps) {
+function TabHost({ mounted, ...props }: TabProps & { mounted: boolean }) {
   const { tab } = props
   const host = hostOf(tab)
   useEffect(() => {
@@ -102,7 +125,18 @@ function TabHost(props: TabProps) {
       if (hosts.get(tab) === host) hosts.delete(tab)
     }
   }, [tab, host])
-  return createPortal(<TabBody {...props} />, host.el)
+  // 内容卸载（切走太久的对话标签）：容器留着，里面空了；滚动位置表里的元素都已不在，一起清掉
+  useEffect(() => {
+    if (!mounted) return
+    const forget = noteMounted()
+    return () => {
+      forget()
+      host.scrolls.clear()
+      // 上面的容器清理先跑：标签是关掉的（容器已丢）就不记，免得 unloaded 只增不减、重开时漏掉淡入
+      if (hosts.get(tab) === host) unloaded.add(tab)
+    }
+  }, [mounted, host, tab])
+  return createPortal(mounted ? <TabBody {...props} /> : null, host.el)
 }
 
 /** 一个标签的内容：不是当前标签时隐藏但保持挂载；切过来时淡入 */
@@ -117,14 +151,16 @@ const TabBody = memo(function TabBody({
 }: TabProps) {
   useI18n()
   const ref = useRef<HTMLDivElement>(null)
-  const wasActive = useRef(active)
+  // 卸载过又挂载回来的当前标签也淡入（其余情况挂载时是当前标签不淡入）
+  const wasActive = useRef(active && !unloaded.has(tab))
   const sessionId = isNewTab(tab) || isFileTab(tab) ? null : tab
   const title = useSessionTitle(sessionId)
 
   useLayoutEffect(() => {
     if (active && !wasActive.current && ref.current) fadeIn(ref.current)
     wasActive.current = active
-  }, [active])
+    unloaded.delete(tab)
+  }, [active, tab])
 
   return (
     <div

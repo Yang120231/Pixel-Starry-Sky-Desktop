@@ -15,6 +15,7 @@ import {
 import { isDemo, projects as demoProjects } from '@/data'
 import { demo } from '@/data/demo'
 import { SESSION_REMOVED_EVENT } from './sessionLifecycle'
+import { RETAIN_RELEASED, evictions } from './retention'
 import { getMachines, machineOf } from '@/features/machines/store'
 
 export interface EngineState {
@@ -63,6 +64,17 @@ const opening: Record<string, Array<{ seq: number; event: HostEvent & { kind: 's
 let viewing = new Set<string>()
 
 export const bridge = isDemo ? undefined : window.pixelsky?.engine
+
+// 快照的释放（docs/ui/renderer-memory.md §3.4）：useSession 按引用计数，归零的会话只留最近几个
+/** 各会话被几处在用 */
+const refs = new Map<string, number>()
+/** 引用归零的先后，最近的在后 */
+let released: string[] = []
+/** 打开过快照、或在标签里出现过的会话：没有快照时跑完照样标「有新回复」 */
+const everOpened = new Set<string>()
+/** 释放前多等一会儿，让紧跟着到的事件和引用的回落先处理完（StrictMode 双调用、快速切标签） */
+const SWEEP_DELAY_MS = 3000
+let sweepTimer: ReturnType<typeof setTimeout> | undefined
 
 let pendingRaf: number | undefined
 let pendingTimer: ReturnType<typeof setTimeout> | undefined
@@ -129,7 +141,13 @@ function applySessionEvent(e: HostEvent & { kind: 'session' }): void {
     return
   }
   const snap = state.snapshots[id]
-  if (!snap || e.seq <= (seqs[id] ?? 0)) return
+  if (!snap) {
+    // 快照被释放（或标签启动时没挂载）的会话：事件丢掉，但跑完了照样标「有新回复」
+    if (e.event.type === 'turn_completed' && everOpened.has(id) && !viewing.has(id) && !state.unread[id])
+      set({ unread: { ...state.unread, [id]: true } })
+    return
+  }
+  if (e.seq <= (seqs[id] ?? 0)) return
   seqs[id] = e.seq
   const next = reduce(snap, e.event)
   const unread =
@@ -159,7 +177,10 @@ function onHostEvent(e: HostEvent): void {
         delete snapshots[id]
         delete unread[id]
         delete seqs[id]
+        // refs 不动：它数的是还挂着的组件，由 releaseSession 归零时清；这里删了，组件卸载时会算出 -1
+        everOpened.delete(id)
       }
+      if (removed.length) released = released.filter(id => !removed.includes(id))
       for (const id of archived) delete unread[id]
       set({
         sessions: e.sessions,
@@ -167,6 +188,9 @@ function onHostEvent(e: HostEvent): void {
         unread,
         currentProjectId: pickProject(state.projects, e.sessions, state.currentProjectId),
       })
+      // 归档且没人用的直接释放，不进最近释放队列；其余的等延后的清理
+      if (archived.size) drop(evictions({ ...sweepInput(), keep: Infinity }).filter(id => archived.has(id)))
+      scheduleSweep()
       if (removed.length || archived.size)
         window.dispatchEvent(new CustomEvent(SESSION_REMOVED_EVENT, { detail: { ids: [...removed, ...archived] } }))
       return
@@ -189,9 +213,12 @@ let started = false
 
 /** 连接主进程：拉初始数据、订阅事件（只做一次） */
 export function startEngineStore(): void {
-  if (started || !bridge) return
+  if (started) return
   started = true
-  bridge.onEvent(onHostEvent)
+  // 订阅之后、拉列表之前向主进程报到：崩溃恢复中主进程不往没准备好的页面推送（docs/ui/renderer-memory.md §3.1.2）。演示模式也报，没有 preload 就跳过
+  bridge?.onEvent(onHostEvent)
+  void window.pixelsky?.app?.ready().catch(() => {})
+  if (!bridge) return
   void Promise.all([bridge.projects(), bridge.sessions(), bridge.defaults()]).then(([projects, sessions, defaults]) => {
     set({ ready: true, projects, sessions, defaults, currentProjectId: pickProject(projects, sessions, null) })
   })
@@ -215,7 +242,9 @@ export async function openSession(id: string): Promise<void> {
       }
     }
     seqs[id] = last
+    everOpened.add(id)
     set({ snapshots: { ...state.snapshots, [id]: snap } })
+    scheduleSweep()
   } catch (error) {
     if (!state.ready || state.sessions.some(s => s.record.id === id)) throw error
   } finally {
@@ -286,6 +315,75 @@ export function invalidateRemoteSnapshots(machine: string): void {
       delete snapshots[id]
       delete seqs[id]
     }
+  released = released.filter(id => id in snapshots)
+  set({ snapshots })
+}
+
+/** 这个会话现在有人在用（useSession 挂载）；演示模式的快照是固定数据，不参与释放 */
+export function retainSession(id: string): void {
+  if (!bridge) return
+  refs.set(id, (refs.get(id) ?? 0) + 1)
+  released = released.filter(x => x !== id)
+}
+
+/** 用完了：引用归零后进最近释放队列，延后清理 */
+export function releaseSession(id: string): void {
+  if (!bridge) return
+  const n = (refs.get(id) ?? 0) - 1
+  if (n > 0) {
+    refs.set(id, n)
+    return
+  }
+  refs.delete(id)
+  // 快照已经没了（会话被删）就没有要释放的，不进队列
+  if (!(id in state.snapshots)) return
+  released = [...released.filter(x => x !== id), id]
+  scheduleSweep()
+}
+
+/** 布局里的对话标签（不论有没有挂载）：它们的会话跑完照样标「有新回复」；只加不删 */
+export function noteTabSessions(ids: readonly string[]): void {
+  for (const id of ids) everOpened.add(id)
+}
+
+function scheduleSweep(): void {
+  if (!bridge || sweepTimer !== undefined) return
+  sweepTimer = setTimeout(() => {
+    sweepTimer = undefined
+    sweep()
+  }, SWEEP_DELAY_MS)
+}
+
+/** 释放判断要用的输入：运行中、等你处理、正在打开的不释放 */
+function sweepInput(): Parameters<typeof evictions>[0] {
+  const pinned = new Set(Object.keys(opening))
+  for (const s of state.sessions) if (s.state !== 'idle' || s.background) pinned.add(s.record.id)
+  for (const [id, snap] of Object.entries(state.snapshots))
+    if (snap.state !== 'idle' || snap.pending.length > 0) pinned.add(id)
+  return {
+    loaded: Object.keys(state.snapshots),
+    refs,
+    released,
+    pinned,
+    archived: new Set(state.sessions.filter(s => s.record.archivedAt).map(s => s.record.id)),
+    keep: RETAIN_RELEASED,
+  }
+}
+
+function sweep(): void {
+  drop(evictions(sweepInput()))
+  released = released.filter(id => id in state.snapshots)
+}
+
+/** 从界面内存里删掉这些会话的快照和序号（再打开时从主进程重新拉） */
+function drop(ids: readonly string[]): void {
+  if (!ids.length) return
+  const snapshots = { ...state.snapshots }
+  for (const id of ids) {
+    delete snapshots[id]
+    delete seqs[id]
+  }
+  released = released.filter(id => !ids.includes(id))
   set({ snapshots })
 }
 

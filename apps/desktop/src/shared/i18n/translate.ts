@@ -33,6 +33,7 @@ import { longConversationMessages } from './longConversationMessages'
 import { tabMenuMessages } from './tabMenuMessages'
 import { minimalModeMessages } from './minimalModeMessages'
 import { htmlPreviewMessages } from './htmlPreviewMessages'
+import { recoveryMessages } from './recoveryMessages'
 import { replaceCodedErrors } from '@pixelsky/protocol'
 import type { Locale } from './messages'
 
@@ -73,6 +74,7 @@ export const allMessages = {
   ...tabMenuMessages,
   ...minimalModeMessages,
   ...htmlPreviewMessages,
+  ...recoveryMessages,
 }
 export type TranslationKey = keyof typeof allMessages
 

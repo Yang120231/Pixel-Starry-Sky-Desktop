@@ -1,5 +1,6 @@
 // 本机日志：设置 › 日志用（docs/ui/logging.md §4.7）
 import type { LogEntry, LogQuery, LogSettings } from '@pixelsky/protocol'
+import type { RendererMemorySample } from '../shared/types/memory'
 
 export interface LogBridge {
   /** 按条件读最近的条目（跨重启，从文件读），按时间先后 */
@@ -14,4 +15,6 @@ export interface LogBridge {
   exportDiagnostics(): Promise<string | null>
   /** 渲染进程报错写进日志（限流） */
   write(level: 'warn' | 'error', message: string, fields?: Record<string, unknown>): void
+  /** 内存采样（docs/ui/renderer-memory.md §3.2）：界面的数，主进程补上自己那边的；回复下一次采样的间隔 */
+  sample(sample: RendererMemorySample): Promise<{ intervalMs: number }>
 }

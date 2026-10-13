@@ -47,6 +47,9 @@ export function TaskInbox() {
   // 等你处理但还没打开过的会话：后台读一次快照，好显示审批内容
   useEffect(() => {
     if (isDemo) return
+    // 不再等你处理的会话忘掉：快照可能已被释放，下次又等你处理时要再读一次
+    const waiting = new Set(items.filter(item => item.lane === 'waiting').map(item => item.sessionId))
+    for (const id of fetched.current) if (!waiting.has(id)) fetched.current.delete(id)
     for (const item of items) {
       if (
         item.lane !== 'waiting' ||
