@@ -1,12 +1,25 @@
-import { imageMediaType, MAX_IMAGE_BYTES, type ImageAttachment } from '@pixelsky/protocol'
+import { imageMediaType, MAX_FILE_BYTES, MAX_IMAGE_BYTES, type ImageAttachment } from '@pixelsky/protocol'
 import { tr } from '@/i18n/core'
+import { convertImage, needsConversion, otherImageFormat } from './convertImage'
 
 export async function readImage(file: File): Promise<ImageAttachment> {
-  if (!file.size || file.size > MAX_IMAGE_BYTES) throw new Error(tr('composer.attachment.tooLarge'))
-  const buffer = await file.arrayBuffer()
-  const bytes = new Uint8Array(buffer),
+  // BMP、ICO、AVIF 先转成 PNG（convertImage.ts）：原文件可以大一些（BMP 截图常有几十 MB），转出来的再按 10 MiB 算
+  if (!file.size || file.size > (needsConversion(file) ? MAX_FILE_BYTES : MAX_IMAGE_BYTES))
+    throw new Error(tr('composer.attachment.tooLarge'))
+  let buffer = await file.arrayBuffer()
+  let bytes = new Uint8Array(buffer),
     mediaType = imageMediaType(bytes)
-  if (!mediaType) throw new Error(tr('composer.attachment.invalidType'))
+  let size = file.size
+  if (!mediaType) {
+    const other = otherImageFormat(bytes)
+    if (!other) throw new Error(tr('composer.attachment.invalidType'))
+    const converted = await convertImage(file, other)
+    buffer = await converted.blob.arrayBuffer()
+    bytes = new Uint8Array(buffer)
+    mediaType = converted.mediaType
+    size = converted.blob.size
+  }
+  if (size > MAX_IMAGE_BYTES) throw new Error(tr('composer.attachment.tooLarge'))
   const blob = new Blob([buffer], { type: mediaType }),
     url = URL.createObjectURL(blob)
   try {
@@ -26,7 +39,7 @@ export async function readImage(file: File): Promise<ImageAttachment> {
       id: crypto.randomUUID(),
       name: file.name || 'image',
       mediaType,
-      bytes: file.size,
+      bytes: size,
       ...dimensions,
       dataBase64,
     }

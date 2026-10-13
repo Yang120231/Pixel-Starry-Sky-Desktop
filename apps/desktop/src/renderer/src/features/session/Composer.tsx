@@ -49,6 +49,7 @@ import { tr } from '../../i18n/core'
 import { ImageAttachments } from '@/features/session/attachments/ImageAttachments'
 import { FileAttachments } from '@/features/session/attachments/FileAttachments'
 import { readImage } from '@/features/session/attachments/images'
+import { needsConversion } from '@/features/session/attachments/convertImage'
 import { isImageFile, readTextFile } from '@/features/session/attachments/files'
 import { updateFiles, updateImages, useFileDraft, useImageDraft } from '@/features/session/attachments/drafts'
 import { Popover, PopoverItem } from '@/ui'
@@ -324,16 +325,21 @@ export function Composer({
       setError(tr('composer.attachment.tooMany'))
       return
     }
-    if (
-      images.reduce((sum, image) => sum + image.bytes, 0) + list.reduce((sum, file) => sum + file.size, 0) >
-      MAX_IMAGE_TOTAL
-    ) {
+    // 要转成 PNG 的（BMP 这类）原文件大小不算数，转完再算
+    const already = images.reduce((sum, image) => sum + image.bytes, 0)
+    if (already + list.reduce((sum, file) => sum + (needsConversion(file) ? 0 : file.size), 0) > MAX_IMAGE_TOTAL) {
       setError(tr('composer.attachment.totalTooLarge'))
       return
     }
     read(async () => {
-      const loaded = await Promise.all(list.map(readImage))
-      await updateImages(key, current => [...current, ...loaded])
+      // 和文件一样：一张读不了（HEIC 这类）不耽误别的
+      const results = await Promise.allSettled(list.map(readImage))
+      const loaded = results.flatMap(r => (r.status === 'fulfilled' ? [r.value] : []))
+      if (already + loaded.reduce((sum, image) => sum + image.bytes, 0) > MAX_IMAGE_TOTAL)
+        throw new Error(tr('composer.attachment.totalTooLarge'))
+      if (loaded.length) await updateImages(key, current => [...current, ...loaded])
+      const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected')
+      if (failed) throw failed.reason
     })
   }
 

@@ -10,6 +10,7 @@ import {
   type FileAttachment,
 } from '@pixelsky/protocol'
 import { tr } from '@/i18n/core'
+import { needsConversion } from './convertImage'
 import { containerOf, documentAttachment, readDocument } from './extract'
 import { htmlTitle, htmlToText } from './extract/html'
 import { ipynbText } from './extract/ipynb'
@@ -20,9 +21,11 @@ type Encoding = FileAttachment['encoding']
 
 const IMAGE_EXT = /\.(png|jpe?g|webp|gif)$/i
 const OFFICE_EXT = /\.(docx|xlsx|pptx|docm|xlsm|pptm|odt|ods|odp|epub)$/i
-/** 按类型和扩展名分：图片走图片附件，其余当文本文件读（读的时候再按内容判断） */
+/** 按类型和扩展名分：图片走图片附件（BMP、HEIC 这类要转的也算），其余当文本文件读（读的时候再按内容判断） */
 export const isImageFile = (file: File): boolean =>
-  (IMAGE_MEDIA_TYPES as readonly string[]).includes(file.type) || (!file.type && IMAGE_EXT.test(file.name))
+  (IMAGE_MEDIA_TYPES as readonly string[]).includes(file.type) ||
+  (!file.type && IMAGE_EXT.test(file.name)) ||
+  needsConversion(file)
 
 /** 文件名像是放密钥的：添加时提醒一下 */
 export const looksSecret = (name: string): boolean =>
