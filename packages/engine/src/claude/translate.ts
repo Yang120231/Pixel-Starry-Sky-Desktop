@@ -353,7 +353,7 @@ export class ClaudeTranslator {
         if (block.type !== 'tool_use') continue
         const id = str(block.id)
         if (!id || this.subTools.has(id)) continue
-        const item = toolItem(id, str(block.name), obj(block.input), this.cwd, label)
+        const item = toolItem(id, str(block.name), obj(block.input), this.cwd, label, parent)
         this.subTools.set(id, item)
         this.subParent.set(id, parent)
         this.cb.emit({ type: 'item_started', item })

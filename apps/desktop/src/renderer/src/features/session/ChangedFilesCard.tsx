@@ -4,7 +4,7 @@ import { tr } from '../../i18n/core'
 import { ChevronRight, FileDiff, SquareArrowOutUpRight, Undo2 } from 'lucide-react'
 import { Button, DiffStat, IconButton, cn, useComingSoon } from '@/ui'
 import { DiffView } from '@/ui/code/DiffView'
-import { changedFiles, type ChangedFiles } from '@/data'
+import { changedFiles, type ChangedFile, type ChangedFiles } from '@/data'
 import { openFile } from '@/features/files/store'
 import type { WorkspaceRef } from '../../../../shared/types/workspace'
 import { isDemo, projects } from '@/data'
@@ -34,6 +34,82 @@ export function ChangedFilesCard({
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set())
   if (!data) return null
   const review = onReview ?? (isDemo ? () => comingSoon(tr('session.ChangedFilesCard.review')) : null)
+  /** 一个文件一行；prefix 区分分组（同一个文件可能在两组里），展开状态按它记 */
+  const fileRow = (f: ChangedFile, prefix: string) => {
+    const path = f.dir + f.name
+    const ref = target ?? (isDemo && projects[0] ? { projectId: projects[0].id } : null)
+    const openInEditor = (): void => {
+      if (ref) void openFile(ref, path, undefined, 1, f.newText).catch(e => setError(e.message))
+    }
+    const diffs = f.diffs ?? []
+    const openKey = prefix + path
+    const expanded = diffs.length > 0 && open.has(openKey)
+    const toggle = (): void =>
+      setOpen(current => {
+        const next = new Set(current)
+        if (!next.delete(openKey)) next.add(openKey)
+        return next
+      })
+    return (
+      <li key={path}>
+        <div className="group/file flex h-[34px] items-center gap-1 rounded-md pr-1 pl-2 text-list hover:bg-hover">
+          <button
+            type="button"
+            className="flex h-full min-w-0 flex-1 items-center gap-2 text-left disabled:cursor-default"
+            aria-expanded={diffs.length ? expanded : undefined}
+            title={
+              diffs.length
+                ? tr(expanded ? 'session.ChangedFilesCard.hideChanges' : 'session.ChangedFilesCard.showChanges')
+                : tr('session.ChangedFilesCard.openFileInPixel')
+            }
+            disabled={!diffs.length && !ref}
+            onClick={diffs.length ? toggle : openInEditor}
+          >
+            {diffs.length > 0 && (
+              <ChevronRight
+                size={14}
+                strokeWidth={1.5}
+                className={cn(
+                  'shrink-0 text-fg-muted transition-transform duration-(--dur-fast)',
+                  expanded && 'rotate-90',
+                )}
+              />
+            )}
+            <span className={cn('min-w-0 flex-1 truncate', !diffs.length && 'hover:underline')}>
+              <span className="text-fg-muted">{f.dir}</span>
+              <span className="text-fg">{f.name}</span>
+            </span>
+            <DiffStat added={f.added} removed={f.removed} className="shrink-0 text-meta" />
+          </button>
+          {diffs.length > 0 && ref && (
+            <IconButton
+              icon={SquareArrowOutUpRight}
+              label={tr('session.ChangedFilesCard.openInEditor')}
+              size={26}
+              iconSize={14}
+              onClick={openInEditor}
+              className={cn(
+                'opacity-0 group-hover/file:opacity-100 focus-visible:opacity-100',
+                expanded && 'opacity-100',
+              )}
+            />
+          )}
+        </div>
+        {expanded && (
+          <div className="mx-2 mt-0.5 mb-1.5 max-h-72 overflow-auto rounded-lg border border-line-card bg-surface py-1.5">
+            {diffs.map((diff, i) => (
+              <DiffView
+                key={i}
+                diff={diff}
+                path={path}
+                className={i > 0 ? 'mt-1.5 border-t border-line-subtle pt-1.5' : undefined}
+              />
+            ))}
+          </div>
+        )}
+      </li>
+    )
+  }
   return (
     <section className={cn('rounded-xl border border-line-card bg-surface shadow-sm', className)} style={style}>
       {/* 一行标题（docs/ui/conversation-concise.md §3 E） */}
@@ -63,82 +139,33 @@ export function ChangedFilesCard({
           </Button>
         )}
       </div>
-      <ul className="px-2 pb-2">
-        {data.files.map(f => {
-          const path = f.dir + f.name
-          const ref = target ?? (isDemo && projects[0] ? { projectId: projects[0].id } : null)
-          const openInEditor = (): void => {
-            if (ref) void openFile(ref, path, undefined, 1, f.newText).catch(e => setError(e.message))
-          }
-          const diffs = f.diffs ?? []
-          const expanded = diffs.length > 0 && open.has(path)
-          const toggle = (): void =>
-            setOpen(current => {
-              const next = new Set(current)
-              if (!next.delete(path)) next.add(path)
-              return next
-            })
-          return (
-            <li key={path}>
-              <div className="group/file flex h-[34px] items-center gap-1 rounded-md pr-1 pl-2 text-list hover:bg-hover">
-                <button
-                  type="button"
-                  className="flex h-full min-w-0 flex-1 items-center gap-2 text-left disabled:cursor-default"
-                  aria-expanded={diffs.length ? expanded : undefined}
-                  title={
-                    diffs.length
-                      ? tr(expanded ? 'session.ChangedFilesCard.hideChanges' : 'session.ChangedFilesCard.showChanges')
-                      : tr('session.ChangedFilesCard.openFileInPixel')
-                  }
-                  disabled={!diffs.length && !ref}
-                  onClick={diffs.length ? toggle : openInEditor}
-                >
-                  {diffs.length > 0 && (
-                    <ChevronRight
-                      size={14}
-                      strokeWidth={1.5}
-                      className={cn(
-                        'shrink-0 text-fg-muted transition-transform duration-(--dur-fast)',
-                        expanded && 'rotate-90',
-                      )}
-                    />
-                  )}
-                  <span className={cn('min-w-0 flex-1 truncate', !diffs.length && 'hover:underline')}>
-                    <span className="text-fg-muted">{f.dir}</span>
-                    <span className="text-fg">{f.name}</span>
+      {data.groups ? (
+        // 有子智能体改的文件：按来源分组，每组一行小标题（docs/ui/subagent-changes.md §2.2）
+        <div className="px-2 pb-2">
+          {data.groups.map(g => {
+            const label = g.label ?? tr('session.changes.mainAgent')
+            return (
+              <div key={g.key} data-change-group={g.key}>
+                <div className="flex h-7 items-center gap-1.5 px-2 pt-1 text-meta text-fg-muted">
+                  <span className="min-w-0 truncate font-medium text-fg-secondary" title={label}>
+                    {label}
                   </span>
-                  <DiffStat added={f.added} removed={f.removed} className="shrink-0 text-meta" />
-                </button>
-                {diffs.length > 0 && ref && (
-                  <IconButton
-                    icon={SquareArrowOutUpRight}
-                    label={tr('session.ChangedFilesCard.openInEditor')}
-                    size={26}
-                    iconSize={14}
-                    onClick={openInEditor}
-                    className={cn(
-                      'opacity-0 group-hover/file:opacity-100 focus-visible:opacity-100',
-                      expanded && 'opacity-100',
-                    )}
-                  />
-                )}
-              </div>
-              {expanded && (
-                <div className="mx-2 mt-0.5 mb-1.5 max-h-72 overflow-auto rounded-lg border border-line-card bg-surface py-1.5">
-                  {diffs.map((diff, i) => (
-                    <DiffView
-                      key={i}
-                      diff={diff}
-                      path={path}
-                      className={i > 0 ? 'mt-1.5 border-t border-line-subtle pt-1.5' : undefined}
-                    />
-                  ))}
+                  <span className="shrink-0">
+                    ·{' '}
+                    {tr(g.files.length === 1 ? 'session.changes.groupFile' : 'session.changes.groupFiles', {
+                      n: g.files.length,
+                    })}
+                  </span>
+                  <DiffStat added={g.added} removed={g.removed} className="shrink-0" />
                 </div>
-              )}
-            </li>
-          )
-        })}
-      </ul>
+                <ul>{g.files.map(f => fileRow(f, g.key + '|'))}</ul>
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <ul className="px-2 pb-2">{data.files.map(f => fileRow(f, ''))}</ul>
+      )}
       {error && (
         <p role="status" className="px-4 pb-3 text-meta text-danger">
           {translateMessage(error)}

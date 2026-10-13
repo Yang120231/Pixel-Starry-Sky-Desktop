@@ -82,6 +82,17 @@ export interface ChangedFiles {
   added: number
   removed: number
   files: ChangedFile[]
+  /** 有子智能体改的文件时按来源分组（主智能体在前），合计和 files 按路径合并（docs/ui/subagent-changes.md §2.2） */
+  groups?: ChangedFileGroup[]
+}
+
+export interface ChangedFileGroup {
+  key: string
+  /** 子智能体的名字；主智能体为 null */
+  label: string | null
+  added: number
+  removed: number
+  files: ChangedFile[]
 }
 
 export interface AssistantReply {

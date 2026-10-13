@@ -151,6 +151,39 @@ describe('ClaudeTranslator（真实录像）', () => {
     expect(events).toHaveLength(0)
   })
 
+  it('子 agent 的工具调用：条目带子智能体名字和派出它的 Agent 调用 id（docs/ui/subagent-changes.md §2.3）', () => {
+    const events: EngineEvent[] = []
+    const t = new ClaudeTranslator('D:\work', {
+      emit: e => events.push(e),
+      sessionId: () => {},
+      permissionMode: () => {},
+      turnEnded: () => {},
+      fastState: () => {},
+    })
+    t.startTurn('t')
+    t.handle({
+      type: 'assistant',
+      parent_tool_use_id: 'toolu_parent',
+      message: {
+        id: 'm',
+        content: [
+          {
+            type: 'tool_use',
+            id: 'toolu_edit',
+            name: 'Edit',
+            input: { file_path: 'D:\work\a.ts', old_string: 'a', new_string: 'b' },
+          },
+        ],
+      },
+    })
+    const started = events.find(e => e.type === 'item_started')
+    expect(started?.type === 'item_started' && started.item).toMatchObject({
+      kind: 'file_change',
+      subagent: expect.any(String),
+      subagentCall: 'toolu_parent',
+    })
+  })
+
   it('用量按进程累计求差：同一进程里没有新 token 的一轮不带 usage；换进程后基线清零', () => {
     const events: EngineEvent[] = []
     const t = new ClaudeTranslator('D:\\work', {

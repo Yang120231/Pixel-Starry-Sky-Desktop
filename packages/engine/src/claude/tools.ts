@@ -112,11 +112,21 @@ function todoSteps(input: Input): TodoStep[] {
   }))
 }
 
-/** 工具调用开始：模型给出了完整参数。subagent：调用它的子智能体名字（主智能体调用时不传） */
-export function toolItem(id: string, name: string, input: Input, cwd: string, subagent?: string): Item {
+/**
+ * 工具调用开始：模型给出了完整参数。subagent：调用它的子智能体名字；subagentCall：派出它的 Agent 工具调用 id
+ * （主智能体调用时都不传）
+ */
+export function toolItem(
+  id: string,
+  name: string,
+  input: Input,
+  cwd: string,
+  subagent?: string,
+  subagentCall?: string,
+): Item {
   const item = baseToolItem(id, name, input, cwd)
   if (subagent && (item.kind === 'command' || item.kind === 'file_change' || item.kind === 'tool'))
-    return { ...item, subagent }
+    return { ...item, subagent, ...(subagentCall ? { subagentCall } : {}) }
   return item
 }
 

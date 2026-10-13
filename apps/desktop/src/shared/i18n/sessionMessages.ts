@@ -8,6 +8,12 @@ export const sessionMessages = {
   'turnRail.left': { zh: '左侧', en: 'Left' },
   'turnRail.right': { zh: '右侧', en: 'Right' },
   'turnRail.off': { zh: '关闭', en: 'Off' },
+  // 一轮一张改动卡片，按子智能体分组（GitHub #40，docs/ui/subagent-changes.md）
+  'session.changes.mainAgent': { zh: '主智能体', en: 'Main agent' },
+  'session.changes.groupFile': { zh: '{n} 个文件', en: '{n} file' },
+  'session.changes.groupFiles': { zh: '{n} 个文件', en: '{n} files' },
+  'session.changes.agentFile': { zh: '改了 {n} 个文件', en: 'Changed {n} file' },
+  'session.changes.agentFiles': { zh: '改了 {n} 个文件', en: 'Changed {n} files' },
   // 你发的消息上的操作按钮放在哪里（GitHub #28）
   'messageActions.setting': { zh: '消息操作按钮', en: 'Message actions' },
   'messageActions.settingHint': {

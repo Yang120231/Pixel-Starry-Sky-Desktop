@@ -48,6 +48,8 @@ export type Item =
       status: ItemStatus
       /** 是哪个子智能体调用的（名字）；主智能体调用时没有 */
       subagent?: string
+      /** 派出这个子智能体的 Agent 工具调用 id（对应智能体追踪的 AgentRun.toolUseId，docs/ui/subagent-changes.md §2.3） */
+      subagentCall?: string
       /** 后台子智能体的工具：这一轮结束时还在跑，不跟着这一轮收尾 */
       background?: boolean
     }
@@ -57,6 +59,7 @@ export type Item =
       changes: FileChange[]
       status: ItemStatus
       subagent?: string
+      subagentCall?: string
       background?: boolean
     }
   | {
@@ -70,6 +73,7 @@ export type Item =
       output: string
       status: ItemStatus
       subagent?: string
+      subagentCall?: string
       background?: boolean
       /** 结果里的图片（例如 Read 了一张图片），有大小上限；超出的只在 output 里留「[图片]」 */
       images?: ImageAttachment[]

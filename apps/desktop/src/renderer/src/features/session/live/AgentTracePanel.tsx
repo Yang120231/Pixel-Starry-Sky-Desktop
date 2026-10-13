@@ -20,7 +20,7 @@ import {
 } from 'lucide-react'
 import type { AgentRun, AgentRuns, Item, WorkflowRun } from '@pixelsky/protocol'
 import { IconButton, ResizeHandle, Spinner, cn } from '@/ui'
-import { bridge } from '@/features/engine'
+import { bridge, toChangedFiles, useEngineState } from '@/features/engine'
 import { isDemo } from '@/data'
 import { demo } from '@/data/demo'
 import {
@@ -39,6 +39,8 @@ import {
 import { Markdown } from '@/ui/markdown/Markdown'
 import { ReasoningBlock, ToolItemRow, UserBubble } from './ItemRows'
 import { useDockFloat, type DragKind } from './useDockFloat'
+import { ChangedFilesCard } from '../ChangedFilesCard'
+import { agentFileCount, filesByAgent } from './changeBlocks'
 import type { ResizeDir } from './traceWindow'
 
 /** 会话顶部栏高度（top-12）和面板标题栏高度（h-11） */
@@ -99,11 +101,14 @@ function AgentRow({
   a,
   bar,
   now,
+  files = 0,
   onPick,
 }: {
   a: AgentRun
   bar?: { left: number; width: number }
   now: number
+  /** 这个子智能体改了几个文件（docs/ui/subagent-changes.md §2.3） */
+  files?: number
   onPick: (id: string) => void
 }) {
   useI18n()
@@ -122,7 +127,14 @@ function AgentRow({
           {a.label || a.id || tr('session.live.AgentTracePanel.queued')}
         </span>
         <span className="block truncate text-label text-fg-faint" title={a.model || undefined}>
-          {[a.type, shortModel(a.model)].filter(Boolean).join(' · ')}
+          {/* 改了几个文件放最前面：这一列窄，后面的类型、模型常被截掉 */}
+          {[
+            files > 0 && tr(files === 1 ? 'session.changes.agentFile' : 'session.changes.agentFiles', { n: files }),
+            a.type,
+            shortModel(a.model),
+          ]
+            .filter(Boolean)
+            .join(' · ')}
         </span>
       </span>
       <span className="relative h-1.5 rounded-full bg-subtle">
@@ -304,6 +316,15 @@ function AgentFocus({
   // 第一条用户消息就是任务说明，单独折叠显示
   const task = items?.[0]?.kind === 'user' ? items[0].text : agent.prompt
   const rest = items?.[0]?.kind === 'user' ? items.slice(1) : (items ?? [])
+  // 它改了哪些文件：从它自己的对话里汇总（docs/ui/subagent-changes.md §2.3）
+  const changes = useMemo(
+    () =>
+      toChangedFiles(
+        (items ?? []).flatMap(it => (it.kind === 'file_change' && it.status === 'completed' ? it.changes : [])),
+      ),
+    [items],
+  )
+  const target = useMemo(() => ({ sessionId }), [sessionId])
 
   return (
     <div className="flex flex-col gap-3">
@@ -354,6 +375,7 @@ function AgentFocus({
           )}
         </section>
       )}
+      {changes && <ChangedFilesCard data={changes} target={target} />}
       {agent.result && !items?.length && (
         <div className="text-meta text-fg-muted">
           {tr('session.live.AgentTracePanel.result')}
@@ -414,6 +436,9 @@ export function AgentTracePanel({ sessionId, runs, focus, onFocus, onClose, belo
     return a ? { agent: a, run: null } : null
   }, [focus, runs])
 
+  // 子智能体改了几个文件：主会话里它的工具条目带着派出它的 Agent 调用 id
+  const sessionItems = useEngineState(s => s.snapshots[sessionId]?.items)
+  const fileCounts = useMemo(() => filesByAgent(sessionItems ?? []), [sessionItems])
   const totalTokens = [...runs.workflows, ...runs.agents].reduce((n, r) => n + r.tokens, 0)
   const agentBars = useMemo(() => timeline(runs.agents, now), [runs.agents, now])
   const empty = runs.workflows.length === 0 && runs.agents.length === 0
@@ -575,7 +600,14 @@ export function AgentTracePanel({ sessionId, runs, focus, onFocus, onClose, belo
                 </div>
                 <ColumnHead />
                 {runs.agents.map(a => (
-                  <AgentRow key={a.id} a={a} bar={agentBars.get(a.id || a.label)} now={now} onPick={onFocus} />
+                  <AgentRow
+                    key={a.id}
+                    a={a}
+                    bar={agentBars.get(a.id || a.label)}
+                    now={now}
+                    files={agentFileCount(fileCounts, a.toolUseId, a.label)}
+                    onPick={onFocus}
+                  />
                 ))}
               </section>
             )}

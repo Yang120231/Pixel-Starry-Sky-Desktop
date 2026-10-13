@@ -36,6 +36,7 @@ export const SHOWCASE_SESSIONS = [
   { id: 'demo-claude-question', title: '提问：单选和多选' },
   { id: 'demo-claude-plan', title: '计划确认' },
   { id: 'demo-claude-long', title: '长对话：轮次跳转（30 轮）' },
+  { id: 'demo-claude-subagents', title: '后台子智能体：改动按子智能体分组' },
 ] as const
 
 type SessionId = (typeof SHOWCASE_SESSIONS)[number]['id']
@@ -1609,6 +1610,118 @@ const long = snapshot(
   ]),
 )
 
+// ---------- 后台子智能体：一轮一张改动卡片，按子智能体分组（GitHub #40，docs/ui/subagent-changes.md） ----------
+
+const BG_AGENTS = [
+  { id: 'agent-bg-composer', call: 'bg-t1', label: '拆分 Composer 的状态' },
+  { id: 'agent-bg-draft', call: 'bg-t2', label: '草稿改用 IndexedDB' },
+  { id: 'agent-bg-tests', call: 'bg-t3', label: '补齐草稿的测试' },
+] as const
+
+const bgEdit = (id: string, agent: (typeof BG_AGENTS)[number] | null, path: string, lines: string[]): Item => ({
+  kind: 'file_change',
+  id,
+  changes: [change(path, 'update', lines)],
+  status: 'completed',
+  ...(agent ? { subagent: agent.label, subagentCall: agent.call } : {}),
+})
+
+const bgAgentCall = (agent: (typeof BG_AGENTS)[number], output: string): Item => ({
+  kind: 'tool',
+  id: agent.call,
+  tool: 'task',
+  name: 'Agent',
+  title: agent.label,
+  output,
+  status: 'completed',
+})
+
+const BG_EDITS = {
+  main: ['@@ -1,3 +1,4 @@', ' # pixel-web', ' ', '+草稿按会话保存，切换会话不会丢。'],
+  composerState: [
+    '@@ -12,6 +12,4 @@',
+    '-  const [text, setText] = useState(draft)',
+    '-  const [files, setFiles] = useState([])',
+    '+  const { text, setText, files, setFiles } = useComposerState(draft)',
+    '   const send = useSend(sessionId)',
+  ],
+  composerHook: [
+    '@@ -8,3 +8,3 @@',
+    '-      <Composer sessionId={id} />',
+    '+      <Composer sessionId={id} draft={draft} />',
+    '     </main>',
+  ],
+  draftStore: [
+    '@@ -1,4 +1,6 @@',
+    "-const KEY = 'draft:'",
+    "+import { openDB } from './db'",
+    '+',
+    "+const STORE = 'drafts'",
+    ' export async function loadDraft(id) {',
+    '-  return localStorage.getItem(KEY + id)',
+    '+  return (await openDB()).get(STORE, id)',
+  ],
+  draftComposer: [
+    '@@ -3,3 +3,3 @@',
+    "-import { loadDraft } from './draftStorage'",
+    "+import { loadDraft } from './draftStore'",
+    ' ',
+  ],
+  draftTest: [
+    '@@ -20,2 +20,9 @@',
+    ' })',
+    '+',
+    "+it('IndexedDB 不可用时退回内存', async () => {",
+    "+  indexedDB.open = () => { throw new Error('blocked') }",
+    "+  await saveDraft('s1', '你好')",
+    "+  expect(await loadDraft('s1')).toBe('你好')",
+    '+})',
+  ],
+}
+
+const subagents = snapshot(
+  record('demo-claude-subagents', { updatedAt: T0 - 1 * MIN }),
+  [
+    user('bg-u1', '草稿相关的三块重构分给后台子智能体并行做，做完各自汇报', 9),
+    bgEdit('bg-f0', null, 'README.md', BG_EDITS.main),
+    bgAgentCall(BG_AGENTS[0], '已在后台启动'),
+    bgAgentCall(BG_AGENTS[1], '已在后台启动'),
+    bgAgentCall(BG_AGENTS[2], '已在后台启动'),
+    assistant('bg-a1', '先把 `useDraft` 从入口导出，三个子智能体已在后台开始，完成后我逐个汇报。'),
+    stats('bg-s1', 'completed', { durationMs: 21_000, models: { 'claude-opus-5-5': opus(1_900, 620, 0.0451) } }),
+    // 子智能体 1 跑完：它的改动在主会话里，带名字和派出它的调用 id；主智能体被唤醒说一句
+    bgEdit('bg-f1', BG_AGENTS[0], 'src/session/Composer.jsx', BG_EDITS.composerState),
+    bgEdit('bg-f2', BG_AGENTS[0], 'src/session/SessionView.jsx', BG_EDITS.composerHook),
+    { kind: 'notice', id: 'bg-n1', level: 'info', text: '子智能体已完成：拆分 Composer 的状态' },
+    assistant('bg-a2', '「拆分 Composer 的状态」完成：状态挪进了 `useComposerState`，`SessionView.jsx` 改成传草稿。'),
+    stats('bg-s2', 'completed', { durationMs: 3_400, models: { 'claude-opus-5-5': opus(2_100, 140, 0.0213) } }),
+    // 子智能体 2：也改了 Composer.jsx（同一个文件在两组里，标题只算一个）
+    bgEdit('bg-f3', BG_AGENTS[1], 'src/session/useDraft.ts', BG_EDITS.draftStore),
+    bgEdit('bg-f4', BG_AGENTS[1], 'src/session/Composer.jsx', BG_EDITS.draftComposer),
+    { kind: 'notice', id: 'bg-n2', level: 'info', text: '子智能体已完成：草稿改用 IndexedDB' },
+    assistant('bg-a3', '「草稿改用 IndexedDB」完成，`useDraft.ts` 改成读写 IndexedDB。'),
+    stats('bg-s3', 'completed', { durationMs: 2_900, models: { 'claude-opus-5-5': opus(2_300, 120, 0.0198) } }),
+    bgEdit('bg-f5', BG_AGENTS[2], 'src/session/__tests__/useDraft.test.ts', BG_EDITS.draftTest),
+    { kind: 'notice', id: 'bg-n3', level: 'info', text: '子智能体已完成：补齐草稿的测试' },
+    assistant('bg-a4', '三个都完成了：测试补了 IndexedDB 不可用时的退路。改动在下面按子智能体分好组了。'),
+    stats('bg-s4', 'completed', { durationMs: 3_100, models: { 'claude-opus-5-5': opus(2_500, 160, 0.0236) } }),
+  ],
+  {
+    runs: {
+      workflows: [],
+      agents: BG_AGENTS.map((a, i) =>
+        agentRun(a.id, a.label, {
+          type: 'general-purpose',
+          toolUseId: a.call,
+          startedAt: T0 - (9 - i) * MIN,
+          durationMs: (3 + i) * 60_000,
+          result: `${a.label}：完成`,
+        }),
+      ),
+    },
+  },
+)
+
 export const showcaseSnapshots: Record<string, SessionSnapshot> = Object.fromEntries(
   [
     markdown,
@@ -1628,6 +1741,7 @@ export const showcaseSnapshots: Record<string, SessionSnapshot> = Object.fromEnt
     question,
     plan,
     long,
+    subagents,
   ].map(s => [s.record.id, s]),
 )
 
@@ -1699,6 +1813,18 @@ const SUBAGENT_ITEMS: Record<string, Item[]> = {
     },
     assistant('z-a1', 'README 已更新：补了「草稿只存在本机、发送成功后清掉」两句。'),
   ],
+}
+
+// 后台子智能体自己的对话：任务说明 + 它的改动（主会话里同样的条目，不带子智能体名字）
+for (const [i, agent] of BG_AGENTS.entries()) {
+  const own = subagents.items.filter(it => it.kind === 'file_change' && it.subagentCall === agent.call)
+  SUBAGENT_ITEMS[agent.id] = [
+    user(`bg-x${i}`, agent.label, 9 - i),
+    ...own.map(it =>
+      it.kind === 'file_change' ? { kind: it.kind, id: `${it.id}-own`, changes: it.changes, status: it.status } : it,
+    ),
+    assistant(`bg-xa${i}`, `${agent.label}：完成`),
+  ]
 }
 
 export function showcaseSubagentTranscript(_sessionId: string, agentId: string): Item[] {

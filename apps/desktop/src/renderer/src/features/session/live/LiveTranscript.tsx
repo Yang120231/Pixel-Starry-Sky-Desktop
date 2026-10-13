@@ -16,9 +16,8 @@ import {
 import { TurnRail } from './TurnRail'
 import { turnsOf } from './turnRailModel'
 import { useTurnRailSide } from '@/features/settings/turnRail'
-import type { FileChange, Item, SessionSnapshot } from '@pixelsky/protocol'
+import type { Item, SessionSnapshot } from '@pixelsky/protocol'
 import { Spinner, cn } from '@/ui'
-import { toChangedFiles } from '@/features/engine'
 import type { ChangedFiles } from '@/data'
 import { ChangedFilesCard } from '../ChangedFilesCard'
 import { TurnStats } from '../TurnStats'
@@ -44,30 +43,12 @@ import {
 } from './scrollFollow'
 import { changesHeight, itemHeight, toolsHeight } from './blockHeight'
 import { reviewTurn } from '@/features/panel/artifacts/focus'
-import { foldTurns, turnReplies } from './turnFold'
+import { turnReplies } from './turnFold'
+import { innerBlocks, sameItems, toBlocks, type Block, type ChangesCache } from './changeBlocks'
 import { TurnProcess } from './TurnProcess'
 import { WAIT_CLOCK_MS, clockText, waitingFor } from './currentStep'
 import { useSince } from './stepClock'
 import { formatDuration } from './agentTrace'
-
-type ToolItem = Extract<Item, { kind: 'command' | 'file_change' | 'tool' }>
-
-type Block =
-  | { type: 'item'; item: Item }
-  | { type: 'tools'; key: string; items: ToolItem[] }
-  /** 一轮的过程：收成一行「执行」，点开看里面的条目 */
-  | { type: 'process'; key: string; items: Item[]; running: boolean; durationMs: number | null }
-  /** turnKey：这一轮的用户消息 id，第一条用户消息之前的改动为 'start' */
-  | { type: 'changes'; key: string; turnKey: string; data: ChangedFiles }
-
-/**
- * 每轮改动卡片的数据缓存：这一轮的文件改动条目（对象本身）没变就复用上次的数据，
- * 流式输出时卡片的 props 不变，memo 才能跳过它（docs/ui/conversation-ux.md §2.7）
- */
-type ChangesCache = Map<string, { items: Item[]; data: ChangedFiles }>
-
-const sameItems = (a: readonly Item[], b: readonly Item[]): boolean =>
-  a.length === b.length && a.every((item, i) => item === b[i])
 
 /** 块没渲染过时的占位高度（content-visibility，见 blockHeight.ts）；按条目对象缓存，流式输出时只重算在动的那一条 */
 const heights = new WeakMap<Item, number>()
@@ -77,72 +58,6 @@ function estimate(item: Item): number {
   return height
 }
 const placeholder = (px: number): CSSProperties => ({ containIntrinsicBlockSize: `auto ${px}px` })
-
-function isTool(item: Item): item is ToolItem {
-  return item.kind === 'command' || item.kind === 'file_change' || item.kind === 'tool'
-}
-
-/** 把条目分成显示块；running 为真时最后一轮还没结束，不显示它的改动卡片 */
-function toBlocks(items: Item[], running: boolean, cache: ChangesCache): Block[] {
-  const blocks: Block[] = []
-  let changes: FileChange[] = []
-  let changeItems: Item[] = []
-  let turnKey = 'start'
-  const flushChanges = (): void => {
-    const key = `changes-${turnKey}`
-    const cached = cache.get(key)
-    const data = cached && sameItems(cached.items, changeItems) ? cached.data : toChangedFiles(changes)
-    if (data) {
-      cache.set(key, { items: changeItems, data })
-      blocks.push({ type: 'changes', key, turnKey, data })
-    }
-    changes = []
-    changeItems = []
-  }
-  for (const entry of foldTurns(items, running)) {
-    if (entry.type === 'process') {
-      for (const item of entry.items)
-        if (item.kind === 'file_change' && item.status === 'completed') {
-          changes.push(...item.changes)
-          changeItems.push(item)
-        }
-      blocks.push(entry)
-      continue
-    }
-    const item = entry.item
-    if (item.kind === 'user' && item.mode !== 'guidance') {
-      flushChanges()
-      turnKey = item.id
-    }
-    // 一轮的统计放在这一轮最后（改动文件卡片之后），docs/ui/usage.md §4
-    if (item.kind === 'turn_stats') flushChanges()
-    if (item.kind === 'file_change' && item.status === 'completed') {
-      changes.push(...item.changes)
-      changeItems.push(item)
-    }
-    if (isTool(item)) {
-      const last = blocks[blocks.length - 1]
-      if (last?.type === 'tools') last.items.push(item)
-      else blocks.push({ type: 'tools', key: `tools-${item.id}`, items: [item] })
-    } else {
-      blocks.push({ type: 'item', item })
-    }
-  }
-  if (!running) flushChanges()
-  return blocks
-}
-
-/** 执行块里的条目：连续的工具调用串成一组 */
-function innerBlocks(items: Item[]): Block[] {
-  const blocks: Block[] = []
-  for (const item of items) {
-    const last = blocks[blocks.length - 1]
-    if (!isTool(item)) blocks.push({ type: 'item', item })
-    else if (last?.type === 'tools') last.items.push(item)
-    else blocks.push({ type: 'tools', key: `tools-${item.id}`, items: [item] })
-  }
-  return blocks
-}
 
 // 下面几个显示组件都 memo：条目对象没变（protocol 的 reduce 只替换变了的那一条）就不重新渲染，
 // 流式输出时只有最后一条在动（docs/ui/conversation-ux.md §2.7）
@@ -193,7 +108,14 @@ const TurnChanges = memo(function TurnChanges({
   turnKey: string
 }) {
   const target = useMemo(() => (sessionId ? { sessionId } : undefined), [sessionId])
-  const style = useMemo(() => placeholder(changesHeight(data.files.length)), [data])
+  // 分组时每组多一行小标题
+  const style = useMemo(
+    () =>
+      placeholder(
+        changesHeight(data.groups ? data.groups.reduce((n, g) => n + g.files.length + 1, 0) : data.files.length),
+      ),
+    [data],
+  )
   // 「审查」：在右侧「产物」里打开这一轮的改动（docs/ui/conversation-ux.md §2.1）
   const review = useMemo(
     () => (sessionId ? () => reviewTurn(sessionId, turnKey === 'start' ? null : turnKey) : undefined),
