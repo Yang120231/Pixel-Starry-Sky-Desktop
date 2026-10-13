@@ -316,7 +316,7 @@ export const gitMessages = {
   'git.history.date': { zh: '时间', en: 'Date' },
   'git.history.parents': { zh: '父提交', en: 'Parents' },
   'git.history.jumpParent': { zh: '跳到父提交 {hash}', en: 'Go to parent {hash}' },
-  'git.history.stat': { zh: '{files} 个文件 +{ins} −{del}', en: '{files} files +{ins} −{del}' },
+  'git.history.files': { zh: '{files} 个文件', en: '{files} files' },
   'git.history.commits': { zh: '{n} 个提交', en: '{n} commits' },
   'git.history.mergeNote': {
     zh: '合并提交：和第一父提交比较',

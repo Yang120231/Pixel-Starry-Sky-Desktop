@@ -557,7 +557,7 @@ export function GitHistory({
       <div className="pr-2 pb-2">
         <div className="flex items-center gap-1.5 px-1.5 pb-1 text-meta text-fg-muted">
           <span className="min-w-0 flex-1 truncate">
-            {tr('git.history.commits', { n })} · {tr('git.history.stat', statOf(set))}
+            {tr('git.history.commits', { n })} · <DiffStat {...statOf(set)} />
           </span>
           <SmallAction icon={Sparkles} outline={false} onClick={() => reviewRange(what, set, n)}>
             {tr('git.history.reviewChanges')}
@@ -1116,7 +1116,7 @@ function CommitDetail({
       </div>
       <div className="overflow-hidden rounded-lg border border-line-card">
         <p className="border-b border-line-subtle bg-subtle px-2.5 py-1 text-meta text-fg-muted">
-          {tr('git.history.stat', statOf(set))}
+          <DiffStat {...statOf(set)} />
           {c.parents.length > 1 && <span className="text-fg-faint"> · {tr('git.history.mergeNote')}</span>}
         </p>
         <div className="p-0.5">{files}</div>
@@ -1158,6 +1158,16 @@ const statOf = (set: GitChangeSet) => ({
   del: set.files.reduce((n, f) => n + (f.deletions ?? 0), 0),
 })
 
+/** 「N 个文件 +x −y」：增删数和文件行一样用绿 / 红（GitHub #36） */
+function DiffStat({ files, ins, del }: { files: number; ins: number; del: number }) {
+  return (
+    <>
+      {tr('git.history.files', { files })} <span className="text-success">+{ins}</span>{' '}
+      <span className="text-danger">−{del}</span>
+    </>
+  )
+}
+
 /** 主进程的失败类型（notRepo、timeout…）换成 §3 的文案；其余原样显示 */
 function historyFailure(message: string): { title: string; hint: string } {
   const kind = /^(missing|notRepo|timeout|locked|unknown)$/.exec(message.trim())?.[1]
@@ -1197,7 +1207,7 @@ function HoverCard({
       <p className="mt-1.5 line-clamp-[12] break-words whitespace-pre-wrap text-fg">{fullMessage(c)}</p>
       {c.stat && (
         <p className="mt-1.5 text-fg-muted">
-          {tr('git.history.stat', { files: c.stat.files, ins: c.stat.insertions, del: c.stat.deletions })}
+          <DiffStat files={c.stat.files} ins={c.stat.insertions} del={c.stat.deletions} />
         </p>
       )}
       {badges.length > 0 && (
