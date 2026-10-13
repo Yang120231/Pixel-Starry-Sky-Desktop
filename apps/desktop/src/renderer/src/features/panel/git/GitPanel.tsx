@@ -51,10 +51,11 @@ import { BranchMenu } from './BranchMenu'
 import { GitHistory } from './GitHistory'
 import { FILE_HISTORY_EVENT, takeFileHistory } from './fileHistory'
 import { publishGitStatus } from './summary'
+import { demoApply } from './demoGit'
 import { demo as demoData } from '@/data/demo'
 
 /** 命令面板触发的 Git 操作（docs/ui/git-panel.md §6）：先打开 Git 页，状态读到后再执行；history 切到「历史」（§9.1） */
-export type GitPaletteAction = 'pull' | 'push' | 'fetch' | 'branch' | 'history'
+export type GitPaletteAction = 'pull' | 'push' | 'fetch' | 'branch' | 'history' | 'changes'
 const GIT_ACTION_EVENT = 'pixelsky:git-action'
 let pendingAction: GitPaletteAction | null = null
 export function requestGitAction(action: GitPaletteAction): void {
@@ -80,52 +81,6 @@ export function GitPanel({ active }: { active: boolean }) {
 }
 
 type Confirm = { title: string; body: ReactNode; label: string; danger: boolean; run: () => void }
-
-// 演示模式：在内存里模拟操作结果，方便看界面
-function demoApply(status: GitStatus, action: string, arg?: unknown): GitStatus {
-  const s = structuredClone(status)
-  const paths = (list: GitFileChange[], p: unknown) =>
-    p === 'all' ? list : list.filter(f => (p as string[]).includes(f.path))
-  if (action === 'stage') {
-    const moved = [...paths(s.unstaged, arg), ...paths(s.untracked, arg)]
-    s.unstaged = s.unstaged.filter(f => !moved.includes(f))
-    s.untracked = s.untracked.filter(f => !moved.includes(f))
-    s.staged = [
-      ...s.staged.filter(f => !moved.some(m => m.path === f.path)),
-      ...moved.map(f => ({ ...f, code: f.code === '?' ? ('A' as const) : f.code })),
-    ]
-  }
-  if (action === 'unstage') {
-    const moved = paths(s.staged, arg)
-    s.staged = s.staged.filter(f => !moved.includes(f))
-    s.unstaged = [...s.unstaged.filter(f => !moved.some(m => m.path === f.path)), ...moved.filter(f => f.code !== 'A')]
-    s.untracked = [...s.untracked, ...moved.filter(f => f.code === 'A').map(f => ({ ...f, code: '?' as const }))]
-  }
-  if (action === 'discard') {
-    const p =
-      arg === 'all' ? 'all' : [...(arg as { paths: string[] }).paths, ...(arg as { untracked: string[] }).untracked]
-    s.unstaged = s.unstaged.filter(f => !paths(s.unstaged, p).includes(f))
-    s.untracked = s.untracked.filter(f => !paths(s.untracked, p).includes(f))
-  }
-  if (action === 'commit') {
-    const all = (arg as { all: boolean }).all
-    s.staged = []
-    if (all) {
-      s.unstaged = []
-      s.untracked = []
-    }
-    s.ahead += 1
-    if ((arg as { push: boolean }).push) s.ahead = 0
-  }
-  if (action === 'push') {
-    s.ahead = 0
-    s.upstream = s.upstream ?? `origin/${s.branch}`
-  }
-  if (action === 'pull') s.behind = 0
-  if (action === 'fetch') s.fetchedAt = Date.now()
-  if (action === 'switch') s.branch = (arg as string).replace(/^origin\//, '')
-  return s
-}
 
 function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean; active: boolean }) {
   useI18n()
@@ -307,6 +262,10 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
       else if (action === 'history') {
         setSelected(null)
         setView('history')
+      } else if (action === 'changes') {
+        // 输入框上方的「N 个改动」（docs/ui/composer-git.md）
+        setSelected(null)
+        setView('changes')
       } else void openBranches()
     }
     consume()

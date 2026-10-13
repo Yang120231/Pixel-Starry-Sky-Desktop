@@ -15,10 +15,20 @@ import type { GitBranch as Branch, GitFailure, GitResult } from '../../../../sha
 import type { WorkspaceRef } from '../../../../shared/types/workspace'
 
 /**
- * 顶栏「项目 › 分支」里的分支名（GitHub #21，docs/ui/context-settings-branch-switch.md §3）：
- * 点开是 Git 面板同一个分支菜单；有没提交的改动时先确认；失败时写原因，可以去 Git 面板处理
+ * 分支名按钮（GitHub #21，docs/ui/context-settings-branch-switch.md §3）：
+ * 点开是 Git 面板同一个分支菜单；有没提交的改动时先确认；失败时写原因，可以去 Git 面板处理。
+ * 2026-10-13 起放在输入框上方那一行（composer，往上弹，docs/ui/composer-git.md）
  */
-export function HeaderBranch({ workspace: target, label }: { workspace: WorkspaceRef; label: string }) {
+export function HeaderBranch({
+  workspace: target,
+  label,
+  variant = 'header',
+}: {
+  workspace: WorkspaceRef
+  label: string
+  variant?: 'header' | 'composer'
+}) {
+  const up = variant === 'composer'
   useI18n()
   const api = window.pixelsky?.projectTools
   const [menu, setMenu] = useState(false)
@@ -128,7 +138,8 @@ export function HeaderBranch({ workspace: target, label }: { workspace: Workspac
         disabled={busy}
         onClick={() => (menu ? setMenu(false) : void open())}
         className={cn(
-          'press no-drag inline-flex h-7 min-w-0 items-center gap-1 rounded-md px-1.5 text-fg-muted hover:bg-hover hover:text-fg',
+          'press no-drag inline-flex min-w-0 items-center gap-1 rounded-md hover:bg-hover hover:text-fg',
+          up ? 'h-6 px-1 text-fg-faint' : 'h-7 px-1.5 text-fg-muted',
           menu && 'bg-hover text-fg',
           busy && 'opacity-60',
         )}
@@ -142,6 +153,7 @@ export function HeaderBranch({ workspace: target, label }: { workspace: Workspac
           branches={branches}
           loading={loading}
           onClose={close}
+          up={up}
           onSwitch={b => void choose(b)}
           onCreate={create}
         />
@@ -150,7 +162,10 @@ export function HeaderBranch({ workspace: target, label }: { workspace: Workspac
         <div
           role="alert"
           data-header-branch-failure={failure.kind}
-          className="pop-in no-drag absolute top-full left-0 z-40 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-line-card bg-popover p-3 shadow-menu"
+          className={cn(
+            'pop-in no-drag absolute left-0 z-40 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-line-card bg-popover p-3 shadow-menu',
+            up ? 'bottom-full mb-1' : 'top-full mt-1',
+          )}
         >
           <p className="text-meta text-fg-faint">{tr('git.action.switch')}</p>
           <p className="text-list font-medium text-danger">{failureTitle(failure.kind)}</p>

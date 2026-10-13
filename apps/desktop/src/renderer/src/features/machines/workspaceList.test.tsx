@@ -11,6 +11,8 @@ vi.mock('@/features/machines/store', () => ({
   openMachineManager: () => {},
   openWorkspacePicker: () => {},
 }))
+// 输入框上方的 Git 那几项（docs/ui/composer-git.md）不在这里测：它导入的账号模块要真的 window
+vi.mock('@/features/session/ComposerGit', () => ({ ComposerGit: () => null }))
 import { I18nProvider } from '@/i18n/I18nProvider'
 import type { StatusBarController } from '@/features/engine'
 import type { WorkspaceChoice } from '../../../../shared/types/machines'

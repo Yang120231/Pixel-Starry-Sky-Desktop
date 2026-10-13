@@ -544,7 +544,11 @@ export function Composer({
           }}
         />
       )}
-      <ComposerStatusBar live={status} extra={statusExtra} />
+      <ComposerStatusBar
+        live={status}
+        extra={statusExtra}
+        git={live ? composerWorkspace(live.sessionId, status, draftKey) : null}
+      />
       <div data-composer-style={style} className={cn('composer-shell relative', chatgpt && CARD_STYLE)}>
         <div
           ref={cardRef}

@@ -1,5 +1,5 @@
 import { Fragment, useState } from 'react'
-import { Ellipsis, EllipsisVertical, GitBranch, PanelLeft, PanelRight } from 'lucide-react'
+import { Ellipsis, EllipsisVertical, PanelLeft, PanelRight } from 'lucide-react'
 import { cn, IconButton, Popover, useComingSoon } from '@/ui'
 import { isMac } from '@/features/layout/keybindings'
 import { TOGGLE_PANEL, TOGGLE_SIDEBAR, withShortcut } from '@/features/layout/shortcuts'
@@ -13,8 +13,6 @@ import { tr } from '@/i18n/core'
 import { LayoutActionButton } from '@/features/layout/LayoutActionButton'
 import { ToolbarContext, type ToolbarState } from '@/features/layout/ToolbarContext'
 import { paneActions } from '@/features/panes/store'
-import { useGitSummary } from '@/features/panel/git/summary'
-import { HeaderBranch } from './HeaderBranch'
 import type { ActiveWorkspace } from '@/features/editor/target'
 
 interface SessionHeaderProps {
@@ -203,25 +201,17 @@ function MoreTools({
   )
 }
 
-/** 顶栏左边的「项目 › 分支」：不是 Git 仓库、还没读到时只有项目名；分离的 HEAD 显示短 hash。分支名点开能切换（HeaderBranch） */
+/**
+ * 顶栏左边的项目名。分支 2026-10-13 挪到了每个输入框上方那一行（docs/ui/composer-git.md）：
+ * 分屏时每个窗格的仓库可能不一样，顶栏只有一条，只能跟着当前窗格
+ */
 function WorkspaceLocation({ workspace }: { workspace: NonNullable<SessionHeaderProps['workspace']> }) {
-  const git = useGitSummary(workspace.ref)
-  const branch = git ? (git.detached ? (git.head ?? '').slice(0, 7) : git.branch) : null
   if (!workspace.name) return null
   return (
     <div data-header-workspace className="flex min-w-0 items-center gap-1.5 text-ui text-fg-secondary">
       <h1 title={workspace.path || workspace.name} className="min-w-0 truncate font-medium">
         {workspace.name}
       </h1>
-      {branch &&
-        (workspace.ref ? (
-          <HeaderBranch workspace={workspace.ref} label={branch} />
-        ) : (
-          <span className="inline-flex min-w-0 shrink-[2] items-center gap-1 text-fg-muted">
-            <GitBranch size={13} strokeWidth={1.5} className="shrink-0" />
-            <span className="truncate font-mono text-meta">{branch}</span>
-          </span>
-        ))}
     </div>
   )
 }

@@ -1,15 +1,25 @@
 import type { ReactNode } from 'react'
-import { ChevronDown, Folder, GitBranch, Monitor } from 'lucide-react'
+import { ChevronDown, Folder, Monitor } from 'lucide-react'
 import { composerStatus } from '@/data'
+import type { WorkspaceRef } from '../../../../shared/types/workspace'
+import { ComposerGit } from './ComposerGit'
 import type { StatusBarController } from '@/features/engine'
 import { useI18n } from '@/i18n/I18nProvider'
 import { openMachineManager, openWorkspacePicker, useMachines } from '@/features/machines/store'
 
 /**
- * 输入框外部左上方的机器与项目 / 分支；欢迎页保留项目选择入口。
- * 传入 live 时显示真实项目（欢迎页可以切换 / 添加项目）；不传时是演示数据。
+ * 输入框外部左上方的机器与项目，后面是 Git（分支、改动、拉取 / 推送、提交，docs/ui/composer-git.md）；欢迎页保留项目选择入口。
+ * 传入 live 时显示真实项目（欢迎页可以切换 / 添加项目）；不传时是演示数据。git 是这个输入框所在的工作区，没有就不显示 Git
  */
-export function ComposerStatusBar({ live, extra }: { live?: StatusBarController; extra?: ReactNode }) {
+export function ComposerStatusBar({
+  live,
+  extra,
+  git,
+}: {
+  live?: StatusBarController
+  extra?: ReactNode
+  git?: WorkspaceRef | null
+}) {
   const { text } = useI18n()
   const machines = useMachines(),
     machine = machines.machines.find(m => m.id === machines.currentId)
@@ -26,20 +36,18 @@ export function ComposerStatusBar({ live, extra }: { live?: StatusBarController;
         <Monitor size={13} strokeWidth={1.5} />
         {live ? (machine?.id === 'local' ? text('本机') : machine?.name) : text(composerStatus.machine)}
       </button>
-      {live ? (
-        <ProjectPicker live={live} />
-      ) : (
-        composerStatus.branch !== null && (
-          <span className="inline-flex items-center gap-1">
-            <GitBranch size={13} strokeWidth={1.5} />
-            <span className="font-mono">{composerStatus.branch}</span>
-          </span>
-        )
+      {live && <ProjectPicker live={live} />}
+      {(git ?? (!live && composerStatus.branch !== null ? DEMO_TARGET : null)) && (
+        <span data-composer-git className="-ml-2 inline-flex min-w-0 flex-wrap items-center gap-x-1">
+          <ComposerGit target={git ?? DEMO_TARGET} />
+        </span>
       )}
       {extra && <span className="ml-auto flex shrink-0 items-center">{extra}</span>}
     </div>
   )
 }
+
+const DEMO_TARGET: WorkspaceRef = { projectId: 'demo' }
 
 /**
  * All project entry points share the same directory / Git worktree picker.

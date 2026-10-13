@@ -26,6 +26,16 @@ export const changeCount = (status: GitStatus): number =>
 export const needsCommitAll = (status: GitStatus): boolean =>
   status.staged.length === 0 && status.unstaged.length + status.untracked.length > 0
 
+/**
+ * 输入框上方的「↑2 ↓1」（docs/ui/composer-git.md）：没有远端、都同步了时为 null；
+ * 有分支但还没推送过（没有上游）算「未发布」
+ */
+export function syncState(status: GitStatus): { ahead: number; behind: number; unpublished: boolean } | null {
+  const unpublished = !status.upstream && !status.detached && !status.initial && !!status.branch
+  if (!status.remotes.length || (!status.ahead && !status.behind && !unpublished)) return null
+  return { ahead: status.ahead, behind: status.behind, unpublished }
+}
+
 /** 文件名和所在目录 */
 export function splitPath(path: string): { name: string; dir: string } {
   const i = path.lastIndexOf('/')

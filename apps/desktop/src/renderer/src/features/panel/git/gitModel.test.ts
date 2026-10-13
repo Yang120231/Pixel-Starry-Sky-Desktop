@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { setCurrentLocale } from '../../../i18n/core'
 import type { GitFileChange, GitStatus } from '../../../../../shared/types/project-tools'
-import { ago, diffMode, gitSections, needsCommitAll, neighbour, splitPath } from './gitModel'
+import { ago, diffMode, gitSections, needsCommitAll, neighbour, splitPath, syncState } from './gitModel'
 
 afterEach(() => setCurrentLocale('zh-CN'))
 const f = (path: string, code: GitFileChange['code'] = 'M'): GitFileChange => ({
@@ -61,5 +61,17 @@ describe('Git 面板显示规则', () => {
     expect(ago(now - 6 * 60_000, now)).toBe('6 分钟前')
     setCurrentLocale('en-US')
     expect(ago(now - 2 * 3600_000, now)).toBe('2 h ago')
+  })
+})
+
+describe('输入框上方的拉取 / 推送（composer-git）', () => {
+  it('没有远端或都同步了不显示；领先、落后、没推送过的分支显示', () => {
+    expect(syncState(status({ ahead: 2 }))).toBeNull()
+    const remote = { remotes: ['origin'], upstream: 'origin/main' }
+    expect(syncState(status(remote))).toBeNull()
+    expect(syncState(status({ ...remote, ahead: 2, behind: 1 }))).toEqual({ ahead: 2, behind: 1, unpublished: false })
+    expect(syncState(status({ remotes: ['origin'] }))).toEqual({ ahead: 0, behind: 0, unpublished: true })
+    expect(syncState(status({ remotes: ['origin'], detached: true, branch: null }))).toBeNull()
+    expect(syncState(status({ remotes: ['origin'], initial: true }))).toBeNull()
   })
 })

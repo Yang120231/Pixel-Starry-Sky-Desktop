@@ -24,6 +24,8 @@ export interface SidebarLayout {
 
 export interface SidebarPrefs {
   version: 4
+  /** 做过的一次性升级（不升 version：旧版本读到不认识的版本号会把整份偏好当坏的） */
+  upgrades?: string[]
   showRecent: boolean
   recentExpanded: boolean
   icons: SidebarIcons
@@ -32,8 +34,8 @@ export interface SidebarPrefs {
 
 export const SIDEBAR_PREFS_KEY = 'pixelsky.sidebar'
 export const DEFAULT_SIDEBAR_LAYOUT: SidebarLayout = {
-  header: ['workbench', 'channels', 'git', 'openIn'],
-  more: [],
+  header: ['workbench', 'channels', 'openIn'],
+  more: ['git'],
   top: ['addProject', 'newTask'],
   bottom: ['usage', 'plugins', 'settings'],
 }
@@ -79,9 +81,14 @@ function parseSidebarLayout(value: unknown): SidebarLayout {
   return result
 }
 
+const GIT_TO_MORE = 'header-git-to-more'
+/** 2026-10-13 之前的默认顶栏（云主机已在读取时丢掉） */
+const OLD_HEADER = 'workbench,channels,git,openIn'
+
 function defaults(): SidebarPrefs {
   return {
     version: 4,
+    upgrades: [GIT_TO_MORE],
     showRecent: true,
     recentExpanded: true,
     icons: { ...DEFAULT_SIDEBAR_ICONS },
@@ -105,6 +112,15 @@ export function parseSidebarPrefs(value: unknown): SidebarPrefs {
   }
   if (saved.version === 2 || saved.version === 3 || saved.version === 4) {
     result.layout = parseSidebarLayout(saved.layout)
+    // Git 的常用操作挪到输入框上方后（docs/ui/composer-git.md），顶栏的 Git 默认收进「更多工具」；
+    // 只改没动过的旧默认顶栏，自己排过的不动；只做一次，之后挪回顶栏不会再被改
+    const upgrades = Array.isArray(saved.upgrades) ? saved.upgrades.filter(u => typeof u === 'string') : []
+    if (!upgrades.includes(GIT_TO_MORE)) {
+      if (result.layout.header.join() === OLD_HEADER && !result.layout.more.length)
+        result.layout = { ...result.layout, header: [...DEFAULT_SIDEBAR_LAYOUT.header], more: ['git'] }
+      upgrades.push(GIT_TO_MORE)
+    }
+    result.upgrades = upgrades
     if (
       saved.version === 2 &&
       result.layout.top.join() === 'addProject,newTask' &&

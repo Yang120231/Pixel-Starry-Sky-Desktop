@@ -12,7 +12,10 @@ export function BranchMenu({
   onSwitch,
   onCreate,
   onClose,
+  up = false,
 }: {
+  /** 往上弹（输入框上方那一行，docs/ui/composer-git.md） */
+  up?: boolean
   branches: Branch[]
   loading: boolean
   onSwitch: (branch: Branch) => void
@@ -51,7 +54,10 @@ export function BranchMenu({
       ref={box}
       role="dialog"
       aria-label={tr('git.branch.menu')}
-      className="pop-in no-drag absolute top-full left-0 z-40 mt-1 flex max-h-80 w-72 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg border border-line-card bg-popover shadow-menu"
+      className={cn(
+        'pop-in no-drag absolute left-0 z-40 flex max-h-80 w-72 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg border border-line-card bg-popover shadow-menu',
+        up ? 'bottom-full mb-1' : 'top-full mt-1',
+      )}
     >
       <div className="shrink-0 border-b border-line-subtle p-2">
         <input

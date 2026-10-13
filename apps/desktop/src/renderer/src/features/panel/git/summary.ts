@@ -1,4 +1,5 @@
-// 工作区的 Git 摘要（分支、未提交的改动数），给顶栏和新任务起点用（docs/ui/workbench-ux-3.md §2.1）。
+// 工作区的 Git 摘要（分支、未提交的改动数），给顶栏和新任务起点用（docs/ui/workbench-ux-3.md §2.1）；
+// 完整状态给输入框上方的 Git 那几项用（docs/ui/composer-git.md）。
 // 只读有人在用的工作区；窗口回到前台、项目工具变化、一轮结束或改了文件时重读（去抖），不定时轮询。
 // Git 页读到的状态也写进来，在 Git 页切换分支后顶栏马上跟着变。
 import { useEffect, useSyncExternalStore } from 'react'
@@ -7,9 +8,11 @@ import { demo as demoData } from '@/data/demo'
 import { keyRef, refKey } from '@/features/editor/target'
 import type { GitStatus } from '../../../../../shared/types/project-tools'
 import { summarize, type GitSummary } from './summarize'
+import { demoApply } from './demoGit'
 import type { WorkspaceRef } from '../../../../../shared/types/workspace'
 
 const cache = new Map<string, GitSummary | null>()
+const statuses = new Map<string, GitStatus>()
 const users = new Map<string, { ref: WorkspaceRef; count: number }>()
 const loading = new Set<string>()
 const listeners = new Set<() => void>()
@@ -23,9 +26,17 @@ function changed(): void {
 /** Git 页读到状态时调用 */
 export function publishGitStatus(ref: WorkspaceRef, status: GitStatus): void {
   const key = refKey(ref)
-  const next = summarize(status)
-  if (JSON.stringify(cache.get(key)) === JSON.stringify(next)) return
-  cache.set(key, next)
+  if (JSON.stringify(statuses.get(key)) === JSON.stringify(status)) return
+  statuses.set(key, status)
+  cache.set(key, summarize(status))
+  changed()
+}
+
+// 演示模式：输入框上方的提交、拉取、推送在内存里改这一份（GitPanel 的演示状态各管各的）
+let demoStatus: GitStatus | null = null
+const demoGit = (): GitStatus => (demoStatus ??= structuredClone(demoData().git.status))
+export function applyDemoGit(action: string, arg?: unknown): void {
+  demoStatus = demoApply(demoGit(), action, arg)
   changed()
 }
 
@@ -81,6 +92,20 @@ function subscribe(listener: () => void): () => void {
 }
 
 export function useGitSummary(ref: WorkspaceRef | null): GitSummary | null {
+  const key = useWatched(ref)
+  if (isDemo) return ref ? summarize(demoGit()) : null
+  return key ? (cache.get(key) ?? null) : null
+}
+
+/** 最近读到的完整状态；还没读到、不是 Git 仓库时是 null（不是仓库时 status.repo 为 false） */
+export function useGitStatus(ref: WorkspaceRef | null): GitStatus | null {
+  const key = useWatched(ref)
+  if (isDemo) return ref ? demoGit() : null
+  return key ? (statuses.get(key) ?? null) : null
+}
+
+/** 有人在看这个工作区：登记、挂监听、先读一次 */
+function useWatched(ref: WorkspaceRef | null): string | null {
   const key = ref ? refKey(ref) : null
   useSyncExternalStore(subscribe, () => version)
   useEffect(() => {
@@ -97,6 +122,5 @@ export function useGitSummary(ref: WorkspaceRef | null): GitSummary | null {
       if (users.size === 0) stop?.()
     }
   }, [key])
-  if (isDemo) return ref ? summarize(demoData().git.status) : null
-  return key ? (cache.get(key) ?? null) : null
+  return key
 }
