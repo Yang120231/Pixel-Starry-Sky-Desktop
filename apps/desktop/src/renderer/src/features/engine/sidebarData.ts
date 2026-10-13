@@ -69,7 +69,19 @@ export function recentSpansProjects(recent: Array<Pick<RecentItem, 'projectId' |
   return new Set(recent.map(r => r.projectId ?? r.project ?? '')).size > 1
 }
 
-export function demoSidebarData(projects: Project[], recent: RecentItem[], changes: Record<string, DemoSessionChange>) {
+/** 停止只压掉「运行中」；传了 store 的未读就以它为准（归档后恢复的会话也能标未读） */
+function demoStatus(status: SessionStatus, unread: boolean | undefined, tracked: boolean): SessionStatus {
+  if (!tracked || status === 'running') return status
+  return unread ? 'unread' : 'idle'
+}
+
+export function demoSidebarData(
+  projects: Project[],
+  recent: RecentItem[],
+  changes: Record<string, DemoSessionChange>,
+  /** 传了就以它为准判断未读（演示模式也走引擎 store 的未读） */
+  unread?: Record<string, true>,
+) {
   const deleted = (id: string) => changes[id]?.deleted
   const map = (s: Project['sessions'][number]) => ({
     ...s,
@@ -77,7 +89,7 @@ export function demoSidebarData(projects: Project[], recent: RecentItem[], chang
     bottomedAt: changes[s.id]?.bottomedAt === undefined ? (s.bottomedAt ?? null) : changes[s.id].bottomedAt,
     pinnedAt: changes[s.id]?.pinnedAt === undefined ? (s.pinnedAt ?? null) : changes[s.id].pinnedAt,
     archivedAt: changes[s.id] ? changes[s.id].archivedAt : (s.archivedAt ?? null),
-    status: changes[s.id]?.stopped ? ('idle' as const) : s.status,
+    status: demoStatus(changes[s.id]?.stopped ? 'idle' : s.status, unread?.[s.id], !!unread),
   })
   const result = projects.map(p => {
     const all = [...p.sessions, ...(p.archived ?? [])].filter(s => !deleted(s.id)).map(map)

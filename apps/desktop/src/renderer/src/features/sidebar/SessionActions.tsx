@@ -24,6 +24,8 @@ type Action = 'archive' | 'restore' | 'delete' | 'rename' | 'bottom' | 'pin'
 interface Context {
   request: (action: Action, target: SessionTarget) => void
   requestResult: (action: Action, target: SessionTarget) => Promise<boolean>
+  /** 复制会话 ID 到剪贴板，成功后弹提示 */
+  copyId: (target: SessionTarget) => void
   busy: boolean
 }
 const Context = createContext<Context | null>(null)
@@ -36,7 +38,17 @@ interface Request {
   action: 'archive' | 'delete'
   target: SessionTarget
 }
-type ToastKind = 'archive' | 'restore' | 'delete' | 'error' | 'rename' | 'bottom' | 'unbottom' | 'pin' | 'unpin'
+type ToastKind =
+  | 'archive'
+  | 'restore'
+  | 'delete'
+  | 'error'
+  | 'rename'
+  | 'bottom'
+  | 'unbottom'
+  | 'pin'
+  | 'unpin'
+  | 'copyId'
 interface Toast {
   kind: ToastKind
   id: string
@@ -53,6 +65,7 @@ const TOAST_KEYS = {
   unbottom: 'session.unbottomToast',
   pin: 'session.pinToast',
   unpin: 'session.unpinToast',
+  copyId: 'session.copiedId',
 } as const
 export function SessionActionsProvider({ children }: { children: ReactNode }) {
   const { t } = useI18n(),
@@ -222,6 +235,21 @@ export function SessionActionsProvider({ children }: { children: ReactNode }) {
     else if (action === 'delete' || (action === 'archive' && current.running)) setConfirm({ action, target: current })
     else void apply(action, current, false)
   }
+  const copyId = (target: SessionTarget): void => {
+    // 引擎会话 id（没有就用本地 id）；演示模式直接用 target.id
+    const record = isLive
+      ? (getEngineState().snapshots[target.id]?.record ??
+        getEngineState().sessions.find(s => s.record.id === target.id)?.record)
+      : undefined
+    const text = record?.engineSessionId ?? record?.id ?? target.id
+    const write = window.pixelsky?.terminal
+      ? window.pixelsky.terminal.clipboardWrite(text)
+      : navigator.clipboard.writeText(text)
+    void Promise.resolve(write).then(
+      () => setToast({ kind: 'copyId', id: target.id, title: target.title, at: Date.now() }),
+      () => setToast({ kind: 'error', id: target.id, title: target.title, text: t('session.retry'), at: Date.now() }),
+    )
+  }
   const selected = confirm ? fresh(confirm.target) : null
   const requestResult = (action: Action, target: SessionTarget): Promise<boolean> => {
     if (working.current || confirm || rename || pendingResult.current) return Promise.resolve(false)
@@ -231,7 +259,7 @@ export function SessionActionsProvider({ children }: { children: ReactNode }) {
     })
   }
   return (
-    <Context.Provider value={{ request, requestResult, busy }}>
+    <Context.Provider value={{ request, requestResult, copyId, busy }}>
       {children}
       {rename && (
         <RenameSessionDialog

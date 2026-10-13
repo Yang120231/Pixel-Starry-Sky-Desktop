@@ -5,14 +5,21 @@ import {
   ArchiveRestore,
   ArrowDownToLine,
   ArrowUpFromLine,
-  Ellipsis,
+  Circle,
+  CircleDot,
+  Columns2,
+  Copy,
   PencilLine,
   Pin,
   PinOff,
   Trash2,
+  type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/ui'
 import { useI18n } from '@/i18n/I18nProvider'
+import { useEngineState } from '@/features/engine'
+import { markSessionUnread } from '@/features/engine/store'
+import { paneActions } from '@/features/panes/store'
 import { useSessionActions, type SessionTarget } from './SessionActions'
 export function SessionRow({
   target,
@@ -40,6 +47,12 @@ export function SessionRow({
     setPosition(null)
     setCoords(null)
     if (restore) button.current?.focus({ preventScroll: true })
+  }
+  const unread = useEngineState(s => !!s.unread[target.id])
+  // 菜单项点击：先关菜单（焦点不回到行内按钮，动作自己处理），再执行
+  const run = (fn: () => void): void => {
+    close(false)
+    fn()
   }
   const show = (x?: number, y?: number): void => {
     const rect = row.current?.getBoundingClientRect()
@@ -107,27 +120,47 @@ export function SessionRow({
         <span
           className={cn(
             'flex items-center gap-1.5 group-hover/session:invisible group-focus-within/session:invisible',
-            (selected || position) && 'invisible',
+            position && 'invisible',
           )}
         >
           {trailing}
         </span>
-        <button
-          type="button"
-          aria-haspopup="menu"
-          aria-expanded={!!position}
-          aria-label={t('session.actions', { title: target.title })}
-          title={t('session.menu')}
-          onClick={() => (position ? close() : show())}
+        <div
           className={cn(
-            'absolute right-0 flex size-6 items-center justify-center rounded-md text-fg-muted hover:bg-selected hover:text-fg focus-visible:ring-2 focus-visible:ring-accent',
-            selected || position
-              ? 'visible'
-              : 'invisible group-hover/session:visible group-focus-within/session:visible',
+            'absolute right-0 flex items-center gap-0.5',
+            position ? 'visible' : 'invisible group-hover/session:visible group-focus-within/session:visible',
           )}
         >
-          <Ellipsis size={16} strokeWidth={1.5} />
-        </button>
+          {[
+            {
+              key: 'pin',
+              label: t(target.pinned ? 'session.unpin' : 'session.pin'),
+              icon: target.pinned ? PinOff : Pin,
+              run: () => actions.request('pin', target),
+            },
+            {
+              key: 'archive',
+              label: t(target.archived ? 'session.restore' : 'session.archive'),
+              icon: target.archived ? ArchiveRestore : Archive,
+              run: () => actions.request(target.archived ? 'restore' : 'archive', target),
+            },
+          ].map(({ key, label, icon: Icon, run }) => (
+            <button
+              key={key}
+              type="button"
+              disabled={actions.busy}
+              aria-label={label}
+              title={label}
+              onClick={event => {
+                event.stopPropagation()
+                run()
+              }}
+              className="flex size-6 items-center justify-center rounded-md text-fg-muted hover:bg-selected hover:text-fg focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40"
+            >
+              <Icon size={15} strokeWidth={1.5} />
+            </button>
+          ))}
+        </div>
       </div>
       {position &&
         createPortal(
@@ -166,78 +199,88 @@ export function SessionRow({
               }
             }}
           >
-            <button
-              role="menuitem"
+            <MenuItem
+              icon={target.pinned ? PinOff : Pin}
+              label={t(target.pinned ? 'session.unpin' : 'session.pin')}
               disabled={actions.busy}
-              onClick={() => {
-                close(false)
-                actions.request('rename', target)
-              }}
-              className="flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-ui hover:bg-hover disabled:opacity-40"
-            >
-              <PencilLine size={15} strokeWidth={1.5} />
-              {t('session.rename')}
-            </button>
-            <button
-              role="menuitem"
+              onClick={() => run(() => actions.request('pin', target))}
+            />
+            <MenuItem
+              icon={target.bottomed ? ArrowUpFromLine : ArrowDownToLine}
+              label={t(target.bottomed ? 'session.unbottom' : 'session.bottom')}
               disabled={actions.busy}
-              onClick={() => {
-                close(false)
-                actions.request('pin', target)
-              }}
-              className="flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-ui hover:bg-hover disabled:opacity-40"
-            >
-              {target.pinned ? <PinOff size={15} strokeWidth={1.5} /> : <Pin size={15} strokeWidth={1.5} />}{' '}
-              {t(target.pinned ? 'session.unpin' : 'session.pin')}
-            </button>
-            <button
-              role="menuitem"
+              onClick={() => run(() => actions.request('bottom', target))}
+            />
+            <MenuItem
+              icon={unread ? Circle : CircleDot}
+              label={t(unread ? 'session.markRead' : 'session.markUnread')}
+              disabled={target.running}
+              onClick={() => run(() => markSessionUnread(target.id, !unread))}
+            />
+            <MenuItem
+              icon={Columns2}
+              label={t('session.openInSplit')}
+              onClick={() =>
+                run(() => {
+                  const r = document.querySelector('.pane-area')?.getBoundingClientRect()
+                  paneActions.openInSplit(target.id, { width: r?.width ?? 0, height: r?.height ?? 0 })
+                })
+              }
+            />
+            <MenuItem
+              icon={PencilLine}
+              label={t('session.rename')}
               disabled={actions.busy}
-              onClick={() => {
-                close(false)
-                actions.request('bottom', target)
-              }}
-              className="flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-ui hover:bg-hover disabled:opacity-40"
-            >
-              {target.bottomed ? (
-                <ArrowUpFromLine size={15} strokeWidth={1.5} />
-              ) : (
-                <ArrowDownToLine size={15} strokeWidth={1.5} />
-              )}{' '}
-              {t(target.bottomed ? 'session.unbottom' : 'session.bottom')}
-            </button>
+              onClick={() => run(() => actions.request('rename', target))}
+            />
+            <MenuItem
+              icon={target.archived ? ArchiveRestore : Archive}
+              label={t(target.archived ? 'session.restore' : 'session.archive')}
+              disabled={actions.busy}
+              onClick={() => run(() => actions.request(target.archived ? 'restore' : 'archive', target))}
+            />
             <div role="separator" className="my-1 border-t border-line-subtle" />
-            <button
-              role="menuitem"
+            <MenuItem icon={Copy} label={t('session.copyId')} onClick={() => run(() => actions.copyId(target))} />
+            <div role="separator" className="my-1 border-t border-line-subtle" />
+            <MenuItem
+              icon={Trash2}
+              label={t('session.deleteMenu')}
+              danger
               disabled={actions.busy}
-              onClick={() => {
-                close(false)
-                actions.request(target.archived ? 'restore' : 'archive', target)
-              }}
-              className="flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-ui hover:bg-hover disabled:opacity-40"
-            >
-              {target.archived ? (
-                <ArchiveRestore size={15} strokeWidth={1.5} />
-              ) : (
-                <Archive size={15} strokeWidth={1.5} />
-              )}{' '}
-              {t(target.archived ? 'session.restore' : 'session.archive')}
-            </button>
-            <button
-              role="menuitem"
-              disabled={actions.busy}
-              onClick={() => {
-                close(false)
-                actions.request('delete', target)
-              }}
-              className="flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-ui text-danger hover:bg-hover disabled:opacity-40"
-            >
-              <Trash2 size={15} strokeWidth={1.5} />
-              {t('session.deleteMenu')}
-            </button>
+              onClick={() => run(() => actions.request('delete', target))}
+            />
           </div>,
           document.body,
         )}
     </div>
+  )
+}
+
+function MenuItem({
+  icon: Icon,
+  label,
+  onClick,
+  disabled,
+  danger,
+}: {
+  icon: LucideIcon
+  label: string
+  onClick: () => void
+  disabled?: boolean
+  danger?: boolean
+}) {
+  return (
+    <button
+      role="menuitem"
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        'flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-ui hover:bg-hover disabled:opacity-40',
+        danger && 'text-danger',
+      )}
+    >
+      <Icon size={15} strokeWidth={1.5} />
+      {label}
+    </button>
   )
 }

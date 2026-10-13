@@ -89,9 +89,6 @@ export function FeedbackThread({
             <div className="flex shrink-0 items-center gap-3">
               <TypeChip type={thread.type} />
               <StatusWord status={thread.status} />
-              {thread.status !== 'closed' && (
-                <Button onClick={() => setConfirmClose(true)}>{tr('feedback.thread.close')}</Button>
-              )}
             </div>
           )
         }
@@ -119,7 +116,13 @@ export function FeedbackThread({
               </li>
             ))}
           </ol>
-          <ReplyBox threadId={id} closed={detail.thread.status === 'closed'} onSent={setDetail} onFailed={onFailed} />
+          <ReplyBox
+            threadId={id}
+            closed={detail.thread.status === 'closed'}
+            onSent={setDetail}
+            onFailed={onFailed}
+            onClose={() => setConfirmClose(true)}
+          />
         </>
       )}
       {confirmClose && (
@@ -130,6 +133,7 @@ export function FeedbackThread({
           cancelLabel={tr('feedback.form.cancel')}
           busy={closing}
           error={closeError}
+          danger
           onConfirm={() => void close()}
           onCancel={() => setConfirmClose(false)}
         />
@@ -357,17 +361,19 @@ function Lightbox({ url, name, onClose }: { url: string; name: string; onClose: 
   )
 }
 
-/** 补充框：文字 + 勾选项 + 截图；已关闭时提示发送会重新打开 */
+/** 补充框：文字 + 勾选项 + 截图；已关闭时提示发送会重新打开。没关闭时左下角放「关闭反馈」（点了先弹确认） */
 function ReplyBox({
   threadId,
   closed,
   onSent,
   onFailed,
+  onClose,
 }: {
   threadId: string
   closed: boolean
   onSent: (detail: FeedbackDetail) => void
   onFailed: (e: unknown) => void
+  onClose: () => void
 }) {
   useI18n()
   const [body, setBody] = useState('')
@@ -443,6 +449,11 @@ function ReplyBox({
         </p>
       )}
       <div className="mt-3 flex items-center justify-end gap-3">
+        {!closed && (
+          <Button variant="ghost" className="mr-auto" onClick={onClose} disabled={busy}>
+            {tr('feedback.thread.close')}
+          </Button>
+        )}
         {reason && body.trim() !== '' && !busy && (
           <span className="min-w-0 truncate text-meta text-fg-faint">{reasonText(reason)}</span>
         )}

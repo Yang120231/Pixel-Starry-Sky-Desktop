@@ -121,7 +121,7 @@ export function useSidebarData(): SidebarData {
   }, [])
 
   return useMemo(() => {
-    if (!isLive) return demoSidebarData(demoProjects, demoRecent, demoChanges)
+    if (!isLive) return demoSidebarData(demoProjects, demoRecent, demoChanges, unread)
     return sidebarData(
       projects.filter(p => machineOf(p.id) === machines.currentId),
       sessions.filter(s => machineOf(s.record.id) === machines.currentId),

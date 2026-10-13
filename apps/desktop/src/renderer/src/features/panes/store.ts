@@ -408,6 +408,34 @@ export const paneActions = {
     )
   },
 
+  /**
+   * 分屏打开会话（侧栏会话右键菜单）：已经显示在某个窗格里就聚焦那个窗格；
+   * 否则在当前窗格右侧分出新窗格打开，宽度不够往下分，都放不下就提示
+   */
+  openInSplit(sessionId: string, container: { width: number; height: number }): void {
+    showWorkbench()
+    const owner = T.leafOfTab(state.layout.root, sessionId)
+    if (owner) {
+      setLayout(T.activateTab(state.layout, owner.id, sessionId))
+      return
+    }
+    const rect = T.computeRects(state.layout.root).panes.get(state.layout.focused)
+    if (!rect) return
+    const dir: Dir | null =
+      (rect.w * container.width) / 2 >= MIN_PANE.width
+        ? 'row'
+        : (rect.h * container.height) / 2 >= MIN_PANE.height
+          ? 'col'
+          : null
+    if (!dir) {
+      notify(tr('panes.store.notEnoughSpaceFor'))
+      return
+    }
+    paneActions.split(dir, container)
+    // 拆分后新窗格已是当前窗格，把会话开在里面
+    setLayout(T.openTab(state.layout, sessionId))
+  },
+
   /** 关闭窗格：先收拢到 0（有动画时），动画结束后再从布局里删掉；里面的会话继续在后台运行 */
   async closePane(leafId: string): Promise<void> {
     const fileTabs = T.findLeaf(state.layout.root, leafId)?.tabs.filter(T.isFileTab) ?? []

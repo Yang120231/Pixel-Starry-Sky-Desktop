@@ -12,7 +12,7 @@ import {
   type SessionSnapshot,
   type SessionSummary,
 } from '@pixelsky/protocol'
-import { isDemo } from '@/data'
+import { isDemo, projects as demoProjects } from '@/data'
 import { demo } from '@/data/demo'
 import { SESSION_REMOVED_EVENT } from './sessionLifecycle'
 import { getMachines, machineOf } from '@/features/machines/store'
@@ -42,7 +42,15 @@ let state: EngineState = {
   projects: [],
   sessions: [],
   snapshots: isDemo ? { ...demo().conversations.snapshots } : {},
-  unread: {},
+  // 演示模式：演示数据里标了「有新回复」的会话作为初始未读，这样标记已读 / 未读和真实模式走同一套
+  unread: isDemo
+    ? Object.fromEntries(
+        demoProjects
+          .flatMap(p => [...p.sessions, ...(p.archived ?? [])])
+          .filter(s => s.status === 'unread')
+          .map(s => [s.id, true as const]),
+      )
+    : {},
   currentProjectId: null,
 }
 const listeners = new Set<() => void>()
@@ -231,6 +239,15 @@ export function setViewingSet(ids: string[]): void {
     for (const id of ids) delete rest[id]
     set({ unread: rest })
   }
+}
+
+/** 手动标记会话未读 / 已读（侧栏会话右键菜单）；正在显示的会话标成未读后保持，直到视图集合变化时被清 */
+export function markSessionUnread(id: string, unread: boolean): void {
+  if (!!state.unread[id] === unread) return
+  const next = { ...state.unread }
+  if (unread) next[id] = true
+  else delete next[id]
+  set({ unread: next })
 }
 
 /** 重新拉取新会话默认设置（用户在别的会话里改过强度 / 权限后，新会话沿用） */
