@@ -2592,6 +2592,10 @@ export const catalog = {
     "zh": "{p0} 个对话还在后台运行，可以在侧栏里打开",
     "en": "{p0} conversations are still running in the background; open them from the sidebar"
   },
+  "panes.PaneView.moveTo": {
+    "zh": "移动到…",
+    "en": "Move to…"
+  },
   "panes.PaneView.closeOtherTabs": {
     "zh": "关闭其他标签页",
     "en": "Close other tabs"

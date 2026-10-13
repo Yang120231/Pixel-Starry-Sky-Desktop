@@ -1,9 +1,9 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
-import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { memo, useLayoutEffect, useRef, useState } from 'react'
 import { Columns2, Ellipsis, FileText, Maximize2, Minimize2, MousePointerClick, Plus, Rows2, X } from 'lucide-react'
 import { IconButton, Popover, PopoverItem, Spinner, cn } from '@/ui'
+import { ActionMenu, type MenuAction } from '@/ui/ActionMenu'
 import { isLive, useEngineState, useSessionTitle } from '@/features/engine'
 import { busy } from '@/features/engine/sidebarData'
 import { SPLIT_DOWN, SPLIT_RIGHT, ZOOM_PANE, withShortcut } from '@/features/layout/shortcuts'
@@ -297,7 +297,13 @@ function TabStrip({ leaf, dim, areaSize }: { leaf: Leaf; dim: boolean; areaSize:
         </button>
       </span>
       {blankMenu && (
-        <BulkMenu leaf={leaf} at={blankMenu} kinds={['all', 'inactive']} onClose={() => setBlankMenu(null)} />
+        <ActionMenu
+          x={blankMenu.x}
+          y={blankMenu.y}
+          label={tr('panes.PaneView.conversationTabsDragTo')}
+          actions={bulkActions(leaf, null, ['all', 'inactive'])}
+          onClose={() => setBlankMenu(null)}
+        />
       )}
       {menu && (
         <TabMenu
@@ -398,7 +404,10 @@ function Tab({
   )
 }
 
-/** 使用独立浮层，避免右键菜单被窄窗格或标签栏的滚动裁切。 */
+/**
+ * 标签右键菜单（docs/ui/ui-polish-2026-10-13.md §4）：独立浮层，不被窄窗格或标签栏的滚动裁切。
+ * 顺序：重命名 → 文件标签的几项 → 移动到… › → 关闭（单个 + 批量）→ 最下面单独一组的删除，免得和重命名挨着点错
+ */
 function TabMenu({
   leaf,
   menu,
@@ -411,7 +420,6 @@ function TabMenu({
   onClose: () => void
 }) {
   useI18n()
-  const ref = useRef<HTMLDivElement>(null)
   const layout = usePaneState(s => s.layout)
   const closing = usePaneState(s => s.closing)
   const all = leaves(layout.root)
@@ -474,158 +482,77 @@ function TabMenu({
         : [{ label: tr('panes.PaneView.moveToPane', { p0: i + 1 }), target: { leafId: l.id, index: l.tabs.length } }],
     ),
   ]
-  useLayoutEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const r = el.getBoundingClientRect()
-    el.style.left = `${Math.max(8, Math.min(menu.x, window.innerWidth - r.width - 8))}px`
-    el.style.top = `${Math.max(8, Math.min(menu.y, window.innerHeight - r.height - 8))}px`
-    el.querySelector<HTMLElement>('button:not(:disabled)')?.focus()
-  }, [menu.x, menu.y])
-  useEffect(() => {
-    const close = (e: PointerEvent) => {
-      if (!ref.current?.contains(e.target as Node)) onClose()
-    }
-    window.addEventListener('pointerdown', close)
-    window.addEventListener('blur', onClose)
-    return () => {
-      window.removeEventListener('pointerdown', close)
-      window.removeEventListener('blur', onClose)
-    }
-  }, [onClose])
   if (index < 0) return null
-  return createPortal(
-    <div
-      ref={ref}
-      role="menu"
-      aria-label={tr('panes.PaneView.moveConversationTab')}
-      className="pop-in no-drag fixed z-50 max-h-[calc(100vh-16px)] min-w-48 overflow-y-auto rounded-lg border border-line-card bg-popover p-1 shadow-menu"
-      style={{ left: menu.x, top: menu.y }}
-      onKeyDown={e => {
-        const items = [...(ref.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [])]
-        const i = items.indexOf(document.activeElement as HTMLButtonElement)
-        if (e.key === 'Escape') {
-          e.preventDefault()
-          onClose()
-        } else if (e.key === 'Tab') onClose()
-        else if (['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
-          e.preventDefault()
-          const next =
-            e.key === 'Home'
-              ? 0
-              : e.key === 'End'
-                ? items.length - 1
-                : (i + (e.key === 'ArrowUp' ? -1 : 1) + items.length) % items.length
-          items[next]?.focus()
-        }
-        e.stopPropagation()
-      }}
-    >
-      {sessionTarget && (
-        <>
-          {(['rename', 'delete'] as const).map(action => (
-            <button
-              key={action}
-              role="menuitem"
-              disabled={sessionActions.busy}
-              className={cn(
-                'flex h-8 w-full items-center rounded-md px-2 text-left text-ui hover:bg-hover',
-                action === 'delete' ? 'text-danger' : 'text-fg',
-              )}
-              onClick={() => {
-                onClose()
-                sessionActions.request(action, sessionTarget)
-              }}
-            >
-              {tr(action === 'rename' ? 'session.rename' : 'session.delete')}
-            </button>
-          ))}
-          <div className="my-1 border-t border-line" />
-        </>
-      )}
-      {parseFileTab(menu.tab) && (
-        <>
-          <button
-            role="menuitem"
-            className="flex h-8 w-full items-center rounded-md px-2 text-left text-ui text-fg hover:bg-hover"
-            onClick={() => {
+  const move: MenuAction[] = choices.map((choice, i) => {
+    const problem = choice.disabled ? null : dropProblem(layout, menu.tab, choice.target, areaSize())
+    return {
+      label: choice.label,
+      disabled: choice.disabled || !!problem,
+      title: problem ?? undefined,
+      // 左右移动 | 四个方向拆分 | 移到别的窗格，各一组
+      separator: i === 2 || i === 6,
+      run: () => paneActions.dropTab(menu.tab, choice.target, areaSize()),
+    }
+  })
+  const file = parseFileTab(menu.tab)
+  const actions: MenuAction[] = [
+    ...(sessionTarget
+      ? [
+          {
+            label: tr('session.rename'),
+            disabled: sessionActions.busy,
+            run: () => sessionActions.request('rename', sessionTarget),
+          },
+        ]
+      : []),
+    ...(file
+      ? [
+          {
+            label: tr('workspace.moveRight'),
+            run: () => {
               paneActions.detachFileTab(menu.tab)
               openRightTab(menu.tab)
-              onClose()
-            }}
-          >
-            {tr('workspace.moveRight')}
-          </button>
-          <button
-            role="menuitem"
-            className="flex h-8 w-full items-center rounded-md px-2 text-left text-ui text-fg hover:bg-hover"
-            onClick={() => {
-              const file = parseFileTab(menu.tab)!
-              showFiles(file.ref, file.path)
-              onClose()
-            }}
-          >
-            {tr('panes.PaneView.revealInFileTree')}
-          </button>
-          <button
-            role="menuitem"
-            className="flex h-8 w-full items-center rounded-md px-2 text-left text-ui text-fg hover:bg-hover"
-            onClick={() => {
-              const file = parseFileTab(menu.tab)!
+            },
+          },
+          { label: tr('panes.PaneView.revealInFileTree'), run: () => showFiles(file.ref, file.path) },
+          {
+            label: tr('panes.PaneView.copyFilePath'),
+            run: () => {
               if (!isDemo) void window.pixelsky!.files.copyPath(file.ref, file.path)
-              onClose()
-            }}
-          >
-            {tr('panes.PaneView.copyFilePath')}
-          </button>
-          <button
-            role="menuitem"
-            className="flex h-8 w-full items-center rounded-md px-2 text-left text-ui text-fg hover:bg-hover"
-            onClick={() => {
-              const file = parseFileTab(menu.tab)!
+            },
+          },
+          {
+            label: tr('panes.PaneView.openWithExternalEditor'),
+            run: () => {
               if (!isDemo)
                 void window.pixelsky!.editor.open(file.ref, undefined, file.path).catch(e => notify(e.message))
-              onClose()
-            }}
-          >
-            {tr('panes.PaneView.openWithExternalEditor')}
-          </button>
-          <div className="my-1 border-t border-line" />
-        </>
-      )}
-      {choices.map(choice => {
-        const problem = choice.disabled ? null : dropProblem(layout, menu.tab, choice.target, areaSize())
-        return (
-          <button
-            key={choice.label}
-            role="menuitem"
-            type="button"
-            disabled={choice.disabled || !!problem}
-            title={problem ?? undefined}
-            className="flex h-8 w-full items-center rounded-md px-2 text-left text-ui text-fg hover:bg-hover disabled:cursor-default disabled:text-fg-faint disabled:hover:bg-transparent"
-            onClick={() => {
-              paneActions.dropTab(menu.tab, choice.target, areaSize())
-              onClose()
-            }}
-          >
-            {choice.label}
-          </button>
-        )
-      })}
-      <button
-        role="menuitem"
-        type="button"
-        className="mt-1 flex h-8 w-full items-center rounded-md border-t border-line px-2 text-left text-ui text-fg hover:bg-hover"
-        onClick={() => {
-          paneActions.closeTab(leaf.id, menu.tab)
-          onClose()
-        }}
-      >
-        {tr('panel.PanelTabs.closeTab')}
-      </button>
-      <BulkItems leaf={leaf} anchor={menu.tab} kinds={['others', 'right', 'all', 'inactive']} onClose={onClose} />
-    </div>,
-    document.body,
+            },
+          },
+        ]
+      : []),
+    { label: tr('panes.PaneView.moveTo'), separator: true, children: move },
+    { label: tr('panel.PanelTabs.closeTab'), separator: true, run: () => void paneActions.closeTab(leaf.id, menu.tab) },
+    ...bulkActions(leaf, menu.tab, ['others', 'right', 'all', 'inactive']),
+    ...(sessionTarget
+      ? [
+          {
+            label: tr('session.delete'),
+            danger: true,
+            separator: true,
+            disabled: sessionActions.busy,
+            run: () => sessionActions.request('delete', sessionTarget),
+          },
+        ]
+      : []),
+  ]
+  return (
+    <ActionMenu
+      x={menu.x}
+      y={menu.y}
+      label={tr('panes.PaneView.moveConversationTab')}
+      actions={actions}
+      onClose={onClose}
+    />
   )
 }
 
@@ -637,92 +564,13 @@ const BULK_LABEL: Record<BulkClose, () => string> = {
 }
 
 /** 批量关闭的几项（GitHub #32）：没有可关的标签时灰掉 */
-function BulkItems({
-  leaf,
-  anchor,
-  kinds,
-  onClose,
-}: {
-  leaf: Leaf
-  anchor: string | null
-  kinds: BulkClose[]
-  onClose: () => void
-}) {
-  useI18n()
-  return (
-    <>
-      {kinds.map(kind => (
-        <button
-          key={kind}
-          role="menuitem"
-          type="button"
-          disabled={!tabsToClose(leaf, kind, anchor, tabInUse).length}
-          title={kind === 'inactive' ? tr('panes.PaneView.closeInactiveHint') : undefined}
-          className="flex h-8 w-full items-center rounded-md px-2 text-left text-ui text-fg hover:bg-hover disabled:cursor-default disabled:text-fg-faint disabled:hover:bg-transparent"
-          onClick={() => {
-            onClose()
-            void paneActions.closeTabs(leaf.id, kind, anchor)
-          }}
-        >
-          {BULK_LABEL[kind]()}
-        </button>
-      ))}
-    </>
-  )
-}
-
-/** 标签栏空白处右键的菜单（和标签右键菜单一样是独立浮层） */
-function BulkMenu({
-  leaf,
-  at,
-  kinds,
-  onClose,
-}: {
-  leaf: Leaf
-  at: { x: number; y: number }
-  kinds: BulkClose[]
-  onClose: () => void
-}) {
-  useI18n()
-  const ref = useRef<HTMLDivElement>(null)
-  useLayoutEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const r = el.getBoundingClientRect()
-    el.style.left = `${Math.max(8, Math.min(at.x, window.innerWidth - r.width - 8))}px`
-    el.style.top = `${Math.max(8, Math.min(at.y, window.innerHeight - r.height - 8))}px`
-    el.querySelector<HTMLElement>('button:not(:disabled)')?.focus()
-  }, [at.x, at.y])
-  useEffect(() => {
-    const close = (e: PointerEvent) => {
-      if (!ref.current?.contains(e.target as Node)) onClose()
-    }
-    window.addEventListener('pointerdown', close)
-    window.addEventListener('blur', onClose)
-    return () => {
-      window.removeEventListener('pointerdown', close)
-      window.removeEventListener('blur', onClose)
-    }
-  }, [onClose])
-  return createPortal(
-    <div
-      ref={ref}
-      role="menu"
-      aria-label={tr('panes.PaneView.conversationTabsDragTo')}
-      className="pop-in no-drag fixed z-50 min-w-48 rounded-lg border border-line-card bg-popover p-1 shadow-menu"
-      style={{ left: at.x, top: at.y }}
-      onKeyDown={e => {
-        if (e.key === 'Escape' || e.key === 'Tab') {
-          e.preventDefault()
-          onClose()
-        }
-        e.stopPropagation()
-      }}
-    >
-      <BulkItems leaf={leaf} anchor={null} kinds={kinds} onClose={onClose} />
-    </div>,
-    document.body,
-  )
+function bulkActions(leaf: Leaf, anchor: string | null, kinds: BulkClose[]): MenuAction[] {
+  return kinds.map(kind => ({
+    label: BULK_LABEL[kind](),
+    disabled: !tabsToClose(leaf, kind, anchor, tabInUse).length,
+    title: kind === 'inactive' ? tr('panes.PaneView.closeInactiveHint') : undefined,
+    run: () => void paneActions.closeTabs(leaf.id, kind, anchor),
+  }))
 }
 
 function EmptyPane() {
