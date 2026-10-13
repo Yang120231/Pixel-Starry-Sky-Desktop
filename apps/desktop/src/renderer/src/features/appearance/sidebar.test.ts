@@ -52,14 +52,14 @@ describe('侧边栏外观偏好', () => {
     const migrated = parseSidebarPrefs(oldPrefs)
     expect(migrated).toMatchObject({
       version: 4,
-      layout: { header: H, top: ['addProject', 'newTask'], bottom: ['usage', 'plugins', 'settings'] },
+      layout: { header: H, more: [], top: ['addProject', 'newTask'], bottom: ['usage', 'plugins', 'settings'] },
       showRecent: false,
       recentExpanded: false,
       icons: { usage: 'gauge' },
     })
     const custom = { top: ['usage', 'addProject', 'newTask'], bottom: ['settings', 'plugins'] }
-    expect(parseSidebarPrefs({ ...oldPrefs, layout: custom }).layout).toEqual({ header: H, ...custom })
-    expect(parseSidebarPrefs({ ...oldPrefs, version: 3 }).layout).toEqual({ header: H, ...oldLayout })
+    expect(parseSidebarPrefs({ ...oldPrefs, layout: custom }).layout).toEqual({ header: H, more: [], ...custom })
+    expect(parseSidebarPrefs({ ...oldPrefs, version: 3 }).layout).toEqual({ header: H, more: [], ...oldLayout })
   })
 
   it('默认显示并展开最近任务，无法识别的版本和损坏内容安全回退', () => {
@@ -137,11 +137,13 @@ describe('侧边栏外观偏好', () => {
     })
     expect(prefs.layout).toEqual({
       header: H,
+      more: [],
       top: ['usage', 'newTask', 'addProject'],
       bottom: ['settings', 'plugins'],
     })
     expect(parseSidebarPrefs({ version: 3, layout: { top: 'settings', bottom: ['newTask'] } }).layout).toEqual({
       header: H,
+      more: [],
       top: ['addProject'],
       bottom: ['newTask', 'usage', 'plugins', 'settings'],
     })
@@ -154,16 +156,19 @@ describe('侧边栏外观偏好', () => {
     const layout = structuredClone(DEFAULT_SIDEBAR_LAYOUT)
     expect(moveSidebarActionInLayout(layout, 'settings', 'bottom', 2)).toEqual({
       header: H,
+      more: [],
       top: ['addProject', 'newTask'],
       bottom: ['usage', 'plugins', 'settings'],
     })
     expect(moveSidebarActionInLayout(layout, 'usage', 'bottom', 0)).toEqual({
       header: H,
+      more: [],
       top: ['addProject', 'newTask'],
       bottom: ['usage', 'plugins', 'settings'],
     })
     expect(moveSidebarActionInLayout(layout, 'plugins', 'top', 1)).toEqual({
       header: H,
+      more: [],
       top: ['addProject', 'plugins', 'newTask'],
       bottom: ['usage', 'settings'],
     })
@@ -176,7 +181,12 @@ describe('侧边栏外观偏好', () => {
     for (const action of ['settings', 'plugins', 'usage'] as const) {
       layout = moveSidebarActionInLayout(layout, action, 'top', Number.POSITIVE_INFINITY)
     }
-    expect(layout).toEqual({ header: H, top: ['addProject', 'newTask', 'settings', 'plugins', 'usage'], bottom: [] })
+    expect(layout).toEqual({
+      header: H,
+      more: [],
+      top: ['addProject', 'newTask', 'settings', 'plugins', 'usage'],
+      bottom: [],
+    })
     layout = moveSidebarActionInLayout(layout, 'newTask', 'bottom', 999)
     expect(layout.bottom).toEqual(['newTask'])
     layout = moveSidebarActionInLayout(layout, 'settings', 'bottom', -99)
@@ -198,7 +208,12 @@ describe('侧边栏外观偏好', () => {
     let sidebar = await import('./sidebar')
     sidebar.setSidebarPrefs({ showRecent: false, recentExpanded: false })
     sidebar.setSidebarIcon('newTask', 'plus')
-    sidebar.setSidebarLayout({ header: H, top: ['settings'], bottom: ['newTask', 'usage', 'plugins', 'addProject'] })
+    sidebar.setSidebarLayout({
+      header: H,
+      more: [],
+      top: ['settings'],
+      bottom: ['newTask', 'usage', 'plugins', 'addProject'],
+    })
     vi.resetModules()
     sidebar = await import('./sidebar')
     expect(sidebar.getSidebarPrefs()).toMatchObject({
@@ -221,7 +236,12 @@ describe('侧边栏外观偏好', () => {
     sidebar.setSidebarIcon('plugins', 'plug')
     sidebar.setSidebarIcon('usage', 'gauge')
     sidebar.moveSidebarAction('usage', 'top', 0)
-    const movedLayout = { header: H, top: ['usage', 'addProject', 'newTask'], bottom: ['plugins', 'settings'] }
+    const movedLayout = {
+      header: H,
+      more: [],
+      top: ['usage', 'addProject', 'newTask'],
+      bottom: ['plugins', 'settings'],
+    }
     sidebar.resetSidebarIcons()
     expect(sidebar.getSidebarPrefs()).toEqual({
       version: 4,
@@ -272,6 +292,7 @@ describe('侧边栏外观偏好', () => {
     const sidebar = await import('./sidebar')
     const layout: SidebarLayout = {
       header: [...H],
+      more: [],
       top: ['usage'],
       bottom: ['settings', 'newTask', 'plugins', 'addProject'],
     }
@@ -284,6 +305,7 @@ describe('侧边栏外观偏好', () => {
     sidebar.setSidebarLayout({ top: ['usage', 'usage'], bottom: ['unknown'] } as unknown as SidebarLayout)
     expect(sidebar.getSidebarPrefs().layout).toEqual({
       header: H,
+      more: [],
       top: ['usage', 'addProject', 'newTask'],
       bottom: ['plugins', 'settings'],
     })
@@ -302,7 +324,7 @@ describe('侧边栏外观偏好', () => {
   it('v3 升级到 v4 时补上默认顶栏排，保留自定义侧栏顺序', () => {
     const custom = { top: ['settings', 'newTask'], bottom: ['addProject', 'usage', 'plugins'] }
     const prefs = parseSidebarPrefs({ version: 3, showRecent: true, recentExpanded: true, layout: custom })
-    expect(prefs).toMatchObject({ version: 4, layout: { header: H, ...custom } })
+    expect(prefs).toMatchObject({ version: 4, layout: { header: H, more: [], ...custom } })
     expect(H).toEqual([...HEADER_ACTIONS])
   })
 
@@ -318,16 +340,15 @@ describe('侧边栏外观偏好', () => {
     expect(getLayoutIcon('usage', DEFAULT_SIDEBAR_ICONS)).toBe(getSidebarIcon('usage', DEFAULT_SIDEBAR_ICONS))
     expect(getLayoutIcon('git', DEFAULT_SIDEBAR_ICONS)).toBeTruthy()
     // 顶栏工具放进侧栏后照样受每排上限约束；机器切换和右面板开关固定，不在布局里
-    for (const action of ['machines', 'workbench'] as const)
-      layout = moveSidebarActionInLayout(layout, action, 'top', 99)
-    expect(layout.top).toEqual(['addProject', 'newTask', 'channels', 'machines', 'workbench'])
+    for (const action of ['openIn', 'workbench'] as const) layout = moveSidebarActionInLayout(layout, action, 'top', 99)
+    expect(layout.top).toEqual(['addProject', 'newTask', 'channels', 'openIn', 'workbench'])
     expect(moveSidebarActionInLayout(layout, 'usage', 'top', 0)).toEqual(layout)
-    expect(layout.header).toEqual(['usage', 'openIn'])
+    expect(layout.header).toEqual(['usage'])
   })
 
   it('侧栏一排最多 5 个，排满时拒绝移入但允许排内换序；顶栏不限', () => {
     let layout = DEFAULT_SIDEBAR_LAYOUT
-    for (const action of ['workbench', 'machines', 'channels'] as const)
+    for (const action of ['workbench', 'channels', 'git'] as const)
       layout = moveSidebarActionInLayout(layout, action, 'top', 99)
     expect(layout.top).toHaveLength(SIDEBAR_ROW_LIMIT)
     expect(isRowFull(layout, 'top')).toBe(true)
@@ -348,7 +369,7 @@ describe('侧边栏外观偏好', () => {
         bottom: ['usage', 'plugins', 'settings'],
       },
     })
-    expect(prefs.layout.header).toEqual(['git', 'workbench', 'machines', 'channels', 'openIn'])
+    expect(prefs.layout.header).toEqual(['git', 'workbench', 'channels', 'openIn'])
   })
 
   it('终端、编辑器、命令面板已从图标位置移除（D066），旧偏好里的位置读取时丢弃', () => {
@@ -365,7 +386,7 @@ describe('侧边栏外观偏好', () => {
     expect(prefs.layout.header[0]).toBe('workbench')
     expect(prefs.layout.top.slice(0, 1)).toEqual(['newTask'])
     expect(all.sort()).toEqual([...LAYOUT_ACTIONS].sort())
-    expect(DEFAULT_SIDEBAR_LAYOUT.header).toEqual(['workbench', 'machines', 'channels', 'git', 'openIn'])
+    expect(DEFAULT_SIDEBAR_LAYOUT.header).toEqual(['workbench', 'channels', 'git', 'openIn'])
   })
 
   it('旧偏好里的自动化原位换成 Git（D061），不重复、不丢位置', () => {
@@ -421,5 +442,32 @@ describe('侧边栏外观偏好', () => {
         )
       }
     }
+  })
+
+  it('云主机并进机器菜单（D114 §6）：旧偏好里的位置读取时丢弃，别的不动', () => {
+    const prefs = parseSidebarPrefs({
+      version: 4,
+      layout: {
+        header: ['machines', 'workbench', 'channels', 'git', 'openIn'],
+        top: ['addProject', 'machines', 'newTask'],
+        bottom: ['usage', 'plugins', 'settings'],
+      },
+    })
+    expect(prefs.layout).toEqual({ ...DEFAULT_SIDEBAR_LAYOUT })
+    expect([...LAYOUT_ACTIONS]).not.toContain('machines')
+  })
+
+  it('「更多工具」一排（D114 §6）：旧偏好没有时为空；能放进去、能挪出来，不限个数', () => {
+    expect(parseSidebarPrefs({ version: 4, layout: { header: H } }).layout.more).toEqual([])
+    let layout = moveSidebarActionInLayout(DEFAULT_SIDEBAR_LAYOUT, 'git', 'more', 0)
+    expect(layout.header).toEqual(['workbench', 'channels', 'openIn'])
+    expect(layout.more).toEqual(['git'])
+    for (const action of SIDEBAR_ACTIONS) layout = moveSidebarActionInLayout(layout, action, 'more', 99)
+    expect(layout.more).toHaveLength(SIDEBAR_ACTIONS.length + 1)
+    expect(isRowFull(layout, 'more')).toBe(false)
+    expect(parseSidebarPrefs({ version: 4, layout }).layout).toEqual(layout)
+    layout = moveSidebarActionInLayout(layout, 'git', 'header', 99)
+    expect(layout.header.at(-1)).toBe('git')
+    expect(layout.more).not.toContain('git')
   })
 })

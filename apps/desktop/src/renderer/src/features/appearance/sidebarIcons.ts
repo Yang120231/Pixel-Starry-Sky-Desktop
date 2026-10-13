@@ -3,7 +3,6 @@ import {
   Bolt,
   ChartColumn,
   ChartNoAxesCombined,
-  Cloud,
   Folder,
   FolderOpen,
   FolderPlus,
@@ -29,9 +28,10 @@ export type SidebarAction = (typeof SIDEBAR_ACTIONS)[number]
 /**
  * 原右上角顶栏的工具；图标固定，位置可与侧栏动作互换。
  * 终端、编辑器（</>）、命令面板已于 2026-10-10 移除（D066）：终端和文件在右侧工作区，命令面板用 Ctrl+Shift+P；
+ * 云主机 2026-10-13 并进顶栏的机器菜单（「本机 ▾」›「管理机器…」，docs/ui/ui-polish-2026-10-13.md §6）。
  * 保存的布局里如果还有它们，读取时自动丢弃。
  */
-export const HEADER_ACTIONS = ['workbench', 'machines', 'channels', 'git', 'openIn'] as const
+export const HEADER_ACTIONS = ['workbench', 'channels', 'git', 'openIn'] as const
 export type HeaderAction = (typeof HEADER_ACTIONS)[number]
 
 /** 图标位置编辑器里可移动的全部入口 */
@@ -40,7 +40,6 @@ export type LayoutAction = (typeof LAYOUT_ACTIONS)[number]
 
 const HEADER_ICONS: Record<HeaderAction, LucideIcon> = {
   workbench: LayoutDashboard,
-  machines: Cloud,
   channels: MessageSquare,
   git: GitBranch,
   openIn: SquareArrowOutUpRight,

@@ -1,7 +1,15 @@
 // 「打开方式」（GitHub #12，docs/ui/open-with.md）：顶栏的分体按钮。左边直接用默认程序打开当前工作区，
 // 右边的 ▾ 列出本机装了的编辑器、文件资源管理器和终端，标出默认的，可以改默认。图标位置里能挪走或隐藏。
 import { useEffect, useState } from 'react'
-import { Check, ChevronDown, FolderOpen, Settings, SquareArrowOutUpRight, SquareTerminal } from 'lucide-react'
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  FolderOpen,
+  Settings,
+  SquareArrowOutUpRight,
+  SquareTerminal,
+} from 'lucide-react'
 import { cn, Popover, useToast } from '@/ui'
 import { isDemo } from '@/data'
 import { useI18n } from '@/i18n/I18nProvider'
@@ -13,6 +21,7 @@ import type { EditorItem, EditorState, OpenTool } from '../../../../shared/types
 import { EditorIcon, editorLabel } from './EditorIcon'
 import { refreshEditors, setEditors, useEditors } from './store'
 import { useActiveWorkspace } from './target'
+import { useToolbarState } from '@/features/layout/ToolbarContext'
 
 type Choice = { kind: 'editor'; item: EditorItem } | { kind: 'tool'; tool: OpenTool }
 
@@ -60,6 +69,7 @@ export function OpenInButton({ placement }: { placement: SidebarPlacement }) {
   const workspace = useActiveWorkspace()
   const [menu, setMenu] = useState(false)
   const [busy, setBusy] = useState(false)
+  const { closeMenu } = useToolbarState()
   // 启动后空闲时读一次（要查注册表和安装目录），点按钮时就知道默认是哪个
   useEffect(() => {
     if (state) return
@@ -82,6 +92,7 @@ export function OpenInButton({ placement }: { placement: SidebarPlacement }) {
     try {
       await window.pixelsky!.editor.open(ref, choiceId(choice))
       setMenu(false)
+      closeMenu?.()
     } catch (e) {
       toast(translateMessage((e as Error).message))
     } finally {
@@ -111,8 +122,9 @@ export function OpenInButton({ placement }: { placement: SidebarPlacement }) {
     : current
       ? tr('openWith.openWith', { p0: choiceName(current), p1: workspace.name })
       : tr('openWith.choose')
-  const side = placement === 'bottom' ? 'bottom-full mb-1' : 'top-full mt-1'
-  const align = placement === 'header' ? 'right-0' : 'left-0'
+  // 在「更多工具」菜单里时列表从左边弹出（菜单贴着窗口右边）
+  const side = placement === 'more' ? '-top-1' : placement === 'bottom' ? 'bottom-full mb-1' : 'top-full mt-1'
+  const align = placement === 'more' ? 'right-full mr-2' : placement === 'header' ? 'right-0' : 'left-0'
 
   const row = (choice: Choice) => {
     const id = choiceId(choice),
@@ -148,34 +160,61 @@ export function OpenInButton({ placement }: { placement: SidebarPlacement }) {
     )
   }
 
-  return (
-    <span data-open-in className="relative inline-flex shrink-0 items-center">
-      <span
-        className={cn('inline-flex h-8 items-center rounded-md', menu && 'bg-active', !!disabledReason && 'opacity-40')}
+  const trigger =
+    placement === 'more' ? (
+      <button
+        type="button"
+        data-menu-item
+        aria-haspopup="menu"
+        aria-expanded={menu}
+        title={disabledReason ?? undefined}
+        disabled={!!disabledReason}
+        onClick={showMenu}
+        className={cn(
+          'flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-ui text-fg hover:bg-hover disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent',
+          menu && 'bg-hover',
+        )}
       >
-        <button
-          type="button"
-          aria-label={label}
-          title={label}
-          disabled={!!disabledReason || busy}
-          onClick={() => (current ? void open(current) : showMenu())}
-          className="press no-drag inline-flex h-8 items-center gap-1.5 rounded-l-md pr-1 pl-2 text-fg-secondary hover:bg-hover hover:text-fg disabled:hover:bg-transparent"
+        <SquareArrowOutUpRight size={15} strokeWidth={1.5} className="shrink-0 text-fg-secondary" />
+        <span className="flex-1">{tr('sidebar.action.openIn')}</span>
+        <ChevronRight size={14} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
+      </button>
+    ) : null
+
+  return (
+    <span data-open-in className={cn('relative shrink-0 items-center', trigger ? 'flex w-full' : 'inline-flex')}>
+      {trigger ?? (
+        <span
+          className={cn(
+            'inline-flex h-8 items-center rounded-md',
+            menu && 'bg-active',
+            !!disabledReason && 'opacity-40',
+          )}
         >
-          <ChoiceIcon choice={current} />
-        </button>
-        <button
-          type="button"
-          aria-label={tr('openWith.more')}
-          title={tr('openWith.more')}
-          aria-haspopup="menu"
-          aria-expanded={menu}
-          disabled={!!disabledReason}
-          onClick={showMenu}
-          className="press no-drag inline-flex h-8 w-5 items-center justify-center rounded-r-md text-fg-muted hover:bg-hover hover:text-fg disabled:hover:bg-transparent"
-        >
-          <ChevronDown size={13} strokeWidth={1.5} />
-        </button>
-      </span>
+          <button
+            type="button"
+            aria-label={label}
+            title={label}
+            disabled={!!disabledReason || busy}
+            onClick={() => (current ? void open(current) : showMenu())}
+            className="press no-drag inline-flex h-8 items-center gap-1.5 rounded-l-md pr-1 pl-2 text-fg-secondary hover:bg-hover hover:text-fg disabled:hover:bg-transparent"
+          >
+            <ChoiceIcon choice={current} />
+          </button>
+          <button
+            type="button"
+            aria-label={tr('openWith.more')}
+            title={tr('openWith.more')}
+            aria-haspopup="menu"
+            aria-expanded={menu}
+            disabled={!!disabledReason}
+            onClick={showMenu}
+            className="press no-drag inline-flex h-8 w-5 items-center justify-center rounded-r-md text-fg-muted hover:bg-hover hover:text-fg disabled:hover:bg-transparent"
+          >
+            <ChevronDown size={13} strokeWidth={1.5} />
+          </button>
+        </span>
+      )}
       <Popover open={menu} onClose={() => setMenu(false)} className={cn(side, align, 'max-h-96 w-64 overflow-auto')}>
         <p className="px-2 pt-1 pb-1.5 text-meta text-fg-muted">
           {tr('openWith.title', { p0: workspace.name || tr('openWith.workspace') })}
@@ -202,6 +241,7 @@ export function OpenInButton({ placement }: { placement: SidebarPlacement }) {
           data-menu-item
           onClick={() => {
             setMenu(false)
+            closeMenu?.()
             settings.openSettings('editor')
           }}
           className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-ui text-fg-secondary hover:bg-hover hover:text-fg"

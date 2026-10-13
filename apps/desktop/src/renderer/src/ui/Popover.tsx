@@ -22,7 +22,13 @@ export function Popover({ open, onClose, className, children }: PopoverProps) {
     }
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
-      else if (!e.defaultPrevented && ref.current && !isTypingTarget(document.activeElement))
+      // 里面又开着一层（「更多工具」里的打开方式）时交给里层
+      else if (
+        !e.defaultPrevented &&
+        ref.current &&
+        !ref.current.querySelector('[data-popover]') &&
+        !isTypingTarget(document.activeElement)
+      )
         pickByDigit(e, [...ref.current.querySelectorAll<HTMLElement>('[data-menu-item]:not(:disabled)')])
     }
     document.addEventListener('mousedown', onDown)
@@ -36,6 +42,7 @@ export function Popover({ open, onClose, className, children }: PopoverProps) {
   return (
     <div
       ref={ref}
+      data-popover
       className={cn(
         'pop-in no-drag absolute z-40 min-w-44 rounded-lg border border-line-card bg-popover p-1 shadow-menu',
         className,

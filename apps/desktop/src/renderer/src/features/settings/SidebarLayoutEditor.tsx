@@ -6,6 +6,7 @@ import {
   ArrowRight,
   ArrowUp,
   ChevronDown,
+  EllipsisVertical,
   PanelRight,
   RotateCcw,
   Search,
@@ -218,6 +219,11 @@ export function SidebarLayoutEditor() {
                   <ChevronDown size={13} strokeWidth={1.5} />
                 </span>
               )}
+              {placement === 'more' && (
+                <span className="inline-flex size-8 shrink-0 items-center justify-center text-fg-faint">
+                  <EllipsisVertical size={16} strokeWidth={1.5} />
+                </span>
+              )}
               {placement === 'top' && (
                 <span
                   title={tr('sidebar.layout.searchFixed')}
@@ -237,8 +243,14 @@ export function SidebarLayoutEditor() {
               )}
               <div
                 data-layout-items
-                className={cn('flex min-h-8 min-w-1 flex-wrap items-center gap-1', placement !== 'header' && 'ml-auto')}
+                className={cn(
+                  'flex min-h-8 min-w-1 flex-wrap items-center gap-1',
+                  (placement === 'top' || placement === 'bottom') && 'ml-auto',
+                )}
               >
+                {placement === 'more' && !prefs.layout.more.length && (
+                  <span className="px-1 text-meta text-fg-faint">{tr('sidebar.layout.moreEmpty')}</span>
+                )}
                 {prefs.layout[placement].map(action => {
                   const Icon = getLayoutIcon(action, prefs.icons)
                   return (

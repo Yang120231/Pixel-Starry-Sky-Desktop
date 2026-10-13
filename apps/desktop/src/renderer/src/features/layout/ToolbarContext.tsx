@@ -5,6 +5,8 @@ export interface ToolbarState {
   panelOpen: boolean
   filesPanelOpen?: boolean
   onCloseFiles?: () => void
+  /** 在顶栏「⋮ 更多工具」菜单里：点了一项后关掉菜单（docs/ui/ui-polish-2026-10-13.md §6） */
+  closeMenu?: () => void
 }
 
 export const ToolbarContext = createContext<ToolbarState>({ panelOpen: false })

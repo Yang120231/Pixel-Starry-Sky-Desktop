@@ -1,6 +1,7 @@
 export const machineMessages = {
   'machines.title': { zh: '机器与连接', en: 'Machines & connections' },
   'machines.switch': { zh: '切换机器', en: 'Switch machine' },
+  'machines.manage': { zh: '管理机器…', en: 'Manage machines…' },
   'machines.local': { zh: '本机', en: 'This computer' },
   'machines.add': { zh: '添加 SSH 机器', en: 'Add SSH machine' },
   'machines.edit': { zh: '编辑连接', en: 'Edit connection' },

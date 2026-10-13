@@ -1,15 +1,17 @@
-import { ChevronDown, Ellipsis, GitBranch, PanelLeft, PanelRight } from 'lucide-react'
-import { cn, IconButton, useComingSoon } from '@/ui'
+import { Fragment, useState } from 'react'
+import { Ellipsis, EllipsisVertical, GitBranch, PanelLeft, PanelRight } from 'lucide-react'
+import { cn, IconButton, Popover, useComingSoon } from '@/ui'
 import { isMac } from '@/features/layout/keybindings'
 import { TOGGLE_PANEL, TOGGLE_SIDEBAR, withShortcut } from '@/features/layout/shortcuts'
 import { useI18n } from '@/i18n/I18nProvider'
 import { useCommandPalette } from '@/features/commands/CommandPaletteProvider'
-import { openMachineManager, useMachines } from '@/features/machines/store'
-import { useSidebarPrefs } from '@/features/appearance/sidebar'
+import { MachineMenu } from '@/features/machines/MachineMenu'
+import { useNarrowWindow } from '@/features/layout/narrowWindow'
+import { useSidebarPrefs, type LayoutAction } from '@/features/appearance/sidebar'
 import { addProject, isLive } from '@/features/engine'
 import { tr } from '@/i18n/core'
 import { LayoutActionButton } from '@/features/layout/LayoutActionButton'
-import { ToolbarContext } from '@/features/layout/ToolbarContext'
+import { ToolbarContext, type ToolbarState } from '@/features/layout/ToolbarContext'
 import { paneActions } from '@/features/panes/store'
 import { useGitSummary } from '@/features/panel/git/summary'
 import { HeaderBranch } from './HeaderBranch'
@@ -33,6 +35,21 @@ interface SessionHeaderProps {
 const ACTION =
   'press no-drag inline-flex h-8 shrink-0 items-center justify-center gap-1 rounded-md px-2 text-fg-muted hover:bg-hover hover:text-fg'
 
+/** 窗口窄时从顶栏收进「更多工具」的（docs/ui/ui-polish-2026-10-13.md §6） */
+const COLLAPSIBLE: readonly LayoutAction[] = ['git', 'openIn']
+const PAGES: readonly LayoutAction[] = ['workbench', 'channels']
+
+/** 顶栏这一排：工作台、协作频道挨着时包成一个两段切换 */
+function groupHeader(actions: LayoutAction[]): LayoutAction[][] {
+  const out: LayoutAction[][] = []
+  for (const action of actions) {
+    const last = out.at(-1)
+    if (last?.length === 1 && PAGES.includes(last[0]) && PAGES.includes(action)) last.push(action)
+    else out.push([action])
+  }
+  return out
+}
+
 /** 跨会话区和右面板的顶栏：标题在左，工具在右侧连续排列。
  *  机器切换和右面板开关固定，中间工具的顺序和去留由图标位置设置决定（docs/ui/sidebar-compact-controls.md）。 */
 export function SessionHeader({
@@ -47,15 +64,16 @@ export function SessionHeader({
   onCloseFiles,
   panelToggle,
 }: SessionHeaderProps) {
-  useI18n()
-  const machineState = useMachines(),
-    machine = machineState.machines.find(m => m.id === machineState.currentId)
   const { text } = useI18n()
   const commands = useCommandPalette()
   const comingSoon = useComingSoon()
   const { layout } = useSidebarPrefs()
+  const narrow = useNarrowWindow()
+  const header = narrow ? layout.header.filter(a => !COLLAPSIBLE.includes(a)) : layout.header
+  const more = [...(narrow ? layout.header.filter(a => COLLAPSIBLE.includes(a)) : []), ...layout.more]
   const onAddProject = isLive ? () => void addProject() : () => comingSoon(tr('sidebar.Sidebar.addProject'))
   const onNewTask = isLive ? () => paneActions.open(null) : undefined
+  const callbacks = { onAddProject, onNewTask }
   return (
     <header
       // macOS 侧边栏收起时左上角是红绿灯（index.ts 的 trafficLightPosition），让开
@@ -87,31 +105,30 @@ export function SessionHeader({
         )}
       </div>
       <div className="header-tools no-drag ml-auto flex shrink-0 items-center gap-0.5">
-        <button
-          type="button"
-          title={machine?.host ? `${machine.name} · ${machine.username}@${machine.host}` : text('切换机器')}
-          aria-label={text('切换机器')}
-          onClick={openMachineManager}
-          className={ACTION}
-        >
-          <span
-            className={`size-1.5 shrink-0 rounded-full ${machine && ['local', 'connected'].includes(machine.status) ? 'bg-online' : 'bg-warn'}`}
-          />
-          <span className="max-w-40 truncate text-meta @max-[680px]:hidden">
-            {machine?.id === 'local' ? text('本机') : machine?.name}
-          </span>
-          <ChevronDown size={13} strokeWidth={1.5} />
-        </button>
+        <MachineMenu className={ACTION} />
         <ToolbarContext.Provider value={{ panelOpen, filesPanelOpen, onCloseFiles }}>
-          {layout.header.map(action => (
-            <LayoutActionButton
-              key={action}
-              action={action}
-              placement="header"
-              onAddProject={onAddProject}
-              onNewTask={onNewTask}
-            />
-          ))}
+          {groupHeader(header).map(group =>
+            group.length > 1 ? (
+              <div
+                key={group.join()}
+                role="group"
+                aria-label={tr('sidebar.pages')}
+                data-header-pages
+                className="mx-0.5 inline-flex shrink-0 items-center rounded-lg bg-subtle p-0.5"
+              >
+                {group.map(action => (
+                  <LayoutActionButton key={action} action={action} placement="header" {...callbacks} />
+                ))}
+              </div>
+            ) : (
+              <Fragment key={group[0]}>
+                <LayoutActionButton action={group[0]} placement="header" {...callbacks} />
+              </Fragment>
+            ),
+          )}
+          {more.length > 0 && (
+            <MoreTools actions={more} toolbar={{ panelOpen, filesPanelOpen, onCloseFiles }} {...callbacks} />
+          )}
         </ToolbarContext.Provider>
         {panelToggle === undefined ? (
           <IconButton
@@ -138,6 +155,51 @@ export function SessionHeader({
         )}
       </div>
     </header>
+  )
+}
+
+/** 顶栏「⋮ 更多工具」：图标位置里放进「更多」的，加上窗口窄时收起来的 Git、打开方式；每项一行带文字 */
+function MoreTools({
+  actions,
+  toolbar,
+  onAddProject,
+  onNewTask,
+}: {
+  actions: LayoutAction[]
+  toolbar: ToolbarState
+  onAddProject: () => void
+  onNewTask?: () => void
+}) {
+  useI18n()
+  const [open, setOpen] = useState(false)
+  return (
+    <span className="relative inline-flex shrink-0">
+      <IconButton
+        icon={EllipsisVertical}
+        label={tr('sidebar.moreTools')}
+        size={32}
+        iconSize={16}
+        active={open}
+        data-more-tools
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onMouseDown={e => open && e.stopPropagation()}
+        onClick={() => setOpen(v => !v)}
+      />
+      <Popover open={open} onClose={() => setOpen(false)} className="top-full right-0 mt-1 w-56">
+        <ToolbarContext.Provider value={{ ...toolbar, closeMenu: () => setOpen(false) }}>
+          {actions.map(action => (
+            <LayoutActionButton
+              key={action}
+              action={action}
+              placement="more"
+              onAddProject={onAddProject}
+              onNewTask={onNewTask}
+            />
+          ))}
+        </ToolbarContext.Provider>
+      </Popover>
+    </span>
   )
 }
 

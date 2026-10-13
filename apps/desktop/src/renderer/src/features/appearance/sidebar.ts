@@ -12,11 +12,12 @@ import {
 
 export type { HeaderAction, LayoutAction, SidebarAction, SidebarIconId, SidebarIcons } from './sidebarIcons'
 
-/** header 是窗口右上角顶栏，top / bottom 是侧栏顶部和底部 */
-export type SidebarPlacement = 'header' | 'top' | 'bottom'
+/** header 是窗口右上角顶栏，more 是顶栏「⋮ 更多工具」菜单里（docs/ui/ui-polish-2026-10-13.md §6），top / bottom 是侧栏顶部和底部 */
+export type SidebarPlacement = 'header' | 'more' | 'top' | 'bottom'
 
 export interface SidebarLayout {
   header: LayoutAction[]
+  more: LayoutAction[]
   top: LayoutAction[]
   bottom: LayoutAction[]
 }
@@ -31,14 +32,15 @@ export interface SidebarPrefs {
 
 export const SIDEBAR_PREFS_KEY = 'pixelsky.sidebar'
 export const DEFAULT_SIDEBAR_LAYOUT: SidebarLayout = {
-  header: ['workbench', 'machines', 'channels', 'git', 'openIn'],
+  header: ['workbench', 'channels', 'git', 'openIn'],
+  more: [],
   top: ['addProject', 'newTask'],
   bottom: ['usage', 'plugins', 'settings'],
 }
-/** 侧栏最窄 240px 时一排放得下的可移动图标（顶部还有搜索、底部还有账号各占一格）；顶栏不限 */
+/** 侧栏最窄 240px 时一排放得下的可移动图标（顶部还有搜索、底部还有账号各占一格）；顶栏和更多菜单不限 */
 export const SIDEBAR_ROW_LIMIT = 5
 
-export const LAYOUT_PLACEMENTS: readonly SidebarPlacement[] = ['header', 'top', 'bottom']
+export const LAYOUT_PLACEMENTS: readonly SidebarPlacement[] = ['header', 'more', 'top', 'bottom']
 
 /** 改名的入口：自动化换成了 Git（D061），保存的位置原样沿用 */
 const RENAMED: Record<string, LayoutAction> = { automation: 'git' }
@@ -48,12 +50,12 @@ function isLayoutAction(value: unknown): value is LayoutAction {
 }
 
 export function isRowFull(layout: SidebarLayout, row: SidebarPlacement, moving?: LayoutAction): boolean {
-  return row !== 'header' && layout[row].filter(item => item !== moving).length >= SIDEBAR_ROW_LIMIT
+  return (row === 'top' || row === 'bottom') && layout[row].filter(item => item !== moving).length >= SIDEBAR_ROW_LIMIT
 }
 
 /** 先保留三排已有的合法顺序，再把缺失入口补回默认排；侧栏排满时溢出到顶栏。 */
 function parseSidebarLayout(value: unknown): SidebarLayout {
-  const result: SidebarLayout = { header: [], top: [], bottom: [] }
+  const result: SidebarLayout = { header: [], more: [], top: [], bottom: [] }
   const seen = new Set<LayoutAction>()
   const place = (row: SidebarPlacement, action: LayoutAction): void => {
     result[isRowFull(result, row) ? 'header' : row].push(action)

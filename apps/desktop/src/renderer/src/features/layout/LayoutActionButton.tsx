@@ -1,6 +1,6 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { GitBranch } from 'lucide-react'
-import { IconButton } from '@/ui'
+import { IconButton, PopoverItem } from '@/ui'
 import { NavButton } from '@/features/layout/TopNav'
 import { SidebarActionButton, type SidebarActionCallbacks } from '@/features/sidebar/SidebarActionButton'
 import { isSidebarAction, type LayoutAction } from '@/features/appearance/sidebarIcons'
@@ -22,25 +22,47 @@ export function LayoutActionButton({
   return (
     <span data-layout-slot={action} className="contents">
       {isSidebarAction(action) ? (
-        <SidebarActionButton action={action} onAddProject={onAddProject} onNewTask={onNewTask} />
+        <SidebarActionButton
+          action={action}
+          onAddProject={onAddProject}
+          onNewTask={onNewTask}
+          row={placement === 'more'}
+        />
       ) : action === 'git' ? (
-        <GitButton />
+        <GitButton row={placement === 'more'} />
       ) : action === 'openIn' ? (
         <OpenInButton placement={placement} />
       ) : (
-        <NavButton id={action} />
+        <NavButton id={action} placement={placement} />
       )}
     </span>
   )
 }
 
-/** 打开右侧面板的 Git 页；已经在显示时再点收起面板（docs/ui/git-panel.md §1.1） */
-function GitButton() {
+/** 打开右侧面板的 Git 页；已经在显示时再点收起面板（docs/ui/git-panel.md §1.1）。row：「更多工具」菜单里的一行 */
+function GitButton({ row }: { row: boolean }) {
   useI18n()
-  const { panelOpen } = useToolbarState()
+  const { panelOpen, closeMenu } = useToolbarState()
   const page = usePage()
   const tab = useActivePanelTab()
   const shown = panelOpen && page === 'workbench' && tab === 'git'
+  const toggle = (): void => {
+    if (shown) window.dispatchEvent(new Event('pixelsky:close-right-workspace'))
+    else openRightTab('git')
+  }
+  if (row)
+    return (
+      <PopoverItem
+        icon={<GitBranch size={15} strokeWidth={1.5} className="text-fg-secondary" />}
+        selected={shown}
+        onClick={() => {
+          closeMenu?.()
+          toggle()
+        }}
+      >
+        {tr('sidebar.action.git')}
+      </PopoverItem>
+    )
   return (
     <IconButton
       icon={GitBranch}
@@ -48,10 +70,7 @@ function GitButton() {
       size={32}
       iconSize={16}
       active={shown}
-      onClick={() => {
-        if (shown) window.dispatchEvent(new Event('pixelsky:close-right-workspace'))
-        else openRightTab('git')
-      }}
+      onClick={toggle}
     />
   )
 }
