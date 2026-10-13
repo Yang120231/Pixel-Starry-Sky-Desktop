@@ -167,10 +167,18 @@ function Agents({ agents, divided }: { agents: ProgressAgent[]; divided: boolean
                 <StateIcon state={a.state} />
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="flex min-w-0 items-center gap-1.5 text-list">
+                    {/* 任务名优先：模型名、类型限宽、先缩到三个字宽，长了各自省略（GitHub #38） */}
                     <span className="min-w-0 truncate text-fg">{a.label}</span>
-                    {a.model && <span className="shrink-0 text-meta text-fg-faint">{shortModel(a.model)}</span>}
+                    {a.model && (
+                      <span
+                        title={a.model}
+                        className="max-w-[35%] min-w-[3em] shrink-[10] truncate text-meta text-fg-faint"
+                      >
+                        {shortModel(a.model)}
+                      </span>
+                    )}
                     {a.type && (
-                      <span className="shrink-0 rounded-sm border border-line px-1 text-meta leading-[1.4] text-fg-muted">
+                      <span className="max-w-[30%] min-w-[3em] shrink-[10] truncate rounded-sm border border-line px-1 text-meta leading-[1.4] text-fg-muted">
                         {a.type}
                       </span>
                     )}

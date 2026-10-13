@@ -1092,6 +1092,22 @@ export const catalog = {
     "zh": "关闭（Esc）",
     "en": "Close (Esc)"
   },
+  "session.live.AgentTracePanel.float": {
+    "zh": "浮动",
+    "en": "Float"
+  },
+  "session.live.AgentTracePanel.dockRight": {
+    "zh": "停靠回右侧",
+    "en": "Dock to the right"
+  },
+  "session.live.AgentTracePanel.resizeWidth": {
+    "zh": "调整追踪窗口宽度",
+    "en": "Resize trace panel width"
+  },
+  "session.live.AgentTracePanel.moveWindow": {
+    "zh": "移动追踪窗口（方向键移动，Shift + 方向键调整大小，双击停靠）",
+    "en": "Move trace window (arrows move, Shift + arrows resize, double-click to dock)"
+  },
   "session.live.AgentTracePanel.noSubagentsRunningYet": {
     "zh": "还没有子智能体运行",
     "en": "No subagents running yet"

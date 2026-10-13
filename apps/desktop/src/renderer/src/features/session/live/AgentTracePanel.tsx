@@ -4,10 +4,22 @@ import { tr, type TranslationKey } from '../../../i18n/core'
 // 智能体追踪面板（docs/engines.md §15.4，参考 JuCode AgentRunsPanel）：
 // 会话主区右侧的抽屉。总览：每个多智能体编排一节（按阶段、共用时间轴），再加「子智能体（Agent 工具）」一节；
 // 点一个智能体进入它的会话（只读），还在运行时每 2.5 秒刷新。
-import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Bot, Check, ChevronRight, CircleDashed, Minus, Workflow, X, type LucideIcon } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  ArrowLeft,
+  Bot,
+  Check,
+  ChevronRight,
+  CircleDashed,
+  Minus,
+  PanelRight,
+  PictureInPicture2,
+  Workflow,
+  X,
+  type LucideIcon,
+} from 'lucide-react'
 import type { AgentRun, AgentRuns, Item, WorkflowRun } from '@pixelsky/protocol'
-import { IconButton, Spinner, cn } from '@/ui'
+import { IconButton, ResizeHandle, Spinner, cn } from '@/ui'
 import { bridge } from '@/features/engine'
 import { isDemo } from '@/data'
 import { demo } from '@/data/demo'
@@ -26,6 +38,24 @@ import {
 } from './agentTrace'
 import { Markdown } from '@/ui/markdown/Markdown'
 import { ReasoningBlock, ToolItemRow, UserBubble } from './ItemRows'
+import { useDockFloat, type DragKind } from './useDockFloat'
+import type { ResizeDir } from './traceWindow'
+
+/** 会话顶部栏高度（top-12）和面板标题栏高度（h-11） */
+const SESSION_HEADER = 48
+const PANEL_HEADER = 44
+
+/** 浮动时的 8 个缩放把手：四条边和四个角 */
+const FLOAT_HANDLES: Record<ResizeDir, string> = {
+  n: 'inset-x-3 -top-1 h-2 cursor-ns-resize',
+  s: 'inset-x-3 -bottom-1 h-2 cursor-ns-resize',
+  w: 'inset-y-3 -left-1 w-2 cursor-ew-resize',
+  e: 'inset-y-3 -right-1 w-2 cursor-ew-resize',
+  nw: '-top-1 -left-1 size-4 cursor-nwse-resize',
+  se: '-right-1 -bottom-1 size-4 cursor-nwse-resize',
+  ne: '-top-1 -right-1 size-4 cursor-nesw-resize',
+  sw: '-bottom-1 -left-1 size-4 cursor-nesw-resize',
+}
 
 const STATE_ICON: Record<RunState, LucideIcon | null> = {
   running: null,
@@ -91,7 +121,7 @@ function AgentRow({
         <span className="block truncate text-list text-fg">
           {a.label || a.id || tr('session.live.AgentTracePanel.queued')}
         </span>
-        <span className="block truncate text-label text-fg-faint">
+        <span className="block truncate text-label text-fg-faint" title={a.model || undefined}>
           {[a.type, shortModel(a.model)].filter(Boolean).join(' · ')}
         </span>
       </span>
@@ -293,7 +323,9 @@ function AgentFocus({
         <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 pl-6 text-meta text-fg-muted tabular-nums">
           {run && <span>{run.name || run.description}</span>}
           {[agent.type, shortModel(agent.model)].filter(Boolean).length > 0 && (
-            <span>{[agent.type, shortModel(agent.model)].filter(Boolean).join(' · ')}</span>
+            <span title={agent.model || undefined}>
+              {[agent.type, shortModel(agent.model)].filter(Boolean).join(' · ')}
+            </span>
           )}
           <span>{RUN_STATE_LABEL[s]}</span>
           <span>{formatDuration(elapsed(agent, s, now))}</span>
@@ -386,29 +418,105 @@ export function AgentTracePanel({ sessionId, runs, focus, onFocus, onClose, belo
   const agentBars = useMemo(() => timeline(runs.agents, now), [runs.agents, now])
   const empty = runs.workflows.length === 0 && runs.agents.length === 0
 
+  // 停靠 / 浮动：量面板的父元素（会话主区），位置计算见 traceWindow.ts
+  const rootRef = useRef<HTMLElement>(null)
+  const win = useDockFloat(rootRef, {
+    topOffset: belowHeader ? SESSION_HEADER : 0,
+    headerHeight: PANEL_HEADER,
+  })
+  const cancelDrag = win.cancelDrag
+
   // Esc 关闭：在捕获阶段先拿到并标记已处理，输入框就不会再用这次 Esc 停止回复（docs/ui/conversation-ux.md §2.5）
+  // 拖动窗口时 Esc 只撤回这次拖动；停靠宽度把手拖动中由把手自己处理（它在 data-layout-resize 期间接管 Esc）
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented) return
+      if (cancelDrag()) {
+        e.preventDefault()
+        e.stopPropagation()
+        return
+      }
+      if (document.documentElement.dataset.layoutResize) return
       e.preventDefault()
       onClose()
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [onClose])
+  }, [onClose, cancelDrag])
+
+  const { rect } = win
+  const floatToggle = win.floating ? (
+    <IconButton icon={PanelRight} label={tr('session.live.AgentTracePanel.dockRight')} onClick={win.toggle} />
+  ) : (
+    <IconButton
+      icon={PictureInPicture2}
+      label={tr('session.live.AgentTracePanel.float')}
+      disabled={!win.canFloat}
+      onClick={win.toggle}
+    />
+  )
 
   return (
     <aside
+      ref={rootRef}
       // 底色用卡片色：工作台里 --bg-app 是透明的，用它会透出下面的对话（docs/ui/conversation-ux.md §2.2）
       className={cn(
-        'pop-in absolute right-0 bottom-0 z-30 flex w-[min(560px,92%)] flex-col border-l border-line bg-surface shadow-popover',
-        belowHeader ? 'top-12' : 'top-0',
+        'pop-in absolute z-30 flex flex-col bg-surface shadow-popover',
+        rect
+          ? 'rounded-xl border border-line'
+          : cn('right-0 bottom-0 border-l border-line', belowHeader ? 'top-12' : 'top-0'),
       )}
+      style={
+        rect
+          ? { left: rect.x, top: rect.y + (belowHeader ? SESSION_HEADER : 0), width: rect.w, height: rect.h }
+          : { width: `min(${win.dockWidth}px, 90%)` }
+      }
       aria-label={tr('session.live.AgentTracePanel.agentActivity')}
     >
-      <header className="flex h-11 shrink-0 items-center gap-2 border-b border-line px-4">
+      {rect ? (
+        (Object.keys(FLOAT_HANDLES) as ResizeDir[]).map(dir => (
+          <div
+            key={dir}
+            data-no-drag
+            aria-hidden="true"
+            className={cn('absolute z-20 touch-none', FLOAT_HANDLES[dir])}
+            {...win.dragProps(dir as DragKind)}
+          />
+        ))
+      ) : (
+        <ResizeHandle
+          label={tr('session.live.AgentTracePanel.resizeWidth')}
+          axis="x"
+          scale={-1}
+          value={win.dockWidth}
+          min={win.dockMin}
+          max={win.dockMax}
+          className="top-0 bottom-0 -left-1"
+          onChange={win.dockPreview}
+          onCommit={win.dockCommit}
+          onCancel={() => win.dockPreview(null)}
+          onReset={win.dockReset}
+        />
+      )}
+      <header
+        className={cn(
+          'flex h-11 shrink-0 touch-none items-center gap-2 border-b border-line px-4 select-none',
+          rect &&
+            'cursor-move rounded-t-xl focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent',
+        )}
+        tabIndex={rect ? 0 : undefined}
+        aria-label={rect ? tr('session.live.AgentTracePanel.moveWindow') : undefined}
+        title={rect ? tr('session.live.AgentTracePanel.moveWindow') : undefined}
+        onKeyDown={win.headerKey}
+        onDoubleClick={e => {
+          if (!(e.target as HTMLElement).closest('button')) win.toggle()
+        }}
+        {...win.dragProps('move')}
+      >
         <Bot size={16} strokeWidth={1.5} className="shrink-0 text-fg-secondary" />
-        <span className="text-ui font-medium text-fg">{tr('session.live.AgentTracePanel.agentActivity')}</span>
+        <span className="shrink-0 text-ui font-medium whitespace-nowrap text-fg">
+          {tr('session.live.AgentTracePanel.agentActivity')}
+        </span>
         {!empty && (
           <span className="min-w-0 truncate text-meta text-fg-muted tabular-nums">
             {[
@@ -427,6 +535,7 @@ export function AgentTracePanel({ sessionId, runs, focus, onFocus, onClose, belo
           </span>
         )}
         <span className="flex-1" />
+        {floatToggle}
         <IconButton icon={X} label={tr('session.live.AgentTracePanel.closeEsc')} onClick={onClose} />
       </header>
       <div className="selectable min-h-0 flex-1 overflow-y-auto px-4 py-4">

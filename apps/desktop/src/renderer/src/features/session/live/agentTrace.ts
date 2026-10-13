@@ -67,8 +67,15 @@ export function formatDuration(ms: number): string {
 /** 28,470 */
 export const formatCount = (n: number): string => Math.round(n).toLocaleString('en-US')
 
-/** claude-sonnet-5-5 → sonnet-5-5 */
-export const shortModel = (model: string): string => model.replace(/^claude-/, '')
+/**
+ * 列表里的短模型名：去掉厂商前缀、[1m] 标记和 claude-（GitHub #38），完整名放在悬停提示里。
+ * claude-sonnet-5-5 → sonnet-5-5；anthropic/claude-v4.1flash[1m] → v4.1flash
+ */
+export const shortModel = (model: string): string =>
+  model
+    .replace(/\[1m\]$/i, '')
+    .replace(/^.*\//, '')
+    .replace(/^claude-/, '') || model
 
 /** 每个智能体的时间线条在共用时间轴上的位置（百分比） */
 export function timeline(agents: AgentRun[], now: number): Map<string, { left: number; width: number }> {

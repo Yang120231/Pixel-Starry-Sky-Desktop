@@ -416,6 +416,18 @@
 :root[data-layout-resize='y'] * {
   cursor: row-resize !important;
 }
+:root[data-layout-resize='move'],
+:root[data-layout-resize='move'] * {
+  cursor: move !important;
+}
+:root[data-layout-resize='nwse'],
+:root[data-layout-resize='nwse'] * {
+  cursor: nwse-resize !important;
+}
+:root[data-layout-resize='nesw'],
+:root[data-layout-resize='nesw'] * {
+  cursor: nesw-resize !important;
+}
 .layout-resize-handle {
   position: absolute;
   z-index: 20;
