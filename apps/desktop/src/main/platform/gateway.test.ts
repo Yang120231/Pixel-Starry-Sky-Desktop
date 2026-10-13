@@ -477,3 +477,67 @@ describe('自定义 API 经本机网关（docs/ui/custom-api.md §4.1）', () =>
     expect(calls[0].init.headers).toMatchObject({ authorization: 'Bearer sk-real-key', session_id: 'abc' })
   })
 })
+
+it('上游 input_tokens 含缓存时，平台线路和自定义 API 转发出去的都是标准口径；标准口径逐字原样（GitHub #34）', async () => {
+  const sse = (input: number, read: number) =>
+    `event: message_start\ndata: ${JSON.stringify({ type: 'message_start', message: { usage: { input_tokens: input, cache_read_input_tokens: read, cache_creation_input_tokens: 0, output_tokens: 1 } } })}\n\n` +
+    'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}\n\n'
+  let reply: () => Response = () => new Response('')
+  let record = { id: 's', engine: 'claude', model: 'm', platform: { groupId: '2', account: 'user' } } as SessionRecord
+  server = platformGateway({
+    sessions: new Map([['s', { recordId: 's', secret: 'local-secret' }]]),
+    record: () => record,
+    account: () => 'user',
+    fetch: async () => reply(),
+    upstream: async () => reply(),
+    provider: () =>
+      ({
+        id: 'p1',
+        name: 'Relay',
+        protocol: 'anthropic',
+        baseUrl: 'https://relay.example.com',
+        auth: 'x-api-key',
+        models: [{ id: 'm' }],
+        modelFallback: true,
+        apiKey: 'sk',
+        headers: {},
+      }) as unknown as ResolvedProvider,
+  })
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  const post = async (model: string) =>
+    (
+      await fetch('http://127.0.0.1:' + (server.address() as { port: number }).port + '/v1/messages', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer local-secret' },
+        body: JSON.stringify({ model }),
+      })
+    ).text()
+  const inputOf = (text: string) => JSON.parse(text.split('\n')[1].slice(6)).message.usage.input_tokens
+  const stream = (body: string) => () => new Response(body, { headers: { 'Content-Type': 'text/event-stream' } })
+
+  // 平台线路：含缓存的模型连续两个请求认定后改成标准口径，内容事件不动
+  reply = stream(sse(155_000, 154_000))
+  expect(inputOf(await post('anthropic/claude-v4.1flash'))).toBe(155_000)
+  const fixed = await post('anthropic/claude-v4.1flash')
+  expect(inputOf(fixed)).toBe(1_000)
+  expect(fixed).toContain('"text":"hi"')
+  // 同一条线路的另一个模型是标准口径：逐字原样
+  reply = stream(sse(120, 150_000))
+  expect(await post('claude-sonnet-5')).toBe(sse(120, 150_000))
+  // 非流式响应同样校正
+  reply = () =>
+    new Response(
+      JSON.stringify({ type: 'message', usage: { input_tokens: 20_000, cache_read_input_tokens: 19_500 } }),
+      {
+        headers: { 'Content-Type': 'application/json' },
+      },
+    )
+  expect(JSON.parse(await post('anthropic/claude-v4.1flash')).usage.input_tokens).toBe(500)
+
+  // 自定义 API 单独判断
+  record = { id: 's', engine: 'claude', model: 'm', platform: null, provider: { id: 'p1' } } as SessionRecord
+  reply = stream(sse(50_000, 49_000))
+  expect(inputOf(await post('m'))).toBe(50_000)
+  expect(inputOf(await post('m'))).toBe(1_000)
+})

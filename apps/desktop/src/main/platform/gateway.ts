@@ -5,6 +5,7 @@ import { describeError, logger } from '@pixelsky/engine'
 import type { SessionRecord } from '@pixelsky/protocol'
 import type { ResolvedProvider } from '../core/providers/store'
 import { classifyError, providerHeaders, upstreamUrl, type Fetch } from '../core/providers/upstream'
+import { CacheUsageFix } from './usageFix'
 
 const log = logger('gateway')
 
@@ -53,6 +54,8 @@ export function platformGateway(options: {
 }): Server {
   /** 没有计数接口的自定义接口地址 → 发现的时间；过一小时再试一次（接口可能补上了） */
   const noCountTokens = new Map<string, number>()
+  /** 上游的缓存用量口径（GitHub #34）：按线路 / 接口 + 模型记住，含缓存的改回标准口径 */
+  const usageFix = new CacheUsageFix()
   return createServer(async (req, res) => {
     const abort = new AbortController()
     res.on('close', () => abort.abort())
@@ -89,7 +92,8 @@ export function platformGateway(options: {
           ),
         )
     }
-    const pipe = async (upstream: Response): Promise<void> => {
+    /** usageKey：Messages 请求的「线路或接口 + 模型」，转发时按它校正缓存用量的口径；计数接口、Responses 不传 */
+    const pipe = async (upstream: Response, usageKey: string | null = null): Promise<void> => {
       const output: Record<string, string> = {
         'Content-Type': upstream.headers.get('Content-Type') ?? 'application/json',
         'Cache-Control': 'no-store',
@@ -103,6 +107,10 @@ export function platformGateway(options: {
       res.writeHead(upstream.status, output)
       // Messages 的 SSE 只按完整事件转发：上游中途断开时能接一个 error 事件收尾，而不是掐断连接
       const sse = !responses && output['Content-Type'].includes('text/event-stream')
+      // 非流式的成功响应（Claude Code 流式失败后会改用非流式再试）整个收齐再校正用量，响应体不大
+      const rewriter = usageKey === null ? null : usageFix.request(usageKey)
+      const whole = rewriter !== null && !sse && upstream.ok && output['Content-Type'].includes('json')
+      const held: Buffer[] = []
       let tail: Buffer = Buffer.alloc(0)
       try {
         if (upstream.body)
@@ -110,11 +118,20 @@ export function platformGateway(options: {
             if (abort.signal.aborted) break
             bytes += chunk.length
             let out = Buffer.from(chunk)
+            if (whole) {
+              held.push(out)
+              continue
+            }
             if (sse) {
               const all = tail.length ? Buffer.concat([tail, out]) : out
               const end = eventEnd(all)
               out = all.subarray(0, end)
               tail = all.subarray(end)
+              if (rewriter && out.length) {
+                const text = out.toString('utf8')
+                const fixed = rewriter.sse(text)
+                if (fixed !== text) out = Buffer.from(fixed, 'utf8')
+              }
             }
             if (out.length && !res.write(out)) await once(res, 'drain', { signal: abort.signal })
           }
@@ -126,6 +143,7 @@ export function platformGateway(options: {
         res.end(midStreamError)
         return
       }
+      if (whole && held.length) res.write(rewriter!.json(Buffer.concat(held).toString('utf8')))
       if (tail.length) res.write(tail)
       res.end()
       if (abort.signal.aborted) log.info('引擎先断开了连接', trace())
@@ -207,7 +225,8 @@ export function platformGateway(options: {
           })
         noCountTokens.set(url, Date.now())
       }
-      await pipe(upstream)
+      const model = (JSON.parse(body) as { model?: unknown }).model
+      await pipe(upstream, responses || countTokens ? null : `custom:${p.id}|${String(model ?? record.model ?? '')}`)
     }
 
     try {
@@ -299,7 +318,7 @@ export function platformGateway(options: {
         await Promise.resolve(trackRequest?.(requestId, model, chargeId)).catch(error =>
           log.warn('记不上平台请求的计费 ID', { ...trace(error), chargeId }),
         )
-      await pipe(upstream)
+      await pipe(upstream, responses ? null : `platform:${platform.groupId}|${model}`)
     } catch (error) {
       if (abort.signal.aborted) log.info('引擎先断开了连接', trace(error))
       else if (res.headersSent) log.warn('上游连接中途断开', trace(error))
