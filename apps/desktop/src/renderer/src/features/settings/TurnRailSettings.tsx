@@ -2,20 +2,24 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
 import { Segmented } from '@/ui'
 import { SettingRow } from './SettingRow'
-import { setTurnRailSide, useTurnRailSide, type TurnRailSide } from './turnRail'
+import { setTurnRailSide, useTurnRailOn } from './turnRail'
 
-/** 设置 › 外观 › 对话：轮次跳转条放哪边（docs/ui/turn-rail.md §3） */
+/** 设置 › 外观 › 对话：滚动条上显示轮次（docs/ui/turn-rail.md §3、§8）；关掉时只剩滚动条 */
 export function TurnRailSettings() {
   useI18n()
-  const side = useTurnRailSide()
-  const options: { value: TurnRailSide; label: string }[] = [
-    { value: 'left', label: tr('turnRail.left') },
-    { value: 'right', label: tr('turnRail.right') },
+  const on = useTurnRailOn()
+  const options: { value: 'on' | 'off'; label: string }[] = [
+    { value: 'on', label: tr('turnRail.on') },
     { value: 'off', label: tr('turnRail.off') },
   ]
   return (
     <SettingRow title={tr('turnRail.setting')} description={tr('turnRail.settingHint')}>
-      <Segmented label={tr('turnRail.setting')} options={options} value={side} onChange={setTurnRailSide} />
+      <Segmented
+        label={tr('turnRail.setting')}
+        options={options}
+        value={on ? 'on' : 'off'}
+        onChange={v => setTurnRailSide(v === 'on' ? 'right' : 'off')}
+      />
     </SettingRow>
   )
 }

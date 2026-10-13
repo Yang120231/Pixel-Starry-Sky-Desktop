@@ -20,6 +20,10 @@
 .conversation-scroller::-webkit-scrollbar {
   width: var(--conversation-scrollbar-width);
 }
+/* 会话的滚动条换成带轮次刻度的那条（live/TurnRail.tsx，docs/ui/turn-rail.md §8）：原生的留着位置、不画滑块 */
+.conversation-scroller[data-custom-scrollbar]::-webkit-scrollbar-thumb {
+  background: transparent;
+}
 .conversation-inset {
   width: 100%;
   min-width: 0;
@@ -33,15 +37,14 @@
 .conversation-reading-strips {
   width: calc(100% - 2 * var(--conversation-scrollbar-width));
 }
-/* 对话区（输入框上面那块）：窗格很矮时被压扁，顶上的任务条 / 智能体活动、轮次导航不能漏到输入区上面；
-   矮到放不下时先收起这两样 */
+/* 对话区（输入框上面那块）：窗格很矮时被压扁，顶上的任务条 / 智能体活动不能漏到输入区上面；
+   矮到放不下时先收起。滚动条（带轮次刻度）贴着对话区上下，不会漏出去，不收 */
 .conversation-body {
   container-name: conversation-body;
   container-type: size;
 }
 @container conversation-body (height < 160px) {
-  .conversation-reading-strips,
-  [data-turn-rail] {
+  .conversation-reading-strips {
     display: none;
   }
 }

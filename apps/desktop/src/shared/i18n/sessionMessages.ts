@@ -1,12 +1,11 @@
 export const sessionMessages = {
   // 轮次跳转条（docs/ui/turn-rail.md）
-  'turnRail.setting': { zh: '轮次跳转条', en: 'Turn navigator' },
+  'turnRail.setting': { zh: '滚动条上显示轮次', en: 'Show turns on the scrollbar' },
   'turnRail.settingHint': {
-    zh: '对话边上每一轮一个刻度，点一下跳到那一轮',
-    en: 'A tick for each turn along the conversation edge; click one to jump to it',
+    zh: '对话右边的滚动条上，每一轮画一道刻度，位置就是那一轮在对话里的位置；点刻度跳过去，鼠标停一会儿列出全部轮次',
+    en: 'Marks each turn on the conversation scrollbar at its real position; click a mark to jump there, or hover to list every turn',
   },
-  'turnRail.left': { zh: '左侧', en: 'Left' },
-  'turnRail.right': { zh: '右侧', en: 'Right' },
+  'turnRail.on': { zh: '显示', en: 'Show' },
   'turnRail.off': { zh: '关闭', en: 'Off' },
   // 一轮一张改动卡片，按子智能体分组（GitHub #40，docs/ui/subagent-changes.md）
   'session.changes.mainAgent': { zh: '主智能体', en: 'Main agent' },

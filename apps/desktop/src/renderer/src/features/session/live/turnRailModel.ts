@@ -1,4 +1,4 @@
-// 轮次跳转条（docs/ui/turn-rail.md）：轮次列表、刻度抽样、当前轮。纯函数
+// 对话区的滚动条和轮次刻度（docs/ui/turn-rail.md §8）：轮次列表、刻度位置、滑块位置、当前轮。纯函数
 import type { Item } from '@pixelsky/protocol'
 
 export interface Turn {
@@ -20,19 +20,62 @@ export function turnsOf(items: readonly Item[]): Turn[] {
   return turns
 }
 
-/** 放得下的刻度数：间距最小 3px */
-export function maxTicks(height: number, minGap = 3): number {
-  return Math.max(2, Math.floor(height / minGap))
+export interface Tick {
+  /** 这个刻度代表的第一轮（下标）；挨得太近合并时点它跳到这一轮 */
+  index: number
+  /** 合并了几轮 */
+  count: number
+  /** 在滑轨里的位置（px，从滑轨顶部算） */
+  y: number
+  /** 当前轮在这个刻度里 */
+  current: boolean
 }
 
-/** 刻度太多时按比例抽样：保留第一轮、最后一轮和当前轮，返回要画的轮次下标（升序） */
-export function sampleTurns(count: number, limit: number, current: number): number[] {
-  if (count <= limit) return Array.from({ length: count }, (_, i) => i)
-  const picked = new Set<number>([0, count - 1])
-  if (current >= 0 && current < count) picked.add(current)
-  const slots = limit - picked.size
-  for (let k = 1; k <= slots; k++) picked.add(Math.round((k * (count - 1)) / (slots + 1)))
-  return [...picked].sort((a, b) => a - b)
+/**
+ * 刻度画在每一轮在整段对话里的实际位置上，和滑块用同一把尺子（内容位置 / 内容总高 × 滑轨高）：
+ * 滑块盖住的刻度就是屏幕上正在看的那几轮。挨得比 minGap 近的合成一个，当前轮所在的那个高亮
+ */
+export function placeTicks(
+  tops: readonly number[],
+  contentHeight: number,
+  trackHeight: number,
+  current: number,
+  minGap = 3,
+): Tick[] {
+  if (contentHeight <= 0 || trackHeight <= 0) return []
+  const ticks: Tick[] = []
+  tops.forEach((top, index) => {
+    if (!Number.isFinite(top)) return
+    const y = Math.min(trackHeight, Math.max(0, (top / contentHeight) * trackHeight))
+    const last = ticks.at(-1)
+    if (last && y - last.y < minGap) {
+      last.count++
+      if (index === current) last.current = true
+    } else ticks.push({ index, count: 1, y, current: index === current })
+  })
+  return ticks
+}
+
+/** 滑块：按看得到的比例，最矮 minHeight；被最矮高度撑长时贴住滑轨底部，不出界 */
+export function thumbOf(
+  scrollTop: number,
+  viewHeight: number,
+  contentHeight: number,
+  trackHeight: number,
+  minHeight = 24,
+): { top: number; height: number } | null {
+  if (contentHeight <= viewHeight + 1 || trackHeight <= 0) return null
+  const height = Math.min(trackHeight, Math.max(minHeight, (viewHeight / contentHeight) * trackHeight))
+  const top = Math.min(trackHeight - height, Math.max(0, (scrollTop / contentHeight) * trackHeight))
+  return { top, height }
+}
+
+/** 点在滑轨上：离某个刻度 slop 以内就跳到那一轮，否则返回 null（按位置滚） */
+export function tickAt(ticks: readonly Tick[], y: number, slop = 6): Tick | null {
+  let best: Tick | null = null
+  for (const tick of ticks)
+    if (Math.abs(tick.y - y) <= slop && (!best || Math.abs(tick.y - y) < Math.abs(best.y - y))) best = tick
+  return best
 }
 
 /** 当前轮：顶部已经滚过（或接近）视口顶部的最后一轮；都还在下面时是第一轮 */

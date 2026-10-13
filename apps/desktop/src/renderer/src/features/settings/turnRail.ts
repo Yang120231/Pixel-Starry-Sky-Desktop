@@ -1,4 +1,5 @@
-// 轮次跳转条的位置（docs/ui/turn-rail.md §3）：左侧 / 右侧 / 关闭，保存在本机，多窗口同步
+// 滚动条上显示轮次（docs/ui/turn-rail.md §3、§8）：保存在本机，多窗口同步。
+// 2026-10-13 起刻度和滚动条合成一条、只在右边：存的值沿用原来的 left / right / off，left、right 都算「显示」
 import { useSyncExternalStore } from 'react'
 
 export type TurnRailSide = 'left' | 'right' | 'off'
@@ -53,4 +54,9 @@ export function useTurnRailSide(): TurnRailSide {
     () => side,
     () => DEFAULT_TURN_RAIL,
   )
+}
+
+/** 显示轮次刻度（原来选左侧、右侧的都算） */
+export function useTurnRailOn(): boolean {
+  return useTurnRailSide() !== 'off'
 }

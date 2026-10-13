@@ -15,7 +15,7 @@ import {
 } from 'react'
 import { TurnRail } from './TurnRail'
 import { turnsOf } from './turnRailModel'
-import { useTurnRailSide } from '@/features/settings/turnRail'
+import { useTurnRailOn } from '@/features/settings/turnRail'
 import type { Item, SessionSnapshot } from '@pixelsky/protocol'
 import { Spinner, cn } from '@/ui'
 import type { ChangedFiles } from '@/data'
@@ -190,7 +190,7 @@ export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot
   const running = !!snapshot && snapshot.state !== 'idle'
   const items = snapshot?.items ?? []
   // 轮次跳转条（docs/ui/turn-rail.md）
-  const railSide = useTurnRailSide()
+  const showTurns = useTurnRailOn()
   const turns = useMemo(() => turnsOf(snapshot?.items ?? []), [snapshot?.items])
   const sessionId = snapshot?.record.id ?? null
   const changesCache = useRef<{ sessionId: string | null; map: ChangesCache }>({ sessionId: null, map: new Map() })
@@ -440,6 +440,7 @@ export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot
             if (scrollUpKey(e) && !target.closest('input, textarea, select, [contenteditable="true"]')) release()
           }}
           data-search-session={snapshot?.record.id}
+          data-custom-scrollbar
           className="conversation-scroller selectable min-h-0 flex-1 overflow-y-auto bg-app"
         >
           <div
@@ -487,8 +488,9 @@ export function LiveTranscript({ snapshot, header }: { snapshot: SessionSnapshot
           </div>
         </div>
         {away && snapshot && <JumpToLatest unseen={unseen} onClick={jumpToLatest} />}
-        {railSide !== 'off' && snapshot && (
-          <TurnRail turns={turns} scroller={scroller} side={railSide} onBeforeJump={detachForSearch} />
+        {/* 滚动条和轮次刻度合成一条（docs/ui/turn-rail.md §8）；设置里关掉轮次时只剩滚动条 */}
+        {snapshot && (
+          <TurnRail turns={turns} scroller={scroller} showTurns={showTurns} onBeforeJump={detachForSearch} />
         )}
       </div>
     </ExpandScope.Provider>

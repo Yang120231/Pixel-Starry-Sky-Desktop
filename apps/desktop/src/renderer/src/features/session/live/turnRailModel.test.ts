@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Item } from '@pixelsky/protocol'
-import { currentTurn, maxTicks, sampleTurns, turnsOf } from './turnRailModel'
+import { currentTurn, placeTicks, thumbOf, tickAt, turnsOf } from './turnRailModel'
 
 const user = (id: string, text: string, mode?: 'guidance'): Item => ({ kind: 'user', id, text, createdAt: 0, mode })
 
@@ -20,13 +20,35 @@ describe('轮次跳转条', () => {
     expect(turns[1].preview).toBe(`${'长'.repeat(60)}…`)
   })
 
-  it('放得下就全画；放不下时抽样，首尾和当前轮都在', () => {
-    expect(sampleTurns(5, 10, 2)).toEqual([0, 1, 2, 3, 4])
-    const picked = sampleTurns(200, 20, 137)
-    expect(picked).toHaveLength(20)
-    expect(picked).toEqual(expect.arrayContaining([0, 137, 199]))
-    expect([...picked].sort((a, b) => a - b)).toEqual(picked)
-    expect(maxTicks(300)).toBe(100)
+  it('刻度画在实际位置上（内容位置 / 总高 × 滑轨高）；挨太近的合并，当前轮所在的那个高亮', () => {
+    // 内容 2000px，滑轨 200px：每 10px 内容 = 1px 滑轨
+    expect(placeTicks([0, 500, 1990], 2000, 200, 1)).toEqual([
+      { index: 0, count: 1, y: 0, current: false },
+      { index: 1, count: 1, y: 50, current: true },
+      { index: 2, count: 1, y: 199, current: false },
+    ])
+    const merged = placeTicks([0, 10, 20, 400], 2000, 200, 2)
+    expect(merged.map(t => [t.index, t.count, t.current])).toEqual([
+      [0, 3, true],
+      [3, 1, false],
+    ])
+    // 还没排版出来的行（量不到位置）跳过
+    expect(placeTicks([0, Number.POSITIVE_INFINITY], 2000, 200, 0)).toHaveLength(1)
+    expect(placeTicks([0], 0, 200, 0)).toEqual([])
+  })
+
+  it('滑块按看得到的比例；最矮 24px，被撑长时不出滑轨；内容放得下时没有滑块', () => {
+    expect(thumbOf(0, 500, 2000, 200)).toEqual({ top: 0, height: 50 })
+    expect(thumbOf(1000, 500, 2000, 200)).toEqual({ top: 100, height: 50 })
+    expect(thumbOf(99_000, 500, 100_000, 200)).toEqual({ top: 176, height: 24 })
+    expect(thumbOf(0, 500, 500, 200)).toBeNull()
+  })
+
+  it('点滑轨：离刻度 6px 以内对齐到那一轮，取最近的；远了按位置滚', () => {
+    const ticks = placeTicks([0, 500, 600], 2000, 200, 0)
+    expect(tickAt(ticks, 53)?.index).toBe(1)
+    expect(tickAt(ticks, 58)?.index).toBe(2)
+    expect(tickAt(ticks, 120)).toBeNull()
   })
 
   it('当前轮：滚过视口顶部的最后一轮', () => {

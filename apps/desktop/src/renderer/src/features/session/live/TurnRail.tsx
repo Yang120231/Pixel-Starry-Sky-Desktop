@@ -1,52 +1,102 @@
-// 轮次跳转条（docs/ui/turn-rail.md）：对话区左边或右边一列短刻度，每轮一个；
-// 鼠标移上去在旁边展开轮次列表（序号 + 第一行），点刻度或列表项跳到那一轮
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
+// 对话区右边的滚动条，带轮次刻度（docs/ui/turn-rail.md §8）：原来的轮次跳转条和滚动条合成一条。
+// 刻度画在每一轮的实际位置上，和滑块同一把尺子；滑块能拖，点空白处滚到那里，点刻度附近跳到那一轮；
+// 鼠标停一会儿在旁边展开轮次列表。设置里关掉轮次时只剩滚动条
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+  type RefObject,
+} from 'react'
 import { onPaneSettled, paneMoving, settledResizeObserver } from '@/features/panes/motion'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import { cn } from '@/ui'
-import { currentTurn, maxTicks, sampleTurns, type Turn } from './turnRailModel'
+import { currentTurn, placeTicks, thumbOf, tickAt, type Turn } from './turnRailModel'
 
-/** 刻度区最大高度占对话区的比例 */
-const MAX_SHARE = 0.6
-/** 展开 / 收起列表的延迟：从刻度移到列表的路上不闪 */
-const OPEN_DELAY = 120
+/** 滑轨上下留的空 */
+const PAD = 4
+// 滑块和刻度离右边 5–6px：右侧面板、分屏的拖动条（8px 宽，骑在边线上）会盖住对话区最右边 4px
+/** 展开 / 收起列表的延迟：只是路过、去拖滑块时不弹 */
+const OPEN_DELAY = 300
 const CLOSE_DELAY = 220
+
+interface Metrics {
+  scrollTop: number
+  view: number
+  content: number
+  track: number
+}
 
 export function TurnRail({
   turns,
   scroller,
-  side,
+  showTurns,
   onBeforeJump,
 }: {
   turns: Turn[]
   scroller: RefObject<HTMLDivElement | null>
-  side: 'left' | 'right'
+  /** 设置里的「滚动条上显示轮次」 */
+  showTurns: boolean
   /** 跳转前：暂停「贴底跟随」，不然新内容会把视口拉回底部 */
   onBeforeJump: () => void
 }) {
   useI18n()
-  const [current, setCurrent] = useState(0)
-  const [height, setHeight] = useState(0)
-  const [open, setOpen] = useState(false)
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const rail = useRef<HTMLElement>(null)
   const list = useRef<HTMLDivElement>(null)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const drag = useRef<{ pointer: number; y: number; top: number } | null>(null)
+  const [metrics, setMetrics] = useState<Metrics>({ scrollTop: 0, view: 0, content: 0, track: 0 })
+  const [tops, setTops] = useState<number[]>([])
+  const [current, setCurrent] = useState(0)
+  const [open, setOpen] = useState(false)
+  const [dragging, setDragging] = useState(false)
+  const withTurns = showTurns && turns.length >= 2
 
   const elementOf = (id: string): HTMLElement | null =>
     scroller.current?.querySelector<HTMLElement>(`[data-search-item="${CSS.escape(id)}"]`) ?? null
 
-  // 对话区高度 → 刻度区能用的高度
+  // 尺寸和每一轮的位置：内容高度变了（排版出真实高度、新消息）、窗格大小变了时重量
   useLayoutEffect(() => {
     const el = scroller.current
     if (!el) return
-    const measure = (): void => setHeight(Math.max(0, el.clientHeight * MAX_SHARE))
+    let frame = 0
+    const measure = (): void => {
+      frame = 0
+      const base = el.getBoundingClientRect().top - el.scrollTop
+      setTops(
+        withTurns
+          ? turns.map(t => {
+              const row = elementOf(t.id)
+              return row ? row.getBoundingClientRect().top - base : Number.POSITIVE_INFINITY
+            })
+          : [],
+      )
+      setMetrics({
+        scrollTop: el.scrollTop,
+        view: el.clientHeight,
+        content: el.scrollHeight,
+        track: Math.max(0, (rail.current?.clientHeight ?? el.clientHeight) - PAD * 2),
+      })
+    }
+    const soon = (): void => {
+      if (!frame) frame = requestAnimationFrame(measure)
+    }
     measure()
-    const ro = settledResizeObserver(measure)
+    const ro = settledResizeObserver(soon)
     ro.observe(el)
-    return () => ro.disconnect()
-  }, [scroller])
+    if (el.firstElementChild) ro.observe(el.firstElementChild)
+    return () => {
+      ro.disconnect()
+      if (frame) cancelAnimationFrame(frame)
+    }
+    // elementOf 只读 scroller
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scroller, turns, withTurns])
 
-  // 滚动时算当前轮（每帧最多一次）
+  // 滚动：滑块跟着走，算当前轮（每帧最多一次）
   useEffect(() => {
     const el = scroller.current
     if (!el) return
@@ -54,19 +104,23 @@ export function TurnRail({
       pending = false
     const update = (): void => {
       frame = 0
+      setMetrics(m => ({ ...m, scrollTop: el.scrollTop, view: el.clientHeight, content: el.scrollHeight }))
+      if (!withTurns) return
       const base = el.getBoundingClientRect().top - el.scrollTop
-      const tops = turns.map(t => {
+      const rows = turns.map(t => {
         const row = elementOf(t.id)
         return row ? row.getBoundingClientRect().top - base : Number.POSITIVE_INFINITY
       })
       // 滚到底时最后一轮可能很短、顶部还没到视口顶部：也算最后一轮
       const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 4
-      setCurrent(atBottom ? turns.length - 1 : currentTurn(tops, el.scrollTop))
+      setCurrent(atBottom ? turns.length - 1 : currentTurn(rows, el.scrollTop))
     }
-    // 窗格过渡期间贴底的对话每帧都在滚：先不算（要量每一轮的位置），结束后补一次
+    // 窗格过渡期间贴底的对话每帧都在滚：先不算当前轮（要量每一轮的位置），结束后补一次
     const onScroll = (): void => {
-      if (paneMoving(el)) pending = true
-      else if (!frame) frame = requestAnimationFrame(update)
+      if (paneMoving(el)) {
+        pending = true
+        setMetrics(m => ({ ...m, scrollTop: el.scrollTop, content: el.scrollHeight }))
+      } else if (!frame) frame = requestAnimationFrame(update)
     }
     const off = onPaneSettled(() => {
       if (!pending) return
@@ -80,9 +134,8 @@ export function TurnRail({
       el.removeEventListener('scroll', onScroll)
       if (frame) cancelAnimationFrame(frame)
     }
-    // elementOf 只读 scroller
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scroller, turns])
+  }, [scroller, turns, withTurns])
 
   const jump = (index: number): void => {
     const el = scroller.current
@@ -113,21 +166,12 @@ export function TurnRail({
       }
       requestAnimationFrame(step)
     }
-    const top = targetTop()
-    // 离得远直接跳（平滑滚过一长段既慢，又要把沿途内容都排版一遍）
-    if (Math.abs(top - el.scrollTop) > el.clientHeight * 3) {
-      el.scrollTop = top
-      settle()
-      return
-    }
-    el.scrollTo({ top, behavior: 'smooth' })
-    el.addEventListener('scrollend', settle, { once: true })
+    scrollToward(el, targetTop(), settle)
   }
 
-  if (turns.length < 2) return null
-
-  const shown = sampleTurns(turns.length, maxTicks(height, 4), current)
-  const gap = Math.min(8, Math.max(4, height / Math.max(1, shown.length)))
+  const thumb = thumbOf(metrics.scrollTop, metrics.view, metrics.content, metrics.track)
+  if (!thumb) return null
+  const ticks = withTurns ? placeTicks(tops, metrics.content, metrics.track, current) : []
 
   const later = (next: boolean, delay: number): void => {
     if (timer.current) clearTimeout(timer.current)
@@ -136,6 +180,48 @@ export function TurnRail({
   const go = (index: number): void => {
     jump(index)
     setOpen(false)
+  }
+  const railY = (clientY: number): number => clientY - (rail.current?.getBoundingClientRect().top ?? 0) - PAD
+
+  const onPointerDown = (e: PointerEvent<HTMLElement>): void => {
+    const el = scroller.current
+    if (!el || e.button !== 0) return
+    e.preventDefault()
+    if (timer.current) clearTimeout(timer.current)
+    setOpen(false)
+    const y = railY(e.clientY)
+    // 按在滑块上：拖
+    if (y >= thumb.top && y <= thumb.top + thumb.height) {
+      drag.current = { pointer: e.pointerId, y: e.clientY, top: el.scrollTop }
+      e.currentTarget.setPointerCapture(e.pointerId)
+      setDragging(true)
+      return
+    }
+    // 点在刻度附近：跳到那一轮；否则把那个位置滚到视口中间
+    const tick = tickAt(ticks, y)
+    if (tick) {
+      jump(tick.index)
+      return
+    }
+    scrollToward(el, (y / metrics.track) * metrics.content - metrics.view / 2)
+  }
+  const onPointerMove = (e: PointerEvent<HTMLElement>): void => {
+    const el = scroller.current
+    const d = drag.current
+    if (!el || !d || d.pointer !== e.pointerId) return
+    el.scrollTop = d.top + ((e.clientY - d.y) * metrics.content) / Math.max(1, metrics.track)
+  }
+  const endDrag = (e: PointerEvent<HTMLElement>): void => {
+    if (drag.current?.pointer !== e.pointerId) return
+    drag.current = null
+    setDragging(false)
+  }
+
+  const onKey = (e: KeyboardEvent): void => {
+    if (!withTurns || (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Enter')) return
+    e.preventDefault()
+    setOpen(true)
+    requestAnimationFrame(() => list.current?.querySelector<HTMLButtonElement>('[aria-current]')?.focus())
   }
   const onListKey = (e: KeyboardEvent): void => {
     const items = [...(list.current?.querySelectorAll<HTMLButtonElement>('[data-turn-item]') ?? [])]
@@ -155,73 +241,65 @@ export function TurnRail({
 
   return (
     <nav
-      data-turn-rail={side}
+      ref={rail}
+      data-turn-rail
       aria-label={tr('turnRail.label')}
-      className={cn(
-        'absolute top-1/2 z-10 -translate-y-1/2',
-        side === 'right' ? 'right-[calc(var(--conversation-scrollbar-width)+4px)]' : 'left-1',
-      )}
-      onMouseEnter={() => later(true, OPEN_DELAY)}
+      className="group/rail absolute top-0 right-0 bottom-0 z-10 w-[18px]"
+      onMouseEnter={() => withTurns && !drag.current && later(true, OPEN_DELAY)}
       onMouseLeave={() => later(false, CLOSE_DELAY)}
-      onFocus={() => later(true, 0)}
+      onFocus={() => withTurns && later(true, 0)}
       onBlur={e => {
         if (!e.currentTarget.contains(e.relatedTarget as Node)) later(false, 0)
       }}
     >
-      {/* 刻度：一个可聚焦的入口，聚焦后在列表里用 ↑ / ↓ 选、回车跳 */}
+      {/* 滑轨：拖滑块、点位置、点刻度；滚轮照常滚对话 */}
       <div
-        role="button"
-        tabIndex={0}
-        aria-expanded={open}
-        aria-label={tr('turnRail.label')}
-        data-turn-ticks
-        onKeyDown={e => {
-          if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Enter') return
-          e.preventDefault()
-          setOpen(true)
-          requestAnimationFrame(() => list.current?.querySelector<HTMLButtonElement>('[aria-current]')?.focus())
-        }}
-        className={cn(
-          'group/rail flex w-6 flex-col rounded-md py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-accent',
-          side === 'right' ? 'items-end pr-1' : 'items-start pl-1',
-        )}
+        role={withTurns ? 'button' : undefined}
+        tabIndex={withTurns ? 0 : undefined}
+        aria-expanded={withTurns ? open : undefined}
+        aria-label={withTurns ? tr('turnRail.label') : undefined}
+        data-turn-ticks={withTurns ? ticks.length : undefined}
+        onKeyDown={onKey}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onLostPointerCapture={endDrag}
+        onWheel={e => scroller.current?.scrollBy({ top: e.deltaY })}
+        className="absolute inset-0 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
-        {shown.map(index => {
-          const active = index === current
-          return (
-            <span
-              key={turns[index].id}
-              data-turn-index={index}
-              aria-current={active ? 'true' : undefined}
-              onClick={() => go(index)}
-              style={{ height: gap }}
-              className={cn(
-                'flex w-full cursor-pointer items-center',
-                side === 'right' ? 'justify-end' : 'justify-start',
-              )}
-            >
-              <span
-                className={cn(
-                  'block h-[1.5px] rounded-full transition-[width,background-color,opacity] duration-(--dur-fast)',
-                  active
-                    ? 'w-4 bg-fg opacity-90'
-                    : 'w-2 bg-fg-faint opacity-45 group-hover/rail:w-2.5 group-hover/rail:opacity-80',
-                )}
-              />
-            </span>
-          )
-        })}
+        <span
+          data-rail-thumb
+          aria-hidden
+          style={{ top: PAD + thumb.top, height: thumb.height }}
+          className={cn(
+            'absolute right-[6px] rounded-full transition-[width,background-color] duration-(--dur-fast)',
+            dragging ? 'w-2 bg-fg-faint' : 'w-1 bg-selected group-hover/rail:w-2 group-hover/rail:bg-fg-faint/50',
+          )}
+        />
+        {ticks.map(tick => (
+          <span
+            key={turns[tick.index].id}
+            data-turn-index={tick.index}
+            aria-hidden
+            aria-current={tick.current ? 'true' : undefined}
+            style={{ top: PAD + tick.y }}
+            className={cn(
+              'pointer-events-none absolute right-[5px] h-[1.5px] -translate-y-1/2 rounded-full transition-[width,opacity] duration-(--dur-fast)',
+              tick.current
+                ? 'w-3 bg-fg opacity-90'
+                : 'w-1.5 bg-fg-faint opacity-60 group-hover/rail:w-2 group-hover/rail:opacity-90',
+            )}
+          />
+        ))}
       </div>
-      {open && (
+      {open && withTurns && (
         <div
           ref={list}
           role="menu"
           data-turn-list
           onKeyDown={onListKey}
-          className={cn(
-            'pop-in absolute top-1/2 flex max-h-[min(60vh,440px)] w-[280px] -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-line-card bg-popover shadow-popover',
-            side === 'right' ? 'right-full mr-1.5' : 'left-full ml-1.5',
-          )}
+          className="pop-in absolute top-1/2 right-full mr-1.5 flex max-h-[min(60vh,440px)] w-[280px] -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-line-card bg-popover shadow-popover"
         >
           <div className="flex shrink-0 items-center justify-between px-3 pt-2.5 pb-1.5 text-label text-fg-faint">
             <span>{tr('turnRail.label')}</span>
@@ -234,6 +312,18 @@ export function TurnRail({
       )}
     </nav>
   )
+}
+
+/** 离得近平滑滚，离得远直接跳（平滑滚过一长段既慢，又要把沿途内容都排版一遍） */
+function scrollToward(el: HTMLElement, top: number, after?: () => void): void {
+  const target = Math.max(0, Math.min(top, el.scrollHeight - el.clientHeight))
+  if (Math.abs(target - el.scrollTop) > el.clientHeight * 3) {
+    el.scrollTop = target
+    after?.()
+    return
+  }
+  el.scrollTo({ top: target, behavior: 'smooth' })
+  if (after) el.addEventListener('scrollend', after, { once: true })
 }
 
 function TurnList({ turns, current, onPick }: { turns: Turn[]; current: number; onPick: (index: number) => void }) {
