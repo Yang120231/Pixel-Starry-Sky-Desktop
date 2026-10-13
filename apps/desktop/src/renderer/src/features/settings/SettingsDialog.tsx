@@ -38,6 +38,7 @@ import { CloseActionSettings } from './CloseActionSettings'
 import { TurnRailSettings } from './TurnRailSettings'
 import { LongConversationSettings } from './LongConversationSettings'
 import { SubagentViewSettings } from './SubagentViewSettings'
+import { ModeTransitionSettings } from './ModeTransitionSettings'
 import { MessageActionsSettings } from './MessageActionsSettings'
 import { CacheMissSettings } from './CacheMissSettings'
 import { WallpaperSettings } from './WallpaperSettings'
@@ -712,6 +713,7 @@ function AppearanceSection() {
           disabled={motionDisabled}
         />
       </SettingRow>
+      <ModeTransitionSettings />
       <CloseActionSettings />
 
       <SidebarSettings />

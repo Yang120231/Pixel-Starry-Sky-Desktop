@@ -62,6 +62,23 @@ export const codingShellMessages = {
     zh: '代码模式收放底部面板（对话模式不响应）',
     en: 'Coding mode: toggle bottom panel (ignored in chat mode)',
   },
+  // 「对话 | 代码」切换动画（docs/ui/mode-transition.md）
+  'coding.shell.transition.setting': { zh: '切换对话 / 代码时', en: 'Switching chat / code' },
+  'coding.shell.transition.hint': {
+    zh: '滑动：对话滑到右栏，文件树和编辑器依次进来；淡入：整个窗口交叉淡入。',
+    en: 'Slide: the conversation moves to the right panel while the file tree and editor slide in. Fade: the whole window cross-fades.',
+  },
+  'coding.shell.transition.keywords': {
+    zh: '代码模式 对话模式 切换 动画 滑动 淡入 过渡 mode transition slide fade coding',
+    en: 'coding mode chat mode switch animation slide fade transition 代码模式 切换 动画',
+  },
+  'coding.shell.transition.slide': { zh: '滑动', en: 'Slide' },
+  'coding.shell.transition.fade': { zh: '淡入', en: 'Fade' },
+  'coding.shell.transition.off': { zh: '关闭', en: 'Off' },
+  'coding.shell.transition.motionOff': {
+    zh: '「动画」已关闭，切换时不播放。',
+    en: 'Animations are turned off, so switching is instant.',
+  },
   'coding.shell.help.hashChat': {
     zh: '代码模式的命令中心里输入 # 搜索会话',
     en: 'In the coding-mode command center, type # to search sessions',

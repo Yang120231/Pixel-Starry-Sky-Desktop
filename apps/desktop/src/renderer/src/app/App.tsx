@@ -257,7 +257,7 @@ export function App() {
       ) : (
         <>
           {/* 侧边栏、右侧面板一直挂载，收起 / 展开带滑动动画（docs/ui/workbench.md §4.1） */}
-          <div className="relative flex shrink-0">
+          <div data-vt-chat-sidebar className="relative flex shrink-0">
             <CollapsibleSlot open={sidebarOpen} width={sidebarWidth} side="left">
               <ToolbarContext.Provider
                 value={{ panelOpen, filesPanelOpen: panelOpen, onCloseFiles: () => setPanelOpen(false) }}
@@ -304,6 +304,7 @@ export function App() {
                 aria-hidden={!onWorkbench || undefined}
               >
                 <div
+                  data-vt-chat-conversation
                   className={panelMaximized && panelOpen ? 'hidden' : 'relative flex min-h-0 min-w-0 flex-1 flex-col'}
                 >
                   <Workspace
@@ -313,7 +314,7 @@ export function App() {
                     onTogglePanel={togglePanel}
                   />
                 </div>
-                <div className="relative flex min-h-0 shrink-0">
+                <div data-vt-chat-right className="relative flex min-h-0 shrink-0">
                   <CollapsibleSlot
                     open={panelOpen}
                     width={panelMaximized ? windowWidth - (sidebarOpen ? sidebarWidth : 0) : panelWidth}

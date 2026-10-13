@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @import './tokens.css';
 @import './minimal.css';
+@import './modeTransition.css';
 
 /* 搜索定位只强调条目，使用现有主题变量；移除 class 后恢复原背景。 */
 .search-hit {

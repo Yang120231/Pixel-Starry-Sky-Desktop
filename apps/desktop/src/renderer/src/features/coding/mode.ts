@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { parseAppMode } from './layoutModel'
 import type { AppMode } from './types'
+import { runModeTransition } from './modeTransition'
 
 const demo = typeof window !== 'undefined' && window.pixelsky?.demo === true
 /** 演示模式用 'pixelsky.app-mode.demo'（docs/ui/coding-mode-impl.md D6） */
@@ -44,7 +45,9 @@ export function setAppMode(mode: AppMode): void {
       // 存储不可用时只在内存里生效
     }
   }
-  apply(mode)
+  if (mode === current) return
+  // 切换布局时按设置播动画（modeTransition.ts）；别的窗口改了模式（storage 事件）不播
+  runModeTransition(() => apply(mode), mode === 'code' ? 'toCode' : 'toChat')
 }
 
 export function subscribeAppMode(fn: () => void): () => void {

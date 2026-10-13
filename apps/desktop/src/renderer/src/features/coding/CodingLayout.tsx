@@ -49,7 +49,7 @@ export function CodingLayout() {
         <ToolStripe side="left" />
         {/* 看板 / 频道盖住时三栏保持挂载，只加 inert（D14） */}
         <div className="flex min-h-0 min-w-0 flex-1" inert={!onWorkbench}>
-          <div className="relative flex min-h-0 shrink-0">
+          <div data-vt-code-left className="relative flex min-h-0 shrink-0">
             <CollapsibleSlot open={fit.left.shown} width={fit.left.size} side="left">
               <div className="flex h-full min-w-0 flex-1 border-r border-line-layout">
                 <LeftArea view={prefs.left.view} visible={fit.left.shown} />

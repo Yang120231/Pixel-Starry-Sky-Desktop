@@ -19,6 +19,7 @@ export function CenterArea({ fit, viewportHeight }: { fit: CodingFit; viewportHe
     <div data-coding-center className="flex min-h-0 min-w-0 flex-1 flex-col bg-app">
       {fit.tooNarrow && <NarrowNotice />}
       <div
+        data-vt-code-editor
         className={cn('min-h-0 min-w-0 flex-1 flex-col', fit.editorHidden ? 'hidden' : 'flex')}
         inert={fit.editorHidden}
       >

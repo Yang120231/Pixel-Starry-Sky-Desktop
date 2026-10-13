@@ -1,0 +1,206 @@
+/* 「对话 | 代码」切换动画（docs/ui/mode-transition.md，模拟见 scratch/2026-10-14-mode-anim）。
+   features/coding/modeTransition.ts 播放期间给 <html> 加 data-mode-vt（slide / fade）和 data-mode-dir（toCode / toChat），
+   平时一条都不生效。进来的层减速、离开的层加速且更短；两个方向都是「先走后来」，不是倒放 */
+
+/* ---------- A 滑动：给几块区域起名字，对话那一栏是两边共用的名字（中间 ⇄ 右栏） ---------- */
+:root[data-mode-vt='slide'] [data-vt-chat-sidebar] {
+  view-transition-name: mode-chat-sidebar;
+}
+:root[data-mode-vt='slide'] [data-vt-chat-right] {
+  view-transition-name: mode-chat-right;
+}
+:root[data-mode-vt='slide'] :is([data-vt-chat-conversation], [data-coding-right]) {
+  view-transition-name: mode-conversation;
+}
+:root[data-mode-vt='slide'] [data-vt-code-left] {
+  view-transition-name: mode-code-left;
+}
+:root[data-mode-vt='slide'] [data-vt-code-editor] {
+  view-transition-name: mode-code-editor;
+}
+:root[data-mode-vt='slide'] [data-coding-bottom] {
+  view-transition-name: mode-code-bottom;
+}
+:root[data-mode-vt='slide'] [data-coding-status] {
+  view-transition-name: mode-code-status;
+}
+
+/* 对话那一栏：外框慢-快-慢地移过去、改宽；两张截图按原尺寸贴在左上角、外框裁掉多出来的（不拉伸文字），中途交叉淡入 */
+:root[data-mode-vt='slide']::view-transition-group(mode-conversation) {
+  animation-duration: 420ms;
+  animation-timing-function: cubic-bezier(0.45, 0, 0.15, 1);
+  overflow: clip;
+  background: var(--bg-app);
+}
+:root[data-mode-vt='slide']::view-transition-old(mode-conversation),
+:root[data-mode-vt='slide']::view-transition-new(mode-conversation) {
+  inline-size: auto;
+  block-size: auto;
+  inset-inline-start: 0;
+}
+:root[data-mode-vt='slide']::view-transition-old(mode-conversation) {
+  animation: mode-vt-conv-out 140ms linear 100ms both;
+}
+:root[data-mode-vt='slide']::view-transition-new(mode-conversation) {
+  animation: mode-vt-conv-in 170ms linear 170ms both;
+}
+:root[data-mode-vt='slide'][data-mode-dir='toChat']::view-transition-new(mode-conversation) {
+  animation-duration: 180ms;
+  animation-delay: 150ms;
+}
+
+/* 对话 → 代码：会话列表、右侧面板离开；文件树、编辑器、底部面板、状态栏进来 */
+:root[data-mode-vt='slide']::view-transition-old(mode-chat-sidebar) {
+  animation: mode-vt-out-left 200ms var(--mode-vt-out) both;
+}
+:root[data-mode-vt='slide']::view-transition-old(mode-chat-right) {
+  animation: mode-vt-out-right 160ms var(--mode-vt-out) both;
+}
+:root[data-mode-vt='slide']::view-transition-new(mode-code-left) {
+  animation: mode-vt-in-left 320ms var(--mode-vt-in) 80ms both;
+}
+:root[data-mode-vt='slide']::view-transition-new(mode-code-editor) {
+  animation: mode-vt-in-rise 320ms var(--mode-vt-in) 100ms both;
+}
+:root[data-mode-vt='slide']::view-transition-new(mode-code-bottom) {
+  animation: mode-vt-in-up 300ms var(--mode-vt-in) 180ms both;
+}
+:root[data-mode-vt='slide']::view-transition-new(mode-code-status) {
+  animation: mode-vt-in-status 200ms var(--mode-vt-in) 280ms both;
+}
+
+/* 代码 → 对话：代码区几块先快速离开，会话列表、右侧面板随后进来 */
+:root[data-mode-vt='slide']::view-transition-old(mode-code-left) {
+  animation: mode-vt-out-left 180ms var(--mode-vt-out) both;
+}
+:root[data-mode-vt='slide']::view-transition-old(mode-code-editor) {
+  animation: mode-vt-out-sink 180ms var(--mode-vt-out) both;
+}
+:root[data-mode-vt='slide']::view-transition-old(mode-code-bottom) {
+  animation: mode-vt-out-down 160ms var(--mode-vt-out) both;
+}
+:root[data-mode-vt='slide']::view-transition-old(mode-code-status) {
+  animation: mode-vt-out-status 140ms var(--mode-vt-out) both;
+}
+:root[data-mode-vt='slide']::view-transition-new(mode-chat-sidebar) {
+  animation: mode-vt-in-left 320ms var(--mode-vt-in) 100ms both;
+}
+:root[data-mode-vt='slide']::view-transition-new(mode-chat-right) {
+  animation: mode-vt-in-right 300ms var(--mode-vt-in) 160ms both;
+}
+
+/* 其余（顶栏、工具条）整体交叉淡入 */
+:root[data-mode-vt='slide']::view-transition-old(root) {
+  animation: mode-vt-fade-out 200ms var(--mode-vt-out) 60ms both;
+}
+:root[data-mode-vt='slide']::view-transition-new(root) {
+  animation: mode-vt-fade-in 240ms var(--mode-vt-in) 100ms both;
+}
+
+/* ---------- B 淡入：整屏交叉淡入，旧的轻轻缩小、新的从稍大落到原尺寸 ---------- */
+:root[data-mode-vt='fade']::view-transition-old(root) {
+  animation: mode-vt-fade-shrink 180ms var(--mode-vt-out) both;
+}
+:root[data-mode-vt='fade']::view-transition-new(root) {
+  animation: mode-vt-fade-settle 200ms var(--mode-vt-in) 60ms both;
+}
+
+:root[data-mode-vt] {
+  --mode-vt-in: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --mode-vt-out: cubic-bezier(0.4, 0, 1, 1);
+}
+
+@keyframes mode-vt-conv-out {
+  to {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+}
+@keyframes mode-vt-conv-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+@keyframes mode-vt-out-left {
+  to {
+    opacity: 0;
+    transform: translateX(-36px);
+  }
+}
+@keyframes mode-vt-out-right {
+  to {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+@keyframes mode-vt-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-28px);
+  }
+}
+@keyframes mode-vt-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+@keyframes mode-vt-in-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+}
+@keyframes mode-vt-out-sink {
+  to {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+}
+@keyframes mode-vt-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(56px);
+  }
+}
+@keyframes mode-vt-out-down {
+  to {
+    opacity: 0;
+    transform: translateY(56px);
+  }
+}
+@keyframes mode-vt-in-status {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+}
+@keyframes mode-vt-out-status {
+  to {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+}
+@keyframes mode-vt-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes mode-vt-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes mode-vt-fade-shrink {
+  to {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+@keyframes mode-vt-fade-settle {
+  from {
+    opacity: 0;
+    transform: scale(1.015);
+  }
+}

@@ -165,6 +165,15 @@ export const SETTINGS_INDEX: SearchEntry[] = [
   { section: 'appearance', title: '切换窗格时', keywords: '窗格 分屏 高亮 滑动 焦点 动画' },
   {
     section: 'appearance',
+    get title() {
+      return tr('coding.shell.transition.setting')
+    },
+    get keywords() {
+      return tr('coding.shell.transition.keywords')
+    },
+  },
+  {
+    section: 'appearance',
     title: '关闭主窗口时',
     keywords: '托盘 通知区域 后台 最小化 隐藏 退出 关闭 tray background minimize close quit',
   },
