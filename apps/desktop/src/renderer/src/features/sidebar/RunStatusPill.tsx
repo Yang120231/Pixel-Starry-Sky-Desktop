@@ -54,28 +54,29 @@ export function RunStatusPill({
         )}
         onClick={() => onFilter(on ? null : kind)}
         className={cn(
-          'press flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 text-list tabular-nums hover:bg-hover disabled:pointer-events-none',
+          'press flex h-8 min-w-0 flex-1 basis-0 items-center justify-center gap-2 rounded-md px-2 text-list tabular-nums hover:bg-hover disabled:pointer-events-none',
           on && 'bg-selected hover:bg-selected',
         )}
       >
-        {kind === 'running' ? (
-          running > 0 ? (
+        {/* 图标都占 14px 宽，两半的字对得齐 */}
+        <span className="flex size-3.5 shrink-0 items-center justify-center">
+          {kind === 'running' && running > 0 ? (
             <Spinner size={14} />
           ) : (
-            <Dot tone="accent" size={6} className="mx-1 opacity-40" />
-          )
-        ) : (
-          <Dot tone="accent" size={6} className={cn('mx-1', !waiting && 'opacity-40')} />
-        )}
+            <Dot tone="accent" size={6} className={cn(!count && 'opacity-40')} />
+          )}
+        </span>
         {/* 数字是 0 的那一半用灰色，不像有事 */}
         <span
           className={cn(
-            'truncate',
+            'flex min-w-0 items-baseline gap-1',
             !count ? 'text-fg-faint' : kind === 'waiting' ? 'text-accent-fg' : on ? 'text-fg' : 'text-fg-secondary',
           )}
         >
-          {count}
-          {tr(kind === 'running' ? 'session.live.agentTrace.running' : 'sidebar.runStatus.waiting')}
+          <span className="shrink-0 font-medium">{count}</span>
+          <span className="truncate">
+            {tr(kind === 'running' ? 'session.live.agentTrace.running' : 'sidebar.runStatus.waiting')}
+          </span>
         </span>
       </button>
     )
@@ -86,6 +87,8 @@ export function RunStatusPill({
         {half('running', running)}
         <span aria-hidden className="h-4 w-px shrink-0 bg-line" />
         {half('waiting', waiting)}
+        {/* 看板入口和两半隔开：两半一样宽、字在各自中间 */}
+        <span aria-hidden className="h-4 w-px shrink-0 bg-line" />
         <button
           type="button"
           aria-label={tr('sidebar.runStatus.openBoard')}
