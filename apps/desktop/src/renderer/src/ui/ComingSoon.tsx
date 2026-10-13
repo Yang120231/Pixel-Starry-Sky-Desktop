@@ -1,6 +1,7 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../i18n/core'
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react'
+import { Toast } from './Toast'
 
 const ComingSoonContext = createContext<(label?: string) => void>(() => {})
 const ToastContext = createContext<(message: string) => void>(() => {})
@@ -26,9 +27,9 @@ export function ComingSoonProvider({ children }: { children: ReactNode }) {
     <ComingSoonContext.Provider value={show}>
       <ToastContext.Provider value={toast}>{children}</ToastContext.Provider>
       {message && (
-        <div className="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg border border-line bg-surface px-3.5 py-2 text-[13px] text-fg shadow-popover">
+        <Toast key={message} className="pointer-events-none">
           {message}
-        </div>
+        </Toast>
       )}
     </ComingSoonContext.Provider>
   )

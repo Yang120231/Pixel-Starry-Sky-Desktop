@@ -5,6 +5,7 @@ import { bridge, getEngineState } from '@/features/engine/store'
 import { paneActions } from '@/features/panes/store'
 import { SESSION_REMOVED_EVENT } from '@/features/engine/sessionLifecycle'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
+import { Toast } from '@/ui/Toast'
 import { useI18n } from '@/i18n/I18nProvider'
 import { translateMessage } from '@/i18n/core'
 import { retainSessionFiles } from '@/features/files/store'
@@ -267,12 +268,7 @@ export function SessionActionsProvider({ children }: { children: ReactNode }) {
         />
       )}
       {toast && (
-        <div
-          role="status"
-          aria-live="polite"
-          data-session-toast
-          className="fixed bottom-6 left-1/2 z-[90] flex max-w-[calc(100vw-32px)] -translate-x-1/2 items-center gap-3 rounded-lg border border-line-card bg-popover px-4 py-3 text-list text-fg shadow-menu"
-        >
+        <Toast data-session-toast className="py-2.5 text-list">
           <span className="min-w-0 break-words">
             {toast.kind === 'error' ? toast.text : t(TOAST_KEYS[toast.kind], { title: toast.title })}
           </span>
@@ -294,7 +290,7 @@ export function SessionActionsProvider({ children }: { children: ReactNode }) {
           >
             <X size={14} />
           </button>
-        </div>
+        </Toast>
       )}
     </Context.Provider>
   )

@@ -14,6 +14,7 @@ import './panes.css'
 import { SessionHeader } from '@/features/session/SessionHeader'
 import { useHeaderActions } from '@/features/session/SessionView'
 import { cn } from '@/ui'
+import { Toast } from '@/ui/Toast'
 import { isLive, setViewingSet, useEngineState, useSessionTitle } from '@/features/engine'
 import {
   CLOSE_TAB,
@@ -459,11 +460,8 @@ function Notice({ text }: { text: string }) {
   }, [])
   if (!show) return null
   return (
-    <div
-      role="status"
-      className="pane-notice absolute bottom-24 left-1/2 z-30 -translate-x-1/2 rounded-lg border border-line bg-surface px-4 py-2 text-ui text-fg shadow-popover"
-    >
+    <Toast scope="area" className="z-30">
       {text}
-    </div>
+    </Toast>
   )
 }
