@@ -1,5 +1,8 @@
 import { useI18n } from '@/i18n/I18nProvider'
+import { tr } from '../../i18n/core'
 import { Dot, Spinner, cn } from '@/ui'
+import type { SessionLane } from '@/features/board/sessionLanes'
+import { LANE_LABEL, LANE_TONE } from './RunStatusPill'
 import type { Session } from '@/data'
 import { SessionRow } from './SessionRow'
 import { useSessionChannel } from '@/features/channels/store'
@@ -9,10 +12,13 @@ export function SessionItem({
   session,
   selected,
   onSelect,
+  lane,
 }: {
   session: Session
   selected: boolean
   onSelect: (id: string) => void
+  /** 侧栏按状态筛选时：右边写原因（等你处理 / 出错 / 运行中…），代替时间 */
+  lane?: SessionLane
 }) {
   useI18n()
   const running = session.status === 'running'
@@ -33,13 +39,17 @@ export function SessionItem({
       onSelect={onSelect}
       className="[&>button]:pl-9"
       trailing={
-        <>
-          {unread && <Dot tone="accent" className="mr-0.5" />}
-          {running && <Spinner size={14} />}
-          {!unread && !running && session.time && (
-            <span className="shrink-0 text-meta text-fg-faint">{session.time}</span>
-          )}
-        </>
+        lane ? (
+          <span className={cn('shrink-0 text-meta', LANE_TONE[lane])}>{tr(LANE_LABEL[lane])}</span>
+        ) : (
+          <>
+            {unread && <Dot tone="accent" className="mr-0.5" />}
+            {running && <Spinner size={14} />}
+            {!unread && !running && session.time && (
+              <span className="shrink-0 text-meta text-fg-faint">{session.time}</span>
+            )}
+          </>
+        )
       }
     >
       <span className={cn('min-w-0 truncate', !channel && 'flex-1', unread && 'font-semibold text-fg')}>

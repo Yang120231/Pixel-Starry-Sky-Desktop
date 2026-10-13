@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Archive, ChevronRight, Folder, FolderOpen } from 'lucide-react'
 import { Spinner } from '@/ui'
 import type { Project } from '@/data'
+import type { SessionLane } from '@/features/board/sessionLanes'
 import { SidebarEmpty, SidebarRow } from './SidebarSection'
 import { SessionItem } from './SessionItem'
 import { ProjectRow } from './ProjectRow'
@@ -13,10 +14,13 @@ export function ProjectTree({
   projects,
   selectedSessionId,
   onSelectSession,
+  lanes,
 }: {
   projects: Project[]
   selectedSessionId: string | null
   onSelectSession: (id: string) => void
+  /** 侧栏按状态筛选时：项目全部展开（不改记住的展开状态），会话右边写原因 */
+  lanes?: ReadonlyMap<string, SessionLane>
 }) {
   useI18n()
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() =>
@@ -28,7 +32,7 @@ export function ProjectTree({
   return (
     <>
       {projects.map(p => {
-        const open = expanded[p.id] ?? !!p.expanded
+        const open = lanes ? true : (expanded[p.id] ?? !!p.expanded)
         const FolderIcon = open ? FolderOpen : Folder
         return (
           <div key={p.id} className="flex flex-col gap-px">
@@ -52,7 +56,13 @@ export function ProjectTree({
             )}
             {open &&
               p.sessions.map(s => (
-                <SessionItem key={s.id} session={s} selected={s.id === selectedSessionId} onSelect={onSelectSession} />
+                <SessionItem
+                  key={s.id}
+                  session={s}
+                  selected={s.id === selectedSessionId}
+                  onSelect={onSelectSession}
+                  lane={lanes?.get(s.id)}
+                />
               ))}
             {open && !!p.archived?.length && (
               <>

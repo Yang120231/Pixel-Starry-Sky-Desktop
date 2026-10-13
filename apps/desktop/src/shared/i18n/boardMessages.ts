@@ -59,9 +59,11 @@ export const boardMessages = {
   'board.columnLabel': { zh: '{name}，{n} 项', en: '{name}, {n} items' },
   'sidebar.runStatus.waiting': { zh: '等你', en: 'waiting' },
   'sidebar.runStatus.openBoard': { zh: '打开任务看板', en: 'Open task board' },
-  'sidebar.runStatus.expandBoard': {
-    zh: '展开运行中和等你的会话',
-    en: 'Show running sessions and sessions waiting on you',
-  },
-  'sidebar.runStatus.listBoard': { zh: '运行中和等你的会话', en: 'Running sessions and sessions waiting on you' },
+  'sidebar.runStatus.filterRunning': { zh: '只看运行中的会话', en: 'Show only running sessions' },
+  'sidebar.runStatus.filterWaiting': { zh: '只看等你的会话', en: 'Show only sessions waiting on you' },
+  'sidebar.runStatus.clearFilter': { zh: '显示全部会话', en: 'Show all sessions' },
+  'sidebar.runStatus.showingRunning': { zh: '只看运行中', en: 'Running only' },
+  'sidebar.runStatus.showingWaiting': { zh: '只看等你', en: 'Waiting on you only' },
+  'sidebar.runStatus.noneRunning': { zh: '没有在运行的会话', en: 'No running sessions' },
+  'sidebar.runStatus.noneWaiting': { zh: '没有等你的会话', en: 'Nothing is waiting on you' },
 } as const

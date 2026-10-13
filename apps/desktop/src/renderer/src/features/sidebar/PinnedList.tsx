@@ -10,6 +10,8 @@ import { machineOf, useMachines } from '@/features/machines/store'
 import { projects as demoProjects } from '@/data'
 import { SidebarRow } from './SidebarSection'
 import { SessionRow } from './SessionRow'
+import type { SessionLane } from '@/features/board/sessionLanes'
+import { LANE_LABEL, LANE_TONE } from './RunStatusPill'
 
 /** 「任务看板」入口（docs/ui/task-board.md §2）：只管我的任务，显示没完成的手动任务数 */
 function BoardEntry() {
@@ -40,18 +42,22 @@ export function PinnedList({
   sessions,
   selectedSessionId,
   onSelectSession,
+  lanes,
 }: {
   sessions: PinnedSession[]
   selectedSessionId: string | null
   onSelectSession: (id: string) => void
+  /** 侧栏按状态筛选时：不显示看板入口，右边写原因 */
+  lanes?: ReadonlyMap<string, SessionLane>
 }) {
   useI18n()
   return (
     <>
-      <BoardEntry />
+      {!lanes && <BoardEntry />}
       {sessions.map(session => {
         const running = session.status === 'running'
         const unread = session.status === 'unread'
+        const lane = lanes?.get(session.id)
         return (
           <SessionRow
             key={session.id}
@@ -59,13 +65,17 @@ export function PinnedList({
             selected={session.id === selectedSessionId}
             onSelect={onSelectSession}
             trailing={
-              <>
-                {unread && <Dot tone="accent" className="mr-0.5" />}
-                {running && <Spinner size={14} />}
-                {!unread && !running && session.time && (
-                  <span className="shrink-0 text-meta text-fg-faint">{session.time}</span>
-                )}
-              </>
+              lane ? (
+                <span className={cn('shrink-0 text-meta', LANE_TONE[lane])}>{tr(LANE_LABEL[lane])}</span>
+              ) : (
+                <>
+                  {unread && <Dot tone="accent" className="mr-0.5" />}
+                  {running && <Spinner size={14} />}
+                  {!unread && !running && session.time && (
+                    <span className="shrink-0 text-meta text-fg-faint">{session.time}</span>
+                  )}
+                </>
+              )
             }
           >
             <Pin size={16} strokeWidth={1.5} className="shrink-0 text-fg-muted" />

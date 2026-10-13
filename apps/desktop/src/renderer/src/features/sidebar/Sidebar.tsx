@@ -1,7 +1,7 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
-import { useId, useState } from 'react'
-import { ChevronDown, FolderPlus, Search } from 'lucide-react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { ChevronDown, FolderPlus, Search, X } from 'lucide-react'
 import { cn, useComingSoon } from '@/ui'
 import { setSidebarPrefs, useSidebarPrefs } from '@/features/appearance/sidebar'
 import { OPEN_SEARCH, withShortcut } from '@/features/layout/shortcuts'
@@ -15,6 +15,8 @@ import { TASK_DRAG_TYPE, draggedTask, pinTask } from '@/features/panel/pinnedTas
 import { ProjectTree } from './ProjectTree'
 import { RecentItem } from './RecentItem'
 import { RunStatusPill } from './RunStatusPill'
+import { filterProjects, filterSessions, lanesOf, useScrollFade, type RunFilter } from './runFilter'
+import { useSessionCards } from '@/features/board/useSessionCards'
 import { SidebarFooter } from './SidebarFooter'
 import { useOpenSearch } from '@/features/search/SearchProvider'
 
@@ -44,6 +46,17 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
   // 把任务清单里的任务拖到侧栏任意位置松开：固定到「固定任务」（docs/ui/files-search-terminal-pins.md §5）
   const [dropping, setDropping] = useState(false)
   const taskDrag = (e: React.DragEvent): boolean => e.dataTransfer.types.includes(TASK_DRAG_TYPE)
+  // 底部胶囊点了数字：置顶和项目只看运行中 / 等你的会话（不保存，重启后看全部）
+  const cards = useSessionCards()
+  const [runFilter, setRunFilter] = useState<RunFilter | null>(null)
+  const lanes = useMemo(() => (runFilter ? lanesOf(cards) : undefined), [cards, runFilter])
+  const shownProjects = runFilter && lanes ? filterProjects(projects, lanes, runFilter) : projects
+  const shownPinned = runFilter && lanes ? filterSessions(pinnedSessions, lanes, runFilter) : pinnedSessions
+  useEffect(() => {
+    if (runFilter && !cards.length) setRunFilter(null)
+  }, [runFilter, cards.length])
+  const scroller = useRef<HTMLDivElement>(null)
+  useScrollFade(scroller)
   return (
     <aside
       className={cn('flex h-full w-full min-w-0 flex-col bg-sidebar', dropping && 'sidebar-task-drop')}
@@ -92,21 +105,53 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
         ))}
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto px-3 pt-4 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {/* 置顶：任务看板入口 + 置顶的会话（docs/ui/task-board.md §2） */}
-        <SidebarSection title={tr('sidebar.Sidebar.pinned')}>
-          <PinnedList
-            sessions={pinnedSessions}
-            selectedSessionId={selectedSessionId}
-            onSelectSession={onSelectSession}
-          />
-        </SidebarSection>
+      <div
+        ref={scroller}
+        data-sidebar-scroll
+        className="flex min-h-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto px-3 pt-4 pb-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {runFilter && (
+          <div className="-mb-2 flex h-7 shrink-0 items-center gap-1 rounded-md bg-selected pr-1 pl-2.5 text-meta text-fg">
+            <span className="min-w-0 flex-1 truncate">
+              {tr(runFilter === 'running' ? 'sidebar.runStatus.showingRunning' : 'sidebar.runStatus.showingWaiting')}
+            </span>
+            <button
+              type="button"
+              aria-label={tr('sidebar.runStatus.clearFilter')}
+              title={tr('sidebar.runStatus.clearFilter')}
+              onClick={() => setRunFilter(null)}
+              className="inline-flex size-5 items-center justify-center rounded hover:bg-hover"
+            >
+              <X size={12} strokeWidth={2} />
+            </button>
+          </div>
+        )}
+        {/* 置顶：任务看板入口 + 置顶的会话（docs/ui/task-board.md §2）；筛选时只列符合的，没有就不显示这一组 */}
+        {(!runFilter || shownPinned.length > 0) && (
+          <SidebarSection title={tr('sidebar.Sidebar.pinned')}>
+            <PinnedList
+              sessions={shownPinned}
+              selectedSessionId={selectedSessionId}
+              onSelectSession={onSelectSession}
+              lanes={lanes}
+            />
+          </SidebarSection>
+        )}
 
-        <PinnedTasks dropping={dropping} />
+        {!runFilter && <PinnedTasks dropping={dropping} />}
 
         <SidebarSection title={tr('sidebar.Sidebar.projects')}>
-          {projects.length > 0 ? (
-            <ProjectTree projects={projects} selectedSessionId={selectedSessionId} onSelectSession={onSelectSession} />
+          {runFilter && shownProjects.length === 0 ? (
+            <SidebarEmpty>
+              {tr(runFilter === 'running' ? 'sidebar.runStatus.noneRunning' : 'sidebar.runStatus.noneWaiting')}
+            </SidebarEmpty>
+          ) : shownProjects.length > 0 ? (
+            <ProjectTree
+              projects={shownProjects}
+              selectedSessionId={selectedSessionId}
+              onSelectSession={onSelectSession}
+              lanes={lanes}
+            />
           ) : (
             <>
               <SidebarEmpty>{tr('sidebar.Sidebar.noProjectsYet')}</SidebarEmpty>
@@ -121,9 +166,9 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
         </SidebarSection>
       </div>
 
-      <RunStatusPill selectedSessionId={selectedSessionId} onSelectSession={onSelectSession} />
+      <RunStatusPill cards={cards} filter={runFilter} onFilter={setRunFilter} />
       {/* 最近任务来自两个以上项目才显示，否则和上面的项目列表完全重复（docs/ui/conversation-ux-2.md §2.3） */}
-      {prefs.showRecent && recentSpansProjects(recent) && (
+      {!runFilter && prefs.showRecent && recentSpansProjects(recent) && (
         <section className="mx-3 flex min-h-0 max-h-[35%] shrink-0 flex-col pb-2" data-sidebar-recent>
           <h3 className="shrink-0">
             <button
