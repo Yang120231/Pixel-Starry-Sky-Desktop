@@ -77,7 +77,9 @@ export async function initProjectTools(ctx: AppContext): Promise<void> {
   })
   handle('projectTools:openExternal', async (_, input) => {
     const url = new URL(value(input, 4000, true))
-    if (!['http:', 'https:'].includes(url.protocol)) throw new Error('只支持 HTTP 或 HTTPS 地址')
+    // 浏览器标签里打开的本地 HTML（main/workspace/browser.ts 的 pageUrl）也能交给系统浏览器；别的本地文件不行
+    const html = url.protocol === 'file:' && /\.html?$/i.test(url.pathname)
+    if (!['http:', 'https:'].includes(url.protocol) && !html) throw new Error('只支持 HTTP 或 HTTPS 地址')
     await shell.openExternal(url.href)
   })
   await initProjectBrowser(ctx, dir, host)

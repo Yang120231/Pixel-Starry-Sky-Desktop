@@ -2,7 +2,7 @@ import { translateMessage } from '../../i18n/core'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { Eye, FileText, RefreshCw, Save, FolderTree, WrapText, Columns2 } from 'lucide-react'
+import { Eye, FileText, Globe, RefreshCw, Save, FolderTree, WrapText, Columns2 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { IconButton, Spinner } from '@/ui'
@@ -24,6 +24,8 @@ import { fileIndent } from './code/positions'
 import { ExternalFileButton } from './ExternalFileButton'
 import { FileBreadcrumbs } from './FileBreadcrumbs'
 import { isDemo } from '@/data'
+import { isHtmlPath, previewHtml } from '@/features/files/htmlPreview'
+import { machineOf } from '@/features/machines/store'
 
 export function FileEditor({
   id,
@@ -97,6 +99,15 @@ export function FileEditor({
               setPreview(v => !v)
               updateFile(id, { preview: !preview })
             }}
+          />
+        )}
+        {isHtmlPath(tab.path) && !isDemo && machineOf(tab.ref.projectId ?? tab.ref.sessionId) === 'local' && (
+          <IconButton
+            icon={Globe}
+            size={28}
+            iconSize={15}
+            label={tr('htmlPreview.open')}
+            onClick={() => void previewHtml(tab.ref, tab.path)}
           />
         )}
         {doc?.kind === 'text' && (

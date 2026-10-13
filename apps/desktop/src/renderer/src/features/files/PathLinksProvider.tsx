@@ -8,6 +8,7 @@ import { PathLinksContext, type PathLinks } from '@/ui/markdown/pathLinks'
 import { openFile } from './store'
 import { wholeTextFile } from './pathLinks'
 import { findPathMatches } from './pathMatch'
+import { isHtmlPath, previewHtml } from './htmlPreview'
 
 export function PathLinksProvider({ sessionId, children }: { sessionId: string | null; children: ReactNode }) {
   const toast = useToast()
@@ -16,10 +17,15 @@ export function PathLinksProvider({ sessionId, children }: { sessionId: string |
     const ref = { sessionId }
     return {
       resolve: isDemo ? async text => demoTextFile(text) : text => wholeTextFile(ref, text),
-      open: target =>
-        void openFile(ref, target.path, target.line ?? undefined, target.column ?? 1).catch((e: Error) =>
-          toast(e.message),
-        ),
+      // HTML 没带行号时在右侧浏览器里看效果（本机项目），其余照旧在编辑器里打开
+      open: target => {
+        const source = (): Promise<void> => openFile(ref, target.path, target.line ?? undefined, target.column ?? 1)
+        const run =
+          isHtmlPath(target.path) && !target.line
+            ? previewHtml(ref, target.path).then(shown => (shown ? undefined : source()))
+            : source()
+        void run.catch((e: Error) => toast(e.message))
+      },
     }
   }, [sessionId, toast])
   return <PathLinksContext.Provider value={value}>{children}</PathLinksContext.Provider>

@@ -1,7 +1,8 @@
 import { BrowserWindow, WebContentsView, dialog, session, shell, type IpcMainInvokeEvent } from 'electron'
 import * as ipc from '../ipc/guard'
 import { createHash, randomUUID } from 'node:crypto'
-import { join, basename } from 'node:path'
+import { join, basename, isAbsolute, relative } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { BrowserPage, BrowserState } from '../../shared/types/project-browser'
 import type { WorkspaceRef } from '../../shared/types/workspace'
 import { JsonStore, value, type ToolsHost } from '../core/project-tools/common'
@@ -29,6 +30,29 @@ export function browserUrl(raw: unknown): string {
     throw new Error('只支持 HTTP 或 HTTPS 地址')
   return url.href
 }
+/**
+ * 网页标签能打开的地址：http / https；本机项目还能用 file:// 打开项目目录里面的文件（对话里点 HTML 路径直接看效果）。
+ * root 是本机项目的根目录，远程机器、没有项目时为 null（只认 http / https）
+ */
+export function pageUrl(raw: unknown, root: string | null): string {
+  const input = value(raw, 4000, true)
+  if (!/^file:/i.test(input)) return browserUrl(input)
+  const url = new URL(input)
+  let file: string
+  try {
+    file = fileURLToPath(url)
+  } catch {
+    throw new Error('只支持 HTTP 或 HTTPS 地址')
+  }
+  const inside = root ? relative(root, file) : ''
+  if (!root || !inside || inside.startsWith('..') || isAbsolute(inside)) throw new Error('只能打开项目目录里的文件')
+  return url.href
+}
+/** 标签标题：网页没写标题时用主机名，本地文件用文件名 */
+const pageTitle = (url: string): string => {
+  const parsed = new URL(url)
+  return parsed.protocol === 'file:' ? decodeURIComponent(basename(parsed.pathname)) : parsed.hostname
+}
 export async function initProjectBrowser(ctx: AppContext, dir: string, host: ToolsHost): Promise<void> {
   const store = new JsonStore<{ scopes: Record<string, StoredScope> }>(join(dir, 'browser.json'), { scopes: {} })
   await store.init()
@@ -45,6 +69,8 @@ export async function initProjectBrowser(ctx: AppContext, dir: string, host: Too
     configured = new Set<string>()
   const bounds = new Map<number, { scope: string; rect: Electron.Rectangle }>()
   const scopeMachines = new Map<string, string>()
+  /** 本机项目的根目录（file:// 只放行这里面的文件）；远程机器不记 */
+  const scopeRoots = new Map<string, string>()
   const scopeOf = (ref: WorkspaceRef): string => {
     const target = host.resolve(ref)
     const machine = machineOf(target.projectId)
@@ -56,6 +82,7 @@ export async function initProjectBrowser(ctx: AppContext, dir: string, host: Too
       )
       .digest('hex')
     scopeMachines.set(key, machine)
+    if (machine === 'local') scopeRoots.set(key, target.path)
     return key
   }
   const state = (scope: string): BrowserState => {
@@ -187,9 +214,10 @@ export async function initProjectBrowser(ctx: AppContext, dir: string, host: Too
       } catch {}
       return { action: 'deny' }
     })
+    const root = scopeRoots.get(scope) ?? null
     const allowed = (event: Electron.Event, url: string): void => {
       try {
-        browserUrl(url)
+        pageUrl(url, root)
       } catch {
         event.preventDefault()
       }
@@ -198,7 +226,7 @@ export async function initProjectBrowser(ctx: AppContext, dir: string, host: Too
     wc.on('will-redirect', allowed)
     wc.on('will-frame-navigate', event => {
       try {
-        browserUrl(event.url)
+        pageUrl(event.url, root)
       } catch {
         event.preventDefault()
       }
@@ -208,13 +236,13 @@ export async function initProjectBrowser(ctx: AppContext, dir: string, host: Too
       const url = wc.getURL()
       if (!p.loading && url && url !== 'about:blank') {
         try {
-          const actual = browserUrl(url),
+          const actual = pageUrl(url, root),
             remote = p.remoteUrl ? browserRemoteUrl(actual, p.remoteUrl, p.url) : null
           if (p.remoteUrl) p.remoteUrl = remote ?? actual
           p.url = actual
         } catch {}
       }
-      p.title = wc.getTitle() || new URL(p.url).hostname
+      p.title = wc.getTitle() || pageTitle(p.url)
       p.canBack = wc.navigationHistory.canGoBack()
       p.canForward = wc.navigationHistory.canGoForward()
       broadcast(scope)
@@ -281,7 +309,7 @@ export async function initProjectBrowser(ctx: AppContext, dir: string, host: Too
   }
   handle('state', (_, scope) => state(scope))
   handle('navigate', async (e, scope, rawId, rawUrl) => {
-    const original = browserUrl(rawUrl),
+    const original = pageUrl(rawUrl, scopeRoots.get(scope) ?? null),
       url = await transport(scope, original),
       win = BrowserWindow.fromWebContents(e.sender)!
     let page!: BrowserPage
@@ -298,7 +326,7 @@ export async function initProjectBrowser(ctx: AppContext, dir: string, host: Too
           id: randomUUID(),
           url,
           remoteUrl: original === url ? undefined : original,
-          title: new URL(original).hostname,
+          title: pageTitle(original),
           loading: false,
           error: null,
           canBack: false,
