@@ -31,3 +31,8 @@ docs/screenshots/
 # 各包误放的临时目录（应放根目录 scratch/）
 packages/*/scratch/
 apps/*/scratch/
+
+# 云端服务（services/cloud）构建出的二进制
+services/cloud/pixelsky-cloud
+services/cloud/*.exe
+services/cloud/deploy/*-linux-amd64

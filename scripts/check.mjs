@@ -1,5 +1,6 @@
 // 统一检查入口（无依赖，不经过 pnpm）
-// 用法：node scripts/check.mjs [--fast] [--strict] [--remote] [--build] [--only <步骤名>]
+// 用法：node scripts/check.mjs [--fast] [--strict] [--remote] [--build] [--cloud] [--only <步骤名>]
+// --cloud 加跑 services/cloud 的 Go 检查（gofmt、go vet、go test），需要本机装 Go 1.27 或更新版本
 import { spawn } from 'node:child_process'
 import { existsSync, rmSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
@@ -30,6 +31,10 @@ const vitest = (cwd, extra = []) => ({
 })
 
 const buildDir = join(root, 'scratch', `${new Date().toISOString().slice(0, 10)}-check-build-${process.pid}`)
+
+// 云端服务（Go）：独立的 go.mod，不经过 node；只有 --cloud 时才跑
+const cloud = join(root, 'services', 'cloud')
+const goCommand = (name, args) => ({ name, group: 'cloud', cwd: cloud, command: 'go', args })
 
 // group：fast 只跑 tsc 和 docs
 const steps = [
@@ -74,12 +79,17 @@ const steps = [
     args: ['build', '--outDir', buildDir],
     cleanup: () => rmSync(buildDir, { recursive: true, force: true }),
   },
+  // gofmt -l 没有退出码告警，有输出就是没格式化，所以用 failOnOutput
+  { name: 'cloud:gofmt', group: 'cloud', cwd: cloud, command: 'gofmt', args: ['-l', '.'], failOnOutput: true },
+  goCommand('cloud:vet', ['vet', './...']),
+  goCommand('cloud:test', ['test', './...', '-count=1']),
 ]
 
 const selected = steps.filter(step => {
   if (only) return step.name === only || step.group === only
   if (step.group === 'remote') return has('--remote')
   if (step.group === 'build') return has('--build')
+  if (step.group === 'cloud') return has('--cloud')
   // 文档只在本机，仓库里没有 check-docs.mjs 时跳过
   if (step.group === 'docs' && !existsSync(step.script)) return false
   if (has('--fast')) return step.group === 'tsc' || step.group === 'docs'
@@ -97,7 +107,10 @@ delete env.ELECTRON_RUN_AS_NODE
 
 const run = step =>
   new Promise(done => {
-    const child = spawn(process.execPath, [step.script, ...step.args], {
+    // 有 command 的步骤直接调用外部命令（如 go），否则用 node 运行脚本
+    const file = step.command ?? process.execPath
+    const argv = step.command ? step.args : [step.script, ...step.args]
+    const child = spawn(file, argv, {
       cwd: step.cwd,
       env,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -105,7 +118,13 @@ const run = step =>
     let output = ''
     child.stdout.on('data', chunk => (output += chunk))
     child.stderr.on('data', chunk => (output += chunk))
-    child.on('error', error => done({ code: 1, output: output + String(error) }))
+    child.on('error', error => {
+      const hint =
+        error.code === 'ENOENT' && step.command
+          ? `未找到命令 ${step.command}。--cloud 需要本机安装 Go 1.27 或更新版本，并把 go、gofmt 加入 PATH（https://go.dev/dl/）\n`
+          : ''
+      done({ code: 1, output: output + hint + String(error) })
+    })
     child.on('close', code => done({ code: code ?? 1, output }))
   })
 
@@ -127,7 +146,8 @@ for (const step of selected) {
   const start = Date.now()
   const result = await run(step)
   step.cleanup?.()
-  if (result.code === 0) {
+  const passed = result.code === 0 && !(step.failOnOutput && result.output.trim() !== '')
+  if (passed) {
     console.log(`✓ ${step.name}  ${seconds(start)}`)
   } else {
     console.log(`✗ ${step.name}  ${seconds(start)}`)

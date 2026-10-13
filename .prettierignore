@@ -11,6 +11,9 @@ packages/engine/test/fixtures
 **/*.md
 apps/desktop/src/shared/i18n/catalog.ts
 apps/desktop/src/shared/i18n/systemMessages.ts
+# 云端服务：契约样例由 Go 测试生成（CONTRACT_UPDATE=1），授权页模板的输出要和原程序逐字节一致
+services/cloud/testdata/contract
+services/cloud/web
 
 # 手机端的安卓原生工程（Capacitor 生成，里面有复制进去的网页文件和构建输出）
 apps/mobile/android/

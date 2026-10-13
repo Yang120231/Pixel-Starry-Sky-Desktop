@@ -1,6 +1,6 @@
 {
   "name": "@pixelsky/mobile",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "像素星空手机端（网页版先行，之后用 Capacitor 包成 App；docs/mobile-remote.md §8）",
