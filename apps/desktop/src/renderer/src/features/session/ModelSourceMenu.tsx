@@ -610,7 +610,7 @@ function ChannelModelRow({
         )}
       >
         {/* 勾放最左边一列：每行的模型名对齐，右边留给执行者 */}
-        <span className="mt-0.5 flex w-4 shrink-0 justify-center">
+        <span className="flex w-4 shrink-0 justify-center self-center">
           {selected && <Check size={14} strokeWidth={2.25} className="text-accent-fg" />}
         </span>
         <span className="min-w-0 flex-1">
