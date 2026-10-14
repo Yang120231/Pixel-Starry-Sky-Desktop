@@ -37,6 +37,7 @@ import { MinimalModeSettings } from './MinimalModeSettings'
 import { CloseActionSettings } from './CloseActionSettings'
 import { TurnRailSettings } from './TurnRailSettings'
 import { LongConversationSettings } from './LongConversationSettings'
+import { StopBackgroundAgentsSettings } from './StopBackgroundAgentsSettings'
 import { SubagentViewSettings } from './SubagentViewSettings'
 import { ModeTransitionSettings } from './ModeTransitionSettings'
 import { GitOpenStyleSettings } from './GitOpenStyleSettings'
@@ -722,6 +723,7 @@ function AppearanceSection() {
       <TurnRailSettings />
       <LongConversationSettings />
       <SubagentViewSettings />
+      <StopBackgroundAgentsSettings />
       <MessageActionsSettings />
       <FullAccessConfirmSettings />
       <CacheMissSettings />

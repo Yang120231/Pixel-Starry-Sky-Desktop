@@ -26,6 +26,7 @@ import type {
   ProjectRecord,
   AddProjectsResult,
   ForkResult,
+  InterruptOptions,
   RewindOptions,
   RewindPreview,
   RewindResult,
@@ -337,8 +338,8 @@ export class EngineHost {
     return this.m.turn.compactContext(id)
   }
 
-  async interrupt(id: string): Promise<void> {
-    return this.m.turn.interrupt(id)
+  async interrupt(id: string, opts?: InterruptOptions): Promise<void> {
+    return this.m.turn.interrupt(id, opts)
   }
 
   /** 核对轮次后同步进入现有停止和队列锁；旧提醒不能暂停或中断下一轮。 */

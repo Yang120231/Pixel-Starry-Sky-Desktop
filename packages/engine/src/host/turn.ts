@@ -5,6 +5,7 @@ import type {
   ContextDetailLevel,
   ContextDiagnostic,
   ExtensionLaunch,
+  InterruptOptions,
   Item,
   SendReceipt,
   TaskOutput,
@@ -219,7 +220,7 @@ export class HostTurn {
     return receipt
   }
 
-  async interrupt(id: string): Promise<void> {
+  async interrupt(id: string, opts?: InterruptOptions): Promise<void> {
     const m = this.ctx.m
     const rt = m.sessions.runtime(id)
     rt.generation++
@@ -228,7 +229,7 @@ export class HostTurn {
     if (rt.stopping) return
     rt.stopping = true
     try {
-      await rt.session?.interrupt()
+      await rt.session?.interrupt(opts)
     } finally {
       rt.stopping = false
       if (!rt.snapshot.turnId && !rt.pumping) {

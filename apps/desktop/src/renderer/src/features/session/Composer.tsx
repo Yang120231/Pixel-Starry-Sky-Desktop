@@ -29,6 +29,7 @@ import { useComposerDraft } from '@/features/engine/drafts'
 import { QueuedMessages } from './QueuedMessages'
 import { ContextWindowButton } from './ContextWindowButton'
 import { useComposerStyle } from '@/features/settings/composerStyle'
+import { useStopBackgroundAgents } from '@/features/settings/stopBackgroundAgents'
 import { ComposerStatusBar } from './ComposerStatusBar'
 import './composerCompact.css'
 import { useI18n } from '@/i18n/I18nProvider'
@@ -266,6 +267,7 @@ export function Composer({
   const modes = items.filter(a => a.kind === 'mode')
   const hasText = text.trim().length > 0
   const running = !!live?.running
+  const stopWithMain = useStopBackgroundAgents()
   const hasContent = hasText || images.length > 0 || textFiles.length > 0
   const canSend = hasContent && !busy && !reading && !imageDraft.loading && !fileDraft.loading
 
@@ -494,7 +496,11 @@ export function Composer({
           key="stop"
           type="button"
           aria-label={translate('停止')}
-          title={translate('停止当前任务并暂停队列（Esc）')}
+          title={
+            live?.backgroundAgents && stopWithMain
+              ? tr('subagentStop.stopTooltip', { n: live.backgroundAgents })
+              : translate('停止当前任务并暂停队列（Esc）')
+          }
           onClick={stop}
           className="press no-drag inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-fg hover:opacity-90"
         >

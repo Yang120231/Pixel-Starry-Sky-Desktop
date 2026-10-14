@@ -16,6 +16,8 @@ export interface SubagentStatus {
   status: string
   /** 最新进度（摘要或正在用的工具） */
   message: string | null
+  /** 后台子智能体（Agent 工具 run_in_background）；前台的不带 */
+  background?: boolean
 }
 
 /** 智能体追踪里的一个智能体（编排里的智能体，或 Agent 工具派出的子智能体） */

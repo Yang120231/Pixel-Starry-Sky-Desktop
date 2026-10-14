@@ -61,6 +61,15 @@ export const SETTINGS_INDEX: SearchEntry[] = [
       return tr('subagent.searchKeywords')
     },
   },
+  {
+    section: 'appearance',
+    get title() {
+      return tr('subagentStop.setting')
+    },
+    get keywords() {
+      return tr('subagentStop.searchKeywords')
+    },
+  },
   { section: 'appearance', title: '对话框风格', keywords: '输入框 风格 样式 布局 chatgpt claude 工具框内 框外' },
   {
     section: 'editor',

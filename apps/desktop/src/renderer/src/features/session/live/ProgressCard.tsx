@@ -2,11 +2,11 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../../i18n/core'
 // 进度卡片：浮在对话区右上角，显示当前计划和子智能体（docs/ui/progress-card.md，参考 Claude 桌面版）
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Bot, Check, ChevronDown, ChevronUp, CircleSlash, X } from 'lucide-react'
+import { Bot, Check, ChevronDown, ChevronUp, CircleSlash, Square, X } from 'lucide-react'
 import { settledResizeObserver } from '@/features/panes/motion'
 import type { SessionSnapshot, TodoStep } from '@pixelsky/protocol'
 import { IconButton, cn } from '@/ui'
-import { elapsed, formatDuration, shortModel, type RunState } from './agentTrace'
+import { elapsed, formatDuration, RUN_STATE_LABEL, shortModel, type RunState } from './agentTrace'
 import { activeStep, currentPlan, progressAgents, turnKey, type Plan, type ProgressAgent } from './progressData'
 import { useOpenTrace } from './trace'
 
@@ -37,6 +37,8 @@ export interface Progress {
   background: boolean
   visible: boolean
   dismiss: () => void
+  /** 关掉过的卡片再显示出来（保留模式的「查看」） */
+  reveal: () => void
 }
 
 /** 当前计划、子智能体和是否显示；「关闭」只在这一轮里有效 */
@@ -53,6 +55,7 @@ export function useProgress(snapshot: SessionSnapshot | null): Progress {
   const key = `${snapshot?.record.id ?? ''}:${items ? turnKey(items) : ''}`
   const [dismissed, setDismissed] = useState<string | null>(null)
   const dismiss = useCallback(() => setDismissed(key), [key])
+  const reveal = useCallback(() => setDismissed(null), [])
   // 只在运行中显示：空闲时计划和子智能体都在这一轮收起的执行块里（docs/ui/conversation-concise.md §3 F）
   return {
     plan,
@@ -60,6 +63,7 @@ export function useProgress(snapshot: SessionSnapshot | null): Progress {
     background: background && !running,
     visible: dismissed !== key && ((running && (!!plan || agents.length > 0)) || (background && agents.length > 0)),
     dismiss,
+    reveal,
   }
 }
 
@@ -84,6 +88,7 @@ function StateIcon({ state }: { state: RunState }) {
   if (state === 'running') return <span className="mt-[6px] size-[7px] shrink-0 animate-pulse rounded-full bg-active" />
   if (state === 'done') return <Check size={12} strokeWidth={2} className="mt-[3px] shrink-0 text-success" />
   if (state === 'failed') return <X size={12} strokeWidth={2} className="mt-[3px] shrink-0 text-danger" />
+  if (state === 'stopped') return <span className="mt-[3px] size-3 shrink-0 rounded-[3px] bg-fg-faint" />
   return <CircleSlash size={12} strokeWidth={1.75} className="mt-[3px] shrink-0 text-fg-muted" />
 }
 
@@ -104,6 +109,8 @@ function summary(plan: Plan | null, agents: ProgressAgent[]): string {
   const running = agents.filter(a => a.state === 'running').length
   if (running > 0) parts.push(tr('session.progress.agentsRunning', { n: running }))
   else if (agents.length > 0) parts.push(tr('session.progress.agents', { n: agents.length }))
+  const stopped = agents.filter(a => a.state === 'stopped').length
+  if (running > 0 && stopped > 0) parts.push(tr('subagentStop.stoppedCount', { n: stopped }))
   return parts.join(' · ')
 }
 
@@ -145,24 +152,55 @@ function Steps({ steps }: { steps: TodoStep[] }) {
   )
 }
 
-function Agents({ agents, divided }: { agents: ProgressAgent[]; divided: boolean }) {
+function Agents({
+  agents,
+  divided,
+  onStop,
+}: {
+  agents: ProgressAgent[]
+  divided: boolean
+  onStop?: (ids: string[]) => Promise<string[]>
+}) {
   const openTrace = useOpenTrace()
   const now = useNow(agents.some(a => a.state === 'running'))
+  const [stopping, setStopping] = useState<Set<string>>(() => new Set())
+  const stop = (ids: string[]): void => {
+    setStopping(s => new Set([...s, ...ids]))
+    void onStop?.(ids).then(failed => {
+      if (failed.length > 0) setStopping(s => new Set([...s].filter(id => !failed.includes(id))))
+    })
+  }
+  const running = agents.filter(a => a.state === 'running' && a.background && !stopping.has(a.id)).map(a => a.id)
   return (
     <div className={cn('px-1.5', divided && 'mt-1.5 border-t border-line-subtle pt-1.5')}>
-      <div className="px-1.5 pb-0.5 text-meta text-fg-faint">
-        {tr('session.progress.subagents')} <span className="tabular-nums">{agents.length}</span>
+      <div className="flex items-center justify-between px-1.5 pb-0.5 text-meta text-fg-faint">
+        <span>
+          {tr('session.progress.subagents')} <span className="tabular-nums">{agents.length}</span>
+        </span>
+        {onStop && running.length > 0 && (
+          <button
+            type="button"
+            onClick={() => stop(running)}
+            className="press inline-flex items-center gap-1 rounded px-1 text-danger hover:bg-hover"
+          >
+            <Square size={9} strokeWidth={0} fill="currentColor" />
+            {tr('subagentStop.stopAll')}
+          </button>
+        )}
       </div>
       <ul className="flex max-h-[11rem] flex-col overflow-y-auto">
         {agents.map(a => {
           const time = elapsed(a, a.state, now)
           return (
-            <li key={a.id}>
+            <li key={a.id} className="group relative flex items-start">
               <button
                 type="button"
                 onClick={() => openTrace?.({ agentId: a.id })}
                 title={tr('session.live.SessionStrips.viewSubagentConversation')}
-                className="press flex w-full min-w-0 items-start gap-2 rounded-md px-1.5 py-1 text-left hover:bg-hover"
+                className={cn(
+                  'press flex min-w-0 flex-1 items-start gap-2 rounded-md px-1.5 py-1 text-left hover:bg-hover',
+                  onStop && a.state === 'running' && a.background && 'pr-8',
+                )}
               >
                 <StateIcon state={a.state} />
                 <span className="flex min-w-0 flex-1 flex-col">
@@ -183,8 +221,12 @@ function Agents({ agents, divided }: { agents: ProgressAgent[]; divided: boolean
                       </span>
                     )}
                     <span className="flex-1" />
-                    {time > 0 && (
-                      <span className="shrink-0 text-meta text-fg-faint tabular-nums">{formatDuration(time)}</span>
+                    {a.state === 'stopped' ? (
+                      <span className="shrink-0 text-meta text-fg-faint">{RUN_STATE_LABEL.stopped}</span>
+                    ) : (
+                      time > 0 && (
+                        <span className="shrink-0 text-meta text-fg-faint tabular-nums">{formatDuration(time)}</span>
+                      )
                     )}
                   </span>
                   {a.message && (
@@ -194,6 +236,18 @@ function Agents({ agents, divided }: { agents: ProgressAgent[]; divided: boolean
                   )}
                 </span>
               </button>
+              {onStop && a.state === 'running' && a.background && (
+                <button
+                  type="button"
+                  aria-label={tr('subagentStop.stopOne')}
+                  title={tr('subagentStop.stopOne')}
+                  disabled={stopping.has(a.id)}
+                  onClick={() => stop([a.id])}
+                  className="press absolute top-1 right-1 inline-flex size-5 items-center justify-center rounded bg-danger/10 text-danger opacity-0 group-hover:opacity-100 focus-visible:opacity-100 disabled:pointer-events-none disabled:opacity-40"
+                >
+                  <Square size={9} strokeWidth={0} fill="currentColor" />
+                </button>
+              )}
             </li>
           )
         })}
@@ -207,6 +261,8 @@ export function ProgressCard({
   belowFind,
   offset = 0,
   onOpenTrace,
+  onStopAgents,
+  expandToken,
 }: {
   progress: Progress
   /** 对话内搜索条打开着：卡片挪到搜索条下面 */
@@ -214,6 +270,10 @@ export function ProgressCard({
   /** 上面后台任务条的高度：卡片放到任务条下面，不盖住「输出 / 停止」 */
   offset?: number
   onOpenTrace?: () => void
+  /** 停一个或几个子智能体；引擎没有后台任务能力时不传，界面不出停止按钮 */
+  onStopAgents?: (ids: string[]) => Promise<string[]>
+  /** 变一次就把卡片展开（保留模式的「查看」） */
+  expandToken?: number
 }) {
   useI18n()
   const card = useRef<HTMLElement>(null)
@@ -230,6 +290,9 @@ export function ProgressCard({
     ro.observe(box)
     return () => ro.disconnect()
   }, [])
+  useEffect(() => {
+    if (expandToken) setUserCollapsed(false)
+  }, [expandToken])
   const collapsed = userCollapsed ?? (stored || narrow)
   const toggle = (): void => {
     setUserCollapsed(!collapsed)
@@ -281,7 +344,7 @@ export function ProgressCard({
       {!collapsed && (
         <div className="flex min-h-0 flex-col overflow-y-auto">
           {plan && <Steps steps={plan.steps} />}
-          {agents.length > 0 && <Agents agents={agents} divided={!!plan} />}
+          {agents.length > 0 && <Agents agents={agents} divided={!!plan} onStop={onStopAgents} />}
         </div>
       )}
     </section>

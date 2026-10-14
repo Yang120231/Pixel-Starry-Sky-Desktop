@@ -27,6 +27,7 @@ export type {
 export type {
   ContextWindows,
   EngineCaps,
+  InterruptOptions,
   EngineCatalog,
   EngineConfig,
   EngineConfigPatch,

@@ -1176,3 +1176,67 @@ describe('回退到某条用户消息之前（Claude 假引擎，模拟真实记
     expect(host.open(record.id).record.pendingRewind).toBeNull()
   })
 })
+
+describe('停止时连同后台子智能体', () => {
+  const controlLog = (): string[] => {
+    try {
+      return readFileSync(join(root, 'argv.control.log'), 'utf8').split('\n').filter(Boolean)
+    } catch {
+      return []
+    }
+  }
+  const start = async (host: EngineHost) => {
+    const { record } = setup(host)
+    await host.send(record.id, '并行跑')
+    await waitFor(() => host.open(record.id).tasks.length === 4 && host.open(record.id).state !== 'idle')
+    return record
+  }
+  const notices = (id: string) =>
+    host0(id)
+      .items.filter(i => i.kind === 'notice')
+      .map(i => (i as { text: string }).text)
+  let hostRef: EngineHost
+  const host0 = (id: string) => hostRef.open(id)
+
+  it('background: true：后台子智能体和编排都停，后台命令留着；只有一条汇总提示', async () => {
+    const host = (hostRef = makeHost())
+    const record = await start(host)
+    await host.interrupt(record.id, { background: true })
+    await waitFor(() => host.open(record.id).state === 'idle')
+    await waitFor(() => host.open(record.id).tasks.length === 1)
+    const snap = host.open(record.id)
+    expect(snap.tasks.map(t => t.id)).toEqual(['bg1'])
+    expect(snap.subagents.map(s => [s.label, s.status])).toEqual([
+      ['甲', 'stopped'],
+      ['乙', 'stopped'],
+    ])
+    const list = notices(record.id)
+    expect(list.filter(t => t.startsWith('已停止，连同'))).toEqual(['已停止，连同 3 个后台子智能体（甲、乙、编排）'])
+    expect(list.some(t => t.includes('已停止：'))).toBe(false)
+    const log = controlLog()
+    expect(log.indexOf('stop_task')).toBeGreaterThanOrEqual(0)
+    expect(log.indexOf('stop_task')).toBeLessThan(log.lastIndexOf('interrupt'))
+  })
+
+  it('不带选项：四个后台任务都还在，没有汇总提示', async () => {
+    const host = (hostRef = makeHost())
+    const record = await start(host)
+    await host.interrupt(record.id)
+    await waitFor(() => host.open(record.id).state === 'idle')
+    const snap = host.open(record.id)
+    expect(snap.tasks).toHaveLength(4)
+    expect(snap.background).toBe(3)
+    expect(notices(record.id).some(t => t.startsWith('已停止，连同'))).toBe(false)
+    expect(controlLog()).not.toContain('stop_task')
+  })
+
+  it('interruptTurn 不会停后台任务', async () => {
+    const host = (hostRef = makeHost())
+    const record = await start(host)
+    const turnId = host.open(record.id).turnId as string
+    expect(await host.interruptTurn(record.id, turnId)).toBe(true)
+    await waitFor(() => host.open(record.id).state === 'idle')
+    expect(host.open(record.id).tasks).toHaveLength(4)
+    expect(controlLog()).not.toContain('stop_task')
+  })
+})

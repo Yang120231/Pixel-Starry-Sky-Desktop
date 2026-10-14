@@ -1,6 +1,12 @@
 import type { AlwaysScope, Effort, EngineId, PermissionMode } from './base'
 import type { SessionSettings } from './session'
 
+/** 中断选项 */
+export interface InterruptOptions {
+  /** 连同后台子智能体、多智能体编排一起停（只有 caps.backgroundTasks 的引擎用到） */
+  background?: boolean
+}
+
 /** 引擎能力表：界面按它决定显示什么，组件里不判断是哪个引擎 */
 export interface EngineCaps {
   /** 可直接发送图片内容块；缺省表示未接入。 */

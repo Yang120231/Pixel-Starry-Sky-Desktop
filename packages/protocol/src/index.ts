@@ -9,6 +9,7 @@ export type {
   ContextWindows,
   Effort,
   EngineCaps,
+  InterruptOptions,
   EngineCatalog,
   EngineConfig,
   EngineConfigPatch,
@@ -218,3 +219,5 @@ export {
   isSubagentBox,
 } from './turnFold'
 export type { TurnEntry, ProcessSummary, FoldOptions } from './turnFold'
+export { backgroundAgents } from './backgroundAgents'
+export type { BackgroundAgentRef } from './backgroundAgents'

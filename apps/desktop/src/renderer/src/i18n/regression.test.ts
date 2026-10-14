@@ -49,6 +49,7 @@ import { recoveryMessages } from '../../../shared/i18n/recoveryMessages'
 import { pathClickMessages } from '../../../shared/i18n/pathClickMessages'
 import { contextMenuMessages } from '../../../shared/i18n/contextMenuMessages'
 import { subagentMessages } from '../../../shared/i18n/subagentMessages'
+import { subagentStopMessages } from '../../../shared/i18n/subagentStopMessages'
 import { traceHistoryMessages } from '../../../shared/i18n/traceHistoryMessages'
 
 // 与 shared/i18n/translate.ts 的 allMessages 合并顺序一致
@@ -100,6 +101,7 @@ const dictionaries: Record<string, Record<string, unknown>> = {
   pathClickMessages,
   contextMenuMessages,
   subagentMessages,
+  subagentStopMessages,
   traceHistoryMessages,
 }
 

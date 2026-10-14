@@ -8,6 +8,7 @@ import {
   type ContextDiagnostic,
   type ApprovalDecision,
   type ImageAttachment,
+  type InterruptOptions,
   type PermissionMode,
   type SessionFlags,
   type SessionSettings,
@@ -698,7 +699,7 @@ export class ClaudeSession implements EngineSession {
     })
   }
 
-  async interrupt(): Promise<void> {
+  async interrupt(opts?: InterruptOptions): Promise<void> {
     const proc = this.proc
     if (!this.translator.activeTurn && !this.guidance.size) return
     if (!proc) {
@@ -706,6 +707,32 @@ export class ClaudeSession implements EngineSession {
       this.translator.interruptTurn()
       return
     }
+    // 连同后台子智能体一起停：先发 stop_task，让停止通知排在 interrupt 前面，interrupt 的 cancel_queued 会丢掉它们，不会触发新一轮
+    const targets = opts?.background && proc.alive ? this.translator.backgroundTargets() : []
+    const stops = targets.map(t =>
+      proc.request('stop_task', { task_id: t.id }, 5_000).then(
+        () => true,
+        () => false,
+      ),
+    )
+    if (targets.length > 0) {
+      this.translator.muteStopNotices(targets.map(t => t.id))
+      const ids = targets.map(t => t.id)
+      const deadline = Date.now() + 1_500
+      await Promise.race([Promise.all(stops), new Promise<void>(r => setTimeout(r, 1_500))])
+      // 回复到了不等于停止通知到了：再等通知落地（最多到 deadline），免得 interrupt 之后才来
+      while (this.translator.pendingStopNotices(ids) && Date.now() < deadline) await new Promise(r => setTimeout(r, 20))
+    }
+    await this.interruptTurnProcess(proc)
+    if (targets.length === 0) return
+    const ok = await Promise.all(stops)
+    this.translator.unmuteStopNotices(targets.filter((_, i) => !ok[i]).map(t => t.id))
+    const killed = !this.proc?.alive
+    const labels = targets.filter((_, i) => killed || ok[i]).map(t => t.label)
+    if (labels.length > 0) this.translator.stoppedWithMain(labels)
+  }
+
+  private async interruptTurnProcess(proc: ClaudeProcess): Promise<void> {
     try {
       const receipt = await proc.request(
         'interrupt',

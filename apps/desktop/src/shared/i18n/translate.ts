@@ -43,6 +43,7 @@ import { recoveryMessages } from './recoveryMessages'
 import { pathClickMessages } from './pathClickMessages'
 import { contextMenuMessages } from './contextMenuMessages'
 import { subagentMessages } from './subagentMessages'
+import { subagentStopMessages } from './subagentStopMessages'
 import { traceHistoryMessages } from './traceHistoryMessages'
 import { wslMessages } from './wslMessages'
 import { replaceCodedErrors } from '@pixelsky/protocol'
@@ -96,6 +97,7 @@ export const allMessages = {
   ...pathClickMessages,
   ...contextMenuMessages,
   ...subagentMessages,
+  ...subagentStopMessages,
   ...traceHistoryMessages,
 }
 export type TranslationKey = keyof typeof allMessages

@@ -3,6 +3,7 @@ import type {
   AgentRuns,
   ApprovalDecision,
   ImageAttachment,
+  InterruptOptions,
   Item,
   TaskOutput,
   EngineCatalog,
@@ -61,7 +62,8 @@ export interface EngineSession {
    * 适配器负责在这一轮结束时发 turn_completed（带同一个 turnId），出错也要发。
    */
   send(text: string, turnId: string, userItemId: string, attachments?: ImageAttachment[]): void
-  interrupt(): Promise<void>
+  /** opts.background：连同后台子智能体一起停；没有后台任务的引擎忽略 */
+  interrupt(opts?: InterruptOptions): Promise<void>
   answer(requestId: string, decision: ApprovalDecision): void
   /** 改模型 / 强度 / 权限 / 开关：进程在跑就实时生效，否则下次启动时生效 */
   update(patch: Partial<SessionSettings>, strict?: boolean): Promise<void>

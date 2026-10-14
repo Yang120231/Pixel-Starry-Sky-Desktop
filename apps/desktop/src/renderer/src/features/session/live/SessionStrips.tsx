@@ -119,3 +119,29 @@ export function TaskStrip({ sessionId, tasks }: { sessionId: string; tasks: Back
     </div>
   )
 }
+
+/** 保留模式：主智能体停了，还有后台子智能体在跑（docs/ui/subagent-stop.md §S4） */
+export function KeptAgentsStrip({
+  count,
+  onView,
+  onStopAll,
+}: {
+  count: number
+  onView: () => void
+  onStopAll: () => void
+}) {
+  useI18n()
+  return (
+    <div className="mb-2 flex items-center gap-2 rounded-xl border border-active/40 bg-accent-soft px-3 py-1.5 text-meta text-fg">
+      <Spinner size={12} />
+      <span className="min-w-0 truncate">{tr('subagentStop.keptStrip', { n: count })}</span>
+      <span className="flex-1" />
+      <button type="button" className={LINK} onClick={onView}>
+        {tr('subagentStop.view')}
+      </button>
+      <button type="button" className={cn(LINK, 'text-danger hover:text-danger')} onClick={onStopAll}>
+        ■ {tr('subagentStop.stopAll')}
+      </button>
+    </div>
+  )
+}
