@@ -65,6 +65,29 @@ export function recordRecentFile(scope: string, id: string, at = Date.now()): vo
   listeners.forEach(fn => fn())
 }
 
+/** 文件改名 / 移动后标签换了 id：各作用域里的旧 id 换成新的（审查报告 2026-10-14） */
+export function renameRecentFile(from: string, to: string): void {
+  let changed = false
+  recent = Object.fromEntries(
+    Object.entries(recent).map(([scope, list]) => {
+      if (!list.some(item => item.id === from)) return [scope, list]
+      changed = true
+      const seen = new Set<string>()
+      const next = list
+        .map(item => (item.id === from ? { ...item, id: to } : item))
+        .filter(item => !seen.has(item.id) && (seen.add(item.id), true))
+      return [scope, next]
+    }),
+  )
+  if (!changed) return
+  try {
+    localStorage.setItem(KEY, JSON.stringify(recent))
+  } catch {
+    /* 没有持久化也能用 */
+  }
+  listeners.forEach(fn => fn())
+}
+
 export function useRecentFiles(scope: string): RecentFile[] {
   return useSyncExternalStore(
     fn => {

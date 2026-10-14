@@ -23,7 +23,15 @@ import {
   selectNextOccurrence,
 } from '@codemirror/search'
 import { ClipboardPaste, Copy, MessageSquareQuote, Scissors, TextSelect } from 'lucide-react'
-import { FILE_CLOSED_EVENT, getFiles, saveFile, updateFile, type OpenFile } from '@/features/files/store'
+import {
+  FILE_CLOSED_EVENT,
+  FILE_RENAMED_EVENT,
+  getFiles,
+  saveFile,
+  updateFile,
+  type FileRename,
+  type OpenFile,
+} from '@/features/files/store'
 import { motionEnabled } from '@/features/panes/motion'
 import { appendComposerDraft } from '@/features/engine/drafts'
 import { QUOTE_SELECTION } from '@/features/layout/shortcuts'
@@ -74,6 +82,21 @@ export function releaseEditor(tabId: string): void {
 }
 /** 编辑器实例数（内存遥测用） */
 export const editorCount = (): number => runtimes.size
+// 文件改名 / 移动后标签换了 id：编辑器实例挪到新 id 下（内容、撤销记录、光标都保留）
+window.addEventListener(FILE_RENAMED_EVENT, e => {
+  for (const { from, to } of (e as CustomEvent<FileRename[]>).detail) {
+    const runtime = runtimes.get(from)
+    if (!runtime) continue
+    const stale = runtimes.get(to)
+    if (stale && stale !== runtime) {
+      window.clearTimeout(stale.timer)
+      window.clearTimeout(stale.flashTimer)
+      stale.view.destroy()
+    }
+    runtimes.delete(from)
+    runtimes.set(to, runtime)
+  }
+})
 window.addEventListener(FILE_CLOSED_EVENT, e => {
   const id = (e as CustomEvent<string>).detail,
     runtime = runtimes.get(id)

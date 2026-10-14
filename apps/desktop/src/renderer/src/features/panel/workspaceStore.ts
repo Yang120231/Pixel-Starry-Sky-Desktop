@@ -91,6 +91,22 @@ export function detachPanelFile(id: string): void {
   contexts = Object.fromEntries(
     Object.entries(contexts).map(([scope, layout]) => [scope, removePanelTabs(layout, [id])]),
   )
+  // 关掉的标签不再记「保存成别的 id」：以后同一个 id 是另一个文件（审查报告 2026-10-14）
+  for (const [from, to] of [...persistedFileIds]) if (from === id || to === id) persistedFileIds.delete(from)
+  emit()
+}
+/** 文件改名 / 移动后标签换了 id：各作用域布局里的旧 id 换成新的 */
+export function renamePanelFile(from: string, to: string): void {
+  const swap = (id: string): string => (id === from ? to : id)
+  contexts = Object.fromEntries(
+    Object.entries(contexts).map(([scope, layout]) => [
+      scope,
+      layout.tabs.includes(from)
+        ? { ...layout, tabs: [...new Set(layout.tabs.map(swap))], active: layout.active && swap(layout.active) }
+        : layout,
+    ]),
+  )
+  for (const [key, value] of [...persistedFileIds]) if (value === from) persistedFileIds.set(key, to)
   emit()
 }
 export function replacePanelFile(from: string, to: string): void {

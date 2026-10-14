@@ -2,7 +2,14 @@ import { useSyncExternalStore } from 'react'
 import { isDemo } from '@/data'
 import { releaseEditor } from '@/features/editor/code/CodeEditor'
 import { confirmFiles } from '@/features/files/FileConfirm'
-import { dirtyFile, ensureFile, getFiles, removeFile } from '@/features/files/store'
+import {
+  FILE_RENAMED_EVENT,
+  dirtyFile,
+  ensureFile,
+  getFiles,
+  removeFile,
+  type FileRename,
+} from '@/features/files/store'
 import { showWorkbench } from '@/features/layout/page'
 import { panelFileIds } from '@/features/panel/workspaceStore'
 import { recordRecentFile } from '@/features/panel/recentFiles'
@@ -71,6 +78,24 @@ export function useCodeTabs(): CodeTabsState {
   )
 }
 export const getCodeTabs = (): CodeTabsState => state
+
+// 文件改名 / 移动后标签换了 id：所有项目的标签组、视图设置、最近使用顺序里的旧 id 换成新的（审查报告 2026-10-14）
+window.addEventListener(FILE_RENAMED_EVENT, e => {
+  const moves = (e as CustomEvent<FileRename[]>).detail
+  let next = groups
+  for (const { from, to } of moves) {
+    next = Object.fromEntries(Object.entries(next).map(([key, g]) => [key, replaceInGroup(g, from, to)]))
+    if (from in views) {
+      views[to] = views[from]
+      delete views[from]
+    }
+    order = order.map(id => (id === from ? to : id))
+  }
+  if (next === groups && !moves.length) return
+  groups = next
+  persist()
+  publish()
+})
 
 /** 当前项目换了：切到它的标签组，并把恢复出来的文件读进来 */
 export function setCodeProject(key: string): void {

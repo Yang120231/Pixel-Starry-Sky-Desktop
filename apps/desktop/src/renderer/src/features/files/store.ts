@@ -10,11 +10,13 @@ import {
   getPanelScope,
   openRightTab,
   detachPanelFile,
+  renamePanelFile,
   replacePanelFile,
   panelFileIds,
   resolvePanelFileId,
 } from '@/features/panel/workspaceStore'
 import { demo } from '@/data/demo'
+import { renameRecentFile } from '@/features/panel/recentFiles'
 
 export const OPEN_FILES_EVENT = 'pixelsky:open-files'
 export const FILE_CLOSED_EVENT = 'pixelsky:file-closed'
@@ -88,20 +90,44 @@ const under = (path: string, base: string): boolean => path === base || path.sta
 export const openFilesUnder = (ref: WorkspaceRef, path: string): OpenFile[] =>
   state.tabs.filter(tab => sameRef(tab.ref, ref) && under(tab.path, path))
 
+/** 改名 / 移动后标签 id 换了：编辑器实例、右栏布局、代码模式标签、最近文件、窗格跟着换（detail 是 FileRename[]） */
+export const FILE_RENAMED_EVENT = 'pixelsky:file-renamed'
+export interface FileRename {
+  from: string
+  to: string
+}
+
 /**
- * 文件树重命名 / 移动后，已打开的标签换成新路径。标签 id 不变，保留编辑器和草稿；
- * 保存的布局记新 id，重启后按新路径打开（和 retainSessionFiles 同样的做法）。
+ * 文件树重命名 / 移动后，已打开的标签换成新路径和新 id（id 由路径算出），草稿、编辑器（含撤销记录）都保留。
+ * 原来 id 不变、只记一笔「旧 id → 新 id」：之后在旧路径新建或打开文件会算出同一个 id，打开的是改名后的文件，
+ * 保存也写进它；代码模式的标签和最近文件还记着旧 id，重启后指向旧路径（审查报告 2026-10-14）。
  */
 export function renameOpenFiles(ref: WorkspaceRef, from: string, to: string): void {
-  let changed = false
+  const moves: FileRename[] = []
   const tabs = state.tabs.map(tab => {
     if (!sameRef(tab.ref, ref) || !under(tab.path, from)) return tab
-    changed = true
     const path = to + tab.path.slice(from.length)
-    replacePanelFile(tab.id, fileTab(tab.ref, path))
-    return { ...tab, path, name: path.split('/').pop() ?? path }
+    const id = fileTab(tab.ref, path)
+    if (id !== tab.id) moves.push({ from: tab.id, to: id })
+    return { ...tab, id, path, name: path.split('/').pop() ?? path }
   })
-  if (changed) set({ ...state, tabs })
+  if (!moves.length) {
+    if (tabs.some((t, i) => t !== state.tabs[i])) set({ ...state, tabs })
+    return
+  }
+  // 新路径以前开过、文件早已不在、标签还留着：去掉那个旧标签，免得两个标签同一个 id
+  const moved = new Set(moves.map(m => m.from))
+  const taken = new Set(moves.map(m => m.to))
+  const kept = tabs.filter((t, i) => !(taken.has(t.id) && !moved.has(state.tabs[i].id)))
+  const active = moves.find(m => m.from === state.active)?.to ?? state.active
+  set({ tabs: kept, active })
+  for (const m of moves) {
+    renamePanelFile(m.from, m.to)
+    paneActions.replace(m.from, m.to)
+    renameRecentFile(m.from, m.to)
+  }
+  // 代码模式的标签组、编辑器实例在各自模块里换（它们引用这个模块，不能反过来引用）
+  window.dispatchEvent(new CustomEvent<FileRename[]>(FILE_RENAMED_EVENT, { detail: moves }))
 }
 
 export const dirtyFile = (tab: OpenFile): boolean =>
