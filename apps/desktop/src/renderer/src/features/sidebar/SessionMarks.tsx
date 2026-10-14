@@ -31,8 +31,8 @@ export function SessionMarks({
 }
 
 /**
- * 项目里对话标题左边的状态（docs/ui/sidebar-hierarchy.md）：转圈 = 在跑，「等你 / 出错 / 暂停」小标签 = 要你处理，
- * 主色点 = 有新回复。转圈和点放在固定 14px 的格子里，有没有状态的标题都对齐；标签比格子宽，标题往右让
+ * 项目里对话的状态（docs/ui/sidebar-styles.md「大文件夹」版）：挂在项目文件夹图标正下方（行左边 5px 起、14px 宽，绝对定位，不占标题的位置）。
+ * 转圈 = 在跑；黄 / 红 / 灰点 = 等你 / 出错 / 暂停（右边的时间换成 NeedsYouLabel）；主色点 = 有新回复
  */
 export function SessionStatusMark({
   lane,
@@ -43,23 +43,24 @@ export function SessionStatusMark({
   running: boolean
   unread: boolean
 }) {
-  if (needsYou(lane))
-    return (
-      <span
-        data-session-mark={lane}
-        className={cn('shrink-0 rounded px-1 text-[10.5px] leading-4 font-semibold', TAG_TONE[lane])}
-      >
-        {tr(TAG_LABEL[lane])}
-      </span>
-    )
+  const kind = needsYou(lane) ? lane : running ? 'running' : unread ? 'unread' : undefined
+  if (!kind) return null
   return (
-    <span
-      data-session-mark={running ? 'running' : unread ? 'unread' : undefined}
-      className="flex w-3.5 shrink-0 items-center justify-center"
-    >
-      {running ? <Spinner size={12} className="text-active!" /> : unread && <Dot tone="accent" size={7} />}
+    <span data-session-mark={kind} className="absolute left-[5px] flex w-3.5 items-center justify-center">
+      {kind === 'running' ? (
+        <Spinner size={11} className="text-active!" />
+      ) : kind === 'unread' ? (
+        <Dot tone="accent" size={7} />
+      ) : (
+        <span className={cn('size-[7px] rounded-full', DOT_TONE[kind])} />
+      )}
     </span>
   )
+}
+
+/** 要你处理的对话右边写「等你 / 出错 / 暂停」，代替时间 */
+export function NeedsYouLabel({ lane }: { lane: NeedsYouLane }) {
+  return <span className={cn('shrink-0 text-meta font-semibold', TEXT_TONE[lane])}>{tr(TAG_LABEL[lane])}</span>
 }
 
 const TAG_LABEL = {
@@ -67,8 +68,13 @@ const TAG_LABEL = {
   failed: 'sidebar.tree.tag.failed',
   paused: 'sidebar.tree.tag.paused',
 } as const satisfies Record<NeedsYouLane, Parameters<typeof tr>[0]>
-const TAG_TONE: Record<NeedsYouLane, string> = {
-  waiting: 'bg-warn/15 text-warn',
-  failed: 'bg-danger/12 text-danger',
-  paused: 'bg-fg-faint/15 text-fg-muted',
+const DOT_TONE: Record<NeedsYouLane, string> = {
+  waiting: 'bg-warn',
+  failed: 'bg-danger',
+  paused: 'bg-fg-faint',
+}
+const TEXT_TONE: Record<NeedsYouLane, string> = {
+  waiting: 'text-warn',
+  failed: 'text-danger',
+  paused: 'text-fg-muted',
 }

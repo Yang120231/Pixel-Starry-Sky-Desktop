@@ -1,7 +1,19 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type MouseEvent } from 'react'
-import { Archive, Boxes, ChevronRight, Ellipsis, Folders, Layers, ListPlus, PencilLine, Ungroup, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent } from 'react'
+import {
+  Archive,
+  ChevronRight,
+  Ellipsis,
+  Folder,
+  FolderOpen,
+  Folders,
+  Layers,
+  ListPlus,
+  PencilLine,
+  Ungroup,
+  X,
+} from 'lucide-react'
 import { Spinner, cn } from '@/ui'
 import { ActionMenu } from '@/ui/ActionMenu'
 import type { Project } from '@/data'
@@ -16,7 +28,7 @@ import { lanesOf } from './runFilter'
 import { SessionItem } from './SessionItem'
 import { ProjectRow } from './ProjectRow'
 import { GroupNameDialog } from './GroupNameDialog'
-import { SHOWN_SESSIONS, projectColor, projectCounts, projectFolders, visibleSessions } from './projectTreeModel'
+import { SHOWN_SESSIONS, projectCounts, projectFolders, visibleSessions } from './projectTreeModel'
 import {
   addToGroup,
   arrangeProjects,
@@ -173,17 +185,11 @@ export function ProjectTree({
       lanes,
     })
     const folders = projectFolders(p).map(f => f.name)
-    // 展开且下面有东西的项目是一张浅卡（项目行 + 文件夹行 + 对话），收起的就是一行（docs/ui/sidebar-styles.md 版本 4）
-    const card = open && (folders.length > 0 || p.sessions.length > 0 || !!p.archived?.length)
     return (
       <div
         key={p.id}
         data-project-group={p.id}
-        data-project-card={card || undefined}
-        className={cn(
-          'flex flex-col gap-px',
-          card && 'my-0.5 rounded-lg bg-fg/[0.035] pb-1 ring-1 ring-line-subtle ring-inset',
-        )}
+        className={cn('flex flex-col gap-px', open && p.sessions.length > 0 && 'mb-1')}
       >
         <ProjectRow
           project={p}
@@ -198,14 +204,14 @@ export function ProjectTree({
           <div
             data-project-folders
             title={tr('sidebar.tree.folders', { names: folders.join(', ') })}
-            className="-mt-1 flex h-5 min-w-0 items-center gap-1.5 pr-2 pl-[52px] text-meta text-fg-faint"
+            className="-mt-1 flex h-5 min-w-0 items-center gap-2.5 pr-2 pl-1.5 text-meta text-fg-faint"
           >
-            <Folders size={12} strokeWidth={1.5} className="-ml-[18px] shrink-0" />
+            <Folders size={12} strokeWidth={1.5} className="shrink-0" />
             <span className="min-w-0 truncate">{folders.join(' · ')}</span>
           </div>
         )}
         {open && (p.sessions.length > 0 || !!p.archived?.length) && (
-          <div data-project-sessions className="flex flex-col gap-px pr-0.5 pl-5">
+          <div data-project-sessions className="flex flex-col gap-px">
             {shown.map(s => (
               <SessionItem
                 key={s.id}
@@ -292,10 +298,8 @@ export function ProjectTree({
             key={group.id}
             data-project-section={group.id}
             aria-label={group.name}
-            style={{ '--group-color': projectColor(group.id) } as CSSProperties}
             className={cn(
-              'relative my-1 flex flex-col gap-px rounded-lg pl-2 transition-shadow',
-              'before:absolute before:top-0.5 before:bottom-0.5 before:left-0 before:w-[3px] before:rounded-full before:bg-(--group-color)',
+              'my-0.5 flex flex-col gap-px rounded-lg transition-shadow',
               dropTarget === group.id && 'ring-1 ring-accent-line',
             )}
             {...dropZone(group.id, ids => save(addToGroup(groups, group.id, ids)))}
@@ -309,7 +313,11 @@ export function ProjectTree({
               onToggle={() => setProjectsCollapsed([groupKey(group.id)], open)}
               onMenu={(x, y) => setGroupMenu({ group, x, y })}
             />
-            {open && <div className="flex flex-col gap-px">{members.map(renderProject)}</div>}
+            {open && (
+              <div className="relative ml-3.5 flex flex-col gap-px pl-2 before:absolute before:top-0.5 before:bottom-1.5 before:left-0 before:border-l before:border-line-subtle">
+                {members.map(renderProject)}
+              </div>
+            )}
           </section>
         )
       })}
@@ -345,7 +353,7 @@ export function ProjectTree({
   )
 }
 
-/** 分区标题（版本 4）：分区色淡底，箭头 + 分区色图标和名字 + 「N 个项目」，右边是组里在跑 / 等你的合计；悬停出 ⋯，右键同一个菜单 */
+/** 分区标题（「大文件夹」版）：大一号带淡填充的文件夹（展开时打开）+ 加粗的名字 + 小框里的项目数，展开时整行淡底 + 「N 个项目」，右边是组里在跑 / 等你的合计；悬停出 ⋯，右键同一个菜单 */
 function GroupHeader({
   group,
   open,
@@ -370,23 +378,42 @@ function GroupHeader({
         event.preventDefault()
         onMenu(event.clientX, event.clientY)
       }}
-      className="group/section relative flex h-7 min-w-0 shrink-0 items-center rounded-md bg-[color-mix(in_srgb,var(--group-color)_14%,transparent)] hover:bg-[color-mix(in_srgb,var(--group-color)_22%,transparent)]"
+      className={cn(
+        'group/section relative flex h-[34px] min-w-0 shrink-0 items-center rounded-md hover:bg-hover',
+        open && 'bg-fg/[0.035]',
+      )}
     >
       <button
         type="button"
         aria-expanded={open}
         onClick={onToggle}
         title={group.name}
-        className="flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-md pl-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+        className="flex h-full min-w-0 flex-1 items-center gap-2 rounded-md pl-0.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
       >
-        <ChevronRight
-          size={12}
-          strokeWidth={1.75}
-          className={cn('shrink-0 text-fg-faint transition-transform duration-150', open && 'rotate-90')}
-        />
-        <Boxes size={14} strokeWidth={1.6} className="shrink-0 text-(color:--group-color)" />
-        <span className="min-w-0 truncate text-list font-semibold text-(color:--group-color)">{group.name}</span>
-        <span className="shrink-0 text-meta text-fg-faint">{tr('sidebar.group.count', { count })}</span>
+        {open ? (
+          <FolderOpen
+            size={22}
+            strokeWidth={1.5}
+            fill="currentColor"
+            fillOpacity={0.16}
+            className="shrink-0 text-fg-secondary"
+          />
+        ) : (
+          <Folder
+            size={22}
+            strokeWidth={1.5}
+            fill="currentColor"
+            fillOpacity={0.16}
+            className="shrink-0 text-fg-secondary"
+          />
+        )}
+        <span className="min-w-0 truncate text-[14px] font-bold text-fg">{group.name}</span>
+        <span
+          title={tr('sidebar.group.count', { count })}
+          className="shrink-0 rounded border border-line-subtle px-1 text-label leading-4 text-fg-faint tabular-nums"
+        >
+          {count}
+        </span>
       </button>
       <span className="flex shrink-0 items-center pr-1.5 group-focus-within/section:invisible group-hover/section:invisible">
         <StatusPills running={running} waiting={waiting} />
@@ -460,7 +487,7 @@ function ProjectStatus({
   )
 }
 
-/** 竖线下面的小字行：「还有 N 个对话 ›」/「收起」、「已归档 N 个」 */
+/** 对话下面的小字行：「还有 N 个对话 ›」/「收起」（和标题对齐）、「已归档 N 个」（图标挂在文件夹图标下面） */
 function MoreRow({
   label,
   open,
@@ -477,9 +504,12 @@ function MoreRow({
       type="button"
       aria-expanded={open}
       onClick={onClick}
-      className="flex h-7 w-full min-w-0 shrink-0 items-center gap-1.5 rounded-md pr-2.5 pl-[28px] text-left text-meta text-fg-muted hover:bg-hover hover:text-fg"
+      className={cn(
+        'flex h-7 w-full min-w-0 shrink-0 items-center rounded-md pr-2.5 text-left text-meta text-fg-muted hover:bg-hover hover:text-fg',
+        icon ? 'gap-2.5 pl-1.5' : 'gap-1.5 pl-[28px]',
+      )}
     >
-      {icon && <Archive size={12} strokeWidth={1.5} className="-ml-[18px] shrink-0" />}
+      {icon && <Archive size={12} strokeWidth={1.5} className="shrink-0" />}
       <span className="min-w-0 truncate">{label}</span>
       <ChevronRight
         size={12}

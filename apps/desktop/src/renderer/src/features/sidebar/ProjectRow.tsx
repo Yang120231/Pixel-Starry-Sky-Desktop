@@ -1,8 +1,8 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
-  ChevronRight,
   Ellipsis,
+  Folder,
   FolderOpen,
   Folders,
   PencilLine,
@@ -21,10 +21,9 @@ import { machineOf } from '@/features/machines/store'
 import { paneActions } from '@/features/panes/store'
 import type { Project } from '@/data'
 import { ProjectFoldersDialog } from './ProjectFoldersDialog'
-import { projectColor, projectInitial } from './projectTreeModel'
 
 /**
- * 侧栏项目行：箭头 + 描边的彩色首字方块 + 加粗的名字，像对话的小标题（docs/ui/sidebar-hierarchy.md）。点击展开 / 收起；右键、⋯ 按钮、ContextMenu 键或 Shift+F10 打开项目菜单。
+ * 侧栏项目行：文件夹图标（展开时是打开的文件夹）+ 名字（docs/ui/sidebar-styles.md「大文件夹」版）。点击展开 / 收起；右键、⋯ 按钮、ContextMenu 键或 Shift+F10 打开项目菜单。
  * 悬停（或键盘聚焦到这一行）时 ⋯ 右边出现「+」，在这个项目下新建会话（issue #5）；菜单里也有这一项。
  * 重命名只改显示名，移除只把项目移出列表（磁盘文件和会话记录保留）。见 docs/ui/sidebar-compact-controls.md §9。
  */
@@ -151,20 +150,12 @@ export function ProjectRow({
         onClick={onToggle}
         className="flex h-full min-w-0 flex-1 items-center gap-2 overflow-hidden rounded-md pl-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
       >
-        <ChevronRight
-          size={14}
-          strokeWidth={1.75}
-          className={cn('shrink-0 text-fg-faint transition-transform duration-150', open && 'rotate-90')}
-        />
-        <span
-          aria-hidden
-          data-project-badge
-          className="flex size-[18px] shrink-0 items-center justify-center rounded-[5px] border-[1.5px] text-[11px] leading-none font-bold"
-          style={{ borderColor: projectColor(project.id), color: projectColor(project.id) }}
-        >
-          {projectInitial(project.name)}
-        </span>
-        <span className="min-w-0 flex-1 truncate font-semibold">{project.name}</span>
+        {open ? (
+          <FolderOpen size={16} strokeWidth={1.5} className="shrink-0 text-fg-secondary" />
+        ) : (
+          <Folder size={16} strokeWidth={1.5} className="shrink-0 text-fg-secondary" />
+        )}
+        <span className="min-w-0 flex-1 truncate">{project.name}</span>
       </button>
       {/* 悬停时右边放 ⋯ 和 +：这一块变宽只是项目名更早截断，行高和左边的图标、名字位置都不动 */}
       <div
