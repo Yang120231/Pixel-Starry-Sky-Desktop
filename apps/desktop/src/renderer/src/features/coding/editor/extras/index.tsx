@@ -7,6 +7,7 @@ import { useToast } from '@/ui'
 import { PROBLEMS_READY, useProblems } from '../../problems'
 import { codeLens, LENS_MAX_LINES } from './codeLens'
 import { overviewRuler } from './overviewRuler'
+import { useTaskGutter } from './taskGutter'
 import { enclosingSymbol } from './symbolsModel'
 
 const NONE: readonly Extension[] = []
@@ -21,7 +22,7 @@ function overLines(text: string, limit: number): boolean {
   return false
 }
 
-/** 代码透镜 + 概览标尺；返回值 memo */
+/** 代码透镜 + 概览标尺 + package.json 的运行 ▶；返回值 memo */
 export function useEditorExtras(tab: OpenFile | null): readonly Extension[] {
   const toast = useToast()
   const toastRef = useRef(toast)
@@ -33,13 +34,14 @@ export function useEditorExtras(tab: OpenFile | null): readonly Extension[] {
   const head = tab?.head ?? null
   const text = tab?.document?.kind === 'text'
   const big = text && tab ? overLines(tab.draft, LENS_MAX_LINES) : false
+  const tasks = useTaskGutter(tab)
   return useMemo(() => {
     if (!id || !text) return NONE
-    const list: Extension[] = []
+    const list: Extension[] = [...tasks]
     if (!big) list.push(codeLens(id, path, message => toastRef.current(message)))
     list.push(overviewRuler(head))
     return list
-  }, [id, path, head, text, big])
+  }, [id, path, head, text, big, tasks])
 }
 
 /** 面包屑后面的「› ƒ 名字」和问题计数 */

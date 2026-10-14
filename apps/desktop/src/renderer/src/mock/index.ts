@@ -19,7 +19,7 @@ import { demoInbox } from './inbox'
 import { demoMachines } from './machines'
 import { demoBoardTasks } from './board'
 import { demoEngineCatalog, demoEngineConfig, demoEngineStatus, demoPlatformGroups, demoProviders } from './platform'
-import { demoToolBrowser, demoToolCopies, demoToolEnvironment, demoToolTasks } from './projectTools'
+import { demoToolBrowser, demoToolCopies, demoToolEnvironment, demoToolRunTasks, demoToolTasks } from './projectTools'
 import { demoRemoteCalls } from './remoteCalls'
 import { demoSearchProjects, searchDemo } from './search'
 import { demoSessions } from './sessionLifecycle'
@@ -44,6 +44,7 @@ export const demoSource: DemoSource = {
   boardTasks: demoBoardTasks,
   projectTools: {
     tasks: demoToolTasks,
+    runTasks: demoToolRunTasks,
     environment: demoToolEnvironment,
     copies: demoToolCopies,
     browser: demoToolBrowser,

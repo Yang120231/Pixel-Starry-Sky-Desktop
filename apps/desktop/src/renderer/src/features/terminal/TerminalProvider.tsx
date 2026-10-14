@@ -17,6 +17,7 @@ import {
   useTerminalStore,
 } from './store'
 import { screens } from './screens'
+import { exitSuffix } from '@/features/coding/tasks/model'
 import { openRightTab } from '@/features/panel/workspaceStore'
 import { workspaceTerminals } from './workspace'
 import { getMachines, machineOf, selectMachine } from '@/features/machines/store'
@@ -60,6 +61,11 @@ interface TerminalUi {
   setSplitRatio(ratio: number): void
   /** 新建终端并运行一条项目脚本命令（标题用脚本名） */
   runScript(name: string, command: string): Promise<void>
+  /**
+   * 跑「任务」视图里的任务（docs/ui/coding-tasks.md §3）：reuseId 还在就复用它（已退出的先重启），否则新建；
+   * 标题改成任务名，选中并显示，命令后面接「跑完退出带退出码」的后缀。返回终端 id，失败 null
+   */
+  runTask(name: string, command: string, reuseId?: string | null): Promise<string | null>
 }
 interface Dialog {
   kind: 'rename' | 'close' | 'restart' | 'paste'
@@ -401,8 +407,33 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       creating.current = false
     }
   }
+  const runTask = async (name: string, command: string, reuseId?: string | null): Promise<string | null> => {
+    const ref = defaultRef()
+    if (!ref || creating.current) return null
+    creating.current = true
+    terminalError(null)
+    try {
+      let record = reuseId ? terminalState().terminals.find(r => r.id === reuseId) : undefined
+      if (record && record.status !== 'running' && record.status !== 'starting') {
+        await terminalRestart(record.id)
+        record = terminalState().terminals.find(r => r.id === reuseId)
+      }
+      record ??= await terminalCreate(ref)
+      select(record.id)
+      await terminalRename(record.id, name).catch(() => undefined)
+      const program = terminalState().profiles.find(p => p.id === record.profileId)?.command
+      terminalRunWhenReady(record.id, isDemo ? command : command + exitSuffix(program))
+      return record.id
+    } catch (cause) {
+      terminalError(cause)
+      return null
+    } finally {
+      creating.current = false
+    }
+  }
   const context: TerminalUi = {
     ...ui,
+    runTask,
     splitRight,
     showRight,
     runScript,

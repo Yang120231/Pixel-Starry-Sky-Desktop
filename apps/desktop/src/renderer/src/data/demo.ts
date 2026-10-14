@@ -38,6 +38,7 @@ import type {
   ManualTask,
   ProjectCopy,
   TaskState,
+  RunTaskState,
 } from '../../../shared/types/project-tools'
 import type { TerminalProfile } from '../../../shared/types/terminal'
 import type { DirectoryListing, EditorState, FileDocument } from '../../../shared/types/workspace'
@@ -100,7 +101,14 @@ export interface DemoSource {
   inbox: InboxItem[]
   /** 演示用的云端机器（顶栏「本机 | 云端」），machines/store.ts 演示时用它当初始状态 */
   machines?: MachineState
-  projectTools: { tasks: TaskState; environment: EnvironmentState; copies: ProjectCopy[]; browser: BrowserState }
+  projectTools: {
+    tasks: TaskState
+    /** 左栏「任务」：项目里能跑的命令（docs/ui/coding-tasks.md） */
+    runTasks: RunTaskState
+    environment: EnvironmentState
+    copies: ProjectCopy[]
+    browser: BrowserState
+  }
   /** 任务看板的演示任务（几个演示项目都有，docs/ui/task-board.md §7）；now 是打开看板的时间 */
   boardTasks(now: number): ManualTask[]
   remoteCalls(now: number): RemoteCall[]

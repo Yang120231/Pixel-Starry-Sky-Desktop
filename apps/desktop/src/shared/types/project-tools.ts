@@ -63,6 +63,33 @@ export interface ToolStatus {
   status: 'ready' | 'missing' | 'error' | 'mismatch' | 'unknown'
   checkedAt: number
 }
+/** 代码模式左栏「任务」：项目里能跑的命令（docs/ui/coding-tasks.md §2）。只读文件得到，不执行命令 */
+export type RunTaskKind = 'npm' | 'make' | 'cargo'
+export interface RunTask {
+  /** 组内唯一：任务名 */
+  name: string
+  /** 灰字：npm 是脚本内容，make 空，cargo 是完整命令 */
+  detail: string
+  /** 在文件里的行号（1 起）；不知道时 null */
+  line: number | null
+}
+export interface RunTaskGroup {
+  kind: RunTaskKind
+  /** 文件相对工作区根目录的路径（posix），如 `package.json`、`apps/desktop/package.json` */
+  file: string
+  /** 文件所在文件夹（posix），根目录是 '' */
+  dir: string
+  /** npm 组用哪个包管理器 */
+  manager?: import('@pixelsky/protocol').PackageManager
+  tasks: RunTask[]
+}
+export interface RunTaskState {
+  /** 工作区根目录（绝对路径） */
+  root: string
+  groups: RunTaskGroup[]
+  /** 文件太多，只读了前 30 个 */
+  truncated: boolean
+}
 export interface EnvironmentState {
   projectId: string
   projectPath: string

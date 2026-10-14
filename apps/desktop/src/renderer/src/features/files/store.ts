@@ -18,6 +18,8 @@ import { demo } from '@/data/demo'
 
 export const OPEN_FILES_EVENT = 'pixelsky:open-files'
 export const FILE_CLOSED_EVENT = 'pixelsky:file-closed'
+/** 文件保存成功后广播：detail 是 { root, path }（「任务」视图靠它重新读 package.json 等） */
+export const FILE_SAVED_EVENT = 'pixelsky:file-saved'
 export interface OpenFile {
   preview?: boolean
   id: string
@@ -286,6 +288,7 @@ export async function saveFile(id: string): Promise<boolean> {
     const document = await window.pixelsky!.files.save(tab.ref, tab.path, tab.draft, tab.document.version)
     // 保存期间还可输入；只更新基线，不覆盖更晚的草稿。
     updateFile(id, { document, external: null, ignoredVersion: null, saving: false })
+    window.dispatchEvent(new CustomEvent(FILE_SAVED_EVENT, { detail: { root: tab.root, path: tab.path } }))
     return true
   } catch (e) {
     updateFile(id, { error: (e as Error).message, saving: false })

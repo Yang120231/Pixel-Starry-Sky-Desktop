@@ -6,6 +6,7 @@ import type {
   ServiceDefinition,
   ServiceInput,
   EnvironmentState,
+  RunTaskState,
   ProjectCopy,
   CopyInput,
   CopyPreview,
@@ -41,6 +42,8 @@ export interface ProjectToolsBridge {
   deleteTask(id: string): Promise<void>
   reorderTasks(projectId: string, ids: string[]): Promise<void>
   environment(ref: WorkspaceRef, force?: boolean): Promise<EnvironmentState>
+  /** 代码模式左栏「任务」：项目里能跑的命令（docs/ui/coding-tasks.md） */
+  runTasks(ref: WorkspaceRef): Promise<RunTaskState>
   services(ref: WorkspaceRef): Promise<ServiceDefinition[]>
   saveService(ref: WorkspaceRef, input: ServiceInput): Promise<ServiceDefinition>
   deleteService(id: string): Promise<void>

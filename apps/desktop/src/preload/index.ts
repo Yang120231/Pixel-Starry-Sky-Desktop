@@ -244,6 +244,7 @@ const projectTools: ProjectToolsBridge = {
   deleteTask: id => call('projectTools:deleteTask', id),
   reorderTasks: (id, ids) => call('projectTools:reorderTasks', id, ids),
   environment: (ref, force) => call('projectTools:environment', ref, force),
+  runTasks: ref => call('projectTools:runTasks', ref),
   services: ref => call('projectTools:services', ref),
   saveService: (ref, input) => call('projectTools:saveService', ref, input),
   deleteService: id => call('projectTools:deleteService', id),

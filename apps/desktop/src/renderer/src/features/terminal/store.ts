@@ -187,7 +187,11 @@ export async function terminalRestart(id: string, force = false): Promise<void> 
   if (isDemo) {
     applyTerminalRecord({ ...record, generation: record.generation + 1, status: 'running', exitCode: undefined })
     event({ type: 'data', terminalId: id, generation: record.generation + 1, seq: 1, data: demo().terminal.output })
-  } else applyTerminalRecord(await window.pixelsky!.terminal.restart(id, force))
+  } else {
+    // 新的 shell 还没出过输出：terminalRunWhenReady 要等它的提示符，不能用上一轮的记录
+    seenOutput.delete(id)
+    applyTerminalRecord(await window.pixelsky!.terminal.restart(id, force))
+  }
 }
 /**
  * 新建的终端出现第一段输出（shell 就绪）后写入一条命令；最多等 4 秒。

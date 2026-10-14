@@ -7,6 +7,7 @@ import { codingReviewMessages } from './codingReviewMessages'
 import { codingBottomMessages } from './codingBottomMessages'
 import { codingRightMessages } from './codingRightMessages'
 import { codingStatusMessages } from './codingStatusMessages'
+import { codingTasksMessages } from './codingTasksMessages'
 
 /** 代码模式各模块的字典汇总（docs/ui/coding-mode-impl.md D5） */
 export const codingMessages = {
@@ -19,6 +20,7 @@ export const codingMessages = {
   ...codingBottomMessages,
   ...codingRightMessages,
   ...codingStatusMessages,
+  ...codingTasksMessages,
 }
 
 /** 逐字典去重检查用（regression.test.ts） */
@@ -32,4 +34,5 @@ export const codingDictionaries = {
   codingBottomMessages,
   codingRightMessages,
   codingStatusMessages,
+  codingTasksMessages,
 }

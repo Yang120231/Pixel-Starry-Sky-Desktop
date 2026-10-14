@@ -520,6 +520,13 @@ export const IPC_CONTRACT = {
     remote: 'projectTools:environment',
     trust: 'window',
   },
+  'projectTools:runTasks': {
+    kind: 'invoke',
+    route: 'selected',
+    ids: [0],
+    remote: 'projectTools:runTasks',
+    trust: 'window',
+  },
   'projectTools:forgetCopy': {
     kind: 'invoke',
     route: 'resource',

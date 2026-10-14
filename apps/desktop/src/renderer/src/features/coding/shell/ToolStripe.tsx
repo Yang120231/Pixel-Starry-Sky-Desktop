@@ -6,6 +6,7 @@ import {
   Files,
   GitBranch,
   Globe,
+  ListChecks,
   MessageSquare,
   MessagesSquare,
   Search,
@@ -30,6 +31,7 @@ import { useProjectContext } from '@/features/panel/projectContext'
 import type { LeftView, RightView } from '../types'
 import { useGitBadge } from '../left/git'
 import { useConversationsBadge } from '../left/conversations'
+import { useRunningTaskCount } from '../left/tasks'
 
 /** 工具条按钮：32px 图标按钮，可带角标 */
 function StripeButton({
@@ -68,6 +70,7 @@ const LEFT_ITEMS: Array<{ view: LeftView; icon: LucideIcon; label: TranslationKe
   { view: 'files', icon: Files, label: 'coding.shell.files' },
   { view: 'search', icon: Search, label: 'coding.shell.search' },
   { view: 'git', icon: GitBranch, label: 'coding.shell.git' },
+  { view: 'tasks', icon: ListChecks, label: 'coding.shell.tasks' },
   { view: 'conversations', icon: MessagesSquare, label: 'coding.shell.conversations' },
 ]
 
@@ -86,6 +89,7 @@ function LeftStripe() {
   const settings = useSettings()
   const account = useAccount()
   const gitBadge = useGitBadge()
+  const taskBadge = useRunningTaskCount()
   const conversationsDot = useConversationsBadge()
   const problems = useProblems(useProjectContext().ref)
   // 团队回复了反馈、还没看：设置按钮上一个红点（docs/ui/feedback.md §2.6）。大小、位置跟这条工具条上别的角标一致
@@ -94,6 +98,8 @@ function LeftStripe() {
   const badgeOf = (view: LeftView): ReactNode =>
     view === 'git' && gitBadge > 0 ? (
       <CountBadge count={gitBadge} />
+    ) : view === 'tasks' && taskBadge > 0 ? (
+      <CountBadge count={taskBadge} />
     ) : view === 'conversations' && conversationsDot ? (
       <Dot tone="accent" size={7} />
     ) : null
