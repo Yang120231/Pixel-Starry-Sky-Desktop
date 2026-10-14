@@ -44,10 +44,12 @@ export function FilesView({ visible }: { visible: boolean }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PanelHeader title={ws.name || tr('coding.files.title')} />
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      {/* 两节各自滚动（AI 改动多时原来会压扁、溢出盖住下面的文件树）：AI 改动最多占四成高度，文件树占剩下的 */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {ref && turn && files.length > 0 ? (
           <Section
             id="ai-turn"
+            className="max-h-[40%] shrink-0"
             title={tr('coding.files.aiTurn')}
             extra={
               turn.running ? (
@@ -58,7 +60,7 @@ export function FilesView({ visible }: { visible: boolean }) {
               ) : undefined
             }
           >
-            <ul className="px-2 pb-2">
+            <ul className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
               {files.map(f => (
                 <li key={f.path}>
                   <button
@@ -76,9 +78,9 @@ export function FilesView({ visible }: { visible: boolean }) {
             </ul>
           </Section>
         ) : null}
-        <Section id="tree" title={ws.name || tr('coding.files.title')}>
+        <Section id="tree" title={ws.name || tr('coding.files.title')} className="min-h-0 flex-1">
           {ref ? (
-            <div className="flex min-h-50 flex-col">
+            <div className="flex min-h-0 flex-1 flex-col">
               <FileTree
                 requested={ref}
                 scoped

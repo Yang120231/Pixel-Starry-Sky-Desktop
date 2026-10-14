@@ -13,12 +13,15 @@ export function Section({
   title,
   extra,
   defaultOpen = true,
+  className,
   children,
 }: {
   id: string
   title: ReactNode
   extra?: ReactNode
   defaultOpen?: boolean
+  /** 放在外层 flex 列里时控制伸缩（例如文件面板：AI 改动 shrink-0、文件树 flex-1） */
+  className?: string
   children: ReactNode
 }) {
   useI18n()
@@ -29,7 +32,7 @@ export function Section({
     setOpen(next)
   }
   return (
-    <section data-coding-section={id} className="flex min-h-0 flex-col">
+    <section data-coding-section={id} className={cn('flex min-h-0 flex-col', className)}>
       <div className="flex h-7 shrink-0 items-center gap-1 px-2">
         <button
           type="button"
@@ -47,7 +50,7 @@ export function Section({
         </button>
         {extra ? <div className="no-drag flex shrink-0 items-center gap-0.5">{extra}</div> : null}
       </div>
-      {open ? <div className="min-h-0">{children}</div> : null}
+      {open ? <div className="flex min-h-0 flex-1 flex-col">{children}</div> : null}
     </section>
   )
 }
