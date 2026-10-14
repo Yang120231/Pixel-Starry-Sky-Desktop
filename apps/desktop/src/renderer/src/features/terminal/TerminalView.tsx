@@ -249,7 +249,7 @@ export function TerminalView({
     return () => window.removeEventListener('pointerdown', dismiss)
   }, [menu])
   return (
-    <div className={visible ? 'relative flex min-h-0 flex-1 flex-col' : 'hidden'} inert={!visible}>
+    <div className={visible ? 'relative flex min-h-0 min-w-0 flex-1 flex-col' : 'hidden'} inert={!visible}>
       <div
         ref={host}
         data-terminal-input={record.id}

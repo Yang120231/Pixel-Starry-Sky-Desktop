@@ -171,8 +171,11 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     if (!r) return
     const machine = machineOf(r.projectId)
     if (machine !== getMachines().currentId) {
+      // 切好了才再选一次：万一没切到也不会反复重试（原来切换中会陷入死循环，审查报告 2026-10-14 第 5 条）
       void selectMachine(machine)
-        .then(() => select(id))
+        .then(() => {
+          if (getMachines().currentId === machine) select(id)
+        })
         .catch(terminalError)
       return
     }

@@ -1,8 +1,12 @@
+import { useRef } from 'react'
 import { Eraser, Maximize2, Minimize2, Plus, SquareSplitHorizontal, X } from 'lucide-react'
 import { IconButton, cn } from '@/ui'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import { useTerminalUi } from '@/features/terminal/TerminalProvider'
+import { TabStripArrows } from '@/features/panes/TabStripArrows'
+import { useTabStripScroll } from '@/features/panes/tabScroll'
+import '@/features/panes/panes.css'
 import { codingLayout } from '../layoutStore'
 import { PROBLEMS_READY, useProblems } from '../problems'
 import type { BottomTab } from '../types'
@@ -48,37 +52,44 @@ export function BottomPanel({
   // 问题标签隐藏时，之前存下的 bottom.tab='problems' 兜底显示终端
   const tab: BottomTab = TABS.includes(savedTab) ? savedTab : 'terminal'
   const inTerminal = tab === 'terminal'
+  // 面板窄时标签不压扁：横向滚动，当前标签滚进可视区，两头淡出加翻页箭头（和编辑器标签栏一样）
+  const strip = useRef<HTMLDivElement>(null)
+  useTabStripScroll(strip, tab, TABS)
   return (
     <div data-coding-bottom-panel className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
       <div className="flex h-9 shrink-0 items-center gap-1 px-2">
-        <div
-          role="tablist"
-          aria-label={tr('coding.bottom.tabs')}
-          className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden"
-        >
-          {TABS.map(id => (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              id={`coding-bottom-tab-${id}`}
-              aria-selected={tab === id}
-              aria-controls={`coding-bottom-page-${id}`}
-              data-coding-bottom-tab={id}
-              onClick={() => codingLayout.showBottom(id)}
-              className={cn(
-                'press no-drag flex h-7 min-w-0 shrink items-center gap-1.5 rounded-md px-2.5 text-ui',
-                tab === id ? 'bg-selected text-fg' : 'text-fg-muted hover:bg-hover hover:text-fg',
-              )}
-            >
-              <span className="min-w-0 truncate">{tr(`coding.bottom.tab.${id}`)}</span>
-              {counts[id] ? (
-                <span className="shrink-0 rounded-full bg-hover px-1.5 text-meta text-fg-muted tabular-nums">
-                  {counts[id]}
-                </span>
-              ) : null}
-            </button>
-          ))}
+        <div className="tab-strip-wrap h-full">
+          <div
+            ref={strip}
+            role="tablist"
+            aria-label={tr('coding.bottom.tabs')}
+            className="bottom-tab-strip relative flex h-full min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
+            {TABS.map(id => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                id={`coding-bottom-tab-${id}`}
+                aria-selected={tab === id}
+                aria-controls={`coding-bottom-page-${id}`}
+                data-coding-bottom-tab={id}
+                onClick={() => codingLayout.showBottom(id)}
+                className={cn(
+                  'press no-drag flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-ui whitespace-nowrap',
+                  tab === id ? 'bg-selected text-fg' : 'text-fg-muted hover:bg-hover hover:text-fg',
+                )}
+              >
+                <span>{tr(`coding.bottom.tab.${id}`)}</span>
+                {counts[id] ? (
+                  <span className="shrink-0 rounded-full bg-hover px-1.5 text-meta text-fg-muted tabular-nums">
+                    {counts[id]}
+                  </span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+          <TabStripArrows strip={strip} />
         </div>
         <div className="no-drag flex shrink-0 items-center gap-0.5">
           <IconButton

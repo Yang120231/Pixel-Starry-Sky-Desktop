@@ -177,7 +177,8 @@ export function TerminalPanel({
       hidden={!(embedded || bare ? visible : ui.open)}
       inert={!(embedded || bare ? visible : ui.open)}
       className={cn(
-        'terminal-panel min-h-0 shrink-0 flex-col bg-panel',
+        // min-w-0：xterm 画好后宽度是写死的像素，不加的话容器变窄时被它撑住，要一步步重排才缩回去
+        'terminal-panel min-h-0 min-w-0 shrink-0 flex-col bg-panel',
         !bare && 'border-t border-line-layout',
         (embedded || bare ? visible : ui.open) ? 'flex' : 'hidden',
         (embedded || bare) && 'flex-1',
@@ -401,7 +402,13 @@ export function TerminalPanel({
           <IconButton icon={X} label={t('terminal.closeSearch')} size={24} onClick={ui.stopSearch} />
         </div>
       )}
-      <div ref={body} className={cn('relative flex min-h-0 flex-1 bg-terminal', split ? 'flex-row' : 'flex-col')}>
+      <div
+        ref={body}
+        className={cn(
+          'relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-terminal',
+          split ? 'flex-row' : 'flex-col',
+        )}
+      >
         {!active && (
           <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 text-center text-fg">
             <TerminalSquare size={25} className="text-fg-faint" />

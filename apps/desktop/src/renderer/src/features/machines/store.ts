@@ -35,8 +35,9 @@ let state: MachineState = (isDemo ? demo().machines : undefined) ?? {
     },
   ],
 }
-let started = false,
-  switching = false
+let started = false
+/** 切换机器一次只做一个：后来的排在前一个后面（审查报告 2026-10-14 第 5 条） */
+let switchQueue: Promise<void> = Promise.resolve()
 export function useMachines(): MachineState {
   return useSyncExternalStore(
     cb => {
@@ -92,9 +93,14 @@ export async function openWslTerminal(id: string): Promise<void> {
   if (isDemo || !window.pixelsky) return
   await window.pixelsky.machines.wslTerminal(id)
 }
-export async function selectMachine(id: string): Promise<void> {
-  if (switching || id === state.currentId) return
-  switching = true
+/** 切到某台机器。完成时当前机器一定是 id（失败则抛错）：切换中再调用会排队，不会假装已经切好 */
+export function selectMachine(id: string): Promise<void> {
+  const next = switchQueue.catch(() => {}).then(() => switchTo(id))
+  switchQueue = next
+  return next
+}
+async function switchTo(id: string): Promise<void> {
+  if (id === state.currentId) return
   const previous = state.currentId
   try {
     if (isDemo) {
@@ -114,8 +120,6 @@ export async function selectMachine(id: string): Promise<void> {
     set(await window.pixelsky!.machines.state())
     await refreshMachineEngine(previous).catch(() => {})
     throw error
-  } finally {
-    switching = false
   }
 }
 export async function selectWorkspace(choice: WorkspaceChoice, fresh = false): Promise<void> {

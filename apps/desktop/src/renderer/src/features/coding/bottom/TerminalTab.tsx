@@ -59,7 +59,8 @@ export function TerminalTab({
       className={cn('min-h-0 min-w-0 flex-1', visible ? 'flex' : 'hidden')}
       inert={!visible}
     >
-      <div className="relative flex min-h-0 min-w-0 flex-1">
+      {/* 裁掉溢出：终端变窄时 xterm 还没重排的那一帧不能画到右边列表上 */}
+      <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
         {service ? (
           <pre
             data-coding-service-output={service.id}
@@ -74,7 +75,7 @@ export function TerminalTab({
       <div
         data-terminal-list
         data-collapsed={collapsed}
-        className="relative flex shrink-0 border-l border-line-layout"
+        className="relative flex shrink-0 border-l border-line-layout bg-panel"
         style={{ width: collapsed ? 28 : TERMINAL_LIST_WIDTH }}
       >
         {collapsed ? (
