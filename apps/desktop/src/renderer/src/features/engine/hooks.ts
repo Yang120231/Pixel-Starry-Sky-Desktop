@@ -319,6 +319,8 @@ export interface ComposerController {
   suggestion: string | null
   permissionMode: PermissionMode
   permissionModes: PermissionMode[]
+  /** 这个引擎新会话的默认权限（完全放行的确认和「改回」用，docs/ui/full-access-confirm.md） */
+  defaultPermissionMode: PermissionMode
   setPermissionMode(m: PermissionMode): void
   /** 这一轮正在进行（包括等审批） */
   running: boolean
@@ -629,6 +631,10 @@ export function useComposerController(
     suggestion: snap?.suggestion ?? null,
     permissionMode: record ? record.permissionMode : base.permissionMode,
     permissionModes: engine?.caps.permissionModes ?? ['ask', 'edits', 'plan', 'full'],
+    defaultPermissionMode:
+      config?.[engineId]?.defaults.permissionMode ??
+      (defaults?.engine === engineId ? defaults.permissionMode : null) ??
+      'edits',
     setPermissionMode: permissionMode => patch({ permissionMode }),
     running: !!snap && snap.state !== 'idle',
     stop: () => (record ? b.interrupt(record.id) : Promise.resolve()),

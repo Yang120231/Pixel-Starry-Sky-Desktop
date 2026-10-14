@@ -41,6 +41,7 @@ import { SubagentViewSettings } from './SubagentViewSettings'
 import { ModeTransitionSettings } from './ModeTransitionSettings'
 import { GitOpenStyleSettings } from './GitOpenStyleSettings'
 import { MessageActionsSettings } from './MessageActionsSettings'
+import { FullAccessConfirmSettings } from './FullAccessConfirmSettings'
 import { CacheMissSettings } from './CacheMissSettings'
 import { WallpaperSettings } from './WallpaperSettings'
 import type { PaneFocusMotion } from '@/features/appearance/paneFocusMotion'
@@ -727,6 +728,7 @@ function AppearanceSection() {
       <LongConversationSettings />
       <SubagentViewSettings />
       <MessageActionsSettings />
+      <FullAccessConfirmSettings />
       <CacheMissSettings />
 
       <GroupTitle>{tr('settings.SettingsDialog.fonts')}</GroupTitle>

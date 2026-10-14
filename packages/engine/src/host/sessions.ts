@@ -237,6 +237,8 @@ export class HostSessions {
       // 要「设为默认」才改默认值，除非这个引擎打开了「记住会话里的选择」（GitHub #6）
       const remembered: Partial<SessionSettings> = { ...settings }
       if (!m.settings.remembersChoices(record.engine)) for (const k of EFFORT_PANEL_KEYS) delete remembered[k]
+      // 完全放行只管这个对话，不记成新会话的默认；要默认完全放行得在设置里明确改（docs/ui/full-access-confirm.md）
+      if (remembered.permissionMode === 'full') delete remembered.permissionMode
       if (Object.keys(remembered).length > 0) m.settings.setDefaults({ ...remembered, engine: record.engine })
       await rt.session?.update(settings)
     }

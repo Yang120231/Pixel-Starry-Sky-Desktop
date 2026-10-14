@@ -17,6 +17,7 @@ import {
   type PermissionMode,
 } from '@pixelsky/protocol'
 import { Button, CopyButton, EngineIcon, Select, Switch, cn } from '@/ui'
+import { ConfirmDialog } from '@/ui/ConfirmDialog'
 import { platformModels, usePlatform } from '@/features/account/platform'
 import { EFFORT_LABEL, PERMISSION_INFO, bridge, isLive, redetectEngines } from '@/features/engine'
 import { envLines, parseEnvLines } from './envLines'
@@ -64,9 +65,31 @@ export function EngineDetail({
     onSave(patch).catch((err: unknown) => setError((err as Error).message))
   }
   const d = config.defaults
+  // 新会话默认改成完全放行：影响以后所有新任务，先弹窗确认（docs/ui/full-access-confirm.md P4）
+  const [confirmFull, setConfirmFull] = useState(false)
 
   return (
     <section>
+      {confirmFull && (
+        <ConfirmDialog
+          title={tr('fullAccess.default.title')}
+          description={
+            <>
+              <p>{tr('fullAccess.default.body', { p0: e.name })}</p>
+              <p className="mt-1.5 text-fg-muted">{tr('fullAccess.default.note')}</p>
+            </>
+          }
+          confirmLabel={tr('fullAccess.default.ok')}
+          cancelLabel={tr('fullAccess.confirm.cancel')}
+          warn
+          busy={false}
+          onCancel={() => setConfirmFull(false)}
+          onConfirm={() => {
+            setConfirmFull(false)
+            run({ defaults: { permissionMode: 'full' } })
+          }}
+        />
+      )}
       <button
         type="button"
         onClick={onBack}
@@ -113,7 +136,11 @@ export function EngineDetail({
             <Select
               label={tr('settings.engines.EngineDetail.defaultPermissions')}
               value={d.permissionMode}
-              onChange={v => run({ defaults: { permissionMode: v as PermissionMode } })}
+              onChange={v =>
+                v === 'full' && d.permissionMode !== 'full'
+                  ? setConfirmFull(true)
+                  : run({ defaults: { permissionMode: v as PermissionMode } })
+              }
               options={e.caps.permissionModes.map(m => ({ value: m, label: PERMISSION_INFO[m].label }))}
             />
           }

@@ -9,6 +9,7 @@ export function ConfirmDialog({
   busy,
   error,
   danger,
+  warn,
   focusInput,
   confirmDisabled,
   extra,
@@ -22,6 +23,8 @@ export function ConfirmDialog({
   busy: boolean
   error?: string | null
   danger?: boolean
+  /** 确认按钮用警告色（放宽权限之类，比删除轻一档） */
+  warn?: boolean
   focusInput?: boolean
   confirmDisabled?: boolean
   /** 取消和确认之间的第三个按钮（比如「打开 Git 面板」） */
@@ -130,7 +133,7 @@ export function ConfirmDialog({
             onClick={onConfirm}
             className={cn(
               'press rounded-md px-3 py-2 text-ui font-medium disabled:opacity-50',
-              danger ? 'bg-danger text-accent-on' : 'bg-primary text-primary-fg',
+              danger ? 'bg-danger text-accent-on' : warn ? 'bg-warn text-accent-on' : 'bg-primary text-primary-fg',
             )}
           >
             {confirmLabel}

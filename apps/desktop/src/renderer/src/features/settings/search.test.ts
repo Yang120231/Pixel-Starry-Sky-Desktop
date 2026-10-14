@@ -23,6 +23,7 @@ describe('设置搜索（plan-search-panes-compact §1）', () => {
     expect(searchSettings('HTTPS_PROXY', label).map(h => h.title)).toContain('环境变量')
     expect(searchSettings('隐藏 模型', label).map(h => h.title)).toContain('菜单里显示的模型')
     expect(searchSettings('本机引擎', label).length).toBeGreaterThan(0)
+    expect(searchSettings('完全放行', label).map(h => h.title)).toContain('切到完全放行前先确认')
     expect(searchSettings('   ', label)).toEqual([])
     expect(searchSettings('完全不存在的设置', label)).toEqual([])
   })

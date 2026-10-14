@@ -219,6 +219,15 @@ export const SETTINGS_INDEX: SearchEntry[] = [
     title: '消息操作按钮',
     keywords: '复制 分叉 分支 回退 撤回 按钮 位置 左侧 下方 message actions copy fork rewind position below left',
   },
+  {
+    section: 'appearance',
+    get title() {
+      return tr('fullAccess.setting.title')
+    },
+    get keywords() {
+      return tr('fullAccess.setting.keywords')
+    },
+  },
   { section: 'appearance', title: '缓存未命中提醒', keywords: '缓存 命中率 提醒 停止' },
   { section: 'appearance', title: '界面字体', keywords: '字体 font' },
   { section: 'appearance', title: '代码字体', keywords: '等宽 字体 mono' },

@@ -20,6 +20,7 @@ import { AttachmentChip } from './AttachmentChip'
 import { EffortMenu, PermissionMenu } from './ComposerMenus'
 import { ModelSourceMenu } from './ModelSourceMenu'
 import { SourceHintBar } from './SourceHintBar'
+import { FullAccessStrip } from './FullAccessStrip'
 import { ResizeHandle } from '@/ui/ResizeHandle'
 import { setLayoutSize, useLayoutSize } from '@/features/layout/sizes'
 import { useComposerDraft } from '@/features/engine/drafts'
@@ -597,6 +598,7 @@ export function Composer({
             onCancel={() => setLayoutSize('composerHeight', composerHeight, true)}
             onReset={() => setLayoutSize('composerHeight', null, true)}
           />
+          {live && live.permissionMode === 'full' && <FullAccessStrip live={live} />}
           {live && (
             <SourceHintBar
               live={live}
@@ -784,6 +786,8 @@ export function Composer({
                 modes={live.permissionModes}
                 onSelect={live.setPermissionMode}
                 engine={live.engine?.id}
+                defaultMode={live.defaultPermissionMode}
+                started={live.started}
               />
             </span>
           ) : (
