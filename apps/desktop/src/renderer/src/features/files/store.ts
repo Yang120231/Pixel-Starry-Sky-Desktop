@@ -205,6 +205,11 @@ export async function openFile(
 ): Promise<string | null> {
   const panelScope = getPanelScope()
   let normalized = path.replaceAll('\\', '/').replace(/^\.\//, '')
+  // 从附加文件夹的 Git 面板打开（ref 带 folder）：换成项目里的「::N/…」，和文件树打开的是同一个标签
+  if (ref.folder) {
+    normalized = `::${ref.folder}/${normalized}`
+    ref = ref.sessionId ? { sessionId: ref.sessionId } : { projectId: ref.projectId! }
+  }
   const demoProject = isDemo
     ? projects.find(p => p.id === ref.projectId || p.sessions.some(s => s.id === ref.sessionId))
     : null

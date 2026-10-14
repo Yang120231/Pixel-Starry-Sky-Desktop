@@ -1,4 +1,10 @@
-export type WorkspaceRef = { sessionId: string; projectId?: never } | { projectId: string; sessionId?: never }
+/**
+ * 项目或会话。folder：多文件夹项目的第 N 个附加文件夹（从 1 开始，docs/ui/multi-root-projects.md §3.4），
+ * 这时工作区就是那个文件夹（Git 面板按它找仓库）；不写就是主文件夹
+ */
+export type WorkspaceRef =
+  | { sessionId: string; projectId?: never; folder?: number }
+  | { projectId: string; sessionId?: never; folder?: number }
 export interface WorkspaceTarget {
   ref: WorkspaceRef
   name: string

@@ -21,6 +21,7 @@ import { ResizeHandle } from '@/ui/ResizeHandle'
 import { useSettings } from '@/features/settings/SettingsProvider'
 import { useEngineState } from '@/features/engine'
 import { addProject } from '@/features/engine/store'
+import { folderLabel } from '@/features/files/extraFolderPaths'
 import { isDemo, projects as demoProjects } from '@/data'
 import { useTerminalUi } from './TerminalProvider'
 import { useTerminalStore, terminalError } from './store'
@@ -47,6 +48,7 @@ export function TerminalPanel({
     state = useTerminalStore(),
     settings = useSettings()
   const realProjects = useEngineState(s => s.projects)
+  const extraFolders = isDemo ? undefined : realProjects.find(p => p.id === ui.projectId)?.folders
   const machines = useMachines()
   const projects = isDemo ? demoProjects : realProjects.filter(p => machineOf(p.id) === machines.currentId)
   const panel = useRef<HTMLElement>(null),
@@ -315,6 +317,19 @@ export function TerminalPanel({
           disabled={!ui.projectId}
           className="terminal-shell-select"
         />
+        {/* 多文件夹项目：在某个附加文件夹里开终端（docs/ui/multi-root-projects.md §3.4） */}
+        {!!extraFolders?.length && ui.projectId && (
+          <Select
+            label={t('terminal.newInFolder')}
+            placeholder={t('terminal.newInFolder')}
+            value=""
+            fitContent
+            options={extraFolders.map((f, i) => ({ value: String(i + 1), label: folderLabel(f), hint: f.path }))}
+            onChange={folder => void ui.create({ projectId: ui.projectId!, folder: Number(folder) })}
+            disabled={!state.ready}
+            className="terminal-shell-select"
+          />
+        )}
         <IconButton
           icon={Search}
           label={t('terminal.search')}

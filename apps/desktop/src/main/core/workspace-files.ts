@@ -32,8 +32,12 @@ export type TargetResolver = (ref: WorkspaceRef) => WorkspaceTarget
 export function workspaceRef(value: unknown): WorkspaceRef {
   const v = value as Partial<WorkspaceRef> | null
   if (!v || typeof v !== 'object') throw new Error('缺少项目或会话')
-  if (typeof v.sessionId === 'string' && v.sessionId && v.projectId === undefined) return { sessionId: v.sessionId }
-  if (typeof v.projectId === 'string' && v.projectId && v.sessionId === undefined) return { projectId: v.projectId }
+  // 附加文件夹编号（docs/ui/multi-root-projects.md §3.4）：1–20 的整数，别的值一律当成没写
+  const folder = Number.isInteger(v.folder) && v.folder! >= 1 && v.folder! <= 20 ? { folder: v.folder } : {}
+  if (typeof v.sessionId === 'string' && v.sessionId && v.projectId === undefined)
+    return { sessionId: v.sessionId, ...folder }
+  if (typeof v.projectId === 'string' && v.projectId && v.sessionId === undefined)
+    return { projectId: v.projectId, ...folder }
   throw new Error('项目目标不正确')
 }
 

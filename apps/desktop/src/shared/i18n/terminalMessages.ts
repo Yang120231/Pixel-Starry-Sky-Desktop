@@ -62,6 +62,7 @@ export const terminalMessages = {
   'terminal.next': { zh: '下一个匹配', en: 'Next match' },
   'terminal.closeSearch': { zh: '关闭查找', en: 'Close find' },
   'terminal.addProject': { zh: '添加项目', en: 'Add project' },
+  'terminal.newInFolder': { zh: '在附加文件夹开终端', en: 'New terminal in extra folder' },
   'terminal.exitTitle': { zh: '终端仍在运行', en: 'Terminals are still running' },
   'terminal.exitHint': {
     zh: '退出会结束本窗口的终端及其前台子进程。',

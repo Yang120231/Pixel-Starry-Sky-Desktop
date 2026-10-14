@@ -10,6 +10,14 @@ const foldersOf = (folders: readonly ProjectFolder[] | undefined): Pick<Workspac
 
 /** 桌面文件与编辑器只读取已有的目标，不启动或重建会话引擎。 */
 export function resolveLocalWorkspace(host: EngineHost, ref: WorkspaceRef): WorkspaceTarget {
+  // 指名了附加文件夹（Git 面板切到别的仓库）：工作区就是那个文件夹，它自己没有附加文件夹
+  if (ref.folder) {
+    const { folder, ...base } = ref
+    const whole = resolveLocalWorkspace(host, base as WorkspaceRef)
+    const picked = whole.folders?.[folder - 1]
+    if (!picked) throw new Error('项目里没有这个文件夹')
+    return { ref: { ...whole.ref, folder }, path: picked.path, name: `${whole.name} · ${picked.name}` }
+  }
   if (ref.sessionId) {
     const record = host.record(ref.sessionId)
     if (!record) throw new Error('会话已不存在')
