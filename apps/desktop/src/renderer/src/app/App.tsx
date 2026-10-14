@@ -112,8 +112,12 @@ export function App() {
   const sessionId = current && !isNewTab(current) && !isFileTab(current) ? current : null
   // 引擎系统：连接主进程（演示模式下什么都不做）；正在看的会话由 Workspace 统一标记
   useEngineBoot()
-  // 设置 › 用量 里点「打开这个会话」：和在侧栏点一样，打开到当前窗格
-  useOpenSessionRequests(paneActions.open)
+  // 设置 › 用量 里点「打开这个会话」：和在侧栏点一样，打开到当前窗格；
+  // 代码模式下对话在右栏，右栏正显示通知 / 任务等别的视图（例如从「待处理」点「去回答」）时切回对话，不然看不到任何变化
+  useOpenSessionRequests(id => {
+    paneActions.open(id)
+    if (getAppMode() === 'code') codingLayout.showRight('chat')
+  })
   // 「正在看」标记和失效会话标签清理（两种模式都要跑）
   usePaneHousekeeping()
   useEffect(() => {
