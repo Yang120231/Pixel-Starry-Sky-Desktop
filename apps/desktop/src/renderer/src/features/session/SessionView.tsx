@@ -1,6 +1,6 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Bot, GitBranch, MessagesSquare } from 'lucide-react'
 import { SessionHeader } from './SessionHeader'
 import { Transcript } from './Transcript'
@@ -11,7 +11,9 @@ import { hasConversation } from './conversation'
 import { LiveTranscript } from './live/LiveTranscript'
 import { ApprovalCard } from './live/ApprovalCard'
 import { AgentTracePanel } from './live/AgentTracePanel'
-import { TaskStrip } from './live/SessionStrips'
+import { KeptAgentsStrip, TaskStrip } from './live/SessionStrips'
+import { keptAgents } from './live/subagentStop'
+import { stopAgents } from './live/stopAgents'
 import { ProgressCard, useProgress } from './live/ProgressCard'
 import { InlinePlan } from './live/InlinePlan'
 import { useMinimal } from '@/features/appearance/ThemeProvider'
@@ -31,6 +33,7 @@ import { paneActions } from '@/features/panes/store'
 import { isDemo, sessionDiff } from '@/data'
 import { demo } from '@/data/demo'
 import { cn } from '@/ui'
+import { ENGINES } from '@pixelsky/protocol'
 import {
   bridge,
   isLive,
@@ -182,6 +185,10 @@ function LiveSessionView({
       ? { ...fullProgress, plan: null, visible: fullProgress.visible && fullProgress.agents.length > 0 }
       : fullProgress
   const traceInStrips = hasRuns && !progress.visible
+  // 保留模式：主智能体停了、后台子智能体还在跑（docs/ui/subagent-stop.md §S4）
+  const kept = useMemo(() => keptAgents(snapshot), [snapshot])
+  const canStopAgents = !!snapshot && ENGINES[snapshot.record.engine].caps.backgroundTasks
+  const [expandToken, setExpandToken] = useState(0)
   const showStrips = !!sessionId && (tasks.length > 0 || traceInStrips)
   // 后台任务条的高度：进度卡片放到它下面（docs/ui/conversation-concise.md §3 F）
   const strips = useRef<HTMLDivElement>(null)
@@ -285,6 +292,8 @@ function LiveSessionView({
                       belowFind={find !== null}
                       offset={stripsHeight}
                       onOpenTrace={hasRuns ? () => openTrace() : undefined}
+                      onStopAgents={canStopAgents ? ids => void stopAgents(sessionId, ids) : undefined}
+                      expandToken={expandToken}
                     />
                   )}
                   {find !== null && (
@@ -292,6 +301,23 @@ function LiveSessionView({
                   )}
                 </div>
                 <ComposerArea>
+                  {kept.length > 0 && (
+                    <KeptAgentsStrip
+                      count={kept.length}
+                      onView={() => {
+                        setTrace(null)
+                        fullProgress.reveal()
+                        setExpandToken(n => n + 1)
+                        if (fullProgress.agents.length === 0) openTrace()
+                      }}
+                      onStopAll={() =>
+                        void stopAgents(
+                          sessionId,
+                          kept.map(k => k.id),
+                        )
+                      }
+                    />
+                  )}
                   <RetryStatus sessionId={sessionId} retry={snapshot?.retry} />
                   {snapshot?.pending.map(req => (
                     <ApprovalCard

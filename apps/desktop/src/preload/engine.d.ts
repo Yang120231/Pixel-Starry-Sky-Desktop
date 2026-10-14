@@ -103,7 +103,8 @@ export interface EngineBridge {
   /** 旁聊：单独问一次，不进主对话（§3） */
   sideQuestion(id: string, question: string, history: import('@pixelsky/protocol').SideTurn[]): Promise<string>
   cancelSideQuestion(id: string): Promise<void>
-  interrupt(id: string): Promise<void>
+  /** opts.background：连同后台子智能体一起停 */
+  interrupt(id: string, opts?: import('@pixelsky/protocol').InterruptOptions): Promise<void>
   /** 提醒专用：轮次已过期时返回 false，不中断或暂停下一轮。 */
   interruptTurn(id: string, expectedTurnId: string): Promise<boolean>
   answer(id: string, requestId: string, decision: ApprovalDecision): Promise<void>

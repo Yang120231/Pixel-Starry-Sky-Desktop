@@ -26,6 +26,10 @@ describe('设置搜索（plan-search-panes-compact §1）', () => {
     expect(searchSettings('   ', label)).toEqual([])
     expect(searchSettings('完全不存在的设置', label)).toEqual([])
   })
+  it('「停止时一起停掉后台子智能体」中文、英文关键词都搜得到', () => {
+    expect(searchSettings('后台子智能体', label).map(h => h.title)).toContain('停止时一起停掉后台子智能体')
+    expect(searchSettings('stop background', label).map(h => h.section)).toContain('appearance')
+  })
   it('索引没有重复的（页面，标题）', () => {
     const keys = SETTINGS_INDEX.map(e => `${e.section}/${e.title}`)
     expect(new Set(keys).size).toBe(keys.length)

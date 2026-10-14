@@ -177,3 +177,68 @@ describe('后台任务结束提示的结构化信息（docs/ui/subagent-box.md �
     expect(notice).not.toHaveProperty('task')
   })
 })
+
+describe('停止时连同后台子智能体（translate）', () => {
+  const started = (t: ClaudeTranslator, id: string, bg?: boolean, kind = 'local_agent') =>
+    t.handle({
+      type: 'system',
+      subtype: 'task_started',
+      task_id: id,
+      task_type: kind,
+      description: id === 'a1' ? '甲' : '乙',
+      ...(bg === undefined ? {} : { is_backgrounded: bg }),
+    })
+  const subs = (events: EngineEvent[]) => {
+    const last = events.filter(e => e.type === 'subagents').at(-1)
+    return last && last.type === 'subagents' ? last.subagents : []
+  }
+  const notices = (events: EngineEvent[]) =>
+    events.flatMap(e => (e.type === 'item_completed' && e.item.kind === 'notice' ? [e.item.text] : []))
+
+  it('后台启动的带 background，前台的不带，task_updated 转后台后补上', () => {
+    const { t, events } = make()
+    t.startTurn('turn-1')
+    started(t, 'a1', true)
+    started(t, 'a2', false)
+    expect(subs(events).map(s => s.background)).toEqual([true, undefined])
+    t.handle({ type: 'system', subtype: 'task_updated', task_id: 'a2', patch: { is_backgrounded: true } })
+    expect(subs(events).map(s => s.background)).toEqual([true, true])
+  })
+
+  it('backgroundTargets 合并子智能体条和后台任务列表', () => {
+    const { t } = make()
+    t.startTurn('turn-1')
+    started(t, 'a1', true)
+    t.handle({
+      type: 'system',
+      subtype: 'background_tasks_changed',
+      tasks: [
+        { task_id: 'a1', task_type: 'local_agent', description: '甲' },
+        { task_id: 'w1', task_type: 'local_workflow', description: '编排' },
+        { task_id: 'b1', task_type: 'local_bash', description: 'dev' },
+      ],
+    })
+    expect(t.backgroundTargets()).toEqual([
+      { id: 'a1', label: '甲', kind: 'agent' },
+      { id: 'w1', label: '编排', kind: 'workflow' },
+    ])
+  })
+
+  it('muteStopNotices：静音的 stopped 通知不提示，状态照样更新；没静音的照常提示', () => {
+    const { t, events } = make()
+    t.startTurn('turn-1')
+    started(t, 'a1', true)
+    started(t, 'a2', true)
+    t.muteStopNotices(['a1'])
+    for (const id of ['a1', 'a2'])
+      t.handle({ type: 'system', subtype: 'task_notification', task_id: id, status: 'stopped', summary: '' })
+    expect(subs(events).map(s => s.status)).toEqual(['stopped', 'stopped'])
+    expect(notices(events)).toEqual(['子智能体已停止'])
+  })
+
+  it('stoppedWithMain 的文案', () => {
+    const { t, events } = make()
+    t.stoppedWithMain(['甲', '乙'])
+    expect(notices(events)).toEqual(['已停止，连同 2 个后台子智能体（甲、乙）'])
+  })
+})

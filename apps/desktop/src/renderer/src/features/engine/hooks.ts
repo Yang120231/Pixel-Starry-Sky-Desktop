@@ -65,6 +65,8 @@ import {
   useEngineState,
 } from './store'
 import { demo, useDemoSessionChanges } from '@/data/demo'
+import { stopTargets } from '@/features/session/live/subagentStop'
+import { getStopBackgroundAgents } from '@/features/settings/stopBackgroundAgents'
 
 /** 是否连接了真实引擎（演示模式下为 false） */
 export const isLive = !!bridge
@@ -323,6 +325,8 @@ export interface ComposerController {
   /** 这一轮正在进行（包括等审批） */
   running: boolean
   stop(): Promise<void>
+  /** 还在跑的后台子智能体 / 编排个数（停止按钮的提示用）；引擎没有后台任务时为 0 */
+  backgroundAgents: number
   /** 发送；失败时抛出给用户看的错误 */
   submit(
     text: string,
@@ -631,7 +635,14 @@ export function useComposerController(
     permissionModes: engine?.caps.permissionModes ?? ['ask', 'edits', 'plan', 'full'],
     setPermissionMode: permissionMode => patch({ permissionMode }),
     running: !!snap && snap.state !== 'idle',
-    stop: () => (record ? b.interrupt(record.id) : Promise.resolve()),
+    backgroundAgents: stopTargets(snap).length,
+    stop: () =>
+      record
+        ? b.interrupt(
+            record.id,
+            getStopBackgroundAgents() && ENGINES[engineId].caps.backgroundTasks ? { background: true } : undefined,
+          )
+        : Promise.resolve(),
     redetect: () => void redetectEngines(),
     submit: async (text, clientMessageId = crypto.randomUUID(), attachments = [], files = []) => {
       const input = { text, clientMessageId, attachments, ...(files.length ? { files } : {}) }

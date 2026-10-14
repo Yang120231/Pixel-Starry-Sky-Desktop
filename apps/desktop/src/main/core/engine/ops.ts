@@ -1,7 +1,7 @@
 // 引擎接口（docs/engines.md §3、§5）：本机与远端共用的操作表，参数先校验再交给 EngineHost。
 // 「添加项目」（本机弹对话框）和「导出用量」（本机弹保存框）不在表里，见 engine/ipc.ts / machines/remote-runtime.ts
 import { searchQuery, type EngineHost } from '@pixelsky/engine'
-import type { ApprovalDecision, RewindOptions, SessionRecord, SideTurn } from '@pixelsky/protocol'
+import type { ApprovalDecision, InterruptOptions, RewindOptions, SessionRecord, SideTurn } from '@pixelsky/protocol'
 import type { SessionPatch } from '../../../shared/types/engine'
 import { artifactRef, engineConfigPatch, engineId, int, str, usageListQuery, usageQuery, value } from '../args'
 import type { OpTable } from '../ops'
@@ -32,6 +32,10 @@ function rewindOptions(raw: unknown): RewindOptions {
 }
 
 /** 旁聊之前的问答：最多 20 轮，每段最多 20000 字 */
+function interruptOptions(raw: unknown): InterruptOptions {
+  return (raw as { background?: unknown } | null)?.background === true ? { background: true } : {}
+}
+
 function sideHistory(raw: unknown): SideTurn[] {
   if (!Array.isArray(raw)) return []
   return raw.slice(-20).flatMap(t => {
@@ -122,7 +126,7 @@ export const ENGINE_OPS = {
   'engine:sideQuestion': (c, id, question, history) =>
     c.host.sideQuestion(str(id, 'id'), str(question, 'question'), sideHistory(history)),
   'engine:cancelSideQuestion': (c, id) => c.host.cancelSideQuestion(str(id, 'id')),
-  'engine:interrupt': (c, id) => c.host.interrupt(str(id, 'id')),
+  'engine:interrupt': (c, id, opts) => c.host.interrupt(str(id, 'id'), interruptOptions(opts)),
   'engine:interruptTurn': (c, id, turnId) => c.host.interruptTurn(str(id, 'id'), str(turnId, 'turnId')),
   'engine:answer': (c, id, requestId, decision) =>
     c.host.answer(str(id, 'id'), str(requestId, 'requestId'), decision as ApprovalDecision),

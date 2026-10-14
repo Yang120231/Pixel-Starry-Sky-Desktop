@@ -38,6 +38,8 @@ export const SHOWCASE_SESSIONS = [
   { id: 'demo-claude-long', title: '长对话：轮次跳转（30 轮）' },
   { id: 'demo-claude-long-120', title: '长对话：只显示最近 20 轮（120 轮）' },
   { id: 'demo-claude-subagents', title: '后台子智能体：改动按子智能体分组' },
+  { id: 'demo-claude-subagent-stop', title: '停止：连同后台子智能体' },
+  { id: 'demo-claude-subagent-kept', title: '停止：后台子智能体继续运行' },
 ] as const
 
 type SessionId = (typeof SHOWCASE_SESSIONS)[number]['id']
@@ -1811,6 +1813,105 @@ const subagents = snapshot(
   },
 )
 
+// ---------- 停止主智能体时连同后台子智能体（docs/ui/subagent-stop.md） ----------
+
+const STOP_AGENTS = [
+  { id: 'agent-stop-form', call: 'ss-t1', label: '查设置页的旧表单' },
+  { id: 'agent-stop-test', call: 'ss-t2', label: '跑一遍设置页测试' },
+] as const
+const STOP_DONE = { id: 'agent-stop-field', call: 'ss-t3', label: '整理旧表单字段' } as const
+
+const stopAgentStatus = (a: { id: string; label: string }, status: string, message: string | null = null) => ({
+  id: a.id,
+  label: a.label,
+  status,
+  message,
+  background: true,
+})
+const stopAgentRun = (a: { id: string; call: string; label: string }, patch: Partial<AgentRun> = {}): AgentRun =>
+  agentRun(a.id, a.label, {
+    type: 'general-purpose',
+    state: 'running',
+    startedAt: T0 - 2 * MIN,
+    durationMs: 0,
+    toolUseId: a.call,
+    ...patch,
+  })
+const stopTask = (a: { id: string; label: string }, message: string | null = null) => ({
+  id: a.id,
+  kind: 'local_agent',
+  description: a.label,
+  message,
+})
+
+const subagentStop = snapshot(
+  record('demo-claude-subagent-stop', { updatedAt: T0 - 1 * MIN }),
+  [
+    user('ss-u1', '把设置页的旧表单查一遍，再跑一遍设置页测试', 6),
+    assistant('ss-a1', '好，我派两个后台子智能体去查旧表单、跑测试。', 'interrupted'),
+    stats('ss-s1', 'interrupted', { durationMs: 12_000, models: { 'claude-opus-5-5': opus(1_800, 240, 0.0211) } }),
+    {
+      kind: 'notice',
+      id: 'ss-n1',
+      level: 'info',
+      text: '已停止，连同 2 个后台子智能体（查设置页的旧表单、跑一遍设置页测试）',
+    },
+    user('ss-u2', '重新来，这次把旧表单字段也整理了', 2),
+    bgAgentCall(STOP_AGENTS[0], '已在后台启动'),
+    bgAgentCall(STOP_AGENTS[1], '已在后台启动'),
+    bgAgentCall(STOP_DONE, '已在后台启动'),
+    assistant('ss-a2', '三个子智能体都已在后台开始，我先等它们的结果。'),
+  ],
+  {
+    state: 'running',
+    turnId: 'ss-turn-2',
+    background: 2,
+    subagents: [
+      stopAgentStatus(STOP_AGENTS[0], 'running', 'Grep form'),
+      stopAgentStatus(STOP_AGENTS[1], 'running', 'pnpm test settings'),
+      stopAgentStatus(STOP_DONE, 'stopped'),
+    ],
+    tasks: [stopTask(STOP_AGENTS[0], 'Grep form'), stopTask(STOP_AGENTS[1], 'pnpm test settings')],
+    runs: {
+      workflows: [],
+      agents: [
+        stopAgentRun(STOP_AGENTS[0]),
+        stopAgentRun(STOP_AGENTS[1], { type: 'Explore' }),
+        stopAgentRun(STOP_DONE, { state: 'stopped', durationMs: 31_000 }),
+      ],
+    },
+  },
+)
+
+const subagentKept = snapshot(
+  record('demo-claude-subagent-kept', { updatedAt: T0 - 1 * MIN }),
+  [
+    user('sk-u1', '把设置页的旧表单查一遍，再跑一遍设置页测试', 4),
+    bgAgentCall({ call: 'sk-t1', label: '查设置页的旧表单' }, '已在后台启动'),
+    bgAgentCall({ call: 'sk-t2', label: '跑一遍设置页测试' }, '已在后台启动'),
+    assistant('sk-a1', '两个子智能体已在后台开始，正在汇总', 'interrupted'),
+    stats('sk-s1', 'interrupted', { durationMs: 9_000, models: { 'claude-opus-5-5': opus(1_600, 180, 0.0187) } }),
+  ],
+  {
+    background: 2,
+    subagents: [
+      stopAgentStatus({ id: 'agent-keep-form', label: '查设置页的旧表单' }, 'running', 'Grep form'),
+      stopAgentStatus({ id: 'agent-keep-test', label: '跑一遍设置页测试' }, 'running', 'pnpm test settings'),
+    ],
+    tasks: [
+      stopTask({ id: 'agent-keep-form', label: '查设置页的旧表单' }, 'Grep form'),
+      stopTask({ id: 'agent-keep-test', label: '跑一遍设置页测试' }, 'pnpm test settings'),
+    ],
+    runs: {
+      workflows: [],
+      agents: [
+        stopAgentRun({ id: 'agent-keep-form', call: 'sk-t1', label: '查设置页的旧表单' }),
+        stopAgentRun({ id: 'agent-keep-test', call: 'sk-t2', label: '跑一遍设置页测试' }, { type: 'Explore' }),
+      ],
+    },
+  },
+)
+
 export const showcaseSnapshots: Record<string, SessionSnapshot> = Object.fromEntries(
   [
     markdown,
@@ -1832,6 +1933,8 @@ export const showcaseSnapshots: Record<string, SessionSnapshot> = Object.fromEnt
     long,
     long120,
     subagents,
+    subagentStop,
+    subagentKept,
   ].map(s => [s.record.id, s]),
 )
 
@@ -1942,6 +2045,18 @@ const TASK_OUTPUT: Record<string, TaskOutput> = {
     output: '✓ lint        32s\n✓ unit tests  1m 04s\n… e2e         运行中（2m 10s）',
     truncated: true,
   },
+}
+
+for (const a of [STOP_AGENTS[0], STOP_AGENTS[1], STOP_DONE]) {
+  SUBAGENT_ITEMS[a.id] = [user(`${a.id}-u`, a.label, 2), assistant(`${a.id}-a`, '进行中。')]
+  TASK_OUTPUT[a.id] = { output: `${a.label}：进行中`, truncated: false }
+}
+for (const [id, label] of [
+  ['agent-keep-form', '查设置页的旧表单'],
+  ['agent-keep-test', '跑一遍设置页测试'],
+] as const) {
+  SUBAGENT_ITEMS[id] = [user(`${id}-u`, label, 3), assistant(`${id}-a`, '进行中。')]
+  TASK_OUTPUT[id] = { output: `${label}：进行中`, truncated: false }
 }
 
 export function showcaseTaskOutput(_sessionId: string, taskId: string): TaskOutput {

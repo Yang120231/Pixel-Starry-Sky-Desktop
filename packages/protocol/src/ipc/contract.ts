@@ -175,6 +175,7 @@ export const IPC_CONTRACT = {
     mobile: 'view',
     trust: 'sender',
   },
+  // 第二个参数 InterruptOptions 可省略
   'engine:interrupt': {
     kind: 'invoke',
     route: 'resource',

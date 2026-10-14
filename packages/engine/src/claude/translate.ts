@@ -7,6 +7,7 @@
 // - 子 agent（Task 工具）的消息带 parent_tool_use_id，v1 不展开，只显示那一行工具调用；
 // - result 每轮正好一条，是一轮结束的标志；里面的花费和 modelUsage 是进程内累计值。
 import type {
+  BackgroundAgentRef,
   BackgroundTask,
   EngineEvent,
   Item,
@@ -20,7 +21,7 @@ import type {
   Usage,
   RequestRetryState,
 } from '@pixelsky/protocol'
-import { estimateCost, officialPrice } from '@pixelsky/protocol'
+import { backgroundAgents, estimateCost, officialPrice } from '@pixelsky/protocol'
 import { Runs } from './runs'
 import { completeToolItem, toolItem } from './tools'
 import { RequestCacheReader } from './request-cache'
@@ -168,6 +169,8 @@ export class ClaudeTranslator {
   /** 上次报给宿主的后台工作数（background 事件） */
   private backgroundCount = 0
   private subagentList: SubagentStatus[] = []
+  /** 连同主智能体一起停的任务 id：它们的「已停止」通知不单独提示 */
+  private quietStops = new Set<string>()
   /** 这次压缩（docs/ui/compaction.md）：status 'compacting' 时开始；结果和 compact_boundary 先后不定，都到了才算完 */
   private compaction: CompactionItem | null = null
   /** 压缩完了但 Claude Code 没给压缩后的大小：用下一次请求的上下文占用补上 */
@@ -244,6 +247,7 @@ export class ClaudeTranslator {
     }
     if (this.runs.stopAll()) this.emitRuns()
     this.taskInfo.clear()
+    this.quietStops.clear()
     for (const id of [...this.subTools.keys()]) this.settleSubTool(id, 'interrupted')
     for (const item of this.asyncAgents.values())
       this.cb.emit({ type: 'item_completed', item: { ...item, status: 'interrupted' } as Item })
@@ -275,6 +279,20 @@ export class ClaudeTranslator {
     }
     this.subagentList = i >= 0 ? this.subagentList.map((a, j) => (j === i ? next : a)) : [...this.subagentList, next]
     this.cb.emit({ type: 'subagents', subagents: [...this.subagentList] })
+  }
+
+  /** 还在跑的后台子智能体和编排（停止时一起停的对象） */
+  backgroundTargets(): BackgroundAgentRef[] {
+    return backgroundAgents(this.subagentList, this.bgTasks)
+  }
+
+  muteStopNotices(ids: string[]): void {
+    for (const id of ids) this.quietStops.add(id)
+  }
+
+  /** 停主智能体时一起停了后台子智能体：合成一条提示 */
+  stoppedWithMain(labels: string[]): void {
+    this.notice('info', `已停止，连同 ${labels.length} 个后台子智能体（${labels.join('、')}）`)
   }
 
   markDeclined(toolUseId: string): void {
@@ -411,7 +429,12 @@ export class ClaudeTranslator {
         }
         this.taskInfo.set(id, info)
         if (kind === 'local_agent')
-          this.setSubagent(id, { label: info.description || '子智能体', status: 'running', message: null })
+          this.setSubagent(id, {
+            label: info.description || '子智能体',
+            status: 'running',
+            message: null,
+            ...(info.background ? { background: true } : {}),
+          })
         break
       }
       case 'task_progress': {
@@ -430,7 +453,10 @@ export class ClaudeTranslator {
       }
       case 'task_updated': {
         const info = this.taskInfo.get(id)
-        if (info && obj(msg.patch).is_backgrounded === true) info.background = true
+        if (info && obj(msg.patch).is_backgrounded === true) {
+          info.background = true
+          if (info.kind === 'local_agent') this.setSubagent(id, { background: true })
+        }
         break
       }
       case 'task_notification': {
@@ -438,6 +464,8 @@ export class ClaudeTranslator {
         const info = this.taskInfo.get(id)
         this.taskInfo.delete(id)
         const status = str(msg.status) || 'completed'
+        // 连同主智能体一起停的：不逐个提示，最后由 stoppedWithMain 合成一条
+        const quiet = this.quietStops.delete(id) && status === 'stopped'
         // 后台子智能体真正结束了：它的 Agent 工具行这时才收尾
         const call = info?.toolUseId ?? (str(msg.tool_use_id) || null)
         const launched = call ? this.asyncAgents.get(call) : undefined
@@ -461,7 +489,7 @@ export class ClaudeTranslator {
             for (const toolId of [...this.subTools.keys()]) this.settleSubTool(toolId, 'interrupted')
         }
         const background = !info || info.background
-        if (background && msg.skip_transcript !== true && msg.ambient !== true) {
+        if (background && !quiet && msg.skip_transcript !== true && msg.ambient !== true) {
           const kind = taskKindLabel(info?.kind ?? '')
           // 子智能体因 API 报错提前结束：报错部分和主会话一样说人话
           const raw = str(msg.summary)

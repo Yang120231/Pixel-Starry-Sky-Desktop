@@ -10,11 +10,13 @@
 //   含「子任务」→ 派一个子智能体（task_* 帧 + 子智能体调用 Read）
 //   含「派出」  → 派一个后台子智能体，这一轮先结束，子智能体跑完后引擎自己接着汇总一轮
 //   含「后台」  → 起一个后台命令（background_tasks_changed），等 stop_task 才结束
+//   含「并行」  → 起后台子智能体 bga1「甲」、bga2「乙」，多智能体编排 wf1「编排」和后台命令 bg1，然后慢慢输出直到被中断
 //   一轮成功结束后发一条 prompt_suggestion
 //   FAKE_CLAUDE_FAST_BLOCKED  Fast 模式开不了的原因（不设时可以开）
 //   其他       → 回复「收到：<消息>」
 // 环境变量：
 //   FAKE_CLAUDE_LOG       每次启动把命令行参数追加到这个文件（一行一个 JSON 数组）
+//                         另外把收到的控制请求类型按顺序写到 .control.log（一行一个）
 //   FAKE_CLAUDE_MODEL_LOG 收到 set_model 时把模型名追加到这个文件（一行一个）
 //   FAKE_CLAUDE_PROJECTS  收到消息时在这里创建会话记录文件（模拟 ~/.claude/projects）
 //   FAKE_CLAUDE_REWIND    rewind_files 的模拟：JSON { file, content }，预览时报这个文件，还原时写入 content；
@@ -563,6 +565,55 @@ async function runTurn(text) {
     return
   }
 
+  if (text.includes('并行')) {
+    for (const [tid, desc] of [
+      ['bga1', '甲'],
+      ['bga2', '乙'],
+    ]) {
+      out({
+        type: 'system',
+        subtype: 'task_started',
+        task_id: tid,
+        task_type: 'local_agent',
+        description: desc,
+        tool_use_id: `tu_${tid}`,
+        is_backgrounded: true,
+      })
+      bgTasks.set(tid, { task_id: tid, task_type: 'local_agent', description: desc })
+    }
+    out({
+      type: 'system',
+      subtype: 'task_started',
+      task_id: 'wf1',
+      task_type: 'local_workflow',
+      description: '编排',
+      is_backgrounded: true,
+    })
+    bgTasks.set('wf1', { task_id: 'wf1', task_type: 'local_workflow', description: '编排' })
+    out({
+      type: 'system',
+      subtype: 'task_started',
+      task_id: 'bg1',
+      task_type: 'local_bash',
+      description: 'npm run dev',
+      is_backgrounded: true,
+    })
+    bgTasks.set('bg1', { task_id: 'bg1', task_type: 'local_bash', description: 'npm run dev' })
+    out({ type: 'system', subtype: 'background_tasks_changed', tasks: [...bgTasks.values()] })
+    const slow = Array.from({ length: 100 }, (_, i) => `${i} `)
+    const ok = await streamText(slow.join(''), slow)
+    if (!ok) {
+      out({
+        type: 'user',
+        message: { role: 'user', content: '[Request interrupted by user]' },
+        parent_tool_use_id: null,
+      })
+      result('error_during_execution')
+    } else result('success')
+    turn = null
+    return
+  }
+
   if (text.includes('后台')) {
     bgTasks.set('bg1', { task_id: 'bg1', task_type: 'local_bash', description: 'npm run dev' })
     out({
@@ -682,6 +733,8 @@ function respond(requestId, response) {
 function handle(msg) {
   if (msg.type === 'control_request') {
     const r = msg.request
+    if (process.env.FAKE_CLAUDE_LOG)
+      appendFileSync(process.env.FAKE_CLAUDE_LOG.replace(/\.log$/, '.control.log'), `${r.subtype}\n`)
     switch (r.subtype) {
       case 'initialize':
         const initialized = {
