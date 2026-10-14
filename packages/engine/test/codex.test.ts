@@ -264,6 +264,10 @@ describe('Codex app-server adapter', () => {
       tokenCounts({ inputTokens: 100, cachedInputTokens: 40, cacheWriteInputTokens: 10, outputTokens: 20 }),
     ).toMatchObject({ input: 50, cacheRead: 40, cacheWrite: 10, output: 20 })
     expect(codexPermission('plan').sandboxPolicy).toEqual({ type: 'readOnly', networkAccess: false })
+    // 项目的附加文件夹和工作目录一样可写（docs/ui/multi-root-projects.md §3.3）
+    expect(codexPermission('auto', '/w', ['/a', '/b']).sandboxPolicy).toMatchObject({
+      writableRoots: ['/w', '/a', '/b'],
+    })
   })
   it('压缩上下文：开始带压缩前大小，完成后用下一次用量补上压缩后大小', () => {
     const events: EngineEvent[] = []

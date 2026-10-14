@@ -90,6 +90,7 @@ export const ENGINE_OPS = {
   'engine:projects': c => c.host.projects(),
   'engine:removeProject': (c, id) => c.host.removeProject(str(id, 'id')),
   'engine:renameProject': (c, id, name) => c.host.renameProject(str(id, 'id'), name as string),
+  'engine:setProjectFolders': (c, id, folders) => c.host.setProjectFolders(str(id, 'id'), folders),
   'engine:sessions': c => c.host.sessions(),
   'engine:createSession': async (c, opts) => {
     const o = (opts ?? {}) as Parameters<EngineHost['createSession']>[0] & {

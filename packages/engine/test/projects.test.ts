@@ -77,3 +77,31 @@ it('一次加多个时都已在列表里或都加不上：不保存、不广播'
   expect(events).toEqual([])
   expect(() => host.addProject(join(root, 'nope'))).toThrow('目录不存在')
 })
+
+it('附加文件夹：整组替换、去掉和主文件夹相同的和重复的、保存并广播；清空后不写这个字段', () => {
+  const main = mkdtempSync(join(root, 'main-'))
+  const a = mkdtempSync(join(root, 'a-'))
+  const b = mkdtempSync(join(root, 'b-'))
+  const host = makeHost()
+  const project = host.addProject(main)
+  events = []
+  const updated = host.setProjectFolders(project.id, [a, { path: b, name: '  文档 ' }, main, a])
+  expect(updated.folders).toEqual([{ path: a }, { path: b, name: '文档' }])
+  expect(events).toEqual([{ kind: 'projects', projects: [updated] }])
+  expect(makeHost().projects()).toEqual([updated])
+  const cleared = host.setProjectFolders(project.id, [])
+  expect('folders' in cleared).toBe(false)
+})
+
+it('附加文件夹：不存在的目录、格式不对、项目不存在都拒绝，原来的不变', () => {
+  const main = mkdtempSync(join(root, 'main-'))
+  const a = mkdtempSync(join(root, 'a-'))
+  const host = makeHost()
+  const project = host.addProject(main)
+  host.setProjectFolders(project.id, [a])
+  expect(() => host.setProjectFolders(project.id, [join(root, 'nope')])).toThrow('目录不存在')
+  expect(() => host.setProjectFolders(project.id, 'x')).toThrow('项目文件夹不对')
+  expect(() => host.setProjectFolders(project.id, [{ path: 3 }])).toThrow('项目文件夹不对')
+  expect(() => host.setProjectFolders('missing', [])).toThrow('项目不存在')
+  expect(host.projects()[0].folders).toEqual([{ path: a }])
+})

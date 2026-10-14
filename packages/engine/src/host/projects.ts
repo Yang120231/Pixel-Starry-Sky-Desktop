@@ -2,7 +2,12 @@
 import { randomUUID } from 'node:crypto'
 import { basename, resolve } from 'node:path'
 import { statSync } from 'node:fs'
-import { normalizeProjectName, type AddProjectsResult, type ProjectRecord } from '@pixelsky/protocol'
+import {
+  normalizeProjectName,
+  type AddProjectsResult,
+  type ProjectFolder,
+  type ProjectRecord,
+} from '@pixelsky/protocol'
 import type { HostContext } from './context'
 
 function isDir(p: string): boolean {
@@ -72,6 +77,36 @@ export class HostProjects {
     this.ctx.store.saveProjects(this.list)
     this.ctx.opts.emit({ kind: 'projects', projects: this.projects() })
     return renamed
+  }
+
+  /**
+   * 改项目的附加文件夹（docs/ui/multi-root-projects.md §3.2）：整组替换，按给的顺序。
+   * 每个都要是已有的文件夹，不能和主文件夹相同，重复的只留一个；最多 20 个。已经开始的对话不受影响
+   */
+  setProjectFolders(id: string, folders: unknown): ProjectRecord {
+    const project = this.list.find(p => p.id === id)
+    if (!project) throw new Error('项目不存在')
+    if (!Array.isArray(folders) || folders.length > 20) throw new Error('项目文件夹不对')
+    const guard = this.ctx.m.guard
+    const seen = new Set([guard.workspaceKey(project.path)])
+    const next: ProjectFolder[] = []
+    for (const raw of folders as unknown[]) {
+      const item = typeof raw === 'string' ? { path: raw } : (raw as { path?: unknown; name?: unknown } | null)
+      if (!item || typeof item.path !== 'string' || !item.path.trim()) throw new Error('项目文件夹不对')
+      const abs = resolve(item.path)
+      if (!isDir(abs)) throw new Error(`目录不存在：${abs}`)
+      const key = guard.workspaceKey(abs)
+      if (seen.has(key)) continue
+      seen.add(key)
+      const name = typeof item.name === 'string' && item.name.trim() ? normalizeProjectName(item.name) : undefined
+      next.push(name ? { path: abs, name } : { path: abs })
+    }
+    const { folders: _old, ...rest } = project
+    const updated: ProjectRecord = next.length ? { ...rest, folders: next } : rest
+    this.list = this.list.map(p => (p.id === id ? updated : p))
+    this.ctx.store.saveProjects(this.list)
+    this.ctx.opts.emit({ kind: 'projects', projects: this.projects() })
+    return updated
   }
 
   removeProject(id: string): void {

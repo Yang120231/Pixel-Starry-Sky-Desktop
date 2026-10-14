@@ -57,6 +57,7 @@ export class HostSessions {
       id: randomUUID(),
       projectId: project.id,
       cwd: workspacePath ?? project.path,
+      ...(project.folders?.length ? { extraDirs: project.folders.map(f => f.path) } : {}),
       engine,
       engineSessionId: null,
       title: NEW_TITLE,

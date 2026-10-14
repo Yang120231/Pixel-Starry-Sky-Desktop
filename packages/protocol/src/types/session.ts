@@ -1,10 +1,19 @@
 import type { Effort, EngineId, PermissionMode } from './base'
 
-/** 项目 = 一个工作目录 */
+/** 项目的附加文件夹（docs/ui/multi-root-projects.md §3） */
+export interface ProjectFolder {
+  path: string
+  /** 显示名；不写时用文件夹名 */
+  name?: string
+}
+
+/** 项目 = 一个主文件夹（AI 在这里启动），可以再带几个附加文件夹 */
 export interface ProjectRecord {
   id: string
   name: string
   path: string
+  /** 附加文件夹，按添加顺序；没有时不写这个字段（旧数据就是单文件夹项目） */
+  folders?: ProjectFolder[]
   /** 毫秒时间戳 */
   addedAt: number
 }
@@ -125,6 +134,8 @@ export interface SessionRecord extends SessionSettings {
   projectId: string
   /** 工作目录（创建时从项目复制，项目路径以后变了也不影响已有会话） */
   cwd: string
+  /** 项目的附加文件夹（创建时从项目复制，之后给项目加减文件夹不影响已有会话；docs/ui/multi-root-projects.md §3.2） */
+  extraDirs?: string[]
   engine: EngineId
   /** 引擎自己的会话 id（Claude 的 session_id / Codex 的 thread id）；还没启动过引擎时为 null */
   engineSessionId: string | null

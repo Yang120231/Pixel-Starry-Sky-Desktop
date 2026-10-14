@@ -17,6 +17,7 @@ import type {
   SearchResponse,
   OpenedSession,
   ProjectRecord,
+  ProjectFolder,
   AddProjectsResult,
   SessionRecord,
   SessionSettings,
@@ -58,6 +59,8 @@ export interface EngineBridge {
   removeProject(id: string): Promise<void>
   /** 只改显示名，磁盘上的文件夹不变 */
   renameProject(id: string, name: string): Promise<ProjectRecord>
+  /** 改项目的附加文件夹（整组替换；只对之后新建的对话生效，docs/ui/multi-root-projects.md §3） */
+  setProjectFolders(id: string, folders: ProjectFolder[]): Promise<ProjectRecord>
   sessions(): Promise<SessionSummary[]>
   createSession(
     opts: {

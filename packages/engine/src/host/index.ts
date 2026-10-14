@@ -248,6 +248,11 @@ export class EngineHost {
     return this.m.projects.renameProject(id, name)
   }
 
+  /** 改项目的附加文件夹（只对之后新建的对话生效） */
+  setProjectFolders(id: string, folders: unknown): ProjectRecord {
+    return this.m.projects.setProjectFolders(id, folders)
+  }
+
   /** 从列表里移除项目（不删除磁盘上的任何文件，会话记录保留） */
   removeProject(id: string): void {
     this.m.projects.removeProject(id)
