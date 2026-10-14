@@ -1,10 +1,16 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { ChevronDown, FolderInput, FolderPlus, X } from 'lucide-react'
+import { ChevronDown, ChevronsDownUp, ChevronsUpDown, FolderInput, FolderPlus, X } from 'lucide-react'
 import { IconButton, cn, useComingSoon, useToast } from '@/ui'
 import { ActionMenu } from '@/ui/ActionMenu'
-import { recentOpen, setSidebarPrefs, useShortWindow, useSidebarPrefs } from '@/features/appearance/sidebar'
+import {
+  recentOpen,
+  setProjectsCollapsed,
+  setSidebarPrefs,
+  useShortWindow,
+  useSidebarPrefs,
+} from '@/features/appearance/sidebar'
 import { getSidebarIcon } from '@/features/appearance/sidebarIcons'
 import { addProject, isLive, recentSpansProjects, useSidebarData } from '@/features/engine'
 import { addProjectPaths, importProjects } from '@/features/engine/store'
@@ -15,6 +21,7 @@ import { PinnedList } from './PinnedList'
 import { PinnedTasks } from './PinnedTasks'
 import { TASK_DRAG_TYPE, draggedTask, pinTask } from '@/features/panel/pinnedTasks'
 import { ProjectTree } from './ProjectTree'
+import { arrangeProjects, groupKey } from './projectGroups'
 import { RecentItem } from './RecentItem'
 import { RunStatusPill } from './RunStatusPill'
 import { filterProjects, filterSessions, lanesOf, useScrollFade, type RunFilter } from './runFilter'
@@ -78,6 +85,12 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
   useEffect(() => {
     if (runFilter && !cards.length) setRunFilter(null)
   }, [runFilter, cards.length])
+  // 「项目」标题右边的全部收起 / 全部展开（分区也算）：有展开着的就全部收起
+  const foldKeys = [
+    ...projects.map(p => p.id),
+    ...arrangeProjects(projects, prefs.groups ?? []).flatMap(e => (e.kind === 'group' ? [groupKey(e.group.id)] : [])),
+  ]
+  const anyOpen = foldKeys.some(key => !prefs.collapsed?.includes(key))
   const scroller = useRef<HTMLDivElement>(null)
   useScrollFade(scroller)
   return (
@@ -146,15 +159,27 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
 
         <SidebarSection
           title={tr('sidebar.Sidebar.projects')}
+          count={projects.length || undefined}
           action={
-            <IconButton
-              icon={AddProjectIcon}
-              label={tr('sidebar.action.addProject')}
-              size={22}
-              iconSize={14}
-              aria-haspopup={isLive ? 'menu' : undefined}
-              onClick={openAddMenu}
-            />
+            <span className="flex items-center gap-0.5">
+              {!runFilter && projects.length > 1 && (
+                <IconButton
+                  icon={anyOpen ? ChevronsDownUp : ChevronsUpDown}
+                  label={tr(anyOpen ? 'sidebar.tree.collapseAll' : 'sidebar.tree.expandAll')}
+                  size={22}
+                  iconSize={14}
+                  onClick={() => setProjectsCollapsed(foldKeys, anyOpen)}
+                />
+              )}
+              <IconButton
+                icon={AddProjectIcon}
+                label={tr('sidebar.action.addProject')}
+                size={22}
+                iconSize={14}
+                aria-haspopup={isLive ? 'menu' : undefined}
+                onClick={openAddMenu}
+              />
+            </span>
           }
         >
           {addMenu && (
@@ -179,7 +204,7 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
               projects={shownProjects}
               selectedSessionId={selectedSessionId}
               onSelectSession={onSelectSession}
-              lanes={lanes}
+              filtering={!!runFilter}
             />
           ) : (
             <>

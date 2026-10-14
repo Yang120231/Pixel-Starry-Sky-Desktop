@@ -423,10 +423,15 @@ export async function addProject(): Promise<string | null> {
   return result ? applyAdded(result) : null
 }
 
-/** 按路径一次加多个本机项目（「从一个文件夹导入」、拖到侧栏的文件夹，docs/ui/multi-root-projects.md §2） */
-export async function addProjectPaths(paths: string[]): Promise<string | null> {
+/**
+ * 按路径一次加多个本机项目（「从一个文件夹导入」、拖到侧栏的文件夹，docs/ui/multi-root-projects.md §2）。
+ * 返回宿主的结果（新加的、本来就有的、加不上的），「放进一个分区」要用到项目 ID
+ */
+export async function addProjectPaths(paths: string[]): Promise<AddProjectsResult | null> {
   if (!bridge || !paths.length || remotePicker()) return null
-  return applyAdded(await bridge.addProjects(paths))
+  const result = await bridge.addProjects(paths)
+  applyAdded(result)
+  return result
 }
 
 /** 「从一个文件夹导入…」：打开 ProjectImport 的勾选对话框（远程机器转到工作区选择器） */

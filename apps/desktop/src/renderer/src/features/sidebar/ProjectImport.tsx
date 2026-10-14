@@ -10,6 +10,9 @@ import { cn, useToast } from '@/ui'
 import { IMPORT_PROJECTS_EVENT, PROJECTS_ADDED_EVENT, addProjectPaths, importCandidates } from '@/features/engine/store'
 import type { ImportCandidates } from '../../../../shared/types/workspace'
 import { addedSummary, defaultPicked } from './projectImportModel'
+import { GROUP_NAME_LIMIT, getSidebarPrefs, setProjectGroups } from '@/features/appearance/sidebar'
+import { createGroup, newGroupId } from './projectGroups'
+import { folderLabel } from '@/features/files/extraFolderPaths'
 
 const message = (e: unknown): string => translateMessage(e instanceof Error ? e.message : String(e))
 
@@ -20,6 +23,9 @@ export function ProjectImport() {
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // 勾了两个以上时可以「放进一个分区」，名字默认是上级文件夹名（docs/ui/sidebar-groups.md）
+  const [grouped, setGrouped] = useState(false)
+  const [groupName, setGroupName] = useState('')
 
   useEffect(() => {
     const open = (): void => {
@@ -29,6 +35,8 @@ export function ProjectImport() {
           setData(next)
           setPicked(new Set(defaultPicked(next.candidates)))
           setError(null)
+          setGrouped(false)
+          setGroupName(folderLabel({ path: next.parent }))
         },
         e => toast(message(e), { duration: 4000 }),
       )
@@ -60,7 +68,11 @@ export function ProjectImport() {
     setError(null)
     try {
       // 按列表里的顺序加
-      await addProjectPaths(data.candidates.filter(c => picked.has(c.path)).map(c => c.path))
+      const result = await addProjectPaths(data.candidates.filter(c => picked.has(c.path)).map(c => c.path))
+      const name = Array.from(groupName.trim()).slice(0, GROUP_NAME_LIMIT).join('')
+      const ids = result ? [...result.added, ...result.existing].map(p => p.id) : []
+      if (grouped && name && ids.length)
+        setProjectGroups(createGroup(getSidebarPrefs().groups ?? [], { id: newGroupId(), name }, ids))
       setData(null)
     } catch (e) {
       setError(message(e))
@@ -118,6 +130,30 @@ export function ProjectImport() {
                   </li>
                 ))}
               </ul>
+              {picked.size > 1 && (
+                <div className="mt-3 flex items-center gap-2 px-2 text-meta">
+                  <label className="flex shrink-0 cursor-pointer items-center gap-2 text-fg">
+                    <input
+                      type="checkbox"
+                      data-import-group
+                      checked={grouped}
+                      disabled={busy}
+                      onChange={() => setGrouped(v => !v)}
+                    />
+                    {tr('projectImport.group')}
+                  </label>
+                  {grouped && (
+                    <input
+                      aria-label={tr('projectImport.groupName')}
+                      value={groupName}
+                      maxLength={GROUP_NAME_LIMIT * 2}
+                      disabled={busy}
+                      onChange={event => setGroupName(event.target.value)}
+                      className="h-7 min-w-0 flex-1 rounded-md border border-line bg-surface px-2 text-ui text-fg outline-none focus:border-accent-line"
+                    />
+                  )}
+                </div>
+              )}
               {data.truncated && (
                 <p className="mt-1 text-meta text-fg-muted">
                   {tr('projectImport.truncated', { n: data.candidates.length })}

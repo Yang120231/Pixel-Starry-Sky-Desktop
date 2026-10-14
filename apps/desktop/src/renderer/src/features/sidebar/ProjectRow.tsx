@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
+  ChevronRight,
   Ellipsis,
   FolderOpen,
   Folders,
@@ -20,9 +21,10 @@ import { machineOf } from '@/features/machines/store'
 import { paneActions } from '@/features/panes/store'
 import type { Project } from '@/data'
 import { ProjectFoldersDialog } from './ProjectFoldersDialog'
+import { projectColor, projectInitial } from './projectTreeModel'
 
 /**
- * 侧栏项目行：点击展开 / 收起；右键、⋯ 按钮、ContextMenu 键或 Shift+F10 打开项目菜单。
+ * 侧栏项目行：箭头 + 描边的彩色首字方块 + 加粗的名字，像对话的小标题（docs/ui/sidebar-hierarchy.md）。点击展开 / 收起；右键、⋯ 按钮、ContextMenu 键或 Shift+F10 打开项目菜单。
  * 悬停（或键盘聚焦到这一行）时 ⋯ 右边出现「+」，在这个项目下新建会话（issue #5）；菜单里也有这一项。
  * 重命名只改显示名，移除只把项目移出列表（磁盘文件和会话记录保留）。见 docs/ui/sidebar-compact-controls.md §9。
  */
@@ -30,14 +32,23 @@ export function ProjectRow({
   project,
   open,
   onToggle,
-  icon: Icon,
   trailing,
+  picked = false,
+  groupActions = [],
+  onDragStart,
 }: {
   project: Project
   open: boolean
-  onToggle: () => void
-  icon: LucideIcon
+  /** 点项目行：普通点击展开 / 收起，按住 Ctrl / Shift 是多选（ProjectTree 判断） */
+  onToggle: (event: React.MouseEvent<HTMLButtonElement>) => void
+  /** 右边：在跑 / 等你的数目，收起时没有状态就写对话数和最近时间 */
   trailing?: ReactNode
+  /** Ctrl / Shift 选中了（准备组成分区） */
+  picked?: boolean
+  /** 菜单里的分区操作（新建分区、加入「X」、移出分区），docs/ui/sidebar-groups.md */
+  groupActions?: { label: string; icon: LucideIcon; run: () => void }[]
+  /** 拖项目进出分区 */
+  onDragStart?: (event: React.DragEvent<HTMLDivElement>) => void
 }) {
   const { t } = useI18n()
   const toast = useToast()
@@ -110,6 +121,9 @@ export function ProjectRow({
     <div
       ref={row}
       data-project-row={project.id}
+      data-picked={picked || undefined}
+      draggable={!!onDragStart}
+      onDragStart={onDragStart}
       onContextMenu={event => {
         event.preventDefault()
         show(event.clientX, event.clientY)
@@ -120,7 +134,10 @@ export function ProjectRow({
           show()
         }
       }}
-      className="group/project relative flex h-8 min-w-0 shrink-0 items-center rounded-md text-list text-fg-secondary transition-colors hover:bg-hover"
+      className={cn(
+        'group/project relative flex h-8 min-w-0 shrink-0 items-center rounded-md text-list text-fg transition-colors',
+        picked ? 'bg-accent-soft ring-1 ring-accent-line ring-inset' : 'hover:bg-hover',
+      )}
     >
       <button
         ref={button}
@@ -132,20 +149,22 @@ export function ProjectRow({
         }
         aria-expanded={open}
         onClick={onToggle}
-        className="flex h-full min-w-0 flex-1 items-center gap-2.5 overflow-hidden rounded-md pl-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+        className="flex h-full min-w-0 flex-1 items-center gap-2 overflow-hidden rounded-md pl-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
       >
-        <Icon size={16} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
-        <span className="min-w-0 flex-1 truncate">{project.name}</span>
-        {/* 多文件夹项目：名字后面写「+2」，悬停看全部路径 */}
-        {!!project.folders?.length && (
-          <span
-            data-project-folders-count
-            aria-label={t('projectFolders.count', { n: project.folders.length + 1 })}
-            className="shrink-0 text-label text-fg-faint"
-          >
-            +{project.folders.length}
-          </span>
-        )}
+        <ChevronRight
+          size={14}
+          strokeWidth={1.75}
+          className={cn('shrink-0 text-fg-faint transition-transform duration-150', open && 'rotate-90')}
+        />
+        <span
+          aria-hidden
+          data-project-badge
+          className="flex size-[18px] shrink-0 items-center justify-center rounded-[5px] border-[1.5px] text-[11px] leading-none font-bold"
+          style={{ borderColor: projectColor(project.id), color: projectColor(project.id) }}
+        >
+          {projectInitial(project.name)}
+        </span>
+        <span className="min-w-0 flex-1 truncate font-semibold">{project.name}</span>
       </button>
       {/* 悬停时右边放 ⋯ 和 +：这一块变宽只是项目名更早截断，行高和左边的图标、名字位置都不动 */}
       <div
@@ -234,6 +253,21 @@ export function ProjectRow({
               {t('project.newSession')}
             </button>
             <div role="separator" className="my-1 border-t border-line-subtle" />
+            {groupActions.map(action => (
+              <button
+                key={action.label}
+                role="menuitem"
+                onClick={() => {
+                  close(false)
+                  action.run()
+                }}
+                className={item}
+              >
+                <action.icon size={15} strokeWidth={1.5} />
+                <span className="min-w-0 truncate">{action.label}</span>
+              </button>
+            ))}
+            {groupActions.length > 0 && <div role="separator" className="my-1 border-t border-line-subtle" />}
             <button role="menuitem" onClick={() => run(() => setDialog('rename'))} className={item}>
               <PencilLine size={15} strokeWidth={1.5} />
               {t('project.rename')}

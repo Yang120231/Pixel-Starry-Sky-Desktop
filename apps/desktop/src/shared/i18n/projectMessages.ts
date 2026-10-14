@@ -41,6 +41,8 @@ export const projectMessages = {
   },
   'projectImport.confirm': { zh: '添加 {n} 个项目', en: 'Add {n} projects' },
   'projectImport.cancel': { zh: '取消', en: 'Cancel' },
+  'projectImport.group': { zh: '放进一个分区', en: 'Put them in one section' },
+  'projectImport.groupName': { zh: '分区名字', en: 'Section name' },
   'projectImport.dropHint': { zh: '松开添加为项目', en: 'Drop to add as projects' },
   'projectImport.notFolders': { zh: '只能把文件夹拖进来作为项目', en: 'Only folders can be added as projects' },
   'project.menu': { zh: '项目操作', en: 'Project actions' },
