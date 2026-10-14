@@ -92,6 +92,8 @@ export const machineMessages = {
   'machines.go': { zh: '打开目录', en: 'Open directory' },
   'machines.parent': { zh: '上一级', en: 'Parent directory' },
   'machines.useDirectory': { zh: '添加此目录', en: 'Add this directory' },
+  'machines.addChecked': { zh: '添加勾选的 {n} 个', en: 'Add {n} selected' },
+  'machines.checkDirectory': { zh: '勾选「{name}」', en: 'Select {name}' },
   'machines.emptyDirectory': { zh: '没有子目录', en: 'No subdirectories' },
   'machines.loading': { zh: '正在读取…', en: 'Loading…' },
   'machines.offline': {

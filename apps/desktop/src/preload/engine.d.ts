@@ -17,6 +17,7 @@ import type {
   SearchResponse,
   OpenedSession,
   ProjectRecord,
+  AddProjectsResult,
   SessionRecord,
   SessionSettings,
   SessionSummary,
@@ -25,6 +26,7 @@ import type {
   UsageSummary,
 } from '@pixelsky/protocol'
 import type { UsageQuery, SessionPatch } from '../shared/types/engine'
+import type { ImportCandidates } from '../shared/types/workspace'
 
 export interface EngineBridge {
   search(query: SearchQuery): Promise<SearchResponse>
@@ -47,8 +49,12 @@ export interface EngineBridge {
   /** 新会话的默认设置 */
   defaults(): Promise<EngineDefaults>
   projects(): Promise<ProjectRecord[]>
-  /** 弹出选择文件夹对话框并添加项目；取消时返回 null */
-  addProject(): Promise<ProjectRecord | null>
+  /** 弹出选择文件夹对话框（可以一次选几个）并添加项目；取消时返回 null */
+  addProject(): Promise<AddProjectsResult | null>
+  /** 按路径一次加多个项目（「从一个文件夹导入」、拖到侧栏的文件夹） */
+  addProjects(paths: string[]): Promise<AddProjectsResult>
+  /** 选一个上级文件夹，列出它下面的子文件夹；取消时返回 null */
+  importCandidates(): Promise<ImportCandidates | null>
   removeProject(id: string): Promise<void>
   /** 只改显示名，磁盘上的文件夹不变 */
   renameProject(id: string, name: string): Promise<ProjectRecord>

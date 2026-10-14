@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { ChevronDown, FolderPlus } from 'lucide-react'
+import { ChevronDown, FolderInput, FolderPlus } from 'lucide-react'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import { Popover, PopoverItem } from '@/ui/Popover'
 import { cn, useComingSoon } from '@/ui'
 import { addProject, isLive, useSidebarData } from '@/features/engine'
+import { importProjects } from '@/features/engine/store'
 import { paneActions } from '@/features/panes/store'
 import { newChatInProject, useCodingWorkspace } from '../workspace'
 
@@ -55,6 +56,17 @@ export function ProjectWidget() {
         <PopoverItem icon={<FolderPlus size={16} strokeWidth={1.5} className="shrink-0" />} onClick={add}>
           {tr('coding.top.project.add')}
         </PopoverItem>
+        {isLive && (
+          <PopoverItem
+            icon={<FolderInput size={16} strokeWidth={1.5} className="shrink-0" />}
+            onClick={() => {
+              setOpen(false)
+              importProjects()
+            }}
+          >
+            {tr('projectImport.fromFolder')}
+          </PopoverItem>
+        )}
       </Popover>
     </div>
   )

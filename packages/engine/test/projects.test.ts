@@ -50,3 +50,30 @@ it('移除项目保留磁盘文件夹，重新添加同一目录得到新项目'
   expect(existsSync(dir)).toBe(true)
   expect(host.addProject(dir).id).not.toBe(project.id)
 })
+
+it('一次加多个：按顺序加到最后，已在列表里的和重复的只算一次，不存在的记原因；只保存、广播一次', () => {
+  const a = mkdtempSync(join(root, 'a-'))
+  const b = mkdtempSync(join(root, 'b-'))
+  const host = makeHost()
+  const old = host.addProject(a)
+  events = []
+  const missing = join(root, 'missing')
+  const result = host.addProjects([b, a, missing, b])
+  expect(result.added.map(p => p.path)).toEqual([b])
+  expect(result.existing).toEqual([old])
+  expect(result.failed).toEqual([{ path: missing, error: `目录不存在：${missing}` }])
+  expect(host.projects().map(p => p.path)).toEqual([a, b])
+  expect(events).toEqual([{ kind: 'projects', projects: host.projects() }])
+  expect(makeHost().projects()).toEqual(host.projects())
+})
+
+it('一次加多个时都已在列表里或都加不上：不保存、不广播', () => {
+  const a = mkdtempSync(join(root, 'a-'))
+  const host = makeHost()
+  host.addProject(a)
+  events = []
+  const result = host.addProjects([a, join(root, 'nope')])
+  expect(result.added).toEqual([])
+  expect(events).toEqual([])
+  expect(() => host.addProject(join(root, 'nope'))).toThrow('目录不存在')
+})

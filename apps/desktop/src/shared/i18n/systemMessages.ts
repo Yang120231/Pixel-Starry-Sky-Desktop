@@ -248,6 +248,14 @@ export const systemMessages = {
     "zh": "选择项目文件夹",
     "en": "Choose project folder"
   },
+  "system.chooseImportFolder": {
+    "zh": "选择一个包含多个项目的文件夹",
+    "en": "Choose a folder that contains projects"
+  },
+  "system.projectPathsInvalid": {
+    "zh": "项目路径不对",
+    "en": "Invalid project paths"
+  },
   "system.exportUsageRecords": {
     "zh": "导出用量记录",
     "en": "Export usage records"

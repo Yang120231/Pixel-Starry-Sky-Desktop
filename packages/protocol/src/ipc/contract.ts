@@ -99,6 +99,7 @@ export const IPC_CONTRACT = {
     remote: 'engine:addProject',
     trust: 'sender',
   },
+  'engine:addProjects': { kind: 'invoke', route: 'selected', picker: true, trust: 'sender' },
   'engine:answer': {
     kind: 'invoke',
     route: 'resource',
@@ -340,6 +341,7 @@ export const IPC_CONTRACT = {
   },
   'engine:taskOutput': { kind: 'invoke', route: 'resource', ids: [0, 1], remote: 'engine:taskOutput', trust: 'sender' },
   'engine:update': { kind: 'invoke', route: 'selected', ids: [0], remote: 'engine:update', trust: 'sender' },
+  'engine:importCandidates': { kind: 'invoke', route: 'selected', picker: true, trust: 'sender' },
   'engine:install': { kind: 'invoke', route: 'selected', ids: [0], remote: 'engine:install', trust: 'sender' },
   'engine:updateSession': {
     kind: 'invoke',

@@ -9,9 +9,11 @@ import {
   type EngineInfo,
   type HostEvent,
   type ProjectRecord,
+  type AddProjectsResult,
   type SessionSnapshot,
   type SessionSummary,
 } from '@pixelsky/protocol'
+import type { ImportCandidates } from '../../../../shared/types/workspace'
 import { isDemo, projects as demoProjects } from '@/data'
 import { demo } from '@/data/demo'
 import { SESSION_REMOVED_EVENT } from './sessionLifecycle'
@@ -393,18 +395,49 @@ export async function redetectEngines(): Promise<void> {
   set({ engines: await bridge.engines(true) })
 }
 
-/** 添加项目；成功后设为当前项目 */
+/** 一次加了几个项目时广播的事件：ProjectImport 据此弹一句「已添加 3 个项目，1 个已在列表里」 */
+export const PROJECTS_ADDED_EVENT = 'pixelsky:projects-added'
+
+/** 把添加结果并进列表，切到第一个新加的（没有新加的就切到第一个已在列表里的）；返回它的 id */
+function applyAdded(result: AddProjectsResult): string | null {
+  const known = new Set(state.projects.map(p => p.id))
+  const projects = [...state.projects, ...result.added.filter(p => !known.has(p.id))]
+  const first = result.added[0] ?? result.existing[0]
+  set(first ? { projects, currentProjectId: first.id } : { projects })
+  window.dispatchEvent(new CustomEvent<AddProjectsResult>(PROJECTS_ADDED_EVENT, { detail: result }))
+  return first?.id ?? null
+}
+
+/** 远程机器上的项目走工作区选择器（在机器上选目录）；返回 true 表示已经转过去了 */
+function remotePicker(): boolean {
+  if (getMachines().currentId === 'local') return false
+  window.dispatchEvent(new Event('pixelsky:choose-workspace'))
+  return true
+}
+
+/** 添加项目（选文件夹对话框里可以一次选几个）；成功后设为当前项目 */
 export async function addProject(): Promise<string | null> {
-  if (!bridge) return null
-  if (getMachines().currentId !== 'local') {
-    window.dispatchEvent(new Event('pixelsky:choose-workspace'))
-    return null
-  }
-  const p = await bridge.addProject()
-  if (!p) return null
-  const projects = state.projects.some(x => x.id === p.id) ? state.projects : [...state.projects, p]
-  set({ projects, currentProjectId: p.id })
-  return p.id
+  if (!bridge || remotePicker()) return null
+  const result = await bridge.addProject()
+  return result ? applyAdded(result) : null
+}
+
+/** 按路径一次加多个本机项目（「从一个文件夹导入」、拖到侧栏的文件夹，docs/ui/multi-root-projects.md §2） */
+export async function addProjectPaths(paths: string[]): Promise<string | null> {
+  if (!bridge || !paths.length || remotePicker()) return null
+  return applyAdded(await bridge.addProjects(paths))
+}
+
+/** 「从一个文件夹导入…」：打开 ProjectImport 的勾选对话框（远程机器转到工作区选择器） */
+export function importProjects(): void {
+  if (!bridge || remotePicker()) return
+  window.dispatchEvent(new Event(IMPORT_PROJECTS_EVENT))
+}
+export const IMPORT_PROJECTS_EVENT = 'pixelsky:import-projects'
+
+/** 选上级文件夹并列出子文件夹；取消时 null */
+export async function importCandidates(): Promise<ImportCandidates | null> {
+  return bridge ? bridge.importCandidates() : null
 }
 
 /** 改项目显示名；列表随宿主的 projects 事件刷新 */

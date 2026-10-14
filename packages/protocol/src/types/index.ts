@@ -5,6 +5,7 @@ export type {
   ImageAttachment,
   MessageInput,
   ProjectRecord,
+  AddProjectsResult,
   QueueSettings,
   QueueStatus,
   QueueSummary,

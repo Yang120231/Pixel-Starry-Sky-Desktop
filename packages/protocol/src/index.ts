@@ -34,6 +34,7 @@ export type {
   OpenedSession,
   PermissionMode,
   ProjectRecord,
+  AddProjectsResult,
   Question,
   QuestionOption,
   QueueSettings,

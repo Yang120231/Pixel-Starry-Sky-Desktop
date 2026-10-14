@@ -163,6 +163,12 @@ export function addProjectPath(host: EngineHost, path: unknown) {
   return host.addProject(value(path, 4096, true))
 }
 
+/** 一次按路径添加多个项目（「从一个文件夹导入」、把文件夹拖到侧栏，docs/ui/multi-root-projects.md §2） */
+export function addProjectPaths(host: EngineHost, paths: unknown) {
+  if (!Array.isArray(paths) || paths.length > 500) throw new Error('项目路径不对')
+  return host.addProjects(paths.map(path => value(path, 4096, true)))
+}
+
 /** 导出用量的 CSV 内容；保存到哪里由本机决定 */
 export function usageCsv(host: EngineHost, q: unknown): string {
   return host.usageCsv(usageQuery(q))

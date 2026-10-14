@@ -27,7 +27,8 @@ import { initMachines } from '../machines/service'
 import { machineOf } from '../machines/identity'
 import { initArtifacts } from '../artifacts/ipc'
 import { resolveTerminalTarget, workspaceToolsHost } from '../workspace/resolve'
-import { ENGINE_OPS, type EngineOpContext } from '../core/engine/ops'
+import { ENGINE_OPS, addProjectPaths, type EngineOpContext } from '../core/engine/ops'
+import { listImportCandidates } from '../core/importProjects'
 import { opEntries, type InvokeName, type OpTable } from '../core/ops'
 import { SearchRegistry } from '../core/search-registry'
 import { usageQuery } from '../core/args'
@@ -131,12 +132,31 @@ export async function initEngine(ctx: AppContext): Promise<void> {
     return ctx.machines ? ctx.machines.invoke(channel, args, run) : run()
   }
   initArtifacts(h)
+  // 选项目文件夹：可以按住 Ctrl / Shift 一次选几个（docs/ui/multi-root-projects.md §2）
   handle('engine:addProject', async e => {
     const win = BrowserWindow.fromWebContents(e.sender)
-    const opts = { title: nativeText(win, '选择项目文件夹'), properties: ['openDirectory' as const] }
+    const opts = {
+      title: nativeText(win, '选择项目文件夹'),
+      properties: ['openDirectory' as const, 'multiSelections' as const],
+    }
+    const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+    if (r.canceled || !r.filePaths.length) return null
+    return h.addProjects(r.filePaths)
+  })
+  handle('engine:addProjects', (_e, paths: unknown) => addProjectPaths(h, paths))
+  // 「从一个文件夹导入…」：先选上级文件夹，再列出子文件夹给界面勾选
+  handle('engine:importCandidates', async e => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    const opts = {
+      title: nativeText(win, '选择一个包含多个项目的文件夹'),
+      properties: ['openDirectory' as const],
+    }
     const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
     if (r.canceled || !r.filePaths[0]) return null
-    return h.addProject(r.filePaths[0])
+    return listImportCandidates(
+      r.filePaths[0],
+      h.projects().map(p => p.path),
+    )
   })
   handle('engine:usageExport', async (e, q) => {
     const query = usageQuery(q)

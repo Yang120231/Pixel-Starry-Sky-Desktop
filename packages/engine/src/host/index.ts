@@ -23,6 +23,7 @@ import type {
   MessageInput,
   OpenedSession,
   ProjectRecord,
+  AddProjectsResult,
   ForkResult,
   RewindOptions,
   RewindPreview,
@@ -235,6 +236,11 @@ export class EngineHost {
   /** 添加项目；同一个目录只添加一次 */
   addProject(path: string): ProjectRecord {
     return this.m.projects.addProject(path)
+  }
+
+  /** 一次添加多个项目（docs/ui/multi-root-projects.md §2） */
+  addProjects(paths: readonly string[]): AddProjectsResult {
+    return this.m.projects.addProjects(paths)
   }
 
   /** 改侧栏显示的项目名；只改名称，不动磁盘上的文件夹 */

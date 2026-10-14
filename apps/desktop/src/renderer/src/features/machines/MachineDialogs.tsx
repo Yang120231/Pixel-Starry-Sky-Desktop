@@ -40,6 +40,8 @@ export function MachineDialogs() {
       null,
     ),
     [path, setPath] = useState('')
+  // 目录列表里勾选的子目录：一次加成几个项目（docs/ui/multi-root-projects.md §2.2）
+  const [checked, setChecked] = useState<Set<string>>(new Set())
   const message = (error: unknown) => {
     const raw = error instanceof Error ? error.message : String(error)
     return (machineErrors as Record<string, { zh: string; en: string }>)[raw]?.[locale === 'en-US' ? 'en' : 'zh'] ?? raw
@@ -129,6 +131,7 @@ export function MachineDialogs() {
     const next = await window.pixelsky!.machines.directories(state.currentId, path)
     setDirectory(next)
     setPath(next.path)
+    setChecked(new Set())
   }
   const current = state.machines.find(m => m.id === state.currentId)
   if (!view) return null
@@ -391,16 +394,34 @@ export function MachineDialogs() {
                       .. / {t('machines.parent')}
                     </button>
                   )}
-                  {directory.directories.map(name => (
-                    <button
-                      key={name}
-                      className="flex w-full items-center gap-2 rounded p-2 text-left text-ui hover:bg-hover"
-                      onClick={() => void run(() => browse(directory.path.replace(/\/$/, '') + '/' + name))}
-                    >
-                      <Folder size={14} />
-                      <span className="break-all">{name}</span>
-                    </button>
-                  ))}
+                  {directory.directories.map(name => {
+                    const child = directory.path.replace(/\/$/, '') + '/' + name
+                    return (
+                      <div key={name} className="flex items-center gap-1 rounded hover:bg-hover">
+                        <input
+                          type="checkbox"
+                          className="ml-2 shrink-0"
+                          aria-label={t('machines.checkDirectory', { name })}
+                          checked={checked.has(child)}
+                          onChange={() =>
+                            setChecked(prev => {
+                              const next = new Set(prev)
+                              if (next.has(child)) next.delete(child)
+                              else next.add(child)
+                              return next
+                            })
+                          }
+                        />
+                        <button
+                          className="flex min-w-0 flex-1 items-center gap-2 p-2 text-left text-ui"
+                          onClick={() => void run(() => browse(child))}
+                        >
+                          <Folder size={14} className="shrink-0" />
+                          <span className="break-all">{name}</span>
+                        </button>
+                      </div>
+                    )
+                  })}
                   {!directory.directories.length && (
                     <p className="p-2 text-meta text-fg-muted">{t('machines.emptyDirectory')}</p>
                   )}
@@ -418,6 +439,20 @@ export function MachineDialogs() {
                   >
                     {t('machines.useDirectory')}
                   </Button>
+                  {checked.size > 0 && (
+                    <Button
+                      disabled={busy}
+                      onClick={() =>
+                        void run(async () => {
+                          // 一个一个加：远程机器的辅助进程只有单个添加
+                          for (const dir of checked) await window.pixelsky!.machines.addProject(state.currentId, dir)
+                          setDirectory(null)
+                        })
+                      }
+                    >
+                      {t('machines.addChecked', { n: checked.size })}
+                    </Button>
+                  )}
                   <Button disabled={busy} onClick={() => setDirectory(null)}>
                     {t('machines.cancel')}
                   </Button>

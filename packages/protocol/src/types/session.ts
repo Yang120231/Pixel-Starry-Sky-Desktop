@@ -9,6 +9,13 @@ export interface ProjectRecord {
   addedAt: number
 }
 
+/** 一次添加多个项目的结果（docs/ui/multi-root-projects.md §2）：新加的、本来就在列表里的、加不上的 */
+export interface AddProjectsResult {
+  added: ProjectRecord[]
+  existing: ProjectRecord[]
+  failed: { path: string; error: string }[]
+}
+
 export type TurnOutcome = 'completed' | 'interrupted' | 'failed'
 
 export interface SessionSettings {

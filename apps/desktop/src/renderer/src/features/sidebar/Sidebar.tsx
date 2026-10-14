@@ -1,11 +1,13 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { ChevronDown, FolderPlus, X } from 'lucide-react'
-import { IconButton, cn, useComingSoon } from '@/ui'
+import { ChevronDown, FolderInput, FolderPlus, X } from 'lucide-react'
+import { IconButton, cn, useComingSoon, useToast } from '@/ui'
+import { ActionMenu } from '@/ui/ActionMenu'
 import { recentOpen, setSidebarPrefs, useShortWindow, useSidebarPrefs } from '@/features/appearance/sidebar'
 import { getSidebarIcon } from '@/features/appearance/sidebarIcons'
 import { addProject, isLive, recentSpansProjects, useSidebarData } from '@/features/engine'
+import { addProjectPaths, importProjects } from '@/features/engine/store'
 import { SidebarHeader } from './SidebarHeader'
 import { SidebarNav } from './SidebarNav'
 import { SidebarEmpty, SidebarRow, SidebarSection } from './SidebarSection'
@@ -40,12 +42,33 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
   const recentId = useId()
   // 演示模式是 mock 数据，否则是引擎里的真实项目和会话
   const { projects, pinned: pinnedSessions, recent } = useSidebarData()
+  const toast = useToast()
   const onAddProject = isLive ? () => void addProject() : () => comingSoon(tr('sidebar.Sidebar.addProject'))
+  // 「项目」标题右边的「＋」：添加项目文件夹（可多选）/ 从一个文件夹导入（docs/ui/multi-root-projects.md §2）
+  const [addMenu, setAddMenu] = useState<{ x: number; y: number } | null>(null)
+  const openAddMenu = (e: React.MouseEvent<HTMLElement>): void => {
+    if (!isLive) return onAddProject()
+    const rect = e.currentTarget.getBoundingClientRect()
+    setAddMenu({ x: rect.left, y: rect.bottom + 4 })
+  }
   const onNewTask = isLive ? () => onSelectSession(null) : undefined
   const AddProjectIcon = getSidebarIcon('addProject', prefs.icons)
   // 把任务清单里的任务拖到侧栏任意位置松开：固定到「固定任务」（docs/ui/files-search-terminal-pins.md §5）
   const [dropping, setDropping] = useState(false)
   const taskDrag = (e: React.DragEvent): boolean => e.dataTransfer.types.includes(TASK_DRAG_TYPE)
+  // 从资源管理器拖文件夹进来：加成项目（一次可以拖几个）
+  const fileDrag = (e: React.DragEvent): boolean => isLive && e.dataTransfer.types.includes('Files')
+  const dropFolders = (transfer: DataTransfer): void => {
+    const folders = [...transfer.items]
+      .filter(item => item.kind === 'file' && item.webkitGetAsEntry()?.isDirectory)
+      .map(item => {
+        const file = item.getAsFile()
+        return file ? (window.pixelsky?.pathForFile(file) ?? '') : ''
+      })
+      .filter(Boolean)
+    if (!folders.length) return toast(tr('projectImport.notFolders'))
+    addProjectPaths(folders).catch((e: unknown) => toast(e instanceof Error ? e.message : String(e)))
+  }
   // 底部胶囊点了数字：置顶和项目只看运行中 / 等你的会话（不保存，重启后看全部）
   const cards = useSessionCards()
   const [runFilter, setRunFilter] = useState<RunFilter | null>(null)
@@ -61,7 +84,7 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
     <aside
       className={cn('flex h-full w-full min-w-0 flex-col bg-sidebar', dropping && 'sidebar-task-drop')}
       onDragOver={e => {
-        if (!taskDrag(e)) return
+        if (!taskDrag(e) && !fileDrag(e)) return
         e.preventDefault()
         e.dataTransfer.dropEffect = 'copy'
         if (!dropping) setDropping(true)
@@ -70,6 +93,11 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropping(false)
       }}
       onDrop={e => {
+        if (fileDrag(e)) {
+          e.preventDefault()
+          setDropping(false)
+          return dropFolders(e.dataTransfer)
+        }
         if (!taskDrag(e)) return
         e.preventDefault()
         setDropping(false)
@@ -124,10 +152,23 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
               label={tr('sidebar.action.addProject')}
               size={22}
               iconSize={14}
-              onClick={onAddProject}
+              aria-haspopup={isLive ? 'menu' : undefined}
+              onClick={openAddMenu}
             />
           }
         >
+          {addMenu && (
+            <ActionMenu
+              x={addMenu.x}
+              y={addMenu.y}
+              label={tr('projectImport.menu')}
+              onClose={() => setAddMenu(null)}
+              actions={[
+                { label: tr('projectImport.addFolders'), icon: FolderPlus, run: () => void addProject() },
+                { label: tr('projectImport.fromFolder'), icon: FolderInput, run: importProjects },
+              ]}
+            />
+          )}
           <WslHint />
           {runFilter && shownProjects.length === 0 ? (
             <SidebarEmpty>

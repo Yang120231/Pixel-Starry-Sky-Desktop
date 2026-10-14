@@ -4,6 +4,21 @@ export interface WorkspaceTarget {
   name: string
   path: string
 }
+/** 「从一个文件夹导入…」列出的一个子文件夹（docs/ui/multi-root-projects.md §2） */
+export interface ImportCandidate {
+  name: string
+  path: string
+  /** 里面有 .git、package.json 之类，默认勾上 */
+  project: boolean
+  /** 已经是项目 */
+  added: boolean
+}
+export interface ImportCandidates {
+  parent: string
+  candidates: ImportCandidate[]
+  /** 子文件夹太多，只列了前面一部分 */
+  truncated: boolean
+}
 export interface FileEntry {
   name: string
   path: string
