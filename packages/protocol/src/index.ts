@@ -35,6 +35,7 @@ export type {
   PermissionMode,
   ProjectRecord,
   AddProjectsResult,
+  ProjectFolder,
   Question,
   QuestionOption,
   QueueSettings,

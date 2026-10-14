@@ -10,6 +10,7 @@ import {
   type HostEvent,
   type ProjectRecord,
   type AddProjectsResult,
+  type ProjectFolder,
   type SessionSnapshot,
   type SessionSummary,
 } from '@pixelsky/protocol'
@@ -422,10 +423,15 @@ export async function addProject(): Promise<string | null> {
   return result ? applyAdded(result) : null
 }
 
-/** 按路径一次加多个本机项目（「从一个文件夹导入」、拖到侧栏的文件夹，docs/ui/multi-root-projects.md §2） */
-export async function addProjectPaths(paths: string[]): Promise<string | null> {
+/**
+ * 按路径一次加多个本机项目（「从一个文件夹导入」、拖到侧栏的文件夹，docs/ui/multi-root-projects.md §2）。
+ * 返回宿主的结果（新加的、本来就有的、加不上的），「放进一个分区」要用到项目 ID
+ */
+export async function addProjectPaths(paths: string[]): Promise<AddProjectsResult | null> {
   if (!bridge || !paths.length || remotePicker()) return null
-  return applyAdded(await bridge.addProjects(paths))
+  const result = await bridge.addProjects(paths)
+  applyAdded(result)
+  return result
 }
 
 /** 「从一个文件夹导入…」：打开 ProjectImport 的勾选对话框（远程机器转到工作区选择器） */
@@ -434,6 +440,17 @@ export function importProjects(): void {
   window.dispatchEvent(new Event(IMPORT_PROJECTS_EVENT))
 }
 export const IMPORT_PROJECTS_EVENT = 'pixelsky:import-projects'
+
+/** 改项目的附加文件夹（整组替换，只对之后新建的对话生效）；列表随宿主的 projects 事件刷新 */
+export async function setProjectFolders(id: string, folders: ProjectFolder[]): Promise<void> {
+  if (!bridge) return
+  await bridge.setProjectFolders(id, folders)
+}
+
+/** 选几个文件夹（只要路径）；取消时 null */
+export async function pickFolders(): Promise<string[] | null> {
+  return bridge ? bridge.pickFolders() : null
+}
 
 /** 选上级文件夹并列出子文件夹；取消时 null */
 export async function importCandidates(): Promise<ImportCandidates | null> {

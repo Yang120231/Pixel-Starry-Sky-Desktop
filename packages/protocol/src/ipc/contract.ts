@@ -45,8 +45,9 @@ export interface IpcChannelSpec {
  * 3（2026-10-10）：文件新建 / 重命名 / 删除 / 内容搜索，终端创建可带初始命令，固定任务（docs/ui/files-search-terminal-pins.md）。
  * 4（2026-10-11）：手机端取会话尾部和单条完整内容（engine:openSessionTail、engine:itemDetail，docs/mobile-remote.md §5.2）。
  * 5（2026-10-14）：RPC 隧道和内存统计（tunnel:*、stats，docs/ui/wsl-mode.md 第 3 步）。
+ * 6（2026-10-14）：项目的附加文件夹（engine:setProjectFolders，会话带 extraDirs，docs/ui/multi-root-projects.md §3.5）。
  */
-export const REMOTE_PROTOCOL = 5
+export const REMOTE_PROTOCOL = 6
 
 export const IPC_CONTRACT = {
   'account:calls': { kind: 'invoke', route: 'local', trust: 'sender' },
@@ -210,6 +211,7 @@ export const IPC_CONTRACT = {
     mobile: 'view',
     trust: 'sender',
   },
+  'engine:pickFolders': { kind: 'invoke', route: 'selected', picker: true, trust: 'sender' },
   'engine:projects': {
     kind: 'invoke',
     route: 'aggregate',
@@ -230,6 +232,13 @@ export const IPC_CONTRACT = {
     route: 'resource',
     ids: [0],
     remote: 'engine:renameProject',
+    trust: 'sender',
+  },
+  'engine:setProjectFolders': {
+    kind: 'invoke',
+    route: 'resource',
+    ids: [0],
+    remote: 'engine:setProjectFolders',
     trust: 'sender',
   },
   'engine:renameSession': {

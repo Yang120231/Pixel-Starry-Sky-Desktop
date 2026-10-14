@@ -5,12 +5,15 @@ import { cn } from '@/ui'
 /** 分组：28px 高的小标题（右侧可放一个 22px 图标按钮）+ 列表 */
 export function SidebarSection({
   title,
+  count,
   action,
   children,
   className,
   contentClassName,
 }: {
   title: string
+  /** 标题后面的淡色数目（项目有几个） */
+  count?: number
   /** 标题右侧的小按钮，建议 22px 图标按钮 */
   action?: ReactNode
   children: ReactNode
@@ -21,7 +24,10 @@ export function SidebarSection({
   return (
     <section className={cn('flex shrink-0 flex-col', className)}>
       <div className="flex h-7 shrink-0 items-center justify-between gap-2 pr-1.5 pl-2.5">
-        <h3 className="min-w-0 truncate text-label font-medium text-fg-muted">{title}</h3>
+        <h3 className="flex min-w-0 items-baseline gap-1.5 truncate text-label font-medium text-fg-muted">
+          {title}
+          {count !== undefined && <span className="text-meta font-normal text-fg-faint tabular-nums">{count}</span>}
+        </h3>
         {action}
       </div>
       <div className={cn('flex flex-col gap-px', contentClassName)}>{children}</div>

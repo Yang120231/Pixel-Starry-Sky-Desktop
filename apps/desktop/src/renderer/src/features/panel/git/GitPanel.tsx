@@ -14,7 +14,9 @@ import {
   Undo2,
   X,
 } from 'lucide-react'
-import { Button, cn, IconButton, Segmented, Spinner } from '@/ui'
+import { Button, cn, IconButton, Segmented, Select, Spinner } from '@/ui'
+import { useEngineState } from '@/features/engine'
+import { folderLabel } from '@/features/files/extraFolderPaths'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
@@ -85,14 +87,33 @@ const AUTO_FETCH_MS = 10 * 60_000
 export function GitPanel({ active }: { active: boolean }) {
   useI18n()
   const context = useProjectContext()
+  // 多文件夹项目（docs/ui/multi-root-projects.md §3.4）：顶上切仓库，0 是主文件夹，N 是第 N 个附加文件夹
+  const folders = useEngineState(s => s.projects.find(p => p.id === context.projectId)?.folders)
+  const [picked, setPicked] = useState<{ key: string; folder: number }>({ key: '', folder: 0 })
+  const folder = picked.key === context.key && folders && picked.folder <= folders.length ? picked.folder : 0
   if (!context.ref && !context.demo) return <NoProject />
+  const target = context.ref ? (folder ? { ...context.ref, folder } : context.ref) : { projectId: 'demo' }
+  const body = (
+    <GitBody key={context.key + ':' + JSON.stringify(target)} target={target} demo={context.demo} active={active} />
+  )
+  if (!folders?.length || context.demo) return body
+  const options = [
+    { value: '0', label: context.name, hint: tr('projectFolders.main') },
+    ...folders.map((f, i) => ({ value: String(i + 1), label: folderLabel(f), hint: f.path })),
+  ]
   return (
-    <GitBody
-      key={context.key + ':' + JSON.stringify(context.ref)}
-      target={context.ref ?? { projectId: 'demo' }}
-      demo={context.demo}
-      active={active}
-    />
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div data-git-repo-switch className="shrink-0 border-b border-line-subtle px-3 py-1.5">
+        <Select
+          label={tr('git.repository')}
+          value={String(folder)}
+          options={options}
+          onChange={value => setPicked({ key: context.key, folder: Number(value) })}
+          className="w-full"
+        />
+      </div>
+      {body}
+    </div>
   )
 }
 

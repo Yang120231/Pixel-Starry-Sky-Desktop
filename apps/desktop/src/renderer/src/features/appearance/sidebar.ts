@@ -29,8 +29,20 @@ export interface SidebarPrefs {
   recentExpanded: boolean
   /** 自己点过「最近任务」的展开 / 收起（可选，不升版本）：点过就不再按窗口高度自动收起 */
   recentChosen?: boolean
+  /** 侧栏里收起的项目 ID（可选，不升版本；docs/ui/sidebar-hierarchy.md） */
+  collapsed?: string[]
+  /** 侧栏分区：几个项目归成一组（可选，不升版本；docs/ui/sidebar-groups.md） */
+  groups?: ProjectGroup[]
   icons: SidebarIcons
   layout: SidebarLayout
+}
+
+/** 侧栏分区：只是收纳，项目和对话都不动；一个项目最多在一个分区里 */
+export interface ProjectGroup {
+  id: string
+  name: string
+  /** 项目 ID，按加入的先后 */
+  projects: string[]
 }
 
 export const SIDEBAR_PREFS_KEY = 'pixelsky.sidebar'
@@ -110,6 +122,10 @@ function parseSidebarLayout(value: unknown): SidebarLayout {
 }
 
 const GIT_TO_MORE = 'header-git-to-more'
+/** 侧栏改成项目 → 对话两层后（docs/ui/sidebar-hierarchy.md），「最近任务」默认关掉一次；之后在设置里打开不会再被关 */
+const RECENT_OFF = 'recent-off'
+/** 记住的收起项目最多这么多个，删掉的项目留下的 ID 不会无限累积 */
+const COLLAPSED_LIMIT = 200
 /** 2026-10-13 之前的默认顶栏（云主机已在读取时丢掉） */
 const OLD_HEADER = 'workbench,channels,git,openIn'
 /** 早已删掉的入口，读原始数据比对时也要先去掉 */
@@ -129,8 +145,8 @@ function rawRow(layout: unknown, key: string): string[] {
 function defaults(): SidebarPrefs {
   return {
     version: 4,
-    upgrades: [GIT_TO_MORE],
-    showRecent: true,
+    upgrades: [GIT_TO_MORE, RECENT_OFF],
+    showRecent: false,
     recentExpanded: true,
     icons: { ...DEFAULT_SIDEBAR_ICONS },
     layout: parseSidebarLayout(null),
@@ -146,6 +162,12 @@ export function parseSidebarPrefs(value: unknown): SidebarPrefs {
   if (typeof saved.showRecent === 'boolean') result.showRecent = saved.showRecent
   if (typeof saved.recentExpanded === 'boolean') result.recentExpanded = saved.recentExpanded
   if (typeof saved.recentChosen === 'boolean') result.recentChosen = saved.recentChosen
+  if (Array.isArray(saved.collapsed)) {
+    const ids = saved.collapsed.filter((id): id is string => typeof id === 'string' && !!id && id.length <= 200)
+    if (ids.length) result.collapsed = [...new Set(ids)].slice(-COLLAPSED_LIMIT)
+  }
+  const groups = parseProjectGroups(saved.groups)
+  if (groups.length) result.groups = groups
   if (saved.icons && typeof saved.icons === 'object' && !Array.isArray(saved.icons)) {
     const icons = saved.icons as Record<string, unknown>
     for (const action of SIDEBAR_ACTIONS) {
@@ -179,6 +201,37 @@ export function parseSidebarPrefs(value: unknown): SidebarPrefs {
       result.layout = parseSidebarLayout(null)
     }
   }
+  // 看原始数据：v1 没有 upgrades，解析结果里是默认值、已经带着 RECENT_OFF
+  const done = Array.isArray(saved.upgrades) ? saved.upgrades : []
+  if (!done.includes(RECENT_OFF)) {
+    result.showRecent = false
+    result.upgrades = [...(result.upgrades ?? []).filter(u => u !== RECENT_OFF), RECENT_OFF]
+  }
+  return result
+}
+
+export const GROUP_NAME_LIMIT = 40
+const GROUP_LIMIT = 50
+
+/** 分区：名字去掉首尾空白、最长 40 字；同一个项目只算在第一个分区里；没有项目的分区丢掉 */
+function parseProjectGroups(value: unknown): ProjectGroup[] {
+  if (!Array.isArray(value)) return []
+  const seen = new Set<string>(),
+    ids = new Set<string>(),
+    result: ProjectGroup[] = []
+  for (const item of value) {
+    if (!item || typeof item !== 'object' || result.length >= GROUP_LIMIT) continue
+    const { id, name, projects } = item as Record<string, unknown>
+    if (typeof id !== 'string' || !id || id.length > 80 || ids.has(id) || typeof name !== 'string') continue
+    const label = Array.from(name.trim()).slice(0, GROUP_NAME_LIMIT).join('')
+    if (!label || !Array.isArray(projects)) continue
+    const members = projects.filter(
+      (p): p is string => typeof p === 'string' && !!p && p.length <= 200 && !seen.has(p) && !!seen.add(p),
+    )
+    if (!members.length) continue
+    ids.add(id)
+    result.push({ id, name: label, projects: members.slice(0, COLLAPSED_LIMIT) })
+  }
   return result
 }
 
@@ -205,6 +258,21 @@ export function setSidebarPrefs(patch: Partial<Omit<SidebarPrefs, 'version'>>): 
     // 存储不可用时，本窗口仍可切换，且不影响其他外观偏好。
   }
   listeners.forEach(listener => listener())
+}
+
+/** 侧栏项目收起（collapsed 为 true）或展开；对话模式侧栏和代码模式左栏共用 */
+export function setProjectsCollapsed(ids: readonly string[], collapsed: boolean): void {
+  const current = new Set(prefs.collapsed ?? [])
+  for (const id of ids) {
+    if (collapsed) current.add(id)
+    else current.delete(id)
+  }
+  setSidebarPrefs({ collapsed: [...current] })
+}
+
+/** 整组替换分区（增删改由 sidebar/projectGroups.ts 的纯函数算好） */
+export function setProjectGroups(groups: ProjectGroup[]): void {
+  setSidebarPrefs({ groups })
 }
 
 export function setSidebarIcon(action: SidebarAction, id: SidebarIconId): void {

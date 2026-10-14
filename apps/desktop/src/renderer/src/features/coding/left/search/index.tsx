@@ -6,6 +6,7 @@ import { Segmented, Spinner, cn } from '@/ui'
 import { isDemo } from '@/data'
 import { demo } from '@/data/demo'
 import { openFile } from '@/features/files/store'
+import { displayPath } from '@/features/files/extraFolders'
 import { demoFileHits, searchFiles, type FileHits } from '@/features/search/fileSearch'
 import { useCodingWorkspace } from '../../workspace'
 import { PanelHeader } from '../../shell/PanelHeader'
@@ -125,7 +126,7 @@ export function SearchView({ visible }: { visible: boolean }) {
               <section key={g.path} className="px-2 pb-1">
                 <button
                   type="button"
-                  title={g.path}
+                  title={displayPath(ref, g.path)}
                   onClick={scope === 'name' ? () => void openFile(ref, g.path) : undefined}
                   className={cn(
                     'flex min-h-7 w-full min-w-0 items-center gap-1.5 rounded-md px-2 text-left text-meta text-fg-secondary',
@@ -134,7 +135,9 @@ export function SearchView({ visible }: { visible: boolean }) {
                 >
                   <File size={14} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
                   <span className="min-w-0 truncate text-fg">{g.name}</span>
-                  {g.dir ? <span className="min-w-0 truncate text-label text-fg-faint">{g.dir}</span> : null}
+                  {g.dir ? (
+                    <span className="min-w-0 truncate text-label text-fg-faint">{displayPath(ref, g.dir)}</span>
+                  ) : null}
                 </button>
                 {scope === 'content'
                   ? g.hits.map(h => (

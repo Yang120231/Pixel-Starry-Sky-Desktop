@@ -26,7 +26,7 @@ import { setCurrentLocale } from '../../i18n/core'
 const H = DEFAULT_SIDEBAR_LAYOUT.header
 const B = DEFAULT_SIDEBAR_LAYOUT.bottom
 const X = DEFAULT_SIDEBAR_LAYOUT.hidden
-const UPGRADES = ['header-git-to-more']
+const UPGRADES = ['header-git-to-more', 'recent-off']
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -113,11 +113,11 @@ describe('侧边栏外观偏好', () => {
     expect(v2.layout).toEqual(DEFAULT_SIDEBAR_LAYOUT)
   })
 
-  it('默认显示并展开最近任务，无法识别的版本和损坏内容安全回退', () => {
+  it('最近任务默认不显示，无法识别的版本和损坏内容安全回退', () => {
     const fallback = {
       version: 4,
       upgrades: UPGRADES,
-      showRecent: true,
+      showRecent: false,
       recentExpanded: true,
       icons: DEFAULT_SIDEBAR_ICONS,
       layout: DEFAULT_SIDEBAR_LAYOUT,
@@ -298,6 +298,40 @@ describe('侧边栏外观偏好', () => {
     expect((await import('./sidebar')).getSidebarPrefs()).toEqual(sidebar.getSidebarPrefs())
   })
 
+  it('最近任务只关一次：没做过 recent-off 的关掉，做过之后自己打开的保留', () => {
+    const old = parseSidebarPrefs({ version: 4, upgrades: ['header-git-to-more'], showRecent: true })
+    expect(old).toMatchObject({ showRecent: false, upgrades: UPGRADES })
+    expect(parseSidebarPrefs({ ...old, showRecent: true })).toMatchObject({ showRecent: true, upgrades: UPGRADES })
+    expect(parseSidebarPrefs({ version: 1, showRecent: true })).toMatchObject({ showRecent: false, upgrades: UPGRADES })
+  })
+
+  it('分区：名字去空白、最长 40 字，项目只算在第一个分区，空分区和坏数据丢掉', () => {
+    const groups = parseSidebarPrefs({
+      version: 4,
+      groups: [
+        { id: 'g1', name: '  像素星空  ', projects: ['a', 'b', 'a', 3] },
+        { id: 'g2', name: '重复的项目', projects: ['b'] },
+        { id: 'g1', name: '重复 ID', projects: ['c'] },
+        { id: 'g3', name: '   ', projects: ['d'] },
+        { id: 'g4', name: '长'.repeat(50), projects: ['e'] },
+        null,
+        'bad',
+      ],
+    }).groups
+    expect(groups).toEqual([
+      { id: 'g1', name: '像素星空', projects: ['a', 'b'] },
+      { id: 'g4', name: '长'.repeat(40), projects: ['e'] },
+    ])
+    expect(parseSidebarPrefs({ version: 4, groups: 'x' }).groups).toBeUndefined()
+  })
+
+  it('收起的项目：只留字符串、去重、最多 200 个', () => {
+    const ids = Array.from({ length: 205 }, (_, i) => `p${i}`)
+    expect(parseSidebarPrefs({ version: 4, collapsed: ['a', 'a', 3, '', 'b'] }).collapsed).toEqual(['a', 'b'])
+    expect(parseSidebarPrefs({ version: 4, collapsed: ids }).collapsed).toEqual(ids.slice(5))
+    expect(parseSidebarPrefs({ version: 4, collapsed: 'a' }).collapsed).toBeUndefined()
+  })
+
   it('存储读取失败或 JSON 损坏时能启动，写入失败时仍可切换和恢复', async () => {
     const { storage } = mockStorage({ [SIDEBAR_PREFS_KEY]: '{broken' })
     vi.resetModules()
@@ -306,7 +340,7 @@ describe('侧边栏外观偏好', () => {
     storage.getItem.mockImplementation(() => {
       throw new Error('Storage unavailable')
     })
-    expect(sidebar.readSidebarPrefs().showRecent).toBe(true)
+    expect(sidebar.readSidebarPrefs().showRecent).toBe(false)
     storage.setItem.mockImplementation(() => {
       throw new Error('Quota exceeded')
     })

@@ -39,6 +39,10 @@ export interface Session {
 export interface Project {
   id: string
   name: string
+  /** 主文件夹（演示数据没有） */
+  path?: string
+  /** 多文件夹项目的附加文件夹（docs/ui/multi-root-projects.md §3） */
+  folders?: { path: string; name?: string }[]
   branch?: string
   running?: boolean
   expanded?: boolean

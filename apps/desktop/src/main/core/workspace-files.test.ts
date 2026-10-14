@@ -130,6 +130,50 @@ describe('项目文件', () => {
   })
 })
 
+describe('多文件夹项目（docs/ui/multi-root-projects.md §3.4）', () => {
+  let extra: string, multi: WorkspaceFiles
+  beforeEach(async () => {
+    extra = join(folder, '附加 文件夹')
+    await mkdir(join(extra, 'src'), { recursive: true })
+    await writeFile(join(extra, 'src', 'a.ts'), 'export const 银河 = 1\n')
+    await writeFile(join(root, 'main.ts'), 'const 银河 = 0\n')
+    multi = new WorkspaceFiles(
+      value => ({ ref: value, name: '测试项目', path: root, folders: [{ path: extra, name: '附加' }] }),
+      { trash: async () => {} },
+    )
+  })
+
+  it('「::1/…」读写附加文件夹，不带前缀的还是主文件夹；没有的文件夹编号报找不到', async () => {
+    expect((await multi.list(ref, '::1')).entries.map(e => e.path)).toEqual(['::1/src'])
+    expect((await multi.list(ref, '::1/src')).entries.map(e => e.path)).toEqual(['::1/src/a.ts'])
+    expect((await multi.list(ref, '')).entries.map(e => e.path)).toEqual(['main.ts'])
+    const doc = await multi.read(ref, '::1/src/a.ts')
+    expect(doc).toMatchObject({ kind: 'text', path: '::1/src/a.ts', content: 'export const 银河 = 1\n' })
+    if (doc.kind !== 'text') throw new Error('not text')
+    await multi.save(ref, '::1/src/a.ts', 'changed\n', doc.version)
+    expect(await readFile(join(extra, 'src', 'a.ts'), 'utf8')).toBe('changed\n')
+    await expect(multi.read(ref, '::2/x.ts')).rejects.toThrow('files.notFound')
+    // 附加文件夹里同样不能越界
+    await expect(multi.read(ref, '::1/../中文 & 项目 (1)/main.ts')).rejects.toThrow()
+  })
+
+  it('新建、重命名带回前缀；不能在主文件夹和附加文件夹之间移动', async () => {
+    expect(await multi.create(ref, '::1/src/b.ts', 'file')).toEqual({ path: '::1/src/b.ts' })
+    expect(await multi.rename(ref, '::1/src/b.ts', '::1/src/c.ts')).toEqual({ path: '::1/src/c.ts' })
+    await expect(multi.rename(ref, '::1/src/c.ts', 'c.ts')).rejects.toThrow('files.outsideProject')
+    await multi.remove(ref, '::1/src/c.ts')
+  })
+
+  it('按名字搜、内容搜、Git 标记都包括附加文件夹', async () => {
+    expect((await multi.search(ref, 'a.ts')).entries.map(e => e.path)).toEqual(['::1/src/a.ts'])
+    const found = await multi.grep(ref, '银河')
+    expect(found.matches.map(m => m.path).sort()).toEqual(['::1/src/a.ts', 'main.ts'])
+    execFileSync('git', ['init', '-q'], { cwd: extra, windowsHide: true })
+    expect((await multi.status(ref))['::1/src/']).toBeUndefined()
+    expect(Object.keys(await multi.status(ref))).toContain('::1/src')
+  })
+})
+
 describe('编辑器参数', () => {
   it('中文与 shell 特殊字符作为参数原样传入，文件定位保留盘符', () => {
     expect(editorArgs('code', 'reuse', 'D:\\中文 & 项目', 'D:\\中文 & 项目\\file.ts', 10, 4)).toEqual([

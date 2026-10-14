@@ -17,6 +17,7 @@ import {
 } from '@/features/panel/workspaceStore'
 import { demo } from '@/data/demo'
 import { renameRecentFile } from '@/features/panel/recentFiles'
+import { isAbsolutePath, relativeInFolders } from './extraFolderPaths'
 
 export const OPEN_FILES_EVENT = 'pixelsky:open-files'
 export const FILE_CLOSED_EVENT = 'pixelsky:file-closed'
@@ -229,7 +230,12 @@ export async function openFile(
   options: OpenFileOptions = {},
 ): Promise<string | null> {
   const panelScope = getPanelScope()
-  const normalized = path.replaceAll('\\', '/').replace(/^\.\//, '')
+  let normalized = path.replaceAll('\\', '/').replace(/^\.\//, '')
+  // 从附加文件夹的 Git 面板打开（ref 带 folder）：换成项目里的「::N/…」，和文件树打开的是同一个标签
+  if (ref.folder) {
+    normalized = `::${ref.folder}/${normalized}`
+    ref = ref.sessionId ? { sessionId: ref.sessionId } : { projectId: ref.projectId! }
+  }
   const demoProject = isDemo
     ? projects.find(p => p.id === ref.projectId || p.sessions.some(s => s.id === ref.sessionId))
     : null
@@ -240,6 +246,8 @@ export async function openFile(
     windows = machine === 'local' && window.pixelsky?.platform === 'win32'
   const root = target.path.replaceAll('\\', '/'),
     key = windows ? root.toLowerCase() : root
+  // 绝对路径（AI 改了附加文件夹里的文件，改动卡片给的是完整路径）：换成主文件夹的相对路径或「::N/…」
+  if (!isDemo && isAbsolutePath(normalized)) normalized = relativeInFolders(normalized, target, windows) ?? normalized
   const existing = state.tabs.find(
     t =>
       machineOf(t.ref.projectId ?? t.ref.sessionId) === machine &&

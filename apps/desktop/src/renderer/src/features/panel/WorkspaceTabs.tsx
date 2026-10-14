@@ -8,6 +8,7 @@ import { dirtyFile, useFiles } from '@/features/files/store'
 import { parseFileTab } from '@/features/panes/tree'
 import { panelCloseTargets, TOOL_IDS, type PanelLayout, type ToolId } from './workspaceState'
 import { GROUP_KEY, TOOLS, toolIcon } from './tools'
+import { displayPath } from '@/features/files/extraFolders'
 export function WorkspaceTabs({
   layout,
   maximized,
@@ -113,7 +114,9 @@ export function WorkspaceTabs({
                 role="tab"
                 tabIndex={id === layout.active ? 0 : -1}
                 aria-selected={id === layout.active}
-                title={file ? `${file.project} / ${file.path}` : (parseFileTab(id)?.path ?? label(id))}
+                title={
+                  file ? `${file.project} / ${displayPath(file.ref, file.path)}` : (parseFileTab(id)?.path ?? label(id))
+                }
                 className="flex h-full min-w-0 items-center gap-1.5 rounded-md px-2 text-meta"
                 onClick={() => onSelect(id)}
                 onKeyDown={e => {

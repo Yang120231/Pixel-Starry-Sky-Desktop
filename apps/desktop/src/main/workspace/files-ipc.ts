@@ -3,7 +3,7 @@ import { isAbsolute, resolve } from 'node:path'
 import { app, BrowserWindow, clipboard, dialog, shell, type IpcMainInvokeEvent } from 'electron'
 import { Editors } from '../core/editors'
 import * as ipc from '../ipc/guard'
-import { WorkspaceFiles, workspacePath, workspaceRef, type TargetResolver } from '../core/workspace-files'
+import { WorkspaceFiles, locateFolder, workspacePath, workspaceRef, type TargetResolver } from '../core/workspace-files'
 import type { AppContext } from '../app/context'
 import { resolveWorkspace } from './resolve'
 import { FILE_OPS } from '../core/workspace/ops'
@@ -39,8 +39,9 @@ export async function initWorkspace(ctx: AppContext): Promise<void> {
     handle(channel, (_e, ...args) => run(args))
   }
   handle('files:reveal', async (_e, ref, path = '') => {
-    const target = files.target(ref)
-    const file = await workspacePath(target.path, path)
+    // 「::N/…」在附加文件夹里（docs/ui/multi-root-projects.md §3.4）
+    const at = locateFolder(files.target(ref), path)
+    const file = await workspacePath(at.root, at.rel)
     if (path) shell.showItemInFolder(file)
     else {
       const err = await shell.openPath(file)
@@ -48,7 +49,8 @@ export async function initWorkspace(ctx: AppContext): Promise<void> {
     }
   })
   handle('files:copyPath', async (_e, ref, path = '') => {
-    clipboard.writeText(await workspacePath(files.target(ref).path, path))
+    const at = locateFolder(files.target(ref), path)
+    clipboard.writeText(await workspacePath(at.root, at.rel))
   })
   handle('editor:state', (_e, force) => editors.state(force === true))
   handle('editor:preferences', (_e, patch) => editors.preferences(patch))

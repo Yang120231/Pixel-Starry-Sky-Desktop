@@ -10,6 +10,7 @@ import {
   FileClock,
   FilePlus,
   FolderPlus,
+  FolderInput,
   RefreshCw,
   ChevronsDownUp,
   Search,
@@ -29,6 +30,7 @@ import { isDemo, projects as demoProjects } from '@/data'
 import { useActiveWorkspace } from '@/features/editor/target'
 import { OPEN_FILES_EVENT, dirtyFile, openFile, openFilesUnder, removeFile, renameOpenFiles, useFiles } from './store'
 import type { DirectoryListing, FileEntry, WorkspaceRef } from '../../../../shared/types/workspace'
+import type { ProjectFolder } from '@pixelsky/protocol'
 import { demo } from '@/data/demo'
 import { requestFileHistory } from '@/features/panel/git/fileHistory'
 import { sendPathToChat } from './sendPath'
@@ -635,6 +637,7 @@ export function FileTree({
                   <ProjectRoot
                     key={project.id}
                     name={project.name}
+                    folders={(project as { folders?: ProjectFolder[] }).folders}
                     refTarget={rootRef(project)}
                     autoOpen={
                       scoped ||
@@ -683,6 +686,7 @@ export function FileTree({
 
 function ProjectRoot({
   name,
+  folders,
   refTarget,
   autoOpen,
   query,
@@ -691,6 +695,8 @@ function ProjectRoot({
   externalStatuses,
 }: {
   name: string
+  /** 多文件夹项目的附加文件夹（docs/ui/multi-root-projects.md §3.4）：主文件夹的内容下面各一行，展开看 */
+  folders?: readonly ProjectFolder[]
   refTarget: WorkspaceRef
   autoOpen: boolean
   query: string
@@ -838,7 +844,19 @@ function ProjectRoot({
             <p className="px-2 py-1 text-label text-fg-faint">{tr('files.FileTree.filterByNameSkips')}</p>
           </div>
         ) : (
-          <Directory refTarget={refTarget} path="" depth={0} revision={revision} statuses={statuses} />
+          <>
+            <Directory refTarget={refTarget} path="" depth={0} revision={revision} statuses={statuses} />
+            {folders?.map((folder, i) => (
+              <ExtraFolder
+                key={folder.path}
+                folder={folder}
+                path={`::${i + 1}`}
+                refTarget={refTarget}
+                revision={revision}
+                statuses={statuses}
+              />
+            ))}
+          </>
         ))}
       {menu && (
         <ActionMenu
@@ -865,6 +883,45 @@ function ProjectRoot({
         />
       )}
     </section>
+  )
+}
+
+/** 多文件夹项目的一个附加文件夹：一行文件夹名（悬停写完整路径），展开列出它的内容；不能重命名、删除 */
+function ExtraFolder({
+  folder,
+  path,
+  refTarget,
+  revision,
+  statuses,
+}: {
+  folder: ProjectFolder
+  path: string
+  refTarget: WorkspaceRef
+  revision: number
+  statuses: Record<string, string>
+}) {
+  useI18n()
+  const [open, setOpen] = useState(false)
+  const name = folder.name || folder.path.split(/[\\/]/).filter(Boolean).pop() || folder.path
+  return (
+    <div data-extra-folder={path}>
+      <button
+        type="button"
+        aria-expanded={open}
+        title={folder.path}
+        onClick={() => setOpen(v => !v)}
+        className="flex h-7 w-full items-center gap-1.5 border-t border-line-subtle px-3 text-left text-list text-fg hover:bg-hover"
+      >
+        <ChevronRight
+          size={13}
+          className={cn('shrink-0 transition-transform duration-(--dur-fast)', open && 'rotate-90')}
+        />
+        <FolderInput size={14} className="shrink-0 text-accent-fg" />
+        <span className="truncate font-medium">{name}</span>
+        <span className="min-w-0 flex-1 truncate text-label text-fg-faint">{tr('files.extraFolder')}</span>
+      </button>
+      {open && <Directory refTarget={refTarget} path={path} depth={0} revision={revision} statuses={statuses} />}
+    </div>
   )
 }
 

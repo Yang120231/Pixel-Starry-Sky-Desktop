@@ -240,6 +240,31 @@ describe('Claude Code：追加参数', () => {
   })
 })
 
+describe('Claude Code：项目的附加文件夹（docs/ui/multi-root-projects.md §3.3）', () => {
+  it('新对话按项目的附加文件夹加 --add-dir；之后改项目文件夹不影响这个对话', async () => {
+    const { host, spawns } = claudeHost()
+    const main = projectDir(),
+      a = projectDir(),
+      b = projectDir()
+    const project = host.addProject(main)
+    host.setProjectFolders(project.id, [a, { path: b, name: '文档' }])
+    const s = host.createSession({ projectId: project.id })
+    expect(host.sessions().find(x => x.record.id === s.id)!.record.extraDirs).toEqual([a, b])
+    await host.send(s.id, '第一条')
+    await waitFor(() => turnsDone(s.id) === 1)
+    const argv = spawns().at(-1)!
+    const at = argv.indexOf('--add-dir')
+    expect(argv.slice(at, at + 4)).toEqual(['--add-dir', a, '--add-dir', b])
+
+    host.setProjectFolders(project.id, [])
+    await host.send(s.id, '第二条')
+    await waitFor(() => turnsDone(s.id) === 2)
+    expect(host.sessions().find(x => x.record.id === s.id)!.record.extraDirs).toEqual([a, b])
+    // 新对话就没有了
+    expect(host.createSession({ projectId: project.id }).extraDirs).toBeUndefined()
+  })
+})
+
 describe('Claude Code：重启时进程起不来（§9.1）', () => {
   it('不当成会话记录丢了：不提示「没带过去」，会话 id 和待执行的回退都留着，好了以后照常接上', async () => {
     const fail = join(root, 'start-fail')

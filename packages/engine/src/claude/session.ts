@@ -471,6 +471,8 @@ export class ClaudeSession implements EngineSession {
     // 上下文超过 200K 的自定义模型带 [1m] 启动（docs/ui/custom-api.md §10）
     const model = rec.model ? claudeModelName(rec.model, this.deps.env) : rec.model
     const args = claudeArgs({ ...rec, model }, sid, resume, this.deps.launch, rewindAt, fork)
+    // 项目的附加文件夹（docs/ui/multi-root-projects.md §3.3）：Claude Code 能读写，也会告诉模型
+    for (const dir of rec.extraDirs ?? []) args.push('--add-dir', dir)
     for (const path of this.deps.extensions?.pluginDirs ?? []) args.push('--plugin-dir', path)
     if (this.deps.extensions?.mcpFile) args.push('--mcp-config', this.deps.extensions.mcpFile)
     if (this.retrySettingsFile) {

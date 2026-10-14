@@ -6,6 +6,7 @@ export type {
   MessageInput,
   ProjectRecord,
   AddProjectsResult,
+  ProjectFolder,
   QueueSettings,
   QueueStatus,
   QueueSummary,

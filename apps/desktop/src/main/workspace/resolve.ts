@@ -31,6 +31,14 @@ export function workspaceToolsHost(ctx: AppContext): ToolsHost {
 export function resolveTerminalTarget(ctx: AppContext, ref: WorkspaceRef): TerminalTarget {
   const host = ctx.engine
   if (!host) throw new Error('项目尚未加载')
+  // 在多文件夹项目的附加文件夹里开终端（docs/ui/multi-root-projects.md §3.4）
+  if (ref.folder) {
+    const target = resolveLocalWorkspace(host, ref)
+    const projectId = ref.projectId ?? host.record(ref.sessionId!)?.projectId
+    const project = host.projects().find(item => item.id === projectId)
+    if (!project) throw new Error('项目已不存在')
+    return { projectId: project.id, projectName: project.name, cwd: target.path }
+  }
   if ('projectId' in ref) {
     const project = host.projects().find(item => item.id === ref.projectId)
     if (!project) throw new Error('项目已不存在')

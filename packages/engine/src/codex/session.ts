@@ -66,7 +66,8 @@ export function turnErrorDetail(raw: unknown, willRetry?: unknown): string | nul
   return lines.join('\n')
 }
 
-export function codexPermission(mode: string, cwd?: string): Message {
+/** extraDirs：项目的附加文件夹，和工作目录一样可写（docs/ui/multi-root-projects.md §3.3） */
+export function codexPermission(mode: string, cwd?: string, extraDirs: readonly string[] = []): Message {
   return mode === 'full'
     ? { approvalPolicy: 'never', sandboxPolicy: { type: 'dangerFullAccess' } }
     : mode === 'plan'
@@ -75,7 +76,7 @@ export function codexPermission(mode: string, cwd?: string): Message {
           approvalPolicy: mode === 'ask' ? 'untrusted' : 'on-request',
           sandboxPolicy: {
             type: 'workspaceWrite',
-            writableRoots: cwd ? [cwd] : [],
+            writableRoots: cwd ? [cwd, ...extraDirs] : [],
             networkAccess: false,
             excludeTmpdirEnvVar: false,
             excludeSlashTmp: false,
@@ -234,6 +235,8 @@ export class CodexSession implements EngineSession {
         throw new Error('Codex managed requirements prohibit this permission mode')
       const threadParams = {
         cwd: record.cwd,
+        // 附加文件夹：Codex 只靠可写目录不知道它们在哪，开线程时说一声
+        ...(record.extraDirs?.length ? { developerInstructions: extraDirsNote(record.extraDirs) } : {}),
         ...(record.model ? { model: record.model } : {}),
         approvalPolicy: policy.approvalPolicy,
         sandbox:
@@ -385,7 +388,7 @@ export class CodexSession implements EngineSession {
         threadId: this.threadId,
         clientUserMessageId: userItemId,
         input: this.input(text, attachments),
-        ...codexPermission(this.settings.permissionMode, this.ctx.record().cwd),
+        ...codexPermission(this.settings.permissionMode, this.ctx.record().cwd, this.ctx.record().extraDirs),
         ...(this.settings.model ? { model: this.settings.model } : {}),
         ...(this.settings.effort ? { effort: this.settings.effort } : {}),
         summary: this.settings.thinkingSummaries ? 'concise' : 'none',
@@ -849,4 +852,12 @@ export class CodexSession implements EngineSession {
     await this.proc?.close(opts.quick ? QUICK_CLOSE_MS : undefined)
     this.ctx.extensions?.dispose?.()
   }
+}
+
+/** 告诉 Codex 项目还有哪些文件夹（docs/ui/multi-root-projects.md §3.3） */
+export function extraDirsNote(dirs: readonly string[]): string {
+  return [
+    'This project also includes these folders besides the working directory. You can read and edit files in them:',
+    ...dirs.map(dir => `- ${dir}`),
+  ].join('\n')
 }

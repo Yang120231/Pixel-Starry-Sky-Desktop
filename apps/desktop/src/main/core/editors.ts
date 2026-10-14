@@ -5,7 +5,7 @@ import { basename, delimiter, join, posix, resolve } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { logger } from '@pixelsky/engine'
 import type { EditorItem, EditorKind, EditorState, OpenTool, WorkspaceRef } from '../../shared/types/workspace'
-import { workspacePath, type TargetResolver } from './workspace-files'
+import { locateFolder, workspacePath, type TargetResolver } from './workspace-files'
 import { detectJetBrains, detectTools, jetbrainsName, launchTool, productOf } from './open-tools'
 import { exeVersion } from './exe-version'
 import { findShortcuts } from './shortcuts'
@@ -432,9 +432,10 @@ export class Editors {
   ): Promise<{ editor: string; target: string }> {
     if (editorId !== undefined && typeof editorId !== 'string') throw new Error('编辑器 ID 不正确')
     if (path !== undefined && typeof path !== 'string') throw new Error('文件路径不正确')
-    const target = this.target(ref)
-    const root = await workspacePath(target.path, '', 'directory')
-    const file = path ? await workspacePath(root, path, 'file') : undefined
+    // 附加文件夹里的文件（「::N/…」）：编辑器按那个文件夹打开（docs/ui/multi-root-projects.md §3.4）
+    const at = locateFolder(this.target(ref), path ?? '')
+    const root = await workspacePath(at.root, '', 'directory')
+    const file = path ? await workspacePath(root, at.rel, 'file') : undefined
     const state = await this.current()
     // 文件资源管理器、Git Bash、终端：只能打开整个文件夹（GitHub #12）
     const tool = !file ? state.tools.find(t => t.id === editorId) : undefined

@@ -16,8 +16,11 @@ const observed = new Set<number>()
 const terminalOnly = { looseOwner: true } as const
 function ref(value: unknown): WorkspaceRef {
   const item = value as Partial<WorkspaceRef>
-  if (typeof item?.projectId === 'string' && item.projectId) return { projectId: item.projectId }
-  if (typeof item?.sessionId === 'string' && item.sessionId) return { sessionId: item.sessionId }
+  // 附加文件夹编号（docs/ui/multi-root-projects.md §3.4）：只收 1–20 的整数
+  const folder =
+    Number.isInteger(item?.folder) && item.folder! >= 1 && item.folder! <= 20 ? { folder: item.folder } : {}
+  if (typeof item?.projectId === 'string' && item.projectId) return { projectId: item.projectId, ...folder }
+  if (typeof item?.sessionId === 'string' && item.sessionId) return { sessionId: item.sessionId, ...folder }
   throw new Error('请先选择项目')
 }
 function id(value: unknown): string {
