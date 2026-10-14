@@ -18,7 +18,14 @@ import { demoGitBranches, demoGitDiff, demoGitHistory, demoGitStatus } from './g
 import { demoInbox } from './inbox'
 import { demoMachines, demoMachineProjects, demoMachineWorkspaces } from './machines'
 import { demoBoardTasks } from './board'
-import { demoEngineCatalog, demoEngineConfig, demoEngineStatus, demoPlatformGroups, demoProviders } from './platform'
+import {
+  demoEngineCatalog,
+  demoCodexCatalog,
+  demoEngineConfig,
+  demoEngineStatus,
+  demoPlatformGroups,
+  demoProviders,
+} from './platform'
 import { demoToolBrowser, demoToolCopies, demoToolEnvironment, demoToolRunTasks, demoToolTasks } from './projectTools'
 import { demoRemoteCalls } from './remoteCalls'
 import { demoSearchProjects, searchDemo } from './search'
@@ -34,7 +41,12 @@ export const demoSource: DemoSource = {
   store: demoStore,
   platformGroups: demoPlatformGroups,
   providers: demoProviders,
-  engines: { status: demoEngineStatus, catalog: demoEngineCatalog, config: demoEngineConfig },
+  engines: {
+    status: demoEngineStatus,
+    catalog: demoEngineCatalog,
+    codexCatalog: demoCodexCatalog,
+    config: demoEngineConfig,
+  },
   artifacts: { response: demoArtifacts, change: demoArtifactChange, preview: demoArtifactPreview },
   context: demoContext,
   files: { contents: DEMO_FILES, editorState: DEMO_EDITOR_STATE, directory: demoDirectory, document: demoDocument },

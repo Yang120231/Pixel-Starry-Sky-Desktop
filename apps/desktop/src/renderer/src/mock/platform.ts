@@ -127,6 +127,27 @@ export const demoEngineCatalog: EngineCatalog = {
   ],
 }
 
+/** 演示模式下 Codex 报上来的模型（和真机 Codex 0.162 的 model/list 一样的形状） */
+const codexModel = (id: string, label: string, isDefault = false) => ({
+  id,
+  label,
+  efforts: ['low', 'medium', 'high', 'xhigh'] as Array<'low' | 'medium' | 'high' | 'xhigh'>,
+  defaultEffort: 'medium' as const,
+  inputModalities: ['text', 'image'],
+  isDefault,
+})
+export const demoCodexCatalog: EngineCatalog = {
+  outputStyles: [],
+  currentOutputStyle: null,
+  models: [
+    codexModel('gpt-6.1-sol', 'GPT-6.1-Sol', true),
+    codexModel('gpt-6-astra', 'GPT-6-Astra'),
+    codexModel('gpt-6-sol', 'GPT-6-Sol'),
+    codexModel('gpt-6-luna', 'GPT-6-Luna'),
+    codexModel('gpt-5.5', 'GPT-5.5'),
+  ],
+}
+
 const demoLocal = (): EngineLocalConfig => ({
   path: null,
   args: [],
