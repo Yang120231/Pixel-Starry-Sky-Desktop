@@ -1,4 +1,5 @@
 // 从编辑器等地方往会话输入框里放内容（docs/ui/editor-quote.md §2）：找哪个输入框、放完把光标移过去
+import { composerInputFor } from './composerInput/ComposerInput'
 import { isLive } from '@/features/engine'
 import { getEngineState } from '@/features/engine/store'
 import { getPaneState } from '@/features/panes/store'
@@ -23,11 +24,6 @@ export function composerTarget(): ComposerTarget | null {
 
 /** 把光标放到这个输入框的末尾（输入框要在页面上） */
 export function focusComposer(key: string): void {
-  requestAnimationFrame(() => {
-    const el = document.querySelector<HTMLTextAreaElement>(`textarea[data-composer-key="${CSS.escape(key)}"]`)
-    if (!el) return
-    el.focus()
-    el.setSelectionRange(el.value.length, el.value.length)
-    el.scrollTop = el.scrollHeight
-  })
+  // 等这次渲染把追加的草稿写进输入框
+  requestAnimationFrame(() => composerInputFor(key)?.focusEnd())
 }

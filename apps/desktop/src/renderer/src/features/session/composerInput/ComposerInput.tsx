@@ -1,0 +1,277 @@
+// 会话输入框（docs/ui/composer-paste-fold.md §6）：CodeMirror 6 代替 textarea，粘贴的长文本折成标签。
+// 接口贴近原来的 textarea：value / onChange / 光标 / onKeyDown / 粘贴 / placeholder / 高度
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef } from 'react'
+import { history, historyKeymap, insertNewline, invertedEffects, standardKeymap } from '@codemirror/commands'
+import { Compartment, EditorState, Prec, Transaction } from '@codemirror/state'
+import { EditorView, keymap, placeholder as placeholderExt } from '@codemirror/view'
+import { cn } from '@/ui'
+import { tr } from '@/i18n/core'
+import './composerInput.css'
+import { addPaste, nextPasteId, pasteField, resetPastes, shouldFold, trimBlankLines } from './pasteFold'
+import { pasteDecorations } from './pasteView'
+import { loadPastes, savePastes } from './pasteStore'
+
+export interface ComposerInputHandle {
+  focus(): void
+  /** 光标放到末尾并滚到底 */
+  focusEnd(): void
+  /** 当前选区（文字里的位置） */
+  selection(): { from: number; to: number }
+  /** 放光标并聚焦 */
+  setCaret(at: number): void
+  /** 编辑器最外层（量高度用） */
+  readonly dom: HTMLElement | null
+}
+
+interface Props {
+  /** 草稿键：换了就换一份内容和撤销记录 */
+  composerKey: string
+  value: string
+  onChange(value: string): void
+  /** 光标位置；选中一片时为 null */
+  onCaret(caret: number | null): void
+  /** 先于编辑器自己的按键处理；处理了就 preventDefault */
+  onKeyDown(event: KeyboardEvent): void
+  /** 粘贴里有文件 / 文件夹时交给外面，返回是否拿走了（文字部分仍由这里插入） */
+  onPasteFiles(data: DataTransfer): boolean
+  placeholder: string
+  autoFocus?: boolean
+  /** 编辑器高度（px）；内容高度通过 onContentHeight 报给外面，由外面算 */
+  height: number
+  onContentHeight(height: number): void
+  /** 底部内边距小一点（ChatGPT 风格，按钮在卡片右下角） */
+  tight?: boolean
+  ariaControls?: string
+  ariaActiveDescendant?: string
+  className?: string
+}
+
+/** 按草稿键登记，别处（focusComposer）用来聚焦 */
+const registry = new Map<string, ComposerInputHandle>()
+export const composerInputFor = (key: string): ComposerInputHandle | null => registry.get(key) ?? null
+
+/** 两段文字的最小改动：去掉相同的头尾（外面改了 value 时用，粘贴段的范围能跟着映射） */
+export function minimalChange(from: string, to: string): { from: number; to: number; insert: string } | null {
+  if (from === to) return null
+  let start = 0
+  const max = Math.min(from.length, to.length)
+  while (start < max && from.charCodeAt(start) === to.charCodeAt(start)) start++
+  let endA = from.length,
+    endB = to.length
+  while (endA > start && endB > start && from.charCodeAt(endA - 1) === to.charCodeAt(endB - 1)) {
+    endA--
+    endB--
+  }
+  return { from: start, to: endA, insert: to.slice(start, endB) }
+}
+
+const theme = EditorView.theme({
+  '&': { height: '100%', background: 'transparent', color: 'var(--text)' },
+  '&.cm-focused': { outline: 'none' },
+  '.cm-scroller': { fontFamily: 'inherit', lineHeight: '24px', overflowX: 'hidden' },
+  // 内边距用 composerInput.css 里的变量，极简模式（minimal.css）能改
+  '.cm-content': {
+    padding: 'var(--ci-pt) 0 var(--ci-pb)',
+    caretColor: 'var(--text)',
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word',
+  },
+  '.cm-line': { padding: '0 var(--ci-px)' },
+  '.cm-placeholder': { color: 'var(--text-faint)' },
+})
+
+export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function ComposerInput(props, forwarded) {
+  const host = useRef<HTMLDivElement>(null)
+  const view = useRef<EditorView | null>(null)
+  const latest = useRef(props)
+  latest.current = props
+  /** 正在把外面的 value 写进编辑器：这次改动不回调 onChange */
+  const syncing = useRef(false)
+  /** 按了 Ctrl+Shift+V：接下来的粘贴不折 */
+  const plainPaste = useRef(0)
+  const placeholderSlot = useRef(new Compartment())
+
+  const handle: ComposerInputHandle = {
+    focus: () => view.current?.focus(),
+    focusEnd: () => {
+      const v = view.current
+      if (!v) return
+      const end = v.state.doc.length
+      v.dispatch({ selection: { anchor: end }, effects: EditorView.scrollIntoView(end, { y: 'end' }) })
+      v.focus()
+    },
+    selection: () => {
+      const main = view.current?.state.selection.main
+      return main ? { from: main.from, to: main.to } : { from: 0, to: 0 }
+    },
+    setCaret: at => {
+      const v = view.current
+      if (!v) return
+      const pos = Math.max(0, Math.min(at, v.state.doc.length))
+      v.dispatch({ selection: { anchor: pos }, scrollIntoView: true })
+      v.focus()
+    },
+    get dom() {
+      return view.current?.dom ?? null
+    },
+  }
+  useImperativeHandle(forwarded, () => handle)
+
+  const createState = (doc: string, key: string): EditorState =>
+    EditorState.create({
+      doc,
+      extensions: [
+        pasteField,
+        pasteDecorations(),
+        history(),
+        // 删掉 / 撤回一段时把「这是粘贴段」也一起撤回：被改动吞掉的段记成反向效果
+        invertedEffects.of(tr => {
+          if (!tr.docChanged) return []
+          const alive = new Set(tr.state.field(pasteField).map(c => c.id))
+          return tr.startState.field(pasteField).flatMap(c => (alive.has(c.id) ? [] : [addPaste.of(c)]))
+        }),
+        EditorView.lineWrapping,
+        placeholderSlot.current.of(placeholderExt(latest.current.placeholder)),
+        theme,
+        EditorView.contentAttributes.of({
+          spellcheck: 'false',
+          'aria-label': tr('composer.input'),
+          'aria-multiline': 'true',
+          role: 'textbox',
+          'data-composer-key': key,
+        }),
+        Prec.highest(
+          EditorView.domEventHandlers({
+            keydown(event) {
+              if (event.key.toLowerCase() === 'v' && event.shiftKey && (event.ctrlKey || event.metaKey))
+                plainPaste.current = Date.now()
+              latest.current.onKeyDown(event)
+              return event.defaultPrevented
+            },
+            paste(event, v) {
+              const data = event.clipboardData
+              if (!data) return false
+              const tookFiles = latest.current.onPasteFiles(data)
+              const raw = data.getData('text/plain')
+              const plain = Date.now() - plainPaste.current < 1000
+              if (!raw) {
+                if (tookFiles) event.preventDefault()
+                return tookFiles
+              }
+              plainPaste.current = 0
+              event.preventDefault()
+              const trimmed = trimBlankLines(raw)
+              const fold = !plain && shouldFold(trimmed)
+              const text = fold ? trimmed : raw.replace(/\r\n?/g, '\n')
+              const { from, to } = v.state.selection.main
+              v.dispatch({
+                changes: { from, to, insert: text },
+                selection: { anchor: from + text.length },
+                effects: fold
+                  ? addPaste.of({
+                      id: nextPasteId(v.state.field(pasteField)),
+                      from,
+                      to: from + text.length,
+                      folded: true,
+                    })
+                  : [],
+                userEvent: 'input.paste',
+                scrollIntoView: true,
+              })
+              return true
+            },
+          }),
+        ),
+        keymap.of([{ key: 'Enter', run: insertNewline, shift: insertNewline }, ...historyKeymap, ...standardKeymap]),
+        EditorView.updateListener.of(update => {
+          const p = latest.current
+          if (update.docChanged && !syncing.current) p.onChange(update.state.doc.toString())
+          if (update.docChanged || update.selectionSet) {
+            const main = update.state.selection.main
+            p.onCaret(main.empty ? main.head : null)
+          }
+          if (update.state.field(pasteField) !== update.startState.field(pasteField))
+            savePastes(key, update.state.field(pasteField))
+          if (update.geometryChanged || update.heightChanged || update.docChanged)
+            p.onContentHeight(Math.ceil(update.view.contentHeight))
+        }),
+      ],
+    })
+
+  // 建编辑器；草稿键变了换一份状态（内容、撤销记录、粘贴段都换）
+  const keyRef = useRef<string | null>(null)
+  useLayoutEffect(() => {
+    if (!host.current) return
+    const { composerKey, value } = latest.current
+    const state = createState(value, composerKey)
+    if (!view.current) view.current = new EditorView({ state, parent: host.current })
+    else view.current.setState(state)
+    keyRef.current = composerKey
+    view.current.dispatch({
+      effects: resetPastes.of(loadPastes(composerKey)),
+      annotations: Transaction.addToHistory.of(false),
+    })
+    registry.set(composerKey, handle)
+    latest.current.onContentHeight(Math.ceil(view.current.contentHeight))
+    return () => {
+      if (registry.get(composerKey) === handle) registry.delete(composerKey)
+    }
+    // 只跟草稿键走；其余用 latest
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.composerKey])
+  useEffect(
+    () => () => {
+      view.current?.destroy()
+      view.current = null
+    },
+    [],
+  )
+
+  // 外面改了 value（发送后清空、选了 @ 文件、别处追加草稿…）：只改不同的那一段，粘贴段跟着映射
+  useLayoutEffect(() => {
+    const v = view.current
+    if (!v || keyRef.current !== props.composerKey) return
+    const change = minimalChange(v.state.doc.toString(), props.value)
+    if (!change) return
+    syncing.current = true
+    try {
+      // 不给 selection：光标跟着改动自己映射
+      v.dispatch({ changes: change, annotations: Transaction.addToHistory.of(false) })
+    } finally {
+      syncing.current = false
+    }
+  }, [props.value, props.composerKey])
+
+  useEffect(() => {
+    view.current?.dispatch({
+      effects: placeholderSlot.current.reconfigure(placeholderExt(props.placeholder)),
+    })
+  }, [props.placeholder])
+
+  // aria-controls / aria-activedescendant 跟着菜单变
+  useEffect(() => {
+    const el = view.current?.contentDOM
+    if (!el) return
+    for (const [name, value] of [
+      ['aria-controls', props.ariaControls],
+      ['aria-activedescendant', props.ariaActiveDescendant],
+    ] as const)
+      if (value) el.setAttribute(name, value)
+      else el.removeAttribute(name)
+  }, [props.ariaControls, props.ariaActiveDescendant])
+
+  useEffect(() => {
+    if (props.autoFocus) view.current?.focus()
+    // 只在挂上时
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  return (
+    <div
+      ref={host}
+      data-composer-input
+      className={cn('composer-input selectable min-w-0 flex-1', props.tight && 'composer-input-tight', props.className)}
+      style={{ height: props.height }}
+    />
+  )
+})

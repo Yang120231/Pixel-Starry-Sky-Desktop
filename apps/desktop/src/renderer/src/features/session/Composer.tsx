@@ -1,15 +1,5 @@
 import { translateMessage } from '../../i18n/core'
-import {
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type DragEvent,
-  type KeyboardEvent,
-  type ReactNode,
-} from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { ArrowUp, AtSign, ChevronDown, Mic, Paperclip, Plus, ShieldOff, Square, SquareSlash } from 'lucide-react'
 import { settledResizeObserver } from '@/features/panes/motion'
 import { IconButton, cn, useComingSoon } from '@/ui'
@@ -54,6 +44,7 @@ import { needsConversion } from '@/features/session/attachments/convertImage'
 import { isImageFile, readTextFile } from '@/features/session/attachments/files'
 import { updateFiles, updateImages, useFileDraft, useImageDraft } from '@/features/session/attachments/drafts'
 import { Popover, PopoverItem } from '@/ui'
+import { ComposerInput, type ComposerInputHandle } from './composerInput/ComposerInput'
 
 /** text-prose 是 14px / 1.7，行高取整成 24px，增高计算和样式共用 */
 const LINE_HEIGHT = 24
@@ -108,13 +99,13 @@ export function Composer({
   const submitting = useRef(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const ref = useRef<HTMLTextAreaElement>(null)
+  const ref = useRef<ComposerInputHandle>(null)
   const cardRef = useRef<HTMLDivElement>(null)
   const toolbarRef = useRef<HTMLDivElement>(null)
   const composerHeight = useLayoutSize('composerHeight')
   const [maxHeight, setMaxHeight] = useState(LINE_HEIGHT * MAX_ROWS + paddingY)
-  const [cardWidth, setCardWidth] = useState(0)
-  const [textHeight, setTextHeight] = useState(56)
+  /** 输入框内容的高度（含内边距），输入框报上来 */
+  const [contentHeight, setContentHeight] = useState(56)
   // 引擎 / 额度来源 / 模型菜单；已开始的会话切换平台 ↔ 自有前先确认（docs/ui/source-switch.md §3.4）
   const [menuOpen, setMenuOpen] = useState(false)
   const [addMenu, setAddMenu] = useState(false)
@@ -172,10 +163,8 @@ export function Composer({
   /** 改了文字后把光标放到指定位置（等这次渲染把新文字写进输入框） */
   const placeCaret = (at: number): void => {
     requestAnimationFrame(() => {
-      const el = ref.current
-      if (!el) return
-      el.focus()
-      el.setSelectionRange(at, at)
+      if (!ref.current) return
+      ref.current.setCaret(at)
       setCaret(at)
     })
   }
@@ -233,11 +222,10 @@ export function Composer({
     if (!card || !pane) return
     const measure = (): void => {
       if (!card.clientWidth || !pane.clientHeight) return
-      const overhead = card.offsetHeight - (ref.current?.offsetHeight ?? 56)
+      const overhead = card.offsetHeight - (ref.current?.dom?.offsetHeight ?? 56)
       setMaxHeight(
         Math.max(56, Math.floor(pane.clientHeight / 2) - overhead - (toolbarRef.current?.offsetHeight ?? 40)),
       )
-      setCardWidth(card.clientWidth)
     }
     measure()
     // 窗格过渡期间不量，结束后补一次（不然每帧重渲染输入框）
@@ -248,21 +236,12 @@ export function Composer({
     return () => observer.disconnect()
   }, [style])
 
-  useLayoutEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const previousScroll = el.scrollTop
-    el.style.height = 'auto'
-    const automaticMax = Math.min(LINE_HEIGHT * MAX_ROWS + paddingY, maxHeight)
-    const height = Math.max(
-      56,
-      composerHeight === null ? Math.min(el.scrollHeight, automaticMax) : Math.min(composerHeight, maxHeight),
-    )
-    el.style.height = `${height}px`
-    el.style.overflowY = el.scrollHeight > height ? 'auto' : 'hidden'
-    if (composerHeight !== null) el.scrollTop = previousScroll
-    setTextHeight(height)
-  }, [text, composerHeight, maxHeight, cardWidth, paddingY])
+  // 高度：没拖过时跟着内容长，最多 8 行（再不超过窗格一半）；拖过就用拖的高度
+  const automaticMax = Math.min(LINE_HEIGHT * MAX_ROWS + paddingY, maxHeight)
+  const textHeight = Math.max(
+    56,
+    composerHeight === null ? Math.min(contentHeight, automaticMax) : Math.min(composerHeight, maxHeight),
+  )
 
   const remove = (id: string) => setItems(list => list.filter(a => a.id !== id))
   const files = items.filter(a => a.kind !== 'mode')
@@ -372,8 +351,8 @@ export function Composer({
       return
     }
     const insert = paths.map(path => folderMention(path, status?.project?.path)).join('')
-    const el = ref.current
-    const next = insertAt(text, el?.selectionStart ?? text.length, el?.selectionEnd ?? text.length, insert)
+    const sel = ref.current?.selection() ?? { from: text.length, to: text.length }
+    const next = insertAt(text, sel.from, sel.to, insert)
     setText(next.text)
     setError(null)
     placeCaret(next.caret)
@@ -425,8 +404,9 @@ export function Composer({
   const suggestion = live && !running && text === '' ? live.suggestion : null
   const stop = (): void => void live?.stop().catch((err: Error) => setError(err.message))
 
-  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
-    if (e.nativeEvent.isComposing) return
+  // 输入框是 CodeMirror（composerInput/ComposerInput.tsx），这里拿到的是原生键盘事件，先于编辑器自己的按键处理
+  const onKeyDown = (e: KeyboardEvent): void => {
+    if (e.isComposing) return
     if (commandQuery !== undefined && !commandDismissed) {
       if (e.key === 'Escape') {
         e.preventDefault()
@@ -463,7 +443,7 @@ export function Composer({
       }
     }
     // 回复进行中按 Esc 停止，和停止按钮一样（docs/ui/conversation-ux.md §2.5）
-    const { isComposing, defaultPrevented } = e.nativeEvent
+    const { isComposing, defaultPrevented } = e
     if (escapeStops({ key: e.key, isComposing, defaultPrevented }, running)) {
       e.preventDefault()
       stop()
@@ -476,7 +456,7 @@ export function Composer({
       return
     }
     // 输入法正在选字时的回车不是发送
-    if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return
+    if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return
     e.preventDefault()
     void submit()
   }
@@ -680,12 +660,12 @@ export function Composer({
           )}
 
           <div className="composer-input-row flex min-w-0 items-end">
-            <textarea
+            {/* 粘贴的长文本在这里折成标签（docs/ui/composer-paste-fold.md） */}
+            <ComposerInput
               ref={ref}
-              data-composer-key={key}
-              rows={1}
-              aria-controls={commandMatches.length ? listId : mention ? mentionListId : undefined}
-              aria-activedescendant={
+              composerKey={key}
+              ariaControls={commandMatches.length ? listId : mention ? mentionListId : undefined}
+              ariaActiveDescendant={
                 commandMatches.length
                   ? `${listId}-${activeCommandIndex}`
                   : mention && mentions.entries.length
@@ -694,29 +674,18 @@ export function Composer({
               }
               value={text}
               autoFocus={autoFocus}
-              onChange={e => {
-                setText(e.target.value)
-                setCaret(e.target.selectionStart === e.target.selectionEnd ? e.target.selectionEnd : null)
+              onChange={value => {
+                setText(value)
                 if (error) setError(null)
               }}
-              onSelect={e => {
-                const el = e.currentTarget
-                setCaret(el.selectionStart === el.selectionEnd ? el.selectionEnd : null)
-              }}
+              onCaret={setCaret}
               onKeyDown={onKeyDown}
-              onPaste={event => {
-                const { folders, files } = splitFolders(event.clipboardData)
-                if (files.length || folders.length) {
-                  event.preventDefault()
-                  addFolders(folders)
-                  addFiles(files)
-                  const pasted = event.clipboardData.getData('text/plain')
-                  if (pasted) {
-                    const start = event.currentTarget.selectionStart,
-                      end = event.currentTarget.selectionEnd
-                    setText(current => current.slice(0, start) + pasted + current.slice(end))
-                  }
-                }
+              onPasteFiles={data => {
+                const { folders, files } = splitFolders(data)
+                if (!files.length && !folders.length) return false
+                addFolders(folders)
+                addFiles(files)
+                return true
               }}
               placeholder={
                 running
@@ -725,11 +694,10 @@ export function Composer({
                     ? `${suggestion}（${translate('按 Tab 填入')}）`
                     : translate(composer.placeholder)
               }
-              className={cn(
-                'block min-h-[56px] min-w-0 flex-1 resize-none bg-transparent px-4 pt-3.5 text-prose text-fg outline-none placeholder:text-fg-faint',
-                chatgpt ? 'pb-2' : 'pb-3.5',
-              )}
-              style={{ lineHeight: `${LINE_HEIGHT}px` }}
+              height={textHeight}
+              onContentHeight={setContentHeight}
+              tight={chatgpt}
+              className="text-prose text-fg"
             />
             {!chatgpt && sendControls}
           </div>
@@ -782,8 +750,8 @@ export function Composer({
                   hint="@"
                   onClick={() => {
                     setAddMenu(false)
-                    const el = ref.current
-                    const next = insertMention(text, el?.selectionStart ?? text.length, el?.selectionEnd ?? text.length)
+                    const sel = ref.current?.selection() ?? { from: text.length, to: text.length }
+                    const next = insertMention(text, sel.from, sel.to)
                     setText(next.text)
                     placeCaret(next.caret)
                   }}

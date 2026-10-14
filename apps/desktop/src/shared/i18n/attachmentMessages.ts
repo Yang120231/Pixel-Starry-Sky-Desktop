@@ -120,4 +120,11 @@ export const attachmentMessages = {
     zh: '拿不到这个文件夹在磁盘上的路径，请从资源管理器拖进来，或用 @ 引用',
     en: 'Couldn’t get this folder’s path on disk. Drag it from File Explorer, or reference it with @',
   },
+  // 粘贴的长文本折成标签（docs/ui/composer-paste-fold.md）
+  'composer.paste.label': { zh: '粘贴的文本 #{id}', en: 'Pasted text #{id}' },
+  'composer.paste.lines': { zh: '{count} 行', en: '{count} lines' },
+  'composer.paste.chars': { zh: '{count} 字', en: '{count} chars' },
+  'composer.paste.expand': { zh: '点开查看和修改', en: 'Click to view and edit' },
+  'composer.paste.collapse': { zh: '收起', en: 'Collapse' },
+  'composer.input': { zh: '消息输入框', en: 'Message input' },
 } as const

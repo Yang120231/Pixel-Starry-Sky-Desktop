@@ -1,0 +1,9 @@
+/* 会话输入框的内边距（docs/ui/composer-paste-fold.md §6）；极简模式在 minimal.css 里改这几个变量 */
+.composer-input {
+  --ci-pt: 14px;
+  --ci-pb: 14px;
+  --ci-px: 16px;
+}
+.composer-input.composer-input-tight {
+  --ci-pb: 8px;
+}
