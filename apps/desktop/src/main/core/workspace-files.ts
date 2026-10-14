@@ -478,7 +478,18 @@ function gitStatus(cwd: string): Promise<Record<string, string>> {
   return new Promise(resolveStatus => {
     execFile(
       'git',
-      ['-C', cwd, '-c', 'core.quotepath=false', 'status', '--porcelain=v1', '-z', '--untracked-files=normal', '--', '.'],
+      [
+        '-C',
+        cwd,
+        '-c',
+        'core.quotepath=false',
+        'status',
+        '--porcelain=v1',
+        '-z',
+        '--untracked-files=normal',
+        '--',
+        '.',
+      ],
       { windowsHide: true, timeout: 4000, maxBuffer: 1024 * 1024, encoding: 'utf8' },
       async (err, output) => {
         if (err) {
