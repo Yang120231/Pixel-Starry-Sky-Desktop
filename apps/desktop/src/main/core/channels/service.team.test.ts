@@ -159,6 +159,18 @@ describe('协作频道 Phase C：团队频道分流', () => {
     expect(pushes().some(m => m.id === message.id)).toBe(true)
   })
 
+  it('团队频道不收附件', async () => {
+    const { c, online } = await open()
+    await online()
+    await expect(
+      c.post('tc_1', {
+        text: '看图',
+        clientId: 'att',
+        files: [{ id: 'f', name: 'a.log', bytes: 1, lines: 1, encoding: 'utf-8', text: 'a' }],
+      }),
+    ).rejects.toThrow('团队频道暂不支持附件')
+  })
+
   it('观察者：@ AI 成员只当文字，不带 mentions', async () => {
     const { c, cloud, online } = await open()
     cloud.role = 'observer'

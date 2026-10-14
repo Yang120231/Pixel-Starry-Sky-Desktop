@@ -2,7 +2,19 @@
 // 不依赖 Electron：引擎调用、推送、机器 / 项目 / 会话列表都由 main/channels/ipc.ts 注入，
 // 引擎调用和窗口走同一层路由（含 SSH 机器），所以派到远程会话的活和本机一样。
 import { randomUUID } from 'node:crypto'
-import type { HostEvent, ProjectRecord, SessionRecord, SessionSummary, OpenedSession } from '@pixelsky/protocol'
+import {
+  ENGINES as ENGINE_INFO,
+  MAX_IMAGE_COUNT,
+  MAX_IMAGE_TOTAL,
+  validateFiles,
+  validateImages,
+  type HostEvent,
+  type MessageInput,
+  type OpenedSession,
+  type ProjectRecord,
+  type SessionRecord,
+  type SessionSummary,
+} from '@pixelsky/protocol'
 import type { Locale } from '../../../shared/i18n/messages'
 import type {
   AgentConfig,
@@ -19,15 +31,18 @@ import type {
   HumanMember,
   PostInput,
   AgentPolicy,
+  ChannelAttachments,
   TeamRole,
 } from '../../../shared/types/channels'
 import { parseMentions } from '../../../shared/channels/mentions'
 import { ChannelStore, type StoredChannel } from './store'
 import {
+  attachedNote,
   clipResult,
   continuePrompt,
   decisionOf,
   dispatchPrompt,
+  droppedNote,
   followUpPrompt,
   historyLines,
   summaryOf,
@@ -604,7 +619,9 @@ export class Channels {
     if (this.isTeam(channelId)) return this.postTeam(channelId, input)
     const c = this.channel(channelId)
     const text = typeof input?.text === 'string' ? input.text.trim() : ''
-    if (!text) throw new Error('消息不能为空')
+    const images = validateImages(input?.attachments),
+      files = validateFiles(input?.files)
+    if (!text && !images.length && !files.length) throw new Error('消息不能为空')
     const clientId = typeof input.clientId === 'string' ? input.clientId : randomUUID()
     const known = this.posted.get(clientId)
     if (known) {
@@ -628,6 +645,14 @@ export class Channels {
       replyToId,
       mentions: parseMentions(text, members).filter(id => id !== SELF_ID),
     }
+    if (images.length || files.length) {
+      // 全文先写好再追加消息：消息出现时附件一定读得到
+      await this.store.saveAttachments(channelId, message.id, { images, files })
+      message.attached = {
+        images: images.map(({ dataBase64: _d, ...meta }) => meta),
+        files: files.map(({ text: _t, tail: _l, ...meta }) => meta),
+      }
+    }
     this.posted.set(clientId, message.id)
     await this.store.append(message)
     // 发消息就算看过了
@@ -642,6 +667,54 @@ export class Channels {
     } else for (const id of agents) tasks.push(this.newTask(c, message, id, replyToId))
     this.changed()
     return { message, tasks }
+  }
+
+  /** 一条消息带的图片和文件全文（团队频道没有附件） */
+  async attachments(channelId: string, messageId: string): Promise<ChannelAttachments> {
+    if (this.isTeam(channelId)) return { images: [], files: [] }
+    this.channel(channelId)
+    return this.store.readAttachments(channelId, messageId)
+  }
+
+  /** 这一轮要带上的附件：几条消息的合在一起，超过一条消息的上限时后面的图片不带；引擎不收图片时只带文件 */
+  private async attachmentsFor(
+    run: TaskRun,
+    member: AgentConfig,
+  ): Promise<{ input: Pick<MessageInput, 'attachments' | 'files'>; dropped: { images: number; files: number } }> {
+    const dropped = { images: 0, files: 0 }
+    if (!run.attach?.length) return { input: {}, dropped }
+    const images: ChannelAttachments['images'] = [],
+      files: ChannelAttachments['files'] = []
+    let total = 0
+    for (const id of run.attach) {
+      const data = await this.store.readAttachments(run.channelId, id)
+      for (const image of data.images)
+        if (images.length < MAX_IMAGE_COUNT && total + image.bytes <= MAX_IMAGE_TOTAL) {
+          images.push(image)
+          total += image.bytes
+        } else dropped.images++
+      files.push(...data.files)
+    }
+    const takesImages = ENGINE_INFO[member.engine]?.caps.imageInput === true
+    if (!takesImages) dropped.images += images.length
+    const kept = { attachments: takesImages ? images : [], files: files.slice(0, 10) }
+    // 文件全文合计超了就一个个往回减，直到能发
+    while (kept.files.length) {
+      try {
+        validateFiles(kept.files)
+        break
+      } catch {
+        kept.files = kept.files.slice(0, -1)
+      }
+    }
+    dropped.files = files.length - kept.files.length
+    return {
+      input: {
+        ...(kept.attachments.length ? { attachments: kept.attachments } : {}),
+        ...(kept.files.length ? { files: kept.files } : {}),
+      },
+      dropped,
+    }
   }
 
   /** 第一次派给成员的提示词：带最近的讨论和被引用的消息 */
@@ -680,6 +753,7 @@ export class Channels {
       history: historyLines(list, { beforeId: source.id, since, skip: replyToId, nameOf: this.nameOf, locale }),
       quoted: quotedText,
       request: source.text,
+      attached: source.attached ? { images: source.attached.images.length, files: source.attached.files.length } : null,
     })
   }
 
@@ -693,7 +767,14 @@ export class Channels {
       at: now,
       authorId: SELF_ID,
       assigneeId: memberId,
-      title: taskTitle(source.text, this.channelMembers(c)) || source.text.slice(0, 60),
+      title:
+        taskTitle(source.text, this.channelMembers(c)) ||
+        // 只 @ 了人、没写字：用附件的文件名
+        [...(source.attached?.images ?? []), ...(source.attached?.files ?? [])]
+          .map(a => a.name)
+          .join('、')
+          .slice(0, 60) ||
+        source.text.slice(0, 60),
       status: 'queued',
       sessionId: null,
       sourceMessageId: source.id,
@@ -722,6 +803,7 @@ export class Channels {
       progress: null,
       followUps: [],
       notice: null,
+      ...(source.attached ? { attach: [source.id] } : {}),
     }
     this.store.runs.set(task.id, run)
     this.saveRuns()
@@ -734,14 +816,35 @@ export class Channels {
     const member = this.member(task.assigneeId)
     if (!member) return
     const locale = this.deps.locale()
-    const text = followUpPrompt({ locale, channel: c.name, author: this.nameOf(SELF_ID), text: source.text })
+    const note = source.attached
+      ? attachedNote(source.attached.images.length, source.attached.files.length, locale)
+      : ''
+    const text = followUpPrompt({
+      locale,
+      channel: c.name,
+      author: this.nameOf(SELF_ID),
+      text: [source.text, note].filter(Boolean).join('\n'),
+    })
     const run = this.store.runs.get(task.id)
+    const attach = source.attached ? [source.id] : []
     if (run && run.phase !== 'ended') {
-      this.store.runs.set(task.id, { ...run, followUps: [...run.followUps, text] })
+      this.store.runs.set(task.id, {
+        ...run,
+        followUps: [...run.followUps, text],
+        ...(attach.length ? { followUpAttach: [...(run.followUpAttach ?? []), ...attach] } : {}),
+      })
       this.saveRuns()
       return
     }
-    this.nextRound(task, run ?? null, text, this.freshPrompt(c, source, member, task.id, false))
+    this.nextRound(
+      task,
+      run ?? null,
+      text,
+      this.freshPrompt(c, source, member, task.id, false),
+      undefined,
+      undefined,
+      attach,
+    )
   }
 
   /** 开始下一轮（追加要求、重试）：排进成员的队列 */
@@ -752,6 +855,8 @@ export class Channels {
     fresh: string,
     team?: TeamRunRef,
     memberId?: string,
+    /** 这一轮要带上哪些消息的附件 */
+    attach?: string[],
   ): void {
     // 团队活：云端任务卡的轮次可能已经被追加要求加过了
     const round = team ? Math.max((run?.round ?? task.round ?? 1) + 1, task.round ?? 0) : (task.round ?? 1) + 1
@@ -774,6 +879,7 @@ export class Channels {
       progress: null,
       followUps: [],
       notice: null,
+      ...(attach?.length ? { attach } : {}),
       ...(team ? { team: { ...team, final: undefined } } : {}),
     }
     this.store.runs.set(task.id, next)
@@ -849,7 +955,13 @@ export class Channels {
       this.store.runs.set(run.taskId, current)
       this.patch(run.channelId, run.taskId, { sessionId, status: 'queued' })
       this.saveRuns()
-      await this.deps.call('engine:send', [sessionId, { text, clientMessageId: cmid }])
+      const extra = await this.attachmentsFor(current, member)
+      // 几条消息的附件合在一起超过一条消息的上限、带不上的，告诉 AI 一声
+      const lost = droppedNote(extra.dropped.images, extra.dropped.files, this.deps.locale())
+      await this.deps.call('engine:send', [
+        sessionId,
+        { text: lost ? `${text}\n\n${lost}` : text, clientMessageId: cmid, ...extra.input },
+      ])
     } catch (error) {
       const latest = this.store.runs.get(run.taskId)
       if (latest && latest.phase === 'sent' && !latest.started)
@@ -933,7 +1045,15 @@ export class Channels {
       // 做的时候追加的要求：接着发
       if (run.followUps.length && finish.note !== 'cancelled') {
         const text = run.followUps.join('\n\n')
-        this.nextRound({ ...task, ...patch } as ChannelTask, ended, text, text, run.team, run.memberId)
+        this.nextRound(
+          { ...task, ...patch } as ChannelTask,
+          ended,
+          text,
+          text,
+          run.team,
+          run.memberId,
+          run.followUpAttach,
+        )
         return
       }
     }
@@ -999,7 +1119,11 @@ export class Channels {
           : (run?.freshPrompt ?? task.title)
       // 还没开始就失败：原样再发一次；做到一半：发「继续」
       const prompt = run?.started ? continuePrompt(this.deps.locale()) : (run?.prompt ?? fresh)
-      this.nextRound(task, run ?? null, prompt, fresh)
+      // 还没开始就失败的，附件原样再带；做到一半的会话里已经有了
+      const attach = run?.started
+        ? undefined
+        : (run?.attach ?? (source?.kind === 'message' && source.attached ? [source.id] : undefined))
+      this.nextRound(task, run ?? null, prompt, fresh, undefined, undefined, attach)
       return
     }
     if (!run || run.phase === 'ended') return
@@ -1270,6 +1394,7 @@ export class Channels {
     const info = team.channelInfo(channelId)
     if (!info) throw new Error('频道不存在')
     const text = typeof input?.text === 'string' ? input.text.trim() : ''
+    if (input?.attachments?.length || input?.files?.length) throw new Error('团队频道暂不支持附件')
     if (!text) throw new Error('消息不能为空')
     const me = team.getMe()?.id
     // 观察者不能派活：@ AI 成员只当文字

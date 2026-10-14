@@ -271,6 +271,142 @@ describe('协作频道：派活', () => {
   })
 })
 
+/** 1×1 的 PNG */
+const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+const image = (id: string) => ({
+  id,
+  name: `${id}.png`,
+  mediaType: 'image/png' as const,
+  bytes: 70,
+  width: 1,
+  height: 1,
+  dataBase64: PNG,
+})
+const file = (id: string) => ({
+  id,
+  name: `${id}.log`,
+  bytes: 5,
+  lines: 1,
+  encoding: 'utf-8' as const,
+  text: 'hello',
+})
+/** 发给会话的消息里带的附件 */
+const sentWith = () =>
+  engine.calls
+    .filter(x => x.channel === 'engine:send')
+    .map(x => x.args[1] as { text: string; attachments?: { id: string }[]; files?: { id: string }[] })
+
+describe('协作频道：附件（本机频道）', () => {
+  it('消息带图片和文件：全文另存，消息里只有说明；派活时一起发给会话，提示词说一句', async () => {
+    const c = await open()
+    const a = await c.saveMember(null, agent('前端助手'))
+    const channelId = await c.create({ name: 'ch', memberIds: [a] })
+    const { message } = await c.post(channelId, {
+      text: '@前端助手 看下这个报错',
+      clientId: 'p1',
+      attachments: [image('shot')],
+      files: [file('err')],
+    })
+    await settle()
+    expect(message.attached).toEqual({
+      images: [{ id: 'shot', name: 'shot.png', mediaType: 'image/png', bytes: 70, width: 1, height: 1 }],
+      files: [{ id: 'err', name: 'err.log', bytes: 5, lines: 1, encoding: 'utf-8' }],
+    })
+    expect(JSON.stringify(texts(c, channelId)[0])).not.toContain(PNG)
+    expect(await c.attachments(channelId, message.id)).toEqual({ images: [image('shot')], files: [file('err')] })
+    const [sent] = sentWith()
+    expect(sent.attachments?.map(i => i.id)).toEqual(['shot'])
+    expect(sent.files?.map(f => f.id)).toEqual(['err'])
+    expect(sent.text).toContain('这次的要求：\n@前端助手 看下这个报错\n（附 1 张图片、1 个文件）')
+    // 重启后附件还在；runs.json 里不存图片
+    await c.dispose()
+    const again = await open()
+    expect(await again.attachments(channelId, message.id)).toEqual({ images: [image('shot')], files: [file('err')] })
+    expect(JSON.stringify([...(again as unknown as { store: ChannelStore }).store.runs.values()])).not.toContain(PNG)
+  })
+
+  it('只有图片也能发；没 @ 人就只是一条消息，标题用文件名；历史里写明带了附件', async () => {
+    const c = await open()
+    const a = await c.saveMember(null, agent('前端助手'))
+    const channelId = await c.create({ name: 'ch', memberIds: [a] })
+    await expect(c.post(channelId, { text: '  ', clientId: 'e' })).rejects.toThrow('消息不能为空')
+    const { tasks: none } = await c.post(channelId, { text: '', clientId: 'i1', attachments: [image('a')] })
+    expect(none).toEqual([])
+    await c.post(channelId, { text: '@前端助手', clientId: 'i2', attachments: [image('b')] })
+    await settle()
+    expect(tasks(c, channelId)[0].title).toBe('b.png')
+    expect(sentWith()[0].text).toContain('林夏：（附 1 张图片）')
+  })
+
+  it('还在做时追加的要求带附件：做完后跟着下一轮一起发；还没开始就失败的重试照样带', async () => {
+    const c = await open()
+    const a = await c.saveMember(null, agent('前端助手'))
+    const channelId = await c.create({ name: 'ch', memberIds: [a] })
+    await c.post(channelId, { text: '@前端助手 改按钮', clientId: '1' })
+    await settle()
+    const task = tasks(c, channelId)[0]
+    await c.post(channelId, { text: '按这张图改', replyToId: task.id, clientId: '2', attachments: [image('ref')] })
+    complete(c, 's1', `ch-${task.id}-1`, '改好了')
+    await settle()
+    expect(
+      sentWith()
+        .at(-1)
+        ?.attachments?.map(i => i.id),
+    ).toEqual(['ref'])
+    expect(sentWith().at(-1)?.text).toContain('按这张图改\n（附 1 张图片）')
+
+    engine.fail.set('engine:send', '发送失败')
+    await c.post(channelId, { text: '@前端助手 再看看', clientId: '3', files: [file('f')] })
+    complete(c, 's1', `ch-${task.id}-2`, '好')
+    await settle()
+    const second = tasks(c, channelId)[1]
+    expect(second.status).toBe('failed')
+    engine.fail.delete('engine:send')
+    await c.taskAction(second.id, 'retry')
+    await settle()
+    expect(
+      sentWith()
+        .at(-1)
+        ?.files?.map(f => f.id),
+    ).toEqual(['f'])
+  })
+
+  it('追加要求的附件和原来的合起来超过 5 张：多的不带，并告诉 AI', async () => {
+    const c = await open()
+    const a = await c.saveMember(null, agent('前端助手'))
+    const channelId = await c.create({ name: 'ch', memberIds: [a] })
+    await c.post(channelId, { text: '@前端助手 改按钮', clientId: '1' })
+    await settle()
+    const task = tasks(c, channelId)[0]
+    const pics = (ids: string[]) => ids.map(image)
+    await c.post(channelId, {
+      text: '参考图',
+      replyToId: task.id,
+      clientId: '2',
+      attachments: pics(['a', 'b', 'c', 'd']),
+    })
+    await c.post(channelId, { text: '还有这些', replyToId: task.id, clientId: '3', attachments: pics(['e', 'f']) })
+    complete(c, 's1', `ch-${task.id}-1`, '改好了')
+    await settle()
+    const last = sentWith().at(-1)!
+    expect(last.attachments?.map(i => i.id)).toEqual(['a', 'b', 'c', 'd', 'e'])
+    expect(last.text).toContain('（频道里还有 1 张图片 超过一条消息的上限，这次没带上）')
+  })
+
+  it('格式不对的附件不收；团队频道不支持附件', async () => {
+    const c = await open()
+    const channelId = await c.create({ name: 'ch', memberIds: [] })
+    await expect(
+      c.post(channelId, {
+        text: 'x',
+        clientId: 'b',
+        attachments: [{ ...image('x'), mediaType: 'image/bmp' as 'image/png' }],
+      }),
+    ).rejects.toThrow('图片附件格式不正确')
+    expect(await c.attachments(channelId, 'nope')).toEqual({ images: [], files: [] })
+  })
+})
+
 describe('协作频道：失败、停止、重试', () => {
   it('机器没连上 → 失败；重试时还没开始的原样再发，做到一半的发「继续」', async () => {
     machines.push({ id: 'ssh-ab', name: 'build-01', connected: false })

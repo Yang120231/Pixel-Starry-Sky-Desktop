@@ -125,6 +125,9 @@ export async function initChannels(ctx: AppContext): Promise<void> {
   )
   ipc.handle('channels:delete', (_e, id) => channels.delete(str(id, '频道')))
   ipc.handle('channels:post', (_e, id, input) => channels.post(str(id, '频道'), input as PostInput))
+  ipc.handle('channels:attachments', (_e, id, messageId) =>
+    channels.attachments(str(id, '频道'), str(messageId, '消息')),
+  )
   ipc.handle('channels:markRead', (_e, id) => channels.markRead(str(id, '频道')))
   ipc.handle('channels:saveMember', (_e, channelId, input) =>
     channels.saveMember(typeof channelId === 'string' && channelId ? channelId : null, input as AgentInput),

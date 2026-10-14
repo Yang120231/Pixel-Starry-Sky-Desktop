@@ -1,13 +1,27 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '../../i18n/core'
-import { useId, useLayoutEffect, useMemo, useState, type KeyboardEvent, type Ref, type RefObject } from 'react'
-import { ArrowUp, CornerUpLeft, X } from 'lucide-react'
+import {
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type DragEvent,
+  type KeyboardEvent,
+  type Ref,
+  type RefObject,
+} from 'react'
+import { ArrowUp, CornerUpLeft, Paperclip, X } from 'lucide-react'
 import { cn, IconButton, useToast } from '@/ui'
 import { CARD_STYLE } from '@/features/session/Composer'
 import { useComposerDraft } from '@/features/engine/drafts'
 import { isDemo } from '@/data'
 import type { Channel, ChannelMember } from '@/data/types'
-import type { TeamRole } from '../../../../shared/types/channels'
+import type { ChannelAttachments, TeamRole } from '../../../../shared/types/channels'
+import { ImageAttachments } from '@/features/session/attachments/ImageAttachments'
+import { FileAttachments } from '@/features/session/attachments/FileAttachments'
+import { transferFiles, useChannelAttachments } from './useChannelAttachments'
 import type { Quotable } from './ChannelMessage'
 import { channelsLive } from './store'
 import { excerpt, filterMentionable, insertMention, mentionAt } from './model'
@@ -17,7 +31,7 @@ import { mentionNote } from './teamModel'
 const LINE_HEIGHT = 24
 const MAX_ROWS = 8
 
-/** 频道输入框（docs/ui/channels.md §6）：只有文本和发送；@ 菜单、引用条、按频道保存草稿 */
+/** 频道输入框（docs/ui/channels.md §6）：文本、附件（本机频道，可粘贴 / 拖进来）和发送；@ 菜单、引用条、按频道保存草稿 */
 export function ChannelComposer({
   channel,
   members,
@@ -44,14 +58,18 @@ export function ChannelComposer({
   /** Phase C：团队频道连不上云端，不能发送 */
   offline?: boolean
   /** 发出去了才清空输入框；失败时抛出原因 */
-  onSend: (text: string) => Promise<void>
+  onSend: (text: string, extra: ChannelAttachments) => Promise<void>
   onCancelReply: () => void
   inputRef: RefObject<HTMLTextAreaElement | null>
 }) {
   useI18n()
   const menuId = useId()
   // 演示数据和真实数据共用草稿存储，演示模式加前缀避免混在一起
-  const [value, setValue] = useComposerDraft(`${isDemo ? 'demo:' : ''}channel:${channel.id}`)
+  const draftKey = `${isDemo ? 'demo:' : ''}channel:${channel.id}`
+  const [value, setValue] = useComposerDraft(draftKey)
+  const attach = useChannelAttachments(draftKey)
+  const fileInput = useRef<HTMLInputElement>(null)
+  const [dragging, setDragging] = useState(false)
   const [caret, setCaret] = useState(0)
   const [selected, setSelected] = useState(0)
   /** 按 Esc 关掉的那个 @ 的位置；光标移到别的 @ 时菜单重新出现 */
@@ -64,8 +82,9 @@ export function ChannelComposer({
   const menuOpen = !!mention && dismissed !== mention.start
   const toast = useToast()
   const [sending, setSending] = useState(false)
-  const canSend = value.trim().length > 0 && !sending && !offline
   const team = channel.scope === 'team'
+  const hasAttachments = !team && (attach.images.length > 0 || attach.files.length > 0)
+  const canSend = (value.trim().length > 0 || hasAttachments) && !sending && !offline && !attach.busy
   const hasAgents = members.some(m => m.kind === 'agent')
 
   // 自动增高，最多 8 行
@@ -94,14 +113,43 @@ export function ChannelComposer({
   const send = () => {
     if (!canSend) return
     setSending(true)
-    onSend(value)
+    const sent = hasAttachments ? { images: attach.images, files: attach.files } : { images: [], files: [] }
+    onSend(value, sent)
       .then(() => {
         setValue('')
         setCaret(0)
         setDismissed(null)
+        if (hasAttachments) void attach.clear(sent).catch(() => {})
       })
       .catch(error => toast(tr('channels.composer.sendFailed', { error: translateMessage((error as Error).message) })))
       .finally(() => setSending(false))
+  }
+
+  /** 粘贴 / 拖进来的文件当附件；团队频道不支持，说一声 */
+  const takeFiles = (files: File[]): boolean => {
+    if (!files.length) return false
+    if (team) toast(tr('channels.attach.team'))
+    else attach.add(files)
+    return true
+  }
+  const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    if (!takeFiles(transferFiles(e.clipboardData))) return
+    // 复制的文件同时带着文字（比如文件名）时，文字照常插进去
+    e.preventDefault()
+    const pasted = e.clipboardData.getData('text/plain')
+    if (pasted && !team) {
+      const el = e.currentTarget,
+        start = el.selectionStart,
+        end = el.selectionEnd
+      setValue(value.slice(0, start) + pasted + value.slice(end))
+      setCaret(start + pasted.length)
+    }
+  }
+  const onDrop = (e: DragEvent<HTMLDivElement>) => {
+    if (!e.dataTransfer.types.includes('Files')) return
+    e.preventDefault()
+    setDragging(false)
+    takeFiles(transferFiles(e.dataTransfer))
   }
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -144,7 +192,27 @@ export function ChannelComposer({
         {menuOpen && (
           <MentionMenu id={menuId} members={candidates} selected={selected} onChoose={choose} team={team} role={role} />
         )}
-        <div className={cn(CARD_STYLE, 'overflow-hidden')}>
+        <div
+          onDragEnter={e => {
+            if (e.dataTransfer.types.includes('Files')) {
+              e.preventDefault()
+              setDragging(true)
+            }
+          }}
+          onDragOver={e => {
+            if (e.dataTransfer.types.includes('Files')) e.preventDefault()
+          }}
+          onDragLeave={e => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false)
+          }}
+          onDrop={onDrop}
+          className={cn(CARD_STYLE, 'relative overflow-hidden', dragging && !team && 'ring-2 ring-accent')}
+        >
+          {dragging && !team && (
+            <div className="pointer-events-none absolute inset-1 z-20 flex items-center justify-center rounded-xl border-2 border-dashed border-accent-line bg-accent-soft/80 text-ui font-medium text-accent-fg">
+              {tr('composer.file.drop')}
+            </div>
+          )}
           {replyTo && (
             <div className="flex min-w-0 items-center gap-2 border-b border-line-subtle py-1 pr-1.5 pl-3 text-meta text-fg-muted">
               <CornerUpLeft size={13} strokeWidth={1.5} className="shrink-0" />
@@ -168,7 +236,43 @@ export function ChannelComposer({
               />
             </div>
           )}
-          <div className="flex items-end gap-2 py-2 pr-2 pl-4">
+          {hasAttachments && (
+            <div data-channel-composer-attachments="" className="flex flex-col gap-2 px-3 pt-3">
+              {attach.images.length > 0 && (
+                <ImageAttachments
+                  images={attach.images}
+                  onRemove={attach.removeImage}
+                  onReplace={attach.replaceImage}
+                />
+              )}
+              {attach.files.length > 0 && <FileAttachments files={attach.files} onRemove={attach.removeFile} />}
+            </div>
+          )}
+          {attach.error && !team && (
+            <div className="px-4 pt-2 text-meta whitespace-pre-wrap text-danger">{translateMessage(attach.error)}</div>
+          )}
+          <div className={cn('flex items-end gap-2 py-2 pr-2', team ? 'pl-4' : 'pl-1.5')}>
+            {!team && (
+              <>
+                <IconButton
+                  icon={Paperclip}
+                  label={tr('channels.attach.add')}
+                  size={32}
+                  disabled={offline}
+                  onClick={() => fileInput.current?.click()}
+                />
+                <input
+                  ref={fileInput}
+                  type="file"
+                  multiple
+                  hidden
+                  onChange={event => {
+                    if (event.currentTarget.files) attach.add(event.currentTarget.files)
+                    event.currentTarget.value = ''
+                  }}
+                />
+              </>
+            )}
             <textarea
               ref={inputRef as Ref<HTMLTextAreaElement>}
               rows={1}
@@ -198,6 +302,7 @@ export function ChannelComposer({
               onKeyUp={syncCaret}
               onClick={syncCaret}
               onKeyDown={onKeyDown}
+              onPaste={onPaste}
               className="block max-h-[208px] min-h-8 flex-1 resize-none bg-transparent py-1 text-prose leading-6 text-fg outline-none placeholder:text-fg-faint"
             />
             <button

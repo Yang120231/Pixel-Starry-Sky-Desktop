@@ -76,6 +76,34 @@ export function clipResult(text: string, locale: Locale): string {
   return `${text.slice(0, RESULT_MAX)}\n\n${en(locale) ? '…full reply in the session' : '…完整内容见会话'}`
 }
 
+/** 消息带了附件：「（附 2 张图片、1 个文件）」；都没有时空串 */
+export function attachedNote(images: number, files: number, locale: Locale): string {
+  if (!images && !files) return ''
+  if (en(locale)) {
+    const parts = [
+      images ? `${images} image${images > 1 ? 's' : ''}` : '',
+      files ? `${files} file${files > 1 ? 's' : ''}` : '',
+    ]
+    return `(attached: ${parts.filter(Boolean).join(', ')})`
+  }
+  const parts = [images ? `${images} 张图片` : '', files ? `${files} 个文件` : '']
+  return `（附 ${parts.filter(Boolean).join('、')}）`
+}
+
+/** 几条消息的附件合在一起超过上限、这一轮没带上的；都带上了时空串 */
+export function droppedNote(images: number, files: number, locale: Locale): string {
+  if (!images && !files) return ''
+  if (en(locale)) {
+    const parts = [
+      images ? `${images} image${images > 1 ? 's' : ''}` : '',
+      files ? `${files} file${files > 1 ? 's' : ''}` : '',
+    ]
+    return `(${parts.filter(Boolean).join(' and ')} from the channel could not be attached: over the per-message limit)`
+  }
+  const parts = [images ? `${images} 张图片` : '', files ? `${files} 个文件` : '']
+  return `（频道里还有 ${parts.filter(Boolean).join('、')} 超过一条消息的上限，这次没带上）`
+}
+
 /** 历史里的一行；事件不带（null） */
 function historyLine(m: ChannelMessage, nameOf: (id: string) => string, locale: Locale): string | null {
   const colon = en(locale) ? ': ' : '：'
@@ -88,7 +116,9 @@ function historyLine(m: ChannelMessage, nameOf: (id: string) => string, locale: 
   }
   // AI 的长回复只带第一段
   const body = m.format === 'markdown' ? (m.text.split(/\n\s*\n/)[0] ?? '') : m.text
-  const text = body.trim().length > LINE_MAX ? `${body.trim().slice(0, LINE_MAX)}…` : body.trim()
+  const clipped = body.trim().length > LINE_MAX ? `${body.trim().slice(0, LINE_MAX)}…` : body.trim()
+  const note = m.attached ? attachedNote(m.attached.images.length, m.attached.files.length, locale) : ''
+  const text = [clipped, note].filter(Boolean).join(' ')
   return text ? `${nameOf(m.authorId)}${colon}${text}` : null
 }
 
@@ -132,6 +162,8 @@ export interface DispatchInput {
   /** 被引用的消息（一定带上） */
   quoted: string | null
   request: string
+  /** 这条消息带的附件数：提示词里说一句，图片和文件本身跟着这条消息一起发 */
+  attached?: { images: number; files: number } | null
 }
 
 /** 第一次派给一个会话的提示词（§4.2） */
@@ -145,7 +177,9 @@ export function dispatchPrompt(input: DispatchInput): string {
     if (input.instructions.trim()) parts.push(`Your role:\n${input.instructions.trim()}`)
     if (input.history.length) parts.push(`Recent discussion (oldest first):\n${input.history.join('\n')}`)
     if (input.quoted) parts.push(`Quoted message:\n> ${input.quoted.replace(/\n/g, '\n> ')}`)
-    parts.push(`The request:\n${input.request.trim()}`)
+    parts.push(
+      `The request:\n${[input.request.trim(), attachedNote(input.attached?.images ?? 0, input.attached?.files ?? 0, locale)].filter(Boolean).join('\n')}`,
+    )
     parts.push(
       'When you are done, end with one or two paragraphs summarizing what you did, which files you changed and anything left unfinished.\nIf something needs a person to decide, put it on its own line starting with "Needs your decision:".',
     )
@@ -156,7 +190,9 @@ export function dispatchPrompt(input: DispatchInput): string {
     if (input.instructions.trim()) parts.push(`你的职责：\n${input.instructions.trim()}`)
     if (input.history.length) parts.push(`最近的讨论（从旧到新）：\n${input.history.join('\n')}`)
     if (input.quoted) parts.push(`引用的消息：\n> ${input.quoted.replace(/\n/g, '\n> ')}`)
-    parts.push(`这次的要求：\n${input.request.trim()}`)
+    parts.push(
+      `这次的要求：\n${[input.request.trim(), attachedNote(input.attached?.images ?? 0, input.attached?.files ?? 0, locale)].filter(Boolean).join('\n')}`,
+    )
     parts.push(
       '做完后，最后用一两段话总结：做了什么、改了哪些文件、有没有没做完的。\n如果有需要人来决定的事，单独写一行，以「需要你决定：」开头。',
     )

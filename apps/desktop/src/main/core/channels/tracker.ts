@@ -53,6 +53,10 @@ export interface TaskRun {
   notice: string | null
   /** 团队频道派来的活（本机频道的活没有） */
   team?: TeamRunRef
+  /** 这一轮要带上哪些消息的附件（发的时候再读，runs.json 里不存图片） */
+  attach?: string[]
+  /** 这一轮还没做完时追加的要求带的附件，做完后跟着 followUps 一起发 */
+  followUpAttach?: string[]
 }
 
 /** 新的一轮运行信息（团队执行端用；本机频道在 service.ts 里自己拼） */

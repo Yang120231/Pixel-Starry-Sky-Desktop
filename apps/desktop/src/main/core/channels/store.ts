@@ -3,10 +3,11 @@
 //   runs.json                   每项活这一轮的运行信息（重启后对账）
 //   <频道 id>/channel.json       频道信息、成员、已读位置
 //   <频道 id>/messages.jsonl     消息，只追加；任务卡的变化追加 { kind: 'task_update', id, patch }，读的时候合并
+//   <频道 id>/attachments/<消息 id>.json  消息带的图片和文件全文（消息里只有说明，按需读）
 import { randomUUID } from 'node:crypto'
 import { appendFile, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { AgentConfig, ChannelMessage, ChannelTask } from '../../../shared/types/channels'
+import type { AgentConfig, ChannelAttachments, ChannelMessage, ChannelTask } from '../../../shared/types/channels'
 import type { TaskRun } from './tracker'
 
 export interface StoredChannel {
@@ -173,6 +174,29 @@ export class ChannelStore {
     if (Object.keys(saved).length)
       void this.appendLine(channelId, { kind: 'task_update', id, patch: saved }).catch(() => {})
     return task
+  }
+
+  /** 消息带的附件全文另存一个文件（要在 append 那条消息之前写好） */
+  async saveAttachments(channelId: string, messageId: string, data: ChannelAttachments): Promise<void> {
+    if (!ID.test(channelId) || !ID.test(messageId)) throw new Error('消息不存在')
+    const dir = join(this.dir, channelId, 'attachments')
+    await this.write(() => mkdir(dir, { recursive: true }).then(() => {}))
+    return this.atomic(join(dir, `${messageId}.json`), JSON.stringify(data))
+  }
+
+  /** 读不到（没有附件、文件坏了）时两个空数组 */
+  async readAttachments(channelId: string, messageId: string): Promise<ChannelAttachments> {
+    const none: ChannelAttachments = { images: [], files: [] }
+    if (!ID.test(channelId) || !ID.test(messageId)) return none
+    await this.flush()
+    const data = await this.readJson<Partial<ChannelAttachments> | null>(
+      join(this.dir, channelId, 'attachments', `${messageId}.json`),
+      null,
+    )
+    return {
+      images: Array.isArray(data?.images) ? data.images : [],
+      files: Array.isArray(data?.files) ? data.files : [],
+    }
   }
 
   task(taskId: string): ChannelTask | null {

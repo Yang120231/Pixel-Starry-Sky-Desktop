@@ -1,6 +1,6 @@
 // 协作频道的数据类型（docs/ui/channels.md §9，Phase B 的改动见 docs/ui/channels-phase-b.md §10.1）。
 // 主进程（main/core/channels/）和渲染层共用；演示数据（mock/channels.ts）只填界面要用的字段。
-import type { ApprovalRequest, EngineId, SessionSettings } from '@pixelsky/protocol'
+import type { ApprovalRequest, EngineId, FileAttachment, ImageAttachment, SessionSettings } from '@pixelsky/protocol'
 
 export type ChannelAgentStatus = 'idle' | 'running' | 'waiting' | 'offline'
 
@@ -171,6 +171,20 @@ export interface ChannelTextMessage extends ChannelMessageBase {
   mentions?: string[]
   /** AI 成员发回的任务结果：对应的任务卡 */
   taskId?: string | null
+  /** 带的图片和文件：消息里只有说明，图片数据和文件全文另存，按需用 channels:attachments 读 */
+  attached?: ChannelAttachedMeta
+}
+
+/** 消息带的附件说明（本机频道；团队频道不支持） */
+export interface ChannelAttachedMeta {
+  images: Omit<ImageAttachment, 'dataBase64'>[]
+  files: Omit<FileAttachment, 'text' | 'tail'>[]
+}
+
+/** 消息带的附件全文 */
+export interface ChannelAttachments {
+  images: ImageAttachment[]
+  files: FileAttachment[]
 }
 
 /** 派给 AI 成员的一项活；状态变化时原地更新，不追加新消息 */
@@ -262,6 +276,9 @@ export interface PostInput {
   replyToId?: string | null
   /** 防止重复发送 */
   clientId: string
+  /** 图片和文本文件（只有本机频道支持） */
+  attachments?: ImageAttachment[]
+  files?: FileAttachment[]
 }
 
 export type ChannelTaskAction = 'cancel' | 'stop' | 'retry'

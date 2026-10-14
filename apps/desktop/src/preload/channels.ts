@@ -1,5 +1,6 @@
 import type {
   AgentInput,
+  ChannelAttachments,
   ChannelInput,
   ChannelMessage,
   ChannelMessagePush,
@@ -20,6 +21,8 @@ export interface ChannelsBridge {
   update(id: string, patch: { name?: string; topic?: string | null; projectId?: string | null }): Promise<void>
   delete(id: string): Promise<void>
   post(channelId: string, input: PostInput): Promise<{ message: ChannelTextMessage; tasks: string[] }>
+  /** 一条消息带的图片和文件全文；没有时两个空数组 */
+  attachments(channelId: string, messageId: string): Promise<ChannelAttachments>
   markRead(channelId: string): Promise<void>
   /** 新建或编辑 AI 成员；带 channelId 时顺便加进这个频道。返回成员 id */
   saveMember(channelId: string | null, input: AgentInput): Promise<string>

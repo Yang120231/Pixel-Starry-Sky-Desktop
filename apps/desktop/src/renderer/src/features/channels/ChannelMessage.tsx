@@ -1,12 +1,16 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { CornerUpLeft } from 'lucide-react'
 import { Avatar, cn, CopyButton, EngineIcon, IconButton } from '@/ui'
 import { Markdown } from '@/ui/markdown/Markdown'
 import type { ChannelMember, ChannelTask, ChannelTextMessage } from '@/data/types'
 import { excerpt, splitMentions } from './model'
 import { formatClock } from './format'
+import { channelActions } from './store'
+import { ImageAttachments } from '@/features/session/attachments/ImageAttachments'
+import { FileAttachments } from '@/features/session/attachments/FileAttachments'
+import type { ChannelAttachments } from '../../../../shared/types/channels'
 
 /** 成员头像：真人是圆形首字头像，AI 成员是圆角方块里的引擎图标 */
 export function MemberAvatar({
@@ -145,6 +149,41 @@ function MentionText({ text, members }: { text: string; members: readonly Channe
   )
 }
 
+/** 消息带的图片和文件：消息里只有说明，看到时再读全文 */
+function MessageAttachments({ message }: { message: ChannelTextMessage }) {
+  useI18n()
+  const [data, setData] = useState<ChannelAttachments | null>(null),
+    [failed, setFailed] = useState(false)
+  useEffect(() => {
+    let alive = true
+    channelActions
+      .attachments(message.channelId, message.id)
+      .then(next => alive && setData(next))
+      .catch(() => alive && setFailed(true))
+    return () => {
+      alive = false
+    }
+  }, [message.channelId, message.id])
+  const meta = message.attached
+  if (!meta) return null
+  if (failed || (data && !data.images.length && !data.files.length))
+    return <p className="mt-1 text-meta text-fg-faint">{tr('channels.attach.missing')}</p>
+  if (!data)
+    return (
+      <div data-channel-attachments="" className="mt-1.5 flex flex-wrap gap-2" aria-busy="true">
+        {meta.images.map(image => (
+          <div key={image.id} className="h-24 w-24 rounded-lg border border-line-card bg-subtle" />
+        ))}
+      </div>
+    )
+  return (
+    <div data-channel-attachments="" className="mt-1.5 flex flex-col gap-2">
+      {data.images.length > 0 && <ImageAttachments images={data.images} />}
+      {data.files.length > 0 && <FileAttachments files={data.files} />}
+    </div>
+  )
+}
+
 /** 引用块：被引用人 + 原文摘要，点击跳到原消息 */
 function QuoteBlock({
   quoted,
@@ -238,8 +277,9 @@ export function MessageGroup({
               {m.format === 'markdown' ? (
                 <Folded text={m.text} />
               ) : (
-                <MentionText text={m.text} members={channelMembers} />
+                m.text && <MentionText text={m.text} members={channelMembers} />
               )}
+              {m.attached && <MessageAttachments message={m} />}
             </div>
             <div
               role="toolbar"

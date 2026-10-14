@@ -8,6 +8,7 @@ import type { Channel, ChannelMember, ChannelMessage, ChannelTask, ChannelTextMe
 import type {
   AgentInput,
   AgentPolicy,
+  ChannelAttachments,
   ChannelInput,
   ChannelsSnapshot,
   ChannelTaskAction,
@@ -22,6 +23,8 @@ import { appendMessage, createMessage, firstUnreadAt, markRead, unreadTotal } fr
 /** 正式模式的桥接；演示模式和没有 preload 时为 undefined */
 export const channelsBridge = isDemo ? undefined : window.pixelsky?.channels
 export const channelsLive = !!channelsBridge
+/** 演示模式发的消息带的附件 */
+const demoAttachments = new Map<string, ChannelAttachments>()
 
 export interface ChannelsState {
   /** 正式模式已经从主进程拿到频道列表 */
@@ -210,12 +213,19 @@ export const channelActions = {
    * 以「你」的身份发一条消息。正式模式交给主进程（解析 @、派活），失败时抛出原因；
    * 演示模式只追加到内存，AI 成员不会回复。
    */
-  async send(channelId: string, text: string): Promise<void> {
+  async send(channelId: string, text: string, extra: ChannelAttachments = { images: [], files: [] }): Promise<void> {
     const body = text.trim()
     const replyToId = state.replyTo[channelId] ?? null
-    if (!body) return
+    const attached = extra.images.length > 0 || extra.files.length > 0
+    if (!body && !attached) return
     if (channelsBridge) {
-      const { message } = await channelsBridge.post(channelId, { text: body, replyToId, clientId: crypto.randomUUID() })
+      const { message } = await channelsBridge.post(channelId, {
+        text: body,
+        replyToId,
+        clientId: crypto.randomUUID(),
+        ...(extra.images.length ? { attachments: extra.images } : {}),
+        ...(extra.files.length ? { files: extra.files } : {}),
+      })
       const list = state.messages[channelId] ?? []
       set({
         messages: { ...state.messages, [channelId]: upsertMessage(list, message) },
@@ -236,7 +246,19 @@ export const channelActions = {
       members,
       now: Date.now(),
     })
+    if (attached) {
+      demoAttachments.set(message.id, extra)
+      message.attached = {
+        images: extra.images.map(({ dataBase64: _d, ...meta }) => meta),
+        files: extra.files.map(({ text: _t, tail: _l, ...meta }) => meta),
+      }
+    }
     set({ messages: appendMessage(state.messages, message), replyTo: { ...state.replyTo, [channelId]: null } })
+  },
+  /** 一条消息带的图片和文件全文（演示模式只在本次运行的内存里） */
+  attachments(channelId: string, messageId: string): Promise<ChannelAttachments> {
+    if (channelsBridge) return channelsBridge.attachments(channelId, messageId)
+    return Promise.resolve(demoAttachments.get(messageId) ?? { images: [], files: [] })
   },
   async createChannel(input: ChannelInput): Promise<string> {
     if (!channelsBridge) return demo.createChannel(input)

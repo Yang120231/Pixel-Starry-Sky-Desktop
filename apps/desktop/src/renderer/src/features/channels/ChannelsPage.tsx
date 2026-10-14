@@ -137,7 +137,7 @@ export function ChannelsPage({
           followUp={followUp}
           role={role}
           offline={channel.scope === 'team' && connection === 'offline'}
-          onSend={text => channelActions.send(channel.id, text)}
+          onSend={(text, extra) => channelActions.send(channel.id, text, extra)}
           onCancelReply={() => channelActions.setReplyTo(channel.id, null)}
           inputRef={composer}
         />

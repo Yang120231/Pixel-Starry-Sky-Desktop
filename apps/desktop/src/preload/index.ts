@@ -371,6 +371,7 @@ const channels: ChannelsBridge = {
   update: (id, patch) => call('channels:update', id, patch),
   delete: id => call('channels:delete', id),
   post: (id, input) => call('channels:post', id, input),
+  attachments: (id, messageId) => call('channels:attachments', id, messageId),
   markRead: id => call('channels:markRead', id),
   saveMember: (channelId, input) => call('channels:saveMember', channelId, input),
   addMember: (channelId, memberId) => call('channels:addMember', channelId, memberId),
