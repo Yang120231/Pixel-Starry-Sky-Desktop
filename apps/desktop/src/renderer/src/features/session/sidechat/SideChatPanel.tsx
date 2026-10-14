@@ -22,7 +22,7 @@ export function SideChatPanel({
   /** 还不能问的原因（例如还没发过消息）；null 表示可以 */
   disabledReason: string | null
   /** 从输入框的 /btw 打开时直接问这一句 */
-  initialQuestion?: { text: string; token: number } | null
+  initialQuestion?: { text: string; token: number; draft?: boolean } | null
   belowHeader: boolean
   onClose: () => void
 }) {
@@ -34,9 +34,19 @@ export function SideChatPanel({
   const pending = entries.some(e => e.pending)
 
   useEffect(() => {
+    // draft：对话区右键「在旁聊里问」，引用的文字放进输入框，等用户写完问题再发
+    if (initialQuestion?.draft) {
+      setDraft(initialQuestion.text)
+      requestAnimationFrame(() => {
+        const el = input.current
+        el?.focus()
+        el?.setSelectionRange(el.value.length, el.value.length)
+      })
+      return
+    }
     if (initialQuestion?.text && !disabledReason) void askSide(sessionId, initialQuestion.text, ask)
     input.current?.focus()
-    // 只在打开 / 再次从 /btw 提问时触发
+    // 只在打开 / 再次从 /btw、右键菜单提问时触发
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialQuestion?.token])
 

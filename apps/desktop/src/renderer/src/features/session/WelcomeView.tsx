@@ -1,4 +1,3 @@
-import { useRef } from 'react'
 import { Logo } from '@/ui'
 import { isDemo } from '@/data'
 import type { ComposerController, StatusBarController } from '@/features/engine'
@@ -9,6 +8,7 @@ import { Composer } from './Composer'
 import { ComposerArea } from './ComposerArea'
 import { starters } from './starters'
 import { composerWorkspace } from './composerWorkspace'
+import { focusComposer } from './composerTarget'
 import { useI18n } from '@/i18n/I18nProvider'
 
 /**
@@ -29,24 +29,20 @@ export function WelcomeView({
   const needProject = !!status && !status.project
   const key = draftKey ?? live?.sessionId ?? (live ? 'new-session' : 'demo')
   const [draft, setDraft] = useComposerDraft(key)
-  const box = useRef<HTMLDivElement>(null)
   // 演示模式用演示数据里的 Git 状态
   const ref = status ? composerWorkspace(live?.sessionId, status, draftKey) : isDemo ? { projectId: 'demo' } : null
   const git = useGitSummary(ref)
   const choose = (prompt: string): void => {
     setDraft(prompt)
-    requestAnimationFrame(() => {
-      const input = box.current?.querySelector('textarea')
-      input?.focus()
-      input?.setSelectionRange(prompt.length, prompt.length)
-    })
+    // 输入框是 CodeMirror，不是 textarea：按草稿键找到它，光标放到末尾
+    focusComposer(key)
   }
   return (
     <div
       data-follow-scroll
       className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto bg-app pb-[12vh]"
     >
-      <div ref={box} data-follow-sidebar className="flex w-full min-w-0 flex-col">
+      <div data-follow-sidebar className="flex w-full min-w-0 flex-col">
         <div className="flex flex-col items-center px-6 text-center">
           <Logo size={44} />
           <h2 className="mt-5 text-title text-fg">{text('有什么可以帮你？')}</h2>

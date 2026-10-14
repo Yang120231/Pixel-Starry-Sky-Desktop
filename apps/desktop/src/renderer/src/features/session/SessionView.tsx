@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { Bot, GitBranch, MessagesSquare } from 'lucide-react'
 import { SessionHeader } from './SessionHeader'
 import { Transcript } from './Transcript'
-import { Composer } from './Composer'
+import { Composer, composerDraftKey } from './Composer'
 import { ComposerArea } from './ComposerArea'
 import { WelcomeView } from './WelcomeView'
 import { hasConversation } from './conversation'
@@ -40,6 +40,7 @@ import {
   useStatusBar,
 } from '@/features/engine'
 import './conversation.css'
+import { TranscriptMenu } from './contextMenu/TranscriptMenu'
 
 export interface SessionViewProps {
   /** 当前会话，null 表示新会话（显示欢迎页） */
@@ -203,12 +204,15 @@ function LiveSessionView({
   const composerKey = draftKey ?? sessionId ?? ''
   const branch = useBranchActions(sessionId, snapshot, composerKey)
   // 旁聊面板：null 关着；token 每次从 /btw 打开加一
-  const [side, setSide] = useState<{ text: string; token: number } | null>(null)
+  // draft：文字只放进旁聊输入框，不直接发（对话区右键「在旁聊里问」）
+  const [side, setSide] = useState<{ text: string; token: number; draft?: boolean } | null>(null)
   useEffect(() => setSide(null), [sessionId])
-  const openSide = useCallback((text = '') => {
+  const openSide = useCallback((text = '', draft = false) => {
     setTrace(null)
-    setSide(prev => ({ text, token: (prev?.token ?? 0) + 1 }))
+    setSide(prev => ({ text, token: (prev?.token ?? 0) + 1, draft }))
   }, [])
+  // 对话区右键菜单挂在对话区外层
+  const body = useRef<HTMLDivElement>(null)
   // 代码评论（§4）
   const review = useReviewComments(sessionId)
   const forkedFrom = snapshot?.record.forkedFrom ?? null
@@ -236,7 +240,7 @@ function LiveSessionView({
             )}
             {sessionId ? (
               <>
-                <div className="conversation-body relative flex min-h-0 flex-1 flex-col overflow-hidden">
+                <div ref={body} className="conversation-body relative flex min-h-0 flex-1 flex-col overflow-hidden">
                   {showStrips && (
                     <div
                       ref={strips}
@@ -290,6 +294,15 @@ function LiveSessionView({
                   {find !== null && (
                     <ConversationFind root={mainRef} focusToken={find} onClose={() => setFind(null)} folded={folded} />
                   )}
+                  <TranscriptMenu
+                    root={body}
+                    composerKey={composerDraftKey(draftKey, composer)}
+                    cwd={snapshot?.record.cwd ?? null}
+                    items={snapshot?.items}
+                    onFind={() => setFind(n => (n ?? 0) + 1)}
+                    onAskSide={branch.sideChat ? text => openSide(text, true) : null}
+                    sideDisabled={branch.sideChat?.disabledReason ?? null}
+                  />
                 </div>
                 <ComposerArea>
                   <RetryStatus sessionId={sessionId} retry={snapshot?.retry} />

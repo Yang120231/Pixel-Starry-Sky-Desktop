@@ -45,6 +45,7 @@ import { imageViewerMessages } from '../../../shared/i18n/imageViewerMessages'
 import { htmlPreviewMessages } from '../../../shared/i18n/htmlPreviewMessages'
 import { recoveryMessages } from '../../../shared/i18n/recoveryMessages'
 import { pathClickMessages } from '../../../shared/i18n/pathClickMessages'
+import { contextMenuMessages } from '../../../shared/i18n/contextMenuMessages'
 import { subagentMessages } from '../../../shared/i18n/subagentMessages'
 import { traceHistoryMessages } from '../../../shared/i18n/traceHistoryMessages'
 
@@ -93,6 +94,7 @@ const dictionaries: Record<string, Record<string, unknown>> = {
   htmlPreviewMessages,
   recoveryMessages,
   pathClickMessages,
+  contextMenuMessages,
   subagentMessages,
   traceHistoryMessages,
 }

@@ -41,6 +41,9 @@ export const CodeBlock = memo(function CodeBlock({
   return (
     <div
       data-folded={folded || undefined}
+      // 右键菜单（features/session/contextMenu）从这里认出代码块和语言
+      data-code-block=""
+      data-code-lang={lang ?? undefined}
       className={cn('group/code my-3 overflow-hidden rounded-lg border border-line bg-subtle', className)}
     >
       <div className="flex h-8 items-center justify-between border-b border-line-subtle pr-1.5 pl-3">

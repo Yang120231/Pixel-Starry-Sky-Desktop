@@ -39,6 +39,7 @@ import { imageViewerMessages } from './imageViewerMessages'
 import { htmlPreviewMessages } from './htmlPreviewMessages'
 import { recoveryMessages } from './recoveryMessages'
 import { pathClickMessages } from './pathClickMessages'
+import { contextMenuMessages } from './contextMenuMessages'
 import { subagentMessages } from './subagentMessages'
 import { traceHistoryMessages } from './traceHistoryMessages'
 import { wslMessages } from './wslMessages'
@@ -89,6 +90,7 @@ export const allMessages = {
   ...htmlPreviewMessages,
   ...recoveryMessages,
   ...pathClickMessages,
+  ...contextMenuMessages,
   ...subagentMessages,
   ...traceHistoryMessages,
 }

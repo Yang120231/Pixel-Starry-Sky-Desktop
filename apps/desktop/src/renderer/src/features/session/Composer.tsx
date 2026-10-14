@@ -57,6 +57,12 @@ export const CARD_STYLE =
  * 传入 live（引擎的真实逻辑）时能真正发送，Enter 发送、Shift+Enter 换行，运行中发送键变成停止键；
  * 不传（演示模式）时按钮只提示「即将推出」。
  */
+/** 输入框的草稿键；对话区右键菜单往输入框里放引用，要和输入框用同一个（演示模式是 demo） */
+export const composerDraftKey = (
+  draftKey: string | undefined,
+  live: { sessionId: string | null } | null | undefined,
+): string => draftKey ?? live?.sessionId ?? (live ? 'new-session' : 'demo')
+
 export function Composer({
   live,
   status,
@@ -84,7 +90,7 @@ export function Composer({
   const chatgpt = style === 'chatgpt'
   const paddingY = chatgpt ? 22 : 28
   const [items, setItems] = useState(initialAttachments)
-  const key = draftKey ?? live?.sessionId ?? (live ? 'new-session' : 'demo')
+  const key = composerDraftKey(draftKey, live)
   const imageDraft = useImageDraft(key)
   const images = imageDraft.images
   const fileDraft = useFileDraft(key)
