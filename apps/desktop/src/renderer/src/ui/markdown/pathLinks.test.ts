@@ -30,6 +30,12 @@ describe('linkPathText', () => {
     expect(linkPathText('D:\\repo\\a.ts')).toBe('D:\\repo\\a.ts')
   })
 
+  it('Codex 的 /E:/… 写法：盘符前面多的 / 去掉；空格（%20）还原', () => {
+    expect(linkPathText('/E:/mods/proj/build/index.html')).toBe('E:/mods/proj/build/index.html')
+    expect(linkPathText('/E:/mods/AE2%201.20%20GTL/a.java#L12')).toBe('E:/mods/AE2 1.20 GTL/a.java:12')
+    expect(linkPathText('/home/me/a.ts')).toBe('/home/me/a.ts')
+  })
+
   it('网址、页内锚点、空地址不算', () => {
     expect(linkPathText('https://example.com/a.ts')).toBeNull()
     expect(linkPathText('mailto:me@example.com')).toBeNull()

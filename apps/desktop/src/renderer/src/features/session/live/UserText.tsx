@@ -2,7 +2,7 @@
 // @路径 是项目里存在的文件时显示成文件标签，单击打开、双击在文件夹中显示（判断和打开由 PathLinksProvider 提供，docs/ui/path-click.md）；
 // 从编辑器引用的代码（docs/ui/editor-quote.md）开头那行「路径#L12-18」和 @路径#L12-18 也是文件标签，带行号，点击跳到第一行。
 import { FileText } from 'lucide-react'
-import { usePathClick, usePathTarget } from '@/ui/markdown/pathLinks'
+import { pathData, usePathClick, usePathTarget } from '@/ui/markdown/pathLinks'
 import { quoteHeading } from '../quote'
 
 export type UserTextPart =
@@ -65,10 +65,11 @@ export function userTextParts(text: string, leading = true): UserTextPart[] {
 function Mention({ text, path, lines }: { text: string; path: string; lines?: { start: number; end: number } }) {
   const target = usePathTarget(lines ? `${path}:${lines.start}` : path)
   const click = usePathClick(target)
-  if (!click) return <>{text}</>
+  if (!click || !target) return <>{text}</>
   return (
     <button
       type="button"
+      {...pathData(target)}
       title={click.title}
       {...click.handlers}
       className="mx-px inline-flex max-w-full items-baseline gap-1 rounded-sm border border-line bg-surface px-1 align-baseline font-mono text-[0.9em] text-code-path hover:border-line-strong hover:underline"

@@ -6,6 +6,16 @@ export const pathClickMessages = {
     en: 'Click to expand diff · double-click to show in folder',
   },
   'path.hintRemote': { zh: '单击打开', en: 'Click to open' },
+  // 回复里的链接指向文件夹、项目外的路径（docs/ui/path-click.md）
+  'path.hintFolder': {
+    zh: '单击在文件树中显示 · 双击在文件夹中显示',
+    en: 'Click to show in file tree · double-click to show in folder',
+  },
+  'path.hintFolderRemote': { zh: '单击在文件树中显示', en: 'Click to show in file tree' },
+  'path.hintOutside': {
+    zh: '不在项目里 · 单击在文件夹中显示',
+    en: 'Outside the project · click to show in folder',
+  },
   'path.revealRemote': {
     zh: '远程机器上的文件不能在本机文件夹中显示',
     en: 'Files on a remote machine cannot be shown in a local folder',

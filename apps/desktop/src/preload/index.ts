@@ -220,6 +220,8 @@ const editor: EditorBridge = {
   remove: id => call('editor:remove', id),
   open: (ref, id, path, line, col) => call('editor:open', ref, id, path, line, col),
   openMemory: (sessionId, path, action) => call('editor:openMemory', sessionId, path, action),
+  statOutside: path => call('editor:statOutside', path),
+  revealOutside: path => call('editor:revealOutside', path),
 }
 const windowControls: WindowBridge = {
   getState: () => call('window:getState'),
@@ -436,6 +438,8 @@ const feedback: FeedbackBridge = {
   close: id => call('feedback:close', id),
   preview: query => call('feedback:preview', query),
   attachment: (threadId, attachmentId) => call('feedback:attachment', threadId, attachmentId),
+  pending: () => call('feedback:pending'),
+  ack: ids => call('feedback:ack', ids),
   onChange: cb => {
     const listener = (_event: Electron.IpcRendererEvent, value: FeedbackChange): void => cb(value)
     on('feedback:changed', listener)

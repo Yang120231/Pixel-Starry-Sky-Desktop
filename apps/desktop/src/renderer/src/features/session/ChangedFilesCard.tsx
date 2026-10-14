@@ -95,6 +95,7 @@ ${path}${ref && !isRemoteRef(ref) ? `\n${tr('path.hintDiff')}` : ''}`
                 : pathHint(ref, path)
             }
             disabled={!diffs.length && !ref}
+            data-path={path}
             {...rowClick}
           >
             {diffs.length > 0 && (

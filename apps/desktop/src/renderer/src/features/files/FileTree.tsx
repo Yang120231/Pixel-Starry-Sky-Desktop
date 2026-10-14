@@ -34,6 +34,7 @@ import { requestFileHistory } from '@/features/panel/git/fileHistory'
 import { sendPathToChat } from './sendPath'
 import { cutPasteKeys, dropTarget, hasFileDrag, join2, movedPath, parentOf, refKey, writeDragData } from './treeDrag'
 import type { DragOver, DragSource } from './treeDrag'
+import { REVEAL_FOLDER_EVENT, takeFolderReveal } from './treeReveal'
 const pathKey = (path: string): string => {
   const p = path.replaceAll('\\', '/').replace(/\/$/, '')
   return window.pixelsky?.platform === 'win32' ? p.toLowerCase() : p
@@ -55,6 +56,8 @@ const EXPAND_FOLDER_EVENT = 'pixelsky:file-tree-expand-folder'
  * 只发展开事件的话新挂载的行收不到；行挂载时看这里，自己或子孙在里面就展开（自己那条用掉就删）
  */
 const pendingExpand = new Set<string>()
+/** 要滚进可视区的那一行（「项目 key + 换行 + 路径」），对话里的文件夹链接用（treeReveal.ts） */
+let pendingScroll: string | null = null
 function takePendingExpand(ref: WorkspaceRef, path: string): boolean {
   const prefix = refKey(ref) + '\n'
   let hit = false
@@ -407,6 +410,22 @@ export function FileTree({
       }),
     )
   }
+  // 对话里的文件夹链接：找根目录相同的那棵树，展开项目、再一层层展开到文件夹（行挂上时看 pendingExpand），最后滚过去。
+  // 每次渲染重新挂：roots、expandFolder 都是这次渲染算出来的
+  useEffect(() => {
+    const take = (): void => {
+      const want = takeFolderReveal(path => roots.some(p => pathKey(p.path) === pathKey(path)))
+      const root = want && roots.find(p => pathKey(p.path) === pathKey(want.root))
+      if (!want || !root) return
+      const ref = rootRef(root)
+      pendingScroll = refKey(ref) + '\n' + want.path
+      expandFolder(ref, '')
+      expandFolder(ref, want.path)
+    }
+    take()
+    window.addEventListener(REVEAL_FOLDER_EVENT, take)
+    return () => window.removeEventListener(REVEAL_FOLDER_EVENT, take)
+  })
   const endDrag = (): void => {
     setDrag(null)
     setDropKey(null)
@@ -1009,6 +1028,17 @@ function FileRow({
     if (r.top < bounds.top) list.scrollTop -= bounds.top - r.top
     else if (r.bottom > bounds.bottom) list.scrollTop += r.bottom - bounds.bottom
   }, [active?.path, sameRef, entry.path])
+  // 对话里的文件夹链接要定位的就是这一行：挂上（或已经在）时滚进可视区
+  useLayoutEffect(() => {
+    const scroll = (): void => {
+      if (pendingScroll !== refKey(refTarget) + '\n' + entry.path) return
+      pendingScroll = null
+      row.current?.scrollIntoView({ block: 'nearest' })
+    }
+    scroll()
+    window.addEventListener(EXPAND_FOLDER_EVENT, scroll)
+    return () => window.removeEventListener(EXPAND_FOLDER_EVENT, scroll)
+  }, [entry.path, refTarget.projectId, refTarget.sessionId])
   const Icon = entry.kind === 'directory' ? (expanded ? FolderOpen : Folder) : File
   // 过滤结果是平铺的：结果里的文件行不接收，文件夹行只放不展开
   const dropOver: DragOver | null =

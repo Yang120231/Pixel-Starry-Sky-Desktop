@@ -5,11 +5,13 @@ import { isDemo } from '@/data'
 import { demo } from '@/data/demo'
 import { useToast } from '@/ui'
 import { PathLinksContext, type PathLinks } from '@/ui/markdown/pathLinks'
-import { openFile } from './store'
-import { wholeTextFile } from './pathLinks'
+import { tr, translateMessage } from '@/i18n/core'
+import { openFile, showFiles } from './store'
+import { linkTarget, wholeTextFile, workspaceRoot } from './pathLinks'
+import { revealFolderInTree } from './treeReveal'
 import { findPathMatches } from './pathMatch'
 import { isHtmlPath, previewHtml } from './htmlPreview'
-import { pathHint, revealPath } from './reveal'
+import { isRemoteRef, pathHint, revealPath } from './reveal'
 
 export function PathLinksProvider({ sessionId, children }: { sessionId: string | null; children: ReactNode }) {
   const toast = useToast()
@@ -29,7 +31,30 @@ export function PathLinksProvider({ sessionId, children }: { sessionId: string |
       },
       // 双击 / Shift+Enter：在文件夹中显示；远程机器 revealPath 会提示不能显示（提示文字只写单击打开）
       reveal: target => void revealPath(ref, target.path, toast),
-      hint: path => pathHint(ref, path),
+      hint: (path, kind) =>
+        kind === 'folder'
+          ? `${tr(isRemoteRef(ref) ? 'path.hintFolderRemote' : 'path.hintFolder')}\n${path}`
+          : kind === 'outside'
+            ? `${tr('path.hintOutside')}\n${path}`
+            : pathHint(ref, path),
+      // Markdown 链接：文件夹、项目外的路径也认（docs/ui/path-click.md）
+      resolveLink: isDemo
+        ? async text => {
+            const file = demoTextFile(text)
+            return file && { kind: 'file', ...file }
+          }
+        : text => linkTarget(ref, text),
+      // 文件夹：打开文件面板，文件树一层层展开到它并滚过去（按根目录认是哪棵树，treeReveal.ts）
+      showFolder: path => {
+        showFiles(ref)
+        void workspaceRoot(ref).then(root => root && revealFolderInTree(root, path))
+      },
+      revealOutside: path => {
+        if (isDemo) return toast(tr('path.revealDemo'))
+        void window
+          .pixelsky!.editor.revealOutside(path)
+          .catch((e: Error) => toast(tr('path.revealFailed', { reason: translateMessage(e.message) })))
+      },
     }
   }, [sessionId, toast])
   return <PathLinksContext.Provider value={value}>{children}</PathLinksContext.Provider>

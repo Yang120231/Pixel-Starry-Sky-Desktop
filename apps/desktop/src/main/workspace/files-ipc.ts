@@ -1,3 +1,5 @@
+import { stat } from 'node:fs/promises'
+import { isAbsolute, resolve } from 'node:path'
 import { app, BrowserWindow, clipboard, dialog, shell, type IpcMainInvokeEvent } from 'electron'
 import { Editors } from '../core/editors'
 import * as ipc from '../ipc/guard'
@@ -73,6 +75,18 @@ export async function initWorkspace(ctx: AppContext): Promise<void> {
   handle('editor:open', (_e, ref, id, path, line, col) => editors.open(workspaceRef(ref), id, path, line, col))
   // 上下文明细里项目外的记忆文件（docs/ui/context-window.md §7）：只开本机会话诊断里列出的文件；
   // 有默认编辑器就用它打开，没有用系统默认程序；reveal 在文件夹里显示
+  // 回复里链接到项目外的本机路径（docs/ui/path-click.md）：只看存不存在、在文件夹中显示，不打开、不执行。
+  // \\主机\共享 这类网络路径不碰：光是查一下存不存在，系统就会去连那台机器
+  handle('editor:statOutside', async (_e, path: unknown) => {
+    const file = outsidePath(path)
+    const info = await stat(file).catch(() => null)
+    return info ? (info.isDirectory() ? 'folder' : 'file') : null
+  })
+  handle('editor:revealOutside', async (_e, path: unknown) => {
+    const file = outsidePath(path)
+    if (!(await stat(file).catch(() => null))) throw new Error('找不到这个路径：' + file)
+    shell.showItemInFolder(file)
+  })
   handle('editor:openMemory', async (_e, sessionId: unknown, path: unknown, action: unknown) => {
     if (typeof sessionId !== 'string' || machineOf(sessionId) !== 'local') throw new Error('只能打开本机上的记忆文件')
     const listed = ctx.engine?.open(sessionId).context?.diagnostic?.memory ?? []
@@ -82,4 +96,11 @@ export async function initWorkspace(ctx: AppContext): Promise<void> {
     const err = await shell.openPath(file)
     if (err) throw new Error('打不开这个文件：' + err)
   })
+}
+
+/** 项目外路径的参数检查：本机绝对路径；网络路径（\\主机\共享、//主机/共享）不收 */
+export function outsidePath(path: unknown): string {
+  if (typeof path !== 'string' || !path || path.length > 4096 || path.includes('\0')) throw new Error('路径不正确')
+  if (/^[\\/]{2}/.test(path) || !isAbsolute(path)) throw new Error('只能是本机上的完整路径')
+  return resolve(path)
 }

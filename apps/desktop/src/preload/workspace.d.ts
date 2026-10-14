@@ -56,4 +56,8 @@ export interface EditorBridge {
   ): Promise<{ editor: string; target: string }>
   /** 上下文明细里项目外的记忆文件：用默认编辑器（没有时用系统默认程序）打开，或在文件夹里显示。只认会话诊断里列出的路径 */
   openMemory(sessionId: string, path: string, action?: 'open' | 'reveal'): Promise<void>
+  /** 回复里链接到项目外的本机路径：是文件、文件夹还是不存在（不读内容） */
+  statOutside(path: string): Promise<'file' | 'folder' | null>
+  /** 项目外的本机路径在系统文件夹中显示（不打开文件） */
+  revealOutside(path: string): Promise<void>
 }

@@ -494,6 +494,7 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
     const reveal = ref ? () => void revealPath(ref, change.path, toast) : null
     return {
       title: pathHint(ref, change.path),
+      'data-path': change.path,
       ...pathClickHandlers({ open: () => openChangedFile(change), reveal }),
     }
   }
