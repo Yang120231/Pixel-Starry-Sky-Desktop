@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ArrowLeft, Copy, ExternalLink, FileCode2, FolderOpen } from 'lucide-react'
 import { IconButton, Segmented, Spinner } from '@/ui'
 import { Markdown } from '@/ui/markdown/Markdown'
+import { ZoomableImage } from '@/ui/ImageViewer'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '@/i18n/core'
 import type { ArtifactDelivery } from '@pixelsky/protocol'
@@ -134,9 +135,10 @@ export function ArtifactPreview({
           <Notice text={tr('artifacts.pdf')} />
         ) : preview.kind === 'image' ? (
           <div className="flex justify-center p-3">
-            <img
+            <ZoomableImage
               src={preview.dataUrl}
               alt={name}
+              bytes={preview.bytes}
               className="max-w-full rounded-md border border-line-subtle object-contain"
             />
           </div>

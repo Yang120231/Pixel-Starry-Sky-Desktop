@@ -35,6 +35,7 @@ import { costMessages } from './costMessages'
 import { longConversationMessages } from './longConversationMessages'
 import { tabMenuMessages } from './tabMenuMessages'
 import { minimalModeMessages } from './minimalModeMessages'
+import { imageViewerMessages } from './imageViewerMessages'
 import { htmlPreviewMessages } from './htmlPreviewMessages'
 import { recoveryMessages } from './recoveryMessages'
 import { pathClickMessages } from './pathClickMessages'
@@ -82,6 +83,7 @@ export const allMessages = {
   ...longConversationMessages,
   ...tabMenuMessages,
   ...minimalModeMessages,
+  ...imageViewerMessages,
   ...htmlPreviewMessages,
   ...recoveryMessages,
   ...pathClickMessages,
