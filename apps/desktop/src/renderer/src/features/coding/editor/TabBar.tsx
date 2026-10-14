@@ -22,7 +22,7 @@ export interface TabItem {
 }
 
 const hint = (avail: ViewAvailability, mode: EditorViewMode): string | undefined => {
-  if (mode === 'code') return undefined
+  if (mode === 'code' || mode === 'preview') return undefined
   if (avail.reason === 'noHead') return tr('coding.editor.view.noHead')
   if (avail.reason === 'binary') return tr('coding.editor.view.binary')
   if (avail.reason === 'noChange') return tr('coding.editor.view.noChange')
@@ -30,7 +30,7 @@ const hint = (avail: ViewAvailability, mode: EditorViewMode): string | undefined
   return undefined
 }
 
-/** 代码 | 变更 | 并排 */
+/** 预览（Markdown）| 代码 | 变更 | 并排 */
 function ViewSwitch({
   mode,
   avail,
@@ -42,6 +42,7 @@ function ViewSwitch({
 }) {
   useI18n()
   const items: { value: EditorViewMode; label: string; enabled: boolean }[] = [
+    ...(avail.preview ? [{ value: 'preview' as const, label: tr('coding.editor.view.preview'), enabled: true }] : []),
     { value: 'code', label: tr('coding.editor.view.code'), enabled: true },
     { value: 'diff', label: tr('coding.editor.view.diff'), enabled: avail.diff },
     { value: 'split', label: tr('coding.editor.view.split'), enabled: avail.split },

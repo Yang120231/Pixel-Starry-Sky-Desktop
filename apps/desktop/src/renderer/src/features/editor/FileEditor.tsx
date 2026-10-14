@@ -4,15 +4,12 @@ import { tr } from '../../i18n/core'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { Extension } from '@codemirror/state'
 import { Eye, FileText, Globe, RefreshCw, Save, FolderTree, WrapText, Columns2 } from 'lucide-react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import { IconButton, Spinner } from '@/ui'
 import {
   activateFile,
   checkFile,
   dirtyFile,
   ensureFile,
-  getFiles,
   loadFile,
   saveFile,
   updateFile,
@@ -22,6 +19,7 @@ import { confirmFiles } from '@/features/files/FileConfirm'
 import { CodeEditor } from './code/CodeEditor'
 import { fileLanguage } from './code/languages'
 import { fileIndent } from './code/positions'
+import { MarkdownPreview } from './MarkdownPreview'
 import { ExternalFileButton } from './ExternalFileButton'
 import { FileBreadcrumbs } from './FileBreadcrumbs'
 import { isDemo } from '@/data'
@@ -36,6 +34,8 @@ export function FileEditor({
   extensions,
   footer = true,
   crumbExtra,
+  preview: controlledPreview,
+  onExitPreview,
 }: {
   id: string
   active: boolean
@@ -47,6 +47,10 @@ export function FileEditor({
   footer?: boolean
   /** 面包屑后面的附加内容（代码模式的符号和问题计数） */
   crumbExtra?: ReactNode
+  /** 受控的预览开关（代码模式由视图切换决定）；传了就不显示眼睛按钮、不用内部状态 */
+  preview?: boolean
+  /** 受控时双击预览里的块：退出预览并定位到源码行 */
+  onExitPreview?: (line: number) => void
 }) {
   useI18n()
   const [treeOpen, setTreeOpen] = useState(() => localStorage.getItem('pixelsky.editor.tree') !== 'false')
@@ -57,7 +61,10 @@ export function FileEditor({
   const [wordWrap, setWordWrap] = useState(() => localStorage.getItem('pixelsky.editor.wrap') === 'true')
   const files = useFiles(),
     tab = files.tabs.find(t => t.id === id),
-    [preview, setPreview] = useState(() => getFiles().tabs.find(t => t.id === id)?.preview ?? false)
+    // 不受控时预览开没开记在标签上（没设过时 Markdown 默认开）；打开时指名了行会被设成关（files/store openFile）
+    innerPreview = tab?.preview ?? (!!tab && fileLanguage(tab.path) === 'Markdown'),
+    controlled = controlledPreview !== undefined,
+    preview = controlled ? controlledPreview : innerPreview
   useEffect(() => {
     void ensureFile(id)
   }, [id])
@@ -99,7 +106,7 @@ export function FileEditor({
       <div className="flex h-10 shrink-0 items-center gap-1 border-b border-line-layout px-3">
         <FileBreadcrumbs tab={tab} />
         {crumbExtra}
-        {fileLanguage(tab.path) === 'Markdown' && (
+        {!controlled && fileLanguage(tab.path) === 'Markdown' && (
           <IconButton
             icon={Eye}
             size={28}
@@ -107,7 +114,6 @@ export function FileEditor({
             label={preview ? tr('editor.FileEditor.backToMarkdownEditor') : tr('editor.FileEditor.previewMarkdown')}
             active={preview}
             onClick={() => {
-              setPreview(v => !v)
               updateFile(id, { preview: !preview })
             }}
           />
@@ -234,12 +240,16 @@ export function FileEditor({
                 <CodeEditor tab={tab} active={active && !preview} wordWrap={wordWrap} extensions={extensions} />
               </div>
               {preview && (
-                <div
-                  data-markdown-preview
-                  className="prose min-h-0 flex-1 overflow-auto px-5 py-4 text-prose text-fg-body"
-                >
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{tab.draft}</ReactMarkdown>
-                </div>
+                <MarkdownPreview
+                  text={tab.draft}
+                  onJump={line => {
+                    if (controlled) return onExitPreview?.(line)
+                    updateFile(id, {
+                      preview: false,
+                      reveal: { line, column: 1, seq: (tab.reveal?.seq ?? 0) + 1 },
+                    })
+                  }}
+                />
               )}
               {footer && (
                 <footer className="flex min-h-7 shrink-0 flex-wrap items-center justify-end gap-x-3 border-t border-line-layout px-3 py-1 text-label text-fg-muted">

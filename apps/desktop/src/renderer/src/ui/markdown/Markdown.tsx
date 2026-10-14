@@ -9,6 +9,7 @@ import { InlineCode, MarkdownLink, PathLinksContext, keepLocalPaths } from './pa
 import { Callout, isAlertKind, remarkAlerts } from './alerts'
 import { hasMath, normalizeMath, useMathPlugins, type PluggableList } from './math'
 import { createStreamSplitter } from './streamBlocks'
+import { rehypeHeadingIds, rehypeSourceLines } from './document'
 import type { Element, ElementContent } from 'hast'
 
 /** 取出 hast 节点里的全部文字（代码块的原文） */
@@ -26,6 +27,12 @@ function fencedCode(pre: Element | undefined): { code: string; lang: string | nu
   return { code: code ? textOf(code) : '', lang: langClass ? langClass.slice('language-'.length) : null }
 }
 
+/** 文档模式的 data-line（对话里没有，返回 undefined 不输出属性） */
+const lineOf = (node: Element | undefined): number | undefined => {
+  const line = node?.properties?.dataLine
+  return typeof line === 'number' ? line : undefined
+}
+
 const components: Components = {
   // 链接：项目里的文件在软件里打开，其余在新窗口打开（主进程交给系统浏览器，只放行 http / https）
   a: ({ node: _node, ...props }) => <MarkdownLink {...props} />,
@@ -34,18 +41,34 @@ const components: Components = {
   // 引用块：带 [!NOTE] 等标记的画成提示块（docs/ui/content-highlight.md §2 G）
   blockquote: ({ node, children }) => {
     const kind = node?.properties?.dataAlert
-    return isAlertKind(kind) ? <Callout kind={kind}>{children}</Callout> : <blockquote>{children}</blockquote>
+    const line = lineOf(node)
+    if (isAlertKind(kind))
+      return line === undefined ? (
+        <Callout kind={kind}>{children}</Callout>
+      ) : (
+        <div data-line={line}>
+          <Callout kind={kind}>{children}</Callout>
+        </div>
+      )
+    return <blockquote data-line={line}>{children}</blockquote>
   },
   // 表格（docs/ui/markdown-table.md）：圆角外框占满整行，列宽按内容分；内容更宽时在框里横向滚动
-  table: ({ node: _node, ...props }) => (
-    <div className="my-3 max-w-full overflow-x-auto rounded-lg border border-line-card">
-      <table {...props} />
+  table: ({ node, ...props }) => (
+    <div data-line={lineOf(node)} className="my-3 max-w-full overflow-x-auto rounded-lg border border-line-card">
+      <table {...{ ...props, 'data-line': undefined }} />
     </div>
   ),
   // 代码块：语言标题栏 + 复制按钮 + 语法高亮（docs/ui/code-highlight.md）
   pre: ({ node }) => {
     const { code, lang } = fencedCode(node)
-    return <CodeBlock code={code} lang={lang} />
+    const line = lineOf(node)
+    return line === undefined ? (
+      <CodeBlock code={code} lang={lang} />
+    ) : (
+      <div data-line={line}>
+        <CodeBlock code={code} lang={lang} />
+      </div>
+    )
   },
 }
 
@@ -118,11 +141,14 @@ export const Markdown = memo(function Markdown({
   text,
   className,
   streaming,
+  document,
 }: {
   text: string
   className?: string
   /** 回复还在输出：先不加路径链接和公式，等这条完成，免得内容变化时闪动；按空行分块，已写完的块不重新解析 */
   streaming?: boolean
+  /** 文档模式（预览 .md 文件）：按标准 Markdown 不把单个换行当换行；块级元素带 data-line，标题带 id */
+  document?: boolean
 }) {
   useI18n()
   // 公式：有公式标记时才加载 KaTeX，加载好之前按原文显示（docs/ui/content-highlight.md §2 I）；流式时不扫全文
@@ -130,8 +156,12 @@ export const Markdown = memo(function Markdown({
   const source = useMemo(() => (math ? normalizeMath(text) : text), [math, text])
   // 提示块要在 remark-breaks 之前认出标记；remark-breaks：单个换行也换行（一行一个的列表、数字不会挤成一段）
   const remarkPlugins = useMemo<PluggableList>(
-    () => [remarkAlerts, remarkGfm, ...(math?.remark ?? []), remarkBreaks],
-    [math],
+    () => [remarkAlerts, remarkGfm, ...(math?.remark ?? []), ...(document ? [] : [remarkBreaks])],
+    [math, document],
+  )
+  const rehypePlugins = useMemo<PluggableList | undefined>(
+    () => (document ? [...(math?.rehype ?? []), rehypeSourceLines, rehypeHeadingIds] : math?.rehype),
+    [math, document],
   )
   return (
     <div className={cn(PROSE, className)}>
@@ -140,7 +170,7 @@ export const Markdown = memo(function Markdown({
       ) : (
         <ReactMarkdown
           remarkPlugins={remarkPlugins}
-          rehypePlugins={math?.rehype}
+          rehypePlugins={rehypePlugins}
           components={components}
           urlTransform={keepLocalPaths}
         >

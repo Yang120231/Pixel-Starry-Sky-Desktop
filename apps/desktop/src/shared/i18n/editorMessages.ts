@@ -1,5 +1,7 @@
 // 代码编辑器：把选中的代码引用到对话（docs/ui/editor-quote.md）、右键菜单
 export const editorMessages = {
+  // Markdown 预览（docs/ui/markdown-preview.md）
+  'editor.preview.toc': { zh: '目录', en: 'Contents' },
   'editor.quote.action': { zh: '引用到对话', en: 'Quote in chat' },
   'editor.quote.palette': { zh: '把选中的代码引用到对话', en: 'Quote selected code in chat' },
   'editor.quote.noSession': {

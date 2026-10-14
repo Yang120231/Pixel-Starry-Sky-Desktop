@@ -6,6 +6,8 @@ export interface ViewInput {
   draft: string
   /** 文本文件才能看差异 */
   text: boolean
+  /** Markdown 文本文件才有「预览」 */
+  markdown: boolean
   /** 这一轮开始前的内容；算不出来是 null */
   turnBaseline: string | null
   /** 中栏宽度 */
@@ -16,6 +18,7 @@ export interface ViewInput {
 
 export interface ViewAvailability {
   code: true
+  preview: boolean
   diff: boolean
   split: boolean
   /** 能算出「只看这一轮」的基准 */
@@ -35,14 +38,20 @@ export function viewAvailability(input: ViewInput): ViewAvailability {
   else if (input.draft === input.head && !turn) reason = 'noChange'
   const diff = reason === null
   const narrow = input.width < input.splitMinWidth
-  return { code: true, diff, split: diff && !narrow, turn, reason, narrow }
+  return { code: true, preview: input.text && input.markdown, diff, split: diff && !narrow, turn, reason, narrow }
 }
 
 /** 保存的视图在当前条件下不可用时退回「代码」 */
 export function effectiveMode(mode: EditorViewMode, avail: ViewAvailability): EditorViewMode {
+  if (mode === 'preview') return avail.preview ? 'preview' : 'code'
   if (mode === 'diff') return avail.diff ? 'diff' : 'code'
   if (mode === 'split') return avail.split ? 'split' : avail.diff ? 'diff' : 'code'
   return 'code'
+}
+
+/** 标签没选过视图时的默认：Markdown 文本文件看预览，其余看代码 */
+export function defaultMode(avail: ViewAvailability): EditorViewMode {
+  return avail.preview ? 'preview' : 'code'
 }
 
 /** 「只看这一轮」算不出基准时退回 HEAD */

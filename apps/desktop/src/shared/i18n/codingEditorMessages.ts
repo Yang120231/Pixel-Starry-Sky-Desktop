@@ -13,6 +13,7 @@ export const codingEditorMessages = {
   'coding.editor.reveal': { zh: '在文件树里定位', en: 'Reveal in file tree' },
   'coding.editor.splitRight': { zh: '向右分屏', en: 'Split right' },
   'coding.editor.view': { zh: '视图', en: 'View' },
+  'coding.editor.view.preview': { zh: '预览', en: 'Preview' },
   'coding.editor.view.code': { zh: '代码', en: 'Code' },
   'coding.editor.view.diff': { zh: '变更', en: 'Changes' },
   'coding.editor.view.split': { zh: '并排', en: 'Side by side' },

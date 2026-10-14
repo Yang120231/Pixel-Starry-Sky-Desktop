@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { effectiveBase, effectiveMode, viewAvailability, type ViewInput } from './viewModel'
+import { defaultMode, effectiveBase, effectiveMode, viewAvailability, type ViewInput } from './viewModel'
 
-const base: ViewInput = { head: 'a', draft: 'b', text: true, turnBaseline: null, width: 800, splitMinWidth: 560 }
+const base: ViewInput = {
+  head: 'a',
+  draft: 'b',
+  text: true,
+  markdown: false,
+  turnBaseline: null,
+  width: 800,
+  splitMinWidth: 560,
+}
 
 describe('viewAvailability', () => {
   it('有 HEAD 且有改动时三种视图都能点', () => {
@@ -24,6 +32,23 @@ describe('viewAvailability', () => {
   })
   it('太窄时并排不能点，变更还能点', () => {
     expect(viewAvailability({ ...base, width: 400 })).toMatchObject({ diff: true, split: false, narrow: true })
+  })
+})
+
+describe('预览', () => {
+  it('只有 Markdown 文本文件能点，默认就是预览', () => {
+    expect(viewAvailability(base).preview).toBe(false)
+    expect(defaultMode(viewAvailability(base))).toBe('code')
+    const md = viewAvailability({ ...base, markdown: true })
+    expect(md.preview).toBe(true)
+    expect(defaultMode(md)).toBe('preview')
+    expect(effectiveMode('preview', md)).toBe('preview')
+  })
+  it('不是文本文件时没有预览，保存的预览退回代码', () => {
+    const bin = viewAvailability({ ...base, markdown: true, text: false })
+    expect(bin.preview).toBe(false)
+    expect(effectiveMode('preview', bin)).toBe('code')
+    expect(effectiveMode('preview', viewAvailability(base))).toBe('code')
   })
 })
 

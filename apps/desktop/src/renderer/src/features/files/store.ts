@@ -226,12 +226,15 @@ export async function openFile(
   updateFile(id, { root, project: target.name })
   await loading
   const current = state.tabs.find(t => t.id === id)
+  // 指名了行（搜索结果、路径链接）：Markdown 不停在预览，切到源码那一行（docs/ui/markdown-preview.md §2）
+  const named = line !== undefined || !!searchText
   if (searchText && current?.document?.kind === 'text') {
     const index = current.draft.indexOf(searchText.replace(/\r\n/g, '\n'))
     line = index >= 0 ? current.draft.slice(0, index).split('\n').length : 1
   }
   updateFile(id, {
     reveal: { line: Math.max(1, line ?? 1), column: Math.max(1, column), seq: (current?.reveal?.seq ?? 0) + 1 },
+    ...(named && (line ?? 1) > 1 && /\.(md|markdown)$/i.test(normalized) ? { preview: false } : {}),
   })
   const target0 = options.target ?? 'auto'
   if ((target0 === 'code' || target0 === 'auto') && codeOpener) {

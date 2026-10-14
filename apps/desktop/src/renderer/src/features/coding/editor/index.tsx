@@ -5,7 +5,17 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import { Button, DiffStat, cn } from '@/ui'
 import { FileEditor } from '@/features/editor/FileEditor'
-import { dirtyFile, ensureFile, openFile, setCodeOpener, useFiles, type OpenFile } from '@/features/files/store'
+import { fileLanguage } from '@/features/editor/code/languages'
+import {
+  dirtyFile,
+  ensureFile,
+  getFiles,
+  openFile,
+  setCodeOpener,
+  updateFile,
+  useFiles,
+  type OpenFile,
+} from '@/features/files/store'
 import { CLOSE_TAB, CYCLE_TAB } from '@/features/layout/shortcuts'
 import { SPLIT_MIN_WIDTH } from '@/features/panel/git/gitModel'
 import { useRecentFiles } from '@/features/panel/recentFiles'
@@ -36,7 +46,7 @@ import { DiffPane } from './DiffPane'
 import { GitDiffTab } from './GitDiffTab'
 import { GitWorkBar } from './GitWorkBar'
 import { getGitDiffTab, useGitDiffRev } from './gitDiffTabs'
-import { effectiveBase, effectiveMode, viewAvailability } from './viewModel'
+import { defaultMode, effectiveBase, effectiveMode, viewAvailability } from './viewModel'
 import type { MenuAction } from '@/ui/ActionMenu'
 
 const EMPTY: readonly Extension[] = []
@@ -199,6 +209,7 @@ export function EditorArea({ visible, width }: { visible: boolean; width: number
             head: tab.head,
             draft: tab.draft,
             text: tab.document?.kind === 'text',
+            markdown: fileLanguage(tab.path) === 'Markdown',
             turnBaseline,
             width,
             splitMinWidth: SPLIT_MIN_WIDTH,
@@ -207,8 +218,15 @@ export function EditorArea({ visible, width }: { visible: boolean; width: number
     [tab, turnBaseline, width],
   )
   const saved = active ? views[active] : undefined
-  const mode = avail ? effectiveMode(saved?.mode ?? 'code', avail) : 'code'
+  const mode = avail ? effectiveMode(saved?.mode ?? defaultMode(avail), avail) : 'code'
   const base = avail ? effectiveBase(saved?.base ?? 'head', avail) : 'head'
+  // 打开时指名了行（搜索结果、路径链接）：files/store 把标签的 preview 设成 false，这里切到「代码」并把这个请求用掉
+  const leavePreview = tab?.preview === false && mode === 'preview'
+  useEffect(() => {
+    if (!leavePreview || !active) return
+    setCodeView(active, 'code')
+    updateFile(active, { preview: undefined })
+  }, [leavePreview, active])
 
   const menu = useCallback((): MenuAction[] => {
     const current = getCodeTabs().group.active
@@ -265,12 +283,23 @@ export function EditorArea({ visible, width }: { visible: boolean; width: number
       ) : (
         <>
           {tab && <GitWorkBar tab={tab} />}
-          {mode === 'code' || !tab ? (
+          {mode === 'code' || mode === 'preview' || !tab ? (
             <div className="flex min-h-0 min-w-0 flex-1 flex-col">
               <FileEditor
                 key={active}
                 id={active}
                 active={visible}
+                preview={mode === 'preview'}
+                onExitPreview={line => {
+                  setCodeView(active, 'code')
+                  updateFile(active, {
+                    reveal: {
+                      line,
+                      column: 1,
+                      seq: (getFiles().tabs.find(t => t.id === active)?.reveal?.seq ?? 0) + 1,
+                    },
+                  })
+                }}
                 extensions={merged}
                 footer={false}
                 crumbExtra={tab ? <SymbolCrumb tab={tab} /> : null}
