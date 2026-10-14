@@ -207,10 +207,23 @@ export async function discoverClaude(
   // 登录状态：老版本没有 auth status，查不到就当作已登录，真正出错时会在对话里提示
   let loggedIn = true
   let projectsDir: string | null = null
+  let account: EngineInfo['account']
   const auth = await run(launcher, ['auth', 'status', '--json'], env)
   try {
-    const o = JSON.parse(auth.stdout) as { loggedIn?: boolean; projectsDirectory?: string }
+    const o = JSON.parse(auth.stdout) as {
+      loggedIn?: boolean
+      projectsDirectory?: string
+      email?: unknown
+      subscriptionType?: unknown
+      orgName?: unknown
+    }
     if (typeof o.loggedIn === 'boolean') loggedIn = o.loggedIn
+    if (o.loggedIn === true) {
+      const text = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : undefined)
+      const found = { email: text(o.email), plan: text(o.subscriptionType), org: text(o.orgName) }
+      const filled = Object.fromEntries(Object.entries(found).filter(([, v]) => v))
+      if (Object.keys(filled).length) account = filled
+    }
     if (typeof o.projectsDirectory === 'string') projectsDir = o.projectsDirectory
   } catch {
     // 忽略
@@ -229,5 +242,9 @@ export async function discoverClaude(
       },
     }
   }
-  return { launcher, projectsDir, info: { ...base(launch), status: 'ready', version, path, message: null } }
+  return {
+    launcher,
+    projectsDir,
+    info: { ...base(launch), status: 'ready', version, path, message: null, ...(account ? { account } : {}) },
+  }
 }

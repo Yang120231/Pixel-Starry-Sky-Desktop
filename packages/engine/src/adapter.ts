@@ -20,6 +20,14 @@ export interface Launcher {
   args: string[]
 }
 
+/** 正在跑的授权登录命令（docs/ui/model-channels.md §3） */
+export interface LoginProcess {
+  /** 往命令的 stdin 写（粘贴授权码） */
+  write(text: string): void
+  kill(): void
+  done: Promise<import('./exec').ExecResult>
+}
+
 /** 适配器向 EngineHost 汇报的通道 */
 export interface SessionContext {
   extensions?: import('@pixelsky/protocol').ExtensionLaunch
@@ -102,6 +110,10 @@ export interface EngineAdapter {
    * 宿主随后重新检测。onLine 收每一行输出
    */
   install?(onLine?: (line: string) => void): Promise<EngineUpdateResult>
+  /** 授权登录（docs/ui/model-channels.md §3）：起登录命令后马上返回，宿主管超时、取消、之后的重新检测 */
+  login?(method: 'browser' | 'device', onLine: (line: string) => void): Promise<LoginProcess>
+  /** 取消授权：claude auth logout / codex logout */
+  logout?(): Promise<EngineUpdateResult>
   /** npm 上的包名：宿主定时查最新版本，界面提示「有新版本」（docs/ui/engine-update.md） */
   readonly npmPackage?: string
   /**

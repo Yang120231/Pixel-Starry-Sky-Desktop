@@ -1,0 +1,40 @@
+import { fileURLToPath } from 'node:url'
+import { describe, expect, it } from 'vitest'
+import { runInteractive } from '../src/exec'
+
+const fake = fileURLToPath(new URL('./fakes/fake-login.mjs', import.meta.url))
+const node = { command: process.execPath, args: [fake] }
+
+describe('runInteractive', () => {
+  it('不带换行的提示符也交出来，去掉颜色，只交一次；stdin 写入后命令结束', async () => {
+    const lines: string[] = []
+    const p = runInteractive(node, ['code'], process.env, l => lines.push(l))
+    await new Promise<void>(resolve => {
+      const t = setInterval(() => {
+        if (lines.includes('Paste code here if prompted >')) {
+          clearInterval(t)
+          resolve()
+        }
+      }, 20)
+    })
+    p.write('abc\n')
+    const r = await p.done
+    expect(r.ok).toBe(true)
+    expect(lines.filter(l => l.startsWith('Paste code'))).toHaveLength(1)
+    expect(lines[0]).toMatch(/^If the browser didn't open, visit: https:/)
+    expect(lines).toContain('got abc')
+  })
+
+  it('kill 结束命令', async () => {
+    const p = runInteractive(node, ['hang'], process.env, () => undefined)
+    await new Promise(r => setTimeout(r, 300))
+    p.kill()
+    const r = await p.done
+    expect(r.ok).toBe(false)
+  })
+
+  it('程序起不来：started 为 false', async () => {
+    const p = runInteractive({ command: 'definitely-not-a-command-xyz', args: [] }, [], process.env, () => undefined)
+    expect((await p.done).started).toBe(false)
+  })
+})

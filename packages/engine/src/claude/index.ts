@@ -15,9 +15,9 @@ import {
   type SessionRecord,
   viaGateway,
 } from '@pixelsky/protocol'
-import type { EngineAdapter, EngineSession, Launcher, SessionContext } from '../adapter'
+import type { EngineAdapter, EngineSession, Launcher, LoginProcess, SessionContext } from '../adapter'
 import { engineEnv } from '../env'
-import { outputTail, runStream, startupReason } from '../exec'
+import { outputTail, run, runInteractive, runStream, startupReason } from '../exec'
 import { engineBase } from '../registry'
 import { claudeInstaller, customClaude, discoverClaude, type ClaudeDiscovery } from './discover'
 import { rewindFilesOnce, sideQuestionOnce, type HelperTarget, type RewindFilesReply } from './helper'
@@ -382,6 +382,22 @@ export class ClaudeAdapter implements EngineAdapter {
     const r = await runStream(d.launcher, ['update'], this.env(), 5 * 60_000, onLine)
     this.catalogCache = null
     // 版本由宿主重新检测后填上（重新检测会广播给界面）
+    return { ok: r.ok, output: outputTail(r), version: null }
+  }
+
+  /** 授权登录：claude auth login（浏览器登录；命令自己会打开浏览器，粘贴授权码从 stdin 写入） */
+  async login(method: 'browser' | 'device', onLine: (line: string) => void): Promise<LoginProcess> {
+    if (method !== 'browser') throw new Error('Claude Code 不支持设备码登录')
+    const d = await this.discover(false)
+    if (!d.launcher) throw new Error(d.info.message ?? '没找到 Claude Code')
+    return runInteractive(d.launcher, ['auth', 'login'], this.env(), onLine)
+  }
+
+  /** 取消授权：claude auth logout */
+  async logout(): Promise<EngineUpdateResult> {
+    const d = await this.discover(false)
+    if (!d.launcher) throw new Error(d.info.message ?? '没找到 Claude Code')
+    const r = await run(d.launcher, ['auth', 'logout'], this.env())
     return { ok: r.ok, output: outputTail(r), version: null }
   }
 

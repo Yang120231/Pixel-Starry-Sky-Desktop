@@ -8,6 +8,7 @@ import type {
   EngineDefaults,
   EngineId,
   EngineInfo,
+  EngineLogin,
   EngineUpdateResult,
   HostEvent,
   Item,
@@ -40,6 +41,13 @@ export interface EngineBridge {
   updateEngine(engine: EngineId): Promise<EngineUpdateResult>
   /** 一键安装（只在 EngineInfo.installable 时可用）；过程看 engine:event 的 engine_job */
   installEngine(engine: EngineId): Promise<EngineUpdateResult>
+  /** 授权登录（docs/ui/model-channels.md §3）：起登录命令后马上返回当前进度，之后看 engine:event 的 engine_login */
+  loginEngine(engine: EngineId, method?: 'browser' | 'device'): Promise<EngineLogin>
+  /** 把用户粘贴的授权码写给正在等它的登录命令 */
+  loginInput(engine: EngineId, text: string): Promise<void>
+  cancelLogin(engine: EngineId): Promise<void>
+  /** 取消授权（claude auth logout / codex logout），结束后重新检测 */
+  logoutEngine(engine: EngineId): Promise<EngineUpdateResult>
   retrySettings(): Promise<{ maxRetries: number | null }>
   setRetrySettings(maxRetries: number | null): Promise<{ maxRetries: number | null }>
   /** 引擎列表和状态；force 时重新检测 */

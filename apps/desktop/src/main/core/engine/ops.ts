@@ -85,6 +85,16 @@ export const ENGINE_OPS = {
   'engine:catalog': (c, engine, force) => c.host.engineCatalog(engineId(engine), force === true),
   'engine:update': (c, engine) => c.host.updateEngine(engineId(engine)),
   'engine:install': (c, engine) => c.host.installEngine(engineId(engine)),
+  'engine:login': (c, engine, method) => {
+    if (method !== undefined && method !== 'browser' && method !== 'device') throw new Error('登录方式不对')
+    return c.host.loginEngine(engineId(engine), method)
+  },
+  'engine:loginInput': (c, engine, text) => {
+    if (typeof text !== 'string' || text.length > 4096) throw new Error('授权码不对')
+    return c.host.loginInput(engineId(engine), text)
+  },
+  'engine:loginCancel': (c, engine) => c.host.cancelLogin(engineId(engine)),
+  'engine:logout': (c, engine) => c.host.logoutEngine(engineId(engine)),
   'engine:retrySettings': c => c.host.retrySettings(),
   'engine:setRetrySettings': (c, maxRetries) => c.host.setRetrySettings(maxRetries as number),
   'engine:projects': c => c.host.projects(),
