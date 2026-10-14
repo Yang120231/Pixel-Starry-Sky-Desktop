@@ -3,7 +3,7 @@ import { useEffect, useState, type RefObject } from 'react'
 import { Check, Monitor, RefreshCw, SquareTerminal } from 'lucide-react'
 import { cn, Popover, Spinner, useToast } from '@/ui'
 import { useI18n } from '@/i18n/I18nProvider'
-import { translateMessage } from '@/i18n/core'
+import { machineErrorText } from './errorText'
 import type { TranslationKey } from '../../../../shared/i18n/translate'
 import { chooseWsl, openWorkspacePicker, refreshWsl, selectMachine, useMachines } from './store'
 import { wslMachines, wslStatusLine, type WslStatusLine } from './switchModel'
@@ -43,7 +43,7 @@ export function LocalMenu({
   const statusText = (line: WslStatusLine): string => {
     const params = { ...line.params }
     if (params.problem) params.problem = t(params.problem as TranslationKey)
-    if (params.code) params.error = translateMessage(params.code)
+    if (params.code) params.error = machineErrorText(params.code)
     return t(line.key as TranslationKey, params)
   }
   const toWindows = () => {
@@ -51,13 +51,13 @@ export function LocalMenu({
     if (state.currentId === 'local') return
     void selectMachine('local').then(
       () => openWorkspacePicker(),
-      (e: Error) => toast(translateMessage(e.message)),
+      (e: Error) => toast(machineErrorText(e)),
     )
   }
   const toDistro = (id: string) => {
     onClose()
     if (state.currentId === id || state.machines.find(m => m.id === id)?.status === 'connecting') return
-    void chooseWsl(id, message => toast(translateMessage(message)))
+    void chooseWsl(id, message => toast(machineErrorText(message)))
   }
   return (
     <Popover open={open} onClose={onClose} anchor={anchor} className="w-80">

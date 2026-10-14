@@ -22,6 +22,7 @@ interface CodeView {
 }
 const CODES: Record<string, CodeView> = {
   WSL_START_FAILED: { line: true, noShort: true },
+  WSL_HOME_EMPTY: {},
   ENCODING_NOT_UTF8: { param: 'charmap', handled: true },
   ENCODING_UNKNOWN: {},
   NODE_MISSING: {},

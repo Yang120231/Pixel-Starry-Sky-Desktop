@@ -5,6 +5,7 @@ export type TunnelPeer = Pick<RpcPeer, 'call' | 'event' | 'handle'> & Partial<Pi
 
 // 单连接发送缓冲上限：对端写不过来时会发 pause，正常到不了这里；超过就当对端卡死，断开
 const BUFFER_LIMIT = 8 * 1024 * 1024
+const FINISH_TIMEOUT_MS = 10_000
 const HOST = '127.0.0.1'
 // RPC 输出积压超过高水位就暂停读源 socket，降到低水位再恢复（RpcPeer 在 64MB 时会直接关连接）
 const BACKLOG_HIGH = 16 * 1024 * 1024
@@ -39,7 +40,7 @@ export class TunnelEnd {
   ) {
     peer.handle('tunnel:open', d => this.onOpen(d as { id: string; port: number }))
     peer.handle('tunnel:data', d => this.onData(d as { id: string; data: string }))
-    peer.handle('tunnel:end', d => this.drop((d as { id: string }).id, false))
+    peer.handle('tunnel:end', d => this.finish((d as { id: string }).id))
     peer.handle('tunnel:pause', d => this.setPeerPaused((d as { id: string }).id, true))
     peer.handle('tunnel:resume', d => this.setPeerPaused((d as { id: string }).id, false))
     peer.whenClosed?.(() => this.close())
@@ -192,6 +193,22 @@ export class TunnelEnd {
     if (!socket) return
     if (socket.writableLength > BUFFER_LIMIT) return this.drop(id, true)
     if (!socket.write(Buffer.from(data, 'base64'))) this.safeEvent('tunnel:pause', { id })
+  }
+
+  // 对端正常结束：先把写队列里的数据 flush 完再关，超时才强制销毁
+  private finish(id: string): void {
+    const socket = this.conns.get(id)
+    if (!socket) return
+    this.conns.delete(id)
+    this.peerPaused.delete(id)
+    this.outFull.delete(id)
+    socket.removeAllListeners('data')
+    socket.on('error', () => socket.destroy())
+    socket.end()
+    socket.resume()
+    const timer = setTimeout(() => socket.destroy(), FINISH_TIMEOUT_MS)
+    timer.unref()
+    socket.once('close', () => clearTimeout(timer))
   }
 
   private drop(id: string, notify: boolean): void {

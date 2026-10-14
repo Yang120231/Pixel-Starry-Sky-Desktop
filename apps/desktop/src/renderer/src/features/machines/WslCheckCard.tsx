@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom'
 import { AlertCircle, Circle, CheckCircle2, XCircle, X } from 'lucide-react'
 import { Button, CopyButton, IconButton, Spinner, cn, useToast } from '@/ui'
 import { useI18n } from '@/i18n/I18nProvider'
-import { translateMessage } from '@/i18n/core'
+import { machineErrorText } from './errorText'
 import type { TranslationKey } from '../../../../shared/i18n/translate'
 import type { CheckItem } from '../../../../shared/types/machines'
 import {
@@ -45,7 +45,7 @@ export function WslCheckCard() {
 }
 
 function Card({ id, items: fresh }: { id: string; items: CheckItem[] | null }) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const toast = useToast()
   const machine = useMachines().machines.find(m => m.id === id)
   const root = useRef<HTMLDivElement>(null)
@@ -55,7 +55,7 @@ function Card({ id, items: fresh }: { id: string; items: CheckItem[] | null }) {
   const items = sortCheckItems(fresh ?? machine?.wsl?.lastCheck?.items ?? [])
   const ready = requiredReady(items)
   const name = machine?.name ?? ''
-  const fail = (e: unknown) => toast(translateMessage((e as Error).message))
+  const fail = (e: unknown) => toast(machineErrorText(e, locale))
   const recheck = async () => {
     setBusy('check')
     try {
@@ -81,7 +81,7 @@ function Card({ id, items: fresh }: { id: string; items: CheckItem[] | null }) {
   const start = async () => {
     setBusy('start')
     try {
-      if ((await chooseWsl(id, m => toast(translateMessage(m)))) === 'selected') closeWslCheck()
+      if ((await chooseWsl(id, m => toast(machineErrorText(m, locale)))) === 'selected') closeWslCheck()
     } finally {
       setBusy(null)
     }

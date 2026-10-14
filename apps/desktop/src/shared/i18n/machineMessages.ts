@@ -121,6 +121,13 @@ export const machineErrors = {
     zh: 'WSL 还没准备好，按检查卡片装好需要的东西。',
     en: 'WSL is not ready. Install what the check card lists, then try again.',
   },
+  SSH_MACHINE_MISSING: { zh: '这台机器已不存在，请刷新列表。', en: 'This machine no longer exists. Refresh the list.' },
+  SSH_CONNECTING: { zh: '正在连接，请稍后再试。', en: 'Still connecting. Try again shortly.' },
+  SSH_HELPER_PATH_INVALID: {
+    zh: '远端辅助程序的安装路径不正确，请重试。',
+    en: 'The helper install path on the remote is invalid. Try again.',
+  },
+  TUNNEL_CLOSED: { zh: '隧道已关闭。', en: 'The tunnel was closed.' },
   WSL_CONNECTION_CLOSED: { zh: 'WSL 连接已断开。', en: 'The WSL connection closed.' },
   WSL_START_FAILED: {
     zh: '无法启动这个 WSL 发行版，请在终端里运行 wsl 看看是否正常。',

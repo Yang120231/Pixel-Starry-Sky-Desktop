@@ -4,7 +4,7 @@ import { useRef, useState } from 'react'
 import { Check, ChevronDown, Cloud, Monitor, Plus, Server, Settings2, SquareTerminal } from 'lucide-react'
 import { cn, Popover, SEGMENT_TRACK, segmentItem, useToast } from '@/ui'
 import { useI18n } from '@/i18n/I18nProvider'
-import { translateMessage } from '@/i18n/core'
+import { machineErrorText } from './errorText'
 import { openMachineManager, openWorkspacePicker, selectMachine, useMachines } from './store'
 import { LocalMenu } from './LocalMenu'
 import { cloudMachines, switchView, usableMachine, wslMachines } from './switchModel'
@@ -33,7 +33,7 @@ export function MachineSwitch() {
     setOpen(false)
     void selectMachine(id).then(
       () => openWorkspacePicker(),
-      (e: Error) => toast(translateMessage(e.message)),
+      (e: Error) => toast(machineErrorText(e)),
     )
   }
   return (

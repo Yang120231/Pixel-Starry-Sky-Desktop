@@ -271,3 +271,14 @@ describe('i18n 防回归', () => {
     )
   })
 })
+
+describe('machineErrors 覆盖 main/machines 抛出的纯代码', () => {
+  it.each(['SSH_MACHINE_MISSING', 'SSH_CONNECTING', 'SSH_HELPER_PATH_INVALID', 'TUNNEL_CLOSED', 'WSL_HOME_EMPTY'])(
+    '%s 有中英文案',
+    code => {
+      const entry = (machineErrors as Record<string, { zh: string; en: string }>)[code]
+      expect(entry?.zh).toBeTruthy()
+      expect(entry?.en).toBeTruthy()
+    },
+  )
+})

@@ -26,6 +26,11 @@ describe('requiredReady', () => {
 })
 
 describe('itemView', () => {
+  it('WSL_HOME_EMPTY 有短说明和原因', () => {
+    const view = itemView(item('start', 'fail', true, { code: 'WSL_HOME_EMPTY' }))
+    expect(view.short).not.toBeNull()
+    expect(view.reason).not.toBeNull()
+  })
   it('通过的项右侧显示 detail', () => {
     expect(itemView(item('claude', 'ok', false, { detail: '2.1.299' }))).toMatchObject({
       short: { text: '2.1.299' },

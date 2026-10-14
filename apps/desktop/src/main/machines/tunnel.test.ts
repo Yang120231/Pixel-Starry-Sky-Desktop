@@ -219,6 +219,34 @@ describe('RPC 隧道', () => {
       handlers.get('tunnel:data')!({ id, data: chunk })
     expect(events.some(e => e[0] === 'tunnel:end' && (e[1] as { id: string }).id === id)).toBe(true)
   })
+  it('收到对端 tunnel:end：先 flush 完写队列的数据再关', async () => {
+    const handlers = new Map<string, (d: unknown) => void>()
+    const peer: TunnelPeer = {
+      call: async () => undefined as never,
+      event: () => {},
+      handle: (channel, cb) => void handlers.set(channel, cb),
+    }
+    const end = new TunnelEnd(peer, 'remote')
+    closers.push(() => end.close())
+    let held!: net.Socket
+    const server = await echoServer(s => {
+      held = s
+      s.pause()
+    })
+    const id = await end.methods['tunnel:connect'](server.port)
+    const total = 6 * 1024 * 1024
+    const chunk = Buffer.alloc(1024 * 1024, 'z').toString('base64')
+    for (let i = 0; i < 6; i++) handlers.get('tunnel:data')!({ id, data: chunk })
+    handlers.get('tunnel:end')!({ id })
+    let received = 0
+    const done = new Promise<void>(resolve => {
+      held.on('data', c => (received += c.length))
+      held.on('end', () => resolve())
+    })
+    held.resume()
+    await done
+    expect(received).toBe(total)
+  })
   it('RPC 输出积压时暂停读源，降下来再继续', async () => {
     const handlers = new Map<string, (d: unknown) => void>()
     const datas: unknown[] = []

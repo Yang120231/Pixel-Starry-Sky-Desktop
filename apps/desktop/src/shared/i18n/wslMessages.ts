@@ -77,6 +77,11 @@ export const wslMessages = {
   'wsl.short.CLAUDE_WINDOWS': { zh: '找到的是 Windows 程序', en: 'Found a Windows program' },
   'wsl.short.CODEX_MISSING': { zh: '没装', en: 'Not installed' },
   'wsl.short.CODEX_WINDOWS': { zh: '找到的是 Windows 程序', en: 'Found a Windows program' },
+  'wsl.short.WSL_HOME_EMPTY': { zh: '读不到主目录', en: 'Home directory unknown' },
+  'wsl.reason.WSL_HOME_EMPTY': {
+    zh: '读不到这个发行版里的用户主目录，请先在 WSL 里打开一次完成初始化。',
+    en: "Could not read the user's home directory in this distro. Open it in WSL once to finish setup.",
+  },
   'wsl.reason.WSL_START_FAILED': {
     zh: '启动超时或失败。第一次用这个发行版，先在终端里打开一次，完成创建用户。',
     en: 'Start timed out or failed. If this distro is new, open it once in a terminal and finish creating a user.',
