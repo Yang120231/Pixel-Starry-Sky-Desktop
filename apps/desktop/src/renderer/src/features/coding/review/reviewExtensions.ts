@@ -35,9 +35,10 @@ const theme = EditorView.baseTheme({
     position: 'relative',
     backgroundColor: removed,
     padding: '0 14px',
-    color: 'var(--text-muted)',
+    // 删掉的行不划线、用次一级的字色：只靠红底区分，旧内容照样看得清
+    color: 'var(--text-secondary)',
   },
-  '.cm-ai-deleted-line': { textDecoration: 'line-through', whiteSpace: 'pre', minHeight: '1em' },
+  '.cm-ai-deleted-line': { whiteSpace: 'pre', minHeight: '1em' },
   '.cm-ai-tools': {
     position: 'absolute',
     right: '12px',
