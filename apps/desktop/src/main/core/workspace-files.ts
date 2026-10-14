@@ -126,8 +126,13 @@ export async function workspaceNewPath(
   if (parent !== root && !inside(root, parent)) throw codedError('files.outsideProject')
   const path = join(parent, name)
   const existing = await lstat(path).catch(() => null)
-  // Windows 上只改大小写（a.ts → A.ts）时新旧是同一个条目，允许
-  const sameEntry = allowExisting !== undefined && allowExisting.toLowerCase() === path.toLowerCase()
+  // 只改大小写（a.ts → A.ts）：不区分大小写的文件系统上新旧是同一个条目，允许；区分大小写时（Linux、WSL、
+  // SSH 远端）A.ts 可能是另一个文件，要拒绝，否则会被覆盖。按 dev + ino 判断是不是同一个条目，不按字符串
+  let sameEntry = false
+  if (existing && allowExisting !== undefined && allowExisting.toLowerCase() === path.toLowerCase()) {
+    const source = await lstat(allowExisting).catch(() => null)
+    sameEntry = !!source && source.dev === existing.dev && source.ino === existing.ino
+  }
   if (existing && !sameEntry) throw codedError('files.exists', { name })
   return { root, path }
 }
@@ -329,12 +334,13 @@ export class WorkspaceFiles {
   async headContent(ref: WorkspaceRef, path: string): Promise<string | null> {
     const cwd = await workspacePath(this.target(ref).path, '', 'directory')
     await workspacePath(cwd, path, 'file')
+    // 不设 cwd、用 -C：Windows 按裸名启动时会先在 cwd 里找，项目里的 git.exe 不能顶替真正的 git
     const git = (args: string[]): Promise<string | null> =>
       new Promise(done => {
         execFile(
           'git',
-          args,
-          { cwd, windowsHide: true, timeout: 2000, maxBuffer: READ_LIMIT, encoding: 'utf8' },
+          ['-C', cwd, ...args],
+          { windowsHide: true, timeout: 2000, maxBuffer: READ_LIMIT, encoding: 'utf8' },
           (err, out) => done(err ? null : out),
         )
       })
@@ -407,11 +413,23 @@ export class WorkspaceFiles {
 
   async status(ref: WorkspaceRef): Promise<Record<string, string>> {
     const cwd = await workspacePath(this.target(ref).path, '', 'directory')
+    // 不设 cwd、用 -C：同 headContent
     return new Promise(resolveStatus => {
       execFile(
         'git',
-        ['-c', 'core.quotepath=false', 'status', '--porcelain=v1', '-z', '--untracked-files=normal', '--', '.'],
-        { cwd, windowsHide: true, timeout: 4000, maxBuffer: 1024 * 1024, encoding: 'utf8' },
+        [
+          '-C',
+          cwd,
+          '-c',
+          'core.quotepath=false',
+          'status',
+          '--porcelain=v1',
+          '-z',
+          '--untracked-files=normal',
+          '--',
+          '.',
+        ],
+        { windowsHide: true, timeout: 4000, maxBuffer: 1024 * 1024, encoding: 'utf8' },
         async (err, output) => {
           if (err) {
             resolveStatus({})
@@ -420,8 +438,8 @@ export class WorkspaceFiles {
           // Porcelain 路径相对仓库根，先读取 prefix 以兼容会话 cwd 位于子目录。
           execFile(
             'git',
-            ['rev-parse', '--show-prefix'],
-            { cwd, windowsHide: true, timeout: 2000, encoding: 'utf8' },
+            ['-C', cwd, 'rev-parse', '--show-prefix'],
+            { windowsHide: true, timeout: 2000, encoding: 'utf8' },
             (prefixError, prefixText) => {
               if (prefixError) {
                 resolveStatus({})

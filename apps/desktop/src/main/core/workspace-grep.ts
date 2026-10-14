@@ -32,10 +32,11 @@ export function parseGitGrepLine(line: string): GrepMatch | null {
   }
 }
 
-/** 跑一条 git 命令只看退出码；git 不可用时为 null */
+/** 跑一条 git 命令只看退出码；git 不可用时为 null。
+ * 不设 cwd、用 -C：Windows 按裸名启动时会先在 cwd 里找，项目里的 git.exe 不能顶替真正的 git */
 function gitExit(cwd: string, args: string[]): Promise<number | null> {
   return new Promise(done => {
-    const child = spawn('git', args, { cwd, windowsHide: true, stdio: 'ignore' })
+    const child = spawn('git', ['-C', cwd, ...args], { windowsHide: true, stdio: 'ignore' })
     child.on('error', () => done(null))
     child.on('close', code => done(code))
   })
@@ -47,7 +48,7 @@ async function gitGrep(cwd: string, query: string, deadline: number): Promise<Gr
   if ((await gitExit(cwd, ['check-ignore', '-q', '.'])) !== 1) return null
   return new Promise(done => {
     const args = ['-c', 'core.quotepath=false', 'grep', '-n', '--column', '-I', '-F', '-i', '--untracked']
-    const child = spawn('git', [...args, '--no-color', '-e', query, '--', '.'], { cwd, windowsHide: true })
+    const child = spawn('git', ['-C', cwd, ...args, '--no-color', '-e', query, '--', '.'], { windowsHide: true })
     const matches: GrepMatch[] = []
     let buffer = '',
       truncated = false,
