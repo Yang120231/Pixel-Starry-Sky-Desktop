@@ -110,7 +110,6 @@ export function ChannelComposer({
     [followUp, value, members],
   )
   const [sending, setSending] = useState(false)
-  const team = channel.scope === 'team'
   const hasAttachments = !team && (attach.images.length > 0 || attach.files.length > 0)
   const canSend = (value.trim().length > 0 || hasAttachments) && !sending && !offline && !attach.busy
   const hasAgents = members.some(m => m.kind === 'agent')
