@@ -39,6 +39,7 @@ export const fullAccessMessages = {
     en: 'Full access for this task: commands, edits and deletions run without asking',
   },
   'fullAccess.revert': { zh: '改回{p0}', en: 'Switch to {p0}' },
+  'fullAccess.dismissStrip': { zh: '不再提示', en: 'Dismiss' },
 
   'fullAccess.default.title': { zh: '以后的新任务都完全放行？', en: 'Start every new task with full access?' },
   'fullAccess.default.body': {
