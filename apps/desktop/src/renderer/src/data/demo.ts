@@ -17,7 +17,7 @@ import type {
   TaskOutput,
   UsageRecord,
 } from '@pixelsky/protocol'
-import type { MachineState } from '../../../shared/types/machines'
+import type { MachineState, WorkspaceChoice } from '../../../shared/types/machines'
 import type { AccountInfo, StoreCatalog } from '../../../shared/types/account'
 import type { ArtifactPreview } from '../../../shared/types/artifacts'
 import type { PlatformGroupInfo } from '../../../shared/types/platform-catalog'
@@ -43,7 +43,7 @@ import type {
 import type { TerminalProfile } from '../../../shared/types/terminal'
 import type { DirectoryListing, EditorState, FileDocument } from '../../../shared/types/workspace'
 import type { InboxItem } from '@/features/panel/inbox/inboxModel'
-import type { AppData, DemoSessionChange, EngineLite } from './types'
+import type { AppData, DemoSessionChange, EngineLite, Project } from './types'
 
 /** 是否为演示模式（主进程根据环境变量 PIXELSKY_DEMO=1 或启动参数 --demo 传入） */
 export const isDemo = typeof window !== 'undefined' && window.pixelsky?.demo === true
@@ -101,6 +101,9 @@ export interface DemoSource {
   inbox: InboxItem[]
   /** 演示用的云端机器（顶栏「本机 | 云端」），machines/store.ts 演示时用它当初始状态 */
   machines?: MachineState
+  /** 演示时某台机器（WSL）自己的项目和工作区；没有的机器沿用 appData.projects */
+  machineProjects?: Record<string, Array<Project & { path: string }>>
+  machineWorkspaces?: (machineId: string) => WorkspaceChoice[]
   projectTools: {
     tasks: TaskState
     /** 左栏「任务」：项目里能跑的命令（docs/ui/coding-tasks.md） */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { MachineInfo, MachineState } from '../../../../shared/types/machines'
-import { cloudMachines, switchView } from './switchModel'
+import type { CheckItem, MachineInfo, MachineState } from '../../../../shared/types/machines'
+import { cloudMachines, switchView, wslMachines, wslStatusLine } from './switchModel'
 
 const machine = (id: string, status: MachineInfo['status'], name = id): MachineInfo => ({
   id,
@@ -51,6 +51,10 @@ describe('switchView', () => {
       warn: false,
     })
   })
+  it('WSL 发行版：云端那半不带名字（view.side 为 local）', () => {
+    const v = switchView(state('wsl-aaaaaaaaaaaa', machine('wsl-aaaaaaaaaaaa', 'connected', 'Ubuntu-24.04')))
+    expect(v.side).toBe('local')
+  })
   it('WSL 发行版没连上时带警告点', () => {
     expect(switchView(state('wsl-aaaaaaaaaaaa', machine('wsl-aaaaaaaaaaaa', 'error', 'Debian'))).warn).toBe(true)
   })
@@ -69,5 +73,89 @@ describe('cloudMachines', () => {
   it('不含 WSL 发行版', () => {
     const a = machine('ssh-1', 'connected')
     expect(cloudMachines(state('local', a, machine('wsl-bbbbbbbbbbbb', 'disconnected')))).toEqual([a])
+  })
+})
+
+const item = (key: CheckItem['key'], status: CheckItem['status'], required: boolean, extra: Partial<CheckItem> = {}) =>
+  ({ key, status, required, detail: '', ...extra }) as CheckItem
+const distro = (
+  status: MachineInfo['status'],
+  wslState: 'running' | 'stopped',
+  items?: CheckItem[],
+  error: string | null = null,
+): MachineInfo => ({
+  ...machine('wsl-aaaaaaaaaaaa', status, 'Debian'),
+  error,
+  wsl: { distro: 'Debian', version: 2, isDefault: false, state: wslState, lastCheck: items && { at: 1, items } },
+})
+const passing = [
+  item('start', 'ok', true),
+  item('node', 'ok', true),
+  item('claude', 'ok', false, { detail: '2.1.299' }),
+]
+const nodeOld = [item('start', 'ok', true), item('node', 'fail', true, { code: 'NODE_OLD' })]
+
+describe('wslMachines', () => {
+  it('只取 WSL 发行版', () => {
+    const w = machine('wsl-bbbbbbbbbbbb', 'disconnected')
+    expect(wslMachines(state('local', machine('ssh-1', 'connected'), w))).toEqual([w])
+  })
+})
+
+describe('wslStatusLine', () => {
+  it('已连接，带 Claude Code 版本', () => {
+    expect(wslStatusLine(distro('connected', 'running', passing))).toEqual({
+      tone: 'ok',
+      key: 'wsl.status.connectedVersion',
+      params: { version: 'Claude Code 2.1' },
+      needsPrep: false,
+    })
+  })
+  it('已连接，没有版本', () => {
+    expect(wslStatusLine(distro('connected', 'running'))).toEqual({
+      tone: 'ok',
+      key: 'wsl.status.connected',
+      needsPrep: false,
+    })
+  })
+  it('连接中', () => {
+    expect(wslStatusLine(distro('connecting', 'running')).tone).toBe('busy')
+  })
+  it('运行中且上次检查通过', () => {
+    expect(wslStatusLine(distro('disconnected', 'running', passing))).toEqual({
+      tone: 'ok',
+      key: 'wsl.status.runningOk',
+      needsPrep: false,
+    })
+  })
+  it('没运行，上次检查有必需项没过：需要准备', () => {
+    expect(wslStatusLine(distro('disconnected', 'stopped', nodeOld))).toEqual({
+      tone: 'idle',
+      key: 'wsl.status.stoppedFailed',
+      params: { problem: 'wsl.problem.NODE_OLD' },
+      needsPrep: true,
+    })
+  })
+  it('运行中，上次检查没过', () => {
+    const line = wslStatusLine(distro('disconnected', 'running', nodeOld))
+    expect(line.key).toBe('wsl.status.runningFailed')
+    expect(line.needsPrep).toBe(true)
+  })
+  it('可选项没过不算需要准备', () => {
+    const items = [...passing, item('codex', 'warn', false, { code: 'CODEX_MISSING' })]
+    expect(wslStatusLine(distro('disconnected', 'stopped', items)).needsPrep).toBe(false)
+  })
+  it('没有检查记录', () => {
+    expect(wslStatusLine(distro('disconnected', 'stopped')).key).toBe('wsl.status.stoppedNever')
+    expect(wslStatusLine(distro('disconnected', 'running')).key).toBe('wsl.status.runningNever')
+  })
+  it('出错：显示错误码；WSL_NOT_READY 走检查记录', () => {
+    expect(wslStatusLine(distro('error', 'running', undefined, 'WSL_START_FAILED'))).toEqual({
+      tone: 'warn',
+      key: 'wsl.status.error',
+      params: { code: 'WSL_START_FAILED' },
+      needsPrep: false,
+    })
+    expect(wslStatusLine(distro('error', 'stopped', nodeOld, 'WSL_NOT_READY')).needsPrep).toBe(true)
   })
 })

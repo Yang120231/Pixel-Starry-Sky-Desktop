@@ -41,6 +41,7 @@ import { recoveryMessages } from './recoveryMessages'
 import { pathClickMessages } from './pathClickMessages'
 import { subagentMessages } from './subagentMessages'
 import { traceHistoryMessages } from './traceHistoryMessages'
+import { wslMessages } from './wslMessages'
 import { replaceCodedErrors } from '@pixelsky/protocol'
 import type { Locale } from './messages'
 
@@ -59,6 +60,7 @@ export const allMessages = {
   ...workspaceMessages,
   ...machineMessages,
   ...machineErrors,
+  ...wslMessages,
   ...channelMessages,
   ...teamMessages,
   ...notificationMessages,

@@ -16,6 +16,7 @@ import { sidebarMessages } from '../../../shared/i18n/sidebarMessages'
 import { projectMessages } from '../../../shared/i18n/projectMessages'
 import { workspaceMessages } from '../../../shared/i18n/workspaceMessages'
 import { machineMessages, machineErrors } from '../../../shared/i18n/machineMessages'
+import { wslMessages } from '../../../shared/i18n/wslMessages'
 import { channelMessages } from '../../../shared/i18n/channelMessages'
 import { teamMessages } from '../../../shared/i18n/teamMessages'
 import { notificationMessages } from '../../../shared/i18n/notificationMessages'
@@ -63,6 +64,7 @@ const dictionaries: Record<string, Record<string, unknown>> = {
   workspaceMessages,
   machineMessages,
   machineErrors,
+  wslMessages,
   channelMessages,
   teamMessages,
   notificationMessages,

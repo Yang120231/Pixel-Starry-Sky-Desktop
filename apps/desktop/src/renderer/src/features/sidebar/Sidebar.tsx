@@ -18,6 +18,7 @@ import { RunStatusPill } from './RunStatusPill'
 import { filterProjects, filterSessions, lanesOf, useScrollFade, type RunFilter } from './runFilter'
 import { useSessionCards } from '@/features/board/useSessionCards'
 import { SidebarFooter } from './SidebarFooter'
+import { WslHint } from './WslHint'
 
 export interface SidebarProps {
   selectedSessionId: string | null
@@ -127,6 +128,7 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
             />
           }
         >
+          <WslHint />
           {runFilter && shownProjects.length === 0 ? (
             <SidebarEmpty>
               {tr(runFilter === 'running' ? 'sidebar.runStatus.noneRunning' : 'sidebar.runStatus.noneWaiting')}

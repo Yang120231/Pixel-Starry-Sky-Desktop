@@ -12,6 +12,7 @@ import { openRightTab } from '@/features/panel/workspaceStore'
 import { initMachines, machineOf, selectMachine, selectWorkspace, useMachines } from './store'
 import { cachedWorkspaces, loadWorkspaces } from './workspaceList'
 import { isDemo } from '@/data'
+import { demo } from '@/data/demo'
 import { getFiles } from '@/features/files/store'
 import { confirmFiles } from '@/features/files/FileConfirm'
 
@@ -84,7 +85,12 @@ export function MachineDialogs() {
   // 工作区列表（issue #11）：有上次读到的就直接显示，在后台刷新后替换，不清空、不显示「正在读取」；
   // 只有从没读过时才显示。项目工具变化时（revision）合并成一次后台刷新
   useEffect(() => {
-    if (view !== 'workspaces' || isDemo) return
+    if (view !== 'workspaces') return
+    if (isDemo) {
+      setWorkspaces(demo().machineWorkspaces?.(state.currentId) ?? [])
+      setLoading(false)
+      return
+    }
     let gone = false
     const list = projects.filter(p => machineOf(p.id) === state.currentId)
     const cached = cachedWorkspaces(state.currentId, list)
@@ -373,6 +379,9 @@ export function MachineDialogs() {
                     {t('machines.go')}
                   </Button>
                 </div>
+                {current?.kind === 'wsl' && path.startsWith('/mnt/') && (
+                  <p className="-mt-1 mb-2 text-meta text-warn">{t('wsl.mntHint')}</p>
+                )}
                 <div className="max-h-60 overflow-auto rounded-md border border-line p-1">
                   {directory.parent && (
                     <button

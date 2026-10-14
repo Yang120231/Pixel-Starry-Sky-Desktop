@@ -9,6 +9,10 @@ import { machineOf } from '../machines/identity'
 import type { ShellChannel } from '../machines/link'
 import type { Machines } from '../machines/service'
 
+/** 远端终端的名字：WSL 发行版叫「WSL · 名字」，其余仍是 SSH Shell（profile id 不变，存档兼容） */
+export const shellLabel = (machine: string, name?: string): string =>
+  machine.startsWith('wsl-') && name ? `WSL · ${name}` : 'SSH Shell'
+
 interface Run {
   channel: ShellChannel
   owner: number
@@ -50,11 +54,12 @@ export class RemoteTerminals {
   state(owner: number): TerminalState {
     const machine = this.machines.currentId,
       remote = this.machines.state().machines.find(m => m.id === machine)
+    const label = shellLabel(machine, remote?.name)
     return {
       profiles: [
         {
           id: 'ssh-shell',
-          label: 'SSH Shell',
+          label,
           command:
             remote?.status === 'connected' ? (this.machines.connection(machine).hello?.shell ?? '/bin/sh') : '/bin/sh',
           args: [],
@@ -87,6 +92,7 @@ export class RemoteTerminals {
   private async createOnce(owner: number, ref: WorkspaceRef): Promise<TerminalRecord> {
     if (this.records.length >= 36) throw new Error('最多打开 12 个终端，请先关闭部分标签')
     const machine = machineOf(ref.projectId ?? ref.sessionId),
+      label = shellLabel(machine, this.machines.state().machines.find(m => m.id === machine)?.name),
       target = this.machines.target(ref)
     if (!target) throw new Error('项目已不存在')
     const projectId = ref.projectId ?? this.machines.record(ref.sessionId!)?.projectId
@@ -97,8 +103,8 @@ export class RemoteTerminals {
       projectName: target.name,
       cwd: target.path,
       profileId: 'ssh-shell',
-      profileLabel: 'SSH Shell',
-      title: 'SSH Shell',
+      profileLabel: label,
+      title: label,
       titleEdited: false,
       status: 'stopped',
       generation: 0,

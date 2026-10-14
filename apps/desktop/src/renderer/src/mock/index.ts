@@ -16,7 +16,7 @@ import { demo } from './demo'
 import { DEMO_EDITOR_STATE, DEMO_FILES, demoDirectory, demoDocument } from './files'
 import { demoGitBranches, demoGitDiff, demoGitHistory, demoGitStatus } from './git'
 import { demoInbox } from './inbox'
-import { demoMachines } from './machines'
+import { demoMachines, demoMachineProjects, demoMachineWorkspaces } from './machines'
 import { demoBoardTasks } from './board'
 import { demoEngineCatalog, demoEngineConfig, demoEngineStatus, demoPlatformGroups, demoProviders } from './platform'
 import { demoToolBrowser, demoToolCopies, demoToolEnvironment, demoToolRunTasks, demoToolTasks } from './projectTools'
@@ -41,6 +41,8 @@ export const demoSource: DemoSource = {
   git: { status: demoGitStatus, branches: demoGitBranches, diff: demoGitDiff, history: demoGitHistory },
   inbox: demoInbox,
   machines: demoMachines,
+  machineProjects: demoMachineProjects,
+  machineWorkspaces: demoMachineWorkspaces,
   boardTasks: demoBoardTasks,
   projectTools: {
     tasks: demoToolTasks,

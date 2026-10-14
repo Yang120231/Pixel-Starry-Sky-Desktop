@@ -136,3 +136,70 @@ export async function selectWorkspace(choice: WorkspaceChoice, fresh = false): P
     localStorage.setItem('pixelsky.last-workspace.' + id, JSON.stringify(choice))
   } catch {}
 }
+
+// WSL 检查卡片的开关（LocalMenu 和卡片自己共用）：items 是刚探测到的结果，没有时读机器记录里的 lastCheck
+interface WslCheckView {
+  id: string
+  items: CheckItem[] | null
+}
+let wslCheck: WslCheckView | null = null
+const wslCheckListeners = new Set<() => void>()
+const setWslCheck = (value: WslCheckView | null) => {
+  wslCheck = value
+  wslCheckListeners.forEach(fn => fn())
+}
+export function useWslCheck(): WslCheckView | null {
+  return useSyncExternalStore(
+    cb => {
+      wslCheckListeners.add(cb)
+      return () => {
+        wslCheckListeners.delete(cb)
+      }
+    },
+    () => wslCheck,
+  )
+}
+export const openWslCheck = (id: string, items: CheckItem[] | null = null): void => setWslCheck({ id, items })
+export const updateWslCheck = (id: string, items: CheckItem[]): void => {
+  if (wslCheck?.id === id) setWslCheck({ id, items })
+}
+export const closeWslCheck = (): void => setWslCheck(null)
+
+/**
+ * 点了某个 WSL 发行版：已连接就切过去并选工作区；否则先连接，没准备好打开检查卡片。
+ * 返回 'card' 表示卡片开着（没切过去）；连接抛错时打开卡片并把错误交给 onError。
+ */
+export async function chooseWsl(id: string, onError?: (message: string) => void): Promise<'selected' | 'card'> {
+  const machine = state.machines.find(m => m.id === id)
+  const select = async (): Promise<'selected' | 'card'> => {
+    try {
+      await selectMachine(id)
+    } catch (error) {
+      onError?.((error as Error).message)
+      openWslCheck(id)
+      return 'card'
+    }
+    openWorkspacePicker()
+    return 'selected'
+  }
+  if (machine?.status === 'connected') return select()
+  if (isDemo || !window.pixelsky) {
+    // 演示里没有主进程：上次检查必需项都过了就当连上了，否则直接显示检查卡片
+    const items = machine?.wsl?.lastCheck?.items ?? []
+    return items.length > 0 && items.every(i => !i.required || i.status === 'ok')
+      ? select()
+      : (openWslCheck(id), 'card')
+  }
+  try {
+    const result = await window.pixelsky.machines.connect(id)
+    if (!result.connected) {
+      openWslCheck(id, result.items ?? null)
+      return 'card'
+    }
+  } catch (error) {
+    onError?.((error as Error).message)
+    openWslCheck(id)
+    return 'card'
+  }
+  return select()
+}
