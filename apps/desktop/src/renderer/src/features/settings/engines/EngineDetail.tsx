@@ -16,12 +16,13 @@ import {
   type EngineLocalConfig,
   type PermissionMode,
 } from '@pixelsky/protocol'
-import { Button, EngineIcon, Select, Switch, cn } from '@/ui'
+import { Button, CopyButton, EngineIcon, Select, Switch, cn } from '@/ui'
 import { platformModels, usePlatform } from '@/features/account/platform'
 import { EFFORT_LABEL, PERMISSION_INFO, bridge, isLive, redetectEngines } from '@/features/engine'
 import { envLines, parseEnvLines } from './envLines'
 import { migrateEnv, providerEnvKeys } from './migrateEnv'
 import { LaunchCard } from './LaunchCard'
+import { splitInstallCommand } from './installCommand'
 import { DefaultBadge, ENGINE_INTRO, ENGINE_STATUS, FIELD } from './parts'
 import {
   canInstall,
@@ -374,8 +375,8 @@ function Header({
         </div>
       </div>
       {!ready && e.message && !(updating && action === 'install') && (
-        <div className="mt-3 rounded-lg border border-line px-3 py-2 text-meta">
-          <p className="whitespace-pre-line text-warn">{translateMessage(e.message)}</p>
+        <div className="selectable mt-3 rounded-lg border border-line px-3 py-2 text-meta">
+          <InstallMessage message={translateMessage(e.message)} />
           {installable && <p className="mt-1 text-fg-secondary">{tr('engineJob.installHint')}</p>}
         </div>
       )}
@@ -696,5 +697,21 @@ function Row({
       </div>
       {children && <div className="mt-2.5">{children}</div>}
     </div>
+  )
+}
+
+/** 「没找到」的提示：整段能选中复制；里面的安装命令单独成一行等宽字，带复制按钮 */
+function InstallMessage({ message }: { message: string }) {
+  const { before, command, after } = splitInstallCommand(message)
+  if (!command) return <p className="whitespace-pre-line text-warn">{message}</p>
+  return (
+    <>
+      <p className="whitespace-pre-line text-warn">{before}</p>
+      <div className="mt-1.5 flex items-center gap-1 rounded-md bg-subtle py-1 pr-1 pl-2.5">
+        <code className="min-w-0 flex-1 font-mono text-meta break-all text-fg">{command}</code>
+        <CopyButton text={command} iconOnly label={tr('engineJob.copyCommand')} />
+      </div>
+      {after && <p className="mt-1 whitespace-pre-line text-warn">{after}</p>}
+    </>
   )
 }

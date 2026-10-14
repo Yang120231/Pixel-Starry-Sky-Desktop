@@ -7,6 +7,7 @@ export const updateMessages = {
     zh: '点「安装」会运行官方安装方式，装好后自动检测，不用自己输命令。',
     en: 'Install runs the official installer and re-detects when it finishes — no commands needed.',
   },
+  'engineJob.copyCommand': { zh: '复制安装命令', en: 'Copy install command' },
   'engineJob.installing': { zh: '安装中', en: 'Installing' },
   'engineJob.updating': { zh: '更新中', en: 'Updating' },
   'engineJob.phase.prepare': { zh: '准备中', en: 'Preparing' },
