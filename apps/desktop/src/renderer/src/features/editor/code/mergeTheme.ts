@@ -23,6 +23,11 @@ export const mergeTheme = EditorView.theme({
     fontSize: 'var(--text-meta)',
     padding: '4px 14px',
   },
+  // 并排时对面新增 / 删除的行留出的空白（按行比对后两边逐行对齐，docs/ui/coding-mode.md §3.3.3）：斜纹，一眼看出「这边没有这几行」
+  '.cm-mergeSpacer': {
+    background:
+      'repeating-linear-gradient(135deg, color-mix(in srgb, var(--text-muted) 12%, transparent) 0 1px, transparent 1px 7px)',
+  },
   '.cm-changeGutter': { width: '3px', paddingLeft: '1px' },
   '&.cm-merge-a .cm-changedLineGutter, .cm-deletedLineGutter': { background: 'var(--danger)' },
   '&.cm-merge-b .cm-changedLineGutter, .cm-changedLineGutter': { background: 'var(--success)' },

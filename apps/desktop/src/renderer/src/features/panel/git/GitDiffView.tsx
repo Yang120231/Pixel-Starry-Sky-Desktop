@@ -19,6 +19,7 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import { editorTheme } from '@/features/editor/code/theme'
 import { mergeTheme } from '@/features/editor/code/mergeTheme'
+import { lineDiffConfig } from '@/features/editor/code/lineDiff'
 import { loadLanguage } from '@/features/editor/code/languages'
 import { useRemember } from '../ToolsUi'
 import type { GitArea, GitDiff, GitFileChange } from '../../../../../shared/types/project-tools'
@@ -61,6 +62,7 @@ function DiffEditor({
           parent,
           collapseUnchanged: COLLAPSE,
           gutter: true,
+          diffConfig: lineDiffConfig,
         })
         navRef.current = view.b
         destroy = () => view.destroy()
@@ -71,7 +73,13 @@ function DiffEditor({
             doc: modified,
             extensions: [
               ...base,
-              unifiedMergeView({ original, mergeControls: false, collapseUnchanged: COLLAPSE, gutter: true }),
+              unifiedMergeView({
+                original,
+                mergeControls: false,
+                collapseUnchanged: COLLAPSE,
+                gutter: true,
+                diffConfig: lineDiffConfig,
+              }),
             ],
           }),
         })
