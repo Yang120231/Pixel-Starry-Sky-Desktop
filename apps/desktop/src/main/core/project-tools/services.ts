@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createServer, connect } from 'node:net'
@@ -53,11 +53,27 @@ async function findProgram(program: string): Promise<string | null> {
   const out = await optional(process.platform === 'win32' ? 'where.exe' : 'which', [program])
   return out?.split(/\r?\n/).find(p => process.platform !== 'win32' || /\.(exe|cmd|bat)$/i.test(p)) ?? null
 }
-async function version(program: string, path: string, cwd: string): Promise<string | null> {
+/** 程序版本。cwd 是项目目录（corepack 的 pnpm 按项目的 packageManager 报版本） */
+export async function version(program: string, path: string, cwd: string): Promise<string | null> {
   if (process.platform === 'win32' && /\.(cmd|bat)$/i.test(path)) {
     // Fixed program identifiers only, avoiding arbitrary shell text during detection.
     if (!['pnpm', 'npm'].includes(program)) return null
-    return optional(process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', program + ' --version'], cwd)
+    // cmd 按名字找程序时先找当前目录：写垫片的绝对路径，并让垫片里的 node 也不从项目目录找（审查报告 2026-10-14 第 2 条）
+    return new Promise(done => {
+      execFile(
+        process.env.ComSpec ?? 'cmd.exe',
+        ['/d', '/s', '/c', `""${path}" --version"`],
+        {
+          cwd,
+          env: { ...process.env, NoDefaultCurrentDirectoryInExePath: '1' },
+          windowsVerbatimArguments: true,
+          windowsHide: true,
+          timeout: 6000,
+          encoding: 'utf8',
+        },
+        (err, out) => done(err ? null : out.trim()),
+      )
+    })
   }
   return optional(path, ['--version'], cwd)
 }

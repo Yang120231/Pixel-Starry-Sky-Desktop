@@ -388,7 +388,7 @@ BUILD SUCCESSFUL in 3s
 describe('gradle run helpers', () => {
   it('builds the launch command per platform', () => {
     expect(gradleLaunch('win32', 'exec')).toEqual({
-      command: 'cmd',
+      command: process.env.ComSpec ?? 'cmd.exe',
       args: ['/d', '/s', '/c', '".\\gradlew.bat tasks --all --console=plain"'],
       windowsVerbatimArguments: true,
     })

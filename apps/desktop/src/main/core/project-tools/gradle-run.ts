@@ -39,7 +39,12 @@ export function gradleLaunch(platform: string, wrapper: 'none' | 'exec' | 'scrip
   if (platform === 'win32') {
     // 写 .\gradlew.bat：设了 NoDefaultCurrentDirectoryInExePath 时 cmd 不在当前目录找
     const exe = wrapper === 'none' ? 'gradle' : '.\\gradlew.bat'
-    return { command: 'cmd', args: ['/d', '/s', '/c', `"${exe} ${TASKS_ARGS}"`], windowsVerbatimArguments: true }
+    // cmd 本身用绝对路径（ComSpec）：按名字找时会先在项目目录里找 cmd.exe
+    return {
+      command: process.env.ComSpec ?? 'cmd.exe',
+      args: ['/d', '/s', '/c', `"${exe} ${TASKS_ARGS}"`],
+      windowsVerbatimArguments: true,
+    }
   }
   if (wrapper === 'exec') return { command: './gradlew', args: TASKS_ARGS.split(' ') }
   if (wrapper === 'script') return { command: 'sh', args: ['gradlew', ...TASKS_ARGS.split(' ')] }
