@@ -34,7 +34,16 @@ vi.mock('@pixelsky/engine', () => ({
 }))
 vi.mock('./logging', () => ({ logService: () => ({ flushSync: mocks.flushSync }) }))
 
-import { allowCallStacks, mainLag, memoryLevel, trimStack, watchMemory, watchWindow } from './responsiveness'
+import {
+  allowCallStacks,
+  mainLag,
+  memoryLevel,
+  remoteMemoryChecker,
+  trimStack,
+  watchMemory,
+  watchRemoteMemory,
+  watchWindow,
+} from './responsiveness'
 
 const KB = 1024
 
@@ -156,5 +165,61 @@ describe('内存占用高', () => {
     for (const value of [1_200, 1_600, 1_700, 2_100, 1_600, 2_100, 900, 1_600]) await tick(value)
     expect(mocks.lines.map(l => l.fields!.workingSetMb)).toEqual([1_600, 2_100, 1_600])
     expect(mocks.lines[0]).toMatchObject({ level: 'warn', message: '内存占用高', fields: { type: 'Tab', pid: 7 } })
+  })
+})
+
+describe('WSL 内存占用高', () => {
+  const warn = vi.fn()
+  beforeEach(() => warn.mockClear())
+
+  it('分档只记一次，带 machine 和 processes；降下来清档，断开也清档，stats 失败保留档位', () => {
+    const check = remoteMemoryChecker({ warn })
+    const at = (rssMb: number) => [{ id: 'wsl-a', rssMb, processes: 3 }]
+    check(at(1_000))
+    check(at(1_600))
+    check(at(1_700))
+    check(at(2_100))
+    expect(warn.mock.calls.map(c => c[1])).toEqual([
+      { machine: 'wsl-a', rssMb: 1_600, processes: 3 },
+      { machine: 'wsl-a', rssMb: 2_100, processes: 3 },
+    ])
+    check([], ['wsl-a']) // 仍连着但没取到
+    check(at(2_100))
+    expect(warn).toHaveBeenCalledTimes(2)
+    check([]) // 断开
+    check(at(2_100))
+    expect(warn).toHaveBeenCalledTimes(3)
+    check(at(900))
+    check(at(1_600))
+    expect(warn).toHaveBeenCalledTimes(4)
+  })
+
+  it('只问已连接的 WSL；上一轮没回来就跳过，5 秒超时', async () => {
+    vi.useFakeTimers()
+    const stats = vi.fn((id: string) =>
+      id === 'wsl-slow' ? new Promise<null>(() => {}) : Promise.resolve({ rssMb: 1_600, processes: 2 }),
+    )
+    const machines = {
+      state: () => ({
+        machines: [
+          { id: 'local', kind: 'local', status: 'local' },
+          { id: 'ssh-1', kind: 'ssh', status: 'connected' },
+          { id: 'wsl-off', kind: 'wsl', status: 'disconnected' },
+          { id: 'wsl-ok', kind: 'wsl', status: 'connected' },
+          { id: 'wsl-slow', kind: 'wsl', status: 'connected' },
+        ],
+      }),
+      stats,
+    }
+    watchRemoteMemory(() => machines, 1_000)
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(stats.mock.calls.map(c => c[0])).toEqual(['wsl-ok', 'wsl-slow'])
+    await vi.advanceTimersByTimeAsync(3_000) // 慢的还没超时，跳过
+    expect(stats).toHaveBeenCalledTimes(2)
+    expect(mocks.lines).toHaveLength(0)
+    await vi.advanceTimersByTimeAsync(2_000) // 5 秒超时，这一轮收尾
+    expect(mocks.lines.map(l => l.fields)).toEqual([{ machine: 'wsl-ok', rssMb: 1_600, processes: 2 }])
+    await vi.advanceTimersByTimeAsync(2_000) // 下一轮继续
+    expect(stats).toHaveBeenCalledTimes(4)
   })
 })

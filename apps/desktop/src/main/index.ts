@@ -36,6 +36,7 @@ import {
   memoryChecker,
   watchMainLoop,
   watchMemory,
+  watchRemoteMemory,
   watchWindow,
 } from './app/responsiveness'
 import { initMemory, memoryTick, noteLoaded } from './app/memory'
@@ -397,6 +398,7 @@ app.whenReady().then(async () => {
     },
   })
   watchMemory(memoryTick)
+  watchRemoteMemory(() => ctx.machines) // WSL 里的引擎进程不在 getAppMetrics 里，单独问
   setAppMenu()
   initUiLanguage(locale => {
     setAppMenu(locale)

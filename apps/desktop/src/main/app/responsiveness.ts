@@ -185,3 +185,72 @@ export function memoryChecker(): (metrics: ReturnType<typeof app.getAppMetrics>)
 export function watchMemory(onTick: (metrics: ReturnType<typeof app.getAppMetrics>) => void = memoryChecker()): void {
   setInterval(() => onTick(app.getAppMetrics()), MEMORY_EVERY_MS).unref()
 }
+
+export interface RemoteMemorySample {
+  id: string
+  rssMb: number
+  processes: number
+}
+
+/** WSL 机器里的进程内存分档（和本机进程同一套阈值）；samples 没带的机器按断开清档，stats 失败但仍连着的放进 connected 保留档位 */
+export function remoteMemoryChecker(
+  writer: Pick<typeof log, 'warn'> = log,
+): (samples: RemoteMemorySample[], connected?: string[]) => void {
+  const logged = new Map<string, number>()
+  return (samples, connected = []) => {
+    const alive = new Set([...connected, ...samples.map(s => s.id)])
+    for (const { id, rssMb, processes } of samples) {
+      const level = memoryLevel(rssMb)
+      const before = logged.get(id) ?? 0
+      if (level > before) {
+        logged.set(id, level)
+        writer.warn('WSL 内存占用高', { machine: id, rssMb, processes })
+      } else if (rssMb < MEMORY_WARN_MB - MEMORY_STEP_MB) logged.delete(id)
+    }
+    for (const id of logged.keys()) if (!alive.has(id)) logged.delete(id)
+  }
+}
+
+const REMOTE_STATS_TIMEOUT_MS = 5_000
+
+interface MachineStats {
+  state(): { machines: { id: string; kind?: string; status: string }[] }
+  stats(id: string): Promise<{ rssMb: number; processes: number } | null>
+}
+
+/** 每分钟问已连接的 WSL 机器（SSH 不占本机内存，不问）；上一轮没回来就跳过，单次最多等 5 秒 */
+export function watchRemoteMemory(getMachines: () => MachineStats | null | undefined, every = MEMORY_EVERY_MS): void {
+  const check = remoteMemoryChecker()
+  let busy = false
+  setInterval(() => {
+    const machines = getMachines()
+    if (!machines || busy) return
+    const ids = machines
+      .state()
+      .machines.filter(m => m.kind === 'wsl' && m.status === 'connected')
+      .map(m => m.id)
+    busy = true
+    void (async () => {
+      const samples: RemoteMemorySample[] = []
+      const connected: string[] = []
+      await Promise.all(
+        ids.map(async id => {
+          let timer: NodeJS.Timeout | undefined
+          try {
+            const stats = await Promise.race([
+              machines.stats(id),
+              new Promise<null>(resolve => (timer = setTimeout(() => resolve(null), REMOTE_STATS_TIMEOUT_MS))),
+            ])
+            if (stats) samples.push({ id, ...stats })
+            else connected.push(id)
+          } catch {
+            connected.push(id)
+          } finally {
+            clearTimeout(timer)
+          }
+        }),
+      )
+      check(samples, connected)
+    })().finally(() => (busy = false))
+  }, every).unref()
+}
