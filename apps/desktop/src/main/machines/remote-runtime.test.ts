@@ -98,6 +98,19 @@ describe('remote runtime', () => {
     await expect(call('files:read', ref, '../outside')).rejects.toThrow()
   })
 
+  it('reads an image from the remote session workspace as image data for the desktop', async () => {
+    const added = await call('engine:addProject', project)
+    const session = await call('engine:createSession', { projectId: added.id })
+    const data = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jWZkAAAAASUVORK5CYII='
+    await writeFile(join(project, 'screen.png'), Buffer.from(data, 'base64'))
+    expect(await call('files:read', { sessionId: session.id }, 'screen.png')).toEqual({
+      kind: 'image',
+      path: 'screen.png',
+      dataUrl: `data:image/png;base64,${data}`,
+      bytes: Buffer.from(data, 'base64').length,
+    })
+  })
+
   it('keeps manual tasks per project', async () => {
     const added = await call('engine:addProject', project)
     const task = await call('projectTools:createTask', added.id, { title: 'Write tests', note: 'remote' })

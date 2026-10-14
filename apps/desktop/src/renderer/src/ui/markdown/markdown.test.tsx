@@ -4,6 +4,7 @@ import { I18nProvider } from '@/i18n/I18nProvider'
 import { Markdown } from './Markdown'
 import { hasMath, loadMath, normalizeMath } from './math'
 import { shouldFold } from '../code/CodeBlock'
+import { MarkdownImageContext } from './MarkdownImage'
 
 const html = (text: string): string =>
   renderToStaticMarkup(
@@ -85,5 +86,28 @@ describe('链接地址', () => {
   it('网址照常是链接，危险的协议仍被清掉', () => {
     expect(html('[站点](https://example.com)')).toContain('href="https://example.com"')
     expect(html('[坏](javascript:alert(1))')).not.toContain('javascript:')
+  })
+})
+
+describe('正文图片', () => {
+  it('本地路径不直接交给 Windows 浏览器加载，无会话时显示可读提示', () => {
+    const out = html('![最新提示框](/home/me/repo/screen.png)')
+    expect(out).not.toContain('<img')
+    expect(out).toContain('data-markdown-image="unavailable"')
+    expect(out).toContain('最新提示框')
+  })
+
+  it('流式正文也保留图片读取上下文，等待对应会话的图片数据', () => {
+    for (const streaming of [false, true]) {
+      const out = renderToStaticMarkup(
+        <I18nProvider>
+          <MarkdownImageContext.Provider value={async () => null}>
+            <Markdown text="![截图](file:///home/me/repo/screen.png)" streaming={streaming} />
+          </MarkdownImageContext.Provider>
+        </I18nProvider>,
+      )
+      expect(out).toContain('data-markdown-image="loading"')
+      expect(out).not.toContain('<img')
+    }
   })
 })

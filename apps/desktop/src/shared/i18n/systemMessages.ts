@@ -1,5 +1,8 @@
 // 宿主错误及原生窗口文案；CLI 原始输出和用户内容保持原文。
 export const systemMessages = {
+  'markdown.image.name': { zh: '图片', en: 'Image' },
+  'markdown.image.loading': { zh: '正在读取图片…', en: 'Loading image…' },
+  'markdown.image.unavailable': { zh: '无法显示图片：{p0}', en: 'Could not display image: {p0}' },
   'composer.attachment.closePreview': { zh: '关闭图片预览', en: 'Close image preview' },
   'composer.attachment.loading': { zh: '正在读取附件…', en: 'Reading attachments…' },
   'composer.attachment.saveError': {

@@ -48,6 +48,7 @@ import { getActiveWorkspace } from '@/features/editor/target'
 import { ImageAttachments } from '@/features/session/attachments/ImageAttachments'
 import { FileAttachments } from '@/features/session/attachments/FileAttachments'
 import { Markdown } from '@/ui/markdown/Markdown'
+import { MarkdownImage } from '@/ui/markdown/MarkdownImage'
 import { useMessageActionsPosition } from '@/features/settings/messageActions'
 import { formatDuration } from './agentTrace'
 import { STEP_CLOCK_MS, clockText } from './currentStep'
@@ -465,9 +466,11 @@ function fileVerb(changes: FileChange[]): string {
 export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'command' | 'file_change' | 'tool'> }) {
   useI18n()
   const images = item.kind === 'tool' ? (item.images ?? []) : []
+  const viewedImage = item.kind === 'tool' && item.name === 'imageView' && !images.length ? item.title : null
   // 已经显示成图片的，不再在文字框里重复一行「[图片]」；只剩占位时文字框整个不显示
   const output = item.kind === 'file_change' ? '' : withoutShownImagePlaceholders(item.output, images.length)
-  const foldable = item.kind === 'file_change' ? item.changes.some(c => c.diff) : !!output || images.length > 0
+  const foldable =
+    item.kind === 'file_change' ? item.changes.some(c => c.diff) : !!output || images.length > 0 || !!viewedImage
   const { open, toggle, fold } = useFold(item.id, foldable)
   const row = useRef<HTMLDivElement>(null)
   const [fileError, setFileError] = useState('')
@@ -721,6 +724,11 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
       {open && images.length > 0 && (
         <div className="mt-1 mb-1.5 ml-[23px]">
           <ImageAttachments images={images} />
+        </div>
+      )}
+      {open && viewedImage && (
+        <div className="mt-1 mb-1.5 ml-[23px]">
+          <MarkdownImage src={viewedImage} />
         </div>
       )}
     </div>

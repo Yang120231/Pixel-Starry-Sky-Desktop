@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm'
 import { cn } from '@/ui'
 import { CodeBlock } from '@/ui/code/CodeBlock'
 import { InlineCode, MarkdownLink, PathLinksContext, keepLocalPaths } from './pathLinks'
+import { MarkdownImage } from './MarkdownImage'
 import { Callout, isAlertKind, remarkAlerts } from './alerts'
 import { hasMath, normalizeMath, useMathPlugins, type PluggableList } from './math'
 import { createStreamSplitter } from './streamBlocks'
@@ -36,6 +37,9 @@ const lineOf = (node: Element | undefined): number | undefined => {
 const components: Components = {
   // 链接：项目里的文件在软件里打开，其余在新窗口打开（主进程交给系统浏览器，只放行 http / https）
   a: ({ node: _node, ...props }) => <MarkdownLink {...props} />,
+  img: ({ src, alt, title }) => (
+    <MarkdownImage src={typeof src === 'string' ? src : undefined} alt={alt} title={title} />
+  ),
   // 行内代码（代码块由下面的 pre 整个接管）：项目里的文件变成可点击的路径（docs/ui/content-highlight.md §2 A）
   code: ({ node: _node, className, children }) => <InlineCode className={className}>{children}</InlineCode>,
   // 引用块：带 [!NOTE] 等标记的画成提示块（docs/ui/content-highlight.md §2 G）

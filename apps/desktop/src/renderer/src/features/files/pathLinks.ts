@@ -45,10 +45,10 @@ function entriesIn(ref: WorkspaceRef, dir: string, windows: boolean): Promise<En
 }
 
 /**
- * 一个路径 → 项目内存在的文件的相对路径；不存在、在项目外或解析不了时为 null。
+ * 一个路径 → 所选项目里的相对路径；项目外或解析不了时为 null，文件存在性由读取接口校验。
  * cwd 是相对路径的起点，不给时用项目根目录。
  */
-export async function workspaceFilePath(ref: WorkspaceRef, raw: string, cwd?: string): Promise<string | null> {
+export async function workspaceRelativePath(ref: WorkspaceRef, raw: string, cwd?: string): Promise<string | null> {
   if (!window.pixelsky) return null
   const windows = machineOf(ref.projectId ?? ref.sessionId) === 'local' && window.pixelsky.platform === 'win32'
   const target = await workspaceTarget(ref)
@@ -64,7 +64,14 @@ export async function workspaceFilePath(ref: WorkspaceRef, raw: string, cwd?: st
         break
       }
     }
+  return relative
+}
+
+/** 项目内确实存在的文件；图片读取不依赖目录缓存，交给 files.read 校验文件。 */
+export async function workspaceFilePath(ref: WorkspaceRef, raw: string, cwd?: string): Promise<string | null> {
+  const relative = await workspaceRelativePath(ref, raw, cwd)
   if (!relative) return null
+  const windows = machineOf(ref.projectId ?? ref.sessionId) === 'local' && window.pixelsky!.platform === 'win32'
   return (await entryKind(ref, relative, windows)) === 'file' ? relative : null
 }
 

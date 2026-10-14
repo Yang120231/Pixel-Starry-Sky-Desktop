@@ -12,9 +12,15 @@ import { revealFolderInTree } from './treeReveal'
 import { findPathMatches } from './pathMatch'
 import { isHtmlPath, previewHtml } from './htmlPreview'
 import { isRemoteRef, pathHint, revealPath } from './reveal'
+import { MarkdownImageContext, type MarkdownImageReader } from '@/ui/markdown/MarkdownImage'
+import { readMarkdownImage } from './markdownImages'
 
 export function PathLinksProvider({ sessionId, children }: { sessionId: string | null; children: ReactNode }) {
   const toast = useToast()
+  const imageReader = useMemo<MarkdownImageReader | null>(
+    () => (sessionId && !isDemo ? path => readMarkdownImage({ sessionId }, path) : null),
+    [sessionId],
+  )
   const value = useMemo<PathLinks | null>(() => {
     if (!sessionId || !window.pixelsky) return null
     const ref = { sessionId }
@@ -57,7 +63,11 @@ export function PathLinksProvider({ sessionId, children }: { sessionId: string |
       },
     }
   }, [sessionId, toast])
-  return <PathLinksContext.Provider value={value}>{children}</PathLinksContext.Provider>
+  return (
+    <MarkdownImageContext.Provider value={imageReader}>
+      <PathLinksContext.Provider value={value}>{children}</PathLinksContext.Provider>
+    </MarkdownImageContext.Provider>
+  )
 }
 
 /** 演示模式（docs/ui/demo-conversation.md）：整段文字是演示文件列表里的路径时才算 */
