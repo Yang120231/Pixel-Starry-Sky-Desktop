@@ -2,6 +2,7 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../i18n/core'
 import { useEffect, useState } from 'react'
 import { Sidebar } from '../features/sidebar/Sidebar'
+import { SidebarFollow } from './SidebarFollow'
 import { ToolbarContext } from '../features/layout/ToolbarContext'
 import { RightPanel } from '../features/panel/RightPanel'
 import { defaultPanelOpen, defaultSessionId } from '../data'
@@ -263,8 +264,9 @@ export function App() {
       ) : (
         <>
           {/* 侧边栏、右侧面板一直挂载，收起 / 展开带滑动动画（docs/ui/workbench.md §4.1） */}
+          <SidebarFollow open={sidebarOpen} />
           <div data-vt-chat-sidebar className="relative flex shrink-0">
-            <CollapsibleSlot open={sidebarOpen} width={sidebarWidth} side="left">
+            <CollapsibleSlot open={sidebarOpen} width={sidebarWidth} side="left" slide>
               <ToolbarContext.Provider
                 value={{ panelOpen, filesPanelOpen: panelOpen, onCloseFiles: () => setPanelOpen(false) }}
               >

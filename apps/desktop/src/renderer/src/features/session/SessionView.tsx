@@ -23,7 +23,6 @@ import { foldedMatches } from './live/foldedText'
 import { RetryStatus } from './live/RetryStatus'
 import { MessageActionsContext } from './live/MessageActions'
 import { useBranchActions } from './useBranchActions'
-import { useWindowCenter } from './windowCenter'
 import { RewindUndoBar, ReviewCommentsBar } from './ComposerNotices'
 import { SideChatPanel } from './sidechat/SideChatPanel'
 import { clearReviewComments, reviewMessage, useReviewComments } from './reviewComments'
@@ -86,11 +85,8 @@ function DemoSessionView({
 }: SessionViewProps) {
   useI18n()
   const showConversation = sessionId !== null && hasConversation
-  const mainRef = useRef<HTMLElement>(null)
-  useWindowCenter(mainRef)
   return (
     <main
-      ref={mainRef}
       className={cn('conversation-view flex flex-1 flex-col bg-app', embedded ? 'min-h-0 min-w-0' : 'min-w-[464px]')}
     >
       {!embedded && (
@@ -139,7 +135,6 @@ function LiveSessionView({
   useEffect(() => setTrace(null), [sessionId])
   // 对话内搜索（Ctrl+F）：token 每按一次加一，已经打开时重新聚焦（docs/ui/content-highlight.md §2 E）
   const mainRef = useRef<HTMLElement>(null)
-  useWindowCenter(mainRef)
   const [find, setFind] = useState<number | null>(null)
   useEffect(() => setFind(null), [sessionId])
   useFindShortcut(mainRef, !!sessionId, () => setFind(n => (n ?? 0) + 1))

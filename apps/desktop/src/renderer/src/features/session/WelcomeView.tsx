@@ -42,8 +42,11 @@ export function WelcomeView({
     })
   }
   return (
-    <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto bg-app pb-[12vh]">
-      <div ref={box} className="flex w-full min-w-0 flex-col">
+    <div
+      data-follow-scroll
+      className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto bg-app pb-[12vh]"
+    >
+      <div ref={box} data-follow-sidebar className="flex w-full min-w-0 flex-col">
         <div className="flex flex-col items-center px-6 text-center">
           <Logo size={44} />
           <h2 className="mt-5 text-title text-fg">{text('有什么可以帮你？')}</h2>

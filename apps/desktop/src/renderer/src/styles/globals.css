@@ -360,6 +360,21 @@
 .collapsible-slot[data-open] {
   transition-duration: var(--dur-expand);
 }
+/* 平移模式（对话模式侧边栏，docs/ui/workbench.md §4.1）：宽度一步到位，app/SidebarFollow.tsx 用位移滑内容；
+   收起时先浮在会话主区上面滑出去（data-sliding），滑完才裁掉 */
+.collapsible-slot[data-slide] {
+  transition: none;
+}
+.collapsible-slot[data-sliding] {
+  position: relative;
+  z-index: 30;
+  overflow: visible;
+}
+/* 跟着侧栏平移的那 260ms 里，居中块带着位移会伸出滚动区，不出横向滚动条 */
+:root[data-sidebar-slide] .conversation-scroller,
+:root[data-sidebar-slide] [data-follow-scroll] {
+  overflow-x: hidden;
+}
 /* 代码模式的底部面板：同一个容器改高度动画（ui/CollapsibleSlot.tsx side="bottom"） */
 .collapsible-slot[data-side='bottom'] {
   transition-property: height;

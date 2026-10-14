@@ -1,6 +1,6 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
-import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { ResizeHandle } from '@/ui/ResizeHandle'
 import { settledResizeObserver } from '@/features/panes/motion'
 import { DEFAULT_COMPOSER_WIDTH, setLayoutSize, useLayoutSize } from '@/features/layout/sizes'
@@ -63,11 +63,7 @@ export function ComposerArea({ children }: { children: ReactNode }) {
   const width = Math.max(min, Math.min(preferredWidth, max))
   return (
     <div ref={container} className="conversation-inset shrink-0 pb-3">
-      <div
-        ref={area}
-        className="composer-area relative mx-auto min-w-0 max-w-full"
-        style={{ width, '--composer-width': `${width}px` } as CSSProperties}
-      >
+      <div ref={area} className="composer-area relative mx-auto min-w-0 max-w-full" style={{ width }}>
         {children}
         {(['left', 'right'] as const).map(side => (
           <ResizeHandle
