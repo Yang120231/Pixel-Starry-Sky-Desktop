@@ -9,7 +9,7 @@ import type {
   SkillCommand,
   TurnOutcome,
 } from '@pixelsky/protocol'
-import { EMPTY_FLAGS, isQuietWarning } from '@pixelsky/protocol'
+import { EMPTY_FLAGS, isQuietWarning, viaGateway } from '@pixelsky/protocol'
 import { QUICK_CLOSE_MS, type CloseOptions, type EngineSession, type Launcher, type SessionContext } from '../adapter'
 import { CodexProcess, array, object, string, type Message } from './process'
 import { codexCatalog } from './catalog'
@@ -132,6 +132,10 @@ export class CodexSession implements EngineSession {
   private windowOverridden = false
   /** 已经发过的配置类警告（Codex 每轮都发一次），同一会话只出一次 */
   private readonly quietShown = new Set<string>()
+  /** 上一轮带了计划协作模式：切到别的权限后，下一轮要带一次 default 切回来 */
+  private planSent = false
+  /** thread/start 报的模型：会话跟随引擎默认、目录也没写当前模型时，计划模式用它 */
+  private threadModel: string | null = null
   /** 停止后等待 turn/completed 的回调，finish() 时统一唤醒 */
   private turnWaiters: Array<() => void> = []
 
@@ -219,8 +223,8 @@ export class CodexSession implements EngineSession {
     })
     this.proc = proc
     try {
-      // 额外技能根是本机版本的实验字段，仅加载管理 Skills 时协商。
-      await proc.initialize(!!ext?.skillRoots?.length)
+      // 额外技能根、turn/start 的 collaborationMode（计划模式）都是实验字段，一律声明实验接口（docs/codex-engine.md §3.5）
+      await proc.initialize(true)
       if (ext?.skillRoots?.length) await proc.request('skills/extraRoots/set', { extraRoots: ext.skillRoots })
       this.catalog = await codexCatalog(proc)
       const requirements = await proc.request('configRequirements/read').catch(() => ({}))
@@ -252,6 +256,9 @@ export class CodexSession implements EngineSession {
         }
       else thread = await proc.request('thread/start', threadParams)
       this.threadId = string(object(thread.thread).id)
+      this.threadModel = string(thread.model) || null
+      // 恢复的线程可能还停在计划模式（上次退出前选的计划）：按它报的实际模式算，下一轮需要时切回 default
+      this.planSent = string(object(thread.collaborationMode).mode) === 'plan'
       if (!this.threadId) throw new Error('Codex did not return a thread ID')
       this.ctx.setEngineSessionId(this.threadId)
       if (resumeFailed)
@@ -265,23 +272,7 @@ export class CodexSession implements EngineSession {
             detail: null,
           },
         })
-      this.ctx.emit({
-        type: 'flags',
-        flags: {
-          ...EMPTY_FLAGS,
-          compactAvailable: true,
-          contextAvailable: false,
-          steerAvailable: this.options.steeringValidated === true,
-          fastAvailable: false,
-          fastState: 'off',
-          fastBlocked: 'Codex provider fast mode is not verified',
-          ultracodeAvailable: false,
-        },
-      })
-      if (this.settings.fast) {
-        this.settings.fast = false
-        this.ctx.setFast(false)
-      }
+      this.emitFlags()
       const skills = await proc
         .request('skills/list', {
           cwds: [record.cwd],
@@ -398,6 +389,8 @@ export class CodexSession implements EngineSession {
         ...(this.settings.model ? { model: this.settings.model } : {}),
         ...(this.settings.effort ? { effort: this.settings.effort } : {}),
         summary: this.settings.thinkingSummaries ? 'concise' : 'none',
+        ...this.collaboration(),
+        ...this.serviceTier(),
       })
       const turnId = string(object(result.turn).id)
       if (this.active === active) this.nativeTurnId = turnId || this.nativeTurnId
@@ -410,7 +403,73 @@ export class CodexSession implements EngineSession {
     }
   }
   async update(patch: Partial<SessionSettings>): Promise<void> {
-    if (!this.active) this.settings = { ...this.settings, ...patch }
+    if (this.active) return
+    this.settings = { ...this.settings, ...patch }
+    // 换模型、换线路后 Fast 能不能开跟着变；目录还没读到时等 open() 再报
+    if (
+      this.catalog &&
+      (patch.model !== undefined ||
+        patch.fast !== undefined ||
+        patch.platform !== undefined ||
+        patch.provider !== undefined)
+    )
+      this.emitFlags()
+  }
+  /** 当前模型开 Fast 用的服务档位 */
+  private fastTier(): string | undefined {
+    const id = this.settings.model ?? this.catalog?.currentModel ?? this.threadModel
+    return this.catalog?.models?.find(m => m.id === id)?.fastTier
+  }
+  /**
+   * Fast 开不了的原因（docs/codex-engine.md §3.5）：走平台 / 自定义接口、provider 不是 openai 时没核实档位加价，
+   * 当前模型没有 Fast 档位时也不行；能开时 null
+   */
+  private fastBlocked(): string | null {
+    if (viaGateway(this.ctx.record()) || (this.catalog?.currentProvider ?? 'openai') !== 'openai')
+      return 'codex_gateway'
+    return this.fastTier() ? null : 'model_not_allowed'
+  }
+  private emitFlags(): void {
+    const blocked = this.fastBlocked()
+    if (blocked && this.settings.fast) {
+      this.settings.fast = false
+      this.ctx.setFast(false)
+    }
+    this.ctx.emit({
+      type: 'flags',
+      flags: {
+        ...EMPTY_FLAGS,
+        compactAvailable: true,
+        contextAvailable: false,
+        steerAvailable: this.options.steeringValidated === true,
+        fastAvailable: !blocked,
+        fastState: this.settings.fast ? 'on' : 'off',
+        fastBlocked: blocked,
+        ultracodeAvailable: false,
+      },
+    })
+  }
+  /**
+   * 计划模式用 Codex 原生的计划协作模式（模型才有提问工具 request_user_input）；它会一直沿用，
+   * 所以从计划切到别的权限后要带一次 default 切回来。developer_instructions 为 null 时用 Codex 内置的指令
+   */
+  private collaboration(): Message {
+    const plan = this.settings.permissionMode === 'plan'
+    if (!plan && !this.planSent) return {}
+    const model = this.settings.model ?? this.catalog?.currentModel ?? this.threadModel
+    if (!model) throw new Error('Codex plan mode needs a model')
+    this.planSent = plan
+    return {
+      collaborationMode: {
+        mode: plan ? 'plan' : 'default',
+        settings: { model, reasoning_effort: this.settings.effort ?? null, developer_instructions: null },
+      },
+    }
+  }
+  /** Fast：能开时每轮都写明档位（开 priority、关 default），以界面开关为准；开不了时不带，用 Codex 自己的配置 */
+  private serviceTier(): Message {
+    if (this.fastBlocked()) return {}
+    return { serviceTier: this.settings.fast ? (this.fastTier() ?? 'priority') : 'default' }
   }
   async steer(text: string, id: string, attachments: ImageAttachment[] = []): Promise<void> {
     if (!this.active || !this.nativeTurnId || !this.options.steeringValidated)

@@ -178,6 +178,8 @@ export interface EngineModel {
   defaultEffort: Effort | null
   inputModalities: string[]
   isDefault: boolean
+  /** 开 Fast 时要用的服务档位（Codex：model/list 的 serviceTiers 里的 priority）；没有就是这个模型不支持 Fast */
+  fastTier?: string
 }
 
 /** 检查更新的结果 */

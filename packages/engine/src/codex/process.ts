@@ -72,9 +72,14 @@ export class CodexProcess {
           continue
         }
         if (typeof value.method === 'string') {
-          if (typeof value.id === 'string' || typeof value.id === 'number')
-            handlers.request(value.id, value.method, object(value.params))
-          else handlers.notification(value.method, object(value.params))
+          // 处理器抛错（例如落盘失败）：记日志、接着处理后面的消息，不能变成主进程未捕获异常（审查报告 2026-10-14）
+          try {
+            if (typeof value.id === 'string' || typeof value.id === 'number')
+              handlers.request(value.id, value.method, object(value.params))
+            else handlers.notification(value.method, object(value.params))
+          } catch (err) {
+            log.error('处理 Codex 消息出错', { method: value.method, error: (err as Error).message })
+          }
         } else if (typeof value.id === 'number') {
           const request = this.pending.get(value.id)
           if (!request) continue

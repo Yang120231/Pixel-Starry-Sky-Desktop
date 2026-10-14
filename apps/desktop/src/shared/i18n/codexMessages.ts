@@ -12,8 +12,12 @@ export const codexMessages = {
     en: 'Work automatically in the workspace; ask when sandbox escalation is needed',
   },
   'codex.permission.plan': {
-    zh: '只读规划；未启用原生协作计划模式',
-    en: 'Read-only planning; native collaboration plan mode is not enabled',
+    zh: '只读，用 Codex 原生计划模式先出方案；需要你拿主意时会弹出问题',
+    en: 'Read-only; uses Codex native plan mode to propose a plan and asks you when a decision is needed',
+  },
+  'codex.fastGateway': {
+    zh: '只在 Codex 用自己的登录（ChatGPT / OpenAI Key）时可用',
+    en: 'Only available when Codex uses its own sign-in (ChatGPT / OpenAI key)',
   },
   'codex.targets': { zh: '适用引擎', en: 'Applies to' },
   'codex.extensionInfo': {

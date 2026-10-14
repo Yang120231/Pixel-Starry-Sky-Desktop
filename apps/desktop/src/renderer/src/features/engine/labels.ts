@@ -49,6 +49,10 @@ const FAST_BLOCKED: Record<string, string> = {
   get not_first_party() {
     return tr('engine.labels.onlySupportedByOfficial')
   },
+  /** Codex 走平台 / 自定义接口（docs/codex-engine.md §3.5） */
+  get codex_gateway() {
+    return tr('codex.fastGateway')
+  },
   get disabled_by_env() {
     return tr('engine.labels.disabledByEnvironmentVariable')
   },

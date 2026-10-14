@@ -14,6 +14,13 @@ export async function codexCatalog(proc: CodexProcess): Promise<EngineCatalog> {
       const efforts = array(model.supportedReasoningEfforts)
         .map(e => string(object(e).reasoningEffort))
         .filter((e): e is Effort => EFFORTS.includes(e as Effort))
+      // Fast：新版在 serviceTiers 里列 priority（名字叫 Fast），老版只有 additionalSpeedTiers: ['fast']
+      const tiers = array(model.serviceTiers).map(t => string(object(t).id))
+      const fastTier = tiers.includes('priority')
+        ? 'priority'
+        : array(model.additionalSpeedTiers).map(string).includes('fast')
+          ? 'fast'
+          : undefined
       const defaultEffort = EFFORTS.includes(model.defaultReasoningEffort as Effort)
         ? (model.defaultReasoningEffort as Effort)
         : null
@@ -24,6 +31,7 @@ export async function codexCatalog(proc: CodexProcess): Promise<EngineCatalog> {
         defaultEffort,
         inputModalities: array(model.inputModalities ?? ['text', 'image']).map(string),
         isDefault: model.isDefault === true,
+        ...(fastTier ? { fastTier } : {}),
       })
     }
     cursor = string(page.nextCursor) || null

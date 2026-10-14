@@ -24,13 +24,13 @@ const wait = async (fn: () => boolean): Promise<void> => {
   }
   throw new Error('Codex test timed out')
 }
-function setup(idleMs = 50) {
+function setup(idleMs = 50, opts: { env?: Record<string, string>; permissionMode?: 'ask' | 'plan' } = {}) {
   const log = join(root, 'rpc.jsonl'),
     events: HostEvent[] = [],
     launcher = { command: process.execPath, args: [fileURLToPath(new URL('./fakes/fake-codex.mjs', import.meta.url))] }
   const adapter = new CodexAdapter({
     launcher,
-    env: { ...process.env, FAKE_CODEX_LOG: log, FAKE_CODEX_RESUME_FAIL_FILE: join(root, 'resume-fail') },
+    env: { ...process.env, FAKE_CODEX_LOG: log, FAKE_CODEX_RESUME_FAIL_FILE: join(root, 'resume-fail'), ...opts.env },
     launchOptions: () => ({ askQuestions: true, steeringValidated: true }),
   })
   host = new EngineHost({
@@ -44,7 +44,7 @@ function setup(idleMs = 50) {
     engine: 'codex',
     model: 'fake-codex',
     effort: 'high',
-    permissionMode: 'ask',
+    permissionMode: opts.permissionMode ?? 'ask',
   })
   const messages = () =>
     readFileSync(log, 'utf8')
@@ -281,5 +281,76 @@ describe('Codex app-server adapter', () => {
     translator.usage(15_000)
     translator.usage(16_000)
     expect(translator.items.get('cx-c1')).toMatchObject({ postTokens: 15_000 })
+  })
+  it('计划模式带 Codex 原生计划协作模式，模型提问弹问题卡；切回别的权限时带一次 default', async () => {
+    const { session, messages } = setup(50, { permissionMode: 'plan' })
+    await host!.send(session.id, '提问')
+    await wait(() => host!.open(session.id).pending.length === 1)
+    const start = () => messages().filter(m => m.method === 'turn/start')
+    // 会话进程声明实验接口（第一条 initialize 是检测引擎时的探测进程）
+    expect(
+      messages()
+        .filter(m => m.method === 'initialize')
+        .at(-1)?.params.capabilities,
+    ).toEqual({ experimentalApi: true })
+    expect(start()[0].params).toMatchObject({
+      approvalPolicy: 'on-request',
+      sandboxPolicy: { type: 'readOnly' },
+      collaborationMode: {
+        mode: 'plan',
+        settings: { model: 'fake-codex', reasoning_effort: 'high', developer_instructions: null },
+      },
+    })
+    expect(host!.open(session.id).pending[0]).toMatchObject({
+      requestId: 'ask',
+      kind: 'question',
+      questions: [
+        {
+          id: 'scope',
+          question: '先做哪一批？',
+          allowOther: true,
+          options: [{ label: '只做收尾（推荐）' }, { label: '先补测试' }],
+        },
+      ],
+    })
+    host!.answer(session.id, 'ask', { type: 'answer', answers: { '先做哪一批？': '只做收尾（推荐）' } })
+    await wait(() => host!.open(session.id).state === 'idle')
+    expect(messages().find(m => m.id === 'ask' && m.result)?.result).toEqual({
+      answers: { scope: { answers: ['只做收尾（推荐）'] } },
+    })
+    await host!.update(session.id, { permissionMode: 'edits' })
+    await host!.send(session.id, '第二轮')
+    await wait(() => host!.open(session.id).state === 'idle' && start().length === 2)
+    await host!.send(session.id, '第三轮')
+    await wait(() => host!.open(session.id).state === 'idle' && start().length === 3)
+    expect(start()[1].params.collaborationMode).toMatchObject({ mode: 'default', settings: { model: 'fake-codex' } })
+    expect(start()[2].params.collaborationMode).toBeUndefined()
+  })
+  it('Fast：自己的 openai 登录且模型有 priority 档位时可开，每轮写明档位；换到没有档位的模型就关掉并说明原因', async () => {
+    const { session, messages } = setup(50, { env: { FAKE_CODEX_PROVIDER: 'openai' } })
+    await host!.update(session.id, { fast: true })
+    await host!.send(session.id, '快')
+    await wait(() => host!.open(session.id).state === 'idle')
+    expect(host!.open(session.id).flags).toMatchObject({ fastAvailable: true, fastState: 'on', fastBlocked: null })
+    const start = () => messages().filter(m => m.method === 'turn/start')
+    expect(start()[0].params.serviceTier).toBe('priority')
+    expect(start()[0].params.collaborationMode).toBeUndefined()
+    await host!.update(session.id, { fast: false })
+    await host!.send(session.id, '慢一点')
+    await wait(() => host!.open(session.id).state === 'idle' && start().length === 2)
+    expect(start()[1].params.serviceTier).toBe('default')
+    await host!.update(session.id, { fast: true, model: 'fake-plain' })
+    await wait(() => host!.open(session.id).flags.fastBlocked === 'model_not_allowed')
+    expect(host!.open(session.id).flags.fastAvailable).toBe(false)
+    expect(host!.open(session.id).record.fast).toBe(false)
+  })
+  it('Fast：provider 不是 openai（自定义 / 平台线路）时开不了，不带 serviceTier', async () => {
+    const { session, messages } = setup()
+    await host!.update(session.id, { fast: true })
+    await host!.send(session.id, '快')
+    await wait(() => host!.open(session.id).state === 'idle')
+    expect(host!.open(session.id).flags).toMatchObject({ fastAvailable: false, fastBlocked: 'codex_gateway' })
+    expect(host!.open(session.id).record.fast).toBe(false)
+    expect(messages().find(m => m.method === 'turn/start')?.params.serviceTier).toBeUndefined()
   })
 })

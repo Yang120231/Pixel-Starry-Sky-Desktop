@@ -29,6 +29,16 @@ const models = [
     defaultReasoningEffort: 'high',
     inputModalities: ['text', 'image'],
     isDefault: true,
+    serviceTiers: [{ id: 'priority', name: 'Fast', description: '2x speed, increased usage' }],
+  },
+  {
+    id: 'fake-plain',
+    model: 'fake-plain',
+    displayName: 'Fake Plain',
+    supportedReasoningEfforts: [{ reasoningEffort: 'high' }],
+    defaultReasoningEffort: 'high',
+    inputModalities: ['text'],
+    isDefault: false,
   },
 ]
 function finish(status = 'completed') {
@@ -70,6 +80,11 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
     return
   }
   if (process.env.FAKE_CODEX_LOG) appendFileSync(process.env.FAKE_CODEX_LOG, JSON.stringify(m) + '\n')
+  if (m.result && m.id === 'ask') {
+    pending = null
+    finish('completed')
+    return
+  }
   if (m.result && m.id === 'approve') {
     pending = null
     finish(m.result.decision === 'decline' ? 'interrupted' : 'completed')
@@ -94,7 +109,13 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
       response(m, { data: models, nextCursor: null })
       break
     case 'config/read':
-      response(m, { config: { model: 'fake-codex', model_provider: 'fake', windows: { sandbox: 'elevated' } } })
+      response(m, {
+        config: {
+          model: 'fake-codex',
+          model_provider: process.env.FAKE_CODEX_PROVIDER ?? 'fake',
+          windows: { sandbox: 'elevated' },
+        },
+      })
       break
     case 'configRequirements/read':
       response(m, { requirements: null })
@@ -184,6 +205,32 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
               additionalDetails: 'upstream connect error',
               codexErrorInfo: { responseTooManyFailedAttempts: { httpStatusCode: 502 } },
             },
+          },
+        })
+        return
+      }
+      if (text.includes('提问') && p.collaborationMode?.mode === 'plan') {
+        // 计划协作模式下模型才有 request_user_input
+        pending = 'ask'
+        out({
+          id: 'ask',
+          method: 'item/tool/requestUserInput',
+          params: {
+            threadId: thread,
+            turnId: id,
+            itemId: 'ask-1',
+            questions: [
+              {
+                id: 'scope',
+                header: '范围',
+                question: '先做哪一批？',
+                isOther: true,
+                options: [
+                  { label: '只做收尾（推荐）', description: '行为问题单列' },
+                  { label: '先补测试', description: '确认后修复' },
+                ],
+              },
+            ],
           },
         })
         return
