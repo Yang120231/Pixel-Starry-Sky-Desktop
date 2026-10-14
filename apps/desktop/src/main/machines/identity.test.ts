@@ -3,6 +3,15 @@ import { argumentMachine, machineOf, remoteIds, remoteArguments } from './identi
 const machine = 'ssh-11111111-1111-4111-8111-111111111111'
 const id = '22222222-2222-4222-8222-222222222222'
 describe('machine resource ownership', () => {
+  it('encodes wsl resource ids both ways and keeps them apart from ssh', () => {
+    const wsl = 'wsl-33333333-3333-4333-8333-333333333333'
+    expect(remoteIds({ id }, wsl, true)).toEqual({ id: wsl + '~' + id })
+    expect(remoteIds({ id: wsl + '~' + id }, wsl, false)).toEqual({ id })
+    expect(remoteIds({ id: wsl + '~' + id }, machine, false)).toEqual({ id: wsl + '~' + id })
+    expect(remoteIds({ id: machine + '~' + id }, wsl, false)).toEqual({ id: machine + '~' + id })
+    expect(machineOf(wsl + '~' + id)).toBe(wsl)
+    expect(argumentMachine([{ projectId: wsl + '~' + id }])).toBe(wsl)
+  })
   it('keeps identical remote and local resources distinct without rewriting user content', () => {
     const raw = {
       record: { id, projectId: id, engineSessionId: id },

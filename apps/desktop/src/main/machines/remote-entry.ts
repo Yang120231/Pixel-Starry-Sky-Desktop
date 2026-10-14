@@ -8,7 +8,7 @@ import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 // Never include Electron or desktop credentials in this process.
 console.log = (...args) => console.error(...args)
 const namespace = process.argv[2] ?? 'default'
-if (!/^(ssh-[a-f0-9-]+|default)$/.test(namespace)) process.exit(2)
+if (!/^((ssh|wsl)-[a-f0-9-]+|default)$/.test(namespace)) process.exit(2)
 const dir = join(homedir(), '.local', 'share', 'pixelsky', 'remote', 'data', namespace)
 mkdirSync(dir, { recursive: true, mode: 0o700 })
 const lock = join(dir, 'runtime.lock')

@@ -459,6 +459,11 @@ describe('resolveRoute golden table', () => {
       expect(actual.map(row => row.join(' '))).toEqual(routeProfiles[profile])
     })
   }
+  it('routes wsl machine resources to that machine', () => {
+    const wsl = 'wsl-33333333-3333-4333-8333-333333333333'
+    expect(resolveRoute('engine:send', [wsl + '~' + U], L)).toEqual({ kind: 'remote', machine: wsl })
+    expect(resolveRoute('engine:send', [{ sessionId: wsl + '~' + U }], M1)).toEqual({ kind: 'remote', machine: wsl })
+  })
   it('does not mutate arguments', () => {
     const args = [{ projectId: R1, nested: { id: L } }, R1]
     const before = JSON.stringify(args)

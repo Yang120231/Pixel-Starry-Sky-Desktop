@@ -2,7 +2,7 @@ import { IPC_CONTRACT, type IpcChannelSpec } from '@pixelsky/protocol'
 
 /** Resource IDs carry machine ownership; user text, file contents and native engine IDs do not. */
 export function machineOf(id: unknown): string {
-  return typeof id === 'string' && /^ssh-[a-f0-9-]+~/.test(id) ? id.slice(0, id.indexOf('~')) : 'local'
+  return typeof id === 'string' && /^(ssh|wsl)-[a-f0-9-]+~/.test(id) ? id.slice(0, id.indexOf('~')) : 'local'
 }
 const fields = new Set([
   'id',
@@ -25,7 +25,7 @@ const fields = new Set([
   'workspaceSessionId',
 ])
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i
-const resourceId = /^ssh-[a-f0-9-]+~[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i
+const resourceId = /^(ssh|wsl)-[a-f0-9-]+~[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i
 const opaque = new Set(['input', 'output', 'content', 'env', 'arguments', 'schema', 'metadata'])
 export function remoteIds<T>(value: T, machine: string, encode: boolean, field = ''): T {
   if (opaque.has(field)) return value

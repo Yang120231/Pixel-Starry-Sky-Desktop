@@ -2,16 +2,15 @@ import { randomUUID } from 'node:crypto'
 import { StringDecoder } from 'node:string_decoder'
 import { join } from 'node:path'
 import { readFile, writeFile } from 'node:fs/promises'
-import type { ClientChannel } from 'ssh2'
 import type { TerminalEvent, TerminalRecord, TerminalState } from '../../shared/types/terminal'
 import type { WorkspaceRef } from '../../shared/types/workspace'
 import { terminalTitle } from './profiles'
 import { machineOf } from '../machines/identity'
-import { quoteSh } from '../machines/ssh'
+import type { ShellChannel } from '../machines/link'
 import type { Machines } from '../machines/service'
 
 interface Run {
-  channel: ClientChannel
+  channel: ShellChannel
   owner: number
   seq: number
   generation: number
@@ -117,10 +116,7 @@ export class RemoteTerminals {
     record.error = undefined
     this.emit(owner, { type: 'record', record: { ...record } })
     try {
-      const channel = await connection.channel('cd -- ' + quoteSh(record.cwd) + ' && exec ' + quoteSh(shell) + ' -l', {
-        cols: 100,
-        rows: 24,
-      })
+      const channel = await connection.openShell(record.cwd, shell, { cols: 100, rows: 24 })
       const run: Run = {
         channel,
         owner,
@@ -142,12 +138,11 @@ export class RemoteTerminals {
         }
         if (run.bytes > 256 * 1024) channel.pause()
       }
-      channel.on('data', output)
-      channel.stderr.on('data', output)
-      channel.on('error', (error: Error) => {
+      channel.onData(output)
+      channel.onError(error => {
         record.error = error.message
       })
-      channel.on('close', (code: number | undefined) => {
+      channel.onClose(code => {
         if (this.runs.get(record.id) !== run) return
         this.runs.delete(record.id)
         record.status = 'exited'
@@ -179,7 +174,7 @@ export class RemoteTerminals {
     if (!run || run.generation !== generation) return
     if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols < 2 || cols > 500 || rows < 2 || rows > 300)
       throw new Error('终端尺寸不正确')
-    run.channel.setWindow(rows, cols, 0, 0)
+    run.channel.resize(cols, rows)
   }
   ack(owner: number, id: string, generation: number, seq: number): void {
     const run = this.runs.get(id)
@@ -217,12 +212,11 @@ export class RemoteTerminals {
   private async stop(run: Run): Promise<void> {
     await new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('终端未能停止，请重试')), 5000)
-      run.channel.once('close', () => {
+      run.channel.onClose(() => {
         clearTimeout(timer)
         resolve()
       })
-      run.channel.signal('TERM')
-      run.channel.close()
+      run.channel.kill()
     })
   }
   hasRunning(owner?: number): boolean {

@@ -5,19 +5,12 @@ import { connect as connectTcp, createServer, type Server } from 'node:net'
 import { REMOTE_PROTOCOL } from '@pixelsky/protocol'
 import { RpcPeer, type RpcHandler } from './rpc'
 import type { MachineInput } from '../../shared/types/machines'
+import type { RemoteHello, RemoteLink, ShellChannel } from './link'
 
 /** Upload directory of the helper on the remote machine; changes together with the protocol version. */
 const REMOTE_DIR = 'v' + REMOTE_PROTOCOL
 export const quoteSh = (value: string): string => "'" + value.replaceAll("'", "'\\''") + "'"
-export interface RemoteHello {
-  protocol: number
-  platform: string
-  arch: string
-  hostname: string
-  home: string
-  node: string
-  shell: string
-}
+export type { RemoteHello }
 export class FingerprintRequired extends Error {
   constructor(
     readonly fingerprint: string,
@@ -26,7 +19,7 @@ export class FingerprintRequired extends Error {
     super('SSH_FINGERPRINT_REQUIRED')
   }
 }
-export class SshConnection {
+export class SshConnection implements RemoteLink {
   readonly client = new Client()
   peer: RpcPeer | null = null
   hello: RemoteHello | null = null
@@ -116,7 +109,7 @@ export class SshConnection {
     if (!remotePath.startsWith(info.home + '/.local/share/pixelsky/remote/' + REMOTE_DIR + '/helper-'))
       throw new Error('SSH_HELPER_PATH_INVALID')
     const namespace = input.id ?? 'default'
-    if (!/^(ssh-[a-f0-9-]+|default)$/.test(namespace)) throw new Error('SSH_INVALID_CONFIG')
+    if (!/^((ssh|wsl)-[a-f0-9-]+|default)$/.test(namespace)) throw new Error('SSH_INVALID_CONFIG')
     const channel = await this.channel('node ' + quoteSh(remotePath) + ' ' + quoteSh(namespace))
     let diagnostic = ''
     channel.stderr.on('data', (data: Buffer) => {
@@ -145,6 +138,25 @@ export class SshConnection {
         error ? reject(error) : resolve(stream),
       ),
     )
+  }
+  async openShell(cwd: string, shell: string, size: { cols: number; rows: number }): Promise<ShellChannel> {
+    const channel = await this.channel('cd -- ' + quoteSh(cwd) + ' && exec ' + quoteSh(shell) + ' -l', size)
+    return {
+      write: data => void channel.write(data),
+      resize: (cols, rows) => void channel.setWindow(rows, cols, 0, 0),
+      pause: () => void channel.pause(),
+      resume: () => void channel.resume(),
+      kill: () => {
+        channel.signal('TERM')
+        channel.close()
+      },
+      onData: cb => {
+        channel.on('data', cb)
+        channel.stderr.on('data', cb)
+      },
+      onClose: cb => void channel.on('close', cb),
+      onError: cb => void channel.on('error', cb),
+    }
   }
   async exec(command: string, input?: Buffer): Promise<string> {
     const channel = await this.channel(command)

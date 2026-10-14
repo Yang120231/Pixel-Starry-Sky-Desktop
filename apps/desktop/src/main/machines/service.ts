@@ -15,6 +15,7 @@ import type { AppContext } from '../app/context'
 import type { ProviderStore } from '../core/providers/store'
 import type { EventBus, PushChannel } from '../app/events'
 import { FingerprintRequired, SshConnection } from './ssh'
+import type { RemoteLink } from './link'
 import { machineOf, remoteIds, remoteArguments, remoteMethod } from './identity'
 import { resolveRoute } from './routing'
 import { addProjectPath } from '../core/engine/ops'
@@ -26,7 +27,7 @@ interface StoredMachine extends Omit<MachineInput, 'password' | 'passphrase'> {
 }
 interface RemoteState {
   info: MachineInfo
-  connection?: SshConnection
+  connection?: RemoteLink
   pendingFingerprint?: string
   projects: ProjectRecord[]
   sessions: SessionSummary[]
@@ -338,7 +339,7 @@ export class Machines {
       this.changed()
     }
   }
-  connection(id: string): SshConnection {
+  connection(id: string): RemoteLink {
     const state = this.states.get(id)
     if (!state?.connection?.peer || state.info.status !== 'connected') throw new Error('SSH_NOT_CONNECTED')
     return state.connection

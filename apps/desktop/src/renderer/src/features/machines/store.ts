@@ -13,7 +13,7 @@ import { isNewTab } from '@/features/panes/tree'
 import { demo } from '@/data/demo'
 
 export const machineOf = (id: unknown): string =>
-  typeof id === 'string' && /^ssh-[a-f0-9-]+~/.test(id) ? id.slice(0, id.indexOf('~')) : 'local'
+  typeof id === 'string' && /^(ssh|wsl)-[a-f0-9-]+~/.test(id) ? id.slice(0, id.indexOf('~')) : 'local'
 const listeners = new Set<() => void>()
 let state: MachineState = (isDemo ? demo().machines : undefined) ?? {
   currentId: 'local',
