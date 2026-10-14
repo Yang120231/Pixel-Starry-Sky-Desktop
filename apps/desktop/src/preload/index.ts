@@ -93,6 +93,7 @@ const engine: EngineBridge = {
   removeProject: id => call('engine:removeProject', id),
   renameProject: (id, name) => call('engine:renameProject', id, name),
   setProjectFolders: (id, folders) => call('engine:setProjectFolders', id, folders),
+  pickFolders: () => call('engine:pickFolders'),
   sessions: () => call('engine:sessions'),
   createSession: opts => call('engine:createSession', opts),
   openSession: id => call('engine:openSession', id),

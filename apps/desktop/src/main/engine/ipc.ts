@@ -144,6 +144,16 @@ export async function initEngine(ctx: AppContext): Promise<void> {
     return h.addProjects(r.filePaths)
   })
   handle('engine:addProjects', (_e, paths: unknown) => addProjectPaths(h, paths))
+  // 给项目加附加文件夹时选文件夹（只选，不加成项目；docs/ui/multi-root-projects.md §3.4）
+  handle('engine:pickFolders', async e => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    const opts = {
+      title: nativeText(win, '选择要加进项目的文件夹'),
+      properties: ['openDirectory' as const, 'multiSelections' as const],
+    }
+    const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+    return r.canceled || !r.filePaths.length ? null : r.filePaths
+  })
   // 「从一个文件夹导入…」：先选上级文件夹，再列出子文件夹给界面勾选
   handle('engine:importCandidates', async e => {
     const win = BrowserWindow.fromWebContents(e.sender)

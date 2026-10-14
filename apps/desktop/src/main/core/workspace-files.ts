@@ -134,6 +134,24 @@ export async function workspaceNewPath(
 
 const relativeTo = (root: string, path: string): string => relative(root, path).split(sep).join('/')
 
+/** 「::N/…」：第 N 个附加文件夹里的路径（docs/ui/multi-root-projects.md §3.4）；以前的路径不允许带冒号，所以不会撞上 */
+const EXTRA_FOLDER = /^::(\d{1,2})(?:[\\/]|$)/
+
+/** 路径在哪个文件夹：root 是那个文件夹，rel 是相对它的路径，prefix 是返回路径时要加回去的前缀 */
+export function locateFolder(target: WorkspaceTarget, input: unknown): { root: string; rel: unknown; prefix: string } {
+  const match = typeof input === 'string' ? EXTRA_FOLDER.exec(input) : null
+  if (!match) return { root: target.path, rel: input, prefix: '' }
+  const folder = target.folders?.[Number(match[1]) - 1]
+  if (!folder) throw codedError('files.notFound')
+  return { root: folder.path, rel: (input as string).slice(match[0].length), prefix: `::${match[1]}/` }
+}
+
+/** 主文件夹和每个附加文件夹：[根目录, 前缀] */
+const allFolders = (target: WorkspaceTarget): [string, string][] => [
+  [target.path, ''],
+  ...(target.folders ?? []).map((f, i): [string, string] => [f.path, `::${i + 1}/`]),
+]
+
 async function boundedRead(file: string, max: number): Promise<Buffer> {
   const h = await open(file, 'r')
   try {
@@ -191,7 +209,8 @@ export class WorkspaceFiles {
   /** 新建空文件或文件夹（docs/ui/files-search-terminal-pins.md §3）；返回相对项目的路径 */
   async create(ref: WorkspaceRef, path: unknown, kind: unknown): Promise<{ path: string }> {
     if (kind !== 'file' && kind !== 'folder') throw new Error('参数不正确')
-    const target = await workspaceNewPath(this.target(ref).path, path)
+    const at = locateFolder(this.target(ref), path)
+    const target = await workspaceNewPath(at.root, at.rel)
     try {
       if (kind === 'folder') await mkdir(target.path)
       else await (await open(target.path, 'wx')).close()
@@ -200,15 +219,18 @@ export class WorkspaceFiles {
         throw codedError('files.exists', { name: basename(target.path) })
       throw err
     }
-    return { path: relativeTo(target.root, target.path) }
+    return { path: at.prefix + relativeTo(target.root, target.path) }
   }
 
-  /** 在同一项目内重命名或移动；目标已存在时拒绝 */
+  /** 在同一项目内重命名或移动；目标已存在时拒绝。不能跨文件夹移动（主文件夹和附加文件夹之间） */
   async rename(ref: WorkspaceRef, from: unknown, to: unknown): Promise<{ path: string }> {
-    const root = this.target(ref).path
-    const source = await workspaceEntry(root, from)
-    const target = await workspaceNewPath(root, to, source.path)
-    if (target.path === source.path) return { path: relativeTo(source.root, source.path) }
+    const workspace = this.target(ref)
+    const at = locateFolder(workspace, from)
+    const dest = locateFolder(workspace, to)
+    if (at.prefix !== dest.prefix) throw codedError('files.outsideProject')
+    const source = await workspaceEntry(at.root, at.rel)
+    const target = await workspaceNewPath(at.root, dest.rel, source.path)
+    if (target.path === source.path) return { path: at.prefix + relativeTo(source.root, source.path) }
     // 不能把文件夹移进它自己里面（只改大小写时 Windows 的路径比较会把两者当成同一个，跳过这个检查）
     const caseOnly = target.path.toLowerCase() === source.path.toLowerCase()
     if (!caseOnly && inside(source.path, target.path)) throw codedError('files.outsideProject')
@@ -221,13 +243,14 @@ export class WorkspaceFiles {
       if (code === 'EXDEV') throw codedError('files.crossDevice')
       throw err
     }
-    return { path: relativeTo(target.root, target.path) }
+    return { path: at.prefix + relativeTo(target.root, target.path) }
   }
 
   /** 删除：移到回收站，不做永久删除 */
   async remove(ref: WorkspaceRef, path: unknown): Promise<void> {
     if (!this.options.trash) throw new Error('当前环境不能删除文件')
-    const entry = await workspaceEntry(this.target(ref).path, path)
+    const at = locateFolder(this.target(ref), path)
+    const entry = await workspaceEntry(at.root, at.rel)
     try {
       await this.options.trash(entry.path, relativeTo(entry.root, entry.path))
     } catch (err) {
@@ -236,7 +259,8 @@ export class WorkspaceFiles {
   }
 
   async list(ref: WorkspaceRef, path: string): Promise<DirectoryListing> {
-    const dir = await workspacePath(this.target(ref).path, path, 'directory')
+    const at = locateFolder(this.target(ref), path)
+    const dir = await workspacePath(at.root, at.rel, 'directory')
     const all = (await readdir(dir, { withFileTypes: true })).filter(e => e.name !== '.git')
     all.sort(
       (a, b) =>
@@ -276,13 +300,16 @@ export class WorkspaceFiles {
     if (typeof name !== 'string' || name.length > 160) throw new Error('筛选名称过长')
     const term = name.trim().toLocaleLowerCase()
     if (!term) return this.list(ref, '')
-    const root = await workspacePath(this.target(ref).path, '', 'directory')
+    // 多文件夹项目：按顺序搜每个文件夹（主文件夹先），共用同一个上限和时限
+    const roots: [string, string][] = []
+    for (const [path, prefix] of allFolders(this.target(ref)))
+      roots.push([await workspacePath(path, '', 'directory'), prefix])
     const entries: DirectoryListing['entries'] = []
-    const queue = ['']
+    const queue: [string, string, string][] = roots.map(([root, prefix]) => [root, prefix, ''])
     let examined = 0
     const deadline = Date.now() + 2500
     while (queue.length && examined < 10000 && entries.length < SEARCH_LIMIT && Date.now() < deadline) {
-      const path = queue.shift()!
+      const [root, prefix, path] = queue.shift()!
       let children
       try {
         children = await readdir(join(root, path), { withFileTypes: true })
@@ -296,11 +323,11 @@ export class WorkspaceFiles {
         if (e.name.toLocaleLowerCase().includes(term))
           entries.push({
             name: e.name,
-            path: next,
+            path: prefix + next,
             kind: e.isDirectory() ? 'directory' : 'file',
             linked: e.isSymbolicLink(),
           })
-        if (e.isDirectory() && !e.isSymbolicLink()) queue.push(next)
+        if (e.isDirectory() && !e.isSymbolicLink()) queue.push([root, prefix, next])
       }
     }
     return { entries, truncated: queue.length > 0 || examined >= 10000 || entries.length >= SEARCH_LIMIT }
@@ -308,11 +335,26 @@ export class WorkspaceFiles {
 
   /** 内容搜索（git grep 或逐个读文件），路径相对项目 */
   async grep(ref: WorkspaceRef, query: unknown): Promise<GrepResult> {
-    return grepWorkspace(await workspacePath(this.target(ref).path, '', 'directory'), query)
+    const folders = allFolders(this.target(ref))
+    const main = await grepWorkspace(await workspacePath(folders[0][0], '', 'directory'), query)
+    if (folders.length === 1) return main
+    // 多文件夹项目：每个文件夹各搜一遍，结果按文件夹顺序接起来；一个文件夹搜不了（不在了）就跳过
+    const matches = [...main.matches]
+    let truncated = main.truncated
+    for (const [path, prefix] of folders.slice(1)) {
+      const result = await workspacePath(path, '', 'directory')
+        .then(root => grepWorkspace(root, query))
+        .catch(() => null)
+      if (!result) continue
+      matches.push(...result.matches.map(m => ({ ...m, path: prefix + m.path })))
+      truncated ||= result.truncated
+    }
+    return { matches, truncated }
   }
 
   async read(ref: WorkspaceRef, path: string): Promise<FileDocument> {
-    const file = await workspacePath(this.target(ref).path, path, 'file')
+    const at = locateFolder(this.target(ref), path)
+    const file = await workspacePath(at.root, at.rel, 'file')
     const info = await stat(file)
     const image = IMAGES[extname(file).toLowerCase()]
     try {
@@ -327,8 +369,10 @@ export class WorkspaceFiles {
 
   /** HEAD 路径使用仓库前缀，避免子目录项目读错文件；未跟踪与非 Git 项目返回 null。 */
   async headContent(ref: WorkspaceRef, path: string): Promise<string | null> {
-    const cwd = await workspacePath(this.target(ref).path, '', 'directory')
-    await workspacePath(cwd, path, 'file')
+    const at = locateFolder(this.target(ref), path)
+    const rel = typeof at.rel === 'string' ? at.rel : path
+    const cwd = await workspacePath(at.root, '', 'directory')
+    await workspacePath(cwd, rel, 'file')
     const git = (args: string[]): Promise<string | null> =>
       new Promise(done => {
         execFile(
@@ -340,7 +384,7 @@ export class WorkspaceFiles {
       })
     const prefix = await git(['rev-parse', '--show-prefix'])
     if (prefix === null) return null
-    const content = await git(['show', `HEAD:${prefix.trim()}${path.replaceAll('\\', '/')}`])
+    const content = await git(['show', `HEAD:${prefix.trim()}${rel.replaceAll('\\', '/')}`])
     return content === null || content.includes('\0') ? null : content.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n')
   }
 
@@ -354,13 +398,13 @@ export class WorkspaceFiles {
     if (typeof content !== 'string' || typeof version !== 'string' || !/^[0-9a-f]{64}$/.test(version))
       throw new Error('保存参数不正确')
     if (Buffer.byteLength(content, 'utf8') > TEXT_LIMIT) throw new Error('内容太大，请用外部编辑器保存')
-    const root = this.target(ref).path
-    const file = await workspacePath(root, path, 'file')
+    const { root, rel } = locateFolder(this.target(ref), path)
+    const file = await workspacePath(root, rel, 'file')
     const previous = this.saves.get(file) ?? Promise.resolve()
     const job = previous
       .catch(() => {})
       .then(async () => {
-        const actual = await workspacePath(root, path, 'file')
+        const actual = await workspacePath(root, rel, 'file')
         if (actual !== file) throw new Error('文件路径已经变化，请重新打开')
         const h = await open(file, 'r')
         const temporary = file + `.pixelsky-${randomUUID()}.tmp`
@@ -385,7 +429,7 @@ export class WorkspaceFiles {
           }
           // 临时文件写好后再次核对，写入失败保留原文件；保存不更换符号链接本身。
           if (
-            (await workspacePath(root, path, 'file')) !== file ||
+            (await workspacePath(root, rel, 'file')) !== file ||
             HASH(await boundedRead(file, TEXT_LIMIT)) !== version
           )
             throw codedError('files.changedOutside')
@@ -405,57 +449,70 @@ export class WorkspaceFiles {
     }
   }
 
+  /** 文件树上的 Git 标记；多文件夹项目里每个文件夹各查各的仓库，附加文件夹的路径带「::N/」 */
   async status(ref: WorkspaceRef): Promise<Record<string, string>> {
-    const cwd = await workspacePath(this.target(ref).path, '', 'directory')
-    return new Promise(resolveStatus => {
-      execFile(
-        'git',
-        ['-c', 'core.quotepath=false', 'status', '--porcelain=v1', '-z', '--untracked-files=normal', '--', '.'],
-        { cwd, windowsHide: true, timeout: 4000, maxBuffer: 1024 * 1024, encoding: 'utf8' },
-        async (err, output) => {
-          if (err) {
-            resolveStatus({})
-            return
-          }
-          // Porcelain 路径相对仓库根，先读取 prefix 以兼容会话 cwd 位于子目录。
-          execFile(
-            'git',
-            ['rev-parse', '--show-prefix'],
-            { cwd, windowsHide: true, timeout: 2000, encoding: 'utf8' },
-            (prefixError, prefixText) => {
-              if (prefixError) {
-                resolveStatus({})
-                return
-              }
-              const prefix = prefixText.trim()
-              const statuses: Record<string, string> = {}
-              const records = output.split('\0')
-              for (let i = 0; i < records.length; i++) {
-                const row = records[i]
-                if (row.length < 4) continue
-                const code = row.slice(0, 2).trim()
-                const original = row.slice(3)
-                if (code.includes('R') || code.includes('C')) i++
-                if (prefix && !original.startsWith(prefix)) continue
-                const path = original.slice(prefix.length).replace(/\/$/, '')
-                statuses[path] =
-                  code === '??'
-                    ? '?'
-                    : code.includes('U')
-                      ? '!'
-                      : code.includes('D')
-                        ? 'D'
-                        : code.includes('A')
-                          ? 'A'
-                          : code.includes('R')
-                            ? 'R'
-                            : 'M'
-              }
-              resolveStatus(statuses)
-            },
-          )
-        },
-      )
-    })
+    const statuses: Record<string, string> = {}
+    for (const [path, prefix] of allFolders(this.target(ref))) {
+      // 主文件夹不在了照旧报错；附加文件夹不在了就跳过
+      const cwd = prefix
+        ? await workspacePath(path, '', 'directory').catch(() => null)
+        : await workspacePath(path, '', 'directory')
+      if (!cwd) continue
+      for (const [file, code] of Object.entries(await gitStatus(cwd))) statuses[prefix + file] = code
+    }
+    return statuses
   }
+}
+
+function gitStatus(cwd: string): Promise<Record<string, string>> {
+  return new Promise(resolveStatus => {
+    execFile(
+      'git',
+      ['-c', 'core.quotepath=false', 'status', '--porcelain=v1', '-z', '--untracked-files=normal', '--', '.'],
+      { cwd, windowsHide: true, timeout: 4000, maxBuffer: 1024 * 1024, encoding: 'utf8' },
+      async (err, output) => {
+        if (err) {
+          resolveStatus({})
+          return
+        }
+        // Porcelain 路径相对仓库根，先读取 prefix 以兼容会话 cwd 位于子目录。
+        execFile(
+          'git',
+          ['rev-parse', '--show-prefix'],
+          { cwd, windowsHide: true, timeout: 2000, encoding: 'utf8' },
+          (prefixError, prefixText) => {
+            if (prefixError) {
+              resolveStatus({})
+              return
+            }
+            const prefix = prefixText.trim()
+            const statuses: Record<string, string> = {}
+            const records = output.split('\0')
+            for (let i = 0; i < records.length; i++) {
+              const row = records[i]
+              if (row.length < 4) continue
+              const code = row.slice(0, 2).trim()
+              const original = row.slice(3)
+              if (code.includes('R') || code.includes('C')) i++
+              if (prefix && !original.startsWith(prefix)) continue
+              const path = original.slice(prefix.length).replace(/\/$/, '')
+              statuses[path] =
+                code === '??'
+                  ? '?'
+                  : code.includes('U')
+                    ? '!'
+                    : code.includes('D')
+                      ? 'D'
+                      : code.includes('A')
+                        ? 'A'
+                        : code.includes('R')
+                          ? 'R'
+                          : 'M'
+            }
+            resolveStatus(statuses)
+          },
+        )
+      },
+    )
+  })
 }

@@ -209,6 +209,7 @@ export const IPC_CONTRACT = {
     mobile: 'view',
     trust: 'sender',
   },
+  'engine:pickFolders': { kind: 'invoke', route: 'selected', picker: true, trust: 'sender' },
   'engine:projects': {
     kind: 'invoke',
     route: 'aggregate',

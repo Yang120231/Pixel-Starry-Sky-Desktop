@@ -10,6 +10,7 @@ import {
   type HostEvent,
   type ProjectRecord,
   type AddProjectsResult,
+  type ProjectFolder,
   type SessionSnapshot,
   type SessionSummary,
 } from '@pixelsky/protocol'
@@ -434,6 +435,17 @@ export function importProjects(): void {
   window.dispatchEvent(new Event(IMPORT_PROJECTS_EVENT))
 }
 export const IMPORT_PROJECTS_EVENT = 'pixelsky:import-projects'
+
+/** 改项目的附加文件夹（整组替换，只对之后新建的对话生效）；列表随宿主的 projects 事件刷新 */
+export async function setProjectFolders(id: string, folders: ProjectFolder[]): Promise<void> {
+  if (!bridge) return
+  await bridge.setProjectFolders(id, folders)
+}
+
+/** 选几个文件夹（只要路径）；取消时 null */
+export async function pickFolders(): Promise<string[] | null> {
+  return bridge ? bridge.pickFolders() : null
+}
 
 /** 选上级文件夹并列出子文件夹；取消时 null */
 export async function importCandidates(): Promise<ImportCandidates | null> {

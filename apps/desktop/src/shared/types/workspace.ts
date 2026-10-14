@@ -2,7 +2,13 @@ export type WorkspaceRef = { sessionId: string; projectId?: never } | { projectI
 export interface WorkspaceTarget {
   ref: WorkspaceRef
   name: string
+  /** 主文件夹 */
   path: string
+  /**
+   * 多文件夹项目的附加文件夹（docs/ui/multi-root-projects.md §3.4）。文件接口里「::1/src/a.ts」指第 1 个附加文件夹里的
+   * src/a.ts，不带前缀的路径在主文件夹里；没有附加文件夹时不写
+   */
+  folders?: { path: string; name: string }[]
 }
 /** 「从一个文件夹导入…」列出的一个子文件夹（docs/ui/multi-root-projects.md §2） */
 export interface ImportCandidate {

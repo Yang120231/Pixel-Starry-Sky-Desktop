@@ -1,6 +1,15 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { Ellipsis, FolderOpen, PencilLine, Plus, SquareArrowOutUpRight, Trash2, type LucideIcon } from 'lucide-react'
+import {
+  Ellipsis,
+  FolderOpen,
+  Folders,
+  PencilLine,
+  Plus,
+  SquareArrowOutUpRight,
+  Trash2,
+  type LucideIcon,
+} from 'lucide-react'
 import { normalizeProjectName, PROJECT_NAME_LIMIT } from '@pixelsky/protocol'
 import { cn, useToast } from '@/ui'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
@@ -10,6 +19,7 @@ import { isLive, removeProject, renameProject } from '@/features/engine'
 import { machineOf } from '@/features/machines/store'
 import { paneActions } from '@/features/panes/store'
 import type { Project } from '@/data'
+import { ProjectFoldersDialog } from './ProjectFoldersDialog'
 
 /**
  * 侧栏项目行：点击展开 / 收起；右键、⋯ 按钮、ContextMenu 键或 Shift+F10 打开项目菜单。
@@ -36,7 +46,7 @@ export function ProjectRow({
     menu = useRef<HTMLDivElement>(null)
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null),
     [coords, setCoords] = useState<{ x: number; y: number } | null>(null)
-  const [dialog, setDialog] = useState<'rename' | 'remove' | null>(null)
+  const [dialog, setDialog] = useState<'rename' | 'remove' | 'folders' | null>(null)
   const remote = machineOf(project.id) !== 'local'
 
   const close = (restore = true): void => {
@@ -115,13 +125,27 @@ export function ProjectRow({
       <button
         ref={button}
         type="button"
-        title={project.name}
+        title={
+          project.folders?.length
+            ? [project.path ?? project.name, ...project.folders.map(f => f.path)].join('\n')
+            : project.name
+        }
         aria-expanded={open}
         onClick={onToggle}
         className="flex h-full min-w-0 flex-1 items-center gap-2.5 overflow-hidden rounded-md pl-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
       >
         <Icon size={16} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
         <span className="min-w-0 flex-1 truncate">{project.name}</span>
+        {/* 多文件夹项目：名字后面写「+2」，悬停看全部路径 */}
+        {!!project.folders?.length && (
+          <span
+            data-project-folders-count
+            aria-label={t('projectFolders.count', { n: project.folders.length + 1 })}
+            className="shrink-0 text-label text-fg-faint"
+          >
+            +{project.folders.length}
+          </span>
+        )}
       </button>
       {/* 悬停时右边放 ⋯ 和 +：这一块变宽只是项目名更早截断，行高和左边的图标、名字位置都不动 */}
       <div
@@ -216,6 +240,16 @@ export function ProjectRow({
             </button>
             <button
               role="menuitem"
+              disabled={remote || !isLive}
+              title={remote ? t('projectFolders.remote') : undefined}
+              onClick={() => run(() => setDialog('folders'))}
+              className={item}
+            >
+              <Folders size={15} strokeWidth={1.5} />
+              {t('projectFolders.menu')}
+            </button>
+            <button
+              role="menuitem"
               disabled={remote}
               title={remote ? t('project.remoteUnavailable') : undefined}
               onClick={() => external(() => window.pixelsky!.files.reveal({ projectId: project.id }))}
@@ -246,6 +280,12 @@ export function ProjectRow({
         <RenameProjectDialog
           name={project.name}
           onSave={name => renameProject(project.id, name)}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog === 'folders' && project.path && (
+        <ProjectFoldersDialog
+          project={{ id: project.id, name: project.name, path: project.path, folders: project.folders }}
           onClose={() => setDialog(null)}
         />
       )}

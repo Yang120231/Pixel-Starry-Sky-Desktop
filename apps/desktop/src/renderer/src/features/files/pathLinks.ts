@@ -1,27 +1,29 @@
 // 文字里的路径 → 项目内确实存在的文件（终端 docs/ui/files-search-terminal-pins.md §4.2，对话 docs/ui/content-highlight.md §2 A）。
-// 项目 / 会话的根目录永久缓存，目录列表缓存几秒：鼠标划过同一屏输出、一条回复里有很多路径时不会反复读盘。
+// 项目 / 会话的根目录（含附加文件夹）缓存 30 秒，目录列表缓存几秒：鼠标划过同一屏输出、一条回复里有很多路径时不会反复读盘。
 import { machineOf } from '@/features/machines/store'
-import type { WorkspaceRef } from '../../../../shared/types/workspace'
+import type { WorkspaceRef, WorkspaceTarget } from '../../../../shared/types/workspace'
 import { findPathMatches, projectPath } from './pathMatch'
 
 const LIST_TTL = 5000
-const roots = new Map<string, Promise<string | null>>()
+/** 项目的附加文件夹可能改（docs/ui/multi-root-projects.md §3），目标只缓存一会儿 */
+const TARGET_TTL = 30_000
+const targets = new Map<string, { at: number; target: Promise<WorkspaceTarget | null> }>()
 const listings = new Map<string, { at: number; names: Promise<Set<string> | null> }>()
 
 const refKey = (ref: WorkspaceRef): string => (ref.sessionId ? `s:${ref.sessionId}` : `p:${ref.projectId}`)
 
+function workspaceTarget(ref: WorkspaceRef): Promise<WorkspaceTarget | null> {
+  const key = refKey(ref),
+    cached = targets.get(key)
+  if (cached && Date.now() - cached.at < TARGET_TTL) return cached.target
+  const target = window.pixelsky!.files.target(ref).catch(() => null)
+  targets.set(key, { at: Date.now(), target })
+  return target
+}
+
 /** 项目根目录（会话是会话的工作目录） */
-export function workspaceRoot(ref: WorkspaceRef): Promise<string | null> {
-  const key = refKey(ref)
-  let root = roots.get(key)
-  if (!root) {
-    root = window
-      .pixelsky!.files.target(ref)
-      .then(t => t.path)
-      .catch(() => null)
-    roots.set(key, root)
-  }
-  return root
+export async function workspaceRoot(ref: WorkspaceRef): Promise<string | null> {
+  return (await workspaceTarget(ref))?.path ?? null
 }
 
 function namesIn(ref: WorkspaceRef, dir: string, windows: boolean): Promise<Set<string> | null> {
@@ -48,9 +50,19 @@ function namesIn(ref: WorkspaceRef, dir: string, windows: boolean): Promise<Set<
 export async function workspaceFilePath(ref: WorkspaceRef, raw: string, cwd?: string): Promise<string | null> {
   if (!window.pixelsky) return null
   const windows = machineOf(ref.projectId ?? ref.sessionId) === 'local' && window.pixelsky.platform === 'win32'
-  const root = await workspaceRoot(ref)
-  if (!root) return null
-  const relative = projectPath(raw, cwd ?? root, root, windows)
+  const target = await workspaceTarget(ref)
+  if (!target) return null
+  const root = target.path
+  let relative = projectPath(raw, cwd ?? root, root, windows)
+  // 多文件夹项目：不在主文件夹里的再看附加文件夹，换成「::N/…」
+  if (!relative)
+    for (const [i, folder] of (target.folders ?? []).entries()) {
+      const inFolder = projectPath(raw, cwd ?? root, folder.path, windows)
+      if (inFolder) {
+        relative = `::${i + 1}/${inFolder}`
+        break
+      }
+    }
   if (!relative) return null
   const parts = relative.split('/'),
     name = parts.pop()!

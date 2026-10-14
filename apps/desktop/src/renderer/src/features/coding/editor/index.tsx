@@ -5,6 +5,7 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import { Button, DiffStat, cn } from '@/ui'
 import { FileEditor } from '@/features/editor/FileEditor'
+import { isDemo } from '@/data'
 import { fileLanguage } from '@/features/editor/code/languages'
 import {
   dirtyFile,
@@ -241,7 +242,12 @@ export function EditorArea({ visible, width }: { visible: boolean; width: number
         label: tr('coding.editor.copyPath'),
         separator: true,
         disabled: !file,
-        run: () => file && void navigator.clipboard.writeText(`${file.root.replace(/\/$/, '')}/${file.path}`),
+        // 主进程按引用找真实路径：附加文件夹里的文件（「::N/…」）、远程机器上的都对
+        run: () =>
+          file &&
+          void (isDemo
+            ? navigator.clipboard.writeText(`${file.root.replace(/\/$/, '')}/${file.path}`)
+            : window.pixelsky!.files.copyPath(file.ref, file.path)),
       },
       {
         label: tr('coding.editor.copyRelPath'),

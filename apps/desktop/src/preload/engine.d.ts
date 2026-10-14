@@ -61,6 +61,8 @@ export interface EngineBridge {
   renameProject(id: string, name: string): Promise<ProjectRecord>
   /** 改项目的附加文件夹（整组替换；只对之后新建的对话生效，docs/ui/multi-root-projects.md §3） */
   setProjectFolders(id: string, folders: ProjectFolder[]): Promise<ProjectRecord>
+  /** 选文件夹（可多选），只返回路径、不加成项目；取消时 null */
+  pickFolders(): Promise<string[] | null>
   sessions(): Promise<SessionSummary[]>
   createSession(
     opts: {

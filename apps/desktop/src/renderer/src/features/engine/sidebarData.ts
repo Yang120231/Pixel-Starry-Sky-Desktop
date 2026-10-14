@@ -32,6 +32,8 @@ export function sidebarData(
     return {
       id: p.id,
       name: p.name,
+      path: p.path,
+      ...(p.folders?.length ? { folders: p.folders } : {}),
       expanded: true,
       running: list.some(s => !s.record.archivedAt && busy(s)),
       // 置顶的会话只显示在「置顶」分组

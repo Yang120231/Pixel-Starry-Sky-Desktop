@@ -6,6 +6,7 @@ import { openFile, type OpenFile } from '@/features/files/store'
 import { ActionMenu } from '@/ui/ActionMenu'
 import type { FileEntry } from '../../../../shared/types/workspace'
 import { demo } from '@/data/demo'
+import { extraFolder, folderLabel, splitExtra } from '@/features/files/extraFolders'
 
 export function FileBreadcrumbs({ tab }: { tab: OpenFile }) {
   const { t, text } = useI18n()
@@ -38,23 +39,28 @@ export function FileBreadcrumbs({ tab }: { tab: OpenFile }) {
       gone = true
     }
   }, [menu?.path, tab.id])
-  const parts = tab.path.split('/')
+  // 附加文件夹里的文件（docs/ui/multi-root-projects.md §3.4）：第一节写文件夹名，路径都在「::N」下面
+  const extra = splitExtra(tab.path)
+  const folder = extra.index === null ? undefined : extraFolder(tab.ref, extra.index)
+  const parts = extra.rest.split('/')
+  const under = (rel: string): string => (extra.prefix ? (rel ? `${extra.prefix}/${rel}` : extra.prefix) : rel)
+  const first = folder ? folderLabel(folder) : extra.prefix || tab.project || text('文件')
   return (
     <nav
       aria-label={t('workspace.breadcrumb')}
       className="flex min-w-0 flex-1 items-center overflow-x-auto whitespace-nowrap text-meta [scrollbar-width:none]"
     >
-      {[tab.project || text('文件'), ...parts].map((name, i) => (
+      {[first, ...parts].map((name, i) => (
         <span key={i} className="flex shrink-0 items-center">
           {i > 0 && <ChevronRight size={12} className="mx-0.5 text-fg-faint" />}
           <button
             type="button"
-            title={i ? parts.slice(0, i).join('/') : tab.root}
+            title={i ? parts.slice(0, i).join('/') : (folder?.path ?? tab.root)}
             className="flex max-w-72 items-center gap-1 rounded px-1 py-1 text-fg-secondary hover:bg-hover"
             onClick={e => {
               const r = e.currentTarget.getBoundingClientRect()
               setMenu({
-                path: i === parts.length ? parts.slice(0, -1).join('/') : parts.slice(0, i).join('/'),
+                path: under(i === parts.length ? parts.slice(0, -1).join('/') : parts.slice(0, i).join('/')),
                 x: r.left,
                 y: r.bottom,
                 trigger: e.currentTarget,
@@ -73,7 +79,7 @@ export function FileBreadcrumbs({ tab }: { tab: OpenFile }) {
           label={t('workspace.breadcrumb')}
           onClose={() => setMenu(null)}
           actions={[
-            ...(menu.path
+            ...(menu.path && menu.path !== extra.prefix
               ? [{ label: '… /', run: () => setMenu({ ...menu, path: menu.path.split('/').slice(0, -1).join('/') }) }]
               : []),
             ...entries.map(entry => ({

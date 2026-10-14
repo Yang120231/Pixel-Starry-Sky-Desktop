@@ -1,4 +1,22 @@
 export const projectMessages = {
+  'files.extraFolder': { zh: '附加文件夹', en: 'Extra folder' },
+  'projectFolders.menu': { zh: '项目文件夹…', en: 'Project folders…' },
+  'projectFolders.title': { zh: '「{name}」的文件夹', en: 'Folders of {name}' },
+  'projectFolders.intro': {
+    zh: 'AI 在主文件夹里启动，同时能读写附加文件夹；文件树、搜索也包括它们。改动只对之后新建的对话生效。',
+    en: 'The AI starts in the main folder and can also read and edit the extra folders; the file tree and search include them too. Changes apply to new conversations only.',
+  },
+  'projectFolders.main': { zh: '主文件夹', en: 'Main folder' },
+  'projectFolders.add': { zh: '添加文件夹…', en: 'Add folders…' },
+  'projectFolders.remove': { zh: '移除「{name}」', en: 'Remove {name}' },
+  'projectFolders.none': { zh: '还没有附加文件夹', en: 'No extra folders yet' },
+  'projectFolders.save': { zh: '保存', en: 'Save' },
+  'projectFolders.cancel': { zh: '取消', en: 'Cancel' },
+  'projectFolders.count': { zh: '{n} 个文件夹', en: '{n} folders' },
+  'projectFolders.remote': {
+    zh: '远程机器上的项目暂时不能加文件夹',
+    en: 'Folders can’t be added to remote projects yet',
+  },
   'projectImport.added': { zh: '已添加 {n} 个项目', en: 'Added {n} projects' },
   'projectImport.existing': { zh: '{n} 个已在列表里', en: '{n} already in the list' },
   'projectImport.existingOne': { zh: '「{name}」已在列表里', en: '“{name}” is already in the list' },
