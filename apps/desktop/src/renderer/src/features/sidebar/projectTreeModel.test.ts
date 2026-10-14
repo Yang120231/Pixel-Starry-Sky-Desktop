@@ -1,32 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { SessionLane } from '@/features/board/sessionLanes'
-import {
-  PROJECT_COLORS,
-  projectColor,
-  projectCounts,
-  projectFolders,
-  projectInitial,
-  visibleSessions,
-} from './projectTreeModel'
+import { projectCounts, projectFolders, visibleSessions } from './projectTreeModel'
 
 const session = (id: string, status: 'idle' | 'running' | 'unread' = 'idle') => ({ id, title: id, status })
-
-describe('侧栏项目方块', () => {
-  it('颜色按 ID 固定，在调色板里', () => {
-    expect(projectColor('local:abc')).toBe(projectColor('local:abc'))
-    expect(PROJECT_COLORS).toContain(projectColor('local:abc'))
-    const colors = new Set(Array.from({ length: 40 }, (_, i) => projectColor(`p${i}`)))
-    expect(colors.size).toBeGreaterThan(4)
-  })
-
-  it('取第一个字母、数字或汉字，字母大写', () => {
-    expect(projectInitial('pixel-web')).toBe('P')
-    expect(projectInitial('.dotfiles')).toBe('D')
-    expect(projectInitial('  像素星空')).toBe('像')
-    expect(projectInitial('_')).toBe('_')
-    expect(projectInitial('')).toBe('?')
-  })
-})
 
 describe('项目标题的状态数', () => {
   it('等你批准 / 出错 / 暂停算等你，在跑算运行，新回复都不算', () => {
