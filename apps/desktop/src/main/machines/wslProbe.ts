@@ -4,9 +4,13 @@ import type { CheckItem } from '../../shared/types/machines'
 // 因为 --exec 不会把 Windows 环境变量带进 WSL（除非配 WSLENV）。
 // 脚本要能在 dash 下跑；不能写 ${ 和反引号（这是模板字符串）
 export const PROBE_SCRIPT = String.raw`
+# WSL 给这个进程分配了控制终端：不带 --foreground 时 timeout 把命令放到后台进程组，
+# bash -ic 一碰终端就被暂停（SIGTTOU），timeout 也杀不掉，整个探测卡住。busybox 的 timeout 没有 --foreground，就不跑 bash -ic
 TO=""
-command -v timeout >/dev/null 2>&1 && TO=timeout
-lim() { t="$1"; shift; if [ -n "$TO" ]; then timeout "$t" "$@"; else "$@"; fi; }
+FG=0
+if timeout --foreground -k 2 1 true >/dev/null 2>&1; then TO="timeout --foreground -k 2"; FG=1
+elif command -v timeout >/dev/null 2>&1; then TO=timeout; fi
+lim() { t="$1"; shift; if [ -n "$TO" ]; then $TO "$t" "$@"; else "$@"; fi; }
 esc() { printf '%s' "$1" | tr -d '\001-\037' | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'; }
 s() { if [ -n "$1" ]; then printf '"%s"' "$(esc "$1")"; else printf null; fi; }
 b() { if [ "$1" = 1 ]; then printf true; else printf false; fi; }
@@ -53,7 +57,7 @@ try_cli() {
   [ "$(head -c 2 "$real" 2>/dev/null)" = "MZ" ] && mz=1
   ver=""
   if [ $mnt = 0 ] && [ $mz = 0 ] && [ -n "$TO" ]; then
-    ver=$(timeout 10 "$p" --version </dev/null 2>/dev/null | head -n 1)
+    ver=$(lim 10 "$p" --version </dev/null 2>/dev/null | head -n 1)
   fi
   item="{\"path\":$(s "$p"),\"real\":$(s "$real"),\"mnt\":$(b $mnt),\"mz\":$(b $mz),\"version\":$(s "$ver")}"
   if [ "$n" = claude ]; then
@@ -63,8 +67,8 @@ try_cli() {
   fi
 }
 shell_find() {
-  if [ -n "$TO" ] && command -v bash >/dev/null 2>&1; then
-    timeout 8 bash -ic "command -v $1" </dev/null 2>/dev/null | grep '^/' | tail -n 1
+  if [ $FG = 1 ] && command -v bash >/dev/null 2>&1; then
+    lim 8 bash -ic "command -v $1" </dev/null 2>/dev/null | grep '^/' | tail -n 1
   fi
 }
 

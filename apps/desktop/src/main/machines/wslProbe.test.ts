@@ -207,4 +207,10 @@ describe('PROBE_SCRIPT', () => {
     expect(PROBE_SCRIPT).not.toContain('${')
     expect(PROBE_SCRIPT).not.toContain('`')
   })
+
+  it('交互式 bash 只在 timeout 支持 --foreground 时跑（WSL 有控制终端，后台进程组里的 bash -ic 会被暂停卡住）', () => {
+    expect(PROBE_SCRIPT).toContain('timeout --foreground -k 2')
+    expect(PROBE_SCRIPT).not.toMatch(/timeout \d+ bash -ic/)
+    expect(PROBE_SCRIPT).toMatch(/\[ \$FG = 1 \] && command -v bash/)
+  })
 })

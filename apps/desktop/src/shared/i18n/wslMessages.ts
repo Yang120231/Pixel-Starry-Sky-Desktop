@@ -63,6 +63,8 @@ export const wslMessages = {
   'wsl.item.claude': { zh: 'Claude Code', en: 'Claude Code' },
   'wsl.item.codex': { zh: 'Codex', en: 'Codex' },
   'wsl.item.login': { zh: '登录', en: 'Login' },
+  'wsl.login.none': { zh: '还没登录', en: 'Not signed in' },
+  'wsl.login.some': { zh: '已登录：{who}', en: 'Signed in: {who}' },
   // 原因：short 放在项右侧，reason 放在项下面
   'wsl.short.ENCODING_NOT_UTF8': {
     zh: '原来是 {charmap}，像素星空里改用 C.UTF-8',

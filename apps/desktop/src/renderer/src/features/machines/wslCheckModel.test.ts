@@ -73,4 +73,14 @@ describe('itemView', () => {
   it('登录项总是说明单独登录', () => {
     expect(itemView(item('login', 'info', false)).reason).toBe('wsl.reason.login')
   })
+
+  it('登录项的 detail 翻译成「还没登录 / 已登录」', () => {
+    expect(itemView({ key: 'login', status: 'info', required: false, detail: 'none' }).short).toEqual({
+      key: 'wsl.login.none',
+    })
+    expect(itemView({ key: 'login', status: 'ok', required: false, detail: 'claude' }).short).toEqual({
+      key: 'wsl.login.some',
+      params: { who: 'claude' },
+    })
+  })
 })

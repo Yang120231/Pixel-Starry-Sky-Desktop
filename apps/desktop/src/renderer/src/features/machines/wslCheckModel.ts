@@ -52,13 +52,19 @@ export interface ItemView {
 /** 返回 wslMessages 的 key，由界面翻译；detail 是原样的事实，不翻译 */
 export function itemView(item: CheckItem): ItemView {
   const view = item.code ? CODES[item.code] : undefined
-  const short = view?.noShort
-    ? null
-    : view
-      ? { key: `wsl.short.${item.code}`, params: view.param ? { [view.param]: item.detail } : undefined }
-      : item.detail
-        ? { text: item.detail }
-        : null
+  // 登录项的 detail 是 'none' 或已登录的引擎名，要翻译
+  const login = item.key === 'login' && !item.code
+  const short = login
+    ? item.detail === 'none' || !item.detail
+      ? { key: 'wsl.login.none' }
+      : { key: 'wsl.login.some', params: { who: item.detail } }
+    : view?.noShort
+      ? null
+      : view
+        ? { key: `wsl.short.${item.code}`, params: view.param ? { [view.param]: item.detail } : undefined }
+        : item.detail
+          ? { text: item.detail }
+          : null
   const reason =
     view && item.code !== 'ENCODING_NOT_UTF8' && item.code !== 'ENCODING_UNKNOWN'
       ? `wsl.reason.${item.code}`
