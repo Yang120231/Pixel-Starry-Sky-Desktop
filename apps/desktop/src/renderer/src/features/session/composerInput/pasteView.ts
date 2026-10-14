@@ -160,8 +160,11 @@ const theme = EditorView.baseTheme({
 /** 装饰跟着粘贴段和文字变（标签上的行数、预览来自段里的字）；atomic 范围是折起来的那些 */
 const decorationField = StateField.define<{ all: DecorationSet; atomic: RangeSet<Decoration> }>({
   create: build,
+  // 段变了（新加、折 / 展开、范围跟着改动移动、段内文字改了）才重建；在段外打字时段的数组不变，
+  // 装饰的位置也不变，不用每次按键都对每段重算行数和预览（审查报告 2026-10-14）
   update(value, tr) {
-    return tr.docChanged || tr.startState.field(pasteField) !== tr.state.field(pasteField) ? build(tr.state) : value
+    if (tr.startState.field(pasteField) !== tr.state.field(pasteField)) return build(tr.state)
+    return tr.docChanged ? { all: value.all.map(tr.changes), atomic: value.atomic.map(tr.changes) } : value
   },
   provide: field => [
     EditorView.decorations.from(field, value => value.all),

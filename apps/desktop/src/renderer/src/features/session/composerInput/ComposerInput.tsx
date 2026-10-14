@@ -1,15 +1,17 @@
 // 会话输入框（docs/ui/composer-paste-fold.md §6）：CodeMirror 6 代替 textarea，粘贴的长文本折成标签。
 // 接口贴近原来的 textarea：value / onChange / 光标 / onKeyDown / 粘贴 / placeholder / 高度
-import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
 import { history, historyKeymap, insertNewline, invertedEffects, standardKeymap } from '@codemirror/commands'
 import { Compartment, EditorState, Prec, Transaction } from '@codemirror/state'
 import { EditorView, keymap, placeholder as placeholderExt } from '@codemirror/view'
 import { cn } from '@/ui'
+import { ActionMenu, type MenuAction } from '@/ui/ActionMenu'
 import { tr } from '@/i18n/core'
 import './composerInput.css'
-import { addPaste, nextPasteId, pasteField, resetPastes, shouldFold, trimBlankLines } from './pasteFold'
+import { addPaste, nextPasteId, pasteField, resetPastes, restoreEffects, shouldFold, trimBlankLines } from './pasteFold'
 import { pasteDecorations } from './pasteView'
 import { loadPastes, savePastes } from './pasteStore'
+import { composerMenuActions } from '../contextMenu/composerMenu'
 
 export interface ComposerInputHandle {
   focus(): void
@@ -65,6 +67,31 @@ export function minimalChange(from: string, to: string): { from: number; to: num
   return { from: start, to: endA, insert: to.slice(start, endB) }
 }
 
+/** 把粘贴的文字放进输入框：长文本折成标签（plain 为真时不折，同 Ctrl+Shift+V）。粘贴事件和右键菜单共用 */
+function insertPaste(v: EditorView, raw: string, plain: boolean): void {
+  const trimmed = trimBlankLines(raw)
+  const fold = !plain && shouldFold(trimmed)
+  const text = fold ? trimmed : raw.replace(/\r\n?/g, '\n')
+  const { from, to } = v.state.selection.main
+  v.dispatch({
+    changes: { from, to, insert: text },
+    selection: { anchor: from + text.length },
+    effects: fold
+      ? addPaste.of({
+          id: nextPasteId(v.state.field(pasteField)),
+          from,
+          to: from + text.length,
+          folded: true,
+        })
+      : [],
+    userEvent: 'input.paste',
+    scrollIntoView: true,
+  })
+}
+
+/** 右键菜单键：菜单键或 Shift+F10 */
+const menuKey = (e: KeyboardEvent): boolean => e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')
+
 const theme = EditorView.theme({
   '&': { height: '100%', background: 'transparent', color: 'var(--text)' },
   '&.cm-focused': { outline: 'none' },
@@ -90,6 +117,7 @@ export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function Com
   /** 按了 Ctrl+Shift+V：接下来的粘贴不折 */
   const plainPaste = useRef(0)
   const placeholderSlot = useRef(new Compartment())
+  const [menu, setMenu] = useState<{ x: number; y: number; actions: MenuAction[] } | null>(null)
 
   const handle: ComposerInputHandle = {
     focus: () => view.current?.focus(),
@@ -125,11 +153,7 @@ export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function Com
         pasteDecorations(),
         history(),
         // 删掉 / 撤回一段时把「这是粘贴段」也一起撤回：被改动吞掉的段记成反向效果
-        invertedEffects.of(tr => {
-          if (!tr.docChanged) return []
-          const alive = new Set(tr.state.field(pasteField).map(c => c.id))
-          return tr.startState.field(pasteField).flatMap(c => (alive.has(c.id) ? [] : [addPaste.of(c)]))
-        }),
+        invertedEffects.of(restoreEffects),
         EditorView.lineWrapping,
         placeholderSlot.current.of(placeholderExt(latest.current.placeholder)),
         theme,
@@ -142,12 +166,34 @@ export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function Com
         }),
         Prec.highest(
           EditorView.domEventHandlers({
-            keydown(event) {
+            // 右键菜单（features/session/contextMenu/composerMenu.ts）：记下点到的字，粘贴段的展开 / 折起要用
+            contextmenu(event, v) {
+              event.preventDefault()
+              const at = v.posAtCoords({ x: event.clientX, y: event.clientY }) ?? v.state.selection.main.head
+              setMenu({ x: event.clientX, y: event.clientY, actions: composerMenuActions(v, at, insertPaste) })
+              return true
+            },
+            keydown(event, v) {
+              if (menuKey(event)) {
+                event.preventDefault()
+                const head = v.state.selection.main.head
+                const rect = v.coordsAtPos(head)
+                const box = v.dom.getBoundingClientRect()
+                setMenu({
+                  x: rect?.left ?? box.left,
+                  y: (rect?.bottom ?? box.top) + 4,
+                  actions: composerMenuActions(v, head, insertPaste),
+                })
+                return true
+              }
               if (event.key.toLowerCase() === 'v' && event.shiftKey && (event.ctrlKey || event.metaKey))
                 plainPaste.current = Date.now()
               latest.current.onKeyDown(event)
               return event.defaultPrevented
             },
+            // 拖进来的是文件：交给外层（Composer 的 onDrop）当附件，编辑器自己不读文件内容插进文字；
+            // 在编辑器里拖动文字照常（审查报告 2026-10-14 第 4 条）
+            drop: event => !!event.dataTransfer?.types.includes('Files'),
             paste(event, v) {
               const data = event.clipboardData
               if (!data) return false
@@ -160,24 +206,7 @@ export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function Com
               }
               plainPaste.current = 0
               event.preventDefault()
-              const trimmed = trimBlankLines(raw)
-              const fold = !plain && shouldFold(trimmed)
-              const text = fold ? trimmed : raw.replace(/\r\n?/g, '\n')
-              const { from, to } = v.state.selection.main
-              v.dispatch({
-                changes: { from, to, insert: text },
-                selection: { anchor: from + text.length },
-                effects: fold
-                  ? addPaste.of({
-                      id: nextPasteId(v.state.field(pasteField)),
-                      from,
-                      to: from + text.length,
-                      folded: true,
-                    })
-                  : [],
-                userEvent: 'input.paste',
-                scrollIntoView: true,
-              })
+              insertPaste(v, raw, plain)
               return true
             },
           }),
@@ -267,11 +296,26 @@ export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function Com
   }, [])
 
   return (
-    <div
-      ref={host}
-      data-composer-input
-      className={cn('composer-input selectable min-w-0 flex-1', props.tight && 'composer-input-tight', props.className)}
-      style={{ height: props.height }}
-    />
+    <>
+      <div
+        ref={host}
+        data-composer-input
+        className={cn(
+          'composer-input selectable min-w-0 flex-1',
+          props.tight && 'composer-input-tight',
+          props.className,
+        )}
+        style={{ height: props.height }}
+      />
+      {menu && (
+        <ActionMenu
+          x={menu.x}
+          y={menu.y}
+          label={tr('ctxmenu.composer.label')}
+          actions={menu.actions}
+          onClose={() => setMenu(null)}
+        />
+      )}
+    </>
   )
 })

@@ -103,9 +103,12 @@ export function ShortcutsHelp() {
         latest.current.close()
         return
       }
-      // 代码编辑器里 Ctrl+/ 是注释，终端里留给命令行；别的对话框开着时不叠上去
+      // 代码编辑器里 Ctrl+/ 是注释，终端里留给命令行；别的对话框开着时不叠上去。
+      // 会话输入框也是 CodeMirror（.cm-editor），但没有注释功能，照常打开
       const active = document.activeElement
-      if (active?.closest('.cm-editor, [data-terminal-input]') || document.querySelector('[aria-modal="true"]')) return
+      const codeEditor = active?.closest('.cm-editor') && !active.closest('[data-composer-input]')
+      if (codeEditor || active?.closest('[data-terminal-input]') || document.querySelector('[aria-modal="true"]'))
+        return
       e.preventDefault()
       latest.current.show()
     }

@@ -196,18 +196,19 @@ export function ModelSourceMenu({
   const routes = groupsForModel(platform.groups, live.model)
 
   return (
-    <div className="relative">
+    // min-w-0 / max-w-full：输入框窄时工具行不换行，模型名截短让出位置，右边的强度、上下文才不会被挤出去
+    <div className="relative min-w-0">
       <button
         ref={trigger}
         type="button"
         onClick={() => onOpenChange(!open)}
-        className={TRIGGER}
+        className={cn(TRIGGER, 'max-w-full')}
         title={`${text.model} · ${text.source}`}
         aria-haspopup="menu"
         aria-expanded={open}
       >
         <EngineIcon engine={engineId} size={16} />
-        <span data-model-name className={cn('max-w-44 truncate', notReady && 'text-warn')}>
+        <span data-model-name className={cn('max-w-44 min-w-0 truncate', notReady && 'text-warn')}>
           {text.model}
         </span>
         <span data-model-source className="shrink-0 text-meta text-fg-muted">
