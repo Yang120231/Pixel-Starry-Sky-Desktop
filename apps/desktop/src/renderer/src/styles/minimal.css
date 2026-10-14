@@ -27,9 +27,24 @@
   padding: 8px 12px;
 }
 
-/* 输入框：下面一排模型 / 线路 / 推理强度 / 模式用等宽字（卡片圆角、细框和高度在 density.css） */
+/* 输入框：方一点（8px 圆角）、不要投影（投影用 --shadow-composer 去掉，聚焦时的 ring 照旧）；
+   下面一排模型 / 线路 / 推理强度 / 模式用等宽字。输入框这几条 D137 曾挪去两种模式共用，0.3.6 起回到只在极简模式（正常模式恢复 0.3.3 的样子） */
+:root[data-minimal='on'] .composer-card {
+  border-radius: 8px;
+}
 :root[data-minimal='on'] .composer-toolbar button {
   font-family: var(--font-mono);
+}
+/* 输入框上方的机器、项目、Git、旁聊：鼠标移到输入框区域、键盘焦点在这一行里、或这一行的菜单开着时才显示；
+   光标在输入框里打字不算（打开会话时输入框会自动聚焦，算的话这一行就一直显示）。位置一直留着，不会跳 */
+:root[data-minimal='on'] .composer-area [data-composer-workspace] {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+:root[data-minimal='on'] .composer-area:hover [data-composer-workspace],
+:root[data-minimal='on'] .composer-area [data-composer-workspace]:focus-within,
+:root[data-minimal='on'] .composer-area [data-composer-workspace]:has([aria-expanded='true']) {
+  opacity: 1;
 }
 /* 侧栏：收起最近任务，底部胶囊去掉外框只剩一行字（行高在 density.css） */
 :root[data-minimal='on'] [data-sidebar-recent] {
@@ -76,9 +91,22 @@
   font-size: var(--text-meta);
 }
 
-/* 输入框下面一排（docs/ui/minimal-mode.md §4）：等宽字（24px 高、细框的小标签在 density.css，两种模式共用） */
+/* 输入框下面一排（docs/ui/minimal-mode.md §4）：每个按钮一样高（24px）、一圈细框的小标签，图标按钮也一样，等宽字；
+   不管弹出菜单里的按钮。IconButton 的宽高写在行内样式上，只能 !important */
 :root[data-minimal='on'] .composer-toolbar button:not([data-popover] button) {
+  height: 24px !important;
+  min-width: 24px;
+  width: auto !important;
+  padding-inline: 6px;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
   font-family: var(--font-mono);
+  font-size: var(--text-label);
+}
+:root[data-minimal='on'] .composer-toolbar button:not([data-popover] button) svg {
+  width: 13px;
+  height: 13px;
 }
 
 /* 标签栏：只有一个标签时不显示（顶栏写着对话标题）；多个时标签不要底框和阴影 */
@@ -98,8 +126,17 @@
   opacity: 1;
 }
 
-/* 输入框：发送 / 停止是方块（一行高、24px 在 density.css） */
+/* 输入框：一行高，发送 / 停止是右下角 24px 的小方块 */
+:root[data-minimal='on'] .composer-input-row textarea {
+  min-height: 40px;
+  padding: 10px 12px;
+}
+:root[data-minimal='on'] .composer-send-controls {
+  padding: 0 8px 8px 0;
+}
 :root[data-minimal='on'] .composer-send-controls button {
+  width: 24px;
+  height: 24px;
   border-radius: 4px;
 }
 

@@ -1,5 +1,6 @@
 /* 紧凑比例（D137，docs/ui/minimal-mode.md §8）：原来只在极简模式里的字号、行高、按钮高度，正常模式也用。
-   只管尺寸和「不用时不显示」，不管装饰：阴影、圆角、用户消息整行块、等宽字、隐藏最近任务这些仍只在 minimal.css 里。
+   只管尺寸，不管装饰：阴影、圆角、用户消息整行块、等宽字、隐藏最近任务这些仍只在 minimal.css 里。
+   输入框（方角无投影、一行高、上方一行不用时隐藏、下面一排细框小标签）0.3.6 起又只在极简模式里：用户反馈正常模式不好看，恢复 0.3.3 的样子。
    不放 @layer，压得过 Tailwind 的工具类。 */
 
 :root {
@@ -40,54 +41,7 @@
   height: 26px;
 }
 
-/* 输入框卡片：方一点（8px 圆角）、不要投影，和极简模式一样（D137）；投影用变量去掉，聚焦时的 ring 照旧 */
-.composer-card {
-  --shadow-composer: none;
-  border-radius: 8px;
-}
-
-/* 输入框上方的机器、项目、Git、旁聊：鼠标移到输入框区域、键盘焦点在这一行里、或这一行的菜单开着时才显示；
-   光标在输入框里打字不算（打开会话时输入框会自动聚焦，算的话这一行就一直显示）。位置一直留着，不会跳 */
-.composer-area [data-composer-workspace] {
-  opacity: 0;
-  transition: opacity 120ms ease;
-}
-.composer-area:hover [data-composer-workspace],
-.composer-area [data-composer-workspace]:is(:focus-within, :has([aria-expanded='true'])) {
-  opacity: 1;
-}
-
-/* 输入框下面一排：每个按钮一样高（24px）、一圈细框的小标签，图标按钮也一样；不管弹出菜单里的按钮。
-   IconButton 的宽高写在行内样式上，只能 !important */
-.composer-toolbar button:not([data-popover] button) {
-  height: 24px !important;
-  min-width: 24px;
-  width: auto !important;
-  padding-inline: 6px;
-  gap: 4px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  font-size: var(--text-label);
-}
-.composer-toolbar button:not([data-popover] button) svg {
-  width: 13px;
-  height: 13px;
-}
-
 /* 标签 24 高 */
 [data-tab-strip] [role='tab'] {
-  height: 24px;
-}
-
-/* 输入框：一行高，发送 / 停止是右下角 24px 的小按钮 */
-.composer-input-row textarea {
-  min-height: 40px;
-  padding: 10px 12px;
-}
-.composer-send-controls {
-  padding: 0 8px 8px 0;
-}
-.composer-send-controls button {
-  width: 24px;
   height: 24px;
 }
