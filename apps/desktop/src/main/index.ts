@@ -1,6 +1,6 @@
 // 开发版用自己的数据目录（app/data-dir.ts），要在其他模块之前
 import './app/data-dir'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { mkdirSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import {
@@ -17,13 +17,15 @@ import { logger } from '@pixelsky/engine'
 import { initAccount } from './account/account'
 import * as ipc from './ipc/guard'
 import { initAppInfo } from './app/info'
-import { initUpdater } from './app/updater'
+import { initUpdater, runPendingInstall } from './app/updater'
+import { quitWhenAllClosed } from './app/quit'
 import { initEngine } from './engine/ipc'
 import { loadShellEnv } from './app/shell-env'
 import { initMobile } from './mobile/ipc'
 import { initWorkspace } from './workspace/files-ipc'
 import { initWindowControls, observeWindowControls } from './app/window-controls'
 import { initUiLanguage, nativeText } from './app/ui-language'
+import { watchEditMenu } from './app/editMenu'
 import { initProjectTools } from './workspace/project-tools-ipc'
 import { initChannels } from './channels/ipc'
 import { initNotifications } from './notifications/notifications'
@@ -60,6 +62,15 @@ const TITLE_BAR_HEIGHT = 48
 const captureDir = process.env.PIXELSKY_CAPTURE
 // 调试端口会向本机所有进程开放整个页面，只在开发环境（未打包）允许打开
 const debugPort = app.isPackaged ? undefined : process.env.PIXELSKY_DEBUG_PORT
+// Windows 按名字启动程序（git、where.exe …）时会先在当前目录里找：从终端 cd 到某个项目再启动应用时，
+// 项目里的 git.exe 会顶替真正的 git。打包版启动时把当前目录换成安装目录（审查报告 2026-10-14）
+if (process.platform === 'win32' && app.isPackaged) {
+  try {
+    process.chdir(dirname(process.execPath))
+  } catch {
+    /* 换不了就保持原样 */
+  }
+}
 /** 主进程共用的状态：事件、退出任务、引擎 / SSH 机器 / 项目工具（app/context.ts） */
 const ctx = createAppContext()
 initLogging(ctx) // 本机日志，见 app/logging.ts（越早越好：后面初始化出的错也要记下来）
@@ -138,6 +149,8 @@ app.on('before-quit', event => {
   quitRequested = true
   void ctx.lifecycle.shutdown().finally(() => {
     quitReady = true
+    // 点过「重启以更新」：现在才打开安装程序（打不开时照常退出）
+    runPendingInstall()
     app.quit()
   })
 })
@@ -259,6 +272,9 @@ function createWindow(): BrowserWindow {
     })
     if (choice === 1) event.preventDefault()
   })
+
+  // 普通输入框右键：系统原生的剪切 / 复制 / 粘贴菜单（app/editMenu.ts）
+  watchEditMenu(win)
 
   // 外部链接用系统浏览器打开
   // 只放行 http(s)，不把 file:、自定义协议等交给系统去处理
@@ -433,5 +449,6 @@ app.whenReady().then(async () => {
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
+  // macOS 平时关窗口不退出；从菜单、托盘、崩溃对话框退出时 before-quit 先关窗口，关完要接着退出
+  if (quitWhenAllClosed(process.platform, quitting)) app.quit()
 })

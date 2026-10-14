@@ -13,6 +13,19 @@ import { isNoRelease, notesText, updateError } from './update-notes'
 
 const FIRST_CHECK_DELAY = 10_000
 const CHECK_EVERY = 4 * 60 * 60 * 1000
+/** 点了「重启以更新」后这么久没退出（有没保存的文件时选了返回）：不再在退出时打开安装程序，按钮恢复 */
+const INSTALL_WAIT = 15_000
+
+/** 点了「重启以更新」：退出流程（未保存确认、关终端、shutdown）走完后再打开安装程序 */
+let installOnQuit = false
+/** 退出流程的最后一步（index.ts 的 before-quit）：点过「重启以更新」就打开安装程序，装完自动打开新版本。
+ * 不能在点按钮时直接 quitAndInstall：安装程序一启动，几秒内就会强制结束应用，未保存确认和退出清理都来不及
+ * （审查报告 2026-10-14 第 3 条）。没点过时由 autoInstallOnAppQuit 在退出时静默安装 */
+export function runPendingInstall(): void {
+  if (!installOnQuit) return
+  installOnQuit = false
+  autoUpdater.quitAndInstall(false, true)
+}
 const [OWNER, REPO] = new URL(REPO_URL).pathname.slice(1).split('/')
 
 /** 「接收测试版」开关存在 userData/update.json，默认开（现在只有测试版） */
@@ -109,10 +122,15 @@ export function initUpdater(ctx: AppContext): void {
       // 先让按钮变成「正在重启…」再退出。显示安装程序的进度条（不静默），装完自动打开新版本：
       // 原来静默安装的十几秒里什么都看不见，像是没反应（docs/release-update.md §11）。
       // 带 --updated 时安装程序不问安装方式、不停在完成页（build/installer.nsh）
+      // 先走正常退出，安装程序在退出流程最后才打开（runPendingInstall）
       set({ installing: true })
-      setTimeout(() => autoUpdater.quitAndInstall(false, true), 150)
-      // 退出被拦下（有没保存的文件时选了返回）：过一会儿按钮恢复
-      setTimeout(() => set({ installing: false }), 15_000).unref()
+      installOnQuit = true
+      setTimeout(() => app.quit(), 150)
+      // 退出被拦下（有没保存的文件时选了返回）：过一会儿按钮恢复，之后退出时不再重启
+      setTimeout(() => {
+        installOnQuit = false
+        set({ installing: false })
+      }, INSTALL_WAIT).unref()
     },
     deny,
   )
