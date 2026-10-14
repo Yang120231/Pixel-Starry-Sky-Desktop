@@ -46,6 +46,7 @@ export const workspaceMessages = {
   'workspace.newFile': { zh: '新建文件', en: 'New file' },
   'workspace.newFolder': { zh: '新建文件夹', en: 'New folder' },
   'workspace.renameEntry': { zh: '重命名', en: 'Rename' },
+  'workspace.sendPath': { zh: '发送路径到对话', en: 'Send path to chat' },
   'workspace.deleteEntry': { zh: '删除', en: 'Delete' },
   'workspace.fileName': { zh: '文件名', en: 'File name' },
   'workspace.folderName': { zh: '文件夹名', en: 'Folder name' },

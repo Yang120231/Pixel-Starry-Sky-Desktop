@@ -65,6 +65,19 @@ export function appendComposerDraft(key: string, text: string): void {
   listeners.forEach(listener => listener())
 }
 
+/** 接在草稿末尾、同一行（@路径 这类）：前面不是空白时补一个空格 */
+export function appendComposerInline(key: string, text: string): void {
+  if (!text) return
+  const current = drafts[key] ?? ''
+  drafts = { ...drafts, [key]: !current || /\s$/.test(current) ? current + text : `${current} ${text}` }
+  try {
+    localStorage.setItem(STORAGE, JSON.stringify(drafts))
+  } catch {
+    /* 当前窗口内仍保留 */
+  }
+  listeners.forEach(listener => listener())
+}
+
 /** 撤销回退时去掉回退放进来的原文（只在草稿正好以它结尾时去掉，用户改过就不动） */
 export function removeComposerDraftTail(key: string, text: string): void {
   const current = drafts[key] ?? ''

@@ -20,6 +20,8 @@ export interface MenuAction {
   separator?: boolean
   /** 鼠标提示（不可点时说明原因） */
   title?: string
+  /** 右侧淡色小字（快捷键、符号提示） */
+  hint?: string
   /** 子菜单（docs/ui/ui-polish-2026-10-13.md §4）：悬停、→ 或回车打开，← 或 Esc 回到这一项 */
   children?: MenuAction[]
 }
@@ -262,6 +264,7 @@ function Items({
         >
           {Icon && <Icon size={15} strokeWidth={1.5} className="shrink-0 text-fg-muted" />}
           <span className="min-w-0 flex-1 truncate">{action.label}</span>
+          {action.hint && <span className="shrink-0 text-meta text-fg-faint">{action.hint}</span>}
           {action.checked && <Check size={14} strokeWidth={1.75} className="shrink-0 text-fg-muted" />}
           {action.children && <ChevronRight size={14} strokeWidth={1.75} className="shrink-0 text-fg-muted" />}
         </button>

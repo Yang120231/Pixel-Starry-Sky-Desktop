@@ -17,6 +17,7 @@ import {
   ExternalLink,
   Pencil,
   Trash2,
+  MessageSquareShare,
 } from 'lucide-react'
 import { ActionMenu } from '@/ui/ActionMenu'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
@@ -28,6 +29,7 @@ import { OPEN_FILES_EVENT, dirtyFile, openFile, openFilesUnder, removeFile, rena
 import type { DirectoryListing, FileEntry, WorkspaceRef } from '../../../../shared/types/workspace'
 import { demo } from '@/data/demo'
 import { requestFileHistory } from '@/features/panel/git/fileHistory'
+import { sendPathToChat } from './sendPath'
 const pathKey = (path: string): string => {
   const p = path.replaceAll('\\', '/').replace(/\/$/, '')
   return window.pixelsky?.platform === 'win32' ? p.toLowerCase() : p
@@ -811,10 +813,20 @@ function FileRow({
             menu.trigger.focus({ preventScroll: true })
           }}
           actions={[
+            {
+              label: tr('workspace.sendPath'),
+              icon: MessageSquareShare,
+              hint: '@',
+              run: () => {
+                const error = sendPathToChat({ root: targetRoot ?? '', path: entry.path }, entry.kind === 'directory')
+                if (error) setError(error)
+              },
+            },
             ...(entry.kind === 'directory'
               ? [
                   {
                     label: tr('workspace.newFile'),
+                    separator: true,
                     icon: FilePlus,
                     run: () => ops.edit({ mode: 'file', ref: refTarget, parent: entry.path }),
                   },
@@ -828,6 +840,7 @@ function FileRow({
             {
               label: tr('workspace.renameEntry'),
               icon: Pencil,
+              separator: entry.kind !== 'directory',
               run: () => ops.edit({ mode: 'rename', ref: refTarget, parent: parentOf(entry.path), path: entry.path }),
             },
             {
