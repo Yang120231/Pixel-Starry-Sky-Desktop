@@ -46,7 +46,8 @@ import {
   executorDesc,
   executorName,
 } from '@/features/model-channels/channelLabels'
-import { rememberExecutor, setNewTaskDefault, useChannelPrefs } from '@/features/model-channels/channelPrefs'
+import { rememberExecutor, useChannelPrefs } from '@/features/model-channels/channelPrefs'
+import { pinNewTask } from '@/features/model-channels/newTaskDefault'
 import { openAuthDialog } from '@/features/model-channels/authDialogStore'
 import { useChannelEngines } from '@/features/model-channels/loginStore'
 import { MenuRow, TRIGGER } from './ComposerMenus'
@@ -159,8 +160,11 @@ export function ModelSourceMenu({
       onRequestChoice(choice)
       return
     }
-    if (!keepOpen) onOpenChange(false)
-    run(() => live.applyChoice(choice))
+    // 成功了才收起菜单：出错时原因写在菜单里
+    run(async () => {
+      await live.applyChoice(choice)
+      if (!keepOpen) onOpenChange(false)
+    })
   }
 
   const modelText =
@@ -292,7 +296,7 @@ export function ModelSourceMenu({
                 <button
                   type="button"
                   onClick={() => {
-                    setNewTaskDefault({ mode: 'fixed', choice: current })
+                    pinNewTask(current)
                     live.saveAsDefault()
                   }}
                   title={tr('session.ModelSourceMenu.useThisConversationsCredit')}

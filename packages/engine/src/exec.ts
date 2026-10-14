@@ -275,20 +275,26 @@ export function runInteractive(
   const pending = { stdout: '', stderr: '' }
   const timers: Partial<Record<'stdout' | 'stderr', NodeJS.Timeout>> = {}
   const LIMIT = 256 * 1024
+  /** 已经当提示符交出去的半行：后面接着来的输出补齐这一行时再交完整的一行（网址分两段到也不会被截断） */
+  const shown = { stdout: '', stderr: '' }
   const take = (key: 'stdout' | 'stderr', chunk: string, flush = false): void => {
     if (out[key].length < LIMIT) out[key] += chunk
     clearTimeout(timers[key])
     const parts = (pending[key] + chunk).split(/\r\n|\r|\n/)
     pending[key] = flush ? '' : (parts.pop() ?? '')
+    // 交过的半行补齐了：半行里有网址（被分成两段送来）就重交完整的一行，否则是提示符，只交后面接上的部分
+    if (parts.length && shown[key] && parts[0].startsWith(shown[key]) && !/https?:/.test(shown[key]))
+      parts[0] = parts[0].slice(shown[key].length)
+    if (parts.length) shown[key] = ''
     for (const part of parts) {
       const line = plainLine(part)
       if (line) onText(line)
     }
-    // 半行停住不动：当作提示符交出去，并清掉，同一段不会交两次
-    if (pending[key]) {
+    // 半行停住不动：当作提示符交出去；同一段不会交两次
+    if (pending[key] && pending[key] !== shown[key]) {
       timers[key] = setTimeout(() => {
+        shown[key] = pending[key]
         const line = plainLine(pending[key])
-        pending[key] = ''
         if (line) onText(line)
       }, PARTIAL_IDLE_MS)
     }

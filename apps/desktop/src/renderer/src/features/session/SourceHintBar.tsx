@@ -8,7 +8,7 @@ import { useState, type ReactNode } from 'react'
 import { ArrowLeftRight, CircleAlert, TriangleAlert } from 'lucide-react'
 import { Spinner, cn } from '@/ui'
 import { useAccount } from '@/features/account/useAccount'
-import { refreshPlatform, usePlatform, type CreditSource } from '@/features/account/platform'
+import { groupsForModel, refreshPlatform, usePlatform, type CreditSource } from '@/features/account/platform'
 import { useSettings } from '@/features/settings/SettingsProvider'
 import type { ComposerController } from '@/features/engine'
 import { providersFor, useProviders } from '@/features/account/providers'
@@ -92,7 +92,7 @@ export function SourceHintBar({
 }) {
   useI18n()
   const account = useAccount()
-  const platform = usePlatform()
+  const platform = usePlatform(live.engine?.id ?? 'claude')
   const settings = useSettings()
   const providers = useProviders()
   const [busy, setBusy] = useState(false)
@@ -100,7 +100,12 @@ export function SourceHintBar({
 
   if (confirm) {
     const engineName = live.engine?.name ?? 'Claude Code'
-    const route = platform.groups.find(g => g.id === (live.groupId ?? platform.groupId))
+    // 换到平台的某个模型：线路按切换时的规则挑（当前线路有这个模型就不换，否则倍率最低的）
+    const target = confirm.choice?.channel === 'platform' ? confirm.choice.model : null
+    const route = target
+      ? (platform.groups.find(g => g.id === live.groupId && g.models.includes(target)) ??
+        groupsForModel(platform.groups, target)[0])
+      : platform.groups.find(g => g.id === (live.groupId ?? platform.groupId))
     const endpoints = providersFor(providers.providers, live.engine?.id ?? 'claude')
     const endpoint = endpoints.find(p => p.id === (confirm.choice?.providerId ?? platform.providerId)) ?? endpoints[0]
     const label = confirm.choice

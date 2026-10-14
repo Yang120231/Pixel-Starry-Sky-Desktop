@@ -23,12 +23,16 @@ function put(login: EngineLogin): void {
   emit()
 }
 
+/** 这次授权已经收到过主进程推来的进度：调用的返回值可能比推送晚到，不能再拿它盖掉更新的状态 */
+const pushed = new Set<EngineId>()
 let listening = false
 function listen(): void {
   if (listening || !bridge) return
   listening = true
   bridge.onEvent(e => {
-    if (e.kind === 'engine_login') put(e.login)
+    if (e.kind !== 'engine_login') return
+    pushed.add(e.login.engine)
+    put(e.login)
   })
 }
 
@@ -97,8 +101,10 @@ export async function startLogin(engine: EngineId, method: EngineLogin['method']
   // 换了方式（浏览器 ↔ 设备码）：先停掉上一次
   if (running(logins[engine])) await bridge.cancelLogin(engine).catch(() => undefined)
   put(blank(engine, method))
+  pushed.delete(engine)
   try {
-    put(await bridge.loginEngine(engine, method))
+    const first = await bridge.loginEngine(engine, method)
+    if (!pushed.has(engine)) put(first)
   } catch (err) {
     put({ ...blank(engine, method), phase: 'failed', error: (err as Error).message })
   }

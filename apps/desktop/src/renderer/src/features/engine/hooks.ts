@@ -766,6 +766,8 @@ export function useComposerController(
       if (record) {
         await b.updateSession(record.id, sourcePatch)
         await b.send(record.id, input)
+        // 工作区选择里打开、还没发过的会话也算新任务
+        afterNewTask()
         return
       }
       // 欢迎页：先确认引擎可用、有项目，再创建会话

@@ -37,6 +37,7 @@ function AuthDialog({ channel }: { channel: AuthChannel }) {
   const settings = useSettings()
   const terminal = useTerminalUi()
   const [code, setCode] = useState('')
+  const [codeError, setCodeError] = useState<string | null>(null)
   const ref = useRef<HTMLDivElement>(null)
   const titleId = useId()
   const needsInstall = !info || info.status === 'missing' || info.status === 'outdated' || info.status === 'unsupported'
@@ -85,7 +86,12 @@ function AuthDialog({ channel }: { channel: AuthChannel }) {
     const text = code.trim()
     if (!text) return
     setCode('')
-    void sendLoginCode(engine, text)
+    setCodeError(null)
+    // 命令已经结束时写不进去：把码放回输入框，写原因
+    sendLoginCode(engine, text).catch((e: unknown) => {
+      setCode(text)
+      setCodeError((e as Error).message)
+    })
   }
 
   const device = login?.method === 'device'
@@ -245,6 +251,11 @@ function AuthDialog({ channel }: { channel: AuthChannel }) {
                 {tr('modelChannels.auth.submitCode')}
               </Button>
             </div>
+            {codeError && (
+              <p role="alert" className="text-meta text-danger">
+                {translateMessage(codeError)}
+              </p>
+            )}
           </form>
         )}
         {engine === 'codex' && (
