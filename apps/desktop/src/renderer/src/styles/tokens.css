@@ -82,6 +82,15 @@
   /* 用量图表三个系列（已用 dataviz 校验脚本验证色盲区分度、对比度，docs/ui/usage.md） */
   --chart-input: #c26f12;
   --chart-cache: #3a6fd0;
+  /* 提交历史分支线（docs/ui/git-graph-colors.md）：当前分支按同步状态上色；别的分支按车道轮换（lane-1..5，避开这三种） */
+  --graph-local: var(--accent);
+  --graph-synced: #6b7f99;
+  --graph-incoming: #8a5cc8;
+  --graph-lane-1: #b8741c;
+  --graph-lane-2: #3a6fd0;
+  --graph-lane-3: #b5477f;
+  --graph-lane-4: #1f8da0;
+  --graph-lane-5: #8a8a1f;
   --chart-output: #0f8456;
   /* 柱状图：同一冷色系三档明暗（缓存读最深、输入居中、输出最浅），7 种浅色卡片底色上用 dataviz 校验脚本（全部两两比较）都通过 */
   --chart-bar-input: #5081fc;
@@ -211,6 +220,15 @@
   --wall-tint: #1f1f1e;
   --chart-input: #c77a22;
   --chart-cache: #4f83e0;
+  /* 提交历史分支线（docs/ui/git-graph-colors.md）：当前分支按同步状态上色；别的分支按车道轮换（lane-1..5，避开这三种） */
+  --graph-local: var(--accent);
+  --graph-synced: #8a9bb4;
+  --graph-incoming: #b48ae6;
+  --graph-lane-1: #d9a35b;
+  --graph-lane-2: #5b94e8;
+  --graph-lane-3: #d98ab4;
+  --graph-lane-4: #4fb8c8;
+  --graph-lane-5: #c2c25a;
   --chart-output: #1e9a6c;
   /* 柱状图：8 种深色卡片底色上都通过（深色的明暗范围更窄，缓存读和底色的对比度低，靠悬停明细和表格看数值） */
   --chart-bar-input: #5081fb;

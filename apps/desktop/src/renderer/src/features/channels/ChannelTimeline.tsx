@@ -12,14 +12,24 @@ import { ChannelTaskCard, type TaskCardActions } from './ChannelTaskCard'
 /** 离底部这么近时，新消息到来自动跟到底部 */
 const STICK_PX = 80
 
-function eventText(event: ChannelEvent, name: (id: string | null | undefined) => string): string {
+function eventText(event: ChannelEvent, name: (id: string | null | undefined) => string, team: boolean): string {
   switch (event.event) {
     case 'joined':
-      return tr('channels.event.joined', { name: name(event.actorId) })
+      return tr(team ? 'team.event.joined' : 'channels.event.joined', { name: name(event.actorId) })
     case 'added':
       return tr('channels.event.added', { actor: name(event.actorId), name: name(event.targetId) })
     case 'removed':
-      return tr('channels.event.removed', { actor: name(event.actorId), name: name(event.targetId) })
+      // 团队频道里被移出的是真人：移出了团队；本机频道里是 AI 成员移出频道
+      return tr(team ? 'team.event.removed' : 'channels.event.removed', {
+        actor: name(event.actorId),
+        name: name(event.targetId),
+      })
+    case 'left':
+      return tr('team.event.left', { name: name(event.actorId) })
+    case 'agentAdded':
+      return tr('team.event.agentAdded', { actor: name(event.actorId), name: name(event.targetId) })
+    case 'agentRemoved':
+      return tr('team.event.agentRemoved', { actor: name(event.actorId), name: name(event.targetId) })
     case 'renamed':
       return tr('channels.event.renamed', { actor: name(event.actorId), value: event.value ?? '' })
     case 'topic':
@@ -186,14 +196,18 @@ export function ChannelTimeline({
                   data-channel-message={row.message.id}
                   className="conversation-message mt-3 flex items-center justify-center gap-1.5 text-meta text-fg-faint"
                 >
-                  {row.message.event === 'joined' || row.message.event === 'added' ? (
+                  {row.message.event === 'joined' ||
+                  row.message.event === 'added' ||
+                  row.message.event === 'agentAdded' ? (
                     <UserPlus size={13} strokeWidth={1.5} />
-                  ) : row.message.event === 'removed' ? (
+                  ) : row.message.event === 'removed' ||
+                    row.message.event === 'left' ||
+                    row.message.event === 'agentRemoved' ? (
                     <UserMinus size={13} strokeWidth={1.5} />
                   ) : (
                     <Info size={13} strokeWidth={1.5} />
                   )}
-                  <span className="min-w-0 truncate">{eventText(row.message, name)}</span>
+                  <span className="min-w-0 truncate">{eventText(row.message, name, channel.scope === 'team')}</span>
                 </div>
               )
             case 'task':

@@ -55,11 +55,12 @@ export function getProviders(): ProvidersState {
   return state
 }
 
-/** 引擎用哪种协议：Claude Code ↔ Anthropic Messages，Codex ↔ OpenAI Responses */
-export const engineProtocol = (engine: EngineId): ProviderProtocol => (engine === 'codex' ? 'responses' : 'anthropic')
+/** 引擎能用哪些协议：Claude Code ↔ Anthropic Messages，Codex ↔ OpenAI Responses，像素星空三种都行（Chat Completions 只有它能用） */
+export const engineProtocols = (engine: EngineId): ProviderProtocol[] =>
+  engine === 'codex' ? ['responses'] : engine === 'pixel' ? ['anthropic', 'responses', 'chat'] : ['anthropic']
 
 export const providersFor = (providers: ProviderView[], engine: EngineId): ProviderView[] =>
-  providers.filter(p => p.protocol === engineProtocol(engine))
+  providers.filter(p => engineProtocols(engine).includes(p.protocol))
 
 /** 接口里还在的模型；没有就取第一个；接口没列模型时保留原值 */
 export function resolveCustomModel(p: ProviderView | undefined, model: string | null): string | null {

@@ -154,7 +154,7 @@ export function OpenInButton({ placement }: { placement: SidebarPlacement | 'com
           <button
             type="button"
             onClick={() => void makeDefault(choice)}
-            className="mr-1 shrink-0 rounded px-1.5 py-0.5 text-meta text-fg-muted opacity-0 group-hover:opacity-100 hover:bg-active hover:text-fg focus-visible:opacity-100"
+            className="mr-1 shrink-0 rounded px-1.5 py-0.5 text-meta text-fg-muted opacity-0 group-hover:opacity-100 hover:bg-selected hover:text-fg focus-visible:opacity-100"
           >
             {tr('openWith.setDefault')}
           </button>
@@ -191,7 +191,7 @@ export function OpenInButton({ placement }: { placement: SidebarPlacement | 'com
             'group/open inline-flex items-center rounded-md',
             // 顶栏里在细边框轨道内，和右侧面板开关一样 24px 高（docs/ui/layout-v2.md §4）
             inTrack ? 'h-6' : 'h-8',
-            menu && 'bg-active',
+            menu && 'bg-selected',
             !!disabledReason && 'opacity-40',
           )}
         >

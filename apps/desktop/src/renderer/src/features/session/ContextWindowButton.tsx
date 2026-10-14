@@ -294,7 +294,7 @@ export function ContextWindowButton({ sessionId }: { sessionId: string | null })
         )}
       >
         <ContextRing percent={Math.min(100, Math.max(0, percent ?? 0))} size={16} />
-        <span className="tabular-nums">
+        <span data-context-percent className="tabular-nums">
           {context?.compacting
             ? tr('session.ContextWindowButton.compacting')
             : percent === null

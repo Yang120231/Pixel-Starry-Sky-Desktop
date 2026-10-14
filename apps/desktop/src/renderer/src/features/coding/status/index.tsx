@@ -10,7 +10,7 @@ import { navigateToItem } from '@/features/search/navigation'
 import { fileIndent } from '@/features/editor/code/positions'
 import { fileLanguage } from '@/features/editor/code/languages'
 import { codingLayout } from '../layoutStore'
-import { useProblems } from '../problems'
+import { PROBLEMS_READY, useProblems } from '../problems'
 import { useCodingWorkspace, useCodingSessionId } from '../workspace'
 import { useActiveCodeTab } from '../editor'
 import { useCodingActivity } from './useCodingActivity'
@@ -59,12 +59,14 @@ export function StatusBarLeft() {
           <span className="max-w-48 truncate">{branch}</span>
         </Item>
       )}
-      <Item data="problems" title={tr('coding.status.problems')}>
-        <XCircle size={14} strokeWidth={1.5} className="shrink-0" />
-        <span>{problems.errors}</span>
-        <AlertTriangle size={14} strokeWidth={1.5} className="ml-1 shrink-0" />
-        <span>{problems.warnings}</span>
-      </Item>
+      {PROBLEMS_READY && (
+        <Item data="problems" title={tr('coding.status.problems')}>
+          <XCircle size={14} strokeWidth={1.5} className="shrink-0" />
+          <span>{problems.errors}</span>
+          <AlertTriangle size={14} strokeWidth={1.5} className="ml-1 shrink-0" />
+          <span>{problems.warnings}</span>
+        </Item>
+      )}
       {activity && sessionId && (
         <Item
           data="activity"

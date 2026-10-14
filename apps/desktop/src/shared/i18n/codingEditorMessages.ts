@@ -32,6 +32,8 @@ export const codingEditorMessages = {
   },
   'coding.editor.empty.title': { zh: '从左边的文件树打开文件', en: 'Open a file from the tree on the left' },
   'coding.editor.empty.recent': { zh: '最近打开', en: 'Recent files' },
+  'coding.editor.empty.openFirst': { zh: '查看第一个改动', en: 'View first change' },
+  'coding.editor.empty.more': { zh: '还有 {n} 个', en: '{n} more' },
   'coding.editor.diff.loading': { zh: '正在读取…', en: 'Loading…' },
   // ---- E1b 的段落：coding.editor.extras.*（只在这一段追加）----
   'coding.editor.extras.explainPrompt': {
@@ -48,4 +50,25 @@ export const codingEditorMessages = {
     en: 'Previous problem (not connected yet)',
   },
   'coding.editor.extras.nextProblem': { zh: '下一个问题（问题检查还没接入）', en: 'Next problem (not connected yet)' },
+  // ---- 中栏「Git 对比」标签（docs/ui/coding-mode.md）----
+  'coding.gitDiff.tag.work': { zh: '更改', en: 'Changes' },
+  'coding.gitDiff.tag.staged': { zh: '暂存', en: 'Staged' },
+  'coding.gitDiff.title': { zh: 'Git 对比：{name}', en: 'Git diff: {name}' },
+  'coding.gitDiff.readonly': { zh: '只读', en: 'Read-only' },
+  'coding.gitDiff.caption.staged': { zh: 'HEAD ↔ 暂存区', en: 'HEAD ↔ index' },
+  'coding.gitDiff.caption.unstaged': { zh: '暂存区 ↔ 工作区', en: 'Index ↔ working tree' },
+  'coding.gitDiff.caption.untracked': { zh: '新文件', en: 'New file' },
+  'coding.gitDiff.caption.conflicted': { zh: '合并冲突', en: 'Merge conflict' },
+  // 设置 › 外观：工作区改动怎么打开（样式 A / B，docs/ui/coding-mode.md §3.3.2）
+  'coding.gitOpen.setting': { zh: '代码模式里点 Git 改动时', en: 'Opening Git changes in code mode' },
+  'coding.gitOpen.hint': {
+    zh: '打开文件：更改的文件开成普通文件标签，看对比 HEAD 的变更、能直接编辑，顶上有暂存 / 撤销；Git 对比：开只读的对比标签。暂存区、历史和删除的文件总是开对比标签。',
+    en: 'Open file: changed files open as normal file tabs showing changes against HEAD, editable, with Stage / Discard on top. Git diff: open a read-only diff tab. Staged, history and deleted files always open a diff tab.',
+  },
+  'coding.gitOpen.file': { zh: '打开文件', en: 'Open file' },
+  'coding.gitOpen.diff': { zh: 'Git 对比', en: 'Git diff' },
+  'coding.gitOpen.keywords': {
+    zh: '代码模式 git 改动 对比 差异 变更 文件标签 暂存 样式',
+    en: 'code mode git changes diff file tab stage style',
+  },
 }

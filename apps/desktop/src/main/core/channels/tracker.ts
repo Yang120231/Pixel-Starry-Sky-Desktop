@@ -4,6 +4,23 @@ import { diffStat } from '@pixelsky/protocol'
 import type { ApprovalRequest, EngineEvent, Item, SessionSnapshot } from '@pixelsky/protocol'
 import type { ChannelTask } from '../../../shared/types/channels'
 
+/** 团队频道派来的活（Phase C §9.1）：任务卡在云端，状态写回云端；本机运行信息照存 runs.json */
+export interface TeamRunRef {
+  teamId: string
+  channelId: string
+  /** 云端任务卡消息 id（也是 TaskRun.taskId） */
+  messageId: string
+  /** 频道 AI 成员 id（ta_…）：发结果时用 */
+  agentId?: string
+  /** 派活的人（owner key）：结果里需要决定时 @ 他 */
+  author?: string
+  title?: string
+  /** 最近一次已处理的追加要求（消息 id） */
+  follow?: string | null
+  /** 这一轮的收尾（任务卡字段 + 结果消息）还没写回云端时留着，重连后补发 */
+  final?: { patch: Record<string, unknown>; result?: { text: string; mentions: string[] } }
+}
+
 /** 一项活这一轮的运行信息，存在 runs.json，重启后用来对账 */
 export interface TaskRun {
   taskId: string
@@ -34,6 +51,29 @@ export interface TaskRun {
   followUps: string[]
   /** 最后一个错误通知（对账时当失败原因） */
   notice: string | null
+  /** 团队频道派来的活（本机频道的活没有） */
+  team?: TeamRunRef
+}
+
+/** 新的一轮运行信息（团队执行端用；本机频道在 service.ts 里自己拼） */
+export function newTaskRun(
+  init: Pick<TaskRun, 'taskId' | 'channelId' | 'memberId' | 'queuedAt' | 'round' | 'prompt' | 'freshPrompt'> &
+    Partial<Pick<TaskRun, 'sessionId' | 'team'>>,
+): TaskRun {
+  return {
+    sessionId: null,
+    clientMessageId: null,
+    phase: 'waiting',
+    started: false,
+    turnId: null,
+    requests: [],
+    diff: {},
+    reply: null,
+    progress: null,
+    followUps: [],
+    notice: null,
+    ...init,
+  }
 }
 
 export interface Finish {

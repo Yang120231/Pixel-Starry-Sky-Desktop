@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { platformGateway } from './gateway'
+import { engineProviderProtocols, groupEngines, pixelApi, pixelGatewayEnv } from './pixel-env'
 import { compactWindows, longContextModels } from './compact-window'
 import { once } from 'node:events'
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
@@ -25,10 +26,13 @@ async function jsonRequest(path: string, method = 'GET'): Promise<unknown> {
   return body.data
 }
 
+/** 最近读到的分组 → platform（openai / anthropic …）；像素星空按它选 Responses 还是 Messages */
+const groupPlatforms = new Map<string, string>()
+
 export async function platformGroups(): Promise<PlatformGroupInfo[]> {
   const data = await jsonRequest('/v1/platform/groups')
   if (!Array.isArray(data)) throw new Error('平台分组数据格式异常')
-  return data.filter(
+  const groups = data.filter(
     (g): g is PlatformGroupInfo =>
       !!g &&
       typeof g.id === 'string' &&
@@ -40,6 +44,8 @@ export async function platformGroups(): Promise<PlatformGroupInfo[]> {
       Array.isArray(g.models) &&
       g.models.every((m: unknown) => typeof m === 'string'),
   )
+  for (const g of groups) groupPlatforms.set(g.id, g.platform)
+  return groups
 }
 
 /** 自定义 API 会话：接口还在、协议对得上引擎、有 Key（docs/ui/custom-api.md §3.3） */
@@ -47,8 +53,7 @@ export function checkProvider(record: SessionRecord, providers: ProviderStore | 
   if (!record.provider || record.platform) return null
   const p = providers?.resolve(record.provider.id)
   if (!p) throw new Error('这个会话用的自定义接口已删除，请换一个接口')
-  if (p.protocol !== (record.engine === 'codex' ? 'responses' : 'anthropic'))
-    throw new Error('接口协议与当前引擎不兼容')
+  if (!engineProviderProtocols(record.engine).includes(p.protocol)) throw new Error('接口协议与当前引擎不兼容')
   if (!p.apiKey) throw new Error(`自定义接口「${p.name}」还没有 Key，请在设置里填写`)
   return p
 }
@@ -62,8 +67,7 @@ export async function validateQueuedInput(record: SessionRecord, providers: Prov
   const groups = await platformGroups()
   const group = groups.find(g => g.id === p.groupId)
   if (!group) throw new Error('排队消息的线路已不可用，请撤回后重新选择')
-  const engines = group.supported_engines ?? (group.platform === 'openai' ? ['codex'] : ['claude'])
-  if (!engines.includes(record.engine)) throw new Error('线路协议与当前引擎不兼容')
+  if (!groupEngines(group).includes(record.engine)) throw new Error('线路协议与当前引擎不兼容')
   const models = group.models.length
     ? group.models
     : await jsonRequest(`/v1/platform/groups/${p.groupId}/models`, 'POST')
@@ -153,6 +157,22 @@ export async function initPlatform(
         PIXELSKY_CODEX_TOKEN: entry.secret,
         ...(window ? { [CODEX_WINDOW_ENV]: String(window) } : {}),
       }
+    }
+    if (record.engine === 'pixel') {
+      // 像素星空不读设置文件，地址 / 密钥 / 协议 / 模型直接给环境变量，由适配器写进会话自己的 models.json（密钥只在环境变量里）。
+      // 协议跟着线路 / 接口走：Messages、Responses、Chat Completions（docs/own-cli.md §12）
+      const api = pixelApi({
+        protocol: provider?.protocol,
+        groupPlatform: record.platform ? (groupPlatforms.get(record.platform.groupId) ?? null) : null,
+      })
+      return pixelGatewayEnv({
+        port: address.port,
+        secret: entry.secret,
+        api,
+        models: provider?.models,
+        model: record.model ?? null,
+        upstreamBaseUrl: provider?.baseUrl ?? null,
+      })
     }
     const env: Record<string, string> = {
       ANTHROPIC_BASE_URL: `http://127.0.0.1:${address.port}`,

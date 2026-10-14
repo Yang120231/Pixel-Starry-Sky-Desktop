@@ -1,5 +1,12 @@
 // 界面数据的类型。组件只依赖这里的类型和 data/index.ts 导出的值。
-import type { Channel, ChannelMember, ChannelMessage } from '../../../shared/types/channels'
+import type {
+  Channel,
+  ChannelMember,
+  ChannelMessage,
+  PendingInvite,
+  TeamInfo,
+  TeamsConnection,
+} from '../../../shared/types/channels'
 
 export interface CurrentUser {
   name: string
@@ -152,6 +159,8 @@ export interface AppData {
   channelMembers: ChannelMember[]
   /** 频道 id → 按时间排列的消息 */
   channelMessages: Record<string, ChannelMessage[]>
+  /** 团队（Phase C，docs/ui/channels-phase-c.md §9.3）：空界面没有团队，也不显示团队入口 */
+  channelTeams: { teams: TeamInfo[]; invites: PendingInvite[]; connection: TeamsConnection }
 }
 
 // 协作频道（docs/ui/channels.md §9）：类型和主进程共用

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { demo } from './demo'
 import { empty } from '@/data/empty'
+import type { ChannelTask } from '@/data/types'
 import { unreadTotal } from '../features/channels/model'
 
 describe('协作频道演示数据', () => {
@@ -38,8 +39,31 @@ describe('协作频道演示数据', () => {
     for (const m of demo.channelMembers)
       if (m.kind === 'agent' && m.sessionId) expect(sessions.has(m.sessionId), m.id).toBe(true)
   })
-  it('未读合计 3（导航角标），空界面没有频道', () => {
-    expect(unreadTotal(demo.channels)).toBe(3)
+  it('示例团队：团队频道都属于某个团队，成员 id 对得上，有一张等同意的卡和一张别人电脑上的进行中的卡', () => {
+    const { teams, invites } = demo.channelTeams
+    expect(teams).toHaveLength(1)
+    expect(invites).toHaveLength(1)
+    const team = teams[0]
+    for (const m of team.members) expect(ids.has(m.id), m.id).toBe(true)
+    const teamChannels = demo.channels.filter(c => c.scope === 'team')
+    expect(teamChannels.length).toBeGreaterThanOrEqual(2)
+    for (const c of teamChannels) {
+      expect(c.teamId, c.id).toBe(team.id)
+      for (const m of team.members) expect(c.memberIds, `${c.id} ${m.id}`).toContain(m.id)
+    }
+    const tasks = messages.filter((m): m is ChannelTask => m.kind === 'task')
+    const self = demo.channelMembers.find(m => m.kind === 'human' && m.you)!
+    expect(tasks.some(t => t.status === 'approval' && t.ownerId === self.id)).toBe(true)
+    expect(
+      tasks.some(t => t.status === 'running' && t.ownerId && t.ownerId !== self.id && t.authorId === self.id),
+    ).toBe(true)
+    const foreign = demo.channelMembers.filter(m => m.kind === 'agent' && m.mine === false)
+    expect(foreign.length).toBeGreaterThan(0)
+    for (const a of foreign) expect(a.kind === 'agent' && a.ownerName).toBeTruthy()
+  })
+  it('未读合计 5（导航角标），空界面没有频道和团队', () => {
+    expect(unreadTotal(demo.channels)).toBe(5)
+    expect(empty.channelTeams).toEqual({ teams: [], invites: [], connection: 'unavailable' })
     expect(empty.channels).toEqual([])
     expect(empty.channelMembers).toEqual([])
     expect(empty.channelMessages).toEqual({})

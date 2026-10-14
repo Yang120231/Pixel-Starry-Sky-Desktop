@@ -18,6 +18,8 @@ import type {
   ChannelTextMessage,
   HumanMember,
   PostInput,
+  AgentPolicy,
+  TeamRole,
 } from '../../../shared/types/channels'
 import { parseMentions } from '../../../shared/channels/mentions'
 import { ChannelStore, type StoredChannel } from './store'
@@ -38,8 +40,12 @@ import {
   trackEvent,
   type Finish,
   type TaskRun,
+  type TeamRunRef,
   type Tracked,
 } from './tracker'
+import type { TeamSync } from './team/sync'
+import { TeamExecutor } from './team/executor'
+import type { AgentRegistration, TeamMessage } from './team/api'
 
 export const SELF_ID = 'you'
 const NAME_MAX = 40
@@ -49,7 +55,7 @@ const PAGE = 200
 const DAY = 86_400_000
 /** 结束了的运行信息留这么久（重试、追加要求用） */
 const KEEP_ENDED = 30 * DAY
-const ENGINES = new Set(['claude', 'codex'])
+const ENGINES = new Set(['claude', 'codex', 'pixel'])
 
 export interface MachineLite {
   id: string
@@ -71,6 +77,14 @@ export interface ChannelsDeps {
   locale: () => Locale
   now?: () => number
   log?: (message: string, error?: unknown) => void
+  /** Phase C：团队同步（没登录 / 没接团队时不传） */
+  team?: TeamSync
+  /** Phase C：这台电脑的设备 id（认领团队任务用） */
+  deviceId?: string
+  /** Phase C：登记 AI 成员时给别人看的机器名 */
+  machineName?: () => string
+  /** 测试里调小团队写回的节流 / 上报间隔 */
+  teamTiming?: { progressMs?: number; statusMs?: number }
 }
 
 const terminal = (status: ChannelTask['status']): boolean =>
@@ -93,10 +107,54 @@ export class Channels {
   private offline = new Set<string>()
   private changedTimer: ReturnType<typeof setTimeout> | null = null
   private runsTimer: ReturnType<typeof setTimeout> | null = null
+  /** Phase C：团队同步和执行端 */
+  private readonly team: TeamSync | null
+  private readonly exec: TeamExecutor | null
+  /** 团队活只在本机有的显示信息（排队前面还有几项、机器断开） */
+  private readonly teamLocal = new Map<string, { ahead?: number; disconnected?: boolean }>()
 
   constructor(private readonly deps: ChannelsDeps) {
     this.store = deps.store
     this.now = deps.now ?? Date.now
+    this.team = deps.team ?? null
+    this.exec = null
+    if (this.team) {
+      const team = this.team
+      this.exec = new TeamExecutor({
+        sync: team,
+        deviceId: deps.deviceId ?? 'device',
+        now: this.now,
+        log: deps.log,
+        ...deps.teamTiming,
+        host: {
+          member: id => this.member(id),
+          run: id => this.store.runs.get(id),
+          runs: () => [...this.store.runs.values()],
+          enqueue: run => {
+            this.store.runs.set(run.taskId, run)
+            this.saveRuns()
+            void this.pump(run.memberId)
+          },
+          nextRound: (card, run, prompt, fresh, ref, memberId) =>
+            this.nextRound(card, run, prompt, fresh, ref, memberId),
+          addFollowUp: (taskId, text, ref) => this.addTeamFollowUp(taskId, text, ref),
+          action: (taskId, action) => this.runAction(taskId, action),
+          setFinal: (taskId, final) => {
+            const run = this.store.runs.get(taskId)
+            if (!run?.team) return
+            this.store.runs.set(taskId, { ...run, team: { ...run.team, final } })
+            this.saveRuns()
+          },
+          agentStatus: id => this.teamAgentStatus(id),
+          locale: () => this.deps.locale(),
+        },
+      })
+      team.bindLocal(localId => this.teamAgentView(localId))
+      team.subscribe({
+        changed: () => this.changed(),
+        message: push => this.pushMessage(this.decorate(push.message)),
+      })
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -120,7 +178,7 @@ export class Channels {
   private agentView(config: AgentConfig, projects: Map<string, ProjectRecord>, machines: MachineLite[]): AgentMember {
     const now = this.now()
     const runs = [...this.store.runs.values()].filter(r => r.memberId === config.id)
-    const tasks = runs.map(r => this.store.task(r.taskId)).filter((t): t is ChannelTask => !!t)
+    const tasks = runs.map(r => this.taskOf(r)).filter((t): t is ChannelTask => !!t)
     const active =
       tasks.find(t => t.status === 'waiting') ??
       tasks.find(t => !terminal(t.status) && this.store.runs.get(t.id)?.phase === 'sent')
@@ -217,7 +275,25 @@ export class Channels {
       this.self(),
       ...this.store.members.map(m => this.agentView(m, projects, machines)),
     ]
-    return { self: this.self(), channels, members, sessionChannels }
+    const team = this.team?.snapshot()
+    if (this.team && team) {
+      channels.push(...this.team.channels())
+      members.push(...this.team.members())
+      for (const run of this.store.runs.values()) {
+        const name = run.team && run.sessionId ? this.team.channelInfo(run.channelId)?.name : null
+        if (name && run.sessionId) sessionChannels[run.sessionId] = name
+      }
+    }
+    return {
+      self: this.self(),
+      channels,
+      members,
+      sessionChannels,
+      teams: team?.teams ?? [],
+      invites: team?.invites ?? [],
+      teamsConnection: team?.connection ?? 'signed-out',
+      teamsSyncedAt: team?.syncedAt ?? null,
+    }
   }
 
   messages(channelId: string, before?: number | null): { messages: ChannelMessage[]; more: boolean } {
@@ -229,7 +305,25 @@ export class Channels {
     return { messages: list.slice(start, stop), more: start > 0 }
   }
 
+  /** 频道是团队频道吗 */
+  private isTeam(channelId: string): boolean {
+    return !!this.team?.hasChannel(channelId)
+  }
+
+  /** 一页消息：本机频道同步返回，团队频道从云端缓存取（IPC 用这个） */
+  page(
+    channelId: string,
+    before?: number | null,
+  ): { messages: ChannelMessage[]; more: boolean } | Promise<{ messages: ChannelMessage[]; more: boolean }> {
+    if (!this.isTeam(channelId)) return this.messages(channelId, before)
+    return this.team!.page(channelId, before).then(page => ({
+      messages: page.messages.map(m => this.decorate(m)),
+      more: page.more,
+    }))
+  }
+
   private changed(): void {
+    this.exec?.statusChanged()
     if (this.changedTimer) return
     this.changedTimer = setTimeout(() => {
       this.changedTimer = null
@@ -299,6 +393,8 @@ export class Channels {
 
   async create(raw: ChannelInput): Promise<string> {
     const name = cleanName(raw?.name, '频道名')
+    if (typeof raw.teamId === 'string' && raw.teamId)
+      return this.createTeamChannel(raw.teamId, name, raw.topic, raw.memberIds)
     this.uniqueChannelName(name)
     const agents = (Array.isArray(raw.memberIds) ? raw.memberIds : []).filter(id => this.member(id))
     const now = this.now()
@@ -318,6 +414,16 @@ export class Channels {
   }
 
   async update(id: string, patch: { name?: string; topic?: string | null; projectId?: string | null }): Promise<void> {
+    const info = this.team?.channelInfo(id)
+    if (info) {
+      const wire: { name?: string; topic?: string | null } = {}
+      if (patch.name !== undefined) wire.name = cleanName(patch.name, '频道名')
+      if (patch.topic !== undefined)
+        wire.topic =
+          typeof patch.topic === 'string' && patch.topic.trim() ? patch.topic.trim().slice(0, TOPIC_MAX) : null
+      await this.team!.updateChannel(info.teamId, id, wire)
+      return
+    }
     const c = { ...this.channel(id) }
     if (patch.name !== undefined) {
       const name = cleanName(patch.name, '频道名')
@@ -343,6 +449,11 @@ export class Channels {
 
   /** 删除频道：消息没了，开出来的会话保留；进行中的活照常做完，不再跟踪 */
   async delete(id: string): Promise<void> {
+    const info = this.team?.channelInfo(id)
+    if (info) {
+      await this.team!.deleteChannel(info.teamId, id)
+      return
+    }
     this.channel(id)
     const members = new Set([...this.store.runs.values()].filter(r => r.channelId === id).map(r => r.memberId))
     await this.store.deleteChannel(id)
@@ -352,6 +463,10 @@ export class Channels {
   }
 
   markRead(id: string): void {
+    if (this.team?.hasChannel(id)) {
+      this.team.markRead(id)
+      return
+    }
     const c = this.store.channels.get(id)
     if (!c) return
     const last = (this.store.messages.get(id) ?? []).reduce((max, m) => Math.max(max, m.at), 0)
@@ -411,6 +526,11 @@ export class Channels {
   }
 
   async addMember(channelId: string, memberId: string): Promise<void> {
+    const info = this.team?.channelInfo(channelId)
+    if (info) {
+      if (this.team!.agentsOfLocal(memberId).some(a => a.channelId === channelId)) return
+      return this.registerAgent(info, channelId, memberId, 'approve')
+    }
     const c = this.channel(channelId)
     if (!this.member(memberId)) throw new Error('成员不存在')
     if (c.memberIds.includes(memberId)) return
@@ -421,6 +541,17 @@ export class Channels {
 
   /** 从频道移除：已经发出去的活照常做完、结果照常发回；还在排队的取消 */
   async removeMember(channelId: string, memberId: string): Promise<void> {
+    const info = this.team?.channelInfo(channelId)
+    if (info) {
+      const agent = this.team!.agentById(memberId)
+      if (!agent || agent.channelId !== channelId) return
+      await this.team!.deleteAgent(info.teamId, memberId)
+      // 还在排队的活取消；已经发出去的照常做完
+      for (const run of [...this.store.runs.values()])
+        if (run.team?.agentId === memberId && run.phase === 'waiting')
+          this.finish(run, { status: 'stopped', note: 'cancelled' })
+      return
+    }
     const c = this.channel(channelId)
     if (!c.memberIds.includes(memberId) || memberId === SELF_ID) return
     await this.store.saveChannel({ ...c, memberIds: c.memberIds.filter(id => id !== memberId) })
@@ -436,6 +567,9 @@ export class Channels {
     if (!this.member(memberId)) return
     if ([...this.store.runs.values()].some(r => r.memberId === memberId && r.phase !== 'ended'))
       throw new Error('这个成员还有没做完的活')
+    // 团队频道里登记的同名成员一起撤下（云端不通也不挡本机删除）
+    for (const a of this.team?.agentsOfLocal(memberId) ?? [])
+      await this.team!.deleteAgent(a.teamId, a.id).catch(e => this.deps.log?.('撤下团队 AI 成员失败', e))
     this.store.members = this.store.members.filter(m => m.id !== memberId)
     await this.store.saveMembers()
     for (const c of this.store.channels.values())
@@ -467,6 +601,7 @@ export class Channels {
   }
 
   async post(channelId: string, input: PostInput): Promise<{ message: ChannelTextMessage; tasks: string[] }> {
+    if (this.isTeam(channelId)) return this.postTeam(channelId, input)
     const c = this.channel(channelId)
     const text = typeof input?.text === 'string' ? input.text.trim() : ''
     if (!text) throw new Error('消息不能为空')
@@ -610,12 +745,20 @@ export class Channels {
   }
 
   /** 开始下一轮（追加要求、重试）：排进成员的队列 */
-  private nextRound(task: ChannelTask, run: TaskRun | null, prompt: string, fresh: string): void {
-    const round = (task.round ?? 1) + 1
+  private nextRound(
+    task: ChannelTask,
+    run: TaskRun | null,
+    prompt: string,
+    fresh: string,
+    team?: TeamRunRef,
+    memberId?: string,
+  ): void {
+    // 团队活：云端任务卡的轮次可能已经被追加要求加过了
+    const round = team ? Math.max((run?.round ?? task.round ?? 1) + 1, task.round ?? 0) : (task.round ?? 1) + 1
     const next: TaskRun = {
       taskId: task.id,
       channelId: task.channelId,
-      memberId: task.assigneeId,
+      memberId: memberId ?? task.assigneeId,
       phase: 'waiting',
       queuedAt: this.now(),
       round,
@@ -631,6 +774,7 @@ export class Channels {
       progress: null,
       followUps: [],
       notice: null,
+      ...(team ? { team: { ...team, final: undefined } } : {}),
     }
     this.store.runs.set(task.id, next)
     this.patch(task.channelId, task.id, {
@@ -644,10 +788,12 @@ export class Channels {
       endedAt: null,
     })
     this.saveRuns()
-    void this.pump(task.assigneeId)
+    void this.pump(next.memberId)
   }
 
   private patch(channelId: string, taskId: string, patch: Partial<ChannelTask>): ChannelTask | null {
+    const run = this.store.runs.get(taskId)
+    if (run?.team) return this.patchTeam(run, patch)
     const task = this.store.patchTask(channelId, taskId, patch)
     if (task) this.pushMessage(task)
     return task
@@ -660,7 +806,7 @@ export class Channels {
     const waiting = runs.filter(r => r.phase === 'waiting').sort((a, b) => a.queuedAt - b.queuedAt)
     waiting.forEach((r, i) => {
       const ahead = i + (busy ? 1 : 0)
-      if (this.store.task(r.taskId)?.ahead !== ahead) this.patch(r.channelId, r.taskId, { ahead })
+      if (this.taskOf(r)?.ahead !== ahead) this.patch(r.channelId, r.taskId, { ahead })
     })
     this.changed()
     if (busy || !waiting.length) return
@@ -673,8 +819,8 @@ export class Channels {
 
   private async start(run: TaskRun): Promise<void> {
     const member = this.member(run.memberId)
-    const task = this.store.task(run.taskId)
-    if (!member || !task || !this.store.channels.has(run.channelId)) {
+    const task = this.taskOf(run)
+    if (!member || !task || (!run.team && !this.store.channels.has(run.channelId))) {
       this.store.runs.delete(run.taskId)
       this.saveRuns()
       return
@@ -734,11 +880,12 @@ export class Channels {
 
   /** 这一轮结束：更新任务卡，做完了就把回复发回频道，再开始成员的下一项活 */
   private finish(run: TaskRun, finish: Finish): void {
-    const task = this.store.task(run.taskId)
+    const task = this.taskOf(run)
     const ended: TaskRun = { ...run, phase: 'ended', requests: [], progress: null }
     this.store.runs.set(run.taskId, ended)
     if (task) {
       const now = this.now()
+      let teamResult: { text: string; mentions: string[] } | undefined
       const patch: Partial<ChannelTask> = {
         status: finish.status,
         error: finish.status === 'failed' ? (finish.error ?? null) : null,
@@ -758,7 +905,11 @@ export class Channels {
         const locale = this.deps.locale()
         patch.summary = reply ? summaryOf(reply) : locale === 'en-US' ? 'No reply text' : '没有回复文字'
         patch.decision = reply ? decisionOf(reply) : null
-        if (reply) {
+        if (reply && run.team) {
+          // 团队活：结果由执行端以 AI 成员的身份发到云端频道（随任务卡的收尾一起，没发成功会补发）
+          const decide = patch.decision && run.team.author ? [run.team.author] : []
+          teamResult = { text: clipResult(reply, locale), mentions: decide }
+        } else if (reply) {
           const result: ChannelTextMessage = {
             kind: 'message',
             id: randomUUID(),
@@ -777,11 +928,12 @@ export class Channels {
           }
         }
       }
-      this.patch(run.channelId, run.taskId, patch)
+      if (run.team) this.patchTeam(ended, patch, teamResult)
+      else this.patch(run.channelId, run.taskId, patch)
       // 做的时候追加的要求：接着发
       if (run.followUps.length && finish.note !== 'cancelled') {
         const text = run.followUps.join('\n\n')
-        this.nextRound({ ...task, ...patch } as ChannelTask, ended, text, text)
+        this.nextRound({ ...task, ...patch } as ChannelTask, ended, text, text, run.team, run.memberId)
         return
       }
     }
@@ -795,6 +947,14 @@ export class Channels {
     const cutoff = this.now() - KEEP_ENDED
     for (const [id, run] of this.store.runs) {
       if (run.phase !== 'ended') continue
+      if (run.team) {
+        // 团队活：卡片在云端；收尾没写回去之前不能丢
+        if (run.queuedAt < cutoff && !run.team.final) {
+          this.store.runs.delete(id)
+          this.teamLocal.delete(id)
+        }
+        continue
+      }
       const task = this.store.task(id)
       if (!task || (task.endedAt ?? task.at) < cutoff) this.store.runs.delete(id)
     }
@@ -815,9 +975,19 @@ export class Channels {
   // -------------------------------------------------------------------------
 
   async taskAction(taskId: string, action: ChannelTaskAction): Promise<void> {
-    const task = this.store.task(taskId)
-    if (!task) throw new Error('任务不存在')
+    // 团队卡：请求记在云端卡片上，由主人的电脑执行
+    if (this.team?.card(taskId)) {
+      await this.team.taskCall(taskId, teamId => this.team!.api.action(teamId, taskId, action))
+      return
+    }
+    return this.runAction(taskId, action)
+  }
+
+  /** 本机执行 Phase B 的取消 / 停止 / 重试（本机频道直接调，团队卡由执行端收到请求后调） */
+  private async runAction(taskId: string, action: ChannelTaskAction): Promise<void> {
     const run = this.store.runs.get(taskId)
+    const task = run?.team ? this.taskOf(run) : this.store.task(taskId)
+    if (!task) throw new Error('任务不存在')
     if (action === 'retry') {
       if (!terminal(task.status)) return
       if (!this.member(task.assigneeId)) throw new Error('成员不存在')
@@ -879,7 +1049,7 @@ export class Channels {
     for (const run of this.store.runs.values()) {
       if (run.phase !== 'sent') continue
       const member = this.member(run.memberId)
-      if (member && down.has(member.machineId) && !this.store.task(run.taskId)?.disconnected)
+      if (member && down.has(member.machineId) && !this.taskOf(run)?.disconnected)
         this.patch(run.channelId, run.taskId, { disconnected: true })
     }
     if (up.length) void this.reconcile(id => up.includes(id))
@@ -913,5 +1083,250 @@ export class Channels {
     }
     for (const m of new Set([...this.store.runs.values()].filter(r => r.phase === 'waiting').map(r => r.memberId)))
       void this.pump(m)
+  }
+
+  // -------------------------------------------------------------------------
+  // Phase C：团队频道（docs/ui/channels-phase-c.md）
+  // -------------------------------------------------------------------------
+
+  /** 一项活现在的任务卡：本机频道从存储取，团队活从云端缓存取并补上只在本机有的信息 */
+  private taskOf(run: TaskRun): ChannelTask | null {
+    if (!run.team) return this.store.task(run.taskId)
+    const card = this.team?.taskOf(run.taskId)
+    if (card) return this.decorate(card) as ChannelTask
+    // 云端卡片还没拉到（刚启动、没连上）：按运行信息凑一张
+    const status: ChannelTask['status'] =
+      run.phase === 'ended'
+        ? 'done'
+        : run.requests.length
+          ? 'waiting'
+          : run.phase === 'sent' && run.started
+            ? 'running'
+            : 'queued'
+    return this.decorate({
+      kind: 'task',
+      id: run.taskId,
+      channelId: run.channelId,
+      at: run.queuedAt,
+      authorId: run.team.author ?? '',
+      assigneeId: run.team.agentId ?? run.memberId,
+      title: run.team.title ?? '',
+      status,
+      sessionId: null,
+      round: run.round,
+      ownerId: this.team?.getMe()?.id,
+    }) as ChannelTask
+  }
+
+  /** 我自己的活：补上会话、待确认请求、排队、断开这些只在本机有的信息 */
+  private decorate(m: ChannelMessage): ChannelMessage {
+    if (m.kind !== 'task') return m
+    const run = this.store.runs.get(m.id)
+    if (!run?.team) return m
+    const local = this.teamLocal.get(m.id)
+    return {
+      ...m,
+      sessionId: run.sessionId ?? m.sessionId ?? null,
+      request: m.status === 'waiting' ? (run.requests[0] ?? null) : null,
+      ...(local?.ahead !== undefined ? { ahead: local.ahead } : {}),
+      ...(local?.disconnected !== undefined ? { disconnected: local.disconnected } : {}),
+    }
+  }
+
+  /** 团队活的任务卡变化：本机才有的信息留在内存，其余交给执行端写回云端 */
+  private patchTeam(
+    run: TaskRun,
+    patch: Partial<ChannelTask>,
+    result?: { text: string; mentions: string[] },
+  ): ChannelTask | null {
+    if (patch.ahead !== undefined || patch.disconnected !== undefined) {
+      const local = { ...this.teamLocal.get(run.taskId) }
+      if (patch.ahead !== undefined) local.ahead = patch.ahead
+      if (patch.disconnected !== undefined) local.disconnected = patch.disconnected
+      this.teamLocal.set(run.taskId, local)
+    }
+    this.exec?.send(run, patch, result)
+    const task = this.taskOf(run)
+    if (task) this.pushMessage(task)
+    return task
+  }
+
+  /** 这一轮还没做完时又有人追加要求：攒着，做完接着发；云端卡片已回到排队，把现在的状态写回去 */
+  private addTeamFollowUp(taskId: string, text: string, team: TeamRunRef): void {
+    const run = this.store.runs.get(taskId)
+    if (!run) return
+    const next: TaskRun = {
+      ...run,
+      followUps: [...run.followUps, text],
+      team: { ...(run.team ?? team), follow: team.follow },
+    }
+    this.store.runs.set(taskId, next)
+    this.saveRuns()
+    this.patchTeam(next, { status: run.requests.length ? 'waiting' : run.started ? 'running' : 'queued' })
+  }
+
+  /** 上报给云端的成员状态 */
+  private teamAgentStatus(localId: string): {
+    status: 'idle' | 'running' | 'waiting' | 'offline'
+    task: string | null
+  } {
+    const config = this.member(localId)
+    if (!config) return { status: 'offline', task: null }
+    const runs = [...this.store.runs.values()].filter(r => r.memberId === localId)
+    const tasks = runs.map(r => this.taskOf(r)).filter((t): t is ChannelTask => !!t)
+    const active =
+      tasks.find(t => t.status === 'waiting') ??
+      tasks.find(t => !terminal(t.status) && this.store.runs.get(t.id)?.phase === 'sent')
+    if (!this.machineOnline(config.machineId)) return { status: 'offline', task: null }
+    return {
+      status: tasks.some(t => t.status === 'waiting') ? 'waiting' : active ? 'running' : 'idle',
+      task: active?.title ?? null,
+    }
+  }
+
+  /** 我的 AI 成员在本机的情况（团队频道的成员行用） */
+  private teamAgentView(localId: string): AgentMember | undefined {
+    const config = this.member(localId)
+    if (!config) return undefined
+    const projects = new Map(this.deps.projects().map(p => [p.id, p]))
+    return this.agentView(config, projects, this.deps.machines())
+  }
+
+  private requireTeam(): TeamSync {
+    if (!this.team) throw new Error('团队功能暂不可用')
+    return this.team
+  }
+
+  private async createTeamChannel(
+    teamId: string,
+    name: string,
+    topic: string | null | undefined,
+    memberIds: string[] | undefined,
+  ): Promise<string> {
+    const team = this.requireTeam()
+    const role = team.roleIn(teamId)
+    if (!role) throw new Error('团队不存在')
+    if (role === 'observer') throw new Error('观察者不能建频道')
+    const id = await team.createChannel(teamId, {
+      name,
+      topic: typeof topic === 'string' && topic.trim() ? topic.trim().slice(0, TOPIC_MAX) : null,
+    })
+    for (const memberId of new Set(Array.isArray(memberIds) ? memberIds.filter(m => this.member(m)) : []))
+      await this.registerAgent({ teamId, role }, id, memberId, 'approve').catch(e =>
+        this.deps.log?.('登记团队 AI 成员失败', e),
+      )
+    return id
+  }
+
+  /** 把自己的 AI 成员登记到团队频道（已登记的更新派活规则）。云端只存名字、引擎、模型、机器名、项目名和规则 */
+  private async registerAgent(
+    info: { teamId: string; role: TeamRole },
+    channelId: string,
+    localId: string,
+    policy: AgentPolicy,
+  ): Promise<void> {
+    if (info.role === 'observer') throw new Error('观察者不能添加 AI 成员')
+    const config = this.member(localId)
+    if (!config) throw new Error('成员不存在')
+    const project = this.deps.projects().find(p => p.id === config.projectId)
+    const machine =
+      config.machineId === 'local'
+        ? (this.deps.machineName?.() ?? '这台电脑')
+        : (this.deps.machines().find(m => m.id === config.machineId)?.name ?? config.machineId)
+    const reg: AgentRegistration = {
+      name: config.name,
+      engine: config.engine,
+      model: config.settings.model ?? '',
+      machine,
+      project: project?.name ?? '',
+      policy,
+    }
+    await this.requireTeam().putAgent(info.teamId, channelId, config.id, reg)
+  }
+
+  /** 团队频道里我的 AI 成员：别人 @ 它要不要我同意 */
+  async setAgentPolicy(channelId: string, memberId: string, policy: AgentPolicy): Promise<void> {
+    if (policy !== 'approve' && policy !== 'team') throw new Error('不支持的派活规则')
+    const team = this.requireTeam()
+    const info = team.channelInfo(channelId)
+    if (!info) throw new Error('频道不存在')
+    const agent = team.agentById(memberId)
+    if (!agent || agent.channelId !== channelId || agent.owner !== team.getMe()?.id)
+      throw new Error('只能设置自己的 AI 成员')
+    await this.registerAgent(info, channelId, agent.localId, policy)
+  }
+
+  /** 等主人同意的活：同意 / 拒绝 */
+  async approveTask(taskId: string, approve: boolean): Promise<void> {
+    const team = this.requireTeam()
+    await team.taskCall(taskId, teamId => team.api.approve(teamId, taskId, !!approve))
+  }
+
+  private async postTeam(
+    channelId: string,
+    input: PostInput,
+  ): Promise<{ message: ChannelTextMessage; tasks: string[] }> {
+    const team = this.requireTeam()
+    const info = team.channelInfo(channelId)
+    if (!info) throw new Error('频道不存在')
+    const text = typeof input?.text === 'string' ? input.text.trim() : ''
+    if (!text) throw new Error('消息不能为空')
+    const me = team.getMe()?.id
+    // 观察者不能派活：@ AI 成员只当文字
+    const mentions = parseMentions(text, team.mentionables(channelId)).filter(
+      id => id !== me && (info.role !== 'observer' || !team.agentById(id)),
+    )
+    const res = await team.post(channelId, {
+      clientId: typeof input.clientId === 'string' ? input.clientId : randomUUID(),
+      text,
+      replyTo: input.replyToId ?? null,
+      mentions,
+    })
+    if (res.message?.kind !== 'message') throw new Error('云端返回的数据异常')
+    // 发消息就算看过了
+    team.markRead(channelId)
+    return { message: res.message, tasks: res.tasks }
+  }
+
+  async createTeam(name: string): Promise<string> {
+    return this.requireTeam().createTeam(cleanName(name, '团队名'))
+  }
+  async updateTeam(teamId: string, patch: { name: string }): Promise<void> {
+    return this.requireTeam().updateTeam(teamId, { name: cleanName(patch?.name, '团队名') })
+  }
+  deleteTeam(teamId: string): Promise<void> {
+    return this.requireTeam().deleteTeam(teamId)
+  }
+  async renameSelf(teamId: string, name: string): Promise<void> {
+    const clean = typeof name === 'string' ? name.replace(/\s+/g, ' ').trim() : ''
+    if (!clean || clean.length > 32) throw new Error('显示名要 1–32 个字')
+    return this.requireTeam().rename(teamId, clean)
+  }
+  async invite(teamId: string, email: string, role: Exclude<TeamRole, 'owner'>): Promise<void> {
+    const mail = typeof email === 'string' ? email.trim().toLowerCase() : ''
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) throw new Error('邮箱格式不对')
+    if (role !== 'member' && role !== 'observer') throw new Error('角色不对')
+    return this.requireTeam().invite(teamId, mail, role)
+  }
+  revokeInvite(teamId: string, inviteId: string): Promise<void> {
+    return this.requireTeam().revokeInvite(teamId, inviteId)
+  }
+  respondInvite(inviteId: string, accept: boolean): Promise<void> {
+    return this.requireTeam().respondInvite(inviteId, !!accept)
+  }
+  async setRole(teamId: string, userId: string, role: Exclude<TeamRole, 'owner'>): Promise<void> {
+    if (role !== 'member' && role !== 'observer') throw new Error('角色不对')
+    return this.requireTeam().setRole(teamId, userId, role)
+  }
+  removeTeamMember(teamId: string, userId: string): Promise<void> {
+    return this.requireTeam().removeMember(teamId, userId)
+  }
+  async refreshTeams(): Promise<void> {
+    await this.team?.refresh()
+  }
+
+  /** 窗口获得焦点 */
+  focus(): void {
+    this.team?.focus()
   }
 }

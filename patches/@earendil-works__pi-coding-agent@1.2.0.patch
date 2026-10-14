@@ -1,0 +1,110 @@
+diff --git a/dist/cli/args.js b/dist/cli/args.js
+index ec17d54377ea8ff8d27a338069809cc9f91e46d2..7bf4829fc8f0633a7f15a973e4e83cd98f4dc3e8 100644
+--- a/dist/cli/args.js
++++ b/dist/cli/args.js
+@@ -280,15 +280,11 @@ ${chalk.bold("Usage:")}
+   ${APP_NAME} [options] [--] [@files...] [messages...]
+ 
+ ${chalk.bold("Commands:")}
+-  ${APP_NAME} install <source> [-l]     Install extension source and add to settings
+-  ${APP_NAME} remove <source> [-l]      Remove extension source from settings
+-  ${APP_NAME} uninstall <source> [-l]   Alias for remove
+-  ${APP_NAME} update [source|self|pi]   Update pi, extensions, or model catalogs
+   ${APP_NAME} list                      List installed extensions from settings
+   ${APP_NAME} config [-l]               Open TUI to enable/disable package resources (Tab switches scope)
+   ${APP_NAME} auth <command>            Print credentials or check provider readiness
+   ${APP_NAME} mcp <command>             Check MCP servers, sign in to or out of OAuth servers
+-  ${APP_NAME} <command> --help          Show help for install/remove/uninstall/update/list/config/auth/mcp
++  ${APP_NAME} <command> --help          Show help for list/config/auth/mcp
+ 
+ ${chalk.bold("Options:")}
+   --provider <name>              Provider to search for --model (requires --model)
+diff --git a/dist/core/slash-commands.js b/dist/core/slash-commands.js
+index 170a066f29382e76a92c9fbef580a320cb571e08..af863e6296ba4b4252bf6717943f767c7e391be2 100644
+--- a/dist/core/slash-commands.js
++++ b/dist/core/slash-commands.js
+@@ -1,4 +1,5 @@
+ import { APP_NAME } from "../config.js";
++// pixelsky: 已去掉 /share /bug /changelog /login（见 docs/own-cli.md §5.1），输入时由交互模式给出不可用提示
+ export const BUILTIN_SLASH_COMMANDS = [
+     { name: "settings", description: "Open settings menu" },
+     { name: "model", description: "Select model (opens selector UI)", argumentHint: "<provider/model>" },
+@@ -7,17 +8,13 @@ export const BUILTIN_SLASH_COMMANDS = [
+     { name: "scoped-models", description: "Enable/disable models for Ctrl+P cycling" },
+     { name: "export", description: "Export session (HTML default, or specify path: .html/.jsonl)" },
+     { name: "import", description: "Import and resume a session from a JSONL file" },
+-    { name: "share", description: "Share session as a secret GitHub gist" },
+-    { name: "bug", description: "Report a bug to the Pi developers", argumentHint: "<description>" },
+     { name: "copy", description: "Copy last agent message to clipboard" },
+     { name: "name", description: "Set session display name" },
+     { name: "session", description: "Show session info and stats" },
+-    { name: "changelog", description: "Show changelog entries" },
+     { name: "hotkeys", description: "Show all keyboard shortcuts" },
+     { name: "fork", description: "Create a new fork from a previous user message" },
+     { name: "clone", description: "Duplicate the current session at the current position" },
+     { name: "trust", description: "Save project trust decision for future sessions" },
+-    { name: "login", description: "Configure provider authentication", argumentHint: "<provider>" },
+     { name: "logout", description: "Remove provider authentication" },
+     { name: "new", description: "Start a new session" },
+     { name: "compact", description: "Manually compact the session context" },
+diff --git a/dist/modes/interactive/interactive-mode.js b/dist/modes/interactive/interactive-mode.js
+index 6a5b925cbdcfbefc916ae80fc460425f4954d364..de646ddeb8741606554499e67f8aadf8a472a5bc 100644
+--- a/dist/modes/interactive/interactive-mode.js
++++ b/dist/modes/interactive/interactive-mode.js
+@@ -658,7 +658,7 @@ export class InteractiveMode {
+             return;
+         this.registerSignalHandlers();
+         // Load changelog (only show new entries, skip for resumed sessions)
+-        this.changelogMarkdown = this.getChangelogForDisplay();
++        this.changelogMarkdown = undefined; // pixelsky: 不显示 Pi 的更新日志
+         if (this.session.scopedModels.length > 0 && this.shouldShowStartupDetails()) {
+             const modelList = this.session.scopedModels
+                 .map((sm) => {
+@@ -2542,6 +2542,17 @@ export class InteractiveMode {
+             text = text.trim();
+             if (!text)
+                 return;
++            // pixelsky: 已关闭的命令（/share 上传会话、/bug、/changelog、/login 订阅登录）
++            {
++                const pixelskyDisabledName = ["share", "bug", "changelog", "login"].find((n) => text === "/" + n || text.startsWith("/" + n + " "));
++                const pixelskyDisabled = pixelskyDisabledName ? [text, pixelskyDisabledName] : undefined;
++                if (pixelskyDisabled) {
++                    this.editor.setText("");
++                    this.showWarning(`/${pixelskyDisabled[1]} 在像素星空命令行中不可用 / /${pixelskyDisabled[1]} is not available in the PixelSky CLI.` +
++                        (pixelskyDisabled[1] === "login" ? " 请用环境变量或 auth.json 配置 API 密钥 / Configure API keys via environment variables or auth.json." : ""));
++                    return;
++                }
++            }
+             // Handle commands
+             if (text === "/settings") {
+                 this.showSettingsSelector();
+diff --git a/dist/utils/tools-manager.js b/dist/utils/tools-manager.js
+index 39b1f1ae3357925c68127b580340208c5d557ed9..77e24475735e8ead0ed997a8e1cebd18f4b12307 100644
+--- a/dist/utils/tools-manager.js
++++ b/dist/utils/tools-manager.js
+@@ -305,6 +305,11 @@ export async function ensureTool(tool, onStatus) {
+     const config = TOOLS[tool];
+     if (!config)
+         return undefined;
++    // pixelsky: 不自动下载可执行文件；只用 PATH 上的（以后随安装包自带）。PIXELSKY_ALLOW_TOOL_DOWNLOAD=1 可恢复下载
++    if (process.env.PIXELSKY_ALLOW_TOOL_DOWNLOAD !== "1") {
++        onStatus?.({ type: "warning", message: `${config.name} not found on PATH; auto-download is disabled in PixelSky CLI.` });
++        return undefined;
++    }
+     if (isOfflineModeEnabled()) {
+         onStatus?.({ type: "warning", message: `${config.name} not found. Offline mode enabled, skipping download.` });
+         return undefined;
+diff --git a/package.json b/package.json
+index e6daaaeea17c25b443213b522bec619495c5563a..d803bddee98a5f1523ee31cf220ff75ab81b5700 100644
+--- a/package.json
++++ b/package.json
+@@ -4,7 +4,8 @@
+ 	"description": "Coding agent CLI with read, bash, edit, write tools and session management",
+ 	"type": "module",
+ 	"piConfig": {
+-		"configDir": ".pi"
++		"name": "pixelsky",
++		"configDir": ".pixelsky-cli"
+ 	},
+ 	"bin": {
+ 		"pi": "dist/bundle/cli.js"

@@ -19,7 +19,7 @@ export class Extensions {
 
   constructor(private readonly ctx: AppContext) {}
 
-  private env(engine: 'claude' | 'codex' = 'claude'): Record<string, string> | undefined {
+  private env(engine: 'claude' | 'codex' | 'pixel' = 'claude'): Record<string, string> | undefined {
     return this.ctx.engine?.engineConfig()[engine].env
   }
 

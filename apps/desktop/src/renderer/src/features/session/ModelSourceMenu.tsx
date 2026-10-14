@@ -202,12 +202,17 @@ export function ModelSourceMenu({
         type="button"
         onClick={() => onOpenChange(!open)}
         className={TRIGGER}
+        title={`${text.model} · ${text.source}`}
         aria-haspopup="menu"
         aria-expanded={open}
       >
         <EngineIcon engine={engineId} size={16} />
-        <span className={cn('max-w-44 truncate', notReady && 'text-warn')}>{text.model}</span>
-        <span className="shrink-0 text-meta text-fg-muted">· {text.source}</span>
+        <span data-model-name className={cn('max-w-44 truncate', notReady && 'text-warn')}>
+          {text.model}
+        </span>
+        <span data-model-source className="shrink-0 text-meta text-fg-muted">
+          · {text.source}
+        </span>
         <ChevronDown size={14} strokeWidth={1.5} className="text-fg-muted" />
       </button>
       <Popover open={open} onClose={() => onOpenChange(false)} side="top" align="end" offset={8} className="w-80">

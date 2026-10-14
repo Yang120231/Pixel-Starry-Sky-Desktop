@@ -1,0 +1,40 @@
+/* 输入框窄宽（< 520px，如代码模式右栏、分屏窄窗格）时收紧：状态行和工具行不换行，次要文字藏起（docs/ui/composer-git.md） */
+.composer-area {
+  container: composer / inline-size;
+}
+@container composer (width < 520px) {
+  /* 机器只留图标，项目、分支截断 */
+  .composer-area [data-composer-workspace] {
+    flex-wrap: nowrap;
+    overflow: hidden;
+  }
+  .composer-area [data-composer-machine-label] {
+    display: none;
+  }
+  .composer-area [data-composer-git] {
+    flex-wrap: nowrap;
+    min-width: 0;
+  }
+  /* ↑↓ 和「提交…」藏起；菜单正开着时不藏，免得弹层跟着消失 */
+  .composer-area [data-composer-sync-wrap]:not(:has([aria-expanded='true'])),
+  .composer-area [data-composer-commit-wrap]:not(:has([aria-expanded='true'])) {
+    display: none;
+  }
+  /* 工具行：权限只剩图标，模型不带来源，上下文不带百分比 */
+  .composer-area .composer-toolbar {
+    flex-wrap: nowrap;
+    min-width: 0;
+  }
+  .composer-area [data-composer-permission] button > span {
+    display: none;
+  }
+  .composer-area [data-model-source] {
+    display: none;
+  }
+  .composer-area [data-model-name] {
+    max-width: 7em;
+  }
+  .composer-area [data-context-percent] {
+    display: none;
+  }
+}

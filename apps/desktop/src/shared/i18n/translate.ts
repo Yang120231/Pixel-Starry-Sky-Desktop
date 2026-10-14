@@ -4,6 +4,7 @@ import { pluginMessages } from './pluginMessages'
 import { sessionMessages } from './sessionMessages'
 import { commandMessages } from './commandMessages'
 import { codexMessages } from './codexMessages'
+import { pixelMessages } from './pixelMessages'
 import { projectToolsMessages } from './projectToolsMessages'
 import { terminalMessages } from './terminalMessages'
 import { sidebarMessages } from './sidebarMessages'
@@ -11,6 +12,7 @@ import { projectMessages } from './projectMessages'
 import { workspaceMessages } from './workspaceMessages'
 import { machineMessages, machineErrors } from './machineMessages'
 import { channelMessages } from './channelMessages'
+import { teamMessages } from './teamMessages'
 import { notificationMessages } from './notificationMessages'
 import { gitMessages } from './gitMessages'
 import { artifactMessages } from './artifactMessages'
@@ -48,6 +50,7 @@ export const allMessages = {
   ...sessionMessages,
   ...commandMessages,
   ...codexMessages,
+  ...pixelMessages,
   ...projectToolsMessages,
   ...terminalMessages,
   ...sidebarMessages,
@@ -56,6 +59,7 @@ export const allMessages = {
   ...machineMessages,
   ...machineErrors,
   ...channelMessages,
+  ...teamMessages,
   ...notificationMessages,
   ...gitMessages,
   ...artifactMessages,

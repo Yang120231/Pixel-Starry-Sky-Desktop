@@ -42,6 +42,7 @@ describe('clampPanel', () => {
     expect(clampPanel('left', 10)).toBe(240)
     expect(clampPanel('left', 9999)).toBe(520)
     expect(clampPanel('right', 333.4)).toBe(333)
+    expect(clampPanel('right', 9999)).toBe(720)
     expect(clampPanel('bottom', Number.NaN)).toBe(PANEL_LIMITS.bottom.initial)
   })
 })
@@ -82,28 +83,89 @@ describe('fitCoding 宽度', () => {
     expect(f.left.size).toBe(280)
     expect(f.right.size).toBe(420)
   })
-  it('1100 宽先缩右栏，再缩左栏', () => {
-    // avail 1020，L+R=700，中栏 320，缺 100：右栏 420 -> 320
-    const f = fitCoding(prefs(), { width: 1100, ...H })
-    expect(f.right.size).toBe(320)
-    expect(f.left.size).toBe(280)
-    expect(f.centerWidth).toBe(420)
-    // 右栏已经最小再缩左栏
-    const g = fitCoding(prefs({ r: 320, l: 400 }), { width: 1100, ...H })
-    expect(g.right.size).toBe(320)
-    expect(g.left.size).toBe(280)
-    expect(g.centerWidth).toBe(CENTER_MIN_WIDTH)
+  it('1280 宽不挤', () => {
+    const f = fitCoding(prefs(), { width: 1280, ...H })
+    expect(f.left).toEqual({ shown: true, size: 280 })
+    expect(f.right.size).toBe(420)
+    expect(f.centerWidth).toBe(1200 - 700)
+    expect(f.leftHiddenByFit).toBe(false)
+    expect(f.terminalListCollapsed).toBe(false)
   })
-  it('缩不够时藏左栏，仍不够时 tooNarrow', () => {
+  it('1160 是只压左栏不藏的边界', () => {
+    // avail 1080，中栏 380，缺 40：左栏 280 -> 240
+    const f = fitCoding(prefs(), { width: 1160, ...H })
+    expect(f.left).toEqual({ shown: true, size: 240 })
+    expect(f.right.size).toBe(420)
+    expect(f.centerWidth).toBe(CENTER_MIN_WIDTH)
+    expect(f.leftHiddenByFit).toBe(false)
+    expect(f.terminalListCollapsed).toBe(false)
+    // 再窄 1px 就藏
+    expect(fitCoding(prefs(), { width: 1159, ...H }).leftHiddenByFit).toBe(true)
+  })
+  it('1100 宽先压左栏，不够再藏左栏，右栏保持偏好宽', () => {
+    // avail 1020，L+R=700，缺 100：左栏最多压 40，不够 -> 藏左栏，中栏 600
+    const f = fitCoding(prefs(), { width: 1100, ...H })
+    expect(f.left.shown).toBe(false)
+    expect(f.leftHiddenByFit).toBe(true)
+    expect(f.right.size).toBe(420)
+    expect(f.centerWidth).toBe(600)
+    expect(f.tooNarrow).toBe(false)
+    // 中栏 600 刚好放得下列表，不收
+    expect(f.terminalListCollapsed).toBe(false)
+  })
+  it('1000 宽藏左栏，终端列表自动收起', () => {
     const f = fitCoding(prefs(), { width: 1000, ...H }) // avail 920
     expect(f.left.shown).toBe(false)
-    expect(f.right.shown).toBe(true)
-    expect(f.centerWidth).toBe(920 - 320)
+    expect(f.leftHiddenByFit).toBe(true)
+    expect(f.right).toEqual({ shown: true, size: 420 })
+    expect(f.centerWidth).toBe(500)
     expect(f.tooNarrow).toBe(false)
-    const g = fitCoding(prefs(), { width: 800, ...H }) // avail 720，右栏 320 -> 中栏 400
+    expect(f.terminalListCollapsed).toBe(true)
+  })
+  it('800 宽藏左栏、右栏压到 320，仍不够 tooNarrow', () => {
+    const g = fitCoding(prefs(), { width: 800, ...H }) // avail 720，右栏 420 -> 320，中栏 400
     expect(g.left.shown).toBe(false)
-    expect(g.right.shown).toBe(true)
+    expect(g.right).toEqual({ shown: true, size: 320 })
+    expect(g.centerWidth).toBe(400)
     expect(g.tooNarrow).toBe(true)
+    expect(g.terminalListCollapsed).toBe(true)
+  })
+  it('右栏偏好 720 在窄窗口里也能压到 320', () => {
+    const f = fitCoding(prefs({ r: 720, lo: false }), { width: 1000, ...H }) // avail 920，缺 220
+    expect(f.right.size).toBe(500)
+    expect(f.centerWidth).toBe(CENTER_MIN_WIDTH)
+    expect(f.terminalListCollapsed).toBe(true) // 右栏被压过，中栏 420 < 600
+    expect(fitCoding(prefs({ r: 720, lo: false }), { width: 1920, ...H }).right.size).toBe(720)
+  })
+  it('keepLeft：左栏只压不藏，改压右栏', () => {
+    // 1100：左栏压到 240，缺 60，右栏 420 -> 360
+    const f = fitCoding(prefs(), { width: 1100, ...H }, { keepLeft: true })
+    expect(f.left).toEqual({ shown: true, size: 240 })
+    expect(f.right.size).toBe(360)
+    expect(f.centerWidth).toBe(CENTER_MIN_WIDTH)
+    expect(f.leftHiddenByFit).toBe(false)
+    expect(f.terminalListCollapsed).toBe(true)
+    // 压到头也不藏左栏
+    const g = fitCoding(prefs(), { width: 800, ...H }, { keepLeft: true }) // avail 720：240 + 320，中栏 160
+    expect(g.left).toEqual({ shown: true, size: 240 })
+    expect(g.right.size).toBe(320)
+    expect(g.tooNarrow).toBe(true)
+  })
+  it('终端列表：挤压阶段且中栏放不下列表才收，没挤压就不收', () => {
+    // 1160：只压了左栏，不算挤压，中栏 420 < 600 也不收
+    const squeezed = fitCoding(prefs(), { width: 1160, ...H })
+    expect(squeezed.leftHiddenByFit).toBe(false)
+    expect(squeezed.terminalListCollapsed).toBe(false)
+    // 只开右栏、中栏宽，不收
+    expect(fitCoding(prefs({ lo: false }), { width: 1920, ...H }).terminalListCollapsed).toBe(false)
+    // 窗口窄但关掉两栏，中栏很宽，不收
+    expect(fitCoding(prefs({ lo: false, ro: false }), { width: 700, ...H }).terminalListCollapsed).toBe(false)
+  })
+  it('只开右栏：右栏先压到 320 再 tooNarrow', () => {
+    const f = fitCoding(prefs({ lo: false }), { width: 800, ...H }) // avail 720，缺 120，右栏压 100
+    expect(f.right.size).toBe(320)
+    expect(f.tooNarrow).toBe(true)
+    expect(f.leftHiddenByFit).toBe(false)
   })
   it('收起的栏不占宽度', () => {
     const f = fitCoding(prefs({ lo: false, ro: false }), { width: 1100, ...H })

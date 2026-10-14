@@ -4,9 +4,11 @@ import type {
   ChannelMessage,
   ChannelMessagePush,
   ChannelsSnapshot,
+  AgentPolicy,
   ChannelTaskAction,
   ChannelTextMessage,
   PostInput,
+  TeamRole,
 } from '../shared/types/channels'
 
 /** 协作频道 Phase B（docs/ui/channels-phase-b.md §11） */
@@ -25,6 +27,26 @@ export interface ChannelsBridge {
   removeMember(channelId: string, memberId: string): Promise<void>
   deleteMember(memberId: string): Promise<void>
   task(taskId: string, action: ChannelTaskAction): Promise<void>
+  // ── Phase C：多人团队（docs/ui/channels-phase-c.md §9.2） ──
+  /** 等主人同意的活（approval）：同意 / 拒绝 */
+  approveTask(taskId: string, approve: boolean): Promise<void>
+  /** 团队频道里我的 AI 成员：别人 @ 它要不要我同意 */
+  setAgentPolicy(channelId: string, memberId: string, policy: AgentPolicy): Promise<void>
+  /** 新建团队，返回团队 id */
+  createTeam(name: string): Promise<string>
+  updateTeam(teamId: string, patch: { name: string }): Promise<void>
+  deleteTeam(teamId: string): Promise<void>
+  /** 改我在这个团队的显示名 */
+  setDisplayName(teamId: string, name: string): Promise<void>
+  invite(teamId: string, email: string, role: Exclude<TeamRole, 'owner'>): Promise<void>
+  revokeInvite(teamId: string, inviteId: string): Promise<void>
+  /** 接受 / 拒绝别人给我的邀请 */
+  respondInvite(inviteId: string, accept: boolean): Promise<void>
+  setRole(teamId: string, userId: string, role: Exclude<TeamRole, 'owner'>): Promise<void>
+  /** 移出成员；userId 是自己就是退出团队 */
+  removeTeamMember(teamId: string, userId: string): Promise<void>
+  /** 马上重连、重拉团队数据 */
+  refreshTeams(): Promise<void>
   onChange(callback: (state: ChannelsSnapshot) => void): () => void
   onMessage(callback: (push: ChannelMessagePush) => void): () => void
 }

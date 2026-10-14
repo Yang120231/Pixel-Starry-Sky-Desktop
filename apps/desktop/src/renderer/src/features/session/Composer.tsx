@@ -37,6 +37,7 @@ import { QueuedMessages } from './QueuedMessages'
 import { ContextWindowButton } from './ContextWindowButton'
 import { useComposerStyle } from '@/features/settings/composerStyle'
 import { ComposerStatusBar } from './ComposerStatusBar'
+import './composerCompact.css'
 import { useI18n } from '@/i18n/I18nProvider'
 import { useCommands } from '@/features/settings/plugins/useCommands'
 import { CommandMenu } from './CommandMenu'
@@ -808,12 +809,15 @@ export function Composer({
             </Popover>
           </span>
           {live ? (
-            <PermissionMenu
-              mode={live.permissionMode}
-              modes={live.permissionModes}
-              onSelect={live.setPermissionMode}
-              engine={live.engine?.id}
-            />
+            // 外包一层 contents：窄宽时 composerCompact.css 靠它把权限按钮收成只剩图标
+            <span data-composer-permission className="contents">
+              <PermissionMenu
+                mode={live.permissionMode}
+                modes={live.permissionModes}
+                onSelect={live.setPermissionMode}
+                engine={live.engine?.id}
+              />
+            </span>
           ) : (
             <button
               type="button"

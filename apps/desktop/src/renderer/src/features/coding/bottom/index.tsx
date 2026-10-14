@@ -4,7 +4,7 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import { useTerminalUi } from '@/features/terminal/TerminalProvider'
 import { codingLayout } from '../layoutStore'
-import { useProblems } from '../problems'
+import { PROBLEMS_READY, useProblems } from '../problems'
 import type { BottomTab } from '../types'
 import { useCodingSessionId, useCodingWorkspace } from '../workspace'
 import { useAiCommands } from './aiCommands'
@@ -17,10 +17,22 @@ import { usePorts } from './usePorts'
 
 export { revealAiCommand } from './aiCommands'
 
-const TABS: BottomTab[] = ['terminal', 'aiCommands', 'output', 'problems', 'ports']
+const TABS: BottomTab[] = (['terminal', 'aiCommands', 'output', 'problems', 'ports'] as const).filter(
+  id => id !== 'problems' || PROBLEMS_READY,
+)
 
 /** 底部面板：终端 | AI 命令 | 输出 | 问题 | 端口，右边是新建 / 分屏 / 清空 / 最大化 / 关闭 */
-export function BottomPanel({ visible, tab, maximized }: { visible: boolean; tab: BottomTab; maximized: boolean }) {
+export function BottomPanel({
+  visible,
+  tab: savedTab,
+  maximized,
+  listCollapsed,
+}: {
+  visible: boolean
+  tab: BottomTab
+  maximized: boolean
+  listCollapsed: boolean
+}) {
   useI18n()
   const ui = useTerminalUi()
   const workspace = useCodingWorkspace()
@@ -33,6 +45,8 @@ export function BottomPanel({ visible, tab, maximized }: { visible: boolean; tab
     problems: problems.errors + problems.warnings,
     ports: ports.length,
   }
+  // 问题标签隐藏时，之前存下的 bottom.tab='problems' 兜底显示终端
+  const tab: BottomTab = TABS.includes(savedTab) ? savedTab : 'terminal'
   const inTerminal = tab === 'terminal'
   return (
     <div data-coding-bottom-panel className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
@@ -104,7 +118,7 @@ export function BottomPanel({ visible, tab, maximized }: { visible: boolean; tab
         </div>
       </div>
       <div className="relative flex min-h-0 flex-1">
-        <TerminalTab visible={visible && inTerminal} commands={commands} />
+        <TerminalTab visible={visible && inTerminal} commands={commands} autoCollapsed={listCollapsed} />
         {tab === 'aiCommands' && <AiCommandsTab sessionId={sessionId} commands={commands} />}
         {tab === 'output' && <OutputTab workspace={workspace} commands={commands} sessionId={sessionId} />}
         {tab === 'problems' && <ProblemsTab />}

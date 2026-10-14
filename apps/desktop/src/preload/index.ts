@@ -374,6 +374,18 @@ const channels: ChannelsBridge = {
   removeMember: (channelId, memberId) => call('channels:removeMember', channelId, memberId),
   deleteMember: memberId => call('channels:deleteMember', memberId),
   task: (taskId, action) => call('channels:task', taskId, action),
+  approveTask: (taskId, approve) => call('channels:approveTask', taskId, approve),
+  setAgentPolicy: (channelId, memberId, policy) => call('channels:agentPolicy', channelId, memberId, policy),
+  createTeam: name => call('teams:create', name),
+  updateTeam: (teamId, patch) => call('teams:update', teamId, patch),
+  deleteTeam: teamId => call('teams:delete', teamId),
+  setDisplayName: (teamId, name) => call('teams:rename', teamId, name),
+  invite: (teamId, email, role) => call('teams:invite', teamId, email, role),
+  revokeInvite: (teamId, inviteId) => call('teams:revokeInvite', teamId, inviteId),
+  respondInvite: (inviteId, accept) => call('teams:respond', inviteId, accept),
+  setRole: (teamId, userId, role) => call('teams:setRole', teamId, userId, role),
+  removeTeamMember: (teamId, userId) => call('teams:removeMember', teamId, userId),
+  refreshTeams: () => call('teams:refresh'),
   onChange: cb => {
     const listener = (_e: Electron.IpcRendererEvent, state: ChannelsSnapshot): void => cb(state)
     on('channels:changed', listener)

@@ -18,6 +18,7 @@ const en = (locale: Locale): boolean => locale === 'en-US'
 
 const STATUS: Record<ChannelTaskStatus, [string, string]> = {
   queued: ['排队中', 'queued'],
+  approval: ['等待同意', 'awaiting approval'],
   running: ['进行中', 'in progress'],
   waiting: ['等你确认', 'waiting for approval'],
   done: ['已完成', 'done'],

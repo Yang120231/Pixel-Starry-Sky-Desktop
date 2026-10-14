@@ -10,18 +10,33 @@ import { TerminalPanel } from '@/features/terminal/TerminalPanel'
 import { useTerminalUi } from '@/features/terminal/TerminalProvider'
 import { useTerminalStore } from '@/features/terminal/store'
 import { workspaceTerminals } from '@/features/terminal/workspace'
+import { TERMINAL_LIST_WIDTH } from '../layoutModel'
 import { codingLayout } from '../layoutStore'
 import { useServices } from '../services'
 import { useCodingSessionId, useCodingWorkspace } from '../workspace'
 import { setOutputSource, useBottomState } from './aiCommands'
 import { summarizeAiCommands, type AiCommandEntry } from './aiCommandsModel'
 
-const LIST_WIDTH = 180
-
 /** 终端页：左边是终端本体（不带自己的标题栏），右边是可收起的列表 */
-export function TerminalTab({ visible, commands }: { visible: boolean; commands: readonly AiCommandEntry[] }) {
+export function TerminalTab({
+  visible,
+  commands,
+  autoCollapsed,
+}: {
+  visible: boolean
+  commands: readonly AiCommandEntry[]
+  /** 窗口窄时布局算出来的「该收起」；用户手动点过就听用户的，布局状态跨过阈值再交还自动 */
+  autoCollapsed: boolean
+}) {
   useI18n()
-  const [collapsed, setCollapsed] = useState(false)
+  const [manual, setManual] = useState<boolean | null>(null)
+  const [seenAuto, setSeenAuto] = useState(autoCollapsed)
+  if (seenAuto !== autoCollapsed) {
+    setSeenAuto(autoCollapsed)
+    setManual(null)
+  }
+  const collapsed = manual ?? autoCollapsed
+  const setCollapsed = (value: boolean): void => setManual(value)
   const store = useTerminalStore()
   const workspace = useCodingWorkspace()
   const { services } = useServices(workspace.ref)
@@ -57,8 +72,10 @@ export function TerminalTab({ visible, commands }: { visible: boolean; commands:
         )}
       </div>
       <div
+        data-terminal-list
+        data-collapsed={collapsed}
         className="relative flex shrink-0 border-l border-line-layout"
-        style={{ width: collapsed ? 28 : LIST_WIDTH }}
+        style={{ width: collapsed ? 28 : TERMINAL_LIST_WIDTH }}
       >
         {collapsed ? (
           <div className="flex w-full justify-center pt-1">

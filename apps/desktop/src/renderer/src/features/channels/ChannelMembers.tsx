@@ -2,15 +2,19 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage, type TranslationKey } from '../../i18n/core'
 import { useState, type ReactNode } from 'react'
 import { ArrowUpRight, Bot, ChevronDown, Ellipsis, Pencil, Trash2, UserMinus, UserPlus, X } from 'lucide-react'
-import { Button, cn, IconButton, Spinner, useComingSoon, useToast } from '@/ui'
+import { Button, cn, IconButton, Select, Spinner, useComingSoon, useToast } from '@/ui'
 import { ActionMenu, type MenuAction } from '@/ui/ActionMenu'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
 import { relativeTime } from '@/features/engine'
 import type { AgentMember, Channel, ChannelAgentStatus, ChannelMember, HumanMember } from '@/data/types'
-import type { AgentConfig, ChannelTaskStatus } from '../../../../shared/types/channels'
+import type { AgentConfig, AgentPolicy, ChannelTaskStatus } from '../../../../shared/types/channels'
 import { agentMeta, MemberAvatar } from './ChannelMessage'
 import { AgentDialog, ChannelDialog } from './ChannelDialogs'
-import { channelActions, channelsLive } from './store'
+import { channelActions, channelsLive, useChannels } from './store'
+import { AddTeamAgentDialog, TeamSettingsDialog } from './TeamDialog'
+import { PresenceAvatar, roleLabel } from './TeamParts'
+import { formatLastSeen } from './format'
+import { canAddAgent, canManageTeam, myRole, onlineCount } from './teamModel'
 
 const STATUS_LABEL: Record<ChannelAgentStatus, TranslationKey> = {
   idle: 'channels.status.idle',
@@ -25,6 +29,7 @@ const STATUS_DOT: Record<Exclude<ChannelAgentStatus, 'running'>, string> = {
 }
 const TASK_LABEL: Record<ChannelTaskStatus, TranslationKey> = {
   queued: 'channels.task.queued',
+  approval: 'team.task.approvalShort',
   running: 'channels.task.running',
   waiting: 'channels.task.waiting',
   done: 'channels.task.done',
@@ -41,17 +46,26 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   )
 }
 
-function HumanRow({ member }: { member: HumanMember }) {
+function HumanRow({ member, team }: { member: HumanMember; team: boolean }) {
   useI18n()
+  const online = !!member.online || !!member.you
+  const seen = team && !online ? formatLastSeen(member.lastSeenAt, Date.now()) : null
+  const role = !member.role
+    ? null
+    : team
+      ? roleLabel(member.role)
+      : tr(member.role === 'owner' ? 'channels.role.owner' : 'channels.role.member')
   return (
     <div className="flex h-9 min-w-0 items-center gap-2.5 rounded-md px-2">
-      <MemberAvatar member={member} size={24} />
+      {team ? (
+        <PresenceAvatar name={member.name} online={online} size={24} />
+      ) : (
+        <MemberAvatar member={member} size={24} />
+      )}
       <span className="min-w-0 truncate text-list text-fg">{member.name}</span>
       {member.you && <span className="shrink-0 text-meta text-fg-muted">{tr('channels.youSuffix')}</span>}
-      {member.role && (
-        <span className="ml-auto shrink-0 text-meta text-fg-faint">
-          {tr(member.role === 'owner' ? 'channels.role.owner' : 'channels.role.member')}
-        </span>
+      {(role || seen) && (
+        <span className="ml-auto shrink-0 text-meta text-fg-faint">{[role, seen].filter(Boolean).join(' · ')}</span>
       )}
     </div>
   )
@@ -94,34 +108,48 @@ function AgentDetails({ member }: { member: AgentMember }) {
 function AgentRow({
   member,
   live,
+  team,
+  canRemoveOthers,
   onOpenSession,
   onEdit,
   onRemove,
+  onPolicy,
 }: {
   member: AgentMember
   live: boolean
+  /** 团队频道 */
+  team: boolean
+  /** 所有者能把别人的 AI 成员移出频道 */
+  canRemoveOthers: boolean
   onOpenSession: (id: string) => void
   onEdit: (config: AgentConfig) => void
   onRemove: (member: AgentMember) => void
+  onPolicy: (member: AgentMember, policy: AgentPolicy) => void
 }) {
   useI18n()
   const [open, setOpen] = useState(false)
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const line = agentLine(member, Date.now())
   const status = tr(STATUS_LABEL[member.status])
-  const actions: MenuAction[] = [
-    ...(member.config ? [{ label: tr('channels.members.edit'), icon: Pencil, run: () => onEdit(member.config!) }] : []),
-    ...(member.sessionId
-      ? [{ label: tr('channels.openSession'), icon: ArrowUpRight, run: () => onOpenSession(member.sessionId!) }]
-      : []),
-    {
-      label: tr('channels.members.remove'),
-      icon: UserMinus,
-      danger: true,
-      separator: true,
-      run: () => onRemove(member),
-    },
-  ]
+  // 别人的 AI 成员：只读，没有「打开会话」和档案
+  const foreign = team && member.mine === false
+  const actions: MenuAction[] = foreign
+    ? [{ label: tr('channels.members.remove'), icon: UserMinus, danger: true, run: () => onRemove(member) }]
+    : [
+        ...(member.config
+          ? [{ label: tr('channels.members.edit'), icon: Pencil, run: () => onEdit(member.config!) }]
+          : []),
+        ...(member.sessionId
+          ? [{ label: tr('channels.openSession'), icon: ArrowUpRight, run: () => onOpenSession(member.sessionId!) }]
+          : []),
+        {
+          label: tr('channels.members.remove'),
+          icon: UserMinus,
+          danger: true,
+          separator: true,
+          run: () => onRemove(member),
+        },
+      ]
   return (
     <div
       className={cn(
@@ -142,7 +170,7 @@ function AgentRow({
         )}
       </span>
       <div className="min-w-0 flex-1">
-        {live && member.config ? (
+        {live && member.config && !foreign ? (
           <button
             type="button"
             aria-expanded={open}
@@ -157,7 +185,14 @@ function AgentRow({
             />
           </button>
         ) : (
-          <div className="truncate text-list font-medium text-fg">{member.name}</div>
+          <div className="flex min-w-0 items-baseline gap-1 text-list font-medium text-fg">
+            <span className="truncate">{member.name}</span>
+            {foreign && member.ownerName && (
+              <span className="shrink-0 text-meta font-normal text-fg-faint">
+                · {tr('team.panel.agentOf', { owner: member.ownerName })}
+              </span>
+            )}
+          </div>
         )}
         <div className="truncate text-meta text-fg-faint">
           {[agentMeta(member), member.project].filter(Boolean).join(' · ')}
@@ -179,9 +214,24 @@ function AgentRow({
             {tr('channels.members.sharesDir', { names: member.sharesDirWith.join('、') })}
           </div>
         )}
+        {team && member.mine !== false && member.policy && (
+          <div className="mt-1 flex items-center gap-2 text-meta text-fg-muted">
+            <span className="shrink-0">{tr('team.panel.policyLabel')}</span>
+            <Select
+              label={tr('team.panel.policyLabel')}
+              value={member.policy}
+              options={[
+                { value: 'approve', label: tr('team.policy.approve') },
+                { value: 'team', label: tr('team.policy.team') },
+              ]}
+              onChange={policy => onPolicy(member, policy)}
+              className="h-7 min-w-0 flex-1"
+            />
+          </div>
+        )}
         {open && <AgentDetails member={member} />}
       </div>
-      {live ? (
+      {foreign && !canRemoveOthers ? null : live ? (
         <IconButton
           icon={Ellipsis}
           label={tr('channels.members.menu', { name: member.name })}
@@ -242,13 +292,24 @@ export function ChannelMembers({
     | { kind: 'channel' }
     | { kind: 'delete' }
     | { kind: 'remove'; member: AgentMember }
+    | { kind: 'policy'; member: AgentMember }
+    | { kind: 'addTeamAgent' }
+    | { kind: 'invite' }
     | null
   >(null)
   const [busy, setBusy] = useState(false)
   const [channelMenu, setChannelMenu] = useState<{ x: number; y: number } | null>(null)
   const humans = members.filter((m): m is HumanMember => m.kind === 'human')
   const agents = members.filter((m): m is AgentMember => m.kind === 'agent')
-  const others = allMembers.filter((m): m is AgentMember => m.kind === 'agent' && !channel.memberIds.includes(m.id))
+  // 可以加进来的：我自己的全局 AI 成员（别人的、团队频道里登记的不算）
+  const others = allMembers.filter(
+    (m): m is AgentMember =>
+      m.kind === 'agent' && !channel.memberIds.includes(m.id) && m.mine !== false && !m.teamAgentId,
+  )
+  const team = channel.scope === 'team'
+  const role = useChannels(s => myRole(s.teams, channel.teamId))
+  const teamName = useChannels(s => s.teams.find(t => t.id === channel.teamId)?.name ?? null)
+  const owner = canManageTeam(role)
   const confirm = (fn: () => Promise<void>) => {
     setBusy(true)
     fn()
@@ -258,6 +319,8 @@ export function ChannelMembers({
       )
       .finally(() => setBusy(false))
   }
+  const policyFailed = (e: unknown) =>
+    toast(tr('channels.task.actionFailed', { error: translateMessage((e as Error).message) }))
   return (
     <aside
       aria-label={tr('channels.members.title')}
@@ -285,7 +348,13 @@ export function ChannelMembers({
           <dd className={cn('min-w-0 break-words', channel.topic ? 'text-fg-secondary' : 'text-fg-faint')}>
             {channel.topic ?? tr('channels.members.noTopic')}
           </dd>
-          {channel.project && (
+          {team && teamName && (
+            <>
+              <dt className="text-fg-faint">{tr('team.panel.team')}</dt>
+              <dd className="min-w-0 truncate text-fg-secondary">{teamName}</dd>
+            </>
+          )}
+          {channel.project && !team && (
             <>
               <dt className="text-fg-faint">{tr('channels.members.project')}</dt>
               <dd className="min-w-0 truncate text-fg-secondary">{channel.project}</dd>
@@ -296,17 +365,36 @@ export function ChannelMembers({
             {tr(channel.scope === 'team' ? 'channels.scope.team' : 'channels.scope.local')}
           </dd>
         </dl>
-        <Section title={tr('channels.members.humans', { count: humans.length })}>
+        <Section
+          title={
+            team
+              ? tr('team.panel.humans', { count: humans.length, online: onlineCount(humans) })
+              : tr('channels.members.humans', { count: humans.length })
+          }
+        >
           {humans.map(m => (
-            <HumanRow key={m.id} member={m} />
+            <HumanRow key={m.id} member={m} team={team} />
           ))}
         </Section>
-        <Section title={tr('channels.members.agents', { count: agents.length })}>
+        <Section
+          title={
+            team
+              ? tr('team.panel.agents', { count: agents.length })
+              : tr('channels.members.agents', { count: agents.length })
+          }
+        >
           {agents.map(m => (
             <AgentRow
               key={m.id}
               member={m}
               live={live}
+              team={team}
+              canRemoveOthers={live && owner}
+              onPolicy={(member, policy) =>
+                policy === 'team'
+                  ? setDialog({ kind: 'policy', member })
+                  : void channelActions.setAgentPolicy(channel.id, member.id, policy).catch(policyFailed)
+              }
               onOpenSession={onOpenSession}
               onEdit={config => setDialog({ kind: 'agent', editing: config })}
               onRemove={member => setDialog({ kind: 'remove', member })}
@@ -315,23 +403,35 @@ export function ChannelMembers({
         </Section>
       </div>
       <div className="flex shrink-0 flex-col gap-2 border-t border-line-subtle p-3">
-        <Button
-          icon={Bot}
-          className="w-full justify-center"
-          onClick={() =>
-            live ? setDialog({ kind: 'agent', editing: null }) : comingSoon(tr('channels.members.addAgent'))
-          }
-        >
-          {tr('channels.members.addAgent')}
-        </Button>
-        <Button
-          icon={UserPlus}
-          variant="ghost"
-          className="w-full justify-center"
-          onClick={() => comingSoon(tr('channels.members.invite'))}
-        >
-          {tr('channels.members.invite')}
-        </Button>
+        {team ? (
+          <>
+            {canAddAgent(role) && (
+              <Button icon={Bot} className="w-full justify-center" onClick={() => setDialog({ kind: 'addTeamAgent' })}>
+                {tr('team.panel.addMine')}
+              </Button>
+            )}
+            {owner && (
+              <Button
+                icon={UserPlus}
+                variant="ghost"
+                className="w-full justify-center"
+                onClick={() => setDialog({ kind: 'invite' })}
+              >
+                {tr('team.panel.invite')}
+              </Button>
+            )}
+          </>
+        ) : (
+          <Button
+            icon={Bot}
+            className="w-full justify-center"
+            onClick={() =>
+              live ? setDialog({ kind: 'agent', editing: null }) : comingSoon(tr('channels.members.addAgent'))
+            }
+          >
+            {tr('channels.members.addAgent')}
+          </Button>
+        )}
       </div>
       {channelMenu && (
         <ActionMenu
@@ -349,6 +449,23 @@ export function ChannelMembers({
             },
           ]}
           onClose={() => setChannelMenu(null)}
+        />
+      )}
+      {dialog?.kind === 'addTeamAgent' && (
+        <AddTeamAgentDialog channelId={channel.id} candidates={others} onClose={() => setDialog(null)} />
+      )}
+      {dialog?.kind === 'invite' && channel.teamId && (
+        <TeamSettingsDialog teamId={channel.teamId} tab="members" focusInvite onClose={() => setDialog(null)} />
+      )}
+      {dialog?.kind === 'policy' && (
+        <ConfirmDialog
+          title={tr('team.policy.confirmTitle')}
+          description={tr('team.policy.confirmBody')}
+          confirmLabel={tr('team.policy.confirm')}
+          cancelLabel={tr('channels.dialog.cancel')}
+          busy={busy}
+          onConfirm={() => confirm(() => channelActions.setAgentPolicy(channel.id, dialog.member.id, 'team'))}
+          onCancel={() => setDialog(null)}
         />
       )}
       {dialog?.kind === 'agent' && (

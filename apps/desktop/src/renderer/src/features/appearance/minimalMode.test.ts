@@ -27,6 +27,15 @@ describe('极简模式', () => {
     expect(css('globals.css')).toContain("@import './minimal.css';")
   })
 
+  it('紧凑比例两种模式共用（D137）：density.css 不挂在 data-minimal 下，在 minimal.css 之前引入', () => {
+    const density = css('density.css').replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(density).toContain('--density: 0.92')
+    expect(density).not.toContain('data-minimal')
+    const globals = css('globals.css')
+    expect(globals.indexOf("@import './density.css';")).toBeGreaterThan(-1)
+    expect(globals.indexOf("@import './density.css';")).toBeLessThan(globals.indexOf("@import './minimal.css';"))
+  })
+
   it('字号变量都乘了 --density', () => {
     const sizes = [...css('globals.css').matchAll(/ {2}--text-[a-z]+: (calc\([^;]+\));/g)].map(m => m[1])
     expect(sizes).toHaveLength(7)

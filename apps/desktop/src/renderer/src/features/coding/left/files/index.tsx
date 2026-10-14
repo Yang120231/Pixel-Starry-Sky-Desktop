@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Search } from 'lucide-react'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
-import { IconButton, DiffStat, cn } from '@/ui'
+import { DiffStat, cn } from '@/ui'
 import { FileTree } from '@/features/files/FileTree'
 import { useSession } from '@/features/engine'
 import { isDemo } from '@/data'
 import { demo } from '@/data/demo'
-import { codingLayout } from '../../layoutStore'
 import { useCodingSessionId, useCodingWorkspace } from '../../workspace'
 import { useTurnChanges } from '../../ai/useTurnChanges'
 import { openCodeDiff } from '../../editor'
@@ -45,18 +43,7 @@ export function FilesView({ visible }: { visible: boolean }) {
   const ref = ws.ref
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <PanelHeader
-        title={ws.name || tr('coding.files.title')}
-        actions={
-          <IconButton
-            icon={Search}
-            size={26}
-            iconSize={14}
-            label={tr('coding.files.openSearch')}
-            onClick={() => codingLayout.showLeft('search')}
-          />
-        }
-      />
+      <PanelHeader title={ws.name || tr('coding.files.title')} />
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         {ref && turn && files.length > 0 ? (
           <Section

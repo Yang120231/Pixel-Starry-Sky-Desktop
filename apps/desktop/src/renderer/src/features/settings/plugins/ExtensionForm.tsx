@@ -73,7 +73,7 @@ export function ExtensionForm({
   const [version, setVersion] = useState<string>(),
     [busy, setBusy] = useState(false),
     [error, setError] = useState<string | null>(null)
-  const [engines, setEngines] = useState<Array<'claude' | 'codex'>>(e?.engines ?? ['claude'])
+  const [engines, setEngines] = useState<Array<'claude' | 'codex' | 'pixel'>>(e?.engines ?? ['claude'])
   useEffect(() => {
     if (e?.kind === 'skill' && bridge) {
       setBusy(true)

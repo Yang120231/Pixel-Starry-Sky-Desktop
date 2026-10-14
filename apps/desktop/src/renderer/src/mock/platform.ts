@@ -1,5 +1,5 @@
 // 演示模式下的平台目录（--demo）。真实目录来自适配层 /v1/platform/groups（docs/ui/platform-groups.md）
-import type { EngineCatalog, EngineConfig, EngineLocalConfig } from '@pixelsky/protocol'
+import { ENGINES, type EngineCatalog, type EngineConfig, type EngineLocalConfig } from '@pixelsky/protocol'
 import type { EngineLite } from '@/data/types'
 import type { PlatformGroupInfo } from '../../../shared/types/platform-catalog'
 import type { ProvidersState } from '../../../shared/types/providers'
@@ -76,6 +76,26 @@ export const demoEngineStatus: EngineLite[] = [
       platformSwitch: false,
     },
   },
+  {
+    // 演示里也显示为已装好，方便截图（真实状态来自适配器的 checkLaunch）
+    id: 'pixel',
+    name: ENGINES.pixel.name,
+    status: 'ready',
+    version: '0.1.0',
+    message: null,
+    path: 'C:\\Users\\linxia\\AppData\\Roaming\\npm\\pixelsky.cmd',
+    caps: {
+      permissionModes: ['ask', 'edits', 'plan', 'full'],
+      efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+      ultracode: false,
+      fast: false,
+      thinkingSummaries: false,
+      selfUpdate: false,
+      launchSettings: false,
+      pluginCommands: false,
+      platformSwitch: false,
+    },
+  },
 ]
 
 /** 演示模式下 Claude Code 报上来的输出风格（设置 › 本机引擎 › 对话） */
@@ -127,7 +147,7 @@ const demoLocal = (): EngineLocalConfig => ({
 })
 
 /** 演示模式下本机引擎的配置（设置 › 本机引擎 › 详情；只改内存） */
-export const demoEngineConfig: EngineConfig = { claude: demoLocal(), codex: demoLocal() }
+export const demoEngineConfig: EngineConfig = { claude: demoLocal(), codex: demoLocal(), pixel: demoLocal() }
 
 /** 演示用的两条自定义 API（docs/ui/custom-api.md §5 A4） */
 export const demoProviders: ProvidersState = {

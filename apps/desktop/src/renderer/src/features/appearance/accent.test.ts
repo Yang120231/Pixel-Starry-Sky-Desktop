@@ -5,6 +5,8 @@ import { ACCENTS, DEFAULT_ACCENT, parseAccent } from './accent'
 import { searchSettings } from '../settings/searchIndex'
 
 const tokens = readFileSync(fileURLToPath(new URL('../../styles/tokens.css', import.meta.url)), 'utf8')
+const globals = readFileSync(fileURLToPath(new URL('../../styles/globals.css', import.meta.url)), 'utf8')
+
 const ACCENT_VARS = ['--accent', '--accent-on', '--accent-soft', '--accent-text', '--accent-border']
 
 /** 取出某个选择器那一块里的 --accent* 变量 */
@@ -16,6 +18,13 @@ function block(selector: string): Record<string, string> {
 }
 
 describe('强调色预设', () => {
+  it('主按钮、发送按钮、进度条和开着的开关都跟着强调色（D138）', () => {
+    expect(globals).toContain('--color-primary: var(--accent);')
+    expect(globals).toContain('--color-primary-fg: var(--accent-on);')
+    const on = globals.slice(globals.indexOf(".ui-switch[aria-checked='true'] {"))
+    expect(on.slice(0, on.indexOf('}'))).toContain('background: var(--accent);')
+  })
+
   it('缺失、旧值或损坏类型回到跟随配色，有效值原样保留', () => {
     for (const value of [undefined, null, '', 'red', {}, 1]) expect(parseAccent(value)).toBe(DEFAULT_ACCENT)
     for (const value of ACCENTS) expect(parseAccent(value)).toBe(value)

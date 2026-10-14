@@ -69,4 +69,30 @@ describe('提交历史的分支线', () => {
     // 插在最上面的分支头前：只有向下的线
     expect(spacerRow(rows[0]).lines).toEqual([{ kind: 'bottom', from: 0, to: 0, color: 0 }])
   })
+
+  it('同步状态：分界行上边那段线是子提交的状态，下边是自己的；未知状态没有 state', () => {
+    const states = new Map<string, 'local' | 'synced' | 'incoming'>([
+      ['c', 'local'],
+      ['b', 'synced'],
+      ['a', 'synced'],
+    ])
+    const rows = layoutGraph([c('c', 'b'), c('b', 'a'), c('a')], states)
+    expect(rows.map(r => r.state)).toEqual(['local', 'synced', 'synced'])
+    expect(rows[0].lines).toContainEqual(expect.objectContaining({ kind: 'bottom', state: 'local' }))
+    expect(rows[1].lines).toContainEqual(expect.objectContaining({ kind: 'top', state: 'local' }))
+    expect(rows[1].lines).toContainEqual(expect.objectContaining({ kind: 'bottom', state: 'synced' }))
+    expect(rows[2].lines).toContainEqual(expect.objectContaining({ kind: 'top', state: 'synced' }))
+    expect(layoutGraph([c('a')])[0].state).toBeUndefined()
+  })
+
+  it('分叉：远程新提交那条车道汇进共同祖先时保持 incoming', () => {
+    const states = new Map<string, 'local' | 'synced' | 'incoming'>([
+      ['u', 'incoming'],
+      ['h', 'local'],
+      ['a', 'synced'],
+    ])
+    const rows = layoutGraph([c('u', 'a'), c('h', 'a'), c('a')], states)
+    expect(rows[2].lines).toContainEqual(expect.objectContaining({ kind: 'top', from: 0, state: 'incoming' }))
+    expect(rows[2].lines).toContainEqual(expect.objectContaining({ kind: 'top', from: 1, state: 'local' }))
+  })
 })

@@ -1,6 +1,13 @@
 // 发往用户接口的请求（docs/ui/custom-api.md §4.1）：地址拼法、认证头、错误分类。网关、测试连接、读取模型共用
-import type { ProviderProblem, ProviderTestResult } from '../../../shared/types/providers'
+import type { ProviderProblem, ProviderProtocol, ProviderTestResult } from '../../../shared/types/providers'
 import type { ResolvedProvider } from './store'
+
+/** 各协议的请求路径（本机网关和上游共用同一套） */
+export const PROTOCOL_PATH = {
+  anthropic: '/v1/messages',
+  responses: '/v1/responses',
+  chat: '/v1/chat/completions',
+} as const satisfies Record<ProviderProtocol, string>
 
 export type Fetch = (url: string, init: RequestInit) => Promise<Response>
 
@@ -8,9 +15,10 @@ export type Fetch = (url: string, init: RequestInit) => Promise<Response>
  * 本机网关收到的路径换成接口地址：
  * - Anthropic 协议：接口地址不带 /v1（https://api.anthropic.com），Claude Code 发 /v1/messages，原样拼上；
  * - Responses 协议：接口地址带 /v1（https://api.openai.com/v1），Codex 发到网关的 /v1/responses，去掉 /v1 再拼。
+ * - Chat Completions 协议：同 Responses，接口地址就是 /chat/completions 前面的部分（https://api.deepseek.com、https://openrouter.ai/api/v1）。
  */
 export function upstreamUrl(p: Pick<ResolvedProvider, 'protocol' | 'baseUrl'>, path: string): string {
-  const rest = p.protocol === 'responses' ? path.replace(/^\/v1(?=\/|$)/, '') : path
+  const rest = p.protocol !== 'anthropic' ? path.replace(/^\/v1(?=\/|$)/, '') : path
   return p.baseUrl + rest
 }
 
@@ -134,11 +142,13 @@ export async function testProvider(p: ResolvedProvider, fetch: Fetch): Promise<P
     } catch (err) {
       return { ok: false, problem: 'other', status: null, message: (err as Error).message }
     }
-  const url = upstreamUrl(p, p.protocol === 'anthropic' ? '/v1/messages' : '/v1/responses')
+  const url = upstreamUrl(p, PROTOCOL_PATH[p.protocol])
   const body =
     p.protocol === 'anthropic'
       ? { model, max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] }
-      : { model, input: 'ping', max_output_tokens: 16 }
+      : p.protocol === 'chat'
+        ? { model, messages: [{ role: 'user', content: 'ping' }], max_tokens: 16 }
+        : { model, input: 'ping', max_output_tokens: 16 }
   let res: Response
   try {
     res = await fetch(url, {

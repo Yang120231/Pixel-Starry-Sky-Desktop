@@ -157,7 +157,13 @@ const ROUTE_LABEL: Record<UsageRoute, string> = {
   },
 }
 
-const ENGINE_LABEL: Record<string, string> = { claude: 'Claude Code', codex: 'Codex' }
+const ENGINE_LABEL: Record<string, string> = {
+  claude: 'Claude Code',
+  codex: 'Codex',
+  get pixel() {
+    return tr('engine.pixel.name')
+  },
+}
 
 /** 分布表、筛选圆片里显示的名称 */
 export function dimLabel(dim: UsageDimension, key: string): string {

@@ -3,7 +3,7 @@ import { tr } from '../../i18n/core'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { ChevronDown, FolderPlus, X } from 'lucide-react'
 import { IconButton, cn, useComingSoon } from '@/ui'
-import { setSidebarPrefs, useSidebarPrefs } from '@/features/appearance/sidebar'
+import { recentOpen, setSidebarPrefs, useShortWindow, useSidebarPrefs } from '@/features/appearance/sidebar'
 import { getSidebarIcon } from '@/features/appearance/sidebarIcons'
 import { addProject, isLive, recentSpansProjects, useSidebarData } from '@/features/engine'
 import { SidebarHeader } from './SidebarHeader'
@@ -35,6 +35,7 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
   useI18n()
   const comingSoon = useComingSoon()
   const prefs = useSidebarPrefs()
+  const recentShown = recentOpen(prefs, useShortWindow())
   const recentId = useId()
   // 演示模式是 mock 数据，否则是引擎里的真实项目和会话
   const { projects, pinned: pinnedSessions, recent } = useSidebarData()
@@ -157,10 +158,10 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
           <h3 className="shrink-0">
             <button
               type="button"
-              aria-expanded={prefs.recentExpanded}
+              aria-expanded={recentShown}
               aria-controls={recentId}
-              title={tr(prefs.recentExpanded ? 'sidebar.recent.collapse' : 'sidebar.recent.expand')}
-              onClick={() => setSidebarPrefs({ recentExpanded: !prefs.recentExpanded })}
+              title={tr(recentShown ? 'sidebar.recent.collapse' : 'sidebar.recent.expand')}
+              onClick={() => setSidebarPrefs({ recentExpanded: !recentShown, recentChosen: true })}
               className="group flex h-8 w-full items-center gap-2 rounded-md px-2 text-label font-medium text-fg-muted hover:bg-hover hover:text-fg"
             >
               <span className="shrink-0">{tr('sidebar.Sidebar.recentTasks')}</span>
@@ -169,16 +170,16 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
                 size={14}
                 strokeWidth={1.5}
                 className="sidebar-history-chevron shrink-0"
-                data-expanded={prefs.recentExpanded}
+                data-expanded={recentShown}
               />
             </button>
           </h3>
           <div
             id={recentId}
             className="sidebar-history-content min-h-0 overflow-hidden"
-            data-expanded={prefs.recentExpanded}
-            aria-hidden={!prefs.recentExpanded}
-            inert={!prefs.recentExpanded}
+            data-expanded={recentShown}
+            aria-hidden={!recentShown}
+            inert={!recentShown}
           >
             <div className="min-h-0 overflow-x-hidden overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <div className="flex flex-col gap-px">

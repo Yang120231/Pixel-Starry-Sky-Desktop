@@ -83,11 +83,13 @@ export type {
 } from './billing'
 export {
   IMAGE_MEDIA_TYPES,
+  IMAGE_PLACEHOLDER,
   MAX_IMAGE_BYTES,
   MAX_IMAGE_COUNT,
   MAX_IMAGE_TOTAL,
   imageMediaType,
   validateImages,
+  withoutShownImagePlaceholders,
 } from './images'
 export {
   FILE_ENCODINGS,

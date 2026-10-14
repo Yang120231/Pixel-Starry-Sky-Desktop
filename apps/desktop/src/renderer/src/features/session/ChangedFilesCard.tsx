@@ -1,7 +1,7 @@
 import { translateMessage } from '../../i18n/core'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
-import { ChevronRight, FileDiff, SquareArrowOutUpRight, Undo2 } from 'lucide-react'
+import { CheckCheck, ChevronRight, FileDiff, ScanEye, SquareArrowOutUpRight, Undo2 } from 'lucide-react'
 import { Button, DiffStat, IconButton, cn, useComingSoon, useToast } from '@/ui'
 import { DiffView } from '@/ui/code/DiffView'
 import { changedFiles, type ChangedFile, type ChangedFiles } from '@/data'
@@ -146,13 +146,13 @@ ${path}${ref && !isRemoteRef(ref) ? `\n${tr('path.hintDiff')}` : ''}`
   return (
     <section
       data-changes-card
-      className={cn('rounded-xl border border-line-card bg-surface shadow-sm', className)}
+      className={cn('@container/changes rounded-xl border border-line-card bg-surface shadow-sm', className)}
       style={style}
     >
       {/* 一行标题（docs/ui/conversation-concise.md §3 E） */}
       <div className="flex min-h-10 items-center gap-2 px-4 pt-1.5 pb-0.5">
         <FileDiff size={15} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
-        <span className="min-w-0 truncate text-list font-medium text-fg">
+        <span data-changes-title className="min-w-[5.5em] shrink truncate text-list font-medium text-fg">
           {tr(
             data.files.length === 1 ? 'session.ChangedFilesCard.editedFile' : 'session.ChangedFilesCard.editedFiles',
             { n: data.files.length },
@@ -160,24 +160,42 @@ ${path}${ref && !isRemoteRef(ref) ? `\n${tr('path.hintDiff')}` : ''}`
         </span>
         <DiffStat added={data.added} removed={data.removed} className="shrink-0 text-meta" />
         <span className="flex-1" />
+        {/* 卡片窄于 440px：三个按钮只剩图标（文字进 title / aria-label），标题才不会被挤没 */}
         {isDemo && (
           <Button
             variant="ghost"
             icon={Undo2}
-            className="h-7 px-2 text-meta"
+            className="h-7 px-2 text-meta @max-[440px]/changes:px-1.5"
+            title={tr('session.ChangedFilesCard.undo')}
+            aria-label={tr('session.ChangedFilesCard.undo')}
             onClick={() => comingSoon(tr('session.ChangedFilesCard.undo'))}
           >
-            {tr('session.ChangedFilesCard.undo')}
+            <span className="@max-[440px]/changes:hidden">{tr('session.ChangedFilesCard.undo')}</span>
           </Button>
         )}
         {code && onKeepAll && (
-          <Button variant="ghost" className="h-7 px-2 text-meta" onClick={onKeepAll}>
-            {tr('coding.review.bar.keepAll')}
+          <Button
+            variant="ghost"
+            className="h-7 px-2 text-meta @max-[440px]/changes:px-1.5"
+            title={tr('coding.review.bar.keepAll')}
+            aria-label={tr('coding.review.bar.keepAll')}
+            onClick={onKeepAll}
+          >
+            <CheckCheck size={14} strokeWidth={1.5} className="hidden @max-[440px]/changes:block" />
+            <span className="@max-[440px]/changes:hidden">{tr('coding.review.bar.keepAll')}</span>
           </Button>
         )}
         {review && (
-          <Button variant="outline" pill className="h-7 px-3 text-meta" onClick={review}>
-            {tr('session.ChangedFilesCard.review')}
+          <Button
+            variant="outline"
+            pill
+            className="h-7 px-3 text-meta @max-[440px]/changes:px-1.5"
+            title={tr('session.ChangedFilesCard.review')}
+            aria-label={tr('session.ChangedFilesCard.review')}
+            onClick={review}
+          >
+            <ScanEye size={14} strokeWidth={1.5} className="hidden @max-[440px]/changes:block" />
+            <span className="@max-[440px]/changes:hidden">{tr('session.ChangedFilesCard.review')}</span>
           </Button>
         )}
       </div>

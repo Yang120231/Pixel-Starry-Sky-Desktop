@@ -7,10 +7,12 @@ import { CARD_STYLE } from '@/features/session/Composer'
 import { useComposerDraft } from '@/features/engine/drafts'
 import { isDemo } from '@/data'
 import type { Channel, ChannelMember } from '@/data/types'
+import type { TeamRole } from '../../../../shared/types/channels'
 import type { Quotable } from './ChannelMessage'
 import { channelsLive } from './store'
 import { excerpt, filterMentionable, insertMention, mentionAt } from './model'
 import { MentionMenu } from './MentionMenu'
+import { mentionNote } from './teamModel'
 
 const LINE_HEIGHT = 24
 const MAX_ROWS = 8
@@ -23,6 +25,8 @@ export function ChannelComposer({
   replyTo,
   replyAuthor,
   followUp,
+  role,
+  offline = false,
   onSend,
   onCancelReply,
   inputRef,
@@ -35,6 +39,10 @@ export function ChannelComposer({
   replyAuthor: ChannelMember | undefined
   /** 引用的是任务卡或任务结果：这条消息是给那项活追加要求（docs/ui/channels-phase-b.md §7.1） */
   followUp: { assignee: string; title: string } | null
+  /** Phase C：我在这个团队里的角色（观察者不能派活） */
+  role?: TeamRole
+  /** Phase C：团队频道连不上云端，不能发送 */
+  offline?: boolean
   /** 发出去了才清空输入框；失败时抛出原因 */
   onSend: (text: string) => Promise<void>
   onCancelReply: () => void
@@ -56,7 +64,8 @@ export function ChannelComposer({
   const menuOpen = !!mention && dismissed !== mention.start
   const toast = useToast()
   const [sending, setSending] = useState(false)
-  const canSend = value.trim().length > 0 && !sending
+  const canSend = value.trim().length > 0 && !sending && !offline
+  const team = channel.scope === 'team'
   const hasAgents = members.some(m => m.kind === 'agent')
 
   // 自动增高，最多 8 行
@@ -74,6 +83,8 @@ export function ChannelComposer({
   const choose = (index: number) => {
     const member = candidates[index]
     if (!mention || !member) return
+    // 观察者不能派活：@ AI 成员只当文字，菜单里灰掉
+    if (team && mentionNote(member, role) === 'observer') return
     const next = insertMention(value, { start: mention.start, end: caret }, member.name)
     setValue(next.text)
     setCaret(next.caret)
@@ -130,7 +141,9 @@ export function ChannelComposer({
   return (
     <div className="conversation-inset conversation-reading shrink-0 pb-4">
       <div className="relative">
-        {menuOpen && <MentionMenu id={menuId} members={candidates} selected={selected} onChoose={choose} />}
+        {menuOpen && (
+          <MentionMenu id={menuId} members={candidates} selected={selected} onChoose={choose} team={team} role={role} />
+        )}
         <div className={cn(CARD_STYLE, 'overflow-hidden')}>
           {replyTo && (
             <div className="flex min-w-0 items-center gap-2 border-b border-line-subtle py-1 pr-1.5 pl-3 text-meta text-fg-muted">
@@ -161,10 +174,17 @@ export function ChannelComposer({
               rows={1}
               value={value}
               aria-label={tr('channels.composer.label')}
-              placeholder={tr(
-                channelsLive && !hasAgents ? 'channels.composer.placeholderNoAgents' : 'channels.composer.placeholder',
-                { name: channel.name },
-              )}
+              disabled={offline}
+              placeholder={
+                offline
+                  ? tr('team.composer.offline')
+                  : tr(
+                      channelsLive && !hasAgents
+                        ? 'channels.composer.placeholderNoAgents'
+                        : 'channels.composer.placeholder',
+                      { name: channel.name },
+                    )
+              }
               role="combobox"
               aria-autocomplete="list"
               aria-expanded={menuOpen}

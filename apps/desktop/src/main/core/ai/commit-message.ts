@@ -5,7 +5,15 @@ import type { AiCommitRequest, AiCommitResult, AiProblem } from '../../../shared
 import type { GitCommitContext, GitContextFile } from '../../../shared/types/project-tools'
 import type { WorkspaceRef } from '../../../shared/types/workspace'
 import type { ResolvedProvider } from '../providers/store'
-import { classifyError, classifyStatus, providerHeaders, redact, upstreamUrl, type Fetch } from '../providers/upstream'
+import {
+  classifyError,
+  classifyStatus,
+  providerHeaders,
+  redact,
+  upstreamUrl,
+  type Fetch,
+  PROTOCOL_PATH,
+} from '../providers/upstream'
 import { oneShotBody, parseReply, type OneShotProtocol } from './oneshot'
 
 /** 提交信息的上限（和 git 提交那边一致） */
@@ -201,7 +209,7 @@ export async function writeCommitMessage(
   const p = req.providerId ? deps.provider(req.providerId) : null
   if (!p) return fail('provider', 'missing')
   if (!p.apiKey) return fail('provider', 'noKey')
-  const url = upstreamUrl(p, p.protocol === 'anthropic' ? '/v1/messages' : '/v1/responses')
+  const url = upstreamUrl(p, PROTOCOL_PATH[p.protocol])
   let res: Response
   try {
     res = await deps.fetch(url, {

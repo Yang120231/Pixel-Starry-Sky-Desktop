@@ -365,10 +365,13 @@ function Row({
   title?: string
   action?: ReactNode
 }) {
-  useI18n()
+  const { locale } = useI18n()
   return (
     <div className="flex min-h-10 items-center gap-4 border-b border-line-subtle px-4 py-1.5 last:border-b-0">
-      <dt className="w-20 shrink-0 text-ui text-fg-muted">{label}</dt>
+      {/* 英文标签比中文长：标签列放宽，只在词与词之间换行，不压到右边的值 */}
+      <dt className={cn('shrink-0 text-ui leading-snug text-fg-muted', locale === 'en-US' ? 'w-32' : 'w-20')}>
+        {label}
+      </dt>
       <dd
         title={title}
         className={`selectable min-w-0 flex-1 truncate text-ui text-fg ${mono ? 'font-mono text-meta' : ''}`}

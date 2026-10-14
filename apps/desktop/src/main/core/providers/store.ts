@@ -165,7 +165,7 @@ export class ProviderStore {
     try {
       const p = raw as StoredProvider
       if (!p || typeof p.id !== 'string' || !PROVIDER_ID.test(p.id)) return []
-      const protocol: ProviderProtocol = p.protocol === 'responses' ? 'responses' : 'anthropic'
+      const protocol: ProviderProtocol = p.protocol === 'responses' || p.protocol === 'chat' ? p.protocol : 'anthropic'
       return [
         {
           id: p.id,
@@ -254,7 +254,8 @@ export class ProviderStore {
     if (input.id !== undefined && !existing) throw new Error('这个接口已经删除')
     if (!existing && !draft && this.providers.length >= MAX_PROVIDERS)
       throw new Error(`最多添加 ${MAX_PROVIDERS} 个接口`)
-    if (input.protocol !== 'anthropic' && input.protocol !== 'responses') throw new Error('请选择协议')
+    if (input.protocol !== 'anthropic' && input.protocol !== 'responses' && input.protocol !== 'chat')
+      throw new Error('请选择协议')
     const protocol = input.protocol
     if (existing && existing.protocol !== protocol) throw new Error('已有接口不能换协议，请新建一个')
     const template: ProviderTemplate =

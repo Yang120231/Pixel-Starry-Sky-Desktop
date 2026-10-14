@@ -127,7 +127,7 @@ function SyncButton({ target, status }: { target: WorkspaceRef; status: GitStatu
     .join(' ')
   const busyReason = status.busySessions > 0 ? tr('git.busy') : undefined
   return (
-    <span className="relative inline-flex shrink-0">
+    <span data-composer-sync-wrap className="relative inline-flex shrink-0">
       <button
         type="button"
         data-composer-sync
@@ -184,7 +184,7 @@ function CommitButton({ target, status }: { target: WorkspaceRef; status: GitSta
   const [open, setOpen] = useState(false)
   const conflicts = status.conflicted.length > 0
   return (
-    <span className="relative inline-flex shrink-0">
+    <span data-composer-commit-wrap className="relative inline-flex shrink-0">
       <button
         type="button"
         data-composer-commit

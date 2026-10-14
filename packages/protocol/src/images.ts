@@ -5,6 +5,26 @@ export const MAX_IMAGE_BYTES = 10 * 1024 * 1024
 export const MAX_IMAGE_TOTAL = 20 * 1024 * 1024
 export const MAX_IMAGE_COUNT = 5
 
+/** 工具结果里图片在文字输出中的占位（纯文本里也看得出这里有图；图片本身另放在 images） */
+export const IMAGE_PLACEHOLDER = '[图片]'
+
+/** 界面显示用：已经作为图片显示出来的那几张，去掉它们在文字输出里的占位行；剩下没内容就返回空串 */
+export function withoutShownImagePlaceholders(output: string, shown: number): string {
+  if (!output || shown <= 0) return output
+  let left = shown
+  const rest = output
+    .split('\n')
+    .filter(line => {
+      if (left > 0 && line.trim() === IMAGE_PLACEHOLDER) {
+        left--
+        return false
+      }
+      return true
+    })
+    .join('\n')
+  return rest.trim() ? rest : ''
+}
+
 export function imageMediaType(data: Uint8Array): ImageAttachment['mediaType'] | null {
   const begins = (...bytes: number[]): boolean => bytes.every((byte, i) => data[i] === byte)
   if (begins(137, 80, 78, 71, 13, 10, 26, 10)) return 'image/png'

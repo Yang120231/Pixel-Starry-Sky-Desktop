@@ -17,6 +17,7 @@ import { useSessionActions } from '@/features/sidebar/SessionActions'
 import { openRightTab } from '@/features/panel/workspaceStore'
 import { useBeginTabDrag } from './drag'
 import { useTabStripScroll } from './tabScroll'
+import { TabStripArrows } from './TabStripArrows'
 import { dropProblem, type DropTarget } from './drop'
 
 type TabStatus = 'running' | 'waiting' | 'unread' | 'idle'
@@ -255,31 +256,34 @@ function TabStrip({ leaf, dim, areaSize }: { leaf: Leaf; dim: boolean; areaSize:
 
   return (
     <div className={cn('pane-head-content flex items-center pr-2', dim && 'opacity-55')}>
-      <div
-        ref={strip}
-        data-tab-strip
-        role="tablist"
-        aria-label={tr('panes.PaneView.conversationTabsDragTo')}
-        className="pane-tab-strip relative flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-2 pt-1 pb-1.5 [scrollbar-width:none]"
-        onContextMenu={e => {
-          e.preventDefault()
-          setBlankMenu({ x: e.clientX, y: e.clientY })
-        }}
-      >
-        {leaf.tabs.map(tab => (
-          <Tab
-            key={tab}
-            tab={tab}
-            leafId={leaf.id}
-            active={tab === leaf.active}
-            entering={isNew(tab)}
-            onMenu={(x, y) => setMenu({ tab, x, y })}
-            refCb={el => {
-              if (el) refs.current.set(tab, el)
-              else refs.current.delete(tab)
-            }}
-          />
-        ))}
+      <div className="tab-strip-wrap">
+        <div
+          ref={strip}
+          data-tab-strip
+          role="tablist"
+          aria-label={tr('panes.PaneView.conversationTabsDragTo')}
+          className="pane-tab-strip relative flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-2 pt-1 pb-1.5 [scrollbar-width:none]"
+          onContextMenu={e => {
+            e.preventDefault()
+            setBlankMenu({ x: e.clientX, y: e.clientY })
+          }}
+        >
+          {leaf.tabs.map(tab => (
+            <Tab
+              key={tab}
+              tab={tab}
+              leafId={leaf.id}
+              active={tab === leaf.active}
+              entering={isNew(tab)}
+              onMenu={(x, y) => setMenu({ tab, x, y })}
+              refCb={el => {
+                if (el) refs.current.set(tab, el)
+                else refs.current.delete(tab)
+              }}
+            />
+          ))}
+        </div>
+        <TabStripArrows strip={strip} />
       </div>
       {/* 新建按钮固定在标签栏右边，标签多了也不会被挤出去；上下留白和标签栏一样，和标签对齐 */}
       <span className="flex shrink-0 pt-1 pb-1.5">

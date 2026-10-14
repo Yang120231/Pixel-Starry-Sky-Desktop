@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useState } from 'react'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import { CollapsibleSlot, ResizeHandle } from '@/ui'
@@ -7,7 +7,7 @@ import { usePage } from '@/features/layout/page'
 import { useEnterCodingMode } from './enter'
 import { useCodingRouting } from './routing'
 import { PANEL_LIMITS, fitCoding } from './layoutModel'
-import { codingLayout, useCodingLayout } from './layoutStore'
+import { codingLayout, reportCodingFit, useCodingLayout, useKeepLeft } from './layoutStore'
 import { CodingTopBar } from './shell/CodingTopBar'
 import { ToolStripe } from './shell/ToolStripe'
 import { LeftArea } from './shell/LeftArea'
@@ -40,7 +40,11 @@ export function CodingLayout() {
   const prefs = useCodingLayout()
   const viewport = useViewport()
   const onWorkbench = usePage() === 'workbench'
-  const fit = fitCoding(prefs, viewport)
+  const keepLeft = useKeepLeft()
+  const fit = fitCoding(prefs, viewport, { keepLeft })
+  useLayoutEffect(() => {
+    reportCodingFit(fit)
+  })
   return (
     <div data-coding-layout className="flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-app text-fg">
       <CodingTopBar />

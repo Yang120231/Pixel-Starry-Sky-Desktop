@@ -21,6 +21,7 @@ import { initPlatform, validateQueuedInput } from '../platform/platform'
 import { initProviders } from '../providers/providers'
 import { initAi } from '../ai/ipc'
 import { Extensions } from '../extensions/ipc'
+import { bundledPixelCli } from './pixel-cli'
 import { initTerminalIpc } from '../terminal/ipc'
 import { initMachines } from '../machines/service'
 import { machineOf } from '../machines/identity'
@@ -55,6 +56,7 @@ export async function initEngine(ctx: AppContext): Promise<void> {
   const extensions = new Extensions(ctx)
   const h = new EngineHost({
     dataDir: join(app.getPath('userData'), 'engine'),
+    pixelCli: bundledPixelCli(),
     // 有 SSH 机器时由它合并本机与远端的项目 / 会话再广播
     emit: (e: HostEvent) => {
       logHostEvent(e)

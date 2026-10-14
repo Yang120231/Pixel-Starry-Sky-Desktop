@@ -58,6 +58,11 @@ export function revealTarget(
   return Math.abs(target - v.scrollLeft) < 1 ? null : target
 }
 
+/** 点箭头翻一页：翻 80% 可视宽度、至少 80px，夹在可滚范围内；from 是当前目标（缓动中用终点） */
+export function pageTarget(v: ScrollView, dir: -1 | 1, from = v.scrollLeft): number {
+  return clampScroll(v, from + dir * Math.max(80, v.clientWidth * 0.8))
+}
+
 /** 缓动的一帧：走剩下距离的 22%，差不到半像素时直接到位 */
 export function easeStep(pos: number, to: number): number {
   const diff = to - pos
@@ -129,7 +134,7 @@ export function useTabStripScroll(ref: RefObject<HTMLElement | null>, active: st
     // 平移：中键在哪都行（包括标签上），左键只在空白处（标签上左键是拖动排序）
     let pan: { id: number; x: number; scroll: number; moved: boolean } | null = null
     const down = (e: PointerEvent): void => {
-      const onTab = (e.target as HTMLElement).closest('[data-tab-id], button')
+      const onTab = (e.target as HTMLElement).closest('[data-tab-id], [role="tab"], button')
       if (!(e.button === 1 || (e.button === 0 && !onTab)) || el.scrollWidth <= el.clientWidth) return
       pan = { id: e.pointerId, x: e.clientX, scroll: el.scrollLeft, moved: false }
     }
@@ -204,6 +209,10 @@ export function useTabStripScroll(ref: RefObject<HTMLElement | null>, active: st
     seen.current = { active, tabs: new Set(tabs) }
     if (!before) reveal(el, false)
     else if (shouldReveal(before, active, tabs)) reveal(el, true)
+    // 新增非当前标签时不滚，但内容变宽了：淡出和箭头也要跟着刷新
+    const { left, right } = overflowEdges(el)
+    el.toggleAttribute('data-fade-left', left)
+    el.toggleAttribute('data-fade-right', right)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- tabs 用 tabsKey 比较内容
   }, [ref, active, tabsKey])
 }
@@ -221,6 +230,13 @@ const animators = new WeakMap<
   HTMLElement,
   { animateTo: (x: number) => void; stop: () => void; pending: () => number | null }
 >()
+
+/** 点箭头：标签栏往左 / 右翻一页（缓动；连点时从上一次的终点接着走） */
+export function scrollTabStrip(el: HTMLElement, dir: -1 | 1): void {
+  const anim = animators.get(el)
+  if (!anim) return
+  anim.animateTo(pageTarget(el, dir, anim.pending() ?? el.scrollLeft))
+}
 
 function reveal(el: HTMLElement, smooth: boolean): void {
   const tab = el.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')

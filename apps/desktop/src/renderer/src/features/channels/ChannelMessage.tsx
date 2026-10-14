@@ -111,6 +111,11 @@ function AuthorLine({ member, at }: { member: ChannelMember | undefined; at: num
           {tr('channels.ai')}
         </span>
       )}
+      {member?.kind === 'agent' && member.mine === false && member.ownerName && (
+        <span className="shrink-0 text-meta text-fg-faint">
+          · {tr('team.panel.agentOf', { owner: member.ownerName })}
+        </span>
+      )}
       {meta && (
         <span title={meta} className="min-w-0 truncate text-meta text-fg-faint">
           {meta}

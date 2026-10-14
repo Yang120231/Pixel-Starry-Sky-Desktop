@@ -11,6 +11,7 @@ import type {
   TodoStep,
   ToolKind,
 } from '@pixelsky/protocol'
+import { IMAGE_PLACEHOLDER } from '@pixelsky/protocol'
 import { diffAdded, diffFromHunks, diffText, type PatchHunk } from '../diff'
 import { MAX_OUTPUT, clip } from '../output'
 import { str } from './shape'
@@ -198,7 +199,7 @@ export function resultText(content: unknown): string {
       .map(c => {
         const b = c as Input
         if (b.type === 'text') return str(b.text)
-        if (b.type === 'image') return '[图片]'
+        if (b.type === 'image') return IMAGE_PLACEHOLDER
         return ''
       })
       .filter(Boolean)

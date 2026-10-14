@@ -35,6 +35,8 @@ export interface EngineHostOptions {
   extensions?: (record: SessionRecord) => ExtensionLaunch
   /** 宿主为单个会话提供平台代理环境，空值使用本机认证。 */
   sessionEnv?: (record: SessionRecord) => NodeJS.ProcessEnv
+  /** 像素星空命令行的自带入口（开发时 packages/cli/src/cli.ts；PIXELSKY_CLI_BIN 优先于它，再其次是 PATH 上的 pixelsky） */
+  pixelCli?: string | null
   /** 保存数据的目录（Electron 里是 userData/engine） */
   dataDir: string
   /** 广播事件给界面 */

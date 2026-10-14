@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, type JSX } from 'react'
 import { tr } from '@/i18n/core'
 import type { OpenFile } from '@/features/files/store'
 import { useToast } from '@/ui'
-import { useProblems } from '../../problems'
+import { PROBLEMS_READY, useProblems } from '../../problems'
 import { codeLens, LENS_MAX_LINES } from './codeLens'
 import { overviewRuler } from './overviewRuler'
 import { enclosingSymbol } from './symbolsModel'
@@ -68,33 +68,35 @@ export function SymbolCrumb({ tab }: { tab: OpenFile }): JSX.Element | null {
           <span className="truncate text-fg">{symbol.name}</span>
         </span>
       )}
-      <span className="ml-auto flex shrink-0 items-center gap-1.5">
-        <span
-          className={problems.errors ? 'text-danger' : undefined}
-          title={tr('coding.editor.extras.errors', { n: problems.errors })}
-        >
-          {problems.errors}E
+      {PROBLEMS_READY && (
+        <span className="ml-auto flex shrink-0 items-center gap-1.5">
+          <span
+            className={problems.errors ? 'text-danger' : undefined}
+            title={tr('coding.editor.extras.errors', { n: problems.errors })}
+          >
+            {problems.errors}E
+          </span>
+          <span
+            className={problems.warnings ? 'text-warn' : undefined}
+            title={tr('coding.editor.extras.warnings', { n: problems.warnings })}
+          >
+            {problems.warnings}W
+          </span>
+          {/* 问题检查还没接入，上下箭头先不能点 */}
+          <button type="button" disabled title={pending} aria-label={pending} className="opacity-40">
+            <ChevronUp size={14} strokeWidth={1.5} className="shrink-0" />
+          </button>
+          <button
+            type="button"
+            disabled
+            title={tr('coding.editor.extras.nextProblem')}
+            aria-label={tr('coding.editor.extras.nextProblem')}
+            className="opacity-40"
+          >
+            <ChevronDown size={14} strokeWidth={1.5} className="shrink-0" />
+          </button>
         </span>
-        <span
-          className={problems.warnings ? 'text-warn' : undefined}
-          title={tr('coding.editor.extras.warnings', { n: problems.warnings })}
-        >
-          {problems.warnings}W
-        </span>
-        {/* 问题检查还没接入，上下箭头先不能点 */}
-        <button type="button" disabled title={pending} aria-label={pending} className="opacity-40">
-          <ChevronUp size={14} strokeWidth={1.5} className="shrink-0" />
-        </button>
-        <button
-          type="button"
-          disabled
-          title={tr('coding.editor.extras.nextProblem')}
-          aria-label={tr('coding.editor.extras.nextProblem')}
-          className="opacity-40"
-        >
-          <ChevronDown size={14} strokeWidth={1.5} className="shrink-0" />
-        </button>
-      </span>
+      )}
     </span>
   )
 }

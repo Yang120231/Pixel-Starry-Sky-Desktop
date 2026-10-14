@@ -36,7 +36,11 @@ const TEMPLATES: Record<Exclude<ProviderTemplate, 'custom'>, { protocol: Provide
 }
 
 export const protocolLabel = (p: ProviderProtocol): string =>
-  p === 'anthropic' ? tr('customApi.protocolAnthropic') : tr('customApi.protocolResponses')
+  p === 'anthropic'
+    ? tr('customApi.protocolAnthropic')
+    : p === 'chat'
+      ? tr('customApi.protocolChat')
+      : tr('customApi.protocolResponses')
 
 export function CustomApiSettings() {
   useI18n()
@@ -319,6 +323,11 @@ function ProviderDialog({ provider, close }: { provider: ProviderView | null; cl
                   value: 'responses',
                   label: tr('customApi.protocolResponses'),
                   hint: tr('customApi.protocolForCodex'),
+                },
+                {
+                  value: 'chat',
+                  label: tr('customApi.protocolChat'),
+                  hint: tr('customApi.protocolForChat'),
                 },
               ]}
             />

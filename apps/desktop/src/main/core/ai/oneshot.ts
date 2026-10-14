@@ -2,7 +2,7 @@
 // 只管请求体和读回复：Anthropic Messages、OpenAI Responses 两种格式；地址、认证头由调用方给（云端和自定义 API 不同）
 import type { AiUsage } from '../../../shared/types/ai'
 
-export type OneShotProtocol = 'anthropic' | 'responses'
+export type OneShotProtocol = 'anthropic' | 'responses' | 'chat'
 
 export interface OneShotRequest {
   protocol: OneShotProtocol
@@ -18,6 +18,16 @@ export interface OneShotReply {
 }
 
 export function oneShotBody(r: OneShotRequest): Record<string, unknown> {
+  if (r.protocol === 'chat')
+    return {
+      model: r.model,
+      max_tokens: r.maxTokens,
+      stream: false,
+      messages: [
+        { role: 'system', content: r.system },
+        { role: 'user', content: r.prompt },
+      ],
+    }
   return r.protocol === 'anthropic'
     ? { model: r.model, max_tokens: r.maxTokens, system: r.system, messages: [{ role: 'user', content: r.prompt }] }
     : { model: r.model, instructions: r.system, input: r.prompt, max_output_tokens: r.maxTokens, store: false }
@@ -46,6 +56,21 @@ export function parseReply(protocol: OneShotProtocol, body: unknown): OneShotRep
             output: count(u.output_tokens),
             cacheRead: count(u.cache_read_input_tokens),
             cacheWrite: count(u.cache_creation_input_tokens),
+          }
+        : null,
+    }
+  }
+  if (protocol === 'chat') {
+    const message = record(record(list(json.choices)[0]).message)
+    const cached = count(record(u.prompt_tokens_details).cached_tokens)
+    return {
+      text: typeof message.content === 'string' ? message.content : '',
+      usage: json.usage
+        ? {
+            input: Math.max(0, count(u.prompt_tokens) - cached),
+            output: count(u.completion_tokens),
+            cacheRead: cached,
+            cacheWrite: 0,
           }
         : null,
     }

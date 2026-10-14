@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { CollapsibleSlot } from '@/ui'
 import { OPEN_SESSION_EVENT, bridge as engineBridge } from '@/features/engine'
 import type { AgentMember, ChannelTask } from '@/data/types'
-import { channelActions, channelsLive, selectedChannel, selfMember, useChannels } from './store'
+import { channelActions, channelsLive, selectedChannel, selfIdIn, useChannels } from './store'
 import type { Quotable } from './ChannelMessage'
 import type { TaskCardActions } from './ChannelTaskCard'
 import { ChannelList } from './ChannelList'
@@ -11,6 +11,7 @@ import { ChannelTimeline } from './ChannelTimeline'
 import { ChannelComposer } from './ChannelComposer'
 import { ChannelMembers } from './ChannelMembers'
 import { ChannelsEmpty } from './ChannelsEmpty'
+import { myRole } from './teamModel'
 
 const MEMBERS_WIDTH = 300
 const NO_MESSAGES: never[] = []
@@ -39,7 +40,10 @@ export function ChannelsPage({
   const newFromMap = useChannels(s => s.newFrom)
   const moreMap = useChannels(s => s.more)
   const channel = useChannels(selectedChannel)
-  const self = useChannels(selfMember)
+  const selfId = useChannels(s => selfIdIn(s, selectedChannel(s)?.memberIds))
+  const hasTeams = useChannels(s => s.teams.length > 0 || s.invites.length > 0)
+  const connection = useChannels(s => s.teamsConnection)
+  const role = useChannels(s => myRole(s.teams, selectedChannel(s)?.teamId))
   const messages = (channel && messageMap[channel.id]) || NO_MESSAGES
   const channelMembers = useMemo(
     () => (channel ? members.filter(m => channel.memberIds.includes(m.id)) : []),
@@ -74,7 +78,9 @@ export function ChannelsPage({
 
   if (!channel)
     return (
-      <div className="absolute inset-0 flex min-w-0">
+      <div className="@container absolute inset-0 flex min-w-0">
+        {/* 加入了团队或收到邀请时，列表要留着（团队段、邀请卡） */}
+        {hasTeams && <ChannelList channels={channels} selectedId="" onSelect={channelActions.select} agents={agents} />}
         <ChannelsEmpty agents={agents} />
       </div>
     )
@@ -85,6 +91,8 @@ export function ChannelsPage({
   }
   const taskActions: TaskCardActions = {
     onOpenSession: openSession,
+    selfId,
+    onApprove: channelActions.approveTask,
     ...(channelsLive
       ? {
           onAction: channelActions.task,
@@ -119,7 +127,7 @@ export function ChannelsPage({
           key={channel.id}
           channel={channel}
           members={channelMembers}
-          selfId={self?.id ?? null}
+          selfId={selfId}
           replyTo={replyTo}
           replyAuthor={
             replyTo
@@ -127,6 +135,8 @@ export function ChannelsPage({
               : undefined
           }
           followUp={followUp}
+          role={role}
+          offline={channel.scope === 'team' && connection === 'offline'}
           onSend={text => channelActions.send(channel.id, text)}
           onCancelReply={() => channelActions.setReplyTo(channel.id, null)}
           inputRef={composer}

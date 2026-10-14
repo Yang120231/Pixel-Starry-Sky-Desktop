@@ -11,3 +11,8 @@ allowBuilds:
   # SSH uses the pure JavaScript implementation; optional native accelerators are not required.
   cpu-features: false
   ssh2: false
+  '@google/genai': false
+  protobufjs: false
+
+patchedDependencies:
+  '@earendil-works/pi-coding-agent@1.2.0': patches/@earendil-works__pi-coding-agent@1.2.0.patch

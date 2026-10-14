@@ -7,6 +7,7 @@ import {
   toggleBottomTab,
   toggleLeftView,
   toggleRightView,
+  type CodingFit,
 } from './layoutModel'
 import type { BottomTab, CodingLayoutPrefs, CodingPanel, LeftView, RightView } from './types'
 
@@ -64,11 +65,56 @@ export function useCodingLayout(): CodingLayoutPrefs {
   return useSyncExternalStore(subscribe, getCodingLayout, getCodingLayout)
 }
 
+/**
+ * 不落盘的两个标记（docs/ui/coding-mode-impl.md §3.2）：
+ * keepLeft——用户主动打开左栏后，窗口窄时左栏只压不藏、改压右栏；关左栏时清掉。
+ * fitLeftHidden——左栏开着但这次被布局藏掉了，由 CodingLayout 在 layout effect 里回报，只记不通知。
+ */
+let keepLeft = false
+let fitLeftHidden = false
+
+function setKeepLeft(value: boolean): void {
+  if (keepLeft === value) return
+  keepLeft = value
+  listeners.forEach(fn => fn())
+}
+/** 同时改偏好和 keepLeft，只通知一次 */
+function setLeft(next: CodingLayoutPrefs, keep: boolean): void {
+  const keepChanged = keepLeft !== keep
+  keepLeft = keep
+  const stateChanged = next !== state
+  set(next)
+  if (keepChanged && !stateChanged) listeners.forEach(fn => fn())
+}
+
+export function getKeepLeft(): boolean {
+  return keepLeft
+}
+export function useKeepLeft(): boolean {
+  return useSyncExternalStore(subscribe, getKeepLeft, getKeepLeft)
+}
+/** CodingLayout 每次算完布局回报一次；只记不通知（不会触发重渲染） */
+export function reportCodingFit(fit: Pick<CodingFit, 'leftHiddenByFit'>): void {
+  fitLeftHidden = fit.leftHiddenByFit
+}
+
+const leftHiddenNow = (): boolean => state.left.open && fitLeftHidden
+
 export const codingLayout = {
   toggle(panel: CodingPanel): void {
+    if (panel === 'left') {
+      if (leftHiddenNow()) setKeepLeft(true)
+      else codingLayout.setOpen('left', !state.left.open)
+      return
+    }
     codingLayout.setOpen(panel, !state[panel].open)
   },
   setOpen(panel: CodingPanel, open: boolean): void {
+    if (panel === 'left') {
+      if (open && leftHiddenNow()) return setKeepLeft(true)
+      if (state.left.open === open) return
+      return setLeft({ ...state, left: { ...state.left, open } }, open)
+    }
     if (state[panel].open === open) return
     set({ ...state, [panel]: { ...state[panel], open } })
   },
@@ -85,10 +131,13 @@ export const codingLayout = {
     codingLayout.setSize(panel, PANEL_LIMITS[panel].initial, true)
   },
   showLeft(view: LeftView): void {
-    set({ ...state, left: { ...state.left, open: true, view } })
+    setLeft({ ...state, left: { ...state.left, open: true, view } }, true)
   },
   toggleLeft(view: LeftView): void {
-    set(toggleLeftView(state, view))
+    // 左栏被布局藏掉时，点当前视图是「我要看」而不是「收起」
+    if (leftHiddenNow() && state.left.view === view) return setKeepLeft(true)
+    const next = toggleLeftView(state, view)
+    setLeft(next, next.left.open)
   },
   showRight(view: RightView): void {
     set({ ...state, right: { ...state.right, open: true, view } })

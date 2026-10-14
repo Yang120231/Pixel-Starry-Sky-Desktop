@@ -27,11 +27,15 @@ export interface SidebarPrefs {
   upgrades?: string[]
   showRecent: boolean
   recentExpanded: boolean
+  /** 自己点过「最近任务」的展开 / 收起（可选，不升版本）：点过就不再按窗口高度自动收起 */
+  recentChosen?: boolean
   icons: SidebarIcons
   layout: SidebarLayout
 }
 
 export const SIDEBAR_PREFS_KEY = 'pixelsky.sidebar'
+/** 窗口高度低于这个值，「最近任务」默认收起（docs/ui/conversation-ux-2.md §2.3） */
+export const RECENT_AUTO_COLLAPSE_HEIGHT = 900
 export const DEFAULT_SIDEBAR_LAYOUT: SidebarLayout = {
   header: ['openIn'],
   bottom: ['usage', 'plugins', 'settings'],
@@ -68,6 +72,13 @@ export function isRowFull(layout: SidebarLayout, row: SidebarPlacement, moving?:
 /** 能不能把入口放进这一排：「设置」不能进「不显示」（它是改回来的入口），底部排满也不行。落点判断、移动、读取都只调它 */
 export function canPlace(layout: SidebarLayout, row: SidebarPlacement, action: LayoutAction): boolean {
   return !(row === 'hidden' && action === 'settings') && !isRowFull(layout, row, action)
+}
+
+/** 最近任务现在是不是展开：点过就按自己的；没点过且保存的是收起也按保存的；否则窗口矮就收起 */
+export function recentOpen(p: Pick<SidebarPrefs, 'recentExpanded' | 'recentChosen'>, short: boolean): boolean {
+  if (p.recentChosen) return p.recentExpanded
+  if (!p.recentExpanded) return false
+  return !short
 }
 
 /** 先保留各排已有的合法顺序，再把缺失入口补回默认排；放不下的先试底部、再溢出到顶栏。 */
@@ -134,6 +145,7 @@ export function parseSidebarPrefs(value: unknown): SidebarPrefs {
   if (saved.version !== 1 && saved.version !== 2 && saved.version !== 3 && saved.version !== 4) return result
   if (typeof saved.showRecent === 'boolean') result.showRecent = saved.showRecent
   if (typeof saved.recentExpanded === 'boolean') result.recentExpanded = saved.recentExpanded
+  if (typeof saved.recentChosen === 'boolean') result.recentChosen = saved.recentChosen
   if (saved.icons && typeof saved.icons === 'object' && !Array.isArray(saved.icons)) {
     const icons = saved.icons as Record<string, unknown>
     for (const action of SIDEBAR_ACTIONS) {
@@ -252,4 +264,21 @@ function subscribe(listener: () => void): () => void {
 
 export function useSidebarPrefs(): SidebarPrefs {
   return useSyncExternalStore(subscribe, getSidebarPrefs, getSidebarPrefs)
+}
+
+const SHORT_QUERY = `(max-height: ${RECENT_AUTO_COLLAPSE_HEIGHT - 0.02}px)`
+
+function subscribeShort(listener: () => void): () => void {
+  const query = window.matchMedia(SHORT_QUERY)
+  query.addEventListener('change', listener)
+  return () => query.removeEventListener('change', listener)
+}
+
+/** 窗口是不是矮（按窗口高度而不是侧栏可用高度：收起后滚动区变高不会又翻回来） */
+export function useShortWindow(): boolean {
+  return useSyncExternalStore(
+    subscribeShort,
+    () => window.matchMedia(SHORT_QUERY).matches,
+    () => false,
+  )
 }

@@ -10,6 +10,10 @@ export const EMPTY_GROUP: CodeTabGroup = { tabs: [], active: null }
 /** 同时保留的编辑器实例上限（超出的按最近最少使用释放） */
 export const EDITOR_CAP = 12
 
+/** Git 对比标签的 id 前缀：不是文件，只在内存里（数据在 gitDiffTabs.ts），不写进持久化 */
+export const GIT_DIFF_PREFIX = 'gitdiff:'
+export const isGitDiffId = (id: string): boolean => id.startsWith(GIT_DIFF_PREFIX)
+
 const isId = (value: unknown): value is string => typeof value === 'string' && value.startsWith('file:')
 
 /** 读出保存的标签；坏数据逐项丢掉 */
@@ -26,6 +30,28 @@ export function parseCodeTabs(raw: unknown): Record<string, CodeTabGroup> {
     out[key] = { tabs, active: isId(active) && tabs.includes(active) ? active : (tabs[0] ?? null) }
   }
   return out
+}
+
+/** 写进 localStorage 的内容：去掉 Git 对比标签（重启后不恢复），只剩对比标签的项目不存 */
+export function persistable(groups: Record<string, CodeTabGroup>): Record<string, CodeTabGroup> {
+  const out: Record<string, CodeTabGroup> = {}
+  for (const [key, g] of Object.entries(groups)) {
+    const tabs = g.tabs.filter(id => !isGitDiffId(id))
+    if (!tabs.length) continue
+    out[key] = { tabs, active: g.active && tabs.includes(g.active) ? g.active : (tabs[0] ?? null) }
+  }
+  return out
+}
+
+/** 把一个标签换成另一个（Git 对比的文件换了区）：位置不变；新 id 已经开着就只留那一个；换的是当前标签则新的成为当前 */
+export function replaceInGroup(g: CodeTabGroup, from: string, to: string): CodeTabGroup {
+  const index = g.tabs.indexOf(from)
+  if (index < 0 || from === to) return g
+  const active = g.active === from ? to : g.active
+  if (g.tabs.includes(to)) return { tabs: g.tabs.filter(t => t !== from), active }
+  const tabs = [...g.tabs]
+  tabs[index] = to
+  return { tabs, active }
 }
 
 /** 已有就激活，否则插到当前标签右边（没有当前标签就放最后） */

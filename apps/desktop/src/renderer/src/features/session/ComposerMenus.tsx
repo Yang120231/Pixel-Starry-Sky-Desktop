@@ -305,7 +305,7 @@ export function PermissionMenu({
   mode: PermissionMode
   modes: PermissionMode[]
   onSelect: (m: PermissionMode) => void
-  engine?: 'claude' | 'codex'
+  engine?: 'claude' | 'codex' | 'pixel'
 }) {
   useI18n()
   const [open, setOpen] = useState(false)

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { imageMediaType, MAX_IMAGE_BYTES, validateImages } from '../src/images'
+import {
+  IMAGE_PLACEHOLDER,
+  imageMediaType,
+  MAX_IMAGE_BYTES,
+  validateImages,
+  withoutShownImagePlaceholders,
+} from '../src/images'
 import type { ImageAttachment } from '../src/types'
 import { itemSearchMatch } from '../src/search'
 
@@ -59,5 +65,16 @@ describe('图片输入边界', () => {
     const image = { ...fixture(), bytes: MAX_IMAGE_BYTES, dataBase64 }
     expect(validateImages([image])[0].bytes).toBe(MAX_IMAGE_BYTES)
     expect(() => validateImages([image, { ...image, id: 'b' }, { ...fixture(), id: 'c' }])).toThrow('20 MiB')
+  })
+})
+
+describe('withoutShownImagePlaceholders', () => {
+  it('显示出来的图片不再重复占位；只剩占位时为空', () => {
+    expect(withoutShownImagePlaceholders(IMAGE_PLACEHOLDER, 1)).toBe('')
+    expect(withoutShownImagePlaceholders(`说明\n${IMAGE_PLACEHOLDER}`, 1)).toBe('说明')
+  })
+  it('超出上限没带上的图片仍保留占位', () => {
+    expect(withoutShownImagePlaceholders(`${IMAGE_PLACEHOLDER}\n${IMAGE_PLACEHOLDER}`, 1)).toBe(IMAGE_PLACEHOLDER)
+    expect(withoutShownImagePlaceholders(IMAGE_PLACEHOLDER, 0)).toBe(IMAGE_PLACEHOLDER)
   })
 })

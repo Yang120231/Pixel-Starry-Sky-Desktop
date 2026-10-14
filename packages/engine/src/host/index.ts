@@ -39,6 +39,7 @@ import type {
 } from '@pixelsky/protocol'
 import { ClaudeAdapter } from '../claude'
 import { CodexAdapter } from '../codex'
+import { PixelAdapter } from '../pixel'
 import { Store } from '../store'
 import { UsageStore, type UsageQuery } from '../usage'
 import { HostBranch } from './branch'
@@ -103,6 +104,13 @@ export class EngineHost {
             steeringValidated: true,
           }
         },
+      }),
+      pixel: new PixelAdapter({
+        overridePath: () => settings.file.paths.pixel ?? null,
+        extraEnv: () => settings.file.env.pixel ?? {},
+        bundledCli: opts.pixelCli,
+        sessionEnv: opts.sessionEnv,
+        launchOptions: () => ({ args: settings.launchOptions('pixel').args }),
       }),
     }
     const projects = new HostProjects(ctx)

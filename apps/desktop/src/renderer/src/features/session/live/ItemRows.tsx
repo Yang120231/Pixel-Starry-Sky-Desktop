@@ -25,6 +25,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import type { FileChange, Item, ItemStatus, ToolKind } from '@pixelsky/protocol'
+import { withoutShownImagePlaceholders } from '@pixelsky/protocol'
 import { CopyButton, DiffStat, IconButton, cn, useToast } from '@/ui'
 import { DiffView } from '@/ui/code/DiffView'
 import { CommandText } from '@/ui/code/CommandText'
@@ -464,7 +465,9 @@ function fileVerb(changes: FileChange[]): string {
 export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'command' | 'file_change' | 'tool'> }) {
   useI18n()
   const images = item.kind === 'tool' ? (item.images ?? []) : []
-  const foldable = item.kind === 'file_change' ? item.changes.some(c => c.diff) : !!item.output || images.length > 0
+  // 已经显示成图片的，不再在文字框里重复一行「[图片]」；只剩占位时文字框整个不显示
+  const output = item.kind === 'file_change' ? '' : withoutShownImagePlaceholders(item.output, images.length)
+  const foldable = item.kind === 'file_change' ? item.changes.some(c => c.diff) : !!output || images.length > 0
   const { open, toggle, fold } = useFold(item.id, foldable)
   const row = useRef<HTMLDivElement>(null)
   const [fileError, setFileError] = useState('')
@@ -702,16 +705,16 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
         </span>
       </Row>
       {open &&
-        item.output &&
+        output &&
         (plan ? (
           <div className={cn(OUTPUT_BOX, 'max-h-[28rem] bg-surface px-4 py-3')}>
-            <Markdown text={item.output} />
+            <Markdown text={output} />
           </div>
         ) : (
           <pre
             className={cn(OUTPUT_BOX, 'p-3 font-mono text-meta leading-[1.6] whitespace-pre-wrap text-fg-secondary')}
           >
-            <LongOutput text={item.output} />
+            <LongOutput text={output} />
           </pre>
         ))}
       {open && images.length > 0 && (

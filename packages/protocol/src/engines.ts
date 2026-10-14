@@ -89,9 +89,47 @@ export const ENGINES: Record<EngineId, EngineDescriptor> = {
     accent: null,
     nativeModelPrefix: null,
   },
+  // 自己的命令行智能体（packages/cli，基于 Pi，docs/own-cli.md）：能力先保守，和 Codex 一样回退 / 旁聊 / 后台任务关着
+  pixel: {
+    id: 'pixel',
+    name: '像素星空',
+    short: 'Px',
+    caps: {
+      imageInput: true,
+      interrupt: true,
+      resume: true,
+      steer: true,
+      rewind: false,
+      // 模型 / 强度走 RPC set_model / set_thinking_level，权限模式走批准扩展的 /pixelsky-mode 命令，都是运行中实时生效
+      liveModelSwitch: true,
+      livePermissionSwitch: true,
+      permissionModes: ['ask', 'edits', 'plan', 'full'],
+      efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+      ultracode: false,
+      fast: false,
+      thinkingSummaries: false,
+      backgroundTasks: false,
+      agentTrace: false,
+      promptSuggestions: false,
+      // 批准走 confirm（允许 / 拒绝），没有「始终允许」
+      alwaysScopes: [],
+      costUsd: true,
+      // 命令行跟着桌面端一起更新，不自更新
+      selfUpdate: false,
+      launchSettings: false,
+      pluginCommands: false,
+      platformSwitch: false,
+    },
+    wireApi: 'messages',
+    // Messages（anthropic / claude 线路）和 Responses（openai 线路）都会说；自定义 API 里还能用 Chat Completions
+    platformVendors: ['anthropic', 'claude', 'openai'],
+    unlabeledGroups: false,
+    accent: null,
+    nativeModelPrefix: null,
+  },
 }
 
-export const ENGINE_ORDER: readonly EngineId[] = ['claude', 'codex']
+export const ENGINE_ORDER: readonly EngineId[] = ['claude', 'codex', 'pixel']
 
 /** 版本号 a 是否比 b 新（按点分的数字逐段比，-beta 之类的后缀不计） */
 export function isNewerVersion(a: string | null | undefined, b: string | null | undefined): boolean {

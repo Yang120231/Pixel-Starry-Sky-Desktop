@@ -1,16 +1,18 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage, type TranslationKey } from '../../i18n/core'
 import { useState } from 'react'
-import { CircleCheck, CirclePause, CircleX, Clock, ShieldAlert, Unplug, type LucideIcon } from 'lucide-react'
+import { CircleCheck, CirclePause, CircleX, Clock, Hand, ShieldAlert, Unplug, type LucideIcon } from 'lucide-react'
 import { Button, cn, DiffStat, Spinner, useToast } from '@/ui'
 import { canAnswerInline } from '@/features/panel/inbox/inboxModel'
 import type { ChannelMember, ChannelTask, ChannelTaskStatus } from '@/data/types'
 import type { ChannelTaskAction } from '../../../../shared/types/channels'
 import { formatClock } from './format'
 import { agentPlace } from './ChannelMessage'
+import { canApprove, canControlTask, canWithdraw, isMyTask } from './teamModel'
 
 const STATUS_LABEL: Record<ChannelTaskStatus, TranslationKey> = {
   queued: 'channels.task.queued',
+  approval: 'team.task.approval',
   running: 'channels.task.running',
   waiting: 'channels.task.waiting',
   done: 'channels.task.done',
@@ -19,6 +21,7 @@ const STATUS_LABEL: Record<ChannelTaskStatus, TranslationKey> = {
 }
 const STATUS_ICON: Record<Exclude<ChannelTaskStatus, 'running'>, { icon: LucideIcon; className: string }> = {
   queued: { icon: Clock, className: 'text-fg-faint' },
+  approval: { icon: Hand, className: 'text-fg-faint' },
   waiting: { icon: ShieldAlert, className: 'text-warn' },
   done: { icon: CircleCheck, className: 'text-success' },
   failed: { icon: CircleX, className: 'text-danger' },
@@ -33,14 +36,33 @@ export interface TaskCardActions {
   onAnswer?: (task: ChannelTask, allow: boolean) => Promise<void>
   /** 追加要求：放一条引用这张卡的引用条 */
   onFollowUp?: (taskId: string) => void
+  /** Phase C：当前用户（只有 AI 成员的主人能同意、回答、打开会话） */
+  selfId?: string | null
+  /** Phase C：等同意的活，主人点同意 / 拒绝 */
+  onApprove?: (taskId: string, approve: boolean) => Promise<void>
+}
+
+/** 状态文字：团队频道里等同意、等别人确认时要写明是谁 */
+function statusText(task: ChannelTask, owner: string, mine: boolean): string {
+  if (task.status === 'approval') return tr('team.task.approval', { owner })
+  if (task.status === 'waiting' && !mine) return tr('team.task.waitingOwner', { owner })
+  return tr(STATUS_LABEL[task.status])
+}
+
+const PENDING_KEY: Record<NonNullable<ChannelTask['pendingAction']>, TranslationKey> = {
+  cancel: 'team.task.pendingCancel',
+  stop: 'team.task.pendingStop',
+  retry: 'team.task.pendingRetry',
 }
 
 /** 状态后面的补充：排队位置、计划进度、取消 */
-function statusDetail(task: ChannelTask): string | null {
+function statusDetail(task: ChannelTask, owner: string): string | null {
   if (task.status === 'queued' && task.ahead) return tr('channels.task.ahead', { count: task.ahead })
   if ((task.status === 'running' || task.status === 'waiting') && task.progress)
     return tr('channels.task.progress', { done: task.progress.done, total: task.progress.total })
   if (task.status === 'stopped' && task.note === 'cancelled') return tr('channels.task.cancelled')
+  if (task.status === 'stopped' && task.note === 'rejected') return tr('team.task.rejected', { owner })
+  if (task.status === 'stopped' && task.note === 'expired') return tr('team.task.expired')
   return null
 }
 
@@ -52,6 +74,8 @@ export function ChannelTaskCard({
   onAction,
   onAnswer,
   onFollowUp,
+  selfId = null,
+  onApprove,
 }: {
   task: ChannelTask
   membersById: ReadonlyMap<string, ChannelMember>
@@ -63,9 +87,15 @@ export function ChannelTaskCard({
   const author = membersById.get(task.authorId)
   const place = agentPlace(assignee)
   const status = task.status === 'running' ? null : STATUS_ICON[task.status]
-  const detail = statusDetail(task)
+  // AI 成员的主人：别人的 AI 成员显示「林夏」，我自己的不用写
+  const ownerName =
+    (assignee?.kind === 'agent' && assignee.ownerName) || membersById.get(task.ownerId ?? '')?.name || '?'
+  const mine = isMyTask(task, selfId)
+  const control = canControlTask(task, selfId)
+  const detail = statusDetail(task, ownerName)
+  const pending = task.pendingAction ?? null
   const live = !!onAction
-  const inline = task.status === 'waiting' && canAnswerInline(task.request ?? null)
+  const inline = task.status === 'waiting' && mine && canAnswerInline(task.request ?? null)
   const run = (fn: () => Promise<void>) => {
     if (busy) return
     setBusy(true)
@@ -73,14 +103,14 @@ export function ChannelTaskCard({
       .catch(error => toast(tr('channels.task.actionFailed', { error: translateMessage((error as Error).message) })))
       .finally(() => setBusy(false))
   }
-  const open = task.sessionId ? () => onOpenSession(task.sessionId!) : null
+  const open = task.sessionId && mine ? () => onOpenSession(task.sessionId!) : null
   const meta = [task.round && task.round > 1 ? tr('channels.task.round', { count: task.round }) : '', place]
     .filter(Boolean)
     .join(' · ')
   return (
     <div className="conversation-message mt-3 pl-10" data-channel-message={task.id}>
       <article
-        aria-label={`${tr(STATUS_LABEL[task.status])}：${task.title}`}
+        aria-label={`${statusText(task, ownerName, mine)}：${task.title}`}
         className={cn(
           'max-w-[560px] rounded-lg border border-line-card bg-surface p-3 shadow-sm',
           (task.status === 'waiting' || task.decision) && 'border-warn/40',
@@ -98,7 +128,7 @@ export function ChannelTaskCard({
               task.status === 'waiting' ? 'text-warn' : task.status === 'failed' ? 'text-danger' : 'text-fg-muted',
             )}
           >
-            {tr(STATUS_LABEL[task.status])}
+            {statusText(task, ownerName, mine)}
             {detail && <span className="font-normal text-fg-faint"> · {detail}</span>}
           </span>
           <span className="min-w-0 flex-1 truncate text-fg-faint">
@@ -128,6 +158,10 @@ export function ChannelTaskCard({
             {tr('channels.task.decision', { text: task.decision })}
           </p>
         )}
+        {task.status === 'queued' && task.ownerOffline && !mine && (
+          <p className="mt-1 text-meta text-fg-muted">{tr('team.task.ownerOffline', { owner: ownerName })}</p>
+        )}
+        {pending && <p className="mt-1 text-meta text-fg-faint">{tr(PENDING_KEY[pending])}</p>}
         {task.disconnected && (
           <p className="mt-1 flex items-center gap-1.5 text-meta text-fg-muted">
             <Unplug size={12} strokeWidth={1.75} className="shrink-0" />
@@ -138,7 +172,26 @@ export function ChannelTaskCard({
           {meta && <span className="min-w-0 truncate">{meta}</span>}
           {task.diff && <DiffStat added={task.diff.added} removed={task.diff.removed} className="shrink-0" />}
           <div className="ml-auto flex shrink-0 flex-wrap items-center gap-1.5">
-            {live && task.status === 'queued' && (
+            {onApprove && canApprove(task, selfId) && (
+              <>
+                <Button
+                  variant="primary"
+                  className="h-7 px-2.5 text-meta"
+                  disabled={busy}
+                  onClick={() => run(() => onApprove(task.id, true))}
+                >
+                  {tr('team.task.approve')}
+                </Button>
+                <Button
+                  className="h-7 px-2.5 text-meta"
+                  disabled={busy}
+                  onClick={() => run(() => onApprove(task.id, false))}
+                >
+                  {tr('team.task.reject')}
+                </Button>
+              </>
+            )}
+            {live && canWithdraw(task, selfId) && !pending && (
               <Button
                 variant="ghost"
                 className="h-7 px-2.5 text-meta"
@@ -148,7 +201,17 @@ export function ChannelTaskCard({
                 {tr('channels.task.cancel')}
               </Button>
             )}
-            {live && task.status === 'running' && (
+            {live && task.status === 'queued' && control && !pending && (
+              <Button
+                variant="ghost"
+                className="h-7 px-2.5 text-meta"
+                disabled={busy}
+                onClick={() => run(() => onAction!(task.id, 'cancel'))}
+              >
+                {tr('channels.task.cancel')}
+              </Button>
+            )}
+            {live && task.status === 'running' && control && !pending && (
               <Button
                 variant="ghost"
                 className="h-7 px-2.5 text-meta"
@@ -179,12 +242,12 @@ export function ChannelTaskCard({
                 )}
               </>
             )}
-            {live && task.status === 'waiting' && !inline && open && (
+            {live && task.status === 'waiting' && mine && !inline && open && (
               <Button variant="primary" className="h-7 px-2.5 text-meta" onClick={open}>
                 {tr('channels.task.answer')}
               </Button>
             )}
-            {live && (task.status === 'failed' || task.status === 'stopped') && (
+            {live && (task.status === 'failed' || task.status === 'stopped') && control && !pending && (
               <Button
                 className="h-7 px-2.5 text-meta"
                 disabled={busy}

@@ -93,22 +93,32 @@ export interface CodingFit {
   centerWidth: number
   editorHidden: boolean
   tooNarrow: boolean
+  /** 左栏开着、但因为窗口窄这次被布局藏掉了（只剩活动栏） */
+  leftHiddenByFit: boolean
+  /** 终端页右侧的列表这次应该自动收起（挤压阶段，让终端本体宽一点） */
+  terminalListCollapsed: boolean
 }
 
-/** 只决定这次怎么显示，不改用户保存的偏好（算法见 §3.2） */
-export function fitCoding(prefs: CodingLayoutPrefs, viewport: { width: number; height: number }): CodingFit {
+/** 终端页右侧列表展开时的宽度 */
+export const TERMINAL_LIST_WIDTH = 180
+
+/**
+ * 只决定这次怎么显示，不改用户保存的偏好。窗口变窄时的收缩顺序（docs/ui/coding-mode-impl.md §3.2）：
+ * 左栏压到 240 -> 藏左栏（只剩活动栏）-> 右栏压到 320 -> 终端列表收起 -> 仍不够提示太窄。
+ * keepLeft（用户刚主动打开左栏）时左栏只压不藏，改去压右栏。
+ */
+export function fitCoding(
+  prefs: CodingLayoutPrefs,
+  viewport: { width: number; height: number },
+  opts: { keepLeft?: boolean } = {},
+): CodingFit {
   const avail = viewport.width - 2 * STRIPE_WIDTH
   let L = prefs.left.open ? clampPanel('left', prefs.left.size) : 0
-  let R = prefs.right.open ? clampPanel('right', prefs.right.size) : 0
+  const prefR = prefs.right.open ? clampPanel('right', prefs.right.size) : 0
+  let R = prefR
   let leftShown = prefs.left.open
+  let leftHiddenByFit = false
   let over = CENTER_MIN_WIDTH - (avail - L - R)
-  if (over > 0 && R > 0) {
-    const cut = Math.min(over, R - PANEL_LIMITS.right.min)
-    if (cut > 0) {
-      R -= cut
-      over -= cut
-    }
-  }
   if (over > 0 && L > 0) {
     const cut = Math.min(over, L - PANEL_LIMITS.left.min)
     if (cut > 0) {
@@ -116,12 +126,23 @@ export function fitCoding(prefs: CodingLayoutPrefs, viewport: { width: number; h
       over -= cut
     }
   }
-  if (over > 0 && L > 0) {
+  if (over > 0 && L > 0 && !opts.keepLeft) {
     L = 0
     leftShown = false
+    leftHiddenByFit = true
     over = CENTER_MIN_WIDTH - (avail - R)
   }
+  if (over > 0 && R > 0) {
+    const cut = Math.min(over, R - PANEL_LIMITS.right.min)
+    if (cut > 0) {
+      R -= cut
+      over -= cut
+    }
+  }
   const tooNarrow = over > 0
+  const centerWidth = avail - L - R
+  const squeezed = leftHiddenByFit || R < prefR || tooNarrow
+  const terminalListCollapsed = squeezed && centerWidth < CENTER_MIN_WIDTH + TERMINAL_LIST_WIDTH
 
   const availH = viewport.height - TOPBAR_HEIGHT - STATUSBAR_HEIGHT
   let bottom: FittedPanel = { shown: false, size: clampPanel('bottom', prefs.bottom.size) }
@@ -139,9 +160,11 @@ export function fitCoding(prefs: CodingLayoutPrefs, viewport: { width: number; h
     left: { shown: leftShown, size: leftShown ? L : clampPanel('left', prefs.left.size) },
     right: { shown: prefs.right.open, size: prefs.right.open ? R : clampPanel('right', prefs.right.size) },
     bottom,
-    centerWidth: avail - L - R,
+    centerWidth,
     editorHidden,
     tooNarrow,
+    leftHiddenByFit,
+    terminalListCollapsed,
   }
 }
 

@@ -33,6 +33,22 @@
   max-width: 1024px;
   margin-inline: auto;
   padding-inline: 32px;
+  /* 按窗口居中（docs/ui/conversation-ux.md §2.8）：往窗口中线挪 --center-shift（windowCenter.ts），
+     最多挪到列边贴着窗格边（两侧滚动条留位也算进去），所以侧栏挡着时贴着侧栏、窄窗格不挪 */
+  --reading-slack: max(0px, calc((100cqw - 2 * var(--conversation-scrollbar-width, 0px) - min(1024px, 100cqw)) / 2));
+  position: relative;
+  left: clamp(calc(-1 * var(--reading-slack)), var(--center-shift, 0px), var(--reading-slack));
+}
+/* 输入框跟对话列走同一条中线：先按对话列的空余夹一次（和上面同一个式子，被侧栏挡住时两者挪一样多），
+   再按输入框自己的宽度（ComposerArea 写 --composer-width）和外层左右 24px 内边距夹 */
+.composer-area {
+  --reading-slack: max(0px, calc((100cqw - 2 * var(--conversation-scrollbar-width, 0px) - min(1024px, 100cqw)) / 2));
+  --composer-slack: max(0px, calc((100cqw - 48px - var(--composer-width, 100cqw)) / 2));
+  left: clamp(
+    calc(-1 * var(--composer-slack)),
+    clamp(calc(-1 * var(--reading-slack)), var(--center-shift, 0px), var(--reading-slack)),
+    var(--composer-slack)
+  );
 }
 .conversation-reading-strips {
   width: calc(100% - 2 * var(--conversation-scrollbar-width));

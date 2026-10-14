@@ -147,16 +147,57 @@
 }
 
 /* 会话标签栏（tabScroll.ts）：两头还有没露出来的标签时淡出；拖动平移时整条显示抓手 */
-.pane-tab-strip[data-fade-left] {
-  mask-image: linear-gradient(to right, transparent, #000 24px);
+:is(.pane-tab-strip, .code-tab-strip)[data-fade-left] {
+  mask-image: linear-gradient(to right, transparent, #000 32px);
 }
-.pane-tab-strip[data-fade-right] {
-  mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+:is(.pane-tab-strip, .code-tab-strip)[data-fade-right] {
+  mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
 }
-.pane-tab-strip[data-fade-left][data-fade-right] {
-  mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+:is(.pane-tab-strip, .code-tab-strip)[data-fade-left][data-fade-right] {
+  mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent);
 }
-.pane-tab-strip[data-panning],
-.pane-tab-strip[data-panning] * {
+:is(.pane-tab-strip, .code-tab-strip)[data-panning],
+:is(.pane-tab-strip, .code-tab-strip)[data-panning] * {
   cursor: grabbing;
+}
+
+/* 标签栏外包一层放翻页箭头（TabStripArrows.tsx）：哪头还有标签没露出来，哪头的箭头才显示 */
+.tab-strip-wrap {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+}
+.tab-strip-wrap > :first-child {
+  min-width: 0;
+  flex: 1;
+}
+.tab-strip-wrap > [data-tab-scroll] {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  display: none;
+  width: 20px;
+  height: 20px;
+  transform: translateY(-50%);
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--bg-surface) 80%, transparent);
+}
+.tab-strip-wrap > [data-tab-scroll]:hover {
+  color: var(--text);
+  background: var(--bg-surface);
+}
+.tab-strip-wrap > [data-tab-scroll='left'] {
+  left: 2px;
+}
+.tab-strip-wrap > [data-tab-scroll='right'] {
+  right: 2px;
+}
+.tab-strip-wrap:has(> [data-fade-left]) > [data-tab-scroll='left'],
+.tab-strip-wrap:has(> [data-fade-right]) > [data-tab-scroll='right'] {
+  display: flex;
 }

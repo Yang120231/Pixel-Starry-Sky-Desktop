@@ -14,7 +14,7 @@ import {
 import { EditorState } from '@codemirror/state'
 import { EditorView, lineNumbers } from '@codemirror/view'
 import { goToNextChunk, goToPreviousChunk, MergeView, unifiedMergeView } from '@codemirror/merge'
-import { IconButton, Segmented, Spinner } from '@/ui'
+import { Button, IconButton, Segmented, Spinner } from '@/ui'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import { editorTheme } from '@/features/editor/code/theme'
@@ -108,13 +108,15 @@ export function GitDiffView({
   onHistory,
   caption,
   busy,
+  labelled,
 }: {
   file: GitFileChange
   /** commit：历史里一个提交的文件（docs/ui/git-panel.md §9.5） */
   area: GitArea | 'commit'
   load: () => Promise<GitDiff>
-  onBack: () => void
-  onNeighbour: (delta: 1 | -1) => void
+  /** 中栏的 Git 对比标签没有「返回」和上一个 / 下一个文件（左栏的列表一直在） */
+  onBack?: () => void
+  onNeighbour?: (delta: 1 | -1) => void
   onStage?: () => void
   onUnstage?: () => void
   onDiscard?: () => void
@@ -124,6 +126,8 @@ export function GitDiffView({
   /** 文件名下面的说明（历史里写是哪个提交 / 哪两个版本）；没有时写目录 */
   caption?: string
   busy: boolean
+  /** 暂存 / 取消暂存 / 撤销写成带文字的按钮（中栏地方够） */
+  labelled?: boolean
 }) {
   useI18n()
   const [diff, setDiff] = useState<GitDiff | null>(null)
@@ -169,7 +173,7 @@ export function GitDiffView({
   return (
     <div ref={box} data-git-diff-view className="flex min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 items-center gap-1 border-b border-line-subtle px-2 py-1.5">
-        <IconButton icon={ArrowLeft} label={tr('git.back')} size={28} iconSize={15} onClick={onBack} />
+        {onBack && <IconButton icon={ArrowLeft} label={tr('git.back')} size={28} iconSize={15} onClick={onBack} />}
         <div className="min-w-0 flex-1 px-1">
           <div className="truncate text-list font-medium text-fg" title={file.path}>
             {name}
@@ -218,20 +222,24 @@ export function GitDiffView({
           />
         </span>
         <span className="flex-1" />
-        <IconButton
-          icon={ChevronLeft}
-          label={tr('git.diff.prevFile')}
-          size={26}
-          iconSize={14}
-          onClick={() => onNeighbour(-1)}
-        />
-        <IconButton
-          icon={ChevronRight}
-          label={tr('git.diff.nextFile')}
-          size={26}
-          iconSize={14}
-          onClick={() => onNeighbour(1)}
-        />
+        {onNeighbour && (
+          <>
+            <IconButton
+              icon={ChevronLeft}
+              label={tr('git.diff.prevFile')}
+              size={26}
+              iconSize={14}
+              onClick={() => onNeighbour(-1)}
+            />
+            <IconButton
+              icon={ChevronRight}
+              label={tr('git.diff.nextFile')}
+              size={26}
+              iconSize={14}
+              onClick={() => onNeighbour(1)}
+            />
+          </>
+        )}
         {onOpen && <IconButton icon={FileCode2} label={tr('git.open')} size={26} iconSize={14} onClick={onOpen} />}
         {onHistory && (
           <IconButton
@@ -242,29 +250,44 @@ export function GitDiffView({
             onClick={onHistory}
           />
         )}
-        {onStage && (
-          <IconButton icon={Plus} label={tr('git.stage')} size={26} iconSize={14} disabled={busy} onClick={onStage} />
-        )}
-        {onUnstage && (
-          <IconButton
-            icon={Minus}
-            label={tr('git.unstage')}
-            size={26}
-            iconSize={14}
-            disabled={busy}
-            onClick={onUnstage}
-          />
-        )}
-        {onDiscard && (
-          <IconButton
-            icon={Undo2}
-            label={tr('git.discard')}
-            size={26}
-            iconSize={14}
-            disabled={busy}
-            onClick={onDiscard}
-          />
-        )}
+        {onStage &&
+          (labelled ? (
+            <Button className="h-7 px-2.5 text-meta" icon={Plus} disabled={busy} onClick={onStage}>
+              {tr('git.stage')}
+            </Button>
+          ) : (
+            <IconButton icon={Plus} label={tr('git.stage')} size={26} iconSize={14} disabled={busy} onClick={onStage} />
+          ))}
+        {onUnstage &&
+          (labelled ? (
+            <Button className="h-7 px-2.5 text-meta" icon={Minus} disabled={busy} onClick={onUnstage}>
+              {tr('git.unstage')}
+            </Button>
+          ) : (
+            <IconButton
+              icon={Minus}
+              label={tr('git.unstage')}
+              size={26}
+              iconSize={14}
+              disabled={busy}
+              onClick={onUnstage}
+            />
+          ))}
+        {onDiscard &&
+          (labelled ? (
+            <Button className="h-7 px-2.5 text-meta" icon={Undo2} disabled={busy} onClick={onDiscard}>
+              {tr('git.discard')}
+            </Button>
+          ) : (
+            <IconButton
+              icon={Undo2}
+              label={tr('git.discard')}
+              size={26}
+              iconSize={14}
+              disabled={busy}
+              onClick={onDiscard}
+            />
+          ))}
       </div>
       {error ? (
         <p role="alert" className="m-3 rounded-md bg-subtle p-2 text-meta text-danger">

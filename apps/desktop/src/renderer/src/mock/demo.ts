@@ -2,7 +2,7 @@
 // 用 `pnpm dev:demo` 启动时显示，用来对照参考图调样式。
 import type { AppData } from '@/data/types'
 import { COMPOSER, RAIL_ITEMS } from '@/data/constants'
-import { demoChannelMembers, demoChannelMessages, demoChannels } from './channels'
+import { demoChannelMembers, demoChannelMessages, demoChannels, demoInvites, demoTeams } from './channels'
 import { SHOWCASE_PROJECT, SHOWCASE_SESSIONS, showcaseSnapshots } from './conversations'
 import { CODING_SESSION } from './coding'
 
@@ -186,4 +186,5 @@ export const demo: AppData = {
   channels: demoChannels,
   channelMembers: demoChannelMembers,
   channelMessages: demoChannelMessages,
+  channelTeams: { teams: demoTeams, invites: demoInvites, connection: 'online' },
 }

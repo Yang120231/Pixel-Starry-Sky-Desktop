@@ -1,7 +1,7 @@
 // 协作频道 Phase B（docs/ui/channels-phase-b.md §10–§11）：把 core/channels 的 Channels 接到 IPC。
 // 引擎调用走 ctx.engineCall（和窗口同一层路由，含 SSH 机器）；会话事件和机器变化从 EventBus.taps 收。
 import { join } from 'node:path'
-import { userInfo } from 'node:os'
+import { hostname, userInfo } from 'node:os'
 import { app } from 'electron'
 import { describeError, logger } from '@pixelsky/engine'
 import type { HostEvent } from '@pixelsky/protocol'
@@ -9,15 +9,38 @@ import * as ipc from '../ipc/guard'
 import type { AppContext } from '../app/context'
 import { windowLocale } from '../app/ui-language'
 import { machineOf } from '../machines/identity'
+import { baseUrl, bridgeToken, onAccountChange, signedInEmail, teamsFetch } from '../account/account'
+import { TeamApi } from '../core/channels/team/api'
+import { loadDeviceId } from '../core/channels/team/device'
+import { TeamRealtime } from '../core/channels/team/realtime'
+import { TeamSync } from '../core/channels/team/sync'
 import { ChannelStore } from '../core/channels/store'
 import { Channels, type MachineLite } from '../core/channels/service'
-import type { AgentInput, ChannelInput, ChannelTaskAction, PostInput } from '../../shared/types/channels'
+import type {
+  AgentInput,
+  AgentPolicy,
+  ChannelInput,
+  ChannelTaskAction,
+  PostInput,
+  TeamRole,
+} from '../../shared/types/channels'
 
 const str = (value: unknown, what: string): string => {
   if (typeof value !== 'string' || !value) throw new Error(`${what}不正确`)
   return value
 }
 const ACTIONS = new Set<ChannelTaskAction>(['cancel', 'stop', 'retry'])
+const INVITE_ROLES = new Set<Exclude<TeamRole, 'owner'>>(['member', 'observer'])
+const POLICIES = new Set<AgentPolicy>(['approve', 'team'])
+const role = (value: unknown): Exclude<TeamRole, 'owner'> => {
+  if (!INVITE_ROLES.has(value as Exclude<TeamRole, 'owner'>)) throw new Error('角色不正确')
+  return value as Exclude<TeamRole, 'owner'>
+}
+
+/** 团队实时通道的地址：登录服务的同一个地址（https → wss） */
+export function teamsWsUrl(base: string): string {
+  return base.replace(/^http/, 'ws').replace(/\/+$/, '') + '/v1/teams/ws'
+}
 
 function selfName(): string {
   try {
@@ -29,8 +52,17 @@ function selfName(): string {
 
 export async function initChannels(ctx: AppContext): Promise<void> {
   const log = logger('channels')
-  const store = new ChannelStore(join(app.getPath('userData'), 'channels'))
+  const dir = join(app.getPath('userData'), 'channels')
+  const store = new ChannelStore(dir)
   await store.init()
+  const deviceId = await loadDeviceId(dir)
+  // 团队同步（Phase C）：登录后启动，退出登录清空
+  const team = new TeamSync({
+    api: new TeamApi(teamsFetch),
+    realtime: handlers =>
+      new TeamRealtime({ url: teamsWsUrl(baseUrl()), token: force => bridgeToken(force), ...handlers }),
+    log: (message, error) => log.warn(message, error ? { error: describeError(error) } : undefined),
+  })
   const machines = (): MachineLite[] =>
     ctx.machines
       ? ctx.machines.state().machines.map(m => ({
@@ -53,6 +85,9 @@ export async function initChannels(ctx: AppContext): Promise<void> {
     selfName,
     locale: () => windowLocale(),
     log: (message, error) => log.warn(message, error ? { error: describeError(error) } : undefined),
+    team,
+    deviceId,
+    machineName: () => hostname() || '这台电脑',
   })
   ctx.events.taps.add((channel, args) => {
     try {
@@ -62,11 +97,27 @@ export async function initChannels(ctx: AppContext): Promise<void> {
       log.warn('频道处理事件失败', { error: describeError(error) })
     }
   })
-  ctx.lifecycle.onShutdown(() => channels.dispose())
+  ctx.lifecycle.onShutdown(() => {
+    team.stop()
+    return channels.dispose()
+  })
+
+  // 登录了就连团队，退出登录（或换账号）就断开并清空；窗口回到前台补一次
+  let teamEmail: string | null = null
+  const applyAccount = (): void => {
+    const email = signedInEmail()
+    if (email === teamEmail) return
+    teamEmail = email
+    team.stop()
+    if (email) team.start()
+  }
+  onAccountChange(applyAccount)
+  applyAccount()
+  app.on('browser-window-focus', () => channels.focus())
 
   ipc.handle('channels:state', () => channels.state())
   ipc.handle('channels:messages', (_e, id, before) =>
-    channels.messages(str(id, '频道'), typeof before === 'number' ? before : null),
+    channels.page(str(id, '频道'), typeof before === 'number' ? before : null),
   )
   ipc.handle('channels:create', (_e, input) => channels.create(input as ChannelInput))
   ipc.handle('channels:update', (_e, id, patch) =>
@@ -89,6 +140,36 @@ export async function initChannels(ctx: AppContext): Promise<void> {
     if (!ACTIONS.has(action as ChannelTaskAction)) throw new Error('不支持的操作')
     return channels.taskAction(str(taskId, '任务'), action as ChannelTaskAction)
   })
+
+  ipc.handle('channels:approveTask', (_e, taskId, approve) =>
+    channels.approveTask(str(taskId, '任务'), approve === true),
+  )
+  ipc.handle('channels:agentPolicy', (_e, channelId, memberId, policy) => {
+    if (!POLICIES.has(policy as AgentPolicy)) throw new Error('不支持的派活规则')
+    return channels.setAgentPolicy(str(channelId, '频道'), str(memberId, '成员'), policy as AgentPolicy)
+  })
+  ipc.handle('teams:create', (_e, name) => channels.createTeam(typeof name === 'string' ? name : ''))
+  ipc.handle('teams:update', (_e, teamId, patch) =>
+    channels.updateTeam(str(teamId, '团队'), (patch ?? {}) as { name: string }),
+  )
+  ipc.handle('teams:delete', (_e, teamId) => channels.deleteTeam(str(teamId, '团队')))
+  ipc.handle('teams:rename', (_e, teamId, name) =>
+    channels.renameSelf(str(teamId, '团队'), typeof name === 'string' ? name : ''),
+  )
+  ipc.handle('teams:invite', (_e, teamId, email, r) =>
+    channels.invite(str(teamId, '团队'), typeof email === 'string' ? email : '', role(r)),
+  )
+  ipc.handle('teams:revokeInvite', (_e, teamId, inviteId) =>
+    channels.revokeInvite(str(teamId, '团队'), str(inviteId, '邀请')),
+  )
+  ipc.handle('teams:respond', (_e, inviteId, accept) => channels.respondInvite(str(inviteId, '邀请'), accept === true))
+  ipc.handle('teams:setRole', (_e, teamId, userId, r) =>
+    channels.setRole(str(teamId, '团队'), str(userId, '成员'), role(r)),
+  )
+  ipc.handle('teams:removeMember', (_e, teamId, userId) =>
+    channels.removeTeamMember(str(teamId, '团队'), str(userId, '成员')),
+  )
+  ipc.handle('teams:refresh', () => channels.refreshTeams())
 
   // 启动时对账：上次退出时还没做完的活
   void channels.reconcile().catch(error => log.warn('频道任务对账失败', { error: describeError(error) }))

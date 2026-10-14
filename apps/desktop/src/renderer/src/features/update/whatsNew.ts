@@ -58,7 +58,8 @@ export function olderNotes(
 
 // ---- 说明的结构：## 分组（新功能 / 改动 / 修复），每组若干条；条目开头的 **加粗** 是标题 ----
 
-export type SectionKind = 'feature' | 'change' | 'fix' | 'other'
+/** highlight：「亮点」，这一版最值得看的几条，弹窗里排最前、做成卡片，不计入条数 */
+export type SectionKind = 'highlight' | 'feature' | 'change' | 'fix' | 'other'
 
 export interface NoteItem {
   /** 开头加粗的那句，没有时省略 */
@@ -76,6 +77,7 @@ export interface NoteSection {
 }
 
 const KINDS: [RegExp, SectionKind][] = [
+  [/亮点|重点|highlight/i, 'highlight'],
   [/新功能|新增|feature|new/i, 'feature'],
   [/改动|变更|change/i, 'change'],
   [/修复|fix/i, 'fix'],
@@ -139,10 +141,10 @@ export function parseNotes(text: string): NoteSection[] {
   return sections.filter(s => s.items.length)
 }
 
-/** 各组有几条：弹窗顶上和折叠的版本行里显示 */
+/** 各组有几条：弹窗顶上和折叠的版本行里显示（「亮点」是从各组里挑的，不算） */
 export function countKinds(sections: NoteSection[]): Partial<Record<SectionKind, number>> {
   const counts: Partial<Record<SectionKind, number>> = {}
-  for (const s of sections) counts[s.kind] = (counts[s.kind] ?? 0) + s.items.length
+  for (const s of sections) if (s.kind !== 'highlight') counts[s.kind] = (counts[s.kind] ?? 0) + s.items.length
   return counts
 }
 

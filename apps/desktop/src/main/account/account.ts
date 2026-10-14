@@ -445,6 +445,21 @@ export async function feedbackFetch(
   })
 }
 
+/** 协作频道 Phase C（docs/ui/channels-phase-c.md §8.1）：只能调 /v1/teams、/v1/invites 下的接口 */
+export async function teamsFetch(
+  method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
+  path: string,
+  body?: unknown,
+  timeoutMs = 20_000,
+): Promise<Response> {
+  if (!/^\/v1\/(teams|invites)(\/|\?|$)/.test(path) || /\.\.|%2e/i.test(path)) throw new Error('无效的团队接口')
+  return authedFetch(path, {
+    method,
+    ...(body !== undefined && { body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }),
+    signal: AbortSignal.timeout(timeoutMs),
+  })
+}
+
 /**
  * 连中转用的访问令牌（WebSocket 不能走 authedFetch）：快过期或中转说令牌失效（force）时先刷新。
  * 没登录、刷新被拒（同时退出登录）时返回 null。

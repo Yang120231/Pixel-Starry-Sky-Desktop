@@ -1,8 +1,9 @@
 // 更新后的「更新内容」弹窗（GitHub #13，docs/release-update.md §8）：每个版本只弹一次；「不再提示」以后都不弹，关于页能再打开。
-// 说明按「新功能 / 改动 / 修复」分组，每条开头加粗的一句当标题；跳过了几版时最新的展开、其余折叠；更早的版本在底下能翻
+// 说明按「亮点 / 新功能 / 改动 / 修复」分组，每条开头加粗的一句当标题；亮点排最前、做成强调色卡片；正文里的 **加粗** 用正文色突出；
+// 跳过了几版时最新的展开、其余折叠；更早的版本在底下能翻
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronRight, ExternalLink, RefreshCw, Sparkles, Wrench, X, type LucideIcon } from 'lucide-react'
+import { ChevronRight, ExternalLink, RefreshCw, Sparkles, Star, Wrench, X, type LucideIcon } from 'lucide-react'
 import { cn } from '@/ui'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
@@ -23,12 +24,15 @@ import {
 } from './whatsNew'
 
 const KIND_STYLE: Record<SectionKind, { icon: LucideIcon; tone: string }> = {
+  highlight: { icon: Star, tone: 'text-accent-on bg-accent' },
   feature: { icon: Sparkles, tone: 'text-accent-fg bg-accent-soft' },
   change: { icon: RefreshCw, tone: 'text-warn bg-warn/10' },
-  fix: { icon: Wrench, tone: 'text-fg-secondary bg-subtle' },
+  fix: { icon: Wrench, tone: 'text-success bg-success/10' },
   other: { icon: ChevronRight, tone: 'text-fg-muted bg-subtle' },
 }
-const ORDER: SectionKind[] = ['feature', 'change', 'fix', 'other']
+const ORDER: SectionKind[] = ['highlight', 'feature', 'change', 'fix', 'other']
+/** 正文里的 **加粗**：用正文色、加重，长条目里一眼看到重点 */
+const STRONG = '[&_strong]:font-semibold [&_strong]:text-fg'
 
 export function WhatsNewDialog() {
   useI18n()
@@ -233,9 +237,11 @@ function VersionBlock({
 function Sections({ version, sections }: { version: string; sections: NoteSection[] }) {
   return (
     <div data-whats-new-notes={version} className="space-y-5">
-      {sections.map((section, i) => (
-        <Section key={`${section.heading}-${i}`} section={section} />
-      ))}
+      {[...sections]
+        .sort((a, b) => Number(b.kind === 'highlight') - Number(a.kind === 'highlight'))
+        .map((section, i) => (
+          <Section key={`${section.heading}-${i}`} section={section} />
+        ))}
     </div>
   )
 }
@@ -255,12 +261,40 @@ function Section({ section }: { section: NoteSection }) {
           <span className="text-meta text-fg-faint tabular-nums">{section.items.length}</span>
         </h4>
       )}
-      <ul className="space-y-2.5">
-        {section.items.map((item, i) => (
-          <Item key={i} item={item} />
-        ))}
-      </ul>
+      {section.kind === 'highlight' ? (
+        <ul className="grid gap-2">
+          {section.items.map((item, i) => (
+            <Highlight key={i} item={item} />
+          ))}
+        </ul>
+      ) : (
+        <ul className="space-y-2.5">
+          {section.items.map((item, i) => (
+            <Item key={i} item={item} />
+          ))}
+        </ul>
+      )}
     </div>
+  )
+}
+
+/** 亮点：强调色细边框的卡片，标题用强调色 */
+function Highlight({ item }: { item: NoteItem }) {
+  return (
+    <li className="rounded-lg border border-accent-line bg-accent-soft/50 px-3.5 py-2.5">
+      {item.title && <p className="text-ui leading-relaxed font-semibold text-accent-fg">{item.title}</p>}
+      {item.body && (
+        <Markdown
+          text={item.body}
+          className={cn(
+            'text-list leading-relaxed text-fg-body',
+            item.title && 'mt-0.5',
+            STRONG,
+            '[&_li]:my-0.5 [&_p]:my-0 [&_ul]:my-1',
+          )}
+        />
+      )}
+    </li>
   )
 }
 
@@ -291,6 +325,7 @@ function Item({ item }: { item: NoteItem }) {
           className={cn(
             'text-list leading-relaxed',
             item.title ? 'mt-0.5 text-fg-secondary' : 'text-fg-body',
+            STRONG,
             '[&_li]:my-0.5 [&_p]:my-0 [&_ul]:my-1',
           )}
         />

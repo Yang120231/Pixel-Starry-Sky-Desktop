@@ -23,7 +23,7 @@ export interface ExtensionCheck {
   at: number
 }
 export interface ExtensionEntry {
-  engines?: Array<'claude' | 'codex'>
+  engines?: Array<'claude' | 'codex' | 'pixel'>
   id: string
   kind: ExtensionKind
   name: string
@@ -52,7 +52,7 @@ export interface ExtensionState {
   secretsPersistent: boolean
 }
 export interface ExtensionInput {
-  engines?: Array<'claude' | 'codex'>
+  engines?: Array<'claude' | 'codex' | 'pixel'>
   id?: string
   kind: ExtensionKind
   name: string
@@ -66,7 +66,7 @@ export interface ExtensionInput {
   expectedVersion?: string
 }
 export interface ExtensionImport {
-  engines?: Array<'claude' | 'codex'>
+  engines?: Array<'claude' | 'codex' | 'pixel'>
   kind: 'plugin' | 'skill'
   source: 'local' | 'git'
   location: string

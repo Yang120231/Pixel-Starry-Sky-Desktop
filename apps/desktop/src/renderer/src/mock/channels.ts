@@ -1,7 +1,11 @@
 // 协作频道的演示数据（docs/ui/channels.md §9.1），只在 `pnpm dev:demo` 显示。
 // 时间相对本地 0 点推算，日期分隔始终是「昨天 / 今天」。
 import type { Channel, ChannelMember, ChannelMessage } from '@/data/types'
+import type { PendingInvite, TeamInfo } from '../../../shared/types/channels'
 
+const NOW = Date.now()
+const HOUR = 3_600_000
+const DAY = 86_400_000
 const midnight = new Date()
 midnight.setHours(0, 0, 0, 0)
 const TODAY = midnight.getTime()
@@ -12,8 +16,25 @@ const at = (day: number, clock: string, seconds = 0): number => {
 }
 
 export const demoChannelMembers: ChannelMember[] = [
-  { id: 'm-linxia', kind: 'human', name: '林夏', you: true, role: 'owner' },
-  { id: 'm-zhouning', kind: 'human', name: '周宁', role: 'member' },
+  { id: 'm-linxia', kind: 'human', name: '林夏', you: true, role: 'owner', userId: 'u:linxia', online: true },
+  {
+    id: 'm-zhouning',
+    kind: 'human',
+    name: '周宁',
+    role: 'member',
+    userId: 'u:zhouning',
+    online: true,
+    lastSeenAt: NOW,
+  },
+  {
+    id: 'm-chenyi',
+    kind: 'human',
+    name: '陈一',
+    role: 'observer',
+    userId: 'u:chenyi',
+    online: false,
+    lastSeenAt: NOW - 2 * HOUR,
+  },
   {
     id: 'a-frontend',
     kind: 'agent',
@@ -65,6 +86,28 @@ export const demoChannelMembers: ChannelMember[] = [
     status: 'idle',
     task: null,
     sessionId: null,
+    ownerId: 'm-linxia',
+    ownerName: '林夏',
+    mine: true,
+    policy: 'approve',
+  },
+  // 周宁的 AI 成员：跑在周宁的电脑上，别人 @ 它要周宁同意（Phase C）
+  {
+    id: 'ta-reviewer',
+    kind: 'agent',
+    name: '审查员',
+    engine: 'codex',
+    model: 'gpt-5.5',
+    machineId: 'remote',
+    machine: '周宁的电脑',
+    project: 'api',
+    status: 'running',
+    task: '审查新设置页的信息架构',
+    ownerId: 'm-zhouning',
+    teamAgentId: 'ta-reviewer',
+    ownerName: '周宁',
+    mine: false,
+    policy: 'approve',
   },
 ]
 
@@ -94,9 +137,20 @@ export const demoChannels: Channel[] = [
     id: 'c-changelog',
     name: '更新日志',
     topic: '整理 10 月更新日志',
-    project: 'docs-site',
     scope: 'team',
-    memberIds: ['m-linxia', 'm-zhouning', 'a-docs'],
+    teamId: 'tm-pixel',
+    memberIds: ['m-linxia', 'm-zhouning', 'm-chenyi', 'a-docs'],
+    unread: 2,
+    mentioned: true,
+    createdAt: YESTERDAY - 86_400_000,
+  },
+  {
+    id: 'c-design',
+    name: '设计评审',
+    topic: '新设置页的设计评审',
+    scope: 'team',
+    teamId: 'tm-pixel',
+    memberIds: ['m-linxia', 'm-zhouning', 'm-chenyi', 'ta-reviewer'],
     unread: 0,
     createdAt: YESTERDAY - 86_400_000,
   },
@@ -315,6 +369,129 @@ export const demoChannelMessages: Record<string, ChannelMessage[]> = {
       format: 'plain',
       text: '谢谢，我今天看一下那两条 TODO。',
     },
+    {
+      kind: 'message',
+      id: 'log-m4',
+      channelId: 'c-changelog',
+      at: at(TODAY, '09:20'),
+      authorId: 'm-zhouning',
+      format: 'plain',
+      text: '那两条 TODO 我补了说明，@文档助手 再重排一遍，加一栏「谁改的」。',
+      mentions: ['a-docs'],
+    },
+    {
+      kind: 'task',
+      id: 'log-t2',
+      channelId: 'c-changelog',
+      at: at(TODAY, '09:20', 15),
+      authorId: 'm-zhouning',
+      assigneeId: 'a-docs',
+      title: '按模块重排更新日志，加作者栏',
+      status: 'approval',
+      ownerId: 'm-linxia',
+      sessionId: null,
+      summary: null,
+      diff: null,
+    },
+    {
+      kind: 'message',
+      id: 'log-m5',
+      channelId: 'c-changelog',
+      at: at(TODAY, '09:24'),
+      authorId: 'm-chenyi',
+      format: 'plain',
+      text: '@林夏 文档助手那张卡在等你点同意，点完它就开工了。',
+      mentions: ['m-linxia'],
+    },
+  ],
+  'c-design': [
+    {
+      kind: 'event',
+      id: 'des-e1',
+      channelId: 'c-design',
+      at: at(YESTERDAY, '11:00'),
+      event: 'joined',
+      actorId: 'm-chenyi',
+    },
+    {
+      kind: 'event',
+      id: 'des-e2',
+      channelId: 'c-design',
+      at: at(YESTERDAY, '11:05'),
+      event: 'agentAdded',
+      actorId: 'm-zhouning',
+      targetId: 'ta-reviewer',
+    },
+    {
+      kind: 'message',
+      id: 'des-m1',
+      channelId: 'c-design',
+      at: at(YESTERDAY, '11:10'),
+      authorId: 'm-zhouning',
+      format: 'plain',
+      text: '新设置页的稿子放在设计文件里了，大家先过一遍。',
+    },
+    {
+      kind: 'message',
+      id: 'des-m2',
+      channelId: 'c-design',
+      at: at(YESTERDAY, '11:32'),
+      authorId: 'm-chenyi',
+      format: 'plain',
+      text: '看完了，我觉得「账号」和「订阅」可以合并成一页。',
+    },
+    {
+      kind: 'message',
+      id: 'des-m3',
+      channelId: 'c-design',
+      at: at(TODAY, '10:30'),
+      authorId: 'm-linxia',
+      format: 'plain',
+      text: '@审查员 看一下新设置页的信息架构，有没有层级太深的地方。',
+      mentions: ['ta-reviewer'],
+    },
+    {
+      kind: 'task',
+      id: 'des-t1',
+      channelId: 'c-design',
+      at: at(TODAY, '10:30', 12),
+      authorId: 'm-linxia',
+      assigneeId: 'ta-reviewer',
+      title: '审查新设置页的信息架构',
+      status: 'running',
+      ownerId: 'm-zhouning',
+      sessionId: null,
+      summary: null,
+      diff: null,
+      progress: { done: 2, total: 5 },
+    },
   ],
   'c-notes': [],
 }
+
+// ── Phase C：示例团队（docs/ui/channels-phase-c.md §9.3），只改内存，不联网 ──
+
+export const demoTeams: TeamInfo[] = [
+  {
+    id: 'tm-pixel',
+    name: '像素星空小队',
+    role: 'owner',
+    members: [
+      { id: 'm-linxia', role: 'owner', online: true, lastSeenAt: NOW },
+      { id: 'm-zhouning', role: 'member', online: true, lastSeenAt: NOW },
+      { id: 'm-chenyi', role: 'observer', online: false, lastSeenAt: NOW - 2 * HOUR },
+    ],
+    invites: [{ id: 'iv-wang', email: 'wang@example.com', role: 'member', expiresAt: NOW + 13.5 * DAY }],
+  },
+]
+
+export const demoInvites: PendingInvite[] = [
+  {
+    id: 'iv-design',
+    teamId: 'tm-design',
+    teamName: '设计组',
+    inviter: '周宁',
+    role: 'member',
+    expiresAt: NOW + 13.5 * DAY,
+  },
+]

@@ -3,6 +3,7 @@ import { FileText } from 'lucide-react'
 import type { Extension } from '@codemirror/state'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
+import { Button, DiffStat, cn } from '@/ui'
 import { FileEditor } from '@/features/editor/FileEditor'
 import { dirtyFile, ensureFile, openFile, setCodeOpener, useFiles, type OpenFile } from '@/features/files/store'
 import { CLOSE_TAB, CYCLE_TAB } from '@/features/layout/shortcuts'
@@ -10,7 +11,9 @@ import { SPLIT_MIN_WIDTH } from '@/features/panel/git/gitModel'
 import { useRecentFiles } from '@/features/panel/recentFiles'
 import { parseFileTab } from '@/features/panes/tree'
 import type { WorkspaceRef } from '../../../../../shared/types/workspace'
+import type { TurnChanges } from '../ai/turnChangesModel'
 import { useTurnChanges } from '../ai/useTurnChanges'
+import { kindTone } from '../left/files/filesModel'
 import { codingLayout } from '../layoutStore'
 import { AiReviewBar, useAiReviewExtensions, useTurnBaseline } from '../review'
 import { SymbolCrumb, useEditorExtras } from './extras'
@@ -25,9 +28,14 @@ import {
   setCodeView,
   useCodeTabs,
 } from './codeTabs'
-import { baseName, pathKey } from './codeTabsModel'
+import { baseName, isGitDiffId, pathKey } from './codeTabsModel'
+import { diffTag } from './gitDiffModel'
+import { emptyTurnList } from './emptyModel'
 import { CodeTabs, type TabItem } from './TabBar'
 import { DiffPane } from './DiffPane'
+import { GitDiffTab } from './GitDiffTab'
+import { GitWorkBar } from './GitWorkBar'
+import { getGitDiffTab, useGitDiffRev } from './gitDiffTabs'
 import { effectiveBase, effectiveMode, viewAvailability } from './viewModel'
 import type { MenuAction } from '@/ui/ActionMenu'
 
@@ -47,17 +55,62 @@ export async function openCodeDiff(ref: WorkspaceRef, path: string): Promise<voi
   if (id) setCodeView(id, 'diff', 'turn')
 }
 
-/** 没有标签时的空状态：提示加最近打开的文件 */
-function EmptyState({ scope }: { scope: string }) {
+/** 没有标签时的空状态：提示、这一轮 AI 改的文件、最近打开的文件 */
+function EmptyState({ scope, turn, target }: { scope: string; turn: TurnChanges | null; target: WorkspaceRef | null }) {
   useI18n()
   const recent = useRecentFiles(scope)
+  const list = emptyTurnList(turn?.files)
+  const first = list.first
   return (
     <div
       data-coding-editor-empty
-      className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-6 text-center text-ui text-fg-muted"
+      className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto p-6 text-center text-ui text-fg-muted"
     >
       <FileText size={24} strokeWidth={1.5} />
       <p>{tr('coding.editor.empty.title')}</p>
+      {target && first && (
+        <div data-coding-empty-turn className="flex w-full max-w-72 flex-col gap-0.5 text-left">
+          <p className="flex items-center gap-2 px-2 pb-1 text-label text-fg-muted">
+            <span>{tr('coding.files.aiTurn')}</span>
+            {turn?.running && (
+              <span className="flex items-center gap-1 font-normal">
+                <span aria-hidden className="size-1.5 rounded-full bg-active" />
+                {tr('coding.files.aiTurnRunning')}
+              </span>
+            )}
+          </p>
+          {list.shown.map(f => (
+            <button
+              key={f.path}
+              type="button"
+              title={f.path}
+              aria-label={tr('coding.files.aiTurnOpen', { name: f.name })}
+              className="press flex min-h-7 min-w-0 items-center gap-2 rounded-md px-2 text-meta hover:bg-hover"
+              onClick={() => void openCodeDiff(target, f.path)}
+            >
+              <span className={cn('shrink-0', kindTone(f.kind))}>{f.name}</span>
+              <span className="min-w-0 flex-1 truncate text-fg-muted">{f.dir}</span>
+              <DiffStat added={f.added} removed={f.removed} className="text-label" />
+            </button>
+          ))}
+          {list.more > 0 && (
+            <button
+              type="button"
+              className="press flex min-h-7 items-center rounded-md px-2 text-meta text-fg-muted hover:bg-hover"
+              onClick={() => codingLayout.showLeft('files')}
+            >
+              {tr('coding.editor.empty.more', { n: list.more })}
+            </button>
+          )}
+          <Button
+            variant="primary"
+            className="mt-2 justify-center"
+            onClick={() => void openCodeDiff(target, first.path)}
+          >
+            {tr('coding.editor.empty.openFirst')}
+          </Button>
+        </div>
+      )}
       {recent.length > 0 && (
         <div className="flex w-full max-w-72 flex-col gap-0.5 text-left">
           <p className="px-2 pb-1 text-label text-fg-muted">{tr('coding.editor.empty.recent')}</p>
@@ -92,6 +145,7 @@ export function EditorArea({ visible, width }: { visible: boolean; width: number
   const { group, views } = useCodeTabs()
   const files = useFiles()
   const turn = useTurnChanges(useCodingSessionId())
+  useGitDiffRev()
 
   useEffect(() => {
     setCodeOpener(openCodeTab)
@@ -106,6 +160,21 @@ export function EditorArea({ visible, width }: { visible: boolean; width: number
 
   const aiPaths = useMemo(() => new Set((turn?.files ?? []).map(f => pathKey(f.path, caseInsensitive))), [turn])
   const items: TabItem[] = group.tabs.map(id => {
+    const git = isGitDiffId(id) ? getGitDiffTab(id) : undefined
+    if (git) {
+      const tag = diffTag(git.area, git.to)
+      return {
+        id,
+        name: baseName(git.path),
+        title: tr('coding.gitDiff.title', { name: git.path }),
+        dirty: false,
+        ai: false,
+        tag:
+          tag.kind === 'commit'
+            ? tag.hash
+            : tr(tag.kind === 'staged' ? 'coding.gitDiff.tag.staged' : 'coding.gitDiff.tag.work'),
+      }
+    }
     const file = files.tabs.find(t => t.id === id)
     const path = file?.path ?? parseFileTab(id)?.path ?? id
     return {
@@ -190,29 +259,36 @@ export function EditorArea({ visible, width }: { visible: boolean; width: number
         menu={menu()}
       />
       {!active ? (
-        <EmptyState scope={workspace.key} />
-      ) : mode === 'code' || !tab ? (
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <FileEditor
-            key={active}
-            id={active}
-            active={visible}
-            extensions={merged}
-            footer={false}
-            crumbExtra={tab ? <SymbolCrumb tab={tab} /> : null}
-          />
-          <AiReviewBar tabId={active} />
-        </div>
+        <EmptyState scope={workspace.key} turn={turn} target={workspace.ref} />
+      ) : isGitDiffId(active) ? (
+        <GitDiffTab key={active} id={active} />
       ) : (
-        <DiffPane
-          key={active}
-          tab={tab}
-          mode={mode}
-          base={base}
-          turnBaseline={turnBaseline}
-          fellBack={(saved?.base ?? 'head') === 'turn' && base === 'head'}
-          onBase={next => setCodeView(active, mode, next)}
-        />
+        <>
+          {tab && <GitWorkBar tab={tab} />}
+          {mode === 'code' || !tab ? (
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+              <FileEditor
+                key={active}
+                id={active}
+                active={visible}
+                extensions={merged}
+                footer={false}
+                crumbExtra={tab ? <SymbolCrumb tab={tab} /> : null}
+              />
+              <AiReviewBar tabId={active} />
+            </div>
+          ) : (
+            <DiffPane
+              key={active}
+              tab={tab}
+              mode={mode}
+              base={base}
+              turnBaseline={turnBaseline}
+              fellBack={(saved?.base ?? 'head') === 'turn' && base === 'head'}
+              onBase={next => setCodeView(active, mode, next)}
+            />
+          )}
+        </>
       )}
     </div>
   )

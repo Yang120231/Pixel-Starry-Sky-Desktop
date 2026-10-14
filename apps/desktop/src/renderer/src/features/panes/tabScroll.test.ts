@@ -1,6 +1,14 @@
 // 会话标签栏的滚动（GitHub #16）
 import { describe, expect, it } from 'vitest'
-import { easeStep, isWheelNotch, overflowEdges, revealTarget, shouldReveal, wheelDistance } from './tabScroll'
+import {
+  easeStep,
+  isWheelNotch,
+  overflowEdges,
+  pageTarget,
+  revealTarget,
+  shouldReveal,
+  wheelDistance,
+} from './tabScroll'
 
 const wheel = (deltaY: number, extra: Partial<Parameters<typeof wheelDistance>[0]> = {}) => ({
   deltaX: 0,
@@ -76,5 +84,18 @@ describe('缓动', () => {
     expect(pos).toBe(0)
     expect(frames).toBeLessThan(20)
     expect(easeStep(0, 100)).toBeCloseTo(22)
+  })
+})
+
+describe('箭头翻页', () => {
+  const v = { scrollLeft: 100, clientWidth: 400, scrollWidth: 1000 }
+  it('翻 80% 可视宽度，夹在可滚范围内', () => {
+    expect(pageTarget(v, 1)).toBe(420)
+    expect(pageTarget(v, -1)).toBe(0)
+    expect(pageTarget({ ...v, scrollLeft: 500 }, 1)).toBe(600)
+  })
+  it('可视区很窄时至少翻 80px，从给定起点接着走', () => {
+    expect(pageTarget({ scrollLeft: 0, clientWidth: 50, scrollWidth: 1000 }, 1)).toBe(80)
+    expect(pageTarget(v, 1, 420)).toBe(600)
   })
 })

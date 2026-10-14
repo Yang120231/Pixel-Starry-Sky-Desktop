@@ -161,7 +161,7 @@ export const feedbackMessages = {
   },
   'feedback.palette.open': { zh: '打开反馈', en: 'Open feedback' },
   'feedback.logsSubmit': { zh: '提交给我们', en: 'Send to us' },
-  'feedback.aboutTitle': { zh: '问题与建议', en: 'Problems and suggestions' },
+  'feedback.aboutTitle': { zh: '问题与建议', en: 'Feedback' },
   'feedback.aboutDesc': {
     zh: '遇到问题或想要新功能，直接告诉团队。',
     en: 'Hit a problem or want a feature? Tell the team directly.',

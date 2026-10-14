@@ -3,15 +3,32 @@ import { Cloud, FileClock, GitBranch, GitCommitHorizontal, Tag } from 'lucide-re
 import { cn, IconButton } from '@/ui'
 import { tr } from '@/i18n/core'
 import type { GitCommitFile } from '../../../../../shared/types/project-tools'
-import type { GraphRow } from './graph'
-import type { Badge, BadgeKind } from './historyModel'
+import type { GraphRow, SyncState } from './graph'
+import { SYNC_TITLE_KEY, type Badge, type BadgeKind, type BadgeTone } from './historyModel'
 import { splitPath } from './gitModel'
 
 /** 一行（不含展开的详情）的高度：两行文字 */
 export const ROW_H = 44
-/** 5 种车道颜色（参照 VS Code），浅色 / 深色由设计变量切换 */
-const COLORS = ['var(--accent)', 'var(--chart-cache)', 'var(--chart-output)', 'var(--chart-input)', 'var(--ultracode)']
+/**
+ * 车道颜色：当前分支的线按同步状态上色（未推送 / 已推送 / 远程新提交，docs/ui/git-graph-colors.md），
+ * 别的分支按车道轮换，轮换的 5 种颜色避开这三种；浅色 / 深色 / 极夜由设计变量（tokens.css --graph-*）切换
+ */
+const COLORS = [
+  'var(--graph-lane-1)',
+  'var(--graph-lane-2)',
+  'var(--graph-lane-3)',
+  'var(--graph-lane-4)',
+  'var(--graph-lane-5)',
+]
 export const laneColor = (i: number): string => COLORS[i % COLORS.length]
+export const SYNC_COLOR: Record<SyncState, string> = {
+  local: 'var(--graph-local)',
+  synced: 'var(--graph-synced)',
+  incoming: 'var(--graph-incoming)',
+}
+/** 有同步状态用状态色，否则按车道 */
+export const lineColor = (state: SyncState | undefined, lane: number): string =>
+  state ? SYNC_COLOR[state] : laneColor(lane)
 
 /** 车道多时收窄间距，不撑开面板 */
 export function laneWidth(lanes: number): number {
@@ -29,11 +46,14 @@ export function GraphCell({
   lanes,
   node,
   expanded,
+  title,
 }: {
   row: GraphRow
   lanes: number
   node: NodeStyle
   expanded: boolean
+  /** 悬停在节点上的提示（同步状态） */
+  title?: string
 }) {
   const lane = laneWidth(lanes)
   const width = lanes * lane + 6
@@ -53,44 +73,69 @@ export function GraphCell({
         ...new Map(
           row.lines
             .filter(l => l.kind === 'full' || l.kind === 'bottom')
-            .map(l => [l.kind === 'full' ? l.from : l.to, l.color] as const),
+            .map(
+              l =>
+                [
+                  l.kind === 'full' ? l.from : l.to,
+                  [lineColor(l.state, l.color), l.state === 'incoming'] as const,
+                ] as const,
+            ),
         ),
       ]
     : []
-  const color = laneColor(row.color)
+  const incomingRow = row.state === 'incoming'
+  const color = lineColor(row.state, row.color)
   const nx = x(row.lane)
   return (
     <div aria-hidden className="relative shrink-0 self-stretch" style={{ width }}>
       <svg width={width} height={ROW_H} className="absolute top-0 left-0 overflow-visible">
         {row.lines.map((line, i) => (
-          <path key={i} d={path(line)} fill="none" stroke={laneColor(line.color)} strokeWidth={1.5} />
-        ))}
-        {node === 'head' ? (
-          <>
-            <circle cx={nx} cy={cy} r={5.5} fill="var(--bg-surface)" stroke={color} strokeWidth={1.5} />
-            <circle cx={nx} cy={cy} r={2.75} fill={color} />
-          </>
-        ) : node === 'merge' ? (
-          <circle cx={nx} cy={cy} r={3.75} fill="var(--bg-surface)" stroke={color} strokeWidth={1.5} />
-        ) : node === 'special' ? (
-          <circle
-            cx={nx}
-            cy={cy}
-            r={4.5}
-            fill="var(--bg-surface)"
-            stroke={color}
+          <path
+            key={i}
+            d={path(line)}
+            fill="none"
+            stroke={lineColor(line.state, line.color)}
             strokeWidth={1.5}
-            strokeDasharray="2.2 1.8"
+            strokeDasharray={line.state === 'incoming' ? '3 2.5' : undefined}
           />
-        ) : (
-          <circle cx={nx} cy={cy} r={3.75} fill={color} />
-        )}
+        ))}
+        <g>
+          {title && <title>{title}</title>}
+          {node === 'head' ? (
+            <>
+              <circle cx={nx} cy={cy} r={5.5} fill="var(--bg-surface)" stroke={color} strokeWidth={1.5} />
+              <circle cx={nx} cy={cy} r={2.75} fill={color} />
+            </>
+          ) : node === 'merge' ? (
+            <circle cx={nx} cy={cy} r={3.75} fill="var(--bg-surface)" stroke={color} strokeWidth={1.5} />
+          ) : node === 'special' ? (
+            <circle
+              cx={nx}
+              cy={cy}
+              r={4.5}
+              fill="var(--bg-surface)"
+              stroke={color}
+              strokeWidth={1.5}
+              strokeDasharray="2.2 1.8"
+            />
+          ) : incomingRow ? (
+            // 远程新提交：空心圈
+            <circle cx={nx} cy={cy} r={3.75} fill="var(--bg-surface)" stroke={color} strokeWidth={1.5} />
+          ) : (
+            // 已推送的实心点略小，未推送的大一点
+            <circle cx={nx} cy={cy} r={row.state === 'synced' ? 3 : 3.75} fill={color} />
+          )}
+        </g>
       </svg>
-      {below.map(([col, c]) => (
+      {below.map(([col, [c, dashed]]) => (
         <span
           key={col}
           className="absolute bottom-0 w-[1.5px]"
-          style={{ top: ROW_H, left: x(col) - 0.75, background: laneColor(c) }}
+          style={{
+            top: ROW_H,
+            left: x(col) - 0.75,
+            background: dashed ? `repeating-linear-gradient(to bottom, ${c} 0 3px, transparent 3px 5.5px)` : c,
+          }}
         />
       ))}
     </div>
@@ -132,11 +177,23 @@ function BadgeIcon({ kind }: { kind: BadgeKind }) {
   )
 }
 
+/** 标记跟线同色：边框和文字用状态色，底色是它的淡色 */
+const toneStyle = (tone: BadgeTone) =>
+  tone === 'neutral'
+    ? undefined
+    : {
+        borderColor: `color-mix(in srgb, ${SYNC_COLOR[tone]} 60%, transparent)`,
+        color: SYNC_COLOR[tone],
+        background: `color-mix(in srgb, ${SYNC_COLOR[tone]} 12%, transparent)`,
+      }
+
 export function RefBadge({ badge, className }: { badge: Badge; className?: string }) {
   return (
     <span
-      title={badgeTitle(badge)}
+      title={badge.tone === 'neutral' ? badgeTitle(badge) : `${badgeTitle(badge)} · ${tr(SYNC_TITLE_KEY[badge.tone])}`}
       data-ref-kind={badge.kind}
+      data-ref-tone={badge.tone}
+      style={toneStyle(badge.tone)}
       className={cn(
         'inline-flex h-[18px] min-w-0 items-center gap-1 rounded-full border px-1.5 text-[11px] leading-none font-medium',
         BADGE_STYLE[badge.kind],
@@ -182,17 +239,26 @@ export function ChangedFiles({
   files,
   onOpen,
   onHistory,
+  isCurrent,
 }: {
   files: GitCommitFile[]
   onOpen: (index: number) => void
   onHistory?: (index: number) => void
+  /** 代码模式下中栏正开着这个文件的对比：高亮这一行 */
+  isCurrent?: (file: GitCommitFile) => boolean
 }) {
   return (
     <ul className="flex flex-col">
       {files.map((file, i) => {
         const { name, dir } = splitPath(file.path)
         return (
-          <li key={file.path} className="group/file flex min-w-0 items-center rounded-md hover:bg-hover">
+          <li
+            key={file.path}
+            className={cn(
+              'group/file flex min-w-0 items-center rounded-md hover:bg-hover',
+              isCurrent?.(file) && 'bg-selected',
+            )}
+          >
             <button
               type="button"
               onClick={() => onOpen(i)}

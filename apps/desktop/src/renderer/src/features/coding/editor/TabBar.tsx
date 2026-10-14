@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Columns2, Ellipsis, Sparkles, X } from 'lucide-react'
+import { useRef, useState, type ReactNode } from 'react'
+import { Columns2, Ellipsis, GitCompare, Sparkles, X } from 'lucide-react'
 import { IconButton, SEGMENT_TRACK, cn, segmentItem, useComingSoon } from '@/ui'
 import { ActionMenu, type MenuAction } from '@/ui/ActionMenu'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
+import { useTabStripScroll } from '../../panes/tabScroll'
+import { TabStripArrows } from '../../panes/TabStripArrows'
+import '../../panes/panes.css'
 import type { EditorViewMode } from '../types'
 import type { ViewAvailability } from './viewModel'
 
@@ -14,6 +17,8 @@ export interface TabItem {
   title: string
   dirty: boolean
   ai: boolean
+  /** Git 对比标签的小标记（更改 / 暂存 / 提交短哈希）；有它就是对比标签 */
+  tag?: string
 }
 
 const hint = (avail: ViewAvailability, mode: EditorViewMode): string | undefined => {
@@ -88,86 +93,96 @@ export function CodeTabs({
   const comingSoon = useComingSoon()
   const [open, setOpen] = useState<{ x: number; y: number } | null>(null)
   const list = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (!active) return
-    for (const el of list.current?.querySelectorAll<HTMLElement>('[data-code-tab]') ?? [])
-      if (el.dataset.codeTab === active) el.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-  }, [active])
+  // 滚轮横向滚、空白处拖动平移、当前标签滚进可视区、两头淡出和翻页箭头（与会话标签栏共用，tabScroll.ts）
+  useTabStripScroll(
+    list,
+    active,
+    tabs.map(tab => tab.id),
+  )
   return (
     <div data-coding-tabs className="flex h-10 shrink-0 items-center gap-1 border-b border-line-layout bg-sidebar pr-2">
-      <div
-        ref={list}
-        role="tablist"
-        aria-label={tr('coding.editor.tabs')}
-        className="flex h-full min-w-0 flex-1 items-end overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
-        {tabs.map(tab => (
-          <div
-            key={tab.id}
-            role="tab"
-            aria-selected={tab.id === active}
-            data-code-tab={tab.id}
-            title={tab.title}
-            tabIndex={0}
-            className={cn(
-              'group/tab press relative flex h-full max-w-48 min-w-0 shrink-0 cursor-default items-center gap-1.5 border-r border-line-layout pr-1 pl-3 text-ui select-none',
-              tab.id === active
-                ? 'bg-app text-fg after:absolute after:inset-x-0 after:top-0 after:h-0.5 after:bg-accent'
-                : 'text-fg-muted hover:bg-hover hover:text-fg',
-            )}
-            onMouseDown={e => {
-              if (e.button === 1) e.preventDefault()
-            }}
-            onClick={() => onActivate(tab.id)}
-            onAuxClick={e => {
-              if (e.button === 1) {
-                e.preventDefault()
-                onClose(tab.id)
-              }
-            }}
-            onKeyDown={e => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                onActivate(tab.id)
-              }
-            }}
-          >
-            <span className="truncate">{tab.name}</span>
-            {tab.ai && (
-              <Sparkles
-                size={12}
-                strokeWidth={1.5}
-                className="shrink-0 text-accent"
-                aria-label={tr('coding.editor.tab.ai')}
-              />
-            )}
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-label={tr('coding.editor.tab.close', { name: tab.name })}
-              className="press relative flex size-5 shrink-0 items-center justify-center rounded text-fg-muted hover:bg-active hover:text-fg"
-              onClick={e => {
-                e.stopPropagation()
-                onClose(tab.id)
+      <div className="tab-strip-wrap h-full">
+        <div
+          ref={list}
+          role="tablist"
+          aria-label={tr('coding.editor.tabs')}
+          className="code-tab-strip flex h-full min-w-0 flex-1 items-end overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {tabs.map(tab => (
+            <div
+              key={tab.id}
+              role="tab"
+              aria-selected={tab.id === active}
+              data-code-tab={tab.id}
+              title={tab.title}
+              tabIndex={0}
+              className={cn(
+                'group/tab press relative flex h-full max-w-48 min-w-0 shrink-0 cursor-default items-center gap-1.5 border-r border-line-layout pr-1 pl-3 text-ui select-none',
+                tab.id === active
+                  ? 'bg-app text-fg after:absolute after:inset-x-0 after:top-0 after:h-0.5 after:bg-accent'
+                  : 'text-fg-muted hover:bg-hover hover:text-fg',
+              )}
+              onMouseDown={e => {
+                if (e.button === 1) e.preventDefault()
+              }}
+              onClick={() => onActivate(tab.id)}
+              onAuxClick={e => {
+                if (e.button === 1) {
+                  e.preventDefault()
+                  onClose(tab.id)
+                }
+              }}
+              onKeyDown={e => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  onActivate(tab.id)
+                }
               }}
             >
-              {tab.dirty && (
-                <span
-                  aria-label={tr('coding.editor.tab.unsaved')}
-                  className="absolute size-1.5 rounded-full bg-fg-muted group-hover/tab:hidden"
+              {tab.tag && <GitCompare size={13} strokeWidth={1.5} aria-hidden className="shrink-0 text-fg-muted" />}
+              <span className="truncate">{tab.name}</span>
+              {tab.tag && (
+                <span data-git-diff-tag className="shrink-0 rounded bg-subtle px-1 text-label text-fg-muted">
+                  {tab.tag}
+                </span>
+              )}
+              {tab.ai && (
+                <Sparkles
+                  size={12}
+                  strokeWidth={1.5}
+                  className="shrink-0 text-accent"
+                  aria-label={tr('coding.editor.tab.ai')}
                 />
               )}
-              <X
-                size={14}
-                strokeWidth={1.5}
-                className={cn(
-                  'shrink-0',
-                  tab.dirty ? 'hidden group-hover/tab:block' : 'opacity-0 group-hover/tab:opacity-100',
+              <button
+                type="button"
+                tabIndex={-1}
+                aria-label={tr('coding.editor.tab.close', { name: tab.name })}
+                className="press relative flex size-5 shrink-0 items-center justify-center rounded text-fg-muted hover:bg-selected hover:text-fg"
+                onClick={e => {
+                  e.stopPropagation()
+                  onClose(tab.id)
+                }}
+              >
+                {tab.dirty && (
+                  <span
+                    aria-label={tr('coding.editor.tab.unsaved')}
+                    className="absolute size-1.5 rounded-full bg-fg-muted group-hover/tab:hidden"
+                  />
                 )}
-              />
-            </button>
-          </div>
-        ))}
+                <X
+                  size={14}
+                  strokeWidth={1.5}
+                  className={cn(
+                    'shrink-0',
+                    tab.dirty ? 'hidden group-hover/tab:block' : 'opacity-0 group-hover/tab:opacity-100',
+                  )}
+                />
+              </button>
+            </div>
+          ))}
+        </div>
+        <TabStripArrows strip={list} />
       </div>
       {avail && <ViewSwitch mode={mode} avail={avail} onChange={onMode} />}
       <IconButton

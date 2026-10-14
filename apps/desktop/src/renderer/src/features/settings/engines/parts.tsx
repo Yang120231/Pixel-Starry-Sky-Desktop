@@ -29,6 +29,9 @@ export const ENGINE_INTRO: Record<EngineId, string> = {
   get codex() {
     return tr('settings.engines.parts.openaisCodingCliSupport')
   },
+  get pixel() {
+    return tr('engine.pixel.intro')
+  },
 }
 
 export const FIELD =

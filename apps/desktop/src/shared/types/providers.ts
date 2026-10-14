@@ -1,5 +1,6 @@
 // 自定义 API（docs/ui/custom-api.md）：主进程和设置页之间传的接口配置。Key 和附加请求头的值只在主进程里
-export type ProviderProtocol = 'anthropic' | 'responses'
+// chat：OpenAI Chat Completions（DeepSeek、OpenRouter 等兼容接口），只有像素星空能用；老版本读到会当成 anthropic，不会崩
+export type ProviderProtocol = 'anthropic' | 'responses' | 'chat'
 export type ProviderAuth = 'x-api-key' | 'bearer'
 export type ProviderTemplate = 'anthropic' | 'openai' | 'custom'
 

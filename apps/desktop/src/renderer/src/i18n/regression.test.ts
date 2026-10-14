@@ -9,6 +9,7 @@ import { pluginMessages } from '../../../shared/i18n/pluginMessages'
 import { sessionMessages } from '../../../shared/i18n/sessionMessages'
 import { commandMessages } from '../../../shared/i18n/commandMessages'
 import { codexMessages } from '../../../shared/i18n/codexMessages'
+import { pixelMessages } from '../../../shared/i18n/pixelMessages'
 import { projectToolsMessages } from '../../../shared/i18n/projectToolsMessages'
 import { terminalMessages } from '../../../shared/i18n/terminalMessages'
 import { sidebarMessages } from '../../../shared/i18n/sidebarMessages'
@@ -16,6 +17,7 @@ import { projectMessages } from '../../../shared/i18n/projectMessages'
 import { workspaceMessages } from '../../../shared/i18n/workspaceMessages'
 import { machineMessages, machineErrors } from '../../../shared/i18n/machineMessages'
 import { channelMessages } from '../../../shared/i18n/channelMessages'
+import { teamMessages } from '../../../shared/i18n/teamMessages'
 import { notificationMessages } from '../../../shared/i18n/notificationMessages'
 import { gitMessages } from '../../../shared/i18n/gitMessages'
 import { artifactMessages } from '../../../shared/i18n/artifactMessages'
@@ -52,6 +54,7 @@ const dictionaries: Record<string, Record<string, unknown>> = {
   sessionMessages,
   commandMessages,
   codexMessages,
+  pixelMessages,
   projectToolsMessages,
   terminalMessages,
   sidebarMessages,
@@ -60,6 +63,7 @@ const dictionaries: Record<string, Record<string, unknown>> = {
   machineMessages,
   machineErrors,
   channelMessages,
+  teamMessages,
   notificationMessages,
   gitMessages,
   artifactMessages,

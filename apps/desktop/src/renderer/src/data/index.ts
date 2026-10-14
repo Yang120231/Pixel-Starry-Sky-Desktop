@@ -36,6 +36,7 @@ export const {
   channels,
   channelMembers,
   channelMessages,
+  channelTeams,
 } = DATA
 
 /** 会话标题；没有选中会话时是「新会话」 */

@@ -7,6 +7,7 @@ export { CLAUDE_COMPACT_MARKER, isClaudeCompaction, rewriteCompaction } from './
 export { LONG_CONTEXT_ENV, claudeModelName } from './claude/long-context'
 export { CODEX_WINDOW_ENV } from './codex/context-config'
 export { CodexAdapter } from './codex'
+export { PixelAdapter } from './pixel'
 export { searchQuery } from './search'
 export { artifactQuery, collectArtifacts, recordedIn, sessionArtifacts, within } from './artifacts'
 export { UsageStore, USAGE_RETENTION_DAYS, type UsageQuery } from './usage'

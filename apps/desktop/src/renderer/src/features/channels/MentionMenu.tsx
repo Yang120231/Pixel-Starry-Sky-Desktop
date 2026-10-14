@@ -3,7 +3,10 @@ import { tr } from '../../i18n/core'
 import { useLayoutEffect, useRef } from 'react'
 import { cn } from '@/ui'
 import type { ChannelMember } from '@/data/types'
+import type { TeamRole } from '../../../../shared/types/channels'
 import { agentMeta, MemberAvatar } from './ChannelMessage'
+import { roleLabel } from './TeamParts'
+import { mentionNote } from './teamModel'
 
 /** 输入框里的 @ 菜单（docs/ui/channels.md §6）；结构和键盘处理照 features/session/CommandMenu.tsx */
 export function MentionMenu({
@@ -11,11 +14,16 @@ export function MentionMenu({
   members,
   selected,
   onChoose,
+  team = false,
+  role,
 }: {
   id: string
   members: readonly ChannelMember[]
   selected: number
   onChoose: (index: number) => void
+  /** 团队频道：真人写团队角色，AI 成员写归属，观察者不能派活 */
+  team?: boolean
+  role?: TeamRole
 }) {
   useI18n()
   const listRef = useRef<HTMLDivElement>(null)
@@ -47,8 +55,12 @@ export function MentionMenu({
           const meta =
             agentMeta(member) ??
             (member.kind === 'human' && member.role
-              ? tr(member.role === 'owner' ? 'channels.role.owner' : 'channels.role.member')
+              ? team
+                ? roleLabel(member.role)
+                : tr(member.role === 'owner' ? 'channels.role.owner' : 'channels.role.member')
               : '')
+          const note = team ? mentionNote(member, role) : null
+          const foreign = member.kind === 'agent' && member.mine === false ? member : null
           return (
             <button
               type="button"
@@ -58,17 +70,25 @@ export function MentionMenu({
               id={`${id}-${index}`}
               data-mention-index={index}
               aria-selected={index === selected}
+              aria-disabled={note === 'observer' || undefined}
               onMouseDown={e => e.preventDefault()}
               onClick={() => onChoose(index)}
               className={cn(
-                'flex h-9 w-full min-w-0 items-center gap-2.5 rounded-md px-2.5 text-left text-list',
+                'flex w-full min-w-0 flex-wrap items-center gap-x-2.5 rounded-md px-2.5 text-left text-list',
+                note ? 'min-h-9 py-1' : 'h-9',
+                note === 'observer' && 'opacity-50',
                 index === selected ? 'bg-selected' : 'hover:bg-hover',
               )}
             >
               <MemberAvatar member={member} size={22} />
               <span className="shrink-0 font-medium text-fg">{member.name}</span>
+              {foreign?.ownerName && (
+                <span className="shrink-0 text-meta text-fg-faint">
+                  · {tr('team.panel.agentOf', { owner: foreign.ownerName })}
+                </span>
+              )}
               {meta && <span className="min-w-0 truncate text-meta text-fg-faint">{meta}</span>}
-              {member.kind === 'agent' && member.config && (
+              {member.kind === 'agent' && (member.config || member.ownerId) && (
                 <span
                   className={cn(
                     'ml-auto shrink-0 text-meta',
@@ -78,6 +98,13 @@ export function MentionMenu({
                   {member.status === 'running' || member.status === 'waiting'
                     ? tr('channels.mention.busy', { count: (member.task ? 1 : 0) + (member.queued ?? 0) })
                     : tr(member.status === 'offline' ? 'channels.status.offline' : 'channels.status.idle')}
+                </span>
+              )}
+              {note && (
+                <span className="basis-full pl-[32px] text-meta text-fg-faint">
+                  {note === 'observer'
+                    ? tr('team.mention.observer')
+                    : tr('team.mention.needsApproval', { owner: foreign?.ownerName ?? '?' })}
                 </span>
               )}
             </button>

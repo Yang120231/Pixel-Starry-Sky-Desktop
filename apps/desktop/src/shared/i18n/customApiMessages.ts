@@ -17,6 +17,7 @@ export const customApiMessages = {
   },
   'customApi.protocolAnthropic': { zh: 'Anthropic 协议', en: 'Anthropic Messages' },
   'customApi.protocolResponses': { zh: 'OpenAI Responses', en: 'OpenAI Responses' },
+  'customApi.protocolChat': { zh: 'OpenAI Chat Completions（兼容格式）', en: 'OpenAI Chat Completions (compatible)' },
   'customApi.modelCount': { zh: '{n} 个模型', en: '{n} models' },
   'customApi.noKey': { zh: '没有 Key', en: 'No key' },
   'customApi.keyHint': { zh: 'Key ••••{p0}', en: 'Key ••••{p0}' },
@@ -34,8 +35,12 @@ export const customApiMessages = {
   'customApi.name': { zh: '名称', en: 'Name' },
   'customApi.namePlaceholder': { zh: '例如 DeepSeek 兼容', en: 'e.g. DeepSeek compatible' },
   'customApi.protocol': { zh: '协议', en: 'Protocol' },
-  'customApi.protocolForClaude': { zh: '给 Claude Code 用', en: 'For Claude Code' },
-  'customApi.protocolForCodex': { zh: '给 Codex 用', en: 'For Codex' },
+  'customApi.protocolForClaude': { zh: '给 Claude Code、像素星空用', en: 'For Claude Code and Pixel Starry Sky' },
+  'customApi.protocolForCodex': { zh: '给 Codex、像素星空用', en: 'For Codex and Pixel Starry Sky' },
+  'customApi.protocolForChat': {
+    zh: '给 DeepSeek、OpenRouter 等兼容接口用；只有像素星空能用（Claude Code 需要 Anthropic，Codex 需要 Responses）',
+    en: 'For DeepSeek, OpenRouter and other compatible APIs; only Pixel Starry Sky can use it (Claude Code needs Anthropic, Codex needs Responses)',
+  },
   'customApi.protocolLocked': {
     zh: '已有接口不能换协议，要换请新建一个',
     en: 'An existing endpoint cannot change protocol; create a new one instead',

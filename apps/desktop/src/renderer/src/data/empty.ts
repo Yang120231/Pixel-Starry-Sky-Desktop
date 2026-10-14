@@ -25,4 +25,5 @@ export const empty: AppData = {
   channels: [],
   channelMembers: [],
   channelMessages: {},
+  channelTeams: { teams: [], invites: [], connection: 'unavailable' },
 }

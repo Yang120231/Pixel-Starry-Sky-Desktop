@@ -11,7 +11,7 @@ import { useMachines } from '@/features/machines/store'
 import type { AgentMember, Channel } from '@/data/types'
 import type { AgentConfig } from '../../../../shared/types/channels'
 import type { WorkspaceChoice } from '../../../../shared/types/machines'
-import { channelActions } from './store'
+import { channelActions, useChannels } from './store'
 
 const INPUT =
   'w-full min-w-0 rounded-md border border-line bg-surface px-3 py-2 text-ui text-fg outline-none focus:border-accent-line focus:ring-2 focus:ring-composer-ring'
@@ -57,16 +57,24 @@ function useProjectOptions(): SelectOption<string>[] {
 export function ChannelDialog({
   channel,
   agents,
+  teamId,
   onClose,
 }: {
   channel: Channel | null
   /** 可以一起加进来的已有 AI 成员（新建时） */
   agents: readonly AgentMember[]
+  /** Phase C：新建团队频道。团队频道没有默认项目，也不在这里选 AI 成员（进频道后再加自己的） */
+  teamId?: string | null
   onClose: () => void
 }) {
   useI18n()
   const projectOptions = useProjectOptions()
   const currentProject = useEngineState(s => s.currentProjectId)
+  const teamName = useChannels(s => {
+    const id = teamId ?? channel?.teamId
+    return id ? (s.teams.find(t => t.id === id)?.name ?? null) : null
+  })
+  const inTeam = !!teamId || channel?.scope === 'team'
   const [name, setName] = useState(channel?.name ?? '')
   const [topic, setTopic] = useState(channel?.topic ?? '')
   const [projectId, setProjectId] = useState<string>(channel ? (channel.projectId ?? '') : (currentProject ?? ''))
@@ -77,10 +85,10 @@ export function ChannelDialog({
     if (!name.trim() || busy) return
     setBusy(true)
     setError(null)
-    const input = { name, topic: topic.trim() || null, projectId: projectId || null }
+    const input = { name, topic: topic.trim() || null, projectId: inTeam ? null : projectId || null }
     const done = channel
-      ? channelActions.updateChannel(channel.id, input)
-      : channelActions.createChannel({ ...input, memberIds: members }).then(() => {})
+      ? channelActions.updateChannel(channel.id, inTeam ? { name, topic: input.topic } : input)
+      : channelActions.createChannel(teamId ? { ...input, teamId } : { ...input, memberIds: members }).then(() => {})
     done.then(onClose, e => {
       setError(errorText(e))
       setBusy(false)
@@ -111,17 +119,21 @@ export function ChannelDialog({
           <Field label={tr('channels.dialog.topic')}>
             <input value={topic} maxLength={200} onChange={e => setTopic(e.target.value)} className={INPUT} />
           </Field>
-          <div className="flex flex-col gap-1.5">
-            <span className="text-meta font-medium text-fg-muted">{tr('channels.dialog.project')}</span>
-            <Select
-              label={tr('channels.dialog.project')}
-              value={projectId}
-              options={[{ value: '', label: tr('channels.dialog.noProject') }, ...projectOptions]}
-              onChange={setProjectId}
-              className="w-full"
-            />
-          </div>
-          {!channel && agents.length > 0 && (
+          {inTeam ? (
+            teamName && <p className="text-meta text-fg-faint">{tr('team.channel.inTeam', { name: teamName })}</p>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-meta font-medium text-fg-muted">{tr('channels.dialog.project')}</span>
+              <Select
+                label={tr('channels.dialog.project')}
+                value={projectId}
+                options={[{ value: '', label: tr('channels.dialog.noProject') }, ...projectOptions]}
+                onChange={setProjectId}
+                className="w-full"
+              />
+            </div>
+          )}
+          {!channel && !inTeam && agents.length > 0 && (
             <fieldset className="flex flex-col gap-1">
               <legend className="mb-1.5 text-meta font-medium text-fg-muted">{tr('channels.dialog.members')}</legend>
               {agents.map(a => (
@@ -198,7 +210,7 @@ export function AgentDialog({
   const engines = useEngineState(s => s.engines)
   const currentProject = useEngineState(s => s.currentProjectId)
   const projectOptions = useProjectOptions()
-  const ready = engines.filter(e => e.status === 'ready' && (e.id === 'claude' || e.id === 'codex'))
+  const ready = engines.filter(e => e.status === 'ready' && (e.id === 'claude' || e.id === 'codex' || e.id === 'pixel'))
   const [name, setName] = useState(editing?.name ?? '')
   const [engine, setEngine] = useState<EngineId>(editing?.engine ?? ready[0]?.id ?? 'claude')
   const firstProject = channel.projectId ?? currentProject ?? projectOptions.find(o => !o.disabled)?.value ?? ''

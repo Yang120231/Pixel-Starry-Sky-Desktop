@@ -5,6 +5,7 @@ import { describeError, logger } from '@pixelsky/engine'
 import type { SessionRecord } from '@pixelsky/protocol'
 import type { ResolvedProvider } from '../core/providers/store'
 import { classifyError, providerHeaders, upstreamUrl, type Fetch } from '../core/providers/upstream'
+import { chatUsage, withUsageOption } from './chat-usage'
 import { CacheUsageFix } from './usageFix'
 
 const log = logger('gateway')
@@ -80,13 +81,14 @@ export function platformGateway(options: {
       ...(error === undefined ? {} : { error: describeError(error) }),
     })
     const responses = path === '/v1/responses'
+    const chat = path === '/v1/chat/completions'
     const countTokens = path === '/v1/messages/count_tokens'
     const fail = (status: number, message: string): void => {
       res
         .writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
         .end(
           JSON.stringify(
-            responses
+            responses || chat
               ? { error: { type: 'invalid_request_error', message } }
               : { type: 'error', error: { type: 'authentication_error', message } },
           ),
@@ -106,11 +108,13 @@ export function platformGateway(options: {
       headersAt = Date.now()
       res.writeHead(upstream.status, output)
       // Messages 的 SSE 只按完整事件转发：上游中途断开时能接一个 error 事件收尾，而不是掐断连接
-      const sse = !responses && output['Content-Type'].includes('text/event-stream')
+      const sse = !responses && !chat && output['Content-Type'].includes('text/event-stream')
       // 非流式的成功响应（Claude Code 流式失败后会改用非流式再试）整个收齐再校正用量，响应体不大
       const rewriter = usageKey === null ? null : usageFix.request(usageKey)
       const whole = rewriter !== null && !sse && upstream.ok && output['Content-Type'].includes('json')
       const held: Buffer[] = []
+      // Chat Completions：留下末尾一段，收尾时读最后一个 usage chunk 记进日志
+      let chatTail = ''
       let tail: Buffer = Buffer.alloc(0)
       try {
         if (upstream.body)
@@ -118,6 +122,7 @@ export function platformGateway(options: {
             if (abort.signal.aborted) break
             bytes += chunk.length
             let out = Buffer.from(chunk)
+            if (chat) chatTail = (chatTail + out.toString('utf8')).slice(-256 * 1024)
             if (whole) {
               held.push(out)
               continue
@@ -148,14 +153,25 @@ export function platformGateway(options: {
       res.end()
       if (abort.signal.aborted) log.info('引擎先断开了连接', trace())
       else if (upstream.status >= 400 && !quiet) log.warn('上游返回错误', trace())
-      else log.debug('请求完成', trace())
+      else {
+        const usage = chat && upstream.ok ? chatUsage(chatTail) : null
+        log.debug('请求完成', { ...trace(), ...(usage ? { usage } : {}) })
+      }
     }
     const passthrough = (): Record<string, string> => {
       const out: Record<string, string> = {}
-      for (const name of responses
-        ? ['session_id', 'conversation_id', 'originator', 'openai-beta']
-        : // Claude Code 的身份头：Sub2api「仅限 Claude Code」的分组靠 User-Agent / X-App / anthropic-beta 认终端
-          ['anthropic-version', 'anthropic-beta', 'user-agent', 'x-app', 'anthropic-dangerous-direct-browser-access']) {
+      for (const name of chat
+        ? []
+        : responses
+          ? ['session_id', 'conversation_id', 'originator', 'openai-beta']
+          : // Claude Code 的身份头：Sub2api「仅限 Claude Code」的分组靠 User-Agent / X-App / anthropic-beta 认终端
+            [
+              'anthropic-version',
+              'anthropic-beta',
+              'user-agent',
+              'x-app',
+              'anthropic-dangerous-direct-browser-access',
+            ]) {
         const value = req.headers[name]
         if (typeof value === 'string') out[name] = value
       }
@@ -172,7 +188,9 @@ export function platformGateway(options: {
       parsed: { model?: unknown },
       raw: string,
     ) => {
-      let body = raw
+      // Chat Completions：流式请求补 include_usage，没有最后那个 usage chunk 就记不上用量
+      if (chat) parsed = withUsageOption(parsed as { model?: unknown; stream?: unknown; stream_options?: unknown })
+      let body = chat ? JSON.stringify(parsed) : raw
       const ids = p.models.map(m => m.id)
       const requested = typeof parsed.model === 'string' ? parsed.model : null
       if (p.modelFallback && ids.length && (!requested || !ids.includes(requested))) {
@@ -180,7 +198,7 @@ export function platformGateway(options: {
         const current = record.model && ids.includes(record.model) ? record.model : ids[0]
         body = JSON.stringify({ ...parsed, model: small ?? current })
       }
-      if (!responses && !countTokens && options.rewrite) body = await options.rewrite(body, async () => ids)
+      if (!responses && !chat && !countTokens && options.rewrite) body = await options.rewrite(body, async () => ids)
       const headers = providerHeaders(p, {
         'content-type': 'application/json',
         accept: countTokens ? 'application/json' : 'text/event-stream',
@@ -226,11 +244,14 @@ export function platformGateway(options: {
         noCountTokens.set(url, Date.now())
       }
       const model = (JSON.parse(body) as { model?: unknown }).model
-      await pipe(upstream, responses || countTokens ? null : `custom:${p.id}|${String(model ?? record.model ?? '')}`)
+      await pipe(
+        upstream,
+        responses || chat || countTokens ? null : `custom:${p.id}|${String(model ?? record.model ?? '')}`,
+      )
     }
 
     try {
-      if (req.method !== 'POST' || (!responses && !countTokens && path !== '/v1/messages')) {
+      if (req.method !== 'POST' || (!responses && !chat && !countTokens && path !== '/v1/messages')) {
         fail(404, 'Unsupported gateway endpoint')
         return
       }
@@ -245,7 +266,7 @@ export function platformGateway(options: {
           fail(401, '这个会话用的自定义接口已删除，请换一个接口')
           return
         }
-        if (provider.protocol !== (responses ? 'responses' : 'anthropic')) {
+        if (provider.protocol !== (responses ? 'responses' : chat ? 'chat' : 'anthropic')) {
           fail(403, '接口协议与当前引擎不兼容')
           return
         }
@@ -256,11 +277,18 @@ export function platformGateway(options: {
       } else if (!record?.platform || options.account() !== record.platform.account) {
         fail(401, '平台账号已退出或切换，请重新登录原账号')
         return
-      } else if (countTokens) {
+      } else if (countTokens || chat) {
+        // 平台线路没有 Chat Completions 入口（云端目录里没有这个协议）
         fail(404, 'Unsupported gateway endpoint')
         return
       }
-      if (record.engine !== (responses ? 'codex' : 'claude')) {
+      // 像素星空三种协议都能走：Messages（与 Claude Code 共用）、Responses（与 Codex 共用）、Chat Completions（只有它）
+      const engineOk = chat
+        ? record.engine === 'pixel'
+        : responses
+          ? record.engine === 'codex' || record.engine === 'pixel'
+          : record.engine === 'claude' || record.engine === 'pixel'
+      if (!engineOk) {
         fail(403, '线路协议与当前引擎不兼容')
         return
       }

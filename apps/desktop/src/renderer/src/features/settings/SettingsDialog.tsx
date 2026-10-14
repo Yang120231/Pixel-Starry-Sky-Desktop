@@ -39,6 +39,7 @@ import { TurnRailSettings } from './TurnRailSettings'
 import { LongConversationSettings } from './LongConversationSettings'
 import { SubagentViewSettings } from './SubagentViewSettings'
 import { ModeTransitionSettings } from './ModeTransitionSettings'
+import { GitOpenStyleSettings } from './GitOpenStyleSettings'
 import { MessageActionsSettings } from './MessageActionsSettings'
 import { CacheMissSettings } from './CacheMissSettings'
 import { WallpaperSettings } from './WallpaperSettings'
@@ -714,6 +715,7 @@ function AppearanceSection() {
         />
       </SettingRow>
       <ModeTransitionSettings />
+      <GitOpenStyleSettings />
       <CloseActionSettings />
 
       <SidebarSettings />

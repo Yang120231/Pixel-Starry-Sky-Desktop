@@ -369,10 +369,10 @@ export class ExtensionService {
         if (
           !Array.isArray(o.engines) ||
           !o.engines.length ||
-          o.engines.some(engine => engine !== 'claude' && engine !== 'codex')
+          o.engines.some(engine => engine !== 'claude' && engine !== 'codex' && engine !== 'pixel')
         )
           throw new Error('适用引擎不正确')
-        e.engines = kind === 'plugin' ? ['claude'] : (o.engines as Array<'claude' | 'codex'>)
+        e.engines = kind === 'plugin' ? ['claude'] : (o.engines as Array<'claude' | 'codex' | 'pixel'>)
       }
       e.sourceDigest = sourceDigest
       this.config.entries.push(e)
@@ -497,7 +497,7 @@ export class ExtensionService {
   }
   launch(
     project: string,
-    engine: 'claude' | 'codex' = 'claude',
+    engine: 'claude' | 'codex' | 'pixel' = 'claude',
     extraEnv: Record<string, string> = {},
   ): ExtensionLaunch {
     project = realpathSync(project)

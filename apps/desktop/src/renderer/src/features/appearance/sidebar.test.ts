@@ -621,4 +621,21 @@ describe('侧边栏外观偏好', () => {
       }
     }
   })
+
+  it('矮窗口默认收起最近任务，点过或保存为收起就按保存的', async () => {
+    const { recentOpen, parseSidebarPrefs } = await import('./sidebar')
+    const fresh = parseSidebarPrefs(null)
+    expect(recentOpen(fresh, false)).toBe(true)
+    expect(recentOpen(fresh, true)).toBe(false)
+    expect(recentOpen({ recentExpanded: false }, false)).toBe(false)
+    expect(recentOpen({ recentExpanded: true, recentChosen: true }, true)).toBe(true)
+    expect(recentOpen({ recentExpanded: false, recentChosen: true }, false)).toBe(false)
+  })
+
+  it('recentChosen 只认 boolean，默认不写', async () => {
+    const { parseSidebarPrefs } = await import('./sidebar')
+    expect(parseSidebarPrefs(null).recentChosen).toBeUndefined()
+    expect(parseSidebarPrefs({ version: 4, recentChosen: true }).recentChosen).toBe(true)
+    expect(parseSidebarPrefs({ version: 4, recentChosen: 'yes' }).recentChosen).toBeUndefined()
+  })
 })

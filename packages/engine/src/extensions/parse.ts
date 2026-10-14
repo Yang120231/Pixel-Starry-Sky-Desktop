@@ -83,9 +83,13 @@ export function input(v: unknown): ExtensionInput {
     enabled: o.enabled !== false,
   }
   if (o.engines !== undefined) {
-    if (!Array.isArray(o.engines) || !o.engines.length || o.engines.some(e => e !== 'claude' && e !== 'codex'))
+    if (
+      !Array.isArray(o.engines) ||
+      !o.engines.length ||
+      o.engines.some(e => e !== 'claude' && e !== 'codex' && e !== 'pixel')
+    )
       throw new Error('适用引擎不正确')
-    base.engines = [...new Set(o.engines)] as Array<'claude' | 'codex'>
+    base.engines = [...new Set(o.engines)] as Array<'claude' | 'codex' | 'pixel'>
   }
   if (base.kind === 'mcp') base.mcp = mcpConfig(o.mcp)
   if (base.kind === 'cli') {

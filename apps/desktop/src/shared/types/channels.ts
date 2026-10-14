@@ -4,15 +4,65 @@ import type { ApprovalRequest, EngineId, SessionSettings } from '@pixelsky/proto
 
 export type ChannelAgentStatus = 'idle' | 'running' | 'waiting' | 'offline'
 
+// ── Phase C：多人团队（docs/ui/channels-phase-c.md §5.3） ──
+
+export type TeamRole = 'owner' | 'member' | 'observer'
+/** 团队频道里别人 @ 我的 AI 成员时：approve = 要我同意（默认）；team = 团队成员可直接派活 */
+export type AgentPolicy = 'approve' | 'team'
+
+export interface TeamMemberInfo {
+  /** owner key（u:123 / e:邮箱），也是团队频道里的成员 id */
+  id: string
+  role: TeamRole
+  online: boolean
+  /** 毫秒时间戳 */
+  lastSeenAt: number | null
+  email?: string
+}
+
+export interface TeamInviteInfo {
+  id: string
+  email: string
+  role: Exclude<TeamRole, 'owner'>
+  expiresAt: number
+}
+
+export interface TeamInfo {
+  id: string
+  name: string
+  /** 我的角色 */
+  role: TeamRole
+  members: TeamMemberInfo[]
+  /** 待接受的邀请；只有所有者能看到 */
+  invites: TeamInviteInfo[]
+}
+
+/** 别人邀请我（频道页最上面的邀请卡） */
+export interface PendingInvite {
+  id: string
+  teamId: string
+  teamName: string
+  /** 邀请人的显示名 */
+  inviter: string
+  role: Exclude<TeamRole, 'owner'>
+  expiresAt: number
+}
+
+/** signed-out 没登录；unavailable 云端没有团队接口（404）；offline 连不上、正在重试 */
+export type TeamsConnection = 'signed-out' | 'unavailable' | 'connecting' | 'online' | 'offline'
+
 export interface HumanMember {
   id: string
   kind: 'human'
   name: string
   /** 当前用户自己 */
   you?: boolean
-  role?: 'owner' | 'member'
-  /** Phase C：平台用户 */
+  role?: TeamRole
+  /** Phase C：平台用户（owner key） */
   userId?: string
+  /** Phase C：团队成员才有 */
+  online?: boolean
+  lastSeenAt?: number | null
 }
 
 /** AI 成员派活时用的会话设置；没写的用引擎默认值 */
@@ -55,8 +105,16 @@ export interface AgentMember {
   task?: string | null
   /** 当前任务的会话 */
   sessionId?: string | null
-  /** Phase C：AI 成员属于哪个真人 */
+  /** Phase C：AI 成员属于哪个真人（owner key） */
   ownerId?: string
+  /** Phase C：团队频道里的 ta_…（和 id 相同） */
+  teamAgentId?: string
+  /** Phase C：主人的显示名（别人的 AI 成员显示「· 林夏的」） */
+  ownerName?: string
+  /** Phase C：是我自己的 AI 成员（本机频道里的成员都是） */
+  mine?: boolean
+  /** Phase C：别人 @ 它时要不要我同意 */
+  policy?: AgentPolicy
   // 以下只有真实数据才有（主进程按任务汇总后推过来）
   config?: AgentConfig
   /** 当前任务之外还在排队的活 */
@@ -83,6 +141,8 @@ export interface Channel {
   projectId?: string | null
   /** local = 本机 AI 协作；team = 团队频道（Phase C） */
   scope: 'local' | 'team'
+  /** Phase C：团队频道属于哪个团队 */
+  teamId?: string
   memberIds: string[]
   unread: number
   /** 未读里有人 @你 */
@@ -92,7 +152,8 @@ export interface Channel {
   lastAt?: number
 }
 
-export type ChannelTaskStatus = 'queued' | 'running' | 'waiting' | 'done' | 'failed' | 'stopped'
+/** approval：团队频道里等 AI 成员的主人同意（Phase C §4.2） */
+export type ChannelTaskStatus = 'queued' | 'approval' | 'running' | 'waiting' | 'done' | 'failed' | 'stopped'
 
 interface ChannelMessageBase {
   id: string
@@ -129,8 +190,8 @@ export interface ChannelTask extends ChannelMessageBase {
   round?: number
   /** 失败原因（第一行） */
   error?: string | null
-  /** stopped 的补充：cancelled = 还没开始就取消了 */
-  note?: 'cancelled' | null
+  /** stopped 的补充：cancelled = 还没开始就取消了；rejected = 主人没同意；expired = 排队太久过期（Phase C） */
+  note?: 'cancelled' | 'rejected' | 'expired' | null
   /** 回复里「需要你决定：」那一行 */
   decision?: string | null
   /** 等你确认的请求（waiting 时） */
@@ -143,11 +204,17 @@ export interface ChannelTask extends ChannelMessageBase {
   disconnected?: boolean
   /** 这一轮结束的时间 */
   endedAt?: number | null
+  /** Phase C：AI 成员的主人（owner key）；只有主人能同意、回答、打开会话 */
+  ownerId?: string
+  /** Phase C：派活的人或主人点了取消 / 停止 / 重试，等主人那台电脑执行 */
+  pendingAction?: ChannelTaskAction | null
+  /** Phase C：主人的电脑不在线（queued 时显示「上线后开始」） */
+  ownerOffline?: boolean
 }
 
 export interface ChannelEvent extends ChannelMessageBase {
   kind: 'event'
-  event: 'joined' | 'added' | 'removed' | 'renamed' | 'topic'
+  event: 'joined' | 'added' | 'removed' | 'renamed' | 'topic' | 'left' | 'agentAdded' | 'agentRemoved'
   actorId: string
   targetId?: string | null
   value?: string | null
@@ -163,6 +230,12 @@ export interface ChannelsSnapshot {
   members: ChannelMember[]
   /** 频道开出来的会话 → 频道名（侧栏、看板上显示 `# 频道名`） */
   sessionChannels: Record<string, string>
+  // ── Phase C ──
+  teams: TeamInfo[]
+  invites: PendingInvite[]
+  teamsConnection: TeamsConnection
+  /** 上次和云端同步成功的时间 */
+  teamsSyncedAt: number | null
 }
 
 /** channels:message 推送：新消息或任务卡更新 */
@@ -177,6 +250,8 @@ export interface ChannelInput {
   projectId?: string | null
   /** 新建时加进来的已有 AI 成员 */
   memberIds?: string[]
+  /** Phase C：建在哪个团队里；不写是本机频道 */
+  teamId?: string | null
 }
 
 /** machineId 由主进程按 projectId 推出来 */

@@ -51,8 +51,12 @@ import type {
 import type { WorkspaceRef } from '../../../../../shared/types/workspace'
 import { failureHint, failureTitle } from './gitModel'
 import { GitDiffView } from './GitDiffView'
+import { hasCodeOpener } from '@/features/files/store'
+import { refKey as workspaceRefKey } from '@/features/editor/target'
+import { routeGitDiff } from '@/features/coding/editor/gitDiffModel'
+import { commitDiffInput, openGitDiffTab, useCurrentGitDiff } from '@/features/coding/editor/gitDiffTabs'
 import { layoutGraph, type GraphRow } from './graph'
-import { ChangedFiles, GraphCell, RefBadge, RefBadges, ROW_H } from './HistoryParts'
+import { ChangedFiles, GraphCell, RefBadge, RefBadges, ROW_H, SYNC_COLOR } from './HistoryParts'
 import {
   HistoryActionDialog,
   touchesWorktree,
@@ -65,6 +69,8 @@ import {
   fullMessage,
   fullTime,
   historyEntries,
+  SYNC_TITLE_KEY,
+  syncStates,
   refBadges,
   shortHash,
   type HistoryEntry,
@@ -162,6 +168,16 @@ export function GitHistory({
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set())
   const [details, setDetails] = useState<Record<string, Detail>>({})
   const [diff, setDiff] = useState<{ items: DiffItem[]; index: number } | null>(null)
+  // 代码模式：提交里的文件在中栏开只读的「Git 对比」标签（左栏提交列表不动）；对话模式仍在面板里就地看
+  const currentDiff = useCurrentGitDiff(workspaceRefKey(target))
+  const showDiff = (items: DiffItem[], index: number) => {
+    const item = items[index]
+    if (item && routeGitDiff(hasCodeOpener()) === 'center') {
+      const caption =
+        item.caption ?? (item.from ? `${shortHash(item.from)} ↔ ${shortHash(item.to)}` : shortHash(item.to))
+      openGitDiffTab(commitDiffInput(target, workspaceRefKey(target), demo, item.file, item.from, item.to, caption))
+    } else setDiff({ items, index })
+  }
   /** 单文件历史（§9.15）：只列改过这个文件的提交；filePath 是查到的仓库内路径 */
   const [file, setFile] = useState<{ path: string; base: 'workspace' | 'repo' } | null>(
     fileRequest ? { path: fileRequest.path, base: fileRequest.base } : null,
@@ -275,7 +291,29 @@ export function GitHistory({
   }, [headKey, refKey])
 
   // 搜索和单文件历史不画分支线（列出的提交不连续）
-  const rows = useMemo(() => (query || file ? null : layoutGraph(commits)), [commits, query, file])
+  // 当前分支的提交按「和上游的关系」分状态（未推送 / 已推送 / 远程新提交），分支线和标记按状态上色（docs/ui/git-graph-colors.md）
+  const upstreamTip = useMemo(
+    () =>
+      (status.upstream &&
+        commits.find(c => c.refs.some(r => r.kind === 'remote' && r.name === status.upstream))?.hash) ||
+      null,
+    [commits, status.upstream],
+  )
+  const states = useMemo(
+    () =>
+      query || file
+        ? null
+        : syncStates(commits, {
+            head: status.head,
+            upstreamTip,
+            ...(status.upstream ? { ahead: status.ahead, behind: status.behind } : {}),
+          }),
+    [commits, query, file, status.head, status.upstream, status.ahead, status.behind, upstreamTip],
+  )
+  const rows = useMemo(
+    () => (query || file ? null : layoutGraph(commits, states ?? undefined)),
+    [commits, query, file, states],
+  )
   const lanes = useMemo(() => Math.max(1, ...(rows ?? []).map(r => r.width)), [rows])
   const entries = useMemo(
     () =>
@@ -284,8 +322,10 @@ export function GitHistory({
         upstream: status.upstream,
         ahead: status.ahead,
         behind: status.behind,
+        unpublished:
+          !status.upstream && !status.detached && !status.initial && !!status.branch && status.remotes.length > 0,
       }),
-    [commits, rows, status.head, status.upstream, status.ahead, status.behind],
+    [commits, rows, status],
   )
 
   const onScroll = () => {
@@ -540,10 +580,19 @@ export function GitHistory({
         <ChangedFiles
           files={set.files}
           onHistory={index => openFileHistory(set.files[index].path)}
+          isCurrent={f =>
+            currentDiff?.area === 'commit' &&
+            currentDiff.path === f.path &&
+            currentDiff.to === set.to &&
+            currentDiff.from === set.from
+          }
           onOpen={index => {
             hideHover()
             scrollBack.current = list.current?.scrollTop ?? 0
-            setDiff({ items: set.files.map(f => ({ file: f, from: set.from, to: set.to })), index })
+            showDiff(
+              set.files.map(f => ({ file: f, from: set.from, to: set.to })),
+              index,
+            )
           }}
         />
         {set.truncated && <p className="px-1.5 text-meta text-warn">{tr('git.history.truncated')}</p>}
@@ -587,7 +636,7 @@ export function GitHistory({
     if (index < 0) return
     hideHover()
     scrollBack.current = list.current?.scrollTop ?? 0
-    setDiff({ items, index })
+    showDiff(items, index)
   }
   /** 任意两个版本之间这个文件的差异：旧的在左 */
   const compareVersions = (a: GitCommit, b: GitCommit) => {
@@ -595,8 +644,8 @@ export function GitHistory({
     if (!older.file || !newer.file) return
     hideHover()
     scrollBack.current = list.current?.scrollTop ?? 0
-    setDiff({
-      items: [
+    showDiff(
+      [
         {
           file: {
             ...newer.file,
@@ -608,8 +657,8 @@ export function GitHistory({
           caption: tr('git.history.file.versions', { from: shortHash(older.hash), to: shortHash(newer.hash) }),
         },
       ],
-      index: 0,
-    })
+      0,
+    )
   }
 
   const renderEntry = (entry: HistoryEntry) => {
@@ -618,27 +667,48 @@ export function GitHistory({
       const key = '@' + entry.kind
       const expanded = open.has(key)
       const Icon = entry.kind === 'outgoing' ? ArrowUp : ArrowDown
+      const tone = entry.kind === 'outgoing' ? 'local' : 'incoming'
+      const label = entry.unpublished
+        ? tr('git.history.outgoingUnpublished')
+        : tr(`git.history.${entry.kind}`, { n: entry.count })
       return (
         <div key={key} data-history-special={entry.kind} className="flex min-w-0">
-          <GraphCell row={graph} lanes={lanes} node="special" expanded={expanded} />
+          <GraphCell
+            row={{ ...graph, state: tone }}
+            lanes={lanes}
+            node="special"
+            expanded={expanded}
+            title={tr(SYNC_TITLE_KEY[tone])}
+          />
           <div className="min-w-0 flex-1">
             <div
-              role="button"
-              tabIndex={0}
-              aria-expanded={expanded}
-              onClick={() => toggleCompare(entry.kind)}
-              onKeyDown={e => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  toggleCompare(entry.kind)
-                }
-              }}
-              className="flex min-w-0 cursor-pointer items-center gap-1.5 rounded-md pr-2 pl-1 text-list text-fg-muted italic hover:bg-hover"
-              style={{ height: ROW_H }}
+              role={entry.unpublished ? undefined : 'button'}
+              tabIndex={entry.unpublished ? undefined : 0}
+              aria-expanded={entry.unpublished ? undefined : expanded}
+              onClick={entry.unpublished ? undefined : () => toggleCompare(entry.kind)}
+              onKeyDown={
+                entry.unpublished
+                  ? undefined
+                  : e => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        toggleCompare(entry.kind)
+                      }
+                    }
+              }
+              title={tr(SYNC_TITLE_KEY[tone])}
+              data-sync-tone={tone}
+              className={cn(
+                'flex min-w-0 items-center gap-1.5 rounded-md pr-2 pl-1 text-list italic',
+                !entry.unpublished && 'cursor-pointer hover:bg-hover',
+              )}
+              style={{ height: ROW_H, color: SYNC_COLOR[tone] }}
             >
               <Icon size={13} className="shrink-0" />
-              <span className="min-w-0 flex-1 truncate">{tr(`git.history.${entry.kind}`, { n: entry.count })}</span>
-              <ChevronDown size={13} className={cn('shrink-0 transition-transform', !expanded && '-rotate-90')} />
+              <span className="min-w-0 flex-1 truncate">{label}</span>
+              {!entry.unpublished && (
+                <ChevronDown size={13} className={cn('shrink-0 transition-transform', !expanded && '-rotate-90')} />
+              )}
             </div>
             {expanded && renderCompare(key, rangeWhat(entry.kind))}
           </div>
@@ -647,7 +717,13 @@ export function GitHistory({
     }
     const c = entry.commit
     const expanded = open.has(c.hash)
-    const badges = refBadges(c.refs, refs?.base ?? null)
+    const state = entry.graph?.state
+    const badges = refBadges(c.refs, refs?.base ?? null, { state, upstream: status.upstream })
+    const nodeTitle = !state
+      ? undefined
+      : state === 'synced' && status.upstream
+        ? tr('git.history.sync.syncedTo', { upstream: status.upstream })
+        : tr(SYNC_TITLE_KEY[state])
     return (
       <div
         key={c.hash}
@@ -659,6 +735,7 @@ export function GitHistory({
           lanes={lanes}
           node={entry.head ? 'head' : graph.merge ? 'merge' : 'commit'}
           expanded={expanded}
+          title={nodeTitle}
         />
         <div className="min-w-0 flex-1">
           <div
@@ -997,7 +1074,14 @@ export function GitHistory({
         />
       )}
       {hover && (
-        <HoverCard commit={hover.commit} rect={hover.rect} badges={refBadges(hover.commit.refs, refs?.base ?? null)} />
+        <HoverCard
+          commit={hover.commit}
+          rect={hover.rect}
+          badges={refBadges(hover.commit.refs, refs?.base ?? null, {
+            state: states?.get(hover.commit.hash),
+            upstream: status.upstream,
+          })}
+        />
       )}
       {pending && (
         <HistoryActionDialog

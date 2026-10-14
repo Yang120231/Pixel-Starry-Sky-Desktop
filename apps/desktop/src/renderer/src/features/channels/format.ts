@@ -1,6 +1,7 @@
 // 频道时间线的日期 / 时间格式（docs/ui/channels.md §5.1）
 import { getLocale, tr } from '../../i18n/core'
 import { dayStart } from './model'
+import { lastSeen } from './teamModel'
 
 const WEEKDAYS = '日一二三四五六'
 
@@ -29,4 +30,19 @@ export function formatClock(at: number): string {
   const d = new Date(at)
   if (getLocale() === 'en-US') return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(d)
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+const SEEN_KEY = { minutes: 'team.seen.minutes', hours: 'team.seen.hours', days: 'team.seen.days' } as const
+
+/** 「N 分钟前在线」等；没有记录或太久以前返回 null */
+export function formatLastSeen(at: number | null | undefined, now = Date.now()): string | null {
+  const seen = lastSeen(at, now)
+  if (!seen) return null
+  if (seen.unit === 'justNow') return tr('team.seen.justNow')
+  return tr(SEEN_KEY[seen.unit], { count: seen.count })
+}
+
+/** 同步时间：今天只写时间，其它带日期 */
+export function formatSyncTime(at: number, now = Date.now()): string {
+  return dayStart(at) === dayStart(now) ? formatClock(at) : `${formatDay(at, now)} ${formatClock(at)}`
 }

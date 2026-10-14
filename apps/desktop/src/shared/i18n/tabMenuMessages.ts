@@ -8,6 +8,8 @@ export const tabMenuMessages = {
   'tabMenu.tabPosition': { zh: '标签位置', en: 'Tab position' },
   'tabMenu.moveLeft': { zh: '向左移', en: 'Move left' },
   'tabMenu.moveRight': { zh: '向右移', en: 'Move right' },
+  'tabMenu.scrollLeft': { zh: '向左滚动标签', en: 'Scroll tabs left' },
+  'tabMenu.scrollRight': { zh: '向右滚动标签', en: 'Scroll tabs right' },
   'tabMenu.close': { zh: '关闭', en: 'Close' },
   'tabMenu.deleteConversation': { zh: '删除对话', en: 'Delete conversation' },
 } as const

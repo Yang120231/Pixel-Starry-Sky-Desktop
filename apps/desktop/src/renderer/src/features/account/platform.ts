@@ -48,20 +48,26 @@ export interface PlatformState extends SourcePreference {
 const KEY = 'pixelsky.platform.preference.v1'
 const HIDDEN_KEY = 'pixelsky.platform.hiddenModels'
 const ENGINE_KEY = 'pixelsky.sources.v2'
-let codexPreference: SourcePreference = {
+/** 除 Claude Code 外，每个引擎各自存一份默认（Claude Code 的在 state 里）；像素星空走 Anthropic 线路但模型自己定 */
+type OwnEngine = Exclude<EngineId, 'claude'>
+const OWN_ENGINES: readonly OwnEngine[] = ['codex', 'pixel']
+const blankPreference = (): SourcePreference => ({
   source: 'self',
   groupId: null,
   model: null,
   selfModel: null,
   providerId: null,
   customModel: null,
-}
-let codexUnsaved = true
-try {
-  const saved = JSON.parse(localStorage.getItem(ENGINE_KEY) ?? '{}').codex
-  if (saved) {
-    codexUnsaved = false
-    codexPreference = {
+})
+const enginePreferences: Record<OwnEngine, SourcePreference> = { codex: blankPreference(), pixel: blankPreference() }
+const engineUnsaved: Record<OwnEngine, boolean> = { codex: true, pixel: true }
+function readEnginePreferences(raw: string | null): void {
+  const all = JSON.parse(raw ?? '{}') as Record<string, Record<string, unknown> | undefined>
+  for (const engine of OWN_ENGINES) {
+    const saved = all[engine]
+    engineUnsaved[engine] = !saved
+    if (!saved) continue
+    enginePreferences[engine] = {
       source: creditSource(saved.source, 'self'),
       groupId: typeof saved.groupId === 'string' ? saved.groupId : null,
       model: typeof saved.model === 'string' ? saved.model : null,
@@ -70,24 +76,42 @@ try {
       customModel: typeof saved.customModel === 'string' ? saved.customModel : null,
     }
   }
+}
+try {
+  readEnginePreferences(localStorage.getItem(ENGINE_KEY))
 } catch {
   /* 首次使用 */
 }
 let projections: Partial<Record<EngineId, PlatformState>> = {}
 export function groupSupportsEngine(group: PlatformGroupInfo, engine: EngineId): boolean {
   const desc = ENGINES[engine]
-  if (group.supported_apis && !group.supported_apis.includes(desc.wireApi)) return false
-  if (group.supported_engines) return group.supported_engines.includes(engine)
+  // 像素星空两种协议（Messages / Responses）都会说
+  if (
+    group.supported_apis &&
+    !(engine === 'pixel' ? ['messages', 'responses'] : [desc.wireApi]).some(a => group.supported_apis!.includes(a))
+  )
+    return false
+  // 目录里写了 claude 或 codex 的线路像素星空也能用
+  if (group.supported_engines)
+    return (
+      group.supported_engines.includes(engine) ||
+      (engine === 'pixel' && (group.supported_engines.includes('claude') || group.supported_engines.includes('codex')))
+    )
   // 旧目录没有写平台字段的分组，只归给允许的引擎（unlabeledGroups）
   if (!group.platform) return desc.unlabeledGroups
   return desc.platformVendors.includes(group.platform)
 }
-function saveEnginePreference(patch: Partial<SourcePreference>): void {
-  codexUnsaved = false
-  codexPreference = { ...codexPreference, ...patch }
+function saveEnginePreference(engine: OwnEngine, patch: Partial<SourcePreference>): void {
+  engineUnsaved[engine] = false
+  enginePreferences[engine] = { ...enginePreferences[engine], ...patch }
   if (!window.pixelsky?.demo)
     try {
-      localStorage.setItem(ENGINE_KEY, JSON.stringify({ codex: codexPreference }))
+      localStorage.setItem(
+        ENGINE_KEY,
+        JSON.stringify(
+          Object.fromEntries(OWN_ENGINES.filter(e => !engineUnsaved[e]).map(e => [e, enginePreferences[e]])),
+        ),
+      )
     } catch {
       /* 保留内存 */
     }
@@ -148,17 +172,7 @@ if (typeof window !== 'undefined')
     } else if (e.key === HIDDEN_KEY) state = { ...state, hiddenModels: readHidden() }
     else if (e.key === ENGINE_KEY) {
       try {
-        const saved = JSON.parse(e.newValue ?? '{}').codex
-        codexUnsaved = !saved
-        if (saved)
-          codexPreference = {
-            source: creditSource(saved.source, 'self'),
-            groupId: typeof saved.groupId === 'string' ? saved.groupId : null,
-            model: typeof saved.model === 'string' ? saved.model : null,
-            selfModel: typeof saved.selfModel === 'string' ? saved.selfModel : null,
-            providerId: typeof saved.providerId === 'string' ? saved.providerId : null,
-            customModel: typeof saved.customModel === 'string' ? saved.customModel : null,
-          }
+        readEnginePreferences(e.newValue)
       } catch {
         return
       }
@@ -189,7 +203,7 @@ function set(patch: Partial<PlatformState>, persist = false): void {
 export function getPlatformState(engine: EngineId = 'claude'): PlatformState {
   if (!projections[engine]) {
     const groups = state.groups.filter(group => groupSupportsEngine(group, engine)),
-      preference = engine === 'claude' ? state : codexPreference
+      preference = engine === 'claude' ? state : enginePreferences[engine]
     const resolved = resolvePlatform(groups, preference.groupId, preference.model)
     projections[engine] = { ...state, ...preference, groups, ...(state.loaded ? resolved : {}) }
   }
@@ -321,8 +335,8 @@ export async function refreshPlatform(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export function setDefaultSource(source: CreditSource, engine: EngineId = 'claude'): void {
-  if (engine === 'codex') {
-    saveEnginePreference({ source })
+  if (engine !== 'claude') {
+    saveEnginePreference(engine, { source })
     return
   }
   set({ source }, true)
@@ -332,7 +346,7 @@ export function setDefaultSource(source: CreditSource, engine: EngineId = 'claud
 export function setDefaultModel(model: string, engine: EngineId = 'claude'): void {
   const current = getPlatformState(engine),
     patch = { source: 'platform' as const, ...resolvePlatform(current.groups, current.groupId, model) }
-  if (engine === 'codex') saveEnginePreference(patch)
+  if (engine !== 'claude') saveEnginePreference(engine, patch)
   else set(patch, true)
 }
 
@@ -346,20 +360,20 @@ export function setDefaultGroup(groupId: string, engine: EngineId = 'claude'): v
     groupId,
     model: current.model && group.models.includes(current.model) ? current.model : group.models[0],
   }
-  if (engine === 'codex') saveEnginePreference(patch)
+  if (engine !== 'claude') saveEnginePreference(engine, patch)
   else set(patch, true)
 }
 
 /** 自定义 API：换接口或模型 */
 export function setDefaultCustom(providerId: string, customModel: string | null, engine: EngineId = 'claude'): void {
   const patch = { source: 'custom' as const, providerId, customModel }
-  if (engine === 'codex') saveEnginePreference(patch)
+  if (engine !== 'claude') saveEnginePreference(engine, patch)
   else set(patch, true)
 }
 
 export function setDefaultSelfModel(selfModel: string | null, engine: EngineId = 'claude'): void {
-  if (engine === 'codex') {
-    saveEnginePreference({ source: 'self', selfModel })
+  if (engine !== 'claude') {
+    saveEnginePreference(engine, { source: 'self', selfModel })
     return
   }
   set({ source: 'self', selfModel }, true)
@@ -405,8 +419,8 @@ export function matchModels(models: string[], query: string): string[] {
 
 /** 「设为默认」：把一个会话的选择写回全局默认 */
 export function saveDefault(p: Partial<SourcePreference>, engine: EngineId = 'claude'): void {
-  if (engine === 'codex') {
-    saveEnginePreference(p)
+  if (engine !== 'claude') {
+    saveEnginePreference(engine, p)
     return
   }
   set(p, true)
@@ -441,8 +455,9 @@ function start(): void {
     // 已经选了自定义 API 的不改：自定义 API 不依赖平台账号
     const source: CreditSource | undefined =
       !initial && email ? 'platform' : unsaved ? (email ? 'platform' : 'self') : undefined
-    if ((source && codexPreference.source !== 'custom') || codexUnsaved)
-      saveEnginePreference({ source: source ?? (email ? 'platform' : 'self') })
+    for (const engine of OWN_ENGINES)
+      if ((source && enginePreferences[engine].source !== 'custom') || engineUnsaved[engine])
+        saveEnginePreference(engine, { source: source ?? (email ? 'platform' : 'self') })
     const claudeSource = state.source === 'custom' ? undefined : source
     set(
       {

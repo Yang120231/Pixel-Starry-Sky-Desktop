@@ -2365,8 +2365,8 @@ export const catalog = {
     "en": "Filter files by name"
   },
   "files.FileTree.filterFilesByName2": {
-    "zh": "按名称筛选文件…",
-    "en": "Filter files by name…"
+    "zh": "按名过滤…",
+    "en": "Filter by name…"
   },
   "files.FileTree.clearFileFilter": {
     "zh": "清空文件筛选",
@@ -2822,7 +2822,7 @@ export const catalog = {
   },
   "settings.AboutSection.applicationVersion": {
     "zh": "应用版本",
-    "en": "Application version"
+    "en": "Version"
   },
   "settings.AboutSection.system": {
     "zh": "系统",
@@ -2842,7 +2842,7 @@ export const catalog = {
   },
   "settings.AboutSection.authenticationService": {
     "zh": "认证服务",
-    "en": "Authentication service"
+    "en": "Sign-in service"
   },
   "settings.AboutSection.openAuthenticationServiceIn": {
     "zh": "在浏览器中打开认证服务",
@@ -2850,7 +2850,7 @@ export const catalog = {
   },
   "settings.AboutSection.dataDirectory": {
     "zh": "数据目录",
-    "en": "Data directory"
+    "en": "Data folder"
   },
   "settings.AboutSection.openDataDirectory": {
     "zh": "打开数据目录",
@@ -2862,7 +2862,7 @@ export const catalog = {
   },
   "settings.AboutSection.sourceRepository": {
     "zh": "代码仓库",
-    "en": "Source repository"
+    "en": "Source code"
   },
   "settings.AboutSection.openSourceRepositoryIn": {
     "zh": "在浏览器中打开代码仓库",

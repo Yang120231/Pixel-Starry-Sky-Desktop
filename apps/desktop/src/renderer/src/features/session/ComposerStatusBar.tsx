@@ -25,6 +25,7 @@ export function ComposerStatusBar({
   const { text } = useI18n()
   const machines = useMachines(),
     machine = machines.machines.find(m => m.id === machines.currentId)
+  const machineName = live ? (machine?.id === 'local' ? text('本机') : machine?.name) : text(composerStatus.machine)
   return (
     <div
       data-composer-workspace
@@ -33,10 +34,14 @@ export function ComposerStatusBar({
       <button
         type="button"
         onClick={() => openMachineManager()}
-        className="inline-flex shrink-0 items-center gap-1.5 hover:text-fg"
+        title={machineName}
+        aria-label={machineName}
+        className="inline-flex min-w-0 shrink-0 items-center gap-1.5 hover:text-fg"
       >
-        <Monitor size={13} strokeWidth={1.5} />
-        {live ? (machine?.id === 'local' ? text('本机') : machine?.name) : text(composerStatus.machine)}
+        <Monitor size={13} strokeWidth={1.5} className="shrink-0" />
+        <span data-composer-machine-label className="truncate">
+          {machineName}
+        </span>
       </button>
       {live ? <ProjectPicker live={live} target={git ?? null} /> : <DemoFolder />}
       {(git ?? (!live && composerStatus.branch !== null ? DEMO_TARGET : null)) && (

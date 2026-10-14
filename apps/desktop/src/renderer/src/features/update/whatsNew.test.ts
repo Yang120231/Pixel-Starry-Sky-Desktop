@@ -76,6 +76,12 @@ describe('说明的结构', () => {
         ],
       },
     ])
+    // 「亮点」排在最前、不计入条数
+    const withHighlights = parseNotes(
+      '## ✨ 亮点\n\n- **团队频道**：几个人一起用\n\n## 🆕 新功能\n\n- **团队频道**：细节',
+    )
+    expect(withHighlights.map(s => s.kind)).toEqual(['highlight', 'feature'])
+    expect(countKinds(withHighlights)).toEqual({ feature: 1 })
     for (const [version, body] of Object.entries(RELEASE_NOTES)) {
       const sections = parseNotes(body)
       expect(sections.length, version).toBeGreaterThan(0)

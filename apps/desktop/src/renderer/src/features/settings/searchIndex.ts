@@ -1,7 +1,7 @@
 // 设置搜索的索引（docs/ui/plan-search-panes-compact.md §1，参考 JuCode settings/nav.ts）：
 // 每个设置项的标题、说明里的关键词、在哪一页。title 要和页面上 SettingRow / GroupTitle 的标题一致
 // （它们会带 data-setting-title），点搜索结果时按标题找到那一行、滚过去并高亮。改设置页时同步改这里。
-import type { EngineId } from '@pixelsky/protocol'
+import { ENGINES, type EngineId } from '@pixelsky/protocol'
 import type { SectionId } from './SettingsDialog'
 import { tr, translateText } from '../../i18n/core'
 
@@ -111,6 +111,7 @@ export const SETTINGS_INDEX: SearchEntry[] = [
     engine: 'claude',
   },
   { section: 'engines', title: 'Codex', keywords: '引擎 openai codex' },
+  { section: 'engines', title: ENGINES.pixel.name, keywords: 'engine pixel pixelsky starry px pi cli agent' },
   { section: 'engines', title: '检查更新', keywords: '升级 更新 版本 claude update 新版本', engine: 'claude' },
   { section: 'engines', title: '新会话默认值', keywords: '默认 新任务 新会话', engine: 'claude' },
   { section: 'engines', title: '推理强度', keywords: 'effort 思考 强度 默认 low high max', engine: 'claude' },
@@ -184,6 +185,15 @@ export const SETTINGS_INDEX: SearchEntry[] = [
     },
     get keywords() {
       return tr('coding.shell.transition.keywords')
+    },
+  },
+  {
+    section: 'appearance',
+    get title() {
+      return tr('coding.gitOpen.setting')
+    },
+    get keywords() {
+      return tr('coding.gitOpen.keywords')
     },
   },
   {

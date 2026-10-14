@@ -25,7 +25,7 @@ import { useInbox } from '@/features/panel/inbox/useInbox'
 import { OPEN_SETTINGS, TOGGLE_TERMINAL, withShortcut } from '@/features/layout/shortcuts'
 import { setPage, showWorkbench, usePage } from '@/features/layout/page'
 import { codingLayout, useCodingLayout } from '../layoutStore'
-import { useProblems } from '../problems'
+import { PROBLEMS_READY, useProblems } from '../problems'
 import { useProjectContext } from '@/features/panel/projectContext'
 import type { LeftView, RightView } from '../types'
 import { useGitBadge } from '../left/git'
@@ -137,17 +137,19 @@ function LeftStripe() {
           codingLayout.toggleBottom('terminal')
         }}
       />
-      <StripeButton
-        data="problems"
-        icon={CircleAlert}
-        label={tr('coding.shell.problems')}
-        active={onWorkbench && layout.bottom.open && layout.bottom.tab === 'problems'}
-        badge={problemCount > 0 ? <CountBadge count={problemCount} /> : null}
-        onClick={() => {
-          showWorkbench()
-          codingLayout.toggleBottom('problems')
-        }}
-      />
+      {PROBLEMS_READY && (
+        <StripeButton
+          data="problems"
+          icon={CircleAlert}
+          label={tr('coding.shell.problems')}
+          active={onWorkbench && layout.bottom.open && layout.bottom.tab === 'problems'}
+          badge={problemCount > 0 ? <CountBadge count={problemCount} /> : null}
+          onClick={() => {
+            showWorkbench()
+            codingLayout.toggleBottom('problems')
+          }}
+        />
+      )}
       <span aria-hidden className="my-1 h-px w-5 shrink-0 bg-line" />
       <StripeButton
         data="settings"

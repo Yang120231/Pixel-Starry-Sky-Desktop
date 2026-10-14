@@ -18,7 +18,20 @@ import { Button, cn, IconButton, Segmented, Spinner } from '@/ui'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
-import { openFile } from '@/features/files/store'
+import { hasCodeOpener, openFile } from '@/features/files/store'
+import { keyRef, refKey } from '@/features/editor/target'
+import { gitOpenTarget, routeGitDiff } from '@/features/coding/editor/gitDiffModel'
+import { getGitOpenStyle } from '@/features/coding/editor/gitOpenStyle'
+import { openWorkFile, useActiveCodeFile } from '@/features/coding/editor/gitWorkOpen'
+import {
+  openGitDiffTab,
+  registerGitFileActions,
+  setGitActionsBusy,
+  setGitFileKey,
+  syncGitDiffTabs,
+  useCurrentGitDiff,
+  workDiffInput,
+} from '@/features/coding/editor/gitDiffTabs'
 import { machineOf } from '@/features/machines/store'
 import { useProjectContext } from '../projectContext'
 import { openRightTab } from '../workspaceStore'
@@ -46,6 +59,7 @@ import {
   type GitSection,
 } from './gitModel'
 import { GitDiffView } from './GitDiffView'
+import type { GitFileActions } from '@/features/coding/editor/gitDiffTabs'
 import { AiCommitButton, AiCommitNote, useAiCommit } from './AiCommit'
 import { BranchMenu } from './BranchMenu'
 import { GitHistory } from './GitHistory'
@@ -354,6 +368,54 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
       })
     else void run(false)
   }
+
+  // 代码模式：点文件打开到中栏（左栏列表不动、高亮当前文件）——样式 A 工作区改动开成文件标签、其余开「Git 对比」标签，
+  // 样式 B 一律「Git 对比」标签（docs/ui/coding-mode.md §3.3.1–3.3.2）；对话模式仍在面板里就地看
+  const workspaceKey = refKey(target)
+  const openDiff = (area: GitArea, file: GitFileChange) => {
+    if (routeGitDiff(hasCodeOpener()) !== 'center') setSelected({ area, path: file.path })
+    else if (gitOpenTarget(getGitOpenStyle(), area, file) === 'file' && file.local)
+      void openWorkFile(target, file.local)
+    else openGitDiffTab(workDiffInput(target, workspaceKey, demo, area, file))
+  }
+  const currentDiff = useCurrentGitDiff(workspaceKey)
+  const currentFile = useActiveCodeFile(workspaceKey)
+  // 中栏对比标签上的暂存 / 取消暂存 / 还原 / 看历史由这里执行（状态、确认框、演示数据都在这里）
+  const diffTabActions = useRef<GitFileActions | null>(null)
+  diffTabActions.current = {
+    stage: path => void stage([path]),
+    unstage: path => void unstage([path]),
+    discard: (path, area) => {
+      const file = sections.find(s => s.area === area)?.files.find(f => f.path === path)
+      if (file) discardFile(file, area)
+    },
+    history: path => showFileHistory(path, 'repo'),
+  }
+  useEffect(() => {
+    registerGitFileActions(workspaceKey, {
+      stage: path => diffTabActions.current?.stage(path),
+      unstage: path => diffTabActions.current?.unstage(path),
+      discard: (path, area) => diffTabActions.current?.discard(path, area),
+      history: path => diffTabActions.current?.history(path),
+    })
+    return () => registerGitFileActions(workspaceKey, null)
+  }, [workspaceKey])
+  useEffect(() => setGitActionsBusy(workspaceKey, busy), [workspaceKey, busy])
+  // 文件标签用 files.target 换过的 ref（会话在项目文件夹里时是项目）：记下对应关系，样式 A 的文件标签才找得到这里的状态和按钮
+  useEffect(() => {
+    if (demo || !window.pixelsky) return
+    let live = true
+    const ref = keyRef(workspaceKey)
+    void window.pixelsky.files.target(ref).then(
+      t => live && setGitFileKey(workspaceKey, refKey('ref' in t && t.ref ? t.ref : ref)),
+      () => undefined,
+    )
+    return () => void (live = false)
+  }, [workspaceKey, demo])
+  // 状态变了，中栏的对比标签跟着文件走：暂存 / 取消暂存后换到新区，还原 / 提交后关掉
+  useEffect(() => {
+    if (status?.repo) syncGitDiffTabs(workspaceKey, sections)
+  }, [workspaceKey, status?.repo, sections])
 
   if (!status)
     return (
@@ -770,11 +832,16 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
                   return (
                     <li
                       key={section.area + ':' + file.path}
-                      className="group/file flex h-7 min-w-0 items-center gap-1 rounded-md pr-0.5 hover:bg-hover"
+                      className={cn(
+                        'group/file flex h-7 min-w-0 items-center gap-1 rounded-md pr-0.5 hover:bg-hover',
+                        ((currentDiff?.area === section.area && currentDiff.path === file.path) ||
+                          (section.area !== 'staged' && currentFile !== null && file.local === currentFile)) &&
+                          'bg-selected',
+                      )}
                     >
                       <button
                         type="button"
-                        onClick={() => setSelected({ area: section.area, path: file.path })}
+                        onClick={() => openDiff(section.area, file)}
                         title={`${tr('git.viewDiff')} · ${file.origPath ? file.origPath + ' → ' : ''}${file.path}`}
                         className="flex h-full min-w-0 flex-1 items-center gap-2 rounded-md pl-2 text-left"
                       >

@@ -87,7 +87,7 @@ export class ChannelStore {
       this.lines.set(channel.id, count)
     }
     // 频道已经删了的活不再跟踪
-    for (const [id, run] of this.runs) if (!this.channels.has(run.channelId)) this.runs.delete(id)
+    for (const [id, run] of this.runs) if (!run.team && !this.channels.has(run.channelId)) this.runs.delete(id)
   }
 
   private async readJson<T>(file: string, fallback: T): Promise<T> {

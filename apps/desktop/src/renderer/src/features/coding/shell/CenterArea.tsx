@@ -42,7 +42,12 @@ export function CenterArea({ fit, viewportHeight }: { fit: CodingFit; viewportHe
         )}
         <CollapsibleSlot open={fit.bottom.shown} size={fit.bottom.size} side="bottom">
           <div data-coding-bottom className="flex h-full min-w-0 flex-1 flex-col border-t border-line-layout bg-panel">
-            <BottomPanel visible={fit.bottom.shown} tab={bottom.tab} maximized={bottom.maximized} />
+            <BottomPanel
+              visible={fit.bottom.shown}
+              tab={bottom.tab}
+              maximized={bottom.maximized}
+              listCollapsed={fit.terminalListCollapsed}
+            />
           </div>
         </CollapsibleSlot>
       </div>

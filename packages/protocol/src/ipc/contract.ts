@@ -68,6 +68,8 @@ export const IPC_CONTRACT = {
   'artifacts:reveal': { kind: 'invoke', route: 'local', trust: 'sender' },
   // 协作频道 Phase B（docs/ui/channels-phase-b.md §11）：频道只存在本机
   'channels:addMember': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'channels:agentPolicy': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'channels:approveTask': { kind: 'invoke', route: 'local', trust: 'sender' },
   'channels:changed': { kind: 'push', route: 'push', trust: 'none' },
   'channels:create': { kind: 'invoke', route: 'local', trust: 'sender' },
   'channels:delete': { kind: 'invoke', route: 'local', trust: 'sender' },
@@ -768,6 +770,17 @@ export const IPC_CONTRACT = {
     trust: 'window',
   },
   // ack 在 terminal/ipc.ts 里自行按终端所在机器分流，所以是 self；focused 只影响本机窗口，是 local
+  // 协作频道 Phase C：多人团队（docs/ui/channels-phase-c.md §9.2）
+  'teams:create': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'teams:delete': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'teams:invite': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'teams:refresh': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'teams:removeMember': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'teams:rename': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'teams:respond': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'teams:revokeInvite': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'teams:setRole': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'teams:update': { kind: 'invoke', route: 'local', trust: 'sender' },
   'terminal:ack': { kind: 'send', route: 'self', trust: 'window' },
   'terminal:chooseProgram': { kind: 'invoke', route: 'self', trust: 'window' },
   'terminal:clipboardRead': { kind: 'invoke', route: 'hostOnly', trust: 'window' },

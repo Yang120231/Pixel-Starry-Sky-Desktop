@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import './tokens.css';
+@import './density.css';
 @import './minimal.css';
 @import './modeTransition.css';
 
@@ -48,13 +49,15 @@
   --color-code-inline-bg: var(--code-inline-bg);
   --color-success: var(--success);
   --color-diff-modified: var(--diff-modified);
+  /* 只给「进行中」的橙色状态（圆点、进度）用；按下 / 菜单开着的底色用 bg-selected，别写 bg-active（2026-10-14 修过三处误用） */
   --color-active: var(--active);
   --color-danger: var(--danger);
   --color-notify: var(--notify);
   --color-warn: var(--warn);
 
-  --color-primary: var(--btn-primary-bg);
-  --color-primary-fg: var(--btn-primary-text);
+  /* 主按钮、可发送时的发送按钮、进度条跟着强调色（D138，修订 D105）；配色里的 --btn-primary-* 不再用于这些 */
+  --color-primary: var(--accent);
+  --color-primary-fg: var(--accent-on);
   --color-disabled: var(--btn-disabled-bg);
   --color-disabled-fg: var(--btn-disabled-text);
   --color-engine-chip: var(--engine-chip-bg);
@@ -83,7 +86,7 @@
   --font-mono: var(--font-mono-user,) 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
 
   /* 字号七级（docs/ui/design-refresh.md §4）：text-title / text-section / text-prose / text-ui / text-list / text-meta / text-label。
-     --density 是极简模式的整体缩放（styles/minimal.css），平时不设、按 1 算 */
+     --density 是整体缩放（styles/density.css，两种模式都是 0.92，D137），没设时按 1 算 */
   --text-title: calc(28px * var(--font-scale, 1) * var(--density, 1));
   --text-title--line-height: 1.2;
   --text-title--letter-spacing: -0.02em;
@@ -914,14 +917,14 @@
 }
 
 /* 开关（ui/Switch.tsx，设置页和推理强度弹窗共用）：
-   关：淡底 + 细边，圆点是卡片底色；开：中性色（主按钮底色），不用强调色（design-tokens.md §1.5）。
+   关：淡底 + 细边，圆点是卡片底色；开：强调色，和勾选框、主按钮一致（D138，修订 D105 的中性色）。
    只有 Ultracode 开着是紫色，和它的星芒、名称流光一致 */
 .ui-switch {
   background: var(--bg-subtle);
   box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 .ui-switch[aria-checked='true'] {
-  background: var(--btn-primary-bg);
+  background: var(--accent);
   box-shadow: none;
 }
 .ui-switch[data-tone='ultracode'][aria-checked='true'] {

@@ -261,7 +261,7 @@ export function sanitize(method: string, args: unknown[]): unknown[] {
   switch (method) {
     case 'engine:createSession': {
       const o = (args[0] ?? {}) as Record<string, unknown>
-      const engine = o.engine === 'claude' || o.engine === 'codex' ? { engine: o.engine } : {}
+      const engine = o.engine === 'claude' || o.engine === 'codex' || o.engine === 'pixel' ? { engine: o.engine } : {}
       return [{ projectId: asString(o.projectId), ...engine }]
     }
     case 'engine:send': {

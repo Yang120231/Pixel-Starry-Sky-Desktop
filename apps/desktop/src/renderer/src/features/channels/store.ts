@@ -3,9 +3,19 @@
 // 正式模式：数据都在主进程（main/core/channels/），这里订阅 channels:changed / channels:message，
 // 进入频道时按页读消息，发消息、建频道、加成员都走 window.pixelsky.channels。
 import { useSyncExternalStore } from 'react'
-import { channelMembers, channelMessages, channels, isDemo } from '@/data'
-import type { Channel, ChannelMember, ChannelMessage, ChannelTextMessage } from '@/data/types'
-import type { AgentInput, ChannelInput, ChannelsSnapshot, ChannelTaskAction } from '../../../../shared/types/channels'
+import { channelMembers, channelMessages, channels, channelTeams, isDemo } from '@/data'
+import type { Channel, ChannelMember, ChannelMessage, ChannelTask, ChannelTextMessage } from '@/data/types'
+import type {
+  AgentInput,
+  AgentPolicy,
+  ChannelInput,
+  ChannelsSnapshot,
+  ChannelTaskAction,
+  PendingInvite,
+  TeamInfo,
+  TeamRole,
+  TeamsConnection,
+} from '../../../../shared/types/channels'
 import { getPage, subscribePage } from '@/features/layout/page'
 import { appendMessage, createMessage, firstUnreadAt, markRead, unreadTotal } from './model'
 
@@ -29,6 +39,13 @@ export interface ChannelsState {
   newFrom: Record<string, number | null>
   /** 频道开出来的会话 → 频道名 */
   sessionChannels: Record<string, string>
+  // ── Phase C：多人团队（docs/ui/channels-phase-c.md） ──
+  teams: TeamInfo[]
+  /** 别人邀请我（频道列表最上面的邀请卡） */
+  invites: PendingInvite[]
+  /** unavailable = 云端没有团队接口，不显示任何团队入口 */
+  teamsConnection: TeamsConnection
+  teamsSyncedAt: number | null
 }
 
 let state: ChannelsState = {
@@ -41,6 +58,10 @@ let state: ChannelsState = {
   replyTo: {},
   newFrom: {},
   sessionChannels: {},
+  teams: channelsLive ? [] : channelTeams.teams,
+  invites: channelsLive ? [] : channelTeams.invites,
+  teamsConnection: channelsLive ? 'unavailable' : channelTeams.connection,
+  teamsSyncedAt: channelsLive ? null : Date.now(),
 }
 const listeners = new Set<() => void>()
 const subscribe = (listener: () => void) => {
@@ -77,6 +98,10 @@ export function selectedChannel(s: ChannelsState): Channel | null {
 export const selfMember = (s: ChannelsState): ChannelMember | null =>
   s.members.find(m => m.kind === 'human' && m.you) ?? null
 
+/** 我在这个频道 / 团队里的成员 id：团队里是账号的 owner key（u:… / e:…），本机频道里是 you（演示数据两边相同） */
+export const selfIdIn = (s: ChannelsState, ids: readonly string[] | null | undefined): string | null =>
+  s.members.find(m => m.kind === 'human' && m.you && !!ids?.includes(m.id))?.id ?? selfMember(s)?.id ?? null
+
 // ---------------------------------------------------------------------------
 // 正式模式：和主进程同步
 // ---------------------------------------------------------------------------
@@ -101,6 +126,10 @@ function applySnapshot(s: ChannelsSnapshot): void {
     channels: visible ? markRead(s.channels, visible) : s.channels,
     members: s.members,
     sessionChannels: s.sessionChannels,
+    teams: s.teams ?? [],
+    invites: s.invites ?? [],
+    teamsConnection: s.teamsConnection ?? 'unavailable',
+    teamsSyncedAt: s.teamsSyncedAt ?? null,
   })
   if (visible && s.channels.some(c => c.id === visible && (c.unread > 0 || c.mentioned))) readLater(visible)
 }
@@ -127,7 +156,7 @@ async function loadMessages(id: string, older = false, unread = 0): Promise<void
     let list = [...page.messages, ...current]
     // 读的同时推过来的消息不能丢
     if (!older) for (const m of state.messages[id] ?? []) list = upsertMessage(list, m)
-    const self = selfMember(state)?.id ?? null
+    const self = selfIdIn(state, state.channels.find(c => c.id === id)?.memberIds)
     const newFrom = unread > 0 ? { ...state.newFrom, [id]: firstUnreadAt(list, unread, self) } : state.newFrom
     set({ messages: { ...state.messages, [id]: list }, more: { ...state.more, [id]: page.more }, newFrom })
   } finally {
@@ -162,7 +191,7 @@ export const channelActions = {
     if (!channel) return
     const loaded = !!state.messages[id]
     if (state.selectedId === id && channel.unread === 0 && !channel.mentioned && (loaded || !channelsLive)) return
-    const self = selfMember(state)?.id ?? null
+    const self = selfIdIn(state, channel.memberIds)
     const newFrom = channel.unread > 0 && loaded ? firstUnreadAt(state.messages[id] ?? [], channel.unread, self) : null
     set({ selectedId: id, channels: markRead(state.channels, id), newFrom: { ...state.newFrom, [id]: newFrom } })
     if (channelsBridge) {
@@ -210,8 +239,9 @@ export const channelActions = {
     set({ messages: appendMessage(state.messages, message), replyTo: { ...state.replyTo, [channelId]: null } })
   },
   async createChannel(input: ChannelInput): Promise<string> {
-    const id = await channelsBridge!.create(input)
-    const snapshot = await channelsBridge!.state()
+    if (!channelsBridge) return demo.createChannel(input)
+    const id = await channelsBridge.create(input)
+    const snapshot = await channelsBridge.state()
     applySnapshot(snapshot)
     set({ selectedId: id, messages: { ...state.messages, [id]: state.messages[id] ?? [] } })
     void loadMessages(id)
@@ -229,15 +259,244 @@ export const channelActions = {
     return channelsBridge!.saveMember(channelId, input)
   },
   addMember(channelId: string, memberId: string): Promise<void> {
-    return channelsBridge!.addMember(channelId, memberId)
+    return channelsBridge ? channelsBridge.addMember(channelId, memberId) : demo.addMember(channelId, memberId)
   },
   removeMember(channelId: string, memberId: string): Promise<void> {
-    return channelsBridge!.removeMember(channelId, memberId)
+    return channelsBridge ? channelsBridge.removeMember(channelId, memberId) : demo.removeMember(channelId, memberId)
   },
   deleteMember(memberId: string): Promise<void> {
     return channelsBridge!.deleteMember(memberId)
   },
   task(taskId: string, action: ChannelTaskAction): Promise<void> {
-    return channelsBridge!.task(taskId, action)
+    return channelsBridge ? channelsBridge.task(taskId, action) : demo.task(taskId, action)
+  },
+  // ── Phase C：团队。正式模式走主进程（返回后再拉一次快照，不等推送）；演示模式只改内存 ──
+  /** 等 AI 成员的主人同意的活：同意 / 拒绝 */
+  async approveTask(taskId: string, approve: boolean): Promise<void> {
+    if (channelsBridge) await channelsBridge.approveTask(taskId, approve)
+    else demo.approveTask(taskId, approve)
+  },
+  /** 我的 AI 成员在这个团队频道里：别人 @ 它要不要我同意 */
+  async setAgentPolicy(channelId: string, memberId: string, policy: AgentPolicy): Promise<void> {
+    if (channelsBridge) await channelsBridge.setAgentPolicy(channelId, memberId, policy)
+    else demo.setAgentPolicy(memberId, policy)
+  },
+  async createTeam(name: string): Promise<string> {
+    if (!channelsBridge) return demo.createTeam(name)
+    const id = await channelsBridge.createTeam(name)
+    await resync()
+    return id
+  },
+  async updateTeam(teamId: string, name: string): Promise<void> {
+    if (channelsBridge) {
+      await channelsBridge.updateTeam(teamId, { name })
+      await resync()
+    } else demo.patchTeam(teamId, t => ({ ...t, name }))
+  },
+  async deleteTeam(teamId: string): Promise<void> {
+    if (channelsBridge) {
+      await channelsBridge.deleteTeam(teamId)
+      await resync()
+    } else demo.removeTeam(teamId)
+  },
+  async setDisplayName(teamId: string, name: string): Promise<void> {
+    if (channelsBridge) {
+      await channelsBridge.setDisplayName(teamId, name)
+      await resync()
+    } else demo.setDisplayName(name)
+  },
+  async invite(teamId: string, email: string, role: Exclude<TeamRole, 'owner'>): Promise<void> {
+    if (channelsBridge) {
+      await channelsBridge.invite(teamId, email, role)
+      await resync()
+    } else demo.invite(teamId, email, role)
+  },
+  async revokeInvite(teamId: string, inviteId: string): Promise<void> {
+    if (channelsBridge) {
+      await channelsBridge.revokeInvite(teamId, inviteId)
+      await resync()
+    } else demo.patchTeam(teamId, t => ({ ...t, invites: t.invites.filter(i => i.id !== inviteId) }))
+  },
+  async respondInvite(inviteId: string, accept: boolean): Promise<void> {
+    if (channelsBridge) {
+      await channelsBridge.respondInvite(inviteId, accept)
+      await resync()
+    } else demo.respondInvite(inviteId, accept)
+  },
+  async setRole(teamId: string, userId: string, role: Exclude<TeamRole, 'owner'>): Promise<void> {
+    if (channelsBridge) {
+      await channelsBridge.setRole(teamId, userId, role)
+      await resync()
+    } else demo.patchTeam(teamId, t => ({ ...t, members: t.members.map(m => (m.id === userId ? { ...m, role } : m)) }))
+  },
+  /** 移出成员；userId 是自己就是退出团队 */
+  async removeTeamMember(teamId: string, userId: string): Promise<void> {
+    if (channelsBridge) {
+      await channelsBridge.removeTeamMember(teamId, userId)
+      await resync()
+    } else demo.removeTeamMember(teamId, userId)
+  },
+  /** 连不上云端时手动重试 */
+  async refreshTeams(): Promise<void> {
+    await channelsBridge?.refreshTeams()
+  },
+}
+
+/** 正式模式：团队操作做完后马上拉一次快照 */
+async function resync(): Promise<void> {
+  if (channelsBridge) applySnapshot(await channelsBridge.state())
+}
+
+// ---------------------------------------------------------------------------
+// 演示模式：团队操作只改内存（docs/ui/channels-phase-c.md §9.3），不联网
+// ---------------------------------------------------------------------------
+
+const demoId = (prefix: string): string => prefix + '-' + crypto.randomUUID().slice(0, 8)
+const DAY = 86_400_000
+
+const demo = {
+  patchTeam(teamId: string, change: (team: TeamInfo) => TeamInfo): void {
+    set({ teams: state.teams.map(t => (t.id === teamId ? change(t) : t)) })
+  },
+  /** 解散或退出：团队和它的频道、消息一起从界面上消失 */
+  removeTeam(teamId: string): void {
+    const gone = new Set(state.channels.filter(c => c.teamId === teamId).map(c => c.id))
+    const messages = Object.fromEntries(Object.entries(state.messages).filter(([id]) => !gone.has(id)))
+    set({
+      teams: state.teams.filter(t => t.id !== teamId),
+      channels: state.channels.filter(c => !gone.has(c.id)),
+      messages,
+      selectedId: state.selectedId && gone.has(state.selectedId) ? null : state.selectedId,
+    })
+  },
+  removeTeamMember(teamId: string, userId: string): void {
+    if (userId === selfMember(state)?.id) return demo.removeTeam(teamId)
+    demo.patchTeam(teamId, t => ({ ...t, members: t.members.filter(m => m.id !== userId) }))
+    // 他的 AI 成员也从这个团队的频道里移出
+    const owned = new Set(state.members.filter(m => m.kind === 'agent' && m.ownerId === userId).map(m => m.id))
+    set({
+      channels: state.channels.map(c =>
+        c.teamId === teamId ? { ...c, memberIds: c.memberIds.filter(id => id !== userId && !owned.has(id)) } : c,
+      ),
+    })
+  },
+  createTeam(name: string): string {
+    const self = selfMember(state)
+    const id = demoId('tm')
+    const team: TeamInfo = {
+      id,
+      name: name.trim(),
+      role: 'owner',
+      members: self ? [{ id: self.id, role: 'owner', online: true, lastSeenAt: Date.now() }] : [],
+      invites: [],
+    }
+    set({ teams: [...state.teams, team] })
+    return id
+  },
+  setDisplayName(name: string): void {
+    set({ members: state.members.map(m => (m.kind === 'human' && m.you ? { ...m, name: name.trim() } : m)) })
+  },
+  invite(teamId: string, email: string, role: Exclude<TeamRole, 'owner'>): void {
+    const address = email.trim().toLowerCase()
+    demo.patchTeam(teamId, t => ({
+      ...t,
+      invites: [
+        ...t.invites.filter(i => i.email !== address),
+        { id: demoId('iv'), email: address, role, expiresAt: Date.now() + 14 * DAY },
+      ],
+    }))
+  },
+  respondInvite(inviteId: string, accept: boolean): void {
+    const invite = state.invites.find(i => i.id === inviteId)
+    const self = selfMember(state)
+    if (!invite) return
+    set({ invites: state.invites.filter(i => i.id !== inviteId) })
+    if (!accept || !self) return
+    // 邀请人当所有者，自己按邀请的角色加入
+    const inviterId = demoId('m')
+    set({
+      members: [...state.members, { id: inviterId, kind: 'human', name: invite.inviter, role: 'owner', online: true }],
+      teams: [
+        ...state.teams,
+        {
+          id: invite.teamId,
+          name: invite.teamName,
+          role: invite.role,
+          members: [
+            { id: inviterId, role: 'owner', online: true, lastSeenAt: Date.now() },
+            { id: self.id, role: invite.role, online: true, lastSeenAt: Date.now() },
+          ],
+          invites: [],
+        },
+      ],
+    })
+  },
+  createChannel(input: ChannelInput): string {
+    const team = state.teams.find(t => t.id === input.teamId)
+    const id = demoId('c')
+    const humans = team?.members.map(m => m.id) ?? [selfMember(state)?.id ?? '']
+    const channel: Channel = {
+      id,
+      name: input.name.trim(),
+      topic: input.topic ?? null,
+      scope: team ? 'team' : 'local',
+      ...(team ? { teamId: team.id } : {}),
+      memberIds: [...humans, ...(input.memberIds ?? [])],
+      unread: 0,
+      createdAt: Date.now(),
+    }
+    set({ channels: [...state.channels, channel], messages: { ...state.messages, [id]: [] }, selectedId: id })
+    return id
+  },
+  addMember(channelId: string, memberId: string): Promise<void> {
+    const self = selfMember(state)
+    set({
+      channels: state.channels.map(c =>
+        c.id === channelId && !c.memberIds.includes(memberId) ? { ...c, memberIds: [...c.memberIds, memberId] } : c,
+      ),
+      // 团队频道里的 AI 成员：登记成我的，规则默认「要我同意」
+      members: state.members.map(m =>
+        m.id === memberId && m.kind === 'agent' && self
+          ? { ...m, mine: true, ownerId: self.id, ownerName: self.name, policy: m.policy ?? 'approve' }
+          : m,
+      ),
+    })
+    return Promise.resolve()
+  },
+  removeMember(channelId: string, memberId: string): Promise<void> {
+    set({
+      channels: state.channels.map(c =>
+        c.id === channelId ? { ...c, memberIds: c.memberIds.filter(id => id !== memberId) } : c,
+      ),
+    })
+    return Promise.resolve()
+  },
+  setAgentPolicy(memberId: string, policy: AgentPolicy): void {
+    set({ members: state.members.map(m => (m.id === memberId && m.kind === 'agent' ? { ...m, policy } : m)) })
+  },
+  /** 找到任务卡并改它 */
+  patchTask(taskId: string, change: (task: ChannelTask) => ChannelTask): void {
+    const messages: Record<string, ChannelMessage[]> = {}
+    for (const [id, list] of Object.entries(state.messages))
+      messages[id] = list.map(m => (m.kind === 'task' && m.id === taskId ? change(m) : m))
+    set({ messages })
+  },
+  approveTask(taskId: string, approve: boolean): void {
+    demo.patchTask(taskId, t =>
+      t.status !== 'approval'
+        ? t
+        : approve
+          ? { ...t, status: 'queued' }
+          : { ...t, status: 'stopped', note: 'rejected', endedAt: Date.now() },
+    )
+  },
+  task(taskId: string, action: ChannelTaskAction): Promise<void> {
+    if (action === 'cancel')
+      demo.patchTask(taskId, t =>
+        t.status === 'queued' || t.status === 'approval'
+          ? { ...t, status: 'stopped', note: 'cancelled', endedAt: Date.now() }
+          : t,
+      )
+    return Promise.resolve()
   },
 }

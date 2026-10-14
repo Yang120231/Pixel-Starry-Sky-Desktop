@@ -33,8 +33,8 @@ export const demoGitStatus: GitStatus = {
   head: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
   initial: false,
   upstream: 'origin/feat/settings-form',
-  ahead: 2,
-  behind: 1,
+  ahead: 4,
+  behind: 2,
   remotes: ['origin'],
   conflicted: [],
   staged: [file('src/settings/AccountForm.tsx', 'M'), file('src/settings/fields/useField.ts', 'A')],
@@ -200,17 +200,26 @@ const ME: [string, string] = ['陈默', 'chenmo@pixel.dev'],
   BOT: [string, string] = ['Claude', 'noreply@anthropic.com']
 const HISTORY: DemoCommit[] = [
   demoCommit(
+    'e2',
+    ['e1'],
+    25 * 60_000,
+    LIN,
+    '表单提示文字统一用 muted 色',
+    [{ kind: 'remote', name: 'origin/feat/settings-form' }],
+    [changed('src/settings/settings.css', 'M', 3, 3)],
+  ),
+  demoCommit(
     'e1',
     ['c8'],
     40 * 60_000,
     LIN,
     '修正表单之间的间距',
-    [{ kind: 'remote', name: 'origin/feat/settings-form' }],
+    [],
     [changed('src/settings/settings.css', 'M', 6, 4)],
   ),
   demoCommit(
     'a1b2c3d4e5f6',
-    ['c9'],
+    ['u3'],
     HOUR,
     ME,
     '表单字段改用 useField\n\n账号表单和外观表单共用一套字段状态和校验，去掉重复的 useState。',
@@ -222,6 +231,24 @@ const HISTORY: DemoCommit[] = [
     ],
   ),
   demoCommit(
+    'u3',
+    ['u2'],
+    2 * HOUR,
+    ME,
+    '外观表单补上主题预览',
+    [],
+    [changed('src/settings/AppearanceForm.tsx', 'M', 10, 2)],
+  ),
+  demoCommit(
+    'u2',
+    ['c9'],
+    2.5 * HOUR,
+    ME,
+    '字段错误提示加无障碍标记',
+    [],
+    [changed('src/settings/fields/useField.ts', 'M', 5, 1)],
+  ),
+  demoCommit(
     'c9',
     ['c8'],
     3 * HOUR,
@@ -229,6 +256,15 @@ const HISTORY: DemoCommit[] = [
     '账号表单加邮箱校验提示',
     [],
     [changed('src/settings/AccountForm.tsx', 'M', 4, 1)],
+  ),
+  demoCommit(
+    'l1',
+    ['c8'],
+    DAY + 8 * HOUR,
+    LIN,
+    '试验：设置页改成两栏布局',
+    [{ kind: 'branch', name: 'feat/layout' }],
+    [changed('src/settings/SettingsPage.tsx', 'M', 20, 6)],
   ),
   demoCommit(
     'c8',
@@ -314,14 +350,16 @@ function demoLog(query: GitLogQuery): GitLogPage {
   // 单文件历史（§9.15）：改过这个文件的提交（演示数据里跟着 src/lazy.ts ← src/loadable.ts 的改名）
   const path = query.path?.replace(/\\/g, '/')
   const names = new Set(path ? [path] : [])
+  // 「自动」范围不含别的本地分支独有的提交
+  const visible = query.scope === 'all' ? HISTORY : HISTORY.filter(c => c.hash !== hash('l1'))
   const source: DemoCommit[] = path
-    ? HISTORY.flatMap(c => {
+    ? visible.flatMap(c => {
         const f = c.files.find(x => names.has(x.path))
         if (!f) return []
         if (f.origPath) names.add(f.origPath)
         return [{ ...c, file: f }]
       })
-    : HISTORY
+    : visible
   const list = q
     ? source.filter(
         c =>
@@ -350,12 +388,16 @@ function demoShow(h: string): GitCommitDetail {
 function demoCompare(target: GitCompareTarget): GitCompareResult {
   // 和分支 / 标签比较（§9.6 第二期）：演示里按「本分支相对 main」给一份
   const kind = typeof target === 'string' ? target : 'base'
-  const pick = { outgoing: ['a1b2c3d4e5f6', 'c9'], incoming: ['e1'], base: ['a1b2c3d4e5f6', 'c9', 'c8', 'c7'] }[kind]
+  const pick = {
+    outgoing: ['a1b2c3d4e5f6', 'u3', 'u2', 'c9'],
+    incoming: ['e2', 'e1'],
+    base: ['a1b2c3d4e5f6', 'c9', 'c8', 'c7'],
+  }[kind]
   const files = new Map<string, GitCommitFile>()
   for (const id of [...pick].reverse()) for (const f of byHash(hash(id))!.files) files.set(f.path, f)
   return {
     from: hash(kind === 'base' ? 'b3' : 'c8'),
-    to: hash(kind === 'incoming' ? 'e1' : 'a1b2c3d4e5f6'),
+    to: hash(kind === 'incoming' ? 'e2' : 'a1b2c3d4e5f6'),
     files: [...files.values()],
     truncated: false,
     commits: pick.length,
@@ -383,7 +425,7 @@ export const demoGitHistory = {
     branch: 'feat/settings-form',
     upstream: 'origin/feat/settings-form',
     base: 'main',
-    local: ['feat/settings-form', 'main', 'pixelsky/review-ui'],
+    local: ['feat/settings-form', 'feat/layout', 'main', 'pixelsky/review-ui'],
     remote: ['origin/feat/settings-form', 'origin/main', 'origin/release/0.1'],
     tags: ['v0.1.0', 'v0.2.0'],
   } satisfies GitRefs,
