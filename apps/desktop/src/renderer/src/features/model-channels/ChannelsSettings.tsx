@@ -25,6 +25,7 @@ import {
   type ChannelId,
 } from './channelModel'
 import {
+  CHANNEL_DIGIT,
   CHANNEL_NUMBER,
   accountText,
   channelFix,
@@ -76,7 +77,7 @@ function Card({
     >
       <div className="flex items-center gap-3 px-4 py-3">
         <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-subtle text-meta font-semibold text-fg-secondary">
-          {CHANNEL_NUMBER[channel]}
+          {CHANNEL_DIGIT[channel]}
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-ui font-medium text-fg">{channelLabel(channel)}</span>

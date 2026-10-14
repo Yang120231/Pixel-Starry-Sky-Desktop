@@ -36,8 +36,9 @@ import {
   type ModelTarget,
 } from '@/features/model-channels/channelModel'
 import {
-  CHANNEL_NUMBER,
-  accountText,
+  CHANNEL_DIGIT,
+  maskEmail,
+  planLabel,
   channelFix,
   channelFixLabel,
   channelLabel,
@@ -252,13 +253,16 @@ export function ModelSourceMenu({
                 }
                 ownModels={ownCatalog?.models}
                 right={
-                  g.channel === 'platform'
-                    ? catalog.email && account.balanceText
-                      ? `${tr('account.AccountMenu.balance')} ${account.balanceText}`
-                      : ''
-                    : isAuthChannel(g.channel) && g.state.kind === 'ready'
-                      ? accountText(engines.find(e => e.id === AUTH_ENGINE[g.channel as 'claude'])?.account)
-                      : ''
+                  g.channel === 'platform' ? (
+                    catalog.email &&
+                    account.balanceText && (
+                      <span className="text-meta text-fg-muted tabular-nums">
+                        {tr('account.AccountMenu.balance')} {account.balanceText}
+                      </span>
+                    )
+                  ) : isAuthChannel(g.channel) && g.state.kind === 'ready' ? (
+                    <AccountTag account={engines.find(e => e.id === AUTH_ENGINE[g.channel as 'claude'])?.account} />
+                  ) : null
                 }
                 stateText={
                   g.channel === 'platform' && g.state.kind === 'no-route'
@@ -357,7 +361,7 @@ function ChannelSection({
   onQuery: (q: string) => void
   hiddenCount: number
   ownModels: Parameters<typeof selfModelLabel>[2]
-  right: string
+  right: ReactNode
   stateText: string | null
   onFix: () => void
   onChoose: (target: ModelTarget, engine: EngineId | null, keepOpen?: boolean) => void
@@ -384,6 +388,7 @@ function ChannelSection({
     isAuthChannel(c) && live.channel === c && live.model && !group.rows.some(r => r.target.model === live.model)
       ? live.model
       : null
+  const fixedEngine = isAuthChannel(c) && group.state.kind === 'ready' ? AUTH_ENGINE[c] : null
   const deleted =
     c === 'custom' &&
     live.channel === 'custom' &&
@@ -392,14 +397,25 @@ function ChannelSection({
 
   return (
     <div className={cn(!first && 'mt-1 border-t border-line-subtle')}>
-      <div data-channel-group={c} className="flex items-baseline justify-between gap-2 px-2 pt-2 pb-0.5">
-        <span className="text-label font-medium text-fg-faint">
-          {CHANNEL_NUMBER[c]} {channelLabel(c)}
+      <div data-channel-group={c} className="flex min-h-7 items-center justify-between gap-3 px-2 pt-2 pb-0.5">
+        <span className="flex min-w-0 items-center gap-1.5 text-label font-medium text-fg-secondary">
+          <span className="flex size-4 shrink-0 items-center justify-center rounded bg-subtle text-[10px] leading-none font-semibold text-fg-muted tabular-nums">
+            {CHANNEL_DIGIT[c]}
+          </span>
+          <span className="truncate">{channelLabel(c)}</span>
+          {/* 授权通道只能交给官方工具：执行者在标题里写一次，每行不再重复 */}
+          {fixedEngine && (
+            <span className="flex shrink-0 items-center gap-1 font-normal text-fg-faint">
+              <span aria-hidden>·</span>
+              <EngineIcon engine={fixedEngine} size={11} />
+              {executorName(fixedEngine)}
+            </span>
+          )}
         </span>
-        {right && <span className="min-w-0 truncate text-meta text-fg-muted tabular-nums">{right}</span>}
+        {right}
       </div>
       {stateText && (
-        <div className="mx-1 flex items-center gap-2 rounded-md px-2 py-1.5 text-meta text-fg-faint">
+        <div className="mx-1 flex items-center gap-2 rounded-md py-1.5 pr-2 pl-8 text-meta text-fg-faint">
           {group.state.kind === 'loading' && <Spinner />}
           <span className="min-w-0 flex-1">{stateText}</span>
           {fix && (
@@ -458,7 +474,7 @@ function ChannelSection({
                 selected={row.selected && !expand}
                 disabled={row.disabled !== null}
                 onClick={() => onChoose(row.target, row.pick.engine, !!provider && provider.models.length > 1)}
-                chip={<ExecutorChip row={row} onSwitch={() => onSwitch(row)} />}
+                chip={fixedEngine ? undefined : <ExecutorChip row={row} onSwitch={() => onSwitch(row)} />}
               />
               {/* 选中的平台模型：下面一行是线路（点开子页） */}
               {c === 'platform' && row.selected && live.channel === 'platform' && (
@@ -490,7 +506,7 @@ function ChannelSection({
         <button
           type="button"
           onClick={onManage}
-          className="mx-1 flex h-7 items-center rounded-md px-1.5 text-meta text-fg-muted hover:bg-hover hover:text-fg"
+          className="mx-1 flex h-7 items-center rounded-md pr-1.5 pl-8 text-meta text-fg-muted hover:bg-hover hover:text-fg"
         >
           {tr('session.ModelSourceMenu.manageModels')}
           {hiddenCount > 0 && (
@@ -547,6 +563,21 @@ function rowHint(
   return ctx.self.find(m => m.value === row.target.model)?.hint
 }
 
+/** 授权通道标题右边：打码的邮箱 + 套餐小标签，悬停看完整邮箱 */
+function AccountTag({ account }: { account: { email?: string; plan?: string } | undefined }) {
+  if (!account?.email && !account?.plan) return null
+  return (
+    <span className="flex min-w-0 items-center gap-1.5 text-meta text-fg-muted" title={account.email}>
+      {account.email && <span className="truncate">{maskEmail(account.email)}</span>}
+      {account.plan && (
+        <span className="shrink-0 rounded bg-subtle px-1.5 text-label leading-[18px] font-medium text-fg-secondary">
+          {planLabel(account.plan)}
+        </span>
+      )}
+    </span>
+  )
+}
+
 /** 菜单里的一行：左边点了选模型，右边是执行者（能换时是按钮） */
 function ChannelModelRow({
   title,
@@ -578,11 +609,14 @@ function ChannelModelRow({
           indent && 'pl-6',
         )}
       >
+        {/* 勾放最左边一列：每行的模型名对齐，右边留给执行者 */}
+        <span className="mt-0.5 flex w-4 shrink-0 justify-center">
+          {selected && <Check size={14} strokeWidth={2.25} className="text-accent-fg" />}
+        </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-ui text-fg">{title}</span>
           {hint && <span className="block truncate text-meta text-fg-muted">{hint}</span>}
         </span>
-        {selected && <Check size={15} strokeWidth={2} className="mt-0.5 shrink-0 text-fg-secondary" />}
       </button>
       {chip}
     </div>
@@ -694,7 +728,7 @@ function PlatformRoute({ live, onOpenRoutes }: { live: SourceMenuController; onO
   if (!platform.email) return null
   if (!platform.loaded && platform.loading) {
     return (
-      <div className="flex items-center gap-2 px-2 py-1.5 pl-6 text-meta text-fg-muted">
+      <div className="flex items-center gap-2 px-2 py-1.5 pl-8 text-meta text-fg-muted">
         <Spinner />
         {tr('session.ModelSourceMenu.loadingRoutes')}
       </div>
@@ -706,7 +740,7 @@ function PlatformRoute({ live, onOpenRoutes }: { live: SourceMenuController; onO
     <button
       type="button"
       onClick={onOpenRoutes}
-      className="flex w-full items-center gap-2 rounded-md py-1 pr-2 pl-6 text-left hover:bg-hover"
+      className="flex w-full items-center gap-2 rounded-md py-1 pr-2 pl-8 text-left hover:bg-hover"
       aria-label={tr('session.ModelSourceMenu.chooseRoute')}
     >
       <span className="shrink-0 text-meta text-fg-muted">{tr('session.ModelSourceMenu.route')}</span>

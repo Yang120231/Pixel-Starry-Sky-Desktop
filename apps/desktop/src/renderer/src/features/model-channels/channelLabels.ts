@@ -4,6 +4,8 @@ import { ENGINES, type EngineId } from '@pixelsky/protocol'
 import { AUTH_ENGINE, type ChannelId, type ChannelState } from './channelModel'
 
 export const CHANNEL_NUMBER: Record<ChannelId, string> = { platform: '①', claude: '②', chatgpt: '③', custom: '④' }
+/** 小方块里的编号（菜单分组标题、设置卡片） */
+export const CHANNEL_DIGIT: Record<ChannelId, string> = { platform: '1', claude: '2', chatgpt: '3', custom: '4' }
 
 export const channelLabel = (c: ChannelId): string => tr(`modelChannels.channel.${c}`)
 export const channelShort = (c: ChannelId): string => tr(`modelChannels.short.${c}`)
@@ -14,10 +16,19 @@ export const executorName = (e: EngineId): string =>
 
 export const executorDesc = (e: EngineId): string => tr(`modelChannels.executor.desc.${e}`)
 
+/** 套餐名首字母大写：max → Max */
+export const planLabel = (plan: string | undefined): string => (plan ? plan[0].toUpperCase() + plan.slice(1) : '')
+
+/** 菜单里的邮箱只露第一个字（共享屏幕时不整个露出来），悬停看完整的 */
+export function maskEmail(email: string): string {
+  const at = email.indexOf('@')
+  return at > 1 ? `${email[0]}•••${email.slice(at)}` : email
+}
+
 /** 已授权的账号：邮箱 · 套餐（max → Max）；都没有时为空 */
 export function accountText(account: { email?: string; plan?: string; org?: string } | undefined): string {
   if (!account) return ''
-  const plan = account.plan ? account.plan[0].toUpperCase() + account.plan.slice(1) : ''
+  const plan = planLabel(account.plan)
   return [account.email, plan].filter(Boolean).join(' · ')
 }
 
