@@ -22,19 +22,21 @@ export function FullAccessStrip({
       className="mx-3 mt-3 flex items-center gap-2 rounded-lg border border-warn/35 bg-warn/8 px-3 py-1.5 text-meta text-fg-secondary"
     >
       <TriangleAlert size={14} className="shrink-0 text-warn" />
-      <span className="min-w-0 flex-1 truncate">{tr(live.started ? 'fullAccess.strip' : 'fullAccess.stripNew')}</span>
-      <div className="flex shrink-0 items-center gap-3">
+      <span data-full-access-text className="min-w-0 flex-1 truncate">
+        {tr(live.started ? 'fullAccess.strip' : 'fullAccess.stripNew')}
+      </span>
+      <div data-full-access-actions className="flex shrink-0 items-center gap-3">
         <button
           type="button"
           onClick={() => setDismissed(true)}
-          className="rounded-md px-1.5 py-0.5 text-fg-secondary hover:bg-hover"
+          className="shrink-0 whitespace-nowrap rounded-md px-1.5 py-0.5 text-fg-secondary hover:bg-hover"
         >
           {tr('fullAccess.dismissStrip')}
         </button>
         <button
           type="button"
           onClick={() => live.setPermissionMode(back)}
-          className="rounded-md px-1.5 py-0.5 text-accent-fg hover:bg-hover"
+          className="shrink-0 whitespace-nowrap rounded-md px-1.5 py-0.5 text-accent-fg hover:bg-hover"
         >
           {tr('fullAccess.revert', { p0: PERMISSION_INFO[back].label })}
         </button>

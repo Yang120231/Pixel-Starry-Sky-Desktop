@@ -2,6 +2,29 @@
 .composer-area {
   container: composer / inline-size;
 }
+/* 完全放行提示按窗格宽度换行，保留完整操作文字。 */
+@container composer (width < 640px) {
+  [data-full-access-strip] {
+    display: grid;
+    grid-template-columns: 14px minmax(0, 1fr);
+    align-items: start;
+  }
+  [data-full-access-strip] > svg {
+    margin-top: 2px;
+  }
+  [data-full-access-text] {
+    overflow: visible;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  [data-full-access-actions] {
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    min-width: 0;
+    row-gap: 4px;
+  }
+}
 @container composer (width < 520px) {
   /* 机器只留图标，项目、分支截断 */
   .composer-area [data-composer-workspace] {
