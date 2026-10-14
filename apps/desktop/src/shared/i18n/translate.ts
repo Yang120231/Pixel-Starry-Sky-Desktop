@@ -37,6 +37,7 @@ import { tabMenuMessages } from './tabMenuMessages'
 import { minimalModeMessages } from './minimalModeMessages'
 import { imageViewerMessages } from './imageViewerMessages'
 import { modelChannelMessages } from './modelChannelMessages'
+import { fullAccessMessages } from './fullAccessMessages'
 import { htmlPreviewMessages } from './htmlPreviewMessages'
 import { recoveryMessages } from './recoveryMessages'
 import { pathClickMessages } from './pathClickMessages'
@@ -89,6 +90,7 @@ export const allMessages = {
   ...minimalModeMessages,
   ...imageViewerMessages,
   ...modelChannelMessages,
+  ...fullAccessMessages,
   ...htmlPreviewMessages,
   ...recoveryMessages,
   ...pathClickMessages,

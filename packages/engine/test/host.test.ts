@@ -802,9 +802,14 @@ describe('EngineHost + Claude（假引擎）', () => {
     await waitFor(() => sessionEvents(record.id).some(e => e.type === 'item_delta'))
     const queued = await host.send(record.id, '插话')
     expect(host.open(record.id).queue.find(q => q.id === queued.queueId)?.status).toBe('queued')
+    const before = host.defaults().permissionMode
     await host.update(record.id, { permissionMode: 'full' })
     expect(host.open(record.id).record.permissionMode).toBe('full')
-    expect(host.defaults().permissionMode).toBe('full')
+    // 完全放行不记成新会话的默认（docs/ui/full-access-confirm.md）；别的模式照旧记住
+    expect(host.defaults().permissionMode).toBe(before)
+    await host.update(record.id, { permissionMode: 'plan' })
+    expect(host.defaults().permissionMode).toBe('plan')
+    await host.update(record.id, { permissionMode: 'full' })
     await host.interrupt(record.id)
     await waitFor(() => turnsDone(record.id) === 1)
     expect(host.open(record.id).queuePaused).toBe(true)

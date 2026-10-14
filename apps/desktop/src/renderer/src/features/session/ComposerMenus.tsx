@@ -21,6 +21,7 @@ import { IconButton, Popover, Switch, cn, useToast } from '@/ui'
 import { PERMISSION_HINTS, PERMISSION_INFO, effortLabel, type ComposerController } from '@/features/engine'
 import { EffortSlider } from './EffortSlider'
 import { effortDiff } from '@/features/engine/effortDefaults'
+import { needsFullConfirm, saferMode, setFullAccessConfirm, useFullAccessConfirm } from './fullAccess'
 
 export const PERMISSION_ICON: Record<PermissionMode, LucideIcon> = {
   ask: Shield,
@@ -301,15 +302,31 @@ export function PermissionMenu({
   modes,
   onSelect,
   engine,
+  defaultMode,
+  started = true,
 }: {
   mode: PermissionMode
   modes: PermissionMode[]
   onSelect: (m: PermissionMode) => void
   engine?: 'claude' | 'codex' | 'pixel'
+  /** 这个引擎新会话的默认权限：确认里写「新任务还是……」 */
+  defaultMode?: PermissionMode
+  /** 已经开始的对话（确认标题写「这个对话」，新任务写「这个任务」） */
+  started?: boolean
 }) {
   useI18n()
   const [open, setOpen] = useState(false)
+  // 从别的模式切进完全放行：先在菜单里就地确认（docs/ui/full-access-confirm.md P2）
+  const [confirming, setConfirming] = useState(false)
+  const [dontAsk, setDontAsk] = useState(false)
+  const ask = useFullAccessConfirm()
   const Icon = PERMISSION_ICON[mode]
+  const close = (): void => {
+    setOpen(false)
+    setConfirming(false)
+    setDontAsk(false)
+  }
+  const later = saferMode(defaultMode, modes)
   return (
     <div className="relative">
       <button
@@ -318,7 +335,7 @@ export function PermissionMenu({
         aria-label={tr('session.ComposerMenus.permissions', { p0: PERMISSION_INFO[mode].label })}
         aria-haspopup="menu"
         aria-expanded={open}
-        onClick={() => setOpen(v => !v)}
+        onClick={() => (open ? close() : setOpen(true))}
         className={cn(
           'press no-drag inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-list hover:bg-hover',
           mode === 'full' ? 'text-warn' : 'text-fg-secondary hover:text-fg',
@@ -327,11 +344,65 @@ export function PermissionMenu({
         <Icon size={16} strokeWidth={1.5} />
         <span>{PERMISSION_INFO[mode].label}</span>
       </button>
-      <Popover open={open} onClose={() => setOpen(false)} side="top" offset={8} className="w-72">
+      <Popover open={open} onClose={close} side="top" offset={8} className="w-80">
         <MenuTitle>{tr('session.Composer.permissionMode')}</MenuTitle>
         {(['ask', 'edits', 'plan', 'full'] as const).map(m => {
           const MIcon = PERMISSION_ICON[m]
           const supported = modes.includes(m)
+          if (m === 'full' && confirming)
+            return (
+              <div
+                key={m}
+                role="alertdialog"
+                aria-labelledby="full-access-confirm-title"
+                data-full-access-confirm
+                className="mx-0.5 mt-1 mb-0.5 rounded-lg border border-warn/40 bg-warn/10 px-3 pt-2.5 pb-2"
+              >
+                <div id="full-access-confirm-title" className="flex items-center gap-2 text-ui font-medium text-fg">
+                  <ShieldOff size={15} strokeWidth={1.75} className="shrink-0 text-warn" />
+                  {tr(started ? 'fullAccess.confirm.title' : 'fullAccess.confirm.newTitle')}
+                </div>
+                <ul className="mt-1.5 mb-2 list-disc space-y-0.5 pl-5 text-meta text-fg-secondary">
+                  <li>{tr('fullAccess.confirm.noAsk')}</li>
+                  <li>{tr(`fullAccess.confirm.${engine ?? 'claude'}`)}</li>
+                  <li>
+                    {tr(started ? 'fullAccess.confirm.scope' : 'fullAccess.confirm.scopeNew', {
+                      p0: PERMISSION_INFO[later].label,
+                    })}
+                  </li>
+                </ul>
+                <label className="mb-2 flex cursor-pointer items-center gap-2 text-meta text-fg-muted">
+                  <input
+                    type="checkbox"
+                    checked={dontAsk}
+                    onChange={e => setDontAsk(e.target.checked)}
+                    className="size-3.5 accent-[var(--warn)]"
+                  />
+                  {tr('fullAccess.confirm.dontAsk')}
+                </label>
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    autoFocus
+                    onClick={() => setConfirming(false)}
+                    className="press h-7 rounded-md border border-line px-2.5 text-meta text-fg-secondary hover:bg-hover hover:text-fg"
+                  >
+                    {tr('fullAccess.confirm.cancel')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (dontAsk) setFullAccessConfirm(false)
+                      onSelect('full')
+                      close()
+                    }}
+                    className="press h-7 rounded-md bg-warn px-2.5 text-meta font-medium text-accent-on hover:opacity-90"
+                  >
+                    {tr('fullAccess.confirm.ok')}
+                  </button>
+                </div>
+              </div>
+            )
           return (
             <MenuRow
               key={m}
@@ -345,8 +416,12 @@ export function PermissionMenu({
                   : tr('session.ComposerMenus.notSupportedByThis2')
               }
               onClick={() => {
+                if (needsFullConfirm(mode, m, ask)) {
+                  setConfirming(true)
+                  return
+                }
                 onSelect(m)
-                setOpen(false)
+                close()
               }}
             />
           )

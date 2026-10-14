@@ -30,6 +30,7 @@ describe('设置搜索（plan-search-panes-compact §1）', () => {
     expect(searchSettings('额度来源', label).map(h => h.title)).toContain('模型通道')
     expect(searchSettings('默认引擎', label).map(h => h.title)).toContain('模型通道')
     expect(searchSettings('默认模型', label).map(h => h.title)).toContain('新对话用')
+    expect(searchSettings('完全放行', label).map(h => h.title)).toContain('切到完全放行前先确认')
     expect(searchSettings('   ', label)).toEqual([])
     expect(searchSettings('完全不存在的设置', label)).toEqual([])
   })
