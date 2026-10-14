@@ -6,7 +6,7 @@ import { SETTINGS_INDEX, searchSettings } from './searchIndex'
 const label = (s: string) =>
   ({
     account: '账号',
-    models: '模型与额度',
+    models: '模型通道',
     engines: '本机引擎',
     usage: '用量',
     appearance: '外观',
@@ -23,6 +23,13 @@ describe('设置搜索（plan-search-panes-compact §1）', () => {
     expect(searchSettings('HTTPS_PROXY', label).map(h => h.title)).toContain('环境变量')
     expect(searchSettings('隐藏 模型', label).map(h => h.title)).toContain('菜单里显示的模型')
     expect(searchSettings('本机引擎', label).length).toBeGreaterThan(0)
+    // 模型通道（docs/ui/model-channels.md §4.3）：新词能搜，老词「额度来源」「默认引擎」也能搜到
+    expect(searchSettings('授权', label).map(h => h.title)).toEqual(
+      expect.arrayContaining(['Claude 授权', 'ChatGPT 授权']),
+    )
+    expect(searchSettings('额度来源', label).map(h => h.title)).toContain('模型通道')
+    expect(searchSettings('默认引擎', label).map(h => h.title)).toContain('模型通道')
+    expect(searchSettings('默认模型', label).map(h => h.title)).toContain('新对话用')
     expect(searchSettings('   ', label)).toEqual([])
     expect(searchSettings('完全不存在的设置', label)).toEqual([])
   })

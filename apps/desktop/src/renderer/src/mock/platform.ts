@@ -44,6 +44,7 @@ export const demoEngineStatus: EngineLite[] = [
     // 演示「有新版本」提示（docs/ui/engine-update.md）
     latestVersion: '2.1.300',
     message: null,
+    account: { email: 'linxia@example.com', plan: 'max' },
     path: 'C:\\Users\\linxia\\.local\\bin\\claude.exe',
     caps: {
       permissionModes: ['ask', 'edits', 'plan', 'full'],
@@ -60,10 +61,11 @@ export const demoEngineStatus: EngineLite[] = [
   {
     id: 'codex',
     name: 'Codex',
-    status: 'unsupported',
-    version: null,
-    message: '即将支持',
-    path: null,
+    // 演示「③ ChatGPT 授权」还没授权（docs/ui/model-channels.md §4.3）
+    status: 'unauthenticated',
+    version: '0.162.1',
+    message: 'Codex is not signed in. Run codex login.',
+    path: 'C:\\Users\\linxia\\AppData\\Roaming\\npm\\codex.cmd',
     caps: {
       permissionModes: ['ask', 'edits', 'full'],
       efforts: ['low', 'medium', 'high', 'xhigh'],
@@ -122,6 +124,27 @@ export const demoEngineCatalog: EngineCatalog = {
       inputModalities: [],
       isDefault: false,
     },
+  ],
+}
+
+/** 演示模式下 Codex 报上来的模型（和真机 Codex 0.162 的 model/list 一样的形状） */
+const codexModel = (id: string, label: string, isDefault = false) => ({
+  id,
+  label,
+  efforts: ['low', 'medium', 'high', 'xhigh'] as Array<'low' | 'medium' | 'high' | 'xhigh'>,
+  defaultEffort: 'medium' as const,
+  inputModalities: ['text', 'image'],
+  isDefault,
+})
+export const demoCodexCatalog: EngineCatalog = {
+  outputStyles: [],
+  currentOutputStyle: null,
+  models: [
+    codexModel('gpt-6.1-sol', 'GPT-6.1-Sol', true),
+    codexModel('gpt-6-astra', 'GPT-6-Astra'),
+    codexModel('gpt-6-sol', 'GPT-6-Sol'),
+    codexModel('gpt-6-luna', 'GPT-6-Luna'),
+    codexModel('gpt-5.5', 'GPT-5.5'),
   ],
 }
 

@@ -36,6 +36,7 @@ import { longConversationMessages } from './longConversationMessages'
 import { tabMenuMessages } from './tabMenuMessages'
 import { minimalModeMessages } from './minimalModeMessages'
 import { imageViewerMessages } from './imageViewerMessages'
+import { modelChannelMessages } from './modelChannelMessages'
 import { htmlPreviewMessages } from './htmlPreviewMessages'
 import { recoveryMessages } from './recoveryMessages'
 import { pathClickMessages } from './pathClickMessages'
@@ -87,6 +88,7 @@ export const allMessages = {
   ...tabMenuMessages,
   ...minimalModeMessages,
   ...imageViewerMessages,
+  ...modelChannelMessages,
   ...htmlPreviewMessages,
   ...recoveryMessages,
   ...pathClickMessages,

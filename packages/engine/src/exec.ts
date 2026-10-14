@@ -239,6 +239,111 @@ export function runStream(
   })
 }
 
+/** 一个交互式命令：能往 stdin 写、能随时结束 */
+export interface InteractiveProcess {
+  write(text: string): void
+  kill(): void
+  done: Promise<ExecResult>
+}
+
+/** 没换行结尾的半行停多久还没后续，就当作提示符交给 onText（Claude 的「Paste code here if prompted >」不带换行） */
+const PARTIAL_IDLE_MS = 150
+
+/**
+ * 跑一个要和用户交互的命令（授权登录）：stdin 可写，每一整行和停住不动的半行（提示符）都交给 onText。
+ * 不经过 shell，不弹窗口；没有超时，由调用方 kill()
+ */
+export function runInteractive(
+  launcher: Launcher,
+  args: string[],
+  env: NodeJS.ProcessEnv,
+  onText: (line: string) => void,
+): InteractiveProcess {
+  let child: ChildProcess
+  try {
+    child = spawn(launcher.command, [...launcher.args, ...args], {
+      env,
+      windowsHide: true,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      detached: !IS_WINDOWS,
+    })
+  } catch (err) {
+    const failed: ExecResult = { ok: false, started: false, stdout: '', stderr: '', error: (err as Error).message }
+    return { write() {}, kill() {}, done: Promise.resolve(failed) }
+  }
+  const out = { stdout: '', stderr: '' }
+  const pending = { stdout: '', stderr: '' }
+  const timers: Partial<Record<'stdout' | 'stderr', NodeJS.Timeout>> = {}
+  const LIMIT = 256 * 1024
+  /** 已经当提示符交出去的半行：后面接着来的输出补齐这一行时再交完整的一行（网址分两段到也不会被截断） */
+  const shown = { stdout: '', stderr: '' }
+  const take = (key: 'stdout' | 'stderr', chunk: string, flush = false): void => {
+    if (out[key].length < LIMIT) out[key] += chunk
+    clearTimeout(timers[key])
+    const parts = (pending[key] + chunk).split(/\r\n|\r|\n/)
+    pending[key] = flush ? '' : (parts.pop() ?? '')
+    // 交过的半行补齐了：半行里有网址（被分成两段送来）就重交完整的一行，否则是提示符，只交后面接上的部分
+    if (parts.length && shown[key] && parts[0].startsWith(shown[key]) && !/https?:/.test(shown[key]))
+      parts[0] = parts[0].slice(shown[key].length)
+    if (parts.length) shown[key] = ''
+    for (const part of parts) {
+      const line = plainLine(part)
+      if (line) onText(line)
+    }
+    // 半行停住不动：当作提示符交出去；同一段不会交两次
+    if (pending[key] && pending[key] !== shown[key]) {
+      timers[key] = setTimeout(() => {
+        shown[key] = pending[key]
+        const line = plainLine(pending[key])
+        if (line) onText(line)
+      }, PARTIAL_IDLE_MS)
+    }
+  }
+  child.stdout!.setEncoding('utf8').on('data', (chunk: string) => take('stdout', chunk))
+  child.stderr!.setEncoding('utf8').on('data', (chunk: string) => take('stderr', chunk))
+  // 命令先退出时往 stdin 写会报 EPIPE，忽略
+  child.stdin!.on('error', () => undefined)
+  let killed = false
+  const done = new Promise<ExecResult>(resolve => {
+    let settled = false
+    const finish = (result: ExecResult): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(timers.stdout)
+      clearTimeout(timers.stderr)
+      resolve(result)
+    }
+    child.on('error', err =>
+      finish({ ok: false, started: false, stdout: out.stdout, stderr: out.stderr, error: err.message }),
+    )
+    child.on('close', code => {
+      take('stdout', '', true)
+      take('stderr', '', true)
+      finish({
+        ok: code === 0 && !killed,
+        started: true,
+        stdout: out.stdout,
+        stderr: out.stderr,
+        error: killed ? '已结束' : code === 0 ? null : `退出码 ${code ?? '?'}`,
+      })
+    })
+  })
+  return {
+    write: text => {
+      try {
+        child.stdin!.write(text)
+      } catch {
+        // 已经退出
+      }
+    },
+    kill: () => {
+      killed = true
+      killTree(child)
+    },
+    done,
+  }
+}
+
 /**
  * 进程起不来时（例如追加了它不认的参数）给用户看的原因：stderr 开头两行，比「进程已退出」有用。
  * 命令行报错带颜色（\x1b[...m），界面上只要文字（docs/ui/engine-launch.md §9.2）

@@ -3,6 +3,8 @@ import type { EngineCatalog, EngineId } from '@pixelsky/protocol'
 import { bridge } from './store'
 import { useEngineState } from './store'
 import { getMachines, useMachines } from '@/features/machines/store'
+import { isDemo } from '@/data'
+import { demo } from '@/data/demo'
 
 const catalogs: Record<string, EngineCatalog> = {}
 const pending = new Set<string>(),
@@ -30,6 +32,7 @@ export function useEngineCatalog(engine: EngineId): EngineCatalog | null {
         listeners.delete(fn)
       }
     },
-    () => catalogs[key] ?? null,
+    // 演示模式没有引擎进程：Codex 用演示目录（③ ChatGPT 授权要列模型），其它照旧没有
+    () => catalogs[key] ?? (isDemo && engine === 'codex' ? demo().engines.codexCatalog : null),
   )
 }

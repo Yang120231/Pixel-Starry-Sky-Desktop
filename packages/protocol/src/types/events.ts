@@ -7,7 +7,7 @@ import type {
   SessionSummary,
   TurnOutcome,
 } from './session'
-import type { EngineConfig, EngineInfo, EngineJob } from './engine'
+import type { EngineConfig, EngineInfo, EngineJob, EngineLogin } from './engine'
 import type { CacheWarning, RequestCacheUsage, RequestRetryState, TurnUsage, Usage } from './usage'
 import type { Item } from './item'
 import type { ApprovalRequest } from './approval'
@@ -124,5 +124,7 @@ export type HostEvent =
   | { kind: 'engines'; engines: EngineInfo[] }
   /** 安装 / 更新引擎的进度（设置 › 本机引擎） */
   | { kind: 'engine_job'; job: EngineJob }
+  /** 引擎授权登录的进度（设置 › 模型通道） */
+  | { kind: 'engine_login'; login: EngineLogin }
   /** 写入了新的用量记录（或清空了），用量页据此刷新 */
   | { kind: 'usage_recorded' }

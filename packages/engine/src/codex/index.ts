@@ -1,4 +1,4 @@
-import type { EngineAdapter, EngineSession, Launcher, SessionContext } from '../adapter'
+import type { EngineAdapter, EngineSession, Launcher, LoginProcess, SessionContext } from '../adapter'
 import {
   codedError,
   type EngineCatalog,
@@ -9,7 +9,7 @@ import {
   viaGateway,
 } from '@pixelsky/protocol'
 import { engineEnv } from '../env'
-import { startupReason } from '../exec'
+import { outputTail, run, runInteractive, startupReason } from '../exec'
 import { engineBase } from '../registry'
 import { customCodex, discoverCodex, toolEnvironment } from './discover'
 import { CodexProcess, object } from './process'
@@ -61,6 +61,24 @@ export class CodexAdapter implements EngineAdapter {
     this.catalogCache = null
     return result
   }
+  /** 授权登录：codex login（浏览器）或 codex login --device-auth（设备码）；用检测到的原生程序，npm 垫片不经 shell 起不来 */
+  async login(method: 'browser' | 'device', onLine: (line: string) => void): Promise<LoginProcess> {
+    const launcher = await this.loginLauncher()
+    const args = method === 'device' ? ['login', '--device-auth'] : ['login']
+    return runInteractive(launcher, args, toolEnvironment(launcher, this.env()), onLine)
+  }
+  /** 取消授权：codex logout */
+  async logout(): Promise<EngineUpdateResult> {
+    const launcher = await this.loginLauncher()
+    const r = await run(launcher, ['logout'], toolEnvironment(launcher, this.env()))
+    return { ok: r.ok, output: outputTail(r), version: null }
+  }
+  private async loginLauncher(): Promise<Launcher> {
+    await this.info()
+    const launcher = this.cached?.launcher
+    if (!launcher) throw new Error(this.cached?.info.message ?? '没找到 Codex')
+    return launcher
+  }
   /** 一键安装：npm install -g（找得到 npm 时 info.installable 才为真） */
   async install(onLine: (line: string) => void = () => undefined): Promise<EngineUpdateResult> {
     const result = await installCodexWithNpm(this.env(), onLine)
@@ -106,6 +124,12 @@ export class CodexAdapter implements EngineAdapter {
       await proc.initialize()
       this.catalogCache = await codexCatalog(proc)
       const auth = await proc.request('account/read', { refreshToken: false })
+      // 已授权的账号（ChatGPT 登录有邮箱和套餐；API Key 登录没有）
+      const account = object(auth.account)
+      const text = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : undefined)
+      const found = { email: text(account.email), plan: text(account.planType) }
+      const filled = Object.fromEntries(Object.entries(found).filter(([, v]) => v))
+      if (Object.keys(filled).length) result.info.account = filled
       if (!Object.keys(object(auth.account)).length && auth.requiresOpenaiAuth === true) {
         result.info.status = 'unauthenticated'
         result.info.message = 'Codex is not signed in. Run codex login.'

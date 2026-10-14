@@ -90,6 +90,8 @@ export interface EngineInfo {
    * 比 version 新时界面提示「有新版本」
    */
   latestVersion?: string
+  /** 已授权的账号，探测时顺便填；拿不到就没有 */
+  account?: { email?: string; plan?: string; org?: string }
   caps: EngineCaps
 }
 
@@ -193,6 +195,24 @@ export interface EngineJob {
   phase: 'prepare' | 'download' | 'install' | 'verify' | 'done' | 'failed'
   startedAt: number
   /** 引擎输出的最后一行（去掉颜色） */
+  line: string | null
+  error: string | null
+}
+
+/** 引擎授权登录的进度（设置 › 模型通道的授权弹窗，docs/ui/model-channels.md §3） */
+export interface EngineLogin {
+  engine: EngineId
+  /** browser 浏览器登录（默认）；device 设备码（只有 Codex 支持） */
+  method: 'browser' | 'device'
+  phase: 'starting' | 'waiting' | 'verify' | 'done' | 'failed' | 'cancelled'
+  startedAt: number
+  /** 输出里认出的授权网址（复制链接 / 重新打开用；CLI 自己会开浏览器） */
+  url: string | null
+  /** 设备码登录要在网页上输入的一次性码 */
+  userCode: string | null
+  /** 命令在等用户粘贴授权码（Claude 手动流程） */
+  awaitingCode: boolean
+  /** 输出的最后一行（去掉颜色） */
   line: string | null
   error: string | null
 }

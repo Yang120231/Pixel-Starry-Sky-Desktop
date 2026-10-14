@@ -139,6 +139,8 @@ export const SYNC_ENTRIES: readonly SyncEntry[] = [
   storageEntry('desktop.platform.claude', 'platform', 'pixelsky.platform.preference.v1'),
   storageEntry('desktop.platform.codex', 'platform', 'pixelsky.sources.v2'),
   storageEntry('desktop.platform.hiddenModels', 'platform', 'pixelsky.platform.hiddenModels'),
+  storageEntry('desktop.channels.executor', 'platform', 'pixelsky.channels.executor.v1'),
+  storageEntry('desktop.channels.newTask', 'platform', 'pixelsky.channels.newTask.v1'),
   // AI 写提交信息的写法（docs/ui/ai-commit-codex-warnings-history.md §2.3）；用哪里的模型只在本机
   storageEntry('desktop.aiCommit.writing', 'platform', 'pixelsky.aiCommit.writing'),
   // 引擎（只读写本机的引擎设置；命令路径、参数、环境变量出不去，见主进程 settings:engine）

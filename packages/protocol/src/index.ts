@@ -20,6 +20,7 @@ export type {
   EngineModel,
   EngineStatus,
   EngineJob,
+  EngineLogin,
   EngineUpdateResult,
   FileChange,
   FileAttachment,

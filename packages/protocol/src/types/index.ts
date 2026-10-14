@@ -36,6 +36,7 @@ export type {
   EngineModel,
   EngineStatus,
   EngineJob,
+  EngineLogin,
   EngineUpdateResult,
   SessionDefaults,
 } from './engine'

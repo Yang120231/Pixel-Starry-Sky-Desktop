@@ -18,6 +18,7 @@ import type {
   EngineDefaults,
   EngineId,
   EngineInfo,
+  EngineLogin,
   EngineUpdateResult,
   Item,
   MessageInput,
@@ -48,6 +49,7 @@ import { HostCache } from './cache'
 import type { EngineHostOptions, HostContext, HostModules, Runtime } from './context'
 import { HostEvents } from './events'
 import { HostGuard } from './guard'
+import { HostLogin } from './login'
 import { HostProjects } from './projects'
 import { HostQuery } from './query'
 import { HostQueue } from './queue'
@@ -127,6 +129,7 @@ export class EngineHost {
       turn: new HostTurn(ctx),
       sessions: new HostSessions(ctx),
       branch: new HostBranch(ctx),
+      login: new HostLogin(ctx),
     }
     for (const r of store.loadRecords()) ctx.records.set(r.id, r)
     this.ctx = ctx
@@ -190,6 +193,25 @@ export class EngineHost {
   /** 检查更新：交给引擎自己的更新命令，结束后重新检测并广播 */
   async updateEngine(engine: EngineId): Promise<EngineUpdateResult> {
     return this.m.settings.updateEngine(engine)
+  }
+
+  /** 授权登录（docs/ui/model-channels.md §3）：起登录命令后马上返回当前进度，之后看 engine_login 事件 */
+  loginEngine(engine: EngineId, method: 'browser' | 'device' = 'browser'): EngineLogin {
+    return this.m.login.loginEngine(engine, method)
+  }
+
+  /** 把用户粘贴的授权码写给正在等它的登录命令 */
+  loginInput(engine: EngineId, text: string): void {
+    this.m.login.loginInput(engine, text)
+  }
+
+  cancelLogin(engine: EngineId): void {
+    this.m.login.cancelLogin(engine)
+  }
+
+  /** 取消授权，随后重新检测 */
+  async logoutEngine(engine: EngineId): Promise<EngineUpdateResult> {
+    return this.m.login.logoutEngine(engine)
   }
 
   /** 一键安装：跑引擎的官方安装方式，过程推 engine_job，结束后重新检测并广播 */
@@ -472,6 +494,7 @@ export class EngineHost {
   async shutdown(): Promise<void> {
     this.ctx.closing = true
     this.m.usage.abortSettlements()
+    this.m.login.closeAll()
     const all = [...this.runtimes.values()]
     for (const rt of all) if (rt.idleTimer) clearTimeout(rt.idleTimer)
     // 退出时不等引擎收尾：最多等 1 秒就强制结束（原来 Claude 等满 5 秒，更新重启时白等）

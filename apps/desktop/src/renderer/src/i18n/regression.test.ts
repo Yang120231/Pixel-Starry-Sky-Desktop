@@ -42,6 +42,7 @@ import { longConversationMessages } from '../../../shared/i18n/longConversationM
 import { tabMenuMessages } from '../../../shared/i18n/tabMenuMessages'
 import { minimalModeMessages } from '../../../shared/i18n/minimalModeMessages'
 import { imageViewerMessages } from '../../../shared/i18n/imageViewerMessages'
+import { modelChannelMessages } from '../../../shared/i18n/modelChannelMessages'
 import { htmlPreviewMessages } from '../../../shared/i18n/htmlPreviewMessages'
 import { recoveryMessages } from '../../../shared/i18n/recoveryMessages'
 import { pathClickMessages } from '../../../shared/i18n/pathClickMessages'
@@ -91,6 +92,7 @@ const dictionaries: Record<string, Record<string, unknown>> = {
   tabMenuMessages,
   minimalModeMessages,
   imageViewerMessages,
+  modelChannelMessages,
   htmlPreviewMessages,
   recoveryMessages,
   pathClickMessages,

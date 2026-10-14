@@ -72,7 +72,13 @@ export interface DemoSource {
   platformGroups: PlatformGroupInfo[]
   /** 自定义 API 的两条假接口 */
   providers: ProvidersState
-  engines: { status: EngineLite[]; catalog: EngineCatalog; config: EngineConfig }
+  engines: {
+    status: EngineLite[]
+    catalog: EngineCatalog
+    /** Codex 的模型目录（③ ChatGPT 授权列的模型，docs/ui/model-channels.md） */
+    codexCatalog: EngineCatalog
+    config: EngineConfig
+  }
   artifacts: {
     response: ArtifactResponse
     change(itemId: string, path: string): FileChange | null
