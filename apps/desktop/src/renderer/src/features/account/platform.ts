@@ -484,6 +484,25 @@ function start(): void {
     .catch(() => undefined)
 }
 
+/** 不按引擎筛的目录：模型通道菜单要看一个平台模型能交给哪些引擎跑（docs/ui/model-channels.md §2.5） */
+export type PlatformCatalog = Pick<PlatformState, 'email' | 'groups' | 'loaded' | 'loading' | 'error' | 'hiddenModels'>
+let catalogView: { from: PlatformState; view: PlatformCatalog } | null = null
+export function getPlatformCatalog(): PlatformCatalog {
+  if (catalogView?.from !== state) {
+    const { email, groups, loaded, loading, error, hiddenModels } = state
+    catalogView = { from: state, view: { email, groups, loaded, loading, error, hiddenModels } }
+  }
+  return catalogView.view
+}
+
+export function usePlatformCatalog(): PlatformCatalog {
+  useEffect(start, [])
+  return useSyncExternalStore(fn => {
+    listeners.add(fn)
+    return () => listeners.delete(fn)
+  }, getPlatformCatalog)
+}
+
 export function usePlatform(engine: EngineId = 'claude'): PlatformState {
   useEffect(start, [])
   return useSyncExternalStore(

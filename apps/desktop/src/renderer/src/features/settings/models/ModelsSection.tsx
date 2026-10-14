@@ -1,11 +1,11 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '../../../i18n/core'
-// 设置 › 模型与额度（docs/ui/source-switch.md §3.6）：新任务的默认引擎，各引擎的默认额度来源、模型、线路、推理强度（EngineDefaults.tsx）；
-// 平台可用线路一览；本机引擎检测结果；自定义 API 的接口（docs/ui/custom-api.md）。已开始的会话在输入框菜单里单独改。
+// 设置 › 模型通道（docs/ui/model-channels.md §2.1）：最上面四张通道卡和「新对话用」（model-channels/ChannelsSettings.tsx，
+// 自定义 API 的接口列在第四张卡里，docs/ui/custom-api.md）；下面是平台线路一览、菜单里显示的模型、AI 提交说明、请求重试。
 import type { EngineId } from '@pixelsky/protocol'
 import { useEffect, useRef, useState } from 'react'
-import { LogIn, RefreshCw } from 'lucide-react'
-import { Button, EngineIcon, Spinner, Switch, cn } from '@/ui'
+import { RefreshCw } from 'lucide-react'
+import { EngineIcon, Spinner, Switch, cn } from '@/ui'
 import { useAccount } from '@/features/account/useAccount'
 import {
   billingLabel,
@@ -21,44 +21,18 @@ import {
   showAllModels,
   usePlatform,
 } from '@/features/account/platform'
-import { isLive, useEngineState } from '@/features/engine'
 import { GroupTitle, SectionTitle } from '../SettingRow'
 import { takeModelsScroll } from './scroll'
 import { RequestRetrySettings } from './RequestRetrySettings'
-import { demo, isDemo } from '@/data/demo'
-import { CustomApiSettings } from './CustomApiSettings'
-import { EngineDefaults } from './EngineDefaults'
+import { ChannelsSettings } from '@/features/model-channels/ChannelsSettings'
 import { AiCommitSettings } from './AiCommitSettings'
 import { ContextWindowInput } from './ContextWindowInput'
 import { setContextWindow, useContextWindows } from './contextWindows'
 
-const ENGINE_STATUS: Record<string, string> = {
-  get ready() {
-    return tr('settings.models.ModelsSection.ready')
-  },
-  get unauthenticated() {
-    return tr('sidebar.SidebarFooter.notSignedIn')
-  },
-  get missing() {
-    return tr('settings.engines.parts.notInstalled')
-  },
-  get outdated() {
-    return tr('settings.engines.parts.outdatedVersion')
-  },
-  get error() {
-    return tr('settings.engines.parts.detectionFailed')
-  },
-  get unsupported() {
-    return tr('session.ModelSourceMenu.comingSoon2')
-  },
-}
-
-export function ModelsSection({ onOpenEngines }: { onOpenEngines?: () => void }) {
+export function ModelsSection() {
   useI18n()
   const platform = usePlatform()
   const account = useAccount()
-  const liveEngines = useEngineState(s => s.engines)
-  const engines = isLive ? liveEngines : isDemo ? demo().engines.status : []
   const codexPlatform = usePlatform('codex')
   const claudeModels = platformModels(platform.groups)
   const codexModels = platformModels(codexPlatform.groups)
@@ -85,22 +59,14 @@ export function ModelsSection({ onOpenEngines }: { onOpenEngines?: () => void })
 
   return (
     <section>
-      <SectionTitle>{tr('settings.models.ModelsSection.modelsCredits')}</SectionTitle>
-      <p className="-mt-2 mb-5 text-meta text-fg-muted">{tr('settings.models.ModelsSection.defaultsForNewTasks')}</p>
+      <SectionTitle>{tr('modelChannels.title')}</SectionTitle>
+      <p className="-mt-2 mb-5 text-meta text-fg-muted">{tr('modelChannels.intro')}</p>
 
-      {/* 默认引擎，和每个引擎各自的默认（docs/ui/engine-defaults.md） */}
-      <EngineDefaults onOpenEngines={onOpenEngines} />
+      <ChannelsSettings />
 
-      {/* 平台线路一览 */}
-      <GroupTitle>{tr('session.ModelSourceMenu.platform')}</GroupTitle>
-      {!platform.email ? (
-        <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-line px-4 py-3">
-          <span className="text-meta text-fg-muted">{tr('settings.models.ModelsSection.signInToPixel')}</span>
-          <Button variant="primary" icon={LogIn} onClick={() => void account.login()}>
-            {tr('account.AccountMenu.signIn')}{' '}
-          </Button>
-        </div>
-      ) : (
+      {/* 平台线路一览（登录了像素星空才有） */}
+      {platform.email && <GroupTitle>{tr('session.ModelSourceMenu.platform')}</GroupTitle>}
+      {platform.email && (
         <div className="mt-3">
           <div className="mb-2 flex items-center justify-between gap-3 text-meta text-fg-muted">
             <span className="min-w-0 truncate">
@@ -234,32 +200,8 @@ export function ModelsSection({ onOpenEngines }: { onOpenEngines?: () => void })
         </div>
       )}
 
-      {/* 本机引擎：详细设置（路径、环境变量、压缩模型）在「本机引擎」页 */}
-      <GroupTitle>{tr('settings.models.ModelsSection.ownAccountLocalEngine')}</GroupTitle>
-      <div className="mt-3 flex items-center gap-3 rounded-lg border border-line px-4 py-2.5">
-        <span className="flex min-w-0 flex-1 flex-wrap gap-x-4 gap-y-1">
-          {engines.map(e => (
-            <span key={e.id} className="inline-flex items-center gap-1.5 text-meta">
-              <EngineIcon engine={e.id} size={14} />
-              <span className="text-fg">{e.name}</span>
-              <span className={e.status === 'ready' ? 'text-success' : 'text-fg-muted'}>
-                {ENGINE_STATUS[e.status] ?? e.status}
-                {e.status === 'ready' && e.version ? ` · ${e.version}` : ''}
-              </span>
-            </span>
-          ))}
-        </span>
-        {onOpenEngines && (
-          <button type="button" onClick={onOpenEngines} className="shrink-0 text-meta text-accent-fg hover:underline">
-            {tr('settings.models.ModelsSection.engineSettings')}{' '}
-          </button>
-        )}
-      </div>
-
       <GroupTitle>{tr('aiCommit.settings.title')}</GroupTitle>
       <AiCommitSettings />
-      <GroupTitle>{tr('settings.models.ModelsSection.customApi')}</GroupTitle>
-      <CustomApiSettings />
       <GroupTitle>{tr('settings.models.ModelsSection.requestRetries')}</GroupTitle>
       <RequestRetrySettings />
     </section>

@@ -1,7 +1,7 @@
 import { tr } from '../../i18n/core'
 import { useI18n } from '@/i18n/I18nProvider'
 // 给组件用的钩子：演示模式返回 mock 数据（或 undefined 让组件走演示逻辑），否则返回引擎的真实数据
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { useEngineCatalog } from './catalog'
 import { useMachines, machineOf } from '@/features/machines/store'
 import { draftWorkspace } from '@/features/machines/drafts'
@@ -50,6 +50,9 @@ import {
   type CreditSource,
 } from '@/features/account/platform'
 import { providersFor, resolveCustomModel, useProviders } from '@/features/account/providers'
+import { channelOf, type ChannelChoice, type ChannelId } from '@/features/model-channels/channelModel'
+import { getChannelPrefs, useChannelPrefs } from '@/features/model-channels/channelPrefs'
+import { rememberNewTask, writeChoiceDefault } from '@/features/model-channels/newTaskDefault'
 import {
   addProject,
   bridge,
@@ -188,18 +191,37 @@ export type SourceMenuController = Pick<
   | 'setProvider'
   | 'setModel'
   | 'saveAsDefault'
+  | 'channel'
+  | 'applyChoice'
 > & { engines: EngineLite[]; engine: EngineLite | null }
+
+/** 演示模式里输入框选的执行引擎（只在内存里） */
+let demoEngine: EngineId = 'claude'
+const demoEngineListeners = new Set<() => void>()
+const setDemoEngine = (id: EngineId): void => {
+  demoEngine = id
+  demoEngineListeners.forEach(fn => fn())
+}
 
 /** 演示模式的菜单：假目录、假引擎，选择只改内存（features/account/platform.ts） */
 export function useDemoSourceController(): SourceMenuController {
-  const platform = usePlatform()
-  const endpoints = providersFor(useProviders().providers, 'claude')
+  const engineId = useSyncExternalStore(
+    fn => {
+      demoEngineListeners.add(fn)
+      return () => demoEngineListeners.delete(fn)
+    },
+    () => demoEngine,
+  )
+  const platform = usePlatform(engineId)
+  const endpoints = providersFor(useProviders().providers, engineId)
   const isPlatform = platform.source === 'platform'
   const endpoint =
     platform.source === 'custom' ? (endpoints.find(p => p.id === platform.providerId) ?? endpoints[0]) : undefined
+  const engines = isDemo ? demo().engines.status : []
   return {
     started: false,
     source: platform.source,
+    channel: channelOf(engineId, platform.source),
     groupId: isPlatform ? platform.groupId : null,
     providerId: endpoint?.id ?? null,
     model: isPlatform
@@ -210,13 +232,13 @@ export function useDemoSourceController(): SourceMenuController {
     isDefault: true,
     platformAvailable: true,
     blocker: null,
-    engines: isDemo ? demo().engines.status : [],
-    engine: isDemo ? demo().engines.status[0] : null,
+    engines,
+    engine: engines.find(e => e.id === engineId) ?? engines[0] ?? null,
     canSwitchEngine: true,
-    selectEngine: () => undefined,
+    selectEngine: setDemoEngine,
     redetect: () => undefined,
-    setSource: async s => setDefaultSource(s),
-    setGroup: async id => setDefaultGroup(id),
+    setSource: async s => setDefaultSource(s, engineId),
+    setGroup: async id => setDefaultGroup(id, engineId),
     setProvider: async id =>
       setDefaultCustom(
         id,
@@ -224,9 +246,18 @@ export function useDemoSourceController(): SourceMenuController {
           endpoints.find(p => p.id === id),
           null,
         ),
+        engineId,
       ),
     setModel: async m =>
-      endpoint ? setDefaultCustom(endpoint.id, m) : isPlatform && m ? setDefaultModel(m) : setDefaultSelfModel(m),
+      endpoint
+        ? setDefaultCustom(endpoint.id, m, engineId)
+        : isPlatform && m
+          ? setDefaultModel(m, engineId)
+          : setDefaultSelfModel(m, engineId),
+    applyChoice: async c => {
+      writeChoiceDefault(c)
+      setDemoEngine(c.engine)
+    },
     saveAsDefault: () => undefined,
   }
 }
@@ -281,6 +312,13 @@ export interface ComposerController {
   setProvider(providerId: string): Promise<void>
   setModel(model: string | null): Promise<void>
   saveAsDefault(): void
+  /** 模型通道（docs/ui/model-channels.md）：当前选择读成通道 */
+  channel: ChannelId
+  /**
+   * 在通道菜单里选了一个模型：新任务连执行引擎一起换；已开始的对话执行者固定，一次改好来源、线路 / 接口和模型
+   * （换通道要先在界面上确认）。「接着上次」时同时写回新任务默认（§2.6）
+   */
+  applyChoice(choice: ChannelChoice): Promise<void>
   blocker: SourceBlocker | null
   engines: EngineInfo[]
   engine: EngineInfo | null
@@ -361,6 +399,8 @@ export function useComposerController(
   const platform = usePlatform(selectedEngineId)
   const providers = useProviders()
   const catalog = useEngineCatalog(selectedEngineId)
+  // 订阅「新任务用什么」（接着上次 / 固定为），设置里改了菜单跟着变
+  useChannelPrefs()
   useEffect(() => {
     if (isLive && !sessionId) void refreshDefaults()
   }, [sessionId])
@@ -520,20 +560,80 @@ export function useComposerController(
     if (!record.platform || !group || group.models.length === 0) return
     const m = record.model && group.models.includes(record.model) ? record.model : group.models[0]
     await b.updateSession(record.id, { platform: { groupId: id, account: record.platform.account }, model: m })
+    if (getChannelPrefs().newTask.mode === 'last') saveDefault({ source: 'platform', groupId: id, model: m }, engineId)
   }
 
-  const setModel = async (m: string | null): Promise<void> => {
+  /** 换模型后推理强度不在新模型的档位里时，改成新模型的默认档 */
+  const effortPatchFor = (m: string | null): { effort?: Effort | null } => {
     const selected = catalog?.models?.find(model => model.id === (m ?? catalog.currentModel))
     const previousEffort = record?.effort ?? base.effort
     const effort =
       selected && previousEffort && !selected.efforts.includes(previousEffort) ? selected.defaultEffort : previousEffort
-    const effortPatch = effort !== previousEffort ? { effort } : {}
+    return effort !== previousEffort ? { effort } : {}
+  }
+
+  const applyChoice = async (c: ChannelChoice): Promise<void> => {
+    const last = getChannelPrefs().newTask.mode === 'last'
+    if (c.engine !== engineId && !canSwitchEngine)
+      throw new Error(tr('modelChannels.engineLocked', { p0: engine?.name ?? engineId }))
+    if (!started || !record) {
+      if (c.engine !== engineId) patch({ engine: c.engine, ...panelDefaults(c.engine) })
+      else {
+        const effortPatch = effortPatchFor(c.model)
+        if (effortPatch.effort !== undefined) patch(effortPatch)
+      }
+      if (last) rememberNewTask(c)
+      else writeChoiceDefault(c)
+      return
+    }
+    const effortPatch = effortPatchFor(c.model)
+    if (c.channel === 'platform') {
+      if (!platform.email) throw new Error(tr('engine.hooks.signInToPixel'))
+      if (!c.model) return
+      // 先保模型：当前线路有这个模型就不换线路，否则换到包含它、倍率最低的线路
+      const keep =
+        record.platform && platform.groups.find(g => g.id === record.platform?.groupId)?.models.includes(c.model)
+      const route = keep ? record.platform!.groupId : groupsForModel(platform.groups, c.model)[0]?.id
+      if (!route) throw new Error(tr('engine.hooks.noRouteSupportsThis'))
+      await b.updateSession(record.id, {
+        platform: { groupId: route, account: record.platform?.account ?? platform.email },
+        provider: null,
+        model: c.model,
+        ...effortPatch,
+      })
+    } else if (c.channel === 'custom') {
+      if (!c.providerId) return
+      await b.updateSession(record.id, {
+        platform: null,
+        provider: { id: c.providerId },
+        model: c.model,
+        ...effortPatch,
+      })
+    } else await b.updateSession(record.id, { platform: null, provider: null, model: c.model, ...effortPatch })
+    if (last) rememberNewTask(c)
+  }
+
+  /** 新任务发出去以后：固定模式恢复成固定的那个；接着上次时确认默认引擎就是这次的 */
+  const afterNewTask = (): void => {
+    const newTask = getChannelPrefs().newTask
+    if (newTask.mode === 'fixed') {
+      rememberNewTask(newTask.choice)
+      return
+    }
+    if (engineId !== defaults?.engine) void b.setDefaultEngine(engineId).catch(() => undefined)
+    // 推理强度也接着上次：这次新任务用的强度记成这个引擎新会话的默认（§2.6）
+    if (base.effort !== panelDefaults(engineId).effort)
+      void b.setConfig(engineId, { defaults: { effort: base.effort } }).catch(() => undefined)
+  }
+
+  const setModel = async (m: string | null): Promise<void> => {
+    const effortPatch = effortPatchFor(m)
     if (!started || !record) {
       if (source === 'custom') {
         if (providerId) setDefaultCustom(providerId, m, engineId)
       } else if (source === 'platform' && m) setDefaultModel(m, engineId)
       else setDefaultSelfModel(m, engineId)
-      if (effort !== previousEffort) patch(effortPatch)
+      if (effortPatch.effort !== undefined) patch(effortPatch)
       return
     }
     if (!record.platform) {
@@ -583,6 +683,8 @@ export function useComposerController(
     setGroup,
     setProvider,
     setModel,
+    channel: channelOf(engineId, source),
+    applyChoice,
     saveAsDefault: () => {
       if (source === 'platform') saveDefault({ source, groupId, model }, engineId)
       else if (source === 'custom') saveDefault({ source, providerId, customModel: model }, engineId)
@@ -687,6 +789,7 @@ export function useComposerController(
         throw err
       }
       setDraft(null)
+      afterNewTask()
       onOpenSession?.(created.id)
     },
   }

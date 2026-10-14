@@ -22,6 +22,7 @@ import { installLongTaskLog } from '../features/logs/longTasks'
 import { installMemorySampler } from '../features/logs/memorySampler'
 import { RecoveredNotice } from '../features/recovery/RecoveredNotice'
 import { SettingsSyncRunner } from '../features/settings/sync/RestoreNotice'
+import { AuthDialogHost } from '../features/model-channels/AuthDialog'
 import { startWindowActivity } from '../features/layout/windowActivity'
 
 document.documentElement.dataset.platform = window.pixelsky?.platform ?? 'web'
@@ -48,6 +49,7 @@ createRoot(document.getElementById('root')!, reactRootErrorOptions).render(
                   <CommandPaletteProvider>
                     <App />
                     <ShortcutsHelp />
+                    <AuthDialogHost />
                     <RecoveredNotice />
                   </CommandPaletteProvider>
                 </TerminalProvider>

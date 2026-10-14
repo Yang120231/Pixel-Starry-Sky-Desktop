@@ -15,6 +15,8 @@ import {
 import { MAX_FILE_BYTES, MAX_FILE_COUNT, MAX_IMAGE_COUNT, MAX_IMAGE_TOTAL } from '@pixelsky/protocol'
 import { useAccount } from '@/features/account/useAccount'
 import type { CreditSource } from '@/features/account/platform'
+import { sourceOfChannel, type ChannelChoice } from '@/features/model-channels/channelModel'
+import type { SourceSwitch } from './SourceHintBar'
 import { useSettings } from '@/features/settings/SettingsProvider'
 import { AttachmentChip } from './AttachmentChip'
 import { EffortMenu, PermissionMenu } from './ComposerMenus'
@@ -65,6 +67,7 @@ export function Composer({
   onSideQuestion,
   statusExtra,
   demoQueue,
+  newTask,
 }: {
   live?: ComposerController
   /** 演示模式没有 live，消息队列面板用演示的（features/engine/demoQueue.ts） */
@@ -76,6 +79,8 @@ export function Composer({
   onSideQuestion?: (question: string) => void
   /** 输入框上方那一行右边的按钮（旁聊） */
   statusExtra?: ReactNode
+  /** 欢迎页（新任务）的输入框：模型按钮旁边写「接着上次」（docs/ui/model-channels.md §2.6） */
+  newTask?: boolean
 }) {
   useI18n()
   const comingSoon = useComingSoon()
@@ -109,7 +114,7 @@ export function Composer({
   // 引擎 / 额度来源 / 模型菜单；已开始的会话切换平台 ↔ 自有前先确认（docs/ui/source-switch.md §3.4）
   const [menuOpen, setMenuOpen] = useState(false)
   const [addMenu, setAddMenu] = useState(false)
-  const [confirmSource, setConfirmSource] = useState<CreditSource | null>(null)
+  const [confirmSource, setConfirmSource] = useState<SourceSwitch | null>(null)
   const account = useAccount()
   const settings = useSettings()
   const demoSource = useDemoSourceController()
@@ -178,8 +183,14 @@ export function Composer({
 
   const requestSource = (next: CreditSource): void => {
     if (!live || next === live.source) return
-    if (live.started) setConfirmSource(next)
+    if (live.started) setConfirmSource({ source: next, choice: null })
     else void live.setSource(next).catch((e: unknown) => setError((e as Error).message))
+  }
+  /** 模型菜单里换到别的通道：已开始的对话先确认（会重启引擎并接上原对话，docs/ui/model-channels.md §2.3） */
+  const requestChoice = (choice: ChannelChoice): void => {
+    if (!live) return
+    if (live.started) setConfirmSource({ source: sourceOfChannel(choice.channel), choice })
+    else void live.applyChoice(choice).catch((e: unknown) => setError((e as Error).message))
   }
 
   // 换会话时收起确认
@@ -802,16 +813,23 @@ export function Composer({
 
           {live ? (
             <>
-              <ModelSourceMenu live={live} open={menuOpen} onOpenChange={setMenuOpen} onRequestSource={requestSource} />
+              <ModelSourceMenu
+                live={live}
+                newTask={newTask}
+                open={menuOpen}
+                onOpenChange={setMenuOpen}
+                onRequestChoice={requestChoice}
+              />
               <EffortMenu live={live} />
             </>
           ) : (
             <>
               <ModelSourceMenu
                 live={demoSource}
+                newTask={newTask}
                 open={menuOpen}
                 onOpenChange={setMenuOpen}
-                onRequestSource={s => void demoSource.setSource(s)}
+                onRequestChoice={c => void demoSource.applyChoice(c)}
               />
               <button
                 type="button"

@@ -12,6 +12,15 @@ import { refreshPlatform, usePlatform, type CreditSource } from '@/features/acco
 import { useSettings } from '@/features/settings/SettingsProvider'
 import type { ComposerController } from '@/features/engine'
 import { providersFor, useProviders } from '@/features/account/providers'
+import { isAuthChannel, type ChannelChoice } from '@/features/model-channels/channelModel'
+import { channelLabel } from '@/features/model-channels/channelLabels'
+import { openAuthDialog } from '@/features/model-channels/authDialogStore'
+
+/** 等用户确认的切换：从提示条 / 错误卡片来的只有来源，从模型菜单来的带具体的通道和模型（docs/ui/model-channels.md §2.3） */
+export interface SourceSwitch {
+  source: CreditSource
+  choice: ChannelChoice | null
+}
 
 function Action({ onClick, children, primary }: { onClick: () => void; children: ReactNode; primary?: boolean }) {
   useI18n()
@@ -76,7 +85,7 @@ export function SourceHintBar({
 }: {
   live: ComposerController
   /** 等用户确认的切换目标；null 表示没有在确认 */
-  confirm: CreditSource | null
+  confirm: SourceSwitch | null
   onCancelConfirm: () => void
   onRequestSource: (source: CreditSource) => void
   onOpenMenu: () => void
@@ -93,18 +102,18 @@ export function SourceHintBar({
     const engineName = live.engine?.name ?? 'Claude Code'
     const route = platform.groups.find(g => g.id === (live.groupId ?? platform.groupId))
     const endpoints = providersFor(providers.providers, live.engine?.id ?? 'claude')
-    const endpoint = endpoints.find(p => p.id === platform.providerId) ?? endpoints[0]
-    const label =
-      confirm === 'self'
+    const endpoint = endpoints.find(p => p.id === (confirm.choice?.providerId ?? platform.providerId)) ?? endpoints[0]
+    const label = confirm.choice
+      ? channelLabel(confirm.choice.channel)
+      : confirm.source === 'self'
         ? tr('session.ModelSourceMenu.ownAccount')
-        : confirm === 'custom'
+        : confirm.source === 'custom'
           ? tr('customApi.source')
           : tr('session.ModelSourceMenu.platform')
     const apply = (): void => {
       setBusy(true)
       setError(null)
-      live
-        .setSource(confirm)
+      ;(confirm.choice ? live.applyChoice(confirm.choice) : live.setSource(confirm.source))
         .then(onCancelConfirm)
         .catch((e: unknown) => setError((e as Error).message))
         .finally(() => setBusy(false))
@@ -128,9 +137,9 @@ export function SourceHintBar({
           {tr('session.SourceHintBar.toContinueThisConversation')}
         </div>
         <div>
-          {confirm === 'self'
+          {confirm.source === 'self'
             ? tr('session.SourceHintBar.futureRequestsAreBilled', { p0: engineName })
-            : confirm === 'custom'
+            : confirm.source === 'custom'
               ? tr('customApi.futureRequests', { p0: endpoint?.name ?? '' })
               : tr('session.SourceHintBar.futureRequestsUsePlatform', { p0: route ? `线路「${route.name}」` : '' })}
           {tr('session.SourceHintBar.engineRestartsAndResumes')}{' '}
@@ -269,6 +278,11 @@ export function SourceHintBar({
             <>
               {usePlatformBtn}
               <Action onClick={live.redetect}>{tr('session.SourceHintBar.detectAgain')}</Action>
+              {b.kind === 'self-auth' && isAuthChannel(live.channel) && (
+                <Action primary onClick={() => openAuthDialog(live.channel as 'claude' | 'chatgpt')}>
+                  {tr('modelChannels.action.auth')}
+                </Action>
+              )}
             </>
           }
         >

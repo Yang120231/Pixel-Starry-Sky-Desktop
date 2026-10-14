@@ -56,7 +56,7 @@ export function WelcomeView({
         </div>
         <div className="mt-7">
           <ComposerArea>
-            <Composer live={live} status={status} draftKey={draftKey} autoFocus={!!live} />
+            <Composer live={live} status={status} draftKey={draftKey} autoFocus={!!live} newTask />
           </ComposerArea>
         </div>
         {/* 占住高度：开始打字时起点消失，输入框不跟着动 */}

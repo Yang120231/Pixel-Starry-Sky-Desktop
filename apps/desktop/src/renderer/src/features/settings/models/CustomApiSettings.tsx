@@ -42,6 +42,22 @@ export const protocolLabel = (p: ProviderProtocol): string =>
       ? tr('customApi.protocolChat')
       : tr('customApi.protocolResponses')
 
+const PROTOCOLS = [
+  {
+    value: 'anthropic',
+    label: 'customApi.protocolAnthropic',
+    path: '/v1/messages',
+    desc: 'modelChannels.protocol.anthropic',
+  },
+  {
+    value: 'responses',
+    label: 'customApi.protocolResponses',
+    path: '/v1/responses',
+    desc: 'modelChannels.protocol.responses',
+  },
+  { value: 'chat', label: 'customApi.protocolChat', path: '/v1/chat/completions', desc: 'modelChannels.protocol.chat' },
+] as const satisfies ReadonlyArray<{ value: ProviderProtocol; label: string; path: string; desc: string }>
+
 export function CustomApiSettings() {
   useI18n()
   const providers = useProviders()
@@ -304,33 +320,48 @@ function ProviderDialog({ provider, close }: { provider: ProviderView | null; cl
             />
           </Field>
           <Field label={tr('customApi.protocol')} hint={provider ? tr('customApi.protocolLocked') : undefined}>
-            <Select<ProviderProtocol>
-              label={tr('customApi.protocol')}
-              className="w-full max-w-lg"
-              disabled={!!provider || template !== 'custom'}
-              value={protocol}
-              onChange={v => {
-                setProtocol(v)
-                setAuth(v === 'anthropic' ? 'x-api-key' : 'bearer')
-              }}
-              options={[
-                {
-                  value: 'anthropic',
-                  label: tr('customApi.protocolAnthropic'),
-                  hint: tr('customApi.protocolForClaude'),
-                },
-                {
-                  value: 'responses',
-                  label: tr('customApi.protocolResponses'),
-                  hint: tr('customApi.protocolForCodex'),
-                },
-                {
-                  value: 'chat',
-                  label: tr('customApi.protocolChat'),
-                  hint: tr('customApi.protocolForChat'),
-                },
-              ]}
-            />
+            {/* 三张单选卡：协议决定交给哪个执行者跑（docs/ui/model-channels.md §2.2） */}
+            <div role="radiogroup" aria-label={tr('customApi.protocol')} className="grid gap-2">
+              {PROTOCOLS.map(p => {
+                const selected = protocol === p.value
+                const locked = !!provider || template !== 'custom'
+                return (
+                  <button
+                    key={p.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    disabled={locked && !selected}
+                    onClick={() => {
+                      if (locked || selected) return
+                      setProtocol(p.value)
+                      setAuth(p.value === 'anthropic' ? 'x-api-key' : 'bearer')
+                    }}
+                    className={cn(
+                      'flex items-start gap-2.5 rounded-lg border px-3 py-2 text-left disabled:opacity-45',
+                      selected ? 'border-line-strong bg-selected' : 'border-line hover:bg-hover',
+                      locked && 'cursor-default',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'mt-1 flex size-3.5 shrink-0 items-center justify-center rounded-full border',
+                        selected ? 'border-accent' : 'border-line-strong',
+                      )}
+                    >
+                      {selected && <span className="size-1.5 rounded-full bg-accent" />}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-baseline gap-2">
+                        <span className="text-ui font-medium text-fg">{tr(p.label)}</span>
+                        <span className="font-mono text-label text-fg-faint">{p.path}</span>
+                      </span>
+                      <span className="block text-meta text-fg-muted">{tr(p.desc)}</span>
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
           </Field>
           <Field label={tr('customApi.baseUrl')} hint={tr('customApi.baseUrlHint')}>
             <input

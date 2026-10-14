@@ -15,6 +15,7 @@ import { openEngineDetail, useEngineDetail } from './nav'
 import { DefaultBadge, ENGINE_STATUS } from './parts'
 import { canInstall, hasNewer, installEngine, outcomeTitle, updateEngine, useEngineUpdate } from './engineUpdate'
 import { JobProgress } from './JobProgress'
+import { openAuthDialog } from '@/features/model-channels/authDialogStore'
 import { mergeContextWindows } from '../models/contextWindows'
 import { demo, isDemo } from '@/data/demo'
 import type { EngineLite } from '@/data/types'
@@ -223,6 +224,16 @@ function EngineRow({
                 ? tr('engineJob.install')
                 : tr('settings.engines.engineUpdate.update')}
           </Button>
+        )}
+        {/* 没登录：直接打开授权弹窗（docs/ui/model-channels.md §2.4） */}
+        {e.status === 'unauthenticated' && (e.id === 'claude' || e.id === 'codex') && (
+          <button
+            type="button"
+            onClick={() => openAuthDialog(e.id === 'claude' ? 'claude' : 'chatgpt')}
+            className="shrink-0 rounded-md border border-line px-2.5 py-1 text-meta text-accent-fg hover:bg-hover"
+          >
+            {tr('modelChannels.action.auth')}
+          </button>
         )}
         {canDefault && (
           <button

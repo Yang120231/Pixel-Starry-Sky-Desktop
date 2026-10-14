@@ -1,118 +1,55 @@
 import { translateMessage } from '../../i18n/core'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
-// 输入框的「引擎 / 额度来源 / 模型」菜单（docs/ui/source-switch.md §3.2）。
-// 三段分开：引擎决定谁执行工具，额度来源决定模型请求走哪里、谁付费，模型列表跟着来源变。
-// 平台时先选模型、再选线路（分组），线路在子页里，按倍率从低到高排。
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Check, ChevronDown, ChevronLeft, ChevronRight, LogIn, RefreshCw } from 'lucide-react'
-import type { EngineConfig, EngineId, EngineModel } from '@pixelsky/protocol'
+// 输入框的模型菜单（docs/ui/model-channels.md §2.3、§2.5）：按四条通道分组列模型，每一行右边写谁来执行，
+// 两个执行者都能跑的模型可以点开换。平台模型的线路在子页里，按倍率从低到高排（docs/ui/source-switch.md §3.2）。
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { Check, ChevronDown, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
+import type { EngineId } from '@pixelsky/protocol'
 import { EngineIcon, Popover, Spinner, cn } from '@/ui'
 import { useAccount } from '@/features/account/useAccount'
-import { providersFor, useProviders } from '@/features/account/providers'
-import type { ProviderView } from '../../../../shared/types/providers'
+import { useProviders } from '@/features/account/providers'
 import {
   billingLabel,
   formatMultiplier,
   groupsForModel,
   noRouteReason,
-  platformModels,
   refreshPlatform,
   usePlatform,
-  visibleModels,
+  usePlatformCatalog,
   MODEL_SEARCH_MIN,
   matchModels,
-  type CreditSource,
 } from '@/features/account/platform'
-import { selfModelLabel, selfModelOptions, useEngineState, type SourceMenuController } from '@/features/engine'
+import { selfModelLabel, selfModelOptions, type SourceMenuController } from '@/features/engine'
 import { useSettings } from '@/features/settings/SettingsProvider'
 import { useEngineCatalog } from '@/features/engine/catalog'
 import { requestModelsScroll } from '@/features/settings/models/scroll'
-import { MenuRow, MenuTitle, TRIGGER } from './ComposerMenus'
-
-const SOURCE_LABEL: Record<CreditSource, string> = {
-  get platform() {
-    return tr('session.ModelSourceMenu.platform')
-  },
-  get self() {
-    return tr('session.ModelSourceMenu.ownAccount')
-  },
-  get custom() {
-    return tr('customApi.source')
-  },
-}
-
-/** 菜单里的小号分段按钮 */
-function MiniSegmented<T extends string>({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string
-  options: Array<{ value: T; label: string; icon?: React.ReactNode; disabled?: boolean; title?: string }>
-  value: T
-  onChange: (v: T) => void
-}) {
-  useI18n()
-  return (
-    <div role="radiogroup" aria-label={label} className="mx-2 flex rounded-lg bg-subtle p-0.5">
-      {options.map(o => {
-        const selected = o.value === value
-        return (
-          <button
-            key={o.value}
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            disabled={o.disabled}
-            title={o.title}
-            onClick={() => !selected && onChange(o.value)}
-            className={cn(
-              'flex h-7 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md border px-2 text-meta',
-              selected
-                ? 'border-line bg-surface font-medium text-fg shadow-sm'
-                : 'border-transparent text-fg-muted hover:text-fg',
-              o.disabled && 'cursor-default opacity-50 hover:text-fg-muted',
-            )}
-          >
-            {o.icon}
-            <span className="truncate">{o.label}</span>
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-/** 输入框按钮上的文字：模型 + 额度来源 */
-function triggerText(
-  live: SourceMenuController,
-  rate: number | null,
-  catalogModels?: EngineModel[],
-  endpointName?: string,
-): { model: string; source: string } {
-  const engineId = live.engine?.id ?? 'claude'
-  if (live.source === 'custom')
-    return {
-      model: live.model ?? endpointName ?? tr('session.ModelSourceMenu.chooseModel'),
-      source: endpointName ? `${tr('customApi.source')} · ${endpointName}` : tr('customApi.source'),
-    }
-  if (live.source === 'platform')
-    return {
-      model: live.model ?? tr('session.ModelSourceMenu.chooseModel'),
-      source:
-        rate === null
-          ? tr('session.ModelSourceMenu.platform')
-          : tr('session.ModelSourceMenu.platform2', { p0: formatMultiplier(rate) }),
-    }
-  return {
-    model: live.model ? selfModelLabel(engineId, live.model, catalogModels) : (live.engine?.name ?? 'Claude Code'),
-    get source() {
-      return tr('session.ModelSourceMenu.ownAccount')
-    },
-  }
-}
+import {
+  AUTH_ENGINE,
+  buildChannelMenu,
+  isAuthChannel,
+  sameTarget,
+  type ChannelChoice,
+  type ChannelGroupView,
+  type ChannelId,
+  type ChannelRow,
+  type ModelTarget,
+} from '@/features/model-channels/channelModel'
+import {
+  CHANNEL_NUMBER,
+  accountText,
+  channelFix,
+  channelFixLabel,
+  channelLabel,
+  channelShort,
+  channelStateText,
+  executorDesc,
+  executorName,
+} from '@/features/model-channels/channelLabels'
+import { rememberExecutor, setNewTaskDefault, useChannelPrefs } from '@/features/model-channels/channelPrefs'
+import { openAuthDialog } from '@/features/model-channels/authDialogStore'
+import { useChannelEngines } from '@/features/model-channels/loginStore'
+import { MenuRow, TRIGGER } from './ComposerMenus'
 
 /** 祖先里会裁掉溢出内容的最近容器的顶部（窗口坐标）；没有时为 0 */
 function clipTop(el: Element | null | undefined): number {
@@ -125,33 +62,45 @@ function clipTop(el: Element | null | undefined): number {
   return top
 }
 
+type Page = { kind: 'main' } | { kind: 'routes' } | { kind: 'executor'; key: string }
+
 export function ModelSourceMenu({
   live,
+  newTask,
   open,
   onOpenChange,
-  onRequestSource,
+  onRequestChoice,
 }: {
   live: SourceMenuController
+  /** 欢迎页的输入框：没自己选过时写「接着上次」 */
+  newTask?: boolean
   open: boolean
   onOpenChange: (open: boolean) => void
-  /** 改额度来源：已开始的会话由输入框先弹确认 */
-  onRequestSource: (source: CreditSource) => void
+  /** 已开始的对话换到别的通道：由输入框先弹确认（会重启引擎并接上原对话） */
+  onRequestChoice: (choice: ChannelChoice) => void
 }) {
   useI18n()
   const engineId: EngineId = live.engine?.id ?? 'claude'
   const platform = usePlatform(engineId)
-  const catalog = useEngineCatalog(engineId)
-  const selfOptions = selfModelOptions(engineId, catalog?.models)
+  const catalog = usePlatformCatalog()
+  const ownCatalog = useEngineCatalog(engineId)
+  const claudeCatalog = useEngineCatalog('claude')
+  const codexCatalog = useEngineCatalog('codex')
+  const engines = useChannelEngines()
+  const providers = useProviders()
+  const prefs = useChannelPrefs()
   const account = useAccount()
-  const [page, setPage] = useState<'main' | 'routes'>('main')
-  const [showLoginHelp, setShowLoginHelp] = useState(false)
+  const settings = useSettings()
+  const [page, setPage] = useState<Page>({ kind: 'main' })
   const [actionError, setActionError] = useState<string | null>(null)
-  // 模型多于 8 个时显示搜索框（docs/ui/plan-search-panes-compact.md §1）
+  // 平台模型多于 8 个时显示搜索框（docs/ui/plan-search-panes-compact.md §1）
   const [modelQuery, setModelQuery] = useState('')
+  /** 这个输入框里自己选过模型：不再显示「接着上次」 */
+  const [picked, setPicked] = useState(false)
   const trigger = useRef<HTMLButtonElement>(null)
   const [menuHeight, setMenuHeight] = useState(420)
   // 菜单向上弹出，最高只到裁剪它的容器（窗格）顶部，不能按窗口顶部算：
-  // 窗格在顶栏下面（分屏时可能更低），按窗口算时长菜单的上半截（引擎切换）会被窗格裁掉。
+  // 窗格在顶栏下面（分屏时可能更低），按窗口算时长菜单的上半截会被窗格裁掉。
   useLayoutEffect(() => {
     if (!open) return
     const measure = (): void => {
@@ -162,38 +111,72 @@ export function ModelSourceMenu({
     measure()
     window.addEventListener('resize', measure)
     return () => window.removeEventListener('resize', measure)
-  }, [open, live.source])
+  }, [open])
 
   useEffect(() => {
     if (!open) return
-    setPage('main')
+    setPage({ kind: 'main' })
     setActionError(null)
     setModelQuery('')
     void refreshPlatform()
   }, [open])
 
-  const engineConfig = useEngineState(s => s.config)
-  const group = platform.groups.find(g => g.id === live.groupId)
-  const providers = useProviders()
-  const endpoints = providersFor(providers.providers, engineId)
+  const selection: ModelTarget = { channel: live.channel, model: live.model, providerId: live.providerId }
+  const locked = live.canSwitchEngine ? null : engineId
+  const groups = buildChannelMenu({
+    selection,
+    locked,
+    platform: catalog,
+    selfModels: {
+      claude: selfModelOptions('claude', claudeCatalog?.models),
+      chatgpt: selfModelOptions('codex', codexCatalog?.models),
+    },
+    providers: providers.providers,
+    engines,
+    remembered: prefs.executors,
+  })
+  const route = platform.groups.find(g => g.id === live.groupId)
   const endpoint = providers.providers.find(p => p.id === live.providerId)
-  const text = triggerText(live, group ? group.rate_multiplier : null, catalog?.models, endpoint?.name)
   const notReady = live.blocker !== null && live.blocker.kind !== 'balance'
 
   const run = (fn: () => Promise<void>): void => {
     setActionError(null)
     fn().catch((e: unknown) => setActionError((e as Error).message))
   }
-
-  const allModels = platformModels(platform.groups)
-  const models = visibleModels(allModels, platform.hiddenModels, [live.model, platform.model])
-  const settings = useSettings()
   const manageModels = (): void => {
     onOpenChange(false)
     requestModelsScroll()
     settings.openSettings('models')
   }
-  const routes = groupsForModel(platform.groups, live.model)
+
+  /** 选了一个模型；keepOpen：自定义接口那一行（下面还要选模型） */
+  const choose = (target: ModelTarget, engine: EngineId | null, keepOpen = false): void => {
+    if (!engine) return
+    setPicked(true)
+    const choice: ChannelChoice = { ...target, engine }
+    if (live.started && target.channel !== live.channel) {
+      onOpenChange(false)
+      onRequestChoice(choice)
+      return
+    }
+    if (!keepOpen) onOpenChange(false)
+    run(() => live.applyChoice(choice))
+  }
+
+  const modelText =
+    live.channel === 'claude' || live.channel === 'chatgpt'
+      ? selfModelLabel(engineId, live.model, ownCatalog?.models)
+      : (live.model ?? tr('session.ModelSourceMenu.chooseModel'))
+  const channelText =
+    live.channel === 'custom'
+      ? (endpoint?.name ?? channelShort('custom'))
+      : live.channel === 'platform' && route
+        ? `${channelShort('platform')} ${formatMultiplier(route.rate_multiplier)}`
+        : channelShort(live.channel)
+  const fixed = prefs.newTask.mode === 'fixed' ? prefs.newTask.choice : null
+  const current: ChannelChoice = { ...selection, engine: engineId }
+  const canPin = !!fixed && !(sameTarget(fixed, current) && fixed.engine === engineId)
+  const executorRow = page.kind === 'executor' ? groups.flatMap(g => g.rows).find(r => r.key === page.key) : undefined
 
   return (
     <div className="relative">
@@ -202,233 +185,141 @@ export function ModelSourceMenu({
         type="button"
         onClick={() => onOpenChange(!open)}
         className={TRIGGER}
-        title={`${text.model} · ${text.source}`}
+        title={`${modelText} · ${channelText} · ${executorName(engineId)}`}
         aria-haspopup="menu"
         aria-expanded={open}
       >
         <EngineIcon engine={engineId} size={16} />
         <span data-model-name className={cn('max-w-44 truncate', notReady && 'text-warn')}>
-          {text.model}
+          {modelText}
         </span>
         <span data-model-source className="shrink-0 text-meta text-fg-muted">
-          · {text.source}
+          · {channelText}
         </span>
+        {newTask && !live.started && !picked && prefs.newTask.mode === 'last' && (
+          <span
+            data-continue-last
+            title={tr('modelChannels.continueLastTitle')}
+            className="shrink-0 rounded-full bg-accent/10 px-1.5 text-label leading-[18px] text-accent-fg"
+          >
+            {tr('modelChannels.continueLast')}
+          </span>
+        )}
         <ChevronDown size={14} strokeWidth={1.5} className="text-fg-muted" />
       </button>
-      <Popover open={open} onClose={() => onOpenChange(false)} side="top" align="end" offset={8} className="w-80">
-        {page === 'routes' ? (
+      <Popover open={open} onClose={() => onOpenChange(false)} side="top" align="end" offset={8} className="w-96">
+        {page.kind === 'routes' ? (
           <RoutesPage
             live={live}
-            routes={routes}
+            routes={groupsForModel(platform.groups, live.model)}
             balance={account.account?.balance ?? null}
-            onBack={() => setPage('main')}
+            onBack={() => setPage({ kind: 'main' })}
             run={run}
+          />
+        ) : page.kind === 'executor' && executorRow ? (
+          <ExecutorPage
+            row={executorRow}
+            engines={engines}
+            onBack={() => setPage({ kind: 'main' })}
+            onPick={e => {
+              rememberExecutor(executorRow.target, e)
+              choose(executorRow.target, e)
+            }}
           />
         ) : (
           <div style={{ maxHeight: menuHeight }} className="flex flex-col overflow-y-auto">
-            {/* 引擎 */}
-            <MenuTitle>{tr('session.ModelSourceMenu.engine')}</MenuTitle>
-            <MiniSegmented
-              label={tr('session.ModelSourceMenu.engine')}
-              value={engineId}
-              onChange={id => live.selectEngine(id)}
-              options={visibleEngines(live.engines, engineConfig, engineId).map(e => ({
-                value: e.id,
-                label: e.status === 'unsupported' ? tr('session.ModelSourceMenu.comingSoon', { p0: e.name }) : e.name,
-                icon: <EngineIcon engine={e.id} size={14} />,
-                disabled: !live.canSwitchEngine || e.status === 'unsupported',
-                title:
-                  e.status === 'unsupported'
-                    ? tr('session.ModelSourceMenu.comingSoon2')
-                    : !live.canSwitchEngine
-                      ? tr('session.ModelSourceMenu.existingConversationCannotSwitch')
-                      : undefined,
-              }))}
-            />
-            {!live.canSwitchEngine && (
-              <p className="px-2 pt-1 text-label text-fg-faint">
-                {tr('session.ModelSourceMenu.cannotSwitchEnginesAfter')}
+            {locked && (
+              <p className="px-2 pt-1 pb-0.5 text-label text-fg-faint">
+                {tr('modelChannels.lockedNote', { p0: executorName(locked) })}
               </p>
             )}
-
-            {/* 额度来源 */}
-            <div className="mt-2 flex items-baseline justify-between gap-2 border-t border-line-subtle px-2 pt-2.5 pb-1">
-              <span className="text-label font-medium text-fg-faint">{tr('session.ModelSourceMenu.creditSource')}</span>
-              {live.source === 'platform' && account.balanceText && (
-                <span className="text-meta text-fg-muted tabular-nums">
-                  {tr('account.AccountMenu.balance')} {account.balanceText}
-                </span>
-              )}
-            </div>
-            <MiniSegmented
-              label={tr('session.ModelSourceMenu.creditSource')}
-              value={live.source}
-              onChange={s => {
-                if (live.started) onOpenChange(false)
-                onRequestSource(s)
-              }}
-              options={(['platform', 'self', 'custom'] as const).map(s => ({
-                value: s,
-                label: SOURCE_LABEL[s],
-                disabled: s === 'platform' && !live.platformAvailable,
-                title:
-                  s === 'platform' && !live.platformAvailable
-                    ? tr('session.ModelSourceMenu.platformCreditsCurrentlySupport')
-                    : undefined,
-              }))}
-            />
-            {live.started && (
-              <p className="px-2 pt-1 text-label text-fg-faint">
-                {tr('session.ModelSourceMenu.appliesToThisConversation')}
-              </p>
-            )}
-
-            {live.source === 'custom' ? (
-              <CustomEndpoints live={live} endpoints={endpoints} run={run} onManage={manageModels} />
-            ) : live.source === 'platform' ? (
-              <PlatformRoute live={live} onOpenRoutes={() => setPage('routes')} />
-            ) : (
-              <SelfStatus live={live} showHelp={showLoginHelp} onToggleHelp={() => setShowLoginHelp(v => !v)} />
-            )}
-
-            {/* 模型 */}
-            <div className="mt-2 border-t border-line-subtle pt-1">
-              <MenuTitle>{tr('session.ModelSourceMenu.model')}</MenuTitle>
-              {live.source === 'custom' ? (
-                (endpoint?.models ?? []).length === 0 ? (
-                  <p className="px-2 pb-1.5 text-meta text-fg-faint">
-                    {live.model ? <span className="font-mono">{live.model}</span> : tr('customApi.noEndpointForEngine')}
-                  </p>
-                ) : (
-                  endpoint!.models.map(m => (
-                    <MenuRow
-                      key={m.id}
-                      selected={m.id === live.model}
-                      onClick={() => run(() => live.setModel(m.id))}
-                      title={<span className="font-mono text-meta">{m.id}</span>}
-                    />
-                  ))
-                )
-              ) : live.source === 'platform' ? (
-                platform.email && allModels.length > 0 ? (
-                  models.length === 0 ? (
-                    <p className="px-2 pb-1.5 text-meta text-fg-faint">
-                      {tr('session.ModelSourceMenu.allModelsAreHidden')}
-                    </p>
-                  ) : (
-                    <>
-                      {models.length > MODEL_SEARCH_MIN && (
-                        <input
-                          value={modelQuery}
-                          onChange={e => setModelQuery(e.target.value)}
-                          placeholder={tr('session.ModelSourceMenu.searchModels')}
-                          aria-label={tr('session.ModelSourceMenu.searchModels')}
-                          spellCheck={false}
-                          className="mx-2 mb-1 h-7 w-[calc(100%-1rem)] rounded-md border border-line bg-subtle px-2 font-mono text-meta text-fg outline-none placeholder:font-sans placeholder:text-fg-faint focus:border-line-strong focus:bg-surface"
-                        />
-                      )}
-                      {matchModels(models, modelQuery).length === 0 && (
-                        <p className="px-2 pb-1.5 text-meta text-fg-faint">
-                          {tr('session.ModelSourceMenu.noMatchingModels')}
-                        </p>
-                      )}
-                      {matchModels(models, modelQuery).map(m => {
-                        const gs = groupsForModel(platform.groups, m)
-                        const min = gs[0]?.rate_multiplier ?? null
-                        const multi = gs.some(g => g.rate_multiplier !== min)
-                        return (
-                          <MenuRow
-                            key={m}
-                            selected={m === live.model}
-                            onClick={() => run(() => live.setModel(m))}
-                            title={<span className="font-mono text-meta">{m}</span>}
-                            hint={
-                              min === null
-                                ? undefined
-                                : tr('session.ModelSourceMenu.routes', {
-                                    p0: formatMultiplier(min),
-                                    p1: multi ? ' 起' : '',
-                                    p2: gs.length,
-                                  })
-                            }
-                          />
-                        )
-                      })}
-                    </>
-                  )
-                ) : (
-                  <p className="px-2 pb-1.5 text-meta text-fg-faint">
-                    {platform.email
-                      ? tr('session.ModelSourceMenu.modelsAppearAfterRoutes')
-                      : tr('session.ModelSourceMenu.signInToView')}
-                  </p>
-                )
-              ) : (
-                selfOptions.map(m => (
-                  <MenuRow
-                    key={m.value ?? 'default'}
-                    selected={m.value === live.model}
-                    onClick={() => run(() => live.setModel(m.value))}
-                    title={m.label}
-                    hint={m.hint}
-                  />
-                ))
-              )}
-              {/* 会话里的完整模型名（比如从平台切回来的 claude-opus-5-5）不在别名表里时也显示出来 */}
-              {live.source === 'self' && live.model && !selfOptions.some(m => m.value === live.model) && (
-                <MenuRow
-                  selected
-                  title={<span className="font-mono text-meta">{live.model}</span>}
-                  hint={tr('session.ModelSourceMenu.modelUsedByThis')}
-                />
-              )}
-              {live.source === 'platform' && allModels.length > 0 && (
-                <button
-                  type="button"
-                  onClick={manageModels}
-                  className="mx-1 flex h-7 items-center rounded-md px-1.5 text-meta text-fg-muted hover:bg-hover hover:text-fg"
-                >
-                  {tr('session.ModelSourceMenu.manageModels')}{' '}
-                  {platform.hiddenModels.length > 0 && (
-                    <span className="ml-1 text-fg-faint">
-                      {tr('session.ModelSourceMenu.hidden')}{' '}
-                      {allModels.filter(m => platform.hiddenModels.includes(m)).length}
-                      {tr('session.ModelSourceMenu.text')}{' '}
-                    </span>
-                  )}
-                </button>
-              )}
-            </div>
+            {groups.map((g, i) => (
+              <ChannelSection
+                key={g.channel}
+                group={g}
+                first={i === 0}
+                live={live}
+                query={modelQuery}
+                onQuery={setModelQuery}
+                hiddenCount={
+                  g.channel === 'platform'
+                    ? catalog.hiddenModels.filter(m => catalog.groups.some(x => x.models.includes(m))).length
+                    : 0
+                }
+                ownModels={ownCatalog?.models}
+                right={
+                  g.channel === 'platform'
+                    ? catalog.email && account.balanceText
+                      ? `${tr('account.AccountMenu.balance')} ${account.balanceText}`
+                      : ''
+                    : isAuthChannel(g.channel) && g.state.kind === 'ready'
+                      ? accountText(engines.find(e => e.id === AUTH_ENGINE[g.channel as 'claude'])?.account)
+                      : ''
+                }
+                stateText={
+                  g.channel === 'platform' && g.state.kind === 'no-route'
+                    ? translateMessage(noRouteReason(catalog, account.account?.balance ?? null).message)
+                    : channelStateText(g.channel, g.state)
+                }
+                onFix={() => {
+                  const fix = channelFix(g.state)
+                  if (fix === 'signin') void account.login()
+                  else if (fix === 'retry') void refreshPlatform()
+                  else if (fix === 'auth' && isAuthChannel(g.channel)) {
+                    onOpenChange(false)
+                    openAuthDialog(g.channel)
+                  } else if (fix === 'add-endpoint') manageModels()
+                  else if (fix) {
+                    onOpenChange(false)
+                    settings.openSettings('engines')
+                  }
+                }}
+                onChoose={choose}
+                onSwitch={row => setPage({ kind: 'executor', key: row.key })}
+                onRoutes={() => setPage({ kind: 'routes' })}
+                onManage={manageModels}
+              />
+            ))}
 
             {actionError && (
               <p role="alert" className="mx-2 mt-1 rounded-md bg-subtle px-2 py-1.5 text-meta text-danger">
-                {actionError}
+                {translateMessage(actionError)}
               </p>
             )}
 
             <div className="mt-1 flex items-center gap-1 border-t border-line-subtle px-1 pt-1">
-              {live.started && !live.isDefault && (
+              {canPin && (
                 <button
                   type="button"
-                  onClick={() => live.saveAsDefault()}
+                  onClick={() => {
+                    setNewTaskDefault({ mode: 'fixed', choice: current })
+                    live.saveAsDefault()
+                  }}
                   title={tr('session.ModelSourceMenu.useThisConversationsCredit')}
                   className="flex h-7 items-center rounded-md px-2 text-meta text-fg-secondary hover:bg-hover hover:text-fg"
                 >
-                  {tr('session.ModelSourceMenu.setAsDefault')}{' '}
+                  {tr('session.ModelSourceMenu.setAsDefault')}
                 </button>
               )}
+              <button
+                type="button"
+                onClick={manageModels}
+                className="flex h-7 items-center rounded-md px-2 text-meta text-fg-muted hover:bg-hover hover:text-fg"
+              >
+                {tr('modelChannels.menu.settings')}
+              </button>
               <div className="flex-1" />
               <button
                 type="button"
-                disabled={platform.loading}
+                disabled={catalog.loading}
                 onClick={() => {
                   void refreshPlatform()
                   live.redetect()
                 }}
                 className="flex h-7 items-center gap-1.5 rounded-md px-2 text-meta text-fg-muted hover:bg-hover hover:text-fg disabled:opacity-50"
               >
-                <RefreshCw size={12} className={cn(platform.loading && 'animate-spin')} />
-                {platform.loading ? tr('session.ModelSourceMenu.refreshing') : tr('account.AccountMenu.refresh')}
+                <RefreshCw size={12} className={cn(catalog.loading && 'animate-spin')} />
+                {catalog.loading ? tr('session.ModelSourceMenu.refreshing') : tr('account.AccountMenu.refresh')}
               </button>
             </div>
           </div>
@@ -438,167 +329,395 @@ export function ModelSourceMenu({
   )
 }
 
-/** 自定义时额度来源下面：和引擎协议相符的接口；没有时给「添加接口…」（docs/ui/custom-api.md §3.2） */
-function CustomEndpoints({
+/** 一个通道：标题行（右边余额 / 账号）+ 模型；不能用时一行状态和按钮 */
+function ChannelSection({
+  group,
+  first,
   live,
-  endpoints,
-  run,
+  query,
+  onQuery,
+  hiddenCount,
+  ownModels,
+  right,
+  stateText,
+  onFix,
+  onChoose,
+  onSwitch,
+  onRoutes,
   onManage,
 }: {
+  group: ChannelGroupView
+  first: boolean
   live: SourceMenuController
-  endpoints: ProviderView[]
-  run: (fn: () => Promise<void>) => void
+  query: string
+  onQuery: (q: string) => void
+  hiddenCount: number
+  ownModels: Parameters<typeof selfModelLabel>[2]
+  right: string
+  stateText: string | null
+  onFix: () => void
+  onChoose: (target: ModelTarget, engine: EngineId | null, keepOpen?: boolean) => void
+  onSwitch: (row: ChannelRow) => void
+  onRoutes: () => void
   onManage: () => void
 }) {
   useI18n()
-  const deleted = !!live.providerId && !endpoints.some(p => p.id === live.providerId)
+  const providers = useProviders()
+  const catalog = usePlatformCatalog()
+  const claudeCatalog = useEngineCatalog('claude')
+  const codexCatalog = useEngineCatalog('codex')
+  const c = group.channel
+  const fix = channelFix(group.state)
+  const rows = c === 'platform' && group.rows.length > MODEL_SEARCH_MIN ? filterRows(group.rows, query) : group.rows
+  const selfOptions =
+    c === 'claude'
+      ? selfModelOptions('claude', claudeCatalog?.models)
+      : c === 'chatgpt'
+        ? selfModelOptions('codex', codexCatalog?.models)
+        : []
+  // 会话里的完整模型名（比如从平台切回来的 claude-opus-5-5）不在别名表里时也显示出来
+  const extraSelf =
+    isAuthChannel(c) && live.channel === c && live.model && !group.rows.some(r => r.target.model === live.model)
+      ? live.model
+      : null
+  const deleted =
+    c === 'custom' &&
+    live.channel === 'custom' &&
+    !!live.providerId &&
+    !providers.providers.some(p => p.id === live.providerId)
+
   return (
-    <div className="pt-1">
+    <div className={cn(!first && 'mt-1 border-t border-line-subtle')}>
+      <div data-channel-group={c} className="flex items-baseline justify-between gap-2 px-2 pt-2 pb-0.5">
+        <span className="text-label font-medium text-fg-faint">
+          {CHANNEL_NUMBER[c]} {channelLabel(c)}
+        </span>
+        {right && <span className="min-w-0 truncate text-meta text-fg-muted tabular-nums">{right}</span>}
+      </div>
+      {stateText && (
+        <div className="mx-1 flex items-center gap-2 rounded-md px-2 py-1.5 text-meta text-fg-faint">
+          {group.state.kind === 'loading' && <Spinner />}
+          <span className="min-w-0 flex-1">{stateText}</span>
+          {fix && (
+            <button type="button" onClick={onFix} className="flex shrink-0 items-center text-accent-fg hover:underline">
+              {channelFixLabel(fix)}
+              <ChevronRight size={12} />
+            </button>
+          )}
+        </div>
+      )}
       {deleted && <p className="px-2 pb-1 text-meta text-warn">{tr('customApi.endpointDeleted')}</p>}
-      {endpoints.map(p => (
-        <MenuRow
-          key={p.id}
-          selected={p.id === live.providerId}
-          onClick={() => run(() => live.setProvider(p.id))}
-          title={p.name}
-          hint={p.keyHint ? tr('customApi.modelCount', { n: p.models.length }) : tr('customApi.noKey')}
+      {c === 'platform' && group.rows.length > MODEL_SEARCH_MIN && (
+        <input
+          value={query}
+          onChange={e => onQuery(e.target.value)}
+          placeholder={tr('session.ModelSourceMenu.searchModels')}
+          aria-label={tr('session.ModelSourceMenu.searchModels')}
+          spellCheck={false}
+          className="mx-2 my-1 h-7 w-[calc(100%-1rem)] rounded-md border border-line bg-subtle px-2 font-mono text-meta text-fg outline-none placeholder:font-sans placeholder:text-fg-faint focus:border-line-strong focus:bg-surface"
         />
-      ))}
-      <button
-        type="button"
-        onClick={onManage}
-        className="mx-1 flex h-7 items-center rounded-md px-1.5 text-meta text-fg-muted hover:bg-hover hover:text-fg"
-      >
-        {endpoints.length === 0 ? tr('customApi.addEllipsis') : tr('customApi.manage')}
-      </button>
+      )}
+      {c === 'platform' && group.rows.length > MODEL_SEARCH_MIN && rows.length === 0 && (
+        <p className="px-2 pb-1.5 text-meta text-fg-faint">{tr('session.ModelSourceMenu.noMatchingModels')}</p>
+      )}
+      {c === 'platform' && group.state.kind === 'ready' && group.rows.length === 0 && (
+        <p className="px-2 pb-1.5 text-meta text-fg-faint">{tr('session.ModelSourceMenu.allModelsAreHidden')}</p>
+      )}
+      <div className="px-1">
+        {rows.map(row => {
+          const hint = rowHint(row, c, {
+            catalog,
+            self: selfOptions,
+            provider: providers.providers.find(p => p.id === row.target.providerId),
+          })
+          const provider = c === 'custom' ? providers.providers.find(p => p.id === row.target.providerId) : undefined
+          const expand = !!provider && row.selected && provider.models.length > 1
+          return (
+            <div key={row.key}>
+              <ChannelModelRow
+                title={
+                  c === 'platform' ? (
+                    <span className="font-mono text-meta">{row.target.model}</span>
+                  ) : c === 'custom' ? (
+                    <span>
+                      {provider?.name}
+                      {row.target.model && (
+                        <span className="font-mono text-meta text-fg-muted"> · {row.target.model}</span>
+                      )}
+                    </span>
+                  ) : (
+                    (selfOptions.find(m => m.value === row.target.model)?.label ??
+                    selfModelLabel(AUTH_ENGINE[c as 'claude'], row.target.model, ownModels))
+                  )
+                }
+                hint={hint}
+                selected={row.selected && !expand}
+                disabled={row.disabled !== null}
+                onClick={() => onChoose(row.target, row.pick.engine, !!provider && provider.models.length > 1)}
+                chip={<ExecutorChip row={row} onSwitch={() => onSwitch(row)} />}
+              />
+              {/* 选中的平台模型：下面一行是线路（点开子页） */}
+              {c === 'platform' && row.selected && live.channel === 'platform' && (
+                <PlatformRoute live={live} onOpenRoutes={onRoutes} />
+              )}
+              {/* 选中的自定义接口有多个模型：展开选模型 */}
+              {expand &&
+                provider!.models.map(m => (
+                  <ChannelModelRow
+                    key={m.id}
+                    indent
+                    title={<span className="font-mono text-meta">{m.id}</span>}
+                    selected={m.id === live.model}
+                    onClick={() => onChoose({ ...row.target, model: m.id }, row.pick.engine)}
+                  />
+                ))}
+            </div>
+          )
+        })}
+        {extraSelf && (
+          <ChannelModelRow
+            selected
+            title={<span className="font-mono text-meta">{extraSelf}</span>}
+            hint={tr('session.ModelSourceMenu.modelUsedByThis')}
+          />
+        )}
+      </div>
+      {c === 'platform' && group.state.kind === 'ready' && (
+        <button
+          type="button"
+          onClick={onManage}
+          className="mx-1 flex h-7 items-center rounded-md px-1.5 text-meta text-fg-muted hover:bg-hover hover:text-fg"
+        >
+          {tr('session.ModelSourceMenu.manageModels')}
+          {hiddenCount > 0 && (
+            <span className="ml-1 text-fg-faint">
+              {tr('session.ModelSourceMenu.hidden')} {hiddenCount}
+              {tr('session.ModelSourceMenu.text')}
+            </span>
+          )}
+        </button>
+      )}
     </div>
   )
 }
 
-/** 平台时额度来源下面的一行：线路（点开子页）；没登录、读取中、出错时显示对应提示 */
-function PlatformRoute({ live, onOpenRoutes }: { live: SourceMenuController; onOpenRoutes: () => void }) {
+function filterRows(rows: ChannelRow[], query: string): ChannelRow[] {
+  const keep = new Set(
+    matchModels(
+      rows.map(r => r.target.model ?? ''),
+      query,
+    ),
+  )
+  return rows.filter(r => keep.has(r.target.model ?? ''))
+}
+
+/** 行下面的小字：不能用的原因 > 自动换了执行者 > 线路 / 说明 / 接口状态 */
+function rowHint(
+  row: ChannelRow,
+  c: ChannelId,
+  ctx: {
+    catalog: ReturnType<typeof usePlatformCatalog>
+    self: Array<{ value: string | null; hint: string }>
+    provider: { keyHint: string | null; models: unknown[] } | undefined
+  },
+): ReactNode {
+  const first = row.candidates[0]
+  if (row.disabled === 'locked' && first) return tr('modelChannels.row.locked', { p0: executorName(first) })
+  if (row.disabled === 'no-executor' && first) return tr('modelChannels.row.noExecutor', { p0: executorName(first) })
+  if (row.pick.fallbackFrom && row.pick.engine)
+    return tr('modelChannels.executor.fallbackMissing', {
+      p0: executorName(row.pick.fallbackFrom),
+      p1: executorName(row.pick.engine),
+    })
+  if (c === 'platform') {
+    const gs = groupsForModel(ctx.catalog.groups, row.target.model)
+    const min = gs[0]?.rate_multiplier ?? null
+    if (min === null) return undefined
+    return tr('session.ModelSourceMenu.routes', {
+      p0: formatMultiplier(min),
+      p1: gs.some(g => g.rate_multiplier !== min) ? ' 起' : '',
+      p2: gs.length,
+    })
+  }
+  if (c === 'custom') return ctx.provider && !ctx.provider.keyHint ? tr('customApi.noKey') : undefined
+  return ctx.self.find(m => m.value === row.target.model)?.hint
+}
+
+/** 菜单里的一行：左边点了选模型，右边是执行者（能换时是按钮） */
+function ChannelModelRow({
+  title,
+  hint,
+  selected,
+  disabled,
+  indent,
+  onClick,
+  chip,
+}: {
+  title: ReactNode
+  hint?: ReactNode
+  selected?: boolean
+  disabled?: boolean
+  indent?: boolean
+  onClick?: () => void
+  chip?: ReactNode
+}) {
+  return (
+    <div className={cn('flex items-center rounded-md', selected && 'bg-selected')}>
+      <button
+        type="button"
+        data-menu-item
+        disabled={disabled}
+        onClick={onClick}
+        className={cn(
+          'flex min-w-0 flex-1 items-start gap-2 rounded-md px-2 py-1.5 text-left hover:bg-hover disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent',
+          selected && 'hover:bg-selected',
+          indent && 'pl-6',
+        )}
+      >
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-ui text-fg">{title}</span>
+          {hint && <span className="block truncate text-meta text-fg-muted">{hint}</span>}
+        </span>
+        {selected && <Check size={15} strokeWidth={2} className="mt-0.5 shrink-0 text-fg-secondary" />}
+      </button>
+      {chip}
+    </div>
+  )
+}
+
+/** 行右边的执行者：能换时是按钮（点开「谁来执行」），否则只是写明 */
+function ExecutorChip({ row, onSwitch }: { row: ChannelRow; onSwitch: () => void }) {
   useI18n()
-  const platform = usePlatform(live.engine?.id ?? 'claude')
-  const account = useAccount()
-  const settings = useSettings()
-  if (!platform.email) {
+  const e = row.pick.engine
+  if (!e || row.disabled) return null
+  const content = (
+    <>
+      <EngineIcon engine={e} size={12} />
+      <span className="truncate">{executorName(e)}</span>
+    </>
+  )
+  if (row.pick.options.length < 2)
     return (
-      <div className="mx-2 mt-2 flex items-center justify-between gap-2 rounded-md bg-subtle px-2.5 py-2 text-meta text-fg-muted">
-        <span>{tr('session.ModelSourceMenu.signInToPixel')}</span>
-        <button
-          type="button"
-          onClick={() => void account.login()}
-          className="flex shrink-0 items-center gap-1 text-accent-fg hover:underline"
-        >
-          <LogIn size={12} />
-          {tr('account.AccountMenu.signIn')}{' '}
-        </button>
-      </div>
+      <span
+        data-executor={e}
+        className="mr-1 flex h-6 max-w-32 shrink-0 items-center gap-1 px-1.5 text-label text-fg-faint"
+      >
+        {content}
+      </span>
     )
-  }
-  if (!platform.loaded && platform.loading) {
-    return (
-      <div className="flex items-center gap-2 px-2 py-2 text-meta text-fg-muted">
-        <Spinner />
-        {tr('session.ModelSourceMenu.loadingRoutes')}{' '}
-      </div>
-    )
-  }
-  const group = platform.groups.find(g => g.id === live.groupId)
-  if (!group) {
-    const reason = noRouteReason(platform, account.account?.balance ?? null)
-    return (
-      <div className="mx-2 mt-2 rounded-md bg-subtle px-2.5 py-2 text-meta">
-        <p role="alert" className="text-danger">
-          {translateMessage(reason.message)}
-        </p>
-        <div className="mt-1.5 flex gap-3">
-          {reason.balance && (
-            <button
-              type="button"
-              onClick={() => settings.openSettings('account')}
-              className="text-accent-fg hover:underline"
-            >
-              {tr('session.live.NoticeActions.viewAccount')}{' '}
-            </button>
-          )}
-          <button type="button" onClick={() => void refreshPlatform()} className="text-accent-fg hover:underline">
-            {tr('session.ModelSourceMenu.retry')}{' '}
-          </button>
-        </div>
-      </div>
-    )
-  }
   return (
     <button
       type="button"
-      onClick={onOpenRoutes}
-      className="mx-1 mt-1.5 flex items-center gap-2 rounded-md px-1 py-1.5 text-left hover:bg-hover"
-      aria-label={tr('session.ModelSourceMenu.chooseRoute')}
+      data-executor={e}
+      onClick={onSwitch}
+      title={tr('modelChannels.executor.switch')}
+      aria-label={`${tr('modelChannels.executor.title')}: ${executorName(e)}`}
+      className="mr-1 flex h-6 max-w-32 shrink-0 items-center gap-1 rounded-md border border-line-subtle px-1.5 text-label text-fg-muted hover:border-line hover:bg-surface hover:text-fg"
     >
-      <span className="w-8 shrink-0 text-meta text-fg-muted">{tr('session.ModelSourceMenu.route')}</span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-ui text-fg">{group.name}</span>
-        <span className="block truncate text-meta text-fg-muted">{billingLabel(group)}</span>
-      </span>
-      <span
-        className="shrink-0 text-ui text-fg-secondary tabular-nums"
-        title={tr('session.ModelSourceMenu.thisAccountsBillingMultiplier')}
-      >
-        {formatMultiplier(group.rate_multiplier)}
-      </span>
-      <ChevronRight size={14} className="shrink-0 text-fg-muted" />
+      {content}
+      <ChevronDown size={11} className="shrink-0" />
     </button>
   )
 }
 
-/** 自有时额度来源下面的一行：引擎本机登录状态。没登录用灰字 + 「怎么登录」，不用警告色（发送前提示条会提醒） */
-function SelfStatus({
-  live,
-  showHelp,
-  onToggleHelp,
+/** 「谁来执行」子页：列出能跑这个模型的执行者，默认的标「推荐」 */
+function ExecutorPage({
+  row,
+  engines,
+  onBack,
+  onPick,
 }: {
-  live: SourceMenuController
-  showHelp: boolean
-  onToggleHelp: () => void
+  row: ChannelRow
+  engines: Array<{ id: EngineId; status: string }>
+  onBack: () => void
+  onPick: (e: EngineId) => void
 }) {
   useI18n()
-  const e = live.engine
-  if (!e) return null
-  if (e.status === 'ready') {
+  return (
+    <div className="flex max-h-[70vh] flex-col overflow-y-auto">
+      <button
+        type="button"
+        onClick={onBack}
+        className="flex items-center gap-1 rounded-md px-1.5 py-1.5 text-left text-meta text-fg-muted hover:bg-hover hover:text-fg"
+      >
+        <ChevronLeft size={14} />
+        <span className="truncate">
+          {tr('modelChannels.executor.title')}
+          {row.target.model && <span className="ml-1.5 font-mono">{row.target.model}</span>}
+        </span>
+      </button>
+      {row.candidates.map((e, i) => {
+        const ok = row.pick.options.includes(e)
+        const status = engines.find(x => x.id === e)?.status
+        return (
+          <MenuRow
+            key={e}
+            icon={<EngineIcon engine={e} size={16} />}
+            selected={e === row.pick.engine}
+            disabled={!ok}
+            onClick={() => onPick(e)}
+            title={
+              <span className="flex items-center gap-1.5">
+                {executorName(e)}
+                {i === 0 && (
+                  <span className="rounded-full border border-accent/40 px-1.5 text-label leading-4 text-accent-fg">
+                    {tr('modelChannels.executor.recommended')}
+                  </span>
+                )}
+              </span>
+            }
+            hint={
+              ok
+                ? executorDesc(e)
+                : status === 'missing'
+                  ? tr('modelChannels.executor.notInstalled')
+                  : tr('modelChannels.executor.unavailable')
+            }
+          />
+        )
+      })}
+      <p className="mt-1 border-t border-line-subtle px-2 pt-1.5 pb-1 text-label text-fg-faint">
+        {tr('modelChannels.executor.lockedNote')}
+      </p>
+    </div>
+  )
+}
+
+/** 选中的平台模型下面一行：线路（点开子页）；读取中、出错时显示对应提示 */
+function PlatformRoute({ live, onOpenRoutes }: { live: SourceMenuController; onOpenRoutes: () => void }) {
+  useI18n()
+  const platform = usePlatform(live.engine?.id ?? 'claude')
+  if (!platform.email) return null
+  if (!platform.loaded && platform.loading) {
     return (
-      <div className="flex items-center gap-1.5 px-2 pt-2 text-meta text-fg-muted">
-        <Check size={13} className="text-success" />
-        {e.name}
-        {tr('session.ModelSourceMenu.localSignIn')}{' '}
-        {e.version ? tr('session.ModelSourceMenu.version', { p0: e.version }) : ''}
+      <div className="flex items-center gap-2 px-2 py-1.5 pl-6 text-meta text-fg-muted">
+        <Spinner />
+        {tr('session.ModelSourceMenu.loadingRoutes')}
       </div>
     )
   }
+  const group = platform.groups.find(g => g.id === live.groupId)
+  if (!group) return null
   return (
-    <div className="px-2 pt-2 text-meta text-fg-muted">
-      <div className="flex items-center justify-between gap-2">
-        <span>
-          {e.status === 'unauthenticated'
-            ? tr('session.ModelSourceMenu.signInToFirst', { p0: e.name })
-            : tr('session.ModelSourceMenu.isTemporarilyUnavailable', { p0: e.name })}
-        </span>
-        {e.message && (
-          <button type="button" onClick={onToggleHelp} className="shrink-0 text-accent-fg hover:underline">
-            {showHelp
-              ? tr('session.ModelSourceMenu.collapse')
-              : e.status === 'unauthenticated'
-                ? tr('session.ModelSourceMenu.howToSignIn')
-                : tr('session.ModelSourceMenu.viewReason')}
-          </button>
-        )}
-      </div>
-      {showHelp && e.message && (
-        <p className="selectable mt-1 rounded-md bg-subtle px-2 py-1.5 text-fg-secondary">
-          {translateMessage(e.message)}
-        </p>
-      )}
-    </div>
+    <button
+      type="button"
+      onClick={onOpenRoutes}
+      className="flex w-full items-center gap-2 rounded-md py-1 pr-2 pl-6 text-left hover:bg-hover"
+      aria-label={tr('session.ModelSourceMenu.chooseRoute')}
+    >
+      <span className="shrink-0 text-meta text-fg-muted">{tr('session.ModelSourceMenu.route')}</span>
+      <span className="min-w-0 flex-1 truncate text-meta text-fg">
+        {group.name}
+        <span className="text-fg-muted"> · {billingLabel(group)}</span>
+      </span>
+      <span
+        className="shrink-0 text-meta text-fg-secondary tabular-nums"
+        title={tr('session.ModelSourceMenu.thisAccountsBillingMultiplier')}
+      >
+        {formatMultiplier(group.rate_multiplier)}
+      </span>
+      <ChevronRight size={13} className="shrink-0 text-fg-muted" />
+    </button>
   )
 }
 
@@ -669,9 +788,4 @@ function RoutesPage({
       </p>
     </div>
   )
-}
-
-/** 输入框引擎菜单里的引擎：设置里隐藏的不显示，但当前会话正在用的照常显示（docs/ui/engine-settings-redesign.md §3.1） */
-function visibleEngines<T extends { id: EngineId }>(engines: T[], config: EngineConfig | null, current: EngineId): T[] {
-  return engines.filter(e => e.id === current || !config?.[e.id]?.hidden)
 }

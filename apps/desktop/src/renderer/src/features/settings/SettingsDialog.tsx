@@ -155,10 +155,10 @@ const SECTIONS: Array<{ id: SectionId; label: string; nav?: string; icon: Lucide
   {
     id: 'models',
     get label() {
-      return tr('settings.models.ModelsSection.modelsCredits')
+      return tr('modelChannels.title')
     },
     get nav() {
-      return tr('settings.SettingsDialog.nav.models')
+      return tr('modelChannels.title')
     },
     icon: Route,
   },
@@ -517,12 +517,7 @@ export function SettingsDialog({
             ) : section === 'editor' ? (
               <EditorSection />
             ) : section === 'models' ? (
-              <ModelsSection
-                onOpenEngines={() => {
-                  openEngineDetail('claude')
-                  setSection('engines')
-                }}
-              />
+              <ModelsSection />
             ) : section === 'plugins' ? (
               machines.currentId === 'local' ? (
                 <PluginsSection />

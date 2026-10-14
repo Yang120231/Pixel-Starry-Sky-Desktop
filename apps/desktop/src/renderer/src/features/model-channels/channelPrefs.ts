@@ -1,0 +1,78 @@
+// 模型通道的两项本机设置（docs/ui/model-channels.md §2.5、§2.6）：按模型记住的执行者、新任务用什么。
+// 都进设置同步（settings/sync/registry.ts）；演示模式只改内存，不覆盖真实设置。
+import { useSyncExternalStore } from 'react'
+import type { EngineId } from '@pixelsky/protocol'
+import {
+  EXECUTOR_KEY,
+  NEW_TASK_KEY,
+  executorKey,
+  parseExecutorMemory,
+  parseNewTask,
+  type ModelTarget,
+  type NewTaskDefault,
+} from './channelModel'
+
+interface Prefs {
+  executors: Record<string, EngineId>
+  newTask: NewTaskDefault
+}
+
+const read = (key: string): string | null => {
+  try {
+    return localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+let prefs: Prefs = { executors: parseExecutorMemory(read(EXECUTOR_KEY)), newTask: parseNewTask(read(NEW_TASK_KEY)) }
+const listeners = new Set<() => void>()
+const emit = (): void => listeners.forEach(fn => fn())
+
+// 别的窗口或设置同步改了
+if (typeof window !== 'undefined')
+  window.addEventListener('storage', e => {
+    if (e.storageArea !== localStorage) return
+    if (e.key === EXECUTOR_KEY) prefs = { ...prefs, executors: parseExecutorMemory(e.newValue) }
+    else if (e.key === NEW_TASK_KEY) prefs = { ...prefs, newTask: parseNewTask(e.newValue) }
+    else return
+    emit()
+  })
+
+function save(key: string, value: unknown): void {
+  if (window.pixelsky?.demo) return
+  try {
+    localStorage.setItem(key, JSON.stringify(value))
+  } catch {
+    /* 存不下也能用内存里的 */
+  }
+}
+
+export function getChannelPrefs(): Prefs {
+  return prefs
+}
+
+export function useChannelPrefs(): Prefs {
+  return useSyncExternalStore(
+    fn => {
+      listeners.add(fn)
+      return () => listeners.delete(fn)
+    },
+    () => prefs,
+  )
+}
+
+/** 换了执行者：按模型记住（授权通道只有一个执行者，不记） */
+export function rememberExecutor(target: ModelTarget, engine: EngineId): void {
+  const key = executorKey(target)
+  if (!key || prefs.executors[key] === engine) return
+  prefs = { ...prefs, executors: { ...prefs.executors, [key]: engine } }
+  save(EXECUTOR_KEY, prefs.executors)
+  emit()
+}
+
+export function setNewTaskDefault(next: NewTaskDefault): void {
+  prefs = { ...prefs, newTask: next }
+  save(NEW_TASK_KEY, next)
+  emit()
+}
