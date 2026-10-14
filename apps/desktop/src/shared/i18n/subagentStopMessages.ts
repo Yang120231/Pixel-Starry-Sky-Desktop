@@ -4,10 +4,6 @@ export const subagentStopMessages = {
     zh: '停止（Esc）· 连同 {n} 个后台子智能体',
     en: 'Stop (Esc) · along with {n} background subagents',
   },
-  'subagentStop.notice': {
-    zh: '已停止，连同 {n} 个后台子智能体（{names}）',
-    en: 'Stopped, along with {n} background subagents ({names})',
-  },
   'subagentStop.stopOne': { zh: '停止这个子智能体', en: 'Stop this subagent' },
   'subagentStop.stopAll': { zh: '全部停止', en: 'Stop all' },
   'subagentStop.stoppedCount': { zh: '{n} 个已停止', en: '{n} stopped' },

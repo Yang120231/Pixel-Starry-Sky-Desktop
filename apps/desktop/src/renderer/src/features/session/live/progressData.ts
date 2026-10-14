@@ -17,6 +17,8 @@ export interface ProgressAgent {
   message: string | null
   startedAt: number
   durationMs: number
+  /** 后台子智能体（只有它们能单独停） */
+  background: boolean
 }
 
 const isTurnStart = (item: Item): boolean => item.kind === 'user' && item.mode !== 'guidance'
@@ -54,6 +56,7 @@ export function progressAgents(subagents: SubagentStatus[], runs: AgentRuns | un
       message: a.message,
       startedAt: run?.startedAt ?? 0,
       durationMs: run?.durationMs ?? 0,
+      background: a.background === true,
     }
   })
 }

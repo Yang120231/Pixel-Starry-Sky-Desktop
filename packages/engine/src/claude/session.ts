@@ -715,11 +715,16 @@ export class ClaudeSession implements EngineSession {
     )
     if (targets.length > 0) {
       this.translator.muteStopNotices(targets.map(t => t.id))
+      const ids = targets.map(t => t.id)
+      const deadline = Date.now() + 1_500
       await Promise.race([Promise.all(stops), new Promise<void>(r => setTimeout(r, 1_500))])
+      // 回复到了不等于停止通知到了：再等通知落地（最多到 deadline），免得 interrupt 之后才来
+      while (this.translator.pendingStopNotices(ids) && Date.now() < deadline) await new Promise(r => setTimeout(r, 20))
     }
     await this.interruptTurnProcess(proc)
     if (targets.length === 0) return
     const ok = await Promise.all(stops)
+    this.translator.unmuteStopNotices(targets.filter((_, i) => !ok[i]).map(t => t.id))
     const killed = !this.proc?.alive
     const labels = targets.filter((_, i) => killed || ok[i]).map(t => t.label)
     if (labels.length > 0) this.translator.stoppedWithMain(labels)

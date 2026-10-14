@@ -292,7 +292,7 @@ function LiveSessionView({
                       belowFind={find !== null}
                       offset={stripsHeight}
                       onOpenTrace={hasRuns ? () => openTrace() : undefined}
-                      onStopAgents={canStopAgents ? ids => void stopAgents(sessionId, ids) : undefined}
+                      onStopAgents={canStopAgents ? ids => stopAgents(sessionId, ids) : undefined}
                       expandToken={expandToken}
                     />
                   )}

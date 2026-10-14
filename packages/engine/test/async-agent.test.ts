@@ -236,6 +236,20 @@ describe('停止时连同后台子智能体（translate）', () => {
     expect(notices(events)).toEqual(['子智能体已停止'])
   })
 
+  it('静音的 killed 通知也不提示；停止没成功的 unmute 后照常提示', () => {
+    const { t, events } = make()
+    t.startTurn('turn-1')
+    started(t, 'a1', true)
+    started(t, 'a2', true)
+    t.muteStopNotices(['a1', 'a2'])
+    expect(t.pendingStopNotices(['a1', 'a2'])).toBe(true)
+    t.unmuteStopNotices(['a2'])
+    for (const id of ['a1', 'a2'])
+      t.handle({ type: 'system', subtype: 'task_notification', task_id: id, status: 'killed', summary: '' })
+    expect(notices(events)).toEqual(['子智能体已结束'])
+    expect(t.pendingStopNotices(['a1', 'a2'])).toBe(false)
+  })
+
   it('stoppedWithMain 的文案', () => {
     const { t, events } = make()
     t.stoppedWithMain(['甲', '乙'])

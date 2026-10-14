@@ -290,6 +290,16 @@ export class ClaudeTranslator {
     for (const id of ids) this.quietStops.add(id)
   }
 
+  /** 这些 id 的停止提示还没到（停止通知还在路上） */
+  pendingStopNotices(ids: string[]): boolean {
+    return ids.some(id => this.quietStops.has(id))
+  }
+
+  /** 停止没成功的：不再静音，之后单独停它时照常提示 */
+  unmuteStopNotices(ids: string[]): void {
+    for (const id of ids) this.quietStops.delete(id)
+  }
+
   /** 停主智能体时一起停了后台子智能体：合成一条提示 */
   stoppedWithMain(labels: string[]): void {
     this.notice('info', `已停止，连同 ${labels.length} 个后台子智能体（${labels.join('、')}）`)
@@ -464,8 +474,12 @@ export class ClaudeTranslator {
         const info = this.taskInfo.get(id)
         this.taskInfo.delete(id)
         const status = str(msg.status) || 'completed'
+        if (this.bgTasks.some(t => t.id === id)) {
+          this.bgTasks = this.bgTasks.filter(t => t.id !== id)
+          this.cb.emit({ type: 'tasks', tasks: [...this.bgTasks] })
+        }
         // 连同主智能体一起停的：不逐个提示，最后由 stoppedWithMain 合成一条
-        const quiet = this.quietStops.delete(id) && status === 'stopped'
+        const quiet = this.quietStops.delete(id) && status !== 'completed' && status !== 'failed'
         // 后台子智能体真正结束了：它的 Agent 工具行这时才收尾
         const call = info?.toolUseId ?? (str(msg.tool_use_id) || null)
         const launched = call ? this.asyncAgents.get(call) : undefined

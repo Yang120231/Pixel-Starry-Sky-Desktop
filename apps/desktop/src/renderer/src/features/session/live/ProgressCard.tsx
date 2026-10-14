@@ -159,16 +159,18 @@ function Agents({
 }: {
   agents: ProgressAgent[]
   divided: boolean
-  onStop?: (ids: string[]) => void
+  onStop?: (ids: string[]) => Promise<string[]>
 }) {
   const openTrace = useOpenTrace()
   const now = useNow(agents.some(a => a.state === 'running'))
   const [stopping, setStopping] = useState<Set<string>>(() => new Set())
   const stop = (ids: string[]): void => {
     setStopping(s => new Set([...s, ...ids]))
-    onStop?.(ids)
+    void onStop?.(ids).then(failed => {
+      if (failed.length > 0) setStopping(s => new Set([...s].filter(id => !failed.includes(id))))
+    })
   }
-  const running = agents.filter(a => a.state === 'running' && !stopping.has(a.id)).map(a => a.id)
+  const running = agents.filter(a => a.state === 'running' && a.background && !stopping.has(a.id)).map(a => a.id)
   return (
     <div className={cn('px-1.5', divided && 'mt-1.5 border-t border-line-subtle pt-1.5')}>
       <div className="flex items-center justify-between px-1.5 pb-0.5 text-meta text-fg-faint">
@@ -195,7 +197,10 @@ function Agents({
                 type="button"
                 onClick={() => openTrace?.({ agentId: a.id })}
                 title={tr('session.live.SessionStrips.viewSubagentConversation')}
-                className="press flex min-w-0 flex-1 items-start gap-2 rounded-md px-1.5 py-1 text-left hover:bg-hover"
+                className={cn(
+                  'press flex min-w-0 flex-1 items-start gap-2 rounded-md px-1.5 py-1 text-left hover:bg-hover',
+                  onStop && a.state === 'running' && a.background && 'pr-8',
+                )}
               >
                 <StateIcon state={a.state} />
                 <span className="flex min-w-0 flex-1 flex-col">
@@ -231,7 +236,7 @@ function Agents({
                   )}
                 </span>
               </button>
-              {onStop && a.state === 'running' && (
+              {onStop && a.state === 'running' && a.background && (
                 <button
                   type="button"
                   aria-label={tr('subagentStop.stopOne')}
@@ -266,7 +271,7 @@ export function ProgressCard({
   offset?: number
   onOpenTrace?: () => void
   /** 停一个或几个子智能体；引擎没有后台任务能力时不传，界面不出停止按钮 */
-  onStopAgents?: (ids: string[]) => void
+  onStopAgents?: (ids: string[]) => Promise<string[]>
   /** 变一次就把卡片展开（保留模式的「查看」） */
   expandToken?: number
 }) {

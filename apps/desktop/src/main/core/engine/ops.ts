@@ -31,11 +31,11 @@ function rewindOptions(raw: unknown): RewindOptions {
   return { conversation: o.conversation === true, code: o.code === true }
 }
 
-/** 旁聊之前的问答：最多 20 轮，每段最多 20000 字 */
 function interruptOptions(raw: unknown): InterruptOptions {
   return (raw as { background?: unknown } | null)?.background === true ? { background: true } : {}
 }
 
+/** 旁聊之前的问答：最多 20 轮，每段最多 20000 字 */
 function sideHistory(raw: unknown): SideTurn[] {
   if (!Array.isArray(raw)) return []
   return raw.slice(-20).flatMap(t => {

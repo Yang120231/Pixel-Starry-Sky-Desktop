@@ -74,6 +74,7 @@ describe('progressAgents', () => {
       message: 'Grep',
       startedAt: 1000,
       durationMs: 0,
+      background: false,
     })
   })
 
