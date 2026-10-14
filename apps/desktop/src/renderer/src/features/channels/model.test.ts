@@ -4,16 +4,22 @@ import { setCurrentLocale } from '../../i18n/core'
 import {
   appendMessage,
   buildTimeline,
+  continuesTask,
   createMessage,
+  defaultMentionIndex,
   filterMentionable,
   firstUnreadAt,
   insertMention,
   markRead,
+  mentionAllOption,
   mentionAt,
+  mentionsAll,
   parseMentions,
+  sharedDirAgents,
   splitMentions,
   unreadTotal,
 } from './model'
+import { isReservedMentionName } from '../../../../shared/channels/mentions'
 import { formatClock, formatDay } from './format'
 
 afterEach(() => setCurrentLocale('zh-CN'))
@@ -52,6 +58,11 @@ const members: ChannelMember[] = [
   },
   { id: 'zn', kind: 'human', name: '周宁' },
 ]
+
+const agentOf = (m: ChannelMember): Extract<ChannelMember, { kind: 'agent' }> => {
+  if (m.kind !== 'agent') throw new Error('not an agent')
+  return m
+}
 
 describe('频道时间线', () => {
   it('同一作者 5 分钟内合并；换人、超时、带引用、任务卡都会断开', () => {
@@ -144,6 +155,79 @@ describe('@提及', () => {
     ])
     expect(parseMentions('mail@周宁', members)).toEqual([])
     expect(parseMentions('好了，@周宁 再看一次', members)).toEqual(['zn'])
+  })
+  it('@全体 / @all 展开成所有 AI 成员（按成员顺序、去重），真人不算', () => {
+    expect(parseMentions('@全体 你们好', members)).toEqual(['fe', 'fe2'])
+    expect(parseMentions('@周宁 @All 看下', members)).toEqual(['zn', 'fe', 'fe2'])
+    expect(parseMentions('@前端 先看，@全体 再一起', members)).toEqual(['fe2', 'fe'])
+    expect(splitMentions('请@全体看下', members)).toEqual([
+      { text: '请' },
+      { text: '@全体', all: true },
+      { text: '看下' },
+    ])
+    expect(splitMentions('@all, go', members)).toEqual([{ text: '@all', all: true }, { text: ', go' }])
+    expect(mentionsAll('@全体 好', members)).toBe(true)
+    expect(mentionsAll('@前端 好', members)).toBe(false)
+  })
+  it('@全体 的边界：@allen、mail@all、没有 AI 成员时都当普通文字；同名成员优先', () => {
+    expect(parseMentions('@allen 在吗', members)).toEqual([])
+    expect(parseMentions('mail@all.com', members)).toEqual([])
+    expect(parseMentions('@all_x', members)).toEqual([])
+    const humans = members.filter(m => m.kind === 'human')
+    expect(parseMentions('@全体 你们好', humans)).toEqual([])
+    expect(splitMentions('@全体', humans)).toEqual([{ text: '@全体' }])
+    // 不带 kind 的成员列表：@全体 不展开
+    expect(parseMentions('@全体', [{ id: 'x', name: '前端' }])).toEqual([])
+    // 老数据里已经有叫「全体」的成员：@全体 指它
+    const named: ChannelMember[] = [...members, { ...agentOf(members[1]), id: 'q', name: '全体' }]
+    expect(parseMentions('@全体', named)).toEqual(['q'])
+  })
+  it('「全体」「all」是保留名，不分大小写、忽略首尾空白', () => {
+    expect(isReservedMentionName('全体')).toBe(true)
+    expect(isReservedMentionName(' ALL ')).toBe(true)
+    expect(isReservedMentionName('全体成员')).toBe(false)
+    expect(isReservedMentionName('allen')).toBe(false)
+  })
+  it('@ 菜单的「全体」：2 个以上 AI 成员、输入是「全体」或「all」的开头时才有', () => {
+    expect(mentionAllOption(members, '')).toEqual({ count: 2 })
+    expect(mentionAllOption(members, '全')).toEqual({ count: 2 })
+    expect(mentionAllOption(members, 'AL')).toEqual({ count: 2 })
+    expect(mentionAllOption(members, '前')).toBeNull()
+    expect(mentionAllOption(members.slice(0, 2), '')).toBeNull()
+  })
+  it('同一个目录的提示只算这个频道里的 AI 成员，不到 2 个不提示', () => {
+    const fe = agentOf(members[1])
+    const fe2 = agentOf(members[2])
+    expect(
+      sharedDirAgents([
+        members[0],
+        { ...fe, sharesDirWith: ['前端'] },
+        { ...fe2, sharesDirWith: ['前端助手'] },
+        members[3],
+      ]),
+    ).toEqual(['前端助手', '前端'])
+    expect(sharedDirAgents([{ ...fe, sharesDirWith: ['别的频道的'] }, fe2])).toEqual([])
+    expect(sharedDirAgents([fe, fe2])).toEqual([])
+  })
+  it('@ 菜单默认选第一个成员；只有在输入「全」「全体」「al」「all」时默认选「全体」', () => {
+    expect(defaultMentionIndex('', true, 2)).toBe(1)
+    expect(defaultMentionIndex('a', true, 2)).toBe(1)
+    expect(defaultMentionIndex('前', true, 2)).toBe(1)
+    expect(defaultMentionIndex('全', true, 2)).toBe(0)
+    expect(defaultMentionIndex('AL', true, 1)).toBe(0)
+    expect(defaultMentionIndex('全体', true, 0)).toBe(0)
+    expect(defaultMentionIndex('', false, 2)).toBe(0)
+  })
+  it('引用任务卡：没 @ 别的 AI 成员才算追加要求；@全体（2 个以上 AI）不算', () => {
+    expect(continuesTask('再改一下', members, 'fe')).toBe(true)
+    expect(continuesTask('@前端助手 再改一下 @周宁', members, 'fe')).toBe(true)
+    expect(continuesTask('@前端 也看下', members, 'fe')).toBe(false)
+    expect(continuesTask('@全体 一起看看', members, 'fe')).toBe(false)
+    expect(continuesTask('@全体 看看', members.slice(0, 2), 'fe')).toBe(true)
+  })
+  it('演示模式发消息：@全体 也展开', () => {
+    const m = createMessage({ id: 'n', channelId: 'c', authorId: 'me', text: '@全体 开工', members, now: 1 })
+    expect(m.mentions).toEqual(['fe', 'fe2'])
   })
   it('候选不含自己，AI 成员在前，可按引擎名过滤', () => {
     expect(filterMentionable(members, '', 'me').map(m => m.id)).toEqual(['fe', 'fe2', 'zn'])

@@ -162,7 +162,13 @@ export class FakeCloud {
           task: {
             assignee: a.id,
             owner: a.owner,
-            title: text.replace(/@\S+/g, '').trim() || text,
+            // 和云端 taskTitle 一样：只去掉被派活的 AI 成员名（@全体、@真人 都留着），取第一行
+            title:
+              assignees
+                .reduce((t, x) => t.split(`@${x.name as string}`).join(''), text)
+                .split('\n')
+                .map(l => l.replace(/\s+/g, ' ').trim())
+                .find(Boolean) ?? text,
             status: status(a),
             round: 1,
             summary: null,

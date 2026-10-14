@@ -7,9 +7,9 @@ import type {
   ChannelTask,
   ChannelTextMessage,
 } from '@/data/types'
-import { mentionBoundary, parseMentions } from '../../../../shared/channels/mentions'
+import { MENTION_ALL, mentionBoundary, parseMentions } from '../../../../shared/channels/mentions'
 
-export { excerpt, parseMentions, splitMentions } from '../../../../shared/channels/mentions'
+export { excerpt, mentionsAll, parseMentions, splitMentions } from '../../../../shared/channels/mentions'
 
 // ---------------------------------------------------------------------------
 // 时间线
@@ -121,6 +121,42 @@ export function filterMentionable(
     !q || m.name.toLowerCase().includes(q) || (m.kind === 'agent' && m.engine.includes(q))
   const list = members.filter(m => m.id !== selfId && match(m))
   return [...list.filter(m => m.kind === 'agent'), ...list.filter(m => m.kind === 'human')]
+}
+
+/**
+ * @ 菜单默认选中哪一项（有「全体」时它是第 0 项）：只打了 @ 或输入和成员也对得上时选第一个成员，
+ * 免得 @ + Enter 一下派给所有 AI；输入是「全」「全体」「al」「all」时才默认选「全体」
+ */
+export function defaultMentionIndex(query: string, hasAll: boolean, memberCount: number): number {
+  if (!hasAll || memberCount === 0) return 0
+  const q = query.trim().toLowerCase()
+  const typingAll = (q.length >= 1 && MENTION_ALL.zh.startsWith(q)) || (q.length >= 2 && MENTION_ALL.en.startsWith(q))
+  return typingAll ? 0 : 1
+}
+
+/**
+ * 引用了任务卡时这条消息还算不算给那项活追加要求：没 @ 别的 AI 成员才算（和主进程 / 云端派活的规则一样）；
+ * 写了 @全体 或 @ 了别的 AI 成员时，发出去会各开新任务卡
+ */
+export function continuesTask(text: string, members: readonly ChannelMember[], assigneeId: string): boolean {
+  const agents = new Set(members.filter(m => m.kind === 'agent').map(m => m.id))
+  return parseMentions(text, members).every(id => !agents.has(id) || id === assigneeId)
+}
+
+/** @ 菜单最上面的「全体 AI 成员」（issue #83）：频道里有 2 个以上 AI 成员、输入的字是「全体」或「all」的开头时出现 */
+export function mentionAllOption(members: readonly ChannelMember[], query: string): { count: number } | null {
+  const count = members.filter(m => m.kind === 'agent').length
+  if (count < 2) return null
+  const q = query.trim().toLowerCase()
+  return !q || MENTION_ALL.zh.startsWith(q) || MENTION_ALL.en.startsWith(q) ? { count } : null
+}
+
+/** @全体 时会同时改同一个目录的 AI 成员（只算这个频道里的）；不到 2 个时空数组 */
+export function sharedDirAgents(members: readonly ChannelMember[]): string[] {
+  const agents = members.filter(m => m.kind === 'agent')
+  const names = new Set(agents.map(a => a.name))
+  const shared = agents.filter(a => a.sharesDirWith?.some(n => n !== a.name && names.has(n))).map(a => a.name)
+  return shared.length >= 2 ? shared : []
 }
 
 // ---------------------------------------------------------------------------

@@ -1,17 +1,19 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
 import { useLayoutEffect, useRef } from 'react'
+import { Users } from 'lucide-react'
 import { cn } from '@/ui'
 import type { ChannelMember } from '@/data/types'
 import type { TeamRole } from '../../../../shared/types/channels'
 import { agentMeta, MemberAvatar } from './ChannelMessage'
 import { roleLabel } from './TeamParts'
-import { mentionNote } from './teamModel'
+import { canDispatch, mentionNote } from './teamModel'
 
 /** 输入框里的 @ 菜单（docs/ui/channels.md §6）；结构和键盘处理照 features/session/CommandMenu.tsx */
 export function MentionMenu({
   id,
   members,
+  all,
   selected,
   onChoose,
   team = false,
@@ -19,12 +21,17 @@ export function MentionMenu({
 }: {
   id: string
   members: readonly ChannelMember[]
+  /** 最上面的「全体 AI 成员」（issue #83）：有它时是第 0 项，成员从第 1 项开始；token 是插入的写法 */
+  all?: { count: number; token: string; approval: number } | null
   selected: number
+  /** index 和 selected 同一套编号（含「全体」那一项） */
   onChoose: (index: number) => void
   /** 团队频道：真人写团队角色，AI 成员写归属，观察者不能派活 */
   team?: boolean
   role?: TeamRole
 }) {
+  const offset = all ? 1 : 0
+  const allBlocked = team && !canDispatch(role)
   useI18n()
   const listRef = useRef<HTMLDivElement>(null)
 
@@ -48,10 +55,45 @@ export function MentionMenu({
         aria-label={tr('channels.mention.label')}
         className="max-h-64 overflow-y-auto overscroll-contain"
       >
-        {members.length === 0 && (
+        {members.length === 0 && !all && (
           <div className="px-3 py-2 text-meta text-fg-muted">{tr('channels.mention.empty')}</div>
         )}
-        {members.map((member, index) => {
+        {all && (
+          <button
+            type="button"
+            role="option"
+            tabIndex={-1}
+            id={`${id}-0`}
+            data-mention-index={0}
+            data-mention-all=""
+            aria-selected={selected === 0}
+            aria-disabled={allBlocked || undefined}
+            onMouseDown={e => e.preventDefault()}
+            onClick={() => onChoose(0)}
+            className={cn(
+              'flex w-full min-w-0 flex-wrap items-center gap-x-2.5 rounded-md px-2.5 text-left text-list',
+              allBlocked || all.approval ? 'min-h-9 py-1' : 'h-9',
+              allBlocked && 'opacity-50',
+              selected === 0 ? 'bg-selected' : 'hover:bg-hover',
+            )}
+          >
+            <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-fg">
+              <Users size={13} strokeWidth={1.75} />
+            </span>
+            <span className="shrink-0 font-medium text-fg">@{all.token}</span>
+            <span className="min-w-0 truncate text-meta text-fg-faint">{tr('channels.mention.all')}</span>
+            <span className="ml-auto shrink-0 text-meta text-fg-faint">
+              {tr('channels.mention.allCount', { count: all.count })}
+            </span>
+            {(allBlocked || !!all.approval) && (
+              <span className="basis-full pl-[32px] text-meta text-fg-faint">
+                {allBlocked ? tr('team.mention.observer') : tr('channels.mention.allApproval', { count: all.approval })}
+              </span>
+            )}
+          </button>
+        )}
+        {members.map((member, i) => {
+          const index = i + offset
           const meta =
             agentMeta(member) ??
             (member.kind === 'human' && member.role

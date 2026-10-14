@@ -1,7 +1,7 @@
 // 协作频道派活的提示词和结果摘取（docs/ui/channels-phase-b.md §4.2、§5.2）。纯函数，不碰磁盘和引擎。
 import type { Locale } from '../../../shared/i18n/messages'
 import type { ChannelMessage, ChannelTaskStatus } from '../../../shared/types/channels'
-import { excerpt, splitMentions } from '../../../shared/channels/mentions'
+import { excerpt, splitMentions, type Mentionable } from '../../../shared/channels/mentions'
 
 /** 最近的讨论最多带这么多条 / 这么多字，先到哪个停在哪个 */
 export const HISTORY_MESSAGES = 20
@@ -26,10 +26,10 @@ const STATUS: Record<ChannelTaskStatus, [string, string]> = {
   stopped: ['已停止', 'stopped'],
 }
 
-/** 消息正文 → 任务卡标题：去掉 @成员，取第一行非空文字 */
-export function taskTitle(text: string, members: readonly { id: string; name: string }[]): string {
+/** 消息正文 → 任务卡标题：去掉 @成员 和 @全体，取第一行非空文字 */
+export function taskTitle(text: string, members: readonly Mentionable[]): string {
   const plain = splitMentions(text, members)
-    .filter(s => !s.memberId)
+    .filter(s => !s.memberId && !s.all)
     .map(s => s.text)
     .join('')
   const line =
@@ -43,6 +43,20 @@ export function taskTitle(text: string, members: readonly { id: string; name: st
       )
       .find(Boolean) ?? ''
   return line.length > TITLE_MAX ? `${line.slice(0, TITLE_MAX)}…` : line
+}
+
+/** 云端生成的团队任务卡标题只去掉了被派活的成员名，@全体 还在：去掉它，其余照旧 */
+export function titleWithoutAll(title: string, members: readonly Mentionable[]): string {
+  const segments = splitMentions(title, members)
+  if (!segments.some(s => s.all)) return title
+  const plain = segments
+    .filter(s => !s.all)
+    .map(s => s.text)
+    .join('')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s,，:：、]+/, '')
+    .trim()
+  return plain || title
 }
 
 const DECISION = /^\s*(?:[-*>]\s*)?(?:\*\*)?(?:需要你决定|Needs your decision)\s*[:：]\s*(?:\*\*)?\s*(.+?)\s*$/im
@@ -164,15 +178,19 @@ export interface DispatchInput {
   request: string
   /** 这条消息带的附件数：提示词里说一句，图片和文件本身跟着这条消息一起发 */
   attached?: { images: number; files: number } | null
+  /** 这条消息 @全体：同时收到这项活的其他 AI 成员 */
+  together?: string[]
 }
 
 /** 第一次派给一个会话的提示词（§4.2） */
 export function dispatchPrompt(input: DispatchInput): string {
   const { locale, channel } = input
   const parts: string[] = []
+  const together = input.together?.length ? input.together : null
   if (en(locale)) {
     parts.push(
-      `You have received a task in the channel #${channel.name}.${channel.topic ? ` (Channel topic: ${channel.topic})` : ''}\nHanded to you by: ${input.author}`,
+      `You have received a task in the channel #${channel.name}.${channel.topic ? ` (Channel topic: ${channel.topic})` : ''}\nHanded to you by: ${input.author}` +
+        (together ? `\nThis message went to every AI member in the channel; ${together.join(', ')} got it too.` : ''),
     )
     if (input.instructions.trim()) parts.push(`Your role:\n${input.instructions.trim()}`)
     if (input.history.length) parts.push(`Recent discussion (oldest first):\n${input.history.join('\n')}`)
@@ -185,7 +203,8 @@ export function dispatchPrompt(input: DispatchInput): string {
     )
   } else {
     parts.push(
-      `你在协作频道 #${channel.name} 里收到一项活。${channel.topic ? `（频道主题：${channel.topic}）` : ''}\n交给你的人：${input.author}`,
+      `你在协作频道 #${channel.name} 里收到一项活。${channel.topic ? `（频道主题：${channel.topic}）` : ''}\n交给你的人：${input.author}` +
+        (together ? `\n这条消息发给了频道里全体 AI 成员，${together.join('、')} 也同时收到了。` : ''),
     )
     if (input.instructions.trim()) parts.push(`你的职责：\n${input.instructions.trim()}`)
     if (input.history.length) parts.push(`最近的讨论（从旧到新）：\n${input.history.join('\n')}`)

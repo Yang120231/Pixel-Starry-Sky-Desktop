@@ -92,6 +92,17 @@ export const channelMessages = {
   'channels.attach.team': { zh: '团队频道暂不支持附件', en: "Team channels don't support attachments yet" },
   'channels.attach.missing': { zh: '附件已不在了', en: 'The attachments are no longer available' },
   'channels.mention.busy': { zh: '进行中 · {count} 项', en: 'Busy · {count}' },
+  'channels.mention.all': { zh: '全体 AI 成员', en: 'All AI members' },
+  'channels.mention.allCount': { zh: '{count} 个一起接活', en: '{count} at once' },
+  'channels.mention.allApproval': {
+    zh: '其中 {count} 个要主人同意',
+    en: '{count} of them need their owner to approve',
+  },
+  'channels.composer.nameSep': { zh: '、', en: ', ' },
+  'channels.composer.allSharesDir': {
+    zh: '{names} 用同一个目录，@全体 会让它们同时改文件，可能冲突',
+    en: '{names} share a folder; @all has them edit files at the same time, which may conflict',
+  },
   'channels.event.removed': { zh: '{actor} 把 {name} 移出了频道', en: '{actor} removed {name} from the channel' },
   'channels.members.menu': { zh: '{name} 的操作', en: 'Actions for {name}' },
   'channels.members.channelMenu': { zh: '频道操作', en: 'Channel actions' },
@@ -193,6 +204,10 @@ export const channelMessages = {
   'channels.error.projectMissing': { zh: '项目不存在', en: 'The project no longer exists' },
   'channels.error.duplicateChannel': { zh: '已经有同名的频道', en: 'A channel with this name already exists' },
   'channels.error.duplicateAgent': { zh: '已经有同名的 AI 成员', en: 'An AI member with this name already exists' },
+  'channels.error.reservedName': {
+    zh: '「全体」「all」留给 @全体，换个名字吧',
+    en: '"全体" and "all" are reserved for @all; choose another name',
+  },
   'channels.error.channelNameEmpty': { zh: '频道名不能为空', en: 'Enter a channel name' },
   'channels.error.channelNameLong': { zh: '频道名最多 40 个字', en: 'Channel names can be at most 40 characters' },
   'channels.error.agentNameEmpty': { zh: '成员名不能为空', en: 'Enter a member name' },

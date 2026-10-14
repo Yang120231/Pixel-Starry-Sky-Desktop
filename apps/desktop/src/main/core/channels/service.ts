@@ -34,7 +34,7 @@ import type {
   ChannelAttachments,
   TeamRole,
 } from '../../../shared/types/channels'
-import { parseMentions } from '../../../shared/channels/mentions'
+import { isReservedMentionName, mentionsAll, parseMentions, type Mentionable } from '../../../shared/channels/mentions'
 import { ChannelStore, type StoredChannel } from './store'
 import {
   attachedNote,
@@ -507,6 +507,9 @@ export class Channels {
     if (!project) throw new Error('项目不存在')
     const existing = raw.id ? this.member(raw.id) : undefined
     if (raw.id && !existing) throw new Error('成员不存在')
+    // 老数据里已经叫「全体」的成员不改名也能保存
+    if (isReservedMentionName(name) && existing?.name.toLowerCase() !== name.toLowerCase())
+      throw new Error('「全体」「all」留给 @全体，换个名字吧')
     const settings: AgentConfig['settings'] = {}
     if (raw.settings?.model !== undefined) settings.model = raw.settings.model
     if (raw.settings?.effort !== undefined) settings.effort = raw.settings.effort
@@ -599,8 +602,8 @@ export class Channels {
   // 发消息、派活
   // -------------------------------------------------------------------------
 
-  private channelMembers(c: StoredChannel): { id: string; name: string }[] {
-    return c.memberIds.map(id => ({ id, name: this.nameOf(id) }))
+  private channelMembers(c: StoredChannel): Mentionable[] {
+    return c.memberIds.map(id => ({ id, name: this.nameOf(id), kind: this.member(id) ? 'agent' : 'human' }))
   }
 
   /** 引用的是任务卡或任务结果：对应的任务卡 */
@@ -754,7 +757,14 @@ export class Channels {
       quoted: quotedText,
       request: source.text,
       attached: source.attached ? { images: source.attached.images.length, files: source.attached.files.length } : null,
+      together: this.together(c, source, member.id),
     })
+  }
+
+  /** 源消息 @全体 时，同时收到这项活的其他 AI 成员的名字 */
+  private together(c: StoredChannel, source: ChannelTextMessage, memberId: string): string[] {
+    if (!mentionsAll(source.text, this.channelMembers(c))) return []
+    return (source.mentions ?? []).filter(id => id !== memberId && this.member(id)).map(this.nameOf)
   }
 
   private newTask(c: StoredChannel, source: ChannelTextMessage, memberId: string, replyToId: string | null): string {

@@ -211,6 +211,46 @@ describe('协作频道：派活', () => {
     expect(tasks(c, channelId)[2]).toMatchObject({ ahead: 0, sessionId: 's3' })
   })
 
+  it('@全体 → 频道里每个 AI 成员各开一张任务卡，提示词写明还有谁收到；不在频道里的成员不算', async () => {
+    const c = await open()
+    const a = await c.saveMember(null, agent('前端助手'))
+    const b = await c.saveMember(null, agent('审查员', { engine: 'codex' }))
+    const outside = await c.saveMember(null, agent('构建'))
+    const channelId = await c.create({ name: 'ch', memberIds: [a, b] })
+    const { message, tasks: ids } = await c.post(channelId, { text: '@全体 自我介绍一下', clientId: 'all1' })
+    await settle()
+    expect(message.mentions).toEqual([a, b])
+    expect(ids).toHaveLength(2)
+    const cards = tasks(c, channelId)
+    expect(cards.map(t => t.assigneeId)).toEqual([a, b])
+    expect(cards.every(t => t.title === '自我介绍一下')).toBe(true)
+    expect(cards.some(t => t.assigneeId === outside)).toBe(false)
+    const sends = engine.sends()
+    expect(sends).toHaveLength(2)
+    expect(sends[0].text).toContain('审查员 也同时收到了')
+    expect(sends[1].text).toContain('前端助手 也同时收到了')
+    // 只 @ 一个成员时不写
+    await c.post(channelId, { text: '@前端助手 再看下', clientId: 'all2' })
+    complete(c, 's1', sends[0].clientMessageId, '好')
+    await settle()
+    expect(engine.sends().at(-1)?.text ?? '').not.toContain('全体 AI 成员')
+  })
+
+  it('引用任务卡再 @全体：多个成员时各开新任务卡，不当成追加要求', async () => {
+    const c = await open()
+    const a = await c.saveMember(null, agent('前端助手'))
+    const b = await c.saveMember(null, agent('审查员', { engine: 'codex' }))
+    const channelId = await c.create({ name: 'ch', memberIds: [a, b] })
+    await c.post(channelId, { text: '@前端助手 改登录页', clientId: 'q1' })
+    await settle()
+    const [card] = tasks(c, channelId)
+    const { tasks: ids } = await c.post(channelId, { text: '@全体 一起看看', clientId: 'q2', replyToId: card.id })
+    await settle()
+    expect(ids).toHaveLength(2)
+    expect(ids).not.toContain(card.id)
+    expect(tasks(c, channelId)).toHaveLength(3)
+  })
+
   it('一直用同一个会话：第二项活发到同一个会话，只补上次之后的讨论', async () => {
     const c = await open()
     const a = await c.saveMember(null, agent('文档助手', { mode: 'shared' }))
@@ -508,12 +548,24 @@ describe('协作频道：存储与对账', () => {
     expect(texts(again, channelId).at(-1)?.text).toBe('离线时做完了')
   })
 
+  it('老数据里已经叫「全体」的成员：不改名照样能保存', async () => {
+    const c = await open()
+    const id = await c.saveMember(null, agent('旧名'))
+    const store = (c as unknown as { store: ChannelStore }).store
+    store.members = store.members.map(m => (m.id === id ? { ...m, name: '全体' } : m))
+    await expect(c.saveMember(null, { ...agent('全体', { instructions: '新职责' }), id })).resolves.toBe(id)
+    await expect(c.saveMember(null, { ...agent('All'), id })).rejects.toThrow('留给 @全体')
+  })
+
   it('改名、改主题、移除成员、删除频道', async () => {
     const c = await open()
     const a = await c.saveMember(null, agent('前端助手'))
     const channelId = await c.create({ name: '旧名', memberIds: [a] })
     await expect(c.create({ name: '旧名' })).rejects.toThrow('已经有同名的频道')
     await expect(c.saveMember(null, agent('前端助手'))).rejects.toThrow('已经有同名的 AI 成员')
+    await expect(c.saveMember(null, agent('全体'))).rejects.toThrow('留给 @全体')
+    await expect(c.saveMember(null, agent('All'))).rejects.toThrow('留给 @全体')
+    await expect(c.saveMember(null, { ...agent('全体'), id: a })).rejects.toThrow('留给 @全体')
     await c.update(channelId, { name: '新名', topic: '主题' })
     await c.removeMember(channelId, a)
     const events = c

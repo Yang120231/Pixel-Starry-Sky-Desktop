@@ -47,6 +47,7 @@ export const demoChannelMembers: ChannelMember[] = [
     status: 'running',
     task: '设置页迁移到新的表单组件',
     sessionId: 's-settings-form',
+    sharesDirWith: ['审查员'],
   },
   {
     id: 'a-reviewer',
@@ -60,6 +61,7 @@ export const demoChannelMembers: ChannelMember[] = [
     status: 'idle',
     task: null,
     sessionId: 's-redesign',
+    sharesDirWith: ['前端助手'],
   },
   {
     id: 'a-builder',

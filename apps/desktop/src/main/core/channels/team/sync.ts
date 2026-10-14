@@ -27,6 +27,8 @@ import {
   type TeamTaskData,
 } from './api'
 import type { RealtimeStatus, TeamFrame } from './realtime'
+import type { Mentionable } from '../../../../shared/channels/mentions'
+import { titleWithoutAll } from '../prompt'
 
 /** 每个频道最多缓存最近这么多条，往上翻再拉 */
 export const CACHE_MAX = 500
@@ -651,13 +653,15 @@ export class TeamSync {
   }
 
   /** 频道里能 @ 的：团队所有真人和本频道的 AI 成员 */
-  mentionables(channelId: string): { id: string; name: string }[] {
+  mentionables(channelId: string): Mentionable[] {
     const meta = this.meta.get(channelId)
     const team = meta && this.teams.get(meta.teamId)
     if (!team) return []
     return [
-      ...team.members.map(m => ({ id: m.id, name: this.nameOf(team.id, m.id) })),
-      ...team.agents.filter(a => a.channelId === channelId).map(a => ({ id: a.id, name: a.name })),
+      ...team.members.map(m => ({ id: m.id, name: this.nameOf(team.id, m.id), kind: 'human' as const })),
+      ...team.agents
+        .filter(a => a.channelId === channelId)
+        .map(a => ({ id: a.id, name: a.name, kind: 'agent' as const })),
     ]
   }
 
@@ -706,7 +710,7 @@ export class TeamSync {
         at: tm.createdAt,
         authorId: tm.author,
         assigneeId: t.assignee,
-        title: t.title,
+        title: titleWithoutAll(t.title, this.mentionables(tm.channelId)),
         status: t.status,
         sessionId: null,
         summary: t.summary,

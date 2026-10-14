@@ -60,7 +60,13 @@ export function ChannelsPage({
     if (!channelsLive || !replyTo) return null
     const taskId = replyTo.kind === 'task' ? replyTo.id : replyTo.taskId
     const task = taskId ? messages.find((m): m is ChannelTask => m.kind === 'task' && m.id === taskId) : undefined
-    return task ? { assignee: members.find(m => m.id === task.assigneeId)?.name ?? '?', title: task.title } : null
+    return task
+      ? {
+          assigneeId: task.assigneeId,
+          assignee: members.find(m => m.id === task.assigneeId)?.name ?? '?',
+          title: task.title,
+        }
+      : null
   }, [replyTo, messages, members])
 
   // 进入页面或切换频道：标为已读，记下「新消息」位置

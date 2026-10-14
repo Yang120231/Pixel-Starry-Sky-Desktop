@@ -4,6 +4,7 @@
 // 本文件只管和云端的往来和「接不接这项活」的判断；本机怎么跑由宿主（Channels）实现。
 import type { Locale } from '../../../../shared/i18n/messages'
 import type { AgentConfig, ChannelMessage, ChannelTask } from '../../../../shared/types/channels'
+import { mentionsAll } from '../../../../shared/channels/mentions'
 import { continuePrompt, dispatchPrompt, followUpPrompt, historyLines } from '../prompt'
 import { newTaskRun, type TaskRun, type TeamRunRef } from '../tracker'
 import { TeamError, type TaskPatch, type TeamMessage, type TeamTaskData } from './api'
@@ -303,7 +304,16 @@ export class TeamExecutor {
         : [],
       quoted,
       request: source?.text ?? t.title,
+      together: source && !follow ? this.together(tm.channelId, source, t.assignee) : [],
     })
+  }
+
+  /** 源消息 @全体 时，同时收到这项活的其他 AI 成员的名字 */
+  private together(channelId: string, source: TeamMessage, assignee: string): string[] {
+    const members = this.sync.mentionables(channelId)
+    if (!mentionsAll(source.text, members)) return []
+    const agents = new Map(members.filter(m => m.kind === 'agent').map(m => [m.id, m.name]))
+    return source.mentions.filter(id => id !== assignee && agents.has(id)).map(id => agents.get(id)!)
   }
 
   // -------------------------------------------------------------------------

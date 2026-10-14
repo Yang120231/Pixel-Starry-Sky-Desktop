@@ -116,6 +116,17 @@ describe('TeamExecutor 认领和派活', () => {
     expect(t.cloud.task(id).claimed_by).toBe(DEVICE)
   })
 
+  it('@全体 派来的活：提示词写明频道里还有谁同时收到', async () => {
+    const t = setup()
+    const mine = t.cloud.addAgent('u:1', 'm-1', { policy: 'team' })
+    const theirs = t.cloud.addAgent('u:2', 'm-9', { policy: 'team' })
+    t.cloud.userPost('u:2', 'tc_1', '@全体 自我介绍一下', [mine.id as string, theirs.id as string])
+    await t.online()
+    await until(() => t.host.enqueue.mock.calls.length > 0)
+    const run = t.host.enqueue.mock.calls[0][0]
+    expect(run.prompt).toContain('这条消息发给了频道里全体 AI 成员，审查员 也同时收到了。')
+  })
+
   it('要我同意的活（approval）不开工；主人同意后才认领', async () => {
     const t = setup()
     const agent = t.cloud.addAgent('u:1', 'm-1')

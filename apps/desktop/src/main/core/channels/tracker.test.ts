@@ -11,6 +11,7 @@ import {
   historyLines,
   summaryOf,
   taskTitle,
+  titleWithoutAll,
 } from './prompt'
 
 const run = (patch: Partial<TaskRun> = {}): TaskRun => ({
@@ -239,6 +240,13 @@ describe('派活提示词（§4.2）', () => {
   it('标题去掉 @，取第一行；结果摘要取第一段；「需要你决定」单独取出', () => {
     expect(taskTitle('@前端助手 ，把设置页迁移到新表单\n细节见下', members)).toBe('把设置页迁移到新表单')
     expect(taskTitle('@前端助手', members)).toBe('')
+    const kinds = members.map(m => ({ ...m, kind: m.id === 'you' ? ('human' as const) : ('agent' as const) }))
+    expect(taskTitle('@全体 ，一起看下登录页', kinds)).toBe('一起看下登录页')
+    expect(taskTitle('@all', kinds)).toBe('')
+    // 云端标题只去掉了成员名：@全体 也去掉，@真人 留着
+    expect(titleWithoutAll('@全体 ，一起看下 @林夏', kinds)).toBe('一起看下 @林夏')
+    expect(titleWithoutAll('看下 @林夏', kinds)).toBe('看下 @林夏')
+    expect(titleWithoutAll('@全体', kinds)).toBe('@全体')
     const reply = '## 总结\n改好了设置页。\n\n需要你决定：要不要删掉旧组件？\n\n其他'
     expect(summaryOf(reply)).toBe('总结 改好了设置页。')
     expect(decisionOf(reply)).toBe('要不要删掉旧组件？')
@@ -298,6 +306,20 @@ describe('派活提示词（§4.2）', () => {
       request: 'do it',
     })
     expect(en).not.toContain('Your role')
+    // @全体：写明还有谁同时收到
+    const base = {
+      channel: { name: 'c', topic: null },
+      author: '林夏',
+      instructions: '',
+      history: [],
+      quoted: null,
+      request: '@全体 看下',
+    }
+    expect(dispatchPrompt({ ...base, locale: 'zh-CN', together: ['审查员', '构建'] })).toContain(
+      '交给你的人：林夏\n这条消息发给了频道里全体 AI 成员，审查员、构建 也同时收到了。',
+    )
+    expect(dispatchPrompt({ ...base, locale: 'en-US', together: ['Reviewer'] })).toContain('Reviewer got it too.')
+    expect(dispatchPrompt({ ...base, locale: 'zh-CN', together: [] })).not.toContain('全体 AI 成员')
     expect(en).toContain('Needs your decision:')
   })
 })

@@ -182,6 +182,33 @@ describe('协作频道 Phase C：团队频道分流', () => {
     await expect(c.addMember('tc_1', 'x')).rejects.toThrow()
   })
 
+  it('@全体：发给云端的 mentions 是本频道所有 AI 成员（含别人的），不含真人；观察者不带', async () => {
+    const { c, cloud, online } = await open()
+    const mine = cloud.addAgent('u:1', 'm-1', { policy: 'team' })
+    const theirs = cloud.addAgent('u:2', 'm-9', { policy: 'team' })
+    cloud.addAgent('u:2', 'm-8', { name: '别的频道' }, 'tc_2')
+    await online()
+    const { message } = await c.post('tc_1', { text: '@全体 看下', clientId: 'all1' })
+    expect(message.mentions).toEqual([mine.id, theirs.id])
+    const post = cloud.calls.filter(x => x.method === 'POST' && x.path.endsWith('/messages')).at(-1)!
+    expect(post.body).toMatchObject({ text: '@全体 看下', mentions: [mine.id, theirs.id] })
+    // 云端的任务卡标题会留着 @全体：显示时去掉
+    cloud.userPost('u:2', 'tc_1', '@全体 ，再看下登录页', [mine.id as string, theirs.id as string])
+    const page = await c.page('tc_1')
+    const titles = page.messages.flatMap(m => (m.kind === 'task' ? [m.title] : []))
+    expect(titles.at(-1)).toBe('再看下登录页')
+  })
+
+  it('@全体：观察者发的不带 AI 成员', async () => {
+    const { c, cloud, online } = await open()
+    cloud.role = 'observer'
+    cloud.addAgent('u:2', 'm-9', { policy: 'team' })
+    cloud.addAgent('u:1', 'm-1', { policy: 'team' })
+    await online()
+    const { message } = await c.post('tc_1', { text: '@all 看下', clientId: 'all2' })
+    expect(message.mentions ?? []).toEqual([])
+  })
+
   it('未读、已读：markRead 走云端', async () => {
     const { c, cloud, online } = await open()
     await online()

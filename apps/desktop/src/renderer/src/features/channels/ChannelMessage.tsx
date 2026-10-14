@@ -132,12 +132,12 @@ function AuthorLine({ member, at }: { member: ChannelMember | undefined; at: num
   )
 }
 
-/** 真人消息：纯文本，@成员 高亮 */
+/** 真人消息：纯文本，@成员 和 @全体 高亮 */
 function MentionText({ text, members }: { text: string; members: readonly ChannelMember[] }) {
   return (
     <p className="text-prose break-words whitespace-pre-wrap text-fg-body">
       {splitMentions(text, members).map((segment, i) =>
-        segment.memberId ? (
+        segment.memberId || segment.all ? (
           <span key={i} className="rounded bg-accent-soft px-0.5 text-accent-fg">
             {segment.text}
           </span>
