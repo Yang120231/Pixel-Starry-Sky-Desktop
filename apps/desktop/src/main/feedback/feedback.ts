@@ -20,6 +20,7 @@ import {
   type FeedbackPreviewQuery,
   type FeedbackReplyInput,
   type FeedbackState,
+  type FeedbackSummary,
   type FeedbackType,
 } from '../../shared/types/feedback'
 import {
@@ -127,6 +128,17 @@ export function initFeedback(ctx: AppContext): void {
 
   ipc.handle('feedback:state', (): FeedbackState => tracker.state(), deny)
   ipc.handle('feedback:refresh', (): Promise<FeedbackState> => tracker.poll(), deny)
+  // 新回复的提醒：界面处理完才记成已提醒；窗口打开时取回没处理的（审查报告 2026-10-14）
+  ipc.handle('feedback:pending', (): FeedbackSummary[] => tracker.unacknowledged(), deny)
+  ipc.handle(
+    'feedback:ack',
+    (_event, ids: unknown): void => {
+      if (!Array.isArray(ids) || ids.length > 200 || !ids.every(id => typeof id === 'string' && id.length <= 200))
+        throw new Error('参数不对')
+      tracker.acknowledge(ids)
+    },
+    deny,
+  )
   ipc.handle(
     'feedback:list',
     async (_event, before: unknown): Promise<FeedbackList> => {

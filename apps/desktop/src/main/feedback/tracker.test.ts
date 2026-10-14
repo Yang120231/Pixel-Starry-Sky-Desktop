@@ -69,6 +69,8 @@ describe('FeedbackTracker', () => {
     const first = setup([ok([read, unread])], store)
     await first.tracker.setAccount('a@x')
     expect(first.changes.at(-1)?.fresh.map(t => t.id)).toEqual(['fb_u'])
+    // 界面处理完（弹了通知）确认
+    first.tracker.acknowledge(['fb_u'])
     const second = setup([ok([read, unread])], store)
     await second.tracker.setAccount('a@x')
     expect(second.changes.at(-1)?.fresh).toEqual([])
@@ -76,6 +78,26 @@ describe('FeedbackTracker', () => {
     const third = setup([ok([{ ...unread, updatedAt: 300 }])], store)
     await third.tracker.setAccount('a@x')
     expect(third.changes.at(-1)?.fresh).toHaveLength(1)
+  })
+
+  it('推给窗口但界面没确认（窗口还没打开、没订阅上）：不记成已提醒，下次启动再提醒；窗口打开时能取回', async () => {
+    const store = memoryStore()
+    const first = setup([ok([thread('fb_u')]), ok([thread('fb_u')])], store)
+    await first.tracker.setAccount('a@x')
+    expect(first.changes.at(-1)?.fresh.map(t => t.id)).toEqual(['fb_u'])
+    // 同一次运行里再查到：不重复推
+    await first.tracker.poll()
+    expect(first.changes.at(-1)?.fresh).toEqual([])
+    // 窗口打开后取回没处理的
+    expect(first.tracker.unacknowledged().map(t => t.id)).toEqual(['fb_u'])
+    expect(store.get('a@x')).toEqual({})
+    // 没确认就退出了：下次启动再提醒一次
+    const second = setup([ok([thread('fb_u')])], store)
+    await second.tracker.setAccount('a@x')
+    expect(second.changes.at(-1)?.fresh.map(t => t.id)).toEqual(['fb_u'])
+    second.tracker.acknowledge(['fb_u', 'fb_not_pending'])
+    expect(store.get('a@x')).toEqual({ fb_u: 100 })
+    expect(second.tracker.unacknowledged()).toEqual([])
   })
 
   it('不同账号分开记录', async () => {

@@ -10,6 +10,7 @@ import type {
   FeedbackPreviewQuery,
   FeedbackReplyInput,
   FeedbackState,
+  FeedbackSummary,
 } from '../shared/types/feedback'
 
 export interface FeedbackBridge {
@@ -29,4 +30,8 @@ export interface FeedbackBridge {
   preview(query: FeedbackPreviewQuery): Promise<FeedbackPreview>
   attachment(threadId: string, attachmentId: number): Promise<FeedbackAttachmentData>
   onChange(cb: (change: FeedbackChange) => void): () => void
+  /** 推过来、还没确认处理过的新回复（窗口打开前推的会丢，打开后取回） */
+  pending(): Promise<FeedbackSummary[]>
+  /** 这些新回复处理完了（弹了通知，或者按设置决定不弹）：记成已提醒 */
+  ack(ids: string[]): Promise<void>
 }

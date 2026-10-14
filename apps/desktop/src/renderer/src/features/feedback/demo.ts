@@ -229,6 +229,9 @@ export function createDemoFeedback(now: () => number = Date.now): FeedbackBridge
       return snapshot()
     },
     list: async () => ({ threads: [], unreadCount: unreadCount(), nextBefore: null }),
+    // 演示模式不弹通知
+    pending: async () => [],
+    ack: async () => {},
     get: async id => {
       const entry = find(id)
       if (entry.thread.unread) {

@@ -129,9 +129,34 @@ export class FeedbackTracker {
     return this.sinceLastPoll() >= this.pollInterval()
   }
 
+  /** 已经推给窗口、还没确认处理过的新回复（审查报告 2026-10-14）：窗口还没打开、没订阅上时推送会丢，
+   * 不能一推就记成「已提醒」。界面处理完（弹了，或者按勿扰 / 前台设置决定不弹）调 acknowledge 才记；
+   * 窗口打开时用 unacknowledged 取回没处理的 */
+  private readonly pending = new Map<string, FeedbackSummary>()
+
+  /** 还没确认处理过的新回复 */
+  unacknowledged(): FeedbackSummary[] {
+    return [...this.pending.values()]
+  }
+
+  /** 界面处理完这些新回复：记成已提醒，以后同一版本的回复不再提醒 */
+  acknowledge(ids: readonly string[]): void {
+    const email = this.current.email
+    if (!email) return
+    const entries: Record<string, number> = {}
+    for (const id of ids) {
+      const t = this.pending.get(id)
+      if (!t) continue
+      entries[id] = t.updatedAt
+      this.pending.delete(id)
+    }
+    if (Object.keys(entries).length) this.deps.store.record(email, entries)
+  }
+
   /** 登录账号变化（null 表示没登录）。换账号 / 退出登录先清空，登录后马上检查一次 */
   setAccount(email: string | null): Promise<FeedbackState> {
     if (email === this.current.email) return this.inflight ?? Promise.resolve(this.current)
+    this.pending.clear()
     this.epoch++
     this.inflight = null
     this.again = false
@@ -188,8 +213,10 @@ export class FeedbackTracker {
   private apply(email: string, list: FeedbackList): void {
     this.lastError = null
     const notified = this.deps.store.get(email)
-    // 未读的团队回复，且这个版本的回复还没提醒过
-    const fresh: FeedbackSummary[] = list.threads.filter(t => t.unread && notified[t.id] !== t.updatedAt)
+    // 未读的团队回复，且这个版本的回复还没提醒过、也没推给窗口等着处理
+    const fresh: FeedbackSummary[] = list.threads.filter(
+      t => t.unread && notified[t.id] !== t.updatedAt && this.pending.get(t.id)?.updatedAt !== t.updatedAt,
+    )
     this.current = {
       status: 'ready',
       email,
@@ -199,9 +226,9 @@ export class FeedbackTracker {
       error: null,
       checkedAt: this.now(),
     }
-    // 先推给窗口，再记下已提醒（推送过程出错不会漏提醒到记录里）
+    // 推给窗口；等界面确认处理过（acknowledge）才记成已提醒
+    for (const t of fresh) this.pending.set(t.id, t)
     this.deps.emit({ state: this.current, fresh })
-    if (fresh.length) this.deps.store.record(email, Object.fromEntries(fresh.map(t => [t.id, t.updatedAt])))
   }
 
   private fail(e: Failure): void {
