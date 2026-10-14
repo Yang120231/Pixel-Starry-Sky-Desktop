@@ -93,19 +93,32 @@ function insertPaste(v: EditorView, raw: string, plain: boolean): void {
 const menuKey = (e: KeyboardEvent): boolean => e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')
 
 const theme = EditorView.theme({
-  '&': { height: '100%', background: 'transparent', color: 'var(--text)' },
+  '&': {
+    height: '100%',
+    background: 'transparent',
+    color: 'var(--text)',
+    // 留白固定在滚动视口外，展开段滚动时也不会贴到卡片圆角或工具行。
+    padding: 'var(--ci-pt) 0 var(--ci-pb)',
+  },
   '&.cm-focused': { outline: 'none' },
-  '.cm-scroller': { fontFamily: 'inherit', lineHeight: '24px', overflowX: 'hidden' },
+  '.cm-scroller': { fontFamily: 'inherit', lineHeight: '24px', overflowX: 'hidden', minHeight: '0' },
   // 内边距用 composerInput.css 里的变量，极简模式（minimal.css）能改
   '.cm-content': {
-    padding: 'var(--ci-pt) 0 var(--ci-pb)',
+    padding: '0 calc(var(--ci-px) - 4px)',
     caretColor: 'var(--text)',
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-word',
   },
-  '.cm-line': { padding: '0 var(--ci-px)' },
+  // 横向留白在行背景外，整行的粘贴高亮不会延伸到卡片边框。
+  '.cm-line': { padding: '0 4px' },
   '.cm-placeholder': { color: 'var(--text-faint)' },
 })
+
+/** CodeMirror 的 contentHeight 不含滚动视口外的固定留白，自动增高时补回。 */
+function inputContentHeight(view: EditorView): number {
+  const style = window.getComputedStyle(view.dom)
+  return Math.ceil(view.contentHeight + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom))
+}
 
 export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function ComposerInput(props, forwarded) {
   const host = useRef<HTMLDivElement>(null)
@@ -222,7 +235,7 @@ export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function Com
           if (update.state.field(pasteField) !== update.startState.field(pasteField))
             savePastes(key, update.state.field(pasteField))
           if (update.geometryChanged || update.heightChanged || update.docChanged)
-            p.onContentHeight(Math.ceil(update.view.contentHeight))
+            p.onContentHeight(inputContentHeight(update.view))
         }),
       ],
     })
@@ -241,7 +254,7 @@ export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function Com
       annotations: Transaction.addToHistory.of(false),
     })
     registry.set(composerKey, handle)
-    latest.current.onContentHeight(Math.ceil(view.current.contentHeight))
+    latest.current.onContentHeight(inputContentHeight(view.current))
     return () => {
       if (registry.get(composerKey) === handle) registry.delete(composerKey)
     }

@@ -1,4 +1,4 @@
-/* 会话输入框的内边距（docs/ui/composer-paste-fold.md §6）；极简模式在 minimal.css 里改这几个变量 */
+/* 上下留白固定在滚动视口外，左右留白包住行背景；极简模式在 minimal.css 里改这几个变量 */
 .composer-input {
   --ci-pt: 14px;
   --ci-pb: 14px;
