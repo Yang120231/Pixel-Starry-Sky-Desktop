@@ -1,11 +1,11 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '../../../i18n/core'
-// 设置 › 模型与额度（docs/ui/source-switch.md §3.6）：新任务的默认额度来源、模型、线路；
+// 设置 › 模型与额度（docs/ui/source-switch.md §3.6）：新任务的默认引擎，各引擎的默认额度来源、模型、线路、推理强度（EngineDefaults.tsx）；
 // 平台可用线路一览；本机引擎检测结果；自定义 API 的接口（docs/ui/custom-api.md）。已开始的会话在输入框菜单里单独改。
 import type { EngineId } from '@pixelsky/protocol'
 import { useEffect, useRef, useState } from 'react'
-import { Check, LogIn, RefreshCw } from 'lucide-react'
-import { Button, EngineIcon, Segmented, Select, Spinner, Switch, cn } from '@/ui'
+import { LogIn, RefreshCw } from 'lucide-react'
+import { Button, EngineIcon, Spinner, Switch, cn } from '@/ui'
 import { useAccount } from '@/features/account/useAccount'
 import {
   billingLabel,
@@ -17,24 +17,17 @@ import {
   noRouteReason,
   platformModels,
   refreshPlatform,
-  setDefaultGroup,
-  setDefaultModel,
-  setDefaultCustom,
-  setDefaultSelfModel,
-  setDefaultSource,
   setModelHidden,
   showAllModels,
   usePlatform,
-  type CreditSource,
 } from '@/features/account/platform'
-import { isLive, selfModelOptions, useEngineState } from '@/features/engine'
-import { useEngineCatalog } from '@/features/engine/catalog'
-import { GroupTitle, SectionTitle, SettingRow } from '../SettingRow'
+import { isLive, useEngineState } from '@/features/engine'
+import { GroupTitle, SectionTitle } from '../SettingRow'
 import { takeModelsScroll } from './scroll'
 import { RequestRetrySettings } from './RequestRetrySettings'
 import { demo, isDemo } from '@/data/demo'
-import { providersFor, resolveCustomModel, useProviders } from '@/features/account/providers'
 import { CustomApiSettings } from './CustomApiSettings'
+import { EngineDefaults } from './EngineDefaults'
 import { AiCommitSettings } from './AiCommitSettings'
 import { ContextWindowInput } from './ContextWindowInput'
 import { setContextWindow, useContextWindows } from './contextWindows'
@@ -84,12 +77,8 @@ export function ModelsSection({ onOpenEngines }: { onOpenEngines?: () => void })
       setWindowError((e as Error).message),
     )
   }
-  const routes = groupsForModel(platform.groups, platform.model)
   const visibilityRef = useRef<HTMLDivElement>(null)
   const [modelQuery, setModelQuery] = useState('')
-  const claudeCatalog = useEngineCatalog('claude')
-  const endpoints = providersFor(useProviders().providers, 'claude')
-  const endpoint = endpoints.find(p => p.id === platform.providerId) ?? endpoints[0]
   useEffect(() => {
     if (takeModelsScroll()) visibilityRef.current?.scrollIntoView({ block: 'start' })
   }, [])
@@ -99,157 +88,8 @@ export function ModelsSection({ onOpenEngines }: { onOpenEngines?: () => void })
       <SectionTitle>{tr('settings.models.ModelsSection.modelsCredits')}</SectionTitle>
       <p className="-mt-2 mb-5 text-meta text-fg-muted">{tr('settings.models.ModelsSection.defaultsForNewTasks')}</p>
 
-      <SettingRow
-        title={tr('settings.models.ModelsSection.defaultCreditSource')}
-        description={tr('settings.models.ModelsSection.platformBilledThroughPixel')}
-      >
-        <Segmented<CreditSource>
-          label={tr('settings.models.ModelsSection.defaultCreditSource')}
-          value={platform.source}
-          onChange={setDefaultSource}
-          options={[
-            {
-              value: 'platform',
-              get label() {
-                return tr('session.ModelSourceMenu.platform')
-              },
-            },
-            {
-              value: 'self',
-              get label() {
-                return tr('session.ModelSourceMenu.ownAccount')
-              },
-            },
-            {
-              value: 'custom',
-              get label() {
-                return tr('customApi.source')
-              },
-            },
-          ]}
-        />
-      </SettingRow>
-
-      {platform.source === 'custom' ? (
-        <SettingRow title={tr('customApi.defaultEndpoint')} description={tr('customApi.defaultEndpointHint')}>
-          {endpoints.length === 0 ? (
-            <p className="text-meta text-fg-faint">{tr('customApi.noEndpointForEngine')}</p>
-          ) : (
-            <div className="flex max-w-lg flex-wrap gap-2">
-              <Select
-                label={tr('customApi.defaultEndpoint')}
-                className="min-w-0 flex-1"
-                value={endpoint?.id ?? ''}
-                onChange={id =>
-                  setDefaultCustom(
-                    id,
-                    resolveCustomModel(
-                      endpoints.find(p => p.id === id),
-                      platform.customModel,
-                    ),
-                  )
-                }
-                options={endpoints.map(p => ({ value: p.id, label: p.name }))}
-              />
-              <Select
-                label={tr('settings.models.ModelsSection.defaultModel')}
-                mono
-                className="min-w-0 flex-1"
-                disabled={!endpoint || endpoint.models.length === 0}
-                value={resolveCustomModel(endpoint, platform.customModel) ?? ''}
-                onChange={v => endpoint && setDefaultCustom(endpoint.id, v)}
-                options={(endpoint?.models ?? []).map(m => ({ value: m.id, label: m.id }))}
-              />
-            </div>
-          )}
-        </SettingRow>
-      ) : platform.source === 'platform' ? (
-        <>
-          <SettingRow
-            title={tr('settings.models.ModelsSection.defaultModel')}
-            description={tr('settings.models.ModelsSection.modelsFromYourAvailable')}
-          >
-            <Select
-              label={tr('settings.models.ModelsSection.defaultModel')}
-              mono
-              className="w-full max-w-sm"
-              disabled={models.length === 0}
-              value={platform.model ?? ''}
-              placeholder={
-                platform.email
-                  ? tr('settings.models.ModelsSection.noModelsAvailable')
-                  : tr('settings.models.ModelsSection.availableAfterSignIn')
-              }
-              onChange={v => setDefaultModel(v)}
-              options={models.map(m => ({ value: m, label: m }))}
-            />
-          </SettingRow>
-          <SettingRow
-            title={tr('settings.models.ModelsSection.defaultRoute')}
-            description={tr('settings.models.ModelsSection.onlyRoutesSupportingDefault')}
-          >
-            {routes.length === 0 ? (
-              <p className="text-meta text-fg-faint">
-                {platform.email
-                  ? tr('settings.models.ModelsSection.noRoutesAvailable')
-                  : tr('settings.models.ModelsSection.availableAfterSignIn')}
-              </p>
-            ) : (
-              <div
-                role="radiogroup"
-                aria-label={tr('settings.models.ModelsSection.defaultRoute')}
-                className="flex max-w-md flex-col gap-1"
-              >
-                {routes.map(g => {
-                  const selected = g.id === platform.groupId
-                  return (
-                    <button
-                      key={g.id}
-                      type="button"
-                      role="radio"
-                      aria-checked={selected}
-                      onClick={() => setDefaultGroup(g.id)}
-                      className={cn(
-                        'flex items-center gap-3 rounded-md border px-3 py-2 text-left',
-                        selected ? 'border-line-strong bg-selected' : 'border-line hover:bg-hover',
-                      )}
-                    >
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-ui text-fg">{g.name}</span>
-                        <span className="block truncate text-meta text-fg-muted">
-                          {billingLabel(g)}
-                          {g.description ? ` · ${g.description}` : ''}
-                        </span>
-                      </span>
-                      <span className="shrink-0 text-ui text-fg-secondary tabular-nums">
-                        {formatMultiplier(g.rate_multiplier)}
-                      </span>
-                      <Check size={15} className={cn('shrink-0', selected ? 'text-fg-secondary' : 'invisible')} />
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </SettingRow>
-        </>
-      ) : (
-        <SettingRow
-          title={tr('settings.models.ModelsSection.defaultModel')}
-          description={tr('settings.models.ModelsSection.claudeCodeModelAliases')}
-        >
-          <Select
-            label={tr('settings.models.ModelsSection.defaultModel')}
-            className="w-full max-w-sm"
-            value={platform.selfModel ?? ''}
-            onChange={v => setDefaultSelfModel(v || null)}
-            options={selfModelOptions('claude', claudeCatalog?.models).map(m => ({
-              value: m.value ?? '',
-              label: m.label,
-              hint: m.hint,
-            }))}
-          />
-        </SettingRow>
-      )}
+      {/* 默认引擎，和每个引擎各自的默认（docs/ui/engine-defaults.md） */}
+      <EngineDefaults onOpenEngines={onOpenEngines} />
 
       {/* 平台线路一览 */}
       <GroupTitle>{tr('session.ModelSourceMenu.platform')}</GroupTitle>

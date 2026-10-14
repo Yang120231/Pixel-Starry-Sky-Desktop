@@ -82,7 +82,21 @@ export const SETTINGS_INDEX: SearchEntry[] = [
     keywords: '同步 云端 多台电脑 换电脑 备份 偏好 sync cloud settings',
   },
 
-  { section: 'models', title: '默认额度来源', keywords: '平台 自有 额度 扣费 来源' },
+  { section: 'models', title: '默认额度来源', keywords: '平台 自有 额度 扣费 来源 codex claude 引擎' },
+  {
+    section: 'models',
+    get title() {
+      return tr('engineDefaults.defaultEngine')
+    },
+    keywords: 'codex claude engine default new task',
+  },
+  {
+    section: 'models',
+    get title() {
+      return tr('engineDefaults.effort')
+    },
+    keywords: 'codex claude effort reasoning default',
+  },
   { section: 'models', title: '默认模型', keywords: '模型 新任务 claude opus sonnet haiku' },
   { section: 'models', title: '默认线路', keywords: '线路 分组 倍率 计费' },
   { section: 'models', title: '平台', keywords: '线路 分组 倍率 余额计费 订阅额度 刷新' },
