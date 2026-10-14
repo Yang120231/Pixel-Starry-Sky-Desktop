@@ -66,7 +66,15 @@ export class ClaudeProcess {
       () => this.stderr.toString(),
       () => this.stopping,
     )
-    readJsonLines(this.child.stdout, msg => this.dispatch(msg))
+    // 处理器抛错（例如模型给的工具参数形状不对）：记日志、接着处理后面的消息，不能变成主进程未捕获异常，
+    // 也不能让同一块里后面的消息（包括本轮结束那一帧）丢掉（审查报告 2026-10-14）
+    readJsonLines(this.child.stdout, msg => {
+      try {
+        this.dispatch(msg)
+      } catch (err) {
+        log.error('处理 Claude 消息出错', { type: String(msg.type), error: (err as Error).message })
+      }
+    })
     this.exitPromise = new Promise(resolve => {
       const done = (code: number | null): void => {
         if (this.exited) return

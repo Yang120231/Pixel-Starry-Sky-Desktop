@@ -19,6 +19,9 @@ import { str } from './shape'
 export { clip }
 
 type Input = Record<string, unknown>
+/** 参数里的数组只取对象元素：模型偶尔给 null 或字符串，直接取字段会抛错（审查报告 2026-10-14） */
+const objects = (value: unknown): Input[] =>
+  Array.isArray(value) ? value.filter((v): v is Input => !!v && typeof v === 'object' && !Array.isArray(v)) : []
 
 /** 工作目录里的文件显示相对路径 */
 export function displayPath(p: string, cwd: string): string {
@@ -42,12 +45,12 @@ function fileChangesFromInput(name: string, input: Input, cwd: string): FileChan
     return [{ path, kind: 'update', newText: str(input.new_string).slice(0, MAX_OUTPUT), ...d }]
   }
   if (name === 'MultiEdit' && Array.isArray(input.edits)) {
-    const parts = (input.edits as Input[]).map(e => diffText(str(e.old_string), str(e.new_string)))
+    const parts = objects(input.edits).map(e => diffText(str(e.old_string), str(e.new_string)))
     return [
       {
         path,
         kind: 'update',
-        newText: str((input.edits as Input[])[0]?.new_string).slice(0, MAX_OUTPUT),
+        newText: str(objects(input.edits)[0]?.new_string).slice(0, MAX_OUTPUT),
         diff: parts.map(p => p.diff).join('\n'),
         added: parts.reduce((n, p) => n + p.added, 0),
         removed: parts.reduce((n, p) => n + p.removed, 0),
@@ -107,7 +110,7 @@ function toolTitle(name: string, input: Input, cwd: string): { tool: ToolKind; t
 
 function todoSteps(input: Input): TodoStep[] {
   if (!Array.isArray(input.todos)) return []
-  return (input.todos as Input[]).map(t => ({
+  return objects(input.todos).map(t => ({
     text: str(t.content) || str(t.activeForm),
     status: t.status === 'completed' ? 'completed' : t.status === 'in_progress' ? 'in_progress' : 'pending',
   }))
@@ -256,14 +259,14 @@ export function completeToolItem(
 
 function questionsFromInput(input: Input): Question[] {
   if (!Array.isArray(input.questions)) return []
-  return (input.questions as Input[]).map(q => ({
+  return objects(input.questions).map(q => ({
     question: str(q.question),
     header: str(q.header),
     multiSelect: q.multiSelect === true,
     // Claude Code 自己的界面每题都带「其他」可以自由输入，模型发问也按这个前提
     allowOther: true,
     options: Array.isArray(q.options)
-      ? (q.options as Input[]).map(o => ({ label: str(o.label), description: str(o.description) }))
+      ? objects(q.options).map(o => ({ label: str(o.label), description: str(o.description) }))
       : [],
   }))
 }

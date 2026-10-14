@@ -91,7 +91,14 @@ export class PixelProcess {
         } else if (value.type === 'response') {
           // 没有对应请求的回应（例如无法解析的命令）：不当作事件
           continue
-        } else handlers.event(value)
+        } else {
+          // 处理器抛错（例如落盘失败）：记日志、接着处理后面的消息，不能变成主进程未捕获异常（审查报告 2026-10-14）
+          try {
+            handlers.event(value)
+          } catch (err) {
+            log.error('处理 Pixel 消息出错', { type: string(value.type), error: (err as Error).message })
+          }
+        }
       }
     })
     this.exitPromise = new Promise(resolve => {
