@@ -15,6 +15,7 @@ import {
   rewriteCompaction,
 } from '@pixelsky/engine'
 import type { PlatformGroupInfo } from '../../shared/types/platform-catalog'
+import { platformModelSupportsEngine } from '../../shared/platform-models'
 import { platformFetch, signedInEmail } from '../account/account'
 import * as ipc from '../ipc/guard'
 import type { ProviderStore, ResolvedProvider } from '../core/providers/store'
@@ -63,6 +64,7 @@ export async function validateQueuedInput(record: SessionRecord, providers: Prov
   checkProvider(record, providers)
   const p = record.platform
   if (!p) return
+  if (!platformModelSupportsEngine(record.model, record.engine)) throw new Error('线路协议与当前引擎不兼容')
   if (signedInEmail() !== p.account) throw new Error('平台账号已退出或切换，请登录原账号后重试')
   const groups = await platformGroups()
   const group = groups.find(g => g.id === p.groupId)
@@ -143,6 +145,8 @@ export async function initPlatform(
   return record => {
     const provider = checkProvider(record, providers)
     if (!record.platform && !provider) return {}
+    if (record.platform && !platformModelSupportsEngine(record.model, record.engine))
+      throw new Error('线路协议与当前引擎不兼容')
     if (record.platform && signedInEmail() !== record.platform.account) throw new Error('请登录此会话使用的平台账号')
     let entry = sessions.get(record.id)
     if (!entry) {
@@ -164,6 +168,7 @@ export async function initPlatform(
       const api = pixelApi({
         protocol: provider?.protocol,
         groupPlatform: record.platform ? (groupPlatforms.get(record.platform.groupId) ?? null) : null,
+        model: record.model,
       })
       return pixelGatewayEnv({
         port: address.port,

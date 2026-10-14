@@ -7,6 +7,7 @@ import type { ResolvedProvider } from '../core/providers/store'
 import { classifyError, providerHeaders, upstreamUrl, type Fetch } from '../core/providers/upstream'
 import { chatUsage, withUsageOption } from './chat-usage'
 import { CacheUsageFix } from './usageFix'
+import { platformModelApi } from '../../shared/platform-models'
 
 const log = logger('gateway')
 
@@ -316,6 +317,12 @@ export function platformGateway(options: {
       }
 
       const platform = record.platform!
+      const api = responses ? 'responses' : 'messages'
+      const recordApi = platformModelApi(record.model)
+      if (recordApi && recordApi !== api) {
+        fail(403, '线路协议与当前引擎不兼容')
+        return
+      }
       const trackRequest = options.requestContext?.(record)
       if (responses && (!parsed.model || (record.model && parsed.model !== record.model))) {
         fail(403, '请求模型与当前平台会话不一致')
@@ -331,6 +338,11 @@ export function platformGateway(options: {
         body = await options.rewrite(body, () => options.routeModels?.(platform.groupId) ?? Promise.resolve([]))
       requestId = `pixelsky-${randomUUID()}`
       const model = String((JSON.parse(body) as { model?: string }).model ?? record.model ?? 'unknown')
+      const modelApi = platformModelApi(model)
+      if (modelApi && modelApi !== api) {
+        fail(403, '线路协议与当前引擎不兼容')
+        return
+      }
       headers.set('X-Client-Request-ID', requestId)
       // 先记下再发：记不上（SSH 断了）就不发，免得扣了费却对不上这一轮
       await trackRequest?.(requestId, model)

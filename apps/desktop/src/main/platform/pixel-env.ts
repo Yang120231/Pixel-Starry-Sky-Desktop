@@ -2,17 +2,24 @@
 // 不依赖 electron，单独测。
 import type { ProviderModel, ProviderProtocol } from '../../shared/types/providers'
 import type { PlatformGroupInfo } from '../../shared/types/platform-catalog'
+import { platformModelApi } from '../../shared/platform-models'
 
 export type PixelApi = 'anthropic-messages' | 'openai-responses' | 'openai-completions'
 
 /**
- * 会话用哪种协议：自定义 API 看接口的协议；平台线路看分组的 platform（openai → Responses，其余 Anthropic Messages）。
- * 平台分组还没读到时按 Anthropic（和以前一样）。
+ * 会话用哪种协议：自定义 API 看接口的协议；平台先看官方模型，再看分组的 platform。
+ * 模型没有命名约定、分组也还没读到时按 Anthropic（和以前一样）。
  */
-export function pixelApi(source: { protocol?: ProviderProtocol | null; groupPlatform?: string | null }): PixelApi {
+export function pixelApi(source: {
+  protocol?: ProviderProtocol | null
+  groupPlatform?: string | null
+  model?: string | null
+}): PixelApi {
   if (source.protocol === 'chat') return 'openai-completions'
   if (source.protocol === 'responses') return 'openai-responses'
   if (source.protocol === 'anthropic') return 'anthropic-messages'
+  const api = platformModelApi(source.model)
+  if (api) return api === 'responses' ? 'openai-responses' : 'anthropic-messages'
   return source.groupPlatform === 'openai' ? 'openai-responses' : 'anthropic-messages'
 }
 

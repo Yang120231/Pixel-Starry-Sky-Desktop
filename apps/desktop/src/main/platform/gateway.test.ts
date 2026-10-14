@@ -1,5 +1,5 @@
 import { once } from 'node:events'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Server } from 'node:http'
 import type { SessionRecord } from '@pixelsky/protocol'
 import { setLogSink } from '@pixelsky/engine'
@@ -11,11 +11,70 @@ afterEach(() => {
   server?.close()
 })
 describe('平台代理按引擎隔离 Responses 与 Messages', () => {
+  it.each([
+    { engine: 'claude', model: 'gpt-6.1-sol', requestModel: 'gpt-6.1-sol', path: '/v1/messages' },
+    { engine: 'claude', model: 'gpt-6-astra', requestModel: 'claude-sonnet-5-5', path: '/v1/messages' },
+    { engine: 'claude', model: 'claude-opus-5-5', requestModel: 'gpt-6-astra', path: '/v1/messages' },
+    { engine: 'codex', model: 'claude-opus-5-5', requestModel: 'claude-opus-5-5', path: '/v1/responses' },
+    { engine: 'pixel', model: 'gpt-6.1-sol', requestModel: 'gpt-6.1-sol', path: '/v1/messages' },
+  ] as const)(
+    '平台 $engine 的 $model / $requestModel 请求协议不匹配时，不记费、不转发',
+    async ({ engine, model, requestModel, path }) => {
+      const upstream = vi.fn(async () => new Response('ok'))
+      const tracked = vi.fn()
+      server = platformGateway({
+        sessions: new Map([['s', { recordId: 's', secret: 'local-secret' }]]),
+        record: () => ({ id: 's', engine, model, platform: { groupId: '2', account: 'user' } }) as SessionRecord,
+        account: () => 'user',
+        fetch: upstream,
+        requestContext: () => tracked,
+      })
+      server.listen(0, '127.0.0.1')
+      await once(server, 'listening')
+      const res = await fetch('http://127.0.0.1:' + (server.address() as { port: number }).port + path, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer local-secret' },
+        body: JSON.stringify({ model: requestModel }),
+      })
+      expect(res.status).toBe(403)
+      expect(await res.json()).toMatchObject({ error: { message: '线路协议与当前引擎不兼容' } })
+      expect(upstream).not.toHaveBeenCalled()
+      expect(tracked).not.toHaveBeenCalled()
+    },
+  )
+
+  it('压缩请求也不能把 Claude 模型改成 GPT', async () => {
+    const upstream = vi.fn(async () => new Response('ok'))
+    server = platformGateway({
+      sessions: new Map([['s', { recordId: 's', secret: 'local-secret' }]]),
+      record: () =>
+        ({
+          id: 's',
+          engine: 'claude',
+          model: 'claude-opus-5-5',
+          platform: { groupId: '2', account: 'user' },
+        }) as SessionRecord,
+      account: () => 'user',
+      fetch: upstream,
+      rewrite: async () => JSON.stringify({ model: 'gpt-6.1-sol' }),
+    })
+    server.listen(0, '127.0.0.1')
+    await once(server, 'listening')
+    const res = await fetch('http://127.0.0.1:' + (server.address() as { port: number }).port + '/v1/messages', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer local-secret' },
+      body: JSON.stringify({ model: 'claude-opus-5-5' }),
+    })
+    expect(res.status).toBe(403)
+    await res.text()
+    expect(upstream).not.toHaveBeenCalled()
+  })
+
   it('选定账号 / 模型 / 线路才转发，退出或改回自有立即失效', async () => {
     let record = {
       id: 'session',
       engine: 'codex',
-      model: 'model',
+      model: 'gpt-6.1-sol',
       platform: { groupId: '7', account: 'user' },
     } as SessionRecord
     let account: string | null = 'user'
@@ -50,7 +109,7 @@ describe('平台代理按引擎隔离 Responses 与 Messages', () => {
     server.listen(0, '127.0.0.1')
     await once(server, 'listening')
     const base = 'http://127.0.0.1:' + (server.address() as { port: number }).port
-    const send = (path = '/v1/responses', model = 'model', token = 'local-secret') =>
+    const send = (path = '/v1/responses', model = 'gpt-6.1-sol', token = 'local-secret') =>
       fetch(base + path, {
         method: 'POST',
         headers: { Authorization: 'Bearer ' + token },
@@ -60,10 +119,12 @@ describe('平台代理按引擎隔离 Responses 与 Messages', () => {
     expect(good.status).toBe(200)
     expect(good.headers.get('retry-after')).toBe('5')
     expect(await good.text()).toContain('response.completed')
-    expect(calls).toEqual([{ path: '/v1/platform/responses', group: '7', body: { model: 'model', stream: true } }])
+    expect(calls).toEqual([
+      { path: '/v1/platform/responses', group: '7', body: { model: 'gpt-6.1-sol', stream: true } },
+    ])
     expect((await send('/v1/messages')).status).toBe(403)
     expect((await send('/v1/responses', 'other')).status).toBe(403)
-    expect((await send('/v1/responses', 'model', 'invalid')).status).toBe(401)
+    expect((await send('/v1/responses', 'gpt-6.1-sol', 'invalid')).status).toBe(401)
     account = null
     expect((await send()).status).toBe(401)
     account = 'user'

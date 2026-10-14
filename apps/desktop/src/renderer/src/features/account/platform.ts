@@ -6,6 +6,7 @@ import { useEffect, useSyncExternalStore } from 'react'
 import { ENGINES, type EngineId } from '@pixelsky/protocol'
 import type { AccountState } from '../../../../shared/types/account'
 import type { PlatformGroupInfo } from '../../../../shared/types/platform-catalog'
+import { platformModelsForEngine } from '../../../../shared/platform-models'
 import { demo } from '@/data/demo'
 
 /** 额度来源：平台、自有、自定义 API（docs/ui/custom-api.md） */
@@ -202,7 +203,10 @@ function set(patch: Partial<PlatformState>, persist = false): void {
 
 export function getPlatformState(engine: EngineId = 'claude'): PlatformState {
   if (!projections[engine]) {
-    const groups = state.groups.filter(group => groupSupportsEngine(group, engine)),
+    const groups = platformModelsForEngine(
+        state.groups.filter(group => groupSupportsEngine(group, engine)),
+        engine,
+      ),
       preference = engine === 'claude' ? state : enginePreferences[engine]
     const resolved = resolvePlatform(groups, preference.groupId, preference.model)
     projections[engine] = { ...state, ...preference, groups, ...(state.loaded ? resolved : {}) }

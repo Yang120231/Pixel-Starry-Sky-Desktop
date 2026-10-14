@@ -75,6 +75,22 @@ describe('谁来执行（§2.5）', () => {
     expect(t('ds')).toEqual(['pixel'])
     expect(t('gone')).toEqual([])
   })
+  it('线路同时声明两个官方引擎时，GPT 仍只给 Codex，Claude 只给 Claude Code', () => {
+    const mixed = [
+      group('both', 'openai', ['gpt-6-astra', 'gpt-6.1-sol', 'claude-opus-5-5'], {
+        supported_engines: ['claude', 'codex'],
+        supported_apis: ['messages', 'responses'],
+      }),
+    ]
+    for (const model of ['gpt-6-astra', 'gpt-6.1-sol'])
+      expect(executorsFor({ channel: 'platform', model, providerId: null }, { groups: mixed, providers })).toEqual([
+        'codex',
+        'pixel',
+      ])
+    expect(
+      executorsFor({ channel: 'platform', model: 'claude-opus-5-5', providerId: null }, { groups: mixed, providers }),
+    ).toEqual(['claude', 'pixel'])
+  })
   it('线路只写了 Claude Code 的模型，像素星空也能跑；目录里没有的模型谁都不能跑', () => {
     const only = [group('c', 'anthropic', ['claude-haiku-5-5'], { supported_engines: ['claude'] })]
     expect(
@@ -221,6 +237,21 @@ describe('菜单（§2.3）', () => {
     )
     expect(menu[0].rows[0].pick.engine).toBe('pixel')
     expect(menu[3].rows[0].pick.engine).toBe('pixel')
+  })
+  it('GPT 的旧 Claude Code 执行者记忆失效，已开始的 Claude Code 对话不能切到 GPT', () => {
+    const platform = {
+      ...input().platform,
+      groups: [group('o', 'openai', ['gpt-6-astra', 'gpt-6.1-sol'], { supported_engines: ['claude', 'codex'] })],
+    }
+    const remembered = { 'platform:gpt-6.1-sol': 'claude' as const }
+    const menu = buildChannelMenu(input({ platform, remembered }))
+    expect(menu[0].rows.map(r => r.pick.engine)).toEqual(['codex', 'codex'])
+    expect(menu[0].rows.map(r => r.pick.options)).toEqual([
+      ['codex', 'pixel'],
+      ['codex', 'pixel'],
+    ])
+    const locked = buildChannelMenu(input({ platform, remembered, locked: 'claude' }))
+    expect(locked[0].rows.map(r => r.disabled)).toEqual(['locked', 'locked'])
   })
   it('能跑的执行者都没装：灰掉', () => {
     const menu = buildChannelMenu(input({ engines: engines({ pixel: 'missing' }) }))

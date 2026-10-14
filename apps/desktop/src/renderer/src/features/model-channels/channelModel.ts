@@ -2,6 +2,7 @@
 // 存储不变，还是「引擎 + 额度来源 + 模型 / 线路 / 接口」；这里只做两边的换算，全是纯函数。
 import type { EngineId, EngineInfo } from '@pixelsky/protocol'
 import type { ProviderProtocol, ProviderView } from '../../../../shared/types/providers'
+import { platformModelSupportsEngine } from '../../../../shared/platform-models'
 import {
   groupSupportsEngine,
   groupsForModel,
@@ -53,7 +54,7 @@ export const protocolExecutors = (p: ProviderProtocol): EngineId[] =>
 /** 官方工具排在像素星空前面 */
 const ORDER: readonly EngineId[] = ['claude', 'codex', 'pixel']
 
-/** 能跑这个模型的执行者，默认的排第一（§2.5 的表）；平台模型看包含它的线路支持哪些引擎 */
+/** 能跑这个模型的执行者，默认的排第一；平台同时核对模型协议和线路声明的引擎能力 */
 export function executorsFor(
   target: ModelTarget,
   ctx: { groups: PlatformGroup[]; providers: Pick<ProviderView, 'id' | 'protocol'>[] },
@@ -65,7 +66,7 @@ export function executorsFor(
   }
   if (!target.model) return []
   const groups = groupsForModel(ctx.groups, target.model)
-  return ORDER.filter(e => groups.some(g => groupSupportsEngine(g, e)))
+  return ORDER.filter(e => platformModelSupportsEngine(target.model, e) && groups.some(g => groupSupportsEngine(g, e)))
 }
 
 type EngineLite = Pick<EngineInfo, 'id' | 'status'>
