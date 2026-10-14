@@ -1,7 +1,7 @@
 import { translateMessage } from '../../i18n/core'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
-import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type DragEvent } from 'react'
 import {
   ChevronRight,
   Folder,
@@ -21,7 +21,7 @@ import {
 } from 'lucide-react'
 import { ActionMenu } from '@/ui/ActionMenu'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
-import { IconButton, Spinner, cn } from '@/ui'
+import { IconButton, Spinner, cn, useToast } from '@/ui'
 import { useEngineState } from '@/features/engine'
 import { isDemo, projects as demoProjects } from '@/data'
 import { useActiveWorkspace } from '@/features/editor/target'
@@ -30,6 +30,8 @@ import type { DirectoryListing, FileEntry, WorkspaceRef } from '../../../../shar
 import { demo } from '@/data/demo'
 import { requestFileHistory } from '@/features/panel/git/fileHistory'
 import { sendPathToChat } from './sendPath'
+import { dropTarget, hasFileDrag, join2, movedPath, parentOf, refKey, writeDragData } from './treeDrag'
+import type { DragOver, DragSource } from './treeDrag'
 const pathKey = (path: string): string => {
   const p = path.replaceAll('\\', '/').replace(/\/$/, '')
   return window.pixelsky?.platform === 'win32' ? p.toLowerCase() : p
@@ -44,11 +46,18 @@ const statusTone = (status: string): string =>
   status === 'M' ? 'text-warn' : status === 'D' || status === '!' ? 'text-danger' : 'text-success'
 /** 在项目根目录新建时，让折叠的 ProjectRoot 展开（detail 是 refKey） */
 const EXPAND_ROOT_EVENT = 'pixelsky:file-tree-expand-root'
+/** 移动后展开目标文件夹（detail 是 { key: refKey, path }） */
+const EXPAND_FOLDER_EVENT = 'pixelsky:file-tree-expand-folder'
+/** 停在折叠文件夹上多久自动展开 */
+const HOVER_EXPAND_MS = 600
+/** 列表上下边缘多少像素内自动滚动 */
+const SCROLL_EDGE = 24
+/** 目标文件夹那一行 / 它展开的子项整块的样式 */
+const DROP_ROW = 'bg-accent/10 outline outline-1 -outline-offset-1 outline-accent/40'
+const DROP_BLOCK = 'rounded-md bg-accent/5 outline outline-1 -outline-offset-1 outline-accent/30'
+const dropKeyOf = (ref: WorkspaceRef, folder: string): string => `${refKey(ref)}\0${folder}`
 
 // 新建 / 重命名 / 删除（docs/ui/files-search-terminal-pins.md §3）
-const refKey = (ref: WorkspaceRef): string => ref.projectId ?? ref.sessionId ?? ''
-const parentOf = (path: string): string => path.split('/').slice(0, -1).join('/')
-const join2 = (parent: string, name: string): string => (parent ? `${parent}/${name}` : name)
 const NAME_OK = (name: string): boolean => !!name && !/[\\/:*?"<>|]/.test(name) && !/[ .]$/.test(name)
 interface EditState {
   mode: 'file' | 'folder' | 'rename'
@@ -58,12 +67,85 @@ interface EditState {
   /** 重命名的原路径 */
   path?: string
 }
-const TreeOps = createContext<{
+interface TreeOpsValue {
   editing: EditState | null
   edit(next: EditState | null): void
   submit(name: string): Promise<void>
   remove(ref: WorkspaceRef, entry: FileEntry): void
-}>({ editing: null, edit: () => {}, submit: async () => {}, remove: () => {} })
+  /** 正在拖的那一项（拖动状态只在这里存一份） */
+  drag: DragSource | null
+  /** 当前高亮的目标文件夹（dropKeyOf） */
+  dropKey: string | null
+  startDrag(source: DragSource): void
+  endDrag(): void
+  hover(key: string | null): void
+  move(source: DragSource, folder: string): Promise<void>
+}
+const TreeOps = createContext<TreeOpsValue>({
+  editing: null,
+  edit: () => {},
+  submit: async () => {},
+  remove: () => {},
+  drag: null,
+  dropKey: null,
+  startDrag: () => {},
+  endDrag: () => {},
+  hover: () => {},
+  move: async () => {},
+})
+
+/** 一个可以放下的位置：算出目标文件夹、更新高亮、悬停展开、放下时移动；over 为 null 表示这里不接收 */
+function useDropProps(ops: TreeOpsValue, over: DragOver | null, expand?: () => void) {
+  const timer = useRef<number | undefined>(undefined)
+  const clear = (): void => {
+    window.clearTimeout(timer.current)
+    timer.current = undefined
+  }
+  useEffect(() => clear, [])
+  // 拖动结束（放下、取消）后不再等着展开
+  useEffect(() => {
+    if (!ops.drag) clear()
+  }, [ops.drag])
+  const target = ops.drag && over ? dropTarget(ops.drag, over) : null
+  const mine = !!ops.drag && !!over
+  return {
+    'data-drop-target': target ? target.folder : undefined,
+    onDragOver: (e: DragEvent) => {
+      if (!mine || !hasFileDrag(e.dataTransfer)) return
+      // 不管能不能放都不再往外层冒泡，否则外层（树下方空白处）会把它当成放到根目录
+      e.stopPropagation()
+      if (!target) {
+        e.dataTransfer.dropEffect = 'none'
+        clear()
+        ops.hover(null)
+        return
+      }
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'move'
+      ops.hover(dropKeyOf(ops.drag!.ref, target.folder))
+    },
+    onDragEnter: (e: DragEvent) => {
+      if (mine && expand && !timer.current && hasFileDrag(e.dataTransfer))
+        timer.current = window.setTimeout(() => {
+          timer.current = undefined
+          expand()
+        }, HOVER_EXPAND_MS)
+    },
+    onDragLeave: (e: DragEvent) => {
+      // 在行内的子元素之间移动也会触发，只有真的离开这一行才算
+      if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
+      clear()
+    },
+    onDrop: (e: DragEvent) => {
+      if (!mine || !hasFileDrag(e.dataTransfer)) return
+      e.stopPropagation()
+      e.preventDefault()
+      clear()
+      if (target) void ops.move(ops.drag!, target.folder)
+      else ops.endDrag()
+    },
+  }
+}
 
 /** 树里就地输入名称：回车确认，Esc 或离开取消；出错时留在输入框并显示原因 */
 function NameInput({ initial, depth, folder }: { initial: string; depth: number; folder: boolean }) {
@@ -214,10 +296,17 @@ export function FileTree({
     [deleting, setDeleting] = useState<{ ref: WorkspaceRef; entry: FileEntry } | null>(null),
     [deleteBusy, setDeleteBusy] = useState(false),
     [opError, setOpError] = useState('')
+  const [drag, setDrag] = useState<DragSource | null>(null),
+    [dropKey, setDropKey] = useState<string | null>(null)
+  const toast = useToast()
+  // 只记最近一次移动；之后有新的移动 / 新建 / 重命名 / 删除就作废
+  const lastMove = useRef<{ ref: WorkspaceRef; from: string; to: string } | null>(null)
+  const scroller = useRef<HTMLDivElement>(null)
   const refresh = (): void => setRevision(n => n + 1)
   const rev = revision + refreshKey
   const startEdit = (next: EditState | null): void => {
     setOpError('')
+    if (next) lastMove.current = null
     if (next && isDemo) return setOpError(tr('workspace.demoCannotModify'))
     // 在折叠的项目里新建时先展开（ProjectRoot 按这个事件展开）
     if (next && next.mode !== 'rename' && !next.parent)
@@ -228,6 +317,7 @@ export function FileTree({
     const current = editing
     if (!current) return
     const bridge = window.pixelsky!.files
+    lastMove.current = null
     if (current.mode === 'rename') {
       if (!current.path) return
       const { path } = await bridge.rename(current.ref, current.path, join2(current.parent, name))
@@ -243,6 +333,7 @@ export function FileTree({
     if (!deleting) return
     setDeleteBusy(true)
     setOpError('')
+    lastMove.current = null
     try {
       await window.pixelsky!.files.remove(deleting.ref, deleting.entry.path)
       for (const tab of openFilesUnder(deleting.ref, deleting.entry.path)) removeFile(tab.id)
@@ -260,11 +351,115 @@ export function FileTree({
     setDeleting({ ref, entry })
   }
   const single = roots.length === 1 ? rootRef(roots[0]) : null
+  const expandFolder = (ref: WorkspaceRef, folder: string): void => {
+    window.dispatchEvent(
+      new CustomEvent(folder ? EXPAND_FOLDER_EVENT : EXPAND_ROOT_EVENT, {
+        detail: folder ? { key: refKey(ref), path: folder } : refKey(ref),
+      }),
+    )
+  }
+  const endDrag = (): void => {
+    setDrag(null)
+    setDropKey(null)
+  }
+  const undoMove = async (record: { ref: WorkspaceRef; from: string; to: string }): Promise<void> => {
+    if (lastMove.current !== record)
+      return void toast(tr('workspace.undoFailed', { reason: tr('workspace.undoStale') }))
+    lastMove.current = null
+    try {
+      const { path } = await window.pixelsky!.files.rename(record.ref, record.to, record.from)
+      renameOpenFiles(record.ref, record.to, path)
+      expandFolder(record.ref, parentOf(path))
+      refresh()
+    } catch (e) {
+      toast(tr('workspace.undoFailed', { reason: translateMessage((e as Error).message) }))
+    }
+  }
+  const move = async (source: DragSource, folder: string): Promise<void> => {
+    endDrag()
+    setOpError('')
+    if (isDemo) return setOpError(tr('workspace.demoCannotModify'))
+    lastMove.current = null
+    try {
+      const { path } = await window.pixelsky!.files.rename(source.ref, source.path, movedPath(source, folder))
+      renameOpenFiles(source.ref, source.path, path)
+      const record = { ref: source.ref, from: source.path, to: path }
+      lastMove.current = record
+      expandFolder(source.ref, folder)
+      refresh()
+      toast(
+        folder
+          ? tr('workspace.moved', { name: source.name, folder })
+          : tr('workspace.movedRoot', { name: source.name }),
+        {
+          action: { label: tr('workspace.undo'), run: () => void undoMove(record) },
+        },
+      )
+    } catch (e) {
+      setOpError((e as Error).message)
+    }
+  }
+  const treeOps: TreeOpsValue = {
+    editing,
+    edit: startEdit,
+    submit,
+    remove,
+    drag,
+    dropKey,
+    startDrag: source => {
+      // 拖动开始时取消正在进行的新建 / 重命名输入
+      setEditing(null)
+      setOpError('')
+      setDrag(source)
+    },
+    endDrag,
+    hover: key => setDropKey(key),
+    move,
+  }
+  // 树下方空白处：只有一个项目时放到根目录
+  const blankDrop = useDropProps(treeOps, single ? { ref: single, kind: 'root' } : null)
+  // 拖动期间靠近列表上下边缘时自动滚动；拖动结束清理
+  const dragging = !!drag
+  useEffect(() => {
+    const el = scroller.current
+    if (!dragging || !el) return
+    let y = -1,
+      frame = 0
+    const over = (e: globalThis.DragEvent): void => {
+      y = e.clientY
+    }
+    const leave = (e: globalThis.DragEvent): void => {
+      if (!el.contains(e.relatedTarget as Node | null)) y = -1
+    }
+    const stop = (): void => setDrag(null)
+    const tick = (): void => {
+      const r = el.getBoundingClientRect()
+      if (y >= r.top && y <= r.bottom) {
+        if (y < r.top + SCROLL_EDGE) el.scrollTop -= 4 + ((r.top + SCROLL_EDGE - y) / SCROLL_EDGE) * 10
+        else if (y > r.bottom - SCROLL_EDGE) el.scrollTop += 4 + ((y - (r.bottom - SCROLL_EDGE)) / SCROLL_EDGE) * 10
+      }
+      frame = requestAnimationFrame(tick)
+    }
+    el.addEventListener('dragover', over, true)
+    el.addEventListener('dragleave', leave, true)
+    // 源元素被刷新掉时收不到它自己的 dragend，这里兜底
+    window.addEventListener('dragend', stop)
+    window.addEventListener('drop', stop)
+    frame = requestAnimationFrame(tick)
+    return () => {
+      cancelAnimationFrame(frame)
+      el.removeEventListener('dragover', over, true)
+      el.removeEventListener('dragleave', leave, true)
+      window.removeEventListener('dragend', stop)
+      window.removeEventListener('drop', stop)
+      setDropKey(null)
+    }
+  }, [dragging])
   const dirtyCount = deleting ? openFilesUnder(deleting.ref, deleting.entry.path).filter(dirtyFile).length : 0
   return (
     <TreeExpansion.Provider value={{ version: collapsed, expanded: expandAll }}>
       <TreeColors.Provider value={statusColors}>
-        <TreeOps.Provider value={{ editing, edit: startEdit, submit, remove }}>
+        <TreeOps.Provider value={treeOps}>
           <div
             data-file-tree
             className={cn(
@@ -335,7 +530,16 @@ export function FileTree({
                 {translateMessage(opError)}
               </p>
             )}
-            <div data-file-tree-scroll className="min-h-0 flex-1 overflow-auto pb-3">
+            <div
+              ref={scroller}
+              data-file-tree-scroll
+              {...blankDrop}
+              onDragLeave={e => {
+                blankDrop.onDragLeave(e)
+                if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropKey(null)
+              }}
+              className="min-h-0 flex-1 overflow-auto pb-3"
+            >
               {roots.length ? (
                 roots.map(project => (
                   <ProjectRoot
@@ -416,6 +620,7 @@ function ProjectRoot({
     ops = useContext(TreeOps)
   const [menu, setMenu] = useState<{ x: number; y: number; trigger: HTMLElement } | null>(null)
   const initial = useRef(true)
+  const headerDrop = useDropProps(ops, { ref: refTarget, kind: 'root' }, expanded ? undefined : () => setExpanded(true))
   useEffect(() => {
     if (autoOpen) setExpanded(true)
   }, [autoOpen])
@@ -495,7 +700,11 @@ function ProjectRoot({
           e.preventDefault()
           setMenu({ x: e.clientX, y: e.clientY, trigger: e.currentTarget })
         }}
-        className="flex h-9 w-full items-center gap-2 px-3 text-left text-ui text-fg hover:bg-hover"
+        {...headerDrop}
+        className={cn(
+          'flex h-9 w-full items-center gap-2 px-3 text-left text-ui text-fg hover:bg-hover',
+          ops.dropKey === dropKeyOf(refTarget, '') && DROP_ROW,
+        )}
       >
         <ChevronRight
           size={13}
@@ -573,15 +782,23 @@ function Directory({
   depth,
   revision,
   statuses,
+  linked,
 }: {
   refTarget: WorkspaceRef
   path: string
   depth: number
   revision: number
   statuses: Record<string, string>
+  linked?: boolean
 }) {
   useI18n()
-  const { editing } = useContext(TreeOps)
+  const ops = useContext(TreeOps),
+    { editing } = ops
+  // 文件夹里的空隙（空文件夹提示、行与行之间）也算放进这个文件夹
+  const drop = useDropProps(
+    ops,
+    path ? { ref: refTarget, kind: 'directory', path, linked } : { ref: refTarget, kind: 'root' },
+  )
   const creating =
     editing && editing.mode !== 'rename' && editing.parent === path && refKey(editing.ref) === refKey(refTarget)
       ? editing
@@ -619,7 +836,7 @@ function Directory({
       </p>
     )
   return (
-    <div>
+    <div {...drop} className={cn(ops.dropKey === dropKeyOf(refTarget, path) && DROP_BLOCK)}>
       {creating && <NameInput key={creating.mode} initial="" depth={depth} folder={creating.mode === 'folder'} />}
       {list.entries.map(entry => (
         <FileRow
@@ -718,6 +935,29 @@ function FileRow({
     else if (r.bottom > bounds.bottom) list.scrollTop += r.bottom - bounds.bottom
   }, [active?.path, sameRef, entry.path])
   const Icon = entry.kind === 'directory' ? (expanded ? FolderOpen : Folder) : File
+  // 过滤结果是平铺的：结果里的文件行不接收，文件夹行只放不展开
+  const dropOver: DragOver | null =
+    entry.kind === 'directory'
+      ? { ref: refTarget, kind: 'directory', path: entry.path, linked: entry.linked }
+      : showPath
+        ? null
+        : { ref: refTarget, kind: 'file', path: entry.path }
+  const canHoverExpand = entry.kind === 'directory' && !entry.linked && !expanded && !showPath
+  const rowDrop = useDropProps(ops, dropOver, canHoverExpand ? () => setExpanded(true) : undefined)
+  const dragged = !!ops.drag && refKey(ops.drag.ref) === refKey(refTarget) && ops.drag.path === entry.path
+  useEffect(() => {
+    const open = (e: Event): void => {
+      const detail = (e as CustomEvent<{ key: string; path: string }>).detail
+      if (
+        entry.kind === 'directory' &&
+        detail.key === refKey(refTarget) &&
+        (detail.path === entry.path || detail.path.startsWith(entry.path + '/'))
+      )
+        setExpanded(true)
+    }
+    window.addEventListener(EXPAND_FOLDER_EVENT, open)
+    return () => window.removeEventListener(EXPAND_FOLDER_EVENT, open)
+  }, [entry.path, entry.kind, refTarget.projectId, refTarget.sessionId])
   return (
     <div>
       {renaming ? (
@@ -725,6 +965,14 @@ function FileRow({
       ) : (
         <div
           ref={row}
+          draggable
+          onDragStart={e => {
+            const source: DragSource = { ref: refTarget, path: entry.path, kind: entry.kind, name: entry.name }
+            writeDragData(e.dataTransfer, source)
+            ops.startDrag(source)
+          }}
+          onDragEnd={ops.endDrag}
+          {...rowDrop}
           onContextMenu={e => {
             e.preventDefault()
             setMenu({ x: e.clientX, y: e.clientY, trigger: e.currentTarget.querySelector('button')! })
@@ -732,6 +980,8 @@ function FileRow({
           className={cn(
             'group/file flex min-w-0 items-center rounded-md pr-2 hover:bg-hover',
             active?.path === entry.path && sameRef && 'bg-selected',
+            dragged && 'opacity-50',
+            entry.kind === 'directory' && ops.dropKey === dropKeyOf(refTarget, entry.path) && DROP_ROW,
           )}
           style={{ paddingLeft: 10 + Math.min(depth, 20) * 12 }}
         >
@@ -801,7 +1051,14 @@ function FileRow({
         </p>
       )}
       {expanded && (
-        <Directory refTarget={refTarget} path={entry.path} depth={depth + 1} revision={revision} statuses={statuses} />
+        <Directory
+          refTarget={refTarget}
+          path={entry.path}
+          depth={depth + 1}
+          revision={revision}
+          statuses={statuses}
+          linked={entry.linked}
+        />
       )}
       {menu && (
         <ActionMenu

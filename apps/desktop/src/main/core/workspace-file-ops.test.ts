@@ -57,6 +57,20 @@ describe('文件新建 / 重命名 / 删除', () => {
     await expect(service.rename(ref, 'src', 'src/inner')).rejects.toThrow('files.outsideProject')
     expect(await service.rename(ref, 'b.ts', 'B.ts')).toEqual({ path: 'B.ts' })
   })
+  it('拖动移动：移到子文件夹成功，移进自己的子文件夹和同名目标被拒', async () => {
+    await mkdir(join(root, 'docs', 'sub'), { recursive: true })
+    await mkdir(join(root, 'other'))
+    await writeFile(join(root, 'note.md'), 'n')
+    await writeFile(join(root, 'docs', 'note.md'), 'old')
+    expect(await service.rename(ref, 'other', 'docs/sub/other')).toEqual({ path: 'docs/sub/other' })
+    expect(await exists(join(root, 'docs', 'sub', 'other'))).toBe(true)
+    await expect(service.rename(ref, 'docs', 'docs/sub/docs')).rejects.toThrow('files.outsideProject')
+    await expect(service.rename(ref, 'note.md', 'docs/note.md')).rejects.toThrow('files.exists')
+    expect(await readFile(join(root, 'docs', 'note.md'), 'utf8')).toBe('old')
+    expect(await readFile(join(root, 'note.md'), 'utf8')).toBe('n')
+    // 撤销：再移回根目录
+    expect(await service.rename(ref, 'docs/sub/other', 'other')).toEqual({ path: 'other' })
+  })
   it('删除走回收站回调，删的是链接本身而不是项目外的目标', async () => {
     await mkdir(join(folder, 'outside'))
     await writeFile(join(folder, 'outside', 'keep.txt'), 'keep')

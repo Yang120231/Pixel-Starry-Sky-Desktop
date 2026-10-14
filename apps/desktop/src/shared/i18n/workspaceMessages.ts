@@ -62,4 +62,9 @@ export const workspaceMessages = {
   'workspace.deleting': { zh: '删除中…', en: 'Deleting…' },
   'workspace.cancel': { zh: '取消', en: 'Cancel' },
   'workspace.demoCannotModify': { zh: '演示模式不能修改文件', en: 'Files can’t be changed in demo mode' },
+  'workspace.moved': { zh: '已把 {name} 移到 {folder}', en: 'Moved {name} to {folder}' },
+  'workspace.movedRoot': { zh: '已把 {name} 移到项目根目录', en: 'Moved {name} to the project root' },
+  'workspace.undo': { zh: '撤销', en: 'Undo' },
+  'workspace.undoStale': { zh: '之后又改动过文件', en: 'Files were changed afterwards' },
+  'workspace.undoFailed': { zh: '撤销失败：{reason}', en: 'Undo failed: {reason}' },
 } as const

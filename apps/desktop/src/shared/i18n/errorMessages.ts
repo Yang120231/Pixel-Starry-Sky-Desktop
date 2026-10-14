@@ -19,6 +19,14 @@ export const errorMessages = {
   'errors.files.parentMissing': { zh: '上级文件夹不存在', en: 'The parent folder doesn’t exist' },
   'errors.files.projectRoot': { zh: '不能修改项目根目录本身', en: 'The project folder itself can’t be changed' },
   'errors.files.trashFailed': { zh: '没能移到回收站：{reason}', en: 'Couldn’t move to the trash: {reason}' },
+  'errors.files.busy': {
+    zh: '{name} 被别的程序占用，关掉后再试',
+    en: '{name} is in use by another program. Close it and try again',
+  },
+  'errors.files.crossDevice': {
+    zh: '不能移到另一个磁盘上的位置',
+    en: 'Can’t move to a location on another disk',
+  },
   'errors.files.queryInvalid': { zh: '搜索内容为空或太长', en: 'The search text is empty or too long' },
   'errors.terminal.scriptNotFound': { zh: '找不到脚本：{name}', en: 'Script not found: {name}' },
   'errors.terminal.commandInvalid': { zh: '要运行的命令不正确', en: 'The command to run is invalid' },

@@ -212,7 +212,15 @@ export class WorkspaceFiles {
     // 不能把文件夹移进它自己里面（只改大小写时 Windows 的路径比较会把两者当成同一个，跳过这个检查）
     const caseOnly = target.path.toLowerCase() === source.path.toLowerCase()
     if (!caseOnly && inside(source.path, target.path)) throw codedError('files.outsideProject')
-    await rename(source.path, target.path)
+    try {
+      await rename(source.path, target.path)
+    } catch (err) {
+      // Windows 上文件被别的程序占着会报 EBUSY / EPERM；目标在另一个盘上报 EXDEV
+      const code = (err as NodeJS.ErrnoException).code
+      if (code === 'EBUSY' || code === 'EPERM') throw codedError('files.busy', { name: basename(source.path) })
+      if (code === 'EXDEV') throw codedError('files.crossDevice')
+      throw err
+    }
     return { path: relativeTo(target.root, target.path) }
   }
 
