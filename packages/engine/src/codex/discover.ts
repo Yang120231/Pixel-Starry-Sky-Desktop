@@ -6,6 +6,7 @@ import type { Launcher } from '../adapter'
 import { isFile, resolveCommand, run, versionAtLeast } from '../exec'
 import { globalNpm } from './update'
 import { engineBase } from '../registry'
+import { keepInWsl, windowsOnlyNote, type WslOpts } from '../wsl'
 
 /** app-server 协议仍是实验接口，0.160.0 是实测通过的下限 */
 export const CODEX_MIN_VERSION = '0.160.0'
@@ -75,15 +76,20 @@ export function customCodex(command: string, env: NodeJS.ProcessEnv): { path: st
 export async function discoverCodex(
   override: string | null,
   env: NodeJS.ProcessEnv,
+  wsl: WslOpts = {},
 ): Promise<{ info: EngineInfo; launcher: Launcher | null }> {
   const base = { ...engineBase('codex'), launch: override ? ('custom' as const) : ('stock' as const) }
   const custom = override ? customCodex(override, env) : null
   if (custom && 'error' in custom)
     return { info: { ...base, status: 'missing', version: null, path: null, message: custom.error }, launcher: null }
+  const skipped: string[] = []
+  const keep = (p: string) => keepInWsl(p, env, skipped, wsl)
+  // PIXELSKY_CODEX_BIN 是用户明确指定的，不做 WSL 过滤
+  const explicit = !custom && env.PIXELSKY_CODEX_BIN ? codexExecutable(env.PIXELSKY_CODEX_BIN) : null
   const path = custom
     ? custom.path
-    : [
-        env.PIXELSKY_CODEX_BIN,
+    : (explicit ??
+      [
         ...(env.PATH ?? env.Path ?? '')
           .split(delimiter)
           .flatMap(dir => ['codex.exe', 'codex.cmd', 'codex'].map(name => join(dir.replace(/^"|"$/g, ''), name))),
@@ -101,8 +107,11 @@ export async function discoverCodex(
             ]),
       ]
         .filter((v): v is string => !!v)
+        .filter(keep)
         .map(codexExecutable)
-        .find(Boolean)
+        // 垫片可能解析到 /mnt 下的原生程序，解析后要再检查一次
+        .find(p => !!p && keep(p)))
+  const note = windowsOnlyNote(skipped)
   if (!path)
     return {
       info: {
@@ -111,7 +120,7 @@ export async function discoverCodex(
         version: null,
         path: null,
         installable: !override && globalNpm(env) !== null,
-        message: 'Codex executable not found. Install Codex CLI or choose its path.',
+        message: 'Codex executable not found. Install Codex CLI or choose its path.' + (note ? ` (${note})` : ''),
       },
       launcher: null,
     }

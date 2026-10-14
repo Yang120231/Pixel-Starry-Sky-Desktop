@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path'
 import { codedError, type EngineInfo } from '@pixelsky/protocol'
 import type { Launcher } from '../adapter'
 import { engineBase } from '../registry'
+import { allOnPath, inWsl, keepInWsl, windowsOnlyNote, type WslOpts } from '../wsl'
 import { IS_WINDOWS, dirsOnPath, findOnPath, isFile, resolveCommand, run, versionAtLeast } from '../exec'
 
 /** 用到的参数（--permission-prompt-tool stdio、--effort、control 协议的 apply_flag_settings 等）在这个版本之后都有 */
@@ -23,11 +24,12 @@ export interface ClaudeDiscovery {
  * 自带程序，按顺序找：PIXELSKY_CLAUDE_BIN → PATH → 官方安装器位置 → npm 全局安装。
  * Windows 上只直接启动 .exe；找到 npm 的 .cmd 垫片时，改用 node 跑包里的 cli.js（不经过 cmd.exe，参数不会被弄坏）。
  */
-export function findClaude(env: NodeJS.ProcessEnv): Launcher | null {
+export function findClaude(env: NodeJS.ProcessEnv, skipped?: string[], wsl: WslOpts = {}): Launcher | null {
   const home = homedir()
+  // PIXELSKY_CLAUDE_BIN 是用户明确指定的，和 customClaude 一样不做 WSL 过滤
+  const explicit = env.PIXELSKY_CLAUDE_BIN
   const exeCandidates = [
-    env.PIXELSKY_CLAUDE_BIN,
-    findOnPath(EXE, env),
+    ...(inWsl(env, wsl.platform) ? allOnPath(EXE, env) : [findOnPath(EXE, env)]),
     join(home, '.local', 'bin', EXE),
     join(home, '.claude', 'local', EXE),
     IS_WINDOWS && env.APPDATA
@@ -38,7 +40,10 @@ export function findClaude(env: NodeJS.ProcessEnv): Launcher | null {
       ? []
       : ['/opt/homebrew/bin/claude', '/usr/local/bin/claude', join(home, '.npm-global', 'bin', 'claude')]),
   ]
+  if (explicit && isNative(explicit) && !/\.(cmd|bat|ps1)$/i.test(explicit)) return { command: explicit, args: [] }
   for (const p of exeCandidates) {
+    // WSL 里不用 Windows 版
+    if (p && !keepInWsl(p, env, skipped, wsl)) continue
     if (p && isNative(p) && !/\.(cmd|bat|ps1)$/i.test(p)) return { command: p, args: [] }
   }
   return IS_WINDOWS ? npmOnPath(env) : null
@@ -132,7 +137,11 @@ function base(launch: EngineInfo['launch']): Omit<EngineInfo, 'status' | 'versio
 }
 
 /** command 为用户替换的命令，null 用自带程序 */
-export async function discoverClaude(command: string | null, env: NodeJS.ProcessEnv): Promise<ClaudeDiscovery> {
+export async function discoverClaude(
+  command: string | null,
+  env: NodeJS.ProcessEnv,
+  wsl: WslOpts = {},
+): Promise<ClaudeDiscovery> {
   const custom = command ? customClaude(command, env) : null
   const launch = custom ? 'custom' : 'stock'
   if (custom && 'error' in custom)
@@ -141,7 +150,9 @@ export async function discoverClaude(command: string | null, env: NodeJS.Process
       projectsDir: null,
       info: { ...base(launch), status: 'missing', version: null, path: null, message: custom.error },
     }
-  const launcher = custom ? custom.launcher : findClaude(env)
+  const skipped: string[] = []
+  const launcher = custom ? custom.launcher : findClaude(env, skipped, wsl)
+  const note = windowsOnlyNote(skipped)
   if (!launcher) {
     return {
       launcher: null,
@@ -152,9 +163,11 @@ export async function discoverClaude(command: string | null, env: NodeJS.Process
         version: null,
         path: null,
         installable: !custom && claudeInstaller(env) !== null,
-        message: IS_WINDOWS
-          ? '没找到 Claude Code。安装：在 PowerShell 运行 irm https://claude.ai/install.ps1 | iex'
-          : '没找到 Claude Code。安装：在终端运行 curl -fsSL https://claude.ai/install.sh | bash',
+        message:
+          (IS_WINDOWS
+            ? '没找到 Claude Code。安装：在 PowerShell 运行 irm https://claude.ai/install.ps1 | iex'
+            : '没找到 Claude Code。安装：在终端运行 curl -fsSL https://claude.ai/install.sh | bash') +
+          (note ? `（${note}）` : ''),
       },
     }
   }
