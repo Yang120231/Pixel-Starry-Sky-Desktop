@@ -121,7 +121,7 @@ beforeEach(async () => {
 })
 afterEach(async () => {
   for (const c of opened) await c.dispose()
-  await rm(dir, { recursive: true, force: true })
+  await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 describe('协作频道：派活', () => {

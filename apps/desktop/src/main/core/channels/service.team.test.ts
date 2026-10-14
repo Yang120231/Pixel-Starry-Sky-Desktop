@@ -104,7 +104,8 @@ beforeEach(async () => {
 })
 afterEach(async () => {
   for (const c of opened) await c.dispose()
-  await rm(dir, { recursive: true, force: true })
+  // 关掉后还可能有一笔写盘没落完（runs.json 原子替换），Windows 上删目录会碰到 ENOTEMPTY / EBUSY：重试几次
+  await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 describe('协作频道 Phase C：快照合并', () => {
