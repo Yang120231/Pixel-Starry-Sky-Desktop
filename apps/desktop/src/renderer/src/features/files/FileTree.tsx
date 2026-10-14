@@ -18,8 +18,10 @@ import {
   Pencil,
   Trash2,
   MessageSquareShare,
+  Scissors,
+  ClipboardPaste,
 } from 'lucide-react'
-import { ActionMenu } from '@/ui/ActionMenu'
+import { ActionMenu, type MenuAction } from '@/ui/ActionMenu'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
 import { IconButton, Spinner, cn, useToast } from '@/ui'
 import { useEngineState } from '@/features/engine'
@@ -30,7 +32,7 @@ import type { DirectoryListing, FileEntry, WorkspaceRef } from '../../../../shar
 import { demo } from '@/data/demo'
 import { requestFileHistory } from '@/features/panel/git/fileHistory'
 import { sendPathToChat } from './sendPath'
-import { dropTarget, hasFileDrag, join2, movedPath, parentOf, refKey, writeDragData } from './treeDrag'
+import { cutPasteKeys, dropTarget, hasFileDrag, join2, movedPath, parentOf, refKey, writeDragData } from './treeDrag'
 import type { DragOver, DragSource } from './treeDrag'
 const pathKey = (path: string): string => {
   const p = path.replaceAll('\\', '/').replace(/\/$/, '')
@@ -48,6 +50,24 @@ const statusTone = (status: string): string =>
 const EXPAND_ROOT_EVENT = 'pixelsky:file-tree-expand-root'
 /** 移动后展开目标文件夹（detail 是 { key: refKey, path }） */
 const EXPAND_FOLDER_EVENT = 'pixelsky:file-tree-expand-folder'
+/**
+ * 移动 / 粘贴后要展开的目标文件夹（「项目 key + 换行 + 路径」）。移动后整棵树重新读目录、行会重新挂载，
+ * 只发展开事件的话新挂载的行收不到；行挂载时看这里，自己或子孙在里面就展开（自己那条用掉就删）
+ */
+const pendingExpand = new Set<string>()
+function takePendingExpand(ref: WorkspaceRef, path: string): boolean {
+  const prefix = refKey(ref) + '\n'
+  let hit = false
+  for (const item of pendingExpand) {
+    if (!item.startsWith(prefix)) continue
+    const target = item.slice(prefix.length)
+    if (target === path) {
+      pendingExpand.delete(item)
+      hit = true
+    } else if (target.startsWith(path + '/')) hit = true
+  }
+  return hit
+}
 /** 停在折叠文件夹上多久自动展开 */
 const HOVER_EXPAND_MS = 600
 /** 列表上下边缘多少像素内自动滚动 */
@@ -79,7 +99,13 @@ interface TreeOpsValue {
   startDrag(source: DragSource): void
   endDrag(): void
   hover(key: string | null): void
-  move(source: DragSource, folder: string): Promise<void>
+  /** 移动成功返回 true（拖动放下、粘贴共用） */
+  move(source: DragSource, folder: string): Promise<boolean>
+  /** 剪切的那一项（docs/ui/file-tree-drag-move.md：拖动之外的键盘 / 右键做法），粘贴后清掉 */
+  cut: DragSource | null
+  setCut(source: DragSource | null): void
+  /** 粘贴到这里：和拖动放下同一套规则（dropTarget）、同一个移动和撤销 */
+  paste(over: DragOver): void
 }
 const TreeOps = createContext<TreeOpsValue>({
   editing: null,
@@ -91,8 +117,26 @@ const TreeOps = createContext<TreeOpsValue>({
   startDrag: () => {},
   endDrag: () => {},
   hover: () => {},
-  move: async () => {},
+  move: async () => false,
+  cut: null,
+  setCut: () => {},
+  paste: () => {},
 })
+
+/** 右键菜单的「粘贴到这里」：有剪切的东西才出现，这里放不下时灰掉并说明 */
+function pasteAction(ops: TreeOpsValue, over: DragOver): MenuAction[] {
+  if (!ops.cut) return []
+  const ok = !!dropTarget(ops.cut, over)
+  return [
+    {
+      label: tr('workspace.pasteHere', { name: ops.cut.name }),
+      icon: ClipboardPaste,
+      disabled: !ok,
+      title: ok ? undefined : tr('workspace.cannotPasteHere'),
+      run: () => ops.paste(over),
+    },
+  ]
+}
 
 /** 一个可以放下的位置：算出目标文件夹、更新高亮、悬停展开、放下时移动；over 为 null 表示这里不接收 */
 function useDropProps(ops: TreeOpsValue, over: DragOver | null, expand?: () => void) {
@@ -297,7 +341,8 @@ export function FileTree({
     [deleteBusy, setDeleteBusy] = useState(false),
     [opError, setOpError] = useState('')
   const [drag, setDrag] = useState<DragSource | null>(null),
-    [dropKey, setDropKey] = useState<string | null>(null)
+    [dropKey, setDropKey] = useState<string | null>(null),
+    [cut, setCut] = useState<DragSource | null>(null)
   const toast = useToast()
   // 只记最近一次移动；之后有新的移动 / 新建 / 重命名 / 删除就作废
   const lastMove = useRef<{ ref: WorkspaceRef; from: string; to: string } | null>(null)
@@ -352,6 +397,10 @@ export function FileTree({
   }
   const single = roots.length === 1 ? rootRef(roots[0]) : null
   const expandFolder = (ref: WorkspaceRef, folder: string): void => {
+    if (folder) {
+      if (pendingExpand.size > 50) pendingExpand.clear()
+      pendingExpand.add(refKey(ref) + '\n' + folder)
+    }
     window.dispatchEvent(
       new CustomEvent(folder ? EXPAND_FOLDER_EVENT : EXPAND_ROOT_EVENT, {
         detail: folder ? { key: refKey(ref), path: folder } : refKey(ref),
@@ -375,10 +424,13 @@ export function FileTree({
       toast(tr('workspace.undoFailed', { reason: translateMessage((e as Error).message) }))
     }
   }
-  const move = async (source: DragSource, folder: string): Promise<void> => {
+  const move = async (source: DragSource, folder: string): Promise<boolean> => {
     endDrag()
     setOpError('')
-    if (isDemo) return setOpError(tr('workspace.demoCannotModify'))
+    if (isDemo) {
+      setOpError(tr('workspace.demoCannotModify'))
+      return false
+    }
     lastMove.current = null
     try {
       const { path } = await window.pixelsky!.files.rename(source.ref, source.path, movedPath(source, folder))
@@ -395,9 +447,21 @@ export function FileTree({
           action: { label: tr('workspace.undo'), run: () => void undoMove(record) },
         },
       )
+      return true
     } catch (e) {
       setOpError((e as Error).message)
+      return false
     }
+  }
+  const paste = (over: DragOver): void => {
+    if (!cut) return
+    const target = dropTarget(cut, over)
+    if (!target) return void toast(tr('workspace.cannotPasteHere'))
+    const source = cut
+    void move(source, target.folder).then(moved => {
+      // 移动成功，或者那一项已经不在了（别处删掉 / 改名），剪切都作废
+      if (moved) setCut(current => (current === source ? null : current))
+    })
   }
   const treeOps: TreeOpsValue = {
     editing,
@@ -415,6 +479,13 @@ export function FileTree({
     endDrag,
     hover: key => setDropKey(key),
     move,
+    cut,
+    setCut: source => {
+      setOpError('')
+      setCut(source)
+      if (source) toast(tr('workspace.cutDone', { name: source.name }))
+    },
+    paste,
   }
   // 树下方空白处：只有一个项目时放到根目录
   const blankDrop = useDropProps(treeOps, single ? { ref: single, kind: 'root' } : null)
@@ -700,6 +771,7 @@ function ProjectRoot({
           e.preventDefault()
           setMenu({ x: e.clientX, y: e.clientY, trigger: e.currentTarget })
         }}
+        onKeyDown={e => cutPasteKeys(e.nativeEvent, ops, null, { ref: refTarget, kind: 'root' })}
         {...headerDrop}
         className={cn(
           'flex h-9 w-full items-center gap-2 px-3 text-left text-ui text-fg hover:bg-hover',
@@ -769,6 +841,7 @@ function ProjectRoot({
               icon: FolderPlus,
               run: () => ops.edit({ mode: 'folder', ref: refTarget, parent: '' }),
             },
+            ...pasteAction(ops, { ref: refTarget, kind: 'root' }),
           ]}
         />
       )}
@@ -877,7 +950,9 @@ function FileRow({
   const expansion = useContext(TreeExpansion)
   const vscode = useContext(TreeColors) === 'vscode'
   const [expanded, setExpanded] = useState(
-      expansion.expanded && entry.kind === 'directory' && !entry.linked && depth < 20,
+      () =>
+        (expansion.expanded && entry.kind === 'directory' && !entry.linked && depth < 20) ||
+        (entry.kind === 'directory' && takePendingExpand(refTarget, entry.path)),
     ),
     [error, setError] = useState('')
   const [menu, setMenu] = useState<{ x: number; y: number; trigger: HTMLElement } | null>(null)
@@ -945,6 +1020,8 @@ function FileRow({
   const canHoverExpand = entry.kind === 'directory' && !entry.linked && !expanded && !showPath
   const rowDrop = useDropProps(ops, dropOver, canHoverExpand ? () => setExpanded(true) : undefined)
   const dragged = !!ops.drag && refKey(ops.drag.ref) === refKey(refTarget) && ops.drag.path === entry.path
+  const cutting = !!ops.cut && refKey(ops.cut.ref) === refKey(refTarget) && ops.cut.path === entry.path
+  const source: DragSource = { ref: refTarget, path: entry.path, kind: entry.kind, name: entry.name }
   useEffect(() => {
     const open = (e: Event): void => {
       const detail = (e as CustomEvent<{ key: string; path: string }>).detail
@@ -967,11 +1044,11 @@ function FileRow({
           ref={row}
           draggable
           onDragStart={e => {
-            const source: DragSource = { ref: refTarget, path: entry.path, kind: entry.kind, name: entry.name }
             writeDragData(e.dataTransfer, source)
             ops.startDrag(source)
           }}
           onDragEnd={ops.endDrag}
+          onKeyDown={e => cutPasteKeys(e.nativeEvent, ops, source, dropOver)}
           {...rowDrop}
           onContextMenu={e => {
             e.preventDefault()
@@ -980,7 +1057,7 @@ function FileRow({
           className={cn(
             'group/file flex min-w-0 items-center rounded-md pr-2 hover:bg-hover',
             active?.path === entry.path && sameRef && 'bg-selected',
-            dragged && 'opacity-50',
+            (dragged || cutting) && 'opacity-50',
             entry.kind === 'directory' && ops.dropKey === dropKeyOf(refTarget, entry.path) && DROP_ROW,
           )}
           style={{ paddingLeft: 10 + Math.min(depth, 20) * 12 }}
@@ -1094,11 +1171,17 @@ function FileRow({
                   },
                 ]
               : []),
+            ...(entry.kind === 'directory' && dropOver ? pasteAction(ops, dropOver) : []),
             {
               label: tr('workspace.renameEntry'),
               icon: Pencil,
               separator: entry.kind !== 'directory',
               run: () => ops.edit({ mode: 'rename', ref: refTarget, parent: parentOf(entry.path), path: entry.path }),
+            },
+            {
+              label: tr('workspace.cut'),
+              icon: Scissors,
+              run: () => ops.setCut(source),
             },
             {
               label: tr('workspace.deleteEntry'),

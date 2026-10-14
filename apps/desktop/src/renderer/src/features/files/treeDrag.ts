@@ -49,3 +49,36 @@ export function writeDragData(data: DataTransfer, source: DragSource): void {
 }
 
 export const hasFileDrag = (data: DataTransfer): boolean => data.types.includes(FILE_DRAG_TYPE)
+
+/** 剪切 / 粘贴要用到的树操作（FileTree 的 TreeOps 里的一部分） */
+export interface CutPasteOps {
+  cut: DragSource | null
+  setCut(source: DragSource | null): void
+  paste(over: DragOver): void
+}
+
+/** 只用到的按键字段，测试里直接传对象 */
+type KeyLike = Pick<
+  KeyboardEvent,
+  'key' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'altKey' | 'preventDefault' | 'stopPropagation'
+>
+
+/**
+ * 剪切 / 粘贴的快捷键（焦点在树的某一行上时）：Ctrl+X 剪切这一项，Ctrl+V 粘贴到这里（文件行等于它所在的文件夹），
+ * Esc 取消剪切。source 为 null 的行（项目名）不能剪切；over 为 null 的行（过滤结果里的文件）不能粘贴
+ */
+export function cutPasteKeys(e: KeyLike, ops: CutPasteOps, source: DragSource | null, over: DragOver | null): void {
+  const mod = (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey
+  const key = e.key.toLowerCase()
+  if (mod && key === 'x' && source) {
+    e.preventDefault()
+    ops.setCut(source)
+  } else if (mod && key === 'v' && ops.cut && over) {
+    e.preventDefault()
+    ops.paste(over)
+  } else if (e.key === 'Escape' && ops.cut) {
+    e.preventDefault()
+    e.stopPropagation()
+    ops.setCut(null)
+  }
+}

@@ -65,6 +65,16 @@ export const workspaceMessages = {
   'workspace.moved': { zh: '已把 {name} 移到 {folder}', en: 'Moved {name} to {folder}' },
   'workspace.movedRoot': { zh: '已把 {name} 移到项目根目录', en: 'Moved {name} to the project root' },
   'workspace.undo': { zh: '撤销', en: 'Undo' },
+  'workspace.cut': { zh: '剪切', en: 'Cut' },
+  'workspace.cutDone': {
+    zh: '已剪切 {name}：在目标文件夹上按 Ctrl+V，或右键「粘贴到这里」；Esc 取消',
+    en: 'Cut {name}: press Ctrl+V on the target folder, or right-click › Paste here; Esc to cancel',
+  },
+  'workspace.pasteHere': { zh: '粘贴到这里（{name}）', en: 'Paste here ({name})' },
+  'workspace.cannotPasteHere': {
+    zh: '不能粘贴到这里：已经在这个文件夹里、是它自己的子文件夹，或者在别的项目里',
+    en: "Can't paste here: it's already in this folder, inside itself, or in another project",
+  },
   'workspace.undoStale': { zh: '之后又改动过文件', en: 'Files were changed afterwards' },
   'workspace.undoFailed': { zh: '撤销失败：{reason}', en: 'Undo failed: {reason}' },
 } as const

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dropTarget, movedPath, type DragSource } from './treeDrag'
+import { cutPasteKeys, dropTarget, movedPath, type CutPasteOps, type DragOver, type DragSource } from './treeDrag'
 
 const ref = { projectId: 'p1' }
 const file = (path: string): DragSource => ({ ref, path, kind: 'file', name: path.split('/').pop()! })
@@ -46,5 +46,57 @@ describe('movedPath', () => {
   it('拼出新路径', () => {
     expect(movedPath(file('a/b.md'), 'docs')).toBe('docs/b.md')
     expect(movedPath(dir('a/src'), '')).toBe('src')
+  })
+})
+
+describe('cutPasteKeys', () => {
+  const key = (k: string, mods: { ctrl?: boolean; meta?: boolean; shift?: boolean } = {}) => {
+    const e = {
+      key: k,
+      ctrlKey: !!mods.ctrl,
+      metaKey: !!mods.meta,
+      shiftKey: !!mods.shift,
+      altKey: false,
+      prevented: false,
+      preventDefault() {
+        e.prevented = true
+      },
+      stopPropagation() {},
+    }
+    return e
+  }
+  const ops = (cut: DragSource | null = null) => {
+    const calls: { cut: (DragSource | null)[]; paste: DragOver[] } = { cut: [], paste: [] }
+    const value: CutPasteOps = { cut, setCut: s => calls.cut.push(s), paste: o => calls.paste.push(o) }
+    return { value, calls }
+  }
+
+  it('Ctrl+X / ⌘X 剪切这一行；项目名行（没有 source）不剪切', () => {
+    const o = ops()
+    const e = key('x', { ctrl: true })
+    cutPasteKeys(e, o.value, file('a.ts'), onFile('a.ts'))
+    cutPasteKeys(key('X', { meta: true }), o.value, dir('src'), onDir('src'))
+    cutPasteKeys(key('x', { ctrl: true }), o.value, null, { ref, kind: 'root' })
+    expect(o.calls.cut.map(c => c?.path)).toEqual(['a.ts', 'src'])
+    expect(e.prevented).toBe(true)
+  })
+
+  it('Ctrl+V 只在剪切过、这一行能放时粘贴；没剪切时不拦（交给别的处理）', () => {
+    const none = ops()
+    const e = key('v', { ctrl: true })
+    cutPasteKeys(e, none.value, file('a.ts'), onFile('a.ts'))
+    expect(none.calls.paste).toEqual([])
+    expect(e.prevented).toBe(false)
+    const some = ops(file('a.ts'))
+    cutPasteKeys(key('v', { ctrl: true }), some.value, dir('src'), onDir('src'))
+    cutPasteKeys(key('v', { ctrl: true }), some.value, file('x.ts'), null)
+    expect(some.calls.paste).toEqual([onDir('src')])
+  })
+
+  it('Esc 取消剪切；带 Shift 的组合键不算', () => {
+    const o = ops(file('a.ts'))
+    cutPasteKeys(key('Escape'), o.value, null, null)
+    cutPasteKeys(key('x', { ctrl: true, shift: true }), o.value, file('b.ts'), onFile('b.ts'))
+    expect(o.calls.cut).toEqual([null])
   })
 })
