@@ -1,11 +1,11 @@
-// package.json 的 scripts 每一项行号左边的 ▶（在跑时 ■）：docs/ui/coding-tasks.md §5
+// package.json 的 scripts 每一项、build.gradle(.kts) 里写的任务和 runs 每一项，行号左边的 ▶（在跑时 ■）：docs/ui/coding-tasks.md §5、§9.3
 import { Prec, type Extension } from '@codemirror/state'
 import { EditorView, GutterMarker, gutter } from '@codemirror/view'
 import { useEffect, useMemo, useRef } from 'react'
 import { tr } from '@/i18n/core'
 import type { OpenFile } from '@/features/files/store'
 import { useCodingWorkspace } from '../../workspace'
-import { npmGroupForFile } from '../../tasks/model'
+import { gutterGroupForFile } from '../../tasks/model'
 import { loadTasks, TASKS_STALE_MS, useRunTasks, useTaskRunner, useTaskStatuses } from '../../tasks/store'
 
 export interface GutterItem {
@@ -81,17 +81,20 @@ export function taskGutter(items: readonly GutterItem[], onClick: (name: string,
 
 const NONE: readonly Extension[] = []
 
-/** 代码模式编辑器：打开的文件是任务列表里的 package.json 时返回 ▶ 扩展，否则空 */
+/** 代码模式编辑器：打开的文件是任务列表里的 package.json / build.gradle(.kts) 时返回 ▶ 扩展，否则空 */
 export function useTaskGutter(tab: OpenFile | null): readonly Extension[] {
   const { ref } = useCodingWorkspace()
-  const isPackage = !!tab && tab.document?.kind === 'text' && tab.path.replaceAll('\\', '/').endsWith('package.json')
+  const isPackage =
+    !!tab &&
+    tab.document?.kind === 'text' &&
+    /(^|\/)(package\.json|build\.gradle(\.kts)?)$/.test(tab.path.replaceAll('\\', '/'))
   const entry = useRunTasks(ref)
   useEffect(() => {
     if (isPackage && ref) void loadTasks(ref, TASKS_STALE_MS)
     // ref 的内容变化由 refKey 体现
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPackage, ref ? JSON.stringify(ref) : ''])
-  const group = isPackage && tab ? npmGroupForFile(entry.state, tab.root, tab.path) : null
+  const group = isPackage && tab ? gutterGroupForFile(entry.state, tab.root, tab.path) : null
   const statuses = useTaskStatuses(entry.state)
   const runner = useTaskRunner(entry.state)
   const runnerRef = useRef(runner)

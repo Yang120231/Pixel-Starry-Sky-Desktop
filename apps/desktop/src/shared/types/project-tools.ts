@@ -64,24 +64,68 @@ export interface ToolStatus {
   checkedAt: number
 }
 /** 代码模式左栏「任务」：项目里能跑的命令（docs/ui/coding-tasks.md §2）。只读文件得到，不执行命令 */
-export type RunTaskKind = 'npm' | 'make' | 'cargo'
+export type RunTaskKind = 'npm' | 'make' | 'cargo' | 'gradle'
 export interface RunTask {
   /** 组内唯一：任务名 */
   name: string
-  /** 灰字：npm 是脚本内容，make 空，cargo 是完整命令 */
+  /** 灰字：npm 是脚本内容，make 空，cargo 是完整命令；gradle 是构建文件里写的 description，按插件推断的为空（界面上换成内置说明） */
   detail: string
   /** 在文件里的行号（1 起）；不知道时 null */
   line: number | null
+  /** gradle：任务分组（Gradle 的 group，小写，如 build、verification、fabric；没写的是 other） */
+  category?: string
+  /** gradle：完整任务列表里 Gradle 给的说明（多是英文）；界面上排在 detail 和内置说明后面 */
+  description?: string
+}
+/** gradle.properties 的一项（docs/ui/coding-tasks.md §9） */
+export interface GradleProperty {
+  key: string
+  /** secret 时为空串，不把值传出主进程 */
+  value: string
+  line: number
+  /** 键名像密码 / token（含 pass、secret、token、key、credential），界面显示成 •••• */
+  secret: boolean
+}
+/** gradle 组（一个 Gradle 项目）的附加信息 */
+export interface RunTaskGradle {
+  /** 构建根目录（settings.gradle 所在；没有 settings 时是 build.gradle 所在），相对工作区根（posix），根是 '' */
+  buildDir: string
+  /** 项目路径：根项目 ':'，子项目 ':fabric'、':libs:core' */
+  project: string
+  /** 显示名：根项目是 rootProject.name（没写用文件夹名），子项目是项目路径 */
+  name: string
+  /** 构建根目录下有 gradlew / gradlew.bat */
+  wrapper: boolean
+  /** 同一个构建所有文件内容的指纹（settings、各 build 文件、gradle.properties、wrapper 配置），完整任务列表用它判断是否过期 */
+  stamp: string
+  /** 认出的主插件显示名，如 'Fabric Loom'、'ModDevGradle'、'Spring Boot'、'java' */
+  plugin: string | null
+  /** 只在根项目：gradle-wrapper.properties 里的 Gradle 版本 */
+  gradleVersion?: string | null
+  /** 只在根项目：toolchain / sourceCompatibility / jvmToolchain 等写的 Java 版本 */
+  javaVersion?: string | null
+  /** 只在根项目：gradle.properties（最多 100 项） */
+  properties?: GradleProperty[]
 }
 export interface RunTaskGroup {
   kind: RunTaskKind
-  /** 文件相对工作区根目录的路径（posix），如 `package.json`、`apps/desktop/package.json` */
+  /** 文件相对工作区根目录的路径（posix），如 `package.json`、`apps/desktop/package.json`；gradle 是 build.gradle(.kts)，根项目没有时是 settings 文件 */
   file: string
   /** 文件所在文件夹（posix），根目录是 '' */
   dir: string
   /** npm 组用哪个包管理器 */
   manager?: import('@pixelsky/protocol').PackageManager
+  /** gradle 组的附加信息 */
+  gradle?: RunTaskGradle
   tasks: RunTask[]
+}
+/** `gradlew tasks --all` 读出的一个任务（「加载完整列表」） */
+export interface GradleListedTask {
+  /** 项目路径：根项目 ':'，子项目 ':fabric' */
+  project: string
+  name: string
+  category: string
+  description: string
 }
 export interface RunTaskState {
   /** 工作区根目录（绝对路径） */

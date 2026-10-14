@@ -527,6 +527,20 @@ export const IPC_CONTRACT = {
     remote: 'projectTools:runTasks',
     trust: 'window',
   },
+  'projectTools:gradleTasks': {
+    kind: 'invoke',
+    route: 'selected',
+    ids: [0],
+    remote: 'projectTools:gradleTasks',
+    trust: 'window',
+  },
+  'projectTools:gradleTasksCancel': {
+    kind: 'invoke',
+    route: 'selected',
+    ids: [0],
+    remote: 'projectTools:gradleTasksCancel',
+    trust: 'window',
+  },
   'projectTools:forgetCopy': {
     kind: 'invoke',
     route: 'resource',

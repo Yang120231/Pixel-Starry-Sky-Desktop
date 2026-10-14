@@ -7,6 +7,7 @@ import type { OpTable } from '../ops'
 import { workspaceRef } from '../workspace-files'
 import { gitWorktrees, samePath, value, type GitWorktree, type ToolsHost } from './common'
 import type { GitTools } from './git'
+import { cancelGradleTasks, listGradleTasks } from './gradle-run'
 import { readRunTasks } from './run-tasks'
 import { portStatus } from './services'
 import type { ProjectTools } from './tools'
@@ -45,6 +46,10 @@ export const PROJECT_TOOL_OPS = {
   'projectTools:reorderTasks': (c, id, ids) => c.tools.tasks.reorder(value(id, 200, true), ids as string[]),
   'projectTools:environment': (c, ref, force) => c.tools.services.environment(workspaceRef(ref), force === true),
   'projectTools:runTasks': (c, ref) => readRunTasks(c.host.resolve(workspaceRef(ref)).path),
+  'projectTools:gradleTasks': (c, ref, buildDir) =>
+    listGradleTasks(c.host.resolve(workspaceRef(ref)).path, value(buildDir, 500)),
+  'projectTools:gradleTasksCancel': (c, ref, buildDir) =>
+    cancelGradleTasks(c.host.resolve(workspaceRef(ref)).path, value(buildDir, 500)),
   'projectTools:services': (c, ref) => c.tools.services.list(workspaceRef(ref)),
   'projectTools:saveService': (c, ref, input) => c.tools.services.save(workspaceRef(ref), input as ServiceInput),
   'projectTools:deleteService': (c, id) => c.tools.services.remove(value(id, 200, true)),

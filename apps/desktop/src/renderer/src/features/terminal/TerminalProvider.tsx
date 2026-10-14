@@ -63,9 +63,14 @@ interface TerminalUi {
   runScript(name: string, command: string): Promise<void>
   /**
    * 跑「任务」视图里的任务（docs/ui/coding-tasks.md §3）：reuseId 还在就复用它（已退出的先重启），否则新建；
-   * 标题改成任务名，选中并显示，命令后面接「跑完退出带退出码」的后缀。返回终端 id，失败 null
+   * 标题改成任务名，选中并显示，命令后面接「跑完退出带退出码」的后缀。返回终端 id，失败 null。
+   * command 可以是函数：按终端程序给出命令（Gradle 在 cmd 里写法不同）
    */
-  runTask(name: string, command: string, reuseId?: string | null): Promise<string | null>
+  runTask(
+    name: string,
+    command: string | ((program: string | undefined) => string),
+    reuseId?: string | null,
+  ): Promise<string | null>
 }
 interface Dialog {
   kind: 'rename' | 'close' | 'restart' | 'paste'
@@ -407,7 +412,11 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       creating.current = false
     }
   }
-  const runTask = async (name: string, command: string, reuseId?: string | null): Promise<string | null> => {
+  const runTask = async (
+    name: string,
+    command: string | ((program: string | undefined) => string),
+    reuseId?: string | null,
+  ): Promise<string | null> => {
     const ref = defaultRef()
     if (!ref || creating.current) return null
     creating.current = true
@@ -422,7 +431,8 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       select(record.id)
       await terminalRename(record.id, name).catch(() => undefined)
       const program = terminalState().profiles.find(p => p.id === record.profileId)?.command
-      terminalRunWhenReady(record.id, isDemo ? command : command + exitSuffix(program))
+      const line = typeof command === 'function' ? command(program) : command
+      terminalRunWhenReady(record.id, isDemo ? line : line + exitSuffix(program))
       return record.id
     } catch (cause) {
       terminalError(cause)

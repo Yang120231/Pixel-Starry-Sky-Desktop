@@ -2,15 +2,23 @@ import { describe, expect, it } from 'vitest'
 import type { RunTaskGroup } from '../../../../../shared/types/project-tools'
 import type { TerminalRecord } from '../../../../../shared/types/terminal'
 import {
+  categoryKey,
   exitSuffix,
   filterGroups,
+  gradleBuildKey,
+  gutterGroupForFile,
+  isCategoryCollapsed,
   isCollapsed,
   isTaskFile,
-  npmGroupForFile,
+  mergeGradleFull,
+  PROPERTIES,
+  rowKey,
   taskCommand,
   taskKey,
   taskStatus,
+  taskTitle,
   visibleRows,
+  type GradleFull,
 } from './model'
 
 const task = (name: string, detail = '') => ({ name, detail, line: null })
@@ -113,9 +121,109 @@ describe('筛选与可见行', () => {
   })
   it('编辑器文件对应的 npm 组', () => {
     const state = { root: 'D:/p', truncated: false, groups }
-    expect(npmGroupForFile(state, 'd:\\p\\', 'apps/desktop/package.json')?.dir).toBe('apps/desktop')
-    expect(npmGroupForFile(state, 'D:/p', 'package.json')?.dir).toBe('')
-    expect(npmGroupForFile(state, 'D:/other', 'package.json')).toBeNull()
-    expect(npmGroupForFile(null, 'D:/p', 'package.json')).toBeNull()
+    expect(gutterGroupForFile(state, 'd:\\p\\', 'apps/desktop/package.json')?.dir).toBe('apps/desktop')
+    expect(gutterGroupForFile(state, 'D:/p', 'package.json')?.dir).toBe('')
+    expect(gutterGroupForFile(state, 'D:/other', 'package.json')).toBeNull()
+    expect(gutterGroupForFile(null, 'D:/p', 'package.json')).toBeNull()
+  })
+})
+
+describe('Gradle（§9）', () => {
+  const gradle = (project: string, buildDir = '', wrapper = true): RunTaskGroup => ({
+    kind: 'gradle',
+    file: project === ':' ? `${buildDir ? buildDir + '/' : ''}build.gradle` : `${project.slice(1)}/build.gradle`,
+    dir: project === ':' ? buildDir : project.slice(1),
+    gradle: {
+      buildDir,
+      project,
+      name: project === ':' ? 'ruby-mod' : project,
+      wrapper,
+      stamp: 's1',
+      plugin: null,
+      ...(project === ':' ? { properties: [{ key: 'mod_version', value: '1.2.0', line: 3, secret: false }] } : {}),
+    },
+    tasks: [
+      { name: 'build', detail: '', line: null, category: 'build' },
+      { name: 'runClient', detail: '', line: 7, category: 'fabric' },
+      { name: 'dependencies', detail: '', line: null, category: 'help' },
+    ],
+  })
+  const root = gradle(':')
+  const fabric = gradle(':fabric')
+
+  it('命令：wrapper、子项目、-p、cmd、没有 wrapper', () => {
+    expect(taskCommand(root, root.tasks[0])).toBe('./gradlew build')
+    expect(taskCommand(fabric, fabric.tasks[1])).toBe('./gradlew :fabric:runClient')
+    expect(taskCommand(fabric, fabric.tasks[1], 'C:\\Windows\\System32\\cmd.exe')).toBe(
+      '.\\gradlew.bat :fabric:runClient',
+    )
+    expect(taskCommand(fabric, fabric.tasks[1], 'pwsh.exe')).toBe('./gradlew :fabric:runClient')
+    const nested = gradle(':', 'android')
+    expect(taskCommand(nested, nested.tasks[0])).toBe('./android/gradlew -p android build')
+    expect(taskCommand(nested, nested.tasks[0], 'cmd')).toBe('.\\android\\gradlew.bat -p android build')
+    const spaced = gradle(':', 'my app')
+    expect(taskCommand(spaced, spaced.tasks[0], 'pwsh')).toBe('& "./my app/gradlew" -p "my app" build')
+    expect(taskCommand(gradle(':', '', false), root.tasks[0])).toBe('gradle build')
+    expect(taskTitle(root, root.tasks[0])).toBe('build')
+    expect(taskTitle(fabric, fabric.tasks[1])).toBe(':fabric:runClient')
+  })
+
+  it('可见行：属性、分组两层，help 和属性默认收起', () => {
+    const rows = visibleRows([root], {}, false)
+    expect(
+      rows.map(r => (r.type === 'task' ? r.task.name : r.type === 'category' ? `[${r.category}]` : r.type)),
+    ).toEqual(['group', `[${PROPERTIES}]`, '[build]', 'build', '[fabric]', 'runClient', '[help]'])
+    expect(isCategoryCollapsed(root, 'help', {})).toBe(true)
+    expect(isCategoryCollapsed(root, 'help', { [categoryKey(root, 'help')]: false })).toBe(false)
+    // 展开属性；筛选时全部展开
+    expect(visibleRows([root], { [categoryKey(root, PROPERTIES)]: false }, false).some(r => r.type === 'prop')).toBe(
+      true,
+    )
+    expect(visibleRows([root], {}, true)).toHaveLength(9)
+    expect(new Set(visibleRows([root], {}, true).map(rowKey)).size).toBe(9)
+  })
+
+  it('筛选：分组名、属性键和值；密的值不参与', () => {
+    expect(filterGroups([root], 'fabric')[0].tasks.map(t => t.name)).toEqual(['runClient'])
+    const byProp = filterGroups([root], '1.2.0')
+    expect(byProp[0].tasks).toEqual([])
+    expect(byProp[0].gradle?.properties).toHaveLength(1)
+    const secret: RunTaskGroup = {
+      ...root,
+      gradle: { ...root.gradle!, properties: [{ key: 'TOKEN', value: '', line: 1, secret: true }] },
+    }
+    expect(filterGroups([secret], 'token')).toHaveLength(1)
+  })
+
+  it('完整列表替换推断的任务，行号和自己写的说明留着，Gradle 的说明放 description', () => {
+    const state = { root: 'D:\\p', truncated: false, groups: [root, fabric, npm('', 'pnpm')] }
+    const full: GradleFull = {
+      at: 1,
+      stamp: 's1',
+      tasks: [
+        { project: ':fabric', name: 'runClient', category: 'fabric', description: 'Starts the client' },
+        { project: ':fabric', name: 'remapJar', category: 'fabric', description: 'Remaps the jar' },
+        { project: ':', name: 'build', category: 'build', description: 'Assembles and tests' },
+      ],
+    }
+    const merged = mergeGradleFull(state, new Map([[gradleBuildKey('d:/p/', ''), full]]))
+    expect(merged.groups[1].tasks).toEqual([
+      { name: 'runClient', detail: '', line: 7, category: 'fabric', description: 'Starts the client' },
+      { name: 'remapJar', detail: '', line: null, category: 'fabric', description: 'Remaps the jar' },
+    ])
+    expect(merged.groups[0].tasks.map(t => t.name)).toEqual(['build'])
+    expect(merged.groups[2]).toBe(state.groups[2])
+    expect(mergeGradleFull(state, new Map())).toBe(state)
+  })
+
+  it('任务文件和编辑器 ▶', () => {
+    expect(isTaskFile('fabric/build.gradle')).toBe(true)
+    expect(isTaskFile('build.gradle.kts')).toBe(true)
+    expect(isTaskFile('settings.gradle.kts')).toBe(true)
+    expect(isTaskFile('gradle.properties')).toBe(true)
+    expect(isTaskFile('gradle/wrapper/gradle-wrapper.properties')).toBe(true)
+    expect(isTaskFile('app.gradle')).toBe(false)
+    const state = { root: 'D:/p', truncated: false, groups: [root, fabric] }
+    expect(gutterGroupForFile(state, 'D:/p', 'fabric/build.gradle')).toBe(fabric)
   })
 })

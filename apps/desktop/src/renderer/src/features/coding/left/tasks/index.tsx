@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import {
+  Blocks,
   Box,
   Check,
   ChevronDown,
@@ -8,7 +9,9 @@ import {
   CircleX,
   Copy,
   Crosshair,
+  Folder,
   Hammer,
+  Info,
   ListChecks,
   Package,
   Play,
@@ -16,31 +19,66 @@ import {
   RefreshCw,
   Search,
   Server,
+  Settings2,
+  SlidersHorizontal,
   Sparkles,
   Square,
   SquareTerminal,
   type LucideIcon,
 } from 'lucide-react'
 import { useI18n } from '@/i18n/I18nProvider'
-import { tr } from '@/i18n/core'
+import { allMessages, tr, type TranslationKey } from '@/i18n/core'
 import { Button, IconButton, Spinner, cn, useToast } from '@/ui'
 import { ActionMenu, type MenuAction } from '@/ui/ActionMenu'
+import { ConfirmDialog } from '@/ui/ConfirmDialog'
 import { isDemo } from '@/data'
 import { appendComposerDraft } from '@/features/engine/drafts'
 import { composerTarget, focusComposer } from '@/features/session/composerTarget'
 import { openFile } from '@/features/files/store'
-import type { RunTask, RunTaskGroup, RunTaskKind } from '../../../../../../shared/types/project-tools'
+import type { GradleProperty, RunTask, RunTaskGroup, RunTaskKind } from '../../../../../../shared/types/project-tools'
+import type { WorkspaceRef } from '../../../../../../shared/types/workspace'
 import { PanelHeader } from '../../shell/PanelHeader'
 import { codingLayout } from '../../layoutStore'
 import { useCodingWorkspace } from '../../workspace'
-import { filterGroups, isCollapsed, taskCommand, taskKey, visibleRows, type TaskStatus } from '../../tasks/model'
-import { loadTasks, TASKS_STALE_MS, useRunTasks, useTaskRunner, useTaskStatuses } from '../../tasks/store'
+import {
+  categoryKey,
+  filterGroups,
+  isCategoryCollapsed,
+  isCollapsed,
+  PROPERTIES,
+  rowKey,
+  taskCommand,
+  visibleRows,
+  type TaskRow,
+  type TaskStatus,
+} from '../../tasks/model'
+import {
+  cancelGradleFull,
+  loadGradleFull,
+  loadTasks,
+  TASKS_STALE_MS,
+  useGradleFull,
+  useRunTasks,
+  useTaskRunner,
+  useTaskStatuses,
+} from '../../tasks/store'
 
-const GROUP_ICON: Record<RunTaskKind, LucideIcon> = { npm: Package, make: Hammer, cargo: Box }
+const GROUP_ICON: Record<RunTaskKind, LucideIcon> = { npm: Package, make: Hammer, cargo: Box, gradle: Blocks }
 const COLLAPSED_KEY = 'pixelsky.coding.tasks.collapsed'
+const ARGS_KEY = 'pixelsky.coding.tasks.gradleArgs'
+/** 「带参数运行」里一点就加的参数（§9.3） */
+const COMMON_ARGS = [
+  '--stacktrace',
+  '--info',
+  '--debug',
+  '--offline',
+  '--refresh-dependencies',
+  '--rerun-tasks',
+  '--continue',
+]
 
 type Overrides = Record<string, boolean>
-/** 展开 / 收起状态：按项目记在 localStorage，值是 { 文件路径: 是否收起 } */
+/** 展开 / 收起状态：按项目记在 localStorage，值是 { 文件路径（Gradle 分组是 文件路径 + 分组）: 是否收起 } */
 function readCollapsed(project: string): Overrides {
   try {
     const all = JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? '{}') as Record<string, Overrides>
@@ -64,13 +102,47 @@ const clipboardWrite = (text: string): Promise<unknown> =>
 
 const baseName = (path: string): string => path.split('/').pop() ?? path
 
-/** 组头的灰字：包管理器、「根目录」或文件名 */
+/** 组头的名字：Gradle 根项目写项目名、子项目写项目路径；其余子文件夹写文件夹，根目录写文件名 */
+function groupTitle(group: RunTaskGroup): string {
+  const g = group.gradle
+  if (g) return g.project === ':' ? g.name : g.project
+  return group.dir || group.file
+}
+
+/** 组头的灰字：包管理器、「根目录」或文件名；Gradle 根项目是版本，子项目是主插件 */
 function groupHint(group: RunTaskGroup): string {
   const parts: string[] = []
+  const g = group.gradle
+  if (g) {
+    if (g.project !== ':') return g.plugin ?? ''
+    if (g.gradleVersion) parts.push(`Gradle ${g.gradleVersion}`)
+    if (g.javaVersion) parts.push(`Java ${g.javaVersion}`)
+    parts.push(g.buildDir || tr('coding.tasks.rootDir'))
+    return parts.join(' · ')
+  }
   if (group.dir) parts.push(baseName(group.file))
   if (group.manager) parts.push(group.manager)
   if (!group.dir) parts.push(tr('coding.tasks.rootDir'))
   return parts.join(' · ')
+}
+
+/** 任务行的灰字：npm 是脚本内容；Gradle 依次用构建文件里写的说明、内置说明、完整列表里 Gradle 给的说明 */
+function taskDetail(group: RunTaskGroup, task: RunTask): string {
+  if (task.detail || group.kind !== 'gradle') return task.detail
+  const key = `coding.tasks.gradle.desc.${task.name}`
+  return key in allMessages ? tr(key as TranslationKey) : (task.description ?? '')
+}
+
+/** gradle.properties 相对工作区根的路径 */
+const propertiesFile = (group: RunTaskGroup): string =>
+  group.gradle?.buildDir ? `${group.gradle.buildDir}/gradle.properties` : 'gradle.properties'
+
+function readArgs(): string {
+  try {
+    return localStorage.getItem(ARGS_KEY) ?? ''
+  } catch {
+    return ''
+  }
 }
 
 function StatusIcon({ status }: { status: TaskStatus }) {
@@ -110,14 +182,85 @@ function StatusIcon({ status }: { status: TaskStatus }) {
   }
 }
 
-interface MenuState {
-  x: number
-  y: number
-  group: RunTaskGroup
-  task: RunTask
+/** Gradle 根项目最后的提示条：按插件推断 / 正在加载完整列表 / 已加载 / 可能过期 / 失败（§9.3） */
+function GradleFullBar({ wsRef, root, group }: { wsRef: WorkspaceRef | null; root: string; group: RunTaskGroup }) {
+  const g = group.gradle!
+  const { full, job } = useGradleFull(root, g.buildDir)
+  const load = (): void => {
+    if (wsRef) void loadGradleFull(wsRef, root, g.buildDir, g.stamp)
+  }
+  let icon = <Info size={12} strokeWidth={1.75} className="shrink-0" />
+  let text = tr('coding.tasks.gradle.full.hint')
+  let action = {
+    label: tr('coding.tasks.gradle.full.load'),
+    title: tr('coding.tasks.gradle.full.loadTitle'),
+    run: load,
+  }
+  let tone = 'text-fg-faint'
+  if (job?.loading) {
+    icon = <Spinner size={12} className="shrink-0 text-accent" />
+    text = tr('coding.tasks.gradle.full.loading')
+    action = {
+      label: tr('coding.tasks.gradle.full.cancel'),
+      title: '',
+      run: () => wsRef && cancelGradleFull(wsRef, root, g.buildDir),
+    }
+  } else if (job?.error) {
+    icon = <CircleX size={12} strokeWidth={1.75} className="shrink-0 text-danger" />
+    text = tr('coding.tasks.gradle.full.failed', { error: job.error })
+    action = { label: tr('coding.tasks.gradle.full.retry'), title: tr('coding.tasks.gradle.full.loadTitle'), run: load }
+    tone = 'text-danger'
+  } else if (full) {
+    const stale = full.stamp !== g.stamp
+    icon = stale ? (
+      <Info size={12} strokeWidth={1.75} className="shrink-0 text-warning" />
+    ) : (
+      <Check size={12} strokeWidth={2} className="shrink-0 text-success" />
+    )
+    text = stale
+      ? tr('coding.tasks.gradle.full.stale')
+      : tr('coding.tasks.gradle.full.done', {
+          time: new Date(full.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        })
+    action = {
+      label: tr('coding.tasks.gradle.full.reload'),
+      title: tr('coding.tasks.gradle.full.loadTitle'),
+      run: load,
+    }
+  }
+  return (
+    <div
+      data-gradle-full={job?.loading ? 'loading' : job?.error ? 'error' : full ? 'done' : 'none'}
+      className={cn('mt-1 mb-1 ml-5 flex min-h-7 items-center gap-1.5 rounded-md bg-subtle px-2 py-1 text-meta', tone)}
+    >
+      {icon}
+      <span className="min-w-0 flex-1 break-words" title={job?.error ?? undefined}>
+        {text}
+      </span>
+      <button
+        type="button"
+        title={action.title || undefined}
+        disabled={!wsRef}
+        onClick={action.run}
+        className="press shrink-0 rounded px-1 text-accent-fg hover:underline disabled:opacity-50"
+      >
+        {action.label}
+      </button>
+    </div>
+  )
 }
 
-/** 左栏「任务」：按文件分组列出 package.json / Makefile / Cargo.toml 里能跑的命令（docs/ui/coding-tasks.md §4） */
+type MenuState =
+  | { kind: 'task'; x: number; y: number; group: RunTaskGroup; task: RunTask }
+  | { kind: 'prop'; x: number; y: number; group: RunTaskGroup; prop: GradleProperty }
+
+interface ArgsState {
+  group: RunTaskGroup
+  task: RunTask
+  value: string
+}
+
+/** 左栏「任务」：按文件分组列出 package.json / Makefile / Cargo.toml / Gradle 里能跑的命令（docs/ui/coding-tasks.md §4、§9） */
 export function TasksView({ visible }: { visible: boolean }) {
   useI18n()
   const toast = useToast()
@@ -129,6 +272,7 @@ export function TasksView({ visible }: { visible: boolean }) {
   const [query, setQuery] = useState('')
   const [overrides, setOverrides] = useState<Overrides>({})
   const [menu, setMenu] = useState<MenuState | null>(null)
+  const [args, setArgs] = useState<ArgsState | null>(null)
   const [cursor, setCursor] = useState<string | null>(null)
   const list = useRef<HTMLDivElement>(null)
   const refKey = ref ? JSON.stringify(ref) : ''
@@ -145,8 +289,6 @@ export function TasksView({ visible }: { visible: boolean }) {
   const filtering = query.trim() !== ''
   const groups = useMemo(() => filterGroups(state?.groups ?? [], query), [state, query])
   const rows = useMemo(() => visibleRows(groups, overrides, filtering), [groups, overrides, filtering])
-  const rowKey = (row: (typeof rows)[number]): string =>
-    row.type === 'group' ? `g:${row.group.file}` : `t:${taskKey(row.group, row.task)}`
 
   const setCollapsed = (next: Overrides): void => {
     setOverrides(next)
@@ -154,6 +296,11 @@ export function TasksView({ visible }: { visible: boolean }) {
   }
   const toggle = (group: RunTaskGroup, collapsed = !isCollapsed(group, overrides)): void =>
     setCollapsed({ ...overrides, [group.file]: collapsed })
+  const toggleCategory = (
+    group: RunTaskGroup,
+    category: string,
+    collapsed = !isCategoryCollapsed(group, category, overrides),
+  ): void => setCollapsed({ ...overrides, [categoryKey(group, category)]: collapsed })
   const collapseAll = (): void =>
     setCollapsed(Object.fromEntries((state?.groups ?? []).map(g => [g.file, true] as const)))
 
@@ -185,25 +332,78 @@ export function TasksView({ visible }: { visible: boolean }) {
   const locate = (group: RunTaskGroup, task: RunTask): void => {
     if (ref) void openFile(ref, group.file, task.line ?? 1, 1, undefined, { target: 'code' })
   }
-  const actions = (m: MenuState): MenuAction[] => [
-    { label: tr('coding.tasks.menu.run'), icon: Play, run: () => void runner.run(m.group, m.task) },
-    { label: tr('coding.tasks.menu.runNew'), icon: SquareTerminal, run: () => void runner.run(m.group, m.task, true) },
-    { label: tr('coding.tasks.menu.askAi'), icon: Sparkles, run: () => askAi(m.group, m.task) },
+  const locateProp = (group: RunTaskGroup, prop: GradleProperty): void => {
+    if (ref) void openFile(ref, propertiesFile(group), prop.line, 1, undefined, { target: 'code' })
+  }
+  const copy = (text: string, done: TranslationKey): void => void clipboardWrite(text).then(() => toast(tr(done)))
+  const runWithArgs = (a: ArgsState): void => {
+    try {
+      localStorage.setItem(ARGS_KEY, a.value.trim())
+    } catch {
+      // 记不住就算了
+    }
+    setArgs(null)
+    void runner.run(a.group, a.task, false, a.value)
+  }
+
+  const taskActions = (group: RunTaskGroup, task: RunTask): MenuAction[] => [
+    { label: tr('coding.tasks.menu.run'), icon: Play, run: () => void runner.run(group, task) },
+    { label: tr('coding.tasks.menu.runNew'), icon: SquareTerminal, run: () => void runner.run(group, task, true) },
+    ...(group.kind === 'gradle'
+      ? [
+          {
+            label: tr('coding.tasks.menu.runArgs'),
+            icon: Settings2,
+            run: () => setArgs({ group, task, value: readArgs() }),
+          },
+          {
+            label: tr('coding.tasks.menu.refreshDeps'),
+            icon: RefreshCw,
+            run: () => void runner.run(group, task, false, '--refresh-dependencies'),
+          },
+        ]
+      : []),
+    { label: tr('coding.tasks.menu.askAi'), icon: Sparkles, run: () => askAi(group, task) },
     {
       label: tr('coding.tasks.menu.service'),
       icon: Server,
       separator: true,
-      run: () => saveService(m.group, m.task),
+      run: () => saveService(group, task),
     },
     {
       label: tr('coding.tasks.menu.copy'),
       icon: Copy,
-      run: () => void clipboardWrite(taskCommand(m.group, m.task)).then(() => toast(tr('coding.tasks.copied'))),
+      run: () => copy(taskCommand(group, task), 'coding.tasks.copied'),
     },
     {
-      label: tr('coding.tasks.menu.locate', { file: baseName(m.group.file) }),
+      label: tr('coding.tasks.menu.locate', { file: baseName(group.file) }),
       icon: Crosshair,
-      run: () => locate(m.group, m.task),
+      run: () => locate(group, task),
+    },
+  ]
+  const propActions = (group: RunTaskGroup, prop: GradleProperty): MenuAction[] => [
+    ...(prop.secret
+      ? []
+      : [
+          {
+            label: tr('coding.tasks.menu.copyValue'),
+            icon: Copy,
+            run: () => copy(prop.value, 'coding.tasks.copiedValue'),
+          },
+        ]),
+    ...(prop.secret
+      ? []
+      : [
+          {
+            label: tr('coding.tasks.menu.copyLine'),
+            icon: Copy,
+            run: () => copy(`${prop.key}=${prop.value}`, 'coding.tasks.copiedValue'),
+          },
+        ]),
+    {
+      label: tr('coding.tasks.menu.locate', { file: 'gradle.properties' }),
+      icon: Crosshair,
+      run: () => locateProp(group, prop),
     },
   ]
 
@@ -222,11 +422,189 @@ export function TasksView({ visible }: { visible: boolean }) {
     } else if (e.key === 'Enter' && row && !e.nativeEvent.isComposing) {
       e.preventDefault()
       if (row.type === 'task') void runner.run(row.group, row.task)
-      else toggle(row.group)
-    } else if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && row?.type === 'group' && !filtering) {
-      e.preventDefault()
-      toggle(row.group, e.key === 'ArrowLeft')
+      else if (row.type === 'prop') locateProp(row.group, row.prop)
+      else if (row.type === 'category') {
+        if (!filtering) toggleCategory(row.group, row.category)
+      } else toggle(row.group)
+    } else if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && !filtering) {
+      if (row?.type === 'group') {
+        e.preventDefault()
+        toggle(row.group, e.key === 'ArrowLeft')
+      } else if (row?.type === 'category') {
+        e.preventDefault()
+        toggleCategory(row.group, row.category, e.key === 'ArrowLeft')
+      }
     }
+  }
+
+  const renderRow = (row: TaskRow, index: number) => {
+    const key = rowKey(row)
+    const { group } = row
+    const deep = group.kind === 'gradle'
+    const rowClass =
+      'press flex h-7 cursor-default items-center rounded-md text-ui outline-none hover:bg-hover focus-visible:bg-hover'
+    const tabIndex = cursor === key || (cursor === null && index === 0) ? 0 : -1
+    if (row.type === 'group') {
+      const collapsed = !filtering && isCollapsed(group, overrides)
+      const Icon = group.gradle && group.gradle.project !== ':' ? Folder : GROUP_ICON[group.kind]
+      return (
+        <div
+          key={key}
+          role="treeitem"
+          aria-level={1}
+          aria-expanded={!collapsed}
+          tabIndex={tabIndex}
+          data-task-row={key}
+          onFocus={() => setCursor(key)}
+          onClick={() => {
+            setCursor(key)
+            if (!filtering) toggle(group)
+          }}
+          className={cn(rowClass, 'gap-1.5 px-1')}
+        >
+          {collapsed ? (
+            <ChevronRight size={14} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
+          ) : (
+            <ChevronDown size={14} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
+          )}
+          <Icon size={14} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
+          <span className="max-w-[70%] min-w-0 shrink-0 truncate font-medium text-fg" title={group.file}>
+            {groupTitle(group)}
+          </span>
+          <span className="min-w-0 shrink-[4] truncate text-meta text-fg-faint">{groupHint(group)}</span>
+        </div>
+      )
+    }
+    if (row.type === 'category') {
+      const collapsed = !filtering && isCategoryCollapsed(group, row.category, overrides)
+      const props = row.category === PROPERTIES
+      return (
+        <div
+          key={key}
+          role="treeitem"
+          aria-level={2}
+          aria-expanded={!collapsed}
+          tabIndex={tabIndex}
+          data-task-row={key}
+          onFocus={() => setCursor(key)}
+          onClick={() => {
+            setCursor(key)
+            if (!filtering) toggleCategory(group, row.category)
+          }}
+          className={cn(rowClass, 'gap-1.5 pr-2 pl-5')}
+        >
+          {collapsed ? (
+            <ChevronRight size={14} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
+          ) : (
+            <ChevronDown size={14} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
+          )}
+          {props && <SlidersHorizontal size={13} strokeWidth={1.5} className="shrink-0 text-fg-muted" />}
+          <span className="min-w-0 truncate text-fg-secondary">
+            {props ? tr('coding.tasks.gradle.properties') : row.category}
+          </span>
+          {props && <span className="min-w-0 truncate text-meta text-fg-faint">gradle.properties</span>}
+          <span className="ml-auto shrink-0 rounded-full bg-subtle px-1.5 text-label text-fg-faint">{row.count}</span>
+        </div>
+      )
+    }
+    if (row.type === 'prop') {
+      const { prop } = row
+      return (
+        <div
+          key={key}
+          role="treeitem"
+          aria-level={3}
+          tabIndex={tabIndex}
+          data-task-row={key}
+          title={prop.secret ? prop.key : `${prop.key}=${prop.value}`}
+          onFocus={() => setCursor(key)}
+          onClick={() => {
+            setCursor(key)
+            locateProp(group, prop)
+          }}
+          onContextMenu={e => {
+            e.preventDefault()
+            setCursor(key)
+            setMenu({ kind: 'prop', x: e.clientX, y: e.clientY, group, prop })
+          }}
+          className={cn(
+            rowClass,
+            'gap-3 pr-2 pl-11 font-mono text-label',
+            cursor === key && 'bg-selected hover:bg-selected',
+          )}
+        >
+          <span className="min-w-0 shrink-0 max-w-[70%] truncate text-fg-secondary">{prop.key}</span>
+          <span
+            className="ml-auto min-w-0 truncate text-fg-faint"
+            aria-label={prop.secret ? tr('coding.tasks.gradle.secret') : undefined}
+          >
+            {prop.secret ? '••••' : prop.value}
+          </span>
+        </div>
+      )
+    }
+    const { task } = row
+    const status = statuses.of(group, task)
+    const running = status.kind === 'running'
+    return (
+      <div
+        key={key}
+        role="treeitem"
+        aria-level={deep ? 3 : 2}
+        aria-selected={cursor === key}
+        tabIndex={tabIndex}
+        data-task-row={key}
+        data-task-status={status.kind}
+        title={taskCommand(group, task)}
+        onFocus={() => setCursor(key)}
+        onClick={() => {
+          setCursor(key)
+          runner.focus(group, task)
+        }}
+        onDoubleClick={() => void runner.run(group, task)}
+        onContextMenu={e => {
+          e.preventDefault()
+          setCursor(key)
+          setMenu({ kind: 'task', x: e.clientX, y: e.clientY, group, task })
+        }}
+        className={cn(
+          'group/task gap-2 pr-1',
+          rowClass,
+          deep ? 'pl-10' : 'pl-6',
+          cursor === key && 'bg-selected hover:bg-selected',
+        )}
+      >
+        <StatusIcon status={status} />
+        <span className="shrink-0 text-fg">{task.name}</span>
+        <span className={cn('min-w-0 flex-1 truncate text-meta text-fg-faint', group.kind !== 'gradle' && 'font-mono')}>
+          {taskDetail(group, task)}
+        </span>
+        {status.kind === 'failed' && status.code !== null && (
+          <span className="shrink-0 text-meta text-fg-faint group-hover/task:hidden">
+            {tr('coding.tasks.exitCode', { code: status.code })}
+          </span>
+        )}
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label={tr(running ? 'coding.tasks.stop' : 'coding.tasks.run', { name: task.name })}
+          title={tr(running ? 'coding.tasks.stop' : 'coding.tasks.run', { name: task.name })}
+          onClick={e => {
+            e.stopPropagation()
+            setCursor(key)
+            if (running) runner.stop(group, task)
+            else void runner.run(group, task)
+          }}
+          onDoubleClick={e => e.stopPropagation()}
+          className={cn(
+            'press flex size-5 shrink-0 items-center justify-center rounded text-fg-muted hover:bg-hover hover:text-fg',
+            running ? 'text-danger' : 'invisible group-hover/task:visible group-focus-visible/task:visible',
+          )}
+        >
+          {running ? <Square size={11} strokeWidth={2} fill="currentColor" /> : <Play size={12} strokeWidth={1.75} />}
+        </button>
+      </div>
+    )
   }
 
   const hasGroups = (state?.groups.length ?? 0) > 0
@@ -305,103 +683,17 @@ export function TasksView({ visible }: { visible: boolean }) {
           {filtering && groups.length === 0 && (
             <p className="px-2 py-1 text-meta text-fg-faint">{tr('coding.tasks.noMatch')}</p>
           )}
-          {groups.map(group => {
-            const collapsed = !filtering && isCollapsed(group, overrides)
-            const Icon = GROUP_ICON[group.kind]
-            const gKey = `g:${group.file}`
-            return (
-              <div key={group.file} role="group">
-                <div
-                  role="treeitem"
-                  aria-expanded={!collapsed}
-                  tabIndex={cursor === gKey || (cursor === null && group === groups[0]) ? 0 : -1}
-                  data-task-row={gKey}
-                  onFocus={() => setCursor(gKey)}
-                  onClick={() => {
-                    setCursor(gKey)
-                    if (!filtering) toggle(group)
-                  }}
-                  className="press flex h-7 cursor-default items-center gap-1.5 rounded-md px-1 text-ui outline-none hover:bg-hover focus-visible:bg-hover"
-                >
-                  {collapsed ? (
-                    <ChevronRight size={14} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
-                  ) : (
-                    <ChevronDown size={14} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
-                  )}
-                  <Icon size={14} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
-                  <span className="min-w-0 truncate font-medium text-fg" title={group.file}>
-                    {group.dir || group.file}
-                  </span>
-                  <span className="min-w-0 shrink-[2] truncate text-meta text-fg-faint">{groupHint(group)}</span>
-                </div>
-                {!collapsed &&
-                  group.tasks.map(task => {
-                    const status = statuses.of(group, task)
-                    const tKey = `t:${taskKey(group, task)}`
-                    const running = status.kind === 'running'
-                    const command = taskCommand(group, task)
-                    return (
-                      <div
-                        key={task.name}
-                        role="treeitem"
-                        aria-selected={cursor === tKey}
-                        tabIndex={cursor === tKey ? 0 : -1}
-                        data-task-row={tKey}
-                        data-task-status={status.kind}
-                        title={command}
-                        onFocus={() => setCursor(tKey)}
-                        onClick={() => {
-                          setCursor(tKey)
-                          runner.focus(group, task)
-                        }}
-                        onDoubleClick={() => void runner.run(group, task)}
-                        onContextMenu={e => {
-                          e.preventDefault()
-                          setCursor(tKey)
-                          setMenu({ x: e.clientX, y: e.clientY, group, task })
-                        }}
-                        className={cn(
-                          'group/task press flex h-7 cursor-default items-center gap-2 rounded-md pr-1 pl-6 text-ui outline-none hover:bg-hover focus-visible:bg-hover',
-                          cursor === tKey && 'bg-selected hover:bg-selected',
-                        )}
-                      >
-                        <StatusIcon status={status} />
-                        <span className="shrink-0 text-fg">{task.name}</span>
-                        <span className="min-w-0 flex-1 truncate font-mono text-meta text-fg-faint">{task.detail}</span>
-                        {status.kind === 'failed' && status.code !== null && (
-                          <span className="shrink-0 text-meta text-fg-faint group-hover/task:hidden">
-                            {tr('coding.tasks.exitCode', { code: status.code })}
-                          </span>
-                        )}
-                        <button
-                          type="button"
-                          tabIndex={-1}
-                          aria-label={tr(running ? 'coding.tasks.stop' : 'coding.tasks.run', { name: task.name })}
-                          title={tr(running ? 'coding.tasks.stop' : 'coding.tasks.run', { name: task.name })}
-                          onClick={e => {
-                            e.stopPropagation()
-                            setCursor(tKey)
-                            if (running) runner.stop(group, task)
-                            else void runner.run(group, task)
-                          }}
-                          onDoubleClick={e => e.stopPropagation()}
-                          className={cn(
-                            'press flex size-5 shrink-0 items-center justify-center rounded text-fg-muted hover:bg-hover hover:text-fg',
-                            running
-                              ? 'text-danger'
-                              : 'invisible group-hover/task:visible group-focus-visible/task:visible',
-                          )}
-                        >
-                          {running ? (
-                            <Square size={11} strokeWidth={2} fill="currentColor" />
-                          ) : (
-                            <Play size={12} strokeWidth={1.75} />
-                          )}
-                        </button>
-                      </div>
-                    )
-                  })}
+          {rows.map((row, index) => {
+            const g = row.group.gradle
+            // Gradle 根项目展开时，最后一行后面放完整列表的提示条
+            const bar = g?.project === ':' && rows[index + 1]?.group !== row.group && !isCollapsed(row.group, overrides)
+            return bar ? (
+              <div key={rowKey(row)} role="none">
+                {renderRow(row, index)}
+                <GradleFullBar wsRef={ref} root={state.root} group={row.group} />
               </div>
+            ) : (
+              renderRow(row, index)
             )
           })}
         </div>
@@ -411,8 +703,65 @@ export function TasksView({ visible }: { visible: boolean }) {
           x={menu.x}
           y={menu.y}
           label={tr('coding.tasks.menu')}
-          actions={actions(menu)}
+          actions={menu.kind === 'task' ? taskActions(menu.group, menu.task) : propActions(menu.group, menu.prop)}
           onClose={() => setMenu(null)}
+        />
+      )}
+      {args && (
+        <ConfirmDialog
+          title={tr('coding.tasks.args.title', { name: args.task.name })}
+          focusInput
+          busy={false}
+          confirmLabel={tr('coding.tasks.args.run')}
+          cancelLabel={tr('coding.tasks.args.cancel')}
+          description={
+            <div className="flex flex-col gap-2">
+              <p className="font-mono text-meta break-all text-fg-faint">
+                {taskCommand(args.group, args.task)} {args.value.trim()}
+              </p>
+              <input
+                aria-label={tr('coding.tasks.args.label')}
+                value={args.value}
+                placeholder="--stacktrace"
+                onChange={e => setArgs({ ...args, value: e.target.value })}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                    e.preventDefault()
+                    runWithArgs(args)
+                  }
+                }}
+                className="w-full rounded-md border border-line bg-surface px-3 py-2 font-mono text-ui text-fg outline-none focus:border-accent"
+              />
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-meta text-fg-faint">{tr('coding.tasks.args.common')}</span>
+                {COMMON_ARGS.map(flag => {
+                  const parts = args.value.split(/\s+/).filter(Boolean)
+                  const on = parts.includes(flag)
+                  return (
+                    <button
+                      key={flag}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() =>
+                        setArgs({
+                          ...args,
+                          value: (on ? parts.filter(p => p !== flag) : [...parts, flag]).join(' '),
+                        })
+                      }
+                      className={cn(
+                        'press rounded-md border px-1.5 py-0.5 font-mono text-meta',
+                        on ? 'border-accent bg-accent-soft text-accent-fg' : 'border-line text-fg-muted hover:bg-hover',
+                      )}
+                    >
+                      {flag}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          }
+          onConfirm={() => runWithArgs(args)}
+          onCancel={() => setArgs(null)}
         />
       )}
     </div>

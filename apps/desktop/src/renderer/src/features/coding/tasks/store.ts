@@ -1,13 +1,24 @@
 // 「任务」的数据和运行（docs/ui/coding-tasks.md §3、§4）：读任务列表（按工作区缓存）、任务 → 终端的内存对应、跑 / 停 / 跳到终端
 import { useCallback, useMemo, useSyncExternalStore } from 'react'
-import type { RunTask, RunTaskGroup, RunTaskState } from '../../../../../shared/types/project-tools'
+import type { GradleListedTask, RunTask, RunTaskGroup, RunTaskState } from '../../../../../shared/types/project-tools'
 import type { WorkspaceRef } from '../../../../../shared/types/workspace'
 import { isDemo } from '@/data'
 import { demo } from '@/data/demo'
 import { FILE_SAVED_EVENT } from '@/features/files/store'
 import { terminalState, useTerminalStore } from '@/features/terminal/store'
 import { useTerminalUi } from '@/features/terminal/TerminalProvider'
-import { IDLE, isTaskFile, taskCommand, taskKey, taskStatus, type TaskStatus } from './model'
+import {
+  gradleBuildKey,
+  IDLE,
+  isTaskFile,
+  mergeGradleFull,
+  taskCommand,
+  taskKey,
+  taskStatus,
+  taskTitle,
+  type GradleFull,
+  type TaskStatus,
+} from './model'
 
 /** 视图重新显示时，距上次读取超过这么久才重新读 */
 export const TASKS_STALE_MS = 10_000
@@ -58,16 +69,127 @@ export async function loadTasks(ref: WorkspaceRef, maxAge = 0): Promise<void> {
   }
 }
 
-/** 这个工作区的任务列表（不自动读；调用 loadTasks） */
+// ---- Gradle 完整任务列表（docs/ui/coding-tasks.md §9.2）：按构建记在 localStorage ----
+const FULL_KEY = isDemo ? 'pixelsky.coding.tasks.gradleFull.demo' : 'pixelsky.coding.tasks.gradleFull'
+/** 最多记这么多个构建、每个构建这么多个任务 */
+const MAX_FULL_BUILDS = 20
+const MAX_FULL_TASKS = 3000
+function readFulls(): Map<string, GradleFull> {
+  try {
+    const data = JSON.parse(localStorage.getItem(FULL_KEY) ?? '{}') as Record<string, GradleFull>
+    return new Map(Object.entries(data).filter(([, v]) => v && typeof v.stamp === 'string' && Array.isArray(v.tasks)))
+  } catch {
+    return new Map()
+  }
+}
+let fulls = typeof window === 'undefined' ? new Map<string, GradleFull>() : readFulls()
+/** 正在加载 / 上次失败的构建 */
+export interface GradleJob {
+  loading: boolean
+  error: string | null
+}
+const jobs = new Map<string, GradleJob>()
+/** 完整列表或加载状态每变一次加一 */
+let fullVersion = 0
+function fullsChanged(): void {
+  fullVersion++
+  notify()
+}
+function saveFulls(): void {
+  const recent = [...fulls].sort((a, b) => b[1].at - a[1].at).slice(0, MAX_FULL_BUILDS)
+  fulls = new Map(recent)
+  try {
+    localStorage.setItem(FULL_KEY, JSON.stringify(Object.fromEntries(recent)))
+  } catch {
+    // 存不了就只在这次有效
+  }
+}
+
+/** 演示模式的完整列表：在推断的基础上多几个 */
+function demoListed(state: RunTaskState, buildDir: string): GradleListedTask[] {
+  const listed: GradleListedTask[] = []
+  for (const group of state.groups) {
+    const g = group.gradle
+    if (!g || g.buildDir !== buildDir) continue
+    for (const t of group.tasks)
+      listed.push({ project: g.project, name: t.name, category: t.category || 'other', description: t.detail })
+    listed.push(
+      {
+        project: g.project,
+        name: 'buildEnvironment',
+        category: 'help',
+        description: 'Displays all buildscript dependencies.',
+      },
+      {
+        project: g.project,
+        name: 'outgoingVariants',
+        category: 'help',
+        description: 'Displays the outgoing variants.',
+      },
+    )
+  }
+  return listed
+}
+
+/** 跑 gradlew tasks --all 读完整列表（点了才跑）；stamp 是当前构建文件的指纹 */
+export async function loadGradleFull(ref: WorkspaceRef, root: string, buildDir: string, stamp: string): Promise<void> {
+  const key = gradleBuildKey(root, buildDir)
+  if (jobs.get(key)?.loading) return
+  jobs.set(key, { loading: true, error: null })
+  fullsChanged()
+  try {
+    let tasks: GradleListedTask[]
+    if (isDemo) {
+      await new Promise(r => setTimeout(r, 1200))
+      if (!jobs.get(key)?.loading) return
+      tasks = demoListed(entries.get(refKey(ref))?.state ?? demo().projectTools.runTasks, buildDir)
+    } else tasks = await window.pixelsky!.projectTools.gradleTasks(ref, buildDir)
+    if (!jobs.get(key)?.loading) return
+    fulls.set(key, { at: Date.now(), stamp, tasks: tasks.slice(0, MAX_FULL_TASKS) })
+    saveFulls()
+    jobs.delete(key)
+  } catch (cause) {
+    // 取消的不算失败
+    if (jobs.get(key)?.loading)
+      jobs.set(key, { loading: false, error: cause instanceof Error ? cause.message : String(cause) })
+  }
+  fullsChanged()
+}
+export function cancelGradleFull(ref: WorkspaceRef, root: string, buildDir: string): void {
+  const key = gradleBuildKey(root, buildDir)
+  if (!jobs.get(key)?.loading) return
+  jobs.delete(key)
+  fullsChanged()
+  if (!isDemo) void window.pixelsky!.projectTools.gradleTasksCancel(ref, buildDir).catch(() => undefined)
+}
+/** 一个构建的完整列表记录和加载状态 */
+export function useGradleFull(root: string, buildDir: string): { full: GradleFull | null; job: GradleJob | null } {
+  useSyncExternalStore(subscribe, () => fullVersion)
+  const key = gradleBuildKey(root, buildDir)
+  return { full: fulls.get(key) ?? null, job: jobs.get(key) ?? null }
+}
+
+/** 缓存 + 完整列表合起来的结果；同一份输入返回同一个对象（useSyncExternalStore 要求） */
+const views = new Map<string, { base: TasksEntry; version: number; value: TasksEntry }>()
+function view(key: string): TasksEntry {
+  const base = entries.get(key) ?? EMPTY
+  const cached = views.get(key)
+  if (cached && cached.base === base && cached.version === fullVersion) return cached.value
+  const value = base.state ? { ...base, state: mergeGradleFull(base.state, fulls) } : base
+  views.set(key, { base, version: fullVersion, value })
+  return value
+}
+
+/** 这个工作区的任务列表（不自动读；调用 loadTasks）；Gradle 构建有完整列表时用完整列表 */
 export function useRunTasks(ref: WorkspaceRef | null): TasksEntry {
   const key = ref ? refKey(ref) : ''
-  return useSyncExternalStore(subscribe, () => entries.get(key) ?? EMPTY)
+  return useSyncExternalStore(subscribe, () => view(key))
 }
 /** 不在 React 里取当前缓存（编辑器 ▶ 用） */
-export const getRunTasks = (ref: WorkspaceRef | null): TasksEntry => (ref ? (entries.get(refKey(ref)) ?? EMPTY) : EMPTY)
+export const getRunTasks = (ref: WorkspaceRef | null): TasksEntry => (ref ? view(refKey(ref)) : EMPTY)
 
 const normRoot = (root: string): string => root.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase()
-// 编辑器保存了 package.json / Makefile / Cargo.toml：根目录相同的缓存重新读
+// 编辑器保存了 package.json / Makefile / Cargo.toml / Gradle 的文件：根目录相同的缓存重新读
 if (typeof window !== 'undefined')
   window.addEventListener(FILE_SAVED_EVENT, event => {
     const { root, path } = (event as CustomEvent<{ root: string; path: string }>).detail
@@ -146,8 +268,8 @@ function idleTerminalNamed(name: string, root: string): string | null {
   )
 }
 export interface TaskRunner {
-  /** 运行：还在跑就只跳到它的终端；fresh = 总是新开终端 */
-  run(group: RunTaskGroup, task: RunTask, fresh?: boolean): Promise<void>
+  /** 运行：还在跑就只跳到它的终端；fresh = 总是新开终端；args 接在命令后面（Gradle 的「带参数运行」） */
+  run(group: RunTaskGroup, task: RunTask, fresh?: boolean, args?: string): Promise<void>
   /** 往它的终端发 Ctrl+C，行标成已停止 */
   stop(group: RunTaskGroup, task: RunTask): void
   /** 跳到它的终端；没有终端返回 false */
@@ -168,12 +290,14 @@ export function useTaskRunner(state: RunTaskState | null): TaskRunner {
     [root, select],
   )
   const run = useCallback(
-    async (group: RunTaskGroup, task: RunTask, fresh = false): Promise<void> => {
+    async (group: RunTaskGroup, task: RunTask, fresh = false, args = ''): Promise<void> => {
       const key = runKey(root, group, task)
       const status = statusOf(key)
       if (status.kind === 'running' && !fresh && focus(group, task)) return
-      const reuse = fresh ? null : (runs.get(key)?.terminalId ?? idleTerminalNamed(task.name, root))
-      const id = await runTask(task.name, taskCommand(group, task), reuse)
+      const title = taskTitle(group, task)
+      const reuse = fresh ? null : (runs.get(key)?.terminalId ?? idleTerminalNamed(title, root))
+      const extra = args.trim()
+      const id = await runTask(title, program => taskCommand(group, task, program) + (extra ? ` ${extra}` : ''), reuse)
       if (id) setRun(key, { terminalId: id, stopped: false, demoOk: isDemo })
     },
     [root, runTask, focus],

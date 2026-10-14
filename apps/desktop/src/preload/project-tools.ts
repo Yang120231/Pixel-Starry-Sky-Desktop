@@ -7,6 +7,7 @@ import type {
   ServiceInput,
   EnvironmentState,
   RunTaskState,
+  GradleListedTask,
   ProjectCopy,
   CopyInput,
   CopyPreview,
@@ -44,6 +45,9 @@ export interface ProjectToolsBridge {
   environment(ref: WorkspaceRef, force?: boolean): Promise<EnvironmentState>
   /** 代码模式左栏「任务」：项目里能跑的命令（docs/ui/coding-tasks.md） */
   runTasks(ref: WorkspaceRef): Promise<RunTaskState>
+  /** Gradle 完整任务列表：在构建根目录跑 `gradlew tasks --all`（docs/ui/coding-tasks.md §9.2） */
+  gradleTasks(ref: WorkspaceRef, buildDir: string): Promise<GradleListedTask[]>
+  gradleTasksCancel(ref: WorkspaceRef, buildDir: string): Promise<void>
   services(ref: WorkspaceRef): Promise<ServiceDefinition[]>
   saveService(ref: WorkspaceRef, input: ServiceInput): Promise<ServiceDefinition>
   deleteService(id: string): Promise<void>

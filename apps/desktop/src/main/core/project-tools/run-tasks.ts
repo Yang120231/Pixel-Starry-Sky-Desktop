@@ -3,6 +3,7 @@ import { readdir, readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { LOCKFILE_NAMES, detectPackageManager, type PackageManager } from '@pixelsky/protocol'
 import type { RunTask, RunTaskGroup, RunTaskKind, RunTaskState } from '../../../shared/types/project-tools'
+import { readGradleBuild } from './gradle'
 
 const MAX_DEPTH = 3
 const MAX_FILES = 30
@@ -11,7 +12,9 @@ const MAX_MAKE_TARGETS = 50
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'out', 'target', 'vendor'])
 const MAKEFILES = new Set(['Makefile', 'makefile', 'GNUmakefile'])
 /** 根目录组的顺序 */
-const KIND_ORDER: Record<RunTaskKind, number> = { npm: 0, make: 1, cargo: 2 }
+const KIND_ORDER: Record<RunTaskKind, number> = { npm: 0, make: 1, cargo: 2, gradle: 3 }
+const GRADLE_SETTINGS = new Set(['settings.gradle', 'settings.gradle.kts'])
+const GRADLE_BUILDS = new Set(['build.gradle', 'build.gradle.kts'])
 
 interface Manifest {
   kind: RunTaskKind
@@ -27,9 +30,21 @@ function manifestKind(name: string): RunTaskKind | null {
   return null
 }
 
+/** 这个文件夹有 settings 就是 Gradle 构建的根；没有 settings、也不在已找到的构建里面的 build 文件自己算一个构建（§9.1） */
+function gradleManifest(dir: string, names: string[], builds: string[]): Manifest | null {
+  const settings = names.find(name => GRADLE_SETTINGS.has(name))
+  const build = names.find(name => GRADLE_BUILDS.has(name))
+  // buildSrc 是主构建的一部分，不单独算
+  if (dir === 'buildSrc' || dir.endsWith('/buildSrc')) return null
+  if (!settings && (!build || builds.some(b => !b || dir === b || dir.startsWith(b + '/')))) return null
+  builds.push(dir)
+  return { kind: 'gradle', dir, name: (settings ?? build)! }
+}
+
 /** 广度优先往下最多 3 层找清单文件；不跟随符号链接 */
 async function findManifests(root: string): Promise<{ files: Manifest[]; truncated: boolean }> {
   const files: Manifest[] = []
+  const builds: string[] = []
   let level = ['']
   for (let depth = 0; depth <= MAX_DEPTH && level.length; depth++) {
     const next: string[] = []
@@ -41,6 +56,12 @@ async function findManifests(root: string): Promise<{ files: Manifest[]; truncat
         continue
       }
       entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+      const gradle = gradleManifest(
+        dir,
+        entries.filter(e => e.isFile()).map(e => e.name),
+        builds,
+      )
+      if (gradle) files.push(gradle)
       for (const entry of entries) {
         if (entry.isSymbolicLink()) continue
         if (entry.isDirectory()) {
@@ -168,6 +189,10 @@ export async function readRunTasks(root: string): Promise<RunTaskState> {
 
   const groups: RunTaskGroup[] = []
   for (const file of files) {
+    if (file.kind === 'gradle') {
+      groups.push(...(await readGradleBuild(root, file.dir, readSmall)))
+      continue
+    }
     const text = await readSmall(join(absolute(file.dir), file.name))
     if (text === null) continue
     const path = file.dir ? `${file.dir}/${file.name}` : file.name
@@ -182,9 +207,24 @@ export async function readRunTasks(root: string): Promise<RunTaskState> {
     if (!tasks.length) continue
     groups.push({ kind: file.kind, file: path, dir: file.dir, ...(manager ? { manager } : {}), tasks })
   }
+  // 排序按「层」：gradle 子项目属于它的构建根目录那一层，同层排在 npm / make / cargo 后面，构建里根项目在前、子项目按项目路径
+  const levelOf = (g: RunTaskGroup) => g.gradle?.buildDir ?? g.dir
+  const projectOrder = (a: RunTaskGroup, b: RunTaskGroup) => {
+    const pa = a.gradle?.project ?? ':'
+    const pb = b.gradle?.project ?? ':'
+    if (pa === pb) return 0
+    if (pa === ':' || pb === ':') return pa === ':' ? -1 : 1
+    return pa < pb ? -1 : 1
+  }
   groups.sort((a, b) => {
-    if (!a.dir !== !b.dir) return a.dir ? 1 : -1
-    if (!a.dir) return KIND_ORDER[a.kind] - KIND_ORDER[b.kind]
+    const la = levelOf(a)
+    const lb = levelOf(b)
+    if (!la !== !lb) return la ? 1 : -1
+    if (!la) return KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || projectOrder(a, b)
+    if (a.kind === 'gradle' || b.kind === 'gradle') {
+      if (la !== lb) return la < lb ? -1 : 1
+      return KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || projectOrder(a, b)
+    }
     return a.file < b.file ? -1 : a.file > b.file ? 1 : 0
   })
   return { root, groups, truncated }
