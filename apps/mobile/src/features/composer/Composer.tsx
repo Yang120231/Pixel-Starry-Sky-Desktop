@@ -7,6 +7,7 @@ import { useRef, useState } from 'react'
 import { ENGINES, type EngineId } from '@pixelsky/protocol'
 import type { DesktopLink } from '@/connection'
 import { imageDataUrl, usePendingImages } from '@/data/images'
+import { attemptFor, sendKey, type SendAttempt } from '@/data/retry'
 import { FINE_POINTER, Spinner, cn, useMedia } from '@/ui'
 import { AttachButton, AttachmentStrip } from '@/ui/images'
 
@@ -36,6 +37,8 @@ export function Composer({
   const latest = useRef(draft)
   latest.current = draft
   const ready = canAct && (!!draft.trim() || images.images.length > 0) && !busy && !images.busy
+  // 上次没发成功的内容和它的 ID：原样重发时沿用，电脑上能认出是同一条（data/retry.ts）
+  const attempt = useRef<SendAttempt | null>(null)
   const send = async () => {
     const sent = draft,
       value = draft.trim(),
@@ -43,12 +46,23 @@ export function Composer({
     if (!link || (!value && !attachments.length)) return
     setBusy(true)
     setError(null)
+    const current = attemptFor(
+      attempt.current,
+      sendKey(
+        sessionId,
+        value,
+        attachments.map(i => i.id),
+      ),
+      () => crypto.randomUUID(),
+    )
+    attempt.current = current
     try {
       await link.call('engine:send', sessionId, {
         text: value,
-        clientMessageId: crypto.randomUUID(),
+        clientMessageId: current.id,
         ...(attachments.length ? { attachments } : {}),
       })
+      attempt.current = null
       if (latest.current === sent) onDraft('')
       images.discard(attachments.map(i => i.id))
     } catch (e) {

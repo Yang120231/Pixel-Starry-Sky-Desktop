@@ -495,3 +495,34 @@ describe('helpers', () => {
     expect(sanitize('engine:interrupt', ['s'])).toEqual(['s'])
   })
 })
+
+// 「允许」结果帧只发一次，手机当时不在线就收不到（审查报告 2026-10-14）：手机重连后会重发配对请求，
+// 已经记下这部手机（公钥一致）时直接回「已允许」
+describe('MobileGateway pairing result after reconnect', () => {
+  it('re-sent pair request from an accepted phone gets accepted again, even after the pairing is gone', async () => {
+    const t = setup()
+    const p = t.phone('p1')
+    const offer = (await t.gateway.startPairing()).offer
+    p.pair(offer)
+    await t.gateway.decide(true)
+    p.results.length = 0
+    // 手机没收到 accepted，重连后重发
+    p.pair(offer)
+    expect(p.results).toEqual([{ status: 'accepted' }])
+    // 电脑重启 / 配对面板关了（没有进行中的配对）也一样
+    t.gateway.cancelPairing()
+    p.pair(offer)
+    expect(p.results).toEqual([{ status: 'accepted' }, { status: 'accepted' }])
+  })
+  it('a different key under the same phone id is not told anything', async () => {
+    const t = setup()
+    const p = t.phone('p1')
+    const offer = (await t.gateway.startPairing()).offer
+    p.pair(offer)
+    await t.gateway.decide(true)
+    t.gateway.cancelPairing()
+    const impostor = t.phone('p1')
+    impostor.pair(offer)
+    expect(impostor.results).toEqual([])
+  })
+})

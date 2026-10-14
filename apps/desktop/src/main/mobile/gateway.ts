@@ -397,14 +397,21 @@ export class MobileGateway {
   private onPair(phone: string, body: Uint8Array): void {
     const p = this.pairing,
       key = this.d.store.keypair()
-    // 没在配对、过期、已经有一部在等确认：不理（不回结果，免得被拿来探测）
-    if (!p || !key || p.status !== 'waiting' || this.now() > p.expires) return
     let request: unknown
     try {
       request = decodeJson(body)
     } catch {
       return
     }
+    // 已经允许过的手机又发来配对请求：「允许」结果帧只发一次，手机当时不在线（锁屏、切走、中转在重连）就没收到，
+    // 重连后会重发请求。公钥和记下的一致就再回一次（审查报告 2026-10-14）；不一致照常走下面的配对流程
+    const known = this.d.store.device(phone)
+    if (known && (request as { key?: unknown } | null)?.key === known.publicKey) {
+      this.pairResult(phone, 'accepted')
+      return
+    }
+    // 没在配对、过期、已经有一部在等确认：不理（不回结果，免得被拿来探测）
+    if (!p || !key || p.status !== 'waiting' || this.now() > p.expires) return
     const verified = verifyPairRequest(request, p.secret, key.publicKey)
     if (!verified) return
     p.request = { phone, ...verified }

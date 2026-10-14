@@ -1,11 +1,12 @@
 // 新建任务：选项目、引擎，写第一句话（可以带图片）。引擎默认用电脑上设的那个（docs/mobile-remote.md §17 第 7 项）；
 // 权限模式、线路、模型都用电脑上的设置（手机传了也会被电脑忽略，D095）。
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Check, Folder, Send } from 'lucide-react'
 import { ENGINES, ENGINE_ORDER, type EngineId, type SessionRecord } from '@pixelsky/protocol'
 import type { Pairing } from '@/connection'
 import { useDefaultEngine, useDesktop } from '@/data/hooks'
 import { imageDataUrl, usePendingImages } from '@/data/images'
+import { attemptFor, sendKey, type SendAttempt } from '@/data/retry'
 import { Banner, Button, Empty, Screen, Section, Segmented, Spinner, cn } from '@/ui'
 import { AttachButton, AttachmentStrip } from '@/ui/images'
 
@@ -37,18 +38,32 @@ export function NewTask({
   const chosen = (projects.some(p => p.id === projectId) ? projectId : null) ?? projects[0]?.id ?? null
   const hasContent = !!text.trim() || images.images.length > 0
 
+  // 上次建好了会话、但消息没发成功：重试时不再新建会话，消息沿用同一个 ID（data/retry.ts）
+  const created = useRef<{ key: string; sessionId: string } | null>(null)
+  const attempt = useRef<SendAttempt | null>(null)
   const create = async () => {
     if (!link || !chosen || !hasContent) return
     setBusy(true)
     setError(null)
+    const value = text.trim()
+    const ids = images.images.map(i => i.id)
+    const target = JSON.stringify([chosen, engine])
     try {
-      const record = await link.call<SessionRecord>('engine:createSession', { projectId: chosen, engine })
-      await link.call('engine:send', record.id, {
-        text: text.trim(),
-        clientMessageId: crypto.randomUUID(),
+      if (created.current?.key !== target) {
+        const record = await link.call<SessionRecord>('engine:createSession', { projectId: chosen, engine })
+        created.current = { key: target, sessionId: record.id }
+      }
+      const sessionId = created.current.sessionId
+      const current = attemptFor(attempt.current, sendKey(sessionId, value, ids), () => crypto.randomUUID())
+      attempt.current = current
+      await link.call('engine:send', sessionId, {
+        text: value,
+        clientMessageId: current.id,
         ...(images.images.length ? { attachments: images.images } : {}),
       })
-      onCreated(record.id)
+      created.current = null
+      attempt.current = null
+      onCreated(sessionId)
     } catch (e) {
       setError((e as Error).message)
       setBusy(false)
