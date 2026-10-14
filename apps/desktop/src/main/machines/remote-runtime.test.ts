@@ -24,6 +24,7 @@ beforeEach(async () => {
         throw new Error('no desktop in tests')
       },
       event: (channel: string, value: unknown) => events.push([channel, value]),
+      handle: () => {},
     },
     join(root, 'data'),
   )
@@ -42,6 +43,17 @@ describe('remote runtime', () => {
     expect(hello).toMatchObject({ protocol: REMOTE_PROTOCOL, node: process.versions.node })
     await expect(call('engine:nothing')).rejects.toThrow('REMOTE_UNSUPPORTED: engine:nothing')
     await expect(call('toString')).rejects.toThrow('REMOTE_UNSUPPORTED')
+  })
+
+  it('stats 返回内存和进程数', async () => {
+    const stats = await call('stats')
+    expect(stats.rssMb).toBeGreaterThan(0)
+    expect(stats.processes).toBeGreaterThanOrEqual(1)
+  })
+
+  it('tunnel:listen 经方法表路由，返回可用端口', async () => {
+    const port = await call<number>('tunnel:listen')
+    expect(port).toBeGreaterThan(0)
   })
 
   it('lists directories', async () => {

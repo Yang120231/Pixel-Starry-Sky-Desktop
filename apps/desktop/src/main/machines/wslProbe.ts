@@ -1,3 +1,5 @@
+import type { CheckItem } from '../../shared/types/machines'
+
 // 通过 probeArgs() 的参数从 stdin 喂进去；用户指定的 node 路径靠 `env PIXELSKY_NODE=...` 传，
 // 因为 --exec 不会把 Windows 环境变量带进 WSL（除非配 WSLENV）。
 // 脚本要能在 dash 下跑；不能写 ${ 和反引号（这是模板字符串）
@@ -17,7 +19,11 @@ try_node() {
   p="$2"
   [ -n "$p" ] || return 0
   case "$NSEEN" in *"|$p|"*) return 0 ;; esac
-  [ -e "$p" ] || return 0
+  if [ ! -e "$p" ]; then
+    # 用户指定的路径不存在也要报出来（版本为空 = 跑不起来），不能悄悄换成别的
+    [ "$1" = env ] && add_node "{\"source\":\"env\",\"path\":$(s "$p"),\"windows\":false,\"version\":null,\"platform\":null}"
+    return 0
+  fi
   NSEEN="$NSEEN$p|"
   win=0; ver=""; plat=""
   case "$p" in /mnt/*) win=1 ;; esac
@@ -154,17 +160,7 @@ export function parseProbe(stdout: string): WslProbe | null {
   return null
 }
 
-export interface CheckItem {
-  key: 'start' | 'encoding' | 'node' | 'claude' | 'codex' | 'login'
-  status: 'ok' | 'fail' | 'warn' | 'info'
-  required: boolean
-  /** 给界面显示的短事实（版本、路径、错误信息），不放中文句子 */
-  detail: string
-  /** 原因码，如 WSL_START_FAILED NODE_MISSING NODE_OLD NODE_BROKEN NODE_WINDOWS CLAUDE_MISSING ENCODING_NOT_UTF8 */
-  code?: string
-  /** 可复制的命令 */
-  fix?: string
-}
+export type { CheckItem }
 
 const NODE_MIN = 22
 const NODE_FIX = 'curl -fsSL https://fnm.vercel.app/install | bash && ~/.local/share/fnm/fnm install 22'

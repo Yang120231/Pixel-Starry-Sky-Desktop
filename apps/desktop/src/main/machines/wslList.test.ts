@@ -79,8 +79,8 @@ describe('wslMachineId', () => {
 })
 
 describe('listWsl', () => {
-  it('run 返回 null 时是空列表', async () => {
-    expect(await listWsl(async () => null)).toEqual([])
+  it('run 返回 null 时返回 null（和空列表区分）', async () => {
+    expect(await listWsl(async () => null)).toEqual(process.platform === 'win32' ? null : [])
   })
   it('只在 Windows 上执行', async () => {
     let calls = 0
@@ -89,6 +89,6 @@ describe('listWsl', () => {
       return utf16(sample, true)
     })
     expect(calls).toBe(process.platform === 'win32' ? 1 : 0)
-    expect(list.length).toBe(process.platform === 'win32' ? 1 : 0)
+    expect(list?.length).toBe(process.platform === 'win32' ? 1 : 0)
   })
 })

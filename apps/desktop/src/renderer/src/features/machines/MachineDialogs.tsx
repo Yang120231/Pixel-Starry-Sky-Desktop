@@ -157,6 +157,7 @@ export function MachineDialogs() {
               onChange={e => setQuery(e.target.value)}
             />
             {state.machines
+              .filter(m => m.kind !== 'wsl')
               .filter(m => (m.name + m.host).toLowerCase().includes(query.toLowerCase()))
               .map(machine => (
                 <div key={machine.id} className="mb-2 rounded-lg border border-line bg-surface p-3">

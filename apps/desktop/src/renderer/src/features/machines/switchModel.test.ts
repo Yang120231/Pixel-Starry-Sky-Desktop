@@ -4,6 +4,7 @@ import { cloudMachines, switchView } from './switchModel'
 
 const machine = (id: string, status: MachineInfo['status'], name = id): MachineInfo => ({
   id,
+  kind: id === 'local' ? 'local' : id.startsWith('wsl-') ? 'wsl' : 'ssh',
   name,
   host: id === 'local' ? '' : 'h',
   port: 22,
@@ -43,6 +44,16 @@ describe('switchView', () => {
   it('没有远程机器', () => {
     expect(switchView(state('local'))).toEqual({ side: 'local', warn: false })
   })
+  it('当前是 WSL 发行版：本机这一边，带发行版名', () => {
+    expect(switchView(state('wsl-aaaaaaaaaaaa', machine('wsl-aaaaaaaaaaaa', 'connected', 'Ubuntu')))).toEqual({
+      side: 'local',
+      name: 'Ubuntu',
+      warn: false,
+    })
+  })
+  it('WSL 发行版没连上时带警告点', () => {
+    expect(switchView(state('wsl-aaaaaaaaaaaa', machine('wsl-aaaaaaaaaaaa', 'error', 'Debian'))).warn).toBe(true)
+  })
   it('当前机器不在列表里时当本机', () => {
     expect(switchView(state('ssh-9')).side).toBe('local')
   })
@@ -54,5 +65,9 @@ describe('cloudMachines', () => {
       b = machine('ssh-2', 'disconnected')
     expect(cloudMachines(state('local', a, b))).toEqual([a, b])
     expect(cloudMachines(state('local'))).toEqual([])
+  })
+  it('不含 WSL 发行版', () => {
+    const a = machine('ssh-1', 'connected')
+    expect(cloudMachines(state('local', a, machine('wsl-bbbbbbbbbbbb', 'disconnected')))).toEqual([a])
   })
 })

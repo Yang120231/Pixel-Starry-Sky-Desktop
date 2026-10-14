@@ -15,14 +15,23 @@ export class RpcPeer {
   private readonly core: RpcCore
   onEvent: (channel: string, data: unknown) => void = () => {}
   onClose: (error: Error) => void = () => {}
+  private readonly channels = new Map<string, (data: unknown) => void>()
+  private readonly closeListeners: (() => void)[] = []
   constructor(
     input: Readable,
     private output: Writable,
     handler?: RpcHandler,
   ) {
     this.core = new RpcCore(message => this.write(message), handler, { closedMessage: 'SSH_CONNECTION_CLOSED' })
-    this.core.onEvent = (channel, data) => this.onEvent(channel, data)
-    this.core.onClose = error => this.onClose(error)
+    this.core.onEvent = (channel, data) => {
+      const cb = this.channels.get(channel)
+      if (cb) cb(data)
+      else this.onEvent(channel, data)
+    }
+    this.core.onClose = error => {
+      this.closeListeners.forEach(cb => cb())
+      this.onClose(error)
+    }
     input.on('data', chunk => this.receive(Buffer.isBuffer(chunk) ? this.decoder.write(chunk) : String(chunk)))
     input.on('error', error => this.close(error))
     input.on('end', () => this.close(new Error('SSH_CONNECTION_CLOSED')))
@@ -40,6 +49,18 @@ export class RpcPeer {
   }
   event(channel: string, data: unknown): void {
     this.core.event(channel, data)
+  }
+  /** 按频道收事件：已注册的频道不再给 onEvent（onEvent 会被 service 整个覆盖，隧道等模块不能靠它）。 */
+  handle(channel: string, cb: (data: unknown) => void): void {
+    this.channels.set(channel, cb)
+  }
+  /** 连接关闭时通知（不占用会被覆盖的 onClose）。 */
+  whenClosed(cb: () => void): void {
+    this.closeListeners.push(cb)
+  }
+  /** 待写出的字节数：隧道据此在输出积压时暂停读源 socket，免得撞上 RPC_SIZE_LIMIT 把整条连接关掉。 */
+  get backlog(): number {
+    return this.output.writableLength
   }
   private receive(chunk: string): void {
     if (this.core.isClosed) return

@@ -456,6 +456,10 @@ contextBridge.exposeInMainWorld('pixelsky', {
     chooseKey: () => call('machines:chooseKey'),
     directories: (id, path) => call('machines:directories', id, path),
     addProject: (id, path) => call('machines:addProject', id, path),
+    wslList: () => call('machines:wslList'),
+    wslCheck: id => call('machines:wslCheck', id),
+    wslSetNode: (id, path) => call('machines:wslSetNode', id, path),
+    wslTerminal: id => call('machines:wslTerminal', id),
     workspaces: id => call('machines:workspaces', id),
     openWorkspace: choice => call('machines:openWorkspace', choice),
     onChange: callback => {

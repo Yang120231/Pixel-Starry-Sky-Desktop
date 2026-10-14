@@ -24,7 +24,7 @@ const tableKeys = (file: string, text: string, pattern: RegExp): string[] =>
   })
 
 /** 远端方法表里不对应任何通道的辅助方法：握手，以及远端 → 本机会话回调用的平台请求。 */
-const HELPER_METHODS = ['hello', 'platform:request', 'platform:record']
+const HELPER_METHODS = ['hello', 'platform:request', 'platform:record', 'stats']
 
 const walk = (dir: string): string[] =>
   readdirSync(dir).flatMap(name => {
@@ -152,7 +152,7 @@ describe('IPC contract shape', () => {
     expect(readFileSync(contractFile, 'utf8')).not.toMatch(/^\s*import\s/m)
   })
   it('exports the remote protocol version', () => {
-    expect(REMOTE_PROTOCOL).toBe(4)
+    expect(REMOTE_PROTOCOL).toBe(5)
     const runtime = readFileSync(join(mainDir, 'machines/remote-runtime.ts'), 'utf8')
     expect(runtime).not.toMatch(/export const REMOTE_PROTOCOL/)
     expect(runtime).toMatch(/protocol: REMOTE_PROTOCOL/)

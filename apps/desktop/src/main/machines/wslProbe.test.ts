@@ -145,6 +145,12 @@ describe('pickNode', () => {
     const nodes = [node({ source: 'env', path: '/opt/node/bin/node', version: '24.0.0' }), node()]
     expect(pickNode(probe({ nodes }))).toBe('/opt/node/bin/node')
   })
+  it('用户指定的路径不存在时不换别的 node，报 NODE_BROKEN', () => {
+    const nodes = [node({ source: 'env', path: '/nope/node', version: null, platform: null }), node()]
+    expect(pickNode(probe({ nodes }))).toBeNull()
+    const item = wslCheckItems(probe({ nodes })).find(i => i.key === 'node')
+    expect(item).toMatchObject({ status: 'fail', code: 'NODE_BROKEN', detail: '/nope/node' })
+  })
   it('跳过 Windows 版和旧版本', () => {
     const nodes = [node({ windows: true, platform: null }), node({ version: '20.1.0' })]
     expect(pickNode(probe({ nodes }))).toBeNull()
@@ -186,6 +192,17 @@ describe('PROBE_SCRIPT', () => {
     },
     70000,
   )
+  it.skipIf(!shOk)('PIXELSKY_NODE 指向不存在的文件时仍输出 env 项', () => {
+    const result = spawnSync('sh', ['-s'], {
+      input: PROBE_SCRIPT,
+      encoding: 'utf8',
+      timeout: 60000,
+      env: { ...process.env, PIXELSKY_NODE: '/nope/node' },
+    })
+    const env = parseProbe(result.stdout)!.nodes.find(n => n.source === 'env')
+    expect(env).toMatchObject({ path: '/nope/node', version: null })
+    expect(pickNode(parseProbe(result.stdout))).toBeNull()
+  })
   it('不含会破坏模板字符串的写法', () => {
     expect(PROBE_SCRIPT).not.toContain('${')
     expect(PROBE_SCRIPT).not.toContain('`')

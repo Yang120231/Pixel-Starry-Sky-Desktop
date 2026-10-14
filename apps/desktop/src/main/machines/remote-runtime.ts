@@ -15,20 +15,22 @@ import { bindOps } from '../core/ops'
 import { listDirectories } from '../core/directories'
 import { gatewaySettings } from '../platform/compact-window'
 import type { WorkspaceRef } from '../../shared/types/workspace'
-import type { RpcPeer } from './rpc'
+import { TunnelEnd, type TunnelPeer } from './tunnel'
+import { collectStats } from './stats'
 
 type Handler = (...args: never[]) => unknown
 type RemoteOf<Spec> = Spec extends { readonly remote: infer Method extends string } ? Method : never
 /** Every method name the IPC contract declares in a `remote` field: each one needs an implementation below. */
 type ContractMethod = RemoteOf<(typeof IPC_CONTRACT)[keyof typeof IPC_CONTRACT]>
 /** Methods that serve no channel: the handshake, and the platform requests the helper sends back to the desktop. */
-type HelperMethod = 'hello' | 'platform:request' | 'platform:record'
+type HelperMethod = 'hello' | 'platform:request' | 'platform:record' | 'tunnel:listen' | 'tunnel:connect' | 'stats'
 
 export async function createRemoteRuntime(
-  peer: Pick<RpcPeer, 'call' | 'event'>,
+  peer: TunnelPeer,
   dataDir = join(homedir(), '.local', 'share', 'pixelsky', 'remote', 'data'),
   extra: Partial<EngineHostOptions> = {},
 ) {
+  const tunnel = new TunnelEnd(peer, 'remote')
   const environments = new Map<string, NodeJS.ProcessEnv>()
   const prepare = async (record: SessionRecord) => {
     if (!viaGateway(record)) {
@@ -105,6 +107,8 @@ export async function createRemoteRuntime(
       if (record) host.platformRequestContext(record)?.(requestId, model, chargeId)
     },
     'platform:record': id => host.executionRecord(id),
+    ...tunnel.methods,
+    stats: () => collectStats(),
   }
   const methods: Record<string, Handler> = { ...helperMethods, ...contractMethods }
   return {
@@ -115,6 +119,7 @@ export async function createRemoteRuntime(
       return methods[method](...(args as never[]))
     },
     async close() {
+      tunnel.close()
       await Promise.allSettled([projectTools.shutdown(), host.shutdown()])
     },
   }

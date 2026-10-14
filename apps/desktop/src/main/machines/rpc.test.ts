@@ -48,4 +48,24 @@ describe('SSH JSONL RPC', () => {
     for (const byte of data) input.write(Buffer.from([byte]))
     expect(values).toEqual(['中文路径'])
   })
+  it('handle 按频道接收事件，未注册的频道仍给 onEvent', () => {
+    const input = new PassThrough(),
+      peer = new RpcPeer(input, new PassThrough()),
+      handled: unknown[] = [],
+      fallback: string[] = []
+    peers.push(peer)
+    peer.onEvent = name => fallback.push(name)
+    peer.handle('tunnel:data', data => handled.push(data))
+    input.write(JSON.stringify({ event: 'tunnel:data', data: 1 }) + '\n')
+    input.write(JSON.stringify({ event: 'engine:event', data: 2 }) + '\n')
+    expect(handled).toEqual([1])
+    expect(fallback).toEqual(['engine:event'])
+  })
+  it('whenClosed 在连接关闭时通知', () => {
+    const peer = new RpcPeer(new PassThrough(), new PassThrough())
+    let closed = 0
+    peer.whenClosed(() => closed++)
+    peer.close()
+    expect(closed).toBe(1)
+  })
 })

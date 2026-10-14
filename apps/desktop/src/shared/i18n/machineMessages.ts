@@ -117,6 +117,32 @@ export const machineErrors = {
     zh: 'SSH Agent 不可用，请启动 Agent 或选择私钥文件。',
     en: 'SSH Agent is unavailable. Start an agent or select a private key file.',
   },
+  WSL_NOT_READY: {
+    zh: 'WSL 还没准备好，按检查卡片装好需要的东西。',
+    en: 'WSL is not ready. Install what the check card lists, then try again.',
+  },
+  WSL_CONNECTION_CLOSED: { zh: 'WSL 连接已断开。', en: 'The WSL connection closed.' },
+  WSL_START_FAILED: {
+    zh: '无法启动这个 WSL 发行版，请在终端里运行 wsl 看看是否正常。',
+    en: 'Could not start this WSL distribution. Run wsl in a terminal to see what is wrong.',
+  },
+  WSL_COMMAND_TIMEOUT: {
+    zh: 'WSL 响应太慢，第一次启动可能需要一会儿，请稍后重试。',
+    en: 'WSL took too long to respond. The first start can be slow; try again shortly.',
+  },
+  WSL_COMMAND_FAILED: { zh: 'WSL 里的命令执行失败。', en: 'A command inside WSL failed.' },
+  WSL_HOME_EMPTY: {
+    zh: '读不到这个发行版里的用户主目录，请先在 WSL 里打开一次完成初始化。',
+    en: "Could not read the user's home directory in this distro. Open it in WSL once to finish setup.",
+  },
+  WSL_NOT_EDITABLE: {
+    zh: 'WSL 发行版由系统提供，不能在这里编辑或删除。',
+    en: 'WSL distributions come from Windows and cannot be edited or removed here.',
+  },
+  WSL_NODE_PATH_INVALID: {
+    zh: '请填 WSL 里的 Linux 路径，以 / 开头，且不能在 /mnt/ 下。',
+    en: 'Enter a Linux path inside WSL that starts with / and is not under /mnt/.',
+  },
   SSH_NOT_CONNECTED: { zh: '机器未连接，请先重新连接。', en: 'Machine disconnected. Reconnect first.' },
   SSH_CONNECTION_CLOSED: { zh: 'SSH 连接已断开。', en: 'The SSH connection closed.' },
   SSH_NODE_REQUIRED: {

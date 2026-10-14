@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import type { MachineState, WorkspaceChoice } from '../../../../shared/types/machines'
+import type { CheckItem, MachineState, WorkspaceChoice } from '../../../../shared/types/machines'
 import {
   getEngineState,
   setCurrentProject,
@@ -20,6 +20,7 @@ let state: MachineState = (isDemo ? demo().machines : undefined) ?? {
   machines: [
     {
       id: 'local',
+      kind: 'local',
       name: '',
       host: '',
       port: 0,
@@ -72,6 +73,24 @@ export function openMachineManager(opts: { add?: boolean } = {}): void {
 /** fresh：选了一定开新对话（输入框上方文件夹菜单的「在别的文件夹开新对话…」），不跳到那个文件夹已有的对话 */
 export function openWorkspacePicker(opts: { fresh?: boolean } = {}): void {
   window.dispatchEvent(new CustomEvent('pixelsky:choose-workspace', { detail: opts }))
+}
+/** 重新检测 WSL 发行版（演示里没有主进程，原样返回） */
+export async function refreshWsl(): Promise<void> {
+  if (isDemo || !window.pixelsky) return
+  set(await window.pixelsky.machines.wslList())
+}
+/** 只探测不连接；演示里返回当前记录的检查项 */
+export async function checkWsl(id: string): Promise<CheckItem[]> {
+  if (isDemo || !window.pixelsky) return state.machines.find(m => m.id === id)?.wsl?.lastCheck?.items ?? []
+  return window.pixelsky.machines.wslCheck(id)
+}
+export async function setWslNode(id: string, path: string | null): Promise<void> {
+  if (isDemo || !window.pixelsky) return
+  await window.pixelsky.machines.wslSetNode(id, path)
+}
+export async function openWslTerminal(id: string): Promise<void> {
+  if (isDemo || !window.pixelsky) return
+  await window.pixelsky.machines.wslTerminal(id)
 }
 export async function selectMachine(id: string): Promise<void> {
   if (switching || id === state.currentId) return

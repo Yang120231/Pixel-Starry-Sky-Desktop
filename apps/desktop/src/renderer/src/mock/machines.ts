@@ -9,6 +9,7 @@ const remote = (
   status: MachineInfo['status'],
 ): MachineInfo => ({
   id,
+  kind: 'ssh',
   name,
   host,
   port: 22,
@@ -27,6 +28,7 @@ export const demoMachines: MachineState = {
   machines: [
     {
       id: 'local',
+      kind: 'local',
       name: '',
       host: '',
       port: 0,

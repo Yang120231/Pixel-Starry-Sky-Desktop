@@ -2,12 +2,9 @@ import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 
-export interface WslDistro {
-  name: string
-  state: 'running' | 'stopped' | 'installing' | 'converting' | 'unknown'
-  version: 1 | 2
-  isDefault: boolean
-}
+import type { WslDistro } from '../../shared/types/machines'
+
+export type { WslDistro }
 
 // 旧版 wsl.exe 不认 WSL_UTF8，输出是 UTF-16LE，所以两种都要认；UTF-8 文本里不会有 0 字节，
 // 有就是 UTF-16（中文占多数时按「一半以上是 0」会漏判）
@@ -87,8 +84,9 @@ function runWsl(args: string[]): Promise<Buffer | null> {
   })
 }
 
-export async function listWsl(run: (args: string[]) => Promise<Buffer | null> = runWsl): Promise<WslDistro[]> {
+export async function listWsl(run: (args: string[]) => Promise<Buffer | null> = runWsl): Promise<WslDistro[] | null> {
   if (process.platform !== 'win32') return []
   const out = await run(['--list', '--verbose'])
-  return out ? parseWslList(decodeWslOutput(out)) : []
+  // null = wsl.exe 超时或出错，和「确实没有发行版」要分开，免得偶发失败把机器全藏起来
+  return out ? parseWslList(decodeWslOutput(out)) : null
 }
