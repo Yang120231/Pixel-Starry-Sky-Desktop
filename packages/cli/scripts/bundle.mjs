@@ -139,8 +139,14 @@ for (const dir of [...pkgDirs].sort()) {
       ? meta.license
       : (meta.license?.type ?? meta.licenses?.map(l => l.type).join(' OR ') ?? '未知')
   const files = readdirSync(dir).filter(f => /^(licen[sc]e|copying|notice)/i.test(f) && statSync(join(dir, f)).isFile())
-  if (files.length === 0 && !meta.name.startsWith('@earendil-works/')) console.warn(`警告：${id} 没找到许可文本`)
   const texts = files.map(f => `--- ${f} ---\n${readFileSync(join(dir, f), 'utf8').trim()}`)
+  if (files.length === 0 && !meta.name.startsWith('@earendil-works/')) {
+    // 包里没带许可文本的，必须在 LICENSES/extra/<包名>.txt 手工补（核对过上游），否则构建失败
+    const name = meta.name.replace('/', '__')
+    const extra = join(root, 'LICENSES', 'extra', name + '.txt')
+    if (!existsSync(extra)) throw new Error(`${id} 没找到许可文本，请补 ${extra}`)
+    texts.push(`--- ${name}.txt（手工补充）---\n${readFileSync(extra, 'utf8').trim()}`)
+  }
   sections.push(`## ${id} (${license})\n\n${texts.join('\n\n')}\n`)
 }
 writeFileSync(join(out, 'THIRD_PARTY_NOTICES.txt'), `像素星空命令行随包分发的第三方软件\n\n${sections.join('\n')}`)

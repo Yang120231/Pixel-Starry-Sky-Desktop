@@ -10,6 +10,8 @@ const PIXEL_CLI_SRC = join(__dirname, '../../../packages/cli/dist/pixel-cli')
 const PIXEL_CLI_FILES = [
   'pixel.mjs',
   'package.json',
+  'THIRD_PARTY_NOTICES.txt',
+  'LICENSES/pi-coding-agent-MIT.txt',
   'codemode-worker.js',
   'image-resize-worker.js',
   'node_modules/quickjs-wasi/quickjs.wasm',

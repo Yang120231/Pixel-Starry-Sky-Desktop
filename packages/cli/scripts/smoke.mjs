@@ -17,7 +17,9 @@ const exe = resolve(opt('--exe') ?? process.execPath)
 const entry = resolve(opt('--entry') ?? join(root, 'dist', 'pixel-cli', 'pixel.mjs'))
 let version
 try {
-  version = JSON.parse(readFileSync(join(dirname(entry), 'package.json'), 'utf8')).version
+  const pkg = JSON.parse(readFileSync(join(dirname(entry), 'package.json'), 'utf8'))
+  version = pkg.version
+  if (pkg.piConfig?.name !== 'pixelsky') throw new Error('package.json 缺 piConfig 或品牌不是 pixelsky')
 } catch (e) {
   console.error('冒烟失败：读不到产物旁边的 package.json（品牌靠它）：' + e.message)
   process.exit(1)
@@ -104,6 +106,29 @@ for (const r of requests) {
 if (!responses.c.data?.commands?.some(c => c.name === 'pixelsky-mode'))
   fail('get_commands 里没有 pixelsky-mode，自带扩展没打进去')
 console.log('ok RPC get_state / get_commands / get_available_models')
+
+// 4. 运行期依赖：在产物目录里用同一个可执行文件加载 photon / quickjs 的 wasm（跟 Pi 的 worker 一样要读磁盘上的文件）
+const loadCheck = [
+  "const { readFileSync } = await import('node:fs')",
+  "const { createRequire } = await import('node:module')",
+  "const require = createRequire(process.cwd() + '/pixel.mjs')",
+  "const q = await import('quickjs-wasi')",
+  "const w = readFileSync(require.resolve('quickjs-wasi/quickjs.wasm'))",
+  'await WebAssembly.compile(w)',
+  "await import('@silvia-odwyer/photon-node')",
+  "const ph = readFileSync(require.resolve('@silvia-odwyer/photon-node/photon_rs_bg.wasm'))",
+  'await WebAssembly.compile(ph)',
+  "console.log('wasm-ok', typeof q)",
+].join(';')
+const lc = spawnSync(exe, ['--input-type=module', '-e', loadCheck], {
+  env,
+  cwd: dirname(entry),
+  encoding: 'utf8',
+  timeout: 30000,
+})
+stderrAll += lc.stderr ?? ''
+if (lc.status !== 0 || !lc.stdout.includes('wasm-ok')) fail('quickjs / photon 的 wasm 在产物目录里加载失败')
+console.log('ok quickjs / photon wasm 可加载')
 
 rmSync(agentDir, { recursive: true, force: true })
 console.log('冒烟通过')
