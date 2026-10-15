@@ -8,6 +8,7 @@ import type { EngineAdapter, EngineSession, SessionContext } from '../src/adapte
 import type { ChatSeed } from '../src/chat-log'
 import type { EngineHostOptions } from '../src/host/context'
 import { EngineHost } from '../src/host'
+import { derivedSeen } from '../src/host/handoff'
 import { ENGINES } from '../src/registry'
 
 let root: string
@@ -477,5 +478,104 @@ describe('跨引擎接力：回退、撤销、分叉', () => {
     expect(f2.record.engineSessions?.claude?.seen).toBeNull()
     const notice = host.open(f2.record.id).items.findLast(i => i.kind === 'notice')
     expect(notice?.kind === 'notice' && notice.text).toContain('交接')
+  })
+
+  /** claude 一，切 codex 二，切回 claude 发 /compact（暂缓交接）再发三 */
+  async function heldSlashThenTurn() {
+    const t = setup()
+    await t.say('一', 'a')
+    await t.host.update(t.record.id, { engine: 'codex' })
+    await t.say('二', 'b')
+    await t.host.update(t.record.id, { engine: 'claude' })
+    await t.say('/compact', 's')
+    await t.say('三', 'c')
+    return t
+  }
+
+  it('回退：重建游标时跳过暂缓交接的斜杠命令那一轮，下一条消息仍带交接', async () => {
+    const { host, claude, record, say, snap } = await heldSlashThenTurn()
+    const before = snap().items[snap().items.findIndex(i => i.id === 'b') - 1].id
+    await host.rewind(record.id, 'c')
+    expect(snap().items.map(i => i.id)).toContain('s')
+    expect(snap().items.map(i => i.id)).not.toContain('c')
+    expect(snap().record.engineSessions?.claude?.seen).toBe(before)
+    await say('四')
+    const sent = claude.sessions.at(-1)!.inputs.at(-1)!
+    expect(sent.startsWith('<pixelsky-handoff')).toBe(true)
+    expect(sent).toContain('用户：二')
+  })
+
+  it('分叉：重建游标时跳过暂缓交接的斜杠命令那一轮，分叉里第一条消息仍带交接', async () => {
+    const { host, claude, snap } = await heldSlashThenTurn()
+    const before = snap().items[snap().items.findIndex(i => i.id === 'b') - 1].id
+    const forked = await host.forkSession(snap().record.id, 'c')
+    expect(forked.record.engineSessions?.claude?.seen).toBe(before)
+    const forkId = forked.record.id
+    await host.send(forkId, { text: '四', clientMessageId: 'd' })
+    await until(() => host.open(forkId).items.some(i => i.kind === 'user' && i.id === 'd'))
+    await until(() => host.open(forkId).state === 'idle' && host.open(forkId).queue.length === 0)
+    const sent = claude.sessions.at(-1)!.inputs.at(-1)!
+    expect(sent.startsWith('<pixelsky-handoff')).toBe(true)
+    expect(sent).toContain('用户：二')
+  })
+
+  it('回退：没有可交接的内容时斜杠命令那一轮正常推进游标，下一条消息不带交接', async () => {
+    const { host, claude, record, say, snap } = setup()
+    await say('a1', 'a')
+    await say('/compact', 's')
+    await say('b1', 'b')
+    const before = snap().items[snap().items.findIndex(i => i.id === 'b') - 1].id
+    await host.rewind(record.id, 'b')
+    expect(snap().record.engineSessions?.claude?.seen).toBe(before)
+    await say('四')
+    expect(claude.sessions.at(-1)!.inputs.at(-1)).toBe('四')
+  })
+})
+
+describe('derivedSeen', () => {
+  const user = (id: string, engine?: EngineId, text = id, mode?: 'guidance'): Item => ({
+    kind: 'user',
+    id,
+    text,
+    createdAt: 0,
+    ...(engine ? { engine } : {}),
+    ...(mode ? { mode } : {}),
+  })
+  const reply = (id: string): Item => ({ kind: 'assistant', id, text: id, status: 'completed' })
+
+  it('没有该引擎的用户消息为 null', () => {
+    expect(derivedSeen([user('u1', 'codex'), reply('r1')], 'claude', 'claude')).toBeNull()
+  })
+
+  it('普通消息：游标是它所在一轮的末尾', () => {
+    const items = [user('u1', 'claude'), reply('r1'), user('u2', 'codex'), reply('r2')]
+    expect(derivedSeen(items, 'claude', 'claude')).toBe('r1')
+  })
+
+  it('斜杠命令前面有没交接的内容：不推进游标', () => {
+    const items = [
+      user('u1', 'claude'),
+      reply('r1'),
+      user('u2', 'codex'),
+      reply('r2'),
+      user('u3', 'claude', '/compact'),
+    ]
+    expect(derivedSeen(items, 'claude', 'claude')).toBe('r1')
+  })
+
+  it('斜杠命令前面没有可交接的内容：照常推进', () => {
+    const items = [user('u1', 'claude'), reply('r1'), user('u2', 'claude', '/compact'), reply('r2')]
+    expect(derivedSeen(items, 'claude', 'claude')).toBe('r2')
+  })
+
+  it('开头就是斜杠命令且前面没有内容：推进；只有暂缓的斜杠命令时为 null', () => {
+    expect(derivedSeen([user('u1', 'claude', '/init'), reply('r1')], 'claude', 'claude')).toBe('r1')
+    const held = [user('u1', 'codex'), reply('r1'), user('u2', 'claude', '/compact')]
+    expect(derivedSeen(held, 'claude', 'claude')).toBeNull()
+  })
+
+  it('中途补充以斜杠开头不算斜杠命令；没标引擎的消息按 fallback 算', () => {
+    const items = [user('u1', 'codex'), reply('r1'), user('u2', undefined, '/x', 'guidance')]
+    expect(derivedSeen(items, 'claude', 'claude')).toBe('u2')
   })
 })

@@ -11,7 +11,7 @@ import {
   type SessionRecord,
 } from '@pixelsky/protocol'
 import { buildChatSeed, renderSeed, type ChatSeed } from '../chat-log'
-import { buildHandoff, handoffEngines } from '../handoff'
+import { buildHandoff, handoffEngines, hasHandoffContent } from '../handoff'
 import { ENGINES } from '../registry'
 import type { HostContext } from './context'
 
@@ -20,16 +20,25 @@ export const lastItemId = (items: readonly Item[]): string | null => items.at(-1
 
 /**
  * 回退 / 分叉保留 items 之后，这个引擎上下文里最后一条对话条目：它最后处理的那条用户消息所在的一轮的末尾
- * （下一条普通用户消息之前，没有下一条就是最后一条）；它一条都没处理过为 null。untagged 的用户消息按 fallback 引擎算
+ * （下一条普通用户消息之前，没有下一条就是最后一条）；它一条都没处理过为 null。untagged 的用户消息按 fallback 引擎算。
+ * 从头按轮重放 plan 的 hold 规则：斜杠命令派发时还有没交接的内容（游标之后、这条消息之前）就跳过这一轮，
+ * 不推进游标，交接留给下一条普通消息；否则 /compact 那一轮的末尾会被当成已读
  */
 export function derivedSeen(items: readonly Item[], engine: EngineId, fallback: EngineId): string | null {
-  let u = -1
+  let seen = -1
   items.forEach((item, i) => {
-    if (item.kind === 'user' && (item.engine ?? fallback) === engine) u = i
+    if (item.kind !== 'user' || (item.engine ?? fallback) !== engine) return
+    // 斜杠命令派发时还有没交接的内容就不推进游标（同 plan 的 hold）
+    if (
+      item.mode !== 'guidance' &&
+      item.text.trimStart().startsWith('/') &&
+      hasHandoffContent(items.slice(seen + 1, i))
+    )
+      return
+    const next = items.findIndex((it, j) => j > i && it.kind === 'user' && it.mode !== 'guidance')
+    seen = next < 0 ? items.length - 1 : next - 1
   })
-  if (u < 0) return null
-  const next = items.findIndex((item, i) => i > u && item.kind === 'user' && item.mode !== 'guidance')
-  return (next < 0 ? items.at(-1) : items[next - 1])?.id ?? null
+  return seen < 0 ? null : items[seen].id
 }
 
 /** 新引擎收到的这条消息要不要带交接 */
@@ -154,6 +163,7 @@ export class HostHandoff {
     })
     if (!built) return plain
     // 斜杠命令（/compact 等）要原样交给引擎，不能前面加东西；交接留给下一条普通消息
+    // 这条 hold 规则回退 / 分叉重建游标时由 derivedSeen 重放，两处要保持一致
     if (text.trimStart().startsWith('/')) return { ...plain, hold: true }
     // 错误恢复也会补发未确认的上下文，只有接手另一个引擎的普通轮次才显示换引擎提示。
     // 斜杠命令不交接，不能让它吞掉留给下一条普通消息的提示；中途补充也不算新轮次。

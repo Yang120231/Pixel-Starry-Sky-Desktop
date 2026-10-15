@@ -44,6 +44,11 @@ export function isMeaningful(item: Item): boolean {
   )
 }
 
+/** 这些条目里有没有值得交接的内容（有信息量、而且能渲染出文字） */
+export function hasHandoffContent(items: readonly Item[]): boolean {
+  return items.some(item => isMeaningful(item) && render(item) !== null)
+}
+
 /** 这些条目里出现过的、处理过用户消息的引擎（按出现顺序，不含 except） */
 export function handoffEngines(items: readonly Item[], except?: EngineId): EngineId[] {
   const seen: EngineId[] = []
@@ -207,7 +212,7 @@ export function buildHandoff(input: HandoffInput): { text: string; count: number
   const { mode, target, conversationId } = input
   const budget = input.budget ?? DEFAULT_HANDOFF_BUDGET
   const items = input.items.filter(isMeaningful)
-  if (items.length === 0 || !items.some(item => render(item) !== null)) return null
+  if (!hasHandoffContent(items)) return null
   const count = items.length
   const engines = handoffEngines(items, target)
   const names = engines.length ? engines.map(e => ENGINES[e].name).join('、') : '其他 AI 引擎'
