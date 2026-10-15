@@ -27,6 +27,15 @@ export const SETTINGS_INDEX: SearchEntry[] = [
   { section: 'notifications', title: '勿扰', keywords: '勿扰 免打扰 静音 安静 do not disturb dnd quiet' },
   { section: 'notifications', title: '定时勿扰', keywords: '勿扰 定时 每天 夜间 schedule quiet hours dnd' },
   { section: 'notifications', title: '发送测试通知', keywords: '通知 测试 test notification' },
+  {
+    section: 'projects',
+    get title() {
+      return tr('projectImport.fromTools')
+    },
+    get keywords() {
+      return tr('projects.keywords')
+    },
+  },
   { section: 'machines', title: '机器与连接', keywords: '机器 ssh remote 主机 连接 工作区 workspace' },
   {
     section: 'appearance',

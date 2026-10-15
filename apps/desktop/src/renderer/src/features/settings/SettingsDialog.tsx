@@ -7,6 +7,7 @@ import {
   ChartColumn,
   CodeXml,
   Cpu,
+  FolderOpen,
   Info,
   Keyboard,
   MessageSquareText,
@@ -67,6 +68,7 @@ import { LogsSection } from '../logs/LogsSection'
 import { FeedbackSection } from '../feedback/FeedbackSection'
 import { useFeedbackUnread } from '../feedback/store'
 import { MobileSection } from '../mobile/settings/MobileSection'
+import { ProjectsSection } from './projects/ProjectsSection'
 
 export type SectionId =
   | 'account'
@@ -77,6 +79,7 @@ export type SectionId =
   | 'shortcuts'
   | 'about'
   | 'editor'
+  | 'projects'
   | 'extensions'
   /** 旧名：以前的「插件配置」，现在是扩展页的 AI 引擎分组；老入口（输入框里的链接）仍用它 */
   | 'plugins'
@@ -166,6 +169,13 @@ const SECTIONS: Array<{ id: SectionId; label: string; nav?: string; icon: Lucide
     icon: CodeXml,
   },
   {
+    id: 'projects',
+    get label() {
+      return tr('projects.title')
+    },
+    icon: FolderOpen,
+  },
+  {
     id: 'models',
     get label() {
       return tr('modelChannels.title')
@@ -218,7 +228,17 @@ const NAV_GROUPS: Array<{ label: string | null; ids: SectionId[] }> = [
     get label() {
       return tr('settings.SettingsDialog.application')
     },
-    ids: ['account', 'appearance', 'notifications', 'editor', 'extensions', 'shortcuts', 'machines', 'mobile'],
+    ids: [
+      'account',
+      'appearance',
+      'notifications',
+      'editor',
+      'projects',
+      'extensions',
+      'shortcuts',
+      'machines',
+      'mobile',
+    ],
   },
   {
     get label() {
@@ -528,6 +548,8 @@ export function SettingsDialog({
               <AccountSection />
             ) : section === 'editor' ? (
               <EditorSection />
+            ) : section === 'projects' ? (
+              <ProjectsSection />
             ) : section === 'models' ? (
               <ModelsSection />
             ) : section === 'extensions' || section === 'plugins' ? (

@@ -443,12 +443,6 @@ export function importProjects(): void {
 }
 export const IMPORT_PROJECTS_EVENT = 'pixelsky:import-projects'
 
-export const BULK_IMPORT_PROJECTS_EVENT = 'pixelsky:bulk-import-projects'
-export function bulkImportProjects(): void {
-  if (!bridge || remotePicker()) return
-  window.dispatchEvent(new Event(BULK_IMPORT_PROJECTS_EVENT))
-}
-
 export async function scanProjectImports(): Promise<ProjectImportBatch | null> {
   if (!bridge || remotePicker()) return null
   return bridge.scanProjectImports()

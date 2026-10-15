@@ -1,7 +1,7 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { ChevronDown, ChevronsDownUp, ChevronsUpDown, FolderInput, FolderPlus, X } from 'lucide-react'
+import { ChevronDown, ChevronsDownUp, ChevronsUpDown, FolderInput, FolderPlus, Import, X } from 'lucide-react'
 import { IconButton, cn, useComingSoon, useToast } from '@/ui'
 import { ActionMenu } from '@/ui/ActionMenu'
 import {
@@ -13,7 +13,8 @@ import {
 } from '@/features/appearance/sidebar'
 import { getSidebarIcon } from '@/features/appearance/sidebarIcons'
 import { addProject, isLive, recentSpansProjects, useSidebarData } from '@/features/engine'
-import { addProjectPaths, bulkImportProjects, importProjects } from '@/features/engine/store'
+import { addProjectPaths, importProjects } from '@/features/engine/store'
+import { useSettings } from '@/features/settings/SettingsProvider'
 import { SidebarHeader } from './SidebarHeader'
 import { SidebarNav } from './SidebarNav'
 import { SidebarEmpty, SidebarRow, SidebarSection } from './SidebarSection'
@@ -44,6 +45,7 @@ export interface SidebarProps {
 export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: SidebarProps) {
   useI18n()
   const comingSoon = useComingSoon()
+  const settings = useSettings()
   const prefs = useSidebarPrefs()
   const recentShown = recentOpen(prefs, useShortWindow())
   const recentId = useId()
@@ -191,7 +193,11 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
               actions={[
                 { label: tr('projectImport.addFolders'), icon: FolderPlus, run: () => void addProject() },
                 { label: tr('projectImport.fromFolder'), icon: FolderInput, run: importProjects },
-                { label: tr('projectImport.bulkTitle'), icon: FolderInput, run: bulkImportProjects },
+                {
+                  label: tr('projectImport.menuFromTools'),
+                  icon: Import,
+                  run: () => settings.openSettings('projects'),
+                },
               ]}
             />
           )}
