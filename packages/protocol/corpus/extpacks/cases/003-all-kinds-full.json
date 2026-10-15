@@ -1,0 +1,7 @@
+{
+  "title": "七种贡献各一条的底板，完整语法检查：上传级别没有任何问题",
+  "expectCodes": [],
+  "input": "folder",
+  "grammar": "full",
+  "base": "all-kinds"
+}

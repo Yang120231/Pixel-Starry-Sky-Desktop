@@ -1,0 +1,60 @@
+{
+  "rulesVersion": 1,
+  "dev": {
+    "status": "warning",
+    "inactive": {
+      "snippets": [
+        0
+      ]
+    },
+    "skills": [
+      {
+        "name": "review",
+        "index": 0
+      }
+    ],
+    "issues": [
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint"
+      },
+      {
+        "code": "snippets.file",
+        "severity": "error",
+        "scope": "contribution",
+        "path": "snippets/tinyini.json",
+        "contribution": {
+          "kind": "snippets",
+          "index": 0
+        },
+        "upload": "reject"
+      }
+    ]
+  },
+  "upload": {
+    "pass": false,
+    "issues": [
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint",
+        "outcome": "hint"
+      },
+      {
+        "code": "snippets.file",
+        "severity": "error",
+        "scope": "contribution",
+        "path": "snippets/tinyini.json",
+        "contribution": {
+          "kind": "snippets",
+          "index": 0
+        },
+        "upload": "reject",
+        "outcome": "reject"
+      }
+    ]
+  }
+}

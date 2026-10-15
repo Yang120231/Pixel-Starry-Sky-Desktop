@@ -1,0 +1,9 @@
+{
+  "title": "技能文件夹里有脚本",
+  "expectCodes": ["skill.files", "files.type"],
+  "input": "folder",
+  "base": "all-kinds",
+  "files": {
+    "skills/review/run.py": "print(1)\n"
+  }
+}

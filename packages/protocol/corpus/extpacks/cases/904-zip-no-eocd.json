@@ -1,0 +1,14 @@
+{
+  "title": "没有目录结尾记录",
+  "expectCodes": ["zip.invalid"],
+  "input": "zip",
+  "zipEntries": [
+    {
+      "name": "pixelsky-extension.json",
+      "text": "{\"id\":\"a.b\",\"name\":\"A\",\"version\":\"1.0.0\"}"
+    }
+  ],
+  "zipOptions": {
+    "noEocd": true
+  }
+}

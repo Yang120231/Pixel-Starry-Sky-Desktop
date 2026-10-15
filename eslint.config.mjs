@@ -9,6 +9,7 @@ const files = [
   'packages/*/src/**/*.ts',
   'packages/*/test/**/*.ts',
   'scripts/**/*.{js,mjs}',
+  'packages/*/scripts/**/*.mjs',
 ]
 
 // 同一文件命中多个配置块时，同名规则由后者整体覆盖（不合并选项），
@@ -17,6 +18,10 @@ const mainLayerImportPatterns = [
   {
     group: ['**/renderer', '**/renderer/**', '**/preload', '**/preload/**'],
     message: 'main 不得导入 renderer / preload；共享 DTO 放 src/shared',
+  },
+  {
+    group: ['@pixelsky/extension-cli/grammar', '@pixelsky/extension-cli/check'],
+    message: 'main 只能用 extension-cli 的 ./folder / ./zip；语法引擎不进主进程',
   },
 ]
 

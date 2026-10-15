@@ -1,0 +1,18 @@
+{
+  "title": "主题 include 成环",
+  "expectCodes": ["theme.file"],
+  "input": "folder",
+  "base": "all-kinds",
+  "files": {
+    "themes/night.json": {
+      "json": {
+        "include": "./b.json"
+      }
+    },
+    "themes/b.json": {
+      "json": {
+        "include": "./night.json"
+      }
+    }
+  }
+}

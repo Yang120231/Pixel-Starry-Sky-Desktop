@@ -1,0 +1,12 @@
+{
+  "title": "条目名含反斜杠",
+  "expectCodes": ["zip.entryName"],
+  "input": "zip",
+  "base": "pixelsky.dotenv",
+  "zipEntries": [
+    {
+      "name": "a\\b.txt",
+      "text": "x"
+    }
+  ]
+}

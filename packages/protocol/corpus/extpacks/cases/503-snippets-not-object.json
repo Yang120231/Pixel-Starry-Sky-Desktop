@@ -1,0 +1,9 @@
+{
+  "title": "片段文件最外层不是对象",
+  "expectCodes": ["snippets.file"],
+  "input": "folder",
+  "base": "all-kinds",
+  "files": {
+    "snippets/tinyini.json": "[]\n"
+  }
+}

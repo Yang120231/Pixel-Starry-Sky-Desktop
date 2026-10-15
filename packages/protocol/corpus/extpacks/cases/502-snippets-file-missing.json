@@ -1,0 +1,7 @@
+{
+  "title": "片段文件不存在",
+  "expectCodes": ["snippets.file"],
+  "input": "folder",
+  "base": "all-kinds",
+  "remove": ["snippets/tinyini.json"]
+}

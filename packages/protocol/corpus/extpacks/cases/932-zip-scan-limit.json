@@ -1,0 +1,13 @@
+{
+  "title": "zip 里条目超过 5000 个：读不全",
+  "expectCodes": ["files.scanLimit"],
+  "input": "zip",
+  "generate": [
+    {
+      "path": "many/f{i}.txt",
+      "count": 5001,
+      "text": "x"
+    }
+  ],
+  "base": "pixelsky.dotenv"
+}

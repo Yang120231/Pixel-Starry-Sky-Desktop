@@ -1,0 +1,9 @@
+{
+  "title": "技能名含大写和符号",
+  "expectCodes": ["skill.frontmatter"],
+  "input": "folder",
+  "base": "all-kinds",
+  "files": {
+    "skills/review/SKILL.md": "---\nname: Review!\ndescription: Does a thing. Use when asked.\n---\n\nBody.\n"
+  }
+}

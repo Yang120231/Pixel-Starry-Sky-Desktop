@@ -1,0 +1,58 @@
+{
+  "rulesVersion": 1,
+  "dev": {
+    "status": "warning",
+    "inactive": {},
+    "skills": [],
+    "issues": [
+      {
+        "code": "files.encoding",
+        "severity": "warning",
+        "scope": "file",
+        "path": "notes/bad.txt",
+        "upload": "reject"
+      },
+      {
+        "code": "files.unused",
+        "severity": "warning",
+        "scope": "file",
+        "path": "notes/bad.txt",
+        "upload": "hint"
+      },
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint"
+      }
+    ]
+  },
+  "upload": {
+    "pass": false,
+    "issues": [
+      {
+        "code": "files.encoding",
+        "severity": "warning",
+        "scope": "file",
+        "path": "notes/bad.txt",
+        "upload": "reject",
+        "outcome": "reject"
+      },
+      {
+        "code": "files.unused",
+        "severity": "warning",
+        "scope": "file",
+        "path": "notes/bad.txt",
+        "upload": "hint",
+        "outcome": "hint"
+      },
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint",
+        "outcome": "hint"
+      }
+    ]
+  }
+}

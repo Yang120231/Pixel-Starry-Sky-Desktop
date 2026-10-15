@@ -1,0 +1,18 @@
+{
+  "title": "语法里有编译不了的正则（上传级别，完整检查）",
+  "expectCodes": ["grammar.regex"],
+  "input": "folder",
+  "grammar": "full",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "syntaxes/dotenv.tmLanguage.json": {
+      "merge": {
+        "repository": {
+          "comment": {
+            "match": "^\\s*(#).*[abc"
+          }
+        }
+      }
+    }
+  }
+}

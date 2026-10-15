@@ -1,0 +1,16 @@
+{
+  "title": "contributes 里全是空数组",
+  "expectCodes": ["manifest.contributes"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": {
+      "merge": {
+        "contributes": {
+          "grammars": [],
+          "snippets": []
+        }
+      }
+    }
+  }
+}

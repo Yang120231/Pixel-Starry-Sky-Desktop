@@ -1,0 +1,41 @@
+{
+  "rulesVersion": 1,
+  "dev": {
+    "status": "warning",
+    "inactive": {},
+    "skills": [],
+    "issues": [
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint"
+      }
+    ]
+  },
+  "upload": {
+    "pass": false,
+    "issues": [
+      {
+        "code": "grammar.perfUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint",
+        "outcome": "hint"
+      },
+      {
+        "code": "grammar.regex",
+        "severity": "error",
+        "scope": "contribution",
+        "path": "syntaxes/dotenv.tmLanguage.json",
+        "contribution": {
+          "kind": "grammars",
+          "index": 0
+        },
+        "upload": "reject",
+        "pointer": "/repository/comment/match",
+        "outcome": "reject"
+      }
+    ]
+  }
+}

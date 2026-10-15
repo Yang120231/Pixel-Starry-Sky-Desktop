@@ -1,0 +1,9 @@
+{
+  "title": "SKILL.md 没有开头的 --- 块",
+  "expectCodes": ["skill.frontmatter"],
+  "input": "folder",
+  "base": "all-kinds",
+  "files": {
+    "skills/review/SKILL.md": "只有正文\n"
+  }
+}

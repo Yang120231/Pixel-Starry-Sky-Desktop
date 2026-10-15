@@ -1,0 +1,60 @@
+{
+  "rulesVersion": 1,
+  "dev": {
+    "status": "warning",
+    "inactive": {
+      "taskTemplates": [
+        0
+      ]
+    },
+    "skills": [
+      {
+        "name": "review",
+        "index": 0
+      }
+    ],
+    "issues": [
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint"
+      },
+      {
+        "code": "task.extract",
+        "severity": "error",
+        "scope": "contribution",
+        "path": "extract[0]",
+        "contribution": {
+          "kind": "taskTemplates",
+          "index": 0
+        },
+        "upload": "reject"
+      }
+    ]
+  },
+  "upload": {
+    "pass": false,
+    "issues": [
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint",
+        "outcome": "hint"
+      },
+      {
+        "code": "task.extract",
+        "severity": "error",
+        "scope": "contribution",
+        "path": "extract[0]",
+        "contribution": {
+          "kind": "taskTemplates",
+          "index": 0
+        },
+        "upload": "reject",
+        "outcome": "reject"
+      }
+    ]
+  }
+}

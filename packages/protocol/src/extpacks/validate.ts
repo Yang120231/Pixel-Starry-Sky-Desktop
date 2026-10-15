@@ -1,6 +1,8 @@
 // 扩展包校验（方案 §5 / authoring-spec §2–§9）。纯函数：文件内容通过 ExtPackReader 读，不碰文件系统。
 // 严重度（开发者模式）：error/pack = 整个扩展不加载；error/contribution = 只停用那一条；error/file = 该文件不使用；
 // warning = 照常加载。upload 是以后上传检查对它的处理。所有函数都不抛异常，对畸形输入也一样。
+import type { ExtIssueCode } from './codes'
+import { manifestJsoncIssue, mk } from './issue'
 import { packDir, resolvePackPath } from './match'
 import { EXT_BUILTIN_SCOPES, EXT_LIMITS, EXT_MANIFEST } from './types'
 import type {
@@ -113,21 +115,6 @@ function validText(v: unknown): boolean {
   return isStr(v.zh) && v.zh.length > 0 && (v.en === undefined || (isStr(v.en) && v.en.length > 0))
 }
 
-function mk(
-  severity: ExtPackIssue['severity'],
-  scope: ExtPackIssue['scope'],
-  code: string,
-  zh: string,
-  en: string,
-  extra?: { path?: string; upload?: ExtPackIssue['upload']; contribution?: ExtPackIssue['contribution'] },
-): ExtPackIssue {
-  const issue: ExtPackIssue = { severity, scope, code, message: { zh, en } }
-  if (extra?.path !== undefined) issue.path = extra.path
-  if (extra?.contribution) issue.contribution = extra.contribution
-  if (extra?.upload) issue.upload = extra.upload
-  return issue
-}
-
 function unknownKeys(obj: Rec, allowed: readonly string[]): string[] {
   return Object.keys(obj).filter(k => !allowed.includes(k) && !k.startsWith('x-') && k !== '$schema')
 }
@@ -138,19 +125,19 @@ function unknownKeys(obj: Rec, allowed: readonly string[]): string[] {
 
 export function validateManifest(
   raw: unknown,
-  opts: { appVersion: string; source: ExtPackSource },
+  opts: { appVersion?: string; source: ExtPackSource },
 ): { manifest: ExtPackManifest | null; issues: ExtPackIssue[] } {
   const issues: ExtPackIssue[] = []
   const add = (
     severity: 'error' | 'warning',
     scope: 'pack' | 'file',
-    code: string,
+    code: ExtIssueCode,
     zh: string,
     en: string,
     path?: string,
   ) => issues.push(mk(severity, scope, code, zh, en, { path, upload: 'reject' }))
-  const warn = (code: string, zh: string, en: string, path?: string) => add('warning', 'pack', code, zh, en, path)
-  const fatal = (code: string, zh: string, en: string, path?: string) => add('error', 'pack', code, zh, en, path)
+  const warn = (code: ExtIssueCode, zh: string, en: string, path?: string) => add('warning', 'pack', code, zh, en, path)
+  const fatal = (code: ExtIssueCode, zh: string, en: string, path?: string) => add('error', 'pack', code, zh, en, path)
 
   // M1：调用方也可以直接传清单原文；严格 JSON 失败但 JSONC 能解析时给警告并继续
   let value: unknown = raw
@@ -160,11 +147,7 @@ export function validateManifest(
     } catch (e) {
       try {
         value = parseJsonc(raw)
-        warn(
-          'manifest.jsonc',
-          `${EXT_MANIFEST} 里有注释或结尾逗号，上传时要去掉`,
-          `${EXT_MANIFEST} contains comments or trailing commas; remove them before uploading`,
-        )
+        issues.push(manifestJsoncIssue(EXT_MANIFEST))
       } catch {
         const detail = e instanceof Error ? e.message : String(e)
         fatal(
@@ -300,7 +283,8 @@ export function validateManifest(
     for (const k of unknownKeys(engines, KEYS.engines)) {
       warn('manifest.unknownField', `engines 里不认识的字段「${k}」`, `Unknown field "${k}" in engines`, `engines.${k}`)
     }
-    const ok = satisfiesEngine(engines.pixelsky, opts.appVersion)
+    // 没给 appVersion（上传级别）只查写法，不判断软件版本够不够
+    const ok = satisfiesEngine(engines.pixelsky, opts.appVersion ?? '0.0.0')
     if (ok === null) {
       warn(
         'manifest.engineRange',
@@ -308,7 +292,7 @@ export function validateManifest(
         `Cannot parse engines.pixelsky: ${engines.pixelsky}`,
         'engines.pixelsky',
       )
-    } else if (!ok) {
+    } else if (!ok && opts.appVersion !== undefined) {
       fatal(
         'manifest.engineUnmet',
         `需要像素星空 ${engines.pixelsky}（当前 ${opts.appVersion}）`,
@@ -457,7 +441,7 @@ class Capped {
         mk(
           e.severity,
           e.scope,
-          code,
+          code as ExtIssueCode,
           `还有 ${rest} 处同类问题没有列出`,
           `${rest} more of the same problem not listed`,
           { upload: e.upload },
@@ -474,9 +458,9 @@ export function validatePackFiles(
   _opts: { source: ExtPackSource },
 ): ExtPackIssue[] {
   const out = new Capped()
-  const warn = (code: string, zh: string, en: string, path?: string) =>
+  const warn = (code: ExtIssueCode, zh: string, en: string, path?: string) =>
     out.add(mk('warning', 'file', code, zh, en, { path, upload: 'reject' }))
-  const real = files.filter(f => f.kind === 'file' && !f.path.startsWith('.git/'))
+  const real = files.filter(f => f.kind === 'file')
   const hasIconThemes = Array.isArray(manifest?.contributes?.iconThemes) && manifest.contributes.iconThemes.length > 0
   const seen = new Map<string, string>()
   let total = 0
@@ -736,9 +720,9 @@ export function validateContributions(
     const forItem = (kind: ExtPackContributionKind, index: number) => {
       const contribution = { kind, index }
       return {
-        err: (code: string, zh: string, en: string, path?: string) =>
+        err: (code: ExtIssueCode, zh: string, en: string, path?: string) =>
           issues.push(mk('error', 'contribution', code, zh, en, { path, contribution, upload: 'reject' })),
-        warn: (code: string, zh: string, en: string, path?: string, upload: ExtPackIssue['upload'] = 'reject') =>
+        warn: (code: ExtIssueCode, zh: string, en: string, path?: string, upload: ExtPackIssue['upload'] = 'reject') =>
           issues.push(mk('warning', 'contribution', code, zh, en, { path, contribution, upload })),
         add: (i: ExtPackIssue) => issues.push({ ...i, contribution }),
         /** 检查这一条里的未知字段（M16） */
@@ -954,19 +938,6 @@ export function validateContributions(
         }
       }
     })
-    if (grammars.length > 0) {
-      issues.push(
-        mk(
-          'warning',
-          'pack',
-          'grammar.regexUnchecked',
-          '语法里的 Oniguruma 正则和分词性能没有在本地检查，上传时才测',
-          'Oniguruma regexes and tokenizing speed are not checked locally; they are tested on upload',
-          { upload: 'hint' },
-        ),
-      )
-    }
-
     // ---- 主题 ----
     const themeIds = new Set<string>()
     listOf('themes').forEach((raw, i) => {
@@ -1386,7 +1357,7 @@ export function validateContributions(
     let unusedTotal = 0
     for (const p of all) {
       const base = p.slice(p.lastIndexOf('/') + 1)
-      if ((TEXT_EXTS.test(base) || /^license/i.test(base)) && !p.startsWith('.git/')) {
+      if (TEXT_EXTS.test(base) || /^license/i.test(base) || p.startsWith('samples/')) {
         const size = reader.size(p)
         if (size !== null && size <= EXT_LIMITS.fileBytes) {
           const bytes = reader.readBytes(p, EXT_LIMITS.fileBytes)
@@ -1417,7 +1388,6 @@ export function validateContributions(
       const exempt =
         p === EXT_MANIFEST ||
         p.startsWith('samples/') ||
-        p.startsWith('.git/') ||
         /^(readme|license|changelog)(\.[a-z]+)?$/i.test(p) ||
         refs.has(p)
       if (!exempt) {

@@ -1,0 +1,13 @@
+{
+  "title": "icon 指向的文件不存在",
+  "expectCodes": ["manifest.icon"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": {
+      "merge": {
+        "icon": "icon.png"
+      }
+    }
+  }
+}

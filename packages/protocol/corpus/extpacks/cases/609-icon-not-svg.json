@@ -1,0 +1,25 @@
+{
+  "title": "图标不是 .svg / .png",
+  "expectCodes": ["iconTheme.iconPath"],
+  "input": "folder",
+  "base": "all-kinds",
+  "files": {
+    "icons/theme.json": {
+      "json": {
+        "iconDefinitions": {
+          "file": {
+            "iconPath": "./file.svg"
+          },
+          "folder": {
+            "iconPath": "./folder.svg"
+          },
+          "gif": {
+            "iconPath": "./a.gif"
+          }
+        },
+        "file": "file",
+        "folder": "folder"
+      }
+    }
+  }
+}

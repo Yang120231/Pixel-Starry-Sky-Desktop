@@ -1,0 +1,58 @@
+{
+  "rulesVersion": 1,
+  "dev": {
+    "status": "warning",
+    "inactive": {},
+    "skills": [],
+    "issues": [
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint"
+      },
+      {
+        "code": "manifest.l10n",
+        "severity": "warning",
+        "scope": "pack",
+        "path": "l10n.en.name",
+        "upload": "reject"
+      },
+      {
+        "code": "manifest.unknownField",
+        "severity": "warning",
+        "scope": "pack",
+        "path": "l10n.fr",
+        "upload": "reject"
+      }
+    ]
+  },
+  "upload": {
+    "pass": false,
+    "issues": [
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint",
+        "outcome": "hint"
+      },
+      {
+        "code": "manifest.l10n",
+        "severity": "warning",
+        "scope": "pack",
+        "path": "l10n.en.name",
+        "upload": "reject",
+        "outcome": "reject"
+      },
+      {
+        "code": "manifest.unknownField",
+        "severity": "warning",
+        "scope": "pack",
+        "path": "l10n.fr",
+        "upload": "reject",
+        "outcome": "reject"
+      }
+    ]
+  }
+}

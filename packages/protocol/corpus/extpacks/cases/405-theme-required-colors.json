@@ -1,0 +1,15 @@
+{
+  "title": "没写 editor.foreground",
+  "expectCodes": ["theme.requiredColors"],
+  "input": "folder",
+  "base": "all-kinds",
+  "files": {
+    "themes/night.json": {
+      "json": {
+        "colors": {
+          "editor.background": "#1a1b26"
+        }
+      }
+    }
+  }
+}

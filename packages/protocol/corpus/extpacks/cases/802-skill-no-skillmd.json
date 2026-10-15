@@ -1,0 +1,10 @@
+{
+  "title": "技能文件夹里没有 SKILL.md",
+  "expectCodes": ["skill.path"],
+  "input": "folder",
+  "base": "all-kinds",
+  "remove": ["skills/review/SKILL.md"],
+  "files": {
+    "skills/review/notes.md": "x\n"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "title": "片段文件不是合法的 JSON",
+  "expectCodes": ["snippets.file"],
+  "input": "folder",
+  "base": "all-kinds",
+  "files": {
+    "snippets/tinyini.json": "{ \"a\": "
+  }
+}

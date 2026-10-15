@@ -1,0 +1,15 @@
+{
+  "title": "系统垃圾文件在任何层级都被略过，samples/ 里也一样",
+  "expectCodes": ["grammar.regexUnchecked"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    ".DS_Store": "x",
+    "Thumbs.db": "x",
+    "desktop.ini": "x",
+    "samples/.DS_Store": "x",
+    "samples/Thumbs.db": "x",
+    "__MACOSX/._README.md": "x",
+    "node_modules/a/index.js": "x"
+  }
+}

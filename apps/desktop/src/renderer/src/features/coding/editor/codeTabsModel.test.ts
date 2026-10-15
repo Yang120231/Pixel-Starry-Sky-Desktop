@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { closeInGroup, cycleInGroup, lruToRelease, openInGroup, parseCodeTabs, pathKey } from './codeTabsModel'
+import {
+  closeInGroup,
+  cycleInGroup,
+  lruToRelease,
+  openInGroup,
+  parseCodeTabs,
+  pathKey,
+  reopenedView,
+} from './codeTabsModel'
 
 const g = (tabs: string[], active: string | null) => ({ tabs, active })
 
@@ -77,5 +85,22 @@ describe('pathKey', () => {
   it('统一分隔符和大小写', () => {
     expect(pathKey('.\\src\\A.ts', true)).toBe('src/a.ts')
     expect(pathKey('src/A.ts', false)).toBe('src/A.ts')
+  })
+})
+
+describe('reopenedView', () => {
+  it('停在「变更 / 并排」的回到默认视图，对比基准留着', () => {
+    expect(reopenedView({ mode: 'diff', base: 'head' })).toEqual({ base: 'head' })
+    expect(reopenedView({ mode: 'split', base: 'turn' })).toEqual({ base: 'turn' })
+  })
+  it('「代码 / 预览」是用户选的，原样不动', () => {
+    const code = { mode: 'code' as const, base: 'head' as const }
+    const preview = { mode: 'preview' as const, base: 'turn' as const }
+    expect(reopenedView(code)).toBe(code)
+    expect(reopenedView(preview)).toBe(preview)
+    expect(reopenedView({ base: 'head' })).toEqual({ base: 'head' })
+  })
+  it('没记过就还是没有', () => {
+    expect(reopenedView(undefined)).toBeUndefined()
   })
 })

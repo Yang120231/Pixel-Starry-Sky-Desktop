@@ -16,9 +16,10 @@ export function cleanTemp(): void {
   for (const dir of made.splice(0)) rmSync(dir, { recursive: true, force: true })
 }
 
-export const FIXTURES = join(__dirname, '__fixtures__')
+/** 共享用例的底板文件夹（packages/protocol/corpus/extpacks/bases） */
+export const FIXTURES = join(__dirname, '../../../../../packages/protocol/corpus/extpacks/bases')
 
-/** 把 __fixtures__/<name> 复制成 <into>/<as ?? name>，返回目标目录 */
+/** 把 bases/<name> 复制成 <into>/<as ?? name>，返回目标目录 */
 export function copyFixture(name: string, into: string, as: string = name): string {
   const target = join(into, as)
   cpSync(join(FIXTURES, name), target, { recursive: true })

@@ -1,0 +1,23 @@
+{
+  "title": "片段缺 body、prefix 超过 30 个字符",
+  "expectCodes": ["snippets.entry"],
+  "input": "folder",
+  "base": "all-kinds",
+  "files": {
+    "snippets/tinyini.json": {
+      "json": {
+        "NoBody": {
+          "prefix": "nb"
+        },
+        "LongPrefix": {
+          "prefix": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "body": "x"
+        },
+        "Good": {
+          "prefix": "ok",
+          "body": ["a", "b"]
+        }
+      }
+    }
+  }
+}

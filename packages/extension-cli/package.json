@@ -1,0 +1,38 @@
+{
+  "name": "@pixelsky/extension-cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "扩展命令行工具 pixelsky-ext：validate / pack（docs/extensions/cli.md）；node 侧的扩展读取、zip、语法检查也从这里按子路径导出",
+  "bin": {
+    "pixelsky-ext": "./dist/pixelsky-ext.mjs"
+  },
+  "exports": {
+    "./folder": "./src/lib/folder.ts",
+    "./zip": "./src/lib/zip.ts",
+    "./grammar": "./src/lib/grammar/index.ts",
+    "./check": "./src/lib/check.ts",
+    "./testing": "./src/testing/corpus.ts"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@pixelsky/protocol": "workspace:*",
+    "fflate": "0.8.3",
+    "vscode-oniguruma": "2.0.1",
+    "vscode-textmate": "9.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "esbuild": "0.25.12",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  },
+  "author": "xiao_hei"
+}

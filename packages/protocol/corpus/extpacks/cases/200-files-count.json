@@ -1,0 +1,13 @@
+{
+  "title": "文件数超过 500",
+  "expectCodes": ["files.count"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "generate": [
+    {
+      "path": "extra/f{i}.txt",
+      "count": 501,
+      "text": "x"
+    }
+  ]
+}

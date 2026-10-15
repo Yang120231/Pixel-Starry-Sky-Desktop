@@ -1,0 +1,29 @@
+{
+  "rulesVersion": 1,
+  "dev": {
+    "status": "error",
+    "inactive": {},
+    "skills": [],
+    "issues": [
+      {
+        "code": "manifest.engineUnmet",
+        "severity": "error",
+        "scope": "pack",
+        "path": "engines.pixelsky",
+        "upload": "reject"
+      }
+    ]
+  },
+  "upload": {
+    "pass": true,
+    "issues": [
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint",
+        "outcome": "hint"
+      }
+    ]
+  }
+}

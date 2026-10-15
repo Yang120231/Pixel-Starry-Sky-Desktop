@@ -1,0 +1,9 @@
+{
+  "title": "zip 里 samples/ 的点开头文件不算隐藏文件",
+  "expectCodes": ["grammar.regexUnchecked"],
+  "input": "zip",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "samples/.env": "A=1\n"
+  }
+}

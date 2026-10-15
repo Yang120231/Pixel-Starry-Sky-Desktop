@@ -1,0 +1,12 @@
+{
+  "title": "条目名带了 UTF-8 标志但不是合法的 UTF-8",
+  "expectCodes": ["zip.nameEncoding"],
+  "input": "zip",
+  "base": "pixelsky.dotenv",
+  "zipEntries": [
+    {
+      "nameBase64": "/v8udHh0",
+      "text": "x"
+    }
+  ]
+}

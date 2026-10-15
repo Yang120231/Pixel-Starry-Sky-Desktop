@@ -1,0 +1,23 @@
+{
+  "rulesVersion": 1,
+  "upload": {
+    "pass": false,
+    "issues": [
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint",
+        "outcome": "hint"
+      },
+      {
+        "code": "zip.duplicate",
+        "severity": "error",
+        "scope": "pack",
+        "path": "README.md",
+        "upload": "reject",
+        "outcome": "reject"
+      }
+    ]
+  }
+}

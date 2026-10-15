@@ -1,0 +1,68 @@
+{
+  "rulesVersion": 1,
+  "dev": {
+    "status": "warning",
+    "inactive": {
+      "skills": [
+        0
+      ]
+    },
+    "skills": [],
+    "issues": [
+      {
+        "code": "files.unused",
+        "severity": "warning",
+        "scope": "file",
+        "path": "skills/review/SKILL.md",
+        "upload": "hint"
+      },
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint"
+      },
+      {
+        "code": "skill.path",
+        "severity": "error",
+        "scope": "contribution",
+        "contribution": {
+          "kind": "skills",
+          "index": 0
+        },
+        "upload": "reject"
+      }
+    ]
+  },
+  "upload": {
+    "pass": false,
+    "issues": [
+      {
+        "code": "files.unused",
+        "severity": "warning",
+        "scope": "file",
+        "path": "skills/review/SKILL.md",
+        "upload": "hint",
+        "outcome": "hint"
+      },
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint",
+        "outcome": "hint"
+      },
+      {
+        "code": "skill.path",
+        "severity": "error",
+        "scope": "contribution",
+        "contribution": {
+          "kind": "skills",
+          "index": 0
+        },
+        "upload": "reject",
+        "outcome": "reject"
+      }
+    ]
+  }
+}

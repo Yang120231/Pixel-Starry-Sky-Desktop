@@ -1,0 +1,11 @@
+{
+  "title": "文本文件带 BOM",
+  "expectCodes": ["files.encoding"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "README.md": {
+      "base64": "77u/IyB4Cg=="
+    }
+  }
+}

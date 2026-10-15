@@ -26,6 +26,7 @@ import {
   isGitDiffId,
   parseCodeTabs,
   persistable,
+  reopenedView,
   replaceInGroup,
   type CodeTabGroup,
   type CodeTabsState,
@@ -121,6 +122,9 @@ function touch(id: string): void {
 
 /** 注册成 code opener：openFile 的结果落到中栏 */
 export function openCodeTab(id: string): void {
+  // 停在「变更 / 并排」的回到文件本身（docs/ui/coding-mode.md §3.3.2）
+  const view = reopenedView(views[id])
+  if (view !== views[id] && view) views[id] = view
   setGroup(openInGroup(groups[projectKey] ?? EMPTY_GROUP, id))
   recordRecentFile(projectKey, id)
   touch(id)

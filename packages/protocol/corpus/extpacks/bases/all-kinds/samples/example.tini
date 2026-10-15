@@ -1,0 +1,34 @@
+; tiny ini sample
+[section1]
+key1 = value 1
+other_key1 = another value
+[section2]
+key2 = value 2
+other_key2 = another value
+[section3]
+key3 = value 3
+other_key3 = another value
+[section4]
+key4 = value 4
+other_key4 = another value
+[section5]
+key5 = value 5
+other_key5 = another value
+[section6]
+key6 = value 6
+other_key6 = another value
+[section7]
+key7 = value 7
+other_key7 = another value
+[section8]
+key8 = value 8
+other_key8 = another value
+[section9]
+key9 = value 9
+other_key9 = another value
+[s10]
+k10 = v
+[s11]
+k11 = v
+[s12]
+k12 = v

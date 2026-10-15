@@ -1,0 +1,13 @@
+{
+  "title": "repository 不是 https",
+  "expectCodes": ["manifest.url"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": {
+      "merge": {
+        "repository": "http://example.com/x"
+      }
+    }
+  }
+}

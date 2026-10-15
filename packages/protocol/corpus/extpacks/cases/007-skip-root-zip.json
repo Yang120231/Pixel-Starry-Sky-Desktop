@@ -1,0 +1,11 @@
+{
+  "title": "根目录的 .zip / .vsix 被略过，子目录里的 .zip 照常算「不允许的文件类型」",
+  "expectCodes": ["files.type"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "old.zip": "x",
+    "ext.vsix": "x",
+    "docs/inner.zip": "x"
+  }
+}

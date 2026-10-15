@@ -1,0 +1,6 @@
+{
+  "title": "作者示例里的坏清单（写到一半的 JSON）",
+  "expectCodes": ["manifest.parse"],
+  "input": "folder",
+  "base": "bad-manifest"
+}

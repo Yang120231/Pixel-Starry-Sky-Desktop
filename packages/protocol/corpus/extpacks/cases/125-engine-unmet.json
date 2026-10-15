@@ -1,0 +1,16 @@
+{
+  "title": "软件版本太低：只有开发级别报，上传级别不判断软件版本",
+  "expectCodes": ["manifest.engineUnmet"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "appVersion": "0.3.0",
+  "files": {
+    "pixelsky-extension.json": {
+      "merge": {
+        "engines": {
+          "pixelsky": ">=0.4.0"
+        }
+      }
+    }
+  }
+}

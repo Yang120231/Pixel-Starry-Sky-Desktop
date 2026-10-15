@@ -1,0 +1,56 @@
+{
+  "rulesVersion": 1,
+  "dev": {
+    "status": "warning",
+    "inactive": {},
+    "skills": [
+      {
+        "name": "review",
+        "index": 0
+      }
+    ],
+    "issues": [
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint"
+      },
+      {
+        "code": "iconTheme.default",
+        "severity": "warning",
+        "scope": "contribution",
+        "path": "icons/theme.json",
+        "contribution": {
+          "kind": "iconThemes",
+          "index": 0
+        },
+        "upload": "reject"
+      }
+    ]
+  },
+  "upload": {
+    "pass": false,
+    "issues": [
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint",
+        "outcome": "hint"
+      },
+      {
+        "code": "iconTheme.default",
+        "severity": "warning",
+        "scope": "contribution",
+        "path": "icons/theme.json",
+        "contribution": {
+          "kind": "iconThemes",
+          "index": 0
+        },
+        "upload": "reject",
+        "outcome": "reject"
+      }
+    ]
+  }
+}

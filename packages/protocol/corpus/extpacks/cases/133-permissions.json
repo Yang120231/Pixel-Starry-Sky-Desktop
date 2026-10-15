@@ -1,0 +1,13 @@
+{
+  "title": "permissions 不是空数组",
+  "expectCodes": ["manifest.permissions"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": {
+      "merge": {
+        "permissions": ["net"]
+      }
+    }
+  }
+}

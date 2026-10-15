@@ -1,0 +1,12 @@
+{
+  "title": "条目名是 GBK、没有 UTF-8 标志",
+  "expectCodes": ["zip.nameEncoding"],
+  "input": "zip",
+  "base": "pixelsky.dotenv",
+  "zipEntries": [
+    {
+      "nameBase64": "xOO6wy50eHQ=",
+      "text": "x"
+    }
+  ]
+}

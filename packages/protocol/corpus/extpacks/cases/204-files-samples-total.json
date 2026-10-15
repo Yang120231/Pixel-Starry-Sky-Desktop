@@ -1,0 +1,12 @@
+{
+  "title": "samples/ 合计超过 200 KB",
+  "expectCodes": ["files.samples"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "samples/big.env": {
+      "repeat": "A=1\n",
+      "bytes": 204801
+    }
+  }
+}

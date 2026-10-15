@@ -1,0 +1,13 @@
+{
+  "title": "不支持的压缩方式",
+  "expectCodes": ["zip.unsupported"],
+  "input": "zip",
+  "base": "pixelsky.dotenv",
+  "zipEntries": [
+    {
+      "name": "odd.txt",
+      "text": "x",
+      "method": 12
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "title": "提示词文件不是 UTF-8",
+  "expectCodes": ["prompt.body", "files.encoding"],
+  "input": "folder",
+  "base": "all-kinds",
+  "files": {
+    "prompts/explain.md": {
+      "base64": "/v8A/w=="
+    }
+  }
+}

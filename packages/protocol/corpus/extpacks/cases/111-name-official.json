@@ -1,0 +1,13 @@
+{
+  "title": "name 含「官方」字样",
+  "expectCodes": ["manifest.name"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": {
+      "merge": {
+        "name": "官方 .env 支持"
+      }
+    }
+  }
+}

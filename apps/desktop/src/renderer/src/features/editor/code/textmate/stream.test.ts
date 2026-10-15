@@ -8,7 +8,7 @@ import { OnigScanner, OnigString, loadWASM } from 'vscode-oniguruma'
 import { tmParser, type TmState } from './stream'
 import { setOnigLibForTests, onigLib } from './onig'
 
-const FIXTURE = resolve(__dirname, '../../../../../../main/extension-packs/__fixtures__/pixelsky.dotenv')
+const FIXTURE = resolve(__dirname, '../../../../../../../../../packages/protocol/corpus/extpacks/bases/pixelsky.dotenv')
 const sample = readFileSync(resolve(FIXTURE, 'samples/example.env'), 'utf8').split('\n')
 
 let grammar: IGrammar

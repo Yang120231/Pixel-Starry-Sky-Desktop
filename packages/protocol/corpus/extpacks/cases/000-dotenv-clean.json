@@ -1,0 +1,6 @@
+{
+  "title": "作者示例 pixelsky.dotenv：开发级别只有「语法正则没检查」的提示",
+  "expectCodes": ["grammar.regexUnchecked"],
+  "input": "folder",
+  "base": "pixelsky.dotenv"
+}

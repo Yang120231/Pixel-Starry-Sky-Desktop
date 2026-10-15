@@ -1,0 +1,24 @@
+{
+  "title": "颜色写法不对",
+  "expectCodes": ["theme.color"],
+  "input": "folder",
+  "base": "all-kinds",
+  "files": {
+    "themes/night.json": {
+      "json": {
+        "colors": {
+          "editor.background": "#1a1b26",
+          "editor.foreground": "white"
+        },
+        "tokenColors": [
+          {
+            "scope": "string",
+            "settings": {
+              "foreground": "#12"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

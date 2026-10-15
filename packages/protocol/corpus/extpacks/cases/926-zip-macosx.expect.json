@@ -1,0 +1,55 @@
+{
+  "rulesVersion": 1,
+  "upload": {
+    "pass": false,
+    "issues": [
+      {
+        "code": "files.hidden",
+        "severity": "warning",
+        "scope": "file",
+        "path": ".DS_Store",
+        "upload": "reject",
+        "outcome": "reject"
+      },
+      {
+        "code": "files.hidden",
+        "severity": "warning",
+        "scope": "file",
+        "path": "__MACOSX/._README.md",
+        "upload": "reject",
+        "outcome": "reject"
+      },
+      {
+        "code": "files.type",
+        "severity": "warning",
+        "scope": "file",
+        "path": ".DS_Store",
+        "upload": "reject",
+        "outcome": "reject"
+      },
+      {
+        "code": "files.unused",
+        "severity": "warning",
+        "scope": "file",
+        "path": ".DS_Store",
+        "upload": "hint",
+        "outcome": "hint"
+      },
+      {
+        "code": "files.unused",
+        "severity": "warning",
+        "scope": "file",
+        "path": "__MACOSX/._README.md",
+        "upload": "hint",
+        "outcome": "hint"
+      },
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint",
+        "outcome": "hint"
+      }
+    ]
+  }
+}

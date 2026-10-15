@@ -1,0 +1,16 @@
+{
+  "title": "engines 里有不认识的字段",
+  "expectCodes": ["manifest.unknownField"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": {
+      "merge": {
+        "engines": {
+          "pixelsky": ">=0.4.0",
+          "node": ">=20"
+        }
+      }
+    }
+  }
+}

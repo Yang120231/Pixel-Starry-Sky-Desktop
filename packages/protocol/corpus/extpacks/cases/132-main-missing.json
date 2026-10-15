@@ -1,0 +1,13 @@
+{
+  "title": "没写 main",
+  "expectCodes": ["manifest.main"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": {
+      "merge": {
+        "main": null
+      }
+    }
+  }
+}

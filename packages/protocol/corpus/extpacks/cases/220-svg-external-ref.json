@@ -1,0 +1,9 @@
+{
+  "title": "SVG 里的外部引用",
+  "expectCodes": ["svg.unsafe"],
+  "input": "folder",
+  "base": "all-kinds",
+  "files": {
+    "icons/folder.svg": "<svg xmlns=\"http://www.w3.org/2000/svg\"><image href=\"https://example.com/a.png\"/></svg>\n"
+  }
+}

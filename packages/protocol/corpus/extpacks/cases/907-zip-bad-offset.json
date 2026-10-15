@@ -1,0 +1,16 @@
+{
+  "title": "中央目录位置超出文件",
+  "expectCodes": ["zip.invalid"],
+  "input": "zip",
+  "zipEntries": [
+    {
+      "name": "pixelsky-extension.json",
+      "text": "{\"id\":\"a.b\",\"name\":\"A\",\"version\":\"1.0.0\"}"
+    }
+  ],
+  "zipOptions": {
+    "eocd": {
+      "cdOffset": 999999
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "title": "分卷 zip",
+  "expectCodes": ["zip.invalid"],
+  "input": "zip",
+  "zipEntries": [
+    {
+      "name": "pixelsky-extension.json",
+      "text": "{\"id\":\"a.b\",\"name\":\"A\",\"version\":\"1.0.0\"}"
+    }
+  ],
+  "zipOptions": {
+    "eocd": {
+      "disk": 1
+    }
+  }
+}

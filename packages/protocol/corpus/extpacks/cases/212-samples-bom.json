@@ -1,0 +1,11 @@
+{
+  "title": "samples/ 里的示例带 BOM",
+  "expectCodes": ["files.encoding"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "samples/example.env": {
+      "base64": "77u/QT0xCg=="
+    }
+  }
+}

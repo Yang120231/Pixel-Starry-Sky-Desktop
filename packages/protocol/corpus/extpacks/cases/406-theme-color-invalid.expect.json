@@ -1,0 +1,56 @@
+{
+  "rulesVersion": 1,
+  "dev": {
+    "status": "warning",
+    "inactive": {},
+    "skills": [
+      {
+        "name": "review",
+        "index": 0
+      }
+    ],
+    "issues": [
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint"
+      },
+      {
+        "code": "theme.color",
+        "severity": "warning",
+        "scope": "contribution",
+        "path": "themes/night.json",
+        "contribution": {
+          "kind": "themes",
+          "index": 0
+        },
+        "upload": "reject"
+      }
+    ]
+  },
+  "upload": {
+    "pass": false,
+    "issues": [
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint",
+        "outcome": "hint"
+      },
+      {
+        "code": "theme.color",
+        "severity": "warning",
+        "scope": "contribution",
+        "path": "themes/night.json",
+        "contribution": {
+          "kind": "themes",
+          "index": 0
+        },
+        "upload": "reject",
+        "outcome": "reject"
+      }
+    ]
+  }
+}

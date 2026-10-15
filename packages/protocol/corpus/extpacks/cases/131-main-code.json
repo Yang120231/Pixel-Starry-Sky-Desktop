@@ -1,0 +1,13 @@
+{
+  "title": "main 不是 null（第一期不能带代码）",
+  "expectCodes": ["manifest.main"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": {
+      "merge": {
+        "main": "index.js"
+      }
+    }
+  }
+}

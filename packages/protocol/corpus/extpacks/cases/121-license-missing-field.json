@@ -1,0 +1,13 @@
+{
+  "title": "清单没有 license 字段",
+  "expectCodes": ["manifest.license"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": {
+      "merge": {
+        "license": null
+      }
+    }
+  }
+}

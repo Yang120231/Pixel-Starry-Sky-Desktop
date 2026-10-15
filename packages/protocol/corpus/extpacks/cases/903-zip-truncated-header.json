@@ -1,0 +1,6 @@
+{
+  "title": "zip 只有开头几个字节",
+  "expectCodes": ["zip.invalid"],
+  "input": "zip",
+  "zipBase64": "UEsDBA=="
+}

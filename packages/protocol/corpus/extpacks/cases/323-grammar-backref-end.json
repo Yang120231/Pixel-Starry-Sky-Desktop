@@ -1,0 +1,19 @@
+{
+  "title": "end 里的 \\1 回溯引用按运行时的做法处理，不当成错误",
+  "expectCodes": ["grammar.perfUnchecked"],
+  "input": "folder",
+  "grammar": "regex",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "syntaxes/dotenv.tmLanguage.json": {
+      "merge": {
+        "repository": {
+          "string-single": {
+            "begin": "(')",
+            "end": "\\1|$"
+          }
+        }
+      }
+    }
+  }
+}

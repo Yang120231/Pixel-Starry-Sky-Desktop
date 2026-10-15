@@ -1,0 +1,13 @@
+{
+  "title": "语法文件里的 scopeName 和清单不一致",
+  "expectCodes": ["grammar.file"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "syntaxes/dotenv.tmLanguage.json": {
+      "merge": {
+        "scopeName": "source.other"
+      }
+    }
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "rulesVersion": 1,
+  "dev": {
+    "status": "warning",
+    "inactive": {
+      "snippets": [
+        0
+      ]
+    },
+    "skills": [
+      {
+        "name": "review",
+        "index": 0
+      }
+    ],
+    "issues": [
+      {
+        "code": "files.unused",
+        "severity": "warning",
+        "scope": "file",
+        "path": "snippets/tinyini.json",
+        "upload": "hint"
+      },
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint"
+      },
+      {
+        "code": "snippets.fields",
+        "severity": "error",
+        "scope": "contribution",
+        "path": "path",
+        "contribution": {
+          "kind": "snippets",
+          "index": 0
+        },
+        "upload": "reject"
+      }
+    ]
+  },
+  "upload": {
+    "pass": false,
+    "issues": [
+      {
+        "code": "files.unused",
+        "severity": "warning",
+        "scope": "file",
+        "path": "snippets/tinyini.json",
+        "upload": "hint",
+        "outcome": "hint"
+      },
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint",
+        "outcome": "hint"
+      },
+      {
+        "code": "snippets.fields",
+        "severity": "error",
+        "scope": "contribution",
+        "path": "path",
+        "contribution": {
+          "kind": "snippets",
+          "index": 0
+        },
+        "upload": "reject",
+        "outcome": "reject"
+      }
+    ]
+  }
+}

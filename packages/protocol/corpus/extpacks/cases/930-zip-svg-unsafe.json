@@ -1,0 +1,6 @@
+{
+  "title": "zip 里的 SVG 带脚本",
+  "expectCodes": ["svg.unsafe"],
+  "input": "zip",
+  "base": "unsafe-svg"
+}

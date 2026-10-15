@@ -1,0 +1,13 @@
+{
+  "title": "没有 engines",
+  "expectCodes": ["manifest.engines"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": {
+      "merge": {
+        "engines": null
+      }
+    }
+  }
+}

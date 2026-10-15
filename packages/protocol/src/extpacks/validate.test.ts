@@ -129,6 +129,7 @@ describe('validateManifest', () => {
     expect(find(bad.issues, 'manifest.parse')[0]).toMatchObject({ severity: 'error', scope: 'pack' })
     const lenient = validateManifest(`// c\n${JSON.stringify(base())}`, { appVersion: APP, source: 'folder' })
     expect(codesOf(lenient.issues)).toEqual(['manifest.jsonc'])
+    expect(lenient.issues[0]).toMatchObject({ scope: 'file', path: 'pixelsky-extension.json', upload: 'reject' })
     expect(lenient.manifest?.id).toBe('acme.demo')
   })
   it('M2 不是对象', () => {
@@ -183,6 +184,12 @@ describe('validateManifest', () => {
     const unmet = find(manifestIssues(base({ engines: { pixelsky: '>=9.0.0' } })), 'manifest.engineUnmet')[0]
     expect(unmet.severity).toBe('error') // 低于要求版本的软件看不到这个扩展
     expect(unmet.message.zh).toContain('>=9.0.0')
+  })
+  it('M12 不传 appVersion（上传级别）：不判断版本够不够，写法解析不了仍然报', () => {
+    const up = (engine: string) =>
+      validateManifest(base({ engines: { pixelsky: engine } }), { source: 'folder' }).issues
+    expect(codesOf(up('>=9.0.0'))).toEqual([])
+    expect(codesOf(up('latest'))).toContain('manifest.engineRange')
   })
   it('M13 l10n', () => {
     expect(codesOf(manifestIssues(base({ l10n: { en: { name: 'x'.repeat(41) } } })))).toContain('manifest.l10n')
@@ -242,9 +249,9 @@ describe('validatePackFiles', () => {
     const issues = run([...good, f('run.sh'), f('a.wasm'), f('samples/x.rb'), f('LICENSE.md')])
     expect(find(issues, 'files.type').map(i => i.path)).toEqual(['run.sh', 'a.wasm'])
   })
-  it('F2 隐藏文件（samples 里的和 .git/ 除外）', () => {
+  it('F2 隐藏文件（samples 里的除外；.git/ 不再豁免，由来源层跳过）', () => {
     const issues = run([...good, f('.env'), f('a/.hidden/x.json'), f('samples/.env'), f('.git/config')])
-    expect(find(issues, 'files.hidden').map(i => i.path)).toEqual(['.env', 'a/.hidden/x.json'])
+    expect(find(issues, 'files.hidden').map(i => i.path)).toEqual(['.env', 'a/.hidden/x.json', '.git/config'])
   })
   it('F3 符号链接不在这里报（由加载器报），也不参与其他检查', () => {
     expect(run([...good, f('link.sh', 5, 'symlink')])).toEqual([])
@@ -295,10 +302,10 @@ describe('validateContributions', () => {
     base({ contributes, ...over })
   const errs = (issues: ExtPackIssue[]) => issues.filter(i => i.severity === 'error')
 
-  it('dotenv 示例：没有错误，只有「正则没检查」这条提示', () => {
+  it('dotenv 示例：没有任何问题（「正则没检查」由 checkPack 报，见 check.test.ts）', () => {
     const r = run(dotenv, dotenvFiles)
     expect(errs(r.issues)).toEqual([])
-    expect(codesOf(r.issues)).toEqual(['grammar.regexUnchecked'])
+    expect(codesOf(r.issues)).toEqual([])
   })
 
   describe('M8 清单图标', () => {
@@ -387,9 +394,9 @@ describe('validateContributions', () => {
       expect(codesOf(check(g({ samples: ['samples/none.x'] })))).toContain('grammar.samples')
       expect(codesOf(check(g({ samples: ['syntaxes/x.tmLanguage.json'] })))).toContain('grammar.samples')
     })
-    it('G8 每个有语法的包只报一次', () => {
+    it('G8 validateContributions 不再报 grammar.regexUnchecked（移到 checkPack）', () => {
       const r = run(withContrib({ grammars: [g(), g({ language: 'y', scopeName: 'source.y' })] }), files())
-      expect(find(r.issues, 'grammar.regexUnchecked')).toHaveLength(1)
+      expect(find(r.issues, 'grammar.regexUnchecked')).toHaveLength(0)
     })
     it('G9 include 内置作用域是警告，每个语法只报一次，# 前面才算', () => {
       const text = JSON.stringify({
@@ -727,6 +734,21 @@ describe('validateContributions', () => {
           .sort(),
       ).toEqual(['README.md', 's.json'])
       expect(find(r.issues, 'files.encoding').every(i => i.severity === 'warning')).toBe(true)
+    })
+    it('F11 samples 下任意扩展名都查编码；.git/ 不再豁免', () => {
+      const bom = new Uint8Array([0xef, 0xbb, 0xbf, ...enc('A=1')])
+      const r = run(withContrib({ snippets: [{ language: 'go', path: 's.json' }] }), {
+        's.json': '{}',
+        'samples/a.env': bom,
+        'samples/b.rb': new Uint8Array([0xff, 0xfe]),
+        'samples/ok.txt': 'x',
+        '.git/notes.md': bom,
+      })
+      expect(
+        find(r.issues, 'files.encoding')
+          .map(i => i.path)
+          .sort(),
+      ).toEqual(['.git/notes.md', 'samples/a.env', 'samples/b.rb'])
     })
     it('F10 没被引用的文件（README / LICENSE / CHANGELOG / samples / 图标 / 被 include 的主题除外）', () => {
       const r = run(dotenv, { ...dotenvFiles, 'CHANGELOG.md': '#', 'notes.md': '#', 'icons/x.svg': '<svg/>' })

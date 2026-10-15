@@ -1,0 +1,6 @@
+{
+  "title": "七种贡献各一条的底板：只有「语法正则没检查」的提示",
+  "expectCodes": ["grammar.regexUnchecked"],
+  "input": "folder",
+  "base": "all-kinds"
+}

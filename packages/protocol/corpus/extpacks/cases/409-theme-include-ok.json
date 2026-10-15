@@ -1,0 +1,29 @@
+{
+  "title": "主题 include 同一扩展里的另一个主题：通过",
+  "expectCodes": ["grammar.regexUnchecked"],
+  "input": "folder",
+  "base": "all-kinds",
+  "files": {
+    "themes/night.json": {
+      "json": {
+        "include": "./base.json",
+        "tokenColors": [
+          {
+            "scope": "keyword",
+            "settings": {
+              "foreground": "#bb9af7"
+            }
+          }
+        ]
+      }
+    },
+    "themes/base.json": {
+      "json": {
+        "colors": {
+          "editor.background": "#1a1b26",
+          "editor.foreground": "#a9b1d6"
+        }
+      }
+    }
+  }
+}

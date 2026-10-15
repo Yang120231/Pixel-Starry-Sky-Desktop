@@ -1,0 +1,60 @@
+{
+  "rulesVersion": 1,
+  "dev": {
+    "status": "warning",
+    "inactive": {
+      "prompts": [
+        1
+      ]
+    },
+    "skills": [
+      {
+        "name": "review",
+        "index": 0
+      }
+    ],
+    "issues": [
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint"
+      },
+      {
+        "code": "prompt.fields",
+        "severity": "error",
+        "scope": "contribution",
+        "path": "id",
+        "contribution": {
+          "kind": "prompts",
+          "index": 1
+        },
+        "upload": "reject"
+      }
+    ]
+  },
+  "upload": {
+    "pass": false,
+    "issues": [
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint",
+        "outcome": "hint"
+      },
+      {
+        "code": "prompt.fields",
+        "severity": "error",
+        "scope": "contribution",
+        "path": "id",
+        "contribution": {
+          "kind": "prompts",
+          "index": 1
+        },
+        "upload": "reject",
+        "outcome": "reject"
+      }
+    ]
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "title": "声明的大小和实际不符",
+  "expectCodes": ["zip.corrupt"],
+  "input": "zip",
+  "base": "pixelsky.dotenv",
+  "zipEntries": [
+    {
+      "name": "bad.txt",
+      "text": "xyz",
+      "badSize": true
+    }
+  ]
+}

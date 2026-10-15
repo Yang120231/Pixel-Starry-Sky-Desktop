@@ -1,0 +1,15 @@
+{
+  "title": "清单在第一层文件夹里（多套了一层）",
+  "expectCodes": ["zip.nested"],
+  "input": "zip",
+  "zipEntries": [
+    {
+      "name": "ext/pixelsky-extension.json",
+      "text": "{\"id\":\"a.b\",\"name\":\"A\",\"version\":\"1.0.0\"}"
+    },
+    {
+      "name": "ext/README.md",
+      "text": "# a\n"
+    }
+  ]
+}

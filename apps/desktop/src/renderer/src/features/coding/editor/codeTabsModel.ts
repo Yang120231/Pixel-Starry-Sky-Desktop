@@ -98,7 +98,23 @@ export function lruToRelease(
 export interface CodeTabsState {
   projectKey: string
   group: CodeTabGroup
-  views: Record<string, { mode: EditorViewMode; base: DiffBase }>
+  /** 每个标签上次用的视图；mode 空着就按文件类型取默认（代码，Markdown 是预览） */
+  views: Record<string, CodeTabView>
+}
+
+export interface CodeTabView {
+  mode?: EditorViewMode
+  base: DiffBase
+}
+
+/**
+ * 从「打开文件」类入口（文件树、Ctrl+P、搜索、路径链接、Git 的「打开文件」）再打开一个标签时的视图：
+ * 停在「变更 / 并排」的回到文件本身，对比基准留着；「代码 / 预览」是用户自己选的，不动。
+ * 看改动的入口（点改动行、AI 改动卡片）打开后会再设成「变更」，不受影响
+ */
+export function reopenedView(view: CodeTabView | undefined): CodeTabView | undefined {
+  if (!view || (view.mode !== 'diff' && view.mode !== 'split')) return view
+  return { base: view.base }
 }
 
 /** 路径比较用的归一化：Windows 本机不分大小写 */

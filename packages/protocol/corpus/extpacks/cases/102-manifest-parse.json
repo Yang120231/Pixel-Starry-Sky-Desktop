@@ -1,0 +1,9 @@
+{
+  "title": "清单不是合法的 JSON",
+  "expectCodes": ["manifest.parse"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": "{ \"id\": \"pixelsky.x\", "
+  }
+}

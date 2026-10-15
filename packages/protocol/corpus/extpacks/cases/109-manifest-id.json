@@ -1,0 +1,13 @@
+{
+  "title": "id 写法不对",
+  "expectCodes": ["manifest.id"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": {
+      "merge": {
+        "id": "Bad_ID"
+      }
+    }
+  }
+}

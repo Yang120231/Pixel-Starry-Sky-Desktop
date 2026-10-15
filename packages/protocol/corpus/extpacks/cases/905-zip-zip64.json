@@ -1,0 +1,17 @@
+{
+  "title": "zip64 标记",
+  "expectCodes": ["zip.invalid"],
+  "input": "zip",
+  "zipEntries": [
+    {
+      "name": "pixelsky-extension.json",
+      "text": "{\"id\":\"a.b\",\"name\":\"A\",\"version\":\"1.0.0\"}"
+    }
+  ],
+  "zipOptions": {
+    "eocd": {
+      "count": 65535,
+      "countHere": 65535
+    }
+  }
+}

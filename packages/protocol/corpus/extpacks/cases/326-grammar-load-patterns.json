@@ -1,0 +1,16 @@
+{
+  "title": "语法的 patterns 写成字符串：没有正则可编译，但分词器装不进来",
+  "expectCodes": ["grammar.load"],
+  "input": "folder",
+  "grammar": "full",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "syntaxes/dotenv.tmLanguage.json": {
+      "json": {
+        "scopeName": "source.dotenv",
+        "patterns": "oops",
+        "repository": 5
+      }
+    }
+  }
+}

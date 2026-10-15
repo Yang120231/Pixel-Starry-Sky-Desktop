@@ -1,0 +1,75 @@
+{
+  "rulesVersion": 1,
+  "dev": {
+    "status": "warning",
+    "inactive": {
+      "prompts": [
+        0
+      ]
+    },
+    "skills": [
+      {
+        "name": "review",
+        "index": 0
+      }
+    ],
+    "issues": [
+      {
+        "code": "files.unused",
+        "severity": "warning",
+        "scope": "file",
+        "path": "prompts/explain.md",
+        "upload": "hint"
+      },
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint"
+      },
+      {
+        "code": "prompt.fields",
+        "severity": "error",
+        "scope": "contribution",
+        "path": "path",
+        "contribution": {
+          "kind": "prompts",
+          "index": 0
+        },
+        "upload": "reject"
+      }
+    ]
+  },
+  "upload": {
+    "pass": false,
+    "issues": [
+      {
+        "code": "files.unused",
+        "severity": "warning",
+        "scope": "file",
+        "path": "prompts/explain.md",
+        "upload": "hint",
+        "outcome": "hint"
+      },
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint",
+        "outcome": "hint"
+      },
+      {
+        "code": "prompt.fields",
+        "severity": "error",
+        "scope": "contribution",
+        "path": "path",
+        "contribution": {
+          "kind": "prompts",
+          "index": 0
+        },
+        "upload": "reject",
+        "outcome": "reject"
+      }
+    ]
+  }
+}

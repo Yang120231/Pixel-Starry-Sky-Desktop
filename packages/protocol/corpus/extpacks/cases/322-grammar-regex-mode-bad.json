@@ -1,0 +1,18 @@
+{
+  "title": "只测正则编译：坏正则照样报",
+  "expectCodes": ["grammar.regex", "grammar.perfUnchecked"],
+  "input": "folder",
+  "grammar": "regex",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "syntaxes/dotenv.tmLanguage.json": {
+      "merge": {
+        "repository": {
+          "comment": {
+            "match": "[abc"
+          }
+        }
+      }
+    }
+  }
+}

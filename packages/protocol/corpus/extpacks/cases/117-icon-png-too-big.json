@@ -1,0 +1,16 @@
+{
+  "title": "icon.png 超过 1024×1024",
+  "expectCodes": ["manifest.icon"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": {
+      "merge": {
+        "icon": "icon.png"
+      }
+    },
+    "icon.png": {
+      "base64": "iVBORw0KGgoAAAANSUhEUgAAB9AAAAfQAAAAAAAAAAAA"
+    }
+  }
+}

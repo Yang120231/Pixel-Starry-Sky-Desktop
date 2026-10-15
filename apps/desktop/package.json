@@ -40,6 +40,7 @@
     "@lezer/highlight": "^1.2.5",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@pixelsky/engine": "workspace:*",
+    "@pixelsky/extension-cli": "workspace:*",
     "@pixelsky/link": "workspace:*",
     "@pixelsky/protocol": "workspace:*",
     "@tailwindcss/vite": "^4.3.3",

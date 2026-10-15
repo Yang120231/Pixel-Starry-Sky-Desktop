@@ -1,0 +1,6 @@
+{
+  "title": "图标主题里的 SVG 带脚本",
+  "expectCodes": ["svg.unsafe"],
+  "input": "folder",
+  "base": "unsafe-svg"
+}

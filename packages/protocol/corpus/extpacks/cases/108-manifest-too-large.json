@@ -1,0 +1,12 @@
+{
+  "title": "清单超过 256 KB",
+  "expectCodes": ["manifest.parse"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": {
+      "repeat": " ",
+      "bytes": 262145
+    }
+  }
+}

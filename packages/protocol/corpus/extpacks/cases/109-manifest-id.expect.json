@@ -1,0 +1,45 @@
+{
+  "rulesVersion": 1,
+  "dev": {
+    "status": "error",
+    "inactive": {},
+    "skills": [],
+    "issues": [
+      {
+        "code": "manifest.id",
+        "severity": "error",
+        "scope": "pack",
+        "path": "id",
+        "upload": "reject"
+      },
+      {
+        "code": "manifest.publisherMismatch",
+        "severity": "warning",
+        "scope": "pack",
+        "path": "publisher",
+        "upload": "reject"
+      }
+    ]
+  },
+  "upload": {
+    "pass": false,
+    "issues": [
+      {
+        "code": "manifest.id",
+        "severity": "error",
+        "scope": "pack",
+        "path": "id",
+        "upload": "reject",
+        "outcome": "reject"
+      },
+      {
+        "code": "manifest.publisherMismatch",
+        "severity": "warning",
+        "scope": "pack",
+        "path": "publisher",
+        "upload": "reject",
+        "outcome": "reject"
+      }
+    ]
+  }
+}

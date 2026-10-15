@@ -1,0 +1,11 @@
+{
+  "title": "samples/ 里嵌套的 node_modules 和 .git 也被略过",
+  "expectCodes": ["grammar.regexUnchecked"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "samples/node_modules/x.txt": "x",
+    "samples/sub/.git/config": "x",
+    "samples/sub/ok.env": "A=1\n"
+  }
+}

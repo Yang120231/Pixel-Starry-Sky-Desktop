@@ -1,0 +1,7 @@
+{
+  "title": "语言设置文件不存在",
+  "expectCodes": ["grammar.configuration"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "remove": ["language-configuration.json"]
+}

@@ -1,0 +1,7 @@
+{
+  "title": "提示词文件不存在",
+  "expectCodes": ["prompt.body"],
+  "input": "folder",
+  "base": "all-kinds",
+  "remove": ["prompts/explain.md"]
+}

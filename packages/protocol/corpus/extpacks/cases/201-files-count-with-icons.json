@@ -1,0 +1,13 @@
+{
+  "title": "带文件图标主题的扩展，文件数上限放宽到 3000",
+  "expectCodes": ["files.unused"],
+  "input": "folder",
+  "base": "all-kinds",
+  "generate": [
+    {
+      "path": "extra/f{i}.txt",
+      "count": 501,
+      "text": "x"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "title": "price 不是 null",
+  "expectCodes": ["manifest.price"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": {
+      "merge": {
+        "price": 5
+      }
+    }
+  }
+}

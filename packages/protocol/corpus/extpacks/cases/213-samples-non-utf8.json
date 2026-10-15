@@ -1,0 +1,11 @@
+{
+  "title": "samples/ 里任意扩展名的示例都查编码",
+  "expectCodes": ["files.encoding"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "samples/extra.dat": {
+      "base64": "/v8A/w=="
+    }
+  }
+}

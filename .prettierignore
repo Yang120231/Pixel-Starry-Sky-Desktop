@@ -18,6 +18,7 @@ services/cloud/web
 # 手机端的安卓原生工程（Capacitor 生成，里面有复制进去的网页文件和构建输出）
 apps/mobile/android/
 
-# 扩展中心：随包的 Material 图标（逐字节拷贝，一行 444 KB 的 JSON）和从作者示例拷来的测试夹具，保持原样
+# 扩展中心：随包的 Material 图标（逐字节拷贝，一行 444 KB 的 JSON）和从作者示例拷来的共享用例底板和生成的期望，保持原样
 apps/desktop/resources/builtin-extensions/
-apps/desktop/src/main/extension-packs/__fixtures__/
+packages/protocol/corpus/extpacks/bases/
+packages/protocol/corpus/extpacks/cases/*.expect.json

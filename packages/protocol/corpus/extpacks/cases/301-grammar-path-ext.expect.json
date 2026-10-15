@@ -1,0 +1,85 @@
+{
+  "rulesVersion": 1,
+  "dev": {
+    "status": "warning",
+    "inactive": {
+      "grammars": [
+        0
+      ]
+    },
+    "skills": [],
+    "issues": [
+      {
+        "code": "files.unused",
+        "severity": "warning",
+        "scope": "file",
+        "path": "language-configuration.json",
+        "upload": "hint"
+      },
+      {
+        "code": "files.unused",
+        "severity": "warning",
+        "scope": "file",
+        "path": "syntaxes/dotenv.tmLanguage.json",
+        "upload": "hint"
+      },
+      {
+        "code": "grammar.fields",
+        "severity": "error",
+        "scope": "contribution",
+        "path": "path",
+        "contribution": {
+          "kind": "grammars",
+          "index": 0
+        },
+        "upload": "reject"
+      },
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint"
+      }
+    ]
+  },
+  "upload": {
+    "pass": false,
+    "issues": [
+      {
+        "code": "files.unused",
+        "severity": "warning",
+        "scope": "file",
+        "path": "language-configuration.json",
+        "upload": "hint",
+        "outcome": "hint"
+      },
+      {
+        "code": "files.unused",
+        "severity": "warning",
+        "scope": "file",
+        "path": "syntaxes/dotenv.tmLanguage.json",
+        "upload": "hint",
+        "outcome": "hint"
+      },
+      {
+        "code": "grammar.fields",
+        "severity": "error",
+        "scope": "contribution",
+        "path": "path",
+        "contribution": {
+          "kind": "grammars",
+          "index": 0
+        },
+        "upload": "reject",
+        "outcome": "reject"
+      },
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint",
+        "outcome": "hint"
+      }
+    ]
+  }
+}

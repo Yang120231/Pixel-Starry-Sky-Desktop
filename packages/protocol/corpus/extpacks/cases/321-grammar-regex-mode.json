@@ -1,0 +1,7 @@
+{
+  "title": "只测正则编译（--grammar regex）：编译通过，提示没测性能",
+  "expectCodes": ["grammar.perfUnchecked"],
+  "input": "folder",
+  "grammar": "regex",
+  "base": "pixelsky.dotenv"
+}

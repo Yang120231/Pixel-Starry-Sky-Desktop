@@ -1,10 +1,17 @@
+export type { ExtEngineCode, ExtIssueCode, ExtZipCode, GrammarIssueParams } from './codes'
+export type { ExtCheckVerdict } from './verdict'
 export type {
+  CheckPackOptions,
+  ExtCheckLevel,
   ExtGrammar,
   ExtIconTheme,
   ExtLocale,
+  ExtIssueOutcome,
+  ExtPackCheck,
   ExtPackContributes,
   ExtPackContributionKind,
   ExtPackFileEntry,
+  ExtPackFiles,
   ExtPackInactive,
   ExtPackInfo,
   ExtPackIssue,
@@ -33,7 +40,13 @@ export {
   EXT_MANIFEST,
   EXT_RESERVED_TASK_FILES,
   EXT_RESERVED_TASK_IDS,
+  EXT_RULES_VERSION,
 } from './types'
+export { EXT_ENGINE_CODES, EXT_ISSUE_CODES, EXT_ZIP_CODES, EXT_ZIP_FATAL, grammarIssue, zipIssue } from './codes'
+export { checkPack, dedupeIssues, readerFromFiles } from './check'
+export { extPackSkipped } from './skip'
+export { checkVerdict, issueOutcome } from './verdict'
+export { locateJsonPointer } from './locate'
 export {
   contributionCount,
   extText,

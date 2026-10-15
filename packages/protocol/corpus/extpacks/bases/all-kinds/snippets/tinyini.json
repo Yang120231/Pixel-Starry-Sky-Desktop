@@ -1,0 +1,3 @@
+{
+  "Section": { "prefix": "sec", "body": ["[${1:name}]", "$0"], "description": "A section" }
+}

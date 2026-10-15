@@ -1,0 +1,23 @@
+{
+  "rulesVersion": 1,
+  "upload": {
+    "pass": false,
+    "issues": [
+      {
+        "code": "files.symlink",
+        "severity": "error",
+        "scope": "file",
+        "path": "link",
+        "upload": "reject",
+        "outcome": "reject"
+      },
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint",
+        "outcome": "hint"
+      }
+    ]
+  }
+}

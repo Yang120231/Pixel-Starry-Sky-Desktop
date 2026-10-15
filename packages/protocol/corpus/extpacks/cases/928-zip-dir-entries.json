@@ -1,0 +1,16 @@
+{
+  "title": "目录条目被忽略",
+  "expectCodes": ["grammar.regexUnchecked"],
+  "input": "zip",
+  "base": "pixelsky.dotenv",
+  "zipEntries": [
+    {
+      "name": "syntaxes/",
+      "dir": true
+    },
+    {
+      "name": "empty/",
+      "dir": true
+    }
+  ]
+}

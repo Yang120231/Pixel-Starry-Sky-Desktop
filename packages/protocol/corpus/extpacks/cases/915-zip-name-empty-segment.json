@@ -1,0 +1,12 @@
+{
+  "title": "条目名有空的路径段",
+  "expectCodes": ["zip.entryName"],
+  "input": "zip",
+  "base": "pixelsky.dotenv",
+  "zipEntries": [
+    {
+      "name": "a//b.txt",
+      "text": "x"
+    }
+  ]
+}

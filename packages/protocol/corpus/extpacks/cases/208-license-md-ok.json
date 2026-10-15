@@ -1,0 +1,10 @@
+{
+  "title": "LICENSE.md 也算有许可证",
+  "expectCodes": ["grammar.regexUnchecked"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "remove": ["LICENSE"],
+  "files": {
+    "LICENSE.md": "MIT\n"
+  }
+}

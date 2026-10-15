@@ -1,0 +1,7 @@
+{
+  "title": "缺少 LICENSE",
+  "expectCodes": ["files.license"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "remove": ["LICENSE"]
+}

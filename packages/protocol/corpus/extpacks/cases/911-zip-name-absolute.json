@@ -1,0 +1,12 @@
+{
+  "title": "条目名是绝对路径",
+  "expectCodes": ["zip.entryName"],
+  "input": "zip",
+  "base": "pixelsky.dotenv",
+  "zipEntries": [
+    {
+      "name": "/etc/passwd",
+      "text": "x"
+    }
+  ]
+}

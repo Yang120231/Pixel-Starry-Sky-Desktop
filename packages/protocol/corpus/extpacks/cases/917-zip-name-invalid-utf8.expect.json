@@ -1,0 +1,22 @@
+{
+  "rulesVersion": 1,
+  "upload": {
+    "pass": false,
+    "issues": [
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint",
+        "outcome": "hint"
+      },
+      {
+        "code": "zip.nameEncoding",
+        "severity": "error",
+        "scope": "pack",
+        "upload": "reject",
+        "outcome": "reject"
+      }
+    ]
+  }
+}

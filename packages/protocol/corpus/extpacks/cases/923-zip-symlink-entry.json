@@ -1,0 +1,12 @@
+{
+  "title": "zip 里的符号链接条目",
+  "expectCodes": ["files.symlink"],
+  "input": "zip",
+  "base": "pixelsky.dotenv",
+  "zipEntries": [
+    {
+      "name": "link",
+      "symlink": "README.md"
+    }
+  ]
+}

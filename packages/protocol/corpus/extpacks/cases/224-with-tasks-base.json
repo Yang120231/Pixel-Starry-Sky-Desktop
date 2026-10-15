@@ -1,0 +1,6 @@
+{
+  "title": "带任务模板的底板（没有 README / LICENSE）",
+  "expectCodes": ["files.license", "files.readme"],
+  "input": "folder",
+  "base": "with-tasks"
+}
