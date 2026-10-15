@@ -8,8 +8,8 @@ import {
   composeBody,
   errorText,
   freshNotice,
-  matchesFilter,
   mergeThreads,
+  noticeChannel,
   shouldNotify,
   threadOfNotification,
   windowSince,
@@ -25,6 +25,12 @@ const summary = (id: string, over: Partial<FeedbackSummary> = {}): FeedbackSumma
   unread: true,
   preview: 'reply text',
   previewAuthor: 'team',
+  teamSeen: false,
+  teamSeenAt: null,
+  working: false,
+  workingAt: null,
+  messageCount: 1,
+  attachments: { logs: 0, images: 0 },
   ...over,
 })
 
@@ -43,7 +49,7 @@ describe('limits', () => {
     expect(checkCreate({ ...ok, title: 'x'.repeat(101) })).toEqual({ code: 'titleLong', limit: 100 })
     expect(checkCreate({ ...ok, body: ' ' })).toEqual({ code: 'bodyEmpty' })
     expect(checkCreate({ ...ok, composed: 'x'.repeat(10_001) })).toEqual({ code: 'bodyLong', limit: 10_000 })
-    expect(checkCreate({ ...ok, images: 4 })).toEqual({ code: 'images', limit: 3 })
+    expect(checkCreate({ ...ok, images: 6 })).toEqual({ code: 'images', limit: 5 })
   })
   it('counts characters, not UTF-16 units', () => {
     expect(checkCreate({ ...ok, title: '😀'.repeat(100) })).toBeNull()
@@ -65,12 +71,6 @@ describe('windowSince', () => {
 })
 
 describe('list helpers', () => {
-  it('filters by status', () => {
-    expect(matchesFilter('closed', 'open')).toBe(false)
-    expect(matchesFilter('replied', 'open')).toBe(true)
-    expect(matchesFilter('closed', 'closed')).toBe(true)
-    expect(matchesFilter('open', 'all')).toBe(true)
-  })
   it('merges pages without duplicates, first page wins', () => {
     const merged = mergeThreads([summary('a', { title: 'new' })], [summary('a'), summary('b')])
     expect(merged.map(t => t.id)).toEqual(['a', 'b'])
@@ -91,10 +91,18 @@ describe('notifications', () => {
   })
   it('respects do-not-disturb and unfocusedOnly', () => {
     const now = new Date(2026, 9, 13, 12, 0).getTime()
+    expect(noticeChannel(DEFAULT_NOTIFICATION_PREFS, false, now)).toBe('system')
+    // 前台：不弹系统通知，改成应用内提示（不受「仅在后台通知」影响）
+    expect(noticeChannel(DEFAULT_NOTIFICATION_PREFS, true, now)).toBe('toast')
+    expect(noticeChannel({ ...DEFAULT_NOTIFICATION_PREFS, unfocusedOnly: false }, true, now)).toBe('toast')
+    expect(noticeChannel({ ...DEFAULT_NOTIFICATION_PREFS, dndUntil: now + 1000 }, false, now)).toBe('none')
+    expect(noticeChannel({ ...DEFAULT_NOTIFICATION_PREFS, dndUntil: now + 1000 }, true, now)).toBe('none')
+  })
+  it('shouldNotify keeps the system-notification rule', () => {
+    const now = new Date(2026, 9, 13, 12, 0).getTime()
     expect(shouldNotify(DEFAULT_NOTIFICATION_PREFS, false, now)).toBe(true)
     expect(shouldNotify(DEFAULT_NOTIFICATION_PREFS, true, now)).toBe(false)
     expect(shouldNotify({ ...DEFAULT_NOTIFICATION_PREFS, unfocusedOnly: false }, true, now)).toBe(true)
-    expect(shouldNotify({ ...DEFAULT_NOTIFICATION_PREFS, dndUntil: now + 1000 }, false, now)).toBe(false)
   })
   it('routes notification ids', () => {
     expect(threadOfNotification('feedback:fb_9')).toBe('fb_9')

@@ -2,7 +2,6 @@
 import {
   FEEDBACK_LIMITS,
   type FeedbackDiagnostics,
-  type FeedbackStatus,
   type FeedbackSummary,
   type FeedbackType,
 } from '../../../../shared/types/feedback'
@@ -64,11 +63,6 @@ export function sizeText(bytes: number): string {
   return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`
 }
 
-/** 列表筛选：全部 / 未关闭 / 已关闭 */
-export type ListFilter = 'all' | 'open' | 'closed'
-export const matchesFilter = (status: FeedbackStatus, filter: ListFilter): boolean =>
-  filter === 'all' || (filter === 'closed') === (status === 'closed')
-
 export const TYPE_ORDER: FeedbackType[] = ['bug', 'feature', 'other']
 
 /** 第一页（轮询拿到的）+ 手动加载的更早页，按 id 去重，第一页的数据优先 */
@@ -77,10 +71,18 @@ export function mergeThreads(first: FeedbackSummary[], older: FeedbackSummary[])
   return [...first, ...older.filter(t => !seen.has(t.id))]
 }
 
-const clip = (text: string, max: number): string => (text.length > max ? `${text.slice(0, max - 1)}…` : text)
+export const clip = (text: string, max: number): string => (text.length > max ? `${text.slice(0, max - 1)}…` : text)
 
 /** 系统通知的内容：一次检查有多条只弹一条汇总；null = 没有新回复 */
-export function freshNotice(fresh: FeedbackSummary[]): { id: string; count: number; body: string } | null {
+export function freshNotice(fresh: FeedbackSummary[]): {
+  id: string
+  count: number
+  body: string
+  /** 应用内提示用：第一条的编号、标题、预览 */
+  threadId: string
+  title: string
+  preview: string
+} | null {
   const first = fresh[0]
   if (!first) return null
   const preview = first.preview.replace(/\s+/g, ' ').trim()
@@ -88,10 +90,23 @@ export function freshNotice(fresh: FeedbackSummary[]): { id: string; count: numb
     id: `feedback:${first.id}`,
     count: fresh.length,
     body: clip(preview ? `${first.title}\n${preview}` : first.title, 300),
+    threadId: first.id,
+    title: first.title,
+    preview: clip(preview, 120),
   }
 }
 
-/** 要不要弹：沿用通知设置的勿扰、「仅在窗口不在前台时通知」 */
+/**
+ * 怎么提醒（docs/ui/feedback-v2.md §4）：勿扰时不提醒；窗口在前台用应用内提示（右下角卡片），不在前台用系统通知。
+ * 「仅在窗口不在前台时通知」管的是系统通知，不影响应用内提示。
+ */
+export type NoticeChannel = 'none' | 'toast' | 'system'
+export function noticeChannel(prefs: NotificationPrefs, focused: boolean, now: number): NoticeChannel {
+  if (isQuiet(prefs, new Date(now))) return 'none'
+  return focused ? 'toast' : 'system'
+}
+
+/** 要不要弹系统通知：沿用通知设置的勿扰、「仅在窗口不在前台时通知」（团队聊天通知 TeamNotifier 也用它） */
 export function shouldNotify(prefs: NotificationPrefs, focused: boolean, now: number): boolean {
   if (isQuiet(prefs, new Date(now))) return false
   return !(focused && prefs.unfocusedOnly)

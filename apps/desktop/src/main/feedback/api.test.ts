@@ -43,11 +43,61 @@ describe('解析', () => {
           unread: true,
           preview: '已修复',
           previewAuthor: 'team',
+          teamSeen: false,
+          teamSeenAt: null,
+          working: false,
+          workingAt: null,
+          messageCount: 0,
+          attachments: { logs: 0, images: 0 },
         },
       ],
       unreadCount: 2,
       nextBefore: 'c1',
     })
+  })
+
+  it('列表：v2 新字段（团队看过、处理中、条数、附件数）', async () => {
+    mocks.fetch.mockResolvedValue(
+      reply(200, {
+        threads: [
+          {
+            ...summary,
+            team_seen: true,
+            team_seen_at: '2026-10-12T07:00:00Z',
+            working: true,
+            working_at: '2026-10-12T08:00:00Z',
+            message_count: 3,
+            attachments: { logs: 1, images: 2 },
+          },
+          { ...summary, working: false, working_at: '2026-10-12T08:00:00Z' },
+        ],
+      }),
+    )
+    const [a, b] = (await api.listFeedback()).threads
+    expect(a).toMatchObject({
+      teamSeen: true,
+      teamSeenAt: Date.parse('2026-10-12T07:00:00Z'),
+      working: true,
+      workingAt: Date.parse('2026-10-12T08:00:00Z'),
+      messageCount: 3,
+      attachments: { logs: 1, images: 2 },
+    })
+    // 没在处理时不给 workingAt
+    expect(b.workingAt).toBeNull()
+  })
+
+  it('详情：丢掉后台才有的 note / assigned 消息', async () => {
+    const m = (id: number, kind: string) => ({
+      id,
+      author: 'team',
+      kind,
+      body: 'x',
+      created_at: '2026-10-12T06:03:00Z',
+    })
+    mocks.fetch.mockResolvedValue(
+      reply(200, { thread: summary, messages: [m(1, 'message'), m(2, 'note'), m(3, 'assigned'), m(4, 'closed')] }),
+    )
+    expect((await api.getFeedback(ID)).messages.map(x => x.id)).toEqual([1, 4])
   })
 
   it('列表：next_before 为 null / 缺字段时不崩', async () => {

@@ -92,7 +92,7 @@ function LeftStripe() {
   const taskBadge = useRunningTaskCount()
   const conversationsDot = useConversationsBadge()
   const problems = useProblems(useProjectContext().ref)
-  // 团队回复了反馈、还没看：设置按钮上一个红点（docs/ui/feedback.md §2.6）。大小、位置跟这条工具条上别的角标一致
+  // 团队回复了反馈、还没看：设置按钮上一个数字角标（docs/ui/feedback-v2.md §4，超过 9 显示 9+）。大小、位置跟这条工具条上别的角标一致
   const feedbackUnread = useFeedbackUnread()
   const onWorkbench = page === 'workbench'
   const badgeOf = (view: LeftView): ReactNode =>
@@ -162,7 +162,7 @@ function LeftStripe() {
         icon={Settings}
         label={withShortcut(tr('coding.shell.settings'), OPEN_SETTINGS)}
         active={settings.open && settings.section !== 'account'}
-        badge={feedbackUnread > 0 ? <Dot tone="notify" size={7} /> : null}
+        badge={feedbackUnread > 0 ? <CountBadge tone="notify" count={feedbackUnread} max={9} /> : null}
         onClick={() => settings.openSettings()}
       />
       <button

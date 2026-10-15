@@ -1,6 +1,6 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
-import { Dot, IconButton, SEGMENT_ICON } from '@/ui'
+import { CountBadge, IconButton, SEGMENT_ICON } from '@/ui'
 import { useFeedbackUnread } from '@/features/feedback/store'
 import { useSidebarPrefs } from '@/features/appearance/sidebar'
 import { getSidebarIcon, type FooterAction } from '@/features/appearance/sidebarIcons'
@@ -14,7 +14,7 @@ export function SidebarActionButton({ action, compact = false }: { action: Foote
   useI18n()
   const { icons } = useSidebarPrefs()
   const settings = useSettings()
-  // 团队回复了反馈、还没看：设置按钮上一个红点（docs/ui/feedback.md §2.6）
+  // 团队回复了反馈、还没看：设置按钮上一个数字角标（docs/ui/feedback-v2.md §4，超过 9 显示 9+）
   const unread = useFeedbackUnread()
   const dot = action === 'settings' && unread > 0
 
@@ -47,7 +47,9 @@ export function SidebarActionButton({ action, compact = false }: { action: Foote
   return (
     <span className="relative inline-flex shrink-0">
       {button}
-      {dot && <Dot tone="notify" size={6} className="pointer-events-none absolute top-1 right-1" />}
+      {dot && (
+        <CountBadge tone="notify" count={unread} max={9} className="pointer-events-none absolute -top-0.5 -right-0.5" />
+      )}
     </span>
   )
 }

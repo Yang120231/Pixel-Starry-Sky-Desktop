@@ -158,7 +158,7 @@ describe('prepareImages', () => {
 
   it('校验格式、数量和能否解码', () => {
     expect(() => prepareImages([{ ...png(10), mediaType: 'image/gif' }], shrink)).toThrow(/格式/)
-    expect(() => prepareImages([png(1), png(1), png(1), png(1)], shrink)).toThrow(/最多/)
+    expect(() => prepareImages([png(1), png(1), png(1), png(1), png(1), png(1)], shrink)).toThrow(/最多/)
     expect(() => prepareImages([png(FEEDBACK_LIMITS.imageBytes + 1)], () => null)).toThrow(/无法读取/)
   })
 })

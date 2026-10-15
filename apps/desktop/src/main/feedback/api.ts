@@ -80,6 +80,16 @@ export function parseSummary(v: unknown): FeedbackSummary | null {
     unread: v.unread === true,
     preview: str(v.preview),
     previewAuthor: oneOf(v.preview_author, AUTHORS, 'user'),
+    // 以下是反馈 v2 新增的字段，旧云端没有：给默认值
+    teamSeen: v.team_seen === true,
+    teamSeenAt: timeOrNull(v.team_seen_at),
+    working: v.working === true,
+    workingAt: v.working === true ? timeOrNull(v.working_at) : null,
+    messageCount: Math.max(0, Math.floor(int(v.message_count))),
+    attachments: {
+      logs: isObj(v.attachments) ? Math.max(0, Math.floor(int(v.attachments.logs))) : 0,
+      images: isObj(v.attachments) ? Math.max(0, Math.floor(int(v.attachments.images))) : 0,
+    },
   }
 }
 
@@ -131,6 +141,8 @@ function parseAttachment(v: unknown): FeedbackAttachmentMeta | null {
 
 function parseMessage(v: unknown): FeedbackMessage | null {
   if (!isObj(v) || typeof v.id !== 'number' || !Number.isFinite(v.id)) return null
+  // 内部备注（note）、认领事件（assigned）只给后台；万一漏下来也不显示
+  if (typeof v.kind === 'string' && !['message', 'closed', 'reopened'].includes(v.kind)) return null
   return {
     id: v.id,
     author: oneOf(v.author, AUTHORS, 'user'),
