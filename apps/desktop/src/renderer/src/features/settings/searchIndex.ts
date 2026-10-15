@@ -42,6 +42,42 @@ export const SETTINGS_INDEX: SearchEntry[] = [
     keywords: '插件 连接器 MCP Skills 技能 命令行 CLI plugin connector extension server',
   },
   {
+    section: 'extensions',
+    get title() {
+      return tr('extensions.title')
+    },
+    get keywords() {
+      return tr('extensions.keywords')
+    },
+  },
+  {
+    section: 'extensions',
+    get title() {
+      return tr('extensions.loadFolder')
+    },
+    get keywords() {
+      return tr('extensions.loadFolderKeywords')
+    },
+  },
+  {
+    section: 'appearance',
+    get title() {
+      return tr('extensions.appearance.fileIcons')
+    },
+    get keywords() {
+      return tr('extensions.appearance.fileIconsKeywords')
+    },
+  },
+  {
+    section: 'appearance',
+    get title() {
+      return tr('extensions.appearance.editorTheme')
+    },
+    get keywords() {
+      return tr('extensions.appearance.editorThemeKeywords')
+    },
+  },
+  {
     section: 'appearance',
     title: '界面语言',
     keywords: '语言 中文 英文 简体 language Chinese English locale localization',

@@ -1,0 +1,15 @@
+{
+  "id": "pixelsky.unsafe-svg",
+  "name": "Unsafe SVG",
+  "version": "1.0.0",
+  "publisher": "pixelsky",
+  "description": "Icon theme whose svg carries a script",
+  "license": "MIT",
+  "repository": null,
+  "homepage": null,
+  "engines": { "pixelsky": ">=0.4.0" },
+  "contributes": { "iconThemes": [{ "id": "unsafe", "label": "Unsafe", "path": "icons.json" }] },
+  "main": null,
+  "permissions": [],
+  "price": null
+}

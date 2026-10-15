@@ -15,6 +15,8 @@ export interface PlaceOptions {
   offset?: number
   /** 离视口边缘至少留多少（px），默认 8 */
   margin?: number
+  /** 上下弹出时横向尽量留在这个范围里（例如锚点所在的窗格）；放不下时只夹在视口内 */
+  within?: { left: number; right: number }
 }
 
 export interface Placement {
@@ -37,7 +39,7 @@ export function placePopover(
   viewport: { width: number; height: number },
   opts: PlaceOptions = {},
 ): Placement {
-  const { side = 'bottom', align = 'start', offset = 4, margin = 8 } = opts
+  const { side = 'bottom', align = 'start', offset = 4, margin = 8, within } = opts
   const vertical = side === 'bottom' || side === 'top'
   const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(v, Math.max(min, max)))
   let used: PopoverSide = side
@@ -52,7 +54,14 @@ export function placePopover(
     const height = Math.min(size.height, maxHeight)
     const top = used === 'bottom' ? anchor.bottom + offset : anchor.top - offset - height
     const rawLeft = align === 'end' ? anchor.right - size.width : anchor.left
-    return { top, left: clamp(rawLeft, margin, viewport.width - size.width - margin), maxHeight, side: used }
+    let lo = margin,
+      hi = viewport.width - size.width - margin
+    if (within) {
+      const l = Math.max(lo, within.left + margin),
+        r = Math.min(hi, within.right - size.width - margin)
+      if (l <= r) [lo, hi] = [l, r]
+    }
+    return { top, left: clamp(rawLeft, lo, hi), maxHeight, side: used }
   }
   const room = {
     right: viewport.width - anchor.right - offset - margin,

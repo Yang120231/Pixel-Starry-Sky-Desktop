@@ -7,6 +7,7 @@ import type { ProvidersBridge } from './providers'
 import type { EditorBridge, FilesBridge } from './workspace'
 import type { WindowBridge } from './window'
 import type { ExtensionsBridge } from './extensions'
+import type { ExtPacksBridge } from './extpacks'
 import type { ProjectToolsBridge } from './project-tools'
 import type { TerminalBridge } from './terminal'
 import type { NotificationsBridge } from './notifications'
@@ -27,6 +28,8 @@ export type * from './feedback'
 export interface PixelskyBridge {
   machines: import('./machines').MachineBridge
   extensions: ExtensionsBridge
+  /** 扩展包（语法 / 主题 / 图标 / 片段 / 任务 / 技能 / 提示词） */
+  extpacks: ExtPacksBridge
   platform: NodeJS.Platform | string
   /** 拖进来 / 粘贴的文件在磁盘上的路径（GitHub #15）；不是本机文件时为空字符串 */
   pathForFile(file: File): string

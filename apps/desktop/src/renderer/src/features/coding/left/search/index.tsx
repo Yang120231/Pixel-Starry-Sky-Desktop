@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { File, Search, X } from 'lucide-react'
+import { Search, X } from 'lucide-react'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '@/i18n/core'
 import { Segmented, Spinner, cn } from '@/ui'
 import { isDemo } from '@/data'
 import { demo } from '@/data/demo'
 import { openFile } from '@/features/files/store'
+import { FileIcon } from '@/features/files/icons/FileIcon'
 import { displayPath } from '@/features/files/extraFolders'
 import { demoFileHits, searchFiles, type FileHits } from '@/features/search/fileSearch'
 import { useCodingWorkspace } from '../../workspace'
@@ -133,7 +134,7 @@ export function SearchView({ visible }: { visible: boolean }) {
                     scope === 'name' ? 'press hover:bg-hover' : 'cursor-default',
                   )}
                 >
-                  <File size={14} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
+                  <FileIcon name={g.name} kind="file" size={14} />
                   <span className="min-w-0 truncate text-fg">{g.name}</span>
                   {g.dir ? (
                     <span className="min-w-0 truncate text-label text-fg-faint">{displayPath(ref, g.dir)}</span>

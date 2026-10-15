@@ -7,6 +7,10 @@ import type {
   RunTaskState,
 } from '../../../../../shared/types/project-tools'
 import type { TerminalRecord } from '../../../../../shared/types/terminal'
+import { extTaskCommand, shellName } from './extCommand'
+
+// 扩展任务的命令拼装在 extCommand.ts（不引用扩展 store，node 测试能直接用）；shellName 也放在那里，这里原样再导出
+export { shellName }
 
 /** 目录带空格或引号时加双引号 */
 function quoteDir(dir: string): string {
@@ -36,6 +40,7 @@ function gradleCommand(group: RunTaskGroup, task: RunTask, shell: string | undef
 /** 在终端里跑这个任务的命令；子文件夹用工具自己的目录参数，不 cd。shell 是终端程序（只有 Gradle 在 cmd 里写法不同），不知道时按 PowerShell / sh 都能用的写 */
 export function taskCommand(group: RunTaskGroup, task: RunTask, shell?: string): string {
   if (group.kind === 'gradle' && group.gradle) return gradleCommand(group, task, shell)
+  if (group.kind === 'ext' && group.ext) return extTaskCommand(group, task, shell)
   const dir = group.dir
   if (group.kind === 'make') return dir ? `make -C ${quoteDir(dir)} ${task.name}` : `make ${task.name}`
   if (group.kind === 'cargo')
@@ -46,16 +51,14 @@ export function taskCommand(group: RunTaskGroup, task: RunTask, shell?: string):
   return `${manager} ${flag} ${quoteDir(dir)} run ${task.name}`
 }
 
-/** 终端程序的名字：去掉目录和 .exe，小写 */
-export function shellName(program: string | undefined): string {
-  const base = (program ?? '').replaceAll('\\', '/').split('/').pop() ?? ''
-  return base.toLowerCase().replace(/\.exe$/, '')
-}
+const POWERSHELL_EXIT = '; $ok=$?; if ($LASTEXITCODE) { exit $LASTEXITCODE }; if (-not $ok) { exit 1 }; exit 0'
 
 /** 命令后面接的「跑完就退出、带上命令的退出码」；程序名不认识（含远程）时按 POSIX shell 处理 */
 export function exitSuffix(program: string | undefined): string {
   const name = shellName(program)
-  if (name === 'powershell' || name === 'pwsh') return '; exit $LASTEXITCODE'
+  // 只写 exit $LASTEXITCODE 时，命令找不到（如没装 task）或 cmdlet 出错会退出码 0、显示成功；所以先记下 $?，
+  // 程序给了非 0 退出码就用它，否则按 $? 判断成败
+  if (name === 'powershell' || name === 'pwsh') return POWERSHELL_EXIT
   if (name === 'cmd') return ' && exit 0 || exit 1'
   if (name === 'fish') return '; exit $status'
   return '; exit $?'
@@ -85,7 +88,11 @@ export const taskTitle = (group: RunTaskGroup, task: RunTask): string =>
   group.gradle && group.gradle.project !== ':' ? `${group.gradle.project}:${task.name}` : task.name
 
 /** 任务在内存里的键（同一工作区内唯一） */
-export const taskKey = (group: RunTaskGroup, task: RunTask): string => `${group.file}\u0000${task.name}`
+/** 组的标识：普通组就是文件；扩展组再带上扩展 + 模板，免得两个扩展对同一个文件出的组撞键 */
+export const groupKey = (group: RunTaskGroup): string =>
+  group.kind === 'ext' && group.ext ? `${group.file}\u0001${group.ext.packKey}/${group.ext.templateId}` : group.file
+
+export const taskKey = (group: RunTaskGroup, task: RunTask): string => `${groupKey(group)}\u0000${task.name}`
 
 /** 按任务名、命令、所在文件夹 / 文件筛选；组里没有任务命中就去掉这一组 */
 export function filterGroups(groups: readonly RunTaskGroup[], query: string): RunTaskGroup[] {
@@ -114,7 +121,7 @@ export function filterGroups(groups: readonly RunTaskGroup[], query: string): Ru
 
 /** 根目录的组默认展开，其余收起；overrides 是用户手动改过的（true = 收起） */
 export function isCollapsed(group: RunTaskGroup, overrides: Readonly<Record<string, boolean>>): boolean {
-  return overrides[group.file] ?? group.dir !== ''
+  return overrides[groupKey(group)] ?? group.dir !== ''
 }
 
 /** Gradle 里默认收起的分组（§9.3） */
@@ -131,7 +138,7 @@ const QUIET_CATEGORIES = new Set([
 /** 「属性」节点当作一个分组，名字不会和 Gradle 的分组重名 */
 export const PROPERTIES = '\u0001properties'
 /** Gradle 分组 / 属性节点展开状态的键 */
-export const categoryKey = (group: RunTaskGroup, category: string): string => `${group.file}\u0000${category}`
+export const categoryKey = (group: RunTaskGroup, category: string): string => `${groupKey(group)}\u0000${category}`
 export function isCategoryCollapsed(
   group: RunTaskGroup,
   category: string,
@@ -179,9 +186,9 @@ export function visibleRows(
 
 /** 行的键（键盘焦点、data-task-row） */
 export function rowKey(row: TaskRow): string {
-  if (row.type === 'group') return `g:${row.group.file}`
+  if (row.type === 'group') return `g:${groupKey(row.group)}`
   if (row.type === 'category') return `c:${categoryKey(row.group, row.category)}`
-  if (row.type === 'prop') return `p:${row.group.file}\u0000${row.prop.key}`
+  if (row.type === 'prop') return `p:${groupKey(row.group)}\u0000${row.prop.key}`
   return `t:${taskKey(row.group, row.task)}`
 }
 
@@ -226,10 +233,11 @@ export function mergeGradleFull(state: RunTaskState, fulls: ReadonlyMap<string, 
 /** 组头显示的名字：子文件夹写文件夹，根目录写文件名 */
 export const groupTitle = (group: RunTaskGroup): string => (group.dir ? group.dir : group.file)
 
-/** 文件名是不是会产生任务（编辑器保存后要重新读） */
-export function isTaskFile(path: string): boolean {
+/** 文件名是不是会产生任务（编辑器保存后要重新读）；extra 是扩展任务模板认的文件名 */
+export function isTaskFile(path: string, extra?: ReadonlySet<string>): boolean {
   const name = path.replaceAll('\\', '/').split('/').pop() ?? ''
   return (
+    !!extra?.has(name) ||
     name === 'package.json' ||
     name === 'Cargo.toml' ||
     /^(gnu)?makefile$/i.test(name) ||

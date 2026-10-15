@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_MINIMAL_MODE, parseMinimalMode } from './minimalMode'
@@ -34,6 +35,26 @@ describe('极简模式', () => {
     const globals = css('globals.css')
     expect(globals.indexOf("@import './density.css';")).toBeGreaterThan(-1)
     expect(globals.indexOf("@import './density.css';")).toBeLessThan(globals.indexOf("@import './minimal.css';"))
+  })
+
+  it('样式里用到的 data-* 钩子在源码里都找得到（组件改了以后规则不会悄悄失效，§9）', () => {
+    const hooks = new Set<string>()
+    for (const name of ['minimal.css', 'density.css'])
+      for (const m of css(name)
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .matchAll(/\[(data-[a-z0-9-]+)/g))
+        hooks.add(m[1])
+    hooks.delete('data-minimal')
+    expect(hooks.size).toBeGreaterThan(40)
+    const root = fileURLToPath(new URL('../../', import.meta.url))
+    const source = readdirSync(root, { recursive: true, encoding: 'utf8' })
+      .filter(f => /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f))
+      .map(f => readFileSync(join(root, f), 'utf8'))
+      .join('\n')
+    // JSX 里写 data-xxx，或者用 dataset.xxx 设（驼峰）
+    const camel = (h: string) => h.slice(5).replace(/-([a-z0-9])/g, (_, c: string) => c.toUpperCase())
+    const missing = [...hooks].filter(h => !source.includes(h) && !source.includes(`dataset.${camel(h)}`))
+    expect(missing).toEqual([])
   })
 
   it('字号变量都乘了 --density', () => {

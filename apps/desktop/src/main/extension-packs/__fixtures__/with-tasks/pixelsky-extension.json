@@ -1,0 +1,26 @@
+{
+  "id": "pixelsky.with-tasks",
+  "name": "With Tasks",
+  "version": "1.0.0",
+  "publisher": "pixelsky",
+  "description": "A justfile task template",
+  "license": "MIT",
+  "repository": null,
+  "homepage": null,
+  "engines": { "pixelsky": ">=0.4.0" },
+  "contributes": {
+    "taskTemplates": [
+      {
+        "id": "just",
+        "label": "just",
+        "files": ["justfile"],
+        "extract": [{ "pattern": "^([a-z][a-z0-9_-]*):", "flags": "m", "name": 1 }],
+        "runner": { "default": "just" },
+        "command": "{runner} {name}"
+      }
+    ]
+  },
+  "main": null,
+  "permissions": [],
+  "price": null
+}

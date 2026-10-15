@@ -9,6 +9,7 @@ import {
   dialog,
   Menu,
   nativeTheme,
+  protocol,
   session,
   shell,
   type MenuItemConstructorOptions,
@@ -20,6 +21,8 @@ import { initAppInfo } from './app/info'
 import { initUpdater, runPendingInstall } from './app/updater'
 import { quitWhenAllClosed } from './app/quit'
 import { initEngine } from './engine/ipc'
+import { initExtensionPacks } from './extension-packs/ipc'
+import { EXT_SCHEME_PRIVILEGES } from './extension-packs/protocol'
 import { loadShellEnv } from './app/shell-env'
 import { initMobile } from './mobile/ipc'
 import { initWorkspace } from './workspace/files-ipc'
@@ -400,6 +403,9 @@ function setAppMenu(locale: Locale = 'zh-CN'): void {
 // Windows 系统通知需要 AppUserModelID；开发版没有安装记录，用 Electron 本身的路径（docs/ui/notifications.md §4）
 if (process.platform === 'win32') app.setAppUserModelId(app.isPackaged ? 'com.pixelsky.desktop' : process.execPath)
 
+// 扩展包的资源协议 pixelsky-ext:// 必须在 ready 之前登记
+protocol.registerSchemesAsPrivileged([EXT_SCHEME_PRIVILEGES])
+
 app.whenReady().then(async () => {
   // 卡顿诊断：窗口没响应、主进程卡住、内存过高时写日志（docs/ui/logging.md §4.9）
   allowCallStacks(session.defaultSession, isAppUrl)
@@ -427,6 +433,7 @@ app.whenReady().then(async () => {
   initLogIpc() // 设置 › 日志，见 app/logging.ts
   initUpdater(ctx) // 自动更新（GitHub Releases），见 app/updater.ts
   await loadShellEnv() // macOS / Linux 从程序坞、桌面菜单启动时补回登录 shell 的 PATH，见 app/shell-env.ts
+  initExtensionPacks(ctx) // 扩展包（语法 / 主题 / 图标 / 片段 / 任务 / 技能 / 提示词），见 extension-packs/ipc.ts
   await initEngine(ctx) // 引擎系统（Claude Code 等），见 engine/ipc.ts
   initMobile(ctx) // 手机远程连接（默认关），见 mobile/ipc.ts
   initSettingsSync(ctx) // 设置云同步，见 account/settings-sync.ts

@@ -1,0 +1,15 @@
+{
+  "id": "pixelsky.with-skill",
+  "name": "With Skill",
+  "version": "1.0.0",
+  "publisher": "pixelsky",
+  "description": "Two skills, one per engine mix",
+  "license": "MIT",
+  "repository": null,
+  "homepage": null,
+  "engines": { "pixelsky": ">=0.4.0" },
+  "contributes": { "skills": [{ "path": "skills/hello" }, { "path": "skills/hola", "engines": ["codex"] }] },
+  "main": null,
+  "permissions": [],
+  "price": null
+}

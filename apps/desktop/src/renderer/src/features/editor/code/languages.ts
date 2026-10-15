@@ -3,67 +3,18 @@ import type { Extension } from '@codemirror/state'
 import { StreamLanguage, type StreamParser } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
 import { keyHighlight } from './theme'
+import { builtinLanguageName } from './builtinLanguages'
+import { packGrammarForPath } from './languageIds'
+import { textmateLanguage } from './textmate'
 
-const extensions: Record<string, string> = {
-  ts: 'TypeScript',
-  mts: 'TypeScript',
-  cts: 'TypeScript',
-  tsx: 'TSX',
-  js: 'JavaScript',
-  mjs: 'JavaScript',
-  cjs: 'JavaScript',
-  jsx: 'JSX',
-  json: 'JSON',
-  jsonc: 'JSON',
-  css: 'CSS',
-  html: 'HTML',
-  htm: 'HTML',
-  md: 'Markdown',
-  markdown: 'Markdown',
-  py: 'Python',
-  rs: 'Rust',
-  go: 'Go',
-  yaml: 'YAML',
-  yml: 'YAML',
-  toml: 'TOML',
-  sh: 'Shell',
-  bash: 'Shell',
-  zsh: 'Shell',
-  sql: 'SQL',
-  java: 'Java',
-  kt: 'Kotlin',
-  kts: 'Kotlin',
-  scala: 'Scala',
-  sc: 'Scala',
-  groovy: 'Groovy',
-  gradle: 'Groovy',
-  c: 'C',
-  h: 'C',
-  cpp: 'C++',
-  cc: 'C++',
-  cxx: 'C++',
-  hpp: 'C++',
-  hh: 'C++',
-  hxx: 'C++',
-  cs: 'C#',
-  xml: 'XML',
-  xsd: 'XML',
-  xsl: 'XML',
-  xslt: 'XML',
-  svg: 'XML',
-  fxml: 'XML',
-  plist: 'XML',
-  csproj: 'XML',
-  properties: 'Properties',
-  ini: 'INI',
-  cfg: 'INI',
-  dockerfile: 'Dockerfile',
-}
+/** 内置名字永远不被扩展替换（编辑器里有按 Markdown 判断的逻辑）；没有内置的再看扩展语法 */
 export function fileLanguage(path: string): string {
-  const name = path.split(/[\\/]/).pop()?.toLowerCase() ?? ''
-  // Dockerfile 常常没有扩展名，或者写成 Dockerfile.dev
-  if (/^(docker|container)file(\..+)?$/.test(name)) return 'Dockerfile'
-  return extensions[name.split('.').pop() ?? ''] ?? tr('code.highlight.plainText')
+  const builtin = builtinLanguageName(path)
+  if (builtin) return builtin
+  const grammar = packGrammarForPath(path)?.grammar
+  return grammar
+    ? (grammar.aliases?.[0] ?? grammar.language ?? tr('code.highlight.plainText'))
+    : tr('code.highlight.plainText')
 }
 
 /**
@@ -89,15 +40,20 @@ function clikeDefinitions<S>(parser: StreamParser<S>): StreamParser<S> {
   }
 }
 
-export async function loadLanguage(path: string): Promise<Extension> {
-  switch (fileLanguage(path)) {
+export async function loadLanguage(path: string, firstLine?: string): Promise<Extension> {
+  const ref = packGrammarForPath(path, firstLine)
+  if (ref) return textmateLanguage(ref)
+  const builtin = builtinLanguageName(path)
+  switch (builtin) {
     case 'TypeScript':
     case 'TSX':
     case 'JavaScript':
     case 'JSX': {
       const { javascript } = await import('@codemirror/lang-javascript')
-      const name = fileLanguage(path)
-      return javascript({ typescript: name === 'TypeScript' || name === 'TSX', jsx: name === 'JSX' || name === 'TSX' })
+      return javascript({
+        typescript: builtin === 'TypeScript' || builtin === 'TSX',
+        jsx: builtin === 'JSX' || builtin === 'TSX',
+      })
     }
     case 'JSON': {
       const support = (await import('@codemirror/lang-json')).json()

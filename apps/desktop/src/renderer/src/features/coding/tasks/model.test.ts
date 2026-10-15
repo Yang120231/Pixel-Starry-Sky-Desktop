@@ -6,6 +6,7 @@ import {
   exitSuffix,
   filterGroups,
   gradleBuildKey,
+  groupKey,
   gutterGroupForFile,
   isCategoryCollapsed,
   isCollapsed,
@@ -71,8 +72,10 @@ describe('taskCommand', () => {
 
 describe('exitSuffix', () => {
   it('按程序名判断', () => {
-    expect(exitSuffix('powershell.exe')).toBe('; exit $LASTEXITCODE')
-    expect(exitSuffix('C:\\Program Files\\PowerShell\\7\\pwsh.exe')).toBe('; exit $LASTEXITCODE')
+    // 先记下 $?：命令找不到时 $LASTEXITCODE 是空的，只写 exit $LASTEXITCODE 会退出码 0
+    const ps = '; $ok=$?; if ($LASTEXITCODE) { exit $LASTEXITCODE }; if (-not $ok) { exit 1 }; exit 0'
+    expect(exitSuffix('powershell.exe')).toBe(ps)
+    expect(exitSuffix('C:\\Program Files\\PowerShell\\7\\pwsh.exe')).toBe(ps)
     expect(exitSuffix('CMD.EXE')).toBe(' && exit 0 || exit 1')
     expect(exitSuffix('/usr/bin/fish')).toBe('; exit $status')
     expect(exitSuffix('/bin/zsh')).toBe('; exit $?')
@@ -118,6 +121,32 @@ describe('筛选与可见行', () => {
     expect(isTaskFile('makefile')).toBe(true)
     expect(isTaskFile('src/Cargo.toml')).toBe(true)
     expect(isTaskFile('src/index.ts')).toBe(false)
+  })
+  it('两个扩展对同一个文件出的组：行键、任务键、收起状态互相独立', () => {
+    const ext = (packKey: string, templateId = 'just'): RunTaskGroup => ({
+      kind: 'ext',
+      file: 'justfile',
+      dir: '',
+      tasks: [task('build')],
+      ext: {
+        packKey,
+        packId: packKey,
+        templateId,
+        label: 'Just',
+        command: 'just {name}',
+        cwd: '{dir}',
+        runner: null,
+        runnerLocal: false,
+      },
+    })
+    const a = ext('f-a')
+    const b = ext('f-b')
+    const c = ext('f-a', 'other')
+    const rowOf = (group: RunTaskGroup) => ({ type: 'group' as const, group, collapsed: false, count: 1 })
+    expect(new Set([a, b, c].map(g => rowKey(rowOf(g) as never))).size).toBe(3)
+    expect(new Set([a, b, c].map(g => taskKey(g, g.tasks[0]))).size).toBe(3)
+    expect(isCollapsed(b, { [groupKey(a)]: true })).toBe(false)
+    expect(isCollapsed(a, { [groupKey(a)]: true })).toBe(true)
   })
   it('编辑器文件对应的 npm 组', () => {
     const state = { root: 'D:/p', truncated: false, groups }

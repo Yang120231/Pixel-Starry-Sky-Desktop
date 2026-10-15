@@ -34,7 +34,16 @@ export class Extensions {
 
   /** 会话启动前：给引擎准备这个工作目录生效的扩展 */
   prepare(record: SessionRecord): ExtensionLaunch {
-    return this.get().launch(record.cwd, record.engine, this.env(record.engine))
+    const launch = this.get().launch(record.cwd, record.engine, this.env(record.engine))
+    // 扩展包里的技能：Claude 走生成的插件目录，Codex 走技能目录；没有时 key 和原来一字不差
+    const packs = this.ctx.extPacks?.skillLaunch(record.engine)
+    if (!packs) return launch
+    return {
+      ...launch,
+      key: packs.key ? launch.key + '|packs:' + packs.key : launch.key,
+      pluginDirs: [...launch.pluginDirs, ...packs.pluginDirs],
+      ...(packs.skillRoots.length > 0 ? { skillRoots: [...(launch.skillRoots ?? []), ...packs.skillRoots] } : {}),
+    }
   }
 
   register(): void {
@@ -105,7 +114,12 @@ export class Extensions {
     handle('check', (id, ref) => mutate(() => service().check(text(id, 'id'), project(ref))))
     handle('update', (id, apply) => mutate(() => service().update(text(id, 'id'), apply === true)))
     handle('skillText', (id, ref) => service().skillText(text(id, 'id'), project(ref)))
-    handle('commands', ref => service().commands(project(ref)))
+    handle('commands', ref => {
+      const seen = new Set<string>()
+      return [...service().commands(project(ref)), ...(ctx.extPacks?.skillCommands() ?? [])].filter(
+        c => !seen.has(c.name) && !!seen.add(c.name),
+      )
+    })
     handle('reveal', (id, ref) => {
       shell.showItemInFolder(service().location(text(id, 'id'), project(ref)))
     })
@@ -116,6 +130,8 @@ export class Extensions {
           : await dialog.showOpenDialog({ title: '选择插件或技能目录', properties: ['openDirectory'] })
       return selected.canceled ? null : (selected.filePaths[0] ?? null)
     })
+    // 扩展包的技能变了，输入框的技能列表也要刷新
+    ctx.extPacks?.onChange(() => ctx.events.broadcast('extensions:changed'))
     app.on('will-quit', () => this.service?.close())
   }
 }

@@ -45,7 +45,7 @@ export const PROJECT_TOOL_OPS = {
   'projectTools:allTasks': c => c.tools.tasks.all(),
   'projectTools:reorderTasks': (c, id, ids) => c.tools.tasks.reorder(value(id, 200, true), ids as string[]),
   'projectTools:environment': (c, ref, force) => c.tools.services.environment(workspaceRef(ref), force === true),
-  'projectTools:runTasks': (c, ref) => readRunTasks(c.host.resolve(workspaceRef(ref)).path),
+  'projectTools:runTasks': (c, ref, templates) => readRunTasks(c.host.resolve(workspaceRef(ref)).path, templates),
   'projectTools:gradleTasks': (c, ref, buildDir) =>
     listGradleTasks(c.host.resolve(workspaceRef(ref)).path, value(buildDir, 500)),
   'projectTools:gradleTasksCancel': (c, ref, buildDir) =>

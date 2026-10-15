@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { File as FileIcon, Search } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { Search } from 'lucide-react'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import { Kbd, cn } from '@/ui'
@@ -11,6 +11,8 @@ import { useOpenSearch } from '@/features/search/SearchProvider'
 import { setSearchShortcutOverride } from '@/features/search/shortcutOverride'
 import { demoFileHits, searchFiles, type FileHit } from '@/features/search/fileSearch'
 import { openFile } from '@/features/files/store'
+import { FileIcon as FileTypeIcon } from '@/features/files/icons/FileIcon'
+import { isIgnoredPath, partitionIgnored, useIgnoredSet } from '@/features/files/ignored'
 import { useActiveCodeTab } from '../editor'
 import { useCodingWorkspace } from '../workspace'
 import { parseQuery } from './commandCenterModel'
@@ -57,6 +59,9 @@ function CommandCenter({ onClose }: { onClose: () => void }) {
   const [files, setFiles] = useState<FileState>({ hits: [], loading: false, error: false })
   const { ref } = useCodingWorkspace()
   const codeTab = useActiveCodeTab()
+  // 被 .gitignore 忽略的文件排在后面、变暗
+  const ignored = useIgnoredSet(ref)
+  const hits = useMemo(() => partitionIgnored(files.hits, h => h.path, ignored), [files.hits, ignored])
   const palette = useCommandPalette()
   const openSearch = useOpenSearch()
   const input = useRef<HTMLInputElement>(null)
@@ -110,7 +115,7 @@ function CommandCenter({ onClose }: { onClose: () => void }) {
   )
   const submit = (): void => {
     if (q.kind === 'file') {
-      const hit = files.hits[selected]
+      const hit = hits[selected]
       if (hit) pick(hit)
     } else if (q.kind === 'command') {
       // 输入的文字带不过去，命令面板自己从头输入
@@ -136,7 +141,7 @@ function CommandCenter({ onClose }: { onClose: () => void }) {
       submit()
     } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault()
-      const n = files.hits.length
+      const n = hits.length
       if (q.kind === 'file' && n) setSelected(s => (s + (e.key === 'ArrowDown' ? 1 : n - 1)) % n)
     }
   }
@@ -146,13 +151,14 @@ function CommandCenter({ onClose }: { onClose: () => void }) {
     if (!term) body = <Note>{tr('coding.top.cc.hint')}</Note>
     else if (!ref) body = <Note>{tr('coding.top.cc.noProject')}</Note>
     else if (files.error) body = <Note>{tr('coding.top.cc.failed')}</Note>
-    else if (files.hits.length === 0)
+    else if (hits.length === 0)
       body = <Note>{tr(files.loading ? 'coding.top.cc.searching' : 'coding.top.cc.noFiles')}</Note>
     else
       body = (
         <ul role="listbox" className="max-h-80 overflow-auto p-1">
-          {files.hits.map((hit, i) => {
+          {hits.map((hit, i) => {
             const slash = hit.path.lastIndexOf('/')
+            const dim = isIgnoredPath(hit.path, ignored)
             return (
               <li
                 key={hit.key}
@@ -165,8 +171,8 @@ function CommandCenter({ onClose }: { onClose: () => void }) {
                   i === selected && 'bg-accent-soft',
                 )}
               >
-                <FileIcon size={14} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
-                <span className="shrink-0">{hit.path.slice(slash + 1)}</span>
+                <FileTypeIcon name={hit.path.slice(slash + 1)} kind="file" size={14} dim={dim} />
+                <span className={cn('shrink-0', dim && 'text-fg-faint')}>{hit.path.slice(slash + 1)}</span>
                 {slash > 0 && (
                   <span className="min-w-0 truncate text-meta text-fg-muted">{hit.path.slice(0, slash)}</span>
                 )}

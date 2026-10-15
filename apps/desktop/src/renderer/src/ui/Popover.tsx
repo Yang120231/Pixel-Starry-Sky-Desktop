@@ -35,6 +35,8 @@ interface PopoverProps {
   anchor?: RefObject<HTMLElement | null>
   /** 去掉默认的 p-1 和最小宽度（自带内边距的面板，例如分支菜单） */
   bare?: boolean
+  /** 上下弹出时横向尽量留在这个范围里（窗口坐标，例如锚点所在的窗格）；每次定位时调用 */
+  within?: () => { left: number; right: number } | null
   role?: 'dialog' | 'menu'
   'aria-label'?: string
   children: ReactNode
@@ -57,6 +59,7 @@ export function Popover({
   matchWidth = false,
   anchor,
   bare = false,
+  within,
   role,
   'aria-label': ariaLabel,
   children,
@@ -101,7 +104,12 @@ export function Popover({
       el.style.maxWidth = `${vw - 16}px`
       if (matchWidth) el.style.width = `${r.width}px`
       const size = { width: el.offsetWidth, height: el.offsetHeight }
-      const p = placePopover(r, size, { width: vw, height: vh }, { side, align, offset })
+      const p = placePopover(
+        r,
+        size,
+        { width: vw, height: vh },
+        { side, align, offset, within: within?.() ?? undefined },
+      )
       if (size.height > p.maxHeight) {
         el.style.maxHeight = `${p.maxHeight}px`
         if (getComputedStyle(el).overflowY === 'visible') el.style.overflowY = 'auto'

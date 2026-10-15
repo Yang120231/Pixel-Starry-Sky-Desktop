@@ -3,7 +3,7 @@ import { openTask } from '@/features/panel/openTask'
 import { useI18n } from '@/i18n/I18nProvider'
 import { getLocale, tr, translateMessage } from '../../i18n/core'
 import { Fragment, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
-import { ChevronRight, CornerDownLeft, FileText, Folder, MessageSquare, Search, SquareTerminal, X } from 'lucide-react'
+import { ChevronRight, CornerDownLeft, Folder, MessageSquare, Search, SquareTerminal, X } from 'lucide-react'
 import type { SearchQuery, SearchResponse, SearchResult, SearchScope } from '@pixelsky/protocol'
 import { IconButton, Spinner, cn } from '@/ui'
 import { OPEN_SESSION_EVENT, bridge, useEngineState } from '@/features/engine'
@@ -11,6 +11,8 @@ import { isDemo } from '@/data'
 import { ProjectFilter } from './ProjectFilter'
 import { demo } from '@/data/demo'
 import { openFile } from '@/features/files/store'
+import { FileIcon } from '@/features/files/icons/FileIcon'
+import { isIgnoredPath, partitionIgnored, useIgnoredSet } from '@/features/files/ignored'
 import { useActiveWorkspace } from '@/features/editor/target'
 import { demoFileHits, searchFiles, type FileHit, type FileHits } from './fileSearch'
 import { groupResults, titleFragments, type ResultGroup } from './groupResults'
@@ -104,6 +106,12 @@ export function SearchDialog({
   const workspace = useActiveWorkspace()
   const fileRef: WorkspaceRef | null = projectId ? { projectId } : workspace.ref
   const fileRefKey = fileRef ? (fileRef.projectId ?? 'session:' + fileRef.sessionId) : ''
+  // 被 .gitignore 忽略的文件排在后面、变暗
+  const ignoredPaths = useIgnoredSet(fileRef)
+  const fileHitList = useMemo(
+    () => partitionIgnored(fileHits.hits, h => h.path, ignoredPaths),
+    [fileHits.hits, ignoredPaths],
+  )
   const openHit = (hit: FileHit) => {
     void openFile(hit.ref, hit.path, hit.line ?? undefined, hit.column ?? 1).catch(() => undefined)
     onClose()
@@ -120,17 +128,17 @@ export function SearchDialog({
       ]),
     [groups, expanded],
   )
-  const total = fileHits.hits.length + rows.length
+  const total = fileHitList.length + rows.length
   const activateIndex = (i: number) => {
-    if (i < fileHits.hits.length) openHit(fileHits.hits[i])
+    if (i < fileHitList.length) openHit(fileHitList[i])
     else {
-      const row = rows[i - fileHits.hits.length]
+      const row = rows[i - fileHitList.length]
       if (row) activate(row.kind === 'group' ? row.group.head : row.hit)
     }
   }
   /** 展开 / 收起一个会话的命中；收起时选中项落回这个会话那一行 */
   const toggleGroup = (key: string, open: boolean) => {
-    const at = fileHits.hits.length + rows.findIndex(r => r.kind === 'group' && r.group.key === key)
+    const at = fileHitList.length + rows.findIndex(r => r.kind === 'group' && r.group.key === key)
     const shown = rows.filter(r => r.kind === 'hit' && r.group.key === key).length
     const extra = groups.find(g => g.key === key)?.rest.length ?? 0
     setExpanded(prev => {
@@ -267,7 +275,7 @@ export function SearchDialog({
             setSelected(i => (i + (e.key === 'ArrowDown' ? 1 : -1) + total) % total)
           } else if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && caretAtEnd(inputRef.current)) {
             // 光标在输入框末尾时，右键展开选中会话的命中、左键收起；光标在中间时照常移动光标
-            const row = rows[selected - fileHits.hits.length]
+            const row = rows[selected - fileHitList.length]
             if (!row) return
             const open = expanded.has(row.group.key)
             if (e.key === 'ArrowRight' && row.kind === 'group' && row.group.rest.length && !open) {
@@ -359,7 +367,7 @@ export function SearchDialog({
           aria-label={tr('search.SearchDialog.searchResults')}
           aria-busy={loading}
         >
-          {fileHits.hits.map((hit, i) => (
+          {fileHitList.map((hit, i) => (
             <button
               key={hit.key}
               id={`search-result-${i}`}
@@ -376,9 +384,22 @@ export function SearchDialog({
                 i === selected ? 'bg-selected' : 'hover:bg-hover',
               )}
             >
-              <FileText size={16} strokeWidth={1.5} className="mt-0.5 shrink-0 text-fg-muted" />
+              <FileIcon
+                name={hit.path.split('/').pop() ?? hit.path}
+                kind="file"
+                size={16}
+                dim={isIgnoredPath(hit.path, ignoredPaths)}
+                className="mt-0.5"
+              />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-ui font-medium text-fg">{hit.path.split('/').pop()}</span>
+                <span
+                  className={cn(
+                    'block truncate text-ui font-medium',
+                    isIgnoredPath(hit.path, ignoredPaths) ? 'text-fg-faint' : 'text-fg',
+                  )}
+                >
+                  {hit.path.split('/').pop()}
+                </span>
                 <span className="mt-0.5 block truncate text-label text-fg-faint">
                   {hit.path} ·{' '}
                   {hit.line === null
@@ -395,7 +416,7 @@ export function SearchDialog({
             </button>
           ))}
           {rows.map((row, n) => {
-            const i = n + fileHits.hits.length
+            const i = n + fileHitList.length
             if (row.kind === 'hit') {
               const h = row.hit
               // 展开后的最后一处下面写明还有几处没列出（搜索每个会话最多只带最近 3 处）

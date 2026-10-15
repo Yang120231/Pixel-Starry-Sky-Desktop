@@ -26,6 +26,7 @@ import { FileBreadcrumbs } from './FileBreadcrumbs'
 import { isDemo } from '@/data'
 import { isHtmlPath, previewHtml } from '@/features/files/htmlPreview'
 import { machineOf } from '@/features/machines/store'
+import { usePacksRevision } from '@/features/extpacks/store'
 
 export function FileEditor({
   id,
@@ -54,6 +55,7 @@ export function FileEditor({
   onExitPreview?: (line: number) => void
 }) {
   useI18n()
+  usePacksRevision()
   const [treeOpen, setTreeOpen] = useState(() => localStorage.getItem('pixelsky.editor.tree') !== 'false')
   const [narrow, setNarrow] = useState(false),
     [drawerOpen, setDrawerOpen] = useState(false)
@@ -104,7 +106,10 @@ export function FileEditor({
         if (active) void checkFile(id)
       }}
     >
-      <div className="flex min-h-10 shrink-0 flex-wrap items-start gap-1 border-b border-line-layout px-3 py-1">
+      <div
+        data-file-editor-bar
+        className="flex min-h-10 shrink-0 flex-wrap items-start gap-1 border-b border-line-layout px-3 py-1"
+      >
         <FileBreadcrumbs tab={tab}>{crumbExtra}</FileBreadcrumbs>
         <div className="ml-auto flex max-w-full shrink-0 flex-wrap items-center gap-1">
           {!controlled && fileLanguage(tab.path) === 'Markdown' && (

@@ -9,6 +9,7 @@ import {
   ListChecks,
   MessageSquare,
   MessagesSquare,
+  Puzzle,
   Search,
   Settings,
   SquareKanban,
@@ -158,10 +159,22 @@ function LeftStripe() {
       )}
       <span aria-hidden className="my-1 h-px w-5 shrink-0 bg-line" />
       <StripeButton
+        data="extensions"
+        icon={Puzzle}
+        label={tr('extensions.stripe')}
+        active={settings.open && (settings.section === 'extensions' || settings.section === 'plugins')}
+        onClick={() => settings.openSettings('extensions')}
+      />
+      <StripeButton
         data="settings"
         icon={Settings}
         label={withShortcut(tr('coding.shell.settings'), OPEN_SETTINGS)}
-        active={settings.open && settings.section !== 'account'}
+        active={
+          settings.open &&
+          settings.section !== 'account' &&
+          settings.section !== 'extensions' &&
+          settings.section !== 'plugins'
+        }
         badge={feedbackUnread > 0 ? <CountBadge tone="notify" count={feedbackUnread} max={9} /> : null}
         onClick={() => settings.openSettings()}
       />

@@ -1,0 +1,22 @@
+{
+  "数据库连接": {
+    "prefix": ["db", "database"],
+    "body": ["DATABASE_URL=${1|postgres,mysql|}://${2:user}:${3:password}@${4:localhost}:${5:5432}/${6:app}", "$0"],
+    "description": "数据库连接串"
+  },
+  "端口": {
+    "prefix": "port",
+    "body": ["PORT=${1:3000}", "$0"],
+    "description": "服务监听端口"
+  },
+  "引用变量": {
+    "prefix": "ref",
+    "body": "${1:NAME}=\\${${2:OTHER}}$0",
+    "description": "值里引用另一个变量"
+  },
+  "分节注释": {
+    "prefix": "section",
+    "body": ["# ---------- ${1:说明} ----------", "$0"],
+    "description": "一节配置的标题注释"
+  }
+}

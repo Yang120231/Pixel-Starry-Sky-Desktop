@@ -50,18 +50,28 @@ import { useToast } from '@/ui'
 import { ActionMenu, type MenuAction } from '@/ui/ActionMenu'
 import { changeGutter, changedLines, setExternalLines, setGitChanges } from './gutter'
 import { loadLanguage } from './languages'
-import { editorPhrases, editorTheme } from './theme'
+import { editorChrome, editorPhrases } from './theme'
+import { firstLineOf, languageKeyForPath } from './languageIds'
+import { onEditorPacksChanged } from './packEvents'
+import { editorPackExtensions } from './packs'
+import { promptMenuActions } from '@/features/extpacks/prompts/editorMenu'
 import { fileIndent, linePosition } from './positions'
 
 type Runtime = {
   view: EditorView
   readonly: Compartment
   language: Compartment
+  /** 扩展提供的颜色主题和代码片段 */
+  packs: Compartment
   phrases: Compartment
   wrap: Compartment
   /** 代码模式的审查、透镜等扩展；对话模式挂载时清回 EMPTY */
   extra: Compartment
   large: boolean
+  /** 当前语言的识别结果（languageKeyForPath）：变了才重新加载语言 */
+  languageKey: string
+  /** 每次加载语言加一；晚到的旧结果不应用 */
+  languageSeq: number
   timer?: number
   flashTimer?: number
   revealSeq: number
@@ -96,6 +106,8 @@ window.addEventListener(FILE_RENAMED_EVENT, e => {
     runtimes.delete(from)
     runtimes.set(to, runtime)
   }
+  // 改名可能改了扩展名：重新认语言（标签 id 已经是新的）
+  for (const { to } of (e as CustomEvent<FileRename[]>).detail) refreshRuntime(to)
 })
 window.addEventListener(FILE_CLOSED_EVENT, e => {
   const id = (e as CustomEvent<string>).detail,
@@ -106,6 +118,34 @@ window.addEventListener(FILE_CLOSED_EVENT, e => {
     runtime.view.destroy()
     runtimes.delete(id)
   }
+})
+
+/** 重新加载语言：每次递增 languageSeq，晚到的旧结果直接丢掉 */
+function reloadLanguage(rt: Runtime, path: string, view: EditorView): void {
+  const seq = ++rt.languageSeq
+  rt.languageKey = languageKeyForPath(path, firstLineOf(view.state.doc))
+  loadLanguage(path, firstLineOf(view.state.doc))
+    .then(extension => {
+      if (rt.languageSeq === seq && !rt.large) view.dispatch({ effects: rt.language.reconfigure(extension) })
+    })
+    .catch(() => {})
+}
+
+/** 扩展包变了（或改名）之后：刷新颜色主题 / 片段，语言只在识别结果变了时才重新加载 */
+function refreshRuntime(id: string): void {
+  const rt = runtimes.get(id),
+    tab = getFiles().tabs.find(t => t.id === id)
+  if (!rt || !tab) return
+  const firstLine = firstLineOf(rt.view.state.doc)
+  rt.view.dispatch({ effects: rt.packs.reconfigure(editorPackExtensions(tab.path, firstLine)) })
+  if (!rt.large && languageKeyForPath(tab.path, firstLine) !== rt.languageKey) reloadLanguage(rt, tab.path, rt.view)
+}
+let packsTimer: number | undefined
+onEditorPacksChanged(() => {
+  window.clearTimeout(packsTimer)
+  packsTimer = window.setTimeout(() => {
+    for (const id of [...runtimes.keys()]) refreshRuntime(id)
+  }, 50)
 })
 
 function recalc(id: string, runtime: Runtime): void {
@@ -151,6 +191,7 @@ const clipboardRead = (): Promise<string> =>
 
 /** 右键菜单：引用到对话，再加上剪切、复制、粘贴、全选（编辑器原来没有右键菜单） */
 function menuActions(tabId: string, view: EditorView, toast: (message: string) => void): MenuAction[] {
+  const tabPath = getFiles().tabs.find(t => t.id === tabId)?.path ?? ''
   const { state } = view
   const selected = state.selection.ranges.filter(r => !r.empty)
   const text = selected.map(r => state.sliceDoc(r.from, r.to)).join(state.lineBreak)
@@ -164,6 +205,7 @@ function menuActions(tabId: string, view: EditorView, toast: (message: string) =
         if (error) toast(error)
       },
     },
+    ...promptMenuActions({ tabId, path: tabPath, view, toast }),
     {
       label: tr('editor.menu.cut'),
       icon: Scissors,
@@ -217,6 +259,7 @@ export function CodeEditor({
     let runtime = runtimes.get(tab.id)
     if (!runtime) {
       const language = new Compartment(),
+        packs = new Compartment(),
         readonly = new Compartment(),
         phrases = new Compartment(),
         wrap = new Compartment(),
@@ -226,7 +269,7 @@ export function CodeEditor({
         state: EditorState.create({
           doc: tab.draft,
           extensions: [
-            editorTheme,
+            editorChrome,
             wrap.of(wordWrap ? EditorView.lineWrapping : []),
             phrases.of(EditorState.phrases.of({ ...editorPhrases })),
             lineNumbers(),
@@ -257,6 +300,7 @@ export function CodeEditor({
             search({ top: true }),
             changeGutter,
             extra.of(EMPTY),
+            packs.of(editorPackExtensions(tab.path, firstLineOf(tab.draft))),
             indentUnit.of(fileIndent(tab.draft).unit),
             EditorState.allowMultipleSelections.of(true),
             language.of([]),
@@ -303,22 +347,19 @@ export function CodeEditor({
         view,
         readonly,
         language,
+        packs,
         phrases,
         wrap,
         extra,
         large: !!(tab.document?.kind === 'text' && tab.document.readonly),
+        languageKey: languageKeyForPath(tab.path, firstLineOf(tab.draft)),
+        languageSeq: 0,
         revealSeq: -1,
         changed: tab.changed,
       }
       runtimes.set(tab.id, runtime)
       if (!(tab.document?.kind === 'text' && tab.document.readonly)) {
-        const created = runtime
-        void loadLanguage(tab.path)
-          .then(extension => {
-            if (runtimes.get(tab.id) === created && !created.large)
-              created.view.dispatch({ effects: language.reconfigure(extension) })
-          })
-          .catch(() => {})
+        reloadLanguage(runtime, tab.path, view)
       }
     } else host.current.appendChild(runtime.view.dom)
     runtime.view.requestMeasure()
@@ -370,13 +411,7 @@ export function CodeEditor({
       const wasLarge = runtime.large
       runtime.large = !!tab.document.readonly
       if (runtime.large) view.dispatch({ effects: runtime.language.reconfigure([]) })
-      else if (wasLarge)
-        void loadLanguage(tab.path)
-          .then(extension => {
-            if (runtimes.get(tab.id) === runtime && !runtime.large)
-              view.dispatch({ effects: runtime.language.reconfigure(extension) })
-          })
-          .catch(() => {})
+      else if (wasLarge) reloadLanguage(runtime, tab.path, view)
     }
   }, [tab.id, tab.document, tab.head])
   useEffect(() => {

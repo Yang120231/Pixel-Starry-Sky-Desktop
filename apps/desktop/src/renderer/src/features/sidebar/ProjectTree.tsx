@@ -19,6 +19,7 @@ import { ActionMenu } from '@/ui/ActionMenu'
 import type { Project } from '@/data'
 import { useSessionCards } from '@/features/board/useSessionCards'
 import {
+  setProjectArrangement,
   setProjectGroups,
   setProjectsCollapsed,
   useSidebarPrefs,
@@ -34,22 +35,39 @@ import {
   arrangeProjects,
   createGroup,
   dissolveGroup,
+  dropPlace,
+  dropProjects,
   groupKey,
   groupOf,
+  moveGroup,
   newGroupId,
   rangeBetween,
   removeFromGroups,
   renameGroup,
+  type DropPlace,
 } from './projectGroups'
 
-/** 拖项目进出分区时 dataTransfer 里的类型（值是项目 ID 的 JSON 数组） */
+/** 拖项目时 dataTransfer 里的类型（值是项目 ID 的 JSON 数组） */
 const PROJECT_DRAG_TYPE = 'application/x-pixelsky-projects'
+/** 拖分区时 dataTransfer 里的类型（值是分区 ID） */
+const GROUP_DRAG_TYPE = 'application/x-pixelsky-project-group'
+
+/** 拖动时的落点：into 是放进分区（盒子描边），before / after 是排到这个项目 / 分区的前面、后面（一道主题色横线） */
+type DropAt = { key: string; place: 'into' | DropPlace }
+
+/** 落点按标题行算：标题行上半排到前面，下半和下面的对话 / 项目排到后面（展开的项目很高，按整块的中线算会跳） */
+function placeBy(event: DragEvent<HTMLElement>, header: string): DropPlace {
+  const head = event.currentTarget.querySelector(header)?.getBoundingClientRect()
+  return head && event.clientY <= head.bottom ? dropPlace(head, event.clientY) : 'after'
+}
 
 /**
  * 项目列表（docs/ui/sidebar-hierarchy.md）：项目行像小标题，展开后对话挂在一条竖线下面；
  * 每个项目先列 5 个对话，其余收进「还有 N 个对话」。收起哪些项目记在侧栏偏好里，重启后还在。
  * 分区（docs/ui/sidebar-groups.md）：几个项目归成一组放在最上面；Ctrl / Shift 点项目多选，右键组成分区，
- * 也能把项目拖进拖出分区。右键项目打开项目菜单
+ * 也能把项目拖进拖出分区。右键项目打开项目菜单。
+ * 拖动换位置：项目拖到别的项目上半 / 下半就排到它前面 / 后面（目标在分区里就跟着进去），分区标题拖到别的分区上同理；
+ * 按状态筛选时只能拖进拖出分区，不改先后（看到的只是一部分）
  */
 export function ProjectTree({
   projects,
@@ -69,16 +87,19 @@ export function ProjectTree({
   const prefs = useSidebarPrefs()
   const collapsed = new Set(prefs.collapsed ?? [])
   const groups = prefs.groups ?? []
+  const saved = prefs.order ?? []
   const [showAll, setShowAll] = useState<Record<string, boolean>>({})
   const [archivedOpen, setArchivedOpen] = useState<Record<string, boolean>>({})
   // Ctrl / Shift 选中的项目（准备组成分区）；Esc 或普通点击清掉
   const [picked, setPicked] = useState<string[]>([])
   const anchor = useRef<string | null>(null)
   const [naming, setNaming] = useState<{ ids: string[] } | { group: ProjectGroup } | null>(null)
-  const [dropTarget, setDropTarget] = useState<string | null>(null)
+  const [drop, setDrop] = useState<DropAt | null>(null)
+  // 正在拖的（拖动途中 dataTransfer 读不到值，只能看类型）；从别处拖进来时为 null
+  const dragging = useRef<{ ids: string[] } | { group: string } | null>(null)
   const [groupMenu, setGroupMenu] = useState<{ group: ProjectGroup; x: number; y: number } | null>(null)
 
-  const entries = arrangeProjects(projects, groups)
+  const entries = arrangeProjects(projects, groups, saved)
   const shownGroups = entries.flatMap(e => (e.kind === 'group' ? [e.group] : []))
   const order = entries.flatMap(e => (e.kind === 'group' ? e.projects.map(p => p.id) : [e.project.id]))
   const pickedNow = picked.filter(id => order.includes(id))
@@ -146,7 +167,13 @@ export function ProjectTree({
   }
   const dragStart = (p: Project) => (event: DragEvent<HTMLDivElement>) => {
     const ids = pickedNow.includes(p.id) ? pickedNow : [p.id]
+    dragging.current = { ids }
     event.dataTransfer.setData(PROJECT_DRAG_TYPE, JSON.stringify(ids))
+    event.dataTransfer.effectAllowed = 'move'
+  }
+  const dragGroup = (group: ProjectGroup) => (event: DragEvent<HTMLDivElement>) => {
+    dragging.current = { group: group.id }
+    event.dataTransfer.setData(GROUP_DRAG_TYPE, group.id)
     event.dataTransfer.effectAllowed = 'move'
   }
   const draggedIds = (event: DragEvent): string[] => {
@@ -157,26 +184,81 @@ export function ProjectTree({
       return []
     }
   }
-  /** 拖到分区上：放进去；拖到分区外的项目上：移出分区 */
-  const dropZone = (target: string, onDrop: (ids: string[]) => void) => ({
-    onDragOver: (event: DragEvent) => {
+  const dragEnd = (): void => {
+    dragging.current = null
+    setDrop(null)
+  }
+  const over = (event: DragEvent, at: DropAt): void => {
+    event.preventDefault()
+    event.stopPropagation()
+    event.dataTransfer.dropEffect = 'move'
+    if (drop?.key !== at.key || drop.place !== at.place) setDrop(at)
+  }
+  const done = (event: DragEvent): void => {
+    event.preventDefault()
+    event.stopPropagation()
+    setDrop(null)
+  }
+  /**
+   * 项目上的落点：拖项目来时，上半 / 下半排到它前面 / 后面（筛选时不排，分区外的项目上是移出分区）；
+   * 拖的就是它自己时不接。拖分区来时不管，交给外面的分区盒子
+   */
+  const projectDrop = (p: Project, inGroup: boolean) => ({
+    onDragOver: (event: DragEvent<HTMLDivElement>) => {
       if (!event.dataTransfer.types.includes(PROJECT_DRAG_TYPE)) return
-      event.preventDefault()
-      event.stopPropagation()
-      event.dataTransfer.dropEffect = 'move'
-      if (dropTarget !== target) setDropTarget(target)
+      const self = !!dragging.current && 'ids' in dragging.current && dragging.current.ids.includes(p.id)
+      if (self) {
+        event.stopPropagation()
+        if (drop) setDrop(null)
+        return
+      }
+      if (filtering) {
+        if (!inGroup) over(event, { key: p.id, place: 'into' })
+        return
+      }
+      over(event, { key: p.id, place: placeBy(event, '[data-project-row]') })
     },
-    onDrop: (event: DragEvent) => {
-      if (!event.dataTransfer.types.includes(PROJECT_DRAG_TYPE)) return
-      event.preventDefault()
-      event.stopPropagation()
-      setDropTarget(null)
-      const ids = draggedIds(event)
-      if (ids.length) onDrop(ids)
+    onDrop: (event: DragEvent<HTMLDivElement>) => {
+      if (!event.dataTransfer.types.includes(PROJECT_DRAG_TYPE) || (filtering && inGroup)) return
+      done(event)
+      const ids = draggedIds(event).filter(id => id !== p.id)
+      if (!ids.length) return
+      if (filtering) return save(removeFromGroups(groups, ids))
+      const place = placeBy(event, '[data-project-row]')
+      setProjectArrangement(dropProjects({ groups, order: saved }, order, ids, p.id, place))
+      setPicked([])
     },
   })
+  /** 分区盒子上的落点：拖项目来就放进去；拖分区来就排到它前面 / 后面（上半 / 下半） */
+  const groupDrop = (group: ProjectGroup) => ({
+    onDragOver: (event: DragEvent<HTMLElement>) => {
+      const types = event.dataTransfer.types
+      if (types.includes(PROJECT_DRAG_TYPE)) return over(event, { key: group.id, place: 'into' })
+      if (!types.includes(GROUP_DRAG_TYPE) || filtering) return
+      if (dragging.current && 'group' in dragging.current && dragging.current.group === group.id) {
+        if (drop) setDrop(null)
+        return
+      }
+      over(event, { key: group.id, place: placeBy(event, '[data-section-header]') })
+    },
+    onDrop: (event: DragEvent<HTMLElement>) => {
+      const types = event.dataTransfer.types
+      if (types.includes(PROJECT_DRAG_TYPE)) {
+        done(event)
+        const ids = draggedIds(event)
+        if (ids.length) save(addToGroup(groups, group.id, ids))
+        return
+      }
+      if (!types.includes(GROUP_DRAG_TYPE) || filtering) return
+      done(event)
+      const id = event.dataTransfer.getData(GROUP_DRAG_TYPE)
+      const place = placeBy(event, '[data-section-header]')
+      if (id && id !== group.id) save(moveGroup(groups, id, group.id, place))
+    },
+  })
+  const lineAt = (key: string): DropPlace | null => (drop?.key === key && drop.place !== 'into' ? drop.place : null)
 
-  const renderProject = (p: Project) => {
+  const renderProject = (p: Project, inGroup = false) => {
     const open = filtering || !collapsed.has(p.id)
     const { running, waiting } = projectCounts(p.sessions, lanes)
     const { shown, hidden } = visibleSessions(p.sessions, {
@@ -189,8 +271,14 @@ export function ProjectTree({
       <div
         key={p.id}
         data-project-group={p.id}
-        className={cn('flex flex-col gap-px', open && p.sessions.length > 0 && 'mb-1')}
+        className={cn(
+          'relative flex flex-col gap-px rounded-md',
+          open && p.sessions.length > 0 && 'mb-1',
+          drop?.key === p.id && drop.place === 'into' && 'ring-1 ring-accent-line',
+        )}
+        {...projectDrop(p, inGroup)}
       >
+        <DropLine place={lineAt(p.id)} />
         <ProjectRow
           project={p}
           open={open}
@@ -255,7 +343,16 @@ export function ProjectTree({
   }
 
   return (
-    <div className="contents" onDragEnd={() => setDropTarget(null)}>
+    <div
+      className="contents"
+      onDragEnd={dragEnd}
+      onDragLeave={event => {
+        // 拖出整个列表（不是在行和行之间移动）时去掉横线 / 描边
+        const next = event.relatedTarget as Node | null
+        const list = (event.currentTarget as HTMLElement).parentElement
+        if (!next || !list?.contains(next)) setDrop(null)
+      }}
+    >
       {pickedNow.length > 0 && (
         <div
           data-projects-picked={pickedNow.length}
@@ -274,16 +371,7 @@ export function ProjectTree({
         </div>
       )}
       {entries.map(entry => {
-        if (entry.kind === 'project')
-          return (
-            <div
-              key={entry.project.id}
-              className="contents"
-              {...dropZone('none', ids => save(removeFromGroups(groups, ids)))}
-            >
-              {renderProject(entry.project)}
-            </div>
-          )
+        if (entry.kind === 'project') return renderProject(entry.project)
         const { group, projects: members } = entry
         const open = filtering || !collapsed.has(groupKey(group.id))
         const totals = members.reduce(
@@ -299,11 +387,12 @@ export function ProjectTree({
             data-project-section={group.id}
             aria-label={group.name}
             className={cn(
-              'my-0.5 flex flex-col gap-px rounded-lg transition-shadow',
-              dropTarget === group.id && 'ring-1 ring-accent-line',
+              'relative my-0.5 flex flex-col gap-px rounded-lg transition-shadow',
+              drop?.key === group.id && drop.place === 'into' && 'ring-1 ring-accent-line',
             )}
-            {...dropZone(group.id, ids => save(addToGroup(groups, group.id, ids)))}
+            {...groupDrop(group)}
           >
+            <DropLine place={lineAt(group.id)} />
             <GroupHeader
               group={group}
               open={open}
@@ -312,10 +401,11 @@ export function ProjectTree({
               waiting={totals.waiting}
               onToggle={() => setProjectsCollapsed([groupKey(group.id)], open)}
               onMenu={(x, y) => setGroupMenu({ group, x, y })}
+              onDragStart={filtering ? undefined : dragGroup(group)}
             />
             {open && (
               <div className="relative ml-3.5 flex flex-col gap-px pl-2 before:absolute before:top-0.5 before:bottom-1.5 before:left-0 before:border-l before:border-line-subtle">
-                {members.map(renderProject)}
+                {members.map(p => renderProject(p, true))}
               </div>
             )}
           </section>
@@ -353,6 +443,21 @@ export function ProjectTree({
   )
 }
 
+/** 拖动换位置时落点上的一道主题色横线：排到前面画在上沿，排到后面画在下沿 */
+function DropLine({ place }: { place: DropPlace | null }) {
+  if (!place) return null
+  return (
+    <span
+      aria-hidden
+      data-drop-line={place}
+      className={cn(
+        'pointer-events-none absolute inset-x-1 z-10 h-0.5 rounded-full bg-accent',
+        place === 'before' ? '-top-px' : '-bottom-px',
+      )}
+    />
+  )
+}
+
 /** 分区标题（「大文件夹」版）：大一号带淡填充的文件夹（展开时打开）+ 加粗的名字 + 小框里的项目数，展开时整行淡底 + 「N 个项目」，右边是组里在跑 / 等你的合计；悬停出 ⋯，右键同一个菜单 */
 function GroupHeader({
   group,
@@ -362,6 +467,7 @@ function GroupHeader({
   waiting,
   onToggle,
   onMenu,
+  onDragStart,
 }: {
   group: ProjectGroup
   open: boolean
@@ -370,10 +476,14 @@ function GroupHeader({
   waiting: number
   onToggle: () => void
   onMenu: (x: number, y: number) => void
+  /** 拖分区标题换位置（筛选时不能拖） */
+  onDragStart?: (event: DragEvent<HTMLDivElement>) => void
 }) {
   return (
     <div
       data-section-header={group.id}
+      draggable={!!onDragStart}
+      onDragStart={onDragStart}
       onContextMenu={event => {
         event.preventDefault()
         onMenu(event.clientX, event.clientY)

@@ -63,17 +63,18 @@ export function ChatView({ visible }: { visible: boolean }) {
         engaged && 'before:bg-accent',
       )}
     >
-      <div className="flex h-9 shrink-0 items-center gap-1 border-b border-line-layout px-2">
+      <div data-coding-chat-header className="flex h-9 shrink-0 items-center gap-1 border-b border-line-layout px-2">
         <MessageSquareText size={16} strokeWidth={1.5} className="shrink-0 text-accent-fg" />
         <ConversationSwitcher sessionId={sessionId} />
         <span
           aria-hidden
+          data-coding-chat-badge
           className="shrink-0 rounded-full bg-accent-soft px-1.5 text-[10px] leading-4 font-medium text-accent-fg"
         >
           AI
         </span>
         <div className="flex-1" />
-        <div className="no-drag flex shrink-0 items-center gap-0.5">
+        <div data-coding-chat-actions className="no-drag flex shrink-0 items-center gap-0.5">
           <IconButton
             icon={Plus}
             label={t('coding.right.chat.newChat')}

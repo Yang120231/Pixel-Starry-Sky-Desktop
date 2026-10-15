@@ -47,6 +47,7 @@ export function FileBreadcrumbs({ tab, children }: { tab: OpenFile; children?: R
   const first = folder ? folderLabel(folder) : extra.prefix || tab.project || text('文件')
   return (
     <nav
+      data-file-breadcrumbs
       aria-label={t('workspace.breadcrumb')}
       className="flex min-w-0 flex-[1_1_16rem] flex-wrap items-center self-center whitespace-normal text-meta"
     >

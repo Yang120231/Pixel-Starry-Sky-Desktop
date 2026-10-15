@@ -5,6 +5,7 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { commandDescription } from '@/i18n/commandDescriptions'
 import { tr } from '@/i18n/core'
 import { usePluginText } from '@/features/settings/plugins/text'
+import type { PromptCommand } from '@/features/extpacks/prompts/usePromptCommands'
 
 export function CommandMenu({
   id,
@@ -14,7 +15,7 @@ export function CommandMenu({
   onSettings,
 }: {
   id: string
-  commands: SkillCommand[]
+  commands: Array<SkillCommand | PromptCommand>
   selected: number
   onChoose: (index: number) => void
   onSettings: () => void
@@ -52,6 +53,35 @@ export function CommandMenu({
       >
         {commands.length === 0 && <div className="px-3 py-2 text-meta text-fg-muted">{tr('commands.menuEmpty')}</div>}
         {commands.map((command, index) => {
+          if (command.invocation === 'prompt') {
+            return (
+              <button
+                type="button"
+                role="option"
+                tabIndex={-1}
+                id={`${id}-${index}`}
+                data-command-index={index}
+                aria-selected={index === selected}
+                key={`${command.invocation}:${command.name}`}
+                onMouseDown={event => event.preventDefault()}
+                onClick={() => onChoose(index)}
+                className={cn(
+                  'flex w-full min-w-0 flex-col gap-1 rounded-md px-3 py-2 text-left text-list',
+                  index === selected ? 'bg-selected' : 'hover:bg-hover',
+                )}
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="truncate font-medium">{command.prompt.title}</span>
+                  <span className="shrink-0 rounded bg-hover px-1.5 text-meta text-fg-muted">{tr('prompts.chip')}</span>
+                </span>
+                {command.prompt.description && (
+                  <span title={command.prompt.description} className="truncate text-meta text-fg-muted">
+                    {command.prompt.description}
+                  </span>
+                )}
+              </button>
+            )
+          }
           const description = commandDescription(command, locale)
           return (
             <button
@@ -61,7 +91,7 @@ export function CommandMenu({
               id={`${id}-${index}`}
               data-command-index={index}
               aria-selected={index === selected}
-              key={command.name}
+              key={`${command.invocation}:${command.name}`}
               onMouseDown={event => event.preventDefault()}
               onClick={() => onChoose(index)}
               className={cn(

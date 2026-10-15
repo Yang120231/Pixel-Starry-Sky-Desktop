@@ -46,6 +46,13 @@ import { subagentMessages } from './subagentMessages'
 import { subagentStopMessages } from './subagentStopMessages'
 import { traceHistoryMessages } from './traceHistoryMessages'
 import { wslMessages } from './wslMessages'
+import { extensionCenterMessages } from './extensionCenterMessages'
+import { fileIconMessages } from './fileIconMessages'
+import { extGrammarMessages } from './extGrammarMessages'
+import { editorThemeMessages } from './editorThemeMessages'
+import { extSnippetMessages } from './extSnippetMessages'
+import { extTaskMessages } from './extTaskMessages'
+import { promptMessages } from './promptMessages'
 import { replaceCodedErrors } from '@pixelsky/protocol'
 import type { Locale } from './messages'
 
@@ -99,6 +106,13 @@ export const allMessages = {
   ...subagentMessages,
   ...subagentStopMessages,
   ...traceHistoryMessages,
+  ...extensionCenterMessages,
+  ...fileIconMessages,
+  ...extGrammarMessages,
+  ...editorThemeMessages,
+  ...extSnippetMessages,
+  ...extTaskMessages,
+  ...promptMessages,
 }
 export type TranslationKey = keyof typeof allMessages
 

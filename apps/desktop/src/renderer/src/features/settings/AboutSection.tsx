@@ -26,7 +26,7 @@ const CHANNEL_LABELS: Record<AppInfo['channel'], string> = {
 }
 
 /** 开源组件致谢：只列直接依赖的主要部分 */
-const CREDITS = ['Electron', 'React', 'Tailwind CSS', 'Lucide', 'Vite']
+const CREDITS = ['Electron', 'React', 'Tailwind CSS', 'Lucide', 'Vite', 'Material Icon Theme (MIT)']
 
 /** 设置 → 关于：版本、运行环境、账号服务、本地数据（docs/ui/settings.md §5） */
 export function AboutSection({ onOpenAccount }: { onOpenAccount: () => void }) {

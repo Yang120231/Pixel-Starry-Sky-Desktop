@@ -3,6 +3,7 @@ import { readdir, readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { LOCKFILE_NAMES, detectPackageManager, type PackageManager } from '@pixelsky/protocol'
 import type { RunTask, RunTaskGroup, RunTaskKind, RunTaskState } from '../../../shared/types/project-tools'
+import { readExtTaskGroups } from './ext-tasks'
 import { readGradleBuild } from './gradle'
 
 const MAX_DEPTH = 3
@@ -12,7 +13,7 @@ const MAX_MAKE_TARGETS = 50
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'out', 'target', 'vendor'])
 const MAKEFILES = new Set(['Makefile', 'makefile', 'GNUmakefile'])
 /** 根目录组的顺序 */
-const KIND_ORDER: Record<RunTaskKind, number> = { npm: 0, make: 1, cargo: 2, gradle: 3 }
+const KIND_ORDER: Record<RunTaskKind, number> = { npm: 0, make: 1, cargo: 2, gradle: 3, ext: 4 }
 const GRADLE_SETTINGS = new Set(['settings.gradle', 'settings.gradle.kts'])
 const GRADLE_BUILDS = new Set(['build.gradle', 'build.gradle.kts'])
 
@@ -156,8 +157,8 @@ function cargoTasks(text: string, dir: string): RunTask[] {
   }))
 }
 
-export async function readRunTasks(root: string): Promise<RunTaskState> {
-  const { files, truncated } = await findManifests(root)
+export async function readRunTasks(root: string, templates?: unknown): Promise<RunTaskState> {
+  const { files, truncated: manifestsTruncated } = await findManifests(root)
   const absolute = (dir: string) => (dir ? join(root, ...dir.split('/')) : root)
 
   // 包管理器：从文件夹往上到根，第一个有锁文件或 packageManager 字段的地方决定
@@ -207,6 +208,10 @@ export async function readRunTasks(root: string): Promise<RunTaskState> {
     if (!tasks.length) continue
     groups.push({ kind: file.kind, file: path, dir: file.dir, ...(manager ? { manager } : {}), tasks })
   }
+  // 扩展的任务模板：排在内置组后面
+  const ext = await readExtTaskGroups(root, templates)
+  groups.push(...ext.groups)
+  const truncated = manifestsTruncated || ext.truncated
   // 排序按「层」：gradle 子项目属于它的构建根目录那一层，同层排在 npm / make / cargo 后面，构建里根项目在前、子项目按项目路径
   const levelOf = (g: RunTaskGroup) => g.gradle?.buildDir ?? g.dir
   const projectOrder = (a: RunTaskGroup, b: RunTaskGroup) => {
