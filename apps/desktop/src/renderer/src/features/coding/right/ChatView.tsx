@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Copy, MessageSquareText, MoreHorizontal, PanelRightClose, Plus } from 'lucide-react'
 import { useI18n } from '@/i18n/I18nProvider'
+import { cn } from '@/ui'
 import { ErrorBoundary } from '@/ui/ErrorBoundary'
 import { IconButton } from '@/ui/IconButton'
 import { Popover, PopoverItem } from '@/ui/Popover'
@@ -25,6 +26,25 @@ export function ChatView({ visible }: { visible: boolean }) {
   const { projectId } = useCodingWorkspace()
   const soon = useComingSoon()
   const [menu, setMenu] = useState(false)
+  const root = useRef<HTMLDivElement>(null)
+  // 正在和对话打交道（刚打开、点了或聚焦在对话里）：左边亮一条主色竖线；点回编辑器等别处就熄掉
+  const [engaged, setEngaged] = useState(visible)
+  useEffect(() => {
+    if (!visible) return
+    setEngaged(true)
+    const onTouch = (e: Event) => {
+      const target = e.target as Element
+      if (root.current?.contains(target)) setEngaged(true)
+      // 弹出的菜单、对话框挂在 body 上：点它们不算离开对话，只有点到代码模式里的别处才熄
+      else if (target.closest?.('[data-coding-layout]')) setEngaged(false)
+    }
+    document.addEventListener('pointerdown', onTouch, true)
+    document.addEventListener('focusin', onTouch, true)
+    return () => {
+      document.removeEventListener('pointerdown', onTouch, true)
+      document.removeEventListener('focusin', onTouch, true)
+    }
+  }, [visible])
 
   // 没有对话标签时补一个新对话；放在 effect 里，渲染时先空白
   useEffect(() => {
@@ -32,10 +52,26 @@ export function ChatView({ visible }: { visible: boolean }) {
   }, [chatTab, visible])
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex h-9 shrink-0 items-center gap-1 px-2">
-        <MessageSquareText size={16} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
+    // 对话用侧栏色（会话里用 bg-app 的地方跟着换），和编辑器拉开一档（docs/ui/coding-mode.md §2.3）
+    <div
+      ref={root}
+      data-coding-chat
+      data-engaged={engaged || undefined}
+      className={cn(
+        'relative flex min-h-0 min-w-0 flex-1 flex-col bg-sidebar [--bg-app:var(--bg-sidebar)]',
+        "before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:z-10 before:w-0.5 before:content-['']",
+        engaged && 'before:bg-accent',
+      )}
+    >
+      <div className="flex h-9 shrink-0 items-center gap-1 border-b border-line-layout px-2">
+        <MessageSquareText size={16} strokeWidth={1.5} className="shrink-0 text-accent-fg" />
         <ConversationSwitcher sessionId={sessionId} />
+        <span
+          aria-hidden
+          className="shrink-0 rounded-full bg-accent-soft px-1.5 text-[10px] leading-4 font-medium text-accent-fg"
+        >
+          AI
+        </span>
         <div className="flex-1" />
         <div className="no-drag flex shrink-0 items-center gap-0.5">
           <IconButton

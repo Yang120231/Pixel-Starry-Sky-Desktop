@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useState } from 'react'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
-import { CollapsibleSlot, ResizeHandle } from '@/ui'
+import { CollapsibleSlot, ResizeHandle, cn } from '@/ui'
 import { MachineStatus } from '@/features/machines/MachineStatus'
 import { usePage } from '@/features/layout/page'
 import { useEnterCodingMode } from './enter'
@@ -15,6 +15,7 @@ import { CenterArea } from './shell/CenterArea'
 import { PageOverlay } from './shell/PageOverlay'
 import { StatusBar } from './shell/StatusBar'
 import { RightArea } from './right'
+import { resolveRightView } from './right/viewModel'
 
 function useViewport(): { width: number; height: number } {
   const [size, setSize] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }))
@@ -90,7 +91,14 @@ export function CodingLayout() {
               />
             )}
             <CollapsibleSlot open={fit.right.shown} width={fit.right.size} side="right">
-              <div data-coding-right className="flex h-full min-w-0 flex-1 border-l border-line-layout bg-sidebar">
+              <div
+                data-coding-right
+                className={cn(
+                  'flex h-full min-w-0 flex-1 border-l bg-sidebar',
+                  // 对话和编辑器之间用实线分开，别看成编辑器的延伸
+                  resolveRightView(prefs.right.view) === 'chat' ? 'border-line' : 'border-line-layout',
+                )}
+              >
                 <RightArea visible={fit.right.shown} view={prefs.right.view} />
               </div>
             </CollapsibleSlot>
