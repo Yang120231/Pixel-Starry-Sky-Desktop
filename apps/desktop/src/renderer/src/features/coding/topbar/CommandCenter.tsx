@@ -1,4 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+  type RefObject,
+} from 'react'
+import { createPortal, flushSync } from 'react-dom'
 import { Search } from 'lucide-react'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
@@ -17,10 +28,11 @@ import { useActiveCodeTab } from '../editor'
 import { useCodingWorkspace } from '../workspace'
 import { parseQuery } from './commandCenterModel'
 
-/** 顶栏中间的命令中心按钮；挂载时接管 Ctrl+P（卸载时还给全局搜索） */
-export function CommandCenterButton() {
+/** 顶栏命令中心：输入框在入口原位展开；挂载时接管 Ctrl+P。 */
+export function CommandCenterButton({ compact = false }: { compact?: boolean }) {
   useI18n()
   const [open, setOpen] = useState(false)
+  const anchor = useRef<HTMLButtonElement>(null)
   useEffect(() => {
     const show = (): void => setOpen(true)
     setSearchShortcutOverride(show)
@@ -29,19 +41,26 @@ export function CommandCenterButton() {
   return (
     <>
       <button
+        ref={anchor}
         type="button"
         data-command-center-button
         aria-haspopup="dialog"
         aria-expanded={open}
+        aria-hidden={open || undefined}
+        tabIndex={open ? -1 : undefined}
         aria-label={tr('coding.top.cc.open')}
         onClick={() => setOpen(true)}
-        className="flex h-7 w-full min-w-[200px] max-w-[480px] items-center gap-2 rounded-md border border-line-card bg-subtle px-2 text-list text-fg-muted hover:bg-hover aria-expanded:border-accent-line @max-[999px]:w-8 @max-[999px]:min-w-0 @max-[999px]:justify-center @max-[999px]:px-0"
+        className={cn(
+          'flex h-7 w-full items-center gap-2 rounded-md border border-line-card bg-subtle px-2 text-list text-fg-muted hover:bg-hover',
+          compact && 'justify-center px-0',
+          open && 'invisible',
+        )}
       >
         <Search size={14} strokeWidth={1.5} className="shrink-0" />
-        <span className="min-w-0 flex-1 truncate text-left @max-[999px]:hidden">{tr('coding.top.cc.placeholder')}</span>
-        <Kbd className="@max-[999px]:hidden">{OPEN_SEARCH.label}</Kbd>
+        {!compact && <span className="min-w-0 flex-1 truncate text-left">{tr('coding.top.cc.placeholder')}</span>}
+        {!compact && <Kbd>{OPEN_SEARCH.label}</Kbd>}
       </button>
-      {open && <CommandCenter onClose={() => setOpen(false)} />}
+      {open && <CommandCenter anchor={anchor} onClose={() => setOpen(false)} />}
     </>
   )
 }
@@ -52,7 +71,7 @@ interface FileState {
   error: boolean
 }
 
-function CommandCenter({ onClose }: { onClose: () => void }) {
+function CommandCenter({ anchor, onClose }: { anchor: RefObject<HTMLButtonElement | null>; onClose: () => void }) {
   useI18n()
   const [text, setText] = useState('')
   const [selected, setSelected] = useState(0)
@@ -65,11 +84,31 @@ function CommandCenter({ onClose }: { onClose: () => void }) {
   const palette = useCommandPalette()
   const openSearch = useOpenSearch()
   const input = useRef<HTMLInputElement>(null)
+  const [position, setPosition] = useState({ top: 0, left: 0, width: 480 })
   const returnFocus = useRef<HTMLElement | null>(
     document.activeElement instanceof HTMLElement ? document.activeElement : null,
   )
   const q = parseQuery(text)
   const term = q.kind === 'file' ? q.term : ''
+
+  useLayoutEffect(() => {
+    const button = anchor.current
+    if (!button) return
+    const place = (): void => {
+      const rect = button.getBoundingClientRect()
+      // 窄窗口的图标入口展开为可输入的面板，仍以窗口中心对齐。
+      const width = rect.width > 32 ? rect.width : Math.min(480, window.innerWidth - 32)
+      setPosition({ top: rect.top, left: (window.innerWidth - width) / 2, width })
+    }
+    place()
+    const observer = new ResizeObserver(place)
+    observer.observe(button)
+    window.addEventListener('resize', place)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', place)
+    }
+  }, [anchor])
 
   useEffect(() => {
     input.current?.focus()
@@ -119,7 +158,7 @@ function CommandCenter({ onClose }: { onClose: () => void }) {
       if (hit) pick(hit)
     } else if (q.kind === 'command') {
       // 输入的文字带不过去，命令面板自己从头输入
-      onClose()
+      flushSync(onClose)
       palette.open()
     } else if (q.kind === 'chat') {
       // openSearch 看到别的 aria-modal 会直接返回，所以先关掉自己，等下一帧再开
@@ -143,6 +182,9 @@ function CommandCenter({ onClose }: { onClose: () => void }) {
       e.preventDefault()
       const n = hits.length
       if (q.kind === 'file' && n) setSelected(s => (s + (e.key === 'ArrowDown' ? 1 : n - 1)) % n)
+    } else if (e.key === 'Tab') {
+      e.preventDefault()
+      input.current?.focus()
     }
   }
 
@@ -155,13 +197,14 @@ function CommandCenter({ onClose }: { onClose: () => void }) {
       body = <Note>{tr(files.loading ? 'coding.top.cc.searching' : 'coding.top.cc.noFiles')}</Note>
     else
       body = (
-        <ul role="listbox" className="max-h-80 overflow-auto p-1">
+        <ul id="command-center-results" role="listbox" className="max-h-80 overflow-auto p-1">
           {hits.map((hit, i) => {
             const slash = hit.path.lastIndexOf('/')
             const dim = isIgnoredPath(hit.path, ignored)
             return (
               <li
                 key={hit.key}
+                id={`command-center-result-${i}`}
                 role="option"
                 aria-selected={i === selected}
                 onMouseEnter={() => setSelected(i)}
@@ -193,7 +236,7 @@ function CommandCenter({ onClose }: { onClose: () => void }) {
   else if (!codeTab) body = <Note>{tr('coding.top.cc.lineNoFile')}</Note>
   else body = <Note>{tr('coding.top.cc.lineGo', { p0: q.line })}</Note>
 
-  return (
+  return createPortal(
     <div className="no-drag fixed inset-0 z-50" onMouseDown={onClose}>
       <div
         role="dialog"
@@ -201,29 +244,41 @@ function CommandCenter({ onClose }: { onClose: () => void }) {
         aria-label={tr('coding.top.cc.open')}
         data-command-center
         onMouseDown={e => e.stopPropagation()}
-        className="pop-in absolute left-1/2 top-12 w-[600px] max-w-[calc(100vw-32px)] -translate-x-1/2 overflow-hidden rounded-lg border border-line-card bg-popover shadow-menu"
+        style={{
+          top: position.top,
+          left: position.left,
+          width: position.width,
+          maxHeight: `calc(100dvh - ${position.top + 16}px)`,
+        }}
+        className="absolute flex flex-col overflow-hidden rounded-md border border-line-card bg-popover shadow-menu"
       >
-        {/* 输入框聚焦时强调色描边 + 淡光晕，看得出焦点在这（docs/screenshots/command-center-focus-mock.html 方案 A） */}
-        <div className="px-2 pt-2 pb-1.5">
-          <div
-            data-command-center-field
-            className="flex h-9 items-center gap-2 rounded-md border border-line-card bg-subtle px-2.5 focus-within:border-accent-line focus-within:ring-[3px] focus-within:ring-accent-soft"
-          >
-            <Search size={14} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
-            <input
-              ref={input}
-              value={text}
-              onChange={e => setText(e.target.value)}
-              onKeyDown={onKeyDown}
-              aria-label={tr('coding.top.cc.input')}
-              placeholder={tr('coding.top.cc.placeholder')}
-              className="h-full min-w-0 flex-1 bg-transparent text-list text-fg outline-none placeholder:text-fg-faint"
-            />
-          </div>
+        <div
+          data-command-center-field
+          className="flex h-[26px] shrink-0 items-center gap-2 rounded-t-[5px] bg-subtle px-[7px] outline -outline-offset-1 outline-transparent focus-within:outline-accent-line"
+        >
+          <Search size={14} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
+          <input
+            ref={input}
+            value={text}
+            onChange={e => setText(e.target.value)}
+            onKeyDown={onKeyDown}
+            aria-label={tr('coding.top.cc.input')}
+            role="combobox"
+            aria-expanded={q.kind === 'file' && hits.length > 0}
+            aria-controls={q.kind === 'file' && hits.length > 0 ? 'command-center-results' : undefined}
+            aria-activedescendant={
+              q.kind === 'file' && hits[selected] ? `command-center-result-${selected}` : undefined
+            }
+            autoComplete="off"
+            placeholder={tr('coding.top.cc.placeholder')}
+            className="h-full min-w-0 flex-1 bg-transparent text-list text-fg outline-none placeholder:text-fg-faint"
+          />
+          <Kbd>{OPEN_SEARCH.label}</Kbd>
         </div>
-        {body}
+        <div className="min-h-0 overflow-auto border-t border-line-subtle">{body}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
