@@ -48,11 +48,12 @@ describe('打包后的 pixelsky-ext', () => {
     const r = run(['validate', dotenv, '--json'])
     expect(r.status, r.stderr).toBe(0)
     const out = JSON.parse(r.stdout) as {
-      issues: unknown[]
+      issues: Array<{ code: string }>
       verdict: { pass: boolean }
       grammar: { grammars: Array<{ samples: Array<{ lines: number }> }> }
     }
-    expect(out.issues).toEqual([])
+    // 「接近上限」只是提示，取决于机器快慢（CI 机器上最慢一行能到 15 ms），不算问题；真超限照样失败
+    expect(out.issues.filter(i => i.code !== 'grammar.perfNearLimit')).toEqual([])
     expect(out.verdict.pass).toBe(true)
     expect(out.grammar.grammars[0].samples[0].lines).toBe(5000)
   })
@@ -106,7 +107,8 @@ describe('打包后的 pixelsky-ext', () => {
     'PIXELSKY_EXT_HANG_MS 极小：到点就卡死，文字输出里写明上限和文件；编译卡死时语法行是「没有检查」',
     { timeout: 60_000 },
     () => {
-      const zh = run(['validate', dotenv, '--no-color'], { PIXELSKY_EXT_HANG_MS: '1' })
+      // 明确要中文：CI 机器的系统语言是英文，默认会按系统语言输出
+      const zh = run(['validate', dotenv, '--no-color', '--lang', 'zh'], { PIXELSKY_EXT_HANG_MS: '1' })
       expect(zh.status, zh.stderr + zh.stdout).toBe(1)
       expect(zh.stdout).toMatch(
         /分词超过 1 毫秒还没完成，可能有回溯爆炸的正则（(示例 samples\/example\.env|语法文件 syntaxes\/dotenv\.tmLanguage\.json)）/,
