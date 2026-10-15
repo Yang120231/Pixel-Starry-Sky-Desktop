@@ -35,18 +35,20 @@ const statusOf = (value: unknown, complete: boolean): ItemStatus =>
 /** 当前 thread 的条目转换；原生用户消息由宿主负责，只用于输入确认。 */
 export class CodexTranslator {
   readonly items = new Map<string, Item>()
-  readonly agents = new Map<string, AgentRun>()
   /** 压缩完了还没有压缩后的大小：等下一次用量更新补上（docs/ui/compaction.md） */
   private compactionSize: string | null = null
   constructor(
     private readonly emit: (event: EngineEvent) => void,
     /** 当前上下文占用（最近一次请求），压缩开始时当「压缩前」 */
     private readonly contextTokens: () => number | null = () => null,
+    /** 子智能体按线程 id 记；会话传入同一个，跨轮保留（结束常在后面的轮次才到） */
+    readonly agents = new Map<string, AgentRun>(),
   ) {}
   item(raw: Message, complete: boolean): void {
     const id = 'cx-' + string(raw.id),
-      type = string(raw.type),
-      status = statusOf(raw.status, complete),
+      type = string(raw.type)
+    if (type === 'subAgentActivity') return this.subagent(raw, complete)
+    const status = statusOf(raw.status, complete),
       prior = this.items.get(id)
     let item: Item | null = null
     if (type === 'agentMessage' || type === 'plan')
@@ -135,19 +137,83 @@ export class CodexTranslator {
           toolUseId: id,
         })
       }
-      this.emit({ type: 'runs', runs: { workflows: [], agents: [...this.agents.values()] } })
-      this.emit({
-        type: 'subagents',
-        subagents: [...this.agents.values()].map(agent => ({
-          id: agent.id,
-          label: agent.label,
-          status: agent.state,
-          message: agent.result || agent.prompt,
-        })),
-      })
+      this.emitRuns()
     }
     this.items.set(id, item)
     this.emit({ type: complete ? 'item_completed' : 'item_started', item })
+  }
+  /**
+   * 新版 Codex 的子智能体（collaboration 命名空间）：started 是派出（id 就是 spawn_agent 的调用 id），
+   * interacted 是发消息 / 追加任务，completed 是跑完（id 是合成的，可能在后面的轮次才到）。
+   * 只有派出出卡片，其余只更新追踪。
+   */
+  subagent(raw: Message, complete: boolean): void {
+    const agentId = string(raw.agentThreadId)
+    if (!agentId) return
+    const kind = string(raw.kind),
+      prior = this.agents.get(agentId),
+      label = string(raw.agentPath).split('/').filter(Boolean).pop() || prior?.label || agentId.slice(0, 8),
+      startedAt = prior?.startedAt ?? Date.now(),
+      done = kind === 'completed'
+    let toolUseId = prior?.toolUseId ?? null
+    if (kind === 'started') {
+      const id = 'cx-' + string(raw.id),
+        item: Item = {
+          kind: 'tool',
+          id,
+          tool: 'task',
+          name: 'spawn_agent',
+          title: label,
+          output: '',
+          status: statusOf(raw.status, complete),
+        }
+      toolUseId = id
+      this.items.set(id, item)
+      this.emit({ type: complete ? 'item_completed' : 'item_started', item })
+    }
+    this.agents.set(agentId, {
+      id: agentId,
+      label,
+      type: 'Codex',
+      model: string(raw.model) || prior?.model || '',
+      state: done ? 'completed' : 'running',
+      startedAt,
+      durationMs: done ? Date.now() - startedAt : 0,
+      tokens: prior?.tokens ?? 0,
+      toolCalls: prior?.toolCalls ?? 0,
+      phase: null,
+      prompt: prior?.prompt ?? '',
+      result: prior?.result ?? '',
+      toolUseId,
+    })
+    this.emitRuns()
+  }
+  /** 子智能体线程自己的事件：只算工具次数和 token，不进主对话 */
+  child(threadId: string, method: string, params: Message): void {
+    const agent = this.agents.get(threadId)
+    if (!agent) return
+    let next = agent
+    if (method === 'item/completed') {
+      const type = string(object(params.item).type)
+      if (!/^(agentMessage|plan|reasoning|userMessage|contextCompaction)$/.test(type))
+        next = { ...agent, toolCalls: agent.toolCalls + 1 }
+    } else if (method === 'thread/tokenUsage/updated')
+      next = { ...agent, tokens: tokenCounts(object(params.tokenUsage).total).total }
+    if (next === agent) return
+    this.agents.set(threadId, next)
+    this.emitRuns()
+  }
+  private emitRuns(): void {
+    this.emit({ type: 'runs', runs: { workflows: [], agents: [...this.agents.values()] } })
+    this.emit({
+      type: 'subagents',
+      subagents: [...this.agents.values()].map(agent => ({
+        id: agent.id,
+        label: agent.label,
+        status: agent.state,
+        message: agent.result || agent.prompt,
+      })),
+    })
   }
   delta(method: string, params: Message): void {
     const id = 'cx-' + string(params.itemId),

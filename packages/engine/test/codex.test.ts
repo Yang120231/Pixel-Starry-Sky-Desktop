@@ -1,12 +1,13 @@
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { CodexAdapter, EngineHost } from '../src'
-import type { EngineEvent, HostEvent } from '@pixelsky/protocol'
+import type { AgentRun, EngineEvent, HostEvent } from '@pixelsky/protocol'
 import { codexPermission, turnErrorDetail } from '../src/codex/session'
 import { CODEX_MIN_VERSION, codexVersionStatus } from '../src/codex/discover'
 import { CodexTranslator, tokenCounts } from '../src/codex/translate'
+import { loadCodexRuns } from '../src/codex/runs'
 import { makeTmp, removeTmp } from './helpers/tmp'
 let root: string, host: EngineHost | undefined
 beforeEach(() => {
@@ -385,6 +386,116 @@ describe('Codex app-server adapter', () => {
     translator.usage(15_000)
     translator.usage(16_000)
     expect(translator.items.get('cx-c1')).toMatchObject({ postTokens: 15_000 })
+  })
+  it('新版子智能体：派出出一张卡并进追踪，发消息不出卡，跑完跨轮也能更新，子线程算工具次数和 token', () => {
+    const events: EngineEvent[] = [],
+      agents = new Map<string, AgentRun>()
+    const first = new CodexTranslator(e => events.push(e), undefined, agents)
+    const spawn = {
+      type: 'subAgentActivity',
+      id: 'call_spawn',
+      kind: 'started',
+      agentThreadId: 'child-1',
+      agentPath: '/root/pattern_api',
+      model: 'gpt-x',
+    }
+    first.item(spawn, false)
+    first.item(spawn, true)
+    expect(first.items.get('cx-call_spawn')).toMatchObject({
+      kind: 'tool',
+      tool: 'task',
+      title: 'pattern_api',
+      status: 'completed',
+    })
+    expect(agents.get('child-1')).toMatchObject({
+      label: 'pattern_api',
+      model: 'gpt-x',
+      state: 'running',
+      toolUseId: 'cx-call_spawn',
+    })
+    first.item({ type: 'subAgentActivity', id: 'call_msg', kind: 'interacted', agentThreadId: 'child-1' }, true)
+    expect(first.items.has('cx-call_msg')).toBe(false)
+    first.child('child-1', 'item/completed', { item: { type: 'commandExecution' } })
+    first.child('child-1', 'item/completed', { item: { type: 'agentMessage' } })
+    first.child('child-1', 'thread/tokenUsage/updated', { tokenUsage: { total: { totalTokens: 1234 } } })
+    expect(agents.get('child-1')).toMatchObject({ toolCalls: 1, tokens: 1234 })
+    // 下一轮换了翻译器，跑完照样记到原来的追踪上
+    const next = new CodexTranslator(e => events.push(e), undefined, agents)
+    next.item(
+      {
+        type: 'subAgentActivity',
+        id: 'subagent-completed-child-1',
+        kind: 'completed',
+        agentThreadId: 'child-1',
+        agentPath: '/root/pattern_api',
+      },
+      true,
+    )
+    expect(next.items.size).toBe(0)
+    expect(agents.get('child-1')).toMatchObject({
+      state: 'completed',
+      model: 'gpt-x',
+      toolUseId: 'cx-call_spawn',
+      toolCalls: 1,
+    })
+    const runs = events.filter(e => e.type === 'runs').at(-1)
+    expect(runs).toMatchObject({ runs: { agents: [{ id: 'child-1', state: 'completed' }] } })
+  })
+  it('重新打开会话：从线程的各段 rollout 还原子智能体追踪', () => {
+    const thread = '01a14092-744d-7183-a67e-8a03c58f3578',
+      at = parseInt(thread.replace(/-/g, '').slice(0, 12), 16)
+    const dayDir = (time: number) => {
+      const date = new Date(time),
+        dir = join(
+          root,
+          'sessions',
+          String(date.getFullYear()),
+          String(date.getMonth() + 1).padStart(2, '0'),
+          String(date.getDate()).padStart(2, '0'),
+        )
+      mkdirSync(dir, { recursive: true })
+      return dir
+    }
+    const event = (item: object, started: number) =>
+      JSON.stringify({
+        type: 'event_msg',
+        payload: { type: 'item_completed', thread_id: thread, item, started_at_ms: started },
+      })
+    const activity = (id: string, kind: string, model: string | null) => ({
+      type: 'SubAgentActivity',
+      model,
+      id,
+      kind,
+      agent_thread_id: 'child-1',
+      agent_path: '/root/pattern_api',
+    })
+    writeFileSync(
+      join(dayDir(at), `rollout-2026-10-16T01-18-22-${thread}.jsonl`),
+      [
+        JSON.stringify({ type: 'session_meta', payload: { id: thread } }),
+        event(activity('call_spawn', 'started', 'gpt-x'), at + 1000),
+      ].join('\n'),
+    )
+    // 隔几天接着跑：另起一段，放在那天的目录
+    writeFileSync(
+      join(
+        dayDir(at + 3 * 86_400_000),
+        `rollout-2026-10-19T09-00-00-${thread}_01a14097-8eb8-7691-873b-2c6ad0d11d32.jsonl`,
+      ),
+      [event(activity('subagent-completed-child-1', 'completed', null), at + 61_000), ''].join('\n'),
+    )
+    expect(loadCodexRuns(root, thread).agents).toEqual([
+      expect.objectContaining({
+        id: 'child-1',
+        label: 'pattern_api',
+        model: 'gpt-x',
+        state: 'completed',
+        startedAt: at + 1000,
+        durationMs: 60_000,
+        toolUseId: 'cx-call_spawn',
+      }),
+    ])
+    expect(loadCodexRuns(root, 'not-a-uuid').agents).toEqual([])
   })
   it('计划模式带 Codex 原生计划协作模式，模型提问弹问题卡；切回别的权限时带一次 default', async () => {
     const { session, messages } = setup(50, { permissionMode: 'plan' })

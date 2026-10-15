@@ -1,6 +1,7 @@
 import { delimiter } from 'node:path'
 import type {
   ApprovalDecision,
+  AgentRun,
   ApprovalRequest,
   ContextWindows,
   EngineCatalog,
@@ -31,6 +32,8 @@ export interface CodexLaunchOptions {
   defaultModel?: () => string | null
   /** Codex 报过的各模型窗口（没改窗口时记下），算自动压缩的 token 数用 */
   knownWindows?: Map<string, number>
+  /** 以前派出过的子智能体（从 rollout 还原）：接着跑完时在原来的追踪上更新 */
+  savedAgents?: () => AgentRun[]
 }
 
 /** 用户追加的参数里第一个由像素星空控制的（docs/ui/engine-launch.md §3）：--listen，改平台线路的 -c；都允许时返回 null */
@@ -128,6 +131,8 @@ export class CodexSession implements EngineSession {
   private contextWindow: number | null = null
   private compacting = false
   private translator: CodexTranslator
+  /** 派出过的子智能体：每轮换新翻译器也要保留 */
+  private readonly agents = new Map<string, AgentRun>()
   private reportedError: string | null = null
   /** 同一毫秒内的多条报错也要各自保留，id 不能只靠时间戳 */
   private noticeSeq = 0
@@ -149,9 +154,15 @@ export class CodexSession implements EngineSession {
     private readonly options: CodexLaunchOptions,
   ) {
     this.settings = { ...ctx.record() }
+    try {
+      for (const agent of options.savedAgents?.() ?? []) this.agents.set(agent.id, agent)
+    } catch {
+      // 读不到以前的追踪不影响会话
+    }
     this.translator = new CodexTranslator(
       event => this.ctx.emit(event),
       () => this.last.total || null,
+      this.agents,
     )
   }
   private async open(): Promise<void> {
@@ -383,6 +394,7 @@ export class CodexSession implements EngineSession {
     this.translator = new CodexTranslator(
       event => this.ctx.emit(event),
       () => this.last.total || null,
+      this.agents,
     )
     this.nativeTurnId = null
     this.reportedError = null
@@ -581,7 +593,12 @@ export class CodexSession implements EngineSession {
       return
     }
     const eventThread = string(params.threadId)
+    // 子智能体线程的事件只记进追踪（工具次数、token）
+    if (eventThread && this.agents.has(eventThread)) return this.translator.child(eventThread, method, params)
     if (eventThread && this.threadId && eventThread !== this.threadId) return
+    // 子智能体可能在主轮结束后才跑完：没有进行中的轮次也要更新追踪
+    if (!this.active && method === 'item/completed' && object(params.item).type === 'subAgentActivity')
+      return this.translator.subagent(object(params.item), true)
     if (!this.active) return
     const eventTurn = string(params.turnId || object(params.turn).id)
     if (eventTurn && this.finishedTurns.has(eventTurn)) return

@@ -1,5 +1,8 @@
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import type { EngineAdapter, EngineSession, Launcher, LoginProcess, SessionContext } from '../adapter'
 import {
+  type AgentRuns,
   codedError,
   type EngineCatalog,
   type EngineInfo,
@@ -17,6 +20,7 @@ import { CodexProcess, object } from './process'
 import { codexCatalog } from './catalog'
 import { CodexSession, reservedCodexArg, type CodexLaunchOptions } from './session'
 import { CodexTranslator } from './translate'
+import { loadCodexRuns } from './runs'
 import { CODEX_NPM_PACKAGE, installCodexWithNpm, updateCodexWithNpm } from './update'
 import { array } from './process'
 
@@ -226,6 +230,13 @@ export class CodexAdapter implements EngineAdapter {
       ...(this.opts.launchOptions?.() ?? { askQuestions: true }),
       defaultModel: () => this.catalogCache?.currentModel ?? null,
       knownWindows: this.knownWindows,
+      savedAgents: () => this.loadRuns(ctx.record()).agents,
     })
+  }
+  /** 子智能体追踪从线程的 rollout 还原（读不到就是空的） */
+  loadRuns(record: SessionRecord): AgentRuns {
+    if (!record.engineSessionId) return { workflows: [], agents: [] }
+    const env = viaGateway(record) ? { ...this.env(), ...this.opts.sessionEnv?.(record) } : this.env()
+    return loadCodexRuns(env.CODEX_HOME || join(homedir(), '.codex'), record.engineSessionId)
   }
 }
