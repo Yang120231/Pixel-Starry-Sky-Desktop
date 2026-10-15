@@ -64,6 +64,35 @@ async function commit(message: string, dir = project, extra: string[] = []): Pro
 const tools = () => new GitTools(host, () => {})
 
 describe('Git 面板：提交历史', { timeout: 30_000 }, () => {
+  it('提交里的文件带 local：相对项目目录；项目外、这次删掉的、后来删掉的为 null', async () => {
+    const repo = project
+    project = join(repo, 'web')
+    await mkdir(join(project, 'src'), { recursive: true })
+    await init(repo)
+    await writeFile(join(project, 'src', 'keep.ts'), 'keep\n')
+    await writeFile(join(project, 'gone.ts'), 'gone\n')
+    await writeFile(join(project, 'later.ts'), 'later\n')
+    await writeFile(join(repo, 'README.md'), 'root\n')
+    const first = await commit('第一次', repo)
+    await rm(join(project, 'gone.ts'))
+    await writeFile(join(project, 'src', 'keep.ts'), 'keep 2\n')
+    const second = await commit('删掉 gone.ts', repo)
+    await rm(join(project, 'later.ts'))
+    await commit('后来删掉 later.ts', repo)
+    const g = tools()
+    const firstFiles = (await g.show(ref, first)).files.map(f => [f.path, f.local])
+    expect(firstFiles).toEqual([
+      ['README.md', null],
+      ['web/gone.ts', null],
+      ['web/later.ts', null],
+      ['web/src/keep.ts', 'src/keep.ts'],
+    ])
+    expect((await g.show(ref, second)).files.map(f => [f.code, f.path, f.local])).toEqual([
+      ['D', 'web/gone.ts', null],
+      ['M', 'web/src/keep.ts', 'src/keep.ts'],
+    ])
+  })
+
   it('空仓库没有历史；不是仓库时报 notRepo', async () => {
     const g = tools()
     await expect(g.log(ref, { scope: 'auto', skip: 0, limit: 50 })).rejects.toMatchObject({
@@ -131,6 +160,16 @@ describe('Git 面板：提交历史', { timeout: 30_000 }, () => {
     expect(rootDetail.files.map(f => [f.code, f.path])).toEqual([
       ['A', 'a.txt'],
       ['A', 'old.txt'],
+    ])
+    // 「打开文件」用的 local：现在工作区里还有的才给；old.txt 后来改名成 new.txt，打不开
+    expect(detail.files.map(f => [f.path, f.local])).toEqual([
+      ['a.txt', 'a.txt'],
+      ['bin.dat', 'bin.dat'],
+      ['new.txt', 'new.txt'],
+    ])
+    expect(rootDetail.files.map(f => [f.path, f.local])).toEqual([
+      ['a.txt', 'a.txt'],
+      ['old.txt', null],
     ])
 
     // 一个文件的差异：改名按旧路径取原文，根提交和空文件比，二进制不比较

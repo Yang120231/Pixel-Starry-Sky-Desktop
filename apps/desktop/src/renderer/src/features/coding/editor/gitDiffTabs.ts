@@ -172,7 +172,7 @@ export const commitDiffInput = (
   path: file.path,
   origPath: file.origPath,
   code: file.code,
-  local: null,
+  local: file.local ?? null,
   from,
   to,
   caption,

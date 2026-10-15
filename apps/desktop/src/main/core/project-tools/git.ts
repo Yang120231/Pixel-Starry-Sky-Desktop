@@ -8,6 +8,7 @@ import type {
   GitAction,
   GitBranch,
   GitChangeSet,
+  GitCommitFile,
   GitCommit,
   GitCommitContext,
   GitCommitDetail,
@@ -30,6 +31,7 @@ import {
   classifyGitError,
   isHash,
   LOG_FORMAT,
+  localPath,
   parseCommitFiles,
   parseLog,
   parseLogNumstat,
@@ -631,7 +633,20 @@ export class GitTools {
       this.exec(repo, 'history', diff('--name-status'), 'read'),
       this.exec(repo, 'history', diff('--numstat'), 'read'),
     ])
-    return { from, to, ...parseCommitFiles(names, nums) }
+    const set = parseCommitFiles(names, nums)
+    return { from, to, files: await this.withLocal(repo, set.files), truncated: set.truncated }
+  }
+
+  /** 给提交里的文件填上 local：现在工作区里还有这个文件才能「打开文件」（历史里的文件可能后来删了或改名了） */
+  private async withLocal(repo: Repo, files: GitCommitFile[]): Promise<GitCommitFile[]> {
+    return Promise.all(
+      files.map(async file => {
+        const local = file.code === 'D' ? null : localPath(file.path, repo.prefix)
+        if (!local) return { ...file, local: null }
+        const info = await stat(resolve(repo.root, file.path)).catch(() => null)
+        return { ...file, local: info?.isFile() ? local : null }
+      }),
+    )
   }
 
   async show(ref: WorkspaceRef, hash: unknown): Promise<GitCommitDetail> {

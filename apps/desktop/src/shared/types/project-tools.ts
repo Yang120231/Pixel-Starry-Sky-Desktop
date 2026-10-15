@@ -372,6 +372,8 @@ export interface GitCommitFile {
   /** 二进制文件为 null */
   insertions: number | null
   deletions: number | null
+  /** 这个文件现在在工作区里的路径（相对工作区，可直接打开）；在工作区外、这次删掉的、后来删掉或改名的为 null */
+  local?: string | null
 }
 /** 两个提交之间的改动：一个提交的详情（from = 第一父提交）、未拉取 / 未推送、相对基础分支 */
 export interface GitChangeSet {
