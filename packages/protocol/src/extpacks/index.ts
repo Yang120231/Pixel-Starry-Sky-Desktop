@@ -66,5 +66,11 @@ export {
   validateManifest,
   validatePackFiles,
 } from './validate'
-export { EXT_TASK_NAME_RE, hasNestedQuantifier, parseCondition, validateTaskTemplate } from './tasks'
+export {
+  EXT_TASK_NAME_RE,
+  hasNestedQuantifier,
+  hasQuantifiedAlternation,
+  parseCondition,
+  validateTaskTemplate,
+} from './tasks'
 export { checkSvg, contrastRatio, parseHexColor, parseJsonc, satisfiesEngine } from './text'

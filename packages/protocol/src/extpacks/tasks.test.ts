@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { EXT_TASK_NAME_RE, hasNestedQuantifier, parseCondition, validateTaskTemplate } from './tasks'
+import {
+  EXT_TASK_NAME_RE,
+  hasNestedQuantifier,
+  hasQuantifiedAlternation,
+  parseCondition,
+  validateTaskTemplate,
+} from './tasks'
 
 const just = {
   id: 'just',
@@ -166,6 +172,30 @@ describe('hasNestedQuantifier', () => {
     ['(?:a+b)?', false],
   ] as const)('%s → %s', (pattern, expected) => {
     expect(hasNestedQuantifier(pattern)).toBe(expected)
+  })
+})
+
+describe('hasQuantifiedAlternation', () => {
+  it.each([
+    ['^(a|aa)+$', true],
+    ['(a|b)*', true],
+    ['(?:x|xy){2,}', true],
+    ['(a|aa)+?', true],
+    ['(a|b){1,5}', true],
+    ['^(a|b)?$', false],
+    ['(a|b){0,1}', false],
+    ['(a|aa){40}', true],
+    ['(a|b){1}', false],
+    ['[(|)]+', false],
+    ['\\(a|b\\)+', false],
+    ['^#!.*\\b(node|deno)\\b', false],
+    ['(abc)+', false],
+    ['((a|b)c)+', true], // 保守：内层有分支就算
+    ['((a|aa))+', true],
+    ['(x(a|aa))+', true],
+    ['(?:(a|aa))+', true],
+  ] as const)('%s → %s', (pattern, expected) => {
+    expect(hasQuantifiedAlternation(pattern)).toBe(expected)
   })
 })
 

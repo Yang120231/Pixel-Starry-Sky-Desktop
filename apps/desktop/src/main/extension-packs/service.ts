@@ -63,6 +63,8 @@ export class ExtensionPacks {
   private ready_ = false
   private loading = true
   private revision = 0
+  /** 扩展实例版本号：整个进程内只增不减，重新添加同一目录也不会和旧实例撞号（渲染层按 key+版本号缓存文件） */
+  private packRevision = 0
   private preKey = ''
   private data: PackStateFile = emptyState()
   private packs: LoadedPack[] = []
@@ -142,7 +144,7 @@ export class ExtensionPacks {
           enabled: st.enabled,
           addedAt: 0,
           options: st.options,
-          revision: 1,
+          revision: ++this.packRevision,
           appVersion: this.opts.appVersion,
         }),
       )
@@ -165,7 +167,7 @@ export class ExtensionPacks {
           enabled: f.enabled,
           addedAt: f.addedAt,
           options: f.options,
-          revision: 1,
+          revision: ++this.packRevision,
           appVersion: this.opts.appVersion,
         }),
       )
@@ -266,7 +268,7 @@ export class ExtensionPacks {
         enabled: true,
         addedAt,
         options: {},
-        revision: 1,
+        revision: ++this.packRevision,
         appVersion: this.opts.appVersion,
       })
       const id = pack.info.id
@@ -321,7 +323,7 @@ export class ExtensionPacks {
           enabled: old.info.enabled,
           addedAt: old.info.addedAt,
           options: old.info.options,
-          revision: old.info.revision + 1,
+          revision: ++this.packRevision,
           appVersion: this.opts.appVersion,
         })
         this.packs = this.packs.map(p => (p === old ? fresh : p))

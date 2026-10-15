@@ -186,28 +186,47 @@ function parseBraced(src: string, at: number): { node: Node; end: number } | nul
 }
 
 /** 默认值 / 变量值里不能有 { }（CodeMirror 的限制），整体拍平成纯文本 */
-function flatten(nodes: Node[], vars: Partial<SnippetVariables>): string {
-  return nodes.map(n => renderNode(n, vars, true)).join('')
+function flatten(nodes: Node[], vars: Partial<SnippetVariables>, defaults: Map<number, string>): string {
+  return nodes.map(n => renderNode(n, vars, true, defaults)).join('')
 }
 
-function renderNode(n: Node, vars: Partial<SnippetVariables>, flat: boolean): string {
+/** 每个编号第一处带默认文本的出现（含嵌套、选项取第一个），同编号的其它出现都以它为初始文本（同 VS Code） */
+function collectDefaults(nodes: Node[], vars: Partial<SnippetVariables>, out: Map<number, string>): void {
+  for (const n of nodes) {
+    if (n.t === 'tab') {
+      if (!out.has(n.n)) {
+        const def = flatten(n.def, vars, out)
+        if (def) out.set(n.n, def)
+      }
+      collectDefaults(n.def, vars, out)
+    } else if (n.t === 'choice') {
+      const first = (n.opts[0] ?? '').replace(/[{}]/g, '')
+      if (first && !out.has(n.n)) out.set(n.n, first)
+    } else if (n.t === 'var' && n.def) {
+      collectDefaults(n.def, vars, out)
+    }
+  }
+}
+
+function renderNode(n: Node, vars: Partial<SnippetVariables>, flat: boolean, defaults: Map<number, string>): string {
   const esc = (s: string) => (flat ? s.replace(/[{}]/g, '') : s.replace(/[{}]/g, '\\$&'))
   switch (n.t) {
     case 'text':
       return esc(n.s)
     case 'choice': {
       // 展开时用第一个
-      const first = (n.opts[0] ?? '').replace(/[{}]/g, '')
+      const first = (n.opts[0] ?? '').replace(/[{}]/g, '') || (n.n === 0 ? '' : (defaults.get(n.n) ?? ''))
       return flat ? first : `\${${n.n}${first ? `:${first}` : ''}}`
     }
     case 'tab': {
-      const def = flatten(n.def, vars)
+      // $0 是结束位置，不继承默认文本
+      const def = flatten(n.def, vars, defaults) || (n.n === 0 ? '' : (defaults.get(n.n) ?? ''))
       return flat ? def : `\${${n.n}${def ? `:${def}` : ''}}`
     }
     case 'var': {
       const value = (vars as Record<string, string | undefined>)[n.name]
       if (value) return esc(value)
-      if (n.def) return esc(flatten(n.def, vars))
+      if (n.def) return esc(flatten(n.def, vars, defaults))
       // 提供了但是空的按空处理，没提供的原样插入
       return value === '' ? '' : esc(n.raw)
     }
@@ -216,7 +235,9 @@ function renderNode(n: Node, vars: Partial<SnippetVariables>, flat: boolean): st
 
 /** VS Code 片段语法 → CodeMirror Snippet.parse 能读的模板 */
 export function toCodeMirrorTemplate(body: string, vars: Partial<SnippetVariables>): string {
-  return parseNodes(body, 0, false)
-    .nodes.map(n => renderNode(n, vars, false))
-    .join('')
+  const { nodes } = parseNodes(body, 0, false)
+  const defaults = new Map<number, string>()
+  collectDefaults(nodes, vars, defaults)
+  defaults.delete(0)
+  return nodes.map(n => renderNode(n, vars, false, defaults)).join('')
 }
