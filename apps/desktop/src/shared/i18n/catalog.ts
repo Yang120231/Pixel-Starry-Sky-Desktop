@@ -1669,8 +1669,8 @@ export const catalog = {
     "en": "Rewind to this message?"
   },
   "session.message.rewindDesc": {
-    "zh": "这条消息及之后的对话会被移除，模型上下文回到这条消息之前，原文和图片会放回输入框。项目里的文件改动不会恢复，此操作无法撤销。",
-    "en": "This message and everything after it will be removed, and the model context returns to before this message. The text and images go back to the input box. File changes in the project are not reverted. This cannot be undone."
+    "zh": "这条消息及之后的对话会被移除，模型上下文回到这条消息之前，原文和图片会放回输入框。项目里的文件改动不会恢复；发下一条消息之前可以撤销。",
+    "en": "This message and everything after it will be removed, and the model context returns to before this message. The text and images go back to the input box. File changes in the project are not reverted. You can undo this until you send the next message."
   },
   "session.message.rewindConfirm": {
     "zh": "回退",

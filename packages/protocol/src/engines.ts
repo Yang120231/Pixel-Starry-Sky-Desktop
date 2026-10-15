@@ -64,7 +64,9 @@ export const ENGINES: Record<EngineId, EngineDescriptor> = {
       interrupt: true,
       resume: true,
       steer: true,
-      rewind: false,
+      // 只回退 / 分叉对话（thread/revert、thread/fork），Codex 没有文件检查点：rewindCode、sideChat 不开
+      rewind: true,
+      fork: true,
       liveModelSwitch: false,
       livePermissionSwitch: false,
       // 计划模式用 Codex 原生的计划协作模式，Fast 用服务档位 priority（docs/codex-engine.md §3.5）

@@ -185,7 +185,7 @@ export const branchMessages = {
     en: 'This message is from before a context compaction, so Claude Code cannot continue from here. Started a new engine session without the previous context.',
   },
   'branch.forkMissing': {
-    zh: '无法在 Claude Code 记录中找到这条消息，分叉出的会话没有带上之前的上下文',
-    en: 'Could not find this message in Claude Code history; the forked session does not include the previous context',
+    zh: '无法在 {p0} 记录中找到这条消息，分叉出的会话没有带上之前的上下文',
+    en: 'Could not find this message in {p0} history; the forked session does not include the previous context',
   },
 } as const

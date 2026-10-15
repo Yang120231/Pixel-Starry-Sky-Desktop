@@ -320,7 +320,7 @@ describe('分叉', () => {
   it('新会话带上这条消息之前的对话，引擎从截断点复制，原会话不变', async () => {
     const host = makeHost()
     const { record } = await conversation(host, ['一', '二', '三'])
-    const forked = host.forkSession(record.id, 'm2')
+    const forked = await host.forkSession(record.id, 'm2')
     expect(forked.text).toBe('三')
     const title = host.open(record.id).record.title
     expect(forked.record).toMatchObject({ title: `${title}（分支）`, forkedFrom: { sessionId: record.id, title } })
@@ -343,7 +343,7 @@ describe('分叉', () => {
     const { record, cwd } = await conversation(host, ['一', '二', '三'])
     const source = compact(cwd, host.open(record.id).record.engineSessionId!)
     const before = readFileSync(source, 'utf8')
-    const forked = host.forkSession(record.id, 'm2')
+    const forked = await host.forkSession(record.id, 'm2')
     await host.send(forked.record.id, { text: '另一条路', clientMessageId: 'f1' })
     await waitFor(() => turnsDone(forked.record.id) === 1)
     const args = spawnArgs().at(-1)!
@@ -361,7 +361,7 @@ describe('分叉', () => {
   it('分叉第一条消息：空的新会话，不带截断点', async () => {
     const host = makeHost()
     const { record } = await conversation(host, ['一'])
-    const forked = host.forkSession(record.id, 'm0')
+    const forked = await host.forkSession(record.id, 'm0')
     expect(host.open(forked.record.id).items).toEqual([])
     expect(forked.record.pendingFork).toBeNull()
   })

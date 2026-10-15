@@ -434,7 +434,7 @@ export class EngineHost {
   }
 
   /** 从某条用户消息之前分叉出新会话（§2） */
-  forkSession(id: string, userItemId: string, title?: string): ForkResult {
+  forkSession(id: string, userItemId: string, title?: string): Promise<ForkResult> {
     return this.m.branch.fork(id, userItemId, title)
   }
 

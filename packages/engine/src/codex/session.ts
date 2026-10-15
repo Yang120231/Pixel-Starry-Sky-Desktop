@@ -12,6 +12,7 @@ import type {
 import { EMPTY_FLAGS, isQuietWarning, viaGateway } from '@pixelsky/protocol'
 import { QUICK_CLOSE_MS, type CloseOptions, type EngineSession, type Launcher, type SessionContext } from '../adapter'
 import { CodexProcess, array, object, string, type Message } from './process'
+import { readCodexTurns, revertTarget } from './branch'
 import { codexCatalog } from './catalog'
 import { codexChanges, CodexTranslator, tokenCounts } from './translate'
 import { CODEX_WINDOW_ENV, codexContextConfig } from './context-config'
@@ -247,15 +248,43 @@ export class CodexSession implements EngineSession {
               : 'workspace-write',
       }
       let thread: Message,
-        resumeFailed = false
+        resumeFailed = false,
+        rewindFailed = false,
+        forkFailed = false
       if (record.engineSessionId)
         try {
           thread = await proc.request('thread/resume', { threadId: record.engineSessionId, ...threadParams })
+          // 回退：下次启动才真正截断（thread/revert 会改写记录），撤销回退因此还来得及
+          if (record.pendingRewind)
+            try {
+              const target = revertTarget(await readCodexTurns(proc, record.engineSessionId), record.pendingRewind)
+              if (target === 'missing') throw new Error('Codex rewind point not found')
+              if (target)
+                await proc.request('thread/revert', { threadId: record.engineSessionId, beforeTurnId: target })
+            } catch (error) {
+              if (!proc.alive) throw error
+              // 找不到截断点或回退失败：不能带着没截断的上下文继续，改用新线程
+              thread = await proc.request('thread/start', threadParams)
+              rewindFailed = true
+            }
         } catch (error) {
           // 进程已经退出说明是连接问题，照常报错；进程还在说明线程找不到或已损坏，改用新线程
           if (!proc.alive) throw error
           thread = await proc.request('thread/start', threadParams)
           resumeFailed = true
+        }
+      else if (record.pendingFork)
+        try {
+          // 分叉：从原线程保留到 at 这一轮为止（含），新线程带同样的启动参数
+          thread = await proc.request('thread/fork', {
+            threadId: record.pendingFork.from,
+            lastTurnId: record.pendingFork.at,
+            ...threadParams,
+          })
+        } catch (error) {
+          if (!proc.alive) throw error
+          thread = await proc.request('thread/start', threadParams)
+          forkFailed = true
         }
       else thread = await proc.request('thread/start', threadParams)
       this.threadId = string(object(thread.thread).id)
@@ -264,17 +293,27 @@ export class CodexSession implements EngineSession {
       this.planSent = string(object(thread.collaborationMode).mode) === 'plan'
       if (!this.threadId) throw new Error('Codex did not return a thread ID')
       this.ctx.setEngineSessionId(this.threadId)
-      if (resumeFailed)
+      const warning = resumeFailed
+        ? 'Could not resume the Codex thread; started a new thread (previous context was not carried over)'
+        : rewindFailed
+          ? 'Could not rewind the Codex thread to this message; started a new thread (previous context was not carried over)'
+          : forkFailed
+            ? 'Could not fork the Codex thread; started a new thread (previous context was not carried over)'
+            : null
+      if (warning)
         this.ctx.emit({
           type: 'item_completed',
           item: {
             kind: 'notice',
             id: `cx-resume-${Date.now()}-${++this.noticeSeq}`,
             level: 'warn',
-            text: 'Could not resume the Codex thread; started a new thread (previous context was not carried over)',
+            text: warning,
             detail: null,
           },
         })
+      // 截断点已处理（成功或改成新线程）：清掉记录里的 pendingRewind / pendingFork
+      if (record.pendingRewind) this.ctx.clearPendingRewind?.()
+      if (record.pendingFork) this.ctx.clearPendingFork?.()
       this.emitFlags()
       const skills = await proc
         .request('skills/list', {

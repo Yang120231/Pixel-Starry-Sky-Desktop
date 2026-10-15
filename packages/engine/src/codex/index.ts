@@ -12,6 +12,7 @@ import { engineEnv } from '../env'
 import { outputTail, run, runInteractive, startupReason } from '../exec'
 import { engineBase } from '../registry'
 import { customCodex, discoverCodex, toolEnvironment } from './discover'
+import { codexAnchor, readCodexTurns } from './branch'
 import { CodexProcess, object } from './process'
 import { codexCatalog } from './catalog'
 import { CodexSession, reservedCodexArg, type CodexLaunchOptions } from './session'
@@ -36,6 +37,8 @@ export class CodexAdapter implements EngineAdapter {
   private readonly knownWindows = new Map<string, number>()
   readonly npmPackage = CODEX_NPM_PACKAGE
   readonly updateNeedsIdle = true
+  /** thread id 由 Codex 分配：宿主不预先塞 id（docs/codex-engine.md 回退 / 分叉一节） */
+  readonly enginePicksSessionId = true
   private env(): NodeJS.ProcessEnv {
     return { ...engineEnv(this.opts.env ?? process.env), ...this.opts.extraEnv?.() }
   }
@@ -173,6 +176,42 @@ export class CodexAdapter implements EngineAdapter {
       await proc.close()
     }
   }
+  /**
+   * 回退 / 分叉的截断点：起一个临时 app-server 冷读线程的轮次（不 resume），按用户消息 clientId 求「最后保留的一轮」。
+   * 读不到（没装、线程没了、没有 clientId）返回 null，宿主按「找不到」处理
+   */
+  async rewindAnchor(record: SessionRecord, userItemIds: string[]): Promise<{ at: string | null } | null> {
+    if (!record.engineSessionId) return null
+    let proc: CodexProcess | undefined
+    try {
+      await this.info()
+      const launcher = this.cached?.launcher
+      if (!launcher || this.cached?.info.status === 'error') return null
+      const p: CodexProcess = (proc = new CodexProcess(
+        launcher,
+        ['app-server', '--listen', 'stdio://', ...this.launchArgs()],
+        record.cwd,
+        this.sessionEnvironment(launcher, record),
+        { notification() {}, request: id => p.respondError(id, 'Read-only history'), exit() {} },
+      ))
+      await p.initialize()
+      return codexAnchor(await readCodexTurns(p, record.engineSessionId), userItemIds)
+    } catch {
+      return null
+    } finally {
+      await proc?.close()
+    }
+  }
+  /** 会话和读历史的临时进程共用的环境：平台 / 自定义接口会话去掉 OpenAI 登录变量，带上网关变量 */
+  private sessionEnvironment(launcher: Launcher, record: SessionRecord): NodeJS.ProcessEnv {
+    const env = toolEnvironment(launcher, this.env())
+    env.PIXELSKY_CODEX_PROVIDER = this.catalogCache?.currentProvider ?? 'openai'
+    if (viaGateway(record)) {
+      for (const key of Object.keys(env)) if (/^(OPENAI_|CODEX_ACCESS_TOKEN|CHATGPT_)/i.test(key)) delete env[key]
+      Object.assign(env, this.opts.sessionEnv?.(record) ?? {})
+    }
+    return env
+  }
   createSession(ctx: SessionContext): EngineSession {
     const result = this.cached
     if (
@@ -180,12 +219,7 @@ export class CodexAdapter implements EngineAdapter {
       (result.info.status !== 'ready' && !(viaGateway(ctx.record()) && result.info.status === 'unauthenticated'))
     )
       throw new Error(result?.info.message ?? 'Codex is unavailable')
-    const env = toolEnvironment(result.launcher, this.env())
-    env.PIXELSKY_CODEX_PROVIDER = this.catalogCache?.currentProvider ?? 'openai'
-    if (viaGateway(ctx.record())) {
-      for (const key of Object.keys(env)) if (/^(OPENAI_|CODEX_ACCESS_TOKEN|CHATGPT_)/i.test(key)) delete env[key]
-      Object.assign(env, this.opts.sessionEnv?.(ctx.record()) ?? {})
-    }
+    const env = this.sessionEnvironment(result.launcher, ctx.record())
     return new CodexSession(result.launcher, env, ctx, {
       ...(this.opts.launchOptions?.() ?? { askQuestions: true }),
       defaultModel: () => this.catalogCache?.currentModel ?? null,

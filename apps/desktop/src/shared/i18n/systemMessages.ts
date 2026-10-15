@@ -1258,8 +1258,8 @@ export const systemMessages = {
     en: 'You can only rewind to messages you sent',
   },
   'system.rewindAnchorMissing': {
-    zh: '无法在 Claude Code 记录中回退到这条消息，已开始新的引擎会话（之前的上下文没有带过去）',
-    en: 'Could not rewind to this message in Claude Code history. Started a new engine session without the previous context.',
+    zh: '无法在 {p0} 记录中回退到这条消息，已开始新的引擎会话（之前的上下文没有带过去）',
+    en: 'Could not rewind to this message in {p0} history. Started a new engine session without the previous context.',
   },
   'system.programNotFound': {
     zh: '找不到程序：{p0}',

@@ -127,7 +127,12 @@ export interface EngineAdapter {
    * 回退：按要移除的用户消息（按顺序）在引擎记录里找截断点。
    * 返回 null 表示这些消息都没进入引擎上下文；at 为 null 表示回到会话开头（换新的引擎会话）。
    */
-  rewindAnchor?(record: SessionRecord, userItemIds: string[]): { at: string | null } | null
+  rewindAnchor?(
+    record: SessionRecord,
+    userItemIds: string[],
+  ): { at: string | null } | null | Promise<{ at: string | null } | null>
+  /** 引擎自己分配会话 id（Codex）：宿主不能预先塞 randomUUID，新会话的 engineSessionId 用 null，启动时由引擎新建 */
+  readonly enginePicksSessionId?: boolean
   /**
    * 回退恢复代码：预览或还原到这条用户消息之前的文件（docs/ui/rewind-fork-sidechat.md §1）。
    * 还原时先预览，把要动的文件交给 beforeRestore（存一份当前内容），再还原；返回预览出的文件列表

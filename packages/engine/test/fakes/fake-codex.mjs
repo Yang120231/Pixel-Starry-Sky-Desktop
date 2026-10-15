@@ -1,4 +1,5 @@
-import { appendFileSync, existsSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import readline from 'node:readline'
 if (process.env.FAKE_CODEX_ARGV)
   appendFileSync(process.env.FAKE_CODEX_ARGV, JSON.stringify(process.argv.slice(2)) + '\n')
@@ -14,6 +15,36 @@ const emit = (method, params) => out({ method, params })
 /** 测试通过创建这个文件打开「恢复线程失败」开关：thread/resume 报错，thread/start 给新线程 id */
 const resumeFails = () =>
   !!process.env.FAKE_CODEX_RESUME_FAIL_FILE && existsSync(process.env.FAKE_CODEX_RESUME_FAIL_FILE)
+/**
+ * 线程的轮次（回退 / 分叉测试用）：每个线程记 [{ id, clientId, content }]。
+ * FAKE_CODEX_STATE_DIR 指向目录时落盘（threads.json），新进程能读到旧进程的线程；不设则只在本进程内存里。
+ */
+const stateFile = process.env.FAKE_CODEX_STATE_DIR ? join(process.env.FAKE_CODEX_STATE_DIR, 'threads.json') : null
+let threads = {}
+function loadThreads() {
+  if (!stateFile) return
+  try {
+    threads = JSON.parse(readFileSync(stateFile, 'utf8'))
+  } catch {
+    threads = {}
+  }
+}
+function saveThreads() {
+  if (!stateFile) return
+  mkdirSync(process.env.FAKE_CODEX_STATE_DIR, { recursive: true })
+  writeFileSync(stateFile, JSON.stringify(threads))
+}
+/** 记一轮：把 turn-N 的编号接在已有轮次之后，多个进程之间不重号 */
+function recordTurn(clientId, content) {
+  loadThreads()
+  for (const list of Object.values(threads))
+    for (const t of list) next = Math.max(next, Number(String(t.id).replace(/^turn-/, '')) || 0)
+  const id = 'turn-' + ++next
+  ;(threads[thread] ??= []).push({ id, clientId: clientId ?? null, content })
+  saveThreads()
+  return id
+}
+const rpcError = (m, message) => out({ id: m.id, error: { code: -32000, message } })
 let initialized = false,
   thread = 'fake-thread',
   turn = null,
@@ -159,11 +190,70 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
         out({ id: m.id, error: { code: -32000, message: 'thread not found: ' + p.threadId } })
         break
       }
-      thread = p.threadId ?? (resumeFails() ? 'fake-thread-new' : 'fake-thread')
+      loadThreads()
+      if (m.method === 'thread/resume' && stateFile && !threads[p.threadId]) {
+        rpcError(m, 'thread not found: ' + p.threadId)
+        break
+      }
+      if (m.method === 'thread/start' && stateFile) {
+        // 开了落盘时每个新线程一个新 id，测试能分清「接着原线程」和「开了新线程」
+        const n = Object.keys(threads).length
+        thread = n ? 'fake-thread-' + (n + 1) : 'fake-thread'
+        threads[thread] = []
+        saveThreads()
+      } else thread = p.threadId ?? (resumeFails() ? 'fake-thread-new' : 'fake-thread')
       response(m, { thread: { id: thread, turns: [] } })
       break
+    case 'thread/fork': {
+      loadThreads()
+      const source = threads[p.threadId]
+      const at = p.lastTurnId ? source?.findIndex(t => t.id === p.lastTurnId) : source ? source.length - 1 : -1
+      if (!source || at < 0) {
+        rpcError(m, 'cannot fork: ' + p.threadId + ' @ ' + p.lastTurnId)
+        break
+      }
+      thread = 'fake-fork-' + (Object.keys(threads).length + 1)
+      threads[thread] = source.slice(0, at + 1)
+      saveThreads()
+      response(m, { thread: { id: thread, turns: [] }, model: 'fake-codex' })
+      break
+    }
+    case 'thread/revert': {
+      loadThreads()
+      const list = threads[p.threadId]
+      const at = list ? list.findIndex(t => t.id === p.beforeTurnId) : -1
+      if (at < 0) {
+        rpcError(m, 'turn not found: ' + p.beforeTurnId)
+        break
+      }
+      threads[p.threadId] = list.slice(0, at)
+      saveThreads()
+      response(m, { thread: { id: p.threadId, turns: [] } })
+      break
+    }
+    case 'thread/turns/list': {
+      loadThreads()
+      const list = threads[p.threadId]
+      if (!list) {
+        rpcError(m, 'thread not found: ' + p.threadId)
+        break
+      }
+      const size = Number(process.env.FAKE_CODEX_PAGE) || list.length || 1
+      const start = Number(p.cursor) || 0
+      const page = list.slice(start, start + size)
+      response(m, {
+        data: page.map(t => ({
+          id: t.id,
+          status: 'completed',
+          items: [{ type: 'userMessage', id: 'u-' + t.id, clientId: t.clientId, content: t.content }],
+        })),
+        nextCursor: start + size < list.length ? String(start + size) : null,
+        backwardsCursor: null,
+      })
+      break
+    }
     case 'turn/start': {
-      const id = 'turn-' + ++next,
+      const id = recordTurn(p.clientUserMessageId, p.input),
         text = p.input
           .filter(i => i.type === 'text')
           .map(i => i.text)
