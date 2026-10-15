@@ -6,6 +6,7 @@ import { SessionHeader } from './SessionHeader'
 import { Transcript } from './Transcript'
 import { Composer, composerDraftKey } from './Composer'
 import { ComposerArea } from './ComposerArea'
+import { resetFullAccessStripOnModeChange } from './fullAccessStripState'
 import { WelcomeView } from './WelcomeView'
 import { hasConversation } from './conversation'
 import { LiveTranscript } from './live/LiveTranscript'
@@ -336,7 +337,11 @@ function LiveSessionView({
                     <ApprovalCard
                       key={req.requestId}
                       request={req}
-                      onAnswer={d => bridge?.answer(sessionId, req.requestId, d)}
+                      onAnswer={async d => {
+                        await bridge?.answer(sessionId, req.requestId, d)
+                        if (d.type === 'allow_all')
+                          resetFullAccessStripOnModeChange(snapshot.record.permissionMode, 'full')
+                      }}
                     />
                   ))}
                   {branch.undo && (

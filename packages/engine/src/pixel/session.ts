@@ -490,6 +490,8 @@ export class PixelSession implements EngineSession {
   }
 
   answer(requestId: string, decision: ApprovalDecision): void {
+    if (decision.type === 'allow_all')
+      throw new Error('This engine does not support enabling full access from an approval')
     const approval = this.approvals.get(requestId)
     if (!approval || !this.proc?.alive) {
       // 找不到审批或进程已退出：同样结束这张卡片，不留下点不动的审批

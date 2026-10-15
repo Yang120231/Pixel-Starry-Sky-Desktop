@@ -693,7 +693,16 @@ export class CodexSession implements EngineSession {
       request.canDeny = params.availableDecisions.includes('decline')
       if (!params.availableDecisions.includes('acceptForSession')) request.alwaysScopes = []
     }
+    request.canAllowAll =
+      request.canAllow !== false &&
+      (request.kind === 'command' || request.kind === 'file_change' || method === 'item/permissions/requestApproval')
     this.approvals.set(key, { id, method, params, request })
+    // 当前轮次的原生沙箱设置不能热切换，完全放行后在适配层处理其余审批。
+    // 问答和 MCP 输入仍交给用户填写。
+    if (this.settings.permissionMode === 'full' && request.canAllowAll) {
+      this.answer(key, { type: 'allow' })
+      return
+    }
     this.ctx.emit({ type: 'approval_request', request })
   }
   answer(id: string, decision: ApprovalDecision): void {
@@ -704,7 +713,12 @@ export class CodexSession implements EngineSession {
       this.ctx.emit({ type: 'approval_resolved', requestId: id })
       return
     }
-    const allow = decision.type === 'allow' || decision.type === 'allow_always'
+    if (decision.type === 'allow_all') {
+      if (!approval.request.canAllowAll) throw new Error('This request cannot enable full access')
+      this.settings.permissionMode = 'full'
+      this.ctx.setPermissionMode('full')
+    }
+    const allow = decision.type === 'allow' || decision.type === 'allow_always' || decision.type === 'allow_all'
     if (allow && approval.request.canAllow === false) return
     if (decision.type === 'allow_always' && !approval.request.alwaysScopes.includes(decision.scope)) return
     let response: unknown
@@ -720,7 +734,7 @@ export class CodexSession implements EngineSession {
     else if (approval.method === 'item/permissions/requestApproval')
       response = {
         permissions: allow ? approval.params.permissions : {},
-        scope: decision.type === 'allow_always' ? 'session' : 'turn',
+        scope: decision.type === 'allow_always' || decision.type === 'allow_all' ? 'session' : 'turn',
       }
     else if (approval.method === 'mcpServer/elicitation/request')
       response = {
@@ -741,6 +755,9 @@ export class CodexSession implements EngineSession {
     this.proc.respond(approval.id, response)
     this.approvals.delete(id)
     this.ctx.emit({ type: 'approval_resolved', requestId: id })
+    if (decision.type === 'allow_all')
+      for (const [pendingId, pending] of this.approvals)
+        if (pending.request.canAllowAll) this.answer(pendingId, { type: 'allow' })
   }
   private finish(outcome: TurnOutcome, error: string | null, detail: string | null = null): void {
     const active = this.active

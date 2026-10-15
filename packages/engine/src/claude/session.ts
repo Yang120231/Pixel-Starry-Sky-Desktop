@@ -644,6 +644,8 @@ export class ClaudeSession implements EngineSession {
   }
 
   answer(requestId: string, decision: ApprovalDecision): void {
+    if (decision.type === 'allow_all')
+      throw new Error('This engine does not support enabling full access from an approval')
     const a = this.approvals.get(requestId)
     const proc = this.proc
     this.approvals.delete(requestId)

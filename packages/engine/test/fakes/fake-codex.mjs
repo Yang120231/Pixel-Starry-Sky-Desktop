@@ -20,6 +20,17 @@ let initialized = false,
   next = 0,
   total = 0,
   pending = null
+let approvalQueue = [],
+  approvalIndex = 0
+function nextApproval() {
+  const request = approvalQueue[approvalIndex++]
+  if (!request) return finish()
+  out({
+    id: 'approval-' + approvalIndex,
+    method: request.method,
+    params: { threadId: thread, turnId: turn.id, ...request.params },
+  })
+}
 const models = [
   {
     id: 'fake-codex',
@@ -80,6 +91,11 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
     return
   }
   if (process.env.FAKE_CODEX_LOG) appendFileSync(process.env.FAKE_CODEX_LOG, JSON.stringify(m) + '\n')
+  if (m.result && String(m.id).startsWith('approval-')) {
+    if (m.result.decision === 'decline' || m.result.decision === 'cancel') finish('interrupted')
+    else nextApproval()
+    return
+  }
   if (m.result && m.id === 'ask') {
     pending = null
     finish('completed')
@@ -240,6 +256,30 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
         })
         return
       }
+      if (text.includes('连续审批')) {
+        approvalQueue = [
+          { method: 'item/commandExecution/requestApproval', params: { command: 'echo first' } },
+          {
+            method: 'item/commandExecution/requestApproval',
+            params: { command: 'npm test', threadId: 'fake-sub-thread', turnId: 'sub-turn' },
+          },
+          { method: 'item/fileChange/requestApproval', params: { changes: [] } },
+          { method: 'item/permissions/requestApproval', params: { permissions: { network: { enabled: true } } } },
+          {
+            method: 'item/tool/requestUserInput',
+            params: {
+              questions: [{ id: 'choice', question: 'Choose a name', header: '', options: [], isOther: true }],
+            },
+          },
+          {
+            method: 'mcpServer/elicitation/request',
+            params: { serverName: 'test', requestedSchema: { type: 'object' } },
+          },
+        ]
+        approvalIndex = 0
+        nextApproval()
+        return
+      }
       if (text.includes('子智能体审批')) {
         // 子智能体在自己的线程和轮次里请求审批
         pending = 'approve'
@@ -255,7 +295,16 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
         out({
           id: 'approve',
           method: 'item/commandExecution/requestApproval',
-          params: { threadId: thread, turnId: id, itemId: 'cmd-1', command: 'echo test', reason: 'Test approval' },
+          params: {
+            threadId: thread,
+            turnId: id,
+            itemId: 'cmd-1',
+            command: 'echo test',
+            reason: 'Test approval',
+            ...(process.env.FAKE_CODEX_DECISIONS
+              ? { availableDecisions: JSON.parse(process.env.FAKE_CODEX_DECISIONS) }
+              : {}),
+          },
         })
         return
       }

@@ -145,6 +145,76 @@ describe('Codex app-server adapter', () => {
     await host!.interrupt(session.id)
     expect(host!.open(session.id).queuePaused).toBe(true)
   })
+  it('完全放行立即覆盖本轮不同命令、子智能体、文件和权限审批，保留问答与 MCP 表单；下一轮原生放行且可以改回', async () => {
+    const { session, messages, events } = setup(3000)
+    await host!.send(session.id, '连续审批')
+    await wait(() => host!.open(session.id).pending.length === 1)
+    expect(host!.open(session.id).pending[0].canAllowAll).toBe(true)
+    host!.answer(session.id, 'approval-1', { type: 'allow_all' })
+    await wait(() => host!.open(session.id).pending[0]?.requestId === 'approval-5')
+    expect(host!.open(session.id).record.permissionMode).toBe('full')
+    expect(host!.executionRecord(session.id)?.permissionMode).toBe('full')
+    expect(messages().find(m => m.id === 'approval-2' && m.result)?.result).toEqual({ decision: 'accept' })
+    expect(messages().find(m => m.id === 'approval-3' && m.result)?.result).toEqual({ decision: 'accept' })
+    expect(messages().find(m => m.id === 'approval-4' && m.result)?.result).toMatchObject({
+      permissions: { network: { enabled: true } },
+    })
+    expect(
+      events.flatMap(e =>
+        e.kind === 'session' && e.event.type === 'approval_request' ? [e.event.request.requestId] : [],
+      ),
+    ).toEqual(['approval-1', 'approval-5'])
+    host!.answer(session.id, 'approval-5', { type: 'answer', answers: { 'Choose a name': 'Pixel' } })
+    await wait(() => host!.open(session.id).pending[0]?.requestId === 'approval-6')
+    expect(host!.open(session.id).pending[0].canAllowAll).toBe(false)
+    host!.answer(session.id, 'approval-6', { type: 'form', content: { name: 'Pixel' } })
+    await wait(() => host!.open(session.id).state === 'idle')
+
+    await host!.send(session.id, '第二轮')
+    await wait(() => host!.open(session.id).state === 'idle')
+    expect(
+      messages()
+        .filter(m => m.method === 'turn/start')
+        .at(-1).params,
+    ).toMatchObject({
+      approvalPolicy: 'never',
+      sandboxPolicy: { type: 'dangerFullAccess' },
+    })
+    const other = host!.createSession({ projectId: session.projectId, engine: 'codex' })
+    expect(other.permissionMode).toBe('edits')
+
+    await host!.update(session.id, { permissionMode: 'edits' })
+    await host!.send(session.id, '审批')
+    await wait(() => host!.open(session.id).pending.length === 1)
+    expect(
+      messages()
+        .filter(m => m.method === 'turn/start')
+        .at(-1).params.approvalPolicy,
+    ).toBe('on-request')
+    host!.answer(session.id, 'approve', { type: 'deny' })
+    await wait(() => host!.open(session.id).state === 'idle')
+  })
+  it.each(['allow', 'allow_always'] as const)('%s 保留原来的审批范围，不切换为完全放行', async type => {
+    const { session } = setup()
+    await host!.send(session.id, '连续审批')
+    await wait(() => host!.open(session.id).pending.length === 1)
+    host!.answer(session.id, 'approval-1', type === 'allow' ? { type } : { type, scope: 'session' })
+    await wait(() => host!.open(session.id).pending[0]?.requestId === 'approval-2')
+    expect(host!.open(session.id).record.permissionMode).toBe('ask')
+    host!.answer(session.id, 'approval-2', { type: 'deny' })
+    await wait(() => host!.open(session.id).state === 'idle')
+  })
+  it('原生请求不支持允许时不能通过完全放行绕过，也不会修改权限', async () => {
+    const { session } = setup(50, { env: { FAKE_CODEX_DECISIONS: '["decline"]' } })
+    await host!.send(session.id, '审批')
+    await wait(() => host!.open(session.id).pending.length === 1)
+    expect(host!.open(session.id).pending[0].canAllowAll).toBe(false)
+    expect(() => host!.answer(session.id, 'approve', { type: 'allow_all' })).toThrow('cannot enable full access')
+    expect(host!.open(session.id).record.permissionMode).toBe('ask')
+    expect(host!.open(session.id).pending).toHaveLength(1)
+    host!.answer(session.id, 'approve', { type: 'deny' })
+    await wait(() => host!.open(session.id).state === 'idle')
+  })
   it('原生引导用对应轮次和 client ID，单条消费并显示用户内容', async () => {
     const { session, messages } = setup()
     await host!.send(session.id, '慢')

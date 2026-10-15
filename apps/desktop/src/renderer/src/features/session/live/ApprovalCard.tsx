@@ -393,6 +393,17 @@ export function ApprovalCard({
             <Button variant="ghost" disabled={sent} onClick={() => answer({ type: 'deny' })}>
               {tr('session.live.ApprovalCard.deny')}{' '}
             </Button>
+            {request.canAllowAll && (
+              <Button
+                variant="outline"
+                className="ml-auto"
+                disabled={sent}
+                title={tr('session.live.ApprovalCard.allowAllHint')}
+                onClick={() => answer({ type: 'allow_all' })}
+              >
+                {tr('session.live.ApprovalCard.allowAll')}
+              </Button>
+            )}
           </>
         )}
       </footer>

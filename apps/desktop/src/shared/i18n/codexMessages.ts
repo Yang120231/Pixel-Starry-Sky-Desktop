@@ -1,4 +1,12 @@
 export const codexMessages = {
+  'session.live.ApprovalCard.allowAll': {
+    zh: '本会话后续不再询问',
+    en: 'Allow all for this session',
+  },
+  'session.live.ApprovalCard.allowAllHint': {
+    zh: '允许当前操作，并将本会话切换为完全放行；可在输入框的权限菜单中改回',
+    en: 'Allow this operation and enable full access for this session. Change it back in the composer permission menu.',
+  },
   'codex.nextTurn': {
     zh: '模型、强度和权限修改从下一轮生效',
     en: 'Model, effort and permission changes apply next turn',

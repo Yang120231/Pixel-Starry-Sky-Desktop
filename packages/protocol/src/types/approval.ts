@@ -21,6 +21,8 @@ export interface ApprovalRequest {
   /** 原生请求限制；省略时兼容既有 Claude 决策。 */
   canAllow?: boolean
   canDeny?: boolean
+  /** 可切换为本会话完全放行；与只允许同类操作的 alwaysScopes 区分。 */
+  canAllowAll?: boolean
   requestId: string
   /** 对应的工具条目（如果有） */
   itemId: string | null
@@ -44,6 +46,8 @@ export interface ApprovalRequest {
 export type ApprovalDecision =
   | { type: 'form'; content: Record<string, unknown> }
   | { type: 'allow' }
+  /** 允许当前请求，并将本会话切换为完全放行。 */
+  | { type: 'allow_all' }
   /** 允许，并且以后同类操作都允许（范围见 AlwaysScope） */
   | { type: 'allow_always'; scope: AlwaysScope }
   | { type: 'deny'; message?: string }
