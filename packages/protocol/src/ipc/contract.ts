@@ -50,6 +50,9 @@ export interface IpcChannelSpec {
 export const REMOTE_PROTOCOL = 6
 
 export const IPC_CONTRACT = {
+  'projectImport:scan': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'projectImport:paths': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'projectImport:choose': { kind: 'invoke', route: 'local', trust: 'sender' },
   'account:calls': { kind: 'invoke', route: 'local', trust: 'sender' },
   'account:cancel': { kind: 'invoke', route: 'local', trust: 'sender' },
   'account:changed': { kind: 'push', route: 'push', trust: 'none' },

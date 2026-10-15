@@ -35,6 +35,7 @@ import { SearchRegistry } from '../core/search-registry'
 import { usageQuery } from '../core/args'
 import { npmLatest, scheduleEngineUpdateChecks } from './npm-latest'
 import { logHostEvent } from '../core/log/host-events'
+import { initProjectImport } from './project-import-ipc'
 
 export async function initEngine(ctx: AppContext): Promise<void> {
   ctx.providers = initProviders(ctx)
@@ -137,6 +138,7 @@ export async function initEngine(ctx: AppContext): Promise<void> {
     return ctx.machines ? ctx.machines.invoke(channel, args, run) : run()
   }
   initArtifacts(h)
+  initProjectImport(ctx, h)
   // 选项目文件夹：可以按住 Ctrl / Shift 一次选几个（docs/ui/multi-root-projects.md §2）
   handle('engine:addProject', async e => {
     const win = BrowserWindow.fromWebContents(e.sender)
