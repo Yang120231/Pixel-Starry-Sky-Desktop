@@ -39,7 +39,7 @@ class FakeSession implements EngineSession {
   constructor(
     readonly engine: EngineId,
     readonly ctx: SessionContext,
-    readonly auto: boolean,
+    public auto: boolean,
   ) {
     this.startId = ctx.record().engineSessionId
   }
@@ -50,7 +50,7 @@ class FakeSession implements EngineSession {
     if (!this.ctx.record().engineSessionId) this.ctx.setEngineSessionId(`${this.engine}-sid-${this.inputs.length}`)
     if (this.auto) setTimeout(() => this.finish(), 0)
   }
-  finish(): void {
+  finish(outcome: 'completed' | 'failed' = 'completed'): void {
     const turnId = this.active
     this.active = null
     if (!turnId) return
@@ -63,7 +63,12 @@ class FakeSession implements EngineSession {
         status: 'completed',
       },
     })
-    this.ctx.emit({ type: 'turn_completed', turnId, outcome: 'completed', error: null })
+    this.ctx.emit({
+      type: 'turn_completed',
+      turnId,
+      outcome,
+      error: outcome === 'failed' ? 'connection reset by peer' : null,
+    })
   }
   async interrupt(): Promise<void> {
     const turnId = this.active
@@ -219,6 +224,50 @@ describe('跨引擎接力：换引擎', () => {
     const notice = snap().items.findLast(i => i.kind === 'notice')
     expect(notice?.kind === 'notice' && notice.text).toBe('已把 Codex 期间的聊天同步给 Claude Code（1 轮）')
   })
+
+  it.each([false, true])('同一引擎报错后重试：保留上下文恢复，不显示换引擎提示（聊天回放：%s）', async seeds => {
+    const { host, claude, record, say, snap } = setup({}, seeds)
+    await say('第一句')
+    const session = claude.sessions[0]
+    const seen = snap().record.engineSessions?.claude?.seen
+    session.auto = false
+    await host.send(record.id, { text: '失败的一轮', clientMessageId: 'failed' })
+    await until(() => session.inputs.length === 2)
+    session.finish('failed')
+    expect(snap().record.engineSessions?.claude?.seen).toBe(seen)
+    await host.runQueuedNow(record.id, 'failed')
+    await until(() => session.inputs.length === 3)
+    expect(snap().record.engine).toBe('claude')
+    expect(snap().items.filter(i => i.kind === 'notice')).toHaveLength(0)
+    if (seeds) expect(session.seeds[2]?.turns.map(t => t.user)).toContain('失败的一轮')
+    else expect(session.inputs[2]).toContain('用户：失败的一轮')
+    session.finish()
+    await until(() => snap().state === 'idle' && snap().queue.length === 0)
+    expect(snap().record.engineSessions?.claude?.seen).toBe(snap().items.at(-1)!.id)
+  })
+
+  it.each([false, true])(
+    '换引擎后的首轮报错：重试继续补发交接，但不重复显示换引擎提示（聊天回放：%s）',
+    async seeds => {
+      const { host, codex, record, say, snap } = setup({}, seeds)
+      await say('第一句')
+      await host.update(record.id, { engine: 'codex' })
+      codex.auto = false
+      await host.send(record.id, { text: '第二句', clientMessageId: 'failed' })
+      await until(() => codex.sessions[0]?.inputs.length === 1)
+      const session = codex.sessions[0]
+      expect(snap().items.filter(i => i.kind === 'notice')).toHaveLength(1)
+      session.finish('failed')
+      await host.runQueuedNow(record.id, 'failed')
+      await until(() => session.inputs.length === 2)
+      expect(snap().record.engine).toBe('codex')
+      expect(snap().items.filter(i => i.kind === 'notice')).toHaveLength(1)
+      if (seeds) expect(session.seeds[1]?.turns.map(t => t.user)).toContain('第一句')
+      else expect(session.inputs[1]).toContain('用户：第一句')
+      session.finish()
+      await until(() => snap().state === 'idle' && snap().queue.length === 0)
+    },
+  )
 
   it('historyTool 为真时交接里点名历史工具，并按记录判断；为假或没给时不提', async () => {
     const seen: SessionRecord[] = []

@@ -155,6 +155,12 @@ export class HostHandoff {
     if (!built) return plain
     // 斜杠命令（/compact 等）要原样交给引擎，不能前面加东西；交接留给下一条普通消息
     if (text.trimStart().startsWith('/')) return { ...plain, hold: true }
+    // 错误恢复也会补发未确认的上下文，只有接手另一个引擎的普通轮次才显示换引擎提示。
+    // 斜杠命令不交接，不能让它吞掉留给下一条普通消息的提示；中途补充也不算新轮次。
+    const previous = prior.findLast(
+      item => item.kind === 'user' && item.mode !== 'guidance' && !item.text.trimStart().startsWith('/'),
+    )
+    const showNotice = previous?.kind === 'user' && !!previous.engine && previous.engine !== record.engine
     const name = ENGINES[record.engine].name
     const others = handoffEngines(delta, record.engine)
     const from = others.length ? others.map(e => ENGINES[e].name).join('、') : '其他引擎'
@@ -164,30 +170,34 @@ export class HostHandoff {
         text: body,
         seed,
         hold: false,
-        notice: {
-          kind: 'notice',
-          id: randomUUID(),
-          level: 'info',
-          text:
-            mode === 'full'
-              ? `已把之前的聊天带给 ${name}（${seed.turns.length} 轮）`
-              : `已把 ${from} 期间的聊天同步给 ${name}（${seed.turns.length} 轮）`,
-          detail: renderSeed(seed),
-        },
+        notice: showNotice
+          ? {
+              kind: 'notice',
+              id: randomUUID(),
+              level: 'info',
+              text:
+                mode === 'full'
+                  ? `已把之前的聊天带给 ${name}（${seed.turns.length} 轮）`
+                  : `已把 ${from} 期间的聊天同步给 ${name}（${seed.turns.length} 轮）`,
+              detail: renderSeed(seed),
+            }
+          : null,
       }
     return {
       text: `${built.text}\n\n${body}`,
       hold: false,
-      notice: {
-        kind: 'notice',
-        id: randomUUID(),
-        level: 'info',
-        text:
-          mode === 'full'
-            ? `已把之前的对话交接给 ${name}（${built.count} 条）`
-            : `已把 ${from} 期间的进展同步给 ${name}`,
-        detail: built.text,
-      },
+      notice: showNotice
+        ? {
+            kind: 'notice',
+            id: randomUUID(),
+            level: 'info',
+            text:
+              mode === 'full'
+                ? `已把之前的对话交接给 ${name}（${built.count} 条）`
+                : `已把 ${from} 期间的进展同步给 ${name}`,
+            detail: built.text,
+          }
+        : null,
     }
   }
 }
