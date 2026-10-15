@@ -1,6 +1,6 @@
 import { grammarMatchScore } from '@pixelsky/protocol'
 import type { ExtGrammar, ExtPackInfo, ExtPackState } from '@pixelsky/protocol'
-import { contributionsFrom } from '@/features/extpacks/model'
+import { compareContributionPriority, contributionsFrom } from '@/features/extpacks/model'
 import { getPackState } from '@/features/extpacks/store'
 import { builtinLanguageName } from './builtinLanguages'
 
@@ -64,8 +64,7 @@ export function packGrammarForPath(path: string, firstLine?: string, state?: Ext
     const better =
       !best ||
       score > best.score ||
-      (score === best.score &&
-        (pack.addedAt > best.ref.pack.addedAt || (pack.addedAt === best.ref.pack.addedAt && index > best.ref.index)))
+      (score === best.score && compareContributionPriority({ pack, index }, best.ref) > 0)
     if (better) best = { ref: { pack, index, grammar: item, key: `${pack.key}@${pack.revision}#${index}` }, score }
   }
   if (!best) return null

@@ -286,6 +286,7 @@ export {
   grammarIssue,
   grammarMatchScore,
   hasNestedQuantifier,
+  hasQuantifiedAlternation,
   inactiveContributions,
   issueOutcome,
   loaderIssue,
