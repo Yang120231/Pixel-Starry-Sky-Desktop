@@ -26,6 +26,7 @@ import { FileBreadcrumbs } from './FileBreadcrumbs'
 import { isDemo } from '@/data'
 import { isHtmlPath, previewHtml } from '@/features/files/htmlPreview'
 import { machineOf } from '@/features/machines/store'
+import { usePacksRevision } from '@/features/extpacks/store'
 
 export function FileEditor({
   id,
@@ -54,6 +55,7 @@ export function FileEditor({
   onExitPreview?: (line: number) => void
 }) {
   useI18n()
+  usePacksRevision()
   const [treeOpen, setTreeOpen] = useState(() => localStorage.getItem('pixelsky.editor.tree') !== 'false')
   const [narrow, setNarrow] = useState(false),
     [drawerOpen, setDrawerOpen] = useState(false)

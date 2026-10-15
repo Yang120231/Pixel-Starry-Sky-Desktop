@@ -2,7 +2,7 @@ import { translateMessage } from '../../i18n/core'
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { ArrowUp, AtSign, ChevronDown, Mic, Paperclip, Plus, ShieldOff, Square, SquareSlash } from 'lucide-react'
 import { settledResizeObserver } from '@/features/panes/motion'
-import { IconButton, cn, useComingSoon } from '@/ui'
+import { IconButton, cn, useComingSoon, useToast } from '@/ui'
 import { attachments as initialAttachments, composer } from '@/data'
 import {
   SOURCE_ACTION_EVENT,
@@ -35,6 +35,11 @@ import './composerCompact.css'
 import { useI18n } from '@/i18n/I18nProvider'
 import { useCommands } from '@/features/settings/plugins/useCommands'
 import { CommandMenu } from './CommandMenu'
+import { activeEditorSelection, usePromptCommands } from '@/features/extpacks/prompts/usePromptCommands'
+import { fillPrompt } from '@/features/extpacks/prompts/model'
+import { loadPromptBody } from '@/features/extpacks/prompts/load'
+import { fileLanguage } from '@/features/editor/code/languages'
+import { getFiles } from '@/features/files/store'
 import { MentionMenu, useMentionEntries } from './MentionMenu'
 import { applyMention, folderMention, insertAt, insertMention, mentionAt } from './mention'
 import { machineOf } from '@/features/machines/store'
@@ -92,6 +97,7 @@ export function Composer({
 }) {
   useI18n()
   const comingSoon = useComingSoon()
+  const toast = useToast()
   const { text: translate } = useI18n()
   const style = useComposerStyle()
   const chatgpt = style === 'chatgpt'
@@ -128,6 +134,9 @@ export function Composer({
   const demoSource = useDemoSourceController()
   const commands = useCommands(live?.sessionId, live?.engine?.id),
     listId = useId()
+  // 扩展提示词跟技能命令一起出现在「/」菜单里；要选中内容的提示词只在编辑器里有选中时才列出
+  const promptCommands = usePromptCommands(!!activeEditorSelection())
+  const menuCommands = useMemo(() => [...commands, ...promptCommands], [commands, promptCommands])
   const [commandIndex, setCommandIndex] = useState(0),
     [commandDismissed, setCommandDismissed] = useState(false)
   const commandQuery = /^[/$]([^\s]*)$/.exec(text)?.[1].toLowerCase()
@@ -135,13 +144,14 @@ export function Composer({
   const commandMatches = useMemo(
     () =>
       commandQuery !== undefined && !commandDismissed
-        ? commands.filter(
+        ? menuCommands.filter(
             command =>
               (commandPrefix === '$' ? command.invocation === 'skill' : command.invocation !== 'skill') &&
-              command.name.toLowerCase().includes(commandQuery),
+              (command.name.toLowerCase().includes(commandQuery) ||
+                (command.invocation === 'prompt' && command.prompt.title.toLowerCase().includes(commandQuery))),
           )
         : [],
-    [commands, commandQuery, commandDismissed, commandPrefix],
+    [menuCommands, commandQuery, commandDismissed, commandPrefix],
   )
   const activeCommandIndex = Math.min(commandIndex, Math.max(0, commandMatches.length - 1))
   // 输入 @ 引用项目文件（docs/ui/workbench-ux-3.md §2.6）：光标前是 @ 词时弹出文件列表
@@ -166,7 +176,27 @@ export function Composer({
   }, [commandMatches])
   const chooseCommand = (index: number): void => {
     const command = commandMatches[index]
-    if (command) {
+    if (command?.invocation === 'prompt') {
+      setCommandDismissed(true)
+      const selected = activeEditorSelection()
+      const file = getFiles().tabs.find(t => t.id === getFiles().active)?.path ?? ''
+      void loadPromptBody(command.prompt)
+        .then(body => {
+          const filled = fillPrompt(body, {
+            selection: selected?.text ?? '',
+            file,
+            language: file ? fileLanguage(file) : '',
+            project:
+              (status?.project?.path ?? '')
+                .replace(/[\\/]+$/, '')
+                .split(/[\\/]/)
+                .pop() ?? '',
+          })
+          setText(filled)
+          placeCaret(filled.length)
+        })
+        .catch((e: unknown) => toast(tr('prompts.loadFailed', { error: (e as Error).message })))
+    } else if (command) {
       setText((command.invocation === 'skill' ? '$' : '/') + command.name + ' ')
       setCommandDismissed(true)
       ref.current?.focus()
@@ -784,7 +814,7 @@ export function Composer({
                   {tr('composer.menu.file')}
                 </PopoverItem>
               )}
-              {commands.length > 0 && (
+              {menuCommands.length > 0 && (
                 <PopoverItem
                   icon={<SquareSlash size={15} strokeWidth={1.5} />}
                   hint="/"

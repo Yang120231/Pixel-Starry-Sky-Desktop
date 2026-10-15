@@ -1,4 +1,4 @@
-import type { SessionRecord } from '@pixelsky/protocol'
+import type { ExtTaskTemplateWire, SessionRecord } from '@pixelsky/protocol'
 import type { WorkspaceRef } from '../shared/types/workspace'
 import type {
   ManualTask,
@@ -44,7 +44,8 @@ export interface ProjectToolsBridge {
   reorderTasks(projectId: string, ids: string[]): Promise<void>
   environment(ref: WorkspaceRef, force?: boolean): Promise<EnvironmentState>
   /** 代码模式左栏「任务」：项目里能跑的命令（docs/ui/coding-tasks.md） */
-  runTasks(ref: WorkspaceRef): Promise<RunTaskState>
+  /** templates：扩展提供的任务模板，主进程（或远程运行时）再校验一遍 */
+  runTasks(ref: WorkspaceRef, templates?: ExtTaskTemplateWire[]): Promise<RunTaskState>
   /** Gradle 完整任务列表：在构建根目录跑 `gradlew tasks --all`（docs/ui/coding-tasks.md §9.2） */
   gradleTasks(ref: WorkspaceRef, buildDir: string): Promise<GradleListedTask[]>
   gradleTasksCancel(ref: WorkspaceRef, buildDir: string): Promise<void>

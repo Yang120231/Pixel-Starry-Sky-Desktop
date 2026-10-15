@@ -1,4 +1,4 @@
-import { openMachineManager, useMachines } from '@/features/machines/store'
+import { openMachineManager } from '@/features/machines/store'
 import { Button } from '@/ui'
 import { tr } from '../../i18n/core'
 import { useEffect, useRef, useState } from 'react'
@@ -51,7 +51,9 @@ import { ModelsSection } from './models/ModelsSection'
 import { EnginesSection } from './engines/EnginesSection'
 import { openEngineDetail } from './engines/nav'
 import { EditorSection } from '../editor/settings/EditorSection'
-import { PluginsSection } from './plugins/PluginsSection'
+import { ExtensionsSection } from './extensions/ExtensionsSection'
+import { FileIconThemeSettings } from './FileIconThemeSettings'
+import { EditorThemeSettings } from './EditorThemeSettings'
 import { searchSettings, type SearchEntry } from './searchIndex'
 import { OPEN_SESSION_EVENT } from '@/features/engine'
 import { GroupTitle, SectionTitle, SettingRow } from './SettingRow'
@@ -75,6 +77,8 @@ export type SectionId =
   | 'shortcuts'
   | 'about'
   | 'editor'
+  | 'extensions'
+  /** 旧名：以前的「插件配置」，现在是扩展页的 AI 引擎分组；老入口（输入框里的链接）仍用它 */
   | 'plugins'
   | 'terminal'
   | 'machines'
@@ -103,9 +107,16 @@ const SECTIONS: Array<{ id: SectionId; label: string; nav?: string; icon: Lucide
     icon: Smartphone,
   },
   {
+    id: 'extensions',
+    get label() {
+      return tr('extensions.title')
+    },
+    icon: Puzzle,
+  },
+  {
     id: 'plugins',
     get label() {
-      return tr('plugins.title')
+      return tr('extensions.title')
     },
     icon: Puzzle,
   },
@@ -207,7 +218,7 @@ const NAV_GROUPS: Array<{ label: string | null; ids: SectionId[] }> = [
     get label() {
       return tr('settings.SettingsDialog.application')
     },
-    ids: ['account', 'appearance', 'notifications', 'editor', 'shortcuts', 'machines', 'mobile'],
+    ids: ['account', 'appearance', 'notifications', 'editor', 'extensions', 'shortcuts', 'machines', 'mobile'],
   },
   {
     get label() {
@@ -219,7 +230,7 @@ const NAV_GROUPS: Array<{ label: string | null; ids: SectionId[] }> = [
     get label() {
       return tr('session.ModelSourceMenu.engine')
     },
-    ids: ['engines', 'plugins', 'terminal'],
+    ids: ['engines', 'terminal'],
   },
   { label: null, ids: ['logs', 'feedback', 'about'] },
 ]
@@ -279,7 +290,6 @@ export function SettingsDialog({
   onClose: () => void
 }) {
   const { text, t } = useI18n()
-  const machines = useMachines()
   const feedbackUnread = useFeedbackUnread()
   // 设置搜索（docs/ui/plan-search-panes-compact.md §1）：结果替换左侧导航，点一条跳到那一页并高亮那一行
   const [query, setQuery] = useState('')
@@ -478,7 +488,7 @@ export function SettingsDialog({
                     {g.label && <div className="px-2.5 pb-1 text-label font-medium text-fg-faint">{text(g.label)}</div>}
                     {g.ids.map(id => {
                       const { label, nav, icon: Icon } = SECTIONS.find(s => s.id === id)!
-                      const active = id === section
+                      const active = id === section || (id === 'extensions' && section === 'plugins')
                       return (
                         <button
                           key={id}
@@ -520,12 +530,8 @@ export function SettingsDialog({
               <EditorSection />
             ) : section === 'models' ? (
               <ModelsSection />
-            ) : section === 'plugins' ? (
-              machines.currentId === 'local' ? (
-                <PluginsSection />
-              ) : (
-                <p className="text-ui text-fg-muted">{t('machines.remoteExtensions')}</p>
-              )
+            ) : section === 'extensions' || section === 'plugins' ? (
+              <ExtensionsSection key={section} initialGroup={section === 'plugins' ? 'ai' : 'all'} />
             ) : section === 'machines' ? (
               <section>
                 <SectionTitle>{t('machines.title')}</SectionTitle>
@@ -662,6 +668,8 @@ function AppearanceSection() {
       <PaletteSettings />
       <AccentSettings />
       <MinimalModeSettings />
+      <FileIconThemeSettings />
+      <EditorThemeSettings />
       <SettingRow
         title={tr('settings.SettingsDialog.interfaceLanguage')}
         description={tr('settings.SettingsDialog.chooseLanguageUsedBy')}

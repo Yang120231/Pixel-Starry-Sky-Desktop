@@ -13,7 +13,8 @@ export const selectionMarker = EditorView.editorAttributes.compute(
   (state): Record<string, string> => (state.selection.ranges.some(r => !r.empty) ? { class: 'cm-has-selection' } : {}),
 )
 
-export const editorTheme = [
+/** 编辑器外观（底色、光标、选区、搜索面板……）；颜色主题扩展会在它上面再盖一层 */
+export const editorChrome = [
   selectionMarker,
   EditorView.theme({
     '&': { height: '100%', color: 'var(--text)', backgroundColor: 'var(--bg-app)', fontSize: 'var(--text-meta)' },
@@ -70,21 +71,26 @@ export const editorTheme = [
     '.cm-git-deleted': { borderTop: '3px solid var(--danger)' },
     '.cm-external-change': { backgroundColor: 'var(--accent-soft)' },
   }),
-  syntaxHighlighting(
-    HighlightStyle.define([
-      { tag: [tags.comment], color: 'var(--syn-comment)' },
-      { tag: [tags.keyword, tags.operator], color: 'var(--syn-keyword)' },
-      { tag: [tags.string, tags.regexp], color: 'var(--syn-string)' },
-      { tag: [tags.character], color: 'var(--syn-string)' },
-      { tag: [tags.number, tags.bool, tags.null, tags.atom], color: 'var(--syn-number)' },
-      { tag: [tags.function(tags.variableName), tags.function(tags.propertyName)], color: 'var(--syn-func)' },
-      { tag: [tags.heading], color: 'var(--syn-func)' },
-      { tag: [tags.typeName, tags.className], color: 'var(--syn-type)' },
-      // 注解（Java 的 @Override、Python 的装饰器）在各语言里都是 meta
-      { tag: [tags.meta, tags.tagName, tags.attributeName], color: 'var(--syn-meta)' },
-    ]),
-  ),
 ]
+
+/** 默认的语法着色（--syn-* 变量）；用了扩展的颜色主题时整个拿掉 */
+export const baseHighlight = syntaxHighlighting(
+  HighlightStyle.define([
+    { tag: [tags.comment], color: 'var(--syn-comment)' },
+    { tag: [tags.keyword, tags.operator], color: 'var(--syn-keyword)' },
+    { tag: [tags.string, tags.regexp], color: 'var(--syn-string)' },
+    { tag: [tags.character], color: 'var(--syn-string)' },
+    { tag: [tags.number, tags.bool, tags.null, tags.atom], color: 'var(--syn-number)' },
+    { tag: [tags.function(tags.variableName), tags.function(tags.propertyName)], color: 'var(--syn-func)' },
+    { tag: [tags.heading], color: 'var(--syn-func)' },
+    { tag: [tags.typeName, tags.className], color: 'var(--syn-type)' },
+    // 注解（Java 的 @Override、Python 的装饰器）在各语言里都是 meta
+    { tag: [tags.meta, tags.tagName, tags.attributeName], color: 'var(--syn-meta)' },
+  ]),
+)
+
+/** 兼容旧用法：外观 + 默认着色 */
+export const editorTheme = [editorChrome, baseHighlight]
 
 /**
  * 键名上色（JSON、YAML、properties 的键），和对话里代码块的属性名同色（--syn-type）。

@@ -9,6 +9,7 @@ import { useInbox } from '@/features/panel/inbox/useInbox'
 import { navigateToItem } from '@/features/search/navigation'
 import { fileIndent } from '@/features/editor/code/positions'
 import { fileLanguage } from '@/features/editor/code/languages'
+import { usePacksRevision } from '@/features/extpacks/store'
 import { codingLayout } from '../layoutStore'
 import { PROBLEMS_READY, useProblems } from '../problems'
 import { useCodingWorkspace, useCodingSessionId } from '../workspace'
@@ -86,6 +87,7 @@ export function StatusBarLeft() {
 
 export function StatusBarRight() {
   useI18n()
+  usePacksRevision()
   const tab = useActiveCodeTab()
   const machines = useMachines()
   const inbox = useInbox()

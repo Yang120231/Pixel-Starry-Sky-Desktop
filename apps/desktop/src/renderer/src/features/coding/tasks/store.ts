@@ -4,6 +4,7 @@ import type { GradleListedTask, RunTask, RunTaskGroup, RunTaskState } from '../.
 import type { WorkspaceRef } from '../../../../../shared/types/workspace'
 import { isDemo } from '@/data'
 import { demo } from '@/data/demo'
+import { subscribePacks } from '@/features/extpacks/store'
 import { FILE_SAVED_EVENT } from '@/features/files/store'
 import { terminalState, useTerminalStore } from '@/features/terminal/store'
 import { useTerminalUi } from '@/features/terminal/TerminalProvider'
@@ -19,6 +20,7 @@ import {
   type GradleFull,
   type TaskStatus,
 } from './model'
+import { activeTaskTemplates, extTaskFileNames } from './extTemplates'
 
 /** 视图重新显示时，距上次读取超过这么久才重新读 */
 export const TASKS_STALE_MS = 10_000
@@ -49,6 +51,24 @@ function patch(key: string, next: Partial<TasksEntry>): void {
   notify()
 }
 
+/** 上一次读任务时用的扩展模板（序列化）；扩展变化后模板没变就不用重读 */
+let templatesSig = ''
+let packsWatched = false
+/** 扩展装上 / 停用 / 改动后：模板变了就让缓存作废，已经读过的工作区重新读（视图没挂载的下次显示时 at=0 也会重读） */
+function watchPacks(): void {
+  if (packsWatched || typeof window === 'undefined') return
+  packsWatched = true
+  subscribePacks(() => {
+    const sig = JSON.stringify(activeTaskTemplates())
+    if (sig === templatesSig) return
+    templatesSig = sig
+    for (const [key, entry] of entries) {
+      patch(key, { at: 0 })
+      if (entry.state && refs.has(key)) void loadTasks(refs.get(key)!)
+    }
+  })
+}
+
 /** 读任务；maxAge 内读过就不再读（0 = 总是读）。同一工作区同时只读一次 */
 export async function loadTasks(ref: WorkspaceRef, maxAge = 0): Promise<void> {
   const key = refKey(ref)
@@ -56,14 +76,20 @@ export async function loadTasks(ref: WorkspaceRef, maxAge = 0): Promise<void> {
   if (current?.loading) return
   if (current?.state && maxAge > 0 && Date.now() - current.at < maxAge) return
   refs.set(key, ref)
+  watchPacks()
   if (isDemo) {
     patch(key, { state: demo().projectTools.runTasks, loading: false, error: null, at: Date.now() })
     return
   }
   patch(key, { loading: true, error: null })
   try {
-    const state = await window.pixelsky!.projectTools.runTasks(ref)
+    const templates = activeTaskTemplates()
+    const used = JSON.stringify(templates)
+    templatesSig = used
+    const state = await window.pixelsky!.projectTools.runTasks(ref, templates)
     patch(key, { state, loading: false, error: null, at: Date.now() })
+    // 读的时候扩展又变了（读的过程中重读会被跳过）：补读一次
+    if (JSON.stringify(activeTaskTemplates()) !== used) void loadTasks(ref)
   } catch (cause) {
     patch(key, { loading: false, error: cause instanceof Error ? cause.message : String(cause) })
   }
@@ -193,7 +219,7 @@ const normRoot = (root: string): string => root.replaceAll('\\', '/').replace(/\
 if (typeof window !== 'undefined')
   window.addEventListener(FILE_SAVED_EVENT, event => {
     const { root, path } = (event as CustomEvent<{ root: string; path: string }>).detail
-    if (!isTaskFile(path)) return
+    if (!isTaskFile(path, extTaskFileNames())) return
     for (const [key, entry] of entries)
       if (entry.state && normRoot(entry.state.root) === normRoot(root) && refs.has(key)) void loadTasks(refs.get(key)!)
   })

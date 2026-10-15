@@ -6,9 +6,12 @@ import { goToNextChunk, goToPreviousChunk, MergeView, unifiedMergeView } from '@
 import { IconButton, Segmented } from '@/ui'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
-import { editorTheme } from '@/features/editor/code/theme'
+import { editorChrome } from '@/features/editor/code/theme'
+import { diffPackExtensions } from '@/features/editor/code/packs'
+import { useEditorPacksTick } from '@/features/editor/code/packEvents'
 import { mergeTheme } from '@/features/editor/code/mergeTheme'
 import { lineDiffConfig } from '@/features/editor/code/lineDiff'
+import { firstLineOf } from '@/features/editor/code/languageIds'
 import { loadLanguage } from '@/features/editor/code/languages'
 import type { OpenFile } from '@/features/files/store'
 import type { DiffBase } from '../types'
@@ -30,15 +33,18 @@ function DiffEditor({
   navRef: { current: EditorView | null }
 }) {
   const host = useRef<HTMLDivElement>(null)
+  // 扩展包、深浅色、颜色主题加载完都要重建（B4）
+  const packsTick = useEditorPacksTick()
   useEffect(() => {
     const parent = host.current
     if (!parent) return
     let destroy = (): void => {}
     let disposed = false
-    void loadLanguage(path).then(language => {
+    void loadLanguage(path, firstLineOf(modified || original)).then(language => {
       if (disposed) return
       const base = [
-        editorTheme,
+        editorChrome,
+        ...diffPackExtensions(),
         mergeTheme,
         lineNumbers(),
         EditorView.editable.of(false),
@@ -82,7 +88,7 @@ function DiffEditor({
       navRef.current = null
       destroy()
     }
-  }, [path, original, modified, mode, navRef])
+  }, [path, original, modified, mode, navRef, packsTick])
   return (
     <div
       ref={host}

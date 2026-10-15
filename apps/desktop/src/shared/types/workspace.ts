@@ -31,6 +31,9 @@ export interface ImportCandidates {
   /** 子文件夹太多，只列了前面一部分 */
   truncated: boolean
 }
+/** 文件树状态码：被 .gitignore 等规则忽略（只变暗，不算改动） */
+export const IGNORED_STATUS = 'I'
+/** FileEntry.status / files:status 的值：M 修改、A 新增、D 删除、R 重命名、? 未跟踪、! 冲突、• 里面有改动（仅文件夹）、I 被忽略 */
 export interface FileEntry {
   name: string
   path: string

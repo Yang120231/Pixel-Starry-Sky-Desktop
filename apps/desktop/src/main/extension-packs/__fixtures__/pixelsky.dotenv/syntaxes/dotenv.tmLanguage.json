@@ -1,0 +1,97 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Dotenv",
+  "scopeName": "source.dotenv",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#assignment" },
+    { "include": "#invalid-line" }
+  ],
+  "repository": {
+    "comment": {
+      "match": "^\\s*(#).*$",
+      "name": "comment.line.number-sign.dotenv",
+      "captures": { "1": { "name": "punctuation.definition.comment.dotenv" } }
+    },
+    "assignment": {
+      "begin": "^\\s*(?:(export)\\s+)?([A-Za-z_][A-Za-z0-9_.-]*)\\s*(=)",
+      "beginCaptures": {
+        "1": { "name": "storage.modifier.export.dotenv" },
+        "2": { "name": "variable.other.property.dotenv" },
+        "3": { "name": "keyword.operator.assignment.dotenv" }
+      },
+      "end": "$",
+      "patterns": [
+        { "include": "#string-double" },
+        { "include": "#string-single" },
+        { "include": "#trailing-comment" },
+        { "include": "#constant" },
+        { "include": "#number" },
+        { "include": "#interpolation" },
+        { "include": "#unquoted" }
+      ]
+    },
+    "string-double": {
+      "begin": "\"",
+      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.dotenv" } },
+      "end": "\"|$",
+      "endCaptures": { "0": { "name": "punctuation.definition.string.end.dotenv" } },
+      "name": "string.quoted.double.dotenv",
+      "patterns": [
+        { "match": "\\\\[\\\\\"nrt$]", "name": "constant.character.escape.dotenv" },
+        { "include": "#interpolation" }
+      ]
+    },
+    "string-single": {
+      "begin": "'",
+      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.dotenv" } },
+      "end": "'|$",
+      "endCaptures": { "0": { "name": "punctuation.definition.string.end.dotenv" } },
+      "name": "string.quoted.single.dotenv"
+    },
+    "interpolation": {
+      "patterns": [
+        {
+          "match": "(\\$\\{)([A-Za-z_][A-Za-z0-9_]*)(?:(:?[-=?+])([^}]*))?(\\})",
+          "name": "meta.interpolation.dotenv",
+          "captures": {
+            "1": { "name": "punctuation.definition.variable.begin.dotenv" },
+            "2": { "name": "variable.other.dotenv" },
+            "3": { "name": "keyword.operator.expansion.dotenv" },
+            "4": { "name": "string.unquoted.default.dotenv" },
+            "5": { "name": "punctuation.definition.variable.end.dotenv" }
+          }
+        },
+        {
+          "match": "(\\$)([A-Za-z_][A-Za-z0-9_]*)",
+          "name": "meta.interpolation.dotenv",
+          "captures": {
+            "1": { "name": "punctuation.definition.variable.dotenv" },
+            "2": { "name": "variable.other.dotenv" }
+          }
+        }
+      ]
+    },
+    "trailing-comment": {
+      "match": "(?<=\\s)(#).*$",
+      "name": "comment.line.number-sign.dotenv",
+      "captures": { "1": { "name": "punctuation.definition.comment.dotenv" } }
+    },
+    "constant": {
+      "match": "\\G\\s*(true|false|yes|no|on|off|null)\\s*(?=$|\\s#)",
+      "captures": { "1": { "name": "constant.language.dotenv" } }
+    },
+    "number": {
+      "match": "\\G\\s*(-?\\d+(?:\\.\\d+)?)\\s*(?=$|\\s#)",
+      "captures": { "1": { "name": "constant.numeric.dotenv" } }
+    },
+    "unquoted": {
+      "match": "[^\\s$#\"']+|\\$(?![A-Za-z_{])",
+      "name": "string.unquoted.dotenv"
+    },
+    "invalid-line": {
+      "match": "^\\s*[^#\\s].*$",
+      "name": "invalid.illegal.line.dotenv"
+    }
+  }
+}

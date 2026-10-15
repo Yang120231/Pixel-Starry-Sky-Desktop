@@ -27,7 +27,8 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { useI18n } from '@/i18n/I18nProvider'
-import { allMessages, tr, type TranslationKey } from '@/i18n/core'
+import { extText, packName } from '@pixelsky/protocol'
+import { allMessages, getLocale, tr, type TranslationKey } from '@/i18n/core'
 import { Button, IconButton, Spinner, cn, useToast } from '@/ui'
 import { ActionMenu, type MenuAction } from '@/ui/ActionMenu'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
@@ -35,14 +36,17 @@ import { isDemo } from '@/data'
 import { appendComposerDraft } from '@/features/engine/drafts'
 import { composerTarget, focusComposer } from '@/features/session/composerTarget'
 import { openFile } from '@/features/files/store'
+import { packAssetUrl, packByKey } from '@/features/extpacks/store'
 import type { GradleProperty, RunTask, RunTaskGroup, RunTaskKind } from '../../../../../../shared/types/project-tools'
 import type { WorkspaceRef } from '../../../../../../shared/types/workspace'
+import { activeTaskTemplates } from '../../tasks/extTemplates'
 import { PanelHeader } from '../../shell/PanelHeader'
 import { codingLayout } from '../../layoutStore'
 import { useCodingWorkspace } from '../../workspace'
 import {
   categoryKey,
   filterGroups,
+  groupKey,
   isCategoryCollapsed,
   isCollapsed,
   PROPERTIES,
@@ -63,7 +67,13 @@ import {
   useTaskStatuses,
 } from '../../tasks/store'
 
-const GROUP_ICON: Record<RunTaskKind, LucideIcon> = { npm: Package, make: Hammer, cargo: Box, gradle: Blocks }
+const GROUP_ICON: Partial<Record<RunTaskKind, LucideIcon>> = {
+  npm: Package,
+  make: Hammer,
+  cargo: Box,
+  gradle: Blocks,
+  ext: ListChecks,
+}
 const COLLAPSED_KEY = 'pixelsky.coding.tasks.collapsed'
 const ARGS_KEY = 'pixelsky.coding.tasks.gradleArgs'
 /** 「带参数运行」里一点就加的参数（§9.3） */
@@ -106,6 +116,7 @@ const baseName = (path: string): string => path.split('/').pop() ?? path
 function groupTitle(group: RunTaskGroup): string {
   const g = group.gradle
   if (g) return g.project === ':' ? g.name : g.project
+  if (group.ext) return extText(group.ext.label, getLocale())
   return group.dir || group.file
 }
 
@@ -120,6 +131,10 @@ function groupHint(group: RunTaskGroup): string {
     parts.push(g.buildDir || tr('coding.tasks.rootDir'))
     return parts.join(' · ')
   }
+  if (group.ext) {
+    const pack = packByKey(group.ext.packKey)
+    parts.push(tr('tasks.ext.hint', { name: pack?.manifest ? packName(pack.manifest, getLocale()) : group.ext.packId }))
+  }
   if (group.dir) parts.push(baseName(group.file))
   if (group.manager) parts.push(group.manager)
   if (!group.dir) parts.push(tr('coding.tasks.rootDir'))
@@ -128,6 +143,7 @@ function groupHint(group: RunTaskGroup): string {
 
 /** 任务行的灰字：npm 是脚本内容；Gradle 依次用构建文件里写的说明、内置说明、完整列表里 Gradle 给的说明 */
 function taskDetail(group: RunTaskGroup, task: RunTask): string {
+  if (group.kind === 'ext') return extText(task.extDetail, getLocale())
   if (task.detail || group.kind !== 'gradle') return task.detail
   const key = `coding.tasks.gradle.desc.${task.name}`
   return key in allMessages ? tr(key as TranslationKey) : (task.description ?? '')
@@ -295,14 +311,14 @@ export function TasksView({ visible }: { visible: boolean }) {
     writeCollapsed(project, next)
   }
   const toggle = (group: RunTaskGroup, collapsed = !isCollapsed(group, overrides)): void =>
-    setCollapsed({ ...overrides, [group.file]: collapsed })
+    setCollapsed({ ...overrides, [groupKey(group)]: collapsed })
   const toggleCategory = (
     group: RunTaskGroup,
     category: string,
     collapsed = !isCategoryCollapsed(group, category, overrides),
   ): void => setCollapsed({ ...overrides, [categoryKey(group, category)]: collapsed })
   const collapseAll = (): void =>
-    setCollapsed(Object.fromEntries((state?.groups ?? []).map(g => [g.file, true] as const)))
+    setCollapsed(Object.fromEntries((state?.groups ?? []).map(g => [groupKey(g), true] as const)))
 
   const refresh = (): void => {
     if (ref) void loadTasks(ref)
@@ -446,7 +462,7 @@ export function TasksView({ visible }: { visible: boolean }) {
     const tabIndex = cursor === key || (cursor === null && index === 0) ? 0 : -1
     if (row.type === 'group') {
       const collapsed = !filtering && isCollapsed(group, overrides)
-      const Icon = group.gradle && group.gradle.project !== ':' ? Folder : GROUP_ICON[group.kind]
+      const Icon = group.gradle && group.gradle.project !== ':' ? Folder : (GROUP_ICON[group.kind] ?? ListChecks)
       return (
         <div
           key={key}
@@ -467,7 +483,11 @@ export function TasksView({ visible }: { visible: boolean }) {
           ) : (
             <ChevronDown size={14} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
           )}
-          <Icon size={14} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
+          {group.ext?.icon ? (
+            <img src={packAssetUrl(group.ext.packKey, group.ext.icon)} alt="" className="size-4 shrink-0" />
+          ) : (
+            <Icon size={14} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
+          )}
           <span className="max-w-[70%] min-w-0 shrink-0 truncate font-medium text-fg" title={group.file}>
             {groupTitle(group)}
           </span>
@@ -679,7 +699,11 @@ export function TasksView({ visible }: { visible: boolean }) {
           className="min-h-0 flex-1 overflow-y-auto px-2 pb-2"
         >
           {entry.error && <p className="px-2 pb-1 text-meta text-danger">{entry.error}</p>}
-          {state.truncated && <p className="px-2 pb-1 text-meta text-fg-faint">{tr('coding.tasks.truncated')}</p>}
+          {state.truncated && (
+            <p className="px-2 pb-1 text-meta text-fg-faint">
+              {tr(activeTaskTemplates().length ? 'tasks.ext.truncated' : 'coding.tasks.truncated')}
+            </p>
+          )}
           {filtering && groups.length === 0 && (
             <p className="px-2 py-1 text-meta text-fg-faint">{tr('coding.tasks.noMatch')}</p>
           )}

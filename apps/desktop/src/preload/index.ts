@@ -10,6 +10,7 @@ import type { FilesBridge, EditorBridge } from './workspace'
 import type { WindowState } from '../shared/types/window'
 import type { WindowBridge } from './window'
 import type { ExtensionsBridge } from './extensions'
+import type { ExtPacksBridge } from './extpacks'
 import type { TerminalBridge } from './terminal'
 import type { ProjectToolsBridge } from './project-tools'
 import type { NotificationClick } from '../shared/types/notifications'
@@ -254,7 +255,7 @@ const projectTools: ProjectToolsBridge = {
   deleteTask: id => call('projectTools:deleteTask', id),
   reorderTasks: (id, ids) => call('projectTools:reorderTasks', id, ids),
   environment: (ref, force) => call('projectTools:environment', ref, force),
-  runTasks: ref => call('projectTools:runTasks', ref),
+  runTasks: (ref, templates) => call('projectTools:runTasks', ref, templates),
   gradleTasks: (ref, buildDir) => call('projectTools:gradleTasks', ref, buildDir),
   gradleTasksCancel: (ref, buildDir) => call('projectTools:gradleTasksCancel', ref, buildDir),
   services: ref => call('projectTools:services', ref),
@@ -550,4 +551,21 @@ contextBridge.exposeInMainWorld('pixelsky', {
       return () => ipcRenderer.removeListener('extensions:changed', listener)
     },
   } satisfies ExtensionsBridge,
+  extpacks: {
+    state: () => call('extpacks:state'),
+    addFolder: path => call('extpacks:addFolder', path ?? null),
+    onigWasm: () => call('extpacks:onigWasm'),
+    setEnabled: (key, enabled) => call('extpacks:setEnabled', key, enabled),
+    remove: key => call('extpacks:remove', key),
+    reload: key => call('extpacks:reload', key ?? null),
+    setOptions: (key, patch) => call('extpacks:setOptions', key, patch),
+    readJson: (key, path) => call('extpacks:readJson', key, path),
+    readText: (key, path) => call('extpacks:readText', key, path),
+    reveal: key => call('extpacks:reveal', key),
+    onChange: callback => {
+      const listener = (): void => callback()
+      on('extpacks:changed', listener)
+      return () => ipcRenderer.removeListener('extpacks:changed', listener)
+    },
+  } satisfies ExtPacksBridge,
 })

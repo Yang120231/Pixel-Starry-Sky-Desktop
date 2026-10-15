@@ -1,6 +1,7 @@
 import type { EngineHost } from '@pixelsky/engine'
 import type { HostEvent } from '@pixelsky/protocol'
 import type { ProjectTools } from '../core/project-tools/tools'
+import type { ExtensionPacks } from '../extension-packs/service'
 import type { Machines } from '../machines/service'
 import type { ProviderStore } from '../core/providers/store'
 import { EventBus } from './events'
@@ -23,6 +24,8 @@ export interface AppContext {
   projectTools: ProjectTools | null
   /** 自定义 API 的接口配置（providers/providers.ts 的 initProviders，在 initEngine 里） */
   providers: ProviderStore | null
+  /** 扩展包（extension-packs/ipc.ts 的 initExtensionPacks；和 extensions/ 的 MCP / 插件是两回事） */
+  extPacks: ExtensionPacks | null
   /**
    * 不经过窗口调用引擎操作表（engine/ipc.ts 的 initEngine）：和窗口的调用走同一层路由（含 SSH 机器），
    * owner 是搜索 / 产物扫描的分桶。手机端（main/mobile/）用它
@@ -46,6 +49,7 @@ export function createAppContext(): AppContext {
     machines: null,
     projectTools: null,
     providers: null,
+    extPacks: null,
     engineCall: null,
     toolOps: new Map(),
   }

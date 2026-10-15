@@ -1,7 +1,7 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
 import { memo, useLayoutEffect, useRef, useState } from 'react'
-import { Columns2, Ellipsis, FileText, Maximize2, Minimize2, MousePointerClick, Plus, Rows2, X } from 'lucide-react'
+import { Columns2, Ellipsis, Maximize2, Minimize2, MousePointerClick, Plus, Rows2, X } from 'lucide-react'
 import { IconButton, Popover, PopoverItem, Spinner, cn } from '@/ui'
 import { ActionMenu, type MenuAction } from '@/ui/ActionMenu'
 import { isLive, useEngineState, useSessionTitle } from '@/features/engine'
@@ -19,6 +19,7 @@ import { useBeginTabDrag } from './drag'
 import { useTabStripScroll } from './tabScroll'
 import { TabStripArrows } from './TabStripArrows'
 import { dropProblem, type DropTarget } from './drop'
+import { FileIcon } from '@/features/files/icons/FileIcon'
 
 type TabStatus = 'running' | 'waiting' | 'unread' | 'idle'
 
@@ -385,7 +386,11 @@ function Tab({
         entering && 'pane-tab-in',
       )}
     >
-      {info.file ? <FileText size={12} className="shrink-0 text-fg-muted" /> : <StatusMark status={info.status} />}
+      {info.file ? (
+        <FileIcon name={info.title.split('/').pop() ?? info.title} kind="file" size={14} />
+      ) : (
+        <StatusMark status={info.status} />
+      )}
       <span className="truncate">{info.file ? info.title.split('/').pop() : info.title}</span>
       {info.dirty && (
         <span aria-label={tr('panes.PaneView.unsavedChanges')} className="size-1.5 shrink-0 rounded-full bg-fg-muted" />

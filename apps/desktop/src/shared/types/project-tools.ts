@@ -64,7 +64,7 @@ export interface ToolStatus {
   checkedAt: number
 }
 /** 代码模式左栏「任务」：项目里能跑的命令（docs/ui/coding-tasks.md §2）。只读文件得到，不执行命令 */
-export type RunTaskKind = 'npm' | 'make' | 'cargo' | 'gradle'
+export type RunTaskKind = 'npm' | 'make' | 'cargo' | 'gradle' | 'ext'
 export interface RunTask {
   /** 组内唯一：任务名 */
   name: string
@@ -76,6 +76,8 @@ export interface RunTask {
   category?: string
   /** gradle：完整任务列表里 Gradle 给的说明（多是英文）；界面上排在 detail 和内置说明后面 */
   description?: string
+  /** ext：扩展模板给的说明（多语言文本，界面按当前语言取） */
+  extDetail?: import('@pixelsky/protocol').ExtText
 }
 /** gradle.properties 的一项（docs/ui/coding-tasks.md §9） */
 export interface GradleProperty {
@@ -107,6 +109,23 @@ export interface RunTaskGradle {
   /** 只在根项目：gradle.properties（最多 100 项） */
   properties?: GradleProperty[]
 }
+/** 扩展任务模板产生的组的附加信息（docs/extensions/authoring-spec.md §8） */
+export interface RunTaskExt {
+  packKey: string
+  packId: string
+  templateId: string
+  label: import('@pixelsky/protocol').ExtText
+  /** 扩展里的图标路径 */
+  icon?: string
+  /** 命令模板，含 {name} {runner} {dir} {file} */
+  command: string
+  /** 工作目录模板，默认 {dir} */
+  cwd: string
+  /** 选中的运行器；模板没写 runner 时为 null */
+  runner: string | null
+  /** 运行器是项目里的文件（要加 ./ 或 .\ 前缀） */
+  runnerLocal: boolean
+}
 export interface RunTaskGroup {
   kind: RunTaskKind
   /** 文件相对工作区根目录的路径（posix），如 `package.json`、`apps/desktop/package.json`；gradle 是 build.gradle(.kts)，根项目没有时是 settings 文件 */
@@ -117,6 +136,8 @@ export interface RunTaskGroup {
   manager?: import('@pixelsky/protocol').PackageManager
   /** gradle 组的附加信息 */
   gradle?: RunTaskGradle
+  /** ext 组（扩展的任务模板）的附加信息 */
+  ext?: RunTaskExt
   tasks: RunTask[]
 }
 /** `gradlew tasks --all` 读出的一个任务（「加载完整列表」） */

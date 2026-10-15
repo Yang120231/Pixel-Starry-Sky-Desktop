@@ -1,0 +1,57 @@
+export type {
+  ExtGrammar,
+  ExtIconTheme,
+  ExtLocale,
+  ExtPackContributes,
+  ExtPackContributionKind,
+  ExtPackFileEntry,
+  ExtPackInactive,
+  ExtPackInfo,
+  ExtPackIssue,
+  ExtPackManifest,
+  ExtPackOptions,
+  ExtPackReader,
+  ExtPackSkillInfo,
+  ExtPackSource,
+  ExtPackState,
+  ExtPrompt,
+  ExtSkill,
+  ExtSnippets,
+  ExtTaskDef,
+  ExtTaskExtract,
+  ExtTaskRunner,
+  ExtTaskTemplate,
+  ExtTaskTemplateWire,
+  ExtText,
+  ExtTheme,
+} from './types'
+export {
+  EXT_ASSET_SCHEME,
+  EXT_BUILTIN_LANGUAGE_IDS,
+  EXT_BUILTIN_SCOPES,
+  EXT_LIMITS,
+  EXT_MANIFEST,
+  EXT_RESERVED_TASK_FILES,
+  EXT_RESERVED_TASK_IDS,
+} from './types'
+export {
+  contributionCount,
+  extText,
+  globToRegExp,
+  grammarMatchScore,
+  packDescription,
+  packDir,
+  packName,
+  resolvePackPath,
+} from './match'
+export {
+  forSource,
+  inactiveContributions,
+  loaderIssue,
+  packStatus,
+  validateContributions,
+  validateManifest,
+  validatePackFiles,
+} from './validate'
+export { EXT_TASK_NAME_RE, hasNestedQuantifier, parseCondition, validateTaskTemplate } from './tasks'
+export { checkSvg, contrastRatio, parseHexColor, parseJsonc, satisfiesEngine } from './text'

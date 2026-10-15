@@ -1,18 +1,16 @@
 import { translateMessage } from '../../i18n/core'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
-import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type DragEvent } from 'react'
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import {
   ChevronRight,
-  Folder,
-  FolderOpen,
-  File,
   FileClock,
   FilePlus,
   FolderPlus,
   FolderInput,
   RefreshCw,
   ChevronsDownUp,
+  MoreHorizontal,
   Search,
   Copy,
   ExternalLink,
@@ -29,7 +27,16 @@ import { useEngineState } from '@/features/engine'
 import { isDemo, projects as demoProjects } from '@/data'
 import { useActiveWorkspace } from '@/features/editor/target'
 import { useMinimal } from '@/features/appearance/ThemeProvider'
-import { OPEN_FILES_EVENT, dirtyFile, openFile, openFilesUnder, removeFile, renameOpenFiles, useFiles } from './store'
+import {
+  FILE_SAVED_EVENT,
+  OPEN_FILES_EVENT,
+  dirtyFile,
+  openFile,
+  openFilesUnder,
+  removeFile,
+  renameOpenFiles,
+  useFiles,
+} from './store'
 import type { DirectoryListing, FileEntry, WorkspaceRef } from '../../../../shared/types/workspace'
 import type { ProjectFolder } from '@pixelsky/protocol'
 import { demo } from '@/data/demo'
@@ -38,6 +45,8 @@ import { sendPathToChat } from './sendPath'
 import { cutPasteKeys, dropTarget, hasFileDrag, join2, movedPath, parentOf, refKey, writeDragData } from './treeDrag'
 import type { DragOver, DragSource } from './treeDrag'
 import { REVEAL_FOLDER_EVENT, takeFolderReveal } from './treeReveal'
+import { FileIcon } from './icons/FileIcon'
+import { isHidingIgnored, isIgnoredPath, setHideIgnored, splitStatuses, useHideIgnoredMap } from './ignored'
 const pathKey = (path: string): string => {
   const p = path.replaceAll('\\', '/').replace(/\/$/, '')
   return window.pixelsky?.platform === 'win32' ? p.toLowerCase() : p
@@ -47,6 +56,19 @@ const TreeExpansion = createContext({ version: 0, expanded: false })
 /** 状态上色方式：default 只有字母着色（原样）；vscode 文件名也上色，目录名后加小点（代码模式） */
 export type FileTreeStatusColors = 'default' | 'vscode'
 const TreeColors = createContext<FileTreeStatusColors>('default')
+/**
+ * 被 .gitignore 忽略的路径（变暗）、这棵树是否隐藏它们、以及这次被定位到而暂时露出来的路径（目标和它的上级）。
+ * 每个 ProjectRoot 提供自己的；附加文件夹（::N/…）的行用同一份
+ */
+interface IgnoredInfo {
+  ignored: ReadonlySet<string>
+  hide: boolean
+  exempt: ReadonlySet<string>
+}
+const NO_PATHS: ReadonlySet<string> = new Set()
+const TreeIgnored = createContext<IgnoredInfo>({ ignored: NO_PATHS, hide: false, exempt: NO_PATHS })
+const hiddenByIgnore = (info: IgnoredInfo, path: string): boolean =>
+  info.hide && isIgnoredPath(path, info.ignored) && !info.exempt.has(path)
 /** 状态字母的颜色：M 黄、A 和 ? 绿、D 和 ! 红 */
 const statusTone = (status: string): string =>
   status === 'M' ? 'text-warn' : status === 'D' || status === '!' ? 'text-danger' : 'text-success'
@@ -229,11 +251,7 @@ function NameInput({ initial, depth, folder }: { initial: string; depth: number;
     <div style={{ paddingLeft: 10 + Math.min(depth, 20) * 12 }} className="pr-2">
       <div className="flex min-h-7 items-center gap-1.5">
         <ChevronRight size={12} className="invisible shrink-0" />
-        {folder ? (
-          <Folder size={14} className="shrink-0 text-fg-muted" />
-        ) : (
-          <File size={14} className="shrink-0 text-fg-muted" />
-        )}
+        <FileIcon name={initial} kind={folder ? 'directory' : 'file'} />
         <input
           ref={input}
           value={value}
@@ -300,7 +318,10 @@ export function FileTree({
   const [query, setQuery] = useState(''),
     [revision, setRevision] = useState(0),
     [collapsed, setCollapsed] = useState(0),
-    [expandAll, setExpandAll] = useState(false)
+    [expandAll, setExpandAll] = useState(false),
+    // 标题栏「⋯」菜单（隐藏被忽略的文件）
+    [moreMenu, setMoreMenu] = useState<{ x: number; y: number; trigger: HTMLElement } | null>(null)
+  const hideMap = useHideIgnoredMap()
   const [requestedTarget, setRequestedTarget] = useState<{ path: string; name: string } | null>(null)
   const source = isDemo ? demoProjects.map(p => ({ id: p.id, name: p.name, path: p.name })) : projects
   useEffect(() => {
@@ -588,6 +609,18 @@ export function FileTree({
           setCollapsed(n => n + 1)
         }}
       />
+      {roots.length > 0 && (
+        <IconButton
+          icon={MoreHorizontal}
+          size={26}
+          iconSize={14}
+          label={tr('fileIcons.treeMenu')}
+          onClick={e => {
+            const rect = e.currentTarget.getBoundingClientRect()
+            setMoreMenu({ x: rect.left, y: rect.bottom + 4, trigger: e.currentTarget })
+          }}
+        />
+      )}
     </>
   )
   return (
@@ -670,6 +703,7 @@ export function FileTree({
                     revision={rev}
                     collapsed={collapsed}
                     externalStatuses={externalStatuses}
+                    rootPath={project.path}
                   />
                 ))
               ) : (
@@ -677,6 +711,27 @@ export function FileTree({
               )}
             </div>
           </div>
+          {moreMenu && (
+            <ActionMenu
+              x={moreMenu.x}
+              y={moreMenu.y}
+              label={tr('fileIcons.treeMenu')}
+              onClose={() => {
+                setMoreMenu(null)
+                moreMenu.trigger.focus({ preventScroll: true })
+              }}
+              actions={roots.map(project => {
+                const hidden = isHidingIgnored(hideMap, project.path)
+                return {
+                  label: tr('fileIcons.hideIgnored'),
+                  checked: hidden,
+                  // 多个根时每个根一组，标题是根的名字
+                  section: roots.length > 1 ? project.name : undefined,
+                  run: () => setHideIgnored(project.path, !hidden),
+                }
+              })}
+            />
+          )}
           {deleting && (
             <ConfirmDialog
               title={tr('workspace.deleteTitle', { name: deleting.entry.name })}
@@ -715,6 +770,7 @@ function ProjectRoot({
   revision,
   collapsed,
   externalStatuses,
+  rootPath,
 }: {
   name: string
   /** 多文件夹项目的附加文件夹（docs/ui/multi-root-projects.md §3.4）：主文件夹的内容下面各一行，展开看 */
@@ -725,15 +781,25 @@ function ProjectRoot({
   revision: number
   collapsed: number
   externalStatuses?: Record<string, string>
+  /** 根目录路径：「隐藏被忽略的文件」按它记，.gitignore 保存时按它认是不是这棵树 */
+  rootPath: string
 }) {
   useI18n()
   const [expanded, setExpanded] = useState(autoOpen),
+    [statusTick, setStatusTick] = useState(0),
     [fetchedStatuses, setStatuses] = useState<Record<string, string>>({}),
     [results, setResults] = useState<DirectoryListing | null>(null),
     [error, setError] = useState(''),
     [searching, setSearching] = useState(false)
-  const statuses = externalStatuses ?? fetchedStatuses,
+  const allStatuses = externalStatuses ?? fetchedStatuses,
     hasExternal = !!externalStatuses
+  // 'I' 是被忽略（变暗），不是改动：拆开后改动照旧上色，也不会让文件夹冒出「•」
+  const { changes: statuses, ignored } = useMemo(() => splitStatuses(allStatuses), [allStatuses])
+  const hide = isHidingIgnored(useHideIgnoredMap(), rootPath)
+  // 定位到被隐藏的文件时，目标和它的上级暂时露出来（变暗显示）；切换隐藏开关时清掉
+  const [exempt, setExempt] = useState<ReadonlySet<string>>(NO_PATHS)
+  useEffect(() => setExempt(prev => (prev.size ? NO_PATHS : prev)), [hide])
+  const ignoredInfo = useMemo<IgnoredInfo>(() => ({ ignored, hide, exempt }), [ignored, hide, exempt])
   const expansion = useContext(TreeExpansion),
     ops = useContext(TreeOps)
   const [menu, setMenu] = useState<{ x: number; y: number; trigger: HTMLElement } | null>(null)
@@ -750,6 +816,46 @@ function ProjectRoot({
     window.addEventListener(EXPAND_ROOT_EVENT, open)
     return () => window.removeEventListener(EXPAND_ROOT_EVENT, open)
   }, [rootKey])
+  const openTabs = useFiles()
+  const activeTab = openTabs.tabs.find(t => t.id === openTabs.active)
+  const activePath = activeTab && refKey(activeTab.ref) === rootKey ? activeTab.path : null
+  useEffect(() => {
+    const expose = (path: string | null | undefined): void => {
+      if (!path) return
+      const paths: string[] = []
+      for (let i = path.indexOf('/'); i > 0; i = path.indexOf('/', i + 1)) paths.push(path.slice(0, i))
+      paths.push(path)
+      setExempt(prev => {
+        if (paths.every(p => prev.has(p))) return prev
+        return new Set([...prev, ...paths])
+      })
+    }
+    expose(activePath)
+    const opened = (e: Event): void => {
+      const detail = (e as CustomEvent<{ ref?: WorkspaceRef; path?: string }>).detail
+      if (!detail?.ref || refKey(detail.ref) === rootKey) expose(detail?.path)
+    }
+    const expanding = (e: Event): void => {
+      const detail = (e as CustomEvent<{ key: string; path: string }>).detail
+      if (detail.key === rootKey) expose(detail.path)
+    }
+    window.addEventListener(OPEN_FILES_EVENT, opened)
+    window.addEventListener(EXPAND_FOLDER_EVENT, expanding)
+    return () => {
+      window.removeEventListener(OPEN_FILES_EVENT, opened)
+      window.removeEventListener(EXPAND_FOLDER_EVENT, expanding)
+    }
+  }, [rootKey, activePath])
+  // .gitignore 保存后重新读状态，变暗的范围跟着变
+  useEffect(() => {
+    const saved = (e: Event): void => {
+      const detail = (e as CustomEvent<{ root?: string; path?: string }>).detail
+      if (detail?.root && detail.path?.split('/').pop() === '.gitignore' && pathKey(detail.root) === pathKey(rootPath))
+        setStatusTick(n => n + 1)
+    }
+    window.addEventListener(FILE_SAVED_EVENT, saved)
+    return () => window.removeEventListener(FILE_SAVED_EVENT, saved)
+  }, [rootPath])
   useEffect(() => {
     if (initial.current) initial.current = false
     else setExpanded(expansion.expanded)
@@ -768,7 +874,7 @@ function ProjectRoot({
     return () => {
       cancelled = true
     }
-  }, [expanded, revision, hasExternal, refTarget.projectId, refTarget.sessionId])
+  }, [expanded, revision, statusTick, hasExternal, refTarget.projectId, refTarget.sessionId])
   useEffect(() => {
     let cancelled = false
     setError('')
@@ -829,57 +935,61 @@ function ProjectRoot({
           size={13}
           className={cn('shrink-0 transition-transform duration-(--dur-fast)', expanded && 'rotate-90')}
         />
-        <Folder size={14} className="text-accent-fg" />
+        <FileIcon name={name} kind="directory" expanded={expanded} root className="text-accent-fg" />
         <span className="truncate font-medium">{name}</span>
       </button>
-      {expanded &&
-        (query.trim() ? (
-          <div className="px-2 pb-1">
-            {searching && (
-              <p className="flex items-center gap-2 px-2 py-2 text-meta text-fg-muted">
-                <Spinner size={12} />
-                {tr('files.FileTree.filtering')}
-              </p>
-            )}
-            {error && (
-              <p role="status" className="px-2 py-2 text-meta text-danger">
-                {translateMessage(error)}
-              </p>
-            )}
-            {results?.entries.map(e => (
-              <FileRow
-                key={e.path}
-                entry={e}
-                refTarget={refTarget}
-                depth={0}
-                revision={revision}
-                statuses={statuses}
-                showPath
-              />
-            ))}
-            {results && !results.entries.length && (
-              <p className="px-2 py-2 text-meta text-fg-muted">{tr('files.FileTree.noMatchingFiles')}</p>
-            )}
-            {results?.truncated && (
-              <p className="px-2 py-2 text-label text-fg-muted">{tr('files.FileTree.showingPartialResultsNarrow')}</p>
-            )}
-            <p className="px-2 py-1 text-label text-fg-faint">{tr('files.FileTree.filterByNameSkips')}</p>
-          </div>
-        ) : (
-          <>
-            <Directory refTarget={refTarget} path="" depth={0} revision={revision} statuses={statuses} />
-            {folders?.map((folder, i) => (
-              <ExtraFolder
-                key={folder.path}
-                folder={folder}
-                path={`::${i + 1}`}
-                refTarget={refTarget}
-                revision={revision}
-                statuses={statuses}
-              />
-            ))}
-          </>
-        ))}
+      <TreeIgnored.Provider value={ignoredInfo}>
+        {expanded &&
+          (query.trim() ? (
+            <div className="px-2 pb-1">
+              {searching && (
+                <p className="flex items-center gap-2 px-2 py-2 text-meta text-fg-muted">
+                  <Spinner size={12} />
+                  {tr('files.FileTree.filtering')}
+                </p>
+              )}
+              {error && (
+                <p role="status" className="px-2 py-2 text-meta text-danger">
+                  {translateMessage(error)}
+                </p>
+              )}
+              {results?.entries
+                .filter(e => !hiddenByIgnore(ignoredInfo, e.path))
+                .map(e => (
+                  <FileRow
+                    key={e.path}
+                    entry={e}
+                    refTarget={refTarget}
+                    depth={0}
+                    revision={revision}
+                    statuses={statuses}
+                    showPath
+                  />
+                ))}
+              {results && !results.entries.length && (
+                <p className="px-2 py-2 text-meta text-fg-muted">{tr('files.FileTree.noMatchingFiles')}</p>
+              )}
+              {results?.truncated && (
+                <p className="px-2 py-2 text-label text-fg-muted">{tr('files.FileTree.showingPartialResultsNarrow')}</p>
+              )}
+              <p className="px-2 py-1 text-label text-fg-faint">{tr('files.FileTree.filterByNameSkips')}</p>
+            </div>
+          ) : (
+            <>
+              <Directory refTarget={refTarget} path="" depth={0} revision={revision} statuses={statuses} />
+              {folders?.map((folder, i) => (
+                <ExtraFolder
+                  key={folder.path}
+                  folder={folder}
+                  path={`::${i + 1}`}
+                  refTarget={refTarget}
+                  revision={revision}
+                  statuses={statuses}
+                />
+              ))}
+            </>
+          ))}
+      </TreeIgnored.Provider>
       {menu && (
         <ActionMenu
           x={menu.x}
@@ -901,6 +1011,12 @@ function ProjectRoot({
               run: () => ops.edit({ mode: 'folder', ref: refTarget, parent: '' }),
             },
             ...pasteAction(ops, { ref: refTarget, kind: 'root' }),
+            {
+              label: tr('fileIcons.hideIgnored'),
+              checked: hide,
+              separator: true,
+              run: () => setHideIgnored(rootPath, !hide),
+            },
           ]}
         />
       )}
@@ -974,6 +1090,7 @@ function Directory({
     editing && editing.mode !== 'rename' && editing.parent === path && refKey(editing.ref) === refKey(refTarget)
       ? editing
       : null
+  const ignoredInfo = useContext(TreeIgnored)
   const [list, setList] = useState<DirectoryListing | null>(null),
     [error, setError] = useState('')
   useEffect(() => {
@@ -1006,10 +1123,12 @@ function Directory({
         {tr('editor.FileEditor.loadingFile')}
       </p>
     )
+  // 隐藏被忽略的文件时，一个文件夹里的内容全被藏起来就按空文件夹显示
+  const visible = list.entries.filter(entry => !hiddenByIgnore(ignoredInfo, entry.path))
   return (
     <div {...drop} className={cn(ops.dropKey === dropKeyOf(refTarget, path) && DROP_BLOCK)}>
       {creating && <NameInput key={creating.mode} initial="" depth={depth} folder={creating.mode === 'folder'} />}
-      {list.entries.map(entry => (
+      {visible.map(entry => (
         <FileRow
           key={entry.path}
           entry={entry}
@@ -1019,7 +1138,7 @@ function Directory({
           statuses={statuses}
         />
       ))}
-      {!list.entries.length && !creating && (
+      {!visible.length && !creating && (
         <p className="px-4 py-1 text-meta text-fg-faint">{tr('files.FileTree.emptyFolder')}</p>
       )}
       {list.truncated && (
@@ -1047,6 +1166,7 @@ function FileRow({
   useI18n()
   const expansion = useContext(TreeExpansion)
   const vscode = useContext(TreeColors) === 'vscode'
+  const dim = isIgnoredPath(entry.path, useContext(TreeIgnored).ignored)
   const [expanded, setExpanded] = useState(
       () =>
         (expansion.expanded && entry.kind === 'directory' && !entry.linked && depth < 20) ||
@@ -1118,7 +1238,6 @@ function FileRow({
     window.addEventListener(EXPAND_FOLDER_EVENT, scroll)
     return () => window.removeEventListener(EXPAND_FOLDER_EVENT, scroll)
   }, [entry.path, refTarget.projectId, refTarget.sessionId])
-  const Icon = entry.kind === 'directory' ? (expanded ? FolderOpen : Folder) : File
   // 过滤结果是平铺的：结果里的文件行不接收，文件夹行只放不展开
   const dropOver: DragOver | null =
     entry.kind === 'directory'
@@ -1187,14 +1306,16 @@ function FileRow({
                 ? 'text-accent-fg'
                 : vscode && status && entry.kind !== 'directory'
                   ? statusTone(status)
-                  : 'text-fg-secondary',
+                  : dim
+                    ? 'text-fg-faint'
+                    : 'text-fg-secondary',
             )}
           >
             <ChevronRight
               size={12}
               className={cn('shrink-0', entry.kind !== 'directory' && 'invisible', expanded && 'rotate-90')}
             />
-            <Icon size={14} className="shrink-0 text-fg-muted" />
+            <FileIcon name={entry.name} kind={entry.kind} expanded={expanded} dim={dim} />
             <span className={cn('min-w-0 truncate', !(vscode && entry.kind === 'directory' && status) && 'flex-1')}>
               {showPath ? entry.path : entry.name}
             </span>

@@ -51,6 +51,13 @@ import { contextMenuMessages } from '../../../shared/i18n/contextMenuMessages'
 import { subagentMessages } from '../../../shared/i18n/subagentMessages'
 import { subagentStopMessages } from '../../../shared/i18n/subagentStopMessages'
 import { traceHistoryMessages } from '../../../shared/i18n/traceHistoryMessages'
+import { extensionCenterMessages } from '../../../shared/i18n/extensionCenterMessages'
+import { fileIconMessages } from '../../../shared/i18n/fileIconMessages'
+import { extGrammarMessages } from '../../../shared/i18n/extGrammarMessages'
+import { editorThemeMessages } from '../../../shared/i18n/editorThemeMessages'
+import { extSnippetMessages } from '../../../shared/i18n/extSnippetMessages'
+import { extTaskMessages } from '../../../shared/i18n/extTaskMessages'
+import { promptMessages } from '../../../shared/i18n/promptMessages'
 
 // 与 shared/i18n/translate.ts 的 allMessages 合并顺序一致
 const dictionaries: Record<string, Record<string, unknown>> = {
@@ -103,6 +110,13 @@ const dictionaries: Record<string, Record<string, unknown>> = {
   subagentMessages,
   subagentStopMessages,
   traceHistoryMessages,
+  extensionCenterMessages,
+  fileIconMessages,
+  extGrammarMessages,
+  editorThemeMessages,
+  extSnippetMessages,
+  extTaskMessages,
+  promptMessages,
 }
 
 /** 中英文值不同、需要保持现状的重复 key（当前为空；新增重复必须先说明原因）。 */

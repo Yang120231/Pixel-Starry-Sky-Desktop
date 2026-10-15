@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep, extname } from 'node:path'
 import { codedError, parseCodedError } from '@pixelsky/protocol'
 import { grepWorkspace } from './workspace-grep'
+import { IGNORED_STATUS } from '../../shared/types/workspace'
 import type {
   DirectoryListing,
   FileDocument,
@@ -468,10 +469,60 @@ export class WorkspaceFiles {
         ? await workspacePath(path, '', 'directory').catch(() => null)
         : await workspacePath(path, '', 'directory')
       if (!cwd) continue
-      for (const [file, code] of Object.entries(await gitStatus(cwd))) statuses[prefix + file] = code
+      const [changes, ignored] = await Promise.all([gitStatus(cwd), gitIgnored(cwd)])
+      for (const [file, code] of Object.entries(changes)) statuses[prefix + file] = code
+      // 被忽略的只补没有别的状态的路径（忽略的文件不会有改动，保险起见）
+      for (const file of ignored) statuses[prefix + file] ??= IGNORED_STATUS
     }
     return statuses
   }
+}
+
+/** 条数上限：超过的部分不再变暗，免得一个满是忽略文件的目录拖垮树 */
+const IGNORED_LIMIT = 20_000
+
+/**
+ * git ls-files -z --others --ignored --directory 的输出 → 相对 cwd 的路径列表。
+ * 整个文件夹被忽略时 git 只报这个文件夹（带结尾 /），去掉结尾 /；
+ * '' / '.' / './' 是 cwd 本身被上层仓库忽略，不算（否则整棵树都变暗）。
+ */
+export function parseIgnoredOutput(out: string): string[] {
+  const paths: string[] = []
+  for (const record of out.split('\0')) {
+    const path = record.replace(/\/+$/, '')
+    if (!path || path === '.') continue
+    paths.push(path)
+    if (paths.length >= IGNORED_LIMIT) break
+  }
+  return paths
+}
+
+/**
+ * 被 .gitignore 等规则忽略的路径（相对 cwd）。不能加 --no-empty-directory：它会丢掉「没被忽略的未跟踪目录」里的被忽略文件。
+ * 任何失败都返回 []（不是仓库、超时，或 git 报「directory entry not superset of prefix」——文件夹在上层仓库的忽略目录里时会这样）
+ */
+function gitIgnored(cwd: string): Promise<string[]> {
+  return new Promise(resolveIgnored => {
+    execFile(
+      'git',
+      [
+        '-C',
+        cwd,
+        '-c',
+        'core.quotepath=false',
+        'ls-files',
+        '-z',
+        '--others',
+        '--ignored',
+        '--exclude-standard',
+        '--directory',
+        '--',
+        '.',
+      ],
+      { windowsHide: true, timeout: 4000, maxBuffer: 4 * 1024 * 1024, encoding: 'utf8' },
+      (err, output) => resolveIgnored(err ? [] : parseIgnoredOutput(output)),
+    )
+  })
 }
 
 function gitStatus(cwd: string): Promise<Record<string, string>> {

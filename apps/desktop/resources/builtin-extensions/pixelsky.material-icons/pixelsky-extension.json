@@ -1,0 +1,36 @@
+{
+  "id": "pixelsky.material-icons",
+  "name": "Material Icon Theme",
+  "version": "5.39.0",
+  "publisher": "pixelsky",
+  "description": "文件树和标签上的彩色文件图标（Material Icon Theme，MIT）",
+  "keywords": [
+    "icons",
+    "file icons",
+    "图标"
+  ],
+  "license": "MIT",
+  "repository": "https://github.com/material-extensions/vscode-material-icon-theme",
+  "homepage": null,
+  "engines": {
+    "pixelsky": ">=0.4.0"
+  },
+  "l10n": {
+    "en": {
+      "name": "Material Icon Theme",
+      "description": "Colorful file icons for the file tree and tabs (Material Icon Theme, MIT)"
+    }
+  },
+  "contributes": {
+    "iconThemes": [
+      {
+        "id": "material",
+        "label": "Material",
+        "path": "theme/material-icons.json"
+      }
+    ]
+  },
+  "main": null,
+  "permissions": [],
+  "price": null
+}

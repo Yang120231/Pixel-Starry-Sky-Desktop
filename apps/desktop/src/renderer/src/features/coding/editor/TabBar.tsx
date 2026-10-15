@@ -1,5 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { Columns2, Ellipsis, GitCompare, Sparkles, X } from 'lucide-react'
+import { FileIcon } from '@/features/files/icons/FileIcon'
 import { IconButton, SEGMENT_TRACK, cn, segmentItem, useComingSoon } from '@/ui'
 import { ActionMenu, type MenuAction } from '@/ui/ActionMenu'
 import { useI18n } from '@/i18n/I18nProvider'
@@ -140,7 +141,11 @@ export function CodeTabs({
                 }
               }}
             >
-              {tab.tag && <GitCompare size={13} strokeWidth={1.5} aria-hidden className="shrink-0 text-fg-muted" />}
+              {tab.tag ? (
+                <GitCompare size={13} strokeWidth={1.5} aria-hidden className="shrink-0 text-fg-muted" />
+              ) : (
+                <FileIcon name={tab.name} kind="file" size={14} />
+              )}
               <span className="truncate">{tab.name}</span>
               {tab.tag && (
                 <span data-git-diff-tag className="shrink-0 rounded bg-subtle px-1 text-label text-fg-muted">
