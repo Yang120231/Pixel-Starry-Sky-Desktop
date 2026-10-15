@@ -325,6 +325,13 @@ describe('侧边栏外观偏好', () => {
     expect(parseSidebarPrefs({ version: 4, groups: 'x' }).groups).toBeUndefined()
   })
 
+  it('拖出来的项目先后：只留字符串、去重、最多 500 个，坏数据丢掉', () => {
+    expect(parseSidebarPrefs({ version: 4, order: ['b', 'a', 'b', 3, '', 'c'] }).order).toEqual(['b', 'a', 'c'])
+    expect(parseSidebarPrefs({ version: 4, order: 'x' }).order).toBeUndefined()
+    const ids = Array.from({ length: 505 }, (_, i) => `p${i}`)
+    expect(parseSidebarPrefs({ version: 4, order: ids }).order).toHaveLength(500)
+  })
+
   it('收起的项目：只留字符串、去重、最多 200 个', () => {
     const ids = Array.from({ length: 205 }, (_, i) => `p${i}`)
     expect(parseSidebarPrefs({ version: 4, collapsed: ['a', 'a', 3, '', 'b'] }).collapsed).toEqual(['a', 'b'])
