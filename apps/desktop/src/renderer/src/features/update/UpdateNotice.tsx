@@ -1,23 +1,26 @@
-// 侧栏底部的新版本提示（docs/release-update.md §7）：安装版下好后「重启以更新」，便携版「去下载」；点「稍后」本次运行不再显示
-import { useState } from 'react'
+// 新版本提示（docs/release-update.md §7）：对话模式在侧栏底部，代码模式浮在左下角；点「稍后」本次运行不再显示
 import { ArrowDownToLine, RotateCw, X } from 'lucide-react'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
-import { Button } from '@/ui'
-import { updateActions, useUpdateState } from './store'
+import { Button, cn } from '@/ui'
+import { updateActions, useUpdateNoticeState } from './store'
 
-export function UpdateNotice() {
+export function UpdateNotice({ placement = 'sidebar' }: { placement?: 'sidebar' | 'floating' }) {
   useI18n()
-  const update = useUpdateState()
-  const [dismissed, setDismissed] = useState<string | null>(null)
-  if (!update || (update.status !== 'ready' && update.status !== 'available') || !update.version) return null
-  if (dismissed === update.version) return null
+  const update = useUpdateNoticeState()
+  const version = update?.version
+  if (!update || !version) return null
   const ready = update.status === 'ready'
   return (
     <div
       data-update-notice
       role="status"
-      className="mx-1 mb-2 rounded-lg border border-line-card bg-surface px-3 py-2.5 shadow-sm"
+      className={cn(
+        'rounded-lg border border-line-card bg-surface px-3 py-2.5',
+        placement === 'floating'
+          ? 'absolute bottom-2 left-12 z-20 w-72 max-w-[calc(100%-96px)] shadow-menu'
+          : 'mx-1 mb-2 shadow-sm',
+      )}
     >
       <div className="flex items-start gap-2">
         <p className="min-w-0 flex-1 text-ui font-medium text-fg">
@@ -27,7 +30,7 @@ export function UpdateNotice() {
           type="button"
           aria-label={tr('update.later')}
           title={tr('update.later')}
-          onClick={() => setDismissed(update.version ?? null)}
+          onClick={() => updateActions.dismissNotice(version)}
           className="press no-drag -mt-0.5 -mr-1 flex size-6 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-hover hover:text-fg"
         >
           <X size={14} strokeWidth={1.5} />

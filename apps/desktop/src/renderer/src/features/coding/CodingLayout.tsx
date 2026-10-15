@@ -4,6 +4,7 @@ import { tr } from '@/i18n/core'
 import { CollapsibleSlot, ResizeHandle, cn } from '@/ui'
 import { MachineStatus } from '@/features/machines/MachineStatus'
 import { usePage } from '@/features/layout/page'
+import { UpdateNotice } from '@/features/update/UpdateNotice'
 import { useEnterCodingMode } from './enter'
 import { useCodingRouting } from './routing'
 import { PANEL_LIMITS, fitCoding } from './layoutModel'
@@ -106,6 +107,7 @@ export function CodingLayout() {
         </div>
         <ToolStripe side="right" />
         <PageOverlay />
+        <UpdateNotice placement="floating" />
       </div>
       <StatusBar />
     </div>
