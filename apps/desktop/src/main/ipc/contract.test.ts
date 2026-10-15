@@ -24,7 +24,7 @@ const tableKeys = (file: string, text: string, pattern: RegExp): string[] =>
   })
 
 /** 远端方法表里不对应任何通道的辅助方法：握手，以及远端 → 本机会话回调用的平台请求。 */
-const HELPER_METHODS = ['hello', 'platform:request', 'platform:record', 'stats']
+const HELPER_METHODS = ['hello', 'platform:request', 'platform:record', 'platform:compaction', 'stats']
 
 const walk = (dir: string): string[] =>
   readdirSync(dir).flatMap(name => {

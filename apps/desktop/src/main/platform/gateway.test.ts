@@ -2,7 +2,7 @@ import { once } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Server } from 'node:http'
 import type { SessionRecord } from '@pixelsky/protocol'
-import { setLogSink } from '@pixelsky/engine'
+import { CLAUDE_COMPACT_MARKER, setLogSink, type CompactionRequestReport } from '@pixelsky/engine'
 import { eventEnd, platformGateway } from './gateway'
 import type { ResolvedProvider } from '../core/providers/store'
 let server: Server
@@ -601,4 +601,52 @@ it('上游 input_tokens 含缓存时，平台线路和自定义 API 转发出去
   reply = stream(sse(50_000, 49_000))
   expect(inputOf(await post('m'))).toBe(50_000)
   expect(inputOf(await post('m'))).toBe(1_000)
+})
+
+it('压缩请求：转发时报出接通、首字、输出的 token 和结束；其它请求不报，转发内容不变', async () => {
+  const sse =
+    'event: message_start\ndata: {"type":"message_start","message":{"usage":{"input_tokens":10,"output_tokens":1}}}\n\n' +
+    'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"summary"}}\n\n' +
+    'event: message_delta\ndata: {"type":"message_delta","usage":{"output_tokens":321}}\n\n'
+  const reports: Array<{ record: string; report: CompactionRequestReport }> = []
+  server = platformGateway({
+    sessions: new Map([['s', { recordId: 's', secret: 'local-secret' }]]),
+    record: () =>
+      ({
+        id: 's',
+        engine: 'claude',
+        model: 'claude-opus-5-5',
+        platform: { groupId: '2', account: 'user' },
+      }) as SessionRecord,
+    account: () => 'user',
+    fetch: async () => new Response(sse, { headers: { 'Content-Type': 'text/event-stream' } }),
+    rewrite: async body => body.replace('claude-opus-5-5', 'claude-haiku-4-5'),
+    compaction: (record, report) => reports.push({ record: record.id, report }),
+  })
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  const post = (body: unknown) =>
+    fetch('http://127.0.0.1:' + (server.address() as { port: number }).port + '/v1/messages', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer local-secret' },
+      body: JSON.stringify(body),
+    }).then(r => r.text())
+  expect(await post({ model: 'claude-opus-5-5', system: 'You are Claude Code' })).toBe(sse)
+  expect(reports).toEqual([])
+  const text = await post({ model: 'claude-opus-5-5', system: [{ type: 'text', text: CLAUDE_COMPACT_MARKER }] })
+  expect(text).toBe(sse)
+  const last = reports.at(-1)!
+  expect(last.record).toBe('s')
+  expect(last.report).toMatchObject({
+    model: 'claude-haiku-4-5',
+    requestedModel: 'claude-opus-5-5',
+    status: 200,
+    outputTokens: 321,
+    outputExact: true,
+    done: true,
+    error: null,
+  })
+  expect(last.report.connectedAt).not.toBeNull()
+  expect(last.report.firstTokenAt).not.toBeNull()
+  expect(new Set(reports.map(r => r.report.requestId)).size).toBe(1)
 })

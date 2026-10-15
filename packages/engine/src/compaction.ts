@@ -19,6 +19,26 @@ function systemText(system: unknown): string {
     .join('\n')
 }
 
+/**
+ * 本机网关转发一次压缩请求时报给宿主的进度（requestId 区分 Claude Code 重发的请求），宿主对到正在进行的压缩条目上，
+ * 变成界面用的 CompactionProgress
+ */
+export interface CompactionRequestReport {
+  requestId: string
+  model: string | null
+  requestedModel: string | null
+  requestAt: number
+  connectedAt: number | null
+  status: number | null
+  firstTokenAt: number | null
+  lastContentAt: number | null
+  lastByteAt: number | null
+  outputTokens: number
+  outputExact: boolean
+  done: boolean
+  error: string | null
+}
+
 /** 这个请求体是不是 Claude Code 的压缩请求 */
 export function isClaudeCompaction(body: unknown): boolean {
   if (!body || typeof body !== 'object') return false

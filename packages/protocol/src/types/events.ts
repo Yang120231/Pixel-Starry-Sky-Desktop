@@ -8,7 +8,7 @@ import type {
   TurnOutcome,
 } from './session'
 import type { EngineConfig, EngineInfo, EngineJob, EngineLogin } from './engine'
-import type { CacheWarning, RequestCacheUsage, RequestRetryState, TurnUsage, Usage } from './usage'
+import type { CacheWarning, CompactionProgress, RequestCacheUsage, RequestRetryState, TurnUsage, Usage } from './usage'
 import type { Item } from './item'
 import type { ApprovalRequest } from './approval'
 import type { AgentRuns, BackgroundTask, SubagentStatus } from './agents'
@@ -16,6 +16,8 @@ import type { AgentRuns, BackgroundTask, SubagentStatus } from './agents'
 export type EngineEvent =
   | { type: 'context'; context: import('../context').ContextWindow | null }
   | { type: 'request_retry'; retry: RequestRetryState | null }
+  /** 压缩请求在本机网关上的进度；null 表示清掉。瞬时事件，不落盘 */
+  | { type: 'compaction_progress'; progress: CompactionProgress | null }
   /** 仅主请求的单次缓存计数；瞬时事件，不落盘或写入会话快照。 */
   | { type: 'request_usage'; request: RequestCacheUsage }
   | { type: 'request_cache_reset' }
@@ -85,6 +87,8 @@ export interface SessionSnapshot {
   context?: import('../context').ContextWindow | null
   /** 当前模型请求的重试等待，完成/成功响应后清空，不落盘。 */
   retry?: RequestRetryState | null
+  /** 正在进行的压缩在本机网关上的进度，压缩结束或这一轮结束时清空，不落盘。 */
+  compaction?: CompactionProgress | null
   record: SessionRecord
   state: SessionState
   items: Item[]

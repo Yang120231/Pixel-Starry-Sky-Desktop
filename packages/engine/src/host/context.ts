@@ -15,6 +15,7 @@ import type { EngineAdapter, EngineSession } from '../adapter'
 import type { Store } from '../store'
 import type { UsageStore } from '../usage'
 import type { HostCache } from './cache'
+import type { HostCompaction } from './compaction'
 import type { HostEvents } from './events'
 import type { HostBranch } from './branch'
 import type { HostGuard } from './guard'
@@ -87,6 +88,7 @@ export interface HostModules {
   projects: HostProjects
   query: HostQuery
   cache: HostCache
+  compaction: HostCompaction
   usage: HostUsage
   events: HostEvents
   queue: HostQueue

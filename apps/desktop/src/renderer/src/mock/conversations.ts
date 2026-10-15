@@ -4,6 +4,7 @@
 import type {
   AgentRun,
   ApprovalRequest,
+  CompactionProgress,
   FileChange,
   ImageAttachment,
   Item,
@@ -1193,19 +1194,82 @@ const compacting = snapshot(
   },
 )
 
-/** 演示模式下让「正在压缩」的那条循环播放；update 换掉某个会话的条目 */
+/**
+ * 演示模式下让「正在压缩」的那条循环播放：等待上游接通 → 模型读取对话 → 输出摘要（token 往上涨）→ 整理上下文 → 压完
+ * （数字递减）→ 停 6 秒；网关进度用快照的 compaction 字段（真实会话里由本机网关报来）
+ */
 export function animateCompaction(update: DemoUpdate): void {
-  const set = (patch: Partial<Extract<Item, { kind: 'compaction' }>>): void =>
-    update('demo-claude-compacting', items =>
-      items.map(item => (item.id === COMPACT_LIVE && item.kind === 'compaction' ? { ...item, ...patch } : item)),
+  const set = (
+    patch: Partial<Extract<Item, { kind: 'compaction' }>>,
+    progress: CompactionProgress | null = null,
+  ): void =>
+    update(
+      'demo-claude-compacting',
+      items =>
+        items.map(item => (item.id === COMPACT_LIVE && item.kind === 'compaction' ? { ...item, ...patch } : item)),
+      { compaction: progress },
     )
+  const OUTPUT = 1_814
   const cycle = (): void => {
     const startedAt = Date.now()
-    set({ status: 'running', trigger: null, startedAt, durationMs: null, postTokens: null })
-    window.setTimeout(() => {
-      set({ status: 'completed', trigger: 'auto', durationMs: Date.now() - startedAt, postTokens: 11_234 })
-      window.setTimeout(cycle, 6_000)
-    }, 7_000)
+    const base: CompactionProgress = {
+      itemId: COMPACT_LIVE,
+      requests: 1,
+      model: 'claude-haiku-4-5',
+      requestedModel: 'claude-opus-5-5',
+      requestAt: startedAt + 300,
+      connectedAt: null,
+      status: null,
+      firstTokenAt: null,
+      lastContentAt: null,
+      lastByteAt: null,
+      outputTokens: 0,
+      outputExact: false,
+      done: false,
+      error: null,
+    }
+    const running = { status: 'running', trigger: null, startedAt, durationMs: null, postTokens: null } as const
+    const at = (ms: number, fn: () => void) => window.setTimeout(fn, ms)
+    set(running)
+    at(300, () => set(running, base))
+    const connected = { ...base, connectedAt: startedAt + 1_200, status: 200, lastByteAt: startedAt + 1_200 }
+    at(1_200, () => set(running, connected))
+    // 4 秒出首字，之后每 250 ms 涨一截，9 秒输出完
+    for (let ms = 4_000; ms <= 13_000; ms += 250) {
+      const outputTokens = Math.min(OUTPUT, Math.round(((ms - 4_000) / 9_000) * OUTPUT) + 12)
+      at(ms, () =>
+        set(running, {
+          ...connected,
+          firstTokenAt: startedAt + 4_000,
+          lastContentAt: startedAt + ms,
+          lastByteAt: startedAt + ms,
+          outputTokens,
+        }),
+      )
+    }
+    const finished = {
+      ...connected,
+      firstTokenAt: startedAt + 4_000,
+      lastContentAt: startedAt + 13_000,
+      lastByteAt: startedAt + 13_100,
+      outputTokens: OUTPUT,
+      outputExact: true,
+      done: true,
+    }
+    at(13_100, () => set(running, finished))
+    at(14_500, () => {
+      set({
+        status: 'completed',
+        trigger: 'auto',
+        durationMs: Date.now() - startedAt,
+        postTokens: 11_234,
+        model: 'claude-haiku-4-5',
+        firstTokenMs: 3_700,
+        outputTokens: OUTPUT,
+        requests: 1,
+      })
+      at(6_000, cycle)
+    })
   }
   cycle()
 }

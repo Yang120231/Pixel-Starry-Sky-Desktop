@@ -96,6 +96,12 @@ export class HostEvents {
       queueMicrotask(() => this.flushDelta(id))
       return
     }
+    if ((event.type === 'item_started' || event.type === 'item_completed') && event.item.kind === 'compaction') {
+      const withSummary = m.compaction.withSummary(id, event)
+      this.apply(id, withSummary)
+      m.compaction.itemApplied(id, withSummary.item)
+      return
+    }
     this.apply(id, event)
     switch (event.type) {
       case 'turn_started':

@@ -118,6 +118,11 @@ export type Item =
       preTokens: number | null
       postTokens: number | null
       error?: string | null
+      /** 经过本机网关时的汇总（详情里显示）：实际请求的模型、首字用时、摘要输出的 token、一共发了几次请求 */
+      model?: string | null
+      firstTokenMs?: number | null
+      outputTokens?: number | null
+      requests?: number
     }
   /** 一轮结束后的统计（耗时、token、费用、模型），显示在这一轮回复下方（docs/ui/usage.md §4） */
   | { kind: 'turn_stats'; id: string; turnId: string; outcome: TurnOutcome; usage: TurnUsage }

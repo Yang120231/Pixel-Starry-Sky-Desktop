@@ -55,6 +55,11 @@ export async function initEngine(ctx: AppContext): Promise<void> {
       }
     },
     ctx.providers,
+    (record, report) => {
+      const machine = machineOf(record.id)
+      if (machine === 'local') ctx.engine?.compactionRequest(record.id, report)
+      else void ctx.machines?.call(machine, 'platform:compaction', [record.id, report]).catch(() => {})
+    },
   )
   // 对话历史 MCP 服务：第一次有换过引擎的对话要派发消息时才启动
   const history = historyServer(ctx)

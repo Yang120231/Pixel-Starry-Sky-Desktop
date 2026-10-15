@@ -27,6 +27,7 @@ export function emptySnapshot(record: SessionRecord, items: Item[] = []): Sessio
     execution: null,
     turnId: null,
     retry: null,
+    compaction: null,
   }
 }
 
@@ -52,6 +53,8 @@ export function reduce(s: SessionSnapshot, e: EngineEvent): SessionSnapshot {
       return { ...s, context: e.context }
     case 'request_retry':
       return !e.retry || e.retry.turnId === s.turnId ? { ...s, retry: e.retry } : s
+    case 'compaction_progress':
+      return { ...s, compaction: e.progress }
     case 'request_usage':
     case 'request_cache_reset':
       return s
@@ -70,7 +73,7 @@ export function reduce(s: SessionSnapshot, e: EngineEvent): SessionSnapshot {
           : {}),
       }
     case 'turn_started':
-      return { ...s, turnId: e.turnId, execution: e.execution ?? null, retry: null }
+      return { ...s, turnId: e.turnId, execution: e.execution ?? null, retry: null, compaction: null }
     case 'execution':
       return { ...s, execution: e.settings }
     case 'queue':
@@ -127,6 +130,7 @@ export function reduce(s: SessionSnapshot, e: EngineEvent): SessionSnapshot {
         ...s,
         turnId: null,
         retry: null,
+        compaction: null,
         execution: null,
         pending: [],
         items: s.items.some(x => settle(x, status) !== x) ? s.items.map(x => settle(x, status)) : s.items,

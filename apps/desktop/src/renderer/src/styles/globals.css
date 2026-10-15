@@ -801,14 +801,72 @@
       0% 0;
   }
 }
+/* 还没出字时（等待接通 / 模型读取对话 / 重试）：一小段来回扫，不假装进度在走；出问题时扫得慢一些 */
+.compaction-indeterminate {
+  left: -34%;
+  animation: compaction-indeterminate 1.4s ease-in-out infinite;
+}
+.compaction-indeterminate-slow {
+  animation-duration: 2.6s;
+}
+@keyframes compaction-indeterminate {
+  to {
+    left: 100%;
+  }
+}
+/* 直连官方看不到真实进度，按以往用时估算的进度画成斜纹，和真实进度区分开 */
+.compaction-estimate {
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--accent) 60%, transparent) 0 3px,
+    transparent 3px 6px
+  );
+}
+/* 步骤轨上正在进行的那一步：圆点外一圈往外扩的光 */
+.compaction-step-active {
+  animation: compaction-step 1.4s ease-out infinite;
+}
+@keyframes compaction-step {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 40%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 5px transparent;
+  }
+}
 :root[data-motion='off']
-  :is(.compaction-icon, .compaction-text, .compaction-squeeze, .compaction-saved, .compaction-pill-running) {
+  :is(
+    .compaction-icon,
+    .compaction-text,
+    .compaction-squeeze,
+    .compaction-saved,
+    .compaction-pill-running,
+    .compaction-indeterminate,
+    .compaction-step-active
+  ) {
   animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
   :root[data-motion='system']
-    :is(.compaction-icon, .compaction-text, .compaction-squeeze, .compaction-saved, .compaction-pill-running) {
+    :is(
+      .compaction-icon,
+      .compaction-text,
+      .compaction-squeeze,
+      .compaction-saved,
+      .compaction-pill-running,
+      .compaction-indeterminate,
+      .compaction-step-active
+    ) {
     animation: none;
+  }
+}
+/* 动画关闭时来回扫的那段停在中间 */
+:root[data-motion='off'] .compaction-indeterminate {
+  left: 33%;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-motion='system'] .compaction-indeterminate {
+    left: 33%;
   }
 }
 /* 动画关闭时标题照常显示 */
@@ -1162,6 +1220,8 @@
     .compaction-text,
     .compaction-squeeze,
     .compaction-pill-running,
+    .compaction-indeterminate,
+    .compaction-step-active,
     .step-shimmer
   ) {
   animation-play-state: paused;

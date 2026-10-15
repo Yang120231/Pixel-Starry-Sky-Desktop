@@ -23,7 +23,14 @@ type RemoteOf<Spec> = Spec extends { readonly remote: infer Method extends strin
 /** Every method name the IPC contract declares in a `remote` field: each one needs an implementation below. */
 type ContractMethod = RemoteOf<(typeof IPC_CONTRACT)[keyof typeof IPC_CONTRACT]>
 /** Methods that serve no channel: the handshake, and the platform requests the helper sends back to the desktop. */
-type HelperMethod = 'hello' | 'platform:request' | 'platform:record' | 'tunnel:listen' | 'tunnel:connect' | 'stats'
+type HelperMethod =
+  | 'hello'
+  | 'platform:request'
+  | 'platform:record'
+  | 'platform:compaction'
+  | 'tunnel:listen'
+  | 'tunnel:connect'
+  | 'stats'
 
 export async function createRemoteRuntime(
   peer: TunnelPeer,
@@ -107,6 +114,7 @@ export async function createRemoteRuntime(
       if (record) host.platformRequestContext(record)?.(requestId, model, chargeId)
     },
     'platform:record': id => host.executionRecord(id),
+    'platform:compaction': (id, report) => host.compactionRequest(id, report),
     ...tunnel.methods,
     stats: () => collectStats(),
   }

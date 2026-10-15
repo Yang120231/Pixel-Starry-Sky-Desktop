@@ -54,6 +54,40 @@ export interface RequestRetryState {
   reason: string
 }
 
+/**
+ * 压缩请求在本机网关上的实时进度（平台和自定义 API 的 Claude Code 会话才有）：网关转发压缩请求时顺带读出来的，
+ * 界面据此显示「等待接通 / 模型读取对话 / 输出摘要 / 整理上下文」。瞬时状态，不落盘；结束时汇总写进压缩条目
+ */
+export interface CompactionProgress {
+  /** 对应的压缩条目 */
+  itemId: string
+  /** 这次压缩发了几次请求（Claude Code 失败后会重发），从 1 起 */
+  requests: number
+  /** 实际请求的模型（换成压缩模型后就是压缩模型） */
+  model: string | null
+  /** Claude Code 原本请求的模型；没换模型时和 model 相同 */
+  requestedModel: string | null
+  /** 当前这次请求发出的时间 */
+  requestAt: number
+  /** 收到上游响应头的时间 */
+  connectedAt: number | null
+  /** 上游的 HTTP 状态码 */
+  status: number | null
+  /** 第一段摘要内容到达的时间 */
+  firstTokenAt: number | null
+  /** 最近一次收到摘要内容的时间 */
+  lastContentAt: number | null
+  /** 最近一次收到任何数据的时间（含心跳） */
+  lastByteAt: number | null
+  /** 已输出的 token：结束前按字数估，拿到上游用量后换成准确值 */
+  outputTokens: number
+  outputExact: boolean
+  /** 上游这次请求已经结束（成功或失败） */
+  done: boolean
+  /** 上游报错或中途断开的原因 */
+  error: string | null
+}
+
 export interface CacheWarning {
   sessionId: string
   turnId: string

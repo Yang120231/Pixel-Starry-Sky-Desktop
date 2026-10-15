@@ -3,7 +3,12 @@ export type { EngineAdapter, EngineSession, Launcher, SessionContext } from './a
 export { ClaudeAdapter, type ClaudeAdapterOptions } from './claude'
 export { ENGINES, ENGINE_ORDER } from './registry'
 export { engineEnv } from './env'
-export { CLAUDE_COMPACT_MARKER, isClaudeCompaction, rewriteCompaction } from './compaction'
+export {
+  CLAUDE_COMPACT_MARKER,
+  isClaudeCompaction,
+  rewriteCompaction,
+  type CompactionRequestReport,
+} from './compaction'
 export { LONG_CONTEXT_ENV, claudeModelName } from './claude/long-context'
 export { CODEX_WINDOW_ENV } from './codex/context-config'
 export { CodexAdapter } from './codex'

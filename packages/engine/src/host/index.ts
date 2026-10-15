@@ -41,12 +41,14 @@ import type {
   UsageSummary,
 } from '@pixelsky/protocol'
 import { ClaudeAdapter } from '../claude'
+import type { CompactionRequestReport } from '../compaction'
 import { CodexAdapter } from '../codex'
 import { PixelAdapter } from '../pixel'
 import { Store } from '../store'
 import { UsageStore, type UsageQuery } from '../usage'
 import { HostBranch } from './branch'
 import { HostCache } from './cache'
+import { HostCompaction } from './compaction'
 import type { EngineHostOptions, HostContext, HostModules, Runtime } from './context'
 import { HostEvents } from './events'
 import { HostGuard } from './guard'
@@ -125,6 +127,7 @@ export class EngineHost {
       projects,
       query: new HostQuery(ctx),
       cache: new HostCache(ctx),
+      compaction: new HostCompaction(ctx),
       usage: new HostUsage(ctx),
       events: new HostEvents(ctx),
       queue: new HostQueue(ctx),
@@ -145,6 +148,11 @@ export class EngineHost {
     record: SessionRecord,
   ): ((requestId: string, model: string, chargeId?: string) => void) | undefined {
     return this.m.usage.platformRequestContext(record)
+  }
+
+  /** 本机网关转发压缩请求时报来的进度（压缩上下文的实时进度） */
+  compactionRequest(id: string, report: CompactionRequestReport): void {
+    this.m.compaction.report(id, report)
   }
 
   executionRecord(id: string): SessionRecord | null {

@@ -1,12 +1,13 @@
 import { createServer, type Server } from 'node:http'
 import { once } from 'node:events'
 import { randomUUID } from 'node:crypto'
-import { describeError, logger } from '@pixelsky/engine'
+import { describeError, logger, type CompactionRequestReport } from '@pixelsky/engine'
 import type { SessionRecord } from '@pixelsky/protocol'
 import type { ResolvedProvider } from '../core/providers/store'
 import { classifyError, providerHeaders, upstreamUrl, type Fetch } from '../core/providers/upstream'
 import { chatUsage, withUsageOption } from './chat-usage'
 import { CacheUsageFix } from './usageFix'
+import { compactionTap, type CompactionTap } from './compaction-tap'
 import { platformModelApi } from '../../shared/platform-models'
 
 const log = logger('gateway')
@@ -53,6 +54,8 @@ export function platformGateway(options: {
   requestContext?: (
     record: SessionRecord,
   ) => ((requestId: string, model: string, chargeId?: string) => void | Promise<void>) | undefined
+  /** Claude Code 压缩请求的实时进度（接通、首字、已输出多少、上游报错），按会话报给宿主 */
+  compaction?: (record: SessionRecord, report: CompactionRequestReport) => void
 }): Server {
   /** 没有计数接口的自定义接口地址 → 发现的时间；过一小时再试一次（接口可能补上了） */
   const noCountTokens = new Map<string, number>()
@@ -71,6 +74,14 @@ export function platformGateway(options: {
     let sessionId: string | null = null
     /** 已知的、不用每次记警告的失败（自定义接口没有计数接口） */
     let quiet = false
+    /** 是压缩请求时读出进度报给会话 */
+    let tap: CompactionTap | null = null
+    const startTap = (record: SessionRecord, body: string, requested: unknown): CompactionTap | null => {
+      const report = options.compaction
+      return report && !responses && !chat && !countTokens
+        ? compactionTap(r => report(record, r), body, requested)
+        : null
+    }
     const trace = (error?: unknown) => ({
       path,
       ...(sessionId ? { sessionId } : {}),
@@ -107,6 +118,7 @@ export function platformGateway(options: {
       }
       status = upstream.status
       headersAt = Date.now()
+      tap?.response(upstream.status)
       res.writeHead(upstream.status, output)
       // Messages 的 SSE 只按完整事件转发：上游中途断开时能接一个 error 事件收尾，而不是掐断连接
       const sse = !responses && !chat && output['Content-Type'].includes('text/event-stream')
@@ -122,6 +134,7 @@ export function platformGateway(options: {
           for await (const chunk of upstream.body) {
             if (abort.signal.aborted) break
             bytes += chunk.length
+            tap?.touch()
             let out = Buffer.from(chunk)
             if (chat) chatTail = (chatTail + out.toString('utf8')).slice(-256 * 1024)
             if (whole) {
@@ -133,12 +146,13 @@ export function platformGateway(options: {
               const end = eventEnd(all)
               out = all.subarray(0, end)
               tail = all.subarray(end)
-              if (rewriter && out.length) {
+              if ((rewriter || tap) && out.length) {
                 const text = out.toString('utf8')
-                const fixed = rewriter.sse(text)
+                tap?.sse(text)
+                const fixed = rewriter ? rewriter.sse(text) : text
                 if (fixed !== text) out = Buffer.from(fixed, 'utf8')
               }
-            }
+            } else if (tap && !upstream.ok) tap.body(out.toString('utf8'))
             if (out.length && !res.write(out)) await once(res, 'drain', { signal: abort.signal })
           }
       } catch (error) {
@@ -146,12 +160,14 @@ export function platformGateway(options: {
         // 掐断连接的话 Claude Code 当成网络抖动，最多重试十几次，每次都重发整段上下文、重新计费（压缩时尤其贵）；
         // 回 error 事件：普通请求它只改用非流式再试一次，压缩直接失败
         log.warn('上游连接中途断开', trace(error))
+        tap?.fail('上游连接中途断开')
         res.end(midStreamError)
         return
       }
       if (whole && held.length) res.write(rewriter!.json(Buffer.concat(held).toString('utf8')))
       if (tail.length) res.write(tail)
       res.end()
+      tap?.end()
       if (abort.signal.aborted) log.info('引擎先断开了连接', trace())
       else if (upstream.status >= 400 && !quiet) log.warn('上游返回错误', trace())
       else {
@@ -200,6 +216,7 @@ export function platformGateway(options: {
         body = JSON.stringify({ ...parsed, model: small ?? current })
       }
       if (!responses && !chat && !countTokens && options.rewrite) body = await options.rewrite(body, async () => ids)
+      tap = startTap(record, body, requested)
       const headers = providerHeaders(p, {
         'content-type': 'application/json',
         accept: countTokens ? 'application/json' : 'text/event-stream',
@@ -231,7 +248,9 @@ export function platformGateway(options: {
       } catch (error) {
         if (abort.signal.aborted) throw error
         log.warn('连不上自定义接口', trace(error))
-        fail(502, classifyError(error, url).message)
+        const message = classifyError(error, url).message
+        tap?.fail(message)
+        fail(502, message)
         return
       }
       if (countTokens && COUNT_TOKENS_MISSING.has(upstream.status)) {
@@ -344,6 +363,7 @@ export function platformGateway(options: {
         return
       }
       headers.set('X-Client-Request-ID', requestId)
+      tap = startTap(record, body, parsed.model)
       // 先记下再发：记不上（SSH 断了）就不发，免得扣了费却对不上这一轮
       await trackRequest?.(requestId, model)
       const upstream = await options.fetch(responses ? '/v1/platform/responses' : '/v1/platform/messages', {
@@ -360,6 +380,8 @@ export function platformGateway(options: {
         )
       await pipe(upstream, responses ? null : `platform:${platform.groupId}|${model}`)
     } catch (error) {
+      if (abort.signal.aborted) tap?.end()
+      else tap?.fail((error as Error).message || '上游请求失败')
       if (abort.signal.aborted) log.info('引擎先断开了连接', trace(error))
       else if (res.headersSent) log.warn('上游连接中途断开', trace(error))
       else if ((error as { code?: unknown }).code !== 'AUTH_EXPIRED') log.warn('上游请求失败', trace(error))

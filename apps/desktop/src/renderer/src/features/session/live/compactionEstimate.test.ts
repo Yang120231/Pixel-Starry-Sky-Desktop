@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_COMPACTION_MS,
   DEFAULT_COMPACTION_RATIO,
+  DEFAULT_FIRST_TOKEN_MS,
+  DEFAULT_SUMMARY_TOKENS,
   expectedDuration,
+  expectedFirstToken,
+  expectedOutput,
   expectedRatio,
   type CompactionSample,
 } from './compactionEstimate'
@@ -35,5 +39,20 @@ describe('压缩的预计用时和比例', () => {
     const samples = [sample('a', 100_000, 20_000, 0.1), sample('b', 100_000, 30_000, 0.1)]
     expect(expectedDuration(null, samples)).toBe(25_000)
     expect(expectedDuration(1_000, samples)).toBe(3_000)
+  })
+})
+
+describe('平时的摘要长度和首字用时', () => {
+  it('只按带这两项的记录（经过网关的）算；没有时用默认值', () => {
+    const plain = sample('a', 100_000, 20_000, 0.1)
+    expect(expectedOutput([plain])).toBe(DEFAULT_SUMMARY_TOKENS)
+    expect(expectedFirstToken([plain])).toBe(DEFAULT_FIRST_TOKEN_MS)
+    const samples = [
+      plain,
+      { ...sample('b', 100_000, 20_000, 0.1), firstTokenMs: 6_000, outputTokens: 1_500 },
+      { ...sample('c', 100_000, 20_000, 0.1), firstTokenMs: 8_000, outputTokens: 2_500 },
+    ]
+    expect(expectedOutput(samples)).toBe(2_000)
+    expect(expectedFirstToken(samples)).toBe(7_000)
   })
 })

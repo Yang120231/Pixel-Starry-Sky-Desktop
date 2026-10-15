@@ -110,4 +110,33 @@ describe('reduce', () => {
     expect(s.items.find(x => x.id === 'c')).toMatchObject({ status: 'interrupted' })
     expect(s.items.find(x => x.id === 'a')).toMatchObject({ status: 'completed' })
   })
+
+  it('压缩进度：直接替换；新的一轮开始和一轮结束时清掉', () => {
+    const progress = {
+      itemId: 'c',
+      requests: 1,
+      model: 'm',
+      requestedModel: 'm',
+      requestAt: 1,
+      connectedAt: null,
+      status: null,
+      firstTokenAt: null,
+      lastContentAt: null,
+      lastByteAt: null,
+      outputTokens: 0,
+      outputExact: false,
+      done: false,
+      error: null,
+    }
+    const started = run([
+      { type: 'turn_started', turnId: 't1' },
+      { type: 'compaction_progress', progress },
+    ])
+    expect(started.compaction).toBe(progress)
+    expect(run([{ type: 'compaction_progress', progress: null }], started).compaction).toBeNull()
+    expect(run([{ type: 'turn_started', turnId: 't2' }], started).compaction).toBeNull()
+    expect(
+      run([{ type: 'turn_completed', turnId: 't1', outcome: 'completed', error: null }], started).compaction,
+    ).toBeNull()
+  })
 })

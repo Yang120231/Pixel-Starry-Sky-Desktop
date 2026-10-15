@@ -13,6 +13,7 @@ import {
   LONG_CONTEXT_ENV,
   claudeModelName,
   rewriteCompaction,
+  type CompactionRequestReport,
 } from '@pixelsky/engine'
 import type { PlatformGroupInfo } from '../../shared/types/platform-catalog'
 import { platformModelSupportsEngine } from '../../shared/platform-models'
@@ -102,6 +103,8 @@ export async function initPlatform(
   ) => ((requestId: string, model: string, chargeId?: string) => void | Promise<void>) | undefined,
   /** 自定义 API 的接口配置；网关转发时按会话取真实 Key */
   providers: ProviderStore | null = null,
+  /** Claude Code 压缩请求的实时进度，报给会话所在的宿主 */
+  compaction?: (record: SessionRecord, report: CompactionRequestReport) => void,
 ): Promise<(record: SessionRecord) => NodeJS.ProcessEnv> {
   ipc.handle('platform:groups', () => platformGroups())
   ipc.handle(
@@ -123,6 +126,7 @@ export async function initPlatform(
     account: signedInEmail,
     fetch: platformFetch,
     requestContext,
+    compaction,
     routeModels,
     provider: id => providers?.resolve(id) ?? null,
     rewrite: async (body, models) => {
