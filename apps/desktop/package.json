@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "dev:demo": "node scripts/dev.mjs --demo",
-    "build": "electron-vite build && electron-vite build --config electron.remote.config.ts",
+    "build": "pnpm --filter @pixelsky/cli bundle && electron-vite build && electron-vite build --config electron.remote.config.ts",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "capture": "electron-vite build && node scripts/capture.mjs",
