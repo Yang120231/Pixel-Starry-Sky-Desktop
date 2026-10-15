@@ -93,6 +93,10 @@ export const codexMessages = {
     zh: '无法恢复 Codex 会话，已开始新会话（之前的上下文没有带过去）',
     en: 'Could not resume the Codex thread; started a new thread (previous context was not carried over)',
   },
+  'codex.couldNotSeedThread': {
+    zh: '没能把之前的对话注入 Codex 会话，这一轮改用文字交接',
+    en: 'Could not add the previous conversation to the Codex thread; sent it as a text handoff instead',
+  },
   'codex.couldNotReadVersion': { zh: '无法读取 Codex 版本号', en: 'Could not read the Codex version' },
   'codex.couldNotRewindThread': {
     zh: '无法回退 Codex 会话到这条消息，已开始新会话（之前的上下文没有带过去）',

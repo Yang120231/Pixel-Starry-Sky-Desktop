@@ -95,6 +95,8 @@ export class ClaudeAdapter implements EngineAdapter {
   private probing: Promise<EngineCatalog> | null = null
   /** 原生安装器和 npm 装的版本号一致，都按这个包查最新版本 */
   readonly npmPackage = '@anthropic-ai/claude-code'
+  /** 跨引擎接力：别的引擎期间的聊天直接写进 Claude Code 的会话记录（chat-log.ts） */
+  readonly seedsHistory = true
 
   constructor(private readonly opts: ClaudeAdapterOptions = {}) {}
 

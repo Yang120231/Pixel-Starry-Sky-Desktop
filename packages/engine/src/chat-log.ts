@@ -1,0 +1,143 @@
+// 跨引擎接力只带「聊天」：用户说过的话和助手每轮的最后一条回复，直接注入新引擎的原生会话。
+// 命令输出、工具调用、文件改动都是工作区里的状态，新引擎和旧引擎面对同一个目录，自己看就行；
+// 重新推不出来的只有用户说过什么、助手得出了什么结论。所以这里不渲染那些条目。
+import type { Item } from '@pixelsky/protocol'
+
+/** 一轮回放：用户说了什么，助手最后回了什么（助手那条可能没有，例如被打断） */
+export interface ChatTurn {
+  /** 这一轮用户消息条目的 id；写进 Claude 记录当 uuid，回退时照样找得到 */
+  id: string
+  /** 用户消息原文（含附件名），已按上限截断 */
+  user: string
+  /** 这一轮最后一条有内容的助手回复，没有为 null */
+  assistant: string | null
+}
+
+/** 发给支持原生注入的引擎的交接：注入不了时退回 fallback（旧的文字交接材料） */
+export interface ChatSeed {
+  /** 更早几轮的概要，接在第一轮用户话前面；全部装得下时为 null */
+  overview: string | null
+  turns: ChatTurn[]
+  /** 注入失败时加在用户消息前面的文字交接材料 */
+  fallback: string
+}
+
+export interface ChatLogOptions {
+  /** 单条用户消息的字数上限 */
+  userLimit?: number
+  /** 单条助手回复的字数上限 */
+  assistantLimit?: number
+}
+
+const DEFAULT_USER_LIMIT = 4_000
+const DEFAULT_ASSISTANT_LIMIT = 8_000
+/** 回放原文的总字数上限；超出的更早几轮只留用户的要求 */
+export const DEFAULT_CHAT_BUDGET = 60_000
+const OVERVIEW_ITEM_CHARS = 300
+const OVERVIEW_CHARS = 6_000
+
+const clip = (text: string, max: number): string => (text.length > max ? `${text.slice(0, max)}…（已截断）` : text)
+
+/** 有内容的助手回复才算数：思考、提示、统计都不是回复 */
+const isReply = (item: Item): item is Extract<Item, { kind: 'assistant' }> =>
+  item.kind === 'assistant' && item.text.trim().length > 0
+
+/** 附件名接在用户话后面；用户只发了文件没写字时，附件名就是这条消息 */
+function userText(item: Extract<Item, { kind: 'user' }>): string {
+  const names = [...(item.attachments ?? []).map(a => a.name), ...(item.files ?? []).map(f => f.name)]
+  const text = item.text.trim()
+  return names.length ? `${text}（附：${names.join('、')}）` : text
+}
+
+/**
+ * 把对话条目压成一轮一轮的聊天。
+ * 中途补充（guidance）不是新的一轮，并进当前这轮的用户话里；第一条普通用户消息之前的零散条目丢掉。
+ */
+export function buildChatLog(items: readonly Item[], opts: ChatLogOptions = {}): ChatTurn[] {
+  const userLimit = opts.userLimit ?? DEFAULT_USER_LIMIT
+  const assistantLimit = opts.assistantLimit ?? DEFAULT_ASSISTANT_LIMIT
+  const turns: ChatTurn[] = []
+  for (const item of items) {
+    if (item.kind === 'user') {
+      const text = userText(item)
+      if (!text) continue
+      if (item.mode === 'guidance' && turns.length > 0) {
+        const last = turns[turns.length - 1]
+        last.user = `${last.user}\n（中途补充）${text}`
+        continue
+      }
+      turns.push({ id: item.id, user: clip(text, userLimit), assistant: null })
+      continue
+    }
+    // 助手回复：这一轮的最后一条胜出，过程宣告（「我会先…」）被后面的结论顶掉
+    if (isReply(item) && turns.length > 0) turns[turns.length - 1].assistant = clip(item.text.trim(), assistantLimit)
+  }
+  return turns
+}
+
+/**
+ * 太长的聊天按「最近的留全文、更早的捏成概要」处理，和 Codex 恢复会话的做法一致
+ * （codex-rs/rollout/src/model_context.rs：压缩摘要 + 压缩之后的原文）。
+ * turns 按时间顺序传入；至少留最近一轮。
+ */
+export function fitChatLog(
+  turns: readonly ChatTurn[],
+  budget: number,
+  overview: (turns: readonly ChatTurn[]) => string | null,
+): { overview: string | null; turns: ChatTurn[] } {
+  const size = (turn: ChatTurn): number => turn.user.length + (turn.assistant?.length ?? 0) + 16
+  let used = 0
+  let from = turns.length
+  for (let i = turns.length - 1; i >= 0; i--) {
+    const next = used + size(turns[i])
+    if (i < turns.length - 1 && next > budget) break
+    used = next
+    from = i
+  }
+  if (from === 0) return { overview: null, turns: [...turns] }
+  return { overview: overview(turns.slice(0, from)), turns: turns.slice(from) }
+}
+
+/** 装不下的更早几轮：只列用户的要求，从最近的往前装 */
+export function chatOverview(turns: readonly ChatTurn[]): string | null {
+  if (turns.length === 0) return null
+  const lines: string[] = []
+  let used = 0
+  for (let i = turns.length - 1; i >= 0; i--) {
+    const line = `- ${clip(turns[i].user.replace(/\s+/g, ' ').trim(), OVERVIEW_ITEM_CHARS)}`
+    if (lines.length > 0 && used + line.length + 1 > OVERVIEW_CHARS) break
+    lines.unshift(line)
+    used += line.length + 1
+  }
+  const omitted = turns.length - lines.length
+  return [
+    `（像素星空补充：这段对话更早还有 ${turns.length} 轮，原文没有带过来，下面是其中用户的要求）`,
+    ...(omitted > 0 ? [`（更早的 ${omitted} 条已省略）`] : []),
+    ...lines,
+  ].join('\n')
+}
+
+/** 交接用的聊天回放；没有可回放的聊天时返回 null */
+export function buildChatSeed(items: readonly Item[], fallback: string, budget = DEFAULT_CHAT_BUDGET): ChatSeed | null {
+  const log = buildChatLog(items)
+  if (log.length === 0) return null
+  const fitted = fitChatLog(log, budget, chatOverview)
+  return { overview: fitted.overview, turns: fitted.turns, fallback }
+}
+
+/** 概要接在第一轮用户话前面，注入时当成同一条用户消息 */
+export function seedTurns(seed: ChatSeed): ChatTurn[] {
+  if (!seed.overview || seed.turns.length === 0) return seed.turns
+  const [first, ...rest] = seed.turns
+  return [{ ...first, user: `${seed.overview}\n\n${first.user}` }, ...rest]
+}
+
+/** 被打断、没有回复的一轮：原生会话里用户和助手要交替，补一句占位 */
+export const NO_REPLY = '（这一轮没有回复，可能被中断了）'
+
+/** 交接提示条目的 detail：注入了什么就给用户看什么 */
+export function renderSeed(seed: ChatSeed): string {
+  return seedTurns(seed)
+    .map(turn => `用户：${turn.user}\n助手：${turn.assistant ?? NO_REPLY}`)
+    .join('\n\n')
+}

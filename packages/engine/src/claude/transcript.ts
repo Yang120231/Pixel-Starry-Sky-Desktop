@@ -1,9 +1,11 @@
 // Claude Code 自己的会话记录文件：<CLAUDE_CONFIG_DIR 或 ~/.claude>/projects/<编码后的工作目录>/<session_id>.jsonl
 // 编码规则：工作目录里不是字母数字的字符都换成 '-'（例如 D:\像素星空 → D------）。
 // 很长的路径会被截断并加哈希，所以按规则找不到时，再在所有项目目录里找一遍。
+import { randomUUID } from 'node:crypto'
 import {
   appendFileSync,
   closeSync,
+  mkdirSync,
   openSync,
   readFileSync,
   readSync,
@@ -169,4 +171,53 @@ export function copyTranscriptUntil(file: string, at: string, sessionId: string)
     }
   }
   return null
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * 跨引擎接力：把别的引擎期间的聊天按 Claude Code 自己的格式写进会话记录，之后 --resume 就带着这些轮次。
+ * 没有记录时新建（从头开始），有记录时接在当前分支末端后面，再让 last-prompt 指向新的末端。
+ * 用户消息的 uuid 用我们的条目 id（发送时也是这么写的），回退时照样找得到截断点。返回记录文件路径
+ */
+export function seedTranscript(
+  projectsDir: string,
+  cwd: string,
+  sessionId: string,
+  turns: readonly { id: string; user: string; assistant: string | null }[],
+  noReply: string,
+): string {
+  const existing = findClaudeTranscript(projectsDir, cwd, sessionId)
+  const file = existing ?? join(projectsDir, encodeCwd(cwd), `${sessionId}.jsonl`)
+  let parent = existing ? currentLeaf(existing) : null
+  const timestamp = new Date().toISOString()
+  const base = { isSidechain: false, userType: 'external', cwd, sessionId, timestamp }
+  const lines: string[] = []
+  for (const turn of turns) {
+    const userId = UUID.test(turn.id) ? turn.id : randomUUID()
+    lines.push(
+      JSON.stringify({
+        ...base,
+        parentUuid: parent,
+        type: 'user',
+        uuid: userId,
+        message: { role: 'user', content: turn.user },
+      }),
+    )
+    const replyId = randomUUID()
+    lines.push(
+      JSON.stringify({
+        ...base,
+        parentUuid: userId,
+        type: 'assistant',
+        uuid: replyId,
+        message: { role: 'assistant', type: 'message', content: [{ type: 'text', text: turn.assistant ?? noReply }] },
+      }),
+    )
+    parent = replyId
+  }
+  if (!existing) mkdirSync(dirname(file), { recursive: true })
+  appendFileSync(file, lines.join('\n') + '\n')
+  if (existing) pointLastPrompt(file, sessionId)
+  return file
 }

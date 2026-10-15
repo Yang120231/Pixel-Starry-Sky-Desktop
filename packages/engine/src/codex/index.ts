@@ -39,6 +39,8 @@ export class CodexAdapter implements EngineAdapter {
   readonly updateNeedsIdle = true
   /** thread id 由 Codex 分配：宿主不预先塞 id（docs/codex-engine.md 回退 / 分叉一节） */
   readonly enginePicksSessionId = true
+  /** 跨引擎接力：别的引擎期间的聊天用 thread/inject_items 注入线程（chat-log.ts） */
+  readonly seedsHistory = true
   private env(): NodeJS.ProcessEnv {
     return { ...engineEnv(this.opts.env ?? process.env), ...this.opts.extraEnv?.() }
   }

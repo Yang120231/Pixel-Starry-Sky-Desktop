@@ -10,6 +10,7 @@ import {
   type Item,
   type SessionRecord,
 } from '@pixelsky/protocol'
+import { buildChatSeed, renderSeed, type ChatSeed } from '../chat-log'
 import { buildHandoff, handoffEngines } from '../handoff'
 import { ENGINES } from '../registry'
 import type { HostContext } from './context'
@@ -33,8 +34,10 @@ export function derivedSeen(items: readonly Item[], engine: EngineId, fallback: 
 
 /** 新引擎收到的这条消息要不要带交接 */
 export interface HandoffPlan {
-  /** 真正发给引擎的文字（可能带着交接材料） */
+  /** 真正发给引擎的文字（引擎不能注入聊天时，前面带着交接材料） */
   text: string
+  /** 要注入引擎原生会话的聊天（适配器 seedsHistory 时）；注入不了时适配器退回 seed.fallback */
+  seed?: ChatSeed
   /** 放在用户消息前面的提示条目，detail 是交接材料原文 */
   notice: Item | null
   /** 斜杠命令（如 /compact）本该带交接但没带：这一轮结束时不推进游标，交接留给下一条普通消息 */
@@ -127,7 +130,9 @@ export class HostHandoff {
   }
 
   /**
-   * 派发一条消息前算要不要给引擎带交接：它没看过的对话（游标之后的，或游标不在了就是全部）整理成材料。
+   * 派发一条消息前算要不要给引擎带交接：它没看过的对话（游标之后的，或游标不在了就是全部）。
+   * 能注入的引擎只带聊天（用户话和每轮的助手结论），直接补进它的原生会话；
+   * 不能注入的引擎（或注入失败时）退回整理好的文字材料，加在消息前面。
    * 旧记录（没有 engineSessions）当前引擎看到了全部对话，不带。
    */
   plan(id: string, record: SessionRecord, text: string, files: FileAttachment[] | undefined): HandoffPlan {
@@ -152,6 +157,24 @@ export class HostHandoff {
     if (text.trimStart().startsWith('/')) return { ...plain, hold: true }
     const name = ENGINES[record.engine].name
     const others = handoffEngines(delta, record.engine)
+    const from = others.length ? others.map(e => ENGINES[e].name).join('、') : '其他引擎'
+    const seed = this.ctx.adapters[record.engine]?.seedsHistory ? buildChatSeed(delta, built.text) : null
+    if (seed)
+      return {
+        text: body,
+        seed,
+        hold: false,
+        notice: {
+          kind: 'notice',
+          id: randomUUID(),
+          level: 'info',
+          text:
+            mode === 'full'
+              ? `已把之前的聊天带给 ${name}（${seed.turns.length} 轮）`
+              : `已把 ${from} 期间的聊天同步给 ${name}（${seed.turns.length} 轮）`,
+          detail: renderSeed(seed),
+        },
+      }
     return {
       text: `${built.text}\n\n${body}`,
       hold: false,
@@ -162,7 +185,7 @@ export class HostHandoff {
         text:
           mode === 'full'
             ? `已把之前的对话交接给 ${name}（${built.count} 条）`
-            : `已把 ${others.length ? others.map(e => ENGINES[e].name).join('、') : '其他引擎'} 期间的进展同步给 ${name}`,
+            : `已把 ${from} 期间的进展同步给 ${name}`,
         detail: built.text,
       },
     }

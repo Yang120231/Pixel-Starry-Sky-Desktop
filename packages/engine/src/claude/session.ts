@@ -16,6 +16,7 @@ import {
   viaGateway,
 } from '@pixelsky/protocol'
 import { queueSettings } from '../queue'
+import { NO_REPLY, seedTurns, type ChatSeed } from '../chat-log'
 import { QUICK_CLOSE_MS, type CloseOptions, type EngineSession, type Launcher, type SessionContext } from '../adapter'
 import { ClaudeProcess, type ControlRequestFromCli } from './process'
 import { loadSavedRuns } from './runs'
@@ -26,6 +27,7 @@ import {
   claudeTranscriptExists,
   copyTranscriptUntil,
   findClaudeTranscript,
+  seedTranscript,
 } from './transcript'
 import { ClaudeTranslator } from './translate'
 import { obj, str } from './shape'
@@ -243,6 +245,8 @@ export class ClaudeSession implements EngineSession {
   private capabilities = new Set<string>()
   private proc: ClaudeProcess | null = null
   private starting: Promise<ClaudeProcess> | null = null
+  /** 跨引擎接力还没注入的聊天：启动进程时写进会话记录；进程已经在跑或写不进去时，发消息时退回文字交接 */
+  private seed: ChatSeed | null = null
   private readonly translator: ClaudeTranslator
   private readonly approvals = new Map<string, PendingApproval>()
   private turnWaiters: Array<() => void> = []
@@ -297,12 +301,17 @@ export class ClaudeSession implements EngineSession {
     if (dir) this.translator.runs.seed(loadSavedRuns(dir))
   }
 
-  send(text: string, turnId: string, userItemId: string, attachments?: ImageAttachment[]): void {
+  send(text: string, turnId: string, userItemId: string, attachments?: ImageAttachment[], seed?: ChatSeed): void {
     this.translator.startTurn(turnId)
+    if (seed) this.seed = seed
     this.ensureProcess().then(
       // 启动期间用户已停止时，不让延迟完成的 spawn 再把原文送出。
       proc => {
-        if (!this.closed && this.translator.activeTurn === turnId) proc.sendUserMessage(text, userItemId, attachments)
+        if (this.closed || this.translator.activeTurn !== turnId) return
+        // 启动时没注入进记录（进程本来就在跑、有待执行的回退 / 分叉、写入失败）：交接材料加在消息前面
+        const left = this.seed
+        this.seed = null
+        proc.sendUserMessage(left ? `${left.fallback}\n\n${text}` : text, userItemId, attachments)
       },
       (err: Error) => this.translator.abortTurn(`无法启动 Claude Code：${err.message}`),
     )
@@ -393,6 +402,7 @@ export class ClaudeSession implements EngineSession {
     const rec = this.ctx.record()
     if (!isDir(rec.cwd)) throw new Error(`工作目录不存在：${rec.cwd}`)
     const sid = rec.engineSessionId ?? rec.id
+    const seeded = this.injectSeed(rec.cwd, sid, rec.pendingRewind ?? null, rec.pendingFork ?? null)
     const resume = claudeTranscriptExists(this.deps.projectsDir, rec.cwd, sid)
     const rewindAt = resume ? (rec.pendingRewind ?? null) : null
     const fork = resume ? null : (rec.pendingFork ?? null)
@@ -426,9 +436,34 @@ export class ClaudeSession implements EngineSession {
             ? COMPACTED_NOTICE
             : '无法在 Claude Code 记录中回退到这条消息，已开始新的引擎会话（之前的上下文没有带过去）',
         )
-      else if (resume)
+      else if (seeded) {
+        // 注入的记录没被认出来：新会话里改用文字交接，这一轮照样带上之前的对话
+        this.seed = seeded
+        this.translator.notice('warn', '没能把之前的对话写进 Claude Code 的会话记录，这一轮改用文字交接')
+      } else if (resume)
         this.translator.notice('warn', '无法恢复 Claude Code 的会话记录，已开始新的引擎会话（之前的上下文没有带过去）')
       return proc
+    }
+  }
+
+  /**
+   * 跨引擎接力：把还没注入的聊天写进这个引擎会话的记录（没有就新建），之后照常 --resume。
+   * 有待执行的回退 / 分叉时不写（截断点之后的条目加载不到），留给发消息时的文字交接。返回写进去的那份，没写为 null
+   */
+  private injectSeed(
+    cwd: string,
+    sid: string,
+    rewindAt: string | null,
+    fork: { from: string; at: string } | null,
+  ): ChatSeed | null {
+    const seed = this.seed
+    if (!seed || rewindAt || fork) return null
+    try {
+      seedTranscript(this.deps.projectsDir, cwd, sid, seedTurns(seed), NO_REPLY)
+      this.seed = null
+      return seed
+    } catch {
+      return null
     }
   }
 

@@ -1,9 +1,16 @@
 // 截断点在上下文压缩之前时，自己复制 Claude Code 的记录（docs/ui/rewind-fork-sidechat.md §2.4）
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { anchorPosition, copyTranscriptUntil, currentLeaf, pointLastPrompt } from '../src/claude/transcript'
+import {
+  anchorPosition,
+  copyTranscriptUntil,
+  currentLeaf,
+  findRewindAnchor,
+  pointLastPrompt,
+  seedTranscript,
+} from '../src/claude/transcript'
 
 let dir: string
 let file: string
@@ -99,5 +106,63 @@ describe('当前分支的最后一条', () => {
     const count = lines().length
     pointLastPrompt(file, 's')
     expect(lines()).toHaveLength(count)
+  })
+})
+
+describe('跨引擎接力：把聊天写进 Claude Code 的记录', () => {
+  const uuid = '11111111-2222-4333-8444-555555555555'
+  const read = (path: string) =>
+    readFileSync(path, 'utf8')
+      .trim()
+      .split('\n')
+      .flatMap(l => {
+        try {
+          return [JSON.parse(l) as Record<string, unknown>]
+        } catch {
+          return []
+        }
+      })
+
+  it('没有记录时新建：用户和助手交替，从头接成一条链', () => {
+    const path = seedTranscript(
+      dir,
+      '/work/proj',
+      'fresh',
+      [
+        { id: uuid, user: '问', assistant: '答' },
+        { id: 'not-a-uuid', user: '再问', assistant: null },
+      ],
+      '（没回复）',
+    )
+    expect(path).toBe(join(dir, '-work-proj', 'fresh.jsonl'))
+    const lines = read(path)
+    expect(lines.map(l => l.type)).toEqual(['user', 'assistant', 'user', 'assistant'])
+    expect(lines[0]).toMatchObject({
+      parentUuid: null,
+      uuid,
+      sessionId: 'fresh',
+      message: { role: 'user', content: '问' },
+    })
+    expect(lines[1]).toMatchObject({ parentUuid: uuid, message: { content: [{ type: 'text', text: '答' }] } })
+    // 不是 uuid 的条目 id 换成新的，链照样接上
+    expect(lines[2].uuid).not.toBe('not-a-uuid')
+    expect(lines[2].parentUuid).toBe(lines[1].uuid)
+    expect(lines[3]).toMatchObject({ message: { content: [{ type: 'text', text: '（没回复）' }] } })
+    // 回退时按我们的条目 id 照样找得到截断点
+    expect(findRewindAnchor(path, [uuid])).toEqual({ at: null })
+    expect(currentLeaf(path)).toBe(lines[3].uuid)
+  })
+
+  it('已有记录时接在当前末端后面，并让 last-prompt 指向新末端', () => {
+    // Claude Code 的记录放在项目目录下：<projects>/<编码后的工作目录>/<会话 id>.jsonl
+    const existing = join(dir, '-work-proj', 'old.jsonl')
+    mkdirSync(join(dir, '-work-proj'))
+    writeFileSync(existing, readFileSync(file))
+    const path = seedTranscript(dir, '/work/proj', 'old', [{ id: uuid, user: '问', assistant: '答' }], '')
+    expect(path).toBe(existing)
+    const lines = read(path)
+    const seeded = lines.filter(l => l.sessionId === 'old' && (l.type === 'user' || l.type === 'assistant')).slice(-2)
+    expect(seeded[0]).toMatchObject({ uuid, parentUuid: 'u2' })
+    expect(lines.at(-1)).toMatchObject({ type: 'last-prompt', leafUuid: seeded[1].uuid })
   })
 })

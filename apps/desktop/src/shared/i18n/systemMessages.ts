@@ -605,6 +605,18 @@ export const systemMessages = {
     zh: '无法恢复 Claude Code 的会话记录，已开始新的引擎会话（之前的上下文没有带过去）',
     en: 'Could not restore Claude Code history. Started a new engine session without the previous context.',
   },
+  'system.couldNotSeedClaude': {
+    zh: '没能把之前的对话写进 Claude Code 的会话记录，这一轮改用文字交接',
+    en: 'Could not add the previous conversation to Claude Code history; sent it as a text handoff this turn.',
+  },
+  'system.chatSeeded': {
+    zh: '已把之前的聊天带给 {p0}（{p1} 轮）',
+    en: 'Brought the previous chat to {p0} ({p1} turns)',
+  },
+  'system.chatSeedSynced': {
+    zh: '已把 {p0} 期间的聊天同步给 {p1}（{p2} 轮）',
+    en: 'Synced the chat from {p0} to {p1} ({p2} turns)',
+  },
   'system.fastModeTemporarilyUnavailable': {
     zh: 'Fast 模式暂时不可用',
     en: 'Fast mode temporarily unavailable',

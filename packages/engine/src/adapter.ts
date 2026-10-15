@@ -14,6 +14,7 @@ import type {
   SessionRecord,
   SessionSettings,
 } from '@pixelsky/protocol'
+import type { ChatSeed } from './chat-log'
 
 /** 要启动的程序：可执行文件 + 固定在前面的参数（例如用 node 跑 cli.js 时是 [cli.js]） */
 export interface Launcher {
@@ -60,8 +61,10 @@ export interface EngineSession {
   /**
    * 开始新的一轮。EngineHost 已经发出了用户消息条目和 turn_started，
    * 适配器负责在这一轮结束时发 turn_completed（带同一个 turnId），出错也要发。
+   * seed：跨引擎接力时这一轮之前要补进上下文的聊天，只发给 seedsHistory 的适配器；
+   * 注入进原生会话，注入不了就把 seed.fallback 加在 text 前面发
    */
-  send(text: string, turnId: string, userItemId: string, attachments?: ImageAttachment[]): void
+  send(text: string, turnId: string, userItemId: string, attachments?: ImageAttachment[], seed?: ChatSeed): void
   /** opts.background：连同后台子智能体一起停；没有后台任务的引擎忽略 */
   interrupt(opts?: InterruptOptions): Promise<void>
   answer(requestId: string, decision: ApprovalDecision): void
@@ -133,6 +136,11 @@ export interface EngineAdapter {
   ): { at: string | null } | null | Promise<{ at: string | null } | null>
   /** 引擎自己分配会话 id（Codex）：宿主不能预先塞 randomUUID，新会话的 engineSessionId 用 null，启动时由引擎新建 */
   readonly enginePicksSessionId?: boolean
+  /**
+   * 跨引擎接力能把别的引擎期间的聊天直接注入原生会话（send 的 seed）。
+   * 不支持的引擎由宿主把交接材料加在消息前面发
+   */
+  readonly seedsHistory?: boolean
   /**
    * 回退恢复代码：预览或还原到这条用户消息之前的文件（docs/ui/rewind-fork-sidechat.md §1）。
    * 还原时先预览，把要动的文件交给 beforeRestore（存一份当前内容），再还原；返回预览出的文件列表

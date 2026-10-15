@@ -174,7 +174,7 @@ export class HostTurn {
       if (rt.snapshot.suggestion) m.events.apply(id, { type: 'suggestion', text: null })
       m.events.apply(id, { type: 'status', state: 'running' })
       m.events.apply(id, { type: 'turn_started', turnId, execution: queueSettings(rt.execution) })
-      rt.session.send(handoff.text, turnId, userItemId, item.attachments)
+      rt.session.send(handoff.text, turnId, userItemId, item.attachments, handoff.seed)
     } catch (err) {
       if (ctx.runtimes.get(id) !== rt) return
       m.queue.changeQueue(id, item.id, { status: 'failed', error: (err as Error).message })

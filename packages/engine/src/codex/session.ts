@@ -11,6 +11,7 @@ import type {
 } from '@pixelsky/protocol'
 import { EMPTY_FLAGS, isQuietWarning, viaGateway } from '@pixelsky/protocol'
 import { QUICK_CLOSE_MS, type CloseOptions, type EngineSession, type Launcher, type SessionContext } from '../adapter'
+import { NO_REPLY, seedTurns, type ChatSeed } from '../chat-log'
 import { CodexProcess, array, object, string, type Message } from './process'
 import { readCodexTurns, revertTarget } from './branch'
 import { codexCatalog } from './catalog'
@@ -366,7 +367,7 @@ export class CodexSession implements EngineSession {
     if (skill?.path) input.push({ type: 'skill', name: skill.name, path: skill.path })
     return input
   }
-  send(text: string, turnId: string, userItemId: string, attachments: ImageAttachment[] = []): void {
+  send(text: string, turnId: string, userItemId: string, attachments: ImageAttachment[] = [], seed?: ChatSeed): void {
     if (this.active) {
       this.ctx.emit({ type: 'turn_completed', turnId, outcome: 'failed', error: 'Codex turn already running' })
       return
@@ -386,11 +387,11 @@ export class CodexSession implements EngineSession {
     this.nativeTurnId = null
     this.reportedError = null
     const active = this.active
-    void this.run(text, userItemId, attachments).catch(error => {
+    void this.run(text, userItemId, attachments, seed).catch(error => {
       if (this.active === active) this.finish('failed', (error as Error).message)
     })
   }
-  private async run(text: string, userItemId: string, attachments: ImageAttachment[]): Promise<void> {
+  private async run(text: string, userItemId: string, attachments: ImageAttachment[], seed?: ChatSeed): Promise<void> {
     const active = this.active
     await this.open()
     if (!this.active || this.active !== active || this.closed) return
@@ -423,10 +424,13 @@ export class CodexSession implements EngineSession {
       })
       await this.proc!.request('thread/compact/start', { threadId: this.threadId })
     } else {
+      // 跨引擎接力：别的引擎期间的聊天先注入线程；注入不了就把交接材料加在消息前面
+      const body = seed && !(await this.injectSeed(seed)) ? `${seed.fallback}\n\n${text}` : text
+      if (!this.active || this.active !== active || this.closed) return
       const result = await this.proc!.request('turn/start', {
         threadId: this.threadId,
         clientUserMessageId: userItemId,
-        input: this.input(text, attachments),
+        input: this.input(body, attachments),
         ...codexPermission(this.settings.permissionMode, this.ctx.record().cwd, this.ctx.record().extraDirs),
         ...(this.settings.model ? { model: this.settings.model } : {}),
         ...(this.settings.effort ? { effort: this.settings.effort } : {}),
@@ -533,6 +537,37 @@ export class CodexSession implements EngineSession {
     } catch (error) {
       this.guidance.delete(id)
       throw error
+    }
+  }
+  /** 把聊天作为原始 Responses 消息追加进线程的模型历史（thread/inject_items）；旧版 Codex 没有这个方法时返回 false */
+  private async injectSeed(seed: ChatSeed): Promise<boolean> {
+    const message = (role: 'user' | 'assistant', text: string): Message => ({
+      type: 'message',
+      role,
+      content: [{ type: role === 'user' ? 'input_text' : 'output_text', text }],
+    })
+    try {
+      await this.proc!.request('thread/inject_items', {
+        threadId: this.threadId,
+        items: seedTurns(seed).flatMap(turn => [
+          message('user', turn.user),
+          message('assistant', turn.assistant ?? NO_REPLY),
+        ]),
+      })
+      return true
+    } catch (error) {
+      if (!this.proc?.alive) throw error
+      this.ctx.emit({
+        type: 'item_completed',
+        item: {
+          kind: 'notice',
+          id: `cx-seed-${Date.now()}-${++this.noticeSeq}`,
+          level: 'warn',
+          text: 'Could not add the previous conversation to the Codex thread; sent it as a text handoff instead',
+          detail: null,
+        },
+      })
+      return false
     }
   }
   private consume(id: string): void {

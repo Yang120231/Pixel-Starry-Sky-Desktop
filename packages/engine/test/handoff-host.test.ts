@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { EngineId, EngineInfo, Item, SessionRecord, SessionSettings } from '@pixelsky/protocol'
 import type { EngineAdapter, EngineSession, SessionContext } from '../src/adapter'
+import type { ChatSeed } from '../src/chat-log'
 import type { EngineHostOptions } from '../src/host/context'
 import { EngineHost } from '../src/host'
 import { ENGINES } from '../src/registry'
@@ -30,6 +31,8 @@ const until = async (fn: () => boolean) => {
 class FakeSession implements EngineSession {
   active: string | null = null
   inputs: string[] = []
+  /** 每次 send 收到的聊天回放（没有为 undefined） */
+  seeds: (ChatSeed | undefined)[] = []
   closed = false
   /** 创建时记录里的引擎会话 id（验证换回来时用的是原来的） */
   readonly startId: string | null
@@ -40,9 +43,10 @@ class FakeSession implements EngineSession {
   ) {
     this.startId = ctx.record().engineSessionId
   }
-  send(text: string, turnId: string): void {
+  send(text: string, turnId: string, _userItemId: string, _attachments?: unknown, seed?: ChatSeed): void {
     this.active = turnId
     this.inputs.push(text)
+    this.seeds.push(seed)
     if (!this.ctx.record().engineSessionId) this.ctx.setEngineSessionId(`${this.engine}-sid-${this.inputs.length}`)
     if (this.auto) setTimeout(() => this.finish(), 0)
   }
@@ -86,6 +90,7 @@ class FakeAdapter implements EngineAdapter {
   constructor(
     readonly engine: EngineId,
     readonly enginePicksSessionId?: boolean,
+    readonly seedsHistory?: boolean,
   ) {}
   async info(): Promise<EngineInfo> {
     return { ...ENGINES[this.engine], status: 'ready', version: 'fake', path: 'fake', message: null }
@@ -100,9 +105,9 @@ class FakeAdapter implements EngineAdapter {
   }
 }
 
-function setup(options: Partial<EngineHostOptions> = {}) {
-  const claude = new FakeAdapter('claude'),
-    codex = new FakeAdapter('codex', true)
+function setup(options: Partial<EngineHostOptions> = {}, seeds = false) {
+  const claude = new FakeAdapter('claude', false, seeds),
+    codex = new FakeAdapter('codex', true, seeds)
   const host = new EngineHost({ dataDir: join(root, 'data'), adapters: { claude, codex }, emit: () => {}, ...options })
   hosts.push(host)
   const project = host.addProject(root)
@@ -179,6 +184,40 @@ describe('跨引擎接力：换引擎', () => {
     await say('第三句')
     expect(codex.sessions[0].inputs[1]).toBe('第三句')
     expect(snap().items.filter(i => i.kind === 'notice')).toHaveLength(1)
+  })
+
+  it('能注入聊天的引擎：消息原样发，之前的聊天作为回放交给适配器，文字交接只当兜底', async () => {
+    const { host, codex, record, say, snap } = setup({}, true)
+    await say('第一句')
+    await host.update(record.id, { engine: 'codex' })
+    await say('第二句')
+    const session = codex.sessions[0]
+    expect(session.inputs[0]).toBe('第二句')
+    const seed = session.seeds[0]!
+    expect(seed.turns).toEqual([{ id: 'm1', user: '第一句', assistant: 'claude 的回复：第一句' }])
+    expect(seed.overview).toBeNull()
+    expect(seed.fallback.startsWith('<pixelsky-handoff')).toBe(true)
+    const notice = snap().items.findLast(i => i.kind === 'notice')
+    expect(notice).toMatchObject({ kind: 'notice', level: 'info', text: '已把之前的聊天带给 Codex（1 轮）' })
+    expect(notice?.kind === 'notice' && notice.detail).toBe('用户：第一句\n助手：claude 的回复：第一句')
+    // 游标推进：再发一条不带回放
+    await say('第三句')
+    expect(session.inputs[1]).toBe('第三句')
+    expect(session.seeds[1]).toBeUndefined()
+  })
+
+  it('能注入聊天的引擎换回来：回放只含另一个引擎期间的轮次', async () => {
+    const { host, claude, record, say, snap } = setup({}, true)
+    await say('第一句')
+    await host.update(record.id, { engine: 'codex' })
+    await say('第二句')
+    await host.update(record.id, { engine: 'claude' })
+    await say('第三句')
+    const session = claude.sessions[1]
+    expect(session.inputs[0]).toBe('第三句')
+    expect(session.seeds[0]!.turns.map(t => t.user)).toEqual(['第二句'])
+    const notice = snap().items.findLast(i => i.kind === 'notice')
+    expect(notice?.kind === 'notice' && notice.text).toBe('已把 Codex 期间的聊天同步给 Claude Code（1 轮）')
   })
 
   it('historyTool 为真时交接里点名历史工具，并按记录判断；为假或没给时不提', async () => {
