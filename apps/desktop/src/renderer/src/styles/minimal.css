@@ -153,11 +153,20 @@
 
 /* 文件编辑器的路径行（对话模式的文件标签、代码模式的编辑器）：最小高度 40 → 28，长路径可换行；保存 / 刷新 / 换行等按钮悬停或聚焦才显示 */
 :root[data-minimal='on'] [data-file-editor-bar] {
+  position: relative;
   min-height: 28px;
   height: auto;
   padding-block: 0;
 }
+/* 按钮组不占位置，悬停时浮在路径行右端：否则窗口窄时它折到第二行，留下一行看不见的按钮 */
 :root[data-minimal='on'] [data-file-editor-bar] > :not([data-file-breadcrumbs], [data-symbol-crumb]) {
+  position: absolute;
+  top: 0;
+  right: 8px;
+  height: 28px;
+  flex-wrap: nowrap;
+  border-radius: 6px;
+  background: var(--bg-popover);
   opacity: 0;
   transition: opacity 120ms ease;
 }
