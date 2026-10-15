@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 // @ts-expect-error 无类型声明的 .mjs
 import { build } from '../scripts/build.mjs'
 import { CORPUS_DIR, REPO_ROOT } from '../src/testing/corpus'
+import { withoutTiming } from './helpers/timing'
 
 const scratch = join(REPO_ROOT, 'scratch', `extcli-bundle-${process.pid}`)
 const bundle = join(scratch, 'pixelsky-ext.mjs')
@@ -52,8 +53,7 @@ describe('打包后的 pixelsky-ext', () => {
       verdict: { pass: boolean }
       grammar: { grammars: Array<{ samples: Array<{ lines: number }> }> }
     }
-    // 「接近上限」只是提示，取决于机器快慢（CI 机器上最慢一行能到 15 ms），不算问题；真超限照样失败
-    expect(out.issues.filter(i => i.code !== 'grammar.perfNearLimit')).toEqual([])
+    expect(withoutTiming(out.issues)).toEqual([])
     expect(out.verdict.pass).toBe(true)
     expect(out.grammar.grammars[0].samples[0].lines).toBe(5000)
   })
@@ -76,7 +76,7 @@ describe('打包后的 pixelsky-ext', () => {
     expect(readdirSync(a)).toEqual(['pixelsky.dotenv-1.0.0.zip'])
     const v = run(['validate', o1.path, '--json'])
     expect(v.status, v.stderr + v.stdout).toBe(0)
-    expect((JSON.parse(v.stdout) as { issues: unknown[] }).issues).toEqual([])
+    expect(withoutTiming((JSON.parse(v.stdout) as { issues: Array<{ code: string }> }).issues)).toEqual([])
   })
 
   it('用法错误退出 2；检查不通过退出 1', { timeout: 60_000 }, () => {

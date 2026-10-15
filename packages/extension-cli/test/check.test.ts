@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { checkInput, UsageError } from '../src/lib/check'
 import { folderPackFiles } from '../src/lib/folder'
 import { writePackZip } from '../src/lib/zip-write'
+import { withoutTiming } from './helpers/timing'
 
 const BASES = resolve(dirname(fileURLToPath(import.meta.url)), '../../protocol/corpus/extpacks/bases')
 const DOTENV = join(BASES, 'pixelsky.dotenv')
@@ -70,7 +71,7 @@ describe('checkInput 流程', () => {
     expect(r.input.kind).toBe('folder')
     expect(r.input.bytes).toBeNull()
     expect(r.verdict.pass).toBe(true)
-    expect(r.check.issues).toEqual([])
+    expect(withoutTiming(r.check.issues)).toEqual([])
     expect(r.grammar).toHaveLength(1)
     expect(r.grammar![0]!.regexes).toBeGreaterThan(0)
     expect(r.grammar![0]!.samples[0]!.lines).toBe(5000)

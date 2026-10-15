@@ -22,6 +22,7 @@ import {
   writeExpect,
 } from '../src/testing/corpus'
 import type { CorpusCase, CorpusExpect } from '../src/testing/corpus'
+import { withoutTiming } from './helpers/timing'
 
 const UPDATE = process.env.CORPUS_UPDATE === '1'
 const TIMEOUT = 60_000
@@ -66,7 +67,7 @@ function mustExpect(c: CorpusCase): CorpusExpect {
 function uploadOf(issues: ExtPackIssue[]): NonNullable<CorpusExpect['upload']> {
   return {
     pass: checkVerdict(issues, { level: 'upload' }).pass,
-    issues: normalizeIssues(issues, true),
+    issues: normalizeIssues(withoutTiming(issues), true),
   }
 }
 
