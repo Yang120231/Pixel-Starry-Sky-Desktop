@@ -142,6 +142,15 @@ export const modelChannelMessages = {
   },
   'modelChannels.authCard.switch': { zh: '切换账号', en: 'Switch account' },
   'modelChannels.authCard.logout': { zh: '取消授权', en: 'Sign out' },
+  'modelChannels.authCard.apiKey': { zh: '用 API Key 登录', en: 'Signed in with an API key' },
+  'modelChannels.authCard.provider': {
+    zh: '正在用 config.toml 里的接口「{p0}」，没有登录 ChatGPT',
+    en: 'Using the “{p0}” provider from config.toml, not signed in to ChatGPT',
+  },
+  'modelChannels.authCard.providerHint': {
+    zh: '这个接口不用授权，在这里取消不了。要改用 ChatGPT，先去掉 ~/.codex/config.toml 里的 model_provider，再回来授权',
+    en: 'This provider needs no sign-in and can’t be removed here. To use ChatGPT, remove model_provider from ~/.codex/config.toml, then sign in here',
+  },
   'modelChannels.authCard.remote': {
     zh: '现在选的是远程机器：那台机器上的引擎要在那台机器上登录（「机器与连接」里看）',
     en: 'A remote machine is selected: sign in to its engines on that machine (see Machines)',

@@ -130,7 +130,12 @@ export class CodexAdapter implements EngineAdapter {
       const found = { email: text(account.email), plan: text(account.planType) }
       const filled = Object.fromEntries(Object.entries(found).filter(([, v]) => v))
       if (Object.keys(filled).length) result.info.account = filled
-      if (!Object.keys(object(auth.account)).length && auth.requiresOpenaiAuth === true) {
+      if (auth.requiresOpenaiAuth === false) {
+        // config.toml 里配了自己的接口：不用登录也能跑，codex logout 取消不掉它
+        result.info.auth = { kind: 'provider', provider: this.catalogCache.currentProvider ?? undefined }
+      } else if (account.type === 'apiKey') result.info.auth = { kind: 'apiKey' }
+      else if (Object.keys(account).length) result.info.auth = { kind: 'login' }
+      else if (auth.requiresOpenaiAuth === true) {
         result.info.status = 'unauthenticated'
         result.info.message = 'Codex is not signed in. Run codex login.'
       }

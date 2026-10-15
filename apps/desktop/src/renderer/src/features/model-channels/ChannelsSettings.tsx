@@ -82,7 +82,8 @@ function Card({
         <span className="min-w-0 flex-1">
           <span className="block text-ui font-medium text-fg">{channelLabel(channel)}</span>
           <span className="block truncate text-meta text-fg-muted">{status}</span>
-          {sub && <span className="block truncate text-meta text-fg-faint">{sub}</span>}
+          {/* 说明和报错可能较长：换行显示，不截断 */}
+          {sub && <span className="block break-words text-meta text-fg-faint">{sub}</span>}
         </span>
         {actions && <span className="flex shrink-0 items-center gap-2">{actions}</span>}
       </div>
@@ -154,6 +155,8 @@ function AuthCard({ channel }: { channel: AuthChannel }) {
   const desc = tr(`modelChannels.${channel}.desc`)
   // 远程机器（SSH / WSL）上的引擎要在那台机器上登录（§6）
   const remote = machine !== 'local'
+  // Codex 用 config.toml 里自己的接口（docs/ui/model-channels.md §3 第 6 条）
+  const provider = state.kind === 'ready' && info?.auth?.kind === 'provider' ? (info.auth.provider ?? '') : null
 
   const logout = (then?: () => void): void => {
     setBusy(true)
@@ -170,15 +173,26 @@ function AuthCard({ channel }: { channel: AuthChannel }) {
   let actions: ReactNode = null
   if (state.kind === 'loading') status = <Spinner />
   else if (state.kind === 'ready') {
-    status = <span className="text-fg">{accountText(info?.account) || tr('modelChannels.auth.done')}</span>
-    actions = remote ? null : (
-      <>
-        <Button onClick={() => setConfirm('switch')}>{tr('modelChannels.authCard.switch')}</Button>
-        <Button variant="ghost" onClick={() => setConfirm('logout')}>
-          {tr('modelChannels.authCard.logout')}
-        </Button>
-      </>
+    const signedIn = accountText(info?.account)
+    status = (
+      <span className="text-fg">
+        {provider !== null
+          ? tr('modelChannels.authCard.provider', { p0: provider })
+          : signedIn || tr(info?.auth?.kind === 'apiKey' ? 'modelChannels.authCard.apiKey' : 'modelChannels.auth.done')}
+      </span>
     )
+    // 自己配置的接口不用授权、取消不掉：只在同时还登着账号时给「取消授权」
+    actions =
+      remote || (provider !== null && !info?.account) ? null : (
+        <>
+          {provider === null && (
+            <Button onClick={() => setConfirm('switch')}>{tr('modelChannels.authCard.switch')}</Button>
+          )}
+          <Button variant="ghost" onClick={() => setConfirm('logout')}>
+            {tr('modelChannels.authCard.logout')}
+          </Button>
+        </>
+      )
   } else if (state.kind === 'auth') {
     actions = remote ? null : (
       <Button variant="primary" onClick={() => openAuthDialog(channel)}>
@@ -202,6 +216,8 @@ function AuthCard({ channel }: { channel: AuthChannel }) {
             tr('modelChannels.authCard.remote')
           ) : error ? (
             <span className="text-danger">{translateMessage(error)}</span>
+          ) : provider !== null ? (
+            tr('modelChannels.authCard.providerHint')
           ) : state.kind !== 'ready' && state.kind !== 'auth' ? (
             desc
           ) : null

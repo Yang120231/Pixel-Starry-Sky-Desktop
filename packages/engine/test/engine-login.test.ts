@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { ENGINES, type EngineInfo, type EngineLogin, type HostEvent } from '@pixelsky/protocol'
+import { ENGINES, parseCodedError, type EngineInfo, type EngineLogin, type HostEvent } from '@pixelsky/protocol'
 import { EngineHost, type EngineAdapter } from '../src'
 import { runInteractive } from '../src/exec'
 import { makeTmp, removeTmp } from './helpers/tmp'
@@ -123,6 +123,41 @@ describe('授权登录', () => {
     const again = host.loginEngine('claude')
     expect(again.url).not.toBeNull()
     expect(logins().filter(l => l.phase === 'starting')).toHaveLength(1)
+  })
+
+  it('取消授权后重新检测仍然可用：不当成功，说明原因', async () => {
+    const root = makeTmp('engine-logout')
+    roots.push(root)
+    let auth: EngineInfo['auth'] = { kind: 'provider', provider: 'relay' }
+    let signedIn = true
+    const adapter: EngineAdapter = {
+      info: async () =>
+        ({
+          ...ENGINES.codex,
+          status: 'ready',
+          version: '0.162.1',
+          path: 'codex',
+          message: null,
+          auth,
+          ...(signedIn ? {} : { status: 'unauthenticated' }),
+        }) as EngineInfo,
+      logout: async () => ({ ok: true, output: 'Not logged in', version: null }),
+      createSession: () => {
+        throw new Error('不开会话')
+      },
+    }
+    const host = new EngineHost({ dataDir: join(root, 'data'), adapters: { codex: adapter }, emit: () => {} })
+    hosts.push(host)
+    const provider = await host.logoutEngine('codex')
+    expect(provider.ok).toBe(false)
+    expect(parseCodedError(provider.output)).toEqual({
+      code: 'engine.logoutProvider',
+      params: { engine: 'Codex', provider: 'relay' },
+    })
+    auth = { kind: 'apiKey' }
+    expect(parseCodedError((await host.logoutEngine('codex')).output)?.code).toBe('engine.logoutStillReady')
+    signedIn = false
+    expect(await host.logoutEngine('codex')).toMatchObject({ ok: true, version: '0.162.1' })
   })
 
   it('不支持登录的引擎抛出', () => {

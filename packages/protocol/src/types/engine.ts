@@ -98,6 +98,12 @@ export interface EngineInfo {
   latestVersion?: string
   /** 已授权的账号，探测时顺便填；拿不到就没有 */
   account?: { email?: string; plan?: string; org?: string }
+  /**
+   * 引擎靠什么调模型（目前只有 Codex 填）：login 账号授权（ChatGPT），apiKey 用 API Key 登录，
+   * provider 自己配置的接口（config.toml 的 model_provider，不需要登录，provider 是它的名字）。
+   * 没有这个字段时按账号授权显示
+   */
+  auth?: { kind: 'login' | 'apiKey' | 'provider'; provider?: string }
   caps: EngineCaps
 }
 

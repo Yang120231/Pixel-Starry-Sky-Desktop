@@ -1,6 +1,6 @@
 // 引擎授权登录（docs/ui/model-channels.md §3）：起适配器的登录命令，把进度推成 engine_login，
 // 命令成功退出后重新检测引擎（检测会广播引擎列表）。和 settings 里的安装 / 更新一样，同一个引擎同时只跑一个
-import type { EngineId, EngineLogin, EngineUpdateResult } from '@pixelsky/protocol'
+import { codedError, type EngineId, type EngineLogin, type EngineUpdateResult } from '@pixelsky/protocol'
 import type { LoginProcess } from '../adapter'
 import { parseClaudeLogin } from '../claude/login'
 import { parseCodexLogin } from '../codex/login'
@@ -78,8 +78,18 @@ export class HostLogin {
     if (!adapter?.logout) throw new Error('这个引擎不支持在应用里取消授权')
     this.cancelLogin(engine)
     const result = await adapter.logout()
-    const list = await this.ctx.m.settings.engines(true)
-    return { ...result, version: list.find(e => e.id === engine)?.version ?? null }
+    const info = (await this.ctx.m.settings.engines(true)).find(e => e.id === engine)
+    const version = info?.version ?? null
+    // 命令成功了但重新检测仍然可用：引擎在用自己配置的接口（或环境变量里的 Key），
+    // 说清楚原因，别让界面当成已经取消
+    if (result.ok && info?.status === 'ready') {
+      const error =
+        info.auth?.kind === 'provider'
+          ? codedError('engine.logoutProvider', { engine: info.name, provider: info.auth.provider ?? '' })
+          : codedError('engine.logoutStillReady', { engine: info.name })
+      return { ok: false, output: error.message, version }
+    }
+    return { ...result, version }
   }
 
   /** 退出应用：结束所有还在跑的登录命令 */

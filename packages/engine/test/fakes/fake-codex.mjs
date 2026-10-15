@@ -103,7 +103,12 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
   }
   switch (m.method) {
     case 'account/read':
-      response(m, { account: { type: 'apiKey' }, requiresOpenaiAuth: true })
+      response(
+        m,
+        process.env.FAKE_CODEX_ACCOUNT
+          ? JSON.parse(process.env.FAKE_CODEX_ACCOUNT)
+          : { account: { type: 'apiKey' }, requiresOpenaiAuth: true },
+      )
       break
     case 'model/list':
       response(m, { data: models, nextCursor: null })

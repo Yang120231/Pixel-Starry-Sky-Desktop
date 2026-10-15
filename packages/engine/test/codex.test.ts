@@ -54,6 +54,36 @@ function setup(idleMs = 50, opts: { env?: Record<string, string>; permissionMode
   return { adapter, session, log, events, messages }
 }
 describe('Codex app-server adapter', () => {
+  it('检测时分清授权来源：ChatGPT 登录、API Key、config.toml 里自己的接口、没登录', async () => {
+    const info = async (account: unknown, provider = 'openai') => {
+      const { adapter } = setup(50, {
+        env: { FAKE_CODEX_ACCOUNT: JSON.stringify(account), FAKE_CODEX_PROVIDER: provider },
+      })
+      const result = await adapter.info()
+      await host?.shutdown()
+      host = undefined
+      return result
+    }
+    const chatgpt = await info({
+      account: { type: 'chatgpt', email: 'a@example.com', planType: 'plus' },
+      requiresOpenaiAuth: true,
+    })
+    expect(chatgpt).toMatchObject({
+      status: 'ready',
+      auth: { kind: 'login' },
+      account: { email: 'a@example.com', plan: 'plus' },
+    })
+    expect(await info({ account: { type: 'apiKey' }, requiresOpenaiAuth: true })).toMatchObject({
+      status: 'ready',
+      auth: { kind: 'apiKey' },
+    })
+    const relay = await info({ account: null, requiresOpenaiAuth: false }, 'relay')
+    expect(relay).toMatchObject({ status: 'ready', auth: { kind: 'provider', provider: 'relay' } })
+    expect(relay.account).toBeUndefined()
+    const none = await info({ account: null, requiresOpenaiAuth: true })
+    expect(none.status).toBe('unauthenticated')
+    expect(none.auth).toBeUndefined()
+  })
   it('重连与失败的报错带上附加说明、错误类型和 HTTP 状态码，供界面查看详情', async () => {
     const { session } = setup()
     await host!.send(session.id, '重连')

@@ -31,6 +31,15 @@ export const errorMessages = {
   'errors.terminal.scriptNotFound': { zh: '找不到脚本：{name}', en: 'Script not found: {name}' },
   'errors.terminal.commandInvalid': { zh: '要运行的命令不正确', en: 'The command to run is invalid' },
   'errors.tasks.notFound': { zh: '任务已不存在', en: 'The task no longer exists' },
+  // 取消授权后引擎仍然可用（docs/ui/model-channels.md §3）
+  'errors.engine.logoutProvider': {
+    zh: '{engine} 没有登录账号，用的是 config.toml 里配置的接口「{provider}」，在这里取消不了。要停用它，去掉配置里的 model_provider',
+    en: '{engine} isn’t signed in to an account. It uses the “{provider}” provider set in config.toml, which can’t be removed here. To stop using it, remove model_provider from the config',
+  },
+  'errors.engine.logoutStillReady': {
+    zh: '已取消授权，但 {engine} 仍然可用：它可能在用环境变量里的 API Key 或自己配置的接口',
+    en: 'Signed out, but {engine} still works. It may be using an API key from an environment variable or its own provider settings',
+  },
   // 引擎启动方式（docs/ui/engine-launch.md §3）
   'errors.launch.notFound': {
     zh: '找不到「{command}」：请填绝对路径或 PATH 上的命令名',
