@@ -104,9 +104,9 @@ export async function linkTarget(ref: WorkspaceRef, text: string): Promise<LinkT
   if (!raw) return null
   const local = machineOf(ref.projectId ?? ref.sessionId) === 'local'
   const windows = local && window.pixelsky.platform === 'win32'
-  const root = await workspaceRoot(ref)
-  if (!root) return null
-  const relative = projectPath(raw, root, root, windows)
+  if (!(await workspaceRoot(ref))) return null
+  // 主文件夹和附加文件夹（「::N/…」）里的都算项目里的（#86）
+  const relative = await workspaceRelativePath(ref, raw)
   if (relative) {
     const kind = await entryKind(ref, relative, windows)
     if (kind === 'file') return { kind: 'file', path: relative, line, column }

@@ -13,6 +13,9 @@ const files: Record<string, string[]> = {
   build: ['reports/'],
   'build/reports': ['index.html'],
   'my dir': ['x.md'],
+  // multi 开头的会话是多文件夹项目：附加文件夹 D:/shared（远程是 /shared）里有 src/a.ts
+  '::1': ['src/'],
+  '::1/src': ['a.ts'],
 }
 // 目录不存在时 listExisting 返回 null，不报错（报错的话主进程会把每一次都记成 ERROR）
 const list = vi.fn(async (_ref: unknown, dir: string) =>
@@ -33,7 +36,15 @@ const statOutside = vi.fn(async (path: string) =>
 vi.stubGlobal('window', {
   pixelsky: {
     platform: 'win32',
-    files: { target: async () => ({ path: 'D:\\repo' }), listExisting: list },
+    files: {
+      target: async (ref: { sessionId?: string }) =>
+        ref.sessionId === 'remote-multi'
+          ? { path: '/repo', folders: [{ path: '/shared' }] }
+          : ref.sessionId?.startsWith('multi')
+            ? { path: 'D:\\repo', folders: [{ path: 'D:\\shared' }] }
+            : { path: 'D:\\repo' },
+      listExisting: list,
+    },
     editor: { statOutside },
   },
 })
@@ -141,6 +152,30 @@ describe('linkTarget', () => {
     statOutside.mockClear()
     expect(await linkTarget({ sessionId: 'remote-1' }, 'C:/elsewhere/a.ts')).toBeNull()
     expect(statOutside).not.toHaveBeenCalled()
+  })
+
+  it('附加文件夹里的文件 / 文件夹也是项目里的：在内部编辑器打开，保留行列（#86）', async () => {
+    statOutside.mockClear()
+    const ref = { sessionId: 'multi-1' }
+    expect(await linkTarget(ref, 'D:/shared/src/a.ts:12:3')).toEqual({
+      kind: 'file',
+      path: '::1/src/a.ts',
+      line: 12,
+      column: 3,
+    })
+    expect(await linkTarget(ref, 'D:\\shared\\src')).toEqual({ kind: 'folder', path: '::1/src' })
+    expect(await linkTarget(ref, 'D:/repo/src/a.ts')).toMatchObject({ kind: 'file', path: 'src/a.ts' })
+    expect(await linkTarget(ref, 'D:/shared/missing.ts')).toBeNull()
+    expect(statOutside).not.toHaveBeenCalled()
+  })
+
+  it('远程会话也认附加文件夹里的文件（#86）', async () => {
+    expect(await linkTarget({ sessionId: 'remote-multi' }, '/shared/src/a.ts:12')).toEqual({
+      kind: 'file',
+      path: '::1/src/a.ts',
+      line: 12,
+      column: null,
+    })
   })
 })
 
