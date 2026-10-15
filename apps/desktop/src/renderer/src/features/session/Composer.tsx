@@ -896,7 +896,7 @@ export function Composer({
               onClick={() => comingSoon(translate('语音输入'))}
             />
           )}
-          <ContextWindowButton sessionId={sessionId} />
+          <ContextWindowButton sessionId={sessionId} engine={(live ?? demoSource).engine?.id ?? 'claude'} />
         </div>
         {chatgpt && sendControls}
       </div>
