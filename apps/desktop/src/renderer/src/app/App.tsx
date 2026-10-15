@@ -30,6 +30,7 @@ import { getAppMode, useAppMode } from '../features/coding/mode'
 import { usePaneHousekeeping } from '../features/panes/housekeeping'
 import { MachineDialogs } from '../features/machines/MachineDialogs'
 import { ProjectImport } from '../features/sidebar/ProjectImport'
+import { BulkProjectImport } from '../features/sidebar/BulkProjectImport'
 import { WslCheckCard } from '../features/machines/WslCheckCard'
 import { WhatsNewDialog } from '../features/update/WhatsNewDialog'
 import { MachineStatus } from '../features/machines/MachineStatus'
@@ -259,6 +260,7 @@ export function App() {
       <TeamNotifier />
       <MachineDialogs />
       <ProjectImport />
+      <BulkProjectImport />
       <WslCheckCard />
       <WhatsNewDialog />
       <FileLifecycle />

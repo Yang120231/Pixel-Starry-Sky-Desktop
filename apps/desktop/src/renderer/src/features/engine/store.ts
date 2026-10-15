@@ -15,6 +15,8 @@ import {
   type SessionSummary,
 } from '@pixelsky/protocol'
 import type { ImportCandidates } from '../../../../shared/types/workspace'
+import type { ProjectImportBatch, ProjectImportPicker } from '../../../../shared/types/project-import'
+import { addProjectsInBatches } from './projectImportBatches'
 import { isDemo, projects as demoProjects } from '@/data'
 import { demo } from '@/data/demo'
 import { SESSION_REMOVED_EVENT } from './sessionLifecycle'
@@ -429,7 +431,7 @@ export async function addProject(): Promise<string | null> {
  */
 export async function addProjectPaths(paths: string[]): Promise<AddProjectsResult | null> {
   if (!bridge || !paths.length || remotePicker()) return null
-  const result = await bridge.addProjects(paths)
+  const result = await addProjectsInBatches(paths, batch => bridge!.addProjects(batch))
   applyAdded(result)
   return result
 }
@@ -440,6 +442,27 @@ export function importProjects(): void {
   window.dispatchEvent(new Event(IMPORT_PROJECTS_EVENT))
 }
 export const IMPORT_PROJECTS_EVENT = 'pixelsky:import-projects'
+
+export const BULK_IMPORT_PROJECTS_EVENT = 'pixelsky:bulk-import-projects'
+export function bulkImportProjects(): void {
+  if (!bridge || remotePicker()) return
+  window.dispatchEvent(new Event(BULK_IMPORT_PROJECTS_EVENT))
+}
+
+export async function scanProjectImports(): Promise<ProjectImportBatch | null> {
+  if (!bridge || remotePicker()) return null
+  return bridge.scanProjectImports()
+}
+
+export async function pickProjectImports(kind: ProjectImportPicker): Promise<ProjectImportBatch | null> {
+  if (!bridge || remotePicker()) return null
+  return bridge.pickProjectImports(kind)
+}
+
+export async function previewProjectPaths(text: string): Promise<ProjectImportBatch | null> {
+  if (!bridge || remotePicker()) return null
+  return bridge.previewProjectPaths(text)
+}
 
 /** 改项目的附加文件夹（整组替换，只对之后新建的对话生效）；列表随宿主的 projects 事件刷新 */
 export async function setProjectFolders(id: string, folders: ProjectFolder[]): Promise<void> {

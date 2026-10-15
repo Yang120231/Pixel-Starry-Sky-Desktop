@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ProjectRecord } from '@pixelsky/protocol'
-import { addedSummary, defaultPicked } from './projectImportModel'
+import { addedSummary, defaultPicked, mergeImportCandidates } from './projectImportModel'
 
 const project = (name: string): ProjectRecord => ({ id: name, name, path: `D:/${name}`, addedAt: 1 })
 
@@ -41,4 +41,14 @@ describe('defaultPicked', () => {
       ]),
     ).toEqual(['a'])
   })
+})
+
+it('merges repeated candidates while preserving order and refreshing availability', () => {
+  const row = (path: string) => ({ path, name: path, sources: ['Folders'], project: false, added: false })
+  const result = mergeImportCandidates(
+    [row('/a'), row('/b')],
+    [{ ...row('/a'), sources: ['Z Code'], project: true, added: true }, row('/c')],
+  )
+  expect(result.map(c => c.path)).toEqual(['/a', '/b', '/c'])
+  expect(result[0]).toMatchObject({ sources: ['Folders', 'Z Code'], project: true, added: true })
 })

@@ -13,7 +13,7 @@ import {
 } from '@/features/appearance/sidebar'
 import { getSidebarIcon } from '@/features/appearance/sidebarIcons'
 import { addProject, isLive, recentSpansProjects, useSidebarData } from '@/features/engine'
-import { addProjectPaths, importProjects } from '@/features/engine/store'
+import { addProjectPaths, bulkImportProjects, importProjects } from '@/features/engine/store'
 import { SidebarHeader } from './SidebarHeader'
 import { SidebarNav } from './SidebarNav'
 import { SidebarEmpty, SidebarRow, SidebarSection } from './SidebarSection'
@@ -191,6 +191,7 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
               actions={[
                 { label: tr('projectImport.addFolders'), icon: FolderPlus, run: () => void addProject() },
                 { label: tr('projectImport.fromFolder'), icon: FolderInput, run: importProjects },
+                { label: tr('projectImport.bulkTitle'), icon: FolderInput, run: bulkImportProjects },
               ]}
             />
           )}

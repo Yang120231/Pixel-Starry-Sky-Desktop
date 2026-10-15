@@ -1,6 +1,7 @@
 // 一次加了几个项目后的那句提示（docs/ui/multi-root-projects.md §2.2）：纯函数，ProjectImport 和测试共用
 import type { AddProjectsResult } from '@pixelsky/protocol'
 import { tr } from '@/i18n/core'
+import type { ProjectImportCandidate } from '../../../../shared/types/project-import'
 
 const folderName = (path: string): string =>
   path
@@ -31,3 +32,20 @@ export function addedSummary(result: AddProjectsResult): string | null {
 /** 打开导入列表时默认勾上的：像项目、还没加的 */
 export const defaultPicked = (candidates: readonly { path: string; project: boolean; added: boolean }[]): string[] =>
   candidates.filter(c => c.project && !c.added).map(c => c.path)
+
+/** 候选路径已在主进程规范化；保留旧项顺序与用户勾选，重复来源合并。 */
+export function mergeImportCandidates(
+  current: readonly ProjectImportCandidate[],
+  incoming: readonly ProjectImportCandidate[],
+): ProjectImportCandidate[] {
+  const merged = new Map(current.map(c => [c.path, c]))
+  for (const candidate of incoming) {
+    const old = merged.get(candidate.path)
+    merged.set(candidate.path, {
+      ...candidate,
+      project: candidate.project || old?.project === true,
+      sources: [...new Set([...(old?.sources ?? []), ...candidate.sources])],
+    })
+  }
+  return [...merged.values()]
+}
