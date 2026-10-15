@@ -70,6 +70,7 @@ import {
 import { demo, useDemoSessionChanges } from '@/data/demo'
 import { stopTargets } from '@/features/session/live/subagentStop'
 import { getStopBackgroundAgents } from '@/features/settings/stopBackgroundAgents'
+import { resetFullAccessStripOnModeChange } from '@/features/session/fullAccessStripState'
 
 /** 是否连接了真实引擎（演示模式下为 false） */
 export const isLive = !!bridge
@@ -741,7 +742,18 @@ export function useComposerController(
       config?.[engineId]?.defaults.permissionMode ??
       (defaults?.engine === engineId ? defaults.permissionMode : null) ??
       'edits',
-    setPermissionMode: permissionMode => patch({ permissionMode }),
+    setPermissionMode: permissionMode => {
+      const previous = (record ?? base).permissionMode
+      if (record)
+        void b
+          .updateSession(record.id, { permissionMode })
+          .then(() => resetFullAccessStripOnModeChange(previous, permissionMode))
+          .catch(() => undefined)
+      else {
+        setDraft({ ...base, permissionMode })
+        resetFullAccessStripOnModeChange(previous, permissionMode)
+      }
+    },
     running: !!snap && snap.state !== 'idle',
     backgroundAgents: stopTargets(snap).length,
     stop: () =>

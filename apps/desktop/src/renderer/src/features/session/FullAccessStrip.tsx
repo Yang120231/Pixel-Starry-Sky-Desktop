@@ -1,10 +1,10 @@
-import { useState } from 'react'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
-// 完全放行时输入框上方的一条细提示：可隐藏本次提示，切走再切回完全放行时重新显示。
+// 完全放行时输入框上方的风险提示，隐藏状态在本机窗口间同步。
 import { TriangleAlert } from 'lucide-react'
 import { PERMISSION_INFO, type ComposerController } from '@/features/engine'
 import { saferMode } from './fullAccess'
+import { dismissFullAccessStrip, useFullAccessStripDismissed } from './fullAccessStripState'
 
 export function FullAccessStrip({
   live,
@@ -12,9 +12,8 @@ export function FullAccessStrip({
   live: Pick<ComposerController, 'started' | 'permissionModes' | 'defaultPermissionMode' | 'setPermissionMode'>
 }) {
   useI18n()
-  const [dismissed, setDismissed] = useState(false)
+  const dismissed = useFullAccessStripDismissed()
   const back = saferMode(live.defaultPermissionMode, live.permissionModes)
-  // Composer 仅在完全放行时挂载此组件，切到其他模式后本次隐藏状态随之清除。
   if (dismissed) return null
   return (
     <div
@@ -28,7 +27,7 @@ export function FullAccessStrip({
       <div data-full-access-actions className="flex shrink-0 items-center gap-3">
         <button
           type="button"
-          onClick={() => setDismissed(true)}
+          onClick={dismissFullAccessStrip}
           className="shrink-0 whitespace-nowrap rounded-md px-1.5 py-0.5 text-fg-secondary hover:bg-hover"
         >
           {tr('fullAccess.dismissStrip')}
