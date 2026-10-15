@@ -57,13 +57,14 @@ export function maybePath(text: string): boolean {
 /**
  * Markdown 链接地址里的本地文件 → 「路径:行:列」形式的文字；网址、页内锚点返回 null。
  * 支持 src/a.ts、./a.ts#L12、a.ts#L12C3、a.ts#L10-L20、file:///D:/x/a.ts。
+ * anchors 为 false 时（图片地址）不切 #：图片没有锚点，「截图 #2.png」里的 # 是文件名的一部分。
  */
-export function linkPathText(href: string | undefined): string | null {
+export function linkPathText(href: string | undefined, anchors = true): string | null {
   if (!href || href.startsWith('#') || href.startsWith('//')) return null
   let value = href
   if (/^file:/i.test(value)) value = value.replace(/^file:\/*/i, /^file:\/*[A-Za-z]:/i.test(value) ? '' : '/')
   else if (/^[a-z][\w+.-]*:/i.test(value) && !DRIVE.test(value)) return null
-  const [rawPath, hash = ''] = value.split('#', 2)
+  const [rawPath, hash = ''] = anchors ? value.split('#', 2) : [value]
   let path: string
   try {
     path = decodeURIComponent(rawPath)

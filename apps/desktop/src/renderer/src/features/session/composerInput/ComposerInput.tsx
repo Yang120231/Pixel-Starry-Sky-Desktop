@@ -1,6 +1,14 @@
 // 会话输入框（docs/ui/composer-paste-fold.md §6）：CodeMirror 6 代替 textarea，粘贴的长文本折成标签。
 // 接口贴近原来的 textarea：value / onChange / 光标 / onKeyDown / 粘贴 / placeholder / 高度
-import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from 'react'
 import { history, historyKeymap, insertNewline, invertedEffects, standardKeymap } from '@codemirror/commands'
 import { Compartment, EditorState, Prec, Transaction } from '@codemirror/state'
 import { EditorView, keymap, placeholder as placeholderExt } from '@codemirror/view'
@@ -308,6 +316,19 @@ export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function Com
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // 上下留白在 .cm-editor 上、不在 contentDOM 里，CodeMirror 不处理那里的点击：自己聚焦并把光标放到最近的一行
+  const focusFromPadding = (event: ReactMouseEvent<HTMLDivElement>): void => {
+    const v = view.current
+    if (!v || event.button !== 0 || v.contentDOM.contains(event.target as Node)) return
+    if (!(event.target === v.dom || event.target === host.current)) return
+    event.preventDefault()
+    const box = v.contentDOM.getBoundingClientRect()
+    const y = Math.min(Math.max(event.clientY, box.top + 1), box.bottom - 1)
+    const at = v.posAtCoords({ x: event.clientX, y }) ?? (event.clientY < box.top ? 0 : v.state.doc.length)
+    v.focus()
+    v.dispatch({ selection: { anchor: at } })
+  }
+
   return (
     <>
       <div
@@ -319,6 +340,7 @@ export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function Com
           props.className,
         )}
         style={{ height: props.height }}
+        onMouseDown={focusFromPadding}
       />
       {menu && (
         <ActionMenu

@@ -36,6 +36,14 @@ describe('linkPathText', () => {
     expect(linkPathText('/home/me/a.ts')).toBe('/home/me/a.ts')
   })
 
+  it('图片地址（anchors = false）不切 #，文件名里的 # 保留', () => {
+    expect(linkPathText('/home/me/repo/Screenshot #2.png', false)).toBe('/home/me/repo/Screenshot #2.png')
+    expect(linkPathText('D:\\proj\\图 #1.png', false)).toBe('D:\\proj\\图 #1.png')
+    expect(linkPathText('shots/a%20b.png', false)).toBe('shots/a b.png')
+    // 链接照旧把 # 后面当锚点
+    expect(linkPathText('docs/a.md#intro')).toBe('docs/a.md')
+  })
+
   it('网址、页内锚点、空地址不算', () => {
     expect(linkPathText('https://example.com/a.ts')).toBeNull()
     expect(linkPathText('mailto:me@example.com')).toBeNull()

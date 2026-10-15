@@ -63,6 +63,13 @@ describe('反馈图片拖放', () => {
     expect(event.stopPropagation).toHaveBeenCalledOnce()
   })
 
+  it('SVG 等不支持的图片交给读取器报错，不悄悄忽略', () => {
+    const state = images()
+    const svg = new File(['<svg/>'], 'logo.svg', { type: 'image/svg+xml' })
+    state.onDrop(drop([svg]))
+    expect(vi.mocked(readImage).mock.calls.map(([file]) => file)).toEqual([svg])
+  })
+
   it('保留普通文字拖放行为', () => {
     const state = images()
     const event = drop([], ['text/plain'])

@@ -57,7 +57,7 @@ function WorkspaceImage({ path, alt, reader }: { path: string; alt: string; read
 /** 本地图片经会话文件接口读取为 data URL；不把机器上的原始路径交给浏览器。 */
 export function MarkdownImage({ src, alt, title }: { src?: string; alt?: string; title?: string }) {
   const reader = useContext(MarkdownImageContext)
-  const path = linkPathText(src)
+  const path = linkPathText(src, false)
   const name = alt || title || path?.split(/[\\/]/).pop() || tr('markdown.image.name')
   if (path) return <WorkspaceImage path={path} alt={name} reader={reader} />
   return <img src={src} alt={name} title={title} className="inline-block max-h-96 max-w-full object-contain" />

@@ -28,6 +28,9 @@ export interface FeedbackImages {
   onDrop: (event: DragEvent) => void
 }
 
+// 支持的图片，加上 MIME 是 image/* 但格式不支持的（如 SVG）：后者交给 readImage 报「图片类型不对」，不悄悄忽略
+const acceptable = (file: File): boolean => isImageFile(file) || file.type.startsWith('image/')
+
 export function useFeedbackImages(): FeedbackImages {
   const [images, setImages] = useState<ImageAttachment[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -37,7 +40,7 @@ export function useFeedbackImages(): FeedbackImages {
   const pending = useRef(0)
   count.current = images.length
   const add = (files: File[]): void => {
-    const list = files.filter(isImageFile)
+    const list = files.filter(acceptable)
     if (!list.length) return
     if (count.current + pending.current + list.length > FEEDBACK_LIMITS.images) {
       setError(tr('feedback.limit.images', { p0: FEEDBACK_LIMITS.images }))
@@ -69,7 +72,7 @@ export function useFeedbackImages(): FeedbackImages {
       setError(null)
     },
     onPaste: event => {
-      const files = [...event.clipboardData.files].filter(isImageFile)
+      const files = [...event.clipboardData.files].filter(acceptable)
       if (!files.length) return
       event.preventDefault()
       add(files)
