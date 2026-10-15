@@ -6,41 +6,53 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import { cn } from '@/ui'
 import { ImageAttachments } from '@/features/session/attachments/ImageAttachments'
+import { isImageFile } from '@/features/session/attachments/files'
 import { readImage } from '@/features/session/attachments/images'
 import { FEEDBACK_LIMITS, type FeedbackImageInput } from '../../../../shared/types/feedback'
 import { errorText } from './logic'
 
-const isImage = (file: File): boolean => file.type.startsWith('image/')
-
 export interface FeedbackImages {
   images: ImageAttachment[]
   error: string | null
+  dragging: boolean
   add: (files: File[]) => void
   remove: (id: string) => void
   replace: (id: string, next: ImageAttachment) => void
   clear: () => void
   /** 表单根元素的 onPaste：剪贴板里有图片就收进来 */
   onPaste: (event: React.ClipboardEvent) => void
+  /** 表单根元素接收拖放，截图区域负责显示拖入状态，避免嵌套处理重复添加 */
+  onDragEnter: (event: DragEvent) => void
+  onDragOver: (event: DragEvent) => void
+  onDragLeave: (event: DragEvent) => void
+  onDrop: (event: DragEvent) => void
 }
 
 export function useFeedbackImages(): FeedbackImages {
   const [images, setImages] = useState<ImageAttachment[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [dragging, setDragging] = useState(false)
+  const dragDepth = useRef(0)
   const count = useRef(0)
+  const pending = useRef(0)
   count.current = images.length
   const add = (files: File[]): void => {
-    const list = files.filter(isImage)
+    const list = files.filter(isImageFile)
     if (!list.length) return
-    if (count.current + list.length > FEEDBACK_LIMITS.images) {
+    if (count.current + pending.current + list.length > FEEDBACK_LIMITS.images) {
       setError(tr('feedback.limit.images', { p0: FEEDBACK_LIMITS.images }))
       return
     }
     setError(null)
-    count.current += list.length
+    pending.current += list.length
     Promise.all(list.map(readImage)).then(
-      loaded => setImages(current => [...current, ...loaded]),
+      loaded => {
+        pending.current -= list.length
+        count.current += loaded.length
+        setImages(current => [...current, ...loaded])
+      },
       (e: unknown) => {
-        count.current -= list.length
+        pending.current -= list.length
         setError(errorText(e))
       },
     )
@@ -48,6 +60,7 @@ export function useFeedbackImages(): FeedbackImages {
   return {
     images,
     error,
+    dragging,
     add,
     remove: id => setImages(current => current.filter(i => i.id !== id)),
     replace: (id, next) => setImages(current => current.map(i => (i.id === id ? next : i))),
@@ -56,10 +69,33 @@ export function useFeedbackImages(): FeedbackImages {
       setError(null)
     },
     onPaste: event => {
-      const files = [...event.clipboardData.files].filter(isImage)
+      const files = [...event.clipboardData.files].filter(isImageFile)
       if (!files.length) return
       event.preventDefault()
       add(files)
+    },
+    onDragEnter: event => {
+      if (!event.dataTransfer.types.includes('Files')) return
+      event.preventDefault()
+      dragDepth.current++
+      setDragging(true)
+    },
+    onDragOver: event => {
+      if (!event.dataTransfer.types.includes('Files')) return
+      event.preventDefault()
+      event.dataTransfer.dropEffect = 'copy'
+    },
+    onDragLeave: () => {
+      dragDepth.current = Math.max(0, dragDepth.current - 1)
+      if (!dragDepth.current) setDragging(false)
+    },
+    onDrop: event => {
+      if (!event.dataTransfer.types.includes('Files')) return
+      event.preventDefault()
+      event.stopPropagation()
+      dragDepth.current = 0
+      setDragging(false)
+      add([...event.dataTransfer.files])
     },
   }
 }
@@ -70,25 +106,11 @@ export const toImageInputs = (images: ImageAttachment[]): FeedbackImageInput[] =
 export function ImageField({ state, hint = true }: { state: FeedbackImages; hint?: boolean }) {
   useI18n()
   const input = useRef<HTMLInputElement>(null)
-  const [dragging, setDragging] = useState(false)
   const full = state.images.length >= FEEDBACK_LIMITS.images
-  const onDrop = (event: DragEvent): void => {
-    event.preventDefault()
-    setDragging(false)
-    state.add([...event.dataTransfer.files])
-  }
   return (
     <div
       data-feedback-images
-      onDragOver={e => {
-        if (e.dataTransfer.types.includes('Files')) {
-          e.preventDefault()
-          setDragging(true)
-        }
-      }}
-      onDragLeave={() => setDragging(false)}
-      onDrop={onDrop}
-      className={cn('rounded-md', dragging && 'bg-accent-soft outline-2 outline-dashed outline-accent')}
+      className={cn('rounded-md', state.dragging && 'bg-accent-soft outline-2 outline-dashed outline-accent')}
     >
       {hint && (
         <p className="mb-2 text-meta text-fg-muted">

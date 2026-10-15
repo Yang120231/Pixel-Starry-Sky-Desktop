@@ -420,7 +420,15 @@ function ReplyBox({
   }
 
   return (
-    <div data-feedback-reply onPaste={images.onPaste} className="mt-6 border-t border-line pt-4">
+    <div
+      data-feedback-reply
+      onPaste={images.onPaste}
+      onDragEnter={images.onDragEnter}
+      onDragOver={images.onDragOver}
+      onDragLeave={images.onDragLeave}
+      onDrop={images.onDrop}
+      className="mt-6 border-t border-line pt-4"
+    >
       {closed && <p className="mb-2 text-meta text-fg-muted">{tr('feedback.thread.reopenHint')}</p>}
       <textarea
         value={body}

@@ -128,6 +128,10 @@ export function FeedbackForm({
     <form
       data-feedback-form
       onPaste={images.onPaste}
+      onDragEnter={images.onDragEnter}
+      onDragOver={images.onDragOver}
+      onDragLeave={images.onDragLeave}
+      onDrop={images.onDrop}
       onSubmit={e => {
         e.preventDefault()
         void submit()
