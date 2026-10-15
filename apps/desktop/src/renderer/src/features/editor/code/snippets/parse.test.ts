@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { EditorState } from '@codemirror/state'
+import { snippet } from '@codemirror/autocomplete'
+import type { EditorView } from '@codemirror/view'
 import { parseSnippetFile, toCodeMirrorTemplate as T } from './parse'
 
 describe('toCodeMirrorTemplate', () => {
@@ -6,7 +9,7 @@ describe('toCodeMirrorTemplate', () => {
     expect(T('a $1 b ${2} c $0', {})).toBe('a ${1} b ${2} c ${0}')
   })
   it('defaults, linked fields', () => {
-    expect(T('${1:foo} and $1', {})).toBe('${1:foo} and ${1}')
+    expect(T('${1:foo} and $1', {})).toBe('${1:foo} and ${1:foo}')
   })
   it('nested placeholders are flattened', () => {
     expect(T('${1:a ${2:b} $3 c}', {})).toBe('${1:a b  c}')
@@ -40,6 +43,35 @@ describe('toCodeMirrorTemplate', () => {
   })
   it('stray $ stays', () => {
     expect(T('cost $ 5 ${', {})).toBe('cost $ 5 $\\{')
+  })
+  it('repeated tabstop: bare later occurrence gets the default', () => {
+    expect(T('const ${1:name} = "$1";$0', {})).toBe('const ${1:name} = "${1:name}";${0}')
+  })
+  it('repeated tabstop: default on the later occurrence applies to all', () => {
+    expect(T('$1 ${1:x}', {})).toBe('${1:x} ${1:x}')
+  })
+  it('repeated tabstop: nested and choice defaults, $0 untouched', () => {
+    expect(T('${1:a ${2:b}} $2 $1', {})).toBe('${1:a b} ${2:b} ${1:a b}')
+    expect(T('${1|x,y|} $1 $0 ${0:z} $0', {})).toBe('${1:x} ${1:x} ${0} ${0:z} ${0}')
+    expect(T('$1 $2', {})).toBe('${1} ${2}')
+  })
+  it('expands with real CodeMirror snippet()', () => {
+    const expand = (body: string): string => {
+      let state = EditorState.create({ extensions: EditorState.allowMultipleSelections.of(true) })
+      const view = {
+        get state() {
+          return state
+        },
+        dispatch(tr: { state: EditorState }) {
+          state = tr.state
+        },
+      } as unknown as EditorView
+      snippet(T(body, {}))(view, { label: 'demo' }, 0, 0)
+      return state.doc.toString()
+    }
+    expect(expand('const ${1:name} = "$1";$0')).toBe('const name = "name";')
+    expect(expand('$1 ${1:x}')).toBe('x x')
+    expect(expand('${1:a ${2:b}} $2')).toBe('a b b')
   })
 })
 

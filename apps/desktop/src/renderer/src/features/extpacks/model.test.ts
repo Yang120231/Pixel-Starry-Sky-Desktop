@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { assetUrl, contributionsFrom, isContributionActive, livePacks, packIdRef } from './model'
+import {
+  assetUrl,
+  compareContributionPriority,
+  contributionsFrom,
+  isContributionActive,
+  livePacks,
+  packIdRef,
+} from './model'
 import { fakePack, fakeState } from './testing'
 
 describe('livePacks', () => {
@@ -44,5 +51,20 @@ describe('packIdRef', () => {
     expect(packIdRef('pixelsky.dotenv/material')).toEqual({ packId: 'pixelsky.dotenv', itemId: 'material' })
     expect(packIdRef('material')).toBeNull()
     expect(packIdRef('a.b/')).toBeNull()
+  })
+})
+
+describe('compareContributionPriority', () => {
+  it('后装的赢，同扩展下标大的赢', () => {
+    expect(
+      compareContributionPriority({ pack: { addedAt: 2 }, index: 0 }, { pack: { addedAt: 1 }, index: 5 }),
+    ).toBeGreaterThan(0)
+    expect(
+      compareContributionPriority({ pack: { addedAt: 1 }, index: 3 }, { pack: { addedAt: 1 }, index: 1 }),
+    ).toBeGreaterThan(0)
+    expect(
+      compareContributionPriority({ pack: { addedAt: 1 }, index: 1 }, { pack: { addedAt: 1 }, index: 3 }),
+    ).toBeLessThan(0)
+    expect(compareContributionPriority({ pack: { addedAt: 1 }, index: 1 }, { pack: { addedAt: 1 }, index: 1 })).toBe(0)
   })
 })

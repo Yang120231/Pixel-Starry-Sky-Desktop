@@ -43,6 +43,10 @@ describe('grammarMatchScore 补充', () => {
   it('firstLine 只测前 200 个字符，嵌套量词的长行不会卡死', () => {
     const t = Date.now()
     expect(grammarMatchScore(g({ firstLine: '^(a+)+$' }), 'x', 'a'.repeat(30) + '!')).toBe(0)
+    // 被量化的分支组（分支重叠）同样会指数回溯，直接当不匹配
+    const t0 = Date.now()
+    expect(grammarMatchScore(g({ firstLine: '^(a|aa)+$' }), 'unmatched.unknown', 'a'.repeat(80) + '!')).toBe(0)
+    expect(Date.now() - t0).toBeLessThan(500)
     expect(Date.now() - t).toBeLessThan(5000)
     expect(grammarMatchScore(g({ firstLine: 'zzz' }), 'x', 'a'.repeat(300) + 'zzz')).toBe(0)
   })

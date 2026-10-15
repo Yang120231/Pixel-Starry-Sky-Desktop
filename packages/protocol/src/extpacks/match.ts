@@ -1,4 +1,4 @@
-import { hasNestedQuantifier } from './tasks'
+import { hasNestedQuantifier, hasQuantifiedAlternation } from './tasks'
 import type { ExtGrammar, ExtLocale, ExtPackContributes, ExtPackManifest, ExtText } from './types'
 
 /** 取多语言文本；英文缺失时退回中文 */
@@ -88,7 +88,8 @@ export function grammarMatchScore(g: ExtGrammar, fileName: string, firstLine?: s
   if (best) return best
   if (g.firstLine && firstLine !== undefined) {
     // 嵌套量词的正则（(a+)+）会指数级回溯，截断长度也救不了：校验没拦住的（绕过校验加载的）直接当不匹配
-    if (hasNestedQuantifier(g.firstLine)) return 0
+    // 被量化的分支组（(a|aa)+）分支重叠时同样指数级回溯，一并当不匹配
+    if (hasNestedQuantifier(g.firstLine) || hasQuantifiedAlternation(g.firstLine)) return 0
     try {
       if (new RegExp(g.firstLine).test(firstLine.slice(0, EXT_FIRST_LINE_MAX))) return 100
     } catch {

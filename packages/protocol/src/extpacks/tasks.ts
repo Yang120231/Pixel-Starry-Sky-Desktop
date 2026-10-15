@@ -106,6 +106,60 @@ export function hasNestedQuantifier(pattern: string): boolean {
   return false
 }
 
+/**
+ * 静态检查「被量化的分支组」：组里有顶层 `|`，后面又跟着可重复的量词（+ * {n,} {n,m}（m>1） {n}（n>1），含懒惰后缀），
+ * 如 (a|aa)+ (a|b)* (?:x|xy){2,}。分支有重叠时同样指数级回溯，hasNestedQuantifier 抓不到。
+ * `?`、{0,1}、{1} 最多一次，放行；转义、字符类里的 | ( ) 不算。
+ */
+export function hasQuantifiedAlternation(pattern: string): boolean {
+  const stack: Array<{ alt: boolean }> = [{ alt: false }]
+  /** 读 i 处的量词；返回是否「可重复多次」 */
+  const repeats = (i: number): boolean => {
+    const c = pattern[i]
+    if (c === '*' || c === '+') return true
+    if (c === '{') {
+      // {n}（n>1）也会重复：(a|aa){40} 一样指数级回溯
+      const m = /^\{(\d+)(?:(,)(\d*))?\}/.exec(pattern.slice(i))
+      if (m) return m[2] ? m[3] === '' || Number(m[3]) > 1 : Number(m[1]) > 1
+    }
+    return false
+  }
+  let i = 0
+  while (i < pattern.length) {
+    const c = pattern[i]
+    if (c === '\\') {
+      i += 2
+    } else if (c === '[') {
+      let j = i + 1
+      if (pattern[j] === '^') j++
+      if (pattern[j] === ']') j++
+      while (j < pattern.length && pattern[j] !== ']') j += pattern[j] === '\\' ? 2 : 1
+      i = j + 1
+    } else if (c === '(') {
+      stack.push({ alt: false })
+      i++
+      if (pattern[i] === '?') {
+        const rest = pattern.slice(i)
+        if (/^\?<[=!]/.test(rest)) i += 3
+        else if (rest[1] === '<') i = pattern.indexOf('>', i) + 1 || pattern.length
+        else i += 2
+      }
+    } else if (c === ')') {
+      i++
+      const g = stack.length > 1 ? stack.pop()! : { alt: false }
+      if (g.alt && repeats(i)) return true
+      // 内层组的分支也算外层的：((a|aa))+ 、(x(a|aa))+ 同样指数级回溯
+      if (g.alt) stack[stack.length - 1].alt = true
+    } else if (c === '|') {
+      stack[stack.length - 1].alt = true
+      i++
+    } else {
+      i++
+    }
+  }
+  return false
+}
+
 /** 命令 / 目录里的 {占位符}：返回不认识的占位符；有落单的花括号也算 */
 function badPlaceholders(text: string, allowed: ReadonlySet<string>): string[] {
   const bad: string[] = []

@@ -38,6 +38,14 @@ export function contributionsFrom<K extends ExtPackContributionKind>(
   return out
 }
 
+/** 同分时谁优先：后装的赢（addedAt 大）；同一个扩展里清单下标大的赢。a 比 b 优先返回正数，反之负数，一样返回 0 */
+export function compareContributionPriority(
+  a: { pack: { addedAt: number }; index: number },
+  b: { pack: { addedAt: number }; index: number },
+): number {
+  return a.pack.addedAt - b.pack.addedAt || a.index - b.index
+}
+
 /** pixelsky-ext://<key>/<各段单独编码>?v=<版本> */
 export function assetUrl(key: string, path: string, revision: number): string {
   return `pixelsky-ext://${key}/${path.split('/').map(encodeURIComponent).join('/')}?v=${revision}`

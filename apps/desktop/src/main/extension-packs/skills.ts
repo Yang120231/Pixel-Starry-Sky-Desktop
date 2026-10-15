@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { copyFile, mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type { ExtPackSkillInfo, SkillCommand } from '@pixelsky/protocol'
@@ -25,18 +25,57 @@ function skillPath(pack: LoadedPack, skill: ExtPackSkillInfo): string {
   return p.replace(/\/+$/, '')
 }
 
-/** 内容寻址的目录名：扩展 key、版本、技能名和路径任何一个变了，名字就变；所以已有的目录永远不用改 */
+const COPY_EXT = /\.(md|png|svg|jpe?g|gif|webp)$/i
+const COPY_FILES = 200
+const COPY_BYTES = 2 * 1024 * 1024
+
+/** 会被复制进包装目录的文件：[扩展内相对路径, 所属技能名, 技能目录相对路径]（writeWrapper 和指纹共用） */
+function wrapperFiles(pack: LoadedPack): { skill: string; base: string; path: string }[] {
+  const out: { skill: string; base: string; path: string }[] = []
+  for (const skill of activeSkills(pack, 'claude')) {
+    const base = skillPath(pack, skill)
+    let count = 0
+    for (const [path, size] of pack.files) {
+      if (!path.startsWith(base + '/') || !COPY_EXT.test(path) || size > COPY_BYTES) continue
+      if (++count > COPY_FILES) break
+      out.push({ skill: skill.name, base, path })
+    }
+  }
+  return out
+}
+
+const fingerprints = new WeakMap<LoadedPack, string>()
+
+/** 要复制的文件的 路径 + 大小 + 修改时间（每个扩展实例只算一次，保证同一实例的目录名稳定） */
+function contentFingerprint(pack: LoadedPack): string {
+  let fp = fingerprints.get(pack)
+  if (fp === undefined) {
+    fp = wrapperFiles(pack)
+      .map(f => {
+        try {
+          const st = statSync(join(pack.root, f.path))
+          return `${f.path}:${st.size}:${st.mtimeMs}`
+        } catch {
+          return `${f.path}:?`
+        }
+      })
+      .join('\n')
+    fingerprints.set(pack, fp)
+  }
+  return fp
+}
+
+/** 目录名：扩展 key、版本、技能名和路径，加上要复制的文件的指纹（路径 / 大小 / 修改时间，不读内容），任何一个变了名字就变；所以已有的目录永远不用改 */
 export function wrapperDirName(pack: LoadedPack): string {
   const skills = activeSkills(pack, 'claude')
     .map(s => `${s.name}=${skillPath(pack, s)}`)
     .join('\n')
-  const hash = createHash('sha1').update(`${pack.info.key}|${pack.info.revision}|${skills}`).digest('hex').slice(0, 8)
+  const hash = createHash('sha1')
+    .update(`${pack.info.key}|${pack.info.revision}|${skills}|${contentFingerprint(pack)}`)
+    .digest('hex')
+    .slice(0, 8)
   return `${claudePluginName(pack.info.id ?? pack.info.key)}-${hash}`
 }
-
-const COPY_EXT = /\.(md|png|svg|jpe?g|gif|webp)$/i
-const COPY_FILES = 200
-const COPY_BYTES = 2 * 1024 * 1024
 
 let tmpCounter = 0
 
@@ -53,16 +92,10 @@ async function writeWrapper(pack: LoadedPack, dir: string): Promise<void> {
       }),
       'utf8',
     )
-    for (const skill of activeSkills(pack, 'claude')) {
-      const base = skillPath(pack, skill)
-      let count = 0
-      for (const [path, size] of pack.files) {
-        if (!path.startsWith(base + '/') || !COPY_EXT.test(path) || size > COPY_BYTES) continue
-        if (++count > COPY_FILES) break
-        const target = join(tmp, 'skills', skill.name, path.slice(base.length + 1))
-        await mkdir(dirname(target), { recursive: true })
-        await copyFile(join(pack.root, path), target)
-      }
+    for (const f of wrapperFiles(pack)) {
+      const target = join(tmp, 'skills', f.skill, f.path.slice(f.base.length + 1))
+      await mkdir(dirname(target), { recursive: true })
+      await copyFile(join(pack.root, f.path), target)
     }
     try {
       await rename(tmp, dir)

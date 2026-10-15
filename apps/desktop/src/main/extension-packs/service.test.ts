@@ -473,6 +473,57 @@ describe('技能', () => {
     expect(next.skillLaunch('claude').pluginDirs).toHaveLength(1)
   })
 
+  it('移除 → 改文件 → 重新添加同一目录：revision 不复用，读到新内容，Claude 包装是新的 SKILL.md', async () => {
+    const e = env()
+    const svc = await started(e)
+    const dir = copyFixture('with-skill', e.folders)
+    const first = await svc.addFolder(dir)
+    const oldDir = svc.skillLaunch('claude').pluginDirs[0]
+    await svc.remove(first.key)
+    const skill = join(dir, 'skills', 'hello', 'SKILL.md')
+    writeFileSync(
+      skill,
+      readFileSync(skill, 'utf8').replace('Say hello to the user.', 'New instructions after reinstall.'),
+    )
+    const second = await svc.addFolder(dir)
+    expect(second.key).toBe(first.key)
+    expect(second.revision).toBeGreaterThan(first.revision)
+    const next = svc.skillLaunch('claude').pluginDirs[0]
+    expect(next).not.toBe(oldDir)
+    expect(readFileSync(join(next, 'skills', 'hello', 'SKILL.md'), 'utf8')).toContain(
+      'New instructions after reinstall.',
+    )
+  })
+
+  it('移除 → 改片段 → 重新添加：readJson 与 revision 都是新的', async () => {
+    const e = env()
+    const svc = await started(e)
+    const dir = copyFixture('pixelsky.dotenv', e.folders)
+    const snippets = join(dir, 'snippets', 'dotenv.json')
+    writeFileSync(snippets, '{"example":{"prefix":"demo","body":"OLD"}}')
+    const first = await svc.addFolder(dir)
+    expect(await svc.readJson(first.key, 'snippets/dotenv.json')).toEqual({ example: { prefix: 'demo', body: 'OLD' } })
+    await svc.remove(first.key)
+    writeFileSync(snippets, '{"example":{"prefix":"demo","body":"NEW"}}')
+    const second = await svc.addFolder(dir)
+    expect(second.revision).not.toBe(first.revision)
+    expect(await svc.readJson(second.key, 'snippets/dotenv.json')).toEqual({ example: { prefix: 'demo', body: 'NEW' } })
+  })
+
+  it('改 SKILL.md 后重新加载：包装目录换名并带新正文', async () => {
+    const e = env()
+    const svc = await started(e)
+    const dir = copyFixture('with-skill', e.folders)
+    const info = await svc.addFolder(dir)
+    const old = svc.skillLaunch('claude').pluginDirs[0]
+    const skill = join(dir, 'skills', 'hello', 'SKILL.md')
+    writeFileSync(skill, readFileSync(skill, 'utf8') + '\nReloaded text.\n')
+    await svc.reload(info.key)
+    const fresh = svc.skillLaunch('claude').pluginDirs[0]
+    expect(fresh).not.toBe(old)
+    expect(readFileSync(join(fresh, 'skills', 'hello', 'SKILL.md'), 'utf8')).toContain('Reloaded text.')
+  })
+
   it('GC 只在 start() 里跑：构造和其它调用不清包装目录', async () => {
     const e = env()
     const svc = await started(e)

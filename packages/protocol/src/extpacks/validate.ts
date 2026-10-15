@@ -16,7 +16,7 @@ import type {
   ExtPackSkillInfo,
   ExtPackSource,
 } from './types'
-import { hasNestedQuantifier, validateTaskTemplate } from './tasks'
+import { hasNestedQuantifier, hasQuantifiedAlternation, validateTaskTemplate } from './tasks'
 import { contrastRatio, parseHexColor, parseJsonc, satisfiesEngine } from './text'
 
 type Rec = Record<string, unknown>
@@ -843,6 +843,14 @@ export function validateContributions(
               'grammar.firstLine',
               `firstLine 里有嵌套的量词（如 (a+)+），可能卡死编辑器：${raw.firstLine}`,
               `firstLine has nested quantifiers (e.g. (a+)+) that can hang the editor: ${raw.firstLine}`,
+              'firstLine',
+            )
+          } else if (hasQuantifiedAlternation(raw.firstLine)) {
+            ok = false
+            it.err(
+              'grammar.firstLine',
+              `firstLine 里有被重复的分支组（如 (a|aa)+），可能卡死编辑器：${raw.firstLine}`,
+              `firstLine has a repeated alternation group (e.g. (a|aa)+) that can hang the editor: ${raw.firstLine}`,
               'firstLine',
             )
           }
