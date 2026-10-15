@@ -376,6 +376,9 @@ describe('validateContributions', () => {
       expect(codesOf(check(g({ firstLine: '^(a+)+$' })))).toContain('grammar.firstLine') // 嵌套量词
       expect(codesOf(check(g({ firstLine: '^(a|aa)+$' })))).toContain('grammar.firstLine') // 被重复的分支组
       expect(errs(check(g({ firstLine: '^#!.*\\b(node|deno)\\b' })))).toEqual([])
+      // 相邻且可以重叠的量词：多项式级回溯，截断到 200 字符也救不了
+      expect(codesOf(check(g({ firstLine: '^a*a*a*a*a*a*a*a*a*a*b$' })))).toContain('grammar.firstLine')
+      expect(errs(check(g({ firstLine: '^#!.*\\bpython[\\d\\.]*\\b' })))).toEqual([])
     })
     it('G4 配置文件缺失或不是 JSONC 是警告；G5 不生效的字段', () => {
       const missing = check(g({ configuration: 'c.json' }))

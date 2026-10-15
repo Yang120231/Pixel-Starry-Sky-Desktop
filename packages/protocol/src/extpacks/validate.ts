@@ -3,7 +3,7 @@
 // warning = 照常加载。upload 是以后上传检查对它的处理。所有函数都不抛异常，对畸形输入也一样。
 import type { ExtIssueCode } from './codes'
 import { manifestJsoncIssue, mk } from './issue'
-import { packDir, resolvePackPath } from './match'
+import { EXT_FIRST_LINE_MAX, packDir, resolvePackPath } from './match'
 import { EXT_BUILTIN_SCOPES, EXT_LIMITS, EXT_MANIFEST } from './types'
 import type {
   ExtPackContributionKind,
@@ -16,7 +16,7 @@ import type {
   ExtPackSkillInfo,
   ExtPackSource,
 } from './types'
-import { hasNestedQuantifier, hasQuantifiedAlternation, validateTaskTemplate } from './tasks'
+import { hasAmbiguousQuantifiers, hasNestedQuantifier, hasQuantifiedAlternation, validateTaskTemplate } from './tasks'
 import { contrastRatio, parseHexColor, parseJsonc, satisfiesEngine } from './text'
 
 type Rec = Record<string, unknown>
@@ -851,6 +851,14 @@ export function validateContributions(
               'grammar.firstLine',
               `firstLine 里有被重复的分支组（如 (a|aa)+），可能卡死编辑器：${raw.firstLine}`,
               `firstLine has a repeated alternation group (e.g. (a|aa)+) that can hang the editor: ${raw.firstLine}`,
+              'firstLine',
+            )
+          } else if (hasAmbiguousQuantifiers(raw.firstLine, EXT_FIRST_LINE_MAX)) {
+            ok = false
+            it.err(
+              'grammar.firstLine',
+              `firstLine 里有可以互相重叠的量词（如 a*a*a*a*b），可能卡死编辑器：${raw.firstLine}`,
+              `firstLine has overlapping quantifiers (e.g. a*a*a*a*b) that can hang the editor: ${raw.firstLine}`,
               'firstLine',
             )
           }

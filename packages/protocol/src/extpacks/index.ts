@@ -68,6 +68,7 @@ export {
 } from './validate'
 export {
   EXT_TASK_NAME_RE,
+  hasAmbiguousQuantifiers,
   hasNestedQuantifier,
   hasQuantifiedAlternation,
   parseCondition,

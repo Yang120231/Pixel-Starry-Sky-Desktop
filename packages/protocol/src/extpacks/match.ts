@@ -1,4 +1,4 @@
-import { hasNestedQuantifier, hasQuantifiedAlternation } from './tasks'
+import { hasAmbiguousQuantifiers, hasNestedQuantifier, hasQuantifiedAlternation } from './tasks'
 import type { ExtGrammar, ExtLocale, ExtPackContributes, ExtPackManifest, ExtText } from './types'
 
 /** 取多语言文本；英文缺失时退回中文 */
@@ -76,6 +76,30 @@ export function wildcardMatch(pattern: string, name: string): boolean {
 /** firstLine 正则只测前这么多个字符，限制回溯代价 */
 export const EXT_FIRST_LINE_MAX = 200
 
+/** firstLine 正则的安全检查 + 编译结果缓存（每次渲染都会问）；null = 不安全或不合法，一律当不匹配 */
+const firstLineCache = new Map<string, RegExp | null>()
+
+function firstLineRegExp(pattern: string): RegExp | null {
+  const hit = firstLineCache.get(pattern)
+  if (hit !== undefined) return hit
+  let re: RegExp | null = null
+  try {
+    // 嵌套量词的正则（(a+)+）会指数级回溯，截断长度也救不了：校验没拦住的（绕过校验加载的）直接当不匹配
+    // 被量化的分支组（(a|aa)+）分支重叠时同样指数级回溯，一并当不匹配
+    // 相邻且可重叠的量词（a*a*a*a*b）是多项式级回溯，同样一并当不匹配
+    if (
+      !hasNestedQuantifier(pattern) &&
+      !hasQuantifiedAlternation(pattern) &&
+      !hasAmbiguousQuantifiers(pattern, EXT_FIRST_LINE_MAX)
+    )
+      re = new RegExp(pattern)
+  } catch {
+    // 坏的正则当作不匹配
+  }
+  firstLineCache.set(pattern, re)
+  return re
+}
+
 /** 0 = 不匹配；filenames 400；filenamePatterns 300；extensions 200 + 扩展名长度；firstLine 100 */
 export function grammarMatchScore(g: ExtGrammar, fileName: string, firstLine?: string): number {
   const lower = fileName.toLowerCase()
@@ -87,14 +111,8 @@ export function grammarMatchScore(g: ExtGrammar, fileName: string, firstLine?: s
   }
   if (best) return best
   if (g.firstLine && firstLine !== undefined) {
-    // 嵌套量词的正则（(a+)+）会指数级回溯，截断长度也救不了：校验没拦住的（绕过校验加载的）直接当不匹配
-    // 被量化的分支组（(a|aa)+）分支重叠时同样指数级回溯，一并当不匹配
-    if (hasNestedQuantifier(g.firstLine) || hasQuantifiedAlternation(g.firstLine)) return 0
-    try {
-      if (new RegExp(g.firstLine).test(firstLine.slice(0, EXT_FIRST_LINE_MAX))) return 100
-    } catch {
-      // 坏的正则当作不匹配
-    }
+    const re = firstLineRegExp(g.firstLine)
+    if (re && re.test(firstLine.slice(0, EXT_FIRST_LINE_MAX))) return 100
   }
   return 0
 }

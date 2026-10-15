@@ -286,6 +286,7 @@ export {
   globToRegExp,
   grammarIssue,
   grammarMatchScore,
+  hasAmbiguousQuantifiers,
   hasNestedQuantifier,
   hasQuantifiedAlternation,
   inactiveContributions,

@@ -52,6 +52,44 @@ describe('grammarMatchScore 补充', () => {
   })
 })
 
+describe('grammarMatchScore firstLine 相邻可重叠的量词', () => {
+  it('a*a*…a*b 是多项式级回溯，直接当不匹配，不会卡住', () => {
+    const t = Date.now()
+    expect(grammarMatchScore(g({ firstLine: '^a*a*a*a*a*a*a*a*a*a*b$' }), 'x', 'a'.repeat(80) + '!')).toBe(0)
+    expect(Date.now() - t).toBeLessThan(50)
+    // 缓存命中后同样是不匹配
+    expect(grammarMatchScore(g({ firstLine: '^a*a*a*a*a*a*a*a*a*a*b$' }), 'x', 'a'.repeat(80) + 'b')).toBe(0)
+  })
+  it('shebang 之类的常见写法照常匹配', () => {
+    expect(grammarMatchScore(g({ firstLine: '^#!.*\\bnode\\b' }), 'run', '#!/usr/bin/env node')).toBe(100)
+    expect(grammarMatchScore(g({ firstLine: '^#!.*\\b(node|deno)\\b' }), 'run', '#!/usr/bin/env deno')).toBe(100)
+    expect(grammarMatchScore(g({ firstLine: '^#!.*\\bpython[\\d\\.]*\\b' }), 'run', '#!/usr/bin/python3.11')).toBe(100)
+    expect(grammarMatchScore(g({ firstLine: '^<\\?php' }), 'run', '<?php echo 1;')).toBe(100)
+    expect(grammarMatchScore(g({ firstLine: '^#!.*\\bnode\\b' }), 'run', '#!/bin/sh')).toBe(0)
+  })
+  it('坏的正则当不匹配', () => {
+    expect(grammarMatchScore(g({ firstLine: '(' }), 'x', '(')).toBe(0)
+  })
+  // 放行的写法在最坏输入（200 个可重叠字符 + '!'）下也要很快，防止分析过于宽松
+  it.each([
+    ['a*a*b', 'a'],
+    ['^#!.*\\bnode\\b', 'a'],
+    ['^#!.*\\b(node|deno)\\b', 'a'],
+    ['^#!.*\\bpython[\\d\\.]*\\b', 'a'],
+    ['^\\s*<\\?xml', ' '],
+    ['^.*-\\*-\\s*mode:\\s*ruby\\s*-\\*-', ' '],
+    ['-\\*-\\s*(mode:)?\\s*(c\\+\\+)\\s*(;|-\\*-)', ' '],
+    ['a+b+', 'a'],
+    ['^<\\?php', '<'],
+  ])('放行的 %s 最坏输入很快', (firstLine, fill) => {
+    const t = Date.now()
+    grammarMatchScore(g({ firstLine }), 'x', fill.repeat(200) + '!')
+    grammarMatchScore(g({ firstLine }), 'x', '#!' + fill.repeat(198) + '!')
+    grammarMatchScore(g({ firstLine }), 'x', '-*-' + fill.repeat(197) + '!')
+    expect(Date.now() - t).toBeLessThan(200)
+  })
+})
+
 describe('wildcardMatch', () => {
   it('只认 *，整串匹配，不分大小写', () => {
     expect(wildcardMatch('.env.*', '.ENV.local')).toBe(true)

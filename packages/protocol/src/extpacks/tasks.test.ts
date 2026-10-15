@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   EXT_TASK_NAME_RE,
+  hasAmbiguousQuantifiers,
   hasNestedQuantifier,
   hasQuantifiedAlternation,
   parseCondition,
@@ -196,6 +197,53 @@ describe('hasQuantifiedAlternation', () => {
     ['(?:(a|aa))+', true],
   ] as const)('%s → %s', (pattern, expected) => {
     expect(hasQuantifiedAlternation(pattern)).toBe(expected)
+  })
+})
+
+describe('hasAmbiguousQuantifiers', () => {
+  it.each([
+    ['^a*a*a*a*a*a*a*a*a*a*b$', true],
+    ['a*a*a*a*b', true],
+    ['.*.*.*x', true],
+    ['.*a.*b.*c', true],
+    ['(a*){5}', true],
+    ['(a+){2,100}', true],
+    ['\\s*\\s*\\s*\\s*$x', true],
+    ['a+b+', false],
+    ['a*a*b', false],
+    ['^#!.*\\bnode\\b', false],
+    ['^#!.*\\b(node|deno)\\b', false],
+    ['^#!.*\\bpython[\\d\\.]*\\b', false],
+    ['^\\s*<\\?xml', false],
+    ['^.*-\\*-\\s*mode:\\s*ruby\\s*-\\*-', false],
+    ['-\\*-\\s*(mode:)?\\s*(c\\+\\+)\\s*(;|-\\*-)', false],
+    ['^<\\?php', false],
+    // 字符类、取反、转义、范围
+    ['[ab]*[bc]*[cd]*[de]*x', true],
+    ['[ab]*[cd]*[ef]*[gh]*x', false],
+    ['[^a]*[^b]*[^c]*x', true],
+    ['\\d*\\w*\\D*\\W*\\w*!', true],
+    ['\\x41*\\u0041*A*A*b', true],
+    ['[\\]a]*[\\]a]*[\\]a]*[\\]a]*b', true],
+    ['a{1,3}a{1,3}a{1,3}b', false],
+    ['a{0,200}a{0,200}a{0,200}a{0,200}b', true],
+    ['(?=a*a*a*a*b)x', true],
+    ['(?:a*)*', true],
+    ['\\(a*\\(a*\\(a*\\(a*b', false],
+    ['{a*{a*{a*{a*b', false],
+    // 不会抛：不合法的正则也要返回布尔值
+    ['(', false],
+    ['a**', false],
+    ['[a', false],
+    ['\\', false],
+  ] as const)('%s → %s', (pattern, expected) => {
+    expect(hasAmbiguousQuantifiers(pattern)).toBe(expected)
+  })
+  it('超长的模式也很快', () => {
+    const t = Date.now()
+    expect(hasAmbiguousQuantifiers('(?:a|b)'.repeat(5000) + 'c*')).toBe(false)
+    expect(hasAmbiguousQuantifiers('('.repeat(20000))).toBeTypeOf('boolean')
+    expect(Date.now() - t).toBeLessThan(1000)
   })
 })
 

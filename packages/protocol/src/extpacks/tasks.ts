@@ -160,6 +160,315 @@ export function hasQuantifiedAlternation(pattern: string): boolean {
   return false
 }
 
+/** 128 位 ASCII 位图 + 「可能含非 ASCII 字符」标记；hasAmbiguousQuantifiers 用它判断两个字符集是否重叠 */
+interface CharSet {
+  bits: Uint32Array
+  other: boolean
+}
+const csNew = (other = false): CharSet => ({ bits: new Uint32Array(4), other })
+const csAdd = (s: CharSet, c: number): void => {
+  if (c < 128) s.bits[c >> 5] |= 1 << (c & 31)
+  else s.other = true
+}
+const csAddRange = (s: CharSet, lo: number, hi: number): void => {
+  for (let c = lo; c <= Math.min(hi, 127); c++) csAdd(s, c)
+  if (hi > 127) s.other = true
+}
+const csUnion = (a: CharSet, b: CharSet): CharSet => {
+  const r = csNew(a.other || b.other)
+  for (let k = 0; k < 4; k++) r.bits[k] = a.bits[k] | b.bits[k]
+  return r
+}
+/** 把 b 并进 a（原地） */
+const csMerge = (a: CharSet, b: CharSet): void => {
+  for (let k = 0; k < 4; k++) a.bits[k] |= b.bits[k]
+  a.other ||= b.other
+}
+/** 取反：非 ASCII 一律算「可能含」 */
+const csNot = (s: CharSet): CharSet => {
+  const r = csNew(true)
+  for (let k = 0; k < 4; k++) r.bits[k] = ~s.bits[k]
+  return r
+}
+const csFull = (): CharSet => csNot(csNew())
+const csOverlap = (a: CharSet, b: CharSet): boolean => {
+  if (a.other && b.other) return true
+  for (let k = 0; k < 4; k++) if ((a.bits[k] & b.bits[k]) !== 0) return true
+  return false
+}
+/** \d \w \s 及其取反 \D \W \S；不是这六个返回 null */
+const classSet = (kind: string): CharSet | null => {
+  const s = csNew()
+  const lower = kind.toLowerCase()
+  if (lower === 'd') csAddRange(s, 48, 57)
+  else if (lower === 'w') {
+    csAddRange(s, 48, 57)
+    csAddRange(s, 65, 90)
+    csAddRange(s, 97, 122)
+    csAdd(s, 95)
+  } else if (lower === 's') {
+    for (const c of [9, 10, 11, 12, 13, 32]) csAdd(s, c)
+    s.other = true // 还有 U+00A0、U+2028 等非 ASCII 空白
+  } else return null
+  return kind === lower ? s : csNot(s)
+}
+
+/** hasAmbiguousQuantifiers 的小 AST：item = 带量词的单个字符集或组（组有 alts）；look = 环视（零宽） */
+interface QItem {
+  t: 'item'
+  min: number
+  max: number
+  /** 自身能匹配的所有字符（组 = 内部所有字符的并集） */
+  cs: CharSet
+  /** 能出现在这个元素开头的字符 */
+  first: CharSet
+  nullable: boolean
+  /** 内部（不含自己的量词）是否还有可变次数的元素 */
+  variable: boolean
+  alts?: QNode[][]
+}
+interface QLook {
+  t: 'look'
+  alts: QNode[][]
+}
+type QNode = QItem | QLook
+
+/** 一个序列开头能出现的字符，以及整个序列是否可以匹配空串（环视零宽，跳过） */
+function seqFirst(seq: QNode[]): { first: CharSet; nullable: boolean } {
+  let first = csNew()
+  for (const n of seq) {
+    if (n.t === 'look') continue
+    first = csUnion(first, n.first)
+    if (!n.nullable) return { first, nullable: false }
+  }
+  return { first, nullable: true }
+}
+
+/**
+ * 静态检查「相邻且可重叠的量词」：hasNestedQuantifier / hasQuantifiedAlternation 拦不住 a*a*a*a*b 这类写法，
+ * 它没有嵌套也没有分支，但回溯是 O(n^k)（k = 量词个数），截断到 200 字符也会卡死渲染线程。
+ *
+ * 做法：把正则（不带 flag，按非 unicode 解释）解析成小 AST，再用 Glushkov 式的 follow 集判断每个可变次数元素是否「歧义」——
+ * 它自己能匹配的字符和它后面能接上的首字符有重叠，就说明同一段输入有多种切分方式。
+ * 每个歧义元素给代价贡献一个因子（无上限 = maxLength+1，有上限 = max-min+1），有上限的组内部代价取 max 次幂，
+ * 无上限的组内部若还有可变元素按无穷大算，分支代价相乘（保守）。总代价超过 (maxLength+1)^2 就拒绝，即最多允许两个无上限的歧义量词。
+ *
+ * 字符集用 128 位 ASCII 位图 + 「含非 ASCII」标记近似；`.`、反向引用按全集，取反类的非 ASCII 一律算有。
+ * 整个模式结尾处的 follow 为空（.test() 找到第一个成功就返回）。耗时线性于模式长度，永不抛错：
+ * 解析器对不合法的正则也会给出结果；万一出了意外（如括号嵌套到栈溢出）按「不安全」返回 true，宁可错拒也不放过可能卡死的写法。
+ */
+export function hasAmbiguousQuantifiers(pattern: string, maxLength = 200): boolean {
+  try {
+    return ambiguityCost(pattern, maxLength) > (maxLength + 1) ** 2
+  } catch {
+    return true
+  }
+}
+
+/** hasAmbiguousQuantifiers 的主体：解析 + 估算最坏回溯代价 */
+function ambiguityCost(pattern: string, maxLength: number): number {
+  let pos = 0
+  const EMPTY = csNew()
+  const quantRe = /\{(\d+)(?:(,)(\d*))?\}/y
+  /** 读 pos 处的量词（含懒惰后缀）；没有量词就是 {1,1}；`{` 不构成合法量词时留给主循环按字面字符处理 */
+  const readQuant = (): { min: number; max: number } => {
+    let min = 1
+    let max = 1
+    const c = pattern[pos]
+    if (c === '*') [min, max] = [0, Infinity]
+    else if (c === '+') [min, max] = [1, Infinity]
+    else if (c === '?') [min, max] = [0, 1]
+    else if (c === '{') {
+      quantRe.lastIndex = pos
+      const m = quantRe.exec(pattern)
+      if (!m) return { min, max }
+      min = Number(m[1])
+      max = m[2] ? (m[3] === '' ? Infinity : Number(m[3])) : min
+      pos += m[0].length - 1
+    } else return { min, max }
+    pos++
+    if (pattern[pos] === '?') pos++
+    return { min, max }
+  }
+  /** pos 指向反斜杠；返回单个字符码或一个字符集，pos 移到转义之后 */
+  const readEscape = (inClass: boolean): number | CharSet => {
+    const c = pattern[pos + 1]
+    if (c === undefined) {
+      pos++
+      return 92
+    }
+    pos += 2
+    const set = classSet(c)
+    if (set) return set
+    const simple: Record<string, number> = { n: 10, r: 13, t: 9, v: 11, f: 12, '0': 0 }
+    if (c in simple) return simple[c]
+    if (c === 'b' && inClass) return 8
+    const hex = c === 'x' ? 2 : c === 'u' ? 4 : 0
+    if (hex) {
+      const h = pattern.slice(pos, pos + hex)
+      if (h.length === hex && /^[0-9a-fA-F]+$/.test(h)) {
+        pos += hex
+        return parseInt(h, 16)
+      }
+    } else if (c === 'c') {
+      const l = pattern[pos]
+      if (l !== undefined && /[A-Za-z]/.test(l)) {
+        pos++
+        return l.charCodeAt(0) % 32
+      }
+      pos-- // \c 后面不是字母：反斜杠按字面字符，c 留给后面
+      return 92
+    }
+    return c.charCodeAt(0)
+  }
+  /** pos 指向 `[`；JS 里 `[]` 是空类、`[^]` 是全集，不像 PCRE 把开头的 `]` 当字面字符 */
+  const readClass = (): CharSet => {
+    pos++
+    const negate = pattern[pos] === '^'
+    if (negate) pos++
+    const s = csNew()
+    const item = (): number | CharSet => (pattern[pos] === '\\' ? readEscape(true) : pattern.charCodeAt(pos++))
+    const put = (x: number | CharSet): void => (typeof x === 'number' ? csAdd(s, x) : csMerge(s, x))
+    while (pos < pattern.length && pattern[pos] !== ']') {
+      const a = item()
+      if (pattern[pos] === '-' && pos + 1 < pattern.length && pattern[pos + 1] !== ']') {
+        pos++
+        const b = item()
+        if (typeof a === 'number' && typeof b === 'number') csAddRange(s, a, b)
+        else {
+          csAdd(s, 45) // 端点是 \d 之类：连字符按字面字符
+          put(a)
+          put(b)
+        }
+      } else put(a)
+    }
+    pos++ // `]`
+    return negate ? csNot(s) : s
+  }
+  const atom = (cs: CharSet, q: { min: number; max: number }): QItem => ({
+    t: 'item',
+    ...q,
+    cs,
+    first: cs,
+    nullable: q.min === 0,
+    variable: false,
+  })
+  const group = (alts: QNode[][], q: { min: number; max: number }): QItem => {
+    const cs = csNew()
+    const first = csNew()
+    let nullable = false
+    let variable = false
+    for (const seq of alts) {
+      const f = seqFirst(seq)
+      csMerge(first, f.first)
+      nullable ||= f.nullable
+      for (const n of seq) {
+        if (n.t === 'look') continue
+        csMerge(cs, n.cs)
+        variable ||= n.min !== n.max || n.variable
+      }
+    }
+    return { t: 'item', ...q, cs, first, nullable: nullable || q.min === 0, variable, alts }
+  }
+  /** 解析到 `)` 或结尾为止（`)` 留给调用方） */
+  const parseAlts = (): QNode[][] => {
+    const alts: QNode[][] = [[]]
+    while (pos < pattern.length) {
+      const c = pattern[pos]
+      const seq = alts[alts.length - 1]
+      if (c === ')') break
+      if (c === '|') {
+        alts.push([])
+        pos++
+      } else if (c === '^' || c === '$' || c === '*' || c === '+' || c === '?') {
+        pos++ // 断言零宽；落单的量词是不合法的写法，跳过
+      } else if (c === '(') {
+        pos++
+        let look = false
+        if (pattern[pos] === '?') {
+          const rest = pattern.slice(pos, pos + 3)
+          if (/^\?<[=!]/.test(rest)) {
+            look = true
+            pos += 3
+          } else if (/^\?[=!]/.test(rest)) {
+            look = true
+            pos += 2
+          } else if (rest[1] === '<') pos = pattern.indexOf('>', pos) + 1 || pattern.length
+          else pos += 2
+        }
+        const body = parseAlts()
+        if (pattern[pos] === ')') pos++
+        const q = readQuant() // 环视后面的量词没有意义，读掉丢弃
+        seq.push(look ? { t: 'look', alts: body } : group(body, q))
+      } else if (c === '[') {
+        const cs = readClass()
+        seq.push(atom(cs, readQuant()))
+      } else if (c === '\\') {
+        const next = pattern[pos + 1] ?? ''
+        if (next === 'b' || next === 'B') {
+          pos += 2
+        } else if (/[1-9]/.test(next) || (next === 'k' && pattern[pos + 2] === '<')) {
+          // 反向引用：不知道引用了什么，按全集
+          if (next === 'k') pos = pattern.indexOf('>', pos) + 1 || pattern.length
+          else {
+            pos++
+            while (/[0-9]/.test(pattern[pos] ?? '')) pos++
+          }
+          seq.push(atom(csFull(), readQuant()))
+        } else {
+          const e = readEscape(false)
+          const cs = typeof e === 'number' ? csNew() : e
+          if (typeof e === 'number') csAdd(cs, e)
+          seq.push(atom(cs, readQuant()))
+        }
+      } else if (c === '.') {
+        pos++
+        seq.push(atom(csFull(), readQuant()))
+      } else {
+        const cs = csNew()
+        csAdd(cs, pattern.charCodeAt(pos++))
+        seq.push(atom(cs, readQuant()))
+      }
+    }
+    return alts
+  }
+
+  const walkAlts = (alts: QNode[][], follow: CharSet): number => {
+    let cost = 1
+    for (const seq of alts) cost *= walkSeq(seq, follow)
+    return cost
+  }
+  /** 从后往前走，随时知道「后面能接上的首字符」；follow = 整个序列之后能接上的首字符 */
+  const walkSeq = (seq: QNode[], follow: CharSet): number => {
+    let cost = 1
+    let cur = follow
+    for (let i = seq.length - 1; i >= 0; i--) {
+      const n = seq[i]
+      if (n.t === 'look') {
+        cost *= walkAlts(n.alts, EMPTY) // 环视零宽、可空：只贡献自己的代价，不影响 follow
+        continue
+      }
+      let c = 1
+      if (n.alts) {
+        const inner = walkAlts(n.alts, n.max > 1 ? csUnion(cur, n.first) : cur) // 重复的组：末尾还能接回组开头
+        if (n.max === Infinity) c = n.variable ? Infinity : inner
+        else c = n.max > 1 ? inner ** n.max : inner
+      }
+      if (n.min !== n.max && csOverlap(n.cs, cur)) c *= n.max === Infinity ? maxLength + 1 : n.max - n.min + 1
+      cost *= c
+      cur = n.nullable ? csUnion(cur, n.first) : n.first
+    }
+    return cost
+  }
+
+  const top = parseAlts()
+  while (pos < pattern.length) {
+    pos++ // 落单的 `)`（不合法的写法）：当作分支分隔继续解析
+    top.push(...parseAlts())
+  }
+  return walkAlts(top, EMPTY)
+}
+
 /** 命令 / 目录里的 {占位符}：返回不认识的占位符；有落单的花括号也算 */
 function badPlaceholders(text: string, allowed: ReadonlySet<string>): string[] {
   const bad: string[] = []
