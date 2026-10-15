@@ -28,6 +28,7 @@ import { IconButton, Spinner, cn, useToast } from '@/ui'
 import { useEngineState } from '@/features/engine'
 import { isDemo, projects as demoProjects } from '@/data'
 import { useActiveWorkspace } from '@/features/editor/target'
+import { useMinimal } from '@/features/appearance/ThemeProvider'
 import { OPEN_FILES_EVENT, dirtyFile, openFile, openFilesUnder, removeFile, renameOpenFiles, useFiles } from './store'
 import type { DirectoryListing, FileEntry, WorkspaceRef } from '../../../../shared/types/workspace'
 import type { ProjectFolder } from '@pixelsky/protocol'
@@ -294,6 +295,8 @@ export function FileTree({
   useI18n()
   const projects = useEngineState(s => s.projects),
     active = useActiveWorkspace()
+  // 极简模式下不写标题时，新建 / 刷新 / 折叠这排按钮并进过滤框那一行（docs/ui/minimal-mode.md §9）
+  const merged = useMinimal() && !heading
   const [query, setQuery] = useState(''),
     [revision, setRevision] = useState(0),
     [collapsed, setCollapsed] = useState(0),
@@ -548,6 +551,45 @@ export function FileTree({
     }
   }, [dragging])
   const dirtyCount = deleting ? openFilesUnder(deleting.ref, deleting.entry.path).filter(dirtyFile).length : 0
+  const actions = (
+    <>
+      {single && (
+        <>
+          <IconButton
+            icon={FilePlus}
+            size={26}
+            iconSize={14}
+            label={tr('workspace.newFile')}
+            onClick={() => startEdit({ mode: 'file', ref: single, parent: '' })}
+          />
+          <IconButton
+            icon={FolderPlus}
+            size={26}
+            iconSize={14}
+            label={tr('workspace.newFolder')}
+            onClick={() => startEdit({ mode: 'folder', ref: single, parent: '' })}
+          />
+        </>
+      )}
+      <IconButton
+        icon={RefreshCw}
+        size={26}
+        iconSize={14}
+        label={tr('files.FileTree.refreshFilesAndGit')}
+        onClick={() => setRevision(n => n + 1)}
+      />
+      <IconButton
+        icon={ChevronsDownUp}
+        size={26}
+        iconSize={14}
+        label={tr(expandAll ? 'workspace.collapseAll' : 'workspace.expandAll')}
+        onClick={() => {
+          setExpandAll(v => !v)
+          setCollapsed(n => n + 1)
+        }}
+      />
+    </>
+  )
   return (
     <TreeExpansion.Provider value={{ version: collapsed, expanded: expandAll }}>
       <TreeColors.Provider value={statusColors}>
@@ -559,64 +601,44 @@ export function FileTree({
               compact && 'w-52 shrink-0 flex-none border-r border-line-layout',
             )}
           >
-            <div className="flex h-10 shrink-0 items-center gap-1 px-2">
-              <span className="flex-1 px-1 text-ui font-medium text-fg">{heading && tr('files.FileTree.files')}</span>
-              {single && (
-                <>
-                  <IconButton
-                    icon={FilePlus}
-                    size={26}
-                    iconSize={14}
-                    label={tr('workspace.newFile')}
-                    onClick={() => startEdit({ mode: 'file', ref: single, parent: '' })}
-                  />
-                  <IconButton
-                    icon={FolderPlus}
-                    size={26}
-                    iconSize={14}
-                    label={tr('workspace.newFolder')}
-                    onClick={() => startEdit({ mode: 'folder', ref: single, parent: '' })}
-                  />
-                </>
+            {!merged && (
+              <div data-file-tree-head className="flex h-10 shrink-0 items-center gap-1 px-2">
+                <span className="flex-1 px-1 text-ui font-medium text-fg">{heading && tr('files.FileTree.files')}</span>
+                <span data-file-tree-actions className="flex shrink-0 items-center gap-1">
+                  {actions}
+                </span>
+              </div>
+            )}
+            <div className={cn('mx-2 mb-2 flex shrink-0 items-center gap-1', merged && 'mt-1')}>
+              <label
+                data-file-tree-filter
+                className="flex h-8 min-w-0 flex-1 items-center gap-1.5 rounded-md border border-line bg-subtle px-2"
+              >
+                <Search size={14} className="shrink-0 text-fg-muted" />
+                <input
+                  aria-label={tr('files.FileTree.filterFilesByName')}
+                  placeholder={tr('files.FileTree.filterFilesByName2')}
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  className="min-w-0 flex-1 bg-transparent text-meta text-fg outline-none"
+                />
+                {query && (
+                  <button
+                    type="button"
+                    aria-label={tr('files.FileTree.clearFileFilter')}
+                    onClick={() => setQuery('')}
+                    className="text-meta text-fg-muted"
+                  >
+                    {tr('files.FileTree.clear')}
+                  </button>
+                )}
+              </label>
+              {merged && (
+                <span data-file-tree-actions className="flex shrink-0 items-center gap-0.5">
+                  {actions}
+                </span>
               )}
-              <IconButton
-                icon={RefreshCw}
-                size={26}
-                iconSize={14}
-                label={tr('files.FileTree.refreshFilesAndGit')}
-                onClick={() => setRevision(n => n + 1)}
-              />
-              <IconButton
-                icon={ChevronsDownUp}
-                size={26}
-                iconSize={14}
-                label={tr(expandAll ? 'workspace.collapseAll' : 'workspace.expandAll')}
-                onClick={() => {
-                  setExpandAll(v => !v)
-                  setCollapsed(n => n + 1)
-                }}
-              />
             </div>
-            <label className="mx-2 mb-2 flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-line bg-subtle px-2">
-              <Search size={14} className="shrink-0 text-fg-muted" />
-              <input
-                aria-label={tr('files.FileTree.filterFilesByName')}
-                placeholder={tr('files.FileTree.filterFilesByName2')}
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-                className="min-w-0 flex-1 bg-transparent text-meta text-fg outline-none"
-              />
-              {query && (
-                <button
-                  type="button"
-                  aria-label={tr('files.FileTree.clearFileFilter')}
-                  onClick={() => setQuery('')}
-                  className="text-meta text-fg-muted"
-                >
-                  {tr('files.FileTree.clear')}
-                </button>
-              )}
-            </label>
             {opError && !deleting && (
               <p role="alert" className="mx-3 mb-2 text-label text-danger">
                 {translateMessage(opError)}

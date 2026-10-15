@@ -57,7 +57,7 @@ export function BottomPanel({
   useTabStripScroll(strip, tab, TABS)
   return (
     <div data-coding-bottom-panel className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex h-9 shrink-0 items-center gap-1 px-2">
+      <div data-coding-bottom-head className="flex h-9 shrink-0 items-center gap-1 px-2">
         <div className="tab-strip-wrap h-full">
           <div
             ref={strip}
@@ -91,7 +91,7 @@ export function BottomPanel({
           </div>
           <TabStripArrows strip={strip} />
         </div>
-        <div className="no-drag flex shrink-0 items-center gap-0.5">
+        <div data-coding-bottom-actions className="no-drag flex shrink-0 items-center gap-0.5">
           <IconButton
             icon={Plus}
             label={tr('coding.bottom.newTerminal')}

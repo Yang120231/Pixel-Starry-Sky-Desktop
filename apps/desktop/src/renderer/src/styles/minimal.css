@@ -1,6 +1,10 @@
 /* 极简模式（docs/ui/minimal-mode.md，参考 Factory）：设置 › 外观打开后写 <html data-minimal="on">，关掉时这里一条都不生效。
    只改装饰，不改颜色（配色另选，「极夜」最像 Factory）。字号、行高、按钮高度这些比例两种模式共用，在 density.css（D137）。
+   一个开关管对话模式和代码模式（§9）。分五节：通用 / 对话区（两种模式共用）/ 共用部件 / 对话模式外壳 / 代码模式外壳。
+   选择器只用 data-* 钩子，不用 Tailwind 类名（minimalMode.test.ts 检查每个钩子在源码里都找得到）。
    不放 @layer，压得过 Tailwind 的工具类。 */
+
+/* ================= 通用 ================= */
 
 :root[data-minimal='on'] {
   /* 去阴影；浮在内容上的东西换成一圈细线，弹出菜单保留阴影（不然压在输入框上分不清） */
@@ -18,6 +22,8 @@
   border-radius: 6px;
 }
 
+/* ================= 对话区（对话模式的窗格和代码模式右栏用的是同一个 SessionView） ================= */
+
 /* 用户消息：整行浅色块，不靠右、不限宽 */
 :root[data-minimal='on'] .conversation-user-bubble {
   flex: 1 1 auto;
@@ -25,6 +31,41 @@
   max-width: none;
   border-radius: 6px;
   padding: 8px 12px;
+}
+
+/* 用户消息的操作按钮浮在块的右上角（ItemRows 的 UserBubble），按钮条自己带底色和细边 */
+:root[data-minimal='on'] [data-overlay-actions] > * {
+  border: 1px solid var(--border-card);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  padding: 0 2px;
+}
+
+/* 对话里的过程（§3）：不画左边的竖线，参数用等宽字、去掉底色（行高在 density.css） */
+:root[data-minimal='on'] [data-process-rows] {
+  border-left-color: transparent;
+  padding-left: 4px;
+}
+:root[data-minimal='on'] [data-tool-verb] {
+  color: var(--text-muted);
+}
+:root[data-minimal='on'] [data-tool-arg] {
+  background: transparent;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  color: var(--text-secondary);
+}
+
+/* 子智能体小框（docs/ui/subagent-box.md §5）：任务名等宽，和工具行一致（高度在 density.css） */
+:root[data-minimal='on'] [data-subagent-box] [data-box-label] {
+  font-family: var(--font-mono);
+}
+
+/* 改动卡片：路径等宽（行高在 density.css） */
+:root[data-minimal='on'] [data-changes-card] [data-file-path] {
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
 }
 
 /* 输入框：方一点（8px 圆角）、不要投影（投影用 --shadow-composer 去掉，聚焦时的 ring 照旧）；
@@ -46,52 +87,8 @@
 :root[data-minimal='on'] .composer-area [data-composer-workspace]:has([aria-expanded='true']) {
   opacity: 1;
 }
-/* 侧栏：收起最近任务，底部胶囊去掉外框只剩一行字（行高在 density.css） */
-:root[data-minimal='on'] [data-sidebar-recent] {
-  display: none;
-}
-:root[data-minimal='on'] [data-run-status] > div {
-  border-color: transparent;
-  background: transparent;
-  box-shadow: none;
-}
 
-/* 对话里的过程（docs/ui/minimal-mode.md §3）：不画左边的竖线，参数用等宽字、去掉底色（行高在 density.css） */
-:root[data-minimal='on'] [data-process-rows] {
-  border-left-color: transparent;
-  padding-left: 4px;
-}
-:root[data-minimal='on'] [data-tool-verb] {
-  color: var(--text-muted);
-}
-:root[data-minimal='on'] [data-tool-arg] {
-  background: transparent;
-  padding: 0;
-  font-family: var(--font-mono);
-  font-size: var(--text-meta);
-  color: var(--text-secondary);
-}
-
-/* 子智能体小框（docs/ui/subagent-box.md §5）：任务名等宽，和工具行一致（高度在 density.css） */
-:root[data-minimal='on'] [data-subagent-box] [data-box-label] {
-  font-family: var(--font-mono);
-}
-
-/* 用户消息的操作按钮浮在块的右上角（ItemRows 的 UserBubble），按钮条自己带底色和细边 */
-:root[data-minimal='on'] [data-overlay-actions] > * {
-  border: 1px solid var(--border-card);
-  border-radius: 6px;
-  background: var(--bg-surface);
-  padding: 0 2px;
-}
-
-/* 改动卡片：路径等宽（行高在 density.css） */
-:root[data-minimal='on'] [data-changes-card] [data-file-path] {
-  font-family: var(--font-mono);
-  font-size: var(--text-meta);
-}
-
-/* 输入框下面一排（docs/ui/minimal-mode.md §4）：每个按钮一样高（24px）、一圈细框的小标签，图标按钮也一样，等宽字；
+/* 输入框下面一排（§4）：每个按钮一样高（24px）、一圈细框的小标签，图标按钮也一样，等宽字；
    不管弹出菜单里的按钮。IconButton 的宽高写在行内样式上，只能 !important */
 :root[data-minimal='on'] .composer-toolbar button:not([data-popover] button) {
   height: 24px !important;
@@ -107,23 +104,6 @@
 :root[data-minimal='on'] .composer-toolbar button:not([data-popover] button) svg {
   width: 13px;
   height: 13px;
-}
-
-/* 标签栏：只有一个标签时不显示（顶栏写着对话标题）；多个时标签不要底框和阴影 */
-:root[data-minimal='on'] [data-tab-bar][data-tab-count='1'] {
-  display: none;
-}
-:root[data-minimal='on'] [data-tab-strip] [role='tab'] {
-  border-color: transparent;
-  box-shadow: none;
-}
-
-/* 底部账号行：只留头像、名字和余额，设置等图标鼠标移过去才显示（图标外面包的是 display: contents，透明度要设在按钮上） */
-:root[data-minimal='on'] [data-sidebar-footer] > :not([data-sidebar-account]) button {
-  opacity: 0;
-}
-:root[data-minimal='on'] footer:is(:hover, :focus-within) [data-sidebar-footer] button {
-  opacity: 1;
 }
 
 /* 输入框：一行高，发送 / 停止是右下角 24px 的小方块 */
@@ -142,18 +122,193 @@
   border-radius: 4px;
 }
 
-/* 代码模式（docs/ui/coding-mode-impl.md §7 W3b）：极简下去阴影、小圆角 */
-:root[data-minimal='on'] [data-coding-topbar],
-:root[data-minimal='on'] [data-coding-stripe],
-:root[data-minimal='on'] [data-coding-status] {
+/* ================= 共用部件（两种模式都有，改一次两边都生效，§9 A） ================= */
+
+/* 顶栏「本机 / 云端」只留图标，和窗格窄时一样（两个按钮都有 title） */
+:root[data-minimal='on'] [data-machine-menu] :is([data-machine-label], [data-machine-chevron]) {
+  display: none;
+}
+
+/* 文件树（对话模式右侧「文件」、代码模式左栏）：过滤框平时无框，聚焦才有框；
+   新建 / 刷新 / 折叠在鼠标移进树或焦点在树里时才显示（不写标题时 FileTree 把它们并进过滤框那一行） */
+:root[data-minimal='on'] [data-file-tree-head] {
+  height: 28px;
+}
+:root[data-minimal='on'] [data-file-tree-filter] {
+  height: 26px;
+  border-color: transparent;
+  background: transparent;
+}
+:root[data-minimal='on'] [data-file-tree-filter]:focus-within {
+  border-color: var(--border);
+  background: var(--bg-subtle);
+}
+:root[data-minimal='on'] [data-file-tree-actions] {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+:root[data-minimal='on'] [data-file-tree]:is(:hover, :focus-within) [data-file-tree-actions] {
+  opacity: 1;
+}
+
+/* 文件编辑器的路径行（对话模式的文件标签、代码模式的编辑器）：40 → 28，保存 / 刷新 / 换行等按钮悬停或聚焦才显示 */
+:root[data-minimal='on'] [data-file-editor-bar] {
+  height: 28px;
+}
+:root[data-minimal='on'] [data-file-editor-bar] > :not([data-file-breadcrumbs], [data-symbol-crumb]) {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+:root[data-minimal='on'] [data-file-editor-bar]:is(:hover, :focus-within) > * {
+  opacity: 1;
+}
+
+/* 标签统一（对话标签、右侧面板标签、代码模式的编辑器标签和底部面板标签）：不要底框和底色，选中字色加深、底下一道线 */
+:root[data-minimal='on']
+  :is([data-tab-strip] [role='tab'], [data-panel-tab], [data-code-tab], [data-coding-bottom-tab]) {
+  border-color: transparent;
+  border-radius: 0;
+  background: transparent;
   box-shadow: none;
+}
+:root[data-minimal='on']
+  :is(
+    [data-tab-strip] [role='tab'][aria-selected='true'],
+    [data-panel-tab][data-active],
+    [data-code-tab][aria-selected='true'],
+    [data-coding-bottom-tab][aria-selected='true']
+  ) {
+  color: var(--text);
+  box-shadow: inset 0 -1px 0 var(--text);
+}
+/* 编辑器标签原来靠顶上的主色条标当前，换成底下的线 */
+:root[data-minimal='on'] [data-code-tab]::after {
+  content: none;
+}
+
+/* ================= 对话模式外壳 ================= */
+
+/* 侧栏：收起最近任务，底部胶囊去掉外框只剩一行字（行高在 density.css） */
+:root[data-minimal='on'] [data-sidebar-recent] {
+  display: none;
+}
+:root[data-minimal='on'] [data-run-status] > div {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* 标签栏：只有一个标签时不显示（顶栏写着对话标题） */
+:root[data-minimal='on'] [data-tab-bar][data-tab-count='1'] {
+  display: none;
+}
+
+/* 底部账号行：只留头像、名字和余额，设置等图标鼠标移过去才显示（图标外面包的是 display: contents，透明度要设在按钮上） */
+:root[data-minimal='on'] [data-sidebar-footer] > :not([data-sidebar-account]) button {
+  opacity: 0;
+}
+:root[data-minimal='on'] footer:is(:hover, :focus-within) [data-sidebar-footer] button {
+  opacity: 1;
+}
+
+/* 右侧面板的标签行：40 → 32，右边的「+ / 放大 / 收起」悬停才显示；一个标签都没有时照常显示 */
+:root[data-minimal='on'] [data-panel-tabs] {
+  height: 32px;
+}
+:root[data-minimal='on'] [data-panel-tabs]:has([data-panel-tab]) > button {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+:root[data-minimal='on'] [data-panel-tabs]:is(:hover, :focus-within) > button {
+  opacity: 1;
+}
+
+/* ================= 代码模式外壳（docs/ui/coding-mode-impl.md §7 W3b，§9 B） ================= */
+
+/* 顶栏、活动条、状态栏、审查条、命令中心去阴影；整宽的条不加圆角，按钮 4px */
+:root[data-minimal='on'] :is([data-coding-topbar], [data-coding-stripe], [data-coding-status]),
+:root[data-minimal='on'] :is([data-ai-review-bar], [data-command-center]) {
+  box-shadow: none;
+}
+:root[data-minimal='on'] :is([data-coding-stripe-button], [data-command-center-button]) {
   border-radius: 4px;
 }
-:root[data-minimal='on'] [data-ai-review-bar],
-:root[data-minimal='on'] [data-command-center] {
-  box-shadow: none;
+
+/* 活动条按钮 32 → 28、图标 18 → 16（条宽 40 不变；IconButton 的宽高写在行内样式上） */
+:root[data-minimal='on'] [data-coding-stripe-button] {
+  width: 28px !important;
+  height: 28px !important;
 }
-:root[data-minimal='on'] [data-coding-stripe-button],
-:root[data-minimal='on'] [data-command-center-button] {
-  border-radius: 4px;
+:root[data-minimal='on'] [data-coding-stripe-button] > svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* 面板标题（左栏、右栏非对话视图）36 → 28 */
+:root[data-minimal='on'] [data-coding-panel-header] {
+  height: 28px;
+}
+
+/* 编辑器标签栏 40 → 32，标签字小一号；「代码 / 变更 / 并排」不要轨道框 */
+:root[data-minimal='on'] [data-coding-tabs] {
+  height: 32px;
+}
+:root[data-minimal='on'] [data-code-tab] {
+  font-size: var(--text-meta);
+}
+:root[data-minimal='on'] [data-editor-view-switch] {
+  height: 24px;
+  border-color: transparent;
+}
+
+/* 底部面板：标签行 36 → 28，标签 22 高；右边的新建 / 拆分 / 清空 / 放大 / 关闭悬停才显示。终端列表默认收起在 TerminalTab */
+:root[data-minimal='on'] [data-coding-bottom-head] {
+  height: 28px;
+}
+:root[data-minimal='on'] [data-coding-bottom-tab] {
+  height: 22px;
+  padding-inline: 6px;
+  font-size: var(--text-meta);
+}
+:root[data-minimal='on'] [data-coding-bottom-actions] {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+:root[data-minimal='on'] [data-coding-bottom-head]:is(:hover, :focus-within) [data-coding-bottom-actions] {
+  opacity: 1;
+}
+
+/* 右栏对话的标题行 36 → 32：不要「AI」小标（靠主色图标和左边的竖线区分），新对话 / 更多 / 收起悬停才显示 */
+:root[data-minimal='on'] [data-coding-chat-header] {
+  height: 32px;
+}
+:root[data-minimal='on'] [data-coding-chat-badge] {
+  display: none;
+}
+:root[data-minimal='on'] [data-coding-chat-actions] {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+:root[data-minimal='on'] [data-coding-chat-header]:is(:hover, :focus-within) [data-coding-chat-actions],
+:root[data-minimal='on'] [data-coding-chat-actions]:has([aria-expanded='true']) {
+  opacity: 1;
+}
+
+/* 状态栏：缩进 / 编码 / 换行 / 语言鼠标移上去才显示；机器名不写（顶栏有）。分支、AI 状态、问题、通知照常 */
+:root[data-minimal='on']
+  [data-coding-status]
+  :is(
+    [data-status-item='indent'],
+    [data-status-item='encoding'],
+    [data-status-item='newline'],
+    [data-status-item='language']
+  ) {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+:root[data-minimal='on'] [data-coding-status]:is(:hover, :focus-within) [data-status-item] {
+  opacity: 1;
+}
+:root[data-minimal='on'] [data-coding-status] [data-status-item='machine'] {
+  display: none;
 }

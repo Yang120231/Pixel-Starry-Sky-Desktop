@@ -97,6 +97,8 @@ export function WorkspaceTabs({
           return (
             <div
               key={id}
+              data-panel-tab={id}
+              data-active={id === layout.active || undefined}
               className={cn(
                 'group flex h-7 max-w-[min(32rem,80vw)] shrink-0 items-center gap-1 rounded-md border pr-1',
                 id === layout.active

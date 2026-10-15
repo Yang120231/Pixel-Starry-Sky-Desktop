@@ -104,7 +104,7 @@ export function FileEditor({
         if (active) void checkFile(id)
       }}
     >
-      <div className="flex h-10 shrink-0 items-center gap-1 border-b border-line-layout px-3">
+      <div data-file-editor-bar className="flex h-10 shrink-0 items-center gap-1 border-b border-line-layout px-3">
         <FileBreadcrumbs tab={tab} />
         {crumbExtra}
         {!controlled && fileLanguage(tab.path) === 'Markdown' && (

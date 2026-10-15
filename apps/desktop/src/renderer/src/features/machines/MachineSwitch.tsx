@@ -66,8 +66,17 @@ export function MachineSwitch() {
         )}
       >
         <LocalIcon size={14} strokeWidth={1.5} />
-        <span className="max-w-32 truncate @max-[680px]:hidden">{onWsl ? view.name : t('machines.local')}</span>
-        {hasWsl && <ChevronDown size={12} strokeWidth={1.5} className="-ml-0.5 text-fg-faint @max-[680px]:hidden" />}
+        <span data-machine-label className="max-w-32 truncate @max-[680px]:hidden">
+          {onWsl ? view.name : t('machines.local')}
+        </span>
+        {hasWsl && (
+          <ChevronDown
+            data-machine-chevron
+            size={12}
+            strokeWidth={1.5}
+            className="-ml-0.5 text-fg-faint @max-[680px]:hidden"
+          />
+        )}
       </button>
       <button
         type="button"
@@ -84,8 +93,15 @@ export function MachineSwitch() {
       >
         {view.warn && <span className="size-1.5 shrink-0 rounded-full bg-warn" />}
         <Cloud size={14} strokeWidth={1.5} />
-        <span className="max-w-40 truncate @max-[680px]:hidden">{cloudLabel}</span>
-        <ChevronDown size={12} strokeWidth={1.5} className="-ml-0.5 text-fg-faint @max-[680px]:hidden" />
+        <span data-machine-label className="max-w-40 truncate @max-[680px]:hidden">
+          {cloudLabel}
+        </span>
+        <ChevronDown
+          data-machine-chevron
+          size={12}
+          strokeWidth={1.5}
+          className="-ml-0.5 text-fg-faint @max-[680px]:hidden"
+        />
       </button>
       {hasWsl && <LocalMenu open={localOpen} onClose={() => setLocalOpen(false)} anchor={localRef} />}
       <Popover open={open} onClose={() => setOpen(false)} align="end" className="w-72">

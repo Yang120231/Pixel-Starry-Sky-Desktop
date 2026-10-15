@@ -4,6 +4,7 @@ import type { ServiceDefinition } from '../../../../../shared/types/project-tool
 import { IconButton, cn } from '@/ui'
 import { stripAnsi } from '@/ui/code/ansi'
 import { useI18n } from '@/i18n/I18nProvider'
+import { useMinimal } from '@/features/appearance/ThemeProvider'
 import { tr } from '@/i18n/core'
 import { useSession } from '@/features/engine'
 import { TerminalPanel } from '@/features/terminal/TerminalPanel'
@@ -17,6 +18,9 @@ import { useCodingSessionId, useCodingWorkspace } from '../workspace'
 import { setOutputSource, useBottomState } from './aiCommands'
 import { summarizeAiCommands, type AiCommandEntry } from './aiCommandsModel'
 
+/** 用户手动收起 / 展开过（记着当时的自动值）：切到对话模式再回来时代码模式会重新挂载，靠它接着用用户选的 */
+let remembered: { auto: boolean; collapsed: boolean } | null = null
+
 /** 终端页：左边是终端本体（不带自己的标题栏），右边是可收起的列表 */
 export function TerminalTab({
   visible,
@@ -29,14 +33,21 @@ export function TerminalTab({
   autoCollapsed: boolean
 }) {
   useI18n()
-  const [manual, setManual] = useState<boolean | null>(null)
-  const [seenAuto, setSeenAuto] = useState(autoCollapsed)
-  if (seenAuto !== autoCollapsed) {
-    setSeenAuto(autoCollapsed)
+  // 极简模式下列表默认收起（docs/ui/minimal-mode.md §9）；点开过就听用户的，直到窗口宽窄或极简开关变了
+  const minimal = useMinimal()
+  const auto = autoCollapsed || minimal
+  const [manual, setManual] = useState<boolean | null>(() => (remembered?.auto === auto ? remembered.collapsed : null))
+  const [seenAuto, setSeenAuto] = useState(auto)
+  if (seenAuto !== auto) {
+    setSeenAuto(auto)
     setManual(null)
+    remembered = null
   }
-  const collapsed = manual ?? autoCollapsed
-  const setCollapsed = (value: boolean): void => setManual(value)
+  const collapsed = manual ?? auto
+  const setCollapsed = (value: boolean): void => {
+    setManual(value)
+    remembered = { auto, collapsed: value }
+  }
   const store = useTerminalStore()
   const workspace = useCodingWorkspace()
   const { services } = useServices(workspace.ref)
