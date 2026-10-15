@@ -149,7 +149,7 @@ export function RightPanel({ maximized = false, visible = true }: { maximized?: 
   return (
     <aside
       data-right-workspace
-      className="relative flex h-full min-h-0 w-full min-w-0 flex-col border-l border-line-divider bg-panel"
+      className="relative flex h-full min-h-0 w-full min-w-0 flex-col border-l border-line-layout bg-panel"
       onKeyDown={e => {
         if (
           e.defaultPrevented ||
