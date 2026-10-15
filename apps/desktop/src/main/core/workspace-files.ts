@@ -310,10 +310,16 @@ export class WorkspaceFiles {
     if (typeof name !== 'string' || name.length > 160) throw new Error('筛选名称过长')
     const term = name.trim().toLocaleLowerCase()
     if (!term) return this.list(ref, '')
-    // 多文件夹项目：按顺序搜每个文件夹（主文件夹先），共用同一个上限和时限
+    // 多文件夹项目：按顺序搜每个文件夹（主文件夹先），共用同一个上限和时限；
+    // 主文件夹不在了报错，附加文件夹不在了（删掉、移走、暂时访问不了）就跳过，和 grep / status 一样（#85）
     const roots: [string, string][] = []
-    for (const [path, prefix] of allFolders(this.target(ref)))
-      roots.push([await workspacePath(path, '', 'directory'), prefix])
+    for (const [i, [path, prefix]] of allFolders(this.target(ref)).entries()) {
+      const root =
+        i === 0
+          ? await workspacePath(path, '', 'directory')
+          : await workspacePath(path, '', 'directory').catch(() => null)
+      if (root) roots.push([root, prefix])
+    }
     const entries: DirectoryListing['entries'] = []
     const queue: [string, string, string][] = roots.map(([root, prefix]) => [root, prefix, ''])
     let examined = 0

@@ -172,6 +172,27 @@ describe('多文件夹项目（docs/ui/multi-root-projects.md §3.4）', () => {
     expect((await multi.status(ref))['::1/src/']).toBeUndefined()
     expect(Object.keys(await multi.status(ref))).toContain('::1/src')
   })
+
+  it('附加文件夹不在了：按名字搜跳过它，主文件夹照样搜；主文件夹不在了才报错（#85）', async () => {
+    const gone = new WorkspaceFiles(value => ({
+      ref: value,
+      name: '测试项目',
+      path: root,
+      folders: [
+        { path: join(folder, '已删掉'), name: '没了' },
+        { path: extra, name: '附加' },
+      ],
+    }))
+    expect((await gone.search(ref, 'main')).entries.map(e => e.path)).toEqual(['main.ts'])
+    expect((await gone.search(ref, 'a.ts')).entries.map(e => e.path)).toEqual(['::2/src/a.ts'])
+    const noMain = new WorkspaceFiles(value => ({
+      ref: value,
+      name: '测试项目',
+      path: join(folder, '已删掉'),
+      folders: [{ path: extra, name: '附加' }],
+    }))
+    await expect(noMain.search(ref, 'a.ts')).rejects.toThrow('项目目录不存在')
+  })
 })
 
 describe('编辑器参数', () => {
