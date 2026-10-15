@@ -213,7 +213,7 @@ export const PaneView = memo(function PaneView(props: PaneViewProps) {
         </div>
       )}
       {!showHead && leaf.tabs.length > 0 && (
-        <div data-tab-bar data-tab-count={leaf.tabs.length} className="shrink-0 border-b border-line-divider">
+        <div data-tab-bar data-tab-count={leaf.tabs.length} className="shrink-0 border-b border-line-layout">
           <TabStrip leaf={leaf} dim={false} areaSize={props.areaSize} />
         </div>
       )}
