@@ -3,7 +3,7 @@ import { tr, translateMessage } from '../../i18n/core'
 // 设置 › 模型通道（docs/ui/model-channels.md §2.1）：四张通道卡（状态 + 授权 / 登录按钮），自定义接口列在第四张里；
 // 最下面「新对话用：接着上次 / 固定为」（§2.6）
 import { useState, type ReactNode } from 'react'
-import { LogIn } from 'lucide-react'
+import { Columns2, LogIn, PanelTop } from 'lucide-react'
 import { Button, EngineIcon, Segmented, Select, Spinner, cn } from '@/ui'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
 import { useAccount } from '@/features/account/useAccount'
@@ -34,7 +34,7 @@ import {
   channelStateText,
   executorName,
 } from './channelLabels'
-import { useChannelPrefs } from './channelPrefs'
+import { setMenuLayout, useChannelPrefs } from './channelPrefs'
 import { openAuthDialog } from './authDialogStore'
 import { logoutEngine, useChannelEngines } from './loginStore'
 import { currentNewTaskChoice, pinNewTask } from './newTaskDefault'
@@ -52,6 +52,7 @@ export function ChannelsSettings() {
         </div>
       </Card>
       <NewTaskRow />
+      <MenuLayoutRow />
     </div>
   )
 }
@@ -256,6 +257,32 @@ function AuthCard({ channel }: { channel: AuthChannel }) {
 
 const fixKey = (fix: NonNullable<ReturnType<typeof channelFix>>): 'install' | 'update' | 'view' =>
   fix === 'install' ? 'install' : fix === 'update' ? 'update' : 'view'
+
+/** 输入框模型菜单的排法：标签页（默认）/ 两栏（§2.3） */
+function MenuLayoutRow() {
+  useI18n()
+  const prefs = useChannelPrefs()
+  return (
+    <div
+      data-setting-title={tr('modelChannels.menu.layout')}
+      className="flex items-center justify-between gap-4 rounded-lg border border-line px-4 py-3"
+    >
+      <div className="min-w-0">
+        <div className="text-ui font-medium text-fg">{tr('modelChannels.menu.layout')}</div>
+        <p className="mt-0.5 text-meta text-fg-muted">{tr('modelChannels.menu.layoutDesc')}</p>
+      </div>
+      <Segmented
+        label={tr('modelChannels.menu.layout')}
+        value={prefs.menuLayout}
+        onChange={setMenuLayout}
+        options={[
+          { value: 'tabs', label: tr('modelChannels.menu.layoutTabs'), icon: PanelTop },
+          { value: 'cols', label: tr('modelChannels.menu.layoutCols'), icon: Columns2 },
+        ]}
+      />
+    </div>
+  )
+}
 
 /** 「新对话用」：接着上次（默认）/ 固定为某个模型 */
 function NewTaskRow() {

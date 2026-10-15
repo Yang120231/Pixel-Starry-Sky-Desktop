@@ -1,4 +1,4 @@
-// 模型通道的两项本机设置（docs/ui/model-channels.md §2.5、§2.6）：按模型记住的执行者、新任务用什么。
+// 模型通道的本机设置（docs/ui/model-channels.md §2.3、§2.5、§2.6）：按模型记住的执行者、新任务用什么、模型菜单怎么排。
 // 都进设置同步（settings/sync/registry.ts）；演示模式只改内存，不覆盖真实设置。
 import { useSyncExternalStore } from 'react'
 import type { EngineId } from '@pixelsky/protocol'
@@ -11,10 +11,12 @@ import {
   type ModelTarget,
   type NewTaskDefault,
 } from './channelModel'
+import { MENU_LAYOUT_KEY, parseMenuLayout, type MenuLayout } from './menuModel'
 
 interface Prefs {
   executors: Record<string, EngineId>
   newTask: NewTaskDefault
+  menuLayout: MenuLayout
 }
 
 const read = (key: string): string | null => {
@@ -25,7 +27,11 @@ const read = (key: string): string | null => {
   }
 }
 
-let prefs: Prefs = { executors: parseExecutorMemory(read(EXECUTOR_KEY)), newTask: parseNewTask(read(NEW_TASK_KEY)) }
+let prefs: Prefs = {
+  executors: parseExecutorMemory(read(EXECUTOR_KEY)),
+  newTask: parseNewTask(read(NEW_TASK_KEY)),
+  menuLayout: parseMenuLayout(read(MENU_LAYOUT_KEY)),
+}
 const listeners = new Set<() => void>()
 const emit = (): void => listeners.forEach(fn => fn())
 
@@ -35,6 +41,7 @@ if (typeof window !== 'undefined')
     if (e.storageArea !== localStorage) return
     if (e.key === EXECUTOR_KEY) prefs = { ...prefs, executors: parseExecutorMemory(e.newValue) }
     else if (e.key === NEW_TASK_KEY) prefs = { ...prefs, newTask: parseNewTask(e.newValue) }
+    else if (e.key === MENU_LAYOUT_KEY) prefs = { ...prefs, menuLayout: parseMenuLayout(e.newValue) }
     else return
     emit()
   })
@@ -74,5 +81,13 @@ export function rememberExecutor(target: ModelTarget, engine: EngineId): void {
 export function setNewTaskDefault(next: NewTaskDefault): void {
   prefs = { ...prefs, newTask: next }
   save(NEW_TASK_KEY, next)
+  emit()
+}
+
+/** 输入框模型菜单：标签页（默认）/ 两栏 */
+export function setMenuLayout(layout: MenuLayout): void {
+  if (prefs.menuLayout === layout) return
+  prefs = { ...prefs, menuLayout: layout }
+  save(MENU_LAYOUT_KEY, layout)
   emit()
 }

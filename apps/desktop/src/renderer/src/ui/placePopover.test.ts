@@ -37,6 +37,17 @@ describe('placePopover', () => {
     expect(placePopover(rect(10, 100), { width: 200, height: 100 }, vp, { align: 'end' }).left).toBe(8)
   })
 
+  it('within：横向尽量留在窗格里，窗格放不下时只夹在视口内', () => {
+    // 锚点右边 580，宽 540 向左伸会越过窗格左边 260：往右挪到窗格里
+    const pane = { left: 260, right: 1000 }
+    expect(placePopover(rect(500, 100), { width: 540, height: 100 }, vp, { align: 'end', within: pane }).left).toBe(268)
+    expect(placePopover(rect(500, 100), { width: 200, height: 100 }, vp, { align: 'end', within: pane }).left).toBe(380)
+    expect(
+      placePopover(rect(500, 100), { width: 540, height: 100 }, vp, { align: 'end', within: { left: 300, right: 700 } })
+        .left,
+    ).toBe(580 - 540)
+  })
+
   it('side=right 放在右边，放不下翻到左边', () => {
     expect(placePopover(rect(100, 100), { width: 200, height: 100 }, vp, { side: 'right', offset: 8 })).toMatchObject({
       side: 'right',
