@@ -487,7 +487,7 @@ function ProjectStatus({
   )
 }
 
-/** 对话下面的小字行：「还有 N 个对话 ›」/「收起」（和标题对齐）、「已归档 N 个」（图标挂在文件夹图标下面） */
+/** 对话下面的小字行：「还有 N 个对话 ›」/「收起」文字、「已归档 N 个」图标均与会话标题左侧对齐 */
 function MoreRow({
   label,
   open,
@@ -505,8 +505,8 @@ function MoreRow({
       aria-expanded={open}
       onClick={onClick}
       className={cn(
-        'flex h-7 w-full min-w-0 shrink-0 items-center rounded-md pr-2.5 text-left text-meta text-fg-muted hover:bg-hover hover:text-fg',
-        icon ? 'gap-2.5 pl-1.5' : 'gap-1.5 pl-[28px]',
+        'flex h-7 w-full min-w-0 shrink-0 items-center rounded-md pr-2.5 pl-[28px] text-left text-meta text-fg-muted hover:bg-hover hover:text-fg',
+        icon ? 'gap-2.5' : 'gap-1.5',
       )}
     >
       {icon && <Archive size={12} strokeWidth={1.5} className="shrink-0" />}
