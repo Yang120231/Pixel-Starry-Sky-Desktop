@@ -90,24 +90,25 @@ export interface ExecutorPick {
 }
 
 /**
- * 选谁来执行：记住的（还能跑的话）→ 默认的 → 下一个能跑的。
- * locked 是已开始对话的引擎：执行者固定，跑不了这个模型时 engine 为 null。
+ * 选谁来执行：当前对话正在用的（能跑就不换引擎）→ 记住的（还能跑的话）→ 默认的 → 下一个能跑的。
+ * current 只在已开始的对话里给：这样换模型不会顺带换引擎，要换引擎得自己在「谁来执行」里选（会先确认）。
  */
 export function pickExecutor(
   candidates: EngineId[],
-  opts: { channel: ChannelId; engines: EngineLite[]; remembered?: EngineId | null; locked?: EngineId | null },
+  opts: { channel: ChannelId; engines: EngineLite[]; remembered?: EngineId | null; current?: EngineId | null },
 ): ExecutorPick {
-  if (opts.locked) {
-    const ok = candidates.includes(opts.locked)
-    return { engine: ok ? opts.locked : null, options: ok ? [opts.locked] : [], fallbackFrom: null, unavailable: !ok }
-  }
   const options = candidates.filter(e =>
     engineRunnable(
       opts.engines.find(i => i.id === e),
       opts.channel,
     ),
   )
-  const chosen = opts.remembered && options.includes(opts.remembered) ? opts.remembered : (options[0] ?? null)
+  const chosen =
+    opts.current && options.includes(opts.current)
+      ? opts.current
+      : opts.remembered && options.includes(opts.remembered)
+        ? opts.remembered
+        : (options[0] ?? null)
   const first = candidates[0] ?? null
   return {
     engine: chosen ?? first,
@@ -189,8 +190,8 @@ export interface ChannelRow {
   candidates: EngineId[]
   pick: ExecutorPick
   selected: boolean
-  /** 灰掉的原因：locked 对话已开始、换不了执行者；no-executor 能跑它的执行者都没装 */
-  disabled: 'locked' | 'no-executor' | null
+  /** 灰掉的原因：no-executor 能跑它的执行者都没装 */
+  disabled: 'no-executor' | null
 }
 
 export interface ChannelGroupView {
@@ -201,8 +202,8 @@ export interface ChannelGroupView {
 
 export interface MenuInput {
   selection: ModelTarget | null
-  /** 已开始的对话用的引擎（执行者固定）；新任务为 null */
-  locked: EngineId | null
+  /** 已开始的对话正在用的引擎（优先沿用，换引擎要确认）；新任务为 null */
+  current: EngineId | null
   platform: { email: string | null; loaded: boolean; loading: boolean; groups: PlatformGroup[]; hiddenModels: string[] }
   /** 授权通道列的模型（引擎的别名表 / 目录） */
   selfModels: Record<AuthChannel, Array<{ value: string | null }>>
@@ -221,7 +222,7 @@ export function buildChannelMenu(input: MenuInput): ChannelGroupView[] {
       channel: target.channel,
       engines: input.engines,
       remembered: memo ? input.remembered[memo] : null,
-      locked: input.locked,
+      current: input.current,
     })
     return {
       key,
@@ -229,7 +230,7 @@ export function buildChannelMenu(input: MenuInput): ChannelGroupView[] {
       candidates,
       pick,
       selected: sameTarget(target, input.selection),
-      disabled: input.locked && !pick.engine ? 'locked' : pick.unavailable ? 'no-executor' : null,
+      disabled: pick.unavailable ? 'no-executor' : null,
     }
   }
   return CHANNELS.map(channel => {

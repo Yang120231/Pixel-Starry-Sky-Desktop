@@ -55,56 +55,21 @@ export const modelChannelMessages = {
     en: '{p0} is unavailable, {p1} runs it',
   },
   'modelChannels.row.noExecutor': { zh: '{p0} 不可用', en: '{p0} is unavailable' },
-  'modelChannels.engineLocked': {
-    zh: '这个对话用的是 {p0}，新开任务再换',
-    en: 'This conversation runs with {p0}; switch in a new task',
-  },
   'modelChannels.continueLast': { zh: '接着上次', en: 'Same as last time' },
   'modelChannels.continueLastTitle': {
     zh: '沿用上一个对话选的模型；设置 › 模型通道里可以改成固定一个',
     en: 'Uses the model from your last conversation; you can pin one in Settings › Model channels',
   },
   'modelChannels.menu.settings': { zh: '通道设置', en: 'Channel settings' },
-  'modelChannels.lockedNote': {
-    zh: '这个对话用 {p0} 执行，只能换它能跑的模型',
-    en: 'This conversation runs with {p0}; only models it can run are available',
-  },
 
   // 输入框模型菜单：标签页 / 两栏（§2.3）
   'modelChannels.menu.search': { zh: '搜索全部模型', en: 'Search all models' },
-  'modelChannels.menu.searchLocked': { zh: '搜索 {p0} 能跑的模型', en: 'Search models {p0} can run' },
   'modelChannels.menu.clear': { zh: '清空', en: 'Clear' },
   'modelChannels.menu.current': { zh: '当前通道', en: 'Current channel' },
   'modelChannels.menu.add': { zh: '添加通道', en: 'Add channel' },
   'modelChannels.menu.addTitle': { zh: '添加通道：{p0}', en: 'Add a channel: {p0}' },
   'modelChannels.menu.none': { zh: '还没有可用的模型通道', en: 'No model channel yet' },
   'modelChannels.menu.noneHint': { zh: '设置任意一个就能开始用', en: 'Set up any one to get started' },
-  'modelChannels.menu.blocked': {
-    zh: '另有 {p0} 个只能用 {p1} 跑 · 新开任务可选',
-    en: '{p0} more run only with {p1} · pick them in a new task',
-  },
-  'modelChannels.menu.blockedMixed': {
-    zh: '另有 {p0} 个这个对话跑不了 · 新开任务可选',
-    en: "{p0} more can't run in this conversation · pick them in a new task",
-  },
-  'modelChannels.menu.blockedRow': {
-    zh: '只能用 {p0} 跑，新开任务时可选',
-    en: 'Runs only with {p0}; pick it in a new task',
-  },
-  'modelChannels.menu.lockedTitle': { zh: '这个对话用 {p0} 执行', en: 'This conversation runs with {p0}' },
-  'modelChannels.menu.lockedChannel': {
-    zh: '{p0}的模型只能用 {p1} 跑，新开任务时可以选。',
-    en: '{p0} models run only with {p1}; pick them in a new task.',
-  },
-  'modelChannels.menu.lockedAuth': {
-    zh: '{p0}的模型只能用 {p1} 跑（订阅只交给官方工具），新开任务时可以选。',
-    en: '{p0} models run only with {p1} (subscriptions only go to the official tool); pick them in a new task.',
-  },
-  'modelChannels.menu.newTask': { zh: '新开任务', en: 'New task' },
-  'modelChannels.menu.searchBlocked': {
-    zh: '另有 {p0} 个匹配的这个对话跑不了（{p1}）',
-    en: "{p0} more matches can't run in this conversation ({p1})",
-  },
   'modelChannels.menu.noMatch': { zh: '没有匹配的模型', en: 'No matching models' },
   'modelChannels.menu.noMatchHint': { zh: '换个关键词试试', en: 'Try another keyword' },
   'modelChannels.menu.broken.signin': { zh: '像素星空登录已失效', en: 'PixelSky sign-in has expired' },
@@ -138,13 +103,7 @@ export const modelChannelMessages = {
   'modelChannels.menu.refresh': { zh: '刷新模型和线路', en: 'Refresh models and routes' },
   'modelChannels.menu.manage': { zh: '管理模型…', en: 'Manage models…' },
   'modelChannels.menu.hiddenCount': { zh: '（已隐藏 {p0} 个）', en: '({p0} hidden)' },
-  'modelChannels.menu.onlyWith': { zh: '只能用 {p0} 跑', en: 'Runs only with {p0}' },
-  'modelChannels.menu.otherExecutor': { zh: '别的执行者', en: 'another executor' },
   'modelChannels.menu.usable': { zh: '{p0} 个可用', en: '{p0} available' },
-  'modelChannels.menu.usableBlocked': {
-    zh: '{p0} 个可用 · {p1} 个跑不了',
-    en: "{p0} available · {p1} can't run here",
-  },
   'modelChannels.tab.platform': { zh: '平台', en: 'PixelSky' },
   'modelChannels.tab.claude': { zh: 'Claude', en: 'Claude' },
   'modelChannels.tab.chatgpt': { zh: 'ChatGPT', en: 'ChatGPT' },

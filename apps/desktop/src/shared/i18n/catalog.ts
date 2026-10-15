@@ -1404,14 +1404,6 @@ export const catalog = {
     "zh": "即将支持",
     "en": "Coming soon"
   },
-  "session.ModelSourceMenu.existingConversationCannotSwitch": {
-    "zh": "已经开始的会话不能换引擎，请新建任务",
-    "en": "An existing conversation cannot switch engines. Create a new task."
-  },
-  "session.ModelSourceMenu.cannotSwitchEnginesAfter": {
-    "zh": "已经开始的会话不能换引擎",
-    "en": "Cannot switch engines after a conversation starts"
-  },
   "session.ModelSourceMenu.creditSource": {
     "zh": "额度来源",
     "en": "Credit source"

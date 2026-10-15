@@ -17,7 +17,9 @@ import {
   type PermissionMode,
   type QueuedMessage,
   type QueueSettings,
+  type SessionSettings,
   type SessionSnapshot,
+  sourceKey,
 } from '@pixelsky/protocol'
 import {
   isDemo,
@@ -280,6 +282,23 @@ export type QueueController = Pick<
   | 'resumeQueue'
 >
 
+/** 运行中换了额度来源、还没生效：当前这一轮仍用原来源，从下一条消息起用新来源 */
+export interface PendingSource {
+  source: CreditSource
+  /** 新来源的线路名（平台）/ 接口名（自定义），读不到时为 null */
+  name: string | null
+  /** 撤销：改回正在跑的这一轮用的来源和模型 */
+  undo(): Promise<void>
+}
+
+/** 运行中（或有排队）选了别的引擎、还没生效：记录里的引擎仍是现在这个，从下一条消息起换到它 */
+export interface PendingEngine {
+  engine: EngineId
+  name: string
+  /** 撤销：留在原来的引擎 */
+  undo(): Promise<void>
+}
+
 export interface ComposerController {
   queue: QueuedMessage[]
   queuePaused: boolean
@@ -308,24 +327,33 @@ export interface ComposerController {
   isDefault: boolean
   /** 平台可选（引擎是 Claude Code） */
   platformAvailable: boolean
-  /** 改额度来源。已开始的会话要先在界面上确认（会重启引擎并接上原对话） */
+  /** 运行中换了来源还没生效时非 null（对话记录已是新来源，当前这一轮仍用原来源） */
+  pendingSource: PendingSource | null
+  /** 运行中选了别的引擎还没生效时非 null；此时 engine / 模型菜单已经按新引擎显示 */
+  pendingEngine: PendingEngine | null
+  /** 真正持有这个会话的引擎（record.engine）；换引擎的确认文案、撤销判断用，和 engine 不一定相同 */
+  sessionEngine: EngineInfo | null
+  /** 这段对话里这个引擎已经有自己的原生会话（换回它时接上并同步期间的内容） */
+  engineHasSession(id: EngineId): boolean
+  /** 改额度来源。已开始的会话要先在界面上确认（会重启引擎并接上原对话；运行中换的从下一条消息生效） */
   setSource(source: CreditSource): Promise<void>
   setGroup(groupId: string): Promise<void>
-  /** 自定义 API：换接口（已开始的会话等这一轮结束后重启引擎） */
+  /** 自定义 API：换接口（已开始的会话从下一条消息起换进程） */
   setProvider(providerId: string): Promise<void>
   setModel(model: string | null): Promise<void>
   saveAsDefault(): void
   /** 模型通道（docs/ui/model-channels.md）：当前选择读成通道 */
   channel: ChannelId
   /**
-   * 在通道菜单里选了一个模型：新任务连执行引擎一起换；已开始的对话执行者固定，一次改好来源、线路 / 接口和模型
-   * （换通道要先在界面上确认）。「接着上次」时同时写回新任务默认（§2.6）
+   * 在通道菜单里选了一个模型：新任务连执行引擎一起换；已开始的对话一次改好引擎、来源、线路 / 接口和模型
+   * （换通道 / 换引擎要先在界面上确认；运行中的从下一条消息起生效）。「接着上次」时同时写回新任务默认（§2.6）
    */
   applyChoice(choice: ChannelChoice): Promise<void>
   blocker: SourceBlocker | null
   engines: EngineInfo[]
+  /** 输入框现在选的引擎；已开始的会话在运行中选了别的引擎时是新选的那个（record.nextEngine ?? record.engine） */
   engine: EngineInfo | null
-  /** 还没发过消息时才能换引擎 */
+  /** 能不能在输入框里换引擎（已开始的会话也能换，换引擎要先确认，之前的对话会整理成交接内容带过去） */
   canSwitchEngine: boolean
   selectEngine(id: EngineId): void
   effort: Effort | null
@@ -402,7 +430,8 @@ export function useComposerController(
   const config = useEngineState(s => s.config)
   const snap = useEngineState(s => (sessionId ? (s.snapshots[sessionId] ?? null) : null))
   const [draft, setDraft] = useState<Draft | null>(null)
-  const selectedEngineId = snap?.record.engine ?? draft?.engine ?? defaults?.engine ?? 'claude'
+  const selectedEngineId =
+    (snap ? (snap.record.nextEngine ?? snap.record.engine) : null) ?? draft?.engine ?? defaults?.engine ?? 'claude'
   const platform = usePlatform(selectedEngineId)
   const providers = useProviders()
   const catalog = useEngineCatalog(selectedEngineId)
@@ -423,10 +452,10 @@ export function useComposerController(
     ...panelDefaults(baseEngine),
   }
   const record = snap?.record ?? null
-  const engineId = record?.engine ?? base.engine
+  // 已开始的会话：运行中选了别的引擎时，菜单、模型、强度档位都按新选的引擎走（下一条消息起生效）
+  const engineId = record ? (record.nextEngine ?? record.engine) : base.engine
   const engine = engines.find(e => e.id === engineId) ?? null
-  const canSwitchEngine =
-    !record || ((snap?.items.length ?? 0) === 0 && (snap?.queue.length ?? 0) === 0 && snap?.state === 'idle')
+  const canSwitchEngine = true
 
   const patch = (p: Partial<Draft>): void => {
     if (record) void b.updateSession(record.id, p).catch(() => undefined)
@@ -434,7 +463,7 @@ export function useComposerController(
   }
 
   // ---- 额度来源（docs/ui/source-switch.md §3.3）：已开始的会话用自己的记录，否则用全局默认 ----
-  const started = !canSwitchEngine
+  const started = !!record && ((snap?.items.length ?? 0) > 0 || (snap?.queue.length ?? 0) > 0 || snap?.state !== 'idle')
   const source: CreditSource = started
     ? record?.platform
       ? 'platform'
@@ -519,6 +548,55 @@ export function useComposerController(
     return { groupId: sel.groupId, model: sel.model }
   }
 
+  // 运行中换了来源：记录已经是新来源，正在跑的这一轮（snap.execution）仍是原来源
+  const exec = snap && snap.state !== 'idle' ? snap.execution : null
+  const pendingSource: PendingSource | null =
+    record && exec && sourceKey(record) !== sourceKey({ platform: exec.platform, provider: exec.provider ?? null })
+      ? {
+          source,
+          name:
+            source === 'platform'
+              ? (platform.groups.find(g => g.id === groupId)?.name ?? null)
+              : source === 'custom'
+                ? (endpoint?.name ?? null)
+                : null,
+          undo: async () => {
+            await b.updateSession(record.id, {
+              platform: exec.platform ?? null,
+              provider: exec.provider ?? null,
+              model: exec.model ?? null,
+            })
+          },
+        }
+      : null
+
+  // 运行中（或有排队）选了别的引擎：记录里的引擎还是现在这个，下一条消息起才换
+  const pendingEngine: PendingEngine | null =
+    record?.nextEngine && record.nextEngine !== record.engine
+      ? {
+          engine: record.nextEngine,
+          name: engines.find(e => e.id === record.nextEngine)?.name ?? ENGINES[record.nextEngine].name,
+          undo: async () => {
+            // 模型、强度、来源也改回原引擎在用的：正在跑的这一轮，或者排队里还用原引擎的最后一条
+            const kept =
+              exec ??
+              snap?.queue.findLast(q => (q.settings.engine ?? record.engine) === record.engine)?.settings ??
+              null
+            await b.updateSession(record.id, {
+              engine: record.engine,
+              ...(kept
+                ? {
+                    platform: kept.platform ?? null,
+                    provider: kept.provider ?? null,
+                    model: kept.model ?? null,
+                    effort: kept.effort ?? null,
+                  }
+                : {}),
+            })
+          },
+        }
+      : null
+
   const setSource = async (next: CreditSource): Promise<void> => {
     if (!started || !record) {
       setDefaultSource(next, engineId)
@@ -579,10 +657,46 @@ export function useComposerController(
     return effort !== previousEffort ? { effort } : {}
   }
 
+  /** 换到别的引擎时的面板默认值；权限模式沿用，目标引擎没有这一档时用它自己的默认 */
+  const enginePanelPatch = (target: EngineId): Partial<Draft> => {
+    const modes = engines.find(e => e.id === target)?.caps.permissionModes ?? ENGINES[target].caps.permissionModes
+    const mode = record?.permissionMode ?? base.permissionMode
+    return {
+      ...panelDefaults(target),
+      ...(modes.includes(mode)
+        ? {}
+        : {
+            permissionMode: config?.[target]?.defaults.permissionMode ?? (modes.includes('edits') ? 'edits' : modes[0]),
+          }),
+    }
+  }
+
+  /** 已开始的会话选了某个通道 + 模型：来源、线路 / 接口、模型的补丁（按目标引擎的线路目录挑线路） */
+  const choicePatch = (c: ChannelChoice): Partial<SessionSettings> | null => {
+    if (!record) return null
+    if (c.channel === 'platform') {
+      if (!platform.email) throw new Error(tr('engine.hooks.signInToPixel'))
+      if (!c.model) return null
+      const groups = getPlatformState(c.engine).groups
+      // 先保模型：当前线路有这个模型就不换线路，否则换到包含它、倍率最低的线路
+      const keep = record.platform && groups.find(g => g.id === record.platform?.groupId)?.models.includes(c.model)
+      const route = keep ? record.platform!.groupId : groupsForModel(groups, c.model)[0]?.id
+      if (!route) throw new Error(tr('engine.hooks.noRouteSupportsThis'))
+      return {
+        platform: { groupId: route, account: record.platform?.account ?? platform.email },
+        provider: null,
+        model: c.model,
+      }
+    }
+    if (c.channel === 'custom') {
+      if (!c.providerId) return null
+      return { platform: null, provider: { id: c.providerId }, model: c.model }
+    }
+    return { platform: null, provider: null, model: c.model }
+  }
+
   const applyChoice = async (c: ChannelChoice): Promise<void> => {
     const last = getChannelPrefs().newTask.mode === 'last'
-    if (c.engine !== engineId && !canSwitchEngine)
-      throw new Error(tr('modelChannels.engineLocked', { p0: engine?.name ?? engineId }))
     if (!started || !record) {
       if (c.engine !== engineId) patch({ engine: c.engine, ...panelDefaults(c.engine) })
       else {
@@ -593,30 +707,16 @@ export function useComposerController(
       else writeChoiceDefault(c)
       return
     }
-    const effortPatch = effortPatchFor(c.model)
-    if (c.channel === 'platform') {
-      if (!platform.email) throw new Error(tr('engine.hooks.signInToPixel'))
-      if (!c.model) return
-      // 先保模型：当前线路有这个模型就不换线路，否则换到包含它、倍率最低的线路
-      const keep =
-        record.platform && platform.groups.find(g => g.id === record.platform?.groupId)?.models.includes(c.model)
-      const route = keep ? record.platform!.groupId : groupsForModel(platform.groups, c.model)[0]?.id
-      if (!route) throw new Error(tr('engine.hooks.noRouteSupportsThis'))
-      await b.updateSession(record.id, {
-        platform: { groupId: route, account: record.platform?.account ?? platform.email },
-        provider: null,
-        model: c.model,
-        ...effortPatch,
-      })
-    } else if (c.channel === 'custom') {
-      if (!c.providerId) return
-      await b.updateSession(record.id, {
-        platform: null,
-        provider: { id: c.providerId },
-        model: c.model,
-        ...effortPatch,
-      })
-    } else await b.updateSession(record.id, { platform: null, provider: null, model: c.model, ...effortPatch })
+    const sourcePatch = choicePatch(c)
+    if (!sourcePatch) return
+    // 换引擎：一次改好引擎和它的来源 / 模型 / 面板默认（推理强度档位按新引擎的来）；
+    // 空闲时马上换，运行中或有排队时记为「下一条消息起用」（后端 nextEngine）
+    const effortPatch = c.engine !== engineId ? enginePanelPatch(c.engine) : effortPatchFor(c.model)
+    await b.updateSession(record.id, {
+      ...(c.engine !== engineId ? { engine: c.engine } : {}),
+      ...sourcePatch,
+      ...effortPatch,
+    })
     if (last) rememberNewTask(c)
   }
 
@@ -686,6 +786,10 @@ export function useComposerController(
     model,
     isDefault,
     platformAvailable,
+    pendingSource,
+    pendingEngine,
+    sessionEngine: record ? (engines.find(e => e.id === record.engine) ?? null) : null,
+    engineHasSession: id => !!record?.engineSessions?.[id]?.id,
     setSource,
     setGroup,
     setProvider,
@@ -702,7 +806,34 @@ export function useComposerController(
     engine,
     canSwitchEngine,
     selectEngine: id => {
-      if (canSwitchEngine) patch({ engine: id, ...panelDefaults(id) })
+      if (!started || !record) {
+        patch({ engine: id, ...panelDefaults(id) })
+        return
+      }
+      if (id === engineId) return
+      // 已开始的会话：来源和接口在新引擎上还能用就沿用，否则退回自有账号；界面上的确认由调用方负责
+      const p = getPlatformState(id)
+      const keepPlatform =
+        !!record.platform && p.groups.some(g => g.id === record.platform?.groupId && g.models.length > 0)
+      const keepProvider =
+        !!record.provider && providersFor(providers.providers, id).some(x => x.id === record.provider?.id)
+      const model = keepPlatform
+        ? resolvePlatform(p.groups, record.platform!.groupId, record.model).model
+        : keepProvider
+          ? resolveCustomModel(
+              providers.providers.find(x => x.id === record.provider?.id),
+              record.model,
+            )
+          : null
+      void b
+        .updateSession(record.id, {
+          engine: id,
+          platform: keepPlatform ? record.platform : null,
+          provider: keepProvider ? record.provider : null,
+          model,
+          ...enginePanelPatch(id),
+        })
+        .catch(() => undefined)
     },
     effort: record ? record.effort : base.effort,
     efforts: catalog?.models?.find(m => m.id === (model ?? catalog.currentModel))?.efforts ??

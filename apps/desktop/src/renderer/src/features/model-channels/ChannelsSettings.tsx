@@ -297,7 +297,7 @@ function NewTaskRow() {
   const fixed = prefs.newTask.mode === 'fixed' ? prefs.newTask.choice : null
   const groups = buildChannelMenu({
     selection: fixed,
-    locked: null,
+    current: null,
     platform: catalog,
     selfModels: {
       claude: selfModelOptions('claude', claudeCatalog?.models),

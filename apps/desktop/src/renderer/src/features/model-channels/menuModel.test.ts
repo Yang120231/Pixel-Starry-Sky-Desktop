@@ -2,32 +2,30 @@ import { describe, expect, it } from 'vitest'
 import type { EngineId } from '@pixelsky/protocol'
 import type { ChannelGroupView, ChannelId, ChannelRow, ChannelState } from './channelModel'
 import {
-  blockedExecutor,
   highlightParts,
   isUnset,
   listRows,
   parseMenuLayout,
-  partitionRows,
   resolveView,
   searchChannels,
   splitChannels,
   stepView,
 } from './menuModel'
 
-function row(channel: ChannelId, model: string, opts: { locked?: boolean; candidates?: EngineId[] } = {}): ChannelRow {
+function row(channel: ChannelId, model: string, opts: { candidates?: EngineId[] } = {}): ChannelRow {
   const candidates = opts.candidates ?? ['claude']
   return {
     key: `${channel}:${model}`,
     target: { channel, model, providerId: null },
     candidates,
     pick: {
-      engine: opts.locked ? null : candidates[0],
-      options: opts.locked ? [] : candidates,
+      engine: candidates[0],
+      options: candidates,
       fallbackFrom: null,
       unavailable: false,
     },
     selected: false,
-    disabled: opts.locked ? 'locked' : null,
+    disabled: null,
   }
 }
 
@@ -76,21 +74,6 @@ describe('splitChannels', () => {
   })
 })
 
-describe('partitionRows / blockedExecutor', () => {
-  it('跑不了的单独拿出来，只有一种执行者时给出它', () => {
-    const rows = [
-      row('platform', 'a'),
-      row('platform', 'b', { locked: true, candidates: ['codex', 'pixel'] }),
-      row('platform', 'c', { locked: true, candidates: ['codex', 'pixel'] }),
-    ]
-    const { usable, blocked } = partitionRows(rows)
-    expect(usable.map(r => r.target.model)).toEqual(['a'])
-    expect(blocked.map(r => r.target.model)).toEqual(['b', 'c'])
-    expect(blockedExecutor(blocked)).toBe('codex')
-    expect(blockedExecutor([...blocked, row('custom', 'x', { locked: true, candidates: ['pixel'] })])).toBeNull()
-  })
-})
-
 describe('resolveView / stepView', () => {
   const channels = splitChannels(
     [g('platform', models('platform', 2)), g('claude', models('claude', 2)), g('chatgpt', [], { kind: 'auth' })],
@@ -130,19 +113,12 @@ describe('listRows', () => {
     expect(listRows(split([g('platform', models('platform', 20))]))).toBe(8)
   })
 
-  it('平台多一行「管理模型」，跑不了的折成一行，额外的行（线路、展开的接口）算进去', () => {
+  it('平台多一行「管理模型」，额外的行（线路、展开的接口）算进去', () => {
     expect(listRows(split([g('platform', models('platform', 4))]))).toBe(5)
-    const rows = [
-      ...models('platform', 4),
-      row('platform', 'x', { locked: true }),
-      row('platform', 'y', { locked: true }),
-    ]
-    expect(listRows(split([g('platform', rows)]))).toBe(6)
     expect(listRows(split([g('platform', models('platform', 4))]), x => (x.channel === 'platform' ? 1 : 0))).toBe(6)
   })
 
-  it('一个都跑不了的通道留出说明的高度；「＋」页按通道数估', () => {
-    expect(listRows(split([g('claude', [row('claude', 'a', { locked: true })])]))).toBe(5)
+  it('「＋」页按通道数估', () => {
     const unset = split([
       g('claude', models('claude', 1)),
       g('platform', [], { kind: 'signin' }),
@@ -158,8 +134,8 @@ describe('searchChannels', () => {
     [
       g('platform', [
         row('platform', 'claude-opus-5-5'),
-        row('platform', 'gpt-6-sol', { locked: true, candidates: ['codex', 'pixel'] }),
-        row('platform', 'gpt-6-luna', { locked: true, candidates: ['codex', 'pixel'] }),
+        row('platform', 'gpt-6-sol', { candidates: ['codex', 'pixel'] }),
+        row('platform', 'gpt-6-luna', { candidates: ['codex', 'pixel'] }),
       ]),
       g('claude', [row('claude', 'opus'), row('claude', 'haiku')]),
       g('chatgpt', [], { kind: 'auth' }),
@@ -171,23 +147,23 @@ describe('searchChannels', () => {
 
   it('跨通道按文字找，不分大小写；没命中的通道不出现', () => {
     const found = searchChannels(channels, 'OPUS', text)
-    expect(found.groups.map(x => [x.group.channel, x.rows.map(r => r.target.model)])).toEqual([
+    expect(found.map(x => [x.group.channel, x.rows.map(r => r.target.model)])).toEqual([
       ['platform', ['claude-opus-5-5']],
       ['claude', ['opus']],
     ])
-    expect(found.blocked).toEqual([])
   })
 
-  it('跑不了的命中按通道数一下', () => {
+  it('别的引擎才能跑的模型也能搜到（选了会换引擎）', () => {
     const found = searchChannels(channels, 'gpt-6', text)
-    expect(found.groups).toEqual([])
-    expect(found.blocked).toEqual([{ channel: 'platform', count: 2 }])
+    expect(found.map(x => [x.group.channel, x.rows.map(r => r.target.model)])).toEqual([
+      ['platform', ['gpt-6-sol', 'gpt-6-luna']],
+    ])
   })
 
   it('失效的通道不搜', () => {
     const broken = splitChannels([g('chatgpt', [], { kind: 'auth' })], { current: 'chatgpt', started: true })
     expect(broken.shown).toHaveLength(1)
-    expect(searchChannels(broken, 'gpt', text)).toEqual({ groups: [], blocked: [] })
+    expect(searchChannels(broken, 'gpt', text)).toEqual([])
   })
 })
 

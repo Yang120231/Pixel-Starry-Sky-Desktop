@@ -1,6 +1,5 @@
 // 输入框模型菜单的排法（docs/ui/model-channels.md §2.3）：标签页（默认）/ 两栏，没设置的通道收进「＋」，
 // 搜索跨通道，列表高度按最长的通道定。全是纯函数，界面在 session/ModelSourceMenu.tsx。
-import type { EngineId } from '@pixelsky/protocol'
 import type { ChannelGroupView, ChannelId, ChannelRow, ChannelState } from './channelModel'
 
 export type MenuLayout = 'tabs' | 'cols'
@@ -31,7 +30,7 @@ export interface MenuChannels {
 
 /**
  * 分成显示的和收起的。已开始的对话正在用的通道即使失效了也照常显示（界面写原因和修复按钮），
- * 不然看不出这个对话为什么换不了；新任务没有这个例外
+ * 不然看不出这个对话为什么用不了；新任务没有这个例外
  */
 export function splitChannels(
   groups: ChannelGroupView[],
@@ -43,17 +42,6 @@ export function splitChannels(
 
 /** 显示着但失效了（只有上面那个例外会这样） */
 export const isBroken = (g: ChannelGroupView): boolean => isUnset(g.state)
-
-/** 一组里这个对话能选的行和跑不了的行（已开始的对话执行者固定，跑不了的收成一行） */
-export function partitionRows(rows: ChannelRow[]): { usable: ChannelRow[]; blocked: ChannelRow[] } {
-  return { usable: rows.filter(r => r.disabled !== 'locked'), blocked: rows.filter(r => r.disabled === 'locked') }
-}
-
-/** 跑不了的那几行要用谁跑：只有一种时给出它，混着的给 null */
-export function blockedExecutor(rows: ChannelRow[]): EngineId | null {
-  const set = new Set(rows.map(r => r.candidates[0]).filter(Boolean))
-  return set.size === 1 ? [...set][0] : null
-}
 
 /** 打开时停在哪：上次看的还在就用它，否则当前通道，再否则第一个显示的，都没有就是添加页 */
 export function resolveView(
@@ -87,9 +75,7 @@ export function listRows(channels: MenuChannels, extra: (g: ChannelGroupView) =>
   const rowsOf = (g: ChannelGroupView): number => {
     if (isBroken(g)) return 2
     if (g.state.kind !== 'ready') return 2
-    const { usable, blocked } = partitionRows(g.rows)
-    if (!usable.length && blocked.length) return 5
-    return usable.length + (blocked.length ? 1 : 0) + (g.channel === 'platform' ? 1 : 0) + extra(g)
+    return g.rows.length + (g.channel === 'platform' ? 1 : 0) + extra(g)
   }
   const counts = channels.shown.map(rowsOf)
   if (channels.unset.length) counts.push(Math.ceil(channels.unset.length * 1.7))
@@ -102,25 +88,17 @@ export interface SearchGroup {
 }
 
 /**
- * 搜索全部显示的通道（失效的不搜）：text 给出一行用来匹配的文字（模型名、显示名、说明），不分大小写。
- * 跑不了的命中按通道数一下，界面汇总成一行
+ * 搜索全部显示的通道（失效的不搜）：text 给出一行用来匹配的文字（模型名、显示名、说明），不分大小写
  */
 export function searchChannels(
   channels: MenuChannels,
   query: string,
   text: (g: ChannelGroupView, row: ChannelRow) => string,
-): { groups: SearchGroup[]; blocked: Array<{ channel: ChannelId; count: number }> } {
+): SearchGroup[] {
   const q = query.trim().toLowerCase()
   const live = channels.shown.filter(g => !isBroken(g) && g.state.kind === 'ready')
   const hit = (g: ChannelGroupView, r: ChannelRow): boolean => !q || text(g, r).toLowerCase().includes(q)
-  return {
-    groups: live
-      .map(g => ({ group: g, rows: partitionRows(g.rows).usable.filter(r => hit(g, r)) }))
-      .filter(x => x.rows.length),
-    blocked: live
-      .map(g => ({ channel: g.channel, count: partitionRows(g.rows).blocked.filter(r => hit(g, r)).length }))
-      .filter(x => x.count),
-  }
+  return live.map(g => ({ group: g, rows: g.rows.filter(r => hit(g, r)) })).filter(x => x.rows.length)
 }
 
 /** 搜索时高亮的那一段：[前, 命中, 后]；没命中返回 null */

@@ -11,7 +11,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Columns2,
-  Lock,
   PanelTop,
   Plus,
   RefreshCw,
@@ -37,7 +36,6 @@ import { selfModelLabel, selfModelOptions, type SourceMenuController } from '@/f
 import { useSettings } from '@/features/settings/SettingsProvider'
 import { useEngineCatalog } from '@/features/engine/catalog'
 import { requestModelsScroll } from '@/features/settings/models/scroll'
-import { paneActions } from '@/features/panes/store'
 import {
   AUTH_ENGINE,
   buildChannelMenu,
@@ -65,11 +63,9 @@ import { rememberExecutor, setMenuLayout, useChannelPrefs } from '@/features/mod
 import {
   COLS_MENU_WIDTH,
   MENU_ROW,
-  blockedExecutor,
   highlightParts,
   isBroken,
   listRows,
-  partitionRows,
   resolveView,
   searchChannels,
   splitChannels,
@@ -150,7 +146,6 @@ export function ModelSourceMenu({
   const [query, setQuery] = useState('')
   /** 键盘 ↑/↓ 停在第几个能选的行；-1 是没停 */
   const [active, setActive] = useState(-1)
-  const [blockedOpen, setBlockedOpen] = useState(false)
   /** 开着「谁来执行」下拉的那一行 */
   const [exMenu, setExMenu] = useState<string | null>(null)
   /** 这个输入框里自己选过模型：不再显示「接着上次」 */
@@ -184,7 +179,6 @@ export function ModelSourceMenu({
     setView(null)
     setQuery('')
     setActive(-1)
-    setBlockedOpen(false)
     setExMenu(null)
     void refreshPlatform()
   }, [open])
@@ -194,14 +188,14 @@ export function ModelSourceMenu({
   }, [open, active])
 
   const selection: ModelTarget = { channel: live.channel, model: live.model, providerId: live.providerId }
-  const locked = live.canSwitchEngine ? null : engineId
   const selfModels = {
     claude: selfModelOptions('claude', claudeCatalog?.models),
     chatgpt: selfModelOptions('codex', codexCatalog?.models),
   }
   const groups = buildChannelMenu({
     selection,
-    locked,
+    // 已开始的对话沿用当前引擎，换引擎要在行右边的「谁来执行」里选（会先确认）
+    current: live.started ? engineId : null,
     platform: catalog,
     selfModels,
     providers: providers.providers,
@@ -237,7 +231,6 @@ export function ModelSourceMenu({
     setView(v)
     setActive(-1)
     setExMenu(null)
-    setBlockedOpen(false)
   }
 
   /** 选了一个模型；keepOpen：自定义接口那一行（下面还要选模型） */
@@ -245,7 +238,8 @@ export function ModelSourceMenu({
     if (!engine) return
     setPicked(true)
     const choice: ChannelChoice = { ...target, engine }
-    if (live.started && target.channel !== live.channel) {
+    // 已开始的对话换通道 / 换引擎：先确认（换引擎会把之前的对话整理成交接内容带过去）
+    if (live.started && (target.channel !== live.channel || engine !== engineId)) {
       onOpenChange(false)
       onRequestChoice(choice)
       return
@@ -318,9 +312,8 @@ export function ModelSourceMenu({
     )
   }
 
-  const usableCount = (g: ChannelGroupView): number => partitionRows(g.rows).usable.length
-  /** 标签 / 左栏写淡：失效、不能用，或这个对话一个都跑不了 */
-  const dim = (g: ChannelGroupView): boolean => isBroken(g) || g.state.kind !== 'ready' || usableCount(g) === 0
+  /** 标签 / 左栏写淡：失效、不能用或没有模型 */
+  const dim = (g: ChannelGroupView): boolean => isBroken(g) || g.state.kind !== 'ready' || g.rows.length === 0
   const stateText = (g: ChannelGroupView): string | null =>
     g.channel === 'platform' && g.state.kind === 'no-route'
       ? translateMessage(noRouteReason(catalog, account.account?.balance ?? null).message)
@@ -340,18 +333,9 @@ export function ModelSourceMenu({
     if (isBroken(g)) return brokenTitle(g)
     const text = stateText(g)
     if (text) return text
-    const { usable, blocked } = partitionRows(g.rows)
-    if (!usable.length && blocked.length) {
-      const only = blockedExecutor(blocked)
-      return tr('modelChannels.menu.onlyWith', {
-        p0: only ? executorName(only) : tr('modelChannels.menu.otherExecutor'),
-      })
-    }
     const a = authAccount(g.channel)
     if (a?.email || a?.plan) return [a.email && maskEmail(a.email), planLabel(a.plan)].filter(Boolean).join(' · ')
-    const count = blocked.length
-      ? tr('modelChannels.menu.usableBlocked', { p0: usable.length, p1: blocked.length })
-      : tr('modelChannels.menu.usable', { p0: usable.length })
+    const count = tr('modelChannels.menu.usable', { p0: g.rows.length })
     return g.channel === 'platform' && account.balanceText ? `${account.balanceText} · ${count}` : count
   }
   const addTitle = tr('modelChannels.menu.addTitle', {
@@ -363,20 +347,6 @@ export function ModelSourceMenu({
 
   const renderRow = (g: ChannelGroupView, row: ChannelRow, inSearch = false): ReactNode => {
     const c = g.channel
-    if (row.disabled === 'locked') {
-      const first = row.candidates[0]
-      return (
-        <ModelRow
-          key={row.key}
-          off
-          title={rowTitle(c, row)}
-          mono={c === 'platform'}
-          query={query}
-          offTitle={first ? tr('modelChannels.menu.blockedRow', { p0: executorName(first) }) : undefined}
-          meta={first && <EngineIcon engine={first} size={12} className="opacity-60" />}
-        />
-      )
-    }
     const provider = c === 'custom' ? providerOf(row) : undefined
     const multi = !!provider && provider.models.length > 1
     // 选中的自定义接口有多个模型：下面展开选模型（搜索结果里不展开，选了就回到它的通道展开）
@@ -404,8 +374,7 @@ export function ModelSourceMenu({
           onPick={pick}
           onHover={idx >= 0 ? () => setActive(idx) : undefined}
           chip={
-            // 授权通道只交给官方工具、已开始的对话执行者固定：都不用每行写
-            !locked &&
+            // 授权通道只交给官方工具，不用每行写
             !isAuthChannel(c) && (
               <ExecutorChip
                 row={row}
@@ -414,7 +383,8 @@ export function ModelSourceMenu({
                 onOpenChange={o => setExMenu(o ? row.key : null)}
                 onPick={e => {
                   setExMenu(null)
-                  rememberExecutor(row.target, e)
+                  // 已开始的对话换引擎要先确认，不提前记
+                  if (!live.started) rememberExecutor(row.target, e)
                   choose(row.target, e)
                 }}
               />
@@ -447,7 +417,7 @@ export function ModelSourceMenu({
   }
 
   const renderInfo = (g: ChannelGroupView): ReactNode => {
-    if (g.state.kind !== 'ready' || usableCount(g) === 0) return null
+    if (g.state.kind !== 'ready' || g.rows.length === 0) return null
     const c = g.channel
     const a = authAccount(c)
     const [label, onClick]: [string, () => void] =
@@ -553,31 +523,6 @@ export function ModelSourceMenu({
         </div>
       )
     }
-    const { usable, blocked } = partitionRows(g.rows)
-    const only = blockedExecutor(blocked)
-    const onlyName = only ? executorName(only) : tr('modelChannels.menu.otherExecutor')
-    if (!usable.length && blocked.length && locked)
-      return (
-        <Empty title={tr('modelChannels.menu.lockedTitle', { p0: executorName(locked) })}>
-          {tr(isAuthChannel(c) ? 'modelChannels.menu.lockedAuth' : 'modelChannels.menu.lockedChannel', {
-            p0: channelLabel(c),
-            p1: onlyName,
-          })}
-          <span className="mt-2.5 flex justify-center">
-            <button
-              type="button"
-              onClick={() => {
-                onOpenChange(false)
-                paneActions.open(null)
-              }}
-              className={cn(MINI_BUTTON, MINI_OUTLINE)}
-            >
-              <Plus size={13} />
-              {tr('modelChannels.menu.newTask')}
-            </button>
-          </span>
-        </Empty>
-      )
     // 会话里的完整模型名（比如从平台切回来的 claude-opus-5-5）不在别名表里时也显示出来
     const extraSelf =
       isAuthChannel(c) && live.channel === c && live.model && !g.rows.some(r => r.target.model === live.model)
@@ -596,24 +541,8 @@ export function ModelSourceMenu({
         {c === 'platform' && g.rows.length === 0 && (
           <p className="px-2 py-1.5 text-meta text-fg-faint">{tr('session.ModelSourceMenu.allModelsAreHidden')}</p>
         )}
-        {usable.map(row => renderRow(g, row))}
+        {g.rows.map(row => renderRow(g, row))}
         {extraSelf && <ModelRow selected mono title={extraSelf} desc={tr('session.ModelSourceMenu.modelUsedByThis')} />}
-        {blocked.length > 0 && (
-          <button
-            type="button"
-            aria-expanded={blockedOpen}
-            onClick={() => setBlockedOpen(o => !o)}
-            className="flex h-[30px] w-full items-center gap-1.5 rounded-md pr-2 pl-7 text-left text-meta text-fg-faint hover:bg-hover hover:text-fg-muted"
-          >
-            <span className="min-w-0 flex-1 truncate">
-              {only
-                ? tr('modelChannels.menu.blocked', { p0: blocked.length, p1: onlyName })
-                : tr('modelChannels.menu.blockedMixed', { p0: blocked.length })}
-            </span>
-            <ChevronRight size={12} className={cn('shrink-0 transition-transform', blockedOpen && 'rotate-90')} />
-          </button>
-        )}
-        {blockedOpen && blocked.map(row => renderRow(g, row))}
         {c === 'platform' && (
           <button
             type="button"
@@ -684,12 +613,11 @@ export function ModelSourceMenu({
     const found = searchChannels(channels, query, (g, row) =>
       [rowTitle(g.channel, row), row.target.model ?? '', rowDesc(g.channel, row) ?? ''].join(' '),
     )
-    const blockedTotal = found.blocked.reduce((n, x) => n + x.count, 0)
-    if (!found.groups.length && !blockedTotal)
+    if (!found.length)
       return <Empty title={tr('modelChannels.menu.noMatch')}>{tr('modelChannels.menu.noMatchHint')}</Empty>
     return (
       <>
-        {found.groups.map(({ group, rows }, i) => (
+        {found.map(({ group, rows }, i) => (
           <div key={group.channel}>
             <p className={cn('px-2 pb-0.5 text-label text-fg-muted', i === 0 ? 'pt-1' : 'pt-2')}>
               {channelLabel(group.channel)}
@@ -697,17 +625,6 @@ export function ModelSourceMenu({
             {rows.map(row => renderRow(group, row, true))}
           </div>
         ))}
-        {blockedTotal > 0 && locked && (
-          <p
-            title={tr('modelChannels.lockedNote', { p0: executorName(locked) })}
-            className="flex min-h-[30px] items-center pr-2 pl-7 text-meta text-fg-faint"
-          >
-            {tr('modelChannels.menu.searchBlocked', {
-              p0: blockedTotal,
-              p1: found.blocked.map(x => `${tr(`modelChannels.tab.${x.channel}`)} ${x.count}`).join('、'),
-            })}
-          </p>
-        )}
       </>
     )
   }
@@ -766,9 +683,7 @@ export function ModelSourceMenu({
     }
   }
 
-  const searchLabel = locked
-    ? tr('modelChannels.menu.searchLocked', { p0: executorName(locked) })
-    : tr('modelChannels.menu.search')
+  const searchLabel = tr('modelChannels.menu.search')
   const searchBox = (
     <label className="flex h-[30px] shrink-0 items-center gap-1.5 rounded-lg border border-line bg-subtle pr-1.5 pl-2 text-fg-faint focus-within:border-line-strong focus-within:bg-surface">
       <Search size={13} className="shrink-0" />
@@ -799,17 +714,6 @@ export function ModelSourceMenu({
         >
           <X size={12} />
         </button>
-      )}
-      {locked && (
-        <span
-          data-locked-executor={locked}
-          title={tr('modelChannels.lockedNote', { p0: executorName(locked) })}
-          className="flex h-5 shrink-0 cursor-help items-center gap-1 rounded border border-line-subtle bg-surface px-1.5 text-label text-fg-muted"
-        >
-          <Lock size={10} />
-          <EngineIcon engine={locked} size={11} />
-          {executorName(locked)}
-        </span>
       )}
     </label>
   )

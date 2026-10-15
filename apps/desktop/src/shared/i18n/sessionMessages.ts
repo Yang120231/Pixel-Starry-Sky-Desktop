@@ -231,4 +231,35 @@ export const sessionMessages = {
     en: 'Not signed in to Claude Code: run claude in a terminal and follow the sign-in prompt',
   },
   'engineDefaults.recheck': { zh: '重新检测', en: 'Check again' },
+  // 运行中换额度来源：当前这一轮不变，下一条消息起换（SourceHintBar）
+  'session.SourceHintBar.nextMessageUses': {
+    zh: '下一条消息使用 {p0}，当前回复仍用原来的额度来源',
+    en: 'The next message will use {p0}; the current reply keeps its original credit source',
+  },
+  'session.SourceHintBar.undoSwitch': { zh: '撤销', en: 'Undo' },
+  // 已开始的对话换引擎（跨引擎接力）：确认 + 运行中的「下一条消息使用 ××」提示
+  'session.SourceHintBar.switchEngineTitle': {
+    zh: '切换到 {p0} 继续这段对话',
+    en: 'Continue this conversation with {p0}',
+  },
+  'session.SourceHintBar.switchEngineBody': {
+    zh: '之前的对话会整理成交接内容带给 {p0}；{p1} 的思考过程、待审批操作和正在运行的工具无法带过去。',
+    en: "The earlier conversation is packaged as a handoff for {p0}. {p1}'s reasoning, pending approvals and running tools can't be carried over.",
+  },
+  'session.SourceHintBar.switchEngineBodyResume': {
+    zh: '会接上 {p0} 在这段对话里原来的会话，并同步这期间发生的内容；{p1} 的思考过程、待审批操作和正在运行的工具无法带过去。',
+    en: "Resumes {p0}'s own session in this conversation and syncs what happened meanwhile. {p1}'s reasoning, pending approvals and running tools can't be carried over.",
+  },
+  'session.SourceHintBar.switchEngineNextMessage': {
+    zh: '从下一条消息起使用。',
+    en: 'Takes effect from the next message.',
+  },
+  'session.SourceHintBar.nextMessageUsesEngine': {
+    zh: '下一条消息使用 {p0}，当前回复不受影响',
+    en: 'The next message will use {p0}; the current reply is not affected',
+  },
+  'session.SourceHintBar.takesEffectFromNextMessage': {
+    zh: '当前回复仍用原来的额度来源，从下一条消息起切换，届时引擎会重启并接上原来的对话。',
+    en: 'The current reply keeps its original credit source. The switch takes effect from the next message, when the engine restarts and resumes this conversation.',
+  },
 } as const
