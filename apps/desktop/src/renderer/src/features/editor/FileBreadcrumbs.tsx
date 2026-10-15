@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { ChevronRight, Folder, FileText } from 'lucide-react'
 import { useI18n } from '@/i18n/I18nProvider'
 import { isDemo } from '@/data'
@@ -8,7 +8,7 @@ import type { FileEntry } from '../../../../shared/types/workspace'
 import { demo } from '@/data/demo'
 import { extraFolder, folderLabel, splitExtra } from '@/features/files/extraFolders'
 
-export function FileBreadcrumbs({ tab }: { tab: OpenFile }) {
+export function FileBreadcrumbs({ tab, children }: { tab: OpenFile; children?: ReactNode }) {
   const { t, text } = useI18n()
   const [menu, setMenu] = useState<{ path: string; x: number; y: number; trigger: HTMLElement } | null>(null)
   const [entries, setEntries] = useState<FileEntry[]>([]),
@@ -48,15 +48,15 @@ export function FileBreadcrumbs({ tab }: { tab: OpenFile }) {
   return (
     <nav
       aria-label={t('workspace.breadcrumb')}
-      className="flex min-w-0 flex-1 items-center overflow-x-auto whitespace-nowrap text-meta [scrollbar-width:none]"
+      className="flex min-w-0 flex-[1_1_16rem] flex-wrap items-center self-center whitespace-normal text-meta"
     >
       {[first, ...parts].map((name, i) => (
-        <span key={i} className="flex shrink-0 items-center">
-          {i > 0 && <ChevronRight size={12} className="mx-0.5 text-fg-faint" />}
+        <span key={i} className="flex min-w-0 max-w-full shrink-0 items-center">
+          {i > 0 && <ChevronRight size={12} className="mx-0.5 shrink-0 text-fg-faint" />}
           <button
             type="button"
             title={i ? parts.slice(0, i).join('/') : (folder?.path ?? tab.root)}
-            className="flex max-w-72 items-center gap-1 rounded px-1 py-1 text-fg-secondary hover:bg-hover"
+            className="flex min-w-0 items-center gap-1 rounded px-1 py-1 text-left text-fg-secondary hover:bg-hover"
             onClick={e => {
               const r = e.currentTarget.getBoundingClientRect()
               setMenu({
@@ -67,11 +67,16 @@ export function FileBreadcrumbs({ tab }: { tab: OpenFile }) {
               })
             }}
           >
-            {i === 0 ? <Folder size={13} /> : i === parts.length ? <FileText size={13} /> : null}
-            <span className="truncate">{name}</span>
+            {i === 0 ? (
+              <Folder size={13} className="shrink-0" />
+            ) : i === parts.length ? (
+              <FileText size={13} className="shrink-0" />
+            ) : null}
+            <span className="min-w-0 [overflow-wrap:anywhere]">{name}</span>
           </button>
         </span>
       ))}
+      {children}
       {menu && (
         <ActionMenu
           x={menu.x}

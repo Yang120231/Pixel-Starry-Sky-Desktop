@@ -104,89 +104,96 @@ export function FileEditor({
         if (active) void checkFile(id)
       }}
     >
-      <div className="flex h-10 shrink-0 items-center gap-1 border-b border-line-layout px-3">
-        <FileBreadcrumbs tab={tab} />
-        {crumbExtra}
-        {!controlled && fileLanguage(tab.path) === 'Markdown' && (
+      <div className="flex min-h-10 shrink-0 flex-wrap items-start gap-1 border-b border-line-layout px-3 py-1">
+        <FileBreadcrumbs tab={tab}>{crumbExtra}</FileBreadcrumbs>
+        <div className="ml-auto flex max-w-full shrink-0 flex-wrap items-center gap-1">
+          {!controlled && fileLanguage(tab.path) === 'Markdown' && (
+            <IconButton
+              icon={Eye}
+              size={28}
+              iconSize={15}
+              label={preview ? tr('editor.FileEditor.backToMarkdownEditor') : tr('editor.FileEditor.previewMarkdown')}
+              active={preview}
+              onClick={() => {
+                updateFile(id, { preview: !preview })
+              }}
+            />
+          )}
+          {isHtmlPath(tab.path) && !isDemo && machineOf(tab.ref.projectId ?? tab.ref.sessionId) === 'local' && (
+            <IconButton
+              icon={Globe}
+              size={28}
+              iconSize={15}
+              label={tr('htmlPreview.open')}
+              onClick={() => void previewHtml(tab.ref, tab.path)}
+            />
+          )}
+          {doc?.kind === 'text' && (
+            <IconButton
+              icon={Save}
+              size={28}
+              iconSize={15}
+              label={tr('editor.FileEditor.saveFileCtrlS')}
+              disabled={!!readonly || !dirtyFile(tab) || tab.saving || isDemo}
+              onClick={() => void saveFile(id)}
+            />
+          )}
           <IconButton
-            icon={Eye}
+            icon={RefreshCw}
             size={28}
             iconSize={15}
-            label={preview ? tr('editor.FileEditor.backToMarkdownEditor') : tr('editor.FileEditor.previewMarkdown')}
-            active={preview}
+            label={tr('editor.FileEditor.reloadFile')}
+            disabled={tab.loading || tab.saving}
             onClick={() => {
-              updateFile(id, { preview: !preview })
+              void confirmFiles([id], tr('editor.FileEditor.loadNewVersion')).then(ok => {
+                if (ok) void loadFile(id)
+              })
             }}
           />
-        )}
-        {isHtmlPath(tab.path) && !isDemo && machineOf(tab.ref.projectId ?? tab.ref.sessionId) === 'local' && (
-          <IconButton
-            icon={Globe}
-            size={28}
-            iconSize={15}
-            label={tr('htmlPreview.open')}
-            onClick={() => void previewHtml(tab.ref, tab.path)}
-          />
-        )}
-        {doc?.kind === 'text' && (
-          <IconButton
-            icon={Save}
-            size={28}
-            iconSize={15}
-            label={tr('editor.FileEditor.saveFileCtrlS')}
-            disabled={!!readonly || !dirtyFile(tab) || tab.saving || isDemo}
-            onClick={() => void saveFile(id)}
-          />
-        )}
-        <IconButton
-          icon={RefreshCw}
-          size={28}
-          iconSize={15}
-          label={tr('editor.FileEditor.reloadFile')}
-          disabled={tab.loading || tab.saving}
-          onClick={() => {
-            void confirmFiles([id], tr('editor.FileEditor.loadNewVersion')).then(ok => {
-              if (ok) void loadFile(id)
-            })
-          }}
-        />
-        <ExternalFileButton tab={tab} />
-        {doc?.kind === 'text' && (
-          <IconButton
-            icon={WrapText}
-            size={28}
-            iconSize={15}
-            label={tr('workspace.wrap')}
-            active={wordWrap}
-            aria-pressed={wordWrap}
-            onClick={() => {
-              setWordWrap(v => !v)
-              localStorage.setItem('pixelsky.editor.wrap', String(!wordWrap))
-            }}
-          />
-        )}
-        {onMoveToChat && (
-          <IconButton icon={Columns2} size={28} iconSize={15} label={tr('workspace.moveChat')} onClick={onMoveToChat} />
-        )}
-        {explorer && (
-          <IconButton
-            icon={FolderTree}
-            size={28}
-            iconSize={15}
-            label={tr(treeVisible ? 'workspace.hideTree' : 'workspace.tree')}
-            active={treeVisible}
-            aria-expanded={treeVisible}
-            onClick={() => {
-              if (narrow) {
-                setTreeOpen(true)
-                setDrawerOpen(v => !v)
-              } else {
-                setTreeOpen(v => !v)
-                localStorage.setItem('pixelsky.editor.tree', String(!treeOpen))
-              }
-            }}
-          />
-        )}
+          <ExternalFileButton tab={tab} />
+          {doc?.kind === 'text' && (
+            <IconButton
+              icon={WrapText}
+              size={28}
+              iconSize={15}
+              label={tr('workspace.wrap')}
+              active={wordWrap}
+              aria-pressed={wordWrap}
+              onClick={() => {
+                setWordWrap(v => !v)
+                localStorage.setItem('pixelsky.editor.wrap', String(!wordWrap))
+              }}
+            />
+          )}
+          {onMoveToChat && (
+            <IconButton
+              icon={Columns2}
+              size={28}
+              iconSize={15}
+              label={tr('workspace.moveChat')}
+              onClick={onMoveToChat}
+            />
+          )}
+          {explorer && (
+            <IconButton
+              icon={FolderTree}
+              size={28}
+              iconSize={15}
+              label={tr(treeVisible ? 'workspace.hideTree' : 'workspace.tree')}
+              active={treeVisible}
+              aria-expanded={treeVisible}
+              onClick={() => {
+                if (narrow) {
+                  setTreeOpen(true)
+                  setDrawerOpen(v => !v)
+                } else {
+                  setTreeOpen(v => !v)
+                  localStorage.setItem('pixelsky.editor.tree', String(!treeOpen))
+                }
+              }}
+            />
+          )}
+        </div>
       </div>
       <div className="relative flex min-h-0 min-w-0 flex-1">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">

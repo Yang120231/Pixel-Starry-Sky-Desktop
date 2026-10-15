@@ -54,20 +54,22 @@ export function SymbolCrumb({ tab }: { tab: OpenFile }): JSX.Element | null {
     () => (isText && draft.length <= CRUMB_MAX_CHARS ? enclosingSymbol(draft, line, tab.path) : null),
     [isText, draft, line, tab.path],
   )
-  if (!isText) return null
+  if (!isText || (!symbol && !PROBLEMS_READY)) return null
   const pending = tr('coding.editor.extras.prevProblem')
   return (
-    <span className="ml-1 flex min-w-0 flex-1 items-center gap-2 text-xs text-fg-muted" data-symbol-crumb>
+    <span className="ml-1 flex min-w-0 max-w-full flex-wrap items-center gap-2 text-xs text-fg-muted" data-symbol-crumb>
       {symbol && (
         <span
-          className="flex min-w-0 items-center gap-1"
+          className="flex min-w-0 max-w-full items-center gap-1"
           title={tr('coding.editor.extras.symbol', { name: symbol.name })}
         >
-          <span aria-hidden>›</span>
-          <span aria-hidden className="font-mono text-accent">
+          <span aria-hidden className="shrink-0">
+            ›
+          </span>
+          <span aria-hidden className="shrink-0 font-mono text-accent">
             {symbol.kind === 'class' ? 'C' : 'ƒ'}
           </span>
-          <span className="truncate text-fg">{symbol.name}</span>
+          <span className="min-w-0 text-fg [overflow-wrap:anywhere]">{symbol.name}</span>
         </span>
       )}
       {PROBLEMS_READY && (
