@@ -1,0 +1,7 @@
+{
+  "title": "主题文件不存在",
+  "expectCodes": ["theme.file"],
+  "input": "folder",
+  "base": "all-kinds",
+  "remove": ["themes/night.json"]
+}

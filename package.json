@@ -12,6 +12,7 @@
     "dist": "pnpm --filter @pixelsky/desktop dist",
     "test": "pnpm -r --if-present test",
     "check": "node scripts/check.mjs",
+    "ext": "node packages/extension-cli/scripts/run.mjs",
     "lint": "node node_modules/eslint/bin/eslint.js .",
     "format": "node node_modules/prettier/bin/prettier.cjs --write .",
     "format:check": "node node_modules/prettier/bin/prettier.cjs --check ."

@@ -1,0 +1,11 @@
+{
+  "title": ".git 目录整个当作不存在，不报隐藏文件",
+  "expectCodes": ["grammar.regexUnchecked"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    ".git/config": "[core]\n",
+    ".git/HEAD": "ref: refs/heads/main\n",
+    ".git/objects/ab/cdef": "x"
+  }
+}

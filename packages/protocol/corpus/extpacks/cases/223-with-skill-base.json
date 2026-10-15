@@ -1,0 +1,6 @@
+{
+  "title": "带两个技能的底板（没有 README / LICENSE）：技能按清单下标列出",
+  "expectCodes": ["files.license", "files.readme"],
+  "input": "folder",
+  "base": "with-skill"
+}

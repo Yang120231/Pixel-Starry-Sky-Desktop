@@ -1,0 +1,51 @@
+{
+  "rulesVersion": 1,
+  "dev": {
+    "status": "warning",
+    "inactive": {},
+    "skills": [],
+    "issues": [
+      {
+        "code": "grammar.configIgnored",
+        "severity": "warning",
+        "scope": "contribution",
+        "path": "language-configuration.json",
+        "contribution": {
+          "kind": "grammars",
+          "index": 0
+        },
+        "upload": "hint"
+      },
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint"
+      }
+    ]
+  },
+  "upload": {
+    "pass": true,
+    "issues": [
+      {
+        "code": "grammar.configIgnored",
+        "severity": "warning",
+        "scope": "contribution",
+        "path": "language-configuration.json",
+        "contribution": {
+          "kind": "grammars",
+          "index": 0
+        },
+        "upload": "hint",
+        "outcome": "hint"
+      },
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint",
+        "outcome": "hint"
+      }
+    ]
+  }
+}

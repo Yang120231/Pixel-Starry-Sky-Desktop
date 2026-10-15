@@ -1,0 +1,55 @@
+{
+  "rulesVersion": 1,
+  "dev": {
+    "status": "warning",
+    "inactive": {
+      "skills": [
+        0
+      ]
+    },
+    "skills": [],
+    "issues": [
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint"
+      },
+      {
+        "code": "skill.frontmatter",
+        "severity": "error",
+        "scope": "contribution",
+        "path": "skills/review/SKILL.md",
+        "contribution": {
+          "kind": "skills",
+          "index": 0
+        },
+        "upload": "reject"
+      }
+    ]
+  },
+  "upload": {
+    "pass": false,
+    "issues": [
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint",
+        "outcome": "hint"
+      },
+      {
+        "code": "skill.frontmatter",
+        "severity": "error",
+        "scope": "contribution",
+        "path": "skills/review/SKILL.md",
+        "contribution": {
+          "kind": "skills",
+          "index": 0
+        },
+        "upload": "reject",
+        "outcome": "reject"
+      }
+    ]
+  }
+}

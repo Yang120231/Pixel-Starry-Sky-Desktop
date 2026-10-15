@@ -1,0 +1,10 @@
+{
+  "title": "samples/ 里的点开头文件保留（.env 示例），不报隐藏文件",
+  "expectCodes": ["grammar.regexUnchecked"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "samples/.env": "PORT=3000\n",
+    "samples/.env.local": "DEBUG=1\n"
+  }
+}

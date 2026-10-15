@@ -1,0 +1,7 @@
+{
+  "title": "缺少 README.md",
+  "expectCodes": ["files.readme"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "remove": ["README.md"]
+}

@@ -1,0 +1,9 @@
+{
+  "title": "SVG 里的 on* 事件属性",
+  "expectCodes": ["svg.unsafe"],
+  "input": "folder",
+  "base": "all-kinds",
+  "files": {
+    "icons/folder.svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" onload=\"alert(1)\"><rect width=\"4\" height=\"4\"/></svg>\n"
+  }
+}

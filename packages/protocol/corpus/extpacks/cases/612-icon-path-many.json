@@ -1,0 +1,97 @@
+{
+  "title": "坏图标路径超过 20 个：多出的合成一条",
+  "expectCodes": ["iconTheme.iconPath"],
+  "input": "folder",
+  "base": "all-kinds",
+  "files": {
+    "icons/theme.json": {
+      "json": {
+        "iconDefinitions": {
+          "file": {
+            "iconPath": "./file.svg"
+          },
+          "folder": {
+            "iconPath": "./folder.svg"
+          },
+          "m0": {
+            "iconPath": "./missing0.svg"
+          },
+          "m1": {
+            "iconPath": "./missing1.svg"
+          },
+          "m2": {
+            "iconPath": "./missing2.svg"
+          },
+          "m3": {
+            "iconPath": "./missing3.svg"
+          },
+          "m4": {
+            "iconPath": "./missing4.svg"
+          },
+          "m5": {
+            "iconPath": "./missing5.svg"
+          },
+          "m6": {
+            "iconPath": "./missing6.svg"
+          },
+          "m7": {
+            "iconPath": "./missing7.svg"
+          },
+          "m8": {
+            "iconPath": "./missing8.svg"
+          },
+          "m9": {
+            "iconPath": "./missing9.svg"
+          },
+          "m10": {
+            "iconPath": "./missing10.svg"
+          },
+          "m11": {
+            "iconPath": "./missing11.svg"
+          },
+          "m12": {
+            "iconPath": "./missing12.svg"
+          },
+          "m13": {
+            "iconPath": "./missing13.svg"
+          },
+          "m14": {
+            "iconPath": "./missing14.svg"
+          },
+          "m15": {
+            "iconPath": "./missing15.svg"
+          },
+          "m16": {
+            "iconPath": "./missing16.svg"
+          },
+          "m17": {
+            "iconPath": "./missing17.svg"
+          },
+          "m18": {
+            "iconPath": "./missing18.svg"
+          },
+          "m19": {
+            "iconPath": "./missing19.svg"
+          },
+          "m20": {
+            "iconPath": "./missing20.svg"
+          },
+          "m21": {
+            "iconPath": "./missing21.svg"
+          },
+          "m22": {
+            "iconPath": "./missing22.svg"
+          },
+          "m23": {
+            "iconPath": "./missing23.svg"
+          },
+          "m24": {
+            "iconPath": "./missing24.svg"
+          }
+        },
+        "file": "file",
+        "folder": "folder"
+      }
+    }
+  }
+}

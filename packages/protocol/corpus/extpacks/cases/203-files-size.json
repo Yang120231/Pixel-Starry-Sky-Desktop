@@ -1,0 +1,12 @@
+{
+  "title": "单个文件超过 2 MB",
+  "expectCodes": ["files.size"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "big.txt": {
+      "repeat": "x",
+      "bytes": 2097153
+    }
+  }
+}

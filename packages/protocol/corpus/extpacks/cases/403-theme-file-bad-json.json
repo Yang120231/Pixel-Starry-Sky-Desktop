@@ -1,0 +1,9 @@
+{
+  "title": "主题文件不是合法的 JSON",
+  "expectCodes": ["theme.file"],
+  "input": "folder",
+  "base": "all-kinds",
+  "files": {
+    "themes/night.json": "{ \"colors\": "
+  }
+}

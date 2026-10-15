@@ -1,0 +1,15 @@
+{
+  "rulesVersion": 1,
+  "upload": {
+    "pass": true,
+    "issues": [
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint",
+        "outcome": "hint"
+      }
+    ]
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "title": "清单最外层不是对象",
+  "expectCodes": ["manifest.notObject"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": "[1, 2]\n"
+  }
+}

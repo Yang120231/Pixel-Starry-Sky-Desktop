@@ -1,0 +1,16 @@
+{
+  "title": "只有大小写不同的两个文件",
+  "expectCodes": ["files.path"],
+  "input": "zip",
+  "base": "pixelsky.dotenv",
+  "zipEntries": [
+    {
+      "name": "docs/A.txt",
+      "text": "x"
+    },
+    {
+      "name": "docs/a.txt",
+      "text": "y"
+    }
+  ]
+}

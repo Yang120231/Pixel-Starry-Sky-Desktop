@@ -1,0 +1,13 @@
+{
+  "title": "图标主题文件没有 iconDefinitions",
+  "expectCodes": ["iconTheme.file"],
+  "input": "folder",
+  "base": "all-kinds",
+  "files": {
+    "icons/theme.json": {
+      "json": {
+        "file": "file"
+      }
+    }
+  }
+}

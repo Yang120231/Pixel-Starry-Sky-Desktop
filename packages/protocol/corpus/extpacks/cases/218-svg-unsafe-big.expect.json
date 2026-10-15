@@ -1,0 +1,71 @@
+{
+  "rulesVersion": 1,
+  "dev": {
+    "status": "warning",
+    "inactive": {},
+    "skills": [
+      {
+        "name": "review",
+        "index": 0
+      }
+    ],
+    "issues": [
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint"
+      },
+      {
+        "code": "iconTheme.iconPath",
+        "severity": "warning",
+        "scope": "contribution",
+        "path": "icons/theme.json",
+        "contribution": {
+          "kind": "iconThemes",
+          "index": 0
+        },
+        "upload": "reject"
+      },
+      {
+        "code": "svg.unsafe",
+        "severity": "error",
+        "scope": "file",
+        "path": "icons/file.svg",
+        "upload": "reject"
+      }
+    ]
+  },
+  "upload": {
+    "pass": false,
+    "issues": [
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint",
+        "outcome": "hint"
+      },
+      {
+        "code": "iconTheme.iconPath",
+        "severity": "warning",
+        "scope": "contribution",
+        "path": "icons/theme.json",
+        "contribution": {
+          "kind": "iconThemes",
+          "index": 0
+        },
+        "upload": "reject",
+        "outcome": "reject"
+      },
+      {
+        "code": "svg.unsafe",
+        "severity": "error",
+        "scope": "file",
+        "path": "icons/file.svg",
+        "upload": "reject",
+        "outcome": "reject"
+      }
+    ]
+  }
+}

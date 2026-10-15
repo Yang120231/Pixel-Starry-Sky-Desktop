@@ -1,7 +1,7 @@
 import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { loadPack, packKey, walkPack } from './loader'
+import { loadPack, packKey } from './loader'
 import { cleanTemp, copyFixture, tempDir } from './testing'
 
 afterEach(cleanTemp)
@@ -44,31 +44,6 @@ describe('packKey', () => {
   })
 })
 
-describe('walkPack', () => {
-  it('跳过 .git 和 node_modules，符号链接记成 symlink 且不进入', async () => {
-    const dir = tempDir()
-    mkdirSync(join(dir, 'a', 'b'), { recursive: true })
-    mkdirSync(join(dir, '.git'))
-    mkdirSync(join(dir, 'node_modules'))
-    writeFileSync(join(dir, 'a', 'b', 'x.json'), '{}')
-    writeFileSync(join(dir, '.git', 'config'), 'x')
-    writeFileSync(join(dir, 'node_modules', 'm.js'), 'x')
-    const linked = trySymlink(join(dir, 'a'), join(dir, 'link'))
-    const { files, truncated } = await walkPack(dir, { limitFiles: 100, limitBytes: 1e6 })
-    expect(truncated).toBe(false)
-    expect(files.filter(f => f.kind === 'file').map(f => f.path)).toEqual(['a/b/x.json'])
-    if (linked) expect(files.find(f => f.kind === 'symlink')?.path).toBe('link')
-  })
-
-  it('超过文件数或字节数上限就停并标 truncated', async () => {
-    const dir = tempDir()
-    for (let i = 0; i < 5; i++) writeFileSync(join(dir, `f${i}.md`), 'x'.repeat(10))
-    expect((await walkPack(dir, { limitFiles: 3, limitBytes: 1e6 })).truncated).toBe(true)
-    expect((await walkPack(dir, { limitFiles: 100, limitBytes: 25 })).truncated).toBe(true)
-    expect((await walkPack(dir, { limitFiles: 5, limitBytes: 50 })).truncated).toBe(false)
-  })
-})
-
 describe('loadPack', () => {
   it('加载示例扩展：有 id、文件表和清单，不是 error', async () => {
     const dir = tempDir()
@@ -80,6 +55,22 @@ describe('loadPack', () => {
     expect(pack.info.manifest?.contributes.grammars).toHaveLength(1)
     expect(pack.files.has('syntaxes/dotenv.tmLanguage.json')).toBe(true)
     expect(pack.info.revision).toBe(1)
+  })
+
+  it('跳过 .git / node_modules / .gitignore / .vscode，不报 files.hidden', async () => {
+    const root = copyFixture('pixelsky.dotenv', tempDir())
+    mkdirSync(join(root, '.git'))
+    mkdirSync(join(root, 'node_modules'))
+    mkdirSync(join(root, '.vscode'))
+    writeFileSync(join(root, '.git', 'config'), 'x')
+    writeFileSync(join(root, 'node_modules', 'm.js'), 'x')
+    writeFileSync(join(root, '.vscode', 'settings.json'), '{}')
+    writeFileSync(join(root, '.gitignore'), 'node_modules')
+    const pack = await loadPack(input(root))
+    expect(pack.files.has('.git/config')).toBe(false)
+    expect(pack.files.has('.gitignore')).toBe(false)
+    expect(pack.files.has('.vscode/settings.json')).toBe(false)
+    expect(pack.info.issues.some(i => i.code === 'files.hidden')).toBe(false)
   })
 
   it('停用的扩展照样校验，但 live 为 false', async () => {

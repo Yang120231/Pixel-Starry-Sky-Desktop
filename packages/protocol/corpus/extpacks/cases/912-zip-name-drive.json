@@ -1,0 +1,12 @@
+{
+  "title": "条目名带盘符",
+  "expectCodes": ["zip.entryName"],
+  "input": "zip",
+  "base": "pixelsky.dotenv",
+  "zipEntries": [
+    {
+      "name": "C:/x.txt",
+      "text": "x"
+    }
+  ]
+}

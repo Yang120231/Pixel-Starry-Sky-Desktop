@@ -1,0 +1,20 @@
+{
+  "title": "l10n.en.name 太长、l10n 里有别的语言",
+  "expectCodes": ["manifest.l10n", "manifest.unknownField"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": {
+      "merge": {
+        "l10n": {
+          "en": {
+            "name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          },
+          "fr": {
+            "name": "x"
+          }
+        }
+      }
+    }
+  }
+}

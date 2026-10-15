@@ -1,0 +1,12 @@
+{
+  "title": "清单是符号链接：当作没有清单",
+  "expectCodes": ["manifest.missing"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": {
+      "symlink": "README.md"
+    }
+  },
+  "needs": ["symlink"]
+}

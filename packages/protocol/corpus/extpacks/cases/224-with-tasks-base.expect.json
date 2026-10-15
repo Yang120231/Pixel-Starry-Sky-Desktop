@@ -1,0 +1,41 @@
+{
+  "rulesVersion": 1,
+  "dev": {
+    "status": "warning",
+    "inactive": {},
+    "skills": [],
+    "issues": [
+      {
+        "code": "files.license",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "reject"
+      },
+      {
+        "code": "files.readme",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "reject"
+      }
+    ]
+  },
+  "upload": {
+    "pass": false,
+    "issues": [
+      {
+        "code": "files.license",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "reject",
+        "outcome": "reject"
+      },
+      {
+        "code": "files.readme",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "reject",
+        "outcome": "reject"
+      }
+    ]
+  }
+}

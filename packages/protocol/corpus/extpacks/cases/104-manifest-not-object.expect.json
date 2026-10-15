@@ -1,0 +1,28 @@
+{
+  "rulesVersion": 1,
+  "dev": {
+    "status": "error",
+    "inactive": {},
+    "skills": [],
+    "issues": [
+      {
+        "code": "manifest.notObject",
+        "severity": "error",
+        "scope": "pack",
+        "upload": "reject"
+      }
+    ]
+  },
+  "upload": {
+    "pass": false,
+    "issues": [
+      {
+        "code": "manifest.notObject",
+        "severity": "error",
+        "scope": "pack",
+        "upload": "reject",
+        "outcome": "reject"
+      }
+    ]
+  }
+}

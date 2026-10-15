@@ -1,0 +1,15 @@
+{
+  "title": "engines.pixelsky 写法解析不了",
+  "expectCodes": ["manifest.engineRange"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": {
+      "merge": {
+        "engines": {
+          "pixelsky": ">=0.4.0 || >=1.0.0"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "title": "条目名含控制字符",
+  "expectCodes": ["zip.entryName"],
+  "input": "zip",
+  "base": "pixelsky.dotenv",
+  "zipEntries": [
+    {
+      "name": "a\u0001b.txt",
+      "text": "x"
+    }
+  ]
+}

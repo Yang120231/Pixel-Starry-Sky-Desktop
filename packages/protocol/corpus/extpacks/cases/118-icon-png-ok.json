@@ -1,0 +1,16 @@
+{
+  "title": "icon.png 尺寸合格：不报问题",
+  "expectCodes": ["grammar.regexUnchecked"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": {
+      "merge": {
+        "icon": "icon.png"
+      }
+    },
+    "icon.png": {
+      "base64": "iVBORw0KGgoAAAANSUhEUgAAAQAAAAEAAAAAAAAAAAAA"
+    }
+  }
+}

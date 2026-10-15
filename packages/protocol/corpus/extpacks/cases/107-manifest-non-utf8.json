@@ -1,0 +1,11 @@
+{
+  "title": "清单不是 UTF-8",
+  "expectCodes": ["manifest.parse"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": {
+      "base64": "/v8="
+    }
+  }
+}

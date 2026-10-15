@@ -1,0 +1,70 @@
+{
+  "rulesVersion": 1,
+  "dev": {
+    "status": "warning",
+    "inactive": {
+      "skills": [
+        0
+      ]
+    },
+    "skills": [],
+    "issues": [
+      {
+        "code": "files.type",
+        "severity": "warning",
+        "scope": "file",
+        "path": "skills/review/run.py",
+        "upload": "reject"
+      },
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint"
+      },
+      {
+        "code": "skill.files",
+        "severity": "error",
+        "scope": "contribution",
+        "path": "skills/review",
+        "contribution": {
+          "kind": "skills",
+          "index": 0
+        },
+        "upload": "reject"
+      }
+    ]
+  },
+  "upload": {
+    "pass": false,
+    "issues": [
+      {
+        "code": "files.type",
+        "severity": "warning",
+        "scope": "file",
+        "path": "skills/review/run.py",
+        "upload": "reject",
+        "outcome": "reject"
+      },
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint",
+        "outcome": "hint"
+      },
+      {
+        "code": "skill.files",
+        "severity": "error",
+        "scope": "contribution",
+        "path": "skills/review",
+        "contribution": {
+          "kind": "skills",
+          "index": 0
+        },
+        "upload": "reject",
+        "outcome": "reject"
+      }
+    ]
+  }
+}

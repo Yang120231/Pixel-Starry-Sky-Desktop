@@ -1,0 +1,23 @@
+{
+  "title": "include 内置作用域：暂时不生效的提示",
+  "expectCodes": ["grammar.includeBuiltinScope"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "syntaxes/dotenv.tmLanguage.json": {
+      "merge": {
+        "patterns": [
+          {
+            "include": "#comment"
+          },
+          {
+            "include": "#assignment"
+          },
+          {
+            "include": "source.js"
+          }
+        ]
+      }
+    }
+  }
+}

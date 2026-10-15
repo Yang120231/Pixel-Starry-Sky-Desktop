@@ -1,0 +1,19 @@
+{
+  "title": "语言设置里有暂不生效的字段",
+  "expectCodes": ["grammar.configIgnored"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "language-configuration.json": {
+      "json": {
+        "comments": {
+          "lineComment": "#"
+        },
+        "folding": {
+          "offSide": true
+        },
+        "onEnterRules": []
+      }
+    }
+  }
+}

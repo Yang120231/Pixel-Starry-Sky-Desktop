@@ -1,0 +1,7 @@
+{
+  "title": "作者示例用完整语法检查（Oniguruma 编译 + 分词性能）：上传级别没有任何问题",
+  "expectCodes": [],
+  "input": "folder",
+  "grammar": "full",
+  "base": "pixelsky.dotenv"
+}

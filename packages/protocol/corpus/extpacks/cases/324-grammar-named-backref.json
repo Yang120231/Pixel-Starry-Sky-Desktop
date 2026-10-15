@@ -1,0 +1,18 @@
+{
+  "title": "命名分组和 \\k<名字> 能编译",
+  "expectCodes": ["grammar.perfUnchecked"],
+  "input": "folder",
+  "grammar": "regex",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "syntaxes/dotenv.tmLanguage.json": {
+      "merge": {
+        "repository": {
+          "comment": {
+            "match": "^\\s*(?<h>#)(?:.*)(?<!\\k<h>\\k<h>)$"
+          }
+        }
+      }
+    }
+  }
+}

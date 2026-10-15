@@ -1,0 +1,11 @@
+{
+  "title": "不允许的文件类型（脚本和程序）",
+  "expectCodes": ["files.type"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "run.js": "x",
+    "tools/setup.sh": "x",
+    "bin/tool.exe": "MZ"
+  }
+}

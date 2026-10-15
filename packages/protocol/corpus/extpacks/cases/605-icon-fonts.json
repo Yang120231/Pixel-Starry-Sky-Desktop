@@ -1,0 +1,25 @@
+{
+  "title": "图标主题用了字体图标",
+  "expectCodes": ["iconTheme.fonts"],
+  "input": "folder",
+  "base": "all-kinds",
+  "files": {
+    "icons/theme.json": {
+      "json": {
+        "iconDefinitions": {
+          "file": {
+            "iconPath": "./file.svg"
+          },
+          "folder": {
+            "iconPath": "./folder.svg"
+          },
+          "glyph": {
+            "fontCharacter": "\\E001"
+          }
+        },
+        "file": "file",
+        "folder": "folder"
+      }
+    }
+  }
+}

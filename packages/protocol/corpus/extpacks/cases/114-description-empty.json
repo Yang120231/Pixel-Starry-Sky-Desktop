@@ -1,0 +1,13 @@
+{
+  "title": "description 是空的",
+  "expectCodes": ["manifest.description"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": {
+      "merge": {
+        "description": ""
+      }
+    }
+  }
+}

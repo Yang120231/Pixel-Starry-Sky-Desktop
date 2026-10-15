@@ -16,6 +16,7 @@ const strict = has('--strict')
 const desktop = join(root, 'apps', 'desktop')
 const engine = join(root, 'packages', 'engine')
 const protocol = join(root, 'packages', 'protocol')
+const extcli = join(root, 'packages', 'extension-cli')
 const link = join(root, 'packages', 'link')
 const mobile = join(root, 'apps', 'mobile')
 const tsc = (cwd, project) => ({
@@ -42,6 +43,7 @@ const steps = [
   { name: 'tsc:desktop-node', group: 'tsc', ...tsc(desktop, 'tsconfig.node.json') },
   { name: 'tsc:engine', group: 'tsc', ...tsc(engine, 'tsconfig.json') },
   { name: 'tsc:protocol', group: 'tsc', ...tsc(protocol, 'tsconfig.json') },
+  { name: 'tsc:extension-cli', group: 'tsc', ...tsc(extcli, 'tsconfig.json') },
   { name: 'tsc:link', group: 'tsc', ...tsc(link, 'tsconfig.json') },
   { name: 'tsc:mobile', group: 'tsc', ...tsc(mobile, 'tsconfig.json') },
   {
@@ -51,6 +53,7 @@ const steps = [
   },
   { name: 'test:engine', group: 'test', ...vitest(engine) },
   { name: 'test:protocol', group: 'test', ...vitest(protocol) },
+  { name: 'test:extension-cli', group: 'test', ...vitest(extcli) },
   { name: 'test:link', group: 'test', ...vitest(link) },
   { name: 'test:mobile', group: 'test', ...vitest(mobile) },
   { name: 'docs', group: 'docs', cwd: root, script: join(root, 'scripts', 'check-docs.mjs'), args: [] },

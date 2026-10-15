@@ -1,0 +1,11 @@
+{
+  "title": "文本文件不是合法的 UTF-8",
+  "expectCodes": ["files.encoding"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "notes/bad.txt": {
+      "base64": "/v8A/w=="
+    }
+  }
+}

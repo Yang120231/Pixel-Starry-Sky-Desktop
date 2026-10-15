@@ -1,0 +1,15 @@
+{
+  "rulesVersion": 1,
+  "upload": {
+    "pass": false,
+    "issues": [
+      {
+        "code": "zip.nested",
+        "severity": "error",
+        "scope": "pack",
+        "upload": "reject",
+        "outcome": "reject"
+      }
+    ]
+  }
+}

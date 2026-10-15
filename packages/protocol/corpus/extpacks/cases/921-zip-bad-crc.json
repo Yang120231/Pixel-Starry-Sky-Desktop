@@ -1,0 +1,13 @@
+{
+  "title": "CRC 对不上",
+  "expectCodes": ["zip.corrupt"],
+  "input": "zip",
+  "base": "pixelsky.dotenv",
+  "zipEntries": [
+    {
+      "name": "bad.txt",
+      "text": "x",
+      "badCrc": true
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "title": "注释和背景对比度不够：只是提示",
+  "expectCodes": ["theme.contrast"],
+  "input": "folder",
+  "base": "all-kinds",
+  "files": {
+    "themes/night.json": {
+      "json": {
+        "colors": {
+          "editor.background": "#1a1b26",
+          "editor.foreground": "#a9b1d6"
+        },
+        "tokenColors": [
+          {
+            "scope": "comment",
+            "settings": {
+              "foreground": "#1c1d28"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

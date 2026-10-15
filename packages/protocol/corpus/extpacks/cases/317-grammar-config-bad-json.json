@@ -1,0 +1,9 @@
+{
+  "title": "语言设置文件不是合法的 JSON",
+  "expectCodes": ["grammar.configuration"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "language-configuration.json": "{ \"comments\": "
+  }
+}

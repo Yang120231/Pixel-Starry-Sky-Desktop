@@ -1,0 +1,12 @@
+{
+  "title": "包里有符号链接",
+  "expectCodes": ["files.symlink"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "link": {
+      "symlink": "README.md"
+    }
+  },
+  "needs": ["symlink"]
+}

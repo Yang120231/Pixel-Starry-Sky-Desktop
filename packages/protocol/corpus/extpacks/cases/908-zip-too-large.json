@@ -1,0 +1,17 @@
+{
+  "title": "zip 超过 10 MB",
+  "expectCodes": ["zip.tooLarge"],
+  "input": "zip",
+  "zipEntries": [
+    {
+      "name": "pixelsky-extension.json",
+      "text": "{\"id\":\"a.b\",\"name\":\"A\",\"version\":\"1.0.0\"}"
+    },
+    {
+      "name": "pad.txt",
+      "repeat": "x",
+      "bytes": 10485761,
+      "method": 0
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "title": "图标文件不存在",
+  "expectCodes": ["iconTheme.iconPath"],
+  "input": "folder",
+  "base": "all-kinds",
+  "files": {
+    "icons/theme.json": {
+      "json": {
+        "iconDefinitions": {
+          "file": {
+            "iconPath": "./file.svg"
+          },
+          "folder": {
+            "iconPath": "./folder.svg"
+          },
+          "extra": {
+            "iconPath": "./nope.svg"
+          }
+        },
+        "file": "file",
+        "folder": "folder"
+      }
+    }
+  }
+}

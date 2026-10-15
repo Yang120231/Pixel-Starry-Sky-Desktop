@@ -1,0 +1,13 @@
+{
+  "title": "icon 不是 .png / .svg",
+  "expectCodes": ["manifest.icon"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": {
+      "merge": {
+        "icon": "icon.gif"
+      }
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "title": "图标主题文件不存在",
+  "expectCodes": ["iconTheme.file"],
+  "input": "folder",
+  "base": "all-kinds",
+  "remove": ["icons/theme.json"]
+}

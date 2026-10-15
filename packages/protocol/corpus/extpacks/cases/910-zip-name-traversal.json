@@ -1,0 +1,12 @@
+{
+  "title": "条目名含 ..",
+  "expectCodes": ["zip.entryName"],
+  "input": "zip",
+  "base": "pixelsky.dotenv",
+  "zipEntries": [
+    {
+      "name": "../evil.txt",
+      "text": "x"
+    }
+  ]
+}

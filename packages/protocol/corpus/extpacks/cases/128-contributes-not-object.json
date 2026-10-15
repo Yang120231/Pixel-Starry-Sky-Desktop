@@ -1,0 +1,13 @@
+{
+  "title": "contributes 不是对象",
+  "expectCodes": ["manifest.contributes"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": {
+      "merge": {
+        "contributes": "x"
+      }
+    }
+  }
+}

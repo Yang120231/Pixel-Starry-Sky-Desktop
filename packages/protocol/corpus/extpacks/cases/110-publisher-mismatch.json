@@ -1,0 +1,13 @@
+{
+  "title": "publisher 和 id 的前缀不一致",
+  "expectCodes": ["manifest.publisherMismatch"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": {
+      "merge": {
+        "publisher": "someone"
+      }
+    }
+  }
+}

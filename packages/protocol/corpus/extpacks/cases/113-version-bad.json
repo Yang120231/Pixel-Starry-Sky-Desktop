@@ -1,0 +1,13 @@
+{
+  "title": "version 不是语义化版本",
+  "expectCodes": ["manifest.version"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": {
+      "merge": {
+        "version": "1.0"
+      }
+    }
+  }
+}

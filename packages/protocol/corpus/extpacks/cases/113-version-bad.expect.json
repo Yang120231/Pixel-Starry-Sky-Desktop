@@ -1,0 +1,43 @@
+{
+  "rulesVersion": 1,
+  "dev": {
+    "status": "warning",
+    "inactive": {},
+    "skills": [],
+    "issues": [
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint"
+      },
+      {
+        "code": "manifest.version",
+        "severity": "warning",
+        "scope": "pack",
+        "path": "version",
+        "upload": "reject"
+      }
+    ]
+  },
+  "upload": {
+    "pass": false,
+    "issues": [
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint",
+        "outcome": "hint"
+      },
+      {
+        "code": "manifest.version",
+        "severity": "warning",
+        "scope": "pack",
+        "path": "version",
+        "upload": "reject",
+        "outcome": "reject"
+      }
+    ]
+  }
+}

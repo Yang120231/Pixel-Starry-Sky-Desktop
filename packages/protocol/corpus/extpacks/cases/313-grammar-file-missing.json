@@ -1,0 +1,7 @@
+{
+  "title": "语法文件不存在",
+  "expectCodes": ["grammar.file"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "remove": ["syntaxes/dotenv.tmLanguage.json"]
+}

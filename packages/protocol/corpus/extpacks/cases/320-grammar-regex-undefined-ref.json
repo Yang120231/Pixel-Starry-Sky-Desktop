@@ -1,0 +1,18 @@
+{
+  "title": "引用了不存在的命名分组：Oniguruma 编译失败",
+  "expectCodes": ["grammar.regex"],
+  "input": "folder",
+  "grammar": "full",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "syntaxes/dotenv.tmLanguage.json": {
+      "merge": {
+        "repository": {
+          "comment": {
+            "match": "(?<x>#)\\k<y>"
+          }
+        }
+      }
+    }
+  }
+}

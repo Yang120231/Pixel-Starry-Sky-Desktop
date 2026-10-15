@@ -1,0 +1,28 @@
+{
+  "title": "图标用 PNG：只查存在和大小",
+  "expectCodes": ["grammar.regexUnchecked"],
+  "input": "folder",
+  "base": "all-kinds",
+  "files": {
+    "icons/theme.json": {
+      "json": {
+        "iconDefinitions": {
+          "file": {
+            "iconPath": "./file.svg"
+          },
+          "folder": {
+            "iconPath": "./folder.svg"
+          },
+          "p": {
+            "iconPath": "./p.png"
+          }
+        },
+        "file": "file",
+        "folder": "folder"
+      }
+    },
+    "icons/p.png": {
+      "base64": "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgAAAAAAAAAAAA"
+    }
+  }
+}

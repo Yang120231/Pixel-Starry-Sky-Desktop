@@ -1,0 +1,28 @@
+{
+  "rulesVersion": 1,
+  "dev": {
+    "status": "error",
+    "inactive": {},
+    "skills": [],
+    "issues": [
+      {
+        "code": "manifest.parse",
+        "severity": "error",
+        "scope": "pack",
+        "path": "pixelsky-extension.json"
+      }
+    ]
+  },
+  "upload": {
+    "pass": false,
+    "issues": [
+      {
+        "code": "manifest.parse",
+        "severity": "error",
+        "scope": "pack",
+        "path": "pixelsky-extension.json",
+        "outcome": "reject"
+      }
+    ]
+  }
+}

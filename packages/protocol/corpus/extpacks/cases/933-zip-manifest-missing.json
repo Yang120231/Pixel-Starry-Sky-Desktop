@@ -1,0 +1,11 @@
+{
+  "title": "zip 里没有清单",
+  "expectCodes": ["manifest.missing"],
+  "input": "zip",
+  "zipEntries": [
+    {
+      "name": "README.md",
+      "text": "# a\n"
+    }
+  ]
+}

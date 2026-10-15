@@ -1,0 +1,9 @@
+{
+  "title": "语法文件不是合法的 JSON",
+  "expectCodes": ["grammar.file"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "syntaxes/dotenv.tmLanguage.json": "{ \"scopeName\": "
+  }
+}

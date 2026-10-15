@@ -1,0 +1,15 @@
+{
+  "title": "zip 里的清单是符号链接：当作没有清单",
+  "expectCodes": ["manifest.missing"],
+  "input": "zip",
+  "zipEntries": [
+    {
+      "name": "pixelsky-extension.json",
+      "symlink": "README.md"
+    },
+    {
+      "name": "README.md",
+      "text": "# a\n"
+    }
+  ]
+}

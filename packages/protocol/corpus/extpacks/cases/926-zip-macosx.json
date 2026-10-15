@@ -1,0 +1,10 @@
+{
+  "title": "zip 里的 macOS 垃圾文件不会被略过",
+  "expectCodes": ["files.hidden"],
+  "input": "zip",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "__MACOSX/._README.md": "x",
+    ".DS_Store": "x"
+  }
+}

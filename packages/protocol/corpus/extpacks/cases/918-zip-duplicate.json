@@ -1,0 +1,12 @@
+{
+  "title": "同一个名字出现两次",
+  "expectCodes": ["zip.duplicate"],
+  "input": "zip",
+  "base": "pixelsky.dotenv",
+  "zipEntries": [
+    {
+      "name": "README.md",
+      "text": "dup\n"
+    }
+  ]
+}

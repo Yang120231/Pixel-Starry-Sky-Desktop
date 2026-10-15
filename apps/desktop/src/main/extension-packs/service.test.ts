@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ExtensionPacks } from './service'
 import { readStateFile, writeStateFile } from './store'
-import { cleanTemp, copyFixture, tempDir } from './testing'
+import { cleanTemp, copyFixture, FIXTURES, tempDir } from './testing'
 
 afterEach(cleanTemp)
 
@@ -266,7 +266,7 @@ describe('开关、移除、重新加载、选项', () => {
     expect(info.status).toBe('error')
     writeFileSync(
       join(dir, 'pixelsky-extension.json'),
-      readFileSync(join(__dirname, '__fixtures__/with-tasks/pixelsky-extension.json')),
+      readFileSync(join(FIXTURES, 'with-tasks/pixelsky-extension.json')),
     )
     await svc.reload(info.key)
     expect(svc.state().packs[0].id).toBe('pixelsky.with-tasks')

@@ -1,0 +1,13 @@
+{
+  "title": "文件超过 5000 个：读不全，整个包拒绝",
+  "expectCodes": ["files.scanLimit"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "generate": [
+    {
+      "path": "many/f{i}.txt",
+      "count": 5001,
+      "text": "x"
+    }
+  ]
+}

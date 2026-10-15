@@ -1,0 +1,17 @@
+{
+  "name": "TinyIni",
+  "scopeName": "source.tinyini",
+  "patterns": [{ "include": "#comment" }, { "include": "#section" }, { "include": "#pair" }],
+  "repository": {
+    "comment": { "match": "^\\s*[;#].*$", "name": "comment.line.tinyini" },
+    "section": { "match": "^\\s*(\\[)([^\\]]+)(\\])", "name": "entity.name.section.tinyini" },
+    "pair": {
+      "match": "^\\s*([A-Za-z_][A-Za-z0-9_.-]*)\\s*(=)\\s*(.*)$",
+      "captures": {
+        "1": { "name": "variable.other.property.tinyini" },
+        "2": { "name": "keyword.operator.assignment.tinyini" },
+        "3": { "name": "string.unquoted.tinyini" }
+      }
+    }
+  }
+}

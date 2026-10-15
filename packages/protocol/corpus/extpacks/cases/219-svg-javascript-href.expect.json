@@ -1,0 +1,48 @@
+{
+  "rulesVersion": 1,
+  "dev": {
+    "status": "warning",
+    "inactive": {},
+    "skills": [
+      {
+        "name": "review",
+        "index": 0
+      }
+    ],
+    "issues": [
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint"
+      },
+      {
+        "code": "svg.unsafe",
+        "severity": "error",
+        "scope": "file",
+        "path": "icons/folder.svg",
+        "upload": "reject"
+      }
+    ]
+  },
+  "upload": {
+    "pass": false,
+    "issues": [
+      {
+        "code": "grammar.regexUnchecked",
+        "severity": "warning",
+        "scope": "pack",
+        "upload": "hint",
+        "outcome": "hint"
+      },
+      {
+        "code": "svg.unsafe",
+        "severity": "error",
+        "scope": "file",
+        "path": "icons/folder.svg",
+        "upload": "reject",
+        "outcome": "reject"
+      }
+    ]
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "title": "加密条目",
+  "expectCodes": ["zip.unsupported"],
+  "input": "zip",
+  "base": "pixelsky.dotenv",
+  "zipEntries": [
+    {
+      "name": "secret.txt",
+      "text": "x",
+      "encrypted": true
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "title": "清单带注释和末尾逗号：能解析，但整个包会被上传拒绝",
+  "expectCodes": ["manifest.jsonc", "grammar.regexUnchecked"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": "// 注释\n{\n  \"$schema\": \"../../schema/pixelsky-extension.schema.json\",\n  \"id\": \"pixelsky.dotenv\",\n  \"name\": \".env 文件支持\",\n  \"version\": \"1.0.0\",\n  \"publisher\": \"pixelsky\",\n  \"description\": \".env 文件的语法高亮、注释切换和常用片段\",\n  \"keywords\": [\n    \"env\",\n    \"dotenv\",\n    \"配置\"\n  ],\n  \"license\": \"MIT\",\n  \"repository\": \"https://github.com/pixelsky/ext-dotenv\",\n  \"homepage\": null,\n  \"engines\": {\n    \"pixelsky\": \">=0.4.0\"\n  },\n  \"l10n\": {\n    \"en\": {\n      \"name\": \".env Support\",\n      \"description\": \"Syntax highlighting, comment toggling and snippets for .env files\"\n    }\n  },\n  \"contributes\": {\n    \"grammars\": [\n      {\n        \"language\": \"dotenv\",\n        \"aliases\": [\n          \"Dotenv\",\n          \".env\"\n        ],\n        \"extensions\": [\n          \".env\"\n        ],\n        \"filenames\": [\n          \".env\",\n          \".env.local\",\n          \".env.example\",\n          \".env.development\",\n          \".env.production\",\n          \".env.test\"\n        ],\n        \"filenamePatterns\": [\n          \".env.*\"\n        ],\n        \"scopeName\": \"source.dotenv\",\n        \"path\": \"syntaxes/dotenv.tmLanguage.json\",\n        \"configuration\": \"language-configuration.json\",\n        \"samples\": [\n          \"samples/example.env\"\n        ]\n      }\n    ],\n    \"snippets\": [\n      {\n        \"language\": \"dotenv\",\n        \"path\": \"snippets/dotenv.json\"\n      }\n    ]\n  },\n  \"main\": null,\n  \"permissions\": [],\n  \"price\": null,\n}\n"
+  }
+}

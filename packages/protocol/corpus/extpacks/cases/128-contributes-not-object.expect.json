@@ -1,0 +1,30 @@
+{
+  "rulesVersion": 1,
+  "dev": {
+    "status": "error",
+    "inactive": {},
+    "skills": [],
+    "issues": [
+      {
+        "code": "manifest.contributes",
+        "severity": "error",
+        "scope": "pack",
+        "path": "contributes",
+        "upload": "reject"
+      }
+    ]
+  },
+  "upload": {
+    "pass": false,
+    "issues": [
+      {
+        "code": "manifest.contributes",
+        "severity": "error",
+        "scope": "pack",
+        "path": "contributes",
+        "upload": "reject",
+        "outcome": "reject"
+      }
+    ]
+  }
+}

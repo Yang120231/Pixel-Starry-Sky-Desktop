@@ -1,0 +1,56 @@
+{
+  "title": "firstLine 有嵌套量词",
+  "expectCodes": ["grammar.firstLine"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": {
+      "json": {
+        "$schema": "../../schema/pixelsky-extension.schema.json",
+        "id": "pixelsky.dotenv",
+        "name": ".env 文件支持",
+        "version": "1.0.0",
+        "publisher": "pixelsky",
+        "description": ".env 文件的语法高亮、注释切换和常用片段",
+        "keywords": ["env", "dotenv", "配置"],
+        "license": "MIT",
+        "repository": "https://github.com/pixelsky/ext-dotenv",
+        "homepage": null,
+        "engines": {
+          "pixelsky": ">=0.4.0"
+        },
+        "l10n": {
+          "en": {
+            "name": ".env Support",
+            "description": "Syntax highlighting, comment toggling and snippets for .env files"
+          }
+        },
+        "contributes": {
+          "grammars": [
+            {
+              "language": "dotenv",
+              "aliases": ["Dotenv", ".env"],
+              "extensions": [".env"],
+              "filenames": [".env", ".env.local", ".env.example", ".env.development", ".env.production", ".env.test"],
+              "filenamePatterns": [".env.*"],
+              "scopeName": "source.dotenv",
+              "path": "syntaxes/dotenv.tmLanguage.json",
+              "configuration": "language-configuration.json",
+              "samples": ["samples/example.env"],
+              "firstLine": "^(a+)+$"
+            }
+          ],
+          "snippets": [
+            {
+              "language": "dotenv",
+              "path": "snippets/dotenv.json"
+            }
+          ]
+        },
+        "main": null,
+        "permissions": [],
+        "price": null
+      }
+    }
+  }
+}

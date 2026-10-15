@@ -114,6 +114,8 @@ export interface ExtPackIssue {
   contribution?: { kind: ExtPackContributionKind; index: number }
   /** 以后上传检查对它的处理（给作者的提示）；undefined = 只在本地提示 */
   upload?: 'reject' | 'hint'
+  /** 已知时的位置：file = 扩展内的路径；pointer = 该 JSON 文件内的 RFC 6901 指针；line / column 从 1 起（UTF-16 列） */
+  loc?: { file: string; pointer?: string; line?: number; column?: number }
 }
 export type ExtPackInactive = Partial<Record<ExtPackContributionKind, number[]>>
 /** overrideBuiltin 存语法的覆盖键 = `grammar.language ?? grammar.scopeName` */
@@ -161,6 +163,39 @@ export interface ExtPackFileEntry {
   size: number
   kind: 'file' | 'symlink'
 }
+/** 一个扩展的文件来源：文件夹、zip、内存都实现它 */
+export interface ExtPackFiles {
+  /** 正斜杠相对路径，按 UTF-16 码元排序，不含目录；文件夹 / 内存来源已套用 extPackSkipped */
+  entries: ExtPackFileEntry[]
+  /** 到扫描上限（文件数 / 字节）就停了 */
+  truncated: boolean
+  /** 普通文件的字节数；不存在 / 不是普通文件（含符号链接）返回 null。与 entries / 上限无关（读清单用） */
+  stat(path: string): number | null
+  /** 普通文件的前 maxBytes 字节；不存在 / 不是普通文件 / 路径不安全 / 读失败返回 null */
+  read(path: string, maxBytes: number): Uint8Array | null
+  /** 来源自己发现的问题（zip 层）；checkPack 放在最前面 */
+  preIssues?: ExtPackIssue[]
+}
+export interface CheckPackOptions {
+  source: ExtPackSource
+  /** 不传 = 上传级别：不判断 manifest.engineUnmet */
+  appVersion?: string
+  /** 语法引擎的问题；undefined = 没跑引擎，有语法时报 grammar.regexUnchecked */
+  grammar?: ExtPackIssue[]
+}
+export interface ExtPackCheck {
+  id: string | null
+  manifest: ExtPackManifest | null
+  /** 只含普通文件：路径 → 字节数 */
+  files: Map<string, number>
+  /** 已按来源过滤、去重，保持产生顺序 */
+  issues: ExtPackIssue[]
+  status: ExtPackInfo['status']
+  inactive: ExtPackInactive
+  skills: ExtPackSkillInfo[]
+}
+export type ExtCheckLevel = 'upload' | 'dev'
+export type ExtIssueOutcome = 'reject' | 'hint' | 'note'
 /** readText：文件不存在或太大返回 null；按 UTF-8 严格解码并去掉 BOM（编码问题由校验器通过 readBytes 报告） */
 export interface ExtPackReader {
   exists(path: string): boolean
@@ -191,7 +226,18 @@ export const EXT_LIMITS = {
   textBytes: 256 * 1024,
   lineChars: 10_000,
   lineMs: 30,
+  /** 语法性能检查：把样例循环补到这么多行再测 */
+  stressLines: 5000,
+  /** 语法性能检查：单行分词的时间上限 */
+  sampleMs: 1000,
+  /** 一个样例分词超过这么久还没完成，当作卡死 */
+  hangMs: 10_000,
+  /** 最慢一行超过 lineMs 的这个比例，给「接近上限」提示 */
+  nearRatio: 0.5,
 } as const
+
+/** 规则语义变化时加一；写进命令行的 JSON 和共享用例的期望 */
+export const EXT_RULES_VERSION = 1
 
 /** 软件内置的 26 个语言 id（authoring-spec §4.5） */
 export const EXT_BUILTIN_LANGUAGE_IDS: readonly string[] = [

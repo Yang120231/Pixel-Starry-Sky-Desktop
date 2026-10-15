@@ -1,0 +1,9 @@
+{
+  "title": "zip 里的 .git/ 不再豁免：算隐藏文件和不允许的类型",
+  "expectCodes": ["files.hidden", "files.type"],
+  "input": "zip",
+  "base": "pixelsky.dotenv",
+  "files": {
+    ".git/config": "[core]\n"
+  }
+}

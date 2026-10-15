@@ -1,0 +1,9 @@
+{
+  "title": "zip 里的点开头文件：隐藏文件",
+  "expectCodes": ["files.hidden"],
+  "input": "zip",
+  "base": "pixelsky.dotenv",
+  "files": {
+    ".gitignore": "dist/\n"
+  }
+}

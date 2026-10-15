@@ -1,0 +1,6 @@
+{
+  "title": "不是 zip",
+  "expectCodes": ["zip.invalid"],
+  "input": "zip",
+  "zipBase64": "dGhpcyBpcyBkZWZpbml0ZWx5IG5vdCBhIHppcCBmaWxlIGF0IGFsbA=="
+}

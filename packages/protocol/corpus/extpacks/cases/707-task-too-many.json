@@ -1,0 +1,690 @@
+{
+  "title": "tasks 超过 200 个",
+  "expectCodes": ["task.tooMany"],
+  "input": "folder",
+  "base": "all-kinds",
+  "files": {
+    "pixelsky-extension.json": {
+      "json": {
+        "id": "pixelsky.all-kinds",
+        "name": "All Kinds",
+        "version": "1.0.0",
+        "publisher": "pixelsky",
+        "description": "One valid contribution of each kind",
+        "keywords": ["corpus"],
+        "license": "MIT",
+        "repository": null,
+        "homepage": null,
+        "engines": {
+          "pixelsky": ">=0.4.0"
+        },
+        "contributes": {
+          "grammars": [
+            {
+              "language": "tinyini",
+              "aliases": ["TinyIni"],
+              "extensions": [".tini"],
+              "scopeName": "source.tinyini",
+              "path": "syntaxes/tinyini.tmLanguage.json",
+              "samples": ["samples/example.tini"]
+            }
+          ],
+          "themes": [
+            {
+              "id": "night",
+              "label": "Night",
+              "uiTheme": "dark",
+              "path": "themes/night.json"
+            }
+          ],
+          "snippets": [
+            {
+              "language": "tinyini",
+              "path": "snippets/tinyini.json"
+            }
+          ],
+          "iconThemes": [
+            {
+              "id": "mini",
+              "label": "Mini",
+              "path": "icons/theme.json"
+            }
+          ],
+          "taskTemplates": [
+            {
+              "id": "just-all",
+              "label": "Just",
+              "files": ["justfile"],
+              "tasks": [
+                {
+                  "name": "t0"
+                },
+                {
+                  "name": "t1"
+                },
+                {
+                  "name": "t2"
+                },
+                {
+                  "name": "t3"
+                },
+                {
+                  "name": "t4"
+                },
+                {
+                  "name": "t5"
+                },
+                {
+                  "name": "t6"
+                },
+                {
+                  "name": "t7"
+                },
+                {
+                  "name": "t8"
+                },
+                {
+                  "name": "t9"
+                },
+                {
+                  "name": "t10"
+                },
+                {
+                  "name": "t11"
+                },
+                {
+                  "name": "t12"
+                },
+                {
+                  "name": "t13"
+                },
+                {
+                  "name": "t14"
+                },
+                {
+                  "name": "t15"
+                },
+                {
+                  "name": "t16"
+                },
+                {
+                  "name": "t17"
+                },
+                {
+                  "name": "t18"
+                },
+                {
+                  "name": "t19"
+                },
+                {
+                  "name": "t20"
+                },
+                {
+                  "name": "t21"
+                },
+                {
+                  "name": "t22"
+                },
+                {
+                  "name": "t23"
+                },
+                {
+                  "name": "t24"
+                },
+                {
+                  "name": "t25"
+                },
+                {
+                  "name": "t26"
+                },
+                {
+                  "name": "t27"
+                },
+                {
+                  "name": "t28"
+                },
+                {
+                  "name": "t29"
+                },
+                {
+                  "name": "t30"
+                },
+                {
+                  "name": "t31"
+                },
+                {
+                  "name": "t32"
+                },
+                {
+                  "name": "t33"
+                },
+                {
+                  "name": "t34"
+                },
+                {
+                  "name": "t35"
+                },
+                {
+                  "name": "t36"
+                },
+                {
+                  "name": "t37"
+                },
+                {
+                  "name": "t38"
+                },
+                {
+                  "name": "t39"
+                },
+                {
+                  "name": "t40"
+                },
+                {
+                  "name": "t41"
+                },
+                {
+                  "name": "t42"
+                },
+                {
+                  "name": "t43"
+                },
+                {
+                  "name": "t44"
+                },
+                {
+                  "name": "t45"
+                },
+                {
+                  "name": "t46"
+                },
+                {
+                  "name": "t47"
+                },
+                {
+                  "name": "t48"
+                },
+                {
+                  "name": "t49"
+                },
+                {
+                  "name": "t50"
+                },
+                {
+                  "name": "t51"
+                },
+                {
+                  "name": "t52"
+                },
+                {
+                  "name": "t53"
+                },
+                {
+                  "name": "t54"
+                },
+                {
+                  "name": "t55"
+                },
+                {
+                  "name": "t56"
+                },
+                {
+                  "name": "t57"
+                },
+                {
+                  "name": "t58"
+                },
+                {
+                  "name": "t59"
+                },
+                {
+                  "name": "t60"
+                },
+                {
+                  "name": "t61"
+                },
+                {
+                  "name": "t62"
+                },
+                {
+                  "name": "t63"
+                },
+                {
+                  "name": "t64"
+                },
+                {
+                  "name": "t65"
+                },
+                {
+                  "name": "t66"
+                },
+                {
+                  "name": "t67"
+                },
+                {
+                  "name": "t68"
+                },
+                {
+                  "name": "t69"
+                },
+                {
+                  "name": "t70"
+                },
+                {
+                  "name": "t71"
+                },
+                {
+                  "name": "t72"
+                },
+                {
+                  "name": "t73"
+                },
+                {
+                  "name": "t74"
+                },
+                {
+                  "name": "t75"
+                },
+                {
+                  "name": "t76"
+                },
+                {
+                  "name": "t77"
+                },
+                {
+                  "name": "t78"
+                },
+                {
+                  "name": "t79"
+                },
+                {
+                  "name": "t80"
+                },
+                {
+                  "name": "t81"
+                },
+                {
+                  "name": "t82"
+                },
+                {
+                  "name": "t83"
+                },
+                {
+                  "name": "t84"
+                },
+                {
+                  "name": "t85"
+                },
+                {
+                  "name": "t86"
+                },
+                {
+                  "name": "t87"
+                },
+                {
+                  "name": "t88"
+                },
+                {
+                  "name": "t89"
+                },
+                {
+                  "name": "t90"
+                },
+                {
+                  "name": "t91"
+                },
+                {
+                  "name": "t92"
+                },
+                {
+                  "name": "t93"
+                },
+                {
+                  "name": "t94"
+                },
+                {
+                  "name": "t95"
+                },
+                {
+                  "name": "t96"
+                },
+                {
+                  "name": "t97"
+                },
+                {
+                  "name": "t98"
+                },
+                {
+                  "name": "t99"
+                },
+                {
+                  "name": "t100"
+                },
+                {
+                  "name": "t101"
+                },
+                {
+                  "name": "t102"
+                },
+                {
+                  "name": "t103"
+                },
+                {
+                  "name": "t104"
+                },
+                {
+                  "name": "t105"
+                },
+                {
+                  "name": "t106"
+                },
+                {
+                  "name": "t107"
+                },
+                {
+                  "name": "t108"
+                },
+                {
+                  "name": "t109"
+                },
+                {
+                  "name": "t110"
+                },
+                {
+                  "name": "t111"
+                },
+                {
+                  "name": "t112"
+                },
+                {
+                  "name": "t113"
+                },
+                {
+                  "name": "t114"
+                },
+                {
+                  "name": "t115"
+                },
+                {
+                  "name": "t116"
+                },
+                {
+                  "name": "t117"
+                },
+                {
+                  "name": "t118"
+                },
+                {
+                  "name": "t119"
+                },
+                {
+                  "name": "t120"
+                },
+                {
+                  "name": "t121"
+                },
+                {
+                  "name": "t122"
+                },
+                {
+                  "name": "t123"
+                },
+                {
+                  "name": "t124"
+                },
+                {
+                  "name": "t125"
+                },
+                {
+                  "name": "t126"
+                },
+                {
+                  "name": "t127"
+                },
+                {
+                  "name": "t128"
+                },
+                {
+                  "name": "t129"
+                },
+                {
+                  "name": "t130"
+                },
+                {
+                  "name": "t131"
+                },
+                {
+                  "name": "t132"
+                },
+                {
+                  "name": "t133"
+                },
+                {
+                  "name": "t134"
+                },
+                {
+                  "name": "t135"
+                },
+                {
+                  "name": "t136"
+                },
+                {
+                  "name": "t137"
+                },
+                {
+                  "name": "t138"
+                },
+                {
+                  "name": "t139"
+                },
+                {
+                  "name": "t140"
+                },
+                {
+                  "name": "t141"
+                },
+                {
+                  "name": "t142"
+                },
+                {
+                  "name": "t143"
+                },
+                {
+                  "name": "t144"
+                },
+                {
+                  "name": "t145"
+                },
+                {
+                  "name": "t146"
+                },
+                {
+                  "name": "t147"
+                },
+                {
+                  "name": "t148"
+                },
+                {
+                  "name": "t149"
+                },
+                {
+                  "name": "t150"
+                },
+                {
+                  "name": "t151"
+                },
+                {
+                  "name": "t152"
+                },
+                {
+                  "name": "t153"
+                },
+                {
+                  "name": "t154"
+                },
+                {
+                  "name": "t155"
+                },
+                {
+                  "name": "t156"
+                },
+                {
+                  "name": "t157"
+                },
+                {
+                  "name": "t158"
+                },
+                {
+                  "name": "t159"
+                },
+                {
+                  "name": "t160"
+                },
+                {
+                  "name": "t161"
+                },
+                {
+                  "name": "t162"
+                },
+                {
+                  "name": "t163"
+                },
+                {
+                  "name": "t164"
+                },
+                {
+                  "name": "t165"
+                },
+                {
+                  "name": "t166"
+                },
+                {
+                  "name": "t167"
+                },
+                {
+                  "name": "t168"
+                },
+                {
+                  "name": "t169"
+                },
+                {
+                  "name": "t170"
+                },
+                {
+                  "name": "t171"
+                },
+                {
+                  "name": "t172"
+                },
+                {
+                  "name": "t173"
+                },
+                {
+                  "name": "t174"
+                },
+                {
+                  "name": "t175"
+                },
+                {
+                  "name": "t176"
+                },
+                {
+                  "name": "t177"
+                },
+                {
+                  "name": "t178"
+                },
+                {
+                  "name": "t179"
+                },
+                {
+                  "name": "t180"
+                },
+                {
+                  "name": "t181"
+                },
+                {
+                  "name": "t182"
+                },
+                {
+                  "name": "t183"
+                },
+                {
+                  "name": "t184"
+                },
+                {
+                  "name": "t185"
+                },
+                {
+                  "name": "t186"
+                },
+                {
+                  "name": "t187"
+                },
+                {
+                  "name": "t188"
+                },
+                {
+                  "name": "t189"
+                },
+                {
+                  "name": "t190"
+                },
+                {
+                  "name": "t191"
+                },
+                {
+                  "name": "t192"
+                },
+                {
+                  "name": "t193"
+                },
+                {
+                  "name": "t194"
+                },
+                {
+                  "name": "t195"
+                },
+                {
+                  "name": "t196"
+                },
+                {
+                  "name": "t197"
+                },
+                {
+                  "name": "t198"
+                },
+                {
+                  "name": "t199"
+                },
+                {
+                  "name": "t200"
+                }
+              ],
+              "runner": {
+                "default": "just"
+              },
+              "command": "{runner} {name}"
+            }
+          ],
+          "skills": [
+            {
+              "path": "skills/review"
+            }
+          ],
+          "prompts": [
+            {
+              "id": "explain",
+              "title": "Explain",
+              "path": "prompts/explain.md",
+              "where": ["composer", "editor"],
+              "requires": "selection"
+            }
+          ]
+        },
+        "main": null,
+        "permissions": [],
+        "price": null
+      }
+    }
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "id": "pixelsky.all-kinds",
+  "name": "All Kinds",
+  "version": "1.0.0",
+  "publisher": "pixelsky",
+  "description": "One valid contribution of each kind",
+  "keywords": ["corpus"],
+  "license": "MIT",
+  "repository": null,
+  "homepage": null,
+  "engines": { "pixelsky": ">=0.4.0" },
+  "contributes": {
+    "grammars": [
+      {
+        "language": "tinyini",
+        "aliases": ["TinyIni"],
+        "extensions": [".tini"],
+        "scopeName": "source.tinyini",
+        "path": "syntaxes/tinyini.tmLanguage.json",
+        "samples": ["samples/example.tini"]
+      }
+    ],
+    "themes": [{ "id": "night", "label": "Night", "uiTheme": "dark", "path": "themes/night.json" }],
+    "snippets": [{ "language": "tinyini", "path": "snippets/tinyini.json" }],
+    "iconThemes": [{ "id": "mini", "label": "Mini", "path": "icons/theme.json" }],
+    "taskTemplates": [
+      {
+        "id": "just-all",
+        "label": "Just",
+        "files": ["justfile"],
+        "tasks": [{ "name": "build", "description": "Build" }],
+        "runner": { "default": "just" },
+        "command": "{runner} {name}"
+      }
+    ],
+    "skills": [{ "path": "skills/review" }],
+    "prompts": [
+      {
+        "id": "explain",
+        "title": "Explain",
+        "path": "prompts/explain.md",
+        "where": ["composer", "editor"],
+        "requires": "selection"
+      }
+    ]
+  },
+  "main": null,
+  "permissions": [],
+  "price": null
+}

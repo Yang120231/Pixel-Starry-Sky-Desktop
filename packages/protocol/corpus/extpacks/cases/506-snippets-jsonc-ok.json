@@ -1,0 +1,9 @@
+{
+  "title": "片段文件允许注释和末尾逗号",
+  "expectCodes": ["grammar.regexUnchecked"],
+  "input": "folder",
+  "base": "all-kinds",
+  "files": {
+    "snippets/tinyini.json": "{\n  // 注释\n  \"S\": { \"prefix\": \"s\", \"body\": \"x\", },\n}\n"
+  }
+}

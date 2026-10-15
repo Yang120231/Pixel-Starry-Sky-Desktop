@@ -1,0 +1,14 @@
+{
+  "title": "清单里有不认识的字段；x- 开头和 $schema 不算",
+  "expectCodes": ["manifest.unknownField"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": {
+      "merge": {
+        "colour": "red",
+        "x-note": "ok"
+      }
+    }
+  }
+}

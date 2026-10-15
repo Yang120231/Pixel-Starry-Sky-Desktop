@@ -1,0 +1,13 @@
+{
+  "title": "name 超过 40 个字符",
+  "expectCodes": ["manifest.name"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": {
+      "merge": {
+        "name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
+}

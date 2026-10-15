@@ -1,0 +1,20 @@
+{
+  "title": "完整的图标主题缺 file / folder 默认图标",
+  "expectCodes": ["iconTheme.default"],
+  "input": "folder",
+  "base": "all-kinds",
+  "files": {
+    "icons/theme.json": {
+      "json": {
+        "iconDefinitions": {
+          "file": {
+            "iconPath": "./file.svg"
+          },
+          "folder": {
+            "iconPath": "./folder.svg"
+          }
+        }
+      }
+    }
+  }
+}

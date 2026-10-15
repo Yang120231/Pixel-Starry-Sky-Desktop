@@ -1,0 +1,14 @@
+{
+  "title": "icon.png 不是 PNG",
+  "expectCodes": ["manifest.icon"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "pixelsky-extension.json": {
+      "merge": {
+        "icon": "icon.png"
+      }
+    },
+    "icon.png": "not a png at all, really not a png"
+  }
+}

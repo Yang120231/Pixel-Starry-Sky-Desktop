@@ -1,0 +1,9 @@
+{
+  "title": "路径超过 128 个字符",
+  "expectCodes": ["files.path"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/c.txt": "x"
+  }
+}

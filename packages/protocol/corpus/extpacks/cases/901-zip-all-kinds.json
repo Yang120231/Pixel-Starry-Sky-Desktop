@@ -1,0 +1,6 @@
+{
+  "title": "七种贡献的底板打成 zip",
+  "expectCodes": ["grammar.regexUnchecked"],
+  "input": "zip",
+  "base": "all-kinds"
+}

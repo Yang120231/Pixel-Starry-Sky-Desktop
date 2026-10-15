@@ -1,0 +1,11 @@
+{
+  "title": "samples/ 以外的点开头文件和文件夹当作不存在（.gitignore、.vscode/、.src/ 逃生口）",
+  "expectCodes": ["grammar.regexUnchecked"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    ".gitignore": "dist/\n",
+    ".vscode/settings.json": "{}\n",
+    ".src/build.mjs": "export {}\n"
+  }
+}

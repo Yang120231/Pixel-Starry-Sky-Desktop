@@ -1,0 +1,11 @@
+{
+  "title": "清单没引用的文件是提示；README / LICENSE / CHANGELOG / samples 除外",
+  "expectCodes": ["files.unused"],
+  "input": "folder",
+  "base": "pixelsky.dotenv",
+  "files": {
+    "notes/todo.md": "# todo\n",
+    "CHANGELOG.md": "# log\n",
+    "docs/extra.json": "{}\n"
+  }
+}
