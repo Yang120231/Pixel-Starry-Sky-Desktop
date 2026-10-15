@@ -54,6 +54,12 @@ describe('Git 对比标签 store', () => {
     expect(getGitDiffTab(c1)).toMatchObject({ area: 'commit', to: 'c1', caption: 'c1' })
   })
 
+  it('历史里的提交文件带上工作区路径（标签右上角能「打开文件」）；后来删掉的没有', () => {
+    expect(commitDiffInput(ref, 'p:p1', false, { ...commitFile, local: 'a.ts' }, 'p0', 'c1').local).toBe('a.ts')
+    expect(commitDiffInput(ref, 'p:p1', false, { ...commitFile, local: null }, 'p0', 'c1').local).toBeNull()
+    expect(commitDiffInput(ref, 'p:p1', false, commitFile, 'p0', 'c1').local).toBeNull()
+  })
+
   it('暂存：标签换到暂存区，位置和激活不变；还原 / 提交：关掉', async () => {
     const a = openGitDiffTab(workDiffInput(ref, 'p:p1', false, 'unstaged', file('a.ts')))
     const other = openGitDiffTab(workDiffInput(ref, 'p:p1', false, 'untracked', file('n.ts', '?')))

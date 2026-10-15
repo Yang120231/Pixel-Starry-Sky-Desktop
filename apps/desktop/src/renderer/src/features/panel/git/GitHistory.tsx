@@ -51,7 +51,7 @@ import type {
 import type { WorkspaceRef } from '../../../../../shared/types/workspace'
 import { failureHint, failureTitle } from './gitModel'
 import { GitDiffView } from './GitDiffView'
-import { hasCodeOpener } from '@/features/files/store'
+import { hasCodeOpener, openFile } from '@/features/files/store'
 import { refKey as workspaceRefKey } from '@/features/editor/target'
 import { routeGitDiff } from '@/features/coding/editor/gitDiffModel'
 import { commitDiffInput, openGitDiffTab, useCurrentGitDiff } from '@/features/coding/editor/gitDiffTabs'
@@ -579,6 +579,10 @@ export function GitHistory({
       <>
         <ChangedFiles
           files={set.files}
+          onOpenFile={index => {
+            const local = set.files[index].local
+            if (local) void openFile(target, local)
+          }}
           onHistory={index => openFileHistory(set.files[index].path)}
           isCurrent={f =>
             currentDiff?.area === 'commit' &&
@@ -836,12 +840,13 @@ export function GitHistory({
     return (
       <GitDiffView
         key={`${item.from}:${item.to}:${f.path}`}
-        file={{ path: f.path, origPath: f.origPath, code: f.code, local: null, submodule: false }}
+        file={{ path: f.path, origPath: f.origPath, code: f.code, local: f.local ?? null, submodule: false }}
         area="commit"
         busy={false}
         caption={item.caption}
         load={() => api.diff({ area: 'commit', path: f.path, origPath: f.origPath, from: item.from, to: item.to })}
         onBack={() => setDiff(null)}
+        onOpen={f.local ? () => void openFile(target, f.local!) : undefined}
         onNeighbour={delta => setDiff(d => d && { ...d, index: (d.index + delta + d.items.length) % d.items.length })}
         onHistory={file ? undefined : () => openFileHistory(f.path)}
       />

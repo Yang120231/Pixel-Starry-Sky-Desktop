@@ -1,5 +1,5 @@
 // 提交历史的小部件（docs/ui/git-panel.md §9.3–9.5）：分支线单元格、引用标记、改动文件列表
-import { Cloud, FileClock, GitBranch, GitCommitHorizontal, Tag } from 'lucide-react'
+import { Cloud, FileClock, FileCode2, GitBranch, GitCommitHorizontal, Tag } from 'lucide-react'
 import { cn, IconButton } from '@/ui'
 import { tr } from '@/i18n/core'
 import type { GitCommitFile } from '../../../../../shared/types/project-tools'
@@ -234,15 +234,18 @@ const CODE_COLOR: Record<GitCommitFile['code'], string> = {
   T: 'text-warn',
 }
 
-/** 一个提交 / 一段比较里改动的文件：状态字母、文件名、目录、+/−；点了看差异，悬停可以看这个文件的历史 */
+/** 一个提交 / 一段比较里改动的文件：状态字母、文件名、目录、+/−；点了看差异，悬停可以打开文件、看这个文件的历史 */
 export function ChangedFiles({
   files,
   onOpen,
+  onOpenFile,
   onHistory,
   isCurrent,
 }: {
   files: GitCommitFile[]
   onOpen: (index: number) => void
+  /** 打开工作区里这个文件现在的版本；只给 local 不为空的文件显示 */
+  onOpenFile?: (index: number) => void
   onHistory?: (index: number) => void
   /** 代码模式下中栏正开着这个文件的对比：高亮这一行 */
   isCurrent?: (file: GitCommitFile) => boolean
@@ -272,7 +275,8 @@ export function ChangedFiles({
               </span>
               <span
                 className={cn(
-                  'shrink-0 truncate text-list',
+                  // 窄侧栏里悬停出两个按钮时，文件名可以截短，不压到右边的 +/−
+                  'min-w-0 truncate text-list',
                   file.code === 'D' ? 'text-fg-muted line-through' : 'text-fg',
                 )}
               >
@@ -289,6 +293,17 @@ export function ChangedFiles({
                 </span>
               )}
             </button>
+            {onOpenFile && file.local && (
+              <span className="shrink-0 opacity-0 group-hover/file:opacity-100 group-focus-within/file:opacity-100">
+                <IconButton
+                  icon={FileCode2}
+                  label={tr('git.open')}
+                  size={22}
+                  iconSize={12}
+                  onClick={() => onOpenFile(i)}
+                />
+              </span>
+            )}
             {onHistory && file.code !== 'D' && (
               <span className="shrink-0 opacity-0 group-hover/file:opacity-100 group-focus-within/file:opacity-100">
                 <IconButton

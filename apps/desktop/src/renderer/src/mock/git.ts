@@ -165,6 +165,7 @@ const changed = (path: string, code: GitCommitFile['code'], ins: number | null, 
   code,
   insertions: ins,
   deletions: del,
+  local: code === 'D' ? null : path,
 })
 function demoCommit(
   id: string,
