@@ -8,6 +8,7 @@ import { ToolError } from '../src/lib/check'
 import { main } from '../src/cli/main'
 import { pickLang } from '../src/cli/i18n'
 import type { CliHooks, CliIo } from '../src/cli/io'
+import { withoutTiming } from './helpers/timing'
 
 const BASES = resolve(dirname(fileURLToPath(import.meta.url)), '../../protocol/corpus/extpacks/bases')
 const ANSI = new RegExp(`${String.fromCharCode(27)}\\[`)
@@ -179,8 +180,10 @@ describe('JSON', () => {
     expect(j.pack).toEqual({ id: 'pixelsky.dotenv', version: '1.0.0', files: 7, bytes: 8328 })
     expect(j.status).toBe('ok')
     expect(j.verdict).toEqual({ pass: true, blocking: 0 })
-    expect(j.counts).toEqual({ error: 0, warning: 0, reject: 0, hint: 0, note: 0 })
-    expect(j.issues).toEqual([])
+    // 慢机器上可能多一条测速提示（warning / hint），其余计数必须为 0
+    const timing = j.issues.length - withoutTiming(j.issues as Array<{ code: string }>).length
+    expect(j.counts).toEqual({ error: 0, warning: timing, reject: 0, hint: timing, note: 0 })
+    expect(withoutTiming(j.issues as Array<{ code: string }>)).toEqual([])
     expect(j.notChecked).toEqual(['publisher', 'versionIncrement', 'listedConflicts'])
     expect(j.output).toBeNull()
     expect(j.grammar.mode).toBe('full')

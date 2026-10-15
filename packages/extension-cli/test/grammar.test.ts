@@ -9,6 +9,7 @@ import { createTmEngine } from '../src/lib/grammar/engine'
 import type { TmTokenizer } from '../src/lib/grammar/engine'
 import { measureSample } from '../src/lib/grammar/measure'
 import { checkGrammars } from '../src/lib/grammar/run'
+import { withoutTiming } from './helpers/timing'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repo = resolve(here, '../../..')
@@ -421,7 +422,7 @@ describe('worker runner (bundled)', () => {
     expect(r.stderr).toBe('')
     expect(r.status).toBe(0)
     const out = JSON.parse(r.stdout) as { codes: string[]; results: Array<{ samples: Array<{ lines: number }> }> }
-    expect(out.codes).toEqual([])
+    expect(withoutTiming(out.codes.map(code => ({ code }))).map(i => i.code)).toEqual([])
     expect(out.results[0].samples[0].lines).toBe(5000)
   }, 60_000)
 
