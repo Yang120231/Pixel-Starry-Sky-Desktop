@@ -4,10 +4,15 @@ import {
   arrangeProjects,
   createGroup,
   dissolveGroup,
+  dropPlace,
+  dropProjects,
   groupOf,
+  moveGroup,
+  moveProjects,
   rangeBetween,
   removeFromGroups,
   renameGroup,
+  sortByOrder,
 } from './projectGroups'
 
 const projects = ['a', 'b', 'c', 'd', 'e'].map(id => ({ id }))
@@ -57,6 +62,67 @@ describe('分区增删改', () => {
     expect(removeFromGroups(groups, ['x'])).toEqual([groups[0]])
     expect(renameGroup(groups, 'g1', '客户')[0].name).toBe('客户')
     expect(dissolveGroup(groups, 'g1')).toEqual([groups[1]])
+  })
+})
+
+describe('拖动换位置', () => {
+  it('按记下的先后排，没排过的（新加的）接在后面', () => {
+    expect(sortByOrder(projects, ['c', 'a']).map(p => p.id)).toEqual(['c', 'a', 'b', 'd', 'e'])
+    expect(sortByOrder(projects, []).map(p => p.id)).toEqual(['a', 'b', 'c', 'd', 'e'])
+  })
+
+  it('分区里和分区外的项目都按记下的先后', () => {
+    const order = ['d', 'e', 'b', 'a']
+    expect(arrangeProjects(projects, groups, order)).toEqual([
+      { kind: 'group', group: groups[0], projects: [{ id: 'd' }, { id: 'b' }] },
+      { kind: 'project', project: { id: 'e' } },
+      { kind: 'project', project: { id: 'a' } },
+      { kind: 'project', project: { id: 'c' } },
+    ])
+  })
+
+  it('上半是前面、下半是后面', () => {
+    expect(dropPlace({ top: 100, height: 32 }, 110)).toBe('before')
+    expect(dropPlace({ top: 100, height: 32 }, 120)).toBe('after')
+  })
+
+  it('拖到目标前面 / 后面，拖的几个保持原来的先后', () => {
+    const shown = ['a', 'b', 'c', 'd']
+    expect(moveProjects([], shown, ['d'], 'a', 'before')).toEqual(['d', 'a', 'b', 'c'])
+    expect(moveProjects([], shown, ['a'], 'c', 'after')).toEqual(['b', 'c', 'a', 'd'])
+    expect(moveProjects([], shown, ['d', 'a'], 'b', 'after')).toEqual(['b', 'a', 'd', 'c'])
+  })
+
+  it('看不到的项目（别的机器的）接在后面，相对先后不变；拖到自己身上不变', () => {
+    expect(moveProjects(['x', 'a', 'y', 'b'], ['a', 'b'], ['b'], 'a', 'before')).toEqual(['b', 'a', 'x', 'y'])
+    expect(moveProjects([], ['a', 'b'], ['a', 'b'], 'b', 'after')).toEqual(['a', 'b'])
+  })
+
+  it('放到分区里的项目旁边就进这个分区，放到外面的项目旁边就移出分区', () => {
+    const state = { groups, order: [] }
+    const shown = ['b', 'd', 'a', 'c', 'e']
+    expect(dropProjects(state, shown, ['a'], 'd', 'before')).toEqual({
+      groups: [{ ...groups[0], projects: ['d', 'b', 'a'] }, groups[1]],
+      order: ['b', 'a', 'd', 'c', 'e'],
+    })
+    expect(dropProjects(state, shown, ['b'], 'e', 'after')).toEqual({
+      groups: [{ ...groups[0], projects: ['d'] }, groups[1]],
+      order: ['d', 'a', 'c', 'e', 'b'],
+    })
+  })
+
+  it('同一个分区里换位置：分区不变，只改先后', () => {
+    const next = dropProjects({ groups, order: [] }, ['b', 'd', 'a'], ['d'], 'b', 'before')
+    expect(next.order).toEqual(['d', 'b', 'a'])
+    expect(next.groups.map(g => [...g.projects].sort())).toEqual([['b', 'd'], ['x']])
+  })
+
+  it('分区换位置；目标不存在或拖到自己身上不变', () => {
+    const three = [...groups, { id: 'g3', name: '三', projects: ['c'] }]
+    expect(moveGroup(three, 'g3', 'g1', 'before').map(g => g.id)).toEqual(['g3', 'g1', 'g2'])
+    expect(moveGroup(three, 'g1', 'g2', 'after').map(g => g.id)).toEqual(['g2', 'g1', 'g3'])
+    expect(moveGroup(three, 'g1', 'g1', 'after')).toEqual(three)
+    expect(moveGroup(three, 'g1', 'nope', 'after')).toEqual(three)
   })
 })
 

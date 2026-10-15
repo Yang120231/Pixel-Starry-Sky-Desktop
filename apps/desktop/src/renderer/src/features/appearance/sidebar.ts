@@ -33,6 +33,8 @@ export interface SidebarPrefs {
   collapsed?: string[]
   /** 侧栏分区：几个项目归成一组（可选，不升版本；docs/ui/sidebar-groups.md） */
   groups?: ProjectGroup[]
+  /** 侧栏里拖出来的项目先后（项目 ID；可选，不升版本）。分区的先后就是 groups 的先后 */
+  order?: string[]
   icons: SidebarIcons
   layout: SidebarLayout
 }
@@ -126,6 +128,8 @@ const GIT_TO_MORE = 'header-git-to-more'
 const RECENT_OFF = 'recent-off'
 /** 记住的收起项目最多这么多个，删掉的项目留下的 ID 不会无限累积 */
 const COLLAPSED_LIMIT = 200
+/** 记住的项目先后最多这么多个 */
+const ORDER_LIMIT = 500
 /** 2026-10-13 之前的默认顶栏（云主机已在读取时丢掉） */
 const OLD_HEADER = 'workbench,channels,git,openIn'
 /** 早已删掉的入口，读原始数据比对时也要先去掉 */
@@ -168,6 +172,10 @@ export function parseSidebarPrefs(value: unknown): SidebarPrefs {
   }
   const groups = parseProjectGroups(saved.groups)
   if (groups.length) result.groups = groups
+  if (Array.isArray(saved.order)) {
+    const ids = saved.order.filter((id): id is string => typeof id === 'string' && !!id && id.length <= 200)
+    if (ids.length) result.order = [...new Set(ids)].slice(0, ORDER_LIMIT)
+  }
   if (saved.icons && typeof saved.icons === 'object' && !Array.isArray(saved.icons)) {
     const icons = saved.icons as Record<string, unknown>
     for (const action of SIDEBAR_ACTIONS) {
@@ -273,6 +281,11 @@ export function setProjectsCollapsed(ids: readonly string[], collapsed: boolean)
 /** 整组替换分区（增删改由 sidebar/projectGroups.ts 的纯函数算好） */
 export function setProjectGroups(groups: ProjectGroup[]): void {
   setSidebarPrefs({ groups })
+}
+
+/** 拖动换位置：分区和项目先后一起存（项目拖进别的分区时两样都变） */
+export function setProjectArrangement(arrangement: { groups: ProjectGroup[]; order: string[] }): void {
+  setSidebarPrefs(arrangement)
 }
 
 export function setSidebarIcon(action: SidebarAction, id: SidebarIconId): void {
