@@ -8,6 +8,7 @@ export const codingTopMessages = {
   'coding.top.cc.placeholder': { zh: '搜索文件、命令和对话', en: 'Search files, commands and chats' },
   'coding.top.cc.open': { zh: '打开命令中心', en: 'Open command center' },
   'coding.top.cc.input': { zh: '命令中心输入框', en: 'Command center input' },
+  'coding.top.cc.enterOpen': { zh: '↵ 打开', en: '↵ Open' },
   'coding.top.cc.hint': {
     zh: '直接输入文件名；> 命令，# 对话，@ 符号，:行号',
     en: 'Type a file name; > commands, # chats, @ symbols, :line',

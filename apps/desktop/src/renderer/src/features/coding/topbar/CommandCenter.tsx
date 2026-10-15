@@ -30,9 +30,10 @@ export function CommandCenterButton() {
         type="button"
         data-command-center-button
         aria-haspopup="dialog"
+        aria-expanded={open}
         aria-label={tr('coding.top.cc.open')}
         onClick={() => setOpen(true)}
-        className="flex h-7 w-full min-w-[200px] max-w-[480px] items-center gap-2 rounded-md border border-line-card bg-subtle px-2 text-list text-fg-muted hover:bg-hover @max-[999px]:w-8 @max-[999px]:min-w-0 @max-[999px]:justify-center @max-[999px]:px-0"
+        className="flex h-7 w-full min-w-[200px] max-w-[480px] items-center gap-2 rounded-md border border-line-card bg-subtle px-2 text-list text-fg-muted hover:bg-hover aria-expanded:border-accent-line @max-[999px]:w-8 @max-[999px]:min-w-0 @max-[999px]:justify-center @max-[999px]:px-0"
       >
         <Search size={14} strokeWidth={1.5} className="shrink-0" />
         <span className="min-w-0 flex-1 truncate text-left @max-[999px]:hidden">{tr('coding.top.cc.placeholder')}</span>
@@ -161,13 +162,18 @@ function CommandCenter({ onClose }: { onClose: () => void }) {
                 onClick={() => pick(hit)}
                 className={cn(
                   'flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-list text-fg',
-                  i === selected && 'bg-hover',
+                  i === selected && 'bg-accent-soft',
                 )}
               >
                 <FileIcon size={14} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
                 <span className="shrink-0">{hit.path.slice(slash + 1)}</span>
                 {slash > 0 && (
                   <span className="min-w-0 truncate text-meta text-fg-muted">{hit.path.slice(0, slash)}</span>
+                )}
+                {i === selected && (
+                  <span aria-hidden className="ml-auto shrink-0 pl-2 text-meta text-fg-faint">
+                    {tr('coding.top.cc.enterOpen')}
+                  </span>
                 )}
               </li>
             )
@@ -191,17 +197,23 @@ function CommandCenter({ onClose }: { onClose: () => void }) {
         onMouseDown={e => e.stopPropagation()}
         className="pop-in absolute left-1/2 top-12 w-[600px] max-w-[calc(100vw-32px)] -translate-x-1/2 overflow-hidden rounded-lg border border-line-card bg-popover shadow-menu"
       >
-        <div className="flex items-center gap-2 border-b border-line-layout px-3">
-          <Search size={14} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
-          <input
-            ref={input}
-            value={text}
-            onChange={e => setText(e.target.value)}
-            onKeyDown={onKeyDown}
-            aria-label={tr('coding.top.cc.input')}
-            placeholder={tr('coding.top.cc.placeholder')}
-            className="h-10 min-w-0 flex-1 bg-transparent text-list text-fg outline-none placeholder:text-fg-faint"
-          />
+        {/* 输入框聚焦时强调色描边 + 淡光晕，看得出焦点在这（docs/screenshots/command-center-focus-mock.html 方案 A） */}
+        <div className="px-2 pt-2 pb-1.5">
+          <div
+            data-command-center-field
+            className="flex h-9 items-center gap-2 rounded-md border border-line-card bg-subtle px-2.5 focus-within:border-accent-line focus-within:ring-[3px] focus-within:ring-accent-soft"
+          >
+            <Search size={14} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
+            <input
+              ref={input}
+              value={text}
+              onChange={e => setText(e.target.value)}
+              onKeyDown={onKeyDown}
+              aria-label={tr('coding.top.cc.input')}
+              placeholder={tr('coding.top.cc.placeholder')}
+              className="h-full min-w-0 flex-1 bg-transparent text-list text-fg outline-none placeholder:text-fg-faint"
+            />
+          </div>
         </div>
         {body}
       </div>
