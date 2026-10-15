@@ -18,6 +18,7 @@ import type { HostCache } from './cache'
 import type { HostEvents } from './events'
 import type { HostBranch } from './branch'
 import type { HostGuard } from './guard'
+import type { HostHandoff } from './handoff'
 import type { HostLogin } from './login'
 import type { HostProjects } from './projects'
 import type { HostQuery } from './query'
@@ -33,7 +34,9 @@ export interface EngineHostOptions {
   /** 这个账号在这段时间的全部调用（旧记录按时间补录实扣用，docs/ui/usage.md §11.2）；账号已切换时抛错 */
   platformCalls?: (q: { account: string; from: number; to: number }, signal: AbortSignal) => Promise<RemoteCall[]>
   /** 按项目准备插件 / MCP 配置；返回的临时资源由引擎连接关闭时释放。 */
-  extensions?: (record: SessionRecord) => ExtensionLaunch
+  extensions?: (record: SessionRecord) => ExtensionLaunch | Promise<ExtensionLaunch>
+  /** 这个会话的引擎能不能用 pixelsky_history 工具；交接材料里据此提示新引擎去查更早的对话 */
+  historyTool?: (record: SessionRecord) => boolean
   /** 宿主为单个会话提供平台代理环境，空值使用本机认证。 */
   sessionEnv?: (record: SessionRecord) => NodeJS.ProcessEnv
   /** 像素星空命令行的自带入口（开发时 packages/cli/src/cli.ts；PIXELSKY_CLI_BIN 优先于它，再其次是 PATH 上的 pixelsky） */
@@ -74,6 +77,8 @@ export interface Runtime {
   /** 启动这个进程时的引擎级设置（launchKey）；设置变了，下一条消息前重启进程 */
   sessionLaunch?: string
   pumpFinished: Promise<void> | null
+  /** 这一轮（turnId）是没带交接的斜杠命令：结束时不推进引擎的游标，交接留给下一条普通消息 */
+  holdCursor?: string
 }
 
 export interface HostModules {
@@ -88,6 +93,7 @@ export interface HostModules {
   turn: HostTurn
   sessions: HostSessions
   branch: HostBranch
+  handoff: HostHandoff
   login: HostLogin
 }
 

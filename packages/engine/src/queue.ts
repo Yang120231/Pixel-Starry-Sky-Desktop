@@ -1,5 +1,5 @@
 import type { MessageInput, QueuedMessage, QueueSettings, SendReceipt, SessionRecord } from '@pixelsky/protocol'
-import { EFFORTS, PROVIDER_ID, validateFiles, validateImages } from '@pixelsky/protocol'
+import { EFFORTS, ENGINES, PROVIDER_ID, validateFiles, validateImages } from '@pixelsky/protocol'
 
 export interface QueueFile {
   items: QueuedMessage[]
@@ -12,13 +12,17 @@ export const queueSettings = (r: SessionRecord): QueueSettings => ({
   effort: r.effort,
   platform: r.platform ? { ...r.platform } : null,
   provider: r.provider ? { id: r.provider.id } : null,
+  // 选了别的引擎还没生效时（运行中改的），新消息按新引擎算
+  engine: r.nextEngine ?? r.engine,
 })
 export const sameQueueSettings = (a: QueueSettings, b: QueueSettings): boolean =>
   a.model === b.model &&
   a.effort === b.effort &&
   a.platform?.groupId === b.platform?.groupId &&
   a.platform?.account === b.platform?.account &&
-  (a.provider?.id ?? null) === (b.provider?.id ?? null)
+  (a.provider?.id ?? null) === (b.provider?.id ?? null) &&
+  // 旧排队项没有引擎：按会话当前引擎算，和任何引擎都算相同
+  (a.engine ?? b.engine) === (b.engine ?? a.engine)
 
 export function messageInput(
   input: string | MessageInput,
@@ -49,6 +53,9 @@ export function messageInput(
   const c = s.provider ?? null
   if (c !== null && (typeof c !== 'object' || typeof c.id !== 'string' || !PROVIDER_ID.test(c.id) || p !== null))
     throw new Error('排队消息的额度来源无效')
+  if (s.engine !== undefined && !(typeof s.engine === 'string' && Object.hasOwn(ENGINES, s.engine)))
+    throw new Error('排队消息的引擎无效')
+  const engine = s.engine ?? record.nextEngine ?? record.engine
   return {
     text: v.text.trim(),
     clientMessageId: v.clientMessageId,
@@ -59,6 +66,7 @@ export function messageInput(
       effort: s.effort,
       platform: p ? { groupId: p.groupId, account: p.account } : null,
       provider: c ? { id: c.id } : null,
+      ...(engine ? { engine } : {}),
     },
   }
 }

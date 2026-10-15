@@ -1,3 +1,4 @@
+import type { EngineId } from './base'
 import type { FileAttachment, ImageAttachment, TurnOutcome } from './session'
 import type { TurnUsage } from './usage'
 
@@ -41,6 +42,8 @@ export type Item =
       createdAt: number
       turnId?: string
       mode?: 'normal' | 'guidance'
+      /** 处理这条消息的引擎（跨引擎接力）；旧条目没有，按会话当前引擎处理 */
+      engine?: EngineId
     }
   /** 助手回复，Markdown */
   | { kind: 'assistant'; id: string; text: string; status: ItemStatus }

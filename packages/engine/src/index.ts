@@ -9,6 +9,17 @@ export { CODEX_WINDOW_ENV } from './codex/context-config'
 export { CodexAdapter } from './codex'
 export { PixelAdapter } from './pixel'
 export { searchQuery } from './search'
+export { buildHandoff, handoffEngines, type HandoffInput } from './handoff'
+export {
+  historyOutline,
+  historyRead,
+  historySearch,
+  historyTurns,
+  type HistoryTurn,
+  type OutlineOptions,
+  type ReadOptions,
+  type SearchOptions,
+} from './history'
 export { artifactQuery, collectArtifacts, recordedIn, sessionArtifacts, within } from './artifacts'
 export { UsageStore, USAGE_RETENTION_DAYS, type UsageQuery } from './usage'
 export {

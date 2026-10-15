@@ -82,6 +82,8 @@ export interface ExtensionLaunch {
   key: string
   pluginDirs: string[]
   mcpFile?: string
+  /** 不用逐次审批的工具（Claude 的 permissions.allow 规则），例如只读的对话历史 MCP */
+  allowTools?: string[]
   pathDirs: string[]
   dispose?: () => void
 }

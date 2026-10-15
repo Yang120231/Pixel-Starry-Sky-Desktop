@@ -9,6 +9,7 @@ import * as ipc from '../ipc/guard'
 import { ExtensionService } from './service'
 import { selectedMachine, type AppContext } from '../app/context'
 import { resolveWorkspace } from '../workspace/resolve'
+import { HISTORY_SERVER_NAME, type HistoryServer } from '../engine/history-mcp'
 
 /**
  * 扩展（MCP / 插件 / 技能 / 命令行）的主进程一侧：服务实现在 extensions/service.ts。
@@ -17,7 +18,10 @@ import { resolveWorkspace } from '../workspace/resolve'
 export class Extensions {
   private service: ExtensionService | null = null
 
-  constructor(private readonly ctx: AppContext) {}
+  constructor(
+    private readonly ctx: AppContext,
+    private readonly history: HistoryServer | null = null,
+  ) {}
 
   private env(engine: 'claude' | 'codex' | 'pixel' = 'claude'): Record<string, string> | undefined {
     return this.ctx.engine?.engineConfig()[engine].env
@@ -33,8 +37,25 @@ export class Extensions {
   }
 
   /** 会话启动前：给引擎准备这个工作目录生效的扩展 */
-  prepare(record: SessionRecord): ExtensionLaunch {
-    const launch = this.get().launch(record.cwd, record.engine, this.env(record.engine))
+  async prepare(record: SessionRecord): Promise<ExtensionLaunch> {
+    // 换过引擎的对话：额外挂一个只读的对话历史 MCP 服务器，新引擎可以按需查更早的部分
+    const history = await this.history?.entry(record)
+    const base = this.get().launch(
+      record.cwd,
+      record.engine,
+      this.env(record.engine),
+      history
+        ? {
+            [HISTORY_SERVER_NAME]: {
+              type: 'http',
+              url: history.url,
+              headers: { Authorization: `Bearer ${history.token}` },
+            },
+          }
+        : {},
+    )
+    // 历史工具只读，不用每次查都等用户批准
+    const launch = history ? { ...base, allowTools: [`mcp__${HISTORY_SERVER_NAME}`] } : base
     // 扩展包里的技能：Claude 走生成的插件目录，Codex 走技能目录；没有时 key 和原来一字不差
     const packs = this.ctx.extPacks?.skillLaunch(record.engine)
     if (!packs) return launch

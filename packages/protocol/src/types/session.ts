@@ -50,6 +50,20 @@ export type QueueSettings = Pick<SessionSettings, 'model' | 'effort'> & {
   platform: NonNullable<SessionSettings['platform']> | null
   /** 旧的排队项没有这个字段，按 null 处理 */
   provider?: NonNullable<SessionSettings['provider']> | null
+  /** 这条消息用哪个引擎（跨引擎接力）；旧的排队项没有这个字段，按会话当前引擎处理 */
+  engine?: EngineId
+}
+
+/**
+ * 一个引擎在这段对话里的原生会话（跨引擎接力）：id 是它自己的会话 id，seen 是它上下文里最后一条对话条目的 id
+ * （null 表示它什么都没看到，下次用它时要带上完整交接）。当前引擎的 id 仍以 SessionRecord.engineSessionId 为准
+ */
+export interface EngineSessionState {
+  id: string | null
+  seen: string | null
+  /** 换走时还没生效的回退 / 分叉截断点，换回来时放回记录 */
+  pendingRewind?: string | null
+  pendingFork?: { from: string; at: string } | null
 }
 
 /** 用户输入的图片。Base64 只保存在本地队列 / 引擎发送链路，不进入搜索正文。 */
@@ -139,6 +153,10 @@ export interface SessionRecord extends SessionSettings {
   engine: EngineId
   /** 引擎自己的会话 id（Claude 的 session_id / Codex 的 thread id）；还没启动过引擎时为 null */
   engineSessionId: string | null
+  /** 各引擎的原生会话和读到的位置（跨引擎接力）；旧记录没有，按「当前引擎已看到全部对话」处理 */
+  engineSessions?: Partial<Record<EngineId, EngineSessionState>>
+  /** 运行中或有排队时选了别的引擎：从下一条发出的消息起使用，派发到它时才真正切换；没有时为 null */
+  nextEngine?: EngineId | null
   title: string
   createdAt: number
   updatedAt: number

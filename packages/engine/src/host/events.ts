@@ -116,7 +116,22 @@ export class HostEvents {
       case 'turn_completed': {
         if (event.usage || m.usage.hasPlatformRequests(id, event.turnId))
           m.usage.recordUsage(id, event.turnId, event.outcome, event.usage ?? { models: {}, durationMs: 0 })
+        // 这一轮结束：执行它的引擎看到了对话到现在为止的全部（没带交接的斜杠命令除外，交接留给下一条普通消息；
+        // 失败的一轮不确定引擎收没收到，游标不动，重试时再带一次交接）。旧记录从这里开始有 engineSessions
+        const done = rt.snapshot.record
+        const engine = rt.execution?.engine ?? done.engine
+        const entry = done.engineSessions?.[engine]
+        const held = rt.holdCursor === event.turnId || (event.outcome === 'failed' && !!done.engineSessions)
+        rt.holdCursor = undefined
         this.patchRecord(id, {
+          engineSessions: {
+            ...done.engineSessions,
+            [engine]: {
+              ...entry,
+              id: done.engineSessionId,
+              seen: held ? (entry?.seen ?? null) : (rt.snapshot.items.at(-1)?.id ?? null),
+            },
+          },
           lastOutcome: event.outcome,
           lastError: event.outcome === 'failed' ? (event.error ?? '').slice(0, 500) || null : null,
           updatedAt: Date.now(),
@@ -169,6 +184,7 @@ export class HostEvents {
                 createdAt: Date.now(),
                 mode: event.mode ?? 'guidance',
                 turnId: rt.snapshot.turnId ?? undefined,
+                engine: rt.execution?.engine ?? rt.snapshot.record.engine,
               },
             })
             m.queue.removeQueue(id, input.id, 'accepted')

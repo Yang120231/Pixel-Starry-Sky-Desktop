@@ -635,7 +635,54 @@ describe('EngineHost + Claude（假引擎）', () => {
     expect(spawnArgs()).toHaveLength(0)
   })
 
-  it('这一轮还在跑时不能切换额度来源', async () => {
+  it('这一轮还在跑时可以切换额度来源：记录先改，当前这一轮仍用原来源，下一条消息换进程接上原对话', async () => {
+    writeFileSync(join(root, 'gateway.json'), '{}')
+    const modelLog = join(root, 'models.log')
+    const seen: (string | null)[] = []
+    const host = makeHost(60_000, { FAKE_CLAUDE_MODEL_LOG: modelLog }, r => {
+      seen.push(r.provider?.id ?? r.platform?.account ?? null)
+      return { ANTHROPIC_AUTH_TOKEN: 'loopback-only', PIXELSKY_GATEWAY_SETTINGS: join(root, 'gateway.json') }
+    })
+    const { record } = setup(host)
+    await host.update(record.id, { platform: { groupId: '7', account: 'a@example.com' }, model: 'model-a' })
+    await host.send(record.id, 'slow 慢一点')
+    await waitFor(() => host.open(record.id).state === 'running')
+
+    // 运行中换到自定义接口：不再报错，记录是新来源，正在执行的仍是原来源和原模型
+    await host.update(record.id, { provider: { id: 'p1' }, model: 'deepseek-chat' })
+    expect(host.open(record.id).record).toMatchObject({
+      platform: null,
+      provider: { id: 'p1' },
+      model: 'deepseek-chat',
+    })
+    expect(host.record(record.id)).toMatchObject({
+      platform: { groupId: '7', account: 'a@example.com' },
+      provider: null,
+      model: 'model-a',
+    })
+    expect(host.open(record.id).execution).toMatchObject({ platform: { account: 'a@example.com' }, provider: null })
+    // 还没生效时再改新来源的模型，也不动当前这一轮
+    await host.update(record.id, { model: 'deepseek-reasoner' })
+    expect(host.record(record.id)?.model).toBe('model-a')
+    // 同一来源下的其它设置照旧实时生效
+    await host.update(record.id, { permissionMode: 'ask' })
+    expect(host.record(record.id)?.permissionMode).toBe('ask')
+    expect(host.open(record.id).state).toBe('running')
+    await waitFor(() => turnsDone(record.id) === 1)
+    expect(() => readFileSync(modelLog, 'utf8')).toThrow()
+    expect(spawnArgs()).toHaveLength(1)
+    expect(host.record(record.id)?.provider?.id).toBe('p1')
+
+    // 下一条消息：换进程，--resume 接上原对话，用新来源和新模型
+    await host.send(record.id, '换了来源')
+    await waitFor(() => turnsDone(record.id) === 2)
+    expect(spawnArgs()).toHaveLength(2)
+    expect(spawnArgs()[1]).toEqual(expect.arrayContaining(['--resume', record.id]))
+    expect(spawnArgs()[1][spawnArgs()[1].indexOf('--model') + 1]).toBe('deepseek-reasoner')
+    expect(seen).toEqual(['a@example.com', 'p1'])
+  })
+
+  it('运行中同一账号换分组照旧实时生效，不算换来源', async () => {
     writeFileSync(join(root, 'gateway.json'), '{}')
     const host = makeHost(60_000, {}, () => ({
       ANTHROPIC_AUTH_TOKEN: 'loopback-only',
@@ -644,11 +691,13 @@ describe('EngineHost + Claude（假引擎）', () => {
     const { record } = setup(host)
     await host.update(record.id, { platform: { groupId: '7', account: 'a@example.com' } })
     await host.send(record.id, 'slow 慢一点')
-    await expect(host.update(record.id, { platform: null })).rejects.toThrow('这一轮结束后')
-    await host.interrupt(record.id)
+    await waitFor(() => host.open(record.id).state === 'running')
+    await host.update(record.id, { platform: { groupId: '9', account: 'a@example.com' } })
+    expect(host.record(record.id)?.platform?.groupId).toBe('9')
     await waitFor(() => turnsDone(record.id) === 1)
-    expect(host.record(record.id)?.platform?.groupId).toBe('7')
+    expect(spawnArgs()).toHaveLength(1)
   })
+
   it('发一条消息：流式回复、标题、引擎会话 id、保存后能重新读出', async () => {
     const host = makeHost()
     const { record } = setup(host)
@@ -1153,9 +1202,9 @@ describe('回退到某条用户消息之前（Claude 假引擎，模拟真实记
     await host.rewind(record.id, 'lost-a')
     expect(host.open(record.id).record.engineSessionId).not.toBe(oldSid)
     expect(host.open(record.id).record.pendingRewind).toBeNull()
-    expect(host.open(record.id).items.some(i => i.kind === 'notice' && i.text.includes('之前的上下文没有带过去'))).toBe(
-      true,
-    )
+    // 回到最开头：没有保留的对话，不用提示也不用交接
+    expect(host.open(record.id).items.some(i => i.kind === 'notice')).toBe(false)
+    expect(host.open(record.id).record.engineSessions?.claude?.seen).toBeNull()
   })
 
   it('截断点在引擎记录里找不到时换新的引擎会话并提示，不再重复失败', async () => {

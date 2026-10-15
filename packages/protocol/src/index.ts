@@ -37,6 +37,7 @@ export type {
   PermissionMode,
   ProjectRecord,
   AddProjectsResult,
+  EngineSessionState,
   ProjectFolder,
   Question,
   QuestionOption,

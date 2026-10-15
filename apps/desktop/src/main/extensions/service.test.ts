@@ -94,6 +94,62 @@ describe('管理配置与凭据', () => {
     launch.dispose?.()
     expect(existsSync(launch.mcpFile!)).toBe(false)
   })
+  it('额外 MCP 服务器（对话历史）：Claude 只有它时也写文件，Codex 凭据走环境变量，key 随地址变化且不含令牌', () => {
+    const history = (port: number, token = 'history-secret') => ({
+      pixelsky_history: {
+        type: 'http' as const,
+        url: `http://127.0.0.1:${port}/mcp`,
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    })
+    const none = service.launch(project, 'claude')
+    expect(none.mcpFile).toBeUndefined()
+    const cc = service.launch(project, 'claude', {}, history(5001))
+    expect(JSON.parse(readFileSync(cc.mcpFile!, 'utf8')).mcpServers.pixelsky_history).toEqual(
+      history(5001).pixelsky_history,
+    )
+    expect(cc.key).toBe(none.key + '|pixelsky_history:http://127.0.0.1:5001/mcp')
+    expect(cc.key).not.toContain('history-secret')
+    const moved = service.launch(project, 'claude', {}, history(5002))
+    expect(moved.key).not.toBe(cc.key)
+    expect(service.launch(project, 'claude', {}, history(5001, 'other-token')).key).toBe(cc.key)
+    cc.dispose?.()
+    moved.dispose?.()
+    expect(existsSync(cc.mcpFile!)).toBe(false)
+
+    const cx = service.launch(project, 'codex', {}, history(5001))
+    expect(cx.codexConfig?.['mcp_servers."pixelsky_history"']).toMatchObject({
+      url: 'http://127.0.0.1:5001/mcp',
+      env_http_headers: { Authorization: expect.stringMatching(/^PIXELSKY_MCP_SECRET_\d+$/) },
+    })
+    expect(Object.values(cx.env ?? {})).toEqual(['Bearer history-secret'])
+    expect(JSON.stringify(cx.codexConfig)).not.toContain('history-secret')
+    expect(cx.key).toBe(service.launch(project, 'codex').key + '|pixelsky_history:http://127.0.0.1:5001/mcp')
+  })
+  it('额外 MCP 服务器与扩展配置的服务器并存，同名时以应用提供的为准', () => {
+    service.upsert({
+      kind: 'mcp',
+      name: 'pixelsky_history',
+      scope: global,
+      mcp: { type: 'http', url: 'https://example.com/fake' },
+    })
+    service.upsert({
+      kind: 'mcp',
+      name: 'remote',
+      scope: global,
+      mcp: { type: 'http', url: 'https://example.com/mcp' },
+    })
+    const launch = service.launch(
+      project,
+      'claude',
+      {},
+      { pixelsky_history: { type: 'http', url: 'http://127.0.0.1:1/mcp' } },
+    )
+    const servers = JSON.parse(readFileSync(launch.mcpFile!, 'utf8')).mcpServers
+    expect(servers.remote.url).toBe('https://example.com/mcp')
+    expect(servers.pixelsky_history.url).toBe('http://127.0.0.1:1/mcp')
+    launch.dispose?.()
+  })
   it('相同范围重复失败，项目覆盖全局；其他项目变更不改变启动签名', () => {
     const config = { kind: 'mcp', name: 'remote', scope: global, mcp: { type: 'http', url: 'https://example.com/mcp' } }
     service.upsert(config)
