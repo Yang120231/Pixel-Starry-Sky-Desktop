@@ -2,10 +2,12 @@ import { translateMessage } from '../../i18n/core'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
 // 输入框上方的额度来源提示条（docs/ui/source-switch.md §3.4、§3.5）：
-// - 已开始的会话切换平台 / 自有前的确认（会重启引擎并接上原对话）；
+// - 已开始的会话切换平台 / 自有 / 引擎前的确认（换来源会重启引擎并接上原对话，换引擎会把之前的对话交接过去；运行中换的从下一条消息生效）；
+// - 运行中换了来源 / 引擎后的「下一条消息使用 ××」提示，可撤销；
 // - 发送前就知道会失败的情况 + 一键按钮。平台失败从不自动改用自有，按钮让用户自己选。
 import { useState, type ReactNode } from 'react'
 import { ArrowLeftRight, CircleAlert, TriangleAlert } from 'lucide-react'
+import { ENGINES } from '@pixelsky/protocol'
 import { Spinner, cn } from '@/ui'
 import { useAccount } from '@/features/account/useAccount'
 import { groupsForModel, refreshPlatform, usePlatform, type CreditSource } from '@/features/account/platform'
@@ -92,7 +94,9 @@ export function SourceHintBar({
 }) {
   useI18n()
   const account = useAccount()
-  const platform = usePlatform(live.engine?.id ?? 'claude')
+  // 确认换引擎时，线路和接口按要换去的那个引擎的目录来找
+  const targetEngineId = confirm?.choice?.engine ?? live.engine?.id ?? 'claude'
+  const platform = usePlatform(targetEngineId)
   const settings = useSettings()
   const providers = useProviders()
   const [busy, setBusy] = useState(false)
@@ -106,15 +110,24 @@ export function SourceHintBar({
       ? (platform.groups.find(g => g.id === live.groupId && g.models.includes(target)) ??
         groupsForModel(platform.groups, target)[0])
       : platform.groups.find(g => g.id === (live.groupId ?? platform.groupId))
-    const endpoints = providersFor(providers.providers, live.engine?.id ?? 'claude')
+    const endpoints = providersFor(providers.providers, targetEngineId)
     const endpoint = endpoints.find(p => p.id === (confirm.choice?.providerId ?? platform.providerId)) ?? endpoints[0]
-    const label = confirm.choice
-      ? channelLabel(confirm.choice.channel)
-      : confirm.source === 'self'
-        ? tr('session.ModelSourceMenu.ownAccount')
-        : confirm.source === 'custom'
-          ? tr('customApi.source')
-          : tr('session.ModelSourceMenu.platform')
+    // 换引擎：之前的对话交接给新引擎（回到用过的引擎时接上它自己的会话）
+    const switchEngine = !!confirm.choice && confirm.choice.engine !== live.engine?.id
+    const nextEngineName = switchEngine
+      ? (live.engines.find(e => e.id === targetEngineId)?.name ?? ENGINES[targetEngineId].name)
+      : ''
+    const fromEngineName = live.sessionEngine?.name ?? engineName
+    const sourceChanged = !switchEngine || confirm.choice?.channel !== live.channel
+    const label = switchEngine
+      ? nextEngineName
+      : confirm.choice
+        ? channelLabel(confirm.choice.channel)
+        : confirm.source === 'self'
+          ? tr('session.ModelSourceMenu.ownAccount')
+          : confirm.source === 'custom'
+            ? tr('customApi.source')
+            : tr('session.ModelSourceMenu.platform')
     const apply = (): void => {
       setBusy(true)
       setError(null)
@@ -137,18 +150,75 @@ export function SourceHintBar({
         }
       >
         <div className="font-medium text-fg">
-          {tr('session.SourceHintBar.switchTo2')}
-          {label}
-          {tr('session.SourceHintBar.toContinueThisConversation')}
+          {switchEngine ? (
+            tr('session.SourceHintBar.switchEngineTitle', { p0: nextEngineName })
+          ) : (
+            <>
+              {tr('session.SourceHintBar.switchTo2')}
+              {label}
+              {tr('session.SourceHintBar.toContinueThisConversation')}
+            </>
+          )}
         </div>
         <div>
-          {confirm.source === 'self'
-            ? tr('session.SourceHintBar.futureRequestsAreBilled', { p0: engineName })
-            : confirm.source === 'custom'
-              ? tr('customApi.futureRequests', { p0: endpoint?.name ?? '' })
-              : tr('session.SourceHintBar.futureRequestsUsePlatform', { p0: route ? `线路「${route.name}」` : '' })}
-          {tr('session.SourceHintBar.engineRestartsAndResumes')}{' '}
+          {switchEngine &&
+            tr(
+              live.engineHasSession(targetEngineId)
+                ? 'session.SourceHintBar.switchEngineBodyResume'
+                : 'session.SourceHintBar.switchEngineBody',
+              { p0: nextEngineName, p1: fromEngineName },
+            )}
+          {switchEngine && ' '}
+          {sourceChanged &&
+            (confirm.source === 'self'
+              ? tr('session.SourceHintBar.futureRequestsAreBilled', { p0: nextEngineName || engineName })
+              : confirm.source === 'custom'
+                ? tr('customApi.futureRequests', { p0: endpoint?.name ?? '' })
+                : tr('session.SourceHintBar.futureRequestsUsePlatform', {
+                    p0: route ? `线路「${route.name}」` : '',
+                  }))}
+          {switchEngine
+            ? live.running && tr('session.SourceHintBar.switchEngineNextMessage')
+            : live.running
+              ? tr('session.SourceHintBar.takesEffectFromNextMessage')
+              : tr('session.SourceHintBar.engineRestartsAndResumes')}{' '}
         </div>
+        {error && <div className="text-danger">{translateMessage(error)}</div>}
+      </Bar>
+    )
+  }
+
+  const pending = live.pendingSource
+  const pendingEngine = live.pendingEngine
+  if (pending || pendingEngine) {
+    const sourceLabel = pending
+      ? pending.source === 'self'
+        ? tr('session.ModelSourceMenu.ownAccount')
+        : `${pending.source === 'custom' ? tr('customApi.source') : tr('session.ModelSourceMenu.platform')}${pending.name ? ` · ${pending.name}` : ''}`
+      : ''
+    // 换引擎和换来源一起记着时合成一条：引擎在前、来源在后；撤销一次两个都还原（引擎先改回，来源再改回原来正在跑的）
+    const label = pendingEngine
+      ? pending
+        ? `${pendingEngine.name} · ${sourceLabel}`
+        : pendingEngine.name
+      : sourceLabel
+    const undo = (): void => {
+      setBusy(true)
+      setError(null)
+      ;(pendingEngine ? pendingEngine.undo() : Promise.resolve())
+        .then(() => pending?.undo())
+        .catch((e: unknown) => setError((e as Error).message))
+        .finally(() => setBusy(false))
+    }
+    return (
+      <Bar
+        tone="info"
+        icon={<ArrowLeftRight size={14} />}
+        actions={<Action onClick={undo}>{busy ? <Spinner /> : tr('session.SourceHintBar.undoSwitch')}</Action>}
+      >
+        {tr(pendingEngine ? 'session.SourceHintBar.nextMessageUsesEngine' : 'session.SourceHintBar.nextMessageUses', {
+          p0: label,
+        })}
         {error && <div className="text-danger">{translateMessage(error)}</div>}
       </Bar>
     )

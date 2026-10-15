@@ -165,12 +165,37 @@ export class HostSessions {
     id: string,
     patch: Partial<SessionSettings> & { title?: string; engine?: EngineId },
   ): Promise<SessionRecord> {
-    const m = this.ctx.m
+    const { ctx } = this
+    const m = ctx.m
     const rt = this.runtime(id)
     if (rt.inspectingContext) throw new Error('上下文诊断正在刷新，完成后再修改会话设置')
-    const current = rt.snapshot.record
+    let current = rt.snapshot.record
     const next: Partial<SessionRecord> = {}
     let restart = false
+    const running = rt.snapshot.state !== 'idle' || rt.pumping
+    // 换引擎（跨引擎接力）：没开始过的会话直接改；开始过且空闲的现在就换；忙的记下来，从下一条派发的消息起生效
+    if (patch.engine !== undefined) {
+      if (patch.engine === current.engine) {
+        if (current.nextEngine) next.nextEngine = null
+      } else if (
+        rt.snapshot.items.length === 0 &&
+        !rt.session &&
+        !rt.pumping &&
+        rt.snapshot.queue.length === 0 &&
+        !current.nextEngine
+      )
+        next.engine = patch.engine
+      else if (!running && !rt.stopping && !rt.activeId && rt.snapshot.queue.length === 0) {
+        if (ctx.changingSessions.has(id)) throw new Error('正在处理这个会话，请稍后重试')
+        ctx.changingSessions.add(id)
+        try {
+          await m.handoff.switchEngine(id, patch.engine)
+        } finally {
+          ctx.changingSessions.delete(id)
+        }
+        current = rt.snapshot.record
+      } else next.nextEngine = patch.engine
+    }
     // 平台和自定义 API 互斥：设了一边就清掉另一边（docs/ui/custom-api.md §4.2）
     let platform = patch.platform !== undefined ? patch.platform : (current.platform ?? null)
     let provider = patch.provider !== undefined ? patch.provider : (current.provider ?? null)
@@ -183,10 +208,11 @@ export class HostSessions {
       JSON.stringify(platform) !== JSON.stringify(current.platform ?? null) ||
       (provider?.id ?? null) !== (current.provider?.id ?? null)
     if (changed) {
-      // 同一账号换分组、同一来源不变时不用换进程；换了账号或来源种类等这一轮结束后重启
+      // 同一账号换分组、同一来源不变时不用换进程；换了账号或来源种类要换进程。
+      // 运行中换来源：记录先改，当前这一轮仍用原来源（执行设置、网关路由、模型都不动），
+      // 下一条消息派发时 pump 比对 sourceKey 换进程接上原对话；空闲时现在就关进程
       const sameSource = sourceKey({ platform, provider }) === sourceKey(current)
-      if (!sameSource && (rt.snapshot.state !== 'idle' || rt.pumping)) throw new Error('这一轮结束后再切换额度来源')
-      if (!sameSource && rt.session) restart = true
+      if (!sameSource && !running && rt.session) restart = true
       next.platform = platform
       next.provider = provider ? { id: provider.id } : null
     }
@@ -200,14 +226,25 @@ export class HostSessions {
     if (patch.ultracode !== undefined) next.ultracode = patch.ultracode
     if (patch.fast !== undefined) next.fast = patch.fast
     if (patch.thinkingSummaries !== undefined) next.thinkingSummaries = patch.thinkingSummaries
-    if (patch.engine !== undefined && patch.engine !== current.engine) {
-      if (rt.snapshot.items.length > 0 || rt.session || rt.pumping || rt.snapshot.queue.length > 0)
-        throw new Error('已经开始对话或有排队任务的会话不能换引擎，请新建会话')
-      next.engine = patch.engine
-    }
+    // 运行中且新来源（或新引擎）和正在用的不同（这次换的，或之前换了还没生效）：model / effort 属于新来源，
+    // 不动执行设置，也不发给还在用旧来源的进程
+    const inUse = rt.execution ? sourceKey(rt.execution) : rt.session ? rt.sessionSource : undefined
+    const nextEngine = next.nextEngine !== undefined ? next.nextEngine : current.nextEngine
+    const deferred =
+      running &&
+      ((inUse !== undefined && inUse !== sourceKey({ platform, provider })) ||
+        (nextEngine ?? current.engine) !== (rt.execution?.engine ?? current.engine))
     const record = m.events.patchRecord(id, next)
     if (rt.execution) {
       const applied = { ...next }
+      // 还没生效的引擎选择不进执行设置（正在执行的还是原来的引擎）
+      delete applied.nextEngine
+      if (deferred) {
+        delete applied.platform
+        delete applied.provider
+        delete applied.model
+        delete applied.effort
+      }
       if (!ENGINES[current.engine].caps.liveModelSwitch && rt.snapshot.state !== 'idle') {
         delete applied.model
         delete applied.effort
@@ -237,11 +274,18 @@ export class HostSessions {
       // 模型和权限记住用户的选择，作为以后新会话的默认值；推理强度那几项只影响这个会话，
       // 要「设为默认」才改默认值，除非这个引擎打开了「记住会话里的选择」（GitHub #6）
       const remembered: Partial<SessionSettings> = { ...settings }
-      if (!m.settings.remembersChoices(record.engine)) for (const k of EFFORT_PANEL_KEYS) delete remembered[k]
+      // 记在目标引擎名下（运行中选了别的引擎还没生效时，也算它的）
+      const target = record.nextEngine ?? record.engine
+      if (!m.settings.remembersChoices(target)) for (const k of EFFORT_PANEL_KEYS) delete remembered[k]
       // 完全放行只管这个对话，不记成新会话的默认；要默认完全放行得在设置里明确改（docs/ui/full-access-confirm.md）
       if (remembered.permissionMode === 'full') delete remembered.permissionMode
-      if (Object.keys(remembered).length > 0) m.settings.setDefaults({ ...remembered, engine: record.engine })
-      await rt.session?.update(settings)
+      if (Object.keys(remembered).length > 0) m.settings.setDefaults({ ...remembered, engine: target })
+      const live = { ...settings }
+      if (deferred) {
+        delete live.model
+        delete live.effort
+      }
+      if (Object.keys(live).length > 0) await rt.session?.update(live)
     }
     return record
   }

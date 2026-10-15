@@ -50,6 +50,7 @@ import { HostCache } from './cache'
 import type { EngineHostOptions, HostContext, HostModules, Runtime } from './context'
 import { HostEvents } from './events'
 import { HostGuard } from './guard'
+import { HostHandoff } from './handoff'
 import { HostLogin } from './login'
 import { HostProjects } from './projects'
 import { HostQuery } from './query'
@@ -130,6 +131,7 @@ export class EngineHost {
       turn: new HostTurn(ctx),
       sessions: new HostSessions(ctx),
       branch: new HostBranch(ctx),
+      handoff: new HostHandoff(ctx),
       login: new HostLogin(ctx),
     }
     for (const r of store.loadRecords()) ctx.records.set(r.id, r)
@@ -319,6 +321,11 @@ export class EngineHost {
   /** 当前快照 */
   open(id: string): SessionSnapshot {
     return this.m.sessions.open(id)
+  }
+
+  /** 会话的全部条目（只读副本，没加载过就从存储读）；给对话历史工具用 */
+  historyItems(id: string): Item[] {
+    return [...this.m.sessions.open(id).items]
   }
 
   /** 打开会话（给界面用）：快照 + 序号，之后界面只应用序号更大的事件 */

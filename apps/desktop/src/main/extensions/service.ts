@@ -499,6 +499,7 @@ export class ExtensionService {
     project: string,
     engine: 'claude' | 'codex' | 'pixel' = 'claude',
     extraEnv: Record<string, string> = {},
+    extraServers: Record<string, McpConfig> = {},
   ): ExtensionLaunch {
     project = realpathSync(project)
     const env = { ...this.runtimeEnv(project), ...extraEnv }
@@ -528,11 +529,18 @@ export class ExtensionService {
       if (e.kind === 'cli' && e.check?.status === 'ready') pathDirs.push(dirname(program(e.command!, this.env())))
       for (const c of e.components.filter(c => c.kind === 'cli' && c.path)) pathDirs.push(c.path!)
     }
+    // 应用自己提供的 MCP 服务器（对话历史等）：不进扩展配置，也不能被同名的扩展盖掉；key 带上地址，变了就换进程（令牌不进 key）
+    Object.assign(servers, structuredClone(extraServers))
+    const extraKey = Object.entries(extraServers)
+      .map(([name, c]) => `|${name}:${c.url ?? c.command ?? ''}`)
+      .join('')
     let file: string | undefined
     if (engine === 'codex') {
       const { codexConfig, env: secretEnv } = codexMcp(servers, env)
       return {
-        key: JSON.stringify(entries.map(e => [e.id, e.revision, e.digest, e.enabled, e.mcp, e.command, e.args])),
+        key:
+          JSON.stringify(entries.map(e => [e.id, e.revision, e.digest, e.enabled, e.mcp, e.command, e.args])) +
+          extraKey,
         pluginDirs: [],
         pathDirs: [...new Set(pathDirs)],
         skillRoots,
@@ -545,18 +553,19 @@ export class ExtensionService {
       writeFileSync(file, JSON.stringify({ mcpServers: servers }), { mode: 0o600 })
     }
     return {
-      key: JSON.stringify(
-        entries.map(e => [
-          e.id,
-          e.revision,
-          e.digest,
-          e.enabled,
-          e.mcp,
-          e.command,
-          e.args,
-          e.kind === 'cli' ? e.check?.status : null,
-        ]),
-      ),
+      key:
+        JSON.stringify(
+          entries.map(e => [
+            e.id,
+            e.revision,
+            e.digest,
+            e.enabled,
+            e.mcp,
+            e.command,
+            e.args,
+            e.kind === 'cli' ? e.check?.status : null,
+          ]),
+        ) + extraKey,
       pluginDirs,
       pathDirs: [...new Set(pathDirs)],
       mcpFile: file,

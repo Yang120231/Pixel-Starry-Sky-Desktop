@@ -224,10 +224,15 @@ export function Composer({
     if (live.started) setConfirmSource({ source: next, choice: null })
     else void live.setSource(next).catch((e: unknown) => setError((e as Error).message))
   }
-  /** 模型菜单里换到别的通道：已开始的对话先确认（会重启引擎并接上原对话，docs/ui/model-channels.md §2.3） */
+  /**
+   * 模型菜单里换到别的通道 / 引擎：已开始的对话先确认（换通道会重启引擎并接上原对话，换引擎会把之前的对话交接过去，
+   * docs/ui/model-channels.md §2.3）。已记着「下一条消息换引擎」时选回原来的引擎只是撤销，同通道就不用确认
+   */
   const requestChoice = (choice: ChannelChoice): void => {
     if (!live) return
-    if (live.started) setConfirmSource({ source: sourceOfChannel(choice.channel), choice })
+    const undoEngine =
+      !!live.pendingEngine && choice.engine === live.sessionEngine?.id && choice.channel === live.channel
+    if (live.started && !undoEngine) setConfirmSource({ source: sourceOfChannel(choice.channel), choice })
     else void live.applyChoice(choice).catch((e: unknown) => setError((e as Error).message))
   }
 
@@ -896,7 +901,7 @@ export function Composer({
               onClick={() => comingSoon(translate('语音输入'))}
             />
           )}
-          <ContextWindowButton sessionId={sessionId} />
+          <ContextWindowButton sessionId={sessionId} engine={(live ?? demoSource).engine?.id ?? 'claude'} />
         </div>
         {chatgpt && sendControls}
       </div>

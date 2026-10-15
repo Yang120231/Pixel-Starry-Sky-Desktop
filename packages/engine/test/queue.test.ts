@@ -205,7 +205,11 @@ describe('消息队列：调度与恢复', () => {
       })
     await send('a')
     await until(() => !!ready)
-    await expect(host.update(record.id, { engine: 'codex' })).rejects.toThrow('排队任务')
+    // 派发中选别的引擎不再报错：记成下一条消息起用的引擎，改回当前引擎就清掉
+    await host.update(record.id, { engine: 'codex' })
+    expect(host.open(record.id).record).toMatchObject({ engine: 'claude', nextEngine: 'codex' })
+    await host.update(record.id, { engine: 'claude' })
+    expect(host.open(record.id).record.nextEngine).toBeNull()
     await send('b')
     await host.interrupt(record.id)
     ready()

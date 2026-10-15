@@ -21,6 +21,7 @@ import { initPlatform, validateQueuedInput } from '../platform/platform'
 import { initProviders } from '../providers/providers'
 import { initAi } from '../ai/ipc'
 import { Extensions } from '../extensions/ipc'
+import { historyEnabled, historyServer } from './history-mcp'
 import { bundledPixelCli } from './pixel-cli'
 import { initTerminalIpc } from '../terminal/ipc'
 import { initMachines } from '../machines/service'
@@ -54,7 +55,10 @@ export async function initEngine(ctx: AppContext): Promise<void> {
     },
     ctx.providers,
   )
-  const extensions = new Extensions(ctx)
+  // 对话历史 MCP 服务：第一次有换过引擎的对话要派发消息时才启动
+  const history = historyServer(ctx)
+  app.on('will-quit', () => history.close())
+  const extensions = new Extensions(ctx, history)
   const h = new EngineHost({
     dataDir: join(app.getPath('userData'), 'engine'),
     pixelCli: bundledPixelCli(),
@@ -73,6 +77,7 @@ export async function initEngine(ctx: AppContext): Promise<void> {
         ? ctx.providers?.get(record.provider.id)?.models.find(m => m.id === model.replace(/\[1m\]$/i, ''))?.priceRef
         : null,
     extensions: record => extensions.prepare(record),
+    historyTool: historyEnabled,
     platformCharges,
     platformCalls,
     latestVersion: npmLatest,

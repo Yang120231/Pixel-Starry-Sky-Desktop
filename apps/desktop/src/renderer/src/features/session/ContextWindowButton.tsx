@@ -4,7 +4,7 @@ import { tr } from '../../i18n/core'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, ChevronRight, FolderOpen, RefreshCw, Scissors, X } from 'lucide-react'
-import type { ContextDetail, ContextDetailLevel, ContextWindow } from '@pixelsky/protocol'
+import type { ContextDetail, ContextDetailLevel, ContextWindow, EngineId } from '@pixelsky/protocol'
 import { ContextRing, cn, useToast } from '@/ui'
 import { bridge, useSession } from '@/features/engine'
 import { isDemo } from '@/data'
@@ -56,7 +56,7 @@ function demoRefreshed(context: ContextWindow, n: number): ContextWindow {
   }
 }
 
-export function ContextWindowButton({ sessionId }: { sessionId: string | null }) {
+export function ContextWindowButton({ sessionId, engine }: { sessionId: string | null; engine: EngineId }) {
   useI18n()
   const toast = useToast()
   const settings = useSettings()
@@ -558,13 +558,13 @@ export function ContextWindowButton({ sessionId }: { sessionId: string | null })
                   : ''}
                 {isDemo ? tr('session.ContextWindowButton.demoData') : ''}
               </p>
-              {/* 按这个会话的来源跳到填上下文窗口的地方（GitHub #20） */}
+              {/* 跟随输入框当前的执行引擎，未创建会话时也能打开对应详情。 */}
               <button
                 type="button"
                 data-context-settings
                 onClick={() => {
                   setOpen(false)
-                  openContextSettings(snapshot?.record ?? null, settings.openSettings)
+                  openContextSettings(engine, settings.openSettings)
                 }}
                 className="shrink-0 text-label text-accent-fg hover:underline"
               >

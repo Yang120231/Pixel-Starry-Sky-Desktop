@@ -4,6 +4,8 @@ import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } 
 import { dirname, isAbsolute, relative } from 'node:path'
 import { normalizeSessionTitle } from '@pixelsky/protocol'
 import type {
+  EngineId,
+  EngineSessionState,
   ForkResult,
   Item,
   RewindCodePreview,
@@ -15,6 +17,7 @@ import type {
 } from '@pixelsky/protocol'
 import { ENGINES } from '../registry'
 import type { HostContext } from './context'
+import { derivedSeen, lastItemId } from './handoff'
 
 /** 还原代码前存一份当前内容，总共超过这个大小就不提供代码撤销 */
 export const UNDO_LIMIT = 20 * 1024 * 1024
@@ -24,9 +27,9 @@ interface UndoEntry {
   removed: Item[]
   /** 回退时保留的条目数（之后回退可能加了一条提示，撤销时去掉） */
   kept: number
-  before: Pick<SessionRecord, 'engineSessionId' | 'pendingRewind' | 'pendingFork'>
+  before: RewindState
   /** 回退后的状态：撤销时要求没变（没发新消息、引擎没接着跑） */
-  after: Pick<SessionRecord, 'engineSessionId' | 'pendingRewind' | 'pendingFork'> & {
+  after: RewindState & {
     count: number
     lastId: string | null
   }
@@ -35,6 +38,20 @@ interface UndoEntry {
 }
 
 type UserItem = Extract<Item, { kind: 'user' }>
+
+/** 回退会动到的会话记录字段（撤销时整体放回） */
+type RewindState = Pick<
+  SessionRecord,
+  'engineSessionId' | 'pendingRewind' | 'pendingFork' | 'engineSessions' | 'nextEngine'
+>
+
+const rewindState = (record: SessionRecord): RewindState => ({
+  engineSessionId: record.engineSessionId,
+  pendingRewind: record.pendingRewind ?? null,
+  pendingFork: record.pendingFork ?? null,
+  engineSessions: record.engineSessions,
+  nextEngine: record.nextEngine ?? null,
+})
 
 export class HostBranch {
   /** 每个会话最近一次回退，只在内存里（重启后不能撤销） */
@@ -142,11 +159,7 @@ export class HostBranch {
     if (!ENGINES[record.engine].caps.rewind) throw new Error('当前引擎暂不支持回退')
     if (!options.conversation && !options.code) throw new Error('请选择要恢复的内容')
     const { index, target } = this.userItem(id, userItemId)
-    const before = {
-      engineSessionId: record.engineSessionId,
-      pendingRewind: record.pendingRewind ?? null,
-      pendingFork: record.pendingFork ?? null,
-    }
+    const before = rewindState(record)
     ctx.changingSessions.add(id)
     try {
       await this.closeProcess(id)
@@ -170,9 +183,7 @@ export class HostBranch {
         kept: options.conversation ? index : now.items.length,
         before,
         after: {
-          engineSessionId: now.record.engineSessionId,
-          pendingRewind: now.record.pendingRewind ?? null,
-          pendingFork: now.record.pendingFork ?? null,
+          ...rewindState(now.record),
           count: now.items.length,
           lastId: now.items.at(-1)?.id ?? null,
         },
@@ -221,47 +232,76 @@ export class HostBranch {
     const rt = m.sessions.runtime(id)
     const record = rt.snapshot.record
     const adapter = ctx.adapters[record.engine]
-    const dropped = rt.snapshot.items.slice(index).flatMap(item => (item.kind === 'user' ? [item.id] : []))
+    // 只算当前引擎处理过的用户消息：其他引擎处理的不在它的上下文里，不用在它的记录里回退
+    const dropped = rt.snapshot.items
+      .slice(index)
+      .flatMap(item => (item.kind === 'user' && (item.engine ?? record.engine) === record.engine ? [item.id] : []))
     // Codex 要起临时进程读轮次，所以可能是异步的
     // 分叉出来还没启动的会话（Codex）没有自己的线程：截断点要回到来源线程里重新算
     const forkOnly = !record.engineSessionId && record.pendingFork ? record.pendingFork : null
     const thread = record.engineSessionId ?? forkOnly?.from ?? null
-    const anchor = thread ? await adapter?.rewindAnchor?.({ ...record, engineSessionId: thread }, dropped) : null
+    // 被回退的消息都不是当前引擎处理的：它的原生会话原样保留
+    const untouched = !!thread && dropped.length === 0
+    const anchor =
+      thread && !untouched ? await adapter?.rewindAnchor?.({ ...record, engineSessionId: thread }, dropped) : null
     // 引擎自己分配会话 id（Codex）时写 null，启动时新建；其他引擎我们预先给一个
     const freshId = (): string | null => (adapter?.enginePicksSessionId ? null : randomUUID())
-    ctx.store.replaceItems(id, rt.snapshot.items.slice(0, index))
+    const kept = rt.snapshot.items.slice(0, index)
+    // 回退前当前引擎读到哪里：旧记录（没有 engineSessions）读到了全部对话
+    const old = record.engineSessions
+    const oldEntry = old?.[record.engine]
+    const oldSeen = oldEntry ? oldEntry.seen : old ? null : lastItemId(rt.snapshot.items)
+    ctx.store.replaceItems(id, kept)
     m.events.apply(id, { type: 'items_truncated', fromItemId: userItemId })
     m.cache.reset(id)
     // Missing native records must never silently preserve the discarded context.
-    if (anchor && forkOnly)
-      m.events.patchRecord(
-        id,
-        anchor.at
-          ? { pendingFork: { from: forkOnly.from, at: anchor.at } }
-          : { engineSessionId: freshId(), pendingRewind: null, pendingFork: null },
-      )
-    else if (anchor)
-      m.events.patchRecord(
-        id,
-        anchor.at ? { pendingRewind: anchor.at } : { engineSessionId: freshId(), pendingRewind: null },
-      )
-    else {
-      m.events.patchRecord(id, {
+    let patch: Partial<SessionRecord>
+    // 引擎原生记录里的截断点找到了：它的上下文保留到那里
+    let worked = untouched
+    if (untouched) patch = {}
+    else if (anchor && forkOnly) {
+      worked = !!anchor.at
+      patch = anchor.at
+        ? { pendingFork: { from: forkOnly.from, at: anchor.at } }
+        : { engineSessionId: freshId(), pendingRewind: null, pendingFork: null }
+    } else if (anchor) {
+      worked = !!anchor.at
+      patch = anchor.at ? { pendingRewind: anchor.at } : { engineSessionId: freshId(), pendingRewind: null }
+    } else
+      patch = {
         engineSessionId: freshId(),
         pendingRewind: null,
         ...(forkOnly ? { pendingFork: null } : {}),
-      })
-      if (thread)
-        m.events.apply(id, {
-          type: 'item_completed',
-          item: {
-            kind: 'notice',
-            id: randomUUID(),
-            level: 'warn',
-            text: `无法在 ${ENGINES[record.engine].name} 记录中回退到这条消息，已开始新的引擎会话（之前的上下文没有带过去）`,
-          },
-        })
+      }
+    // 跨引擎游标：当前引擎没接上就是新会话，什么都没看到，下一条消息带完整交接；
+    // 接上了：原来读到的位置还在保留的对话里就不变，否则退回到它最后处理的那一轮的末尾
+    const keptIds = new Set(kept.map(item => item.id))
+    const engineSessions: Partial<Record<EngineId, EngineSessionState>> = { ...old }
+    engineSessions[record.engine] = {
+      id: patch.engineSessionId !== undefined ? patch.engineSessionId : record.engineSessionId,
+      seen: !worked
+        ? null
+        : oldSeen !== null && keptIds.has(oldSeen)
+          ? oldSeen
+          : derivedSeen(kept, record.engine, record.engine),
     }
+    // 其他引擎的原生会话里带着被回退掉的内容（它读到的位置不在保留的对话里）：作废，下次用它新开一个
+    for (const key of Object.keys(engineSessions) as EngineId[]) {
+      const other = engineSessions[key]
+      if (key !== record.engine && other && !(other.seen !== null && keptIds.has(other.seen)))
+        engineSessions[key] = { id: null, seen: null }
+    }
+    m.events.patchRecord(id, { ...patch, engineSessions })
+    if (!worked && thread && kept.length > 0)
+      m.events.apply(id, {
+        type: 'item_completed',
+        item: {
+          kind: 'notice',
+          id: randomUUID(),
+          level: 'info',
+          text: `无法在 ${ENGINES[record.engine].name} 记录中回退到这条消息，已开始新的引擎会话，下一条消息会带上之前对话的交接`,
+        },
+      })
     if (rt.snapshot.context)
       m.events.apply(id, { type: 'context', context: { ...rt.snapshot.context, stale: true, diagnosticStale: true } })
     if (rt.snapshot.suggestion) m.events.apply(id, { type: 'suggestion', text: null })
@@ -280,7 +320,9 @@ export class HostBranch {
       (snap.items.at(-1)?.id ?? null) !== entry.after.lastId ||
       snap.record.engineSessionId !== entry.after.engineSessionId ||
       (snap.record.pendingRewind ?? null) !== entry.after.pendingRewind ||
-      JSON.stringify(snap.record.pendingFork ?? null) !== JSON.stringify(entry.after.pendingFork)
+      JSON.stringify(snap.record.pendingFork ?? null) !== JSON.stringify(entry.after.pendingFork) ||
+      JSON.stringify(snap.record.engineSessions ?? null) !== JSON.stringify(entry.after.engineSessions ?? null) ||
+      (snap.record.nextEngine ?? null) !== entry.after.nextEngine
     ) {
       this.undo.delete(id)
       throw new Error('回退之后有了新的对话，不能撤销了')
@@ -329,10 +371,28 @@ export class HostBranch {
     const anchor = thread ? await adapter?.rewindAnchor?.({ ...source, engineSessionId: thread }, later) : null
     if (ctx.closing) throw new Error('应用正在退出')
     const now = Date.now()
+    // 分叉出的会话只带当前引擎的原生会话：截断点找到了，它读到的位置不变或退到最后处理的那一轮末尾；
+    // 没找到就是新会话什么都没看到，第一条消息带完整交接
+    const forked = !!(anchor?.at && thread)
+    const keptIds = new Set(items.map(item => item.id))
+    const oldEntry = source.engineSessions?.[source.engine]
+    const oldSeen = oldEntry ? oldEntry.seen : source.engineSessions ? null : lastItemId(rt.snapshot.items)
+    const engineSessionId = adapter?.enginePicksSessionId ? null : randomUUID()
     const record: SessionRecord = {
       ...source,
       id: randomUUID(),
-      engineSessionId: adapter?.enginePicksSessionId ? null : randomUUID(),
+      engineSessionId,
+      engineSessions: {
+        [source.engine]: {
+          id: engineSessionId,
+          seen: !forked
+            ? null
+            : oldSeen !== null && keptIds.has(oldSeen)
+              ? oldSeen
+              : derivedSeen(items, source.engine, source.engine),
+        },
+      },
+      nextEngine: null,
       title: title ? normalizeSessionTitle(title) : `${source.title}（分支）`,
       titleEdited: true,
       createdAt: now,
@@ -347,13 +407,13 @@ export class HostBranch {
       forkedFrom: { sessionId: source.id, title: source.title },
     }
     const notice: Item[] =
-      !anchor && thread && items.length > 0
+      !anchor?.at && thread && items.length > 0
         ? [
             {
               kind: 'notice',
               id: randomUUID(),
               level: 'warn',
-              text: `无法在 ${ENGINES[source.engine].name} 记录中找到这条消息，分叉出的会话没有带上之前的上下文`,
+              text: `无法在 ${ENGINES[source.engine].name} 记录中找到这条消息，分叉出的会话是新的引擎会话，第一条消息会带上之前对话的交接`,
             },
           ]
         : []

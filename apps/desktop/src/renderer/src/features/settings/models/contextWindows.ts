@@ -1,11 +1,10 @@
 // 云端 / 本机模型的上下文窗口（GitHub #20，docs/ui/context-settings-branch-switch.md §2）：存在引擎设置里，
 // 每个引擎一份；主进程校验后广播 engine_config，store 跟着更新。演示模式只在内存里
 import { useSyncExternalStore } from 'react'
-import type { ContextWindows, EngineConfigPatch, EngineId, SessionRecord } from '@pixelsky/protocol'
+import type { ContextWindows, EngineConfigPatch, EngineId } from '@pixelsky/protocol'
 import { bridge, isLive, useEngineState } from '@/features/engine'
 import { demo, isDemo } from '@/data/demo'
 import { openEngineDetail } from '../engines/nav'
-import { requestModelsScroll } from './scroll'
 
 export type WindowSource = keyof ContextWindows
 
@@ -59,20 +58,8 @@ export async function setContextWindow(
   listeners.forEach(fn => fn())
 }
 
-/**
- * 上下文按钮里的「上下文设置…」：云端会话到模型与额度的模型列表，本机会话到这个引擎的详情，
- * 自定义 API 会话到模型与额度（自定义 API 在同一页）；还没有会话时按本机引擎 Claude Code
- */
-export function openContextSettings(
-  record: Pick<SessionRecord, 'engine' | 'platform' | 'provider'> | null,
-  open: (section: 'models' | 'engines') => void,
-): void {
-  if (record?.platform) {
-    requestModelsScroll()
-    open('models')
-  } else if (record?.provider) open('models')
-  else {
-    openEngineDetail(record?.engine ?? 'claude')
-    open('engines')
-  }
+/** 「上下文设置…」直接打开当前选中的执行引擎详情，新任务也使用输入框的选择。 */
+export function openContextSettings(engine: EngineId, open: (section: 'engines') => void): void {
+  openEngineDetail(engine)
+  open('engines')
 }

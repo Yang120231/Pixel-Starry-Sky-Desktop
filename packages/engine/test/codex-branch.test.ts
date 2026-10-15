@@ -193,7 +193,7 @@ describe('Codex 回退', { timeout: 20_000 }, () => {
     await host!.rewind(session.id, 'm1')
     expect(host!.open(session.id).record.engineSessionId ?? null).toBeNull()
     expect(notices(session.id)).toEqual([
-      '无法在 Codex 记录中回退到这条消息，已开始新的引擎会话（之前的上下文没有带过去）',
+      '无法在 Codex 记录中回退到这条消息，已开始新的引擎会话，下一条消息会带上之前对话的交接',
     ])
     await say(session.id, '新的', 'n0')
     expect(host!.open(session.id).record.engineSessionId).toBeTruthy()
@@ -263,7 +263,9 @@ describe('Codex 分叉', { timeout: 20_000 }, () => {
     rmSync(stateFile())
     const forked = await host!.forkSession(session.id, 'm1')
     expect(forked.record.pendingFork ?? null).toBeNull()
-    expect(notices(forked.record.id)).toEqual(['无法在 Codex 记录中找到这条消息，分叉出的会话没有带上之前的上下文'])
+    expect(notices(forked.record.id)).toEqual([
+      '无法在 Codex 记录中找到这条消息，分叉出的会话是新的引擎会话，第一条消息会带上之前对话的交接',
+    ])
   })
 
   it('还没启动的分叉会话再回退：按原线程重算 pendingFork，不会带上已移除的消息', async () => {
@@ -309,7 +311,9 @@ describe('Codex 分叉', { timeout: 20_000 }, () => {
     rmSync(stateFile())
     const third = await host!.forkSession(first.record.id, 'm1')
     expect(third.record.pendingFork ?? null).toBeNull()
-    expect(notices(third.record.id)).toEqual(['无法在 Codex 记录中找到这条消息，分叉出的会话没有带上之前的上下文'])
+    expect(notices(third.record.id)).toEqual([
+      '无法在 Codex 记录中找到这条消息，分叉出的会话是新的引擎会话，第一条消息会带上之前对话的交接',
+    ])
   })
 
   it('分叉时原线程已经没了：改开新线程并提示，清掉 pendingFork', async () => {

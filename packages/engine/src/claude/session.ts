@@ -486,6 +486,7 @@ export class ClaudeSession implements EngineSession {
     const extra = {
       ...(this.deps.launch?.outputStyle ? { outputStyle: this.deps.launch.outputStyle } : {}),
       ...(this.deps.launch?.modelSettings ? { modelSettings: this.deps.launch.modelSettings } : {}),
+      ...(this.deps.extensions?.allowTools?.length ? { permissions: { allow: this.deps.extensions.allowTools } } : {}),
     }
     const settingsArg = claudeSettingsArgument(gateway, this.deps.maxRetries ?? null, extra)
     // 合并网关配置时写了临时文件，进程换掉或退出时删掉

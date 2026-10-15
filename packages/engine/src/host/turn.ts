@@ -10,7 +10,7 @@ import type {
   SendReceipt,
   TaskOutput,
 } from '@pixelsky/protocol'
-import { messageWithFiles, sourceKey, viaGateway } from '@pixelsky/protocol'
+import { sourceKey, viaGateway } from '@pixelsky/protocol'
 import { queueSettings } from '../queue'
 import type { HostContext } from './context'
 import { NEW_TITLE, titleFrom } from './title'
@@ -49,7 +49,7 @@ export class HostTurn {
     m.events.apply(id, { type: 'status', state: 'starting' })
     let preparedExtensions: ExtensionLaunch | undefined
     try {
-      const record = { ...rt.snapshot.record, ...item.settings }
+      let record = { ...rt.snapshot.record, ...item.settings }
       const adapter = ctx.adapters[record.engine]
       if (!adapter) throw new Error('这个引擎暂不支持')
       const info = await adapter.info()
@@ -59,13 +59,20 @@ export class HostTurn {
         throw new Error(info.message ?? `${info.name} 不可用`)
       await ctx.opts.validateInput?.(record)
       if (!stillCurrent()) return
+      // 这条消息用的引擎和会话现在的不同（运行中选了别的引擎，或排队时就选了别的）：先切过去，用上面检测过的新引擎
+      if (item.settings.engine && item.settings.engine !== rt.snapshot.record.engine) {
+        await m.handoff.switchEngine(id, item.settings.engine)
+        if (!stillCurrent()) return
+        record = { ...rt.snapshot.record, ...item.settings }
+      }
       if (rt.idleTimer) {
         clearTimeout(rt.idleTimer)
         rt.idleTimer = null
       }
       const source = sourceKey(record)
       const maxRetries = m.settings.file.maxRetries
-      const extensions = (preparedExtensions = ctx.opts.extensions?.(record))
+      // 在换引擎之后准备：新引擎的第一条消息就带上按新记录（engineSessions 等）决定的扩展
+      const extensions = (preparedExtensions = await ctx.opts.extensions?.(record))
       const launch = m.settings.launchKey(record.engine) + m.settings.modelLaunchKey(record) + (extensions?.key ?? '')
       // 额度来源、重试次数或引擎级设置（输出风格、允许提问、压缩触发点、路径、环境变量）变了：换一个进程，--resume 接上原对话
       if (
@@ -77,7 +84,8 @@ export class HostTurn {
         await old.close()
       }
       if (!stillCurrent()) return
-      rt.execution = { ...rt.snapshot.record, ...item.settings }
+      // 执行设置里的引擎就是正在用的这个，nextEngine（还没生效的选择）不带进来
+      rt.execution = { ...rt.snapshot.record, ...item.settings, nextEngine: null }
       if (!rt.session) {
         rt.sessionSource = source
         rt.sessionMaxRetries = maxRetries
@@ -89,7 +97,21 @@ export class HostTurn {
           emit: e => m.events.onEngineEvent(id, e),
           setEngineSessionId: engineSessionId => {
             if (rt.execution) rt.execution.engineSessionId = engineSessionId
-            m.events.patchRecord(id, { engineSessionId })
+            // 当前引擎在 engineSessions 里的 id 一起同步（旧记录没有 engineSessions，等第一轮结束时再建）
+            const latest = rt.snapshot.record
+            const engine = rt.execution?.engine ?? latest.engine
+            const entry = latest.engineSessions?.[engine]
+            m.events.patchRecord(id, {
+              engineSessionId,
+              ...(latest.engineSessions
+                ? {
+                    engineSessions: {
+                      ...latest.engineSessions,
+                      [engine]: { ...entry, id: engineSessionId, seen: entry?.seen ?? null },
+                    },
+                  }
+                : {}),
+            })
           },
           setPermissionMode: permissionMode => {
             if (rt.execution) rt.execution.permissionMode = permissionMode
@@ -121,8 +143,12 @@ export class HostTurn {
       if (!stillCurrent()) return
       const turnId = randomUUID()
       const userItemId = item.attempt ? `${item.id}-retry-${randomUUID()}` : item.id
+      // 新引擎没看过的对话整理成交接材料，放在用户消息前面发给它；用户消息条目里仍是用户原文
+      const handoff = m.handoff.plan(id, record, item.text, item.files)
+      rt.holdCursor = handoff.hold ? turnId : undefined
       rt.activeId = item.id
       m.queue.changeQueue(id, item.id, { status: 'running', attempt: (item.attempt ?? 0) + 1, messageUuid: userItemId })
+      if (handoff.notice) m.events.apply(id, { type: 'item_completed', item: handoff.notice })
       m.events.apply(id, {
         type: 'item_completed',
         item: {
@@ -134,6 +160,7 @@ export class HostTurn {
           createdAt: Date.now(),
           mode: 'normal',
           turnId,
+          engine: record.engine,
         },
       })
       const latest = rt.snapshot.record
@@ -147,7 +174,7 @@ export class HostTurn {
       if (rt.snapshot.suggestion) m.events.apply(id, { type: 'suggestion', text: null })
       m.events.apply(id, { type: 'status', state: 'running' })
       m.events.apply(id, { type: 'turn_started', turnId, execution: queueSettings(rt.execution) })
-      rt.session.send(messageWithFiles(item.text, item.files), turnId, userItemId, item.attachments)
+      rt.session.send(handoff.text, turnId, userItemId, item.attachments)
     } catch (err) {
       if (ctx.runtimes.get(id) !== rt) return
       m.queue.changeQueue(id, item.id, { status: 'failed', error: (err as Error).message })

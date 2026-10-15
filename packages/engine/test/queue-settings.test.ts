@@ -28,6 +28,33 @@ describe('排队消息的额度来源（docs/ui/custom-api.md §4.2）', () => {
   })
 })
 
+describe('排队消息的引擎（跨引擎接力）', () => {
+  const r = { ...record, engine: 'claude' } as unknown as SessionRecord
+  it('带上会话当前的引擎；运行中选了别的引擎还没生效时，新消息按新引擎算', () => {
+    expect(queueSettings(r).engine).toBe('claude')
+    expect(queueSettings({ ...r, nextEngine: 'codex' }).engine).toBe('codex')
+    expect(messageInput('hi', { ...r, nextEngine: 'codex' }, id).settings.engine).toBe('codex')
+  })
+
+  it('引擎不同算不同的设置；旧排队项没有引擎，和任何引擎都算相同', () => {
+    const s = queueSettings(r)
+    expect(sameQueueSettings(s, { ...s, engine: 'codex' })).toBe(false)
+    expect(sameQueueSettings(s, { ...s, engine: 'claude' })).toBe(true)
+    const { engine: _engine, ...legacy } = s
+    expect(sameQueueSettings(legacy, s)).toBe(true)
+    expect(sameQueueSettings(s, legacy)).toBe(true)
+  })
+
+  it('调用方给的引擎必须是已知的', () => {
+    const withEngine = (engine: unknown) =>
+      messageInput({ text: 'hi', clientMessageId: 'c1', settings: { ...queueSettings(r), engine } as never }, r, id)
+    expect(withEngine('codex').settings.engine).toBe('codex')
+    expect(() => withEngine('gpt')).toThrow('引擎无效')
+    expect(() => withEngine(7)).toThrow('引擎无效')
+    expect(() => withEngine('toString')).toThrow('引擎无效')
+  })
+})
+
 describe('环境变量里的接口地址和 Key（docs/ui/custom-api.md §3.4）', () => {
   it('新增或修改被拒，已有的原样保留、删除都可以', async () => {
     const { EngineHost } = await import('../src')

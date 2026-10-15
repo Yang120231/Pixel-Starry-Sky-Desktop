@@ -130,16 +130,14 @@ describe('谁来执行（§2.5）', () => {
     const pick = pickExecutor(['pixel'], { channel: 'custom', engines: engines({ pixel: 'unsupported' }) })
     expect(pick).toEqual({ engine: 'pixel', options: [], fallbackFrom: null, unavailable: true })
   })
-  it('对话开始后执行者固定：能跑就只有它，跑不了就是 null', () => {
-    expect(pickExecutor(['claude', 'pixel'], { channel: 'platform', engines: engines(), locked: 'pixel' })).toEqual({
-      engine: 'pixel',
-      options: ['pixel'],
-      fallbackFrom: null,
-      unavailable: false,
-    })
-    expect(pickExecutor(['codex', 'pixel'], { channel: 'platform', engines: engines(), locked: 'claude' }).engine).toBe(
-      null,
-    )
+  it('已开始的对话沿用当前引擎（能跑就不换），盖过记住的；跑不了才按默认选', () => {
+    const base = { channel: 'platform' as const, engines: engines() }
+    expect(pickExecutor(['claude', 'pixel'], { ...base, current: 'pixel', remembered: 'claude' }).engine).toBe('pixel')
+    expect(pickExecutor(['codex', 'pixel'], { ...base, current: 'claude' }).engine).toBe('codex')
+    // 当前引擎没装：不沿用
+    expect(
+      pickExecutor(['claude', 'pixel'], { ...base, engines: engines({ claude: 'missing' }), current: 'claude' }).engine,
+    ).toBe('pixel')
   })
   it('记执行者的键：平台按模型、自定义按接口，授权通道不记', () => {
     expect(executorKey({ channel: 'platform', model: 'm', providerId: null })).toBe('platform:m')
@@ -180,7 +178,7 @@ describe('通道状态', () => {
 describe('菜单（§2.3）', () => {
   const input = (patch: Partial<MenuInput> = {}): MenuInput => ({
     selection: { channel: 'platform', model: 'claude-opus-5-5', providerId: null },
-    locked: null,
+    current: null,
     platform: { email: 'a@b.c', loaded: true, loading: false, groups, hiddenModels: [] },
     selfModels: { claude: [{ value: null }, { value: 'opus' }], chatgpt: [{ value: null }] },
     providers,
@@ -208,18 +206,17 @@ describe('菜单（§2.3）', () => {
     const menu = buildChannelMenu(input({ engines: engines({ codex: 'unauthenticated' }) }))
     expect(menu[2]).toMatchObject({ state: { kind: 'auth' }, rows: [] })
   })
-  it('对话开始后只剩同一个执行者能跑的', () => {
-    const menu = buildChannelMenu(input({ locked: 'claude' }))
-    expect(menu[0].rows.map(r => r.disabled)).toEqual([null, null, 'locked'])
-    expect(menu[1].rows.every(r => r.disabled === null)).toBe(true)
-    expect(menu[2].rows.every(r => r.disabled === 'locked')).toBe(true)
-    expect(menu[3].rows.map(r => r.disabled)).toEqual([null, 'locked', 'locked'])
+  it('已开始的对话：沿用当前引擎，但别的引擎能跑的行也不灰（选了会换引擎）', () => {
+    const menu = buildChannelMenu(input({ current: 'claude' }))
+    expect(menu[0].rows.map(r => r.pick.engine)).toEqual(['claude', 'claude', 'codex'])
+    expect(menu[0].rows.map(r => r.disabled)).toEqual([null, null, null])
+    expect(menu[3].rows.map(r => r.pick.engine)).toEqual(['claude', 'codex', 'pixel'])
+    expect(menu[2].rows.every(r => r.disabled === null)).toBe(true)
   })
-  it('像素星空的对话：平台模型和三种接口都能接着用，授权通道不行', () => {
-    const menu = buildChannelMenu(input({ locked: 'pixel' }))
-    expect(menu[0].rows.every(r => r.disabled === null)).toBe(true)
-    expect(menu[1].rows.every(r => r.disabled === 'locked')).toBe(true)
-    expect(menu[3].rows.every(r => r.disabled === null)).toBe(true)
+  it('像素星空的对话：平台模型和自定义接口默认继续由它执行', () => {
+    const menu = buildChannelMenu(input({ current: 'pixel' }))
+    expect(menu[0].rows.map(r => r.pick.engine)).toEqual(['pixel', 'pixel', 'pixel'])
+    expect(menu[3].rows.map(r => r.pick.engine)).toEqual(['pixel', 'pixel', 'pixel'])
   })
   it('自定义接口一行一个，选中的接口显示当前模型，其它显示第一个模型', () => {
     const menu = buildChannelMenu(
@@ -238,7 +235,7 @@ describe('菜单（§2.3）', () => {
     expect(menu[0].rows[0].pick.engine).toBe('pixel')
     expect(menu[3].rows[0].pick.engine).toBe('pixel')
   })
-  it('GPT 的旧 Claude Code 执行者记忆失效，已开始的 Claude Code 对话不能切到 GPT', () => {
+  it('GPT 的旧 Claude Code 执行者记忆失效', () => {
     const platform = {
       ...input().platform,
       groups: [group('o', 'openai', ['gpt-6-astra', 'gpt-6.1-sol'], { supported_engines: ['claude', 'codex'] })],
@@ -250,8 +247,9 @@ describe('菜单（§2.3）', () => {
       ['codex', 'pixel'],
       ['codex', 'pixel'],
     ])
-    const locked = buildChannelMenu(input({ platform, remembered, locked: 'claude' }))
-    expect(locked[0].rows.map(r => r.disabled)).toEqual(['locked', 'locked'])
+    // 已开始的 Claude Code 对话选 GPT：Claude Code 跑不了，换成 Codex（界面会先确认）
+    const started = buildChannelMenu(input({ platform, remembered, current: 'claude' }))
+    expect(started[0].rows.map(r => r.pick.engine)).toEqual(['codex', 'codex'])
   })
   it('能跑的执行者都没装：灰掉', () => {
     const menu = buildChannelMenu(input({ engines: engines({ pixel: 'missing' }) }))
