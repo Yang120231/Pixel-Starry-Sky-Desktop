@@ -56,6 +56,12 @@ const SUMMARY = {
   unread: 'boolean',
   preview: 'string',
   previewAuthor: 'string',
+  teamSeen: 'boolean',
+  teamSeenAt: ['number', 'null'],
+  working: 'boolean',
+  workingAt: ['number', 'null'],
+  messageCount: 'number',
+  attachments: 'object',
 }
 
 function expectDetail(d: Awaited<ReturnType<typeof api.getFeedback>>): void {

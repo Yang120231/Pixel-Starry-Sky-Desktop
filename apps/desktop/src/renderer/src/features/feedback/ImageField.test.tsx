@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useFeedbackImages, type FeedbackImages } from './ImageField'
 import { readImage } from '@/features/session/attachments/images'
+import { FEEDBACK_LIMITS } from '../../../../shared/types/feedback'
 
 vi.mock('@/features/session/attachments/images', () => ({ readImage: vi.fn() }))
 vi.mock('@/features/session/attachments/ImageAttachments', () => ({ ImageAttachments: () => null }))
@@ -73,12 +74,14 @@ describe('反馈图片拖放', () => {
     expect(readImage).not.toHaveBeenCalled()
   })
 
-  it('读取尚未完成时，连续拖入也不能超过三张', () => {
+  it('读取尚未完成时，连续拖入也不能超过上限', () => {
     vi.mocked(readImage).mockImplementation(() => new Promise(() => {}))
     const state = images()
-    state.onDrop(drop([new File(['png'], '1.png'), new File(['png'], '2.png')]))
-    state.onDrop(drop([new File(['png'], '3.png'), new File(['png'], '4.png')]))
-    expect(readImage).toHaveBeenCalledTimes(2)
+    const pngs = (from: number, n: number) => Array.from({ length: n }, (_, i) => new File(['png'], `${from + i}.png`))
+    // 先拖入差一张到上限，还在读取时再拖两张：后一批整批不收
+    state.onDrop(drop(pngs(1, FEEDBACK_LIMITS.images - 1)))
+    state.onDrop(drop(pngs(FEEDBACK_LIMITS.images, 2)))
+    expect(readImage).toHaveBeenCalledTimes(FEEDBACK_LIMITS.images - 1)
   })
 
   it('粘贴也接收缺少 MIME 类型的图片', () => {

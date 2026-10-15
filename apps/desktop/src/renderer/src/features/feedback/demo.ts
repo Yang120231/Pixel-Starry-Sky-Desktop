@@ -73,8 +73,19 @@ const message = (
   id,
 })
 
+/** 条数、附件数跟着消息算（和云端一致：只数 kind=message） */
+function withCounts(thread: FeedbackThread, messages: FeedbackMessage[]): FeedbackThread {
+  const real = messages.filter(m => m.kind === 'message')
+  const all = real.flatMap(m => m.attachments)
+  return {
+    ...thread,
+    messageCount: real.length,
+    attachments: { logs: all.filter(a => a.kind === 'log').length, images: all.filter(a => a.kind === 'image').length },
+  }
+}
+
 function summaryOf(entry: Entry): FeedbackSummary {
-  const { closedBy: _by, closedAt: _at, ...summary } = entry.thread
+  const { closedBy: _by, closedAt: _at, ...summary } = withCounts(entry.thread, entry.messages)
   return summary
 }
 
@@ -104,9 +115,22 @@ export function createDemoFeedback(now: () => number = Date.now): FeedbackBridge
     available: true,
   }
   const open = { closedBy: null, closedAt: null } as const
+  const idle = {
+    teamSeen: false,
+    teamSeenAt: null,
+    working: false,
+    workingAt: null,
+    messageCount: 0,
+    attachments: { logs: 0, images: 0 },
+  } as const
   entries.set('fb_demo0000000001', {
     thread: {
       ...open,
+      ...idle,
+      teamSeen: true,
+      teamSeenAt: t0 - 20 * HOUR,
+      working: true,
+      workingAt: t0 - 5 * HOUR,
       id: 'fb_demo0000000001',
       type: 'bug',
       title: tr('feedback.demo.t1.title'),
@@ -133,6 +157,11 @@ export function createDemoFeedback(now: () => number = Date.now): FeedbackBridge
   entries.set('fb_demo0000000002', {
     thread: {
       ...open,
+      ...idle,
+      teamSeen: true,
+      teamSeenAt: t0 - 3 * DAY + 2 * HOUR,
+      working: true,
+      workingAt: t0 - 2 * DAY,
       id: 'fb_demo0000000002',
       type: 'feature',
       title: tr('feedback.demo.t2.title'),
@@ -155,6 +184,9 @@ export function createDemoFeedback(now: () => number = Date.now): FeedbackBridge
   })
   entries.set('fb_demo0000000003', {
     thread: {
+      ...idle,
+      teamSeen: true,
+      teamSeenAt: t0 - 14 * DAY + HOUR,
       id: 'fb_demo0000000003',
       type: 'other',
       title: tr('feedback.demo.t3.title'),
@@ -175,6 +207,26 @@ export function createDemoFeedback(now: () => number = Date.now): FeedbackBridge
     blobs: new Map(),
   })
 
+  entries.set('fb_demo0000000004', {
+    thread: {
+      ...open,
+      ...idle,
+      teamSeen: true,
+      teamSeenAt: t0 - 4 * HOUR,
+      id: 'fb_demo0000000004',
+      type: 'bug',
+      title: tr('feedback.demo.t4.title'),
+      status: 'open',
+      createdAt: t0 - 6 * HOUR,
+      updatedAt: t0 - 6 * HOUR,
+      unread: false,
+      preview: tr('feedback.demo.t4.body'),
+      previewAuthor: 'user',
+    },
+    messages: [message(1, { author: 'user', body: tr('feedback.demo.t4.body'), createdAt: t0 - 6 * HOUR })],
+    blobs: new Map(),
+  })
+
   const sorted = (): FeedbackSummary[] => [...entries.values()].map(summaryOf).sort((a, b) => b.updatedAt - a.updatedAt)
   const unreadCount = (): number => [...entries.values()].filter(e => e.thread.unread).length
   const snapshot = (): FeedbackState => ({
@@ -190,7 +242,10 @@ export function createDemoFeedback(now: () => number = Date.now): FeedbackBridge
     const change: FeedbackChange = { state: snapshot(), fresh: [] }
     listeners.forEach(fn => fn(change))
   }
-  const detail = (entry: Entry): FeedbackDetail => ({ thread: { ...entry.thread }, messages: [...entry.messages] })
+  const detail = (entry: Entry): FeedbackDetail => ({
+    thread: withCounts(entry.thread, entry.messages),
+    messages: [...entry.messages],
+  })
   const find = (id: string): Entry => {
     const entry = entries.get(id)
     if (!entry) throw new Error('NOT_FOUND')
@@ -245,6 +300,7 @@ export function createDemoFeedback(now: () => number = Date.now): FeedbackBridge
       const id = `fb_demo${String(++seq).padStart(10, '0')}x`
       const entry: Entry = {
         thread: {
+          ...idle,
           id,
           type: input.type,
           title: input.title,
@@ -296,6 +352,8 @@ export function createDemoFeedback(now: () => number = Date.now): FeedbackBridge
       )
       Object.assign(entry.thread, {
         status: 'open',
+        teamSeen: false,
+        teamSeenAt: null,
         updatedAt: at,
         preview: input.body,
         previewAuthor: 'user' as const,
@@ -310,7 +368,14 @@ export function createDemoFeedback(now: () => number = Date.now): FeedbackBridge
         entry.messages.push(
           message(entry.messages.length + 1, { author: 'user', kind: 'closed', body: '', createdAt: at }),
         )
-        Object.assign(entry.thread, { status: 'closed', closedBy: 'user' as const, closedAt: at, updatedAt: at })
+        Object.assign(entry.thread, {
+          status: 'closed',
+          working: false,
+          workingAt: null,
+          closedBy: 'user' as const,
+          closedAt: at,
+          updatedAt: at,
+        })
         emit()
       }
       return detail(entry)

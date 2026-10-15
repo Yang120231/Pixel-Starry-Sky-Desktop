@@ -1,19 +1,29 @@
 // 设置 › 反馈 › 一条反馈（docs/ui/feedback.md §2.2）：消息、附件、补充框、关闭
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronDown, FileText, Paperclip } from 'lucide-react'
+import {
+  Check,
+  ChevronDown,
+  CircleCheck,
+  FileText,
+  Image as ImageIcon,
+  Paperclip,
+  ScrollText,
+  Stethoscope,
+} from 'lucide-react'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '@/i18n/core'
 import { Button, Spinner, cn } from '@/ui'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
 import type { FeedbackAttachmentMeta, FeedbackDetail, FeedbackMessage } from '../../../../shared/types/feedback'
 import { AttachmentOptions, TextBox, type AttachmentValue } from './AttachmentOptions'
-import { INPUT_CLASS, reasonText } from './FeedbackForm'
+import { reasonText } from './FeedbackForm'
 import { ImageField, toImageInputs, useFeedbackImages } from './ImageField'
 import { checkReply, diagnosticsLines, errorText, isAuthExpired, sizeText, type LimitReason } from './logic'
-import { Crumbs, StatusWord, TypeChip, formatTime } from './parts'
-import { feedbackApi, useFeedback } from './store'
+import { Crumbs, SEND_HINT, StatusWord, TypeChip, TypeIcon, formatTime } from './parts'
+import { feedbackApi, getFeedbackSnapshot, useFeedback } from './store'
 import { useFeedbackPreview } from './usePreview'
+import { newReplyIndex, progressSteps, type ProgressStep } from './view'
 
 export function FeedbackThread({
   id,
@@ -33,6 +43,9 @@ export function FeedbackThread({
   const [closing, setClosing] = useState(false)
   const [closeError, setCloseError] = useState<string | null>(null)
   const { threads } = useFeedback()
+  // 从列表点进来时这条是未读：记下来画「新回复」分隔线（打开后服务端就标成已读了，之后的状态不能再用）
+  const unreadAtOpen = useRef(getFeedbackSnapshot().threads.find(t => t.id === id)?.unread ?? false)
+  if (detail?.thread.unread) unreadAtOpen.current = true
 
   useEffect(() => {
     let cancelled = false
@@ -79,20 +92,11 @@ export function FeedbackThread({
   }
 
   const thread = detail?.thread
+  const closed = thread?.status === 'closed'
+  const dividerAt = detail ? newReplyIndex(detail.messages, unreadAtOpen.current) : -1
   return (
     <div data-feedback-thread={id}>
-      <Crumbs
-        current={thread?.title ?? '…'}
-        onBack={onBack}
-        right={
-          thread && (
-            <div className="flex shrink-0 items-center gap-3">
-              <TypeChip type={thread.type} />
-              <StatusWord status={thread.status} />
-            </div>
-          )
-        }
-      />
+      <Crumbs current={thread?.title ?? '…'} onBack={onBack} />
       {error && (
         <p className="selectable mb-4 flex items-center gap-2 rounded-md bg-subtle px-3 py-2 text-meta text-danger">
           <span className="min-w-0 flex-1 break-all">{error}</span>
@@ -107,22 +111,44 @@ export function FeedbackThread({
           {tr('feedback.loading')}
         </div>
       )}
-      {detail && (
+      {detail && thread && (
         <>
+          <header className="mb-4 flex items-start gap-3">
+            <TypeIcon type={thread.type} size={36} />
+            <div className="min-w-0 flex-1">
+              <h3 className="selectable text-section font-semibold break-words text-fg">{thread.title}</h3>
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-meta text-fg-muted">
+                <TypeChip type={thread.type} />
+                <StatusWord thread={thread} />
+                <span>{formatTime(thread.createdAt)}</span>
+              </div>
+            </div>
+            {!closed && (
+              <Button
+                icon={CircleCheck}
+                className="shrink-0"
+                onClick={() => setConfirmClose(true)}
+                data-feedback-resolve
+              >
+                {tr('feedback.thread.resolved')}
+              </Button>
+            )}
+          </header>
+          {closed && (
+            <p data-feedback-closed-banner className="mb-4 rounded-md bg-subtle px-3 py-2 text-meta text-fg-muted">
+              {tr('feedback.thread.closedBanner')}
+            </p>
+          )}
+          <Progress steps={progressSteps(thread, detail.messages)} />
           <ol className="flex flex-col gap-3">
-            {detail.messages.map(m => (
+            {detail.messages.map((m, i) => (
               <li key={m.id}>
+                {i === dividerAt && <NewReplyRule />}
                 <Message threadId={id} message={m} />
               </li>
             ))}
           </ol>
-          <ReplyBox
-            threadId={id}
-            closed={detail.thread.status === 'closed'}
-            onSent={setDetail}
-            onFailed={onFailed}
-            onClose={() => setConfirmClose(true)}
-          />
+          <ReplyBox threadId={id} closed={closed} onSent={setDetail} onFailed={onFailed} />
         </>
       )}
       {confirmClose && (
@@ -138,6 +164,78 @@ export function FeedbackThread({
           onCancel={() => setConfirmClose(false)}
         />
       )}
+    </div>
+  )
+}
+
+const STEP_LABEL: Record<ProgressStep['key'], () => string> = {
+  submitted: () => tr('feedback.step.submitted'),
+  seen: () => tr('feedback.step.seen'),
+  working: () => tr('feedback.step.working'),
+  replied: () => tr('feedback.step.replied'),
+  resolved: () => tr('feedback.step.resolved'),
+}
+
+/** 五步进度：已提交 → 团队已看到 → 处理中 → 已回复 → 已解决；没走到的空心 */
+function Progress({ steps }: { steps: ProgressStep[] }) {
+  useI18n()
+  return (
+    <ol data-feedback-progress className="mb-6 flex items-start rounded-lg border border-line bg-surface px-3 py-3">
+      {steps.map((step, i) => {
+        const done = step.state === 'done'
+        return (
+          <li
+            key={step.key}
+            data-step={step.key}
+            data-done={done}
+            className="relative flex min-w-0 flex-1 flex-col items-center text-center"
+          >
+            {i > 0 && (
+              <span
+                aria-hidden
+                className={cn(
+                  'absolute top-2.5 right-1/2 h-px w-full',
+                  done ? 'bg-accent' : 'border-t border-dashed border-line-strong',
+                )}
+              />
+            )}
+            <span
+              className={cn(
+                'relative flex size-5 items-center justify-center rounded-full border',
+                done ? 'border-accent bg-accent text-accent-on' : 'border-line-strong bg-surface',
+              )}
+            >
+              {done && <Check size={12} strokeWidth={2.5} />}
+            </span>
+            <span className={cn('mt-1.5 text-label font-medium', done ? 'text-fg' : 'text-fg-faint')}>
+              {STEP_LABEL[step.key]()}
+            </span>
+            <span className="text-label text-fg-faint">
+              {step.at
+                ? formatTime(step.at)
+                : step.key === 'resolved' && !done
+                  ? tr('feedback.step.resolvedHint')
+                  : ' '}
+            </span>
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
+/** 「新回复」分隔线：画在最后一条用户消息之后、团队消息之前 */
+function NewReplyRule() {
+  useI18n()
+  return (
+    <div
+      data-feedback-new-reply
+      role="separator"
+      className="mb-3 flex items-center gap-3 text-label font-medium text-notify"
+    >
+      <span className="h-px flex-1 bg-notify/40" />
+      {tr('feedback.thread.newReply')}
+      <span className="h-px flex-1 bg-notify/40" />
     </div>
   )
 }
@@ -361,19 +459,20 @@ function Lightbox({ url, name, onClose }: { url: string; name: string; onClose: 
   )
 }
 
-/** 补充框：文字 + 勾选项 + 截图；已关闭时提示发送会重新打开。没关闭时左下角放「关闭反馈」（点了先弹确认） */
+/**
+ * 补充框：输入框 + 底部三个开关小按钮（附带日志 / 诊断信息 / 截图），打开后在输入框下面展开对应设置；Ctrl+Enter 发送。
+ * 已关闭时提示发送会重新打开。「问题已解决，关闭」在页面右上角。
+ */
 function ReplyBox({
   threadId,
   closed,
   onSent,
   onFailed,
-  onClose,
 }: {
   threadId: string
   closed: boolean
   onSent: (detail: FeedbackDetail) => void
   onFailed: (e: unknown) => void
-  onClose: () => void
 }) {
   useI18n()
   const [body, setBody] = useState('')
@@ -383,10 +482,13 @@ function ReplyBox({
     range: '2h',
     includeError: false,
   })
+  const [imagesOpen, setImagesOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
   const images = useFeedbackImages()
   const preview = useFeedbackPreview(value.logs, value.range, null)
+  // 已经有图片（粘贴进来的）就一直展开
+  const showImages = imagesOpen || images.images.length > 0
 
   let reason: LimitReason | null = checkReply({ body, images: images.images.length })
   if (!reason && value.logs && preview.loading) reason = { code: 'previewing' }
@@ -406,6 +508,7 @@ function ReplyBox({
       })
       setBody('')
       setValue(v => ({ ...v, diagnostics: false, logs: false }))
+      setImagesOpen(false)
       images.clear()
       void feedbackApi()
         .refresh()
@@ -427,48 +530,120 @@ function ReplyBox({
       onDragOver={images.onDragOver}
       onDragLeave={images.onDragLeave}
       onDrop={images.onDrop}
-      className="mt-6 border-t border-line pt-4"
+      onKeyDown={e => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+          e.preventDefault()
+          void send()
+        }
+      }}
+      className={cn(
+        'mt-6 rounded-lg border border-line bg-surface p-2.5 focus-within:border-accent',
+        // 截图区默认收起，拖入图片时整个回复框高亮
+        images.dragging && 'border-dashed border-accent bg-accent-soft/40',
+      )}
     >
-      {closed && <p className="mb-2 text-meta text-fg-muted">{tr('feedback.thread.reopenHint')}</p>}
+      {closed && <p className="mb-2 px-1 text-meta text-fg-muted">{tr('feedback.thread.reopenHint')}</p>}
       <textarea
         value={body}
         onChange={e => setBody(e.target.value)}
         placeholder={tr('feedback.thread.replyPlaceholder')}
         aria-label={tr('feedback.thread.replyPlaceholder')}
-        rows={3}
-        className={`${INPUT_CLASS} resize-y py-2`}
+        rows={2}
+        className="w-full resize-y bg-transparent px-1 py-1 text-list text-fg outline-none placeholder:text-fg-faint"
       />
-      <div className="mt-3">
-        <AttachmentOptions
-          value={value}
-          onChange={patch => setValue(v => ({ ...v, ...patch }))}
-          preview={preview}
-          hasAround={false}
-          error={null}
-          showTitle={false}
-        />
-      </div>
-      <div className="mt-2">
-        <ImageField state={images} hint={false} />
-      </div>
+      {(value.diagnostics || value.logs || showImages) && (
+        <div className="mt-1 mb-1 flex flex-col gap-1 border-t border-line-subtle pt-1">
+          {value.diagnostics && (
+            <AttachmentOptions
+              value={value}
+              onChange={patch => setValue(v => ({ ...v, ...patch }))}
+              preview={preview}
+              hasAround={false}
+              error={null}
+              showTitle={false}
+              rows={['diagnostics']}
+              bare
+            />
+          )}
+          {value.logs && (
+            <AttachmentOptions
+              value={value}
+              onChange={patch => setValue(v => ({ ...v, ...patch }))}
+              preview={preview}
+              hasAround={false}
+              error={null}
+              showTitle={false}
+              rows={['logs']}
+              bare
+            />
+          )}
+          {showImages && (
+            <div className="py-1.5">
+              <ImageField state={images} />
+            </div>
+          )}
+        </div>
+      )}
       {failure && (
-        <p role="alert" className="selectable mt-3 rounded-md bg-subtle px-3 py-2 text-meta break-all text-danger">
+        <p role="alert" className="selectable mt-2 rounded-md bg-subtle px-3 py-2 text-meta break-all text-danger">
           {failure}
         </p>
       )}
-      <div className="mt-3 flex items-center justify-end gap-3">
-        {!closed && (
-          <Button variant="ghost" className="mr-auto" onClick={onClose} disabled={busy}>
-            {tr('feedback.thread.close')}
-          </Button>
-        )}
+      <div className="mt-1 flex items-center gap-1.5">
+        <ToggleChip icon={ScrollText} on={value.logs} onClick={() => setValue(v => ({ ...v, logs: !v.logs }))}>
+          {tr('feedback.thread.attachLogs')}
+        </ToggleChip>
+        <ToggleChip
+          icon={Stethoscope}
+          on={value.diagnostics}
+          onClick={() => setValue(v => ({ ...v, diagnostics: !v.diagnostics }))}
+        >
+          {tr('feedback.attach.diagnostics')}
+        </ToggleChip>
+        <ToggleChip icon={ImageIcon} on={showImages} onClick={() => !images.images.length && setImagesOpen(o => !o)}>
+          {images.images.length
+            ? `${tr('feedback.attach.images')} ${images.images.length}`
+            : tr('feedback.attach.images')}
+        </ToggleChip>
+        <span className="min-w-0 flex-1" />
         {reason && body.trim() !== '' && !busy && (
           <span className="min-w-0 truncate text-meta text-fg-faint">{reasonText(reason)}</span>
         )}
+        <span className="shrink-0 font-mono text-label whitespace-nowrap text-fg-faint">{SEND_HINT}</span>
         <Button variant="primary" onClick={() => void send()} disabled={!!reason || busy}>
           {busy ? tr('feedback.thread.sending') : tr('feedback.thread.send')}
         </Button>
       </div>
     </div>
+  )
+}
+
+/** 补充框底部的开关小按钮：开着时高亮，设置展开在输入框下面 */
+function ToggleChip({
+  icon: Icon,
+  on,
+  onClick,
+  children,
+}: {
+  icon: typeof ScrollText
+  on: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      onClick={onClick}
+      className={cn(
+        'press inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-meta',
+        on
+          ? 'border-accent-line bg-accent-soft text-accent-fg'
+          : 'border-line text-fg-muted hover:bg-hover hover:text-fg',
+      )}
+    >
+      <Icon size={13} strokeWidth={1.6} />
+      {children}
+    </button>
   )
 }

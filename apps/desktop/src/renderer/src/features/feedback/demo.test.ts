@@ -5,13 +5,13 @@ import { createDemoFeedback } from './demo'
 const input = { diagnostics: true, logs: null, images: [], error: null }
 
 describe('demo feedback', () => {
-  it('starts with three threads, one unread reply', async () => {
+  it('starts with four threads, one unread reply', async () => {
     const api = createDemoFeedback()
     const state = await api.state()
     expect(state.status).toBe('ready')
-    expect(state.threads).toHaveLength(3)
+    expect(state.threads).toHaveLength(4)
     expect(state.unreadCount).toBe(1)
-    expect(state.threads.map(t => t.status).sort()).toEqual(['closed', 'open', 'replied'])
+    expect(state.threads.map(t => t.status).sort()).toEqual(['closed', 'open', 'open', 'replied'])
   })
 
   it('opening the unread thread clears the red dot and notifies listeners', async () => {
@@ -49,6 +49,25 @@ describe('demo feedback', () => {
     const metas = d.messages[0].attachments
     expect(metas.map(a => a.kind)).toEqual(['log', 'image'])
     expect(await api.attachment(d.thread.id, metas[0].id)).toEqual({ kind: 'log', text: 'line' })
+  })
+
+  it('derives message and attachment counts and the v2 status fields', async () => {
+    const api = createDemoFeedback()
+    const [first] = (await api.state()).threads.filter(t => t.id === 'fb_demo0000000001')
+    expect(first).toMatchObject({ messageCount: 2, attachments: { logs: 1, images: 0 }, working: true, teamSeen: true })
+    const d = await api.create({
+      ...input,
+      type: 'other',
+      title: 'T',
+      body: 'B',
+      images: [{ name: 'a.png', mediaType: 'image/png', data: 'AAAA' }],
+    })
+    expect(d.thread).toMatchObject({
+      messageCount: 1,
+      attachments: { logs: 0, images: 1 },
+      working: false,
+      teamSeen: false,
+    })
   })
 
   it('previews fixed redacted text', async () => {

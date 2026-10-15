@@ -54,6 +54,8 @@
   --color-danger: var(--danger);
   --color-notify: var(--notify);
   --color-warn: var(--warn);
+  --color-status-working: var(--status-working);
+  --color-status-seen: var(--status-seen);
 
   /* 主按钮、可发送时的发送按钮、进度条跟着强调色（D138，修订 D105）；配色里的 --btn-primary-* 不再用于这些 */
   --color-primary: var(--accent);

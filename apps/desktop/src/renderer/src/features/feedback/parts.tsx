@@ -1,10 +1,12 @@
 // 反馈页几个视图共用的小部件：面包屑、类型标签、状态文字、时间
 import type { ReactNode } from 'react'
-import { ChevronLeft } from 'lucide-react'
+import { Bug, ChevronLeft, Lightbulb, MessageCircle, type LucideIcon } from 'lucide-react'
 import { useI18n } from '@/i18n/I18nProvider'
 import { getLocale, tr } from '@/i18n/core'
 import { cn } from '@/ui'
-import type { FeedbackStatus, FeedbackType } from '../../../../shared/types/feedback'
+import { isMac } from '../layout/keybindings'
+import type { FeedbackSummary, FeedbackType } from '../../../../shared/types/feedback'
+import { statusKind, type StatusKind } from './view'
 
 /** 「10月12日 14:03」；不是今年的带年份 */
 export function formatTime(ts: number, withTime = true): string {
@@ -15,6 +17,17 @@ export function formatTime(ts: number, withTime = true): string {
     day: 'numeric',
     ...(withTime ? { hour: '2-digit', minute: '2-digit', hour12: false } : {}),
   })
+}
+
+/** 列表上的时间：今天只写时分，其他写日期 */
+export function friendlyTime(ts: number): string {
+  const date = new Date(ts)
+  const now = new Date()
+  if (date.toDateString() === now.toDateString())
+    return tr('feedback.today', {
+      p0: date.toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit', hour12: false }),
+    })
+  return formatTime(ts, false)
 }
 
 const TYPE_LABEL: Record<FeedbackType, () => string> = {
@@ -32,17 +45,49 @@ export function TypeChip({ type }: { type: FeedbackType }) {
   )
 }
 
-const STATUS: Record<FeedbackStatus, { label: () => string; tone: string }> = {
-  open: { label: () => tr('feedback.status.open'), tone: 'text-fg-muted' },
-  replied: { label: () => tr('feedback.status.replied'), tone: 'font-medium text-accent-fg' },
-  closed: { label: () => tr('feedback.status.closed'), tone: 'text-fg-faint' },
+export const TYPE_ICON: Record<FeedbackType, LucideIcon> = { bug: Bug, feature: Lightbulb, other: MessageCircle }
+const TYPE_TINT: Record<FeedbackType, string> = {
+  bug: 'bg-danger/10 text-danger',
+  feature: 'bg-warn/12 text-warn',
+  other: 'bg-subtle text-fg-secondary',
 }
 
-export function StatusWord({ status }: { status: FeedbackStatus }) {
-  useI18n()
+/** 类型图标方块（列表卡片、详情标题左边） */
+export function TypeIcon({ type, size = 32 }: { type: FeedbackType; size?: number }) {
+  const Icon = TYPE_ICON[type]
   return (
-    <span data-feedback-status={status} className={cn('shrink-0 text-meta', STATUS[status].tone)}>
-      {STATUS[status].label()}
+    <span
+      aria-hidden
+      style={{ width: size, height: size }}
+      className={cn('flex shrink-0 items-center justify-center rounded-md', TYPE_TINT[type])}
+    >
+      <Icon size={Math.round(size * 0.5)} strokeWidth={1.6} />
+    </span>
+  )
+}
+
+/** 状态文字（列表和详情一致）：已关闭灰 / 已回复绿 / 团队处理中紫 / 团队已看到蓝 / 等待回复暖色 */
+const STATUS: Record<StatusKind, { label: () => string; tone: string }> = {
+  closed: { label: () => tr('feedback.status.closed'), tone: 'bg-subtle text-fg-faint' },
+  replied: { label: () => tr('feedback.status.replied'), tone: 'bg-success/12 text-success' },
+  working: { label: () => tr('feedback.status.working'), tone: 'bg-status-working/12 text-status-working' },
+  seen: { label: () => tr('feedback.status.seen'), tone: 'bg-status-seen/12 text-status-seen' },
+  waiting: { label: () => tr('feedback.status.open'), tone: 'bg-warn/12 text-warn' },
+}
+
+export function StatusWord({ thread }: { thread: Pick<FeedbackSummary, 'status' | 'working' | 'teamSeen'> }) {
+  useI18n()
+  const kind = statusKind(thread)
+  return (
+    <span
+      data-feedback-status={thread.status}
+      data-feedback-status-kind={kind}
+      className={cn(
+        'inline-flex h-5 shrink-0 items-center rounded-full px-2 text-label font-medium',
+        STATUS[kind].tone,
+      )}
+    >
+      {STATUS[kind].label()}
     </span>
   )
 }
@@ -75,3 +120,6 @@ export function Crumbs({ current, onBack, right }: { current: string; onBack: ()
     </div>
   )
 }
+
+/** 发送快捷键提示：Ctrl ↵ / ⌘↵ */
+export const SEND_HINT = isMac ? '⌘↵' : 'Ctrl ↵'

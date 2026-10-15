@@ -24,7 +24,7 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react'
-import { Dot, IconButton, Segmented, cn } from '@/ui'
+import { CountBadge, IconButton, Segmented, cn } from '@/ui'
 import { useTheme, type MotionPreference, type ThemePreference } from '@/features/appearance/ThemeProvider'
 import { AboutSection } from './AboutSection'
 import { AccountSection } from '../account/settings/AccountSection'
@@ -499,7 +499,7 @@ export function SettingsDialog({
                           {/* 一行放不下（别的语言、等宽字体）就省略，不折行撑破行高；悬停看全名 */}
                           <span className="min-w-0 truncate">{text(nav ?? label)}</span>
                           {id === 'feedback' && feedbackUnread > 0 && (
-                            <Dot tone="notify" size={7} className="ml-auto" />
+                            <CountBadge tone="notify" count={feedbackUnread} max={9} className="ml-auto" />
                           )}
                         </button>
                       )

@@ -2,16 +2,29 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { cn } from './cn'
 
 /** 蓝色数字角标（图标栏的 3、5） */
-export function CountBadge({ count, className }: { count: number; className?: string }) {
+export function CountBadge({
+  count,
+  max,
+  tone = 'accent',
+  className,
+}: {
+  count: number
+  /** 超过这个数显示「max+」（例如 9 → 9+） */
+  max?: number
+  /** notify = 红色提醒（反馈有新回复） */
+  tone?: 'accent' | 'notify'
+  className?: string
+}) {
   useI18n()
   return (
     <span
       className={cn(
-        'inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] leading-none font-semibold text-accent-on',
+        'inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none font-semibold',
+        tone === 'notify' ? 'bg-notify text-white' : 'bg-accent text-accent-on',
         className,
       )}
     >
-      {count}
+      {max !== undefined && count > max ? `${max}+` : count}
     </span>
   )
 }

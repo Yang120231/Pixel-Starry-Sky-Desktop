@@ -19,6 +19,20 @@ export interface FeedbackSummary {
   /** 最后一条消息的开头 */
   preview: string
   previewAuthor: FeedbackAuthor
+  /** 团队看过用户最新的动作（旧云端没有这个字段时为 false） */
+  teamSeen: boolean
+  teamSeenAt: number | null
+  /** 未关闭且已有人负责（不暴露是谁） */
+  working: boolean
+  workingAt: number | null
+  /** 普通消息条数（用户 + 团队） */
+  messageCount: number
+  attachments: FeedbackAttachmentCounts
+}
+
+export interface FeedbackAttachmentCounts {
+  logs: number
+  images: number
 }
 
 export interface FeedbackList {
@@ -168,7 +182,7 @@ export const FEEDBACK_LIMITS = {
   titleChars: 100,
   bodyChars: 10_000,
   errorChars: 4_000,
-  images: 3,
+  images: 5,
   imageBytes: 2 * 1024 * 1024,
   /** 日志原文上限（压缩前） */
   logBytes: 1024 * 1024,

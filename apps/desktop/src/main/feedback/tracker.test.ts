@@ -22,6 +22,12 @@ const thread = (id: string, over: Partial<FeedbackSummary> = {}): FeedbackSummar
   unread: true,
   preview: '',
   previewAuthor: 'team',
+  teamSeen: false,
+  teamSeenAt: null,
+  working: false,
+  workingAt: null,
+  messageCount: 1,
+  attachments: { logs: 0, images: 0 },
   ...over,
 })
 
