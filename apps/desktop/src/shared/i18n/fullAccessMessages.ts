@@ -1,4 +1,4 @@
-// 完全放行的二次确认（docs/ui/full-access-confirm.md）
+// 完全放行的二次确认（每次都确认）与启用后输入框上方的提示条
 export const fullAccessMessages = {
   'fullAccess.confirm.title': { zh: '这个对话完全放行？', en: 'Give this conversation full access?' },
   'fullAccess.confirm.newTitle': { zh: '这个任务完全放行？', en: 'Give this task full access?' },
@@ -26,7 +26,18 @@ export const fullAccessMessages = {
     zh: '只管这个任务，以后的新任务还是「{p0}」',
     en: 'Only this task; later new tasks still use "{p0}"',
   },
-  'fullAccess.confirm.dontAsk': { zh: '以后不再提醒', en: "Don't ask again" },
+  'fullAccess.confirm.hideStrip': { zh: '启用后不在输入框上方提示', en: "Don't show the banner above the input" },
+  'fullAccess.confirm.hideStripScope': { zh: '所有对话，30 天', en: 'all conversations, 30 days' },
+  'fullAccess.confirm.allowThis': {
+    zh: '会允许这次操作，之后运行命令、改文件、删文件都不再问你',
+    en: 'Allows this request; later commands, edits and deletions run without asking',
+  },
+  'fullAccess.confirm.scopeCard': {
+    zh: '只管这个对话，随时可以在输入框的权限菜单里改回',
+    en: 'Only this conversation; switch back anytime from the permission menu',
+  },
+  'fullAccess.confirm.back': { zh: '返回', en: 'Back' },
+  'fullAccess.confirm.allowThisOk': { zh: '允许这次并完全放行', en: 'Allow and give full access' },
   'fullAccess.confirm.cancel': { zh: '取消', en: 'Cancel' },
   'fullAccess.confirm.ok': { zh: '完全放行', en: 'Allow everything' },
 
@@ -52,13 +63,13 @@ export const fullAccessMessages = {
   },
   'fullAccess.default.ok': { zh: '新任务默认完全放行', en: 'Default to full access' },
 
-  'fullAccess.setting.title': { zh: '切到完全放行前先确认', en: 'Confirm before full access' },
+  'fullAccess.setting.title': { zh: '完全放行时在输入框上方提示', en: 'Show a banner when full access is on' },
   'fullAccess.setting.desc': {
-    zh: '在输入框的权限菜单里选「完全放行」时，先说明会发生什么再切换',
-    en: 'Explain what happens before switching to full access from the permission menu',
+    zh: '关掉后所有对话都不显示，30 天后自动打开；切到完全放行前的确认不受影响',
+    en: 'When off, no conversation shows it; it turns back on after 30 days. The confirmation before full access always appears',
   },
   'fullAccess.setting.keywords': {
-    zh: '完全放行 权限 确认 提醒 不再提醒 危险 full access permission confirm bypass',
-    en: 'full access permission confirm bypass dangerous ask again',
+    zh: '完全放行 权限 提示 不再提示 提示条 危险 full access permission banner warning dismiss',
+    en: 'full access permission banner warning dismiss dangerous',
   },
 } as const

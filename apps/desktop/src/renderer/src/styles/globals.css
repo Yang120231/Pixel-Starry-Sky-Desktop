@@ -54,6 +54,7 @@
   --color-danger: var(--danger);
   --color-notify: var(--notify);
   --color-warn: var(--warn);
+  --color-warn-fg: var(--warn-text);
   --color-status-working: var(--status-working);
   --color-status-seen: var(--status-seen);
 

@@ -27,6 +27,7 @@ import { Button, DiffStat, Popover, cn } from '@/ui'
 import { DiffView } from '@/ui/code/DiffView'
 import { CommandText } from '@/ui/code/CommandText'
 import { Markdown } from '@/ui/markdown/Markdown'
+import { FullAccessConfirm } from '../FullAccessConfirm'
 
 const ICON: Record<ApprovalRequest['kind'], LucideIcon> = {
   command: SquareTerminal,
@@ -135,6 +136,8 @@ export function ApprovalCard({
   const [sent, setSent] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
   const [formText, setFormText] = useState('{}')
+  // 「本会话后续不再询问」会切成完全放行：先在卡片底部就地确认，AI 继续等
+  const [confirmingAll, setConfirmingAll] = useState(false)
   let formContent: Record<string, unknown> | null = null
   try {
     const value: unknown = JSON.parse(formText)
@@ -327,86 +330,99 @@ export function ApprovalCard({
           {tr('session.live.ApprovalCard.sendFailed', { p0: translateMessage(failure) })}
         </p>
       )}
-      <footer className="flex flex-wrap items-center gap-2 rounded-b-xl border-t border-line-subtle bg-wall-tint px-4 py-2.5">
-        {request.kind === 'question' ? (
-          <>
-            <Button
-              variant="primary"
-              disabled={!answers || sent}
-              className="disabled:opacity-50"
-              onClick={() => answers && answer({ type: 'answer', answers })}
-            >
-              {tr('session.live.ApprovalCard.submitAnswers')}{' '}
-            </Button>
-            {recommended && (
+      {confirmingAll ? (
+        <FullAccessConfirm
+          title={tr('fullAccess.confirm.title')}
+          items={[tr('fullAccess.confirm.allowThis'), tr('fullAccess.confirm.scopeCard')]}
+          cancelLabel={tr('fullAccess.confirm.back')}
+          confirmLabel={tr('fullAccess.confirm.allowThisOk')}
+          disabled={sent}
+          onCancel={() => setConfirmingAll(false)}
+          onConfirm={() => answer({ type: 'allow_all' })}
+          className="rounded-b-xl border-t border-line-subtle bg-hover px-4 pt-2.5 pb-2.5"
+        />
+      ) : (
+        <footer className="flex flex-wrap items-center gap-2 rounded-b-xl border-t border-line-subtle bg-wall-tint px-4 py-2.5">
+          {request.kind === 'question' ? (
+            <>
               <Button
-                variant="outline"
-                disabled={sent}
-                data-all-recommended
-                onClick={() => answer({ type: 'answer', answers: recommended })}
+                variant="primary"
+                disabled={!answers || sent}
+                className="disabled:opacity-50"
+                onClick={() => answers && answer({ type: 'answer', answers })}
               >
-                {tr('question.allRecommended')}
+                {tr('session.live.ApprovalCard.submitAnswers')}{' '}
               </Button>
-            )}
-            <Button
-              variant="ghost"
-              disabled={sent}
-              onClick={() =>
-                answer({
-                  type: 'deny',
-                  get message() {
-                    return tr('session.live.ApprovalCard.userSkippedThisQuestion')
-                  },
-                })
-              }
-            >
-              {tr('session.live.ApprovalCard.skip')}{' '}
-            </Button>
-          </>
-        ) : request.kind === 'plan' ? (
-          <>
-            <Button variant="primary" disabled={sent} onClick={() => answer({ type: 'allow' })}>
-              {tr('session.live.ApprovalCard.startExecution')}{' '}
-            </Button>
-            <Button variant="ghost" disabled={sent} onClick={() => answer({ type: 'deny' })}>
-              {tr('session.live.ApprovalCard.refinePlan')}{' '}
-            </Button>
-          </>
-        ) : (
-          <>
-            <Button
-              variant="primary"
-              disabled={sent || request.canAllow === false || (request.formSchema !== undefined && !formContent)}
-              onClick={() =>
-                answer(request.formSchema !== undefined ? { type: 'form', content: formContent! } : { type: 'allow' })
-              }
-            >
-              {tr('session.live.ApprovalCard.allowOnce')}{' '}
-            </Button>
-            {request.alwaysScopes.length > 0 && (
-              <AlwaysAllowButton
-                scopes={request.alwaysScopes}
-                disabled={sent}
-                onPick={scope => answer({ type: 'allow_always', scope })}
-              />
-            )}
-            <Button variant="ghost" disabled={sent} onClick={() => answer({ type: 'deny' })}>
-              {tr('session.live.ApprovalCard.deny')}{' '}
-            </Button>
-            {request.canAllowAll && (
+              {recommended && (
+                <Button
+                  variant="outline"
+                  disabled={sent}
+                  data-all-recommended
+                  onClick={() => answer({ type: 'answer', answers: recommended })}
+                >
+                  {tr('question.allRecommended')}
+                </Button>
+              )}
               <Button
-                variant="outline"
-                className="ml-auto"
+                variant="ghost"
                 disabled={sent}
-                title={tr('session.live.ApprovalCard.allowAllHint')}
-                onClick={() => answer({ type: 'allow_all' })}
+                onClick={() =>
+                  answer({
+                    type: 'deny',
+                    get message() {
+                      return tr('session.live.ApprovalCard.userSkippedThisQuestion')
+                    },
+                  })
+                }
               >
-                {tr('session.live.ApprovalCard.allowAll')}
+                {tr('session.live.ApprovalCard.skip')}{' '}
               </Button>
-            )}
-          </>
-        )}
-      </footer>
+            </>
+          ) : request.kind === 'plan' ? (
+            <>
+              <Button variant="primary" disabled={sent} onClick={() => answer({ type: 'allow' })}>
+                {tr('session.live.ApprovalCard.startExecution')}{' '}
+              </Button>
+              <Button variant="ghost" disabled={sent} onClick={() => answer({ type: 'deny' })}>
+                {tr('session.live.ApprovalCard.refinePlan')}{' '}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                variant="primary"
+                disabled={sent || request.canAllow === false || (request.formSchema !== undefined && !formContent)}
+                onClick={() =>
+                  answer(request.formSchema !== undefined ? { type: 'form', content: formContent! } : { type: 'allow' })
+                }
+              >
+                {tr('session.live.ApprovalCard.allowOnce')}{' '}
+              </Button>
+              {request.alwaysScopes.length > 0 && (
+                <AlwaysAllowButton
+                  scopes={request.alwaysScopes}
+                  disabled={sent}
+                  onPick={scope => answer({ type: 'allow_always', scope })}
+                />
+              )}
+              <Button variant="ghost" disabled={sent} onClick={() => answer({ type: 'deny' })}>
+                {tr('session.live.ApprovalCard.deny')}{' '}
+              </Button>
+              {request.canAllowAll && (
+                <Button
+                  variant="outline"
+                  className="ml-auto"
+                  disabled={sent}
+                  title={tr('session.live.ApprovalCard.allowAllHint')}
+                  onClick={() => setConfirmingAll(true)}
+                >
+                  {tr('session.live.ApprovalCard.allowAll')}
+                </Button>
+              )}
+            </>
+          )}
+        </footer>
+      )}
     </section>
   )
 }

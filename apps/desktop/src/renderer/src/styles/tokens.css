@@ -63,6 +63,8 @@
   --danger: #b8463f;
   --notify: #d2483f;
   --warn: #b97a36;
+  /* 小字号的警示文字（描边按钮等）：浅色里 --warn 对白底对比度不够，压暗一档 */
+  --warn-text: #8a5419;
   /* 反馈状态「团队处理中」紫、「团队已看到」蓝（docs/ui/feedback-v2.md §4） */
   --status-working: #7a5cc4;
   --status-seen: #3f78b8;
@@ -207,6 +209,7 @@
   --danger: #f0857d;
   --notify: #f0675e;
   --warn: #e0a86a;
+  --warn-text: #e0a86a;
   --status-working: #b39cf0;
   --status-seen: #7fb0e8;
 

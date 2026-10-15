@@ -20,8 +20,8 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals())
 
-describe('完全放行提示的本机共享确认', () => {
-  it('关闭后，其他窗口和重新打开的窗口读取同一个确认', async () => {
+describe('完全放行提示条的「不再提示」', () => {
+  it('关闭后，其他窗口和重新打开的窗口读取同一条记录', async () => {
     const first = await load()
     const second = await load()
     expect(first.readFullAccessStripDismissed()).toBe(false)
@@ -30,45 +30,37 @@ describe('完全放行提示的本机共享确认', () => {
     expect((await load()).readFullAccessStripDismissed()).toBe(true)
   })
 
-  it.each(['ask', 'edits', 'plan'] as const)('任一窗口从完全放行切到 %s，立即全局恢复提示', async mode => {
-    const first = await load()
-    const second = await load()
-    first.dismissFullAccessStrip()
-    second.resetFullAccessStripOnModeChange('full', mode)
-    expect(first.readFullAccessStripDismissed()).toBe(false)
-    expect(second.readFullAccessStripDismissed()).toBe(false)
-    expect((await load()).readFullAccessStripDismissed()).toBe(false)
-  })
-
-  it('重新切入完全放行也全局恢复提示', async () => {
-    const first = await load()
-    const second = await load()
-    first.dismissFullAccessStrip()
-    second.resetFullAccessStripOnModeChange('edits', 'full')
-    expect(first.readFullAccessStripDismissed()).toBe(false)
-    second.dismissFullAccessStrip()
-    expect(first.readFullAccessStripDismissed()).toBe(true)
-    first.resetFullAccessStripOnModeChange('ask', 'full')
-    expect(second.readFullAccessStripDismissed()).toBe(false)
-  })
-
-  it('重复选择完全放行不清除确认', async () => {
+  it('记住 30 天，过期后恢复显示', async () => {
     const store = await load()
-    store.dismissFullAccessStrip()
-    store.resetFullAccessStripOnModeChange('full', 'full')
-    expect(store.readFullAccessStripDismissed()).toBe(true)
+    const now = 1_800_000_000_000
+    store.setFullAccessStripDismissed(true, now)
+    expect(store.readFullAccessStripDismissed(now + store.FULL_ACCESS_STRIP_DISMISS_MS - 1)).toBe(true)
+    expect(store.readFullAccessStripDismissed(now + store.FULL_ACCESS_STRIP_DISMISS_MS)).toBe(false)
   })
 
-  it('其他模式之间切换或再次选择其他模式，也会清除全局确认', async () => {
+  it('恢复显示会清除记录，所有窗口同步', async () => {
     const first = await load()
     const second = await load()
-    for (const from of ['ask', 'edits', 'plan'] as const) {
-      for (const to of ['ask', 'edits', 'plan'] as const) {
-        first.dismissFullAccessStrip()
-        second.resetFullAccessStripOnModeChange(from, to)
-        expect(first.readFullAccessStripDismissed()).toBe(false)
-      }
-    }
+    first.dismissFullAccessStrip()
+    second.setFullAccessStripDismissed(false)
+    expect(first.readFullAccessStripDismissed()).toBe(false)
+    expect(data.has(first.FULL_ACCESS_STRIP_DISMISSED_KEY)).toBe(false)
+  })
+
+  it('旧版的记录作废并在下次写入时清掉', async () => {
+    data.set('pixelsky.fullAccess.stripDismissed', '1')
+    const store = await load()
+    expect(store.readFullAccessStripDismissed()).toBe(false)
+    store.dismissFullAccessStrip()
+    expect(data.has('pixelsky.fullAccess.stripDismissed')).toBe(false)
+  })
+
+  it('记录不是有效时间时当作没关过', async () => {
+    const store = await load()
+    data.set(store.FULL_ACCESS_STRIP_DISMISSED_KEY, 'abc')
+    expect(store.readFullAccessStripDismissed()).toBe(false)
+    data.set(store.FULL_ACCESS_STRIP_DISMISSED_KEY, '0')
+    expect(store.readFullAccessStripDismissed()).toBe(false)
   })
 
   it('存储不可用时仍能在本窗口隐藏和恢复', async () => {
@@ -87,19 +79,19 @@ describe('完全放行提示的本机共享确认', () => {
     expect(store.readFullAccessStripDismissed()).toBe(false)
     store.dismissFullAccessStrip()
     expect(store.readFullAccessStripDismissed()).toBe(true)
-    store.resetFullAccessStripOnModeChange('edits', 'full')
+    store.setFullAccessStripDismissed(false)
     expect(store.readFullAccessStripDismissed()).toBe(false)
   })
 
-  it('演示模式只影响内存，不覆盖用户已有确认', async () => {
+  it('演示模式只影响内存，不覆盖用户已有记录', async () => {
     const store = await load()
-    data.set(store.FULL_ACCESS_STRIP_DISMISSED_KEY, '1')
+    data.set(store.FULL_ACCESS_STRIP_DISMISSED_KEY, '1700000000000')
     Object.assign(window, { pixelsky: { demo: true } })
     expect(store.readFullAccessStripDismissed()).toBe(false)
     store.dismissFullAccessStrip()
     expect(store.readFullAccessStripDismissed()).toBe(true)
-    store.resetFullAccessStripOnModeChange('edits', 'full')
+    store.setFullAccessStripDismissed(false)
     expect(store.readFullAccessStripDismissed()).toBe(false)
-    expect(data.get(store.FULL_ACCESS_STRIP_DISMISSED_KEY)).toBe('1')
+    expect(data.get(store.FULL_ACCESS_STRIP_DISMISSED_KEY)).toBe('1700000000000')
   })
 })

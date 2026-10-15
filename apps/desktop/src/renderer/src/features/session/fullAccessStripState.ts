@@ -1,26 +1,40 @@
 import { useSyncExternalStore } from 'react'
-import type { PermissionMode } from '@pixelsky/protocol'
 
-export const FULL_ACCESS_STRIP_DISMISSED_KEY = 'pixelsky.fullAccess.stripDismissed'
+// 完全放行时输入框上方提示条的「不再提示」：本机所有对话、所有窗口共用，记住 30 天（和 Codex 的
+// full-access-warning-dismissed-at 一样）；切换权限不清除。切到完全放行前的确认不受它影响，始终会出现。
+export const FULL_ACCESS_STRIP_DISMISSED_KEY = 'pixelsky.fullAccess.stripDismissedAt'
+/** 旧版只记「关过」，切换权限就清除；新规则下作废 */
+const LEGACY_KEY = 'pixelsky.fullAccess.stripDismissed'
+export const FULL_ACCESS_STRIP_DISMISS_MS = 30 * 24 * 60 * 60 * 1000
+
 const listeners = new Set<() => void>()
-let fallback = false
+let fallback: number | null = null
 
-/** 本机所有窗口共用一次风险提示的确认；切换对话、重新挂载不清除。 */
-export function readFullAccessStripDismissed(): boolean {
+function readAt(): number | null {
   try {
-    if (!window.pixelsky?.demo) return localStorage.getItem(FULL_ACCESS_STRIP_DISMISSED_KEY) === '1'
+    if (!window.pixelsky?.demo) {
+      const at = Number(localStorage.getItem(FULL_ACCESS_STRIP_DISMISSED_KEY))
+      return Number.isFinite(at) && at > 0 ? at : null
+    }
   } catch {
-    // 存储不可用时保留本窗口内的确认。
+    // 存储不可用时用本窗口内的记录。
   }
   return fallback
 }
 
-function setDismissed(next: boolean): void {
-  fallback = next
+export function readFullAccessStripDismissed(now = Date.now()): boolean {
+  const at = readAt()
+  return at !== null && now - at < FULL_ACCESS_STRIP_DISMISS_MS
+}
+
+/** true：从现在起 30 天内不显示；false：恢复显示 */
+export function setFullAccessStripDismissed(next: boolean, now = Date.now()): void {
+  fallback = next ? now : null
   try {
     if (!window.pixelsky?.demo) {
-      if (next) localStorage.setItem(FULL_ACCESS_STRIP_DISMISSED_KEY, '1')
+      if (next) localStorage.setItem(FULL_ACCESS_STRIP_DISMISSED_KEY, String(now))
       else localStorage.removeItem(FULL_ACCESS_STRIP_DISMISSED_KEY)
+      localStorage.removeItem(LEGACY_KEY)
     }
   } catch {
     // 本次仍然生效。
@@ -29,12 +43,7 @@ function setDismissed(next: boolean): void {
 }
 
 export function dismissFullAccessStrip(): void {
-  setDismissed(true)
-}
-
-/** 任一窗口选择非完全放行模式就清除全局确认；重新切入完全放行时也恢复提示。 */
-export function resetFullAccessStripOnModeChange(from: PermissionMode, to: PermissionMode): void {
-  if (to !== 'full' || from !== 'full') setDismissed(false)
+  setFullAccessStripDismissed(true)
 }
 
 function subscribe(fn: () => void): () => void {
@@ -50,6 +59,11 @@ function subscribe(fn: () => void): () => void {
   }
 }
 
+/** 每次渲染都重新读，过了 30 天下一次渲染就恢复显示 */
 export function useFullAccessStripDismissed(): boolean {
-  return useSyncExternalStore(subscribe, readFullAccessStripDismissed, () => false)
+  return useSyncExternalStore(
+    subscribe,
+    () => readFullAccessStripDismissed(),
+    () => false,
+  )
 }
