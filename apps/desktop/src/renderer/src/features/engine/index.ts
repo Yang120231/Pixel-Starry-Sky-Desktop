@@ -35,7 +35,7 @@ export {
   takePendingSourceAction,
   type SourceAction,
 } from './sourceActions'
-export { demoRetry, useDemoQueueController } from './demoQueue'
+export { demoAnswer, demoRetry, useDemoQueueController } from './demoQueue'
 export {
   DEFAULT_EFFORT,
   EFFORT_LABEL,

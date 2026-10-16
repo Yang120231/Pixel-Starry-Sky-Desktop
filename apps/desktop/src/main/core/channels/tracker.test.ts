@@ -81,8 +81,8 @@ describe('任务状态跟踪（§5.1）', () => {
     ])
     expect(r.patches).toEqual([
       { status: 'running', request: null, progress: null },
-      { status: 'waiting', request: request('r1') },
-      { status: 'running', request: null },
+      { status: 'waiting', request: request('r1'), waitingCount: 1 },
+      { status: 'running', request: null, waitingCount: 0 },
     ])
     expect(r.finish).toEqual({ status: 'done' })
     expect(r.run.reply).toBe('改好了')

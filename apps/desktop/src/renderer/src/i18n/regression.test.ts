@@ -60,6 +60,7 @@ import { extSnippetMessages } from '../../../shared/i18n/extSnippetMessages'
 import { extTaskMessages } from '../../../shared/i18n/extTaskMessages'
 import { promptMessages } from '../../../shared/i18n/promptMessages'
 import { resumeMessages } from '../../../shared/i18n/resumeMessages'
+import { approvalMessages } from '../../../shared/i18n/approvalMessages'
 
 // 与 shared/i18n/translate.ts 的 allMessages 合并顺序一致
 const dictionaries: Record<string, Record<string, unknown>> = {
@@ -121,6 +122,7 @@ const dictionaries: Record<string, Record<string, unknown>> = {
   extTaskMessages,
   promptMessages,
   resumeMessages,
+  approvalMessages,
 }
 
 /** 中英文值不同、需要保持现状的重复 key（当前为空；新增重复必须先说明原因）。 */

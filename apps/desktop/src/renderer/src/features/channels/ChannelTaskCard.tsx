@@ -9,6 +9,7 @@ import type { ChannelTaskAction } from '../../../../shared/types/channels'
 import { formatClock } from './format'
 import { agentPlace } from './ChannelMessage'
 import { canApprove, canControlTask, canWithdraw, isMyTask } from './teamModel'
+import { approvalSummary } from '@/features/session/live/approvals/model'
 
 const STATUS_LABEL: Record<ChannelTaskStatus, TranslationKey> = {
   queued: 'channels.task.queued',
@@ -67,6 +68,14 @@ function statusDetail(task: ChannelTask, owner: string): string | null {
 }
 
 /** 派给 AI 成员的一项活（docs/ui/channels.md §5.2，Phase B 改动见 channels-phase-b.md §6），状态变化时原地更新 */
+
+/** 等你确认的那一项写什么：提问写问题，其余和会话里的审批列表同一套摘要（docs/ui/approval-stack.md §3） */
+function waitingText(request: NonNullable<ChannelTask['request']>): string {
+  if (request.kind === 'question') return request.questions?.[0]?.question || request.title
+  if (request.kind === 'plan') return request.title
+  const s = approvalSummary(request, null)
+  return [s.label, s.text].filter(Boolean).join(' ') || request.title
+}
 export function ChannelTaskCard({
   task,
   membersById,
@@ -150,7 +159,12 @@ export function ChannelTaskCard({
             className={cn('mt-1 line-clamp-2 text-meta break-words text-fg-muted', task.request.command && 'font-mono')}
             title={task.request.command ?? task.request.title}
           >
-            {task.request.command?.trim() || task.request.questions?.[0]?.question || task.request.title}
+            {waitingText(task.request)}
+            {(task.waitingCount ?? 1) > 1 && (
+              <span data-waiting-more className="ml-1.5 font-sans text-fg-faint">
+                {tr('channels.task.waitingMore', { n: (task.waitingCount ?? 1) - 1 })}
+              </span>
+            )}
           </p>
         )}
         {task.decision && (

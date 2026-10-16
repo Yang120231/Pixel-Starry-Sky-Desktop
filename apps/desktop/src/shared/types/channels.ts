@@ -208,8 +208,10 @@ export interface ChannelTask extends ChannelMessageBase {
   note?: 'cancelled' | 'rejected' | 'expired' | null
   /** 回复里「需要你决定：」那一行 */
   decision?: string | null
-  /** 等你确认的请求（waiting 时） */
+  /** 等你确认的请求（waiting 时）；同时有几项时是第一项 */
   request?: ApprovalRequest | null
+  /** 同时等你确认的项数（AI 一次并行调用几个要审批的工具，docs/ui/approval-stack.md） */
+  waitingCount?: number
   /** 进行中这一轮的计划进度 */
   progress?: { done: number; total: number } | null
   /** 排队中：同一个成员前面还有几项活 */

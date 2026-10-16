@@ -34,6 +34,7 @@ export const SHOWCASE_SESSIONS = [
   { id: 'demo-claude-approve-command', title: '审批：运行命令' },
   { id: 'demo-claude-approve-file', title: '审批：修改文件' },
   { id: 'demo-claude-approve-tool', title: '审批：使用 MCP 工具' },
+  { id: 'demo-claude-approve-many', title: '审批：同时几项（合并成列表）' },
   { id: 'demo-claude-question', title: '提问：单选和多选' },
   { id: 'demo-claude-plan', title: '计划确认' },
   { id: 'demo-claude-long', title: '长对话：轮次跳转（30 轮）' },
@@ -1549,6 +1550,87 @@ const approveTool = waiting(
   },
 )
 
+// 同时几项：AI 一次并行调用几个要审批的工具（docs/ui/approval-stack.md）
+const MANY_GREPS = [
+  { id: 'm-g1', pattern: 'providerOf|function providerOf', path: 'D:\\work\\pixel-web\\src\\client\\format.ts' },
+  { id: 'm-g2', pattern: 'provider|anthropic|openai|MODEL_|model_name', path: 'D:\\work\\deeperseeker\\app.py' },
+  { id: 'm-g3', pattern: 'provider', path: 'D:\\work\\pixel-web\\src\\wire.ts' },
+]
+const approveMany = snapshot(
+  record('demo-claude-approve-many', { updatedAt: T0 }),
+  [
+    user('m-u', '看一下 provider 是从哪里来的，顺便把 PR 开了、推上去', 1, { turnId: 'm-turn' }),
+    assistant('m-a', '我在几个项目里同时搜一下 provider 相关的代码，再开 PR、推送分支。'),
+    {
+      kind: 'tool',
+      id: 'm-pr',
+      tool: 'mcp',
+      name: 'mcp__github__create_pull_request',
+      title: 'github · create_pull_request',
+      output: '',
+      status: 'running',
+    },
+    ...MANY_GREPS.map(
+      (g): Item => ({
+        kind: 'tool',
+        id: g.id,
+        tool: 'mcp',
+        name: 'mcp__fastctx__grep',
+        title: `fastctx · grep ${g.pattern}`,
+        output: '',
+        status: 'running',
+      }),
+    ),
+    {
+      kind: 'command',
+      id: 'm-c',
+      command: 'git push -u origin feat/draft',
+      description: '把 feat/draft 推到远端并设置上游',
+      output: '',
+      exitCode: null,
+      status: 'running',
+    },
+  ],
+  {
+    state: 'waiting',
+    turnId: 'm-turn',
+    execution: { model: 'claude-opus-5-5', effort: 'high', platform: null },
+    pending: [
+      {
+        requestId: 'req-many-pr',
+        itemId: 'm-pr',
+        kind: 'tool',
+        title: '使用 mcp__github__create_pull_request',
+        toolName: 'mcp__github__create_pull_request',
+        description: 'github · create_pull_request',
+        input: PR_INPUT,
+        alwaysScopes: ALWAYS,
+      },
+      ...MANY_GREPS.map(
+        (g): ApprovalRequest => ({
+          requestId: `req-many-${g.id}`,
+          itemId: g.id,
+          kind: 'tool',
+          title: '使用 mcp__fastctx__grep',
+          toolName: 'mcp__fastctx__grep',
+          description: 'fastctx · grep',
+          input: { pattern: g.pattern, path: g.path, output_mode: 'content', line_numbers: true, head_limit: 60 },
+          alwaysScopes: ALWAYS,
+        }),
+      ),
+      {
+        requestId: 'req-many-push',
+        itemId: 'm-c',
+        kind: 'command',
+        title: '运行命令',
+        command: 'git push -u origin feat/draft',
+        description: '把 feat/draft 推到远端并设置上游',
+        alwaysScopes: ALWAYS,
+      },
+    ],
+  },
+)
+
 const question = waiting(
   'demo-claude-question',
   '草稿过期要不要清掉？你定个方案',
@@ -1992,6 +2074,7 @@ export const showcaseSnapshots: Record<string, SessionSnapshot> = Object.fromEnt
     approveCommand,
     approveFile,
     approveTool,
+    approveMany,
     question,
     plan,
     long,
