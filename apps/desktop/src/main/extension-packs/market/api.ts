@@ -1,4 +1,4 @@
-import { codedError } from '@pixelsky/protocol'
+import { codedError, isExtId, isExtVersion } from '@pixelsky/protocol'
 import type {
   ExtPackIssue,
   ExtStoreBlockEntry,
@@ -322,17 +322,14 @@ function parseUpload(body: unknown): ExtStoreUploadResult {
 // 请求
 // ---------------------------------------------------------------------------
 
-// TODO(7.1a 合入后换成 protocol 的 isExtId / isExtVersion)：这里先只做能安全拼进路径的简单检查
-const SAFE_ID = /^[a-z0-9][a-z0-9.-]{2,99}$/
-const SAFE_VERSION = /^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$/
-
+// 拼进路径的 id / 版本号先按协议包的格式规则检查（和云端一致），不合格的不发请求
 function idPath(id: string): string {
-  if (!SAFE_ID.test(id) || id.includes('..')) throw codedError('extstore.badRequest')
+  if (!isExtId(id)) throw codedError('extstore.badRequest')
   return encodeURIComponent(id)
 }
 
 function versionPath(version: string): string {
-  if (!SAFE_VERSION.test(version) || version.includes('..')) throw codedError('extstore.badRequest')
+  if (!isExtVersion(version)) throw codedError('extstore.badRequest')
   return encodeURIComponent(version)
 }
 

@@ -1,4 +1,4 @@
-import { codedError } from '@pixelsky/protocol'
+import { codedError, isExtId, isExtVersion } from '@pixelsky/protocol'
 import type { ExtStoreReportReason } from '@pixelsky/protocol'
 import { object } from '@pixelsky/engine'
 import * as ipc from '../../ipc/guard'
@@ -9,8 +9,6 @@ import type { ExtensionPacks } from '../service'
 // 扩展商店的主进程一侧（docs/ui/extension-store-client.md §3.10）。
 // 现在是骨架：只读通道回空数据，会写的通道参数检查完回 extstore.notImplemented，后面的切片逐个接上真实现。
 
-const ID_MAX = 100
-const VERSION_MAX = 64
 const NAME_MAX = 64
 const TOKEN_MAX = 200
 const QUERY_MAX = 100
@@ -33,9 +31,15 @@ function str(value: unknown, max: number): string {
   return value
 }
 
-/** 扩展 id 和版本号在主进程只做类型和长度检查；格式检查等 7.1a 的 isExtId / isExtVersion 到位后换上 */
-const idArg = (value: unknown): string => str(value, ID_MAX)
-const versionArg = (value: unknown): string => str(value, VERSION_MAX)
+/** 扩展 id 和版本号按协议包的格式规则检查（和云端一致） */
+const idArg = (value: unknown): string => {
+  if (!isExtId(value)) throw codedError('extstore.badRequest')
+  return value
+}
+const versionArg = (value: unknown): string => {
+  if (!isExtVersion(value)) throw codedError('extstore.badRequest')
+  return value
+}
 
 function optionalStr(value: unknown, max: number): string | undefined {
   if (value === undefined || value === null || value === '') return undefined
