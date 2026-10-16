@@ -4,9 +4,11 @@ import { basename, join, resolve, sep } from 'node:path'
 import type { ExtPackInfo, ExtPackOptions, ExtPackState, SkillCommand } from '@pixelsky/protocol'
 import { codedError, EXT_LIMITS, EXT_MANIFEST, parseJsonc, resolvePackPath } from '@pixelsky/protocol'
 import { hasManifest, loadPack, packKey, type LoadedPack } from './loader'
-import { emptyBlocklist, readBlocklistFile, type BlocklistFile } from './market/blocklist'
+import { emptyBlocklist, matchBlocklist, readBlocklistFile, type BlocklistFile } from './market/blocklist'
+import { cleanStoreDir, removeStoreFiles } from './market/cleanup'
 import { keyStatus as storeKeyStatus, type StoreKeyStatus } from './market/keys'
-import { loadStore, readStoreEntries, storeBlock } from './market/store-load'
+import { loadStore, loadStorePack, readStoreEntries, readStoreRecord, storeBlock } from './market/store-load'
+import type { StoreInstallRecord, StoreTasks } from './market/types'
 import { applyWinners } from './market/winner'
 import { ensureClaudeWrappers, gcClaudeWrappers, packSkillCommands, packSkillLaunch } from './skills'
 import { readStateFile, writeStateFile, emptyState, type PackStateFile } from './store'
@@ -17,6 +19,8 @@ export interface ExtPacksOptions {
   appVersion: string
   /** 钥匙在某个站点上的状态（loadStore 遇到已作废的钥匙就设 blocked）；不传用 market/keys.ts 的钥匙表，测试可以注入 */
   keyStatus?: (keyId: string, site: string) => StoreKeyStatus | 'unknown'
+  /** 卸载商店扩展时删它的图标缓存（cache/icons/<id>@*）；不传就不删。market 的 storeIcons().remove 由 initExtensionPacks 传进来 */
+  removeIcons?: (id: string) => Promise<void>
 }
 
 type Engine = 'claude' | 'codex' | 'pixel'
@@ -72,6 +76,8 @@ export class ExtensionPacks {
   private blocklist: BlocklistFile = emptyBlocklist()
   private packs: LoadedPack[] = []
   private wrappers = new Map<string, string>()
+  /** 商店 installer 挂上来的能力（卸载前取消这个 id 正在进行的下载）；没挂上就跳过 */
+  private storeTasks: StoreTasks | null = null
   private phase1: Promise<void> = Promise.resolve()
   private phase2: Promise<void> = Promise.resolve()
   private chain: Promise<unknown> = Promise.resolve()
@@ -106,6 +112,7 @@ export class ExtensionPacks {
     gcClaudeWrappers(this.runtimeDir)
     // 内置和商店一起第一次 commit（loadStore 末尾），第一次推出去的状态里就有商店扩展
     this.phase1 = this.loadBuiltin()
+      .then(() => cleanStoreDir(this.storeDir, message => console.warn('[extension-packs]', message)))
       .then(() => this.loadStore())
       .catch(e => console.error('[extension-packs] builtin/store load failed', e))
     this.phase2 = this.phase1
@@ -185,17 +192,20 @@ export class ExtensionPacks {
     this.replaceSource('builtin', packs)
   }
 
-  /** 加载商店扩展，然后算同 id 的生效关系、刷新包装、第一次 commit（内置的同步和这里合成一次） */
-  private async loadStore(): Promise<void> {
-    const packs = await loadStore({
-      storeDir: this.storeDir,
+  private storeLoadInput() {
+    return {
       state: this.data.store,
       blocklist: this.blocklist,
       keyStatus: this.keyStatus,
       appVersion: this.opts.appVersion,
       revision: () => ++this.packRevision,
-      log: message => console.warn('[extension-packs]', message),
-    })
+      log: (message: string) => console.warn('[extension-packs]', message),
+    }
+  }
+
+  /** 加载商店扩展，然后算同 id 的生效关系、刷新包装、第一次 commit（内置的同步和这里合成一次） */
+  private async loadStore(): Promise<void> {
+    const packs = await loadStore({ storeDir: this.storeDir, ...this.storeLoadInput() })
     this.replaceSource('store', packs)
     applyWinners(this.packs)
     await this.refreshWrappers()
@@ -254,6 +264,68 @@ export class ExtensionPacks {
       () => undefined,
     )
     return run
+  }
+
+  // ---------- 商店扩展（market/install.ts 经 market/ipc.ts 拼的 StoreHost 调这里） ----------
+
+  /** 排进串行队列：里面改状态不会和启停、卸载、别的安装交叉（给 installer 的「换上」用） */
+  runExclusive<T>(fn: () => Promise<T>): Promise<T> {
+    return this.mutate(fn)
+  }
+
+  /** installer 取消任务的入口挂在这里；不用 export let，由 market/ipc.ts 接线 */
+  attachStoreTasks(tasks: StoreTasks): void {
+    this.storeTasks = tasks
+  }
+
+  /** 本机装的这份商店扩展的回执（读 store/<id>/install.json）；没装是 null */
+  storeInfo(id: string): StoreInstallRecord | null {
+    return readStoreRecord(this.storeDir, id)
+  }
+
+  /** 这个站点的停用名单里有没有这个版本；有就给原因（安装前、换上前再查一遍用） */
+  storeBlocked(site: string, id: string, version: string): { reason: string; at: string } | null {
+    return matchBlocklist(this.blocklist, site, id, version)
+  }
+
+  /** 这个站点的停用名单上次读到的时间（ISO）；没读到过是 null */
+  blocklistAt(site: string): string | null {
+    return this.blocklist.sites[site]?.fetchedAt ?? null
+  }
+
+  /**
+   * 换上一份商店扩展（新装、更新、换回）：必须在 runExclusive 里调。回执和解压目录已经写好。
+   * 第一次装（state.json.store 里还没有这个 id）时继承同 id 内置版的开关和选项；更新和换回保留 store[id] 原样。
+   */
+  async replaceStorePack(record: StoreInstallRecord, root: string): Promise<ExtPackInfo> {
+    const id = record.id
+    if (!this.data.store[id]) {
+      const inherited = this.data.builtin[id]
+      this.data.store[id] = inherited
+        ? { enabled: inherited.enabled, options: { ...inherited.options } }
+        : { enabled: true, options: {} }
+      this.save()
+    }
+    const pack = await loadStorePack(record, root, this.storeLoadInput())
+    const rest = this.packs.filter(p => p.info.source === 'store' && p.info.key !== pack.info.key)
+    this.replaceSource(
+      'store',
+      [...rest, pack].sort((a, b) => (a.info.key < b.info.key ? -1 : a.info.key > b.info.key ? 1 : 0)),
+    )
+    applyWinners(this.packs)
+    await this.refreshWrappers()
+    this.commit()
+    return pack.info
+  }
+
+  /** 卸载的内存和设置那一半：去掉这一项、删 state.json.store[id]、让同 id 的内置版顶上、commit。必须在 runExclusive 里调；文件由调用方再删 */
+  async removeStorePack(id: string): Promise<void> {
+    this.packs = this.packs.filter(p => !(p.info.source === 'store' && p.info.key === packKey('store', id)))
+    delete this.data.store[id]
+    this.save()
+    applyWinners(this.packs)
+    await this.refreshWrappers()
+    this.commit()
   }
 
   private find(key: string): LoadedPack {
@@ -325,12 +397,24 @@ export class ExtensionPacks {
     })
   }
 
-  remove(key: string): Promise<void> {
+  async remove(key: string): Promise<void> {
+    // 商店扩展：先取消这个 id 正在进行的下载并等它退出，再进队列卸载（等加载完再找，免得启动时找不到）
+    await this.ready()
+    const pre = this.packs.find(p => p.info.key === key)
+    if (pre?.info.source === 'store') await this.storeTasks?.cancel(key.slice(2))
     return this.mutate(async () => {
       const pack = this.find(key)
       if (pack.info.source === 'builtin') throw codedError('extpacks.builtinRemove')
-      // 卸载商店扩展（取消任务、commit、删目录）是 7.2d 的事；这里先不让它只从内存里消失、重启又回来
-      if (pack.info.source === 'store') throw codedError('extstore.notImplemented')
+      if (pack.info.source === 'store') {
+        const id = key.slice(2)
+        // 先让贡献马上消失（去内存、删设置、让同 id 的内置版顶上、commit），再删文件；
+        // 文件在队列里删（不会和同 id 的下一次安装交叉），删不掉的留给下次启动的 cleanStoreDir
+        await this.removeStorePack(id)
+        const log = (message: string): void => console.warn('[extension-packs]', message)
+        await removeStoreFiles(this.storeDir, id, log)
+        await this.opts.removeIcons?.(id).catch(() => undefined)
+        return
+      }
       this.data.folders = this.data.folders.filter(f => packKey('folder', resolve(f.path)) !== key)
       this.save()
       this.packs = this.packs.filter(p => p !== pack)

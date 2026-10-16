@@ -42,6 +42,15 @@ function parseRecord(raw: unknown, id: string): StoreInstallRecord | null {
   }
 }
 
+/** 读 store/<id>/install.json；不存在、读不了、形状不对返回 null */
+export function readStoreRecord(storeDir: string, id: string): StoreInstallRecord | null {
+  try {
+    return parseRecord(JSON.parse(readFileSync(join(storeDir, id, 'install.json'), 'utf8')), id)
+  } catch {
+    return null
+  }
+}
+
 /**
  * 同步扫 store 目录下每个 <id>/install.json：回执读不了、形状不对、目录不在的跳过并写一行日志，不影响别的。
  * 按 id 排序；`.tmp` 之类不是合法 id 的目录不是扩展。启动时的 preReadKey 和 loadStore 共用。
@@ -58,12 +67,7 @@ export function readStoreEntries(storeDir: string, log: (message: string) => voi
   }
   const out: StoreEntry[] = []
   for (const id of names) {
-    let record: StoreInstallRecord | null
-    try {
-      record = parseRecord(JSON.parse(readFileSync(join(storeDir, id, 'install.json'), 'utf8')), id)
-    } catch {
-      record = null
-    }
+    const record = readStoreRecord(storeDir, id)
     if (!record) {
       log(`skip store/${id}: install.json is missing or invalid`)
       continue
@@ -105,38 +109,46 @@ export interface LoadStoreInput {
 }
 
 /**
- * 加载商店扩展。装的时候已经验过签、按上传标准检查过，所以不扫 SVG 内容（scanSvg:false），
- * 以后商店版 Material（1255 个文件）也不用每次启动都扫。
+ * 加载一份商店扩展（启动时逐个加载、安装 / 更新换上以后也用它）。装的时候已经验过签、按上传标准检查过，
+ * 所以不扫 SVG 内容（scanSvg:false），以后商店版 Material（1255 个文件）也不用每次启动都扫。
  * 名单命中或钥匙已作废的设 blocked（live 为 false）；同 id 的生效关系由调用方再跑 applyWinners。
  */
-export async function loadStore(input: LoadStoreInput): Promise<LoadedPack[]> {
-  const { storeDir, state, blocklist, keyStatus, appVersion, revision, log, now } = input
-  const packs: LoadedPack[] = []
-  for (const { record, root } of readStoreEntries(storeDir, log)) {
-    const st = state[record.id] ?? { enabled: true, options: {} }
-    const pack = await loadPack({
-      key: packKey('store', record.id),
-      root,
-      source: 'store',
-      enabled: st.enabled,
-      addedAt: record.installedAt,
-      options: st.options,
-      revision: revision(),
-      appVersion,
-      scanSvg: false,
-    })
-    const info = pack.info
-    info.store = {
-      version: record.version,
-      installedAt: record.installedAt,
-      sha256: record.sha256,
-      keyId: record.keyId,
-      site: record.site,
-    }
-    const block = storeBlock(record, blocklist, keyStatus, now)
-    if (block) info.blocked = block
-    info.live = computeLive(info)
-    packs.push(pack)
+export async function loadStorePack(
+  record: StoreInstallRecord,
+  root: string,
+  input: Omit<LoadStoreInput, 'storeDir'>,
+): Promise<LoadedPack> {
+  const { state, blocklist, keyStatus, appVersion, revision, now } = input
+  const st = state[record.id] ?? { enabled: true, options: {} }
+  const pack = await loadPack({
+    key: packKey('store', record.id),
+    root,
+    source: 'store',
+    enabled: st.enabled,
+    addedAt: record.installedAt,
+    options: st.options,
+    revision: revision(),
+    appVersion,
+    scanSvg: false,
+  })
+  const info = pack.info
+  info.store = {
+    version: record.version,
+    installedAt: record.installedAt,
+    sha256: record.sha256,
+    keyId: record.keyId,
+    site: record.site,
   }
+  const block = storeBlock(record, blocklist, keyStatus, now)
+  if (block) info.blocked = block
+  info.live = computeLive(info)
+  return pack
+}
+
+/** 加载 store/ 下所有商店扩展（按 id 排序） */
+export async function loadStore(input: LoadStoreInput): Promise<LoadedPack[]> {
+  const packs: LoadedPack[] = []
+  for (const { record, root } of readStoreEntries(input.storeDir, input.log))
+    packs.push(await loadStorePack(record, root, input))
   return packs
 }

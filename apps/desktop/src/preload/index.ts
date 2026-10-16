@@ -595,7 +595,7 @@ contextBridge.exposeInMainWorld('pixelsky', {
     detail: id => call('extstore:detail', id),
     install: (id, version, options) => call('extstore:install', id, version, options ?? {}),
     cancel: id => call('extstore:cancel', id),
-    checkUpdates: () => call('extstore:checkUpdates'),
+    checkUpdates: options => call('extstore:checkUpdates', options ?? {}),
     state: () => call('extstore:state'),
     refreshBlocklist: () => call('extstore:refreshBlocklist'),
     report: (id, input) => call('extstore:report', id, input),
