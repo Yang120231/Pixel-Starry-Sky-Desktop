@@ -2,17 +2,12 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { lstat, readFile, realpath } from 'node:fs/promises'
 import { basename, join, resolve, sep } from 'node:path'
 import type { ExtPackInfo, ExtPackOptions, ExtPackState, SkillCommand } from '@pixelsky/protocol'
-import {
-  codedError,
-  computeLive,
-  EXT_LIMITS,
-  EXT_MANIFEST,
-  loaderIssue,
-  packStatus,
-  parseJsonc,
-  resolvePackPath,
-} from '@pixelsky/protocol'
-import { addPackIssue, hasManifest, loadPack, packKey, type LoadedPack } from './loader'
+import { codedError, EXT_LIMITS, EXT_MANIFEST, parseJsonc, resolvePackPath } from '@pixelsky/protocol'
+import { hasManifest, loadPack, packKey, type LoadedPack } from './loader'
+import { emptyBlocklist, readBlocklistFile, type BlocklistFile } from './market/blocklist'
+import { keyStatus as storeKeyStatus, type StoreKeyStatus } from './market/keys'
+import { loadStore, readStoreEntries, storeBlock } from './market/store-load'
+import { applyWinners } from './market/winner'
 import { ensureClaudeWrappers, gcClaudeWrappers, packSkillCommands, packSkillLaunch } from './skills'
 import { readStateFile, writeStateFile, emptyState, type PackStateFile } from './store'
 
@@ -20,6 +15,8 @@ export interface ExtPacksOptions {
   dataDir: string
   builtinDir: string
   appVersion: string
+  /** 钥匙在某个站点上的状态（loadStore 遇到已作废的钥匙就设 blocked）；不传用 market/keys.ts 的钥匙表，测试可以注入 */
+  keyStatus?: (keyId: string, site: string) => StoreKeyStatus | 'unknown'
 }
 
 type Engine = 'claude' | 'codex' | 'pixel'
@@ -55,6 +52,9 @@ function declaresSkills(root: string): boolean {
   }
 }
 
+/** packs 数组里的来源顺序：内置、商店、文件夹（同 id 的「后到」按这个顺序算） */
+const SOURCE_ORDER = ['builtin', 'store', 'folder'] as const
+
 const TEXT_FILE = /\.(md|txt)$/i
 const LICENSE_FILE = /^LICENSE/i
 
@@ -68,6 +68,8 @@ export class ExtensionPacks {
   private packRevision = 0
   private preKey = ''
   private data: PackStateFile = emptyState()
+  /** 启动时同步读的停用名单（上次存的；定时从网络读是 7.3a） */
+  private blocklist: BlocklistFile = emptyBlocklist()
   private packs: LoadedPack[] = []
   private wrappers = new Map<string, string>()
   private phase1: Promise<void> = Promise.resolve()
@@ -81,18 +83,31 @@ export class ExtensionPacks {
     return join(this.opts.dataDir, 'state.json')
   }
 
+  /** <dataDir>/store：store/<id>/install.json 和解压后的扩展 */
+  get storeDir(): string {
+    return join(this.opts.dataDir, 'store')
+  }
+
+  private get blocklistFile(): string {
+    return join(this.opts.dataDir, 'blocklist.json')
+  }
+
   private get runtimeDir(): string {
     return join(this.opts.dataDir, 'runtime')
   }
 
-  /** 幂等：同步预读 + 清理 Claude 包装目录 + 开始异步加载 */
+  /** 幂等：同步预读（状态文件、停用名单）+ 清理 Claude 包装目录 + 开始异步加载 */
   start(): void {
     if (this.started) return
     this.started = true
     this.data = readStateFile(this.stateFile)
+    this.blocklist = readBlocklistFile(this.blocklistFile)
     this.preKey = this.preReadKey()
     gcClaudeWrappers(this.runtimeDir)
-    this.phase1 = this.loadBuiltin().catch(e => console.error('[extension-packs] builtin load failed', e))
+    // 内置和商店一起第一次 commit（loadStore 末尾），第一次推出去的状态里就有商店扩展
+    this.phase1 = this.loadBuiltin()
+      .then(() => this.loadStore())
+      .catch(e => console.error('[extension-packs] builtin/store load failed', e))
     this.phase2 = this.phase1
       .then(() => this.loadFolders())
       .catch(e => console.error('[extension-packs] folder load failed', e))
@@ -129,8 +144,25 @@ export class ExtensionPacks {
   private preReadKey(): string {
     for (const name of builtinDirs(this.opts.builtinDir))
       if (this.builtinEnabled(name).enabled && declaresSkills(join(this.opts.builtinDir, name))) return 'loading'
+    for (const { record, root } of readStoreEntries(this.storeDir))
+      if (
+        this.data.store[record.id]?.enabled !== false &&
+        declaresSkills(root) &&
+        !storeBlock(record, this.blocklist, this.keyStatus)
+      )
+        return 'loading'
     for (const f of this.data.folders) if (f.enabled && declaresSkills(resolve(f.path))) return 'loading'
     return ''
+  }
+
+  private get keyStatus(): (keyId: string, site: string) => StoreKeyStatus | 'unknown' {
+    return this.opts.keyStatus ?? ((keyId, site) => storeKeyStatus(keyId, site))
+  }
+
+  /** 把某个来源的扩展整批换掉，别的来源原样保留，顺序固定为内置、商店、文件夹 */
+  private replaceSource(source: (typeof SOURCE_ORDER)[number], packs: LoadedPack[]): void {
+    const all = [...this.packs.filter(p => p.info.source !== source), ...packs]
+    this.packs = SOURCE_ORDER.flatMap(s => all.filter(p => p.info.source === s))
   }
 
   private async loadBuiltin(): Promise<void> {
@@ -150,8 +182,22 @@ export class ExtensionPacks {
         }),
       )
     }
-    this.packs = [...packs, ...this.packs.filter(p => p.info.source === 'folder')]
-    this.markDuplicates()
+    this.replaceSource('builtin', packs)
+  }
+
+  /** 加载商店扩展，然后算同 id 的生效关系、刷新包装、第一次 commit（内置的同步和这里合成一次） */
+  private async loadStore(): Promise<void> {
+    const packs = await loadStore({
+      storeDir: this.storeDir,
+      state: this.data.store,
+      blocklist: this.blocklist,
+      keyStatus: this.keyStatus,
+      appVersion: this.opts.appVersion,
+      revision: () => ++this.packRevision,
+      log: message => console.warn('[extension-packs]', message),
+    })
+    this.replaceSource('store', packs)
+    applyWinners(this.packs)
     await this.refreshWrappers()
     this.commit()
   }
@@ -173,28 +219,9 @@ export class ExtensionPacks {
         }),
       )
     }
-    this.packs = [...this.packs.filter(p => p.info.source === 'builtin'), ...folders]
-    this.markDuplicates()
+    this.replaceSource('folder', folders)
+    applyWinners(this.packs)
     await this.refreshWrappers()
-  }
-
-  /** 清单 id 重复：按顺序（内置在前）先到先得，后到的整个扩展报错不加载 */
-  private markDuplicates(): void {
-    // 先清掉旧的重复标记（删掉先到的那个后，后到的要恢复）
-    for (const pack of this.packs) {
-      const info = pack.info
-      if (!info.issues.some(i => i.code === 'pack.duplicateId')) continue
-      info.issues = info.issues.filter(i => i.code !== 'pack.duplicateId')
-      info.status = packStatus(info.issues)
-      info.live = computeLive(info)
-    }
-    const seen = new Set<string>()
-    for (const pack of this.packs) {
-      const id = pack.info.id
-      if (!id) continue
-      if (seen.has(id)) addPackIssue(pack, loaderIssue('pack.duplicateId', { id }))
-      else seen.add(id)
-    }
   }
 
   private async refreshWrappers(): Promise<void> {
@@ -243,6 +270,7 @@ export class ExtensionPacks {
   private persist(pack: LoadedPack): void {
     const { enabled, options } = pack.info
     if (pack.info.source === 'builtin') this.data.builtin[basename(pack.root)] = { enabled, options }
+    else if (pack.info.source === 'store') this.data.store[pack.info.key.slice(2)] = { enabled, options }
     else {
       const entry = this.folderEntry(pack)
       if (entry) {
@@ -273,10 +301,13 @@ export class ExtensionPacks {
         appVersion: this.opts.appVersion,
       })
       const id = pack.info.id
-      if (id && this.packs.some(p => p.info.id === id)) throw codedError('extpacks.duplicateId', { id })
+      // 只有同 id 的已经是文件夹才拒绝；同 id 的内置或商店扩展照常加，文件夹这份生效、那份标 shadowedBy
+      if (id && this.packs.some(p => p.info.source === 'folder' && p.info.id === id))
+        throw codedError('extpacks.duplicateId', { id })
       this.data.folders.push({ path: root, enabled: true, addedAt, options: {} })
       this.save()
       this.packs.push(pack)
+      applyWinners(this.packs)
       await this.refreshWrappers()
       this.commit()
       return pack.info
@@ -287,8 +318,8 @@ export class ExtensionPacks {
     return this.mutate(async () => {
       const pack = this.find(key)
       pack.info.enabled = enabled
-      pack.info.live = computeLive(pack.info)
       this.persist(pack)
+      applyWinners(this.packs)
       await this.refreshWrappers()
       this.commit()
     })
@@ -298,10 +329,12 @@ export class ExtensionPacks {
     return this.mutate(async () => {
       const pack = this.find(key)
       if (pack.info.source === 'builtin') throw codedError('extpacks.builtinRemove')
+      // 卸载商店扩展（取消任务、commit、删目录）是 7.2d 的事；这里先不让它只从内存里消失、重启又回来
+      if (pack.info.source === 'store') throw codedError('extstore.notImplemented')
       this.data.folders = this.data.folders.filter(f => packKey('folder', resolve(f.path)) !== key)
       this.save()
       this.packs = this.packs.filter(p => p !== pack)
-      this.markDuplicates()
+      applyWinners(this.packs)
       await this.refreshWrappers()
       this.commit()
     })
@@ -326,10 +359,14 @@ export class ExtensionPacks {
           options: old.info.options,
           revision: ++this.packRevision,
           appVersion: this.opts.appVersion,
+          scanSvg: old.info.source === 'store' ? false : undefined,
         })
+        // 商店扩展的回执信息和停用状态不在文件夹里，重新加载时带过去
+        if (old.info.store) fresh.info.store = old.info.store
+        if (old.info.blocked) fresh.info.blocked = old.info.blocked
         this.packs = this.packs.map(p => (p === old ? fresh : p))
       }
-      this.markDuplicates()
+      applyWinners(this.packs)
       await this.refreshWrappers()
       this.commit()
     })
