@@ -1,6 +1,7 @@
 // 进度卡片的数据（docs/ui/progress-card.md §2、§3）：当前计划、子智能体行、这一轮的 key
 import type { AgentRuns, Item, SubagentStatus, TodoStep } from '@pixelsky/protocol'
 import { runState, type RunState } from './agentTrace'
+import { agentSteps, type AgentStep } from './agentActivity'
 
 export interface Plan {
   id: string
@@ -19,6 +20,12 @@ export interface ProgressAgent {
   durationMs: number
   /** 后台子智能体（只有它们能单独停） */
   background: boolean
+  /** 「正在做什么」那一行的来源（agentActivity.ts）：最新进度摘要、结束时的结果、任务说明 */
+  summary?: string
+  result?: string
+  task?: string
+  /** 它调用过的工具（对话里带 subagentCall 的条目），按先后；后台子智能体的不一定有 */
+  steps: AgentStep[]
 }
 
 const isTurnStart = (item: Item): boolean => item.kind === 'user' && item.mode !== 'guidance'
@@ -43,10 +50,17 @@ export function currentPlan(items: Item[], running: boolean): Plan | null {
 }
 
 /** 子智能体条的状态和进度，按 id 合并追踪里的模型、类型和时间 */
-export function progressAgents(subagents: SubagentStatus[], runs: AgentRuns | undefined): ProgressAgent[] {
+export function progressAgents(
+  subagents: SubagentStatus[],
+  runs: AgentRuns | undefined,
+  items: readonly Item[] = [],
+): ProgressAgent[] {
   const byId = new Map((runs?.agents ?? []).filter(a => a.id).map(a => [a.id, a]))
+  const steps = agentSteps(items)
   return subagents.map(a => {
     const run = byId.get(a.id)
+    const call = a.toolUseId ?? run?.toolUseId
+    const task = a.task || run?.prompt
     return {
       id: a.id,
       label: a.label || run?.label || a.id.slice(0, 8),
@@ -57,6 +71,10 @@ export function progressAgents(subagents: SubagentStatus[], runs: AgentRuns | un
       startedAt: run?.startedAt ?? 0,
       durationMs: run?.durationMs ?? 0,
       background: a.background === true,
+      ...(a.summary ? { summary: a.summary } : {}),
+      ...(a.result ? { result: a.result } : {}),
+      ...(task ? { task } : {}),
+      steps: (call && steps.get(call)) || [],
     }
   })
 }

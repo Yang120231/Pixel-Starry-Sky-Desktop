@@ -8,6 +8,7 @@ import type { SessionSnapshot, TodoStep } from '@pixelsky/protocol'
 import { IconButton, cn } from '@/ui'
 import { elapsed, formatDuration, RUN_STATE_LABEL, shortModel, type RunState } from './agentTrace'
 import { activeStep, currentPlan, progressAgents, turnKey, type Plan, type ProgressAgent } from './progressData'
+import { activityTooltip, agentActivity, agoText } from './agentActivity'
 import { useOpenTrace } from './trace'
 
 const COLLAPSED_KEY = 'pixelsky.progress.collapsed'
@@ -49,8 +50,8 @@ export function useProgress(snapshot: SessionSnapshot | null): Progress {
   const background = !!snapshot?.background
   const plan = useMemo(() => (items ? currentPlan(items, running) : null), [items, running])
   const agents = useMemo(
-    () => progressAgents(snapshot?.subagents ?? [], snapshot?.runs),
-    [snapshot?.subagents, snapshot?.runs],
+    () => progressAgents(snapshot?.subagents ?? [], snapshot?.runs, items),
+    [snapshot?.subagents, snapshot?.runs, items],
   )
   const key = `${snapshot?.record.id ?? ''}:${items ? turnKey(items) : ''}`
   const [dismissed, setDismissed] = useState<string | null>(null)
@@ -90,6 +91,19 @@ function StateIcon({ state }: { state: RunState }) {
   if (state === 'failed') return <X size={12} strokeWidth={2} className="mt-[3px] shrink-0 text-danger" />
   if (state === 'stopped') return <span className="mt-[3px] size-3 shrink-0 rounded-[3px] bg-fg-faint" />
   return <CircleSlash size={12} strokeWidth={1.75} className="mt-[3px] shrink-0 text-fg-muted" />
+}
+
+/** 每一步第一次出现在卡片里的时间（条目本身不带时间），算「几秒前」用；只增不减，换会话时组件会重建 */
+function useFirstSeen(): (id: string) => number {
+  const seen = useRef(new Map<string, number>())
+  return useCallback((id: string) => {
+    let at = seen.current.get(id)
+    if (at === undefined) {
+      at = Date.now()
+      seen.current.set(id, at)
+    }
+    return at
+  }, [])
 }
 
 /** 运行中的子智能体每秒刷新已用时间 */
@@ -163,6 +177,7 @@ function Agents({
 }) {
   const openTrace = useOpenTrace()
   const now = useNow(agents.some(a => a.state === 'running'))
+  const seen = useFirstSeen()
   const [stopping, setStopping] = useState<Set<string>>(() => new Set())
   const stop = (ids: string[]): void => {
     setStopping(s => new Set([...s, ...ids]))
@@ -229,11 +244,7 @@ function Agents({
                       )
                     )}
                   </span>
-                  {a.message && (
-                    <span className="truncate font-mono text-meta text-fg-muted" title={a.message}>
-                      {a.message}
-                    </span>
-                  )}
+                  <ActivityLine agent={a} now={now} seen={seen} />
                 </span>
               </button>
               {onStop && a.state === 'running' && a.background && (
@@ -253,6 +264,28 @@ function Agents({
         })}
       </ul>
     </div>
+  )
+}
+
+/** 子智能体下面那一行「正在做什么」（agentActivity.ts）；悬停看完整的一句和最近 3 步 */
+function ActivityLine({ agent, now, seen }: { agent: ProgressAgent; now: number; seen: (id: string) => number }) {
+  useI18n()
+  const line = agentActivity(agent, agent.steps)
+  if (!line) return null
+  return (
+    <span
+      data-activity={line.kind}
+      title={activityTooltip(line, agent.steps, seen, now)}
+      className={cn(
+        'truncate text-meta',
+        line.kind === 'failed' ? 'text-danger' : line.kind === 'task' ? 'text-fg-faint' : 'text-fg-muted',
+      )}
+    >
+      {line.text}
+      {line.kind === 'step' && line.stepId && (
+        <span className="text-fg-faint tabular-nums"> · {agoText(now - seen(line.stepId))}</span>
+      )}
+    </span>
   )
 }
 

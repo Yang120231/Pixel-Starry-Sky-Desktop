@@ -14,10 +14,21 @@ export interface SubagentStatus {
   label: string
   /** running / completed / failed / stopped */
   status: string
-  /** 最新进度（摘要或正在用的工具） */
+  /** 最新进度（摘要或正在用的工具）；有过摘要后不再被工具名盖掉 */
   message: string | null
   /** 后台子智能体（Agent 工具 run_in_background）；前台的不带 */
   background?: boolean
+  /**
+   * 进度卡片「正在做什么」那一行用的（docs/ui/progress-card.md §9）：
+   * summary 是 Claude Code 给的最新进度摘要（新摘要来之前一直留着），result 是结束时的结果摘要，
+   * lastTool 是最近一次用的工具名（工具调用没传到界面时兜底），task 是任务说明的开头，
+   * toolUseId 是派出它的 Agent 工具调用（对应它那些工具条目的 subagentCall）
+   */
+  summary?: string
+  result?: string
+  lastTool?: string
+  task?: string
+  toolUseId?: string
 }
 
 /** 智能体追踪里的一个智能体（编排里的智能体，或 Agent 工具派出的子智能体） */

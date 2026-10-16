@@ -41,7 +41,11 @@ interface UsageCounters {
   output: number
   cost: number | null
 }
+
 const ZERO_COUNTERS: UsageCounters = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0, cost: 0 }
+
+/** 子智能体任务说明留多长（进度卡片只显示开头一行） */
+const TASK_PREVIEW = 300
 
 /** Claude 的权限模式名 → 我们的 */
 export const FROM_CLAUDE_MODE: Record<string, PermissionMode> = {
@@ -438,13 +442,19 @@ export class ClaudeTranslator {
           toolUseId: str(msg.tool_use_id) || null,
         }
         this.taskInfo.set(id, info)
-        if (kind === 'local_agent')
+        if (kind === 'local_agent') {
+          const task = (str(msg.prompt) || str(info.toolUseId ? this.toolInputs.get(info.toolUseId)?.prompt : ''))
+            .trim()
+            .slice(0, TASK_PREVIEW)
           this.setSubagent(id, {
             label: info.description || '子智能体',
             status: 'running',
             message: null,
             ...(info.background ? { background: true } : {}),
+            ...(info.toolUseId ? { toolUseId: info.toolUseId } : {}),
+            ...(task ? { task } : {}),
           })
+        }
         break
       }
       case 'task_progress': {
@@ -452,8 +462,12 @@ export class ClaudeTranslator {
         const info = this.taskInfo.get(id)
         if (!info) break
         if (info.kind === 'local_agent') {
-          const message = str(msg.summary) || str(msg.last_tool_name)
-          if (message) this.setSubagent(id, { message })
+          // 摘要不是每次都有：有过摘要后，只带工具名的进度不再把它盖掉
+          const summary = str(msg.summary).trim(),
+            tool = str(msg.last_tool_name)
+          const kept = this.subagentList.find(a => a.id === id)?.summary
+          if (summary) this.setSubagent(id, { summary, message: summary })
+          else if (tool) this.setSubagent(id, { lastTool: tool, message: kept || tool })
         } else {
           const message = str(msg.summary) || str(msg.description) || null
           this.bgTasks = this.bgTasks.map(t => (t.id === id ? { ...t, message } : t))
@@ -497,7 +511,8 @@ export class ClaudeTranslator {
           })
         }
         if (info?.kind === 'local_agent') {
-          this.setSubagent(id, { status, message: str(msg.summary) || null })
+          const result = str(msg.summary).trim()
+          this.setSubagent(id, { status, message: result || null, ...(result ? { result } : {}) })
           // 子智能体都结束了：还挂着的工具不会再有结果
           if (!this.subagentList.some(a => a.status === 'running'))
             for (const toolId of [...this.subTools.keys()]) this.settleSubTool(toolId, 'interrupted')

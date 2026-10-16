@@ -931,7 +931,19 @@ describe('EngineHost + Claude（假引擎）', () => {
     await host.send(record.id, '派个子任务')
     await waitFor(() => turnsDone(record.id) === 1)
     const snap = host.open(record.id)
-    expect(snap.subagents).toEqual([{ id: 'agent1', label: '读 README', status: 'completed', message: '读完了' }])
+    expect(snap.subagents).toEqual([
+      {
+        id: 'agent1',
+        label: '读 README',
+        status: 'completed',
+        message: '读完了',
+        // 进度卡片「正在做什么」那一行用的（docs/ui/progress-card.md §9）
+        toolUseId: expect.any(String),
+        task: '读一下 README',
+        lastTool: 'Read',
+        result: '读完了',
+      },
+    ])
     const read = snap.items.find(i => i.kind === 'tool' && i.name === 'Read')
     expect(read).toMatchObject({ subagent: '读 README', status: 'completed' })
     expect(snap.runs.agents).toHaveLength(1)
