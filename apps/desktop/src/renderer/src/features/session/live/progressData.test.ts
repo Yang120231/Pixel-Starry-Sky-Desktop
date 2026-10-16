@@ -75,7 +75,28 @@ describe('progressAgents', () => {
       startedAt: 1000,
       durationMs: 0,
       background: false,
+      steps: [],
     })
+  })
+
+  it('带上摘要、结果、任务说明（追踪里的 prompt 兜底）和它调用过的工具', () => {
+    const tool: Item = {
+      kind: 'tool',
+      id: 't1',
+      tool: 'read',
+      name: 'Read',
+      title: 'a.ts',
+      output: '',
+      status: 'completed',
+      subagentCall: 'tu1',
+    }
+    const [a] = progressAgents(
+      [{ id: 'a1', label: '读码', status: 'running', message: '摘要', summary: '摘要' }],
+      { workflows: [], agents: [{ ...run, prompt: '读一遍 a.ts' }] },
+      [tool, { ...tool, id: 't2', subagentCall: 'other' }],
+    )
+    expect(a).toMatchObject({ summary: '摘要', task: '读一遍 a.ts' })
+    expect(a.steps.map(s => s.id)).toEqual(['t1'])
   })
 
   it('没有追踪数据时用子智能体条自己的信息', () => {

@@ -38,6 +38,7 @@ import {
   timeline,
   type RunState,
 } from './agentTrace'
+import { runActivity } from './agentActivity'
 import { Markdown } from '@/ui/markdown/Markdown'
 import { ReasoningBlock, ToolItemRow, UserBubble } from './ItemRows'
 import { useDockFloat, type DragKind } from './useDockFloat'
@@ -122,7 +123,8 @@ function AgentRow({
       type="button"
       disabled={!a.id}
       onClick={() => onPick(a.id)}
-      title={a.prompt || a.label}
+      // 悬停：和进度卡片同一套说法（任务：… / 完成：… / 失败：…），docs/ui/progress-card.md §9
+      title={runActivity(a)?.full || a.prompt || a.label}
       className="grid w-full grid-cols-[16px_minmax(0,1.3fr)_minmax(0,1fr)_64px_70px_36px] items-center gap-2 rounded-md px-2 py-1.5 text-left text-meta hover:bg-hover disabled:cursor-default disabled:hover:bg-transparent"
     >
       <StateIcon state={a.state} />
