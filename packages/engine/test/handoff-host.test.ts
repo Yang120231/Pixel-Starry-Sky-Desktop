@@ -11,8 +11,11 @@ import type { EngineHostOptions } from '../src/host/context'
 import { ClaudeAdapter } from '../src'
 import { EngineHost } from '../src/host'
 import { derivedSeen } from '../src/host/handoff'
+import { NATIVE_TEXT } from '../src/claude/native'
 import { ENGINES } from '../src/registry'
 
+const NATIVE = '11111111-1111-4111-8111-111111111111'
+const NATIVE_USER = '33333333-3333-4333-8333-333333333333'
 const FAKE_CLAUDE = fileURLToPath(new URL('./fakes/fake-claude.mjs', import.meta.url))
 
 let root: string
@@ -95,6 +98,52 @@ class FakeSession implements EngineSession {
 class FakeAdapter implements EngineAdapter {
   sessions: FakeSession[] = []
   auto = true
+  /** 引擎那边的原生会话记录还在不在（hasNativeSession） */
+  exists = true
+  hasNativeSession(): boolean {
+    return this.exists
+  }
+  /** 接着引擎自己的会话：固定有一个会话、一轮对话 */
+  nativeSessions = async () =>
+    ({
+      sessions: [
+        {
+          id: NATIVE,
+          file: '',
+          size: 1,
+          mtimeMs: 1,
+          updatedAt: 1,
+          cwd: root,
+          subdir: null,
+          title: '终端会话',
+          firstPrompt: '导入的话',
+          lastPrompt: null,
+          branch: null,
+          source: 'terminal',
+          model: null,
+        },
+      ],
+      budget: { left: 0 },
+      details: async function* () {},
+    }) as unknown as Awaited<ReturnType<NonNullable<EngineAdapter['nativeSessions']>>>
+  readNativeSession = async () => ({
+    file: '',
+    items: [
+      { kind: 'user' as const, id: NATIVE_USER, text: '导入的话', createdAt: 1, engine: 'claude' as const },
+      { kind: 'assistant' as const, id: 'imp-' + NATIVE_USER + '-0', text: '导入的回复', status: 'completed' as const },
+    ],
+    title: '终端会话',
+    turns: 1,
+    shown: 1,
+    summary: null,
+    source: 'terminal' as const,
+    model: 'claude-opus-4-5',
+    leafUuid: 'leaf',
+    at: 'native-at',
+    earliestShownUuid: NATIVE_USER,
+    hasEarlier: false,
+    compacted: false,
+  })
   /** 回退时的截断点：返回 null 表示记录里找不到 */
   anchor: ((ids: string[]) => { at: string | null } | null) | null = (ids: string[]) => ({ at: `at-${ids[0]}` })
   constructor(
@@ -463,6 +512,7 @@ describe('跨引擎接力：回退、撤销、分叉', () => {
     expect(JSON.stringify(snap().record.engineSessions)).toBe(before)
     expect(snap().items.map(i => i.id)).toContain('c')
   })
+
   it('真实 Claude 记录里有接力写进去的轮次：回退到其他引擎期间的消息，下次启动的截断点把接力轮次一起剪掉', async () => {
     const projectsDir = join(root, 'claude-projects')
     const claude = new ClaudeAdapter({
@@ -637,5 +687,85 @@ describe('derivedSeen', () => {
   it('中途补充以斜杠开头不算斜杠命令；没标引擎的消息按 fallback 算', () => {
     const items = [user('u1', 'codex'), reply('r1'), user('u2', undefined, '/x', 'guidance')]
     expect(derivedSeen(items, 'claude', 'claude')).toBe('u2')
+  })
+})
+
+describe('接着引擎自己的会话（docs/ui/claude-resume.md）', () => {
+  /** 导入一个原生会话成新对话，返回对它发消息的小工具 */
+  async function imported(mode: 'inplace' | 'copy' = 'inplace') {
+    const t = setup({}, true)
+    const res = await t.host.importNativeSession(t.host.projects()[0].id, 'claude', NATIVE, { mode })
+    if (!('sessionId' in res)) throw new Error('没有建对话')
+    const id = res.sessionId
+    const snap = () => t.host.open(id)
+    let n = 0
+    const say = async (text: string) => {
+      const clientMessageId = `n${++n}`
+      await t.host.send(id, { text, clientMessageId })
+      await until(() => snap().items.some(i => i.kind === 'user' && i.id === clientMessageId))
+      await until(() => snap().state === 'idle' && snap().queue.length === 0)
+    }
+    return { ...t, id, snap, say }
+  }
+
+  it('导入后换到 Codex：第一条消息的回放是导入的聊天；再换回 Claude：回放只含 Codex 期间的轮次，引擎会话 id 还是原来的', async () => {
+    const { host, claude, codex, id, snap, say } = await imported()
+    expect(snap().record).toMatchObject({ engineSessionId: NATIVE, imported: { sessionId: NATIVE, turns: 1 } })
+    await host.update(id, { engine: 'codex' })
+    await say('给 Codex')
+    expect(codex.sessions[0].seeds[0]!.turns.map(t => t.user)).toEqual(['导入的话'])
+    const brought = snap().items.findLast(i => i.kind === 'notice')
+    expect(brought).toMatchObject({ kind: 'notice', text: '已把之前的聊天带给 Codex（1 轮）' })
+    await host.update(id, { engine: 'claude' })
+    expect(snap().record.engineSessionId).toBe(NATIVE)
+    await say('回到 Claude')
+    expect(claude.sessions[0].startId).toBe(NATIVE)
+    expect(claude.sessions[0].seeds[0]!.turns.map(t => t.user)).toEqual(['给 Codex'])
+    // 原生会话还在，不会被当成「没了」
+    expect(snap().items.some(i => i.kind === 'notice' && i.level === 'warn')).toBe(false)
+  })
+
+  it('原生会话记录没了：整段聊天当没看过，回放给适配器，单独一条带详情的 warn 提示；之后游标照常推进', async () => {
+    const { host, claude, id, snap, say } = await imported()
+    claude.exists = false
+    await say('还在吗')
+    const session = claude.sessions[0]
+    expect(session.seeds[0]!.turns.map(t => t.user)).toEqual(['导入的话'])
+    const warn = snap().items.find(i => i.kind === 'notice' && i.level === 'warn')
+    expect(warn).toMatchObject({ kind: 'notice', text: NATIVE_TEXT.recreated(1) })
+    expect(warn?.kind === 'notice' && warn.detail).toContain('导入的话')
+    // 记录又有了（接力已经写进去）：不再重复
+    claude.exists = true
+    await say('再来')
+    expect(session.seeds[1]).toBeUndefined()
+    expect(snap().items.filter(i => i.kind === 'notice' && i.level === 'warn')).toHaveLength(1)
+    expect(host.record(id)?.engineSessions?.claude?.seen).toBe(snap().items.at(-1)!.id)
+  })
+
+  it('还没启动的分叉（复制一份接着聊）本来就没有文件：不触发「记录没了」', async () => {
+    const { claude, snap, say } = await imported('copy')
+    expect(snap().record.pendingFork).toBeTruthy()
+    claude.exists = false
+    await say('第一句')
+    expect(claude.sessions[0].seeds[0]).toBeUndefined()
+    expect(snap().items.some(i => i.kind === 'notice' && i.level === 'warn')).toBe(false)
+  })
+
+  it('有待执行的回退时也不触发', async () => {
+    const { host, claude, id, snap, say } = await imported()
+    await say('第一句')
+    await say('第二句')
+    await host.rewind(id, 'n2')
+    expect(snap().record.pendingRewind).toBeTruthy()
+    claude.exists = false
+    await say('改')
+    expect(claude.sessions.at(-1)!.seeds.at(-1)).toBeUndefined()
+  })
+
+  it('适配器没有原生会话方法：列出和导入报「不支持」，普通对话不能做导入的操作', async () => {
+    const t = setup()
+    t.claude.nativeSessions = undefined as never
+    await expect(t.host.nativeSessions(t.host.projects()[0].id, 'claude')).rejects.toThrow('不支持')
+    await expect(t.host.nativeSessionAction(t.record.id, 'check')).rejects.toThrow('不是接着')
   })
 })

@@ -170,6 +170,71 @@ export interface SessionRecord extends SessionSettings {
   pendingFork?: { from: string; at: string } | null
   /** 从哪个会话分叉出来的（顶部一行「分叉自『…』」） */
   forkedFrom?: { sessionId: string; title: string } | null
+  /** 接着引擎自己留下的会话（终端里的 Claude Code……）导入来的（docs/ui/claude-resume.md §4.5） */
+  imported?: ImportedSession | null
+}
+
+/**
+ * 导入的原生会话：sessionId 是它在引擎里的会话 id；turns 是这条分支一共多少轮，shown 是现在显示着多少轮
+ * （「加载更早的」「补上」之后更新）；forked 是「复制一份接着聊」：原会话一个字节都不写，但仍算被这个对话占用
+ */
+export interface ImportedSession {
+  engine: EngineId
+  sessionId: string
+  at: number
+  turns: number
+  shown: number
+  forked?: boolean
+}
+
+/** 一个引擎自己留下的、可以接着聊的会话（终端里的 Claude Code……） */
+export interface NativeSessionSummary {
+  id: string
+  title: string
+  firstPrompt: string
+  /** 第二步（nativeSessionDetails）才有 */
+  lastPrompt: string | null
+  branch: string | null
+  /** 会话开在项目子文件夹里时的相对路径，在项目根目录为 null */
+  subdir: string | null
+  updatedAt: number
+  size: number
+  /** 第二步才有 */
+  model: string | null
+  source: 'terminal' | 'other'
+  /** 已被像素星空的某个对话占用：那个对话的 id，没有为 null */
+  ownerId: string | null
+  /** 现在有进程开着：'maybe' 是读不到登记、只看记录修改时间的退路 */
+  live: 'terminal' | 'other' | 'maybe' | null
+}
+
+/** 第二步补上的尾部信息 */
+export interface NativeSessionDetail {
+  id: string
+  lastPrompt: string | null
+  title: string
+  /** 最后一条记录的时间；读不到为 null */
+  lastActive: number | null
+  model: string | null
+  branch: string | null
+  /** 已经接到别的会话里了（那个会话单独列出）：这一行不该显示 */
+  superseded: boolean
+  /** 尾部读取的预算用完了：其余字段还是第一步的 */
+  skipped: boolean
+}
+
+/** 导入结果：新对话 / 已经被占用 / 正开着（原地导入时，界面给「复制一份接着聊」） */
+export type NativeImportResult =
+  | { sessionId: string; model: string | null; turns: number; shown: number }
+  | { ownerId: string }
+  | { live: 'terminal' | 'other' }
+
+/** nativeSessionAction 的操作：加载更早的 / 补上终端里新聊的 / 原地改成复制 / 只检查有没有新聊的（有就在末尾加提示） */
+export type NativeAction = 'earlier' | 'sync' | 'copy' | 'check'
+
+/** added：这次加进显示的轮数（copy 为 0；check 是发现的新轮数，没有加进显示） */
+export interface NativeActionResult {
+  added: number
 }
 
 /** 回退要做什么（docs/ui/rewind-fork-sidechat.md §1）；省略时只回退对话 */

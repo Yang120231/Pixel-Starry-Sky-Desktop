@@ -84,6 +84,8 @@ export function reduce(s: SessionSnapshot, e: EngineEvent): SessionSnapshot {
       const i = s.items.findIndex(x => x.id === e.fromItemId)
       return i < 0 ? s : { ...s, items: s.items.slice(0, i) }
     }
+    case 'items_reset':
+      return { ...s, items: e.items }
     case 'item_started':
     case 'item_completed':
       return { ...s, items: upsert(s.items, e.item) }

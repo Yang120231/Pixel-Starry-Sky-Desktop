@@ -53,6 +53,7 @@ import { editorThemeMessages } from './editorThemeMessages'
 import { extSnippetMessages } from './extSnippetMessages'
 import { extTaskMessages } from './extTaskMessages'
 import { promptMessages } from './promptMessages'
+import { resumeMessages } from './resumeMessages'
 import { replaceCodedErrors } from '@pixelsky/protocol'
 import type { Locale } from './messages'
 
@@ -113,6 +114,7 @@ export const allMessages = {
   ...extSnippetMessages,
   ...extTaskMessages,
   ...promptMessages,
+  ...resumeMessages,
 }
 export type TranslationKey = keyof typeof allMessages
 

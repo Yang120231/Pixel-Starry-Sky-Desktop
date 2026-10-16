@@ -328,53 +328,107 @@ function taskText(text: string): string {
     .join('\n')
 }
 
+export interface TranscriptItemsOptions {
+  /** 条目 id：'seq' 按序号（user-1、assistant-2……）；'uuid' 用户条目是行的 uuid，其余是 imp-<uuid>-<块序号>，工具用 tool_use 的 id */
+  ids?: 'seq' | 'uuid'
+  /** 去掉编排智能体任务前面的框架说明（taskText） */
+  task?: boolean
+  /** 只留最后这么多条 */
+  limit?: number
+  /** 接管一类行的转换（导入终端会话用，docs/ui/claude-resume.md §4.2）；子智能体不传 */
+  hooks?: {
+    /** 一行 user 记录里用户文字对应的条目（tool_result 仍按默认补全工具条目）；传了就不再走默认的用户文字处理 */
+    user?: (row: Msg) => Item[]
+    /** assistant 的文字块要不要跳过 */
+    skipText?: (row: Msg, text: string) => boolean
+    /** system 行对应的条目（compact_boundary 等） */
+    system?: (row: Msg) => Item[]
+  }
+  /** 并行调用的兄弟结果不在传进来的行里：按 tool_use_id 找装着它的 tool_result 那一行 */
+  result?: (toolUseId: string) => Msg | undefined
+  /** 到最后都没有结果的工具标成 interrupted */
+  closeTools?: boolean
+  /** 工具结果里的图片不要（items.jsonl 会变得很大） */
+  noImages?: boolean
+}
+
+const dropImages = (item: Item): Item => {
+  if (item.kind !== 'tool' || !item.images) return item
+  const { images, ...rest } = item
+  void images
+  return rest
+}
+
+/** 把 Claude Code 的记录行（user / assistant 的消息）转成条目 */
+export function transcriptItems(rows: readonly Msg[], cwd: string, opts: TranscriptItemsOptions = {}): Item[] {
+  const items: Item[] = []
+  const tools = new Map<string, number>()
+  const byUuid = opts.ids === 'uuid'
+  const hooks = opts.hooks
+  let n = 0
+  const seq = (p: string) => `${p}-${++n}`
+  const plain = opts.task ? taskText : (t: string) => t
+  const complete = (at: number, block: Msg, row: Msg) => {
+    const done = completeToolItem(items[at], block.content, block.is_error === true, row.toolUseResult)
+    items[at] = opts.noImages ? dropImages(done) : done
+  }
+  for (const row of rows) {
+    const content = obj(row.message).content
+    const uuid = str(row.uuid)
+    const id = (p: string, i: number) => (byUuid && uuid ? `imp-${uuid}-${i}` : seq(p))
+    if (row.type === 'user') {
+      const createdAt = Date.parse(str(row.timestamp)) || 0
+      if (hooks?.user) items.push(...hooks.user(row))
+      else if (typeof content === 'string') {
+        items.push({ kind: 'user', id: byUuid && uuid ? uuid : seq('user'), text: plain(content), createdAt })
+        continue
+      }
+      let texts = 0
+      for (const block of arr(content)) {
+        if (block.type === 'text' && str(block.text).trim() && !hooks?.user) {
+          items.push({
+            kind: 'user',
+            id: byUuid && uuid ? (texts++ === 0 ? uuid : `imp-${uuid}-${texts}`) : seq('user'),
+            text: plain(str(block.text)),
+            createdAt,
+          })
+        } else if (block.type === 'tool_result') {
+          const at = tools.get(str(block.tool_use_id))
+          if (at !== undefined) complete(at, block, row)
+        }
+      }
+    } else if (row.type === 'assistant') {
+      arr(content).forEach((block, i) => {
+        if (block.type === 'text' && str(block.text).trim()) {
+          if (hooks?.skipText?.(row, str(block.text))) return
+          items.push({ kind: 'assistant', id: id('assistant', i), text: str(block.text), status: 'completed' })
+        } else if (block.type === 'thinking' && str(block.thinking).trim()) {
+          items.push({ kind: 'reasoning', id: id('reasoning', i), text: str(block.thinking), status: 'completed' })
+        } else if (block.type === 'tool_use') {
+          const toolId = str(block.id) || id('tool', i)
+          tools.set(toolId, items.length)
+          items.push(toolItem(toolId, str(block.name), obj(block.input), cwd))
+        }
+      })
+    } else if (row.type === 'system' && hooks?.system) {
+      items.push(...hooks.system(row))
+    }
+  }
+  for (const [toolId, at] of tools) {
+    const item = items[at]
+    if (!('status' in item) || item.status !== 'running') continue
+    const row = opts.result?.(toolId)
+    const block =
+      row && arr(obj(row.message).content).find(b => b.type === 'tool_result' && str(b.tool_use_id) === toolId)
+    if (row && block) complete(at, block, row)
+    else if (opts.closeTools) items[at] = completeToolItem(item, '', false, undefined, 'interrupted')
+  }
+  return opts.limit ? items.slice(-opts.limit) : items
+}
+
 /** 读一个子智能体的对话，转成条目（只读显示用） */
 export function loadSubagentTranscript(sessionDir: string, agentId: string, cwd: string): Item[] {
   const file = agentFile(sessionDir, agentId)
   if (!file) throw new Error('这个子智能体还没有保存会话')
-  const items: Item[] = []
-  const tools = new Map<string, number>()
-  let n = 0
-  const id = (p: string) => `${p}-${++n}`
-  for (const row of readRows(file)) {
-    const content = obj(row.message).content
-    if (row.type === 'user') {
-      if (typeof content === 'string') {
-        items.push({
-          kind: 'user',
-          id: id('user'),
-          text: taskText(content),
-          createdAt: Date.parse(str(row.timestamp)) || 0,
-        })
-        continue
-      }
-      for (const block of arr(content)) {
-        if (block.type === 'text' && str(block.text).trim()) {
-          items.push({
-            kind: 'user',
-            id: id('user'),
-            text: taskText(str(block.text)),
-            createdAt: Date.parse(str(row.timestamp)) || 0,
-          })
-        } else if (block.type === 'tool_result') {
-          const at = tools.get(str(block.tool_use_id))
-          if (at !== undefined)
-            items[at] = completeToolItem(items[at], block.content, block.is_error === true, row.toolUseResult)
-        }
-      }
-    } else if (row.type === 'assistant') {
-      for (const block of arr(content)) {
-        if (block.type === 'text' && str(block.text).trim()) {
-          items.push({ kind: 'assistant', id: id('assistant'), text: str(block.text), status: 'completed' })
-        } else if (block.type === 'thinking' && str(block.thinking).trim()) {
-          items.push({ kind: 'reasoning', id: id('reasoning'), text: str(block.thinking), status: 'completed' })
-        } else if (block.type === 'tool_use') {
-          const toolId = str(block.id) || id('tool')
-          tools.set(toolId, items.length)
-          items.push(toolItem(toolId, str(block.name), obj(block.input), cwd))
-        }
-      }
-    }
-  }
-  return items.slice(-TRANSCRIPT_ITEMS)
+  return transcriptItems(readRows(file), cwd, { task: true, limit: TRANSCRIPT_ITEMS })
 }

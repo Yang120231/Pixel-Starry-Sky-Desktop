@@ -119,6 +119,12 @@ const engine: EngineBridge = {
   rewind: (id, itemId, options) => call('engine:rewind', id, itemId, options),
   undoRewind: id => call('engine:undoRewind', id),
   fork: (id, itemId, title) => call('engine:fork', id, itemId, title),
+  nativeSessions: (projectId, engine, opts) => call('engine:nativeSessions', projectId, engine, opts),
+  nativeSessionDetails: (projectId, engine, ids) => call('engine:nativeSessionDetails', projectId, engine, ids),
+  importNativeSession: (projectId, engine, nativeId, opts) =>
+    call('engine:importNativeSession', projectId, engine, nativeId, opts),
+  cancelNativeImport: token => call('engine:cancelNativeImport', token),
+  nativeSessionAction: (id, kind) => call('engine:nativeSessionAction', id, kind),
   sideQuestion: (id, question, history) => call('engine:sideQuestion', id, question, history),
   cancelSideQuestion: id => call('engine:cancelSideQuestion', id),
   interrupt: (id, opts) => call('engine:interrupt', id, ...(opts ? [opts] : [])),

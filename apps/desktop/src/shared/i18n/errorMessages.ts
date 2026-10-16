@@ -70,4 +70,8 @@ export const errorMessages = {
     zh: '启动参数太多或太长（最多 100 个，每个不超过 4000 字）',
     en: 'Too many or too long launch arguments (up to 100, each at most 4000 characters)',
   },
+  'errors.resume.live': {
+    zh: '终端或别的程序里正开着这个会话，不能直接往里写',
+    en: 'This session is open in the terminal or another program, so it can’t be written to directly',
+  },
 } as const

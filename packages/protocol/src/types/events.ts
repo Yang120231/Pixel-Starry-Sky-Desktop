@@ -50,6 +50,8 @@ export type EngineEvent =
   | { type: 'suggestion'; text: string | null }
   /** 回退：从这条条目起（含）之后全部移除 */
   | { type: 'items_truncated'; fromItemId: string }
+  /** 整个条目列表换掉（接着引擎自己的会话时加载更早的 / 补上，docs/ui/claude-resume.md §4.8） */
+  | { type: 'items_reset'; items: Item[] }
   | { type: 'commands'; commands: import('../extensions').SkillCommand[] }
   | { type: 'queue'; items: QueuedMessage[]; paused: boolean }
   | { type: 'input_ack'; id: string; state: 'consumed' | 'cancelled' | 'uncertain'; mode?: 'normal' | 'guidance' }
@@ -128,6 +130,8 @@ export type HostEvent =
   | { kind: 'engines'; engines: EngineInfo[] }
   /** 安装 / 更新引擎的进度（设置 › 本机引擎） */
   | { kind: 'engine_job'; job: EngineJob }
+  /** 导入引擎自己的会话时读文件的进度（大文件才发）；token 是调用方给 importNativeSession 的 */
+  | { kind: 'native_import'; token: string; read: number; total: number }
   /** 引擎授权登录的进度（设置 › 模型通道） */
   | { kind: 'engine_login'; login: EngineLogin }
   /** 写入了新的用量记录（或清空了），用量页据此刷新 */

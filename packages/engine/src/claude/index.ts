@@ -1,6 +1,6 @@
 // Claude Code 适配器
 import { homedir } from 'node:os'
-import { delimiter } from 'node:path'
+import { delimiter, dirname } from 'node:path'
 import {
   EFFORTS,
   codedError,
@@ -21,17 +21,30 @@ import { outputTail, run, runInteractive, runStream, startupReason } from '../ex
 import { engineBase } from '../registry'
 import { claudeInstaller, customClaude, discoverClaude, type ClaudeDiscovery } from './discover'
 import { rewindFilesOnce, sideQuestionOnce, type HelperTarget, type RewindFilesReply } from './helper'
-import { ClaudeProcess } from './process'
+import { ClaudeProcess, ownClaudePids } from './process'
 import { ClaudeSession, reservedClaudeArg, type ClaudeLaunchOptions } from './session'
 import { loadSavedRuns, loadSubagentTranscript } from './runs'
 import {
   anchorPosition,
   claudeSessionDir,
+  claudeTranscriptExists,
   defaultProjectsDir,
   findClaudeTranscript,
   findRewindAnchor,
   pointLastPrompt,
 } from './transcript'
+import {
+  liveClaudeSessions,
+  listClaudeSessions,
+  newerTurns,
+  readClaudeSession,
+  type ClaudeSessionList,
+  type ListOptions,
+  type LiveState,
+  type NativeRead,
+  type NewerTurns,
+  type ReadOptions,
+} from './native'
 import { LONG_CONTEXT_ENV, claudeModelName, windowSettings } from './long-context'
 
 export interface ClaudeAdapterOptions {
@@ -173,14 +186,40 @@ export class ClaudeAdapter implements EngineAdapter {
     return dir ? loadSavedRuns(dir) : { workflows: [], agents: [] }
   }
 
-  rewindAnchor(record: SessionRecord, userItemIds: string[]): { at: string | null } | null {
+  async rewindAnchor(record: SessionRecord, userItemIds: string[]): Promise<{ at: string | null } | null> {
     const file = findClaudeTranscript(this.projectsDir(), record.cwd, record.engineSessionId ?? record.id)
     return file ? findRewindAnchor(file, userItemIds) : null
   }
 
-  beforeCompaction(record: SessionRecord, userItemId: string): boolean {
+  async beforeCompaction(record: SessionRecord, userItemId: string): Promise<boolean> {
     const file = findClaudeTranscript(this.projectsDir(), record.cwd, record.engineSessionId ?? record.id)
-    return !!file && anchorPosition(file, userItemId) === 'compacted'
+    return !!file && (await anchorPosition(file, userItemId)) === 'compacted'
+  }
+
+  nativeSessions(cwd: string, opts?: ListOptions): Promise<ClaudeSessionList> {
+    return listClaudeSessions(this.projectsDir(), cwd, opts)
+  }
+
+  readNativeSession(cwd: string, id: string, opts?: ReadOptions): Promise<NativeRead | null> {
+    return readClaudeSession(this.projectsDir(), cwd, id, opts)
+  }
+
+  newerNativeTurns(
+    cwd: string,
+    id: string,
+    after: string,
+    opts?: { turns?: number; afterTurn?: boolean },
+  ): Promise<NewerTurns | null> {
+    return newerTurns(this.projectsDir(), cwd, id, after, opts)
+  }
+
+  hasNativeSession(record: SessionRecord): boolean {
+    return claudeTranscriptExists(this.projectsDir(), record.cwd, record.engineSessionId ?? record.id)
+  }
+
+  /** pid 登记在 Claude Code 配置目录（projects 的上一级）的 sessions 下 */
+  nativeLive(rows: readonly { id: string; mtimeMs: number }[]): Map<string, LiveState> {
+    return liveClaudeSessions(dirname(this.projectsDir()), rows, ownClaudePids)
   }
 
   subagentTranscript(record: SessionRecord, agentId: string): Item[] {
@@ -272,13 +311,15 @@ export class ClaudeAdapter implements EngineAdapter {
    * 辅助进程：--resume 这个会话，平台会话带网关设置。要读当前分支（GitHub #82）：回退了还没发新消息时
    * 用 --resume-session-at 截到回退点（和主会话下次启动一样）；否则先让记录的 last-prompt 指向当前末端（pointLastPrompt）
    */
-  private helperTarget(record: SessionRecord): HelperTarget {
+  private async helperTarget(record: SessionRecord): Promise<HelperTarget> {
     const sid = record.engineSessionId
     const file = sid ? findClaudeTranscript(this.projectsDir(), record.cwd, sid) : null
     if (!sid || !file) throw new Error('这个会话还没有 Claude Code 记录')
     // 回退点在压缩之前时 Claude Code 读不到那里（主会话下次启动会自己复制记录接上），辅助进程就按默认的读
     const pending =
-      record.pendingRewind && anchorPosition(file, record.pendingRewind) === 'loaded' ? record.pendingRewind : null
+      record.pendingRewind && (await anchorPosition(file, record.pendingRewind)) === 'loaded'
+        ? record.pendingRewind
+        : null
     if (!record.pendingRewind)
       try {
         pointLastPrompt(file, sid)
@@ -307,12 +348,12 @@ export class ClaudeAdapter implements EngineAdapter {
     dryRun: boolean,
     beforeRestore?: (files: string[]) => void,
   ): Promise<RewindFilesReply> {
-    return rewindFilesOnce(this.helperTarget(record), userItemId, dryRun, beforeRestore)
+    return rewindFilesOnce(await this.helperTarget(record), userItemId, dryRun, beforeRestore)
   }
 
   /** 旁聊：带着这个会话的上下文单独问一次，没有工具、不写记录（docs/ui/rewind-fork-sidechat.md §3） */
   async sideQuestion(record: SessionRecord, prompt: string, signal: AbortSignal): Promise<string> {
-    const target = this.helperTarget(record)
+    const target = await this.helperTarget(record)
     return sideQuestionOnce(target, prompt, record.model && claudeModelName(record.model, target.env), signal)
   }
 

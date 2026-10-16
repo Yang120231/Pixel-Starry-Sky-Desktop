@@ -3,7 +3,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type Drag
 import { ArrowUp, AtSign, ChevronDown, Mic, Paperclip, Plus, ShieldOff, Square, SquareSlash } from 'lucide-react'
 import { settledResizeObserver } from '@/features/panes/motion'
 import { IconButton, cn, useComingSoon, useToast } from '@/ui'
-import { attachments as initialAttachments, composer } from '@/data'
+import { attachments as initialAttachments, composer, isDemo } from '@/data'
 import {
   SOURCE_ACTION_EVENT,
   useDemoSourceController,
@@ -44,6 +44,9 @@ import { MentionMenu, useMentionEntries } from './MentionMenu'
 import { applyMention, folderMention, insertAt, insertMention, mentionAt } from './mention'
 import { machineOf } from '@/features/machines/store'
 import { composerWorkspace } from './composerWorkspace'
+import { useResumeCommand } from '@/features/resume/useResumeCommand'
+import { parseResumeCommand } from '@/features/resume/model'
+import { openResumePicker } from '@/features/resume/store'
 import { escapeStops } from './escapeStop'
 import { tr } from '../../i18n/core'
 import { ImageAttachments } from '@/features/session/attachments/ImageAttachments'
@@ -136,7 +139,20 @@ export function Composer({
     listId = useId()
   // 扩展提示词跟技能命令一起出现在「/」菜单里；要选中内容的提示词只在编辑器里有选中时才列出
   const promptCommands = usePromptCommands(!!activeEditorSelection())
-  const menuCommands = useMemo(() => [...commands, ...promptCommands], [commands, promptCommands])
+  // 「/resume」是像素星空自己的命令（接着终端里的 Claude Code 会话）：执行者是 Claude Code 才有；引擎哪天也给了同名命令就丢掉它的
+  const resumeWorkspace = composerWorkspace(live?.sessionId, status, draftKey)
+  const resumeCommand = useResumeCommand(
+    (live ?? demoSource).engine?.id,
+    resumeWorkspace?.sessionId ?? resumeWorkspace?.projectId,
+  )
+  const menuCommands = useMemo(
+    () => [
+      ...(resumeCommand ? commands.filter(c => !(c.name === 'resume' && c.invocation !== 'skill')) : commands),
+      ...promptCommands,
+      ...(resumeCommand ? [resumeCommand] : []),
+    ],
+    [commands, promptCommands, resumeCommand],
+  )
   const [commandIndex, setCommandIndex] = useState(0),
     [commandDismissed, setCommandDismissed] = useState(false)
   const commandQuery = /^[/$]([^\s]*)$/.exec(text)?.[1].toLowerCase()
@@ -174,9 +190,25 @@ export function Composer({
   useEffect(() => {
     setCommandIndex(index => Math.min(index, Math.max(0, commandMatches.length - 1)))
   }, [commandMatches])
+  /** 打开「接着 Claude Code 会话」选择框；关掉回到这个输入框，打开了新对话就清掉输入框里的 /resume */
+  const openResume = (parsed: { id: string | null; query: string } = { id: null, query: '' }): void => {
+    setCommandDismissed(true)
+    openResumePicker({
+      projectId: status?.project?.id ?? (isDemo ? 'demo' : null),
+      query: parsed.query,
+      id: parsed.id,
+      settingsFor: live?.resumeSettings,
+      onOpened: () => setText(''),
+      onClosed: () => ref.current?.focus(),
+    })
+  }
   const chooseCommand = (index: number): void => {
     const command = commandMatches[index]
-    if (command?.invocation === 'prompt') {
+    if (command?.invocation === 'app') {
+      // 菜单里选中：输入框里只有刚敲的「/resu」这一个词（commandQuery 的正则要求整段文字就是它），清掉，回到敲「/」之前
+      setText('')
+      openResume()
+    } else if (command?.invocation === 'prompt') {
       setCommandDismissed(true)
       const selected = activeEditorSelection()
       const file = getFiles().tabs.find(t => t.id === getFiles().active)?.path ?? ''
@@ -428,6 +460,12 @@ export function Composer({
       setText('')
       return
     }
+    // 手打 /resume [关键词 | 完整 id] 回车：打开选择框，不发给 Claude
+    const resume = resumeCommand ? parseResumeCommand(text) : null
+    if (resume) {
+      openResume(resume)
+      return
+    }
     if (!live) {
       if (hasContent) comingSoon(translate('发送'))
       return
@@ -568,6 +606,7 @@ export function Composer({
       {(live ?? demoQueue) && (
         <QueuedMessages
           live={(live ?? demoQueue)!}
+          sessionId={live?.sessionId ?? null}
           onPrepareRecall={async recalled => {
             if (!recalled.attachments?.length && !recalled.files?.length) return
             const restored = new Set<string>()

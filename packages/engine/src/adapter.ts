@@ -15,6 +15,7 @@ import type {
   SessionSettings,
 } from '@pixelsky/protocol'
 import type { ChatSeed } from './chat-log'
+import type { ClaudeSessionList, ListOptions, LiveState, NativeRead, NewerTurns, ReadOptions } from './claude/native'
 
 /** 要启动的程序：可执行文件 + 固定在前面的参数（例如用 node 跑 cli.js 时是 [cli.js]） */
 export interface Launcher {
@@ -155,7 +156,22 @@ export interface EngineAdapter {
    * 这条用户消息在引擎记录里排在最近一次上下文压缩之前（Claude Code 只保留压缩之后的代码检查点，GitHub #82）；
    * 用来把「没有检查点」说清楚
    */
-  beforeCompaction?(record: SessionRecord, userItemId: string): boolean
+  beforeCompaction?(record: SessionRecord, userItemId: string): boolean | Promise<boolean>
+  /** 接着引擎自己留下的会话（docs/ui/claude-resume.md）：列出这个文件夹的会话（第一步），尾部信息靠返回的 details 补 */
+  nativeSessions?(cwd: string, opts?: ListOptions): Promise<ClaudeSessionList>
+  /** 把引擎自己的一个会话读成条目（流式，能取消）；记录不在了返回 null */
+  readNativeSession?(cwd: string, id: string, opts?: ReadOptions): Promise<NativeRead | null>
+  /** 补上：after 之后新增的轮次；after 不在当前分支上或记录不在了返回 null */
+  newerNativeTurns?(
+    cwd: string,
+    id: string,
+    after: string,
+    opts?: { turns?: number; afterTurn?: boolean },
+  ): Promise<NewerTurns | null>
+  /** 这个会话在引擎那边的记录还在不在（接力发现记录没了时把聊天写进新的引擎会话用） */
+  hasNativeSession?(record: SessionRecord): boolean
+  /** 这些会话现在有没有别的进程开着（不含像素星空自己起的进程）；id 不在结果里的按没开着算 */
+  nativeLive?(rows: readonly { id: string; mtimeMs: number }[]): Map<string, LiveState>
   /** 旁聊：带着会话上下文单独问一次，没有工具、不写记录（§3） */
   sideQuestion?(record: SessionRecord, prompt: string, signal: AbortSignal): Promise<string>
 }

@@ -15,6 +15,7 @@ import { SearchProvider } from '../features/search/SearchProvider'
 import { I18nProvider } from '../i18n/I18nProvider'
 import { SessionActionsProvider } from '../features/sidebar/SessionActions'
 import { TerminalProvider } from '../features/terminal/TerminalProvider'
+import { ResumeHost } from '../features/resume/ResumeHost'
 import { CommandPaletteProvider } from '../features/commands/CommandPaletteProvider'
 import { ShortcutsHelp } from '../features/layout/ShortcutsHelp'
 import { installRendererErrorLog, reactRootErrorOptions } from '../features/logs/rendererErrors'
@@ -50,6 +51,7 @@ createRoot(document.getElementById('root')!, reactRootErrorOptions).render(
                     <App />
                     <ShortcutsHelp />
                     <AuthDialogHost />
+                    <ResumeHost />
                     <RecoveredNotice />
                   </CommandPaletteProvider>
                 </TerminalProvider>

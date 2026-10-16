@@ -54,6 +54,7 @@ import { formatDuration } from './agentTrace'
 import { STEP_CLOCK_MS, clockText } from './currentStep'
 import { useSince } from './stepClock'
 import { useMinimal } from '@/features/appearance/ThemeProvider'
+import { NativeNoticeAction } from '@/features/resume/NativeNoticeAction'
 
 type ItemOf<K extends Item['kind']> = Extract<Item, { kind: K }>
 
@@ -788,8 +789,10 @@ export function TodoCard({ item }: { item: ItemOf<'todo'> }) {
 }
 
 /** 提示：信息 / 警告 / 错误 */
-export function NoticeRow({ item }: { item: ItemOf<'notice'> }) {
+export function NoticeRow({ item, sessionId }: { item: ItemOf<'notice'>; sessionId?: string | null }) {
   useI18n()
+  // 接着终端里的会话时提示右边的按钮：加载更早的 / 补上终端里新聊的 N 轮（docs/ui/claude-resume.md §4.8）
+  const [actionError, setActionError] = useState<string | null>(null)
   const Icon = item.level === 'error' ? CircleAlert : item.level === 'warn' ? TriangleAlert : Info
   // 后台任务结束的提示带结构化信息时按界面语言重新拼（引擎的 text 是中文）
   const text = item.task ? taskNoticeText(item.task) : translateMessage(item.text)
@@ -816,6 +819,9 @@ export function NoticeRow({ item }: { item: ItemOf<'notice'> }) {
         ) : (
           <span className="min-w-0 flex-1 break-words whitespace-pre-wrap">{text}</span>
         )}
+        {item.action && sessionId && (
+          <NativeNoticeAction action={item.action} sessionId={sessionId} onError={setActionError} />
+        )}
         {(detail || long) && (
           <button
             type="button"
@@ -837,6 +843,11 @@ export function NoticeRow({ item }: { item: ItemOf<'notice'> }) {
           </button>
         )}
       </div>
+      {actionError && (
+        <p role="alert" className="mt-1 ml-[23px] text-meta text-danger">
+          {translateMessage(actionError)}
+        </p>
+      )}
       {detail && open && (
         <div
           data-notice-detail

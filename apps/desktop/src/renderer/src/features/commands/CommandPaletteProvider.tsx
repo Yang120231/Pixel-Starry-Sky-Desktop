@@ -1,4 +1,5 @@
-import { openMachineManager, openWorkspacePicker } from '@/features/machines/store'
+import { machineOf, openMachineManager, openWorkspacePicker } from '@/features/machines/store'
+import { openResumePicker } from '@/features/resume/store'
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal, flushSync } from 'react-dom'
 import {
@@ -7,6 +8,7 @@ import {
   Code2,
   Command,
   File,
+  History,
   FolderOpen,
   GitBranch,
   Keyboard,
@@ -189,6 +191,20 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
       },
       undefined,
       samePane,
+    )
+    // 接着终端里的 Claude Code 会话（docs/ui/claude-resume.md §2.1）：按当前项目打开选择框；远程机器上暂不支持
+    const remoteWorkspace = machineOf(ref?.sessionId ?? ref?.projectId) !== 'local'
+    add(
+      'resume.open',
+      'resume.palette',
+      'terminal.categoryWorkbench',
+      History,
+      () => {
+        openResumePicker({ projectId: projectId ?? (isDemo ? 'demo' : null) })
+      },
+      undefined,
+      () => hasProject() && !remoteWorkspace,
+      remoteWorkspace ? t('resume.remote') : undefined,
     )
     add('nav.workbench', 'nav.workbench', 'terminal.categoryWorkbench', LayoutDashboard, showWorkbench)
     add('nav.channels', 'nav.channels', 'terminal.categoryWorkbench', MessageSquare, () => setPage('channels'))

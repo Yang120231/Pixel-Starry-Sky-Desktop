@@ -6,6 +6,7 @@ import { commandDescription } from '@/i18n/commandDescriptions'
 import { tr } from '@/i18n/core'
 import { usePluginText } from '@/features/settings/plugins/text'
 import type { PromptCommand } from '@/features/extpacks/prompts/usePromptCommands'
+import type { AppCommand } from '@/features/resume/useResumeCommand'
 
 export function CommandMenu({
   id,
@@ -15,7 +16,7 @@ export function CommandMenu({
   onSettings,
 }: {
   id: string
-  commands: Array<SkillCommand | PromptCommand>
+  commands: Array<SkillCommand | PromptCommand | AppCommand>
   selected: number
   onChoose: (index: number) => void
   onSettings: () => void
@@ -79,6 +80,34 @@ export function CommandMenu({
                     {command.prompt.description}
                   </span>
                 )}
+              </button>
+            )
+          }
+          if (command.invocation === 'app') {
+            return (
+              <button
+                type="button"
+                role="option"
+                tabIndex={-1}
+                id={`${id}-${index}`}
+                data-command-index={index}
+                data-app-command={command.name}
+                aria-selected={index === selected}
+                key={`${command.invocation}:${command.name}`}
+                onMouseDown={event => event.preventDefault()}
+                onClick={() => onChoose(index)}
+                className={cn(
+                  'flex w-full min-w-0 flex-col gap-1 rounded-md px-3 py-2 text-left text-list',
+                  index === selected ? 'bg-selected' : 'hover:bg-hover',
+                )}
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="truncate font-medium">/{command.name}</span>
+                  <span className="shrink-0 rounded bg-hover px-1.5 text-meta text-fg-muted">{tr('resume.chip')}</span>
+                </span>
+                <span title={command.description} className="truncate text-meta text-fg-muted">
+                  {command.description}
+                </span>
               </button>
             )
           }

@@ -95,7 +95,7 @@ export class HostBranch {
     const { index } = this.userItem(id, userItemId)
     const code = await this.codePreview(snapshot.record, userItemId)
     // 没有检查点、而且这条在压缩之前：说清楚是压缩的缘故（GitHub #82）
-    if (!code.ok && code.reason === 'no-checkpoint' && this.beforeCompaction(id, index, userItemId))
+    if (!code.ok && code.reason === 'no-checkpoint' && (await this.beforeCompaction(id, index, userItemId)))
       return { code: { ...code, reason: 'compacted' } }
     return { code }
   }
@@ -104,11 +104,11 @@ export class HostBranch {
    * 这条用户消息在上下文压缩之前：对话里它后面有压缩，或者引擎记录里它排在最近一次压缩之前
    * （回退把对话里的压缩条目截掉以后，只能看记录）
    */
-  private beforeCompaction(id: string, index: number, userItemId: string): boolean {
+  private async beforeCompaction(id: string, index: number, userItemId: string): Promise<boolean> {
     const snapshot = this.ctx.m.sessions.runtime(id).snapshot
     if (compactedAfter(snapshot.items, index)) return true
     try {
-      return this.ctx.adapters[snapshot.record.engine]?.beforeCompaction?.(snapshot.record, userItemId) ?? false
+      return (await this.ctx.adapters[snapshot.record.engine]?.beforeCompaction?.(snapshot.record, userItemId)) ?? false
     } catch {
       return false
     }
@@ -171,7 +171,7 @@ export class HostBranch {
         } catch (err) {
           // 只恢复代码时照旧报错；同时回退对话时对话照样回退，告诉界面代码没恢复（GitHub #82）
           if (!options.conversation) throw err
-          codeSkipped = this.beforeCompaction(id, index, userItemId)
+          codeSkipped = (await this.beforeCompaction(id, index, userItemId))
             ? '这条消息在上下文压缩之前，Claude Code 只保留压缩之后的代码检查点，代码保持不变'
             : (err as Error).message
         }
@@ -411,6 +411,8 @@ export class HostBranch {
       pendingRewind: null,
       pendingFork: anchor?.at && thread ? { from: thread, at: anchor.at } : null,
       forkedFrom: { sessionId: source.id, title: source.title },
+      // 导入来的标记只属于原对话，不然同一个终端会话被两条记录认领
+      imported: null,
     }
     const notice: Item[] =
       !anchor?.at && thread && items.length > 0

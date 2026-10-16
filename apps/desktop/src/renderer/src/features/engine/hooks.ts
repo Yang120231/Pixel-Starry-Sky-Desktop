@@ -30,7 +30,8 @@ import {
   type RecentItem,
   type SessionStatus,
 } from '@/data'
-import { engineAccent, fastBlockedText, relativeTime } from './labels'
+import { engineAccent, fastBlockedText, relativeTime, selfModelOptions } from './labels'
+import { resumeModel } from '@/features/resume/model'
 import { effortDefaultsFor } from './effortDefaults'
 import { sidebarData, demoSidebarData, type PinnedSession } from './sidebarData'
 import { useAccount } from '@/features/account/useAccount'
@@ -395,6 +396,11 @@ export interface ComposerController {
   stop(): Promise<void>
   /** 还在跑的后台子智能体 / 编排个数（停止按钮的提示用）；引擎没有后台任务时为 0 */
   backgroundAgents: number
+  /**
+   * 接着终端里的 Claude Code 会话时新对话用的设置（docs/ui/claude-resume.md §2.3）：模型用会话最后用的（当前额度来源能跑时），
+   * 额度来源、权限、推理强度跟输入框；平台没登录 / 线路没读到时抛出给用户看的错误
+   */
+  resumeSettings(sessionModel: string | null): Partial<SessionSettings>
   /** 发送；失败时抛出给用户看的错误 */
   submit(
     text: string,
@@ -886,6 +892,42 @@ export function useComposerController(
           )
         : Promise.resolve(),
     redetect: () => void redetectEngines(),
+    resumeSettings: sessionModel => {
+      const picked = resumeModel({
+        source,
+        model,
+        groupId,
+        sessionModel,
+        groups: platform.groups,
+        selfModels: [
+          ...selfModelOptions(engineId, catalog?.models).map(o => o.value),
+          ...(catalog?.models ?? []).map(m => m.resolved ?? null),
+        ],
+      })
+      const panel = {
+        effort: record ? record.effort : base.effort,
+        permissionMode: record ? record.permissionMode : base.permissionMode,
+        ultracode: record ? record.ultracode : base.ultracode,
+        fast: record ? record.fast : base.fast,
+        thinkingSummaries: record ? record.thinkingSummaries : base.thinkingSummaries,
+      }
+      if (source === 'platform') {
+        if (!platform.email) throw new Error(tr('engine.hooks.signInToPixel2'))
+        if (!picked.groupId || !picked.model)
+          throw new Error(platform.error ?? tr('engine.hooks.platformRoutesAreLoading'))
+        return {
+          ...panel,
+          platform: { groupId: picked.groupId, account: platform.email },
+          provider: null,
+          model: picked.model,
+        }
+      }
+      if (source === 'custom') {
+        if (!providerId) throw new Error(tr('customApi.noEndpointForEngine'))
+        return { ...panel, platform: null, provider: { id: providerId }, model: picked.model }
+      }
+      return { ...panel, platform: null, provider: null, model: picked.model }
+    },
     submit: async (text, clientMessageId = crypto.randomUUID(), attachments = [], files = []) => {
       const input = { text, clientMessageId, attachments, ...(files.length ? { files } : {}) }
       if (
