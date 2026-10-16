@@ -104,6 +104,11 @@ export interface EngineInfo {
    * 没有这个字段时按账号授权显示
    */
   auth?: { kind: 'login' | 'apiKey' | 'provider'; provider?: string }
+  /**
+   * 引擎运行时报的配置类警告（目前只有 Codex：config.toml 里不认识的设置项、开了开发中的功能），每类一条原文。
+   * 不进对话，显示在设置 › 本机引擎的详情里；重新检测时清空，下一轮还有就再报。没有时没有这个字段
+   */
+  configWarnings?: string[]
   caps: EngineCaps
 }
 
