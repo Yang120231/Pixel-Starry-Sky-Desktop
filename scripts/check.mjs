@@ -49,7 +49,7 @@ const steps = [
   {
     name: 'test:desktop',
     group: 'test',
-    ...vitest(desktop, ['src/renderer/src', 'src/main', 'src/shared', '--root', '.']),
+    ...vitest(desktop, ['src/renderer/src', 'src/main', 'src/shared', 'src/workers', '--root', '.']),
   },
   { name: 'test:engine', group: 'test', ...vitest(engine) },
   { name: 'test:protocol', group: 'test', ...vitest(protocol) },
@@ -80,6 +80,8 @@ const steps = [
     cwd: desktop,
     script: join(desktop, 'node_modules', 'electron-vite', 'bin', 'electron-vite.js'),
     args: ['build', '--outDir', buildDir],
+    // 构建出来的主进程包里不能有语法引擎（检查进程另有一个入口）；要在 cleanup 删掉输出之前查
+    verify: { script: join(root, 'scripts', 'check-main-bundle.mjs'), args: [buildDir] },
     cleanup: () => rmSync(buildDir, { recursive: true, force: true }),
   },
   // gofmt -l 没有退出码告警，有输出就是没格式化，所以用 failOnOutput
@@ -147,7 +149,11 @@ for (const step of selected) {
     continue
   }
   const start = Date.now()
-  const result = await run(step)
+  let result = await run(step)
+  if (result.code === 0 && step.verify) {
+    const verified = await run({ cwd: root, ...step.verify })
+    result = { code: verified.code, output: result.output + verified.output }
+  }
   step.cleanup?.()
   const passed = result.code === 0 && !(step.failOnOutput && result.output.trim() !== '')
   if (passed) {

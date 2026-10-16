@@ -16,7 +16,7 @@
     "dist": "pnpm build && electron-builder --win --publish never",
     "dist:mac": "pnpm build && electron-builder --mac --publish never",
     "dist:linux": "pnpm build && electron-builder --linux --publish never",
-    "test": "vitest run src/renderer/src src/main src/shared --root ."
+    "test": "vitest run src/renderer/src src/main src/shared src/workers --root ."
   },
   "devDependencies": {
     "@codemirror/autocomplete": "^6.20.3",
