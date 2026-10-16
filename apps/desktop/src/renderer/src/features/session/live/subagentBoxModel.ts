@@ -63,19 +63,25 @@ const NONE: AgentRuns = { workflows: [], agents: [] }
 export const boxElapsed = (model: Pick<BoxModel, 'startedAt' | 'durationMs' | 'state'>, now: number): number =>
   elapsed(model, model.state === 'approval' ? 'running' : model.state, now)
 
-/** 派发小框：主智能体的 Agent / Task / Workflow 调用（Codex 协作智能体没有运行记录，只用条目自己的状态） */
+/** Codex 派出子智能体的调用：派出去就返回了（子智能体在后台接着跑），条目完成不代表子智能体跑完 */
+const CODEX_SPAWN = /^(spawn_agent|collabAgentToolCall|collabToolCall)$/
+
+/** 派发小框：主智能体的 Agent / Task / Workflow 调用，以及 Codex 派出子智能体的调用 */
 export function dispatchBox(item: ToolItem, runs: AgentRuns = NONE, approval = false): BoxModel {
   const workflow: WorkflowRun | undefined =
     item.name === 'Workflow' ? runs.workflows.find(w => w.toolUseId === item.id) : undefined
   const agent: AgentRun | undefined = workflow ? undefined : runs.agents.find(a => a.toolUseId === item.id)
   const run = workflow ?? agent
-  // 条目已经结束就以条目为准；还在跑时看运行记录（后台子智能体的条目要等它真正结束才收尾）
+  // 条目已经结束就以条目为准；还在跑时看运行记录（后台子智能体的条目要等它真正结束才收尾）。
+  // Codex 派出成功只说明派出去了，有运行记录时看子智能体自己的状态
   const state: RunState =
-    item.status !== 'running'
-      ? itemState(item.status)
-      : run
-        ? runState(workflow ? workflow.status : agent!.state)
-        : 'running'
+    item.status === 'completed' && agent && CODEX_SPAWN.test(item.name)
+      ? runState(agent.state)
+      : item.status !== 'running'
+        ? itemState(item.status)
+        : run
+          ? runState(workflow ? workflow.status : agent!.state)
+          : 'running'
   return {
     icon: item.name === 'Workflow' ? 'workflow' : 'bot',
     label: item.title,

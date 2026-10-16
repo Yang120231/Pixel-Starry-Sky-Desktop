@@ -51,6 +51,15 @@ describe('派发小框', () => {
     expect(dispatchBox(call('running')).state).toBe('running')
   })
 
+  it('Codex 派出调用完成只说明派出去了：有运行记录时看子智能体自己的状态', () => {
+    const spawn = (status: Tool['status']) => call(status, 'spawn_agent')
+    expect(dispatchBox(spawn('completed'), runs(run())).state).toBe('running')
+    expect(dispatchBox(spawn('completed'), runs(run({ state: 'completed' }))).state).toBe('done')
+    expect(dispatchBox(spawn('completed')).state).toBe('done')
+    expect(dispatchBox(spawn('failed'), runs(run())).state).toBe('failed')
+    expect(dispatchBox(call('completed', 'collabAgentToolCall'), runs(run())).state).toBe('running')
+  })
+
   it('等你批准只在还在跑时显示', () => {
     expect(dispatchBox(call('running'), undefined, true).state).toBe('approval')
     expect(dispatchBox(call('completed'), undefined, true).state).toBe('done')
