@@ -194,7 +194,10 @@ function Chevron({ open }: { open: boolean }) {
   )
 }
 
-/** 这次打开应用里看到的思考：开始时间、用时（只在内存里，重开会话后没有用时就显示「思考过程」） */
+/**
+ * 这次打开应用里看到的思考：开始时间、用时（只在内存里，重开会话后没有用时就显示「思考过程」）。
+ * 引擎给了 durationMs 的用引擎的（Codex 的思考条目想完才发，这里只能看到 0 秒）
+ */
 const thinkingStart = new Map<string, number>()
 const thinkingTook = new Map<string, number>()
 
@@ -216,7 +219,7 @@ export function ReasoningBlock({ item }: { item: ItemOf<'reasoning'> }) {
   if (running && !thinkingStart.has(item.id)) thinkingStart.set(item.id, Date.now())
   const started = thinkingStart.get(item.id)
   if (!running && started !== undefined && !thinkingTook.has(item.id)) thinkingTook.set(item.id, Date.now() - started)
-  const took = thinkingTook.get(item.id) ?? null
+  const took = (running ? undefined : item.durationMs) ?? thinkingTook.get(item.id) ?? null
   if (!running && !hasText && took === null) return null
   const elapsed = running && started !== undefined ? Date.now() - started : 0
   const label = running

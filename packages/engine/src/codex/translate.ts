@@ -40,6 +40,12 @@ export class CodexTranslator {
   readonly items = new Map<string, Item>()
   /** 压缩完了还没有压缩后的大小：等下一次用量更新补上（docs/ui/compaction.md） */
   private compactionSize: string | null = null
+  /**
+   * 上一次有动静的时间（这一轮开始、条目开始 / 结束 / 增量）。Codex 的思考条目要等模型想完才开始、紧接着就结束，
+   * 真正在想的是上一次动静到它出现的这段，思考用时从这里算
+   */
+  private lastAt = Date.now()
+  private readonly reasoningStart = new Map<string, number>()
   constructor(
     private readonly emit: (event: EngineEvent) => void,
     /** 当前上下文占用（最近一次请求），压缩开始时当「压缩前」 */
@@ -55,6 +61,9 @@ export class CodexTranslator {
       prior = this.items.get(id),
       // collab 调用有派出 / 发消息 / 等待 / 关闭几种（raw.tool），只有派出的才是子智能体的派发卡
       spawns = /^(collabAgentToolCall|collabToolCall)$/.test(type) && /^spawn_?agent$/i.test(string(raw.tool))
+    const now = Date.now(),
+      since = this.lastAt
+    this.lastAt = now
     let item: Item | null = null
     if (type === 'agentMessage' || type === 'plan')
       item = {
@@ -63,14 +72,16 @@ export class CodexTranslator {
         text: string(raw.text) || (prior?.kind === 'assistant' ? prior.text : ''),
         status,
       }
-    else if (type === 'reasoning')
+    else if (type === 'reasoning') {
+      if (!this.reasoningStart.has(id)) this.reasoningStart.set(id, since)
       item = {
         kind: 'reasoning',
         id,
         text: array(raw.summary).map(string).join('\n\n') || (prior?.kind === 'reasoning' ? prior.text : ''),
         status,
+        ...(status === 'running' ? {} : { durationMs: now - this.reasoningStart.get(id)! }),
       }
-    else if (type === 'commandExecution')
+    } else if (type === 'commandExecution')
       item = {
         kind: 'command',
         id,
@@ -237,6 +248,7 @@ export class CodexTranslator {
         false,
       )
     }
+    this.lastAt = Date.now()
     const item = this.items.get(id)
     if (!item) return
     const field = item.kind === 'command' || item.kind === 'tool' ? 'output' : 'text'
@@ -252,6 +264,7 @@ export class CodexTranslator {
   }
   plan(params: Message): void {
     const id = 'cx-plan-' + string(params.turnId)
+    this.lastAt = Date.now()
     const item: Item = {
       kind: 'todo',
       id,

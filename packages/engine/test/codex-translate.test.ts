@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentRun, EngineEvent } from '@pixelsky/protocol'
 import { CodexTranslator } from '../src/codex/translate'
 
@@ -61,5 +61,42 @@ describe('Codex 子智能体：这一轮结束时的收尾', () => {
       translator = new CodexTranslator(e => events.push(e))
     translator.finish('failed')
     expect(events).toEqual([])
+  })
+})
+
+describe('Codex 思考用时', () => {
+  const reasoning = (events: EngineEvent[]) =>
+    events.findLast(e => e.type === 'item_completed' && e.item.kind === 'reasoning')
+  afterEach(() => vi.useRealTimers())
+
+  it('思考条目想完才发、紧接着就结束：用时从上一次动静算到它结束', () => {
+    vi.useFakeTimers({ now: 0 })
+    const events: EngineEvent[] = [],
+      translator = new CodexTranslator(e => events.push(e))
+    vi.setSystemTime(5_200)
+    translator.item({ type: 'reasoning', id: 'r1', summary: [] }, false)
+    vi.setSystemTime(5_220)
+    translator.item({ type: 'reasoning', id: 'r1', summary: [] }, true)
+    expect(reasoning(events)).toMatchObject({ item: { id: 'cx-r1', status: 'completed', durationMs: 5_220 } })
+
+    translator.item({ type: 'commandExecution', id: 'c1', command: 'ls' }, false)
+    vi.setSystemTime(6_000)
+    translator.item({ type: 'commandExecution', id: 'c1', command: 'ls' }, true)
+    vi.setSystemTime(9_000)
+    translator.item({ type: 'reasoning', id: 'r2', summary: ['想好了'] }, true)
+    expect(reasoning(events)).toMatchObject({ item: { id: 'cx-r2', text: '想好了', durationMs: 3_000 } })
+  })
+
+  it('开着思考摘要时从摘要增量建出来的条目：开始时间同样取上一次动静', () => {
+    vi.useFakeTimers({ now: 0 })
+    const events: EngineEvent[] = [],
+      translator = new CodexTranslator(e => events.push(e))
+    vi.setSystemTime(2_000)
+    translator.delta('item/reasoning/summaryTextDelta', { itemId: 'r1', delta: '先看' })
+    expect(events[0]).toMatchObject({ type: 'item_started', item: { status: 'running' } })
+    expect(events[0].type === 'item_started' && 'durationMs' in events[0].item).toBe(false)
+    vi.setSystemTime(4_000)
+    translator.item({ type: 'reasoning', id: 'r1', summary: ['先看'] }, true)
+    expect(reasoning(events)).toMatchObject({ item: { durationMs: 4_000 } })
   })
 })
