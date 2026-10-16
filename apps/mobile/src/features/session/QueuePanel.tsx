@@ -120,7 +120,12 @@ export function QueuePanel({
           </button>
         )}
       </div>
-      <div className={cn('flex flex-col gap-1.5 pb-1', open && 'max-h-[35dvh] overflow-y-auto')}>
+      <div
+        className={cn(
+          'flex flex-col gap-1.5 pb-1',
+          open && 'max-h-[calc(var(--app-height,100dvh)*0.35)] overflow-y-auto',
+        )}
+      >
         {shown.map(q => (
           <button
             key={q.id}

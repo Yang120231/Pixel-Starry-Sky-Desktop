@@ -120,6 +120,7 @@ export {
 } from './files'
 export type { ContextDetail, ContextDetailLevel, ContextDiagnostic, ContextPart, ContextWindow } from './context'
 export { contextCount, contextDiagnostic } from './context'
+export { REPLY_PREVIEW_MAX, replyPreview } from './replyPreview'
 export type {
   SearchFragment,
   SearchKind,

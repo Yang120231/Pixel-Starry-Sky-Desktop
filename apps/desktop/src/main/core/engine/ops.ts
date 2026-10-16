@@ -80,6 +80,21 @@ function nativeImportOptions(raw: unknown): {
   }
 }
 
+const MODE_LABEL: Record<string, string> = { ask: '每步问我', edits: '自动改文件', plan: '只规划', full: '完全放行' }
+
+/** 手机改了会话设置时留在会话里的那句话（只写真的变了的项）；都没变时返回 null */
+export function mobileChangeNotice(before: SessionRecord | null, patch: SessionPatch): string | null {
+  const parts: string[] = []
+  const changed = <K extends 'permissionMode' | 'model' | 'effort' | 'thinkingSummaries'>(key: K): boolean =>
+    patch[key] !== undefined && (!before || patch[key] !== before[key])
+  if (changed('permissionMode'))
+    parts.push(`模式改成了「${MODE_LABEL[patch.permissionMode!] ?? patch.permissionMode}」`)
+  if (changed('model')) parts.push(`模型改成了「${patch.model ?? '引擎默认'}」`)
+  if (changed('effort')) parts.push(`强度改成了「${patch.effort ?? '引擎默认'}」`)
+  if (changed('thinkingSummaries')) parts.push(`思考摘要改成了「${patch.thinkingSummaries ? '开' : '关'}」`)
+  return parts.length ? `手机把${parts.join('，把')}` : null
+}
+
 const SEARCH_CANCELLED = { results: [], cancelled: true, truncated: false, partial: false, sessionCount: 0 }
 const SCAN_CANCELLED = { turns: [], delivered: [], outsideCount: 0, truncated: false, partial: false, cancelled: true }
 
@@ -191,14 +206,17 @@ export const ENGINE_OPS = {
   'engine:interruptTurn': (c, id, turnId) => c.host.interruptTurn(str(id, 'id'), str(turnId, 'turnId')),
   'engine:answer': (c, id, requestId, decision) =>
     c.host.answer(str(id, 'id'), str(requestId, 'requestId'), decision as ApprovalDecision),
-  'engine:updateSession': async (c, id, raw) => {
+  // 第三个参数 via 可省略：'mobile' 表示是手机改的，会话里留一条看得见的记录（docs/mobile-remote.md §21.7）；
+  // 记录的文字由这里按改动算出来，不信任调用方给的文字。旧版远端不认第三个参数，忽略就是了
+  'engine:updateSession': async (c, id, raw, via?: unknown) => {
     const sessionId = str(id, 'id'),
-      patch = (raw ?? {}) as SessionPatch
-    if (c.beforeUpdate) {
-      const record = c.host.record(sessionId)
-      if (record) await c.beforeUpdate({ ...record, ...patch })
-    }
-    return c.host.update(sessionId, patch)
+      patch = (raw ?? {}) as SessionPatch,
+      before = c.host.record(sessionId)
+    if (c.beforeUpdate && before) await c.beforeUpdate({ ...before, ...patch })
+    const record = await c.host.update(sessionId, patch)
+    const text = via === 'mobile' ? mobileChangeNotice(before, patch) : null
+    if (text) c.host.addNotice(sessionId, 'warn', text)
+    return record
   },
   'engine:deleteSession': (c, id) => c.host.deleteSession(str(id, 'id')),
   'engine:renameSession': (c, id, title) => c.host.renameSession(str(id, 'id'), title as string),

@@ -119,6 +119,7 @@ export const IPC_CONTRACT = {
     route: 'resource',
     ids: [0],
     remote: 'engine:archiveSession',
+    mobile: 'act',
     trust: 'sender',
   },
   'engine:artifactChange': {
@@ -151,7 +152,14 @@ export const IPC_CONTRACT = {
     remote: 'engine:cancelSearch',
     trust: 'sender',
   },
-  'engine:catalog': { kind: 'invoke', route: 'selected', ids: [0], remote: 'engine:catalog', trust: 'sender' },
+  'engine:catalog': {
+    kind: 'invoke',
+    route: 'selected',
+    ids: [0],
+    remote: 'engine:catalog',
+    mobile: 'view',
+    trust: 'sender',
+  },
   'engine:compact': { kind: 'invoke', route: 'resource', ids: [0], remote: 'engine:compact', trust: 'sender' },
   'engine:config': { kind: 'invoke', route: 'selected', ids: [0], remote: 'engine:config', trust: 'sender' },
   'engine:context': { kind: 'invoke', route: 'resource', ids: [0], remote: 'engine:context', trust: 'sender' },
@@ -250,6 +258,7 @@ export const IPC_CONTRACT = {
     route: 'resource',
     ids: [0],
     remote: 'engine:renameSession',
+    mobile: 'act',
     trust: 'sender',
   },
   'engine:resumeQueue': {
@@ -371,6 +380,7 @@ export const IPC_CONTRACT = {
     route: 'resource',
     ids: [0],
     remote: 'engine:setSessionPinned',
+    mobile: 'act',
     trust: 'sender',
   },
   'engine:steerQueued': {
@@ -402,6 +412,7 @@ export const IPC_CONTRACT = {
     route: 'resource',
     ids: [0],
     remote: 'engine:updateSession',
+    mobile: 'act',
     trust: 'sender',
   },
   'engine:usageClear': { kind: 'invoke', route: 'selected', ids: [0], remote: 'engine:usageClear', trust: 'sender' },
