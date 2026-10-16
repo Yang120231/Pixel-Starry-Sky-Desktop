@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Plus } from 'lucide-react'
 import type {
-  ExtPackContributes,
   ExtStoreCheckReport,
   ExtStoreMyExtension,
   ExtStorePickUploadResult,
@@ -37,8 +36,6 @@ export interface PublishTabProps {
   onLoadReport(id: string, version: string): Promise<ExtStoreCheckReport | null>
   /** 上传面板 */
   picked: ExtStorePickUploadResult | null
-  /** 选 zip 的 id 对应的上一个上架版本的清单贡献，没上架过回 null */
-  previousFor(id: string): ExtPackContributes | null
   uploading: boolean
   uploadError?: string | null
   /** 云端回 check_failed 时带回来的检查结果 */
@@ -270,7 +267,7 @@ export function PublishTab(props: PublishTabProps) {
           <UploadPanel
             publisherName={publisher.name}
             picked={props.picked}
-            previous={props.picked ? props.previousFor(props.picked.id) : null}
+            previous={props.picked?.previousContributes ?? null}
             uploading={props.uploading}
             error={props.uploadError}
             cloudReport={props.cloudReport}

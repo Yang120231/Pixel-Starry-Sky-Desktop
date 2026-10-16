@@ -83,7 +83,7 @@ export function UploadPanel({
   }
 
   const failed = picked ? failedChecks(picked.checks) : []
-  const submittable = picked ? canSubmit(picked.report, picked.checks) && !uploading : false
+  const submittable = picked ? picked.token !== '' && canSubmit(picked.report, picked.checks) && !uploading : false
   const shownError =
     dropError === 'tooLarge'
       ? t('errors.extstore.api.tooLarge')

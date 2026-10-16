@@ -27,7 +27,6 @@ const props = (over: Partial<PublishTabProps> = {}): PublishTabProps => ({
   onRelist: async () => {},
   onLoadReport: async () => null,
   picked: null,
-  previousFor: () => null,
   uploading: false,
   onPick: () => {},
   onSubmitUpload: () => {},
