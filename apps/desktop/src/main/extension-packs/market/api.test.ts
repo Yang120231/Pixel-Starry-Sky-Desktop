@@ -119,7 +119,7 @@ const coded = (e: Error) => parseCodedError(e.message)
 describe('解析', () => {
   it('目录（extapi.go:104-131）：条目、next_before 为 null 和有值', async () => {
     const { api, calls } = make({ pub: () => json({ items: [item, { no: 'id' }, 5], next_before: null }) })
-    const page = await api.catalog({ q: 'he llo', category: 'code', sort: 'newest', before: '30' })
+    const page = await api.catalog({ q: 'he llo', category: 'code', sort: 'updated', before: '30' })
     expect(page.nextBefore).toBeNull()
     expect(page.items).toHaveLength(1)
     expect(page.items[0]).toEqual({
@@ -140,7 +140,7 @@ describe('解析', () => {
     expect(Object.fromEntries(url.searchParams)).toEqual({
       q: 'he llo',
       category: 'code',
-      sort: 'newest',
+      sort: 'updated',
       before: '30',
       limit: '30',
     })

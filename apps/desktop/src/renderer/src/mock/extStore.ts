@@ -252,7 +252,7 @@ function catalog(q = '', category = '', sort = 'recommended', before: string | n
       (!kinds || i.kinds.some(k => kinds.includes(k))),
   )
   if (sort === 'downloads') list = [...list].sort((a, b) => b.downloads - a.downloads)
-  else if (sort === 'newest') list = [...list].sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
+  else if (sort === 'updated') list = [...list].sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
   const offset = Math.max(0, Number(before) || 0)
   const items = list.slice(offset, offset + PAGE)
   return { items, nextBefore: offset + PAGE < list.length ? String(offset + PAGE) : null }

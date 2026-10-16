@@ -35,7 +35,7 @@ const REPORT_REASONS: readonly ExtStoreReportReason[] = [
   'misleading',
   'other',
 ]
-const SORTS = ['recommended', 'downloads', 'newest']
+const SORTS = ['recommended', 'downloads', 'updated']
 
 function str(value: unknown, max: number): string {
   if (typeof value !== 'string' || !value || value.length > max || value.includes('\0'))

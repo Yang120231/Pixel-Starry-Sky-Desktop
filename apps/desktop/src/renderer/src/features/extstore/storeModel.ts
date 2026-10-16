@@ -73,7 +73,7 @@ export const STORE_CATEGORY_GROUPS: ReadonlyArray<{ id: 'code' | 'ai'; label: Tr
 export const STORE_SORTS: ReadonlyArray<{ value: ExtStoreSort; label: TranslationKey }> = [
   { value: 'recommended', label: 'extstore.sort.recommended' },
   { value: 'downloads', label: 'extstore.sort.downloads' },
-  { value: 'newest', label: 'extstore.sort.newest' },
+  { value: 'updated', label: 'extstore.sort.newest' },
 ]
 
 /** 能不能选：第二期、第三期的分类只显示、不能点 */

@@ -120,7 +120,7 @@ describe('DiscoverTab', () => {
   })
 
   it('从详情回来：搜索词、分类、排序还在', () => {
-    seed({ q: 'swift', category: 'grammars', sort: 'newest' })
+    seed({ q: 'swift', category: 'grammars', sort: 'updated' })
     const html = wrap(<DiscoverTab />)
     expect(html).toContain('value="swift"')
     expect(html).toMatch(

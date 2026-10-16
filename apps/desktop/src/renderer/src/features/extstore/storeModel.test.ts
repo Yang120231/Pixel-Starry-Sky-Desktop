@@ -90,7 +90,7 @@ describe('catalogQueryOf', () => {
       sort: 'downloads',
       before: '30',
     })
-    expect(catalogQueryOf({ q: 'x'.repeat(120), category: 'all', sort: 'newest' }).q).toHaveLength(100)
+    expect(catalogQueryOf({ q: 'x'.repeat(120), category: 'all', sort: 'updated' }).q).toHaveLength(100)
   })
   it('不能选的分类不传 category', () => {
     expect(catalogQueryOf({ q: '', category: 'mcp', sort: 'recommended' })).toEqual({})
