@@ -44,7 +44,7 @@ describe('ExtensionsSection 页签', () => {
     openExtTab('installed')
   })
 
-  it('点进详情时渲染详情占位和「发现」返回键，页签仍在', () => {
+  it('点进详情时渲染详情页（取到之前是加载中）和返回键，页签仍在', () => {
     openExtDetail('pixelsky.swift')
     const html = render()
     expect(html).toContain('data-store-detail="pixelsky.swift"')

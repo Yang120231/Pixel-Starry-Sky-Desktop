@@ -134,13 +134,17 @@ export function useExtStore(): ExtStoreSnapshot {
   return useSyncExternalStore(subscribeExtStore, getExtStore, getExtStore)
 }
 
-/** 装 / 更新：进度由 extstore:changed 推送，这里只管发起和记下失败原因 */
-export async function installExtension(id: string, version: string): Promise<boolean> {
+/** 装 / 更新 / 换回（rollback）：进度由 extstore:changed 推送，这里只管发起和记下失败原因 */
+export async function installExtension(
+  id: string,
+  version: string,
+  options: { rollback?: boolean } = {},
+): Promise<boolean> {
   const b = api()
   if (!b) return false
   if (snapshot.installErrors[id]) set({ installErrors: withoutKey(snapshot.installErrors, id) })
   try {
-    await b.install(id, version)
+    await b.install(id, version, options.rollback ? { rollback: true } : undefined)
     void refreshExtStore()
     return true
   } catch (e) {
@@ -200,3 +204,6 @@ export function saveDiscoverView(next: DiscoverView): void {
 export function discoverView(): DiscoverView {
   return view
 }
+
+/** 界面用的预加载桥（演示模式是自带数据的假桥）；详情页、举报用 */
+export const storeBridge = api
