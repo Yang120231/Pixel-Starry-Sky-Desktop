@@ -17,6 +17,7 @@ import { NO_REPLY, seedImageCount, seedTurns, type ChatSeed, type ChatTurn } fro
 import { CodexProcess, array, object, string, type Message } from './process'
 import { readCodexTurns, revertTarget } from './branch'
 import { codexCatalog } from './catalog'
+import { codexCommand } from './command'
 import { codexChanges, CodexTranslator, tokenCounts } from './translate'
 import { CODEX_WINDOW_ENV, codexContextConfig } from './context-config'
 
@@ -877,7 +878,7 @@ export class CodexSession implements EngineSession {
         title: params.networkApprovalContext
           ? title('Codex network access', 'Codex subagent {agent} network access')
           : title('Codex command approval', 'Codex subagent {agent} command approval'),
-        command: string(params.command),
+        command: codexCommand(string(params.command)),
         description: string(params.reason),
         input: params.networkApprovalContext,
         alwaysScopes: ['session'],

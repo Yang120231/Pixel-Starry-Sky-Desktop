@@ -179,7 +179,7 @@ export class CodexAdapter implements EngineAdapter {
       const result = await proc.request('thread/read', { threadId: agentId, includeTurns: true })
       const translator = new CodexTranslator(() => {})
       for (const turn of array(object(result.thread).turns))
-        for (const item of array(object(turn).items)) translator.item(object(item), true)
+        for (const item of array(object(turn).items)) translator.item(object(item), true, false)
       return [...translator.items.values()]
     } finally {
       await proc.close()

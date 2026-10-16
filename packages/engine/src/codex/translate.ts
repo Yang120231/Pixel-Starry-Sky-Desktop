@@ -2,6 +2,7 @@ import type { AgentRun, EngineEvent, FileChange, Item, ItemStatus } from '@pixel
 import { array, object, string, number, type Message } from './process'
 import { diffAdded } from '../diff'
 import { MAX_OUTPUT, clip } from '../output'
+import { codexCommand } from './command'
 
 export function codexChanges(value: unknown): FileChange[] {
   return array(value)
@@ -40,6 +41,12 @@ export class CodexTranslator {
   readonly items = new Map<string, Item>()
   /** 压缩完了还没有压缩后的大小：等下一次用量更新补上（docs/ui/compaction.md） */
   private compactionSize: string | null = null
+  /**
+   * 上一次有动静的时间（这一轮开始、条目开始 / 结束 / 增量）。Codex 的思考条目要等模型想完才开始、紧接着就结束，
+   * 真正在想的是上一次动静到它出现的这段，思考用时从这里算
+   */
+  private lastAt = Date.now()
+  private readonly reasoningStart = new Map<string, number>()
   constructor(
     private readonly emit: (event: EngineEvent) => void,
     /** 当前上下文占用（最近一次请求），压缩开始时当「压缩前」 */
@@ -47,7 +54,8 @@ export class CodexTranslator {
     /** 子智能体按线程 id 记；会话传入同一个，跨轮保留（结束常在后面的轮次才到） */
     readonly agents = new Map<string, AgentRun>(),
   ) {}
-  item(raw: Message, complete: boolean): void {
+  /** timed：是否算思考用时。冷读的历史（子智能体记录）一次性全倒进来，算出来都是 0，不算，界面按没有用时显示 */
+  item(raw: Message, complete: boolean, timed = true): void {
     const id = 'cx-' + string(raw.id),
       type = string(raw.type)
     if (type === 'subAgentActivity') return this.subagent(raw, complete)
@@ -55,6 +63,9 @@ export class CodexTranslator {
       prior = this.items.get(id),
       // collab 调用有派出 / 发消息 / 等待 / 关闭几种（raw.tool），只有派出的才是子智能体的派发卡
       spawns = /^(collabAgentToolCall|collabToolCall)$/.test(type) && /^spawn_?agent$/i.test(string(raw.tool))
+    const now = Date.now(),
+      since = this.lastAt
+    this.lastAt = now
     let item: Item | null = null
     if (type === 'agentMessage' || type === 'plan')
       item = {
@@ -63,18 +74,20 @@ export class CodexTranslator {
         text: string(raw.text) || (prior?.kind === 'assistant' ? prior.text : ''),
         status,
       }
-    else if (type === 'reasoning')
+    else if (type === 'reasoning') {
+      if (!this.reasoningStart.has(id)) this.reasoningStart.set(id, since)
       item = {
         kind: 'reasoning',
         id,
         text: array(raw.summary).map(string).join('\n\n') || (prior?.kind === 'reasoning' ? prior.text : ''),
         status,
+        ...(status === 'running' || !timed ? {} : { durationMs: now - this.reasoningStart.get(id)! }),
       }
-    else if (type === 'commandExecution')
+    } else if (type === 'commandExecution')
       item = {
         kind: 'command',
         id,
-        command: string(raw.command),
+        command: codexCommand(string(raw.command)),
         // description 是命令说明（悬停时显示）；Codex 没有说明，不能放工作目录
         description: null,
         output: clip(string(raw.aggregatedOutput)) || (prior?.kind === 'command' ? prior.output : ''),
@@ -237,6 +250,7 @@ export class CodexTranslator {
         false,
       )
     }
+    this.lastAt = Date.now()
     const item = this.items.get(id)
     if (!item) return
     const field = item.kind === 'command' || item.kind === 'tool' ? 'output' : 'text'
@@ -252,6 +266,7 @@ export class CodexTranslator {
   }
   plan(params: Message): void {
     const id = 'cx-plan-' + string(params.turnId)
+    this.lastAt = Date.now()
     const item: Item = {
       kind: 'todo',
       id,

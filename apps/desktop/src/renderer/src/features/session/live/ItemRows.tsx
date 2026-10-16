@@ -52,7 +52,7 @@ import { Markdown } from '@/ui/markdown/Markdown'
 import { MarkdownImage } from '@/ui/markdown/MarkdownImage'
 import { useMessageActionsPosition } from '@/features/settings/messageActions'
 import { formatDuration } from './agentTrace'
-import { STEP_CLOCK_MS, clockText } from './currentStep'
+import { STEP_CLOCK_MS, baseName, clockText } from './currentStep'
 import { useSince } from './stepClock'
 import { useMinimal } from '@/features/appearance/ThemeProvider'
 import { NativeNoticeAction } from '@/features/resume/NativeNoticeAction'
@@ -195,7 +195,10 @@ function Chevron({ open }: { open: boolean }) {
   )
 }
 
-/** 这次打开应用里看到的思考：开始时间、用时（只在内存里，重开会话后没有用时就显示「思考过程」） */
+/**
+ * 这次打开应用里看到的思考：开始时间、用时（只在内存里，重开会话后没有用时就显示「思考过程」）。
+ * 引擎给了 durationMs 的用引擎的（Codex 的思考条目想完才发，这里只能看到 0 秒）
+ */
 const thinkingStart = new Map<string, number>()
 const thinkingTook = new Map<string, number>()
 
@@ -217,7 +220,7 @@ export function ReasoningBlock({ item }: { item: ItemOf<'reasoning'> }) {
   if (running && !thinkingStart.has(item.id)) thinkingStart.set(item.id, Date.now())
   const started = thinkingStart.get(item.id)
   if (!running && started !== undefined && !thinkingTook.has(item.id)) thinkingTook.set(item.id, Date.now() - started)
-  const took = thinkingTook.get(item.id) ?? null
+  const took = (running ? undefined : item.durationMs) ?? thinkingTook.get(item.id) ?? null
   if (!running && !hasText && took === null) return null
   const elapsed = running && started !== undefined ? Date.now() - started : 0
   const label = running
@@ -488,6 +491,106 @@ function fileVerb(changes: FileChange[]): string {
     : tr('session.live.ItemRows.edit')
 }
 
+/** 上一级文件夹名：同一次改动里有同名文件时写在文件名前（common/build.gradle） */
+const parentName = (path: string): string =>
+  baseName(path.slice(0, Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))))
+
+type PathClick = { title: string; 'data-path': string } & ReturnType<typeof pathClickHandlers>
+
+/** 改文件的一行（一个文件）：有 diff 时点行展开 / 收起，打开编辑器用单独的图标；没有 diff 时点文件名直接打开 */
+function FileChangeLine({
+  item,
+  change: c,
+  dir,
+  waitTag,
+  changedClick,
+}: {
+  item: ItemOf<'file_change'>
+  change: FileChange
+  dir: string
+  waitTag: ReactNode
+  changedClick: (change: FileChange) => PathClick
+}) {
+  const foldable = !!c.diff
+  const { open, toggle, fold } = useFold(item.id, foldable)
+  const editing = item.status === 'running'
+  const name = (
+    <>
+      {dir && <span className="text-fg-muted">{dir}/</span>}
+      {baseName(c.path)}
+    </>
+  )
+  const summary = (
+    <>
+      <RunningIcon icon={c.kind === 'add' ? FilePlus : FilePen} status={item.status} />
+      <span data-tool-verb className={cn('shrink-0', editing && 'step-shimmer')}>
+        {fileVerb([c])}
+      </span>
+      <div className="flex min-w-0 flex-1 overflow-hidden">
+        {foldable ? (
+          <span title={c.path} className="truncate font-mono text-meta text-code-path">
+            {name}
+          </span>
+        ) : (
+          <button
+            type="button"
+            {...changedClick(c)}
+            className="truncate text-left font-mono text-meta text-code-path hover:underline"
+          >
+            {name}
+          </button>
+        )}
+      </div>
+      {editing && <StepClock id={item.id} />}
+      {(c.added > 0 || c.removed > 0) && <DiffStat added={c.added} removed={c.removed} className="text-meta" />}
+      <StatusMark status={item.status} />
+      <SubagentTag name={item.subagent} />
+    </>
+  )
+  if (!foldable)
+    return (
+      <div
+        data-step-row
+        className="flex min-h-[30px] min-w-0 items-center gap-2 rounded-md px-2 text-list text-fg-secondary"
+      >
+        {summary}
+        {waitTag}
+      </div>
+    )
+  return (
+    <div data-fold={fold}>
+      <div className="group/file flex min-w-0 items-center gap-1">
+        <button
+          type="button"
+          aria-expanded={open}
+          title={tr(open ? 'session.ChangedFilesCard.hideChanges' : 'session.ChangedFilesCard.showChanges')}
+          onClick={toggle}
+          data-step-row
+          className="flex min-h-[30px] min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left text-list text-fg-secondary hover:bg-hover"
+        >
+          {summary}
+          <Chevron open={open} />
+        </button>
+        {waitTag}
+        <span className={cn('opacity-0 group-hover/file:opacity-100 focus-within:opacity-100', open && 'opacity-100')}>
+          <IconButton
+            icon={SquareArrowOutUpRight}
+            label={tr('session.ChangedFilesCard.openInEditor')}
+            size={24}
+            iconSize={13}
+            {...changedClick(c)}
+          />
+        </span>
+      </div>
+      {open && (
+        <div className={cn(OUTPUT_BOX, 'bg-surface py-1.5')}>
+          <DiffView diff={c.diff} path={c.path} />
+        </div>
+      )}
+    </div>
+  )
+}
+
 /** 工具调用的一行：运行命令 / 编辑文件 / 读取 / 搜索 / 网页 / MCP / 子任务；点开看输出或 diff。条目没变就不重新渲染 */
 export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'command' | 'file_change' | 'tool'> }) {
   useI18n()
@@ -596,105 +699,24 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
   }
 
   if (item.kind === 'file_change') {
-    const added = item.changes.reduce((n, c) => n + c.added, 0)
-    const removed = item.changes.reduce((n, c) => n + c.removed, 0)
-    const single = item.changes.length === 1
-    // 有 diff 时点行展开 / 收起，打开编辑器用单独的图标；没有 diff 时点路径直接打开（docs/ui/changes-inline-diff.md）
-    const openButton = (c: FileChange): ReactNode => (
-      <IconButton
-        icon={SquareArrowOutUpRight}
-        label={tr('session.ChangedFilesCard.openInEditor')}
-        size={24}
-        iconSize={13}
-        {...changedClick(c)}
-      />
-    )
-    const paths = (
-      <div className="flex min-w-0 flex-1 gap-2 overflow-hidden">
-        {item.changes.map(c =>
-          foldable ? (
-            <span key={c.path} className="truncate font-mono text-meta text-code-path">
-              {c.path}
-            </span>
-          ) : (
-            <button
-              key={c.path}
-              type="button"
-              {...changedClick(c)}
-              className="truncate text-left font-mono text-meta text-code-path hover:underline"
-            >
-              {c.path}
-            </button>
-          ),
-        )}
-      </div>
-    )
-    const editing = item.status === 'running'
-    const summary = (
-      <>
-        <RunningIcon icon={item.changes[0]?.kind === 'add' ? FilePlus : FilePen} status={item.status} />
-        <span data-tool-verb className={cn('shrink-0', editing && 'step-shimmer')}>
-          {fileVerb(item.changes)}
-        </span>
-        {paths}
-        {editing && <StepClock id={item.id} />}
-        {(added > 0 || removed > 0) && <DiffStat added={added} removed={removed} className="text-meta" />}
-        <StatusMark status={item.status} />
-        <SubagentTag name={item.subagent} />
-      </>
-    )
+    // 一次改了几个文件就拆成几行，每行只写文件名、各自展开自己的 diff；完整路径在悬停提示里
+    const names = item.changes.map(c => baseName(c.path))
     return (
-      <div ref={row} data-fold={fold} className={rowClass}>
-        {foldable ? (
-          <div className="group/file flex min-w-0 items-center gap-1">
-            <button
-              type="button"
-              aria-expanded={open}
-              title={tr(open ? 'session.ChangedFilesCard.hideChanges' : 'session.ChangedFilesCard.showChanges')}
-              onClick={toggle}
-              data-step-row
-              className="flex min-h-[30px] min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left text-list text-fg-secondary hover:bg-hover"
-            >
-              {summary}
-              <Chevron open={open} />
-            </button>
-            {waitTag}
-            {single && (
-              <span
-                className={cn('opacity-0 group-hover/file:opacity-100 focus-within:opacity-100', open && 'opacity-100')}
-              >
-                {openButton(item.changes[0])}
-              </span>
-            )}
-          </div>
-        ) : (
-          <div
-            data-step-row
-            className="flex min-h-[30px] min-w-0 items-center gap-2 rounded-md px-2 text-list text-fg-secondary"
-          >
-            {summary}
-            {waitTag}
-          </div>
-        )}
+      <div ref={row} className={rowClass}>
+        {item.changes.map((c, i) => (
+          <FileChangeLine
+            key={c.path}
+            item={item}
+            change={c}
+            dir={names.indexOf(names[i]) !== names.lastIndexOf(names[i]) ? parentName(c.path) : ''}
+            waitTag={i === 0 ? waitTag : null}
+            changedClick={changedClick}
+          />
+        ))}
         {fileError && (
           <p role="status" className="px-2 text-meta text-danger">
             {fileError}
           </p>
-        )}
-        {open && (
-          <div className={cn(OUTPUT_BOX, 'bg-surface py-1.5')}>
-            {item.changes.map(c => (
-              <div key={c.path}>
-                {!single && (
-                  <div className="flex items-center gap-1 pr-1.5 pl-3 font-mono text-meta text-fg-muted">
-                    <span className="min-w-0 flex-1 truncate">{c.path}</span>
-                    {openButton(c)}
-                  </div>
-                )}
-                <DiffView diff={c.diff} path={c.path} />
-              </div>
-            ))}
-          </div>
         )}
       </div>
     )
