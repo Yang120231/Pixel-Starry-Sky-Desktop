@@ -15,6 +15,7 @@ import {
 } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
+import type { ImageAttachment } from '@pixelsky/protocol'
 import { isFile } from '../exec'
 
 export function defaultProjectsDir(env: NodeJS.ProcessEnv): string {
@@ -220,6 +221,18 @@ function readBranch(file: string): { leaf: string | null; branch: Set<string>; k
   return { leaf, branch, known: new Set(parents.keys()) }
 }
 
+/** 用户消息的 content：带图时和 Claude Code 自己记的一样，是文字块加图片块的数组；没有图就是一段文字 */
+function userContent(text: string, images: readonly ImageAttachment[] = []): string | Record<string, unknown>[] {
+  if (images.length === 0) return text
+  return [
+    { type: 'text', text },
+    ...images.map(image => ({
+      type: 'image',
+      source: { type: 'base64', media_type: image.mediaType, data: image.dataBase64 },
+    })),
+  ]
+}
+
 /**
  * 跨引擎接力：把别的引擎期间的聊天按 Claude Code 自己的格式写进会话记录，之后 --resume 就带着这些轮次。
  * 没有记录时新建（从头开始），有记录时接在当前分支末端后面，再让 last-prompt 指向新的末端。
@@ -231,7 +244,7 @@ export function seedTranscript(
   projectsDir: string,
   cwd: string,
   sessionId: string,
-  turns: readonly { id: string; user: string; assistant: string | null }[],
+  turns: readonly { id: string; user: string; assistant: string | null; images?: readonly ImageAttachment[] }[],
   noReply: string,
 ): string {
   const existing = findClaudeTranscript(projectsDir, cwd, sessionId)
@@ -255,7 +268,7 @@ export function seedTranscript(
         parentUuid: parent,
         type: 'user',
         uuid: userId,
-        message: { role: 'user', content: turn.user },
+        message: { role: 'user', content: userContent(turn.user, turn.images) },
       }),
     )
     const replyId = randomUUID()

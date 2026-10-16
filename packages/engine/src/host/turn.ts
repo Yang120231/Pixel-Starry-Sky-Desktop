@@ -145,7 +145,7 @@ export class HostTurn {
       const turnId = randomUUID()
       const userItemId = item.attempt ? `${item.id}-retry-${randomUUID()}` : item.id
       // 新引擎没看过的对话整理成交接材料，放在用户消息前面发给它；用户消息条目里仍是用户原文
-      const handoff = m.handoff.plan(id, record, item.text, item.files)
+      const handoff = m.handoff.plan(id, record, item.text, item.files, item.attachments)
       rt.holdCursor = handoff.hold ? turnId : undefined
       rt.activeId = item.id
       m.queue.changeQueue(id, item.id, { status: 'running', attempt: (item.attempt ?? 0) + 1, messageUuid: userItemId })
@@ -175,7 +175,7 @@ export class HostTurn {
       if (rt.snapshot.suggestion) m.events.apply(id, { type: 'suggestion', text: null })
       m.events.apply(id, { type: 'status', state: 'running' })
       m.events.apply(id, { type: 'turn_started', turnId, execution: queueSettings(rt.execution) })
-      rt.session.send(handoff.text, turnId, userItemId, item.attachments, handoff.seed)
+      rt.session.send(handoff.text, turnId, userItemId, item.attachments, handoff.seed, handoff.attachments)
     } catch (err) {
       if (ctx.runtimes.get(id) !== rt) return
       m.queue.changeQueue(id, item.id, { status: 'failed', error: (err as Error).message })

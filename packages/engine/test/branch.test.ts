@@ -497,3 +497,66 @@ describe('旁聊', () => {
     await expect(host.sideQuestion(record.id, '问', [])).rejects.toThrow('先在主对话里发一条消息')
   })
 })
+
+describe('跨引擎接力带图片到 Claude', () => {
+  const png = (name: string) => ({
+    id: name.replace(/\W/g, '-'),
+    name,
+    mediaType: 'image/png' as const,
+    bytes: 16,
+    width: 1,
+    height: 1,
+    dataBase64: Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), Buffer.alloc(8)]).toString('base64'),
+  })
+  const sent = (): { types: string[]; text: string; images: unknown[] }[] =>
+    readFileSync(join(root, 'images.jsonl'), 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map(l => JSON.parse(l))
+
+  it('写进记录的用户消息带图片块：Claude 恢复时看得到，回退截断点照样找得到', async () => {
+    const host = makeHost({ FAKE_CLAUDE_IMAGES: join(root, 'images.jsonl') }, { codex: new StubCodex() })
+    const { record, cwd } = await conversation(host, ['一'])
+    await host.update(record.id, { engine: 'codex' })
+    const b = '11111111-2222-4333-8444-555555555555'
+    await host.send(record.id, { text: '看这张图', clientMessageId: b, attachments: [png('a.png')] })
+    await waitFor(() => turnsDone(record.id) === 2)
+    await host.update(record.id, { engine: 'claude' })
+    await host.send(record.id, { text: '三', clientMessageId: 'c' })
+    await waitFor(() => turnsDone(record.id) === 3)
+    const sid = host.open(record.id).record.engineSessionId!
+    const file = join(root, 'claude-projects', cwd.replace(/[^A-Za-z0-9]/g, '-'), `${sid}.jsonl`)
+    const entry = readFileSync(file, 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map(l => JSON.parse(l))
+      .find(e => e.uuid === b)
+    expect(entry.message.content).toEqual([
+      { type: 'text', text: '看这张图（附：a.png）' },
+      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: png('a.png').dataBase64 } },
+    ])
+    // 注入成功：当前这条消息不带交接材料和图片
+    expect(sent().at(-1)).toMatchObject({ types: ['string'], text: '三', images: [] })
+    // 回退到这条消息之前：截断点是它前一条
+    await host.rewind(record.id, b)
+    expect(host.open(record.id).record.pendingRewind).toBe(entry.parentUuid)
+    expect(userTexts(host, record.id)).toEqual(['一'])
+  })
+
+  it('没能写进记录（有待执行的回退）：退回文字交接，更早消息的图片排在当前消息图片前面一起发', async () => {
+    const host = makeHost({ FAKE_CLAUDE_IMAGES: join(root, 'images.jsonl') }, { codex: new StubCodex() })
+    const { record } = await conversation(host, ['一', '二'])
+    await host.rewind(record.id, 'm1')
+    await host.update(record.id, { engine: 'codex' })
+    await host.send(record.id, { text: '三', clientMessageId: 'b', attachments: [png('old.png')] })
+    await waitFor(() => turnsDone(record.id) === 3)
+    await host.update(record.id, { engine: 'claude' })
+    await host.send(record.id, { text: '四', clientMessageId: 'c', attachments: [png('new.png')] })
+    await waitFor(() => turnsDone(record.id) === 4)
+    const last = sent().at(-1)!
+    expect(last.types).toEqual(['text', 'image', 'image'])
+    expect(last.images).toHaveLength(2)
+    expect(last.text).toContain('下面第 1 张图是之前「三」那条消息附的 old.png')
+    expect(last.text.endsWith('\n\n四')).toBe(true)
+  })
+})

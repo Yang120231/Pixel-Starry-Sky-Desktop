@@ -13,6 +13,7 @@ import type {
 } from '@pixelsky/protocol'
 import { EMPTY_FLAGS } from '@pixelsky/protocol'
 import { QUICK_CLOSE_MS, type CloseOptions, type EngineSession, type Launcher, type SessionContext } from '../adapter'
+import type { ChatSeed } from '../chat-log'
 import { findModel, piThinkingLevel } from './catalog'
 import { PixelProcess, array, object, string, type Message } from './process'
 import { PixelTranslator, approvalFor, toolNameFromTitle } from './translate'
@@ -299,7 +300,14 @@ export class PixelSession implements EngineSession {
   // 发送
   // ---------------------------------------------------------------------------
 
-  send(text: string, turnId: string, userItemId: string, attachments: ImageAttachment[] = []): void {
+  send(
+    text: string,
+    turnId: string,
+    userItemId: string,
+    attachments: ImageAttachment[] = [],
+    _seed?: ChatSeed,
+    handoffImages: ImageAttachment[] = [],
+  ): void {
     if (this.active) {
       this.ctx.emit({ type: 'turn_completed', turnId, outcome: 'failed', error: 'Pixel turn already running' })
       return
@@ -309,7 +317,7 @@ export class PixelSession implements EngineSession {
     this.promptUserSeen = false
     this.guidance.length = 0
     this.translator.beginTurn()
-    void this.run(active, text, userItemId, attachments).catch(error => {
+    void this.run(active, text, userItemId, attachments, handoffImages).catch(error => {
       if (this.active === active) this.finish('failed', (error as Error).message)
     })
   }
@@ -319,11 +327,19 @@ export class PixelSession implements EngineSession {
     text: string,
     userItemId: string,
     attachments: ImageAttachment[],
+    handoffImages: ImageAttachment[],
   ): Promise<void> {
     await this.open()
     if (this.active !== active || this.closed) return
-    if (attachments.length && !array(this.modelInfo.input).includes('image'))
-      throw new Error('This model does not support images')
+    const sees = array(this.modelInfo.input).includes('image')
+    if (attachments.length && !sees) throw new Error('This model does not support images')
+    // 交接带的更早消息的图片排在前面；模型不能看图就不带，交接材料里说明过也只当文字理解
+    const images = sees ? [...handoffImages, ...attachments] : attachments
+    if (!sees && handoffImages.length)
+      this.translator.notice(
+        'warn',
+        `The current model can't view images; ${handoffImages.length} earlier image(s) were not passed along`,
+      )
     const proc = this.proc!
     const compact = /^\/compact(?:\s+([\s\S]*))?$/.exec(text.trim())
     active.promptSent = true
@@ -339,8 +355,8 @@ export class PixelSession implements EngineSession {
       'prompt',
       {
         message: text,
-        ...(attachments.length
-          ? { images: attachments.map(i => ({ type: 'image', data: i.dataBase64, mimeType: i.mediaType })) }
+        ...(images.length
+          ? { images: images.map(i => ({ type: 'image', data: i.dataBase64, mimeType: i.mediaType })) }
           : {}),
       },
       60_000,
