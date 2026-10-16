@@ -99,4 +99,12 @@ describe('Codex 思考用时', () => {
     translator.item({ type: 'reasoning', id: 'r1', summary: ['先看'] }, true)
     expect(reasoning(events)).toMatchObject({ item: { durationMs: 4_000 } })
   })
+
+  it('冷读的历史（子智能体记录）不算用时：一次性倒进来算出来都是 0', () => {
+    const events: EngineEvent[] = [],
+      translator = new CodexTranslator(e => events.push(e))
+    translator.item({ type: 'reasoning', id: 'r1', summary: [] }, true, false)
+    expect(reasoning(events)).toMatchObject({ item: { id: 'cx-r1', status: 'completed' } })
+    expect('durationMs' in translator.items.get('cx-r1')!).toBe(false)
+  })
 })
