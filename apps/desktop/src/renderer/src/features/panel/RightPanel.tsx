@@ -220,7 +220,10 @@ export function RightPanel({ maximized = false, visible = true }: { maximized?: 
                 ) : kind === 'copies' ? (
                   <CopiesPanel />
                 ) : (
-                  <BrowserTab requested={browserRequest} />
+                  <BrowserTab
+                    requested={browserRequest}
+                    onHandled={seq => setBrowserRequest(current => (current?.seq === seq ? null : current))}
+                  />
                 )}
               </div>
             ),

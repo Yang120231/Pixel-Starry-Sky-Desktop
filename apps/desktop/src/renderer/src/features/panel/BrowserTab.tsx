@@ -23,10 +23,23 @@ import type { BrowserState } from '../../../../shared/types/project-browser'
 import type { WorkspaceRef } from '../../../../shared/types/workspace'
 import { demo as demoData } from '@/data/demo'
 
-export function BrowserTab({ requested }: { requested?: { ref: WorkspaceRef; url: string; seq: number } | null }) {
+export function BrowserTab({
+  requested,
+  onHandled,
+}: {
+  requested?: { ref: WorkspaceRef; url: string; seq: number } | null
+  /** 请求已经交给浏览器：外面把它清掉。切对话时 BrowserBody 会按对话重建，不清的话切回来会再打开一次 */
+  onHandled?: (seq: number) => void
+}) {
   const ctx = useProjectContext()
   return ctx.ref ? (
-    <BrowserBody key={ctx.key + ':' + JSON.stringify(ctx.ref)} target={ctx.ref} demo={ctx.demo} requested={requested} />
+    <BrowserBody
+      key={ctx.key + ':' + JSON.stringify(ctx.ref)}
+      target={ctx.ref}
+      demo={ctx.demo}
+      requested={requested}
+      onHandled={onHandled}
+    />
   ) : (
     <NoProject />
   )
@@ -35,10 +48,12 @@ function BrowserBody({
   target,
   demo,
   requested,
+  onHandled,
 }: {
   target: WorkspaceRef
   demo: boolean
   requested?: { ref: WorkspaceRef; url: string; seq: number } | null
+  onHandled?: (seq: number) => void
 }) {
   useI18n()
   const [state, setState] = useState<BrowserState | null>(
@@ -90,6 +105,7 @@ function BrowserBody({
     )
       return
     requestedSeq.current = requested.seq
+    onHandled?.(requested.seq)
     void run(async () => setState(await window.pixelsky!.projectBrowser.navigate(target, null, requested.url)))
   }, [requested, state?.scope])
   useEffect(() => {
