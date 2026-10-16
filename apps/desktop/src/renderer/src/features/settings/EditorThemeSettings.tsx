@@ -5,6 +5,7 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { usePackState } from '@/features/extpacks/store'
 import {
   editorThemeOptions,
+  editorThemesAvailable,
   getEditorThemeChoice,
   onEditorThemeChoiceChange,
   setEditorThemeChoice,
@@ -16,7 +17,7 @@ const FOLLOW = '__follow__'
 // getEditorThemeChoice 每次返回新对象，useSyncExternalStore 要稳定的快照，所以用序列化后的字符串
 const snapshot = (): string => JSON.stringify(getEditorThemeChoice())
 
-/** 设置 › 外观里的代码配色：深色、浅色各选一个颜色主题 */
+/** 设置 › 外观里的代码配色：深色、浅色各选一个颜色主题；没有启用着的代码配色扩展就不显示 */
 export function EditorThemeSettings(): JSX.Element | null {
   const { locale } = useI18n()
   const state = usePackState()
@@ -25,6 +26,7 @@ export function EditorThemeSettings(): JSX.Element | null {
   >
   const dark = editorThemeOptions(state, 'dark', locale)
   const light = editorThemeOptions(state, 'light', locale)
+  if (!editorThemesAvailable(state)) return null
 
   const row = (mode: 'dark' | 'light', options: typeof dark) => {
     const value = choice[mode]

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ExtPackInfo } from '@pixelsky/protocol'
 import { fakePack, fakeState } from '@/features/extpacks/testing'
-import { effectiveIconChoice, iconThemeOptions, selectIconTheme } from './store'
+import { effectiveIconChoice, iconThemeOptions, iconThemesAvailable, selectIconTheme } from './store'
 
 const material = (over: Partial<ExtPackInfo> = {}) =>
   fakePack({
@@ -63,5 +63,20 @@ describe('effectiveIconChoice / iconThemeOptions', () => {
     const options = iconThemeOptions(fakeState(material(), custom()), 'zh-CN')
     expect(options.map(o => o.value)).toEqual(['material', 'simple', 'acme.icons/flat'])
     expect(options[2].label).toContain('Flat')
+  })
+  it('Material 扩展停用了就不列 Material', () => {
+    const off = material({ enabled: false, live: false })
+    expect(iconThemeOptions(fakeState(off, custom()), 'zh-CN').map(o => o.value)).toEqual(['simple', 'acme.icons/flat'])
+    expect(iconThemeOptions(fakeState(off), 'zh-CN').map(o => o.value)).toEqual(['simple'])
+  })
+  it('图标主题扩展都停用了（只剩简单、局部主题不算）就不显示这一行', () => {
+    expect(iconThemesAvailable(fakeState(material()))).toBe(true)
+    expect(iconThemesAvailable(fakeState(material({ live: false }), custom()))).toBe(true)
+    expect(iconThemesAvailable(fakeState(material({ live: false }), custom({ live: false })))).toBe(false)
+    expect(iconThemesAvailable(fakeState(material({ inactive: { iconThemes: [0] } })))).toBe(false)
+    const onlyPartial = fakePack({
+      contributes: { iconThemes: [{ id: 'x', label: 'X', path: 'x.json', partial: true }] },
+    })
+    expect(iconThemesAvailable(fakeState(onlyPartial))).toBe(false)
   })
 })

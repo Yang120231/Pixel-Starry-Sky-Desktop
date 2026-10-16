@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { fakePack, fakeState } from '@/features/extpacks/testing'
-import { editorThemeOptions } from './store'
+import { editorThemeOptions, editorThemesAvailable } from './store'
 
 describe('editorThemeOptions', () => {
   const pack = fakePack({
@@ -18,5 +18,11 @@ describe('editorThemeOptions', () => {
   })
   it('skips packs that are not live', () => {
     expect(editorThemeOptions(fakeState({ ...pack, live: false }), 'dark', 'en-US')).toEqual([])
+  })
+  it('没有启用着的代码配色扩展就不显示这一行', () => {
+    expect(editorThemesAvailable(fakeState(pack))).toBe(true)
+    expect(editorThemesAvailable(fakeState({ ...pack, live: false }))).toBe(false)
+    expect(editorThemesAvailable(fakeState({ ...pack, inactive: { themes: [0, 1] } }))).toBe(false)
+    expect(editorThemesAvailable(fakeState())).toBe(false)
   })
 })
