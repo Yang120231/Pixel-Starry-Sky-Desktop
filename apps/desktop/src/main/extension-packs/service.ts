@@ -2,12 +2,28 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { lstat, readFile, realpath } from 'node:fs/promises'
 import { basename, join, resolve, sep } from 'node:path'
 import type { ExtPackInfo, ExtPackOptions, ExtPackState, SkillCommand } from '@pixelsky/protocol'
-import { codedError, EXT_LIMITS, EXT_MANIFEST, parseJsonc, resolvePackPath } from '@pixelsky/protocol'
-import { hasManifest, loadPack, packKey, type LoadedPack } from './loader'
+import {
+  codedError,
+  computeLive,
+  EXT_LIMITS,
+  EXT_MANIFEST,
+  loaderIssue,
+  packStatus,
+  parseJsonc,
+  resolvePackPath,
+} from '@pixelsky/protocol'
+import { addPackIssue, hasManifest, loadPack, packKey, type LoadedPack } from './loader'
 import { emptyBlocklist, matchBlocklist, readBlocklistFile, type BlocklistFile } from './market/blocklist'
 import { cleanStoreDir, removeStoreFiles } from './market/cleanup'
 import { keyStatus as storeKeyStatus, type StoreKeyStatus } from './market/keys'
-import { loadStore, loadStorePack, readStoreEntries, readStoreRecord, storeBlock } from './market/store-load'
+import {
+  loadStore,
+  loadStorePack,
+  readStoreEntries,
+  readStoreRecord,
+  REVOKED_KEY_REASON,
+  storeBlock,
+} from './market/store-load'
 import type { StoreInstallRecord, StoreTasks } from './market/types'
 import { applyWinners } from './market/winner'
 import { ensureClaudeWrappers, gcClaudeWrappers, packSkillCommands, packSkillLaunch } from './skills'
@@ -230,6 +246,7 @@ export class ExtensionPacks {
       )
     }
     this.replaceSource('folder', folders)
+    this.markBlocked()
     applyWinners(this.packs)
     await this.refreshWrappers()
   }
@@ -379,6 +396,7 @@ export class ExtensionPacks {
       this.data.folders.push({ path: root, enabled: true, addedAt, options: {} })
       this.save()
       this.packs.push(pack)
+      this.markBlocked()
       applyWinners(this.packs)
       await this.refreshWrappers()
       this.commit()
@@ -389,6 +407,7 @@ export class ExtensionPacks {
   setEnabled(key: string, enabled: boolean): Promise<void> {
     return this.mutate(async () => {
       const pack = this.find(key)
+      if (enabled && pack.info.blocked) throw codedError('extpacks.blocked')
       pack.info.enabled = enabled
       this.persist(pack)
       applyWinners(this.packs)
@@ -450,10 +469,61 @@ export class ExtensionPacks {
         if (old.info.blocked) fresh.info.blocked = old.info.blocked
         this.packs = this.packs.map(p => (p === old ? fresh : p))
       }
+      this.markBlocked()
       applyWinners(this.packs)
       await this.refreshWrappers()
       this.commit()
     })
+  }
+
+  /**
+   * 停用名单变了（market/blocklist-sync.ts 读到新名单后调）：重算每份商店扩展的 blocked（命中设上、解除清掉，
+   * 开关状态没动过所以解除后回到原样），文件夹扩展同 id 同版本命中时只加一条警告，然后重算生效关系并 commit。
+   */
+  applyBlocklist(list: BlocklistFile): Promise<void> {
+    return this.mutate(async () => {
+      this.blocklist = list
+      this.markBlocked()
+      applyWinners(this.packs)
+      await this.refreshWrappers()
+      this.commit()
+    })
+  }
+
+  /** 按当前名单重算商店扩展的 blocked 和文件夹扩展的 pack.storeBlocked 警告（不 commit） */
+  private markBlocked(): void {
+    for (const pack of this.packs) {
+      const info = pack.info
+      if (info.source === 'store' && info.store) {
+        const hit = info.id ? matchBlocklist(this.blocklist, info.store.site, info.id, info.store.version) : null
+        const block =
+          hit ??
+          (this.keyStatus(info.store.keyId, info.store.site) === 'revoked'
+            ? { reason: REVOKED_KEY_REASON, at: new Date().toISOString() }
+            : null)
+        if (block) info.blocked = block
+        else delete info.blocked
+        info.live = computeLive(info)
+      } else if (info.source === 'folder') {
+        if (info.issues.some(i => i.code === 'pack.storeBlocked')) {
+          info.issues = info.issues.filter(i => i.code !== 'pack.storeBlocked')
+          info.status = packStatus(info.issues)
+        }
+        const version = info.manifest?.version
+        const reason = info.id && version ? this.folderBlockReason(info.id, version) : null
+        if (reason !== null) addPackIssue(pack, loaderIssue('pack.storeBlocked', { reason }))
+        else info.live = computeLive(info)
+      }
+    }
+  }
+
+  /** 文件夹扩展不属于哪个站点，任何站点的名单命中都算 */
+  private folderBlockReason(id: string, version: string): string | null {
+    for (const site of Object.keys(this.blocklist.sites)) {
+      const hit = matchBlocklist(this.blocklist, site, id, version)
+      if (hit) return hit.reason
+    }
+    return null
   }
 
   setOptions(key: string, patch: ExtPackOptions): Promise<void> {

@@ -7,7 +7,8 @@ import { createServer, type Server, type ServerResponse } from 'node:http'
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { hostname, release } from 'node:os'
 import { join } from 'node:path'
-import { app, BrowserWindow, safeStorage, shell } from 'electron'
+import { app, BrowserWindow, net, safeStorage, shell } from 'electron'
+import { codedError } from '@pixelsky/protocol'
 import { nativeText, windowLocale } from '../app/ui-language'
 import { sendTo } from '../app/rendererHealth'
 import * as ipc from '../ipc/guard'
@@ -479,11 +480,35 @@ export async function extensionsFetch(
     body = JSON.stringify(opts.body)
     headers['Content-Type'] = 'application/json'
   }
-  return authedFetch(path, {
-    method,
-    ...(body !== undefined && { body, headers }),
-    signal: AbortSignal.timeout(opts.timeoutMs ?? 20_000),
-  })
+  try {
+    return await authedFetch(path, {
+      method,
+      ...(body !== undefined && { body, headers }),
+      signal: AbortSignal.timeout(opts.timeoutMs ?? 20_000),
+    })
+  } catch (e) {
+    // 只有「连不上」（fetch 抛 TypeError）才判断是不是代理造成的；超时、登录过期、取消原样抛
+    if (e instanceof TypeError && (await publicReachable())) throw codedError('extstore.proxyHint')
+    throw e
+  }
+}
+
+/**
+ * 带登录的请求用全局 fetch（不走系统代理），公开请求用 net.fetch（走系统代理）。
+ * 前者连不上时试一次公开接口：能通就说明是代理环境造成的（docs/ui/extension-store-client.md §3.2）。
+ */
+async function publicReachable(): Promise<boolean> {
+  try {
+    const res = await net.fetch(`${baseUrl()}/cloud/api/extensions?limit=1`, {
+      credentials: 'omit',
+      redirect: 'error',
+      signal: AbortSignal.timeout(8_000),
+    })
+    await res.body?.cancel().catch(() => undefined)
+    return res.ok
+  } catch {
+    return false
+  }
 }
 
 /**
