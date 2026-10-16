@@ -49,6 +49,7 @@ import { traceHistoryMessages } from './traceHistoryMessages'
 import { wslMessages } from './wslMessages'
 import { extensionCenterMessages } from './extensionCenterMessages'
 import { extstoreInstalledMessages } from './extstoreInstalledMessages'
+import { extstorePublishMessages } from './extstorePublishMessages'
 import { fileIconMessages } from './fileIconMessages'
 import { extGrammarMessages } from './extGrammarMessages'
 import { editorThemeMessages } from './editorThemeMessages'
@@ -113,6 +114,7 @@ export const allMessages = {
   ...traceHistoryMessages,
   ...extensionCenterMessages,
   ...extstoreInstalledMessages,
+  ...extstorePublishMessages,
   ...fileIconMessages,
   ...extGrammarMessages,
   ...editorThemeMessages,
