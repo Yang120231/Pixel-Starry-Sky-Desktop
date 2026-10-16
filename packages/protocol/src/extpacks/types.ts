@@ -188,6 +188,8 @@ export interface CheckPackOptions {
   appVersion?: string
   /** 语法引擎的问题；undefined = 没跑引擎，有语法时报 grammar.regexUnchecked */
   grammar?: ExtPackIssue[]
+  /** 是否扫 svg 内容（svg.unsafe）；默认 source !== 'builtin'。商店扩展启动加载时传 false（安装时已扫过） */
+  scanSvg?: boolean
 }
 export interface ExtPackCheck {
   id: string | null
@@ -243,7 +245,7 @@ export const EXT_LIMITS = {
 } as const
 
 /** 规则语义变化时加一；写进命令行的 JSON 和共享用例的期望 */
-export const EXT_RULES_VERSION = 1
+export const EXT_RULES_VERSION = 2
 
 /** 软件内置的 26 个语言 id（authoring-spec §4.5） */
 export const EXT_BUILTIN_LANGUAGE_IDS: readonly string[] = [
