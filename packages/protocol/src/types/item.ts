@@ -4,6 +4,13 @@ import type { TurnUsage } from './usage'
 
 export type ItemStatus = 'running' | 'completed' | 'failed' | 'declined' | 'interrupted'
 
+/** 显示时去掉的外层 shell（Codex 命令）：line 原始整行，shell 外壳名（小写、无 .exe：powershell / pwsh / bash / sh / zsh / cmd …），extra 引出脚本的开关以外的参数 */
+export interface CommandWrapper {
+  line: string
+  shell: string
+  extra: string[]
+}
+
 export interface FileChange {
   path: string
   /** 编辑输入的新内容片段，用于编辑器定位；旧记录可能缺失。 */
@@ -56,6 +63,8 @@ export type Item =
       kind: 'command'
       id: string
       command: string
+      /** Codex 命令显示时去掉了外层 shell：原始整行和外壳信息；没拆过（或旧数据）没有 */
+      wrapper?: CommandWrapper
       /** 命令说明（Claude 的 description），可能没有 */
       description: string | null
       output: string

@@ -1556,6 +1556,14 @@ const MANY_GREPS = [
   { id: 'm-g2', pattern: 'provider|anthropic|openai|MODEL_|model_name', path: 'D:\\work\\deeperseeker\\app.py' },
   { id: 'm-g3', pattern: 'provider', path: 'D:\\work\\pixel-web\\src\\wire.ts' },
 ]
+const LOG_CLEAN = {
+  command: 'Get-ChildItem -Recurse -Filter *.log | Remove-Item',
+  wrapper: {
+    line: '"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -NoProfile -ExecutionPolicy Bypass -Command "Get-ChildItem -Recurse -Filter *.log | Remove-Item"',
+    shell: 'powershell',
+    extra: ['-NoProfile', '-ExecutionPolicy', 'Bypass'],
+  },
+}
 const approveMany = snapshot(
   record('demo-claude-approve-many', { updatedAt: T0 }),
   [
@@ -1586,6 +1594,15 @@ const approveMany = snapshot(
       id: 'm-c',
       command: 'git push -u origin feat/draft',
       description: '把 feat/draft 推到远端并设置上游',
+      output: '',
+      exitCode: null,
+      status: 'running',
+    },
+    {
+      kind: 'command',
+      id: 'm-w',
+      ...LOG_CLEAN,
+      description: null,
       output: '',
       exitCode: null,
       status: 'running',
@@ -1625,6 +1642,14 @@ const approveMany = snapshot(
         title: '运行命令',
         command: 'git push -u origin feat/draft',
         description: '把 feat/draft 推到远端并设置上游',
+        alwaysScopes: ALWAYS,
+      },
+      {
+        requestId: 'req-many-wrapped',
+        itemId: 'm-w',
+        kind: 'command',
+        title: 'Codex 要运行命令',
+        ...LOG_CLEAN,
         alwaysScopes: ALWAYS,
       },
     ],

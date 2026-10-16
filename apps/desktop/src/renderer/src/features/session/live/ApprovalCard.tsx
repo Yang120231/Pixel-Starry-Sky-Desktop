@@ -22,12 +22,13 @@ import {
   Wrench,
   type LucideIcon,
 } from 'lucide-react'
-import type { AlwaysScope, ApprovalDecision, ApprovalRequest, Question } from '@pixelsky/protocol'
+import type { AlwaysScope, ApprovalDecision, ApprovalRequest, CommandWrapper, Question } from '@pixelsky/protocol'
 import { Button, DiffStat, Popover, cn } from '@/ui'
 import { DiffView } from '@/ui/code/DiffView'
 import { CommandText } from '@/ui/code/CommandText'
 import { Markdown } from '@/ui/markdown/Markdown'
 import { FullAccessConfirm } from '../FullAccessConfirm'
+import { hasWrapperExtra, shellDisplayName } from './commandWrapper'
 
 const ICON: Record<ApprovalRequest['kind'], LucideIcon> = {
   command: SquareTerminal,
@@ -122,6 +123,48 @@ function AlwaysAllowButton({
   )
 }
 
+/** 外层 shell 还带了别的参数：一定显示，不用点开 */
+function WrapperWarn({ wrapper }: { wrapper: CommandWrapper }) {
+  return (
+    <div
+      role="note"
+      className="mb-1.5 flex flex-wrap items-center gap-1.5 rounded-lg bg-warn/12 px-2.5 py-1.5 text-list text-warn"
+    >
+      <span>{tr('approvals.wrapperExtra', { shell: shellDisplayName(wrapper.shell) })}</span>
+      {wrapper.extra.map((a, i) => (
+        <code key={i} className="rounded-sm bg-warn/15 px-1.5 font-mono text-meta break-all">
+          {a}
+        </code>
+      ))}
+    </div>
+  )
+}
+
+/** 命令下面一行：外壳名 + 「完整命令」开关，点开是原始整行 */
+function WrapperMeta({ wrapper }: { wrapper: CommandWrapper }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="mt-1.5">
+      <div className="flex flex-wrap items-center gap-1.5 text-meta text-fg-muted">
+        <span className="rounded-sm border border-line px-1.5 py-px text-label">{shellDisplayName(wrapper.shell)}</span>
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen(v => !v)}
+          className="rounded-sm px-1 hover:text-fg"
+        >
+          {tr('approvals.fullCommand')} {open ? '▾' : '▸'}
+        </button>
+      </div>
+      {open && (
+        <div className="mt-1.5 rounded-lg border border-dashed border-line px-2.5 py-1.5 font-mono text-meta leading-[1.55] break-all whitespace-pre-wrap text-fg-secondary select-text">
+          {wrapper.line}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /** 命令、改文件、工具的内容区（单张卡和合并列表里展开的一行共用） */
 export function ApprovalBody({
   request,
@@ -137,6 +180,7 @@ export function ApprovalBody({
     return (
       <>
         {request.description && <p className="mb-1.5 text-list text-fg-muted">{request.description}</p>}
+        {hasWrapperExtra(request.wrapper) && <WrapperWarn wrapper={request.wrapper} />}
         <pre
           className={cn(
             className,
@@ -145,6 +189,7 @@ export function ApprovalBody({
         >
           <CommandText command={request.command ?? ''} />
         </pre>
+        {request.wrapper && <WrapperMeta wrapper={request.wrapper} />}
       </>
     )
   if (request.kind === 'file_change')

@@ -30,6 +30,7 @@ import { withoutShownImagePlaceholders } from '@pixelsky/protocol'
 import { CopyButton, DiffStat, IconButton, cn, useToast } from '@/ui'
 import { DiffView } from '@/ui/code/DiffView'
 import { CommandText } from '@/ui/code/CommandText'
+import { hasWrapperExtra } from './commandWrapper'
 import { AnsiText } from '@/ui/code/AnsiText'
 import { useOpenTrace } from './trace'
 import { StepMark } from './ProgressCard'
@@ -644,7 +645,7 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
           icon={SquareTerminal}
           verb={verb}
           status={item.status}
-          expandable={!!item.output}
+          expandable={!!item.output || hasWrapperExtra(item.wrapper)}
           open={open}
           onToggle={toggle}
           action={
@@ -670,6 +671,11 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
           trailing={
             <>
               <StatusMark status={item.status} />
+              {hasWrapperExtra(item.wrapper) && (
+                <span className="shrink-0 rounded-sm bg-warn/12 px-1.5 py-px text-label text-warn">
+                  {tr('approvals.wrapped')}
+                </span>
+              )}
               {item.status !== 'running' && item.exitCode !== null && item.exitCode !== 0 && (
                 <span className="shrink-0 text-meta text-danger tabular-nums">
                   {tr('session.live.exitCode', { n: item.exitCode })}
@@ -682,16 +688,24 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
           <code
             data-tool-arg
             className="truncate rounded-sm bg-subtle px-1.5 py-0.5 font-mono text-[length:calc(12.5px*var(--font-scale,1))] text-fg"
-            title={item.description ?? item.command}
+            title={
+              item.description ??
+              (item.wrapper ? tr('approvals.fullCommandTip', { line: item.wrapper.line }) : item.command)
+            }
           >
             <CommandText command={item.command} />
           </code>
         </Row>
-        {open && item.output && (
+        {open && (item.output || hasWrapperExtra(item.wrapper)) && (
           <pre
             className={cn(OUTPUT_BOX, 'p-3 font-mono text-meta leading-[1.6] whitespace-pre-wrap text-fg-secondary')}
           >
-            <LongOutput text={item.output} />
+            {item.wrapper && (
+              <span className="mb-1 block break-all select-text">
+                <span className="font-sans text-fg-muted">{tr('approvals.fullCommand')}</span> {item.wrapper.line}
+              </span>
+            )}
+            {item.output && <LongOutput text={item.output} />}
           </pre>
         )}
       </div>

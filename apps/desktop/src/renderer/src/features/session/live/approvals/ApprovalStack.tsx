@@ -774,12 +774,12 @@ function ScopeMenu({
   )
 }
 
-function RowTag({ children, accent }: { children: ReactNode; accent?: boolean }) {
+function RowTag({ children, accent, warn }: { children: ReactNode; accent?: boolean; warn?: boolean }) {
   return (
     <span
       className={cn(
         'shrink-0 rounded-sm px-1.5 py-px text-label',
-        accent ? 'bg-accent-soft text-accent-fg' : 'bg-subtle text-fg-muted',
+        accent ? 'bg-accent-soft text-accent-fg' : warn ? 'bg-warn/12 text-warn' : 'bg-subtle text-fg-muted',
       )}
     >
       {children}
@@ -915,6 +915,7 @@ function ApprovalRow({
           </span>
           {/* 标签不跟着文字一起被省略号截掉 */}
           {summary.outside && <RowTag>{tr('approvals.outside')}</RowTag>}
+          {summary.wrapped && <RowTag warn>{tr('approvals.wrapped')}</RowTag>}
           {!canAllow && !done && <RowTag>{tr('approvals.onlyDeny')}</RowTag>}
           {fresh && !done && <RowTag accent>{tr('approvals.newRow')}</RowTag>}
         </button>

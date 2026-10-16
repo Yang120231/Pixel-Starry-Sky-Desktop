@@ -6,6 +6,7 @@ export type {
   ApprovalRequest,
   BackgroundTask,
   CacheWarning,
+  CommandWrapper,
   CompactionProgress,
   ContextWindows,
   Effort,

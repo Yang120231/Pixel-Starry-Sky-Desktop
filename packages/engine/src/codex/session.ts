@@ -17,7 +17,7 @@ import { NO_REPLY, seedImageCount, seedTurns, type ChatSeed, type ChatTurn } fro
 import { CodexProcess, array, object, string, type Message } from './process'
 import { readCodexTurns, revertTarget } from './branch'
 import { codexCatalog } from './catalog'
-import { codexCommand } from './command'
+import { codexCommandParts } from './command'
 import { codexChanges, CodexTranslator, tokenCounts } from './translate'
 import { CODEX_WINDOW_ENV, codexContextConfig } from './context-config'
 
@@ -870,7 +870,8 @@ export class CodexSession implements EngineSession {
       // 子智能体的条目不在主对话里，卡片不挂到条目上
       itemId = params.itemId && !subagent ? 'cx-' + string(params.itemId) : null
     let request: ApprovalRequest
-    if (method === 'item/commandExecution/requestApproval')
+    if (method === 'item/commandExecution/requestApproval') {
+      const { command, wrapper } = codexCommandParts(string(params.command))
       request = {
         requestId: key,
         itemId,
@@ -878,12 +879,13 @@ export class CodexSession implements EngineSession {
         title: params.networkApprovalContext
           ? title('Codex network access', 'Codex subagent {agent} network access')
           : title('Codex command approval', 'Codex subagent {agent} command approval'),
-        command: codexCommand(string(params.command)),
+        command,
+        ...(wrapper ? { wrapper } : {}),
         description: string(params.reason),
         input: params.networkApprovalContext,
         alwaysScopes: ['session'],
       }
-    else if (method === 'item/fileChange/requestApproval')
+    } else if (method === 'item/fileChange/requestApproval')
       request = {
         requestId: key,
         itemId,

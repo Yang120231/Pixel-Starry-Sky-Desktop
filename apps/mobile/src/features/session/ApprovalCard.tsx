@@ -75,6 +75,18 @@ export function ApprovalCard({
           </div>
         </div>
         {request.description && <p className="text-meta text-fg-secondary">{request.description}</p>}
+        {request.wrapper && request.wrapper.extra.length > 0 && (
+          <p className="flex flex-wrap items-center gap-1.5 rounded-xl bg-warn/12 px-3 py-2 text-meta text-warn">
+            <span>
+              外层 {request.wrapper.shell === 'powershell' ? 'PowerShell' : request.wrapper.shell} 还带了参数：
+            </span>
+            {request.wrapper.extra.map((a, i) => (
+              <code key={i} className="rounded-sm bg-warn/15 px-1.5 font-mono text-label break-all">
+                {a}
+              </code>
+            ))}
+          </p>
+        )}
         {request.command && (
           <pre className="max-h-40 overflow-auto rounded-xl bg-subtle px-3 py-2.5 font-mono text-label break-all whitespace-pre-wrap">
             {request.command}
