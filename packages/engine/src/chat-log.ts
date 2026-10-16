@@ -1,7 +1,7 @@
 // 跨引擎接力只带「聊天」：用户说过的话和助手每轮的最后一条回复，直接注入新引擎的原生会话。
 // 命令输出、工具调用、文件改动都是工作区里的状态，新引擎和旧引擎面对同一个目录，自己看就行；
 // 重新推不出来的只有用户说过什么、助手得出了什么结论。所以这里不渲染那些条目。
-import { MAX_IMAGE_COUNT, MAX_IMAGE_TOTAL, type ImageAttachment, type Item } from '@pixelsky/protocol'
+import type { Item } from '@pixelsky/protocol'
 
 /** 一轮回放：用户说了什么，助手最后回了什么（助手那条可能没有，例如被打断） */
 export interface ChatTurn {
@@ -11,8 +11,6 @@ export interface ChatTurn {
   user: string
   /** 这一轮最后一条有内容的助手回复，没有为 null */
   assistant: string | null
-  /** 这一轮用户消息（含中途补充）带上的图片原图，没有为 undefined；user 里的附件名和它对得上 */
-  images?: ImageAttachment[]
 }
 
 /** 发给支持原生注入的引擎的交接：注入不了时退回 fallback（旧的文字交接材料） */
@@ -22,10 +20,6 @@ export interface ChatSeed {
   turns: ChatTurn[]
   /** 注入失败时加在用户消息前面的文字交接材料 */
   fallback: string
-  /** 注入失败退回 fallback 时，随当前消息一起发的更早消息的图片（排在当前消息自己的图片前面，fallback 里有说明）；没有为 undefined */
-  fallbackImages?: ImageAttachment[]
-  /** 这份回放里有图、但没带上的张数（更早的几轮、超出数量或大小上限、目标引擎不能看图）；没有为 undefined */
-  omittedImages?: number
 }
 
 export interface ChatLogOptions {
@@ -33,8 +27,6 @@ export interface ChatLogOptions {
   userLimit?: number
   /** 单条助手回复的字数上限 */
   assistantLimit?: number
-  /** 带上的图片；不传就是全部带上。不在里面的图片，用户话里写「未带上」，turn.images 里也没有 */
-  carried?: ReadonlySet<ImageAttachment>
 }
 
 const DEFAULT_USER_LIMIT = 4_000
@@ -43,8 +35,6 @@ const DEFAULT_ASSISTANT_LIMIT = 8_000
 export const DEFAULT_CHAT_BUDGET = 60_000
 const OVERVIEW_ITEM_CHARS = 300
 const OVERVIEW_CHARS = 6_000
-/** 交接带图片的总大小上限（解码后的字节）：图片只是补背景，不能把一条消息撑得太大 */
-export const HANDOFF_IMAGE_BYTES = 5 * 1024 * 1024
 
 const clip = (text: string, max: number): string => (text.length > max ? `${text.slice(0, max)}…（已截断）` : text)
 
@@ -52,44 +42,11 @@ const clip = (text: string, max: number): string => (text.length > max ? `${text
 const isReply = (item: Item): item is Extract<Item, { kind: 'assistant' }> =>
   item.kind === 'assistant' && item.text.trim().length > 0
 
-/** 一次能带多少张图片、多少字节 */
-export interface ImageRoom {
-  count: number
-  bytes: number
-}
-
-/** 交接图片的额度：数量和大小各有上限；used 是同一条消息里已经占了额度的图片（当前消息自己的） */
-export function handoffImageRoom(used: readonly ImageAttachment[] = []): ImageRoom {
-  const bytes = used.reduce((sum, image) => sum + image.bytes, 0)
-  return {
-    count: Math.max(0, MAX_IMAGE_COUNT - used.length),
-    bytes: Math.max(0, Math.min(HANDOFF_IMAGE_BYTES, MAX_IMAGE_TOTAL - bytes)),
-  }
-}
-
-/** 按时间顺序传入，从最新往前挑带得动的：数量和大小都不能超，遇到第一张装不下的就停（更早的更没必要带）；按原顺序返回 */
-export function pickRecentImages<T extends { bytes: number }>(images: readonly T[], room: ImageRoom): T[] {
-  const picked: T[] = []
-  let bytes = 0
-  for (let i = images.length - 1; i >= 0; i--) {
-    if (picked.length >= room.count || bytes + images[i].bytes > room.bytes) break
-    bytes += images[i].bytes
-    picked.unshift(images[i])
-  }
-  return picked
-}
-
-/** 附件名接在用户话后面；用户只发了文件没写字时，附件名就是这条消息。没带上的图片单独写明 */
-function userText(item: Extract<Item, { kind: 'user' }>, carried?: ReadonlySet<ImageAttachment>): string {
-  const images = item.attachments ?? []
-  const left = carried ? images.filter(a => !carried.has(a)) : []
-  const names = [
-    ...(carried ? images.filter(a => carried.has(a)) : images).map(a => a.name),
-    ...(item.files ?? []).map(f => f.name),
-  ]
+/** 附件名接在用户话后面；用户只发了文件没写字时，附件名就是这条消息 */
+function userText(item: Extract<Item, { kind: 'user' }>): string {
+  const names = [...(item.attachments ?? []).map(a => a.name), ...(item.files ?? []).map(f => f.name)]
   const text = item.text.trim()
-  const attached = names.length ? `（附：${names.join('、')}）` : ''
-  return `${text}${attached}${left.length ? `（附图 ${left.map(a => a.name).join('、')}，未带上）` : ''}`
+  return names.length ? `${text}（附：${names.join('、')}）` : text
 }
 
 /**
@@ -102,16 +59,14 @@ export function buildChatLog(items: readonly Item[], opts: ChatLogOptions = {}):
   const turns: ChatTurn[] = []
   for (const item of items) {
     if (item.kind === 'user') {
-      const text = userText(item, opts.carried)
+      const text = userText(item)
       if (!text) continue
-      const images = (item.attachments ?? []).filter(a => !opts.carried || opts.carried.has(a))
       if (item.mode === 'guidance' && turns.length > 0) {
         const last = turns[turns.length - 1]
         last.user = `${last.user}\n（中途补充）${text}`
-        if (images.length) last.images = [...(last.images ?? []), ...images]
         continue
       }
-      turns.push({ id: item.id, user: clip(text, userLimit), assistant: null, ...(images.length ? { images } : {}) })
+      turns.push({ id: item.id, user: clip(text, userLimit), assistant: null })
       continue
     }
     // 助手回复：这一轮的最后一条胜出，过程宣告（「我会先…」）被后面的结论顶掉
@@ -162,56 +117,13 @@ export function chatOverview(turns: readonly ChatTurn[]): string | null {
   ].join('\n')
 }
 
-export interface ChatSeedOptions {
-  /** 目标引擎能看图时才带图片，默认带 */
-  carryImages?: boolean
-  /** 能带的图片额度，默认是完整额度；当前消息自己有图片时要先扣掉，免得和回放里的图片加起来撑爆一次请求 */
-  room?: ImageRoom
-  /** 注入失败退回文字交接时随当前消息发的图片，fallback 里要有对应的说明 */
-  fallbackImages?: readonly ImageAttachment[]
-}
-
-/**
- * 交接用的聊天回放；没有可回放的聊天时返回 null。
- * 图片只带留着原文的几轮里最近的几张（数量和大小有上限），折进概要的更早几轮不带图
- */
-export function buildChatSeed(
-  items: readonly Item[],
-  fallback: string,
-  budget = DEFAULT_CHAT_BUDGET,
-  opts: ChatSeedOptions = {},
-): ChatSeed | null {
+/** 交接用的聊天回放；没有可回放的聊天时返回 null */
+export function buildChatSeed(items: readonly Item[], fallback: string, budget = DEFAULT_CHAT_BUDGET): ChatSeed | null {
   const log = buildChatLog(items)
   if (log.length === 0) return null
   const fitted = fitChatLog(log, budget, chatOverview)
-  let turns = fitted.turns
-  const total = log.reduce((sum, turn) => sum + (turn.images?.length ?? 0), 0)
-  let carried = 0
-  if (total > 0) {
-    const picked = new Set(
-      opts.carryImages === false
-        ? []
-        : pickRecentImages(
-            turns.flatMap(turn => turn.images ?? []),
-            opts.room ?? handoffImageRoom(),
-          ),
-    )
-    // 带哪些图定了以后重排一遍，用户话里才写得对（带上了 / 未带上）
-    turns = buildChatLog(items, { carried: picked }).slice(log.length - turns.length)
-    carried = picked.size
-  }
-  return {
-    overview: fitted.overview,
-    turns,
-    fallback,
-    ...(opts.fallbackImages?.length ? { fallbackImages: [...opts.fallbackImages] } : {}),
-    ...(total > carried ? { omittedImages: total - carried } : {}),
-  }
+  return { overview: fitted.overview, turns: fitted.turns, fallback }
 }
-
-/** 回放里带上的图片张数 */
-export const seedImageCount = (seed: ChatSeed): number =>
-  seed.turns.reduce((sum, turn) => sum + (turn.images?.length ?? 0), 0)
 
 /** 概要接在第一轮用户话前面，注入时当成同一条用户消息 */
 export function seedTurns(seed: ChatSeed): ChatTurn[] {

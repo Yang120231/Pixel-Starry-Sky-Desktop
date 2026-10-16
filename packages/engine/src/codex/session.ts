@@ -12,7 +12,7 @@ import type {
 } from '@pixelsky/protocol'
 import { EMPTY_FLAGS, isQuietWarning, viaGateway } from '@pixelsky/protocol'
 import { QUICK_CLOSE_MS, type CloseOptions, type EngineSession, type Launcher, type SessionContext } from '../adapter'
-import { NO_REPLY, seedImageCount, seedTurns, type ChatSeed, type ChatTurn } from '../chat-log'
+import { NO_REPLY, seedTurns, type ChatSeed } from '../chat-log'
 import { CodexProcess, array, object, string, type Message } from './process'
 import { readCodexTurns, revertTarget } from './branch'
 import { codexCatalog } from './catalog'
@@ -138,6 +138,8 @@ export class CodexSession implements EngineSession {
   private noticeSeq = 0
   /** 启动时带了 model_context_window：报上来的窗口是设置的值，不记成 Codex 自己的 */
   private windowOverridden = false
+  /** 已经发过的配置类警告（Codex 每轮都发一次），同一会话只出一次 */
+  private readonly quietShown = new Set<string>()
   /** 上一轮带了计划协作模式：切到别的权限后，下一轮要带一次 default 切回来 */
   private planSent = false
   /** thread/start 报的模型：会话跟随引擎默认、目录也没写当前模型时，计划模式用它 */
@@ -407,8 +409,8 @@ export class CodexSession implements EngineSession {
     if (!this.active || this.active !== active || this.closed) return
     const selected = this.catalog?.models?.find(m => m.id === (this.settings.model ?? this.catalog?.currentModel))
     this.active.baseline = { ...this.totals }
-    const sees = !!selected?.inputModalities.includes('image')
-    if (attachments.length && !sees) throw new Error('This Codex model does not support images')
+    if (attachments.length && (!selected || !selected.inputModalities.includes('image')))
+      throw new Error('This Codex model does not support images')
     if (this.settings.effort && selected && !selected.efforts.includes(this.settings.effort))
       throw new Error('This Codex model does not support the selected effort')
     this.active.model = this.settings.model ?? this.catalog?.currentModel ?? 'Codex'
@@ -435,17 +437,12 @@ export class CodexSession implements EngineSession {
       await this.proc!.request('thread/compact/start', { threadId: this.threadId })
     } else {
       // 跨引擎接力：别的引擎期间的聊天先注入线程；注入不了就把交接材料加在消息前面
-      const injected = !seed || (await this.injectSeed(seed, sees))
-      const body = injected ? text : `${seed.fallback}\n\n${text}`
-      // 退回文字交接时，材料里说明过的更早消息的图片排在消息自己的图片前面；模型不能看图就不带
-      const images = !injected && sees ? [...(seed.fallbackImages ?? []), ...attachments] : attachments
-      // 模型不能看图：host 以为带上的图片被丢掉了，告诉用户
-      if (seed && !sees) this.droppedImages(injected ? seedImageCount(seed) : (seed.fallbackImages?.length ?? 0))
+      const body = seed && !(await this.injectSeed(seed)) ? `${seed.fallback}\n\n${text}` : text
       if (!this.active || this.active !== active || this.closed) return
       const result = await this.proc!.request('turn/start', {
         threadId: this.threadId,
         clientUserMessageId: userItemId,
-        input: this.input(body, images),
+        input: this.input(body, attachments),
         ...codexPermission(this.settings.permissionMode, this.ctx.record().cwd, this.ctx.record().extraDirs),
         ...(this.settings.model ? { model: this.settings.model } : {}),
         ...(this.settings.effort ? { effort: this.settings.effort } : {}),
@@ -554,41 +551,20 @@ export class CodexSession implements EngineSession {
       throw error
     }
   }
-  private droppedImages(count: number): void {
-    if (count <= 0) return
-    this.ctx.emit({
-      type: 'item_completed',
-      item: {
-        kind: 'notice',
-        id: `cx-images-${Date.now()}-${++this.noticeSeq}`,
-        level: 'warn',
-        text: `The current model can't view images; ${count} earlier image(s) were not passed along`,
-        detail: null,
-      },
-    })
-  }
   /** 把聊天作为原始 Responses 消息追加进线程的模型历史（thread/inject_items）；旧版 Codex 没有这个方法时返回 false */
-  private async injectSeed(seed: ChatSeed, sees: boolean): Promise<boolean> {
-    const message = (role: 'user' | 'assistant', text: string, images: readonly ImageAttachment[] = []): Message => ({
+  private async injectSeed(seed: ChatSeed): Promise<boolean> {
+    const message = (role: 'user' | 'assistant', text: string): Message => ({
       type: 'message',
       role,
-      content: [
-        { type: role === 'user' ? 'input_text' : 'output_text', text },
-        ...images.map(image => ({
-          type: 'input_image',
-          image_url: `data:${image.mediaType};base64,${image.dataBase64}`,
-        })),
-      ],
+      content: [{ type: role === 'user' ? 'input_text' : 'output_text', text }],
     })
-    // 模型不能看图：只注入文字，用户话里写明图片没带上，不能让它以为看过
-    const user = (turn: ChatTurn): Message =>
-      turn.images?.length && !sees
-        ? message('user', `${turn.user}（上面这些图片没有带上：当前模型不能看图）`)
-        : message('user', turn.user, turn.images)
     try {
       await this.proc!.request('thread/inject_items', {
         threadId: this.threadId,
-        items: seedTurns(seed).flatMap(turn => [user(turn), message('assistant', turn.assistant ?? NO_REPLY)]),
+        items: seedTurns(seed).flatMap(turn => [
+          message('user', turn.user),
+          message('assistant', turn.assistant ?? NO_REPLY),
+        ]),
       })
       return true
     } catch (error) {
@@ -705,14 +681,16 @@ export class CodexSession implements EngineSession {
     } else if (method === 'error' || method === 'warning') {
       const text = string(object(params.error).message || params.message)
       if (method === 'error') this.reportedError = text
-      // 用户 config.toml 引起、不影响使用的警告（每轮都发）：和这一轮无关，不进对话，报给宿主显示在设置里
-      if (method === 'warning' && isQuietWarning(text)) return this.ctx.reportConfigWarning?.(text)
+      // 用户 config.toml 引起、不影响使用的警告：灰色提示，同一会话只出一次（docs/ui/ai-commit-codex-warnings-history.md §3）
+      const quiet = method === 'warning' && isQuietWarning(text)
+      if (quiet && this.quietShown.has(text)) return
+      if (quiet) this.quietShown.add(text)
       this.ctx.emit({
         type: 'item_completed',
         item: {
           kind: 'notice',
           id: `cx-${method}-${Date.now()}-${++this.noticeSeq}`,
-          level: method === 'error' ? 'error' : 'warn',
+          level: method === 'error' ? 'error' : quiet ? 'info' : 'warn',
           text,
           detail: turnErrorDetail(params.error, params.willRetry),
         },
