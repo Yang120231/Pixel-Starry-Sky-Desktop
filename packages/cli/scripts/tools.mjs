@@ -34,7 +34,8 @@ const lockPath = join(root, 'tools.lock.json')
 export const TOOLS = {
   rg: {
     repo: 'BurntSushi/ripgrep',
-    version: '15.1.0',
+    // 15.2.0 起才有 aarch64 的 musl 版；15.1.0 及以前 Linux arm64 只有 gnu 版，远程 arm64 机器那份下不到
+    version: '15.2.0',
     asset: (v, triple, ext) => `ripgrep-${v}-${triple}.${ext}`,
     tag: v => v,
     licenses: ['LICENSE-MIT', 'UNLICENSE', 'COPYING'],
