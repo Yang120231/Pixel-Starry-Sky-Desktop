@@ -431,6 +431,31 @@ describe('跨引擎接力：回退、撤销、分叉', () => {
     expect(claude.sessions).toHaveLength(1)
   })
 
+  it('回退到交接给当前引擎的消息之前：截断点按它上下文里最早被移除的消息算，不只看它自己处理的', async () => {
+    const { host, claude, record, snap } = await threeTurns()
+    const asked: string[][] = []
+    claude.anchor = ids => (asked.push(ids), { at: `at-${ids[0]}` })
+    await host.rewind(record.id, 'b')
+    // b 是 codex 处理的，换回 claude 时交接进了 claude 的原生会话
+    expect(asked).toEqual([['b', 'c']])
+    expect(snap().record.pendingRewind).toBe('at-b')
+  })
+
+  it('回退的消息还没交接给当前引擎（在它的游标之后）：当前引擎的会话不动', async () => {
+    const { host, claude, record, say, snap } = setup()
+    await say('一', 'a')
+    await host.update(record.id, { engine: 'codex' })
+    await say('二', 'b')
+    await host.update(record.id, { engine: 'claude' })
+    const asked: string[][] = []
+    claude.anchor = ids => (asked.push(ids), null)
+    const claudeId = snap().record.engineSessionId
+    await host.rewind(record.id, 'b')
+    expect(asked).toEqual([])
+    expect(snap().record.engineSessionId).toBe(claudeId)
+    expect(snap().record.pendingRewind ?? null).toBeNull()
+  })
+
   it('找不到截断点：当前引擎换新会话，提示下一条消息带交接，下一条消息带完整交接', async () => {
     const { host, claude, record, say, snap } = setup()
     await say('一', 'a')
