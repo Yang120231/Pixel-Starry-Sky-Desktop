@@ -165,4 +165,50 @@ describe('跨引擎接力：把聊天写进 Claude Code 的记录', () => {
     expect(seeded[0]).toMatchObject({ uuid, parentUuid: 'u2' })
     expect(lines.at(-1)).toMatchObject({ type: 'last-prompt', leafUuid: seeded[1].uuid })
   })
+
+  describe('带图片的轮次', () => {
+    const image = {
+      id: 'i1',
+      name: 'image.png',
+      mediaType: 'image/png' as const,
+      bytes: 3,
+      width: 1,
+      height: 1,
+      dataBase64: 'AAAA',
+    }
+    const imageBlock = { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAAA' } }
+
+    it('用户消息写成文字块加图片块的数组，没有图的轮次仍是一段文字', () => {
+      const path = seedTranscript(
+        dir,
+        '/work/proj',
+        'img',
+        [
+          { id: uuid, user: '看这个（附：image.png）', assistant: null, images: [image] },
+          { id: 'plain', user: '再问', assistant: '答' },
+        ],
+        '（没回复）',
+      )
+      const lines = read(path)
+      expect(lines[0]).toMatchObject({
+        type: 'user',
+        message: { role: 'user', content: [{ type: 'text', text: '看这个（附：image.png）' }, imageBlock] },
+      })
+      expect(lines[2]).toMatchObject({ message: { role: 'user', content: '再问' } })
+    })
+
+    it('数组内容不影响回退截断点、末端和续写', async () => {
+      const turns = [{ id: uuid, user: '看这个', assistant: null, images: [image] }]
+      const path = seedTranscript(dir, '/work/proj', 'img', turns, '（没回复）')
+      const lines = read(path)
+      expect(await findRewindAnchor(path, [uuid])).toEqual({ at: null })
+      expect(currentLeaf(path)).toBe(lines[1].uuid)
+      // 之后的新轮次接在末端，图片轮次的 uuid 不变
+      seedTranscript(dir, '/work/proj', 'img', [{ id: 'next', user: '后来', assistant: '嗯' }], '')
+      const users = read(path).filter(l => l.type === 'user')
+      expect(users).toHaveLength(2)
+      expect(users[1]).toMatchObject({ parentUuid: lines[1].uuid })
+      expect(await findRewindAnchor(path, [uuid, 'next'])).toEqual({ at: null })
+    })
+  })
 })
