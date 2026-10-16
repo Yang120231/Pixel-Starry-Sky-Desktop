@@ -6,7 +6,7 @@ import { CodexAdapter, EngineHost } from '../src'
 import type { AgentRun, EngineEvent, EngineInfo, HostEvent, ImageAttachment } from '@pixelsky/protocol'
 import type { EngineAdapter, EngineSession, SessionContext } from '../src/adapter'
 import { ENGINES } from '../src/registry'
-import { codexPermission, turnErrorDetail } from '../src/codex/session'
+import { codexPermission, turnErrorDetail, withoutOwnFeatures } from '../src/codex/session'
 import { CODEX_MIN_VERSION, codexVersionStatus } from '../src/codex/discover'
 import { CodexTranslator, tokenCounts } from '../src/codex/translate'
 import { loadCodexRuns } from '../src/codex/runs'
@@ -27,14 +27,24 @@ const wait = async (fn: () => boolean): Promise<void> => {
   }
   throw new Error('Codex test timed out')
 }
-function setup(idleMs = 50, opts: { env?: Record<string, string>; permissionMode?: 'ask' | 'plan' } = {}) {
+function setup(
+  idleMs = 50,
+  opts: { env?: Record<string, string>; permissionMode?: 'ask' | 'plan'; askQuestions?: boolean } = {},
+) {
   const log = join(root, 'rpc.jsonl'),
+    argv = join(root, 'argv.jsonl'),
     events: HostEvent[] = [],
     launcher = { command: process.execPath, args: [fileURLToPath(new URL('./fakes/fake-codex.mjs', import.meta.url))] }
   const adapter = new CodexAdapter({
     launcher,
-    env: { ...process.env, FAKE_CODEX_LOG: log, FAKE_CODEX_RESUME_FAIL_FILE: join(root, 'resume-fail'), ...opts.env },
-    launchOptions: () => ({ askQuestions: true, steeringValidated: true }),
+    env: {
+      ...process.env,
+      FAKE_CODEX_LOG: log,
+      FAKE_CODEX_ARGV: argv,
+      FAKE_CODEX_RESUME_FAIL_FILE: join(root, 'resume-fail'),
+      ...opts.env,
+    },
+    launchOptions: () => ({ askQuestions: opts.askQuestions ?? true, steeringValidated: true }),
   })
   host = new EngineHost({
     dataDir: join(root, 'engine'),
@@ -54,7 +64,14 @@ function setup(idleMs = 50, opts: { env?: Record<string, string>; permissionMode
       .trim()
       .split('\n')
       .map(line => JSON.parse(line))
-  return { adapter, session, log, events, messages }
+  const launches = (): string[][] =>
+    existsSync(argv)
+      ? readFileSync(argv, 'utf8')
+          .trim()
+          .split('\n')
+          .map(line => JSON.parse(line))
+      : []
+  return { adapter, session, log, events, messages, launches }
 }
 describe('Codex app-server adapter', () => {
   it('检测时分清授权来源：ChatGPT 登录、API Key、config.toml 里自己的接口、没登录', async () => {
@@ -662,6 +679,39 @@ describe('Codex app-server adapter', () => {
     expect(start()[1].params.collaborationMode).toMatchObject({ mode: 'default', settings: { model: 'fake-codex' } })
     expect(start()[2].params.collaborationMode).toBeUndefined()
   })
+  it('允许提问时打开 Default 模式提问：启动带开关，第一轮带一次 default 拿提问指令，非计划模式也弹问题卡', async () => {
+    const { session, messages, launches } = setup()
+    await host!.send(session.id, '提问')
+    await wait(() => host!.open(session.id).pending.length === 1)
+    expect(launches().at(-1)).toEqual(expect.arrayContaining(['-c', 'features.default_mode_request_user_input=true']))
+    const start = () => messages().filter(m => m.method === 'turn/start')
+    expect(start()[0].params.collaborationMode).toEqual({
+      mode: 'default',
+      settings: { model: 'fake-codex', reasoning_effort: 'high', developer_instructions: null },
+    })
+    expect(host!.open(session.id).pending[0]).toMatchObject({ kind: 'question', questions: [{ id: 'scope' }] })
+    host!.answer(session.id, 'ask', { type: 'answer', answers: { '先做哪一批？': '先补测试' } })
+    await wait(() => host!.open(session.id).state === 'idle')
+    await host!.send(session.id, '第二轮')
+    await wait(() => host!.open(session.id).state === 'idle' && start().length === 2)
+    expect(start()[1].params.collaborationMode).toBeUndefined()
+  })
+  it('不允许提问时不开 Default 模式提问，也不带协作模式', async () => {
+    const { session, messages, launches } = setup(50, { askQuestions: false })
+    await host!.send(session.id, '提问')
+    await wait(() => host!.open(session.id).state === 'idle')
+    expect(host!.open(session.id).pending).toHaveLength(0)
+    expect(launches().at(-1)!.join(' ')).not.toContain('default_mode_request_user_input')
+    expect(messages().find(m => m.method === 'turn/start')?.params.collaborationMode).toBeUndefined()
+  })
+  it('开发中功能警告里去掉像素星空自己打开的 Default 模式提问；只剩它时不报', () => {
+    const tail = ' Under-development features are incomplete and may behave unpredictably.'
+    expect(withoutOwnFeatures(`Under-development features enabled: default_mode_request_user_input.${tail}`)).toBe(null)
+    expect(
+      withoutOwnFeatures(`Under-development features enabled: memories, default_mode_request_user_input.${tail}`),
+    ).toBe(`Under-development features enabled: memories.${tail}`)
+    expect(withoutOwnFeatures('Model metadata for `x` not found.')).toBe('Model metadata for `x` not found.')
+  })
   it('Fast：自己的 openai 登录且模型有 priority 档位时可开，每轮写明档位；换到没有档位的模型就关掉并说明原因', async () => {
     const { session, messages } = setup(50, { env: { FAKE_CODEX_PROVIDER: 'openai' } })
     await host!.update(session.id, { fast: true })
@@ -670,7 +720,7 @@ describe('Codex app-server adapter', () => {
     expect(host!.open(session.id).flags).toMatchObject({ fastAvailable: true, fastState: 'on', fastBlocked: null })
     const start = () => messages().filter(m => m.method === 'turn/start')
     expect(start()[0].params.serviceTier).toBe('priority')
-    expect(start()[0].params.collaborationMode).toBeUndefined()
+    expect(start()[0].params.collaborationMode).toMatchObject({ mode: 'default' })
     await host!.update(session.id, { fast: false })
     await host!.send(session.id, '慢一点')
     await wait(() => host!.open(session.id).state === 'idle' && start().length === 2)
