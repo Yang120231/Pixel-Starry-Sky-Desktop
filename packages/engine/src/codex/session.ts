@@ -11,6 +11,7 @@ import type {
   TurnOutcome,
 } from '@pixelsky/protocol'
 import { EMPTY_FLAGS, isQuietWarning, viaGateway } from '@pixelsky/protocol'
+import { versionAtLeast } from '../exec'
 import { QUICK_CLOSE_MS, type CloseOptions, type EngineSession, type Launcher, type SessionContext } from '../adapter'
 import { NO_REPLY, seedImageCount, seedTurns, type ChatSeed, type ChatTurn } from '../chat-log'
 import { CodexProcess, array, object, string, type Message } from './process'
@@ -28,6 +29,11 @@ export interface CodexLaunchOptions {
   autoCompactPct?: number | null
   /** 云端 / 本机模型填的上下文窗口 */
   contextWindows?: ContextWindows
+  /** 检测到的 Codex 版本；null 是读不到（替换的命令不一定报版本） */
+  version?: string | null
+  /** Codex 带着 Default 模式提问开关起不来时记在适配器上：之后新开的会话不用再失败一次（重新检测后清掉） */
+  askRejected?: () => boolean
+  rejectAsk?: () => void
   /** 会话用默认模型时，Codex 报的当前模型 */
   defaultModel?: () => string | null
   /** Codex 报过的各模型窗口（没改窗口时记下），算自动压缩的 token 数用 */
@@ -54,18 +60,38 @@ export function reservedCodexArg(args: readonly string[]): string | null {
 }
 /** 「允许中途向我提问」时打开的 Codex 开发中功能：Default 模式（非计划）下模型也有 request_user_input */
 const DEFAULT_MODE_ASK = 'default_mode_request_user_input'
+/** 这个开关最早出现的版本（0.110.0 的 features.rs 里已有，更早的没核实），比 CODEX_MIN_VERSION 低 */
+export const DEFAULT_MODE_ASK_MIN_VERSION = '0.110.0'
+/** 这个版本的 Codex 认不认得开关；版本读不到时照常带，不认得的老版本靠「启动失败重试」和警告过滤兜底 */
+export function defaultModeAskSupported(version: string | null | undefined): boolean {
+  return !version || versionAtLeast(version, DEFAULT_MODE_ASK_MIN_VERSION)
+}
+/** 不认识的设置项警告里指向开关的那一行（形如 "  session-flags: `features.default_mode_request_user_input` is ignored."） */
+const OWN_FEATURE_LINE = /`(?:features\.)?default_mode_request_user_input`/
 /**
- * Codex 开了开发中功能时报的警告去掉像素星空自己打开的那项（不是用户 config.toml 里写的）；只剩它时返回 null 不报
+ * Codex 的配置类警告去掉像素星空自己打开的那项（只在开关是我们加的才去：用户自己的 config.toml / 参数也开了就原样留着）：
+ * 开发中功能的警告去掉这一项，不认识的设置项（旧版 Codex 不认得开关）的警告去掉这一行并减掉个数；只剩它时返回 null 不报
  */
-export function withoutOwnFeatures(text: string): string | null {
-  const match = /^Under-development features? enabled: ([^.]*)\./i.exec(text)
-  if (!match) return text
-  const rest = match[1]
-    .split(',')
-    .map(key => key.trim())
-    .filter(key => key && key !== DEFAULT_MODE_ASK)
-  if (!rest.length) return null
-  return text.replace(match[1], rest.join(', '))
+export function withoutOwnFeatures(text: string, added: boolean): string | null {
+  if (!added) return text
+  // isQuietWarning 认警告时先去掉开头的空白，这里也一样，不然开头带换行的警告匹配不上
+  const body = text.trimStart()
+  const features = /^Under-development features? enabled: ([^.]*)\./i.exec(body)
+  if (features) {
+    const rest = features[1]
+      .split(',')
+      .map(key => key.trim())
+      .filter(key => key && key !== DEFAULT_MODE_ASK)
+    if (!rest.length) return null
+    return body.replace(features[1], rest.join(', '))
+  }
+  const [head, ...lines] = body.split('\n')
+  const ignoring = /^(Codex is ignoring )(\d+)( unrecognized configuration setting)s?\b(.*)$/i.exec(head)
+  const kept = lines.filter(line => !OWN_FEATURE_LINE.test(line))
+  if (!ignoring || kept.length === lines.length) return text
+  const count = Number(ignoring[2]) - (lines.length - kept.length)
+  if (count <= 0) return null
+  return [`${ignoring[1]}${count}${ignoring[3]}${count === 1 ? '' : 's'}${ignoring[4]}`, ...kept].join('\n')
 }
 /** Codex TurnError 里 message 之外的原始信息（附加说明、错误类型、HTTP 状态码），给界面「详情」用；没有时为 null */
 export function turnErrorDetail(raw: unknown, willRetry?: unknown): string | null {
@@ -153,10 +179,23 @@ export class CodexSession implements EngineSession {
   private noticeSeq = 0
   /** 启动时带了 model_context_window：报上来的窗口是设置的值，不记成 Codex 自己的 */
   private windowOverridden = false
-  /** 线程当前沿用的协作模式（上次带的或恢复时报的）；null 是还没带过，线程用的是没有模式指令的 Default */
+  /** 线程当前沿用的协作模式（turn/start 成功带过的或恢复时报的）；null 是还没带过，线程用的是没有模式指令的 Default */
   private modeSent: 'plan' | 'default' | null = null
+  /** 协作模式里最后带的模型和推理强度：它优先于 turn/start 外层的 model / effort，中途换了就要重新带 */
+  private modeModel: string | null = null
+  private modeEffort: string | null = null
   /** thread/start 报的模型：会话跟随引擎默认、目录也没写当前模型时，计划模式用它 */
   private threadModel: string | null = null
+  /** thread/start 报的推理强度（含 config.toml 里的 model_reasoning_effort）：会话跟随引擎默认时带协作模式用它，不能带 null 冲掉 */
+  private threadEffort: string | null = null
+  /** 当前 Codex 进程带了 Default 模式提问开关：带了才给模型 Default 模式的提问指令 */
+  private askFlag = false
+  /** 开关是像素星空加的（用户自己的 config.toml / 参数没开）：警告里才去掉这一项 */
+  private ownAskFlag = false
+  /** Codex 因为开关起不来：之后重连也不再带 */
+  private askFlagRejected = false
+  /** 当前这次启动的 initialize 进度：只有 initialize 失败（进程起不来）才可能是开关引起的 */
+  private startup: 'pending' | 'done' | 'failed' = 'pending'
   /** 停止后等待 turn/completed 的回调，finish() 时统一唤醒 */
   private turnWaiters: Array<() => void> = []
 
@@ -188,6 +227,26 @@ export class CodexSession implements EngineSession {
     return this.opening
   }
   private async connect(): Promise<void> {
+    const ask =
+      this.options.askQuestions &&
+      !this.askFlagRejected &&
+      !this.options.askRejected?.() &&
+      defaultModeAskSupported(this.options.version)
+    if (!ask) return this.launch(false)
+    try {
+      return await this.launch(true)
+    } catch (error) {
+      // 开关让 Codex 起不来（以后改名 / 去掉了）：不带开关重试一次，之后也不再带，也不再带 Default 模式的协作模式；
+      // 开关只是锦上添花，起得来之后的失败（线程、网络）和它无关，照常报错
+      if (this.closed || this.startup !== 'failed') throw error
+      this.askFlagRejected = true
+      this.options.rejectAsk?.()
+      return this.launch(false)
+    }
+  }
+  private async launch(askFlag: boolean): Promise<void> {
+    this.askFlag = askFlag
+    this.startup = 'pending'
     const record = this.ctx.record(),
       environment = { ...this.env },
       // 用户追加的参数放在像素星空自己的 -c 前面：同一个配置项写两次时后写的生效
@@ -225,7 +284,12 @@ export class CodexSession implements EngineSession {
     }
     const ext = this.ctx.extensions
     for (const [key, value] of Object.entries(ext?.codexConfig ?? {})) config(key, value)
-    if (this.options.askQuestions) config(`features.${DEFAULT_MODE_ASK}`, true)
+    if (askFlag) config(`features.${DEFAULT_MODE_ASK}`, true)
+    // 用户追加的参数 / 配置也开了同一个功能时警告不是我们的；config.toml 要等 config/read 才知道，警告可能先到，先按我们的算
+    this.ownAskFlag =
+      askFlag &&
+      !(this.options.args ?? []).some(arg => arg.includes(DEFAULT_MODE_ASK)) &&
+      !JSON.stringify(ext?.codexConfig ?? {}).includes(DEFAULT_MODE_ASK)
     // 上下文窗口和自动压缩（GitHub #20）：放在用户追加的参数后面，同一项以设置为准
     const model = record.model ?? this.options.defaultModel?.() ?? null
     const context = codexContextConfig({
@@ -244,7 +308,8 @@ export class CodexSession implements EngineSession {
       notification: (method, params) => this.notification(method, params),
       request: (id, method, params) => this.request(id, method, params),
       exit: (_code, tail) => {
-        if (this.proc !== proc) return
+        // 带开关启动时在 initialize 前退出：connect() 会不带开关重试，不在这里结束这一轮
+        if (this.proc !== proc || (askFlag && this.startup === 'pending')) return
         if (!this.closed && this.active) this.finish('failed', tail || 'Codex process exited')
         this.threadId = null
       },
@@ -252,9 +317,15 @@ export class CodexSession implements EngineSession {
     this.proc = proc
     try {
       // 额外技能根、turn/start 的 collaborationMode（计划模式）都是实验字段，一律声明实验接口（docs/codex-engine.md §3.5）
-      await proc.initialize(true)
+      await proc.initialize(true).catch(error => {
+        this.startup = 'failed'
+        throw error
+      })
+      this.startup = 'done'
       if (ext?.skillRoots?.length) await proc.request('skills/extraRoots/set', { extraRoots: ext.skillRoots })
       this.catalog = await codexCatalog(proc)
+      // 用户自己的 config.toml 也开了同一个功能：警告是他们的，不替他们去掉
+      if (this.ownAskFlag && (await this.userEnabledAsk(proc))) this.ownAskFlag = false
       const requirements = await proc.request('configRequirements/read').catch(() => ({}))
       const allowed = array(object(object(requirements).requirements).allowedApprovalPolicies)
       const policy = codexPermission(this.settings.permissionMode)
@@ -315,8 +386,15 @@ export class CodexSession implements EngineSession {
       else thread = await proc.request('thread/start', threadParams)
       this.threadId = string(object(thread.thread).id)
       this.threadModel = string(thread.model) || null
-      // 恢复的线程可能还停在计划模式（上次退出前选的计划）：按它报的实际模式算，下一轮需要时切回 default
-      this.modeSent = string(object(thread.collaborationMode).mode) === 'plan' ? 'plan' : null
+      // 恢复的线程会报它实际的协作模式（新建的不报）：可能还停在计划模式（上次退出前选的计划），下一轮需要时切回 default
+      const held = object(thread.collaborationMode),
+        heldSettings = object(held.settings)
+      this.threadEffort = string(thread.reasoningEffort) || string(heldSettings.reasoning_effort) || null
+      // 没开提问时线程里的 default 不是这次要带的，但它的模型和强度仍优先于外层，记下来换了才会重新带
+      const heldDefault = string(held.mode) === 'default' && !this.asks()
+      this.modeSent = string(held.mode) === 'plan' ? 'plan' : heldDefault ? 'default' : null
+      this.modeModel = heldDefault ? string(heldSettings.model) || null : null
+      this.modeEffort = heldDefault ? string(heldSettings.reasoning_effort) || null : null
       if (!this.threadId) throw new Error('Codex did not return a thread ID')
       this.ctx.setEngineSessionId(this.threadId)
       const warning = resumeFailed
@@ -382,6 +460,21 @@ export class CodexSession implements EngineSession {
       await proc.close()
       throw error
     }
+  }
+  /** 给模型 Default 模式的提问指令：允许提问且 Codex 带着开关启动 */
+  private asks(): boolean {
+    return this.options.askQuestions && this.askFlag
+  }
+  /** 用户自己的配置层（config.toml 等，不含命令行 -c）是否开了 Default 模式提问；读不到按没开算 */
+  private async userEnabledAsk(proc: CodexProcess): Promise<boolean> {
+    const result = await proc.request('config/read', { includeLayers: true }).catch(() => ({}))
+    return array(object(result).layers).some(raw => {
+      const layer = object(raw)
+      return (
+        string(object(layer.name).type) !== 'sessionFlags' &&
+        object(object(layer.config).features)[DEFAULT_MODE_ASK] === true
+      )
+    })
   }
   private input(text: string, attachments: ImageAttachment[]): Message[] {
     const input: Message[] = text ? [{ type: 'text', text, text_elements: [] }] : []
@@ -458,6 +551,7 @@ export class CodexSession implements EngineSession {
       // 模型不能看图：host 以为带上的图片被丢掉了，告诉用户
       if (seed && !sees) this.droppedImages(injected ? seedImageCount(seed) : (seed.fallbackImages?.length ?? 0))
       if (!this.active || this.active !== active || this.closed) return
+      const collab = this.collaboration()
       const result = await this.proc!.request('turn/start', {
         threadId: this.threadId,
         clientUserMessageId: userItemId,
@@ -466,9 +560,11 @@ export class CodexSession implements EngineSession {
         ...(this.settings.model ? { model: this.settings.model } : {}),
         ...(this.settings.effort ? { effort: this.settings.effort } : {}),
         summary: this.settings.thinkingSummaries ? 'concise' : 'none',
-        ...this.collaboration(),
+        ...collab.params,
         ...this.serviceTier(),
       })
+      // turn/start 被拒绝时不记：Codex 那边没收到，下一轮要照样重带
+      collab.commit()
       const turnId = string(object(result.turn).id)
       if (this.active === active) this.nativeTurnId = turnId || this.nativeTurnId
       else if (turnId) {
@@ -530,22 +626,37 @@ export class CodexSession implements EngineSession {
    * 计划模式用 Codex 原生的计划协作模式（模型有提问工具 request_user_input）；它会一直沿用，
    * 所以从计划切到别的权限后要带一次 default 切回来。允许提问时 Default 模式也有这个工具，
    * 第一轮就带一次 default，模型才拿到 Default 模式「少问、只问可选问题」的指令。
-   * developer_instructions 为 null 时用 Codex 内置的指令
+   * 协作模式里的模型和推理强度优先于 turn/start 外层的 model / effort，所以带过之后中途换了模型或强度也要重新带，
+   * 不然线程还按旧的跑。developer_instructions 为 null 时用 Codex 内置的指令。
+   * 带过什么要等 turn/start 成功后才记（commit），被拒绝的下一轮照样重带
    */
-  private collaboration(): Message {
+  private collaboration(): { params: Message; commit: () => void } {
+    const none = { params: {}, commit: () => {} }
     const mode = this.settings.permissionMode === 'plan' ? 'plan' : 'default'
-    if (mode === 'default' && (this.modeSent === 'default' || (!this.modeSent && !this.options.askQuestions))) return {}
     const model = this.settings.model ?? this.catalog?.currentModel ?? this.threadModel
-    if (!model) {
-      // 只为提问指令带的 default 不是必须的：还不知道模型时先不带
-      if (mode === 'default' && !this.modeSent) return {}
-      throw new Error('Codex plan mode needs a model')
+    // 会话跟随引擎默认时用 thread/start 报的实际强度（含 config.toml 里的），带 null 不知道会不会冲成模型默认
+    const effort = this.settings.effort ?? this.threadEffort
+    if (mode === 'default') {
+      // 从计划切回来必须带；其余只在提问指令还没带过、或带过的模型 / 强度和现在的不一样时带
+      const first = !this.modeSent && this.asks()
+      const stale = this.modeSent === 'default' && (model !== this.modeModel || effort !== this.modeEffort)
+      if (this.modeSent !== 'plan' && !first && !stale) return none
+      // 只为提问指令或跟上模型带的 default 不是必须的：还不知道模型时先不带
+      if (!model && this.modeSent !== 'plan') return none
+      // 强度不知道、模型又有强度可选时也不带，宁可没有提问指令，也不带 null 去冲掉用户配置的强度；
+      // 模型没有强度可选（目录里 efforts 为空）时 null 就是实际情况
+      const supported = this.catalog?.models?.find(m => m.id === model)?.efforts.length
+      if (effort === null && supported && this.modeSent !== 'plan') return none
     }
-    this.modeSent = mode
+    if (!model) throw new Error('Codex plan mode needs a model')
     return {
-      collaborationMode: {
-        mode,
-        settings: { model, reasoning_effort: this.settings.effort ?? null, developer_instructions: null },
+      params: {
+        collaborationMode: { mode, settings: { model, reasoning_effort: effort, developer_instructions: null } },
+      },
+      commit: () => {
+        this.modeSent = mode
+        this.modeModel = model
+        this.modeEffort = effort
       },
     }
   }
@@ -729,7 +840,7 @@ export class CodexSession implements EngineSession {
       if (method === 'error') this.reportedError = text
       // 用户 config.toml 引起、不影响使用的警告（每轮都发）：和这一轮无关，不进对话，报给宿主显示在设置里
       if (method === 'warning' && isQuietWarning(text)) {
-        const own = withoutOwnFeatures(text)
+        const own = withoutOwnFeatures(text, this.ownAskFlag)
         return own === null ? undefined : this.ctx.reportConfigWarning?.(own)
       }
       this.ctx.emit({

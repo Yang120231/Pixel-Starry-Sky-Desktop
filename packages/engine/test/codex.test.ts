@@ -3,10 +3,16 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { CodexAdapter, EngineHost } from '../src'
-import type { AgentRun, EngineEvent, EngineInfo, HostEvent, ImageAttachment } from '@pixelsky/protocol'
+import type { AgentRun, Effort, EngineEvent, EngineInfo, HostEvent, ImageAttachment } from '@pixelsky/protocol'
 import type { EngineAdapter, EngineSession, SessionContext } from '../src/adapter'
 import { ENGINES } from '../src/registry'
-import { codexPermission, turnErrorDetail, withoutOwnFeatures } from '../src/codex/session'
+import {
+  codexPermission,
+  defaultModeAskSupported,
+  turnErrorDetail,
+  withoutOwnFeatures,
+  type CodexLaunchOptions,
+} from '../src/codex/session'
 import { CODEX_MIN_VERSION, codexVersionStatus } from '../src/codex/discover'
 import { CodexTranslator, tokenCounts } from '../src/codex/translate'
 import { loadCodexRuns } from '../src/codex/runs'
@@ -27,9 +33,24 @@ const wait = async (fn: () => boolean): Promise<void> => {
   }
   throw new Error('Codex test timed out')
 }
+/** 换一个全新的会话环境：关掉上一个宿主，清掉 RPC / 启动参数记录，不然新旧记录混在一起 */
+const fresh = async () => {
+  await host!.shutdown()
+  rmSync(join(root, 'rpc.jsonl'), { force: true })
+  rmSync(join(root, 'argv.jsonl'), { force: true })
+}
 function setup(
   idleMs = 50,
-  opts: { env?: Record<string, string>; permissionMode?: 'ask' | 'plan'; askQuestions?: boolean } = {},
+  opts: {
+    env?: Record<string, string>
+    permissionMode?: 'ask' | 'plan'
+    askQuestions?: boolean
+    /** 会话记录里的模型 / 推理强度；null 是跟随引擎默认，不写就用 fake-codex / high */
+    model?: string | null
+    effort?: Effort | null
+    /** 追加的启动选项（版本、启动参数等） */
+    launch?: Partial<CodexLaunchOptions>
+  } = {},
 ) {
   const log = join(root, 'rpc.jsonl'),
     argv = join(root, 'argv.jsonl'),
@@ -44,7 +65,7 @@ function setup(
       FAKE_CODEX_RESUME_FAIL_FILE: join(root, 'resume-fail'),
       ...opts.env,
     },
-    launchOptions: () => ({ askQuestions: opts.askQuestions ?? true, steeringValidated: true }),
+    launchOptions: () => ({ askQuestions: opts.askQuestions ?? true, steeringValidated: true, ...opts.launch }),
   })
   host = new EngineHost({
     dataDir: join(root, 'engine'),
@@ -55,8 +76,8 @@ function setup(
   const session = host.createSession({
     projectId: host.addProject(root).id,
     engine: 'codex',
-    model: 'fake-codex',
-    effort: 'high',
+    model: opts.model !== undefined ? opts.model : 'fake-codex',
+    effort: opts.effort !== undefined ? opts.effort : 'high',
     permissionMode: opts.permissionMode ?? 'ask',
   })
   const messages = () =>
@@ -704,13 +725,239 @@ describe('Codex app-server adapter', () => {
     expect(launches().at(-1)!.join(' ')).not.toContain('default_mode_request_user_input')
     expect(messages().find(m => m.method === 'turn/start')?.params.collaborationMode).toBeUndefined()
   })
-  it('开发中功能警告里去掉像素星空自己打开的 Default 模式提问；只剩它时不报', () => {
+  describe('Default 模式提问的协作模式', () => {
+    type Messages = ReturnType<typeof setup>['messages']
+    const turns = (messages: Messages) => messages().filter(m => m.method === 'turn/start')
+    /** 发一轮，等到这一轮结束（累计第 count 个 turn/start 之后回到空闲） */
+    const send = async (id: string, text: string, count: number, messages: Messages) => {
+      await host!.send(id, text)
+      await wait(() => host!.open(id).state === 'idle' && turns(messages).length === count)
+    }
+    it('推理强度跟随引擎配置时第一轮带线程报的强度，不带 null 冲掉 config.toml 里的', async () => {
+      const { session, messages } = setup(10_000, {
+        effort: null,
+        env: { FAKE_CODEX_THREAD_EFFORT: 'xhigh', FAKE_CODEX_THREAD_MODEL: 'fake-codex' },
+      })
+      await send(session.id, '第一轮', 1, messages)
+      expect(turns(messages)[0].params.collaborationMode).toEqual({
+        mode: 'default',
+        settings: { model: 'fake-codex', reasoning_effort: 'xhigh', developer_instructions: null },
+      })
+      expect(turns(messages)[0].params.effort).toBeUndefined()
+    })
+    it('强度不知道（线程没报、会话也没选）且模型有强度可选时不带 default；计划模式照旧带 null', async () => {
+      const { session, messages } = setup(10_000, { effort: null })
+      await send(session.id, '第一轮', 1, messages)
+      expect(turns(messages)[0].params.collaborationMode).toBeUndefined()
+      await host!.update(session.id, { permissionMode: 'plan' })
+      await send(session.id, '计划', 2, messages)
+      expect(turns(messages)[1].params.collaborationMode).toEqual({
+        mode: 'plan',
+        settings: { model: 'fake-codex', reasoning_effort: null, developer_instructions: null },
+      })
+    })
+    it('模型不知道时不带 default（也不报错）；线程报了模型就用它', async () => {
+      const unknown = setup(10_000, {
+        model: null,
+        env: { FAKE_CODEX_NO_MODEL: '1', FAKE_CODEX_THREAD_EFFORT: 'high' },
+      })
+      await send(unknown.session.id, '第一轮', 1, unknown.messages)
+      expect(turns(unknown.messages)[0].params.collaborationMode).toBeUndefined()
+      expect(turns(unknown.messages)[0].params.model).toBeUndefined()
+      await fresh()
+      const reported = setup(10_000, {
+        model: null,
+        env: { FAKE_CODEX_NO_MODEL: '1', FAKE_CODEX_THREAD_MODEL: 'fake-plain', FAKE_CODEX_THREAD_EFFORT: 'high' },
+      })
+      await send(reported.session.id, '第一轮', 1, reported.messages)
+      expect(turns(reported.messages)[0].params.collaborationMode).toMatchObject({
+        mode: 'default',
+        settings: { model: 'fake-plain', reasoning_effort: 'high' },
+      })
+    })
+    it('中途换模型或推理强度：带过 default 之后换了就重新带，没换不重复带', async () => {
+      const { session, messages } = setup(10_000)
+      await send(session.id, '第一轮', 1, messages)
+      await send(session.id, '没换', 2, messages)
+      expect(turns(messages)[1].params.collaborationMode).toBeUndefined()
+      await host!.update(session.id, { effort: 'low' })
+      await send(session.id, '换强度', 3, messages)
+      expect(turns(messages)[2].params).toMatchObject({
+        effort: 'low',
+        collaborationMode: { mode: 'default', settings: { model: 'fake-codex', reasoning_effort: 'low' } },
+      })
+      await send(session.id, '又没换', 4, messages)
+      expect(turns(messages)[3].params.collaborationMode).toBeUndefined()
+      await host!.update(session.id, { model: 'fake-plain', effort: 'high' })
+      await send(session.id, '换模型', 5, messages)
+      expect(turns(messages)[4].params).toMatchObject({
+        model: 'fake-plain',
+        collaborationMode: { mode: 'default', settings: { model: 'fake-plain', reasoning_effort: 'high' } },
+      })
+    })
+    it('跟随引擎默认的会话换回默认强度时，用线程报的强度重新带', async () => {
+      const { session, messages } = setup(10_000, {
+        env: { FAKE_CODEX_THREAD_EFFORT: 'xhigh', FAKE_CODEX_THREAD_MODEL: 'fake-codex' },
+      })
+      await send(session.id, '第一轮', 1, messages)
+      expect(turns(messages)[0].params.collaborationMode).toMatchObject({ settings: { reasoning_effort: 'high' } })
+      await host!.update(session.id, { effort: null })
+      await send(session.id, '换回默认', 2, messages)
+      expect(turns(messages)[1].params.collaborationMode).toMatchObject({
+        mode: 'default',
+        settings: { reasoning_effort: 'xhigh' },
+      })
+    })
+    it('turn/start 被拒绝时不记已带过：下一轮照样带 default', async () => {
+      const failFile = join(root, 'turn-fail')
+      const { session, messages } = setup(10_000, { env: { FAKE_CODEX_TURN_FAIL_FILE: failFile } })
+      writeFileSync(failFile, '')
+      await host!.send(session.id, '被拒绝')
+      await wait(() => !existsSync(failFile) && host!.open(session.id).state === 'idle')
+      expect(turns(messages)).toHaveLength(1)
+      await send(session.id, '第二轮', 2, messages)
+      expect(turns(messages)[0].params.collaborationMode).toMatchObject({ mode: 'default' })
+      expect(turns(messages)[1].params.collaborationMode).toMatchObject({ mode: 'default' })
+      await send(session.id, '第三轮', 3, messages)
+      expect(turns(messages)[2].params.collaborationMode).toBeUndefined()
+    })
+    it('恢复线程：报的是计划模式就在需要时切回 default；报的是 default 照样带一次提问指令', async () => {
+      const resumed = async (collab: unknown, opts: Parameters<typeof setup>[1] = {}) => {
+        const { session, messages } = setup(50, {
+          ...opts,
+          env: { FAKE_CODEX_RESUME_COLLAB: JSON.stringify(collab), ...opts.env },
+        })
+        await send(session.id, '第一轮', 1, messages)
+        // 空闲后进程退出，下一轮 thread/resume 接着原线程
+        await new Promise(r => setTimeout(r, 200))
+        await host!.update(session.id, { permissionMode: 'edits' })
+        await send(session.id, '第二轮', 2, messages)
+        expect(messages().some(m => m.method === 'thread/resume')).toBe(true)
+        return turns(messages)[1].params.collaborationMode
+      }
+      const plan = { mode: 'plan', settings: { model: 'fake-codex', reasoning_effort: 'high' } }
+      expect(await resumed(plan, { askQuestions: false })).toMatchObject({
+        mode: 'default',
+        settings: { model: 'fake-codex' },
+      })
+      await fresh()
+      const held = { mode: 'default', settings: { model: 'fake-codex', reasoning_effort: 'high' } }
+      expect(await resumed(held)).toMatchObject({ mode: 'default', settings: { reasoning_effort: 'high' } })
+      await fresh()
+      // 没开提问：线程里已有的 default 和现在一致就不带
+      expect(await resumed(held, { askQuestions: false })).toBeUndefined()
+    })
+    it('恢复线程时线程里留着 default：没开提问也要在中途换模型后重新带，免得被旧的覆盖', async () => {
+      const held = { mode: 'default', settings: { model: 'fake-codex', reasoning_effort: 'high' } }
+      const { session, messages } = setup(50, {
+        askQuestions: false,
+        env: { FAKE_CODEX_RESUME_COLLAB: JSON.stringify(held) },
+      })
+      await send(session.id, '第一轮', 1, messages)
+      await new Promise(r => setTimeout(r, 200))
+      await host!.update(session.id, { model: 'fake-plain' })
+      await send(session.id, '第二轮', 2, messages)
+      expect(turns(messages)[1].params.collaborationMode).toMatchObject({
+        mode: 'default',
+        settings: { model: 'fake-plain', reasoning_effort: 'high' },
+      })
+    })
+  })
+  describe('Default 模式提问开关的兼容', () => {
+    const flag = 'features.default_mode_request_user_input=true'
+    const finish = async (session: { id: string }) => {
+      await host!.send(session.id, '第一轮')
+      await wait(() => host!.open(session.id).state === 'idle')
+    }
+    const codexWarnings = async () => (await host!.engines()).find(e => e.id === 'codex')!.configWarnings
+    const notices = (id: string) => host!.open(id).items.filter(i => i.kind === 'notice')
+    it('版本太老（读到的版本低于开关出现的版本）不带开关，也不带 default；读不到版本或够新照常带', async () => {
+      expect(defaultModeAskSupported('0.109.0')).toBe(false)
+      expect(defaultModeAskSupported('0.110.0')).toBe(true)
+      expect(defaultModeAskSupported(CODEX_MIN_VERSION)).toBe(true)
+      expect(defaultModeAskSupported(null)).toBe(true)
+      const old = setup(50, { launch: { version: '0.109.0' } })
+      await finish(old.session)
+      expect(old.launches().flat()).not.toContain(flag)
+      expect(old.messages().find(m => m.method === 'turn/start')?.params.collaborationMode).toBeUndefined()
+      await fresh()
+      const recent = setup(50, { launch: { version: '0.162.1' } })
+      await finish(recent.session)
+      expect(recent.launches().flat()).toContain(flag)
+      expect(recent.messages().find(m => m.method === 'turn/start')?.params.collaborationMode).toMatchObject({
+        mode: 'default',
+      })
+    })
+    it('Codex 带着开关起不来：不带开关重试一次，这一轮正常完成、不带 default，之后重连也不再带开关', async () => {
+      const { session, messages, launches } = setup(50, { env: { FAKE_CODEX_REJECT_ASK: '1' } })
+      await finish(session)
+      expect(launches().filter(args => args.includes(flag))).toHaveLength(1)
+      expect(launches().at(-1)).not.toContain(flag)
+      expect(host!.open(session.id).items.some(i => i.kind === 'turn_stats')).toBe(true)
+      expect(notices(session.id)).toEqual([])
+      expect(messages().find(m => m.method === 'turn/start')?.params.collaborationMode).toBeUndefined()
+      // 空闲后进程退出，再发一轮重新启动（新会话对象，靠适配器记着）：不再带开关，共 4 次启动：检测探测、带开关、重试、第二轮
+      await new Promise(r => setTimeout(r, 200))
+      await host!.send(session.id, '第二轮')
+      await wait(() => host!.open(session.id).items.filter(i => i.kind === 'turn_stats').length === 2)
+      expect(launches().filter(args => args.includes(flag))).toHaveLength(1)
+      expect(launches()).toHaveLength(4)
+    })
+    it('开关带来的警告整条去掉（包括开头带换行的），不进对话也不进设置里的配置提示', async () => {
+      for (const kind of ['features', 'features-newline', 'ignored']) {
+        const { session } = setup(50, { env: { FAKE_CODEX_ASK_WARNING: kind } })
+        await finish(session)
+        expect(notices(session.id), kind).toEqual([])
+        expect(await codexWarnings(), kind).toBeUndefined()
+        await fresh()
+      }
+    })
+    it('不认识的设置项警告里只去掉开关那一行并减掉个数，用户自己的那条照常留着', async () => {
+      const { session } = setup(50, { env: { FAKE_CODEX_ASK_WARNING: 'ignored-mixed' } })
+      await finish(session)
+      expect(await codexWarnings()).toEqual([
+        'Codex is ignoring 1 unrecognized configuration setting. Check for typos or deprecated settings.\n' +
+          '  user (config.toml): `disable_response_storage` is ignored.',
+      ])
+    })
+    it('用户自己的 config.toml 或启动参数也开了同一个功能：警告原样留着', async () => {
+      const warning = /^Under-development features enabled: default_mode_request_user_input\./
+      const userConfig = setup(50, { env: { FAKE_CODEX_ASK_WARNING: 'features', FAKE_CODEX_USER_ASK: '1' } })
+      await finish(userConfig.session)
+      expect(await codexWarnings()).toEqual([expect.stringMatching(warning)])
+      await fresh()
+      const viaArgs = setup(50, {
+        env: { FAKE_CODEX_ASK_WARNING: 'features' },
+        launch: { args: ['-c', flag] },
+      })
+      await finish(viaArgs.session)
+      expect(await codexWarnings()).toEqual([expect.stringMatching(warning)])
+    })
+  })
+  it('配置类警告去掉像素星空自己打开的 Default 模式提问；只剩它时不报；不是我们加的原样留着', () => {
     const tail = ' Under-development features are incomplete and may behave unpredictably.'
-    expect(withoutOwnFeatures(`Under-development features enabled: default_mode_request_user_input.${tail}`)).toBe(null)
+    const only = `Under-development features enabled: default_mode_request_user_input.${tail}`
+    expect(withoutOwnFeatures(only, true)).toBe(null)
+    expect(withoutOwnFeatures(`\n${only}`, true)).toBe(null)
+    expect(withoutOwnFeatures(only, false)).toBe(only)
     expect(
-      withoutOwnFeatures(`Under-development features enabled: memories, default_mode_request_user_input.${tail}`),
+      withoutOwnFeatures(`Under-development features enabled: memories, default_mode_request_user_input.${tail}`, true),
     ).toBe(`Under-development features enabled: memories.${tail}`)
-    expect(withoutOwnFeatures('Model metadata for `x` not found.')).toBe('Model metadata for `x` not found.')
+    // 开头的空白和 isQuietWarning 一样先去掉
+    expect(withoutOwnFeatures(`\n  Under-development features enabled: memories.${tail}`, true)).toBe(
+      `Under-development features enabled: memories.${tail}`,
+    )
+    expect(withoutOwnFeatures('Model metadata for `x` not found.', true)).toBe('Model metadata for `x` not found.')
+    const own = '  session-flags: `features.default_mode_request_user_input` is ignored.'
+    const user = '  user (config.toml): `x` is ignored.'
+    const head = (n: number) => `Codex is ignoring ${n} unrecognized configuration setting${n === 1 ? '' : 's'}. Check.`
+    expect(withoutOwnFeatures(`${head(1)}\n${own}`, true)).toBe(null)
+    expect(withoutOwnFeatures(`\n${head(1)}\n${own}`, true)).toBe(null)
+    expect(withoutOwnFeatures(`${head(1)}\n${own}`, false)).toBe(`${head(1)}\n${own}`)
+    expect(withoutOwnFeatures(`${head(2)}\n${own}\n${user}`, true)).toBe(`${head(1)}\n${user}`)
+    expect(withoutOwnFeatures(`${head(3)}\n${own}\n${user}\n${user}`, true)).toBe(`${head(2)}\n${user}\n${user}`)
+    // 没有指向开关的行就原样留着
+    expect(withoutOwnFeatures(`${head(1)}\n${user}`, true)).toBe(`${head(1)}\n${user}`)
   })
   it('Fast：自己的 openai 登录且模型有 priority 档位时可开，每轮写明档位；换到没有档位的模型就关掉并说明原因', async () => {
     const { session, messages } = setup(50, { env: { FAKE_CODEX_PROVIDER: 'openai' } })
@@ -839,14 +1086,21 @@ describe('Codex 接手带图片的聊天', () => {
     expect(start.params.input).toEqual([{ type: 'text', text: '怎么样', text_elements: [] }])
   })
 
-  it('模型不能看图：只注入文字并写明图片没带上，不报错', async () => {
+  it('模型不能看图（目录里查得到）：host 就不交图片，注入的文字写明没带上，也不用会话再警告，不报错', async () => {
     const { session, messages } = await handoff('fake-plain', {}, undefined)
+    const inject = messages().find(m => m.method === 'thread/inject_items')!
+    expect(inject.params!.items![0].content).toEqual([{ type: 'input_text', text: `${ASKED}（附图 old.png，未带上）` }])
+    expect(host!.open(session.id).items.some(i => i.kind === 'notice' && i.level === 'error')).toBe(false)
+    expect(notices(session.id)).toEqual([])
+  })
+
+  it('目录里没有这个模型：host 按引擎能力交了图片，会话这边兜底不带，并告诉用户实际没带', async () => {
+    const { session, messages } = await handoff('fake-unlisted', {}, undefined)
     const inject = messages().find(m => m.method === 'thread/inject_items')!
     expect(inject.params!.items![0].content).toEqual([
       { type: 'input_text', text: `${ASKED}（附：old.png）（上面这些图片没有带上：当前模型不能看图）` },
     ])
     expect(host!.open(session.id).items.some(i => i.kind === 'notice' && i.level === 'error')).toBe(false)
-    // host 的提示说带了图片，这里告诉用户实际没带
     expect(notices(session.id)).toEqual([
       "The current model can't view images, so 1 earlier image(s) were not actually passed along",
     ])
@@ -865,8 +1119,15 @@ describe('Codex 接手带图片的聊天', () => {
     expect(input.slice(1).map(i => i.url)).toEqual([url(old), url(own)])
   })
 
-  it('注入失败且模型不能看图：只发文字交接，不带图片也不报错', async () => {
+  it('注入失败且模型不能看图（目录里查得到）：只发文字交接，不带图片，不用会话再警告也不报错', async () => {
     const { session, messages } = await handoff('fake-plain', { FAKE_CODEX_INJECT_FAIL: '1' }, undefined)
+    const start = messages().find(m => m.method === 'turn/start') as { params: { input: { type: string }[] } }
+    expect(start.params.input.map(i => i.type)).toEqual(['text'])
+    expect(notices(session.id).filter(t => t.includes('view images'))).toEqual([])
+  })
+
+  it('注入失败且目录里没有这个模型：会话兜底只发文字交接，不带图片，告诉用户实际没带', async () => {
+    const { session, messages } = await handoff('fake-unlisted', { FAKE_CODEX_INJECT_FAIL: '1' }, undefined)
     const start = messages().find(m => m.method === 'turn/start') as { params: { input: { type: string }[] } }
     expect(start.params.input.map(i => i.type)).toEqual(['text'])
     expect(notices(session.id).filter(t => t.includes('view images'))).toEqual([

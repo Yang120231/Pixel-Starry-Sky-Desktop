@@ -145,7 +145,10 @@ export class HostTurn {
       const turnId = randomUUID()
       const userItemId = item.attempt ? `${item.id}-retry-${randomUUID()}` : item.id
       // 新引擎没看过的对话整理成交接材料，放在用户消息前面发给它；用户消息条目里仍是用户原文
-      const handoff = m.handoff.plan(id, record, item.text, item.files, item.attachments)
+      // 当前模型能不能看图要问目录（异步），所以先问好再算交接
+      const sees = await m.handoff.modelSees(id, record)
+      if (!stillCurrent()) return
+      const handoff = m.handoff.plan(id, record, item.text, item.files, item.attachments, sees)
       rt.holdCursor = handoff.hold ? turnId : undefined
       rt.activeId = item.id
       m.queue.changeQueue(id, item.id, { status: 'running', attempt: (item.attempt ?? 0) + 1, messageUuid: userItemId })

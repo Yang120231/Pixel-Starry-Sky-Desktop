@@ -613,6 +613,40 @@ export const systemMessages = {
     zh: '已把之前的聊天带给 {p0}（{p1} 轮）',
     en: 'Brought the previous chat to {p0} ({p1} turns)',
   },
+  // 不知道是哪个引擎处理的那段（「其他引擎」写在模板里，不是 {p0}）：必须排在下面带 {p0} 的同步模板前面，
+  // 否则英文的「another engine」会被当成 {p0} 配走，翻回中文变成「已把 another engine 期间…」；各档次序同下面的变体
+  'system.chatSeedSyncedOtherImages': {
+    zh: '已把其他引擎期间的聊天同步给 {p0}（{p1} 轮，含 {p2} 张图片）',
+    en: 'Synced the chat from another engine to {p0} ({p1} turns, including {p2} image(s))',
+  },
+  'system.chatSeedSyncedOtherImagesPartial': {
+    zh: '已把其他引擎期间的聊天同步给 {p0}（{p1} 轮，含 {p2} 张图片，{p3} 张图片未带上）',
+    en: 'Synced the chat from another engine to {p0} ({p1} turns, including {p2} image(s), {p3} image(s) not carried)',
+  },
+  'system.chatSeedSyncedOtherImagesOmitted': {
+    zh: '已把其他引擎期间的聊天同步给 {p0}（{p1} 轮，{p2} 张图片未带上）',
+    en: 'Synced the chat from another engine to {p0} ({p1} turns, {p2} image(s) not carried)',
+  },
+  'system.chatSeedSyncedOther': {
+    zh: '已把其他引擎期间的聊天同步给 {p0}（{p1} 轮）',
+    en: 'Synced the chat from another engine to {p0} ({p1} turns)',
+  },
+  'system.progressSyncedOtherImages': {
+    zh: '已把其他引擎期间的进展同步给 {p0}（含 {p1} 张图片）',
+    en: 'Synced the progress from another engine to {p0} (including {p1} image(s))',
+  },
+  'system.progressSyncedOtherImagesPartial': {
+    zh: '已把其他引擎期间的进展同步给 {p0}（含 {p1} 张图片，{p2} 张图片未带上）',
+    en: 'Synced the progress from another engine to {p0} (including {p1} image(s), {p2} image(s) not carried)',
+  },
+  'system.progressSyncedOtherImagesOmitted': {
+    zh: '已把其他引擎期间的进展同步给 {p0}（{p1} 张图片未带上）',
+    en: 'Synced the progress from another engine to {p0} ({p1} image(s) not carried)',
+  },
+  'system.progressSyncedOther': {
+    zh: '已把其他引擎期间的进展同步给 {p0}',
+    en: 'Synced the progress from another engine to {p0}',
+  },
   'system.chatSeedSynced': {
     zh: '已把 {p0} 期间的聊天同步给 {p1}（{p2} 轮）',
     en: 'Synced the chat from {p0} to {p1} ({p2} turns)',

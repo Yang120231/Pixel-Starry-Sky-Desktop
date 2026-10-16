@@ -4,7 +4,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { EngineId, EngineInfo, ImageAttachment, Item, SessionRecord, SessionSettings } from '@pixelsky/protocol'
+import type {
+  EngineId,
+  EngineInfo,
+  EngineModel,
+  ImageAttachment,
+  Item,
+  SessionRecord,
+  SessionSettings,
+} from '@pixelsky/protocol'
 import type { EngineAdapter, EngineSession, SessionContext } from '../src/adapter'
 import type { ChatSeed } from '../src/chat-log'
 import type { EngineHostOptions } from '../src/host/context'
@@ -112,6 +120,9 @@ class FakeAdapter implements EngineAdapter {
   auto = true
   /** 引擎那边的原生会话记录还在不在（hasNativeSession） */
   exists = true
+  /** 目录里的模型（catalog）；没给就是空目录，当前模型能不能看图按引擎能力 */
+  models: EngineModel[] | undefined
+  catalog = async () => ({ models: this.models, currentModel: null, outputStyles: [], currentOutputStyle: null })
   hasNativeSession(): boolean {
     return this.exists
   }
@@ -218,6 +229,26 @@ describe('跨引擎接力：换引擎', () => {
     expect(snap().record.engineSessions?.codex).toEqual({ id: null, seen: null })
     expect(snap().record.engineSessionId).toBeNull()
     expect(users()[0].engine).toBe('claude')
+  })
+
+  it('同步通知里不知道是哪个引擎处理的那段（游标已在那条用户消息之后）：写「其他引擎」', async () => {
+    const { host, record, say, snap } = setup()
+    await say('第一句')
+    await host.update(record.id, { engine: 'codex' })
+    const second = await say('第二句')
+    await host.update(record.id, { engine: 'claude' })
+    // 模拟 claude 的游标停在 codex 那条用户消息上：交接里只剩 codex 的回复，没有带引擎标记的用户消息
+    const rt = (host as unknown as { runtimes: Map<string, { snapshot: { record: SessionRecord } }> }).runtimes.get(
+      record.id,
+    )!
+    const sessions = rt.snapshot.record.engineSessions!
+    rt.snapshot.record = {
+      ...rt.snapshot.record,
+      engineSessions: { ...sessions, claude: { ...sessions.claude!, seen: second } },
+    }
+    await say('第三句')
+    const notice = snap().items.findLast(i => i.kind === 'notice')
+    expect(notice?.kind === 'notice' && notice.text).toBe('已把其他引擎期间的进展同步给 Claude Code')
   })
 
   it('旧记录（没有 engineSessions、用户消息没标引擎）换引擎：补标记，旧引擎读到全部对话', async () => {
@@ -690,6 +721,65 @@ describe('跨引擎接力：图片', () => {
     expect(notice(snap().items)).toMatchObject({
       text: expect.stringContaining('含 1 张图片，2 张图片未带上'),
     })
+  })
+
+  const model = (id: string, inputModalities: string[]): EngineModel => ({
+    id,
+    label: id,
+    efforts: [],
+    defaultEffort: null,
+    inputModalities,
+    isDefault: false,
+  })
+
+  it.each([true, false])(
+    '引擎能看图但当前模型不能（目录里查得到）：不带图，只写「未带上」，不会又说带了又说没带（聊天回放：%s）',
+    async seeds => {
+      const t = setup({}, seeds)
+      t.codex.models = [model('m', ['text'])]
+      t.claude.auto = false
+      await t.host.send(t.record.id, { text: ASKED, clientMessageId: 'first', attachments: [png('a.png')] })
+      await until(() => !!t.claude.sessions[0]?.active)
+      await t.claude.sessions[0].interrupt()
+      await until(() => t.snap().state === 'idle' && t.snap().queue.length === 0)
+      await t.host.update(t.record.id, { engine: 'codex' })
+      await t.say('怎么样')
+      const session = t.codex.sessions[0]
+      expect(session.attachments[0]).toBeUndefined()
+      expect(session.handoffImages[0]).toBeUndefined()
+      const seed = session.seeds[0]
+      if (seed) {
+        expect(seed.turns[0].images).toBeUndefined()
+        expect(seed.fallbackImages).toBeUndefined()
+        expect(seed.omittedImages).toBe(1)
+      }
+      const shown = notice(t.snap().items)
+      expect(shown).toMatchObject({
+        text: seeds
+          ? '已把之前的聊天带给 Codex（1 轮，1 张图片未带上）'
+          : '已把之前的对话交接给 Codex（1 条，1 张图片未带上）',
+      })
+      expect(shown?.kind === 'notice' && shown.text).not.toContain('含')
+    },
+  )
+
+  it('目录里的模型能看图、或查不到当前模型：照常带图', async () => {
+    for (const models of [[model('m', ['text', 'image'])], [model('other', ['text'])], undefined]) {
+      const t = await interruptedWithImages(true)
+      t.codex.models = models
+      await t.say('怎么样')
+      expect(t.codex.sessions[0].seeds[0]!.turns[0].images).toHaveLength(1)
+      expect(notice(t.snap().items)).toMatchObject({ text: '已把之前的聊天带给 Codex（1 轮，含 1 张图片）' })
+    }
+  })
+
+  it('读目录失败：按引擎能力，照常带图', async () => {
+    const t = await interruptedWithImages(true)
+    t.codex.catalog = async () => {
+      throw new Error('catalog down')
+    }
+    await t.say('怎么样')
+    expect(t.codex.sessions[0].seeds[0]!.turns[0].images).toHaveLength(1)
   })
 
   it.each([true, false])('目标引擎不能看图：一张都不带，写明未带上（聊天回放：%s）', async seeds => {

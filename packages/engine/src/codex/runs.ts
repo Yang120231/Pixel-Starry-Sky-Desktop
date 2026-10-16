@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import type { AgentRun, AgentRuns, EngineEvent } from '@pixelsky/protocol'
 import { object, string } from './process'
-import { CodexTranslator } from './translate'
+import { CodexTranslator, interruptedAgent } from './translate'
 
 const DAY = 86_400_000
 
@@ -81,6 +81,6 @@ export function loadCodexRuns(codexHome: string, threadId: string): AgentRuns {
   // 从磁盘读回来的会话没有活着的子进程：还停在 running 的子智能体不会再有后续，标成已中断（与 Claude 侧把没结束的工具标中断一致）
   return {
     workflows: [],
-    agents: [...agents.values()].map(a => (a.state === 'running' ? { ...a, state: 'interrupted' } : a)),
+    agents: [...agents.values()].map(interruptedAgent),
   }
 }

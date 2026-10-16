@@ -382,11 +382,13 @@ describe('Pixel 接手带图片的聊天', () => {
     ])
   })
 
-  it('模型不能看图：不带更早消息的图片，也不报错', async () => {
+  it('模型不能看图：宿主按目录里的模型就不带更早消息的图片，只写未带上，不再先说带了又更正，也不报错', async () => {
     const { session, prompt } = await handoff('fake/fake-small')
     expect(prompt.images).toBeUndefined()
-    const warns = snap(session.id).items.flatMap(i => (i.kind === 'notice' && i.level === 'warn' ? [i.text] : []))
-    expect(warns).toContain("The current model can't view images, so 1 earlier image(s) were not actually passed along")
+    const notices = snap(session.id).items.flatMap(i => (i.kind === 'notice' ? [i.text] : []))
+    expect(notices).toContain('已把之前的对话交接给 像素星空（1 条，1 张图片未带上）')
+    expect(notices.some(text => text.includes('当前模型不能看图') || text.includes("can't view images"))).toBe(false)
+    expect(notices.some(text => text.includes('含 1 张图片'))).toBe(false)
     expect(snap(session.id).items.some(i => i.kind === 'notice' && i.level === 'error')).toBe(false)
     expect(snap(session.id).items.filter(i => i.kind === 'user')).toHaveLength(2)
   })

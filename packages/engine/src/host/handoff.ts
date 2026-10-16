@@ -157,10 +157,28 @@ export class HostHandoff {
   }
 
   /**
+   * 目标引擎当前选的模型能不能看图：目录里查得到这个模型就以它的输入类型为准（Codex / Pixel 有的模型不能看图），
+   * 查不到（没有目录、目录里没有这个模型、读目录失败）按引擎能力。派发前先问，plan 是同步的。
+   * 对话里没有图片时不用查，免得白白等目录（有的引擎要起进程）
+   */
+  async modelSees(id: string, record: SessionRecord): Promise<boolean> {
+    const engineSees = !!ENGINES[record.engine].caps.imageInput
+    if (!engineSees || !userImages(this.ctx.m.sessions.runtime(id).snapshot.items).length) return engineSees
+    try {
+      const catalog = await this.ctx.adapters[record.engine]?.catalog?.()
+      const model = catalog?.models?.find(m => m.id === (record.model ?? catalog.currentModel))
+      return model ? model.inputModalities.includes('image') : engineSees
+    } catch {
+      return engineSees
+    }
+  }
+
+  /**
    * 派发一条消息前算要不要给引擎带交接：它没看过的对话（游标之后的，或游标不在了就是全部）。
    * 能注入的引擎只带聊天（用户话和每轮的助手结论），直接补进它的原生会话；
    * 不能注入的引擎（或注入失败时）退回整理好的文字材料，加在消息前面。
    * 旧记录（没有 engineSessions）当前引擎看到了全部对话，不带。
+   * sees：当前模型能不能看图（modelSees 的结果），决定带不带更早消息的图片；不给按引擎能力
    */
   plan(
     id: string,
@@ -168,6 +186,7 @@ export class HostHandoff {
     text: string,
     files: FileAttachment[] | undefined,
     attachments: readonly ImageAttachment[] = [],
+    sees: boolean = !!ENGINES[record.engine].caps.imageInput,
   ): HandoffPlan {
     const rt = this.ctx.m.sessions.runtime(id)
     const body = messageWithFiles(text, files)
@@ -192,7 +211,7 @@ export class HostHandoff {
     const all = userImages(delta).filter(({ image }) => !skipIds.has(image.id))
     const room = handoffImageRoom(attachments)
     // 单张超过 Claude 的大小 / 边长上限的不带（带了写进记录后每次 resume 都会被拒）
-    const carry = ENGINES[record.engine].caps.imageInput
+    const carry = sees
       ? pickRecentImages(
           all.filter(({ image }) => carriableImage(image)),
           room,
@@ -219,10 +238,11 @@ export class HostHandoff {
     const showNotice = previous?.kind === 'user' && !!previous.engine && previous.engine !== record.engine
     const name = ENGINES[record.engine].name
     const others = handoffEngines(delta, record.engine)
-    const from = others.length ? others.map(e => ENGINES[e].name).join('、') : '其他引擎'
+    // 不知道是哪个引擎时写「其他引擎」（词典里有不带 {p0} 的专用模板，所以前后不留空格）
+    const during = others.length ? ` ${others.map(e => ENGINES[e].name).join('、')} ` : '其他引擎'
     const seed = this.ctx.adapters[record.engine]?.seedsHistory
       ? buildChatSeed(delta, built.text, undefined, {
-          carryImages: !!ENGINES[record.engine].caps.imageInput,
+          carryImages: sees,
           room,
           skipIds,
           fallbackImages: carry.map(c => c.image),
@@ -251,7 +271,7 @@ export class HostHandoff {
                 text:
                   mode === 'full'
                     ? `已把之前的聊天带给 ${name}（${turns}）`
-                    : `已把 ${from} 期间的聊天同步给 ${name}（${turns}）`,
+                    : `已把${during}期间的聊天同步给 ${name}（${turns}）`,
                 detail: renderSeed(seed),
               }
             : null,
@@ -270,7 +290,7 @@ export class HostHandoff {
             text:
               mode === 'full'
                 ? `已把之前的对话交接给 ${name}（${[`${built.count} 条`, ...parts].join('，')}）`
-                : `已把 ${from} 期间的进展同步给 ${name}${parts.length ? `（${parts.join('，')}）` : ''}`,
+                : `已把${during}期间的进展同步给 ${name}${parts.length ? `（${parts.join('，')}）` : ''}`,
             detail: built.text,
           }
         : null,

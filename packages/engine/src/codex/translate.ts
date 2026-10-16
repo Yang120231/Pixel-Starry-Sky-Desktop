@@ -32,6 +32,9 @@ const statusOf = (value: unknown, complete: boolean): ItemStatus =>
         : complete
           ? 'completed'
           : 'running'
+/** 子智能体停在 running 的标成已中断（它的进程没了，或这一轮被中止，不会再有后续）；其他状态不动 */
+export const interruptedAgent = (agent: AgentRun): AgentRun =>
+  agent.state === 'running' ? { ...agent, state: 'interrupted' } : agent
 /** 当前 thread 的条目转换；原生用户消息由宿主负责，只用于输入确认。 */
 export class CodexTranslator {
   readonly items = new Map<string, Item>()
@@ -285,6 +288,17 @@ export class CodexTranslator {
         this.items.set(item.id, finished)
         this.emit({ type: 'item_completed', item: finished })
       }
+    // 进程退出 / 这一轮被中断或失败：还在 running 的子智能体小卡片不能一直转，标成已中断（同 runs.ts 读回磁盘时）。
+    // 正常结束（completed）不动：子智能体可能在主轮结束后才跑完；之后到的「跑完」事件会把状态改回 completed
+    if (outcome === 'completed') return
+    let changed = false
+    for (const [id, agent] of this.agents) {
+      const next = interruptedAgent(agent)
+      if (next === agent) continue
+      this.agents.set(id, next)
+      changed = true
+    }
+    if (changed) this.emitRuns()
   }
 }
 

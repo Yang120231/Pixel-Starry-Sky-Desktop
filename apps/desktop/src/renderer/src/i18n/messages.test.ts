@@ -79,6 +79,43 @@ describe('中英文词典', () => {
       expect(translateMessage(en, 'zh-CN'), en).toBe(zh)
     }
   })
+  it('不知道是哪个引擎处理的那段时，同步通知里的「其他引擎」也能翻成英文', () => {
+    const cases: [string, string][] = [
+      [
+        '已把其他引擎期间的聊天同步给 Claude Code（2 轮）',
+        'Synced the chat from another engine to Claude Code (2 turns)',
+      ],
+      [
+        '已把其他引擎期间的聊天同步给 Claude Code（2 轮，含 2 张图片）',
+        'Synced the chat from another engine to Claude Code (2 turns, including 2 image(s))',
+      ],
+      [
+        '已把其他引擎期间的聊天同步给 Claude Code（2 轮，含 2 张图片，3 张图片未带上）',
+        'Synced the chat from another engine to Claude Code (2 turns, including 2 image(s), 3 image(s) not carried)',
+      ],
+      [
+        '已把其他引擎期间的聊天同步给 Claude Code（2 轮，3 张图片未带上）',
+        'Synced the chat from another engine to Claude Code (2 turns, 3 image(s) not carried)',
+      ],
+      ['已把其他引擎期间的进展同步给 Claude Code', 'Synced the progress from another engine to Claude Code'],
+      [
+        '已把其他引擎期间的进展同步给 Claude Code（含 2 张图片）',
+        'Synced the progress from another engine to Claude Code (including 2 image(s))',
+      ],
+      [
+        '已把其他引擎期间的进展同步给 Claude Code（含 2 张图片，1 张图片未带上）',
+        'Synced the progress from another engine to Claude Code (including 2 image(s), 1 image(s) not carried)',
+      ],
+      [
+        '已把其他引擎期间的进展同步给 Claude Code（1 张图片未带上）',
+        'Synced the progress from another engine to Claude Code (1 image(s) not carried)',
+      ],
+    ]
+    for (const [zh, en] of cases) {
+      expect(translateMessage(zh, 'en-US'), zh).toBe(en)
+      expect(translateMessage(en, 'zh-CN'), en).toBe(zh)
+    }
+  })
   it('模型不能看图的更正提示中英文互译', () => {
     const en = "The current model can't view images, so 2 earlier image(s) were not actually passed along"
     expect(translateMessage(en, 'zh-CN')).toBe('当前模型不能看图，之前的 2 张图片实际没有带上')

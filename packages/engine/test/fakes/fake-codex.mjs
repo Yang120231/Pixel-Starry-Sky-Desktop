@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import readline from 'node:readline'
 if (process.env.FAKE_CODEX_ARGV)
@@ -8,6 +8,11 @@ if (process.argv.includes('--fake-bad-arg')) {
   process.stderr.write(
     "\x1b[1m\x1b[31merror:\x1b[0m unexpected argument '--fake-bad-arg' found\n\nUsage: codex app-server [OPTIONS]\n",
   )
+  process.exit(2)
+}
+// 模拟不认得 default_mode_request_user_input 开关的 Codex（以后改名 / 去掉）：带了开关就起不来
+if (process.env.FAKE_CODEX_REJECT_ASK && process.argv.includes('features.default_mode_request_user_input=true')) {
+  process.stderr.write("error: unknown feature 'default_mode_request_user_input'\n")
   process.exit(2)
 }
 const out = value => process.stdout.write(JSON.stringify(value) + '\n')
@@ -56,6 +61,14 @@ let approvalQueue = [],
 /** 协作模式像真 Codex 一样沿用到下一次 turn/start 带新的；Default 模式要开了开发中开关模型才有 request_user_input */
 let collaborationMode = 'default'
 const defaultModeAsk = process.argv.includes('features.default_mode_request_user_input=true')
+/** thread/start、thread/resume 报的实际模型 / 推理强度 / 协作模式（FAKE_CODEX_RESUME_COLLAB 是 JSON，只有 resume 报）；不设就不报，和真 Codex 没配置时一样 */
+const threadReport = resume => ({
+  ...(process.env.FAKE_CODEX_THREAD_MODEL ? { model: process.env.FAKE_CODEX_THREAD_MODEL } : {}),
+  ...(process.env.FAKE_CODEX_THREAD_EFFORT ? { reasoningEffort: process.env.FAKE_CODEX_THREAD_EFFORT } : {}),
+  ...(resume && process.env.FAKE_CODEX_RESUME_COLLAB
+    ? { collaborationMode: JSON.parse(process.env.FAKE_CODEX_RESUME_COLLAB) }
+    : {}),
+})
 function nextApproval() {
   const request = approvalQueue[approvalIndex++]
   if (!request) return finish()
@@ -166,10 +179,27 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
     case 'config/read':
       response(m, {
         config: {
-          model: 'fake-codex',
+          ...(process.env.FAKE_CODEX_NO_MODEL ? {} : { model: 'fake-codex' }),
           model_provider: process.env.FAKE_CODEX_PROVIDER ?? 'fake',
           windows: { sandbox: 'elevated' },
         },
+        // includeLayers 时：命令行 -c 在 sessionFlags 层；FAKE_CODEX_USER_ASK 模拟用户 config.toml 里也开了同一个功能
+        ...(p.includeLayers
+          ? {
+              layers: [
+                {
+                  name: { type: 'sessionFlags' },
+                  config: defaultModeAsk ? { features: { default_mode_request_user_input: true } } : {},
+                },
+                {
+                  name: { type: 'user', file: 'config.toml' },
+                  config: process.env.FAKE_CODEX_USER_ASK
+                    ? { features: { default_mode_request_user_input: true } }
+                    : {},
+                },
+              ],
+            }
+          : {}),
       })
       break
     case 'configRequirements/read':
@@ -205,7 +235,7 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
         threads[thread] = []
         saveThreads()
       } else thread = p.threadId ?? (resumeFails() ? 'fake-thread-new' : 'fake-thread')
-      response(m, { thread: { id: thread, turns: [] } })
+      response(m, { thread: { id: thread, turns: [] }, ...threadReport(m.method === 'thread/resume') })
       break
     case 'thread/fork': {
       loadThreads()
@@ -256,6 +286,12 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
       break
     }
     case 'turn/start': {
+      // 测试创建这个文件让下一次 turn/start 被拒绝（一次性）：模拟 Codex 回错，这一轮没开成
+      if (process.env.FAKE_CODEX_TURN_FAIL_FILE && existsSync(process.env.FAKE_CODEX_TURN_FAIL_FILE)) {
+        rmSync(process.env.FAKE_CODEX_TURN_FAIL_FILE)
+        rpcError(m, 'turn rejected')
+        break
+      }
       const id = recordTurn(p.clientUserMessageId, p.input),
         text = p.input
           .filter(i => i.type === 'text')
@@ -293,6 +329,33 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
             'Under-development features enabled: local_thread_store_compaction. To suppress this warning, set `suppress_unstable_features_warning = true`.',
         })
         emit('warning', { message: 'Model metadata for `fake-model` not found.' })
+      }
+      if (process.env.FAKE_CODEX_ASK_WARNING) {
+        // 开关带来的警告，和真 Codex 一样只在功能真开着时才报；换行开头、旧版 Codex 不认得开关等写法见各取值
+        const kind = process.env.FAKE_CODEX_ASK_WARNING,
+          tail = ' Under-development features are incomplete and may behave unpredictably.'
+        if (kind === 'ignored') {
+          if (defaultModeAsk)
+            emit('warning', {
+              message:
+                'Codex is ignoring 1 unrecognized configuration setting. Check for typos or deprecated settings.\n' +
+                '  session-flags: `features.default_mode_request_user_input` is ignored.',
+            })
+        } else if (kind === 'ignored-mixed') {
+          if (defaultModeAsk)
+            emit('warning', {
+              message:
+                'Codex is ignoring 2 unrecognized configuration settings. Check for typos or deprecated settings.\n' +
+                '  session-flags: `features.default_mode_request_user_input` is ignored.\n' +
+                '  user (config.toml): `disable_response_storage` is ignored.',
+            })
+        } else if (defaultModeAsk || process.env.FAKE_CODEX_USER_ASK)
+          emit('warning', {
+            message:
+              (kind === 'features-newline' ? '\n' : '') +
+              'Under-development features enabled: default_mode_request_user_input.' +
+              tail,
+          })
       }
       if (text.includes('崩溃')) {
         process.exit(3)

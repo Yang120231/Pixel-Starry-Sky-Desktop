@@ -37,6 +37,8 @@ export class CodexAdapter implements EngineAdapter {
   private cached: { info: EngineInfo; launcher: Launcher | null } | null = null
   private detecting: Promise<EngineInfo> | null = null
   private catalogCache: EngineCatalog | null = null
+  /** Codex 带着 Default 模式提问开关起不来过：之后的会话不再带（重新检测时清掉，升级后可能就认得了） */
+  private askRejected = false
   /** Codex 报过的各模型窗口（GitHub #20）：设了自动压缩、没填窗口时按它算 token 数 */
   private readonly knownWindows = new Map<string, number>()
   readonly npmPackage = CODEX_NPM_PACKAGE
@@ -103,6 +105,7 @@ export class CodexAdapter implements EngineAdapter {
     return this.detecting
   }
   private async detect(): Promise<EngineInfo> {
+    this.askRejected = false
     const result = this.opts.launcher
       ? {
           info: {
@@ -227,6 +230,9 @@ export class CodexAdapter implements EngineAdapter {
       throw new Error(result?.info.message ?? 'Codex is unavailable')
     const env = this.sessionEnvironment(result.launcher, ctx.record())
     return new CodexSession(result.launcher, env, ctx, {
+      version: result.info.version,
+      askRejected: () => this.askRejected,
+      rejectAsk: () => (this.askRejected = true),
       ...(this.opts.launchOptions?.() ?? { askQuestions: true }),
       defaultModel: () => this.catalogCache?.currentModel ?? null,
       knownWindows: this.knownWindows,
