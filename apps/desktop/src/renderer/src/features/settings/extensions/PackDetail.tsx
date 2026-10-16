@@ -160,7 +160,7 @@ export function PackDetail({ pack, all, onClose }: { pack: ExtPackInfo; all: Ext
           {t('extensions.detail.reload')}
         </Button>
         <Button
-          disabled={busy || pack.status === 'error'}
+          disabled={busy || pack.status === 'error' || (!pack.enabled && !!pack.blocked)}
           onClick={() => void run(() => bridge?.setEnabled(pack.key, !pack.enabled))}
         >
           {pack.enabled ? t('extensions.detail.disable') : t('extensions.detail.enable')}
@@ -189,6 +189,16 @@ export function PackDetail({ pack, all, onClose }: { pack: ExtPackInfo; all: Ext
             </Button>
           ))}
       </div>
+      {!pack.enabled && pack.blocked && (
+        <p data-enable-reason className="mt-2 text-ui text-danger">
+          {t('extstore.detail.blockedReason', { reason: pack.blocked.reason })}
+        </p>
+      )}
+      {pack.shadowedBy && (
+        <p data-enable-reason className="mt-2 text-ui text-fg-muted">
+          {t('extstore.detail.shadowedReason', { source: t(`extstore.installed.shadowSource.${pack.shadowedBy}`) })}
+        </p>
+      )}
       {error && <p className="mt-2 text-ui text-danger">{error}</p>}
 
       {pack.manifest ? (

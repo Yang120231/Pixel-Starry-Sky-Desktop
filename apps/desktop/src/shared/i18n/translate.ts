@@ -48,6 +48,7 @@ import { progressLineMessages } from './progressLineMessages'
 import { traceHistoryMessages } from './traceHistoryMessages'
 import { wslMessages } from './wslMessages'
 import { extensionCenterMessages } from './extensionCenterMessages'
+import { extstoreInstalledMessages } from './extstoreInstalledMessages'
 import { fileIconMessages } from './fileIconMessages'
 import { extGrammarMessages } from './extGrammarMessages'
 import { editorThemeMessages } from './editorThemeMessages'
@@ -111,6 +112,7 @@ export const allMessages = {
   ...progressLineMessages,
   ...traceHistoryMessages,
   ...extensionCenterMessages,
+  ...extstoreInstalledMessages,
   ...fileIconMessages,
   ...extGrammarMessages,
   ...editorThemeMessages,

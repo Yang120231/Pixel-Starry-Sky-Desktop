@@ -53,6 +53,7 @@ import { subagentStopMessages } from '../../../shared/i18n/subagentStopMessages'
 import { progressLineMessages } from '../../../shared/i18n/progressLineMessages'
 import { traceHistoryMessages } from '../../../shared/i18n/traceHistoryMessages'
 import { extensionCenterMessages } from '../../../shared/i18n/extensionCenterMessages'
+import { extstoreInstalledMessages } from '../../../shared/i18n/extstoreInstalledMessages'
 import { fileIconMessages } from '../../../shared/i18n/fileIconMessages'
 import { extGrammarMessages } from '../../../shared/i18n/extGrammarMessages'
 import { editorThemeMessages } from '../../../shared/i18n/editorThemeMessages'
@@ -115,6 +116,7 @@ const dictionaries: Record<string, Record<string, unknown>> = {
   progressLineMessages,
   traceHistoryMessages,
   extensionCenterMessages,
+  extstoreInstalledMessages,
   fileIconMessages,
   extGrammarMessages,
   editorThemeMessages,
