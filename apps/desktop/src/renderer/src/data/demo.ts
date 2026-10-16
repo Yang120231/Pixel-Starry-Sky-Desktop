@@ -43,6 +43,7 @@ import type {
   TaskState,
   RunTaskState,
 } from '../../../shared/types/project-tools'
+import type { ExtStoreBridge } from '../../../preload/extstore'
 import type { TerminalProfile } from '../../../shared/types/terminal'
 import type { SessionStatusState } from '../../../shared/types/session-status'
 import type { DirectoryListing, EditorState, FileDocument } from '../../../shared/types/workspace'
@@ -111,6 +112,8 @@ export interface DemoSource {
   inbox: InboxItem[]
   /** 侧栏对话状态图标用的演示数据：文件夹没了、关联的 PR（docs/ui/sidebar-status-icons.md） */
   sessionStatus?: SessionStatusState
+  /** 扩展商店（设置 › 扩展 › 发现）：假的预加载桥（带一份演示目录）和已经装好的扩展 id */
+  extStore: { bridge: ExtStoreBridge; installed: string[] }
   /** 演示用的云端机器（顶栏「本机 | 云端」），machines/store.ts 演示时用它当初始状态 */
   machines?: MachineState
   /** 演示时某台机器（WSL）自己的项目和工作区；没有的机器沿用 appData.projects */
