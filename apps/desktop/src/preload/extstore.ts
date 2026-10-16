@@ -22,7 +22,8 @@ export interface ExtStoreBridge {
   detail(id: string): Promise<ExtStoreDetail | null>
   install(id: string, version: string, options?: ExtStoreInstallOptions): Promise<ExtPackInfo>
   cancel(id: string): Promise<void>
-  checkUpdates(): Promise<ExtStoreUpdates>
+  /** auto:true 是打开扩展页时的自动检查（主进程按 10 分钟节流）；不带参数是点「检查更新」，立刻查 */
+  checkUpdates(options?: { auto?: boolean }): Promise<ExtStoreUpdates>
   state(): Promise<ExtStoreState>
   /** 打开扩展页时让主进程读一次停用名单（主进程自己按 5 分钟节流） */
   refreshBlocklist(): Promise<ExtStoreRefreshResult>

@@ -819,3 +819,102 @@ describe('商店扩展：加载顺序和同 id 生效', () => {
     expect(folder.issues.length).toBeGreaterThan(store.issues.length)
   })
 })
+
+describe('商店扩展：卸载', () => {
+  const storeDir = (e: Env): string => join(e.dataDir, 'store')
+
+  it('卸载后 state.json 里没有 store[id]；重新装同 id 按第一次装处理，不沿用卸载前的开关', async () => {
+    const e = env()
+    installStoreFixture(storeDir(e), 'pixelsky.dotenv', 'pixelsky.dotenv')
+    writeStateFile(stateFile(e), {
+      version: 1,
+      folders: [],
+      builtin: {},
+      store: { 'pixelsky.dotenv': { enabled: false, options: { overrideBuiltin: ['x'] } } },
+    })
+    const svc = await started(e)
+    expect(pack(svc, 'pixelsky.dotenv')).toMatchObject({ source: 'store', enabled: false })
+    await svc.remove('s-pixelsky.dotenv')
+    expect(svc.state().packs).toEqual([])
+    expect(readStateFile(stateFile(e)).store).toEqual({})
+    expect(JSON.parse(readFileSync(stateFile(e), 'utf8')).store).toEqual({})
+    // 同 id 重新装：state.json 里没有 → 默认开着
+    const record = installStoreFixture(storeDir(e), 'pixelsky.dotenv', 'pixelsky.dotenv')
+    const info = await svc.runExclusive(() =>
+      svc.replaceStorePack(record, join(storeDir(e), 'pixelsky.dotenv', record.dir)),
+    )
+    expect(info).toMatchObject({ enabled: true, live: true, options: {} })
+    expect(readStateFile(stateFile(e)).store['pixelsky.dotenv']).toEqual({ enabled: true, options: {} })
+  })
+
+  it('先 commit 再删文件：commit 时 install.json 还在，但状态里已经没有这个扩展，同 id 的内置版顶上', async () => {
+    const e = env(['pixelsky.dotenv'])
+    installStoreFixture(storeDir(e), 'pixelsky.dotenv', 'pixelsky.dotenv')
+    const svc = await started(e)
+    expect(svc.state().packs.map(p => [p.source, p.live])).toEqual([
+      ['builtin', false],
+      ['store', true],
+    ])
+    const seen: Array<{ installJson: boolean; packs: Array<[string, boolean, string | undefined]> }> = []
+    svc.onChange(() =>
+      seen.push({
+        installJson: existsSync(join(storeDir(e), 'pixelsky.dotenv', 'install.json')),
+        packs: svc.state().packs.map(p => [p.source, p.live, p.shadowedBy]),
+      }),
+    )
+    await svc.remove('s-pixelsky.dotenv')
+    expect(seen).toEqual([{ installJson: true, packs: [['builtin', true, undefined]] }])
+    expect(existsSync(join(storeDir(e), 'pixelsky.dotenv'))).toBe(false)
+  })
+
+  it('有任务时先调 cancel(id)，再卸载；没挂 installer 时跳过', async () => {
+    const e = env()
+    installStoreFixture(storeDir(e), 'pixelsky.dotenv', 'pixelsky.dotenv')
+    const svc = await started(e)
+    const order: string[] = []
+    svc.attachStoreTasks({
+      cancel: async id => {
+        order.push(`cancel:${id}`)
+        // 取消返回时还没卸载
+        order.push(`still:${svc.state().packs.length}`)
+      },
+    })
+    svc.onChange(() => order.push('commit'))
+    await svc.remove('s-pixelsky.dotenv')
+    expect(order).toEqual(['cancel:pixelsky.dotenv', 'still:1', 'commit'])
+    // 文件夹扩展不调 cancel
+    const info = await svc.addFolder(copyFixture('pixelsky.dotenv', e.folders))
+    order.length = 0
+    await svc.remove(info.key)
+    expect(order).toEqual(['commit'])
+  })
+
+  it('卸载时删图标缓存；内置扩展仍不能卸载', async () => {
+    const e = env(['pixelsky.dotenv'])
+    installStoreFixture(storeDir(e), 'with-skill', 'pixelsky.with-skill')
+    const removed: string[] = []
+    const svc = new ExtensionPacks({
+      dataDir: e.dataDir,
+      builtinDir: e.builtinDir,
+      appVersion: '0.4.1-beta',
+      removeIcons: async id => void removed.push(id),
+    })
+    svc.start()
+    await svc.ready()
+    await expect(svc.remove('b-pixelsky.dotenv')).rejects.toThrow('extpacks.builtinRemove')
+    await svc.remove('s-pixelsky.with-skill')
+    expect(removed).toEqual(['pixelsky.with-skill'])
+  })
+
+  it('启动时 cleanStoreDir 在 loadStore 之前跑：.tmp、没有回执的目录、多余版本目录都清掉', async () => {
+    const e = env()
+    installStoreFixture(storeDir(e), 'pixelsky.dotenv', 'pixelsky.dotenv')
+    mkdirSync(join(storeDir(e), '.tmp', 'half'), { recursive: true })
+    mkdirSync(join(storeDir(e), 'acme.orphan', 'aaaaaaaaaaaaaaaa'), { recursive: true })
+    mkdirSync(join(storeDir(e), 'pixelsky.dotenv', 'cccccccccccccccc'))
+    const svc = await started(e)
+    expect(svc.state().packs.map(p => p.id)).toEqual(['pixelsky.dotenv'])
+    expect(readdirSync(storeDir(e)).sort()).toEqual(['pixelsky.dotenv'])
+    expect(readdirSync(join(storeDir(e), 'pixelsky.dotenv')).sort()).toEqual(['aaaaaaaaaaaaaaaa', 'install.json'])
+  })
+})
