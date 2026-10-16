@@ -136,7 +136,9 @@ export function diffTotal(run: Pick<TaskRun, 'diff'>): { added: number; removed:
 }
 
 const waitingPatch = (requests: ApprovalRequest[]): Partial<ChannelTask> =>
-  requests.length ? { status: 'waiting', request: requests[0] } : { status: 'running', request: null }
+  requests.length
+    ? { status: 'waiting', request: requests[0], waitingCount: requests.length }
+    : { status: 'running', request: null, waitingCount: 0 }
 
 /** 一个会话事件。只处理已经发出去的这一轮；别的轮次（用户自己在会话里发的）不管 */
 export function trackEvent(run: TaskRun, event: EngineEvent): Tracked {

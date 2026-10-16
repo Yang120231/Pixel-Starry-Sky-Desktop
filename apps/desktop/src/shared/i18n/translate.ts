@@ -55,6 +55,7 @@ import { extSnippetMessages } from './extSnippetMessages'
 import { extTaskMessages } from './extTaskMessages'
 import { promptMessages } from './promptMessages'
 import { resumeMessages } from './resumeMessages'
+import { approvalMessages } from './approvalMessages'
 import { replaceCodedErrors } from '@pixelsky/protocol'
 import type { Locale } from './messages'
 
@@ -117,6 +118,7 @@ export const allMessages = {
   ...extTaskMessages,
   ...promptMessages,
   ...resumeMessages,
+  ...approvalMessages,
 }
 export type TranslationKey = keyof typeof allMessages
 

@@ -32,10 +32,13 @@ export function ApprovalCard({
   request,
   canAct,
   onAnswer,
+  more = 0,
 }: {
   request: ApprovalRequest
   canAct: boolean
   onAnswer(decision: ApprovalDecision): Promise<void>
+  /** 同时还有几项在等（AI 一次并行调用几个要审批的工具）：一项一项处理，这里写还剩几项 */
+  more?: number
 }) {
   const [busy, setBusy] = useState(false)
   const [confirmAlways, setConfirmAlways] = useState(false)
@@ -67,6 +70,7 @@ export function ApprovalCard({
             <div className="text-section font-semibold">{request.title}</div>
             <div className="text-meta text-fg-muted">
               {request.kind === 'question' ? '需要你回答' : '需要你允许才能继续'}
+              {more > 0 && <span data-approval-more> · 后面还有 {more} 项</span>}
             </div>
           </div>
         </div>

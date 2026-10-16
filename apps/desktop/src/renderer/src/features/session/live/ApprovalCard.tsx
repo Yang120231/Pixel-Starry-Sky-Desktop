@@ -40,7 +40,7 @@ const ICON: Record<ApprovalRequest['kind'], LucideIcon> = {
 const BODY = 'max-h-[34vh] overflow-auto'
 
 /** 「始终允许」的范围（docs/engines.md §15.6） */
-const SCOPE_INFO: Record<AlwaysScope, { label: string; desc: string }> = {
+export const SCOPE_INFO: Record<AlwaysScope, { label: string; desc: string }> = {
   session: {
     get label() {
       return tr('session.live.ApprovalCard.thisSession')
@@ -122,6 +122,66 @@ function AlwaysAllowButton({
   )
 }
 
+/** 命令、改文件、工具的内容区（单张卡和合并列表里展开的一行共用） */
+export function ApprovalBody({
+  request,
+  className = BODY,
+  compact = false,
+}: {
+  request: ApprovalRequest
+  className?: string
+  /** 合并列表里展开的一行：工具的说明（服务 · 工具）行上已经写了，不再重复 */
+  compact?: boolean
+}) {
+  if (request.kind === 'command')
+    return (
+      <>
+        {request.description && <p className="mb-1.5 text-list text-fg-muted">{request.description}</p>}
+        <pre
+          className={cn(
+            className,
+            'rounded-lg border border-line bg-subtle px-3 py-2 font-mono text-[length:calc(12.5px*var(--font-scale,1))] leading-[1.6] whitespace-pre-wrap text-fg',
+          )}
+        >
+          <CommandText command={request.command ?? ''} />
+        </pre>
+      </>
+    )
+  if (request.kind === 'file_change')
+    return (
+      <div className={cn(className, 'rounded-lg border border-line')}>
+        {(request.changes ?? []).map(c => (
+          <div key={c.path} className="border-b border-line-subtle last:border-b-0">
+            <div className="flex items-center gap-2 px-3 py-1.5 text-list">
+              <span className="min-w-0 flex-1 truncate font-mono text-[length:calc(12.5px*var(--font-scale,1))] text-code-path">
+                {c.path}
+              </span>
+              <DiffStat added={c.added} removed={c.removed} className="text-meta" />
+            </div>
+            <DiffView diff={c.diff} path={c.path} className="pb-1.5" commentable={false} />
+          </div>
+        ))}
+      </div>
+    )
+  if (request.kind === 'tool')
+    return (
+      <>
+        {request.description && !compact && (
+          <p className="mb-1.5 truncate text-list text-fg-muted">{request.description}</p>
+        )}
+        <pre
+          className={cn(
+            className,
+            'rounded-lg border border-line bg-subtle px-3 py-2 font-mono text-meta leading-[1.6] whitespace-pre-wrap text-fg-secondary',
+          )}
+        >
+          {JSON.stringify(request.input, null, 2)}
+        </pre>
+      </>
+    )
+  return null
+}
+
 export function ApprovalCard({
   request,
   onAnswer,
@@ -166,7 +226,12 @@ export function ApprovalCard({
   const recommended = request.kind === 'question' ? recommendedAnswers(questions) : null
 
   return (
-    <section className="pop-in mb-3 rounded-xl border border-line-strong bg-surface shadow-menu" aria-live="polite">
+    <section
+      className="pop-in shrink-0 rounded-xl border border-line-strong bg-surface shadow-menu"
+      aria-live="polite"
+      data-approval-card
+      data-approval-request={request.requestId}
+    >
       <header className="flex items-center gap-2 px-4 pt-3.5 pb-2 text-ui font-medium text-fg">
         <Icon size={16} strokeWidth={1.5} className="shrink-0 text-fg-secondary" />
         <span className="min-w-0 flex-1 truncate">{translateMessage(request.title)}</span>
@@ -186,49 +251,7 @@ export function ApprovalCard({
             />
           </label>
         )}
-        {request.kind === 'command' && (
-          <>
-            {request.description && <p className="mb-1.5 text-list text-fg-muted">{request.description}</p>}
-            <pre
-              className={cn(
-                BODY,
-                'rounded-lg border border-line bg-subtle px-3 py-2 font-mono text-[length:calc(12.5px*var(--font-scale,1))] leading-[1.6] whitespace-pre-wrap text-fg',
-              )}
-            >
-              <CommandText command={request.command ?? ''} />
-            </pre>
-          </>
-        )}
-
-        {request.kind === 'file_change' && (
-          <div className={cn(BODY, 'rounded-lg border border-line')}>
-            {(request.changes ?? []).map(c => (
-              <div key={c.path} className="border-b border-line-subtle last:border-b-0">
-                <div className="flex items-center gap-2 px-3 py-1.5 text-list">
-                  <span className="min-w-0 flex-1 truncate font-mono text-[length:calc(12.5px*var(--font-scale,1))] text-code-path">
-                    {c.path}
-                  </span>
-                  <DiffStat added={c.added} removed={c.removed} className="text-meta" />
-                </div>
-                <DiffView diff={c.diff} path={c.path} className="pb-1.5" commentable={false} />
-              </div>
-            ))}
-          </div>
-        )}
-
-        {request.kind === 'tool' && (
-          <>
-            {request.description && <p className="mb-1.5 truncate text-list text-fg-muted">{request.description}</p>}
-            <pre
-              className={cn(
-                BODY,
-                'rounded-lg border border-line bg-subtle px-3 py-2 font-mono text-meta leading-[1.6] whitespace-pre-wrap text-fg-secondary',
-              )}
-            >
-              {JSON.stringify(request.input, null, 2)}
-            </pre>
-          </>
-        )}
+        <ApprovalBody request={request} />
 
         {request.kind === 'plan' && (
           <div className={cn(BODY, 'rounded-lg border border-line bg-wall-tint px-4 py-3')}>

@@ -1,4 +1,5 @@
 import { useI18n } from '@/i18n/I18nProvider'
+import { useApprovalWait, locateApproval, useSelectedApprovalItem } from './approvals/focus'
 import { tr, translateMessage, type TranslationKey } from '../../../i18n/core'
 // 对话流里各种条目的显示（docs/engines.md §5.3、§11）
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -393,6 +394,30 @@ function Row({
   )
 }
 
+/** 在等审批的工具行：标「等你决定」，点了跳到下面那一项（docs/ui/approval-stack.md）。放在行按钮外面，不嵌套按钮 */
+function WaitTag({ itemId }: { itemId: string }) {
+  useI18n()
+  const wait = useApprovalWait(itemId)
+  if (!wait) return null
+  return (
+    <button
+      type="button"
+      data-approval-wait={wait.requestId}
+      title={tr('approvals.locate')}
+      onClick={() => locateApproval(wait.sessionId, wait.requestId)}
+      className="press shrink-0 rounded-sm bg-warn/12 px-1.5 text-label text-warn hover:bg-warn/20"
+    >
+      {tr('approvals.waiting')}
+    </button>
+  )
+}
+
+/** 审批里选中了这一项：对话里这一行轻微高亮 */
+function useApprovalSelected(itemId: string): boolean {
+  const wait = useApprovalWait(itemId)
+  return useSelectedApprovalItem(wait?.sessionId ?? null) === itemId
+}
+
 /** 工具行上的小标签：是哪个子智能体调用的 */
 function SubagentTag({ name }: { name?: string }) {
   useI18n()
@@ -478,6 +503,10 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
   const { open, toggle, fold } = useFold(item.id, foldable)
   const row = useRef<HTMLDivElement>(null)
   const [fileError, setFileError] = useState('')
+  const waiting = !!useApprovalWait(item.id)
+  const waitTag = waiting ? <WaitTag itemId={item.id} /> : null
+  const approvalSelected = useApprovalSelected(item.id)
+  const rowClass = cn('rounded-md', approvalSelected && 'bg-hover')
   const openTrace = useOpenTrace()
   const toast = useToast()
   const code = useAppMode() === 'code'
@@ -509,7 +538,7 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
   if (item.kind === 'command') {
     const verb = item.status === 'running' ? tr('session.live.ItemRows.running') : tr('session.live.ItemRows.ran')
     return (
-      <div ref={row} data-fold={fold}>
+      <div ref={row} data-fold={fold} className={rowClass}>
         <Row
           id={item.id}
           icon={SquareTerminal}
@@ -519,18 +548,23 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
           open={open}
           onToggle={toggle}
           action={
-            code && (
-              <button
-                type="button"
-                onClick={() => {
-                  const ref = changedRef()
-                  const sessionId = ref && 'sessionId' in ref ? ref.sessionId : undefined
-                  if (sessionId) revealAiCommand(sessionId, item.id)
-                }}
-                className="shrink-0 rounded-md px-2 py-1 text-meta text-accent-fg hover:bg-hover"
-              >
-                {tr('coding.shell.viewInTerminal')}
-              </button>
+            (waiting || code) && (
+              <>
+                {waitTag}
+                {code && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const ref = changedRef()
+                      const sessionId = ref && 'sessionId' in ref ? ref.sessionId : undefined
+                      if (sessionId) revealAiCommand(sessionId, item.id)
+                    }}
+                    className="shrink-0 rounded-md px-2 py-1 text-meta text-accent-fg hover:bg-hover"
+                  >
+                    {tr('coding.shell.viewInTerminal')}
+                  </button>
+                )}
+              </>
             )
           }
           trailing={
@@ -613,7 +647,7 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
       </>
     )
     return (
-      <div ref={row} data-fold={fold}>
+      <div ref={row} data-fold={fold} className={rowClass}>
         {foldable ? (
           <div className="group/file flex min-w-0 items-center gap-1">
             <button
@@ -627,6 +661,7 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
               {summary}
               <Chevron open={open} />
             </button>
+            {waitTag}
             {single && (
               <span
                 className={cn('opacity-0 group-hover/file:opacity-100 focus-within:opacity-100', open && 'opacity-100')}
@@ -641,6 +676,7 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
             className="flex min-h-[30px] min-w-0 items-center gap-2 rounded-md px-2 text-list text-fg-secondary"
           >
             {summary}
+            {waitTag}
           </div>
         )}
         {fileError && (
@@ -676,7 +712,7 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
   // 提交计划：展开看的是计划正文（Markdown），批准之后对话里还在
   const plan = item.name === 'ExitPlanMode'
   return (
-    <div ref={row} data-fold={fold}>
+    <div ref={row} data-fold={fold} className={rowClass}>
       <Row
         id={item.id}
         icon={plan ? ListTodo : meta.icon}
@@ -697,14 +733,19 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
           </>
         }
         action={
-          traceable ? (
-            <button
-              type="button"
-              onClick={() => openTrace?.({ toolUseId: item.id })}
-              className="shrink-0 rounded-md px-1.5 py-1 text-meta text-accent-fg hover:bg-hover"
-            >
-              {tr('session.live.ItemRows.viewActivity')}{' '}
-            </button>
+          waiting || traceable ? (
+            <>
+              {waitTag}
+              {traceable && (
+                <button
+                  type="button"
+                  onClick={() => openTrace?.({ toolUseId: item.id })}
+                  className="shrink-0 rounded-md px-1.5 py-1 text-meta text-accent-fg hover:bg-hover"
+                >
+                  {tr('session.live.ItemRows.viewActivity')}{' '}
+                </button>
+              )}
+            </>
           ) : undefined
         }
       >

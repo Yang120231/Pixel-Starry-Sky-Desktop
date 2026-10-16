@@ -9,7 +9,9 @@ import { ComposerArea } from './ComposerArea'
 import { WelcomeView } from './WelcomeView'
 import { hasConversation } from './conversation'
 import { LiveTranscript } from './live/LiveTranscript'
-import { ApprovalCard } from './live/ApprovalCard'
+import { ApprovalStack } from './live/approvals/ApprovalStack'
+import { ApprovalWaitContext } from './live/approvals/focus'
+import { focusComposer } from './composerTarget'
 import { AgentTracePanel } from './live/AgentTracePanel'
 import { KeptAgentsStrip, TaskStrip } from './live/SessionStrips'
 import { keptAgents } from './live/subagentStop'
@@ -36,6 +38,7 @@ import { cn } from '@/ui'
 import { ENGINES } from '@pixelsky/protocol'
 import {
   bridge,
+  demoAnswer,
   isLive,
   useComposerController,
   useDemoQueueController,
@@ -188,6 +191,14 @@ function LiveSessionView({
   const traceInStrips = hasRuns && !progress.visible
   // 保留模式：主智能体停了、后台子智能体还在跑（docs/ui/subagent-stop.md §S4）
   const kept = useMemo(() => keptAgents(snapshot), [snapshot])
+  // 对话里等审批的工具行标「等你决定」，点了跳到下面的审批（docs/ui/approval-stack.md）
+  const pendingApprovals = snapshot?.pending
+  const approvalWait = useMemo(() => {
+    if (!sessionId || !pendingApprovals?.length) return null
+    const byItem = new Map<string, string>()
+    for (const r of pendingApprovals) if (r.itemId) byItem.set(r.itemId, r.requestId)
+    return byItem.size ? { sessionId, byItem } : null
+  }, [sessionId, pendingApprovals])
   const canStopAgents = !!snapshot && ENGINES[snapshot.record.engine].caps.backgroundTasks
   const [expandToken, setExpandToken] = useState(0)
   const showStrips = !!sessionId && (tasks.length > 0 || traceInStrips)
@@ -271,23 +282,25 @@ function LiveSessionView({
                     </div>
                   )}
                   <MessageActionsContext.Provider value={branch.messageActions}>
-                    <LiveTranscript
-                      snapshot={snapshot}
-                      footer={inlinePlan && <InlinePlan plan={inlinePlan} />}
-                      header={
-                        forkedFrom && (
-                          <button
-                            type="button"
-                            data-forked-from
-                            onClick={() => paneActions.open(forkedFrom.sessionId)}
-                            className="conversation-message press inline-flex items-center gap-1.5 self-start rounded-md px-1.5 py-0.5 text-meta text-fg-muted hover:bg-hover hover:text-fg"
-                          >
-                            <GitBranch size={12} strokeWidth={1.75} />
-                            {tr('fork.from', { title: forkedFrom.title })}
-                          </button>
-                        )
-                      }
-                    />
+                    <ApprovalWaitContext.Provider value={approvalWait}>
+                      <LiveTranscript
+                        snapshot={snapshot}
+                        footer={inlinePlan && <InlinePlan plan={inlinePlan} />}
+                        header={
+                          forkedFrom && (
+                            <button
+                              type="button"
+                              data-forked-from
+                              onClick={() => paneActions.open(forkedFrom.sessionId)}
+                              className="conversation-message press inline-flex items-center gap-1.5 self-start rounded-md px-1.5 py-0.5 text-meta text-fg-muted hover:bg-hover hover:text-fg"
+                            >
+                              <GitBranch size={12} strokeWidth={1.75} />
+                              {tr('fork.from', { title: forkedFrom.title })}
+                            </button>
+                          )
+                        }
+                      />
+                    </ApprovalWaitContext.Provider>
                   </MessageActionsContext.Provider>
                   {progress.visible && !trace && (
                     <ProgressCard
@@ -332,13 +345,19 @@ function LiveSessionView({
                     />
                   )}
                   <RetryStatus sessionId={sessionId} retry={snapshot?.retry} />
-                  {snapshot?.pending.map(req => (
-                    <ApprovalCard
-                      key={req.requestId}
-                      request={req}
-                      onAnswer={d => bridge?.answer(sessionId, req.requestId, d)}
+                  {snapshot && (
+                    <ApprovalStack
+                      key={`approvals:${sessionId}`}
+                      sessionId={sessionId}
+                      pending={snapshot.pending}
+                      cwd={snapshot.record.cwd ?? null}
+                      bounds={mainRef}
+                      onAnswer={(req, d) =>
+                        bridge ? bridge.answer(sessionId, req.requestId, d) : demoAnswer(sessionId, req.requestId, d)
+                      }
+                      onEscape={() => focusComposer(composerDraftKey(draftKey, composer))}
                     />
-                  ))}
+                  )}
                   {branch.undo && (
                     <RewindUndoBar done={branch.undo} onUndo={branch.undoRewind} onDismiss={branch.dismissUndo} />
                   )}

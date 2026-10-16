@@ -393,6 +393,8 @@ export interface ComposerController {
   setPermissionMode(m: PermissionMode): void
   /** 这一轮正在进行（包括等审批） */
   running: boolean
+  /** 引擎在等你审批（输入框提示「AI 在等你决定」，docs/ui/approval-stack.md） */
+  awaitingApproval?: boolean
   stop(): Promise<void>
   /** 还在跑的后台子智能体 / 编排个数（停止按钮的提示用）；引擎没有后台任务时为 0 */
   backgroundAgents: number
@@ -883,6 +885,7 @@ export function useComposerController(
       else setDraft({ ...base, permissionMode })
     },
     running: !!snap && snap.state !== 'idle',
+    awaitingApproval: !!snap && snap.pending.length > 0,
     backgroundAgents: stopTargets(snap).length,
     stop: () =>
       record

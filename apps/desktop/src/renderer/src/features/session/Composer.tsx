@@ -797,11 +797,13 @@ export function Composer({
                 return true
               }}
               placeholder={
-                running
-                  ? translate('继续补充要求，Enter 加入队列…')
-                  : suggestion
-                    ? `${suggestion}（${translate('按 Tab 填入')}）`
-                    : translate(composer.placeholder)
+                live?.awaitingApproval
+                  ? tr('approvals.composerHint')
+                  : running
+                    ? translate('继续补充要求，Enter 加入队列…')
+                    : suggestion
+                      ? `${suggestion}（${translate('按 Tab 填入')}）`
+                      : translate(composer.placeholder)
               }
               height={textHeight}
               onContentHeight={setContentHeight}

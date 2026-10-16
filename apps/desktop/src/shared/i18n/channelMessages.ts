@@ -70,6 +70,7 @@ export const channelMessages = {
   'channels.task.stop': { zh: '停止', en: 'Stop' },
   'channels.task.retry': { zh: '重试', en: 'Retry' },
   'channels.task.followUp': { zh: '追加要求', en: 'Follow up' },
+  'channels.task.waitingMore': { zh: '另有 {n} 项', en: '{n} more' },
   'channels.task.allow': { zh: '允许', en: 'Allow' },
   'channels.task.deny': { zh: '拒绝', en: 'Deny' },
   'channels.task.answer': { zh: '去回答', en: 'Answer' },

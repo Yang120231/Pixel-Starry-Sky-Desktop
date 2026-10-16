@@ -1,12 +1,31 @@
 // 演示模式里的消息队列和错误卡片「重试」（docs/ui/demo-conversation.md §3）：不连引擎，按钮直接改演示快照，
 // 让队列面板、发送失败、重试、撤回这些在演示数据里也看得到效果。不是演示模式时都不起作用。
-import type { Item, QueuedMessage } from '@pixelsky/protocol'
+import type { ApprovalDecision, Item, QueuedMessage } from '@pixelsky/protocol'
 import { isDemo } from '@/data'
 import { tr } from '../../i18n/core'
 import type { QueueController } from './hooks'
 import { updateDemoSnapshot, useEngineState } from './store'
 
 const NOT_SENT = '演示模式不会真的发送。'
+
+/**
+ * 演示模式里答复审批（docs/ui/approval-stack.md）：移走这一项，对话里对应的工具行改成完成 / 已拒绝；
+ * 都处理完就回到空闲。不是演示模式时什么都不做
+ */
+export function demoAnswer(sessionId: string, requestId: string, decision: ApprovalDecision): void {
+  updateDemoSnapshot(sessionId, snap => {
+    const request = snap.pending.find(p => p.requestId === requestId)
+    if (!request) return snap
+    const pending = snap.pending.filter(p => p !== request)
+    const status = decision.type === 'deny' ? 'declined' : 'completed'
+    const items = snap.items.map(i =>
+      i.id === request.itemId && (i.kind === 'command' || i.kind === 'file_change' || i.kind === 'tool')
+        ? ({ ...i, status } as Item)
+        : i,
+    )
+    return { ...snap, pending, items, state: pending.length ? snap.state : 'idle' }
+  })
+}
 
 let seq = 0
 const demoId = (prefix: string): string => `${prefix}-${Date.now()}-${++seq}`
