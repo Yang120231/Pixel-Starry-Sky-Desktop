@@ -14,8 +14,8 @@ export interface ChooseDeps {
   ): Promise<NativeImportResult>
   /** 这一行的尾部还没补到时，单独要一次它最后用的模型 */
   modelOf(nativeId: string): Promise<string | null>
-  /** 输入框的设置：模型、额度来源、权限、推理强度（按 model.ts 的规则挑模型） */
-  settingsFor(sessionModel: string | null): Partial<SessionSettings>
+  /** 输入框的设置：模型、额度来源、权限、推理强度（按 model.ts 的规则挑模型）；可以等输入框准备好 */
+  settingsFor(sessionModel: string | null): Partial<SessionSettings> | Promise<Partial<SessionSettings>>
   token: string
 }
 
@@ -36,7 +36,8 @@ export async function chooseRow(row: ResumeRow, how: ChooseHow, deps: ChooseDeps
           ? 'copy'
           : 'inplace'
   const model = row.model ?? (await deps.modelOf(row.id).catch(() => null))
-  const result = await deps.importSession(row.id, { mode, settings: deps.settingsFor(model), token: deps.token })
+  const settings = await deps.settingsFor(model)
+  const result = await deps.importSession(row.id, { mode, settings, token: deps.token })
   if ('ownerId' in result) return { kind: 'owned', sessionId: result.ownerId }
   if ('live' in result) return { kind: 'live', live: result.live }
   return { kind: 'opened', sessionId: result.sessionId }
@@ -44,3 +45,28 @@ export async function chooseRow(row: ResumeRow, how: ChooseHow, deps: ChooseDeps
 
 /** 错误是不是「这个会话的记录已经不在了」（宿主报的中文句子，按界面语言翻译后和词典里的比） */
 export const isGoneError = (message: string): boolean => translateMessage(message) === tr('resume.gone')
+
+/**
+ * 输入框的设置。输入框还没准备好（刚启动）、平台线路还在加载时等一会儿，最多 5 秒；
+ * 还是没有输入框就用引擎默认，还在报错就把错误交给调用方
+ */
+export async function settingsWhenReady(
+  settingsFor: ((sessionModel: string | null) => Partial<SessionSettings> | undefined) | undefined,
+  sessionModel: string | null,
+  wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms)),
+): Promise<Partial<SessionSettings>> {
+  if (!settingsFor) return {}
+  let failure: unknown = null
+  for (let i = 0; i < 50; i++) {
+    try {
+      const settings = settingsFor(sessionModel)
+      if (settings) return settings
+      failure = null
+    } catch (error) {
+      failure = error
+    }
+    await wait(100)
+  }
+  if (failure) throw failure
+  return {}
+}
