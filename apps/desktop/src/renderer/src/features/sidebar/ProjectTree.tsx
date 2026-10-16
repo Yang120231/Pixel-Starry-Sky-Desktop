@@ -25,7 +25,7 @@ import {
   useSidebarPrefs,
   type ProjectGroup,
 } from '@/features/appearance/sidebar'
-import { lanesOf } from './runFilter'
+import { cardsOf, lanesOf } from './runFilter'
 import { SessionItem } from './SessionItem'
 import { ProjectRow } from './ProjectRow'
 import { GroupNameDialog } from './GroupNameDialog'
@@ -84,6 +84,7 @@ export function ProjectTree({
   useI18n()
   const cards = useSessionCards()
   const lanes = useMemo(() => lanesOf(cards), [cards])
+  const cardById = useMemo(() => cardsOf(cards), [cards])
   const prefs = useSidebarPrefs()
   const collapsed = new Set(prefs.collapsed ?? [])
   const groups = prefs.groups ?? []
@@ -307,6 +308,7 @@ export function ProjectTree({
                 selected={s.id === selectedSessionId}
                 onSelect={onSelectSession}
                 lane={lanes.get(s.id)}
+                card={cardById.get(s.id)}
                 reason={filtering}
               />
             ))}

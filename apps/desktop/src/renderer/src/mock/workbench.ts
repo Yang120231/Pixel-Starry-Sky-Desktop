@@ -18,6 +18,7 @@ import {
   stats,
   user,
 } from './conversations'
+import { statusDemoSnapshots } from './statusDemo'
 
 const HOUR = 60 * MIN
 const DAY = 24 * HOUR
@@ -514,5 +515,7 @@ export const workbenchSnapshots: Record<string, SessionSnapshot> = Object.fromEn
     cloudReconnect(),
     channelQuote(),
     changelog(),
-  ].map(s => [s.record.id, s]),
+  ]
+    .map(s => [s.record.id, s] as const)
+    .concat(Object.entries(statusDemoSnapshots)),
 )

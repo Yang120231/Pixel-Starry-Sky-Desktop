@@ -14,6 +14,9 @@ export function laneMatches(lane: SessionLane | undefined, filter: RunFilter): b
 export const lanesOf = (cards: readonly SessionCard[]): Map<string, SessionLane> =>
   new Map(cards.map(c => [c.id, c.lane]))
 
+/** 会话 ID → 看板卡片（侧栏行要里面的请求、错误） */
+export const cardsOf = (cards: readonly SessionCard[]): Map<string, SessionCard> => new Map(cards.map(c => [c.id, c]))
+
 /** 项目只留符合的会话、全部展开、不带归档；没有符合会话的项目不显示 */
 export function filterProjects(
   projects: readonly Project[],

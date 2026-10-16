@@ -1,0 +1,42 @@
+// 侧栏对话状态图标要的额外信号（docs/ui/sidebar-status-icons.md）：工作文件夹还在不在、对话关联的 GitHub PR。
+// 主进程算好推给界面；只读，不改远端。
+
+/** 对话关联的一个 PR */
+export interface SessionPr {
+  /** owner/repo */
+  repo: string
+  number: number
+  url: string
+  title: string
+  state: 'open' | 'draft' | 'merged' | 'closed'
+  /** 检查（CI）汇总：没有检查或查不到为 null */
+  ci: 'pass' | 'fail' | 'pending' | null
+  /** 没通过的检查数（ci 为 fail 时） */
+  ciFailed: number
+  /** 和目标分支有合并冲突 */
+  conflict: boolean
+  additions: number
+  deletions: number
+  head: string
+  base: string
+  /** ISO 时间：已合并 / 已关闭的时间 */
+  closedAt: string | null
+  /** 只知道有这个 PR（对话里出现过链接），查不到状态：私有仓库又没登录 gh */
+  unknown?: boolean
+}
+
+export interface SessionStatusState {
+  /** 工作文件夹找不到了的对话（只查本机对话） */
+  missingFolders: Record<string, true>
+  /** 对话关联的 PR，按「最需要看」排好：检查没过 / 有冲突的开着的 > 开着的 > 草稿 > 已合并 > 已关闭 */
+  prs: Record<string, SessionPr[]>
+  /** 本机有没有能用的 gh（装了且登录了）；悬停卡里提示用 */
+  gh: 'ready' | 'missing' | 'signed-out'
+}
+
+export interface SessionStatusBridge {
+  get(): Promise<SessionStatusState>
+  /** 立刻重查（不传就查全部）；切回窗口、悬停卡里点「刷新」时用 */
+  refresh(sessionId?: string): Promise<void>
+  onChange(callback: (state: SessionStatusState) => void): () => void
+}

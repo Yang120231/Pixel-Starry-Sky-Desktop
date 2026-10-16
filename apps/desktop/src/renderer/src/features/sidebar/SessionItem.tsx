@@ -1,9 +1,10 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
 import { cn } from '@/ui'
-import { NeedsYouLabel, SessionMarks, SessionStatusMark } from './SessionMarks'
-import { needsYou } from './projectTreeModel'
-import type { SessionLane } from '@/features/board/sessionLanes'
+import { SessionMarks, SessionStatusMark, StatusLabel, ringOf } from './SessionMarks'
+import { StatusHover } from './SessionStatusCard'
+import { useRowStatus } from './useRowStatus'
+import type { SessionCard, SessionLane } from '@/features/board/sessionLanes'
 import { LANE_LABEL, LANE_TONE } from './RunStatusPill'
 import type { Session } from '@/data'
 import { SessionRow } from './SessionRow'
@@ -11,13 +12,15 @@ import { useSessionChannel } from '@/features/channels/store'
 
 /**
  * 项目下面的对话（docs/ui/sidebar-styles.md「大文件夹」版）：标题和项目名对齐，状态挂在项目文件夹图标正下方，
- * 右边是时间（要你处理的写「等你 / 出错 / 暂停」）；新回复的标题用主色加粗，当前打开的有底色
+ * 右边是时间（有问题的写「等你 / 要登录 / 出错…」）；新回复的标题用主色加粗，当前打开的有底色。
+ * 状态格放什么见 sessionStatusModel.statusOf（docs/ui/sidebar-status-icons.md），鼠标停上去弹出详情和操作
  */
 export function SessionItem({
   session,
   selected,
   onSelect,
   lane,
+  card,
   reason,
 }: {
   session: Session
@@ -25,6 +28,8 @@ export function SessionItem({
   onSelect: (id: string) => void
   /** 看板 / 胶囊里的分类，决定标题左边的状态 */
   lane?: SessionLane
+  /** 看板卡片（等你批准的请求、错误原文、队列）；没有要处理的就没有 */
+  card?: SessionCard
   /** 侧栏按状态筛选时：右边写原因（等你处理 / 出错 / 运行中…），代替时间 */
   reason?: boolean
 }) {
@@ -34,6 +39,8 @@ export function SessionItem({
   const fresh = unread || lane === 'unread'
   // 协作频道派活开出来的会话（docs/ui/channels-phase-b.md §2.4）
   const channel = useSessionChannel(session.id)
+  const status = useRowStatus(session.id, { card, running, unread })
+  const ring = ringOf(selected)
   return (
     <SessionRow
       target={{
@@ -50,14 +57,24 @@ export function SessionItem({
       trailing={
         reason && lane ? (
           <span className={cn('shrink-0 text-meta', LANE_TONE[lane])}>{tr(LANE_LABEL[lane])}</span>
-        ) : needsYou(lane) ? (
-          <NeedsYouLabel lane={lane} />
+        ) : status.label ? (
+          <StatusLabel status={status} ring={ring} />
         ) : (
-          <SessionMarks running={running} unread={unread} time={session.time} />
+          <SessionMarks running={running} unread={unread} time={session.time} status={status} ring={ring} />
         )
       }
     >
-      <SessionStatusMark lane={lane} running={running} unread={fresh} />
+      {status.mark && (
+        <StatusHover
+          sessionId={session.id}
+          title={session.title}
+          status={status}
+          card={card}
+          className="absolute left-[5px] flex w-3.5 items-center justify-center"
+        >
+          <SessionStatusMark status={status} ring={ring} />
+        </StatusHover>
+      )}
       <span className={cn('min-w-0 truncate', !channel && 'flex-1', fresh && 'font-semibold text-accent-fg')}>
         {session.title}
       </span>

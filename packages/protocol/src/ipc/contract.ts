@@ -536,6 +536,10 @@ export const IPC_CONTRACT = {
   'providers:remove': { kind: 'invoke', route: 'local', trust: 'sender' },
   'providers:save': { kind: 'invoke', route: 'local', trust: 'sender' },
   'providers:test': { kind: 'invoke', route: 'local', trust: 'sender' },
+  // 侧栏对话的状态图标（docs/ui/sidebar-status-icons.md §4）：只在本机
+  'sessionStatus:changed': { kind: 'push', route: 'push', trust: 'none' },
+  'sessionStatus:get': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'sessionStatus:refresh': { kind: 'invoke', route: 'local', trust: 'sender' },
   'projectBrowser:action': { kind: 'invoke', route: 'local', trust: 'window' },
   'projectBrowser:annotate': { kind: 'invoke', route: 'local', trust: 'window' },
   'projectBrowser:changed': { kind: 'push', route: 'push', trust: 'none' },

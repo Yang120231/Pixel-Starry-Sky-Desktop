@@ -10,7 +10,7 @@ import { requestLogFocus } from '@/features/logs/focus'
 import { requestFeedback } from '@/features/feedback/focus'
 import { classifyError, type ErrorKind } from './errorKind'
 
-const LABEL: Record<SourceAction, string> = {
+export const SOURCE_ACTION_LABEL: Record<SourceAction, string> = {
   get 'open-menu'() {
     return tr('session.live.NoticeActions.changeRoute')
   },
@@ -34,7 +34,8 @@ const LABEL: Record<SourceAction, string> = {
   },
 }
 
-function actionsFor(
+/** 侧栏状态悬停卡也用（features/sidebar/SessionStatusCard.tsx） */
+export function actionsFor(
   kind: ErrorKind,
   record: Pick<SessionRecord, 'platform' | 'provider'>,
   engine: SessionRecord['engine'],
@@ -98,7 +99,7 @@ export function NoticeActions({
           onClick={() => (a === 'retry' && isDemo ? demoRetry(record.id) : requestSourceAction(record.id, a))}
           className="press h-7 rounded-md border border-line bg-surface px-2.5 text-meta text-fg-secondary hover:bg-hover hover:text-fg"
         >
-          {LABEL[a]}
+          {SOURCE_ACTION_LABEL[a]}
         </button>
       ))}
       <button

@@ -28,7 +28,13 @@ export {
 } from './store'
 export { recentSpansProjects } from './sidebarData'
 export { OPEN_SESSION_EVENT, useOpenSessionRequests } from './openRequests'
-export { SOURCE_ACTION_EVENT, requestSourceAction, type SourceAction } from './sourceActions'
+export {
+  SOURCE_ACTION_EVENT,
+  requestSourceAction,
+  requestSourceActionAfterOpen,
+  takePendingSourceAction,
+  type SourceAction,
+} from './sourceActions'
 export { demoRetry, useDemoQueueController } from './demoQueue'
 export {
   DEFAULT_EFFORT,
