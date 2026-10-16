@@ -2,6 +2,7 @@ import type { AgentRun, EngineEvent, FileChange, Item, ItemStatus } from '@pixel
 import { array, object, string, number, type Message } from './process'
 import { diffAdded } from '../diff'
 import { MAX_OUTPUT, clip } from '../output'
+import { codexCommand } from './command'
 
 export function codexChanges(value: unknown): FileChange[] {
   return array(value)
@@ -85,7 +86,7 @@ export class CodexTranslator {
       item = {
         kind: 'command',
         id,
-        command: string(raw.command),
+        command: codexCommand(string(raw.command)),
         // description 是命令说明（悬停时显示）；Codex 没有说明，不能放工作目录
         description: null,
         output: clip(string(raw.aggregatedOutput)) || (prior?.kind === 'command' ? prior.output : ''),
