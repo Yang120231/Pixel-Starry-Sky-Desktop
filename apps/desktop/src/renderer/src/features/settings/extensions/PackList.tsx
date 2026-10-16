@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { ExtPackContributionKind, ExtPackInfo } from '@pixelsky/protocol'
 import { packDescription } from '@pixelsky/protocol'
 import { cn, Switch } from '@/ui'
@@ -17,16 +18,39 @@ const CHIP_KEYS = {
   prompts: 'extensions.chip.prompts',
 } as const satisfies Record<ExtPackContributionKind, string>
 
-/** 扩展图标：清单里的 icon，没有就用名字首字母 */
-export function PackIcon({ pack, size = 32 }: { pack: ExtPackInfo; size?: number }) {
+/**
+ * 扩展图标：清单里的 icon，没有就用名字首字母。
+ * 商店目录里的扩展还没装、没有 pack，传 src（pixelsky-ext://store-icon/…）和 name；图片加载失败也退回首字母
+ */
+export function PackIcon({
+  pack,
+  size = 32,
+  src,
+  name,
+}: {
+  pack?: ExtPackInfo
+  size?: number
+  src?: string
+  name?: string
+}) {
   const { locale } = useI18n()
-  const icon = pack.manifest?.icon
+  const [failed, setFailed] = useState<string | null>(null)
+  const icon = pack?.manifest?.icon
   const style = { width: size, height: size }
-  if (icon && pack.status !== 'error') {
+  const url = src ?? (pack && icon && pack.status !== 'error' ? packAssetUrl(pack.key, icon) : undefined)
+  if (url && failed !== url) {
     return (
-      <img src={packAssetUrl(pack.key, icon)} alt="" draggable={false} className="shrink-0 rounded-md" style={style} />
+      <img
+        src={url}
+        alt=""
+        draggable={false}
+        className="shrink-0 rounded-md"
+        style={style}
+        onError={() => setFailed(url)}
+      />
     )
   }
+  const title = name ?? (pack ? packTitle(pack, locale) : '')
   return (
     <span
       aria-hidden
@@ -34,7 +58,7 @@ export function PackIcon({ pack, size = 32 }: { pack: ExtPackInfo; size?: number
       className="flex shrink-0 items-center justify-center rounded-md bg-avatar text-ui font-medium text-avatar-fg"
     >
       {/* 跳过开头的符号：「.env 文件支持」显示 E 而不是「.」 */}
-      {(packTitle(pack, locale).match(/[\p{L}\p{N}]/u)?.[0] ?? '?').toUpperCase()}
+      {(title.match(/[\p{L}\p{N}]/u)?.[0] ?? '?').toUpperCase()}
     </span>
   )
 }
