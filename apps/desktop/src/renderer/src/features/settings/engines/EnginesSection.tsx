@@ -178,6 +178,11 @@ function EngineRow({
                   {ENGINE_STATUS[e.status] ?? e.status}
                 </span>
               )}
+              {!!e.configWarnings?.length && (
+                <span className="text-label text-warn">
+                  {tr('engineConfigWarnings.badge', { p0: e.configWarnings.length })}
+                </span>
+              )}
               {newer && !updating && !result && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-1.5 text-label text-accent-fg">
                   <CircleArrowUp size={11} />

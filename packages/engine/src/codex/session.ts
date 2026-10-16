@@ -138,8 +138,6 @@ export class CodexSession implements EngineSession {
   private noticeSeq = 0
   /** 启动时带了 model_context_window：报上来的窗口是设置的值，不记成 Codex 自己的 */
   private windowOverridden = false
-  /** 已经发过的配置类警告（Codex 每轮都发一次），同一会话只出一次 */
-  private readonly quietShown = new Set<string>()
   /** 上一轮带了计划协作模式：切到别的权限后，下一轮要带一次 default 切回来 */
   private planSent = false
   /** thread/start 报的模型：会话跟随引擎默认、目录也没写当前模型时，计划模式用它 */
@@ -681,16 +679,14 @@ export class CodexSession implements EngineSession {
     } else if (method === 'error' || method === 'warning') {
       const text = string(object(params.error).message || params.message)
       if (method === 'error') this.reportedError = text
-      // 用户 config.toml 引起、不影响使用的警告：灰色提示，同一会话只出一次（docs/ui/ai-commit-codex-warnings-history.md §3）
-      const quiet = method === 'warning' && isQuietWarning(text)
-      if (quiet && this.quietShown.has(text)) return
-      if (quiet) this.quietShown.add(text)
+      // 用户 config.toml 引起、不影响使用的警告（每轮都发）：和这一轮无关，不进对话，报给宿主显示在设置里
+      if (method === 'warning' && isQuietWarning(text)) return this.ctx.reportConfigWarning?.(text)
       this.ctx.emit({
         type: 'item_completed',
         item: {
           kind: 'notice',
           id: `cx-${method}-${Date.now()}-${++this.noticeSeq}`,
-          level: method === 'error' ? 'error' : quiet ? 'info' : 'warn',
+          level: method === 'error' ? 'error' : 'warn',
           text,
           detail: turnErrorDetail(params.error, params.willRetry),
         },

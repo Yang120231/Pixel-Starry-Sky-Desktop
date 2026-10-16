@@ -133,6 +133,7 @@ export class HostTurn {
             if (rt.execution) rt.execution.pendingFork = null
             m.events.patchRecord(id, { pendingFork: null })
           },
+          reportConfigWarning: text => m.settings.reportConfigWarning(info.id, text),
         })
         preparedExtensions = undefined
       } else {

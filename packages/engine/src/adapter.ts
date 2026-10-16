@@ -55,6 +55,8 @@ export interface SessionContext {
   clearPendingRewind?(): void
   /** 分叉第一次启动成功（或改成新会话）后清掉 pendingFork */
   clearPendingFork?(): void
+  /** 引擎报了配置类警告（用户 config.toml 引起、不影响使用）：不进对话，交给宿主放进引擎信息 */
+  reportConfigWarning?(text: string): void
 }
 
 /** 一个会话对应的引擎连接。进程按需启动；close() 之后这个对象不再使用 */
