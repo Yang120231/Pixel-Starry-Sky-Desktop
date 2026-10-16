@@ -119,7 +119,13 @@ export function SessionScreen({
         <div className="mx-auto w-full max-w-3xl">
           {pending ? (
             <>
-              <ApprovalCard key={pending.requestId} request={pending} canAct={canAct} onAnswer={answer} />
+              <ApprovalCard
+                key={pending.requestId}
+                request={pending}
+                canAct={canAct}
+                onAnswer={answer}
+                more={(snapshot?.pending.length ?? 1) - 1}
+              />
               {/* 等审批时输入框不显示，停止键放在审批卡下面，不然这一轮没法从手机打断 */}
               {running && canAct && (
                 <button
