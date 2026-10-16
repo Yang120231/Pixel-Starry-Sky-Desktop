@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ExtStoreCatalogPage, ExtStoreItem } from '@pixelsky/protocol'
 import {
+  installToast,
   cardAction,
   cardFields,
   catalogQueryOf,
@@ -166,13 +167,13 @@ describe('cardAction', () => {
         installed: false,
         progress: { phase: 'downloading', version: '1.0.0', kind: 'install', received: 50, total: 200 },
       }),
-    ).toEqual({ kind: 'installing', percent: 25 })
+    ).toEqual({ kind: 'installing', percent: 25, phase: 'downloading' })
     expect(
       cardAction({
         installed: true,
         progress: { phase: 'verifying', version: '1.0.0', kind: 'update', received: 0, total: null },
       }),
-    ).toEqual({ kind: 'installing', percent: null })
+    ).toEqual({ kind: 'installing', percent: null, phase: expect.any(String) })
   })
 })
 
@@ -185,5 +186,26 @@ describe('installedIdsOf', () => {
       { id: null, source: 'store' },
     ])
     expect([...ids]).toEqual(['a.store'])
+  })
+})
+
+describe('installToast', () => {
+  it('装好：已安装 X（用名字，没有名字用 id）；更新是 updated', () => {
+    expect(installToast({ id: 'a.b', name: 'Swift 支持', ok: true })).toEqual({
+      kind: 'installed',
+      id: 'a.b',
+      name: 'Swift 支持',
+    })
+    expect(installToast({ id: 'a.b', ok: true, kind: 'update' })).toMatchObject({ kind: 'updated', name: 'a.b' })
+  })
+  it('silent 不弹；取消不弹；失败带原因', () => {
+    expect(installToast({ id: 'a.b', ok: true, silent: true })).toBeNull()
+    expect(installToast({ id: 'a.b', ok: false, cancelled: true, reason: '下载已取消' })).toBeNull()
+    expect(installToast({ id: 'a.b', name: 'X', ok: false, reason: '连不上' })).toEqual({
+      kind: 'failed',
+      id: 'a.b',
+      name: 'X',
+      reason: '连不上',
+    })
   })
 })

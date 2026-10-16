@@ -98,6 +98,20 @@ export const extensionCenterMessages = {
   'extstore.action.downloadingNoPercent': { zh: '下载中', en: 'Downloading' },
   'extstore.action.verifying': { zh: '校验中', en: 'Verifying' },
   'extstore.action.installing': { zh: '安装中', en: 'Installing' },
+  'extstore.toast.installed': { zh: '已安装 {name}', en: 'Installed {name}' },
+  'extstore.toast.updated': { zh: '已更新 {name}', en: 'Updated {name}' },
+  'extstore.toast.failed': { zh: '{name} 没装上：{reason}', en: '{name} couldn’t be installed: {reason}' },
+  'extstore.toast.view': { zh: '查看', en: 'View' },
+  'extstore.command.checkUpdates': { zh: '扩展：检查更新', en: 'Extensions: Check for updates' },
+  'extstore.command.search': { zh: '扩展：搜索…', en: 'Extensions: Search…' },
+  'extstore.search.keywords': {
+    zh: '扩展 商店 发现 搜索 安装 市场 discover store marketplace search install extension',
+    en: 'extension store discover search install marketplace 扩展 商店 发现 搜索 安装 市场',
+  },
+  'extstore.publish.keywords': {
+    zh: '扩展 发布 上传 我的发布 发布者 publish upload publisher my extensions',
+    en: 'extension publish upload publisher my publishing 扩展 发布 上传 我的发布 发布者',
+  },
   'extstore.offline.title': { zh: '连不上扩展商店', en: 'Can’t reach the extension store' },
   'extstore.offline.hint': {
     zh: '「已安装」不受影响，可以稍后再试。',

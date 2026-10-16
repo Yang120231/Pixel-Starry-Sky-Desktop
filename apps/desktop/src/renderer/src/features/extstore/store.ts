@@ -9,7 +9,7 @@ import type {
 import { demo, isDemo } from '@/data/demo'
 import { translateMessage } from '@/i18n/core'
 import { extstoreBridge } from './bridge'
-import { EMPTY_STORE_STATE, UPDATE_CHECK_INTERVAL_MS } from './storeModel'
+import { EMPTY_STORE_STATE, UPDATE_CHECK_INTERVAL_MS, installToast, type InstallToast } from './storeModel'
 
 // 扩展商店状态的单例（方案 §2）：第一次用到时才去主进程取，之后跟着 extstore:changed 刷新。
 // 导入时不做任何事（没有监听、没有请求、不碰 window / document），node 环境的测试可以放心 import。
@@ -134,20 +134,47 @@ export function useExtStore(): ExtStoreSnapshot {
   return useSyncExternalStore(subscribeExtStore, getExtStore, getExtStore)
 }
 
-/** 装 / 更新：进度由 extstore:changed 推送，这里只管发起和记下失败原因 */
-export async function installExtension(id: string, version: string): Promise<boolean> {
+// 安装结束的提示：状态单例里算出来，由挂在应用根上的 ExtStoreToastHost 弹（单例本身不碰界面）
+const toastListeners = new Set<(t: InstallToast) => void>()
+const itemNames = new Map<string, string>()
+
+export function subscribeInstallToasts(listener: (t: InstallToast) => void): () => void {
+  toastListeners.add(listener)
+  return () => {
+    toastListeners.delete(listener)
+  }
+}
+
+export interface InstallOptions {
+  /** 不弹「已安装」提示（别处代为安装时用） */
+  silent?: boolean
+  /** 提示里用的名字；不给就用目录里见过的名字，再没有就用 id */
+  name?: string
+  /** 'update' 包含换回 */
+  kind?: 'install' | 'update'
+}
+
+/** 装 / 更新：进度由 extstore:changed 推送，这里只管发起、记下失败原因和发提示 */
+export async function installExtension(id: string, version: string, options: InstallOptions = {}): Promise<boolean> {
   const b = api()
   if (!b) return false
   if (snapshot.installErrors[id]) set({ installErrors: withoutKey(snapshot.installErrors, id) })
+  const base = { id, name: options.name ?? itemNames.get(id), kind: options.kind, silent: options.silent }
+  const emitToast = (r: Parameters<typeof installToast>[0]): void => {
+    const toast = installToast(r)
+    if (toast) for (const l of [...toastListeners]) l(toast)
+  }
   try {
     await b.install(id, version)
     void refreshExtStore()
+    emitToast({ ...base, ok: true })
     return true
   } catch (e) {
-    set({
-      installErrors: { ...snapshot.installErrors, [id]: translateMessage((e as Error)?.message ?? String(e)) },
-    })
+    const raw = (e as Error)?.message ?? String(e)
+    const reason = translateMessage(raw)
+    set({ installErrors: { ...snapshot.installErrors, [id]: reason } })
     void refreshExtStore()
+    emitToast({ ...base, ok: false, reason, cancelled: /extstore\.cancelled/.test(raw) })
     return false
   }
 }
@@ -168,7 +195,11 @@ function withoutKey<T>(map: Readonly<Record<string, T>>, key: string): Record<st
 /** 目录请求（发现页用）：没有桥时当作连不上 */
 export function fetchCatalog(query: ExtStoreCatalogQuery): Promise<ExtStoreCatalogPage> {
   const b = api()
-  return b ? b.catalog(query) : Promise.reject(new Error('extstore unavailable'))
+  if (!b) return Promise.reject(new Error('extstore unavailable'))
+  return b.catalog(query).then(page => {
+    for (const item of page.items) itemNames.set(item.id, item.name)
+    return page
+  })
 }
 
 // ---- 发现页的浏览位置 ----

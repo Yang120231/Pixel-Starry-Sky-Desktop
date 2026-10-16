@@ -51,6 +51,8 @@ import {
 import { getPaneState, paneActions } from '@/features/panes/store'
 import { SHORTCUTS_HELP_EVENT } from '@/features/layout/ShortcutsHelp'
 import { getPage, setPage, showWorkbench } from '@/features/layout/page'
+import { extStoreCommands } from '@/features/extstore/commands'
+import { checkExtUpdates } from '@/features/extstore/store'
 import { getNotificationPrefs, setNotificationPrefs } from '@/features/settings/notifications'
 import { requestGitAction } from '@/features/panel/git/GitPanel'
 import { focusedTab, isFileTab, isNewTab, findLeaf } from '@/features/panes/tree'
@@ -503,6 +505,8 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
       add('settings.' + section, key, 'terminal.categorySettings', Settings, () =>
         settings.openSettings(section as SectionId),
       )
+    for (const c of extStoreCommands({ openSettings: s => settings.openSettings(s), checkUpdates: checkExtUpdates }))
+      add(c.id, c.key, 'terminal.categorySettings', Settings, c.run)
     add(
       'help.shortcuts',
       'shortcuts.help.action',

@@ -6,7 +6,7 @@ import { Button, cn, Segmented, Spinner } from '@/ui'
 import { useI18n } from '@/i18n/I18nProvider'
 import { usePackState } from '@/features/extpacks/store'
 import { debounced } from '@/features/extstore/debounce'
-import { openExtDetail } from '@/features/extstore/nav'
+import { consumeExtSearchFocus, openExtDetail, subscribeExtNav } from '@/features/extstore/nav'
 import {
   cancelInstall,
   discoverView,
@@ -66,6 +66,15 @@ export function DiscoverTab() {
   const [reloadKey, setReloadKey] = useState(0)
 
   const rootRef = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
+  // 命令面板「扩展：搜索…」：挂载时和之后每次请求都看一眼
+  useEffect(() => {
+    const focus = (): void => {
+      if (consumeExtSearchFocus()) searchRef.current?.focus()
+    }
+    focus()
+    return subscribeExtNav(focus)
+  }, [])
   const sentinelRef = useRef<HTMLDivElement>(null)
   const scrollTopRef = useRef(initial.scrollTop)
   const requestId = useRef(0)
@@ -160,7 +169,11 @@ export function DiscoverTab() {
 
   const handlers: CardHandlers = {
     onOpen: id => openExtDetail(id),
-    onInstall: (item, version) => void installExtension(item.id, version),
+    onInstall: (item, version) =>
+      void installExtension(item.id, version, {
+        name: item.name,
+        kind: installedIds.has(item.id) ? 'update' : 'install',
+      }),
     onCancel: id => void cancelInstall(id),
   }
   const stateOf = (item: ExtStoreItem): CardState => ({
@@ -184,6 +197,7 @@ export function DiscoverTab() {
           <label className="flex h-8 min-w-40 flex-1 items-center gap-1.5 rounded-md border border-line bg-surface px-2 text-fg-muted focus-within:border-line-strong">
             <Search size={14} strokeWidth={1.5} className="shrink-0" />
             <input
+              ref={searchRef}
               value={text}
               onChange={e => {
                 const q = clampQuery(e.target.value)

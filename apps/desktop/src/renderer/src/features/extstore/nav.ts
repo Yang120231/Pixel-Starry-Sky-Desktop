@@ -35,6 +35,28 @@ export function openExtDetail(id: string | null): void {
   emit()
 }
 
+let searchFocus = false
+
+/** 打开「发现」页签并让搜索框拿到焦点（命令面板「扩展：搜索…」）；页签还没挂载时，挂载后由 consumeExtSearchFocus 取走 */
+export function openExtSearch(): void {
+  tab = 'discover'
+  detail = null
+  searchFocus = true
+  emit()
+}
+
+/** 有没有待处理的「聚焦搜索框」请求；取走后清掉 */
+export function consumeExtSearchFocus(): boolean {
+  const pending = searchFocus
+  searchFocus = false
+  return pending
+}
+
+/** 订阅用：每次 openExtSearch 都会通知，页面据此再看一次 consumeExtSearchFocus */
+export function subscribeExtNav(cb: () => void): () => void {
+  return subscribe(cb)
+}
+
 export function useExtTab(): ExtTab {
   return useSyncExternalStore(subscribe, getExtTab, getExtTab)
 }

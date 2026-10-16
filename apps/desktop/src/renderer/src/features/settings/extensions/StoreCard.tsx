@@ -1,9 +1,10 @@
-import { Download, X } from 'lucide-react'
+import { Download } from 'lucide-react'
 import type { ExtPackContributionKind, ExtStoreItem } from '@pixelsky/protocol'
-import { Button, cn } from '@/ui'
+import { cn } from '@/ui'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, type TranslationKey } from '@/i18n/core'
-import { cardAction, cardFields, formatDownloads, type CardAction } from '@/features/extstore/storeModel'
+import { cardAction, cardFields, formatDownloads } from '@/features/extstore/storeModel'
+import { InstallButton } from '@/features/extstore/InstallButton'
 import { PackBadge } from './PackBadge'
 import { PackIcon } from './PackList'
 
@@ -32,68 +33,6 @@ export interface CardHandlers {
   onOpen(id: string): void
   onInstall(item: ExtStoreItem, version: string): void
   onCancel(id: string): void
-}
-
-/** 卡片右边的按钮：安装 / 已安装 / 更新 / 正在装 */
-export function StoreAction({
-  item,
-  action,
-  onInstall,
-  onCancel,
-}: {
-  item: ExtStoreItem
-  action: CardAction
-  onInstall(item: ExtStoreItem, version: string): void
-  onCancel(id: string): void
-}) {
-  const { t } = useI18n()
-  const small = 'h-7 px-2.5 text-meta'
-  switch (action.kind) {
-    case 'install':
-      return (
-        <Button className={small} onClick={() => onInstall(item, item.version)}>
-          {t('extstore.action.install')}
-        </Button>
-      )
-    case 'installed':
-      return (
-        <span className="inline-flex h-6 shrink-0 items-center rounded-full border border-success/40 px-2.5 text-meta whitespace-nowrap text-success">
-          {t('extstore.action.installed')}
-        </span>
-      )
-    case 'update':
-      return (
-        <Button variant="primary" className={small} onClick={() => onInstall(item, action.version)}>
-          {t('extstore.action.update')}
-        </Button>
-      )
-    case 'updateBlocked':
-      return (
-        <span
-          className="inline-flex h-6 shrink-0 items-center text-meta whitespace-nowrap text-fg-faint"
-          title={action.need ? tr('extstore.action.updateBlocked', { version: action.need }) : undefined}
-        >
-          {t('extstore.action.updateBlockedShort')}
-        </span>
-      )
-    case 'installing':
-      return (
-        <span className="inline-flex shrink-0 items-center gap-1 text-meta whitespace-nowrap text-fg-muted">
-          {action.percent === null
-            ? t('extstore.action.installing')
-            : t('extstore.action.downloading', { percent: action.percent })}
-          <button
-            type="button"
-            aria-label={t('extstore.action.cancel')}
-            title={t('extstore.action.cancel')}
-            onClick={() => onCancel(item.id)}
-            className="press no-drag inline-flex size-5 items-center justify-center rounded hover:bg-hover hover:text-fg"
-          >
-            <X size={12} strokeWidth={1.75} />
-          </button>
-        </span>
-      )
-  }
 }
 
 /** 贡献种类小标签（只显示认识的种类） */
@@ -184,7 +123,13 @@ export function StoreFeaturedCard({
         <span className="flex min-w-0 flex-wrap items-center gap-1">
           <KindTags kinds={f.kinds} />
         </span>
-        <StoreAction item={item} action={action} onInstall={handlers.onInstall} onCancel={handlers.onCancel} />
+        <InstallButton
+          id={item.id}
+          version={item.version}
+          action={action}
+          onInstall={v => handlers.onInstall(item, v)}
+          onCancel={handlers.onCancel}
+        />
       </div>
       {state.error && <p className="text-meta text-danger">{state.error}</p>}
     </li>
@@ -217,7 +162,13 @@ export function StoreRow({ item, state, handlers }: { item: ExtStoreItem; state:
             </span>
           </span>
         </button>
-        <StoreAction item={item} action={action} onInstall={handlers.onInstall} onCancel={handlers.onCancel} />
+        <InstallButton
+          id={item.id}
+          version={item.version}
+          action={action}
+          onInstall={v => handlers.onInstall(item, v)}
+          onCancel={handlers.onCancel}
+        />
       </div>
       {state.error && <p className="mt-1.5 pl-11 text-meta text-danger">{state.error}</p>}
     </li>

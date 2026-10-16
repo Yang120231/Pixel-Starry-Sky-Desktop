@@ -185,7 +185,7 @@ export type CardAction =
   /** 能装 */
   | { kind: 'install' }
   /** 正在下载 / 校验 / 安装；percent 是 0–100，不知道总大小时是 null */
-  | { kind: 'installing'; percent: number | null }
+  | { kind: 'installing'; percent: number | null; phase: ExtStoreProgress['phase'] }
   | { kind: 'installed' }
   | { kind: 'update'; version: string }
   /** 有新版本，但要求更新的像素星空 */
@@ -203,7 +203,7 @@ export function cardAction(input: {
       progress.phase === 'downloading' && progress.total
         ? Math.min(100, Math.round((progress.received / progress.total) * 100))
         : null
-    return { kind: 'installing', percent }
+    return { kind: 'installing', percent, phase: progress.phase }
   }
   if (!installed) return { kind: 'install' }
   if (update) {
@@ -223,4 +223,27 @@ export function installedIdsOf(packs: ReadonlyArray<{ id?: string | null; source
   const ids = new Set<string>()
   for (const p of packs) if (p.source === 'store' && p.id) ids.add(p.id)
   return ids
+}
+
+/** 一次安装结束后要不要弹提示：装好弹「已安装 / 已更新 X」（silent 不弹），失败弹原因，取消不弹 */
+export type InstallToast =
+  | { kind: 'installed' | 'updated'; id: string; name: string }
+  | { kind: 'failed'; id: string; name: string; reason: string }
+
+export function installToast(result: {
+  id: string
+  name?: string
+  ok: boolean
+  /** 'update' 包含换回 */
+  kind?: 'install' | 'update'
+  silent?: boolean
+  /** 已翻成当前语言的失败原因 */
+  reason?: string
+  cancelled?: boolean
+}): InstallToast | null {
+  const name = result.name || result.id
+  if (result.ok)
+    return result.silent ? null : { kind: result.kind === 'update' ? 'updated' : 'installed', id: result.id, name }
+  if (result.cancelled || !result.reason) return null
+  return { kind: 'failed', id: result.id, name, reason: result.reason }
 }
