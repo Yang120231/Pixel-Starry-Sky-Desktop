@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { parseCodedError } from '@pixelsky/protocol'
+import { codedError, parseCodedError } from '@pixelsky/protocol'
 
 vi.mock('electron', () => ({ net: { fetch: vi.fn() } }))
 vi.mock('../../account/account', () => ({ baseUrl: () => 'http://127.0.0.1:9', extensionsFetch: vi.fn() }))
@@ -491,6 +491,17 @@ describe('按「接口 + code」映射错误', () => {
   it('网络层错误：连不上是 offline，超时是 timeout，未登录和登录过期是 notSignedIn', async () => {
     const reject = (e: unknown) => make({ pub: () => Promise.reject(e), auth: () => Promise.reject(e) })
     expect((await fail(reject(new TypeError('fetch failed')).api.catalog())).key).toBe('extstore.offline')
+    // Electron net.fetch 断网、连接被掐断时抛的是普通 Error，不是 TypeError（7.6a 走查发现漏成原文）
+    expect((await fail(reject(new Error('net::ERR_EMPTY_RESPONSE')).api.catalog())).key).toBe('extstore.offline')
+    expect((await fail(reject(new Error('net::ERR_CONNECTION_REFUSED')).api.publisher())).key).toBe('extstore.offline')
+    // 已经带代码的错误（例如代理提示）不被改写成 offline
+    const proxy = await reject(codedError('extstore.proxyHint'))
+      .api.publisher()
+      .then(
+        () => null,
+        (e: unknown) => e as Error,
+      )
+    expect(parseCodedError(proxy?.message)?.code).toBe('extstore.proxyHint')
     expect((await fail(reject(Object.assign(new Error('t'), { name: 'TimeoutError' })).api.catalog())).key).toBe(
       'extstore.timeout',
     )

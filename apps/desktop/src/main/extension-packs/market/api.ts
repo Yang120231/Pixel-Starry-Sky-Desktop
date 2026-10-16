@@ -1,4 +1,4 @@
-import { codedError, isExtId, isExtVersion } from '@pixelsky/protocol'
+import { codedError, isExtId, isExtVersion, parseCodedError } from '@pixelsky/protocol'
 import type {
   ExtPackIssue,
   ExtStoreBlockEntry,
@@ -387,7 +387,9 @@ export function createApi(deps: StoreApiDeps = { publicFetch, extensionsFetch })
         throw storeError('extstore.notSignedIn', '', 401)
       if (err?.name === 'TimeoutError') throw storeError('extstore.timeout', '', 0)
       if (err?.name === 'AbortError') throw storeError('extstore.cancelled', '', 0)
-      if (e instanceof Error && !(e instanceof TypeError)) throw e
+      // 已经带代码的错误（白名单拒绝、代理提示等）原样往上抛；其余网络层失败都算连不上——
+      // Electron 的 net.fetch 断网时抛的是普通 Error（net::ERR_*），不是 TypeError，和 downloadCapped 一样统一成 offline
+      if (e instanceof Error && parseCodedError(e.message)) throw e
       throw storeError('extstore.offline', '', 0)
     }
     if (res.ok) return res
