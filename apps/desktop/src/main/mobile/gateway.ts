@@ -46,6 +46,7 @@ import type { MobilePairing } from '../../shared/types/mobile'
 import type { GitDiff } from '../../shared/types/project-tools'
 import type { FileDocument } from '../../shared/types/workspace'
 import { phoneDiff, PHONE_DIFF_LIMIT, type PhoneDiff } from './diff'
+import { PushScheduler, pushChanges, type PushPayload } from './push'
 import type { MobileStore } from './store'
 
 const contract: Readonly<Record<string, IpcChannelSpec>> = IPC_CONTRACT
@@ -57,6 +58,18 @@ export const PAIRING_TTL = 5 * 60_000
 const MAX_WATCHED = 4
 /** 会话列表推送的节流间隔 */
 const SESSIONS_THROTTLE = 500
+/**
+ * 流式增量攒这么久打包成一帧发（云端每条连接限 500 帧/秒，docs/mobile-remote.md §17.4）；
+ * 只对 hello 时说了能拆包的手机这样做
+ */
+export const DELTA_BATCH = 100
+/** 攒着的增量超过这么多字符就立刻发，一帧不会太大（单帧 1 MB，中文转义后会变长） */
+const DELTA_BATCH_CHARS = 64_000
+/**
+ * 这么久没收到手机的任何消息：当它不在前台（突然断网时中转要等心跳超时才发现），照样推送提醒。
+ * 新版手机在前台时每 20 秒说一次 away(false)
+ */
+const SILENT_AFTER = 45_000
 /** 推给手机的会话列表最多几条（去掉归档，按更新时间） */
 const MAX_SESSIONS = 200
 /** 搜索对话内容最多回几条 */
@@ -71,7 +84,7 @@ export const PHONE_TEXT_LIMIT = 500_000
 const MAX_ARTIFACTS = 100
 
 export interface GatewayDeps {
-  store: Pick<MobileStore, 'desktopId' | 'device' | 'addDevice' | 'touch' | 'keypair'>
+  store: Pick<MobileStore, 'desktopId' | 'device' | 'devices' | 'addDevice' | 'touch' | 'keypair'>
   desktopName(): string
   relay(): string
   /** 手机网页版的地址：二维码做成这个地址的链接，手机相机扫了直接打开；null 时二维码是 pixelsky:// */
@@ -88,6 +101,8 @@ export interface GatewayDeps {
   /** 配对状态、在线状态变了（设置页刷新） */
   changed(): void
   now?(): number
+  /** 推送提醒攒多久合成一条、两条至少隔多久（测试改短），默认 PUSH_DELAY / PUSH_GAP */
+  pushTiming?: { delay: number; gap: number }
   /**
    * 本机引擎宿主上的只读查询（手机的「默认引擎」「搜索对话内容」）。契约里的 engine:defaults、engine:search
    * 跟着电脑界面当前选中的机器走，手机没法指定，所以只查本机；没有时手机退回自己的做法。
@@ -116,6 +131,8 @@ export interface CloudDevices {
   pairing(): Promise<{ code: string; expiresAt: number }>
   confirm(phone: string): Promise<void>
   remove(phone: string): Promise<void>
+  /** 网页推送（§22.2）：请云端推给这部手机；手机没登记推送时云端什么都不做 */
+  push?(phone: string, payload: PushPayload): Promise<void>
 }
 
 interface Peer {
@@ -127,7 +144,19 @@ interface Peer {
   search?: AbortController
   /** 电脑上已经吊销：回完这一次就断开 */
   revoked?: boolean
+  /** 手机页面切到后台了（它自己说的）：照样推送提醒 */
+  away?: boolean
+  /** 最后一次收到这部手机的消息 */
+  heardAt?: number
+  /** 手机能拆开打包成一帧的多个事件（hello 时说的）；旧版手机不能，事件照旧一条一帧 */
+  batch?: boolean
+  /** 攒着还没发的会话事件 */
+  pending?: SessionEvent[]
+  pendingChars?: number
+  flushTimer?: ReturnType<typeof setTimeout>
 }
+
+type SessionEvent = Extract<HostEvent, { kind: 'session' }>
 
 interface Pairing {
   secret: string
@@ -289,8 +318,18 @@ export class MobileGateway {
   private latestSessions: SessionSummary[] | null = null
   /** 产物扫描的请求号 */
   private scans = 0
+  /** 上一次的会话列表：和这次比，算出要推送的提醒 */
+  private pushPrev: SessionSummary[] | null = null
+  private readonly pushes: PushScheduler
 
-  constructor(private readonly d: GatewayDeps) {}
+  constructor(private readonly d: GatewayDeps) {
+    this.pushes = new PushScheduler(
+      (phone, payload) => d.cloud?.push?.(phone, payload) ?? Promise.resolve(),
+      d.pushTiming?.delay,
+      d.pushTiming?.gap,
+      () => this.now(),
+    )
+  }
 
   private now(): number {
     return this.d.now?.() ?? Date.now()
@@ -433,7 +472,12 @@ export class MobileGateway {
     }
     if (decoded.type === FrameType.Pair) this.onPair(phone, decoded.body)
     else if (decoded.type === FrameType.Handshake1) this.onHandshake(phone, decoded.body)
-    else if (decoded.type === FrameType.Data) this.peers.get(phone)?.channel.receive(decoded.body)
+    else if (decoded.type === FrameType.Data) {
+      const peer = this.peers.get(phone)
+      if (!peer) return
+      peer.heardAt = this.now()
+      peer.channel.receive(decoded.body)
+    }
   }
 
   private onHandshake(phone: string, body: Uint8Array): void {
@@ -474,7 +518,7 @@ export class MobileGateway {
       },
       (method, args) => this.handle(peer, method, args),
     )
-    const peer: Peer = { phone, channel, rpc, watching: [] }
+    const peer: Peer = { phone, channel, rpc, watching: [], heardAt: this.now() }
     rpc.onClose = () => this.drop(phone, peer)
     this.peers.set(phone, peer)
     try {
@@ -494,8 +538,18 @@ export class MobileGateway {
       throw new Error('MOBILE_REVOKED')
     }
     // tools：这台电脑能给手机用工具和加项目（§18.4），旧版没有这个字段
-    if (method === 'hello')
+    if (method === 'hello') {
+      peer.batch = (args[0] as { batch?: unknown } | undefined)?.batch === true
+      // 新连上的页面在前台：断开时排上的提醒不用推了（在后台连上的手机会接着说 away）
+      this.pushes.cancel(peer.phone)
       return { version: LINK_VERSION, name: this.d.desktopName(), access: device.access, tools: true }
+    }
+    // 页面切到后台 / 回到前台（§22.2）：后台时照样推送提醒；旧版电脑不认这个方法，手机不管报错
+    if (method === 'away') {
+      peer.away = args[0] === true
+      if (!peer.away) this.pushes.cancel(peer.phone)
+      return null
+    }
     if (method === 'unwatch') {
       peer.watching = peer.watching.filter(id => id !== args[0])
       return null
@@ -636,6 +690,8 @@ export class MobileGateway {
 
   /** EventBus 的 tap：窗口收到什么，这里就看到什么 */
   hostEvent(channel: string, args: unknown[]): void {
+    if (channel === 'engine:event' && (args[0] as HostEvent | undefined)?.kind === 'sessions')
+      this.remind((args[0] as Extract<HostEvent, { kind: 'sessions' }>).sessions)
     if (!this.peers.size) return
     // 任务、Git 状态变了（电脑上已经合并过）：手机上开着的工具页重新取。
     // 手机只看事件内容不看通道名，旧版手机认不得 kind: 'tools'，会直接忽略
@@ -646,9 +702,9 @@ export class MobileGateway {
     if (channel !== 'engine:event') return
     const event = args[0] as HostEvent
     if (event.kind === 'session') {
-      let slim: HostEvent | null = null
+      let slim: SessionEvent | null = null
       for (const peer of this.peers.values())
-        if (peer.watching.includes(event.sessionId)) peer.rpc.event('engine:event', (slim ??= slimForPhone(event)))
+        if (peer.watching.includes(event.sessionId)) this.sessionEvent(peer, (slim ??= slimForPhone(event)))
     } else if (event.kind === 'sessions') {
       this.latestSessions = event.sessions
       this.sessionsTimer ??= setTimeout(() => {
@@ -661,6 +717,48 @@ export class MobileGateway {
       }, SESSIONS_THROTTLE)
     } else if (event.kind === 'projects') {
       for (const peer of this.peers.values()) peer.rpc.event('engine:event', event)
+    }
+  }
+
+  /**
+   * 会话事件：流式增量攒一会儿，打包成一帧发；别的事件（审批、状态、条目完成）到了先发攒着的，再立刻发它，顺序不变。
+   * 不合并增量的内容：手机按 seq 一条条应用（apps/mobile/src/data/session.ts）
+   */
+  private sessionEvent(peer: Peer, event: SessionEvent): void {
+    if (!peer.batch) {
+      peer.rpc.event('engine:event', event)
+      return
+    }
+    if (event.event.type !== 'item_delta') {
+      // 先发攒着的，再单独发这一条：它可能很大（条目完成带整段输出），不和增量挤一帧
+      this.flush(peer)
+      peer.rpc.event('engine:event', event)
+      return
+    }
+    ;(peer.pending ??= []).push(event)
+    peer.pendingChars = (peer.pendingChars ?? 0) + event.event.delta.length
+    if (peer.pendingChars >= DELTA_BATCH_CHARS) this.flush(peer)
+    else peer.flushTimer ??= setTimeout(() => this.flush(peer), DELTA_BATCH)
+  }
+
+  private flush(peer: Peer): void {
+    if (peer.flushTimer) clearTimeout(peer.flushTimer)
+    peer.flushTimer = undefined
+    const events = peer.pending ?? []
+    peer.pending = undefined
+    peer.pendingChars = 0
+    if (events.length === 1) peer.rpc.event('engine:event', events[0])
+    else if (events.length) peer.rpc.event('engine:event', { kind: 'batch', events })
+  }
+
+  /** 会话列表变了：有新的「等你处理 / 完成 / 出错」时，推给不在线或页面在后台的手机 */
+  private remind(sessions: SessionSummary[]): void {
+    if (!this.d.cloud?.push) return
+    const counts = pushChanges(this.pushPrev, sessions)
+    this.pushPrev = sessions
+    for (const device of this.d.store.devices) {
+      const peer = this.peers.get(device.id)
+      if (!peer || peer.away || this.now() - (peer.heardAt ?? 0) > SILENT_AFTER) this.pushes.add(device.id, counts)
     }
   }
 
@@ -686,6 +784,7 @@ export class MobileGateway {
     const peer = this.peers.get(phone)
     if (!peer || (only && peer !== only)) return
     this.peers.delete(phone)
+    if (peer.flushTimer) clearTimeout(peer.flushTimer)
     peer.search?.abort()
     peer.channel.fail(new Error('MOBILE_DISCONNECTED'))
     peer.rpc.close()
@@ -695,6 +794,7 @@ export class MobileGateway {
   close(): void {
     if (this.sessionsTimer) clearTimeout(this.sessionsTimer)
     this.sessionsTimer = null
+    this.pushes.close()
     this.dropAll()
     this.pairing = null
   }

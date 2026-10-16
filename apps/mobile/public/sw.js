@@ -25,3 +25,43 @@ self.addEventListener('fetch', event => {
   if (event.request.mode !== 'navigate') return
   event.respondWith(fetch(event.request).catch(async () => (await caches.match(OFFLINE)) ?? Response.error()))
 })
+
+// 锁屏提醒（docs/mobile-remote.md §22.2）：电脑经云端推来 { kind, count }，不带任务标题。
+// 每条推送都显示通知（iOS 要求，不显示的话会被取消订阅）；电脑那边只推给不在线或页面在后台的手机。
+const TEXT = {
+  waiting: n => `有 ${n} 个任务等你处理`,
+  failed: n => `${n} 个任务出错了`,
+  completed: n => `${n} 个任务完成`,
+}
+
+self.addEventListener('push', event => {
+  let data = {}
+  try {
+    data = event.data ? event.data.json() : {}
+  } catch {}
+  const text = TEXT[data.kind]
+  const count = Number.isInteger(data.count) && data.count > 0 ? data.count : 1
+  event.waitUntil(
+    self.registration.showNotification('像素星空', {
+      body: text ? text(count) : '电脑上的任务有新情况',
+      // 同一种只留最新一条
+      tag: 'pixelsky-' + (text ? data.kind : 'other'),
+      renotify: true,
+      icon: './icons/icon-192.png',
+    }),
+  )
+})
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close()
+  event.waitUntil(
+    (async () => {
+      const scope = self.registration.scope
+      const open = (await self.clients.matchAll({ type: 'window', includeUncontrolled: true })).find(c =>
+        c.url.startsWith(scope),
+      )
+      if (open) return open.focus()
+      return self.clients.openWindow(scope)
+    })(),
+  )
+})

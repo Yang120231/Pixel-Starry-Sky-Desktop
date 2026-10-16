@@ -20,6 +20,7 @@ import {
 } from '@pixelsky/link'
 import type { ImageAttachment, SearchResult, SessionSummary } from '@pixelsky/protocol'
 import {
+  DELTA_BATCH,
   IMAGE_INLINE,
   MobileGateway,
   PAIRING_TTL,
@@ -125,6 +126,7 @@ function setup(extra: Partial<GatewayDeps> = {}) {
       desktopId: 'desk-1',
       keypair: () => desktop,
       device: id => devices.find(d => d.id === id),
+      devices,
       addDevice: d => {
         const stored = { ...d, lastSeenAt: null }
         devices.push(stored)
@@ -147,9 +149,11 @@ function setup(extra: Partial<GatewayDeps> = {}) {
       pairing: async () => (cloudCalls.push('pairing'), { code: 'cloud-code', expiresAt: now + 60_000 }),
       confirm: async phone => void cloudCalls.push('confirm ' + phone),
       remove: async phone => void cloudCalls.push('remove ' + phone),
+      push: async (phone, payload) => void cloudCalls.push(`push ${phone} ${payload.kind} ${payload.count}`),
     },
     changed: () => {},
     now: () => now,
+    pushTiming: { delay: 10, gap: 0 },
     ...extra,
   }
   const gateway = new MobileGateway(deps)
@@ -460,6 +464,94 @@ describe('MobileGateway calls', () => {
     await wait(20)
     expect(p.events).toHaveLength(3)
     expect(p.events[2]).toEqual({ kind: 'tools' })
+  })
+
+  it('packs streaming deltas into one frame for phones that can unpack them, keeping order', async () => {
+    const t = setup()
+    gateways.push(t.gateway)
+    const p = await paired(t)
+    await p.call('hello', { batch: true })
+    await p.call('engine:openSessionTail', 's1')
+    let seq = 1
+    const session = (event: unknown) => ({ kind: 'session', sessionId: 's1', seq: ++seq, event })
+    const delta = (text: string) => session({ type: 'item_delta', itemId: 'a', field: 'text', delta: text })
+    for (let i = 0; i < 30; i++) t.gateway.hostEvent('engine:event', [delta('x')])
+    await wait(20)
+    expect(p.events).toHaveLength(0)
+    await wait(DELTA_BATCH + 20)
+    expect(p.events).toHaveLength(1)
+    expect(p.events[0]).toMatchObject({ kind: 'batch' })
+    const first = (p.events[0] as { events: { seq: number }[] }).events
+    expect(first.map(e => e.seq)).toEqual(Array.from({ length: 30 }, (_, i) => i + 2))
+    // 审批到了：先发攒着的增量（只有一条时照旧一条一帧），再单独发它
+    t.gateway.hostEvent('engine:event', [delta('y')])
+    t.gateway.hostEvent('engine:event', [session({ type: 'approval_resolved', requestId: 'r1' })])
+    await wait(0)
+    expect(p.events.slice(1)).toMatchObject([
+      { kind: 'session', seq: 32 },
+      { kind: 'session', seq: 33 },
+    ])
+  })
+
+  it('pushes reminders to phones that are offline or in the background, not to one looking at the page', async () => {
+    const t = setup()
+    gateways.push(t.gateway)
+    const p = await paired(t)
+    const sessions = (state: string, lastOutcome: string | null = null) =>
+      t.gateway.hostEvent('engine:event', [
+        {
+          kind: 'sessions',
+          sessions: [{ record: { id: 's1', title: 's1', updatedAt: 1, archivedAt: null, lastOutcome }, state }],
+        },
+      ])
+    const pushes = () => t.cloudCalls.filter(c => c.startsWith('push'))
+    sessions('running')
+    sessions('waiting')
+    await wait(30)
+    expect(pushes()).toEqual([])
+    // 页面切到后台：照样推
+    await p.call('away', true)
+    sessions('running')
+    sessions('idle', 'completed')
+    await wait(30)
+    expect(pushes()).toEqual(['push p1 completed 1'])
+    // 回到前台：攒着的不推
+    sessions('running')
+    sessions('idle', 'failed')
+    await p.call('away', false)
+    await wait(30)
+    expect(pushes()).toEqual(['push p1 completed 1'])
+    // 断开了：推，几种同时有时取最要紧的
+    t.gateway.phoneLeft('p1')
+    sessions('running')
+    sessions('idle', 'completed')
+    sessions('waiting')
+    await wait(30)
+    expect(pushes()).toEqual(['push p1 completed 1', 'push p1 waiting 1'])
+  })
+
+  it('treats a phone it has not heard from for a while as not looking, and drops queued pushes when it reconnects', async () => {
+    const t = setup()
+    gateways.push(t.gateway)
+    const p = await paired(t)
+    const sessions = (state: string) =>
+      t.gateway.hostEvent('engine:event', [
+        { kind: 'sessions', sessions: [{ record: { id: 's1', title: 's1', updatedAt: 1, archivedAt: null }, state }] },
+      ])
+    const pushes = () => t.cloudCalls.filter(c => c.startsWith('push'))
+    sessions('running')
+    t.tick(46_000)
+    sessions('waiting')
+    await wait(30)
+    expect(pushes()).toEqual(['push p1 waiting 1'])
+    // 断开时排上的，还没到点手机就从前台连回来了：不推
+    t.gateway.phoneLeft('p1')
+    sessions('running')
+    sessions('waiting')
+    expect(await p.connect(t.desktop.publicKey)).toBe(true)
+    await p.call('hello', { batch: true })
+    await wait(30)
+    expect(pushes()).toEqual(['push p1 waiting 1'])
   })
 
   it('tells a removed phone before disconnecting it', async () => {
