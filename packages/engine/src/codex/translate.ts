@@ -54,7 +54,8 @@ export class CodexTranslator {
     /** 子智能体按线程 id 记；会话传入同一个，跨轮保留（结束常在后面的轮次才到） */
     readonly agents = new Map<string, AgentRun>(),
   ) {}
-  item(raw: Message, complete: boolean): void {
+  /** timed：是否算思考用时。冷读的历史（子智能体记录）一次性全倒进来，算出来都是 0，不算，界面按没有用时显示 */
+  item(raw: Message, complete: boolean, timed = true): void {
     const id = 'cx-' + string(raw.id),
       type = string(raw.type)
     if (type === 'subAgentActivity') return this.subagent(raw, complete)
@@ -80,7 +81,7 @@ export class CodexTranslator {
         id,
         text: array(raw.summary).map(string).join('\n\n') || (prior?.kind === 'reasoning' ? prior.text : ''),
         status,
-        ...(status === 'running' ? {} : { durationMs: now - this.reasoningStart.get(id)! }),
+        ...(status === 'running' || !timed ? {} : { durationMs: now - this.reasoningStart.get(id)! }),
       }
     } else if (type === 'commandExecution')
       item = {
