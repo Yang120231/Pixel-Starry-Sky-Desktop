@@ -157,7 +157,7 @@ describe('日志服务', () => {
     expect(text).toEqual(['刷新失败 [redacted]', '记下'])
   })
 
-  it('会话事件：重试和失败记 warn，错误提示记 error，正常结束和配置类警告记 info', () => {
+  it('会话事件：重试和失败记 warn，错误提示记 error，正常结束记 info，信息提示不记', () => {
     const svc = new LogService({ dir, now: () => t0 })
     setLogSink(svc)
     const got: LogEntry[] = []
@@ -171,10 +171,6 @@ describe('日志服务', () => {
     session({ type: 'request_retry', retry: null })
     session({ type: 'item_completed', item: { kind: 'notice', id: 'n', level: 'error', text: 'API Error: 499' } })
     session({ type: 'item_completed', item: { kind: 'notice', id: 'i', level: 'info', text: '压缩' } })
-    session({
-      type: 'item_completed',
-      item: { kind: 'notice', id: 'q', level: 'info', text: 'Under-development features enabled: x.' },
-    })
     session({ type: 'turn_completed', turnId: 't1', outcome: 'failed', error: 'API Error: 499' })
     session({
       type: 'turn_completed',
@@ -186,7 +182,6 @@ describe('日志服务', () => {
     expect(got.map(e => [e.level, e.message])).toEqual([
       ['warn', '请求重试'],
       ['error', '错误提示'],
-      ['info', '引擎配置警告'],
       ['warn', '一轮失败'],
       ['info', '一轮结束'],
     ])
@@ -196,6 +191,6 @@ describe('日志服务', () => {
       attempt: 3,
       reason: 'Connection dropped (ECONNRESET)',
     })
-    expect(got[4].fields).toMatchObject({ outcome: 'completed', durationMs: 5 })
+    expect(got[3].fields).toMatchObject({ outcome: 'completed', durationMs: 5 })
   })
 })
