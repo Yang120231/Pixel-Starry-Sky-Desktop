@@ -44,6 +44,8 @@ const kindLabel = (kind: string): string =>
   kind in KIND_LABELS ? tr(KIND_LABELS[kind as ExtPackContributionKind]) : kind
 
 export interface StoreDetailProps {
+  /** 扩展 id；详情还没取到、本机也没有时用它标出这一页 */
+  id?: string
   /** 商店详情；接口回 404（已下架 / 被平台停用）时是 null，这时用 localPack 显示本机那份 */
   detail: ExtStoreDetail | null
   /** 本机同 id 的扩展（已装的商店版、内置或开发中）；详情是 null 时靠它显示 */
@@ -134,7 +136,7 @@ export function StoreDetail(props: StoreDetailProps) {
   const [reporting, setReporting] = useState(props.reportOpen ?? false)
 
   const manifest = detail?.manifest ?? localPack?.manifest ?? null
-  const id = detail?.extension.id ?? localPack?.id ?? ''
+  const id = detail?.extension.id ?? localPack?.id ?? props.id ?? ''
   const name = manifest ? packName(manifest, locale) : (detail?.extension.name ?? id)
   const description = manifest ? packDescription(manifest, locale) : (detail?.extension.description ?? '')
   const publisher = detail?.extension.publisher ?? (manifest ? { name: manifest.publisher, official: false } : null)

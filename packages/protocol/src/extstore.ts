@@ -55,7 +55,7 @@ export const EXTSTORE_ERROR_CODES = [
 export type ExtStoreErrorCode = (typeof EXTSTORE_ERROR_CODES)[number]
 
 /** 发现页的排序 */
-export type ExtStoreSort = 'recommended' | 'downloads' | 'newest'
+export type ExtStoreSort = 'recommended' | 'downloads' | 'updated'
 
 /** 举报原因 */
 export type ExtStoreReportReason = 'malicious' | 'broken' | 'copyright' | 'inappropriate' | 'misleading' | 'other'

@@ -152,9 +152,11 @@ export interface InstallOptions {
   name?: string
   /** 'update' 包含换回 */
   kind?: 'install' | 'update'
+  /** 换回旧版本（可以比本机的低） */
+  rollback?: boolean
 }
 
-/** 装 / 更新：进度由 extstore:changed 推送，这里只管发起、记下失败原因和发提示 */
+/** 装 / 更新 / 换回：进度由 extstore:changed 推送，这里只管发起、记下失败原因和发提示 */
 export async function installExtension(id: string, version: string, options: InstallOptions = {}): Promise<boolean> {
   const b = api()
   if (!b) return false
@@ -165,7 +167,7 @@ export async function installExtension(id: string, version: string, options: Ins
     if (toast) for (const l of [...toastListeners]) l(toast)
   }
   try {
-    await b.install(id, version)
+    await b.install(id, version, options.rollback ? { rollback: true } : undefined)
     void refreshExtStore()
     emitToast({ ...base, ok: true })
     return true
@@ -231,3 +233,6 @@ export function saveDiscoverView(next: DiscoverView): void {
 export function discoverView(): DiscoverView {
   return view
 }
+
+/** 界面用的预加载桥（演示模式是自带数据的假桥）；详情页、举报用 */
+export const storeBridge = api

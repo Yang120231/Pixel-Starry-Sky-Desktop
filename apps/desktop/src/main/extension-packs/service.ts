@@ -305,11 +305,6 @@ export class ExtensionPacks {
     return matchBlocklist(this.blocklist, site, id, version)
   }
 
-  /** 这个站点的停用名单上次读到的时间（ISO）；没读到过是 null */
-  blocklistAt(site: string): string | null {
-    return this.blocklist.sites[site]?.fetchedAt ?? null
-  }
-
   /**
    * 换上一份商店扩展（新装、更新、换回）：必须在 runExclusive 里调。回执和解压目录已经写好。
    * 第一次装（state.json.store 里还没有这个 id）时继承同 id 内置版的开关和选项；更新和换回保留 store[id] 原样。

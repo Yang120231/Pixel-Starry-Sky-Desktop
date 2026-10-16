@@ -1,47 +1,28 @@
+import { join } from 'node:path'
+import { BrowserWindow, dialog, webContents } from 'electron'
 import { codedError, isExtId, isExtVersion } from '@pixelsky/protocol'
-import type {
-  ExtStoreDetail,
-  ExtStoreLocal,
-  ExtStoreReportReason,
-  ExtStoreSort,
-  ExtStoreState,
-} from '@pixelsky/protocol'
+import type { ExtStoreDetail, ExtStoreLocal, ExtStoreSort, ExtStoreState } from '@pixelsky/protocol'
 import { object } from '@pixelsky/engine'
 import * as ipc from '../../ipc/guard'
 import type { AppContext } from '../../app/context'
-import { baseUrl } from '../../account/account'
+import { baseUrl, signedInEmail } from '../../account/account'
+import { nativeText } from '../../app/ui-language'
 import type { ExtensionPacks } from '../service'
 import { storeApi, StoreError } from './api'
+import { createBlocklistSync } from './blocklist-sync'
+import { createCheckHost, forkCheckProcess } from './check-host'
 import { createInstaller } from './install'
 import { downloadCapped } from './net'
+import { createPublisher } from './publish'
 import type { StoreHost } from './types'
 import { AUTO_CHECK_INTERVAL_MS, createUpdates } from './updates'
 
 // 扩展商店的主进程一侧（docs/ui/extension-store-client.md §3.10）。
-// 公开通道（目录、详情、安装、取消、检查更新、状态）已接上真实现；要登录的通道（我的发布、举报）还是
-// 参数检查完回 extstore.notImplemented，7.5b 接上。停用名单的读取和 refreshBlocklist 是 7.3a。
+// 公开通道（目录、详情、安装、取消、检查更新、状态）直接用 api / installer / updates；停用名单的定时读取是
+// blocklist-sync.ts；要登录的通道（我的发布、举报）交给 publish.ts 的 createPublisher，参数检查在它里面。
 
-const NAME_MAX = 64
-const TOKEN_MAX = 200
 const QUERY_MAX = 100
-const REPORT_DETAIL_MAX = 2000
-/** 拖进来的 zip 最多 10 MB + 1 字节（多 1 字节用来判断超了） */
-const UPLOAD_MAX = 10 * 1024 * 1024 + 1
-const REPORT_REASONS: readonly ExtStoreReportReason[] = [
-  'malicious',
-  'broken',
-  'copyright',
-  'inappropriate',
-  'misleading',
-  'other',
-]
 const SORTS = ['recommended', 'downloads', 'updated']
-
-function str(value: unknown, max: number): string {
-  if (typeof value !== 'string' || !value || value.length > max || value.includes('\0'))
-    throw codedError('extstore.badRequest')
-  return value
-}
 
 /** 扩展 id 和版本号按协议包的格式规则检查（和云端一致） */
 const idArg = (value: unknown): string => {
@@ -68,26 +49,6 @@ function catalogQuery(raw: unknown): void {
   optionalStr(q.before, 40)
 }
 
-function reportInput(raw: unknown): void {
-  const input = object(raw)
-  if (typeof input.reason !== 'string' || !REPORT_REASONS.includes(input.reason as ExtStoreReportReason))
-    throw codedError('extstore.badRequest')
-  if (typeof input.detail !== 'string' || input.detail.length > REPORT_DETAIL_MAX)
-    throw codedError('extstore.badRequest')
-  versionArg(input.version)
-}
-
-/** null 弹选择框；{ bytes, name } 是拖进来的 zip。传字符串（路径）一律拒绝 */
-function pickUploadInput(raw: unknown): void {
-  if (raw === null) return
-  const input = object(raw)
-  if (!(input.bytes instanceof ArrayBuffer) || input.bytes.byteLength > UPLOAD_MAX) {
-    if (input.bytes instanceof ArrayBuffer) throw codedError('extstore.tooLarge')
-    throw codedError('extstore.badRequest')
-  }
-  str(input.name, 260)
-}
-
 /** 本机装的同 id 的那一份：商店 > 文件夹 > 内置（详情页要显示「本机装的版本」） */
 function localOf(service: ExtensionPacks, id: string): ExtStoreLocal | null {
   const packs = service.state().packs.filter(p => p.id === id)
@@ -102,11 +63,41 @@ function localOf(service: ExtensionPacks, id: string): ExtStoreLocal | null {
   }
 }
 
+/**
+ * 「选择 zip 或文件夹」：macOS 一个对话框能同时选；Windows / Linux 的对话框不能又选文件又选文件夹
+ * （同时写两个属性只会出文件夹选择器），所以先问一句选哪种。取消返回 null
+ */
+async function pickUploadPath(sender: Electron.WebContents | undefined): Promise<string | null> {
+  const win = sender ? BrowserWindow.fromWebContents(sender) : null
+  const show = (opts: Electron.OpenDialogOptions) =>
+    win ? dialog.showOpenDialog(win, opts) : dialog.showOpenDialog(opts)
+  let properties: Array<'openFile' | 'openDirectory'> = ['openFile', 'openDirectory']
+  if (process.platform !== 'darwin') {
+    const ask = {
+      type: 'question' as const,
+      title: nativeText(win, '选择要上传的扩展'),
+      message: nativeText(win, '要上传 zip 文件还是扩展文件夹？'),
+      buttons: [nativeText(win, 'zip 文件'), nativeText(win, '扩展文件夹'), nativeText(win, '取消')],
+      defaultId: 0,
+      cancelId: 2,
+      noLink: true,
+    }
+    const { response } = win ? await dialog.showMessageBox(win, ask) : await dialog.showMessageBox(ask)
+    if (response === 2) return null
+    properties = response === 0 ? ['openFile'] : ['openDirectory']
+  }
+  const r = await show({
+    title: nativeText(win, '选择要上传的扩展'),
+    properties,
+    ...(properties.length === 1 && properties[0] === 'openFile'
+      ? { filters: [{ name: 'zip', extensions: ['zip'] }] }
+      : {}),
+  })
+  return r.canceled || !r.filePaths[0] ? null : r.filePaths[0]
+}
+
 /** 扩展商店的 IPC；service 的方法拼成 StoreHost 交给 installer（install.ts 自己拿不到 service） */
 export function initExtStore(ctx: AppContext, service: ExtensionPacks): void {
-  const todo = (): never => {
-    throw codedError('extstore.notImplemented')
-  }
   const site = (): string => new URL(baseUrl()).origin
   const changed = (): void => ctx.events.broadcast('extstore:changed')
 
@@ -141,6 +132,30 @@ export function initExtStore(ctx: AppContext, service: ExtensionPacks): void {
   // 启动时静默安装 BOOTSTRAP_PACKS（默认空，什么都不做）；不 await，失败只写日志
   void installer.bootstrap().catch(e => console.warn('[extension-store] bootstrap failed', e))
 
+  // 停用名单：启动 15 秒后读一次、之后每 6 小时；读到后交给 service 重算 blocked。文件就是 service 启动时同步读的那一份
+  const blocklist = createBlocklistSync({
+    file: join(service.opts.dataDir, 'blocklist.json'),
+    site,
+    api: storeApi,
+    apply: list => service.applyBlocklist(list).then(changed),
+  })
+  void service.ready().then(() => blocklist.start())
+  ctx.lifecycle.onShutdown(() => blocklist.stop())
+
+  // 我的发布：选包的对话框、登录状态、检查进程都从这里注入（publish.ts 不碰 electron）
+  const publisher = createPublisher({
+    api: storeApi,
+    // ext-check.js 和 main/index.js 在同一个文件夹；起不起来由 check-host 回「本机没检查完」
+    runCheck: createCheckHost({
+      fork: forkCheckProcess,
+      workerPath: join(__dirname, 'ext-check.js'),
+      tmpRoot: join(service.storeDir, '.tmp'),
+    }),
+    signedIn: signedInEmail,
+    checksDir: join(service.opts.dataDir, 'publish-checks'),
+    pickPath: owner => pickUploadPath(webContents.fromId(Number(owner))),
+  })
+
   ipc.handle('extstore:catalog', (_e, query: unknown) => {
     catalogQuery(query)
     const q = object(query)
@@ -170,53 +185,27 @@ export function initExtStore(ctx: AppContext, service: ExtensionPacks): void {
     (): ExtStoreState => ({
       site: site(),
       updates: updates.last(),
-      blocklistAt: service.blocklistAt(site()),
+      blocklistAt: blocklist.status().blocklistAt,
       installing: installer.installing(),
     }),
   )
-  ipc.handle('extstore:refreshBlocklist', () => ({ blocklistAt: service.blocklistAt(site()) }))
-  ipc.handle('extstore:publisher', () => ({ publisher: null, extensions: [] }))
-  ipc.handle('extstore:publishCheck', (_e, id: unknown, version: unknown) => {
-    idArg(id)
-    versionArg(version)
-    return null
-  })
+  ipc.handle('extstore:refreshBlocklist', async () => ({ blocklistAt: (await blocklist.refresh()).blocklistAt }))
+  ipc.handle('extstore:publisher', () => publisher.publisher())
+  ipc.handle('extstore:publishCheck', (_e, id: unknown, version: unknown) => publisher.publishCheck(id, version))
 
-  // 会写的：检查参数后回 notImplemented
+  // 会写的
   ipc.handle('extstore:install', (_e, id: unknown, version: unknown, options: unknown) => {
     const rollback = object(options).rollback
     if (rollback !== undefined && typeof rollback !== 'boolean') throw codedError('extstore.badRequest')
     return installer.install(idArg(id), versionArg(version), { rollback: rollback === true })
   })
   ipc.handle('extstore:cancel', (_e, id: unknown) => installer.cancel(idArg(id)))
-  ipc.handle('extstore:report', (_e, id: unknown, input: unknown) => {
-    idArg(id)
-    reportInput(input)
-    return todo()
-  })
-  ipc.handle('extstore:register', (_e, name: unknown) => {
-    str(name, NAME_MAX)
-    return todo()
-  })
-  ipc.handle('extstore:pickUpload', (_e, input: unknown) => {
-    pickUploadInput(input)
-    return todo()
-  })
-  ipc.handle('extstore:upload', (_e, token: unknown) => {
-    str(token, TOKEN_MAX)
-    return todo()
-  })
-  ipc.handle('extstore:withdraw', (_e, id: unknown, version: unknown) => {
-    idArg(id)
-    versionArg(version)
-    return todo()
-  })
-  ipc.handle('extstore:delist', (_e, id: unknown) => {
-    idArg(id)
-    return todo()
-  })
-  ipc.handle('extstore:relist', (_e, id: unknown) => {
-    idArg(id)
-    return todo()
-  })
+  ipc.handle('extstore:report', (_e, id: unknown, input: unknown) => publisher.report(id, input))
+  ipc.handle('extstore:register', (_e, name: unknown) => publisher.register(name))
+  // 每个窗口只留一份没用过的 token：以发起调用的窗口（sender.id）为主人
+  ipc.handle('extstore:pickUpload', (e, input: unknown) => publisher.pickUpload(input, e.sender.id))
+  ipc.handle('extstore:upload', (e, token: unknown) => publisher.upload(token, e.sender.id))
+  ipc.handle('extstore:withdraw', (_e, id: unknown, version: unknown) => publisher.withdraw(id, version))
+  ipc.handle('extstore:delist', (_e, id: unknown) => publisher.delist(id))
+  ipc.handle('extstore:relist', (_e, id: unknown) => publisher.relist(id))
 }
