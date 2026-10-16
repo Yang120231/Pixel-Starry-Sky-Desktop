@@ -119,9 +119,18 @@ if (process.env.FAKE_CLAUDE_CHAIN) {
   const leaf = entries.findLast(e => e.type === 'last-prompt')?.leafUuid
   const isLeaf = leaf && byId.has(leaf) && !messages.some(e => e.parentUuid === leaf)
   chainTail = resumeAt ?? (isLeaf ? leaf : (messages.at(-1)?.uuid ?? null))
+  // 接力写进来的条目按真实格式放在 message.content 里；parentUuid 绕成环时停下，visible 末尾记一个 '<loop>'
   const visible = []
-  for (let id = chainTail; id; id = byId.get(id)?.parentUuid)
-    if (byId.get(id)?.type === 'user') visible.unshift(byId.get(id).text)
+  const walked = new Set()
+  for (let id = chainTail; id; id = byId.get(id)?.parentUuid) {
+    if (walked.has(id)) {
+      visible.push('<loop>')
+      break
+    }
+    walked.add(id)
+    const e = byId.get(id)
+    if (e?.type === 'user') visible.unshift(e.text ?? e.message?.content)
+  }
   if (process.env.FAKE_CLAUDE_CHAIN_LOG && !argv.includes('--no-session-persistence'))
     appendFileSync(process.env.FAKE_CLAUDE_CHAIN_LOG, JSON.stringify(visible) + '\n')
   // 分叉且要保存：把截断点之前的链复制到新会话的记录里

@@ -4,11 +4,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { HostEvent } from '@pixelsky/protocol'
+import type { EngineId, EngineInfo, HostEvent } from '@pixelsky/protocol'
 import { ClaudeAdapter, EngineHost } from '../src'
+import type { EngineAdapter, EngineSession, SessionContext } from '../src/adapter'
 import { helpersExited, parseRewindReply, parseSideAnswer, sideQuestionArgs } from '../src/claude/helper'
 import { claudeArgs } from '../src/claude/session'
 import { sidePrompt } from '../src/host/branch'
+import { ENGINES } from '../src/registry'
 
 const FAKE = fileURLToPath(new URL('./fakes/fake-claude.mjs', import.meta.url))
 
@@ -16,7 +18,10 @@ let root: string
 let events: HostEvent[]
 let hosts: EngineHost[]
 
-function makeHost(extraEnv: NodeJS.ProcessEnv = {}): EngineHost {
+function makeHost(
+  extraEnv: NodeJS.ProcessEnv = {},
+  extraAdapters: Partial<Record<EngineId, EngineAdapter>> = {},
+): EngineHost {
   const projectsDir = join(root, 'claude-projects')
   const adapter = new ClaudeAdapter({
     launcher: { command: process.execPath, args: [FAKE] },
@@ -34,10 +39,47 @@ function makeHost(extraEnv: NodeJS.ProcessEnv = {}): EngineHost {
     dataDir: join(root, 'data'),
     emit: e => events.push(e),
     idleMs: 60_000,
-    adapters: { claude: adapter },
+    adapters: { claude: adapter, ...extraAdapters },
   })
   hosts.push(host)
   return host
+}
+
+/** 跨引擎接力里的另一个引擎：只回一句话，不碰 Claude 的记录 */
+class StubCodex implements EngineAdapter {
+  readonly enginePicksSessionId = true
+  async info(): Promise<EngineInfo> {
+    return { ...ENGINES.codex, status: 'ready', version: 'stub', path: 'stub', message: null }
+  }
+  createSession(ctx: SessionContext): EngineSession {
+    let n = 0
+    return {
+      send(text, turnId) {
+        if (!ctx.record().engineSessionId) ctx.setEngineSessionId('codex-thread')
+        setTimeout(() => {
+          ctx.emit({
+            type: 'item_completed',
+            item: { kind: 'assistant', id: `cx-${++n}`, text: `codex:${text}`, status: 'completed' },
+          })
+          ctx.emit({ type: 'turn_completed', turnId, outcome: 'completed', error: null })
+        }, 0)
+      },
+      async interrupt() {},
+      answer() {},
+      async update() {},
+      async close() {},
+    }
+  }
+}
+
+/** Claude 会话记录里主线上的 user / assistant 条目 */
+function chainEntries(cwd: string, sid: string): { type: string; uuid: string; parentUuid: string | null }[] {
+  const file = join(root, 'claude-projects', cwd.replace(/[^A-Za-z0-9]/g, '-'), `${sid}.jsonl`)
+  return readFileSync(file, 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map(l => JSON.parse(l) as { type: string; uuid: string; parentUuid: string | null })
+    .filter(e => e.type === 'user' || e.type === 'assistant')
 }
 
 const spawnArgs = (): string[][] =>
@@ -314,6 +356,65 @@ describe('回退：对话 / 代码 / 两者，撤销', () => {
     await expect(host.undoRewind(record.id)).rejects.toThrow('不能撤销')
     expect(userTexts(host, record.id)).toEqual(['一', '改'])
   })
+})
+
+describe('跨引擎接力写进 Claude 记录后的回退和重试', () => {
+  it('回退到另一个引擎处理、已同步进 Claude 记录的消息之前：Claude 的上下文只保留之前的部分', async () => {
+    const host = makeHost({}, { codex: new StubCodex() })
+    const { record } = await conversation(host, ['一'])
+    await host.update(record.id, { engine: 'codex' })
+    await host.send(record.id, { text: '二', clientMessageId: 'b' })
+    await waitFor(() => turnsDone(record.id) === 2)
+    await host.update(record.id, { engine: 'claude' })
+    await host.send(record.id, { text: '三', clientMessageId: 'c' })
+    await waitFor(() => turnsDone(record.id) === 3)
+    // 换回 Claude 时「二」写进了它的记录
+    expect(visible().at(-1)).toEqual(['一', '二'])
+
+    await host.rewind(record.id, 'b')
+    expect(userTexts(host, record.id)).toEqual(['一'])
+    await host.send(record.id, { text: '四', clientMessageId: 'd' })
+    await waitFor(() => turnsDone(record.id) === 4)
+    expect(visible().at(-1)).toEqual(['一'])
+  })
+
+  it.each([false, true])(
+    '失败的一轮已写进记录，关掉进程后重试：不重复写入，uuid 唯一、没有环，回退截断点不变（中间换过引擎：%s）',
+    async viaCodex => {
+      // 和界面发的一样用 UUID 当消息 id：Claude 记录里的 uuid 就是它
+      const b = '11111111-2222-4333-8444-555555555555'
+      const c = '66666666-7777-4888-8999-aaaaaaaaaaaa'
+      const host = makeHost({}, { codex: new StubCodex() })
+      const { record, cwd } = await conversation(host, ['一'])
+      if (viaCodex) {
+        await host.update(record.id, { engine: 'codex' })
+        await host.send(record.id, { text: '二', clientMessageId: b })
+        await waitFor(() => turnsDone(record.id) === 2)
+        await host.update(record.id, { engine: 'claude' })
+      }
+      const done = turnsDone(record.id)
+      await host.send(record.id, { text: '认证失败', clientMessageId: c })
+      await waitFor(() => turnsDone(record.id) === done + 1)
+      expect(host.open(record.id).queue[0]).toMatchObject({ id: c, status: 'failed' })
+      const sid = host.open(record.id).record.engineSessionId!
+      const parentOfC = chainEntries(cwd, sid).find(e => e.uuid === c)!.parentUuid
+
+      // 归档关掉进程，恢复后重试：重新启动时又要把游标之后的聊天（含失败的那条）写进记录
+      await host.archiveSession(record.id, true)
+      await host.archiveSession(record.id, false)
+      await host.runQueuedNow(record.id, c)
+      await waitFor(() => turnsDone(record.id) === done + 2)
+
+      const entries = chainEntries(cwd, sid)
+      const uuids = entries.map(e => e.uuid)
+      expect(new Set(uuids).size).toBe(uuids.length)
+      expect(entries.filter(e => e.uuid === c)).toEqual([expect.objectContaining({ parentUuid: parentOfC })])
+      // 重试时 Claude 读到的上下文没有重复、没有环
+      expect(visible().at(-1)).toEqual(viaCodex ? ['一', '二', '认证失败'] : ['一', '认证失败'])
+      await host.rewind(record.id, c)
+      expect(host.open(record.id).record.pendingRewind).toBe(parentOfC)
+    },
+  )
 })
 
 describe('分叉', () => {
