@@ -24,6 +24,33 @@ export const EXTSTORE_ERROR_CODES = [
   'extstore.notFound',
   'extstore.badRequest',
   'extstore.proxyHint',
+  // 云端接口的错误，按「接口 + code」映射（main/extension-packs/market/api.ts）
+  'extstore.api.invalid',
+  'extstore.api.checkFailed',
+  'extstore.api.checkTimeout',
+  'extstore.api.noPublisher',
+  'extstore.api.notYourPublisher',
+  'extstore.api.versionProblem',
+  'extstore.api.tooManyPending',
+  'extstore.api.uploadRateLimited',
+  'extstore.api.reportRateLimited',
+  'extstore.api.alreadyReported',
+  'extstore.api.reportNotFound',
+  'extstore.api.myNotFound',
+  'extstore.api.tooLarge',
+  'extstore.api.badPackage',
+  'extstore.api.checkerUnavailable',
+  'extstore.api.checkerError',
+  'extstore.api.unavailable',
+  'extstore.api.badState',
+  'extstore.api.delistedByAdmin',
+  'extstore.api.nameTaken',
+  'extstore.api.alreadyPublisher',
+  'extstore.api.reservedName',
+  'extstore.api.badPublisherName',
+  'extstore.api.badResponse',
+  'extstore.api.cloud',
+  'extstore.api.status',
 ] as const
 export type ExtStoreErrorCode = (typeof EXTSTORE_ERROR_CODES)[number]
 
@@ -209,6 +236,9 @@ export interface ExtStoreCheckReport {
   /** 本机没检查完（进程起不来、超时）时为 true，issues 为空 */
   incomplete: boolean
   issues: ExtPackIssue[]
+  /** 要改的问题条数、只是提示的条数（云端检查报告的 verdict.blocking / counts.hint）；没有就不给 */
+  blocking?: number
+  hints?: number
   rulesVersion?: number
   toolVersion?: string
 }

@@ -35,11 +35,24 @@ vi.mock('../ipc/guard', () => ({
   handle: (name: string, fn: (...args: unknown[]) => unknown) => mocks.handlers.set(name, fn),
 }))
 
-const requests: Array<{ path: string; body: Record<string, unknown> | null }> = []
+const requests: Array<{
+  path: string
+  body: Record<string, unknown> | null
+  raw: unknown
+  headers: Headers
+  method: string
+}> = []
 let revoked = false
 vi.stubGlobal('fetch', async (input: string, init: RequestInit = {}) => {
   const path = new URL(input).pathname
-  requests.push({ path, body: typeof init.body === 'string' ? JSON.parse(init.body) : null })
+  requests.push({
+    path,
+    body: typeof init.body === 'string' ? JSON.parse(init.body) : null,
+    raw: init.body,
+    headers: new Headers(init.headers),
+    method: init.method ?? 'GET',
+  })
+  if (path.startsWith('/v1/extensions')) return Response.json({ ok: true }, { status: 200 })
   if (path === '/v1/oauth/token' && revoked) return Response.json({ error: 'invalid_grant' }, { status: 400 })
   if (path.startsWith('/v1/platform/')) return Response.json({}, { status: revoked ? 401 : 200 })
   // 账号数据读不到只是暂时故障：保持登录
@@ -59,12 +72,43 @@ writeFileSync(
   }),
 )
 
-const { deviceName, initAccount, platformFetch, signedInEmail } = await import('./account')
+const { deviceName, extensionsFetch, initAccount, platformFetch, signedInEmail } = await import('./account')
 vi.useFakeTimers({ toFake: ['setInterval'] })
 initAccount()
 
 afterAll(() => {
   vi.useRealTimers()
+})
+
+describe('extensionsFetch', () => {
+  it('带登录令牌请求 /v1/extensions，JSON 体和原始字节都能发', async () => {
+    requests.length = 0
+    expect((await extensionsFetch('GET', '/v1/extensions/publisher')).status).toBe(200)
+    expect(requests[0].headers.get('Authorization')).toBe('Bearer pss_a')
+
+    await extensionsFetch('POST', '/v1/extensions/publisher', { body: { name: 'acme' } })
+    expect(requests[1].body).toEqual({ name: 'acme' })
+    expect(requests[1].headers.get('Content-Type')).toBe('application/json')
+
+    const bytes = new Uint8Array([80, 75, 3, 4])
+    await extensionsFetch('POST', '/v1/extensions/upload', { raw: bytes, contentType: 'application/zip' })
+    expect(requests[2].raw).toBe(bytes)
+    expect(requests[2].headers.get('Content-Type')).toBe('application/zip')
+  })
+
+  it('白名单外和带 .. / %2e 的路径在发请求前就被拒', async () => {
+    requests.length = 0
+    for (const path of [
+      '/v1/platform/x',
+      '/v1/extensionsx',
+      '/v1/extensions/../platform',
+      '/v1/extensions/%2e%2e/x',
+      '/v1/extensions/%2E%2e/x',
+      '/cloud/api/extensions',
+    ])
+      await expect(extensionsFetch('GET', path), path).rejects.toThrow()
+    expect(requests).toEqual([])
+  })
 })
 
 describe('登录会话', () => {

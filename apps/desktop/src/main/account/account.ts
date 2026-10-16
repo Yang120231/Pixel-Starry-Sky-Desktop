@@ -461,6 +461,32 @@ export async function teamsFetch(
 }
 
 /**
+ * 扩展商店的作者接口（docs/ui/extension-store-client.md §7）：只能调 /v1/extensions 下的接口，不放宽其他白名单。
+ * body 发 JSON；raw 发原始字节（上传 zip），contentType 写在请求头里。
+ */
+export async function extensionsFetch(
+  method: 'GET' | 'POST',
+  path: string,
+  opts: { body?: unknown; raw?: Uint8Array; contentType?: string; timeoutMs?: number } = {},
+): Promise<Response> {
+  if (!/^\/v1\/extensions(\/|\?|$)/.test(path) || /\.\.|%2e/i.test(path)) throw new Error('无效的扩展接口')
+  const headers: Record<string, string> = {}
+  let body: RequestInit['body']
+  if (opts.raw !== undefined) {
+    body = opts.raw as RequestInit['body']
+    headers['Content-Type'] = opts.contentType ?? 'application/octet-stream'
+  } else if (opts.body !== undefined) {
+    body = JSON.stringify(opts.body)
+    headers['Content-Type'] = 'application/json'
+  }
+  return authedFetch(path, {
+    method,
+    ...(body !== undefined && { body, headers }),
+    signal: AbortSignal.timeout(opts.timeoutMs ?? 20_000),
+  })
+}
+
+/**
  * 连中转用的访问令牌（WebSocket 不能走 authedFetch）：快过期或中转说令牌失效（force）时先刷新。
  * 没登录、刷新被拒（同时退出登录）时返回 null。
  */
