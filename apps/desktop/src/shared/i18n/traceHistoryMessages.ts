@@ -34,4 +34,9 @@ export const traceHistoryMessages = {
   'trace.history.agoMinutes': { zh: '{n} 分钟前', en: '{n} min ago' },
   'trace.history.agoHours': { zh: '{n} 小时前', en: '{n} h ago' },
   'trace.history.agoDays': { zh: '{n} 天前', en: '{n} d ago' },
+  // 编排按阶段折叠（docs/ui/agent-trace-phases.md）
+  'trace.phase.workflow': { zh: '工作流', en: 'Workflow' },
+  'trace.phase.other': { zh: '其他', en: 'Other' },
+  'trace.phase.count': { zh: '{done}/{total} 个完成', en: '{done} of {total} done' },
+  'trace.phase.more': { zh: '还有 {n} 个', en: '{n} more' },
 } as const

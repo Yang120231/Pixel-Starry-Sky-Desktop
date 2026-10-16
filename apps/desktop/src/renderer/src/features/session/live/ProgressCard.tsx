@@ -9,6 +9,7 @@ import { IconButton, cn } from '@/ui'
 import { elapsed, formatDuration, RUN_STATE_LABEL, shortModel, type RunState } from './agentTrace'
 import { activeStep, currentPlan, progressAgents, turnKey, type Plan, type ProgressAgent } from './progressData'
 import { activityTooltip, agentActivity, agoText } from './agentActivity'
+import { useFirstSeen } from './useFirstSeen'
 import { useOpenTrace } from './trace'
 
 const COLLAPSED_KEY = 'pixelsky.progress.collapsed'
@@ -91,19 +92,6 @@ function StateIcon({ state }: { state: RunState }) {
   if (state === 'failed') return <X size={12} strokeWidth={2} className="mt-[3px] shrink-0 text-danger" />
   if (state === 'stopped') return <span className="mt-[3px] size-3 shrink-0 rounded-[3px] bg-fg-faint" />
   return <CircleSlash size={12} strokeWidth={1.75} className="mt-[3px] shrink-0 text-fg-muted" />
-}
-
-/** 每一步第一次出现在卡片里的时间（条目本身不带时间），算「几秒前」用；只增不减，换会话时组件会重建 */
-function useFirstSeen(): (id: string) => number {
-  const seen = useRef(new Map<string, number>())
-  return useCallback((id: string) => {
-    let at = seen.current.get(id)
-    if (at === undefined) {
-      at = Date.now()
-      seen.current.set(id, at)
-    }
-    return at
-  }, [])
 }
 
 /** 运行中的子智能体每秒刷新已用时间 */

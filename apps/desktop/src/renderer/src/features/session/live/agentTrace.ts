@@ -107,6 +107,67 @@ export function byPhase(run: WorkflowRun): { title: string; agents: AgentRun[] }
   return out
 }
 
+/**
+ * 一个阶段的状态（阶段那一行的图标、默认展开）：有失败的算失败，有跑着的算跑着，全没开始算排队，
+ * 有完成也有没开始的（中间等着）算跑着，有停掉的算停止，其余完成
+ */
+export function phaseState(agents: readonly Pick<AgentRun, 'state'>[]): RunState {
+  const states = agents.map(a => runState(a.state))
+  if (states.includes('failed')) return 'failed'
+  if (states.includes('running')) return 'running'
+  if (states.length > 0 && states.every(s => s === 'queued')) return 'queued'
+  if (states.includes('queued')) return 'running'
+  if (states.includes('stopped')) return 'stopped'
+  return 'done'
+}
+
+/** 跑着的和有失败的阶段默认展开，其余收起（只看圆点） */
+export const phaseOpenByDefault = (state: RunState): boolean => state === 'running' || state === 'failed'
+
+export interface PhaseView {
+  /** 阶段名；编排没分阶段、或不在任何阶段里的为空 */
+  title: string
+  agents: AgentRun[]
+  state: RunState
+  /** 完成了几个（失败、停掉的不算） */
+  done: number
+  /** 每个智能体一个圆点 */
+  dots: RunState[]
+  /** 这个阶段都用同一个模型时写在表头；不同时为空，每行自己写 */
+  model: string
+}
+
+/** 编排的阶段（docs/ui/agent-trace-phases.md）：状态、圆点、完成数、共用的模型 */
+export function phaseViews(run: WorkflowRun): PhaseView[] {
+  return byPhase(run).map(({ title, agents }) => {
+    const models = new Set(agents.map(a => a.model))
+    const dots = agents.map(a => runState(a.state))
+    return {
+      title,
+      agents,
+      state: phaseState(agents),
+      done: dots.filter(s => s === 'done').length,
+      dots,
+      model: models.size === 1 ? [...models][0] : '',
+    }
+  })
+}
+
+/** 阶段里先列这么多个智能体 */
+export const PHASE_ROWS = 8
+
+/** 阶段里列哪些：不超过 8 个全列；多了先列跑着、失败、停掉的，再按先后补满 8 个，其余收进「还有 N 个」 */
+export function phaseRows(agents: readonly AgentRun[], all: boolean): { shown: AgentRun[]; hidden: number } {
+  if (all || agents.length <= PHASE_ROWS) return { shown: [...agents], hidden: 0 }
+  const urgent = new Set(agents.filter(a => !['done', 'queued'].includes(runState(a.state))))
+  for (const a of agents) {
+    if (urgent.size >= PHASE_ROWS) break
+    urgent.add(a)
+  }
+  const shown = agents.filter(a => urgent.has(a))
+  return { shown, hidden: agents.length - shown.length }
+}
+
 /** 编排里完成了几个 / 一共几个 */
 export function progress(run: WorkflowRun): { done: number; total: number } {
   const finished = run.agents.filter(a => {

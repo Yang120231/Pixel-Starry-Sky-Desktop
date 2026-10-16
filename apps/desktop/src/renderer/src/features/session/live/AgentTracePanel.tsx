@@ -2,7 +2,8 @@ import { translateMessage } from '../../../i18n/core'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, type TranslationKey } from '../../../i18n/core'
 // 智能体追踪面板（docs/engines.md §15.4，参考 JuCode AgentRunsPanel）：
-// 会话主区右侧的抽屉。总览：每个多智能体编排一节（按阶段、共用时间轴），再加「子智能体（Agent 工具）」一节；
+// 会话主区右侧的抽屉。总览：每个多智能体编排一节（按阶段折叠，阶段一行带圆点，docs/ui/agent-trace-phases.md），
+// 再加「子智能体（Agent 工具）」一节（每个下面一行「正在做什么」）；
 // 点一个智能体进入它的会话（只读），还在运行时每 2.5 秒刷新。
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -16,7 +17,6 @@ import {
   Minus,
   PanelRight,
   PictureInPicture2,
-  Workflow,
   X,
   type LucideIcon,
 } from 'lucide-react'
@@ -28,17 +28,20 @@ import { demo } from '@/data/demo'
 import {
   RUN_STATE_LABEL,
   anyRunning,
-  byPhase,
   elapsed,
   formatCount,
   formatDuration,
-  progress,
+  phaseOpenByDefault,
+  phaseRows,
+  phaseViews,
   runState,
   shortModel,
-  timeline,
+  type PhaseView,
   type RunState,
 } from './agentTrace'
-import { runActivity } from './agentActivity'
+import { activityTooltip, agentActivity, agoText, runActivity, type Activity, type AgentStep } from './agentActivity'
+import { progressAgents } from './progressData'
+import { useFirstSeen } from './useFirstSeen'
 import { Markdown } from '@/ui/markdown/Markdown'
 import { ReasoningBlock, ToolItemRow, UserBubble } from './ItemRows'
 import { useDockFloat, type DragKind } from './useDockFloat'
@@ -101,67 +104,98 @@ function StateIcon({ state }: { state: string }) {
   )
 }
 
-/** 一行智能体：状态、名字、类型 · 模型、时间线条、耗时、tokens、工具次数 */
+/** 智能体表的列：状态、名字、耗时、tokens、工具次数；面板窄（340 以下）时去掉 tokens */
+const ROW_GRID =
+  'grid grid-cols-[16px_minmax(0,1fr)_64px_70px_36px] gap-2 @max-[340px]:grid-cols-[16px_minmax(0,1fr)_56px_32px]'
+const TOKENS_COL = '@max-[340px]:hidden'
+
+/** 名字下面那一行（docs/ui/agent-trace-phases.md §2）：Agent 工具的子智能体写「正在做什么」，编排里的只在失败时写原因 */
+export interface RowLine {
+  activity: Activity
+  /** 「几秒前」和悬停提示用 */
+  steps?: readonly AgentStep[]
+}
+
+/** 一行智能体：状态、名字（后面小字：改了几个文件 · 类型 · 模型）、耗时、tokens、工具次数；下面可选一行 */
 function AgentRow({
   a,
-  bar,
   now,
   files = 0,
+  showModel = true,
+  line,
+  seen,
   onPick,
 }: {
   a: AgentRun
-  bar?: { left: number; width: number }
   now: number
   /** 这个子智能体改了几个文件（docs/ui/subagent-changes.md §2.3） */
   files?: number
+  /** 阶段里都用同一个模型时写在表头，行里不再写 */
+  showModel?: boolean
+  line?: RowLine | null
+  seen?: (id: string) => number
   onPick: (id: string) => void
 }) {
   useI18n()
   const s = runState(a.state)
+  const meta = [
+    files > 0 && tr(files === 1 ? 'session.changes.agentFile' : 'session.changes.agentFiles', { n: files }),
+    a.type,
+    showModel && shortModel(a.model),
+  ]
+    .filter(Boolean)
+    .join(' · ')
+  const act = line?.activity
   return (
     <button
       type="button"
       disabled={!a.id}
       onClick={() => onPick(a.id)}
       // 悬停：和进度卡片同一套说法（任务：… / 完成：… / 失败：…），docs/ui/progress-card.md §9
-      title={runActivity(a)?.full || a.prompt || a.label}
-      className="grid w-full grid-cols-[16px_minmax(0,1.3fr)_minmax(0,1fr)_64px_70px_36px] items-center gap-2 rounded-md px-2 py-1.5 text-left text-meta hover:bg-hover disabled:cursor-default disabled:hover:bg-transparent"
+      title={
+        act && seen ? activityTooltip(act, line?.steps ?? [], seen, now) : runActivity(a)?.full || a.prompt || a.label
+      }
+      className={cn(
+        ROW_GRID,
+        'w-full items-center rounded-md px-2 py-1 text-left text-meta hover:bg-hover disabled:cursor-default disabled:hover:bg-transparent',
+      )}
     >
       <StateIcon state={a.state} />
-      <span className="min-w-0">
-        <span className="block truncate text-list text-fg">
+      <span className="flex min-w-0 flex-col">
+        <span className="truncate text-list text-fg">
           {a.label || a.id || tr('session.live.AgentTracePanel.queued')}
+          {meta && (
+            <span className="ml-1.5 text-label text-fg-faint" title={a.model || undefined}>
+              {meta}
+            </span>
+          )}
         </span>
-        <span className="block truncate text-label text-fg-faint" title={a.model || undefined}>
-          {/* 改了几个文件放最前面：这一列窄，后面的类型、模型常被截掉 */}
-          {[
-            files > 0 && tr(files === 1 ? 'session.changes.agentFile' : 'session.changes.agentFiles', { n: files }),
-            a.type,
-            shortModel(a.model),
-          ]
-            .filter(Boolean)
-            .join(' · ')}
-        </span>
-      </span>
-      <span className="relative h-1.5 rounded-full bg-subtle">
-        {bar && (
+        {act && (
           <span
+            data-activity={act.kind}
             className={cn(
-              'absolute inset-y-0 rounded-full',
-              s === 'running' && 'bg-accent',
-              s === 'done' && 'bg-fg-muted',
-              s === 'failed' && 'bg-danger',
-              (s === 'stopped' || s === 'queued') && 'bg-line-strong',
+              'truncate text-label',
+              act.kind === 'failed' ? 'text-danger' : act.kind === 'task' ? 'text-fg-faint' : 'text-fg-muted',
             )}
-            style={{ left: `${bar.left}%`, width: `${bar.width}%` }}
-          />
+          >
+            {act.text}
+            {act.kind === 'step' && act.stepId && seen && (
+              <span className="text-fg-faint tabular-nums"> · {agoText(now - seen(act.stepId))}</span>
+            )}
+          </span>
         )}
       </span>
       <span className="text-right text-fg-muted tabular-nums">{formatDuration(elapsed(a, s, now))}</span>
-      <span className="text-right text-fg-muted tabular-nums">{formatCount(a.tokens)}</span>
+      <span className={cn('text-right text-fg-muted tabular-nums', TOKENS_COL)}>{formatCount(a.tokens)}</span>
       <span className="text-right text-fg-muted tabular-nums">{a.toolCalls}</span>
     </button>
   )
+}
+
+/** 编排里的智能体：只在失败时在名字下面写原因（跑着的只有任务说明，和名字差不多，写了只会变挤） */
+const workflowLine = (a: AgentRun): RowLine | null => {
+  const activity = runState(a.state) === 'failed' ? runActivity(a) : null
+  return activity ? { activity } : null
 }
 
 function UnseenTag() {
@@ -173,16 +207,120 @@ function UnseenTag() {
   )
 }
 
-function ColumnHead() {
+function ColumnHead({ model = '' }: { model?: string }) {
   useI18n()
   return (
-    <div className="grid grid-cols-[16px_minmax(0,1.3fr)_minmax(0,1fr)_64px_70px_36px] gap-2 px-2 pb-1 text-label text-fg-faint">
+    <div className={cn(ROW_GRID, 'px-2 pb-0.5 text-label text-fg-faint')}>
       <span />
-      <span>{tr('session.contextData.agents')}</span>
-      <span>{tr('session.live.AgentTracePanel.timeline')}</span>
+      <span className="truncate" title={model || undefined}>
+        {model ? shortModel(model) : tr('session.contextData.agents')}
+      </span>
       <span className="text-right">{tr('session.live.AgentTracePanel.duration')}</span>
-      <span className="text-right">Tokens</span>
+      <span className={cn('text-right', TOKENS_COL)}>Tokens</span>
       <span className="text-right">{tr('session.live.AgentTracePanel.tools')}</span>
+    </div>
+  )
+}
+
+/** 阶段一行上的圆点：每个智能体一个，完成灰实心、跑着亮色呼吸、没开始空、失败红、停掉灰圈；放不下的截掉 */
+const DOTS_MAX = 24
+function PhaseDots({ dots }: { dots: RunState[] }) {
+  return (
+    <span aria-hidden className="flex min-w-0 items-center gap-[3px] overflow-hidden">
+      {dots.slice(0, DOTS_MAX).map((d, i) => (
+        <span
+          key={i}
+          className={cn(
+            'size-1.5 shrink-0 rounded-full',
+            d === 'done' && 'bg-fg-faint',
+            d === 'running' && 'animate-pulse bg-fg',
+            d === 'queued' && 'bg-line-strong',
+            d === 'failed' && 'bg-danger',
+            d === 'stopped' && 'ring-1 ring-fg-faint ring-inset',
+          )}
+        />
+      ))}
+      {dots.length > DOTS_MAX && (
+        <span className="shrink-0 text-label text-fg-faint tabular-nums">+{dots.length - DOTS_MAX}</span>
+      )}
+    </span>
+  )
+}
+
+/** 一个阶段：一行（状态、名字、圆点、完成数/总数、箭头）点开是这个阶段的表；没分阶段的编排直接是表 */
+function PhaseBlock({
+  phase,
+  open,
+  onToggle,
+  bare,
+  now,
+  onPick,
+}: {
+  phase: PhaseView
+  open: boolean
+  onToggle: () => void
+  /** 编排没分阶段：不画阶段那一行 */
+  bare: boolean
+  now: number
+  onPick: (id: string) => void
+}) {
+  useI18n()
+  const [all, setAll] = useState(false)
+  const { shown, hidden } = phaseRows(phase.agents, all)
+  const table = (
+    <div className="pt-0.5 pb-1">
+      <ColumnHead model={phase.model} />
+      {shown.map((a, j) => (
+        <AgentRow
+          key={a.id || `${phase.title}-${j}`}
+          a={a}
+          now={now}
+          showModel={!phase.model}
+          line={workflowLine(a)}
+          onPick={onPick}
+        />
+      ))}
+      {hidden > 0 && (
+        <button
+          type="button"
+          onClick={() => setAll(true)}
+          className="ml-[26px] rounded-md px-2 py-0.5 text-label text-fg-muted hover:bg-hover hover:text-fg"
+        >
+          {tr('trace.phase.more', { n: hidden })}
+        </button>
+      )}
+    </div>
+  )
+  if (bare) return table
+  const total = phase.agents.length
+  return (
+    <div data-trace-phase={phase.title || undefined}>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={onToggle}
+        title={tr('trace.phase.count', { done: phase.done, total })}
+        className={cn(
+          'flex h-[30px] w-full items-center gap-2 rounded-md px-2 text-left hover:bg-hover',
+          open && 'bg-subtle',
+        )}
+      >
+        <StateIcon state={phase.state} />
+        <span className="max-w-[45%] shrink-0 truncate text-list text-fg">
+          {phase.title || tr('trace.phase.other')}
+        </span>
+        <PhaseDots dots={phase.dots} />
+        <span className="flex-1" />
+        <span className="shrink-0 text-meta text-fg-muted tabular-nums">
+          {phase.done}/{total}
+        </span>
+        <ChevronRight
+          size={13}
+          strokeWidth={1.5}
+          className={cn('shrink-0 text-fg-faint transition-transform duration-(--dur-fast)', open && 'rotate-90')}
+        />
+      </button>
+      {open && table}
     </div>
   )
 }
@@ -204,66 +342,67 @@ function WorkflowSection({
   unseen?: boolean
 }) {
   useI18n()
-  const bars = useMemo(() => timeline(run.agents, now), [run.agents, now])
-  const p = progress(run)
+  const phases = useMemo(() => phaseViews(run), [run])
+  // 阶段展开：跑着的和有失败的默认展开，点过的这次打开面板里记住
+  const [phaseOpen, setPhaseOpen] = useState<Record<string, boolean>>({})
   const s = runState(run.status)
+  const bare = phases.length === 1 && !phases[0].title
   return (
     <section className={cn('rounded-xl border bg-surface shadow-sm', unseen ? 'border-warn/35' : 'border-line')}>
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="flex w-full items-center gap-2 px-3 py-2.5 text-left"
+        className="flex w-full items-center gap-2 px-3 pt-2.5 pb-0.5 text-left"
       >
+        <StateIcon state={run.status} />
+        <span className="min-w-0 flex-1 truncate text-ui font-semibold text-fg">
+          {run.name || run.description || run.id}
+        </span>
+        {unseen && <UnseenTag />}
         <ChevronRight
           size={14}
           strokeWidth={1.5}
-          className={cn('shrink-0 text-fg-muted transition-transform duration-(--dur-fast)', open && 'rotate-90')}
+          className={cn('shrink-0 text-fg-faint transition-transform duration-(--dur-fast)', open && 'rotate-90')}
         />
-        <Workflow size={15} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-ui font-medium text-fg">{run.name || run.description || run.id}</span>
-          {run.name && run.description && (
-            <span className="block truncate text-meta text-fg-muted">{run.description}</span>
-          )}
-        </span>
-        {unseen && <UnseenTag />}
-        <StateIcon state={run.status} />
       </button>
-      <div className="flex flex-wrap gap-x-3 gap-y-0.5 px-3 pb-2 pl-[52px] text-meta text-fg-muted tabular-nums">
-        <span>{RUN_STATE_LABEL[s]}</span>
-        {p.total > 0 && <span>{tr('session.live.AgentTracePanel.agents', { done: p.done, total: p.total })}</span>}
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5 px-3 pl-[34px] text-meta text-fg-muted tabular-nums">
+        <span title={RUN_STATE_LABEL[s]}>{tr('trace.phase.workflow')}</span>
         <span>{formatDuration(elapsed(run, s, now))}</span>
         <span>{formatCount(run.tokens)} tokens</span>
         <span>{toolCallsText(run.toolCalls)}</span>
       </div>
-      {open && (
-        <div className="border-t border-line-subtle px-1.5 pt-2 pb-1.5">
-          {run.agents.length === 0 ? (
-            <div className="px-2 py-2 text-meta text-fg-faint">
-              {tr('session.live.AgentTracePanel.noAgentsDispatchedYet')}
-            </div>
-          ) : (
-            <>
-              <ColumnHead />
-              {byPhase(run).map((g, i) => (
-                <div key={i}>
-                  {g.title && <div className="px-2 pt-1.5 pb-0.5 text-label font-medium text-fg-muted">{g.title}</div>}
-                  {g.agents.map((a, j) => (
-                    <AgentRow
-                      key={a.id || `${i}-${j}`}
-                      a={a}
-                      bar={bars.get(a.id || a.label)}
-                      now={now}
-                      onPick={onPick}
-                    />
-                  ))}
-                </div>
-              ))}
-            </>
-          )}
-        </div>
+      {run.name && run.description && (
+        <p
+          title={run.description}
+          className="line-clamp-2 px-3 pt-0.5 pl-[34px] text-meta text-fg-faint @max-[340px]:line-clamp-1"
+        >
+          {run.description}
+        </p>
       )}
+      <div className={cn('px-1.5 pt-1.5', open ? 'pb-1.5' : 'pb-1')}>
+        {!open ? null : run.agents.length === 0 ? (
+          <div className="px-2 py-2 text-meta text-fg-faint">
+            {tr('session.live.AgentTracePanel.noAgentsDispatchedYet')}
+          </div>
+        ) : (
+          phases.map((p, i) => {
+            const key = p.title || `#${i}`
+            const isOpen = phaseOpen[key] ?? phaseOpenByDefault(p.state)
+            return (
+              <PhaseBlock
+                key={key}
+                phase={p}
+                bare={bare}
+                open={isOpen}
+                onToggle={() => setPhaseOpen(o => ({ ...o, [key]: !isOpen }))}
+                now={now}
+                onPick={onPick}
+              />
+            )
+          })
+        )}
+      </div>
     </section>
   )
 }
@@ -644,7 +783,17 @@ export function AgentTracePanel({ sessionId, runs, focus, onFocus, onClose, belo
     [runs, now, seen, hist.clearedAt, hist.onlyTurn, turnIds],
   )
   const runningCount = part.running.workflows.length + part.running.agents.length
-  const agentBars = useMemo(() => timeline(part.running.agents, now), [part.running.agents, now])
+  // Agent 工具的子智能体「正在做什么」：引擎给的摘要 / 结果 / 任务说明 + 对话里它调用过的工具（agentActivity.ts）
+  const sessionSubagents = useEngineState(s => s.snapshots[sessionId]?.subagents)
+  const agentLines = useMemo(() => {
+    const out = new Map<string, RowLine>()
+    for (const a of progressAgents(sessionSubagents ?? [], runs, sessionItems ?? [])) {
+      const activity = agentActivity(a, a.steps)
+      if (activity) out.set(a.id, { activity, steps: a.steps })
+    }
+    return out
+  }, [sessionSubagents, runs, sessionItems])
+  const stepSeen = useFirstSeen()
   const empty = runs.workflows.length === 0 && runs.agents.length === 0
   const allDone = !empty && runningCount === 0 && part.attention.length === 0
   const showHistory = part.history.length > 0 || part.clearedCount > 0 || hist.onlyTurn
@@ -780,7 +929,7 @@ export function AgentTracePanel({ sessionId, runs, focus, onFocus, onClose, belo
         {floatToggle}
         <IconButton icon={X} label={tr('session.live.AgentTracePanel.closeEsc')} onClick={onClose} />
       </header>
-      <div className="selectable min-h-0 flex-1 overflow-y-auto px-4 py-4">
+      <div className="selectable @container min-h-0 flex-1 overflow-y-auto px-4 py-4">
         {focus && focused ? (
           <AgentFocus
             key={focused.agent.id}
@@ -823,9 +972,10 @@ export function AgentTracePanel({ sessionId, runs, focus, onFocus, onClose, belo
                       <AgentRow
                         key={a.id}
                         a={a}
-                        bar={agentBars.get(a.id || a.label)}
                         now={now}
                         files={agentFileCount(fileCounts, a.toolUseId, a.label)}
+                        line={agentLines.get(a.id)}
+                        seen={stepSeen}
                         onPick={onFocus}
                       />
                     ))}
@@ -869,6 +1019,8 @@ export function AgentTracePanel({ sessionId, runs, focus, onFocus, onClose, belo
                           a={e.run}
                           now={now}
                           files={agentFileCount(fileCounts, e.run.toolUseId, e.run.label)}
+                          line={agentLines.get(e.run.id)}
+                          seen={stepSeen}
                           onPick={onFocus}
                         />
                       </div>
