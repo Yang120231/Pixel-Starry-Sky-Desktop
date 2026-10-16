@@ -420,6 +420,18 @@ export function leafOf(idx: TranscriptIndex): string | null {
   return last?.uuid ?? null
 }
 
+/** 从 leaf 沿父链往回走得到的所有 uuid（越过压缩边界沿 logicalParentUuid，同 branchRows）；遇到环就停 */
+export function branchUuids(idx: TranscriptIndex, leaf: string): Set<string> {
+  const out = new Set<string>()
+  let cur = idx.rows.get(leaf)
+  while (cur && !out.has(cur.uuid)) {
+    out.add(cur.uuid)
+    const next: string | null = cur.boundary ? (cur.logical ?? cur.parent) : cur.parent
+    cur = next ? idx.rows.get(next) : undefined
+  }
+  return out
+}
+
 /** 按位置读出一批行，解析成对象（读不出来或写坏的行不在结果里）。key 是 offset */
 export async function readRowsAt(file: string, positions: Iterable<RowPos>): Promise<Map<number, Row>> {
   const sorted = [...new Map([...positions].map(p => [p.offset, p])).values()].sort((a, b) => a.offset - b.offset)

@@ -124,7 +124,7 @@ describe('跨引擎接力：把聊天写进 Claude Code 的记录', () => {
       })
 
   it('没有记录时新建：用户和助手交替，从头接成一条链', async () => {
-    const path = seedTranscript(
+    const path = await seedTranscript(
       dir,
       '/work/proj',
       'fresh',
@@ -153,17 +153,81 @@ describe('跨引擎接力：把聊天写进 Claude Code 的记录', () => {
     expect(currentLeaf(path)).toBe(lines[3].uuid)
   })
 
-  it('已有记录时接在当前末端后面，并让 last-prompt 指向新末端', () => {
+  it('已有记录时接在当前末端后面，并让 last-prompt 指向新末端', async () => {
     // Claude Code 的记录放在项目目录下：<projects>/<编码后的工作目录>/<会话 id>.jsonl
     const existing = join(dir, '-work-proj', 'old.jsonl')
     mkdirSync(join(dir, '-work-proj'))
     writeFileSync(existing, readFileSync(file))
-    const path = seedTranscript(dir, '/work/proj', 'old', [{ id: uuid, user: '问', assistant: '答' }], '')
+    const path = await seedTranscript(dir, '/work/proj', 'old', [{ id: uuid, user: '问', assistant: '答' }], '')
     expect(path).toBe(existing)
     const lines = read(path)
     const seeded = lines.filter(l => l.sessionId === 'old' && (l.type === 'user' || l.type === 'assistant')).slice(-2)
     expect(seeded[0]).toMatchObject({ uuid, parentUuid: 'u2' })
     expect(lines.at(-1)).toMatchObject({ type: 'last-prompt', leafUuid: seeded[1].uuid })
+  })
+
+  // 失败的一轮游标不动，进程关掉后重试会把同一轮再交一次
+  describe('重复交接同一轮', () => {
+    const second = '66666666-2222-4333-8444-555555555555'
+
+    it('已经接力写过的轮次不再写：uuid 不重复，父链不成环，截断点不变', async () => {
+      const turns = [{ id: uuid, user: '问', assistant: '答' }]
+      const path = await seedTranscript(dir, '/work/proj', 'again', turns, '')
+      const before = readFileSync(path, 'utf8')
+      await seedTranscript(dir, '/work/proj', 'again', turns, '')
+      expect(readFileSync(path, 'utf8')).toBe(before)
+      // 后面跟着新的一轮时只写新的那轮，接在原来的末端后面
+      const leaf = currentLeaf(path)
+      await seedTranscript(dir, '/work/proj', 'again', [...turns, { id: second, user: '再问', assistant: '再答' }], '')
+      const users = read(path).filter(l => l.type === 'user')
+      expect(users.map(u => u.uuid)).toEqual([uuid, second])
+      expect(users[1].parentUuid).toBe(leaf)
+      expect(await findRewindAnchor(path, [uuid])).toEqual({ at: null })
+    })
+
+    it('Claude Code 自己记过的失败消息（当前分支上）不再写', async () => {
+      const existing = join(dir, '-work-proj', 'failed.jsonl')
+      mkdirSync(join(dir, '-work-proj'))
+      writeFileSync(
+        existing,
+        [
+          { type: 'user', uuid: 'u0', parentUuid: null, version: '2.1.0' },
+          { type: 'assistant', uuid: 'a0', parentUuid: 'u0', message: { model: 'claude' } },
+          { type: 'user', uuid, parentUuid: 'a0', version: '2.1.0', message: { role: 'user', content: '问' } },
+          { type: 'assistant', uuid: 'err', parentUuid: uuid, message: { model: '<synthetic>' } },
+        ]
+          .map(r => JSON.stringify(r))
+          .join('\n') + '\n',
+      )
+      const before = readFileSync(existing, 'utf8')
+      await seedTranscript(dir, '/work/proj', 'failed', [{ id: uuid, user: '问', assistant: null }], '')
+      expect(readFileSync(existing, 'utf8')).toBe(before)
+      expect(await findRewindAnchor(existing, [uuid])).toEqual({ at: 'a0' })
+    })
+
+    it('uuid 在回退掉的旧分支上：换一个新的 uuid 写', async () => {
+      const existing = join(dir, '-work-proj', 'rewound.jsonl')
+      mkdirSync(join(dir, '-work-proj'))
+      writeFileSync(
+        existing,
+        [
+          { type: 'user', uuid: 'u0', parentUuid: null },
+          { type: 'assistant', uuid: 'a0', parentUuid: 'u0' },
+          { type: 'user', uuid, parentUuid: 'a0' },
+          { type: 'assistant', uuid: 'old', parentUuid: uuid },
+          // 回退后从 a0 接出的新分支
+          { type: 'user', uuid: 'u1', parentUuid: 'a0' },
+          { type: 'assistant', uuid: 'a1', parentUuid: 'u1' },
+        ]
+          .map(r => JSON.stringify(r))
+          .join('\n') + '\n',
+      )
+      await seedTranscript(dir, '/work/proj', 'rewound', [{ id: uuid, user: '问', assistant: '答' }], '')
+      const seeded = read(existing).filter(l => l.type === 'user').at(-1)!
+      expect(seeded.uuid).not.toBe(uuid)
+      expect(seeded.parentUuid).toBe('a1')
+      expect(read(existing).filter(l => l.uuid === uuid)).toHaveLength(1)
+    })
   })
 
   describe('带图片的轮次', () => {
@@ -178,8 +242,8 @@ describe('跨引擎接力：把聊天写进 Claude Code 的记录', () => {
     }
     const imageBlock = { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAAA' } }
 
-    it('用户消息写成文字块加图片块的数组，没有图的轮次仍是一段文字', () => {
-      const path = seedTranscript(
+    it('用户消息写成文字块加图片块的数组，没有图的轮次仍是一段文字', async () => {
+      const path = await seedTranscript(
         dir,
         '/work/proj',
         'img',
@@ -199,12 +263,12 @@ describe('跨引擎接力：把聊天写进 Claude Code 的记录', () => {
 
     it('数组内容不影响回退截断点、末端和续写', async () => {
       const turns = [{ id: uuid, user: '看这个', assistant: null, images: [image] }]
-      const path = seedTranscript(dir, '/work/proj', 'img', turns, '（没回复）')
+      const path = await seedTranscript(dir, '/work/proj', 'img', turns, '（没回复）')
       const lines = read(path)
       expect(await findRewindAnchor(path, [uuid])).toEqual({ at: null })
       expect(currentLeaf(path)).toBe(lines[1].uuid)
       // 之后的新轮次接在末端，图片轮次的 uuid 不变
-      seedTranscript(dir, '/work/proj', 'img', [{ id: 'next', user: '后来', assistant: '嗯' }], '')
+      await seedTranscript(dir, '/work/proj', 'img', [{ id: 'next', user: '后来', assistant: '嗯' }], '')
       const users = read(path).filter(l => l.type === 'user')
       expect(users).toHaveLength(2)
       expect(users[1]).toMatchObject({ parentUuid: lines[1].uuid })

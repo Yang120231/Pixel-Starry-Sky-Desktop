@@ -7,7 +7,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { ImageAttachment } from '@pixelsky/protocol'
 import { isFile } from '../exec'
-import { anchorPositionIn, copyRowsTo, rewindAnchorIn, transcriptIndex } from './transcript-index'
+import { anchorPositionIn, branchUuids, copyRowsTo, rewindAnchorIn, transcriptIndex } from './transcript-index'
 
 export function defaultProjectsDir(env: NodeJS.ProcessEnv): string {
   return join(env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), 'projects')
@@ -152,23 +152,30 @@ function userContent(text: string, images: readonly ImageAttachment[] = []): str
 /**
  * 跨引擎接力：把别的引擎期间的聊天按 Claude Code 自己的格式写进会话记录，之后 --resume 就带着这些轮次。
  * 没有记录时新建（从头开始），有记录时接在当前分支末端后面，再让 last-prompt 指向新的末端。
- * 用户消息的 uuid 用我们的条目 id（发送时也是这么写的），回退时照样找得到截断点。返回记录文件路径
+ * 用户消息的 uuid 用我们的条目 id（发送时也是这么写的），回退时照样找得到截断点。
+ * 失败的一轮游标不动，进程关掉后重试会把同一轮再交一次：已经在当前分支上的轮次（Claude Code 收到时自己记过，
+ * 或上次接力写过）不再写；记录里别处已有这个 uuid（回退掉的旧分支）时换一个新的。同一个 uuid 写两遍会让
+ * parentUuid 父链成环、回退截断点找错。返回记录文件路径
  */
-export function seedTranscript(
+export async function seedTranscript(
   projectsDir: string,
   cwd: string,
   sessionId: string,
   turns: readonly { id: string; user: string; assistant: string | null; images?: readonly ImageAttachment[] }[],
   noReply: string,
-): string {
+): Promise<string> {
   const existing = findClaudeTranscript(projectsDir, cwd, sessionId)
   const file = existing ?? join(projectsDir, encodeCwd(cwd), `${sessionId}.jsonl`)
   let parent = existing ? currentLeaf(existing) : null
+  const idx = existing ? await transcriptIndex(existing) : null
+  const branch = idx && parent ? branchUuids(idx, parent) : new Set<string>()
   const timestamp = new Date().toISOString()
   const base = { isSidechain: false, userType: 'external', cwd, sessionId, timestamp }
   const lines: string[] = []
   for (const turn of turns) {
-    const userId = UUID.test(turn.id) ? turn.id : randomUUID()
+    const own = UUID.test(turn.id) ? turn.id : null
+    if (own && branch.has(own)) continue
+    const userId = own && !idx?.rows.has(own) ? own : randomUUID()
     lines.push(
       JSON.stringify({
         ...base,
@@ -190,6 +197,7 @@ export function seedTranscript(
     )
     parent = replyId
   }
+  if (lines.length === 0) return file
   if (!existing) mkdirSync(dirname(file), { recursive: true })
   appendFileSync(file, lines.join('\n') + '\n')
   if (existing) pointLastPrompt(file, sessionId)

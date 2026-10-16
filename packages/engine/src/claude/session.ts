@@ -418,7 +418,7 @@ export class ClaudeSession implements EngineSession {
       const live = liveClaudeSession(dirname(this.deps.projectsDir), sid, ownClaudePids)
       if (live === 'terminal' || live === 'other') throw codedError('resume.live', { source: live })
     }
-    const seeded = this.injectSeed(rec.cwd, sid, rec.pendingRewind ?? null, rec.pendingFork ?? null)
+    const seeded = await this.injectSeed(rec.cwd, sid, rec.pendingRewind ?? null, rec.pendingFork ?? null)
     const resume = claudeTranscriptExists(this.deps.projectsDir, rec.cwd, sid)
     const rewindAt = resume ? (rec.pendingRewind ?? null) : null
     const fork = resume ? null : (rec.pendingFork ?? null)
@@ -466,16 +466,16 @@ export class ClaudeSession implements EngineSession {
    * 跨引擎接力：把还没注入的聊天写进这个引擎会话的记录（没有就新建），之后照常 --resume。
    * 有待执行的回退 / 分叉时不写（截断点之后的条目加载不到），留给发消息时的文字交接。返回写进去的那份，没写为 null
    */
-  private injectSeed(
+  private async injectSeed(
     cwd: string,
     sid: string,
     rewindAt: string | null,
     fork: { from: string; at: string } | null,
-  ): ChatSeed | null {
+  ): Promise<ChatSeed | null> {
     const seed = this.seed
     if (!seed || rewindAt || fork) return null
     try {
-      seedTranscript(this.deps.projectsDir, cwd, sid, seedTurns(seed), NO_REPLY)
+      await seedTranscript(this.deps.projectsDir, cwd, sid, seedTurns(seed), NO_REPLY)
       this.seed = null
       return seed
     } catch {
