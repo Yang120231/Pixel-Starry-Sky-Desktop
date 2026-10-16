@@ -122,6 +122,7 @@ describe('加载', () => {
       version: 1,
       folders: [{ path: dir, enabled: true, addedAt: 5, options: {} }],
       builtin: {},
+      store: {},
     })
     const svc = await started(e)
     const [first, second] = svc.state().packs
@@ -141,6 +142,7 @@ describe('加载', () => {
         { path: b, enabled: true, addedAt: 2, options: {} },
       ],
       builtin: {},
+      store: {},
     })
     const svc = await started(e)
     const [first, second] = svc.state().packs
@@ -172,6 +174,7 @@ describe('加载', () => {
       version: 1,
       folders: [{ path: dir, enabled: true, addedAt: 5, options: {} }],
       builtin: {},
+      store: {},
     })
     const svc = make(e)
     await svc.builtinReady()
@@ -398,6 +401,7 @@ describe('技能', () => {
       version: 1,
       folders: [{ path: dir, enabled: true, addedAt: 5, options: {} }],
       builtin: {},
+      store: {},
     })
 
   it('ready 之前：没有带技能的扩展 key 为空，有就是 loading，且不给目录', async () => {

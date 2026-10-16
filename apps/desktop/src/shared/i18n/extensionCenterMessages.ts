@@ -165,4 +165,85 @@ export const extensionCenterMessages = {
     zh: '账号相关的请求不走系统代理，请检查网络或代理设置',
     en: "Account requests don't use the system proxy. Check your network or proxy settings",
   },
+  // 云端接口的错误（按「接口 + code」映射，docs/ui/extension-store-client.md §6.3、§6.5、§7）
+  'errors.extstore.api.invalid': {
+    zh: '提交的内容不完整或格式不对',
+    en: 'The submitted content is incomplete or malformed',
+  },
+  'errors.extstore.api.checkFailed': {
+    zh: '扩展包没有通过检查，请按下面的问题修改后重新上传',
+    en: "The package didn't pass the checks. Fix the issues below and upload again",
+  },
+  'errors.extstore.api.checkTimeout': {
+    zh: '云端检查超时（超过 60 秒）：多半是语法里有很慢的正则',
+    en: 'The cloud check timed out (over 60 seconds): usually a very slow regular expression in a grammar',
+  },
+  'errors.extstore.api.noPublisher': { zh: '先注册发布者名再上传', en: 'Register a publisher name before uploading' },
+  'errors.extstore.api.notYourPublisher': {
+    zh: '清单里的 publisher 和 id 前缀必须是你注册的发布者名',
+    en: 'The manifest publisher and id prefix must be your registered publisher name',
+  },
+  'errors.extstore.api.versionProblem': { zh: '{message}', en: '{message}' },
+  'errors.extstore.api.tooManyPending': {
+    zh: '这个扩展已经有 3 个版本在等审核，先撤回一些或等审核完',
+    en: 'This extension already has 3 versions awaiting review. Withdraw some or wait for the review',
+  },
+  'errors.extstore.api.uploadRateLimited': {
+    zh: '今天的上传次数用完了：一个账号一天最多上传 20 次',
+    en: "You've used up today's uploads: at most 20 per account per day",
+  },
+  'errors.extstore.api.reportRateLimited': {
+    zh: '今天的举报次数用完了：一个账号一天最多 10 次',
+    en: "You've used up today's reports: at most 10 per account per day",
+  },
+  'errors.extstore.api.alreadyReported': {
+    zh: '你 7 天内已经举报过这个扩展',
+    en: "You've already reported this extension within the last 7 days",
+  },
+  'errors.extstore.api.reportNotFound': {
+    zh: '这个扩展不在商店里（没上架过或已下架）',
+    en: "This extension isn't in the store (never listed, or delisted)",
+  },
+  'errors.extstore.api.myNotFound': { zh: '找不到这个扩展或版本', en: 'Extension or version not found' },
+  'errors.extstore.api.tooLarge': { zh: '扩展包太大：不能超过 10 MB', en: 'The package is too large: 10 MB at most' },
+  'errors.extstore.api.badPackage': { zh: '扩展包不对：{message}', en: 'Invalid package: {message}' },
+  'errors.extstore.api.checkerUnavailable': {
+    zh: '云端检查器暂时不可用，请稍后再试',
+    en: 'The cloud checker is temporarily unavailable. Try again later',
+  },
+  'errors.extstore.api.checkerError': {
+    zh: '云端检查出错，请稍后再试',
+    en: 'The cloud check failed. Try again later',
+  },
+  'errors.extstore.api.unavailable': {
+    zh: '云端暂时不可用，请稍后再试',
+    en: 'The cloud is temporarily unavailable. Try again later',
+  },
+  'errors.extstore.api.badState': {
+    zh: '这个版本现在的状态不能这样操作（可能已经审核过了）',
+    en: "This version's current state doesn't allow that (it may have been reviewed already)",
+  },
+  'errors.extstore.api.delistedByAdmin': {
+    zh: '这个扩展是平台下架的，不能自己重新上架；有疑问请反馈',
+    en: 'This extension was delisted by the platform and cannot be relisted by you. Send feedback if you have questions',
+  },
+  'errors.extstore.api.nameTaken': {
+    zh: '这个发布者名已经被别人注册了，换一个',
+    en: 'This publisher name is already taken. Pick another one',
+  },
+  'errors.extstore.api.alreadyPublisher': {
+    zh: '你的账号已经注册过发布者，发布者名注册后不能改',
+    en: 'Your account already has a publisher. The name cannot be changed',
+  },
+  'errors.extstore.api.reservedName': {
+    zh: '这个发布者名是保留的，换一个',
+    en: 'This publisher name is reserved. Pick another one',
+  },
+  'errors.extstore.api.badPublisherName': {
+    zh: '发布者名要 3–32 个字符，只能用小写字母、数字和 -，不能以 - 开头或结尾',
+    en: 'A publisher name is 3–32 characters of lowercase letters, digits and -, and cannot start or end with -',
+  },
+  'errors.extstore.api.badResponse': { zh: '云端返回的数据异常', en: 'The cloud returned unexpected data' },
+  'errors.extstore.api.cloud': { zh: '{message}', en: '{message}' },
+  'errors.extstore.api.status': { zh: '云端出错了（状态码 {status}）', en: 'Cloud error (status {status})' },
 } as const satisfies Record<string, { zh: string; en: string }>
