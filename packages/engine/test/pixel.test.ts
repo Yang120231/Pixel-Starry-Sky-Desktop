@@ -27,13 +27,23 @@ const wait = async (fn: () => boolean): Promise<void> => {
   }
   throw new Error('Pixel test timed out')
 }
+/**
+ * 本机装的 coding agent 可能在环境里留着 ANTHROPIC_BASE_URL 之类的变量：那些会让 Pixel 会话多写一份 models.json、
+ * 多带 --session-dir，断言就跟着变。这里清掉，需要哪个用例自己按 extra 给。
+ */
+function pixelEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env }
+  for (const key of Object.keys(env))
+    if (/^(ANTHROPIC|OPENAI)_/i.test(key) || /^PIXELSKY_PIXEL_/i.test(key)) delete env[key]
+  return env
+}
 function setup(idleMs = 50, extra: Record<string, unknown> = {}) {
   const log = join(root, 'rpc.jsonl'),
     argv = join(root, 'argv.jsonl'),
     events: HostEvent[] = []
   const adapter = new PixelAdapter({
     launcher: { command: process.execPath, args: [FAKE] },
-    env: { ...process.env, FAKE_PIXEL_LOG: log, FAKE_PIXEL_ARGV: argv, FAKE_PIXEL_DIR: join(root, 'sessions') },
+    env: { ...pixelEnv(), FAKE_PIXEL_LOG: log, FAKE_PIXEL_ARGV: argv, FAKE_PIXEL_DIR: join(root, 'sessions') },
     agentRoot: join(root, 'agents'),
     ...extra,
   } as never)
