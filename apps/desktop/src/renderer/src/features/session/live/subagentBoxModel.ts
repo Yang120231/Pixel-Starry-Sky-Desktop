@@ -63,8 +63,11 @@ const NONE: AgentRuns = { workflows: [], agents: [] }
 export const boxElapsed = (model: Pick<BoxModel, 'startedAt' | 'durationMs' | 'state'>, now: number): number =>
   elapsed(model, model.state === 'approval' ? 'running' : model.state, now)
 
-/** Codex 派出子智能体的调用：派出去就返回了（子智能体在后台接着跑），条目完成不代表子智能体跑完 */
-const CODEX_SPAWN = /^(spawn_agent|collabAgentToolCall|collabToolCall)$/
+/**
+ * Codex 派出子智能体的调用：派出去就返回了（子智能体在后台接着跑），条目完成不代表子智能体跑完。
+ * 引擎把 collab 的派出调用（tool 为 spawnAgent）记成 spawn_agent；等待 / 发消息 / 关闭沿用原名，只看条目自己的状态
+ */
+const CODEX_SPAWN = /^spawn_agent$/
 
 /** 派发小框：主智能体的 Agent / Task / Workflow 调用，以及 Codex 派出子智能体的调用 */
 export function dispatchBox(item: ToolItem, runs: AgentRuns = NONE, approval = false): BoxModel {

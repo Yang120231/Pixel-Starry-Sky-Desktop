@@ -376,7 +376,7 @@ describe('Pixel 接手带图片的聊天', () => {
     const { session, prompt } = await handoff('fake/fake-small')
     expect(prompt.images).toBeUndefined()
     const warns = snap(session.id).items.flatMap(i => (i.kind === 'notice' && i.level === 'warn' ? [i.text] : []))
-    expect(warns).toContain("The current model can't view images; 1 earlier image(s) were not passed along")
+    expect(warns).toContain("The current model can't view images, so 1 earlier image(s) were not actually passed along")
     expect(snap(session.id).items.some(i => i.kind === 'notice' && i.level === 'error')).toBe(false)
     expect(snap(session.id).items.filter(i => i.kind === 'user')).toHaveLength(2)
   })

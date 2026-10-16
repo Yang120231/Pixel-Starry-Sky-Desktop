@@ -84,7 +84,7 @@ const SEARCH_CANCELLED = { results: [], cancelled: true, truncated: false, parti
 const SCAN_CANCELLED = { turns: [], delivered: [], outsideCount: 0, truncated: false, partial: false, cancelled: true }
 
 export const ENGINE_OPS = {
-  'engine:engines': (c, force) => c.host.engines(force === true),
+  'engine:engines': (c, force) => c.host.engines(force === true, force === true),
   'engine:search': (c, raw) => {
     const q = searchQuery(raw)
     return c.searches.begin(

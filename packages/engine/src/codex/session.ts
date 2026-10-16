@@ -562,7 +562,7 @@ export class CodexSession implements EngineSession {
         kind: 'notice',
         id: `cx-images-${Date.now()}-${++this.noticeSeq}`,
         level: 'warn',
-        text: `The current model can't view images; ${count} earlier image(s) were not passed along`,
+        text: `The current model can't view images, so ${count} earlier image(s) were not actually passed along`,
         detail: null,
       },
     })

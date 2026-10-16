@@ -115,9 +115,11 @@ export class HostSettings {
     this.file = ctx.store.loadSettings()
   }
 
-  async engines(force = false): Promise<EngineInfo[]> {
-    // 重新检测（用户多半刚改完 config.toml）：清掉记下的配置警告，下一轮还有的话引擎会再报
-    if (force) for (const id of ENGINE_ORDER) delete this.configWarnings[id]
+  /** force：重新检测；userDetect：用户自己点的「重新检测」（只有这时才清掉记下的配置警告） */
+  async engines(force = false, userDetect = false): Promise<EngineInfo[]> {
+    // 用户刚改完 config.toml 自己点的重新检测才清警告，下一轮还有的话引擎会再报；
+    // 登录 / 装更新 / 改启动设置引起的检测不动警告，否则改 Claude 的设置会顺手清掉 Codex 的警告
+    if (userDetect) for (const id of ENGINE_ORDER) delete this.configWarnings[id]
     const list = (
       await Promise.all(
         ENGINE_ORDER.map(id => this.ctx.adapters[id]?.info(force) ?? Promise.resolve(unsupportedInfo(id))),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentRun, WorkflowRun } from '@pixelsky/protocol'
-import { PHASE_ROWS, phaseOpenByDefault, phaseRows, phaseState, phaseViews, shortModel } from './agentTrace'
+import { PHASE_ROWS, phaseOpenByDefault, phaseRows, phaseState, phaseViews, runState, shortModel } from './agentTrace'
 
 const agent = (id: string, state: string, phase: number | null = 0, model = 'opus-5-5'): AgentRun => ({
   id,
@@ -16,6 +16,15 @@ const agent = (id: string, state: string, phase: number | null = 0, model = 'opu
   prompt: '',
   result: '',
   toolUseId: null,
+})
+
+describe('runState', () => {
+  it('Codex 的子智能体状态词归类', () => {
+    for (const s of ['errored', 'notFound', 'not_found']) expect(runState(s)).toBe('failed')
+    expect(runState('shutdown')).toBe('stopped')
+    for (const s of ['pendingInit', 'pending_init', 'pending']) expect(runState(s)).toBe('queued')
+    expect(runState('')).toBe('done')
+  })
 })
 
 describe('shortModel', () => {

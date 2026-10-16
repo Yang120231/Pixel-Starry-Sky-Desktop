@@ -250,7 +250,10 @@ describe('Codex app-server adapter', () => {
     // 第二轮同样的警告不再广播
     const broadcasts = events.filter(e => e.kind === 'engines' && e.engines.some(x => x.configWarnings))
     expect(broadcasts).toHaveLength(2)
+    // 登录 / 装更新 / 改启动设置引起的重新检测不动警告；用户自己点「重新检测」才清掉
     await host!.engines(true)
+    expect((await codex()).configWarnings).toHaveLength(2)
+    await host!.engines(true, true)
     expect((await codex()).configWarnings).toBeUndefined()
   })
   it('原生压缩走方法而非 turn/start 的普通提示', async () => {
@@ -507,6 +510,114 @@ describe('Codex app-server adapter', () => {
     ])
     expect(loadCodexRuns(root, 'not-a-uuid').agents).toEqual([])
   })
+  it('重新打开会话：只派出没跑完的子智能体标成已中断，跑完的保持完成', () => {
+    const thread = '01a14092-744d-7183-a67e-8a03c58f3579',
+      at = parseInt(thread.replace(/-/g, '').slice(0, 12), 16),
+      date = new Date(at),
+      dir = join(
+        root,
+        'sessions',
+        String(date.getFullYear()),
+        String(date.getMonth() + 1).padStart(2, '0'),
+        String(date.getDate()).padStart(2, '0'),
+      )
+    mkdirSync(dir, { recursive: true })
+    const event = (id: string, kind: string, child: string, started: number) =>
+      JSON.stringify({
+        type: 'event_msg',
+        payload: {
+          type: 'item_completed',
+          thread_id: thread,
+          item: { type: 'SubAgentActivity', id, kind, agent_thread_id: child, agent_path: '/root/' + child },
+          started_at_ms: started,
+        },
+      })
+    writeFileSync(
+      join(dir, `rollout-2026-10-16T01-18-22-${thread}.jsonl`),
+      [
+        event('s1', 'started', 'child-a', at + 1000),
+        event('s2', 'started', 'child-b', at + 2000),
+        event('c2', 'completed', 'child-b', at + 5000),
+      ].join('\n'),
+    )
+    const agents = loadCodexRuns(root, thread).agents
+    expect(agents.find(a => a.id === 'child-a')).toMatchObject({ state: 'interrupted', toolUseId: 'cx-s1' })
+    expect(agents.find(a => a.id === 'child-b')).toMatchObject({ state: 'completed', durationMs: 3000 })
+  })
+  it('collab 调用只有派出（spawnAgent）出派发卡并认领子智能体；等待 / 关闭沿用派出时的卡片，状态跟着子智能体', () => {
+    const agents = new Map<string, AgentRun>(),
+      translator = new CodexTranslator(() => {}, undefined, agents),
+      collab = (id: string, tool: string, status: string, state: string) => ({
+        type: 'collabAgentToolCall',
+        id,
+        tool,
+        status,
+        prompt: tool === 'spawnAgent' ? '干活' : undefined,
+        receiverThreadIds: ['child-1'],
+        agentsStates: { 'child-1': { status: state, message: null } },
+      })
+    translator.item(collab('spawn', 'spawnAgent', 'completed', 'pendingInit'), true)
+    translator.item(collab('wait', 'wait', 'completed', 'running'), true)
+    translator.item(collab('close', 'closeAgent', 'completed', 'shutdown'), true)
+    expect(translator.items.get('cx-spawn')).toMatchObject({ name: 'spawn_agent' })
+    expect(translator.items.get('cx-wait')).toMatchObject({ name: 'collabAgentToolCall' })
+    expect(translator.items.get('cx-close')).toMatchObject({ name: 'collabAgentToolCall' })
+    expect(agents.get('child-1')).toMatchObject({ state: 'shutdown', toolUseId: 'cx-spawn', prompt: '干活' })
+  })
+  it('重新打开会话：只派出没跑完的子智能体标成已中断，跑完的保持完成', () => {
+    const thread = '01a14092-744d-7183-a67e-8a03c58f3579',
+      at = parseInt(thread.replace(/-/g, '').slice(0, 12), 16),
+      date = new Date(at),
+      dir = join(
+        root,
+        'sessions',
+        String(date.getFullYear()),
+        String(date.getMonth() + 1).padStart(2, '0'),
+        String(date.getDate()).padStart(2, '0'),
+      )
+    mkdirSync(dir, { recursive: true })
+    const event = (id: string, kind: string, child: string, started: number) =>
+      JSON.stringify({
+        type: 'event_msg',
+        payload: {
+          type: 'item_completed',
+          thread_id: thread,
+          item: { type: 'SubAgentActivity', id, kind, agent_thread_id: child, agent_path: '/root/' + child },
+          started_at_ms: started,
+        },
+      })
+    writeFileSync(
+      join(dir, `rollout-2026-10-16T01-18-22-${thread}.jsonl`),
+      [
+        event('s1', 'started', 'child-a', at + 1000),
+        event('s2', 'started', 'child-b', at + 2000),
+        event('c2', 'completed', 'child-b', at + 5000),
+      ].join('\n'),
+    )
+    const agents = loadCodexRuns(root, thread).agents
+    expect(agents.find(a => a.id === 'child-a')).toMatchObject({ state: 'interrupted', toolUseId: 'cx-s1' })
+    expect(agents.find(a => a.id === 'child-b')).toMatchObject({ state: 'completed', durationMs: 3000 })
+  })
+  it('collab 调用只有派出（spawnAgent）认领子智能体；等待 / 关闭沿用派出时的卡片，状态跟着子智能体', () => {
+    const agents = new Map<string, AgentRun>(),
+      translator = new CodexTranslator(() => {}, undefined, agents),
+      collab = (id: string, tool: string, status: string, state: string) => ({
+        type: 'collabAgentToolCall',
+        id,
+        tool,
+        status,
+        prompt: tool === 'spawnAgent' ? '干活' : undefined,
+        receiverThreadIds: ['child-1'],
+        agentsStates: { 'child-1': { status: state, message: null } },
+      })
+    translator.item(collab('spawn', 'spawnAgent', 'completed', 'pendingInit'), true)
+    translator.item(collab('wait', 'wait', 'completed', 'running'), true)
+    translator.item(collab('close', 'closeAgent', 'completed', 'shutdown'), true)
+    expect(translator.items.get('cx-spawn')).toMatchObject({ name: 'spawn_agent' })
+    expect(translator.items.get('cx-wait')).toMatchObject({ name: 'collabAgentToolCall' })
+    expect(translator.items.get('cx-close')).toMatchObject({ name: 'collabAgentToolCall' })
+    expect(agents.get('child-1')).toMatchObject({ state: 'shutdown', toolUseId: 'cx-spawn', prompt: '干活' })
+  })
   it('计划模式带 Codex 原生计划协作模式，模型提问弹问题卡；切回别的权限时带一次 default', async () => {
     const { session, messages } = setup(50, { permissionMode: 'plan' })
     await host!.send(session.id, '提问')
@@ -687,7 +798,7 @@ describe('Codex 接手带图片的聊天', () => {
     expect(host!.open(session.id).items.some(i => i.kind === 'notice' && i.level === 'error')).toBe(false)
     // host 的提示说带了图片，这里告诉用户实际没带
     expect(notices(session.id)).toEqual([
-      "The current model can't view images; 1 earlier image(s) were not passed along",
+      "The current model can't view images, so 1 earlier image(s) were not actually passed along",
     ])
   })
 
@@ -709,7 +820,7 @@ describe('Codex 接手带图片的聊天', () => {
     const start = messages().find(m => m.method === 'turn/start') as { params: { input: { type: string }[] } }
     expect(start.params.input.map(i => i.type)).toEqual(['text'])
     expect(notices(session.id).filter(t => t.includes('view images'))).toEqual([
-      "The current model can't view images; 1 earlier image(s) were not passed along",
+      "The current model can't view images, so 1 earlier image(s) were not actually passed along",
     ])
   })
 })

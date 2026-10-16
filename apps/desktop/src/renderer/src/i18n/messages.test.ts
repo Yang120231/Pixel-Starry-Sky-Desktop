@@ -19,6 +19,71 @@ describe('中英文词典', () => {
       'Unexpected tool failure: EXTERNAL_123',
     )
   })
+  it('交接通知带图片说明时也能翻成英文', () => {
+    const cases: [string, string][] = [
+      ['已把之前的聊天带给 Codex（3 轮）', 'Brought the previous chat to Codex (3 turns)'],
+      [
+        '已把之前的聊天带给 Codex（3 轮，含 5 张图片）',
+        'Brought the previous chat to Codex (3 turns, including 5 image(s))',
+      ],
+      [
+        '已把之前的聊天带给 Codex（3 轮，含 5 张图片，1 张图片未带上）',
+        'Brought the previous chat to Codex (3 turns, including 5 image(s), 1 image(s) not carried)',
+      ],
+      [
+        '已把之前的聊天带给 Codex（3 轮，1 张图片未带上）',
+        'Brought the previous chat to Codex (3 turns, 1 image(s) not carried)',
+      ],
+      ['已把 Codex 期间的聊天同步给 Claude Code（2 轮）', 'Synced the chat from Codex to Claude Code (2 turns)'],
+      [
+        '已把 Codex 期间的聊天同步给 Claude Code（2 轮，含 2 张图片）',
+        'Synced the chat from Codex to Claude Code (2 turns, including 2 image(s))',
+      ],
+      [
+        '已把 Codex 期间的聊天同步给 Claude Code（2 轮，含 2 张图片，3 张图片未带上）',
+        'Synced the chat from Codex to Claude Code (2 turns, including 2 image(s), 3 image(s) not carried)',
+      ],
+      [
+        '已把 Codex 期间的聊天同步给 Claude Code（2 轮，3 张图片未带上）',
+        'Synced the chat from Codex to Claude Code (2 turns, 3 image(s) not carried)',
+      ],
+      ['已把之前的对话交接给 Codex（4 条）', 'Handed the previous conversation to Codex (4 messages)'],
+      [
+        '已把之前的对话交接给 Codex（4 条，含 1 张图片）',
+        'Handed the previous conversation to Codex (4 messages, including 1 image(s))',
+      ],
+      [
+        '已把之前的对话交接给 Codex（4 条，含 2 张图片，2 张图片未带上）',
+        'Handed the previous conversation to Codex (4 messages, including 2 image(s), 2 image(s) not carried)',
+      ],
+      [
+        '已把之前的对话交接给 Codex（4 条，1 张图片未带上）',
+        'Handed the previous conversation to Codex (4 messages, 1 image(s) not carried)',
+      ],
+      ['已把 Codex 期间的进展同步给 Claude Code', 'Synced the progress from Codex to Claude Code'],
+      [
+        '已把 Codex 期间的进展同步给 Claude Code（含 2 张图片）',
+        'Synced the progress from Codex to Claude Code (including 2 image(s))',
+      ],
+      [
+        '已把 Codex 期间的进展同步给 Claude Code（含 2 张图片，1 张图片未带上）',
+        'Synced the progress from Codex to Claude Code (including 2 image(s), 1 image(s) not carried)',
+      ],
+      [
+        '已把 Codex 期间的进展同步给 Claude Code（1 张图片未带上）',
+        'Synced the progress from Codex to Claude Code (1 image(s) not carried)',
+      ],
+    ]
+    for (const [zh, en] of cases) {
+      expect(translateMessage(zh, 'en-US'), zh).toBe(en)
+      expect(translateMessage(en, 'zh-CN'), en).toBe(zh)
+    }
+  })
+  it('模型不能看图的更正提示中英文互译', () => {
+    const en = "The current model can't view images, so 2 earlier image(s) were not actually passed along"
+    expect(translateMessage(en, 'zh-CN')).toBe('当前模型不能看图，之前的 2 张图片实际没有带上')
+    expect(translateMessage('当前模型不能看图，之前的 2 张图片实际没有带上', 'en-US')).toBe(en)
+  })
   it('几乎只有占位符的模板不会改坏引擎原文', () => {
     for (const text of [
       'Reconnecting... 3/5',

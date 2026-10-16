@@ -338,7 +338,7 @@ export class PixelSession implements EngineSession {
     if (!sees && handoffImages.length)
       this.translator.notice(
         'warn',
-        `The current model can't view images; ${handoffImages.length} earlier image(s) were not passed along`,
+        `The current model can't view images, so ${handoffImages.length} earlier image(s) were not actually passed along`,
       )
     const proc = this.proc!
     const compact = /^\/compact(?:\s+([\s\S]*))?$/.exec(text.trim())

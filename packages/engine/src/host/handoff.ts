@@ -13,6 +13,7 @@ import {
 } from '@pixelsky/protocol'
 import {
   buildChatSeed,
+  carriableImage,
   handoffImageRoom,
   pickRecentImages,
   renderSeed,
@@ -185,9 +186,18 @@ export class HostHandoff {
     const delta = at >= 0 ? prior.slice(at + 1) : prior
     const mode = at >= 0 ? 'delta' : 'full'
     // 走文字交接（适配器不能注入，或注入失败）时图片随这条消息发：先扣掉消息自己的图片占的额度，目标引擎不能看图就不带
-    const all = userImages(delta)
+    // 失败的一轮重试时，它的图片已经随当前消息重发（游标没动，那条用户消息还在 delta 里）：按图片 id 去重，
+    // 只在文字里留附件名，不再当「更早的图」带一遍，也不算没带上；那一轮的文字照旧重发
+    const skipIds = new Set(attachments.map(a => a.id))
+    const all = userImages(delta).filter(({ image }) => !skipIds.has(image.id))
     const room = handoffImageRoom(attachments)
-    const carry = ENGINES[record.engine].caps.imageInput ? pickRecentImages(all, room) : []
+    // 单张超过 Claude 的大小 / 边长上限的不带（带了写进记录后每次 resume 都会被拒）
+    const carry = ENGINES[record.engine].caps.imageInput
+      ? pickRecentImages(
+          all.filter(({ image }) => carriableImage(image)),
+          room,
+        )
+      : []
     const built = buildHandoff({
       items: delta,
       mode,
@@ -214,6 +224,7 @@ export class HostHandoff {
       ? buildChatSeed(delta, built.text, undefined, {
           carryImages: !!ENGINES[record.engine].caps.imageInput,
           room,
+          skipIds,
           fallbackImages: carry.map(c => c.image),
         })
       : null

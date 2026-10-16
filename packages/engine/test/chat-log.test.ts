@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ImageAttachment, Item } from '@pixelsky/protocol'
 import {
   HANDOFF_IMAGE_BYTES,
+  HANDOFF_IMAGE_MAX_BYTES,
   buildChatLog,
   buildChatSeed,
   chatOverview,
@@ -95,6 +96,16 @@ describe('buildChatLog：只带聊天', () => {
     ])
   })
 
+  it('很长的用户消息：先截正文再接附件名，说明不会被截掉', () => {
+    const a = image('a.png')
+    const long = '啊'.repeat(4500)
+    const out = buildChatLog([user(long, { attachments: [a] })], { carried: new Set() })
+    expect(out[0].user.endsWith('（已截断）（附图 a.png，未带上）')).toBe(true)
+    // buildChatSeed 走的是同一处
+    const seed = buildChatSeed([user(long, { attachments: [a] })], '', undefined, { carryImages: false })!
+    expect(seed.turns[0].user.endsWith('（已截断）（附图 a.png，未带上）')).toBe(true)
+  })
+
   it('超长的单条按上限截断', () => {
     const out = buildChatLog([user('啊'.repeat(50)), assistant('嗯'.repeat(50))], { userLimit: 10, assistantLimit: 10 })
     expect(out[0].user).toBe('啊啊啊啊啊啊啊啊啊啊…（已截断）')
@@ -160,13 +171,13 @@ describe('交接的聊天回放', () => {
 })
 
 const MB = 1024 * 1024
-const image = (name: string, bytes = 1000): ImageAttachment => ({
+const image = (name: string, bytes = 1000, width = 1, height = 1): ImageAttachment => ({
   id: name,
   name,
   mediaType: 'image/png',
   bytes,
-  width: 1,
-  height: 1,
+  width,
+  height,
   dataBase64: `data-${name}`,
 })
 const names = (images: readonly ImageAttachment[] | undefined) => (images ?? []).map(i => i.name)
@@ -225,14 +236,45 @@ describe('交接带图片', () => {
   it('总大小不超过上限：从最新往前装，遇到装不下的就停', () => {
     const items = [
       user('一', { attachments: [image('small.png', 1 * MB)] }),
-      user('二', { attachments: [image('big.png', 4 * MB)] }),
+      user('二', { attachments: [image('big.png', Math.floor(3.4 * MB))] }),
       user('三', { attachments: [image('new.png', 2 * MB)] }),
     ]
     const seed = buildChatSeed(items, '')!
-    // new 2MB + big 4MB 超过 5MB：big 装不下，更早的 small 也不再带
+    // new 2MB + big 3.4MB 超过 5MB：big 装不下，更早的 small 也不再带
     expect(seed.turns.map(t => names(t.images))).toEqual([[], [], ['new.png']])
     expect(seed.omittedImages).toBe(2)
     expect(HANDOFF_IMAGE_BYTES).toBe(5 * MB)
+  })
+
+  it('单张超过 3.5 MiB 或边长超过 8000 px 的图不带：算没带上，只留下文件名', () => {
+    const big = image('big.png', HANDOFF_IMAGE_MAX_BYTES + 1)
+    const wide = image('wide.png', 1000, 8001, 1)
+    const tall = image('tall.png', 1000, 1, 9000)
+    const ok = image('ok.png', 1000, 8000, 8000)
+    const seed = buildChatSeed([user('看', { attachments: [big, wide, tall, ok] })], '')!
+    expect(names(seed.turns[0].images)).toEqual(['ok.png'])
+    expect(seed.turns[0].user).toBe('看（附：ok.png）（附图 big.png、wide.png、tall.png，未带上）')
+    expect(seed.omittedImages).toBe(3)
+    // 刚好 3.5 MiB 的可以带
+    expect(
+      names(
+        buildChatSeed([user('看', { attachments: [image('x.png', HANDOFF_IMAGE_MAX_BYTES)] })], '')!.turns[0].images,
+      ),
+    ).toEqual(['x.png'])
+  })
+
+  it('skipIds 里的图片（失败重试时已经随当前消息重发）：只留文件名，不带原图也不计没带上', () => {
+    const a = image('a.png'),
+      b = image('b.png')
+    const items = [user('看', { attachments: [a, b] })]
+    const seed = buildChatSeed(items, '', undefined, { skipIds: new Set([a.id]) })!
+    expect(names(seed.turns[0].images)).toEqual(['b.png'])
+    expect(seed.turns[0].user).toBe('看（附：a.png、b.png）')
+    expect(seed.omittedImages).toBeUndefined()
+    // 全跳过：没有 images，也没有 omittedImages
+    const none = buildChatSeed(items, '', undefined, { skipIds: new Set([a.id, b.id]) })!
+    expect(none.turns[0]).not.toHaveProperty('images')
+    expect(none).not.toHaveProperty('omittedImages')
   })
 
   it('折进概要的更早几轮不带图', () => {
