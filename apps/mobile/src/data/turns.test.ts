@@ -152,6 +152,12 @@ describe('thinkingLabel', () => {
     expect(thinkingLabel(run('h1', 'completed'))).toBe('思考了')
     expect(thinkingLabel(run('h2', 'completed', ' '))).toBeNull()
   })
+
+  it('prefers the engine-reported duration (Codex sends reasoning only after it is done)', () => {
+    expect(thinkingLabel(run('c1', 'running'), 0)).toBe('正在思考')
+    expect(thinkingLabel({ ...run('c1', 'completed', ''), durationMs: 6000 }, 20)).toBe('思考了 6 秒')
+    expect(thinkingLabel({ ...run('c2', 'completed', ''), durationMs: 3000 })).toBe('思考了 3 秒')
+  })
 })
 
 describe('latestTodo', () => {

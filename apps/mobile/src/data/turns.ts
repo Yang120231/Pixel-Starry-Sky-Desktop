@@ -117,7 +117,7 @@ export function timeDividers(items: readonly Item[], now: number = Date.now()): 
   return map
 }
 
-// 思考用时：Item 里没有时间字段，只记手机上亲眼看到在运行的那段（同桌面 ItemRows 的 ReasoningBlock）；历史记录、刷新后只写「思考了」
+// 思考用时：引擎给了 durationMs（Codex）就用它；否则只记手机上亲眼看到在运行的那段（同桌面 ItemRows 的 ReasoningBlock），历史记录、刷新后只写「思考了」
 const thinkingStart = new Map<string, number>()
 const thinkingTook = new Map<string, number>()
 
@@ -135,7 +135,7 @@ export function thinkingLabel(item: Extract<Item, { kind: 'reasoning' }>, now: n
     const elapsed = started === undefined ? 0 : now - started
     return elapsed >= 1000 ? `思考中 ${spanText(elapsed)}` : '正在思考'
   }
-  const took = thinkingTook.get(item.id)
+  const took = item.durationMs ?? thinkingTook.get(item.id)
   if (took !== undefined) return `思考了 ${spanText(took)}`
   return item.text.trim() ? '思考了' : null
 }
