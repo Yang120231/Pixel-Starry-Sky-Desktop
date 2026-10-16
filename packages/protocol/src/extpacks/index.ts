@@ -45,6 +45,7 @@ export {
 export { EXT_ENGINE_CODES, EXT_ISSUE_CODES, EXT_ZIP_CODES, EXT_ZIP_FATAL, grammarIssue, zipIssue } from './codes'
 export { checkPack, dedupeIssues, readerFromFiles } from './check'
 export { extPackSkipped } from './skip'
+export { computeLive } from './live'
 export { checkVerdict, issueOutcome } from './verdict'
 export { locateJsonPointer } from './locate'
 export {

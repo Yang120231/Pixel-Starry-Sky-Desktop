@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { checkPack, dedupeIssues, EXT_MANIFEST, packStatus } from '@pixelsky/protocol'
+import { checkPack, computeLive, dedupeIssues, EXT_MANIFEST, packStatus } from '@pixelsky/protocol'
 import type { ExtPackFiles, ExtPackInfo, ExtPackIssue, ExtPackOptions, ExtPackSource } from '@pixelsky/protocol'
 import { FOLDER_SCAN, folderPackFiles } from '@pixelsky/extension-cli/folder'
 
@@ -64,7 +64,7 @@ export async function loadPack(input: LoadPackInput): Promise<LoadedPack> {
     revision,
     status: c.status,
     manifest: c.manifest,
-    live: enabled && c.status !== 'error',
+    live: computeLive({ enabled, status: c.status }),
     inactive: c.inactive,
     issues: c.issues,
     options,
@@ -78,7 +78,7 @@ export function addPackIssue(pack: LoadedPack, issue: ExtPackIssue): void {
   const info = pack.info
   info.issues = dedupeIssues([...info.issues, issue])
   info.status = packStatus(info.issues)
-  info.live = info.enabled && info.status !== 'error'
+  info.live = computeLive(info)
 }
 
 /** 清单文件是否存在（addFolder 的前置检查，不读内容） */

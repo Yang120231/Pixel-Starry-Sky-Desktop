@@ -115,4 +115,54 @@ export const extensionCenterMessages = {
   'extensions.detail.skillEngines': { zh: '适用 {engines}', en: 'For {engines}' },
   'extensions.detail.noManifest': { zh: '没有读到清单', en: 'The manifest could not be read' },
   'extensions.detail.publisher': { zh: '发布者', en: 'Publisher' },
+  'errors.extpacks.blocked': {
+    zh: '这个扩展已被平台停用，不能打开',
+    en: "This extension has been disabled by the platform and can't be turned on",
+  },
+  'errors.extstore.notImplemented': {
+    zh: '扩展商店的这个功能还没做好',
+    en: "This extension store feature isn't ready yet",
+  },
+  'errors.extstore.notSignedIn': { zh: '请先登录像素星空账号', en: 'Sign in to your Pixel Sky account first' },
+  'errors.extstore.installing': { zh: '正在安装…', en: 'Installing…' },
+  'errors.extstore.cancelled': { zh: '下载已取消', en: 'Download cancelled' },
+  'errors.extstore.offline': { zh: '下载失败：连不上扩展商店', en: "Download failed: can't reach the extension store" },
+  'errors.extstore.timeout': {
+    zh: '下载太慢，30 秒没有收到数据',
+    en: 'Download too slow: no data received for 30 seconds',
+  },
+  'errors.extstore.tooLarge': { zh: '下载的文件太大', en: 'The downloaded file is too large' },
+  'errors.extstore.badSignature': {
+    zh: '签名不对，已拒绝安装（可能被篡改）',
+    en: 'Invalid signature, installation refused (it may have been tampered with)',
+  },
+  'errors.extstore.unknownKey': {
+    zh: '这个扩展用的签名钥匙软件不认识',
+    en: "The app doesn't recognize the signing key used by this extension",
+  },
+  'errors.extstore.unknownSite': {
+    zh: '这个云端的签名钥匙软件不认识：{site}',
+    en: "The app doesn't recognize the signing keys of this cloud: {site}",
+  },
+  'errors.extstore.revokedKey': { zh: '签名钥匙已作废', en: 'The signing key has been revoked' },
+  'errors.extstore.packErrors': { zh: '扩展有错误：{issues}', en: 'The extension has errors: {issues}' },
+  'errors.extstore.badFiles': {
+    zh: '扩展里有不能在本机保存的文件：{files}',
+    en: "The extension contains files that can't be saved locally: {files}",
+  },
+  'errors.extstore.engineUnmet': { zh: '需要像素星空 {version} 以上', en: 'Requires Pixel Sky {version} or later' },
+  'errors.extstore.downgrade': {
+    zh: '不能装比本机更低的版本',
+    en: "Can't install a version older than the one on this computer",
+  },
+  'errors.extstore.versionBlocked': {
+    zh: '这个版本已被平台停用：{reason}',
+    en: 'This version has been disabled by the platform: {reason}',
+  },
+  'errors.extstore.notFound': { zh: '商店里没有这个扩展', en: "This extension isn't in the store" },
+  'errors.extstore.badRequest': { zh: '请求参数不对', en: 'Invalid request' },
+  'errors.extstore.proxyHint': {
+    zh: '账号相关的请求不走系统代理，请检查网络或代理设置',
+    en: "Account requests don't use the system proxy. Check your network or proxy settings",
+  },
 } as const satisfies Record<string, { zh: string; en: string }>

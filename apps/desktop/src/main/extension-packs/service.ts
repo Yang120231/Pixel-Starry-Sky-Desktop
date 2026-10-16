@@ -4,6 +4,7 @@ import { basename, join, resolve, sep } from 'node:path'
 import type { ExtPackInfo, ExtPackOptions, ExtPackState, SkillCommand } from '@pixelsky/protocol'
 import {
   codedError,
+  computeLive,
   EXT_LIMITS,
   EXT_MANIFEST,
   loaderIssue,
@@ -185,7 +186,7 @@ export class ExtensionPacks {
       if (!info.issues.some(i => i.code === 'pack.duplicateId')) continue
       info.issues = info.issues.filter(i => i.code !== 'pack.duplicateId')
       info.status = packStatus(info.issues)
-      info.live = info.enabled && info.status !== 'error'
+      info.live = computeLive(info)
     }
     const seen = new Set<string>()
     for (const pack of this.packs) {
@@ -286,7 +287,7 @@ export class ExtensionPacks {
     return this.mutate(async () => {
       const pack = this.find(key)
       pack.info.enabled = enabled
-      pack.info.live = enabled && pack.info.status !== 'error'
+      pack.info.live = computeLive(pack.info)
       this.persist(pack)
       await this.refreshWrappers()
       this.commit()
