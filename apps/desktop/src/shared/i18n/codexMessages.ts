@@ -36,6 +36,12 @@ export const codexMessages = {
     zh: '使用本机 Codex 登录及 provider 配置；输出风格和提问开关由原生配置管理。',
     en: 'Use your local Codex sign-in and provider configuration. Output styles and question controls are managed by native config.',
   },
+  'engineConfigWarnings.title': { zh: '配置提示', en: 'Config warnings' },
+  'engineConfigWarnings.note': {
+    zh: '{p0} 读取本机配置时报的提示，不影响使用，也不会显示在对话里。改好配置后点「重新检测」清掉；下一轮还有的话会再出现',
+    en: '{p0} reported these while reading your local config. They don’t affect use and aren’t shown in conversations. After fixing the config, click Detect again to clear them; they come back next turn if still present',
+  },
+  'engineConfigWarnings.badge': { zh: '{p0} 条配置提示', en: '{p0} config warnings' },
   'codex.mcpInput': { zh: '填写 MCP 请求的数据（JSON）', en: 'Enter the data requested by MCP (JSON)' },
   'codex.mcpInputInvalid': { zh: '请输入有效的 JSON 对象', en: 'Enter a valid JSON object' },
   'codex.noRoutes': {
@@ -96,6 +102,10 @@ export const codexMessages = {
   'codex.couldNotSeedThread': {
     zh: '没能把之前的对话注入 Codex 会话，这一轮改用文字交接',
     en: 'Could not add the previous conversation to the Codex thread; sent it as a text handoff instead',
+  },
+  'codex.imagesNotPassed': {
+    zh: '当前模型不能看图，之前的 {p0} 张图片实际没有带上',
+    en: "The current model can't view images, so {p0} earlier image(s) were not actually passed along",
   },
   'codex.couldNotReadVersion': { zh: '无法读取 Codex 版本号', en: 'Could not read the Codex version' },
   'codex.couldNotRewindThread': {

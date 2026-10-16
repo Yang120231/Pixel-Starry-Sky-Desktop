@@ -4,7 +4,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { EngineId, EngineInfo, Item, SessionRecord, SessionSettings } from '@pixelsky/protocol'
+import type {
+  EngineId,
+  EngineInfo,
+  EngineModel,
+  ImageAttachment,
+  Item,
+  SessionRecord,
+  SessionSettings,
+} from '@pixelsky/protocol'
 import type { EngineAdapter, EngineSession, SessionContext } from '../src/adapter'
 import type { ChatSeed } from '../src/chat-log'
 import type { EngineHostOptions } from '../src/host/context'
@@ -41,6 +49,9 @@ class FakeSession implements EngineSession {
   inputs: string[] = []
   /** 每次 send 收到的聊天回放（没有为 undefined） */
   seeds: (ChatSeed | undefined)[] = []
+  /** 每次 send 收到的当前消息自己的图片和文字交接带的更早消息的图片 */
+  attachments: (ImageAttachment[] | undefined)[] = []
+  handoffImages: (ImageAttachment[] | undefined)[] = []
   closed = false
   /** 创建时记录里的引擎会话 id（验证换回来时用的是原来的） */
   readonly startId: string | null
@@ -51,10 +62,19 @@ class FakeSession implements EngineSession {
   ) {
     this.startId = ctx.record().engineSessionId
   }
-  send(text: string, turnId: string, _userItemId: string, _attachments?: unknown, seed?: ChatSeed): void {
+  send(
+    text: string,
+    turnId: string,
+    _userItemId: string,
+    attachments?: ImageAttachment[],
+    seed?: ChatSeed,
+    handoffImages?: ImageAttachment[],
+  ): void {
     this.active = turnId
     this.inputs.push(text)
     this.seeds.push(seed)
+    this.attachments.push(attachments)
+    this.handoffImages.push(handoffImages)
     if (!this.ctx.record().engineSessionId) this.ctx.setEngineSessionId(`${this.engine}-sid-${this.inputs.length}`)
     if (this.auto) setTimeout(() => this.finish(), 0)
   }
@@ -100,6 +120,9 @@ class FakeAdapter implements EngineAdapter {
   auto = true
   /** 引擎那边的原生会话记录还在不在（hasNativeSession） */
   exists = true
+  /** 目录里的模型（catalog）；没给就是空目录，当前模型能不能看图按引擎能力 */
+  models: EngineModel[] | undefined
+  catalog = async () => ({ models: this.models, currentModel: null, outputStyles: [], currentOutputStyle: null })
   hasNativeSession(): boolean {
     return this.exists
   }
@@ -173,8 +196,8 @@ function setup(options: Partial<EngineHostOptions> = {}, seeds = false) {
   const record = host.createSession({ projectId: project.id, engine: 'claude', model: 'm', effort: 'low' })
   const idle = () => host.open(record.id).state === 'idle' && host.open(record.id).queue.length === 0
   let n = 0
-  const say = async (text: string, clientMessageId = `m${++n}`) => {
-    await host.send(record.id, { text, clientMessageId })
+  const say = async (text: string, clientMessageId = `m${++n}`, attachments?: ImageAttachment[]) => {
+    await host.send(record.id, { text, clientMessageId, ...(attachments ? { attachments } : {}) })
     await until(() => host.open(record.id).items.some(i => i.kind === 'user' && i.id === clientMessageId))
     await until(idle)
     return clientMessageId
@@ -206,6 +229,26 @@ describe('跨引擎接力：换引擎', () => {
     expect(snap().record.engineSessions?.codex).toEqual({ id: null, seen: null })
     expect(snap().record.engineSessionId).toBeNull()
     expect(users()[0].engine).toBe('claude')
+  })
+
+  it('同步通知里不知道是哪个引擎处理的那段（游标已在那条用户消息之后）：写「其他引擎」', async () => {
+    const { host, record, say, snap } = setup()
+    await say('第一句')
+    await host.update(record.id, { engine: 'codex' })
+    const second = await say('第二句')
+    await host.update(record.id, { engine: 'claude' })
+    // 模拟 claude 的游标停在 codex 那条用户消息上：交接里只剩 codex 的回复，没有带引擎标记的用户消息
+    const rt = (host as unknown as { runtimes: Map<string, { snapshot: { record: SessionRecord } }> }).runtimes.get(
+      record.id,
+    )!
+    const sessions = rt.snapshot.record.engineSessions!
+    rt.snapshot.record = {
+      ...rt.snapshot.record,
+      engineSessions: { ...sessions, claude: { ...sessions.claude!, seen: second } },
+    }
+    await say('第三句')
+    const notice = snap().items.findLast(i => i.kind === 'notice')
+    expect(notice?.kind === 'notice' && notice.text).toBe('已把其他引擎期间的进展同步给 Claude Code')
   })
 
   it('旧记录（没有 engineSessions、用户消息没标引擎）换引擎：补标记，旧引擎读到全部对话', async () => {
@@ -445,6 +488,323 @@ describe('跨引擎接力：换引擎', () => {
     expect(snap().record.ultracode).toBe(true)
     await host.update(record.id, { engine: 'codex' })
     expect(snap().record.ultracode).toBe(false)
+  })
+})
+
+/** 合法的 PNG 图片附件（只有文件头，其余补零） */
+const png = (name: string, bytes = 64): ImageAttachment => ({
+  id: name.replace(/\W/g, '-'),
+  name,
+  mediaType: 'image/png',
+  bytes,
+  width: 1,
+  height: 1,
+  dataBase64: Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), Buffer.alloc(bytes - 8)]).toString(
+    'base64',
+  ),
+})
+const ASKED = '这个地方显示的内容不对'
+
+describe('跨引擎接力：图片', () => {
+  /** claude 先收到一条带图的消息，被打断没有回复，再换成 codex */
+  async function interruptedWithImages(seeds: boolean, images = [png('a.png')]) {
+    const t = setup({}, seeds)
+    t.claude.auto = false
+    await t.host.send(t.record.id, { text: ASKED, clientMessageId: 'first', attachments: images })
+    await until(() => !!t.claude.sessions[0]?.active)
+    await t.claude.sessions[0].interrupt()
+    await until(() => t.snap().state === 'idle' && t.snap().queue.length === 0)
+    await t.host.update(t.record.id, { engine: 'codex' })
+    return t
+  }
+  const notice = (items: readonly Item[]) => items.findLast(i => i.kind === 'notice')
+
+  it('能注入聊天的引擎：回放里带上图片，用户话写明附了什么，提示里写张数', async () => {
+    const a = png('a.png')
+    const { codex, say, snap } = await interruptedWithImages(true, [a])
+    await say('怎么样')
+    const session = codex.sessions[0]
+    expect(session.inputs[0]).toBe('怎么样')
+    const seed = session.seeds[0]!
+    expect(seed.turns).toEqual([{ id: 'first', user: `${ASKED}（附：a.png）`, assistant: null, images: [a] }])
+    expect(seed.omittedImages).toBeUndefined()
+    // 注入失败退回文字交接：图片随当前消息发，材料里说明是哪条消息的
+    expect(seed.fallbackImages).toEqual([a])
+    expect(seed.fallback).toContain(`下面第 1 张图是之前「${ASKED}」那条消息附的 a.png`)
+    expect(session.attachments[0]).toBeUndefined()
+    expect(session.handoffImages[0]).toBeUndefined()
+    const n = notice(snap().items)
+    expect(n).toMatchObject({ level: 'info', text: '已把之前的聊天带给 Codex（1 轮，含 1 张图片）' })
+    expect(n?.kind === 'notice' && n.detail).toBe(`用户：${ASKED}（附：a.png）\n助手：（这一轮没有回复，可能被中断了）`)
+  })
+
+  it('换回来同步另一个引擎期间的聊天时也带图', async () => {
+    const images = Array.from({ length: 5 }, (_, i) => png(`${i}.png`))
+    const { host, claude, codex, record, say, snap } = await interruptedWithImages(true, images)
+    await say('第二轮', 'm2', [png('x.png'), png('y.png')])
+    // 当前消息自己带 2 张，回放只剩 3 张的额度
+    expect(codex.sessions[0].seeds[0]!.turns[0].images).toHaveLength(3)
+    claude.auto = true
+    await host.update(record.id, { engine: 'claude' })
+    await say('第三轮', 'm3', [png('z.png')])
+    // 换回 claude：codex 期间的一轮带 2 张图
+    expect(snap().items.findLast(i => i.kind === 'notice')).toMatchObject({
+      text: '已把 Codex 期间的聊天同步给 Claude Code（1 轮，含 2 张图片）',
+    })
+  })
+
+  it('回放里图片超过 5 张：最早的未带上，提示里说没带上几张', async () => {
+    const t = setup({}, true)
+    for (const [i, name] of ['1.png', '2.png', '3.png'].entries())
+      await t.say(`问${i}`, `q${i}`, [png(name), png(`${name}-b`)])
+    await t.host.update(t.record.id, { engine: 'codex' })
+    await t.say('接着')
+    const seed = t.codex.sessions[0].seeds[0]!
+    expect(seed.omittedImages).toBe(1)
+    expect(seed.turns[0].user).toBe('问0（附：1.png-b）（附图 1.png，未带上）')
+    expect(notice(t.snap().items)).toMatchObject({
+      text: '已把之前的聊天带给 Codex（3 轮，含 5 张图片，1 张图片未带上）',
+    })
+  })
+
+  it('不能注入聊天的引擎：更早消息的图片随这条消息发，排在消息自己的图片前面，文字里说明各是哪条消息的', async () => {
+    const a = png('a.png'),
+      b = png('b.png')
+    const { codex, say, snap } = await interruptedWithImages(false, [a])
+    await say('怎么样', 'm2', [b])
+    const session = codex.sessions[0]
+    expect(session.handoffImages[0]).toEqual([a])
+    expect(session.attachments[0]).toEqual([b])
+    expect(session.seeds[0]).toBeUndefined()
+    expect(session.inputs[0]).toContain('这条消息附带的图片里，前 1 张是之前消息里的图')
+    expect(session.inputs[0]).toContain(`下面第 1 张图是之前「${ASKED}」那条消息附的 a.png`)
+    expect(session.inputs[0].endsWith('\n\n怎么样')).toBe(true)
+    // 用户消息条目里只有用户自己发的图
+    expect(snap().items.findLast(i => i.kind === 'user')).toMatchObject({ attachments: [b] })
+    expect(notice(snap().items)).toMatchObject({ text: '已把之前的对话交接给 Codex（1 条，含 1 张图片）' })
+  })
+
+  it('当前消息自己的图片先占额度：只带得下的最近几张，没带上的说明', async () => {
+    const earlier = [1, 2, 3, 4].map(i => png(`e${i}.png`))
+    const own = [1, 2, 3].map(i => png(`c${i}.png`))
+    const { codex, say, snap } = await interruptedWithImages(false, earlier)
+    await say('怎么样', 'm2', own)
+    const session = codex.sessions[0]
+    expect(session.handoffImages[0]).toEqual(earlier.slice(2))
+    expect(session.attachments[0]).toEqual(own)
+    const text = session.inputs[0]
+    expect(text.indexOf('下面第 1 张图是之前「')).toBeLessThan(text.indexOf('下面第 2 张图是之前「'))
+    expect(text).toMatch(/下面第 1 张图是之前「.*」那条消息附的 e3\.png/)
+    expect(text).toMatch(/下面第 2 张图是之前「.*」那条消息附的 e4\.png/)
+    expect(text).toContain('另有 2 张之前消息里的图片没有带过来，只留下了文件名。')
+    expect(notice(snap().items)).toMatchObject({
+      text: '已把之前的对话交接给 Codex（1 条，含 2 张图片，2 张图片未带上）',
+    })
+  })
+
+  it('当前消息自己的图片也占回放的额度：回放少带，没带上的记进张数和提示', async () => {
+    const earlier = [1, 2, 3].map(i => png(`e${i}.png`))
+    const own = [1, 2, 3, 4].map(i => png(`c${i}.png`))
+    const { codex, say, snap } = await interruptedWithImages(true, earlier)
+    await say('怎么样', 'm2', own)
+    const seed = codex.sessions[0].seeds[0]!
+    expect(seed.turns[0].images).toEqual([earlier[2]])
+    expect(seed.omittedImages).toBe(2)
+    expect(seed.fallbackImages).toEqual([earlier[2]])
+    expect(notice(snap().items)).toMatchObject({
+      text: '已把之前的聊天带给 Codex（1 轮，含 1 张图片，2 张图片未带上）',
+    })
+  })
+
+  it.each([false, true])('当前消息已经有 5 张图：更早的一张都不带，并说明（聊天回放：%s）', async seeds => {
+    const own = [1, 2, 3, 4, 5].map(i => png(`c${i}.png`))
+    const { codex, say } = await interruptedWithImages(seeds)
+    await say('怎么样', 'm2', own)
+    const session = codex.sessions[0]
+    expect(session.handoffImages[0]).toBeUndefined()
+    expect(session.attachments[0]).toEqual(own)
+    const seed = session.seeds[0]
+    expect(seed?.fallbackImages).toBeUndefined()
+    const text = seed ? seed.fallback : session.inputs[0]
+    expect(text).not.toContain('下面第')
+    expect(text).toContain('另有 1 张之前消息里的图片没有带过来，只留下了文件名。')
+  })
+
+  it.each([false, true])(
+    '带图的一轮失败后重试：这张图只出现一次，更早的图照旧带上，失败那轮的文字照旧重发（聊天回放：%s）',
+    async seeds => {
+      const old = png('old.png'),
+        cur = png('cur.png')
+      const { host, claude, codex, record, say, snap } = setup({}, seeds)
+      claude.auto = true
+      await say('更早的话', 'q0', [old])
+      await host.update(record.id, { engine: 'codex' })
+      codex.auto = false
+      await host.send(record.id, { text: '失败的一轮', clientMessageId: 'failed', attachments: [cur] })
+      await until(() => codex.sessions[0]?.inputs.length === 1)
+      const session = codex.sessions[0]
+      // 失败两次：每次重试都不能多带一份
+      for (const n of [2, 3]) {
+        session.finish('failed')
+        await host.runQueuedNow(record.id, 'failed')
+        await until(() => session.inputs.length === n)
+        expect(session.attachments[n - 1]).toEqual([cur])
+        const seed = session.seeds[n - 1]
+        if (seed) {
+          const images = seed.turns.flatMap(t => t.images ?? [])
+          expect(images).toEqual([old])
+          expect(seed.omittedImages).toBeUndefined()
+          // 每次失败的那一轮的文字都留着（游标没动），图片都只写文件名
+          expect(seed.turns.map(t => t.user)).toEqual([
+            '更早的话（附：old.png）',
+            ...Array<string>(n - 1).fill('失败的一轮（附：cur.png）'),
+          ])
+          expect(seed.fallbackImages).toEqual([old])
+          expect(seed.fallback).toContain('前 1 张是之前消息里的图')
+          expect(seed.fallback).not.toContain('另有')
+        } else {
+          expect(session.handoffImages[n - 1]).toEqual([old])
+          expect(session.inputs[n - 1]).toContain('用户：失败的一轮（附：cur.png）')
+          expect(session.inputs[n - 1]).toContain('前 1 张是之前消息里的图')
+          expect(session.inputs[n - 1]).not.toContain('另有')
+        }
+      }
+      session.finish()
+      await until(() => snap().state === 'idle' && snap().queue.length === 0)
+    },
+  )
+
+  it.each([false, true])('同引擎带图的一轮失败后重试：没有更早的图可带（聊天回放：%s）', async seeds => {
+    const cur = png('cur.png')
+    const { host, claude, record, say, snap } = setup({}, seeds)
+    await say('第一句')
+    const session = claude.sessions[0]
+    session.auto = false
+    await host.send(record.id, { text: '失败的一轮', clientMessageId: 'failed', attachments: [cur] })
+    await until(() => session.inputs.length === 2)
+    session.finish('failed')
+    await host.runQueuedNow(record.id, 'failed')
+    await until(() => session.inputs.length === 3)
+    expect(session.attachments[2]).toEqual([cur])
+    expect(session.handoffImages[2]).toBeUndefined()
+    const seed = session.seeds[2]
+    if (seed) {
+      expect(seed.turns.flatMap(t => t.images ?? [])).toEqual([])
+      expect(seed.turns.at(-1)?.user).toBe('失败的一轮（附：cur.png）')
+      expect(seed.omittedImages).toBeUndefined()
+      expect(seed.fallbackImages).toBeUndefined()
+    } else {
+      expect(session.inputs[2]).toContain('用户：失败的一轮（附：cur.png）')
+      expect(session.inputs[2]).not.toContain('前 1 张')
+    }
+    session.finish()
+    await until(() => snap().state === 'idle' && snap().queue.length === 0)
+  })
+
+  it.each([false, true])('单张太大或边长超限的图不带，算没带上（聊天回放：%s）', async seeds => {
+    // 4 MB 的图：数据本身合法，只是单张超过交接的上限
+    const big = png('big.png', 4 * 1024 * 1024)
+    const wide = { ...png('wide.png'), width: 8001 }
+    const ok = png('ok.png')
+    const { codex, say, snap } = await interruptedWithImages(seeds, [big, wide, ok])
+    await say('怎么样')
+    const session = codex.sessions[0]
+    const seed = session.seeds[0]
+    if (seed) {
+      expect(seed.turns[0].images).toEqual([ok])
+      expect(seed.omittedImages).toBe(2)
+      expect(seed.turns[0].user).toBe(`${ASKED}（附：ok.png）（附图 big.png、wide.png，未带上）`)
+    } else {
+      expect(session.handoffImages[0]).toEqual([ok])
+      expect(session.inputs[0]).toContain('另有 2 张之前消息里的图片没有带过来')
+    }
+    expect(notice(snap().items)).toMatchObject({
+      text: expect.stringContaining('含 1 张图片，2 张图片未带上'),
+    })
+  })
+
+  const model = (id: string, inputModalities: string[]): EngineModel => ({
+    id,
+    label: id,
+    efforts: [],
+    defaultEffort: null,
+    inputModalities,
+    isDefault: false,
+  })
+
+  it.each([true, false])(
+    '引擎能看图但当前模型不能（目录里查得到）：不带图，只写「未带上」，不会又说带了又说没带（聊天回放：%s）',
+    async seeds => {
+      const t = setup({}, seeds)
+      t.codex.models = [model('m', ['text'])]
+      t.claude.auto = false
+      await t.host.send(t.record.id, { text: ASKED, clientMessageId: 'first', attachments: [png('a.png')] })
+      await until(() => !!t.claude.sessions[0]?.active)
+      await t.claude.sessions[0].interrupt()
+      await until(() => t.snap().state === 'idle' && t.snap().queue.length === 0)
+      await t.host.update(t.record.id, { engine: 'codex' })
+      await t.say('怎么样')
+      const session = t.codex.sessions[0]
+      expect(session.attachments[0]).toBeUndefined()
+      expect(session.handoffImages[0]).toBeUndefined()
+      const seed = session.seeds[0]
+      if (seed) {
+        expect(seed.turns[0].images).toBeUndefined()
+        expect(seed.fallbackImages).toBeUndefined()
+        expect(seed.omittedImages).toBe(1)
+      }
+      const shown = notice(t.snap().items)
+      expect(shown).toMatchObject({
+        text: seeds
+          ? '已把之前的聊天带给 Codex（1 轮，1 张图片未带上）'
+          : '已把之前的对话交接给 Codex（1 条，1 张图片未带上）',
+      })
+      expect(shown?.kind === 'notice' && shown.text).not.toContain('含')
+    },
+  )
+
+  it('目录里的模型能看图、或查不到当前模型：照常带图', async () => {
+    for (const models of [[model('m', ['text', 'image'])], [model('other', ['text'])], undefined]) {
+      const t = await interruptedWithImages(true)
+      t.codex.models = models
+      await t.say('怎么样')
+      expect(t.codex.sessions[0].seeds[0]!.turns[0].images).toHaveLength(1)
+      expect(notice(t.snap().items)).toMatchObject({ text: '已把之前的聊天带给 Codex（1 轮，含 1 张图片）' })
+    }
+  })
+
+  it('读目录失败：按引擎能力，照常带图', async () => {
+    const t = await interruptedWithImages(true)
+    t.codex.catalog = async () => {
+      throw new Error('catalog down')
+    }
+    await t.say('怎么样')
+    expect(t.codex.sessions[0].seeds[0]!.turns[0].images).toHaveLength(1)
+  })
+
+  it.each([true, false])('目标引擎不能看图：一张都不带，写明未带上（聊天回放：%s）', async seeds => {
+    const caps = ENGINES.codex.caps
+    const saved = caps.imageInput
+    caps.imageInput = false
+    try {
+      const { codex, say, snap } = await interruptedWithImages(seeds)
+      await say('怎么样')
+      const session = codex.sessions[0]
+      expect(session.handoffImages[0]).toBeUndefined()
+      const seed = session.seeds[0]
+      if (seed) {
+        expect(seed.turns[0]).toMatchObject({ user: `${ASKED}（附图 a.png，未带上）` })
+        expect(seed.turns[0].images).toBeUndefined()
+        expect(seed.fallbackImages).toBeUndefined()
+      }
+      expect(notice(snap().items)).toMatchObject({
+        text: seeds
+          ? '已把之前的聊天带给 Codex（1 轮，1 张图片未带上）'
+          : '已把之前的对话交接给 Codex（1 条，1 张图片未带上）',
+      })
+    } finally {
+      caps.imageInput = saved
+    }
   })
 })
 

@@ -32,6 +32,9 @@ const statusOf = (value: unknown, complete: boolean): ItemStatus =>
         : complete
           ? 'completed'
           : 'running'
+/** 子智能体停在 running 的标成已中断（它的进程没了，或这一轮被中止，不会再有后续）；其他状态不动 */
+export const interruptedAgent = (agent: AgentRun): AgentRun =>
+  agent.state === 'running' ? { ...agent, state: 'interrupted' } : agent
 /** 当前 thread 的条目转换；原生用户消息由宿主负责，只用于输入确认。 */
 export class CodexTranslator {
   readonly items = new Map<string, Item>()
@@ -49,7 +52,9 @@ export class CodexTranslator {
       type = string(raw.type)
     if (type === 'subAgentActivity') return this.subagent(raw, complete)
     const status = statusOf(raw.status, complete),
-      prior = this.items.get(id)
+      prior = this.items.get(id),
+      // collab 调用有派出 / 发消息 / 等待 / 关闭几种（raw.tool），只有派出的才是子智能体的派发卡
+      spawns = /^(collabAgentToolCall|collabToolCall)$/.test(type) && /^spawn_?agent$/i.test(string(raw.tool))
     let item: Item | null = null
     if (type === 'agentMessage' || type === 'plan')
       item = {
@@ -106,7 +111,7 @@ export class CodexTranslator {
         kind: 'tool',
         id,
         tool,
-        name: type === 'mcpToolCall' ? `${string(raw.server)} / ${string(raw.tool)}` : type,
+        name: type === 'mcpToolCall' ? `${string(raw.server)} / ${string(raw.tool)}` : spawns ? 'spawn_agent' : type,
         title: string(raw.command || raw.query || raw.prompt || raw.path || raw.tool || raw.name) || type,
         output: clip(
           raw.error ? JSON.stringify(raw.error) : raw.result ? JSON.stringify(raw.result) : string(raw.output),
@@ -134,7 +139,8 @@ export class CodexTranslator {
           phase: null,
           prompt: string(raw.prompt) || priorAgent?.prompt || '',
           result: string(state.message),
-          toolUseId: id,
+          // 只有派出调用认领子智能体；等待 / 发消息 / 关闭沿用派出时的卡片 id
+          toolUseId: spawns ? id : (priorAgent?.toolUseId ?? id),
         })
       }
       this.emitRuns()
@@ -282,6 +288,17 @@ export class CodexTranslator {
         this.items.set(item.id, finished)
         this.emit({ type: 'item_completed', item: finished })
       }
+    // 进程退出 / 这一轮被中断或失败：还在 running 的子智能体小卡片不能一直转，标成已中断（同 runs.ts 读回磁盘时）。
+    // 正常结束（completed）不动：子智能体可能在主轮结束后才跑完；之后到的「跑完」事件会把状态改回 completed
+    if (outcome === 'completed') return
+    let changed = false
+    for (const [id, agent] of this.agents) {
+      const next = interruptedAgent(agent)
+      if (next === agent) continue
+      this.agents.set(id, next)
+      changed = true
+    }
+    if (changed) this.emitRuns()
   }
 }
 

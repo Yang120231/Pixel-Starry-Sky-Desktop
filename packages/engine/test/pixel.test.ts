@@ -3,7 +3,9 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { EngineHost, PixelAdapter } from '../src'
-import type { HostEvent } from '@pixelsky/protocol'
+import type { EngineInfo, HostEvent } from '@pixelsky/protocol'
+import type { EngineAdapter, EngineSession, SessionContext } from '../src/adapter'
+import { ENGINES } from '../src/registry'
 import { PIXEL_MODES, pixelModelsConfig, reservedPixelArg } from '../src/pixel/session'
 import { modelEfforts } from '../src/pixel/catalog'
 import { makeTmp, removeTmp } from './helpers/tmp'
@@ -25,13 +27,23 @@ const wait = async (fn: () => boolean): Promise<void> => {
   }
   throw new Error('Pixel test timed out')
 }
+/**
+ * 本机装的 coding agent 可能在环境里留着 ANTHROPIC_BASE_URL 之类的变量：那些会让 Pixel 会话多写一份 models.json、
+ * 多带 --session-dir，断言就跟着变。这里清掉，需要哪个用例自己按 extra 给。
+ */
+function pixelEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env }
+  for (const key of Object.keys(env))
+    if (/^(ANTHROPIC|OPENAI)_/i.test(key) || /^PIXELSKY_PIXEL_/i.test(key)) delete env[key]
+  return env
+}
 function setup(idleMs = 50, extra: Record<string, unknown> = {}) {
   const log = join(root, 'rpc.jsonl'),
     argv = join(root, 'argv.jsonl'),
     events: HostEvent[] = []
   const adapter = new PixelAdapter({
     launcher: { command: process.execPath, args: [FAKE] },
-    env: { ...process.env, FAKE_PIXEL_LOG: log, FAKE_PIXEL_ARGV: argv, FAKE_PIXEL_DIR: join(root, 'sessions') },
+    env: { ...pixelEnv(), FAKE_PIXEL_LOG: log, FAKE_PIXEL_ARGV: argv, FAKE_PIXEL_DIR: join(root, 'sessions') },
     agentRoot: join(root, 'agents'),
     ...extra,
   } as never)
@@ -296,5 +308,88 @@ describe('Pixel 引擎适配器', () => {
     ) as { providers: { pixelsky: { models: Array<{ id: string }>; api: string } } }
     expect(gateway.providers.pixelsky.models.map(m => m.id)).toEqual(['m1', 'm2'])
     expect(gateway.providers.pixelsky.api).toBe('openai-responses')
+  })
+})
+
+describe('Pixel 接手带图片的聊天', () => {
+  const png = (name: string) => ({
+    id: name.replace(/\W/g, '-'),
+    name,
+    mediaType: 'image/png' as const,
+    bytes: 16,
+    width: 1,
+    height: 1,
+    dataBase64: Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), Buffer.alloc(8)]).toString('base64'),
+  })
+  /** 另一个引擎：收到消息就被打断，没有回复 */
+  const interrupted: EngineAdapter = {
+    async info(): Promise<EngineInfo> {
+      return { ...ENGINES.claude, status: 'ready', version: 'stub', path: 'stub', message: null }
+    },
+    createSession(ctx: SessionContext): EngineSession {
+      return {
+        send: (_text, turnId) => ctx.emit({ type: 'turn_completed', turnId, outcome: 'interrupted', error: null }),
+        async interrupt() {},
+        answer() {},
+        async update() {},
+        async close() {},
+      }
+    },
+  }
+  async function handoff(model: string, own = false) {
+    const log = join(root, 'rpc.jsonl')
+    const adapter = new PixelAdapter({
+      launcher: { command: process.execPath, args: [FAKE] },
+      env: { ...process.env, FAKE_PIXEL_LOG: log, FAKE_PIXEL_DIR: join(root, 'sessions') },
+      agentRoot: join(root, 'agents'),
+    } as never)
+    host = new EngineHost({
+      dataDir: join(root, 'engine'),
+      adapters: { claude: interrupted, pixel: adapter },
+      emit: () => {},
+      idleMs: 60_000,
+    })
+    const session = host.createSession({
+      projectId: host.addProject(root).id,
+      engine: 'claude',
+      model: 'm',
+      effort: 'high',
+      permissionMode: 'ask',
+    })
+    await host.send(session.id, { text: '看这个', clientMessageId: 'first', attachments: [png('old.png')] })
+    await wait(() => snap(session.id).items.some(i => i.kind === 'user') && idle(session.id))
+    await host.update(session.id, { engine: 'pixel', model })
+    await host.send(session.id, {
+      text: '怎么样',
+      clientMessageId: 'second',
+      ...(own ? { attachments: [png('own.png')] } : {}),
+    })
+    await wait(() => snap(session.id).items.filter(i => i.kind === 'user').length === 2 && idle(session.id))
+    const prompt = readFileSync(log, 'utf8')
+      .trim()
+      .split('\n')
+      .map(l => JSON.parse(l))
+      .findLast(m => m.type === 'prompt')
+    return { session, prompt }
+  }
+
+  it('文字交接：更早消息的图片排在消息自己的图片前面一起发', async () => {
+    const { prompt } = await handoff('fake/fake-pixel', true)
+    expect(prompt.message).toContain('下面第 1 张图是之前「看这个」那条消息附的 old.png')
+    expect(prompt.images.map((i: { data: string }) => i.data)).toEqual([
+      png('old.png').dataBase64,
+      png('own.png').dataBase64,
+    ])
+  })
+
+  it('模型不能看图：宿主按目录里的模型就不带更早消息的图片，只写未带上，不再先说带了又更正，也不报错', async () => {
+    const { session, prompt } = await handoff('fake/fake-small')
+    expect(prompt.images).toBeUndefined()
+    const notices = snap(session.id).items.flatMap(i => (i.kind === 'notice' ? [i.text] : []))
+    expect(notices).toContain('已把之前的对话交接给 像素星空（1 条，1 张图片未带上）')
+    expect(notices.some(text => text.includes('当前模型不能看图') || text.includes("can't view images"))).toBe(false)
+    expect(notices.some(text => text.includes('含 1 张图片'))).toBe(false)
+    expect(snap(session.id).items.some(i => i.kind === 'notice' && i.level === 'error')).toBe(false)
+    expect(snap(session.id).items.filter(i => i.kind === 'user')).toHaveLength(2)
   })
 })

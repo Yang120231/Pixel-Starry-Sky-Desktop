@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import type { Item } from '@pixelsky/protocol'
+import type { ImageAttachment, Item } from '@pixelsky/protocol'
 import {
+  HANDOFF_IMAGE_BYTES,
+  HANDOFF_IMAGE_MAX_BYTES,
   buildChatLog,
   buildChatSeed,
   chatOverview,
   fitChatLog,
+  handoffImageRoom,
+  pickRecentImages,
   renderSeed,
+  seedImageCount,
   seedTurns,
   type ChatTurn,
 } from '../src/chat-log'
@@ -91,6 +96,16 @@ describe('buildChatLog：只带聊天', () => {
     ])
   })
 
+  it('很长的用户消息：先截正文再接附件名，说明不会被截掉', () => {
+    const a = image('a.png')
+    const long = '啊'.repeat(4500)
+    const out = buildChatLog([user(long, { attachments: [a] })], { carried: new Set() })
+    expect(out[0].user.endsWith('（已截断）（附图 a.png，未带上）')).toBe(true)
+    // buildChatSeed 走的是同一处
+    const seed = buildChatSeed([user(long, { attachments: [a] })], '', undefined, { carryImages: false })!
+    expect(seed.turns[0].user.endsWith('（已截断）（附图 a.png，未带上）')).toBe(true)
+  })
+
   it('超长的单条按上限截断', () => {
     const out = buildChatLog([user('啊'.repeat(50)), assistant('嗯'.repeat(50))], { userLimit: 10, assistantLimit: 10 })
     expect(out[0].user).toBe('啊啊啊啊啊啊啊啊啊啊…（已截断）')
@@ -152,5 +167,174 @@ describe('交接的聊天回放', () => {
   it('提示条目里展示注入了什么，没回复的轮写明', () => {
     const seed = buildChatSeed([user('问'), assistant('答'), user('再问')], '')!
     expect(renderSeed(seed)).toBe('用户：问\n助手：答\n\n用户：再问\n助手：（这一轮没有回复，可能被中断了）')
+  })
+})
+
+const MB = 1024 * 1024
+const image = (name: string, bytes = 1000, width = 1, height = 1): ImageAttachment => ({
+  id: name,
+  name,
+  mediaType: 'image/png',
+  bytes,
+  width,
+  height,
+  dataBase64: `data-${name}`,
+})
+const names = (images: readonly ImageAttachment[] | undefined) => (images ?? []).map(i => i.name)
+
+describe('交接带图片', () => {
+  it('每轮收集用户消息的图片（含中途补充），用户话里照写文件名', () => {
+    const a = image('a.png'),
+      b = image('b.png')
+    const out = buildChatLog([
+      user('看这个', { attachments: [a] }),
+      user('再看这个', { mode: 'guidance', attachments: [b] }),
+      assistant('看了'),
+      user('没有图'),
+    ])
+    expect(out[0].images).toEqual([a, b])
+    expect(out[0].user).toBe('看这个（附：a.png）\n（中途补充）再看这个（附：b.png）')
+    expect(out[1]).not.toHaveProperty('images')
+  })
+
+  it('指定 carried 时没在里面的图片不进 images，用户话里写明未带上', () => {
+    const a = image('a.png'),
+      b = image('b.png')
+    const file = { id: 'f', name: 'x.ts', bytes: 0, lines: 0, encoding: 'utf-8', text: '', tail: '' }
+    const out = buildChatLog(
+      [user('看', { attachments: [a, b], files: [file] as Extract<Item, { kind: 'user' }>['files'] })],
+      { carried: new Set([b]) },
+    )
+    expect(out[0].images).toEqual([b])
+    expect(out[0].user).toBe('看（附：b.png、x.ts）（附图 a.png，未带上）')
+    // 一张都没带：没有 images
+    const none = buildChatLog([user('看', { attachments: [a] })], { carried: new Set() })
+    expect(none[0]).not.toHaveProperty('images')
+    expect(none[0].user).toBe('看（附图 a.png，未带上）')
+  })
+
+  it('只带最近的 5 张，更早的写明未带上，并记下没带上的张数', () => {
+    const imgs = Array.from({ length: 7 }, (_, i) => image(`${i}.png`))
+    const items = imgs.flatMap((img, i) => [user(`问${i}`, { attachments: [img] }), assistant(`答${i}`)])
+    const seed = buildChatSeed(items, '材料')!
+    expect(seed.turns.map(t => names(t.images))).toEqual([
+      [],
+      [],
+      ['2.png'],
+      ['3.png'],
+      ['4.png'],
+      ['5.png'],
+      ['6.png'],
+    ])
+    expect(seed.turns[0].user).toBe('问0（附图 0.png，未带上）')
+    expect(seed.turns[2].user).toBe('问2（附：2.png）')
+    expect(seed.omittedImages).toBe(2)
+    expect(seedImageCount(seed)).toBe(5)
+    expect(renderSeed(seed)).toContain('用户：问0（附图 0.png，未带上）\n助手：答0')
+  })
+
+  it('总大小不超过上限：从最新往前装，遇到装不下的就停', () => {
+    const items = [
+      user('一', { attachments: [image('small.png', 1 * MB)] }),
+      user('二', { attachments: [image('big.png', Math.floor(3.4 * MB))] }),
+      user('三', { attachments: [image('new.png', 2 * MB)] }),
+    ]
+    const seed = buildChatSeed(items, '')!
+    // new 2MB + big 3.4MB 超过 5MB：big 装不下，更早的 small 也不再带
+    expect(seed.turns.map(t => names(t.images))).toEqual([[], [], ['new.png']])
+    expect(seed.omittedImages).toBe(2)
+    expect(HANDOFF_IMAGE_BYTES).toBe(5 * MB)
+  })
+
+  it('单张超过 3.5 MiB 或边长超过 8000 px 的图不带：算没带上，只留下文件名', () => {
+    const big = image('big.png', HANDOFF_IMAGE_MAX_BYTES + 1)
+    const wide = image('wide.png', 1000, 8001, 1)
+    const tall = image('tall.png', 1000, 1, 9000)
+    const ok = image('ok.png', 1000, 8000, 8000)
+    const seed = buildChatSeed([user('看', { attachments: [big, wide, tall, ok] })], '')!
+    expect(names(seed.turns[0].images)).toEqual(['ok.png'])
+    expect(seed.turns[0].user).toBe('看（附：ok.png）（附图 big.png、wide.png、tall.png，未带上）')
+    expect(seed.omittedImages).toBe(3)
+    // 刚好 3.5 MiB 的可以带
+    expect(
+      names(
+        buildChatSeed([user('看', { attachments: [image('x.png', HANDOFF_IMAGE_MAX_BYTES)] })], '')!.turns[0].images,
+      ),
+    ).toEqual(['x.png'])
+  })
+
+  it('skipIds 里的图片（失败重试时已经随当前消息重发）：只留文件名，不带原图也不计没带上', () => {
+    const a = image('a.png'),
+      b = image('b.png')
+    const items = [user('看', { attachments: [a, b] })]
+    const seed = buildChatSeed(items, '', undefined, { skipIds: new Set([a.id]) })!
+    expect(names(seed.turns[0].images)).toEqual(['b.png'])
+    expect(seed.turns[0].user).toBe('看（附：a.png、b.png）')
+    expect(seed.omittedImages).toBeUndefined()
+    // 全跳过：没有 images，也没有 omittedImages
+    const none = buildChatSeed(items, '', undefined, { skipIds: new Set([a.id, b.id]) })!
+    expect(none.turns[0]).not.toHaveProperty('images')
+    expect(none).not.toHaveProperty('omittedImages')
+  })
+
+  it('折进概要的更早几轮不带图', () => {
+    const items = [
+      user('更早的一轮'.repeat(10), { attachments: [image('old.png')] }),
+      assistant('答'.repeat(100)),
+      user('最近', { attachments: [image('new.png')] }),
+      assistant('好'),
+    ]
+    const seed = buildChatSeed(items, '', 50)!
+    expect(seed.overview).toContain('更早')
+    expect(seed.turns.map(t => names(t.images))).toEqual([['new.png']])
+    expect(seed.omittedImages).toBe(1)
+  })
+
+  it('目标引擎不能看图：一张都不带', () => {
+    const seed = buildChatSeed([user('看', { attachments: [image('a.png')] })], '', undefined, { carryImages: false })!
+    expect(seed.turns[0]).not.toHaveProperty('images')
+    expect(seed.turns[0].user).toBe('看（附图 a.png，未带上）')
+    expect(seed.omittedImages).toBe(1)
+  })
+
+  it('没有图时回放里没有图片相关的字段；退回文字交接带的图片原样记在 fallbackImages', () => {
+    expect(buildChatSeed([user('问')], '材料')).not.toHaveProperty('omittedImages')
+    const a = image('a.png')
+    const seed = buildChatSeed([user('问', { attachments: [a] })], '材料', undefined, { fallbackImages: [a] })!
+    expect(seed.fallbackImages).toEqual([a])
+  })
+
+  it('概要接在第一轮前面时图片跟着第一轮', () => {
+    const a = image('a.png')
+    const turns = seedTurns({
+      overview: '概要',
+      turns: [{ id: 'a', user: '问', assistant: '答', images: [a] }],
+      fallback: '',
+    })
+    expect(turns).toEqual([{ id: 'a', user: '概要\n\n问', assistant: '答', images: [a] }])
+  })
+
+  it('回放按传入的额度挑图：当前消息自己的图片占了额度时少带', () => {
+    const items = [user('一', { attachments: [image('a.png', 1000), image('b.png', 1000)] }), assistant('好')]
+    const seed = buildChatSeed(items, '', undefined, { room: handoffImageRoom([1, 2, 3, 4].map(i => image(`c${i}`))) })!
+    expect(names(seed.turns[0].images)).toEqual(['b.png'])
+    expect(seed.omittedImages).toBe(1)
+    // 大小也一样：只剩 500 字节的额度，一张都装不下
+    const none = buildChatSeed(items, '', undefined, { room: { count: 5, bytes: 500 } })!
+    expect(none.turns[0]).not.toHaveProperty('images')
+    expect(none.omittedImages).toBe(2)
+  })
+
+  it('额度：当前消息自己的图片先占掉数量和大小', () => {
+    expect(handoffImageRoom()).toEqual({ count: 5, bytes: 5 * MB })
+    expect(handoffImageRoom([image('a', 1 * MB), image('b', 1 * MB)])).toEqual({ count: 3, bytes: 5 * MB })
+    // 总量上限 20 MiB：当前消息已经 18 MiB，只剩 2 MiB
+    expect(handoffImageRoom([image('a', 9 * MB), image('b', 9 * MB)])).toEqual({ count: 3, bytes: 2 * MB })
+    expect(handoffImageRoom(Array.from({ length: 5 }, (_, i) => image(String(i))))).toEqual({
+      count: 0,
+      bytes: 5 * MB,
+    })
+    expect(pickRecentImages([image('a', 2), image('b', 2)], { count: 5, bytes: 3 }).map(i => i.name)).toEqual(['b'])
+    expect(pickRecentImages([image('a')], { count: 0, bytes: 5 * MB })).toEqual([])
   })
 })

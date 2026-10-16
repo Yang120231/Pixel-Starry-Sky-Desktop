@@ -8,6 +8,7 @@ import {
   PROVIDER_ENV,
   EFFORTS,
   PERMISSION_MODES,
+  quietWarningKey,
   type ContextWindows,
   type EngineCatalog,
   type EngineConfig,
@@ -21,6 +22,7 @@ import {
   type SessionDefaults,
   type SessionRecord,
 } from '@pixelsky/protocol'
+import { logger } from '../log'
 import { ENGINE_ORDER, unsupportedInfo } from '../registry'
 import { retryLimit } from '../retry'
 import { DEFAULT_SETTINGS, type EngineSettingsFile } from '../store'
@@ -97,6 +99,8 @@ export function jobPhase(line: string, current: EngineJob['phase']): EngineJob['
   return PHASE_ORDER.indexOf(guess) > PHASE_ORDER.indexOf(current) ? guess : current
 }
 
+const log = logger('engine')
+
 export class HostSettings {
   /** 当前设置；只整体替换，不原地修改 */
   file: EngineSettingsFile
@@ -104,19 +108,51 @@ export class HostSettings {
   private readonly latest: Partial<Record<EngineId, string>> = {}
   /** 正在安装 / 更新的引擎 → 在做哪一种 */
   private readonly updating = new Map<EngineId, EngineJob['action']>()
+  /** 引擎运行时报的配置类警告：引擎 → 类别 → 最新一条原文（reportConfigWarning），engines() 带进引擎信息 */
+  private readonly configWarnings: Partial<Record<EngineId, Map<string, string>>> = {}
 
   constructor(private readonly ctx: HostContext) {
     this.file = ctx.store.loadSettings()
   }
 
-  async engines(force = false): Promise<EngineInfo[]> {
+  /** force：重新检测；userDetect：用户自己点的「重新检测」（只有这时才清掉记下的配置警告） */
+  async engines(force = false, userDetect = false): Promise<EngineInfo[]> {
+    // 用户刚改完 config.toml 自己点的重新检测才清警告，下一轮还有的话引擎会再报；
+    // 登录 / 装更新 / 改启动设置引起的检测不动警告，否则改 Claude 的设置会顺手清掉 Codex 的警告
+    if (userDetect) for (const id of ENGINE_ORDER) delete this.configWarnings[id]
     const list = (
       await Promise.all(
         ENGINE_ORDER.map(id => this.ctx.adapters[id]?.info(force) ?? Promise.resolve(unsupportedInfo(id))),
       )
-    ).map(info => (this.latest[info.id] ? { ...info, latestVersion: this.latest[info.id] } : info))
+    ).map(info => {
+      const warnings = this.configWarnings[info.id]
+      return {
+        ...info,
+        ...(this.latest[info.id] ? { latestVersion: this.latest[info.id] } : {}),
+        ...(warnings?.size ? { configWarnings: [...warnings.values()] } : {}),
+      }
+    })
     if (force) this.ctx.opts.emit({ kind: 'engines', engines: list })
     return list
+  }
+
+  /**
+   * 会话里的引擎报了配置类警告（docs/ui/ai-commit-codex-warnings-history.md §3）：不进对话，记在引擎信息上，
+   * 设置 › 本机引擎的详情里显示。同一类只留最新一条；和记下的一样时什么都不做（Codex 每轮都发）
+   */
+  reportConfigWarning(engine: EngineId, text: string): void {
+    const key = quietWarningKey(text)
+    if (!key) return
+    const warnings = (this.configWarnings[engine] ??= new Map())
+    if (warnings.get(key) === text) return
+    warnings.set(key, text)
+    log.info('引擎配置警告', { engine, text })
+    if (this.ctx.closing) return
+    void this.engines()
+      .then(engines => {
+        if (!this.ctx.closing) this.ctx.opts.emit({ kind: 'engines', engines })
+      })
+      .catch(() => {})
   }
 
   defaults(): EngineDefaults {

@@ -7,12 +7,21 @@ import {
   type EngineId,
   type EngineSessionState,
   type FileAttachment,
+  type ImageAttachment,
   type Item,
   type SessionRecord,
 } from '@pixelsky/protocol'
-import { buildChatSeed, renderSeed, type ChatSeed } from '../chat-log'
+import {
+  buildChatSeed,
+  carriableImage,
+  handoffImageRoom,
+  pickRecentImages,
+  renderSeed,
+  seedImageCount,
+  type ChatSeed,
+} from '../chat-log'
 import { NATIVE_TEXT } from '../claude/native'
-import { buildHandoff, handoffEngines, hasHandoffContent } from '../handoff'
+import { buildHandoff, handoffEngines, hasHandoffContent, userImages } from '../handoff'
 import { ENGINES } from '../registry'
 import type { HostContext } from './context'
 
@@ -42,12 +51,20 @@ export function derivedSeen(items: readonly Item[], engine: EngineId, fallback: 
   return seen < 0 ? null : items[seen].id
 }
 
+/** 通知里图片的说明：带上几张、几张没带上；都没有就是空 */
+const imageParts = (carried: number, omitted: number): string[] => [
+  ...(carried > 0 ? [`含 ${carried} 张图片`] : []),
+  ...(omitted > 0 ? [`${omitted} 张图片未带上`] : []),
+]
+
 /** 新引擎收到的这条消息要不要带交接 */
 export interface HandoffPlan {
   /** 真正发给引擎的文字（引擎不能注入聊天时，前面带着交接材料） */
   text: string
-  /** 要注入引擎原生会话的聊天（适配器 seedsHistory 时）；注入不了时适配器退回 seed.fallback */
+  /** 要注入引擎原生会话的聊天（适配器 seedsHistory 时）；注入不了时适配器退回 seed.fallback（连同 seed.fallbackImages） */
   seed?: ChatSeed
+  /** 文字交接时随这条消息一起发的更早消息的图片（text 里有说明），发送时排在消息自己的图片前面；没有为 undefined */
+  attachments?: ImageAttachment[]
   /** 放在用户消息前面的提示条目，detail 是交接材料原文 */
   notice: Item | null
   /** 斜杠命令（如 /compact）本该带交接但没带：这一轮结束时不推进游标，交接留给下一条普通消息 */
@@ -140,12 +157,37 @@ export class HostHandoff {
   }
 
   /**
+   * 目标引擎当前选的模型能不能看图：目录里查得到这个模型就以它的输入类型为准（Codex / Pixel 有的模型不能看图），
+   * 查不到（没有目录、目录里没有这个模型、读目录失败）按引擎能力。派发前先问，plan 是同步的。
+   * 对话里没有图片时不用查，免得白白等目录（有的引擎要起进程）
+   */
+  async modelSees(id: string, record: SessionRecord): Promise<boolean> {
+    const engineSees = !!ENGINES[record.engine].caps.imageInput
+    if (!engineSees || !userImages(this.ctx.m.sessions.runtime(id).snapshot.items).length) return engineSees
+    try {
+      const catalog = await this.ctx.adapters[record.engine]?.catalog?.()
+      const model = catalog?.models?.find(m => m.id === (record.model ?? catalog.currentModel))
+      return model ? model.inputModalities.includes('image') : engineSees
+    } catch {
+      return engineSees
+    }
+  }
+
+  /**
    * 派发一条消息前算要不要给引擎带交接：它没看过的对话（游标之后的，或游标不在了就是全部）。
    * 能注入的引擎只带聊天（用户话和每轮的助手结论），直接补进它的原生会话；
    * 不能注入的引擎（或注入失败时）退回整理好的文字材料，加在消息前面。
    * 旧记录（没有 engineSessions）当前引擎看到了全部对话，不带。
+   * sees：当前模型能不能看图（modelSees 的结果），决定带不带更早消息的图片；不给按引擎能力
    */
-  plan(id: string, record: SessionRecord, text: string, files: FileAttachment[] | undefined): HandoffPlan {
+  plan(
+    id: string,
+    record: SessionRecord,
+    text: string,
+    files: FileAttachment[] | undefined,
+    attachments: readonly ImageAttachment[] = [],
+    sees: boolean = !!ENGINES[record.engine].caps.imageInput,
+  ): HandoffPlan {
     const rt = this.ctx.m.sessions.runtime(id)
     const body = messageWithFiles(text, files)
     const plain: HandoffPlan = { text: body, notice: null, hold: false }
@@ -162,12 +204,27 @@ export class HostHandoff {
     const at = seen === null ? -1 : prior.findIndex(item => item.id === seen)
     const delta = at >= 0 ? prior.slice(at + 1) : prior
     const mode = at >= 0 ? 'delta' : 'full'
+    // 走文字交接（适配器不能注入，或注入失败）时图片随这条消息发：先扣掉消息自己的图片占的额度，目标引擎不能看图就不带
+    // 失败的一轮重试时，它的图片已经随当前消息重发（游标没动，那条用户消息还在 delta 里）：按图片 id 去重，
+    // 只在文字里留附件名，不再当「更早的图」带一遍，也不算没带上；那一轮的文字照旧重发
+    const skipIds = new Set(attachments.map(a => a.id))
+    const all = userImages(delta).filter(({ image }) => !skipIds.has(image.id))
+    const room = handoffImageRoom(attachments)
+    // 单张超过 Claude 的大小 / 边长上限的不带（带了写进记录后每次 resume 都会被拒）
+    const carry = sees
+      ? pickRecentImages(
+          all.filter(({ image }) => carriableImage(image)),
+          room,
+        )
+      : []
     const built = buildHandoff({
       items: delta,
       mode,
       target: record.engine,
       conversationId: id,
       historyTool: this.ctx.opts.historyTool?.(record) ?? false,
+      images: carry,
+      omittedImages: all.length - carry.length,
     })
     if (!built) return plain
     // 斜杠命令（/compact 等）要原样交给引擎，不能前面加东西；交接留给下一条普通消息
@@ -181,9 +238,19 @@ export class HostHandoff {
     const showNotice = previous?.kind === 'user' && !!previous.engine && previous.engine !== record.engine
     const name = ENGINES[record.engine].name
     const others = handoffEngines(delta, record.engine)
-    const from = others.length ? others.map(e => ENGINES[e].name).join('、') : '其他引擎'
-    const seed = this.ctx.adapters[record.engine]?.seedsHistory ? buildChatSeed(delta, built.text) : null
-    if (seed)
+    // 不知道是哪个引擎时写「其他引擎」（词典里有不带 {p0} 的专用模板，所以前后不留空格）
+    const during = others.length ? ` ${others.map(e => ENGINES[e].name).join('、')} ` : '其他引擎'
+    const seed = this.ctx.adapters[record.engine]?.seedsHistory
+      ? buildChatSeed(delta, built.text, undefined, {
+          carryImages: sees,
+          room,
+          skipIds,
+          fallbackImages: carry.map(c => c.image),
+        })
+      : null
+    if (seed) {
+      const parts = imageParts(seedImageCount(seed), seed.omittedImages ?? 0)
+      const turns = [`${seed.turns.length} 轮`, ...parts].join('，')
       return {
         text: body,
         seed,
@@ -203,14 +270,17 @@ export class HostHandoff {
                 level: 'info',
                 text:
                   mode === 'full'
-                    ? `已把之前的聊天带给 ${name}（${seed.turns.length} 轮）`
-                    : `已把 ${from} 期间的聊天同步给 ${name}（${seed.turns.length} 轮）`,
+                    ? `已把之前的聊天带给 ${name}（${turns}）`
+                    : `已把${during}期间的聊天同步给 ${name}（${turns}）`,
                 detail: renderSeed(seed),
               }
             : null,
       }
+    }
+    const parts = imageParts(carry.length, all.length - carry.length)
     return {
       text: `${built.text}\n\n${body}`,
+      ...(carry.length ? { attachments: carry.map(c => c.image) } : {}),
       hold: false,
       notice: showNotice
         ? {
@@ -219,8 +289,8 @@ export class HostHandoff {
             level: 'info',
             text:
               mode === 'full'
-                ? `已把之前的对话交接给 ${name}（${built.count} 条）`
-                : `已把 ${from} 期间的进展同步给 ${name}`,
+                ? `已把之前的对话交接给 ${name}（${[`${built.count} 条`, ...parts].join('，')}）`
+                : `已把${during}期间的进展同步给 ${name}${parts.length ? `（${parts.join('，')}）` : ''}`,
             detail: built.text,
           }
         : null,

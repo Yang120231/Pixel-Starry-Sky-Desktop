@@ -154,14 +154,22 @@ export function Select<V extends string>({
     const outside = (e: PointerEvent): void => {
       if (!trigger.current?.contains(e.target as Node) && !menu.current?.contains(e.target as Node)) setOpen(false)
     }
+    // 只有触发按钮跟着滚走（滚的是它的祖先）才关；别处在滚（背后的对话流式输出自动滚到底）不关
     const scroll = (e: Event): void => {
-      if (e.target !== menu.current && !menu.current?.contains(e.target as Node)) setOpen(false)
+      const target = e.target as Node
+      if (target === menu.current || menu.current?.contains(target)) return
+      if (trigger.current && (target === document || target.contains?.(trigger.current))) setOpen(false)
     }
+    // 焦点进了内置浏览器（原生 WebContentsView）、iframe 或别的窗口：那里的点击到不了界面文档，pointerdown 收不到，
+    // 触发按钮的 blur 也没有 relatedTarget，只有窗口失焦能看出来。不带 capture，只收 window 自己的 blur（菜单里点选项、滚动、按键都不会触发）
+    const blur = (): void => setOpen(false)
     document.addEventListener('pointerdown', outside)
     window.addEventListener('scroll', scroll, true)
+    window.addEventListener('blur', blur)
     return () => {
       document.removeEventListener('pointerdown', outside)
       window.removeEventListener('scroll', scroll, true)
+      window.removeEventListener('blur', blur)
     }
   }, [open])
 
@@ -219,7 +227,11 @@ export function Select<V extends string>({
         title={current?.label ?? placeholder}
         onClick={() => (open ? setOpen(false) : show())}
         onKeyDown={keydown}
-        onBlur={() => setOpen(false)}
+        // 焦点去了界面里别的控件才关；没有 relatedTarget 的（焦点落回 body、窗口失焦）这里不管：点外面、Tab、Esc 各自会关，窗口失焦由上面的 effect 关
+        onBlur={e => {
+          const next = e.relatedTarget as Node | null
+          if (next && !menu.current?.contains(next)) setOpen(false)
+        }}
         className={cn(
           'flex h-8 w-56 max-w-full min-w-0 items-center gap-2 rounded-md border bg-surface px-2.5 text-left text-ui text-fg outline-none',
           'focus-visible:border-line-strong disabled:cursor-default disabled:opacity-50',
