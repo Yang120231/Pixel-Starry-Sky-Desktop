@@ -426,6 +426,11 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
       else finish('interrupted')
       break
     }
+    case 'thread/inject_items':
+      // FAKE_CODEX_INJECT_FAIL：模拟旧版 Codex 没有这个方法，接力退回文字交接
+      if (process.env.FAKE_CODEX_INJECT_FAIL) out({ id: m.id, error: { code: -32601, message: 'Unknown method' } })
+      else response(m, {})
+      break
     case 'thread/compact/start':
       turn = { id: 'compact-' + ++next, item: 'compact-item-' + next, text: 'Compacted', timer: null }
       emit('turn/started', { threadId: thread, turn: { id: turn.id, status: 'inProgress' } })

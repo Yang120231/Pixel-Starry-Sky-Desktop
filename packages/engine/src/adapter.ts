@@ -54,6 +54,8 @@ export interface SessionContext {
   clearPendingRewind?(): void
   /** 分叉第一次启动成功（或改成新会话）后清掉 pendingFork */
   clearPendingFork?(): void
+  /** 引擎报了配置类警告（用户 config.toml 引起、不影响使用）：不进对话，交给宿主放进引擎信息 */
+  reportConfigWarning?(text: string): void
 }
 
 /** 一个会话对应的引擎连接。进程按需启动；close() 之后这个对象不再使用 */
@@ -62,9 +64,18 @@ export interface EngineSession {
    * 开始新的一轮。EngineHost 已经发出了用户消息条目和 turn_started，
    * 适配器负责在这一轮结束时发 turn_completed（带同一个 turnId），出错也要发。
    * seed：跨引擎接力时这一轮之前要补进上下文的聊天，只发给 seedsHistory 的适配器；
-   * 注入进原生会话，注入不了就把 seed.fallback 加在 text 前面发
+   * 注入进原生会话，注入不了就把 seed.fallback 加在 text 前面发，seed.fallbackImages 排在 attachments 前面一起发。
+   * handoffImages：不注入的引擎走文字交接时，text 里说明过的更早消息的图片，排在 attachments 前面；
+   * 当前模型不能看图就丢掉它们（attachments 不能丢，照旧报错）
    */
-  send(text: string, turnId: string, userItemId: string, attachments?: ImageAttachment[], seed?: ChatSeed): void
+  send(
+    text: string,
+    turnId: string,
+    userItemId: string,
+    attachments?: ImageAttachment[],
+    seed?: ChatSeed,
+    handoffImages?: ImageAttachment[],
+  ): void
   /** opts.background：连同后台子智能体一起停；没有后台任务的引擎忽略 */
   interrupt(opts?: InterruptOptions): Promise<void>
   answer(requestId: string, decision: ApprovalDecision): void

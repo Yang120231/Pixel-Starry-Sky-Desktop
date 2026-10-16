@@ -110,6 +110,20 @@ export function EngineDetail({
         </p>
       )}
 
+      {/* 引擎运行时报的配置类警告（docs/ui/ai-commit-codex-warnings-history.md §3）：不进对话，放在这里 */}
+      {e.configWarnings?.length ? (
+        <Group title={tr('engineConfigWarnings.title')} note={tr('engineConfigWarnings.note', { p0: e.name })}>
+          {e.configWarnings.map(text => (
+            <p
+              key={text}
+              className="-mx-2 border-t border-line-subtle px-2 py-3 text-meta whitespace-pre-wrap break-words text-fg-secondary first:border-t-0"
+            >
+              {text}
+            </p>
+          ))}
+        </Group>
+      ) : null}
+
       <Group
         title={tr('settings.engines.EngineDetail.newConversationDefaults')}
         note={tr(config.rememberChoices ? 'engineDefaults.noteRemember' : 'engineDefaults.note')}

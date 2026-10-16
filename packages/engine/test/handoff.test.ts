@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { EngineId, Item } from '@pixelsky/protocol'
-import { buildHandoff, handoffEngines } from '../src/handoff'
+import { buildHandoff, handoffEngines, userImages } from '../src/handoff'
 
 let n = 0
 const id = () => `i${++n}`
@@ -147,6 +147,40 @@ describe('buildHandoff：交接材料', () => {
     expect(out.text).not.toContain('AAAA')
     expect(out.text).not.toContain('秘密内容')
     expect(out.text.match(/<\/pixelsky-handoff>/g)).toHaveLength(1)
+  })
+
+  it('随消息带的图片：按发送顺序说明各是哪条消息附的，没带上的说一声', () => {
+    const img = (name: string) => ({
+      id: name,
+      name,
+      mediaType: 'image/png' as const,
+      width: 1,
+      height: 1,
+      bytes: 1,
+      dataBase64: 'AAAA',
+    })
+    const said = '这个地方显示的内容不对，帮我看看是哪里出了问题'
+    const a = user(said, 'codex', { attachments: [img('a.png')] })
+    const b = user('', 'codex', { attachments: [img('b.png')] })
+    const items: Item[] = [a, assistant('好'), b]
+    const out = buildHandoff({
+      ...base,
+      mode: 'full',
+      items,
+      images: userImages(items),
+      omittedImages: 1,
+    })!
+    const lines = out.text.split('\n')
+    const first = lines.findIndex(l => l.startsWith('下面第 1 张图'))
+    expect(lines[first - 1]).toBe('这条消息附带的图片里，前 2 张是之前消息里的图，不是用户这一条发的：')
+    // 引用用户原话只取开头
+    expect(lines[first]).toBe(`下面第 1 张图是之前「${said.slice(0, 20)}…」那条消息附的 a.png`)
+    expect(lines[first + 1]).toBe('下面第 2 张图是之前那条只发了图片的消息附的 b.png')
+    expect(out.text).toContain('另有 1 张之前消息里的图片没有带过来，只留下了文件名。')
+    // 说明在交接材料的开头部分，不在对话原文里
+    expect(first).toBeLessThan(lines.findIndex(l => l.startsWith('## ')))
+    // 没有图就没有这些说明
+    expect(buildHandoff({ ...base, mode: 'full', items })!.text).not.toContain('下面第')
   })
 
   it('一轮特别长时最近一轮也要放进去（压缩），总长不超预算', () => {

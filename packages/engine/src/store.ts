@@ -276,20 +276,11 @@ export class Store {
       }
     }
     // 没等到完成的条目（进程退出、应用关闭，包括后台子智能体的）：标成已中断。
-    // 以前存下的配置类警告（docs/ui/ai-commit-codex-warnings-history.md §3）按现在的规则：灰色提示，同样的只留第一条
-    const quiet = new Set<string>()
+    // 以前存下的配置类警告（docs/ui/ai-commit-codex-warnings-history.md §3）现在不进对话：去掉
     const items: Item[] = []
     for (const item of byId.values()) {
-      if (item.kind === 'notice' && item.level === 'warn' && isQuietWarning(item.text)) {
-        if (quiet.has(item.text)) continue
-        quiet.add(item.text)
-        items.push({ ...item, level: 'info' })
-      } else if (
-        item.kind !== 'user' &&
-        item.kind !== 'notice' &&
-        item.kind !== 'turn_stats' &&
-        item.status === 'running'
-      )
+      if (item.kind === 'notice' && item.level !== 'error' && isQuietWarning(item.text)) continue
+      if (item.kind !== 'user' && item.kind !== 'notice' && item.kind !== 'turn_stats' && item.status === 'running')
         items.push({ ...item, status: 'interrupted' })
       else items.push(item)
     }

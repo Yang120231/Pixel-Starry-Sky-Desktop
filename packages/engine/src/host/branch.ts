@@ -232,10 +232,18 @@ export class HostBranch {
     const rt = m.sessions.runtime(id)
     const record = rt.snapshot.record
     const adapter = ctx.adapters[record.engine]
-    // 只算当前引擎处理过的用户消息：其他引擎处理的不在它的上下文里，不用在它的记录里回退
-    const dropped = rt.snapshot.items
-      .slice(index)
-      .flatMap(item => (item.kind === 'user' && (item.engine ?? record.engine) === record.engine ? [item.id] : []))
+    // 回退前当前引擎读到哪里：旧记录（没有 engineSessions）读到了全部对话
+    const old = record.engineSessions
+    const oldEntry = old?.[record.engine]
+    const oldSeen = oldEntry ? oldEntry.seen : old ? null : lastItemId(rt.snapshot.items)
+    const seenAt = oldSeen === null ? -1 : rt.snapshot.items.findIndex(item => item.id === oldSeen)
+    // 当前引擎上下文里的用户消息：它自己处理的，加上游标之前别的引擎处理、交接给它的（接力时按条目 id 写进了它的原生记录）。
+    // 游标之后别的引擎处理的不在它的上下文里，不用在它的记录里回退
+    const dropped = rt.snapshot.items.flatMap((item, i) =>
+      i >= index && item.kind === 'user' && ((item.engine ?? record.engine) === record.engine || i <= seenAt)
+        ? [item.id]
+        : [],
+    )
     // Codex 要起临时进程读轮次，所以可能是异步的
     // 分叉出来还没启动的会话（Codex）没有自己的线程：截断点要回到来源线程里重新算
     const forkOnly = !record.engineSessionId && record.pendingFork ? record.pendingFork : null
@@ -247,10 +255,6 @@ export class HostBranch {
     // 引擎自己分配会话 id（Codex）时写 null，启动时新建；其他引擎我们预先给一个
     const freshId = (): string | null => (adapter?.enginePicksSessionId ? null : randomUUID())
     const kept = rt.snapshot.items.slice(0, index)
-    // 回退前当前引擎读到哪里：旧记录（没有 engineSessions）读到了全部对话
-    const old = record.engineSessions
-    const oldEntry = old?.[record.engine]
-    const oldSeen = oldEntry ? oldEntry.seen : old ? null : lastItemId(rt.snapshot.items)
     ctx.store.replaceItems(id, kept)
     m.events.apply(id, { type: 'items_truncated', fromItemId: userItemId })
     m.cache.reset(id)
