@@ -1,7 +1,7 @@
 // Claude Code 自己的会话记录文件：<CLAUDE_CONFIG_DIR 或 ~/.claude>/projects/<编码后的工作目录>/<session_id>.jsonl
 // 编码规则：工作目录里不是字母数字的字符都换成 '-'（例如 D:\像素星空 → D------）。
 // 很长的路径会被截断并加哈希，所以按规则找不到时，再在所有项目目录里找一遍。
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import {
   appendFileSync,
   closeSync,
@@ -15,6 +15,7 @@ import {
 } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
+import type { ImageAttachment } from '@pixelsky/protocol'
 import { isFile } from '../exec'
 
 export function defaultProjectsDir(env: NodeJS.ProcessEnv): string {
@@ -105,8 +106,9 @@ export function pointLastPrompt(file: string, sessionId: string): void {
 }
 
 /**
- * 回退截断点：按顺序找第一条出现在记录里的用户消息（我们发送时把条目 id 写成了 uuid），
+ * 回退截断点：按顺序找第一条出现在记录里的用户消息（我们发送时把条目 id 写成了 uuid，接力写进去的用 seedUuid），
  * 取它的 parentUuid 作为 --resume-session-at。都不在记录里时返回 null。
+ * 同一个 uuid 出现多次时以第一次为准（后面的是重复写入，它的 parentUuid 不可信）
  */
 export function findRewindAnchor(file: string, userIds: string[]): { at: string | null } | null {
   const parents = new Map<string, string | null>()
@@ -114,13 +116,17 @@ export function findRewindAnchor(file: string, userIds: string[]): { at: string 
     if (!line.trim()) continue
     try {
       const e = JSON.parse(line) as { type?: unknown; uuid?: unknown; parentUuid?: unknown; isSidechain?: unknown }
-      if (e.type === 'user' && typeof e.uuid === 'string' && e.isSidechain !== true)
+      if (e.type === 'user' && typeof e.uuid === 'string' && e.isSidechain !== true && !parents.has(e.uuid))
         parents.set(e.uuid, typeof e.parentUuid === 'string' ? e.parentUuid : null)
     } catch {
       // 跳过写坏的行
     }
   }
-  for (const id of userIds) if (parents.has(id)) return { at: parents.get(id) ?? null }
+  for (const id of userIds) {
+    // Claude 自己收到的消息是条目 id 原样，接力写进去的是 seedUuid
+    const uuid = parents.has(id) ? id : seedUuid(id)
+    if (parents.has(uuid)) return { at: parents.get(uuid) ?? null }
+  }
   return null
 }
 
@@ -176,32 +182,93 @@ export function copyTranscriptUntil(file: string, at: string, sessionId: string)
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /**
+ * 接力写进记录的用户消息 uuid：条目 id 本身是 UUID 就用它；不是（例如重试的消息 id 带后缀）就按 id 算一个固定的
+ * UUID（v5 格式），同一条消息每次都得到同一个，回退时照样找得到截断点
+ */
+export function seedUuid(id: string): string {
+  if (UUID.test(id)) return id
+  const h = createHash('sha1').update(`pixelsky:${id}`).digest('hex')
+  const variant = ((parseInt(h[16], 16) & 3) | 8).toString(16)
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-5${h.slice(13, 16)}-${variant}${h.slice(17, 20)}-${h.slice(20, 32)}`
+}
+
+/**
+ * 读整份记录：当前分支末端（同 currentLeaf）、从末端往回整条分支上的 uuid、记录里出现过的全部 uuid。
+ * 压缩分界的 parentUuid 是 null，顺着 logicalParentUuid 接回压缩之前；遇到环就停
+ */
+function readBranch(file: string): { leaf: string | null; branch: Set<string>; known: Set<string> } {
+  const parents = new Map<string, string | null>()
+  let leaf: string | null = null
+  for (const line of readFileSync(file, 'utf8').split('\n')) {
+    if (!line.trim()) continue
+    try {
+      const e = JSON.parse(line) as Record<string, unknown>
+      if (typeof e.uuid !== 'string' || e.isSidechain === true) continue
+      const parent =
+        typeof e.parentUuid === 'string'
+          ? e.parentUuid
+          : typeof e.logicalParentUuid === 'string'
+            ? e.logicalParentUuid
+            : null
+      if (!parents.has(e.uuid)) parents.set(e.uuid, parent)
+      if (e.type === 'user' || e.type === 'assistant') leaf = e.uuid
+    } catch {
+      // 跳过写坏的行
+    }
+  }
+  const branch = new Set<string>()
+  for (let id = leaf; id !== null && !branch.has(id); id = parents.get(id) ?? null) branch.add(id)
+  return { leaf, branch, known: new Set(parents.keys()) }
+}
+
+/** 用户消息的 content：带图时和 Claude Code 自己记的一样，是文字块加图片块的数组；没有图就是一段文字 */
+function userContent(text: string, images: readonly ImageAttachment[] = []): string | Record<string, unknown>[] {
+  if (images.length === 0) return text
+  return [
+    { type: 'text', text },
+    ...images.map(image => ({
+      type: 'image',
+      source: { type: 'base64', media_type: image.mediaType, data: image.dataBase64 },
+    })),
+  ]
+}
+
+/**
  * 跨引擎接力：把别的引擎期间的聊天按 Claude Code 自己的格式写进会话记录，之后 --resume 就带着这些轮次。
  * 没有记录时新建（从头开始），有记录时接在当前分支末端后面，再让 last-prompt 指向新的末端。
- * 用户消息的 uuid 用我们的条目 id（发送时也是这么写的），回退时照样找得到截断点。返回记录文件路径
+ * 用户消息的 uuid 用我们的条目 id（发送时也是这么写的；不是 UUID 时用 seedUuid），回退时照样找得到截断点。
+ * 已经在当前分支上的轮次和它之前的轮次不再写：这一轮 Claude 自己收到过、只是失败了，游标没推进，重试时又交接过来；
+ * 再写一遍会出现重复的 uuid，parentUuid 绕成环。返回记录文件路径
  */
 export function seedTranscript(
   projectsDir: string,
   cwd: string,
   sessionId: string,
-  turns: readonly { id: string; user: string; assistant: string | null }[],
+  turns: readonly { id: string; user: string; assistant: string | null; images?: readonly ImageAttachment[] }[],
   noReply: string,
 ): string {
   const existing = findClaudeTranscript(projectsDir, cwd, sessionId)
   const file = existing ?? join(projectsDir, encodeCwd(cwd), `${sessionId}.jsonl`)
-  let parent = existing ? currentLeaf(existing) : null
+  const { leaf, branch, known } = existing
+    ? readBranch(existing)
+    : { leaf: null, branch: new Set<string>(), known: new Set<string>() }
+  let parent = leaf
   const timestamp = new Date().toISOString()
   const base = { isSidechain: false, userType: 'external', cwd, sessionId, timestamp }
   const lines: string[] = []
-  for (const turn of turns) {
-    const userId = UUID.test(turn.id) ? turn.id : randomUUID()
+  // Claude 自己收到的消息 uuid 是发送时的条目 id 原样（重试的不是 UUID），接力写进去的是 seedUuid
+  const from = turns.findLastIndex(turn => branch.has(turn.id) || branch.has(seedUuid(turn.id))) + 1
+  for (const turn of turns.slice(from)) {
+    const id = seedUuid(turn.id)
+    // 记录里别的分支上已经有这个 uuid：换一个，不能重复
+    const userId = known.has(id) ? randomUUID() : id
     lines.push(
       JSON.stringify({
         ...base,
         parentUuid: parent,
         type: 'user',
         uuid: userId,
-        message: { role: 'user', content: turn.user },
+        message: { role: 'user', content: userContent(turn.user, turn.images) },
       }),
     )
     const replyId = randomUUID()
@@ -216,6 +283,7 @@ export function seedTranscript(
     )
     parent = replyId
   }
+  if (lines.length === 0) return file
   if (!existing) mkdirSync(dirname(file), { recursive: true })
   appendFileSync(file, lines.join('\n') + '\n')
   if (existing) pointLastPrompt(file, sessionId)
