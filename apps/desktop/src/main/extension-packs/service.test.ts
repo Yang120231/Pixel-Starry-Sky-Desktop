@@ -5,6 +5,7 @@ import { packKey, scanLimits } from './loader'
 import { ExtensionPacks, type ExtPacksOptions } from './service'
 import { readStateFile, writeStateFile } from './store'
 import { FOLDER_SCAN } from '@pixelsky/extension-cli/folder'
+import type { BlocklistFile } from './market/blocklist'
 import { cleanTemp, copyFixture, FIXTURES, installStoreFixture, tempDir } from './testing'
 
 afterEach(cleanTemp)
@@ -817,5 +818,98 @@ describe('商店扩展：加载顺序和同 id 生效', () => {
     const svc = await started(e2)
     const folder = await svc.addFolder(copyFixture('unsafe-svg', e2.folders))
     expect(folder.issues.length).toBeGreaterThan(store.issues.length)
+  })
+})
+
+describe('停用名单：applyBlocklist 和 setEnabled', () => {
+  const SITE = 'https://auth.pixelstarrysky.xyz'
+  const OTHER = 'http://127.0.0.1:8080'
+  type Item = { id: string; versions: '*' | string[] }
+  const siteOf = (items: Item[]): BlocklistFile['sites'][string] => ({
+    fetchedAt: '2026-10-17T00:00:00.000Z',
+    updatedAt: '',
+    items: items.map(i => ({ ...i, reason: '含恶意代码' })),
+  })
+  const listOf = (items: Item[], site: string = SITE): BlocklistFile => ({
+    version: 1,
+    sites: { [site]: siteOf(items) },
+  })
+  const id = 'pixelsky.with-skill'
+  const key = 's-pixelsky.with-skill'
+  const storeEnv = async (): Promise<{ e: Env; svc: ExtensionPacks }> => {
+    const e = env()
+    installStoreFixture(join(e.dataDir, 'store'), 'with-skill', id)
+    return { e, svc: await started(e) }
+  }
+
+  it('命中：设 blocked、live 为 false 并 commit；解除后清掉，开关没动过所以回到原来的开着', async () => {
+    const { svc } = await storeEnv()
+    const seen: boolean[] = []
+    svc.onChange(() => seen.push(pack(svc, id).live))
+    expect(pack(svc, id).live).toBe(true)
+    await svc.applyBlocklist(listOf([{ id, versions: ['1.0.0'] }]))
+    expect(pack(svc, id)).toMatchObject({ live: false, enabled: true, blocked: { reason: '含恶意代码' } })
+    await svc.applyBlocklist(listOf([]))
+    expect(pack(svc, id)).toMatchObject({ live: true, enabled: true })
+    expect(pack(svc, id).blocked).toBeUndefined()
+    expect(seen).toEqual([false, true])
+  })
+
+  it('版本对不上不命中；多站点：只看回执里 site 的那份，换站点后别的站点的空名单也不会放出它', async () => {
+    const { svc } = await storeEnv()
+    await svc.applyBlocklist(listOf([{ id, versions: ['9.9.9'] }]))
+    expect(pack(svc, id).live).toBe(true)
+    await svc.applyBlocklist(listOf([{ id, versions: '*' }], OTHER))
+    expect(pack(svc, id).live).toBe(true)
+    await svc.applyBlocklist({ version: 1, sites: { [SITE]: siteOf([{ id, versions: '*' }]), [OTHER]: siteOf([]) } })
+    expect(pack(svc, id).blocked).toBeDefined()
+    await svc.applyBlocklist({ version: 1, sites: { [SITE]: siteOf([{ id, versions: '*' }]) } })
+    expect(pack(svc, id).blocked).toBeDefined()
+  })
+
+  it('命中后 setEnabled(key, true) 被拒（extpacks.blocked），state.json 里的 enabled 不变；关掉照常成功', async () => {
+    const { e, svc } = await storeEnv()
+    await svc.setEnabled(key, false)
+    await svc.applyBlocklist(listOf([{ id, versions: '*' }]))
+    await expect(svc.setEnabled(key, true)).rejects.toThrow('extpacks.blocked')
+    expect(pack(svc, id).enabled).toBe(false)
+    expect(readStateFile(stateFile(e)).store[id].enabled).toBe(false)
+    await svc.applyBlocklist(listOf([]))
+    await svc.setEnabled(key, true)
+    expect(pack(svc, id).live).toBe(true)
+    await svc.applyBlocklist(listOf([{ id, versions: '*' }]))
+    await svc.setEnabled(key, false)
+    expect(pack(svc, id)).toMatchObject({ enabled: false, live: false })
+    expect(readStateFile(stateFile(e)).store[id].enabled).toBe(false)
+  })
+
+  it('被停用的商店版不挡同 id 的内置版：内置顶上，解除后商店版又盖过内置', async () => {
+    const e = env(['pixelsky.dotenv'])
+    installStoreFixture(join(e.dataDir, 'store'), 'pixelsky.dotenv', 'pixelsky.dotenv')
+    const svc = await started(e)
+    const builtin = (): ReturnType<typeof pack> => svc.state().packs.find(p => p.source === 'builtin')!
+    expect(builtin().shadowedBy).toBe('store')
+    await svc.applyBlocklist(listOf([{ id: 'pixelsky.dotenv', versions: '*' }]))
+    expect(builtin().live).toBe(true)
+    expect(builtin().shadowedBy).toBeUndefined()
+    await svc.applyBlocklist(listOf([]))
+    expect(builtin().shadowedBy).toBe('store')
+  })
+
+  it('文件夹扩展同 id 同版本命中：加一条 pack.storeBlocked 警告、live 不变；名单去掉后警告消失', async () => {
+    const e = env()
+    const svc = await started(e)
+    const info = await svc.addFolder(copyFixture('with-skill', e.folders))
+    const warnings = (): number => pack(svc, id).issues.filter(i => i.code === 'pack.storeBlocked').length
+    await svc.applyBlocklist(listOf([{ id, versions: ['1.0.0'] }]))
+    expect(warnings()).toBe(1)
+    expect(pack(svc, id).live).toBe(info.live)
+    expect(pack(svc, id).live).toBe(true)
+    expect(pack(svc, id).blocked).toBeUndefined()
+    await svc.applyBlocklist(listOf([{ id, versions: ['1.0.0'] }]))
+    expect(warnings()).toBe(1)
+    await svc.applyBlocklist(listOf([{ id, versions: ['2.0.0'] }]))
+    expect(warnings()).toBe(0)
+    expect(pack(svc, id).status).toBe(info.status)
   })
 })

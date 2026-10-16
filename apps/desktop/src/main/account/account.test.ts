@@ -7,6 +7,8 @@ import { afterAll, describe, expect, it, vi } from 'vitest'
 
 const userData = mkdtempSync(join(tmpdir(), 'pixelsky-account-'))
 const mocks = vi.hoisted(() => ({
+  netOk: true,
+  netCalls: [] as string[],
   handlers: new Map<string, (...args: unknown[]) => unknown>(),
   opened: [] as string[],
 }))
@@ -18,6 +20,13 @@ vi.mock('electron', () => ({
     on: () => undefined,
   },
   BrowserWindow: { getAllWindows: () => [] },
+  net: {
+    fetch: async (url: string) => {
+      mocks.netCalls.push(url)
+      if (!mocks.netOk) throw new TypeError('net down')
+      return new Response('{}', { status: 200 })
+    },
+  },
   // 测试里「加密」就是原样：只要读写对得上
   safeStorage: {
     isEncryptionAvailable: () => true,
@@ -43,7 +52,9 @@ const requests: Array<{
   method: string
 }> = []
 let revoked = false
+let globalDown = false
 vi.stubGlobal('fetch', async (input: string, init: RequestInit = {}) => {
+  if (globalDown) throw new TypeError('fetch failed')
   const path = new URL(input).pathname
   requests.push({
     path,
@@ -108,6 +119,41 @@ describe('extensionsFetch', () => {
     ])
       await expect(extensionsFetch('GET', path), path).rejects.toThrow()
     expect(requests).toEqual([])
+  })
+})
+
+describe('extensionsFetch 的代理提示', () => {
+  it('全局 fetch 连不上而公开请求（net.fetch）通：extstore.proxyHint', async () => {
+    mocks.netCalls.length = 0
+    mocks.netOk = true
+    globalDown = true
+    try {
+      await expect(extensionsFetch('GET', '/v1/extensions/publisher')).rejects.toThrow('extstore.proxyHint')
+      expect(mocks.netCalls).toHaveLength(1)
+      const url = new URL(mocks.netCalls[0])
+      expect(url.pathname + url.search).toBe('/cloud/api/extensions?limit=1')
+    } finally {
+      globalDown = false
+    }
+  })
+
+  it('两个都不通：原样抛网络错误（api 层映射成 offline）', async () => {
+    mocks.netOk = false
+    globalDown = true
+    try {
+      const e = await extensionsFetch('GET', '/v1/extensions/publisher').catch((x: unknown) => x)
+      expect(e).toBeInstanceOf(TypeError)
+    } finally {
+      globalDown = false
+      mocks.netOk = true
+    }
+  })
+
+  it('请求通就不试公开接口；白名单外的路径也不试', async () => {
+    mocks.netCalls.length = 0
+    await extensionsFetch('GET', '/v1/extensions/publisher')
+    await expect(extensionsFetch('GET', '/v1/platform/x')).rejects.toThrow()
+    expect(mocks.netCalls).toEqual([])
   })
 })
 
