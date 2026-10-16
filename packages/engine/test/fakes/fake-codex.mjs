@@ -53,6 +53,9 @@ let initialized = false,
   pending = null
 let approvalQueue = [],
   approvalIndex = 0
+/** 协作模式像真 Codex 一样沿用到下一次 turn/start 带新的；Default 模式要开了开发中开关模型才有 request_user_input */
+let collaborationMode = 'default'
+const defaultModeAsk = process.argv.includes('features.default_mode_request_user_input=true')
 function nextApproval() {
   const request = approvalQueue[approvalIndex++]
   if (!request) return finish()
@@ -320,8 +323,9 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
         })
         return
       }
-      if (text.includes('提问') && p.collaborationMode?.mode === 'plan') {
-        // 计划协作模式下模型才有 request_user_input
+      if (p.collaborationMode?.mode) collaborationMode = p.collaborationMode.mode
+      if (text.includes('提问') && (collaborationMode === 'plan' || defaultModeAsk)) {
+        // 计划协作模式下模型才有 request_user_input；开了 default_mode_request_user_input 时 Default 模式也有
         pending = 'ask'
         out({
           id: 'ask',

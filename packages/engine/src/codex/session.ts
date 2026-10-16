@@ -52,6 +52,21 @@ export function reservedCodexArg(args: readonly string[]): string | null {
   }
   return null
 }
+/** 「允许中途向我提问」时打开的 Codex 开发中功能：Default 模式（非计划）下模型也有 request_user_input */
+const DEFAULT_MODE_ASK = 'default_mode_request_user_input'
+/**
+ * Codex 开了开发中功能时报的警告去掉像素星空自己打开的那项（不是用户 config.toml 里写的）；只剩它时返回 null 不报
+ */
+export function withoutOwnFeatures(text: string): string | null {
+  const match = /^Under-development features? enabled: ([^.]*)\./i.exec(text)
+  if (!match) return text
+  const rest = match[1]
+    .split(',')
+    .map(key => key.trim())
+    .filter(key => key && key !== DEFAULT_MODE_ASK)
+  if (!rest.length) return null
+  return text.replace(match[1], rest.join(', '))
+}
 /** Codex TurnError 里 message 之外的原始信息（附加说明、错误类型、HTTP 状态码），给界面「详情」用；没有时为 null */
 export function turnErrorDetail(raw: unknown, willRetry?: unknown): string | null {
   const error = object(raw),
@@ -138,8 +153,8 @@ export class CodexSession implements EngineSession {
   private noticeSeq = 0
   /** 启动时带了 model_context_window：报上来的窗口是设置的值，不记成 Codex 自己的 */
   private windowOverridden = false
-  /** 上一轮带了计划协作模式：切到别的权限后，下一轮要带一次 default 切回来 */
-  private planSent = false
+  /** 线程当前沿用的协作模式（上次带的或恢复时报的）；null 是还没带过，线程用的是没有模式指令的 Default */
+  private modeSent: 'plan' | 'default' | null = null
   /** thread/start 报的模型：会话跟随引擎默认、目录也没写当前模型时，计划模式用它 */
   private threadModel: string | null = null
   /** 停止后等待 turn/completed 的回调，finish() 时统一唤醒 */
@@ -210,6 +225,7 @@ export class CodexSession implements EngineSession {
     }
     const ext = this.ctx.extensions
     for (const [key, value] of Object.entries(ext?.codexConfig ?? {})) config(key, value)
+    if (this.options.askQuestions) config(`features.${DEFAULT_MODE_ASK}`, true)
     // 上下文窗口和自动压缩（GitHub #20）：放在用户追加的参数后面，同一项以设置为准
     const model = record.model ?? this.options.defaultModel?.() ?? null
     const context = codexContextConfig({
@@ -300,7 +316,7 @@ export class CodexSession implements EngineSession {
       this.threadId = string(object(thread.thread).id)
       this.threadModel = string(thread.model) || null
       // 恢复的线程可能还停在计划模式（上次退出前选的计划）：按它报的实际模式算，下一轮需要时切回 default
-      this.planSent = string(object(thread.collaborationMode).mode) === 'plan'
+      this.modeSent = string(object(thread.collaborationMode).mode) === 'plan' ? 'plan' : null
       if (!this.threadId) throw new Error('Codex did not return a thread ID')
       this.ctx.setEngineSessionId(this.threadId)
       const warning = resumeFailed
@@ -511,18 +527,24 @@ export class CodexSession implements EngineSession {
     })
   }
   /**
-   * 计划模式用 Codex 原生的计划协作模式（模型才有提问工具 request_user_input）；它会一直沿用，
-   * 所以从计划切到别的权限后要带一次 default 切回来。developer_instructions 为 null 时用 Codex 内置的指令
+   * 计划模式用 Codex 原生的计划协作模式（模型有提问工具 request_user_input）；它会一直沿用，
+   * 所以从计划切到别的权限后要带一次 default 切回来。允许提问时 Default 模式也有这个工具，
+   * 第一轮就带一次 default，模型才拿到 Default 模式「少问、只问可选问题」的指令。
+   * developer_instructions 为 null 时用 Codex 内置的指令
    */
   private collaboration(): Message {
-    const plan = this.settings.permissionMode === 'plan'
-    if (!plan && !this.planSent) return {}
+    const mode = this.settings.permissionMode === 'plan' ? 'plan' : 'default'
+    if (mode === 'default' && (this.modeSent === 'default' || (!this.modeSent && !this.options.askQuestions))) return {}
     const model = this.settings.model ?? this.catalog?.currentModel ?? this.threadModel
-    if (!model) throw new Error('Codex plan mode needs a model')
-    this.planSent = plan
+    if (!model) {
+      // 只为提问指令带的 default 不是必须的：还不知道模型时先不带
+      if (mode === 'default' && !this.modeSent) return {}
+      throw new Error('Codex plan mode needs a model')
+    }
+    this.modeSent = mode
     return {
       collaborationMode: {
-        mode: plan ? 'plan' : 'default',
+        mode,
         settings: { model, reasoning_effort: this.settings.effort ?? null, developer_instructions: null },
       },
     }
@@ -706,7 +728,10 @@ export class CodexSession implements EngineSession {
       const text = string(object(params.error).message || params.message)
       if (method === 'error') this.reportedError = text
       // 用户 config.toml 引起、不影响使用的警告（每轮都发）：和这一轮无关，不进对话，报给宿主显示在设置里
-      if (method === 'warning' && isQuietWarning(text)) return this.ctx.reportConfigWarning?.(text)
+      if (method === 'warning' && isQuietWarning(text)) {
+        const own = withoutOwnFeatures(text)
+        return own === null ? undefined : this.ctx.reportConfigWarning?.(own)
+      }
       this.ctx.emit({
         type: 'item_completed',
         item: {
