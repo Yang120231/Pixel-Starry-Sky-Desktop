@@ -92,9 +92,10 @@ export function imageNotes(images: readonly HandoffImage[], omitted: number): st
   if (images.length) {
     lines.push(`这条消息附带的图片里，前 ${images.length} 张是之前消息里的图，不是用户这一条发的：`)
     images.forEach(({ image, item }, i) => {
-      const said = flat(item.text)
-      const from = said
-        ? `「${said.length > QUOTE_CHARS ? `${said.slice(0, QUOTE_CHARS)}…` : said}」那条消息`
+      // 按码点截，免得把 emoji 劈成半个代理项（Codex 的 JSON 解析器会拒收）
+      const said = Array.from(flat(item.text))
+      const from = said.length
+        ? `「${said.length > QUOTE_CHARS ? `${said.slice(0, QUOTE_CHARS).join('')}…` : said.join('')}」那条消息`
         : '那条只发了图片的消息'
       lines.push(`下面第 ${i + 1} 张图是之前${from}附的 ${image.name}`)
     })

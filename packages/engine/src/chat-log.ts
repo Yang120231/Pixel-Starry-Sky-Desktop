@@ -35,6 +35,8 @@ export interface ChatLogOptions {
   assistantLimit?: number
   /** 带上的图片；不传就是全部带上。不在里面的图片，用户话里写「未带上」，turn.images 里也没有 */
   carried?: ReadonlySet<ImageAttachment>
+  /** 已经随当前消息重发的图片 id（失败重试时同一张图还在上一轮里）：只写附件名，不带原图、不算没带上 */
+  skipIds?: ReadonlySet<string>
 }
 
 const DEFAULT_USER_LIMIT = 4_000
@@ -45,6 +47,18 @@ const OVERVIEW_ITEM_CHARS = 300
 const OVERVIEW_CHARS = 6_000
 /** 交接带图片的总大小上限（解码后的字节）：图片只是补背景，不能把一条消息撑得太大 */
 export const HANDOFF_IMAGE_BYTES = 5 * 1024 * 1024
+/**
+ * 单张图片的上限：Claude API 拒收 base64 超过 5 MB 或任一边超过 8000 px 的图片，
+ * 写进 Claude 记录后每次 --resume 都会失败。base64 约比原图大 1/3，所以原图最多 3.5 MiB
+ */
+export const HANDOFF_IMAGE_MAX_BYTES = 3.5 * 1024 * 1024
+export const HANDOFF_IMAGE_MAX_SIDE = 8000
+
+/** 这张图能不能随交接带上（单张不超过 Claude API 的大小和边长上限） */
+export const carriableImage = (image: ImageAttachment): boolean =>
+  image.bytes <= HANDOFF_IMAGE_MAX_BYTES &&
+  image.width <= HANDOFF_IMAGE_MAX_SIDE &&
+  image.height <= HANDOFF_IMAGE_MAX_SIDE
 
 const clip = (text: string, max: number): string => (text.length > max ? `${text.slice(0, max)}…（已截断）` : text)
 
@@ -79,15 +93,24 @@ export function pickRecentImages<T extends { bytes: number }>(images: readonly T
   return picked
 }
 
-/** 附件名接在用户话后面；用户只发了文件没写字时，附件名就是这条消息。没带上的图片单独写明 */
-function userText(item: Extract<Item, { kind: 'user' }>, carried?: ReadonlySet<ImageAttachment>): string {
+/**
+ * 附件名接在用户话后面；用户只发了文件没写字时，附件名就是这条消息。没带上的图片单独写明。
+ * 先截断正文再接这些说明，长消息的说明才不会被截掉
+ */
+function userText(
+  item: Extract<Item, { kind: 'user' }>,
+  limit: number,
+  carried?: ReadonlySet<ImageAttachment>,
+  skipIds?: ReadonlySet<string>,
+): string {
   const images = item.attachments ?? []
-  const left = carried ? images.filter(a => !carried.has(a)) : []
+  const skipped = (a: ImageAttachment): boolean => !!skipIds?.has(a.id)
+  const left = carried ? images.filter(a => !skipped(a) && !carried.has(a)) : []
   const names = [
-    ...(carried ? images.filter(a => carried.has(a)) : images).map(a => a.name),
+    ...images.filter(a => skipped(a) || !carried || carried.has(a)).map(a => a.name),
     ...(item.files ?? []).map(f => f.name),
   ]
-  const text = item.text.trim()
+  const text = clip(item.text.trim(), limit)
   const attached = names.length ? `（附：${names.join('、')}）` : ''
   return `${text}${attached}${left.length ? `（附图 ${left.map(a => a.name).join('、')}，未带上）` : ''}`
 }
@@ -102,16 +125,20 @@ export function buildChatLog(items: readonly Item[], opts: ChatLogOptions = {}):
   const turns: ChatTurn[] = []
   for (const item of items) {
     if (item.kind === 'user') {
-      const text = userText(item, opts.carried)
+      const guidance = item.mode === 'guidance' && turns.length > 0
+      // 中途补充并进上一轮，不单独截断
+      const text = userText(item, guidance ? Infinity : userLimit, opts.carried, opts.skipIds)
       if (!text) continue
-      const images = (item.attachments ?? []).filter(a => !opts.carried || opts.carried.has(a))
-      if (item.mode === 'guidance' && turns.length > 0) {
+      const images = (item.attachments ?? []).filter(
+        a => !opts.skipIds?.has(a.id) && (!opts.carried || opts.carried.has(a)),
+      )
+      if (guidance) {
         const last = turns[turns.length - 1]
         last.user = `${last.user}\n（中途补充）${text}`
         if (images.length) last.images = [...(last.images ?? []), ...images]
         continue
       }
-      turns.push({ id: item.id, user: clip(text, userLimit), assistant: null, ...(images.length ? { images } : {}) })
+      turns.push({ id: item.id, user: text, assistant: null, ...(images.length ? { images } : {}) })
       continue
     }
     // 助手回复：这一轮的最后一条胜出，过程宣告（「我会先…」）被后面的结论顶掉
@@ -169,6 +196,8 @@ export interface ChatSeedOptions {
   room?: ImageRoom
   /** 注入失败退回文字交接时随当前消息发的图片，fallback 里要有对应的说明 */
   fallbackImages?: readonly ImageAttachment[]
+  /** 已经随当前消息重发的图片 id（失败重试），回放里不再带这些图，也不算没带上 */
+  skipIds?: ReadonlySet<string>
 }
 
 /**
@@ -181,7 +210,7 @@ export function buildChatSeed(
   budget = DEFAULT_CHAT_BUDGET,
   opts: ChatSeedOptions = {},
 ): ChatSeed | null {
-  const log = buildChatLog(items)
+  const log = buildChatLog(items, { skipIds: opts.skipIds })
   if (log.length === 0) return null
   const fitted = fitChatLog(log, budget, chatOverview)
   let turns = fitted.turns
@@ -192,12 +221,12 @@ export function buildChatSeed(
       opts.carryImages === false
         ? []
         : pickRecentImages(
-            turns.flatMap(turn => turn.images ?? []),
+            turns.flatMap(turn => turn.images ?? []).filter(carriableImage),
             opts.room ?? handoffImageRoom(),
           ),
     )
     // 带哪些图定了以后重排一遍，用户话里才写得对（带上了 / 未带上）
-    turns = buildChatLog(items, { carried: picked }).slice(log.length - turns.length)
+    turns = buildChatLog(items, { carried: picked, skipIds: opts.skipIds }).slice(log.length - turns.length)
     carried = picked.size
   }
   return {

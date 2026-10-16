@@ -103,6 +103,10 @@ export const codexMessages = {
     zh: '没能把之前的对话注入 Codex 会话，这一轮改用文字交接',
     en: 'Could not add the previous conversation to the Codex thread; sent it as a text handoff instead',
   },
+  'codex.imagesNotPassed': {
+    zh: '当前模型不能看图，之前的 {p0} 张图片实际没有带上',
+    en: "The current model can't view images, so {p0} earlier image(s) were not actually passed along",
+  },
   'codex.couldNotReadVersion': { zh: '无法读取 Codex 版本号', en: 'Could not read the Codex version' },
   'codex.couldNotRewindThread': {
     zh: '无法回退 Codex 会话到这条消息，已开始新会话（之前的上下文没有带过去）',

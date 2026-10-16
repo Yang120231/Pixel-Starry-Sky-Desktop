@@ -599,6 +599,99 @@ describe('跨引擎接力：图片', () => {
     expect(text).toContain('另有 1 张之前消息里的图片没有带过来，只留下了文件名。')
   })
 
+  it.each([false, true])(
+    '带图的一轮失败后重试：这张图只出现一次，更早的图照旧带上，失败那轮的文字照旧重发（聊天回放：%s）',
+    async seeds => {
+      const old = png('old.png'),
+        cur = png('cur.png')
+      const { host, claude, codex, record, say, snap } = setup({}, seeds)
+      claude.auto = true
+      await say('更早的话', 'q0', [old])
+      await host.update(record.id, { engine: 'codex' })
+      codex.auto = false
+      await host.send(record.id, { text: '失败的一轮', clientMessageId: 'failed', attachments: [cur] })
+      await until(() => codex.sessions[0]?.inputs.length === 1)
+      const session = codex.sessions[0]
+      // 失败两次：每次重试都不能多带一份
+      for (const n of [2, 3]) {
+        session.finish('failed')
+        await host.runQueuedNow(record.id, 'failed')
+        await until(() => session.inputs.length === n)
+        expect(session.attachments[n - 1]).toEqual([cur])
+        const seed = session.seeds[n - 1]
+        if (seed) {
+          const images = seed.turns.flatMap(t => t.images ?? [])
+          expect(images).toEqual([old])
+          expect(seed.omittedImages).toBeUndefined()
+          // 每次失败的那一轮的文字都留着（游标没动），图片都只写文件名
+          expect(seed.turns.map(t => t.user)).toEqual([
+            '更早的话（附：old.png）',
+            ...Array<string>(n - 1).fill('失败的一轮（附：cur.png）'),
+          ])
+          expect(seed.fallbackImages).toEqual([old])
+          expect(seed.fallback).toContain('前 1 张是之前消息里的图')
+          expect(seed.fallback).not.toContain('另有')
+        } else {
+          expect(session.handoffImages[n - 1]).toEqual([old])
+          expect(session.inputs[n - 1]).toContain('用户：失败的一轮（附：cur.png）')
+          expect(session.inputs[n - 1]).toContain('前 1 张是之前消息里的图')
+          expect(session.inputs[n - 1]).not.toContain('另有')
+        }
+      }
+      session.finish()
+      await until(() => snap().state === 'idle' && snap().queue.length === 0)
+    },
+  )
+
+  it.each([false, true])('同引擎带图的一轮失败后重试：没有更早的图可带（聊天回放：%s）', async seeds => {
+    const cur = png('cur.png')
+    const { host, claude, record, say, snap } = setup({}, seeds)
+    await say('第一句')
+    const session = claude.sessions[0]
+    session.auto = false
+    await host.send(record.id, { text: '失败的一轮', clientMessageId: 'failed', attachments: [cur] })
+    await until(() => session.inputs.length === 2)
+    session.finish('failed')
+    await host.runQueuedNow(record.id, 'failed')
+    await until(() => session.inputs.length === 3)
+    expect(session.attachments[2]).toEqual([cur])
+    expect(session.handoffImages[2]).toBeUndefined()
+    const seed = session.seeds[2]
+    if (seed) {
+      expect(seed.turns.flatMap(t => t.images ?? [])).toEqual([])
+      expect(seed.turns.at(-1)?.user).toBe('失败的一轮（附：cur.png）')
+      expect(seed.omittedImages).toBeUndefined()
+      expect(seed.fallbackImages).toBeUndefined()
+    } else {
+      expect(session.inputs[2]).toContain('用户：失败的一轮（附：cur.png）')
+      expect(session.inputs[2]).not.toContain('前 1 张')
+    }
+    session.finish()
+    await until(() => snap().state === 'idle' && snap().queue.length === 0)
+  })
+
+  it.each([false, true])('单张太大或边长超限的图不带，算没带上（聊天回放：%s）', async seeds => {
+    // 4 MB 的图：数据本身合法，只是单张超过交接的上限
+    const big = png('big.png', 4 * 1024 * 1024)
+    const wide = { ...png('wide.png'), width: 8001 }
+    const ok = png('ok.png')
+    const { codex, say, snap } = await interruptedWithImages(seeds, [big, wide, ok])
+    await say('怎么样')
+    const session = codex.sessions[0]
+    const seed = session.seeds[0]
+    if (seed) {
+      expect(seed.turns[0].images).toEqual([ok])
+      expect(seed.omittedImages).toBe(2)
+      expect(seed.turns[0].user).toBe(`${ASKED}（附：ok.png）（附图 big.png、wide.png，未带上）`)
+    } else {
+      expect(session.handoffImages[0]).toEqual([ok])
+      expect(session.inputs[0]).toContain('另有 2 张之前消息里的图片没有带过来')
+    }
+    expect(notice(snap().items)).toMatchObject({
+      text: expect.stringContaining('含 1 张图片，2 张图片未带上'),
+    })
+  })
+
   it.each([true, false])('目标引擎不能看图：一张都不带，写明未带上（聊天回放：%s）', async seeds => {
     const caps = ENGINES.codex.caps
     const saved = caps.imageInput

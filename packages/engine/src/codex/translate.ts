@@ -49,7 +49,9 @@ export class CodexTranslator {
       type = string(raw.type)
     if (type === 'subAgentActivity') return this.subagent(raw, complete)
     const status = statusOf(raw.status, complete),
-      prior = this.items.get(id)
+      prior = this.items.get(id),
+      // collab 调用有派出 / 发消息 / 等待 / 关闭几种（raw.tool），只有派出的才是子智能体的派发卡
+      spawns = /^(collabAgentToolCall|collabToolCall)$/.test(type) && /^spawn_?agent$/i.test(string(raw.tool))
     let item: Item | null = null
     if (type === 'agentMessage' || type === 'plan')
       item = {
@@ -106,7 +108,7 @@ export class CodexTranslator {
         kind: 'tool',
         id,
         tool,
-        name: type === 'mcpToolCall' ? `${string(raw.server)} / ${string(raw.tool)}` : type,
+        name: type === 'mcpToolCall' ? `${string(raw.server)} / ${string(raw.tool)}` : spawns ? 'spawn_agent' : type,
         title: string(raw.command || raw.query || raw.prompt || raw.path || raw.tool || raw.name) || type,
         output: clip(
           raw.error ? JSON.stringify(raw.error) : raw.result ? JSON.stringify(raw.result) : string(raw.output),
@@ -134,7 +136,8 @@ export class CodexTranslator {
           phase: null,
           prompt: string(raw.prompt) || priorAgent?.prompt || '',
           result: string(state.message),
-          toolUseId: id,
+          // 只有派出调用认领子智能体；等待 / 发消息 / 关闭沿用派出时的卡片 id
+          toolUseId: spawns ? id : (priorAgent?.toolUseId ?? id),
         })
       }
       this.emitRuns()

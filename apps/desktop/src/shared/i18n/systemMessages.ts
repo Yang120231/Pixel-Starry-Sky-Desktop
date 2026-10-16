@@ -617,6 +617,64 @@ export const systemMessages = {
     zh: '已把 {p0} 期间的聊天同步给 {p1}（{p2} 轮）',
     en: 'Synced the chat from {p0} to {p1} ({p2} turns)',
   },
+  // 以下是交接通知带图片说明的变体；「只有未带上」的会误配「带上 + 未带上」，所以后者必须排在前面
+  'system.chatSeededImages': {
+    zh: '已把之前的聊天带给 {p0}（{p1} 轮，含 {p2} 张图片）',
+    en: 'Brought the previous chat to {p0} ({p1} turns, including {p2} image(s))',
+  },
+  'system.chatSeededImagesPartial': {
+    zh: '已把之前的聊天带给 {p0}（{p1} 轮，含 {p2} 张图片，{p3} 张图片未带上）',
+    en: 'Brought the previous chat to {p0} ({p1} turns, including {p2} image(s), {p3} image(s) not carried)',
+  },
+  'system.chatSeededImagesOmitted': {
+    zh: '已把之前的聊天带给 {p0}（{p1} 轮，{p2} 张图片未带上）',
+    en: 'Brought the previous chat to {p0} ({p1} turns, {p2} image(s) not carried)',
+  },
+  'system.chatSeedSyncedImages': {
+    zh: '已把 {p0} 期间的聊天同步给 {p1}（{p2} 轮，含 {p3} 张图片）',
+    en: 'Synced the chat from {p0} to {p1} ({p2} turns, including {p3} image(s))',
+  },
+  'system.chatSeedSyncedImagesPartial': {
+    zh: '已把 {p0} 期间的聊天同步给 {p1}（{p2} 轮，含 {p3} 张图片，{p4} 张图片未带上）',
+    en: 'Synced the chat from {p0} to {p1} ({p2} turns, including {p3} image(s), {p4} image(s) not carried)',
+  },
+  'system.chatSeedSyncedImagesOmitted': {
+    zh: '已把 {p0} 期间的聊天同步给 {p1}（{p2} 轮，{p3} 张图片未带上）',
+    en: 'Synced the chat from {p0} to {p1} ({p2} turns, {p3} image(s) not carried)',
+  },
+  // 文字交接（引擎不能注入聊天时）的通知；同步那条没有图片时不带括号，基础模板放最后以免吞掉带括号的
+  'system.handoffImages': {
+    zh: '已把之前的对话交接给 {p0}（{p1} 条，含 {p2} 张图片）',
+    en: 'Handed the previous conversation to {p0} ({p1} messages, including {p2} image(s))',
+  },
+  'system.handoffImagesPartial': {
+    zh: '已把之前的对话交接给 {p0}（{p1} 条，含 {p2} 张图片，{p3} 张图片未带上）',
+    en: 'Handed the previous conversation to {p0} ({p1} messages, including {p2} image(s), {p3} image(s) not carried)',
+  },
+  'system.handoffImagesOmitted': {
+    zh: '已把之前的对话交接给 {p0}（{p1} 条，{p2} 张图片未带上）',
+    en: 'Handed the previous conversation to {p0} ({p1} messages, {p2} image(s) not carried)',
+  },
+  'system.handoff': {
+    zh: '已把之前的对话交接给 {p0}（{p1} 条）',
+    en: 'Handed the previous conversation to {p0} ({p1} messages)',
+  },
+  'system.progressSyncedImages': {
+    zh: '已把 {p0} 期间的进展同步给 {p1}（含 {p2} 张图片）',
+    en: 'Synced the progress from {p0} to {p1} (including {p2} image(s))',
+  },
+  'system.progressSyncedImagesPartial': {
+    zh: '已把 {p0} 期间的进展同步给 {p1}（含 {p2} 张图片，{p3} 张图片未带上）',
+    en: 'Synced the progress from {p0} to {p1} (including {p2} image(s), {p3} image(s) not carried)',
+  },
+  'system.progressSyncedImagesOmitted': {
+    zh: '已把 {p0} 期间的进展同步给 {p1}（{p2} 张图片未带上）',
+    en: 'Synced the progress from {p0} to {p1} ({p2} image(s) not carried)',
+  },
+  'system.progressSynced': {
+    zh: '已把 {p0} 期间的进展同步给 {p1}',
+    en: 'Synced the progress from {p0} to {p1}',
+  },
   'system.nativeTerminal': {
     zh: '接着终端里的 Claude Code 会话 · {p0} 轮',
     en: 'Continuing the Claude Code session from the terminal · {p0} turns',

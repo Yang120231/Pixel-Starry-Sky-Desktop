@@ -149,6 +149,31 @@ describe('buildHandoff：交接材料', () => {
     expect(out.text.match(/<\/pixelsky-handoff>/g)).toHaveLength(1)
   })
 
+  it('引用用户原话按码点截断：不会把 emoji 劈成半个代理项（Codex 的 JSON 解析会拒收）', () => {
+    const img = (name: string) => ({
+      id: name,
+      name,
+      mediaType: 'image/png' as const,
+      width: 1,
+      height: 1,
+      bytes: 1,
+      dataBase64: 'AAAA',
+    })
+    // 按 UTF-16 下标取前 20 个字符会正好切在 emoji 的代理对中间
+    const emoji = String.fromCharCode(0xd83d, 0xde00)
+    const said = `${'啊'.repeat(19)}${emoji.repeat(3)}`
+    const items: Item[] = [user(said, 'codex', { attachments: [img('a.png')] })]
+    const out = buildHandoff({ ...base, mode: 'full', items, images: userImages(items) })!
+    const line = out.text.split('\n').find(l => l.startsWith('下面第 1 张图'))!
+    expect(line).toBe(`下面第 1 张图是之前「${'啊'.repeat(19)}${emoji}…」那条消息附的 a.png`)
+    expect(() => encodeURIComponent(line)).not.toThrow()
+    // 不超过上限时原样引用，不加省略号
+    const short = `${'啊'.repeat(19)}${emoji}`
+    const items2: Item[] = [user(short, 'codex', { attachments: [img('b.png')] })]
+    const out2 = buildHandoff({ ...base, mode: 'full', items: items2, images: userImages(items2) })!
+    expect(out2.text).toContain(`下面第 1 张图是之前「${short}」那条消息附的 b.png`)
+  })
+
   it('随消息带的图片：按发送顺序说明各是哪条消息附的，没带上的说一声', () => {
     const img = (name: string) => ({
       id: name,

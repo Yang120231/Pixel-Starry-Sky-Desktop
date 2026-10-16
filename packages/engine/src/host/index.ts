@@ -173,8 +173,8 @@ export class EngineHost {
   // 引擎
   // -------------------------------------------------------------------------
 
-  async engines(force = false): Promise<EngineInfo[]> {
-    return this.m.settings.engines(force)
+  async engines(force = false, userDetect = false): Promise<EngineInfo[]> {
+    return this.m.settings.engines(force, userDetect)
   }
 
   /** 新会话默认值：默认引擎 + 这个引擎的默认值 */

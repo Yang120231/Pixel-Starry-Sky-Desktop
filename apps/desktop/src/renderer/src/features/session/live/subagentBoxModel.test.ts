@@ -57,7 +57,14 @@ describe('派发小框', () => {
     expect(dispatchBox(spawn('completed'), runs(run({ state: 'completed' }))).state).toBe('done')
     expect(dispatchBox(spawn('completed')).state).toBe('done')
     expect(dispatchBox(spawn('failed'), runs(run())).state).toBe('failed')
-    expect(dispatchBox(call('completed', 'collabAgentToolCall'), runs(run())).state).toBe('running')
+  })
+
+  it('Codex 的等待 / 发消息 / 关闭调用不是派出：只看条目自己的状态', () => {
+    for (const name of ['collabAgentToolCall', 'collabToolCall'])
+      expect(dispatchBox(call('completed', name), runs(run({ state: 'shutdown' }))).state).toBe('done')
+    expect(dispatchBox(call('completed', 'collabAgentToolCall'), runs(run({ state: 'pendingInit' }))).state).toBe(
+      'done',
+    )
   })
 
   it('等你批准只在还在跑时显示', () => {

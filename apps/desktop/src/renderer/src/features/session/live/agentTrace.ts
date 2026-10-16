@@ -36,13 +36,20 @@ export function runState(state: string): RunState {
       return 'done'
     case 'failed':
     case 'error':
+    case 'errored':
+    case 'notFound':
+    case 'not_found':
       return 'failed'
     case 'stopped':
     case 'killed':
     case 'cancelled':
     case 'skipped':
     case 'interrupted':
+    case 'shutdown':
       return 'stopped'
+    case 'pendingInit':
+    case 'pending_init':
+      return 'queued'
     default:
       return state ? 'queued' : 'done'
   }
