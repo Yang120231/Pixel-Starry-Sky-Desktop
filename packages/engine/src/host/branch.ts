@@ -232,18 +232,24 @@ export class HostBranch {
     const rt = m.sessions.runtime(id)
     const record = rt.snapshot.record
     const adapter = ctx.adapters[record.engine]
+    const users = rt.snapshot.items.slice(index).filter(item => item.kind === 'user')
     // 只算当前引擎处理过的用户消息：其他引擎处理的不在它的上下文里，不用在它的记录里回退
-    const dropped = rt.snapshot.items
-      .slice(index)
-      .flatMap(item => (item.kind === 'user' && (item.engine ?? record.engine) === record.engine ? [item.id] : []))
+    const own = users.filter(item => (item.engine ?? record.engine) === record.engine).map(item => item.id)
+    // Claude 的原生记录里带着接力写进去的其他引擎轮次（uuid 就是我们的条目 id）：截断点之后所有用户消息都要交给适配器找，
+    // 否则落在下一条 Claude 消息的 parent 上，被回退的接力轮次还留在上下文里。Codex 自己挑会话 id、不写这种行，保持原样
+    const seeded = !!adapter?.seedsHistory && !adapter.enginePicksSessionId
+    const dropped = seeded ? users.map(item => item.id) : own
     // Codex 要起临时进程读轮次，所以可能是异步的
     // 分叉出来还没启动的会话（Codex）没有自己的线程：截断点要回到来源线程里重新算
     const forkOnly = !record.engineSessionId && record.pendingFork ? record.pendingFork : null
     const thread = record.engineSessionId ?? forkOnly?.from ?? null
-    // 被回退的消息都不是当前引擎处理的：它的原生会话原样保留
-    const untouched = !!thread && dropped.length === 0
-    const anchor =
-      thread && !untouched ? await adapter?.rewindAnchor?.({ ...record, engineSessionId: thread }, dropped) : null
+    const found =
+      thread && dropped.length > 0
+        ? await adapter?.rewindAnchor?.({ ...record, engineSessionId: thread }, dropped)
+        : null
+    // 被回退的消息都不是当前引擎处理的、也没有写进它的记录：它的原生会话原样保留
+    const untouched = !!thread && own.length === 0 && (!seeded || !found)
+    const anchor = untouched ? null : found
     // 引擎自己分配会话 id（Codex）时写 null，启动时新建；其他引擎我们预先给一个
     const freshId = (): string | null => (adapter?.enginePicksSessionId ? null : randomUUID())
     const kept = rt.snapshot.items.slice(0, index)

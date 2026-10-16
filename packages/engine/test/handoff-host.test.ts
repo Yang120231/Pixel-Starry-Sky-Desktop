@@ -1,15 +1,19 @@
 // 跨引擎接力：换引擎、交接、游标、回退 / 分叉（两个假引擎：claude 和 codex）
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { EngineId, EngineInfo, Item, SessionRecord, SessionSettings } from '@pixelsky/protocol'
 import type { EngineAdapter, EngineSession, SessionContext } from '../src/adapter'
 import type { ChatSeed } from '../src/chat-log'
 import type { EngineHostOptions } from '../src/host/context'
+import { ClaudeAdapter } from '../src'
 import { EngineHost } from '../src/host'
 import { derivedSeen } from '../src/host/handoff'
 import { ENGINES } from '../src/registry'
+
+const FAKE_CLAUDE = fileURLToPath(new URL('./fakes/fake-claude.mjs', import.meta.url))
 
 let root: string
 let hosts: EngineHost[]
@@ -458,6 +462,62 @@ describe('跨引擎接力：回退、撤销、分叉', () => {
     await host.undoRewind(record.id)
     expect(JSON.stringify(snap().record.engineSessions)).toBe(before)
     expect(snap().items.map(i => i.id)).toContain('c')
+  })
+  it('真实 Claude 记录里有接力写进去的轮次：回退到其他引擎期间的消息，下次启动的截断点把接力轮次一起剪掉', async () => {
+    const projectsDir = join(root, 'claude-projects')
+    const claude = new ClaudeAdapter({
+      launcher: { command: process.execPath, args: [FAKE_CLAUDE] },
+      projectsDir,
+      env: {
+        ...process.env,
+        FAKE_CLAUDE_PROJECTS: projectsDir,
+        FAKE_CLAUDE_LOG: join(root, 'argv.log'),
+        FAKE_CLAUDE_CHAIN: '1',
+      },
+    })
+    const codex = new FakeAdapter('codex', true, true)
+    const host = new EngineHost({ dataDir: join(root, 'data'), adapters: { claude, codex }, emit: () => {} })
+    hosts.push(host)
+    const cwd = mkdtempSync(join(root, 'proj-'))
+    const project = host.addProject(cwd)
+    const record = host.createSession({ projectId: project.id, engine: 'claude', model: 'm', effort: 'low' })
+    const snap = () => host.open(record.id)
+    const say = async (text: string, clientMessageId: string) => {
+      await host.send(record.id, { text, clientMessageId })
+      await until(() => snap().items.some(i => i.kind === 'user' && i.id === clientMessageId))
+      await until(() => snap().state === 'idle' && snap().queue.length === 0)
+    }
+    // 接力写记录时只认 UUID 形式的条目 id
+    const [a, b, c] = [
+      '11111111-1111-4111-8111-111111111111',
+      '22222222-2222-4222-8222-222222222222',
+      '33333333-3333-4333-8333-333333333333',
+    ]
+    await say('一', a)
+    await host.update(record.id, { engine: 'codex' })
+    await say('二', b)
+    await host.update(record.id, { engine: 'claude' })
+    await say('三', c)
+    const sid = snap().record.engineSessionId!
+    const file = join(projectsDir, cwd.replace(/[^A-Za-z0-9]/g, '-'), `${sid}.jsonl`)
+    const rows = readFileSync(file, 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map(l => JSON.parse(l) as { type?: string; uuid?: string; parentUuid?: string | null })
+    // 第二轮是接力写进来的，用户行的 uuid 就是我们的条目 id
+    const relayed = rows.find(r => r.uuid === b)
+    expect(relayed?.type).toBe('user')
+    const before = rows.find(r => r.uuid === relayed!.parentUuid)
+    expect(before?.type).toBe('assistant')
+
+    await host.rewind(record.id, b)
+    expect(snap().record.pendingRewind).toBe(before!.uuid)
+    await say('四', '44444444-4444-4444-8444-444444444444')
+    const spawns = readFileSync(join(root, 'argv.log'), 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map(l => JSON.parse(l) as string[])
+    expect(spawns.at(-1)).toContain(`--resume-session-at=${before!.uuid}`)
   })
 
   it('分叉：新会话只带当前引擎的原生会话；找不到截断点时游标为空，第一条消息带交接', async () => {
