@@ -6,6 +6,7 @@ import { IconButton, cn, useComingSoon, useToast } from '@/ui'
 import { attachments as initialAttachments, composer } from '@/data'
 import {
   SOURCE_ACTION_EVENT,
+  takePendingSourceAction,
   useDemoSourceController,
   type ComposerController,
   type QueueController,
@@ -264,8 +265,14 @@ export function Composer({
     if (!sessionId) return
     const on = (e: Event): void => {
       const d = (e as CustomEvent<{ sessionId?: string; action?: SourceAction }>).detail
-      if (d?.sessionId === sessionId && d.action) actionRef.current(d.action)
+      if (d?.sessionId !== sessionId || !d.action) return
+      // 侧栏悬停卡同时记了一份「打开后再做」，这里接住了就不再重复执行
+      takePendingSourceAction(sessionId)
+      actionRef.current(d.action)
     }
+    // 侧栏悬停卡里的「重试」「改线路」：先打开会话，输入框挂上后在这里执行
+    const waiting = takePendingSourceAction(sessionId)
+    if (waiting) actionRef.current(waiting)
     window.addEventListener(SOURCE_ACTION_EVENT, on)
     return () => window.removeEventListener(SOURCE_ACTION_EVENT, on)
   }, [sessionId])

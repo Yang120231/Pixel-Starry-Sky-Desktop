@@ -5,6 +5,7 @@ import { COMPOSER, RAIL_ITEMS } from '@/data/constants'
 import { demoChannelMembers, demoChannelMessages, demoChannels, demoInvites, demoTeams } from './channels'
 import { SHOWCASE_PROJECT, SHOWCASE_SESSIONS, showcaseSnapshots } from './conversations'
 import { CODING_SESSION } from './coding'
+import { statusDemoProjects } from './statusDemo'
 
 // 参考图改动卡片里两个文件的 diff（点文件行展开，docs/ui/changes-inline-diff.md）；行数和卡片上的 +27 −8、+15 −2 对得上
 const COMPOSER_DIFFS = [
@@ -117,6 +118,8 @@ export const demo: AppData = {
         status: showcaseSnapshots[s.id].state === 'idle' ? ('idle' as const) : ('running' as const),
       })),
     },
+    // 侧栏对话的状态图标（docs/ui/sidebar-status-icons.md）：每种问题、每种 PR 一个对话
+    ...statusDemoProjects,
     { id: 'pixel-desktop', name: 'pixel-desktop', branch: 'feat/turn-island', sessions: [] },
     { id: 'pixel-channel', name: 'pixel-channel', sessions: [] },
     { id: 'docs-site', name: 'docs-site', sessions: [] },

@@ -518,6 +518,18 @@ contextBridge.exposeInMainWorld('pixelsky', {
       return () => ipcRenderer.removeListener('providers:changed', listener)
     },
   } satisfies import('./providers').ProvidersBridge,
+  sessionStatus: {
+    get: () => call('sessionStatus:get'),
+    refresh: sessionId => call('sessionStatus:refresh', sessionId),
+    onChange: callback => {
+      const listener = (
+        _e: Electron.IpcRendererEvent,
+        state: import('../shared/types/session-status').SessionStatusState,
+      ) => callback(state)
+      on('sessionStatus:changed', listener)
+      return () => ipcRenderer.removeListener('sessionStatus:changed', listener)
+    },
+  } satisfies import('../shared/types/session-status').SessionStatusBridge,
   ai: {
     commitMessage: request => call('ai:commitMessage', request),
     cancel: requestId => call('ai:cancel', requestId),

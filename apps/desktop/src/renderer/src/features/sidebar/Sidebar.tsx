@@ -25,7 +25,7 @@ import { ProjectTree } from './ProjectTree'
 import { arrangeProjects, groupKey } from './projectGroups'
 import { RecentItem } from './RecentItem'
 import { RunStatusPill } from './RunStatusPill'
-import { filterProjects, filterSessions, lanesOf, useScrollFade, type RunFilter } from './runFilter'
+import { cardsOf, filterProjects, filterSessions, lanesOf, useScrollFade, type RunFilter } from './runFilter'
 import { useSessionCards } from '@/features/board/useSessionCards'
 import { SidebarFooter } from './SidebarFooter'
 import { WslHint } from './WslHint'
@@ -82,6 +82,7 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
   const cards = useSessionCards()
   const [runFilter, setRunFilter] = useState<RunFilter | null>(null)
   const lanes = useMemo(() => (runFilter ? lanesOf(cards) : undefined), [cards, runFilter])
+  const cardById = useMemo(() => cardsOf(cards), [cards])
   const shownProjects = runFilter && lanes ? filterProjects(projects, lanes, runFilter) : projects
   const shownPinned = runFilter && lanes ? filterSessions(pinnedSessions, lanes, runFilter) : pinnedSessions
   useEffect(() => {
@@ -153,6 +154,7 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
               selectedSessionId={selectedSessionId}
               onSelectSession={onSelectSession}
               lanes={lanes}
+              cards={cardById}
             />
           </SidebarSection>
         )}

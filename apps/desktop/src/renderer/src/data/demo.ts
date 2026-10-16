@@ -41,6 +41,7 @@ import type {
   RunTaskState,
 } from '../../../shared/types/project-tools'
 import type { TerminalProfile } from '../../../shared/types/terminal'
+import type { SessionStatusState } from '../../../shared/types/session-status'
 import type { DirectoryListing, EditorState, FileDocument } from '../../../shared/types/workspace'
 import type { InboxItem } from '@/features/panel/inbox/inboxModel'
 import type { AppData, DemoSessionChange, EngineLite, Project } from './types'
@@ -105,6 +106,8 @@ export interface DemoSource {
     }
   }
   inbox: InboxItem[]
+  /** 侧栏对话状态图标用的演示数据：文件夹没了、关联的 PR（docs/ui/sidebar-status-icons.md） */
+  sessionStatus?: SessionStatusState
   /** 演示用的云端机器（顶栏「本机 | 云端」），machines/store.ts 演示时用它当初始状态 */
   machines?: MachineState
   /** 演示时某台机器（WSL）自己的项目和工作区；没有的机器沿用 appData.projects */

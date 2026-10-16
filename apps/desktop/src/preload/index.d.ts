@@ -45,6 +45,7 @@ export interface PixelskyBridge {
   platformCatalog: PlatformCatalogBridge
   /** 自定义 API 的接口配置（docs/ui/custom-api.md） */
   providers: ProvidersBridge
+  sessionStatus: import('../shared/types/session-status').SessionStatusBridge
   /** AI 写提交信息（docs/ui/ai-commit-codex-warnings-history.md §2） */
   ai: import('./ai').AiBridge
   /** 「关于」页：版本与运行环境（docs/ui/settings.md §5） */
