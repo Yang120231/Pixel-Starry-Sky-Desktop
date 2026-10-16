@@ -80,12 +80,13 @@ export function effectiveIconChoice(choice: IconThemeChoice, state: ExtPackState
   return 'material'
 }
 
+/** 下拉框的选项：Material 扩展启用着才列 Material，「简单」一直在，再加扩展里的完整主题 */
 export function iconThemeOptions(
   state: ExtPackState,
   locale: ExtLocale,
 ): Array<{ value: IconThemeChoice; label: string }> {
   const out: Array<{ value: IconThemeChoice; label: string }> = [
-    { value: 'material', label: tr('fileIcons.material') },
+    ...(findTheme(state, MATERIAL_REF) ? [{ value: 'material', label: tr('fileIcons.material') }] : []),
     { value: 'simple', label: tr('fileIcons.simple') },
   ]
   for (const { pack, item } of contributionsFrom(state, 'iconThemes')) {
@@ -95,6 +96,14 @@ export function iconThemeOptions(
     out.push({ value, label: `${extText(item.label, locale)} (${packName(pack.manifest, locale)})` })
   }
   return out
+}
+
+/**
+ * 有没有能选的图标主题（Material 或扩展里的完整主题）。都停用了只剩「简单」，设置 › 外观 就不显示「文件图标」这一行；
+ * 选过的保留在本机，扩展重新启用后照旧生效
+ */
+export function iconThemesAvailable(state: ExtPackState): boolean {
+  return contributionsFrom(state, 'iconThemes').some(({ item }) => !item.partial)
 }
 
 function makeResolver(index: IconIndex, light: boolean): FileIconResolver {

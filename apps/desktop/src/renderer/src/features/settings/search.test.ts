@@ -1,7 +1,17 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import type { ExtPackState } from '@pixelsky/protocol'
+import { fakePack, fakeState } from '@/features/extpacks/testing'
+import { tr } from '@/i18n/core'
 import { matchModels } from '../account/platform'
 import { envLines, parseEnvLines } from './engines/envLines'
 import { SETTINGS_INDEX, searchSettings } from './searchIndex'
+
+// 扩展状态：默认什么都没装；随扩展启停的设置项的测试里换掉
+const packs = vi.hoisted(() => ({ state: null as ExtPackState | null }))
+vi.mock('@/features/extpacks/store', async importOriginal => {
+  const real = await importOriginal<typeof import('@/features/extpacks/store')>()
+  return { ...real, getPackState: () => packs.state ?? real.getPackState() }
+})
 
 const label = (s: string) =>
   ({
@@ -37,6 +47,25 @@ describe('设置搜索（plan-search-panes-compact §1）', () => {
   it('「停止时一起停掉后台子智能体」中文、英文关键词都搜得到', () => {
     expect(searchSettings('后台子智能体', label).map(h => h.title)).toContain('停止时一起停掉后台子智能体')
     expect(searchSettings('stop background', label).map(h => h.section)).toContain('appearance')
+  })
+  it('文件图标、代码配色随扩展启停：没有启用着的扩展时搜不到，启用后搜得到', () => {
+    const titles = (q: string) => searchSettings(q, label).map(h => h.title)
+    const icons = tr('extensions.appearance.fileIcons'),
+      colors = tr('extensions.appearance.editorTheme')
+    packs.state = fakeState()
+    expect(titles(icons)).not.toContain(icons)
+    expect(titles(colors)).not.toContain(colors)
+    packs.state = fakeState(
+      fakePack({ key: 'b-1', contributes: { iconThemes: [{ id: 'm', label: 'M', path: 'm.json' }] } }),
+      fakePack({
+        key: 'f-2',
+        id: 'p.two',
+        contributes: { themes: [{ id: 'n', label: 'N', uiTheme: 'dark', path: 'n.json' }] },
+      }),
+    )
+    expect(titles(icons)).toContain(icons)
+    expect(titles(colors)).toContain(colors)
+    packs.state = null
   })
   it('索引没有重复的（页面，标题）', () => {
     const keys = SETTINGS_INDEX.map(e => `${e.section}/${e.title}`)

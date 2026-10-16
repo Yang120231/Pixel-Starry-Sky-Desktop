@@ -63,6 +63,14 @@ export function onEditorThemeChoiceChange(listener: () => void): () => void {
 }
 
 /** 某个深 / 浅色下能选的主题；标签重名时带上扩展名 */
+/**
+ * 有没有启用着的代码配色扩展。一个都没有时只剩「跟随配色」，设置 › 外观 就不显示「代码配色」这一行；
+ * 选过的保留在本机，扩展重新启用后照旧生效
+ */
+export function editorThemesAvailable(state: ExtPackState): boolean {
+  return contributionsFrom(state, 'themes').some(c => !!c.pack.id)
+}
+
 export function editorThemeOptions(
   state: ExtPackState,
   mode: 'dark' | 'light',

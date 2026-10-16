@@ -4,6 +4,9 @@
 import { ENGINES, type EngineId } from '@pixelsky/protocol'
 import type { SectionId } from './SettingsDialog'
 import { tr, translateText } from '../../i18n/core'
+import { getPackState } from '@/features/extpacks/store'
+import { iconThemesAvailable } from '@/features/files/icons/store'
+import { editorThemesAvailable } from '@/features/editor/code/colorTheme/store'
 
 export interface SearchEntry {
   section: SectionId
@@ -12,6 +15,8 @@ export interface SearchEntry {
   keywords: string
   /** 在本机引擎的哪个引擎详情页里（点结果时先打开详情） */
   engine?: EngineId
+  /** 这一行现在显不显示（随扩展启停的设置）；不显示时搜不到 */
+  available?: () => boolean
 }
 
 export const SETTINGS_INDEX: SearchEntry[] = [
@@ -76,6 +81,7 @@ export const SETTINGS_INDEX: SearchEntry[] = [
     get keywords() {
       return tr('extensions.appearance.fileIconsKeywords')
     },
+    available: () => iconThemesAvailable(getPackState()),
   },
   {
     section: 'appearance',
@@ -85,6 +91,7 @@ export const SETTINGS_INDEX: SearchEntry[] = [
     get keywords() {
       return tr('extensions.appearance.editorThemeKeywords')
     },
+    available: () => editorThemesAvailable(getPackState()),
   },
   {
     section: 'appearance',
@@ -319,7 +326,7 @@ export function searchSettings(query: string, sectionLabel: (s: SectionId) => st
   const q = query.trim().toLowerCase().replace(/\s+/g, '')
   if (!q) return []
   const norm = (s: string) => s.toLowerCase().replace(/\s+/g, '')
-  const scored = SETTINGS_INDEX.map(e => {
+  const scored = SETTINGS_INDEX.filter(e => e.available?.() !== false).map(e => {
     const titles = [norm(e.title), norm(translateText(e.title))]
     const score = titles.some(title => title.startsWith(q))
       ? 3
