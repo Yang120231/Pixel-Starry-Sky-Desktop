@@ -196,7 +196,6 @@ export type EngineLite = Pick<
   | 'installable'
   | 'account'
   | 'auth'
-  | 'configWarnings'
 > & {
   caps: Pick<
     import('@pixelsky/protocol').EngineCaps,

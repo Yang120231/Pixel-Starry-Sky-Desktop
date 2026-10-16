@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isQuietWarning, quietWarningKey } from '../src/notices'
+import { isQuietWarning } from '../src/notices'
 
 describe('isQuietWarning', () => {
   it('认出 Codex 的配置类警告（单复数、前面有空白）', () => {
@@ -20,14 +20,5 @@ describe('isQuietWarning', () => {
     expect(isQuietWarning('Reconnecting... 1/5')).toBe(false)
     expect(isQuietWarning('提示：Codex is ignoring 2 unrecognized configuration settings')).toBe(false)
     expect(isQuietWarning('')).toBe(false)
-  })
-})
-
-describe('quietWarningKey', () => {
-  it('同一类警告的数量变了仍是同一类', () => {
-    expect(quietWarningKey('Codex is ignoring 2 unrecognized configuration settings.')).toBe('unrecognized')
-    expect(quietWarningKey('Codex is ignoring 1 unrecognized configuration setting.')).toBe('unrecognized')
-    expect(quietWarningKey('Under-development features enabled: a, b.')).toBe('unstable')
-    expect(quietWarningKey('Model metadata for `gpt-x` not found.')).toBeNull()
   })
 })

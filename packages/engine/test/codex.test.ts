@@ -3,9 +3,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { CodexAdapter, EngineHost } from '../src'
-import type { AgentRun, EngineEvent, EngineInfo, HostEvent, ImageAttachment } from '@pixelsky/protocol'
-import type { EngineAdapter, EngineSession, SessionContext } from '../src/adapter'
-import { ENGINES } from '../src/registry'
+import type { AgentRun, EngineEvent, HostEvent } from '@pixelsky/protocol'
 import { codexPermission, turnErrorDetail } from '../src/codex/session'
 import { CODEX_MIN_VERSION, codexVersionStatus } from '../src/codex/discover'
 import { CodexTranslator, tokenCounts } from '../src/codex/translate'
@@ -231,27 +229,19 @@ describe('Codex app-server adapter', () => {
     expect(host!.open(session.id).items.filter(i => i.kind === 'user' && i.text === '追加要求')).toHaveLength(1)
     await host!.interrupt(session.id)
   })
-  it('config.toml 引起的警告不进对话、记在引擎信息上（只广播一次，重新检测清掉）；别的警告照常每次都显示', async () => {
-    const { session, events } = setup()
+  it('config.toml 引起的警告降成灰色提示、同一会话只出一次；别的警告照常每次都显示', async () => {
+    const { session } = setup()
     await host!.send(session.id, '警告')
     await wait(() => host!.open(session.id).items.some(i => i.kind === 'turn_stats'))
     await host!.send(session.id, '警告')
     await wait(() => host!.open(session.id).items.filter(i => i.kind === 'turn_stats').length === 2)
     const notices = host!.open(session.id).items.flatMap(i => (i.kind === 'notice' ? [[i.level, i.text]] : []))
     expect(notices).toEqual([
+      ['info', expect.stringMatching(/^Codex is ignoring 2 unrecognized configuration settings/)],
+      ['info', expect.stringMatching(/^Under-development features enabled/)],
       ['warn', 'Model metadata for `fake-model` not found.'],
       ['warn', 'Model metadata for `fake-model` not found.'],
     ])
-    const codex = async () => (await host!.engines()).find(e => e.id === 'codex')!
-    expect((await codex()).configWarnings).toEqual([
-      expect.stringMatching(/^Codex is ignoring 2 unrecognized configuration settings/),
-      expect.stringMatching(/^Under-development features enabled/),
-    ])
-    // 第二轮同样的警告不再广播
-    const broadcasts = events.filter(e => e.kind === 'engines' && e.engines.some(x => x.configWarnings))
-    expect(broadcasts).toHaveLength(2)
-    await host!.engines(true)
-    expect((await codex()).configWarnings).toBeUndefined()
   })
   it('原生压缩走方法而非 turn/start 的普通提示', async () => {
     const { session, messages } = setup()
@@ -577,139 +567,5 @@ describe('Codex app-server adapter', () => {
     expect(host!.open(session.id).flags).toMatchObject({ fastAvailable: false, fastBlocked: 'codex_gateway' })
     expect(host!.open(session.id).record.fast).toBe(false)
     expect(messages().find(m => m.method === 'turn/start')?.params.serviceTier).toBeUndefined()
-  })
-})
-
-/** 跨引擎接力里的另一个引擎：收到消息就被打断，没有回复 */
-class InterruptedClaude implements EngineAdapter {
-  async info(): Promise<EngineInfo> {
-    return { ...ENGINES.claude, status: 'ready', version: 'stub', path: 'stub', message: null }
-  }
-  createSession(ctx: SessionContext): EngineSession {
-    return {
-      send(_text, turnId) {
-        ctx.emit({ type: 'turn_completed', turnId, outcome: 'interrupted', error: null })
-      },
-      async interrupt() {},
-      answer() {},
-      async update() {},
-      async close() {},
-    }
-  }
-}
-
-describe('Codex 接手带图片的聊天', () => {
-  const png = (name: string): ImageAttachment => ({
-    id: name.replace(/\W/g, '-'),
-    name,
-    mediaType: 'image/png',
-    bytes: 16,
-    width: 1,
-    height: 1,
-    dataBase64: Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), Buffer.alloc(8, name.length)]).toString(
-      'base64',
-    ),
-  })
-  const url = (image: ImageAttachment) => `data:image/png;base64,${image.dataBase64}`
-  const ASKED = '这个地方显示的内容不对'
-  /** 引擎发的警告提示 */
-  const notices = (id: string) =>
-    host!.open(id).items.flatMap(i => (i.kind === 'notice' && i.level === 'warn' ? [i.text] : []))
-  type Rpc = { method?: string; params?: { items?: { role: string; content: Record<string, unknown>[] }[] } }
-
-  /** claude 先收到一条带图的消息，被打断没有回复；再换成 Codex 发下一条 */
-  async function handoff(model: string, env: Record<string, string>, next: ImageAttachment[] | undefined) {
-    const log = join(root, 'rpc.jsonl')
-    const adapter = new CodexAdapter({
-      launcher: {
-        command: process.execPath,
-        args: [fileURLToPath(new URL('./fakes/fake-codex.mjs', import.meta.url))],
-      },
-      env: { ...process.env, FAKE_CODEX_LOG: log, ...env },
-      launchOptions: () => ({ askQuestions: true, steeringValidated: true }),
-    })
-    host = new EngineHost({
-      dataDir: join(root, 'engine'),
-      adapters: { claude: new InterruptedClaude(), codex: adapter },
-      emit: () => {},
-      idleMs: 60_000,
-    })
-    const session = host.createSession({
-      projectId: host.addProject(root).id,
-      engine: 'claude',
-      model: 'm',
-      effort: 'high',
-      permissionMode: 'ask',
-    })
-    const idle = () => host!.open(session.id).state === 'idle' && host!.open(session.id).queue.length === 0
-    const old = png('old.png')
-    await host.send(session.id, { text: ASKED, clientMessageId: 'first', attachments: [old] })
-    await wait(() => host!.open(session.id).items.some(i => i.kind === 'user') && idle())
-    await host.update(session.id, { engine: 'codex', model })
-    await host.send(session.id, { text: '怎么样', clientMessageId: 'second', ...(next ? { attachments: next } : {}) })
-    await wait(() => host!.open(session.id).items.some(i => i.kind === 'turn_stats') && idle())
-    const messages = (): Rpc[] =>
-      readFileSync(log, 'utf8')
-        .trim()
-        .split('\n')
-        .map(line => JSON.parse(line))
-    return { old, session, messages }
-  }
-
-  it('注入线程的用户消息带 input_image，回复占位仍在，开轮的输入只有这条消息自己', async () => {
-    const { old, messages } = await handoff('fake-codex', {}, undefined)
-    const inject = messages().find(m => m.method === 'thread/inject_items')!
-    expect(inject.params!.items).toEqual([
-      {
-        type: 'message',
-        role: 'user',
-        content: [
-          { type: 'input_text', text: `${ASKED}（附：old.png）` },
-          { type: 'input_image', image_url: url(old) },
-        ],
-      },
-      {
-        type: 'message',
-        role: 'assistant',
-        content: [{ type: 'output_text', text: '（这一轮没有回复，可能被中断了）' }],
-      },
-    ])
-    const start = messages().find(m => m.method === 'turn/start') as { params: { input: unknown[] } }
-    expect(start.params.input).toEqual([{ type: 'text', text: '怎么样', text_elements: [] }])
-  })
-
-  it('模型不能看图：只注入文字并写明图片没带上，不报错', async () => {
-    const { session, messages } = await handoff('fake-plain', {}, undefined)
-    const inject = messages().find(m => m.method === 'thread/inject_items')!
-    expect(inject.params!.items![0].content).toEqual([
-      { type: 'input_text', text: `${ASKED}（附：old.png）（上面这些图片没有带上：当前模型不能看图）` },
-    ])
-    expect(host!.open(session.id).items.some(i => i.kind === 'notice' && i.level === 'error')).toBe(false)
-    // host 的提示说带了图片，这里告诉用户实际没带
-    expect(notices(session.id)).toEqual([
-      "The current model can't view images; 1 earlier image(s) were not passed along",
-    ])
-  })
-
-  it('注入失败退回文字交接：更早消息的图片排在消息自己的图片前面一起发', async () => {
-    const own = png('own.png')
-    const { old, messages } = await handoff('fake-codex', { FAKE_CODEX_INJECT_FAIL: '1' }, [own])
-    const start = messages().find(m => m.method === 'turn/start') as {
-      params: { input: { type: string; text?: string; url?: string }[] }
-    }
-    const input = start.params.input
-    expect(input.map(i => i.type)).toEqual(['text', 'image', 'image'])
-    expect(input[0].text).toContain(`下面第 1 张图是之前「${ASKED}」那条消息附的 old.png`)
-    expect(input[0].text!.endsWith('\n\n怎么样')).toBe(true)
-    expect(input.slice(1).map(i => i.url)).toEqual([url(old), url(own)])
-  })
-
-  it('注入失败且模型不能看图：只发文字交接，不带图片也不报错', async () => {
-    const { session, messages } = await handoff('fake-plain', { FAKE_CODEX_INJECT_FAIL: '1' }, undefined)
-    const start = messages().find(m => m.method === 'turn/start') as { params: { input: { type: string }[] } }
-    expect(start.params.input.map(i => i.type)).toEqual(['text'])
-    expect(notices(session.id).filter(t => t.includes('view images'))).toEqual([
-      "The current model can't view images; 1 earlier image(s) were not passed along",
-    ])
   })
 })

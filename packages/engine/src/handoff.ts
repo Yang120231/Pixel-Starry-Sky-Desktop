@@ -1,6 +1,6 @@
 // 跨引擎接力的交接材料：把对话里目标引擎没看过的部分整理成一段文字，放在用户消息前面发给它。
 // 纯函数、确定性：同样的输入一定得到同样的文字（不读时间和随机数）。
-import { ENGINES, type EngineId, type ImageAttachment, type Item } from '@pixelsky/protocol'
+import { ENGINES, type EngineId, type Item } from '@pixelsky/protocol'
 
 export interface HandoffInput {
   /** 要交接的条目：full 是整段对话，delta 是目标引擎上次处理之后新增的部分 */
@@ -13,10 +13,6 @@ export interface HandoffInput {
   budget?: number
   /** 目标引擎能用 pixelsky_history 工具（outline / read / search）时为 true */
   historyTool?: boolean
-  /** 随这条消息一起发给目标引擎的更早消息的图片，按发送顺序（排在当前消息自己的图片前面）；交接材料里说明各是哪条消息附的 */
-  images?: readonly HandoffImage[]
-  /** 更早消息里没带上的图片张数，交接材料里说一声 */
-  omittedImages?: number
 }
 
 export const HANDOFF_TAG = 'pixelsky-handoff'
@@ -35,20 +31,6 @@ const FILES_LIMIT = 80
 const FILES_CHARS = 3000
 
 export type UserItem = Extract<Item, { kind: 'user' }>
-
-/** 一张图片和它所属的那条用户消息；bytes 同 image.bytes（挑图按它算额度） */
-export interface HandoffImage {
-  image: ImageAttachment
-  item: UserItem
-  bytes: number
-}
-
-/** 这些条目里用户发过的图片（含中途补充），按时间顺序 */
-export function userImages(items: readonly Item[]): HandoffImage[] {
-  return items.flatMap(item =>
-    item.kind === 'user' ? (item.attachments ?? []).map(image => ({ image, item, bytes: image.bytes })) : [],
-  )
-}
 
 /** 有信息量的条目：思考、提示和统计不算 */
 export function isMeaningful(item: Item): boolean {
@@ -82,27 +64,6 @@ export const flat = (text: string): string => text.replace(/\s+/g, ' ').trim()
 /** 用户内容里不能出现我们的结束标签，免得提前结束交接段 */
 const safe = (text: string): string => text.replaceAll(`</${HANDOFF_TAG}`, `</ ${HANDOFF_TAG}`)
 export const isNormalUser = (item: Item): item is UserItem => item.kind === 'user' && item.mode !== 'guidance'
-
-/** 说图片的消息时引用用户原话的字数 */
-const QUOTE_CHARS = 20
-
-/** 随消息发出的更早消息的图片：第几张图是哪条消息附的（顺序和发送顺序一致）；没带上的说一声 */
-export function imageNotes(images: readonly HandoffImage[], omitted: number): string[] {
-  const lines: string[] = []
-  if (images.length) {
-    lines.push(`这条消息附带的图片里，前 ${images.length} 张是之前消息里的图，不是用户这一条发的：`)
-    images.forEach(({ image, item }, i) => {
-      const said = flat(item.text)
-      const from = said
-        ? `「${said.length > QUOTE_CHARS ? `${said.slice(0, QUOTE_CHARS)}…` : said}」那条消息`
-        : '那条只发了图片的消息'
-      lines.push(`下面第 ${i + 1} 张图是之前${from}附的 ${image.name}`)
-    })
-    lines.push('图片没有随消息送达（例如当前模型不能看图）时，按文字说明理解即可。')
-  }
-  if (omitted > 0) lines.push(`另有 ${omitted} 张之前消息里的图片没有带过来，只留下了文件名。`)
-  return lines.map(safe)
-}
 
 export function attachmentNames(item: UserItem): string {
   const names = [...(item.attachments ?? []).map(a => a.name), ...(item.files ?? []).map(f => f.name)]
@@ -271,7 +232,6 @@ export function buildHandoff(input: HandoffInput): { text: string; count: number
     intro.push(
       '需要更早几轮的细节时，用 MCP 服务器 pixelsky_history 的 outline（目录）/ read（读某几轮原文）/ search（按关键词查）工具查询这段对话，不要凭印象猜；Claude Code 里它们叫 mcp__pixelsky_history__outline 等。',
     )
-  intro.push(...imageNotes(input.images ?? [], input.omittedImages ?? 0))
   const head = [open, ...intro].join('\n')
 
   const finish = (sections: string[]): { text: string; count: number } => {

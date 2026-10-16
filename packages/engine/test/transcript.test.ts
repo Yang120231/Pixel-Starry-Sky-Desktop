@@ -10,7 +10,6 @@ import {
   findRewindAnchor,
   pointLastPrompt,
   seedTranscript,
-  seedUuid,
 } from '../src/claude/transcript'
 
 let dir: string
@@ -165,116 +164,5 @@ describe('跨引擎接力：把聊天写进 Claude Code 的记录', () => {
     const seeded = lines.filter(l => l.sessionId === 'old' && (l.type === 'user' || l.type === 'assistant')).slice(-2)
     expect(seeded[0]).toMatchObject({ uuid, parentUuid: 'u2' })
     expect(lines.at(-1)).toMatchObject({ type: 'last-prompt', leafUuid: seeded[1].uuid })
-  })
-
-  it('不是 UUID 的条目 id 每次得到同一个 UUID，回退时按条目 id 找得到', () => {
-    expect(seedUuid(uuid)).toBe(uuid)
-    expect(seedUuid('m1-retry-x')).toBe(seedUuid('m1-retry-x'))
-    expect(seedUuid('m1-retry-x')).not.toBe(seedUuid('m1-retry-y'))
-    expect(seedUuid('m1-retry-x')).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
-    const path = seedTranscript(dir, '/work/proj', 'retry', [{ id: 'm1-retry-x', user: '问', assistant: '答' }], '')
-    expect(read(path)[0].uuid).toBe(seedUuid('m1-retry-x'))
-    expect(findRewindAnchor(path, ['m1-retry-x'])).toEqual({ at: null })
-  })
-
-  it('已经在当前分支上的轮次和它之前的不再写：uuid 不重复，parentUuid 不成环', () => {
-    const existing = join(dir, '-work-proj', 'old.jsonl')
-    mkdirSync(join(dir, '-work-proj'))
-    // Claude 自己收到过 c（那一轮失败了，游标没推进），压缩之前还有 a
-    const chain = [
-      { type: 'user', uuid: 'a', parentUuid: null },
-      { type: 'assistant', uuid: 'ra', parentUuid: 'a' },
-      { type: 'system', subtype: 'compact_boundary', uuid: 'cb', parentUuid: null, logicalParentUuid: 'ra' },
-      { type: 'user', uuid: 'c', parentUuid: 'cb' },
-      { type: 'assistant', uuid: 'rc', parentUuid: 'c' },
-    ]
-    writeFileSync(existing, chain.map(r => JSON.stringify(r)).join('\n') + '\n')
-    const turn = (id: string) => ({ id, user: id, assistant: null })
-    seedTranscript(dir, '/work/proj', 'old', [turn('a'), turn('c')], '')
-    expect(readFileSync(existing, 'utf8')).toBe(chain.map(r => JSON.stringify(r)).join('\n') + '\n')
-    // 之后的新轮次照常接在末端
-    seedTranscript(dir, '/work/proj', 'old', [turn('a'), turn('c'), turn('d')], '')
-    const added = read(existing)
-      .filter(l => l.type === 'user' || l.type === 'assistant')
-      .slice(chain.length - 1)
-    expect(added[0]).toMatchObject({ uuid: seedUuid('d'), parentUuid: 'rc' })
-    const uuids = read(existing).flatMap(l => (typeof l.uuid === 'string' ? [l.uuid] : []))
-    expect(new Set(uuids).size).toBe(uuids.length)
-  })
-
-  it('别的分支上已有同一个 uuid：换一个新的写，不重复', () => {
-    const existing = join(dir, '-work-proj', 'old.jsonl')
-    mkdirSync(join(dir, '-work-proj'))
-    const chain = [
-      { type: 'user', uuid: seedUuid('x'), parentUuid: null },
-      { type: 'user', uuid: 'y', parentUuid: null },
-    ]
-    writeFileSync(existing, chain.map(r => JSON.stringify(r)).join('\n') + '\n')
-    seedTranscript(dir, '/work/proj', 'old', [{ id: 'x', user: 'x', assistant: null }], '')
-    const users = read(existing).filter(l => l.type === 'user')
-    expect(users[2]).toMatchObject({ parentUuid: 'y' })
-    expect(users[2].uuid).not.toBe(seedUuid('x'))
-  })
-
-  it('回退截断点：同一个 uuid 重复出现时以第一次为准', () => {
-    const broken = join(dir, 'broken.jsonl')
-    const chain = [
-      { type: 'user', uuid: 'a', parentUuid: null },
-      { type: 'assistant', uuid: 'ra', parentUuid: 'a' },
-      { type: 'user', uuid: 'c', parentUuid: 'ra' },
-      { type: 'assistant', uuid: 'rc', parentUuid: 'c' },
-      { type: 'user', uuid: 'c', parentUuid: 'rc' },
-    ]
-    writeFileSync(broken, chain.map(r => JSON.stringify(r)).join('\n') + '\n')
-    expect(findRewindAnchor(broken, ['c'])).toEqual({ at: 'ra' })
-  })
-
-  describe('带图片的轮次', () => {
-    const image = {
-      id: 'i1',
-      name: 'image.png',
-      mediaType: 'image/png' as const,
-      bytes: 3,
-      width: 1,
-      height: 1,
-      dataBase64: 'AAAA',
-    }
-    const imageBlock = { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAAA' } }
-
-    it('用户消息写成文字块加图片块的数组，没有图的轮次仍是一段文字', () => {
-      const path = seedTranscript(
-        dir,
-        '/work/proj',
-        'img',
-        [
-          { id: uuid, user: '看这个（附：image.png）', assistant: null, images: [image] },
-          { id: 'plain', user: '再问', assistant: '答' },
-        ],
-        '（没回复）',
-      )
-      const lines = read(path)
-      expect(lines[0]).toMatchObject({
-        type: 'user',
-        message: { role: 'user', content: [{ type: 'text', text: '看这个（附：image.png）' }, imageBlock] },
-      })
-      expect(lines[2]).toMatchObject({ message: { role: 'user', content: '再问' } })
-    })
-
-    it('数组内容不影响回退截断点、末端和续写；重复交接不再写一遍', () => {
-      const turns = [{ id: uuid, user: '看这个', assistant: null, images: [image] }]
-      const path = seedTranscript(dir, '/work/proj', 'img', turns, '（没回复）')
-      const lines = read(path)
-      expect(findRewindAnchor(path, [uuid])).toEqual({ at: null })
-      expect(currentLeaf(path)).toBe(lines[1].uuid)
-      const before = readFileSync(path, 'utf8')
-      seedTranscript(dir, '/work/proj', 'img', turns, '（没回复）')
-      expect(readFileSync(path, 'utf8')).toBe(before)
-      // 之后的新轮次接在末端，图片轮次的 uuid 不变
-      seedTranscript(dir, '/work/proj', 'img', [...turns, { id: 'next', user: '后来', assistant: '嗯' }], '')
-      const users = read(path).filter(l => l.type === 'user')
-      expect(users).toHaveLength(2)
-      expect(users[1]).toMatchObject({ uuid: seedUuid('next'), parentUuid: lines[1].uuid })
-      expect(findRewindAnchor(path, [uuid, 'next'])).toEqual({ at: null })
-    })
   })
 })

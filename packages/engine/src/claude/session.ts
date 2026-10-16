@@ -308,15 +308,10 @@ export class ClaudeSession implements EngineSession {
       // 启动期间用户已停止时，不让延迟完成的 spawn 再把原文送出。
       proc => {
         if (this.closed || this.translator.activeTurn !== turnId) return
-        // 启动时没注入进记录（进程本来就在跑、有待执行的回退 / 分叉、写入失败）：交接材料加在消息前面，
-        // 材料里说明过的更早消息的图片排在消息自己的图片前面一起发
+        // 启动时没注入进记录（进程本来就在跑、有待执行的回退 / 分叉、写入失败）：交接材料加在消息前面
         const left = this.seed
         this.seed = null
-        proc.sendUserMessage(
-          left ? `${left.fallback}\n\n${text}` : text,
-          userItemId,
-          left?.fallbackImages?.length ? [...left.fallbackImages, ...(attachments ?? [])] : attachments,
-        )
+        proc.sendUserMessage(left ? `${left.fallback}\n\n${text}` : text, userItemId, attachments)
       },
       (err: Error) => this.translator.abortTurn(`无法启动 Claude Code：${err.message}`),
     )
