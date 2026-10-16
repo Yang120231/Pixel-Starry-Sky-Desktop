@@ -17,6 +17,7 @@ const desktop = join(root, 'apps', 'desktop')
 const engine = join(root, 'packages', 'engine')
 const protocol = join(root, 'packages', 'protocol')
 const extcli = join(root, 'packages', 'extension-cli')
+const cli = join(root, 'packages', 'cli')
 const link = join(root, 'packages', 'link')
 const mobile = join(root, 'apps', 'mobile')
 const tsc = (cwd, project) => ({
@@ -44,6 +45,14 @@ const steps = [
   { name: 'tsc:engine', group: 'tsc', ...tsc(engine, 'tsconfig.json') },
   { name: 'tsc:protocol', group: 'tsc', ...tsc(protocol, 'tsconfig.json') },
   { name: 'tsc:extension-cli', group: 'tsc', ...tsc(extcli, 'tsconfig.json') },
+  // 像素星空命令行（packages/cli）没有自己的 typescript 依赖，用根目录的
+  {
+    name: 'tsc:cli',
+    group: 'tsc',
+    cwd: cli,
+    script: join(root, 'node_modules', 'typescript', 'bin', 'tsc'),
+    args: ['--noEmit', '-p', 'tsconfig.json'],
+  },
   { name: 'tsc:link', group: 'tsc', ...tsc(link, 'tsconfig.json') },
   { name: 'tsc:mobile', group: 'tsc', ...tsc(mobile, 'tsconfig.json') },
   {
@@ -54,6 +63,7 @@ const steps = [
   { name: 'test:engine', group: 'test', ...vitest(engine) },
   { name: 'test:protocol', group: 'test', ...vitest(protocol) },
   { name: 'test:extension-cli', group: 'test', ...vitest(extcli) },
+  { name: 'test:cli', group: 'test', ...vitest(cli) },
   { name: 'test:link', group: 'test', ...vitest(link) },
   { name: 'test:mobile', group: 'test', ...vitest(mobile) },
   { name: 'docs', group: 'docs', cwd: root, script: join(root, 'scripts', 'check-docs.mjs'), args: [] },

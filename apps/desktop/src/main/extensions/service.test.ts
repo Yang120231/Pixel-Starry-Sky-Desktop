@@ -58,6 +58,38 @@ describe('管理配置与凭据', () => {
     expect(cc.mcpFile).toBeUndefined()
     expect(readFileSync(join(service.dir, 'config.json'), 'utf8')).not.toContain('private-codex')
   })
+  it('像素星空：MCP 写进会话临时文件（含凭据，结束删掉），技能给目录，别的引擎的不带', () => {
+    service.upsert({
+      kind: 'mcp',
+      name: 'pixel.tools',
+      scope: global,
+      engines: ['pixel'],
+      mcp: { type: 'stdio', command: process.execPath, args: ['--version'], env: { TOKEN: 'private-pixel' } },
+    })
+    service.upsert({
+      kind: 'skill',
+      name: 'pixel-skill',
+      scope: global,
+      engines: ['pixel', 'codex'],
+      text: '---\nname: pixel-skill\ndescription: test\n---\nRead project files.',
+    })
+    service.upsert({
+      kind: 'mcp',
+      name: 'claude-only',
+      scope: global,
+      mcp: { type: 'http', url: 'https://example.com/mcp' },
+    })
+    const px = service.launch(project, 'pixel')
+    expect(px.pluginDirs).toEqual([])
+    expect(px.skillRoots).toHaveLength(1)
+    expect(existsSync(join(px.skillRoots![0], 'SKILL.md'))).toBe(true)
+    const file = JSON.parse(readFileSync(px.mcpFile!, 'utf8'))
+    expect(Object.keys(file.mcpServers)).toEqual(['pixel.tools'])
+    expect(file.mcpServers['pixel.tools']).toMatchObject({ type: 'stdio', env: { TOKEN: 'private-pixel' } })
+    expect(service.launch(project, 'codex').skillRoots).toEqual(px.skillRoots)
+    px.dispose?.()
+    expect(existsSync(px.mcpFile!)).toBe(false)
+  })
   it('凭据无法解密时仍能显示其他配置，重新填写前保留原加密文件', () => {
     const dir = join(root, 'broken')
     mkdirSync(dir)
