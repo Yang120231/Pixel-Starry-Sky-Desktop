@@ -243,7 +243,8 @@ describe('上传前的四条核对', () => {
       id: 'acme.hello',
       version: '1.0.0',
       report: okReport,
-      contributes: null,
+      contributes: { prompts: [{ id: 'explain', title: '解释', path: 'p/explain.md' }] },
+      previousContributes: null,
       checks: { permissions: [], prefixOk: true, versionNewer: true },
     })
     expect(runCheck).toHaveBeenCalledTimes(1)
@@ -313,9 +314,22 @@ describe('上传前的四条核对', () => {
 
   it('上一个上架版本的清单带回来做「（新增）」比较', async () => {
     const { pub, api } = setup()
-    const contributes = { themes: [] }
-    api.detail.mockResolvedValue({ manifest: { contributes } } as never)
-    expect((await pub.pickUpload(bytesInput(manifestZip()), 1))?.contributes).toEqual(contributes)
+    const previousContributes = { themes: [] }
+    api.detail.mockResolvedValue({ manifest: { contributes: previousContributes } } as never)
+    const r = await pub.pickUpload(bytesInput(manifestZip()), 1)
+    expect(r?.previousContributes).toEqual(previousContributes)
+    // 这次包里的贡献是另一回事，不会被上一个版本的顶掉
+    expect(r?.contributes).toEqual({ prompts: [{ id: 'explain', title: '解释', path: 'p/explain.md' }] })
+  })
+
+  it('这次包里的贡献带回来；不认识的种类、不是数组的值丢掉', async () => {
+    const { pub } = setup()
+    const skills = [{ id: 's', title: 'S', path: 's.md' }]
+    const zip = manifestZip({ contributes: { skills, themes: 'nope', prompts: { a: 1 }, evil: [1], __proto__x: [2] } })
+    expect((await pub.pickUpload(bytesInput(zip), 1))?.contributes).toEqual({ skills })
+    // 清单里没有 contributes：null
+    const bare = manifestZip({ contributes: undefined })
+    expect((await pub.pickUpload(bytesInput(bare), 1))?.contributes).toBeNull()
   })
 })
 

@@ -15,6 +15,7 @@ import {
 } from '@pixelsky/protocol'
 import type {
   ExtPackContributes,
+  ExtPackContributionKind,
   ExtStoreCheckReport,
   ExtStoreDetail,
   ExtStoreMyExtension,
@@ -133,10 +134,33 @@ export const nodeFs: PublishFs = {
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 
+/** 已知的贡献种类；少一个种类这里会编译不过 */
+const CONTRIBUTION_KINDS = {
+  grammars: true,
+  themes: true,
+  snippets: true,
+  iconThemes: true,
+  taskTemplates: true,
+  skills: true,
+  prompts: true,
+} satisfies Record<ExtPackContributionKind, true>
+
+/** zip 是用户选的、不可信：只留已知的贡献种类，且值是数组的；一个都没有也回一个空对象 */
+function contributesFrom(raw: unknown): ExtPackContributes | null {
+  if (!isObj(raw)) return null
+  const out: Record<string, unknown[]> = {}
+  for (const kind of Object.keys(CONTRIBUTION_KINDS)) {
+    const list = raw[kind]
+    if (Array.isArray(list)) out[kind] = list
+  }
+  return out as ExtPackContributes
+}
+
 interface Manifest {
   id: string
   version: string
   publisher: string
+  contributes: ExtPackContributes | null
 }
 
 /** 从 zip 字节里读出清单的 id / version / publisher；读不到或格式不对返回 null */
@@ -146,7 +170,12 @@ function manifestOf(zip: Buffer): Manifest | null {
     if (!raw) return null
     const m: unknown = JSON.parse(new TextDecoder().decode(raw))
     if (!isObj(m) || !isExtId(m.id) || !isExtVersion(m.version)) return null
-    return { id: m.id, version: m.version, publisher: typeof m.publisher === 'string' ? m.publisher : '' }
+    return {
+      id: m.id,
+      version: m.version,
+      publisher: typeof m.publisher === 'string' ? m.publisher : '',
+      contributes: contributesFrom(m.contributes),
+    }
   } catch {
     return null
   }
@@ -297,7 +326,7 @@ export function createPublisher(deps: PublisherDeps): Publisher {
           .filter(v => USED_STATUSES.includes(v.status))
           .every(v => compareExtVersion(manifest.version, v.version) > 0),
       }
-      const [report, contributes] = await Promise.all([deps.runCheck(zip), previousContributes(manifest.id)])
+      const [report, previous] = await Promise.all([deps.runCheck(zip), previousContributes(manifest.id)])
 
       // 核对没过、或本机检查有要改的问题时不发 token（token 为空串）：界面看到就知道不能提交，也不会白占上传额度
       const blocked = !checks.prefixOk || !checks.versionNewer || (!report.incomplete && (report.blocking ?? 0) > 0)
@@ -314,7 +343,15 @@ export function createPublisher(deps: PublisherDeps): Publisher {
           expires: now() + TOKEN_TTL_MS,
         })
       }
-      return { token, id: manifest.id, version: manifest.version, report, contributes, checks }
+      return {
+        token,
+        id: manifest.id,
+        version: manifest.version,
+        report,
+        contributes: manifest.contributes,
+        previousContributes: previous,
+        checks,
+      }
     },
 
     async upload(token, owner) {

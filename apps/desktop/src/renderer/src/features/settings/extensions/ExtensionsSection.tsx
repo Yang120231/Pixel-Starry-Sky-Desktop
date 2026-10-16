@@ -4,6 +4,7 @@ import { tr } from '@/i18n/core'
 import { usePackState } from '@/features/extpacks/store'
 import { openExtTab, trackExtPage, useExtDetail, useExtTab } from '@/features/extstore/nav'
 import { StoreDetailPage } from '@/features/extstore/detail/StoreDetailPage'
+import { PublishPage } from '@/features/extstore/publish/PublishPage'
 import { touchExtStore } from '@/features/extstore/store'
 import { SectionTitle } from '../SettingRow'
 import { DiscoverTab } from './DiscoverTab'
@@ -36,9 +37,7 @@ export function ExtensionsSection({ initialGroup }: { initialGroup?: PackGroup }
           <DiscoverTab />
         )
       ) : tab === 'publish' ? (
-        <p className="rounded-lg border border-line px-3 py-6 text-center text-ui text-fg-faint">
-          {t('extstore.publish.soon')}
-        </p>
+        <PublishPage />
       ) : (
         <InstalledPage initialGroup={initialGroup} />
       )}

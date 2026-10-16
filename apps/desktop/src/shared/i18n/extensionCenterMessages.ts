@@ -55,7 +55,6 @@ export const extensionCenterMessages = {
   'extstore.tab.discover': { zh: '发现', en: 'Discover' },
   'extstore.tab.installed': { zh: '已安装', en: 'Installed' },
   'extstore.tab.publish': { zh: '我的发布', en: 'My publishing' },
-  'extstore.publish.soon': { zh: '「我的发布」还在做', en: '“My publishing” is coming soon' },
   'extstore.search': { zh: '搜索扩展、语言、作者', en: 'Search extensions, languages, authors' },
   'extstore.sort.label': { zh: '排序', en: 'Sort' },
   'extstore.sort.recommended': { zh: '推荐', en: 'Featured' },

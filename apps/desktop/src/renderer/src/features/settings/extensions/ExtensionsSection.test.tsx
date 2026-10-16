@@ -53,10 +53,10 @@ describe('ExtensionsSection 页签', () => {
     openExtTab('installed')
   })
 
-  it('「我的发布」先是占位', () => {
+  it('「我的发布」渲染发布页（没登录时是登录入口）', () => {
     openExtTab('publish')
     const html = render()
-    expect(html).toContain('还在做')
+    expect(html).toContain('data-publish="signed-out"')
     expect(html).not.toContain('从文件夹加载')
     openExtTab('installed')
   })

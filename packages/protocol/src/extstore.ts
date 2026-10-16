@@ -262,8 +262,10 @@ export interface ExtStorePickUploadResult {
   id: string
   version: string
   report: ExtStoreCheckReport
-  /** 和上一个上架版本比的清单；没上架过是 null */
+  /** 这次选的包里清单的贡献（只留已知的贡献种类）；读不到是 null */
   contributes: ExtPackContributes | null
+  /** 上一个上架版本的贡献（取公开详情的清单），界面拿它标出这次的新增；没上架过或取不到是 null */
+  previousContributes: ExtPackContributes | null
   checks: ExtStoreUploadChecks
 }
 

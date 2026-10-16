@@ -66,6 +66,7 @@ export const picked = (over: Partial<ExtStorePickUploadResult> = {}): ExtStorePi
   version: '1.3.0',
   report: report(),
   contributes: null,
+  previousContributes: null,
   checks: { permissions: [], prefixOk: true, versionNewer: true },
   ...over,
 })
