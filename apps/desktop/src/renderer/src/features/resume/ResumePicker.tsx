@@ -18,7 +18,7 @@ import {
 } from '@/features/engine/store'
 import { isLive } from '@/features/engine/hooks'
 import { composerInputFor } from '@/features/session/composerInput/ComposerInput'
-import { chooseRow, isGoneError, type ChooseHow, type ChooseOutcome } from './choose'
+import { chooseRow, isGoneError, settingsWhenReady, type ChooseHow, type ChooseOutcome } from './choose'
 import {
   filterRows,
   groupRows,
@@ -515,7 +515,7 @@ export function ResumePicker({ request }: { request: ResumeRequest }) {
         token,
         importSession: (id, opts) => importNativeSession(projectId, id, opts),
         modelOf: async id => (await nativeSessionDetails(projectId, [id]))[0]?.model ?? null,
-        settingsFor: model => request.settingsFor?.(model) ?? {},
+        settingsFor: model => settingsWhenReady(request.settingsFor, model),
       })
       if (busyRef.current?.token !== token) return
       await handle(outcome, row)

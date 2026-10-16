@@ -9,8 +9,11 @@ export interface ResumeRequest {
   query?: string
   /** `/resume <完整 uuid>`：不弹列表，直接走选中之后的流程 */
   id?: string | null
-  /** 输入框当前的设置（模型、额度来源、权限、推理强度）；命令面板没有，用引擎默认 */
-  settingsFor?: (sessionModel: string | null) => Partial<SessionSettings>
+  /**
+   * 输入框当前的设置（模型、额度来源、权限、推理强度）；命令面板没有，用引擎默认。
+   * 选中时才调用，拿输入框最新的状态；输入框还没准备好（刚启动）时返回 undefined
+   */
+  settingsFor?: (sessionModel: string | null) => Partial<SessionSettings> | undefined
   /** 新对话打开之后（输入框清掉 /resume） */
   onOpened?: () => void
   /** 关闭之后（把焦点还给输入框） */

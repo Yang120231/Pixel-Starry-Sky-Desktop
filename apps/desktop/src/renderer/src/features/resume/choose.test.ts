@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { NativeImportResult } from '@pixelsky/protocol'
-import { chooseRow, isGoneError, type ChooseDeps } from './choose'
+import { chooseRow, isGoneError, settingsWhenReady, type ChooseDeps } from './choose'
 import { mergeRows, type ResumeRow } from './model'
 
 const row = (extra: Partial<ResumeRow> = {}): ResumeRow =>
@@ -52,6 +52,11 @@ describe('chooseRow', () => {
     expect(known.modelOf).not.toHaveBeenCalled()
     expect(known.settingsFor).toHaveBeenCalledWith('claude-haiku-4-5')
   })
+  it('设置可以晚一点给（等输入框准备好），导入用等到的那份', async () => {
+    const d = { ...deps(), settingsFor: vi.fn(async (model: string | null) => ({ model, effort: 'high' as const })) }
+    await chooseRow(row({ model: 'claude-haiku-4-5' }), 'default', d)
+    expect(d.importSession.mock.calls[0][1].settings).toEqual({ model: 'claude-haiku-4-5', effort: 'high' })
+  })
   it('终端里正开着：Enter 默认走复制一份接着聊；显式原地也照办', async () => {
     const d = deps()
     await chooseRow(row({ live: 'terminal' }), 'default', d)
@@ -76,5 +81,43 @@ describe('chooseRow', () => {
     await expect(chooseRow(row(), 'default', d)).rejects.toThrow('不在了')
     expect(isGoneError('这个会话的记录已经不在了')).toBe(true)
     expect(isGoneError('工作目录不存在')).toBe(false)
+  })
+})
+
+describe('settingsWhenReady', () => {
+  const wait = vi.fn(async () => undefined)
+  it('没有输入框（命令面板）：引擎默认', async () => {
+    expect(await settingsWhenReady(undefined, 'm')).toEqual({})
+  })
+  it('输入框刚启动还没准备好：等到有了再用，拿的是会话的模型', async () => {
+    let ready = false
+    const settingsFor = vi.fn((model: string | null) => (ready ? { model } : undefined))
+    wait
+      .mockImplementationOnce(async () => {})
+      .mockImplementationOnce(async () => {
+        ready = true
+      })
+    expect(await settingsWhenReady(settingsFor, 'claude-haiku-5-5', wait)).toEqual({ model: 'claude-haiku-5-5' })
+    expect(settingsFor).toHaveBeenCalledTimes(3)
+  })
+  it('平台线路还在加载：先等，加载好了就用', async () => {
+    let calls = 0
+    const settingsFor = vi.fn((model: string | null) => {
+      if (++calls < 3) throw new Error('loading')
+      return { model }
+    })
+    expect(await settingsWhenReady(settingsFor, 'm', wait)).toEqual({ model: 'm' })
+  })
+  it('一直没准备好：引擎默认；一直报错：把错误交出去', async () => {
+    expect(await settingsWhenReady(() => undefined, 'm', wait)).toEqual({})
+    await expect(
+      settingsWhenReady(
+        () => {
+          throw new Error('sign in')
+        },
+        'm',
+        wait,
+      ),
+    ).rejects.toThrow('sign in')
   })
 })
