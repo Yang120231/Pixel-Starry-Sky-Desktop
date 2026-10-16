@@ -103,6 +103,8 @@ export type Item =
       text: string
       detail?: string | null
       task?: NoticeTask
+      /** 提示右边的按钮（接着引擎自己的会话：加载更早的 / 补上终端里新聊的 N 轮）；count 是轮数 */
+      action?: { kind: 'native-earlier' | 'native-sync'; count: number }
     }
   /**
    * 压缩上下文（docs/ui/compaction.md）：进行中显示动画和计时，结束后显示「压缩前 → 压缩后」和用时。

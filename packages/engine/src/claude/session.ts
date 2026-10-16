@@ -1,7 +1,9 @@
 // 一个会话对应的 Claude Code 进程：启动 / 恢复、发消息、审批、中断、改设置（docs/engines.md §9）
 import { randomUUID } from 'node:crypto'
 import { readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { dirname } from 'node:path'
 import {
+  codedError,
   contextDiagnostic,
   EMPTY_FLAGS,
   type ContextDetailLevel,
@@ -13,12 +15,14 @@ import {
   type SessionFlags,
   type SessionSettings,
   type TaskOutput,
+  parseCodedError,
   viaGateway,
 } from '@pixelsky/protocol'
 import { queueSettings } from '../queue'
 import { NO_REPLY, seedTurns, type ChatSeed } from '../chat-log'
 import { QUICK_CLOSE_MS, type CloseOptions, type EngineSession, type Launcher, type SessionContext } from '../adapter'
-import { ClaudeProcess, type ControlRequestFromCli } from './process'
+import { ClaudeProcess, ownClaudePids, type ControlRequestFromCli } from './process'
+import { liveClaudeSession } from './native'
 import { loadSavedRuns } from './runs'
 import { alwaysPermissions, approvalFor } from './tools'
 import {
@@ -313,7 +317,9 @@ export class ClaudeSession implements EngineSession {
         this.seed = null
         proc.sendUserMessage(left ? `${left.fallback}\n\n${text}` : text, userItemId, attachments)
       },
-      (err: Error) => this.translator.abortTurn(`无法启动 Claude Code：${err.message}`),
+      // 带代码的错误（resume.live）原样给界面，界面按代码给出「复制一份接着聊」
+      (err: Error) =>
+        this.translator.abortTurn(parseCodedError(err.message) ? err.message : `无法启动 Claude Code：${err.message}`),
     )
   }
 
@@ -402,11 +408,16 @@ export class ClaudeSession implements EngineSession {
     const rec = this.ctx.record()
     if (!isDir(rec.cwd)) throw new Error(`工作目录不存在：${rec.cwd}`)
     const sid = rec.engineSessionId ?? rec.id
+    // 原地接着终端里的会话：那边正开着就不能往同一个文件里写（docs/ui/claude-resume.md §4.6），要放在接力写入之前
+    if (rec.imported && !rec.imported.forked && rec.imported.engine === 'claude' && rec.imported.sessionId === sid) {
+      const live = liveClaudeSession(dirname(this.deps.projectsDir), sid, ownClaudePids)
+      if (live === 'terminal' || live === 'other') throw codedError('resume.live', { source: live })
+    }
     const seeded = this.injectSeed(rec.cwd, sid, rec.pendingRewind ?? null, rec.pendingFork ?? null)
     const resume = claudeTranscriptExists(this.deps.projectsDir, rec.cwd, sid)
     const rewindAt = resume ? (rec.pendingRewind ?? null) : null
     const fork = resume ? null : (rec.pendingFork ?? null)
-    const copy = this.copyCompacted(rec.cwd, sid, rewindAt, fork)
+    const copy = await this.copyCompacted(rec.cwd, sid, rewindAt, fork)
     try {
       if (copy === 'failed') throw new StartupError(COMPACTED_NOTICE)
       return copy ? await this.launch(copy.sid, true) : await this.launch(sid, resume, rewindAt, fork)
@@ -472,12 +483,12 @@ export class ClaudeSession implements EngineSession {
    * 自己把记录复制到截断点为止，存成新的引擎会话再 --resume（docs/ui/rewind-fork-sidechat.md §2.4）。
    * 分叉用分支自己的 id，回退换一个新 id（原会话的记录不动）。不需要复制时返回 null，复制不成返回 'failed'。
    */
-  private copyCompacted(
+  private async copyCompacted(
     cwd: string,
     sid: string,
     rewindAt: string | null,
     fork: { from: string; at: string } | null,
-  ): { sid: string; file: string } | 'failed' | null {
+  ): Promise<{ sid: string; file: string } | 'failed' | null> {
     const at = fork?.at ?? rewindAt
     const source = fork
       ? findClaudeTranscript(this.deps.projectsDir, cwd, fork.from)
@@ -486,9 +497,9 @@ export class ClaudeSession implements EngineSession {
         : null
     if (!at || !source) return null
     try {
-      if (anchorPosition(source, at) !== 'compacted') return null
+      if ((await anchorPosition(source, at)) !== 'compacted') return null
       const target = fork ? sid : randomUUID()
-      const file = copyTranscriptUntil(source, at, target)
+      const file = await copyTranscriptUntil(source, at, target)
       return file ? { sid: target, file } : 'failed'
     } catch {
       return 'failed'

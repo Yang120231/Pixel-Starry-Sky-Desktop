@@ -31,6 +31,7 @@ import { demoRemoteCalls } from './remoteCalls'
 import { demoSearchProjects, searchDemo } from './search'
 import { demoSessions } from './sessionLifecycle'
 import { demoRewindPreview, demoSideAnswer } from './branch'
+import { demoNativeSessions } from './native'
 import { demoTerminalOutput, demoTerminalProfiles } from './terminal'
 import { demoStore } from './store'
 import { demoUsageRecords } from './usage'
@@ -74,6 +75,7 @@ export const demoSource: DemoSource = {
     taskOutput: showcaseTaskOutput,
     rewindPreview: demoRewindPreview,
     sideAnswer: demoSideAnswer,
+    nativeSessions: demoNativeSessions,
     animate: update => {
       animateCompaction(update)
       animateSteps(update)

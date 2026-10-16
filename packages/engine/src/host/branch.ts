@@ -95,7 +95,7 @@ export class HostBranch {
     const { index } = this.userItem(id, userItemId)
     const code = await this.codePreview(snapshot.record, userItemId)
     // 没有检查点、而且这条在压缩之前：说清楚是压缩的缘故（GitHub #82）
-    if (!code.ok && code.reason === 'no-checkpoint' && this.beforeCompaction(id, index, userItemId))
+    if (!code.ok && code.reason === 'no-checkpoint' && (await this.beforeCompaction(id, index, userItemId)))
       return { code: { ...code, reason: 'compacted' } }
     return { code }
   }
@@ -104,11 +104,11 @@ export class HostBranch {
    * 这条用户消息在上下文压缩之前：对话里它后面有压缩，或者引擎记录里它排在最近一次压缩之前
    * （回退把对话里的压缩条目截掉以后，只能看记录）
    */
-  private beforeCompaction(id: string, index: number, userItemId: string): boolean {
+  private async beforeCompaction(id: string, index: number, userItemId: string): Promise<boolean> {
     const snapshot = this.ctx.m.sessions.runtime(id).snapshot
     if (compactedAfter(snapshot.items, index)) return true
     try {
-      return this.ctx.adapters[snapshot.record.engine]?.beforeCompaction?.(snapshot.record, userItemId) ?? false
+      return (await this.ctx.adapters[snapshot.record.engine]?.beforeCompaction?.(snapshot.record, userItemId)) ?? false
     } catch {
       return false
     }
@@ -171,7 +171,7 @@ export class HostBranch {
         } catch (err) {
           // 只恢复代码时照旧报错；同时回退对话时对话照样回退，告诉界面代码没恢复（GitHub #82）
           if (!options.conversation) throw err
-          codeSkipped = this.beforeCompaction(id, index, userItemId)
+          codeSkipped = (await this.beforeCompaction(id, index, userItemId))
             ? '这条消息在上下文压缩之前，Claude Code 只保留压缩之后的代码检查点，代码保持不变'
             : (err as Error).message
         }
@@ -232,18 +232,24 @@ export class HostBranch {
     const rt = m.sessions.runtime(id)
     const record = rt.snapshot.record
     const adapter = ctx.adapters[record.engine]
+    const users = rt.snapshot.items.slice(index).filter(item => item.kind === 'user')
     // 只算当前引擎处理过的用户消息：其他引擎处理的不在它的上下文里，不用在它的记录里回退
-    const dropped = rt.snapshot.items
-      .slice(index)
-      .flatMap(item => (item.kind === 'user' && (item.engine ?? record.engine) === record.engine ? [item.id] : []))
+    const own = users.filter(item => (item.engine ?? record.engine) === record.engine).map(item => item.id)
+    // Claude 的原生记录里带着接力写进去的其他引擎轮次（uuid 就是我们的条目 id）：截断点之后所有用户消息都要交给适配器找，
+    // 否则落在下一条 Claude 消息的 parent 上，被回退的接力轮次还留在上下文里。Codex 自己挑会话 id、不写这种行，保持原样
+    const seeded = !!adapter?.seedsHistory && !adapter.enginePicksSessionId
+    const dropped = seeded ? users.map(item => item.id) : own
     // Codex 要起临时进程读轮次，所以可能是异步的
     // 分叉出来还没启动的会话（Codex）没有自己的线程：截断点要回到来源线程里重新算
     const forkOnly = !record.engineSessionId && record.pendingFork ? record.pendingFork : null
     const thread = record.engineSessionId ?? forkOnly?.from ?? null
-    // 被回退的消息都不是当前引擎处理的：它的原生会话原样保留
-    const untouched = !!thread && dropped.length === 0
-    const anchor =
-      thread && !untouched ? await adapter?.rewindAnchor?.({ ...record, engineSessionId: thread }, dropped) : null
+    const found =
+      thread && dropped.length > 0
+        ? await adapter?.rewindAnchor?.({ ...record, engineSessionId: thread }, dropped)
+        : null
+    // 被回退的消息都不是当前引擎处理的、也没有写进它的记录：它的原生会话原样保留
+    const untouched = !!thread && own.length === 0 && (!seeded || !found)
+    const anchor = untouched ? null : found
     // 引擎自己分配会话 id（Codex）时写 null，启动时新建；其他引擎我们预先给一个
     const freshId = (): string | null => (adapter?.enginePicksSessionId ? null : randomUUID())
     const kept = rt.snapshot.items.slice(0, index)
@@ -405,6 +411,8 @@ export class HostBranch {
       pendingRewind: null,
       pendingFork: anchor?.at && thread ? { from: thread, at: anchor.at } : null,
       forkedFrom: { sessionId: source.id, title: source.title },
+      // 导入来的标记只属于原对话，不然同一个终端会话被两条记录认领
+      imported: null,
     }
     const notice: Item[] =
       !anchor?.at && thread && items.length > 0

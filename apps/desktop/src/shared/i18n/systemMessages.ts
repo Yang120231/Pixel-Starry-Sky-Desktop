@@ -617,6 +617,87 @@ export const systemMessages = {
     zh: '已把 {p0} 期间的聊天同步给 {p1}（{p2} 轮）',
     en: 'Synced the chat from {p0} to {p1} ({p2} turns)',
   },
+  'system.nativeTerminal': {
+    zh: '接着终端里的 Claude Code 会话 · {p0} 轮',
+    en: 'Continuing the Claude Code session from the terminal · {p0} turns',
+  },
+  'system.nativeTerminalEarlier': {
+    zh: '接着终端里的 Claude Code 会话 · {p0} 轮（更早的 {p1} 轮没有显示）',
+    en: 'Continuing the Claude Code session from the terminal · {p0} turns ({p1} earlier turns not shown)',
+  },
+  'system.nativeOther': {
+    zh: '接着 Claude Code 会话（来自其他程序）· {p0} 轮',
+    en: 'Continuing a Claude Code session (from another program) · {p0} turns',
+  },
+  'system.nativeOtherEarlier': {
+    zh: '接着 Claude Code 会话（来自其他程序）· {p0} 轮（更早的 {p1} 轮没有显示）',
+    en: 'Continuing a Claude Code session (from another program) · {p0} turns ({p1} earlier turns not shown)',
+  },
+  'system.nativeCopyTerminal': {
+    zh: '复制了终端里的 Claude Code 会话 · {p0} 轮（原会话不动，两边可以同时用）',
+    en: 'Copied the Claude Code session from the terminal · {p0} turns (the original is untouched; both can be used at the same time)',
+  },
+  'system.nativeCopyTerminalEarlier': {
+    zh: '复制了终端里的 Claude Code 会话 · {p0} 轮（原会话不动，两边可以同时用）（更早的 {p1} 轮没有显示）',
+    en: 'Copied the Claude Code session from the terminal · {p0} turns (the original is untouched; both can be used at the same time) ({p1} earlier turns not shown)',
+  },
+  'system.nativeCopyOther': {
+    zh: '复制了其他程序的 Claude Code 会话 · {p0} 轮（原会话不动，两边可以同时用）',
+    en: 'Copied a Claude Code session from another program · {p0} turns (the original is untouched; both can be used at the same time)',
+  },
+  'system.nativeCopyOtherEarlier': {
+    zh: '复制了其他程序的 Claude Code 会话 · {p0} 轮（原会话不动，两边可以同时用）（更早的 {p1} 轮没有显示）',
+    en: 'Copied a Claude Code session from another program · {p0} turns (the original is untouched; both can be used at the same time) ({p1} earlier turns not shown)',
+  },
+  'system.nativeRelayRun': {
+    zh: '以下 {p0} 轮是在像素星空里用别的引擎聊的，接力时写进了这个会话',
+    en: 'The next {p0} turns were chatted with another engine in Pixel Starry Sky and were written into this session during the handoff',
+  },
+  'system.nativeHandoff': {
+    zh: '这一轮带着像素星空的交接材料',
+    en: 'This turn carried a handoff from Pixel Starry Sky',
+  },
+  'system.nativeGap': {
+    zh: '中间还有 {p0} 轮没有显示',
+    en: '{p0} turns in between are not shown',
+  },
+  'system.nativeImages': {
+    zh: '（{p0} 张图片没有导入）',
+    en: '({p0} images were not imported)',
+  },
+  'system.nativeSummaryOnly': {
+    zh: '以上是压缩之前的轮次，模型只看到压缩摘要',
+    en: 'The turns above are from before compaction; the model only sees the compaction summary',
+  },
+  'system.nativeNewer': {
+    zh: '这个会话在终端里又聊了 {p0} 轮，显示里还没有',
+    en: 'This session continued for {p0} more turns in the terminal; they are not shown here yet',
+  },
+  'system.nativeSynced': {
+    zh: '已补上终端里的 {p0} 轮',
+    en: 'Added {p0} turns from the terminal',
+  },
+  'system.nativeGone': {
+    zh: '这个会话的记录已经不在了',
+    en: 'The record of this session is gone',
+  },
+  'system.nativeEarlierGone': {
+    zh: '这个会话的记录已经不在了，更早的没法再加载',
+    en: 'The record of this session is gone, so earlier turns can’t be loaded',
+  },
+  'system.nativeEarlierMissing': {
+    zh: '找不到要接着往前加载的位置',
+    en: 'Couldn’t find where to continue loading earlier turns',
+  },
+  'system.nativeUnsupported': {
+    zh: '这个引擎不支持接着本机会话',
+    en: 'This engine can’t continue a local session',
+  },
+  'system.nativeCancelled': { zh: '已取消导入', en: 'Import cancelled' },
+  'system.nativeRecreated': {
+    zh: 'Claude Code 的会话记录不在了，已把像素星空里的聊天（{p0} 轮）写进新的引擎会话（工具调用和文件改动没有带过去）',
+    en: 'The Claude Code session record is gone. The chat from Pixel Starry Sky ({p0} turns) was written into a new engine session (tool calls and file changes were not carried over)',
+  },
   'system.fastModeTemporarilyUnavailable': {
     zh: 'Fast 模式暂时不可用',
     en: 'Fast mode temporarily unavailable',

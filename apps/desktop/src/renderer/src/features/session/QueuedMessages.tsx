@@ -22,6 +22,8 @@ import { ImageAttachments } from '@/features/session/attachments/ImageAttachment
 import { FileAttachments } from '@/features/session/attachments/FileAttachments'
 import { isSendFailure, isStarting } from './queueView'
 import { useProviders } from '@/features/account/providers'
+import { isResumeLiveError } from '@/features/resume/model'
+import { nativeSessionAction } from '@/features/engine/store'
 
 const same = (a: QueuedMessage['settings'], b: ComposerController['execution']) =>
   !!b &&
@@ -41,8 +43,11 @@ export function QueuedMessages({
   live,
   onRecall,
   onPrepareRecall,
+  sessionId,
 }: {
   live: QueueController
+  /** 这个输入框的会话 id；发送失败是「终端里正开着」时用它改成复制一份接着聊 */
+  sessionId?: string | null
   onRecall: (text: string) => void
   onPrepareRecall?: (message: QueuedMessage) => Promise<(() => Promise<void>) | void>
 }) {
@@ -245,6 +250,23 @@ export function QueuedMessages({
                     )}
                     {!pending && (
                       <>
+                        {/* 导入的会话启动时发现终端里正开着：改成复制一份接着聊再重发（docs/ui/claude-resume.md §4.6） */}
+                        {sessionId && isResumeLiveError(q.error) && (
+                          <Button
+                            variant="subtle"
+                            data-native-action="copy"
+                            className="h-6 px-1.5 text-meta"
+                            disabled={!!busy}
+                            onClick={() =>
+                              void action(q.id, async () => {
+                                await nativeSessionAction(sessionId, 'copy')
+                                await live.runQueuedNow(q.id)
+                              })
+                            }
+                          >
+                            {tr('resume.copy')}
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           icon={q.error ? RotateCcw : FastForward}

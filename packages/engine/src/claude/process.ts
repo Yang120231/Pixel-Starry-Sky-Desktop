@@ -32,6 +32,9 @@ interface Pending {
   timer: NodeJS.Timeout
 }
 
+/** 像素星空自己起的 Claude Code 进程的 pid（会话进程、回退 / 旁聊的辅助进程）：判断终端里有没有开着同一个会话时要排除 */
+export const ownClaudePids = new Set<number>()
+
 export class ClaudeProcess {
   private readonly child: ChildProcessWithoutNullStreams
   private readonly pending = new Map<string, Pending>()
@@ -57,6 +60,7 @@ export class ClaudeProcess {
       // macOS / Linux：自成进程组，强制结束时连同它启动的命令一起结束
       detached: !IS_WINDOWS,
     })
+    if (this.child.pid !== undefined) ownClaudePids.add(this.child.pid)
     this.child.stdin.on('error', () => {}) // 进程已退出时写入会报 EPIPE，退出事件里统一处理
     this.child.stderr.on('data', (d: Buffer) => this.stderr.push(d.toString('utf8')))
     logProcess(
@@ -79,6 +83,7 @@ export class ClaudeProcess {
       const done = (code: number | null): void => {
         if (this.exited) return
         this.exited = true
+        if (this.child.pid !== undefined) ownClaudePids.delete(this.child.pid)
         for (const p of this.pending.values()) {
           clearTimeout(p.timer)
           p.reject(new Error('Claude Code 进程已退出'))

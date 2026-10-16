@@ -67,6 +67,7 @@ import { approvalWaiting } from './subagentBoxModel'
 import { WAIT_CLOCK_MS, clockText, waitingFor } from './currentStep'
 import { useSince } from './stepClock'
 import { formatDuration } from './agentTrace'
+import { useNativeCheck } from '@/features/resume/useNativeCheck'
 
 /** 块没渲染过时的占位高度（content-visibility，见 blockHeight.ts）；按条目对象缓存，流式输出时只重算在动的那一条 */
 const heights = new WeakMap<Item, number>()
@@ -79,7 +80,15 @@ const placeholder = (px: number): CSSProperties => ({ containIntrinsicBlockSize:
 
 // 下面几个显示组件都 memo：条目对象没变（protocol 的 reduce 只替换变了的那一条）就不重新渲染，
 // 流式输出时只有最后一条在动（docs/ui/conversation-ux.md §2.7）
-const ItemView = memo(function ItemView({ item, reply }: { item: Item; reply?: string }) {
+const ItemView = memo(function ItemView({
+  item,
+  reply,
+  sessionId,
+}: {
+  item: Item
+  reply?: string
+  sessionId?: string | null
+}) {
   useI18n()
   switch (item.kind) {
     case 'user':
@@ -99,7 +108,7 @@ const ItemView = memo(function ItemView({ item, reply }: { item: Item; reply?: s
     case 'todo':
       return <TodoCard item={item} />
     case 'notice':
-      return <NoticeRow item={item} />
+      return <NoticeRow item={item} sessionId={sessionId} />
     case 'compaction':
       return <CompactionRow item={item} />
     case 'turn_stats':
@@ -234,6 +243,8 @@ export function LiveTranscript({
   // 轮次跳转条（docs/ui/turn-rail.md）
   const showTurns = useTurnRailOn()
   const sessionId = snapshot?.record.id ?? null
+  // 导入的终端会话（原地接着的）：打开 / 窗口回到前台时查终端里有没有又聊了新的
+  useNativeCheck(sessionId, !!snapshot?.record.imported && !snapshot.record.imported.forked)
 
   // 长对话只显示最近几轮（docs/ui/turn-rail.md §9）：win.hidden 是从头隐藏了几轮。
   // 打开这个会话时按设置算一次，之后只会变少（点「显示更早的」、跳转到隐藏的内容），新的轮次往后加不会把已显示的藏回去
@@ -587,7 +598,7 @@ export function LiveTranscript({
           highlight === item.id ? 'search-hit' : '',
         ].join(' ')}
       >
-        <ItemView item={item} />
+        <ItemView item={item} sessionId={sessionId} />
       </div>
     )
   }
@@ -710,7 +721,8 @@ export function LiveTranscript({
                   </div>
                   <div className="conversation-message flex h-[30px] items-center gap-2 px-2 text-list text-fg-muted">
                     <Spinner size={13} />
-                    {tr('session.queue.starting')}
+                    {/* 导入的终端会话：Claude Code 要先解析整份记录，大的要几秒 */}
+                    {snapshot?.record.imported ? tr('resume.starting') : tr('session.queue.starting')}
                   </div>
                 </div>
               ))}

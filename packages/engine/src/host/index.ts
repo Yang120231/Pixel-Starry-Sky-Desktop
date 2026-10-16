@@ -22,6 +22,10 @@ import type {
   EngineUpdateResult,
   Item,
   MessageInput,
+  NativeActionResult,
+  NativeImportResult,
+  NativeSessionDetail,
+  NativeSessionSummary,
   OpenedSession,
   ProjectRecord,
   AddProjectsResult,
@@ -54,6 +58,7 @@ import { HostEvents } from './events'
 import { HostGuard } from './guard'
 import { HostHandoff } from './handoff'
 import { HostLogin } from './login'
+import { HostNative } from './native'
 import { HostProjects } from './projects'
 import { HostQuery } from './query'
 import { HostQueue } from './queue'
@@ -136,6 +141,7 @@ export class EngineHost {
       branch: new HostBranch(ctx),
       handoff: new HostHandoff(ctx),
       login: new HostLogin(ctx),
+      native: new HostNative(ctx),
     }
     for (const r of store.loadRecords()) ctx.records.set(r.id, r)
     this.ctx = ctx
@@ -324,6 +330,39 @@ export class EngineHost {
     workspacePath?: string,
   ): SessionRecord {
     return this.m.sessions.createSession(opts, workspacePath)
+  }
+
+  /** 引擎自己留下的会话（终端里的 Claude Code……）：第一步，只读头部（docs/ui/claude-resume.md） */
+  nativeSessions(
+    projectId: string,
+    engine: EngineId,
+    opts?: { subfolders?: boolean },
+  ): Promise<NativeSessionSummary[]> {
+    return this.m.native.nativeSessions(projectId, engine, opts)
+  }
+
+  /** 第二步：读这几个会话的尾部，补最后一句、标题、模型 */
+  nativeSessionDetails(projectId: string, engine: EngineId, ids: unknown): Promise<NativeSessionDetail[]> {
+    return this.m.native.nativeSessionDetails(projectId, engine, ids)
+  }
+
+  /** 导入成一个新对话；mode 'copy' 是复制一份接着聊（原会话不动） */
+  importNativeSession(
+    projectId: string,
+    engine: EngineId,
+    nativeId: string,
+    opts?: { mode?: 'inplace' | 'copy'; settings?: Partial<SessionSettings>; token?: string },
+  ): Promise<NativeImportResult> {
+    return this.m.native.importNative(projectId, engine, nativeId, opts)
+  }
+
+  cancelNativeImport(token: string): void {
+    this.m.native.cancelNativeImport(token)
+  }
+
+  /** 加载更早的 / 补上终端里新聊的 / 检查有没有新聊的 / 改成复制一份接着聊 */
+  nativeSessionAction(id: string, kind: unknown): Promise<NativeActionResult> {
+    return this.m.native.nativeAction(id, kind)
   }
 
   /** 当前快照 */

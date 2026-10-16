@@ -2,20 +2,11 @@
 // 编码规则：工作目录里不是字母数字的字符都换成 '-'（例如 D:\像素星空 → D------）。
 // 很长的路径会被截断并加哈希，所以按规则找不到时，再在所有项目目录里找一遍。
 import { randomUUID } from 'node:crypto'
-import {
-  appendFileSync,
-  closeSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  readSync,
-  readdirSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs'
+import { appendFileSync, closeSync, mkdirSync, openSync, readSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { isFile } from '../exec'
+import { anchorPositionIn, copyRowsTo, rewindAnchorIn, transcriptIndex } from './transcript-index'
 
 export function defaultProjectsDir(env: NodeJS.ProcessEnv): string {
   return join(env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), 'projects')
@@ -51,11 +42,18 @@ export function claudeSessionDir(projectsDir: string, cwd: string, sessionId: st
   return file ? file.slice(0, -'.jsonl'.length) : null
 }
 
-/** 从记录末尾往前找第一条让 pick 返回值的条目；记录很大时也只读最后一段 */
-function scanBack<T>(file: string, pick: (entry: Record<string, unknown>) => T | null): T | null {
+/**
+ * 从记录末尾往前找第一条让 pick 返回值的条目；记录很大时也只读最后一段。
+ * maxBytes：最多读末尾这么多字节，超过还没找到就当没有（列表里只有元数据的大文件不会被整个读）；不传就一直读到文件开头
+ */
+export function scanBack<T>(
+  file: string,
+  pick: (entry: Record<string, unknown>) => T | null,
+  maxBytes = Infinity,
+): T | null {
   const size = statSync(file).size
   for (let chunk = 256 * 1024; ; chunk *= 4) {
-    const start = Math.max(0, size - chunk)
+    const start = Math.max(0, size - Math.min(chunk, maxBytes))
     const buffer = Buffer.alloc(size - start)
     const fd = openSync(file, 'r')
     try {
@@ -75,7 +73,7 @@ function scanBack<T>(file: string, pick: (entry: Record<string, unknown>) => T |
         // 跳过写坏的行
       }
     }
-    if (start === 0) return null
+    if (start === 0 || chunk >= maxBytes) return null
   }
 }
 
@@ -107,21 +105,10 @@ export function pointLastPrompt(file: string, sessionId: string): void {
 /**
  * 回退截断点：按顺序找第一条出现在记录里的用户消息（我们发送时把条目 id 写成了 uuid），
  * 取它的 parentUuid 作为 --resume-session-at。都不在记录里时返回 null。
+ * 走记录索引（流式读，不把整份记录读进内存，docs/ui/claude-resume.md §4.7）
  */
-export function findRewindAnchor(file: string, userIds: string[]): { at: string | null } | null {
-  const parents = new Map<string, string | null>()
-  for (const line of readFileSync(file, 'utf8').split('\n')) {
-    if (!line.trim()) continue
-    try {
-      const e = JSON.parse(line) as { type?: unknown; uuid?: unknown; parentUuid?: unknown; isSidechain?: unknown }
-      if (e.type === 'user' && typeof e.uuid === 'string' && e.isSidechain !== true)
-        parents.set(e.uuid, typeof e.parentUuid === 'string' ? e.parentUuid : null)
-    } catch {
-      // 跳过写坏的行
-    }
-  }
-  for (const id of userIds) if (parents.has(id)) return { at: parents.get(id) ?? null }
-  return null
+export async function findRewindAnchor(file: string, userIds: string[]): Promise<{ at: string | null } | null> {
+  return rewindAnchorIn(await transcriptIndex(file), userIds)
 }
 
 /**
@@ -129,51 +116,25 @@ export function findRewindAnchor(file: string, userIds: string[]): { at: string 
  * 用 --resume-session-at 找不到（报 No message found…，docs/ui/rewind-fork-sidechat.md §2.4）。
  * 'loaded'：在最近一次压缩之后；'compacted'：在它之前；null：记录里没有。
  */
-export function anchorPosition(file: string, at: string): 'loaded' | 'compacted' | null {
-  let index = -1
-  let boundary = -1
-  readFileSync(file, 'utf8')
-    .split('\n')
-    .forEach((line, i) => {
-      if (!line.trim()) return
-      try {
-        const e = JSON.parse(line) as { type?: unknown; subtype?: unknown; uuid?: unknown; isSidechain?: unknown }
-        if (e.uuid === at && index < 0) index = i
-        if (e.type === 'system' && e.subtype === 'compact_boundary' && e.isSidechain !== true) boundary = i
-      } catch {
-        // 跳过写坏的行
-      }
-    })
-  if (index < 0) return null
-  return index > boundary ? 'loaded' : 'compacted'
+export async function anchorPosition(file: string, at: string): Promise<'loaded' | 'compacted' | null> {
+  return anchorPositionIn(await transcriptIndex(file), at)
 }
 
 /**
  * 把记录复制到截断点为止（含截断点），存成同目录下 <sessionId>.jsonl，返回新文件路径；截断点不在记录里时返回 null。
  * 截断点是最后一条，Claude Code 用 --resume 加载时从它往回接，之前的压缩摘要照常生效（§2.4）。
+ * 分块读写；同名记录已存在时抛错
  */
-export function copyTranscriptUntil(file: string, at: string, sessionId: string): string | null {
-  const out: string[] = []
-  for (const line of readFileSync(file, 'utf8').split('\n')) {
-    if (!line.trim()) continue
-    let e: Record<string, unknown>
-    try {
-      e = JSON.parse(line) as Record<string, unknown>
-    } catch {
-      continue
-    }
-    if (typeof e.sessionId === 'string') e.sessionId = sessionId
-    out.push(JSON.stringify(e))
-    if (e.uuid === at) {
-      const path = join(dirname(file), `${sessionId}.jsonl`)
-      writeFileSync(path, out.join('\n') + '\n', { flag: 'wx' })
-      return path
-    }
-  }
-  return null
+export async function copyTranscriptUntil(file: string, at: string, sessionId: string): Promise<string | null> {
+  const row = (await transcriptIndex(file)).rows.get(at)
+  if (!row) return null
+  const end = row.first ?? row
+  const path = join(dirname(file), `${sessionId}.jsonl`)
+  await copyRowsTo(file, end.offset + end.len, path, sessionId)
+  return path
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /**
  * 跨引擎接力：把别的引擎期间的聊天按 Claude Code 自己的格式写进会话记录，之后 --resume 就带着这些轮次。

@@ -21,6 +21,7 @@ import type { HostBranch } from './branch'
 import type { HostGuard } from './guard'
 import type { HostHandoff } from './handoff'
 import type { HostLogin } from './login'
+import type { HostNative } from './native'
 import type { HostProjects } from './projects'
 import type { HostQuery } from './query'
 import type { HostQueue } from './queue'
@@ -97,6 +98,7 @@ export interface HostModules {
   branch: HostBranch
   handoff: HostHandoff
   login: HostLogin
+  native: HostNative
 }
 
 export interface HostContext {

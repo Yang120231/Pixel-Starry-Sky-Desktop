@@ -1,7 +1,14 @@
 // 引擎接口（docs/engines.md §3、§5）：本机与远端共用的操作表，参数先校验再交给 EngineHost。
 // 「添加项目」（本机弹对话框）和「导出用量」（本机弹保存框）不在表里，见 engine/ipc.ts / machines/remote-runtime.ts
 import { searchQuery, type EngineHost } from '@pixelsky/engine'
-import type { ApprovalDecision, InterruptOptions, RewindOptions, SessionRecord, SideTurn } from '@pixelsky/protocol'
+import type {
+  ApprovalDecision,
+  InterruptOptions,
+  RewindOptions,
+  SessionRecord,
+  SessionSettings,
+  SideTurn,
+} from '@pixelsky/protocol'
 import type { SessionPatch } from '../../../shared/types/engine'
 import { artifactRef, engineConfigPatch, engineId, int, str, usageListQuery, usageQuery, value } from '../args'
 import type { OpTable } from '../ops'
@@ -44,6 +51,33 @@ function sideHistory(raw: unknown): SideTurn[] {
       ? [{ question: o.question.slice(0, 20_000), answer: o.answer.slice(0, 20_000) }]
       : []
   })
+}
+
+/** 导入引擎自己的会话时新对话用的设置：逐个挑字段，别的一律丢掉（本机和远端共用） */
+function nativeImportOptions(raw: unknown): {
+  mode: 'inplace' | 'copy'
+  settings: Partial<SessionSettings>
+  token?: string
+} {
+  const o = (raw ?? {}) as Record<string, unknown>
+  const s = (o.settings ?? {}) as Record<string, unknown>
+  const settings: Partial<SessionSettings> = {}
+  if (typeof s.model === 'string' || s.model === null) settings.model = s.model
+  if (s.platform && typeof s.platform === 'object') settings.platform = s.platform as SessionSettings['platform']
+  else if (s.platform === null) settings.platform = null
+  if (s.provider && typeof s.provider === 'object') settings.provider = s.provider as SessionSettings['provider']
+  else if (s.provider === null) settings.provider = null
+  if (typeof s.effort === 'string' || s.effort === null) settings.effort = s.effort as SessionSettings['effort']
+  if (typeof s.permissionMode === 'string')
+    settings.permissionMode = s.permissionMode as SessionSettings['permissionMode']
+  if (typeof s.ultracode === 'boolean') settings.ultracode = s.ultracode
+  if (typeof s.fast === 'boolean') settings.fast = s.fast
+  if (typeof s.thinkingSummaries === 'boolean') settings.thinkingSummaries = s.thinkingSummaries
+  return {
+    mode: o.mode === 'copy' ? 'copy' : 'inplace',
+    settings,
+    ...(typeof o.token === 'string' && o.token ? { token: o.token } : {}),
+  }
 }
 
 const SEARCH_CANCELLED = { results: [], cancelled: true, truncated: false, partial: false, sessionCount: 0 }
@@ -132,6 +166,22 @@ export const ENGINE_OPS = {
   'engine:rewindPreview': (c, id, itemId) => c.host.rewindPreview(str(id, 'id'), str(itemId, 'itemId')),
   'engine:rewind': (c, id, itemId, raw) => c.host.rewind(str(id, 'id'), str(itemId, 'itemId'), rewindOptions(raw)),
   'engine:undoRewind': (c, id) => c.host.undoRewind(str(id, 'id')),
+  // 接着引擎自己留下的会话（终端里的 Claude Code，docs/ui/claude-resume.md）
+  'engine:nativeSessions': (c, projectId, engine, opts) =>
+    c.host.nativeSessions(str(projectId, 'projectId'), engineId(engine), {
+      subfolders: (opts as { subfolders?: unknown } | null)?.subfolders !== false,
+    }),
+  'engine:nativeSessionDetails': (c, projectId, engine, ids) =>
+    c.host.nativeSessionDetails(str(projectId, 'projectId'), engineId(engine), ids),
+  'engine:importNativeSession': (c, projectId, engine, nativeId, opts) =>
+    c.host.importNativeSession(
+      str(projectId, 'projectId'),
+      engineId(engine),
+      str(nativeId, 'id'),
+      nativeImportOptions(opts),
+    ),
+  'engine:cancelNativeImport': (c, token) => c.host.cancelNativeImport(str(token, 'token')),
+  'engine:nativeSessionAction': (c, id, kind) => c.host.nativeSessionAction(str(id, 'id'), kind),
   'engine:fork': (c, id, itemId, title) =>
     c.host.forkSession(str(id, 'id'), str(itemId, 'itemId'), typeof title === 'string' ? title : undefined),
   'engine:sideQuestion': (c, id, question, history) =>

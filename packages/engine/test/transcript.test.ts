@@ -29,15 +29,15 @@ beforeEach(() => {
 afterEach(() => rmSync(dir, { recursive: true, force: true }))
 
 describe('Claude Code 记录的截断点', () => {
-  it('最近一次压缩之前是 compacted，之后是 loaded，没有是 null', () => {
-    expect(anchorPosition(file, 'a1')).toBe('compacted')
-    expect(anchorPosition(file, 'b1')).toBe('compacted')
-    expect(anchorPosition(file, 'u2')).toBe('loaded')
-    expect(anchorPosition(file, 'nope')).toBeNull()
+  it('最近一次压缩之前是 compacted，之后是 loaded，没有是 null', async () => {
+    expect(await anchorPosition(file, 'a1')).toBe('compacted')
+    expect(await anchorPosition(file, 'b1')).toBe('compacted')
+    expect(await anchorPosition(file, 'u2')).toBe('loaded')
+    expect(await anchorPosition(file, 'nope')).toBeNull()
   })
 
-  it('复制到截断点为止，换成新的会话 id；已有同名记录不覆盖', () => {
-    const copied = copyTranscriptUntil(file, 'a1', 'new')
+  it('复制到截断点为止，换成新的会话 id；已有同名记录不覆盖', async () => {
+    const copied = await copyTranscriptUntil(file, 'a1', 'new')
     expect(copied).toBe(join(dir, 'new.jsonl'))
     const lines = readFileSync(copied!, 'utf8')
       .trim()
@@ -45,8 +45,8 @@ describe('Claude Code 记录的截断点', () => {
       .map(l => JSON.parse(l) as Record<string, unknown>)
     expect(lines.map(l => l.uuid)).toEqual(['u1', 'a1'])
     expect(lines.every(l => l.sessionId === 'new')).toBe(true)
-    expect(() => copyTranscriptUntil(file, 'a1', 'new')).toThrow()
-    expect(copyTranscriptUntil(file, 'nope', 'other')).toBeNull()
+    await expect(copyTranscriptUntil(file, 'a1', 'new')).rejects.toThrow()
+    expect(await copyTranscriptUntil(file, 'nope', 'other')).toBeNull()
   })
 })
 
@@ -123,7 +123,7 @@ describe('跨引擎接力：把聊天写进 Claude Code 的记录', () => {
         }
       })
 
-  it('没有记录时新建：用户和助手交替，从头接成一条链', () => {
+  it('没有记录时新建：用户和助手交替，从头接成一条链', async () => {
     const path = seedTranscript(
       dir,
       '/work/proj',
@@ -149,7 +149,7 @@ describe('跨引擎接力：把聊天写进 Claude Code 的记录', () => {
     expect(lines[2].parentUuid).toBe(lines[1].uuid)
     expect(lines[3]).toMatchObject({ message: { content: [{ type: 'text', text: '（没回复）' }] } })
     // 回退时按我们的条目 id 照样找得到截断点
-    expect(findRewindAnchor(path, [uuid])).toEqual({ at: null })
+    expect(await findRewindAnchor(path, [uuid])).toEqual({ at: null })
     expect(currentLeaf(path)).toBe(lines[3].uuid)
   })
 

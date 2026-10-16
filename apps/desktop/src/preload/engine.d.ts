@@ -117,6 +117,34 @@ export interface EngineBridge {
   undoRewind(id: string): Promise<void>
   /** 从这条用户消息之前分叉出新会话（§2） */
   fork(id: string, itemId: string, title?: string): Promise<import('@pixelsky/protocol').ForkResult>
+  /** 接着引擎自己留下的会话（docs/ui/claude-resume.md）：第一步，只读头部；subfolders 连项目子文件夹里开的一起列 */
+  nativeSessions(
+    projectId: string,
+    engine: EngineId,
+    opts?: { subfolders?: boolean },
+  ): Promise<import('@pixelsky/protocol').NativeSessionSummary[]>
+  /** 第二步：读这几个会话的尾部（最后一句、标题、模型）；共用最近一次 nativeSessions 的读取预算 */
+  nativeSessionDetails(
+    projectId: string,
+    engine: EngineId,
+    ids: string[],
+  ): Promise<import('@pixelsky/protocol').NativeSessionDetail[]>
+  /**
+   * 导入成一个新对话。mode 'inplace'（默认）原地接着，'copy' 复制一份接着聊；settings 是新对话用的设置（模型、额度来源……）；
+   * token 用来取消，也是 native_import 进度事件里的 token
+   */
+  importNativeSession(
+    projectId: string,
+    engine: EngineId,
+    nativeId: string,
+    opts?: { mode?: 'inplace' | 'copy'; settings?: Partial<SessionSettings>; token?: string },
+  ): Promise<import('@pixelsky/protocol').NativeImportResult>
+  cancelNativeImport(token: string): Promise<void>
+  /** 对导入的对话：earlier 加载更早的、sync 补上终端里新聊的、check 只检查（有就在末尾加提示）、copy 改成复制一份接着聊 */
+  nativeSessionAction(
+    id: string,
+    kind: import('@pixelsky/protocol').NativeAction,
+  ): Promise<import('@pixelsky/protocol').NativeActionResult>
   /** 旁聊：单独问一次，不进主对话（§3） */
   sideQuestion(id: string, question: string, history: import('@pixelsky/protocol').SideTurn[]): Promise<string>
   cancelSideQuestion(id: string): Promise<void>

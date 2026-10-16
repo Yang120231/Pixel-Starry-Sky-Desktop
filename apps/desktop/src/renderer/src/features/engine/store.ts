@@ -6,11 +6,18 @@ import {
   reduce,
   type EngineConfig,
   type EngineDefaults,
+  type EngineId,
   type EngineInfo,
   type HostEvent,
+  type NativeAction,
+  type NativeActionResult,
+  type NativeImportResult,
+  type NativeSessionDetail,
+  type NativeSessionSummary,
   type ProjectRecord,
   type AddProjectsResult,
   type ProjectFolder,
+  type SessionSettings,
   type SessionSnapshot,
   type SessionSummary,
 } from '@pixelsky/protocol'
@@ -205,6 +212,9 @@ function onHostEvent(e: HostEvent): void {
       return
     case 'engines':
       set({ engines: e.engines })
+      return
+    case 'native_import':
+      setImportProgress(e.token, { read: e.read, total: e.total })
       return
     case 'engine_config':
       // 默认引擎、新会话默认值可能跟着变了
@@ -456,6 +466,94 @@ export async function pickProjectImports(kind: ProjectImportPicker): Promise<Pro
 export async function previewProjectPaths(text: string): Promise<ProjectImportBatch | null> {
   if (!bridge || remotePicker()) return null
   return bridge.previewProjectPaths(text)
+}
+
+// ---------- 接着终端里的 Claude Code 会话（docs/ui/claude-resume.md） ----------
+
+/** 导入大文件时读到哪里了（宿主只在文件超过 50 MB 时才推 native_import） */
+export interface NativeImportProgress {
+  read: number
+  total: number
+}
+const importProgress = new Map<string, NativeImportProgress>()
+const progressListeners = new Set<() => void>()
+function setImportProgress(token: string, progress: NativeImportProgress | null): void {
+  if (progress) importProgress.set(token, progress)
+  else importProgress.delete(token)
+  for (const l of progressListeners) l()
+}
+const subscribeProgress = (l: () => void): (() => void) => {
+  progressListeners.add(l)
+  return () => progressListeners.delete(l)
+}
+
+/** 某次导入（token）的进度；没有进度（文件不大，或还没开始）为 null */
+export function useNativeImportProgress(token: string | null): NativeImportProgress | null {
+  return useSyncExternalStore(subscribeProgress, () => (token ? (importProgress.get(token) ?? null) : null))
+}
+
+/** 第一步：这个项目里引擎自己留下的会话（只读头部，很快）。subfolders：连项目子文件夹里开的一起列（默认 true，传 false 才只列项目主目录） */
+export async function listNativeSessions(
+  projectId: string,
+  opts: { engine?: EngineId; subfolders?: boolean } = {},
+): Promise<NativeSessionSummary[]> {
+  if (isDemo) return demo().conversations.nativeSessions.list(projectId)
+  if (!bridge) return []
+  return bridge.nativeSessions(
+    projectId,
+    opts.engine ?? 'claude',
+    opts.subfolders === false ? { subfolders: false } : undefined,
+  )
+}
+
+/** 第二步：按屏幕上的行分批补尾部信息（最后一句、标题、模型）；共用最近一次列表的读取预算 */
+export async function nativeSessionDetails(
+  projectId: string,
+  ids: string[],
+  engine: EngineId = 'claude',
+): Promise<NativeSessionDetail[]> {
+  if (isDemo) return demo().conversations.nativeSessions.details(ids)
+  if (!bridge || !ids.length) return []
+  return bridge.nativeSessionDetails(projectId, engine, ids)
+}
+
+/**
+ * 导入成一个新对话。mode 'inplace'（默认）原地接着；'copy' 复制一份接着聊（正开着时用）。
+ * 结果是新对话的 sessionId、已被占用的 ownerId，或原地导入时正开着的 live。token 给 cancelNativeImport 和进度用
+ */
+export async function importNativeSession(
+  projectId: string,
+  nativeId: string,
+  opts: {
+    engine?: EngineId
+    mode?: 'inplace' | 'copy'
+    settings?: Partial<SessionSettings>
+    token?: string
+  } = {},
+): Promise<NativeImportResult> {
+  if (isDemo) return demo().conversations.nativeSessions.import(nativeId, opts.mode ?? 'inplace')
+  if (!bridge) throw new Error('引擎不可用')
+  try {
+    return await bridge.importNativeSession(projectId, opts.engine ?? 'claude', nativeId, {
+      mode: opts.mode,
+      settings: opts.settings,
+      token: opts.token,
+    })
+  } finally {
+    if (opts.token) setImportProgress(opts.token, null)
+  }
+}
+
+/** 关掉选择框时取消还没读完的导入（不建对话） */
+export async function cancelNativeImport(token: string): Promise<void> {
+  setImportProgress(token, null)
+  await bridge?.cancelNativeImport(token)
+}
+
+/** 对导入的对话：earlier 加载更早的、sync 补上终端里新聊的、check 只检查（有新的就在末尾加提示）、copy 改成复制一份接着聊 */
+export async function nativeSessionAction(sessionId: string, kind: NativeAction): Promise<NativeActionResult> {
+  if (!bridge) return { added: 0 }
+  return bridge.nativeSessionAction(sessionId, kind)
 }
 
 /** 改项目的附加文件夹（整组替换，只对之后新建的对话生效）；列表随宿主的 projects 事件刷新 */

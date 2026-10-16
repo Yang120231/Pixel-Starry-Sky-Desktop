@@ -11,6 +11,7 @@ import {
   type SessionRecord,
 } from '@pixelsky/protocol'
 import { buildChatSeed, renderSeed, type ChatSeed } from '../chat-log'
+import { NATIVE_TEXT } from '../claude/native'
 import { buildHandoff, handoffEngines, hasHandoffContent } from '../handoff'
 import { ENGINES } from '../registry'
 import type { HostContext } from './context'
@@ -150,7 +151,14 @@ export class HostHandoff {
     const plain: HandoffPlan = { text: body, notice: null, hold: false }
     if (!record.engineSessions) return plain
     const prior = rt.snapshot.items
-    const seen = record.engineSessions[record.engine]?.seen ?? null
+    // 引擎那边的原生会话记录没了（终端里删了、换了机器）：当没看过，下面的接力把整段聊天写进同一个 id 的新记录。
+    // 待执行的回退 / 分叉本来就不在这个 id 的记录里，不算
+    const recreate =
+      !!record.engineSessions[record.engine]?.seen &&
+      !record.pendingRewind &&
+      !record.pendingFork &&
+      this.ctx.adapters[record.engine]?.hasNativeSession?.(record) === false
+    const seen = recreate ? null : (record.engineSessions[record.engine]?.seen ?? null)
     const at = seen === null ? -1 : prior.findIndex(item => item.id === seen)
     const delta = at >= 0 ? prior.slice(at + 1) : prior
     const mode = at >= 0 ? 'delta' : 'full'
@@ -180,18 +188,26 @@ export class HostHandoff {
         text: body,
         seed,
         hold: false,
-        notice: showNotice
+        notice: recreate
           ? {
               kind: 'notice',
               id: randomUUID(),
-              level: 'info',
-              text:
-                mode === 'full'
-                  ? `已把之前的聊天带给 ${name}（${seed.turns.length} 轮）`
-                  : `已把 ${from} 期间的聊天同步给 ${name}（${seed.turns.length} 轮）`,
+              level: 'warn',
+              text: NATIVE_TEXT.recreated(seed.turns.length),
               detail: renderSeed(seed),
             }
-          : null,
+          : showNotice
+            ? {
+                kind: 'notice',
+                id: randomUUID(),
+                level: 'info',
+                text:
+                  mode === 'full'
+                    ? `已把之前的聊天带给 ${name}（${seed.turns.length} 轮）`
+                    : `已把 ${from} 期间的聊天同步给 ${name}（${seed.turns.length} 轮）`,
+                detail: renderSeed(seed),
+              }
+            : null,
       }
     return {
       text: `${built.text}\n\n${body}`,
