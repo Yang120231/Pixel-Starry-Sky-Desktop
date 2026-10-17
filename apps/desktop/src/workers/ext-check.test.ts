@@ -71,7 +71,11 @@ describe('handleCheck', () => {
       check: (path, opts) => checkInput(path, { ...opts, runner: 'inline' }),
     })
     expect(stable(actual)).toEqual(stable(expected))
-    expect(actual.verdict).toEqual(expected.verdict)
+    // verdict.counts 里算上了测速问题（慢的机器上两次检查可能一次超线一次没超），只比结论和阻塞数；其余问题上一行已经比过
+    expect({ pass: actual.verdict.pass, blocking: actual.verdict.blocking }).toEqual({
+      pass: expected.verdict.pass,
+      blocking: expected.verdict.blocking,
+    })
     expect(actual.grammar?.[0]?.regexes).toBeGreaterThan(0)
   }, 30_000)
 
