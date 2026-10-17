@@ -122,6 +122,40 @@ describe('基准与方向', () => {
     await vi.advanceTimersByTimeAsync(WATCH_INTERVAL_MS)
     expect(watch.getState().outcome).toMatchObject({ kind: 'arrived', change: { balance: { from: 10, to: 30 } } })
   })
+  it('打开时那次刷新返回前就到账（$10 → $35）：直接算到账，不拿到账后的余额当基准', async () => {
+    let release!: (r: AccountRefreshResult) => void
+    const refresh = vi
+      .fn<() => Promise<AccountRefreshResult>>()
+      .mockImplementationOnce(() => new Promise(resolve => (release = resolve)))
+      .mockResolvedValue(ok(35))
+    const watch = new PaymentWatch(refresh)
+    watch.begin(account(10))
+    release(ok(35)) // 首次查询暂缓，到账后才返回 $35
+    await vi.advanceTimersByTimeAsync(0)
+    expect(watch.getState()).toMatchObject({
+      watching: false,
+      outcome: { kind: 'arrived', change: { balance: { from: 10, to: 35 } } },
+    })
+    // 之后手动刷新、等自动查询都不会变回「暂未到账」，也不再轮询
+    await watch.manual()
+    await vi.advanceTimersByTimeAsync(WATCH_INTERVAL_MS * 2)
+    expect(watch.getState().outcome).toMatchObject({ kind: 'arrived', change: { balance: { from: 10, to: 35 } } })
+    expect(refresh).toHaveBeenCalledTimes(2) // 基准刷新 + 一次手动
+  })
+  it('打开时那次刷新就看到套餐开通 / 续期：算到账', async () => {
+    const { watch } = make([ok(10, 'Pro')])
+    watch.begin(account(10))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(watch.getState().outcome).toMatchObject({ kind: 'arrived', change: { plan: { from: null, to: 'Pro' } } })
+  })
+  it('对照：基准刷新先回 $35、之后涨到 $60：以 $35 为基准报 $35 → $60', async () => {
+    const { watch } = make([ok(35), ok(60)])
+    watch.begin(account(35))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(watch.getState().outcome).toBeNull()
+    await watch.manual()
+    expect(watch.getState().outcome).toMatchObject({ kind: 'arrived', change: { balance: { from: 35, to: 60 } } })
+  })
   it('套餐失效不算到账', async () => {
     const { watch } = make([ok(10, 'Pro'), ok(10, null)])
     watch.begin(account(10, 'Pro'))

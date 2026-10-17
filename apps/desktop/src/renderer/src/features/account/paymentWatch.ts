@@ -58,8 +58,9 @@ export class PaymentWatch {
   }
 
   /**
-   * 支付页刚打开：先以缓存的账号数据为基准，并马上强制刷新一次，拿到新数据就换成它（缓存可能是几分钟前的，
-   * 期间余额被会话扣掉的部分不能算成到账；拿不到新数据就继续用缓存，判断规则只认「增加」）。
+   * 支付页刚打开：先以缓存的账号数据为基准，并马上强制刷新一次。新数据比缓存少（缓存可能是几分钟前的，
+   * 期间被会话扣掉的部分不能算成到账）就换成新基准；比缓存多（这次刷新返回前就到账了）直接算到账，
+   * 不能拿它当基准，否则之后一直和到账后的自己比、永远「暂未到账」。拿不到新数据就继续用缓存。
    * 然后开始自动轮询（重复打开会重新计时）
    */
   begin(account: Pick<AccountInfo, 'balance' | 'plan'>): void {
@@ -77,9 +78,11 @@ export class PaymentWatch {
   private async refreshBaseline(gen: number): Promise<void> {
     try {
       const res = await this.refresh()
-      if (gen === this.gen && !res.error && res.account && this.snapshot.outcome?.kind !== 'arrived') {
-        this.baseline = snapOf(res.account)
-      }
+      if (gen !== this.gen || res.error || !res.account || this.snapshot.outcome?.kind === 'arrived') return
+      const fresh = snapOf(res.account)
+      const change = this.baseline ? diffAccount(this.baseline, fresh) : null
+      if (change) this.arrive(change)
+      else this.baseline = fresh
     } catch {
       /* 拿不到就用缓存的基准 */
     }
@@ -134,11 +137,12 @@ export class PaymentWatch {
       return
     }
     const change = res?.account && this.baseline ? diffAccount(this.baseline, snapOf(res.account)) : null
-    if (change) {
-      this.clearTimer()
-      this.set({ watching: false, outcome: { kind: 'arrived', change }, error: null })
-    } else if (manual && this.snapshot.outcome?.kind !== 'arrived') {
-      this.set({ outcome: { kind: 'pending' } })
-    }
+    if (change) this.arrive(change)
+    else if (manual && this.snapshot.outcome?.kind !== 'arrived') this.set({ outcome: { kind: 'pending' } })
+  }
+
+  private arrive(change: AccountChange): void {
+    this.clearTimer()
+    this.set({ watching: false, outcome: { kind: 'arrived', change }, error: null })
   }
 }
