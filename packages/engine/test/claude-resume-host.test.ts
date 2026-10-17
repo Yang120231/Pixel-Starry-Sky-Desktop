@@ -539,6 +539,38 @@ describe('加载更早的 / 补上', () => {
     expect(notices(host, id).some(n => n.text.includes('交接') || n.level === 'warn')).toBe(false)
   })
 
+  it('回退了还没发消息（原生记录还没截断）：check / sync 都是 0、不把回退掉的轮次当新聊的，撤销回退照样成功', async () => {
+    const { host, project, cwd } = setup()
+    const file = writeNative(cwd, SID, 3)
+    const { sessionId: id } = await importIn(host, project.id)
+    await host.rewind(id, uu(3))
+    expect(host.open(id).record.pendingRewind).toBe(uu(2))
+    expect(userIds(host, id)).toEqual([uu(1)])
+    const count = host.open(id).items.length
+    await expect(host.nativeSessionAction(id, 'check')).resolves.toEqual({ added: 0 })
+    await expect(host.nativeSessionAction(id, 'sync')).resolves.toEqual({ added: 0 })
+    expect(host.open(id).items).toHaveLength(count)
+    expect(host.open(id).record.pendingRewind).toBe(uu(2))
+
+    await host.undoRewind(id)
+    expect(userIds(host, id)).toEqual([uu(1), uu(3), uu(5)])
+    expect(host.open(id).record.pendingRewind ?? null).toBeNull()
+    // 撤销以后照常查
+    appendFileSync(file, rowsOf(SID, cwd, 1, 4, uu(6)))
+    await expect(host.nativeSessionAction(id, 'check')).resolves.toEqual({ added: 1 })
+  })
+
+  it('回退后发了新消息（截断点用掉了）：被回退掉的轮次不再算终端里新聊的', async () => {
+    const { host, project, cwd } = setup()
+    writeNative(cwd, SID, 3)
+    const { sessionId: id } = await importIn(host, project.id)
+    await host.rewind(id, uu(3))
+    await say(host, id, '改', 1)
+    expect(host.open(id).record.pendingRewind ?? null).toBeNull()
+    await expect(host.nativeSessionAction(id, 'check')).resolves.toEqual({ added: 0 })
+    expect(notices(host, id).some(n => n.action?.kind === 'native-sync')).toBe(false)
+  })
+
   it('复制的对话不补上：check / sync 都是 0', async () => {
     const { host, project, cwd } = setup()
     const file = writeNative(cwd, SID, 1)
