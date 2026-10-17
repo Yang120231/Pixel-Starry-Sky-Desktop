@@ -41,8 +41,14 @@ beforeEach(() => {
   proj = join(root, 'proj')
   mkdirSync(proj, { recursive: true })
   clearCodexCaches()
+  // 缓存按「取数据时的本机时间」决定要不要核对最后一轮：默认时钟定在 updatedAt（T0 + 100）那一秒里
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime((T0 + 100) * 1000 + 500)
 })
-afterEach(() => rmSync(root, { recursive: true, force: true }))
+afterEach(() => {
+  vi.useRealTimers()
+  rmSync(root, { recursive: true, force: true })
+})
 
 // ---------- 手写的 Thread / Turn ----------
 
@@ -487,19 +493,94 @@ describe('第二步（最后一句）', () => {
     })
   })
 
-  it('按 id + updatedAt 缓存：第二次不发请求；updatedAt 变了重新取', async () => {
+  it('按 id + updatedAt 缓存：第二次只核对最后一轮（desc limit 1），不重取；updatedAt 变了重新取', async () => {
     const rpc = new FakeRpc().add(thread(tid(1)), [lastUser('甲')])
     const first = await listCodexThreads(rpc, proj)
     for await (const d of first.details()) expect(d.lastPrompt).toBe('甲')
     expect(rpc.of('thread/turns/list')).toHaveLength(1)
     const second = await listCodexThreads(rpc, proj)
     for await (const d of second.details()) expect(d.lastPrompt).toBe('甲')
-    expect(rpc.of('thread/turns/list')).toHaveLength(1)
+    expect(rpc.of('thread/turns/list').map(p => p.limit)).toEqual([3, 1])
     rpc.threads.get(tid(1))!.meta.updatedAt = T0 + 999
     rpc.threads.get(tid(1))!.turns = [lastUser('乙')]
     const third = await listCodexThreads(rpc, proj)
     for await (const d of third.details()) expect(d.lastPrompt).toBe('乙')
-    expect(rpc.of('thread/turns/list')).toHaveLength(2)
+    expect(rpc.of('thread/turns/list')).toHaveLength(3)
+  })
+
+  it('同一秒（updatedAt 不变）里有了新回复：核对发现最后一轮变了，重新取', async () => {
+    const rpc = new FakeRpc().add(thread(tid(1)), [simple(1, '甲')])
+    const read = async (): Promise<string | null> => {
+      const list = await listCodexThreads(rpc, proj)
+      let out: string | null = null
+      for await (const d of list.details()) out = d.lastPrompt
+      return out
+    }
+    expect(await read()).toBe('甲')
+    rpc.threads.get(tid(1))!.turns.push(simple(2, '乙'))
+    expect(await read()).toBe('乙')
+    expect(rpc.of('thread/turns/list').map(p => p.limit)).toEqual([3, 1, 3])
+    // 没有再变：只多一次 limit 1
+    expect(await read()).toBe('乙')
+    expect(rpc.of('thread/turns/list').map(p => p.limit)).toEqual([3, 1, 3, 1])
+  })
+
+  it('缓存是在 updatedAt 那一秒的余量（之后 2 秒）之外取的：不发核对请求；余量之内仍核对', async () => {
+    const rpc = new FakeRpc().add(thread(tid(1)), [lastUser('甲')])
+    const read = async (): Promise<void> => {
+      for await (const d of (await listCodexThreads(rpc, proj)).details()) expect(d.lastPrompt).toBe('甲')
+    }
+    // updatedAt 是 T0 + 100 秒；在它之后 3 秒（余量用完）取的缓存
+    vi.setSystemTime((T0 + 103) * 1000)
+    await read()
+    await read()
+    expect(rpc.of('thread/turns/list')).toHaveLength(1)
+    // 之后 2.5 秒取的：核对
+    clearCodexCaches()
+    rpc.calls.length = 0
+    vi.setSystemTime((T0 + 102) * 1000 + 500)
+    await read()
+    await read()
+    expect(rpc.of('thread/turns/list').map(p => p.limit)).toEqual([3, 1])
+  })
+
+  it('核对发现变了但重取失败：退回缓存的旧「最后一句」；重取也扣预算', async () => {
+    const rpc = new FakeRpc().add(thread(tid(1)), [simple(1, '甲')])
+    const s = (await listCodexThreads(rpc, proj)).sessions[0]
+    const budget = { left: 10 }
+    await codexThreadDetail(rpc, s, budget)
+    expect(budget.left).toBe(9)
+    rpc.threads.get(tid(1))!.turns.push(simple(2, '乙'))
+    await codexThreadDetail(rpc, s, budget)
+    expect(budget.left).toBe(7)
+    const request = rpc.request.bind(rpc)
+    let n = 0
+    rpc.threads.get(tid(1))!.turns.push(simple(3, '丙'))
+    rpc.request = async (method, params, signal) => {
+      if (++n === 2) throw new Error('boom')
+      return request(method, params, signal)
+    }
+    expect((await codexThreadDetail(rpc, s, budget)).lastPrompt).toBe('乙')
+  })
+
+  it('同一秒里最后一轮从 inProgress 变成 completed 也算变了；核对失败沿用缓存', async () => {
+    const running = simple(1, '甲', { status: 'inProgress' })
+    const rpc = new FakeRpc().add(thread(tid(1)), [running])
+    const budget = { left: 10 }
+    const s = (await listCodexThreads(rpc, proj)).sessions[0]
+    await codexThreadDetail(rpc, s, budget)
+    Object.assign(running, { status: 'completed' })
+    const before = rpc.of('thread/turns/list').length
+    await codexThreadDetail(rpc, s, budget)
+    expect(
+      rpc
+        .of('thread/turns/list')
+        .slice(before)
+        .map(p => p.limit),
+    ).toEqual([1, 3])
+    // 核对失败（线程刚被删）：沿用缓存，不抛
+    rpc.threads.delete(tid(1))
+    expect((await codexThreadDetail(rpc, s, budget)).lastPrompt).toBe('甲')
   })
 
   it('超过 200 次请求的 skipped；tailBudget 可以改', async () => {
@@ -838,16 +919,45 @@ describe('readCodexThread', () => {
       turn('t2', [agent('a2', '续')], { status: 'inProgress', startedAt: null }),
     ]
     const rpc = new FakeRpc().add(thread(tid(1)), turns)
-    const refs = await codexTurnIndex(rpc, tid(1), undefined, 100)
+    const refs = await codexTurnIndex(rpc, tid(1), undefined, T0 + 100)
     expect(refs).toEqual([
       { id: 't1', status: 'completed', startedAt: T0 + 1, prompt: true, clientIds: ['c1'] },
       { id: 't2', status: 'inProgress', startedAt: null, prompt: false, clientIds: [] },
     ])
-    const again = await codexTurnIndex(rpc, tid(1), undefined, 100)
+    // 命中缓存：只多一次核对最后一轮（desc limit 1 summary），不整份重读
+    const again = await codexTurnIndex(rpc, tid(1), undefined, T0 + 100)
     expect(again).toBe(refs)
-    expect(rpc.of('thread/turns/list')).toHaveLength(1)
-    await codexTurnIndex(rpc, tid(1), undefined, 101)
     expect(rpc.of('thread/turns/list')).toHaveLength(2)
+    expect(rpc.of('thread/turns/list')[1]).toMatchObject({ sortDirection: 'desc', limit: 1, itemsView: 'summary' })
+    await codexTurnIndex(rpc, tid(1), undefined, T0 + 101)
+    expect(rpc.of('thread/turns/list')).toHaveLength(3)
+  })
+
+  it('同一秒（updatedAt 不变）里新增轮次：首次导入 / 再读都能读到；没变化时不整份重读；核对失败照常抛', async () => {
+    const rpc = new FakeRpc().add(thread(tid(1)), [simple(1), simple(2)])
+    expect((await readCodexThread(rpc, proj, tid(1)))!.turns).toBe(2)
+    const n = rpc.of('thread/turns/list').length
+    expect((await readCodexThread(rpc, proj, tid(1)))!.turns).toBe(2)
+    // 没变化：多一次 limit 1 核对，索引不重读
+    const extra = rpc.of('thread/turns/list').slice(n)
+    expect(extra.filter(p => p.itemsView === 'summary' && p.limit !== 1)).toEqual([])
+    expect(extra.filter(p => p.limit === 1)).toHaveLength(1)
+    rpc.threads.get(tid(1))!.turns.push(simple(3))
+    const fresh = (await readCodexThread(rpc, proj, tid(1)))!
+    expect(fresh.turns).toBe(3)
+    expect(users(fresh.items)).toEqual(['turn-1', 'turn-2', 'turn-3'])
+    // 索引缓存命中后线程没了：核对失败按「线程不在了」处理，两条路径都是 null
+    rpc.threads.delete(tid(1))
+    expect(await readCodexThread(rpc, proj, tid(1))).toBeNull()
+    expect(await newerCodexTurns(rpc, proj, tid(1), 'turn-1')).toBeNull()
+  })
+
+  it('索引缓存在 updatedAt 那一秒的余量之外取的：命中不发核对请求', async () => {
+    const rpc = new FakeRpc().add(thread(tid(1)), [simple(1)])
+    vi.setSystemTime((T0 + 103) * 1000)
+    await codexTurnIndex(rpc, tid(1), undefined, T0 + 100)
+    await codexTurnIndex(rpc, tid(1), undefined, T0 + 100)
+    expect(rpc.of('thread/turns/list')).toHaveLength(1)
   })
 
   it('取消：翻页之间检查 signal', async () => {
@@ -919,6 +1029,34 @@ describe('newerCodexTurns', () => {
     expect(users(done.items)).toEqual(['turn-3'])
     expect(done).toMatchObject({ turns: 1, shown: 1, at: 'turn-3' })
     expect(done.items.find(i => i.kind === 'assistant')).toMatchObject({ text: '写完了', status: 'completed' })
+  })
+
+  it('同一秒（updatedAt 不变）里：补上 A 之后又新增 B，第二次补上拿得到 B', async () => {
+    const rpc = new FakeRpc().add(thread(tid(1)), manyTurns(1))
+    rpc.threads.get(tid(1))!.turns.push(simple(2))
+    const first = (await newerCodexTurns(rpc, proj, tid(1), 'turn-1'))!
+    expect(users(first.items)).toEqual(['turn-2'])
+    rpc.threads.get(tid(1))!.turns.push(simple(3))
+    const second = (await newerCodexTurns(rpc, proj, tid(1), 'turn-2'))!
+    expect(users(second.items)).toEqual(['turn-3'])
+    expect(second).toMatchObject({ turns: 1, at: 'turn-3', base: 'turn-2' })
+    // 没变化：不整份重读索引，只多一次 limit 1 核对
+    const n = rpc.of('thread/turns/list').length
+    expect((await newerCodexTurns(rpc, proj, tid(1), 'turn-3'))!.turns).toBe(0)
+    const extra = rpc.of('thread/turns/list').slice(n)
+    expect(extra).toHaveLength(1)
+    expect(extra[0]).toMatchObject({ sortDirection: 'desc', limit: 1, itemsView: 'summary' })
+  })
+
+  it('同一秒（updatedAt 不变）里 live 的最后一轮从 inProgress 变成 completed：第二次补上补到它', async () => {
+    const rpc = new FakeRpc().add(thread(tid(1)), manyTurns(1))
+    const running = turn('turn-2', [user('u-2', '在跑'), agent('a-2', '半截')], { status: 'inProgress' })
+    rpc.threads.get(tid(1))!.turns.push(running)
+    expect((await newerCodexTurns(rpc, proj, tid(1), 'turn-1', { live: true }))!.turns).toBe(0)
+    Object.assign(running, { status: 'completed' })
+    const done = (await newerCodexTurns(rpc, proj, tid(1), 'turn-1', { live: true }))!
+    expect(users(done.items)).toEqual(['turn-2'])
+    expect(done).toMatchObject({ turns: 1, at: 'turn-2' })
   })
 
   it('线程更新后（updatedAt 变了）重建索引；live 时末尾没结束的轮不算', async () => {

@@ -53,15 +53,35 @@ function remember<T>(cache: Cache<T>, key: string, value: T, max: number): T {
   return value
 }
 
-/** 第二步的「最后一句」，按 线程 id + updatedAt 缓存 */
-const detailCache: Cache<string | null> = new Map()
-/** 轮次索引，按 线程 id + updatedAt 缓存（同一个线程最多留一份） */
-const indexCache: Cache<TurnRef[]> = new Map()
+/**
+ * 第二步的「最后一句」，按 线程 id + updatedAt 缓存；tail 是缓存时最后一轮的 id + 状态
+ * （updatedAt 只到秒，同一秒里的新回复靠 tail 发现）
+ */
+const detailCache: Cache<{ last: string | null; tail: string; cachedAt: number }> = new Map()
+/** 轮次索引，按 线程 id + updatedAt 缓存（同一个线程最多留一份）；命中后还要核对最后一轮（codexTurnIndex） */
+const indexCache: Cache<{ refs: TurnRef[]; cachedAt: number }> = new Map()
+
+/** 同一秒之后再有改动 updatedAt 一定会变（缓存键失效）；所以只有缓存是在 updatedAt 那一秒内、或之后 2 秒内（时钟 / 落盘余量）取的，才需要核对 */
+const mayChangeInSameSecond = (cachedAt: number, updatedAtMs: number): boolean => cachedAt < updatedAtMs + 1000 + 2000
 
 /** 清掉列表和轮次索引的缓存（测试用） */
 export function clearCodexCaches(): void {
   detailCache.clear()
   indexCache.clear()
+}
+
+/** 最后一轮的指纹：id + 状态；没有轮次是空串 */
+const tailOf = (turn: { id?: unknown; status?: unknown } | undefined): string =>
+  turn ? `${string(turn.id)}|${string(turn.status)}` : ''
+
+/** 廉价核对：只取最后一轮（desc、limit 1、summary），返回它的指纹。请求失败原样抛出 */
+async function tailProbe(reader: CodexRpc, id: string, signal?: AbortSignal): Promise<string> {
+  const reply = await reader.request(
+    'thread/turns/list',
+    { threadId: id, sortDirection: 'desc', limit: 1, itemsView: 'summary' },
+    signal,
+  )
+  return tailOf(array(reply.data).map(object)[0])
 }
 
 const clip = (s: string, max: number): string => (s.length > max ? `${s.slice(0, max)}…` : s)
@@ -211,7 +231,8 @@ export async function listCodexThreads(
 
 /**
  * 第二步：补一个线程的「最后一句」。thread/turns/list 倒序取 3 轮的 summary 视图，
- * 取第一个带用户消息的轮次。命中缓存不发请求也不扣预算；预算（请求数）用完了返回 skipped
+ * 取第一个带用户消息的轮次。命中缓存且缓存是在 updatedAt 那一秒前后取的（同一秒里可能还有改动，见 mayChangeInSameSecond）
+ * 才多发一次 limit 1 核对；每发一次请求（核对、重取）扣一次预算；预算（请求数）用完了：没缓存返回 skipped，有缓存直接用缓存
  */
 export async function codexThreadDetail(
   reader: CodexRpc,
@@ -233,17 +254,37 @@ export async function codexThreadDetail(
     skipped,
     read: 0,
   })
-  if (detailCache.has(key)) return detail(remember(detailCache, key, detailCache.get(key)!, CACHE_MAX), false)
-  if (budget.left <= 0) return detail(s.lastPrompt, true)
-  budget.left--
+  const cached = detailCache.get(key)
+  if (cached) {
+    const keep = (): NativeListedDetail => detail(remember(detailCache, key, cached, CACHE_MAX).last, false)
+    // 预算没了就信缓存
+    if (budget.left <= 0 || !mayChangeInSameSecond(cached.cachedAt, s.updatedAt)) return keep()
+    // updatedAt 只到秒：同一秒里又有新回复 key 不变，核对一下最后一轮（多一次 limit 1 的请求，算进预算）
+    budget.left--
+    try {
+      if ((await tailProbe(reader, s.id, signal)) === cached.tail) return keep()
+    } catch (err) {
+      if (signal?.aborted) throw err
+      return keep()
+    }
+    // 变了：下面重取，重取也扣一次预算
+    budget.left--
+  } else {
+    if (budget.left <= 0) return detail(s.lastPrompt, true)
+    budget.left--
+  }
+  const cachedAt = Date.now()
   let last: string | null = null
+  let tail: string
   try {
     const reply = await reader.request(
       'thread/turns/list',
       { threadId: s.id, sortDirection: 'desc', limit: 3, itemsView: 'summary' },
       signal,
     )
-    for (const turn of array(reply.data).map(object)) {
+    const turns = array(reply.data).map(object)
+    tail = tailOf(turns[0])
+    for (const turn of turns) {
       const users = array(turn.items)
         .map(object)
         .filter(item => item.type === 'userMessage')
@@ -254,11 +295,11 @@ export async function codexThreadDetail(
       }
     }
   } catch (err) {
-    // 取消要往外抛；其余（线程刚被删……）这一行没有「最后一句」就是了，不缓存
+    // 取消要往外抛；其余（线程刚被删……）这一行没有「最后一句」就是了，不缓存；有旧缓存就退回旧的，别显示成空
     if (signal?.aborted) throw err
-    return detail(null, false)
+    return detail(cached ? cached.last : null, false)
   }
-  remember(detailCache, key, last, CACHE_MAX)
+  remember(detailCache, key, { last, tail, cachedAt }, CACHE_MAX)
   return detail(last, false)
 }
 
@@ -409,9 +450,21 @@ export async function codexTurnIndex(
   const key = `${id}|${updatedAt}`
   if (updatedAt !== undefined) {
     const hit = indexCache.get(key)
-    if (hit) return remember(indexCache, key, hit, INDEX_CACHE_MAX)
+    // updatedAt 只到秒：同一秒里新增 / 结束的轮次 key 不变，所以命中后核对最后一轮（id + 状态）一致才复用。
+    // 核对请求失败原样抛出，调用方按 isGone 等处理
+    // 缓存是在那一秒的余量之外取的：之后再有改动 updatedAt 一定变了，直接复用
+    if (
+      hit &&
+      (!mayChangeInSameSecond(hit.cachedAt, updatedAt * 1000) ||
+        (await tailProbe(reader, id, signal)) === tailOf(hit.refs[hit.refs.length - 1]))
+    ) {
+      remember(indexCache, key, hit, INDEX_CACHE_MAX)
+      return hit.refs
+    }
   }
   const refs: TurnRef[] = []
+  // 取数据之前的时间：保守，宁可多核对
+  const cachedAt = Date.now()
   let cursor: string | null = null
   // 页数上限只是防止异常的游标死循环
   for (let page = 0; page < 1000; page++) {
@@ -435,7 +488,7 @@ export async function codexTurnIndex(
     }
     cursor = string(reply.nextCursor) || null
     if (!cursor) {
-      if (updatedAt !== undefined) remember(indexCache, key, refs, INDEX_CACHE_MAX)
+      if (updatedAt !== undefined) remember(indexCache, key, { refs, cachedAt }, INDEX_CACHE_MAX)
       return refs
     }
   }
