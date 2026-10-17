@@ -69,7 +69,8 @@ mac:
     - target: zip
       arch: [x64, arm64]
   category: public.app-category.developer-tools
-  icon: build/icon.png
+  # macOS 的图标四周要留白（1024 画布里方块占 824），和系统里别的图标一样大；scripts/make-brand-icons.mjs 生成
+  icon: build/icon-mac.png
   # 暂不签名、不公证：只做 ad-hoc 签名（Apple 芯片上不签名根本打不开）。
   # 第一次打开系统会拦，要在「系统设置 › 隐私与安全性」里点「仍要打开」；也不能自动更新（只提示去下载）
   identity: '-'
