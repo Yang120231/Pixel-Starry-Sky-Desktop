@@ -1,5 +1,5 @@
 // 统一检查入口（无依赖，不经过 pnpm）
-// 用法：node scripts/check.mjs [--fast] [--strict] [--remote] [--build] [--cloud] [--only <步骤名>]
+// 用法：node scripts/check.mjs [--fast] [--strict] [--remote] [--build] [--cloud] [--extpacks] [--only <步骤名>]
 // --cloud 加跑 services/cloud 的 Go 检查（gofmt、go vet、go test），需要本机装 Go 1.27 或更新版本
 import { spawn } from 'node:child_process'
 import { existsSync, rmSync } from 'node:fs'
@@ -83,6 +83,8 @@ const steps = [
     script: join(root, 'node_modules', 'prettier', 'bin', 'prettier.cjs'),
     args: ['--check', '.'],
   },
+  // 官方语言扩展按上传标准检查（含语法测速，机器忙时可能偏慢）；只有 --extpacks 时才跑
+  { name: 'extpacks', group: 'extpacks', cwd: root, script: join(root, 'scripts', 'check-extpacks.mjs'), args: [] },
   { name: 'remote', group: 'remote', cwd: root, script: join(root, 'scripts', 'check-remote.mjs'), args: [] },
   {
     name: 'build',
@@ -105,6 +107,7 @@ const selected = steps.filter(step => {
   if (step.group === 'remote') return has('--remote')
   if (step.group === 'build') return has('--build')
   if (step.group === 'cloud') return has('--cloud')
+  if (step.group === 'extpacks') return has('--extpacks')
   // 文档只在本机，仓库里没有 check-docs.mjs 时跳过
   if (step.group === 'docs' && !existsSync(step.script)) return false
   if (has('--fast')) return step.group === 'tsc' || step.group === 'docs'
