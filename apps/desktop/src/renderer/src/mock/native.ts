@@ -1,4 +1,4 @@
-// 演示模式里「接着终端里的 Claude Code 会话」（docs/ui/claude-resume.md）：几行覆盖选择框的各种状态。
+// 演示模式里「接着终端里的 Claude Code / Codex 会话」（docs/ui/claude-resume.md、codex-resume.md）：每个引擎几行，覆盖选择框的各种状态。
 // 第一步的列表里最后一句和模型是空的，第二步（details）才补上，演示逐步补的样子；导入只是跳到一个现成的展示对话
 import type { NativeImportResult, NativeSessionDetail, NativeSessionSummary } from '@pixelsky/protocol'
 import type { DemoSource } from '@/data/demo'
@@ -9,7 +9,7 @@ const DAY = 24 * HOUR
 
 type Row = Omit<NativeSessionSummary, 'updatedAt'> & { ago: number; last: string }
 
-const ROWS: Row[] = [
+const CLAUDE_ROWS: Row[] = [
   {
     id: '3f1c2a10-6d7e-4b88-9a31-0c5d8e7a1001',
     title: '修复 Caddy 超时',
@@ -119,18 +119,120 @@ const ROWS: Row[] = [
   },
 ]
 
-const MODELS = ['claude-opus-4-1', 'claude-sonnet-4-5', 'claude-haiku-4-5']
+const cid = (n: number): string => `0199c2a1-7b3e-7c40-8a1d-5e2f9b0c300${n}`
+
+// Codex 的 6 行：普通、子文件夹、已在像素星空里、终端里正开着、可能还开着、其他程序（没有「很大」的一行：Codex 不按文件大小读）
+const CODEX_ROWS: Row[] = [
+  {
+    id: cid(1),
+    title: '给设置页加深色模式开关',
+    firstPrompt: '设置里加一个深色模式开关，跟随系统',
+    lastPrompt: null,
+    branch: 'main',
+    subdir: null,
+    size: 1_800_000,
+    model: null,
+    source: 'terminal',
+    ownerId: null,
+    live: null,
+    ago: 25 * MIN,
+    last: '再把切换动画去掉',
+  },
+  {
+    id: cid(2),
+    title: '修手机端登录跳转',
+    firstPrompt: '手机端登录后没有跳回原页面',
+    lastPrompt: null,
+    branch: 'fix/m-login',
+    subdir: 'apps/mobile',
+    size: 900_000,
+    model: null,
+    source: 'terminal',
+    ownerId: null,
+    live: null,
+    ago: 2 * DAY,
+    last: '跑一下手机端的测试',
+  },
+  {
+    id: cid(3),
+    title: '梳理引擎适配器接口',
+    firstPrompt: '把 Codex 适配器和 Claude 适配器的接口差异列出来',
+    lastPrompt: null,
+    branch: 'main',
+    subdir: null,
+    size: 5_200_000,
+    model: null,
+    source: 'terminal',
+    // 已被像素星空的对话占用：点了跳到那个对话
+    ownerId: 'demo-claude-tools',
+    live: null,
+    ago: 3 * HOUR,
+    last: '写成一张对照表',
+  },
+  {
+    id: cid(4),
+    title: '排查 app-server 启动慢',
+    firstPrompt: 'codex app-server 第一次起要一秒多，看看卡在哪',
+    lastPrompt: null,
+    branch: 'main',
+    subdir: null,
+    size: 3_100_000,
+    model: null,
+    source: 'terminal',
+    ownerId: null,
+    live: 'terminal',
+    ago: 30_000,
+    last: '加一条耗时日志',
+  },
+  {
+    id: cid(5),
+    title: '整理发布说明',
+    firstPrompt: '把这周的提交整理成发布说明',
+    lastPrompt: null,
+    branch: 'release/0.4.8',
+    subdir: null,
+    size: 700_000,
+    model: null,
+    source: 'terminal',
+    ownerId: null,
+    // 锁文件读不到、只看修改时间：可能还开着
+    live: 'maybe',
+    ago: 100_000,
+    last: '把英文版也出一份',
+  },
+  {
+    id: cid(6),
+    title: '批量改名 i18n 键',
+    firstPrompt: '把 resume.* 的键按引擎拆开',
+    lastPrompt: null,
+    branch: 'HEAD',
+    subdir: null,
+    size: 1_500_000,
+    model: null,
+    source: 'other',
+    ownerId: null,
+    live: null,
+    ago: 5 * DAY,
+    last: '跑一下 i18n 测试',
+  },
+]
+
+const ROWS: Record<'claude' | 'codex', Row[]> = { claude: CLAUDE_ROWS, codex: CODEX_ROWS }
+const MODELS: Record<'claude' | 'codex', string[]> = {
+  claude: ['claude-opus-4-1', 'claude-sonnet-4-5', 'claude-haiku-4-5'],
+  codex: ['gpt-5-codex', 'gpt-5', 'gpt-5-mini'],
+}
 
 export const demoNativeSessions: DemoSource['conversations']['nativeSessions'] = {
-  list: () => {
+  list: (_projectId, engine = 'claude') => {
     const now = Date.now()
-    return ROWS.map(({ ago, last: _last, ...row }) => ({ ...row, updatedAt: now - ago }))
+    return ROWS[engine].map(({ ago, last: _last, ...row }) => ({ ...row, updatedAt: now - ago }))
   },
-  details: ids => {
+  details: (ids, engine = 'claude') => {
     const now = Date.now()
     return ids.flatMap<NativeSessionDetail>(id => {
-      const index = ROWS.findIndex(r => r.id === id)
-      const row = ROWS[index]
+      const index = ROWS[engine].findIndex(r => r.id === id)
+      const row = ROWS[engine][index]
       if (!row) return []
       return [
         {
@@ -138,7 +240,7 @@ export const demoNativeSessions: DemoSource['conversations']['nativeSessions'] =
           lastPrompt: row.last,
           title: row.title,
           lastActive: now - row.ago,
-          model: MODELS[index % MODELS.length],
+          model: MODELS[engine][index % MODELS[engine].length],
           branch: row.branch,
           superseded: false,
           skipped: false,
@@ -146,10 +248,10 @@ export const demoNativeSessions: DemoSource['conversations']['nativeSessions'] =
       ]
     })
   },
-  import: (nativeId, mode): NativeImportResult => {
-    const row = ROWS.find(r => r.id === nativeId)
+  import: (nativeId, mode, engine = 'claude'): NativeImportResult => {
+    const row = ROWS[engine].find(r => r.id === nativeId)
     if (row?.ownerId) return { ownerId: row.ownerId }
     if (mode === 'inplace' && (row?.live === 'terminal' || row?.live === 'other')) return { live: row.live }
-    return { sessionId: 'demo-claude-long', model: 'claude-opus-4-1', turns: 120, shown: 50 }
+    return { sessionId: 'demo-claude-long', model: MODELS[engine][0], turns: 120, shown: 50 }
   },
 }

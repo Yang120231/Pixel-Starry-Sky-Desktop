@@ -140,12 +140,10 @@ export function Composer({
     listId = useId()
   // 扩展提示词跟技能命令一起出现在「/」菜单里；要选中内容的提示词只在编辑器里有选中时才列出
   const promptCommands = usePromptCommands(!!activeEditorSelection())
-  // 「/resume」是像素星空自己的命令（接着终端里的 Claude Code 会话）：执行者是 Claude Code 才有；引擎哪天也给了同名命令就丢掉它的
+  // 「/resume」是像素星空自己的命令（接着终端里的 Claude Code / Codex 会话）：执行者是 Claude Code 或 Codex 才有；引擎哪天也给了同名命令就丢掉它的
   const resumeWorkspace = composerWorkspace(live?.sessionId, status, draftKey)
-  const resumeCommand = useResumeCommand(
-    (live ?? demoSource).engine?.id,
-    resumeWorkspace?.sessionId ?? resumeWorkspace?.projectId,
-  )
+  const resumeEngineId = (live ?? demoSource).engine?.id
+  const resumeCommand = useResumeCommand(resumeEngineId, resumeWorkspace?.sessionId ?? resumeWorkspace?.projectId)
   const menuCommands = useMemo(
     () => [
       ...(resumeCommand ? commands.filter(c => !(c.name === 'resume' && c.invocation !== 'skill')) : commands),
@@ -194,10 +192,11 @@ export function Composer({
   // 选择框选中时才取输入框的设置：打开时输入框可能还没准备好（刚启动），模型目录也可能还在加载
   const liveRef = useRef(live)
   liveRef.current = live
-  /** 打开「接着 Claude Code 会话」选择框；关掉回到这个输入框，打开了新对话就清掉输入框里的 /resume */
+  /** 打开「接着 Claude Code / Codex 会话」选择框（列当前执行者的）；关掉回到这个输入框，打开了新对话就清掉输入框里的 /resume */
   const openResume = (parsed: { id: string | null; query: string } = { id: null, query: '' }): void => {
     setCommandDismissed(true)
     openResumePicker({
+      engine: resumeEngineId === 'codex' ? 'codex' : 'claude',
       projectId: status?.project?.id ?? (isDemo ? 'demo' : null),
       query: parsed.query,
       id: parsed.id,

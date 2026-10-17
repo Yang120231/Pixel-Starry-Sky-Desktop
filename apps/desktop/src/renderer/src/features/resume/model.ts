@@ -136,6 +136,11 @@ export function resumeModel(input: ResumeModelInput): { model: string | null; gr
   return keep
 }
 
+/** 「复制一份接着聊」只对原地导入的对话有用：没导入过的、已经是复制出来的都不给 */
+export function canCopyImported(imported: { forked?: boolean } | null | undefined): boolean {
+  return !!imported && !imported.forked
+}
+
 /** 发送失败的错误是不是「终端或别的程序正开着这个会话」（resume.live，QueuedMessage.error 可能带前缀） */
 export function isResumeLiveError(error: string | null | undefined): boolean {
   let live = false

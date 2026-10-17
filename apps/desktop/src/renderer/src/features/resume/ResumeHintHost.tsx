@@ -3,7 +3,7 @@ import type { AddProjectsResult } from '@pixelsky/protocol'
 import { tr } from '@/i18n/core'
 import { useToast } from '@/ui'
 import { PROJECTS_ADDED_EVENT } from '@/features/engine/store'
-import { hintText, openResumeFor, prefetchResumeCounts } from './hint'
+import { hintEngine, hintText, openResumeFor, prefetchResumeCounts } from './hint'
 
 /**
  * 项目从侧栏、拖文件夹、导入对话框等入口加进来之后，查一下终端里有没有原来的会话，有就弹一句提示。
@@ -20,7 +20,10 @@ export function ResumeHintHost() {
           if (found.size === 1) {
             const [[id, counts]] = [...found]
             const text = hintText(counts)
-            if (text) toast(text, { action: { label: tr('resume.hint.action'), run: () => openResumeFor(id) } })
+            if (text)
+              toast(text, {
+                action: { label: tr('resume.hint.action'), run: () => openResumeFor(id, hintEngine(counts)) },
+              })
           } else if (found.size > 1) toast(tr('resume.hint.toastMany', { n: found.size }), { duration: 5000 })
         },
         () => undefined,

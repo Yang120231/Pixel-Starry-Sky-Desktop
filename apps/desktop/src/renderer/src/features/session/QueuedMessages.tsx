@@ -23,8 +23,8 @@ import { ImageAttachments } from '@/features/session/attachments/ImageAttachment
 import { FileAttachments } from '@/features/session/attachments/FileAttachments'
 import { canDismiss, isReconnecting, isSendFailure, isStarting } from './queueView'
 import { useProviders } from '@/features/account/providers'
-import { isResumeLiveError } from '@/features/resume/model'
-import { nativeSessionAction } from '@/features/engine/store'
+import { canCopyImported, isResumeLiveError } from '@/features/resume/model'
+import { nativeSessionAction, useEngineState } from '@/features/engine/store'
 
 const same = (a: QueuedMessage['settings'], b: ComposerController['execution']) =>
   !!b &&
@@ -54,6 +54,11 @@ export function QueuedMessages({
 }) {
   useI18n()
   const providers = useProviders().providers
+  // 「复制一份接着聊」只对原地导入的对话有用：没导入过的、已经是复制出来的都不显示
+  const imported = useEngineState(
+    s => (sessionId ? s.sessions.find(x => x.record.id === sessionId) : undefined)?.record.imported,
+  )
+  const canCopyNative = canCopyImported(imported)
   const [expanded, setExpanded] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -71,9 +76,7 @@ export function QueuedMessages({
     return () => ro.disconnect()
   }, [root])
   // 正在执行的、以及空闲时直接发送正在启动的消息都显示在对话里，不算排队；正在自动重连的显示重连卡片
-  const items = live.queue.filter(
-    q => q.status !== 'running' && !isStarting(q, live.queuePaused) && !isReconnecting(q),
-  )
+  const items = live.queue.filter(q => q.status !== 'running' && !isStarting(q, live.queuePaused) && !isReconnecting(q))
   if (!items.length) return null
   const action = async (id: string, fn: () => Promise<unknown>) => {
     if (busy) return
@@ -254,7 +257,7 @@ export function QueuedMessages({
                     {!pending && (
                       <>
                         {/* 导入的会话启动时发现终端里正开着：改成复制一份接着聊再重发（docs/ui/claude-resume.md §4.6） */}
-                        {sessionId && isResumeLiveError(q.error) && (
+                        {sessionId && isResumeLiveError(q.error) && canCopyNative && (
                           <Button
                             variant="subtle"
                             data-native-action="copy"

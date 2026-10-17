@@ -143,11 +143,11 @@ export interface DemoSource {
     rewindPreview(sessionId: string, itemId: string, firstUserId: string | null): RewindPreview
     /** 旁聊回答（§3） */
     sideAnswer(question: string): string
-    /** 接着终端里的 Claude Code 会话（docs/ui/claude-resume.md）：第一步的列表、第二步补的尾部信息、导入（只是跳到一个现成的展示对话） */
+    /** 接着终端里的 Claude Code / Codex 会话（docs/ui/claude-resume.md、codex-resume.md；按引擎各一份）：第一步的列表、第二步补的尾部信息、导入（只是跳到一个现成的展示对话） */
     nativeSessions: {
-      list(projectId: string): NativeSessionSummary[]
-      details(ids: readonly string[]): NativeSessionDetail[]
-      import(nativeId: string, mode: 'inplace' | 'copy'): NativeImportResult
+      list(projectId: string, engine?: 'claude' | 'codex'): NativeSessionSummary[]
+      details(ids: readonly string[], engine?: 'claude' | 'codex'): NativeSessionDetail[]
+      import(nativeId: string, mode: 'inplace' | 'copy', engine?: 'claude' | 'codex'): NativeImportResult
     }
     /** 会动的演示（压缩上下文、当前步骤循环播放，docs/ui/compaction.md）：update 换掉某个会话的条目，patch 改运行状态等 */
     animate?(update: DemoUpdate): void

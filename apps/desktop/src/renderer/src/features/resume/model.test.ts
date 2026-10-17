@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { NativeSessionDetail, NativeSessionSummary } from '@pixelsky/protocol'
 import type { PlatformGroup } from '@/features/account/platform'
 import {
+  canCopyImported,
   filterRows,
   groupRows,
   isResumeLiveError,
@@ -184,9 +185,35 @@ describe('resumeModel（用会话最后用的模型，当前通道跑不了就�
       groupId: 'g1',
     })
   })
+  it('Codex：会话的模型（Thread.model）和 Claude 走同一套规则', () => {
+    const codex = {
+      ...base,
+      groups: [group('g1', ['m-a']), group('g2', ['gpt-5-codex'], 0.5)],
+      selfModels: ['gpt-5-codex'],
+    }
+    expect(resumeModel({ ...codex, source: 'platform', sessionModel: 'gpt-5-codex' })).toEqual({
+      model: 'gpt-5-codex',
+      groupId: 'g2',
+    })
+    expect(resumeModel({ ...codex, source: 'self', sessionModel: 'gpt-5-codex' })).toEqual({
+      model: 'gpt-5-codex',
+      groupId: null,
+    })
+    expect(resumeModel({ ...codex, source: 'self', sessionModel: 'o3-old' }).model).toBe('composer-model')
+  })
   it('没有模型和 <synthetic> 都用输入框的', () => {
     expect(resumeModel({ ...base, source: 'self', sessionModel: null }).model).toBe('composer-model')
     expect(resumeModel({ ...base, source: 'platform', sessionModel: '<synthetic>' }).model).toBe('composer-model')
+  })
+})
+
+describe('canCopyImported（队列里「复制一份接着聊」的条件）', () => {
+  it('原地导入的对话才给；没导入过、已经是复制出来的都不给', () => {
+    expect(canCopyImported({ forked: false })).toBe(true)
+    expect(canCopyImported({})).toBe(true)
+    expect(canCopyImported({ forked: true })).toBe(false)
+    expect(canCopyImported(null)).toBe(false)
+    expect(canCopyImported(undefined)).toBe(false)
   })
 })
 

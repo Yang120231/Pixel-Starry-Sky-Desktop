@@ -84,6 +84,7 @@ const demoRows = (query = '') =>
 const render = (extra: Partial<PickerViewProps> = {}): string => {
   const groups = extra.groups ?? demoRows()
   const props: PickerViewProps = {
+    engine: 'claude',
     groups,
     query: '',
     selectedId: groups.all[0]?.id ?? null,
@@ -177,6 +178,19 @@ describe('ResumePickerView', () => {
     expect(render({ groups: none, loading: true })).toContain('正在读取会话…')
     expect(render({ reading: true })).toContain('data-resume-reading')
     expect(render({ groups: none, noProject: true })).toContain('先打开一个项目')
+  })
+  it('engine 为 codex：标题、空状态、错误、帮助是 Codex 的', () => {
+    const none = groupRows([])
+    expect(render({ engine: 'codex' })).toContain('接着 Codex 会话')
+    expect(render({ engine: 'claude' })).toContain('接着 Claude Code 会话')
+    expect(render({ engine: 'codex', groups: none })).toContain('这个文件夹还没有 Codex 会话记录')
+    const error = render({ engine: 'codex', groups: none, error: 'Codex 没装好' })
+    expect(error).toContain('读不到 Codex 的会话：Codex 没装好')
+    expect(error).not.toContain('Claude Code')
+    const help = render({ engine: 'codex', help: true })
+    expect(help).toContain('Codex 不让两个程序同时写一个会话')
+    expect(help).not.toContain('--resume')
+    expect(render({ engine: 'claude', help: true })).toContain('--resume')
   })
   it('状态栏的一句话和帮助', () => {
     expect(render({ notice: '这个会话的记录已经不在了' })).toContain('这个会话的记录已经不在了')

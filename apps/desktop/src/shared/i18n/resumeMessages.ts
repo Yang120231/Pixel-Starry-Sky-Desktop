@@ -1,13 +1,15 @@
-// 接着终端里的 Claude Code 会话（docs/ui/claude-resume.md）：斜杠菜单、选择框、对话里的按钮
+// 接着终端里的 Claude Code / Codex 会话（docs/ui/claude-resume.md、codex-resume.md；{engine} 是引擎名）：斜杠菜单、选择框、对话里的按钮
 export const resumeMessages = {
   'resume.chip': { zh: '像素星空', en: 'Pixel Starry Sky' },
   'resume.command.description': {
-    zh: '接着这个文件夹里以前的 Claude Code 会话（新开一个对话）',
-    en: 'Continue an earlier Claude Code session from this folder (opens a new conversation)',
+    zh: '接着这个文件夹里以前的 {engine} 会话（新开一个对话）',
+    en: 'Continue an earlier {engine} session from this folder (opens a new conversation)',
   },
-  'resume.palette': { zh: '接着 Claude Code 会话…', en: 'Continue a Claude Code session…' },
+  'resume.open.claude': { zh: '接着 Claude Code 会话…', en: 'Continue a Claude Code session…' },
+  'resume.open.codex': { zh: '接着 Codex 会话…', en: 'Continue a Codex session…' },
+  'resume.open.codexMissing': { zh: 'Codex 没装好', en: 'Codex isn’t set up' },
   'resume.remote': { zh: '远程机器上暂不支持', en: 'Not supported on remote machines yet' },
-  'resume.title': { zh: '接着 Claude Code 会话', en: 'Continue a Claude Code session' },
+  'resume.title': { zh: '接着 {engine} 会话', en: 'Continue a {engine} session' },
   'resume.search': { zh: '搜索标题、最后一句或 id', en: 'Search titles, last prompts or ids' },
   'resume.searchLabel': { zh: '搜索会话', en: 'Search sessions' },
   'resume.list': { zh: '可以接着聊的会话', en: 'Sessions you can continue' },
@@ -46,14 +48,18 @@ export const resumeMessages = {
   'resume.importingPercent': { zh: '正在读取 {percent}%', en: 'Reading {percent}%' },
   'resume.cancel': { zh: '取消', en: 'Cancel' },
   'resume.empty': {
-    zh: '这个文件夹还没有 Claude Code 会话记录',
-    en: 'This folder has no Claude Code session records yet',
+    zh: '这个文件夹还没有 {engine} 会话记录',
+    en: 'This folder has no {engine} session records yet',
   },
   'resume.noMatch': { zh: '没有匹配的会话', en: 'No matching sessions' },
   'resume.loading': { zh: '正在读取会话…', en: 'Reading sessions…' },
   'resume.unreadable': {
     zh: '读不到 Claude Code 的会话目录：{error}',
     en: 'Can’t read the Claude Code sessions folder: {error}',
+  },
+  'resume.unreadable.codex': {
+    zh: '读不到 Codex 的会话：{error}',
+    en: 'Can’t read the Codex sessions: {error}',
   },
   'resume.retry': { zh: '重试', en: 'Retry' },
   'resume.gone': { zh: '这个会话的记录已经不在了', en: 'The record of this session is gone' },
@@ -66,7 +72,7 @@ export const resumeMessages = {
   'resume.keySelect': { zh: '↑↓ 选择', en: '↑↓ select' },
   'resume.keyOpen': { zh: 'Enter 打开', en: 'Enter open' },
   'resume.keyClose': { zh: 'Esc 关闭', en: 'Esc close' },
-  'resume.starting': { zh: '正在加载 Claude Code 会话…', en: 'Loading the Claude Code session…' },
+  'resume.starting': { zh: '正在加载 {engine} 会话…', en: 'Loading the {engine} session…' },
   'resume.earlier': { zh: '加载更早的', en: 'Load earlier' },
   'resume.sync': { zh: '补上终端里新聊的 {count} 轮', en: 'Add the {count} new turns from the terminal' },
   'resume.help.title': { zh: '和终端里的 /resume 有什么不同', en: 'How this differs from /resume in the terminal' },
@@ -93,6 +99,30 @@ export const resumeMessages = {
   'resume.help.engine': {
     zh: '可以在模型菜单换到 Codex 接着聊（Codex 拿到的是聊天回放，不含工具和压缩摘要）。换回 Claude 时，Codex 期间的聊天会写进终端那份记录。',
     en: 'You can switch to Codex from the model menu (Codex gets a chat replay without tools or compaction summaries). Switching back writes the Codex-era chat into the terminal’s session record.',
+  },
+  'resume.help.codex.live': {
+    zh: '会话在终端里正开着时，Codex 不让两个程序同时写一个会话：只能「复制一份接着聊」（原会话不动），或者关掉终端再来。',
+    en: 'Codex doesn’t let two programs write to one session. If it is open in the terminal, use “Continue in a copy” (the original is untouched) or close the terminal first.',
+  },
+  'resume.help.codex.context': {
+    zh: '模型上下文和终端里完全一样，是同一个会话（thread/resume）。',
+    en: 'The model context is exactly the same as in the terminal: it is the same session (thread/resume).',
+  },
+  'resume.help.codex.idle': {
+    zh: '像素星空刚用过这个会话时，要空闲 2 分钟才放开它，这之前终端里 codex resume 会提示正被占用。',
+    en: 'After Pixel Starry Sky uses a session, it releases it after 2 idle minutes; until then codex resume in the terminal reports it as in use.',
+  },
+  'resume.help.codex.revert': {
+    zh: '直接接着聊的对话回退会改写这个会话的历史，之后终端里看到的也是回退后的；不想动原会话就用「复制一份接着聊」。',
+    en: 'Rewinding a conversation continued directly rewrites the session history, so the terminal sees the rewound version too. Use “Continue in a copy” to leave the original alone.',
+  },
+  'resume.help.codex.legacy': {
+    zh: '旧格式的会话一律复制成新会话接着聊。',
+    en: 'Sessions in the old format are always continued in a copy.',
+  },
+  'resume.help.codex.engine': {
+    zh: '可以在模型菜单换到 Claude Code 接着聊（拿到的是聊天回放，不含工具和压缩摘要）。',
+    en: 'You can switch to Claude Code from the model menu (it gets a chat replay without tools or compaction summaries).',
   },
   'resume.hint.claude': { zh: '终端里有 {n} 个 Claude Code 会话', en: '{n} Claude Code session(s) in the terminal' },
   'resume.hint.codex': { zh: '终端里有 {n} 个 Codex 会话', en: '{n} Codex session(s) in the terminal' },

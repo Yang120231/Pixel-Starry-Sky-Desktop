@@ -10,9 +10,9 @@ import { openResumePicker } from './store'
 export type HintEngine = 'claude' | 'codex'
 export type ResumeCounts = Partial<Record<HintEngine, number>>
 
-/** 现在会去查、也能打开选择器的引擎。Codex 版选择器做好后加进来就行，文案和查询已经按引擎写好 */
-export const HINT_ENGINES: readonly HintEngine[] = ['claude']
-/** 同时最多几个查询在跑 */
+/** 会去查、也能打开选择器的引擎 */
+export const HINT_ENGINES: readonly HintEngine[] = ['claude', 'codex']
+/** 同时最多几个查询在跑（所有项目、所有引擎加起来） */
 export const HINT_CONCURRENCY = 4
 /** 一次导入最多查前多少个项目 */
 export const HINT_MAX_PROJECTS = 40
@@ -34,6 +34,11 @@ export function hintText(counts: ResumeCounts): string | null {
   return m ? tr(m.key, m.params) : null
 }
 
+/** 点「接着聊」打开哪个引擎的选择器：两个引擎都有就先 Claude Code，只有一个就那一个 */
+export function hintEngine(counts: ResumeCounts): HintEngine {
+  return (counts.claude ?? 0) > 0 ? 'claude' : (counts.codex ?? 0) > 0 ? 'codex' : 'claude'
+}
+
 /** 终端里的会话：没被像素星空对话占用的才算「可以接着聊」 */
 export const resumableCount = (list: readonly NativeSessionSummary[]): number =>
   list.filter(s => s.ownerId === null).length
@@ -52,10 +57,29 @@ export async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (it
   return out
 }
 
+/** 全局的查询并发闸：多个项目 × 多个引擎同时查时，在跑的查询也不超过 HINT_CONCURRENCY 个 */
+let inFlight = 0
+const waiters: Array<() => void> = []
+async function withSlot<T>(fn: () => Promise<T>): Promise<T> {
+  if (inFlight >= HINT_CONCURRENCY) await new Promise<void>(resolve => waiters.push(resolve))
+  else inFlight++
+  try {
+    return await fn()
+  } finally {
+    // 把名额直接交给下一个等着的；没人等才归还
+    const next = waiters.shift()
+    if (next) next()
+    else inFlight--
+  }
+}
+
 type Lister = (projectId: string, engine: HintEngine) => Promise<readonly NativeSessionSummary[]>
 const defaultLister: Lister = (projectId, engine) => listNativeSessions(projectId, { engine, subfolders: true })
 
-/** 查一个项目的会话数。远程机器 / WSL 项目、查询失败、引擎不支持都按「没有」处理，不抛错 */
+/**
+ * 查一个项目的会话数。两个引擎同时查（不比只查一个慢），在跑的查询总数由 withSlot 限制。
+ * 远程机器 / WSL 项目、查询失败（比如 Codex 没装）、引擎不支持都按「没有」处理，不抛错
+ */
 export async function fetchResumeCounts(
   projectId: string,
   list: Lister = defaultLister,
@@ -63,15 +87,18 @@ export async function fetchResumeCounts(
 ): Promise<ResumeCounts> {
   if (machineOf(projectId) !== 'local') return {}
   const counts: ResumeCounts = {}
-  for (const engine of engines) {
-    try {
-      const n = resumableCount(await list(projectId, engine))
-      if (n > 0) counts[engine] = n
-    } catch {
-      /* 当作没有 */
-    }
-  }
-  return counts
+  await Promise.all(
+    engines.map(async engine => {
+      try {
+        const n = resumableCount(await withSlot(() => list(projectId, engine)))
+        if (n > 0) counts[engine] = n
+      } catch {
+        /* 当作没有 */
+      }
+    }),
+  )
+  // 按引擎顺序放回去，不让谁先查完影响对象的键顺序
+  return Object.fromEntries(engines.flatMap(e => (counts[e] ? [[e, counts[e]]] : []))) as ResumeCounts
 }
 
 // ---------- 缓存（按项目；一分钟内不重查） ----------
@@ -142,8 +169,7 @@ export function useResumeCounts(projectId: string | null | undefined, fetch = tr
   return counts
 }
 
-/** 打开某个项目的 /resume 选择器。选择器现在只支持 Claude Code，别的引擎先打开 Claude 的 */
+/** 打开某个项目的 /resume 选择器（列指定引擎的会话） */
 export function openResumeFor(projectId: string, engine: HintEngine = 'claude'): void {
-  void engine
-  openResumePicker({ projectId })
+  openResumePicker({ projectId, engine })
 }

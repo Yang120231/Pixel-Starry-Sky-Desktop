@@ -502,7 +502,7 @@ export async function listNativeSessions(
   projectId: string,
   opts: { engine?: EngineId; subfolders?: boolean } = {},
 ): Promise<NativeSessionSummary[]> {
-  if (isDemo) return demo().conversations.nativeSessions.list(projectId)
+  if (isDemo) return demo().conversations.nativeSessions.list(projectId, opts.engine === 'codex' ? 'codex' : 'claude')
   if (!bridge) return []
   return bridge.nativeSessions(
     projectId,
@@ -517,7 +517,7 @@ export async function nativeSessionDetails(
   ids: string[],
   engine: EngineId = 'claude',
 ): Promise<NativeSessionDetail[]> {
-  if (isDemo) return demo().conversations.nativeSessions.details(ids)
+  if (isDemo) return demo().conversations.nativeSessions.details(ids, engine === 'codex' ? 'codex' : 'claude')
   if (!bridge || !ids.length) return []
   return bridge.nativeSessionDetails(projectId, engine, ids)
 }
@@ -536,7 +536,12 @@ export async function importNativeSession(
     token?: string
   } = {},
 ): Promise<NativeImportResult> {
-  if (isDemo) return demo().conversations.nativeSessions.import(nativeId, opts.mode ?? 'inplace')
+  if (isDemo)
+    return demo().conversations.nativeSessions.import(
+      nativeId,
+      opts.mode ?? 'inplace',
+      opts.engine === 'codex' ? 'codex' : 'claude',
+    )
   if (!bridge) throw new Error('引擎不可用')
   try {
     return await bridge.importNativeSession(projectId, opts.engine ?? 'claude', nativeId, {

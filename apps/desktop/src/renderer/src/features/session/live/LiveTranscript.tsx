@@ -69,6 +69,7 @@ import { approvalWaiting } from './subagentBoxModel'
 import { LiveStatusLine } from './LiveStatusLine'
 import { LiveOwnerContext } from './liveOwner'
 import { useNativeCheck } from '@/features/resume/useNativeCheck'
+import { RESUME_ENGINE_NAMES } from '@/features/resume/store'
 
 /** 块没渲染过时的占位高度（content-visibility，见 blockHeight.ts）；按条目对象缓存，流式输出时只重算在动的那一条 */
 const heights = new WeakMap<Item, number>()
@@ -764,8 +765,13 @@ export function LiveTranscript({
                     </div>
                     <div className="conversation-message flex h-[30px] items-center gap-2 px-2 text-list text-fg-muted">
                       <Spinner size={13} />
-                      {/* 导入的终端会话：Claude Code 要先解析整份记录，大的要几秒 */}
-                      {snapshot?.record.imported ? tr('resume.starting') : tr('session.queue.starting')}
+                      {/* 导入的终端会话：引擎要先解析整份记录，大的要几秒 */}
+                      {snapshot?.record.imported
+                        ? tr('resume.starting', {
+                            engine:
+                              RESUME_ENGINE_NAMES[snapshot.record.imported.engine === 'codex' ? 'codex' : 'claude'],
+                          })
+                        : tr('session.queue.starting')}
                     </div>
                   </div>
                 ))}

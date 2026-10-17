@@ -1,8 +1,14 @@
-// 「接着 Claude Code 会话」选择框的打开请求：输入框、命令面板都往这里放，ResumeHost 接住并显示
+// 「接着 Claude Code / Codex 会话」选择框的打开请求：输入框、命令面板都往这里放，ResumeHost 接住并显示
 import { useSyncExternalStore } from 'react'
 import type { SessionSettings } from '@pixelsky/protocol'
 
+/** 能接着聊的引擎 */
+export type ResumeEngine = 'claude' | 'codex'
+export const RESUME_ENGINE_NAMES: Record<ResumeEngine, string> = { claude: 'Claude Code', codex: 'Codex' }
+
 export interface ResumeRequest {
+  /** 列哪个引擎的会话（输入框传当前执行者，命令面板传自己那条的引擎） */
+  engine: ResumeEngine
   /** 列哪个项目的会话；null（没有项目）时选择框只提示先打开项目 */
   projectId: string | null
   /** 预先填进搜索框的关键词（`/resume 关键词`） */
