@@ -178,10 +178,10 @@ describe('JSON', () => {
     expect(j.input).toEqual({ kind: 'folder', path: dotenv(), bytes: null })
     expect(j.options).toEqual({ level: 'upload', grammar: 'full', appVersion: null, strict: false })
     expect(j.pack).toEqual({ id: 'pixelsky.dotenv', version: '1.0.0', files: 7, bytes: 8328 })
-    expect(j.status).toBe('ok')
-    expect(j.verdict).toEqual({ pass: true, blocking: 0 })
-    // 慢机器上可能多一条测速提示（warning / hint），其余计数必须为 0
+    // 慢机器上可能多一条测速提示（warning / hint，状态随之变成 warning），其余计数必须为 0
     const timing = j.issues.length - withoutTiming(j.issues as Array<{ code: string }>).length
+    expect(j.status).toBe(timing ? 'warning' : 'ok')
+    expect(j.verdict).toEqual({ pass: true, blocking: 0 })
     expect(j.counts).toEqual({ error: 0, warning: timing, reject: 0, hint: timing, note: 0 })
     expect(withoutTiming(j.issues as Array<{ code: string }>)).toEqual([])
     expect(j.notChecked).toEqual(['publisher', 'versionIncrement', 'listedConflicts'])
