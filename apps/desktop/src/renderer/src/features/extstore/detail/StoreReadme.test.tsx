@@ -17,6 +17,19 @@ const render = (text: string): string =>
   )
 
 describe('StoreReadme', () => {
+  it('按 Markdown 显示：标题、加粗、行内代码、表格（本机扩展详情也用它）', () => {
+    const html = render(
+      '# Java 支持\n\n## 装上以后\n\n- **代码片段**（`.java` 文件里）\n\n| 前缀 | 作用 |\n| --- | --- |\n| `main` | main 方法 |\n',
+    )
+    expect(html).toContain('<h1>Java 支持</h1>')
+    expect(html).toContain('<h2>装上以后</h2>')
+    expect(html).toContain('<strong>代码片段</strong>')
+    expect(html).toContain('<code>.java</code>')
+    expect(html).toMatch(/<table>[\s\S]*<th>前缀<\/th>[\s\S]*<td><code>main<\/code><\/td>/)
+    expect(html).not.toContain('# Java')
+    expect(html).not.toContain('| --- |')
+  })
+
   it('图片一律不产生 img，只留替代文字', () => {
     const sources = [
       'C:/Windows/win.ini',

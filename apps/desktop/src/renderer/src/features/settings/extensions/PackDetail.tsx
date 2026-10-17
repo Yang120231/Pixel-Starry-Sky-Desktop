@@ -8,6 +8,7 @@ import { tr, translateMessage } from '@/i18n/core'
 import { readPackText, refreshPacks } from '@/features/extpacks/store'
 import { contributionRows, grammarConflicts, issueText, packTitle, type ContributionRow } from './model'
 import { SourceBadge } from '@/features/extstore/installed/InstalledBadges'
+import { StoreReadme } from '@/features/extstore/detail/StoreReadme'
 import { PackBadge } from './PackBadge'
 import { PackIcon, PackStatus } from './PackList'
 
@@ -281,9 +282,10 @@ export function PackDetail({ pack, all, onClose }: { pack: ExtPackInfo; all: Ext
       {readme && (
         <>
           <SubTitle>{t('extensions.detail.readme')}</SubTitle>
-          <pre className="max-h-80 overflow-auto rounded-md bg-subtle p-3 text-meta whitespace-pre-wrap text-fg-secondary">
-            {readme}
-          </pre>
+          {/* 按 Markdown 显示；和商店详情同一个渲染（不可信内容：图片只显示替代文字、链接只放行 http / https） */}
+          <div data-pack-readme className="max-h-96 overflow-auto rounded-md border border-line-subtle p-4">
+            <StoreReadme text={readme} />
+          </div>
         </>
       )}
     </div>
