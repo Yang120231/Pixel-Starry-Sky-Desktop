@@ -319,6 +319,9 @@ export function createSubagentExtension(options: SubagentOptions): ExtensionFact
         let settled: () => void = () => {}
         const done = new Promise<void>(r => (settled = r))
         let streaming = ''
+        // 最后一条助手消息的错误（认证失败等）：Pi 报在 stopReason / errorMessage 上、照样 settled；
+        // 自动重试、压缩后接着跑成功时后面的消息会清掉它
+        let failure = ''
         const calls = new Map<string, ChildCall>()
         const forward: ForwardState = {
           calls,
@@ -343,6 +346,7 @@ export function createSubagentExtension(options: SubagentOptions): ExtensionFact
             const reply = messageText(message) || streaming
             streaming = ''
             if (reply.trim()) progress.result = reply.trim()
+            failure = message.stopReason === 'error' ? text(message.errorMessage) || 'Model request failed' : ''
             report()
           } else if (type === 'agent_settled') settled()
         })
@@ -363,10 +367,20 @@ export function createSubagentExtension(options: SubagentOptions): ExtensionFact
           await child.request('prompt', { message: params.prompt })
           await Promise.race([done, child.untilExit()])
           if (child.exited && progress.state === 'running') throw child.exited
+          if (failure && progress.state === 'running') throw new Error(failure)
           if (progress.state === 'running') progress.state = 'completed'
         } catch (error) {
-          if (progress.state === 'running') progress.state = 'failed'
-          if (!progress.result) progress.result = (error as Error).message
+          if (progress.state === 'running') {
+            progress.state = 'failed'
+            // 原因放前面（主模型和追踪里都看得到），已经写出来的回复跟在后面
+            const reason = (error as Error).message
+            progress.result = progress.result
+              ? `${reason}
+
+Partial report:
+${progress.result}`
+              : reason
+          }
         } finally {
           clearTimeout(timer)
           signal?.removeEventListener('abort', abort)

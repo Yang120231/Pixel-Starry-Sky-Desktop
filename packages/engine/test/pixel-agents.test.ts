@@ -94,7 +94,7 @@ describe('像素星空子智能体 → 智能体追踪', () => {
       type: 'tool_execution_end',
       toolCallId: 'c2',
       toolName: 'task',
-      result: { content: [{ type: 'text', text: 'boom' }] },
+      result: { content: [{ type: 'text', text: 'Subagent failed: 401 REVIEW_AUTH_FAILURE' }] },
       isError: true,
     })
     const runs = events.filter(e => e.type === 'runs').pop() as Extract<EngineEvent, { type: 'runs' }>
@@ -102,6 +102,13 @@ describe('像素星空子智能体 → 智能体追踪', () => {
       ['old-agent', 'completed'],
       ['new', 'failed'],
     ])
+    // 原因进追踪（details 是空的，不能留着之前的进度文字）
+    expect(runs.runs.agents[1].result).toBe('Subagent failed: 401 REVIEW_AUTH_FAILURE')
+    const ended = events.filter(e => e.type === 'item_completed').pop() as Extract<
+      EngineEvent,
+      { type: 'item_completed' }
+    >
+    expect(ended.item).toMatchObject({ id: subagentItemId('c2'), status: 'failed' })
   })
 
   it('重新打开：从主会话文件读子智能体（同一个调用取最后一条），读子智能体的对话', () => {

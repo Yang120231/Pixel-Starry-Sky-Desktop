@@ -543,8 +543,9 @@ export class PixelTranslator {
     const prior = this.agents.get(call)
     let run = Object.keys(details).length ? subagentRun(details, call) : prior
     if (!run) return
-    // 工具出错（子智能体失败）时 details 可能没跟上
-    if (final && raw.isError === true && run.state === 'running') run = { ...run, state: 'failed' }
+    // 工具出错（子智能体失败）时 details 是空的：状态和原因从工具结果里拿（结果还是之前的进度）
+    if (final && raw.isError === true && run.state === 'running')
+      run = { ...run, state: 'failed', result: resultText(object(raw.result)).slice(0, 500) || run.result }
     this.agents.set(call, run)
     this.agentTools.set(call, string(details.lastTool) || this.agentTools.get(call) || null)
     this.emitRuns()

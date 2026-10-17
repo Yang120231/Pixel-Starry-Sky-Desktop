@@ -156,3 +156,55 @@ describe('子智能体：转过来的审批', () => {
     expect(h.child().received.find(m => m.type === 'extension_ui_response')).toMatchObject({ value: ALLOW_OPTION })
   })
 })
+
+/** 只跑一段子进程剧本，收集主会话记下的条目 */
+function runScript(script: (child: FakeChild) => Promise<void>) {
+  let tool: { execute: (...args: unknown[]) => Promise<{ content: Array<{ text: string }> }> } | null = null
+  const entries: Json[] = []
+  createSubagentExtension({ mode: () => 'default', spawnChild: () => new FakeChild(script) as never })({
+    registerTool: (t: never) => (tool = t),
+    getThinkingLevel: () => 'off',
+    appendEntry: (_type: string, data: Json) => entries.push(data),
+  } as never)
+  const ctx = { cwd: process.cwd(), mode: 'rpc', model: undefined, sessionManager: { getSessionFile: () => undefined } }
+  const run = () => tool!.execute('t1', { description: '查东西', prompt: 'look' }, undefined, undefined, ctx)
+  return { run, entries }
+}
+
+const AUTH_ERROR = '401 Unauthorized: REVIEW_AUTH_FAILURE'
+const assistant = (message: Json) => ({
+  type: 'message_end',
+  message: { role: 'assistant', content: [], usage: { input: 1, output: 1 }, ...message },
+})
+
+describe('子智能体：模型请求失败', () => {
+  it('最后一条回复是 stopReason error：工具报错带上原因，记下的状态是 failed', async () => {
+    const h = runScript(async c => c.send(assistant({ stopReason: 'error', errorMessage: AUTH_ERROR })))
+    await expect(h.run()).rejects.toThrow(`Subagent failed: ${AUTH_ERROR}`)
+    expect(h.entries).toEqual([expect.objectContaining({ state: 'failed', result: AUTH_ERROR, toolCallId: 't1' })])
+  })
+
+  it('已经写出一部分再出错：原因在前，已有的回复跟在后面', async () => {
+    const h = runScript(async c => {
+      c.send(assistant({ content: [{ type: 'text', text: 'found a.ts' }], stopReason: 'toolUse' }))
+      c.send(assistant({ stopReason: 'error', errorMessage: AUTH_ERROR }))
+    })
+    await expect(h.run()).rejects.toThrow(`Subagent failed: ${AUTH_ERROR}\n\nPartial report:\nfound a.ts`)
+    expect(h.entries[0]).toMatchObject({ state: 'failed' })
+  })
+
+  it('出错后 Pi 自动重试成功：按最后一条算，正常完成', async () => {
+    const h = runScript(async c => {
+      c.send(assistant({ stopReason: 'error', errorMessage: '529 overloaded' }))
+      c.send(assistant({ content: [{ type: 'text', text: 'all good' }], stopReason: 'stop' }))
+    })
+    const result = await h.run()
+    expect(result.content[0].text).toBe('all good')
+    expect(h.entries[0]).toMatchObject({ state: 'completed', result: 'all good' })
+  })
+
+  it('没有 errorMessage 也算失败', async () => {
+    const h = runScript(async c => c.send(assistant({ stopReason: 'error' })))
+    await expect(h.run()).rejects.toThrow('Subagent failed: Model request failed')
+  })
+})
