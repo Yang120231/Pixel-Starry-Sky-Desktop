@@ -364,6 +364,33 @@ describe('消息队列：调度与恢复', () => {
     expect(host.open(record.id).items.filter(i => i.kind === 'user')).toHaveLength(2)
   })
 
+  it('失败后换了模型 / 额度来源再重试：用会话现在的设置，不用入队时存的', async () => {
+    const { host, adapter, record, send } = setup()
+    await send('a')
+    await until(() => !!adapter.sessions[0]?.active)
+    expect(adapter.sessions[0].inputs[0].settings).toMatchObject({ model: 'alpha', provider: null })
+    adapter.sessions[0].finish('failed')
+    await until(() => host.open(record.id).state === 'idle')
+    expect(host.open(record.id).queue[0]).toMatchObject({ id: 'a', status: 'failed' })
+    // 出错后换渠道：改了会话记录
+    await host.update(record.id, { model: 'beta', effort: 'high', provider: { id: 'other-api' } })
+    await host.runQueuedNow(record.id, 'a')
+    const last = adapter.sessions.at(-1)!.inputs.at(-1)!
+    expect(last.settings).toMatchObject({ model: 'beta', effort: 'high', provider: { id: 'other-api' } })
+  })
+
+  it('没出过错的排队项「立即执行」：仍用入队时的固定设置', async () => {
+    const { host, adapter, record, send } = setup()
+    await send('a')
+    await until(() => !!adapter.sessions[0]?.active)
+    await send('b')
+    await host.update(record.id, { model: 'beta' })
+    await host.runQueuedNow(record.id, 'b')
+    await until(() => adapter.sessions.flatMap(s => s.inputs).some(i => i.id !== 'a'))
+    const b = adapter.sessions.flatMap(s => s.inputs).at(-1)!
+    expect(b.settings.model).toBe('alpha')
+  })
+
   it('引导仅在能力已验证且设置兼容时消费，已消费项不会再自动执行', async () => {
     const { host, adapter, record, send } = setup()
     await send('a')

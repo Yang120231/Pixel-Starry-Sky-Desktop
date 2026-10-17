@@ -159,10 +159,14 @@ export class HostQueue {
     if (!rt.snapshot.queue.some(q => q.id === queueId)) throw new Error('这条消息已经开始处理')
     if (rt.snapshot.state !== 'idle' || rt.pumping) throw new Error('当前任务还没有停止，请稍后重试')
     if (rt.snapshot.record.archivedAt) m.events.patchRecord(id, { archivedAt: null })
+    // 重试出过错的（执行失败、发送失败、交付待核对）：用会话现在的模型、强度和额度来源，不用入队时存的那份——
+    // 出错后多半是换了渠道再重试（docs/ui/message-queue.md「可重试、撤回或检查设置」）。没出过错的排队项照旧用固定设置
+    const retried = item.error || item.status === 'failed' || item.status === 'uncertain'
+    const settings = retried ? queueSettings(rt.snapshot.record) : item.settings
     rt.snapshot = {
       ...rt.snapshot,
       queue: [
-        { ...item, status: 'queued', mode: 'normal', error: null, held: false, direct: true },
+        { ...item, settings, status: 'queued', mode: 'normal', error: null, held: false, direct: true },
         ...rt.snapshot.queue.filter(q => q.id !== queueId),
       ],
       queuePaused: false,
