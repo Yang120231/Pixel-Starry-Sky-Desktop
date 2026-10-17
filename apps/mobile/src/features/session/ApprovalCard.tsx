@@ -59,7 +59,7 @@ export function ApprovalCard({
   const Icon = ICONS[request.kind] ?? ShieldAlert
 
   return (
-    <div className="sheet-in flex max-h-[70dvh] flex-col rounded-t-3xl border-t border-line bg-surface shadow-popover">
+    <div className="sheet-in flex max-h-[calc(var(--app-height,100dvh)*0.7)] flex-col rounded-t-3xl border-t border-line bg-surface shadow-popover">
       <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-line-strong" />
       <div className="flex min-h-0 flex-col gap-3 overflow-y-auto px-4 pt-3 pb-4">
         <div className="flex items-center gap-2.5">

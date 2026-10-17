@@ -182,6 +182,13 @@ export interface SessionRecord extends SessionSettings {
   lastOutcome: TurnOutcome | null
   /** 最近一轮失败时的错误摘要（最多 500 字），其余情况为 null；旧记录没有此字段（docs/ui/tasks-inbox.md） */
   lastError?: string | null
+  /**
+   * 最近一轮 AI 最后一条回复的纯文本开头（会话列表的「最后一句回复」，docs/mobile-remote.md §21.3）：一行、最多 120 个字符
+   * （超出截断并加「…」），已去掉 Markdown 记号（代码块整块换成「[代码]」、行内代码去反引号、链接只留文字、
+   * 标题 / 列表符号 / 引用 / 加粗斜体记号去掉、多个空白合成一个空格；见 replyPreview）。
+   * 用户消息不算；一轮结束时（完成 / 失败 / 中断）如果这一轮有回复就更新，没有回复的轮次保持旧值；还没有回复时不写或为 null
+   */
+  lastReply?: string | null
   /** 回退后尚未生效的引擎截断点（Claude 记录里的条目 uuid）：下次启动引擎时使用，成功启动后清空 */
   pendingRewind?: string | null
   /** 分叉出来、还没启动过引擎的会话：第一次启动时从原引擎会话的截断点复制（docs/ui/rewind-fork-sidechat.md §2） */

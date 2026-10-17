@@ -11,6 +11,7 @@ import type { WindowState } from '../shared/types/window'
 import type { WindowBridge } from './window'
 import type { ExtensionsBridge } from './extensions'
 import type { ExtPacksBridge } from './extpacks'
+import type { ExtStoreBridge } from './extstore'
 import type { TerminalBridge } from './terminal'
 import type { ProjectToolsBridge } from './project-tools'
 import type { NotificationClick } from '../shared/types/notifications'
@@ -590,4 +591,27 @@ contextBridge.exposeInMainWorld('pixelsky', {
       return () => ipcRenderer.removeListener('extpacks:changed', listener)
     },
   } satisfies ExtPacksBridge,
+  extstore: {
+    catalog: query => call('extstore:catalog', query),
+    detail: id => call('extstore:detail', id),
+    install: (id, version, options) => call('extstore:install', id, version, options ?? {}),
+    cancel: id => call('extstore:cancel', id),
+    checkUpdates: options => call('extstore:checkUpdates', options ?? {}),
+    state: () => call('extstore:state'),
+    refreshBlocklist: () => call('extstore:refreshBlocklist'),
+    report: (id, input) => call('extstore:report', id, input),
+    publisher: () => call('extstore:publisher'),
+    register: name => call('extstore:register', name),
+    pickUpload: input => call('extstore:pickUpload', input),
+    upload: token => call('extstore:upload', token),
+    withdraw: (id, version) => call('extstore:withdraw', id, version),
+    delist: id => call('extstore:delist', id),
+    relist: id => call('extstore:relist', id),
+    publishCheck: (id, version) => call('extstore:publishCheck', id, version),
+    onChange: callback => {
+      const listener = (): void => callback()
+      on('extstore:changed', listener)
+      return () => ipcRenderer.removeListener('extstore:changed', listener)
+    },
+  } satisfies ExtStoreBridge,
 })

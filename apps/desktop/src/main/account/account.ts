@@ -7,7 +7,8 @@ import { createServer, type Server, type ServerResponse } from 'node:http'
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { hostname, release } from 'node:os'
 import { join } from 'node:path'
-import { app, BrowserWindow, safeStorage, shell } from 'electron'
+import { app, BrowserWindow, net, safeStorage, shell } from 'electron'
+import { codedError } from '@pixelsky/protocol'
 import { nativeText, windowLocale } from '../app/ui-language'
 import { sendTo } from '../app/rendererHealth'
 import * as ipc from '../ipc/guard'
@@ -383,6 +384,8 @@ export async function settingsFetch(method: 'GET' | 'PUT', body?: unknown): Prom
 async function authedFetch(path: string, init: RequestInit): Promise<Response> {
   if (!tokens) throw new Error('请先登录像素星空账号')
   const requestEpoch = epoch
+  // 请求途中账号退出或切换：和登录过期同一个 code，调用方按「需要重新登录」处理
+  const loggedOut = (): Error => Object.assign(new Error('账号已退出，请重新登录'), { code: 'AUTH_EXPIRED' })
   // 刷新令牌被拒（登录过期，或在云端管理页被吊销）：马上退出登录，不等下一次拉取账号数据
   const signedOut = (): Error => {
     if (epoch === requestEpoch) clearSession(SIGNED_OUT_MESSAGE)
@@ -397,7 +400,7 @@ async function authedFetch(path: string, init: RequestInit): Promise<Response> {
   }
   if (tokens.accessExpiresAt - Date.now() < REFRESH_SKEW_MS) await refresh()
   const send = async (): Promise<Response> => {
-    if (!tokens || epoch !== requestEpoch) throw new Error('账号已退出，请重新登录')
+    if (!tokens || epoch !== requestEpoch) throw loggedOut()
     const headers = new Headers(init.headers)
     headers.set('Authorization', `Bearer ${tokens.accessToken}`)
     return fetch(`${baseUrl()}${path}`, { ...init, headers, redirect: 'error' })
@@ -415,7 +418,7 @@ async function authedFetch(path: string, init: RequestInit): Promise<Response> {
   }
   if (epoch !== requestEpoch) {
     await res.body?.cancel()
-    throw new Error('账号已退出，请重新登录')
+    throw loggedOut()
   }
   return res
 }
@@ -458,6 +461,56 @@ export async function teamsFetch(
     ...(body !== undefined && { body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }),
     signal: AbortSignal.timeout(timeoutMs),
   })
+}
+
+/**
+ * 扩展商店的作者接口（docs/ui/extension-store-client.md §7）：只能调 /v1/extensions 下的接口，不放宽其他白名单。
+ * body 发 JSON；raw 发原始字节（上传 zip），contentType 写在请求头里。
+ */
+export async function extensionsFetch(
+  method: 'GET' | 'POST',
+  path: string,
+  opts: { body?: unknown; raw?: Uint8Array; contentType?: string; timeoutMs?: number } = {},
+): Promise<Response> {
+  if (!/^\/v1\/extensions(\/|\?|$)/.test(path) || /\.\.|%2e/i.test(path)) throw new Error('无效的扩展接口')
+  const headers: Record<string, string> = {}
+  let body: RequestInit['body']
+  if (opts.raw !== undefined) {
+    body = opts.raw as RequestInit['body']
+    headers['Content-Type'] = opts.contentType ?? 'application/octet-stream'
+  } else if (opts.body !== undefined) {
+    body = JSON.stringify(opts.body)
+    headers['Content-Type'] = 'application/json'
+  }
+  try {
+    return await authedFetch(path, {
+      method,
+      ...(body !== undefined && { body, headers }),
+      signal: AbortSignal.timeout(opts.timeoutMs ?? 20_000),
+    })
+  } catch (e) {
+    // 只有「连不上」（fetch 抛 TypeError）才判断是不是代理造成的；超时、登录过期、取消原样抛
+    if (e instanceof TypeError && (await publicReachable())) throw codedError('extstore.proxyHint')
+    throw e
+  }
+}
+
+/**
+ * 带登录的请求用全局 fetch（不走系统代理），公开请求用 net.fetch（走系统代理）。
+ * 前者连不上时试一次公开接口：能通就说明是代理环境造成的（docs/ui/extension-store-client.md §3.2）。
+ */
+async function publicReachable(): Promise<boolean> {
+  try {
+    const res = await net.fetch(`${baseUrl()}/cloud/api/extensions?limit=1`, {
+      credentials: 'omit',
+      redirect: 'error',
+      signal: AbortSignal.timeout(8_000),
+    })
+    await res.body?.cancel().catch(() => undefined)
+    return res.ok
+  } catch {
+    return false
+  }
 }
 
 /**

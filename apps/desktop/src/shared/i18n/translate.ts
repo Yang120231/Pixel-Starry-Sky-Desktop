@@ -48,6 +48,8 @@ import { progressLineMessages } from './progressLineMessages'
 import { traceHistoryMessages } from './traceHistoryMessages'
 import { wslMessages } from './wslMessages'
 import { extensionCenterMessages } from './extensionCenterMessages'
+import { extstoreInstalledMessages } from './extstoreInstalledMessages'
+import { extstorePublishMessages } from './extstorePublishMessages'
 import { fileIconMessages } from './fileIconMessages'
 import { extGrammarMessages } from './extGrammarMessages'
 import { editorThemeMessages } from './editorThemeMessages'
@@ -56,6 +58,7 @@ import { extTaskMessages } from './extTaskMessages'
 import { promptMessages } from './promptMessages'
 import { resumeMessages } from './resumeMessages'
 import { approvalMessages } from './approvalMessages'
+import { extstoreDetailMessages } from './extstoreDetailMessages'
 import { replaceCodedErrors } from '@pixelsky/protocol'
 import type { Locale } from './messages'
 
@@ -111,6 +114,8 @@ export const allMessages = {
   ...progressLineMessages,
   ...traceHistoryMessages,
   ...extensionCenterMessages,
+  ...extstoreInstalledMessages,
+  ...extstorePublishMessages,
   ...fileIconMessages,
   ...extGrammarMessages,
   ...editorThemeMessages,
@@ -119,6 +124,7 @@ export const allMessages = {
   ...promptMessages,
   ...resumeMessages,
   ...approvalMessages,
+  ...extstoreDetailMessages,
 }
 export type TranslationKey = keyof typeof allMessages
 

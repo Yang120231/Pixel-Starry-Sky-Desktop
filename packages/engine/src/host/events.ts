@@ -1,8 +1,23 @@
 // 事件：apply 是唯一写快照的入口（先落盘再广播，seq 递增）；适配器发来的事件在这里推导运行状态
-import { reduce, type EngineEvent, type SessionRecord } from '@pixelsky/protocol'
+import { reduce, replyPreview, type EngineEvent, type Item, type SessionRecord } from '@pixelsky/protocol'
 import type { HostContext } from './context'
 
 type DeltaEvent = Extract<EngineEvent, { type: 'item_delta' }>
+
+/**
+ * 最近一轮最后一条 assistant 回复的预览（SessionRecord.lastReply）：从末尾往前找，遇到普通用户消息（这一轮的起点）就停；
+ * 中途插入的引导消息（guidance）不算起点。这一轮没有回复、或回复是空的 / 全是记号，返回 undefined（调用方保留旧值）
+ */
+export function lastTurnReply(items: readonly Item[]): string | undefined {
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i]
+    if (item.kind === 'user' && item.mode !== 'guidance') return undefined
+    if (item.kind !== 'assistant') continue
+    const preview = replyPreview(item.text)
+    if (preview) return preview
+  }
+  return undefined
+}
 
 export class HostEvents {
   /** 每个会话一条还没应用的文字增量（同一条目同一字段的连续增量合并在这里） */
@@ -129,6 +144,7 @@ export class HostEvents {
         const entry = done.engineSessions?.[engine]
         const held = rt.holdCursor === event.turnId || (event.outcome === 'failed' && !!done.engineSessions)
         rt.holdCursor = undefined
+        const reply = lastTurnReply(rt.snapshot.items)
         this.patchRecord(id, {
           engineSessions: {
             ...done.engineSessions,
@@ -140,6 +156,8 @@ export class HostEvents {
           },
           lastOutcome: event.outcome,
           lastError: event.outcome === 'failed' ? (event.error ?? '').slice(0, 500) || null : null,
+          // 这一轮没有回复（只有用户消息、或只有工具调用）时不写，保留上一次的预览
+          ...(reply === undefined ? {} : { lastReply: reply }),
           updatedAt: Date.now(),
         })
         // 连接问题断开的：这条留在队首，等一会儿自动接着做，队列不暂停（queue.ts reconnect）

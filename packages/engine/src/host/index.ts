@@ -467,6 +467,11 @@ export class EngineHost {
     return this.m.sessions.renameSession(id, title)
   }
 
+  /** 在会话里加一条提示条目（手机改了设置时留一条记录，docs/mobile-remote.md §21.7） */
+  addNotice(id: string, level: 'info' | 'warn' | 'error', text: string): void {
+    this.m.sessions.addNotice(id, level, text)
+  }
+
   setSessionBottom(id: string, bottomed: boolean): SessionRecord {
     return this.m.sessions.setSessionBottom(id, bottomed)
   }

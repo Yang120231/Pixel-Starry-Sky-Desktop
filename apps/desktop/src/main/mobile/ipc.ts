@@ -94,6 +94,9 @@ export function initMobile(ctx: AppContext): void {
     },
     confirm: async phone => void (await cloudCall('POST', `/v1/bridge/devices/${encodeURIComponent(phone)}/confirm`)),
     remove: async phone => void (await cloudCall('DELETE', `/v1/bridge/devices/${encodeURIComponent(phone)}`)),
+    push: async (phone, payload) => {
+      if (store.prefs.enabled) await cloudCall('POST', `/v1/bridge/devices/${encodeURIComponent(phone)}/push`, payload)
+    },
   }
 
   let searchSeq = 0

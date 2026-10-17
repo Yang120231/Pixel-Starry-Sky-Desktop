@@ -17,6 +17,7 @@ import type {
 } from '@pixelsky/protocol'
 import { ENGINES } from '../registry'
 import type { HostContext } from './context'
+import { lastTurnReply } from './events'
 import { derivedSeen, lastItemId } from './handoff'
 
 /** 还原代码前存一份当前内容，总共超过这个大小就不提供代码撤销 */
@@ -42,7 +43,7 @@ type UserItem = Extract<Item, { kind: 'user' }>
 /** 回退会动到的会话记录字段（撤销时整体放回） */
 type RewindState = Pick<
   SessionRecord,
-  'engineSessionId' | 'pendingRewind' | 'pendingFork' | 'engineSessions' | 'nextEngine'
+  'engineSessionId' | 'pendingRewind' | 'pendingFork' | 'engineSessions' | 'nextEngine' | 'lastReply'
 >
 
 const rewindState = (record: SessionRecord): RewindState => ({
@@ -51,6 +52,7 @@ const rewindState = (record: SessionRecord): RewindState => ({
   pendingFork: record.pendingFork ?? null,
   engineSessions: record.engineSessions,
   nextEngine: record.nextEngine ?? null,
+  lastReply: record.lastReply ?? null,
 })
 
 export class HostBranch {
@@ -297,7 +299,8 @@ export class HostBranch {
       if (key !== record.engine && other && !(other.seen !== null && keptIds.has(other.seen)))
         engineSessions[key] = { id: null, seen: null }
     }
-    m.events.patchRecord(id, { ...patch, engineSessions })
+    // 列表里的「最后一句回复」跟着退回到保留的最后一轮（被回退掉的那条不再显示）
+    m.events.patchRecord(id, { ...patch, engineSessions, lastReply: lastTurnReply(kept) ?? null })
     if (!worked && thread && kept.length > 0)
       m.events.apply(id, {
         type: 'item_completed',
@@ -405,6 +408,8 @@ export class HostBranch {
       updatedAt: now,
       lastOutcome: null,
       lastError: null,
+      // 分叉只带到截断点：预览用截断点之前最后一轮的回复，不沿用来源会话的
+      lastReply: lastTurnReply(items) ?? null,
       archivedAt: null,
       bottomedAt: null,
       pinnedAt: null,

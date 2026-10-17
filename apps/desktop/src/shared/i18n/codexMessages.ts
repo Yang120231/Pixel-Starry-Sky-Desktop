@@ -24,13 +24,17 @@ export const codexMessages = {
     en: 'Read-only; uses Codex native plan mode to propose a plan and asks you when a decision is needed',
   },
   'codex.fastGateway': {
-    zh: '只在 Codex 用自己的登录（ChatGPT / OpenAI Key）时可用',
-    en: 'Only available when Codex uses its own sign-in (ChatGPT / OpenAI key)',
+    zh: '接口支持 Fast 时生效，不支持的打开了也没有效果',
+    en: 'Takes effect if the endpoint supports Fast; otherwise turning it on has no effect',
+  },
+  'codex.fastUnverified': {
+    zh: '你的接口或当前模型可能不支持 Fast，打开了可能不生效',
+    en: 'Your endpoint or the current model may not support Fast; turning it on may have no effect',
   },
   'codex.targets': { zh: '适用引擎', en: 'Applies to' },
   'codex.extensionInfo': {
-    zh: 'Codex 支持独立 Skills、stdio / HTTP MCP 与命令行；Claude 插件保持专属',
-    en: 'Codex supports standalone skills, stdio / HTTP MCP and CLI tools; Claude plugins remain engine-specific',
+    zh: 'Codex 和像素星空支持独立 Skills、stdio / HTTP MCP 与命令行；Claude 插件保持专属',
+    en: 'Codex and Pixel Starry Sky support standalone skills, stdio / HTTP MCP and CLI tools; Claude plugins remain engine-specific',
   },
   'codex.nativeSettings': {
     zh: '使用本机 Codex 登录及 provider 配置；输出风格和提问开关由原生配置管理。',

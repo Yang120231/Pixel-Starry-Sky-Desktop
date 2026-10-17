@@ -255,6 +255,8 @@ export class HostNative {
       throw new Error(ctx.changingSessions.has(id) ? '正在处理这个会话，请稍后重试' : '任务运行中，结束后再试')
     }
     if (action !== 'earlier' && imp.forked) return { added: 0 }
+    // 回退了还没发消息：原生记录要等下次启动才截到 pendingRewind，截断点之后读到的都是刚回退掉的轮次，不是终端里新聊的
+    if ((action === 'check' || action === 'sync') && rt.snapshot.record.pendingRewind) return { added: 0 }
     ctx.changingSessions.add(id)
     try {
       if (action === 'earlier') return await this.earlier(id, imp, adapter)

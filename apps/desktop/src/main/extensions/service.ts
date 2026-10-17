@@ -568,6 +568,8 @@ export class ExtensionService {
         ) + extraKey,
       pluginDirs,
       pathDirs: [...new Set(pathDirs)],
+      // 像素星空：MCP 也走这个文件（命令行的 MCP 扩展注册），技能每个目录一个 --skill
+      ...(engine === 'pixel' ? { skillRoots: [...new Set(skillRoots)] } : {}),
       mcpFile: file,
       dispose: () => {
         if (file) rmSync(inside(join(this.dir, 'runtime'), file), { force: true })

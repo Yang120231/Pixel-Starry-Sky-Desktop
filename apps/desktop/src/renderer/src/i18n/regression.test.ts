@@ -53,6 +53,8 @@ import { subagentStopMessages } from '../../../shared/i18n/subagentStopMessages'
 import { progressLineMessages } from '../../../shared/i18n/progressLineMessages'
 import { traceHistoryMessages } from '../../../shared/i18n/traceHistoryMessages'
 import { extensionCenterMessages } from '../../../shared/i18n/extensionCenterMessages'
+import { extstoreInstalledMessages } from '../../../shared/i18n/extstoreInstalledMessages'
+import { extstorePublishMessages } from '../../../shared/i18n/extstorePublishMessages'
 import { fileIconMessages } from '../../../shared/i18n/fileIconMessages'
 import { extGrammarMessages } from '../../../shared/i18n/extGrammarMessages'
 import { editorThemeMessages } from '../../../shared/i18n/editorThemeMessages'
@@ -61,6 +63,7 @@ import { extTaskMessages } from '../../../shared/i18n/extTaskMessages'
 import { promptMessages } from '../../../shared/i18n/promptMessages'
 import { resumeMessages } from '../../../shared/i18n/resumeMessages'
 import { approvalMessages } from '../../../shared/i18n/approvalMessages'
+import { extstoreDetailMessages } from '../../../shared/i18n/extstoreDetailMessages'
 
 // 与 shared/i18n/translate.ts 的 allMessages 合并顺序一致
 const dictionaries: Record<string, Record<string, unknown>> = {
@@ -115,6 +118,8 @@ const dictionaries: Record<string, Record<string, unknown>> = {
   progressLineMessages,
   traceHistoryMessages,
   extensionCenterMessages,
+  extstoreInstalledMessages,
+  extstorePublishMessages,
   fileIconMessages,
   extGrammarMessages,
   editorThemeMessages,
@@ -123,6 +128,7 @@ const dictionaries: Record<string, Record<string, unknown>> = {
   promptMessages,
   resumeMessages,
   approvalMessages,
+  extstoreDetailMessages,
 }
 
 /** 中英文值不同、需要保持现状的重复 key（当前为空；新增重复必须先说明原因）。 */

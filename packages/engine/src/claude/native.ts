@@ -175,8 +175,10 @@ interface HeadInfo {
   cwd: string | null
   entrypoint: string | null
   branch: string | null
-  /** 第一句真正的用户输入（去掉像素星空加的前缀） */
+  /** 第一句真正的用户输入（去掉像素星空加的前缀）；只发图片的不算，标题接着往后找有字的 */
   first: string
+  /** 头部有过真正的用户输入（包括只发了图片的） */
+  prompted: boolean
   customTitle: string | null
   aiTitle: string | null
   lastPrompt: string | null
@@ -232,6 +234,7 @@ async function readHead(file: string, size: number, mtimeMs: number): Promise<He
     entrypoint: null,
     branch: null,
     first: '',
+    prompted: false,
     customTitle: null,
     aiTitle: null,
     lastPrompt: null,
@@ -249,7 +252,10 @@ async function readHead(file: string, size: number, mtimeMs: number): Promise<He
     else if (e.type === 'last-prompt' && typeof e.lastPrompt === 'string') info.lastPrompt = e.lastPrompt
     else if (e.type === 'user' && !info.first && e.isSidechain !== true) {
       const content = userContent(obj(e.message).content)
-      if (classifyUser(e, content) === 'prompt') info.first = splitPrompt(content.text).text
+      if (classifyUser(e, content) === 'prompt') {
+        info.prompted = true
+        info.first = splitPrompt(content.text).text
+      }
     }
   }
   return remember(headCache, key, info)
@@ -395,7 +401,7 @@ export async function listClaudeSessions(
     const where = await matchCwd(cwd, head.cwd, subfolders)
     if (!where) return null
     // 头部没有用户输入、又已经是整个文件、也没有 last-prompt：只有元数据，不列
-    if (!head.first && head.whole && !head.lastPrompt) return null
+    if (!head.first && !head.prompted && head.whole && !head.lastPrompt) return null
     const summary: ClaudeSessionSummary = {
       id: f.id,
       file: f.file,
@@ -607,7 +613,7 @@ export async function claudeSessionDetail(
     lastActive: tail.lastActive,
     model: tail.model,
     branch: tail.branch ?? s.branch,
-    hidden: !(head?.first ?? s.firstPrompt) && lastPrompt === null,
+    hidden: !(head?.first || head?.prompted || s.firstPrompt) && lastPrompt === null,
     continuedIn: tail.continuedIn,
     superseded:
       !!tail.continuedIn &&

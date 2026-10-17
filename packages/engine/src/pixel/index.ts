@@ -1,15 +1,25 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { codedError, type EngineCatalog, type EngineInfo, type SessionRecord, viaGateway } from '@pixelsky/protocol'
+import {
+  codedError,
+  type AgentRuns,
+  type EngineCatalog,
+  type EngineInfo,
+  type Item,
+  type SessionRecord,
+  viaGateway,
+} from '@pixelsky/protocol'
 import type { EngineAdapter, EngineSession, Launcher, SessionContext } from '../adapter'
 import { engineEnv } from '../env'
 import { startupReason } from '../exec'
 import { engineBase } from '../registry'
+import { runsFromSession } from './agents'
 import { customPixel, discoverPixel, pixelEnvironment } from './discover'
 import { pixelCatalog } from './catalog'
 import { PixelProcess } from './process'
 import { PixelSession, reservedPixelArg, type PixelLaunchOptions } from './session'
+import { transcriptItems } from './transcript'
 
 export interface PixelAdapterOptions {
   /** 用户在设置里替换的命令（脚本入口或可执行文件，绝对路径或 PATH 上的命令名） */
@@ -97,6 +107,19 @@ export class PixelAdapter implements EngineAdapter {
       rmSync(cwd, { recursive: true, force: true })
     }
   }
+  /** 智能体追踪：子智能体记在 Pi 主会话文件里（引擎会话 id 就是会话文件路径） */
+  loadRuns(record: SessionRecord): AgentRuns {
+    return {
+      workflows: [],
+      agents: runsFromSession(record.engineSessionId ?? '').map(({ sessionFile: _, ...run }) => run),
+    }
+  }
+  subagentTranscript(record: SessionRecord, agentId: string): Item[] {
+    const run = runsFromSession(record.engineSessionId ?? '').find(r => r.id === agentId)
+    if (!run?.sessionFile) throw new Error('Subagent transcript not found')
+    return transcriptItems(run.sessionFile, record.cwd)
+  }
+
   createSession(ctx: SessionContext): EngineSession {
     const result = this.cached
     if (!result?.launcher || result.info.status !== 'ready')

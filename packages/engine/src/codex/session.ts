@@ -595,20 +595,19 @@ export class CodexSession implements EngineSession {
     return this.catalog?.models?.find(m => m.id === id)?.fastTier
   }
   /**
-   * Fast 开不了的原因（docs/codex-engine.md §3.5）：走平台 / 自定义接口、provider 不是 openai 时没核实档位加价，
-   * 当前模型没有 Fast 档位时也不行；能开时 null
+   * Fast 不设门禁（docs/codex-engine.md §3.5，2026-10-17 用户要求）：开关什么时候都能开，拿不准支不支持时只提示原因
+   * （fastBlocked 带原因、fastAvailable 仍是 true）；确认支持（自己的 openai 登录、模型有 Fast 档位）时 null。
+   * - codex_gateway：走平台 / 像素星空接口（用户要求照样带档位：接口支持就生效，不支持的开了也没效果）
+   * - codex_unverified：provider 不是 openai 或目录里这个模型没有 Fast 档位
+   * 两种都是开着照样带 priority，接口支持就生效
    */
-  private fastBlocked(): string | null {
-    if (viaGateway(this.ctx.record()) || (this.catalog?.currentProvider ?? 'openai') !== 'openai')
-      return 'codex_gateway'
-    return this.fastTier() ? null : 'model_not_allowed'
+  private fastHint(): string | null {
+    if (viaGateway(this.ctx.record())) return 'codex_gateway'
+    if ((this.catalog?.currentProvider ?? 'openai') !== 'openai' || !this.fastTier()) return 'codex_unverified'
+    return null
   }
   private emitFlags(): void {
-    const blocked = this.fastBlocked()
-    if (blocked && this.settings.fast) {
-      this.settings.fast = false
-      this.ctx.setFast(false)
-    }
+    const hint = this.fastHint()
     this.ctx.emit({
       type: 'flags',
       flags: {
@@ -616,9 +615,9 @@ export class CodexSession implements EngineSession {
         compactAvailable: true,
         contextAvailable: false,
         steerAvailable: this.options.steeringValidated === true,
-        fastAvailable: !blocked,
+        fastAvailable: true,
         fastState: this.settings.fast ? 'on' : 'off',
-        fastBlocked: blocked,
+        fastBlocked: hint,
         ultracodeAvailable: false,
       },
     })
@@ -661,10 +660,13 @@ export class CodexSession implements EngineSession {
       },
     }
   }
-  /** Fast：能开时每轮都写明档位（开 priority、关 default），以界面开关为准；开不了时不带，用 Codex 自己的配置 */
+  /**
+   * Fast：开着时每轮带档位；关着时只在确认支持时写明 default（盖过 config.toml 里的档位），
+   * 拿不准时不带，用 Codex 自己的配置
+   */
   private serviceTier(): Message {
-    if (this.fastBlocked()) return {}
-    return { serviceTier: this.settings.fast ? (this.fastTier() ?? 'priority') : 'default' }
+    if (this.settings.fast) return { serviceTier: this.fastTier() ?? 'priority' }
+    return this.fastHint() ? {} : { serviceTier: 'default' }
   }
   async steer(text: string, id: string, attachments: ImageAttachment[] = []): Promise<void> {
     if (!this.active || !this.nativeTurnId || !this.options.steeringValidated)

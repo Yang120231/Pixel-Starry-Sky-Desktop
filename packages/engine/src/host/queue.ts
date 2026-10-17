@@ -186,7 +186,13 @@ export class HostQueue {
       queuePaused: true,
       queue: rt.snapshot.queue.map(q =>
         q.id === item.id
-          ? { ...q, status: 'failed' as const, error: reason || '连接中断', reconnect: undefined, reconnected: attempt - 1 }
+          ? {
+              ...q,
+              status: 'failed' as const,
+              error: reason || '连接中断',
+              reconnect: undefined,
+              reconnected: attempt - 1,
+            }
           : q,
       ),
     }
@@ -258,11 +264,16 @@ export class HostQueue {
     if (rt.snapshot.record.archivedAt) m.events.patchRecord(id, { archivedAt: null })
     // 还在等的自动重连：现在就连，次数照算；失败了再重试的：从头算，又能自动重连满次数
     const reconnect = item.reconnect && item.status === 'queued' ? { ...item.reconnect, at: Date.now() } : undefined
+    // 重试出过错的（执行失败、发送失败、交付待核对）：用会话现在的模型、强度和额度来源，不用入队时存的那份——
+    // 出错后多半是换了渠道再重试（docs/ui/message-queue.md「可重试、撤回或检查设置」）。没出过错的排队项照旧用固定设置
+    const retried = item.error || item.status === 'failed' || item.status === 'uncertain'
+    const settings = retried ? queueSettings(rt.snapshot.record) : item.settings
     rt.snapshot = {
       ...rt.snapshot,
       queue: [
         {
           ...item,
+          settings,
           status: 'queued',
           mode: 'normal',
           error: null,
