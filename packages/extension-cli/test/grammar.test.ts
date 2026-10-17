@@ -325,10 +325,10 @@ describe('checkGrammars (inline, real Oniguruma)', () => {
       samples: ['s.txt'],
     }
     const withHost = await run(files, [hostSpec, injSpec])
-    expect(codes(withHost)).toEqual([])
+    expect(stableCodes(withHost)).toEqual([])
     expect(withHost.results[1].samples).toHaveLength(1)
     const alone = await run(files, [injSpec])
-    expect(codes(alone)).toEqual([])
+    expect(stableCodes(alone)).toEqual([])
     expect(alone.results[0]).toMatchObject({ regexes: 1, samples: [] })
   })
 
