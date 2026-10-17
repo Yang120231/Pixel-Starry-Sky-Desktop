@@ -30,7 +30,7 @@ import {
   type RecentItem,
   type SessionStatus,
 } from '@/data'
-import { engineAccent, fastBlockedText, relativeTime, selfModelOptions } from './labels'
+import { engineAccent, fastBlockedText, fastHintText, relativeTime, selfModelOptions } from './labels'
 import { resumeModel } from '@/features/resume/model'
 import { effortDefaultsFor } from './effortDefaults'
 import { sidebarData, demoSidebarData, type PinnedSession } from './sidebarData'
@@ -372,6 +372,8 @@ export interface ComposerController {
   fastAvailable: boolean | null
   /** 开不了的原因（给用户看的一句话） */
   fastBlocked: string | null
+  /** 能开但拿不准生不生效时的提示（Codex 不设门禁：如「接口支持 Fast 时生效，不支持的打开了也没有效果」） */
+  fastHint: string | null
   fast: boolean
   setFast(on: boolean): void
   /** 显示思考摘要 */
@@ -854,6 +856,8 @@ export function useComposerController(
     fastAvailable: snap?.flags.fastAvailable ?? null,
     fastBlocked:
       snap?.flags.fastBlocked && snap.flags.fastAvailable === false ? fastBlockedText(snap.flags.fastBlocked) : null,
+    fastHint:
+      snap?.flags.fastBlocked && snap.flags.fastAvailable !== false ? fastHintText(snap.flags.fastBlocked) : null,
     fast: record ? record.fast : base.fast,
     setFast: fast => patch({ fast }),
     thinkingSupported: engine?.caps.thinkingSummaries ?? false,
