@@ -1,9 +1,9 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../../i18n/core'
 import { useState } from 'react'
-import { Ticket } from 'lucide-react'
+import { Check, Copy, Ticket } from 'lucide-react'
 import { formatAmount, formatPrice } from '@/features/account'
-import { checkAmount, quoteRecharge } from '../storeLogic'
+import { checkAmount, payAmountTrusted, quoteRecharge } from '../storeLogic'
 import { Button, cn } from '@/ui'
 import type { StoreCatalog, StoreRecharge } from '../../../../../shared/types/account'
 import { OpenPanelButton, type OpenStore } from './StoreParts'
@@ -13,15 +13,19 @@ export function TopUp({
   catalog,
   currency,
   onOpen,
+  initialAmount = '',
 }: {
   catalog: StoreCatalog
   /** 账号币种：到账额度的单位 */
   currency: string
   onOpen: OpenStore
+  /** 金额输入框的初始内容（测试用） */
+  initialAmount?: string
 }) {
   useI18n()
   const { recharge, methods, helpText } = catalog
-  const [text, setText] = useState('')
+  const [text, setText] = useState(initialAmount)
+  const [copied, setCopied] = useState(false)
 
   const redeem = (
     <Button variant="ghost" icon={Ticket} className="h-7 px-2 text-meta" onClick={() => onOpen('redeem')}>
@@ -45,6 +49,18 @@ export function TopUp({
   const payCurrency = catalog.currency
   const check = checkAmount(text, recharge)
   const quote = check.ok ? quoteRecharge(recharge, check.value) : null
+  // 支付币种和套餐币种对不上（或云端没给）时，应付金额的单位拿不准，不显示
+  const dueTrusted = payAmountTrusted(catalog)
+  const copyAmount = (): void => {
+    if (!check.ok) return
+    void navigator.clipboard.writeText(String(check.value)).then(
+      () => {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1500)
+      },
+      () => undefined,
+    )
+  }
   const error =
     !check.ok && check.reason !== 'empty'
       ? check.reason === 'format'
@@ -132,7 +148,7 @@ export function TopUp({
               {quote ? formatAmount(quote.credited, currency) : '—'}
               {quote && quote.bonus > 0 && (
                 <span className="ml-1 text-meta text-accent-fg">
-                  {tr('settings.account.TopUp.includingBonus')} {formatAmount(quote.bonus, currency)}）
+                  {tr('settings.account.TopUp.includingBonusAmount', { p0: formatAmount(quote.bonus, currency) })}
                 </span>
               )}
             </dd>
@@ -140,8 +156,8 @@ export function TopUp({
           <div className="flex items-baseline justify-between gap-4">
             <dt className="text-fg-muted">{tr('settings.account.TopUp.amountDue')}</dt>
             <dd className="text-section font-semibold text-fg tabular-nums">
-              {quote ? formatPrice(quote.pay, payCurrency) : '—'}
-              {quote && quote.fee > 0 && (
+              {quote && dueTrusted && Number.isFinite(quote.pay) ? formatPrice(quote.pay, payCurrency) : '—'}
+              {quote && dueTrusted && quote.fee > 0 && (
                 <span className="ml-1 text-meta font-normal text-fg-muted">
                   {tr('settings.account.TopUp.includingFee', { p0: formatPrice(quote.fee, payCurrency) })}
                 </span>
@@ -149,19 +165,34 @@ export function TopUp({
             </dd>
           </div>
         </dl>
+        {quote && !dueTrusted && (
+          <p className="mt-1.5 text-meta text-fg-faint">{tr('settings.account.TopUp.currencyUnsure')}</p>
+        )}
         <div className="mt-4 flex items-center justify-between gap-3">
           {redeem}
-          <Button
-            variant="primary"
-            disabled={!!error}
-            className={cn(
-              'px-5',
-              error && 'cursor-not-allowed bg-disabled! text-disabled-fg! shadow-none! hover:opacity-100',
-            )}
-            onClick={() => onOpen('purchase')}
-          >
-            {tr('settings.account.TopUp.pay')}
-          </Button>
+          <div className="flex items-center gap-2">
+            <span className="text-meta text-fg-muted">{tr('settings.account.TopUp.reenterAmount')}</span>
+            <Button
+              variant="ghost"
+              icon={copied ? Check : Copy}
+              disabled={!check.ok}
+              className="h-7 px-2 text-meta"
+              onClick={copyAmount}
+            >
+              {copied ? tr('settings.account.TopUp.amountCopied') : tr('settings.account.TopUp.copyAmount')}
+            </Button>
+            <Button
+              variant="primary"
+              disabled={!!error}
+              className={cn(
+                'px-5',
+                error && 'cursor-not-allowed bg-disabled! text-disabled-fg! shadow-none! hover:opacity-100',
+              )}
+              onClick={() => onOpen('purchase')}
+            >
+              {tr('settings.account.TopUp.pay')}
+            </Button>
+          </div>
         </div>
       </div>
 

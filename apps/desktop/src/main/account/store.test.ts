@@ -5,9 +5,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   opened: [] as string[],
   email: 'alice@example.com' as string | null,
+  packaged: false,
+  base: 'https://panel.example.com',
   response: { status: 200, body: {} as unknown },
 }))
 vi.mock('electron', () => ({
+  app: {
+    get isPackaged() {
+      return mocks.packaged
+    },
+  },
   shell: {
     openExternal: async (url: string) => {
       mocks.opened.push(url)
@@ -16,6 +23,7 @@ vi.mock('electron', () => ({
 }))
 vi.mock('./account', () => ({
   signedInEmail: () => mocks.email,
+  baseUrl: () => mocks.base,
   platformFetch: async () =>
     new Response(JSON.stringify(mocks.response.body), {
       status: mocks.response.status,
@@ -23,7 +31,7 @@ vi.mock('./account', () => ({
     }),
 }))
 
-const { fetchStore, openStore, parseStore, storeLink } = await import('./store')
+const { fetchStore, isTrustedPanelHost, openStore, parseStore, storeLink } = await import('./store')
 
 const open = {
   enabled: true,
@@ -51,6 +59,8 @@ const open = {
 beforeEach(() => {
   mocks.opened.length = 0
   mocks.email = 'alice@example.com'
+  mocks.packaged = false
+  mocks.base = 'https://panel.example.com'
   mocks.response = { status: 200, body: open }
 })
 
@@ -179,8 +189,91 @@ describe('storeLink / openStore', () => {
     for (const bad of ['/purchase', '', 'javascript:alert(1)', 'file:///c:/x', 'ftp://x.example/purchase']) {
       expect(() => storeLink('purchase', { ...catalog, purchaseUrl: bad })).toThrow('没有可用的面板地址')
     }
+    mocks.base = 'http://127.0.0.1:9080' // 本地联调：云端和面板都在回环地址
     expect(storeLink('purchase', { ...catalog, purchaseUrl: 'http://127.0.0.1:9080/purchase' })).toBe(
       'http://127.0.0.1:9080/purchase',
     )
+  })
+})
+
+describe('面板地址校验', () => {
+  const link = (purchaseUrl: string) => storeLink('purchase', { ...parseStore(open), purchaseUrl })
+
+  it('正式站、测试站的真实地址都能通过（内置域名 + 云端地址同主机）', () => {
+    // 正式站：认证服务 pixelstarrysky.xyz，面板地址 PANEL_PUBLIC_URL 同域
+    mocks.base = 'https://pixelstarrysky.xyz'
+    expect(link('https://pixelstarrysky.xyz/purchase')).toBe('https://pixelstarrysky.xyz/purchase')
+    // 测试站：auth. 子域；面板地址默认 WEB_URL 就是它
+    mocks.base = 'https://auth.pixelstarrysky.xyz'
+    expect(link('https://auth.pixelstarrysky.xyz/purchase')).toBe('https://auth.pixelstarrysky.xyz/purchase')
+    // 云端地址是别的域时，只认完全相同的主机；内置域名始终可信
+    mocks.base = 'https://panel.example.com'
+    expect(link('https://panel.example.com/purchase')).toBe('https://panel.example.com/purchase')
+    expect(link('https://pixelstarrysky.xyz/redeem')).toBe('https://pixelstarrysky.xyz/redeem')
+  })
+
+  it('云端地址在托管平台上（x.github.io）：同注册域的别人站点不放行', () => {
+    mocks.base = 'https://alice.github.io'
+    expect(link('https://alice.github.io/purchase')).toBe('https://alice.github.io/purchase')
+    for (const bad of [
+      'https://evil.github.io/purchase',
+      'https://github.io/purchase',
+      'https://x.alice.github.io/purchase',
+    ])
+      expect(() => link(bad), bad).toThrow('可信域名')
+  })
+
+  it('不同注册域、仿冒域名、IP 一律拒绝', () => {
+    for (const bad of [
+      'https://evil.example/purchase',
+      'https://pixelstarrysky.xyz.evil.example/purchase',
+      'https://evilpixelstarrysky.xyz/purchase',
+      'https://pixelstarrysky.xyz@evil.example/purchase',
+      'https://1.2.3.4/purchase',
+    ]) {
+      expect(() => link(bad), bad).toThrow(/可信域名|用户名或密码/)
+    }
+  })
+
+  it('带用户名或密码的地址拒绝', () => {
+    expect(() => link('https://user:pw@panel.example.com/purchase')).toThrow('用户名或密码')
+    expect(() => link('https://user@panel.example.com/purchase')).toThrow('用户名或密码')
+  })
+
+  it('打包后只允许 https（回环地址除外）；开发环境 http 也行', () => {
+    mocks.packaged = true
+    expect(() => link('http://panel.example.com/purchase')).toThrow('不是 https')
+    expect(link('https://panel.example.com/purchase')).toBe('https://panel.example.com/purchase')
+    mocks.base = 'http://127.0.0.1:9080'
+    expect(link('http://127.0.0.1:9080/purchase')).toBe('http://127.0.0.1:9080/purchase')
+    mocks.base = 'http://localhost:9080'
+    expect(link('http://localhost:9080/purchase')).toBe('http://localhost:9080/purchase')
+    // 回环地址只在云端地址也是它时才可信：目录里夹带的 127.0.0.1 不会被打开
+    expect(() => link('http://127.0.0.1:9080/purchase')).toThrow('可信域名')
+  })
+
+  it('开发环境：http 的同主机地址可用', () => {
+    mocks.base = 'http://panel.example.com'
+    expect(link('http://panel.example.com/purchase')).toBe('http://panel.example.com/purchase')
+  })
+
+  it('openStore 遇到不可信地址时不调用浏览器', async () => {
+    mocks.response = { status: 200, body: { ...open, purchase_url: 'https://evil.example/purchase' } }
+    await fetchStore()
+    await expect(openStore('purchase')).rejects.toThrow('可信域名')
+    expect(mocks.opened).toEqual([])
+  })
+
+  it('isTrustedPanelHost：云端地址是 IP 时只认同一个 IP', () => {
+    expect(isTrustedPanelHost('10.0.0.5', '10.0.0.5')).toBe(true)
+    expect(isTrustedPanelHost('10.0.0.6', '10.0.0.5')).toBe(false)
+    expect(isTrustedPanelHost('auth.pixelstarrysky.xyz', '10.0.0.5')).toBe(true)
+  })
+})
+
+describe('parseStore 币种', () => {
+  it('云端给了币种 currencyKnown 为 true；没给时默认 CNY 但 currencyKnown 为 false', () => {
+    expect(parseStore({ ...open, currency: 'USD' })).toMatchObject({ currency: 'USD', currencyKnown: true })
+    expect(parseStore({ ...open, currency: undefined })).toMatchObject({ currency: 'CNY', currencyKnown: false })
   })
 })

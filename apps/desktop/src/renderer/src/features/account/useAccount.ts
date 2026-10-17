@@ -2,7 +2,7 @@ import { tr } from '../../i18n/core'
 // 账号状态：模块级 store，所有调用方共享同一份（一次 getState + 一个 onChange 订阅）
 // 规格见 docs/ui/account.md §4.3
 import { useMemo, useSyncExternalStore } from 'react'
-import type { AccountInfo, AccountState } from '../../../../shared/types/account'
+import type { AccountInfo, AccountRefreshResult, AccountState } from '../../../../shared/types/account'
 import type { AccountBridge } from '../../../../preload/account'
 import { formatBalance } from './format'
 import { demo } from '@/data/demo'
@@ -25,7 +25,8 @@ export interface UseAccountResult {
   login: () => Promise<void>
   cancelLogin: () => Promise<void>
   logout: () => Promise<void>
-  refresh: () => Promise<void>
+  /** 重新拉取账号数据；返回刷新后的账号和失败原因（概览页另外通过 error 显示） */
+  refresh: () => Promise<AccountRefreshResult>
 }
 
 interface Snapshot {
@@ -137,7 +138,22 @@ function makeAction(name: 'login' | 'cancelLogin' | 'logout' | 'refresh', fallba
 const login = makeAction('login', () => tr('account.useAccount.signInFailedPlease'))
 const cancelLogin = makeAction('cancelLogin', () => tr('account.useAccount.couldNotCancelSign'))
 const logout = makeAction('logout', () => tr('account.useAccount.couldNotSignOut'))
-const refresh = makeAction('refresh', () => tr('account.useAccount.refreshFailedTryAgain'))
+/** 刷新账号：主进程一定发新请求，返回刷新后的账号数据和失败原因 */
+const refresh = async (): Promise<AccountRefreshResult> => {
+  if (isDemoMode()) return { error: null, account: getSnapshot().account }
+  const bridge = getBridge()
+  if (!bridge) return { error: null, account: null }
+  try {
+    const res = await bridge.refresh()
+    // 被拒绝的来源（非应用页面）拿到 undefined：不能当成「刷新成功、没变化」
+    if (!res) return { error: tr('account.useAccount.refreshFailedTryAgain'), account: null }
+    return { error: res?.error ?? null, account: res?.account ?? null }
+  } catch (e) {
+    const fallback = tr('account.useAccount.refreshFailedTryAgain')
+    routeError(e, fallback)
+    return { error: errorText(e, fallback), account: null }
+  }
+}
 
 /** 账号状态钩子。所有调用方共享同一个 store；操作函数引用稳定、不会抛出 */
 export function useAccount(): UseAccountResult {

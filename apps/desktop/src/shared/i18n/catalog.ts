@@ -3000,13 +3000,13 @@ export const catalog = {
     "zh": "到账额度",
     "en": "Credits received"
   },
-  "settings.account.TopUp.includingBonus": {
-    "zh": "（含赠送",
-    "en": "(including bonus"
+  "settings.account.TopUp.includingBonusAmount": {
+    "zh": "（含赠送 {p0}）",
+    "en": "(incl. {p0} bonus)"
   },
   "settings.account.TopUp.amountDue": {
-    "zh": "应付",
-    "en": "Amount due"
+    "zh": "预计应付",
+    "en": "Estimated amount due"
   },
   "settings.account.TopUp.pay": {
     "zh": "去支付",
@@ -3067,6 +3067,82 @@ export const catalog = {
   "settings.account.Store.paidRefresh": {
     "zh": "我已付款，刷新",
     "en": "I have paid, refresh"
+  },
+  "settings.account.Store.accountCheck": {
+    "zh": "请确认浏览器里面板登录的是 {p0}",
+    "en": "Make sure the panel in your browser is signed in as {p0}"
+  },
+  "settings.account.Store.accountCheckHint": {
+    "zh": "付款到账的是面板里登录的账号；如果浏览器登录的是别的账号，钱会进到别人的号上。",
+    "en": "Payments go to the account signed in on the panel. If the browser is signed in as someone else, the money goes to that account."
+  },
+  "settings.account.Store.balanceNow": {
+    "zh": "当前余额 {p0}",
+    "en": "Balance {p0}"
+  },
+  "settings.account.Store.planNow": {
+    "zh": "套餐 {p0}",
+    "en": "Plan {p0}"
+  },
+  "settings.account.Store.planNone": {
+    "zh": "暂无套餐",
+    "en": "No plan"
+  },
+  "settings.account.Store.planExpires": {
+    "zh": "到期 {p0}",
+    "en": "expires {p0}"
+  },
+  "settings.account.Store.watching": {
+    "zh": "付款后会自动检查到账（2 分钟内每 15 秒一次）。",
+    "en": "After payment, arrival is checked automatically (every 15 seconds for 2 minutes)."
+  },
+  "settings.account.Store.arrived": {
+    "zh": "已到账",
+    "en": "Payment received"
+  },
+  "settings.account.Store.balanceChange": {
+    "zh": "余额 {p0} → {p1}",
+    "en": "Balance {p0} → {p1}"
+  },
+  "settings.account.Store.planChange": {
+    "zh": "套餐 {p0} → {p1}",
+    "en": "Plan {p0} → {p1}"
+  },
+  "settings.account.Store.expiresChange": {
+    "zh": "到期时间 {p0} → {p1}",
+    "en": "Expiry {p0} → {p1}"
+  },
+  "settings.account.Store.noValue": {
+    "zh": "无",
+    "en": "none"
+  },
+  "settings.account.Store.notArrived": {
+    "zh": "暂未到账：可能有几秒延迟；如果一直没到，请到面板确认登录的账号和订单",
+    "en": "Not received yet: it can take a few seconds. If it never arrives, check the signed-in account and the order on the panel"
+  },
+  "settings.account.Store.refreshFailed": {
+    "zh": "刷新失败：{p0}",
+    "en": "Refresh failed: {p0}"
+  },
+  "settings.account.Store.demoNoOpen": {
+    "zh": "演示模式不会打开支付页",
+    "en": "Demo mode does not open the payment page"
+  },
+  "settings.account.TopUp.reenterAmount": {
+    "zh": "需在面板里重新输入金额",
+    "en": "Enter the amount again in the panel"
+  },
+  "settings.account.TopUp.copyAmount": {
+    "zh": "复制金额",
+    "en": "Copy amount"
+  },
+  "settings.account.TopUp.amountCopied": {
+    "zh": "已复制",
+    "en": "Copied"
+  },
+  "settings.account.TopUp.currencyUnsure": {
+    "zh": "支付币种无法确认，请以面板显示的金额为准",
+    "en": "The payment currency cannot be confirmed. Use the amount shown on the panel"
   },
   "settings.account.TopUp.rechargeClosed": {
     "zh": "Sub2api 没有开放在线充值",

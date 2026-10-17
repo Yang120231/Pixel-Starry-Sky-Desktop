@@ -28,6 +28,11 @@ export interface AccountInfo {
   /** 上次成功拉取的时间（毫秒时间戳） */
   updatedAt: number
 }
+/** 手动刷新账号的结果：error 是失败原因（中文宿主文案，界面用 translateMessage），account 是刷新后的账号数据 */
+export interface AccountRefreshResult {
+  error: string | null
+  account: AccountInfo | null
+}
 export type AccountState =
   | { status: 'signed-out'; error?: string }
   | { status: 'signing-in'; authCode: string }
@@ -89,7 +94,10 @@ export interface StoreMethod {
 export interface StoreCatalog {
   /** Sub2api 的支付总开关 */
   enabled: boolean
+  /** 支付币种 */
   currency: string
+  /** 云端没给币种（currency 是默认值猜的）时为 false；缺省当作已知 */
+  currencyKnown?: boolean
   plans: StorePlan[]
   recharge: StoreRecharge
   methods: StoreMethod[]

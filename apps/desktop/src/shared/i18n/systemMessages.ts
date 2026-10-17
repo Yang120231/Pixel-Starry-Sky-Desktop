@@ -1566,4 +1566,12 @@ export const systemMessages = {
     en: "This message hasn't been sent yet. Retry or withdraw it",
   },
   'system.connectionLost': { zh: '连接中断', en: 'Connection lost' },
+  'system.storeRefreshFirst': { zh: '请先刷新套餐信息', en: 'Refresh the plan info first' },
+  'system.storeNoPanelUrl': { zh: '没有可用的面板地址', en: 'No usable panel address' },
+  'system.storeLoadFailedHttp': { zh: '暂时读不到订阅套餐和充值信息（HTTP {p0}）', en: 'Could not read plans and top-up info (HTTP {p0})' },
+  'system.storeInvalidData': { zh: '服务返回的套餐数据异常', en: 'Invalid plan data returned by service' },
+  'system.storeInvalidPage': { zh: '无效的面板页', en: 'Invalid panel page' },
+  'system.storePanelCredentials': { zh: '面板地址带有用户名或密码，已拒绝打开', en: 'The panel address contains a username or password, so it was not opened' },
+  'system.storePanelNotHttps': { zh: '面板地址不是 https，已拒绝打开', en: 'The panel address is not https, so it was not opened' },
+  'system.storePanelUntrusted': { zh: '面板地址不在可信域名内，已拒绝打开', en: 'The panel address is not on a trusted domain, so it was not opened' },
 } as const

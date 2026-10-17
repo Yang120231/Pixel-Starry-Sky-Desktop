@@ -1,6 +1,12 @@
 // 账号登录与额度：主进程、预加载脚本、渲染进程共用的类型。规格见 docs/ui/account.md §4
 
-import type { AccountState, StoreCatalog, StoreLinkKind, StoreLinkParams } from '../shared/types/account'
+import type {
+  AccountRefreshResult,
+  AccountState,
+  StoreCatalog,
+  StoreLinkKind,
+  StoreLinkParams,
+} from '../shared/types/account'
 
 /** window.pixelsky.account：所有网络请求都在主进程里做，渲染进程只能通过这里 */
 export interface AccountBridge {
@@ -14,8 +20,8 @@ export interface AccountBridge {
   login(): Promise<void>
   cancelLogin(): Promise<void>
   logout(): Promise<void>
-  /** 重新拉取账号与额度 */
-  refresh(): Promise<void>
+  /** 重新拉取账号与额度（一定发新请求；返回刷新后的账号数据，失败时带错误） */
+  refresh(): Promise<AccountRefreshResult>
   /** 订阅套餐与充值：云端 /v1/platform/store（跟随 Sub2api，docs/cloud-service.md §4.16） */
   store(): Promise<StoreCatalog>
   /** 在系统浏览器里打开面板的购买页 / 兑换页；地址取自最近一次 store() 的结果 */

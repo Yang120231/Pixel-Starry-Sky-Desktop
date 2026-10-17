@@ -12,7 +12,7 @@ import { codedError } from '@pixelsky/protocol'
 import { nativeText, windowLocale } from '../app/ui-language'
 import { sendTo } from '../app/rendererHealth'
 import * as ipc from '../ipc/guard'
-import type { AccountInfo, AccountPlan, AccountState, Quota } from '../../shared/types/account'
+import type { AccountInfo, AccountPlan, AccountRefreshResult, AccountState, Quota } from '../../shared/types/account'
 
 // ---------------------------------------------------------------------------
 // 常量
@@ -82,6 +82,8 @@ let lastFetchAt = 0
 let flow: LoginFlow | null = null
 let refreshPromise: Promise<void> | null = null
 let fetchPromise: Promise<void> | null = null
+/** 手动刷新排在当前请求之后的那一次（等待期间的多次手动刷新共用它） */
+let followUpPromise: Promise<void> | null = null
 let initialized = false
 /** 令牌已换到、正在拉取账号数据（此时 flow 已为 null，但状态仍是 signing-in） */
 let finishing = false
@@ -214,6 +216,7 @@ function resetInFlight(): void {
   epoch++
   refreshPromise = null
   fetchPromise = null
+  followUpPromise = null
 }
 
 function clearSession(error?: string): void {
@@ -636,6 +639,32 @@ function fetchAccount(): Promise<void> {
   return p
 }
 
+/**
+ * 手动刷新：一定发一次点击之后才开始的新请求。
+ * 已有请求在途（焦点 / 定时刷新）时，它的数据可能是点击之前读的，所以等它结束再发一次；
+ * 等待期间的多次手动刷新共用这一次后续请求。
+ */
+function fetchAccountFresh(): Promise<void> {
+  if (!fetchPromise) return fetchAccount()
+  if (followUpPromise) return followUpPromise
+  const p: Promise<void> = fetchPromise
+    .catch(() => undefined)
+    .then(() => {
+      // 后续请求开始发的这一刻起，新的手动刷新要排到再下一次
+      if (followUpPromise === p) followUpPromise = null
+      return fetchAccount()
+    })
+  followUpPromise = p
+  return p
+}
+
+/** 刷新结束后的结果：失败原因取自账号状态（暂时性故障保留旧数据并挂 error，登录失效则变成未登录） */
+function refreshResult(): AccountRefreshResult {
+  if (state.status === 'signed-in') return { error: state.error ?? null, account: state.account }
+  if (state.status === 'signed-out') return { error: state.error ?? '请先登录像素星空账号', account: null }
+  return { error: null, account: null }
+}
+
 async function doFetchAccount(): Promise<void> {
   if (!tokens) return
   const myEpoch = epoch
@@ -1021,8 +1050,10 @@ export function initAccount(): void {
   )
   ipc.handle(
     'account:refresh',
-    async () => {
-      if (tokens) await fetchAccount().catch(() => undefined)
+    async (): Promise<AccountRefreshResult> => {
+      if (!tokens) return { error: '请先登录像素星空账号', account: null }
+      await fetchAccountFresh().catch(() => undefined)
+      return refreshResult()
     },
     ignore,
   )
