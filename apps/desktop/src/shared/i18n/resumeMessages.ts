@@ -94,4 +94,17 @@ export const resumeMessages = {
     zh: '可以在模型菜单换到 Codex 接着聊（Codex 拿到的是聊天回放，不含工具和压缩摘要）。换回 Claude 时，Codex 期间的聊天会写进终端那份记录。',
     en: 'You can switch to Codex from the model menu (Codex gets a chat replay without tools or compaction summaries). Switching back writes the Codex-era chat into the terminal’s session record.',
   },
+  'resume.hint.claude': { zh: '终端里有 {n} 个 Claude Code 会话', en: '{n} Claude Code session(s) in the terminal' },
+  'resume.hint.codex': { zh: '终端里有 {n} 个 Codex 会话', en: '{n} Codex session(s) in the terminal' },
+  'resume.hint.both': {
+    zh: '终端里有 {claude} 个 Claude Code、{codex} 个 Codex 会话',
+    en: '{claude} Claude Code and {codex} Codex session(s) in the terminal',
+  },
+  'resume.hint.sep.dot': { zh: ' · ', en: ' · ' },
+  'resume.hint.sep.comma': { zh: '，', en: ', ' },
+  'resume.hint.action': { zh: '接着聊', en: 'Continue' },
+  'resume.hint.toastMany': {
+    zh: '其中 {n} 个项目在终端里有原来的 AI 会话，进项目输入 /resume 就能接着聊',
+    en: '{n} of these projects have earlier AI sessions in the terminal; type /resume in a project to continue',
+  },
 } as const satisfies Record<string, { zh: string; en: string }>

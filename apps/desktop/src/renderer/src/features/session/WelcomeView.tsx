@@ -1,9 +1,10 @@
 import { Wordmark } from '@/ui'
 import { isDemo } from '@/data'
-import type { ComposerController, StatusBarController } from '@/features/engine'
+import { useEngineState, type ComposerController, type StatusBarController } from '@/features/engine'
 import { useComposerDraft } from '@/features/engine/drafts'
 import { useGitSummary } from '@/features/panel/git/summary'
 import { tr } from '@/i18n/core'
+import { ResumeHintLink } from '@/features/resume/ResumeHintLink'
 import { Composer } from './Composer'
 import { ComposerArea } from './ComposerArea'
 import { starters } from './starters'
@@ -26,6 +27,9 @@ export function WelcomeView({
   draftKey?: string
 }) {
   const { text } = useI18n()
+  // 项目里还没有任何像素星空对话时，才提示终端里的旧会话
+  const projectId = status?.project?.id
+  const hasConversations = useEngineState(s => !!projectId && s.sessions.some(x => x.record.projectId === projectId))
   const needProject = !!status && !status.project
   const key = draftKey ?? live?.sessionId ?? (live ? 'new-session' : 'demo')
   const [draft, setDraft] = useComposerDraft(key)
@@ -49,6 +53,10 @@ export function WelcomeView({
           <p className="mt-2 text-ui text-fg-muted">
             {needProject ? text('先选择一个项目文件夹，然后描述你要做的事') : text('在这台电脑上开始一个新任务')}
           </p>
+          {/* 这个项目在终端里有原来的 AI 会话：给个入口接着聊（没有会话 / 远程项目 / 演示不显示） */}
+          {!isDemo && projectId && !hasConversations && (
+            <ResumeHintLink projectId={projectId} separator="comma" className="mt-2 text-ui" />
+          )}
         </div>
         <div className="mt-7">
           <ComposerArea>

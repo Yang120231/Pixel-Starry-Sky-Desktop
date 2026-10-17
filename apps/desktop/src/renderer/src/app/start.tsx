@@ -17,6 +17,7 @@ import { I18nProvider } from '../i18n/I18nProvider'
 import { SessionActionsProvider } from '../features/sidebar/SessionActions'
 import { TerminalProvider } from '../features/terminal/TerminalProvider'
 import { ResumeHost } from '../features/resume/ResumeHost'
+import { ResumeHintHost } from '../features/resume/ResumeHintHost'
 import { CommandPaletteProvider } from '../features/commands/CommandPaletteProvider'
 import { ShortcutsHelp } from '../features/layout/ShortcutsHelp'
 import { installRendererErrorLog, reactRootErrorOptions } from '../features/logs/rendererErrors'
@@ -59,6 +60,7 @@ createRoot(document.getElementById('root')!, reactRootErrorOptions).render(
                     <ShortcutsHelp />
                     <AuthDialogHost />
                     <ResumeHost />
+                    <ResumeHintHost />
                     <RecoveredNotice />
                     <ExtStoreToastHost />
                   </CommandPaletteProvider>

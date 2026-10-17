@@ -412,12 +412,14 @@ export async function redetectEngines(): Promise<void> {
 export const PROJECTS_ADDED_EVENT = 'pixelsky:projects-added'
 
 /** 把添加结果并进列表，切到第一个新加的（没有新加的就切到第一个已在列表里的）；返回它的 id */
-function applyAdded(result: AddProjectsResult): string | null {
+function applyAdded(result: AddProjectsResult, quiet = false): string | null {
   const known = new Set(state.projects.map(p => p.id))
   const projects = [...state.projects, ...result.added.filter(p => !known.has(p.id))]
   const first = result.added[0] ?? result.existing[0]
   set(first ? { projects, currentProjectId: first.id } : { projects })
-  window.dispatchEvent(new CustomEvent<AddProjectsResult>(PROJECTS_ADDED_EVENT, { detail: result }))
+  window.dispatchEvent(
+    new CustomEvent<AddProjectsResult & { quiet?: boolean }>(PROJECTS_ADDED_EVENT, { detail: { ...result, quiet } }),
+  )
   return first?.id ?? null
 }
 
@@ -439,10 +441,13 @@ export async function addProject(): Promise<string | null> {
  * 按路径一次加多个本机项目（「从一个文件夹导入」、拖到侧栏的文件夹，docs/ui/multi-root-projects.md §2）。
  * 返回宿主的结果（新加的、本来就有的、加不上的），「放进一个分区」要用到项目 ID
  */
-export async function addProjectPaths(paths: string[]): Promise<AddProjectsResult | null> {
+export async function addProjectPaths(
+  paths: string[],
+  opts: { quiet?: boolean } = {},
+): Promise<AddProjectsResult | null> {
   if (!bridge || !paths.length || remotePicker()) return null
   const result = await addProjectsInBatches(paths, batch => bridge!.addProjects(batch))
-  applyAdded(result)
+  applyAdded(result, opts.quiet)
   return result
 }
 
