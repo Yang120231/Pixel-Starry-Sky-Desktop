@@ -33,3 +33,32 @@ export function splitPrompt(raw: string): PromptParts {
   }
   return { text, handoff, overview }
 }
+
+const IDE_HEAD = '# Context from my IDE setup:'
+const IDE_REQUEST = '## My request for Codex:'
+
+export interface IdeParts {
+  /** 用户自己的请求 */
+  text: string
+  /** VS Code 扩展加在前面的编辑器上下文（打开的文件、选中的内容……）；没有为 null */
+  context: string | null
+}
+
+/**
+ * VS Code 扩展发的消息以「# Context from my IDE setup:」开头，真正的请求在「## My request for Codex:」之后（docs/ui/codex-resume.md §3.2）。
+ * 开头是这两个标记之一并且找得到请求标记才拆；用户话中间碰巧出现这行字不动
+ */
+export function splitIdeContext(raw: string): IdeParts {
+  const head = raw.trimStart()
+  if (!head.startsWith(IDE_HEAD) && !head.startsWith(IDE_REQUEST)) return { text: raw, context: null }
+  const at = head.indexOf(IDE_REQUEST)
+  if (at < 0) return { text: raw, context: null }
+  const context = head.slice(0, at).trim()
+  return {
+    text: head
+      .slice(at + IDE_REQUEST.length)
+      .replace(/^[ \t]*\r?\n?/, '')
+      .trim(),
+    context: context || null,
+  }
+}

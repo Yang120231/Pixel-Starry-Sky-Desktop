@@ -39,6 +39,75 @@ function saveThreads() {
   mkdirSync(process.env.FAKE_CODEX_STATE_DIR, { recursive: true })
   writeFileSync(stateFile, JSON.stringify(threads))
 }
+/**
+ * 线程的元数据（thread/list、thread/read 用）：FAKE_CODEX_STATE_DIR/meta.json，
+ * { 线程 id: { cwd, source, originator, name, preview, updatedAt, model, modelProvider, gitBranch, historyMode,
+ * ephemeral?, parentThreadId?, path?, archived?, createdAt? } }；没有的字段按真 Codex 的形状补默认值。
+ * 只读：测试在起进程前写好
+ */
+function loadMeta() {
+  if (!process.env.FAKE_CODEX_STATE_DIR) return {}
+  try {
+    return JSON.parse(readFileSync(join(process.env.FAKE_CODEX_STATE_DIR, 'meta.json'), 'utf8'))
+  } catch {
+    return {}
+  }
+}
+const textOf = content =>
+  (Array.isArray(content) ? content : [])
+    .filter(i => i.type === 'text')
+    .map(i => i.text)
+    .join('\n')
+/** 一轮的 Turn 对象；items 没给时只有一条 userMessage。view：full / summary（第一条用户消息和最后一条回复）/ notLoaded */
+function turnObject(t, view) {
+  const all = t.items ?? [{ type: 'userMessage', id: 'u-' + t.id, clientId: t.clientId, content: t.content }]
+  let items = all
+  if (view === 'notLoaded') items = []
+  else if (view !== 'full') {
+    const user = all.find(i => i.type === 'userMessage')
+    const reply = [...all].reverse().find(i => i.type === 'agentMessage')
+    items = [user, reply].filter(Boolean)
+  }
+  return {
+    id: t.id,
+    rootTurnId: null,
+    items,
+    itemsView: view === 'full' || view === 'notLoaded' ? view : 'summary',
+    status: t.status ?? 'completed',
+    error: t.error ?? null,
+    startedAt: t.startedAt ?? null,
+    completedAt: t.completedAt ?? null,
+    durationMs: null,
+  }
+}
+function threadObject(id, meta, list) {
+  const first = list?.[0]
+  const firstText = first ? textOf((first.items?.find(i => i.type === 'userMessage') ?? first).content) : ''
+  return {
+    id,
+    sessionId: id,
+    forkedFromId: meta.forkedFromId ?? null,
+    parentThreadId: meta.parentThreadId ?? null,
+    preview: meta.preview ?? firstText,
+    ephemeral: !!meta.ephemeral,
+    historyMode: meta.historyMode ?? 'paginated',
+    modelProvider: meta.modelProvider ?? 'fake',
+    model: meta.model ?? 'fake-codex',
+    reasoningEffort: null,
+    createdAt: meta.createdAt ?? meta.updatedAt ?? 0,
+    updatedAt: meta.updatedAt ?? 0,
+    status: { type: 'notLoaded' },
+    path: meta.path ?? null,
+    cwd: meta.cwd ?? process.cwd(),
+    cliVersion: '0.160.1',
+    originator: meta.originator ?? 'codex_cli_rs',
+    source: meta.source ?? 'cli',
+    gitInfo: meta.gitBranch ? { sha: null, branch: meta.gitBranch, originUrl: null } : null,
+    name: meta.name ?? null,
+    turns: [],
+  }
+}
+const sourceKind = source => (typeof source === 'string' ? source : source?.subAgent ? 'subAgent' : 'unknown')
 /** 记一轮：把 turn-N 的编号接在已有轮次之后，多个进程之间不重号 */
 function recordTurn(clientId, content) {
   loadThreads()
@@ -273,21 +342,59 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
       loadThreads()
       const list = threads[p.threadId]
       if (!list) {
-        rpcError(m, 'thread not found: ' + p.threadId)
+        if (loadMeta()[p.threadId]) {
+          response(m, { data: [], nextCursor: null, backwardsCursor: null })
+          break
+        }
+        out({ id: m.id, error: { code: -32600, message: 'thread not loaded: ' + p.threadId } })
         break
       }
-      const size = Number(process.env.FAKE_CODEX_PAGE) || list.length || 1
+      // 真 Codex：sortDirection 默认 desc、itemsView 默认 summary、游标不透明（这里是已翻过的轮数）。
+      // 没传 limit 时按 FAKE_CODEX_PAGE 或一页读完
+      const size = Number(p.limit) || Number(process.env.FAKE_CODEX_PAGE) || list.length || 1
       const start = Number(p.cursor) || 0
-      const page = list.slice(start, start + size)
+      const ordered = p.sortDirection === 'asc' ? list : [...list].reverse()
+      const page = ordered.slice(start, start + size)
       response(m, {
-        data: page.map(t => ({
-          id: t.id,
-          status: 'completed',
-          items: [{ type: 'userMessage', id: 'u-' + t.id, clientId: t.clientId, content: t.content }],
-        })),
+        data: page.map(t => turnObject(t, p.itemsView)),
         nextCursor: start + size < list.length ? String(start + size) : null,
         backwardsCursor: null,
       })
+      break
+    }
+    case 'thread/list': {
+      const meta = loadMeta()
+      loadThreads()
+      const providers = Array.isArray(p.modelProviders) ? p.modelProviders : ['fake']
+      const kinds = Array.isArray(p.sourceKinds) && p.sourceKinds.length ? p.sourceKinds : ['cli', 'vscode']
+      const cwds = p.cwd == null ? null : Array.isArray(p.cwd) ? p.cwd : [p.cwd]
+      const rows = Object.entries(meta)
+        .filter(([, t]) => !providers.length || providers.includes(t.modelProvider ?? 'fake'))
+        .filter(([, t]) => kinds.includes(sourceKind(t.source ?? 'cli')))
+        .filter(([, t]) => !!t.archived === (p.archived === true))
+        .filter(([, t]) => !cwds || cwds.includes(t.cwd))
+        .sort((a, b) => (b[1].updatedAt ?? 0) - (a[1].updatedAt ?? 0) || (a[0] < b[0] ? -1 : 1))
+      if (p.sortDirection === 'asc') rows.reverse()
+      const size = Number(p.limit) || rows.length || 1
+      const start = Number(p.cursor) || 0
+      response(m, {
+        data: rows.slice(start, start + size).map(([id, t]) => threadObject(id, t, threads[id])),
+        nextCursor: start + size < rows.length ? String(start + size) : null,
+        backwardsCursor: null,
+      })
+      break
+    }
+    case 'thread/read': {
+      const meta = loadMeta()
+      loadThreads()
+      if (!meta[p.threadId] && !threads[p.threadId]) {
+        out({ id: m.id, error: { code: -32600, message: 'thread not loaded: ' + p.threadId } })
+        break
+      }
+      const list = threads[p.threadId]
+      const thread = threadObject(p.threadId, meta[p.threadId] ?? {}, list)
+      if (p.includeTurns) thread.turns = (list ?? []).map(t => turnObject(t, 'full'))
+      response(m, { thread })
       break
     }
     case 'turn/start': {
