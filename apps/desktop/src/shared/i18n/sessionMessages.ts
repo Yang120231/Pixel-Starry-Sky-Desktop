@@ -371,4 +371,13 @@ export const sessionMessages = {
     zh: '当前回复仍用原来的额度来源，从下一条消息起切换，届时引擎会重启并接上原来的对话。',
     en: 'The current reply keeps its original credit source. The switch takes effect from the next message, when the engine restarts and resumes this conversation.',
   },
+  // 运行中的状态行（动作 + 对象 · 本轮用时 ›）：动作和对象分开写，对象用等宽字体
+  'session.live.verb.command': { zh: '正在运行', en: 'Running' },
+  'session.live.verb.edit': { zh: '正在修改', en: 'Editing' },
+  'session.live.verb.create': { zh: '正在新建', en: 'Creating' },
+  'session.live.verb.read': { zh: '正在读取', en: 'Reading' },
+  'session.live.verb.search': { zh: '正在搜索', en: 'Searching' },
+  'session.live.verb.web': { zh: '正在浏览', en: 'Browsing' },
+  'session.live.writing': { zh: '正在写回复', en: 'Writing the reply' },
+  'session.live.elapsed': { zh: '本轮 {time}', en: 'This turn {time}' },
 } as const

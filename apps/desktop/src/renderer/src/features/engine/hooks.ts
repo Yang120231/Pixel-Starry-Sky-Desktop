@@ -34,6 +34,7 @@ import { engineAccent, fastBlockedText, fastHintText, relativeTime, selfModelOpt
 import { resumeModel } from '@/features/resume/model'
 import { effortDefaultsFor } from './effortDefaults'
 import { sidebarData, demoSidebarData, type PinnedSession } from './sidebarData'
+import { useSidebarFreeze } from './sidebarFreeze'
 import { useAccount } from '@/features/account/useAccount'
 import {
   getPlatformState,
@@ -128,6 +129,8 @@ export function useSidebarData(): SidebarData {
   const projects = useEngineState(s => s.projects)
   const sessions = useEngineState(s => s.sessions)
   const unread = useEngineState(s => s.unread)
+  // 鼠标在侧栏里时冻结按最近活动的自动排序（docs/ui/motion-proposal.html ①）；用户操作不受影响
+  const frozen = useSidebarFreeze()
   // 每分钟刷新一次，让「刚刚 / 5分钟」跟着变
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
@@ -148,8 +151,9 @@ export function useSidebarData(): SidebarData {
       sessions.filter(s => machineOf(s.record.id) === machines.currentId),
       unread,
       stamp => relativeTime(stamp, now),
+      frozen,
     )
-  }, [projects, sessions, unread, now, locale, demoChanges, machines.currentId])
+  }, [projects, sessions, unread, now, locale, demoChanges, machines.currentId, frozen])
 }
 
 export { addProject }

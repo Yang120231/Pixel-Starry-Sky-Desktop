@@ -66,9 +66,8 @@ import { innerBlocks, sameItems, toBlocks, type Block, type ChangesCache } from 
 import { TurnProcess } from './TurnProcess'
 import { SubagentCompletionBox, SubagentDispatchBox } from './SubagentBox'
 import { approvalWaiting } from './subagentBoxModel'
-import { WAIT_CLOCK_MS, clockText, waitingFor } from './currentStep'
-import { useSince } from './stepClock'
-import { formatDuration } from './agentTrace'
+import { LiveStatusLine } from './LiveStatusLine'
+import { LiveOwnerContext } from './liveOwner'
 import { useNativeCheck } from '@/features/resume/useNativeCheck'
 
 /** 块没渲染过时的占位高度（content-visibility，见 blockHeight.ts）；按条目对象缓存，流式输出时只重算在动的那一条 */
@@ -187,28 +186,42 @@ const TurnChanges = memo(function TurnChanges({
  */
 const ProcessBlock = memo(
   function ProcessBlock({
+    foldKey,
     items,
     running,
-    live,
     durationMs,
+    toggled,
+    onToggle,
     render,
   }: {
+    foldKey: string
     items: Item[]
     running: boolean
-    live: boolean
     durationMs: number | null
+    /** 「执行」展开状态（null：没点过）；放在外面是因为运行中底部的状态行也能展开它 */
+    toggled: boolean | null
+    onToggle: (key: string, open: boolean) => void
     highlight: string | null
     render: (items: Item[]) => ReactNode
   }) {
+    const toggle = useCallback((open: boolean) => onToggle(foldKey, open), [onToggle, foldKey])
     return (
       <div className="conversation-message" style={placeholder(34)}>
-        <TurnProcess items={items} running={running} live={live} durationMs={durationMs} render={render} />
+        <TurnProcess
+          items={items}
+          running={running}
+          durationMs={durationMs}
+          toggled={toggled}
+          onToggle={toggle}
+          render={render}
+        />
       </div>
     )
   },
   (a, b) =>
     a.running === b.running &&
-    a.live === b.live &&
+    a.toggled === b.toggled &&
+    a.onToggle === b.onToggle &&
     a.durationMs === b.durationMs &&
     a.highlight === b.highlight &&
     sameItems(a.items, b.items),
@@ -322,20 +335,14 @@ export function LiveTranscript({
     [subagents, shownItems, pending],
   )
 
-  // 最后一块不是正在流式输出的文字、也不是转着圈的执行块时，显示「处理中」（不然几个转圈同时出现）
-  // 小框模式下子智能体自己的工具调用不显示，判断「最后一条」时也要跳过；最后一条是还在跑的派发小框时，小框自己转圈
+  // 小框模式下子智能体自己的工具调用不显示，判断「最后一条」和底部状态行写什么时都要跳过
   const shownAll = snapshot?.items ?? NO_ITEMS
   const visible = useMemo(
     () => (subagents === 'box' ? shownAll.filter(it => !isSubagentWork(it)) : shownAll),
     [shownAll, subagents],
   )
   const last = visible[visible.length - 1]
-  const streaming = last && (last.kind === 'assistant' || last.kind === 'reasoning') && last.status === 'running'
-  const lastBlock = blocks[blocks.length - 1]
-  const busyBlock =
-    (lastBlock?.type === 'process' && lastBlock.running) ||
-    (subagents === 'box' && last?.kind === 'tool' && isSubagentCall(last) && last.status === 'running')
-  // 正在压缩时压缩条自己带计时，不再叠一行「正在思考 · 53s」
+  // 正在压缩时压缩条自己带计时，不再叠一行状态
   const compacting = last?.kind === 'compaction' && last.status === 'running'
   // 进行中的压缩那一行要的会话状态（网关进度、重试等待、中断这一轮）；条目列表是 memo 的，经 context 传过去
   const compactionRecord = snapshot?.record
@@ -354,10 +361,25 @@ export function LiveTranscript({
       gateway: (compactionExecution?.engine ?? compactionRecord.engine) === 'claude' && viaGateway(source),
     }
   }, [compactionRecord, compactionExecution, compactionTurn, compactionProgress, compactionRetry])
-  const showThinking = snapshot?.state === 'running' && !streaming && !busyBlock && !compacting
-  // 写具体在等什么（刚发消息：正在思考；工具刚结束：正在看结果），等久了带上秒数（docs/ui/conversation-concise.md §7）
-  const waiting = showThinking ? waitingFor(visible) : null
-  const waitedMs = useSince(waiting ? `wait:${last?.id ?? 'start'}:${waiting}` : null, showThinking)
+  // 运行中底部一直有一行状态（转圈 + 在做什么 + 本轮用时 + ›）；等你批准 / 回答时（state 为 waiting）不显示，
+  // 免得一边写「正在……」一边在等你，批准卡片自己就是提示。
+  // 状态行显示时它独占「在动」：上面还在跑的行（工具、思考、子智能体小框）不再脉冲 / 闪光 / 自己计时（liveOwner.ts）
+  const showLive = snapshot?.state === 'running' && !compacting
+  // 「执行」块的展开状态：状态行末尾的 › 展开的就是最后一个还在运行的执行块
+  const [folds, setFolds] = useState<Record<string, boolean>>({})
+  const setFold = useCallback(
+    (key: string, open: boolean) => setFolds(prev => (prev[key] === open ? prev : { ...prev, [key]: open })),
+    [],
+  )
+  const liveProcess = useMemo(() => {
+    for (let i = blocks.length - 1; i >= 0; i--) {
+      const b = blocks[i]
+      if (b.type === 'process' && b.running) return b.key
+    }
+    return null
+  }, [blocks])
+  const liveOpen = liveProcess !== null && (folds[liveProcess] ?? minimal)
+  const liveFold = liveProcess !== null ? { open: liveOpen, toggle: () => setFold(liveProcess, !liveOpen) } : null
   // 空闲时直接发送的消息在引擎启动期间先显示在对话里（不是排队），开始执行后由正式的用户消息替换
   const starting = snapshot ? snapshot.queue.filter(q => isStarting(q, snapshot.queuePaused)) : []
 
@@ -387,7 +409,7 @@ export function LiveTranscript({
   useLayoutEffect(() => {
     const el = scroller.current
     if (el && stick.current) el.scrollTop = el.scrollHeight
-  }, [blocks, showThinking, starting.length])
+  }, [blocks, showLive, starting.length])
 
   // 显示更早的一批：补出来的内容在上面，屏幕上正在看的位置不动。
   // 记下补之前最上面那条可见条目的位置，补完在布局阶段把滚动位置加上它挪动的距离（不依赖浏览器自己的滚动锚定）
@@ -538,10 +560,12 @@ export function LiveTranscript({
       return (
         <ProcessBlock
           key={b.key}
+          foldKey={b.key}
           items={b.items}
           running={b.running}
-          live={b.running && snapshot?.state === 'running'}
           durationMs={b.durationMs}
+          toggled={folds[b.key] ?? null}
+          onToggle={setFold}
           highlight={highlight}
           render={list => innerBlocks(list).map((inner, j) => renderBlock(inner, j, true))}
         />
@@ -624,150 +648,144 @@ export function LiveTranscript({
   return (
     <ExpandScope.Provider value={snapshot?.record.id ?? null}>
       <CompactionLiveContext.Provider value={compactionLive}>
-        <div className="relative flex min-h-0 flex-1 flex-col">
-          <div
-            ref={scroller}
-            onScroll={e => {
-              const el = e.currentTarget
-              const pos = { top: el.scrollTop, height: el.scrollHeight }
-              const up = scrolledUp(lastPos.current, pos)
-              lastPos.current = pos
-              if (jumping.current) return
-              const near = nearBottom(el)
-              // 往上滚了就松开；往下滚回底部附近（或内容变短、底部自己靠过来）才重新贴底
-              if (up) released.current = true
-              else if (near) released.current = false
-              if (!detached.current) stick.current = near && !released.current
-              setAway(!near)
-              if (near) setUnseen(false)
-              // 滚动停下 200 毫秒后记一次位置（标签已经隐藏就不记，那时量出来的不准）
-              window.clearTimeout(placeTimer.current)
-              placeTimer.current = window.setTimeout(() => {
-                if (el.closest('[aria-hidden="true"]')) return
-                placeRef.current.atBottom = nearBottom(el)
-                placeRef.current.anchor = anchorOf(el)
-                placeRef.current.scrollTop = el.scrollTop
-              }, 200)
-            }}
-            onScrollEnd={e => {
-              if (!jumping.current) return
-              jumping.current = false
-              // 平滑滚动期间又来了内容：补到真正的底部
-              const el = e.currentTarget
-              if (stick.current) el.scrollTop = el.scrollHeight
-              const near = nearBottom(el)
-              setAway(!near)
-              if (near) setUnseen(false)
-            }}
-            onWheel={e => {
-              resume()
-              // 往上滚的第一下就松开，不等滚动事件：平滑滚动的前几帧只挪几像素，等它的话新内容已经把位置拽回去了
-              const el = e.currentTarget
-              if (e.deltaY < 0 && el.scrollTop > 0 && !innerCanScrollUp(e.target as Element, el)) release()
-            }}
-            onTouchMove={resume}
-            onPointerDown={() => {
-              resume()
-              lastInteract.current = performance.now()
-            }}
-            onKeyDown={e => {
-              resume()
-              lastInteract.current = performance.now()
-              const target = e.target as HTMLElement
-              if (scrollUpKey(e) && !target.closest('input, textarea, select, [contenteditable="true"]')) release()
-            }}
-            data-search-session={snapshot?.record.id}
-            data-custom-scrollbar
-            className="conversation-scroller selectable min-h-0 flex-1 overflow-y-auto bg-app"
-          >
+        <LiveOwnerContext.Provider value={showLive}>
+          <div className="relative flex min-h-0 flex-1 flex-col">
             <div
-              ref={stream}
-              data-conversation-stream
-              className="conversation-inset conversation-reading flex flex-col gap-3 pt-5 pb-6"
+              ref={scroller}
+              onScroll={e => {
+                const el = e.currentTarget
+                const pos = { top: el.scrollTop, height: el.scrollHeight }
+                const up = scrolledUp(lastPos.current, pos)
+                lastPos.current = pos
+                if (jumping.current) return
+                const near = nearBottom(el)
+                // 往上滚了就松开；往下滚回底部附近（或内容变短、底部自己靠过来）才重新贴底
+                if (up) released.current = true
+                else if (near) released.current = false
+                if (!detached.current) stick.current = near && !released.current
+                setAway(!near)
+                if (near) setUnseen(false)
+                // 滚动停下 200 毫秒后记一次位置（标签已经隐藏就不记，那时量出来的不准）
+                window.clearTimeout(placeTimer.current)
+                placeTimer.current = window.setTimeout(() => {
+                  if (el.closest('[aria-hidden="true"]')) return
+                  placeRef.current.atBottom = nearBottom(el)
+                  placeRef.current.anchor = anchorOf(el)
+                  placeRef.current.scrollTop = el.scrollTop
+                }, 200)
+              }}
+              onScrollEnd={e => {
+                if (!jumping.current) return
+                jumping.current = false
+                // 平滑滚动期间又来了内容：补到真正的底部
+                const el = e.currentTarget
+                if (stick.current) el.scrollTop = el.scrollHeight
+                const near = nearBottom(el)
+                setAway(!near)
+                if (near) setUnseen(false)
+              }}
+              onWheel={e => {
+                resume()
+                // 往上滚的第一下就松开，不等滚动事件：平滑滚动的前几帧只挪几像素，等它的话新内容已经把位置拽回去了
+                const el = e.currentTarget
+                if (e.deltaY < 0 && el.scrollTop > 0 && !innerCanScrollUp(e.target as Element, el)) release()
+              }}
+              onTouchMove={resume}
+              onPointerDown={() => {
+                resume()
+                lastInteract.current = performance.now()
+              }}
+              onKeyDown={e => {
+                resume()
+                lastInteract.current = performance.now()
+                const target = e.target as HTMLElement
+                if (scrollUpKey(e) && !target.closest('input, textarea, select, [contenteditable="true"]')) release()
+              }}
+              data-search-session={snapshot?.record.id}
+              data-custom-scrollbar
+              className="conversation-scroller selectable min-h-0 flex-1 overflow-y-auto bg-app"
             >
-              {!snapshot && (
-                <div className="conversation-message flex items-center gap-2 py-8 text-list text-fg-muted">
-                  <Spinner size={14} />
-                  {tr('session.live.LiveTranscript.openingConversation')}{' '}
-                </div>
-              )}
-              {header}
-              {hiddenTurns > 0 && (
-                <div
-                  data-transcript-hidden
-                  data-hidden-turns={hiddenTurns}
-                  className="conversation-message flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-line bg-subtle px-3 py-2 text-meta text-fg-muted"
-                >
-                  <span className="tabular-nums">{tr('longConversation.hidden', { n: hiddenTurns })}</span>
-                  <span className="ml-auto flex items-center gap-1.5">
-                    {windowSize !== null && (
+              <div
+                ref={stream}
+                data-conversation-stream
+                className="conversation-inset conversation-reading flex flex-col gap-3 pt-5 pb-6"
+              >
+                {!snapshot && (
+                  <div className="conversation-message flex items-center gap-2 py-8 text-list text-fg-muted">
+                    <Spinner size={14} />
+                    {tr('session.live.LiveTranscript.openingConversation')}{' '}
+                  </div>
+                )}
+                {header}
+                {hiddenTurns > 0 && (
+                  <div
+                    data-transcript-hidden
+                    data-hidden-turns={hiddenTurns}
+                    className="conversation-message flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-line bg-subtle px-3 py-2 text-meta text-fg-muted"
+                  >
+                    <span className="tabular-nums">{tr('longConversation.hidden', { n: hiddenTurns })}</span>
+                    <span className="ml-auto flex items-center gap-1.5">
+                      {windowSize !== null && (
+                        <button
+                          type="button"
+                          data-transcript-show-earlier
+                          onClick={() => showEarlier(windowSize)}
+                          className="press rounded-md px-2 py-1 text-fg-secondary outline-none hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-accent"
+                        >
+                          {tr('longConversation.showEarlier', { n: Math.min(windowSize, hiddenTurns) })}
+                        </button>
+                      )}
                       <button
                         type="button"
-                        data-transcript-show-earlier
-                        onClick={() => showEarlier(windowSize)}
+                        data-transcript-show-all
+                        onClick={() => showEarlier(null)}
                         className="press rounded-md px-2 py-1 text-fg-secondary outline-none hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-accent"
                       >
-                        {tr('longConversation.showEarlier', { n: Math.min(windowSize, hiddenTurns) })}
+                        {tr('longConversation.showAll')}
                       </button>
-                    )}
-                    <button
-                      type="button"
-                      data-transcript-show-all
-                      onClick={() => showEarlier(null)}
-                      className="press rounded-md px-2 py-1 text-fg-secondary outline-none hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-accent"
-                    >
-                      {tr('longConversation.showAll')}
-                    </button>
-                  </span>
-                </div>
-              )}
-              {blocks.map((b, i) => renderBlock(b, i))}
-              {footer}
-              {starting.map(q => (
-                <div key={q.id} data-starting-message={q.id} className="flex flex-col gap-3">
-                  <div className={cn('conversation-user-row', blocks.length > 0 && 'mt-4')}>
-                    <UserBubble
-                      item={{
-                        kind: 'user',
-                        id: q.id,
-                        text: q.text,
-                        attachments: q.attachments,
-                        files: q.files,
-                        createdAt: q.createdAt,
-                      }}
-                    />
+                    </span>
                   </div>
-                  <div className="conversation-message flex h-[30px] items-center gap-2 px-2 text-list text-fg-muted">
-                    <Spinner size={13} />
-                    {/* 导入的终端会话：Claude Code 要先解析整份记录，大的要几秒 */}
-                    {snapshot?.record.imported ? tr('resume.starting') : tr('session.queue.starting')}
+                )}
+                {blocks.map((b, i) => renderBlock(b, i))}
+                {footer}
+                {starting.map(q => (
+                  <div key={q.id} data-starting-message={q.id} className="flex flex-col gap-3">
+                    <div className={cn('conversation-user-row', blocks.length > 0 && 'mt-4')}>
+                      <UserBubble
+                        item={{
+                          kind: 'user',
+                          id: q.id,
+                          text: q.text,
+                          attachments: q.attachments,
+                          files: q.files,
+                          createdAt: q.createdAt,
+                        }}
+                      />
+                    </div>
+                    <div className="conversation-message flex h-[30px] items-center gap-2 px-2 text-list text-fg-muted">
+                      <Spinner size={13} />
+                      {/* 导入的终端会话：Claude Code 要先解析整份记录，大的要几秒 */}
+                      {snapshot?.record.imported ? tr('resume.starting') : tr('session.queue.starting')}
+                    </div>
                   </div>
-                </div>
-              ))}
-              {showThinking && (
-                <div className="conversation-message flex h-[30px] items-center gap-2 px-2 text-list text-fg-muted">
-                  <Spinner size={13} />
-                  <span className="tabular-nums">
-                    {waiting ? tr(`session.wait.${waiting}`) : tr('session.live.LiveTranscript.working')}
-                    {waitedMs >= WAIT_CLOCK_MS && ` · ${clockText(waitedMs, formatDuration)}`}
-                  </span>
-                </div>
-              )}
+                ))}
+                {showLive && <LiveStatusLine items={visible} turnId={snapshot?.turnId ?? null} fold={liveFold} />}
+              </div>
             </div>
+            {away && snapshot && <JumpToLatest unseen={unseen} onClick={jumpToLatest} />}
+            {/* 滚动条和轮次刻度合成一条（docs/ui/turn-rail.md §8）；设置里关掉轮次时只剩滚动条 */}
+            {snapshot && (
+              <TurnRail
+                turns={turns}
+                scroller={scroller}
+                showTurns={showTurns}
+                onBeforeJump={detachForSearch}
+                hiddenTurns={hiddenTurns}
+                onShowEarlier={windowSize !== null ? () => showEarlier(windowSize) : undefined}
+              />
+            )}
           </div>
-          {away && snapshot && <JumpToLatest unseen={unseen} onClick={jumpToLatest} />}
-          {/* 滚动条和轮次刻度合成一条（docs/ui/turn-rail.md §8）；设置里关掉轮次时只剩滚动条 */}
-          {snapshot && (
-            <TurnRail
-              turns={turns}
-              scroller={scroller}
-              showTurns={showTurns}
-              onBeforeJump={detachForSearch}
-              hiddenTurns={hiddenTurns}
-              onShowEarlier={windowSize !== null ? () => showEarlier(windowSize) : undefined}
-            />
-          )}
-        </div>
+        </LiveOwnerContext.Provider>
       </CompactionLiveContext.Provider>
     </ExpandScope.Provider>
   )

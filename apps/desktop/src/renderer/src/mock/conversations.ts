@@ -1328,7 +1328,10 @@ export function animateSteps(update: DemoUpdate): void {
     status,
   })
   const cycle = (): void => {
-    update(STEPS_ID, () => stepsStart, { state: 'running' })
+    // 每次重来都是新的一轮：用户消息的时间换成现在，状态行上「本轮用时」才从头数
+    update(STEPS_ID, () => stepsStart.map(it => (it.kind === 'user' ? { ...it, createdAt: Date.now() } : it)), {
+      state: 'running',
+    })
     // 刚发消息：底部「正在思考…」
     at(2_000, () =>
       put('st-r1', {
