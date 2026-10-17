@@ -720,6 +720,67 @@ describe('导入：行的取舍', () => {
     expect((r.items[1] as { images?: unknown }).images).toBeUndefined()
   })
 
+  it('只发了图片（没写字）的用户消息也是一轮：导入显示图片提示，算轮数、有回退入口', async () => {
+    const png = { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAAA' } }
+    const log = new Log(id(1))
+    log
+      .user('u1', null, '第一问', { origin: { kind: 'human' } })
+      .assistant('a1', 'u1', '第一答')
+      .user('u2', 'a1', [png], { origin: { kind: 'human' } })
+      .assistant('a2', 'u2', '第二答')
+      .save()
+    const r = (await readClaudeSession(projects, cwd, id(1)))!
+    expect(r.turns).toBe(2)
+    expect(users(r.items).map(u => [u.id, u.text])).toEqual([
+      ['u1', '第一问'],
+      ['u2', NATIVE_TEXT.images(1)],
+    ])
+    expect(r.items.filter(i => i.kind === 'assistant').map(i => (i as { text: string }).text)).toEqual([
+      '第一答',
+      '第二答',
+    ])
+  })
+
+  it('终端里追加了一轮只发图片的：补上找得到（从已知那一轮的末尾算起也一样）', async () => {
+    const png = { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAAA' } }
+    const log = new Log(id(1))
+    turns(log, 1, 1, null)
+    log.save()
+    const base = (await readClaudeSession(projects, cwd, id(1)))!
+    log.rows = []
+    log
+      .user('t1', base.at, [png], { origin: { kind: 'human' } })
+      .assistant('ta1', 't1', '看到了')
+      .append()
+    clearNativeCaches()
+    const next = (await newerTurns(projects, cwd, id(1), base.at!))!
+    expect(next).toMatchObject({ turns: 1, shown: 1, at: 'ta1' })
+    expect(next.items.map(i => i.kind)).toEqual(['user', 'assistant'])
+    expect(next.items[0]).toMatchObject({ id: 't1', text: NATIVE_TEXT.images(1) })
+    // 宿主按「对话里认识的最后一条用户消息」补：从 u1 这一轮的末尾算起，新的一轮照样找得到
+    expect((await newerTurns(projects, cwd, id(1), 'u1', { afterTurn: true }))!).toMatchObject({ turns: 1, shown: 1 })
+  })
+
+  it('列表：第一条只发了图片时标题用后面第一句有字的；整个会话只发过图片也照样列出、不隐藏', async () => {
+    const png = { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAAA' } }
+    new Log(id(1))
+      .user('u1', null, [png], { origin: { kind: 'human' } })
+      .assistant('a1', 'u1', '一张截图')
+      .user('u2', 'a1', '帮我把按钮改圆', { origin: { kind: 'human' } })
+      .assistant('a2', 'u2', '好')
+      .save()
+    new Log(id(2))
+      .user('v1', null, [png], { origin: { kind: 'human' } })
+      .assistant('b1', 'v1', '看到了')
+      .save()
+    const list = await listClaudeSessions(projects, cwd)
+    const byId = new Map(list.sessions.map(s => [s.id, s]))
+    expect(byId.get(id(1))?.title).toBe('帮我把按钮改圆')
+    expect(byId.has(id(2))).toBe(true)
+    const details = await collect(list.details())
+    expect(details.find(d => d.id === id(2))?.hidden).toBe(false)
+  })
+
   it('大的工具结果（<persisted-output>）照原样显示', async () => {
     const out =
       '<persisted-output>\nOutput too large (2MB). Full output saved to: C:\\x\\tool-results\\a.txt\n\nPreview…\n</persisted-output>'
