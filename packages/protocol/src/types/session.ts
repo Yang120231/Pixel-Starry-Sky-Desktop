@@ -128,6 +128,24 @@ export interface QueuedMessage {
   /** 发送时没有对话在运行、前面也没有可执行的排队项：立即执行，不算排队。
    *  界面在对话里显示「正在启动」而不是放进消息队列；未能开始（被停止）时宿主清掉此标记。 */
   direct?: boolean
+  /** 连接中断、宿主正在自动重连（retry.ts isConnectionError）：到时间之前留在队首不派发，
+   *  界面显示重连卡片而不是放进消息队列 */
+  reconnect?: QueueReconnect
+  /** 自动重连了几次还是没接上（或用户点了停止）才算失败的：界面在错误原因后面写「已自动重连 n 次」 */
+  reconnected?: number
+}
+
+export interface QueueReconnect {
+  /** 第几次重连，从 1 起 */
+  attempt: number
+  max: number
+  /** 开始等的时间和到点派发的时间（毫秒时间戳） */
+  since: number
+  at: number
+  /** 上一次断开的原因（第一行） */
+  reason: string
+  /** 引擎还没收到这条消息：原样重发；否则发一句「继续」接着断开前的上下文做 */
+  resend?: boolean
 }
 
 export interface SendReceipt {

@@ -95,7 +95,8 @@ class FakeSession implements EngineSession {
       type: 'turn_completed',
       turnId,
       outcome,
-      error: outcome === 'failed' ? 'connection reset by peer' : null,
+      // 不是连接类的错误：这里测手动重试，不让宿主自动重连
+      error: outcome === 'failed' ? 'invalid request' : null,
     })
   }
   async interrupt(): Promise<void> {

@@ -111,6 +111,7 @@ const engine: EngineBridge = {
   context: (id, detail) => call('engine:context', id, detail),
   compact: id => call('engine:compact', id),
   cancelQueued: (id, queueId) => call('engine:cancelQueued', id, queueId),
+  dismissQueued: (id, queueId) => call('engine:dismissQueued', id, queueId),
   moveQueued: (id, queueId, toIndex) => call('engine:moveQueued', id, queueId, toIndex),
   runQueuedNow: (id, queueId) => call('engine:runQueuedNow', id, queueId),
   steerQueued: (id, queueId, turnId) => call('engine:steerQueued', id, queueId, turnId),

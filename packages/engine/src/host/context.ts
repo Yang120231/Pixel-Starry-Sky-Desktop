@@ -59,6 +59,10 @@ export interface EngineHostOptions {
   /** 授权登录最多等多久（毫秒），默认 10 分钟；测试用 */
   loginTimeoutMs?: number
   latestVersion?: (npmPackage: string) => Promise<string | null>
+  /** 断线自动重连时替用户发的那句（按界面语言），默认「继续」 */
+  continueText?: () => string
+  /** 测试用：第 n 次自动重连前等多久（毫秒），不给按 retry.ts reconnectDelay */
+  reconnectDelays?: number[]
 }
 
 export interface Runtime {
@@ -81,6 +85,8 @@ export interface Runtime {
   pumpFinished: Promise<void> | null
   /** 这一轮（turnId）是没带交接的斜杠命令：结束时不推进引擎的游标，交接留给下一条普通消息 */
   holdCursor?: string
+  /** 队首的自动重连到时间时再派发（queue.ts armReconnect） */
+  reconnectTimer?: NodeJS.Timeout | null
 }
 
 export interface HostModules {

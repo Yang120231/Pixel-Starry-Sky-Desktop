@@ -791,6 +791,8 @@ describe('EngineHost + Claude（假引擎）', () => {
   it('引擎崩溃：保留失败消息并暂停，撤回后新消息重启并恢复会话', async () => {
     const host = makeHost()
     const { record } = setup(host)
+    // 引擎意外退出默认会自动重连（queue.ts reconnect），这里测的是不重连时的失败处理
+    host.setRetrySettings(0)
     await host.send(record.id, '崩溃吧')
     await waitFor(() => turnsDone(record.id) === 1)
     const done = sessionEvents(record.id).find(e => e.type === 'turn_completed')
@@ -808,6 +810,8 @@ describe('EngineHost + Claude（假引擎）', () => {
   it('待处理：失败后会话摘要带错误和暂停的队列，重启后不打开会话也能看到，成功后清空', async () => {
     const host = makeHost()
     const { record } = setup(host)
+    // 引擎意外退出默认会自动重连（queue.ts reconnect），这里测的是不重连时的失败处理
+    host.setRetrySettings(0)
     await host.send(record.id, '崩溃吧')
     await waitFor(() => turnsDone(record.id) === 1)
     const summary = () => host.sessions().find(s => s.record.id === record.id)!

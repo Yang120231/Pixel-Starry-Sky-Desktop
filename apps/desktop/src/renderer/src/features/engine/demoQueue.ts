@@ -82,6 +82,14 @@ export function useDemoQueueController(sessionId: string | null): QueueControlle
       setQueue(queue => queue.filter(q => q.id !== id))
       return item.text
     },
+    dismissQueued: async id => {
+      const item = find(id)
+      updateDemoSnapshot(sessionId, s => ({
+        ...s,
+        queue: s.queue.filter(q => q.id !== id),
+        items: s.items.map(i => (i.kind === 'user' && i.id === item.messageUuid ? { ...i, dismissed: true } : i)),
+      }))
+    },
     moveQueued: async (id, index) =>
       setQueue(queue => {
         const item = queue.find(q => q.id === id)

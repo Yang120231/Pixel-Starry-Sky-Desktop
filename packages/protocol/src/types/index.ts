@@ -9,6 +9,7 @@ export type {
   EngineSessionState,
   ProjectFolder,
   QueueSettings,
+  QueueReconnect,
   QueueStatus,
   QueueSummary,
   QueuedMessage,

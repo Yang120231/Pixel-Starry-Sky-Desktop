@@ -37,6 +37,8 @@ export class HostTurn {
     // 失败 / 待核对和单独暂停的项不堵住队首，取第一条可执行的消息。
     const item = rt.snapshot.queuePaused ? undefined : rt.snapshot.queue.find(q => q.status === 'queued' && !q.held)
     if (!item) return
+    // 自动重连还没到时间：后面的消息也等着，到时间再来
+    if (m.queue.armReconnect(id)) return
     rt.pumping = true
     let finishPump!: () => void
     rt.pumpFinished = new Promise<void>(resolve => {
@@ -143,28 +145,45 @@ export class HostTurn {
       }
       if (!stillCurrent()) return
       const turnId = randomUUID()
-      const userItemId = item.attempt ? `${item.id}-retry-${randomUUID()}` : item.id
+      // 断线自动重连（queue.ts reconnect）：引擎收到过这条的，只发一句「继续」接着断开前的上下文做，
+      // 对话里那条原消息不动（关掉时标它「未送达」）；没收到过的原样重发，沿用原来的条目，不多出一条
+      const resume = !!item.reconnect && !item.reconnect.resend && !!item.messageUuid
+      const text = resume ? (ctx.opts.continueText?.() ?? '继续') : item.text
+      const files = resume ? undefined : item.files
+      const attachments = resume ? undefined : item.attachments
+      const userItemId = resume
+        ? `${item.id}-reconnect-${randomUUID()}`
+        : item.reconnect?.resend && item.messageUuid
+          ? item.messageUuid
+          : item.attempt
+            ? `${item.id}-retry-${randomUUID()}`
+            : item.id
       // 新引擎没看过的对话整理成交接材料，放在用户消息前面发给它；用户消息条目里仍是用户原文
       // 当前模型能不能看图要问目录（异步），所以先问好再算交接
       const sees = await m.handoff.modelSees(id, record)
       if (!stillCurrent()) return
-      const handoff = m.handoff.plan(id, record, item.text, item.files, item.attachments, sees)
+      const handoff = m.handoff.plan(id, record, text, files, attachments, sees)
       rt.holdCursor = handoff.hold ? turnId : undefined
       rt.activeId = item.id
-      m.queue.changeQueue(id, item.id, { status: 'running', attempt: (item.attempt ?? 0) + 1, messageUuid: userItemId })
+      m.queue.changeQueue(id, item.id, {
+        status: 'running',
+        attempt: (item.attempt ?? 0) + 1,
+        messageUuid: resume ? item.messageUuid : userItemId,
+      })
       if (handoff.notice) m.events.apply(id, { type: 'item_completed', item: handoff.notice })
       m.events.apply(id, {
         type: 'item_completed',
         item: {
           kind: 'user',
           id: userItemId,
-          text: item.text,
-          attachments: item.attachments,
-          ...(item.files ? { files: item.files } : {}),
+          text,
+          attachments,
+          ...(files ? { files } : {}),
           createdAt: Date.now(),
           mode: 'normal',
           turnId,
           engine: record.engine,
+          ...(resume ? { reconnect: item.reconnect!.attempt } : {}),
         },
       })
       const latest = rt.snapshot.record
@@ -178,10 +197,21 @@ export class HostTurn {
       if (rt.snapshot.suggestion) m.events.apply(id, { type: 'suggestion', text: null })
       m.events.apply(id, { type: 'status', state: 'running' })
       m.events.apply(id, { type: 'turn_started', turnId, execution: queueSettings(rt.execution) })
-      rt.session.send(handoff.text, turnId, userItemId, item.attachments, handoff.seed, handoff.attachments)
+      rt.session.send(handoff.text, turnId, userItemId, attachments, handoff.seed, handoff.attachments)
     } catch (err) {
       if (ctx.runtimes.get(id) !== rt) return
-      m.queue.changeQueue(id, item.id, { status: 'failed', error: (err as Error).message })
+      const error = (err as Error).message
+      // 引擎没启动起来、消息没发出去：连接问题的也自动重连，到时原样重发
+      if (rt.activeId !== item.id && m.queue.reconnect(id, item.id, error, true)) {
+        m.events.apply(id, { type: 'status', state: 'idle' })
+        return
+      }
+      m.queue.changeQueue(id, item.id, {
+        status: 'failed',
+        error,
+        reconnect: undefined,
+        ...(item.reconnect ? { reconnected: item.reconnect.attempt } : {}),
+      })
       rt.snapshot = { ...rt.snapshot, queuePaused: true }
       m.queue.publishQueue(id)
       m.events.apply(id, { type: 'status', state: 'idle' })

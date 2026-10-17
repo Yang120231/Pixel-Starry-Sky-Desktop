@@ -43,6 +43,7 @@ export type {
   Question,
   QuestionOption,
   QueueSettings,
+  QueueReconnect,
   QueueStatus,
   QueueSummary,
   QueuedMessage,

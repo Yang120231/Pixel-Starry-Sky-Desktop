@@ -44,6 +44,10 @@ export type Item =
       mode?: 'normal' | 'guidance'
       /** 处理这条消息的引擎（跨引擎接力）；旧条目没有，按会话当前引擎处理 */
       engine?: EngineId
+      /** 连接中断后宿主自动发的「继续」是第几次重连：界面显示成一行小字，不当成用户说的话 */
+      reconnect?: number
+      /** 发送失败后用户点了「关掉」：没送到，留在对话里变淡，标「未送达」 */
+      dismissed?: boolean
     }
   /** 助手回复，Markdown */
   | { kind: 'assistant'; id: string; text: string; status: ItemStatus }

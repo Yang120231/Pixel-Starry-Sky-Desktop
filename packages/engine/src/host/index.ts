@@ -392,7 +392,9 @@ export class EngineHost {
     return this.m.turn.compactContext(id)
   }
 
+  /** 停止：正在等的自动重连也一起停下，那条直接算发送失败 */
   async interrupt(id: string, opts?: InterruptOptions): Promise<void> {
+    this.m.queue.stopReconnect(id)
     return this.m.turn.interrupt(id, opts)
   }
 
@@ -403,6 +405,10 @@ export class EngineHost {
 
   cancelQueued(id: string, queueId: string): string {
     return this.m.queue.cancelQueued(id, queueId)
+  }
+
+  dismissQueued(id: string, queueId: string): void {
+    this.m.queue.dismissQueued(id, queueId)
   }
 
   moveQueued(id: string, queueId: string, toIndex: number): void {
@@ -551,7 +557,10 @@ export class EngineHost {
     this.m.usage.abortSettlements()
     this.m.login.closeAll()
     const all = [...this.runtimes.values()]
-    for (const rt of all) if (rt.idleTimer) clearTimeout(rt.idleTimer)
+    for (const rt of all) {
+      if (rt.idleTimer) clearTimeout(rt.idleTimer)
+      if (rt.reconnectTimer) clearTimeout(rt.reconnectTimer)
+    }
     // 退出时不等引擎收尾：最多等 1 秒就强制结束（原来 Claude 等满 5 秒，更新重启时白等）
     await Promise.all(all.map(rt => rt.session?.close({ quick: true }).catch(() => undefined)))
   }

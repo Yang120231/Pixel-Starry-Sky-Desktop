@@ -1,10 +1,11 @@
-// 消息队列：发送、排队、撤回、调序、继续、插队、引导（docs/ui/message-queue.md）
+// 消息队列：发送、排队、撤回、关掉、调序、继续、插队、引导、断线自动重连（docs/ui/message-queue.md）
 import { randomUUID } from 'node:crypto'
 import { statSync } from 'node:fs'
 import type { MessageInput, QueuedMessage, QueueSummary, SendReceipt } from '@pixelsky/protocol'
 import { messageWithFiles } from '@pixelsky/protocol'
 import { messageInput, queueSettings, sameQueueSettings } from '../queue'
 import { ENGINES } from '../registry'
+import { isConnectionError, reconnectDelay, reconnectLimit } from '../retry'
 import type { HostContext } from './context'
 
 export class HostQueue {
@@ -74,6 +75,10 @@ export class HostQueue {
     if (rt.snapshot.record.archivedAt) m.events.patchRecord(id, { archivedAt: null })
     if (rt.snapshot.suggestion) m.events.apply(id, { type: 'suggestion', text: null })
     this.publishQueue(id)
+    // 有发送失败的消息时直接说了新的：失败那条算关掉（对话里标「未送达」，想带上可以点「重发」）
+    if (idle)
+      for (const q of rt.snapshot.queue)
+        if (q.status === 'failed' && rt.snapshot.items.some(i => i.id === q.messageUuid)) this.dismissQueued(id, q.id)
     queueMicrotask(() => {
       void m.turn.pump(id)
     })
@@ -111,6 +116,98 @@ export class HostQueue {
     if (['running', 'dispatching', 'delivering'].includes(item.status)) throw new Error('这条消息已开始交付，无法撤回')
     this.removeQueue(id, queueId, 'cancelled')
     return item.text
+  }
+
+  /**
+   * 发送失败的消息不重发也不撤回：从队列里拿掉，对话里的那条变淡、标「未送达」，错误卡片照旧，接着说什么由用户定。
+   * 还没进对话的（引擎没启动起来）关掉就找不回来了：只能重试或撤回
+   */
+  dismissQueued(id: string, queueId: string): void {
+    const rt = this.ctx.m.sessions.runtime(id)
+    const item = rt.snapshot.queue.find(q => q.id === queueId)
+    if (!item) throw new Error('这条消息已开始处理或已经撤回')
+    if (item.status !== 'failed' && item.status !== 'uncertain') throw new Error('只有失败或待核对的消息可以关掉')
+    const user = item.messageUuid ? rt.snapshot.items.find(i => i.id === item.messageUuid) : undefined
+    if (user?.kind !== 'user') throw new Error('这条消息还没发出去，请重试或撤回')
+    this.removeQueue(id, queueId, 'accepted')
+    if (rt.snapshot.queue.length === 0 && rt.snapshot.queuePaused) {
+      rt.snapshot = { ...rt.snapshot, queuePaused: false }
+      this.publishQueue(id)
+    }
+    this.ctx.m.events.apply(id, { type: 'item_completed', item: { ...user, dismissed: true } })
+  }
+
+  /**
+   * 一轮因为连接问题失败（retry.ts isConnectionError）：先不标失败，这条留在队首按退避等一会儿再派发
+   * （Codex 的 Reconnecting n/m）。resend：引擎还没收到它，到时原样重发；否则发一句「继续」接着断开前的上下文做。
+   * 不是连接问题、或次数用完时返回 false，调用方照常标失败。
+   */
+  reconnect(id: string, queueId: string, error: string | null, resend = false): boolean {
+    const { ctx } = this
+    const rt = ctx.m.sessions.runtime(id)
+    const item = rt.snapshot.queue.find(q => q.id === queueId)
+    if (!item || item.mode !== 'normal' || ctx.closing || !isConnectionError(error)) return false
+    const max = item.reconnect?.max ?? reconnectLimit(ctx.m.settings.file.maxRetries)
+    const attempt = (item.reconnect?.attempt ?? 0) + 1
+    if (attempt > max) return false
+    const now = Date.now()
+    const delay = ctx.opts.reconnectDelays?.[attempt - 1] ?? reconnectDelay(attempt)
+    const next: QueuedMessage = {
+      ...item,
+      status: 'queued',
+      error: null,
+      held: false,
+      direct: true,
+      reconnect: {
+        attempt,
+        max,
+        since: now,
+        at: now + delay,
+        reason: (error ?? '').split('\n')[0].slice(0, 300),
+        ...(resend ? { resend: true } : {}),
+      },
+    }
+    rt.snapshot = { ...rt.snapshot, queue: [next, ...rt.snapshot.queue.filter(q => q.id !== queueId)] }
+    this.publishQueue(id)
+    if (!this.armReconnect(id)) queueMicrotask(() => void ctx.m.turn.pump(id))
+    return true
+  }
+
+  /** 用户在重连卡片上点了「停止」：不再自动重连，这条直接算发送失败，队列暂停 */
+  stopReconnect(id: string): void {
+    const rt = this.ctx.runtimes.get(id)
+    const item = rt?.snapshot.queue.find(q => q.status === 'queued' && q.reconnect)
+    if (!rt || !item?.reconnect) return
+    if (rt.reconnectTimer) clearTimeout(rt.reconnectTimer)
+    rt.reconnectTimer = null
+    const { attempt, reason } = item.reconnect
+    rt.snapshot = {
+      ...rt.snapshot,
+      queuePaused: true,
+      queue: rt.snapshot.queue.map(q =>
+        q.id === item.id
+          ? { ...q, status: 'failed' as const, error: reason || '连接中断', reconnect: undefined, reconnected: attempt - 1 }
+          : q,
+      ),
+    }
+    this.publishQueue(id)
+  }
+
+  /** 队首是还没到时间的自动重连：到时间再派发一次（重复调用只留最新的一个定时器） */
+  armReconnect(id: string): boolean {
+    const rt = this.ctx.runtimes.get(id)
+    if (!rt) return false
+    const head = rt.snapshot.queue.find(q => q.status === 'queued' && !q.held)
+    if (rt.reconnectTimer) clearTimeout(rt.reconnectTimer)
+    rt.reconnectTimer = null
+    const wait = head?.reconnect ? head.reconnect.at - Date.now() : 0
+    if (wait <= 0) return false
+    rt.reconnectTimer = setTimeout(() => {
+      rt.reconnectTimer = null
+      if (this.ctx.runtimes.get(id) === rt) void this.ctx.m.turn.pump(id)
+    }, wait)
+    rt.reconnectTimer.unref?.()
+    return true
   }
 
   moveQueued(id: string, queueId: string, toIndex: number): void {
@@ -159,10 +256,21 @@ export class HostQueue {
     if (!rt.snapshot.queue.some(q => q.id === queueId)) throw new Error('这条消息已经开始处理')
     if (rt.snapshot.state !== 'idle' || rt.pumping) throw new Error('当前任务还没有停止，请稍后重试')
     if (rt.snapshot.record.archivedAt) m.events.patchRecord(id, { archivedAt: null })
+    // 还在等的自动重连：现在就连，次数照算；失败了再重试的：从头算，又能自动重连满次数
+    const reconnect = item.reconnect && item.status === 'queued' ? { ...item.reconnect, at: Date.now() } : undefined
     rt.snapshot = {
       ...rt.snapshot,
       queue: [
-        { ...item, status: 'queued', mode: 'normal', error: null, held: false, direct: true },
+        {
+          ...item,
+          status: 'queued',
+          mode: 'normal',
+          error: null,
+          held: false,
+          direct: true,
+          reconnect,
+          reconnected: undefined,
+        },
         ...rt.snapshot.queue.filter(q => q.id !== queueId),
       ],
       queuePaused: false,
