@@ -10,7 +10,7 @@ import type {
   SkillCommand,
   TurnOutcome,
 } from '@pixelsky/protocol'
-import { EMPTY_FLAGS, isQuietWarning, viaGateway } from '@pixelsky/protocol'
+import { EMPTY_FLAGS, codedError, isQuietWarning, viaGateway } from '@pixelsky/protocol'
 import { versionAtLeast } from '../exec'
 import { QUICK_CLOSE_MS, type CloseOptions, type EngineSession, type Launcher, type SessionContext } from '../adapter'
 import { NO_REPLY, seedImageCount, seedTurns, type ChatSeed, type ChatTurn } from '../chat-log'
@@ -332,8 +332,11 @@ export class CodexSession implements EngineSession {
       const policy = codexPermission(this.settings.permissionMode)
       if (allowed.length && !allowed.includes(policy.approvalPolicy))
         throw new Error('Codex managed requirements prohibit this permission mode')
+      const modelProvider = gatewayProvider ?? (string(environment.PIXELSKY_CODEX_PROVIDER) || undefined)
       const threadParams = {
         cwd: record.cwd,
+        // 显式带上来源：resume / fork 不带时 Codex 沿用线程自己存的来源，平台会话接以前用别的来源开的线程会绕过网关
+        ...(modelProvider ? { modelProvider } : {}),
         // 附加文件夹：Codex 只靠可写目录不知道它们在哪，开线程时说一声
         ...(record.extraDirs?.length ? { developerInstructions: extraDirsNote(record.extraDirs) } : {}),
         ...(record.model ? { model: record.model } : {}),
@@ -368,6 +371,9 @@ export class CodexSession implements EngineSession {
         } catch (error) {
           // 进程已经退出说明是连接问题，照常报错；进程还在说明线程找不到或已损坏，改用新线程
           if (!proc.alive) throw error
+          // 另一个进程（例如终端里的 codex）正写着这个线程：改开新线程会丢上下文，报给界面让用户选
+          if (/already has an active writer/i.test((error as Error).message))
+            throw codedError('resume.live', { source: 'other' })
           thread = await proc.request('thread/start', threadParams)
           resumeFailed = true
         }

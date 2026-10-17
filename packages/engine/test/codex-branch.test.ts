@@ -242,6 +242,25 @@ describe('Codex 分叉', { timeout: 20_000 }, () => {
     expect(notices(forked.record.id)).toEqual([])
   })
 
+  it('thread/fork 显式带 modelProvider：平台 / 自定义接口是网关的 provider，自己账号是 config 里的当前 provider', async () => {
+    for (const [env, expected] of [
+      [{ FAKE_CODEX_PROVIDER: 'openai' }, 'openai'],
+      [{ PIXELSKY_CODEX_BASE_URL: 'http://127.0.0.1:9/v1', PIXELSKY_CODEX_TOKEN: 'tok' }, 'pixelsky-custom'],
+    ] as const) {
+      const { session, messages, say, conversation } = setup(env)
+      if (expected === 'pixelsky-custom') await host!.update(session.id, { provider: { id: 'my-api' } })
+      await conversation(['一', '二', '三'])
+      const forked = await host!.forkSession(session.id, 'm2')
+      await say(forked.record.id, '另一条路', 'f0')
+      const fork = messages().find(m => m.method === 'thread/fork')
+      expect(fork?.params?.modelProvider).toBe(expected)
+      await host!.shutdown()
+      host = undefined
+      rmSync(join(root, 'state'), { recursive: true, force: true })
+      rmSync(join(root, 'rpc.jsonl'), { force: true })
+    }
+  })
+
   it('分叉到第一条：新线程，没有 pendingFork，也不调 thread/fork', async () => {
     const { session, messages, say, conversation } = setup()
     await conversation(['一', '二'])

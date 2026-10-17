@@ -3,7 +3,15 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { CodexAdapter, EngineHost } from '../src'
-import type { AgentRun, Effort, EngineEvent, EngineInfo, HostEvent, ImageAttachment } from '@pixelsky/protocol'
+import {
+  parseCodedError,
+  type AgentRun,
+  type Effort,
+  type EngineEvent,
+  type EngineInfo,
+  type HostEvent,
+  type ImageAttachment,
+} from '@pixelsky/protocol'
 import type { EngineAdapter, EngineSession, SessionContext } from '../src/adapter'
 import { ENGINES } from '../src/registry'
 import {
@@ -328,6 +336,59 @@ describe('Codex app-server adapter', () => {
     await host!.send(session.id, 'third')
     await wait(() => host!.open(session.id).items.filter(i => i.kind === 'turn_stats').length === 3)
     expect(host!.open(session.id).state).toBe('idle')
+  })
+  it('thread/start 和 thread/resume 显式带 modelProvider：自己账号用 config 里的当前 provider，自定义接口是 pixelsky-custom', async () => {
+    const providers = (messages: () => { method?: string; params?: Record<string, unknown> }[]) =>
+      messages()
+        .filter(m => m.method === 'thread/start' || m.method === 'thread/resume')
+        .map(m => [m.method, m.params?.modelProvider])
+    const own = setup(50, { env: { FAKE_CODEX_PROVIDER: 'openai' } })
+    await host!.send(own.session.id, 'one')
+    await wait(() => host!.open(own.session.id).items.some(i => i.kind === 'turn_stats'))
+    await new Promise(r => setTimeout(r, 150))
+    await host!.send(own.session.id, 'two')
+    await wait(() => host!.open(own.session.id).items.filter(i => i.kind === 'turn_stats').length === 2)
+    expect(providers(own.messages)).toEqual([
+      ['thread/start', 'openai'],
+      ['thread/resume', 'openai'],
+    ])
+    await host!.shutdown()
+    host = undefined
+    const gateway = setup(50, {
+      env: { PIXELSKY_CODEX_BASE_URL: 'http://127.0.0.1:9/v1', PIXELSKY_CODEX_TOKEN: 'tok' },
+    })
+    await host!.update(gateway.session.id, { provider: { id: 'my-api' } })
+    await host!.send(gateway.session.id, 'one')
+    await wait(() => host!.open(gateway.session.id).items.some(i => i.kind === 'turn_stats'))
+    expect(providers(gateway.messages).at(-1)).toEqual(['thread/start', 'pixelsky-custom'])
+  })
+  it('thread/resume 带 modelProvider：关掉进程再发送，resume 里是当前来源', async () => {
+    const { session, messages } = setup(50, {
+      env: { PIXELSKY_CODEX_BASE_URL: 'http://127.0.0.1:9/v1', PIXELSKY_CODEX_TOKEN: 'tok' },
+    })
+    await host!.update(session.id, { provider: { id: 'my-api' } })
+    await host!.send(session.id, 'one')
+    await wait(() => host!.open(session.id).items.some(i => i.kind === 'turn_stats'))
+    await new Promise(r => setTimeout(r, 150))
+    await host!.send(session.id, 'two')
+    await wait(() => host!.open(session.id).items.filter(i => i.kind === 'turn_stats').length === 2)
+    expect(messages().find(m => m.method === 'thread/resume')?.params?.modelProvider).toBe('pixelsky-custom')
+  })
+  it('线程正被别的进程写着（already has an active writer）：失败代码 resume.live，不改开新线程', async () => {
+    const { session, messages } = setup(50, { env: { FAKE_CODEX_LOCKED: '1' } })
+    await host!.send(session.id, 'first')
+    await wait(() => host!.open(session.id).items.some(i => i.kind === 'turn_stats'))
+    const oldId = host!.open(session.id).record.engineSessionId
+    await new Promise(r => setTimeout(r, 150))
+    const starts = () => messages().filter(m => m.method === 'thread/start').length
+    const before = starts()
+    await host!.send(session.id, 'second')
+    await wait(() => host!.open(session.id).state === 'idle' && host!.open(session.id).queue.some(q => q.error))
+    expect(messages().some(m => m.method === 'thread/resume')).toBe(true)
+    expect(starts()).toBe(before)
+    const queued = host!.open(session.id).queue.find(q => q.error)
+    expect(parseCodedError(queued?.error)?.code).toBe('resume.live')
+    expect(host!.open(session.id).record.engineSessionId).toBe(oldId)
   })
   it('停止后等原生结束这一轮，不会直接结束进程', async () => {
     const { session, messages, events } = setup()

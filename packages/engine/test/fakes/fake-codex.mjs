@@ -219,6 +219,11 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
       break
     case 'thread/start':
     case 'thread/resume':
+      // FAKE_CODEX_LOCKED：另一个进程正写着这个线程（终端里的 codex）
+      if (m.method === 'thread/resume' && process.env.FAKE_CODEX_LOCKED) {
+        out({ id: m.id, error: { code: -32000, message: 'thread ' + p.threadId + ' already has an active writer' } })
+        break
+      }
       if (m.method === 'thread/resume' && resumeFails()) {
         out({ id: m.id, error: { code: -32000, message: 'thread not found: ' + p.threadId } })
         break
