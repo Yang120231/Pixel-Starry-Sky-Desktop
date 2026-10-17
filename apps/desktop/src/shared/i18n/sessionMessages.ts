@@ -115,6 +115,11 @@ export const sessionMessages = {
   'session.reconnect.inSeconds': { zh: '· 约 {p0} 秒后', en: '· in about {p0}s' },
   'session.reconnect.connecting': { zh: '· 正在连接…', en: '· Connecting…' },
   'session.reconnect.now': { zh: '立即重连', en: 'Reconnect now' },
+  'session.reconnect.paused': {
+    zh: '连接中断，自动重连已暂停 {p0}/{p1}',
+    en: 'Connection lost. Auto-reconnect paused {p0}/{p1}',
+  },
+  'session.reconnect.resume': { zh: '继续重连', en: 'Resume reconnecting' },
   'session.reconnect.resumeHint': {
     zh: '接着断开前的位置继续，不重发你的消息',
     en: 'Picks up where it stopped without resending your message',

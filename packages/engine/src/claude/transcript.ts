@@ -173,9 +173,13 @@ export async function seedTranscript(
   const timestamp = new Date().toISOString()
   const base = { isSidechain: false, userType: 'external', cwd, sessionId, timestamp }
   const lines: string[] = []
+  // 同一批里已经写过的条目 id（重复的不再写）
+  const written = new Set<string>()
   for (const turn of turns) {
-    const own = UUID.test(turn.id) ? turn.id : null
-    if (own && (branch.has(own) || branchItems.has(own))) continue
+    // 任意 id 都去重：非 UUID 的（如重试出来的 X-retry-…）靠记录里的 pixelskyItemId 认出已写过
+    const own = turn.id
+    if (branch.has(own) || branchItems.has(own) || written.has(own)) continue
+    written.add(own)
     if (parentIsUser) {
       const replyId = randomUUID()
       lines.push(
@@ -189,14 +193,14 @@ export async function seedTranscript(
       )
       parent = replyId
     }
-    const userId = own && !idx?.rows.has(own) ? own : randomUUID()
+    const userId = UUID.test(own) && !idx?.rows.has(own) ? own : randomUUID()
     lines.push(
       JSON.stringify({
         ...base,
         parentUuid: parent,
         type: 'user',
         uuid: userId,
-        ...(own && userId !== own ? { pixelskyItemId: own } : {}),
+        ...(userId !== own ? { pixelskyItemId: own } : {}),
         message: { role: 'user', content: userContent(turn.user, turn.images) },
       }),
     )

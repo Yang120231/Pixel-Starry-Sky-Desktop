@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { QueuedMessage, SessionSnapshot } from '@pixelsky/protocol'
-import { canSteer, isPending, queueItems, queueLabel, queueTitle } from './queue'
+import { canSteer, isPending, isReconnecting, queueItems, queueLabel, queueTitle } from './queue'
 
 const q = (id: string, patch: Partial<QueuedMessage> = {}): QueuedMessage => ({
   id,
@@ -37,6 +37,15 @@ describe('消息队列面板', () => {
     expect(queueTitle([q('a', { held: true })], false)).toBe('队列已暂停')
     expect(queueTitle([q('a')], false)).toBe('排队中')
     expect(isPending(q('a', { status: 'delivering' }))).toBe(true)
+  })
+
+  it('自动重连中的那条：单独暂停的不算，整个队列暂停时写「重连已暂停」', () => {
+    const reconnect = { attempt: 2, max: 5, at: 10, since: 0, reason: '', resend: false }
+    expect(isReconnecting(q('a', { reconnect }))).toBe(true)
+    expect(isReconnecting(q('a', { reconnect, held: true }))).toBe(false)
+    expect(queueLabel(q('a', { reconnect }))).toBe('正在重连 2/5')
+    expect(queueLabel(q('a', { reconnect }), true)).toBe('重连已暂停 2/5')
+    expect(queueLabel(q('a', { reconnect, held: true }))).toBe('已暂停')
   })
 
   it('引导：要排队中、引擎支持、正在跑一轮', () => {

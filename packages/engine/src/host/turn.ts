@@ -13,6 +13,7 @@ import type {
 import { sourceKey, viaGateway } from '@pixelsky/protocol'
 import { queueSettings } from '../queue'
 import type { HostContext } from './context'
+import { reconnectedCount } from './queue'
 import { NEW_TITLE, titleFrom } from './title'
 
 export class HostTurn {
@@ -44,6 +45,7 @@ export class HostTurn {
     rt.pumpFinished = new Promise<void>(resolve => {
       finishPump = resolve
     })
+    rt.turn = undefined
     const generation = rt.generation
     const stillCurrent = () =>
       !ctx.closing && ctx.runtimes.get(id) === rt && generation === rt.generation && !rt.snapshot.queuePaused
@@ -51,7 +53,13 @@ export class HostTurn {
     m.events.apply(id, { type: 'status', state: 'starting' })
     let preparedExtensions: ExtensionLaunch | undefined
     try {
-      let record = { ...rt.snapshot.record, ...item.settings }
+      // 自动重连的项（不管等了多久、中间换没换过模型 / 额度来源）一律用会话现在的设置，不用入队时存的那份
+      const settings = item.reconnect ? queueSettings(rt.snapshot.record) : item.settings
+      // 派发前校验自动重连发什么（queue.ts reconnectPlan）：只发「继续」/ 原样重发 / 原消息没了就不发
+      const plan = m.queue.reconnectPlan(id, item)
+      if (plan.kind === 'fail') throw new Error(plan.error)
+      const resume = plan.kind === 'resume'
+      let record = { ...rt.snapshot.record, ...settings }
       const adapter = ctx.adapters[record.engine]
       if (!adapter) throw new Error('这个引擎暂不支持')
       const info = await adapter.info()
@@ -62,10 +70,10 @@ export class HostTurn {
       await ctx.opts.validateInput?.(record)
       if (!stillCurrent()) return
       // 这条消息用的引擎和会话现在的不同（运行中选了别的引擎，或排队时就选了别的）：先切过去，用上面检测过的新引擎
-      if (item.settings.engine && item.settings.engine !== rt.snapshot.record.engine) {
-        await m.handoff.switchEngine(id, item.settings.engine)
+      if (settings.engine && settings.engine !== rt.snapshot.record.engine) {
+        await m.handoff.switchEngine(id, settings.engine)
         if (!stillCurrent()) return
-        record = { ...rt.snapshot.record, ...item.settings }
+        record = { ...rt.snapshot.record, ...settings }
       }
       if (rt.idleTimer) {
         clearTimeout(rt.idleTimer)
@@ -87,7 +95,7 @@ export class HostTurn {
       }
       if (!stillCurrent()) return
       // 执行设置里的引擎就是正在用的这个，nextEngine（还没生效的选择）不带进来
-      rt.execution = { ...rt.snapshot.record, ...item.settings, nextEngine: null }
+      rt.execution = { ...rt.snapshot.record, ...settings, nextEngine: null }
       if (!rt.session) {
         rt.sessionSource = source
         rt.sessionMaxRetries = maxRetries
@@ -145,16 +153,15 @@ export class HostTurn {
       }
       if (!stillCurrent()) return
       const turnId = randomUUID()
-      // 断线自动重连（queue.ts reconnect）：引擎收到过这条的，只发一句「继续」接着断开前的上下文做，
-      // 对话里那条原消息不动（关掉时标它「未送达」）；没收到过的原样重发，沿用原来的条目，不多出一条
-      const resume = !!item.reconnect && !item.reconnect.resend && !!item.messageUuid
+      // 断线自动重连（queue.ts reconnect / reconnectPlan）：引擎收到过这条的，只发一句「继续」接着断开前的上下文做，
+      // 对话里那条原消息不动（关掉时标它「未送达」）；没收到过的原样重发，沿用原来的条目和时间，不多出一条
       const text = resume ? (ctx.opts.continueText?.() ?? '继续') : item.text
       const files = resume ? undefined : item.files
       const attachments = resume ? undefined : item.attachments
       const userItemId = resume
         ? `${item.id}-reconnect-${randomUUID()}`
-        : item.reconnect?.resend && item.messageUuid
-          ? item.messageUuid
+        : plan.kind === 'resend'
+          ? plan.userItemId
           : item.attempt
             ? `${item.id}-retry-${randomUUID()}`
             : item.id
@@ -162,13 +169,33 @@ export class HostTurn {
       // 当前模型能不能看图要问目录（异步），所以先问好再算交接
       const sees = await m.handoff.modelSees(id, record)
       if (!stillCurrent()) return
-      const handoff = m.handoff.plan(id, record, text, files, attachments, sees)
+      const handoff = m.handoff.plan(
+        id,
+        record,
+        text,
+        files,
+        attachments,
+        sees,
+        plan.kind === 'resend' ? userItemId : undefined,
+      )
       rt.holdCursor = handoff.hold ? turnId : undefined
       rt.activeId = item.id
+      rt.turn = {
+        turnId,
+        queueId: item.id,
+        userItemId,
+        resume,
+        delivered: resume,
+        progressed: false,
+        engineRetried: false,
+      }
+      // 整条发送（正常 / 重试 / 原样重发）先记「引擎还没收到」，收到确认再写 true；「继续」不动
       m.queue.changeQueue(id, item.id, {
         status: 'running',
         attempt: (item.attempt ?? 0) + 1,
         messageUuid: resume ? item.messageUuid : userItemId,
+        ...(resume ? {} : { delivered: false }),
+        ...(item.reconnect ? { settings } : {}),
       })
       if (handoff.notice) m.events.apply(id, { type: 'item_completed', item: handoff.notice })
       m.events.apply(id, {
@@ -179,7 +206,7 @@ export class HostTurn {
           text,
           attachments,
           ...(files ? { files } : {}),
-          createdAt: Date.now(),
+          createdAt: plan.kind === 'resend' ? (plan.createdAt ?? Date.now()) : Date.now(),
           mode: 'normal',
           turnId,
           engine: record.engine,
@@ -202,7 +229,13 @@ export class HostTurn {
       if (ctx.runtimes.get(id) !== rt) return
       const error = (err as Error).message
       // 引擎没启动起来、消息没发出去：连接问题的也自动重连，到时原样重发
-      if (rt.activeId !== item.id && m.queue.reconnect(id, item.id, error, true)) {
+      if (rt.activeId !== item.id && m.queue.reconnect(id, item.id, error, generation)) {
+        m.events.apply(id, { type: 'status', state: 'idle' })
+        return
+      }
+      // 用户在派发中点了停止：已经结算成发送失败（queue.ts stopReconnect），这里的报错不改它的原因
+      const settled = rt.snapshot.queue.find(q => q.id === item.id)
+      if (item.reconnect && rt.activeId !== item.id && settled?.status === 'failed' && !settled.reconnect) {
         m.events.apply(id, { type: 'status', state: 'idle' })
         return
       }
@@ -210,7 +243,8 @@ export class HostTurn {
         status: 'failed',
         error,
         reconnect: undefined,
-        ...(item.reconnect ? { reconnected: item.reconnect.attempt } : {}),
+        // 这一轮真发出去过才算上；还没发出去（派发前校验失败）就不算
+        ...(item.reconnect ? { reconnected: reconnectedCount(item.reconnect, rt.activeId === item.id) } : {}),
       })
       rt.snapshot = { ...rt.snapshot, queuePaused: true }
       m.queue.publishQueue(id)

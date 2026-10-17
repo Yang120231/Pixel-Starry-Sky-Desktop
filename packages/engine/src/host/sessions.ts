@@ -354,6 +354,8 @@ export class HostSessions {
     ctx.changingSessions.add(id)
     try {
       if (archived) {
+        // 归档会停掉当前任务：等着的 / 派发中的自动重连一起结算成发送失败，不然会话归档了还在后台重连
+        m.queue.stopReconnect(id)
         await m.turn.interrupt(id)
         const old = rt.session
         rt.session = null

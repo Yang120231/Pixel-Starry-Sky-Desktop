@@ -1,6 +1,6 @@
 // 消息队列（docs/mobile-remote.md §17 第 2 项，规则同桌面 QueuedMessages）：输入框上面列出排着的消息，
 // 点一条弹出能做的事：插队 / 重试、引导、上移、下移、撤回（撤回的文字放回输入框）、关掉；
-// 断线自动重连中的那条：立即重连、停止。
+// 断线自动重连中的那条：立即重连、停止（队列暂停时是继续重连、停止）。
 import { useState } from 'react'
 import { ChevronDown, ChevronUp, CornerDownRight, ImageIcon, Pause } from 'lucide-react'
 import type { QueuedMessage, SessionSnapshot } from '@pixelsky/protocol'
@@ -63,8 +63,8 @@ export function QueuePanel({
     if (isReconnecting(q))
       return [
         {
-          label: '立即重连',
-          hint: '不等倒计时，现在就连',
+          label: snapshot.queuePaused ? '继续重连' : '立即重连',
+          hint: snapshot.queuePaused ? '自动重连已暂停，现在接着连' : '不等倒计时，现在就连',
           disabled: q.status === 'dispatching',
           onSelect: () => void run(q.id, 'engine:runQueuedNow', q.id),
         },
@@ -171,7 +171,9 @@ export function QueuePanel({
               ) : (
                 <span className={cn('size-1.5 rounded-full', q.error ? 'bg-warn' : 'bg-fg-faint')} />
               )}
-              <span className={q.error || isSendFailure(q) ? 'text-warn' : 'text-fg-muted'}>{queueLabel(q)}</span>
+              <span className={q.error || isSendFailure(q) ? 'text-warn' : 'text-fg-muted'}>
+                {queueLabel(q, snapshot.queuePaused)}
+              </span>
               {!!q.attachments?.length && (
                 <span className="flex items-center gap-0.5 text-fg-faint">
                   <ImageIcon size={12} /> {q.attachments.length}

@@ -1434,6 +1434,14 @@ export const systemMessages = {
     zh: '请先停止当前任务再回退',
     en: 'Stop the current task before rewinding',
   },
+  'system.rewindReconnecting': {
+    zh: '正在自动重连，请先停止再回退',
+    en: 'Auto-reconnecting. Stop it before rewinding',
+  },
+  'system.reconnectOriginalGone': {
+    zh: '原消息已不在对话里，请重试或撤回',
+    en: 'The original message is no longer in the conversation. Retry or withdraw it',
+  },
   'system.rewindUnsupported': {
     zh: '当前引擎暂不支持回退',
     en: 'The current engine does not support rewinding yet',

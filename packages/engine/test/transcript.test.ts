@@ -387,4 +387,40 @@ describe('跨引擎接力：把聊天写进 Claude Code 的记录', () => {
       expect(await findRewindAnchor(path, [uuid, 'next'])).toEqual({ at: null })
     })
   })
+
+  // PR #96 #10 / #11
+  describe('非 UUID 的条目 id 和同一批重复的 id', () => {
+    const retryId = `${uuid}-retry-33333333-3333-4333-8333-333333333333`
+
+    it('重试出来的 id（X-retry-…）再交接一次不重复写，记录里带 pixelskyItemId', async () => {
+      const turn = { id: retryId, user: '重试的一轮', assistant: null }
+      const path = await seedTranscript(dir, '/work/proj', 'retry', [turn], '（没回复）')
+      await seedTranscript(dir, '/work/proj', 'retry', [turn], '（没回复）')
+      const users = read(path).filter(l => l.type === 'user')
+      expect(users).toHaveLength(1)
+      expect(users[0]).toMatchObject({ pixelskyItemId: retryId })
+      expect(users[0].uuid).not.toBe(retryId)
+    })
+
+    it('同一批里 id 相同的轮次只写一次', async () => {
+      const path = await seedTranscript(
+        dir,
+        '/work/proj',
+        'dup',
+        [
+          { id: uuid, user: '一', assistant: '答一' },
+          { id: uuid, user: '一（重复）', assistant: '答二' },
+          { id: 'plain', user: '二', assistant: '答' },
+          { id: 'plain', user: '二（重复）', assistant: '答' },
+        ],
+        '（没回复）',
+      )
+      const lines = read(path)
+      expect(lines.filter(l => l.uuid === uuid)).toHaveLength(1)
+      expect(lines.filter(l => l.type === 'user').map(l => (l.message as { content: string }).content)).toEqual([
+        '一',
+        '二',
+      ])
+    })
+  })
 })

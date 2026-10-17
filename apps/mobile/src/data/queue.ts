@@ -7,9 +7,10 @@ export function isStarting(q: QueuedMessage, paused: boolean): boolean {
   return !!q.direct && !q.held && !paused && !q.reconnect && (q.status === 'queued' || q.status === 'dispatching')
 }
 
-/** 断线后电脑正在自动重连的那条：面板里写「正在重连 n/m」，可以立即重连或停止 */
+/** 断线后电脑正在自动重连的那条：面板里写「正在重连 n/m」，可以立即重连或停止；
+ *  单独暂停（held）的按普通暂停项显示 */
 export const isReconnecting = (q: QueuedMessage): boolean =>
-  !!q.reconnect && (q.status === 'queued' || q.status === 'dispatching')
+  !!q.reconnect && !q.held && (q.status === 'queued' || q.status === 'dispatching')
 
 /** 失败的这条已经在对话里：可以「关掉」，不重发也不撤回，对话里标「未送达」 */
 export const canDismiss = (q: QueuedMessage): boolean =>
@@ -26,8 +27,10 @@ export function queueItems(snapshot: Pick<SessionSnapshot, 'queue' | 'queuePause
 /** 已经在交付，不能撤回 / 插队 */
 export const isPending = (q: QueuedMessage): boolean => q.status === 'dispatching' || q.status === 'delivering'
 
-export function queueLabel(q: QueuedMessage): string {
-  if (q.reconnect && isReconnecting(q)) return `正在重连 ${q.reconnect.attempt}/${q.reconnect.max}`
+/** paused：整个队列暂停（比如电脑重启后恢复出来的）。重连项这时不会自己重连，要点「继续重连」 */
+export function queueLabel(q: QueuedMessage, paused = false): string {
+  if (q.reconnect && isReconnecting(q))
+    return `${paused ? '重连已暂停' : '正在重连'} ${q.reconnect.attempt}/${q.reconnect.max}`
   if (isSendFailure(q)) return '发送失败'
   if (q.status === 'failed') return '执行失败'
   if (q.status === 'uncertain') return '待核对'

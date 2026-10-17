@@ -346,7 +346,7 @@ function LiveSessionView({
                     />
                   )}
                   <RetryStatus sessionId={sessionId} retry={snapshot?.retry} />
-                  <ReconnectStatus sessionId={sessionId} queue={snapshot?.queue} />
+                  <ReconnectStatus sessionId={sessionId} queue={snapshot?.queue} paused={!!snapshot?.queuePaused} />
                   {snapshot && (
                     <ApprovalStack
                       key={`approvals:${sessionId}`}
