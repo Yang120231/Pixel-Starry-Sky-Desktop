@@ -22,6 +22,7 @@ import { initUpdater, runPendingInstall } from './app/updater'
 import { quitWhenAllClosed } from './app/quit'
 import { initEngine } from './engine/ipc'
 import { initExtensionPacks } from './extension-packs/ipc'
+import { initExtStore } from './extension-packs/market/ipc'
 import { EXT_SCHEME_PRIVILEGES } from './extension-packs/protocol'
 import { loadShellEnv } from './app/shell-env'
 import { initMobile } from './mobile/ipc'
@@ -433,7 +434,8 @@ app.whenReady().then(async () => {
   initLogIpc() // 设置 › 日志，见 app/logging.ts
   initUpdater(ctx) // 自动更新（GitHub Releases），见 app/updater.ts
   await loadShellEnv() // macOS / Linux 从程序坞、桌面菜单启动时补回登录 shell 的 PATH，见 app/shell-env.ts
-  initExtensionPacks(ctx) // 扩展包（语法 / 主题 / 图标 / 片段 / 任务 / 技能 / 提示词），见 extension-packs/ipc.ts
+  const packs = initExtensionPacks(ctx) // 扩展包（语法 / 主题 / 图标 / 片段 / 任务 / 技能 / 提示词），见 extension-packs/ipc.ts
+  initExtStore(ctx, packs) // 扩展商店（发现、安装、更新、我的发布），见 extension-packs/market/ipc.ts
   await initEngine(ctx) // 引擎系统（Claude Code 等），见 engine/ipc.ts
   initMobile(ctx) // 手机远程连接（默认关），见 mobile/ipc.ts
   initSettingsSync(ctx) // 设置云同步，见 account/settings-sync.ts

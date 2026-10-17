@@ -15,6 +15,8 @@ export interface SearchEntry {
   keywords: string
   /** 在本机引擎的哪个引擎详情页里（点结果时先打开详情） */
   engine?: EngineId
+  /** 在设置 › 扩展的哪个页签里（点结果时先切到那个页签） */
+  extTab?: 'discover' | 'installed' | 'publish'
   /** 这一行现在显不显示（随扩展启停的设置）；不显示时搜不到 */
   available?: () => boolean
 }
@@ -62,6 +64,26 @@ export const SETTINGS_INDEX: SearchEntry[] = [
     },
     get keywords() {
       return tr('extensions.keywords')
+    },
+  },
+  {
+    section: 'extensions',
+    extTab: 'discover',
+    get title() {
+      return tr('extstore.tab.discover')
+    },
+    get keywords() {
+      return tr('extstore.search.keywords')
+    },
+  },
+  {
+    section: 'extensions',
+    extTab: 'publish',
+    get title() {
+      return tr('extstore.tab.publish')
+    },
+    get keywords() {
+      return tr('extstore.publish.keywords')
     },
   },
   {

@@ -5,6 +5,7 @@ import '../styles/globals.css'
 import { App } from './App'
 import { ThemeProvider } from '../features/appearance/ThemeProvider'
 import { SettingsProvider } from '../features/settings/SettingsProvider'
+import { ExtStoreToastHost } from '@/features/extstore/ToastHost'
 import { ComingSoonProvider } from '../ui'
 // 字体、强调色和配色设置在第一次渲染前就写到 <html> 上，避免启动时先闪一下默认字体
 import '../features/appearance/fonts'
@@ -53,6 +54,7 @@ createRoot(document.getElementById('root')!, reactRootErrorOptions).render(
                     <AuthDialogHost />
                     <ResumeHost />
                     <RecoveredNotice />
+                    <ExtStoreToastHost />
                   </CommandPaletteProvider>
                 </TerminalProvider>
               </SessionActionsProvider>
