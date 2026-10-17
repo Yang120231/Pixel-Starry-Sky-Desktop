@@ -285,7 +285,7 @@ function LiveSessionView({
                     <ApprovalWaitContext.Provider value={approvalWait}>
                       <LiveTranscript
                         snapshot={snapshot}
-                        footer={inlinePlan && <InlinePlan plan={inlinePlan} />}
+                        footer={inlinePlan && <InlinePlan plan={inlinePlan} working={fullProgress.working} />}
                         header={
                           forkedFrom && (
                             <button

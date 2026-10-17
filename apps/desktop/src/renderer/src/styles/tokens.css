@@ -993,6 +993,8 @@
   --dur-pane-focus: 450ms; /* 换窗格的短暂高亮 */
   --ease-spring: cubic-bezier(0.34, 1.36, 0.64, 1); /* 稍微冲过头再回来，开关滑块用 */
   --dur-switch: 280ms; /* 开关滑块滑动 */
+  --dur-move: 320ms; /* 列表里的行换位置 */
+  --ease-move: cubic-bezier(0.65, 0, 0.35, 1);
 }
 :root[data-platform='darwin'] {
   --titlebar-reserve: 0px;

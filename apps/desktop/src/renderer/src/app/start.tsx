@@ -26,6 +26,7 @@ import { RecoveredNotice } from '../features/recovery/RecoveredNotice'
 import { SettingsSyncRunner } from '../features/settings/sync/RestoreNotice'
 import { AuthDialogHost } from '../features/model-channels/AuthDialog'
 import { startWindowActivity } from '../features/layout/windowActivity'
+import { startLoopClock } from '../features/layout/loopClock'
 
 document.documentElement.dataset.platform = window.pixelsky?.platform ?? 'web'
 // 页面报错、未处理的 Promise 拒绝写进本机日志（docs/ui/logging.md §4.5）
@@ -36,6 +37,8 @@ installLongTaskLog()
 installMemorySampler()
 // 窗口不在前台时暂停循环动画（docs/ui/performance.md）
 startWindowActivity()
+// 转圈、闪烁的点对齐同一个节奏（docs/ui/motion-proposal.html）
+startLoopClock()
 
 createRoot(document.getElementById('root')!, reactRootErrorOptions).render(
   <StrictMode>
