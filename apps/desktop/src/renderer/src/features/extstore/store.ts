@@ -97,7 +97,8 @@ export function touchUpdates(now: number = Date.now()): void {
 
 /** 打开扩展页时调：读停用名单，超过 10 分钟没查过更新就查一次 */
 export function touchExtStore(now: number = Date.now()): void {
-  start()
+  // 同一个 now：start() 里第一次读名单记下的时间和后面的节流判断一致（不然差几毫秒，5 分钟节流会多算）
+  start(now)
   touchBlocklist(now)
   touchUpdates(now)
 }
@@ -118,14 +119,14 @@ export async function checkExtUpdates(): Promise<ExtStoreUpdates> {
   }
 }
 
-function start(): void {
+function start(now: number = Date.now()): void {
   if (started) return
   const b = api()
   if (!b) return
   started = true
   b.onChange(() => void refreshExtStore())
   void refreshExtStore()
-  touchBlocklist()
+  touchBlocklist(now)
 }
 
 /** 第一次调用会触发取状态、订阅变化，并让主进程读一次停用名单；取到之前是空状态 */
