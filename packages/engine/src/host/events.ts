@@ -5,6 +5,9 @@ import { reconnectedCount } from './queue'
 
 type DeltaEvent = Extract<EngineEvent, { type: 'item_delta' }>
 
+/** 原地接着终端里的 Codex 会话的对话：空闲这么久就关进程、放开线程的写入锁 */
+const CODEX_IMPORTED_IDLE_MS = 2 * 60_000
+
 /**
  * 最近一轮最后一条 assistant 回复的预览（SessionRecord.lastReply）：从末尾往前找，遇到普通用户消息（这一轮的起点）就停；
  * 中途插入的引导消息（guidance）不算起点。这一轮没有回复、或回复是空的 / 全是记号，返回 undefined（调用方保留旧值）
@@ -290,13 +293,20 @@ export class HostEvents {
     const rt = this.ctx.runtimes.get(id)
     if (!rt || rt.snapshot.background) return
     if (rt.idleTimer) clearTimeout(rt.idleTimer)
+    // 原地接着终端里的 Codex 会话：进程一直拿着线程的写入锁，终端里 `codex resume` 会报被占用，所以 2 分钟空闲就放开
+    // （docs/ui/codex-resume.md §4.6）；下一条消息再 thread/resume
+    const imported = rt.snapshot.record.imported
+    const idleMs =
+      imported?.engine === 'codex' && !imported.forked
+        ? Math.min(this.ctx.idleMs, CODEX_IMPORTED_IDLE_MS)
+        : this.ctx.idleMs
     rt.idleTimer = setTimeout(() => {
       rt.idleTimer = null
       if (rt.snapshot.state !== 'idle' || rt.snapshot.background || !rt.session) return
       const s = rt.session
       rt.session = null
       void s.close()
-    }, this.ctx.idleMs)
+    }, idleMs)
     rt.idleTimer.unref?.()
   }
 }

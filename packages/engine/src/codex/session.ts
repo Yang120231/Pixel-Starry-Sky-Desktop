@@ -41,6 +41,8 @@ export interface CodexLaunchOptions {
   knownWindows?: Map<string, number>
   /** 以前派出过的子智能体（从 rollout 还原）：接着跑完时在原来的追踪上更新 */
   savedAgents?: () => AgentRun[]
+  /** 这个会话占着的线程：拿到线程 id 时登记、换线程 / 进程退出 / 关闭时撤销（适配器的 ownThreads，列表上「正开着」不算它们） */
+  ownThread?: (id: string, own: boolean) => void
 }
 
 /** 用户追加的参数里第一个由像素星空控制的（docs/ui/engine-launch.md §3）：--listen，改平台线路的 -c；都允许时返回 null */
@@ -149,6 +151,10 @@ export class CodexSession implements EngineSession {
   private opening: Promise<void> | null = null
   private closed = false
   private threadId: string | null = null
+  /** 已经向 options.ownThread 登记的线程 id */
+  private ownedThread: string | null = null
+  /** 恢复线程失败、改开了新线程的英文提示：要等聊天注入之后才发（注入成功且宿主已经说过「记录不在了」就不发） */
+  private resumeNotice: string | null = null
   private nativeTurnId: string | null = null
   private readonly finishedTurns = new Set<string>()
   private active: {
@@ -313,6 +319,7 @@ export class CodexSession implements EngineSession {
         if (this.proc !== proc || (askFlag && this.startup === 'pending')) return
         if (!this.closed && this.active) this.finish('failed', tail || 'Codex process exited')
         this.threadId = null
+        this.own(null)
       },
     })
     this.proc = proc
@@ -373,7 +380,7 @@ export class CodexSession implements EngineSession {
           if (!proc.alive) throw error
           // 另一个进程（例如终端里的 codex）正写着这个线程：改开新线程会丢上下文，报给界面让用户选
           if (/already has an active writer/i.test((error as Error).message))
-            throw codedError('resume.live', { source: 'other' })
+            throw codedError('resume.live', { source: record.imported?.source ?? 'other' })
           thread = await proc.request('thread/start', threadParams)
           resumeFailed = true
         }
@@ -404,13 +411,16 @@ export class CodexSession implements EngineSession {
       this.modeEffort = heldDefault ? string(heldSettings.reasoning_effort) || null : null
       if (!this.threadId) throw new Error('Codex did not return a thread ID')
       this.ctx.setEngineSessionId(this.threadId)
-      const warning = resumeFailed
+      this.own(this.threadId)
+      // 恢复失败的提示等聊天注入之后再发（run()），其余的这里就发
+      this.resumeNotice = resumeFailed
         ? 'Could not resume the Codex thread; started a new thread (previous context was not carried over)'
-        : rewindFailed
-          ? 'Could not rewind the Codex thread to this message; started a new thread (previous context was not carried over)'
-          : forkFailed
-            ? 'Could not fork the Codex thread; started a new thread (previous context was not carried over)'
-            : null
+        : null
+      const warning = rewindFailed
+        ? 'Could not rewind the Codex thread to this message; started a new thread (previous context was not carried over)'
+        : forkFailed
+          ? 'Could not fork the Codex thread; started a new thread (previous context was not carried over)'
+          : null
       if (warning)
         this.ctx.emit({
           type: 'item_completed',
@@ -467,6 +477,23 @@ export class CodexSession implements EngineSession {
       await proc.close()
       throw error
     }
+  }
+  /** 登记 / 撤销这个会话占着的线程（换了线程先撤销旧的；null 是不再占着） */
+  private own(id: string | null): void {
+    if (this.ownedThread === id) return
+    if (this.ownedThread) this.options.ownThread?.(this.ownedThread, false)
+    this.ownedThread = id
+    if (id) this.options.ownThread?.(id, true)
+  }
+  /** 把恢复失败的英文提示发出去（只发一次） */
+  private flushResumeNotice(): void {
+    const text = this.resumeNotice
+    this.resumeNotice = null
+    if (!text) return
+    this.ctx.emit({
+      type: 'item_completed',
+      item: { kind: 'notice', id: `cx-resume-${Date.now()}-${++this.noticeSeq}`, level: 'warn', text, detail: null },
+    })
   }
   /** 给模型 Default 模式的提问指令：允许提问且 Codex 带着开关启动 */
   private asks(): boolean {
@@ -548,10 +575,14 @@ export class CodexSession implements EngineSession {
           diagnosticStale: true,
         },
       })
+      this.flushResumeNotice()
       await this.proc!.request('thread/compact/start', { threadId: this.threadId })
     } else {
       // 跨引擎接力：别的引擎期间的聊天先注入线程；注入不了就把交接材料加在消息前面
       const injected = !seed || (await this.injectSeed(seed, sees))
+      // 线程记录没了、宿主已经把整段聊天写进新线程并说过一句：不再重复报「没能恢复」；注入失败照旧报
+      if (injected && seed?.recreated) this.resumeNotice = null
+      else this.flushResumeNotice()
       const body = injected ? text : `${seed.fallback}\n\n${text}`
       // 退回文字交接时，材料里说明过的更早消息的图片排在消息自己的图片前面；模型不能看图就不带
       const images = !injected && sees ? [...(seed.fallbackImages ?? []), ...attachments] : attachments
@@ -1125,6 +1156,7 @@ export class CodexSession implements EngineSession {
   }
   async close(opts: CloseOptions = {}): Promise<void> {
     this.closed = true
+    this.own(null)
     await this.interrupt()
     await this.proc?.close(opts.quick ? QUICK_CLOSE_MS : undefined)
     this.ctx.extensions?.dispose?.()

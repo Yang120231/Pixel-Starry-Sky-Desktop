@@ -17,6 +17,10 @@ if (process.env.FAKE_CODEX_REJECT_ASK && process.argv.includes('features.default
 }
 const out = value => process.stdout.write(JSON.stringify(value) + '\n')
 const emit = (method, params) => out({ method, params })
+const lockedThread = id => {
+  const value = process.env.FAKE_CODEX_LOCKED
+  return !!value && (value === '1' || value === '*' || value.split(',').includes(id))
+}
 /** 测试通过创建这个文件打开「恢复线程失败」开关：thread/resume 报错，thread/start 给新线程 id */
 const resumeFails = () =>
   !!process.env.FAKE_CODEX_RESUME_FAIL_FILE && existsSync(process.env.FAKE_CODEX_RESUME_FAIL_FILE)
@@ -288,8 +292,8 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
       break
     case 'thread/start':
     case 'thread/resume':
-      // FAKE_CODEX_LOCKED：另一个进程正写着这个线程（终端里的 codex）
-      if (m.method === 'thread/resume' && process.env.FAKE_CODEX_LOCKED) {
+      // FAKE_CODEX_LOCKED：另一个进程正写着这个线程（终端里的 codex）。逗号分隔的线程 id；'1' 或 '*' 是所有线程
+      if (m.method === 'thread/resume' && lockedThread(p.threadId)) {
         out({ id: m.id, error: { code: -32000, message: 'thread ' + p.threadId + ' already has an active writer' } })
         break
       }

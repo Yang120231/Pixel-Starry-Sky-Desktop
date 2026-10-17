@@ -257,14 +257,14 @@ export class HostHandoff {
       const turns = [`${seed.turns.length} 轮`, ...parts].join('，')
       return {
         text: body,
-        seed,
+        seed: recreate ? { ...seed, recreated: true } : seed,
         hold: false,
         notice: recreate
           ? {
               kind: 'notice',
               id: randomUUID(),
               level: 'warn',
-              text: NATIVE_TEXT.recreated(seed.turns.length, 'Claude Code'),
+              text: NATIVE_TEXT.recreated(seed.turns.length, name),
               detail: renderSeed(seed),
             }
           : showNotice

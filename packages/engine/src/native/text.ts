@@ -16,9 +16,14 @@ export const NATIVE_TEXT = {
     turns: number,
     missing: number,
     engine = 'Claude Code',
+    /** 旧格式的线程（Codex）：不能原地回退，一律复制成新线程 */
+    legacy = false,
   ): string => {
+    const where = source === 'terminal' ? '终端里' : '其他程序'
     const base = copy
-      ? `复制了${source === 'terminal' ? '终端里' : '其他程序'}的 ${engine} 会话 · ${turns} 轮（原会话不动，两边可以同时用）`
+      ? legacy
+        ? `复制了${where}的 ${engine} 会话 · ${turns} 轮（旧格式的线程不能原地回退，复制成新线程接着聊，原会话不动）`
+        : `复制了${where}的 ${engine} 会话 · ${turns} 轮（原会话不动，两边可以同时用）`
       : source === 'terminal'
         ? `接着终端里的 ${engine} 会话 · ${turns} 轮`
         : `接着 ${engine} 会话（来自其他程序）· ${turns} 轮`
@@ -29,6 +34,10 @@ export const NATIVE_TEXT = {
   newer: (turns: number) => `这个会话在终端里又聊了 ${turns} 轮，显示里还没有`,
   synced: (turns: number) => `已补上终端里的 ${turns} 轮`,
   gone: '这个会话的记录已经不在了',
+  /** 复制一份接着聊要从一轮已结束的轮次分叉，线程里一轮结束的都没有 */
+  nothingToCopy: '这个会话还没有聊完的一轮，没法复制',
+  /** Codex 版：线程是像素星空以前用过的，换引擎时注入的聊天 app-server 读不出来 */
+  pixelskyThread: '这个线程以前在像素星空里用过，换引擎时带过去的聊天不会显示，模型照样看得到',
   cancelled: '已取消导入',
   earlierGone: '这个会话的记录已经不在了，更早的没法再加载',
   unsupported: '这个引擎不支持接着本机会话',

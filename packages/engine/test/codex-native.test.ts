@@ -626,6 +626,12 @@ describe('codexThreadExists', () => {
     mkdirSync(home(), { recursive: true })
     expect(codexThreadExists(home(), id)).toBe(true)
   })
+
+  it('线程 id 不是 UUIDv7（算不出 rollout 在哪天的目录）：拿不准，当它在', () => {
+    mkdirSync(join(home(), 'sessions', '2026', '10', '05'), { recursive: true })
+    expect(codexThreadExists(home(), '11111111-1111-4111-8111-111111111111')).toBe(true)
+    expect(codexThreadExists(home(), 'fake-thread')).toBe(true)
+  })
 })
 
 // ---------- 导入 ----------

@@ -790,6 +790,78 @@ export const systemMessages = {
     zh: 'Claude Code 的会话记录不在了，已把像素星空里的聊天（{p0} 轮）写进新的引擎会话（工具调用和文件改动没有带过去）',
     en: 'The Claude Code session record is gone. The chat from Pixel Starry Sky ({p0} turns) was written into a new engine session (tool calls and file changes were not carried over)',
   },
+  'system.nativeCodexUnavailable': {
+    zh: 'Codex 没装好，读不到它的会话',
+    en: 'Codex isn’t set up, so its sessions can’t be read',
+  },
+  'system.nativeCodexUnavailableReason': {
+    zh: 'Codex 没装好，读不到它的会话：{p0}',
+    en: 'Codex isn’t set up, so its sessions can’t be read: {p0}',
+  },
+  'system.nativeIdeContext': {
+    zh: '这一轮带着编辑器的上下文',
+    en: 'This turn carried context from the editor',
+  },
+  'system.nativeNothingToCopy': {
+    zh: '这个会话还没有聊完的一轮，没法复制',
+    en: 'This session has no finished turn yet, so it can’t be copied',
+  },
+  'system.nativePixelskyThread': {
+    zh: '这个线程以前在像素星空里用过，换引擎时带过去的聊天不会显示，模型照样看得到',
+    en: 'This thread was used in Pixel Starry Sky before. Chat carried over when switching engines is not shown here, but the model still sees it',
+  },
+  'system.nativeRecreatedCodex': {
+    zh: 'Codex 的会话记录不在了，已把像素星空里的聊天（{p0} 轮）写进新的引擎会话（工具调用和文件改动没有带过去）',
+    en: 'The Codex session record is gone. The chat from Pixel Starry Sky ({p0} turns) was written into a new engine session (tool calls and file changes were not carried over)',
+  },
+  'system.nativeCodexTerminal': {
+    zh: '接着终端里的 Codex 会话 · {p0} 轮',
+    en: 'Continuing the Codex session from the terminal · {p0} turns',
+  },
+  'system.nativeCodexTerminalEarlier': {
+    zh: '接着终端里的 Codex 会话 · {p0} 轮（更早的 {p1} 轮没有显示）',
+    en: 'Continuing the Codex session from the terminal · {p0} turns ({p1} earlier turns not shown)',
+  },
+  'system.nativeCodexOther': {
+    zh: '接着 Codex 会话（来自其他程序）· {p0} 轮',
+    en: 'Continuing a Codex session (from another program) · {p0} turns',
+  },
+  'system.nativeCodexOtherEarlier': {
+    zh: '接着 Codex 会话（来自其他程序）· {p0} 轮（更早的 {p1} 轮没有显示）',
+    en: 'Continuing a Codex session (from another program) · {p0} turns ({p1} earlier turns not shown)',
+  },
+  'system.nativeCodexCopyTerminal': {
+    zh: '复制了终端里的 Codex 会话 · {p0} 轮（原会话不动，两边可以同时用）',
+    en: 'Copied the Codex session from the terminal · {p0} turns (the original is untouched; both can be used at the same time)',
+  },
+  'system.nativeCodexCopyTerminalEarlier': {
+    zh: '复制了终端里的 Codex 会话 · {p0} 轮（原会话不动，两边可以同时用）（更早的 {p1} 轮没有显示）',
+    en: 'Copied the Codex session from the terminal · {p0} turns (the original is untouched; both can be used at the same time) ({p1} earlier turns not shown)',
+  },
+  'system.nativeCodexCopyOther': {
+    zh: '复制了其他程序的 Codex 会话 · {p0} 轮（原会话不动，两边可以同时用）',
+    en: 'Copied a Codex session from another program · {p0} turns (the original is untouched; both can be used at the same time)',
+  },
+  'system.nativeCodexCopyOtherEarlier': {
+    zh: '复制了其他程序的 Codex 会话 · {p0} 轮（原会话不动，两边可以同时用）（更早的 {p1} 轮没有显示）',
+    en: 'Copied a Codex session from another program · {p0} turns (the original is untouched; both can be used at the same time) ({p1} earlier turns not shown)',
+  },
+  'system.nativeCodexLegacyTerminal': {
+    zh: '复制了终端里的 Codex 会话 · {p0} 轮（旧格式的线程不能原地回退，复制成新线程接着聊，原会话不动）',
+    en: 'Copied the Codex session from the terminal · {p0} turns (legacy-format threads can’t be rewound in place, so it was copied into a new thread; the original is untouched)',
+  },
+  'system.nativeCodexLegacyTerminalEarlier': {
+    zh: '复制了终端里的 Codex 会话 · {p0} 轮（旧格式的线程不能原地回退，复制成新线程接着聊，原会话不动）（更早的 {p1} 轮没有显示）',
+    en: 'Copied the Codex session from the terminal · {p0} turns (legacy-format threads can’t be rewound in place, so it was copied into a new thread; the original is untouched) ({p1} earlier turns not shown)',
+  },
+  'system.nativeCodexLegacyOther': {
+    zh: '复制了其他程序的 Codex 会话 · {p0} 轮（旧格式的线程不能原地回退，复制成新线程接着聊，原会话不动）',
+    en: 'Copied a Codex session from another program · {p0} turns (legacy-format threads can’t be rewound in place, so it was copied into a new thread; the original is untouched)',
+  },
+  'system.nativeCodexLegacyOtherEarlier': {
+    zh: '复制了其他程序的 Codex 会话 · {p0} 轮（旧格式的线程不能原地回退，复制成新线程接着聊，原会话不动）（更早的 {p1} 轮没有显示）',
+    en: 'Copied a Codex session from another program · {p0} turns (legacy-format threads can’t be rewound in place, so it was copied into a new thread; the original is untouched) ({p1} earlier turns not shown)',
+  },
   'system.fastModeTemporarilyUnavailable': {
     zh: 'Fast 模式暂时不可用',
     en: 'Fast mode temporarily unavailable',

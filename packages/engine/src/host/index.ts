@@ -567,6 +567,9 @@ export class EngineHost {
       if (rt.reconnectTimer) clearTimeout(rt.reconnectTimer)
     }
     // 退出时不等引擎收尾：最多等 1 秒就强制结束（原来 Claude 等满 5 秒，更新重启时白等）
-    await Promise.all(all.map(rt => rt.session?.close({ quick: true }).catch(() => undefined)))
+    await Promise.all([
+      ...all.map(rt => rt.session?.close({ quick: true }).catch(() => undefined)),
+      ...Object.values(this.ctx.adapters).map(adapter => adapter?.close?.().catch(() => undefined)),
+    ])
   }
 }

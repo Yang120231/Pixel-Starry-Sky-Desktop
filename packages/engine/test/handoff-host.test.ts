@@ -1127,12 +1127,28 @@ describe('接着引擎自己的会话（docs/ui/claude-resume.md）', () => {
     const warn = snap().items.find(i => i.kind === 'notice' && i.level === 'warn')
     expect(warn).toMatchObject({ kind: 'notice', text: NATIVE_TEXT.recreated(1) })
     expect(warn?.kind === 'notice' && warn.detail).toContain('导入的话')
+    // 回放带着「记录没了」的标记，引擎据此不再重复报「没能恢复」；之后正常轮次的回放没有这个标记
+    expect(session.seeds[0]!.recreated).toBe(true)
     // 记录又有了（接力已经写进去）：不再重复
     claude.exists = true
     await say('再来')
     expect(session.seeds[1]).toBeUndefined()
     expect(snap().items.filter(i => i.kind === 'notice' && i.level === 'warn')).toHaveLength(1)
     expect(host.record(id)?.engineSessions?.claude?.seen).toBe(snap().items.at(-1)!.id)
+  })
+
+  it('Codex 的线程记录没了：提示带 Codex 的名字，回放带 recreated；平常换引擎的回放没有这个标记', async () => {
+    const { host, codex, id, snap, say } = await imported()
+    await host.update(id, { engine: 'codex' })
+    await say('给 Codex')
+    expect(codex.sessions[0].seeds[0]!.turns.map(t => t.user)).toEqual(['导入的话'])
+    expect(codex.sessions[0].seeds[0]!.recreated).toBeUndefined()
+    codex.exists = false
+    await say('还在吗')
+    const seed = codex.sessions[0].seeds[1]!
+    expect(seed.recreated).toBe(true)
+    const warn = snap().items.findLast(i => i.kind === 'notice' && i.level === 'warn')
+    expect(warn).toMatchObject({ kind: 'notice', text: NATIVE_TEXT.recreated(2, 'Codex') })
   })
 
   it('还没启动的分叉（复制一份接着聊）本来就没有文件：不触发「记录没了」', async () => {

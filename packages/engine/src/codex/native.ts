@@ -26,7 +26,7 @@ import type {
 } from '../native/types'
 import { array, object, string, type Message } from './process'
 import type { CodexRpc } from './reader'
-import { findCodexRollouts } from './runs'
+import { findCodexRollouts, threadTime } from './runs'
 import { CodexTranslator } from './translate'
 
 /** 列表里最多给这么多个（按最后活动时间从新到旧） */
@@ -325,10 +325,10 @@ export function liveCodexThreads(
 
 /**
  * 线程的记录还在不在：sessions/ 下有它的 rollout，或 archived_sessions/ 下有文件名带它的 id。
- * sessions 目录不存在（读不了、布局变了）拿不准，当它在
+ * sessions 目录不存在（读不了、布局变了），或线程 id 不是 UUIDv7（rollout 放在哪天的目录算不出来）拿不准，当它在
  */
 export function codexThreadExists(codexHome: string, id: string): boolean {
-  if (!existsSync(join(codexHome, 'sessions'))) return true
+  if (!existsSync(join(codexHome, 'sessions')) || threadTime(id) === null) return true
   if (findCodexRollouts(codexHome, id).length > 0) return true
   try {
     return readdirSync(join(codexHome, 'archived_sessions')).some(name => name.includes(id))

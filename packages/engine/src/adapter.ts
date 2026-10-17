@@ -183,6 +183,8 @@ export interface EngineAdapter {
   hasNativeSession?(record: SessionRecord): boolean
   /** 这些会话现在有没有别的进程开着（不含像素星空自己起的进程）；id 不在结果里的按没开着算 */
   nativeLive?(rows: readonly { id: string; mtimeMs: number }[]): Map<string, LiveState>
+  /** 应用退出时关掉适配器自己的常驻进程（Codex 的只读 app-server） */
+  close?(): Promise<void>
   /** 旁聊：带着会话上下文单独问一次，没有工具、不写记录（§3） */
   sideQuestion?(record: SessionRecord, prompt: string, signal: AbortSignal): Promise<string>
 }

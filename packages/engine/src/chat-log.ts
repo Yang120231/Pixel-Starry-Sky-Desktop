@@ -26,6 +26,8 @@ export interface ChatSeed {
   fallbackImages?: ImageAttachment[]
   /** 这份回放里有图、但没带上的张数（更早的几轮、超出数量或大小上限、目标引擎不能看图）；没有为 undefined */
   omittedImages?: number
+  /** 引擎那边的原生会话记录没了，这份回放是整段聊天、写进新的引擎会话：宿主已经提示过，引擎不再重复报「没能恢复」 */
+  recreated?: true
 }
 
 export interface ChatLogOptions {

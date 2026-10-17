@@ -116,6 +116,31 @@ describe('中英文词典', () => {
       expect(translateMessage(en, 'zh-CN'), en).toBe(zh)
     }
   })
+  it('接着终端里的 Codex 会话的分隔条和提示都能翻成英文', () => {
+    const pairs: [string, string][] = [
+      ['接着终端里的 Codex 会话 · 3 轮', 'Continuing the Codex session from the terminal · 3 turns'],
+      [
+        '接着 Codex 会话（来自其他程序）· 3 轮（更早的 2 轮没有显示）',
+        'Continuing a Codex session (from another program) · 3 turns (2 earlier turns not shown)',
+      ],
+      [
+        '复制了终端里的 Codex 会话 · 3 轮（原会话不动，两边可以同时用）',
+        'Copied the Codex session from the terminal · 3 turns (the original is untouched; both can be used at the same time)',
+      ],
+      [
+        '复制了其他程序的 Codex 会话 · 3 轮（旧格式的线程不能原地回退，复制成新线程接着聊，原会话不动）（更早的 2 轮没有显示）',
+        'Copied a Codex session from another program · 3 turns (legacy-format threads can’t be rewound in place, so it was copied into a new thread; the original is untouched) (2 earlier turns not shown)',
+      ],
+      [
+        'Codex 的会话记录不在了，已把像素星空里的聊天（2 轮）写进新的引擎会话（工具调用和文件改动没有带过去）',
+        'The Codex session record is gone. The chat from Pixel Starry Sky (2 turns) was written into a new engine session (tool calls and file changes were not carried over)',
+      ],
+      ['Codex 没装好，读不到它的会话：spawn ENOENT', 'Codex isn’t set up, so its sessions can’t be read: spawn ENOENT'],
+      ['这一轮带着编辑器的上下文', 'This turn carried context from the editor'],
+      ['这个会话还没有聊完的一轮，没法复制', 'This session has no finished turn yet, so it can’t be copied'],
+    ]
+    for (const [zh, en] of pairs) expect(translateMessage(zh, 'en-US'), zh).toBe(en)
+  })
   it('模型不能看图的更正提示中英文互译', () => {
     const en = "The current model can't view images, so 2 earlier image(s) were not actually passed along"
     expect(translateMessage(en, 'zh-CN')).toBe('当前模型不能看图，之前的 2 张图片实际没有带上')

@@ -16,6 +16,8 @@ import {
 import type { EngineAdapter } from '../adapter'
 import type { NativeSessionList, NativeRead, NewerTurns } from '../native/types'
 import { NATIVE_TEXT } from '../native/text'
+import { matchCwd } from '../native/paths'
+import { ENGINES } from '../registry'
 import { UUID } from '../claude/transcript'
 import { hasHandoffContent } from '../handoff'
 import type { HostContext } from './context'
@@ -137,20 +139,22 @@ export class HostNative {
     this.imports.delete(token)
   }
 
-  /** 最上面的分隔条：来自哪里、几轮、还有几轮没显示（有就带「加载更早的」按钮） */
+  /** 最上面的分隔条：来自哪个引擎、哪里、几轮、还有几轮没显示（有就带「加载更早的」按钮） */
   private divider(
+    engine: EngineId,
     source: 'terminal' | 'other',
     copy: boolean,
     turns: number,
     missing: number,
     detail: string | null,
     id: string = randomUUID(),
+    legacy = false,
   ): NoticeItem {
     return {
       kind: 'notice',
       id,
       level: 'info',
-      text: NATIVE_TEXT.divider(source, copy, turns, missing, 'Claude Code'),
+      text: NATIVE_TEXT.divider(source, copy, turns, missing, ENGINES[engine].name, legacy),
       detail,
       ...(missing > 0 ? { action: { kind: 'native-earlier' as const, count: missing } } : {}),
     }
@@ -171,7 +175,7 @@ export class HostNative {
     const project = this.project(projectId)
     const adapter = this.adapter(engine)
     if (typeof nativeId !== 'string' || !UUID.test(nativeId)) throw new Error('会话 id 不对')
-    const copy = opts.mode === 'copy'
+    let copy = opts.mode === 'copy'
     const owner = this.owners().get(nativeId)
     if (owner) return { ownerId: owner }
     const summary = this.lists.get(`${projectId}\n${engine}`)?.sessions.find(s => s.id === nativeId)
@@ -200,17 +204,31 @@ export class HostNative {
       if (token && this.imports.get(token) === abort) this.imports.delete(token)
     }
     if (abort.signal.aborted) throw new Error(NATIVE_TEXT.cancelled)
-    if (!read || (copy && !read.at)) throw new Error(NATIVE_TEXT.gone)
+    if (!read) throw new Error(NATIVE_TEXT.gone)
+    // 旧格式的线程（Codex）不能原地回退：一律复制成新线程接着聊
+    const legacy = !!read.copyOnly
+    copy ||= legacy
+    if (copy && !read.at) throw new Error(NATIVE_TEXT.nothingToCopy)
     // 读文件期间可能被别的对话占用了
     const owner2 = this.owners().get(nativeId)
     if (owner2) return { ownerId: owner2 }
 
+    // 对话的工作目录跟着会话原来的目录（Codex 读线程时给；核对过在项目下面才用，没有列表缓存的 /resume <id> 也靠它拿到子文件夹）
+    const where = read.cwd ? await matchCwd(project.path, read.cwd, true) : null
+    const home = where ? read.cwd! : cwd
     const missing = Math.max(0, read.turns - read.shown)
-    const items: Item[] = [this.divider(read.source, copy, read.turns, missing, read.summary), ...read.items]
+    const items: Item[] = [
+      this.divider(engine, read.source, copy, read.turns, missing, read.summary, undefined, legacy),
+      // 像素星空以前用过的线程：中转写进去的聊天读不出来，说一声
+      ...(read.pixelsky
+        ? [{ kind: 'notice', id: randomUUID(), level: 'info', text: NATIVE_TEXT.pixelskyThread, detail: null } as const]
+        : []),
+      ...read.items,
+    ]
     const seen = lastItemId(items)
     const record = m.sessions.createSession(
       { ...(opts.settings ?? {}), projectId, engine },
-      cwd === project.path ? undefined : cwd,
+      home === project.path ? undefined : home,
     )
     ctx.store.replaceItems(record.id, items)
     const imported: ImportedSession = {
@@ -220,6 +238,7 @@ export class HostNative {
       turns: read.turns,
       shown: read.shown,
       ...(copy ? { forked: true } : {}),
+      source: read.source,
     }
     // seen 和每轮结束时写的是同一个意思：这个引擎上下文里最后一条对话条目
     m.events.patchRecord(record.id, {
@@ -256,7 +275,12 @@ export class HostNative {
     }
     if (action !== 'earlier' && imp.forked) return { added: 0 }
     // 回退了还没发消息：原生记录要等下次启动才截到 pendingRewind，截断点之后读到的都是刚回退掉的轮次，不是终端里新聊的
-    if ((action === 'check' || action === 'sync') && rt.snapshot.record.pendingRewind) return { added: 0 }
+    // 对话已经不接着原会话了（回退找不到截断点、旧格式回退失败、回退到第一条：换了新的引擎会话），原会话里截断点之后的轮次也不是新聊的
+    if (
+      (action === 'check' || action === 'sync') &&
+      (rt.snapshot.record.pendingRewind || rt.snapshot.record.engineSessionId !== imp.sessionId)
+    )
+      return { added: 0 }
     ctx.changingSessions.add(id)
     try {
       if (action === 'earlier') return await this.earlier(id, imp, adapter)
@@ -290,7 +314,16 @@ export class HostNative {
         : [item],
     )
     const next = [
-      this.divider(older.source, !!imp.forked, imp.turns, missing, head?.detail ?? null, head?.id),
+      this.divider(
+        imp.engine,
+        older.source,
+        !!imp.forked,
+        imp.turns,
+        missing,
+        head?.detail ?? null,
+        head?.id,
+        imp.forked && !!older.copyOnly,
+      ),
       ...loaded,
       ...rest,
     ]

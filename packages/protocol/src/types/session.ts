@@ -215,6 +215,8 @@ export interface ImportedSession {
   turns: number
   shown: number
   forked?: boolean
+  /** 导入时这个会话是从终端还是其他程序开的：启动时撞上「正被别的进程写着」按它给提示（Codex） */
+  source?: 'terminal' | 'other'
 }
 
 /** 一个引擎自己留下的、可以接着聊的会话（终端里的 Claude Code……） */
