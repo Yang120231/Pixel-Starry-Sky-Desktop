@@ -476,7 +476,7 @@ export class ClaudeSession implements EngineSession {
     if (!seed || rewindAt || fork) return null
     try {
       await seedTranscript(this.deps.projectsDir, cwd, sid, seedTurns(seed), NO_REPLY)
-      this.seed = null
+      if (this.seed === seed) this.seed = null
       return seed
     } catch {
       return null
