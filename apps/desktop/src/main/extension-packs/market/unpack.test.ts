@@ -180,6 +180,19 @@ describe('unpackPack', () => {
   })
 })
 
+describe('unpackPack 重名', () => {
+  it('完全相同的路径出现两次：抛 extstore.badFiles，不是裸 EEXIST', async () => {
+    const dir = tempDir()
+    const { src } = fake([{ path: 'a.json' }, { path: 'a.json' }])
+    expect((await codeOf(unpackPack(src, dir))).code).toBe('extstore.badFiles')
+  })
+  it('NFC 与 NFD 写法的同名路径：抛 extstore.badFiles', async () => {
+    const dir = tempDir()
+    const { src } = fake([{ path: 'café.json' }, { path: 'café.json' }])
+    expect((await codeOf(unpackPack(src, dir))).code).toBe('extstore.badFiles')
+  })
+})
+
 describe('badPathReason', () => {
   it('正常路径返回 null', () => {
     for (const p of ['a.json', 'icons/a.svg', 'LICENSE', 'a/b-c_d.txt', 'console.json', 'com.json']) {
@@ -190,5 +203,20 @@ describe('badPathReason', () => {
     expect(badPathReason('con.json')).toBe('reserved name')
     expect(badPathReason('LPT9.txt')).toBe('reserved name')
     expect(badPathReason('conx.json')).toBeNull()
+  })
+  it('Windows 非法字符、上标数字保留名、CONIN$、保留名后带空格都拒绝', () => {
+    for (const p of [
+      'a*b.json',
+      'a?b.json',
+      'a"b.json',
+      'a<b.json',
+      'a>b.json',
+      'a|b.json',
+      'COM¹.txt',
+      'conin$.txt',
+      'nul .json',
+    ]) {
+      expect(badPathReason(p), p).not.toBeNull()
+    }
   })
 })

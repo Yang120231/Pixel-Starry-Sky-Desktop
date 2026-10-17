@@ -97,6 +97,7 @@ export const extensionCenterMessages = {
   'extstore.action.installing': { zh: '安装中', en: 'Installing' },
   'extstore.toast.installed': { zh: '已安装 {name}', en: 'Installed {name}' },
   'extstore.toast.updated': { zh: '已更新 {name}', en: 'Updated {name}' },
+  'extstore.toast.rolledBack': { zh: '已换回 {name}', en: 'Rolled back {name}' },
   'extstore.toast.failed': { zh: '{name} 没装上：{reason}', en: '{name} couldn’t be installed: {reason}' },
   'extstore.toast.view': { zh: '查看', en: 'View' },
   'extstore.command.checkUpdates': { zh: '扩展：检查更新', en: 'Extensions: Check for updates' },

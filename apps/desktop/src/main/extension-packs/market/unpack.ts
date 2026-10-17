@@ -19,6 +19,7 @@ export function badPathReason(path: string): string | null {
   if (path.length > EXT_LIMITS.pathChars) return 'too long'
   if (path.includes('\\')) return 'backslash'
   if (path.includes(':')) return 'colon'
+  if (/[*?"<>|]/.test(path)) return 'windows-invalid character'
   if ([...path].some(c => c.charCodeAt(0) < 0x20)) return 'control character'
   const segs = path.split('/')
   if (segs.some(s => s === '' || s === '.' || s === '..')) return 'bad segment'
@@ -52,14 +53,10 @@ export async function unpackPack(src: ExtPackFiles, storeDir: string): Promise<U
   const bad: string[] = []
   const seen = new Map<string, string>()
   for (const f of files) {
-    const lower = f.path.toLowerCase()
+    // NFC 归一 + 小写后撞名（含完全相同的路径）都整包拒绝，免得写第二份时撞出裸 EEXIST
+    const lower = f.path.normalize('NFC').toLowerCase()
     const prev = seen.get(lower)
-    if (
-      badPathReason(f.path) !== null ||
-      (prev !== undefined && prev !== f.path) ||
-      resolvePackPath('', f.path) !== f.path
-    )
-      bad.push(f.path)
+    if (badPathReason(f.path) !== null || prev !== undefined || resolvePackPath('', f.path) !== f.path) bad.push(f.path)
     seen.set(lower, f.path)
   }
   if (bad.length) throw codedError('extstore.badFiles', { files: bad.slice(0, 3).join('、') })

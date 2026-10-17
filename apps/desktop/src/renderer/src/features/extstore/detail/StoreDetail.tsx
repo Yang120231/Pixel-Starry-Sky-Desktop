@@ -68,8 +68,8 @@ export interface StoreDetailProps {
   loading?: boolean
   signedIn: boolean
   onBack(): void
-  /** 安装 / 更新 / 换回；换回时 options.rollback 为 true */
-  onInstall(version: string, options?: { rollback?: boolean }): void
+  /** 安装 / 更新 / 换回；换回时 options.rollback 为 true；kind 决定装好后的提示是「已安装」还是「已更新」 */
+  onInstall(version: string, options?: { rollback?: boolean; kind?: 'install' | 'update' }): void
   onCancelInstall?(): void
   onUninstall(): void
   onSetEnabled(enabled: boolean): void
@@ -186,8 +186,9 @@ export function StoreDetail(props: StoreDetailProps) {
   }
   const run = (a: DetailAction): void => {
     if (a.disabled) return
-    if (a.id === 'install' || a.id === 'update') props.onInstall(a.version as string)
-    else if (a.id === 'rollback') props.onInstall(a.version as string, { rollback: true })
+    if (a.id === 'install') props.onInstall(a.version as string, { kind: 'install' })
+    else if (a.id === 'update') props.onInstall(a.version as string, { kind: 'update' })
+    else if (a.id === 'rollback') props.onInstall(a.version as string, { rollback: true, kind: 'update' })
     else if (a.id === 'uninstall') setConfirming(true)
     else props.onSetEnabled(a.id === 'enable')
   }

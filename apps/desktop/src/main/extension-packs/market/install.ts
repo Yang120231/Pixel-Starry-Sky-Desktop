@@ -263,6 +263,9 @@ export function createInstaller(deps: InstallerDeps): Installer {
 
       // 6. 解压到 store/.tmp/<随机>/
       setProgress('installing', downloaded.bytes.length, downloaded.bytes.length)
+      // 启动时的 cleanStoreDir 会清空 store/.tmp：等它跑完再建临时目录（下载和校验不用等）
+      await host.ready()
+      checkAlive()
       tmpDir = (await unpackPack(src, host.storeDir)).dir
       checkAlive()
 

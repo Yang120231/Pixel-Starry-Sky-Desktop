@@ -11,7 +11,7 @@ import { InstalledTab } from '@/features/extstore/installed/InstalledTab'
 import { runUpdateAll } from '@/features/extstore/installed/installedModel'
 import { GroupTitle } from '../SettingRow'
 import { PluginsSection } from '../plugins/PluginsSection'
-import type { PackGroup } from './model'
+import { packTitle, type PackGroup } from './model'
 import { PackDetail } from './PackDetail'
 
 const errorText = (e: unknown): string => translateMessage((e as Error)?.message ?? String(e))
@@ -22,7 +22,7 @@ const errorText = (e: unknown): string => translateMessage((e as Error)?.message
  * 点一行进详情和 AI 引擎的插件
  */
 export function InstalledPage({ initialGroup }: { initialGroup?: PackGroup }) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const machines = useMachines()
   const state = usePackState()
   const store = useExtStore()
@@ -65,8 +65,11 @@ export function InstalledPage({ initialGroup }: { initialGroup?: PackGroup }) {
   }
 
   // 装 / 更新 / 换回：installExtension 失败不抛错而是把原因记在状态里（显示在对应的行 / 详情上），这里转成抛错好让 runUpdateAll 数失败
+  // 提示里要用的名字和种类：这里都是已装的扩展，只会是更新或换回，不会是「已安装」
   const install = async (id: string, version: string, rollback = false): Promise<void> => {
-    if (!(await installExtension(id, version, { rollback }))) throw new Error('install failed')
+    const pack = state.packs.find(p => p.id === id)
+    const name = pack ? packTitle(pack, locale) : undefined
+    if (!(await installExtension(id, version, { rollback, kind: 'update', name }))) throw new Error('install failed')
   }
 
   const updateOne = (pack: ExtPackInfo): void => {

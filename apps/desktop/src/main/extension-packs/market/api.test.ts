@@ -230,6 +230,8 @@ describe('解析', () => {
           items: [
             { id: 'a.b', versions: '*', reason: '恶意' },
             { id: 'a.c', versions: ['1.0.0', 3], reason: '坏了' },
+            { id: 'a.e', versions: ['not a version', '2.0.0'], reason: '部分坏' },
+            { id: 'a.f', versions: ['not a version'], reason: '全坏' },
             { id: 'a.d', versions: 'nope', reason: 'x' },
             { id: '', versions: '*' },
             null,
@@ -242,6 +244,7 @@ describe('解析', () => {
     expect(list.items).toEqual([
       { id: 'a.b', versions: '*', reason: '恶意' },
       { id: 'a.c', versions: ['1.0.0'], reason: '坏了' },
+      { id: 'a.e', versions: ['2.0.0'], reason: '部分坏' },
     ])
     expect((await make({ pub: () => json({ updated_at: null, items: [] }) }).api.blocklist()).updatedAt).toBeNull()
   })

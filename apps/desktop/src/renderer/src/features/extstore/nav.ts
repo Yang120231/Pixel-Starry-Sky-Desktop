@@ -19,9 +19,9 @@ const subscribe = (cb: () => void): (() => void) => {
 export const getExtTab = (): ExtTab => tab
 export const getExtDetail = (): string | null => detail
 
-/** 切到某个页签；换页签时发现页的详情一并收起 */
+/** 切到某个页签；换页签时发现页的详情一并收起。已经在「发现」时再选「发现」：从详情回到列表 */
 export function openExtTab(next: ExtTab): void {
-  if (tab === next) return
+  if (tab === next && detail === null) return
   tab = next
   detail = null
   emit()

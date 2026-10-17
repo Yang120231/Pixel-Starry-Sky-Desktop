@@ -23,6 +23,8 @@ const KIND_KEYS = {
 /** 一项上的动作要用到的状态，由 DiscoverTab 算好传下来 */
 export interface CardState {
   installed: boolean
+  /** 本机装的版本；有了才能判断商店的版本是不是真的更新 */
+  installedVersion?: string | null
   update?: Parameters<typeof cardAction>[0]['update']
   progress?: Parameters<typeof cardAction>[0]['progress']
   /** 最近一次安装失败的提示 */

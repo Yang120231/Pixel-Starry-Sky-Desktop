@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ExtPackInfo } from '@pixelsky/protocol'
 import { StoreError } from './api'
+import type { StoreKey } from './keys'
 import { AUTO_CHECK_INTERVAL_MS, createUpdates, type UpdatesDeps } from './updates'
 
 vi.mock('electron', () => ({ net: { fetch: vi.fn() } }))
@@ -24,6 +25,8 @@ interface DetailSpec {
   version?: string
   engines?: string
   status?: number
+  /** 这个版本的签名钥匙 id（详情的 latest / versions 里） */
+  keyId?: string
 }
 function setup(packs: ExtPackInfo[], specs: Record<string, DetailSpec>, over: Partial<UpdatesDeps> = {}) {
   const calls: Array<{ id: string; opts: unknown }> = []
@@ -42,6 +45,10 @@ function setup(packs: ExtPackInfo[], specs: Record<string, DetailSpec>, over: Pa
       if (spec.status) throw new StoreError('x', 'internal', spec.status, 'extstore.api.status')
       return {
         extension: { id, version: spec.version },
+        ...(spec.keyId && {
+          latest: { version: spec.version, keyId: spec.keyId },
+          versions: [{ version: spec.version, keyId: spec.keyId }],
+        }),
         manifest: spec.engines ? { engines: { pixelsky: spec.engines } } : null,
       } as never
     } finally {
@@ -130,6 +137,24 @@ describe('checkUpdates', () => {
     // 没被停用、商店版本比本机低：不换回
     const s3 = setup([pack('acme.bad', '1.1.0')], { 'acme.bad': { version: '1.0.0' } })
     expect(await s3.updates.check()).toEqual({})
+  })
+
+  it('换回的那个版本是用已作废的钥匙签的：不给 rollbackTo；钥匙还能用就照给', async () => {
+    const blocked = pack('acme.bad', '1.1.0', { blocked: { reason: '含恶意代码', at: 'now' }, live: false })
+    const key = (keyId: string, status: StoreKey['status']): StoreKey => ({
+      keyId,
+      publicKey: 'x',
+      sites: [SITE],
+      status,
+    })
+    const keys = {
+      table: [key('dead0001', 'revoked'), key('old00001', 'verifyOnly')],
+      dev: { packaged: true, value: undefined },
+    }
+    const s = setup([blocked], { 'acme.bad': { version: '1.0.0', keyId: 'dead0001' } }, { keys })
+    expect(await s.updates.check()).toEqual({})
+    const s2 = setup([blocked], { 'acme.bad': { version: '1.0.0', keyId: 'old00001' } }, { keys })
+    expect(await s2.updates.check()).toEqual({ 'acme.bad': { latest: '1.0.0', engineOk: true, rollbackTo: '1.0.0' } })
   })
 
   it('同时在飞的请求不超过 4 个', async () => {

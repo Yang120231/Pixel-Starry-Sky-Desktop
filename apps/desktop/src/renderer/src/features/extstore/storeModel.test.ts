@@ -9,6 +9,7 @@ import {
   clampQuery,
   formatDownloads,
   installedIdsOf,
+  installedVersionsOf,
   isCategorySelectable,
   mergePages,
   nextBeforeOf,
@@ -161,6 +162,25 @@ describe('cardAction', () => {
       need: '0.5.0',
     })
   })
+  it('知道本机版本时只有商店的版本更新才是「更新」：换回的条目（latest 比本机低）和已经更新完的都不是', () => {
+    const update = { latest: '1.1.0', engineOk: true }
+    expect(cardAction({ installed: true, installedVersion: '1.0.0', update })).toEqual({
+      kind: 'update',
+      version: '1.1.0',
+    })
+    expect(cardAction({ installed: true, installedVersion: '1.1.0', update })).toEqual({ kind: 'installed' })
+    expect(
+      cardAction({ installed: true, installedVersion: '1.2.0', update: { ...update, rollbackTo: '1.0.0' } }),
+    ).toEqual({
+      kind: 'installed',
+    })
+    expect(
+      cardAction({ installed: true, installedVersion: '1.2.0', update: { latest: '2.0.0', engineOk: false } }),
+    ).toEqual({
+      kind: 'updateBlocked',
+      need: null,
+    })
+  })
   it('正在装时优先显示进度', () => {
     expect(
       cardAction({
@@ -174,6 +194,21 @@ describe('cardAction', () => {
         progress: { phase: 'verifying', version: '1.0.0', kind: 'update', received: 0, total: null },
       }),
     ).toEqual({ kind: 'installing', percent: null, phase: expect.any(String) })
+  })
+})
+
+describe('installedVersionsOf', () => {
+  it('只算商店装的，版本优先用安装回执里的', () => {
+    const versions = installedVersionsOf([
+      { id: 'a.store', source: 'store', store: { version: '1.2.0' }, manifest: { version: '1.0.0' } },
+      { id: 'a.nomanifest', source: 'store', store: { version: '2.0.0' } },
+      { id: 'a.dev', source: 'folder', manifest: { version: '9.9.9' } },
+      { id: null, source: 'store', store: { version: '1.0.0' } },
+    ])
+    expect([...versions]).toEqual([
+      ['a.store', '1.2.0'],
+      ['a.nomanifest', '2.0.0'],
+    ])
   })
 })
 
@@ -197,6 +232,7 @@ describe('installToast', () => {
       name: 'Swift 支持',
     })
     expect(installToast({ id: 'a.b', ok: true, kind: 'update' })).toMatchObject({ kind: 'updated', name: 'a.b' })
+    expect(installToast({ id: 'a.b', ok: true, kind: 'update', rollback: true })).toMatchObject({ kind: 'rolledBack' })
   })
   it('silent 不弹；取消不弹；失败带原因', () => {
     expect(installToast({ id: 'a.b', ok: true, silent: true })).toBeNull()

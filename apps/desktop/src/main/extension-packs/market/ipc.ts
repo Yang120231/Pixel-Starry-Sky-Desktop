@@ -139,8 +139,15 @@ export function initExtStore(ctx: AppContext, service: ExtensionPacks): void {
     api: storeApi,
     apply: list => service.applyBlocklist(list).then(changed),
   })
-  void service.ready().then(() => blocklist.start())
-  ctx.lifecycle.onShutdown(() => blocklist.stop())
+  // 退出发生在 ready 之前时，不能让 ready 之后的 start() 又把定时器开起来
+  let shutDown = false
+  void service.ready().then(() => {
+    if (!shutDown) blocklist.start()
+  })
+  ctx.lifecycle.onShutdown(() => {
+    shutDown = true
+    blocklist.stop()
+  })
 
   // 我的发布：选包的对话框、登录状态、检查进程都从这里注入（publish.ts 不碰 electron）
   const publisher = createPublisher({
@@ -150,11 +157,25 @@ export function initExtStore(ctx: AppContext, service: ExtensionPacks): void {
       fork: forkCheckProcess,
       workerPath: join(__dirname, 'ext-check.js'),
       tmpRoot: join(service.storeDir, '.tmp'),
+      // 启动时的 cleanStoreDir 会清空 store/.tmp：等它跑完再建临时目录（它在内置扩展加载后、商店加载前执行）
+      whenReady: () => service.builtinReady(),
     }),
     signedIn: signedInEmail,
     checksDir: join(service.opts.dataDir, 'publish-checks'),
     pickPath: owner => pickUploadPath(webContents.fromId(Number(owner))),
   })
+
+  // 窗口关了就丢掉它没用过的 token 和字节；每个窗口只挂一次
+  const watched = new Set<number>()
+  const watchOwner = (sender: Electron.WebContents): void => {
+    const id = sender.id
+    if (watched.has(id)) return
+    watched.add(id)
+    sender.once('destroyed', () => {
+      watched.delete(id)
+      publisher.forget(id)
+    })
+  }
 
   ipc.handle('extstore:catalog', (_e, query: unknown) => {
     catalogQuery(query)
@@ -203,7 +224,10 @@ export function initExtStore(ctx: AppContext, service: ExtensionPacks): void {
   ipc.handle('extstore:report', (_e, id: unknown, input: unknown) => publisher.report(id, input))
   ipc.handle('extstore:register', (_e, name: unknown) => publisher.register(name))
   // 每个窗口只留一份没用过的 token：以发起调用的窗口（sender.id）为主人
-  ipc.handle('extstore:pickUpload', (e, input: unknown) => publisher.pickUpload(input, e.sender.id))
+  ipc.handle('extstore:pickUpload', (e, input: unknown) => {
+    watchOwner(e.sender)
+    return publisher.pickUpload(input, e.sender.id)
+  })
   ipc.handle('extstore:upload', (e, token: unknown) => publisher.upload(token, e.sender.id))
   ipc.handle('extstore:withdraw', (_e, id: unknown, version: unknown) => publisher.withdraw(id, version))
   ipc.handle('extstore:delist', (_e, id: unknown) => publisher.delist(id))

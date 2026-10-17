@@ -384,6 +384,8 @@ export async function settingsFetch(method: 'GET' | 'PUT', body?: unknown): Prom
 async function authedFetch(path: string, init: RequestInit): Promise<Response> {
   if (!tokens) throw new Error('请先登录像素星空账号')
   const requestEpoch = epoch
+  // 请求途中账号退出或切换：和登录过期同一个 code，调用方按「需要重新登录」处理
+  const loggedOut = (): Error => Object.assign(new Error('账号已退出，请重新登录'), { code: 'AUTH_EXPIRED' })
   // 刷新令牌被拒（登录过期，或在云端管理页被吊销）：马上退出登录，不等下一次拉取账号数据
   const signedOut = (): Error => {
     if (epoch === requestEpoch) clearSession(SIGNED_OUT_MESSAGE)
@@ -398,7 +400,7 @@ async function authedFetch(path: string, init: RequestInit): Promise<Response> {
   }
   if (tokens.accessExpiresAt - Date.now() < REFRESH_SKEW_MS) await refresh()
   const send = async (): Promise<Response> => {
-    if (!tokens || epoch !== requestEpoch) throw new Error('账号已退出，请重新登录')
+    if (!tokens || epoch !== requestEpoch) throw loggedOut()
     const headers = new Headers(init.headers)
     headers.set('Authorization', `Bearer ${tokens.accessToken}`)
     return fetch(`${baseUrl()}${path}`, { ...init, headers, redirect: 'error' })
@@ -416,7 +418,7 @@ async function authedFetch(path: string, init: RequestInit): Promise<Response> {
   }
   if (epoch !== requestEpoch) {
     await res.body?.cancel()
-    throw new Error('账号已退出，请重新登录')
+    throw loggedOut()
   }
   return res
 }

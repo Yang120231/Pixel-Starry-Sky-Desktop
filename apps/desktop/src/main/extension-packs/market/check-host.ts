@@ -35,6 +35,8 @@ export interface CheckHostDeps {
   workerPath: string
   /** 临时 zip 写在 <tmpRoot>/check-<随机>/ 下，检查完（含超时被杀）整个文件夹删掉 */
   tmpRoot: string
+  /** 建临时目录之前先等它（启动时清理 store/.tmp 完成）；不传不等 */
+  whenReady?: () => Promise<void>
   timeoutMs?: number
   rm?: (path: string) => Promise<void>
   randomName?: () => string
@@ -68,6 +70,8 @@ export function createCheckHost(deps: CheckHostDeps): RunUploadCheck {
   const randomName = deps.randomName ?? ((): string => randomBytes(8).toString('hex'))
 
   return async (zipBytes, signal) => {
+    if (signal?.aborted) throw codedError('extstore.cancelled')
+    await deps.whenReady?.()
     if (signal?.aborted) throw codedError('extstore.cancelled')
     const tmpDir = join(deps.tmpRoot, `check-${randomName()}`)
     const proc: { child: CheckProcess | null } = { child: null }

@@ -102,7 +102,11 @@ export function StoreDetailPage({ id }: { id: string }) {
       loading={loading}
       signedIn={account.status === 'signed-in'}
       onBack={() => openExtDetail(null)}
-      onInstall={(v, options) => void installExtension(id, v, options)}
+      onInstall={(v, options) => {
+        // 版本是按当前取到的详情算的；详情还是上一个扩展的（切换瞬间）时不装，免得把 A 的版本装给 B
+        if (detail && detail.extension.id !== id) return
+        void installExtension(id, v, { ...options, name: detail?.extension.name })
+      }}
       onCancelInstall={() => void cancelInstall(id)}
       onUninstall={() => {
         if (localPack) void run(() => extpacks?.remove(localPack.key))

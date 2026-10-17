@@ -51,8 +51,6 @@ const REPORT_REASONS: readonly ExtStoreReportReason[] = [
   'misleading',
   'other',
 ]
-/** 这些状态的版本号不能再用（撤回、没通过的可以再用，见方案 §2.6） */
-const USED_STATUSES = ['approved', 'pending', 'blocked']
 
 export interface PublishFs {
   /** 路径是文件夹、普通文件还是别的；不存在抛错 */
@@ -96,6 +94,8 @@ export interface Publisher {
   relist(id: unknown): Promise<void>
   report(id: unknown, input: unknown): Promise<void>
   publishCheck(id: unknown, version: unknown): Promise<ExtStoreCheckReport | null>
+  /** 这个窗口关了：丢掉它没用过的 token 和字节（最多 10 MB） */
+  forget(owner: PublishOwner): void
 }
 
 export const nodeFs: PublishFs = {
@@ -322,9 +322,13 @@ export function createPublisher(deps: PublisherDeps): Publisher {
       const checks = {
         permissions: [] as string[],
         prefixOk: manifest.publisher === name && manifest.id.startsWith(`${name}.`),
-        versionNewer: versions
-          .filter(v => USED_STATUSES.includes(v.status))
-          .every(v => compareExtVersion(manifest.version, v.version) > 0),
+        // 和云端 versionRule 一致：已通过的版本号永远不能再用、必须比已通过的最高版本大；待审核的只禁同号，
+        // 不要求比它大；撤回、没通过的版本号可以再用（方案 §2.6）
+        versionNewer: versions.every(v =>
+          v.status === 'approved'
+            ? compareExtVersion(manifest.version, v.version) > 0
+            : v.status !== 'pending' || v.version !== manifest.version,
+        ),
       }
       const [report, previous] = await Promise.all([deps.runCheck(zip), previousContributes(manifest.id)])
 
@@ -334,6 +338,8 @@ export function createPublisher(deps: PublisherDeps): Publisher {
       if (blocked) pending.delete(owner)
       else {
         token = newToken()
+        // 顺手清掉所有窗口里已过期的（关窗口的 destroyed 事件之外的兜底）
+        for (const [key, entry] of pending) if (entry.expires <= now()) pending.delete(key)
         pending.set(owner, {
           token,
           bytes: zip,
@@ -407,6 +413,10 @@ export function createPublisher(deps: PublisherDeps): Publisher {
 
     async publishCheck(id, version) {
       return readCheck(idArg(id), versionArg(version))
+    },
+
+    forget(owner) {
+      pending.delete(owner)
     },
   }
 }

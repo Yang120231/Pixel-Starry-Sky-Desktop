@@ -2,6 +2,7 @@ import { compareExtVersion, satisfiesEngine } from '@pixelsky/protocol'
 import type { ExtPackInfo, ExtStoreDetail, ExtStoreUpdate, ExtStoreUpdates } from '@pixelsky/protocol'
 import type { StoreApi } from './api'
 import { engineNeed } from './engine'
+import { keyStatus, type DevKeySource, type StoreKey } from './keys'
 
 // 检查更新（docs/ui/extension-store-client.md §2.5）：只查「当前站点装的商店扩展」，每个取一次详情（绕过缓存），
 // 最多同时 4 个。不导入 service.ts，扩展列表由 market/ipc.ts 传进来。
@@ -17,6 +18,8 @@ export interface UpdatesDeps {
   appVersion: string
   /** 停用名单里有没有这个站点的这个版本（换回只退到没被停用的版本） */
   blocked: (site: string, id: string, version: string) => unknown
+  /** 钥匙表和开发版钥匙来源（测试注入；不传用 market/keys.ts 的） */
+  keys?: { table?: StoreKey[]; dev?: DevKeySource }
   now?: () => number
   /** 结果有变化（要推 extstore:changed） */
   onChange?: () => void
@@ -47,6 +50,14 @@ export function createUpdates(deps: UpdatesDeps): Updates {
   let checkedAt = Number.NEGATIVE_INFINITY
   let inflight: Promise<ExtStoreUpdates> | null = null
 
+  /** 详情里这个版本是用已作废的钥匙签的吗；详情里找不到这个版本的钥匙 id 时按没作废算（真装的时候 verify 会拦） */
+  function revokedKey(detail: ExtStoreDetail, version: string, site: string): boolean {
+    const entry =
+      detail.versions?.find(v => v.version === version) ?? (detail.latest?.version === version ? detail.latest : null)
+    if (!entry?.keyId) return false
+    return keyStatus(entry.keyId, site, deps.keys?.table, deps.keys?.dev) === 'revoked'
+  }
+
   async function one(info: ExtPackInfo, site: string): Promise<[string, ExtStoreUpdate] | null> {
     const local = info.store
     if (!local || !info.id) return null
@@ -64,7 +75,8 @@ export function createUpdates(deps: UpdatesDeps): Updates {
     const need = engine.need ? { engineNeed: engine.need } : {}
     if (cmp > 0) return [info.id, { latest, engineOk: engine.ok, ...need }]
     // 本机这版被停用、商店里「最新」退回到了更早的可用版本：给换回
-    if (cmp < 0 && info.blocked && !deps.blocked(site, info.id, latest))
+    // 签那个版本的钥匙已作废的不换回（装的时候会被拒）
+    if (cmp < 0 && info.blocked && !deps.blocked(site, info.id, latest) && !revokedKey(detail, latest, site))
       return [info.id, { latest, engineOk: engine.ok, ...need, rollbackTo: latest }]
     return null
   }

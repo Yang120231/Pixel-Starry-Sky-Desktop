@@ -59,8 +59,13 @@ export function isPublisherName(s: unknown): s is string {
 export const EXT_ALLOWED_FILE_RE = /\.(json|md|png|svg|txt)$/i
 /** F1：LICENSE 开头的文件名（LICENSE、LICENSE.txt、LICENSE-MIT …） */
 export const EXT_LICENSE_FILE_RE = /^license/i
-/** F4：Windows 保留设备名（带不带扩展名都是；按路径的每一段查） */
-export const EXT_WINDOWS_RESERVED_RE = /^(con|prn|aux|nul|com\d|lpt\d)(\..*)?$/i
+/**
+ * F4：Windows 保留设备名（带不带扩展名都是；按路径的每一段查）。
+ * 含上标数字的 COM¹²³ / LPT¹²³、CONIN$ / CONOUT$；Windows 先去扩展名再去结尾空格，所以 "nul .json" 也算
+ */
+export const EXT_WINDOWS_RESERVED_RE = /^(con|prn|aux|nul|com[\d¹²³]|lpt[\d¹²³]|conin\$|conout\$) *(\..*)?$/i
+/** F4：Windows 文件名里不能出现的字符（冒号单独处理，因为它在 NTFS 上是备用数据流） */
+const EXT_WINDOWS_BAD_CHARS_RE = /[*?"<>|]/
 
 /** 各层允许的字段；其余（除 x- 开头和 $schema）都算未知字段 */
 const KEYS = {
@@ -502,13 +507,14 @@ export function validatePackFiles(
     } else if (p.includes('\\')) {
       warn('files.path', `路径里只能用 /：${p}`, `Paths may only use /: ${p}`, p)
     }
-    const lower = p.toLowerCase()
+    // NFC 归一后再比：macOS APFS 把 NFC / NFD 写法当同一个文件
+    const lower = p.normalize('NFC').toLowerCase()
     const prev = seen.get(lower)
     if (prev !== undefined && prev !== p) {
       warn(
         'files.path',
-        `只有大小写不同的两个文件：${prev} 和 ${p}`,
-        `Two files differ only in case: ${prev} and ${p}`,
+        `只有大小写（或 Unicode 写法）不同的两个文件：${prev} 和 ${p}`,
+        `Two files differ only in case or Unicode form: ${prev} and ${p}`,
         p,
       )
     }
@@ -518,6 +524,14 @@ export function validatePackFiles(
         'files.path',
         `路径里不能有冒号（Windows 上会变成备用数据流）：${p}`,
         `Paths may not contain ":" (it becomes an alternate data stream on Windows): ${p}`,
+        p,
+      )
+    }
+    if (EXT_WINDOWS_BAD_CHARS_RE.test(p)) {
+      warn(
+        'files.path',
+        `路径里不能有 * ? " < > | （Windows 文件名不允许）：${p}`,
+        `Paths may not contain any of * ? " < > | (not allowed in Windows file names): ${p}`,
         p,
       )
     }

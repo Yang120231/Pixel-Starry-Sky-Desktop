@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react'
 import type {
   ExtStoreCatalogPage,
   ExtStoreCatalogQuery,
+  ExtStoreProgress,
   ExtStoreSort,
   ExtStoreState,
   ExtStoreUpdates,
@@ -46,6 +47,17 @@ function set(patch: Partial<ExtStoreSnapshot>): void {
   for (const l of [...listeners]) l()
 }
 
+// 点了安装、主进程的第一条进度还没推回来之前：先在界面上记成「正在装」，按钮立刻变成进度，也挡住连点
+const pending = new Map<string, ExtStoreProgress>()
+
+/** 主进程那边还没有这个 id 的进度时，补上点击后记下的占位进度 */
+function withPending(state: ExtStoreState): ExtStoreState {
+  if (!pending.size) return state
+  const installing = { ...state.installing }
+  for (const [id, progress] of pending) if (!installing[id]) installing[id] = progress
+  return { ...state, installing }
+}
+
 /** 重新取商店状态；取的过程中又来了通知：等这一轮结束再取一次，避免拿到旧状态 */
 export function refreshExtStore(): Promise<void> {
   const b = api()
@@ -54,7 +66,7 @@ export function refreshExtStore(): Promise<void> {
   inflight = b
     .state()
     .then(next => {
-      set({ state: next })
+      set({ state: withPending(next) })
     })
     .catch(() => {})
     .finally(() => {
@@ -156,29 +168,69 @@ export interface InstallOptions {
   rollback?: boolean
 }
 
+/** 正在由这里发起的安装：同一个 id 再调一次直接等这一次的结果（不重复发起、不多弹提示，「全部更新」也不会把它算成失败） */
+const installsInFlight = new Map<string, Promise<boolean>>()
+
 /** 装 / 更新 / 换回：进度由 extstore:changed 推送，这里只管发起、记下失败原因和发提示 */
-export async function installExtension(id: string, version: string, options: InstallOptions = {}): Promise<boolean> {
+export function installExtension(id: string, version: string, options: InstallOptions = {}): Promise<boolean> {
+  const running = installsInFlight.get(id)
+  if (running) return running
+  // 别处（比如另一个窗口）发起的安装还在跑：不再发起
+  if (snapshot.state.installing[id]) return Promise.resolve(false)
+  const run = startInstall(id, version, options).finally(() => installsInFlight.delete(id))
+  installsInFlight.set(id, run)
+  return run
+}
+
+async function startInstall(id: string, version: string, options: InstallOptions): Promise<boolean> {
   const b = api()
   if (!b) return false
-  if (snapshot.installErrors[id]) set({ installErrors: withoutKey(snapshot.installErrors, id) })
-  const base = { id, name: options.name ?? itemNames.get(id), kind: options.kind, silent: options.silent }
+  pending.set(id, {
+    phase: 'downloading',
+    version,
+    kind: options.kind ?? (options.rollback ? 'update' : 'install'),
+    received: 0,
+    total: null,
+  })
+  set({
+    state: withPending(snapshot.state),
+    installErrors: snapshot.installErrors[id] ? withoutKey(snapshot.installErrors, id) : snapshot.installErrors,
+  })
+  const base = {
+    id,
+    name: options.name ?? itemNames.get(id),
+    kind: options.kind,
+    rollback: options.rollback,
+    silent: options.silent,
+  }
   const emitToast = (r: Parameters<typeof installToast>[0]): void => {
     const toast = installToast(r)
     if (toast) for (const l of [...toastListeners]) l(toast)
   }
   try {
     await b.install(id, version, options.rollback ? { rollback: true } : undefined)
+    endPending(id)
     void refreshExtStore()
     emitToast({ ...base, ok: true })
     return true
   } catch (e) {
     const raw = (e as Error)?.message ?? String(e)
     const reason = translateMessage(raw)
-    set({ installErrors: { ...snapshot.installErrors, [id]: reason } })
+    const cancelled = /extstore\.cancelled/.test(raw)
+    endPending(id)
+    // 用户自己取消的不算失败：不弹提示，也不留红字
+    if (!cancelled) set({ installErrors: { ...snapshot.installErrors, [id]: reason } })
     void refreshExtStore()
-    emitToast({ ...base, ok: false, reason, cancelled: /extstore\.cancelled/.test(raw) })
+    emitToast({ ...base, ok: false, reason, cancelled })
     return false
   }
+}
+
+/** 安装结束：去掉占位进度（真实进度由随后的 refreshExtStore 同步） */
+function endPending(id: string): void {
+  pending.delete(id)
+  if (snapshot.state.installing[id])
+    set({ state: { ...snapshot.state, installing: withoutKey(snapshot.state.installing, id) } })
 }
 
 export async function cancelInstall(id: string): Promise<void> {

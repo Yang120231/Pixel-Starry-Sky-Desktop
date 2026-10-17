@@ -1,3 +1,4 @@
+import { compareExtVersion } from '@pixelsky/protocol'
 import type {
   ExtPackContributionKind,
   ExtStoreCatalogPage,
@@ -194,10 +195,12 @@ export type CardAction =
 /** 卡片右边的按钮：正在装 > 有更新 > 已装 > 安装 */
 export function cardAction(input: {
   installed: boolean
+  /** 本机装的版本；知道时只有商店的版本比它新才算「有更新」（换回的那种条目 latest 比本机低，不是更新） */
+  installedVersion?: string | null
   update?: ExtStoreUpdate
   progress?: ExtStoreProgress
 }): CardAction {
-  const { installed, update, progress } = input
+  const { installed, installedVersion, update, progress } = input
   if (progress) {
     const percent =
       progress.phase === 'downloading' && progress.total
@@ -206,7 +209,7 @@ export function cardAction(input: {
     return { kind: 'installing', percent, phase: progress.phase }
   }
   if (!installed) return { kind: 'install' }
-  if (update) {
+  if (update && (!installedVersion || compareExtVersion(update.latest, installedVersion) > 0)) {
     // 换回（rollbackTo）不在发现页处理，只看有没有新版本
     return update.engineOk
       ? { kind: 'update', version: update.latest }
@@ -225,17 +228,35 @@ export function installedIdsOf(packs: ReadonlyArray<{ id?: string | null; source
   return ids
 }
 
+/** 本机从商店装了的扩展的版本（id → 版本）；装好后包列表一刷新，发现页的「更新」就跟着消失 */
+export function installedVersionsOf(
+  packs: ReadonlyArray<{
+    id?: string | null
+    source: string
+    store?: { version: string } | null
+    manifest?: { version: string } | null
+  }>,
+): Map<string, string> {
+  const versions = new Map<string, string>()
+  for (const p of packs) {
+    const v = p.store?.version ?? p.manifest?.version
+    if (p.source === 'store' && p.id && v) versions.set(p.id, v)
+  }
+  return versions
+}
+
 /** 一次安装结束后要不要弹提示：装好弹「已安装 / 已更新 X」（silent 不弹），失败弹原因，取消不弹 */
 export type InstallToast =
-  | { kind: 'installed' | 'updated'; id: string; name: string }
+  | { kind: 'installed' | 'updated' | 'rolledBack'; id: string; name: string }
   | { kind: 'failed'; id: string; name: string; reason: string }
 
 export function installToast(result: {
   id: string
   name?: string
   ok: boolean
-  /** 'update' 包含换回 */
   kind?: 'install' | 'update'
+  /** 换回旧版本：提示写「已换回」 */
+  rollback?: boolean
   silent?: boolean
   /** 已翻成当前语言的失败原因 */
   reason?: string
@@ -243,7 +264,13 @@ export function installToast(result: {
 }): InstallToast | null {
   const name = result.name || result.id
   if (result.ok)
-    return result.silent ? null : { kind: result.kind === 'update' ? 'updated' : 'installed', id: result.id, name }
+    return result.silent
+      ? null
+      : {
+          kind: result.rollback ? 'rolledBack' : result.kind === 'update' ? 'updated' : 'installed',
+          id: result.id,
+          name,
+        }
   if (result.cancelled || !result.reason) return null
   return { kind: 'failed', id: result.id, name, reason: result.reason }
 }

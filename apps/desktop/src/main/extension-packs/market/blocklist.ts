@@ -34,8 +34,12 @@ function item(raw: unknown): BlocklistItem | null {
   if (!isExtId(o.id)) return null
   let versions: BlocklistItem['versions']
   if (o.versions === '*') versions = '*'
-  else if (Array.isArray(o.versions) && o.versions.every(isExtVersion)) versions = o.versions as string[]
-  else return null
+  else if (Array.isArray(o.versions)) {
+    // 只去掉不合法的版本号，合法的照样停用；一个合法的都没有才丢掉整条
+    const valid = o.versions.filter(isExtVersion)
+    if (valid.length === 0) return null
+    versions = valid
+  } else return null
   return { id: o.id, versions, reason: typeof o.reason === 'string' ? o.reason : '' }
 }
 

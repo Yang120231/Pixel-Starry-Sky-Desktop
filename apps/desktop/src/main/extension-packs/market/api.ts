@@ -225,8 +225,10 @@ function parseBlocklist(body: unknown): ExtStoreBlocklist {
   const items: ExtStoreBlockEntry[] = []
   for (const it of body.items) {
     if (!isObj(it) || typeof it.id !== 'string' || !it.id) continue
-    const versions = it.versions === '*' ? '*' : Array.isArray(it.versions) ? strList(it.versions) : null
-    if (versions === null) continue
+    // 版本号列表只留合法的（一个坏的不能让整条作废，把别的版本放出来）；一个合法的都没有就丢掉这条
+    const versions =
+      it.versions === '*' ? '*' : Array.isArray(it.versions) ? strList(it.versions).filter(isExtVersion) : null
+    if (versions === null || (versions !== '*' && versions.length === 0)) continue
     items.push({ id: it.id, versions, reason: str(it.reason) })
   }
   return { updatedAt: strOrNull(body.updated_at), items }

@@ -14,7 +14,13 @@ export function ExtStoreToastHost() {
       subscribeInstallToasts(t => {
         if (t.kind === 'failed')
           return toast(tr('extstore.toast.failed', { name: t.name, reason: t.reason }), { duration: 4000 })
-        toast(tr(t.kind === 'updated' ? 'extstore.toast.updated' : 'extstore.toast.installed', { name: t.name }), {
+        const key =
+          t.kind === 'rolledBack'
+            ? 'extstore.toast.rolledBack'
+            : t.kind === 'updated'
+              ? 'extstore.toast.updated'
+              : 'extstore.toast.installed'
+        toast(tr(key, { name: t.name }), {
           action: {
             label: tr('extstore.toast.view'),
             run: () => {

@@ -53,6 +53,8 @@ const requests: Array<{
 }> = []
 let revoked = false
 let globalDown = false
+/** 不为 null 时，/v1/platform/slow 的响应要等它 resolve 才回（模拟请求途中账号退出） */
+let slowGate: Promise<void> | null = null
 vi.stubGlobal('fetch', async (input: string, init: RequestInit = {}) => {
   if (globalDown) throw new TypeError('fetch failed')
   const path = new URL(input).pathname
@@ -63,6 +65,7 @@ vi.stubGlobal('fetch', async (input: string, init: RequestInit = {}) => {
     headers: new Headers(init.headers),
     method: init.method ?? 'GET',
   })
+  if (path === '/v1/platform/slow' && slowGate) await slowGate
   if (path.startsWith('/v1/extensions')) return Response.json({ ok: true }, { status: 200 })
   if (path === '/v1/oauth/token' && revoked) return Response.json({ error: 'invalid_grant' }, { status: 400 })
   if (path.startsWith('/v1/platform/')) return Response.json({}, { status: revoked ? 401 : 200 })
@@ -162,9 +165,17 @@ describe('登录会话', () => {
     expect(signedInEmail()).toBe('alice@example.com')
     expect((await platformFetch('/v1/platform/groups')).status).toBe(200)
 
+    // 另一个请求还在途中时账号退出：它回来后也抛 AUTH_EXPIRED（调用方按「需要登录」处理，不当成断网）
+    let release!: () => void
+    slowGate = new Promise<void>(resolve => (release = resolve))
+    const inFlight = platformFetch('/v1/platform/slow').catch((e: unknown) => e)
+
     revoked = true
     const error = await platformFetch('/v1/platform/groups').catch((e: unknown) => e)
     expect(error).toMatchObject({ code: 'AUTH_EXPIRED', message: expect.stringContaining('请重新登录') })
+    release()
+    slowGate = null
+    expect(await inFlight).toMatchObject({ code: 'AUTH_EXPIRED', message: '账号已退出，请重新登录' })
     expect(signedInEmail()).toBeNull()
     expect(existsSync(join(userData, 'account.json'))).toBe(false)
     expect(requests.find(r => r.path === '/v1/oauth/token')?.body).toMatchObject({

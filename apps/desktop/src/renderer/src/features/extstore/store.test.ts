@@ -102,6 +102,63 @@ describe('extstore store（有桥）', () => {
   })
 })
 
+describe('安装的状态', () => {
+  it('点了安装就立刻算「正在装」（不等第一条进度），再点同一个 id 不重复发起、等同一次的结果，装完恢复', async () => {
+    let finish!: () => void
+    const install = vi.fn(
+      () =>
+        new Promise<never>(resolve => {
+          finish = () => resolve({} as never)
+        }),
+    )
+    const store = await load(fakeExtStoreBridge({ install }))
+    const toasts: unknown[] = []
+    store.subscribeInstallToasts(t => toasts.push(t))
+    const first = store.installExtension('a.b', '1.0.0', { name: 'AB' })
+    expect(store.getExtStore().state.installing['a.b']).toMatchObject({ version: '1.0.0', kind: 'install' })
+    const second = store.installExtension('a.b', '1.0.0')
+    expect(second).toBe(first)
+    expect(install).toHaveBeenCalledTimes(1)
+    // 主进程那边还没有这个 id 的进度时，刷新状态不会把占位冲掉
+    await store.refreshExtStore()
+    expect(store.getExtStore().state.installing['a.b']).toBeDefined()
+    finish()
+    expect(await first).toBe(true)
+    expect(await second).toBe(true)
+    expect(install).toHaveBeenCalledTimes(1)
+    expect(store.getExtStore().state.installing['a.b']).toBeUndefined()
+    expect(toasts).toHaveLength(1)
+  })
+
+  it('用户取消：不弹提示，也不留进 installErrors；其它失败照常记下', async () => {
+    let message = 'errors.extstore.cancelled'
+    const install = vi.fn(async () => {
+      throw new Error(message)
+    })
+    const store = await load(fakeExtStoreBridge({ install }))
+    const toasts: Array<{ kind: string }> = []
+    store.subscribeInstallToasts(t => toasts.push(t))
+    expect(await store.installExtension('a.b', '1.0.0')).toBe(false)
+    expect(store.getExtStore().installErrors['a.b']).toBeUndefined()
+    expect(toasts).toHaveLength(0)
+    expect(store.getExtStore().state.installing['a.b']).toBeUndefined()
+
+    message = 'errors.extstore.offline'
+    expect(await store.installExtension('a.b', '1.0.0')).toBe(false)
+    expect(store.getExtStore().installErrors['a.b']).toBeTruthy()
+    expect(toasts.map(t => t.kind)).toEqual(['failed'])
+  })
+
+  it('换回的提示是 rolledBack，更新是 updated', async () => {
+    const store = await load(fakeExtStoreBridge({ install: async () => ({}) as never }))
+    const kinds: string[] = []
+    store.subscribeInstallToasts(t => kinds.push(t.kind))
+    await store.installExtension('a.b', '1.0.0', { kind: 'update', rollback: true })
+    await store.installExtension('a.b', '1.1.0', { kind: 'update' })
+    expect(kinds).toEqual(['rolledBack', 'updated'])
+  })
+})
+
 describe('发现页的浏览位置', () => {
   it('saveDiscoverView 后再取，搜索词、分类、排序、页、scrollTop 都一样', async () => {
     const store = await load()

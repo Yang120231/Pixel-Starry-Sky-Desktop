@@ -266,15 +266,11 @@ describe('上传前的四条核对', () => {
     expect(b).toMatchObject({ token: '', checks: { prefixOk: false } })
   })
 
-  it('版本号不比已上架 / 待审核的大：versionNewer 为 false；撤回、没通过的版本号可以再用', async () => {
+  it('版本号不比已上架的最高版本大：versionNewer 为 false；撤回、没通过的版本号可以再用', async () => {
     const { pub, api } = setup()
     api.publisher.mockResolvedValue(state([version('1.0.0', 'approved')]))
     expect(await pub.pickUpload(bytesInput(manifestZip()), 1)).toMatchObject({
       token: '',
-      checks: { versionNewer: false },
-    })
-    api.publisher.mockResolvedValue(state([version('1.0.0', 'pending')]))
-    expect(await pub.pickUpload(bytesInput(manifestZip({ version: '0.9.0' })), 1)).toMatchObject({
       checks: { versionNewer: false },
     })
     api.publisher.mockResolvedValue(state([version('1.0.0', 'withdrawn'), version('1.0.1', 'rejected')]))
@@ -285,6 +281,24 @@ describe('上传前的四条核对', () => {
     api.publisher.mockResolvedValue(state([version('1.0.0', 'approved')]))
     expect(await pub.pickUpload(bytesInput(manifestZip({ version: '1.0.1' })), 1)).toMatchObject({
       checks: { versionNewer: true },
+    })
+  })
+
+  it('待审核的版本只禁同一个版本号，不要求新版本比它大（和云端 versionRule 一致）', async () => {
+    const { pub, api } = setup()
+    // 已通过 1.0.0、待审核 2.0.0：传 1.5.0 比已通过的大，可以
+    api.publisher.mockResolvedValue(state([version('1.0.0', 'approved'), version('2.0.0', 'pending')]))
+    expect(await pub.pickUpload(bytesInput(manifestZip({ version: '1.5.0' })), 1)).toMatchObject({
+      checks: { versionNewer: true },
+    })
+    // 只有待审核 1.0.0：传 0.9.0 可以；传同号 1.0.0 不行
+    api.publisher.mockResolvedValue(state([version('1.0.0', 'pending')]))
+    expect(await pub.pickUpload(bytesInput(manifestZip({ version: '0.9.0' })), 1)).toMatchObject({
+      checks: { versionNewer: true },
+    })
+    expect(await pub.pickUpload(bytesInput(manifestZip({ version: '1.0.0' })), 1)).toMatchObject({
+      token: '',
+      checks: { versionNewer: false },
     })
   })
 
@@ -371,6 +385,17 @@ describe('token', () => {
     await pub.upload('tok4', 2)
     expect(await code(pub.upload('', 1))).toBe('extstore.badRequest')
     expect(api.upload).toHaveBeenCalledTimes(1)
+  })
+
+  it('窗口关了（forget）：它没用过的 token 作废，别的窗口不受影响', async () => {
+    const { pub, api } = setup()
+    await pickOk(pub, 1) // tok1
+    await pickOk(pub, 2) // tok2
+    pub.forget(1)
+    expect(await code(pub.upload('tok1', 1))).toBe('extstore.badRequest')
+    await pub.upload('tok2', 2)
+    expect(api.upload).toHaveBeenCalledTimes(1)
+    pub.forget(99) // 没有记录的窗口：不报错
   })
 
   it('上传的是选包时读到的那份字节，不再读文件', async () => {

@@ -20,6 +20,7 @@ import {
   clampQuery,
   FEATURED_COUNT,
   installedIdsOf,
+  installedVersionsOf,
   isCategorySelectable,
   mergePages,
   nextBeforeOf,
@@ -61,6 +62,8 @@ export function DiscoverTab() {
     sort: initial.sort,
   })
   const [pages, setPages] = useState<ExtStoreCatalogPage[]>(initial.pages)
+  // pages 是按哪组条件取回来的：换分类 / 排序后新的一页还在路上时，列表仍是旧条件的；存浏览位置、翻页、大卡片都以它为准
+  const [loaded, setLoaded] = useState<DiscoverFilter>(filter)
   const [status, setStatus] = useState<LoadState>(initial.pages.length ? 'ready' : 'loading')
   const [more, setMore] = useState<'idle' | 'loading' | 'error'>('idle')
   const [reloadKey, setReloadKey] = useState(0)
@@ -80,8 +83,8 @@ export function DiscoverTab() {
   const requestId = useRef(0)
   // 从详情回来时已经有页了，第一次不重新取
   const skipFirstLoad = useRef(initial.pages.length > 0)
-  const latest = useRef({ filter, pages })
-  latest.current = { filter, pages }
+  const latest = useRef({ loaded, pages })
+  latest.current = { loaded, pages }
 
   // 搜索框输入后等 300 ms 再真正搜；卸载时丢掉没发出去的那次
   const applyQuery = useMemo(
@@ -103,11 +106,13 @@ export function DiscoverTab() {
       .then(page => {
         if (id !== requestId.current) return
         setPages([page])
+        setLoaded(filter)
         setStatus('ready')
       })
       .catch(() => {
         if (id !== requestId.current) return
         setPages([])
+        setLoaded(filter)
         setStatus('error')
       })
   }, [filter, reloadKey])
@@ -118,7 +123,7 @@ export function DiscoverTab() {
     if (!before || more === 'loading') return
     const id = requestId.current
     setMore('loading')
-    fetchCatalog(catalogQueryOf(latest.current.filter, before))
+    fetchCatalog(catalogQueryOf(latest.current.loaded, before))
       .then(page => {
         if (id !== requestId.current) return
         setPages(p => [...p, page])
@@ -155,7 +160,8 @@ export function DiscoverTab() {
     parent?.addEventListener('scroll', onScroll, { passive: true })
     return () => {
       parent?.removeEventListener('scroll', onScroll)
-      const { filter: f, pages: p } = latest.current
+      // 存的是「列表对应的条件」而不是输入框 / 分类栏上的：新一页还没回来就点进详情时，回来才不会条件和列表对不上
+      const { loaded: f, pages: p } = latest.current
       saveDiscoverView({ ...f, pages: p, scrollTop: scrollTopRef.current })
     }
   }, [initial.scrollTop])
@@ -166,6 +172,8 @@ export function DiscoverTab() {
     if (isDemo) for (const id of demo().extStore.installed) ids.add(id)
     return ids
   }, [packs])
+
+  const installedVersions = useMemo(() => installedVersionsOf(packs), [packs])
 
   const handlers: CardHandlers = {
     onOpen: id => openExtDetail(id),
@@ -178,12 +186,13 @@ export function DiscoverTab() {
   }
   const stateOf = (item: ExtStoreItem): CardState => ({
     installed: installedIds.has(item.id),
+    installedVersion: installedVersions.get(item.id),
     update: store.state.updates[item.id],
     progress: store.state.installing[item.id],
     error: store.installErrors[item.id],
   })
 
-  const featured = status === 'ready' && showsFeatured(filter) ? items.slice(0, FEATURED_COUNT) : []
+  const featured = status === 'ready' && showsFeatured(loaded) ? items.slice(0, FEATURED_COUNT) : []
   const rest = featured.length ? items.slice(FEATURED_COUNT) : items
 
   const pick = (category: string): void => {

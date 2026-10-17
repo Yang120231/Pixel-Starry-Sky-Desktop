@@ -280,6 +280,31 @@ describe('validatePackFiles', () => {
     expect(issues.map(i => i.path).sort()).toEqual([...bad].sort())
     for (const i of issues) expect(i).toMatchObject({ severity: 'warning', scope: 'file', upload: 'reject' })
   })
+  it('F4 Windows 非法字符 * ? " < > |、上标数字保留名、CONIN$ / CONOUT$、保留名后带空格（上传拒绝）', () => {
+    const bad = [
+      'a*b.json',
+      'a?b.json',
+      'a"b.json',
+      'a<b.json',
+      'a>b.json',
+      'a|b.json',
+      'docs/COM¹.txt',
+      'docs/com².txt',
+      'LPT³.md',
+      'conin$.txt',
+      'CONOUT$',
+      'nul .json',
+      'docs/con  .txt',
+    ]
+    const issues = find(run([...good, ...bad.map(p => f(p))]), 'files.path')
+    expect(issues.map(i => i.path).sort()).toEqual([...bad].sort())
+    for (const i of issues) expect(i).toMatchObject({ severity: 'warning', scope: 'file', upload: 'reject' })
+  })
+  it('F4 NFC 与 NFD 写法的同名文件算撞名', () => {
+    const issues = find(run([...good, f('café.json'), f('café.json')]), 'files.path')
+    expect(issues).toHaveLength(1)
+    expect(issues[0]).toMatchObject({ upload: 'reject' })
+  })
   it('F4 不误伤：名字里只是含有保留名、com / lpt 后面不是一位数字、中间的点和空格', () => {
     const ok = [
       'console.json',

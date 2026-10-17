@@ -317,6 +317,24 @@ describe('install：成功路径', () => {
     expect(r.changes[r.changes.length - 1].some(p => p.key === `s-${ID}`)).toBe(true)
   })
 
+  it('启动清理（cleanStoreDir）没跑完之前不建 store/.tmp：下载可以先做，解压要等 host.ready', async () => {
+    const e = env()
+    const cloud = new Cloud()
+    cloud.publish(ID, '1.0.0')
+    const r = await rig(e, cloud)
+    const real = r.svc.ready.bind(r.svc)
+    let release!: () => void
+    const gate = new Promise<void>(resolve => (release = resolve))
+    r.svc.ready = () => gate.then(real)
+    const done = r.installer.install(ID, '1.0.0')
+    await vi.waitFor(() => expect(cloud.downloads).toEqual([`${ID}@1.0.0`])) // 下载没被挡
+    await new Promise(resolve => setTimeout(resolve, 30))
+    expect(existsSync(join(e.storeDir, '.tmp'))).toBe(false)
+    release()
+    await expect(done).resolves.toMatchObject({ source: 'store', live: true })
+    expect(tmpLeft(e)).toEqual([])
+  })
+
   it('取详情用 fresh（cache:no-cache），第 2 步；下载走 /cloud/extensions/<id>/<version>.zip', async () => {
     const e = env()
     const cloud = new Cloud()

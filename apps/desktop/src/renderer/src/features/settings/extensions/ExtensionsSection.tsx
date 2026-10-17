@@ -32,7 +32,7 @@ export function ExtensionsSection({ initialGroup }: { initialGroup?: PackGroup }
       <ExtTabs value={tab} onChange={openExtTab} installedCount={installedCount} />
       {tab === 'discover' ? (
         detail ? (
-          <StoreDetailPage id={detail} />
+          <StoreDetailPage key={detail} id={detail} />
         ) : (
           <DiscoverTab />
         )
