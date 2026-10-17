@@ -209,6 +209,54 @@ describe('StoreDetail', () => {
     expect(html).not.toContain('已从商店下架')
   })
 
+  it('详情取失败（503 / 连不上）、本机已装：不说下架，写错误和「重试」，本机那份照常显示', () => {
+    for (const msg of ['云端暂时不可用，稍后再试', '连不上扩展商店，检查一下网络']) {
+      const html = render({ detail: null, localPack: storePack(), loadError: msg, onRetry: noop })
+      expect(html).not.toContain('已从商店下架')
+      expect(html).toContain(`商店详情没取到：${msg}`)
+      expect(html).toContain('data-store-retry')
+      expect(html).toContain('Swift 支持')
+      expect(button(html, 'uninstall')).not.toBe('')
+    }
+  })
+
+  it('详情取失败、本机也没有：只写错误，不说「不在商店里」', () => {
+    const html = render({ detail: null, localPack: null, loadError: '云端暂时不可用', onRetry: noop })
+    expect(html).toContain('商店详情没取到：云端暂时不可用')
+    expect(html).not.toContain('这个扩展不在商店里')
+    expect(html).not.toContain('已从商店下架')
+  })
+
+  it('还在取详情时（第一次打开、点了重试）不说下架，也不显示错误', () => {
+    const html = render({ detail: null, localPack: storePack(), loading: true, loadError: '旧的错误' })
+    expect(html).not.toContain('已从商店下架')
+    expect(html).not.toContain('商店详情没取到')
+  })
+
+  it('详情 200：没有下架和错误提示', () => {
+    const html = render({ localPack: storePack() })
+    expect(html).not.toContain('已从商店下架')
+    expect(html).not.toContain('商店详情没取到')
+  })
+
+  it('停用名单解除后：以实时的本机那份为准，不再用详情里取到的旧 blocked', () => {
+    const html = render({
+      detail: detail({
+        local: {
+          key: 'store-1',
+          version: '1.0.0',
+          source: 'store',
+          enabled: false,
+          blocked: { reason: '坏了', at: 'x' },
+        },
+      }),
+      localPack: storePack({ enabled: false }),
+    })
+    expect(html).not.toContain('已被平台停用')
+    expect(button(html, 'enable')).not.toBe('')
+    expect(button(html, 'enable')).not.toContain('disabled=""')
+  })
+
   it('没登录：举报入口写「登录后举报」', () => {
     expect(render({ signedIn: false })).toContain('登录后举报')
   })

@@ -64,8 +64,11 @@ export interface StoreDetailProps {
   error?: string | null
   /** 图标地址：pixelsky-ext://store-icon/<id>/<version>；取不到时显示首字母 */
   iconSrc?: string | null
-  /** 正在取详情 */
+  /** 正在取详情（第一次取、或点了重试）；这时不下「已下架」的结论 */
   loading?: boolean
+  /** 取详情失败（云端 5xx、连不上等，不含 404）的文案（已翻译好）；有它时不算下架，显示错误和「重试」 */
+  loadError?: string | null
+  onRetry?(): void
   signedIn: boolean
   onBack(): void
   /** 安装 / 更新 / 换回；换回时 options.rollback 为 true；kind 决定装好后的提示是「已安装」还是「已更新」 */
@@ -129,7 +132,20 @@ function progressLabel(p: ExtStoreProgress): string {
 }
 
 export function StoreDetail(props: StoreDetailProps) {
-  const { detail, localPack, update, appVersion, devCopy, progress, busy, error, iconSrc, loading, signedIn } = props
+  const {
+    detail,
+    localPack,
+    update,
+    appVersion,
+    devCopy,
+    progress,
+    busy,
+    error,
+    iconSrc,
+    loading,
+    loadError,
+    signedIn,
+  } = props
   const { locale, t } = useI18n()
   const [tab, setTab] = useState<'readme' | 'versions'>(props.initialTab ?? 'readme')
   const [confirming, setConfirming] = useState(false)
@@ -142,20 +158,20 @@ export function StoreDetail(props: StoreDetailProps) {
   const publisher = detail?.extension.publisher ?? (manifest ? { name: manifest.publisher, official: false } : null)
   const version = detail?.extension.version ?? manifest?.version ?? localPack?.store?.version ?? ''
 
-  // 本机那份：商店详情带的 local 优先，没有就从 localPack 拼
-  const local: ExtStoreLocal | null =
-    detail?.local ??
-    (localPack
-      ? {
-          key: localPack.key,
-          version: localPack.store?.version ?? localPack.manifest?.version ?? null,
-          source: localPack.source,
-          enabled: localPack.enabled,
-          ...(localPack.blocked ? { blocked: localPack.blocked } : {}),
-        }
-      : null)
-  const blockedReason = local?.blocked?.reason ?? localPack?.blocked?.reason ?? null
-  const delisted = detail === null && local !== null
+  // 本机那份：localPack 优先——它跟着扩展列表实时变（启停、停用名单更新）；详情带的 local 是主进程取详情那一刻的，
+  // 只在扩展列表还没有这一项时用（两边挑本机那份的规则相同，见 market/ipc.ts 的 localOf）
+  const local: ExtStoreLocal | null = localPack
+    ? {
+        key: localPack.key,
+        version: localPack.store?.version ?? localPack.manifest?.version ?? null,
+        source: localPack.source,
+        enabled: localPack.enabled,
+        ...(localPack.blocked ? { blocked: localPack.blocked } : {}),
+      }
+    : (detail?.local ?? null)
+  const blockedReason = local?.blocked?.reason ?? null
+  // 只有确实取过、云端回了 404 才算下架；还在取、或取失败（5xx、连不上）都不下这个结论
+  const delisted = detail === null && local !== null && !loading && !loadError
 
   const engineRange = detail?.manifest?.engines.pixelsky ?? null
   const working = !!busy || !!progress
@@ -228,6 +244,23 @@ export function StoreDetail(props: StoreDetailProps) {
         {t('extstoreDetail.back')}
       </button>
 
+      {loadError && !loading && (
+        <div
+          data-store-load-error
+          role="alert"
+          className="mb-3 flex items-center gap-3 rounded-md border border-line bg-subtle px-3 py-2 text-ui"
+        >
+          <p className="selectable min-w-0 flex-1 break-words text-danger">
+            {t('extstoreDetail.loadFailed', { error: loadError })}
+          </p>
+          {props.onRetry && (
+            <Button variant="outline" data-store-retry onClick={props.onRetry}>
+              {t('extstoreDetail.retry')}
+            </Button>
+          )}
+        </div>
+      )}
+
       {(delisted || blockedReason) && (
         <div data-store-notice className="mb-3 rounded-md border border-line bg-subtle px-3 py-2 text-ui">
           {delisted && <p className="text-fg-secondary">{t('extstoreDetail.delisted')}</p>}
@@ -238,7 +271,8 @@ export function StoreDetail(props: StoreDetailProps) {
       )}
 
       {!detail && !localPack ? (
-        <p className="text-ui text-fg-muted">{loading ? '…' : t('extstoreDetail.notFound')}</p>
+        // 取失败时上面已经写了错误，这里不再说「不在商店里」
+        <p className="text-ui text-fg-muted">{loading ? '…' : loadError ? null : t('extstoreDetail.notFound')}</p>
       ) : (
         <>
           <div className="flex items-start gap-4">

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { ExtPackInfo, ExtStoreDetail, ExtStoreReportInput } from '@pixelsky/protocol'
+import type { ExtPackInfo, ExtStoreReportInput } from '@pixelsky/protocol'
 import { tr, translateMessage } from '@/i18n/core'
 import { useAccount } from '@/features/account'
 import { refreshPacks, usePackState } from '@/features/extpacks/store'
@@ -7,6 +7,7 @@ import { openExtDetail } from '../nav'
 import { cancelInstall, installExtension, storeBridge, useExtStore } from '../store'
 import { storeIconSrc } from '../storeModel'
 import { hasDevCopy } from './detailActions'
+import { failedResult, localLoadKey, type DetailResult } from './detailLoad'
 import { StoreDetail } from './StoreDetail'
 
 // 详情页的接线：取详情、从状态单例和扩展列表拼出 StoreDetail 要的 props、把按钮接到通道。
@@ -41,35 +42,39 @@ export function StoreDetailPage({ id }: { id: string }) {
   const { packs } = usePackState()
   const account = useAccount()
   const appVersion = useAppVersion()
-  const [detail, setDetail] = useState<ExtStoreDetail | null>(null)
-  const [loading, setLoading] = useState(true)
+  // 取详情的结果：null = 还没取到过（第一次打开、点了重试）；detail 是 null 时云端回的 404。
+  // 装好 / 启停之后重新取时保留上一次的结果，不闪「已下架」
+  const [result, setResult] = useState<DetailResult | null>(null)
+  const [attempt, setAttempt] = useState(0)
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
   const localPack = useMemo(() => localPackOf(packs, id), [packs, id])
-  const localKey = localPack
-    ? `${localPack.key}:${localPack.revision}:${localPack.enabled}:${localPack.store?.version}`
-    : ''
+  const localKey = localLoadKey(localPack)
 
-  // 打开、装好 / 卸载 / 启停之后重新取（详情里的 local 是主进程取的那一刻的）；404 回 null，界面显示本机那份
+  // 打开、本机那份变了（见 localLoadKey）、点重试时取。只有 404 回 null（下架）；
+  // 5xx、连不上等主进程抛出来的错误留着文案，界面显示错误和「重试」，不当成下架
   useEffect(() => {
     let alive = true
-    setLoading(true)
     const bridge = storeBridge()
     if (!bridge) {
-      setDetail(null)
-      setLoading(false)
+      setResult({ detail: null, error: null })
       return
     }
     bridge
       .detail(id)
-      .then(d => alive && setDetail(d))
-      .catch(() => alive && setDetail(null))
-      .finally(() => alive && setLoading(false))
+      .then(d => alive && setResult({ detail: d, error: null }))
+      .catch(e => alive && setResult(prev => failedResult(prev, errorText(e))))
     return () => {
       alive = false
     }
-  }, [id, localKey])
+  }, [id, localKey, attempt])
+
+  const detail = result?.detail ?? null
+  const retry = (): void => {
+    setResult(null)
+    setAttempt(n => n + 1)
+  }
 
   const run = async (job: () => Promise<unknown> | undefined): Promise<void> => {
     if (busy) return
@@ -99,7 +104,9 @@ export function StoreDetailPage({ id }: { id: string }) {
       busy={busy}
       error={actionError ?? store.installErrors[id] ?? null}
       iconSrc={detail ? storeIconSrc(detail.extension) : version ? `pixelsky-ext://store-icon/${id}/${version}` : null}
-      loading={loading}
+      loading={result === null}
+      loadError={result?.error ?? null}
+      onRetry={retry}
       signedIn={account.status === 'signed-in'}
       onBack={() => openExtDetail(null)}
       onInstall={(v, options) => {

@@ -35,6 +35,8 @@ export const extstoreDetailMessages = {
     en: 'This extension has been removed from the store; the installed copy keeps working',
   },
   'extstoreDetail.blockedReason': { zh: '已被平台停用：{reason}', en: 'Disabled by the platform: {reason}' },
+  'extstoreDetail.loadFailed': { zh: '商店详情没取到：{error}', en: 'Couldn’t load the store details: {error}' },
+  'extstoreDetail.retry': { zh: '重试', en: 'Retry' },
   'extstoreDetail.notFound': { zh: '这个扩展不在商店里', en: 'This extension is not in the store' },
   'extstoreDetail.official': { zh: '官方', en: 'Official' },
   'extstoreDetail.downloads': { zh: '下载 {n}', en: '{n} downloads' },
