@@ -14,8 +14,8 @@ import {
   type SessionSettings,
 } from '@pixelsky/protocol'
 import type { EngineAdapter } from '../adapter'
-import type { ClaudeSessionList, NativeRead, NewerTurns } from '../claude/native'
-import { NATIVE_TEXT } from '../claude/native'
+import type { NativeSessionList, NativeRead, NewerTurns } from '../native/types'
+import { NATIVE_TEXT } from '../native/text'
 import { UUID } from '../claude/transcript'
 import { hasHandoffContent } from '../handoff'
 import type { HostContext } from './context'
@@ -31,7 +31,7 @@ type NoticeItem = Extract<Item, { kind: 'notice' }>
 
 export class HostNative {
   /** 每个项目 + 引擎最近一次的列表：第二步（尾部）共用这次的读取预算，导入时也从这里查会话开在哪个子文件夹 */
-  private readonly lists = new Map<string, ClaudeSessionList>()
+  private readonly lists = new Map<string, NativeSessionList>()
   /** 正在导入的任务，cancelNativeImport 按 token 找到它 */
   private readonly imports = new Map<string, AbortController>()
 
@@ -150,7 +150,7 @@ export class HostNative {
       kind: 'notice',
       id,
       level: 'info',
-      text: NATIVE_TEXT.divider(source, copy, turns, missing),
+      text: NATIVE_TEXT.divider(source, copy, turns, missing, 'Claude Code'),
       detail,
       ...(missing > 0 ? { action: { kind: 'native-earlier' as const, count: missing } } : {}),
     }

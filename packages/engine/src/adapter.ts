@@ -15,7 +15,7 @@ import type {
   SessionSettings,
 } from '@pixelsky/protocol'
 import type { ChatSeed } from './chat-log'
-import type { ClaudeSessionList, ListOptions, LiveState, NativeRead, NewerTurns, ReadOptions } from './claude/native'
+import type { NativeSessionList, ListOptions, LiveState, NativeRead, NewerTurns, ReadOptions } from './native/types'
 
 /** 要启动的程序：可执行文件 + 固定在前面的参数（例如用 node 跑 cli.js 时是 [cli.js]） */
 export interface Launcher {
@@ -169,7 +169,7 @@ export interface EngineAdapter {
    */
   beforeCompaction?(record: SessionRecord, userItemId: string): boolean | Promise<boolean>
   /** 接着引擎自己留下的会话（docs/ui/claude-resume.md）：列出这个文件夹的会话（第一步），尾部信息靠返回的 details 补 */
-  nativeSessions?(cwd: string, opts?: ListOptions): Promise<ClaudeSessionList>
+  nativeSessions?(cwd: string, opts?: ListOptions): Promise<NativeSessionList>
   /** 把引擎自己的一个会话读成条目（流式，能取消）；记录不在了返回 null */
   readNativeSession?(cwd: string, id: string, opts?: ReadOptions): Promise<NativeRead | null>
   /** 补上：after 之后新增的轮次；after 不在当前分支上或记录不在了返回 null */

@@ -20,7 +20,7 @@ import {
   seedImageCount,
   type ChatSeed,
 } from '../chat-log'
-import { NATIVE_TEXT } from '../claude/native'
+import { NATIVE_TEXT } from '../native/text'
 import { buildHandoff, handoffEngines, hasHandoffContent, userImages } from '../handoff'
 import { ENGINES } from '../registry'
 import type { HostContext } from './context'
@@ -264,7 +264,7 @@ export class HostHandoff {
               kind: 'notice',
               id: randomUUID(),
               level: 'warn',
-              text: NATIVE_TEXT.recreated(seed.turns.length),
+              text: NATIVE_TEXT.recreated(seed.turns.length, 'Claude Code'),
               detail: renderSeed(seed),
             }
           : showNotice
