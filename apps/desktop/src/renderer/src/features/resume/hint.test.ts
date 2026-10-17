@@ -6,14 +6,17 @@ vi.hoisted(() => {
     removeEventListener: () => undefined,
   }
 })
-import type { NativeSessionSummary } from '@pixelsky/protocol'
+import type { EngineConfig, NativeSessionSummary } from '@pixelsky/protocol'
 import {
   HINT_MAX_PROJECTS,
   fetchResumeCounts,
   hintEngine,
   hintMessage,
+  cachedResumeCounts,
+  ensureResumeCounts,
   hintText,
   mapLimit,
+  noteEngineConfig,
   openResumeFor,
   prefetchResumeCounts,
   resetResumeHints,
@@ -162,6 +165,61 @@ describe('并发限制', () => {
     expect(found.get('p0')).toEqual({ claude: 2, codex: 2 })
     await prefetchResumeCounts(['p0'])
     expect(list).toHaveBeenCalledTimes(HINT_MAX_PROJECTS * 2)
+    resetResumeHints()
+  })
+})
+
+describe('引擎启动配置变了', () => {
+  const config = (codexHome: string, args: string[] = []): EngineConfig =>
+    ({
+      claude: { path: null, args: [], env: {} },
+      codex: { path: null, args, env: { CODEX_HOME: codexHome } },
+    }) as unknown as EngineConfig
+  const flush = (): Promise<void> => new Promise(r => setTimeout(r, 5))
+
+  it('改了 CODEX_HOME / 参数：缓存作废、按新目录重查；内容一样的新配置不重查', async () => {
+    let home = 'A'
+    const list = vi.fn(async (_p: string, engine: string) => (engine === 'codex' ? sessions(home === 'A' ? 1 : 3) : []))
+    resetResumeHints(list)
+    noteEngineConfig(config('A'))
+    await ensureResumeCounts('p')
+    expect(cachedResumeCounts('p')).toEqual({ codex: 1 })
+    expect(list).toHaveBeenCalledTimes(2)
+
+    // 新对象、内容一样（引擎设置里改了别的）：不重查
+    noteEngineConfig(config('A'))
+    await flush()
+    expect(list).toHaveBeenCalledTimes(2)
+
+    home = 'B'
+    noteEngineConfig(config('B'))
+    await flush()
+    expect(cachedResumeCounts('p')).toEqual({ codex: 3 })
+    expect(list).toHaveBeenCalledTimes(4)
+
+    noteEngineConfig(config('B', ['-c', 'x=1']))
+    await flush()
+    expect(list).toHaveBeenCalledTimes(6)
+    resetResumeHints()
+  })
+
+  it('查的途中配置变了：旧结果丢掉，等着的人拿到新目录的结果', async () => {
+    let release!: () => void
+    const gate = new Promise<void>(r => (release = r))
+    let home = 'A'
+    const list = vi.fn(async (_p: string, engine: string) => {
+      const at = home
+      if (at === 'A') await gate
+      return engine === 'codex' ? sessions(at === 'A' ? 1 : 3) : []
+    })
+    resetResumeHints(list)
+    noteEngineConfig(config('A'))
+    const first = ensureResumeCounts('p')
+    home = 'B'
+    noteEngineConfig(config('B'))
+    release()
+    await first
+    expect(cachedResumeCounts('p')).toEqual({ codex: 3 })
     resetResumeHints()
   })
 })

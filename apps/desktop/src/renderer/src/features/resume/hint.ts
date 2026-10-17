@@ -1,10 +1,10 @@
 // 「终端里有原来的 AI 会话，点一下接着聊」的提示：查询、缓存、并发限制、文案（纯函数）。
 // 导入项目之后（设置 › 项目的结果行、别的入口的提示条）和项目里还没有对话时的空状态共用同一份结果。
 import { useEffect, useSyncExternalStore } from 'react'
-import type { NativeSessionSummary } from '@pixelsky/protocol'
+import type { EngineConfig, NativeSessionSummary } from '@pixelsky/protocol'
 import { tr } from '@/i18n/core'
-import { listNativeSessions } from '@/features/engine/store'
-import { machineOf } from '@/features/machines/store'
+import { getEngineState, listNativeSessions, subscribeEngine } from '@/features/engine/store'
+import { getMachines, machineOf } from '@/features/machines/store'
 import { openResumePicker } from './store'
 
 export type HintEngine = 'claude' | 'codex'
@@ -110,22 +110,80 @@ export async function fetchResumeCounts(
   return Object.fromEntries(engines.flatMap(e => (counts[e] ? [[e, counts[e]]] : []))) as ResumeCounts
 }
 
-// ---------- 缓存（按项目；一分钟内不重查） ----------
+// ---------- 缓存（按项目；一分钟内不重查；引擎的启动配置变了就作废） ----------
 interface Entry {
   counts: ResumeCounts | null
   at: number
   pending: Promise<void> | null
+  /** 按哪一代启动配置查的：代变了，结果作废、要重查 */
+  generation: number
 }
 const cache = new Map<string, Entry>()
 const listeners = new Set<() => void>()
 const emit = (): void => listeners.forEach(l => l())
 let lister: Lister = defaultLister
+/** 启动配置的代：设置里改了 CODEX_HOME / CLAUDE_CONFIG_DIR 等环境变量、程序或参数时加一 */
+let generation = 0
+let launchSeen: { config: EngineConfig | null; key: string } | null = null
+let watching = false
 
 /** 测试用 */
 export function resetResumeHints(next: Lister = defaultLister): void {
   cache.clear()
   lister = next
+  launchSeen = null
   emit()
+}
+
+/** 会影响「会话从哪个目录读」的配置：程序、参数、环境变量 */
+function launchKey(config: EngineConfig): string {
+  return JSON.stringify(
+    HINT_ENGINES.map(engine => {
+      const c = config[engine]
+      if (!c) return null
+      const env = Object.entries(c.env).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      return [c.path, c.args, env]
+    }),
+  )
+}
+
+/**
+ * 引擎配置更新时调（engine_config 广播后 store 会变）：启动配置变了，所有项目的计数作废、在后台重查
+ * （查询并发仍由 withSlot 限制）；重查完之前先显示旧的数字。第一次拿到配置不算变
+ */
+export function noteEngineConfig(config: EngineConfig | null): void {
+  if (!config || launchSeen?.config === config) return
+  const key = launchKey(config)
+  const changed = launchSeen !== null && launchSeen.key !== key
+  launchSeen = { config, key }
+  if (!changed) return
+  generation++
+  for (const id of [...cache.keys()]) void ensureResumeCounts(id)
+}
+
+/** 当前机器不是本机时 store 里的配置（远程机器的）：计数只查本机项目，这些配置不算数 */
+const foreignConfigs = new WeakSet<EngineConfig>()
+
+/**
+ * store 变了：只认本机的引擎配置。切机器时 currentId 先变、配置后到，
+ * 中间看到的远程配置之前已经记进 foreignConfigs，不会被当成本机配置变了
+ */
+function onEngineChange(): void {
+  const config = getEngineState().config
+  if (!config) return
+  if (getMachines().currentId !== 'local') {
+    foreignConfigs.add(config)
+    return
+  }
+  if (!foreignConfigs.has(config)) noteEngineConfig(config)
+}
+
+/** 第一次查询时开始跟着引擎配置（只订阅一次） */
+function watchEngineConfig(): void {
+  if (watching) return
+  watching = true
+  onEngineChange()
+  subscribeEngine(onEngineChange)
 }
 
 export function cachedResumeCounts(projectId: string): ResumeCounts | null {
@@ -134,11 +192,16 @@ export function cachedResumeCounts(projectId: string): ResumeCounts | null {
 
 /** 查一个项目（有新鲜缓存或正在查就不再查） */
 export function ensureResumeCounts(projectId: string): Promise<void> {
+  watchEngineConfig()
   const hit = cache.get(projectId)
-  if (hit?.pending) return hit.pending
-  if (hit?.counts && Date.now() - hit.at < TTL_MS) return Promise.resolve()
-  const entry: Entry = { counts: hit?.counts ?? null, at: hit?.at ?? 0, pending: null }
+  const current = hit?.generation === generation
+  if (hit?.pending && current) return hit.pending
+  if (hit?.counts && current && Date.now() - hit.at < TTL_MS) return Promise.resolve()
+  const entry: Entry = { counts: hit?.counts ?? null, at: hit?.at ?? 0, pending: null, generation }
   entry.pending = fetchResumeCounts(projectId, lister).then(counts => {
+    // 查的途中配置又变了（已经有新的一次在查）或缓存被清了：这次的结果不要，等着的人改等新的那次
+    const latest = cache.get(projectId)
+    if (latest !== entry) return latest?.pending ?? undefined
     entry.counts = counts
     entry.at = Date.now()
     entry.pending = null
