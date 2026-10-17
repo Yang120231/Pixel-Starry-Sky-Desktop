@@ -19,7 +19,7 @@ import {
   type CodexTurn,
 } from '../src/codex/native'
 import { findCodexRollouts } from '../src/codex/runs'
-import { CodexReader, type CodexRpc, type ReaderLaunch, type ReaderProcess } from '../src/codex/reader'
+import { CodexReader, readerLaunchKey, type CodexRpc, type ReaderLaunch, type ReaderProcess } from '../src/codex/reader'
 import type { Message } from '../src/codex/process'
 import { IS_WINDOWS } from '../src/exec'
 import { HANDOFF_TAG } from '../src/handoff'
@@ -1238,6 +1238,70 @@ describe('CodexReader', () => {
       },
     })
     await expect(bad.request('thread/list', {})).rejects.toThrow('unexpected argument')
+  })
+
+  it('启动配置变了（改了 CODEX_HOME / 追加参数）：下次请求关掉旧进程、按新配置起；没变就接着用', async () => {
+    let current: ReaderLaunch = { ...launch, env: { CODEX_HOME: 'A' } }
+    const procs: FakeProc[] = []
+    const used: ReaderLaunch[] = []
+    const reader = new CodexReader(async () => current, {
+      open: async (l, onExit) => {
+        used.push(l)
+        const p = new FakeProc(onExit)
+        procs.push(p)
+        return p
+      },
+    })
+    const ask = async (index: number): Promise<void> => {
+      const r = reader.request('thread/list', {})
+      await tick()
+      procs[index].pending[0].resolve({})
+      await r
+    }
+    await ask(0)
+    // 配置没变（新对象、同样内容、环境变量顺序不同也一样）：不换进程
+    current = { ...launch, env: { CODEX_HOME: 'A', EXTRA: undefined } }
+    await ask(0)
+    expect(procs).toHaveLength(1)
+
+    current = { ...launch, env: { CODEX_HOME: 'B' } }
+    await ask(1)
+    expect(procs[0].killed).toBe(true)
+    expect(used[1].env.CODEX_HOME).toBe('B')
+
+    current = { ...current, args: ['-c', 'x=1'] }
+    await ask(2)
+    expect(procs[1].killed).toBe(true)
+    expect(procs[2].killed).toBe(false)
+    expect(reader.running).toBe(true)
+  })
+
+  it('开着进程时 Codex 变得不可用：关掉旧进程，抛 codexUnavailable', async () => {
+    let current: ReaderLaunch | null = launch
+    const procs: FakeProc[] = []
+    const reader = new CodexReader(async () => current, {
+      open: async (_l, onExit) => {
+        const p = new FakeProc(onExit)
+        procs.push(p)
+        return p
+      },
+    })
+    const a = reader.request('thread/list', {})
+    await tick()
+    procs[0].pending[0].resolve({})
+    await a
+    current = null
+    await expect(reader.request('thread/list', {})).rejects.toThrow(NATIVE_TEXT.codexUnavailable)
+    expect(procs[0].killed).toBe(true)
+    expect(reader.running).toBe(false)
+  })
+
+  it('readerLaunchKey：环境变量顺序不影响，CODEX_HOME / 参数 / 程序不同就不同', () => {
+    const base: ReaderLaunch = { ...launch, env: { A: '1', CODEX_HOME: 'x' } }
+    expect(readerLaunchKey(base)).toBe(readerLaunchKey({ ...base, env: { CODEX_HOME: 'x', A: '1' } }))
+    expect(readerLaunchKey(base)).not.toBe(readerLaunchKey({ ...base, env: { A: '1', CODEX_HOME: 'y' } }))
+    expect(readerLaunchKey(base)).not.toBe(readerLaunchKey({ ...base, args: ['--x'] }))
+    expect(readerLaunchKey(base)).not.toBe(readerLaunchKey({ ...base, launcher: { command: 'codex2', args: [] } }))
   })
 
   it('close() 之后再请求会重起', async () => {

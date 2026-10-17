@@ -152,7 +152,8 @@ export class CodexAdapter implements EngineAdapter {
         }
       : await discoverCodex(this.opts.overridePath?.() ?? null, this.env())
     this.cached = result
-    // Codex 换了位置（用户在设置里换了命令、重装）：读取进程还是旧程序，关掉，下次读取重起
+    // Codex 换了位置（用户在设置里换了命令、重装）：读取进程还是旧程序，马上关掉，不占着旧的 codex.exe。
+    // 参数、环境变量（CODEX_HOME）变了由读取进程自己在下次请求前核对、换进程（reader.ts readerLaunchKey）
     if (before !== undefined && before !== result.info.path) void this.reader.close()
     if (!result.launcher || result.info.status !== 'ready') return result.info
     let stderr = ''

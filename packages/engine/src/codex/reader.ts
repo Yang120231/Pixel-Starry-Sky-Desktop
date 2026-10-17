@@ -1,6 +1,7 @@
 // 只读用的 Codex app-server（docs/ui/codex-resume.md §3.5）：列线程、读线程的元数据和轮次。
 // 只发 thread/list、thread/read、thread/turns/list，绝不 thread/resume（不拿线程的写入锁，不会挡住终端里的 codex）。
 // 按需起一个进程，空闲 60 秒自己关；请求排队一个一个发；signal 触发时不等回包。
+// 每次请求前核对启动配置（程序、参数、环境变量含 CODEX_HOME、工作目录），变了就换一个进程，不会接着读旧目录。
 import { QUICK_CLOSE_MS, type Launcher } from '../adapter'
 import { startupReason } from '../exec'
 import { logger } from '../log'
@@ -42,6 +43,14 @@ export interface ReaderOptions {
 
 export const READER_IDLE_MS = 60_000
 
+/** 启动配置的指纹：任何一项变了（换了 CODEX_HOME、追加参数、程序）都要换进程 */
+export function readerLaunchKey(launch: ReaderLaunch): string {
+  const env = Object.entries(launch.env)
+    .filter(([, value]) => value !== undefined)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+  return JSON.stringify([launch.launcher.command, launch.launcher.args, launch.args, launch.cwd, env])
+}
+
 /** 起 app-server 并握手；握手失败带上 stderr 的头两行当原因 */
 async function openProcess(launch: ReaderLaunch, onExit: () => void): Promise<ReaderProcess> {
   let tail = ''
@@ -72,6 +81,8 @@ async function openProcess(launch: ReaderLaunch, onExit: () => void): Promise<Re
 
 export class CodexReader implements CodexRpc {
   private proc: ReaderProcess | null = null
+  /** 当前进程是按哪份启动配置起的（readerLaunchKey） */
+  private procKey: string | null = null
   private starting: Promise<ReaderProcess> | null = null
   private idle: NodeJS.Timeout | null = null
   /** 排队：上一个请求完了才发下一个 */
@@ -128,6 +139,7 @@ export class CodexReader implements CodexRpc {
     this.stopIdle()
     const proc = this.proc
     this.proc = null
+    this.procKey = null
     this.starting = null
     if (proc) await proc.close(opts.quick ? QUICK_CLOSE_MS : undefined).catch(() => {})
   }
@@ -153,11 +165,9 @@ export class CodexReader implements CodexRpc {
 
   private async ensure(generation: number): Promise<ReaderProcess> {
     if (generation !== this.generation) throw new Error(NATIVE_TEXT.codexReaderClosed)
-    if (this.proc?.alive) return this.proc
-    this.proc = null
     if (!this.starting) {
       // close() 会把 starting 清掉；旧的启动收尾时不能把后来新起的那个也清了
-      const starting: Promise<ReaderProcess> = this.start(generation).finally(() => {
+      const starting: Promise<ReaderProcess> = this.acquire(generation).finally(() => {
         if (this.starting === starting) this.starting = null
       })
       this.starting = starting
@@ -165,11 +175,27 @@ export class CodexReader implements CodexRpc {
     return this.starting
   }
 
-  private async start(generation: number): Promise<ReaderProcess> {
+  /** 拿一个按当前启动配置起的进程：开着且配置没变就接着用，配置变了先关掉旧的再起新的 */
+  private async acquire(generation: number): Promise<ReaderProcess> {
     const launch = await this.launch()
-    if (!launch) throw new Error(NATIVE_TEXT.codexUnavailable)
     // 取启动参数期间被 close() 了
     if (generation !== this.generation) throw new Error(NATIVE_TEXT.codexReaderClosed)
+    const key = launch ? readerLaunchKey(launch) : null
+    const current = this.proc
+    if (current?.alive && key === this.procKey) return current
+    this.proc = null
+    this.procKey = null
+    if (current?.alive) {
+      // 用户在设置里改了 CODEX_HOME / 参数 / 程序：旧进程还读着旧配置，换掉。
+      // 直接杀（只读进程，没东西要收尾）：换下来的进程没人再管，慢慢退出的话之后的 close() 等不到它，会占着 codex.exe 挡住更新
+      log.debug('启动配置变了，换读取进程')
+      current.kill()
+    }
+    if (!launch || key === null) throw new Error(NATIVE_TEXT.codexUnavailable)
+    return this.start(generation, launch, key)
+  }
+
+  private async start(generation: number, launch: ReaderLaunch, key: string): Promise<ReaderProcess> {
     let self: ReaderProcess | null = null
     const onExit = (): void => {
       if (self && this.proc === self) this.proc = null
@@ -182,6 +208,7 @@ export class CodexReader implements CodexRpc {
       throw new Error(NATIVE_TEXT.codexReaderClosed)
     }
     this.proc = self
+    this.procKey = key
     log.debug('读取进程已启动')
     return self
   }
