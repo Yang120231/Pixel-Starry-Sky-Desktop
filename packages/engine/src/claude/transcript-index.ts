@@ -36,6 +36,8 @@ export type UserKind = 'prompt' | 'command' | 'summary' | 'result' | 'other'
 
 export interface IndexRow extends RowPos {
   uuid: string
+  /** Original item id when a relay row needs a fresh UUID. */
+  pixelskyItemId?: string
   parent: string | null
   logical: string | null
   type: string
@@ -226,7 +228,13 @@ function addRow(idx: TranscriptIndex, e: Row, line: number, offset: number, len:
     idx.boundaryLine = Math.max(idx.boundaryLine, line)
   }
   if (type === 'user') {
-    if (!side) idx.userParents.set(row.uuid, row.parent)
+    if (!side) {
+      idx.userParents.set(row.uuid, row.parent)
+      if (typeof e.pixelskyItemId === 'string' && e.pixelskyItemId) {
+        row.pixelskyItemId = e.pixelskyItemId
+        idx.userParents.set(e.pixelskyItemId, row.parent)
+      }
+    }
     const content = userContent(message.content)
     const kind = classifyUser(e, content)
     row.user = kind
