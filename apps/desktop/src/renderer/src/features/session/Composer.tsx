@@ -192,6 +192,8 @@ export function Composer({
   // 选择框选中时才取输入框的设置：打开时输入框可能还没准备好（刚启动），模型目录也可能还在加载
   const liveRef = useRef(live)
   liveRef.current = live
+  const executorRef = useRef(resumeEngineId)
+  executorRef.current = resumeEngineId
   /** 打开「接着 Claude Code / Codex 会话」选择框（列当前执行者的）；关掉回到这个输入框，打开了新对话就清掉输入框里的 /resume */
   const openResume = (parsed: { id: string | null; query: string } = { id: null, query: '' }): void => {
     setCommandDismissed(true)
@@ -201,6 +203,7 @@ export function Composer({
       query: parsed.query,
       id: parsed.id,
       settingsFor: sessionModel => liveRef.current?.resumeSettings(sessionModel),
+      executorNow: () => executorRef.current,
       onOpened: () => setText(''),
       onClosed: () => ref.current?.focus(),
     })

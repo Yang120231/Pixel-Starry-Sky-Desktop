@@ -55,7 +55,12 @@ export function WelcomeView({
           </p>
           {/* 这个项目在终端里有原来的 AI 会话：给个入口接着聊（没有会话 / 远程项目 / 演示不显示） */}
           {!isDemo && projectId && !hasConversations && (
-            <ResumeHintLink projectId={projectId} separator="comma" className="mt-2 text-ui" />
+            <ResumeHintLink
+              projectId={projectId}
+              separator="comma"
+              engine={live?.engine?.id}
+              className="mt-2 text-ui"
+            />
           )}
         </div>
         <div className="mt-7">

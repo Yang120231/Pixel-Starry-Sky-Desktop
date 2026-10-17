@@ -26,6 +26,7 @@ import {
   moveSelection,
   needsChoice,
   rowStatus,
+  unreadableText,
   type NavKey,
   type ResumeGroups,
   type ResumeRow,
@@ -179,7 +180,13 @@ function Row({
       )}
       {choice && (
         <div data-resume-choice className="mt-1.5 flex flex-col gap-1.5">
-          <p className="text-meta text-fg-muted">{tr(`resume.liveNote.${status!}`)}</p>
+          <p className="text-meta text-fg-muted">
+            {tr(
+              status === 'maybe' && view.engine === 'codex'
+                ? 'resume.liveNote.maybe.codex'
+                : `resume.liveNote.${status!}`,
+            )}
+          </p>
           <div className="flex flex-wrap items-center gap-1.5">
             {copyFirst ? (
               <>
@@ -377,11 +384,7 @@ export function ResumePickerView(view: PickerViewProps) {
             data-resume-error
             className="flex flex-col items-center gap-3 px-4 py-9 text-center text-ui text-fg-muted"
           >
-            <span>
-              {tr(view.engine === 'codex' ? 'resume.unreadable.codex' : 'resume.unreadable', {
-                error: translateMessage(view.error),
-              })}
-            </span>
+            <span>{unreadableText(view.engine, view.error)}</span>
             <Button data-resume-action="retry" onClick={view.onRetry}>
               {tr('resume.retry')}
             </Button>
@@ -526,6 +529,9 @@ export function ResumePicker({ request }: { request: ResumeRequest }) {
 
   const activate = async (row: ResumeRow, how: ChooseHow = 'default'): Promise<void> => {
     if (busyRef.current || !projectId) return
+    // 打开之后执行者被换了（比如在别的窗口）：设置是按新执行者算的，不导入，请重新打开
+    const executor = request.executorNow?.()
+    if (executor && executor !== engine) return void setNotice(tr('resume.executorChanged'))
     // 点过「我去那边关掉再来」的行：再按 Enter 重新查一次，不开着了就原地导入，还开着就照旧给两个按钮
     if (how === 'default' && waiting.has(row.id)) how = 'inplace'
     if (row.ownerId) return void handle({ kind: 'owned', sessionId: row.ownerId }, row)

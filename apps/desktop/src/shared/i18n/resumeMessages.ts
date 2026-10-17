@@ -39,6 +39,14 @@ export const resumeMessages = {
     zh: '这个会话最近几分钟内被写过，可能还开着。',
     en: 'This session was written to in the last few minutes and may still be open.',
   },
+  'resume.liveNote.maybe.codex': {
+    zh: '这个会话的写入锁还在，可能还开着。',
+    en: 'This session’s write lock is still there, so it may still be open.',
+  },
+  'resume.executorChanged': {
+    zh: '执行者在打开之后换了，请关掉再重新打开',
+    en: 'The engine changed after this was opened. Close it and open it again.',
+  },
   'resume.stillLive': {
     zh: '这个会话还开着。关掉后再试，或者复制一份接着聊。',
     en: 'This session is still open. Close it and try again, or continue in a copy.',
@@ -124,17 +132,23 @@ export const resumeMessages = {
     zh: '可以在模型菜单换到 Claude Code 接着聊（拿到的是聊天回放，不含工具和压缩摘要）。',
     en: 'You can switch to Claude Code from the model menu (it gets a chat replay without tools or compaction summaries).',
   },
-  'resume.hint.claude': { zh: '终端里有 {n} 个 Claude Code 会话', en: '{n} Claude Code session(s) in the terminal' },
-  'resume.hint.codex': { zh: '终端里有 {n} 个 Codex 会话', en: '{n} Codex session(s) in the terminal' },
+  'resume.hint.claude': {
+    zh: '这个项目有 {n} 个 Claude Code 会话可以接着聊',
+    en: '{n} Claude Code session(s) in this project to continue',
+  },
+  'resume.hint.codex': {
+    zh: '这个项目有 {n} 个 Codex 会话可以接着聊',
+    en: '{n} Codex session(s) in this project to continue',
+  },
   'resume.hint.both': {
-    zh: '终端里有 {claude} 个 Claude Code、{codex} 个 Codex 会话',
-    en: '{claude} Claude Code and {codex} Codex session(s) in the terminal',
+    zh: '这个项目有 {claude} 个 Claude Code、{codex} 个 Codex 会话可以接着聊',
+    en: '{claude} Claude Code and {codex} Codex session(s) in this project to continue',
   },
   'resume.hint.sep.dot': { zh: ' · ', en: ' · ' },
   'resume.hint.sep.comma': { zh: '，', en: ', ' },
   'resume.hint.action': { zh: '接着聊', en: 'Continue' },
   'resume.hint.toastMany': {
-    zh: '其中 {n} 个项目在终端里有原来的 AI 会话，进项目输入 /resume 就能接着聊',
-    en: '{n} of these projects have earlier AI sessions in the terminal; type /resume in a project to continue',
+    zh: '其中 {n} 个项目有原来的 AI 会话，进项目输入 /resume 就能接着聊',
+    en: '{n} of these projects have earlier AI sessions; type /resume in a project to continue',
   },
 } as const satisfies Record<string, { zh: string; en: string }>

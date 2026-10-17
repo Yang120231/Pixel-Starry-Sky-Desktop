@@ -34,9 +34,18 @@ export function hintText(counts: ResumeCounts): string | null {
   return m ? tr(m.key, m.params) : null
 }
 
-/** 点「接着聊」打开哪个引擎的选择器：两个引擎都有就先 Claude Code，只有一个就那一个 */
-export function hintEngine(counts: ResumeCounts): HintEngine {
-  return (counts.claude ?? 0) > 0 ? 'claude' : (counts.codex ?? 0) > 0 ? 'codex' : 'claude'
+/**
+ * 点「接着聊」打开哪个引擎的选择器：只有一个引擎有会话就那一个；两个都有，先开当前执行者那个，
+ * 执行者两个都不是（或不知道）就开会话多的，一样多先 Claude Code
+ */
+export function hintEngine(counts: ResumeCounts, executor?: string | null): HintEngine {
+  const claude = counts.claude ?? 0
+  const codex = counts.codex ?? 0
+  if (claude > 0 && codex > 0) {
+    if (executor === 'claude' || executor === 'codex') return executor
+    return codex > claude ? 'codex' : 'claude'
+  }
+  return codex > 0 ? 'codex' : 'claude'
 }
 
 /** 终端里的会话：没被像素星空对话占用的才算「可以接着聊」 */

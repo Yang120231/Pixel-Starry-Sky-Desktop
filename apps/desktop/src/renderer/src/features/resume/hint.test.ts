@@ -1,4 +1,4 @@
-// 导入项目后的「终端里有会话，接着聊」提示：文案、查询失败、并发限制、打开选择器
+// 导入项目后的「这个项目有会话，接着聊」提示：文案、查询失败、并发限制、打开选择器
 import { describe, expect, it, vi } from 'vitest'
 vi.hoisted(() => {
   ;(globalThis as { window?: unknown }).window ??= {
@@ -35,11 +35,11 @@ describe('hintMessage / hintText', () => {
   it('只有一个引擎', () => {
     expect(hintMessage({ claude: 3 })).toEqual({ key: 'resume.hint.claude', params: { n: 3 } })
     expect(hintMessage({ claude: 0, codex: 2 })).toEqual({ key: 'resume.hint.codex', params: { n: 2 } })
-    expect(hintText({ claude: 1 })).toBe('终端里有 1 个 Claude Code 会话')
+    expect(hintText({ claude: 1 })).toBe('这个项目有 1 个 Claude Code 会话可以接着聊')
   })
   it('两个引擎都有', () => {
     expect(hintMessage({ claude: 3, codex: 2 })).toEqual({ key: 'resume.hint.both', params: { claude: 3, codex: 2 } })
-    expect(hintText({ claude: 3, codex: 2 })).toBe('终端里有 3 个 Claude Code、2 个 Codex 会话')
+    expect(hintText({ claude: 3, codex: 2 })).toBe('这个项目有 3 个 Claude Code、2 个 Codex 会话可以接着聊')
   })
 })
 
@@ -68,22 +68,30 @@ describe('fetchResumeCounts', () => {
     }
     const counts = await fetchResumeCounts('p1', list)
     expect(counts).toEqual({ claude: 2 })
-    expect(hintText(counts)).toBe('终端里有 2 个 Claude Code 会话')
+    expect(hintText(counts)).toBe('这个项目有 2 个 Claude Code 会话可以接着聊')
     const onlyCodex = await fetchResumeCounts('p1', async () => Promise.reject(new Error('x')))
     expect(onlyCodex).toEqual({})
     expect(hintMessage(onlyCodex)).toBeNull()
   })
   it('只有 Codex 有会话：文案和打开的引擎都是 Codex', async () => {
     const counts = await fetchResumeCounts('p1', async (_p, engine) => (engine === 'codex' ? sessions(3) : []))
-    expect(hintText(counts)).toBe('终端里有 3 个 Codex 会话')
+    expect(hintText(counts)).toBe('这个项目有 3 个 Codex 会话可以接着聊')
     expect(hintEngine(counts)).toBe('codex')
   })
-  it('两个引擎都有：用「both」文案，点「接着聊」先开 Claude Code 的', async () => {
+  it('两个引擎都有：用「both」文案，点「接着聊」先开当前执行者的，执行者都不是开会话多的', async () => {
     const counts = await fetchResumeCounts('p1', async (_p, engine) =>
       engine === 'claude' ? sessions(3) : sessions(2),
     )
-    expect(hintText(counts)).toBe('终端里有 3 个 Claude Code、2 个 Codex 会话')
+    expect(hintText(counts)).toBe('这个项目有 3 个 Claude Code、2 个 Codex 会话可以接着聊')
     expect(hintEngine(counts)).toBe('claude')
+    expect(hintEngine(counts, 'codex')).toBe('codex')
+    expect(hintEngine(counts, 'claude')).toBe('claude')
+    expect(hintEngine(counts, 'pixel')).toBe('claude')
+    expect(hintEngine({ claude: 1, codex: 4 }, 'pixel')).toBe('codex')
+    expect(hintEngine({ claude: 1, codex: 4 }, null)).toBe('codex')
+    expect(hintEngine({ claude: 2, codex: 2 })).toBe('claude')
+    // 只有一个引擎有会话时，执行者是谁都开那一个
+    expect(hintEngine({ codex: 1 }, 'claude')).toBe('codex')
   })
   it('查询失败 / 不支持：当没有，不抛错', async () => {
     const list = vi.fn(async (_p: string, engine: string) => {

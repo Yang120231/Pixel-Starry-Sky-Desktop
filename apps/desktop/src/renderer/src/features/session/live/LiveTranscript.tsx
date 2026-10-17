@@ -69,6 +69,7 @@ import { approvalWaiting } from './subagentBoxModel'
 import { LiveStatusLine } from './LiveStatusLine'
 import { LiveOwnerContext } from './liveOwner'
 import { useNativeCheck } from '@/features/resume/useNativeCheck'
+import { loadingImportedEngine } from '@/features/resume/model'
 import { RESUME_ENGINE_NAMES } from '@/features/resume/store'
 
 /** 块没渲染过时的占位高度（content-visibility，见 blockHeight.ts）；按条目对象缓存，流式输出时只重算在动的那一条 */
@@ -273,6 +274,8 @@ export function LiveTranscript({
   const showTurns = useTurnRailOn()
   const sessionId = snapshot?.record.id ?? null
   // 导入的终端会话（原地接着的）：打开 / 窗口回到前台时查终端里有没有又聊了新的
+  // 只在执行者还是导入的那个引擎、还在接着导入的会话（或复制出来还没启动）时写「正在加载 X 会话」，引擎名取正在启动的执行者
+  const importedEngine = loadingImportedEngine(snapshot?.record)
   useNativeCheck(sessionId, !!snapshot?.record.imported && !snapshot.record.imported.forked)
 
   // 长对话只显示最近几轮（docs/ui/turn-rail.md §9）：win.hidden 是从头隐藏了几轮。
@@ -766,11 +769,8 @@ export function LiveTranscript({
                     <div className="conversation-message flex h-[30px] items-center gap-2 px-2 text-list text-fg-muted">
                       <Spinner size={13} />
                       {/* 导入的终端会话：引擎要先解析整份记录，大的要几秒 */}
-                      {snapshot?.record.imported
-                        ? tr('resume.starting', {
-                            engine:
-                              RESUME_ENGINE_NAMES[snapshot.record.imported.engine === 'codex' ? 'codex' : 'claude'],
-                          })
+                      {importedEngine
+                        ? tr('resume.starting', { engine: RESUME_ENGINE_NAMES[importedEngine] })
                         : tr('session.queue.starting')}
                     </div>
                   </div>

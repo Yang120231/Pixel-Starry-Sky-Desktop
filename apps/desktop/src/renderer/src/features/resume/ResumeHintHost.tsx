@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import type { AddProjectsResult } from '@pixelsky/protocol'
 import { tr } from '@/i18n/core'
 import { useToast } from '@/ui'
-import { PROJECTS_ADDED_EVENT } from '@/features/engine/store'
+import { PROJECTS_ADDED_EVENT, getEngineState } from '@/features/engine/store'
 import { hintEngine, hintText, openResumeFor, prefetchResumeCounts } from './hint'
 
 /**
@@ -22,7 +22,10 @@ export function ResumeHintHost() {
             const text = hintText(counts)
             if (text)
               toast(text, {
-                action: { label: tr('resume.hint.action'), run: () => openResumeFor(id, hintEngine(counts)) },
+                action: {
+                  label: tr('resume.hint.action'),
+                  run: () => openResumeFor(id, hintEngine(counts, getEngineState().defaults?.engine)),
+                },
               })
           } else if (found.size > 1) toast(tr('resume.hint.toastMany', { n: found.size }), { duration: 5000 })
         },

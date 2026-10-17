@@ -2,6 +2,7 @@
 // 第一步的列表里最后一句和模型是空的，第二步（details）才补上，演示逐步补的样子；导入只是跳到一个现成的展示对话
 import type { NativeImportResult, NativeSessionDetail, NativeSessionSummary } from '@pixelsky/protocol'
 import type { DemoSource } from '@/data/demo'
+import { assistant, sessionRecord, snapshot, stats, user, T0, opus, SHOWCASE_PROJECT } from './conversations'
 
 const MIN = 60_000
 const HOUR = 60 * MIN
@@ -131,7 +132,7 @@ const CODEX_ROWS: Row[] = [
     branch: 'main',
     subdir: null,
     size: 1_800_000,
-    model: null,
+    model: 'gpt-5-codex',
     source: 'terminal',
     ownerId: null,
     live: null,
@@ -146,7 +147,7 @@ const CODEX_ROWS: Row[] = [
     branch: 'fix/m-login',
     subdir: 'apps/mobile',
     size: 900_000,
-    model: null,
+    model: 'gpt-5',
     source: 'terminal',
     ownerId: null,
     live: null,
@@ -161,7 +162,7 @@ const CODEX_ROWS: Row[] = [
     branch: 'main',
     subdir: null,
     size: 5_200_000,
-    model: null,
+    model: 'gpt-5-mini',
     source: 'terminal',
     // 已被像素星空的对话占用：点了跳到那个对话
     ownerId: 'demo-claude-tools',
@@ -177,7 +178,7 @@ const CODEX_ROWS: Row[] = [
     branch: 'main',
     subdir: null,
     size: 3_100_000,
-    model: null,
+    model: 'gpt-5-codex',
     source: 'terminal',
     ownerId: null,
     live: 'terminal',
@@ -192,10 +193,10 @@ const CODEX_ROWS: Row[] = [
     branch: 'release/0.4.8',
     subdir: null,
     size: 700_000,
-    model: null,
+    model: 'gpt-5',
     source: 'terminal',
     ownerId: null,
-    // 锁文件读不到、只看修改时间：可能还开着
+    // 锁文件在、但测不了有没有被占着（只有 macOS / Linux 会出现）：可能还开着
     live: 'maybe',
     ago: 100_000,
     last: '把英文版也出一份',
@@ -208,7 +209,7 @@ const CODEX_ROWS: Row[] = [
     branch: 'HEAD',
     subdir: null,
     size: 1_500_000,
-    model: null,
+    model: 'gpt-5-mini',
     source: 'other',
     ownerId: null,
     live: null,
@@ -252,6 +253,32 @@ export const demoNativeSessions: DemoSource['conversations']['nativeSessions'] =
     const row = ROWS[engine].find(r => r.id === nativeId)
     if (row?.ownerId) return { ownerId: row.ownerId }
     if (mode === 'inplace' && (row?.live === 'terminal' || row?.live === 'other')) return { live: row.live }
+    // Codex 的导入跳到 Codex 的展示对话（分隔条、执行者都是 Codex），不混进 Claude 的
+    if (engine === 'codex') return { sessionId: DEMO_CODEX_RESUME_ID, model: MODELS.codex[0], turns: 3, shown: 3 }
     return { sessionId: 'demo-claude-long', model: MODELS[engine][0], turns: 120, shown: 50 }
   },
+}
+
+// ---------- 导入 Codex 会话后跳到的展示对话 ----------
+
+export const DEMO_CODEX_RESUME_ID = 'demo-codex-resume'
+
+const codexResumeRecord = sessionRecord(DEMO_CODEX_RESUME_ID, '给设置页加深色模式开关', SHOWCASE_PROJECT, {
+  engine: 'codex',
+  engineSessionId: CODEX_ROWS[0].id,
+  model: 'gpt-5-codex',
+  imported: { engine: 'codex', sessionId: CODEX_ROWS[0].id, at: T0 - 5 * MIN, turns: 3, shown: 3, source: 'terminal' },
+})
+
+/** 合进 mock/index.ts 的 conversations.snapshots */
+export const codexResumeSnapshots = {
+  [DEMO_CODEX_RESUME_ID]: snapshot(codexResumeRecord, [
+    { kind: 'notice', id: 'cr-n1', level: 'info', text: '接着终端里的 Codex 会话 · 3 轮' },
+    user('cr-u1', '设置里加一个深色模式开关，跟随系统', 40),
+    assistant('cr-a1', '加好了：开关在「外观」里，默认跟随系统。'),
+    stats('cr-s1', 'completed', { durationMs: 9_000, models: { 'gpt-5-codex': opus(900, 320, 0.02) } }),
+    user('cr-u2', '再把切换动画去掉', 25),
+    assistant('cr-a2', '去掉了，切换时直接换色。'),
+    stats('cr-s2', 'completed', { durationMs: 6_000, models: { 'gpt-5-codex': opus(700, 210, 0.01) } }),
+  ]),
 }

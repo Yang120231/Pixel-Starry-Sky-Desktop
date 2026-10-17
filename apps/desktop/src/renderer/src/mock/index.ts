@@ -33,7 +33,7 @@ import { demoRemoteCalls } from './remoteCalls'
 import { demoSearchProjects, searchDemo } from './search'
 import { demoSessions } from './sessionLifecycle'
 import { demoRewindPreview, demoSideAnswer } from './branch'
-import { demoNativeSessions } from './native'
+import { codexResumeSnapshots, demoNativeSessions } from './native'
 import { demoTerminalOutput, demoTerminalProfiles } from './terminal'
 import { demoStore } from './store'
 import { demoUsageRecords } from './usage'
@@ -74,7 +74,7 @@ export const demoSource: DemoSource = {
   terminal: { profiles: demoTerminalProfiles, output: demoTerminalOutput },
   sessions: demoSessions,
   conversations: {
-    snapshots: { ...showcaseSnapshots, ...workbenchSnapshots, ...codingSnapshots },
+    snapshots: { ...showcaseSnapshots, ...workbenchSnapshots, ...codingSnapshots, ...codexResumeSnapshots },
     subagentTranscript: showcaseSubagentTranscript,
     taskOutput: showcaseTaskOutput,
     rewindPreview: demoRewindPreview,

@@ -54,11 +54,9 @@ export function QueuedMessages({
 }) {
   useI18n()
   const providers = useProviders().providers
-  // 「复制一份接着聊」只对原地导入的对话有用：没导入过的、已经是复制出来的都不显示
-  const imported = useEngineState(
-    s => (sessionId ? s.sessions.find(x => x.record.id === sessionId) : undefined)?.record.imported,
-  )
-  const canCopyNative = canCopyImported(imported)
+  // 「复制一份接着聊」只在对话仍然接着原会话时显示：没导入过的、已经是复制出来的、换过执行者的、线程已经换掉的都不显示
+  const record = useEngineState(s => (sessionId ? s.sessions.find(x => x.record.id === sessionId) : undefined)?.record)
+  const canCopyNative = canCopyImported(record)
   const [expanded, setExpanded] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
