@@ -959,7 +959,7 @@ describe('Codex app-server adapter', () => {
     // 没有指向开关的行就原样留着
     expect(withoutOwnFeatures(`${head(1)}\n${user}`, true)).toBe(`${head(1)}\n${user}`)
   })
-  it('Fast：自己的 openai 登录且模型有 priority 档位时可开，每轮写明档位；换到没有档位的模型就关掉并说明原因', async () => {
+  it('Fast：自己的 openai 登录且模型有 priority 档位时每轮写明档位；换到没有档位的模型也能开，只提示可能不生效', async () => {
     const { session, messages } = setup(50, { env: { FAKE_CODEX_PROVIDER: 'openai' } })
     await host!.update(session.id, { fast: true })
     await host!.send(session.id, '快')
@@ -973,18 +973,47 @@ describe('Codex app-server adapter', () => {
     await wait(() => host!.open(session.id).state === 'idle' && start().length === 2)
     expect(start()[1].params.serviceTier).toBe('default')
     await host!.update(session.id, { fast: true, model: 'fake-plain' })
-    await wait(() => host!.open(session.id).flags.fastBlocked === 'model_not_allowed')
-    expect(host!.open(session.id).flags.fastAvailable).toBe(false)
-    expect(host!.open(session.id).record.fast).toBe(false)
+    await wait(() => host!.open(session.id).flags.fastBlocked === 'codex_unverified')
+    expect(host!.open(session.id).flags).toMatchObject({ fastAvailable: true, fastState: 'on' })
+    expect(host!.open(session.id).record.fast).toBe(true)
+    await host!.send(session.id, '没有档位的模型')
+    await wait(() => host!.open(session.id).state === 'idle' && start().length === 3)
+    expect(start()[2].params.serviceTier).toBe('priority')
+    // 拿不准时关掉不写 default，用 Codex 自己的配置
+    await host!.update(session.id, { fast: false })
+    await host!.send(session.id, '关掉')
+    await wait(() => host!.open(session.id).state === 'idle' && start().length === 4)
+    expect(start()[3].params.serviceTier).toBeUndefined()
   })
-  it('Fast：provider 不是 openai（自定义 / 平台线路）时开不了，不带 serviceTier', async () => {
+  it('Fast：provider 不是 openai（自己配的接口）时也能开，提示可能不生效，开着照样带档位', async () => {
     const { session, messages } = setup()
     await host!.update(session.id, { fast: true })
     await host!.send(session.id, '快')
     await wait(() => host!.open(session.id).state === 'idle')
-    expect(host!.open(session.id).flags).toMatchObject({ fastAvailable: false, fastBlocked: 'codex_gateway' })
-    expect(host!.open(session.id).record.fast).toBe(false)
-    expect(messages().find(m => m.method === 'turn/start')?.params.serviceTier).toBeUndefined()
+    expect(host!.open(session.id).flags).toMatchObject({
+      fastAvailable: true,
+      fastState: 'on',
+      fastBlocked: 'codex_unverified',
+    })
+    expect(host!.open(session.id).record.fast).toBe(true)
+    expect(messages().find(m => m.method === 'turn/start')?.params.serviceTier).toBe('priority')
+  })
+  it('Fast：走平台 / 像素星空接口时也能开，提示不会生效，不带 serviceTier', async () => {
+    const { session, messages } = setup(50, {
+      env: { PIXELSKY_CODEX_BASE_URL: 'http://127.0.0.1:9/v1', PIXELSKY_CODEX_TOKEN: 'tok' },
+    })
+    await host!.update(session.id, { provider: { id: 'my-api' }, fast: true })
+    await host!.send(session.id, '快')
+    await wait(() => host!.open(session.id).state === 'idle')
+    expect(host!.open(session.id).flags).toMatchObject({
+      fastAvailable: true,
+      fastState: 'on',
+      fastBlocked: 'codex_gateway',
+    })
+    expect(host!.open(session.id).record.fast).toBe(true)
+    const start = messages().find(m => m.method === 'turn/start')
+    expect(start).toBeDefined()
+    expect(start.params.serviceTier).toBeUndefined()
   })
 })
 

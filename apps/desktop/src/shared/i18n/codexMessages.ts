@@ -24,8 +24,12 @@ export const codexMessages = {
     en: 'Read-only; uses Codex native plan mode to propose a plan and asks you when a decision is needed',
   },
   'codex.fastGateway': {
-    zh: '只在 Codex 用自己的登录（ChatGPT / OpenAI Key）时可用',
-    en: 'Only available when Codex uses its own sign-in (ChatGPT / OpenAI key)',
+    zh: '当前接口不支持 Fast，打开了也不会生效（Codex 用自己的登录时才生效）',
+    en: "This endpoint doesn't support Fast; turning it on has no effect (works only with Codex's own sign-in)",
+  },
+  'codex.fastUnverified': {
+    zh: '你的接口或当前模型可能不支持 Fast，打开了可能不生效',
+    en: 'Your endpoint or the current model may not support Fast; turning it on may have no effect',
   },
   'codex.targets': { zh: '适用引擎', en: 'Applies to' },
   'codex.extensionInfo': {
