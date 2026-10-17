@@ -998,7 +998,7 @@ describe('Codex app-server adapter', () => {
     expect(host!.open(session.id).record.fast).toBe(true)
     expect(messages().find(m => m.method === 'turn/start')?.params.serviceTier).toBe('priority')
   })
-  it('Fast：走平台 / 像素星空接口时也能开，提示不会生效，不带 serviceTier', async () => {
+  it('Fast：走平台 / 像素星空接口时也能开，提示看接口支不支持，开着照样带档位、关着不带', async () => {
     const { session, messages } = setup(50, {
       env: { PIXELSKY_CODEX_BASE_URL: 'http://127.0.0.1:9/v1', PIXELSKY_CODEX_TOKEN: 'tok' },
     })
@@ -1011,9 +1011,12 @@ describe('Codex app-server adapter', () => {
       fastBlocked: 'codex_gateway',
     })
     expect(host!.open(session.id).record.fast).toBe(true)
-    const start = messages().find(m => m.method === 'turn/start')
-    expect(start).toBeDefined()
-    expect(start.params.serviceTier).toBeUndefined()
+    const start = () => messages().filter(m => m.method === 'turn/start')
+    expect(start()[0].params.serviceTier).toBe('priority')
+    await host!.update(session.id, { fast: false })
+    await host!.send(session.id, '关掉')
+    await wait(() => host!.open(session.id).state === 'idle' && start().length === 2)
+    expect(start()[1].params.serviceTier).toBeUndefined()
   })
 })
 

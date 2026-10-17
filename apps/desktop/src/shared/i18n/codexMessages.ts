@@ -24,8 +24,8 @@ export const codexMessages = {
     en: 'Read-only; uses Codex native plan mode to propose a plan and asks you when a decision is needed',
   },
   'codex.fastGateway': {
-    zh: '当前接口不支持 Fast，打开了也不会生效（Codex 用自己的登录时才生效）',
-    en: "This endpoint doesn't support Fast; turning it on has no effect (works only with Codex's own sign-in)",
+    zh: '接口支持 Fast 时生效，不支持的打开了也没有效果',
+    en: 'Takes effect if the endpoint supports Fast; otherwise turning it on has no effect',
   },
   'codex.fastUnverified': {
     zh: '你的接口或当前模型可能不支持 Fast，打开了可能不生效',

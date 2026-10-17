@@ -597,8 +597,9 @@ export class CodexSession implements EngineSession {
   /**
    * Fast 不设门禁（docs/codex-engine.md §3.5，2026-10-17 用户要求）：开关什么时候都能开，拿不准支不支持时只提示原因
    * （fastBlocked 带原因、fastAvailable 仍是 true）；确认支持（自己的 openai 登录、模型有 Fast 档位）时 null。
-   * - codex_gateway：走平台 / 像素星空接口，不带档位，开了也不生效（网关按 token 计费，没核实档位加价）
-   * - codex_unverified：provider 不是 openai 或目录里这个模型没有 Fast 档位，开着照样带 priority，接口支持就生效
+   * - codex_gateway：走平台 / 像素星空接口（用户要求照样带档位：接口支持就生效，不支持的开了也没效果）
+   * - codex_unverified：provider 不是 openai 或目录里这个模型没有 Fast 档位
+   * 两种都是开着照样带 priority，接口支持就生效
    */
   private fastHint(): string | null {
     if (viaGateway(this.ctx.record())) return 'codex_gateway'
@@ -660,14 +661,12 @@ export class CodexSession implements EngineSession {
     }
   }
   /**
-   * Fast：开着时每轮带档位（平台 / 像素星空接口除外）；关着时只在确认支持时写明 default（盖过 config.toml 里的档位），
+   * Fast：开着时每轮带档位；关着时只在确认支持时写明 default（盖过 config.toml 里的档位），
    * 拿不准时不带，用 Codex 自己的配置
    */
   private serviceTier(): Message {
-    const hint = this.fastHint()
-    if (hint === 'codex_gateway') return {}
     if (this.settings.fast) return { serviceTier: this.fastTier() ?? 'priority' }
-    return hint ? {} : { serviceTier: 'default' }
+    return this.fastHint() ? {} : { serviceTier: 'default' }
   }
   async steer(text: string, id: string, attachments: ImageAttachment[] = []): Promise<void> {
     if (!this.active || !this.nativeTurnId || !this.options.steeringValidated)

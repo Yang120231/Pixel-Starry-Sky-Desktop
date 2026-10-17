@@ -372,7 +372,7 @@ export interface ComposerController {
   fastAvailable: boolean | null
   /** 开不了的原因（给用户看的一句话） */
   fastBlocked: string | null
-  /** 能开但拿不准生不生效时的提示（Codex 不设门禁：如「当前接口不支持 Fast，打开了也不会生效」） */
+  /** 能开但拿不准生不生效时的提示（Codex 不设门禁：如「接口支持 Fast 时生效，不支持的打开了也没有效果」） */
   fastHint: string | null
   fast: boolean
   setFast(on: boolean): void
