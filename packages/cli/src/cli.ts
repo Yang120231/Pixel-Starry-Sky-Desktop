@@ -54,7 +54,15 @@ if (intercepted.action === 'run') {
       approval,
       todoExtension,
       webExtension,
-      ...(subagent ? [] : [createSubagentExtension({ mode: approval.currentMode, rules: approval })]),
+      ...(subagent
+        ? []
+        : [
+            createSubagentExtension({
+              mode: approval.currentMode,
+              rules: approval,
+              onModeChange: approval.onModeChange,
+            }),
+          ]),
     ],
   })
 }

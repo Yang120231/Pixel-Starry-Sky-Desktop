@@ -1,7 +1,14 @@
 import { EventEmitter } from 'node:events'
 import { PassThrough, Writable } from 'node:stream'
 import { describe, expect, it } from 'vitest'
-import { ALLOW_OPTION, ALWAYS_OPTION, APPROVAL_OPTIONS, approvalTitle } from '../src/extensions/approval.ts'
+import {
+  ALLOW_OPTION,
+  ALWAYS_OPTION,
+  APPROVAL_OPTIONS,
+  DENY_OPTION,
+  approvalTitle,
+  createApprovalExtension,
+} from '../src/extensions/approval.ts'
 import {
   APPROVAL_CONTEXT_STATUS,
   SUBAGENT_TOOL,
@@ -11,7 +18,7 @@ import {
 
 type Json = Record<string, unknown>
 
-/** 假的子进程（--mode rpc）：回 get_state 等请求；prompt 之后跑 script，结束时发 agent_settled */
+/** 假的子进程（--mode rpc）：回 get_state 等请求；prompt 之后跑 script，结束时发 agent_settled（/ 开头的扩展命令只回应） */
 class FakeChild extends EventEmitter {
   readonly stdout = new PassThrough()
   readonly stderr = new PassThrough()
@@ -32,7 +39,8 @@ class FakeChild extends EventEmitter {
           if (m.type === 'extension_ui_response') this.waiting.get(String(m.id))?.(m)
           else if (m.type !== 'abort') {
             this.send({ type: 'response', id: m.id, command: m.type, success: true, data: {} })
-            if (m.type === 'prompt') void script(this).then(() => this.send({ type: 'agent_settled' }))
+            if (m.type === 'prompt' && !String(m.message).startsWith('/'))
+              void script(this).then(() => this.send({ type: 'agent_settled' }))
           }
         }
         done()
@@ -58,15 +66,30 @@ class FakeChild extends EventEmitter {
   }
 }
 
-function harness(answer: string | undefined, allowed: (key: string) => boolean = () => false) {
+interface HarnessOptions {
+  /** 主会话当前的权限模式（默认 default） */
+  mode?: () => string
+  onModeChange?: (listener: (mode: string) => void) => () => void
+  /** 主进程弹审批框时调（模拟弹框期间换模式） */
+  onSelect?: () => void
+  /** 子进程开始要批准之前等它 */
+  gate?: Promise<void>
+}
+
+function harness(
+  answer: string | undefined,
+  allowed: (key: string) => boolean = () => false,
+  opts: HarnessOptions = {},
+) {
   const events: string[] = []
   const remembered: string[] = []
   let tool: { execute: (...args: unknown[]) => Promise<{ content: Array<{ text: string }> }> } | null = null
   let child: FakeChild | null = null
   const writeArgs = { path: 'a.txt', content: 'from child' }
   createSubagentExtension({
-    mode: () => 'default',
+    mode: opts.mode ?? (() => 'default'),
     rules: { allowed, remember: key => remembered.push(key) },
+    onModeChange: opts.onModeChange,
     spawnChild: () => {
       child = new FakeChild(async c => {
         // 先来一个别的调用（摘要不同），要批准的是第二个 write
@@ -77,6 +100,7 @@ function harness(answer: string | undefined, allowed: (key: string) => boolean =
           args: { path: 'other.txt', content: '' },
         })
         c.send({ type: 'tool_execution_start', toolCallId: 'k1', toolName: 'write', args: writeArgs })
+        await opts.gate
         const reply = await c.ask({
           id: 'u1',
           method: 'select',
@@ -106,6 +130,7 @@ function harness(answer: string | undefined, allowed: (key: string) => boolean =
       setStatus: (key: string, text: string) => events.push(`status ${key} ${text}`),
       select: async (title: string) => {
         events.push(`select ${title.split('\n')[0]}`)
+        opts.onSelect?.()
         return answer
       },
       notify: () => {},
@@ -206,5 +231,93 @@ describe('子智能体：模型请求失败', () => {
   it('没有 errorMessage 也算失败', async () => {
     const h = runScript(async c => c.send(assistant({ stopReason: 'error' })))
     await expect(h.run()).rejects.toThrow('Subagent failed: Model request failed')
+  })
+})
+
+describe('子智能体：主会话换权限模式', () => {
+  /** 主会话的权限模式：和批准扩展一样，变了就通知 */
+  function parentMode(initial: string) {
+    let current = initial
+    const listeners = new Set<(mode: string) => void>()
+    return {
+      mode: () => current,
+      set(next: string) {
+        current = next
+        for (const l of [...listeners]) l(next)
+      },
+      onModeChange(listener: (mode: string) => void) {
+        listeners.add(listener)
+        return () => {
+          listeners.delete(listener)
+        }
+      },
+      listeners,
+    }
+  }
+  const modeCommands = (child: FakeChild) =>
+    child.received.filter(m => m.type === 'prompt' && String(m.message).startsWith('/')).map(m => m.message)
+
+  it('子进程跑着时主会话切到计划模式：把 /pixelsky-mode plan 发给子进程；结束后不再订阅', async () => {
+    const parent = parentMode('bypassPermissions')
+    let open: () => void = () => {}
+    const gate = new Promise<void>(r => (open = r))
+    const h = harness(ALLOW_OPTION, () => false, { ...parent, gate })
+    const running = h.run()
+    await new Promise(r => setTimeout(r, 20))
+    expect(parent.listeners.size).toBe(1)
+    parent.set('plan')
+    await new Promise(r => setTimeout(r, 20))
+    expect(modeCommands(h.child())).toEqual(['/pixelsky-mode plan'])
+    open()
+    await running
+    expect(parent.listeners.size).toBe(0)
+  })
+
+  it('主会话已是计划模式：转来的写入审批直接拒绝，不弹框，「不再询问」的规则也不放行', async () => {
+    const h = harness(ALLOW_OPTION, () => true, { mode: () => 'plan' })
+    await h.run()
+    expect(h.events.some(e => e.startsWith('select'))).toBe(false)
+    expect(h.events).toContain(`child got ${DENY_OPTION}`)
+    expect(h.remembered).toEqual([])
+  })
+
+  it('弹框期间主会话切到计划模式：用户点了「本会话不再询问」也拒绝，不记规则', async () => {
+    const parent = parentMode('default')
+    const h = harness(ALWAYS_OPTION, () => false, { ...parent, onSelect: () => parent.set('plan') })
+    await h.run()
+    expect(h.events).toContain('select 允许工具 write？ / Allow tool write?')
+    expect(h.events).toContain(`child got ${DENY_OPTION}`)
+    expect(h.remembered).toEqual([])
+  })
+
+  it('主会话切到完全访问：子进程还按旧模式问的，直接允许不弹框', async () => {
+    const h = harness(undefined, () => false, { mode: () => 'bypassPermissions' })
+    await h.run()
+    expect(h.events.some(e => e.startsWith('select'))).toBe(false)
+    expect(h.events).toContain(`child got ${ALLOW_OPTION}`)
+  })
+
+  it('批准扩展：/pixelsky-mode 换了模式才通知，取消订阅后不再通知', async () => {
+    const commands: Record<string, (args: string, ctx: unknown) => Promise<void>> = {}
+    const ext = createApprovalExtension({ mode: 'bypassPermissions' })
+    ext({
+      registerFlag: () => {},
+      getFlag: () => undefined,
+      registerCommand: (name: string, def: { handler: (args: string, ctx: unknown) => Promise<void> }) => {
+        commands[name] = def.handler
+      },
+      registerTool: () => {},
+      appendEntry: () => {},
+      on: () => {},
+    } as never)
+    const ctx = { ui: { setStatus: () => {}, notify: () => {} } }
+    const seen: string[] = []
+    const off = ext.onModeChange(m => seen.push(m))
+    await commands['pixelsky-mode']('plan', ctx)
+    await commands['pixelsky-mode']('plan', ctx)
+    await commands['pixelsky-mode']('nope', ctx)
+    off()
+    await commands['pixelsky-mode']('default', ctx)
+    expect(seen).toEqual(['plan'])
   })
 })

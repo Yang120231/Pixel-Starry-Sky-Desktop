@@ -180,6 +180,8 @@ export type ApprovalExtension = ExtensionFactory & {
   allowed(key: string): boolean
   /** 记一条「不再询问」规则（子智能体那边选了「本会话不再询问」时，主会话也记上） */
   remember(key: string): void
+  /** 运行中权限模式变了（/pixelsky-mode、计划确认后退出计划模式）时通知；返回取消订阅。子智能体靠它把新模式同步给正在跑的子进程 */
+  onModeChange(listener: (mode: PermissionMode) => void): () => void
 }
 
 /**
@@ -206,6 +208,13 @@ export function createApprovalExtension(
     rules.add(key)
     persist(key)
   }
+  const modeListeners = new Set<(mode: PermissionMode) => void>()
+  const onModeChange = (listener: (mode: PermissionMode) => void): (() => void) => {
+    modeListeners.add(listener)
+    return () => {
+      modeListeners.delete(listener)
+    }
+  }
   const factory = (pi: ExtensionAPI) => {
     persist = key => pi.appendEntry(RULE_ENTRY, { key })
     pi.registerFlag(PERMISSION_FLAG, {
@@ -221,6 +230,7 @@ export function createApprovalExtension(
       if (next === 'plan' && prev !== 'plan') beforePlan = prev
       mode = next
       ctx.ui.setStatus(MODE_STATUS, next)
+      if (next !== prev) for (const l of [...modeListeners]) l(next)
     }
 
     // 运行中切换权限模式：桌面端（RPC）发 prompt "/pixelsky-mode <mode>"，扩展命令立即执行、不进模型（disposition: handled）。
@@ -310,5 +320,5 @@ export function createApprovalExtension(
       return { block: true, reason: `The user denied the "${event.toolName}" tool call.` }
     })
   }
-  return Object.assign(factory, { currentMode, allowed: (key: string) => rules.has(key), remember })
+  return Object.assign(factory, { currentMode, allowed: (key: string) => rules.has(key), remember, onModeChange })
 }

@@ -1,6 +1,8 @@
 // 子智能体：task 工具另起一个我们自己的命令行（--mode rpc），把任务交给它独立完成，结果交回主智能体。
 // 做法参照 Pi 随包的官方示例 examples/extensions/subagent（MIT，它用 --mode json -p）。这里用 RPC 模式，
 // 子进程要批准的操作（extension_ui_request）原样转给主进程的 ctx.ui：桌面端照常弹审批卡片，权限模式、「不再询问」规则都照旧生效。
+// 子进程起来时带着当时的权限模式；之后主会话换模式（例如切到计划模式），用同一条 /pixelsky-mode 命令同步给正在跑的子进程，
+// 转过来的审批也先按主会话当前的模式判一次，同步慢一步时计划模式也挡得住写操作。
 // 子进程带 PIXELSKY_SUBAGENT=1：不再派子智能体、不注入计划模式说明。会话文件放在主会话目录的 subagents/ 下，不进 --resume 列表。
 // 进度通过 onUpdate 的 details 报给桌面端（智能体追踪），结束时用 pi.appendEntry 记进主会话文件。
 // 只用可擦除的 TS 语法。
@@ -12,8 +14,12 @@ import {
   ALLOW_OPTION,
   ALWAYS_OPTION,
   APPROVAL_OPTIONS,
+  DENY_OPTION,
+  MODE_COMMAND,
   approvalTool,
+  decidePermission,
   describeToolCall,
+  isPermissionMode,
   ruleKey,
 } from '../extensions/approval.ts'
 import { mcpChildEnv } from '../extensions/mcp.ts'
@@ -188,6 +194,8 @@ export interface SubagentOptions {
   mode: () => string
   /** 主会话「不再询问」的规则（批准扩展的 allowed / remember）：子智能体的询问也按它答，在子智能体那边选的也记进主会话 */
   rules?: { allowed(key: string): boolean; remember(key: string): void }
+  /** 主会话权限模式变了时通知（批准扩展的 onModeChange），返回取消订阅：新模式同步给正在跑的子进程 */
+  onModeChange?: (listener: (mode: string) => void) => () => void
   /** 测试用：替换起子进程 */
   spawnChild?: (args: string[], env: NodeJS.ProcessEnv, cwd: string) => ChildProcess
 }
@@ -214,6 +222,14 @@ interface ForwardState {
   /** 主会话里 task 调用的 id、子智能体的 id 和名字 */
   context: () => Omit<SubagentApproval, 'tool' | 'args'>
   rules?: SubagentOptions['rules']
+  /** 主会话当前的权限模式 */
+  mode: () => string
+}
+
+/** 按主会话当前的模式，子进程要批准的这个工具该放行 / 拒绝 / 问用户 */
+function parentDecision(mode: string, tool: string): 'allow' | 'block' | 'ask' {
+  if (!isPermissionMode(mode)) return 'ask'
+  return decidePermission({ mode, toolName: tool, hasUI: true }).action
 }
 
 /** 把子进程的对话框转给主进程的界面 */
@@ -225,12 +241,18 @@ async function forwardUi(child: RpcChild, raw: Json, ctx: ExtensionContext, stat
   try {
     if (method === 'select') {
       const choices = (Array.isArray(raw.options) ? raw.options : []).map(text)
-      const approval =
+      const isApproval =
         choices.length === APPROVAL_OPTIONS.length && choices.every((o, i) => o === APPROVAL_OPTIONS[i])
-          ? matchChildCall(state.calls, title)
-          : null
+      const approval = isApproval ? matchChildCall(state.calls, title) : null
       const key = approval ? ruleKey(approval[1].name, approval[1].args) : null
       if (approval) approval[1].asked = true
+      const tool = approval?.[1].name ?? approvalTool(title)
+      // 先按主会话现在的模式判：子进程还带着起来时的模式（同步还没到），主会话已是计划模式就拒绝，不弹、不按规则放行
+      const decision = isApproval && tool ? parentDecision(state.mode(), tool) : 'ask'
+      if (decision !== 'ask') {
+        child.send({ type: 'extension_ui_response', id, value: decision === 'allow' ? ALLOW_OPTION : DENY_OPTION })
+        return
+      }
       // 主会话已经「不再询问」的：直接允许，不再弹
       if (key && state.rules?.allowed(key)) {
         child.send({ type: 'extension_ui_response', id, value: ALLOW_OPTION })
@@ -242,6 +264,11 @@ async function forwardUi(child: RpcChild, raw: Json, ctx: ExtensionContext, stat
         ctx.ui.setStatus(APPROVAL_CONTEXT_STATUS, JSON.stringify(payload))
       }
       const value = await ctx.ui.select(title, choices, options)
+      // 弹框期间主会话切到了计划模式：用户点了允许也不放行
+      if (isApproval && tool && parentDecision(state.mode(), tool) === 'block') {
+        child.send({ type: 'extension_ui_response', id, value: DENY_OPTION })
+        return
+      }
       if (key && value === ALWAYS_OPTION) state.rules?.remember(key)
       child.send({ type: 'extension_ui_response', id, ...(value === undefined ? { cancelled: true } : { value }) })
     } else if (method === 'confirm') {
@@ -327,6 +354,7 @@ export function createSubagentExtension(options: SubagentOptions): ExtensionFact
           calls,
           context: () => ({ toolCallId, agentId: progress.agentId, label: progress.label }),
           rules: options.rules,
+          mode: options.mode,
         }
         const child = new RpcChild(proc, m => {
           const type = text(m.type)
@@ -350,6 +378,11 @@ export function createSubagentExtension(options: SubagentOptions): ExtensionFact
             report()
           } else if (type === 'agent_settled') settled()
         })
+        // 主会话换模式：扩展命令在子进程里立即执行（正在跑也一样），不进模型。上面读模式到这里之间没有 await，不会漏掉
+        const unsubscribe =
+          options.onModeChange?.(next => {
+            void child.request('prompt', { message: `/${MODE_COMMAND} ${next}` }).catch(() => {})
+          }) ?? (() => {})
         const abort = () => {
           progress.state = 'stopped'
           void child.request('abort').catch(() => {})
@@ -382,6 +415,7 @@ ${progress.result}`
               : reason
           }
         } finally {
+          unsubscribe()
           clearTimeout(timer)
           signal?.removeEventListener('abort', abort)
           await child.close()
