@@ -35,6 +35,7 @@ import {
 import { motionEnabled } from '@/features/panes/motion'
 import { appendComposerDraft } from '@/features/engine/drafts'
 import { QUOTE_SELECTION } from '@/features/layout/shortcuts'
+import { notifyEditorBlur } from '@/features/editor/autoSaveModel'
 import { composerTarget, focusComposer } from '@/features/session/composerTarget'
 import {
   QUOTE_MAX_CHARS,
@@ -288,6 +289,11 @@ export function CodeEditor({
                   const error = quoteSelection(tab.id)
                   if (error) toast(error)
                   return true
+                },
+                // 自动保存「编辑器失去焦点时」：焦点挪到编辑器自己的搜索框等内部元素不算
+                blur(e, view) {
+                  if (!(e.relatedTarget instanceof Node && view.dom.contains(e.relatedTarget))) notifyEditorBlur(tab.id)
+                  return false
                 },
               }),
             ),

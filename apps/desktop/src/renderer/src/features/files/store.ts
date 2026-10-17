@@ -54,14 +54,14 @@ function set(next: State): void {
   state = next
   listeners.forEach(l => l())
 }
+export function subscribeFiles(cb: () => void): () => void {
+  listeners.add(cb)
+  return () => {
+    listeners.delete(cb)
+  }
+}
 export function useFiles(): State {
-  return useSyncExternalStore(
-    cb => {
-      listeners.add(cb)
-      return () => listeners.delete(cb)
-    },
-    () => state,
-  )
+  return useSyncExternalStore(subscribeFiles, () => state)
 }
 export const getFiles = (): State => state
 /** 删除会话前把文件 API 目标改为长期存在的项目；当前标签 id 不变，保留 EditorView 与草稿。 */

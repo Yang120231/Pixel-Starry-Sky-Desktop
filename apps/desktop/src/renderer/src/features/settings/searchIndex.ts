@@ -156,6 +156,15 @@ export const SETTINGS_INDEX: SearchEntry[] = [
     keywords: '编辑器 Cursor VS Code Windsurf Trae TraeCode CN 打开项目 默认',
   },
   { section: 'editor', title: '打开窗口', keywords: '编辑器 复用窗口 新窗口' },
+  {
+    section: 'editor',
+    get title() {
+      return tr('editor.autoSave.title')
+    },
+    get keywords() {
+      return tr('editor.autoSave.keywords')
+    },
+  },
   { section: 'editor', title: '指定程序路径', keywords: '编辑器 程序 路径 exe 检测' },
   { section: 'editor', title: '自定义编辑器', keywords: '编辑器 文件夹 参数 添加' },
   { section: 'account', title: '账号', keywords: '登录 退出登录 余额 套餐 订阅 充值 额度 限额' },

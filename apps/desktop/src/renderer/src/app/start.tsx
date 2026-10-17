@@ -26,6 +26,7 @@ import { RecoveredNotice } from '../features/recovery/RecoveredNotice'
 import { SettingsSyncRunner } from '../features/settings/sync/RestoreNotice'
 import { AuthDialogHost } from '../features/model-channels/AuthDialog'
 import { startWindowActivity } from '../features/layout/windowActivity'
+import { startAutoSave } from '../features/editor/autoSave'
 import { startLoopClock } from '../features/layout/loopClock'
 
 document.documentElement.dataset.platform = window.pixelsky?.platform ?? 'web'
@@ -37,6 +38,8 @@ installLongTaskLog()
 installMemorySampler()
 // 窗口不在前台时暂停循环动画（docs/ui/performance.md）
 startWindowActivity()
+// 内置编辑器的自动保存（设置 › 编辑器 › 自动保存，默认关）
+startAutoSave()
 // 转圈、闪烁的点对齐同一个节奏（docs/ui/motion-proposal.html）
 startLoopClock()
 
