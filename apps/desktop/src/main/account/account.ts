@@ -18,7 +18,8 @@ import type { AccountInfo, AccountPlan, AccountState, Quota } from '../../shared
 // 常量
 // ---------------------------------------------------------------------------
 
-const DEFAULT_AUTH_URL = 'https://auth.pixelstarrysky.xyz'
+// 正式站（2026-10-17 起，docs/cloud-prod-migration.md）；测试站 https://auth.pixelstarrysky.xyz 用 PIXELSKY_AUTH_URL 指过去
+const DEFAULT_AUTH_URL = 'https://pixelstarrysky.xyz'
 const CLIENT_ID = 'pixelsky-desktop'
 const FETCH_TIMEOUT_MS = 20_000
 const LOGIN_TIMEOUT_MS = 5 * 60_000

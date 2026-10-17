@@ -14,7 +14,7 @@ function newKey(): { publicKey: string; keyId: string } {
 const row = (site: string, status: StoreKey['status'] = 'active'): StoreKey => ({ ...newKey(), sites: [site], status })
 
 describe('STORE_KEYS', () => {
-  it('has the one planned key, active, for the production site', () => {
+  it('has one active key per site: the test site and the production site', () => {
     expect(STORE_KEYS).toEqual([
       {
         keyId: '8273f03a',
@@ -22,7 +22,14 @@ describe('STORE_KEYS', () => {
         sites: [SITE],
         status: 'active',
       },
+      {
+        keyId: '4f9edb34',
+        publicKey: '89lbJp/zJJSNBbrcD7tCIhJFMfXO3mtdaQDs0/6RHzY=',
+        sites: ['https://pixelstarrysky.xyz'],
+        status: 'active',
+      },
     ])
+    for (const k of STORE_KEYS) expect(keyIdOf(k.publicKey)).toBe(k.keyId)
   })
   it('keyId is the first 8 hex chars of SHA-256 of the 32 raw public key bytes', () => {
     for (const k of STORE_KEYS) {

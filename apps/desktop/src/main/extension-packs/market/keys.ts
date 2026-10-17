@@ -26,7 +26,13 @@ export const STORE_KEYS: StoreKey[] = [
     publicKey: 'z+QHBZ24TLfmMDcrApDCKzSk4VYBsmYYpfDn6jInMjU=',
     sites: ['https://auth.pixelstarrysky.xyz'],
     status: 'active',
-  }, // 2026-10-16 生成（extension-cloud.md §12）
+  }, // 测试站，2026-10-16 生成（extension-cloud.md §12）
+  {
+    keyId: '4f9edb34',
+    publicKey: '89lbJp/zJJSNBbrcD7tCIhJFMfXO3mtdaQDs0/6RHzY=',
+    sites: ['https://pixelstarrysky.xyz'],
+    status: 'active',
+  }, // 正式站，2026-10-17 生成（docs/cloud-prod-migration.md）
 ]
 
 /** 开发版多认钥匙用的环境变量：`<base64>[,<base64>]`，每个是 32 字节公钥原文的 base64 */
