@@ -11,6 +11,7 @@ import {
   type NativeImportResult,
   type NativeSessionDetail,
   type NativeSessionSummary,
+  type SessionRecord,
   type SessionSettings,
 } from '@pixelsky/protocol'
 import type { EngineAdapter } from '../adapter'
@@ -215,7 +216,8 @@ export class HostNative {
 
     // 对话的工作目录跟着会话原来的目录（Codex 读线程时给；核对过在项目下面才用，没有列表缓存的 /resume <id> 也靠它拿到子文件夹）
     const where = read.cwd ? await matchCwd(project.path, read.cwd, true) : null
-    const home = where ? read.cwd! : cwd
+    // 和项目根目录是同一个目录（Windows 上只差大小写 / 末尾分隔符）就用项目路径，不然会被当成「同名的子文件夹」
+    const home = where ? (where.subdir === null ? project.path : read.cwd!) : cwd
     const missing = Math.max(0, read.turns - read.shown)
     const items: Item[] = [
       this.divider(engine, read.source, copy, read.turns, missing, read.summary, undefined, legacy),
@@ -274,13 +276,16 @@ export class HostNative {
       throw new Error(ctx.changingSessions.has(id) ? '正在处理这个会话，请稍后重试' : '任务运行中，结束后再试')
     }
     if (action !== 'earlier' && imp.forked) return { added: 0 }
+    // 按导入的那个引擎看：换了引擎的话，当前引擎的会话 id 和待执行的回退都不是原会话的，原引擎的存在 engineSessions 里
+    const mine = this.followed(rt.snapshot.record, imp)
     // 回退了还没发消息：原生记录要等下次启动才截到 pendingRewind，截断点之后读到的都是刚回退掉的轮次，不是终端里新聊的
     // 对话已经不接着原会话了（回退找不到截断点、旧格式回退失败、回退到第一条：换了新的引擎会话），原会话里截断点之后的轮次也不是新聊的
-    if (
-      (action === 'check' || action === 'sync') &&
-      (rt.snapshot.record.pendingRewind || rt.snapshot.record.engineSessionId !== imp.sessionId)
-    )
+    if ((action === 'check' || action === 'sync') && (mine.pendingRewind || mine.sessionId !== imp.sessionId))
       return { added: 0 }
+    // 复制一份只对「现在还接着原会话」的对话有意义：执行者是导入的那个引擎，且它记的线程 id 还是原会话的。
+    // 否则（换了引擎、回退换了新线程）会从原会话分叉出一份和对话内容对不上的上下文
+    if (action === 'copy' && (!mine.executor || mine.sessionId !== imp.sessionId))
+      throw new Error(NATIVE_TEXT.notFollowing)
     ctx.changingSessions.add(id)
     try {
       if (action === 'earlier') return await this.earlier(id, imp, adapter)
@@ -289,6 +294,20 @@ export class HostNative {
     } finally {
       ctx.changingSessions.delete(id)
     }
+  }
+
+  /**
+   * 导入的那个引擎现在的状态：执行者是它时看记录本身的 engineSessionId / pendingRewind，
+   * 换了引擎时它们属于别的引擎，这个引擎的存在 engineSessions 里
+   */
+  private followed(
+    record: SessionRecord,
+    imp: ImportedSession,
+  ): { executor: boolean; sessionId: string | null | undefined; pendingRewind: string | null | undefined } {
+    if (record.engine === imp.engine)
+      return { executor: true, sessionId: record.engineSessionId, pendingRewind: record.pendingRewind }
+    const entry = record.engineSessions?.[imp.engine]
+    return { executor: false, sessionId: entry?.id, pendingRewind: entry?.pendingRewind }
   }
 
   /** 加载更早的：从最早一条用户条目往前再取 50 轮，插在分隔条和原来的第一条之间 */

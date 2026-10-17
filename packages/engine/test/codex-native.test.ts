@@ -18,16 +18,25 @@ import {
   readCodexThread,
   type CodexTurn,
 } from '../src/codex/native'
+import { findCodexRollouts } from '../src/codex/runs'
 import { CodexReader, type CodexRpc, type ReaderLaunch, type ReaderProcess } from '../src/codex/reader'
 import type { Message } from '../src/codex/process'
 import { IS_WINDOWS } from '../src/exec'
 import { HANDOFF_TAG } from '../src/handoff'
 import { splitIdeContext } from '../src/native/prompt'
+import { QUICK_CLOSE_MS } from '../src/adapter'
 import { NATIVE_TEXT } from '../src/native/text'
+
+// codexThreadExists 先查创建日的目录；findCodexRollouts（全扫）只在那里没找到时才该被调用
+vi.mock('../src/codex/runs', async importActual => {
+  const actual = await importActual<typeof import('../src/codex/runs')>()
+  return { ...actual, findCodexRollouts: vi.fn(actual.findCodexRollouts) }
+})
 
 let root: string
 let proj: string
 beforeEach(() => {
+  vi.mocked(findCodexRollouts).mockClear()
   root = mkdtempSync(join(tmpdir(), 'pixelsky-codexnative-'))
   proj = join(root, 'proj')
   mkdirSync(proj, { recursive: true })
@@ -607,6 +616,35 @@ describe('codexThreadExists', () => {
     expect(codexThreadExists(home(), id)).toBe(true)
   })
 
+  it('在创建日的目录里：命中就返回，不去扫创建日之后的每一天', () => {
+    mkdirSync(join(home(), 'sessions', '2026', '10', '05'), { recursive: true })
+    writeFileSync(join(home(), 'sessions', '2026', '10', '05', rollout), '{}')
+    // 创建日之后几个月每天一个目录：全扫的话要把它们都读一遍
+    for (let d = 6; d <= 30; d++) mkdirSync(join(home(), 'sessions', '2026', '10', String(d).padStart(2, '0')))
+    expect(codexThreadExists(home(), id)).toBe(true)
+    expect(findCodexRollouts).not.toHaveBeenCalled()
+  })
+
+  it('创建日前后一天的目录也算（时区 / 跨零点）', () => {
+    mkdirSync(join(home(), 'sessions', '2026', '10', '04'), { recursive: true })
+    writeFileSync(join(home(), 'sessions', '2026', '10', '04', rollout), '{}')
+    expect(codexThreadExists(home(), id)).toBe(true)
+    expect(findCodexRollouts).not.toHaveBeenCalled()
+    rmSync(join(home(), 'sessions', '2026', '10', '04'), { recursive: true })
+    mkdirSync(join(home(), 'sessions', '2026', '10', '06'), { recursive: true })
+    writeFileSync(join(home(), 'sessions', '2026', '10', '06', rollout), '{}')
+    expect(codexThreadExists(home(), id)).toBe(true)
+    expect(findCodexRollouts).not.toHaveBeenCalled()
+  })
+
+  it('创建日的目录里没有、后来接着跑的段在更晚的目录里：回退到全扫，找得到', () => {
+    mkdirSync(join(home(), 'sessions', '2026', '10', '05'), { recursive: true })
+    mkdirSync(join(home(), 'sessions', '2026', '10', '20'), { recursive: true })
+    writeFileSync(join(home(), 'sessions', '2026', '10', '20', rollout.replace('2026-10-05T08', '2026-10-20T09')), '{}')
+    expect(codexThreadExists(home(), id)).toBe(true)
+    expect(findCodexRollouts).toHaveBeenCalledTimes(1)
+  })
+
   it('在 archived_sessions 里', () => {
     mkdirSync(join(home(), 'sessions'), { recursive: true })
     mkdirSync(join(home(), 'archived_sessions'), { recursive: true })
@@ -671,6 +709,27 @@ describe('readCodexThread', () => {
     const r2 = (await readCodexThread(plain, proj, tid(2)))!
     expect(r2.copyOnly).toBeUndefined()
     expect(r2).toMatchObject({ pixelsky: false, source: 'other' })
+  })
+
+  it('线程不在了的说法才算「不在了」；别的错误（provider / profile 找不到……）原样抛出', async () => {
+    const failing = (message: string): CodexRpc => ({
+      request: async () => {
+        throw new Error(message)
+      },
+    })
+    for (const gone of [
+      'thread not loaded: x',
+      'thread not found',
+      'invalid thread id: x',
+      'no rollout found for thread id x',
+    ]) {
+      expect(await readCodexThread(failing(gone), proj, tid(1)), gone).toBeNull()
+      expect(await newerCodexTurns(failing(gone), proj, tid(1), 'a'), gone).toBeNull()
+    }
+    for (const other of ['model provider not found: pixelsky', 'profile not found', 'file not found']) {
+      await expect(readCodexThread(failing(other), proj, tid(1)), other).rejects.toThrow(other)
+      await expect(newerCodexTurns(failing(other), proj, tid(1), 'a'), other).rejects.toThrow(other)
+    }
   })
 
   it('没有用户消息的 turn 并进前一轮，不计数', async () => {
@@ -842,6 +901,26 @@ describe('newerCodexTurns', () => {
     expect(next.base).toBe('turn-1b')
   })
 
+  it('live：终端里正在跑的那一轮不导入，turns / at 都不算它；它结束后下次再补，回复是完整的', async () => {
+    const rpc = new FakeRpc().add(thread(tid(1)), manyTurns(2))
+    const running = turn('turn-3', [user('u-3', '在跑'), agent('a-3', '半截')], { status: 'inProgress' })
+    rpc.threads.get(tid(1))!.turns.push(running)
+    rpc.threads.get(tid(1))!.meta.updatedAt = T0 + 300
+    const live = (await newerCodexTurns(rpc, proj, tid(1), 'turn-2', { live: true }))!
+    expect(live).toMatchObject({ items: [], turns: 0, shown: 0, at: 'turn-2', base: 'turn-2' })
+    // 对话里认识的最后一条就是这个没结束的轮（不可能，但不能当成「找不到」而丢掉整个判断）
+    expect(await newerCodexTurns(rpc, proj, tid(1), 'turn-3', { live: true })).toMatchObject({ turns: 0, items: [] })
+
+    // 它结束了（回复写完）：下一次补上整轮，回复是完整的、状态不是已中断
+    Object.assign(running, { status: 'completed' })
+    ;(running.items as Message[])[1] = agent('a-3', '写完了')
+    rpc.threads.get(tid(1))!.meta.updatedAt = T0 + 400
+    const done = (await newerCodexTurns(rpc, proj, tid(1), 'turn-2', { live: false }))!
+    expect(users(done.items)).toEqual(['turn-3'])
+    expect(done).toMatchObject({ turns: 1, shown: 1, at: 'turn-3' })
+    expect(done.items.find(i => i.kind === 'assistant')).toMatchObject({ text: '写完了', status: 'completed' })
+  })
+
   it('线程更新后（updatedAt 变了）重建索引；live 时末尾没结束的轮不算', async () => {
     const rpc = new FakeRpc().add(thread(tid(1)), manyTurns(2))
     expect((await newerCodexTurns(rpc, proj, tid(1), 'turn-2'))!.turns).toBe(0)
@@ -884,11 +963,15 @@ describe('CodexReader', () => {
         this.pending.push(entry)
       })
     }
-    async close(): Promise<void> {
+    closeTimeout: number | undefined
+    async close(timeoutMs?: number): Promise<void> {
       this.alive = false
       this.closed = true
+      this.closeTimeout = timeoutMs
     }
+    killed = false
     kill(): void {
+      this.killed = true
       this.die()
     }
     die(): void {
@@ -898,11 +981,13 @@ describe('CodexReader', () => {
     }
   }
   const launch: ReaderLaunch = { launcher: { command: 'codex', args: [] }, args: [], env: {}, cwd: root }
-  function make(opts: { idleMs?: number } = {}): { reader: CodexReader; procs: FakeProc[] } {
+  function make(opts: { idleMs?: number; gate?: Promise<void> } = {}): { reader: CodexReader; procs: FakeProc[] } {
     const procs: FakeProc[] = []
     const reader = new CodexReader(async () => launch, {
-      ...opts,
+      idleMs: opts.idleMs,
       open: async (_l, onExit) => {
+        // 测试想让「正在启动」停一会儿时给 gate
+        await opts.gate
         const p = new FakeProc(onExit)
         procs.push(p)
         return p
@@ -989,15 +1074,139 @@ describe('CodexReader', () => {
     procs[1].pending[0].resolve({ again: true })
     expect(await b).toEqual({ again: true })
 
-    // 进程在请求途中退出（exit 事件还没传到 reader）：同一个请求在新进程上重发
+    // 进程在请求途中退出：和真进程一样，先同步拒绝挂着的请求、再同步通知 onExit（reader 里的 proc 先被清掉），
+    // 同一个请求在新进程上重发一次
     const c = reader.request('thread/read', {})
     await tick()
-    procs[1].alive = false
-    procs[1].pending[0].reject(new Error('Codex process exited'))
+    procs[1].die()
     await tick()
     expect(procs).toHaveLength(3)
     procs[2].pending[0].resolve({ retried: true })
     expect(await c).toEqual({ retried: true })
+
+    // 只重发一次：新进程又在请求途中死了，错误往外抛
+    const d = reader.request('thread/read', {})
+    const failed = expect(d).rejects.toThrow('Codex process exited')
+    await tick()
+    procs[2].die()
+    await tick()
+    expect(procs).toHaveLength(4)
+    procs[3].die()
+    await failed
+  })
+
+  it('请求出错但进程还活着：不重发', async () => {
+    const { reader, procs } = make()
+    const a = reader.request('thread/read', {})
+    const failed = expect(a).rejects.toThrow('thread not loaded')
+    await tick()
+    procs[0].pending[0].reject(new Error('thread not loaded: x'))
+    await failed
+    expect(procs).toHaveLength(1)
+  })
+
+  it('close() 引起的失败不重发（不会把刚关掉的进程又拉起来）', async () => {
+    const { reader, procs } = make()
+    const a = reader.request('thread/read', {})
+    const failed = expect(a).rejects.toThrow('Codex process exited')
+    await tick()
+    const closing = reader.close()
+    procs[0].die()
+    await closing
+    await failed
+    await tick()
+    expect(procs).toHaveLength(1)
+  })
+
+  it('close() 时进程正在启动：起来后马上关掉，请求被拒绝；之后的新请求再按需起', async () => {
+    let open!: () => void
+    const gate = new Promise<void>(resolve => (open = resolve))
+    const { reader, procs } = make({ gate })
+    const a = reader.request('thread/list', {})
+    const rejected = expect(a).rejects.toThrow(NATIVE_TEXT.codexReaderClosed)
+    await tick()
+    await reader.close()
+    open()
+    await rejected
+    await tick()
+    // 这个进程不能留着：update / install 前关的，留着会占住 codex.exe
+    expect(procs).toHaveLength(1)
+    expect(procs[0].killed).toBe(true)
+    expect(reader.running).toBe(false)
+    const b = reader.request('thread/list', {})
+    await tick()
+    expect(procs).toHaveLength(2)
+    procs[1].pending[0].resolve({ ok: 1 })
+    expect(await b).toEqual({ ok: 1 })
+    expect(procs[1].killed).toBe(false)
+  })
+
+  it('close() 后马上又有请求时旧的启动收尾不会弄乱新的：旧进程被关，新请求共用一个新进程', async () => {
+    let open!: () => void
+    const gate = new Promise<void>(resolve => (open = resolve))
+    const { reader, procs } = make({ gate })
+    const a = reader.request('thread/list', {})
+    const rejected = expect(a).rejects.toThrow(NATIVE_TEXT.codexReaderClosed)
+    await tick()
+    await reader.close()
+    const b = reader.request('thread/read', {})
+    await tick()
+    open()
+    await rejected
+    await tick()
+    const c = reader.request('thread/turns/list', {})
+    await tick()
+    // 旧一代的进程已被关，b / c 共用新一代的那一个
+    expect(procs).toHaveLength(2)
+    expect(procs[0].killed).toBe(true)
+    expect(procs[1].killed).toBe(false)
+    procs[1].pending[0].resolve({ b: 1 })
+    expect(await b).toEqual({ b: 1 })
+    await tick()
+    procs[1].pending[0].resolve({ c: 1 })
+    expect(await c).toEqual({ c: 1 })
+    expect(procs).toHaveLength(2)
+  })
+
+  it('close() 时队列里还有请求：立即拒绝，不会为它们再起进程；close 之后发的请求不受影响', async () => {
+    const { reader, procs } = make()
+    const a = reader.request('thread/list', {})
+    const b = reader.request('thread/read', {})
+    const c = reader.request('thread/turns/list', {})
+    await tick()
+    expect(procs[0].pending.map(p => p.method)).toEqual(['thread/list'])
+    const rejectedB = expect(b).rejects.toThrow(NATIVE_TEXT.codexReaderClosed)
+    const rejectedC = expect(c).rejects.toThrow(NATIVE_TEXT.codexReaderClosed)
+    await reader.close()
+    // 在途的 a 照常得到结果（进程已经 close，回包是不是到得了不归 reader 管）
+    procs[0].pending[0].resolve({ a: 1 })
+    expect(await a).toEqual({ a: 1 })
+    await rejectedB
+    await rejectedC
+    await tick()
+    expect(procs).toHaveLength(1)
+    // close 之后的新请求排在旧的后面，但属于新的一代，正常起进程
+    const d = reader.request('thread/list', {})
+    await tick()
+    expect(procs).toHaveLength(2)
+    procs[1].pending[0].resolve({ d: 1 })
+    expect(await d).toEqual({ d: 1 })
+  })
+
+  it('close({ quick: true }) 给进程 1 秒；默认不限定（用进程自己的默认）', async () => {
+    const { reader, procs } = make()
+    const a = reader.request('thread/list', {})
+    await tick()
+    procs[0].pending[0].resolve({})
+    await a
+    await reader.close({ quick: true })
+    expect(procs[0].closeTimeout).toBe(QUICK_CLOSE_MS)
+    const b = reader.request('thread/list', {})
+    await tick()
+    procs[1].pending[0].resolve({})
+    await b
+    await reader.close()
+    expect(procs[1].closeTimeout).toBeUndefined()
   })
 
   it('signal 触发时不等回包直接拒绝，晚到的回包丢掉，队列继续', async () => {
@@ -1135,6 +1344,36 @@ describe('CodexReader + 假 Codex', () => {
     // 整个过程只起了一个进程
     expect(existsSync(log)).toBe(true)
     expect(sent.filter(m => m.method === 'initialize')).toHaveLength(1)
+  })
+
+  it('summary 视图（轮次索引用的）里 userMessage 带 clientId：像素星空发的有，终端里发的是 null（Codex 0.163.0 实测的形状）', async () => {
+    const sent = (n: number, clientId: string): Message => ({
+      id: `turn-${n}`,
+      clientId,
+      content: [text(`问题 ${n}`)],
+      startedAt: T0 + n,
+      items: [user(`u-${n}`, `问题 ${n}`, clientId), agent(`a-${n}`, `回答 ${n}`)],
+    })
+    setup(
+      { [tid(1)]: metaFor({ source: 'vscode', originator: 'pixelsky' }) },
+      { [tid(1)]: [stored(1, '终端里的'), sent(2, 'client-2'), sent(3, 'client-3-retry-7a1f')] },
+    )
+    const raw = await reader.request('thread/turns/list', {
+      threadId: tid(1),
+      sortDirection: 'asc',
+      itemsView: 'summary',
+      limit: 10,
+    })
+    const summaryUsers = array(raw.data).map(t => array(t.items).find(i => i.type === 'userMessage')!)
+    expect(summaryUsers.map(u => Object.keys(u))).toEqual(
+      Array.from({ length: 3 }, () => ['type', 'id', 'clientId', 'content']),
+    )
+    expect(summaryUsers.map(u => u.clientId)).toEqual([null, 'client-2', 'client-3-retry-7a1f'])
+    // 索引、按 clientId 补上 / 加载更早的都靠它
+    const index = await codexTurnIndex(reader, tid(1))
+    expect(index.map(r => r.clientIds)).toEqual([[], ['client-2'], ['client-3-retry-7a1f']])
+    expect(users((await newerCodexTurns(reader, proj, tid(1), 'client-2'))!.items)).toEqual(['turn-3'])
+    expect((await readCodexThread(reader, proj, tid(1), { before: 'client-3-retry-7a1f' }))!.turns).toBe(3)
   })
 
   it('起不来的命令抛出带原因的错误', async () => {

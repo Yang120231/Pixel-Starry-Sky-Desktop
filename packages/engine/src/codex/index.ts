@@ -1,6 +1,14 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import type { EngineAdapter, EngineSession, Launcher, LoginProcess, SessionContext } from '../adapter'
+import type {
+  CloseOptions,
+  EngineAdapter,
+  EngineSession,
+  Launcher,
+  LoginProcess,
+  RewindAnchor,
+  SessionContext,
+} from '../adapter'
 import type { ListOptions, LiveState, NativeRead, NativeSessionList, NewerTurns, ReadOptions } from '../native/types'
 import {
   type AgentRuns,
@@ -216,7 +224,7 @@ export class CodexAdapter implements EngineAdapter {
    * 回退 / 分叉的截断点：起一个临时 app-server 冷读线程的轮次（不 resume），按用户消息 clientId 求「最后保留的一轮」。
    * 读不到（没装、线程没了、没有 clientId）返回 null，宿主按「找不到」处理
    */
-  async rewindAnchor(record: SessionRecord, userItemIds: string[]): Promise<{ at: string | null } | null> {
+  async rewindAnchor(record: SessionRecord, userItemIds: string[]): Promise<RewindAnchor | null> {
     if (!record.engineSessionId) return null
     let proc: CodexProcess | undefined
     try {
@@ -279,8 +287,8 @@ export class CodexAdapter implements EngineAdapter {
     return env.CODEX_HOME || join(homedir(), '.codex')
   }
   /** 关掉适配器自己的常驻进程（应用退出）：读取进程 */
-  close(): Promise<void> {
-    return this.reader.close()
+  close(opts?: CloseOptions): Promise<void> {
+    return this.reader.close(opts)
   }
   // ---------- 接着终端里的 Codex 会话（docs/ui/codex-resume.md） ----------
   async nativeSessions(cwd: string, opts?: ListOptions): Promise<NativeSessionList> {
@@ -302,7 +310,9 @@ export class CodexAdapter implements EngineAdapter {
     after: string,
     opts?: { turns?: number; afterTurn?: boolean },
   ): Promise<NewerTurns | null> {
-    return newerCodexTurns(this.reader, cwd, id, after, { turns: opts?.turns })
+    // 终端里正开着：末尾还没结束的那一轮不补（和导入时一样），等它结束了下次 check 再补
+    const live = this.nativeLive([{ id, mtimeMs: 0 }]).get(id) != null
+    return newerCodexTurns(this.reader, cwd, id, after, { turns: opts?.turns, live })
   }
   hasNativeSession(record: SessionRecord): boolean {
     return !record.engineSessionId || codexThreadExists(this.codexHome(record), record.engineSessionId)

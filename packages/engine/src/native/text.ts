@@ -34,6 +34,10 @@ export const NATIVE_TEXT = {
   newer: (turns: number) => `这个会话在终端里又聊了 ${turns} 轮，显示里还没有`,
   synced: (turns: number) => `已补上终端里的 ${turns} 轮`,
   gone: '这个会话的记录已经不在了',
+  /** Codex 读取进程被关掉了（更新 / 安装 Codex、换了 Codex 的位置、应用退出）时，排队的读取请求被拒绝 */
+  codexReaderClosed: 'Codex 正在更新或已重新检测，读取被中断了，请重试',
+  /** 原地导入的对话已经不接着原会话了（回退换了新线程、换了引擎），不能再「复制一份」 */
+  notFollowing: '这个对话已经不接着原来的会话了，没法再复制一份',
   /** 复制一份接着聊要从一轮已结束的轮次分叉，线程里一轮结束的都没有 */
   nothingToCopy: '这个会话还没有聊完的一轮，没法复制',
   /** Codex 版：线程是像素星空以前用过的，换引擎时注入的聊天 app-server 读不出来 */

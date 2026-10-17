@@ -174,6 +174,17 @@ class FakeAdapter implements EngineAdapter {
     hasEarlier: false,
     compacted: false,
   })
+  /** 终端里又聊了几轮（newerNativeTurns 报多少轮新的） */
+  newerTurns = 0
+  newerNativeTurns = async (_cwd: string, _id: string, after: string) => ({
+    items: [],
+    turns: this.newerTurns,
+    shown: this.newerTurns,
+    gap: 0,
+    leafUuid: null,
+    at: 'newer-at',
+    base: after,
+  })
   /** 回退时的截断点：返回 null 表示记录里找不到 */
   anchor: ((ids: string[]) => { at: string | null } | null) | null = (ids: string[]) => ({ at: `at-${ids[0]}` })
   constructor(
@@ -1116,6 +1127,55 @@ describe('接着引擎自己的会话（docs/ui/claude-resume.md）', () => {
     expect(claude.sessions[0].seeds[0]!.turns.map(t => t.user)).toEqual(['给 Codex'])
     // 原生会话还在，不会被当成「没了」
     expect(snap().items.some(i => i.kind === 'notice' && i.level === 'warn')).toBe(false)
+  })
+
+  it('换了引擎后 check / sync 仍按导入的那个引擎判断：终端里新聊的能发现、能补上；换引擎后回退找不到截断点则是 0', async () => {
+    const { host, claude, id, snap, say } = await imported()
+    await host.update(id, { engine: 'codex' })
+    await say('给 Codex')
+    // 当前引擎是 Codex，它的会话 id 不是原会话的；原会话 id 记在 engineSessions.claude 里
+    expect(snap().record.engineSessionId).not.toBe(NATIVE)
+    expect(snap().record.engineSessions?.claude?.id).toBe(NATIVE)
+    claude.newerTurns = 2
+    await expect(host.nativeSessionAction(id, 'check')).resolves.toEqual({ added: 2 })
+    await expect(host.nativeSessionAction(id, 'sync')).resolves.toEqual({ added: 2 })
+    expect(snap().record.imported).toMatchObject({ turns: 3 })
+    // 原引擎那边还有待执行的回退：和回退了还没发消息一样，不算新聊的
+    const claudeEntry = snap().record.engineSessions!.claude!
+    const patch = (host as unknown as { m: { events: { patchRecord(id: string, p: Partial<SessionRecord>): void } } }).m
+    patch.events.patchRecord(id, {
+      engineSessions: { ...snap().record.engineSessions, claude: { ...claudeEntry, pendingRewind: 'p' } },
+    })
+    await expect(host.nativeSessionAction(id, 'check')).resolves.toEqual({ added: 0 })
+    // 原引擎换了新线程（回退找不到截断点）：同样是 0
+    patch.events.patchRecord(id, {
+      engineSessions: { ...snap().record.engineSessions, claude: { ...claudeEntry, id: null } },
+    })
+    await expect(host.nativeSessionAction(id, 'check')).resolves.toEqual({ added: 0 })
+    await expect(host.nativeSessionAction(id, 'sync')).resolves.toEqual({ added: 0 })
+  })
+
+  it('复制一份只对现在还接着原会话的对话：换了引擎、或原引擎的线程 id 变了都拒绝，回到原引擎且 id 没变则放行', async () => {
+    const { host, id, snap, say } = await imported()
+    await host.update(id, { engine: 'codex' })
+    await say('给 Codex')
+    await expect(host.nativeSessionAction(id, 'copy')).rejects.toThrow(NATIVE_TEXT.notFollowing)
+    // 回到 Claude，线程 id 还是原来的：放行（分叉点用导入时的最后位置）
+    await host.update(id, { engine: 'claude' })
+    expect(snap().record.engineSessionId).toBe(NATIVE)
+    await expect(host.nativeSessionAction(id, 'copy')).resolves.toEqual({ added: 0 })
+    expect(snap().record.imported).toMatchObject({ forked: true })
+    expect(snap().record.pendingFork).toMatchObject({ from: NATIVE })
+  })
+
+  it('原地导入的对话回退换了新线程后也不能再复制一份', async () => {
+    const { host, claude, id, snap, say } = await imported()
+    await say('一句')
+    claude.anchor = null
+    await host.rewind(id, 'n1')
+    expect(snap().record.engineSessionId).not.toBe(NATIVE)
+    await expect(host.nativeSessionAction(id, 'copy')).rejects.toThrow(NATIVE_TEXT.notFollowing)
+    expect(snap().record.imported?.forked).toBeUndefined()
   })
 
   it('原生会话记录没了：整段聊天当没看过，回放给适配器，单独一条带详情的 warn 提示；之后游标照常推进', async () => {

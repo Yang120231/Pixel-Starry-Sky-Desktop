@@ -802,6 +802,14 @@ export const systemMessages = {
     zh: '这一轮带着编辑器的上下文',
     en: 'This turn carried context from the editor',
   },
+  'system.nativeNotFollowing': {
+    zh: '这个对话已经不接着原来的会话了，没法再复制一份',
+    en: 'This conversation no longer continues the original session, so it can’t be copied again',
+  },
+  'system.nativeCodexReaderClosed': {
+    zh: 'Codex 正在更新或已重新检测，读取被中断了，请重试',
+    en: 'Codex is being updated or was re-detected, so reading was interrupted. Please try again',
+  },
   'system.nativeNothingToCopy': {
     zh: '这个会话还没有聊完的一轮，没法复制',
     en: 'This session has no finished turn yet, so it can’t be copied',

@@ -1,7 +1,7 @@
 // 接着终端里的 Codex 会话：列表和占用、导入（原地 / 复制 / 旧格式）、正开着、记录被删、回退 / 分叉、
 // 加载更早的、补上、modelProvider、空闲放开线程（docs/ui/codex-resume.md §8 host 测试），用真的 EngineHost + 假 Codex
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -216,6 +216,14 @@ const patchRecord = (host: EngineHost, id: string, patch: Partial<SessionRecord>
     host as unknown as { m: { events: { patchRecord(id: string, p: Partial<SessionRecord>): void } } }
   ).m.events.patchRecord(id, patch)
 
+/** 往对话里直接放一条用户消息（模拟「发出去了但没送到 Codex」：启动失败留在对话里的那种） */
+const injectUser = (host: EngineHost, id: string, userId: string, text = '没发出去'): void =>
+  (host as unknown as { m: { events: { apply(id: string, e: unknown): void } } }).m.events.apply(id, {
+    type: 'item_completed',
+    item: { kind: 'user', id: userId, text, createdAt: Date.now(), engine: 'codex' },
+  })
+const UNSENT = '00000000-0000-4000-8000-00000000f001'
+
 // 每条要起几个假 Codex 进程（读取进程、会话、读轮次的临时进程），完整检查并发跑时会超过默认的 5 秒
 describe('列表和占用', { timeout: 20_000 }, () => {
   it('列出项目（和子文件夹）里的线程；第二步补最后一句；请求不带 cwd、modelProviders 是 []', async () => {
@@ -330,6 +338,18 @@ describe('导入：原地接着', { timeout: 20_000 }, () => {
     })
   })
 
+  it('线程的 cwd 和项目路径是同一个目录、只差末尾分隔符 / 大小写：算项目根目录，不当成同名子文件夹', async () => {
+    const t = setup()
+    const a = addThread(1, `${t.cwd}${sep}`, 1)
+    const first = await importIn(t, a)
+    expect(t.host.open(first.sessionId).record.cwd).toBe(t.cwd)
+    if (IS_WINDOWS) {
+      const b = addThread(2, t.cwd.toUpperCase(), 1)
+      const second = await importIn(t, b)
+      expect(t.host.open(second.sessionId).record.cwd).toBe(t.cwd)
+    }
+  })
+
   it('子文件夹里的线程：导入后 cwd 是子文件夹；/resume <id> 直接导入（没有列表缓存）也是', async () => {
     const t = setup()
     const sub = join(t.cwd, 'pkg', 'app')
@@ -429,6 +449,39 @@ describe('导入：复制一份接着聊', { timeout: 20_000 }, () => {
     await say(t.host, id, '改', 1)
     expect(called('thread/fork')[0].params).toMatchObject({ threadId: x, lastTurnId: turnId(1, 1) })
     expect(turnIds(x)).toHaveLength(3)
+  })
+
+  it('启动前回退一条没送到 Codex 的消息（保留全部）：pendingFork.at 不动，不会带上导入之后终端里新聊的轮次', async () => {
+    const t = setup()
+    const x = addThread(1, t.cwd, 2)
+    const { sessionId: id } = await importIn(t, x, 'copy')
+    expect(t.host.open(id).record.pendingFork).toEqual({ from: x, at: turnId(1, 2) })
+    // 导入之后终端里又聊了两轮（最后一轮还在跑）；对话里留着一条启动失败、没送到 Codex 的消息
+    appendTurns(x, fxTurn(1, 3), fxTurn(1, 4, { status: 'inProgress' }, null))
+    injectUser(t.host, id, UNSENT)
+    await t.host.rewind(id, UNSENT)
+    const record = t.host.open(id).record
+    expect(record.pendingFork).toEqual({ from: x, at: turnId(1, 2) })
+    expect(record.engineSessionId).toBeNull()
+    expect(userIds(t.host, id)).toEqual([turnId(1, 1), turnId(1, 2)])
+    expect(notices(t.host, id).filter(n => n.level === 'warn' || n.text.startsWith('无法'))).toEqual([])
+    await say(t.host, id, '改', 1)
+    expect(called('thread/fork')[0].params).toMatchObject({ threadId: x, lastTurnId: turnId(1, 2) })
+    expect(turnIds(x)).toHaveLength(4)
+  })
+
+  it('原地导入的对话已有待回退时，再回退一条没送到 Codex 的消息：待回退不被盖掉', async () => {
+    const t = setup()
+    const x = addThread(1, t.cwd, 3)
+    const { sessionId: id } = await importIn(t, x)
+    await t.host.rewind(id, turnId(1, 3))
+    expect(t.host.open(id).record.pendingRewind).toBe(turnId(1, 2))
+    injectUser(t.host, id, UNSENT)
+    await t.host.rewind(id, UNSENT)
+    // 线程里第 3 轮还在（revert 要等下次启动），保留全部不能把 pendingRewind 挪到第 3 轮
+    expect(t.host.open(id).record.pendingRewind).toBe(turnId(1, 2))
+    await say(t.host, id, '改', 1)
+    expect(called('thread/revert')[0].params).toEqual({ threadId: x, beforeTurnId: turnId(1, 3) })
   })
 
   it('线程里一轮结束的都没有：复制报「没聊完的一轮」，不建对话', async () => {
@@ -575,24 +628,57 @@ describe('回退 / 分叉导入来的消息', { timeout: 20_000 }, () => {
     expect(called('thread/start')).toHaveLength(0)
   })
 
-  it('一轮里有引导消息（-u1）：回退到引导消息按「保留全部」处理，不开新线程', async () => {
-    const t = setup()
-    const x = addThread(1, t.cwd, 2)
-    // 第 2 轮里除了第一条用户话，还有一条 steer 追加的
+  /** 第 2 轮里除了第一条用户话，还有一条 steer 追加的 */
+  function withSteer(x: string, turnIndex: number): void {
     const turns = threadsOf()[x]
-    turns[1].items.splice(1, 0, {
+    turns[turnIndex].items.splice(1, 0, {
       type: 'userMessage',
       id: 'steer-1',
       clientId: null,
       content: [{ type: 'text', text: '补充一句', text_elements: [] }],
     })
     write('threads.json', { [x]: turns })
+  }
+
+  it('一轮里有引导消息（-u1）、在最后一轮：回退到引导消息截不开半轮，开新线程，提示「无法在 Codex 记录中回退」，下一条消息带交接', async () => {
+    const t = setup()
+    const x = addThread(1, t.cwd, 2)
+    withSteer(x, 1)
     const { sessionId: id } = await importIn(t, x)
     expect(userIds(t.host, id)).toEqual([turnId(1, 1), turnId(1, 2), `${turnId(1, 2)}-u1`])
     await t.host.rewind(id, `${turnId(1, 2)}-u1`)
-    // 引擎那边整轮截不开：没有截断点（保留到最后一轮），线程和对话都不开新的
-    expect(t.host.open(id).record.engineSessionId).toBe(x)
-    expect(t.host.open(id).record.pendingRewind).toBe(turnId(1, 2))
+    // 对话里这条引导消息已经删了；Codex 不能只回退半轮，所以不再接着 X：新线程 + 提示（不是悄悄留着）
+    const record = t.host.open(id).record
+    expect(record.engineSessionId ?? null).toBeNull()
+    expect(record.pendingRewind ?? null).toBeNull()
+    expect(userIds(t.host, id)).toEqual([turnId(1, 1), turnId(1, 2)])
+    expect(notices(t.host, id).map(n => n.text)).toContain(
+      '无法在 Codex 记录中回退到这条消息，已开始新的引擎会话，下一条消息会带上之前对话的交接',
+    )
+    await say(t.host, id, '改', 1)
+    expect(called('thread/resume')).toHaveLength(0)
+    expect(called('thread/revert')).toHaveLength(0)
+    expect(called('thread/start')).toHaveLength(1)
+    expect(turnIds(x)).toHaveLength(2)
+  })
+
+  it('引导消息在中间某一轮（后面还有一轮）：被移除的包括引导消息和后一轮，同样开新线程 + 提示，不留下半轮', async () => {
+    const t = setup()
+    const x = addThread(1, t.cwd, 3)
+    withSteer(x, 1)
+    const { sessionId: id } = await importIn(t, x)
+    expect(userIds(t.host, id)).toEqual([turnId(1, 1), turnId(1, 2), `${turnId(1, 2)}-u1`, turnId(1, 3)])
+    await t.host.rewind(id, `${turnId(1, 2)}-u1`)
+    const record = t.host.open(id).record
+    expect(record.engineSessionId ?? null).toBeNull()
+    expect(record.pendingRewind ?? null).toBeNull()
+    expect(notices(t.host, id).some(n => n.text.startsWith('无法在 Codex 记录中回退'))).toBe(true)
+    // 回退到整轮（第 2 轮自己的话）照旧：截断点是第 1 轮
+    const y = addThread(2, t.cwd, 3)
+    withSteer(y, 1)
+    const b = await importIn(t, y)
+    await t.host.rewind(b.sessionId, turnId(2, 2))
+    expect(t.host.open(b.sessionId).record.pendingRewind).toBe(turnId(2, 1))
   })
 
   it('分叉：分叉出的记录没有 imported，pendingFork.at 是被分叉消息的前一轮；原对话仍占着 X', async () => {
@@ -673,6 +759,31 @@ describe('加载更早的 / 补上', { timeout: 30_000 }, () => {
     expect(notices(t.host, id).some(n => n.text.includes('交接') || n.level === 'warn')).toBe(false)
   })
 
+  it('终端里正跑着一轮（锁文件说正开着）：check 不算这一轮、sync 不导入它；它跑完后下次 check 再补，回复完整', async () => {
+    const t = setup()
+    const x = addThread(1, t.cwd, 2)
+    const { sessionId: id } = await importIn(t, x)
+    appendTurns(x, fxTurn(1, 3, { status: 'inProgress' }, '半截'))
+    const live = vi.spyOn(t.adapter, 'nativeLive').mockReturnValue(new Map([[x, 'terminal']]))
+    await expect(t.host.nativeSessionAction(id, 'check')).resolves.toEqual({ added: 0 })
+    await expect(t.host.nativeSessionAction(id, 'sync')).resolves.toEqual({ added: 0 })
+    expect(userIds(t.host, id)).toEqual([turnId(1, 1), turnId(1, 2)])
+    expect(t.host.open(id).record.imported).toMatchObject({ turns: 2 })
+    // 不再开着（它也跑完了）：补上整轮
+    live.mockReturnValue(new Map([[x, null]]))
+    write('threads.json', {
+      ...threadsOf(),
+      [x]: threadsOf()[x].map(turn => (turn.id === turnId(1, 3) ? fxTurn(1, 3, {}, '写完了') : turn)),
+    })
+    const meta = metaOf()
+    write('meta.json', { ...meta, [x]: { ...meta[x], updatedAt: Number(meta[x].updatedAt) + 10 } })
+    await expect(t.host.nativeSessionAction(id, 'check')).resolves.toEqual({ added: 1 })
+    await expect(t.host.nativeSessionAction(id, 'sync')).resolves.toEqual({ added: 1 })
+    expect(userIds(t.host, id)).toEqual([turnId(1, 1), turnId(1, 2), turnId(1, 3)])
+    const last = t.host.open(id).items.findLast(i => i.kind === 'assistant')
+    expect(last).toMatchObject({ text: '写完了', status: 'completed' })
+  })
+
   it('回退了还没发消息（线程还没截断）：check / sync 都是 0、不把回退掉的轮次当新聊的，撤销回退照样成功', async () => {
     const t = setup()
     const x = addThread(1, t.cwd, 3)
@@ -712,6 +823,23 @@ describe('加载更早的 / 补上', { timeout: 30_000 }, () => {
     patchRecord(t.host, b.sessionId, { engineSessionId: 'fake-thread-9' })
     await expect(t.host.nativeSessionAction(b.sessionId, 'check')).resolves.toEqual({ added: 0 })
     await expect(t.host.nativeSessionAction(b.sessionId, 'sync')).resolves.toEqual({ added: 0 })
+  })
+
+  it('复制一份接着聊：回退换了新线程（不再接着 X）后拒绝，错误是 NATIVE_TEXT.notFollowing，不改记录', async () => {
+    const t = setup()
+    const x = addThread(1, t.cwd, 3)
+    const { sessionId: id } = await importIn(t, x)
+    await t.host.rewind(id, turnId(1, 1))
+    expect(t.host.open(id).record.engineSessionId ?? null).toBeNull()
+    const before = JSON.stringify(t.host.open(id).record)
+    await expect(t.host.nativeSessionAction(id, 'copy')).rejects.toThrow(NATIVE_TEXT.notFollowing)
+    expect(JSON.stringify(t.host.open(id).record)).toBe(before)
+    // 回退还没执行时（pendingRewind）仍接着 X：放行，分叉点用待回退的位置
+    const y = addThread(2, t.cwd, 3)
+    const b = await importIn(t, y)
+    await t.host.rewind(b.sessionId, turnId(2, 3))
+    await expect(t.host.nativeSessionAction(b.sessionId, 'copy')).resolves.toEqual({ added: 0 })
+    expect(t.host.open(b.sessionId).record.pendingFork).toEqual({ from: y, at: turnId(2, 2) })
   })
 
   it('复制的对话不补上：check / sync 都是 0', async () => {
@@ -827,6 +955,27 @@ describe('空闲后放开线程', { timeout: 20_000 }, () => {
     expect(delays.at(-1)).toBe(3_600_000)
     delays.length = 0
     await say(t.host, plain.id, 'c', 3)
+    expect(delays.at(-1)).toBe(3_600_000)
+  })
+
+  it('只在当前执行者是 Codex、并且还接着原线程时才缩短：回退换了新线程后按普通对话的空闲时间', async () => {
+    const t = setup({ idleMs: 3_600_000 })
+    const x = addThread(1, t.cwd, 2)
+    const { sessionId: id } = await importIn(t, x)
+    const delays: number[] = []
+    const real = globalThis.setTimeout
+    vi.spyOn(globalThis, 'setTimeout').mockImplementation(((fn: () => void, ms?: number) => {
+      if (ms === 120_000 || ms === 3_600_000) delays.push(ms)
+      return real(fn, ms)
+    }) as typeof setTimeout)
+    await say(t.host, id, 'a', 1)
+    expect(delays.at(-1)).toBe(120_000)
+    // 回退到第一条：换了新线程，进程没有拿着 X 的写入锁
+    await t.host.rewind(id, turnId(1, 1))
+    expect(t.host.open(id).record.engineSessionId ?? null).toBeNull()
+    delays.length = 0
+    await say(t.host, id, 'b', 2)
+    expect(t.host.open(id).record.engineSessionId).not.toBe(x)
     expect(delays.at(-1)).toBe(3_600_000)
   })
 

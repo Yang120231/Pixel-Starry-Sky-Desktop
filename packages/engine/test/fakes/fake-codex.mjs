@@ -62,9 +62,13 @@ const textOf = content =>
     .filter(i => i.type === 'text')
     .map(i => i.text)
     .join('\n')
-/** 一轮的 Turn 对象；items 没给时只有一条 userMessage。view：full / summary（第一条用户消息和最后一条回复）/ notLoaded */
+/**
+ * 一轮的 Turn 对象；items 没给时只有一条 userMessage。view：full / summary（第一条用户消息和最后一条回复）/ notLoaded。
+ * 形状和真 Codex 0.163.0 一致（实测）：summary 和 full 视图里 userMessage 的字段都是 type、id、clientId、content，
+ * clientId 是发送方传的 clientUserMessageId（像素星空发的轮次有，终端里发的是 null）
+ */
 function turnObject(t, view) {
-  const all = t.items ?? [{ type: 'userMessage', id: 'u-' + t.id, clientId: t.clientId, content: t.content }]
+  const all = t.items ?? [{ type: 'userMessage', id: 'u-' + t.id, clientId: t.clientId ?? null, content: t.content }]
   let items = all
   if (view === 'notLoaded') items = []
   else if (view !== 'full') {

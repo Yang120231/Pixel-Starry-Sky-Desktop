@@ -1,7 +1,7 @@
 // 只读用的 Codex app-server（docs/ui/codex-resume.md §3.5）：列线程、读线程的元数据和轮次。
 // 只发 thread/list、thread/read、thread/turns/list，绝不 thread/resume（不拿线程的写入锁，不会挡住终端里的 codex）。
 // 按需起一个进程，空闲 60 秒自己关；请求排队一个一个发；signal 触发时不等回包。
-import type { Launcher } from '../adapter'
+import { QUICK_CLOSE_MS, type Launcher } from '../adapter'
 import { startupReason } from '../exec'
 import { logger } from '../log'
 import { NATIVE_TEXT } from '../native/text'
@@ -27,7 +27,7 @@ export interface ReaderLaunch {
 export interface ReaderProcess {
   readonly alive: boolean
   request(method: string, params: unknown, timeoutMs?: number): Promise<Message>
-  close(): Promise<void>
+  close(timeoutMs?: number): Promise<void>
   kill(): void
 }
 
@@ -77,6 +77,8 @@ export class CodexReader implements CodexRpc {
   /** 排队：上一个请求完了才发下一个 */
   private tail: Promise<unknown> = Promise.resolve()
   private waiting = 0
+  /** 「代」：close() 加一。close 之前排队的请求、正在起的进程都属于旧的一代，不能再用 */
+  private generation = 0
 
   constructor(
     private readonly launch: () => Promise<ReaderLaunch | null>,
@@ -96,9 +98,12 @@ export class CodexReader implements CodexRpc {
     if (signal?.aborted) return Promise.reject(signal.reason)
     this.stopIdle()
     this.waiting++
+    const generation = this.generation
     const run = this.tail.then(async () => {
       signal?.throwIfAborted()
-      return this.send(method, params)
+      // 排队期间被 close() 了：不再起进程
+      if (generation !== this.generation) throw new Error(NATIVE_TEXT.codexReaderClosed)
+      return this.send(method, params, generation)
     })
     // 队列接着往下走，不管这一个成不成
     this.tail = run.then(
@@ -114,25 +119,31 @@ export class CodexReader implements CodexRpc {
     return result
   }
 
-  /** 关掉进程（Codex 路径变了、应用退出）；之后再请求会重新起 */
-  async close(): Promise<void> {
+  /**
+   * 关掉进程（Codex 路径变了、更新 / 安装前、应用退出）；之后的新请求会重新起。
+   * 挡得住两种漏网的情况：正在启动的进程（起来后马上关掉）和排队中的请求（立即拒绝）
+   */
+  async close(opts: { quick?: boolean } = {}): Promise<void> {
+    this.generation++
     this.stopIdle()
     const proc = this.proc
     this.proc = null
     this.starting = null
-    if (proc) await proc.close().catch(() => {})
+    if (proc) await proc.close(opts.quick ? QUICK_CLOSE_MS : undefined).catch(() => {})
   }
 
-  private async send(method: string, params: Message): Promise<Message> {
+  private async send(method: string, params: Message, generation: number): Promise<Message> {
     const timeout = this.opts.timeoutMs ?? 60_000
-    // 进程在两次请求之间死了、这次才发现：重起一次再试（读取都是幂等的）
+    // 请求途中进程死了（崩溃、被杀）：重起一次再试（读取都是幂等的）。
+    // 真进程退出时先同步拒绝挂着的请求、再同步通知 onExit，所以这里看到失败时 this.proc 已经被清掉了，只看进程自己的 alive；
+    // 但 close() 引起的失败不重试
     for (let attempt = 0; ; attempt++) {
-      const proc = await this.ensure()
+      const proc = await this.ensure(generation)
       try {
         return await proc.request(method, params, timeout)
       } catch (err) {
-        if (attempt === 0 && !proc.alive && this.proc === proc) {
-          this.proc = null
+        if (attempt === 0 && !proc.alive && generation === this.generation) {
+          if (this.proc === proc) this.proc = null
           continue
         }
         throw err
@@ -140,22 +151,36 @@ export class CodexReader implements CodexRpc {
     }
   }
 
-  private async ensure(): Promise<ReaderProcess> {
+  private async ensure(generation: number): Promise<ReaderProcess> {
+    if (generation !== this.generation) throw new Error(NATIVE_TEXT.codexReaderClosed)
     if (this.proc?.alive) return this.proc
     this.proc = null
-    this.starting ??= this.start().finally(() => (this.starting = null))
+    if (!this.starting) {
+      // close() 会把 starting 清掉；旧的启动收尾时不能把后来新起的那个也清了
+      const starting: Promise<ReaderProcess> = this.start(generation).finally(() => {
+        if (this.starting === starting) this.starting = null
+      })
+      this.starting = starting
+    }
     return this.starting
   }
 
-  private async start(): Promise<ReaderProcess> {
+  private async start(generation: number): Promise<ReaderProcess> {
     const launch = await this.launch()
     if (!launch) throw new Error(NATIVE_TEXT.codexUnavailable)
+    // 取启动参数期间被 close() 了
+    if (generation !== this.generation) throw new Error(NATIVE_TEXT.codexReaderClosed)
     let self: ReaderProcess | null = null
     const onExit = (): void => {
       if (self && this.proc === self) this.proc = null
     }
     const open = this.opts.open ?? openProcess
     self = await open(launch, onExit)
+    // 起进程期间被 close() 了：这个进程已经没人要，马上关掉（不然 update / install 前关了又被拉起来，占着 codex.exe）
+    if (generation !== this.generation) {
+      self.kill()
+      throw new Error(NATIVE_TEXT.codexReaderClosed)
+    }
     this.proc = self
     log.debug('读取进程已启动')
     return self

@@ -295,9 +295,14 @@ export class HostEvents {
     if (rt.idleTimer) clearTimeout(rt.idleTimer)
     // 原地接着终端里的 Codex 会话：进程一直拿着线程的写入锁，终端里 `codex resume` 会报被占用，所以 2 分钟空闲就放开
     // （docs/ui/codex-resume.md §4.6）；下一条消息再 thread/resume
-    const imported = rt.snapshot.record.imported
+    // 只在当前执行者还是 Codex、并且还接着原线程时才缩短：换到别的引擎、或回退后换了新线程，进程没拿着原线程的锁
+    const record = rt.snapshot.record
+    const imported = record.imported
     const idleMs =
-      imported?.engine === 'codex' && !imported.forked
+      imported?.engine === 'codex' &&
+      !imported.forked &&
+      record.engine === 'codex' &&
+      record.engineSessionId === imported.sessionId
         ? Math.min(this.ctx.idleMs, CODEX_IMPORTED_IDLE_MS)
         : this.ctx.idleMs
     rt.idleTimer = setTimeout(() => {

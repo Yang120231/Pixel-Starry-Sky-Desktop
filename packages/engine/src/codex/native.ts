@@ -39,6 +39,7 @@ export const DETAIL_BUDGET = 200
 /** 读轮次内容每页的轮数（一轮 full 视图最大约 650 KB，5 轮离协议帧上限很远） */
 export const FULL_PAGE = 5
 const INDEX_PAGE = 200
+const DAY = 86_400_000
 
 const CACHE_MAX = 500
 const INDEX_CACHE_MAX = 8
@@ -68,8 +69,11 @@ const oneLine = (s: string): string => s.replace(/\s+/g, ' ').trim()
 const pad = (n: number): string => String(n).padStart(2, '0')
 const secondsOf = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 
-/** Codex 报「线程不存在」的几种说法（实测：thread not loaded: <id>；id 写错是 invalid thread id） */
-const GONE = /thread not loaded|thread not found|not found|invalid thread id|no rollout found/i
+/**
+ * Codex 报「线程不存在」的几种说法（实测：thread not loaded: <id>；id 写错是 invalid thread id）。
+ * 不能单独匹配 not found：配置里的 provider / profile 找不到也是这个词，会被当成线程没了而盖住真正的原因
+ */
+const GONE = /thread not loaded|thread not found|invalid thread id|no rollout found/i
 const isGone = (err: unknown): boolean => GONE.test(err instanceof Error ? err.message : String(err))
 
 // ---------- 用户话 ----------
@@ -324,11 +328,34 @@ export function liveCodexThreads(
 // ---------- 记录还在不在 ----------
 
 /**
+ * 线程创建那天（本地日期，前后各一天，防时区 / 跨零点）的日期目录里有没有它的 rollout：第一段一定放在那里。
+ * 宿主每发一条消息都要问一次「记录还在不在」，先查这三个目录，不用把创建日之后的每一天都读一遍
+ */
+function rolloutOnCreationDay(codexHome: string, id: string, createdAt: number): boolean {
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  for (const offset of [0, -DAY, DAY]) {
+    const day = new Date(createdAt + offset)
+    const dir = join(codexHome, 'sessions', String(day.getFullYear()), pad(day.getMonth() + 1), pad(day.getDate()))
+    try {
+      if (readdirSync(dir).some(name => name.startsWith('rollout-') && name.endsWith('.jsonl') && name.includes(id)))
+        return true
+    } catch {
+      // 那天没有目录
+    }
+  }
+  return false
+}
+
+/**
  * 线程的记录还在不在：sessions/ 下有它的 rollout，或 archived_sessions/ 下有文件名带它的 id。
  * sessions 目录不存在（读不了、布局变了），或线程 id 不是 UUIDv7（rollout 放在哪天的目录算不出来）拿不准，当它在
+ * （旧格式线程的 id 是 v4，也落在这里：它们一律复制导入，复制出的新线程是 v7，兜底只对新线程有用）。
+ * 先查创建日的目录，没有再把创建日之后的目录全扫一遍（rollout 被删后才会走到全扫）
  */
 export function codexThreadExists(codexHome: string, id: string): boolean {
-  if (!existsSync(join(codexHome, 'sessions')) || threadTime(id) === null) return true
+  const createdAt = threadTime(id)
+  if (!existsSync(join(codexHome, 'sessions')) || createdAt === null) return true
+  if (rolloutOnCreationDay(codexHome, id, createdAt)) return true
   if (findCodexRollouts(codexHome, id).length > 0) return true
   try {
     return readdirSync(join(codexHome, 'archived_sessions')).some(name => name.includes(id))
@@ -346,7 +373,11 @@ export interface TurnRef {
   startedAt: number | null
   /** 这一轮有没有用户消息（没有的是 Codex 自己续跑的轮，并进前一轮，不单独算） */
   prompt: boolean
-  /** summary 视图里用户消息的 clientId（像素星空发的消息 id；终端里发的没有） */
+  /**
+   * summary 视图里用户消息的 clientId（像素星空发的消息 id；终端里发的没有）。
+   * 实测 Codex 0.163.0：originator 是 pixelsky 的线程，thread/turns/list 的 summary 和 full 视图里 userMessage 都带 clientId
+   * （重试的消息是 <原 id>-retry-<uuid>），所以索引不用 full 视图
+   */
   clientIds: string[]
 }
 
@@ -650,9 +681,11 @@ export async function newerCodexTurns(
     if (isGone(err)) return null
     throw err
   }
+  // live：终端里正在跑的那一轮不导入（导入的话会固定成「已中断」，剩下的回复永远补不进来），下次 check 再补
   const last = liveEnd(refs, opts.live)
-  const p = refs.findIndex((r, i) => i < last && (r.id === after || r.clientIds.includes(after)))
+  const p = refs.findIndex(r => r.id === after || r.clientIds.includes(after))
   if (p < 0) return null
+  // after 就是还没结束的那一轮（last 之后）：没有可补的
   let from = p + 1
   while (from < last && !refs[from].prompt) from++
   const starts = promptIndexes(refs, from, last)

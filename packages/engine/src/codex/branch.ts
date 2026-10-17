@@ -28,30 +28,49 @@ export interface AnchorOptions {
   byTurnId?: boolean
 }
 
+/** 一轮里 turn/steer 追加的引导消息，导入时的条目 id 是 <turn id>-u<n> */
+const steerOf = (turn: CodexTurnInfo, id: string): boolean => {
+  if (!id.startsWith(`${turn.id}-u`)) return false
+  const n = id.slice(turn.id.length + 2)
+  return n.length > 0 && /^\d+$/.test(n)
+}
+
 /**
- * 按被移除的用户消息 id 求截断点（id 是用户消息的 clientId，或者这一轮的 turn id）：
+ * 按被移除的用户消息 id 求截断点（id 是用户消息的 clientId，或者这一轮的 turn id，或者这一轮的引导消息 <turn id>-u<n>）：
  * 1. 最早含有被移除消息的那一轮 → at = 它的前一轮（没有前一轮 → null，一轮都不保留）；
- * 2. 被移除的消息都不在记录里，但轮次带 clientId（它们没发到 Codex），或 byTurnId → at = 最后一轮，什么都不删；
+ *    但这一轮的第一条用户话还保留着（只移除了后面的引导消息，或 clientId 只移除了一部分）→ Codex 不能只回退半轮，返回 null（找不到）；
+ * 2. 被移除的消息都不在记录里，但轮次带 clientId（它们没发到 Codex），或 byTurnId → at = 最后一轮，unchanged：什么都不删；
  * 3. 记录里没有任何 clientId（不是像素星空发的老会话）或读不到 → null（调用方按「找不到」处理）。
- * turn id 无条件参与匹配：像素星空的消息 id 是 UUID v4、turn id 是 v7，不会误中。
- * 一轮里 turn/steer 追加的引导消息（导入时 id 是 <turn id>-u<n>）既不在 clientIds 里也不等于 turn id，匹配不上
+ * turn id 无条件参与匹配：像素星空的消息 id 是 UUID v4、turn id 是 v7，不会误中
  */
 export function codexAnchor(
   turns: readonly CodexTurnInfo[],
   removedIds: readonly string[],
   opts: AnchorOptions = {},
-): { at: string | null } | null {
+): { at: string | null; unchanged?: true } | null {
   const removed = new Set(removedIds)
-  const index = turns.findIndex(turn => removed.has(turn.id) || turn.clientIds.some(id => removed.has(id)))
+  const hit = (turn: CodexTurnInfo): { first: boolean; steer: boolean; client: boolean } => ({
+    first: removed.has(turn.id),
+    client: turn.clientIds.some(id => removed.has(id)),
+    steer: removedIds.some(id => steerOf(turn, id)),
+  })
+  const index = turns.findIndex(turn => {
+    const h = hit(turn)
+    return h.first || h.client || h.steer
+  })
   if (index >= 0) {
-    // 同一轮里还有保留的用户消息（turn/steer 把引导追加进了当前轮）：整轮截不开，按「找不到」处理。
-    // 按 turn id 匹配的（导入来的轮次）不用查：回退移除的是对话末尾的一段，这一轮的第一条都被移除了，后面的引导消息必然一起移除；
-    // 而这样的轮次可能同时带 clientId（像素星空以前发的），那些 clientId 对应的是第一条，不能当成「保留的消息」
-    if (!removed.has(turns[index].id) && turns[index].clientIds.some(id => !removed.has(id))) return null
+    const turn = turns[index]
+    const h = hit(turn)
+    // 按 turn id 匹配的（导入来的轮次）：这一轮的第一条都被移除了，后面的引导消息必然一起移除；
+    // 这样的轮次可能同时带 clientId（像素星空以前发的），那些 clientId 对应的是第一条，不能当成「保留的消息」
+    if (!h.first) {
+      // 第一条保留着：只移除了引导消息，或 turn/steer 把引导追加进了当前轮、clientId 没全移除。整轮截不开，按「找不到」处理
+      if (!h.client || turn.clientIds.some(id => !removed.has(id))) return null
+    }
     return { at: index === 0 ? null : turns[index - 1].id }
   }
   if (turns.length > 0 && (opts.byTurnId || turns.some(turn => turn.clientIds.length > 0)))
-    return { at: turns[turns.length - 1].id }
+    return { at: turns[turns.length - 1].id, unchanged: true }
   return null
 }
 

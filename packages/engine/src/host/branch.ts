@@ -270,7 +270,12 @@ export class HostBranch {
     // 引擎原生记录里的截断点找到了：它的上下文保留到那里
     let worked = untouched
     if (untouched) patch = {}
-    else if (anchor && forkOnly) {
+    else if (anchor?.unchanged) {
+      // 被回退的消息都没进过引擎的记录（启动失败、还没发出去）：线程里什么都不用动，待执行的回退 / 分叉原样保留
+      // （改成线程「现在」的最后一轮会把终端里之后新聊的轮次也带进来，还会盖掉更早的待回退）
+      worked = true
+      patch = {}
+    } else if (anchor && forkOnly) {
       worked = !!anchor.at
       patch = anchor.at
         ? { pendingFork: { from: forkOnly.from, at: anchor.at } }
@@ -382,10 +387,13 @@ export class HostBranch {
     const thread = source.engineSessionId ?? source.pendingFork?.from ?? null
     const anchor = thread ? await adapter?.rewindAnchor?.({ ...source, engineSessionId: thread }, later) : null
     if (ctx.closing) throw new Error('应用正在退出')
+    // 还没启动的分叉会话里，被分叉的消息都没进过线程（unchanged）：沿用它原来的 pendingFork.at，不要挪到线程现在的最后一轮
+    const anchorAt =
+      anchor?.unchanged && !source.engineSessionId && source.pendingFork ? source.pendingFork.at : anchor?.at
     const now = Date.now()
     // 分叉出的会话只带当前引擎的原生会话：截断点找到了，它读到的位置不变或退到最后处理的那一轮末尾；
     // 没找到就是新会话什么都没看到，第一条消息带完整交接
-    const forked = !!(anchor?.at && thread)
+    const forked = !!(anchorAt && thread)
     const keptIds = new Set(items.map(item => item.id))
     const oldEntry = source.engineSessions?.[source.engine]
     const oldSeen = oldEntry ? oldEntry.seen : source.engineSessions ? null : lastItemId(rt.snapshot.items)
@@ -417,13 +425,13 @@ export class HostBranch {
       bottomedAt: null,
       pinnedAt: null,
       pendingRewind: null,
-      pendingFork: anchor?.at && thread ? { from: thread, at: anchor.at } : null,
+      pendingFork: anchorAt && thread ? { from: thread, at: anchorAt } : null,
       forkedFrom: { sessionId: source.id, title: source.title },
       // 导入来的标记只属于原对话，不然同一个终端会话被两条记录认领
       imported: null,
     }
     const notice: Item[] =
-      !anchor?.at && thread && items.length > 0
+      !anchorAt && thread && items.length > 0
         ? [
             {
               kind: 'notice',

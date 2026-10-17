@@ -27,7 +27,8 @@ describe('Codex 截断点（纯函数）', () => {
     expect(codexAnchor(turns, ['m0', 'm1', 'm2'])).toEqual({ at: null })
   })
   it('被移除的消息没发到 Codex：保留全部轮次', () => {
-    expect(codexAnchor(turns, ['never-sent'])).toEqual({ at: 't3' })
+    // unchanged：线程里什么都不用动，宿主不改待执行的回退 / 分叉
+    expect(codexAnchor(turns, ['never-sent'])).toEqual({ at: 't3', unchanged: true })
   })
   it('没有 clientId（老会话）或读不到轮次：找不到', () => {
     expect(codexAnchor([turn('t1'), turn('t2')], ['m0'])).toBeNull()
@@ -56,15 +57,36 @@ describe('Codex 截断点（纯函数）', () => {
       expect(codexAnchor(sent, ['t2', 't3'])).toEqual({ at: 't1' })
     })
     it('byTurnId：被移除的消息都不在线程里 → 保留全部；不带 byTurnId 时老规则不变（找不到）', () => {
-      expect(codexAnchor(imported, ['never-sent'], { byTurnId: true })).toEqual({ at: 't3' })
+      expect(codexAnchor(imported, ['never-sent'], { byTurnId: true })).toEqual({ at: 't3', unchanged: true })
       expect(codexAnchor(imported, ['never-sent'])).toBeNull()
       expect(codexAnchor([], ['x'], { byTurnId: true })).toBeNull()
     })
-    it('引导消息（<turn id>-u1）既不是 clientId 也不等于 turn id：匹配不上，落到「保留全部」', () => {
-      expect(codexAnchor(imported, ['t3-u1'], { byTurnId: true })).toEqual({ at: 't3' })
-      // 同时移除这一轮自己的话时整轮去掉
+    it('引导消息（<turn id>-u1）归到它所在的那一轮：这一轮的第一条话还保留着 → 截不开，找不到（最后一轮）', () => {
+      expect(codexAnchor(imported, ['t3-u1'], { byTurnId: true })).toBeNull()
+      expect(codexAnchor(imported, ['t3-u1', 't3-u2'], { byTurnId: true })).toBeNull()
+    })
+    it('引导消息在中间某一轮：被移除的里有它的下一轮也一样，找不到（不能留下半轮）', () => {
+      expect(codexAnchor(imported, ['t2-u1', 't3'], { byTurnId: true })).toBeNull()
+      expect(codexAnchor(imported, ['t2-u1'], { byTurnId: true })).toBeNull()
+      // 引导消息在更晚的一轮，最早命中的是前面保留着第一条的那一轮
+      expect(codexAnchor(imported, ['t2-u1', 't3', 't3-u1'], { byTurnId: true })).toBeNull()
+    })
+    it('同时移除这一轮自己的话时整轮去掉；引导消息只是跟着一起走', () => {
       expect(codexAnchor(imported, ['t3', 't3-u1'], { byTurnId: true })).toEqual({ at: 't2' })
-      // 按 clientId 匹配的老规则不变：整轮里有保留的用户消息，截不开
+      expect(codexAnchor(imported, ['t2', 't2-u1', 't3'], { byTurnId: true })).toEqual({ at: 't1' })
+      expect(codexAnchor(imported, ['t1', 't1-u1', 't2', 't3'], { byTurnId: true })).toEqual({ at: null })
+    })
+    it('像素星空发的轮次（带 clientId）里的引导消息：第一条保留就找不到；第一条的 clientId 一起移除就截得开', () => {
+      const sent = [turn('t1', 'c1'), turn('t2', 'c2')]
+      expect(codexAnchor(sent, ['t2-u1'], { byTurnId: true })).toBeNull()
+      expect(codexAnchor(sent, ['c2', 't2-u1'], { byTurnId: true })).toEqual({ at: 't1' })
+    })
+    it('不像引导消息的 id（后缀不是数字、不是这一轮的）不算', () => {
+      expect(codexAnchor(imported, ['t3-ux'], { byTurnId: true })).toEqual({ at: 't3', unchanged: true })
+      expect(codexAnchor(imported, ['t3-u'], { byTurnId: true })).toEqual({ at: 't3', unchanged: true })
+      expect(codexAnchor(imported, ['t9-u1'], { byTurnId: true })).toEqual({ at: 't3', unchanged: true })
+    })
+    it('按 clientId 匹配的老规则不变：整轮里有保留的用户消息，截不开', () => {
       expect(codexAnchor([turn('t1', 'm0', 'g0')], ['g0'], { byTurnId: true })).toBeNull()
     })
   })
@@ -197,7 +219,8 @@ describe('Codex 回退', { timeout: 20_000 }, () => {
     data['fake-thread'][1].clientId = 'other'
     writeFileSync(stateFile(), JSON.stringify(data))
     await host!.rewind(session.id, 'm1')
-    expect(host!.open(session.id).record.pendingRewind).toBe('turn-2')
+    // 什么都不用动：不写 pendingRewind
+    expect(host!.open(session.id).record.pendingRewind ?? null).toBeNull()
     const from = messages().length
     await say(session.id, '三', 'n0')
     expect(methods(messages().slice(from))).not.toContain('thread/revert')
