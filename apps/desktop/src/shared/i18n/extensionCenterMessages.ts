@@ -50,7 +50,7 @@ export const extensionCenterMessages = {
     zh: '给代码模式和 AI 引擎加功能。商店里的扩展都经过审核；装好立刻生效。',
     en: 'Add features to code mode and the AI engines. Store extensions are reviewed, and take effect as soon as they are installed.',
   },
-  // 扩展商店（docs/ui/ext-store-step7-plan.md 7.4a / 7.4b）：三个页签和发现页
+  // 扩展商店（docs/ui/extension-store-client.md §2.1，7.4a / 7.4b）：三个页签和发现页
   'extstore.tabs.label': { zh: '扩展页签', en: 'Extension tabs' },
   'extstore.tab.discover': { zh: '发现', en: 'Discover' },
   'extstore.tab.installed': { zh: '已安装', en: 'Installed' },
