@@ -375,6 +375,7 @@ export class HostSessions {
         await m.turn.interrupt(id)
         rt.generation++
         if (rt.idleTimer) clearTimeout(rt.idleTimer)
+        if (rt.reconnectTimer) clearTimeout(rt.reconnectTimer)
         ctx.runtimes.delete(id)
         await rt.session?.close()
       }

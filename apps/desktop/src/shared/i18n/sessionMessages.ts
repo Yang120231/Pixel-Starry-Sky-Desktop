@@ -99,6 +99,33 @@ export const sessionMessages = {
   'session.notice.copyDetail': { zh: '复制报错', en: 'Copy error' },
   'session.queue.sendFailed': { zh: '发送失败', en: 'Send failed' },
   'session.queue.starting': { zh: '正在启动…', en: 'Starting…' },
+  'session.queue.dismiss': { zh: '关掉', en: 'Dismiss' },
+  'session.queue.dismissHint': {
+    zh: '不重发也不撤回：消息留在对话里标「未送达」，可以直接接着说',
+    en: 'Neither resend nor withdraw: the message stays in the conversation marked "Not delivered", and you can just keep going',
+  },
+  'session.queue.undelivered': { zh: '未送达', en: 'Not delivered' },
+  'session.queue.dismissed': { zh: '已关掉', en: 'Dismissed' },
+  'session.queue.resend': { zh: '重发', en: 'Resend' },
+  'session.reconnect.label': { zh: '自动重连进度', en: 'Reconnect progress' },
+  'session.reconnect.reconnecting': {
+    zh: '连接中断，正在重连 {p0}/{p1}',
+    en: 'Connection lost. Reconnecting {p0}/{p1}',
+  },
+  'session.reconnect.inSeconds': { zh: '· 约 {p0} 秒后', en: '· in about {p0}s' },
+  'session.reconnect.connecting': { zh: '· 正在连接…', en: '· Connecting…' },
+  'session.reconnect.now': { zh: '立即重连', en: 'Reconnect now' },
+  'session.reconnect.resumeHint': {
+    zh: '接着断开前的位置继续，不重发你的消息',
+    en: 'Picks up where it stopped without resending your message',
+  },
+  'session.reconnect.resendHint': {
+    zh: '消息还没发出去，接上后原样发送',
+    en: "Your message wasn't sent yet. It will be sent as is once connected",
+  },
+  'session.reconnect.done': { zh: '已重连', en: 'Reconnected' },
+  'session.reconnect.dropped': { zh: '断开 {p0} 次', en: 'dropped {p0}×' },
+  'session.reconnect.tried': { zh: '已自动重连 {p0} 次', en: 'Auto-reconnected {p0}×' },
   'session.pauseQueue': {
     zh: '原有队列保持暂停，可核对后手动继续。',
     en: 'The existing queue remains paused. Review it before resuming.',

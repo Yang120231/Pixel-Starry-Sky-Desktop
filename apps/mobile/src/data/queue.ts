@@ -4,8 +4,16 @@ import type { QueuedMessage, SessionSnapshot } from '@pixelsky/protocol'
 
 /** 空闲时直接发送、正在启动的消息：显示在对话里，不放进队列面板 */
 export function isStarting(q: QueuedMessage, paused: boolean): boolean {
-  return !!q.direct && !q.held && !paused && (q.status === 'queued' || q.status === 'dispatching')
+  return !!q.direct && !q.held && !paused && !q.reconnect && (q.status === 'queued' || q.status === 'dispatching')
 }
+
+/** 断线后电脑正在自动重连的那条：面板里写「正在重连 n/m」，可以立即重连或停止 */
+export const isReconnecting = (q: QueuedMessage): boolean =>
+  !!q.reconnect && (q.status === 'queued' || q.status === 'dispatching')
+
+/** 失败的这条已经在对话里：可以「关掉」，不重发也不撤回，对话里标「未送达」 */
+export const canDismiss = (q: QueuedMessage): boolean =>
+  (q.status === 'failed' || q.status === 'uncertain') && !!q.messageUuid
 
 /** 直接发送却没能开始的消息：仍在队列面板里给重试 / 撤回，但标为「发送失败」 */
 export const isSendFailure = (q: QueuedMessage): boolean => !!q.direct && q.status === 'failed'
@@ -19,6 +27,7 @@ export function queueItems(snapshot: Pick<SessionSnapshot, 'queue' | 'queuePause
 export const isPending = (q: QueuedMessage): boolean => q.status === 'dispatching' || q.status === 'delivering'
 
 export function queueLabel(q: QueuedMessage): string {
+  if (q.reconnect && isReconnecting(q)) return `正在重连 ${q.reconnect.attempt}/${q.reconnect.max}`
   if (isSendFailure(q)) return '发送失败'
   if (q.status === 'failed') return '执行失败'
   if (q.status === 'uncertain') return '待核对'

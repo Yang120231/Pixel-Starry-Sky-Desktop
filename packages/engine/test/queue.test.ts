@@ -282,10 +282,8 @@ describe('消息队列：调度与恢复', () => {
     ).toEqual(['a', 'c'])
     adapter.sessions[0].finish()
     await until(() => host.open(record.id).state === 'idle')
-    expect(host.open(record.id).queue.map(q => [q.id, q.status, !!q.held])).toEqual([
-      ['a', 'failed', false],
-      ['b', 'queued', true],
-    ])
+    // 失败那条在对话里，空闲时直接说了新的就算关掉（标「未送达」）
+    expect(host.open(record.id).queue.map(q => [q.id, q.status, !!q.held])).toEqual([['b', 'queued', true]])
     expect(adapter.sessions[0].inputs).toHaveLength(2)
     host.resumeQueue(record.id)
     await until(() => adapter.sessions[0].inputs.length === 3)

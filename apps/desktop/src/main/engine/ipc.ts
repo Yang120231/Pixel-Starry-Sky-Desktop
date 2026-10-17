@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import { writeFile } from 'node:fs/promises'
 import { app, BrowserWindow, dialog, type IpcMainInvokeEvent } from 'electron'
 import * as ipc from '../ipc/guard'
-import { nativeText } from '../app/ui-language'
+import { nativeText, windowLocale } from '../app/ui-language'
 import { EngineHost } from '@pixelsky/engine'
 import type { HostEvent, SessionRecord } from '@pixelsky/protocol'
 import type { AppContext } from '../app/context'
@@ -88,6 +88,8 @@ export async function initEngine(ctx: AppContext): Promise<void> {
     platformCharges,
     platformCalls,
     latestVersion: npmLatest,
+    // 断线自动重连时替用户发的那句，按界面语言
+    continueText: () => (windowLocale() === 'en-US' ? 'Continue' : '继续'),
   })
   ctx.engine = h
   backfillAfterSignIn(h)

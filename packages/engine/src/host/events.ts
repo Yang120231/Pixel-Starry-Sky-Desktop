@@ -142,16 +142,25 @@ export class HostEvents {
           lastError: event.outcome === 'failed' ? (event.error ?? '').slice(0, 500) || null : null,
           updatedAt: Date.now(),
         })
+        // 连接问题断开的：这条留在队首，等一会儿自动接着做，队列不暂停（queue.ts reconnect）
+        let reconnecting = false
         if (rt.activeId) {
           const item = rt.snapshot.queue.find(q => q.id === rt.activeId)
-          if (item && event.outcome === 'failed')
-            m.queue.changeQueue(id, item.id, { status: 'failed', error: event.error ?? '任务执行失败' })
-          else if (item) m.queue.removeQueue(id, item.id, 'accepted')
+          if (item && event.outcome === 'failed') {
+            reconnecting = m.queue.reconnect(id, item.id, event.error ?? null)
+            if (!reconnecting)
+              m.queue.changeQueue(id, item.id, {
+                status: 'failed',
+                error: event.error ?? '任务执行失败',
+                reconnect: undefined,
+                ...(item.reconnect ? { reconnected: item.reconnect.attempt } : {}),
+              })
+          } else if (item) m.queue.removeQueue(id, item.id, 'accepted')
           rt.activeId = null
         }
         const awaitingGuidance = rt.snapshot.queue.some(q => q.status === 'delivering')
         if (!awaitingGuidance) rt.execution = null
-        if (event.outcome !== 'completed') rt.snapshot = { ...rt.snapshot, queuePaused: true }
+        if (event.outcome !== 'completed' && !reconnecting) rt.snapshot = { ...rt.snapshot, queuePaused: true }
         m.queue.publishQueue(id)
         this.apply(id, { type: 'status', state: awaitingGuidance ? 'starting' : 'idle' })
         // 必须等适配器旧轮的 turnEnded / 审批清理回调返回，再派发下一条。
