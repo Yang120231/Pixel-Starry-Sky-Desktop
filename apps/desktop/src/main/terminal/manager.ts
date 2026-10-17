@@ -12,6 +12,8 @@ import type {
 } from '../../shared/types/terminal'
 import type { WorkspaceRef } from '../../shared/types/workspace'
 import { detectProfiles, profileInput, terminalEnvironment, terminalTitle } from './profiles'
+import { shellIntegration, writeIntegrationFiles, type ShellIntegration } from './integration'
+import { createMarkParser, type MarkParser, type ShellMark } from './shellMarks'
 
 export interface TerminalTarget {
   projectId: string
@@ -29,6 +31,12 @@ interface Runtime {
   bytes: number
   paused: boolean
   closing: boolean
+  /** shell 集成注入成功时才有：从输出里认提示符标记 */
+  marks?: MarkParser
+  /** 这种 shell 报告命令的退出码（cmd 不报） */
+  exitCodes: boolean
+  /** 已收到「命令结束」、等紧跟着的提示符开始 */
+  ended: { exitCode: number | null } | null
   timer?: ReturnType<typeof setTimeout>
   done: Promise<void>
   finish: () => void
@@ -36,8 +44,18 @@ interface Runtime {
 const HIGH = 256 * 1024,
   LOW = 64 * 1024,
   HARD = 4 * 1024 * 1024
+/** 把 extra 并进环境变量；Windows 上变量名不分大小写，先去掉同名的（免得 Prompt 和 PROMPT 并存） */
+function mergeEnv(env: Record<string, string>, extra: Record<string, string>): void {
+  for (const [key, value] of Object.entries(extra)) {
+    if (process.platform === 'win32')
+      for (const old of Object.keys(env)) if (old.toLowerCase() === key.toLowerCase()) delete env[old]
+    env[key] = value
+  }
+}
 export class TerminalManager {
   private readonly file: string
+  /** bash / zsh 注入脚本所在目录；写失败为 null（只影响 bash / zsh，PowerShell / cmd 不用文件） */
+  private integrationDir: string | null = null
   private records: TerminalRecord[] = []
   private profiles: TerminalProfile[] = detectProfiles()
   private defaultId = this.profiles.find(p => p.available)?.id ?? 'powershell'
@@ -53,8 +71,14 @@ export class TerminalManager {
     private emit: (owner: number, event: TerminalEvent) => void,
   ) {
     this.file = join(dataDir, 'terminal', 'terminals.json')
+    this.integrationDir = join(dataDir, 'terminal', 'integration')
   }
   async init(): Promise<void> {
+    try {
+      await writeIntegrationFiles(this.integrationDir!)
+    } catch {
+      this.integrationDir = null
+    }
     try {
       const data = JSON.parse(await readFile(this.file, 'utf8'))
       const custom: TerminalProfile[] = []
@@ -225,12 +249,20 @@ export class TerminalManager {
       this.checkDirectory(record.cwd)
       const profile = this.profiles.find(p => p.id === record.profileId)
       if (!profile?.available) throw new Error('所选 Shell 不可用')
-      const child = pty.spawn(profile.command, profile.args, {
+      const env = terminalEnvironment(process.env)
+      let integration: ShellIntegration | null = null
+      try {
+        integration = shellIntegration(profile, this.integrationDir, env)
+      } catch {
+        /* 注入出错就当没有，shell 照常启动 */
+      }
+      if (integration) mergeEnv(env, integration.env)
+      const child = pty.spawn(profile.command, integration?.args ?? profile.args, {
         name: 'xterm-256color',
         cols: 100,
         rows: 24,
         cwd: record.cwd,
-        env: terminalEnvironment(process.env),
+        env,
         useConpty: true,
       })
       let finish!: () => void
@@ -248,12 +280,21 @@ export class TerminalManager {
         bytes: 0,
         paused: false,
         closing: false,
+        marks: integration ? createMarkParser() : undefined,
+        exitCodes: integration?.exitCodes ?? false,
+        ended: null,
         done,
         finish,
       }
       this.running.set(record.id, run)
       const dataSub = child.onData(data => {
         if (this.running.get(record.id) !== run || run.closing) return
+        if (run.marks) {
+          const parsed = run.marks.push(data)
+          for (const mark of parsed.marks) this.mark(run, mark)
+          data = parsed.text
+          if (!data) return
+        }
         run.pending += data
         if (run.pending.length + run.bytes > HIGH && !run.paused) {
           child.pause()
@@ -293,6 +334,22 @@ export class TerminalManager {
       this.update(record)
     }
     return { ...record }
+  }
+  /** 提示符标记：命令结束先记着，紧跟的提示符开始再一起发给界面（不排在输出后面，不受背压拖慢） */
+  private mark(run: Runtime, mark: ShellMark): void {
+    if (mark.kind === 'end') {
+      run.ended = { exitCode: mark.exitCode }
+      return
+    }
+    const ended = run.ended
+    run.ended = null
+    this.emit(run.owner, {
+      type: 'prompt',
+      terminalId: run.record.id,
+      generation: run.generation,
+      ran: ended ? true : run.exitCodes ? false : null,
+      exitCode: ended?.exitCode ?? null,
+    })
   }
   private flush(run: Runtime): void {
     while (run.pending && run.bytes < HIGH && !run.closing) {

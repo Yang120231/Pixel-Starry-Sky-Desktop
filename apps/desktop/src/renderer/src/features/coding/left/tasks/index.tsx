@@ -58,6 +58,7 @@ import {
 } from '../../tasks/model'
 import {
   cancelGradleFull,
+  isAlive,
   loadGradleFull,
   loadTasks,
   TASKS_STALE_MS,
@@ -166,6 +167,12 @@ function StatusIcon({ status }: { status: TaskStatus }) {
   switch (status.kind) {
     case 'running':
       return <Spinner size={14} className={cn(cls, 'text-accent')} />
+    case 'stopping':
+      return (
+        <span className={cn(cls, 'flex')} title={tr('coding.tasks.status.stopping')}>
+          <Spinner size={14} className="text-warning" />
+        </span>
+      )
     case 'ok':
       return (
         <Check
@@ -565,7 +572,8 @@ export function TasksView({ visible }: { visible: boolean }) {
     }
     const { task } = row
     const status = statuses.of(group, task)
-    const running = status.kind === 'running'
+    // 正在停止时 ■ 还在：程序没停下来（比如在问 Y/N）时可以再发一次 Ctrl+C
+    const running = isAlive(status)
     return (
       <div
         key={key}

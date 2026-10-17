@@ -27,6 +27,10 @@ export const codingTasksMessages = {
   'coding.tasks.status.ok': { zh: '上次运行成功', en: 'Last run succeeded' },
   'coding.tasks.status.failed': { zh: '上次运行失败', en: 'Last run failed' },
   'coding.tasks.status.stopped': { zh: '已停止', en: 'Stopped' },
+  'coding.tasks.status.stopping': {
+    zh: '正在停止…（终端在等你回答时，请到终端里操作）',
+    en: 'Stopping… (if the terminal is waiting for input, answer there)',
+  },
   'coding.tasks.exitCode': { zh: '退出码 {code}', en: 'exit {code}' },
   'coding.tasks.menu': { zh: '任务操作', en: 'Task actions' },
   'coding.tasks.menu.run': { zh: '运行', en: 'Run' },

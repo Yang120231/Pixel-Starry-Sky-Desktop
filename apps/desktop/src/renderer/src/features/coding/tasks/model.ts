@@ -64,7 +64,7 @@ export function exitSuffix(program: string | undefined): string {
   return '; exit $?'
 }
 
-export type TaskStatusKind = 'idle' | 'running' | 'ok' | 'failed' | 'stopped'
+export type TaskStatusKind = 'idle' | 'running' | 'stopping' | 'ok' | 'failed' | 'stopped'
 export interface TaskStatus {
   kind: TaskStatusKind
   /** 失败时的退出码；不知道为 null */
@@ -72,15 +72,41 @@ export interface TaskStatus {
 }
 export const IDLE: TaskStatus = { kind: 'idle', code: null }
 
-/** 终端记录 → 任务状态。stopped 是本地标记（发过 Ctrl+C），压过「终端还在跑」 */
-export function taskStatus(record: TerminalRecord | undefined, stopped = false): TaskStatus {
+/** 这次运行在界面里记下的几件事（store.ts 的 Run），taskStatus 据此在终端记录之上推状态 */
+export interface RunFlags {
+  /** 点了停止，但这个 shell 没有提示符标记可等：直接算已停止（旧行为） */
+  stopped?: boolean
+  /** 点了停止，等提示符回来才算已停止 */
+  stopping?: boolean
+  /** 命令写进终端之后，提示符回来了（Ctrl+C 中止了整行，exit 后缀没执行）；code 是标记里的退出码，不知道为 null */
+  ended?: { code: number | null } | null
+}
+
+/** Ctrl+C 打断的退出码：bash / zsh 的 128+SIGINT，Windows 的 STATUS_CONTROL_C_EXIT（有符号 / 无符号两种写法） */
+const INTERRUPTED = new Set([130, -1073741510, 3221225786])
+
+/** 提示符回来了的结果：点了停止 / 被 Ctrl+C 打断 / 退出码未知 都算已停止；0 成功；其余失败 */
+function endedStatus(code: number | null, stopping: boolean): TaskStatus {
+  if (stopping || code === null || INTERRUPTED.has(code)) return { kind: 'stopped', code: null }
+  return code === 0 ? { kind: 'ok', code: null } : { kind: 'failed', code }
+}
+
+/**
+ * 终端记录 → 任务状态。任务命令后面有 exit 后缀，正常跑完 shell 会退出（看 record）；
+ * 被 Ctrl+C 中止时 shell 留在提示符，靠提示符标记（flags.ended）知道结束了。
+ * 没有标记的 shell 只有 stopped（发过 Ctrl+C）压过「终端还在跑」（已退出的除外：退出码说了算）。标记判定过结束的以标记为准，之后 shell 再退出也不改
+ */
+export function taskStatus(record: TerminalRecord | undefined, flags: RunFlags = {}): TaskStatus {
   if (!record) return IDLE
-  if (stopped && record.status !== 'exited') return { kind: 'stopped', code: null }
-  if (record.status === 'running' || record.status === 'starting') return { kind: 'running', code: null }
+  // 已经按提示符标记判定结束的，之后用户在终端里再 exit 也不改判
+  if (flags.ended && record.status !== 'error') return endedStatus(flags.ended.code, !!flags.stopping)
   if (record.status === 'exited')
     return record.exitCode === 0 ? { kind: 'ok', code: null } : { kind: 'failed', code: record.exitCode ?? null }
+  if (flags.stopped) return { kind: 'stopped', code: null }
   if (record.status === 'error') return { kind: 'failed', code: null }
-  return IDLE
+  if (record.status !== 'running' && record.status !== 'starting') return IDLE
+  if (flags.stopping) return { kind: 'stopping', code: null }
+  return { kind: 'running', code: null }
 }
 
 /** 终端名：Gradle 子项目的任务写全路径（:fabric:runClient），其余就是任务名 */
