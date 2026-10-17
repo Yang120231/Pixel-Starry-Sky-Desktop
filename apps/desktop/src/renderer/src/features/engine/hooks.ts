@@ -280,6 +280,7 @@ export type QueueController = Pick<
   | 'state'
   | 'steerAvailable'
   | 'cancelQueued'
+  | 'dismissQueued'
   | 'moveQueued'
   | 'runQueuedNow'
   | 'steerQueued'
@@ -311,6 +312,8 @@ export interface ComposerController {
   steerAvailable: boolean
   state: SessionSnapshot['state']
   cancelQueued(id: string): Promise<string>
+  /** 发送失败的不重发也不撤回：从队列拿掉，对话里那条标「未送达」 */
+  dismissQueued(id: string): Promise<void>
   moveQueued(id: string, index: number): Promise<void>
   runQueuedNow(id: string): Promise<void>
   steerQueued(id: string): Promise<void>
@@ -782,6 +785,8 @@ export function useComposerController(
     state: snap?.state ?? 'idle',
     cancelQueued: id =>
       record ? b.cancelQueued(record.id, id) : Promise.reject(new Error(tr('engine.hooks.conversationNotFound'))),
+    dismissQueued: id =>
+      record ? b.dismissQueued(record.id, id) : Promise.reject(new Error(tr('engine.hooks.conversationNotFound'))),
     moveQueued: (id, index) =>
       record ? b.moveQueued(record.id, id, index) : Promise.reject(new Error(tr('engine.hooks.conversationNotFound'))),
     runQueuedNow: id =>

@@ -101,6 +101,8 @@ export interface EngineBridge {
   ): Promise<import('@pixelsky/protocol').ContextDiagnostic>
   compact(id: string): Promise<SendReceipt>
   cancelQueued(id: string, queueId: string): Promise<string>
+  /** 发送失败的消息不重发也不撤回：从队列里拿掉，对话里的那条和错误卡片照旧 */
+  dismissQueued(id: string, queueId: string): Promise<void>
   moveQueued(id: string, queueId: string, toIndex: number): Promise<void>
   runQueuedNow(id: string, queueId: string): Promise<void>
   steerQueued(id: string, queueId: string, expectedTurnId: string): Promise<void>

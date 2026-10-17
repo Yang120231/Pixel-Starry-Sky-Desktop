@@ -40,7 +40,9 @@ import { Markdown } from '@/ui/markdown/Markdown'
 import { NoticeRow, ReasoningBlock, TodoCard, ToolItemRow, UserBubble } from './ItemRows'
 import { CompactionRow } from './CompactionRow'
 import { CompactionLiveContext, type CompactionLive } from './compactionLive'
-import { isStarting } from '../queueView'
+import { isReconnecting, isStarting } from '../queueView'
+import { reconnectView } from './reconnectView'
+import { DismissedNote, ReconnectLine } from './ReconnectRows'
 import { NoticeActions } from './NoticeActions'
 import { AssistantMessageActions, UserMessageActions } from './MessageActions'
 import { platformNoticeText } from './errorKind'
@@ -83,14 +85,27 @@ const ItemView = memo(function ItemView({
   item,
   reply,
   sessionId,
+  reconnectFailed,
 }: {
   item: Item
   reply?: string
   sessionId?: string | null
+  /** 断线自动重连的小字：重连后这一轮还是出错了（reconnectView.ts） */
+  reconnectFailed?: boolean
 }) {
   useI18n()
   switch (item.kind) {
     case 'user':
+      if (item.reconnect) return <ReconnectLine attempt={item.reconnect} failed={!!reconnectFailed} />
+      if (item.dismissed)
+        return (
+          <>
+            <div className="opacity-55">
+              <UserBubble item={item} actions={<UserMessageActions item={item} />} />
+            </div>
+            <DismissedNote item={item} sessionId={sessionId} />
+          </>
+        )
       return <UserBubble item={item} actions={<UserMessageActions item={item} />} />
     case 'assistant':
       if (!item.text) return null
@@ -304,12 +319,15 @@ export function LiveTranscript({
   const subagents = useSubagentView()
   const minimal = useMinimal()
   const changesCache = useRef<{ sessionId: string | null; map: ChangesCache }>({ sessionId: null, map: new Map() })
+  // 断线自动重连：自动发的「继续」显示成一行小字，接着重连了的那几次断线报错不显示
+  const pendingReconnect = !!snapshot?.queue.some(isReconnecting)
+  const reconnects = useMemo(() => reconnectView(shownItems, pendingReconnect), [shownItems, pendingReconnect])
   const blocks = useMemo(() => {
     if (changesCache.current.sessionId !== sessionId) changesCache.current = { sessionId, map: new Map() }
-    return toBlocks(shownItems, running, changesCache.current.map, { subagents })
-  }, [shownItems, running, sessionId, subagents])
+    return toBlocks(reconnects.items, running, changesCache.current.map, { subagents })
+  }, [reconnects, running, sessionId, subagents])
   // 每轮统计行对应的回复：和显示在外面的「最后的回复」是同一段（中间穿插工具调用的过渡话不算）
-  const replies = useMemo(() => turnReplies(shownItems, { subagents }), [shownItems, subagents])
+  const replies = useMemo(() => turnReplies(reconnects.items, { subagents }), [reconnects, subagents])
   // 子智能体要批准时，它的小框写「等你批准」
   const pending = snapshot?.pending
   const approving = useMemo(
@@ -571,7 +589,7 @@ export function LiveTranscript({
     if (b.type === 'changes') return <TurnChanges key={b.key} data={b.data} sessionId={sessionId} turnKey={b.turnKey} />
     // 统计关闭时 TurnStats 不产生 DOM，避免外层空块在 flex 列表里留下间距。
     if (b.item.kind === 'turn_stats') return <ItemView key={b.item.id} item={b.item} reply={replies.get(b.item.id)} />
-    const isUser = b.item.kind === 'user'
+    const isUser = b.item.kind === 'user' && !b.item.reconnect
     const item = b.item
     if (item.kind === 'notice' && item.level === 'error' && snapshot) {
       const text = platformNoticeText(snapshot.record, item.text)
@@ -622,7 +640,7 @@ export function LiveTranscript({
           highlight === item.id ? 'search-hit' : '',
         ].join(' ')}
       >
-        <ItemView item={item} sessionId={sessionId} />
+        <ItemView item={item} sessionId={sessionId} reconnectFailed={reconnects.failed.has(item.id)} />
       </div>
     )
   }

@@ -95,8 +95,15 @@ class FakeSession implements EngineSession {
       type: 'turn_completed',
       turnId,
       outcome,
-      error: outcome === 'failed' ? 'connection reset by peer' : null,
+      // 不是连接类的错误：这里测手动重试，不让宿主自动重连
+      error: outcome === 'failed' ? 'invalid request' : null,
     })
+  }
+  /** 这一轮只报错、没有任何输出（消息还没送到引擎就断了） */
+  drop(error: string): void {
+    const turnId = this.active
+    this.active = null
+    if (turnId) this.ctx.emit({ type: 'turn_completed', turnId, outcome: 'failed', error })
   }
   async interrupt(): Promise<void> {
     const turnId = this.active
@@ -361,6 +368,32 @@ describe('跨引擎接力：换引擎', () => {
       expect(snap().items.filter(i => i.kind === 'notice')).toHaveLength(1)
       if (seeds) expect(session.seeds[1]?.turns.map(t => t.user)).toContain('第一句')
       else expect(session.inputs[1]).toContain('用户：第一句')
+      session.finish()
+      await until(() => snap().state === 'idle' && snap().queue.length === 0)
+    },
+  )
+
+  it.each([false, true])(
+    '换引擎后的首轮没送达就断线：自动原样重发，交接材料不含这条消息自己，对话里也只有一条（聊天回放：%s）',
+    async seeds => {
+      const { host, codex, record, say, snap, users } = setup({ reconnectDelays: [0] }, seeds)
+      await say('第一句')
+      await host.update(record.id, { engine: 'codex' })
+      codex.auto = false
+      await host.send(record.id, { text: '第二句', clientMessageId: 'second' })
+      await until(() => codex.sessions[0]?.inputs.length === 1)
+      const session = codex.sessions[0]
+      session.drop('stream disconnected before completion')
+      await until(() => session.inputs.length === 2)
+      expect(snap().queue[0]).toMatchObject({ id: 'second', messageUuid: 'second', delivered: false })
+      expect(users().filter(u => u.text === '第二句')).toHaveLength(1)
+      // 游标没动（失败的一轮），重发时带的交接是第一句，不含刚写进对话的这一条
+      if (seeds) expect(session.seeds[1]?.turns.map(t => t.user)).toEqual(['第一句'])
+      else {
+        expect(session.inputs[1]).toContain('用户：第一句')
+        expect(session.inputs[1]).not.toContain('用户：第二句')
+        expect(session.inputs[1].endsWith('第二句')).toBe(true)
+      }
       session.finish()
       await until(() => snap().state === 'idle' && snap().queue.length === 0)
     },

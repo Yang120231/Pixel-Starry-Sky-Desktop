@@ -179,6 +179,14 @@ export const IPC_CONTRACT = {
     remote: 'engine:deleteSession',
     trust: 'sender',
   },
+  'engine:dismissQueued': {
+    kind: 'invoke',
+    route: 'resource',
+    ids: [0, 1],
+    remote: 'engine:dismissQueued',
+    mobile: 'act',
+    trust: 'sender',
+  },
   'engine:engines': { kind: 'invoke', route: 'selected', ids: [0], remote: 'engine:engines', trust: 'sender' },
   'engine:event': { kind: 'push', route: 'push', trust: 'none' },
   'engine:itemDetail': {

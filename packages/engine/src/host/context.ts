@@ -59,6 +59,27 @@ export interface EngineHostOptions {
   /** 授权登录最多等多久（毫秒），默认 10 分钟；测试用 */
   loginTimeoutMs?: number
   latestVersion?: (npmPackage: string) => Promise<string | null>
+  /** 断线自动重连时替用户发的那句（按界面语言），默认「继续」 */
+  continueText?: () => string
+  /** 测试用：第 n 次自动重连前等多久（毫秒），不给按 retry.ts reconnectDelay */
+  reconnectDelays?: number[]
+}
+
+/** 正在跑的这一轮（turn.ts 调 send 前设置，turn_completed 读完清掉）：断线重连判断「引擎收到这条没有 / 有没有进展」用 */
+export interface TurnTrack {
+  turnId: string
+  /** 这一轮对应的队列项 */
+  queueId: string
+  /** 这一轮发给引擎的用户消息条目 id（引擎确认收到时 input_ack 带的就是它） */
+  userItemId: string
+  /** 这一轮发的是「继续」（原消息早就送达了） */
+  resume: boolean
+  /** 引擎确认收到了这一轮的消息，或者已经有输出 */
+  delivered: boolean
+  /** 这一轮已经有输出（助手 / 推理 / 工具 / 命令）：重连次数从头算 */
+  progressed: boolean
+  /** 引擎自己重试过这次请求（request_retry）：宿主不再叠加一层重连 */
+  engineRetried: boolean
 }
 
 export interface Runtime {
@@ -74,6 +95,7 @@ export interface Runtime {
   stopping: boolean
   generation: number
   activeId: string | null
+  turn?: TurnTrack
   execution: SessionRecord | null
   sessionSource: string | null | undefined
   /** 启动这个进程时的引擎级设置（launchKey）；设置变了，下一条消息前重启进程 */
@@ -81,6 +103,8 @@ export interface Runtime {
   pumpFinished: Promise<void> | null
   /** 这一轮（turnId）是没带交接的斜杠命令：结束时不推进引擎的游标，交接留给下一条普通消息 */
   holdCursor?: string
+  /** 队首的自动重连到时间时再派发（queue.ts armReconnect） */
+  reconnectTimer?: NodeJS.Timeout | null
 }
 
 export interface HostModules {

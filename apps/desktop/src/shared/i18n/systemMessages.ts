@@ -1434,6 +1434,14 @@ export const systemMessages = {
     zh: '请先停止当前任务再回退',
     en: 'Stop the current task before rewinding',
   },
+  'system.rewindReconnecting': {
+    zh: '正在自动重连，请先停止再回退',
+    en: 'Auto-reconnecting. Stop it before rewinding',
+  },
+  'system.reconnectOriginalGone': {
+    zh: '原消息已不在对话里，请重试或撤回',
+    en: 'The original message is no longer in the conversation. Retry or withdraw it',
+  },
   'system.rewindUnsupported': {
     zh: '当前引擎暂不支持回退',
     en: 'The current engine does not support rewinding yet',
@@ -1469,4 +1477,13 @@ export const systemMessages = {
     en: 'PowerShell / curl not found. Install Claude Code from a terminal as shown',
   },
   'system.engineJobNoSuccess': { zh: '没有成功，请看输出', en: "It didn't succeed. See the output" },
+  'system.onlyFailedCanBeDismissed': {
+    zh: '只有失败或待核对的消息可以关掉',
+    en: 'Only failed or unconfirmed messages can be dismissed',
+  },
+  'system.notSentRetryOrWithdraw': {
+    zh: '这条消息还没发出去，请重试或撤回',
+    en: "This message hasn't been sent yet. Retry or withdraw it",
+  },
+  'system.connectionLost': { zh: '连接中断', en: 'Connection lost' },
 } as const

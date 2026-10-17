@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { QueuedMessage } from '@pixelsky/protocol'
-import { isSendFailure, isStarting } from './queueView'
+import { isReconnecting, isSendFailure, isStarting, reconnectPhase } from './queueView'
 
 const item = (patch: Partial<QueuedMessage>): QueuedMessage => ({
   id: 'a',
@@ -29,5 +29,24 @@ describe('空闲直接发送的显示规则', () => {
     expect(isSendFailure(item({ direct: true, status: 'failed' }))).toBe(true)
     expect(isSendFailure(item({ status: 'failed' }))).toBe(false)
     expect(isSendFailure(item({ direct: true, status: 'uncertain' }))).toBe(false)
+  })
+})
+
+describe('自动重连卡片的阶段', () => {
+  const reconnect = { attempt: 1, max: 5, at: 10_000, since: 9_000, reason: '', resend: false }
+  it('单独暂停（held）的重连项不显示重连卡片', () => {
+    expect(isReconnecting(item({ reconnect }))).toBe(true)
+    expect(isReconnecting(item({ reconnect, held: true }))).toBe(false)
+    expect(isReconnecting(item({ reconnect, status: 'failed' }))).toBe(false)
+  })
+  it('倒计时 / 正在连接 / 已暂停 / 到点超过 3 秒还没动静', () => {
+    const q = item({ reconnect })
+    expect(reconnectPhase(q, false, 9_500)).toBe('waiting')
+    expect(reconnectPhase(q, false, 10_000)).toBe('connecting')
+    expect(reconnectPhase(q, false, 13_000)).toBe('connecting')
+    expect(reconnectPhase(q, false, 13_001)).toBe('stalled')
+    expect(reconnectPhase(item({ reconnect, status: 'dispatching' }), false, 20_000)).toBe('connecting')
+    expect(reconnectPhase(q, true, 9_500)).toBe('paused')
+    expect(reconnectPhase(q, true, 20_000)).toBe('paused')
   })
 })

@@ -891,7 +891,7 @@ describe('导入：像素星空接力写进来的行（用真的 seedTranscript 
   const uuid2 = '66666666-2222-4333-8444-555555555555'
 
   it('新建的文件（开头没有 entrypoint）：来源是其他程序；提示、user 条目标 claude、NO_REPLY 不建 assistant、非 uuid 的 id 换成新的', async () => {
-    seedTranscript(
+    await seedTranscript(
       projects,
       cwd,
       id(1),
@@ -921,7 +921,7 @@ describe('导入：像素星空接力写进来的行（用真的 seedTranscript 
     const log = new Log(id(1))
     turns(log, 1, 2, null)
     log.save()
-    seedTranscript(projects, cwd, id(1), [{ id: uuid1, user: '换去 Codex 聊', assistant: '好的' }], NO_REPLY)
+    await seedTranscript(projects, cwd, id(1), [{ id: uuid1, user: '换去 Codex 聊', assistant: '好的' }], NO_REPLY)
     const r = (await readClaudeSession(projects, cwd, id(1)))!
     expect(r.items.map(i => i.kind)).toEqual(['user', 'assistant', 'user', 'assistant', 'notice', 'user', 'assistant'])
     expect(r.items[4]).toMatchObject({ text: NATIVE_TEXT.relayRun(1) })
@@ -933,7 +933,7 @@ describe('导入：像素星空接力写进来的行（用真的 seedTranscript 
 
   it('带概要前缀的第一轮：概要进提示的 detail，user 条目只留原话；标题和 lastPrompt 去掉前缀', async () => {
     const overview = '（像素星空补充：这段对话更早还有 5 轮，原文没有带过来，下面是其中用户的要求）\n- 要求一\n- 要求二'
-    seedTranscript(
+    await seedTranscript(
       projects,
       cwd,
       id(1),
@@ -957,7 +957,7 @@ describe('导入：像素星空接力写进来的行（用真的 seedTranscript 
   })
 
   it('两段接力之间隔着 Claude 自己的轮次：各有一条提示', async () => {
-    seedTranscript(projects, cwd, id(1), [{ id: uuid1, user: '接力一', assistant: '答一' }], NO_REPLY)
+    await seedTranscript(projects, cwd, id(1), [{ id: uuid1, user: '接力一', assistant: '答一' }], NO_REPLY)
     const log = new Log(id(1))
     const rows = readFileSync(log.path, 'utf8')
       .trim()
@@ -968,7 +968,7 @@ describe('导入：像素星空接力写进来的行（用真的 seedTranscript 
       .user('c1', leaf, 'Claude 自己的一轮', { origin: { kind: 'human' } })
       .assistant('ca1', 'c1', '嗯')
       .append()
-    seedTranscript(projects, cwd, id(1), [{ id: uuid2, user: '接力二', assistant: '答二' }], NO_REPLY)
+    await seedTranscript(projects, cwd, id(1), [{ id: uuid2, user: '接力二', assistant: '答二' }], NO_REPLY)
     const r = (await readClaudeSession(projects, cwd, id(1)))!
     expect(r.items.filter(i => i.kind === 'notice').map(i => (i as { text: string }).text)).toEqual([
       NATIVE_TEXT.relayRun(1),
@@ -1097,7 +1097,7 @@ describe('补上终端里新聊的轮次', () => {
     expect(next.items[0]).toMatchObject({ id: 't1', text: '终端里新问的', engine: 'claude' })
     expect(next.at).toBe('ta1')
     // 再追加接力行
-    seedTranscript(
+    await seedTranscript(
       projects,
       cwd,
       id(1),

@@ -20,6 +20,14 @@ describe('轮次跳转条', () => {
     expect(turns[1].preview).toBe(`${'长'.repeat(60)}…`)
   })
 
+  it('断线后自动发的「继续」不算一轮', () => {
+    const resume = { ...user('r', '继续'), reconnect: 1 } as Item
+    expect(turnsOf([user('a', '第一句'), resume, user('b', '第二句')]).map(t => [t.id, t.n])).toEqual([
+      ['a', 1],
+      ['b', 2],
+    ])
+  })
+
   it('刻度画在实际位置上（内容位置 / 总高 × 滑轨高）；挨太近的合并，当前轮所在的那个高亮', () => {
     // 内容 2000px，滑轨 200px：每 10px 内容 = 1px 滑轨
     expect(placeTicks([0, 500, 1990], 2000, 200, 1)).toEqual([

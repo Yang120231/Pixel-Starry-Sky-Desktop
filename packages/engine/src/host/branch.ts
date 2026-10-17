@@ -75,6 +75,9 @@ export class HostBranch {
     if (ctx.closing) throw new Error('应用正在退出')
     if (ctx.changingSessions.has(id)) throw new Error('正在处理这个会话，请稍后重试')
     const rt = ctx.m.sessions.runtime(id)
+    // 等着的 / 派发中的自动重连会按对话里的原消息发「继续」，回退会把它删掉：先停止再回退
+    if (rt.snapshot.queue.some(q => q.reconnect && !q.held && (q.status === 'queued' || q.status === 'dispatching')))
+      throw new Error('正在自动重连，请先停止再回退')
     if (rt.snapshot.state !== 'idle' || rt.pumping || rt.stopping || rt.activeId || rt.inspectingContext)
       throw new Error('请先停止当前任务再回退')
   }

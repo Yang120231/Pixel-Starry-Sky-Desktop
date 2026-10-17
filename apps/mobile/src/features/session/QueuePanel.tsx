@@ -1,10 +1,20 @@
 // 消息队列（docs/mobile-remote.md §17 第 2 项，规则同桌面 QueuedMessages）：输入框上面列出排着的消息，
-// 点一条弹出能做的事：插队 / 重试、引导、上移、下移、撤回（撤回的文字放回输入框）。
+// 点一条弹出能做的事：插队 / 重试、引导、上移、下移、撤回（撤回的文字放回输入框）、关掉；
+// 断线自动重连中的那条：立即重连、停止（队列暂停时是继续重连、停止）。
 import { useState } from 'react'
 import { ChevronDown, ChevronUp, CornerDownRight, ImageIcon, Pause } from 'lucide-react'
 import type { QueuedMessage, SessionSnapshot } from '@pixelsky/protocol'
 import type { DesktopLink } from '@/connection'
-import { canSteer, isPending, isSendFailure, queueItems, queueLabel, queueTitle } from '@/data/queue'
+import {
+  canDismiss,
+  canSteer,
+  isPending,
+  isReconnecting,
+  isSendFailure,
+  queueItems,
+  queueLabel,
+  queueTitle,
+} from '@/data/queue'
 import { Button, Spinner, cn } from '@/ui'
 import { ActionSheet, type SheetAction } from '@/ui/sheet'
 
@@ -50,6 +60,21 @@ export function QueuePanel({
   const actionsFor = (q: QueuedMessage): SheetAction[] => {
     const index = snapshot.queue.indexOf(q)
     const list: SheetAction[] = []
+    if (isReconnecting(q))
+      return [
+        {
+          label: snapshot.queuePaused ? '继续重连' : '立即重连',
+          hint: snapshot.queuePaused ? '自动重连已暂停，现在接着连' : '不等倒计时，现在就连',
+          disabled: q.status === 'dispatching',
+          onSelect: () => void run(q.id, 'engine:runQueuedNow', q.id),
+        },
+        {
+          label: '停止',
+          hint: '不再自动重连，这条算发送失败',
+          danger: true,
+          onSelect: () => void run(q.id, 'engine:interrupt'),
+        },
+      ]
     if (!isPending(q))
       list.push(
         q.error
@@ -86,6 +111,12 @@ export function QueuePanel({
         hint: '文字放回输入框（图片不会放回）',
         danger: true,
         onSelect: () => void run(q.id, 'engine:cancelQueued', q.id),
+      })
+    if (canDismiss(q))
+      list.push({
+        label: '关掉',
+        hint: '不重发也不撤回：消息留在对话里标「未送达」，可以直接接着说',
+        onSelect: () => void run(q.id, 'engine:dismissQueued', q.id),
       })
     return list
   }
@@ -140,7 +171,9 @@ export function QueuePanel({
               ) : (
                 <span className={cn('size-1.5 rounded-full', q.error ? 'bg-warn' : 'bg-fg-faint')} />
               )}
-              <span className={q.error || isSendFailure(q) ? 'text-warn' : 'text-fg-muted'}>{queueLabel(q)}</span>
+              <span className={q.error || isSendFailure(q) ? 'text-warn' : 'text-fg-muted'}>
+                {queueLabel(q, snapshot.queuePaused)}
+              </span>
               {!!q.attachments?.length && (
                 <span className="flex items-center gap-0.5 text-fg-faint">
                   <ImageIcon size={12} /> {q.attachments.length}
@@ -148,7 +181,15 @@ export function QueuePanel({
               )}
             </span>
             <span className="line-clamp-2 text-list text-fg-secondary">{q.text || '（只有图片）'}</span>
-            {q.error && <span className="truncate text-label text-warn">{q.error.split('\n')[0]}</span>}
+            {q.error && (
+              <span className="truncate text-label text-warn">
+                {q.error.split('\n')[0]}
+                {!!q.reconnected && ` · 已自动重连 ${q.reconnected} 次`}
+              </span>
+            )}
+            {q.reconnect && isReconnecting(q) && (
+              <span className="truncate text-label text-fg-faint">{q.reconnect.reason || '连接中断'}</span>
+            )}
           </button>
         ))}
       </div>

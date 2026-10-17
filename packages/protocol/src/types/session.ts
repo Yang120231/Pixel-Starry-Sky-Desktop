@@ -123,11 +123,34 @@ export interface QueuedMessage {
   mode: 'normal' | 'guidance'
   attempt?: number
   messageUuid?: string
+  /** 引擎已经收到 messageUuid 那条原文（确认送达或已有输出）：断线重连时只发「继续」；没送达的原样重发。
+   *  每次整条发送时宿主先写 false，收到引擎的确认后写 true */
+  delivered?: boolean
   /** 队列暂停时用户在空闲状态直接发送了新消息：这条旧排队项单独保持暂停，等「继续队列」 */
   held?: boolean
   /** 发送时没有对话在运行、前面也没有可执行的排队项：立即执行，不算排队。
    *  界面在对话里显示「正在启动」而不是放进消息队列；未能开始（被停止）时宿主清掉此标记。 */
   direct?: boolean
+  /** 连接中断、宿主正在自动重连（retry.ts isConnectionError）：到时间之前留在队首不派发，
+   *  界面显示重连卡片而不是放进消息队列 */
+  reconnect?: QueueReconnect
+  /** 自动重连了几次还是没接上（或用户点了停止）才算失败的：界面在错误原因后面写「已自动重连 n 次」 */
+  reconnected?: number
+}
+
+export interface QueueReconnect {
+  /** 第几次重连，从 1 起 */
+  attempt: number
+  max: number
+  /** 这条消息累计自动重连了几次（有输出时 attempt 会从 1 重算，它不重算）：超过 max 的 3 倍就不再重连，免得上游每次出几个字就断时无限「继续」；旧数据没有，按 attempt 算 */
+  total?: number
+  /** 开始等的时间和到点派发的时间（毫秒时间戳） */
+  since: number
+  at: number
+  /** 上一次断开的原因（第一行） */
+  reason: string
+  /** 引擎还没收到这条消息（!delivered）：到时原样重发；否则发一句「继续」接着断开前的上下文做。只给界面提示，派发时以 delivered 为准 */
+  resend?: boolean
 }
 
 export interface SendReceipt {

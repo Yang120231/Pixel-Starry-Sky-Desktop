@@ -9,6 +9,7 @@ import {
   ChevronDown,
   ChevronRight,
   CornerDownRight,
+  EyeOff,
   FastForward,
   Pause,
   Play,
@@ -20,7 +21,7 @@ import { Button, IconButton, Spinner, cn } from '@/ui'
 import { effortLabel, type ComposerController, type QueueController } from '@/features/engine'
 import { ImageAttachments } from '@/features/session/attachments/ImageAttachments'
 import { FileAttachments } from '@/features/session/attachments/FileAttachments'
-import { isSendFailure, isStarting } from './queueView'
+import { canDismiss, isReconnecting, isSendFailure, isStarting } from './queueView'
 import { useProviders } from '@/features/account/providers'
 import { isResumeLiveError } from '@/features/resume/model'
 import { nativeSessionAction } from '@/features/engine/store'
@@ -69,8 +70,10 @@ export function QueuedMessages({
     ro.observe(view)
     return () => ro.disconnect()
   }, [root])
-  // 正在执行的、以及空闲时直接发送正在启动的消息都显示在对话里，不算排队
-  const items = live.queue.filter(q => q.status !== 'running' && !isStarting(q, live.queuePaused))
+  // 正在执行的、以及空闲时直接发送正在启动的消息都显示在对话里，不算排队；正在自动重连的显示重连卡片
+  const items = live.queue.filter(
+    q => q.status !== 'running' && !isStarting(q, live.queuePaused) && !isReconnecting(q),
+  )
   if (!items.length) return null
   const action = async (id: string, fn: () => Promise<unknown>) => {
     if (busy) return
@@ -300,6 +303,20 @@ export function QueuedMessages({
                         >
                           {tr('session.QueuedMessages.withdraw')}
                         </Button>
+                        {/* 不重发也不撤回：消息留在对话里标「未送达」，队列不再卡住，可以直接接着说 */}
+                        {canDismiss(q) && (
+                          <Button
+                            variant="ghost"
+                            icon={EyeOff}
+                            data-queue-dismiss
+                            className="h-6 px-1.5 text-meta"
+                            disabled={!!busy}
+                            title={tr('session.queue.dismissHint')}
+                            onClick={() => void action(q.id, () => live.dismissQueued(q.id))}
+                          >
+                            {tr('session.queue.dismiss')}
+                          </Button>
+                        )}
                       </>
                     )}
                   </div>
@@ -311,6 +328,7 @@ export function QueuedMessages({
                     {q.error && (
                       <span className="text-warn" title={translateMessage(q.error)}>
                         {translateMessage(q.error.split('\n')[0])}
+                        {!!q.reconnected && ` · ${tr('session.reconnect.tried', { p0: q.reconnected })}`}
                       </span>
                     )}
                     {q.error && !common && <span className="text-fg-faint @min-[600px]/queue:hidden"> · </span>}

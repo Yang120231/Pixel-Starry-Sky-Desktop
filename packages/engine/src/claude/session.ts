@@ -247,6 +247,8 @@ export class ClaudeSession implements EngineSession {
   /** 仅显式引导进入 CLI 的队列；普通消息一直留在 EngineHost。 */
   private guidance = new Map<string, { text: string }>()
   private capabilities = new Set<string>()
+  /** 这一轮发出去的用户消息 id，等 CLI 回显（--replay-user-messages）确认收到；回显到了或没有这一轮时为 null，每轮只确认一次 */
+  private ackPending: string | null = null
   private proc: ClaudeProcess | null = null
   private starting: Promise<ClaudeProcess> | null = null
   /** 跨引擎接力还没注入的聊天：启动进程时写进会话记录；进程已经在跑或写不进去时，发消息时退回文字交接 */
@@ -307,6 +309,7 @@ export class ClaudeSession implements EngineSession {
 
   send(text: string, turnId: string, userItemId: string, attachments?: ImageAttachment[], seed?: ChatSeed): void {
     this.translator.startTurn(turnId)
+    this.ackPending = userItemId
     if (seed) this.seed = seed
     this.ensureProcess().then(
       // 启动期间用户已停止时，不让延迟完成的 spawn 再把原文送出。
@@ -418,7 +421,7 @@ export class ClaudeSession implements EngineSession {
       const live = liveClaudeSession(dirname(this.deps.projectsDir), sid, ownClaudePids)
       if (live === 'terminal' || live === 'other') throw codedError('resume.live', { source: live })
     }
-    const seeded = this.injectSeed(rec.cwd, sid, rec.pendingRewind ?? null, rec.pendingFork ?? null)
+    const seeded = await this.injectSeed(rec.cwd, sid, rec.pendingRewind ?? null, rec.pendingFork ?? null)
     const resume = claudeTranscriptExists(this.deps.projectsDir, rec.cwd, sid)
     const rewindAt = resume ? (rec.pendingRewind ?? null) : null
     const fork = resume ? null : (rec.pendingFork ?? null)
@@ -466,17 +469,17 @@ export class ClaudeSession implements EngineSession {
    * 跨引擎接力：把还没注入的聊天写进这个引擎会话的记录（没有就新建），之后照常 --resume。
    * 有待执行的回退 / 分叉时不写（截断点之后的条目加载不到），留给发消息时的文字交接。返回写进去的那份，没写为 null
    */
-  private injectSeed(
+  private async injectSeed(
     cwd: string,
     sid: string,
     rewindAt: string | null,
     fork: { from: string; at: string } | null,
-  ): ChatSeed | null {
+  ): Promise<ChatSeed | null> {
     const seed = this.seed
     if (!seed || rewindAt || fork) return null
     try {
-      seedTranscript(this.deps.projectsDir, cwd, sid, seedTurns(seed), NO_REPLY)
-      this.seed = null
+      await seedTranscript(this.deps.projectsDir, cwd, sid, seedTurns(seed), NO_REPLY)
+      if (this.seed === seed) this.seed = null
       return seed
     } catch {
       return null
@@ -855,6 +858,17 @@ export class ClaudeSession implements EngineSession {
             this.capabilities.has(c),
           ),
       })
+    }
+    // CLI 把收到的用户消息原样回显（isReplay）：说明这一轮的原文引擎已经收到，宿主据此判断断线时有没有送达
+    if (
+      msg.type === 'user' &&
+      (msg.isReplay === true || msg.is_replay === true) &&
+      this.ackPending !== null &&
+      msg.uuid === this.ackPending
+    ) {
+      const id = this.ackPending
+      this.ackPending = null
+      this.ctx.emit({ type: 'input_ack', id, state: 'consumed', mode: 'normal' })
     }
     if (msg.type === 'command_lifecycle') {
       const id = str(msg.command_uuid)

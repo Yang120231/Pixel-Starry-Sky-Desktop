@@ -9,11 +9,11 @@ export interface Turn {
   preview: string
 }
 
-/** 每条正常发出的我方消息算一轮（运行中插话的引导消息不算） */
+/** 每条正常发出的我方消息算一轮（运行中插话的引导消息、断线后自动发的「继续」不算） */
 export function turnsOf(items: readonly Item[]): Turn[] {
   const turns: Turn[] = []
   for (const item of items) {
-    if (item.kind !== 'user' || item.mode === 'guidance') continue
+    if (item.kind !== 'user' || item.mode === 'guidance' || item.reconnect) continue
     const line = item.text.trim().split('\n')[0]?.trim() ?? ''
     turns.push({ id: item.id, n: turns.length + 1, preview: line.length > 60 ? `${line.slice(0, 60)}…` : line })
   }
