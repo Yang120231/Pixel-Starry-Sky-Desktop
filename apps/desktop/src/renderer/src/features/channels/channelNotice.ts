@@ -4,7 +4,10 @@ import { tr } from '../../i18n/core'
 import type { NotificationIntent } from '@/features/notifications/policy'
 import type { ChannelsState } from './store'
 
-/** 提醒 id 的前缀：`chtask|<频道 id>|<任务卡 id>|<会话提醒的 dedupeKey>`（id 都是 UUID，不含 |） */
+/**
+ * 提醒 id：`chtask|<频道 id>|<任务卡 id>`（id 都是 UUID，不含 |；合计 81 字，主进程限 100 字）。
+ * 同一张卡的新提醒顶替旧的（等你确认 → 做完了），通知中心里一张卡只留一条；去重靠会话提醒的 dedupeKey
+ */
 const PREFIX = 'chtask'
 
 export interface ChannelNotice {
@@ -44,7 +47,7 @@ export function channelNotice(
         ? tr('channels.notify.failed', { detail: what })
         : tr('channels.notify.waiting', { detail: what })
   return {
-    id: [PREFIX, channel.id, ref.taskId, intent.dedupeKey].join('|'),
+    id: [PREFIX, channel.id, ref.taskId].join('|'),
     title: clip(tr('channels.notify.title', { channel: channel.name, member: member?.name ?? '?' }), 120),
     body: clip(body, 300),
     channelId: channel.id,

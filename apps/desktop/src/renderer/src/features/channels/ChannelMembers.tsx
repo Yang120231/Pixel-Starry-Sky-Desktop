@@ -89,7 +89,7 @@ function PinnedList({ channel, members }: { channel: Channel; members: readonly 
             <button
               type="button"
               disabled={!text}
-              onClick={() => channelActions.focusMessage(channel.id, id)}
+              onClick={() => void channelActions.focusMessage(channel.id, id)}
               className="press flex min-w-0 flex-1 items-start gap-2 px-2 py-1.5 text-left disabled:cursor-default"
             >
               <Pin size={12} strokeWidth={1.75} className="mt-0.5 shrink-0 text-fg-faint" />

@@ -70,6 +70,15 @@ describe('channelNotice', () => {
   it('点了提醒：从 id 认出频道和任务卡；别的提醒不认', () => {
     const { id } = channelNotice(intent('waiting'), '', state(), null)!
     expect(taskOfNotice(id)).toEqual({ channelId: 'c1', taskId: 't1' })
+    // 同一张卡的提醒用同一个 id（新的顶替旧的）；真实 id 是 UUID，合计不超过主进程的 100 字
+    expect(channelNotice(intent('completed'), '', state(), null)!.id).toBe(id)
+    const uuid = '0b6f4c1e-7d2a-4f5b-9c3d-2e8a1f6b7c9d'
+    const real = {
+      ...state(),
+      sessionTasks: { s1: { channelId: uuid, taskId: uuid, memberId: 'a1' } },
+      channels: [{ ...channel(), id: uuid }],
+    }
+    expect(channelNotice(intent('completed'), '', real, null)!.id.length).toBeLessThanOrEqual(100)
     expect(taskOfNotice('waiting:s1:r1')).toBeNull()
     expect(taskOfNotice('feedback|x')).toBeNull()
   })

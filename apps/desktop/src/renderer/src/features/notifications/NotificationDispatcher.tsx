@@ -141,7 +141,7 @@ export function NotificationDispatcher() {
       const task = taskOfNotice(id)
       if (task) {
         setPage('channels')
-        channelActions.focusMessage(task.channelId, task.taskId)
+        void channelActions.focusMessage(task.channelId, task.taskId)
         return
       }
       if (sessionId) window.dispatchEvent(new CustomEvent(OPEN_SESSION_EVENT, { detail: { sessionId } }))
