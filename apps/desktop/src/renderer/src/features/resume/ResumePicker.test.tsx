@@ -187,6 +187,15 @@ describe('ResumePickerView', () => {
     expect(render({ reading: true })).toContain('data-resume-reading')
     expect(render({ groups: none, noProject: true })).toContain('先打开一个项目')
   })
+  it('重新查找：头部一直有（读取中、没有项目时灰掉）；没有任何会话时空状态里也有，过滤没匹配时没有', () => {
+    const none = groupRows([])
+    expect(render()).toMatch(/<button[^>]*aria-label="重新查找"[^>]*data-resume-action="recheck"(?![^>]*disabled)/)
+    expect(render({ loading: true })).toMatch(/<button[^>]*data-resume-action="recheck"[^>]*disabled/)
+    expect(render({ groups: none, noProject: true })).toMatch(/<button[^>]*data-resume-action="recheck"[^>]*disabled/)
+    expect(render({ groups: none })).toContain('data-resume-action="recheck-empty"')
+    const filtered = render({ groups: demoRows('不存在的词'), query: '不存在的词' })
+    expect(filtered).not.toContain('data-resume-action="recheck-empty"')
+  })
   it('engine 为 codex：标题、空状态、错误、帮助是 Codex 的', () => {
     const none = groupRows([])
     expect(render({ engine: 'codex' })).toContain('接着 Codex 会话')

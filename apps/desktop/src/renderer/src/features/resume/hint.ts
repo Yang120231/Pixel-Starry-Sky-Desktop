@@ -9,6 +9,14 @@ import { openResumePicker } from './store'
 
 export type HintEngine = 'claude' | 'codex'
 export type ResumeCounts = Partial<Record<HintEngine, number>>
+/** 查询失败的引擎和原因（没装好的引擎不算失败） */
+export type ResumeErrors = Partial<Record<HintEngine, string>>
+/** 界面看的一份：会话数（还没查完为 null）、失败原因、是不是正在查 */
+export interface ResumeHint {
+  counts: ResumeCounts | null
+  errors: ResumeErrors
+  checking: boolean
+}
 
 /** 会去查、也能打开选择器的引擎 */
 export const HINT_ENGINES: readonly HintEngine[] = ['claude', 'codex']
@@ -85,14 +93,22 @@ async function withSlot<T>(fn: () => Promise<T>): Promise<T> {
 type Lister = (projectId: string, engine: HintEngine) => Promise<readonly NativeSessionSummary[]>
 const defaultLister: Lister = (projectId, engine) => listNativeSessions(projectId, { engine, subfolders: true })
 
+/** 引擎没装好（不是已就绪、也不是只差登录）：它查不到不算失败 */
+function engineMissing(engine: HintEngine): boolean {
+  const info = getEngineState().engines.find(e => e.id === engine)
+  return !!info && info.status !== 'ready' && info.status !== 'unauthenticated'
+}
+
 /**
  * 查一个项目的会话数。两个引擎同时查（不比只查一个慢），在跑的查询总数由 withSlot 限制。
- * 远程机器 / WSL 项目、查询失败（比如 Codex 没装）、引擎不支持都按「没有」处理，不抛错
+ * 远程机器 / WSL 项目、查询失败（比如 Codex 没装）、引擎不支持都按「没有」处理，不抛错；
+ * 传了 errors 时把失败的原因记进去（没装好的引擎不记）
  */
 export async function fetchResumeCounts(
   projectId: string,
   list: Lister = defaultLister,
   engines: readonly HintEngine[] = HINT_ENGINES,
+  errors?: ResumeErrors,
 ): Promise<ResumeCounts> {
   if (machineOf(projectId) !== 'local') return {}
   const counts: ResumeCounts = {}
@@ -101,8 +117,9 @@ export async function fetchResumeCounts(
       try {
         const n = resumableCount(await withSlot(() => list(projectId, engine)))
         if (n > 0) counts[engine] = n
-      } catch {
-        /* 当作没有 */
+      } catch (e) {
+        // 当作没有；记下原因给界面显示（「重新查找」旁边）
+        if (errors && !engineMissing(engine)) errors[engine] = e instanceof Error ? e.message : String(e)
       }
     }),
   )
@@ -113,14 +130,23 @@ export async function fetchResumeCounts(
 // ---------- 缓存（按项目；一分钟内不重查；引擎的启动配置变了就作废） ----------
 interface Entry {
   counts: ResumeCounts | null
+  errors: ResumeErrors
   at: number
   pending: Promise<void> | null
   /** 按哪一代启动配置查的：代变了，结果作废、要重查 */
   generation: number
 }
 const cache = new Map<string, Entry>()
+/** 给界面的快照：每次变了换一个新对象（useSyncExternalStore 按引用比较） */
+const views = new Map<string, ResumeHint>()
 const listeners = new Set<() => void>()
 const emit = (): void => listeners.forEach(l => l())
+function publish(projectId: string): void {
+  const entry = cache.get(projectId)
+  if (entry) views.set(projectId, { counts: entry.counts, errors: entry.errors, checking: !!entry.pending })
+  else views.delete(projectId)
+  emit()
+}
 let lister: Lister = defaultLister
 /** 启动配置的代：设置里改了 CODEX_HOME / CLAUDE_CONFIG_DIR 等环境变量、程序或参数时加一 */
 let generation = 0
@@ -130,6 +156,7 @@ let watching = false
 /** 测试用 */
 export function resetResumeHints(next: Lister = defaultLister): void {
   cache.clear()
+  views.clear()
   lister = next
   launchSeen = null
   emit()
@@ -186,6 +213,9 @@ function watchEngineConfig(): void {
   subscribeEngine(onEngineChange)
 }
 
+/** 界面看的那份（会话数、失败原因、是不是正在查）；还没查过是 null */
+export const cachedResumeHint = (projectId: string): ResumeHint | null => views.get(projectId) ?? null
+
 export function cachedResumeCounts(projectId: string): ResumeCounts | null {
   return cache.get(projectId)?.counts ?? null
 }
@@ -241,33 +271,52 @@ export async function scanResumeProject(
     if (gen !== generation && attempt === 0) continue
     // 配置又变了就不写缓存（noteEngineConfig 已经安排了按新配置重查，不能拿旧结果盖掉它）
     if (gen === generation) {
-      cache.set(projectId, { counts: scanCounts(scan, engines), at: Date.now(), pending: null, generation })
-      emit()
+      // 读不到的引擎记下原因（没装好的不算），欢迎页的「查找时出错 · 重试」跟着更新
+      const errors: ResumeErrors = {}
+      for (const e of engines) if (scan[e]?.error && !engineMissing(e)) errors[e] = scan[e]!.error!
+      cache.set(projectId, { counts: scanCounts(scan, engines), errors, at: Date.now(), pending: null, generation })
+      publish(projectId)
     }
     return scan
   }
 }
 
-/** 查一个项目（有新鲜缓存或正在查就不再查） */
-export function ensureResumeCounts(projectId: string): Promise<void> {
+/**
+ * 查一个项目（有新鲜缓存或正在查就不再查）。上次有引擎查失败了不算新鲜，下次照样重查；
+ * force：手动「重新查找」，不管缓存（正在查时等那一次）
+ */
+export function ensureResumeCounts(projectId: string, force = false): Promise<void> {
   watchEngineConfig()
   const hit = cache.get(projectId)
   const current = hit?.generation === generation
   if (hit?.pending && current) return hit.pending
-  if (hit?.counts && current && Date.now() - hit.at < TTL_MS) return Promise.resolve()
-  const entry: Entry = { counts: hit?.counts ?? null, at: hit?.at ?? 0, pending: null, generation }
-  entry.pending = fetchResumeCounts(projectId, lister).then(counts => {
+  const failed = !!hit && Object.keys(hit.errors).length > 0
+  if (!force && !failed && hit?.counts && current && Date.now() - hit.at < TTL_MS) return Promise.resolve()
+  const entry: Entry = {
+    counts: hit?.counts ?? null,
+    errors: hit?.errors ?? {},
+    at: hit?.at ?? 0,
+    pending: null,
+    generation,
+  }
+  const errors: ResumeErrors = {}
+  entry.pending = fetchResumeCounts(projectId, lister, HINT_ENGINES, errors).then(counts => {
     // 查的途中配置又变了（已经有新的一次在查）或缓存被清了：这次的结果不要，等着的人改等新的那次
     const latest = cache.get(projectId)
     if (latest !== entry) return latest?.pending ?? undefined
     entry.counts = counts
+    entry.errors = errors
     entry.at = Date.now()
     entry.pending = null
-    emit()
+    publish(projectId)
   })
   cache.set(projectId, entry)
+  publish(projectId)
   return entry.pending
 }
+
+/** 手动「重新查找」：不管缓存马上重查（选择框里重新查找时也调，提示条跟着更新） */
+export const refreshResumeCounts = (projectId: string): Promise<void> => ensureResumeCounts(projectId, true)
 
 /** 一批项目：限制并发、只查前 HINT_MAX_PROJECTS 个；返回有会话的项目 id → 会话数 */
 export async function prefetchResumeCounts(
@@ -284,19 +333,27 @@ export async function prefetchResumeCounts(
   return found
 }
 
-/** 某个项目的会话数；空闲时自己触发一次查询（有缓存就直接用）。projectId 为 null 时一直是 null */
-export function useResumeCounts(projectId: string | null | undefined, fetch = true): ResumeCounts | null {
-  const counts = useSyncExternalStore(
-    l => {
-      listeners.add(l)
-      return () => listeners.delete(l)
-    },
-    () => (projectId ? cachedResumeCounts(projectId) : null),
-  )
+const subscribeHints = (l: () => void): (() => void) => {
+  listeners.add(l)
+  return () => listeners.delete(l)
+}
+
+/**
+ * 某个项目的查询状态（会话数、失败原因、是不是正在查）；空闲时自己触发一次查询（有缓存就直接用）。
+ * projectId 为 null 或还没查过时是 null
+ */
+export function useResumeHint(projectId: string | null | undefined, fetch = true): ResumeHint | null {
+  const get = (): ResumeHint | null => (projectId ? cachedResumeHint(projectId) : null)
+  const hint = useSyncExternalStore(subscribeHints, get, get)
   useEffect(() => {
     if (projectId && fetch) void ensureResumeCounts(projectId)
   }, [projectId, fetch])
-  return counts
+  return hint
+}
+
+/** 某个项目的会话数（见 useResumeHint）。projectId 为 null 时一直是 null */
+export function useResumeCounts(projectId: string | null | undefined, fetch = true): ResumeCounts | null {
+  return useResumeHint(projectId, fetch)?.counts ?? null
 }
 
 /** 打开某个项目的 /resume 选择器（列指定引擎的会话）；onOpened：选好会话、打开了新对话之后（比如关掉设置窗口） */

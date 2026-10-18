@@ -63,6 +63,9 @@ const oneLine = (s: string): string => s.replace(/\s+/g, ' ').trim()
 // ---------- 列表：第一步（stat + 头 64 KB） ----------
 
 const HEAD_BYTES = 64 * 1024
+/** 头 64 KB 里认不出 cwd 时最多往下读到这里（第一句话里贴了截图、长日志） */
+const HEAD_MAX = 16 * 1024 * 1024
+const HEAD_CHUNK_MAX = 4 * 1024 * 1024
 /** 列表里最多给这么多个（按修改时间从新到旧） */
 export const LIST_LIMIT = 200
 /** 每次打开选择框读尾部的总字节数、单个文件的上限（§3.2） */
@@ -80,7 +83,7 @@ interface HeadInfo {
   customTitle: string | null
   aiTitle: string | null
   lastPrompt: string | null
-  /** 头 64 KB 就是整个文件 */
+  /** 头部读到了文件末尾（整个文件都读过了） */
   whole: boolean
 }
 
@@ -114,19 +117,6 @@ async function readHead(file: string, size: number, mtimeMs: number): Promise<He
   const key = `${file}|${size}|${mtimeMs}`
   const hit = headCache.get(key)
   if (hit) return remember(headCache, key, hit)
-  const fh = await open(file, 'r')
-  let raw: string
-  try {
-    const buf = Buffer.alloc(Math.min(HEAD_BYTES, size))
-    const { bytesRead } = await fh.read(buf, 0, buf.length, 0)
-    raw = buf.subarray(0, bytesRead).toString('utf8')
-  } finally {
-    await fh.close()
-  }
-  const whole = size <= HEAD_BYTES
-  const lines = raw.split('\n')
-  // 不是整个文件时最后一行多半是半截
-  if (!whole) lines.pop()
   const info: HeadInfo = {
     cwd: null,
     entrypoint: null,
@@ -136,27 +126,55 @@ async function readHead(file: string, size: number, mtimeMs: number): Promise<He
     customTitle: null,
     aiTitle: null,
     lastPrompt: null,
-    whole,
+    whole: false,
   }
-  for (const line of lines) {
-    const e = parseLine(line)
-    if (!e) continue
-    if (info.cwd === null && typeof e.cwd === 'string') info.cwd = e.cwd
-    if (info.entrypoint === null && typeof e.entrypoint === 'string') info.entrypoint = e.entrypoint
-    if (typeof e.gitBranch === 'string' && e.gitBranch) info.branch = e.gitBranch
-    if (e.type === 'ai-title' && typeof e.aiTitle === 'string') info.aiTitle = e.aiTitle
-    else if (e.type === 'custom-title' && typeof (e.customTitle ?? e.title) === 'string')
-      info.customTitle = (e.customTitle ?? e.title) as string
-    else if (e.type === 'last-prompt' && typeof e.lastPrompt === 'string') info.lastPrompt = e.lastPrompt
-    else if (e.type === 'user' && !info.first && e.isSidechain !== true) {
-      const content = userContent(obj(e.message).content)
-      if (classifyUser(e, content) === 'prompt') {
-        info.prompted = true
-        info.first = splitPrompt(content.text).text
-      }
+  const fh = await open(file, 'r')
+  try {
+    // 先读头 64 KB。第一句话贴了截图 / 长日志时那一行就超过 64 KB，被截掉的半行里才有 cwd：
+    // 还没认出 cwd 就接着往下读（最多 HEAD_MAX）；认出了 cwd、还没有用户输入、又有一行被截在边界上，只把这一行读完
+    let pos = 0
+    let carry = Buffer.alloc(0)
+    for (let chunk = HEAD_BYTES; ; chunk = Math.min(chunk * 2, HEAD_CHUNK_MAX)) {
+      const buf = Buffer.alloc(Math.max(0, Math.min(chunk, size - pos)))
+      const { bytesRead } = buf.length ? await fh.read(buf, 0, buf.length, pos) : { bytesRead: 0 }
+      const extra = pos > 0
+      pos += bytesRead
+      const end = pos >= size || bytesRead === 0
+      const data = Buffer.concat([carry, buf.subarray(0, bytesRead)])
+      // 只读完被截的那一行时到第一个换行为止，后面读进来的不算（whole 只在真的看完了整个文件时为 true）
+      const finishing = extra && info.cwd !== null
+      const nl = finishing ? data.indexOf(0x0a) : data.lastIndexOf(0x0a)
+      const cut = finishing && nl >= 0 ? nl + 1 : end ? data.length : nl + 1
+      for (const line of data.subarray(0, cut).toString('utf8').split('\n')) takeHead(info, line)
+      carry = data.subarray(cut)
+      info.whole = end && carry.length === 0
+      if (end || pos >= HEAD_MAX) break
+      if (info.cwd !== null && (info.prompted || (extra ? cut > 0 : carry.length === 0))) break
     }
+  } finally {
+    await fh.close()
   }
   return remember(headCache, key, info)
+}
+
+/** 头部的一行：认 cwd、来源、分支、标题和第一句用户输入 */
+function takeHead(info: HeadInfo, line: string): void {
+  const e = parseLine(line)
+  if (!e) return
+  if (info.cwd === null && typeof e.cwd === 'string') info.cwd = e.cwd
+  if (info.entrypoint === null && typeof e.entrypoint === 'string') info.entrypoint = e.entrypoint
+  if (typeof e.gitBranch === 'string' && e.gitBranch) info.branch = e.gitBranch
+  if (e.type === 'ai-title' && typeof e.aiTitle === 'string') info.aiTitle = e.aiTitle
+  else if (e.type === 'custom-title' && typeof (e.customTitle ?? e.title) === 'string')
+    info.customTitle = (e.customTitle ?? e.title) as string
+  else if (e.type === 'last-prompt' && typeof e.lastPrompt === 'string') info.lastPrompt = e.lastPrompt
+  else if (e.type === 'user' && !info.first && e.isSidechain !== true) {
+    const content = userContent(obj(e.message).content)
+    if (classifyUser(e, content) === 'prompt') {
+      info.prompted = true
+      info.first = splitPrompt(content.text).text
+    }
+  }
 }
 
 const pad = (n: number): string => String(n).padStart(2, '0')
@@ -236,7 +254,8 @@ export async function listClaudeSessions(
   opts: ListOptions = {},
 ): Promise<ClaudeSessionList> {
   const subfolders = opts.subfolders === true
-  const files: { id: string; file: string; size: number; mtimeMs: number }[] = []
+  const files: { id: string; file: string; size: number; mtimeMs: number; direct: boolean }[] = []
+  const directDir = join(projectsDir, encodeCwd(cwd))
   for (const dir of await candidateDirs(projectsDir, cwd, subfolders)) {
     let names: string[]
     try {
@@ -253,7 +272,13 @@ export async function listClaudeSessions(
         try {
           const st = await stat(file)
           return st.isFile() && st.size > 0
-            ? { id: name.slice(0, -'.jsonl'.length), file, size: st.size, mtimeMs: st.mtimeMs }
+            ? {
+                id: name.slice(0, -'.jsonl'.length),
+                file,
+                size: st.size,
+                mtimeMs: st.mtimeMs,
+                direct: dir === directDir,
+              }
             : null
         } catch {
           return null
@@ -273,8 +298,10 @@ export async function listClaudeSessions(
     } catch {
       return null
     }
-    if (!head.cwd) return null
-    const where = await matchCwd(cwd, head.cwd, subfolders)
+    // 读到 HEAD_MAX 还没有 cwd：在这个项目自己的记录目录里就算这个项目的（编码撞车的目录里有 cwd 的照常核对）
+    const recorded = head.cwd ?? (f.direct ? cwd : null)
+    if (!recorded) return null
+    const where = await matchCwd(cwd, recorded, subfolders)
     if (!where) return null
     // 头部没有用户输入、又已经是整个文件、也没有 last-prompt：只有元数据，不列
     if (!head.first && !head.prompted && head.whole && !head.lastPrompt) return null
@@ -284,7 +311,7 @@ export async function listClaudeSessions(
       size: f.size,
       mtimeMs: f.mtimeMs,
       updatedAt: f.mtimeMs,
-      cwd: head.cwd,
+      cwd: recorded,
       subdir: where.subdir,
       title: chooseTitle({ custom: head.customTitle, ai: null, first: head.first, last: head.lastPrompt }, f.mtimeMs),
       firstPrompt: clip(oneLine(head.first), 200),

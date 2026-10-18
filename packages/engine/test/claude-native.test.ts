@@ -215,6 +215,40 @@ describe('列表：第一步（stat + 头 64 KB）', () => {
     expect((await listClaudeSessions(projects, a_b)).sessions.map(s => s.id)).toEqual([id(5)])
   })
 
+  it('第一句话贴了截图（那一行超过 64 KB、cwd 只在那一行）：接着往下读，照常列出、标题是那句话', async () => {
+    const shot = { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'A'.repeat(200_000) } }
+    const log = new Log(id(1))
+    log.raw({ type: 'queue-operation', operation: 'enqueue', sessionId: id(1) })
+    log.user('u1', null, [{ type: 'text', text: '看下这个报错' }, shot], { origin: { kind: 'human' } })
+    log.assistant('a1', 'u1', '好的')
+    log.save()
+    const [s] = (await listClaudeSessions(projects, cwd)).sessions
+    expect(s).toMatchObject({ id: id(1), cwd, title: '看下这个报错', firstPrompt: '看下这个报错' })
+  })
+
+  it('cwd 在前面的小行、第一句话那一行跨过 64 KB：把这一行读完，标题是那句话', async () => {
+    const log = new Log(id(1))
+    log.raw({ type: 'mode', mode: 'default', cwd })
+    log.user('u1', null, '贴一段日志\n' + 'log '.repeat(30_000), { origin: { kind: 'human' } })
+    for (let k = 0; k < 5; k++) log.assistant(`a${k}`, 'u1', 'x'.repeat(50_000))
+    log.save()
+    const [s] = (await listClaudeSessions(projects, cwd)).sessions
+    expect(s).toMatchObject({ id: id(1), title: '贴一段日志', firstPrompt: expect.stringMatching(/^贴一段日志/) })
+  })
+
+  it('整个头部都没有 cwd：在项目自己的记录目录里算这个项目的，别的目录里的不算', async () => {
+    const dir = join(projects, encodeCwd(cwd))
+    mkdirSync(dir, { recursive: true })
+    const row = { type: 'user', uuid: 'u1', sessionId: id(1), message: { role: 'user', content: '没有 cwd 的会话' } }
+    writeFileSync(join(dir, `${id(1)}.jsonl`), JSON.stringify(row) + '\n')
+    const sub = join(cwd, 'sub')
+    mkdirSync(sub)
+    mkdirSync(join(projects, encodeCwd(sub)), { recursive: true })
+    writeFileSync(join(projects, encodeCwd(sub), `${id(2)}.jsonl`), JSON.stringify({ ...row, sessionId: id(2) }) + '\n')
+    const list = await listClaudeSessions(projects, cwd, { subfolders: true })
+    expect(list.sessions.map(s => [s.id, s.cwd, s.subdir])).toEqual([[id(1), cwd, null]])
+  })
+
   it('cwd 只差末尾分隔符（Windows 上还有大小写）的照常列', async () => {
     new Log(id(1)).user('u1', null, '一').save()
     // 记录里的 cwd 多一个末尾分隔符

@@ -53,11 +53,12 @@ export function WelcomeView({
           <p className="mt-2 text-ui text-fg-muted">
             {needProject ? text('先选择一个项目文件夹，然后描述你要做的事') : text('在这台电脑上开始一个新任务')}
           </p>
-          {/* 这个项目在终端里有原来的 AI 会话：给个入口接着聊（没有会话 / 远程项目 / 演示不显示） */}
+          {/* 这个项目在终端里有原来的 AI 会话：给个入口接着聊；没找到 / 查失败时给「重新查找」（远程项目 / 演示不显示） */}
           {!isDemo && projectId && !hasConversations && (
             <ResumeHintLink
               projectId={projectId}
               separator="comma"
+              probe
               engine={live?.engine?.id}
               className="mt-2 text-ui"
             />

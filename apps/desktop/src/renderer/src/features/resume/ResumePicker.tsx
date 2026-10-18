@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type Ref } from 'react'
 import { createPortal } from 'react-dom'
-import { CornerDownLeft, FolderGit2, Info, Search, X } from 'lucide-react'
+import { CornerDownLeft, FolderGit2, Info, RefreshCw, Search, X } from 'lucide-react'
 import type { NativeSessionDetail, NativeSessionSummary } from '@pixelsky/protocol'
 import { Button, IconButton, Spinner, cn } from '@/ui'
 import { useI18n } from '@/i18n/I18nProvider'
@@ -32,6 +32,7 @@ import {
   type ResumeRow,
 } from './model'
 import { RESUME_ENGINE_NAMES, closeResumePicker, type ResumeEngine, type ResumeRequest } from './store'
+import { refreshResumeCounts } from './hint'
 
 /** 第二步每批补多少行（对着屏幕上能看到的行逐批补） */
 const TAIL_BATCH = 8
@@ -68,6 +69,7 @@ export interface PickerViewProps {
   onActivate(row: ResumeRow, how: ChooseHow): void
   onWait(row: ResumeRow): void
   onCancelImport(): void
+  /** 重试 / 重新查找：重新列一遍（不用缓存） */
   onRetry(): void
   onHelp(): void
   onClose(): void
@@ -303,6 +305,15 @@ export function ResumePickerView(view: PickerViewProps) {
           </span>
         )}
         <IconButton
+          icon={RefreshCw}
+          label={tr('resume.hint.recheck')}
+          data-resume-action="recheck"
+          size={24}
+          iconSize={14}
+          disabled={view.noProject || view.loading}
+          onClick={view.onRetry}
+        />
+        <IconButton
           icon={Info}
           label={tr('resume.help')}
           size={24}
@@ -391,8 +402,17 @@ export function ResumePickerView(view: PickerViewProps) {
           </div>
         )}
         {empty && !view.noProject && (
-          <div role="status" data-resume-empty className="px-4 py-9 text-center text-ui text-fg-muted">
-            {view.query.trim() ? tr('resume.noMatch') : tr('resume.empty', { engine: engineName })}
+          <div
+            role="status"
+            data-resume-empty
+            className="flex flex-col items-center gap-3 px-4 py-9 text-center text-ui text-fg-muted"
+          >
+            <span>{view.query.trim() ? tr('resume.noMatch') : tr('resume.empty', { engine: engineName })}</span>
+            {!view.query.trim() && (
+              <Button data-resume-action="recheck-empty" onClick={view.onRetry}>
+                {tr('resume.hint.recheck')}
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -663,7 +683,10 @@ export function ResumePicker({ request }: { request: ResumeRequest }) {
           }}
           onRetry={() => {
             setRows(null)
+            setDetails(new Map())
             setAttempt(n => n + 1)
+            // 导入提示、空状态的计数跟着更新
+            if (projectId && isLive) void refreshResumeCounts(projectId)
           }}
           onHelp={() => setHelp(v => !v)}
           onClose={() => closeResumePicker()}

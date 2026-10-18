@@ -147,6 +147,14 @@ export const resumeMessages = {
   'resume.hint.sep.dot': { zh: ' · ', en: ' · ' },
   'resume.hint.sep.comma': { zh: '，', en: ', ' },
   'resume.hint.action': { zh: '接着聊', en: 'Continue' },
+  'resume.hint.checking': { zh: '正在查找终端里原来的会话…', en: 'Looking for earlier terminal sessions…' },
+  'resume.hint.none': {
+    zh: '没找到终端里原来的 Claude Code / Codex 会话',
+    en: 'No earlier Claude Code / Codex sessions found',
+  },
+  'resume.hint.failed': { zh: '查找 {engines} 会话时出错', en: 'Couldn’t look up {engines} sessions' },
+  'resume.hint.failedDetail': { zh: '{engine}：{error}', en: '{engine}: {error}' },
+  'resume.hint.recheck': { zh: '重新查找', en: 'Search again' },
   'resume.hint.toastMany': {
     zh: '其中 {n} 个项目有原来的 AI 会话，进项目输入 /resume 就能接着聊',
     en: '{n} of these projects have earlier AI sessions; type /resume in a project to continue',

@@ -13,7 +13,9 @@ import {
   hintEngine,
   hintMessage,
   cachedResumeCounts,
+  cachedResumeHint,
   ensureResumeCounts,
+  refreshResumeCounts,
   hintText,
   mapLimit,
   noteEngineConfig,
@@ -220,6 +222,37 @@ describe('引擎启动配置变了', () => {
     release()
     await first
     expect(cachedResumeCounts('p')).toEqual({ codex: 3 })
+    resetResumeHints()
+  })
+})
+
+describe('失败原因和手动重新查找', () => {
+  it('查失败的引擎记下原因；有失败时缓存不算新鲜，下次照样重查', async () => {
+    let fail = true
+    const list = vi.fn(async (_p: string, engine: string) => {
+      if (engine === 'codex' && fail) throw new Error('读取超时')
+      return engine === 'claude' ? [] : sessions(2)
+    })
+    resetResumeHints(list)
+    await ensureResumeCounts('q')
+    expect(cachedResumeHint('q')).toEqual({ counts: {}, errors: { codex: '读取超时' }, checking: false })
+    fail = false
+    await ensureResumeCounts('q')
+    expect(list).toHaveBeenCalledTimes(4)
+    expect(cachedResumeHint('q')).toEqual({ counts: { codex: 2 }, errors: {}, checking: false })
+    resetResumeHints()
+  })
+  it('没失败时一分钟内不重查；refreshResumeCounts 不管缓存马上重查，查的时候 checking 为 true', async () => {
+    const list = vi.fn(async () => sessions(1))
+    resetResumeHints(list)
+    await ensureResumeCounts('r')
+    await ensureResumeCounts('r')
+    expect(list).toHaveBeenCalledTimes(2)
+    const again = refreshResumeCounts('r')
+    expect(cachedResumeHint('r')).toMatchObject({ counts: { claude: 1, codex: 1 }, checking: true })
+    await again
+    expect(list).toHaveBeenCalledTimes(4)
+    expect(cachedResumeHint('r')).toEqual({ counts: { claude: 1, codex: 1 }, errors: {}, checking: false })
     resetResumeHints()
   })
 })
