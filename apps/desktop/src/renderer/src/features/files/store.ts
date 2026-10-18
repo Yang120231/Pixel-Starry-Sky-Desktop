@@ -101,16 +101,32 @@ export interface FileRename {
 }
 
 /**
+ * 改名 / 移动 from → to 会被顶掉、还有未保存修改的标签：from 下面已打开的文件挪过去后，id 和新路径上已有的标签撞上了。
+ * 文件树在改名前用它先问（取消就不动磁盘）；确认后把这些 id 传给 renameOpenFiles 的 discard
+ */
+export function displacedDirtyFiles(ref: WorkspaceRef, from: string, to: string): OpenFile[] {
+  const moving = (tab: OpenFile): boolean => sameRef(tab.ref, ref) && under(tab.path, from)
+  const incoming = new Set(state.tabs.filter(moving).map(tab => fileTab(tab.ref, to + tab.path.slice(from.length))))
+  return state.tabs.filter(tab => !moving(tab) && incoming.has(tab.id) && dirtyFile(tab))
+}
+
+/**
  * 文件树重命名 / 移动后，已打开的标签换成新路径和新 id（id 由路径算出），草稿、编辑器（含撤销记录）都保留。
  * 原来 id 不变、只记一笔「旧 id → 新 id」：之后在旧路径新建或打开文件会算出同一个 id，打开的是改名后的文件，
  * 保存也写进它；代码模式的标签和最近文件还记着旧 id，重启后指向旧路径（审查报告 2026-10-14）。
+ * 新路径上已经有标签（文件早已不在或被外部移走、标签还留着）：没改过的去掉，免得两个标签同一个 id；
+ * 有未保存修改的只有在 discard 里（用户确认过丢弃）才去掉，否则留着它，撞上的那个标签不挪（兜底，不丢草稿）
  */
-export function renameOpenFiles(ref: WorkspaceRef, from: string, to: string): void {
+export function renameOpenFiles(ref: WorkspaceRef, from: string, to: string, discard: readonly string[] = []): void {
+  const moving = (tab: OpenFile): boolean => sameRef(tab.ref, ref) && under(tab.path, from)
+  const held = new Map(state.tabs.filter(tab => !moving(tab)).map(tab => [tab.id, tab]))
   const moves: FileRename[] = []
   const tabs = state.tabs.map(tab => {
-    if (!sameRef(tab.ref, ref) || !under(tab.path, from)) return tab
+    if (!moving(tab)) return tab
     const path = to + tab.path.slice(from.length)
     const id = fileTab(tab.ref, path)
+    const other = held.get(id)
+    if (other && dirtyFile(other) && !discard.includes(other.id)) return tab
     if (id !== tab.id) moves.push({ from: tab.id, to: id })
     return { ...tab, id, path, name: path.split('/').pop() ?? path }
   })
@@ -118,7 +134,6 @@ export function renameOpenFiles(ref: WorkspaceRef, from: string, to: string): vo
     if (tabs.some((t, i) => t !== state.tabs[i])) set({ ...state, tabs })
     return
   }
-  // 新路径以前开过、文件早已不在、标签还留着：去掉那个旧标签，免得两个标签同一个 id
   const moved = new Set(moves.map(m => m.from))
   const taken = new Set(moves.map(m => m.to))
   const kept = tabs.filter((t, i) => !(taken.has(t.id) && !moved.has(state.tabs[i].id)))
