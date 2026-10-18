@@ -3,6 +3,9 @@
 import type {
   AccountRefreshResult,
   AccountState,
+  CheckoutCreateInput,
+  CheckoutOrder,
+  PanelStatus,
   StoreCatalog,
   StoreLinkKind,
   StoreLinkParams,
@@ -26,6 +29,24 @@ export interface AccountBridge {
   store(): Promise<StoreCatalog>
   /** 在系统浏览器里打开面板的购买页 / 兑换页；地址取自最近一次 store() 的结果 */
   openStore(kind: StoreLinkKind, params?: StoreLinkParams): Promise<void>
+  // 软件内付款（docs/ui/in-app-payment.md §6.6）：参数在主进程校验；云端的错误码用 codedError('checkout.<CODE>') 抛出，
+  // 没有码的是可读的中文。订单号只认这次登录期间下过 / 列出来过的
+  /** 下单（或复用同参数的待付单）；同一个 requestId 重试云端原样返回，同一时间只能有一个下单在途 */
+  checkoutCreate(input: CheckoutCreateInput): Promise<CheckoutOrder>
+  /** 查单；待付时云端按节流顺带向支付商核实 */
+  checkoutGet(orderId: number): Promise<CheckoutOrder>
+  /** 「我已付款」：马上核实 */
+  checkoutVerify(orderId: number): Promise<CheckoutOrder>
+  /** 取消待付单；返回取消后的状态（可能其实是已付） */
+  checkoutCancel(orderId: number): Promise<CheckoutOrder>
+  /** 软件里下的、还没到期的待付单（不含二维码，要付款时再 checkoutGet） */
+  checkoutPending(): Promise<CheckoutOrder[]>
+  /** 在系统浏览器里打开这笔订单的支付页；地址是主进程记下的，渲染层传不了 */
+  checkoutOpenPayUrl(orderId: number): Promise<void>
+  /** 面板凭证状态：usableForCheckout 为假时下单会要求先确认账号 */
+  panelStatus(): Promise<PanelStatus>
+  /** 在系统浏览器里打开「确认账号」页（只换面板凭证，不换账号） */
+  panelVerify(): Promise<void>
   /** 订阅状态变化，返回取消订阅函数 */
   onChange(cb: (state: AccountState) => void): () => void
 }

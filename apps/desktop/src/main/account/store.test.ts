@@ -31,7 +31,7 @@ vi.mock('./account', () => ({
     }),
 }))
 
-const { fetchStore, isTrustedPanelHost, openStore, parseStore, storeLink } = await import('./store')
+const { fetchStore, isTrustedPanelHost, lastStore, openStore, parseStore, storeLink } = await import('./store')
 
 const open = {
   enabled: true,
@@ -275,5 +275,44 @@ describe('parseStore 币种', () => {
   it('云端给了币种 currencyKnown 为 true；没给时默认 CNY 但 currencyKnown 为 false', () => {
     expect(parseStore({ ...open, currency: 'USD' })).toMatchObject({ currency: 'USD', currencyKnown: true })
     expect(parseStore({ ...open, currency: undefined })).toMatchObject({ currency: 'CNY', currencyKnown: false })
+  })
+})
+
+describe('parseStore 软件内付款能力标记', () => {
+  it('云端没给 checkout（旧版本）：不带这个字段，等于不开', () => {
+    expect('checkout' in parseStore(open)).toBe(false)
+    expect(parseStore(open).checkout).toBeUndefined()
+  })
+
+  it('蛇形转驼峰；支付方式只收非空字符串', () => {
+    const checkout = { enabled: true, methods: ['alipay', 'wxpay', '', 3, null], order_timeout_minutes: 15 }
+    expect(parseStore({ ...open, checkout }).checkout).toEqual({
+      enabled: true,
+      methods: ['alipay', 'wxpay'],
+      orderTimeoutMinutes: 15,
+    })
+  })
+
+  it('格式不对按不开处理，不让整页失败', () => {
+    for (const checkout of [null, 'yes', 1, [], true])
+      expect(parseStore({ ...open, checkout }).checkout).toBeUndefined()
+    // enabled 不是 true、或没有可用的支付方式，都算没开；有效期不对用 30 分钟
+    expect(parseStore({ ...open, checkout: { enabled: 'true', methods: ['alipay'] } }).checkout).toMatchObject({
+      enabled: false,
+    })
+    expect(parseStore({ ...open, checkout: { enabled: true, methods: [] } }).checkout).toMatchObject({
+      enabled: false,
+      methods: [],
+    })
+    for (const order_timeout_minutes of [undefined, 0, -5, '30', NaN])
+      expect(
+        parseStore({ ...open, checkout: { enabled: true, methods: ['alipay'], order_timeout_minutes } }).checkout,
+      ).toMatchObject({ enabled: true, orderTimeoutMinutes: 30 })
+  })
+
+  it('fetchStore 之后 lastStore 带着商品数据和当时的邮箱', async () => {
+    mocks.response = { status: 200, body: { ...open, checkout: { enabled: true, methods: ['alipay'] } } }
+    await fetchStore()
+    expect(lastStore()).toMatchObject({ email: 'alice@example.com', catalog: { checkout: { enabled: true } } })
   })
 })

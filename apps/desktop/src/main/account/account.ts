@@ -546,6 +546,11 @@ export function signedInEmail(): string | null {
   return state.status === 'signed-in' ? state.account.email : null
 }
 
+/** 登录会话代数：每次退出 / 重新登录都会变；软件内付款据此丢掉上一次登录里记下的订单 */
+export function accountEpoch(): number {
+  return epoch
+}
+
 // ---------------------------------------------------------------------------
 // 账号数据映射（蛇形 → AccountInfo，逐字段防御）
 // ---------------------------------------------------------------------------

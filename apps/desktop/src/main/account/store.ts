@@ -5,6 +5,7 @@ import { baseUrl, platformFetch, signedInEmail } from './account'
 import type {
   StoreBonusTier,
   StoreCatalog,
+  StoreCheckout,
   StoreLinkKind,
   StoreLinkParams,
   StorePlan,
@@ -85,6 +86,19 @@ function parseRecharge(v: unknown): StoreRecharge {
   }
 }
 
+/** 软件内付款的能力标记；没给或不是对象（旧版云端）就是不开，返回 undefined */
+function parseCheckout(v: unknown): StoreCheckout | undefined {
+  if (!isObject(v)) return undefined
+  const methods = Array.isArray(v.methods) ? v.methods.filter((m): m is string => typeof m === 'string' && !!m) : []
+  const timeout = num(v.order_timeout_minutes)
+  return {
+    // 没有可用的支付方式时等于没开
+    enabled: v.enabled === true && methods.length > 0,
+    methods,
+    orderTimeoutMinutes: timeout !== null && timeout > 0 ? timeout : 30,
+  }
+}
+
 /** 解析 /v1/platform/store 的响应：蛇形 → 驼峰；字段类型不对就报错，多出来的字段忽略 */
 export function parseStore(body: unknown): StoreCatalog {
   if (!isObject(body) || typeof body.enabled !== 'boolean' || !Array.isArray(body.plans)) {
@@ -96,6 +110,7 @@ export function parseStore(body: unknown): StoreCatalog {
         isObject(m) && text(m.type) ? [{ type: text(m.type), label: text(m.label) || text(m.type) }] : [],
       )
     : []
+  const checkout = parseCheckout(body.checkout)
   return {
     enabled: body.enabled,
     currency: text(body.currency) || 'CNY',
@@ -107,11 +122,17 @@ export function parseStore(body: unknown): StoreCatalog {
     helpText: text(body.help_text),
     purchaseUrl: text(body.purchase_url),
     redeemUrl: text(body.redeem_url),
+    ...(checkout && { checkout }),
   }
 }
 
 /** 最近一次拿到的商品数据：打开浏览器的地址只认它（渲染层传不了任意地址） */
 let last: { email: string | null; catalog: StoreCatalog } | null = null
+
+/** 最近一次商品数据及其所属账号：软件内付款的参数校验（金额范围、套餐、支付方式）只认它 */
+export function lastStore(): { email: string | null; catalog: StoreCatalog } | null {
+  return last
+}
 
 export async function fetchStore(): Promise<StoreCatalog> {
   const res = await platformFetch(STORE_PATH, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })

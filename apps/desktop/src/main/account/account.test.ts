@@ -68,6 +68,9 @@ vi.stubGlobal('fetch', async (input: string, init: RequestInit = {}) => {
   if (path === '/v1/platform/slow' && slowGate) await slowGate
   if (path.startsWith('/v1/extensions')) return Response.json({ ok: true }, { status: 200 })
   if (path === '/v1/oauth/token' && revoked) return Response.json({ error: 'invalid_grant' }, { status: 400 })
+  // 软件内付款：面板凭证的问题云端回 403 + code（不是 401），不能被当成登录过期
+  if (path === '/v1/platform/reauth')
+    return Response.json({ error: '需要确认账号', code: 'PANEL_REAUTH_REQUIRED' }, { status: 403 })
   if (path.startsWith('/v1/platform/')) return Response.json({}, { status: revoked ? 401 : 200 })
   // 账号数据读不到只是暂时故障：保持登录
   return Response.json({}, { status: 503 })
@@ -157,6 +160,17 @@ describe('extensionsFetch 的代理提示', () => {
     await extensionsFetch('GET', '/v1/extensions/publisher')
     await expect(extensionsFetch('GET', '/v1/platform/x')).rejects.toThrow()
     expect(mocks.netCalls).toEqual([])
+  })
+})
+
+describe('platformFetch 的 403', () => {
+  it('403 + code 原样返回：不续期、不退出登录', async () => {
+    requests.length = 0
+    const res = await platformFetch('/v1/platform/reauth', { method: 'POST' })
+    expect(res.status).toBe(403)
+    expect(await res.json()).toMatchObject({ code: 'PANEL_REAUTH_REQUIRED' })
+    expect(requests.map(r => r.path)).toEqual(['/v1/platform/reauth'])
+    expect(signedInEmail()).toBe('alice@example.com')
   })
 })
 

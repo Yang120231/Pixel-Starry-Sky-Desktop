@@ -52,6 +52,14 @@ const account: AccountBridge = {
   refresh: () => invoke('account:refresh'),
   store: () => invoke('account:store'),
   openStore: (kind, params) => invoke('account:openStore', kind, params),
+  checkoutCreate: input => invoke('account:checkoutCreate', input),
+  checkoutGet: orderId => invoke('account:checkoutGet', orderId),
+  checkoutVerify: orderId => invoke('account:checkoutVerify', orderId),
+  checkoutCancel: orderId => invoke('account:checkoutCancel', orderId),
+  checkoutPending: () => invoke('account:checkoutPending'),
+  checkoutOpenPayUrl: orderId => invoke('account:checkoutOpenPayUrl', orderId),
+  panelStatus: () => invoke('account:panelStatus'),
+  panelVerify: () => invoke('account:panelVerify'),
   onChange: cb => {
     const listener = (_event: Electron.IpcRendererEvent, s: AccountState): void => cb(s)
     on('account:changed', listener)

@@ -16,6 +16,16 @@ import type { AppContext } from '../app/context'
 import { platformCalls, platformCharges, accountCalls, accountSummary } from '../platform/billing'
 import { onAccountChange, signedInEmail } from '../account/account'
 import { fetchStore, openStore } from '../account/store'
+import {
+  checkoutCancel,
+  checkoutCreate,
+  checkoutGet,
+  checkoutOpenPayUrl,
+  checkoutPending,
+  checkoutVerify,
+  panelStatus,
+  panelVerify,
+} from '../account/checkout'
 import { logger } from '@pixelsky/engine'
 import { initPlatform, validateQueuedInput } from '../platform/platform'
 import { initProviders } from '../providers/providers'
@@ -113,6 +123,15 @@ export async function initEngine(ctx: AppContext): Promise<void> {
   handle('account:summary', (_e, query) => accountSummary(query))
   handle('account:store', () => fetchStore())
   handle('account:openStore', (_e, kind, params) => openStore(kind, params))
+  // 软件内付款（docs/ui/in-app-payment.md §6.6）：参数校验、订单号白名单、地址校验都在 main/account/checkout.ts
+  handle('account:checkoutCreate', (_e, input) => checkoutCreate(input))
+  handle('account:checkoutGet', (_e, orderId) => checkoutGet(orderId))
+  handle('account:checkoutVerify', (_e, orderId) => checkoutVerify(orderId))
+  handle('account:checkoutCancel', (_e, orderId) => checkoutCancel(orderId))
+  handle('account:checkoutPending', () => checkoutPending())
+  handle('account:checkoutOpenPayUrl', (_e, orderId) => checkoutOpenPayUrl(orderId))
+  handle('account:panelStatus', () => panelStatus())
+  handle('account:panelVerify', () => panelVerify())
   // 搜索 / 产物扫描按窗口分桶；窗口关闭时中止它还没跑完的查询
   const searches = new SearchRegistry(),
     scans = new SearchRegistry()

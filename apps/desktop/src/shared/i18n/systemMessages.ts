@@ -1587,4 +1587,11 @@ export const systemMessages = {
   'system.storePanelCredentials': { zh: '面板地址带有用户名或密码，已拒绝打开', en: 'The panel address contains a username or password, so it was not opened' },
   'system.storePanelNotHttps': { zh: '面板地址不是 https，已拒绝打开', en: 'The panel address is not https, so it was not opened' },
   'system.storePanelUntrusted': { zh: '面板地址不在可信域名内，已拒绝打开', en: 'The panel address is not on a trusted domain, so it was not opened' },
+  'system.checkoutInvalidRequest': { zh: '请求参数不正确', en: 'Invalid request' },
+  'system.checkoutBusy': { zh: '已有一笔订单正在创建，请稍候', en: 'Another order is being created. Please wait' },
+  'system.checkoutInvalidData': { zh: '服务返回的付款数据异常', en: 'Invalid payment data returned by service' },
+  'system.checkoutFailedHttp': { zh: '付款服务暂时不可用（HTTP {p0}）', en: 'The payment service is unavailable (HTTP {p0})' },
+  'system.checkoutOrderNotFound': { zh: '找不到这笔订单，请重新下单', en: 'Order not found. Please place a new order' },
+  'system.checkoutPanelUrlUntrusted': { zh: '确认地址不在可信域名内，已拒绝打开', en: 'The confirmation URL is not trusted and was not opened' },
+  'system.checkoutNoPayPage': { zh: '这笔订单没有可以打开的支付页', en: 'This order has no payment page to open' },
 } as const
