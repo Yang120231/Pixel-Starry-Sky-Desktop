@@ -17,7 +17,7 @@ import {
   useTerminalStore,
 } from './store'
 import { screens } from './screens'
-import { exitSuffix } from '@/features/coding/tasks/model'
+import { exitSuffix, TaskCommandError } from '@/features/coding/tasks/model'
 import { openRightTab } from '@/features/panel/workspaceStore'
 import { workspaceTerminals } from './workspace'
 import { getMachines, machineOf, selectMachine } from '@/features/machines/store'
@@ -433,15 +433,29 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
         await terminalRestart(record.id)
         record = terminalState().terminals.find(r => r.id === reuseId)
       }
+      const created = !record
+      // 新建终端之前先按默认 Shell 拼一次：cmd 下含 % 之类拼不出来的，不必建一个马上关掉的终端（实际 Shell 不同时下面还会再拼一次）
+      if (created && typeof command === 'function') {
+        const state = terminalState()
+        command(state.profiles.find(p => p.id === state.defaultProfileId)?.command)
+      }
       record ??= await terminalCreate(ref)
+      const program = terminalState().profiles.find(p => p.id === record.profileId)?.command
+      let line: string
+      try {
+        line = typeof command === 'function' ? command(program) : command
+      } catch (cause) {
+        // 命令拼不出来（cmd 下路径含 %）：新建的终端用不上，关掉；错误交给调用方提示，不当终端故障
+        if (created) await terminalClose(record.id).catch(() => undefined)
+        throw cause
+      }
       select(record.id)
       await terminalRename(record.id, name).catch(() => undefined)
-      const program = terminalState().profiles.find(p => p.id === record.profileId)?.command
-      const line = typeof command === 'function' ? command(program) : command
       const id = record.id
       terminalRunWhenReady(id, isDemo ? line : line + exitSuffix(program), () => onSent?.(id))
       return id
     } catch (cause) {
+      if (cause instanceof TaskCommandError) throw cause
       terminalError(cause)
       return null
     } finally {

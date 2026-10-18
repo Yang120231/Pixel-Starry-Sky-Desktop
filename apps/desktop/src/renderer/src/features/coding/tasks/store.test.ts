@@ -386,3 +386,16 @@ describe('标记判定过的结果不被之后的退出改判', () => {
     expect(getTaskStatus(ROOT, group, task)).toEqual({ kind: 'ok', code: null })
   })
 })
+
+describe('cmd 下含 % 的路径', () => {
+  it('命令拼不出来：错误交给调用方，不记运行，任务保持空闲', async () => {
+    const { TaskCommandError } = await import('./extCommand')
+    const bad: RunTaskGroup = { ...group, dir: '100%', file: '100%/package.json' }
+    const runTask = vi.fn(async (_name: string, command: string | ((program: string | undefined) => string)) => {
+      if (typeof command === 'function') command('cmd.exe')
+      return 't1'
+    })
+    await expect(runTaskIn({ runTask, select: vi.fn() }, ROOT, bad, task)).rejects.toBeInstanceOf(TaskCommandError)
+    expect(getTaskStatus(ROOT, bad, task).kind).toBe('idle')
+  })
+})

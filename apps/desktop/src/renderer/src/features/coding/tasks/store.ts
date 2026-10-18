@@ -9,6 +9,8 @@ import { FILE_SAVED_EVENT } from '@/features/files/store'
 import { endSince, hasIntegration, weakSince } from '@/features/terminal/marks'
 import { terminalState, useTerminalStore } from '@/features/terminal/store'
 import { useTerminalUi } from '@/features/terminal/TerminalProvider'
+import { useToast } from '@/ui/ComingSoon'
+import { tr } from '@/i18n/core'
 import {
   gradleBuildKey,
   IDLE,
@@ -18,6 +20,7 @@ import {
   taskKey,
   taskStatus,
   taskTitle,
+  TaskCommandError,
   type GradleFull,
   type TaskStatus,
 } from './model'
@@ -414,6 +417,7 @@ export function stopTaskIn(root: string, group: RunTaskGroup, task: RunTask): vo
 /** 跑 / 停 / 跳转；用 TerminalProvider 的 runTask 建终端（复用、改名、发命令） */
 export function useTaskRunner(state: RunTaskState | null): TaskRunner {
   const ui = useTerminalUi()
+  const toast = useToast()
   const root = state?.root ?? ''
   const { runTask, select } = ui
   const focus = useCallback(
@@ -422,8 +426,12 @@ export function useTaskRunner(state: RunTaskState | null): TaskRunner {
   )
   const run = useCallback(
     (group: RunTaskGroup, task: RunTask, fresh = false, args = ''): Promise<void> =>
-      runTaskIn({ runTask, select }, root, group, task, fresh, args),
-    [root, runTask, select],
+      // 命令拼不出来（cmd 下含 %）时 runTaskIn 还没记下运行，任务保持空闲，只给一条提示
+      runTaskIn({ runTask, select }, root, group, task, fresh, args).catch((cause: unknown) => {
+        if (!(cause instanceof TaskCommandError)) throw cause
+        toast(tr(`coding.tasks.${cause.code}`))
+      }),
+    [root, runTask, select, toast],
   )
   const stop = useCallback((group: RunTaskGroup, task: RunTask): void => stopTaskIn(root, group, task), [root])
   return { run, stop, focus }

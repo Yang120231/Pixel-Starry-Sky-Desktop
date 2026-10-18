@@ -45,6 +45,18 @@ export const codingTasksMessages = {
   },
   'coding.tasks.noChat': { zh: '先打开一个对话', en: 'Open a conversation first' },
   'coding.tasks.serviceSaved': { zh: '已设为服务：{name}', en: 'Saved as a service: {name}' },
+  'coding.tasks.cmdPercent': {
+    zh: 'cmd 下无法安全运行含 % 的路径或任务名，请换 PowerShell',
+    en: 'cmd cannot safely run a path or task name containing %; switch to PowerShell',
+  },
+  'coding.tasks.psBatch': {
+    zh: 'PowerShell 调用批处理时无法安全传递含 & | < > ^ % " 的路径或任务名，请换成不含这些字符的名字，或改用别的终端',
+    en: 'PowerShell cannot safely pass a path or task name containing & | < > ^ % " to a batch file; rename it or use another terminal',
+  },
+  'coding.tasks.psQuote': {
+    zh: 'Windows PowerShell 5.1 无法安全传递含 " 的路径或任务名，请换 PowerShell 7',
+    en: 'Windows PowerShell 5.1 cannot safely pass a path or task name containing "; switch to PowerShell 7',
+  },
   'coding.tasks.copied': { zh: '已复制命令', en: 'Command copied' },
   // Gradle（§9）
   'coding.tasks.gradle.properties': { zh: '属性', en: 'Properties' },

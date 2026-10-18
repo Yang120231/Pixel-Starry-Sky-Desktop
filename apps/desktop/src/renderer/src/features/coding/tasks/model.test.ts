@@ -57,16 +57,16 @@ describe('taskCommand', () => {
     expect(taskCommand(npm('apps/web', 'bun'), task('dev'))).toBe('bun --cwd apps/web run dev')
   })
   it('没有包管理器时用 npm；目录带空格加引号', () => {
-    expect(taskCommand(npm('my app', undefined), task('dev'))).toBe('npm --prefix "my app" run dev')
+    expect(taskCommand(npm('my app', undefined), task('dev'))).toBe("npm --prefix 'my app' run dev")
   })
   it('make 和 cargo', () => {
     const make: RunTaskGroup = { kind: 'make', file: 'Makefile', dir: '', tasks: [] }
     expect(taskCommand(make, task('clean'))).toBe('make clean')
-    expect(taskCommand({ ...make, dir: 'sub dir' }, task('clean'))).toBe('make -C "sub dir" clean')
+    expect(taskCommand({ ...make, dir: 'sub dir' }, task('clean'))).toBe("make -C 'sub dir' clean")
     const cargo: RunTaskGroup = { kind: 'cargo', file: 'src-tauri/Cargo.toml', dir: 'src-tauri', tasks: [] }
     expect(taskCommand(cargo, task('build'))).toBe('cargo build --manifest-path src-tauri/Cargo.toml')
     expect(taskCommand({ ...cargo, dir: '' }, task('test'))).toBe('cargo test')
-    expect(taskCommand({ ...cargo, dir: 'a b' }, task('run'))).toBe('cargo run --manifest-path "a b/Cargo.toml"')
+    expect(taskCommand({ ...cargo, dir: 'a b' }, task('run'))).toBe("cargo run --manifest-path 'a b/Cargo.toml'")
   })
 })
 
@@ -226,7 +226,7 @@ describe('Gradle（§9）', () => {
     expect(taskCommand(nested, nested.tasks[0])).toBe('./android/gradlew -p android build')
     expect(taskCommand(nested, nested.tasks[0], 'cmd')).toBe('.\\android\\gradlew.bat -p android build')
     const spaced = gradle(':', 'my app')
-    expect(taskCommand(spaced, spaced.tasks[0], 'pwsh')).toBe('& "./my app/gradlew" -p "my app" build')
+    expect(taskCommand(spaced, spaced.tasks[0], 'pwsh')).toBe("& './my app/gradlew' -p 'my app' build")
     expect(taskCommand(gradle(':', '', false), root.tasks[0])).toBe('gradle build')
     expect(taskTitle(root, root.tasks[0])).toBe('build')
     expect(taskTitle(fabric, fabric.tasks[1])).toBe(':fabric:runClient')

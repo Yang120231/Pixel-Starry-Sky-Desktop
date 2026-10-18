@@ -28,6 +28,7 @@ import {
 } from 'lucide-react'
 import { useI18n } from '@/i18n/I18nProvider'
 import { extText, packName } from '@pixelsky/protocol'
+import { getMachines, machineOf } from '@/features/machines/store'
 import { allMessages, getLocale, tr, type TranslationKey } from '@/i18n/core'
 import { Button, IconButton, Spinner, cn, useToast } from '@/ui'
 import { ActionMenu, type MenuAction } from '@/ui/ActionMenu'
@@ -283,6 +284,12 @@ interface ArgsState {
   value: string
 }
 
+/** 「设为服务」的命令在项目所在机器上跑：Windows 机器是 pwsh / PowerShell，其余是 /bin/sh（远程 / WSL 项目看那台机器的系统），引号按它写 */
+const serviceShell = (projectId: unknown): string => {
+  const machine = getMachines().machines.find(m => m.id === machineOf(projectId))
+  return (machine?.platform ?? window.pixelsky?.platform) === 'win32' ? 'pwsh' : 'sh'
+}
+
 /** 左栏「任务」：按文件分组列出 package.json / Makefile / Cargo.toml / Gradle 里能跑的命令（docs/ui/coding-tasks.md §4、§9） */
 export function TasksView({ visible }: { visible: boolean }) {
   useI18n()
@@ -348,7 +355,11 @@ export function TasksView({ visible }: { visible: boolean }) {
       return
     }
     window
-      .pixelsky!.projectTools.saveService(ref, { name, command: taskCommand(group, task), cwd: state.root })
+      .pixelsky!.projectTools.saveService(ref, {
+        name,
+        command: taskCommand(group, task, serviceShell(ref.projectId)),
+        cwd: state.root,
+      })
       .then(() => toast(tr('coding.tasks.serviceSaved', { name })))
       .catch((e: Error) => toast(e.message))
   }

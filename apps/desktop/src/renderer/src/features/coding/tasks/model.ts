@@ -7,48 +7,52 @@ import type {
   RunTaskState,
 } from '../../../../../shared/types/project-tools'
 import type { TerminalRecord } from '../../../../../shared/types/terminal'
-import { extTaskCommand, shellName } from './extCommand'
+import { extTaskCommand, quote, shellKind, shellName, TaskCommandError } from './extCommand'
 
 // 扩展任务的命令拼装在 extCommand.ts（不引用扩展 store，node 测试能直接用）；shellName 也放在那里，这里原样再导出
-export { shellName }
-
-/** 目录带空格或引号时加双引号 */
-function quoteDir(dir: string): string {
-  return /[\s"]/.test(dir) ? `"${dir.replaceAll('"', '\\"')}"` : dir
-}
+export { shellName, TaskCommandError }
 
 /**
  * Gradle 的命令（docs/ui/coding-tasks.md §9.3）：有 wrapper 用 ./gradlew（PowerShell 自己会找 gradlew.bat，cmd 要写 .\gradlew.bat），
- * 构建不在工作区根时加 -p；根项目只写任务名，子项目写全路径
+ * 构建不在工作区根时加 -p；根项目只写任务名，子项目写全路径。目录、wrapper 路径、任务路径都按终端加引号
  */
 function gradleCommand(group: RunTaskGroup, task: RunTask, shell: string | undefined): string {
   const g = group.gradle!
-  const name = shellName(shell)
+  const kind = shellKind(shell)
+  // gradle / gradlew 在 Windows 上是 .bat：PowerShell 调它会按旧规则传参，含 & | < > ^ % " 的值没法安全传
+  const q = (value: string): string => quote(value, kind, undefined, true)
   let runner = 'gradle'
   if (g.wrapper) {
     const path =
-      name === 'cmd'
+      kind === 'cmd'
         ? `.\\${g.buildDir ? g.buildDir.replaceAll('/', '\\') + '\\' : ''}gradlew.bat`
         : `./${g.buildDir ? g.buildDir + '/' : ''}gradlew`
+    const quoted = q(path)
     // PowerShell 里带引号的路径要用 & 才会执行
-    runner = /[\s"]/.test(path) ? `${name === 'powershell' || name === 'pwsh' ? '& ' : ''}${quoteDir(path)}` : path
+    runner = (kind === 'pwsh' || kind === 'ps5') && quoted !== path ? `& ${quoted}` : quoted
   }
-  const dir = g.buildDir ? ` -p ${quoteDir(g.buildDir)}` : ''
-  return `${runner}${dir} ${g.project === ':' ? task.name : `${g.project}:${task.name}`}`
+  const dir = g.buildDir ? ` -p ${q(g.buildDir)}` : ''
+  return `${runner}${dir} ${q(g.project === ':' ? task.name : `${g.project}:${task.name}`)}`
 }
 
-/** 在终端里跑这个任务的命令；子文件夹用工具自己的目录参数，不 cd。shell 是终端程序（只有 Gradle 在 cmd 里写法不同），不知道时按 PowerShell / sh 都能用的写 */
+/**
+ * 在终端里跑这个任务的命令；子文件夹用工具自己的目录参数，不 cd。
+ * shell 是终端程序，决定引号写法（extCommand.quote）：PowerShell / sh 单引号，cmd 双引号，不知道时单引号（含 ' 按 PowerShell 双写）。
+ * cmd 下目录或任务名含 % 时抛 TaskCommandError
+ */
 export function taskCommand(group: RunTaskGroup, task: RunTask, shell?: string): string {
   if (group.kind === 'gradle' && group.gradle) return gradleCommand(group, task, shell)
   if (group.kind === 'ext' && group.ext) return extTaskCommand(group, task, shell)
+  const kind = shellKind(shell)
+  const q = (value: string): string => quote(value, kind)
   const dir = group.dir
-  if (group.kind === 'make') return dir ? `make -C ${quoteDir(dir)} ${task.name}` : `make ${task.name}`
+  if (group.kind === 'make') return dir ? `make -C ${q(dir)} ${q(task.name)}` : `make ${q(task.name)}`
   if (group.kind === 'cargo')
-    return dir ? `cargo ${task.name} --manifest-path ${quoteDir(`${dir}/Cargo.toml`)}` : `cargo ${task.name}`
+    return dir ? `cargo ${q(task.name)} --manifest-path ${q(`${dir}/Cargo.toml`)}` : `cargo ${q(task.name)}`
   const manager = group.manager ?? 'npm'
-  if (!dir) return `${manager} run ${task.name}`
+  if (!dir) return `${manager} run ${q(task.name)}`
   const flag = manager === 'pnpm' ? '--dir' : manager === 'npm' ? '--prefix' : '--cwd'
-  return `${manager} ${flag} ${quoteDir(dir)} run ${task.name}`
+  return `${manager} ${flag} ${q(dir)} run ${q(task.name)}`
 }
 
 const POWERSHELL_EXIT = '; $ok=$?; if ($LASTEXITCODE) { exit $LASTEXITCODE }; if (-not $ok) { exit 1 }; exit 0'
