@@ -16,6 +16,8 @@ import type { EngineAdapter, EngineSession, SessionContext } from '../src/adapte
 import { ENGINES } from '../src/registry'
 import {
   codexPermission,
+  codexRerouteNotice,
+  codexRetryState,
   defaultModeAskSupported,
   turnErrorDetail,
   withoutOwnFeatures,
@@ -133,32 +135,81 @@ describe('Codex app-server adapter', () => {
     expect(none.status).toBe('unauthenticated')
     expect(none.auth).toBeUndefined()
   })
-  it('重连与失败的报错带上附加说明、错误类型和 HTTP 状态码，供界面查看详情', async () => {
-    const { session } = setup()
+  it('Codex 自己重连时显示「正在重试 n/m」状态条，不再每次一条报错；最后失败的报错带附加说明、错误类型和 HTTP 状态码', async () => {
+    const { session, events } = setup()
     await host!.send(session.id, '重连')
     await wait(
       () =>
         host!.open(session.id).state === 'idle' &&
-        host!.open(session.id).items.filter(i => i.kind === 'notice').length === 3,
+        host!.open(session.id).items.some(i => i.kind === 'notice' && i.level === 'error'),
     )
-    const notices = host!.open(session.id).items.filter(i => i.kind === 'notice')
-    expect(notices.map(n => n.kind === 'notice' && n.text)).toEqual([
-      'Reconnecting... 1/2',
-      'Reconnecting... 2/2',
-      'exceeded retry limit, last status: 502 Bad Gateway',
+    const retries = events.flatMap(e =>
+      e.kind === 'session' && e.sessionId === session.id && e.event.type === 'request_retry' ? [e.event.retry] : [],
+    )
+    expect(retries).toEqual([
+      { turnId: expect.any(String), attempt: 1, maxRetries: 2, retryAt: null, reason: 'HTTP 502' },
+      { turnId: expect.any(String), attempt: 2, maxRetries: 2, retryAt: null, reason: 'HTTP 502' },
     ])
+    const snapshot = host!.open(session.id)
+    expect(snapshot.retry).toBeNull()
+    const notices = snapshot.items.filter(i => i.kind === 'notice')
+    expect(notices).toHaveLength(1)
     expect(notices[0]).toMatchObject({
       level: 'error',
-      detail: [
-        'stream disconnected before completion: error sending request for url (https://api.example.test/v1/responses)',
-        'type: responseStreamDisconnected',
-        'HTTP status: 502',
-        'will retry: yes',
-      ].join('\n'),
-    })
-    expect(notices[2]).toMatchObject({
+      text: 'exceeded retry limit, last status: 502 Bad Gateway',
       detail: ['upstream connect error', 'type: responseTooManyFailedAttempts', 'HTTP status: 502'].join('\n'),
     })
+  })
+  it('换了模型：对话里一条提示，用量记在实际用的模型上；重连后接上了就收起状态条', async () => {
+    const { session, events } = setup()
+    await host!.send(session.id, '换模型')
+    await wait(
+      () => host!.open(session.id).state === 'idle' && host!.open(session.id).items.some(i => i.kind === 'notice'),
+    )
+    const notices = host!.open(session.id).items.filter(i => i.kind === 'notice')
+    expect(notices).toEqual([
+      expect.objectContaining({
+        level: 'warn',
+        text: 'Codex switched the model from fake-codex to fake-codex-safe: the request was flagged as high-risk cybersecurity activity',
+      }),
+    ])
+    const retries = events.flatMap(e =>
+      e.kind === 'session' && e.sessionId === session.id && e.event.type === 'request_retry' ? [e.event.retry] : [],
+    )
+    expect(retries).toEqual([
+      expect.objectContaining({
+        attempt: 1,
+        maxRetries: 5,
+        reason: 'stream disconnected before completion: error decoding response body',
+      }),
+      null,
+    ])
+    const done = events.flatMap(e =>
+      e.kind === 'session' && e.sessionId === session.id && e.event.type === 'turn_completed' ? [e.event] : [],
+    )
+    expect(Object.keys(done.at(-1)!.usage!.models)).toEqual(['fake-codex-safe'])
+  })
+  it('重连状态和换模型提示的拼法', () => {
+    expect(codexRetryState({ message: 'Reconnecting... waiting for network' }, 't1')).toEqual({
+      turnId: 't1',
+      attempt: null,
+      maxRetries: null,
+      retryAt: null,
+      reason: 'waiting for network',
+    })
+    expect(
+      codexRetryState(
+        { message: 'Reconnecting... 3/5', additionalDetails: 'first line\nsecond', codexErrorInfo: 'other' },
+        't1',
+      ),
+    ).toMatchObject({ attempt: 3, maxRetries: 5, reason: 'first line' })
+    expect(codexRetryState(null, 't1').reason).toBe('Connection lost')
+    expect(codexRerouteNotice({ fromModel: 'a', toModel: 'b', reason: 'somethingNew' })).toEqual({
+      text: 'Codex switched the model from a to b',
+      detail: 'reason: somethingNew',
+    })
+    expect(codexRerouteNotice({ fromModel: 'a', toModel: 'a' })).toBeNull()
+    expect(codexRerouteNotice({ toModel: '' })).toBeNull()
   })
   it('报错详情：只有 message 时为空，字符串错误类型照样列出', () => {
     expect(turnErrorDetail({ message: 'boom' })).toBeNull()

@@ -434,6 +434,26 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
         turnId: id,
         item: { type: 'userMessage', id: 'u-' + next, clientId: p.clientUserMessageId, content: p.input },
       })
+      if (text.includes('换模型')) {
+        // 被换了模型，接着断线重连一次，然后照常回复
+        emit('model/rerouted', {
+          threadId: thread,
+          turnId: id,
+          fromModel: 'fake-codex',
+          toModel: 'fake-codex-safe',
+          reason: 'highRiskCyberActivity',
+        })
+        emit('error', {
+          threadId: thread,
+          turnId: id,
+          willRetry: true,
+          error: {
+            message: 'Reconnecting... 1/5',
+            additionalDetails: 'stream disconnected before completion: error decoding response body',
+            codexErrorInfo: null,
+          },
+        })
+      }
       emit('item/started', { threadId: thread, turnId: id, item: { type: 'agentMessage', id: turn.item, text: '' } })
       emit('item/agentMessage/delta', { threadId: thread, turnId: id, itemId: turn.item, delta: turn.text })
       response(m, { turn: { id, status: 'inProgress' } })

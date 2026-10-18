@@ -124,4 +124,13 @@ export const codexMessages = {
     zh: 'Codex 版本太低（需要 0.160.0 或以上）：在终端运行 npm i -g @openai/codex@latest',
     en: 'Codex is too old (requires 0.160.0 or later). Run npm i -g @openai/codex@latest',
   },
+  // Codex 换了模型（session.ts codexRerouteNotice）：带原因的在前，免得被不带原因的模板先匹配
+  'codex.modelReroutedCyber': {
+    zh: 'Codex 把模型从 {p0} 换成了 {p1}：请求被判定为高风险网络安全活动',
+    en: 'Codex switched the model from {p0} to {p1}: the request was flagged as high-risk cybersecurity activity',
+  },
+  'codex.modelRerouted': { zh: 'Codex 把模型从 {p0} 换成了 {p1}', en: 'Codex switched the model from {p0} to {p1}' },
+  // Codex 重连状态条的原因（session.ts codexRetryState）
+  'codex.retryConnectionLost': { zh: '连接断开', en: 'Connection lost' },
+  'codex.retryWaitingForNetwork': { zh: '等待网络恢复', en: 'waiting for network' },
 } as const

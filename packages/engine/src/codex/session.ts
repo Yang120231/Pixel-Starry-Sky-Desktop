@@ -6,6 +6,7 @@ import type {
   ContextWindows,
   EngineCatalog,
   ImageAttachment,
+  RequestRetryState,
   SessionSettings,
   SkillCommand,
   TurnOutcome,
@@ -116,6 +117,49 @@ export function turnErrorDetail(raw: unknown, willRetry?: unknown): string | nul
   return lines.join('\n')
 }
 
+/**
+ * Codex 自己在重连（error 通知带 willRetry: true，message 是「Reconnecting... 2/5」）：转成界面的「正在重试 n/m」状态条。
+ * 原因优先写 HTTP 状态码，其次附加说明的第一行；Codex 不报等多久，retryAt 为 null
+ */
+export function codexRetryState(raw: unknown, turnId: string): RequestRetryState {
+  const error = object(raw)
+  const message = string(error.message).trim()
+  const count = /(\d+)\s*\/\s*(\d+)/.exec(message)
+  let status: number | null = null
+  const info = error.codexErrorInfo
+  if (info && typeof info === 'object')
+    for (const value of Object.values(info as Record<string, unknown>)) {
+      const code = object(value).httpStatusCode
+      if (typeof code === 'number') status = code
+    }
+  const details = string(error.additionalDetails).trim().split('\n')[0].trim()
+  const reason =
+    status !== null
+      ? `HTTP ${status}`
+      : details
+        ? details.slice(0, 300)
+        : message.replace(/^Reconnecting\.*\s*(\d+\s*\/\s*\d+)?\s*/i, '').trim() || 'Connection lost'
+  return {
+    turnId,
+    attempt: count ? Number(count[1]) : null,
+    maxRetries: count ? Number(count[2]) : null,
+    retryAt: null,
+    reason,
+  }
+}
+
+/** Codex 这一轮换了模型（model/rerouted）：给对话里的提示；原因认不出时写在详情里 */
+export function codexRerouteNotice(params: Message): { text: string; detail: string | null } | null {
+  const from = string(params.fromModel),
+    to = string(params.toModel),
+    reason = string(params.reason)
+  if (!to || to === from) return null
+  const text = `Codex switched the model from ${from || 'the selected model'} to ${to}`
+  if (reason === 'highRiskCyberActivity')
+    return { text: `${text}: the request was flagged as high-risk cybersecurity activity`, detail: null }
+  return { text, detail: reason ? `reason: ${reason}` : null }
+}
+
 /** extraDirs：项目的附加文件夹，和工作目录一样可写（docs/ui/multi-root-projects.md §3.3） */
 export function codexPermission(mode: string, cwd?: string, extraDirs: readonly string[] = []): Message {
   return mode === 'full'
@@ -185,6 +229,8 @@ export class CodexSession implements EngineSession {
   /** 派出过的子智能体：每轮换新翻译器也要保留 */
   private readonly agents = new Map<string, AgentRun>()
   private reportedError: string | null = null
+  /** 这一轮正显示着 Codex 的重连状态条（codexRetryState）：有新输出或一轮结束时清掉 */
+  private retryShown = false
   /** 同一毫秒内的多条报错也要各自保留，id 不能只靠时间戳 */
   private noticeSeq = 0
   /** 启动时带了 model_context_window：报上来的窗口是设置的值，不记成 Codex 自己的 */
@@ -559,6 +605,7 @@ export class CodexSession implements EngineSession {
     )
     this.nativeTurnId = null
     this.reportedError = null
+    this.retryShown = false
     const active = this.active
     void this.run(text, userItemId, attachments, seed).catch(error => {
       if (this.active === active) this.finish('failed', (error as Error).message)
@@ -799,6 +846,11 @@ export class CodexSession implements EngineSession {
       return false
     }
   }
+  private clearRetry(): void {
+    if (!this.retryShown) return
+    this.retryShown = false
+    this.ctx.emit({ type: 'request_retry', retry: null })
+  }
   private consume(id: string): void {
     if (this.guidance.delete(id)) this.ctx.emit({ type: 'input_ack', id, state: 'consumed', mode: 'guidance' })
   }
@@ -839,15 +891,17 @@ export class CodexSession implements EngineSession {
         }
       } else {
         this.active.activity = true
+        this.clearRetry()
         this.translator.item(item, method === 'item/completed')
       }
     } else if (
       /^item\/(agentMessage|plan)\/delta$|^item\/reasoning\/summaryTextDelta$|^item\/commandExecution\/outputDelta$/.test(
         method,
       )
-    )
+    ) {
+      this.clearRetry()
       this.translator.delta(method, params)
-    else if (method === 'turn/plan/updated') this.translator.plan(params)
+    } else if (method === 'turn/plan/updated') this.translator.plan(params)
     else if (method === 'thread/tokenUsage/updated') {
       const usage = object(params.tokenUsage)
       this.totals = tokenCounts(usage.total)
@@ -893,6 +947,25 @@ export class CodexSession implements EngineSession {
           compacting: false,
           diagnostic: null,
           diagnosticStale: true,
+        },
+      })
+    } else if (method === 'error' && params.willRetry === true) {
+      // Codex 自己在重连：显示成「正在重试 n/m」状态条，不再每次一条红色报错；最后还是失败时 turn/completed 会报
+      this.retryShown = true
+      this.ctx.emit({ type: 'request_retry', retry: codexRetryState(params.error, this.active.id) })
+    } else if (method === 'model/rerouted') {
+      const notice = codexRerouteNotice(params)
+      if (!notice) return
+      // 之后的用量、上下文窗口都记在实际用的模型上
+      this.active.model = string(params.toModel)
+      this.ctx.emit({
+        type: 'item_completed',
+        item: {
+          kind: 'notice',
+          id: `cx-reroute-${Date.now()}-${++this.noticeSeq}`,
+          level: 'warn',
+          text: notice.text,
+          detail: notice.detail,
         },
       })
     } else if (method === 'error' || method === 'warning') {
@@ -1075,6 +1148,8 @@ export class CodexSession implements EngineSession {
     if (!active) return
     if (this.nativeTurnId) this.markFinished(this.nativeTurnId)
     this.active = null
+    // 状态条由 turn_completed 一起清掉
+    this.retryShown = false
     // 第一轮开始时标题才从第一句话定下来；用户改了标题也在这里跟上
     this.syncThreadName()
     if (this.compacting) {

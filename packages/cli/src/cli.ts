@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { interceptArgv } from './argv.ts'
 import { createApprovalExtension } from './extensions/approval.ts'
 import { gatewayExtension } from './extensions/gateway.ts'
+import { loopGuardExtension } from './extensions/loopGuard.ts'
 import { mcpExtension } from './extensions/mcp.ts'
 import { packagesExtension, skipMissingPackages } from './packages.ts'
 import { SUBAGENT_ENV, createSubagentExtension } from './tools/subagent.ts'
@@ -51,6 +52,8 @@ if (intercepted.action === 'run') {
       gatewayExtension,
       packagesExtension,
       mcpExtension,
+      // 在审批前面：拦下的重复调用不用再问用户
+      loopGuardExtension,
       approval,
       todoExtension,
       webExtension,

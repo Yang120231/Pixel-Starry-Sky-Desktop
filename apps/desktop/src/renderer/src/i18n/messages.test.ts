@@ -146,6 +146,28 @@ describe('中英文词典', () => {
     expect(translateMessage(en, 'zh-CN')).toBe('当前模型不能看图，之前的 2 张图片实际没有带上')
     expect(translateMessage('当前模型不能看图，之前的 2 张图片实际没有带上', 'en-US')).toBe(en)
   })
+  it('Codex 换模型、像素星空防空转停下的提示翻成中文', () => {
+    expect(
+      translateMessage(
+        'Codex switched the model from gpt-5.5 to gpt-5.5-mini: the request was flagged as high-risk cybersecurity activity',
+        'zh-CN',
+      ),
+    ).toBe('Codex 把模型从 gpt-5.5 换成了 gpt-5.5-mini：请求被判定为高风险网络安全活动')
+    expect(translateMessage('Codex switched the model from a to b', 'zh-CN')).toBe('Codex 把模型从 a 换成了 b')
+    expect(
+      translateMessage(
+        'Stopped this run: the agent repeated the same "edit" call 4 times in a row with the same result. Send a message to continue.',
+        'zh-CN',
+      ),
+    ).toBe('这一轮已停下：智能体连着 4 次用同样的参数调用「edit」，结果都一样。发一条消息可以接着做。')
+    expect(
+      translateMessage(
+        'Stopped this run: every tool call failed for 6 steps in a row. Send a message to continue.',
+        'zh-CN',
+      ),
+    ).toBe('这一轮已停下：连着 6 步工具调用全部失败。发一条消息可以接着做。')
+    expect(translateMessage('waiting for network', 'zh-CN')).toBe('等待网络恢复')
+  })
   it('几乎只有占位符的模板不会改坏引擎原文', () => {
     for (const text of [
       'Reconnecting... 3/5',
