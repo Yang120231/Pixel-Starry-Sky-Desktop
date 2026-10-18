@@ -3060,6 +3060,10 @@ export const catalog = {
     "zh": "无法打开面板页",
     "en": "Could not open the panel page"
   },
+  "settings.account.Store.opening": {
+    "zh": "正在打开支付页…",
+    "en": "Opening the payment page…"
+  },
   "settings.account.Store.paidHint": {
     "zh": "在浏览器里完成付款后回到这里",
     "en": "Finish paying in the browser, then come back here"

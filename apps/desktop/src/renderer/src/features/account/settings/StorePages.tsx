@@ -40,23 +40,38 @@ export function StorePages({
     }
   }, [])
 
+  // 打开前先刷新账号定基准（最多 5 秒），期间再点不重复打开
+  const [opening, setOpening] = useState(false)
+  const openingRef = useRef(false)
   const open: OpenStore = (kind, params) => {
+    if (openingRef.current) return
+    openingRef.current = true
+    setOpening(true)
     setOpenError(null)
     setDemoNote(false)
-    store.open(kind, params).then(
-      result => {
+    const done = (): void => {
+      openingRef.current = false
+      if (mounted.current) setOpening(false)
+    }
+    void (async () => {
+      try {
+        const baseline = await watch.prepare()
+        if (!mounted.current) return
+        const result = await store.open(kind, params)
         if (!mounted.current) return
         if (result === 'demo') {
           setDemoNote(true)
           return
         }
         setOpened(true)
-        watch.begin()
-      },
-      (e: unknown) =>
-        mounted.current &&
-        setOpenError(translateMessage(e instanceof Error ? e.message : tr('settings.account.Store.openFailed'))),
-    )
+        watch.begin(baseline)
+      } catch (e) {
+        if (mounted.current)
+          setOpenError(translateMessage(e instanceof Error ? e.message : tr('settings.account.Store.openFailed')))
+      } finally {
+        done()
+      }
+    })()
   }
 
   const refreshAll = async (): Promise<void> => {
@@ -95,6 +110,12 @@ export function StorePages({
           <TopUp catalog={catalog} currency={account.currency} onOpen={open} />
         )}
 
+        {opening && (
+          <p className="mt-3 flex items-center gap-2 text-meta text-fg-muted">
+            <Spinner />
+            {tr('settings.account.Store.opening')}
+          </p>
+        )}
         {openError && (
           <p role="alert" className="selectable mt-3 text-meta text-danger">
             {openError}

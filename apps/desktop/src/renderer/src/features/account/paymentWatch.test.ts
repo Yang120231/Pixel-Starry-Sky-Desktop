@@ -1,8 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AccountRefreshResult } from '../../../../shared/types/account'
-import { PaymentWatch, WATCH_DURATION_MS, WATCH_INTERVAL_MS } from './paymentWatch'
+import {
+  BASELINE_TIMEOUT_MS,
+  PaymentWatch,
+  WATCH_DURATION_MS,
+  WATCH_INTERVAL_MS,
+  baselineBeforeOpen,
+} from './paymentWatch'
 
-// 付款后的到账检测：前 2 分钟每 15 秒自动刷新，变化即停；手动刷新给出对比、暂未到账或错误。
+// 付款后的到账检测：打开支付页前定基准；之后前 2 分钟每 15 秒自动刷新，变化即停；手动刷新给出对比、暂未到账或错误。
 
 const account = (balance: number | null, planName: string | null = null) => ({
   balance,
@@ -40,13 +46,13 @@ describe('自动轮询', () => {
     const { watch, refresh } = make([ok(10)])
     watch.begin(account(10))
     expect(watch.getState().watching).toBe(true)
-    expect(refresh).toHaveBeenCalledTimes(1) // 打开时先强制刷新一次拿新基准
+    expect(refresh).not.toHaveBeenCalled() // 基准是打开前定的，begin 自己不刷新
     await vi.advanceTimersByTimeAsync(WATCH_INTERVAL_MS - 1)
-    expect(refresh).toHaveBeenCalledTimes(1)
+    expect(refresh).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)
-    expect(refresh).toHaveBeenCalledTimes(2)
+    expect(refresh).toHaveBeenCalledTimes(1)
     await vi.advanceTimersByTimeAsync(WATCH_DURATION_MS * 3)
-    expect(refresh).toHaveBeenCalledTimes(1 + WATCH_DURATION_MS / WATCH_INTERVAL_MS)
+    expect(refresh).toHaveBeenCalledTimes(WATCH_DURATION_MS / WATCH_INTERVAL_MS)
     // 2 分钟没到账：留下「暂未到账」，不让提示消失
     expect(watch.getState()).toMatchObject({ watching: false, outcome: { kind: 'pending' }, error: null })
   })
@@ -63,7 +69,7 @@ describe('自动轮询', () => {
   })
 
   it('自动刷新失败不打扰界面，下一次照常', async () => {
-    const { watch } = make([ok(10), { error: '网络错误：x', account: null }, ok(10, 'Pro')])
+    const { watch } = make([{ error: '网络错误：x', account: null }, ok(10, 'Pro')])
     watch.begin(account(10))
     await vi.advanceTimersByTimeAsync(WATCH_INTERVAL_MS)
     expect(watch.getState().error).toBeNull()
@@ -74,10 +80,10 @@ describe('自动轮询', () => {
   it('stop（离开商店页）后不再刷新', async () => {
     const { watch, refresh } = make([ok(10)])
     watch.begin(account(10))
-    await vi.advanceTimersByTimeAsync(WATCH_INTERVAL_MS) // 基准刷新 + 第一次轮询
+    await vi.advanceTimersByTimeAsync(WATCH_INTERVAL_MS) // 第一次轮询
     watch.stop()
     await vi.advanceTimersByTimeAsync(WATCH_DURATION_MS)
-    expect(refresh).toHaveBeenCalledTimes(2)
+    expect(refresh).toHaveBeenCalledTimes(1)
     expect(watch.getState().watching).toBe(false)
   })
 
@@ -106,59 +112,57 @@ describe('自动轮询', () => {
   })
 })
 
-describe('基准与方向', () => {
-  it('打开时缓存的余额是旧的：以强制刷新拿到的新数据为基准，之后会话扣费不算到账', async () => {
-    const { watch } = make([ok(5), ok(4.98)])
-    watch.begin(account(10)) // 缓存里是 10，实际已被会话扣到 5
+describe('打开前定基准（baselineBeforeOpen）', () => {
+  it('打开支付页前就已入账（缓存 $10、服务端 $35）：$35 是基准，不报到账；之后涨到 $60 报 $35 → $60', async () => {
+    const { watch, refresh } = make([ok(35), ok(35), ok(60)])
+    const baseline = await baselineBeforeOpen(refresh, account(10))
+    expect(baseline.balance).toBe(35)
+    watch.begin(baseline)
     await vi.advanceTimersByTimeAsync(WATCH_INTERVAL_MS)
-    expect(watch.getState().outcome).toBeNull()
-    expect(watch.getState().watching).toBe(true)
+    expect(watch.getState()).toMatchObject({ watching: true, outcome: null })
+    await vi.advanceTimersByTimeAsync(WATCH_INTERVAL_MS)
+    expect(watch.getState()).toMatchObject({
+      watching: false,
+      outcome: { kind: 'arrived', change: { balance: { from: 35, to: 60 } } },
+    })
   })
-  it('拿不到新基准时用缓存，余额减少仍不算到账，增加才算', async () => {
-    const { watch } = make([{ error: '网络错误：x', account: null }, ok(9.98), ok(30)])
-    watch.begin(account(10))
+  it('打开后很快就到账：第一次检查就报到账', async () => {
+    const { watch, refresh } = make([ok(10), ok(35)])
+    watch.begin(await baselineBeforeOpen(refresh, account(10)))
+    await watch.manual()
+    expect(watch.getState().outcome).toMatchObject({ kind: 'arrived', change: { balance: { from: 10, to: 35 } } })
+  })
+  it('缓存是旧的、实际已被会话扣到 $5：以 $5 为基准，之后继续扣费不算到账', async () => {
+    const { watch, refresh } = make([ok(5), ok(4.98)])
+    watch.begin(await baselineBeforeOpen(refresh, account(10)))
+    await vi.advanceTimersByTimeAsync(WATCH_INTERVAL_MS)
+    expect(watch.getState()).toMatchObject({ watching: true, outcome: null })
+  })
+  it('刷新失败：用缓存当基准，余额减少不算、增加才算', async () => {
+    const { watch, refresh } = make([{ error: '网络错误：x', account: null }, ok(9.98), ok(30)])
+    watch.begin(await baselineBeforeOpen(refresh, account(10)))
     await vi.advanceTimersByTimeAsync(WATCH_INTERVAL_MS)
     expect(watch.getState().outcome).toBeNull()
     await vi.advanceTimersByTimeAsync(WATCH_INTERVAL_MS)
     expect(watch.getState().outcome).toMatchObject({ kind: 'arrived', change: { balance: { from: 10, to: 30 } } })
   })
-  it('打开时那次刷新返回前就到账（$10 → $35）：直接算到账，不拿到账后的余额当基准', async () => {
-    let release!: (r: AccountRefreshResult) => void
-    const refresh = vi
-      .fn<() => Promise<AccountRefreshResult>>()
-      .mockImplementationOnce(() => new Promise(resolve => (release = resolve)))
-      .mockResolvedValue(ok(35))
-    const watch = new PaymentWatch(refresh)
-    watch.begin(account(10))
-    release(ok(35)) // 首次查询暂缓，到账后才返回 $35
-    await vi.advanceTimersByTimeAsync(0)
-    expect(watch.getState()).toMatchObject({
-      watching: false,
-      outcome: { kind: 'arrived', change: { balance: { from: 10, to: 35 } } },
-    })
-    // 之后手动刷新、等自动查询都不会变回「暂未到账」，也不再轮询
-    await watch.manual()
-    await vi.advanceTimersByTimeAsync(WATCH_INTERVAL_MS * 2)
-    expect(watch.getState().outcome).toMatchObject({ kind: 'arrived', change: { balance: { from: 10, to: 35 } } })
-    expect(refresh).toHaveBeenCalledTimes(2) // 基准刷新 + 一次手动
+  it('刷新函数抛错：用缓存', async () => {
+    const { refresh } = make([new Error('boom')])
+    expect((await baselineBeforeOpen(refresh, account(10))).balance).toBe(10)
   })
-  it('打开时那次刷新就看到套餐开通 / 续期：算到账', async () => {
-    const { watch } = make([ok(10, 'Pro')])
-    watch.begin(account(10))
-    await vi.advanceTimersByTimeAsync(0)
-    expect(watch.getState().outcome).toMatchObject({ kind: 'arrived', change: { plan: { from: null, to: 'Pro' } } })
-  })
-  it('对照：基准刷新先回 $35、之后涨到 $60：以 $35 为基准报 $35 → $60', async () => {
-    const { watch } = make([ok(35), ok(60)])
-    watch.begin(account(35))
-    await vi.advanceTimersByTimeAsync(0)
-    expect(watch.getState().outcome).toBeNull()
-    await watch.manual()
-    expect(watch.getState().outcome).toMatchObject({ kind: 'arrived', change: { balance: { from: 35, to: 60 } } })
+  it('刷新一直不回：最多等 5 秒，超时用缓存', async () => {
+    const refresh = vi.fn(() => new Promise<AccountRefreshResult>(() => undefined))
+    const pending = baselineBeforeOpen(refresh, account(10))
+    let settled: number | null | undefined
+    void pending.then(b => (settled = b.balance))
+    await vi.advanceTimersByTimeAsync(BASELINE_TIMEOUT_MS - 1)
+    expect(settled).toBeUndefined()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(settled).toBe(10)
   })
   it('套餐失效不算到账', async () => {
-    const { watch } = make([ok(10, 'Pro'), ok(10, null)])
-    watch.begin(account(10, 'Pro'))
+    const { watch, refresh } = make([ok(10, 'Pro'), ok(10, null)])
+    watch.begin(await baselineBeforeOpen(refresh, account(10, 'Pro')))
     await vi.advanceTimersByTimeAsync(WATCH_INTERVAL_MS)
     expect(watch.getState().outcome).toBeNull()
   })
@@ -173,7 +177,7 @@ describe('手动刷新', () => {
   })
 
   it('有变化：前后对比；之后再点不会把到账结果换成暂未到账', async () => {
-    const { watch } = make([ok(10), ok(35)])
+    const { watch } = make([ok(35), ok(10)])
     watch.begin(account(10))
     await watch.manual()
     expect(watch.getState().outcome).toMatchObject({ kind: 'arrived', change: { balance: { from: 10, to: 35 } } })
@@ -182,7 +186,7 @@ describe('手动刷新', () => {
   })
 
   it('刷新失败：显示错误，不报暂未到账；下次成功后错误清掉', async () => {
-    const { watch } = make([ok(10), { error: '网络错误：offline', account: null }, ok(10)])
+    const { watch } = make([{ error: '网络错误：offline', account: null }, ok(10)])
     watch.begin(account(10))
     await watch.manual()
     expect(watch.getState()).toMatchObject({ error: '网络错误：offline', outcome: null, refreshing: false })
@@ -205,7 +209,7 @@ describe('手动刷新', () => {
     const first = watch.manual()
     void watch.manual()
     await first
-    expect(refresh).toHaveBeenCalledTimes(2) // 基准刷新 + 一次手动
+    expect(refresh).toHaveBeenCalledTimes(1)
     expect(seen).toHaveBeenCalled()
   })
 })
