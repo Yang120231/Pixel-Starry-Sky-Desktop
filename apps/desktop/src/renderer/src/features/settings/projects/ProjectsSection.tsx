@@ -26,6 +26,8 @@ import { addedSummary, mergeImportCandidates } from '@/features/sidebar/projectI
 import { SectionTitle } from '../SettingRow'
 import { prefetchResumeCounts } from '@/features/resume/hint'
 import { ResumeHintLink } from '@/features/resume/ResumeHintLink'
+import { useSettings } from '../SettingsProvider'
+import { ResumeScanCard } from './ResumeScanCard'
 import {
   IMPORT_TOOLS,
   bucketOf,
@@ -70,6 +72,8 @@ export function ProjectsSection() {
   useI18n()
   const local = useMachines().currentId === 'local'
   const toast = useToast()
+  // 从「原来的 AI 会话」打开了新对话：关掉设置，看得到那个对话
+  const { closeSettings } = useSettings()
   const groups = useSidebarPrefs().groups ?? []
   const [candidates, setCandidates] = useState<ProjectImportCandidate[]>([])
   const [picked, setPicked] = useState<Set<string>>(new Set())
@@ -130,7 +134,8 @@ export function ProjectsSection() {
     return (
       <section>
         <SectionTitle>{tr('projects.title')}</SectionTitle>
-        <p className="text-meta text-fg-muted">{tr('projectImport.localOnly')}</p>
+        <p className="mb-5 text-meta text-fg-muted">{tr('projectImport.localOnly')}</p>
+        <ResumeScanCard onOpened={closeSettings} />
       </section>
     )
 
@@ -211,6 +216,7 @@ export function ProjectsSection() {
     <section className="flex min-h-full flex-col">
       <SectionTitle>{tr('projects.title')}</SectionTitle>
       <p className="-mt-2 mb-5 text-meta text-fg-muted">{tr('projectImport.settingsIntro')}</p>
+      <ResumeScanCard onOpened={closeSettings} />
 
       <div data-setting-title={tr('projectImport.fromTools')} className="mb-2 flex items-baseline justify-between">
         <span className="text-label font-medium text-fg-muted">{tr('projectImport.fromTools')}</span>

@@ -190,6 +190,64 @@ export function cachedResumeCounts(projectId: string): ResumeCounts | null {
   return cache.get(projectId)?.counts ?? null
 }
 
+// ---------- 手动扫描（设置 › 项目「原来的 AI 会话」） ----------
+/** 一个引擎在一个项目里的扫描结果：可以接着聊的数量、其中正开着的、最近一个的时间；读不到时 error 是原因 */
+export interface EngineScan {
+  count: number
+  live: number
+  latest: number | null
+  error: string | null
+}
+export type ProjectScan = Partial<Record<HintEngine, EngineScan>>
+
+/** 一个引擎的会话列表 → 扫描结果（只算没被像素星空对话占用的） */
+export function engineScan(list: readonly NativeSessionSummary[]): EngineScan {
+  const free = list.filter(s => s.ownerId === null)
+  return {
+    count: free.length,
+    // 只算确实开着的（'maybe' 只是按记录修改时间猜的，刚写过的会话会被误报）
+    live: free.filter(s => s.live === 'terminal' || s.live === 'other').length,
+    latest: free.length ? Math.max(...free.map(s => s.updatedAt)) : null,
+    error: null,
+  }
+}
+
+/** 扫描结果 → 提示用的会话数（读不到的引擎当作没有） */
+export const scanCounts = (scan: ProjectScan, engines: readonly HintEngine[] = HINT_ENGINES): ResumeCounts =>
+  Object.fromEntries(engines.flatMap(e => (scan[e]?.count ? [[e, scan[e]!.count]] : []))) as ResumeCounts
+
+/**
+ * 手动扫一个本机项目：不看缓存，两个引擎同时查（在跑的查询总数仍由 withSlot 限制），
+ * 每个引擎单独记错误（比如 Codex 没装好）。结果写回提示缓存，侧栏和欢迎页的「有 N 个会话」跟着更新
+ */
+export async function scanResumeProject(
+  projectId: string,
+  engines: readonly HintEngine[] = HINT_ENGINES,
+): Promise<ProjectScan> {
+  watchEngineConfig()
+  // 扫的途中引擎配置变了（比如改了 CODEX_HOME）：这次读的是旧目录，按新配置再扫一次（最多再扫一次）
+  for (let attempt = 0; ; attempt++) {
+    const gen = generation
+    const scan: ProjectScan = {}
+    await Promise.all(
+      engines.map(async engine => {
+        try {
+          scan[engine] = engineScan(await withSlot(() => lister(projectId, engine)))
+        } catch (e) {
+          scan[engine] = { count: 0, live: 0, latest: null, error: (e as Error).message || String(e) }
+        }
+      }),
+    )
+    if (gen !== generation && attempt === 0) continue
+    // 配置又变了就不写缓存（noteEngineConfig 已经安排了按新配置重查，不能拿旧结果盖掉它）
+    if (gen === generation) {
+      cache.set(projectId, { counts: scanCounts(scan, engines), at: Date.now(), pending: null, generation })
+      emit()
+    }
+    return scan
+  }
+}
+
 /** 查一个项目（有新鲜缓存或正在查就不再查） */
 export function ensureResumeCounts(projectId: string): Promise<void> {
   watchEngineConfig()
@@ -241,7 +299,7 @@ export function useResumeCounts(projectId: string | null | undefined, fetch = tr
   return counts
 }
 
-/** 打开某个项目的 /resume 选择器（列指定引擎的会话） */
-export function openResumeFor(projectId: string, engine: HintEngine = 'claude'): void {
-  openResumePicker({ projectId, engine })
+/** 打开某个项目的 /resume 选择器（列指定引擎的会话）；onOpened：选好会话、打开了新对话之后（比如关掉设置窗口） */
+export function openResumeFor(projectId: string, engine: HintEngine = 'claude', onOpened?: () => void): void {
+  openResumePicker({ projectId, engine, ...(onOpened ? { onOpened } : {}) })
 }
