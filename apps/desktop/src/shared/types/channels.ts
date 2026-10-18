@@ -1,8 +1,32 @@
 // 协作频道的数据类型（docs/ui/channels.md §9，Phase B 的改动见 docs/ui/channels-phase-b.md §10.1）。
 // 主进程（main/core/channels/）和渲染层共用；演示数据（mock/channels.ts）只填界面要用的字段。
-import type { ApprovalRequest, EngineId, FileAttachment, ImageAttachment, SessionSettings } from '@pixelsky/protocol'
+import type {
+  ApprovalRequest,
+  EngineId,
+  FileAttachment,
+  FileChange,
+  ImageAttachment,
+  Item,
+  SessionSettings,
+} from '@pixelsky/protocol'
 
 export type ChannelAgentStatus = 'idle' | 'running' | 'waiting' | 'offline'
+
+/**
+ * 任务卡上「正在做什么」的一步（docs/ui/channels-local-ai.md §3.1 #2）：只留显示要用的字段（和对话里工具行的说法一样），
+ * at 是主进程第一次看到这一步的时间（条目本身不带时间）
+ */
+export type ChannelStep = { id: string; at: number; running: boolean } & (
+  | Pick<Extract<Item, { kind: 'command' }>, 'kind' | 'command' | 'description'>
+  | { kind: 'file_change'; changes: Array<Pick<FileChange, 'kind' | 'path'>> }
+  | Pick<Extract<Item, { kind: 'tool' }>, 'kind' | 'tool' | 'name' | 'title'>
+)
+
+/** 进行中的任务在做什么：最近几步（先后顺序）、AI 最近说的一句 */
+export interface ChannelActivity {
+  steps: ChannelStep[]
+  say: { text: string; at: number } | null
+}
 
 // ── Phase C：多人团队（docs/ui/channels-phase-c.md §5.3） ──
 
@@ -219,6 +243,8 @@ export interface ChannelTask extends ChannelMessageBase {
   waitingCount?: number
   /** 进行中这一轮的计划进度 */
   progress?: { done: number; total: number } | null
+  /** 进行中这一轮「正在做什么」：最近几步和 AI 最近说的一句（只在内存里，不写盘） */
+  activity?: ChannelActivity | null
   /** 排队中：同一个成员前面还有几项活 */
   ahead?: number
   /** 机器断开了，重连后继续跟踪 */

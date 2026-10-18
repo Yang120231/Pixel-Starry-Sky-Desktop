@@ -233,6 +233,36 @@ export const demoChannelMessages: Record<string, ChannelMessage[]> = {
       sessionId: 's-settings-form',
       summary: null,
       diff: null,
+      // 正在做什么（docs/ui/channels-local-ai.md §3.1 #2）：时间相对打开演示的那一刻
+      activity: {
+        steps: [
+          {
+            id: 'web-t2-s1',
+            at: NOW - 95_000,
+            running: false,
+            kind: 'tool',
+            tool: 'read',
+            name: 'Read',
+            title: 'src/settings/AccountPage.tsx',
+          },
+          {
+            id: 'web-t2-s2',
+            at: NOW - 40_000,
+            running: false,
+            kind: 'file_change',
+            changes: [{ kind: 'update', path: 'src/settings/AccountPage.tsx' }],
+          },
+          {
+            id: 'web-t2-s3',
+            at: NOW - 12_000,
+            running: true,
+            kind: 'command',
+            command: 'pnpm vitest run src/settings',
+            description: '运行设置页的单元测试',
+          },
+        ],
+        say: { text: '「账号」页已经迁完，在跑测试。', at: NOW - 60_000 },
+      },
     },
     {
       kind: 'message',

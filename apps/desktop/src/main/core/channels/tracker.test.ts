@@ -44,13 +44,13 @@ const request = (id: string): ApprovalRequest => ({
   alwaysScopes: [],
 })
 
-/** 依次喂事件，返回最后的运行信息和收集到的变化 */
+/** 依次喂事件，返回最后的运行信息和收集到的变化；第 i 个事件的时间是 1000 + i */
 function feed(start: TaskRun, events: EngineEvent[]) {
   let r = start
-  const patches: unknown[] = []
+  const patches: Array<Record<string, unknown>> = []
   let finish = null
-  for (const e of events) {
-    const t = trackEvent(r, e)
+  for (const [i, e] of events.entries()) {
+    const t = trackEvent(r, e, 1000 + i)
     r = t.run
     if (t.patch) patches.push(t.patch)
     if (t.finish) finish = t.finish
@@ -79,14 +79,83 @@ describe('任务状态跟踪（§5.1）', () => {
       { type: 'turn_completed', turnId: 'other-turn', outcome: 'failed', error: 'x' },
       { type: 'turn_completed', turnId: 'turn1', outcome: 'completed', error: null },
     ])
-    expect(r.patches).toEqual([
-      { status: 'running', request: null, progress: null },
+    expect(r.patches.filter(p => 'status' in p)).toEqual([
+      { status: 'running', request: null, progress: null, activity: null },
       { status: 'waiting', request: request('r1'), waitingCount: 1 },
       { status: 'running', request: null, waitingCount: 0 },
     ])
     expect(r.finish).toEqual({ status: 'done' })
     expect(r.run.reply).toBe('改好了')
     expect(diffTotal(r.run)).toEqual({ added: 3, removed: 1 })
+  })
+
+  it('正在做什么：命令 / 改文件 / 工具开始和完成都记，同一步原地更新、保留第一次看到的时间，只留最近 3 步；AI 说的话记第一行', () => {
+    const cmd = (id: string, status: 'running' | 'completed'): Item => ({
+      kind: 'command',
+      id,
+      command: `pnpm test ${id}\n第二行`,
+      description: null,
+      output: '很长的输出',
+      exitCode: status === 'completed' ? 0 : null,
+      status,
+    })
+    const r = feed(run(), [
+      { type: 'item_completed', item: user('ch-t1-1', 'turn1') },
+      { type: 'item_started', item: cmd('c1', 'running') },
+      { type: 'item_completed', item: cmd('c1', 'completed') },
+      {
+        type: 'item_started',
+        item: { kind: 'tool', id: 't1', tool: 'read', name: 'Read', title: 'src/a.ts', output: '', status: 'running' },
+      },
+      { type: 'item_started', item: { kind: 'reasoning', id: 'r1', text: '', status: 'running' } },
+      {
+        type: 'item_started',
+        item: {
+          kind: 'file_change',
+          id: 'f1',
+          status: 'running',
+          changes: [{ path: 'src/b.ts', kind: 'update', diff: '-x\n+y', added: 1, removed: 1 }],
+        },
+      },
+      { type: 'item_started', item: cmd('c2', 'running') },
+      {
+        type: 'item_completed',
+        item: { kind: 'assistant', id: 'a1', text: '测试过了，接着改样式。\n细节……', status: 'completed' },
+      },
+    ])
+    const activity = r.run.activity!
+    expect(activity.steps.map(s => s.id)).toEqual(['t1', 'f1', 'c2'])
+    expect(activity.steps[1]).toEqual({
+      id: 'f1',
+      at: 1005,
+      running: true,
+      kind: 'file_change',
+      changes: [{ kind: 'update', path: 'src/b.ts' }],
+    })
+    expect(activity.steps[2]).toMatchObject({
+      kind: 'command',
+      command: 'pnpm test c2\n第二行',
+      running: true,
+      at: 1006,
+    })
+    expect(activity.say).toEqual({ text: '测试过了，接着改样式。', at: 1007 })
+    // 开始 → 完成：原地更新、时间不变；输出不进任务卡
+    const c1 = feed(run(), [
+      { type: 'item_completed', item: user('ch-t1-1', 'turn1') },
+      { type: 'item_started', item: cmd('c1', 'running') },
+      { type: 'item_completed', item: cmd('c1', 'completed') },
+    ]).run.activity!.steps
+    expect(c1).toEqual([
+      { id: 'c1', at: 1001, running: false, kind: 'command', command: 'pnpm test c1\n第二行', description: null },
+    ])
+    // 每次变化都给任务卡一个 activity 更新；下一轮开始清空
+    expect(r.patches.filter(p => 'activity' in p && p.activity).length).toBe(6)
+    const next = trackEvent(
+      { ...r.run, clientMessageId: 'ch-t1-2' },
+      { type: 'item_completed', item: user('ch-t1-2', 'turn2') },
+    )
+    expect(next.run.activity).toBeNull()
+    expect(next.patch).toMatchObject({ activity: null })
   })
 
   it('重试的 user 条目（id 带 -retry-）也算；失败取错误第一行；中断算已停止', () => {

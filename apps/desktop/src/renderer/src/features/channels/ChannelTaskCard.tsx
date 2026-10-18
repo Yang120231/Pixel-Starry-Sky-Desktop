@@ -10,6 +10,9 @@ import { formatClock } from './format'
 import { agentPlace } from './ChannelMessage'
 import { canApprove, canControlTask, canWithdraw, isMyTask } from './teamModel'
 import { approvalSummary } from '@/features/session/live/approvals/model'
+import { activityTooltip, agoText } from '@/features/session/live/agentActivity'
+import { useNow } from '@/features/session/live/stepClock'
+import { taskActivity } from './taskActivity'
 
 const STATUS_LABEL: Record<ChannelTaskStatus, TranslationKey> = {
   queued: 'channels.task.queued',
@@ -105,6 +108,9 @@ export function ChannelTaskCard({
   const pending = task.pendingAction ?? null
   const live = !!onAction
   const inline = task.status === 'waiting' && mine && canAnswerInline(task.request ?? null)
+  // 进行中：正在做什么（「几秒前」每秒刷新）
+  const activity = taskActivity(task)
+  const now = useNow(!!activity)
   const run = (fn: () => Promise<void>) => {
     if (busy) return
     setBusy(true)
@@ -149,6 +155,21 @@ export function ChannelTaskCard({
         </div>
         <div className="mt-1.5 text-list font-medium break-words text-fg">{task.title}</div>
         {task.summary && <p className="mt-1 text-list break-words text-fg-secondary">{task.summary}</p>}
+        {activity && (
+          <p
+            data-task-activity={activity.line.kind}
+            title={activityTooltip(activity.line, activity.steps, activity.seen, now)}
+            className="mt-1 truncate text-meta text-fg-muted"
+          >
+            {activity.line.text}
+            {activity.line.kind === 'step' && activity.line.stepId && (
+              <span className="text-fg-faint tabular-nums">
+                {' '}
+                · {agoText(now - activity.seen(activity.line.stepId))}
+              </span>
+            )}
+          </p>
+        )}
         {task.status === 'failed' && task.error && (
           <p className="mt-1 line-clamp-3 text-meta break-words text-danger" title={translateMessage(task.error)}>
             {translateMessage(task.error)}

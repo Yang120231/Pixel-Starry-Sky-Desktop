@@ -1025,7 +1025,7 @@ export class Channels {
   /** 这一轮结束：更新任务卡，做完了就把回复发回频道，再开始成员的下一项活 */
   private finish(run: TaskRun, finish: Finish): void {
     const task = this.taskOf(run)
-    const ended: TaskRun = { ...run, phase: 'ended', requests: [], progress: null }
+    const ended: TaskRun = { ...run, phase: 'ended', requests: [], progress: null, activity: null }
     this.store.runs.set(run.taskId, ended)
     if (task) {
       const now = this.now()
@@ -1036,6 +1036,7 @@ export class Channels {
         note: finish.note ?? null,
         request: null,
         progress: null,
+        activity: null,
         ahead: 0,
         disconnected: false,
         endedAt: now,
@@ -1181,7 +1182,8 @@ export class Channels {
   hostEvent(event: HostEvent): void {
     if (event.kind === 'session') {
       for (const run of [...this.store.runs.values()])
-        if (run.phase === 'sent' && run.sessionId === event.sessionId) this.apply(run, trackEvent(run, event.event))
+        if (run.phase === 'sent' && run.sessionId === event.sessionId)
+          this.apply(run, trackEvent(run, event.event, this.now()))
     } else if (event.kind === 'sessions') this.sessionsChanged(event.sessions)
     else if (event.kind === 'projects') this.changed()
   }
@@ -1235,7 +1237,7 @@ export class Channels {
       const latest = this.store.runs.get(run.taskId)
       if (!latest || latest.phase !== 'sent') continue
       this.patch(run.channelId, run.taskId, { disconnected: false })
-      this.apply(latest, reconcileRun(latest, snapshot))
+      this.apply(latest, reconcileRun(latest, snapshot, this.now()))
     }
     for (const m of new Set([...this.store.runs.values()].filter(r => r.phase === 'waiting').map(r => r.memberId)))
       void this.pump(m)
@@ -1301,7 +1303,9 @@ export class Channels {
       if (patch.disconnected !== undefined) local.disconnected = patch.disconnected
       this.teamLocal.set(run.taskId, local)
     }
-    this.exec?.send(run, patch, result)
+    // 「正在做什么」只给本机任务卡（团队卡上写云端会多一大堆更新）
+    const { activity: _activity, ...wire } = patch
+    if (Object.keys(wire).length || result) this.exec?.send(run, wire, result)
     const task = this.taskOf(run)
     if (task) this.pushMessage(task)
     return task
