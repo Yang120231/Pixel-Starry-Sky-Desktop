@@ -38,6 +38,14 @@ const role = (value: unknown): Exclude<TeamRole, 'owner'> => {
 }
 
 /** 团队实时通道的地址：登录服务的同一个地址（https → wss） */
+/**
+ * 团队功能（协作频道 Phase C）2026-10-18 起默认关闭，频道只做本机多 AI 协作（docs/ui/channels-local-ai.md §1）。
+ * 代码、测试和云端接口都留着，开发时设 PIXELSKY_TEAMS=1 打开
+ */
+export function teamsEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.PIXELSKY_TEAMS === '1'
+}
+
 export function teamsWsUrl(base: string): string {
   return base.replace(/^http/, 'ws').replace(/\/+$/, '') + '/v1/teams/ws'
 }
@@ -56,13 +64,15 @@ export async function initChannels(ctx: AppContext): Promise<void> {
   const store = new ChannelStore(dir)
   await store.init()
   const deviceId = await loadDeviceId(dir)
-  // 团队同步（Phase C）：登录后启动，退出登录清空
-  const team = new TeamSync({
-    api: new TeamApi(teamsFetch),
-    realtime: handlers =>
-      new TeamRealtime({ url: teamsWsUrl(baseUrl()), token: force => bridgeToken(force), ...handlers }),
-    log: (message, error) => log.warn(message, error ? { error: describeError(error) } : undefined),
-  })
+  // 团队同步（Phase C）：登录后启动，退出登录清空。团队功能默认关着（teamsEnabled），关着时不创建、不连云端
+  const team = teamsEnabled()
+    ? new TeamSync({
+        api: new TeamApi(teamsFetch),
+        realtime: handlers =>
+          new TeamRealtime({ url: teamsWsUrl(baseUrl()), token: force => bridgeToken(force), ...handlers }),
+        log: (message, error) => log.warn(message, error ? { error: describeError(error) } : undefined),
+      })
+    : null
   const machines = (): MachineLite[] =>
     ctx.machines
       ? ctx.machines.state().machines.map(m => ({
@@ -85,7 +95,7 @@ export async function initChannels(ctx: AppContext): Promise<void> {
     selfName,
     locale: () => windowLocale(),
     log: (message, error) => log.warn(message, error ? { error: describeError(error) } : undefined),
-    team,
+    team: team ?? undefined,
     deviceId,
     machineName: () => hostname() || '这台电脑',
   })
@@ -98,21 +108,23 @@ export async function initChannels(ctx: AppContext): Promise<void> {
     }
   })
   ctx.lifecycle.onShutdown(() => {
-    team.stop()
+    team?.stop()
     return channels.dispose()
   })
 
   // 登录了就连团队，退出登录（或换账号）就断开并清空；窗口回到前台补一次
-  let teamEmail: string | null = null
-  const applyAccount = (): void => {
-    const email = signedInEmail()
-    if (email === teamEmail) return
-    teamEmail = email
-    team.stop()
-    if (email) team.start()
+  if (team) {
+    let teamEmail: string | null = null
+    const applyAccount = (): void => {
+      const email = signedInEmail()
+      if (email === teamEmail) return
+      teamEmail = email
+      team.stop()
+      if (email) team.start()
+    }
+    onAccountChange(applyAccount)
+    applyAccount()
   }
-  onAccountChange(applyAccount)
-  applyAccount()
   app.on('browser-window-focus', () => channels.focus())
 
   ipc.handle('channels:state', () => channels.state())

@@ -472,6 +472,7 @@ export const demoChannelMessages: Record<string, ChannelMessage[]> = {
 }
 
 // ── Phase C：示例团队（docs/ui/channels-phase-c.md §9.3），只改内存，不联网 ──
+// 团队功能 2026-10-18 起默认关闭（docs/ui/channels-local-ai.md §1）：示例留着，演示模式用 demoChannelData(DEMO_TEAMS) 滤掉
 
 export const demoTeams: TeamInfo[] = [
   {
@@ -497,3 +498,33 @@ export const demoInvites: PendingInvite[] = [
     expiresAt: NOW + 13.5 * DAY,
   },
 ]
+
+/** 演示模式里团队先关着（和主进程默认一样）；改成 true 就能看到团队示例 */
+export const DEMO_TEAMS = false
+
+/**
+ * 拼演示模式的频道数据。不带团队时：去掉团队频道和它们的消息、队友、别人电脑上的 AI 成员，
+ * 团队连接报「不可用」（界面藏起所有团队入口），和主进程关着团队时的样子一致
+ */
+export function demoChannelData(teams: boolean): {
+  channels: Channel[]
+  channelMembers: ChannelMember[]
+  channelMessages: Record<string, ChannelMessage[]>
+  channelTeams: { teams: TeamInfo[]; invites: PendingInvite[]; connection: 'online' | 'unavailable' }
+} {
+  if (teams)
+    return {
+      channels: demoChannels,
+      channelMembers: demoChannelMembers,
+      channelMessages: demoChannelMessages,
+      channelTeams: { teams: demoTeams, invites: demoInvites, connection: 'online' },
+    }
+  const channels = demoChannels.filter(c => c.scope !== 'team')
+  const keep = new Set(channels.map(c => c.id))
+  return {
+    channels,
+    channelMembers: demoChannelMembers.filter(m => (m.kind === 'human' ? m.you === true : m.mine !== false)),
+    channelMessages: Object.fromEntries(Object.entries(demoChannelMessages).filter(([id]) => keep.has(id))),
+    channelTeams: { teams: [], invites: [], connection: 'unavailable' },
+  }
+}

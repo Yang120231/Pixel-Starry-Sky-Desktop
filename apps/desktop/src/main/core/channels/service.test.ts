@@ -124,6 +124,14 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
+describe('协作频道：团队关着', () => {
+  it('没有团队同步：团队部分是空的，连接报「不可用」（界面据此藏起团队入口）；团队操作报暂不可用', async () => {
+    const c = await open()
+    expect(c.state()).toMatchObject({ teams: [], invites: [], teamsConnection: 'unavailable', teamsSyncedAt: null })
+    await expect(c.createTeam('小队')).rejects.toThrow('团队功能暂不可用')
+  })
+})
+
 describe('协作频道：派活', () => {
   it('@成员 → 新开会话、改名、发提示词；做完后结果发回频道，任务卡更新摘要 / 改动 / 需要你决定', async () => {
     const c = await open()

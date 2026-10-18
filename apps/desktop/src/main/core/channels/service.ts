@@ -306,7 +306,8 @@ export class Channels {
       sessionChannels,
       teams: team?.teams ?? [],
       invites: team?.invites ?? [],
-      teamsConnection: team?.connection ?? 'signed-out',
+      // 没有团队同步（团队功能关着，见 main/channels/ipc.ts 的 teamsEnabled）：报不可用，界面藏起所有团队入口
+      teamsConnection: this.team ? (team?.connection ?? 'signed-out') : 'unavailable',
       teamsSyncedAt: team?.syncedAt ?? null,
     }
   }
