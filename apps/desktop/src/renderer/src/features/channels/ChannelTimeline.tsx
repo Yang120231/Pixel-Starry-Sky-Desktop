@@ -35,6 +35,10 @@ function eventText(event: ChannelEvent, name: (id: string | null | undefined) =>
       return tr('channels.event.renamed', { actor: name(event.actorId), value: event.value ?? '' })
     case 'topic':
       return tr('channels.event.topic', { actor: name(event.actorId), value: event.value ?? '' })
+    case 'archived':
+      return tr('channels.event.archived', { actor: name(event.actorId) })
+    case 'restored':
+      return tr('channels.event.restored', { actor: name(event.actorId) })
   }
 }
 
@@ -70,7 +74,8 @@ export function ChannelTimeline({
   /** 前面还有更早的消息（正式模式分页） */
   more?: boolean
   onLoadOlder?: () => Promise<void>
-  onReply: (id: string) => void
+  /** 没有时不能回复（归档的频道只读） */
+  onReply?: (id: string) => void
   taskActions: TaskCardActions
 }) {
   useI18n()
@@ -246,7 +251,11 @@ export function ChannelTimeline({
                   onReply={onReply}
                   onJump={jump}
                   pinned={pinned}
-                  onPin={channel.scope === 'local' ? (id, on) => channelActions.pin(channel.id, id, on) : undefined}
+                  onPin={
+                    channel.scope === 'local' && !channel.archivedAt
+                      ? (id, on) => channelActions.pin(channel.id, id, on)
+                      : undefined
+                  }
                 />
               )
           }

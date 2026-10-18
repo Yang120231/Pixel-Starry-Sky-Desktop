@@ -27,6 +27,8 @@ export interface ChannelsBridge {
       notes?: string | null
       notify?: ChannelNotify
       projectId?: string | null
+      /** 归档 / 恢复（docs/ui/channels-local-ai.md §3.1 #11） */
+      archived?: boolean
     },
   ): Promise<void>
   /** 置顶 / 取消置顶一条文字消息（docs/ui/channels-local-ai.md §3.1 #9） */

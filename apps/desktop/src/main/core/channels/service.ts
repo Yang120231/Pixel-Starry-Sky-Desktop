@@ -298,6 +298,7 @@ export class Channels {
         notes: c.notes ?? null,
         pinned: c.pinned ?? [],
         notify: c.notify ?? 'all',
+        archivedAt: c.archivedAt ?? null,
         project: c.projectId ? (projects.get(c.projectId)?.name ?? null) : null,
         projectId: c.projectId,
         scope: 'local' as const,
@@ -417,6 +418,13 @@ export class Channels {
     return c
   }
 
+  /** 要改动的频道：归档了只读（§3.1 #11），恢复后才能发消息、派活、改设置 */
+  private writable(id: string): StoredChannel {
+    const c = this.channel(id)
+    if (c.archivedAt) throw new Error('频道已归档，恢复后才能操作')
+    return c
+  }
+
   private uniqueChannelName(name: string, except?: string): void {
     for (const c of this.store.channels.values())
       if (c.id !== except && c.name.toLowerCase() === name.toLowerCase()) throw new Error('已经有同名的频道')
@@ -470,6 +478,8 @@ export class Channels {
       notes?: string | null
       notify?: ChannelNotify
       projectId?: string | null
+      /** 归档 / 恢复（只有本机频道） */
+      archived?: boolean
     },
   ): Promise<void> {
     const info = this.team?.channelInfo(id)
@@ -483,6 +493,17 @@ export class Channels {
       return
     }
     const c = { ...this.channel(id) }
+    const restoring = patch.archived === false && !!c.archivedAt
+    const archiving = patch.archived === true && !c.archivedAt
+    // 归档了只读：只能恢复（同一次也可以顺带改别的）
+    if (c.archivedAt && !restoring && Object.entries(patch).some(([k, v]) => k !== 'archived' && v !== undefined))
+      throw new Error('频道已归档，恢复后才能操作')
+    if (archiving && [...this.store.runs.values()].some(r => r.channelId === id && r.phase !== 'ended'))
+      throw new Error('频道里还有没做完的活，做完或停掉后再归档')
+    if (restoring) {
+      c.archivedAt = null
+      this.event(id, 'restored')
+    }
     if (patch.name !== undefined) {
       const name = cleanName(patch.name, '频道名')
       if (name !== c.name) {
@@ -508,6 +529,12 @@ export class Channels {
     }
     if (patch.notes !== undefined)
       c.notes = typeof patch.notes === 'string' && patch.notes.trim() ? patch.notes.trim().slice(0, NOTES_MAX) : null
+    // 归档时一并标为已读：收起来的频道不再算未读
+    if (archiving) {
+      c.archivedAt = this.now()
+      c.readAt = c.archivedAt
+      this.event(id, 'archived')
+    }
     await this.store.saveChannel(c)
     this.changed()
   }
@@ -557,6 +584,9 @@ export class Channels {
     if (!project) throw new Error('项目不存在')
     const existing = raw.id ? this.member(raw.id) : undefined
     if (raw.id && !existing) throw new Error('成员不存在')
+    // 归档的频道不能加人（已经在里面的成员照常能改）
+    const into = channelId ? this.store.channels.get(channelId) : undefined
+    if (into && !(existing && into.memberIds.includes(existing.id))) this.writable(into.id)
     // 老数据里已经叫「全体」的成员不改名也能保存
     if (isReservedMentionName(name) && existing?.name.toLowerCase() !== name.toLowerCase())
       throw new Error('「全体」「all」留给 @全体，换个名字吧')
@@ -605,6 +635,7 @@ export class Channels {
     const c = this.channel(channelId)
     if (!this.member(memberId)) throw new Error('成员不存在')
     if (c.memberIds.includes(memberId)) return
+    this.writable(channelId)
     await this.store.saveChannel({ ...c, memberIds: [...c.memberIds, memberId] })
     this.event(channelId, 'added', { targetId: memberId })
     this.changed()
@@ -623,7 +654,7 @@ export class Channels {
           this.finish(run, { status: 'stopped', note: 'cancelled' })
       return
     }
-    const c = this.channel(channelId)
+    const c = this.writable(channelId)
     if (!c.memberIds.includes(memberId) || memberId === SELF_ID) return
     await this.store.saveChannel({ ...c, memberIds: c.memberIds.filter(id => id !== memberId) })
     for (const run of [...this.store.runs.values()])
@@ -673,7 +704,7 @@ export class Channels {
 
   async post(channelId: string, input: PostInput): Promise<{ message: ChannelTextMessage; tasks: string[] }> {
     if (this.isTeam(channelId)) return this.postTeam(channelId, input)
-    const c = this.channel(channelId)
+    const c = this.writable(channelId)
     const text = typeof input?.text === 'string' ? input.text.trim() : ''
     const images = validateImages(input?.attachments),
       files = validateFiles(input?.files)
@@ -828,7 +859,7 @@ export class Channels {
 
   /** 置顶 / 取消置顶一条文字消息（本机频道） */
   async pin(channelId: string, messageId: string, pinned: boolean): Promise<void> {
-    const c = { ...this.channel(channelId) }
+    const c = { ...this.writable(channelId) }
     const message = (this.store.messages.get(channelId) ?? []).find(m => m.id === messageId)
     if (message?.kind !== 'message') throw new Error('只能置顶文字消息')
     const list = (c.pinned ?? []).filter(id => id !== messageId)
@@ -1202,7 +1233,7 @@ export class Channels {
     if (action === 'retry') {
       if (!terminal(task.status)) return
       if (!this.member(task.assigneeId)) throw new Error('成员不存在')
-      const c = this.channel(task.channelId)
+      const c = this.writable(task.channelId)
       const source = this.store.messages.get(c.id)?.find(m => m.id === task.sourceMessageId)
       const fresh =
         source?.kind === 'message'

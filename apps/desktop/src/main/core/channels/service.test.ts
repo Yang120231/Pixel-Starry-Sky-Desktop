@@ -186,6 +186,46 @@ describe('协作频道：提醒（docs/ui/channels-local-ai.md §3.1 #12、#13�
   })
 })
 
+describe('协作频道：归档（docs/ui/channels-local-ai.md §3.1 #11）', () => {
+  it('还有没做完的活不能归档；归档后只读、可以恢复，时间线记一笔，重启后还在', async () => {
+    const c = await open()
+    const memberId = await c.saveMember(null, agent('前端助手'))
+    const other = await c.saveMember(null, agent('审查员'))
+    const channelId = await c.create({ name: '旧项目', memberIds: [memberId] })
+    const { message, tasks: ids } = await c.post(channelId, { text: '@前端助手 改首页', clientId: 'a1' })
+    await settle()
+    await expect(c.update(channelId, { archived: true })).rejects.toThrow('频道里还有没做完的活')
+    await c.taskAction(ids[0], 'stop')
+    await settle()
+    expect(tasks(c, channelId)[0].status).toBe('stopped')
+
+    await c.update(channelId, { archived: true })
+    const archivedAt = c.state().channels[0].archivedAt
+    expect(archivedAt).toEqual(expect.any(Number))
+    expect(c.state().channels[0].unread).toBe(0)
+    const readOnly = '频道已归档，恢复后才能操作'
+    await expect(c.post(channelId, { text: '还在吗', clientId: 'a2' })).rejects.toThrow(readOnly)
+    await expect(c.pin(channelId, message.id, true)).rejects.toThrow(readOnly)
+    await expect(c.update(channelId, { name: '改名' })).rejects.toThrow(readOnly)
+    await expect(c.taskAction(ids[0], 'retry')).rejects.toThrow(readOnly)
+    await expect(c.addMember(channelId, other)).rejects.toThrow(readOnly)
+    await expect(c.saveMember(channelId, agent('新成员'))).rejects.toThrow(readOnly)
+    await expect(c.removeMember(channelId, memberId)).rejects.toThrow(readOnly)
+    // 已经在频道里的成员照常能改（成员是全局的）
+    await c.saveMember(channelId, { ...agent('前端助手'), id: memberId, instructions: '只改前端' })
+    await c.update(channelId, { archived: true })
+    expect((await open()).state().channels[0].archivedAt).toBe(archivedAt)
+
+    await c.update(channelId, { archived: false, name: '新项目' })
+    expect(c.state().channels[0]).toMatchObject({ archivedAt: null, name: '新项目' })
+    await c.post(channelId, { text: '回来了', clientId: 'a3' })
+    const events = c
+      .messages(channelId)
+      .messages.flatMap(m => (m.kind === 'event' && m.event !== 'added' ? [m.event] : []))
+    expect(events).toEqual(['archived', 'restored', 'renamed'])
+  })
+})
+
 describe('协作频道：成员的额度来源', () => {
   it('平台额度：存进成员配置，派活开会话时带上分组和账号；自定义接口同样带上接口 id', async () => {
     const c = await open()

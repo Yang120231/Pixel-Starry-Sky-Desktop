@@ -2,6 +2,8 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage, type TranslationKey } from '../../i18n/core'
 import { useState, type ReactNode } from 'react'
 import {
+  Archive,
+  ArchiveRestore,
   ArrowUpRight,
   Bot,
   ChevronDown,
@@ -100,7 +102,7 @@ function PinnedList({ channel, members }: { channel: Channel; members: readonly 
                 <span className="min-w-0 flex-1 text-meta text-fg-faint">{tr('channels.members.pinnedOld')}</span>
               )}
             </button>
-            {channel.scope === 'local' && (
+            {channel.scope === 'local' && !channel.archivedAt && (
               <IconButton
                 icon={PinOff}
                 label={tr('channels.unpin')}
@@ -185,6 +187,7 @@ function AgentRow({
   live,
   team,
   canRemoveOthers,
+  readOnly = false,
   onOpenSession,
   onEdit,
   onRemove,
@@ -194,6 +197,8 @@ function AgentRow({
   live: boolean
   /** 团队频道 */
   team: boolean
+  /** 归档的频道：不能移出成员（成员是全局的，照常能改） */
+  readOnly?: boolean
   /** 所有者能把别人的 AI 成员移出频道 */
   canRemoveOthers: boolean
   onOpenSession: (id: string) => void
@@ -217,13 +222,17 @@ function AgentRow({
         ...(member.sessionId
           ? [{ label: tr('channels.openSession'), icon: ArrowUpRight, run: () => onOpenSession(member.sessionId!) }]
           : []),
-        {
-          label: tr('channels.members.remove'),
-          icon: UserMinus,
-          danger: true,
-          separator: true,
-          run: () => onRemove(member),
-        },
+        ...(readOnly
+          ? []
+          : [
+              {
+                label: tr('channels.members.remove'),
+                icon: UserMinus,
+                danger: true,
+                separator: true,
+                run: () => onRemove(member),
+              },
+            ]),
       ]
   return (
     <div
@@ -396,6 +405,10 @@ export function ChannelMembers({
   }
   const policyFailed = (e: unknown) =>
     toast(tr('channels.task.actionFailed', { error: translateMessage((e as Error).message) }))
+  // 归档的频道只读（docs/ui/channels-local-ai.md §3.1 #11）：只能恢复、删除，成员和设置都不能改
+  const archived = !!channel.archivedAt
+  const setArchived = (on: boolean) =>
+    void channelActions.updateChannel(channel.id, { archived: on }).catch(policyFailed)
   return (
     <aside
       aria-label={tr('channels.members.title')}
@@ -446,6 +459,7 @@ export function ChannelMembers({
                 <Select
                   label={tr('channels.members.notify')}
                   value={channel.notify ?? 'all'}
+                  disabled={archived}
                   options={NOTIFY_OPTIONS.map(v => ({ value: v, label: tr(`channels.notify.level.${v}`) }))}
                   onChange={v =>
                     void channelActions
@@ -497,6 +511,7 @@ export function ChannelMembers({
               live={live}
               team={team}
               canRemoveOthers={live && owner}
+              readOnly={archived}
               onPolicy={(member, policy) =>
                 policy === 'team'
                   ? setDialog({ kind: 'policy', member })
@@ -509,44 +524,56 @@ export function ChannelMembers({
           ))}
         </Section>
       </div>
-      <div className="flex shrink-0 flex-col gap-2 border-t border-line-subtle p-3">
-        {team ? (
-          <>
-            {canAddAgent(role) && (
-              <Button icon={Bot} className="w-full justify-center" onClick={() => setDialog({ kind: 'addTeamAgent' })}>
-                {tr('team.panel.addMine')}
-              </Button>
-            )}
-            {owner && (
-              <Button
-                icon={UserPlus}
-                variant="ghost"
-                className="w-full justify-center"
-                onClick={() => setDialog({ kind: 'invite' })}
-              >
-                {tr('team.panel.invite')}
-              </Button>
-            )}
-          </>
-        ) : (
-          <Button
-            icon={Bot}
-            className="w-full justify-center"
-            onClick={() =>
-              live ? setDialog({ kind: 'agent', editing: null }) : comingSoon(tr('channels.members.addAgent'))
-            }
-          >
-            {tr('channels.members.addAgent')}
-          </Button>
-        )}
-      </div>
+      {/* 归档的频道：输入框的位置有「恢复频道」，这里不再放按钮 */}
+      {!archived && (
+        <div className="flex shrink-0 flex-col gap-2 border-t border-line-subtle p-3">
+          {team ? (
+            <>
+              {canAddAgent(role) && (
+                <Button
+                  icon={Bot}
+                  className="w-full justify-center"
+                  onClick={() => setDialog({ kind: 'addTeamAgent' })}
+                >
+                  {tr('team.panel.addMine')}
+                </Button>
+              )}
+              {owner && (
+                <Button
+                  icon={UserPlus}
+                  variant="ghost"
+                  className="w-full justify-center"
+                  onClick={() => setDialog({ kind: 'invite' })}
+                >
+                  {tr('team.panel.invite')}
+                </Button>
+              )}
+            </>
+          ) : (
+            <Button
+              icon={Bot}
+              className="w-full justify-center"
+              onClick={() =>
+                live ? setDialog({ kind: 'agent', editing: null }) : comingSoon(tr('channels.members.addAgent'))
+              }
+            >
+              {tr('channels.members.addAgent')}
+            </Button>
+          )}
+        </div>
+      )}
       {channelMenu && (
         <ActionMenu
           x={channelMenu.x}
           y={channelMenu.y}
           label={tr('channels.members.channelMenu')}
           actions={[
-            { label: tr('channels.channel.edit'), icon: Pencil, run: () => setDialog({ kind: 'channel' }) },
+            ...(archived
+              ? [{ label: tr('channels.channel.restore'), icon: ArchiveRestore, run: () => setArchived(false) }]
+              : [{ label: tr('channels.channel.edit'), icon: Pencil, run: () => setDialog({ kind: 'channel' }) }]),
+            ...(!team && !archived
+              ? [{ label: tr('channels.channel.archive'), icon: Archive, run: () => setArchived(true) }]
+              : []),
             {
               label: tr('channels.channel.delete'),
               icon: Trash2,

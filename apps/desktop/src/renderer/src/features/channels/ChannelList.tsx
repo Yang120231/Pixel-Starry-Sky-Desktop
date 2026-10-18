@@ -27,6 +27,7 @@ import { CreateTeamDialog, TeamSettingsDialog } from './TeamDialog'
 import { roleLabel } from './TeamParts'
 import { formatSyncTime } from './format'
 import {
+  ARCHIVED_SECTION,
   canCreateChannel,
   canManageTeam,
   groupChannels,
@@ -36,6 +37,8 @@ import {
 } from './teamModel'
 
 const COLLAPSED_KEY = 'pixelsky.channels.collapsed'
+/** 「已归档」默认收起：列表里记的是「展开了它」 */
+const ARCHIVED_OPEN = 'archived:open'
 
 /** 折叠的段（团队 id / 'local'）存在 localStorage，换电脑不同步 */
 function useCollapsed(): [readonly string[], (id: string) => void] {
@@ -308,27 +311,43 @@ export function ChannelList({
         {teamUi && invites.map(invite => <InviteCard key={invite.id} invite={invite} />)}
         {sections.map(section => {
           const team = section.team
-          const isCollapsed = !searching && collapsed.includes(section.id)
+          const archived = section.id === ARCHIVED_SECTION
+          const isCollapsed =
+            !searching && (archived ? !collapsed.includes(ARCHIVED_OPEN) : collapsed.includes(section.id))
+          // 「已归档」收起时，正在看的那个归档频道还留一行
+          const rows = !isCollapsed
+            ? section.channels
+            : archived
+              ? section.channels.filter(c => c.id === selectedId)
+              : []
           return (
-            <section key={section.id} className="flex shrink-0 flex-col">
+            <section key={section.id} className="flex shrink-0 flex-col" data-channel-section={section.id}>
               <SectionHeader
-                title={team ? team.name : tr('team.section.local')}
+                title={
+                  team
+                    ? team.name
+                    : archived
+                      ? tr('channels.archived.section', { count: section.channels.length })
+                      : tr('team.section.local')
+                }
                 collapsed={isCollapsed}
-                onToggle={() => toggleCollapse(section.id)}
+                onToggle={() => toggleCollapse(archived ? ARCHIVED_OPEN : section.id)}
                 team={team}
                 names={names}
                 selfId={team ? selfInTeam(team) : (self?.id ?? null)}
                 offlineTip={team ? offlineTip : null}
                 onMenu={rect => team && setMenu({ x: rect.right - 180, y: rect.bottom + 4, team })}
                 onAdd={
-                  !team
-                    ? createLocal
-                    : canCreateChannel(team.role)
-                      ? () => setDialog({ kind: 'channel', teamId: team.id })
-                      : null
+                  archived
+                    ? null
+                    : !team
+                      ? createLocal
+                      : canCreateChannel(team.role)
+                        ? () => setDialog({ kind: 'channel', teamId: team.id })
+                        : null
                 }
               />
-              {!isCollapsed && (
+              {(!isCollapsed || rows.length > 0) && (
                 <div className="flex flex-col gap-px">
                   {section.channels.length === 0 && searching && (
                     <SidebarEmpty>{tr('channels.searchEmpty')}</SidebarEmpty>
@@ -336,7 +355,7 @@ export function ChannelList({
                   {section.channels.length === 0 && !searching && team && (
                     <SidebarEmpty>{tr('team.section.empty')}</SidebarEmpty>
                   )}
-                  {section.channels.map(c => (
+                  {rows.map(c => (
                     <ChannelRow key={c.id} channel={c} selected={c.id === selectedId} onSelect={() => onSelect(c.id)} />
                   ))}
                 </div>

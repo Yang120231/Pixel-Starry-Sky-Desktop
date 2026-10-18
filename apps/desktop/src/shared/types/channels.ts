@@ -179,6 +179,8 @@ export interface Channel {
   pinned?: string[]
   /** 这个频道的系统提醒（§3.1 #13）：全部 / 只提醒要我处理的（等你确认、失败）/ 不提醒；没写是全部 */
   notify?: ChannelNotify
+  /** 归档的时间（§3.1 #11）：收进列表底部「已归档」，只读，可恢复；没归档是 null / 没写 */
+  archivedAt?: number | null
   /** Phase C：团队频道属于哪个团队 */
   teamId?: string
   memberIds: string[]
@@ -270,7 +272,17 @@ export interface ChannelTask extends ChannelMessageBase {
 
 export interface ChannelEvent extends ChannelMessageBase {
   kind: 'event'
-  event: 'joined' | 'added' | 'removed' | 'renamed' | 'topic' | 'left' | 'agentAdded' | 'agentRemoved'
+  event:
+    | 'joined'
+    | 'added'
+    | 'removed'
+    | 'renamed'
+    | 'topic'
+    | 'left'
+    | 'agentAdded'
+    | 'agentRemoved'
+    | 'archived'
+    | 'restored'
   actorId: string
   targetId?: string | null
   value?: string | null

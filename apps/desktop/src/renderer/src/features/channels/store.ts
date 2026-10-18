@@ -102,7 +102,7 @@ export function useSessionChannel(sessionId: string): string | null {
 
 /** 当前频道：选中的不存在时退回第一个 */
 export function selectedChannel(s: ChannelsState): Channel | null {
-  return s.channels.find(c => c.id === s.selectedId) ?? s.channels[0] ?? null
+  return s.channels.find(c => c.id === s.selectedId) ?? s.channels.find(c => !c.archivedAt) ?? s.channels[0] ?? null
 }
 
 export const selfMember = (s: ChannelsState): ChannelMember | null =>
@@ -285,10 +285,20 @@ export const channelActions = {
       notes?: string | null
       notify?: ChannelNotify
       projectId?: string | null
+      /** 归档 / 恢复（docs/ui/channels-local-ai.md §3.1 #11） */
+      archived?: boolean
     },
   ): Promise<void> {
     if (channelsBridge) return channelsBridge.update(id, patch)
-    set({ channels: state.channels.map(c => (c.id === id ? { ...c, ...patch, projectId: c.projectId } : c)) })
+    const { archived, ...rest } = patch
+    set({
+      channels: state.channels.map(c => {
+        if (c.id !== id) return c
+        const next = { ...c, ...rest, projectId: c.projectId }
+        if (archived !== undefined) next.archivedAt = archived ? Date.now() : null
+        return archived ? { ...next, unread: 0, mentioned: false } : next
+      }),
+    })
     return Promise.resolve()
   },
   /** 置顶 / 取消置顶一条文字消息（docs/ui/channels-local-ai.md §3.1 #9）；演示模式只改内存 */

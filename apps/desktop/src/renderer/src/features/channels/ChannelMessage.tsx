@@ -230,7 +230,8 @@ export interface MessageGroupProps {
   channelMembers: readonly ChannelMember[]
   messagesById: ReadonlyMap<string, Quotable>
   highlight: string | null
-  onReply: (id: string) => void
+  /** 没有时不能回复（归档的频道） */
+  onReply?: (id: string) => void
   onJump: (id: string) => void
   /** 频道里置顶的消息 */
   pinned?: ReadonlySet<string>
@@ -309,13 +310,15 @@ export function MessageGroup({
               aria-label={tr('channels.messageActions')}
               className="absolute -top-3 right-2 flex items-center gap-0.5 rounded-md border border-line-card bg-popover p-0.5 opacity-0 shadow-menu transition-opacity group-hover/message:opacity-100 group-focus-within/message:opacity-100"
             >
-              <IconButton
-                icon={CornerUpLeft}
-                label={tr('channels.reply')}
-                size={24}
-                iconSize={13}
-                onClick={() => onReply(m.id)}
-              />
+              {onReply && (
+                <IconButton
+                  icon={CornerUpLeft}
+                  label={tr('channels.reply')}
+                  size={24}
+                  iconSize={13}
+                  onClick={() => onReply(m.id)}
+                />
+              )}
               <CopyButton text={m.text} label={tr('channels.copy')} iconOnly />
               {onPin && (
                 <IconButton

@@ -25,6 +25,8 @@ export interface StoredChannel {
   pinned?: string[]
   /** 系统提醒级别；旧数据没有（= all） */
   notify?: ChannelNotify
+  /** 归档的时间；旧数据没有（= 没归档） */
+  archivedAt?: number | null
   createdAt: number
   /** 看到哪里了：这之后别人发的算未读 */
   readAt: number
