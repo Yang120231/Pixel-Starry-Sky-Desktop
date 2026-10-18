@@ -37,13 +37,13 @@ export function formatShortTime(at: number, now = Date.now()): string {
   if (dayStart(at) === dayStart(now)) return formatClock(at)
   const d = new Date(at)
   const otherYear = d.getFullYear() !== new Date(now).getFullYear()
-  if (getLocale() === 'en-US')
-    return new Intl.DateTimeFormat('en-US', {
-      month: 'short',
-      day: 'numeric',
-      ...(otherYear ? { year: 'numeric' } : {}),
-    }).format(d)
-  return `${otherYear ? `${d.getFullYear()}年` : ''}${d.getMonth() + 1}月${d.getDate()}日`
+  const en = getLocale() === 'en-US'
+  // 中文 10月6日 / 2025年10月6日，英文 Oct 6 / Oct 6, 2025
+  return new Intl.DateTimeFormat(en ? 'en-US' : 'zh-CN', {
+    month: en ? 'short' : 'long',
+    day: 'numeric',
+    ...(otherYear ? { year: 'numeric' } : {}),
+  }).format(d)
 }
 
 const SEEN_KEY = { minutes: 'team.seen.minutes', hours: 'team.seen.hours', days: 'team.seen.days' } as const
