@@ -20,7 +20,7 @@ import { folderLabel } from '@/features/files/extraFolderPaths'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
-import { hasCodeOpener, openFile } from '@/features/files/store'
+import { hasCodeOpener, openFile, refreshHeads } from '@/features/files/store'
 import { keyRef, refKey } from '@/features/editor/target'
 import { gitOpenTarget, routeGitDiff } from '@/features/coding/editor/gitDiffModel'
 import { getGitOpenStyle } from '@/features/coding/editor/gitOpenStyle'
@@ -29,6 +29,8 @@ import {
   openGitDiffTab,
   registerGitFileActions,
   setGitActionsBusy,
+  inGitWorkspace,
+  noteGitHead,
   setGitFileKey,
   syncGitDiffTabs,
   useCurrentGitDiff,
@@ -437,6 +439,10 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
   useEffect(() => {
     if (status?.repo) syncGitDiffTabs(workspaceKey, sections)
   }, [workspaceKey, status?.repo, sections])
+  // HEAD 换了（提交、切分支、拉取、终端里提交）：这个工作区打开着的文件标签重读「变更」的基准
+  useEffect(() => {
+    if (status?.repo && noteGitHead(workspaceKey, status.head ?? null)) void refreshHeads(inGitWorkspace(workspaceKey))
+  }, [workspaceKey, status?.repo, status?.head])
 
   if (!status)
     return (
@@ -498,6 +504,8 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
           file={selectedFile}
           area={selected.area}
           busy={busy}
+          // 每次读到新状态都重读一次（文件还在同一区、字母没变时内容也可能变了）
+          revision={status}
           {...fileActions(selectedFile, selected.area)}
           load={() =>
             demo
@@ -657,6 +665,7 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
             disabled={busy}
             onClick={() => {
               void refresh()
+              void refreshHeads(inGitWorkspace(workspaceKey))
               if (view === 'history') setHistoryKey(k => k + 1)
             }}
           />
