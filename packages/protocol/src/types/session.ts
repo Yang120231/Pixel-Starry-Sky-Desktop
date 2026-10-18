@@ -97,6 +97,11 @@ export interface FileAttachment {
   omitted?: number
   /** 不是纯文本、是从这种文件里提取的文字（docs/ui/composer-file-attachments.md §7）；没有就是文本文件 */
   source?: FileSource
+  /**
+   * 原文件在本机磁盘上的路径：本机会话里拖进来 / 从「+」选的文件才有（远程机器、粘贴的截图和文字没有）。
+   * 发给引擎时写在 <attached_file> 上，截断了的智能体可以按路径读完整文件
+   */
+  path?: string
 }
 
 export type FileSource = 'docx' | 'xlsx' | 'pptx' | 'odt' | 'ods' | 'odp' | 'pdf' | 'rtf' | 'epub' | 'html' | 'ipynb'

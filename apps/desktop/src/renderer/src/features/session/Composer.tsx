@@ -14,7 +14,13 @@ import {
   type SourceAction,
   type StatusBarController,
 } from '@/features/engine'
-import { MAX_FILE_BYTES, MAX_FILE_COUNT, MAX_IMAGE_COUNT, MAX_IMAGE_TOTAL } from '@pixelsky/protocol'
+import {
+  MAX_FILE_BYTES,
+  MAX_FILE_COUNT,
+  MAX_IMAGE_COUNT,
+  MAX_IMAGE_TOTAL,
+  type FileAttachment,
+} from '@pixelsky/protocol'
 import { useAccount } from '@/features/account/useAccount'
 import type { CreditSource } from '@/features/account/platform'
 import { sourceOfChannel, type ChannelChoice } from '@/features/model-channels/channelModel'
@@ -398,9 +404,17 @@ export function Composer({
       setError(tr('composer.file.tooLarge', { p0: large.name }))
       return
     }
+    // 本机会话：记下原文件在磁盘上的路径，截断了的智能体可以按路径读完整文件（远程机器看不到本机路径，不带）
+    const workspace = composerWorkspace(live?.sessionId, status, draftKey)
+    const local = machineOf(workspace?.sessionId ?? workspace?.projectId) === 'local'
+    const withPath = async (file: File): Promise<FileAttachment> => {
+      const read = await readTextFile(file)
+      const path = local ? (window.pixelsky?.pathForFile(file) ?? '') : ''
+      return path ? { ...read, path } : read
+    }
     read(async () => {
       // 一个读不了不耽误别的：读成的照常加进来，读不了的说原因
-      const results = await Promise.allSettled(others.map(readTextFile))
+      const results = await Promise.allSettled(others.map(withPath))
       const loaded = results.flatMap(r => (r.status === 'fulfilled' ? [r.value] : []))
       if (loaded.length) await updateFiles(key, current => [...current, ...loaded])
       const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected')
