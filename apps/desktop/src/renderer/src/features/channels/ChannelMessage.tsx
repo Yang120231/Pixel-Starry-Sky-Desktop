@@ -1,8 +1,8 @@
 import { useI18n } from '@/i18n/I18nProvider'
-import { tr } from '../../i18n/core'
+import { tr, translateMessage } from '../../i18n/core'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { CornerUpLeft } from 'lucide-react'
-import { Avatar, cn, CopyButton, EngineIcon, IconButton } from '@/ui'
+import { CornerUpLeft, Pin, PinOff } from 'lucide-react'
+import { Avatar, cn, CopyButton, EngineIcon, IconButton, useToast } from '@/ui'
 import { Markdown } from '@/ui/markdown/Markdown'
 import type { ChannelMember, ChannelTask, ChannelTextMessage } from '@/data/types'
 import { excerpt, splitMentions } from './model'
@@ -232,6 +232,10 @@ export interface MessageGroupProps {
   highlight: string | null
   onReply: (id: string) => void
   onJump: (id: string) => void
+  /** 频道里置顶的消息 */
+  pinned?: ReadonlySet<string>
+  /** 置顶 / 取消置顶（只有本机频道有，docs/ui/channels-local-ai.md §3.1 #9） */
+  onPin?: (id: string, pinned: boolean) => Promise<void>
 }
 
 /** 同一作者的连续消息：第一条带头像和作者行，后面的悬停时在头像位置显示时间 */
@@ -243,9 +247,14 @@ export function MessageGroup({
   highlight,
   onReply,
   onJump,
+  pinned,
+  onPin,
 }: MessageGroupProps) {
   useI18n()
+  const toast = useToast()
   const author = membersById.get(items[0].authorId)
+  const togglePin = (id: string, on: boolean): void =>
+    void onPin?.(id, on).catch(e => toast(tr('channels.pinFailed', { error: translateMessage((e as Error).message) })))
   return (
     <div className="conversation-message mt-3 flex flex-col">
       {items.map((m, i) => {
@@ -288,6 +297,12 @@ export function MessageGroup({
                 m.text && <MentionText text={m.text} members={channelMembers} />
               )}
               {m.attached && <MessageAttachments message={m} />}
+              {pinned?.has(m.id) && (
+                <span data-pinned className="mt-0.5 inline-flex items-center gap-1 text-meta text-fg-faint">
+                  <Pin size={11} strokeWidth={1.75} />
+                  {tr('channels.pinned')}
+                </span>
+              )}
             </div>
             <div
               role="toolbar"
@@ -302,6 +317,15 @@ export function MessageGroup({
                 onClick={() => onReply(m.id)}
               />
               <CopyButton text={m.text} label={tr('channels.copy')} iconOnly />
+              {onPin && (
+                <IconButton
+                  icon={pinned?.has(m.id) ? PinOff : Pin}
+                  label={tr(pinned?.has(m.id) ? 'channels.unpin' : 'channels.pin')}
+                  size={24}
+                  iconSize={13}
+                  onClick={() => togglePin(m.id, !pinned?.has(m.id))}
+                />
+              )}
             </div>
           </div>
         )

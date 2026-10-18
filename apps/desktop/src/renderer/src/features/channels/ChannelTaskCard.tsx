@@ -88,9 +88,12 @@ export function ChannelTaskCard({
   onFollowUp,
   selfId = null,
   onApprove,
+  highlight = false,
 }: {
   task: ChannelTask
   membersById: ReadonlyMap<string, ChannelMember>
+  /** 刚跳过来（提醒点进来、置顶列表）：闪一下 */
+  highlight?: boolean
 } & TaskCardActions) {
   useI18n()
   const toast = useToast()
@@ -129,6 +132,7 @@ export function ChannelTaskCard({
         className={cn(
           'max-w-[560px] rounded-lg border border-line-card bg-surface p-3 shadow-sm',
           (task.status === 'waiting' || task.decision) && 'border-warn/40',
+          highlight && 'search-hit',
         )}
       >
         <div className="flex items-center gap-2 text-meta">

@@ -49,6 +49,8 @@ export interface ChannelsState {
   /** unavailable = 云端没有团队接口，不显示任何团队入口 */
   teamsConnection: TeamsConnection
   teamsSyncedAt: number | null
+  /** 要时间线跳到并高亮的消息（置顶列表、提醒点进来）；时间线处理完清掉 */
+  focus: { channelId: string; messageId: string } | null
 }
 
 let state: ChannelsState = {
@@ -65,6 +67,7 @@ let state: ChannelsState = {
   invites: channelsLive ? [] : channelTeams.invites,
   teamsConnection: channelsLive ? 'unavailable' : channelTeams.connection,
   teamsSyncedAt: channelsLive ? null : Date.now(),
+  focus: null,
 }
 const listeners = new Set<() => void>()
 const subscribe = (listener: () => void) => {
@@ -269,8 +272,32 @@ export const channelActions = {
     void loadMessages(id)
     return id
   },
-  updateChannel(id: string, patch: { name?: string; topic?: string | null; projectId?: string | null }): Promise<void> {
-    return channelsBridge!.update(id, patch)
+  updateChannel(
+    id: string,
+    patch: { name?: string; topic?: string | null; notes?: string | null; projectId?: string | null },
+  ): Promise<void> {
+    if (channelsBridge) return channelsBridge.update(id, patch)
+    set({ channels: state.channels.map(c => (c.id === id ? { ...c, ...patch, projectId: c.projectId } : c)) })
+    return Promise.resolve()
+  },
+  /** 置顶 / 取消置顶一条文字消息（docs/ui/channels-local-ai.md §3.1 #9）；演示模式只改内存 */
+  async pin(channelId: string, messageId: string, pinned: boolean): Promise<void> {
+    if (channelsBridge) return channelsBridge.pin(channelId, messageId, pinned)
+    set({
+      channels: state.channels.map(c => {
+        if (c.id !== channelId) return c
+        const rest = (c.pinned ?? []).filter(id => id !== messageId)
+        return { ...c, pinned: pinned ? [...rest, messageId] : rest }
+      }),
+    })
+  },
+  /** 切到这个频道，时间线跳到这条消息并高亮一下 */
+  focusMessage(channelId: string, messageId: string): void {
+    set({ selectedId: channelId, focus: { channelId, messageId } })
+  },
+  /** 时间线跳过去了（或这条消息不在已读进来的消息里） */
+  focusDone(): void {
+    if (state.focus) set({ focus: null })
   },
   async deleteChannel(id: string): Promise<void> {
     await channelsBridge!.delete(id)

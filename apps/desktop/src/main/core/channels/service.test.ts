@@ -132,6 +132,43 @@ describe('协作频道：团队关着', () => {
   })
 })
 
+describe('协作频道：说明和置顶（docs/ui/channels-local-ai.md §3.1 #9）', () => {
+  it('说明去掉首尾空白存下来，空的算没有；派活提示词带上说明和置顶的消息', async () => {
+    const c = await open()
+    const memberId = await c.saveMember(null, agent('前端助手'))
+    const channelId = await c.create({ name: '说明', memberIds: [memberId] })
+    await c.update(channelId, { notes: '  改完要跑 pnpm check  ' })
+    expect(c.state().channels[0]).toMatchObject({ notes: '改完要跑 pnpm check', pinned: [] })
+    const { message } = await c.post(channelId, { text: '设计稿在 Figma 上', clientId: 'n1' })
+    await c.pin(channelId, message.id, true)
+    expect(c.state().channels[0].pinned).toEqual([message.id])
+    await c.post(channelId, { text: '@前端助手 改一下首页', clientId: 'n2' })
+    await settle()
+    const [send] = engine.sends()
+    expect(send.text).toContain('频道说明（这个频道里每项活都要照着做）：\n改完要跑 pnpm check')
+    expect(send.text).toContain('频道里置顶的资料：\n- 林夏：设计稿在 Figma 上')
+    await c.update(channelId, { notes: '   ' })
+    expect(c.state().channels[0].notes).toBeNull()
+  })
+  it('置顶：只能置顶文字消息，同一条不重复，可以取消，最多 10 条；重启后还在', async () => {
+    const c = await open()
+    const channelId = await c.create({ name: '置顶' })
+    const ids: string[] = []
+    for (let i = 0; i < 11; i++)
+      ids.push((await c.post(channelId, { text: `第 ${i} 条`, clientId: `p${i}` })).message.id)
+    await c.pin(channelId, ids[0], true)
+    await c.pin(channelId, ids[0], true)
+    expect(c.state().channels[0].pinned).toEqual([ids[0]])
+    for (const id of ids.slice(1, 10)) await c.pin(channelId, id, true)
+    await expect(c.pin(channelId, ids[10], true)).rejects.toThrow('最多置顶 10 条')
+    await c.pin(channelId, ids[3], false)
+    expect(c.state().channels[0].pinned).not.toContain(ids[3])
+    await expect(c.pin(channelId, 'nope', true)).rejects.toThrow('只能置顶文字消息')
+    const again = await open()
+    expect(again.state().channels[0].pinned).toHaveLength(9)
+  })
+})
+
 describe('协作频道：成员的额度来源', () => {
   it('平台额度：存进成员配置，派活开会话时带上分组和账号；自定义接口同样带上接口 id', async () => {
     const c = await open()

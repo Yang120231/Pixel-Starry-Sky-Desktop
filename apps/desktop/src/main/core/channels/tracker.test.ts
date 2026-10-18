@@ -5,6 +5,8 @@ import { reconcileRun, trackEvent, diffTotal, type TaskRun } from './tracker'
 import {
   HISTORY_CHARS,
   HISTORY_MESSAGES,
+  PINNED_CHARS,
+  PINNED_ITEM_CHARS,
   clipResult,
   decisionOf,
   dispatchPrompt,
@@ -390,5 +392,35 @@ describe('派活提示词（§4.2）', () => {
     expect(dispatchPrompt({ ...base, locale: 'en-US', together: ['Reviewer'] })).toContain('Reviewer got it too.')
     expect(dispatchPrompt({ ...base, locale: 'zh-CN', together: [] })).not.toContain('全体 AI 成员')
     expect(en).toContain('Needs your decision:')
+  })
+
+  it('频道说明和置顶资料（docs/ui/channels-local-ai.md §3.1 #9）：说明原样带上，置顶每条压成一行、超长截断', () => {
+    const base = {
+      locale: 'zh-CN' as const,
+      channel: { name: 'c', topic: null },
+      author: '林夏',
+      instructions: '只改前端',
+      history: [],
+      quoted: null,
+      request: '@前端助手 改一下',
+    }
+    const p = dispatchPrompt({ ...base, notes: '改完要跑 pnpm check\n不要动 API', pinned: ['林夏：设计稿\n在 Figma'] })
+    expect(p).toContain('频道说明（这个频道里每项活都要照着做）：\n改完要跑 pnpm check\n不要动 API')
+    expect(p).toContain('频道里置顶的资料：\n- 林夏：设计稿 在 Figma')
+    // 说明在职责后面、要求前面
+    expect(p.indexOf('你的职责')).toBeLessThan(p.indexOf('频道说明'))
+    expect(p.indexOf('频道说明')).toBeLessThan(p.indexOf('这次的要求'))
+    expect(dispatchPrompt(base)).not.toContain('频道说明')
+    expect(dispatchPrompt({ ...base, notes: '  ', pinned: [] })).not.toContain('置顶')
+    const long = dispatchPrompt({
+      ...base,
+      pinned: ['a'.repeat(PINNED_ITEM_CHARS + 50), ...Array(10).fill('b'.repeat(900))],
+    })
+    const section = long.slice(long.indexOf('频道里置顶的资料'), long.indexOf('这次的要求'))
+    expect(section).toContain(`${'a'.repeat(PINNED_ITEM_CHARS)}…`)
+    expect(section.length).toBeLessThan(PINNED_CHARS + 200)
+    expect(dispatchPrompt({ ...base, locale: 'en-US', notes: 'run checks', pinned: ['Lin: spec'] })).toContain(
+      'Channel guidelines (follow them for every task here):\nrun checks',
+    )
   })
 })

@@ -8,6 +8,7 @@ import { buildTimeline } from './model'
 import { formatDay } from './format'
 import { MessageGroup, type Quotable } from './ChannelMessage'
 import { ChannelTaskCard, type TaskCardActions } from './ChannelTaskCard'
+import { channelActions, useChannels } from './store'
 
 /** 离底部这么近时，新消息到来自动跟到底部 */
 const STICK_PX = 80
@@ -146,6 +147,19 @@ export function ChannelTimeline({
     setHighlight(id)
   }
 
+  // 置顶列表、提醒点进来：跳到那条消息。消息还没读进来时等着；读进来后找不到（太早的消息）也清掉
+  const focus = useChannels(s => s.focus)
+  useEffect(() => {
+    if (!focus || focus.channelId !== channel.id || !messages.length) return
+    const frame = requestAnimationFrame(() => {
+      jump(focus.messageId)
+      channelActions.focusDone()
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [focus, channel.id, messages.length])
+
+  const pinned = useMemo(() => new Set(channel.pinned ?? []), [channel.pinned])
+
   return (
     <div
       ref={scroller}
@@ -211,7 +225,15 @@ export function ChannelTimeline({
                 </div>
               )
             case 'task':
-              return <ChannelTaskCard key={row.key} task={row.message} membersById={membersById} {...taskActions} />
+              return (
+                <ChannelTaskCard
+                  key={row.key}
+                  task={row.message}
+                  membersById={membersById}
+                  highlight={highlight === row.message.id}
+                  {...taskActions}
+                />
+              )
             case 'group':
               return (
                 <MessageGroup
@@ -223,6 +245,8 @@ export function ChannelTimeline({
                   highlight={highlight}
                   onReply={onReply}
                   onJump={jump}
+                  pinned={pinned}
+                  onPin={channel.scope === 'local' ? (id, on) => channelActions.pin(channel.id, id, on) : undefined}
                 />
               )
           }

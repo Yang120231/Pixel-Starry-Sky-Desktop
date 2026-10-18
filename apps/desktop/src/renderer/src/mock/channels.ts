@@ -120,6 +120,9 @@ export const demoChannels: Channel[] = [
     topic: '把网页版工作台改成 Codex 式布局，并迁移设置页表单',
     project: 'pixel-web',
     scope: 'local',
+    // 频道说明和置顶（docs/ui/channels-local-ai.md §3.1 #9）
+    notes: '改完要跑 pnpm check；不要改 API 和数据库结构。',
+    pinned: ['web-m2'],
     memberIds: ['m-linxia', 'a-frontend', 'a-reviewer'],
     unread: 2,
     mentioned: true,

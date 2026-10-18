@@ -89,6 +89,7 @@ export function ChannelDialog({
   const inTeam = !!teamId || channel?.scope === 'team'
   const [name, setName] = useState(channel?.name ?? '')
   const [topic, setTopic] = useState(channel?.topic ?? '')
+  const [notes, setNotes] = useState(channel?.notes ?? '')
   const [projectId, setProjectId] = useState<string>(channel ? (channel.projectId ?? '') : (currentProject ?? ''))
   const [members, setMembers] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
@@ -98,9 +99,13 @@ export function ChannelDialog({
     setBusy(true)
     setError(null)
     const input = { name, topic: topic.trim() || null, projectId: inTeam ? null : projectId || null }
+    // 频道说明只有本机频道有；新建时建好再存（建频道的接口不带它）
+    const note = notes.trim() || null
     const done = channel
-      ? channelActions.updateChannel(channel.id, inTeam ? { name, topic: input.topic } : input)
-      : channelActions.createChannel(teamId ? { ...input, teamId } : { ...input, memberIds: members }).then(() => {})
+      ? channelActions.updateChannel(channel.id, inTeam ? { name, topic: input.topic } : { ...input, notes: note })
+      : channelActions
+          .createChannel(teamId ? { ...input, teamId } : { ...input, memberIds: members })
+          .then(id => (note && !teamId ? channelActions.updateChannel(id, { notes: note }) : undefined))
     done.then(onClose, e => {
       setError(errorText(e))
       setBusy(false)
@@ -131,6 +136,18 @@ export function ChannelDialog({
           <Field label={tr('channels.dialog.topic')}>
             <input value={topic} maxLength={200} onChange={e => setTopic(e.target.value)} className={INPUT} />
           </Field>
+          {!inTeam && (
+            <Field label={tr('channels.dialog.notes')}>
+              <textarea
+                value={notes}
+                maxLength={2000}
+                rows={3}
+                placeholder={tr('channels.dialog.notesHint')}
+                onChange={e => setNotes(e.target.value)}
+                className={cn(INPUT, 'resize-none')}
+              />
+            </Field>
+          )}
           {inTeam ? (
             teamName && <p className="text-meta text-fg-faint">{tr('team.channel.inTeam', { name: teamName })}</p>
           ) : (

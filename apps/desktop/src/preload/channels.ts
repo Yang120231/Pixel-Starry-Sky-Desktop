@@ -18,7 +18,12 @@ export interface ChannelsBridge {
   /** 一页消息（最多 200 条）；before 是毫秒时间戳，取这之前的 */
   messages(channelId: string, before?: number | null): Promise<{ messages: ChannelMessage[]; more: boolean }>
   create(input: ChannelInput): Promise<string>
-  update(id: string, patch: { name?: string; topic?: string | null; projectId?: string | null }): Promise<void>
+  update(
+    id: string,
+    patch: { name?: string; topic?: string | null; notes?: string | null; projectId?: string | null },
+  ): Promise<void>
+  /** 置顶 / 取消置顶一条文字消息（docs/ui/channels-local-ai.md §3.1 #9） */
+  pin(channelId: string, messageId: string, pinned: boolean): Promise<void>
   delete(id: string): Promise<void>
   post(channelId: string, input: PostInput): Promise<{ message: ChannelTextMessage; tasks: string[] }>
   /** 一条消息带的图片和文件全文；没有时两个空数组 */

@@ -1,7 +1,19 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage, type TranslationKey } from '../../i18n/core'
 import { useState, type ReactNode } from 'react'
-import { ArrowUpRight, Bot, ChevronDown, Ellipsis, Pencil, Trash2, UserMinus, UserPlus, X } from 'lucide-react'
+import {
+  ArrowUpRight,
+  Bot,
+  ChevronDown,
+  Ellipsis,
+  Pencil,
+  Pin,
+  PinOff,
+  Trash2,
+  UserMinus,
+  UserPlus,
+  X,
+} from 'lucide-react'
 import { Button, cn, IconButton, Select, Spinner, useComingSoon, useToast } from '@/ui'
 import { ActionMenu, type MenuAction } from '@/ui/ActionMenu'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
@@ -43,6 +55,67 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
       <h3 className="px-2 text-label font-medium text-fg-muted">{title}</h3>
       <div className="flex flex-col gap-px">{children}</div>
     </section>
+  )
+}
+
+/**
+ * 置顶的消息（docs/ui/channels-local-ai.md §3.1 #9）：派活时作为资料带上。只列读进来了的；
+ * 点一条跳到时间线上那条消息，右边可以取消置顶
+ */
+function PinnedList({ channel, members }: { channel: Channel; members: readonly ChannelMember[] }) {
+  useI18n()
+  const toast = useToast()
+  const messages = useChannels(s => s.messages[channel.id])
+  const ids = channel.pinned ?? []
+  if (!ids.length) return null
+  const byId = new Map((messages ?? []).map(m => [m.id, m]))
+  const name = (id: string) => members.find(m => m.id === id)?.name ?? '?'
+  return (
+    <Section title={tr('channels.members.pinned', { count: ids.length })}>
+      <p className="px-2 pb-1 text-meta text-fg-faint">{tr('channels.members.pinnedHint')}</p>
+      {ids.map(id => {
+        const m = byId.get(id)
+        const text = m?.kind === 'message' ? m.text.replace(/\s+/g, ' ').trim() : null
+        return (
+          <div
+            key={id}
+            data-pinned-item={id}
+            className="group/pin flex min-w-0 items-center gap-1 rounded-md hover:bg-hover"
+          >
+            <button
+              type="button"
+              disabled={!text}
+              onClick={() => channelActions.focusMessage(channel.id, id)}
+              className="press flex min-w-0 flex-1 items-start gap-2 px-2 py-1.5 text-left disabled:cursor-default"
+            >
+              <Pin size={12} strokeWidth={1.75} className="mt-0.5 shrink-0 text-fg-faint" />
+              {text && m?.kind === 'message' ? (
+                <span className="line-clamp-2 min-w-0 flex-1 text-meta break-words text-fg-secondary">
+                  <span className="text-fg-muted">{name(m.authorId)}：</span>
+                  {text}
+                </span>
+              ) : (
+                <span className="min-w-0 flex-1 text-meta text-fg-faint">{tr('channels.members.pinnedOld')}</span>
+              )}
+            </button>
+            {channel.scope === 'local' && (
+              <IconButton
+                icon={PinOff}
+                label={tr('channels.unpin')}
+                size={24}
+                iconSize={12}
+                className="mr-1 shrink-0 opacity-0 group-hover/pin:opacity-100 focus-visible:opacity-100"
+                onClick={() =>
+                  void channelActions
+                    .pin(channel.id, id, false)
+                    .catch(e => toast(tr('channels.pinFailed', { error: translateMessage((e as Error).message) })))
+                }
+              />
+            )}
+          </div>
+        )
+      })}
+    </Section>
   )
 }
 
@@ -364,7 +437,19 @@ export function ChannelMembers({
           <dd className="text-fg-secondary">
             {tr(channel.scope === 'team' ? 'channels.scope.team' : 'channels.scope.local')}
           </dd>
+          {channel.notes && (
+            <>
+              <dt className="text-fg-faint">{tr('channels.members.notes')}</dt>
+              <dd
+                data-channel-notes
+                className="selectable min-w-0 text-meta leading-5 break-words whitespace-pre-wrap text-fg-secondary"
+              >
+                {channel.notes}
+              </dd>
+            </>
+          )}
         </dl>
+        <PinnedList channel={channel} members={allMembers} />
         <Section
           title={
             team

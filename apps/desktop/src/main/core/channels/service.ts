@@ -67,6 +67,9 @@ export const SELF_ID = 'you'
 const NAME_MAX = 40
 const INSTRUCTIONS_MAX = 2000
 const TOPIC_MAX = 200
+/** 频道说明最多这么长；置顶最多这么多条（docs/ui/channels-local-ai.md §3.1 #9） */
+export const NOTES_MAX = 2000
+export const PIN_MAX = 10
 const PAGE = 200
 const DAY = 86_400_000
 /** 结束了的运行信息留这么久（重试、追加要求用） */
@@ -291,6 +294,8 @@ export class Channels {
         id: c.id,
         name: c.name,
         topic: c.topic,
+        notes: c.notes ?? null,
+        pinned: c.pinned ?? [],
         project: c.projectId ? (projects.get(c.projectId)?.name ?? null) : null,
         projectId: c.projectId,
         scope: 'local' as const,
@@ -447,7 +452,10 @@ export class Channels {
     return channel.id
   }
 
-  async update(id: string, patch: { name?: string; topic?: string | null; projectId?: string | null }): Promise<void> {
+  async update(
+    id: string,
+    patch: { name?: string; topic?: string | null; notes?: string | null; projectId?: string | null },
+  ): Promise<void> {
     const info = this.team?.channelInfo(id)
     if (info) {
       const wire: { name?: string; topic?: string | null } = {}
@@ -477,6 +485,8 @@ export class Channels {
     }
     if (patch.projectId !== undefined)
       c.projectId = typeof patch.projectId === 'string' && patch.projectId ? patch.projectId : null
+    if (patch.notes !== undefined)
+      c.notes = typeof patch.notes === 'string' && patch.notes.trim() ? patch.notes.trim().slice(0, NOTES_MAX) : null
     await this.store.saveChannel(c)
     this.changed()
   }
@@ -773,6 +783,8 @@ export class Channels {
     return dispatchPrompt({
       locale,
       channel: { name: c.name, topic: c.topic },
+      notes: c.notes ?? null,
+      pinned: this.pinnedLines(c),
       author: this.nameOf(SELF_ID),
       instructions: member.instructions,
       history: historyLines(list, { beforeId: source.id, since, skip: replyToId, nameOf: this.nameOf, locale }),
@@ -781,6 +793,31 @@ export class Channels {
       attached: source.attached ? { images: source.attached.images.length, files: source.attached.files.length } : null,
       together: this.together(c, source, member.id),
     })
+  }
+
+  /** 置顶的消息（还在的、是文字消息的）：「名字：原文」，派活时作为资料带上 */
+  private pinnedLines(c: StoredChannel): string[] {
+    const list = this.store.messages.get(c.id) ?? []
+    const sep = this.deps.locale() === 'en-US' ? ': ' : '：'
+    return (c.pinned ?? []).flatMap(id => {
+      const m = list.find(x => x.id === id)
+      return m?.kind === 'message' && m.text.trim() ? [`${this.nameOf(m.authorId)}${sep}${m.text.trim()}`] : []
+    })
+  }
+
+  /** 置顶 / 取消置顶一条文字消息（本机频道） */
+  async pin(channelId: string, messageId: string, pinned: boolean): Promise<void> {
+    const c = { ...this.channel(channelId) }
+    const message = (this.store.messages.get(channelId) ?? []).find(m => m.id === messageId)
+    if (message?.kind !== 'message') throw new Error('只能置顶文字消息')
+    const list = (c.pinned ?? []).filter(id => id !== messageId)
+    if (pinned) {
+      if (list.length >= PIN_MAX) throw new Error(`最多置顶 ${PIN_MAX} 条`)
+      list.push(messageId)
+    }
+    c.pinned = list
+    await this.store.saveChannel(c)
+    this.changed()
   }
 
   /** 源消息 @全体 时，同时收到这项活的其他 AI 成员的名字 */

@@ -17,6 +17,10 @@ export interface StoredChannel {
   projectId: string | null
   /** 'you' 和 AI 成员的 id */
   memberIds: string[]
+  /** 频道说明：每次派活都带上（docs/ui/channels-local-ai.md §3.1 #9）；旧数据没有 */
+  notes?: string | null
+  /** 置顶的消息 id（先后顺序），派活时作为资料带上；旧数据没有 */
+  pinned?: string[]
   createdAt: number
   /** 看到哪里了：这之后别人发的算未读 */
   readAt: number

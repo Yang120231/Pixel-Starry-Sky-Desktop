@@ -395,6 +395,7 @@ const channels: ChannelsBridge = {
   post: (id, input) => call('channels:post', id, input),
   attachments: (id, messageId) => call('channels:attachments', id, messageId),
   markRead: id => call('channels:markRead', id),
+  pin: (id, messageId, pinned) => call('channels:pin', id, messageId, pinned),
   saveMember: (channelId, input) => call('channels:saveMember', channelId, input),
   addMember: (channelId, memberId) => call('channels:addMember', channelId, memberId),
   removeMember: (channelId, memberId) => call('channels:removeMember', channelId, memberId),

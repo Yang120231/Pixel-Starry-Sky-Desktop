@@ -170,6 +170,10 @@ export interface Channel {
   projectId?: string | null
   /** local = 本机 AI 协作；team = 团队频道（Phase C） */
   scope: 'local' | 'team'
+  /** 频道说明：每次派活都带上（docs/ui/channels-local-ai.md §3.1 #9；只有本机频道有） */
+  notes?: string | null
+  /** 置顶的消息 id（先后顺序），派活时作为资料带上 */
+  pinned?: string[]
   /** Phase C：团队频道属于哪个团队 */
   teamId?: string
   memberIds: string[]

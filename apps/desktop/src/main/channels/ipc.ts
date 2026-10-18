@@ -141,6 +141,9 @@ export async function initChannels(ctx: AppContext): Promise<void> {
     channels.attachments(str(id, '频道'), str(messageId, '消息')),
   )
   ipc.handle('channels:markRead', (_e, id) => channels.markRead(str(id, '频道')))
+  ipc.handle('channels:pin', (_e, id, messageId, pinned) =>
+    channels.pin(str(id, '频道'), str(messageId, '消息'), pinned === true),
+  )
   ipc.handle('channels:saveMember', (_e, channelId, input) =>
     channels.saveMember(typeof channelId === 'string' && channelId ? channelId : null, input as AgentInput),
   )
