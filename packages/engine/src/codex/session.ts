@@ -17,6 +17,7 @@ import { NO_REPLY, seedImageCount, seedTurns, type ChatSeed, type ChatTurn } fro
 import { CodexProcess, array, object, string, type Message } from './process'
 import { readCodexTurns, revertTarget } from './branch'
 import { codexCatalog } from './catalog'
+import { codexThreadName } from './native'
 import { codexCommandParts } from './command'
 import { codexChanges, CodexTranslator, tokenCounts } from './translate'
 import { CODEX_WINDOW_ENV, codexContextConfig } from './context-config'
@@ -151,6 +152,8 @@ export class CodexSession implements EngineSession {
   private opening: Promise<void> | null = null
   private closed = false
   private threadId: string | null = null
+  /** 线程现在在 Codex 里的名字（syncThreadName 用来判断要不要改） */
+  private threadName = ''
   /** 已经向 options.ownThread 登记的线程 id */
   private ownedThread: string | null = null
   /** 恢复线程失败、改开了新线程的英文提示：要等聊天注入之后才发（注入成功且宿主已经说过「记录不在了」就不发） */
@@ -399,6 +402,7 @@ export class CodexSession implements EngineSession {
         }
       else thread = await proc.request('thread/start', threadParams)
       this.threadId = string(object(thread.thread).id)
+      this.threadName = string(object(thread.thread).name)
       this.threadModel = string(thread.model) || null
       // 恢复的线程会报它实际的协作模式（新建的不报）：可能还停在计划模式（上次退出前选的计划），下一轮需要时切回 default
       const held = object(thread.collaborationMode),
@@ -412,6 +416,7 @@ export class CodexSession implements EngineSession {
       if (!this.threadId) throw new Error('Codex did not return a thread ID')
       this.ctx.setEngineSessionId(this.threadId)
       this.own(this.threadId)
+      this.syncThreadName()
       // 恢复失败的提示等聊天注入之后再发（run()），其余的这里就发
       this.resumeNotice = resumeFailed
         ? 'Could not resume the Codex thread; started a new thread (previous context was not carried over)'
@@ -477,6 +482,21 @@ export class CodexSession implements EngineSession {
       await proc.close()
       throw error
     }
+  }
+  /**
+   * 经网关的线程在 Codex 自己的列表里打不开：名字带上「[像素星空]」前缀，跟着会话标题改；
+   * 改用自己的账号接着聊时去掉前缀。改名失败（老版本 Codex 没有这个接口）不影响对话
+   */
+  private syncThreadName(): void {
+    const proc = this.proc,
+      id = this.threadId
+    if (!proc?.alive || !id) return
+    const record = this.ctx.record()
+    const name = codexThreadName(this.threadName, record.title, viaGateway(record))
+    if (name === null) return
+    // 先记下，同一个名字不重复发
+    this.threadName = name
+    void proc.request('thread/name/set', { threadId: id, name }).catch(() => {})
   }
   /** 登记 / 撤销这个会话占着的线程（换了线程先撤销旧的；null 是不再占着） */
   private own(id: string | null): void {
@@ -1055,6 +1075,8 @@ export class CodexSession implements EngineSession {
     if (!active) return
     if (this.nativeTurnId) this.markFinished(this.nativeTurnId)
     this.active = null
+    // 第一轮开始时标题才从第一句话定下来；用户改了标题也在这里跟上
+    this.syncThreadName()
     if (this.compacting) {
       this.compacting = false
       this.ctx.emit({

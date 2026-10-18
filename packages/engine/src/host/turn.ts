@@ -214,13 +214,13 @@ export class HostTurn {
         },
       })
       const latest = rt.snapshot.record
-      m.events.patchRecord(id, {
-        title:
-          !latest.titleEdited && latest.title === NEW_TITLE
-            ? titleFrom(item.text || item.files?.[0]?.name || item.attachments?.[0]?.name || NEW_TITLE)
-            : latest.title,
-        updatedAt: Date.now(),
-      })
+      const title =
+        !latest.titleEdited && latest.title === NEW_TITLE
+          ? titleFrom(item.text || item.files?.[0]?.name || item.attachments?.[0]?.name || NEW_TITLE)
+          : latest.title
+      m.events.patchRecord(id, { title, updatedAt: Date.now() })
+      // 这一轮的设置快照里也带着标题（引擎读 ctx.record() 拿到的是快照），和改名时一样跟上
+      if (rt.execution) rt.execution = { ...rt.execution, title }
       if (rt.snapshot.suggestion) m.events.apply(id, { type: 'suggestion', text: null })
       m.events.apply(id, { type: 'status', state: 'running' })
       m.events.apply(id, { type: 'turn_started', turnId, execution: queueSettings(rt.execution) })

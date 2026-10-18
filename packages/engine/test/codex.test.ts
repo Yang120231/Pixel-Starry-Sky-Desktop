@@ -362,6 +362,30 @@ describe('Codex app-server adapter', () => {
     await wait(() => host!.open(gateway.session.id).items.some(i => i.kind === 'turn_stats'))
     expect(providers(gateway.messages).at(-1)).toEqual(['thread/start', 'pixelsky-custom'])
   })
+  it('经网关的线程在 Codex 里改名带上「[像素星空]」前缀，跟着标题改；自己账号的不改名', async () => {
+    const names = (messages: () => { method?: string; params?: Record<string, unknown> }[]) =>
+      messages()
+        .filter(m => m.method === 'thread/name/set')
+        .map(m => m.params?.name)
+    const own = setup(50, { env: { FAKE_CODEX_PROVIDER: 'openai' } })
+    await host!.send(own.session.id, 'one')
+    await wait(() => host!.open(own.session.id).items.some(i => i.kind === 'turn_stats'))
+    expect(names(own.messages)).toEqual([])
+    await host!.shutdown()
+    host = undefined
+
+    const gateway = setup(50, {
+      env: { PIXELSKY_CODEX_BASE_URL: 'http://127.0.0.1:9/v1', PIXELSKY_CODEX_TOKEN: 'tok' },
+    })
+    await host!.update(gateway.session.id, { provider: { id: 'my-api' } })
+    await host!.send(gateway.session.id, 'hello there')
+    await wait(() => names(gateway.messages).length === 1)
+    expect(names(gateway.messages)).toEqual(['[像素星空] hello there'])
+    // 标题没变：第二轮不再改名
+    await host!.send(gateway.session.id, 'again')
+    await wait(() => host!.open(gateway.session.id).items.filter(i => i.kind === 'turn_stats').length === 2)
+    expect(names(gateway.messages)).toHaveLength(1)
+  })
   it('thread/resume 带 modelProvider：关掉进程再发送，resume 里是当前来源', async () => {
     const { session, messages } = setup(50, {
       env: { PIXELSKY_CODEX_BASE_URL: 'http://127.0.0.1:9/v1', PIXELSKY_CODEX_TOKEN: 'tok' },

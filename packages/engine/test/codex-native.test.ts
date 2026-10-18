@@ -10,6 +10,7 @@ import {
   codexItems,
   codexThreadDetail,
   codexThreadExists,
+  codexThreadName,
   codexTitle,
   codexTurnIndex,
   liveCodexThreads,
@@ -328,6 +329,22 @@ describe('codexItems', () => {
 })
 
 // ---------- 标题 ----------
+
+describe('经网关线程的名字前缀', () => {
+  it('codexThreadName：经网关加前缀（新会话先不改、一样不重发），不经网关去掉以前的前缀', () => {
+    expect(codexThreadName('', '新会话', true)).toBeNull()
+    expect(codexThreadName('', '修登录', true)).toBe('[像素星空] 修登录')
+    expect(codexThreadName('[像素星空] 修登录', '修登录', true)).toBeNull()
+    expect(codexThreadName('[像素星空] 修登录', '修登录 2', true)).toBe('[像素星空] 修登录 2')
+    expect(codexThreadName('我起的名字', '修登录', true)).toBe('[像素星空] 修登录')
+    expect(codexThreadName('[像素星空] 修登录', '修登录', false)).toBe('修登录')
+    expect(codexThreadName('我起的名字', '修登录', false)).toBeNull()
+    expect(codexThreadName('[像素星空] ', '新会话', false)).toBeNull()
+  })
+  it('列表里的标题去掉前缀', () => {
+    expect(codexTitle({ name: '[像素星空] 修登录' })).toBe('修登录')
+  })
+})
 
 describe('标题', () => {
   it('name → preview（去前缀）→ 日期', () => {

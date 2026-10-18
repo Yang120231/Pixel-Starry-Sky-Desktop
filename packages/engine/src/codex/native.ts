@@ -122,8 +122,30 @@ const promptLine = (raw: string): string | null => {
 }
 
 /** 标题（§3.2）：用户改的名字 / Codex 自动起的 name → 第一句话（去前缀）→「Codex 会话 MM-DD HH:mm」 */
+/**
+ * 经像素星空网关（平台线路、自定义接口）开的线程，在 Codex 自己的列表里的名字前缀：
+ * 这些线程的 provider 只在像素星空启动 Codex 时临时传入，在 Codex 里打不开，带上前缀让用户认得出来
+ */
+export const PIXELSKY_THREAD_MARK = '[像素星空] '
+
+/**
+ * 线程该改成什么名字：经网关的是「前缀 + 会话标题」（标题还是「新会话」时先不改），
+ * 不经网关的去掉以前加的前缀（这时它在 Codex 里能接着用了）。不用改时为 null
+ */
+export function codexThreadName(current: string, title: string, gateway: boolean): string | null {
+  if (gateway) {
+    const base = title.trim()
+    if (!base || base === NEW_TITLE) return null
+    const want = PIXELSKY_THREAD_MARK + base
+    return want === current ? null : want
+  }
+  if (!current.startsWith(PIXELSKY_THREAD_MARK)) return null
+  return current.slice(PIXELSKY_THREAD_MARK.length).trim() || null
+}
+
 export function codexTitle(thread: Message): string {
-  const name = string(thread.name).trim()
+  const raw = string(thread.name).trim()
+  const name = raw.startsWith(PIXELSKY_THREAD_MARK.trim()) ? raw.slice(PIXELSKY_THREAD_MARK.trim().length).trim() : raw
   if (name) return name
   const title = titleFrom(plainPrompt(string(thread.preview)))
   if (title !== NEW_TITLE) return title
