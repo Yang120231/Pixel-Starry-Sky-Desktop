@@ -353,10 +353,19 @@ export class Channels {
     }
   }
 
-  messages(channelId: string, before?: number | null): { messages: ChannelMessage[]; more: boolean } {
+  /**
+   * 一页本机频道的消息（最多 PAGE 条）。beforeId 是界面里最早那条消息：取它前面的，按位置不按时间，
+   * 同一毫秒的几条消息跨在两页之间时不会漏掉；这条消息不在了（删了）才退回按时间 before 取
+   */
+  messages(
+    channelId: string,
+    before?: number | null,
+    beforeId?: string | null,
+  ): { messages: ChannelMessage[]; more: boolean } {
     const list = this.store.messages.get(channelId)
     if (!list) throw new Error('频道不存在')
-    const end = before == null ? list.length : list.findIndex(m => m.at >= before)
+    const at = beforeId ? list.findIndex(m => m.id === beforeId) : -1
+    const end = at >= 0 ? at : before == null ? list.length : list.findIndex(m => m.at >= before)
     const stop = end < 0 ? list.length : end
     const start = Math.max(0, stop - PAGE)
     return { messages: list.slice(start, stop), more: start > 0 }
@@ -401,9 +410,10 @@ export class Channels {
   page(
     channelId: string,
     before?: number | null,
+    beforeId?: string | null,
   ): { messages: ChannelMessage[]; more: boolean } | Promise<{ messages: ChannelMessage[]; more: boolean }> {
-    if (!this.isTeam(channelId)) return this.messages(channelId, before)
-    return this.team!.page(channelId, before).then(page => ({
+    if (!this.isTeam(channelId)) return this.messages(channelId, before, beforeId)
+    return this.team!.page(channelId, before, beforeId).then(page => ({
       messages: page.messages.map(m => this.decorate(m)),
       more: page.more,
     }))

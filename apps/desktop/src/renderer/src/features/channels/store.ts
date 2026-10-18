@@ -173,8 +173,9 @@ async function readPage(
   older: boolean,
   unread: number,
 ): Promise<void> {
-  const before = older ? (state.messages[id]?.[0]?.at ?? null) : null
-  const page = await bridge.messages(id, before)
+  // 更早的一页按最早那条消息的 id 定位（只用时间的话，同一毫秒的几条跨在两页之间会漏掉）
+  const oldest = older ? state.messages[id]?.[0] : undefined
+  const page = await bridge.messages(id, oldest?.at ?? null, oldest?.id ?? null)
   const current = older ? (state.messages[id] ?? []) : []
   let list = [...page.messages, ...current]
   // 读的同时推过来的消息不能丢
@@ -333,7 +334,8 @@ export const channelActions = {
       set({ selectedId: channelId })
       for (let page = 0; page < FOCUS_PAGES; page++) {
         const list = state.messages[channelId]
-        if (list && (list.some(m => m.id === messageId) || !state.more[channelId] || (list[0]?.at ?? 0) <= at)) break
+        // 最早那条比目标还早（严格小于）才说明目标已经不在了；同一毫秒的还要接着往前读
+        if (list && (list.some(m => m.id === messageId) || !state.more[channelId] || (list[0]?.at ?? 0) < at)) break
         await loadMessages(channelId, !!list).catch(() => undefined)
       }
     }

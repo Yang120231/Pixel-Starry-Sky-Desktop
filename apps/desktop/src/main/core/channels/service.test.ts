@@ -762,3 +762,39 @@ describe('协作频道：存储与对账', () => {
     expect(again.state().channels).toEqual([])
   })
 })
+
+describe('消息分页', () => {
+  it('同一毫秒的几条消息跨在两页之间：按最早那条的 id 往前取，一条不漏；只给时间时照旧按时间', async () => {
+    const c = await open()
+    const channelId = await c.create({ name: '分页' })
+    const texts: string[] = []
+    const post = async (i: number, at?: number) => {
+      // 指定 at 时把时钟拨回去，这一条的时间就是 at（和上一条同一毫秒）
+      if (at !== undefined) now = at - 1
+      const { message } = await c.post(channelId, { text: `第 ${i} 条`, clientId: `m${i}` })
+      texts.push(`第 ${i} 条`)
+      return message
+    }
+    await post(0)
+    const first = await post(1)
+    const second = await post(2, first.at)
+    expect(second.at).toBe(first.at)
+    for (let i = 3; i < 202; i++) await post(i)
+
+    const latest = c.messages(channelId)
+    expect(latest.messages).toHaveLength(200)
+    expect(latest.more).toBe(true)
+    const oldest = latest.messages[0]
+    expect(oldest.id).toBe(second.id)
+
+    const older = c.messages(channelId, oldest.at, oldest.id)
+    expect(older.more).toBe(false)
+    const shown = [...older.messages, ...latest.messages].map(m => (m as ChannelTextMessage).text)
+    expect(shown).toEqual(texts)
+    // 不给 id（老的调用）：按时间，同一毫秒的被排除
+    expect(c.messages(channelId, oldest.at).messages.map(m => m.id)).not.toContain(first.id)
+    // id 不在了：退回按时间
+    expect(c.messages(channelId, oldest.at, 'gone').messages).toHaveLength(1)
+    // 要发 202 条（每条写盘）：整套测试并行跑时比单跑慢得多
+  }, 30_000)
+})

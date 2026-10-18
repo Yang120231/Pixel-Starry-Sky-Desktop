@@ -18,7 +18,12 @@ import type {
 export interface ChannelsBridge {
   state(): Promise<ChannelsSnapshot>
   /** 一页消息（最多 200 条）；before 是毫秒时间戳，取这之前的 */
-  messages(channelId: string, before?: number | null): Promise<{ messages: ChannelMessage[]; more: boolean }>
+  /** before / beforeId：界面里最早那条消息的时间和 id，取它前面的一页（按 id 定位，同一毫秒跨页不漏） */
+  messages(
+    channelId: string,
+    before?: number | null,
+    beforeId?: string | null,
+  ): Promise<{ messages: ChannelMessage[]; more: boolean }>
   create(input: ChannelInput): Promise<string>
   update(
     id: string,

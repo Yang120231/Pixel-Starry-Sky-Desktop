@@ -128,8 +128,12 @@ export async function initChannels(ctx: AppContext): Promise<void> {
   app.on('browser-window-focus', () => channels.focus())
 
   ipc.handle('channels:state', () => channels.state())
-  ipc.handle('channels:messages', (_e, id, before) =>
-    channels.page(str(id, '频道'), typeof before === 'number' ? before : null),
+  ipc.handle('channels:messages', (_e, id, before, beforeId) =>
+    channels.page(
+      str(id, '频道'),
+      typeof before === 'number' ? before : null,
+      typeof beforeId === 'string' ? beforeId : null,
+    ),
   )
   ipc.handle('channels:create', (_e, input) => channels.create(input as ChannelInput))
   ipc.handle('channels:update', (_e, id, patch) =>

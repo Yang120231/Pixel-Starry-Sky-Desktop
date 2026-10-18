@@ -388,7 +388,7 @@ const tray: TrayBridge = {
 // 协作频道（docs/ui/channels-phase-b.md §11）
 const channels: ChannelsBridge = {
   state: () => call('channels:state'),
-  messages: (id, before) => call('channels:messages', id, before),
+  messages: (id, before, beforeId) => call('channels:messages', id, before, beforeId),
   create: input => call('channels:create', input),
   update: (id, patch) => call('channels:update', id, patch),
   delete: id => call('channels:delete', id),
