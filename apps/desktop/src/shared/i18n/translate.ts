@@ -58,6 +58,7 @@ import { extTaskMessages } from './extTaskMessages'
 import { promptMessages } from './promptMessages'
 import { resumeMessages } from './resumeMessages'
 import { onboardingMessages } from './onboardingMessages'
+import { systemProxyMessages } from './systemProxyMessages'
 import { approvalMessages } from './approvalMessages'
 import { extstoreDetailMessages } from './extstoreDetailMessages'
 import { replaceCodedErrors } from '@pixelsky/protocol'
@@ -125,6 +126,7 @@ export const allMessages = {
   ...promptMessages,
   ...resumeMessages,
   ...onboardingMessages,
+  ...systemProxyMessages,
   ...approvalMessages,
   ...extstoreDetailMessages,
 }

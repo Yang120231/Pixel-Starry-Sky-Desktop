@@ -7,7 +7,7 @@
 // 同时按原顺序带起依赖引擎的模块：平台额度、SSH 机器、扩展、终端、产物面板的本机操作。
 import { join } from 'node:path'
 import { writeFile } from 'node:fs/promises'
-import { app, BrowserWindow, dialog, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, dialog, session, type IpcMainInvokeEvent } from 'electron'
 import * as ipc from '../ipc/guard'
 import { nativeText, windowLocale } from '../app/ui-language'
 import { EngineHost } from '@pixelsky/engine'
@@ -47,6 +47,7 @@ import { usageQuery } from '../core/args'
 import { npmLatest, scheduleEngineUpdateChecks } from './npm-latest'
 import { logHostEvent } from '../core/log/host-events'
 import { initProjectImport } from './project-import-ipc'
+import { SystemProxy } from './systemProxy'
 import { initSessionStatus } from '../session-status'
 
 export async function initEngine(ctx: AppContext): Promise<void> {
@@ -77,7 +78,25 @@ export async function initEngine(ctx: AppContext): Promise<void> {
   const history = historyServer(ctx)
   app.on('will-quit', () => history.close())
   const extensions = new Extensions(ctx, history)
+  // 系统代理补给本机引擎（Claude Code / Codex 只认环境变量）；远程机器的宿主不传
+  const proxyLog = logger('proxy')
+  const systemProxy = new SystemProxy({
+    resolve: url => session.defaultSession.resolveProxy(url),
+    dir: app.getPath('userData'),
+    log: (message, fields) => proxyLog.info(message, fields),
+  })
+  systemProxy.start()
+  app.on('will-quit', () => systemProxy.stop())
+  ipc.handle('engine:systemProxy', async () => {
+    await systemProxy.refresh()
+    return systemProxy.status()
+  })
+  ipc.handle('engine:setSystemProxy', (_event, enabled: unknown) => {
+    if (typeof enabled !== 'boolean') throw new Error('参数不对')
+    return systemProxy.setEnabled(enabled)
+  })
   const h = new EngineHost({
+    systemProxy: engine => systemProxy.forEngine(engine),
     dataDir: join(app.getPath('userData'), 'engine'),
     pixelCli: bundledPixelCli(),
     // 有 SSH 机器时由它合并本机与远端的项目 / 会话再广播

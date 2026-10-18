@@ -31,6 +31,8 @@ import type { HostTurn } from './turn'
 import type { HostUsage } from './usage'
 
 export interface EngineHostOptions {
+  /** 本机的系统代理（http://主机:端口）：补给引擎进程（env.ts systemProxyEnv）；远程机器上不传 */
+  systemProxy?: (engine: EngineId) => string | null
   platformCharges?: (settlement: PlatformSettlement, signal: AbortSignal) => Promise<PlatformCharge[]>
   settlementDelays?: number[]
   /** 这个账号在这段时间的全部调用（旧记录按时间补录实扣用，docs/ui/usage.md §11.2）；账号已切换时抛错 */

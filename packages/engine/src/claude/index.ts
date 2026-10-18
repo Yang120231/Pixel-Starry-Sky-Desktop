@@ -16,7 +16,7 @@ import {
   viaGateway,
 } from '@pixelsky/protocol'
 import type { EngineAdapter, EngineSession, Launcher, LoginProcess, SessionContext } from '../adapter'
-import { engineEnv } from '../env'
+import { engineEnv, systemProxyEnv } from '../env'
 import { outputTail, run, runInteractive, runStream, startupReason } from '../exec'
 import { engineBase } from '../registry'
 import { claudeInstaller, customClaude, discoverClaude, type ClaudeDiscovery } from './discover'
@@ -55,6 +55,8 @@ export interface ClaudeAdapterOptions {
   env?: NodeJS.ProcessEnv
   /** 用户在设置里追加的环境变量（在清理后的基础环境之上；平台会话的网关变量仍然最后覆盖） */
   extraEnv?: () => Record<string, string>
+  /** 系统代理（http://主机:端口）；没开代理、开关关了时为 null。用户自己设了代理变量时不用（env.ts systemProxyEnv） */
+  systemProxy?: () => string | null
   /** 设置 › 本机引擎里的引擎级选项（输出风格、允许提问、自动压缩触发点、追加参数），每次启动进程时读 */
   launchOptions?: () => ClaudeLaunchOptions & { autoCompactPct: number | null; contextWindows?: ContextWindows }
   /** 测试用：直接指定要启动的程序，跳过查找和检测 */
@@ -119,7 +121,10 @@ export class ClaudeAdapter implements EngineAdapter {
   constructor(private readonly opts: ClaudeAdapterOptions = {}) {}
 
   private env(): NodeJS.ProcessEnv {
-    return { ...engineEnv(this.opts.env ?? process.env), ...(this.opts.extraEnv?.() ?? {}) }
+    const base = engineEnv(this.opts.env ?? process.env)
+    const extra = this.opts.extraEnv?.() ?? {}
+    // 补的代理变量放最后：只在用户没设代理时才有，NO_PROXY 已经并进了用户原有的
+    return { ...base, ...extra, ...systemProxyEnv(base, extra, this.opts.systemProxy?.() ?? null) }
   }
 
   private discover(force: boolean): Promise<ClaudeDiscovery> {

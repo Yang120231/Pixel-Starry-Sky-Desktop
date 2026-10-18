@@ -53,6 +53,9 @@ export interface EngineBridge {
   /** 取消授权（claude auth logout / codex logout），结束后重新检测 */
   logoutEngine(engine: EngineId): Promise<EngineUpdateResult>
   retrySettings(): Promise<{ maxRetries: number | null }>
+  /** 系统代理补给本机引擎的状态（会重新查一次系统代理） */
+  systemProxy(): Promise<import('../shared/types/system-proxy').SystemProxyStatus>
+  setSystemProxy(enabled: boolean): Promise<import('../shared/types/system-proxy').SystemProxyStatus>
   setRetrySettings(maxRetries: number | null): Promise<{ maxRetries: number | null }>
   /** 引擎列表和状态；force 时重新检测 */
   engines(force?: boolean): Promise<EngineInfo[]>

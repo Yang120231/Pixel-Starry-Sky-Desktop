@@ -20,7 +20,7 @@ import {
   type SessionRecord,
   viaGateway,
 } from '@pixelsky/protocol'
-import { engineEnv } from '../env'
+import { engineEnv, systemProxyEnv } from '../env'
 import { outputTail, run, runInteractive, startupReason } from '../exec'
 import { engineBase } from '../registry'
 import { customCodex, discoverCodex, toolEnvironment } from './discover'
@@ -40,6 +40,8 @@ export interface CodexAdapterOptions {
   overridePath?: () => string | null
   env?: NodeJS.ProcessEnv
   extraEnv?: () => Record<string, string>
+  /** 系统代理（http://主机:端口）；没开代理、开关关了时为 null。用户自己设了代理变量时不用（env.ts systemProxyEnv） */
+  systemProxy?: () => string | null
   sessionEnv?: (record: SessionRecord) => NodeJS.ProcessEnv
   launcher?: Launcher
   launchOptions?: () => CodexLaunchOptions
@@ -77,7 +79,10 @@ export class CodexAdapter implements EngineAdapter {
   /** 跨引擎接力：别的引擎期间的聊天用 thread/inject_items 注入线程（chat-log.ts） */
   readonly seedsHistory = true
   private env(): NodeJS.ProcessEnv {
-    return { ...engineEnv(this.opts.env ?? process.env), ...this.opts.extraEnv?.() }
+    const base = engineEnv(this.opts.env ?? process.env)
+    const extra = this.opts.extraEnv?.() ?? {}
+    // 补的代理变量放最后：只在用户没设代理时才有，NO_PROXY 已经并进了用户原有的
+    return { ...base, ...extra, ...systemProxyEnv(base, extra, this.opts.systemProxy?.() ?? null) }
   }
   constructor(private readonly opts: CodexAdapterOptions = {}) {}
   checkLaunch(command: string | null, args: readonly string[]): void {

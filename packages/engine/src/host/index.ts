@@ -100,12 +100,14 @@ export class EngineHost {
       claude: new ClaudeAdapter({
         overridePath: () => settings.file.paths.claude ?? null,
         extraEnv: () => settings.file.env.claude ?? {},
+        systemProxy: () => opts.systemProxy?.('claude') ?? null,
         launchOptions: () => settings.launchOptions('claude'),
         sessionEnv: opts.sessionEnv,
       }),
       codex: new CodexAdapter({
         overridePath: () => settings.file.paths.codex ?? null,
         extraEnv: () => settings.file.env.codex ?? {},
+        systemProxy: () => opts.systemProxy?.('codex') ?? null,
         sessionEnv: opts.sessionEnv,
         launchOptions: () => {
           const o = settings.launchOptions('codex')
@@ -121,6 +123,7 @@ export class EngineHost {
       pixel: new PixelAdapter({
         overridePath: () => settings.file.paths.pixel ?? null,
         extraEnv: () => settings.file.env.pixel ?? {},
+        systemProxy: () => opts.systemProxy?.('pixel') ?? null,
         bundledCli: opts.pixelCli,
         sessionEnv: opts.sessionEnv,
         launchOptions: () => ({ args: settings.launchOptions('pixel').args }),

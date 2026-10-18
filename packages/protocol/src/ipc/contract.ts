@@ -290,6 +290,9 @@ export const IPC_CONTRACT = {
     mobile: 'act',
     trust: 'sender',
   },
+  // 设置 › 本机引擎「使用系统代理」：只管本机引擎，不转给远程机器
+  'engine:systemProxy': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'engine:setSystemProxy': { kind: 'invoke', route: 'local', trust: 'sender' },
   'engine:retrySettings': {
     kind: 'invoke',
     route: 'selected',
