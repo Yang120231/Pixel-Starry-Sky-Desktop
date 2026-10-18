@@ -1,10 +1,13 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../../i18n/core'
-import { ExternalLink, TriangleAlert } from 'lucide-react'
-import { formatBalance, formatDate } from '@/features/account'
-import { Button } from '@/ui'
-import type { AccountInfo, StoreLinkKind, StoreLinkParams } from '../../../../../shared/types/account'
+import { useRef } from 'react'
+import { Circle, CircleDot, ExternalLink, TriangleAlert } from 'lucide-react'
+import { formatBalance, formatDate, formatPrice } from '@/features/account'
+import { Button, cn } from '@/ui'
+import type { AccountInfo, StoreLinkKind, StoreLinkParams, StoreMethod } from '../../../../../shared/types/account'
 import type { AccountChange } from '../storeLogic'
+import { nextRadioIndex, remainingMs } from '../checkout/checkoutLogic'
+import type { TrackedOrder } from '../checkout/useCheckout'
 
 /** 打开面板页：成功后页面上出现「在浏览器里完成付款后回到这里」 */
 export type OpenStore = (kind: StoreLinkKind, params?: StoreLinkParams) => void
@@ -53,6 +56,106 @@ export function AccountCheckNotice({ email }: { email: string }) {
         </div>
         <p className="mt-0.5 text-meta text-fg-muted">{tr('settings.account.Store.accountCheckHint')}</p>
       </div>
+    </div>
+  )
+}
+
+/** 付款前的账号核对（软件内付款开着时）：只和「去浏览器付款」有关，挪到那个入口旁边，缩成一行小字 */
+export function AccountCheckLine({ email }: { email: string }) {
+  useI18n()
+  return (
+    <p role="note" className="selectable text-label text-fg-faint">
+      {tr('settings.account.Store.accountCheck', { p0: email })}
+    </p>
+  )
+}
+
+/** 支付方式单选（软件内付款开着时）：radiogroup，方向键切换，记住上次选的由调用方负责 */
+export function MethodPicker({
+  options,
+  value,
+  onChange,
+  label,
+}: {
+  options: StoreMethod[]
+  value: string
+  onChange: (type: string) => void
+  label: string
+}) {
+  useI18n()
+  const refs = useRef<Array<HTMLButtonElement | null>>([])
+  const hasValue = options.some(m => m.type === value)
+  return (
+    <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-2">
+      {options.map((m, i) => {
+        const selected = m.type === value
+        const Icon = selected ? CircleDot : Circle
+        return (
+          <button
+            key={m.type}
+            ref={el => {
+              refs.current[i] = el
+            }}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            tabIndex={selected || (!hasValue && i === 0) ? 0 : -1}
+            onClick={() => onChange(m.type)}
+            onKeyDown={event => {
+              const next = nextRadioIndex(event.key, i, options.length)
+              if (next === null) return
+              event.preventDefault()
+              onChange(options[next].type)
+              refs.current[next]?.focus()
+            }}
+            className={cn(
+              'press no-drag inline-flex h-8 items-center gap-2 rounded-md border px-3 text-ui',
+              selected
+                ? 'border-accent-line bg-accent-soft font-medium text-fg'
+                : 'border-line-strong bg-surface text-fg-secondary hover:border-fg-faint',
+            )}
+          >
+            <Icon size={14} strokeWidth={2} aria-hidden className={selected ? 'text-accent-fg' : 'text-fg-faint'} />
+            {m.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/** 软件里下的、还没付的单：充值页 / 套餐页上的「继续付款」条（关了弹窗订单也还在，docs/ui/in-app-payment.md §6.3） */
+export function PendingOrderBar({
+  orders,
+  onResume,
+  now = Date.now(),
+}: {
+  orders: TrackedOrder[]
+  onResume: (orderId: number) => void
+  now?: number
+}) {
+  useI18n()
+  const live = orders.filter(t => t.order.status === 'pending' && remainingMs(t.order, t.at, now) > 0)
+  if (live.length === 0) return null
+  return (
+    <div className="flex flex-col gap-2">
+      {live.map(({ order, at }) => (
+        <div
+          key={order.orderId}
+          className="flex items-center gap-3 rounded-lg border border-accent-line bg-accent-soft px-4 py-2.5"
+        >
+          <p className="min-w-0 flex-1 text-meta text-fg-secondary tabular-nums">
+            {tr('settings.account.TopUp.pendingOrder', {
+              p0: order.methodLabel,
+              p1: formatPrice(order.payAmount, order.payCurrency),
+              p2: Math.max(1, Math.ceil(remainingMs(order, at, now) / 60_000)),
+            })}
+          </p>
+          <Button variant="outline" onClick={() => onResume(order.orderId)}>
+            {tr('settings.account.TopUp.continuePay')}
+          </Button>
+        </div>
+      ))}
     </div>
   )
 }

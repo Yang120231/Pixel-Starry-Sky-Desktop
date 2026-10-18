@@ -1,11 +1,14 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../../i18n/core'
-import { Check } from 'lucide-react'
+import { useState } from 'react'
+import { Check, ExternalLink } from 'lucide-react'
 import { formatAmount, formatPrice } from '@/features/account'
 import { isCurrentPlan, validityLabel } from '../storeLogic'
 import { Button, cn } from '@/ui'
 import type { StoreCatalog, StorePlan, StoreQuotas } from '../../../../../shared/types/account'
-import { OpenPanelButton, type OpenStore } from './StoreParts'
+import { checkoutAvailable, checkoutMethods, loadMethod, pickMethod, planIntent } from '../checkout/checkoutLogic'
+import type { CheckoutHost } from '../checkout/useCheckout'
+import { AccountCheckLine, OpenPanelButton, PendingOrderBar, type OpenStore } from './StoreParts'
 
 const quotaRows = (): Array<[keyof StoreQuotas, string]> => [
   ['fiveHour', tr('settings.account.PlanStore.fiveHour')],
@@ -19,13 +22,20 @@ export function PlanStore({
   catalog,
   currentPlan,
   onOpen,
+  checkout,
+  email = '',
 }: {
   catalog: StoreCatalog
   currentPlan: string | null
   onOpen: OpenStore
+  /** 软件内付款；不传或云端没开（catalog.checkout）时和以前一模一样 */
+  checkout?: CheckoutHost
+  /** 登录账号的邮箱：软件内付款开着时，「去浏览器购买」旁的核对提示用 */
+  email?: string
 }) {
   useI18n()
   const { plans } = catalog
+  const [savedMethod] = useState(loadMethod)
 
   if (!catalog.enabled || plans.length === 0) {
     return (
@@ -37,17 +47,43 @@ export function PlanStore({
     )
   }
 
-  return (
+  // 软件内付款：按钮打开弹窗的「准备」步骤（选支付方式、扫码），卡片下方留一个去浏览器购买的小入口（§6.2）
+  const payInApp = !!checkout && checkoutAvailable(catalog)
+  const method = payInApp ? pickMethod(checkoutMethods(catalog), null, savedMethod) : null
+  const scan =
+    checkout && method ? (plan: StorePlan): void => checkout.start(planIntent(plan, method), true) : undefined
+
+  const grid = (
     <div className="grid grid-cols-3 gap-2.5">
       {plans.map(plan => (
-        <PlanCard key={plan.id} plan={plan} current={isCurrentPlan(plan, currentPlan)} onOpen={onOpen} />
+        <PlanCard key={plan.id} plan={plan} current={isCurrentPlan(plan, currentPlan)} onOpen={onOpen} onScan={scan} />
       ))}
+    </div>
+  )
+  if (!payInApp || !checkout) return grid
+  return (
+    <div className="flex flex-col gap-3">
+      <PendingOrderBar orders={checkout.pending} onResume={checkout.resume} />
+      {grid}
+      {email && <AccountCheckLine email={email} />}
     </div>
   )
 }
 
-function PlanCard({ plan, current, onOpen }: { plan: StorePlan; current: boolean; onOpen: OpenStore }) {
+function PlanCard({
+  plan,
+  current,
+  onOpen,
+  onScan,
+}: {
+  plan: StorePlan
+  current: boolean
+  onOpen: OpenStore
+  /** 软件内付款开着时给：主按钮扫码付款，浏览器购买退成小字入口 */
+  onScan?: (plan: StorePlan) => void
+}) {
   useI18n()
+  const browserParams = { tab: 'subscription', ...(plan.groupId ? { group: plan.groupId } : {}) } as const
   const action = current ? tr('settings.account.PlanStore.renew') : tr('settings.account.PlanStore.purchase')
   const rows = quotaRows().filter(([key]) => plan.quotas[key] !== null)
   return (
@@ -113,10 +149,23 @@ function PlanCard({ plan, current, onOpen }: { plan: StorePlan; current: boolean
         <Button
           variant={current ? 'primary' : 'outline'}
           className="w-full justify-center"
-          onClick={() => onOpen('purchase', { tab: 'subscription', ...(plan.groupId ? { group: plan.groupId } : {}) })}
+          onClick={() => (onScan ? onScan(plan) : onOpen('purchase', browserParams))}
         >
           {action}
         </Button>
+        {onScan && (
+          <p className="mt-2 text-center text-label text-fg-faint">
+            {tr('settings.account.PlanStore.alsoInBrowser')}{' '}
+            <button
+              type="button"
+              className="press no-drag inline-flex items-center gap-0.5 underline-offset-2 hover:text-fg hover:underline"
+              onClick={() => onOpen('purchase', browserParams)}
+            >
+              {tr('settings.account.PlanStore.buyInBrowser')}
+              <ExternalLink size={11} aria-hidden />
+            </button>
+          </p>
+        )}
       </div>
     </div>
   )

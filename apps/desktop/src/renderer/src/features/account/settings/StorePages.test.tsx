@@ -2,13 +2,27 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { I18nProvider } from '@/i18n/I18nProvider'
 import { setCurrentLocale } from '@/i18n/core'
-import type { AccountInfo, StoreCatalog } from '../../../../../shared/types/account'
+import type { AccountInfo, CheckoutOrder, StoreCatalog, StorePlan } from '../../../../../shared/types/account'
+import { balanceIntent, planIntent } from '../checkout/checkoutLogic'
+import type { CheckoutHost } from '../checkout/useCheckout'
+import type { StoreState } from '../useStore'
 import { PlanStore } from './PlanStore'
 import { StorePages } from './StorePages'
 import { AccountCheckNotice, PaymentOutcome, StoreHeader, changeLines } from './StoreParts'
 import { TopUp } from './TopUp'
 
 // 订阅套餐 / 充值页：账号核对提示、余额与套餐头部、到账反馈、预计应付（用静态渲染，不依赖 DOM）。
+// 软件内付款（checkout）关着时页面和以前一模一样；开着时的支付方式单选、扫码付款、待付单条（docs/ui/in-app-payment.md §6.1、§6.2、§8.3）。
+
+// StorePages 里的商品数据：默认是读取中（上面的老用例看的就是这个），软件内付款的用例按需换成已读到的目录
+const mocked = vi.hoisted(() => ({ state: { status: 'loading' } as StoreState }))
+vi.mock('../useStore', async importOriginal => {
+  const real = await importOriginal<typeof import('../useStore')>()
+  return {
+    ...real,
+    useStore: () => ({ state: mocked.state, reload: async () => undefined, open: async () => 'demo' as const }),
+  }
+})
 
 const account: AccountInfo = {
   email: 'alice@example.com',
@@ -46,6 +60,7 @@ const catalog = (over: Partial<StoreCatalog> = {}): StoreCatalog => ({
 afterEach(() => {
   vi.unstubAllGlobals()
   setCurrentLocale('zh-CN')
+  mocked.state = { status: 'loading' }
 })
 
 function render(node: React.ReactElement, locale: 'zh-CN' | 'en-US' = 'zh-CN'): string {
@@ -152,5 +167,270 @@ describe('TopUp 预计应付', () => {
 describe('PlanStore', () => {
   it('没有在售套餐时仍给出打开面板的入口', () => {
     expect(render(<PlanStore catalog={catalog()} currentPlan={null} onOpen={vi.fn()} />)).toContain('打开网页面板')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 软件内付款
+// ---------------------------------------------------------------------------
+
+const methods2 = [
+  { type: 'alipay', label: '支付宝' },
+  { type: 'wxpay', label: '微信支付' },
+]
+const checkoutOn = { enabled: true, methods: ['alipay', 'wxpay'], orderTimeoutMinutes: 30 }
+const plan = (id: number, over: Partial<StorePlan> = {}): StorePlan => ({
+  id,
+  name: `套餐${id}`,
+  description: '',
+  price: 99,
+  originalPrice: null,
+  currency: 'CNY',
+  validityDays: 30,
+  features: [],
+  groupName: `分组${id}`,
+  groupId: id,
+  quotas: { fiveHour: null, daily: null, weekly: null, monthly: null },
+  sort: id,
+  ...over,
+})
+const pendingOrder = (over: Partial<CheckoutOrder> = {}): CheckoutOrder => ({
+  orderId: 1234,
+  kind: 'balance',
+  status: 'pending',
+  method: 'alipay',
+  methodLabel: '支付宝',
+  payAmount: 122.4,
+  payCurrency: 'CNY',
+  feeRate: 2,
+  credited: 126,
+  bonus: 6,
+  plan: null,
+  qrContent: null,
+  qrSource: null,
+  payUrl: null,
+  createdAt: new Date().toISOString(),
+  expiresAt: new Date(Date.now() + 18 * 60_000).toISOString(),
+  paidAt: null,
+  completedAt: null,
+  serverTime: new Date().toISOString(),
+  reused: false,
+  ...over,
+})
+const host = (over: Partial<CheckoutHost> = {}): CheckoutHost => ({
+  start: vi.fn(),
+  resume: vi.fn(),
+  pending: [],
+  ...over,
+})
+const tracked = (...orders: CheckoutOrder[]) => orders.map(order => ({ order, at: Date.now() }))
+
+/** 带某个文字的按钮是否可点；没有这个按钮返回 null */
+function buttonState(html: string, label: string): 'disabled' | 'enabled' | null {
+  const m = new RegExp(`<button([^>]*)>((?:(?!</button>).)*?)${label}`, 's').exec(html)
+  if (!m) return null
+  return /disabled=""/.test(m[1]) ? 'disabled' : 'enabled'
+}
+
+const emailNote = /<p role="note"[^>]*>请确认浏览器里面板登录的是 alice@example.com<\/p>/
+const refreshOk = async () => ({ error: null, account })
+
+describe('checkout 关着：页面和以前一模一样', () => {
+  const off = [
+    ['云端没给 checkout 字段（旧版本）', catalog()],
+    ['checkout.enabled 为假', catalog({ checkout: { ...checkoutOn, enabled: false } })],
+    ['没有能扫码的方式', catalog({ checkout: { ...checkoutOn, methods: ['stripe'] } })],
+    ['支付总开关关着', catalog({ enabled: false, checkout: checkoutOn })],
+  ] as const
+  const topup = (c: StoreCatalog, h?: CheckoutHost) => (
+    <TopUp catalog={c} currency="USD" onOpen={vi.fn()} checkout={h} email="alice@example.com" initialAmount="100" />
+  )
+
+  it.each(off)('充值页（%s）：和不带软件内付款时的页面逐字相同', (_name, c) => {
+    const baseline = render(topup(catalog({ enabled: c.enabled })))
+    expect(render(topup(c, host({ pending: tracked(pendingOrder()) })))).toBe(baseline)
+    expect(baseline).not.toContain('role="radiogroup"')
+    expect(baseline).not.toContain('扫码付款')
+    expect(baseline).not.toContain('去浏览器付款')
+    expect(baseline).not.toContain('继续付款')
+  })
+
+  it('充值页：原来的内容都在（只读的支付方式、去支付、重新输入金额、复制金额）', () => {
+    const html = render(topup(catalog()))
+    expect(html).toContain('去支付')
+    expect(html).toContain('支付方式和金额在浏览器里的面板中确认')
+    expect(html).toContain('需在面板里重新输入金额')
+    expect(buttonState(html, '复制金额')).toBe('enabled')
+    expect(buttonState(html, '去支付')).toBe('enabled')
+  })
+
+  it('充值页：云端开着但页面没接软件内付款（不传 checkout）也一样', () => {
+    expect(render(topup(catalog({ checkout: checkoutOn })))).toBe(render(topup(catalog())))
+  })
+
+  it('套餐页：卡片只有购买 / 续费，没有「也可以去浏览器购买」和待付单条', () => {
+    const base = catalog({ plans: [plan(1), plan(2)] })
+    const baseline = render(<PlanStore catalog={base} currentPlan="分组2" onOpen={vi.fn()} />)
+    const disabled = { ...base, checkout: { ...checkoutOn, enabled: false } }
+    expect(
+      render(
+        <PlanStore
+          catalog={disabled}
+          currentPlan="分组2"
+          onOpen={vi.fn()}
+          checkout={host({ pending: tracked(pendingOrder()) })}
+          email="a@b.c"
+        />,
+      ),
+    ).toBe(baseline)
+    expect(baseline).toContain('购买')
+    expect(baseline).toContain('续费')
+    expect(baseline).not.toContain('去浏览器购买')
+    expect(baseline).not.toContain('继续付款')
+  })
+
+  it('整页：账号核对提示仍在页面顶部，没有软件内付款的入口', () => {
+    mocked.state = { status: 'ready', catalog: catalog({ checkout: { ...checkoutOn, enabled: false } }), stale: false }
+    const html = render(<StorePages tab="topup" account={account} onRefreshAccount={refreshOk} />)
+    expect(html).toContain('请确认浏览器里面板登录的是 alice@example.com')
+    expect(html).toContain('付款到账的是面板里登录的账号')
+    expect(html).toContain('去支付')
+    expect(html).not.toContain('扫码付款')
+    expect(html).not.toContain('role="dialog"')
+  })
+})
+
+describe('checkout 开着：充值页', () => {
+  const on = (over: Partial<StoreCatalog> = {}) => catalog({ methods: methods2, checkout: checkoutOn, ...over })
+  const topup = (h: CheckoutHost, amount = '100', c = on()) =>
+    render(
+      <TopUp
+        catalog={c}
+        currency="USD"
+        onOpen={vi.fn()}
+        checkout={h}
+        email="alice@example.com"
+        initialAmount={amount}
+      />,
+    )
+
+  it('支付方式是单选（radiogroup），默认选第一个；不再写「在浏览器里选」', () => {
+    const html = topup(host())
+    expect(html).toContain('role="radiogroup"')
+    expect(html).toMatch(/role="radio"[^>]*aria-checked="true"[^>]*tabindex="0"[^>]*>.*?支付宝/s)
+    expect(html).toMatch(/role="radio"[^>]*aria-checked="false"[^>]*tabindex="-1"[^>]*>.*?微信支付/s)
+    expect(html).not.toContain('支付方式和金额在浏览器里的面板中确认')
+  })
+  it('只列商品数据和 checkout.methods 的交集', () => {
+    const html = topup(host(), '100', on({ checkout: { ...checkoutOn, methods: ['wxpay'] } }))
+    expect(html).toContain('微信支付')
+    expect(html).not.toContain('支付宝')
+  })
+  it('主按钮「扫码付款」，次要「去浏览器付款」；原来的「去支付」没了', () => {
+    const html = topup(host())
+    expect(buttonState(html, '扫码付款')).toBe('enabled')
+    expect(buttonState(html, '去浏览器付款')).toBe('enabled')
+    expect(html).not.toContain('去支付')
+  })
+  it('浏览器付款才需要的提示跟着挪过来：重新输入金额、复制金额、核对账号（缩成一行小字）', () => {
+    const html = topup(host())
+    expect(html).toContain('需在面板里重新输入金额')
+    expect(buttonState(html, '复制金额')).toBe('enabled')
+    expect(html).toMatch(emailNote)
+    expect(html).not.toContain('付款到账的是面板里登录的账号')
+  })
+  it('金额不合法（没填、格式不对、低于下限、高于上限）：两个按钮都不可点', () => {
+    for (const amount of ['', '1', '5000', '12.345']) {
+      const html = topup(host(), amount)
+      expect(buttonState(html, '扫码付款'), amount).toBe('disabled')
+      expect(buttonState(html, '去浏览器付款'), amount).toBe('disabled')
+    }
+    expect(buttonState(topup(host(), '5'), '扫码付款')).toBe('enabled')
+  })
+  it('币种拿不准（payAmountTrusted 为假）：照样能扫码付款', () => {
+    const html = topup(host(), '100', on({ currencyKnown: false }))
+    expect(html).toContain('支付币种无法确认')
+    expect(buttonState(html, '扫码付款')).toBe('enabled')
+  })
+  it('有在软件里下的待付单：出现「继续付款」条（方式、金额、还剩几分钟）', () => {
+    const html = topup(host({ pending: tracked(pendingOrder()) }))
+    expect(html).toContain('你有一笔未付款的订单：支付宝 ¥122.40，还剩 18 分钟')
+    expect(buttonState(html, '继续付款')).toBe('enabled')
+  })
+  it('待付单已到期、或已付款正在到账的：不显示在未付款条里', () => {
+    const expired = pendingOrder({ expiresAt: new Date(Date.now() - 1000).toISOString() })
+    const paid = pendingOrder({ orderId: 5, status: 'paid' })
+    expect(topup(host({ pending: tracked(expired, paid) }))).not.toContain('继续付款')
+  })
+  it('英文界面全是英文', () => {
+    const en = on({
+      methods: [
+        { type: 'alipay', label: 'Alipay' },
+        { type: 'wxpay', label: 'WeChat Pay' },
+      ],
+    })
+    const html = render(
+      <TopUp
+        catalog={en}
+        currency="USD"
+        onOpen={vi.fn()}
+        checkout={host({ pending: tracked(pendingOrder({ methodLabel: 'Alipay' })) })}
+        email="alice@example.com"
+        initialAmount="100"
+      />,
+      'en-US',
+    )
+    expect(html).toContain('Pay by QR code')
+    expect(html).toContain('Pay in browser')
+    expect(html).toContain('Continue paying')
+    expect(html).toContain('You have an unpaid order: Alipay ¥122.40, 18 min left')
+    expect(html).not.toMatch(/[一-鿿]/)
+  })
+})
+
+describe('checkout 开着：套餐页', () => {
+  const on = catalog({ methods: methods2, checkout: checkoutOn, plans: [plan(1), plan(2)] })
+  it('购买 / 续费按钮保留；卡片下方加「也可以 去浏览器购买」；页面有待付单条和核对提示', () => {
+    const html = render(
+      <PlanStore
+        catalog={on}
+        currentPlan="分组2"
+        onOpen={vi.fn()}
+        checkout={host({ pending: tracked(pendingOrder()) })}
+        email="alice@example.com"
+      />,
+    )
+    expect(buttonState(html, '购买')).toBe('enabled')
+    expect(buttonState(html, '续费')).toBe('enabled')
+    expect((html.match(/也可以/g) ?? []).length).toBe(2)
+    expect((html.match(/去浏览器购买/g) ?? []).length).toBe(2)
+    expect(html).toContain('继续付款')
+    expect(html).toMatch(emailNote)
+  })
+  it('整页开着时顶部不再有醒目的账号核对提示（挪到浏览器入口旁）；关着时原样', () => {
+    mocked.state = { status: 'ready', catalog: on, stale: false }
+    const html = render(<StorePages tab="plans" account={account} onRefreshAccount={refreshOk} />)
+    expect(html).not.toContain('付款到账的是面板里登录的账号')
+    expect(html).toContain('也可以')
+    expect(html).toMatch(emailNote)
+    mocked.state = { status: 'ready', catalog: { ...on, checkout: undefined }, stale: false }
+    const off = render(<StorePages tab="plans" account={account} onRefreshAccount={refreshOk} />)
+    expect(off).toContain('付款到账的是面板里登录的账号')
+    expect(off).not.toContain('也可以')
+  })
+})
+
+describe('下单意图由页面给出，参数在主进程再校验', () => {
+  it('充值：金额、方式、估算；套餐：只带套餐 id', () => {
+    const quote = { pay: 102, credited: 110, bonus: 10 }
+    expect(balanceIntent({ amount: 100, method: 'wxpay', quote, dueTrusted: true, payCurrency: 'CNY' })).toMatchObject({
+      kind: 'balance',
+      amount: 100,
+      method: 'wxpay',
+      estimatePay: 102,
+    })
+    const p = planIntent(plan(3), 'alipay')
+    expect(p).toMatchObject({ kind: 'plan', planId: 3, method: 'alipay', estimatePay: 99 })
+    expect(p.amount).toBeUndefined()
   })
 })

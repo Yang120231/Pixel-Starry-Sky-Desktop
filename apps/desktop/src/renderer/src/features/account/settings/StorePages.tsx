@@ -6,6 +6,9 @@ import { Button, Spinner } from '@/ui'
 import type { AccountInfo, AccountRefreshResult, StoreCatalog } from '../../../../../shared/types/account'
 import { useStore } from '../useStore'
 import { usePaymentWatch } from '../usePaymentWatch'
+import { CheckoutDialog } from '../checkout/CheckoutDialog'
+import { checkoutAvailable, checkoutMethods, type CheckoutIntent } from '../checkout/checkoutLogic'
+import { useCheckout } from '../checkout/useCheckout'
 import { AccountCheckNotice, PaymentOutcome, StoreHeader, type OpenStore } from './StoreParts'
 import { PlanStore } from './PlanStore'
 import { TopUp } from './TopUp'
@@ -14,6 +17,8 @@ import { TopUp } from './TopUp'
  * 账号 → 订阅套餐 / 充值：读 Sub2api 的商品数据（docs/ui/settings.md §9.4–9.6）。
  * 付款在浏览器里的面板完成；打开支付页后前 2 分钟每 15 秒自动刷新账号，余额 / 套餐变了就提示到账。
  * 回到窗口时账号数据也会刷新（现有的焦点刷新），这里随之重读商品数据。
+ * 云端开着软件内付款（商品数据的 checkout.enabled）时，主按钮改为在软件里扫码付款，弹窗见 checkout/CheckoutDialog.tsx
+ * （docs/ui/in-app-payment.md）；浏览器付款退成次要入口，仍走上面的支付页流程。
  */
 export function StorePages({
   tab,
@@ -28,6 +33,8 @@ export function StorePages({
   useI18n()
   const store = useStore(account.updatedAt)
   const watch = usePaymentWatch(account, onRefreshAccount)
+  const checkoutOn = store.state.status === 'ready' && checkoutAvailable(store.state.catalog)
+  const checkout = useCheckout(account, checkoutOn, onRefreshAccount)
   const [opened, setOpened] = useState(false)
   const [demoNote, setDemoNote] = useState(false)
   const [openError, setOpenError] = useState<string | null>(null)
@@ -74,6 +81,23 @@ export function StorePages({
     })()
   }
 
+  // 软件内付款和浏览器付款的到账检测不同时运行：开弹窗时停掉后者，也收起「我已付款，刷新」那一块
+  const startCheckout = (intent: CheckoutIntent, prepare: boolean): void => {
+    watch.stop()
+    setOpened(false)
+    setOpenError(null)
+    setDemoNote(false)
+    checkout.start(intent, prepare)
+  }
+  const resumeCheckout = (orderId: number): void => {
+    watch.stop()
+    setOpened(false)
+    setOpenError(null)
+    setDemoNote(false)
+    checkout.resume(orderId)
+  }
+  const checkoutHost = { start: startCheckout, resume: resumeCheckout, pending: checkout.pending }
+
   const refreshAll = async (): Promise<void> => {
     // 商店数据随账号刷新（updatedAt 变化）由 useStore 静默重读，这里不重复读
     await watch.refreshNow()
@@ -105,9 +129,21 @@ export function StorePages({
     body = (
       <div>
         {tab === 'plans' ? (
-          <PlanStore catalog={catalog} currentPlan={account.plan?.name ?? null} onOpen={open} />
+          <PlanStore
+            catalog={catalog}
+            currentPlan={account.plan?.name ?? null}
+            onOpen={open}
+            checkout={checkoutHost}
+            email={account.email}
+          />
         ) : (
-          <TopUp catalog={catalog} currency={account.currency} onOpen={open} />
+          <TopUp
+            catalog={catalog}
+            currency={account.currency}
+            onOpen={open}
+            checkout={checkoutHost}
+            email={account.email}
+          />
         )}
 
         {opening && (
@@ -142,6 +178,28 @@ export function StorePages({
             {watch.outcome && <PaymentOutcome outcome={watch.outcome} currency={account.currency} />}
           </div>
         )}
+        {checkout.state.open && (
+          <CheckoutDialog
+            flow={checkout.flow}
+            state={checkout.state}
+            methods={checkoutMethods(catalog)}
+            currency={account.currency}
+            email={account.email}
+            otherPending={checkout.pending.some(
+              t => t.order.status === 'pending' && t.order.orderId !== checkout.state.order?.orderId,
+            )}
+            onClose={checkout.close}
+            onBrowser={() => {
+              // 改用浏览器付款：关弹窗（订单留着），照原来的流程打开面板
+              const intent = checkout.state.intent
+              const plan = intent?.kind === 'plan' ? catalog.plans.find(p => p.id === intent.planId) : undefined
+              checkout.close()
+              if (intent?.kind === 'plan')
+                open('purchase', { tab: 'subscription', ...(plan?.groupId ? { group: plan.groupId } : {}) })
+              else open('purchase')
+            }}
+          />
+        )}
       </div>
     )
   }
@@ -149,7 +207,7 @@ export function StorePages({
   return (
     <div>
       <StoreHeader account={account} />
-      <AccountCheckNotice email={account.email} />
+      {!checkoutOn && <AccountCheckNotice email={account.email} />}
       {body}
     </div>
   )

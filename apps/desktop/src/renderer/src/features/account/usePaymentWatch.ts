@@ -12,6 +12,8 @@ export interface UsePaymentWatchResult extends WatchState {
   begin: (baseline: Baseline) => void
   /** 「我已付款，刷新」 */
   refreshNow: () => Promise<void>
+  /** 停止自动检测（打开软件内付款弹窗时：两种到账检测不同时运行） */
+  stop: () => void
 }
 
 /** 离开商店页（组件卸载）时自动停止轮询 */
@@ -32,5 +34,6 @@ export function usePaymentWatch(
   const prepare = useCallback(() => baselineBeforeOpen(() => refreshRef.current(), accountRef.current), [])
   const begin = useCallback((baseline: Baseline) => watch.begin(baseline), [watch])
   const refreshNow = useCallback(() => watch.manual(), [watch])
-  return { ...state, prepare, begin, refreshNow }
+  const stop = useCallback(() => watch.stop(), [watch])
+  return { ...state, prepare, begin, refreshNow, stop }
 }
