@@ -191,4 +191,25 @@ describe('登录会话', () => {
     expect(deviceName()).toMatch(/ · |^(Windows|macOS|Linux)/)
     await mocks.handlers.get('account:cancel')?.()
   })
+
+  it('登录中的状态带核对码和授权页地址；在授权页点了取消：未登录，原因是 denied（欢迎页据此提示）', async () => {
+    mocks.opened.length = 0
+    void mocks.handlers.get('account:login')?.()
+    await vi.waitFor(() => expect(mocks.opened).toHaveLength(1))
+    const signingIn = mocks.handlers.get('account:get')?.() as { status: string; authCode: string; url?: string }
+    expect(signingIn).toMatchObject({ status: 'signing-in', url: mocks.opened[0] })
+    expect(new URL(mocks.opened[0]).searchParams.get('auth_code')).toBe(signingIn.authCode)
+    // 模拟浏览器回调：授权页上点了取消
+    const authorize = new URL(mocks.opened[0])
+    const callback = new URL(authorize.searchParams.get('redirect_uri')!)
+    callback.search = new URLSearchParams({
+      state: authorize.searchParams.get('state')!,
+      error: 'access_denied',
+    }).toString()
+    const { get } = await import('node:http')
+    await new Promise<void>((resolve, reject) =>
+      get(callback, res => (res.resume(), res.on('end', resolve))).on('error', reject),
+    )
+    expect(mocks.handlers.get('account:get')?.()).toEqual({ status: 'signed-out', reason: 'denied' })
+  })
 })

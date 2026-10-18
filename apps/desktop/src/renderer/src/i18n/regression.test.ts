@@ -62,6 +62,7 @@ import { extSnippetMessages } from '../../../shared/i18n/extSnippetMessages'
 import { extTaskMessages } from '../../../shared/i18n/extTaskMessages'
 import { promptMessages } from '../../../shared/i18n/promptMessages'
 import { resumeMessages } from '../../../shared/i18n/resumeMessages'
+import { onboardingMessages } from '../../../shared/i18n/onboardingMessages'
 import { approvalMessages } from '../../../shared/i18n/approvalMessages'
 import { extstoreDetailMessages } from '../../../shared/i18n/extstoreDetailMessages'
 
@@ -127,6 +128,7 @@ const dictionaries: Record<string, Record<string, unknown>> = {
   extTaskMessages,
   promptMessages,
   resumeMessages,
+  onboardingMessages,
   approvalMessages,
   extstoreDetailMessages,
 }

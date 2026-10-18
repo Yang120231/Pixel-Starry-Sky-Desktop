@@ -12,7 +12,14 @@ import { codedError } from '@pixelsky/protocol'
 import { nativeText, windowLocale } from '../app/ui-language'
 import { sendTo } from '../app/rendererHealth'
 import * as ipc from '../ipc/guard'
-import type { AccountInfo, AccountPlan, AccountRefreshResult, AccountState, Quota } from '../../shared/types/account'
+import type {
+  AccountInfo,
+  AccountPlan,
+  AccountRefreshResult,
+  AccountState,
+  LoginFailure,
+  Quota,
+} from '../../shared/types/account'
 
 // ---------------------------------------------------------------------------
 // 常量
@@ -771,12 +778,12 @@ function closeFlow(f: LoginFlow): void {
 }
 
 /** 登录失败收尾：只有当前流程仍是它自己时才改状态 */
-function failLogin(f: LoginFlow, reason?: string): void {
+function failLogin(f: LoginFlow, reason?: string, kind: LoginFailure = 'failed'): void {
   if (flow !== f) return
   flow = null
   closeFlow(f)
-  // 没有原因 = 用户自己在授权页点了「取消」，回到未登录即可，不算出错
-  setState(reason ? { status: 'signed-out', error: reason } : { status: 'signed-out' })
+  // 没有原因 = 用户自己在授权页点了「取消」，回到未登录即可，不算出错（欢迎页按 denied 提示一句）
+  setState(reason ? { status: 'signed-out', error: reason, reason: kind } : { status: 'signed-out', reason: 'denied' })
 }
 
 async function completeLogin(f: LoginFlow, code: string, verifier: string, redirectUri: string): Promise<void> {
@@ -833,7 +840,7 @@ async function completeLogin(f: LoginFlow, code: string, verifier: string, redir
     if (account) setState({ status: 'signed-in', account, refreshing: false })
   } catch (e) {
     const message = e instanceof TransientError ? e.message : `网络错误：${describeError(e)}`
-    failLogin(f, `登录失败：${message}`)
+    failLogin(f, `登录失败：${message}`, 'network')
   }
 }
 
@@ -862,7 +869,7 @@ async function login(): Promise<void> {
   const f: LoginFlow = {
     server,
     done: false,
-    timer: setTimeout(() => failLogin(f, '登录超时，请重试'), LOGIN_TIMEOUT_MS),
+    timer: setTimeout(() => failLogin(f, '登录超时，请重试', 'timeout'), LOGIN_TIMEOUT_MS),
   }
   flow = f
   setState({ status: 'signing-in', authCode })
@@ -955,6 +962,8 @@ async function login(): Promise<void> {
     auth_code: authCode,
     device_name: deviceName(),
   }).toString()
+  // 授权页地址给界面（浏览器没自动打开时「复制登录链接」）；只发给本机窗口，不写日志
+  setState({ status: 'signing-in', authCode, url: authorize.toString() })
 
   if (process.env.PIXELSKY_AUTH_NO_BROWSER === '1') {
     // 自动化测试用：不开浏览器，把授权地址打印出来由测试脚本去访问。

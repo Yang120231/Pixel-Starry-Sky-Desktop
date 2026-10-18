@@ -33,9 +33,12 @@ export interface AccountRefreshResult {
   error: string | null
   account: AccountInfo | null
 }
+/** 登录没成功的原因（欢迎页按它显示不同的提示）：超时、在授权页点了取消、连不上服务、其他 */
+export type LoginFailure = 'timeout' | 'denied' | 'network' | 'failed'
 export type AccountState =
-  | { status: 'signed-out'; error?: string }
-  | { status: 'signing-in'; authCode: string }
+  | { status: 'signed-out'; error?: string; reason?: LoginFailure }
+  /** url：授权页地址，回调服务起来后才有（「复制登录链接」用） */
+  | { status: 'signing-in'; authCode: string; url?: string }
   | { status: 'signed-in'; account: AccountInfo; refreshing: boolean; error?: string }
 
 // ---------------------------------------------------------------------------

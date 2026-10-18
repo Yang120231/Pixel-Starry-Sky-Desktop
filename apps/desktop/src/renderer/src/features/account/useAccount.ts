@@ -2,7 +2,7 @@ import { tr } from '../../i18n/core'
 // 账号状态：模块级 store，所有调用方共享同一份（一次 getState + 一个 onChange 订阅）
 // 规格见 docs/ui/account.md §4.3
 import { useMemo, useSyncExternalStore } from 'react'
-import type { AccountInfo, AccountRefreshResult, AccountState } from '../../../../shared/types/account'
+import type { AccountInfo, AccountRefreshResult, AccountState, LoginFailure } from '../../../../shared/types/account'
 import type { AccountBridge } from '../../../../preload/account'
 import { formatBalance } from './format'
 import { demo } from '@/data/demo'
@@ -22,6 +22,11 @@ export interface UseAccountResult {
   balanceText: string | null
   error: string | null
   refreshing: boolean
+  /** 登录中：两边核对的授权码（如 2AE5B0-156C42）和授权页地址（回调服务起来后才有） */
+  authCode: string | null
+  loginUrl: string | null
+  /** 上一次登录没成功的原因（未登录时才有；主动取消、从没登录过为 null） */
+  failure: LoginFailure | null
   login: () => Promise<void>
   cancelLogin: () => Promise<void>
   logout: () => Promise<void>
@@ -34,6 +39,9 @@ interface Snapshot {
   account: AccountInfo | null
   refreshing: boolean
   error: string | null
+  authCode?: string
+  loginUrl?: string
+  failure?: LoginFailure
 }
 
 const LOADING: Snapshot = { status: 'loading', account: null, refreshing: false, error: null }
@@ -52,9 +60,16 @@ function isDemoMode(): boolean {
 function toSnapshot(s: AccountState): Snapshot {
   switch (s.status) {
     case 'signed-out':
-      return { status: 'signed-out', account: null, refreshing: false, error: s.error ?? null }
+      return { status: 'signed-out', account: null, refreshing: false, error: s.error ?? null, failure: s.reason }
     case 'signing-in':
-      return { status: 'signing-in', account: null, refreshing: false, error: null }
+      return {
+        status: 'signing-in',
+        account: null,
+        refreshing: false,
+        error: null,
+        authCode: s.authCode,
+        loginUrl: s.url,
+      }
     case 'signed-in':
       return { status: 'signed-in', account: s.account, refreshing: s.refreshing, error: s.error ?? null }
   }
@@ -167,6 +182,9 @@ export function useAccount(): UseAccountResult {
       balanceText: account ? formatBalance(account.balance, account.currency) : null,
       error: snap.error,
       refreshing: snap.refreshing,
+      authCode: snap.authCode ?? null,
+      loginUrl: snap.loginUrl ?? null,
+      failure: snap.failure ?? (snap.status === 'signed-out' && snap.error ? 'failed' : null),
       login,
       cancelLogin,
       logout,
