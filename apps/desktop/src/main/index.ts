@@ -50,6 +50,7 @@ import { startupTimeline } from './app/startup-timing'
 import { loadApp as loadAppPage, REACT_CRASH, watchCrashes, type CrashWatch } from './app/crashRecovery'
 import { canSend, markReady } from './app/rendererHealth'
 import { initTray, type TrayController } from './app/tray'
+import { isPayWindow } from './app/payWindowRegistry'
 import { resolveInitialWindow, trackWindowState } from './app/window-state'
 import { initSettingsSync } from './account/settings-sync'
 import { initFeedback } from './feedback/feedback'
@@ -100,7 +101,7 @@ app.on('second-instance', () => {
   if (!app.isReady()) return
   if (tray) tray.showWindow()
   else {
-    const win = BrowserWindow.getAllWindows()[0]
+    const win = BrowserWindow.getAllWindows().find(w => !isPayWindow(w))
     if (win) {
       if (win.isMinimized()) win.restore()
       win.show()
@@ -438,7 +439,7 @@ app.whenReady().then(async () => {
     engine: () => ctx.engine?.memoryStats() ?? { runtimes: 0, processes: 0, running: 0 },
     check: memoryChecker(),
     rendererPid: () => {
-      const win = BrowserWindow.getAllWindows().find(w => !w.isDestroyed())
+      const win = BrowserWindow.getAllWindows().find(w => !w.isDestroyed() && !isPayWindow(w))
       return win ? win.webContents.getOSProcessId() : null
     },
   })

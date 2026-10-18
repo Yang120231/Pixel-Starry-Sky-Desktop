@@ -1598,4 +1598,8 @@ export const systemMessages = {
   'system.checkoutTimeout': { zh: '付款服务响应超时，请稍后重试', en: 'The payment service timed out. Try again later' },
   'system.checkoutCreateTimeout': { zh: '下单超时：请稍后在「继续付款」里查看，不会重复下单', en: 'Placing the order timed out. Check "Continue payment" later; no duplicate order will be created' },
   'system.checkoutAccountChanged': { zh: '登录状态已变化，请重试', en: 'The sign-in state changed. Please try again' },
+  'system.checkoutNoOwnerWindow': { zh: '找不到发起请求的窗口', en: 'The window that made the request was not found' },
+  // 付款窗口标题：带上当前页面的主机名，让用户看得出页面来自哪里；支付方式认不出时（英文界面只认 alipay / wxpay）用通用写法
+  'system.checkoutPayWindowTitle': { zh: '{p0}付款页面 · {p1}', en: '{p0} payment page · {p1}' },
+  'system.checkoutPayWindowTitleGeneric': { zh: '付款页面 · {p0}', en: 'Payment page · {p0}' },
 } as const

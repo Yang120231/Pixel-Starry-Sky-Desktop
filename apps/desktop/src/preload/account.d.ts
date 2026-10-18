@@ -6,6 +6,7 @@ import type {
   CheckoutCreateInput,
   CheckoutOrder,
   PanelStatus,
+  PayWindowEvent,
   StoreCatalog,
   StoreLinkKind,
   StoreLinkParams,
@@ -43,6 +44,15 @@ export interface AccountBridge {
   checkoutPending(): Promise<CheckoutOrder[]>
   /** 在系统浏览器里打开这笔订单的支付页；地址是主进程记下的，渲染层传不了 */
   checkoutOpenPayUrl(orderId: number): Promise<void>
+  /**
+   * 在软件里开一个小窗口显示这笔订单的支付页（只给收银台链接的支付方式，qrSource=pay_url）；地址是主进程记下的。
+   * 同一笔再开就聚焦已有窗口，同时最多一个付款窗口。返回时窗口已建好，页面加载失败 / 用户关窗走 onPayWindow
+   */
+  checkoutOpenPayWindow(orderId: number): Promise<void>
+  /** 关掉这笔订单的付款窗口（订单已付 / 取消 / 弹窗关闭时）；窗口已经不在或属于别的订单就什么都不做 */
+  checkoutClosePayWindow(orderId: number): Promise<void>
+  /** 订阅付款窗口事件（用户自己关了窗口、页面加载失败），返回取消订阅函数；主进程自己关窗不会通知 */
+  onPayWindow(cb: (event: PayWindowEvent) => void): () => void
   /** 面板凭证状态：usableForCheckout 为假时下单会要求先确认账号 */
   panelStatus(): Promise<PanelStatus>
   /** 在系统浏览器里打开「确认账号」页（只换面板凭证，不换账号） */

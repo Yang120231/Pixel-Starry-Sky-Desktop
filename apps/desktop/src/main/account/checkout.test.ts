@@ -59,6 +59,7 @@ const {
   panelVerify,
   panelVerifyLink,
   parseOrder,
+  payPageOf,
 } = await import('./checkout')
 const { fetchStore } = await import('./store')
 
@@ -635,6 +636,46 @@ describe('checkoutOpenPayUrl', () => {
     await checkoutCreate(balance)
     await (checkoutOpenPayUrl as (...args: unknown[]) => Promise<void>)(1234, 'https://evil.example/x')
     expect(mocks.opened).toEqual(['https://pay.example.com/cashier/abc'])
+  })
+})
+
+describe('payPageOf（付款窗口要加载的页面）', () => {
+  it('取主进程记下的 pay_url 和支付方式名，渲染层多传的参数不起作用', async () => {
+    reply('POST', '/v1/platform/orders', 200, orderJson)
+    await checkoutCreate(balance)
+    const page = {
+      orderId: 1234,
+      url: 'https://pay.example.com/cashier/abc',
+      label: orderJson.method_label,
+      method: orderJson.method,
+    }
+    expect(payPageOf(1234)).toEqual(page)
+    expect((payPageOf as (...args: unknown[]) => unknown)(1234, 'https://evil.example/x')).toEqual(page)
+  })
+
+  it('没记过的订单、订单号格式不对：拒绝', async () => {
+    reply('POST', '/v1/platform/orders', 200, orderJson)
+    await checkoutCreate(balance)
+    expect(() => payPageOf(999)).toThrow('找不到这笔订单，请重新下单')
+    for (const bad of ['1234', 0, -1, 1.5, null, undefined, {}]) expect(() => payPageOf(bad)).toThrow('请求参数不正确')
+  })
+
+  it('没有 https 支付页（http、带用户名密码、没有）或订单已不是待付：拒绝；换了登录会话后也认不得', async () => {
+    for (const pay_url of ['http://pay.example.com/x', 'https://u:p@pay.example.com/x', null]) {
+      reply('POST', '/v1/platform/orders', 200, { ...orderJson, pay_url })
+      await checkoutCreate({ ...balance, requestId: ID })
+      expect(() => payPageOf(1234), String(pay_url)).toThrow('这笔订单没有可以打开的支付页')
+    }
+    reply('POST', '/v1/platform/orders', 200, orderJson)
+    reply('GET', '/v1/platform/orders/1234', 200, { ...orderJson, status: 'paid' })
+    await checkoutCreate(balance)
+    expect(payPageOf(1234).url).toBe('https://pay.example.com/cashier/abc')
+    await checkoutGet(1234)
+    expect(() => payPageOf(1234)).toThrow('这笔订单没有可以打开的支付页')
+    reply('POST', '/v1/platform/orders', 200, orderJson)
+    await checkoutCreate({ ...balance, requestId: ID })
+    mocks.epoch++
+    expect(() => payPageOf(1234)).toThrow('找不到这笔订单，请重新下单')
   })
 })
 

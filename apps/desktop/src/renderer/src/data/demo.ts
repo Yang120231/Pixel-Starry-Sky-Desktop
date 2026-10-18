@@ -78,6 +78,8 @@ export interface DemoCheckout {
     | 'checkoutCancel'
     | 'checkoutPending'
     | 'checkoutOpenPayUrl'
+    | 'checkoutOpenPayWindow'
+    | 'checkoutClosePayWindow'
     | 'panelStatus'
     | 'panelVerify'
   >

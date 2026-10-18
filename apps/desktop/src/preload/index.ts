@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { HostEvent, IpcChannelName } from '@pixelsky/protocol'
-import type { AccountState } from '../shared/types/account'
+import type { AccountState, PayWindowEvent } from '../shared/types/account'
 import type { AccountBridge } from './account'
 import type { AppInfoBridge } from './app-info'
 import type { UpdateBridge } from './update'
@@ -58,6 +58,15 @@ const account: AccountBridge = {
   checkoutCancel: orderId => invoke('account:checkoutCancel', orderId),
   checkoutPending: () => invoke('account:checkoutPending'),
   checkoutOpenPayUrl: orderId => invoke('account:checkoutOpenPayUrl', orderId),
+  checkoutOpenPayWindow: orderId => invoke('account:checkoutOpenPayWindow', orderId),
+  checkoutClosePayWindow: orderId => invoke('account:checkoutClosePayWindow', orderId),
+  onPayWindow: cb => {
+    const listener = (_event: Electron.IpcRendererEvent, e: PayWindowEvent): void => cb(e)
+    on('account:payWindow', listener)
+    return () => {
+      ipcRenderer.removeListener('account:payWindow', listener)
+    }
+  },
   panelStatus: () => invoke('account:panelStatus'),
   panelVerify: () => invoke('account:panelVerify'),
   onChange: cb => {

@@ -26,6 +26,7 @@ import {
   panelStatus,
   panelVerify,
 } from '../account/checkout'
+import { closePayWindow, openPayWindow } from '../account/pay-window'
 import { logger } from '@pixelsky/engine'
 import { initPlatform, validateQueuedInput } from '../platform/platform'
 import { initProviders } from '../providers/providers'
@@ -130,6 +131,11 @@ export async function initEngine(ctx: AppContext): Promise<void> {
   handle('account:checkoutCancel', (_e, orderId) => checkoutCancel(orderId))
   handle('account:checkoutPending', () => checkoutPending())
   handle('account:checkoutOpenPayUrl', (_e, orderId) => checkoutOpenPayUrl(orderId))
+  // 付款窗口（pay_url 订单在软件里直接显示收银台页，main/account/pay-window.ts）：作为发起请求的窗口的子窗口
+  handle('account:checkoutOpenPayWindow', (e, orderId) =>
+    openPayWindow(BrowserWindow.fromWebContents(e.sender), orderId),
+  )
+  handle('account:checkoutClosePayWindow', (_e, orderId) => closePayWindow(orderId))
   handle('account:panelStatus', () => panelStatus())
   handle('account:panelVerify', () => panelVerify())
   // 搜索 / 产物扫描按窗口分桶；窗口关闭时中止它还没跑完的查询

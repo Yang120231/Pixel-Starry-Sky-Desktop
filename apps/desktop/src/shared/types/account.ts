@@ -176,6 +176,11 @@ export interface CheckoutOrder {
   /** 云端读单时面板凭证已失效（订单状态是最后一次读到的）；缺省当作有效 */
   panelValid?: boolean
 }
+/** 付款窗口的事件（主进程推给渲染层）：用户自己关了窗口，或页面没能加载出来（窗口已被主进程关掉） */
+export interface PayWindowEvent {
+  orderId: number
+  state: 'closed' | 'failed'
+}
 /** 下单参数：requestId 是一次「下单意图」一个 UUID，重试和确认账号后续下单都用同一个 */
 export interface CheckoutCreateInput {
   requestId: string

@@ -19,6 +19,7 @@ import { allMessages, type TranslationKey } from '../../shared/i18n/translate'
 import type { Locale } from '../../shared/i18n/messages'
 import type { TrayCommand, TrayPrefs } from '../../shared/types/tray'
 import { windowLocale } from './ui-language'
+import { isPayWindow } from './payWindowRegistry'
 import { sendWhenReady } from './rendererHealth'
 import { mergeWindowFile } from './windowFile'
 import type { AppContext } from './context'
@@ -186,10 +187,11 @@ export function initTray(ctx: AppContext, deps: TrayDeps): TrayController {
   }
 
   let lastFocused: BrowserWindow | null = null
+  // 付款窗口（第三方收银台页）不当主窗口：不记成最近聚焦的、不参与「显示窗口」「还有没有别的可见窗口」「任务栏红点」
   app.on('browser-window-focus', (_e, win) => {
-    lastFocused = win
+    if (!isPayWindow(win)) lastFocused = win
   })
-  const windows = (): BrowserWindow[] => BrowserWindow.getAllWindows().filter(w => !w.isDestroyed())
+  const windows = (): BrowserWindow[] => BrowserWindow.getAllWindows().filter(w => !w.isDestroyed() && !isPayWindow(w))
   const target = (): BrowserWindow | null =>
     lastFocused && !lastFocused.isDestroyed() ? lastFocused : (windows()[0] ?? null)
   const showWindow = (): BrowserWindow => {

@@ -4,6 +4,7 @@ import type { CheckoutCreateInput } from '../../../shared/types/account'
 import {
   DEMO_COMPLETE_MS,
   DEMO_PAID_MS,
+  DEMO_CASHIER,
   DEMO_QR,
   DEMO_REAUTH_AMOUNT,
   DEMO_REAUTH_MS,
@@ -12,11 +13,11 @@ import {
 import { demoAccount } from './account'
 import { demoStore } from './store'
 
-const balance = (requestId: string, amount: number): CheckoutCreateInput => ({
+const balance = (requestId: string, amount: number, method = 'alipay'): CheckoutCreateInput => ({
   requestId,
   kind: 'balance',
   amount,
-  method: 'alipay',
+  method,
 })
 
 describe('演示模式的软件内付款', () => {
@@ -25,7 +26,7 @@ describe('演示模式的软件内付款', () => {
 
   it('下单后 8 秒变已付款、再 2 秒到账，余额增加；二维码只在待付时给', async () => {
     const demo = createDemoCheckout(demoAccount, demoStore)
-    const order = await demo.bridge.checkoutCreate(balance('r1', 100))
+    const order = await demo.bridge.checkoutCreate(balance('r1', 100, 'wxpay'))
     expect(order.status).toBe('pending')
     expect(order.qrContent).toBe(DEMO_QR)
     expect(order.credited).toBe(105)
@@ -43,6 +44,32 @@ describe('演示模式的软件内付款', () => {
     expect((await demo.bridge.checkoutGet(order.orderId)).status).toBe('completed')
     expect(demo.account().balance).toBeCloseTo(before + 105, 2)
     expect(notified).toBe(1)
+  })
+
+  it('支付宝是 pay_url 订单（收银台链接），微信是 provider 订单（二维码）；两种都带支付链接', async () => {
+    const demo = createDemoCheckout(demoAccount, demoStore)
+    const ali = await demo.bridge.checkoutCreate(balance('a1', 50, 'alipay'))
+    expect(ali).toMatchObject({ qrSource: 'pay_url', qrContent: DEMO_CASHIER, payUrl: DEMO_CASHIER })
+    expect(DEMO_CASHIER).toBe('https://example.invalid/pixelsky-demo-cashier')
+    const wx = await demo.bridge.checkoutCreate(balance('w1', 50, 'wxpay'))
+    expect(wx).toMatchObject({ qrSource: 'provider', qrContent: DEMO_QR, payUrl: DEMO_QR })
+    // 查单、同 requestId 重复下单拿到的还是同一种；待付列表不带二维码
+    expect(await demo.bridge.checkoutGet(ali.orderId)).toMatchObject({ qrSource: 'pay_url', qrContent: DEMO_CASHIER })
+    expect((await demo.bridge.checkoutCreate(balance('a1', 50, 'alipay'))).qrSource).toBe('pay_url')
+    const listed = await demo.bridge.checkoutPending()
+    expect(listed.every(o => o.qrContent === null && o.qrSource === null)).toBe(true)
+  })
+
+  it('演示桥的付款窗口：不开真窗口，认识的订单直接成功，不认识的订单报错；关窗什么都不做', async () => {
+    const demo = createDemoCheckout(demoAccount, demoStore)
+    const ali = await demo.bridge.checkoutCreate(balance('a2', 50, 'alipay'))
+    await expect(demo.bridge.checkoutOpenPayWindow(ali.orderId)).resolves.toBeUndefined()
+    await expect(demo.bridge.checkoutClosePayWindow(ali.orderId)).resolves.toBeUndefined()
+    await expect(demo.bridge.checkoutOpenPayWindow(424242)).rejects.toThrow('找不到这笔订单')
+    // 付款后支付宝订单照样到账
+    await demo.bridge.checkoutVerify(ali.orderId)
+    await vi.advanceTimersByTimeAsync(DEMO_COMPLETE_MS)
+    expect((await demo.bridge.checkoutGet(ali.orderId)).status).toBe('completed')
   })
 
   it('同一个 requestId 返回同一笔订单', async () => {

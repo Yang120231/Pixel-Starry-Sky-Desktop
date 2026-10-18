@@ -3292,10 +3292,6 @@ export const catalog = {
     "zh": "{p0}付款二维码，应付 {p1}",
     "en": "{p0} payment QR code, amount due {p1}"
   },
-  "settings.account.Checkout.qrOpensPage": {
-    "zh": "扫码后会打开支付页面",
-    "en": "Scanning opens the payment page"
-  },
   "settings.account.Checkout.demoQr": {
     "zh": "演示二维码，不能付款",
     "en": "Demo QR code. It can't be paid"
@@ -3348,9 +3344,41 @@ export const catalog = {
     "zh": "改用浏览器付款",
     "en": "Pay in browser instead"
   },
+  "settings.account.Checkout.payInBrowser.panel": {
+    "zh": "去网页面板付款",
+    "en": "Pay on the web panel"
+  },
   "settings.account.Checkout.openPayPage": {
     "zh": "扫不出来？在浏览器打开这笔订单的支付页",
     "en": "Can't scan? Open this order's payment page in the browser"
+  },
+  "settings.account.Checkout.payWindow.hint": {
+    "zh": "请在弹出的付款窗口里，用手机{p0}扫码付款",
+    "en": "In the payment window that opened, scan the code with {p0} on your phone"
+  },
+  "settings.account.Checkout.payWindow.reopen": {
+    "zh": "重新打开付款窗口",
+    "en": "Reopen payment window"
+  },
+  "settings.account.Checkout.payWindow.browser": {
+    "zh": "在浏览器打开支付页",
+    "en": "Open payment page in browser"
+  },
+  "settings.account.Checkout.payWindow.opening": {
+    "zh": "正在打开付款窗口",
+    "en": "Opening the payment window"
+  },
+  "settings.account.Checkout.payWindow.closed": {
+    "zh": "付款窗口已关闭。还没付款的话，可以重新打开",
+    "en": "The payment window was closed. Reopen it if you haven't paid yet"
+  },
+  "settings.account.Checkout.payWindow.failed": {
+    "zh": "付款窗口没能打开或加载失败。请重新打开，或在浏览器打开支付页",
+    "en": "The payment window could not open or load. Reopen it, or open the payment page in the browser"
+  },
+  "settings.account.Checkout.payWindow.demo": {
+    "zh": "演示模式：不会真的打开付款窗口，也不能付款",
+    "en": "Demo mode: no payment window opens and nothing can be paid"
   },
   "settings.account.Checkout.notYet": {
     "zh": "暂时没有查到付款，稍后会自动再查",

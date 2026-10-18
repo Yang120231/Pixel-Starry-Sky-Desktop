@@ -153,8 +153,15 @@ function parsePanel(body: unknown): PanelStatus {
 // 这次登录期间下过 / 列出来过的订单：订单号和对应的 pay_url 只放内存，跟着登录会话代数清空
 // ---------------------------------------------------------------------------
 
-let session: { epoch: number; orders: Map<number, { payUrl: string | null }> } | null = null
-function orders(): Map<number, { payUrl: string | null }> {
+interface Remembered {
+  payUrl: string | null
+  /** 支付方式名（付款窗口的标题用） */
+  label: string
+  /** 支付方式代码（alipay / wxpay）：英文界面的窗口标题按它选通用写法 */
+  method: string
+}
+let session: { epoch: number; orders: Map<number, Remembered> } | null = null
+function orders(): Map<number, Remembered> {
   const epoch = accountEpoch()
   if (!session || session.epoch !== epoch) session = { epoch, orders: new Map() }
   return session.orders
@@ -164,15 +171,15 @@ function remember(order: CheckoutOrder, keepUrl = false): void {
   const map = orders()
   const payUrl =
     order.status === 'pending' ? (order.payUrl ?? (keepUrl ? (map.get(order.orderId)?.payUrl ?? null) : null)) : null
-  map.set(order.orderId, { payUrl })
+  map.set(order.orderId, { payUrl, label: order.methodLabel, method: order.method })
 }
 /** 订单号：正的安全整数，并且是这次登录期间主进程下过 / 列出来过的 */
-function knownOrder(orderId: unknown): { id: number; payUrl: string | null } {
+function knownOrder(orderId: unknown): { id: number; payUrl: string | null; label: string; method: string } {
   const id = positiveInt(orderId)
   if (id === null) throw new Error(MSG_INVALID_REQUEST)
   const entry = orders().get(id)
   if (!entry) throw new Error(MSG_ORDER_NOT_FOUND)
-  return { id, payUrl: entry.payUrl }
+  return { id, payUrl: entry.payUrl, label: entry.label, method: entry.method }
 }
 
 /** 同一时间只能有一个下单在途；记的是下单时的登录会话代数，换了账号就当没有在途 */
@@ -381,6 +388,17 @@ export async function checkoutOpenPayUrl(orderId: unknown): Promise<void> {
   const url = httpsUrl(payUrl)
   if (!url) throw new Error(MSG_NO_PAY_PAGE)
   await shell.openExternal(url)
+}
+
+/**
+ * 付款窗口（main/account/pay-window.ts）要加载的页面：和 checkoutOpenPayUrl 一样，只认这次登录期间记下的订单、
+ * 只用主进程记下的 pay_url（https、无用户名密码）；订单不再待付（pay_url 已清掉）时拒绝
+ */
+export function payPageOf(orderId: unknown): { orderId: number; url: string; label: string; method: string } {
+  const { id, payUrl, label, method } = knownOrder(orderId)
+  const url = httpsUrl(payUrl)
+  if (!url) throw new Error(MSG_NO_PAY_PAGE)
+  return { orderId: id, url, label, method }
 }
 
 /** account:panelStatus：面板凭证状态 */

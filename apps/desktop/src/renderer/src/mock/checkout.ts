@@ -1,5 +1,6 @@
 // 演示模式下的软件内付款（--demo，docs/ui/in-app-payment.md §6.10）：假的下单 / 查单 / 取消 / 待付列表，不连任何网络。
 // 订单 8 秒后（或点「我已付款」后）变 paid，再过 2 秒变 completed，演示账号的余额 / 套餐随之增加；
+// 支付宝演示成「只给收银台链接」的 pay_url 订单（弹窗里走付款窗口，演示桥不开真窗口），微信是 provider 订单（显示二维码），两条路径都能点到；
 // 金额填 66.6 时先要求确认账号（PANEL_REAUTH_REQUIRED），点「去浏览器确认」不开浏览器，3 秒后算确认成功。
 import { codedError } from '@pixelsky/protocol'
 import type {
@@ -14,6 +15,8 @@ import { tr } from '../i18n/core'
 import { quoteRecharge } from '../features/account/storeLogic'
 
 export const DEMO_QR = 'https://example.invalid/pixelsky-demo-pay'
+/** 演示的收银台链接（支付宝订单的 qrContent / payUrl，qrSource=pay_url） */
+export const DEMO_CASHIER = 'https://example.invalid/pixelsky-demo-cashier'
 /** 填这个金额会模拟「需要先在浏览器里确认账号」 */
 export const DEMO_REAUTH_AMOUNT = 66.6
 export const DEMO_PAID_MS = 8_000
@@ -55,9 +58,9 @@ export function createDemoCheckout(
     return {
       ...e.order,
       serverTime: new Date(now()).toISOString(),
-      qrContent: pending && withQr ? DEMO_QR : null,
-      qrSource: pending && withQr ? 'provider' : null,
-      payUrl: pending && withQr ? DEMO_QR : null,
+      qrContent: pending && withQr ? e.order.qrContent : null,
+      qrSource: pending && withQr ? e.order.qrSource : null,
+      payUrl: pending && withQr ? e.order.payUrl : null,
     }
   }
 
@@ -124,14 +127,15 @@ export function createDemoCheckout(
       if (known !== undefined) return view(find(known))
       const t = now()
       let order: Omit<CheckoutOrder, 'orderId'>
+      const cashier = input.method === 'alipay'
       const base = {
         status: 'pending' as const,
         method: input.method,
         methodLabel: methodLabel(input.method),
         payCurrency: catalog.currency,
-        qrContent: DEMO_QR,
-        qrSource: 'provider' as const,
-        payUrl: DEMO_QR,
+        qrContent: cashier ? DEMO_CASHIER : DEMO_QR,
+        qrSource: cashier ? ('pay_url' as const) : ('provider' as const),
+        payUrl: cashier ? DEMO_CASHIER : DEMO_QR,
         createdAt: new Date(t).toISOString(),
         expiresAt: new Date(t + ORDER_TIMEOUT_MS).toISOString(),
         paidAt: null,
@@ -203,6 +207,11 @@ export function createDemoCheckout(
     async checkoutOpenPayUrl() {
       throw new Error(tr('settings.account.Store.demoNoOpen'))
     },
+    // 演示不开真窗口，只当成功（弹窗里会写明这是演示）；订单要存在，和主进程一样认不得的订单报错
+    async checkoutOpenPayWindow(orderId) {
+      find(orderId)
+    },
+    async checkoutClosePayWindow() {},
     async panelStatus(): Promise<PanelStatus> {
       return {
         valid: panelOk,

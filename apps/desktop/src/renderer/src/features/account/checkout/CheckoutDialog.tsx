@@ -109,6 +109,9 @@ export function CheckoutPanel({
     state.phase !== 'order' ? state.phase : order ? orderPhase(order.status, remaining) : 'creating'
   // 订单阶段面板凭证中途失效：还在等 / 查的订单要先去浏览器确认账号才查得下去，这时主按钮是「去浏览器确认账号」
   const panelBad = order?.panelValid === false && (phase === 'waiting' || phase === 'paid' || phase === 'expired')
+  // pay_url 订单（只给收银台网页）：不显示二维码，在付款窗口里付。窗口被用户关了 / 没加载出来时「重新打开付款窗口」当主按钮
+  const payWindowMode = order?.qrSource === 'pay_url'
+  const reopenPrimary = payWindowMode && (state.payWindow === 'closed' || state.payWindow === 'failed')
 
   // 键盘与焦点：Esc 关闭（二次确认时只退回上一步）、Tab 在弹窗里循环、关闭后焦点回到触发按钮
   const handlers = useRef({ onClose, confirmingCancel })
@@ -154,7 +157,12 @@ export function CheckoutPanel({
     if (main) main.focus({ preventScroll: true })
     else if (!root.contains(document.activeElement))
       root.querySelector<HTMLElement>('button')?.focus({ preventScroll: true })
-  }, [phase, confirmingCancel, panelBad])
+  }, [phase, confirmingCancel, panelBad, state.payWindow])
+
+  // 本地倒计时到 0 就算过期：服务端状态可能还没跟上，先把付款窗口关掉（别的终态由 flow 随订单状态关）
+  useEffect(() => {
+    if (phase === 'expired') flow.closePayWindow()
+  }, [phase, flow])
 
   // 倒计时不播报，只在剩 5 分钟和 1 分钟时各播报一次
   const lastRemaining = useRef(remaining)
@@ -188,9 +196,11 @@ export function CheckoutPanel({
       {state.reauth === 'timeout' ? tr(key('reauth.again')) : tr(key('panelInvalid.go'))}
     </Button>
   )
+  // pay_url 订单里「在浏览器打开支付页」（WaitingBody）打开的是这笔订单的收银台；这个按钮是关弹窗、去网页面板重新走购买流程。
+  // 两个都叫「浏览器」会让人以为是同一件事，所以 pay_url 订单里这个写成「去网页面板付款」
   const browserButton = (
     <Button variant="ghost" icon={ExternalLink} onClick={onBrowser}>
-      {tr(key('payInBrowser'))}
+      {tr(key(payWindowMode ? 'payInBrowser.panel' : 'payInBrowser'))}
     </Button>
   )
   const verifyButton = (primary: boolean) => (
@@ -330,6 +340,9 @@ export function CheckoutPanel({
             currency={currency}
             remaining={remaining}
             otherPending={otherPending}
+            flow={flow}
+            payWindow={state.payWindow}
+            reopenPrimary={reopenPrimary}
           />
         )}
         {order && phase === 'paid' && (
@@ -399,14 +412,14 @@ export function CheckoutPanel({
               </div>
             ) : (
               <div className="flex flex-wrap items-center gap-2">
-                {verifyButton(true)}
+                {verifyButton(!reopenPrimary)}
                 <Button variant="outline" disabled={state.busy === 'cancel'} onClick={() => setConfirmingCancel(true)}>
                   {tr(key('cancelOrder'))}
                 </Button>
                 <span className="ml-auto">{browserButton}</span>
               </div>
             )}
-            {order.payUrl && !confirmingCancel && (
+            {order.payUrl && !payWindowMode && !confirmingCancel && (
               <button
                 type="button"
                 className="press self-start text-meta text-fg-muted underline-offset-2 hover:text-fg hover:underline"
@@ -556,19 +569,25 @@ function balanceSummary(credited: number | null, bonus: number, currency: string
   return `${head} · ${got}${extra}`
 }
 
-/** 等待付款：二维码、应付金额、方式、倒计时 */
+/** 等待付款：二维码（pay_url 订单是付款窗口的说明和按钮）、应付金额、方式、倒计时 */
 function WaitingBody({
   order,
   intent,
   currency,
   remaining,
   otherPending,
+  flow,
+  payWindow,
+  reopenPrimary,
 }: {
   order: CheckoutOrder
   intent: CheckoutIntent | null
   currency: string
   remaining: number
   otherPending: boolean
+  flow: CheckoutFlow
+  payWindow: FlowState['payWindow']
+  reopenPrimary: boolean
 }) {
   useI18n()
   const { resolved } = useTheme()
@@ -580,27 +599,61 @@ function WaitingBody({
         ? `${order.plan.name} / ${validityLabel(order.plan.validityDays)}`
         : order.plan.name
       : balanceSummary(order.credited, order.bonus ?? 0, currency)
+  const inWindow = order.qrSource === 'pay_url'
+  // 「付款窗口已关闭」不是 live region：焦点跳到「重新打开」按钮时靠 aria-describedby 把这句读出来
+  const closedNoteId = useId()
   return (
     <div className="flex flex-col gap-3">
       <p className="selectable text-fg-secondary">{summary}</p>
       <div className="flex items-start gap-5">
-        <div className="flex shrink-0 flex-col items-center gap-1.5">
-          {order.qrContent ? (
-            <QrCode
-              text={order.qrContent}
-              ecc="M"
-              fit={{ min: 180, max: 220 }}
-              dark={resolved === 'dark'}
-              label={tr(key('qrLabel'), { p0: order.methodLabel, p1: due })}
-            />
-          ) : (
-            <p className="w-44 text-meta text-fg-muted">{tr(key('noQr'))}</p>
-          )}
-          {demoMode && <p className="max-w-[220px] text-center text-label text-warn">{tr(key('demoQr'))}</p>}
-          {order.qrSource === 'pay_url' && (
-            <p className="max-w-[220px] text-center text-label text-fg-faint">{tr(key('qrOpensPage'))}</p>
-          )}
-        </div>
+        {inWindow ? (
+          <div className="flex w-[220px] shrink-0 flex-col gap-2">
+            <p className="selectable text-fg">{tr(key('payWindow.hint'), { p0: order.methodLabel })}</p>
+            {demoMode && <p className="text-label text-warn">{tr(key('payWindow.demo'))}</p>}
+            {payWindow === 'opening' && (
+              <p className="flex items-center gap-2 text-meta text-fg-muted">
+                <Spinner />
+                {tr(key('payWindow.opening'))}
+              </p>
+            )}
+            {payWindow === 'closed' && (
+              <p id={closedNoteId} className="text-meta text-fg-muted">
+                {tr(key('payWindow.closed'))}
+              </p>
+            )}
+            {payWindow === 'failed' && (
+              <p role="alert" className="text-meta text-danger">
+                {tr(key('payWindow.failed'))}
+              </p>
+            )}
+            <Button
+              variant={reopenPrimary ? 'primary' : 'outline'}
+              data-autofocus={reopenPrimary ? '' : undefined}
+              aria-describedby={payWindow === 'closed' ? closedNoteId : undefined}
+              onClick={() => void flow.openPayWindow()}
+            >
+              {tr(key('payWindow.reopen'))}
+            </Button>
+            <Button variant="ghost" icon={ExternalLink} onClick={() => void flow.openPayUrl()}>
+              {tr(key('payWindow.browser'))}
+            </Button>
+          </div>
+        ) : (
+          <div className="flex shrink-0 flex-col items-center gap-1.5">
+            {order.qrContent ? (
+              <QrCode
+                text={order.qrContent}
+                ecc="M"
+                fit={{ min: 180, max: 220 }}
+                dark={resolved === 'dark'}
+                label={tr(key('qrLabel'), { p0: order.methodLabel, p1: due })}
+              />
+            ) : (
+              <p className="w-44 text-meta text-fg-muted">{tr(key('noQr'))}</p>
+            )}
+            {demoMode && <p className="max-w-[220px] text-center text-label text-warn">{tr(key('demoQr'))}</p>}
+          </div>
+        )}
         <div className="min-w-0 flex-1">
           <div className="text-meta text-fg-muted">{tr(key('amountDue'))}</div>
           <div className="text-title leading-tight font-semibold text-fg tabular-nums">{due}</div>
@@ -609,7 +662,7 @@ function WaitingBody({
           )}
           {amountDiffers(order, intent) && <p className="mt-1 text-meta text-warn">{tr(key('amountDiffers'))}</p>}
           <div className="mt-3 text-fg">{order.methodLabel}</div>
-          <div className="text-meta text-fg-muted">{tr(key('scanWith'), { p0: order.methodLabel })}</div>
+          {!inWindow && <div className="text-meta text-fg-muted">{tr(key('scanWith'), { p0: order.methodLabel })}</div>}
           <div className={cn('mt-1 tabular-nums', remaining < 5 * 60_000 ? 'text-warn' : 'text-fg-secondary')}>
             {tr(key('remaining'), { p0: formatCountdown(remaining) })}
           </div>

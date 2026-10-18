@@ -73,6 +73,7 @@ const state = (over: Partial<FlowState> = {}): FlowState => ({
   reauth: 'idle',
   reauthError: null,
   outcome: null,
+  payWindow: 'idle',
   ...over,
 })
 
@@ -88,6 +89,8 @@ const flow = new CheckoutFlow({
     checkoutVerify: vi.fn(),
     checkoutCancel: vi.fn(),
     checkoutOpenPayUrl: vi.fn(),
+    checkoutOpenPayWindow: vi.fn(),
+    checkoutClosePayWindow: vi.fn(),
     panelStatus: vi.fn(),
     panelVerify: vi.fn(),
   },
@@ -206,10 +209,99 @@ describe('等待付款', () => {
     expect(render(state({ order: order('pending', { payAmount: 125 }) }))).toContain('应付金额以这里为准')
     expect(render(state())).not.toContain('应付金额以这里为准')
   })
-  it('qr_source=pay_url：码下面写「扫码后会打开支付页面」', () => {
-    expect(render(state({ order: order('pending', { qrSource: 'pay_url' }) }))).toContain('扫码后会打开支付页面')
-    expect(render(state())).not.toContain('扫码后会打开支付页面')
+  it('provider 订单照旧：显示二维码，没有付款窗口的说明和按钮', () => {
+    const html = render(state())
+    expect(html).toContain('role="img"')
+    expect(html).not.toContain('付款窗口')
+    expect(hasButton(html, '重新打开付款窗口')).toBe(false)
   })
+})
+
+describe('等待付款：pay_url 订单（付款窗口）', () => {
+  const payUrlOrder = (over: Partial<CheckoutOrder> = {}): CheckoutOrder =>
+    order('pending', {
+      qrSource: 'pay_url',
+      qrContent: 'https://pay.example.com/cashier/abc',
+      payUrl: 'https://pay.example.com/cashier/abc',
+      ...over,
+    })
+  const payState = (over: Partial<FlowState> = {}): FlowState => state({ order: payUrlOrder(), ...over })
+
+  it('不再显示我们生成的二维码，改成说明（带支付方式名）和两个按钮', () => {
+    const html = render(payState({ payWindow: 'open' }))
+    expect(html).not.toContain('role="img"')
+    expect(html).not.toContain('<svg role="img"')
+    expect(html).toContain('请在弹出的付款窗口里，用手机支付宝扫码付款')
+    expect(hasButton(html, '重新打开付款窗口')).toBe(true)
+    expect(hasButton(html, '在浏览器打开支付页')).toBe(true)
+    // 旧的小字链接不再重复出现；倒计时、状态条、我已付款、取消订单照旧
+    expect(html).not.toContain('扫不出来')
+    expect(html).not.toContain('请用支付宝扫码')
+    expect(html).toContain('剩余 29:41')
+    expect(html).toContain('¥122.40')
+    expect(hasButton(html, '我已付款')).toBe(true)
+    expect(hasButton(html, '取消订单')).toBe(true)
+    expect(html).toMatch(/<ol aria-label="付款进度"/)
+  })
+  it('英文界面', () => {
+    const html = render(payState({ payWindow: 'open' }), {}, 'en-US')
+    expect(html).toContain('In the payment window that opened, scan the code with 支付宝 on your phone')
+    expect(hasButton(html, 'Reopen payment window')).toBe(true)
+    expect(hasButton(html, 'Open payment page in browser')).toBe(true)
+  })
+  it('状态播报不重复：正在打开 / 已关闭只是普通小字，只有加载失败是 role=alert', () => {
+    const opening = render(payState({ payWindow: 'opening' }))
+    expect(opening).toContain('正在打开付款窗口')
+    expect(opening).toMatch(/<div role="status" aria-live="polite" class="sr-only">等待付款<\/div>/)
+    expect(opening).not.toContain('role="alert"')
+    const closed = render(payState({ payWindow: 'closed' }))
+    expect(closed).toContain('付款窗口已关闭')
+    expect(closed).not.toContain('role="alert"')
+    const failed = render(payState({ payWindow: 'failed' }))
+    expect(failed).toMatch(/<p role="alert"[^>]*>付款窗口没能打开或加载失败/)
+    expect(render(payState({ payWindow: 'open' }))).not.toContain('role="alert"')
+  })
+  it('窗口被关掉 / 加载失败时「重新打开付款窗口」当主按钮并抢焦点，「我已付款」退成次要', () => {
+    for (const payWindow of ['closed', 'failed'] as const) {
+      const html = render(payState({ payWindow }))
+      expect(html).toMatch(/<button[^>]*data-autofocus=""[^>]*>(?:(?!<\/button>).)*重新打开付款窗口/s)
+      expect(html).not.toMatch(/<button[^>]*data-autofocus=""[^>]*>(?:(?!<\/button>).)*我已付款/s)
+    }
+    const open = render(payState({ payWindow: 'open' }))
+    expect(open).toMatch(/<button[^>]*data-autofocus=""[^>]*>(?:(?!<\/button>).)*我已付款/s)
+    expect(open).not.toMatch(/<button[^>]*data-autofocus=""[^>]*>(?:(?!<\/button>).)*重新打开付款窗口/s)
+  })
+  it('底部的去网页面板按钮和窗口里的「在浏览器打开支付页」文案分开；二维码订单不变', () => {
+    const html = render(payState({ payWindow: 'open' }))
+    expect(hasButton(html, '去网页面板付款')).toBe(true)
+    expect(hasButton(html, '改用浏览器付款')).toBe(false)
+    expect(hasButton(html, '在浏览器打开支付页')).toBe(true)
+    const en = render(payState({ payWindow: 'open' }), {}, 'en-US')
+    expect(hasButton(en, 'Pay on the web panel')).toBe(true)
+    expect(hasButton(en, 'Pay in browser instead')).toBe(false)
+    const qr = render(state())
+    expect(hasButton(qr, '改用浏览器付款')).toBe(true)
+    expect(hasButton(qr, '去网页面板付款')).toBe(false)
+  })
+  it('「付款窗口已关闭」提示不是 live region：「重新打开」按钮用 aria-describedby 指向它；其它状态没有', () => {
+    const closed = render(payState({ payWindow: 'closed' }))
+    const id = /<p id="([^"]+)"[^>]*>付款窗口已关闭/.exec(closed)?.[1]
+    expect(id).toBeTruthy()
+    expect(closed).toMatch(
+      new RegExp(`<button[^>]*aria-describedby="${id}"[^>]*>(?:(?!</button>).)*重新打开付款窗口`, 's'),
+    )
+    for (const payWindow of ['open', 'opening', 'failed'] as const)
+      expect(render(payState({ payWindow }))).not.toContain('aria-describedby')
+  })
+  it('演示模式写明不会真的打开付款窗口；平时没有这句', () => {
+    vi.stubGlobal('window', { pixelsky: { demo: true } })
+    expect(render(payState({ payWindow: 'open' }))).toContain('演示模式：不会真的打开付款窗口')
+    vi.unstubAllGlobals()
+    expect(render(payState({ payWindow: 'open' }))).not.toContain('演示模式')
+  })
+})
+
+describe('等待付款：其它提示', () => {
   it('网络不稳定：小字提示；连续失败 5 次：错误和重试；凭证失效：提示确认账号', () => {
     expect(render(state({ unstable: true }))).toContain('网络不稳定，正在重试')
     const failed = render(state({ watchError: parseCheckoutError(new Error('x')) }))

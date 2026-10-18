@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   netCalls: [] as string[],
   handlers: new Map<string, (...args: unknown[]) => unknown>(),
   opened: [] as string[],
+  windows: [] as unknown[],
+  sent: [] as Array<{ to: unknown; channel: string }>,
 }))
 vi.mock('electron', () => ({
   app: {
@@ -19,7 +21,7 @@ vi.mock('electron', () => ({
     getVersion: () => '9.9.9-test',
     on: () => undefined,
   },
-  BrowserWindow: { getAllWindows: () => [] },
+  BrowserWindow: { getAllWindows: () => mocks.windows },
   net: {
     fetch: async (url: string) => {
       mocks.netCalls.push(url)
@@ -40,6 +42,12 @@ vi.mock('electron', () => ({
   },
 }))
 vi.mock('../app/ui-language', () => ({ nativeText: (_w: unknown, v: string) => v, windowLocale: () => 'zh-CN' }))
+vi.mock('../app/rendererHealth', () => ({
+  sendTo: (wc: unknown, channel: string) => {
+    mocks.sent.push({ to: wc, channel })
+    return true
+  },
+}))
 vi.mock('../ipc/guard', () => ({
   handle: (name: string, fn: (...args: unknown[]) => unknown) => mocks.handlers.set(name, fn),
 }))
@@ -90,6 +98,7 @@ writeFileSync(
 )
 
 const { deviceName, extensionsFetch, initAccount, platformFetch, signedInEmail } = await import('./account')
+const { markPayWindow } = await import('../app/payWindowRegistry')
 vi.useFakeTimers({ toFake: ['setInterval'] })
 initAccount()
 
@@ -225,5 +234,25 @@ describe('登录会话', () => {
       get(callback, res => (res.resume(), res.on('end', resolve))).on('error', reject),
     )
     expect(mocks.handlers.get('account:get')?.()).toEqual({ status: 'signed-out', reason: 'denied' })
+  })
+
+  it('account:changed 只广播给软件自己的窗口，不发给付款窗口（第三方收银台页）', async () => {
+    const fake = () => ({ isDestroyed: () => false, webContents: {} })
+    const main = fake()
+    const pay = fake()
+    markPayWindow(pay as never)
+    mocks.windows = [main, pay]
+    mocks.sent.length = 0
+    mocks.opened.length = 0
+    try {
+      void mocks.handlers.get('account:login')?.()
+      await vi.waitFor(() => expect(mocks.opened).toHaveLength(1))
+      const targets = mocks.sent.filter(s => s.channel === 'account:changed').map(s => s.to)
+      expect(targets).toContain(main.webContents)
+      expect(targets).not.toContain(pay.webContents)
+      await mocks.handlers.get('account:cancel')?.()
+    } finally {
+      mocks.windows = []
+    }
   })
 })

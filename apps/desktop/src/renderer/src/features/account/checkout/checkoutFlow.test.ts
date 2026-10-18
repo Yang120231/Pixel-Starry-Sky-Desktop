@@ -80,6 +80,8 @@ function make(opts: { balances?: number[] } = {}) {
   const verify = vi.fn(async (_id: number) => order())
   const cancel = vi.fn(async (_id: number) => order('cancelled'))
   const openPayUrl = vi.fn(async (_id: number) => undefined)
+  const openPayWindow = vi.fn(async (_id: number) => undefined)
+  const closePayWindow = vi.fn(async (_id: number) => undefined)
   const panelStatus = vi.fn(
     async (): Promise<PanelStatus> => ({ valid: true, expiresAt: null, usableForCheckout: true }),
   )
@@ -100,6 +102,8 @@ function make(opts: { balances?: number[] } = {}) {
       checkoutVerify: verify,
       checkoutCancel: cancel,
       checkoutOpenPayUrl: openPayUrl,
+      checkoutOpenPayWindow: openPayWindow,
+      checkoutClosePayWindow: closePayWindow,
       panelStatus,
       panelVerify,
     },
@@ -109,7 +113,21 @@ function make(opts: { balances?: number[] } = {}) {
     onCompleted,
     onLateOrder,
   })
-  return { flow, create, get, verify, cancel, openPayUrl, panelStatus, panelVerify, refresh, onCompleted, onLateOrder }
+  return {
+    flow,
+    create,
+    get,
+    verify,
+    cancel,
+    openPayUrl,
+    openPayWindow,
+    closePayWindow,
+    panelStatus,
+    panelVerify,
+    refresh,
+    onCompleted,
+    onLateOrder,
+  }
 }
 
 const tick = (ms: number) => vi.advanceTimersByTimeAsync(ms)
@@ -568,5 +586,157 @@ describe('到账', () => {
     t.flow.retryWatch()
     await tick(0)
     expect(t.flow.getState()).toMatchObject({ unstable: false, watchError: null })
+  })
+})
+
+// pay_url 订单（支付FM 这类只给收银台网页）：不显示二维码，下单 / 恢复订单时自动开付款窗口，订单不再待付或弹窗关闭时关掉
+describe('付款窗口（pay_url 订单）', () => {
+  const cashier = (status: CheckoutStatus = 'pending', over: Partial<CheckoutOrder> = {}): CheckoutOrder =>
+    order(status, {
+      qrContent: status === 'pending' ? 'https://pay.example.com/cashier/1' : null,
+      qrSource: status === 'pending' ? 'pay_url' : null,
+      payUrl: status === 'pending' ? 'https://pay.example.com/cashier/1' : null,
+      ...over,
+    })
+  const makeCashier = () => {
+    const t = make()
+    t.create.mockResolvedValue(cashier())
+    t.get.mockResolvedValue(cashier())
+    return t
+  }
+
+  it('下单成功自动打开付款窗口，只传订单号', async () => {
+    const t = makeCashier()
+    t.flow.begin(intent, false)
+    await tick(0)
+    expect(t.openPayWindow).toHaveBeenCalledTimes(1)
+    expect(t.openPayWindow).toHaveBeenCalledWith(1234)
+    expect(t.flow.getState().payWindow).toBe('open')
+    // 之后轮询到的还是待付，不会再自动开
+    await tick(FAST_INTERVAL_MS * 3)
+    expect(t.openPayWindow).toHaveBeenCalledTimes(1)
+  })
+
+  it('「继续付款」恢复订单时也自动打开', async () => {
+    const t = makeCashier()
+    t.flow.resume(1234)
+    await tick(0)
+    expect(t.get).toHaveBeenCalledWith(1234)
+    expect(t.openPayWindow).toHaveBeenCalledWith(1234)
+    expect(t.flow.getState().payWindow).toBe('open')
+  })
+
+  it('provider 订单（显示二维码）不开付款窗口，关闭时也不调关窗', async () => {
+    const t = make()
+    t.flow.begin(intent, false)
+    await tick(0)
+    expect(t.openPayWindow).not.toHaveBeenCalled()
+    expect(t.flow.getState().payWindow).toBe('idle')
+    t.flow.close()
+    expect(t.closePayWindow).not.toHaveBeenCalled()
+  })
+
+  it('订单变成已付款 / 已到账 / 已取消：关掉付款窗口，只关一次', async () => {
+    for (const status of ['paid', 'completed', 'cancelled', 'expired', 'failed'] as const) {
+      const t = makeCashier()
+      t.flow.begin(intent, false)
+      await tick(0)
+      t.get.mockResolvedValue(cashier(status))
+      await tick(FAST_INTERVAL_MS)
+      expect(t.closePayWindow, status).toHaveBeenCalledTimes(1)
+      expect(t.closePayWindow).toHaveBeenCalledWith(1234)
+      expect(t.flow.getState().payWindow, status).toBe('idle')
+      t.flow.dispose()
+    }
+  })
+
+  it('「我已付款」核实到已付款：关窗', async () => {
+    const t = makeCashier()
+    t.flow.begin(intent, false)
+    await tick(0)
+    t.verify.mockResolvedValue(cashier('paid'))
+    await t.flow.verify()
+    expect(t.closePayWindow).toHaveBeenCalledWith(1234)
+  })
+
+  it('取消订单：关窗', async () => {
+    const t = makeCashier()
+    t.cancel.mockResolvedValue(cashier('cancelled'))
+    t.flow.begin(intent, false)
+    await tick(0)
+    await t.flow.cancel()
+    expect(t.closePayWindow).toHaveBeenCalledWith(1234)
+  })
+
+  it('关闭弹窗：关窗（订单留着）', async () => {
+    const t = makeCashier()
+    t.flow.begin(intent, false)
+    await tick(0)
+    t.flow.close()
+    expect(t.closePayWindow).toHaveBeenCalledWith(1234)
+    expect(t.cancel).not.toHaveBeenCalled()
+  })
+
+  it('用户自己关了窗口：状态变 closed，轮询不会自动再开；「重新打开付款窗口」才再开', async () => {
+    const t = makeCashier()
+    t.flow.begin(intent, false)
+    await tick(0)
+    t.flow.payWindowEvent({ orderId: 1234, state: 'closed' })
+    expect(t.flow.getState().payWindow).toBe('closed')
+    await tick(FAST_INTERVAL_MS * 3)
+    expect(t.openPayWindow).toHaveBeenCalledTimes(1)
+    await t.flow.openPayWindow()
+    expect(t.openPayWindow).toHaveBeenCalledTimes(2)
+    expect(t.flow.getState().payWindow).toBe('open')
+  })
+
+  it('页面加载失败（事件）：状态变 failed；打开本身失败（调用报错）也是 failed', async () => {
+    const t = makeCashier()
+    t.flow.begin(intent, false)
+    await tick(0)
+    t.flow.payWindowEvent({ orderId: 1234, state: 'failed' })
+    expect(t.flow.getState().payWindow).toBe('failed')
+    t.openPayWindow.mockRejectedValueOnce(new Error('这笔订单没有可以打开的支付页'))
+    await t.flow.openPayWindow()
+    expect(t.flow.getState().payWindow).toBe('failed')
+    await t.flow.openPayWindow() // 重新打开成功
+    expect(t.flow.getState().payWindow).toBe('open')
+  })
+
+  it('别的订单的事件、关了弹窗之后的事件忽略', async () => {
+    const t = makeCashier()
+    t.flow.begin(intent, false)
+    await tick(0)
+    t.flow.payWindowEvent({ orderId: 9999, state: 'closed' })
+    expect(t.flow.getState().payWindow).toBe('open')
+    t.flow.close()
+    t.flow.payWindowEvent({ orderId: 1234, state: 'closed' })
+    expect(t.flow.getState().payWindow).toBe('idle')
+  })
+
+  it('本地倒计时到期：closePayWindow 关窗，之后轮询到的 pending 不会再自动开', async () => {
+    const t = makeCashier()
+    t.flow.begin(intent, false)
+    await tick(0)
+    t.flow.closePayWindow()
+    expect(t.closePayWindow).toHaveBeenCalledWith(1234)
+    t.flow.closePayWindow() // 没有窗口了，不重复调
+    expect(t.closePayWindow).toHaveBeenCalledTimes(1)
+    await tick(FAST_INTERVAL_MS * 3)
+    expect(t.openPayWindow).toHaveBeenCalledTimes(1)
+  })
+
+  it('重新下单（换订单）：旧窗口关掉，新订单自动开窗', async () => {
+    const t = makeCashier()
+    t.flow.begin(intent, false)
+    await tick(0)
+    t.get.mockResolvedValue(cashier('expired'))
+    await tick(FAST_INTERVAL_MS)
+    t.create.mockResolvedValue(cashier('pending', { orderId: 5678 }))
+    t.get.mockResolvedValue(cashier('pending', { orderId: 5678 }))
+    t.flow.reorder()
+    await tick(0)
+    expect(t.openPayWindow).toHaveBeenLastCalledWith(5678)
+    expect(t.flow.getState().payWindow).toBe('open')
   })
 })

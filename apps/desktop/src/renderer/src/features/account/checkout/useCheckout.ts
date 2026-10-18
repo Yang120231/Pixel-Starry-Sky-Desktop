@@ -50,6 +50,8 @@ const bridge: FlowBridge = {
   checkoutVerify: id => api().checkoutVerify(id),
   checkoutCancel: id => api().checkoutCancel(id),
   checkoutOpenPayUrl: id => api().checkoutOpenPayUrl(id),
+  checkoutOpenPayWindow: id => api().checkoutOpenPayWindow(id),
+  checkoutClosePayWindow: id => api().checkoutClosePayWindow(id),
   panelStatus: () => api().panelStatus(),
   panelVerify: () => api().panelVerify(),
 }
@@ -133,6 +135,11 @@ export function useCheckout(
     }
   }, [flow])
   useEffect(() => () => flow.dispose(), [flow])
+  // 付款窗口被用户自己关掉 / 页面没加载出来：主进程推事件（演示模式没有真窗口，也就没有事件）
+  useEffect(() => {
+    if (window.pixelsky?.demo === true) return
+    return window.pixelsky?.account?.onPayWindow?.(event => flow.payWindowEvent(event))
+  }, [flow])
 
   // 待付单：弹窗关着时每 30 秒查一次。列表里消失的订单可能已经到账，单独查一次；还在到账的继续跟着
   useEffect(() => {

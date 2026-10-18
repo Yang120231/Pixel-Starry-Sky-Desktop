@@ -10,6 +10,7 @@ import { join } from 'node:path'
 import { app, BrowserWindow, net, safeStorage, shell } from 'electron'
 import { codedError } from '@pixelsky/protocol'
 import { nativeText, windowLocale } from '../app/ui-language'
+import { isPayWindow } from '../app/payWindowRegistry'
 import { sendTo } from '../app/rendererHealth'
 import * as ipc from '../ipc/guard'
 import type {
@@ -106,7 +107,8 @@ function setState(next: AccountState): void {
   state = next
   for (const listener of stateListeners) listener(next)
   for (const win of BrowserWindow.getAllWindows()) {
-    if (!win.isDestroyed()) sendTo(win.webContents, 'account:changed', state)
+    // 付款窗口里是第三方收银台网页，不给它软件的账号状态
+    if (!win.isDestroyed() && !isPayWindow(win)) sendTo(win.webContents, 'account:changed', state)
   }
 }
 

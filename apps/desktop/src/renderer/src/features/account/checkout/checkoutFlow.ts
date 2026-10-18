@@ -6,6 +6,7 @@ import type {
   AccountRefreshResult,
   CheckoutCreateInput,
   CheckoutOrder,
+  PayWindowEvent,
 } from '../../../../../shared/types/account'
 import type { AccountBridge } from '../../../../../preload/account'
 import { baselineBeforeOpen } from '../paymentWatch'
@@ -29,9 +30,17 @@ export type FlowBridge = Pick<
   | 'checkoutVerify'
   | 'checkoutCancel'
   | 'checkoutOpenPayUrl'
+  | 'checkoutOpenPayWindow'
+  | 'checkoutClosePayWindow'
   | 'panelStatus'
   | 'panelVerify'
 >
+
+/**
+ * 付款窗口（pay_url 订单：支付FM 这类只给收银台网页的支付方式，在软件里开一个小窗口显示收银台）：
+ * idle 没有 / opening 正在打开 / open 已打开 / closed 用户自己关了 / failed 没能打开或页面加载失败（窗口已被主进程关掉）
+ */
+export type PayWindowState = 'idle' | 'opening' | 'open' | 'closed' | 'failed'
 
 /** 弹窗内容：订单还没有的（准备 / 下单 / 确认账号 / 出错）；有了订单就是 order，细分状态由订单状态和倒计时决定 */
 export type FlowPhase = 'prepare' | 'creating' | 'reauth' | 'error' | 'order'
@@ -64,6 +73,8 @@ export interface FlowState {
   reauthError: CheckoutErrorInfo | null
   /** 到账后的前后对比；settling 表示还在读新账号 */
   outcome: { settling: boolean; change: AccountChange | null } | null
+  /** 付款窗口的状态；provider 订单（显示二维码）一直是 idle */
+  payWindow: PayWindowState
 }
 
 const CLOSED: FlowState = {
@@ -83,6 +94,7 @@ const CLOSED: FlowState = {
   reauth: 'idle',
   reauthError: null,
   outcome: null,
+  payWindow: 'idle',
 }
 
 export interface FlowDeps {
@@ -119,6 +131,10 @@ export class CheckoutFlow {
   private settledFor: number | null = null
   /** 最近一次下单请求（不管结果有没有被丢弃）：主进程同一时间只收一个下单，新的要等它回来 */
   private creating: Promise<unknown> | null = null
+  /** 付款窗口现在属于哪笔订单（主进程同时最多一个）；null 表示没有 */
+  private payWindowOrder: number | null = null
+  /** 已经自动打开过付款窗口的订单：用户关掉或订单本地到期关掉之后，轮询到的 pending 不会再自动打开 */
+  private autoOpened: number | null = null
 
   constructor(private readonly deps: FlowDeps) {
     this.now = deps.now ?? Date.now
@@ -172,6 +188,8 @@ export class CheckoutFlow {
     this.watch.stop()
     this.clearPanelTimer()
     this.clearVerifyTimer()
+    this.releasePayWindow()
+    this.autoOpened = null
     this.snapshot = CLOSED
     this.baseline = null
     this.resumeId = null
@@ -192,6 +210,8 @@ export class CheckoutFlow {
     this.watch.stop()
     this.clearPanelTimer()
     this.clearVerifyTimer()
+    this.releasePayWindow()
+    this.autoOpened = null
     this.resumeId = null
     // 下单前先强制刷新一次账号定基准（和支付页打开前一样）；与下单并行，二维码出来之前不可能已经付款
     this.baseline = null
@@ -296,8 +316,10 @@ export class CheckoutFlow {
     this.watch.stop()
     this.baseline = null
     this.requestId = this.deps.newRequestId()
+    this.releasePayWindow()
     this.patch({
       phase: 'creating',
+      payWindow: 'idle',
       order: null,
       paidAt: null,
       actionError: null,
@@ -427,6 +449,56 @@ export class CheckoutFlow {
     }
   }
 
+  // -------------------------------------------------------------------------
+  // 付款窗口（pay_url 订单）
+  // -------------------------------------------------------------------------
+
+  /** 打开（或聚焦）这笔订单的付款窗口：自动打开和「重新打开付款窗口」都走这里；地址是主进程记下的，这里只传订单号 */
+  async openPayWindow(): Promise<void> {
+    const order = this.snapshot.order
+    if (!this.snapshot.open || !order || order.qrSource !== 'pay_url') return
+    const id = order.orderId
+    this.payWindowOrder = id
+    this.autoOpened = id
+    this.patch({ payWindow: 'opening' })
+    try {
+      await this.deps.bridge.checkoutOpenPayWindow(id)
+    } catch {
+      if (this.payWindowOrder === id && this.snapshot.open) this.patch({ payWindow: 'failed' })
+      return
+    }
+    // 关了弹窗 / 换了订单 / 页面已经加载失败（事件比返回先到）就不再改状态
+    if (this.payWindowOrder === id && this.snapshot.open && this.snapshot.payWindow === 'opening')
+      this.patch({ payWindow: 'open' })
+  }
+
+  /** 关掉付款窗口（订单已付 / 到账 / 取消 / 过期，或弹窗关闭）；没有就什么都不做 */
+  closePayWindow(): void {
+    if (this.payWindowOrder === null) return
+    this.releasePayWindow()
+    if (this.snapshot.open) this.patch({ payWindow: 'idle' })
+  }
+
+  /** 主进程推来的付款窗口事件：用户自己关了窗口，或页面没加载出来（窗口已被主进程关掉）；不是当前这笔的忽略 */
+  payWindowEvent(event: PayWindowEvent): void {
+    if (event.orderId !== this.payWindowOrder || !this.snapshot.open) return
+    this.patch({ payWindow: event.state })
+  }
+
+  /** 通知主进程关窗并忘掉这笔（不改状态）；失败不用管，窗口本来就可能已经没了 */
+  private releasePayWindow(): void {
+    const id = this.payWindowOrder
+    if (id === null) return
+    this.payWindowOrder = null
+    void Promise.resolve(this.deps.bridge.checkoutClosePayWindow(id)).catch(() => undefined)
+  }
+
+  /** 订单更新时：待付的 pay_url 订单自动开窗（每笔一次）；不再待付就关窗 */
+  private syncPayWindow(order: CheckoutOrder): void {
+    if (order.status !== 'pending') this.closePayWindow()
+    else if (order.qrSource === 'pay_url' && this.autoOpened !== order.orderId) void this.openPayWindow()
+  }
+
   /** 连续失败后的「重试」 */
   retryWatch(): void {
     this.watch.retry()
@@ -456,6 +528,7 @@ export class CheckoutFlow {
       this.settledFor = w.order.orderId
       void this.settle(w.order)
     }
+    this.syncPayWindow(w.order)
   }
 
   /** 到账：强制刷新账号，和下单前的快照对比；对比为空（账号缓存还没跟上）就每 2 秒再刷，最多 3 次 */
