@@ -6,6 +6,7 @@ import {
   ENGINES as ENGINE_INFO,
   MAX_IMAGE_COUNT,
   MAX_IMAGE_TOTAL,
+  PROVIDER_ID,
   validateFiles,
   validateImages,
   type HostEvent,
@@ -111,6 +112,23 @@ function cleanName(value: unknown, what: string): string {
   if (!name) throw new Error(`${what}不能为空`)
   if (name.length > NAME_MAX) throw new Error(`${what}最多 ${NAME_MAX} 个字`)
   return name
+}
+
+/**
+ * 成员的额度来源（docs/ui/channels-local-ai.md §3.1 #1）：只留形状对的 platform（分组 + 账号）或 provider（接口 id），
+ * 两个都给时报错；都没有就是自有账号。分组还在不在、账号对不对，由开会话 / 发消息时的引擎判断（失败写在任务卡上）
+ */
+function creditOf(raw: AgentInput['settings']): Pick<AgentConfig['settings'], 'platform' | 'provider'> {
+  const p = raw?.platform
+  const v = raw?.provider
+  const platform =
+    p && typeof p.groupId === 'string' && p.groupId && typeof p.account === 'string' && p.account
+      ? { groupId: p.groupId.slice(0, 200), account: p.account.slice(0, 320) }
+      : null
+  const provider = v && typeof v.id === 'string' && PROVIDER_ID.test(v.id) ? { id: v.id } : null
+  if ((p && !platform) || (v && !provider)) throw new Error('额度来源无效')
+  if (platform && provider) throw new Error('额度来源无效')
+  return platform ? { platform } : provider ? { provider } : {}
 }
 
 export class Channels {
@@ -515,12 +533,15 @@ export class Channels {
     if (raw.settings?.model !== undefined) settings.model = raw.settings.model
     if (raw.settings?.effort !== undefined) settings.effort = raw.settings.effort
     if (raw.settings?.permissionMode !== undefined) settings.permissionMode = raw.settings.permissionMode
+    Object.assign(settings, creditOf(raw.settings))
     const machineId = this.deps.machineOf(raw.projectId)
+    const credit = (x: AgentConfig['settings']) => JSON.stringify([x.platform ?? null, x.provider ?? null])
     const moved =
       existing &&
       (existing.engine !== raw.engine ||
         existing.projectId !== raw.projectId ||
-        existing.copyId !== (raw.copyId ?? null))
+        existing.copyId !== (raw.copyId ?? null) ||
+        credit(existing.settings) !== credit(settings))
     const config: AgentConfig = {
       id: existing?.id ?? randomUUID(),
       name,
@@ -531,7 +552,7 @@ export class Channels {
       settings,
       instructions: (typeof raw.instructions === 'string' ? raw.instructions : '').slice(0, INSTRUCTIONS_MAX),
       mode: raw.mode === 'shared' ? 'shared' : 'per-task',
-      // 换了引擎或目录，原来的共用会话不能再用
+      // 换了引擎、目录或额度来源（会话开出来就定了），原来的共用会话不能再用
       sharedSessionId: moved ? null : (existing?.sharedSessionId ?? null),
       createdAt: existing?.createdAt ?? this.now(),
     }

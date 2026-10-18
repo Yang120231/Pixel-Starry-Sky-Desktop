@@ -132,6 +132,51 @@ describe('协作频道：团队关着', () => {
   })
 })
 
+describe('协作频道：成员的额度来源', () => {
+  it('平台额度：存进成员配置，派活开会话时带上分组和账号；自定义接口同样带上接口 id', async () => {
+    const c = await open()
+    const platform = { groupId: 'g1', account: 'me@example.com' }
+    const a = await c.saveMember(null, agent('平台助手', { settings: { model: 'claude-opus-5-5', platform } }))
+    const b = await c.saveMember(
+      null,
+      agent('接口助手', { settings: { model: 'my-claude', provider: { id: 'anth' } } }),
+    )
+    expect(c.state().members.find(m => m.id === a)).toMatchObject({ config: { settings: { platform } } })
+    const channelId = await c.create({ name: '额度', memberIds: [a, b] })
+    await c.post(channelId, { text: '@平台助手 @接口助手 看一下', clientId: 'c1' })
+    await settle()
+    const creates = engine.calls.filter(x => x.channel === 'engine:createSession').map(x => x.args[0])
+    expect(creates).toContainEqual({ projectId: 'p1', engine: 'claude', model: 'claude-opus-5-5', platform })
+    expect(creates).toContainEqual({ projectId: 'p1', engine: 'claude', model: 'my-claude', provider: { id: 'anth' } })
+  })
+  it('一直用同一个会话的成员换了额度来源：下一项活开新会话（来源是开会话时定的）', async () => {
+    const c = await open()
+    const id = await c.saveMember(null, agent('共用', { mode: 'shared' }))
+    const channelId = await c.create({ name: '共用', memberIds: [id] })
+    await c.post(channelId, { text: '@共用 第一项', clientId: 'd1' })
+    await settle()
+    const [first] = engine.sends()
+    complete(c, first.sessionId, first.clientMessageId, '好了')
+    await settle()
+    const config = c.state().members.find(m => m.id === id)
+    expect(config).toMatchObject({ config: { sharedSessionId: 's1' } })
+    await c.saveMember(null, agent('共用', { id, mode: 'shared', settings: { provider: { id: 'anth' } } }))
+    expect(c.state().members.find(m => m.id === id)).toMatchObject({ config: { sharedSessionId: null } })
+  })
+  it('不写就是自有账号；形状不对、平台和接口同时给都报「额度来源无效」', async () => {
+    const c = await open()
+    const id = await c.saveMember(null, agent('自有'))
+    expect(c.state().members.find(m => m.id === id)).toMatchObject({ config: { settings: { permissionMode: 'ask' } } })
+    const both = { platform: { groupId: 'g', account: 'a' }, provider: { id: 'p' } }
+    await expect(c.saveMember(null, agent('两个', { settings: both }))).rejects.toThrow('额度来源无效')
+    const bad = { platform: { groupId: '', account: 'a' } }
+    await expect(c.saveMember(null, agent('坏的', { settings: bad }))).rejects.toThrow('额度来源无效')
+    await expect(c.saveMember(null, agent('坏接口', { settings: { provider: { id: '../x' } } }))).rejects.toThrow(
+      '额度来源无效',
+    )
+  })
+})
+
 describe('协作频道：派活', () => {
   it('@成员 → 新开会话、改名、发提示词；做完后结果发回频道，任务卡更新摘要 / 改动 / 需要你决定', async () => {
     const c = await open()

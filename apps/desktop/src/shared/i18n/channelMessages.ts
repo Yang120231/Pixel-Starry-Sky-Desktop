@@ -170,6 +170,16 @@ export const channelMessages = {
   'channels.agent.disconnected': { zh: '未连接', en: 'Not connected' },
   'channels.agent.model': { zh: '模型', en: 'Model' },
   'channels.agent.default': { zh: '默认', en: 'Default' },
+  'channels.agent.source': { zh: '额度来源', en: 'Credits' },
+  'channels.agent.source.self': { zh: '自有账号', en: 'Own account' },
+  'channels.agent.source.platform': { zh: '像素星空平台', en: 'PixelSky platform' },
+  'channels.agent.source.signin': { zh: '登录像素星空后可用', en: 'Sign in to PixelSky first' },
+  'channels.agent.source.noRoute': {
+    zh: '平台上没有这个引擎能用的线路',
+    en: 'No platform route works with this engine',
+  },
+  'channels.agent.source.providerGone': { zh: '这个自定义接口已经删了', en: 'This custom API has been removed' },
+  'channels.agent.source.noModels': { zh: '这个来源没有能选的模型', en: 'No models available from this source' },
   'channels.agent.permission': { zh: '权限', en: 'Permissions' },
   'channels.agent.fullWarning': {
     zh: '这个成员做的活不会停下来等你确认，包括运行命令和改文件',
