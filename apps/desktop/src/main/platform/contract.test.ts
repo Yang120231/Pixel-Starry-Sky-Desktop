@@ -42,7 +42,9 @@ vi.mock('../account/account', () => ({
 const { platformGroups } = await import('./platform')
 const { accountCalls, platformCharges } = await import('./billing')
 const { fetchStore } = await import('../account/store')
-const { checkoutCreate, checkoutGet, checkoutPending, panelStatus, panelVerify, parseOrder } = await import('../account/checkout')
+const { checkoutCreate, checkoutGet, checkoutPending, panelStatus, panelVerify, parseOrder } = await import(
+  '../account/checkout'
+)
 const { shell } = await import('electron')
 const { parseCodedError } = await import('@pixelsky/protocol')
 

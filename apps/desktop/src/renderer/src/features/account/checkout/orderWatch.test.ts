@@ -274,7 +274,9 @@ describe('到期与终态', () => {
   })
 
   it('failed（付了钱、加余额失败）：弹窗开着就每 30 秒查，补到账后停', async () => {
-    const { watch, fetch } = make(['failed', 'failed', 'completed'], { expiresAt: new Date(T0 - 60 * MIN).toISOString() })
+    const { watch, fetch } = make(['failed', 'failed', 'completed'], {
+      expiresAt: new Date(T0 - 60 * MIN).toISOString(),
+    })
     watch.start(order('paid'))
     await tick(PAID_INTERVAL_MS)
     expect(watch.getState()).toMatchObject({ active: true, order: { status: 'failed' } })
@@ -283,16 +285,13 @@ describe('到期与终态', () => {
     expect(watch.getState()).toMatchObject({ active: false, order: { status: 'completed' } })
   })
 
-  it.each(['completed', 'refunding', 'refunded'] as const)(
-    '%s 是终态：查到就停',
-    async status => {
-      const { watch, fetch } = make(['pending', status])
-      watch.start(order())
-      await tick(FAST_INTERVAL_MS * 3)
-      expect(fetch).toHaveBeenCalledTimes(2)
-      expect(watch.getState()).toMatchObject({ active: false, order: { status } })
-    },
-  )
+  it.each(['completed', 'refunding', 'refunded'] as const)('%s 是终态：查到就停', async status => {
+    const { watch, fetch } = make(['pending', status])
+    watch.start(order())
+    await tick(FAST_INTERVAL_MS * 3)
+    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(watch.getState()).toMatchObject({ active: false, order: { status } })
+  })
 
   it('start 的订单本身就是终态：不轮询', async () => {
     const { watch, fetch } = make()
