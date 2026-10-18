@@ -47,7 +47,7 @@ interface Snapshot {
 const LOADING: Snapshot = { status: 'loading', account: null, refreshing: false, error: null }
 const SIGNED_OUT: Snapshot = { status: 'signed-out', account: null, refreshing: false, error: null }
 /** 演示模式的快照：第一次读取时创建，之后保持同一个对象（useSyncExternalStore 要求快照稳定） */
-let DEMO: Snapshot | null = null
+let DEMO: Snapshot | null = null // 账号对象变了才重建
 
 function getBridge(): AccountBridge | null {
   return window.pixelsky?.account ?? null
@@ -115,7 +115,8 @@ function start() {
 }
 
 function subscribe(listener: () => void): () => void {
-  if (isDemoMode()) return () => {}
+  // 演示模式：软件内付款到账后演示账号会变（mock/checkout.ts）
+  if (isDemoMode()) return demo().checkout.subscribe(listener)
   listeners.add(listener)
   start()
   return () => {
@@ -124,7 +125,11 @@ function subscribe(listener: () => void): () => void {
 }
 
 function getSnapshot(): Snapshot {
-  if (isDemoMode()) return (DEMO ??= { status: 'signed-in', account: demo().account, refreshing: false, error: null })
+  if (isDemoMode()) {
+    const account = demo().checkout.account()
+    if (DEMO?.account !== account) DEMO = { status: 'signed-in', account, refreshing: false, error: null }
+    return DEMO as Snapshot
+  }
   // 没有桥接（普通浏览器）：直接是未登录，不必等待
   if (!getBridge()) return SIGNED_OUT
   return snapshot

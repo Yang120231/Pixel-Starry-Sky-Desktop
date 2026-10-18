@@ -42,7 +42,8 @@ vi.mock('../account/account', () => ({
 const { platformGroups } = await import('./platform')
 const { accountCalls, platformCharges } = await import('./billing')
 const { fetchStore } = await import('../account/store')
-const { checkoutCreate, checkoutGet, checkoutPending, panelStatus, parseOrder } = await import('../account/checkout')
+const { checkoutCreate, checkoutGet, checkoutPending, panelStatus, panelVerify, parseOrder } = await import('../account/checkout')
+const { shell } = await import('electron')
 const { parseCodedError } = await import('@pixelsky/protocol')
 
 function serve(path: string, s: Sample): void {
@@ -320,6 +321,13 @@ describe.skipIf(!hasSamples)('云端契约样例：软件内付款（docs/ui/in-
   it('面板凭证状态', async () => {
     serve('/v1/platform/panel', sample('desktop/panel-status.json'))
     expect(await panelStatus()).toEqual({ valid: true, expiresAt: '2026-10-19T10:34:50Z', usableForCheckout: true })
+  })
+
+  it('去浏览器确认账号：样例里的确认页地址和云端同主机、https、路径对，主进程照样打开', async () => {
+    const s = sample('desktop/panel-verify.json')
+    serve('/v1/platform/panel/verify', s)
+    await panelVerify()
+    expect(shell.openExternal).toHaveBeenCalledWith((s.body as { url: string }).url)
   })
 
   it('商品接口：支付关着时 checkout 不开', async () => {

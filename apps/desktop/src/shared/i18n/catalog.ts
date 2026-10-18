@@ -3296,6 +3296,10 @@ export const catalog = {
     "zh": "扫码后会打开支付页面",
     "en": "Scanning opens the payment page"
   },
+  "settings.account.Checkout.demoQr": {
+    "zh": "演示二维码，不能付款",
+    "en": "Demo QR code. It can't be paid"
+  },
   "settings.account.Checkout.noQr": {
     "zh": "没有可用的二维码，请改用浏览器付款",
     "en": "No QR code is available. Pay in the browser instead"

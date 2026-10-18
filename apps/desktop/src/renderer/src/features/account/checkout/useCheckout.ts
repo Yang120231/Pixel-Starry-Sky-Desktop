@@ -5,6 +5,7 @@ import { tr } from '../../../i18n/core'
 import { useToast } from '@/ui'
 import type { AccountInfo, AccountRefreshResult, CheckoutOrder } from '../../../../../shared/types/account'
 import type { AccountBridge } from '../../../../../preload/account'
+import { demo } from '@/data/demo'
 import { changeLines } from '../settings/StoreParts'
 import { CheckoutFlow, type FlowBridge, type FlowState } from './checkoutFlow'
 import { vanishedOrders, type CheckoutIntent } from './checkoutLogic'
@@ -35,8 +36,9 @@ export interface UseCheckoutResult {
   close: () => void
 }
 
-/** 桥在调用时才取：没有桥（浏览器预览、演示）时 available 为假，不会走到这里 */
-function api(): AccountBridge {
+/** 桥在调用时才取：没有桥（浏览器预览）时 available 为假，不会走到这里；演示模式用 mock/checkout.ts 的假桥 */
+function api(): Pick<AccountBridge, 'checkoutPending'> & FlowBridge {
+  if (window.pixelsky?.demo === true) return demo().checkout.bridge // 演示：假的下单（mock/checkout.ts）
   const account = window.pixelsky?.account
   if (!account) throw new Error(tr('settings.account.Store.openFailed'))
   return account
@@ -64,7 +66,7 @@ export function trackClosed(list: TrackedOrder[], order: CheckoutOrder, at: numb
 const plain = (o: CheckoutOrder): CheckoutOrder => ({ ...o, qrContent: null, qrSource: null, payUrl: null })
 
 /**
- * available 为假（云端没开软件内付款，或在演示 / 没有桥的环境）时什么都不做：不查待付单、start / resume 也不会下单。
+ * available 为假（云端没开软件内付款，或没有桥的环境）时什么都不做：不查待付单、start / resume 也不会下单。
  * 离开页面（卸载）时关掉弹窗、停掉所有定时器
  */
 export function useCheckout(
@@ -127,18 +129,18 @@ export function useCheckout(
     let alive = true
     let busy = false
     const run = async (): Promise<void> => {
-      const api = window.pixelsky?.account
-      if (busy || !api?.checkoutPending || flow.getState().open) return
+      const bridge = window.pixelsky?.demo === true ? demo().checkout.bridge : window.pixelsky?.account
+      if (busy || !bridge?.checkoutPending || flow.getState().open) return
       busy = true
       try {
-        const listed = await api.checkoutPending()
+        const listed = await bridge.checkoutPending()
         const at = Date.now()
         const next: TrackedOrder[] = listed.map(order => ({ order, at }))
         for (const id of vanishedOrders(
           pendingRef.current.map(t => t.order),
           listed,
         )) {
-          const fresh = await api.checkoutGet(id).catch(() => null)
+          const fresh = await bridge.checkoutGet(id).catch(() => null)
           const old = pendingRef.current.find(t => t.order.orderId === id)
           if (!fresh) {
             if (old) next.push(old) // 查不到就先留着，下次再查

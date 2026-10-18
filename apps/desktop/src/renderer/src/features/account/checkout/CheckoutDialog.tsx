@@ -533,6 +533,7 @@ function WaitingBody({
 }) {
   useI18n()
   const { resolved } = useTheme()
+  const demoMode = typeof window !== 'undefined' && window.pixelsky?.demo === true
   const due = formatPrice(order.payAmount, order.payCurrency)
   const summary =
     order.kind === 'plan' && order.plan
@@ -556,6 +557,7 @@ function WaitingBody({
           ) : (
             <p className="w-44 text-meta text-fg-muted">{tr(key('noQr'))}</p>
           )}
+          {demoMode && <p className="max-w-[220px] text-center text-label text-warn">{tr(key('demoQr'))}</p>}
           {order.qrSource === 'pay_url' && (
             <p className="max-w-[220px] text-center text-label text-fg-faint">{tr(key('qrOpensPage'))}</p>
           )}

@@ -36,12 +36,16 @@ import { demoRewindPreview, demoSideAnswer } from './branch'
 import { codexResumeSnapshots, demoNativeSessions } from './native'
 import { demoTerminalOutput, demoTerminalProfiles } from './terminal'
 import { demoStore } from './store'
+import { createDemoCheckout } from './checkout'
 import { demoUsageRecords } from './usage'
+
+const demoCheckout = createDemoCheckout(demoAccount, demoStore)
 
 export const demoSource: DemoSource = {
   appData: demo,
   account: demoAccount,
   store: demoStore,
+  checkout: demoCheckout,
   platformGroups: demoPlatformGroups,
   providers: demoProviders,
   engines: {

@@ -22,6 +22,7 @@ import type {
 } from '@pixelsky/protocol'
 import type { MachineState, WorkspaceChoice } from '../../../shared/types/machines'
 import type { AccountInfo, StoreCatalog } from '../../../shared/types/account'
+import type { AccountBridge } from '../../../preload/account'
 import type { ArtifactPreview } from '../../../shared/types/artifacts'
 import type { PlatformGroupInfo } from '../../../shared/types/platform-catalog'
 import type { ProvidersState } from '../../../shared/types/providers'
@@ -67,6 +68,23 @@ export type DemoUpdate = (
   patch?: Partial<Omit<SessionSnapshot, 'items'>>,
 ) => void
 
+/** 演示模式的软件内付款（mock/checkout.ts）：假的桥方法，和会随到账变化的演示账号 */
+export interface DemoCheckout {
+  bridge: Pick<
+    AccountBridge,
+    | 'checkoutCreate'
+    | 'checkoutGet'
+    | 'checkoutVerify'
+    | 'checkoutCancel'
+    | 'checkoutPending'
+    | 'checkoutOpenPayUrl'
+    | 'panelStatus'
+    | 'panelVerify'
+  >
+  account(): AccountInfo
+  subscribe(listener: () => void): () => void
+}
+
 /** 全部演示数据。新增演示内容先在这里加字段，再在 mock/index.ts 填上 */
 export interface DemoSource {
   /** 侧边栏、对话、输入框等界面数据（与 data/empty.ts 同形） */
@@ -74,6 +92,8 @@ export interface DemoSource {
   account: AccountInfo
   /** 设置 → 账号里的订阅套餐、充值（形状同云端 /v1/platform/store） */
   store: StoreCatalog
+  /** 软件内付款的假桥和会随到账变化的演示账号（mock/checkout.ts，docs/ui/in-app-payment.md §6.10） */
+  checkout: DemoCheckout
   platformGroups: PlatformGroupInfo[]
   /** 自定义 API 的两条假接口 */
   providers: ProvidersState
