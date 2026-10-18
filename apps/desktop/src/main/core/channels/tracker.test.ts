@@ -91,6 +91,21 @@ describe('任务状态跟踪（§5.1）', () => {
     expect(diffTotal(r.run)).toEqual({ added: 3, removed: 1 })
   })
 
+  it('被拒绝 / 失败的改文件不算进改动', () => {
+    const change = (id: string, status: 'completed' | 'declined' | 'failed'): EngineEvent => ({
+      type: 'item_completed',
+      item: { kind: 'file_change', id, status, changes: [{ path: id, kind: 'add', diff: '', added: 1, removed: 0 }] },
+    })
+    const r = feed(run(), [
+      { type: 'item_completed', item: user('ch-t1-1', 'turn1') },
+      change('f1', 'declined'),
+      change('f2', 'failed'),
+      change('f3', 'completed'),
+      change('f3', 'declined'),
+    ])
+    expect(diffTotal(r.run)).toBeNull()
+  })
+
   it('正在做什么：命令 / 改文件 / 工具开始和完成都记，同一步原地更新、保留第一次看到的时间，只留最近 3 步；AI 说的话记第一行', () => {
     const cmd = (id: string, status: 'running' | 'completed'): Item => ({
       kind: 'command',

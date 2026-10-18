@@ -157,8 +157,13 @@ function absorb(run: TaskRun, item: Item, now: number): TaskRun {
     }
     case 'file_change': {
       if (item.status === 'running') return run
-      const stat = diffStat(item.changes)
-      return { ...run, diff: { ...run.diff, [item.id]: stat } }
+      // 被拒绝 / 失败的改动没有写到文件上，不算（和会话里的改动卡片一样只算完成的）
+      if (item.status !== 'completed') {
+        if (!(item.id in run.diff)) return run
+        const { [item.id]: _dropped, ...diff } = run.diff
+        return { ...run, diff }
+      }
+      return { ...run, diff: { ...run.diff, [item.id]: diffStat(item.changes) } }
     }
     case 'todo':
       return { ...run, progress: progressOf(item) }
