@@ -169,6 +169,23 @@ describe('协作频道：说明和置顶（docs/ui/channels-local-ai.md §3.1 #9
   })
 })
 
+describe('协作频道：提醒（docs/ui/channels-local-ai.md §3.1 #12、#13）', () => {
+  it('快照里有「会话 → 频道、任务卡、成员」，提醒按频道的说法写；提醒级别默认全部，可以改，乱写报错', async () => {
+    const c = await open()
+    const memberId = await c.saveMember(null, agent('前端助手'))
+    const channelId = await c.create({ name: '提醒', memberIds: [memberId] })
+    const { tasks: ids } = await c.post(channelId, { text: '@前端助手 改首页', clientId: 'r1' })
+    await settle()
+    expect(c.state().sessionTasks).toEqual({ s1: { channelId, taskId: ids[0], memberId } })
+    expect(c.state().channels[0].notify).toBe('all')
+    await c.update(channelId, { notify: 'important' })
+    expect(c.state().channels[0].notify).toBe('important')
+    await expect(c.update(channelId, { notify: 'loud' as never })).rejects.toThrow('提醒设置无效')
+    const again = await open()
+    expect(again.state().channels[0].notify).toBe('important')
+  })
+})
+
 describe('协作频道：成员的额度来源', () => {
   it('平台额度：存进成员配置，派活开会话时带上分组和账号；自定义接口同样带上接口 id', async () => {
     const c = await open()

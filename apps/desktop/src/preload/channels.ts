@@ -2,6 +2,7 @@ import type {
   AgentInput,
   ChannelAttachments,
   ChannelInput,
+  ChannelNotify,
   ChannelMessage,
   ChannelMessagePush,
   ChannelsSnapshot,
@@ -20,7 +21,13 @@ export interface ChannelsBridge {
   create(input: ChannelInput): Promise<string>
   update(
     id: string,
-    patch: { name?: string; topic?: string | null; notes?: string | null; projectId?: string | null },
+    patch: {
+      name?: string
+      topic?: string | null
+      notes?: string | null
+      notify?: ChannelNotify
+      projectId?: string | null
+    },
   ): Promise<void>
   /** 置顶 / 取消置顶一条文字消息（docs/ui/channels-local-ai.md §3.1 #9） */
   pin(channelId: string, messageId: string, pinned: boolean): Promise<void>

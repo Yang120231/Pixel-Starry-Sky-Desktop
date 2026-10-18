@@ -10,6 +10,7 @@ import type {
   AgentPolicy,
   ChannelAttachments,
   ChannelInput,
+  ChannelNotify,
   ChannelsSnapshot,
   ChannelTaskAction,
   PendingInvite,
@@ -42,6 +43,8 @@ export interface ChannelsState {
   newFrom: Record<string, number | null>
   /** 频道开出来的会话 → 频道名 */
   sessionChannels: Record<string, string>
+  /** 本机频道开出来的会话 → 最近一张任务卡（系统提醒按频道的说法写） */
+  sessionTasks: NonNullable<ChannelsSnapshot['sessionTasks']>
   // ── Phase C：多人团队（docs/ui/channels-phase-c.md） ──
   teams: TeamInfo[]
   /** 别人邀请我（频道列表最上面的邀请卡） */
@@ -63,6 +66,7 @@ let state: ChannelsState = {
   replyTo: {},
   newFrom: {},
   sessionChannels: {},
+  sessionTasks: {},
   teams: channelsLive ? [] : channelTeams.teams,
   invites: channelsLive ? [] : channelTeams.invites,
   teamsConnection: channelsLive ? 'unavailable' : channelTeams.connection,
@@ -132,6 +136,7 @@ function applySnapshot(s: ChannelsSnapshot): void {
     channels: visible ? markRead(s.channels, visible) : s.channels,
     members: s.members,
     sessionChannels: s.sessionChannels,
+    sessionTasks: s.sessionTasks ?? {},
     teams: s.teams ?? [],
     invites: s.invites ?? [],
     teamsConnection: s.teamsConnection ?? 'unavailable',
@@ -274,7 +279,13 @@ export const channelActions = {
   },
   updateChannel(
     id: string,
-    patch: { name?: string; topic?: string | null; notes?: string | null; projectId?: string | null },
+    patch: {
+      name?: string
+      topic?: string | null
+      notes?: string | null
+      notify?: ChannelNotify
+      projectId?: string | null
+    },
   ): Promise<void> {
     if (channelsBridge) return channelsBridge.update(id, patch)
     set({ channels: state.channels.map(c => (c.id === id ? { ...c, ...patch, projectId: c.projectId } : c)) })

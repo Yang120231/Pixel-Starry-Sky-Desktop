@@ -12,6 +12,9 @@ import type {
 
 export type ChannelAgentStatus = 'idle' | 'running' | 'waiting' | 'offline'
 
+/** 频道的提醒级别（docs/ui/channels-local-ai.md §3.1 #13） */
+export type ChannelNotify = 'all' | 'important' | 'mute'
+
 /**
  * 任务卡上「正在做什么」的一步（docs/ui/channels-local-ai.md §3.1 #2）：只留显示要用的字段（和对话里工具行的说法一样），
  * at 是主进程第一次看到这一步的时间（条目本身不带时间）
@@ -174,6 +177,8 @@ export interface Channel {
   notes?: string | null
   /** 置顶的消息 id（先后顺序），派活时作为资料带上 */
   pinned?: string[]
+  /** 这个频道的系统提醒（§3.1 #13）：全部 / 只提醒要我处理的（等你确认、失败）/ 不提醒；没写是全部 */
+  notify?: ChannelNotify
   /** Phase C：团队频道属于哪个团队 */
   teamId?: string
   memberIds: string[]
@@ -281,6 +286,11 @@ export interface ChannelsSnapshot {
   members: ChannelMember[]
   /** 频道开出来的会话 → 频道名（侧栏、看板上显示 `# 频道名`） */
   sessionChannels: Record<string, string>
+  /**
+   * 本机频道开出来的会话 → 最近一张任务卡（docs/ui/channels-local-ai.md §3.1 #12）：
+   * 这些会话的系统提醒按频道的说法写，点开回到频道定位到卡片
+   */
+  sessionTasks?: Record<string, { channelId: string; taskId: string; memberId: string }>
   // ── Phase C ──
   teams: TeamInfo[]
   invites: PendingInvite[]

@@ -23,6 +23,7 @@ import type {
   AgentMember,
   Channel,
   ChannelInput,
+  ChannelNotify,
   ChannelMember,
   ChannelMessage,
   ChannelsSnapshot,
@@ -296,6 +297,7 @@ export class Channels {
         topic: c.topic,
         notes: c.notes ?? null,
         pinned: c.pinned ?? [],
+        notify: c.notify ?? 'all',
         project: c.projectId ? (projects.get(c.projectId)?.name ?? null) : null,
         projectId: c.projectId,
         scope: 'local' as const,
@@ -305,9 +307,16 @@ export class Channels {
       }))
       .sort((a, b) => b.lastAt - a.lastAt)
     const sessionChannels: Record<string, string> = {}
+    const sessionTasks: NonNullable<ChannelsSnapshot['sessionTasks']> = {}
     for (const [channelId, list] of this.store.messages) {
       const name = this.store.channels.get(channelId)?.name
-      if (name) for (const m of list) if (m.kind === 'task' && m.sessionId) sessionChannels[m.sessionId] = name
+      if (name)
+        for (const m of list)
+          if (m.kind === 'task' && m.sessionId) {
+            sessionChannels[m.sessionId] = name
+            // 消息按时间排：同一个会话（共用会话的成员）留最后一张卡
+            sessionTasks[m.sessionId] = { channelId, taskId: m.id, memberId: m.assigneeId }
+          }
     }
     const members: ChannelMember[] = [
       this.self(),
@@ -327,6 +336,7 @@ export class Channels {
       channels,
       members,
       sessionChannels,
+      sessionTasks,
       teams: team?.teams ?? [],
       invites: team?.invites ?? [],
       // 没有团队同步（团队功能关着，见 main/channels/ipc.ts 的 teamsEnabled）：报不可用，界面藏起所有团队入口
@@ -454,7 +464,13 @@ export class Channels {
 
   async update(
     id: string,
-    patch: { name?: string; topic?: string | null; notes?: string | null; projectId?: string | null },
+    patch: {
+      name?: string
+      topic?: string | null
+      notes?: string | null
+      notify?: ChannelNotify
+      projectId?: string | null
+    },
   ): Promise<void> {
     const info = this.team?.channelInfo(id)
     if (info) {
@@ -485,6 +501,11 @@ export class Channels {
     }
     if (patch.projectId !== undefined)
       c.projectId = typeof patch.projectId === 'string' && patch.projectId ? patch.projectId : null
+    if (patch.notify !== undefined) {
+      if (patch.notify !== 'all' && patch.notify !== 'important' && patch.notify !== 'mute')
+        throw new Error('提醒设置无效')
+      c.notify = patch.notify
+    }
     if (patch.notes !== undefined)
       c.notes = typeof patch.notes === 'string' && patch.notes.trim() ? patch.notes.trim().slice(0, NOTES_MAX) : null
     await this.store.saveChannel(c)

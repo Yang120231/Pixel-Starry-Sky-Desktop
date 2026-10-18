@@ -19,7 +19,7 @@ import { ActionMenu, type MenuAction } from '@/ui/ActionMenu'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
 import { relativeTime } from '@/features/engine'
 import type { AgentMember, Channel, ChannelAgentStatus, ChannelMember, HumanMember } from '@/data/types'
-import type { AgentConfig, AgentPolicy, ChannelTaskStatus } from '../../../../shared/types/channels'
+import type { AgentConfig, AgentPolicy, ChannelNotify, ChannelTaskStatus } from '../../../../shared/types/channels'
 import { agentMeta, MemberAvatar } from './ChannelMessage'
 import { AgentDialog, ChannelDialog } from './ChannelDialogs'
 import { channelActions, channelsLive, useChannels } from './store'
@@ -48,6 +48,8 @@ const TASK_LABEL: Record<ChannelTaskStatus, TranslationKey> = {
   failed: 'channels.task.failed',
   stopped: 'channels.task.stopped',
 }
+
+const NOTIFY_OPTIONS: readonly ChannelNotify[] = ['all', 'important', 'mute']
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -437,6 +439,26 @@ export function ChannelMembers({
           <dd className="text-fg-secondary">
             {tr(channel.scope === 'team' ? 'channels.scope.team' : 'channels.scope.local')}
           </dd>
+          {!team && (
+            <>
+              <dt className="self-center text-fg-faint">{tr('channels.members.notify')}</dt>
+              <dd className="min-w-0">
+                <Select
+                  label={tr('channels.members.notify')}
+                  value={channel.notify ?? 'all'}
+                  options={NOTIFY_OPTIONS.map(v => ({ value: v, label: tr(`channels.notify.level.${v}`) }))}
+                  onChange={v =>
+                    void channelActions
+                      .updateChannel(channel.id, { notify: v })
+                      .catch(e =>
+                        toast(tr('channels.task.actionFailed', { error: translateMessage((e as Error).message) })),
+                      )
+                  }
+                  className="h-7 w-full"
+                />
+              </dd>
+            </>
+          )}
           {channel.notes && (
             <>
               <dt className="text-fg-faint">{tr('channels.members.notes')}</dt>

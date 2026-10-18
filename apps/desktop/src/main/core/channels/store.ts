@@ -10,6 +10,8 @@ import { join } from 'node:path'
 import type { AgentConfig, ChannelAttachments, ChannelMessage, ChannelTask } from '../../../shared/types/channels'
 import type { TaskRun } from './tracker'
 
+import type { ChannelNotify } from '../../../shared/types/channels'
+
 export interface StoredChannel {
   id: string
   name: string
@@ -21,6 +23,8 @@ export interface StoredChannel {
   notes?: string | null
   /** 置顶的消息 id（先后顺序），派活时作为资料带上；旧数据没有 */
   pinned?: string[]
+  /** 系统提醒级别；旧数据没有（= all） */
+  notify?: ChannelNotify
   createdAt: number
   /** 看到哪里了：这之后别人发的算未读 */
   readAt: number
