@@ -19,6 +19,7 @@ import {
   countdownAnnounce,
   focusTrapTarget,
   formatCountdown,
+  inExpiredWatchWindow,
   orderPhase,
   remainingMs,
   saveMethod,
@@ -106,6 +107,8 @@ export function CheckoutPanel({
   const remaining = order ? remainingMs(order, state.receivedAt, now) : 0
   const phase: DialogPhase =
     state.phase !== 'order' ? state.phase : order ? orderPhase(order.status, remaining) : 'creating'
+  // 订单阶段面板凭证中途失效：还在等 / 查的订单要先去浏览器确认账号才查得下去，这时主按钮是「去浏览器确认账号」
+  const panelBad = order?.panelValid === false && (phase === 'waiting' || phase === 'paid' || phase === 'expired')
 
   // 键盘与焦点：Esc 关闭（二次确认时只退回上一步）、Tab 在弹窗里循环、关闭后焦点回到触发按钮
   const handlers = useRef({ onClose, confirmingCancel })
@@ -151,7 +154,7 @@ export function CheckoutPanel({
     if (main) main.focus({ preventScroll: true })
     else if (!root.contains(document.activeElement))
       root.querySelector<HTMLElement>('button')?.focus({ preventScroll: true })
-  }, [phase, confirmingCancel])
+  }, [phase, confirmingCancel, panelBad])
 
   // 倒计时不播报，只在剩 5 分钟和 1 分钟时各播报一次
   const lastRemaining = useRef(remaining)
@@ -170,7 +173,7 @@ export function CheckoutPanel({
   let announce = ''
   if (phase === 'creating') announce = tr(key('creating'))
   else if (phase === 'reauth') announce = tr(key('reauth.intro'))
-  else if (phase === 'error') announce = errorText(state.error)
+  // phase=error 的原因本身是 role=alert（会被读出来），这里不重复
   else if (phase === 'waiting') announce = tr(key('step.waiting'))
   else if (phase === 'paid') announce = tr(key('paid.title'))
   else if (phase === 'completed')
@@ -179,6 +182,12 @@ export function CheckoutPanel({
   else if (phase === 'ended' && order) announce = endedText(order)
 
   const verifyBusy = state.busy === 'verify' || state.verifyLocked
+  const reauthWaiting = state.reauth === 'opening' || state.reauth === 'waiting'
+  const panelConfirmButton = (
+    <Button variant="primary" data-autofocus="" disabled={reauthWaiting} onClick={() => void flow.startReauth()}>
+      {state.reauth === 'timeout' ? tr(key('reauth.again')) : tr(key('panelInvalid.go'))}
+    </Button>
+  )
   const browserButton = (
     <Button variant="ghost" icon={ExternalLink} onClick={onBrowser}>
       {tr(key('payInBrowser'))}
@@ -186,16 +195,21 @@ export function CheckoutPanel({
   )
   const verifyButton = (primary: boolean) => (
     <Button
-      variant={primary ? 'primary' : 'outline'}
-      data-autofocus={primary ? '' : undefined}
+      variant={primary && !panelBad ? 'primary' : 'outline'}
+      data-autofocus={primary && !panelBad ? '' : undefined}
       disabled={verifyBusy || state.busy === 'cancel'}
       onClick={() => void flow.verify()}
     >
       {tr(key('verify'))}
     </Button>
   )
+  // 凭证失效时不让「重新下单」当主按钮 / 抢焦点：旧单可能其实已经付了，再下一单会让用户付第二次
   const reorderButton = intent ? (
-    <Button variant="primary" data-autofocus="" onClick={() => flow.reorder()}>
+    <Button
+      variant={panelBad ? 'outline' : 'primary'}
+      data-autofocus={panelBad ? undefined : ''}
+      onClick={() => flow.reorder()}
+    >
       {tr(key('reorder'))}
     </Button>
   ) : null
@@ -263,7 +277,7 @@ export function CheckoutPanel({
               <Button
                 variant="primary"
                 data-autofocus=""
-                disabled={state.reauth === 'opening' || state.reauth === 'waiting'}
+                disabled={reauthWaiting}
                 onClick={() => void flow.startReauth()}
               >
                 {state.reauth === 'timeout' ? tr(key('reauth.again')) : tr(key('reauth.go'))}
@@ -405,7 +419,7 @@ export function CheckoutPanel({
         )}
         {order && phase === 'paid' && (
           <div className="flex justify-end">
-            <Button variant="outline" data-autofocus="" onClick={onClose}>
+            <Button variant="outline" data-autofocus={panelBad ? undefined : ''} onClick={onClose}>
               {tr(key('close'))}
             </Button>
           </div>
@@ -431,17 +445,42 @@ export function CheckoutPanel({
             <Button variant="outline" data-autofocus={intent ? undefined : ''} onClick={onClose}>
               {tr(key('close'))}
             </Button>
-            {reorderButton}
+            {/* failed 是已经付了钱、到账出了问题：不给「重新下单」，免得再付一次 */}
+            {order.status !== 'failed' && reorderButton}
           </div>
         )}
 
         {order && (phase === 'waiting' || phase === 'expired') && state.notYet && (
-          <p className="text-meta text-fg-muted">{tr(key('notYet'))}</p>
-        )}
-        {order && order.panelValid === false && phase !== 'completed' && (
-          <p role="note" className="text-meta text-warn">
-            {tr(key('panelInvalid'))}
+          <p className="text-meta text-fg-muted">
+            {/* 过期后还在自动再查的窗口内说会再查；窗口外已经不查了，让用户手动再点或联系客服 */}
+            {phase === 'expired' && !inExpiredWatchWindow(remaining)
+              ? tr(key('notYet.stopped'), { p0: order.orderId })
+              : tr(key('notYet'))}
           </p>
+        )}
+        {order && panelBad && (
+          <div className="flex flex-col gap-2">
+            <p role="note" className="text-meta text-warn">
+              {tr(key('panelInvalid'))}
+            </p>
+            <div className="flex flex-wrap items-center gap-2">{panelConfirmButton}</div>
+            {state.reauth === 'waiting' && (
+              <p className="flex items-center gap-2 text-meta text-fg-muted">
+                <Spinner />
+                {tr(key('panelInvalid.waiting'))}
+              </p>
+            )}
+            {state.reauth === 'timeout' && (
+              <p role="alert" className="text-meta text-danger">
+                {tr(key('reauth.timeout'))}
+              </p>
+            )}
+            {state.reauthError && (
+              <p role="alert" className="selectable text-meta text-danger">
+                {errorText(state.reauthError)}
+              </p>
+            )}
+          </div>
         )}
         {state.unstable && !state.watchError && phase === 'waiting' && (
           <p className="text-meta text-fg-faint">{tr(key('networkUnstable'))}</p>

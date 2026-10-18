@@ -7,7 +7,7 @@ import type { AccountInfo, AccountRefreshResult, StoreCatalog } from '../../../.
 import { useStore } from '../useStore'
 import { usePaymentWatch } from '../usePaymentWatch'
 import { CheckoutDialog } from '../checkout/CheckoutDialog'
-import { checkoutAvailable, checkoutMethods, type CheckoutIntent } from '../checkout/checkoutLogic'
+import { browserTarget, checkoutAvailable, checkoutMethods, type CheckoutIntent } from '../checkout/checkoutLogic'
 import { useCheckout } from '../checkout/useCheckout'
 import { AccountCheckNotice, PaymentOutcome, StoreHeader, type OpenStore } from './StoreParts'
 import { PlanStore } from './PlanStore'
@@ -191,11 +191,10 @@ export function StorePages({
             onClose={checkout.close}
             onBrowser={() => {
               // 改用浏览器付款：关弹窗（订单留着），照原来的流程打开面板
-              const intent = checkout.state.intent
-              const plan = intent?.kind === 'plan' ? catalog.plans.find(p => p.id === intent.planId) : undefined
+              // 套餐单（包括从「继续付款」恢复的、没有下单意图的）打开订阅页，其余是充值页
+              const target = browserTarget(checkout.state.intent, checkout.state.order, catalog.plans)
               checkout.close()
-              if (intent?.kind === 'plan')
-                open('purchase', { tab: 'subscription', ...(plan?.groupId ? { group: plan.groupId } : {}) })
+              if (target) open('purchase', target)
               else open('purchase')
             }}
           />

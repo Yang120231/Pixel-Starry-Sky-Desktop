@@ -420,6 +420,61 @@ describe('checkout 开着：套餐页', () => {
   })
 })
 
+describe('checkout 开着：充值关闭 / 没有套餐的空状态仍有账号核对提示', () => {
+  const rechargeOff = (checkout = checkoutOn) =>
+    catalog({
+      methods: methods2,
+      checkout,
+      recharge: { ...catalog().recharge, enabled: false },
+    })
+  it('充值关闭：只有打开面板的入口，补一行账号核对提示（顶部的醒目提示在软件内付款开着时被隐藏）', () => {
+    const html = render(
+      <TopUp catalog={rechargeOff()} currency="USD" onOpen={vi.fn()} checkout={host()} email="alice@example.com" />,
+    )
+    expect(html).toContain('打开网页面板')
+    expect(html).toMatch(emailNote)
+  })
+  it('充值关闭、软件内付款关着（或页面没接）：不加这一行，和以前一样', () => {
+    const off = rechargeOff({ ...checkoutOn, enabled: false })
+    const plain = render(
+      <TopUp catalog={off} currency="USD" onOpen={vi.fn()} checkout={host()} email="alice@example.com" />,
+    )
+    expect(plain).not.toContain('请确认浏览器里面板登录的是')
+    const noHost = render(<TopUp catalog={rechargeOff()} currency="USD" onOpen={vi.fn()} email="alice@example.com" />)
+    expect(noHost).not.toContain('请确认浏览器里面板登录的是')
+  })
+  it('没有在售套餐：同样补一行；没传邮箱就不显示', () => {
+    const empty = catalog({ methods: methods2, checkout: checkoutOn, plans: [] })
+    const html = render(
+      <PlanStore catalog={empty} currentPlan={null} onOpen={vi.fn()} checkout={host()} email="alice@example.com" />,
+    )
+    expect(html).toContain('打开网页面板')
+    expect(html).toMatch(emailNote)
+    expect(render(<PlanStore catalog={empty} currentPlan={null} onOpen={vi.fn()} checkout={host()} />)).not.toContain(
+      '请确认浏览器里面板登录的是',
+    )
+    const off = render(
+      <PlanStore
+        catalog={{ ...empty, checkout: undefined }}
+        currentPlan={null}
+        onOpen={vi.fn()}
+        checkout={host()}
+        email="alice@example.com"
+      />,
+    )
+    expect(off).not.toContain('请确认浏览器里面板登录的是')
+  })
+  it('整页：只有一处账号核对（顶部醒目提示隐藏，空状态里那一行顶上）', () => {
+    mocked.state = { status: 'ready', catalog: rechargeOff(), stale: false }
+    const html = render(<StorePages tab="topup" account={account} onRefreshAccount={refreshOk} />)
+    expect(html).not.toContain('付款到账的是面板里登录的账号')
+    expect((html.match(/请确认浏览器里面板登录的是 alice@example\.com/g) ?? []).length).toBe(1)
+    mocked.state = { status: 'ready', catalog: rechargeOff({ ...checkoutOn, enabled: false }), stale: false }
+    const off = render(<StorePages tab="topup" account={account} onRefreshAccount={refreshOk} />)
+    expect(off).toContain('付款到账的是面板里登录的账号')
+  })
+})
+
 describe('下单意图由页面给出，参数在主进程再校验', () => {
   it('充值：金额、方式、估算；套餐：只带套餐 id', () => {
     const quote = { pay: 102, credited: 110, bonus: 10 }

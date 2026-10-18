@@ -38,11 +38,18 @@ export function PlanStore({
   const [savedMethod] = useState(loadMethod)
 
   if (!catalog.enabled || plans.length === 0) {
+    // 软件内付款开着时顶部的账号核对提示被隐藏了，这里只有浏览器入口，补上核对提示
+    const checkLine = !!checkout && checkoutAvailable(catalog) && !!email
     return (
       <div className="rounded-lg border border-dashed border-line-strong px-4 py-10 text-center">
         <div className="text-ui font-medium text-fg">{tr('settings.account.PlanStore.noPlansOnPanel')}</div>
         <p className="mt-1 text-meta text-fg-muted">{tr('settings.account.PlanStore.plansWillAppearHere')}</p>
         <OpenPanelButton onOpen={onOpen} />
+        {checkLine && (
+          <div className="mt-2">
+            <AccountCheckLine email={email} />
+          </div>
+        )}
       </div>
     )
   }

@@ -1594,4 +1594,8 @@ export const systemMessages = {
   'system.checkoutOrderNotFound': { zh: '找不到这笔订单，请重新下单', en: 'Order not found. Please place a new order' },
   'system.checkoutPanelUrlUntrusted': { zh: '确认地址不在可信域名内，已拒绝打开', en: 'The confirmation URL is not trusted and was not opened' },
   'system.checkoutNoPayPage': { zh: '这笔订单没有可以打开的支付页', en: 'This order has no payment page to open' },
+  'system.checkoutNetwork': { zh: '连不上付款服务，请检查网络后重试', en: 'Cannot reach the payment service. Check your network and try again' },
+  'system.checkoutTimeout': { zh: '付款服务响应超时，请稍后重试', en: 'The payment service timed out. Try again later' },
+  'system.checkoutCreateTimeout': { zh: '下单超时：请稍后在「继续付款」里查看，不会重复下单', en: 'Placing the order timed out. Check "Continue payment" later; no duplicate order will be created' },
+  'system.checkoutAccountChanged': { zh: '登录状态已变化，请重试', en: 'The sign-in state changed. Please try again' },
 } as const

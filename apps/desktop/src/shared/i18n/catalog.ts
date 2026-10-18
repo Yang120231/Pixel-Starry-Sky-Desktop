@@ -3356,6 +3356,10 @@ export const catalog = {
     "zh": "暂时没有查到付款，稍后会自动再查",
     "en": "No payment found yet. We will keep checking"
   },
+  "settings.account.Checkout.notYet.stopped": {
+    "zh": "暂时没有查到付款。如果你已经付款，请点「我已付款」再查一次，或联系客服并提供订单号 {p0}",
+    "en": "No payment found yet. If you have already paid, click \"I have paid\" to check again, or contact support with order {p0}"
+  },
   "settings.account.Checkout.networkUnstable": {
     "zh": "网络不稳定，正在重试",
     "en": "The network is unstable. Retrying"
@@ -3367,6 +3371,14 @@ export const catalog = {
   "settings.account.Checkout.panelInvalid": {
     "zh": "需要确认账号才能继续查询；付完的钱仍会自动到账",
     "en": "Confirm your account to keep checking. Paid orders are still credited automatically"
+  },
+  "settings.account.Checkout.panelInvalid.go": {
+    "zh": "去浏览器确认账号",
+    "en": "Confirm account in browser"
+  },
+  "settings.account.Checkout.panelInvalid.waiting": {
+    "zh": "正在等待浏览器里的确认…（确认后会继续查询这笔订单）",
+    "en": "Waiting for the confirmation in the browser… (this order is checked again afterwards)"
   },
   "settings.account.Checkout.paid.title": {
     "zh": "已收到付款，正在到账…",
@@ -3409,8 +3421,8 @@ export const catalog = {
     "en": "This order was cancelled"
   },
   "settings.account.Checkout.ended.failed": {
-    "zh": "订单失败",
-    "en": "This order failed"
+    "zh": "已收到付款，但到账出了问题，平台会自动补上；长时间没到账请联系客服",
+    "en": "Payment received, but crediting ran into a problem. It will be credited automatically; contact support if it takes long"
   },
   "settings.account.Checkout.ended.refunding": {
     "zh": "订单正在退款",
@@ -3547,6 +3559,10 @@ export const catalog = {
   "settings.account.Checkout.error.INVALID_REQUEST": {
     "zh": "请求参数不正确",
     "en": "Invalid request"
+  },
+  "settings.account.Checkout.error.INTERNAL_ERROR": {
+    "zh": "付款服务出了点问题，请稍后再试",
+    "en": "The payment service ran into a problem. Try again later"
   },
   "settings.account.Checkout.error.UNKNOWN": {
     "zh": "付款出错了，请稍后再试",

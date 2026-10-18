@@ -18,7 +18,7 @@ import {
 } from './checkoutFlow'
 import type { CheckoutIntent } from './checkoutLogic'
 import { FAST_INTERVAL_MS } from './orderWatch'
-import { trackClosed } from './useCheckout'
+import { takeNotice, trackClosed } from './useCheckout'
 
 // 弹窗的流程：下单 → 等待付款 → 到账；面板凭证过期时去浏览器确认账号，确认后用同一个 requestId 自动接着下单；
 // 关掉弹窗不取消订单（docs/ui/in-app-payment.md §2.2、§5.5、§6.3、§6.5）。
@@ -347,6 +347,95 @@ describe('订单上的操作', () => {
   })
 })
 
+describe('订单阶段面板凭证失效 → 确认账号后继续查这笔订单', () => {
+  async function onOrderWithBadPanel() {
+    const t = make()
+    t.create.mockResolvedValueOnce(order('pending', { panelValid: false }))
+    t.flow.begin(intent, false)
+    await tick(0)
+    expect(t.flow.getState()).toMatchObject({ phase: 'order', order: { panelValid: false } })
+    return t
+  }
+
+  it('点「去浏览器确认账号」打开浏览器，等凭证够用后马上查这笔订单；不下新单、requestId 不变', async () => {
+    const t = await onOrderWithBadPanel()
+    t.panelStatus
+      .mockResolvedValueOnce({ valid: false, expiresAt: null, usableForCheckout: false })
+      .mockResolvedValueOnce({ valid: true, expiresAt: null, usableForCheckout: true })
+    t.get.mockResolvedValue(order('pending', { panelValid: true }))
+    await t.flow.startReauth()
+    expect(t.panelVerify).toHaveBeenCalledTimes(1)
+    expect(t.flow.getState()).toMatchObject({ phase: 'order', reauth: 'waiting' })
+    await tick(PANEL_POLL_MS)
+    expect(t.get).not.toHaveBeenCalled() // 第一次还没确认（订单自己的轮询是 3 秒一拍，没到）
+    await tick(PANEL_POLL_MS)
+    expect(t.panelStatus).toHaveBeenCalledTimes(2)
+    expect(t.get).toHaveBeenCalledWith(1234)
+    expect(t.create).toHaveBeenCalledTimes(1) // 没有下新单
+    expect(t.flow.getState()).toMatchObject({
+      phase: 'order',
+      reauth: 'idle',
+      order: { orderId: 1234, panelValid: true },
+    })
+    // 轮询接着跑
+    const calls = t.get.mock.calls.length
+    await tick(FAST_INTERVAL_MS)
+    expect(t.get.mock.calls.length).toBe(calls + 1)
+  })
+
+  it('确认完马上查到订单已付款：接着按已付款的节奏走', async () => {
+    const t = await onOrderWithBadPanel()
+    t.get.mockResolvedValue(order('paid', { panelValid: true }))
+    await t.flow.startReauth()
+    await tick(PANEL_POLL_MS)
+    expect(t.flow.getState().order).toMatchObject({ status: 'paid', panelValid: true })
+  })
+
+  it('确认完这一次没查到：照常轮询接着查', async () => {
+    const t = await onOrderWithBadPanel()
+    t.get.mockRejectedValueOnce(new Error('offline')).mockResolvedValue(order('pending', { panelValid: true }))
+    await t.flow.startReauth()
+    await tick(PANEL_POLL_MS)
+    expect(t.get).toHaveBeenCalled()
+    expect(t.flow.getState().reauth).toBe('idle')
+    await tick(FAST_INTERVAL_MS * 2)
+    expect(t.flow.getState().order).toMatchObject({ panelValid: true })
+  })
+
+  it('订单的凭证是好的时候点不起作用；打开浏览器失败显示原因，可以再试', async () => {
+    const t = make()
+    t.flow.begin(intent, false)
+    await tick(0)
+    await t.flow.startReauth()
+    expect(t.panelVerify).not.toHaveBeenCalled()
+
+    const u = await onOrderWithBadPanel()
+    u.panelVerify.mockRejectedValueOnce(new Error('打不开浏览器'))
+    await u.flow.startReauth()
+    expect(u.flow.getState()).toMatchObject({ reauth: 'idle', reauthError: { message: '打不开浏览器' } })
+    await u.flow.startReauth()
+    expect(u.flow.getState().reauth).toBe('waiting')
+    expect(u.flow.getState().reauthError).toBeNull()
+  })
+
+  it('等了 10 分钟没等到：超时可以再试；等待期间关掉弹窗就不再查', async () => {
+    const t = await onOrderWithBadPanel()
+    t.get.mockImplementation(async () =>
+      order('pending', { panelValid: false, expiresAt: new Date(T0 + 60 * 60_000).toISOString() }),
+    )
+    t.panelStatus.mockResolvedValue({ valid: false, expiresAt: null, usableForCheckout: false })
+    await t.flow.startReauth()
+    await tick(PANEL_WAIT_MS + PANEL_POLL_MS)
+    expect(t.flow.getState().reauth).toBe('timeout')
+    await t.flow.startReauth()
+    expect(t.flow.getState().reauth).toBe('waiting')
+    t.flow.close()
+    const polls = t.panelStatus.mock.calls.length
+    await tick(PANEL_WAIT_MS)
+    expect(t.panelStatus.mock.calls.length).toBe(polls)
+  })
+})
+
 describe('关闭弹窗', () => {
   it('不取消订单，停止轮询；返回手里的订单，待付的进「继续付款」列表', async () => {
     const t = make()
@@ -366,6 +455,28 @@ describe('关闭弹窗', () => {
     expect(trackClosed([], order('paid'), 5)).toHaveLength(1) // 已付款正在到账的也跟着
     expect(trackClosed([], order('completed'), 5)).toEqual([]) // 已到账 / 终态不进列表
     expect(trackClosed([], order('expired'), 5)).toEqual([])
+  })
+
+  it('已到账 / 已取消的单关弹窗时从列表里移走（不留旧状态的横条，也不会因它消失再提示一次到账）', () => {
+    const other = order('pending', { orderId: 9 })
+    const list = trackClosed(trackClosed([], other, 1), order('pending'), 2)
+    expect(list.map(t => t.order.orderId)).toEqual([1234, 9])
+    for (const status of ['completed', 'cancelled', 'failed', 'expired', 'refunded'] as const) {
+      const next = trackClosed(list, order(status), 3)
+      expect(
+        next.map(t => t.order.orderId),
+        status,
+      ).toEqual([9]) // 只移走这一笔，别的单不动
+    }
+    // 已付款正在到账的留着
+    expect(trackClosed(list, order('paid'), 3).map(t => t.order.status)).toEqual(['paid', 'pending'])
+  })
+
+  it('到账提示按订单号去重：同一笔只提示一次', () => {
+    const seen = new Set<number>()
+    expect(takeNotice(seen, 1234)).toBe(true)
+    expect(takeNotice(seen, 1234)).toBe(false)
+    expect(takeNotice(seen, 9)).toBe(true)
   })
 
   it('下单还在途中就关掉：订单在云端建好了，通知列表刷新，不会冒出弹窗', async () => {

@@ -341,6 +341,18 @@ describe('checkoutCreate 参数校验（每条规则一个用例，都不发请�
     await rejects(balance, '请先刷新套餐信息')
   })
 
+  it('金额发出前取整到分：0.1 + 0.2 发的是 0.3，不是 0.30000000000000004', async () => {
+    reply('GET', '/v1/platform/store', 200, { ...storeJson, recharge: { ...storeJson.recharge, min: 0, max: 0 } })
+    await fetchStore()
+    reply('POST', '/v1/platform/orders', 200, orderJson)
+    await checkoutCreate({ ...balance, amount: 0.1 + 0.2 })
+    expect(networkCalls().at(-1)?.body).toMatchObject({ amount: 0.3 })
+    await checkoutCreate({ ...balance, amount: 19.99 })
+    expect(networkCalls().at(-1)?.body).toMatchObject({ amount: 19.99 })
+    await checkoutCreate({ ...balance, amount: 100.07 })
+    expect(networkCalls().at(-1)?.body).toMatchObject({ amount: 100.07 })
+  })
+
   it('请求体：蛇形字段，balance 只带 amount', async () => {
     reply('POST', '/v1/platform/orders', 200, orderJson)
     await checkoutCreate({ ...balance, extra: 'ignored' })
@@ -375,6 +387,34 @@ describe('同时只能一个下单在途', () => {
     expect(codeOf(await failure(checkoutCreate(balance)))?.code).toBe('checkout.UPSTREAM_UNAVAILABLE')
     reply('POST', '/v1/platform/orders', 200, orderJson)
     await expect(checkoutCreate(balance)).resolves.toBeTruthy()
+  })
+
+  it('换了登录会话以后，上一个会话里还在途的下单不再占位，它的结果也不记', async () => {
+    const other = '11111111-6a4b-4f0e-9d8f-2a1c7b5e9d10'
+    let release!: () => void
+    const gate = new Promise<void>(resolve => (release = resolve))
+    mocks.replies.set('POST /v1/platform/orders', (async () => {
+      await gate
+      return { status: 200, body: orderJson }
+    }) as unknown as Reply)
+    const stale = checkoutCreate(balance)
+    mocks.epoch += 1 // 换账号：新会话里要重新取商品数据
+    await fetchStore()
+    mocks.replies.set('POST /v1/platform/orders', { status: 200, body: { ...orderJson, order_id: 99 } })
+    await expect(checkoutCreate({ ...balance, requestId: other })).resolves.toMatchObject({ orderId: 99 })
+    release()
+    expect((await failure(stale)).message).toBe('登录状态已变化，请重试')
+    // 旧会话的订单没有被记到新会话里
+    expect((await failure(checkoutGet(1234))).message).toBe('找不到这笔订单，请重新下单')
+    // 旧下单结束不会清掉新会话的占位：新会话里在途的下单仍然挡住第二个
+    mocks.replies.set('POST /v1/platform/orders', (async () => {
+      await new Promise<void>(resolve => setTimeout(resolve, 20))
+      return { status: 200, body: orderJson }
+    }) as unknown as Reply)
+    const first = checkoutCreate(balance)
+    const second = await failure(checkoutCreate({ ...balance, requestId: '22222222-6a4b-4f0e-9d8f-2a1c7b5e9d10' }))
+    expect(second.message).toBe('已有一笔订单正在创建，请稍候')
+    await first
   })
 
   it('参数校验失败的下单不占位', async () => {
@@ -528,6 +568,7 @@ describe('错误：codedError 的 code 和参数', () => {
       'UNSUPPORTED_RESULT',
       'UPSTREAM_UNAVAILABLE',
       'INVALID_REQUEST',
+      'INTERNAL_ERROR',
     ])
       expect(codeOf(await create(400, { error: '中文', code }))?.code, code).toBe(`checkout.${code}`)
   })
@@ -540,6 +581,21 @@ describe('错误：codedError 的 code 和参数', () => {
   it('没有可读提示 / 响应体不是 JSON：带状态码的中文', async () => {
     expect((await create(502, {})).message).toBe('付款服务暂时不可用（HTTP 502）')
     expect((await create(504, '<html>bad gateway</html>')).message).toBe('付款服务暂时不可用（HTTP 504）')
+  })
+
+  it('503 / 存储出错的 OAuth 风格错误体（没有 code）：用 error_description，机器码不显示', async () => {
+    const desc = '云端服务暂时不可用，请稍后重试'
+    expect((await create(503, { error: 'server_error', error_description: desc })).message).toBe(desc)
+    expect((await create(503, { error: 'invalid_token', error_description: desc })).message).toBe(desc)
+    // 只有机器码、没有描述：不把 server_error 抛给界面，退回带状态码的中文
+    expect((await create(503, { error: 'server_error' })).message).toBe('付款服务暂时不可用（HTTP 503）')
+    expect((await create(401, { error: 'invalid_token' })).message).toBe('付款服务暂时不可用（HTTP 401）')
+    // 有中文 error 时照旧用 error；没有 code 且有描述时描述优先
+    expect((await create(500, { error: '云端存储出错' })).message).toBe('云端存储出错')
+    expect((await create(500, { error: '云端存储出错', error_description: '稍后再试' })).message).toBe('稍后再试')
+    // 有不认识的 code：用 error
+    const unknown = await create(400, { error: '请求不对', code: 'SOMETHING_NEW', error_description: 'x' })
+    expect(unknown.message).toBe('请求不对')
   })
 
   it('成功响应的订单数据坏了：报错，不记订单', async () => {
@@ -666,5 +722,84 @@ describe('panelVerify 的地址校验', () => {
     reply('POST', '/v1/platform/panel/verify', 200, { expires_at: 'x' })
     expect((await failure(panelVerify())).message).toBe('确认地址不在可信域名内，已拒绝打开')
     expect(mocks.opened).toEqual([])
+  })
+})
+
+describe('panelVerifyLink 连端口一起比', () => {
+  it('云端地址带端口：确认地址端口必须一样', () => {
+    mocks.base = 'https://panel.example.com:8443'
+    expect(panelVerifyLink('https://panel.example.com:8443/cli/panel-verify?t=a')).toContain(':8443')
+    expect(() => panelVerifyLink('https://panel.example.com/cli/panel-verify?t=a')).toThrow('已拒绝打开')
+    expect(() => panelVerifyLink('https://panel.example.com:9443/cli/panel-verify?t=a')).toThrow('已拒绝打开')
+  })
+
+  it('云端地址是默认端口：确认地址带别的端口拒绝；默认端口 / 大小写 / 结尾的点照样认', () => {
+    expect(() => panelVerifyLink('https://panel.example.com:8443/cli/panel-verify?t=a')).toThrow('已拒绝打开')
+    expect(panelVerifyLink('https://panel.example.com:443/cli/panel-verify?t=a')).toContain('panel.example.com')
+    expect(panelVerifyLink('https://PANEL.Example.com./cli/panel-verify?t=a')).toContain('/cli/panel-verify')
+    mocks.base = 'https://Panel.Example.com.:8443'
+    expect(panelVerifyLink('https://panel.example.com.:8443/cli/panel-verify?t=a')).toContain(':8443')
+  })
+})
+
+describe('断网、超时和换账号（call 的包装）', () => {
+  const timeout = (): Error =>
+    Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' })
+  const throwing = (e: Error): Reply =>
+    (async () => {
+      throw e
+    }) as unknown as Reply
+
+  it('断网（fetch failed）：中文提示，不冒原始异常', async () => {
+    mocks.replies.set('POST /v1/platform/orders', throwing(new TypeError('fetch failed')))
+    expect((await failure(checkoutCreate(balance))).message).toBe('连不上付款服务，请检查网络后重试')
+    reply('POST', '/v1/platform/orders', 200, orderJson)
+    await checkoutCreate(balance)
+    mocks.replies.set('GET /v1/platform/orders/1234', throwing(new TypeError('fetch failed')))
+    expect((await failure(checkoutGet(1234))).message).toBe('连不上付款服务，请检查网络后重试')
+    mocks.replies.set('GET /v1/platform/panel', throwing(new TypeError('fetch failed')))
+    expect((await failure(panelStatus())).message).toBe('连不上付款服务，请检查网络后重试')
+  })
+
+  it('超时：下单说「不会重复下单」，其它请求说响应超时；和断网分开', async () => {
+    mocks.replies.set('POST /v1/platform/orders', throwing(timeout()))
+    expect((await failure(checkoutCreate(balance))).message).toBe('下单超时：请稍后在「继续付款」里查看，不会重复下单')
+    mocks.replies.set('GET /v1/platform/panel', throwing(timeout()))
+    expect((await failure(panelStatus())).message).toBe('付款服务响应超时，请稍后重试')
+    mocks.replies.set('GET /v1/platform/panel', throwing(new DOMException('aborted', 'AbortError')))
+    expect((await failure(panelStatus())).message).toBe('付款服务响应超时，请稍后重试')
+  })
+
+  it('登录过期之类带 code 的错误、别的错误原样抛，不当成断网', async () => {
+    const expired = Object.assign(new TypeError('登录已失效，请重新登录'), { code: 'AUTH_EXPIRED' })
+    mocks.replies.set('GET /v1/platform/panel', throwing(expired))
+    expect(await failure(panelStatus())).toBe(expired)
+    mocks.replies.set('GET /v1/platform/panel', throwing(new Error('请先登录像素星空账号')))
+    expect((await failure(panelStatus())).message).toBe('请先登录像素星空账号')
+  })
+
+  it('请求途中换了账号：结果丢弃，不记订单，抛「登录状态已变化」', async () => {
+    mocks.replies.set('POST /v1/platform/orders', (async () => {
+      mocks.epoch += 1
+      return { status: 200, body: orderJson }
+    }) as unknown as Reply)
+    expect((await failure(checkoutCreate(balance))).message).toBe('登录状态已变化，请重试')
+    expect((await failure(checkoutGet(1234))).message).toBe('找不到这笔订单，请重新下单')
+  })
+
+  it('查单 / 失败的请求途中换了账号：同样说登录状态已变化，不记订单', async () => {
+    reply('POST', '/v1/platform/orders', 200, orderJson)
+    await checkoutCreate(balance)
+    mocks.replies.set('GET /v1/platform/orders/1234', (async () => {
+      mocks.epoch += 1
+      return { status: 200, body: orderJson }
+    }) as unknown as Reply)
+    expect((await failure(checkoutGet(1234))).message).toBe('登录状态已变化，请重试')
+    expect((await failure(checkoutGet(1234))).message).toBe('找不到这笔订单，请重新下单')
+    mocks.replies.set('GET /v1/platform/panel', (async () => {
+      mocks.epoch += 1
+      throw new TypeError('fetch failed')
+    }) as unknown as Reply)
+    expect((await failure(panelStatus())).message).toBe('登录状态已变化，请重试')
   })
 })

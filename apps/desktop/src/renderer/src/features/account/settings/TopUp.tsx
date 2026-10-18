@@ -51,12 +51,19 @@ export function TopUp({
   )
 
   if (!catalog.enabled || !recharge.enabled) {
+    // 软件内付款开着时顶部的账号核对提示被隐藏了，这里只有浏览器入口，补上核对提示
+    const checkLine = !!checkout && checkoutAvailable(catalog) && !!email
     return (
       <div>
         <div className="rounded-lg border border-dashed border-line-strong px-4 py-10 text-center">
           <div className="text-ui font-medium text-fg">{tr('settings.account.TopUp.rechargeClosed')}</div>
           <p className="mt-1 text-meta text-fg-muted">{tr('settings.account.TopUp.rechargeClosedHint')}</p>
           <OpenPanelButton onOpen={onOpen} />
+          {checkLine && (
+            <div className="mt-2">
+              <AccountCheckLine email={email} />
+            </div>
+          )}
         </div>
         <div className="mt-3 flex justify-center">{redeem}</div>
       </div>

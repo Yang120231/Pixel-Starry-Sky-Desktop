@@ -233,6 +233,72 @@ describe('等待付款', () => {
   })
 })
 
+describe('订单阶段面板凭证失效', () => {
+  const bad = (status: CheckoutStatus = 'pending', over: Partial<CheckoutOrder> = {}) =>
+    order(status, { panelValid: false, ...over })
+  const autofocusCount = (html: string): number => (html.match(/data-autofocus/g) ?? []).length
+  /** 带 data-autofocus 的按钮文字 */
+  const autofocusLabel = (html: string): string | undefined =>
+    /<button[^>]*data-autofocus=""[^>]*>(?:<svg.*?<\/svg>)?([^<]*)<\/button>/s.exec(html)?.[1]
+
+  it('等待付款：有主按钮「去浏览器确认账号」并拿焦点，「我已付款」退成次要', () => {
+    const html = render(state({ order: bad() }))
+    expect(html).toContain('需要确认账号才能继续查询')
+    expect(hasButton(html, '去浏览器确认账号')).toBe(true)
+    expect(autofocusCount(html)).toBe(1)
+    expect(autofocusLabel(html)).toBe('去浏览器确认账号')
+    expect(html).toMatch(/<button[^>]*bg-primary[^>]*data-autofocus=""[^>]*>去浏览器确认账号/)
+    expect(html).not.toMatch(/<button[^>]*bg-primary[^>]*>我已付款/)
+  })
+  it('凭证正常的订单没有这个按钮，主按钮还是「我已付款」', () => {
+    const html = render(state())
+    expect(hasButton(html, '去浏览器确认账号')).toBe(false)
+    expect(autofocusLabel(html)).toBe('我已付款')
+  })
+  it('已过期：焦点 / 主按钮不在「重新下单」上（旧单可能已付，再下一单会付第二次）', () => {
+    const html = render(state({ order: bad('expired') }), { now: T0 + 31 * MIN })
+    expect(hasButton(html, '重新下单')).toBe(true)
+    expect(autofocusCount(html)).toBe(1)
+    expect(autofocusLabel(html)).toBe('去浏览器确认账号')
+    expect(html).not.toMatch(/<button[^>]*bg-primary[^>]*>重新下单/)
+    // 没有下单意图（继续付款恢复的）也一样
+    expect(autofocusLabel(render(state({ order: bad('expired'), intent: null }), { now: T0 + 31 * MIN }))).toBe(
+      '去浏览器确认账号',
+    )
+  })
+  it('凭证正常的过期单：重新下单仍是主按钮', () => {
+    const html = render(state({ order: order('expired') }), { now: T0 + 31 * MIN })
+    expect(autofocusLabel(html)).toBe('重新下单')
+  })
+  it('已付款还没到账：同样给确认账号的入口，关闭不抢焦点', () => {
+    const html = render(state({ order: bad('paid'), paidAt: T0 }))
+    expect(autofocusCount(html)).toBe(1)
+    expect(autofocusLabel(html)).toBe('去浏览器确认账号')
+  })
+  it('已取消 / 已到账的订单不需要：没有按钮，也不再提示', () => {
+    for (const status of ['cancelled', 'completed'] as const) {
+      const html = render(state({ order: bad(status) }))
+      expect(hasButton(html, '去浏览器确认账号')).toBe(false)
+      expect(html).not.toContain('需要确认账号才能继续查询')
+    }
+  })
+  it('点了之后显示等待（按钮不可点）；等超时显示原因和「再试一次」；打开失败显示原因', () => {
+    const waiting = render(state({ order: bad(), reauth: 'waiting' }))
+    expect(waiting).toContain('确认后会继续查询这笔订单')
+    expect(waiting).toMatch(/<button[^>]*disabled=""[^>]*>.*?去浏览器确认账号/s)
+    const timeout = render(state({ order: bad(), reauth: 'timeout' }))
+    expect(timeout).toContain('没有等到浏览器里的确认')
+    expect(hasButton(timeout, '再试一次')).toBe(true)
+    const failed = render(state({ order: bad(), reauthError: parseCheckoutError(new Error('打不开浏览器')) }))
+    expect(failed).toContain('打不开浏览器')
+  })
+  it('英文界面没有残留中文', () => {
+    const html = render(state({ order: bad(), reauth: 'waiting' }), {}, 'en-US').replace(/支付宝/g, 'Alipay')
+    expect(html).toContain('Confirm account in browser')
+    expect(html).not.toMatch(/[一-鿿]/)
+  })
+})
+
 describe('已付款、已到账', () => {
   it('已付款：已收到付款，正在到账；订单继续在后台到账，只有关闭', () => {
     const html = render(state({ order: order('paid'), paidAt: T0 }))
@@ -287,18 +353,37 @@ describe('已过期、终态', () => {
     expect(hasButton(html, '我已付款')).toBe(true)
     expect(hasButton(html, '重新下单')).toBe(true)
   })
-  it('过期超过 10 分钟：不再提示核实', () => {
+  it('过期超过 10 分钟（自动再查已停）：「我已付款」仍在，云端到期后 1 天内还会刷新；超过 1 天才收起', () => {
     const html = render(state(), { now: T0 + 41 * MIN })
     expect(html).toContain('订单已过期')
-    expect(html).not.toContain('如果你已经付了款')
-    expect(hasButton(html, '我已付款')).toBe(false)
+    expect(html).toContain('如果你已经付了款')
+    expect(hasButton(html, '我已付款')).toBe(true)
+    const old = render(state(), { now: T0 + 30 * MIN + 25 * 60 * MIN })
+    expect(old).not.toContain('如果你已经付了款')
+    expect(hasButton(old, '我已付款')).toBe(false)
+  })
+  it('「我已付款」后还没查到：10 分钟慢查窗口内说会再查，窗口外说已经不查了，请再点或联系客服', () => {
+    const waiting = state({ order: order('expired'), notYet: true })
+    const inside = render(waiting, { now: T0 + 30 * MIN + 5 * MIN })
+    expect(inside).toContain('暂时没有查到付款，稍后会自动再查')
+    expect(inside).not.toContain('联系客服并提供订单号')
+    const outside = render(waiting, { now: T0 + 30 * MIN + 11 * MIN })
+    expect(outside).not.toContain('稍后会自动再查')
+    expect(outside).toContain('如果你已经付款，请点「我已付款」再查一次，或联系客服并提供订单号 1234')
+    // 待付单到了 expires_at 还没被云端标成过期：同样按窗口算
+    const lapsed = render(state({ notYet: true }), { now: T0 + 30 * MIN + 11 * MIN })
+    expect(lapsed).toContain('联系客服并提供订单号')
+  })
+  it('英文：窗口外的提示也是英文', () => {
+    const html = render(state({ order: order('expired'), notYet: true }), { now: T0 + 45 * MIN }, 'en-US')
+    expect(html).toContain('contact support with order 1234')
+    expect(html).not.toMatch(/[一-鿿]/)
   })
   it('从「继续付款」恢复的订单没有下单意图：不能重新下单', () => {
     expect(hasButton(render(state({ intent: null }), { now: T0 + 31 * MIN }), '重新下单')).toBe(false)
   })
   it.each([
     ['cancelled', '订单已取消'],
-    ['failed', '订单失败'],
     ['refunding', '订单正在退款'],
     ['refunded', '订单已退款'],
     ['unknown', '订单状态未知'],
@@ -306,6 +391,12 @@ describe('已过期、终态', () => {
     const html = render(state({ order: order(status) }))
     expect(html).toContain(text)
     expect(hasButton(html, '重新下单')).toBe(true)
+    expect(hasButton(html, '关闭')).toBe(true)
+  })
+  it('failed（付了钱、加余额失败）：说明会自动补上，不给「重新下单」', () => {
+    const html = render(state({ order: order('failed') }))
+    expect(html).toContain('已收到付款，但到账出了问题')
+    expect(hasButton(html, '重新下单')).toBe(false)
     expect(hasButton(html, '关闭')).toBe(true)
   })
 })
@@ -341,6 +432,10 @@ describe('下单前后的其它状态', () => {
     const html = render(state({ phase: 'error', order: null, error: e }))
     expect(html).toContain('role="alert"')
     expect(html).toContain('你有 3 笔未付款的订单，请先付款或取消其中一笔')
+    // 同一句只放一个 live region：role=alert 读了，role=status 就留空，不再读第二遍
+    expect(html.split('你有 3 笔未付款的订单，请先付款或取消其中一笔')).toHaveLength(2)
+    expect(html).toContain('<div role="status" aria-live="polite" class="sr-only"></div>')
+    expect((html.match(/role="alert"/g) ?? []).length).toBe(1)
     for (const label of ['重试', '改用浏览器付款', '关闭']) expect(hasButton(html, label)).toBe(true)
   })
   it('需要确认账号：标题、说明、邮箱、去浏览器确认 / 改用浏览器付款 / 取消', () => {

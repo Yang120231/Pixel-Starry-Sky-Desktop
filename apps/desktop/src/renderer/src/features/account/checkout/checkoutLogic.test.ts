@@ -4,8 +4,10 @@ import { allMessages, setCurrentLocale } from '../../../i18n/core'
 import type { CheckoutOrder, StoreCatalog, StorePlan } from '../../../../../shared/types/account'
 import {
   EXPIRED_VERIFY_MS,
+  EXPIRED_WATCH_MS,
   amountDiffers,
   balanceIntent,
+  browserTarget,
   canVerifyExpired,
   checkoutAvailable,
   checkoutErrorText,
@@ -13,6 +15,7 @@ import {
   countdownAnnounce,
   focusTrapTarget,
   formatCountdown,
+  inExpiredWatchWindow,
   isFinalStatus,
   loadMethod,
   nextRadioIndex,
@@ -114,9 +117,54 @@ describe('倒计时', () => {
     expect(countdownAnnounce(4 * MIN, 3 * MIN)).toBeNull()
     expect(countdownAnnounce(10 * MIN, 30_000)).toBe(1) // 一下越过两个门槛（窗口在后台）：取更近的
   })
-  it('过期后「我已付款」保留 10 分钟', () => {
+  it('过期后「我已付款」保留 1 天（云端到期后 1 天内还会刷新）', () => {
+    expect(EXPIRED_VERIFY_MS).toBe(24 * 60 * MIN)
     expect(canVerifyExpired(-EXPIRED_VERIFY_MS + 1)).toBe(true)
     expect(canVerifyExpired(-EXPIRED_VERIFY_MS)).toBe(false)
+    expect(canVerifyExpired(-30 * MIN)).toBe(true) // 自动再查停了以后手动还能点
+  })
+  it('过期后自动再查 10 分钟', () => {
+    expect(EXPIRED_WATCH_MS).toBe(10 * MIN)
+    expect(inExpiredWatchWindow(0)).toBe(true)
+    expect(inExpiredWatchWindow(-EXPIRED_WATCH_MS + 1)).toBe(true)
+    expect(inExpiredWatchWindow(-EXPIRED_WATCH_MS)).toBe(false)
+  })
+})
+
+describe('改用浏览器付款打开哪一页', () => {
+  const plans = [
+    { id: 7, groupId: 3 },
+    { id: 8, groupId: null },
+  ]
+  const balanceOrder: Pick<CheckoutOrder, 'kind' | 'plan'> = { kind: 'balance', plan: null }
+  const planOrder = (id: number): Pick<CheckoutOrder, 'kind' | 'plan'> => ({
+    kind: 'plan',
+    plan: { id, name: 'Pro', validityDays: 30 },
+  })
+  it('充值单（下单意图或订单）打开充值页', () => {
+    expect(browserTarget({ kind: 'balance' }, null, plans)).toBeNull()
+    expect(browserTarget({ kind: 'balance' }, balanceOrder, plans)).toBeNull()
+    expect(browserTarget(null, balanceOrder, plans)).toBeNull()
+    expect(browserTarget(null, null, plans)).toBeNull()
+  })
+  it('套餐单打开订阅页，带上套餐的分组', () => {
+    expect(browserTarget({ kind: 'plan', planId: 7 }, null, plans)).toEqual({ tab: 'subscription', group: 3 })
+    expect(browserTarget({ kind: 'plan', planId: 7 }, planOrder(7), plans)).toEqual({
+      tab: 'subscription',
+      group: 3,
+    })
+  })
+  it('从「继续付款」恢复的套餐单（没有下单意图）也打开订阅页，订单上的套餐为准', () => {
+    expect(browserTarget(null, planOrder(7), plans)).toEqual({ tab: 'subscription', group: 3 })
+    expect(browserTarget({ kind: 'plan', planId: 8 }, planOrder(7), plans)).toEqual({
+      tab: 'subscription',
+      group: 3,
+    })
+  })
+  it('拿不到分组（套餐下架了、没有分组）就只打开订阅页', () => {
+    expect(browserTarget(null, planOrder(99), plans)).toEqual({ tab: 'subscription' })
+    expect(browserTarget(null, planOrder(8), plans)).toEqual({ tab: 'subscription' })
+    expect(browserTarget(null, { kind: 'plan', plan: null }, plans)).toEqual({ tab: 'subscription' })
   })
 })
 
@@ -283,6 +331,7 @@ describe('错误文案', () => {
     'UNSUPPORTED_RESULT',
     'UPSTREAM_UNAVAILABLE',
     'INVALID_REQUEST',
+    'INTERNAL_ERROR',
   ]
   it.each(CODES)('%s：中英文案都有，带不带参数都不会留下没替换的 {…}', code => {
     for (const locale of ['zh-CN', 'en-US'] as const) {
@@ -306,11 +355,29 @@ describe('错误文案', () => {
       '今天的付款额度只剩 ¥12.50',
     )
     setCurrentLocale('en-US')
+    expect(checkoutErrorText(parseCheckoutError(coded('INTERNAL_ERROR')))).toBe(
+      'The payment service ran into a problem. Try again later',
+    )
     expect(checkoutErrorText(parseCheckoutError(coded('AMOUNT_OUT_OF_RANGE', { min: 5, max: 1000 })))).toBe(
       'Amount must be between ¥5 and ¥1,000',
     )
     expect(checkoutErrorText(parseCheckoutError(coded('PANEL_REAUTH_REQUIRED')))).toBe(
       'Confirm your account in the browser once to pay in the app',
+    )
+  })
+  it('每日额度用完（remaining ≤ 0）不说「只剩 ¥0」，说已用完', () => {
+    for (const remaining of [0, -3]) {
+      expect(checkoutErrorText(parseCheckoutError(coded('DAILY_LIMIT_EXCEEDED', { remaining })))).toBe(
+        '今天的付款额度已用完',
+      )
+    }
+    expect(checkoutErrorText(parseCheckoutError(coded('DAILY_LIMIT_EXCEEDED')))).toBe('今天的付款额度已用完')
+    expect(checkoutErrorText(parseCheckoutError(coded('DAILY_LIMIT_EXCEEDED', { remaining: 0.01 })))).toBe(
+      '今天的付款额度只剩 ¥0.01',
+    )
+    setCurrentLocale('en-US')
+    expect(checkoutErrorText(parseCheckoutError(coded('DAILY_LIMIT_EXCEEDED', { remaining: 0 })))).toBe(
+      "Today's payment limit is used up",
     )
   })
   it('金额范围 max 为 0（不限）：只说下限', () => {
@@ -333,6 +400,13 @@ describe('错误文案', () => {
     expect(checkoutErrorText(parseCheckoutError(new Error('这笔订单没有可以打开的支付页')))).toBe(
       'This order has no payment page to open',
     )
+    for (const zh of [
+      '连不上付款服务，请检查网络后重试',
+      '付款服务响应超时，请稍后重试',
+      '下单超时：请稍后在「继续付款」里查看，不会重复下单',
+      '登录状态已变化，请重试',
+    ])
+      expect(checkoutErrorText(parseCheckoutError(new Error(zh))), zh).not.toMatch(/[一-鿿]/)
     expect(checkoutErrorText(parseCheckoutError(null))).toBe(allMessages['settings.account.Checkout.error.UNKNOWN'].en)
   })
 })

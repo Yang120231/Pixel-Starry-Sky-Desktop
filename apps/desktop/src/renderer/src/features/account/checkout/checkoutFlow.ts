@@ -313,10 +313,14 @@ export class CheckoutFlow {
   // 确认账号
   // -------------------------------------------------------------------------
 
-  /** 「去浏览器确认」：打开确认页，然后每 2 秒看一次面板凭证，够用了就自动接着下单 */
+  /**
+   * 「去浏览器确认」：打开确认页，然后每 2 秒看一次面板凭证，够用了就自动接着下单。
+   * 订单阶段凭证中途失效（order.panelValid === false）时也走这里：确认完回到这笔订单继续查，不下新单、不改 requestId
+   */
   async startReauth(): Promise<void> {
     const s = this.snapshot
-    if (s.phase !== 'reauth' || s.reauth === 'opening' || s.reauth === 'waiting') return
+    const onOrder = s.phase === 'order' && s.order?.panelValid === false
+    if ((s.phase !== 'reauth' && !onOrder) || s.reauth === 'opening' || s.reauth === 'waiting') return
     const gen = this.gen
     this.patch({ reauth: 'opening', reauthError: null })
     try {
@@ -342,7 +346,8 @@ export class CheckoutFlow {
           if (gen !== this.gen) return
           if (usable) {
             this.panelTimer = null
-            void this.submit()
+            if (onOrder) void this.resumeOrder(gen)
+            else void this.submit()
           } else if (this.now() >= deadline) {
             this.panelTimer = null
             this.patch({ reauth: 'timeout' })
@@ -351,6 +356,21 @@ export class CheckoutFlow {
       }, PANEL_POLL_MS)
     }
     poll()
+  }
+
+  /** 订单阶段确认完账号：马上查一次这笔订单并接着轮询（同一个订单、同一个 requestId） */
+  private async resumeOrder(gen: number): Promise<void> {
+    const order = this.snapshot.order
+    if (!order) return
+    this.patch({ reauth: 'idle', reauthError: null })
+    try {
+      const next = await this.deps.bridge.checkoutGet(order.orderId)
+      if (gen !== this.gen) return
+      this.watch.adopt(next)
+    } catch {
+      if (gen !== this.gen) return
+      this.watch.retry() // 这一次没查到：照常的轮询接着查（连续失败会按原来的规则报错）
+    }
   }
 
   // -------------------------------------------------------------------------

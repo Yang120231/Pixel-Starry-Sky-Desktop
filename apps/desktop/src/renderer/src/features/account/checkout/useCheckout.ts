@@ -56,10 +56,21 @@ const bridge: FlowBridge = {
 
 const foreground = (): boolean => typeof document === 'undefined' || (!document.hidden && document.hasFocus())
 
-/** 关掉弹窗时手里的订单：还没付的、或已付款正在到账的留在待付列表里（不取消），关了弹窗也能「继续付款」 */
+/**
+ * 关掉弹窗时手里的订单：还没付的、或已付款正在到账的留在待付列表里（不取消），关了弹窗也能「继续付款」；
+ * 已到账 / 已取消 / 已过期等终态的单从列表里移走（不然横条还显示旧状态，列表消失时又会再提示一次到账）
+ */
 export function trackClosed(list: TrackedOrder[], order: CheckoutOrder, at: number): TrackedOrder[] {
-  if (order.status !== 'pending' && order.status !== 'paid') return list
-  return [{ order: plain(order), at }, ...list.filter(t => t.order.orderId !== order.orderId)]
+  const others = list.filter(t => t.order.orderId !== order.orderId)
+  if (order.status !== 'pending' && order.status !== 'paid') return others
+  return [{ order: plain(order), at }, ...others]
+}
+
+/** 到账提示按订单号去重：第一次提示返回 true 并记下，同一笔再来返回 false（弹窗里到账和列表里发现到账都会走到这里） */
+export function takeNotice(seen: Set<number>, orderId: number): boolean {
+  if (seen.has(orderId)) return false
+  seen.add(orderId)
+  return true
 }
 
 /** 不带二维码和支付链接的副本：列表里只需要金额和时间 */
@@ -85,6 +96,8 @@ export function useCheckout(
   const pendingRef = useRef(pending)
   pendingRef.current = pending
   const refreshPendingRef = useRef<() => Promise<void>>(async () => undefined)
+  // 已经提示过到账的订单号：弹窗里到账、列表里发现到账两条路径都会提示，同一笔只提示一次
+  const notifiedRef = useRef(new Set<number>())
 
   const flowRef = useRef<CheckoutFlow | null>(null)
   flowRef.current ??= new CheckoutFlow({
@@ -92,7 +105,8 @@ export function useCheckout(
     refreshAccount: () => refreshRef.current(),
     getAccount: () => accountRef.current,
     newRequestId: () => crypto.randomUUID(),
-    onCompleted: (_order, change) => {
+    onCompleted: (order, change) => {
+      if (!takeNotice(notifiedRef.current, order.orderId)) return
       const line = change ? changeLines(change, accountRef.current.currency)[0] : undefined
       toastRef.current(
         line
@@ -146,9 +160,9 @@ export function useCheckout(
             if (old) next.push(old) // 查不到就先留着，下次再查
           } else if (fresh.status === 'paid') next.push({ order: plain(fresh), at: Date.now() })
           else if (fresh.status === 'completed' && !flow.getState().open) {
-            // 弹窗关着的时候到的账：刷新账号让余额 / 套餐跟上，并提示一下
+            // 弹窗关着的时候到的账：刷新账号让余额 / 套餐跟上，并提示一下（这笔已经提示过就不再提示）
             void refreshRef.current().catch(() => undefined)
-            toastRef.current(tr('settings.account.Checkout.toast.completed'))
+            if (takeNotice(notifiedRef.current, id)) toastRef.current(tr('settings.account.Checkout.toast.completed'))
           }
         }
         if (alive) setPending(next)

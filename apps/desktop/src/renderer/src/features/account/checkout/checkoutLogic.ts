@@ -188,13 +188,38 @@ export function countdownAnnounce(prevMs: number, nowMs: number): 5 | 1 | null {
   return null
 }
 
-/** 过期以后「我已付款」还保留多久：过期后才付的钱也能核实入账 */
-export const EXPIRED_VERIFY_MS = 10 * 60_000
+/**
+ * 过期以后「我已付款」还保留多久：云端对 expired 的单在到期后 1 天内仍会刷新，过期后才付的钱也能核实入账
+ */
+export const EXPIRED_VERIFY_MS = 24 * 60 * 60_000
+/** 过期以后自动再查（慢节奏）多久：覆盖「二维码过期后才付的钱」，超过就停，之后只能手动「我已付款」 */
+export const EXPIRED_WATCH_MS = 10 * 60_000
 /** 已付款超过这么久还没到账就提示「到账有点慢」 */
 export const SLOW_CREDIT_MS = 2 * 60_000
 
 export function canVerifyExpired(remaining: number): boolean {
   return remaining > -EXPIRED_VERIFY_MS
+}
+
+/** 过期后还在自动再查的窗口内（到期后 10 分钟） */
+export function inExpiredWatchWindow(remaining: number): boolean {
+  return remaining > -EXPIRED_WATCH_MS
+}
+
+/**
+ * 「改用浏览器付款」该打开哪一页：订单（从「继续付款」恢复的没有下单意图）或下单意图是套餐就打开订阅页，
+ * 能找到套餐就带上它的分组；否则是充值页
+ */
+export function browserTarget(
+  intent: Pick<CheckoutIntent, 'kind' | 'planId'> | null,
+  order: Pick<CheckoutOrder, 'kind' | 'plan'> | null,
+  plans: Array<Pick<StorePlan, 'id' | 'groupId'>>,
+): { tab: 'subscription'; group?: number } | null {
+  const kind = order?.kind ?? intent?.kind
+  if (kind !== 'plan') return null
+  const planId = order?.plan?.id ?? intent?.planId
+  const plan = planId !== undefined ? plans.find(p => p.id === planId) : undefined
+  return { tab: 'subscription', ...(plan?.groupId ? { group: plan.groupId } : {}) }
 }
 
 /** 应付金额和估算差 1 分以上（同一币种才比）：弹窗里加「以此金额为准」 */
@@ -260,6 +285,7 @@ const ERROR_CODES: ReadonlySet<string> = new Set([
   'UNSUPPORTED_RESULT',
   'UPSTREAM_UNAVAILABLE',
   'INVALID_REQUEST',
+  'INTERNAL_ERROR',
 ])
 
 export interface CheckoutErrorInfo {
@@ -300,7 +326,8 @@ export function checkoutErrorText(info: CheckoutErrorInfo, currency = 'CNY'): st
     }
     if (code === 'DAILY_LIMIT_EXCEEDED') {
       const left = num(params.remaining)
-      return left !== null ? tr(key(code), { p0: price(left) }) : tr(key('DAILY_LIMIT_EXCEEDED_ANY'))
+      // 额度已用完（remaining<=0）不说「只剩 ¥0」
+      return left !== null && left > 0 ? tr(key(code), { p0: price(left) }) : tr(key('DAILY_LIMIT_EXCEEDED_ANY'))
     }
     return tr(key(code))
   }

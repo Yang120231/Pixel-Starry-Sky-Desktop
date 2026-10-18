@@ -22,6 +22,10 @@ const MSG_ORDER_NOT_FOUND = '找不到这笔订单，请重新下单'
 const MSG_PANEL_URL_UNTRUSTED = '确认地址不在可信域名内，已拒绝打开'
 const MSG_NO_PAY_PAGE = '这笔订单没有可以打开的支付页'
 const MSG_REFRESH_FIRST = '请先刷新套餐信息' // 同 store.ts 的 openStore
+const MSG_NETWORK = '连不上付款服务，请检查网络后重试'
+const MSG_TIMEOUT = '付款服务响应超时，请稍后重试'
+const MSG_CREATE_TIMEOUT = '下单超时：请稍后在「继续付款」里查看，不会重复下单'
+const MSG_ACCOUNT_CHANGED = '登录状态已变化，请重试'
 
 /** 云端会给的错误码（§4.5）。认识的才用 codedError 抛给界面，不认识的退回云端给的中文 */
 const KNOWN_CODES: ReadonlySet<string> = new Set([
@@ -41,6 +45,7 @@ const KNOWN_CODES: ReadonlySet<string> = new Set([
   'UNSUPPORTED_RESULT',
   'UPSTREAM_UNAVAILABLE',
   'INVALID_REQUEST',
+  'INTERNAL_ERROR',
 ])
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -170,8 +175,8 @@ function knownOrder(orderId: unknown): { id: number; payUrl: string | null } {
   return { id, payUrl: entry.payUrl }
 }
 
-/** 同一时间只能有一个下单在途 */
-let creating = false
+/** 同一时间只能有一个下单在途；记的是下单时的登录会话代数，换了账号就当没有在途 */
+let creating: number | null = null
 
 // ---------------------------------------------------------------------------
 // 请求
@@ -191,15 +196,34 @@ function checkoutError(code: string, params?: ErrorParams): Error {
   return codedError(`checkout.${code}`, params)
 }
 
-/** 云端的错误体是 {error, code, detail}：有认识的 code 抛带代码的错误，否则抛云端给的中文提示 */
+/** OAuth 风格的机器码（server_error、invalid_token……）：不给用户看 */
+const MACHINE_CODE = /^[a-z][a-z0-9_.:-]*$/i
+
+/**
+ * 云端的错误体是 {error, code, detail}：有认识的 code 抛带代码的错误，否则抛云端给的中文提示。
+ * 503 / 存储出错时是 OAuth 风格的 {error: "server_error", error_description: "…"}（没有 code）：优先用 error_description，
+ * error 是机器码就不显示
+ */
 function apiError(status: number, body: unknown): Error {
   if (isObject(body)) {
     const code = text(body.code)
     if (KNOWN_CODES.has(code)) return checkoutError(code, detailParams(body.detail))
+    const description = text(body.error_description)
     const reason = text(body.error)
-    if (reason) return new Error(reason)
+    if (!code && description) return new Error(description)
+    if (reason && !MACHINE_CODE.test(reason)) return new Error(reason)
+    if (description) return new Error(description)
   }
   return new Error(`付款服务暂时不可用（HTTP ${status}）`)
+}
+
+/** 断网 / 超时的原始异常（fetch failed、The operation was aborted due to timeout）换成中文提示；其它错误（登录过期等）原样抛 */
+function transportError(e: unknown, timeoutMs: number): Error | null {
+  if (!(e instanceof Error) || (e as { code?: unknown }).code === 'AUTH_EXPIRED') return null
+  if (e.name === 'TimeoutError' || e.name === 'AbortError')
+    return new Error(timeoutMs === CREATE_TIMEOUT_MS ? MSG_CREATE_TIMEOUT : MSG_TIMEOUT)
+  if (e instanceof TypeError) return new Error(MSG_NETWORK)
+  return null
 }
 
 /**
@@ -212,17 +236,26 @@ async function call(
   body?: unknown,
   timeoutMs = FETCH_TIMEOUT_MS,
 ): Promise<unknown> {
-  const res = await platformFetch(path, {
-    method,
-    ...(body !== undefined && { body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }),
-    signal: AbortSignal.timeout(timeoutMs),
-  })
+  const epoch = accountEpoch()
+  let res: Response
   let json: unknown = null
   try {
-    json = await res.json()
-  } catch {
-    /* 响应体不是 JSON 就当没有 */
+    res = await platformFetch(path, {
+      method,
+      ...(body !== undefined && { body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }),
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+    try {
+      json = await res.json()
+    } catch (e) {
+      if (!(e instanceof SyntaxError)) throw e // 读响应体时超时 / 断了；响应体不是 JSON 就当没有
+    }
+  } catch (e) {
+    if (accountEpoch() !== epoch) throw new Error(MSG_ACCOUNT_CHANGED)
+    throw transportError(e, timeoutMs) ?? e
   }
+  // 换账号 / 退出登录后回来的结果不属于现在的账号：丢弃，调用方不会记订单
+  if (accountEpoch() !== epoch) throw new Error(MSG_ACCOUNT_CHANGED)
   if (!res.ok) throw apiError(res.status, json)
   return json
 }
@@ -266,7 +299,8 @@ function validateCreate(input: unknown, catalog: StoreCatalog): ValidInput {
     const { min, max } = catalog.recharge
     if ((min > 0 && (amount as number) < min) || (max > 0 && (amount as number) > max))
       throw checkoutError('AMOUNT_OUT_OF_RANGE', { min, max })
-    return { requestId, kind, amount: amount as number, method }
+    // 最多两位小数：0.1 + 0.2 这类的浮点尾巴（0.30000000000000004）云端会拒收，发出去前取整到分
+    return { requestId, kind, amount: Math.round((amount as number) * 100) / 100, method }
   }
   if (!catalog.plans.some(p => p.id === planId)) throw checkoutError('PLAN_UNAVAILABLE')
   return { requestId, kind, planId: planId as number, method }
@@ -282,8 +316,9 @@ export async function checkoutCreate(input: unknown): Promise<CheckoutOrder> {
   const store = lastStore()
   if (!store || store.email !== signedInEmail()) throw new Error(MSG_REFRESH_FIRST)
   const checked = validateCreate(input, store.catalog)
-  if (creating) throw new Error(MSG_BUSY)
-  creating = true
+  const epoch = accountEpoch()
+  if (creating === epoch) throw new Error(MSG_BUSY)
+  creating = epoch
   try {
     const body = {
       request_id: checked.requestId,
@@ -295,7 +330,7 @@ export async function checkoutCreate(input: unknown): Promise<CheckoutOrder> {
     remember(order)
     return order
   } finally {
-    creating = false
+    if (creating === epoch) creating = null
   }
 }
 
@@ -353,8 +388,9 @@ export async function panelStatus(): Promise<PanelStatus> {
   return parsePanel(await call('GET', PANEL_PATH))
 }
 
+/** 小写、去掉主机名结尾的点（"Panel.Example.com.:8443" → "panel.example.com:8443"）；host 带端口也行 */
 function normalizeHost(host: string): string {
-  return host.toLowerCase().replace(/\.$/, '')
+  return host.toLowerCase().replace(/\.(?=:\d+$|$)/, '')
 }
 
 /**
@@ -376,7 +412,8 @@ export function panelVerifyLink(raw: unknown): string {
   const loopback = host === 'localhost' || host === '127.0.0.1' || host === '[::1]'
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && (!app.isPackaged || loopback))) throw untrusted()
   if (url.username || url.password) throw untrusted()
-  if (host !== normalizeHost(cloud.hostname)) throw untrusted()
+  // 主机和端口都要一致（url.host 带端口，默认端口会被省掉）
+  if (normalizeHost(url.host) !== normalizeHost(cloud.host)) throw untrusted()
   if (url.pathname !== PANEL_VERIFY_PATH) throw untrusted()
   return url.toString()
 }

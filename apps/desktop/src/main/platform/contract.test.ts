@@ -316,6 +316,18 @@ describe.skipIf(!hasSamples)('云端契约样例：软件内付款（docs/ui/in-
     expect(await codeOf(create())).toEqual({ code: 'checkout.AMOUNT_OUT_OF_RANGE', params: { min: 5, max: 500 } })
     serve('/v1/platform/orders', sample('desktop/checkout-unsupported.json'))
     expect(await codeOf(create())).toMatchObject({ code: 'checkout.UNSUPPORTED_RESULT' })
+    serve('/v1/platform/orders', sample('desktop/checkout-account-disabled.json'))
+    expect(await codeOf(create())).toMatchObject({ code: 'checkout.ACCOUNT_DISABLED' })
+  })
+
+  it('查单被限频：RATE_LIMITED 带 retry_after；核实时面板凭证失效：仍是订单，panelValid=false', async () => {
+    await openStore()
+    serve('/v1/platform/orders', sample('desktop/checkout-create.json'))
+    await checkoutCreate({ requestId: REQUEST_ID, kind: 'balance', amount: 120, method: 'alipay' })
+    serve('/v1/platform/orders/1001', sample('desktop/checkout-rate-limited.json'))
+    expect(await codeOf(checkoutGet(1001))).toEqual({ code: 'checkout.RATE_LIMITED', params: { retry_after: 41 } })
+    const verify = parseOrder(sample('desktop/checkout-verify-panel-invalid.json').body)
+    expect(verify.panelValid).toBe(false)
   })
 
   it('面板凭证状态', async () => {
