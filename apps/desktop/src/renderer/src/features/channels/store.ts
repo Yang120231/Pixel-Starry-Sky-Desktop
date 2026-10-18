@@ -155,25 +155,37 @@ function readLater(id: string): void {
   }, 300)
 }
 
-const loading = new Set<string>()
+/** 频道 id → 正在读的那一页：同一个频道同时只读一页，这时再要求的等它读完 */
+const loading = new Map<string, Promise<void>>()
 /** 读一页消息；第一次进频道时顺便定「新消息」分隔线（unread：进入前的未读数），和消息一起更新，时间线只滚一次 */
-async function loadMessages(id: string, older = false, unread = 0): Promise<void> {
-  if (!channelsBridge || loading.has(id)) return
-  loading.add(id)
-  try {
-    const before = older ? (state.messages[id]?.[0]?.at ?? null) : null
-    const page = await channelsBridge.messages(id, before)
-    const current = older ? (state.messages[id] ?? []) : []
-    let list = [...page.messages, ...current]
-    // 读的同时推过来的消息不能丢
-    if (!older) for (const m of state.messages[id] ?? []) list = upsertMessage(list, m)
-    const self = selfIdIn(state, state.channels.find(c => c.id === id)?.memberIds)
-    const newFrom = unread > 0 ? { ...state.newFrom, [id]: firstUnreadAt(list, unread, self) } : state.newFrom
-    set({ messages: { ...state.messages, [id]: list }, more: { ...state.more, [id]: page.more }, newFrom })
-  } finally {
-    loading.delete(id)
-  }
+function loadMessages(id: string, older = false, unread = 0): Promise<void> {
+  if (!channelsBridge) return Promise.resolve()
+  const running = loading.get(id)
+  if (running) return running
+  const job = readPage(channelsBridge, id, older, unread).finally(() => loading.delete(id))
+  loading.set(id, job)
+  return job
 }
+
+async function readPage(
+  bridge: NonNullable<typeof channelsBridge>,
+  id: string,
+  older: boolean,
+  unread: number,
+): Promise<void> {
+  const before = older ? (state.messages[id]?.[0]?.at ?? null) : null
+  const page = await bridge.messages(id, before)
+  const current = older ? (state.messages[id] ?? []) : []
+  let list = [...page.messages, ...current]
+  // 读的同时推过来的消息不能丢
+  if (!older) for (const m of state.messages[id] ?? []) list = upsertMessage(list, m)
+  const self = selfIdIn(state, state.channels.find(c => c.id === id)?.memberIds)
+  const newFrom = unread > 0 ? { ...state.newFrom, [id]: firstUnreadAt(list, unread, self) } : state.newFrom
+  set({ messages: { ...state.messages, [id]: list }, more: { ...state.more, [id]: page.more }, newFrom })
+}
+
+/** 搜索结果点进来，消息太早还没读进来时，最多往前再读这么多页 */
+const FOCUS_PAGES = 25
 
 if (channelsBridge) {
   channelsBridge.onChange(applySnapshot)
@@ -312,8 +324,19 @@ export const channelActions = {
       }),
     })
   },
-  /** 切到这个频道，时间线跳到这条消息并高亮一下 */
-  focusMessage(channelId: string, messageId: string): void {
+  /**
+   * 切到这个频道，时间线跳到这条消息并高亮一下。
+   * at（搜索结果带的消息时间）：消息太早、还没读进来时，先往前一页页读到它，再让时间线跳
+   */
+  async focusMessage(channelId: string, messageId: string, at?: number): Promise<void> {
+    if (at != null && channelsBridge) {
+      set({ selectedId: channelId })
+      for (let page = 0; page < FOCUS_PAGES; page++) {
+        const list = state.messages[channelId]
+        if (list && (list.some(m => m.id === messageId) || !state.more[channelId] || (list[0]?.at ?? 0) <= at)) break
+        await loadMessages(channelId, !!list).catch(() => undefined)
+      }
+    }
     set({ selectedId: channelId, focus: { channelId, messageId } })
   },
   /** 时间线跳过去了（或这条消息不在已读进来的消息里） */

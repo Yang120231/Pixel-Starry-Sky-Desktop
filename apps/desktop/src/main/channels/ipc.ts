@@ -144,6 +144,13 @@ export async function initChannels(ctx: AppContext): Promise<void> {
   ipc.handle('channels:pin', (_e, id, messageId, pinned) =>
     channels.pin(str(id, '频道'), str(messageId, '消息'), pinned === true),
   )
+  ipc.handle('channels:search', (_e, text, opts) => {
+    const o = (opts ?? {}) as { limit?: unknown; projectId?: unknown }
+    return channels.search(typeof text === 'string' ? text : '', {
+      limit: typeof o.limit === 'number' ? o.limit : undefined,
+      projectId: typeof o.projectId === 'string' && o.projectId ? o.projectId : null,
+    })
+  })
   ipc.handle('channels:saveMember', (_e, channelId, input) =>
     channels.saveMember(typeof channelId === 'string' && channelId ? channelId : null, input as AgentInput),
   )

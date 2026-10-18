@@ -7,6 +7,9 @@ import {
   MAX_IMAGE_COUNT,
   MAX_IMAGE_TOTAL,
   PROVIDER_ID,
+  containsTerms,
+  searchSnippet,
+  searchTerms,
   validateFiles,
   validateImages,
   type HostEvent,
@@ -27,6 +30,7 @@ import type {
   ChannelMember,
   ChannelMessage,
   ChannelsSnapshot,
+  ChannelSearchResult,
   ChannelTask,
   ChannelTaskAction,
   ChannelTextMessage,
@@ -72,6 +76,9 @@ const TOPIC_MAX = 200
 export const NOTES_MAX = 2000
 export const PIN_MAX = 10
 const PAGE = 200
+/** 频道消息搜索最多返回这么多条；搜索词最多这么长（和全局搜索一样） */
+const SEARCH_LIMIT = 50
+const SEARCH_TEXT_MAX = 200
 const DAY = 86_400_000
 /** 结束了的运行信息留这么久（重试、追加要求用） */
 const KEEP_ENDED = 30 * DAY
@@ -353,6 +360,36 @@ export class Channels {
     const stop = end < 0 ? list.length : end
     const start = Math.max(0, stop - PAGE)
     return { messages: list.slice(start, stop), more: start > 0 }
+  }
+
+  /**
+   * 搜频道消息（docs/ui/channels-local-ai.md §3.1 #8）：本机频道（含归档的）的文字消息和任务卡标题，
+   * 每个词都要出现，新的在前，最多 limit 条。projectId：只搜默认项目是它的频道
+   */
+  search(text: string, opts: { limit?: number; projectId?: string | null } = {}): ChannelSearchResult {
+    const terms = searchTerms(text.slice(0, SEARCH_TEXT_MAX))
+    if (!terms.length) return { hits: [], truncated: false }
+    const limit = Math.min(Math.max(1, Math.floor(opts.limit ?? SEARCH_LIMIT)), SEARCH_LIMIT)
+    const found: { m: Extract<ChannelMessage, { kind: 'message' | 'task' }>; body: string }[] = []
+    for (const c of this.store.channels.values()) {
+      if (opts.projectId && c.projectId !== opts.projectId) continue
+      for (const m of this.store.messages.get(c.id) ?? []) {
+        const body = m.kind === 'message' ? m.text : m.kind === 'task' ? m.title : ''
+        if (m.kind !== 'event' && body && containsTerms(body, terms)) found.push({ m, body })
+      }
+    }
+    found.sort((a, b) => b.m.at - a.m.at)
+    return {
+      hits: found.slice(0, limit).map(({ m, body }) => ({
+        channelId: m.channelId,
+        messageId: m.id,
+        kind: m.kind,
+        authorId: m.kind === 'task' ? m.assigneeId : m.authorId,
+        at: m.at,
+        snippet: searchSnippet(body, terms),
+      })),
+      truncated: found.length > limit,
+    }
   }
 
   /** 频道是团队频道吗 */

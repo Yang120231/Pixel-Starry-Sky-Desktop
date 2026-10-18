@@ -7,6 +7,7 @@ import type {
   FileChange,
   ImageAttachment,
   Item,
+  SearchFragment,
   SessionSettings,
 } from '@pixelsky/protocol'
 
@@ -289,6 +290,24 @@ export interface ChannelEvent extends ChannelMessageBase {
 }
 
 export type ChannelMessage = ChannelTextMessage | ChannelTask | ChannelEvent
+
+/** 频道消息搜索的一条结果（docs/ui/channels-local-ai.md §3.1 #8）：本机频道的文字消息和任务卡标题 */
+export interface ChannelSearchHit {
+  channelId: string
+  messageId: string
+  kind: 'message' | 'task'
+  /** 发消息的人；任务卡是接活的成员 */
+  authorId: string
+  at: number
+  snippet: SearchFragment[]
+}
+
+export interface ChannelSearchResult {
+  /** 新的在前 */
+  hits: ChannelSearchHit[]
+  /** 命中的比 hits 多（只给最近的这些） */
+  truncated: boolean
+}
 
 /** 主进程推给渲染层的频道状态（channels:state / channels:changed） */
 export interface ChannelsSnapshot {

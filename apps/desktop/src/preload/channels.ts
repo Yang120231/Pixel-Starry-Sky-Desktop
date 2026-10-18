@@ -6,6 +6,7 @@ import type {
   ChannelMessage,
   ChannelMessagePush,
   ChannelsSnapshot,
+  ChannelSearchResult,
   AgentPolicy,
   ChannelTaskAction,
   ChannelTextMessage,
@@ -33,6 +34,8 @@ export interface ChannelsBridge {
   ): Promise<void>
   /** 置顶 / 取消置顶一条文字消息（docs/ui/channels-local-ai.md §3.1 #9） */
   pin(channelId: string, messageId: string, pinned: boolean): Promise<void>
+  /** 搜频道消息（§3.1 #8）：新的在前；projectId 只搜默认项目是它的频道 */
+  search(text: string, opts?: { limit?: number; projectId?: string | null }): Promise<ChannelSearchResult>
   delete(id: string): Promise<void>
   post(channelId: string, input: PostInput): Promise<{ message: ChannelTextMessage; tasks: string[] }>
   /** 一条消息带的图片和文件全文；没有时两个空数组 */

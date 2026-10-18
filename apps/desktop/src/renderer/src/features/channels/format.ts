@@ -32,6 +32,20 @@ export function formatClock(at: number): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
+/** 搜索结果的时间（列表窄）：今天只写时间，其它只写日期，不是今年时带上年份 */
+export function formatShortTime(at: number, now = Date.now()): string {
+  if (dayStart(at) === dayStart(now)) return formatClock(at)
+  const d = new Date(at)
+  const otherYear = d.getFullYear() !== new Date(now).getFullYear()
+  if (getLocale() === 'en-US')
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric',
+      ...(otherYear ? { year: 'numeric' } : {}),
+    }).format(d)
+  return `${otherYear ? `${d.getFullYear()}年` : ''}${d.getMonth() + 1}月${d.getDate()}日`
+}
+
 const SEEN_KEY = { minutes: 'team.seen.minutes', hours: 'team.seen.hours', days: 'team.seen.days' } as const
 
 /** 「N 分钟前在线」等；没有记录或太久以前返回 null */

@@ -186,6 +186,39 @@ describe('协作频道：提醒（docs/ui/channels-local-ai.md §3.1 #12、#13�
   })
 })
 
+describe('协作频道：消息搜索（docs/ui/channels-local-ai.md §3.1 #8）', () => {
+  it('搜文字消息和任务卡标题：每个词都要出现、不分大小写，新的在前；归档的频道也搜；可以按项目筛', async () => {
+    const c = await open()
+    const memberId = await c.saveMember(null, agent('前端助手'))
+    const web = await c.create({ name: '网页版', memberIds: [memberId], projectId: 'p1' })
+    const old = await c.create({ name: '旧项目' })
+    const { message: first } = await c.post(web, { text: '首页的 Banner 要换', clientId: 's1' })
+    const { tasks } = await c.post(web, { text: '@前端助手 换掉首页 banner', clientId: 's2' })
+    const { message: third } = await c.post(old, { text: 'banner 尺寸 1200×400，首页用', clientId: 's3' })
+    await c.post(old, { text: '无关的消息', clientId: 's4' })
+    await c.taskAction(tasks[0], 'stop')
+    await settle()
+    await c.update(old, { archived: true })
+
+    const result = c.search('首页 BANNER')
+    expect(result.truncated).toBe(false)
+    expect(result.hits.map(h => [h.kind, h.channelId])).toEqual([
+      ['message', old],
+      ['task', web],
+      ['message', web],
+      ['message', web],
+    ])
+    expect(result.hits[0]).toMatchObject({ messageId: third.id, authorId: SELF_ID })
+    expect(result.hits[1]).toMatchObject({ messageId: tasks[0], authorId: memberId })
+    expect(result.hits.at(-1)!.messageId).toBe(first.id)
+    expect(result.hits[0].snippet.filter(f => f.match).map(f => f.text)).toEqual(['banner', '首页'])
+    expect(c.search('首页 尺寸').hits).toHaveLength(1)
+    expect(c.search('  ').hits).toEqual([])
+    expect(c.search('banner', { projectId: 'p1' }).hits.every(h => h.channelId === web)).toBe(true)
+    expect(c.search('banner', { limit: 2 })).toMatchObject({ truncated: true, hits: [{}, {}] })
+  })
+})
+
 describe('协作频道：归档（docs/ui/channels-local-ai.md §3.1 #11）', () => {
   it('还有没做完的活不能归档；归档后只读、可以恢复，时间线记一笔，重启后还在', async () => {
     const c = await open()
