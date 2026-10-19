@@ -21,11 +21,17 @@
 //                         另外把收到的控制请求类型按顺序写到 .control.log（一行一个）
 //   FAKE_CLAUDE_MODEL_LOG 收到 set_model 时把模型名追加到这个文件（一行一个）
 //   FAKE_CLAUDE_PROJECTS  收到消息时在这里创建会话记录文件（模拟 ~/.claude/projects）
+//   FAKE_CLAUDE_QUOTA     get_usage（账号额度，docs/ui/account-quota.md）：1 回 fixtures/claude-get-usage.json 的实测样本；
+//                         off 回 API Key 登录的形状（rate_limits_available=false）；old 像旧版一样报「不认识的控制请求」；
+//                         不设就和旧版里回 {} 的情况一样。FAKE_CLAUDE_QUOTA_DELAY 毫秒后才回；FAKE_CLAUDE_QUOTA_FAIL=1 回错误
+//   FAKE_CLAUDE_ACCOUNT   initialize 回包里 account.email 的值
+//   FAKE_CLAUDE_RATE_EVENT  每轮成功结束前输出一条 rate_limit_event：1 用 fixtures/claude-rate-limit-event.json，否则当 rate_limit_info 的 JSON
 //   FAKE_CLAUDE_REWIND    rewind_files 的模拟：JSON { file, content }，预览时报这个文件，还原时写入 content；
 //                         user_message_id 以 nocp 开头时报没有检查点
 // -p --output-format json（旁聊）：从 stdin 读问题，回一个 result（含问题、--tools、能看到的用户消息）
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { createHash, randomUUID } from 'node:crypto'
 
 const argv = process.argv.slice(2)
@@ -213,7 +219,20 @@ async function streamText(text, pieces) {
 // 进程内累计的 token（真实 Claude 的 modelUsage 也是进程内累计值，进程重启后从零开始）
 const totals = { inputTokens: 0, outputTokens: 0, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 }
 
+const fixture = name =>
+  JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../fixtures', name), 'utf8'))
+
 function result(subtype, extra = {}) {
+  if (process.env.FAKE_CLAUDE_RATE_EVENT && subtype === 'success')
+    out({
+      type: 'rate_limit_event',
+      rate_limit_info:
+        process.env.FAKE_CLAUDE_RATE_EVENT === '1'
+          ? fixture('claude-rate-limit-event.json').rate_limit_info
+          : JSON.parse(process.env.FAKE_CLAUDE_RATE_EVENT),
+      uuid: randomUUID(),
+      session_id: sessionId,
+    })
   cost += 0.01
   totals.inputTokens += 10
   totals.outputTokens += 5
@@ -783,6 +802,7 @@ function handle(msg) {
           available_output_styles: ['default', 'Explanatory', 'Learning'],
           fast_mode_state: fastMode ? 'on' : 'off',
           fast_mode_disabled_reason: fastBlocked || (fastMode ? undefined : 'sdk_opt_in_required'),
+          ...(process.env.FAKE_CLAUDE_ACCOUNT ? { account: { email: process.env.FAKE_CLAUDE_ACCOUNT } } : {}),
         }
         if (process.env.FAKE_CLAUDE_INIT_DELAY)
           setTimeout(() => respond(msg.request_id, initialized), Number(process.env.FAKE_CLAUDE_INIT_DELAY))
@@ -809,6 +829,39 @@ function handle(msg) {
           })
         }
         respond(msg.request_id, {})
+        return
+      }
+      case 'get_usage': {
+        const quota = process.env.FAKE_CLAUDE_QUOTA
+        if (quota === 'old') {
+          out({
+            type: 'control_response',
+            response: {
+              subtype: 'error',
+              request_id: msg.request_id,
+              error: 'Unknown control request subtype: get_usage',
+            },
+          })
+          return
+        }
+        if (quota !== '1' && quota !== 'off') {
+          respond(msg.request_id, {})
+          return
+        }
+        if (process.env.FAKE_CLAUDE_QUOTA_FAIL === '1') {
+          out({
+            type: 'control_response',
+            response: { subtype: 'error', request_id: msg.request_id, error: 'usage endpoint failed' },
+          })
+          return
+        }
+        const body =
+          quota === 'off'
+            ? { subscription_type: null, rate_limits_available: false, rate_limits: null }
+            : fixture('claude-get-usage.json')
+        if (process.env.FAKE_CLAUDE_QUOTA_DELAY)
+          setTimeout(() => respond(msg.request_id, body), Number(process.env.FAKE_CLAUDE_QUOTA_DELAY))
+        else respond(msg.request_id, body)
         return
       }
       case 'get_context_usage':

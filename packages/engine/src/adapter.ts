@@ -16,6 +16,7 @@ import type {
 } from '@pixelsky/protocol'
 import type { ChatSeed } from './chat-log'
 import type { NativeSessionList, ListOptions, LiveState, NativeRead, NewerTurns, ReadOptions } from './native/types'
+import type { AccountQuotaPatch, QuotaReading } from './quota'
 
 /** 要启动的程序：可执行文件 + 固定在前面的参数（例如用 node 跑 cli.js 时是 [cli.js]） */
 export interface Launcher {
@@ -59,6 +60,8 @@ export interface SessionContext {
   clearPendingFork?(): void
   /** 引擎报了配置类警告（用户 config.toml 引起、不影响使用）：不进对话，交给宿主放进引擎信息 */
   reportConfigWarning?(text: string): void
+  /** 对话里顺带收到了账号额度（Claude rate_limit_event、Codex account/rateLimits/updated）；宿主核对来源后合并 */
+  reportQuota?(patch: AccountQuotaPatch): void
 }
 
 /** 一个会话对应的引擎连接。进程按需启动；close() 之后这个对象不再使用 */
@@ -96,6 +99,11 @@ export interface EngineSession {
   stopTask?(taskId: string): Promise<void>
   /** 读一个后台任务的输出（只给最后一段）；没有后台任务的引擎不实现 */
   taskOutput?(taskId: string): Promise<TaskOutput>
+  /**
+   * 借这个会话活着的进程主动读一次账号额度（docs/ui/account-quota.md §3.4）；没有进程、走网关时返回 null
+   * （宿主改用适配器的临时读取），绝不为它起会话进程
+   */
+  accountQuota?(): Promise<QuotaReading> | null
   /** quick：应用正在退出（包括更新重启），只给进程很短的时间自己退，不等它收尾（docs/release-update.md §11） */
   close(opts?: CloseOptions): Promise<void>
 }
@@ -191,7 +199,9 @@ export interface EngineAdapter {
   hasNativeSession?(record: SessionRecord): boolean
   /** 这些会话现在有没有别的进程开着（不含像素星空自己起的进程）；id 不在结果里的按没开着算 */
   nativeLive?(rows: readonly { id: string; mtimeMs: number }[]): Map<string, LiveState>
-  /** 应用退出时关掉适配器自己的常驻进程（Codex 的只读 app-server）；quick 同会话的 close：最多等 1 秒 */
+  /** 不借会话进程读一次账号额度（Claude：临时进程；Codex：只读 app-server）。不支持的引擎不实现 */
+  accountQuota?(): Promise<QuotaReading>
+  /** 应用退出时关掉适配器自己的常驻进程（Codex 的只读 app-server、Claude 的额度临时进程）；quick 同会话的 close：最多等 1 秒 */
   close?(opts?: CloseOptions): Promise<void>
   /** 旁聊：带着会话上下文单独问一次，没有工具、不写记录（§3） */
   sideQuestion?(record: SessionRecord, prompt: string, signal: AbortSignal): Promise<string>

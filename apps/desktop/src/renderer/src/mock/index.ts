@@ -3,6 +3,7 @@ import type { DemoSource } from '@/data/demo'
 import { demoAccount } from './account'
 import { demoArtifactChange, demoArtifactPreview, demoArtifacts } from './artifacts'
 import { demoContext } from './context'
+import { demoQuota } from './quota'
 import {
   animateCompaction,
   animateSteps,
@@ -56,6 +57,7 @@ export const demoSource: DemoSource = {
   },
   artifacts: { response: demoArtifacts, change: demoArtifactChange, preview: demoArtifactPreview },
   context: demoContext,
+  quota: demoQuota(),
   files: { contents: DEMO_FILES, editorState: DEMO_EDITOR_STATE, directory: demoDirectory, document: demoDocument },
   git: { status: demoGitStatus, branches: demoGitBranches, diff: demoGitDiff, history: demoGitHistory },
   extStore: demoExtStore,

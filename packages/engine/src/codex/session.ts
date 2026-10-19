@@ -15,12 +15,14 @@ import type {
 import { EMPTY_FLAGS, codedError, isQuietWarning, noticeErrorOf, viaGateway } from '@pixelsky/protocol'
 import { versionAtLeast } from '../exec'
 import { QUICK_CLOSE_MS, type CloseOptions, type EngineSession, type Launcher, type SessionContext } from '../adapter'
+import type { QuotaReading } from '../quota'
 import { NO_REPLY, seedImageCount, seedTurns, type ChatSeed, type ChatTurn } from '../chat-log'
 import { CodexProcess, array, object, string, type Message } from './process'
 import { readCodexTurns, revertTarget } from './branch'
 import { codexCatalog } from './catalog'
 import { codexThreadName } from './native'
 import { codexCommandParts } from './command'
+import { codexQuotaPatch, parseCodexRateLimits } from './quota'
 import { codexChanges, CodexTranslator, tokenCounts } from './translate'
 import { CODEX_WINDOW_ENV, codexContextConfig } from './context-config'
 
@@ -211,6 +213,8 @@ export function tomlValue(value: unknown): string {
 }
 export class CodexSession implements EngineSession {
   private proc: CodexProcess | null = null
+  /** 当前进程启动时是不是走本机网关：额度的来源按它判断，不读当前记录（换通道要等下一条消息才换进程） */
+  private procViaGateway = false
   private opening: Promise<void> | null = null
   private closed = false
   private threadId: string | null = null
@@ -330,6 +334,7 @@ export class CodexSession implements EngineSession {
     }
     // 平台和自定义 API 都经本机网关；provider 名分开，Codex 按 provider 存的状态互不串
     const gatewayProvider = record.platform ? 'pixelsky' : record.provider ? 'pixelsky-custom' : null
+    this.procViaGateway = !!gatewayProvider
     if (gatewayProvider) {
       const base = environment.PIXELSKY_CODEX_BASE_URL
       if (!base || !environment.PIXELSKY_CODEX_TOKEN) throw new Error('Codex gateway is unavailable')
@@ -872,7 +877,29 @@ export class CodexSession implements EngineSession {
   private consume(id: string): void {
     if (this.guidance.delete(id)) this.ctx.emit({ type: 'input_ack', id, state: 'consumed', mode: 'guidance' })
   }
+  /**
+   * 借活着的 app-server 问账号额度（docs/ui/account-quota.md §3.3）：握手完成、不走网关才问，否则返回 null
+   * （宿主改用适配器的只读进程）；绝不为它起进程
+   */
+  accountQuota(): Promise<QuotaReading> | null {
+    const proc = this.proc
+    if (this.closed || !proc?.alive || this.startup !== 'done' || this.procViaGateway) return null
+    return proc
+      .request('account/rateLimits/read', { excludeResetCreditDetails: true }, 10_000)
+      .then(res => parseCodexRateLimits(res, Date.now()))
+      .catch(error => {
+        // 没用 ChatGPT 登录（API Key、自己配置的接口）：这个账号没有订阅额度
+        if (/authentication required/i.test((error as Error).message)) return { kind: 'unsupported' as const }
+        throw error
+      })
+  }
   private notification(method: string, params: Message): void {
+    // 账号额度的滚动更新不带 threadId，空闲时也会到，必须先于线程过滤和 active 判断；
+    // 平台 / 自定义接口经本机网关，这里的数据不是用户自己的账号
+    if (method === 'account/rateLimits/updated') {
+      if (!this.procViaGateway) this.ctx.reportQuota?.(codexQuotaPatch(params.rateLimits, Date.now()))
+      return
+    }
     // 子智能体的审批也在这里结束，先于按线程过滤
     if (method === 'serverRequest/resolved') {
       const id = String(params.requestId)

@@ -3,6 +3,8 @@ import { join } from 'node:path'
 import readline from 'node:readline'
 if (process.env.FAKE_CODEX_ARGV)
   appendFileSync(process.env.FAKE_CODEX_ARGV, JSON.stringify(process.argv.slice(2)) + '\n')
+// codex logout：马上退出（账号额度测试用，确认退出登录后关掉只读进程）
+if (process.argv[2] === 'logout') process.exit(0)
 // 像真的 codex 一样拒绝不认识的参数（测试用 --fake-bad-arg）：stderr 报错后退出
 if (process.argv.includes('--fake-bad-arg')) {
   process.stderr.write(
@@ -146,6 +148,11 @@ const threadReport = resume => ({
     ? { collaborationMode: JSON.parse(process.env.FAKE_CODEX_RESUME_COLLAB) }
     : {}),
 })
+/** FAKE_CODEX_RATE_UPDATE：账号额度的滚动更新（account/rateLimits/updated，params.rateLimits 是这个 JSON，不带 threadId）；线程启动后、每轮开始时、每轮结束后（会话已空闲）各发一条 */
+const rateUpdate = idle => {
+  const json = (idle && process.env.FAKE_CODEX_RATE_UPDATE_IDLE) || process.env.FAKE_CODEX_RATE_UPDATE
+  if (json) emit('account/rateLimits/updated', { rateLimits: JSON.parse(json) })
+}
 function nextApproval() {
   const request = approvalQueue[approvalIndex++]
   if (!request) return finish()
@@ -203,6 +210,8 @@ function finish(status = 'completed') {
     },
   })
   emit('turn/completed', { threadId: thread, turn: { id: current.id, status, error: null } })
+  // 一轮结束之后（会话已空闲）再来一条账号额度更新；FAKE_CODEX_RATE_UPDATE_IDLE 给了就发它
+  rateUpdate(true)
 }
 function response(message, result) {
   out({ id: message.id, result })
@@ -242,6 +251,17 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
     return
   }
   switch (m.method) {
+    case 'account/rateLimits/read':
+      // FAKE_CODEX_RATE_LIMITS：回包的 JSON（账号额度，docs/ui/account-quota.md）；FAKE_CODEX_RATE_LIMITS_ERROR 回错误；都不设回 fixtures 里的样本
+      if (process.env.FAKE_CODEX_RATE_LIMITS_ERROR) rpcError(m, process.env.FAKE_CODEX_RATE_LIMITS_ERROR)
+      else
+        response(
+          m,
+          process.env.FAKE_CODEX_RATE_LIMITS
+            ? JSON.parse(process.env.FAKE_CODEX_RATE_LIMITS)
+            : JSON.parse(readFileSync(new URL('../fixtures/codex-rate-limits.json', import.meta.url), 'utf8')),
+        )
+      break
     case 'account/read':
       response(
         m,
@@ -318,6 +338,7 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
         saveThreads()
       } else thread = p.threadId ?? (resumeFails() ? 'fake-thread-new' : 'fake-thread')
       response(m, { thread: { id: thread, turns: [] }, ...threadReport(m.method === 'thread/resume') })
+      rateUpdate()
       break
     case 'thread/fork': {
       loadThreads()
@@ -457,6 +478,7 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
       emit('item/started', { threadId: thread, turnId: id, item: { type: 'agentMessage', id: turn.item, text: '' } })
       emit('item/agentMessage/delta', { threadId: thread, turnId: id, itemId: turn.item, delta: turn.text })
       response(m, { turn: { id, status: 'inProgress' } })
+      rateUpdate()
       if (text.includes('警告')) {
         // 用户 config.toml 引起的警告（每轮都发）和一条真正的警告；不带线程和轮次，和真 Codex 一样
         emit('warning', {

@@ -559,6 +559,16 @@ contextBridge.exposeInMainWorld('pixelsky', {
       return () => ipcRenderer.removeListener('sessionStatus:changed', listener)
     },
   } satisfies import('../shared/types/session-status').SessionStatusBridge,
+  quota: {
+    get: provider => call('quota:get', provider),
+    refresh: (provider, opts) => call('quota:refresh', provider, opts),
+    onChange: callback => {
+      const listener = (_e: Electron.IpcRendererEvent, quota: import('@pixelsky/protocol').AccountQuota) =>
+        callback(quota)
+      on('quota:changed', listener)
+      return () => ipcRenderer.removeListener('quota:changed', listener)
+    },
+  } satisfies import('../shared/types/quota').QuotaBridge,
   ai: {
     commitMessage: request => call('ai:commitMessage', request),
     cancel: requestId => call('ai:cancel', requestId),

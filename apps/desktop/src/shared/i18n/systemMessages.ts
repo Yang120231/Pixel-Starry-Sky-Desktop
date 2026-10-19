@@ -1602,4 +1602,10 @@ export const systemMessages = {
   // 付款窗口标题：带上当前页面的主机名，让用户看得出页面来自哪里；支付方式认不出时（英文界面只认 alipay / wxpay）用通用写法
   'system.checkoutPayWindowTitle': { zh: '{p0}付款页面 · {p1}', en: '{p0} payment page · {p1}' },
   'system.checkoutPayWindowTitleGeneric': { zh: '付款页面 · {p0}', en: 'Payment page · {p0}' },
+  // 账号额度（docs/ui/account-quota.md §5.4）：引擎包抛的是中文原文，界面用 translateMessage 反查
+  'system.quotaTimeout': { zh: '读取额度超时', en: 'Timed out reading usage limits' },
+  'system.quotaNetwork': { zh: '连不上 {p0}', en: 'Couldn’t reach {p0}' },
+  'system.quotaEngineUnavailable': { zh: '{p0} 现在不可用', en: '{p0} is unavailable right now' },
+  'system.quotaFailed': { zh: '读取额度失败：{p0}', en: 'Failed to read usage limits: {p0}' },
+  'system.quotaNoData': { zh: '没有拿到额度数据', en: 'No usage data was returned' },
 } as const

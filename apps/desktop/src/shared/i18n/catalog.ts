@@ -5499,6 +5499,426 @@ export const catalog = {
   "usage.format.noProject": {
     "zh": "未归属项目",
     "en": "No project"
+  },
+  "quota.title.claude": {
+    "zh": "Claude 账号额度",
+    "en": "Claude usage limits"
+  },
+  "quota.title.chatgpt": {
+    "zh": "ChatGPT 账号额度",
+    "en": "ChatGPT usage limits"
+  },
+  "quota.title.platform": {
+    "zh": "像素星空账号额度",
+    "en": "PixelSky account usage"
+  },
+  "quota.tip.withPlan": {
+    "zh": "{p0}（{p1}）",
+    "en": "{p0} ({p1})"
+  },
+  "quota.tip.pair": {
+    "zh": "{p0}：{p1}",
+    "en": "{p0}: {p1}"
+  },
+  "quota.tip.expired": {
+    "zh": "已过恢复时间",
+    "en": "Past reset time"
+  },
+  "quota.tip.expiredFull": {
+    "zh": "已过恢复时间，下次更新后显示新数字",
+    "en": "Past the reset time. New numbers will show after the next update."
+  },
+  "quota.updatedAt": {
+    "zh": "{p0} 更新",
+    "en": "Updated {p0}"
+  },
+  "quota.window.generic": {
+    "zh": "额度",
+    "en": "Usage limit"
+  },
+  "quota.window.fiveHour": {
+    "zh": "5 小时内",
+    "en": "5-hour limit"
+  },
+  "quota.window.week": {
+    "zh": "本周",
+    "en": "Weekly limit"
+  },
+  "quota.window.days": {
+    "zh": "{p0} 天内",
+    "en": "{p0}-day limit"
+  },
+  "quota.window.hours": {
+    "zh": "{p0} 小时内",
+    "en": "{p0}-hour limit"
+  },
+  "quota.short.week": {
+    "zh": "周",
+    "en": "Wk"
+  },
+  "quota.short.day": {
+    "zh": "日",
+    "en": "1d"
+  },
+  "quota.short.planDaily": {
+    "zh": "日",
+    "en": "Day"
+  },
+  "quota.short.planWeekly": {
+    "zh": "周",
+    "en": "Wk"
+  },
+  "quota.short.planMonthly": {
+    "zh": "月",
+    "en": "Mo"
+  },
+  "quota.exhausted.fiveHour": {
+    "zh": "5 小时",
+    "en": "5-hour"
+  },
+  "quota.exhausted.week": {
+    "zh": "本周",
+    "en": "Weekly"
+  },
+  "quota.exhausted.days": {
+    "zh": "{p0} 天",
+    "en": "{p0}-day"
+  },
+  "quota.exhausted.hours": {
+    "zh": "{p0} 小时",
+    "en": "{p0}-hour"
+  },
+  "quota.model.row": {
+    "zh": "{p0} · {p1}",
+    "en": "{p0} · {p1}"
+  },
+  "quota.model.label": {
+    "zh": "{p0} {p1}",
+    "en": "{p1} ({p0})"
+  },
+  "quota.line.used": {
+    "zh": "{p0}已用 {p1}",
+    "en": "{p0}: {p1} used"
+  },
+  "quota.line.exhausted": {
+    "zh": "{p0}已用完",
+    "en": "{p0}: limit reached"
+  },
+  "quota.line.usedModel": {
+    "zh": "{p0} 已用 {p1}",
+    "en": "{p0}: {p1} used"
+  },
+  "quota.line.exhaustedModel": {
+    "zh": "{p0} 已用完",
+    "en": "{p0}: used up"
+  },
+  "quota.reset.today": {
+    "zh": "{p0} 恢复",
+    "en": "Resets {p0}"
+  },
+  "quota.reset.week": {
+    "zh": "{p0} {p1} 恢复",
+    "en": "Resets {p0} {p1}"
+  },
+  "quota.reset.tomorrow": {
+    "zh": "明天 {p0} 恢复",
+    "en": "Resets tomorrow {p0}"
+  },
+  "quota.reset.date": {
+    "zh": "{p0}恢复",
+    "en": "Resets {p0}"
+  },
+  "quota.reset.passed": {
+    "zh": "已过恢复时间",
+    "en": "Past reset time"
+  },
+  "quota.reset.full": {
+    "zh": "{p0}后恢复（{p1}）",
+    "en": "Resets in {p0} ({p1})"
+  },
+  "quota.when.today": {
+    "zh": "今天 {p0}",
+    "en": "today {p0}"
+  },
+  "quota.when.tomorrow": {
+    "zh": "明天 {p0}",
+    "en": "tomorrow {p0}"
+  },
+  "quota.when.date": {
+    "zh": "{p0} {p1} {p2}",
+    "en": "{p0} {p1} {p2}"
+  },
+  "quota.date.monthDay": {
+    "zh": "{p0} 月 {p1} 日",
+    "en": "{p0} {p1}"
+  },
+  "quota.duration.min": {
+    "zh": "{p0} 分",
+    "en": "{p0} min"
+  },
+  "quota.duration.hourMin": {
+    "zh": "{p0} 小时 {p1} 分",
+    "en": "{p0} hr {p1} min"
+  },
+  "quota.duration.hour": {
+    "zh": "{p0} 小时",
+    "en": "{p0} hr"
+  },
+  "quota.duration.dayHour": {
+    "zh": "{p0} 天 {p1} 小时",
+    "en": "{p0} d {p1} hr"
+  },
+  "quota.duration.day": {
+    "zh": "{p0} 天",
+    "en": "{p0} d"
+  },
+  "quota.aria.label": {
+    "zh": "{p0}：{p1}",
+    "en": "{p0}: {p1}"
+  },
+  "quota.aria.loading": {
+    "zh": "正在读取",
+    "en": "loading"
+  },
+  "quota.aria.error": {
+    "zh": "读取失败",
+    "en": "couldn't load"
+  },
+  "quota.aria.join": {
+    "zh": "，",
+    "en": ", "
+  },
+  "quota.button.credits": {
+    "zh": "点数 {p0}",
+    "en": "Credits {p0}"
+  },
+  "quota.button.exhausted": {
+    "zh": "{p0}已用完",
+    "en": "{p0} limit reached"
+  },
+  "quota.button.exhaustedModel": {
+    "zh": "{p0} {p1} 已用完",
+    "en": "{p0} {p1} limit reached"
+  },
+  "quota.button.exhaustedPlain": {
+    "zh": "已用完",
+    "en": "Limit reached"
+  },
+  "quota.credits.unlimited": {
+    "zh": "不限",
+    "en": "Unlimited"
+  },
+  "quota.card.balance": {
+    "zh": "余额",
+    "en": "Balance"
+  },
+  "quota.card.balanceNote": {
+    "zh": "账户余额",
+    "en": "Account balance"
+  },
+  "quota.card.credits": {
+    "zh": "Codex 额度点数",
+    "en": "Codex credits"
+  },
+  "quota.card.creditsNote": {
+    "zh": "没有 5 小时 / 每周上限，点数用完前都能用",
+    "en": "No 5-hour or weekly cap; usable until the credits run out"
+  },
+  "quota.card.exhausted": {
+    "zh": "已用完",
+    "en": "Used up"
+  },
+  "quota.card.left": {
+    "zh": "剩余",
+    "en": "left"
+  },
+  "quota.card.used": {
+    "zh": "已用",
+    "en": "used"
+  },
+  "quota.row.extra": {
+    "zh": "额外用量（本月）",
+    "en": "Extra usage (this month)"
+  },
+  "quota.row.creditsLeft": {
+    "zh": "剩余 {p0}",
+    "en": "{p0} left"
+  },
+  "quota.row.plan": {
+    "zh": "套餐 · {p0}",
+    "en": "Plan · {p0}"
+  },
+  "quota.period.daily": {
+    "zh": "每天",
+    "en": "Daily"
+  },
+  "quota.period.weekly": {
+    "zh": "每周",
+    "en": "Weekly"
+  },
+  "quota.period.monthly": {
+    "zh": "每月",
+    "en": "Monthly"
+  },
+  "quota.rows.title": {
+    "zh": "其它",
+    "en": "Other"
+  },
+  "quota.alert.warn": {
+    "zh": "，用完后要等到 {p0} 才能继续用这个账号。",
+    "en": ". Once it runs out, you'll have to wait until {p0} to keep using this account."
+  },
+  "quota.alert.warnNoTime": {
+    "zh": "，用完后要等额度恢复才能继续用这个账号。",
+    "en": ". Once it runs out, you will have to wait for it to reset to keep using this account."
+  },
+  "quota.alert.fullStrong": {
+    "zh": "{p0}额度已用完",
+    "en": "{p0} limit reached"
+  },
+  "quota.alert.full": {
+    "zh": "，{p0} 恢复；在这之前发消息会被拒绝。",
+    "en": ". Resets {p0}; messages sent before then will be rejected."
+  },
+  "quota.alert.fullNoTime": {
+    "zh": "，恢复前发消息会被拒绝。",
+    "en": ". Messages sent before it resets will be rejected."
+  },
+  "quota.alert.fullModelStrong": {
+    "zh": "{p0} 额度已用完",
+    "en": "{p0} limit reached"
+  },
+  "quota.alert.fullModel": {
+    "zh": "，{p0} 恢复；可以先换别的模型或通道。",
+    "en": ". Resets {p0}; you can switch to another model or channel meanwhile."
+  },
+  "quota.alert.fullModelNoTime": {
+    "zh": "，可以先换别的模型或通道。",
+    "en": ". You can switch to another model or channel meanwhile."
+  },
+  "quota.alert.blockedStrong": {
+    "zh": "账号额度已用完",
+    "en": "Account limit reached"
+  },
+  "quota.alert.extraInUse": {
+    "zh": "套餐额度已用完，正在用额外用量（按量计费）",
+    "en": "Plan limit reached; extra usage (pay-as-you-go) is being used"
+  },
+  "quota.action.switchChannel": {
+    "zh": "换通道",
+    "en": "Switch channel"
+  },
+  "quota.action.settings": {
+    "zh": "额度按钮设置",
+    "en": "Usage button settings"
+  },
+  "quota.link.claude": {
+    "zh": "在 claude.ai 查看",
+    "en": "View on claude.ai"
+  },
+  "quota.link.chatgpt": {
+    "zh": "在 ChatGPT 查看",
+    "en": "View on ChatGPT"
+  },
+  "quota.link.platform": {
+    "zh": "账号设置",
+    "en": "Account settings"
+  },
+  "quota.demoData": {
+    "zh": "演示数据",
+    "en": "Demo data"
+  },
+  "quota.refresh.label": {
+    "zh": "刷新额度",
+    "en": "Refresh usage"
+  },
+  "quota.refresh.done": {
+    "zh": "已刷新",
+    "en": "Refreshed"
+  },
+  "quota.refresh.unavailable": {
+    "zh": "这个版本的 Claude Code 不能主动读取额度，每轮对话后会自动更新；更新 Claude Code 后可以手动刷新",
+    "en": "This version of Claude Code can't report usage on demand. It updates after each turn; update Claude Code to enable manual refresh."
+  },
+  "quota.close": {
+    "zh": "关闭",
+    "en": "Close"
+  },
+  "quota.error.noData": {
+    "zh": "没能读到额度：{p0}",
+    "en": "Couldn't read usage limits: {p0}"
+  },
+  "quota.error.hint": {
+    "zh": "对话不受影响，可以稍后点右上角刷新再试。",
+    "en": "Conversations aren't affected. Try the refresh button (top right) again later."
+  },
+  "quota.error.stale": {
+    "zh": "刷新失败：{p0}",
+    "en": "Refresh failed: {p0}"
+  },
+  "quota.empty.none": {
+    "zh": "还没有读到额度数据，稍后点右上角刷新再试。",
+    "en": "No usage data yet. Try the refresh button (top right) in a moment."
+  },
+  "quota.empty.eventsOnly": {
+    "zh": "这个版本的 Claude Code 每轮对话结束后才会更新额度，发一条消息后就有了。",
+    "en": "This version of Claude Code only reports usage after each turn. It will appear once you send a message."
+  },
+  "quota.settings.title": {
+    "zh": "输入框显示账号额度",
+    "en": "Show account usage in the input"
+  },
+  "quota.settings.desc": {
+    "zh": "用自己的 Claude / ChatGPT 订阅或像素星空平台时，在输入框底栏显示额度用了多少；点开看各项额度和几点恢复。",
+    "en": "When using your own Claude or ChatGPT subscription or the PixelSky platform, show how much of your usage limit is used in the input toolbar. Click it to see each limit and when it resets."
+  },
+  "quota.settings.hidden": {
+    "zh": "已隐藏：输入框里不显示额度按钮，模型通道菜单里的额度简写也不显示。额度用完时，对话里照样会报错提示。",
+    "en": "Hidden: the usage button and the short usage in the model channel menu are not shown. If a limit runs out, the conversation still reports the error."
+  },
+  "quota.settings.when": {
+    "zh": "什么时候显示",
+    "en": "Show when"
+  },
+  "quota.settings.whenAlways": {
+    "zh": "一直显示",
+    "en": "Always"
+  },
+  "quota.settings.whenNear": {
+    "zh": "快用完时才显示",
+    "en": "Only when nearly used up"
+  },
+  "quota.settings.style": {
+    "zh": "按钮样式",
+    "en": "Button style"
+  },
+  "quota.settings.styleFull": {
+    "zh": "图标和百分比",
+    "en": "Icon and percentage"
+  },
+  "quota.settings.styleIcon": {
+    "zh": "只有图标",
+    "en": "Icon only"
+  },
+  "quota.settings.previewLabel": {
+    "zh": "额度按钮预览",
+    "en": "Usage button preview"
+  },
+  "quota.settings.preview": {
+    "zh": "预览（示例数据）",
+    "en": "Preview (sample data)"
+  },
+  "quota.settings.previewEffort": {
+    "zh": "高",
+    "en": "High"
+  },
+  "quota.settings.previewNear": {
+    "zh": "平时没有这个按钮，任一项到 80% 才会出现（直接就是橙色）。",
+    "en": "The button stays hidden until any limit reaches 80%, then appears in orange."
+  },
+  "quota.settings.keywords": {
+    "zh": "额度 用量 5 小时 每周 限额 点数 quota usage limit rate credits",
+    "en": "quota usage limit rate credits 5-hour weekly 额度 用量 限额"
   }
 } as const
 export type TranslationKey = keyof typeof catalog

@@ -9,6 +9,7 @@ import type {
   RewindAnchor,
   SessionContext,
 } from '../adapter'
+import type { QuotaReading } from '../quota'
 import type { ListOptions, LiveState, NativeRead, NativeSessionList, NewerTurns, ReadOptions } from '../native/types'
 import {
   type AgentRuns,
@@ -25,7 +26,8 @@ import { outputTail, run, runInteractive, startupReason } from '../exec'
 import { engineBase } from '../registry'
 import { customCodex, discoverCodex, toolEnvironment } from './discover'
 import { codexAnchor, readCodexTurns } from './branch'
-import { CodexProcess, object } from './process'
+import { CodexProcess, object, string } from './process'
+import { parseCodexRateLimits } from './quota'
 import { codexCatalog } from './catalog'
 import { CodexSession, reservedCodexArg, type CodexLaunchOptions } from './session'
 import { CodexReader } from './reader'
@@ -112,12 +114,18 @@ export class CodexAdapter implements EngineAdapter {
   async login(method: 'browser' | 'device', onLine: (line: string) => void): Promise<LoginProcess> {
     const launcher = await this.loginLauncher()
     const args = method === 'device' ? ['login', '--device-auth'] : ['login']
-    return runInteractive(launcher, args, toolEnvironment(launcher, this.env()), onLine)
+    // 只读进程会缓存启动时的登录状态：登录前后各关一次，下次读额度重新起，不会还是旧账号
+    await this.reader.close()
+    const proc = runInteractive(launcher, args, toolEnvironment(launcher, this.env()), onLine)
+    void proc.done.finally(() => this.reader.close()).catch(() => undefined)
+    return proc
   }
   /** 取消授权：codex logout */
   async logout(): Promise<EngineUpdateResult> {
     const launcher = await this.loginLauncher()
+    await this.reader.close()
     const r = await run(launcher, ['logout'], toolEnvironment(launcher, this.env()))
+    await this.reader.close()
     return { ok: r.ok, output: outputTail(r), version: null }
   }
   private async loginLauncher(): Promise<Launcher> {
@@ -296,6 +304,26 @@ export class CodexAdapter implements EngineAdapter {
   codexHome(record?: SessionRecord): string {
     const env = record && viaGateway(record) ? { ...this.env(), ...this.opts.sessionEnv?.(record) } : this.env()
     return env.CODEX_HOME || join(homedir(), '.codex')
+  }
+  /**
+   * 没有会话进程时读一次账号额度（docs/ui/account-quota.md §3.3）：复用只读的 app-server（空闲 60 秒自己关、请求排队、不拿线程锁），
+   * 不另起进程。没用 ChatGPT 登录（API Key、自己配置的接口）→ unsupported
+   */
+  async accountQuota(): Promise<QuotaReading> {
+    await this.info()
+    if (this.cached?.info.status !== 'ready') return { kind: 'unsupported' }
+    const signal = AbortSignal.timeout(10_000)
+    const auth = await this.reader.request('account/read', { refreshToken: false }, signal)
+    const account = object(auth.account)
+    if (account.type !== 'chatgpt') return { kind: 'unsupported' }
+    try {
+      const res = await this.reader.request('account/rateLimits/read', { excludeResetCreditDetails: true }, signal)
+      const reading = parseCodexRateLimits(res, Date.now())
+      return reading.kind === 'ok' ? { ...reading, account: string(account.email) || null } : reading
+    } catch (error) {
+      if (/authentication required/i.test((error as Error).message)) return { kind: 'unsupported' }
+      throw error
+    }
   }
   /** 关掉适配器自己的常驻进程（应用退出）：读取进程 */
   close(opts?: CloseOptions): Promise<void> {

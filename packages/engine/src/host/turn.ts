@@ -145,6 +145,7 @@ export class HostTurn {
             m.events.patchRecord(id, { pendingFork: null })
           },
           reportConfigWarning: text => m.settings.reportConfigWarning(info.id, text),
+          reportQuota: patch => m.quota.observe(id, patch),
         })
         preparedExtensions = undefined
       } else {

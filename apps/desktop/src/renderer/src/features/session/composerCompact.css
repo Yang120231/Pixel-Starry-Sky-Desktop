@@ -51,6 +51,15 @@
   .composer-area [data-composer-permission] button > span {
     display: none;
   }
+  /* 额度按钮只剩图标 */
+  .composer-area [data-composer-quota] [data-quota-label] {
+    display: none;
+  }
+  .composer-area [data-composer-quota] [data-quota-trigger] {
+    width: 32px;
+    padding: 0;
+    justify-content: center;
+  }
   .composer-area [data-model-source] {
     display: none;
   }

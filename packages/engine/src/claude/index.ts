@@ -15,13 +15,17 @@ import {
   type SessionRecord,
   viaGateway,
 } from '@pixelsky/protocol'
-import type { EngineAdapter, EngineSession, Launcher, LoginProcess, SessionContext } from '../adapter'
+import { QUICK_CLOSE_MS } from '../adapter'
+import type { CloseOptions, EngineAdapter, EngineSession, Launcher, LoginProcess, SessionContext } from '../adapter'
+import type { QuotaReading } from '../quota'
 import { engineEnv, systemProxyEnv } from '../env'
 import { outputTail, run, runInteractive, runStream, startupReason } from '../exec'
 import { engineBase } from '../registry'
 import { claudeInstaller, customClaude, discoverClaude, type ClaudeDiscovery } from './discover'
 import { rewindFilesOnce, sideQuestionOnce, type HelperTarget, type RewindFilesReply } from './helper'
 import { ClaudeProcess, ownClaudePids } from './process'
+import { parseClaudeUsage, unknownControl } from './quota'
+import { obj, str } from './shape'
 import { ClaudeSession, reservedClaudeArg, type ClaudeLaunchOptions } from './session'
 import { loadSavedRuns, loadSubagentTranscript } from './runs'
 import {
@@ -111,6 +115,13 @@ export class ClaudeAdapter implements EngineAdapter {
   private catalogCache: { at: number; value: EngineCatalog } | null = null
   private probing: Promise<EngineCatalog> | null = null
   private probingForce = false
+  /** 额度的临时进程（没有会话进程时问 get_usage 用，问完就关）：同一时间最多一个；应用退出时 close() 杀掉 */
+  private quotaProbe: { account: string; promise: Promise<QuotaReading> } | null = null
+  private quotaProc: ClaudeProcess | null = null
+  /** close() 之后（应用退出）不再起任何额度临时进程 */
+  private closedForQuota = false
+  /** 这个版本认不认识 get_usage；null 还没试过。dropCatalog()（重新检测 / 更新 / 安装）时清回 null，升级后重新试 */
+  private usageRequest: boolean | null = null
   /** 清缓存时自增：握手期间缓存被清过（重新检测 / 更新 / 安装），旧握手的结果不再写进缓存 */
   private catalogGen = 0
   /** 原生安装器和 npm 装的版本号一致，都按这个包查最新版本 */
@@ -403,6 +414,78 @@ export class ClaudeAdapter implements EngineAdapter {
   private dropCatalog(): void {
     this.catalogCache = null
     this.catalogGen++
+    this.usageRequest = null
+  }
+
+  /**
+   * 没有会话进程时读一次账号额度（docs/ui/account-quota.md §3.2）：起一个临时进程问 get_usage，问完就关。
+   * 有会话进程时宿主改借会话的进程（EngineSession.accountQuota），不走这里
+   */
+  async accountQuota(): Promise<QuotaReading> {
+    if (this.closedForQuota) throw new Error('Claude Code unavailable: 应用正在退出')
+    const d = await this.discover(false)
+    if (!d.launcher || d.info.status !== 'ready') return { kind: 'unsupported' }
+    if (this.usageRequest === false) return { kind: 'no-request' }
+    // 同一时间只起一个，且按账号区分：别的账号的读取还在跑时等它结束再起，不拿它的结果顶替
+    const account = d.info.account?.email?.trim().toLowerCase() ?? ''
+    for (let running = this.quotaProbe; running; running = this.quotaProbe) {
+      if (running.account === account) return running.promise
+      await running.promise.catch(() => undefined)
+    }
+    if (this.closedForQuota) throw new Error('Claude Code unavailable: 应用正在退出')
+    const promise = this.probeQuota(d.launcher).finally(() => {
+      if (this.quotaProbe?.promise === promise) this.quotaProbe = null
+    })
+    this.quotaProbe = { account, promise }
+    return promise
+  }
+
+  /** 和握手一样在主目录、用自己的账号环境（不带网关变量）；initialize 30 秒、get_usage 20 秒；无论成败都杀掉进程 */
+  private async probeQuota(launcher: Launcher): Promise<QuotaReading> {
+    const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose']
+    const proc = new ClaudeProcess(launcher, [...args, ...this.launchArgs()], homedir(), this.env(), {
+      onMessage: () => undefined,
+      onControlRequest: () => undefined,
+      onControlCancel: () => undefined,
+      onExit: () => undefined,
+    })
+    this.quotaProc = proc
+    try {
+      const init = await proc.request('initialize', {}, 30_000)
+      this.refreshModels(init.models)
+      const email = str(obj(init.account).email) || null
+      let raw: Record<string, unknown>
+      try {
+        raw = await proc.request('get_usage', { skip_behaviors: true }, 20_000)
+      } catch (err) {
+        if (!unknownControl(err)) throw err
+        this.usageRequest = false
+        return { kind: 'no-request' }
+      }
+      const reading = parseClaudeUsage(raw, Date.now())
+      this.usageRequest = reading.kind !== 'no-request'
+      return reading.kind === 'ok' ? { ...reading, account: email } : reading
+    } finally {
+      proc.kill()
+      if (this.quotaProc === proc) this.quotaProc = null
+    }
+  }
+
+  /** 应用退出：杀掉还在问额度的临时进程 */
+  async close(opts: CloseOptions = {}): Promise<void> {
+    this.closedForQuota = true
+    const proc = this.quotaProc
+    this.quotaProc = null
+    if (!proc) return
+    proc.kill()
+    let timer: NodeJS.Timeout | undefined
+    await Promise.race([
+      proc.exitPromise,
+      new Promise<void>(resolve => {
+        timer = setTimeout(resolve, opts.quick ? QUICK_CLOSE_MS : 5_000)
+      }),
+    ])
+    clearTimeout(timer)
   }
 
   private refreshCatalog(force: boolean): Promise<EngineCatalog> {

@@ -588,6 +588,10 @@ export const IPC_CONTRACT = {
   'providers:remove': { kind: 'invoke', route: 'local', trust: 'sender' },
   'providers:save': { kind: 'invoke', route: 'local', trust: 'sender' },
   'providers:test': { kind: 'invoke', route: 'local', trust: 'sender' },
+  // 账号额度（docs/ui/account-quota.md）：只在本机；远程机器上的对话不显示额度
+  'quota:changed': { kind: 'push', route: 'push', trust: 'none' },
+  'quota:get': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'quota:refresh': { kind: 'invoke', route: 'local', trust: 'sender' },
   // 侧栏对话的状态图标（docs/ui/sidebar-status-icons.md §4）：只在本机
   'sessionStatus:changed': { kind: 'push', route: 'push', trust: 'none' },
   'sessionStatus:get': { kind: 'invoke', route: 'local', trust: 'sender' },

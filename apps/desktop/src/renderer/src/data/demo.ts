@@ -3,10 +3,12 @@
 // 默认模式不加载 mock/（构建时它是单独的分块）。
 import { useSyncExternalStore } from 'react'
 import type {
+  AccountQuota,
   ArtifactResponse,
   ContextWindow,
   EngineCatalog,
   EngineConfig,
+  EngineQuotaProvider,
   FileChange,
   Item,
   NativeImportResult,
@@ -112,6 +114,8 @@ export interface DemoSource {
     preview(path: string): ArtifactPreview
   }
   context: ContextWindow
+  /** 输入框额度按钮和弹窗的演示数据（docs/ui/account-quota.md §6.12）；平台的额度由 account 换算 */
+  quota: Record<EngineQuotaProvider, AccountQuota>
   files: {
     contents: Record<string, string>
     editorState: EditorState

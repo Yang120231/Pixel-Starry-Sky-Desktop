@@ -242,6 +242,8 @@ export class HostEvents {
           void m.turn.pump(id)
         })
         if (rt.snapshot.queuePaused || rt.snapshot.queue.length === 0) this.armIdle(id)
+        // 账号额度：有人看过、超过 5 分钟没取，借这个会话还活着的进程补取一次（分模型 / 额外用量 / 点数）
+        m.quota.afterTurn(id)
         break
       }
       case 'background':

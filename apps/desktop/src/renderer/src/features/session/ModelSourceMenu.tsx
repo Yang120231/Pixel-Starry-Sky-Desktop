@@ -76,6 +76,7 @@ import { pinNewTask } from '@/features/model-channels/newTaskDefault'
 import { openAuthDialog } from '@/features/model-channels/authDialogStore'
 import { useChannelEngines } from '@/features/model-channels/loginStore'
 import { MenuRow, TRIGGER } from './ComposerMenus'
+import { QuotaInline } from './quota/QuotaInline'
 
 const CLIPS = /(hidden|clip|auto|scroll)/
 
@@ -451,7 +452,11 @@ export function ModelSourceMenu({
           ) : c === 'custom' ? (
             <span className="truncate">{providers.providers.map(p => p.name).join('、')}</span>
           ) : (
-            <AccountTag account={a} />
+            <>
+              <AccountTag account={a} />
+              {/* Claude / ChatGPT 授权账号后面的额度简写；平台那一列已经显示余额，不加 */}
+              <QuotaInline provider={c === 'claude' ? 'claude' : 'chatgpt'} />
+            </>
           )}
         </span>
         <button

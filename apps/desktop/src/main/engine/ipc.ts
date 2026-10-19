@@ -34,6 +34,7 @@ import { initAi } from '../ai/ipc'
 import { Extensions } from '../extensions/ipc'
 import { historyEnabled, historyServer } from './history-mcp'
 import { bundledPixelCli } from './pixel-cli'
+import { registerQuotaIpc } from './quota-ipc'
 import { initTerminalIpc } from '../terminal/ipc'
 import { initMachines } from '../machines/service'
 import { machineOf } from '../machines/identity'
@@ -120,8 +121,11 @@ export async function initEngine(ctx: AppContext): Promise<void> {
     latestVersion: npmLatest,
     // 断线自动重连时替用户发的那句，按界面语言
     continueText: () => (windowLocale() === 'en-US' ? 'Continue' : '继续'),
+    // 账号额度变了广播给所有窗口（只在本机；docs/ui/account-quota.md §5）
+    onQuota: quota => ctx.events.broadcast('quota:changed', quota),
   })
   ctx.engine = h
+  registerQuotaIpc(h)
   backfillAfterSignIn(h)
   // 引擎有新版本时设置 › 本机引擎提示「更新」（docs/ui/engine-update.md）
   scheduleEngineUpdateChecks(() => h.checkEngineUpdates())

@@ -32,6 +32,8 @@ import { AccountSection } from '../account/settings/AccountSection'
 import { FontSettings } from './FontSettings'
 import { ReplyStatsSettings } from './ReplyStatsSettings'
 import { ComposerStyleSettings } from './ComposerStyleSettings'
+import { QuotaDisplaySettings } from './QuotaDisplaySettings'
+import { takeSettingsRow } from './settingsJump'
 import { AccentSettings } from './AccentSettings'
 import { PaletteSettings } from './PaletteSettings'
 import { MinimalModeSettings } from './MinimalModeSettings'
@@ -325,6 +327,11 @@ export function SettingsDialog({
     setSection(hit.section)
     setJump(j => ({ title: hit.title, n: (j?.n ?? 0) + 1 }))
   }
+  // 从别处（例如额度弹窗的「额度按钮设置」）打开设置时带来的目标行：取一次，走下面同一套滚动 + 高亮
+  useEffect(() => {
+    const title = takeSettingsRow()
+    if (title) setJump(j => ({ title, n: (j?.n ?? 0) + 1 }))
+  }, [section])
   useEffect(() => {
     if (!jump) return
     // 等新页面渲染出来再找
@@ -751,6 +758,7 @@ function AppearanceSection() {
 
       <GroupTitle>{tr('settings.engines.EngineDetail.conversation')}</GroupTitle>
       <ComposerStyleSettings />
+      <QuotaDisplaySettings />
       <ReplyStatsSettings />
       <TurnRailSettings />
       <LongConversationSettings />

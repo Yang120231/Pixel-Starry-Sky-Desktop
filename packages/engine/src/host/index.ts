@@ -9,6 +9,7 @@
 // guard 工作目录锁、settings 引擎设置、projects 项目、query 搜索与产物、cache 缓存提醒、
 // usage 用量与结算、events 事件与运行状态、queue 消息队列、turn 一轮对话、sessions 会话。
 import type {
+  AccountQuota,
   ApprovalDecision,
   ContextDetailLevel,
   ContextDiagnostic,
@@ -19,6 +20,7 @@ import type {
   EngineId,
   EngineInfo,
   EngineLogin,
+  EngineQuotaProvider,
   EngineUpdateResult,
   Item,
   MessageInput,
@@ -29,6 +31,7 @@ import type {
   OpenedSession,
   ProjectRecord,
   QueueMove,
+  QuotaRefreshOptions,
   AddProjectsResult,
   ForkResult,
   InterruptOptions,
@@ -63,6 +66,7 @@ import { HostNative } from './native'
 import { HostProjects } from './projects'
 import { HostQuery } from './query'
 import { HostQueue } from './queue'
+import { HostQuota } from './quota'
 import { HostSessions } from './sessions'
 import { HostSettings, type SyncableEngineSettings } from './settings'
 import { HostTurn } from './turn'
@@ -146,6 +150,7 @@ export class EngineHost {
       handoff: new HostHandoff(ctx),
       login: new HostLogin(ctx),
       native: new HostNative(ctx),
+      quota: new HostQuota(ctx),
     }
     for (const r of store.loadRecords()) ctx.records.set(r.id, r)
     this.ctx = ctx
@@ -563,6 +568,16 @@ export class EngineHost {
       if (rt.snapshot.state !== 'idle') running++
     }
     return { runtimes: this.runtimes.size, processes, running }
+  }
+
+  /** 当前账号的额度快照（docs/ui/account-quota.md）；不发请求，还没读过为 null */
+  accountQuota(provider: EngineQuotaProvider): Promise<AccountQuota | null> {
+    return this.m.quota.get(provider)
+  }
+
+  /** 按需 / 手动读取账号额度；不抛错，失败时返回 status 'error' 的快照 */
+  refreshAccountQuota(provider: EngineQuotaProvider, opts?: QuotaRefreshOptions): Promise<AccountQuota> {
+    return this.m.quota.refresh(provider, opts)
   }
 
   /** 退出应用：关掉所有引擎进程 */

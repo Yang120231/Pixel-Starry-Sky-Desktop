@@ -1,0 +1,118 @@
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { createPortal } from 'react-dom'
+import type { QuotaProvider } from '@pixelsky/protocol'
+import { tr } from '@/i18n/core'
+import { useI18n } from '@/i18n/I18nProvider'
+import { isDemo } from '@/data/demo'
+import { useAccount } from '@/features/account/useAccount'
+import { useSettings } from '@/features/settings/SettingsProvider'
+import { requestSettingsRow } from '@/features/settings/settingsJump'
+import { QuotaPanel } from './QuotaPanel'
+import { OPEN_MAX_AGE_MS, type QuotaSource } from './quotaStore'
+
+/** 「已刷新」对勾显示多久（同上下文弹窗） */
+const REFRESHED_MS = 1500
+
+/**
+ * 弹窗外壳（docs/ui/account-quota.md §6.6）：portal 到 body，按钮右对齐、往上弹 8px；打开时聚焦、Esc 关闭并把焦点还给按钮、点外面关。
+ * 打开时读取一次（快照比 1 分钟新就直接用），右上角刷新是手动读取（force）。写法照 ContextWindowButton。
+ */
+export function QuotaPopover({
+  provider,
+  source,
+  anchor,
+  now,
+  onClose,
+  onOpenChannels,
+}: {
+  provider: QuotaProvider
+  source: QuotaSource
+  anchor: RefObject<HTMLButtonElement | null>
+  now: number
+  onClose: () => void
+  onOpenChannels: () => void
+}) {
+  useI18n()
+  const popup = useRef<HTMLDivElement>(null)
+  const settings = useSettings()
+  const account = useAccount()
+  const [refreshed, setRefreshed] = useState(false)
+  const { refresh } = source
+  useEffect(() => {
+    void refresh({ maxAgeMs: OPEN_MAX_AGE_MS })
+  }, [refresh])
+  useLayoutEffect(() => {
+    if (!popup.current || !anchor.current) return
+    const position = (): void => {
+      const r = anchor.current!.getBoundingClientRect(),
+        p = popup.current!
+      const bounds = p.getBoundingClientRect()
+      p.style.left = `${Math.max(8, Math.min(r.right - bounds.width, innerWidth - bounds.width - 8))}px`
+      p.style.top = `${Math.max(8, r.top - bounds.height - 8)}px`
+    }
+    position()
+    const observer = new ResizeObserver(position)
+    observer.observe(popup.current)
+    popup.current.focus()
+    window.addEventListener('resize', position)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', position)
+    }
+  }, [anchor])
+  useEffect(() => {
+    const down = (e: PointerEvent): void => {
+      if (!popup.current?.contains(e.target as Node) && !anchor.current?.contains(e.target as Node)) onClose()
+    }
+    window.addEventListener('pointerdown', down)
+    return () => window.removeEventListener('pointerdown', down)
+  }, [anchor, onClose])
+  useEffect(() => {
+    if (!refreshed) return
+    const t = setTimeout(() => setRefreshed(false), REFRESHED_MS)
+    return () => clearTimeout(t)
+  }, [refreshed])
+  const close = (): void => {
+    onClose()
+    anchor.current?.focus()
+  }
+  return createPortal(
+    <QuotaPanel
+      provider={provider}
+      quota={source.quota}
+      loading={source.loading}
+      refreshed={refreshed}
+      now={now}
+      balanceText={account.balanceText}
+      planLimits={source.planLimits}
+      demo={isDemo}
+      panelRef={popup}
+      onKeyDown={e => {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          close()
+        }
+        e.stopPropagation()
+      }}
+      onRefresh={() => {
+        setRefreshed(false)
+        void refresh({ force: true }).then(ok => ok && setRefreshed(true))
+      }}
+      onClose={close}
+      onSwitchChannel={() => {
+        onClose()
+        onOpenChannels()
+      }}
+      onOpenSettings={() => {
+        requestSettingsRow(tr('quota.settings.title'))
+        onClose()
+        settings.openSettings('appearance')
+      }}
+      onOpenAccount={() => {
+        onClose()
+        settings.openSettings('account')
+      }}
+    />,
+    document.body,
+  )
+}

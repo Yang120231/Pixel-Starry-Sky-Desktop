@@ -21,7 +21,9 @@ import {
 import { queueSettings } from '../queue'
 import { NO_REPLY, seedTurns, type ChatSeed } from '../chat-log'
 import { QUICK_CLOSE_MS, type CloseOptions, type EngineSession, type Launcher, type SessionContext } from '../adapter'
+import type { QuotaReading } from '../quota'
 import { ClaudeProcess, ownClaudePids, type ControlRequestFromCli } from './process'
+import { parseClaudeRateLimitEvent, parseClaudeUsage, unknownControl } from './quota'
 import { liveClaudeSession } from './native'
 import { loadSavedRuns } from './runs'
 import { alwaysPermissions, approvalFor } from './tools'
@@ -252,6 +254,8 @@ export class ClaudeSession implements EngineSession {
   /** 这一轮发出去的用户消息 id，等 CLI 回显（--replay-user-messages）确认收到；回显到了或没有这一轮时为 null，每轮只确认一次 */
   private ackPending: string | null = null
   private proc: ClaudeProcess | null = null
+  /** 当前进程启动时是不是走本机网关：额度的来源按它判断，不读当前记录（换通道要等下一条消息才换进程） */
+  private procViaGateway = false
   private starting: Promise<ClaudeProcess> | null = null
   /** 跨引擎接力还没注入的聊天：启动进程时写进会话记录；进程已经在跑或写不进去时，发消息时退回文字交接 */
   private seed: ChatSeed | null = null
@@ -373,6 +377,26 @@ export class ClaudeSession implements EngineSession {
     const diagnostic = this.translator.context.diagnostic(raw, detail)
     this.markUsage(!!diagnostic)
     return diagnostic
+  }
+
+  /**
+   * 借活着的进程问账号额度（get_usage 不进对话、不占队列，运行中也能发）；没有进程或走网关时返回 null，
+   * 绝不为它起会话进程（不能用 ensureProcess：会为此起进程并 --resume 对话）。会话里拿不到账号邮箱，account 填 null
+   */
+  accountQuota(): Promise<QuotaReading> | null {
+    const proc = this.proc
+    if (this.closed || !proc?.alive || this.procViaGateway) return null
+    return proc.request('get_usage', { skip_behaviors: true }, 20_000).then(
+      raw => parseClaudeUsage(raw, Date.now()),
+      err => (unknownControl(err) ? { kind: 'no-request' as const } : Promise.reject(err)),
+    )
+  }
+
+  /** 每次请求后的 rate_limit_event：平台 / 自定义接口经本机网关，事件里是上游账号或网关的数据，不能算到用户自己的账号上 */
+  private onRateLimit(msg: Msg): void {
+    if (this.procViaGateway) return
+    const patch = parseClaudeRateLimitEvent(msg.rate_limit_info, Date.now())
+    if (patch) this.ctx.reportQuota?.(patch)
   }
 
   private markUsage(ok: boolean): void {
@@ -549,9 +573,12 @@ export class ClaudeSession implements EngineSession {
     if (gateway && settingsArg && settingsArg !== gateway) this.retrySettingsFile = settingsArg
     if (settingsArg) args.push('--settings', settingsArg)
     args.push(...(this.deps.launch?.args ?? []))
+    const launchedViaGateway = viaGateway(rec)
     const proc: ClaudeProcess = new ClaudeProcess(this.deps.launcher, args, rec.cwd, this.deps.env, {
       onMessage: m => {
         if (this.proc === proc) {
+          // 额度事件不进对话：只汇报给宿主（账号额度，docs/ui/account-quota.md）
+          if (m.type === 'rate_limit_event') return this.onRateLimit(m)
           if (this.contextFrame(m)) return
           this.onInputFrame(m)
           this.translator.handle(m)
@@ -597,6 +624,7 @@ export class ClaudeSession implements EngineSession {
     }
     if (!proc.alive) throw new StartupError(proc.stderrTail)
     this.proc = proc
+    this.procViaGateway = launchedViaGateway
     if (sid !== rec.engineSessionId) this.ctx.setEngineSessionId(sid)
     if (rec.pendingRewind) this.ctx.clearPendingRewind?.()
     if (rec.pendingFork) this.ctx.clearPendingFork?.()

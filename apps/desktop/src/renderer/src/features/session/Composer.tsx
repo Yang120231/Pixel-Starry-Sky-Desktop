@@ -36,6 +36,7 @@ import { setLayoutSize, useLayoutSize } from '@/features/layout/sizes'
 import { useComposerDraft } from '@/features/engine/drafts'
 import { QueuedMessages } from './QueuedMessages'
 import { ContextWindowButton } from './ContextWindowButton'
+import { QuotaButton } from './quota/QuotaButton'
 import { useComposerStyle } from '@/features/settings/composerStyle'
 import { useStopBackgroundAgents } from '@/features/settings/stopBackgroundAgents'
 import { ComposerStatusBar } from './ComposerStatusBar'
@@ -982,6 +983,14 @@ export function Composer({
               onClick={() => comingSoon(translate('语音输入'))}
             />
           )}
+          {/* 窄宽时 composerCompact.css 靠 data-composer-quota 把额度按钮收成只剩图标 */}
+          <span data-composer-quota className="contents">
+            <QuotaButton
+              controller={live ?? demoSource}
+              sessionId={sessionId}
+              onOpenChannels={() => setMenuOpen(true)}
+            />
+          </span>
           <ContextWindowButton sessionId={sessionId} engine={(live ?? demoSource).engine?.id ?? 'claude'} />
         </div>
         {chatgpt && sendControls}

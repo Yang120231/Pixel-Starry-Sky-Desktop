@@ -370,3 +370,17 @@ export type {
   ExtStoreVersionStatus,
 } from './extstore'
 export { EXTSTORE_ERROR_CODES } from './extstore'
+export type {
+  AccountQuota,
+  EngineQuotaProvider,
+  QuotaCredits,
+  QuotaErrorCode,
+  QuotaExtraUsage,
+  QuotaModelLimit,
+  QuotaProvider,
+  QuotaRefreshOptions,
+  QuotaSource,
+  QuotaStatus,
+  QuotaWindow,
+} from './quota'
+export { QUOTA_WINDOW_MINS, quotaWindowId } from './quota'

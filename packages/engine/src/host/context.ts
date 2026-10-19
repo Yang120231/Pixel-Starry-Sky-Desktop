@@ -1,6 +1,7 @@
 // EngineHost 各模块共享的状态，以及模块之间互相调用的入口（docs/restructure.md §8.3 P8）。
 // 模块只在方法调用时经 ctx.m 访问别的模块，不在构造时互相取值。
 import type {
+  AccountQuota,
   EngineId,
   ExtensionLaunch,
   HostEvent,
@@ -24,6 +25,7 @@ import type { HostLogin } from './login'
 import type { HostNative } from './native'
 import type { HostProjects } from './projects'
 import type { HostQuery } from './query'
+import type { HostQuota } from './quota'
 import type { HostQueue } from './queue'
 import type { HostSessions } from './sessions'
 import type { HostSettings } from './settings'
@@ -49,6 +51,8 @@ export interface EngineHostOptions {
   dataDir: string
   /** 广播事件给界面 */
   emit(event: HostEvent): void
+  /** 当前账号的额度快照变了（docs/ui/account-quota.md §4.4）：主进程广播给所有窗口；远程机器上不传，只静默合并 */
+  onQuota?: (quota: AccountQuota) => void
   /** 空闲多久关闭引擎进程，默认 30 分钟 */
   idleMs?: number
   /** 测试用：替换适配器 */
@@ -125,6 +129,7 @@ export interface HostModules {
   handoff: HostHandoff
   login: HostLogin
   native: HostNative
+  quota: HostQuota
 }
 
 export interface HostContext {

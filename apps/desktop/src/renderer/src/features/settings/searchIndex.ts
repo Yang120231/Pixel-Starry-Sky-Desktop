@@ -316,6 +316,15 @@ export const SETTINGS_INDEX: SearchEntry[] = [
     keywords:
       '侧栏 图标 自定义 替换 恢复 新建任务 添加项目 设置 插件 用量 sidebar icons customize replace reset new task add project settings plugins usage',
   },
+  {
+    section: 'appearance',
+    get title() {
+      return tr('quota.settings.title')
+    },
+    get keywords() {
+      return tr('quota.settings.keywords')
+    },
+  },
   { section: 'appearance', title: '回复下方的统计', keywords: '统计行 耗时 token 费用 回复' },
   {
     section: 'appearance',
