@@ -16,6 +16,7 @@ import { ConfirmDialog } from '@/ui/ConfirmDialog'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import { useComposerController } from '@/features/engine'
+import { collectOverlays, overlayHidesBrowser } from './browserOverlay'
 import { PreviewViewport } from './PreviewViewport'
 import { useProjectContext } from './projectContext'
 import { FIELD, NoProject, ToolError, useOperation } from './ToolsUi'
@@ -117,16 +118,39 @@ function BrowserBody({
       until = 0,
       prior = '',
       stopped = false
+    // 弹出层自己变高 / 变宽（展开明细）要重新判断：对当前存在的弹出层挂 ResizeObserver，弹出层没了就摘掉
+    const watched = new Set<Element>()
+    const overlayResize = new ResizeObserver(() => follow())
+    const watchOverlays = (now: Element[]) => {
+      for (const el of watched)
+        if (!now.includes(el)) {
+          overlayResize.unobserve(el)
+          watched.delete(el)
+        }
+      for (const el of now)
+        if (!watched.has(el)) {
+          watched.add(el)
+          overlayResize.observe(el)
+        }
+    }
     const sync = () => {
       if (stopped) return
       const element = viewport.current,
         r = element?.getBoundingClientRect()
-      const overlay = document.querySelector('[role="dialog"],[role="menu"],[role="listbox"],[data-settings-dialog]')
+      // 只有模态对话框、设置对话框，或和占位框重叠的弹出层 / 菜单才藏；不挡到网页的不藏
+      const overlays = collectOverlays()
+      watchOverlays(overlays.map(o => o.element))
+      const covered =
+        !!r &&
+        overlayHidesBrowser(
+          r,
+          overlays.map(o => o.candidate),
+        )
       const visible =
         !!r &&
         r.width > 40 &&
         r.height > 40 &&
-        !overlay &&
+        !covered &&
         !document.hidden &&
         r.right <= innerWidth + 1 &&
         r.bottom <= innerHeight + 1 &&
@@ -175,11 +199,17 @@ function BrowserBody({
     ]
     for (const [t, name, fn] of events) t.addEventListener(name, fn, { capture: true, passive: true })
     const fallback = window.setInterval(sync, 500)
+    // 弹出层存在期间（下拉滚动、弹窗只挪位置不变大小，ResizeObserver 看不到）每 150ms 兜底量一次，没有弹出层时不量
+    const popoverFallback = window.setInterval(() => {
+      if (watched.size) sync()
+    }, 150)
     sync()
     return () => {
       stopped = true
       cancelAnimationFrame(frame)
       window.clearInterval(fallback)
+      window.clearInterval(popoverFallback)
+      overlayResize.disconnect()
       resize.disconnect()
       portals.disconnect()
       for (const [t, name, fn] of events) t.removeEventListener(name, fn, { capture: true })
