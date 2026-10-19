@@ -297,6 +297,7 @@ export class CodexSession implements EngineSession {
       event => this.ctx.emit(event),
       () => this.last.total || null,
       this.agents,
+      this.ctx.record().cwd,
     )
   }
   private async open(): Promise<void> {
@@ -631,6 +632,7 @@ export class CodexSession implements EngineSession {
       event => this.ctx.emit(event),
       () => this.last.total || null,
       this.agents,
+      this.ctx.record().cwd,
     )
     this.nativeTurnId = null
     this.reportedError = null
