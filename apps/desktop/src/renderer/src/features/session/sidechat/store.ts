@@ -2,6 +2,7 @@
 import { useSyncExternalStore } from 'react'
 import type { SideTurn } from '@pixelsky/protocol'
 import { translateMessage } from '@/i18n/core'
+import { SESSION_REMOVED_EVENT } from '@/features/engine/sessionLifecycle'
 
 export interface SideEntry {
   id: string
@@ -18,6 +19,17 @@ export type SideCancel = (sessionId: string) => Promise<void> | void
 let chats: Record<string, SideEntry[]> = {}
 const listeners = new Set<() => void>()
 const EMPTY: SideEntry[] = []
+
+// 会话删掉、归档了：旁聊也丢掉（只在内存里，原来只增不删，docs/perf-audit-2026-10-18.md D7）；正在答的留着
+if (typeof window !== 'undefined')
+  window.addEventListener(SESSION_REMOVED_EVENT, event => {
+    const ids = (event as CustomEvent<{ ids?: string[] }>).detail?.ids ?? []
+    const gone = ids.filter(id => chats[id] && !chats[id].some(e => e.pending))
+    if (!gone.length) return
+    chats = { ...chats }
+    for (const id of gone) delete chats[id]
+    listeners.forEach(l => l())
+  })
 
 function set(sessionId: string, entries: SideEntry[]): void {
   chats = { ...chats, [sessionId]: entries }

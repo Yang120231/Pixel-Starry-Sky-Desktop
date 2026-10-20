@@ -26,7 +26,15 @@ export function DiffView({
   commentable?: boolean
 }) {
   useI18n()
-  const lines = useMemo(() => diff.split('\n'), [diff])
+  const allLines = useMemo(() => diff.split('\n'), [diff])
+  // 很长的 diff 先只画前 DIFF_LINE_LIMIT 行（高亮、逐词对比也只算这些），点「显示剩余」再全画
+  // （原来几千行一挂载就是一个长任务，docs/perf-audit-2026-10-18.md B4）
+  const [all, setAll] = useState(false)
+  const lines = useMemo(
+    () => (all || allLines.length <= DIFF_LINE_LIMIT ? allLines : allLines.slice(0, DIFF_LINE_LIMIT)),
+    [allLines, all],
+  )
+  const rest = allLines.length - lines.length
   const lang = useMemo(() => languageFromPath(path), [path])
   // 去掉每行开头的 +/−/空格 后整段高亮（跨行的注释、字符串颜色才对）；@@ 段头和 ---/+++ 文件头不参与
   const segments = useMemo(
@@ -34,7 +42,7 @@ export function DiffView({
     [lines, lang],
   )
   const words = useMemo(() => wordDiffRanges(lines), [lines])
-  const numbers = useMemo(() => diffLineNumbers(lines), [lines])
+  const numbers = useMemo(() => diffLineNumbers(allLines), [allLines])
   const api = useContext(DiffCommentsContext)
   const comments = commentable && api && path ? api : null
   const existing = comments && path ? comments.list(path) : []
@@ -131,9 +139,22 @@ export function DiffView({
           </div>
         )
       })}
+      {rest > 0 && (
+        <button
+          type="button"
+          data-diff-more
+          onClick={() => setAll(true)}
+          className="sticky left-0 mx-3 my-1.5 rounded-md border border-line px-2 py-0.5 font-sans text-meta text-fg-secondary hover:bg-hover"
+        >
+          {tr('ui.DiffView.showRest', { n: rest })}
+        </button>
+      )}
     </pre>
   )
 }
+
+/** 一次最多画多少行；超过的点按钮再画 */
+export const DIFF_LINE_LIMIT = 400
 
 const BOX = 'mx-3 my-1.5 max-w-[560px] rounded-lg border border-line bg-surface font-sans whitespace-normal'
 

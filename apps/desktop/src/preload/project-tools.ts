@@ -91,5 +91,6 @@ export interface ProjectToolsBridge {
   gitCompare(ref: WorkspaceRef, target: GitCompareTarget): Promise<GitCompareResult>
   /** 历史里会改动仓库的操作（§9.6 第二期） */
   gitHistoryAction(ref: WorkspaceRef, action: GitHistoryAction): Promise<GitResult>
-  onChange(cb: () => void): () => void
+  /** kind：output 只是服务多了几行输出（只有显示输出的地方要重取）；state 是任务、服务状态、副本、Git 等变了 */
+  onChange(cb: (kind: 'state' | 'output') => void): () => void
 }

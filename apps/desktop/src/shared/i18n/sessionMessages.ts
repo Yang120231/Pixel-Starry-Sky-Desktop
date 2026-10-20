@@ -255,6 +255,14 @@ export const sessionMessages = {
     en: 'Show all {n} lines ({m} hidden)',
   },
   'session.live.outputCollapse': { zh: '收起中间部分', en: 'Collapse the middle' },
+  'session.live.outputShowAllChars': {
+    zh: '显示全部（中间省略了 {n} 个字）',
+    en: 'Show all ({n} characters hidden)',
+  },
+  'session.live.outputTooLong': {
+    zh: '后面还有 {n} 个字没显示，太长了，复制输出或在编辑器里看',
+    en: '{n} more characters not shown — copy the output or open it in an editor',
+  },
   'session.live.thoughtFor': { zh: '思考了 {time}', en: 'Thought for {time}' },
   'session.live.thinkingFor': { zh: '思考中 · {time}', en: 'Thinking · {time}' },
   'session.live.tool.AskUserQuestion': { zh: '提问', en: 'Asked' },

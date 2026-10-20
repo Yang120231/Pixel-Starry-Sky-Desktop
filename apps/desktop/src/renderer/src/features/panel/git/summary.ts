@@ -106,7 +106,8 @@ function reloadSoon(): void {
 function watch(): void {
   const bridge = window.pixelsky
   if (stop || !bridge?.projectTools) return
-  const offTools = bridge.projectTools.onChange(reloadSoon)
+  // 只是服务多了几行输出时不重读（docs/perf-audit-2026-10-18.md B2）
+  const offTools = bridge.projectTools.onChange(kind => kind === 'state' && reloadSoon())
   const offWindow = bridge.window.onState(state => {
     if (state.focused) reloadSoon()
   })
@@ -161,6 +162,26 @@ export function useGitRevision(ref: WorkspaceRef | null): number {
   return useSyncExternalStore(subscribeRevision, () => (key ? (revisions.get(key) ?? 0) : 0))
 }
 
+/**
+ * 没人看了的工作区，过 5 分钟还没人看就丢掉完整状态（大仓库的文件列表很大，原来只增不删，
+ * docs/perf-audit-2026-10-18.md D7）；再有人看时重新读。期间又有人看就不丢
+ */
+const FORGET_MS = 5 * 60_000
+const forgetting = new Map<string, number>()
+function forgetLater(key: string): void {
+  window.clearTimeout(forgetting.get(key))
+  forgetting.set(
+    key,
+    window.setTimeout(() => {
+      forgetting.delete(key)
+      if (users.has(key) || loading.has(key)) return
+      statuses.delete(key)
+      cache.delete(key)
+      errors.delete(key)
+    }, FORGET_MS),
+  )
+}
+
 /** 有人在看这个工作区：登记、挂监听、先读一次；watching 为 false（例如 Git 页不在前台）时不登记 */
 function useWatched(ref: WorkspaceRef | null, watching = true): string | null {
   const key = ref ? refKey(ref) : null
@@ -175,7 +196,10 @@ function useWatched(ref: WorkspaceRef | null, watching = true): string | null {
     void load(target, false)
     return () => {
       const u = users.get(key)
-      if (u && --u.count === 0) users.delete(key)
+      if (u && --u.count === 0) {
+        users.delete(key)
+        forgetLater(key)
+      }
       if (users.size === 0) stop?.()
     }
   }, [key, watching])

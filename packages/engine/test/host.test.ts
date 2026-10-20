@@ -1136,6 +1136,8 @@ describe('EngineHost + Claude（假引擎）', () => {
     expect(items.map(i => i.kind)).toEqual(['user', 'reasoning', 'tool', 'assistant'])
     expect(items[0]).toMatchObject({ text: '找 bug\n然后汇报' })
     expect(items[2]).toMatchObject({ name: 'Read', status: 'completed', output: 'alpha' })
+    // 文件没变：用上次解析的结果，不再整读（追踪面板运行中每 2.5 秒取一次）
+    expect(await again.subagentTranscript(record.id, 'a1')).toBe(items)
     expect(() => again.subagentTranscript(record.id, '../x')).toThrow()
   })
 

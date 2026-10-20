@@ -1,6 +1,7 @@
 // 看板和底部胶囊共用的会话分类（docs/ui/task-board.md §2.1）：同一份数据、同一个函数，数字始终一致
 import { useMemo } from 'react'
 import { isLive, useEngineState, useSidebarData } from '@/features/engine'
+import { useSessionDigests } from '@/features/engine/sessionDigest'
 import { machineOf, useMachines } from '@/features/machines/store'
 import { useInbox } from '@/features/panel/inbox/useInbox'
 import { demoSessionCards, sessionCards, type SessionCard } from './sessionLanes'
@@ -8,7 +9,8 @@ import { demoSessionCards, sessionCards, type SessionCard } from './sessionLanes
 export function useSessionCards(): SessionCard[] {
   const inbox = useInbox()
   const sessions = useEngineState(s => s.sessions)
-  const snapshots = useEngineState(s => s.snapshots)
+  // 只看最新待办：别的会话在输出时不跟着重算（docs/perf-audit-2026-10-18.md B3）
+  const snapshots = useSessionDigests()
   const projects = useEngineState(s => s.projects)
   const unread = useEngineState(s => s.unread)
   const machine = useMachines().currentId

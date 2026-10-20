@@ -116,6 +116,8 @@ export const SYNC_ENTRIES: readonly SyncEntry[] = [
   storageEntry('desktop.replyStats', 'display', 'pixelsky.reply-stats'),
   storageEntry('desktop.turnRail', 'display', 'pixelsky.turn-rail'),
   storageEntry('desktop.longConversation', 'display', 'pixelsky.long-conversation'),
+  storageEntry('desktop.terminalScrollback', 'display', 'pixelsky.terminal.scrollback'),
+  storageEntry('desktop.terminalScreenReader', 'display', 'pixelsky.terminal.screenReader'),
   storageEntry('desktop.subagentView', 'display', 'pixelsky.subagent-view'),
   storageEntry('desktop.stopBackgroundSubagents', 'display', 'pixelsky.stop-background-subagents'),
   storageEntry('desktop.messageActions', 'display', 'pixelsky.message-actions'),

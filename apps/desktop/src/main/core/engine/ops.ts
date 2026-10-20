@@ -18,6 +18,7 @@ import type { SearchRegistry } from '../search-registry'
 import { workspaceRef } from '../workspace-files'
 import { readArtifact } from '../artifact-files'
 import { itemDetail, sessionTail, tailOptions } from './tail'
+import { imageOf } from './desktop-images'
 
 export interface EngineOpContext {
   host: EngineHost
@@ -182,6 +183,9 @@ export const ENGINE_OPS = {
   // 手机端（docs/mobile-remote.md §5.2）：只取最后一段条目，点开某一条时再取完整内容
   'engine:openSessionTail': (c, id, opts) => sessionTail(c.host.openSession(str(id, 'id')), tailOptions(opts)),
   'engine:itemDetail': (c, id, itemId) => itemDetail(c.host.open(str(id, 'id')), str(itemId, 'itemId')),
+  // 桌面界面按需取一张图的原图（快照里不带，desktop-images.ts）
+  'engine:image': (c, id, itemId, imageId) =>
+    imageOf(c.host.open(str(id, 'id')).items, str(itemId, 'itemId'), str(imageId, 'imageId')),
   'engine:send': (c, id, input) => c.host.send(str(id, 'id'), input as Parameters<EngineHost['send']>[1]),
   'engine:context': (c, id, detail) => c.host.inspectContext(str(id, 'id'), detail === 'summary' ? 'summary' : 'full'),
   'engine:compact': (c, id) => c.host.compactContext(str(id, 'id')),

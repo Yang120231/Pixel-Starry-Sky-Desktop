@@ -150,6 +150,7 @@ export class HostUsage {
       epoch = this.epoch
     this.settlements.set(key, controller)
     const charges = new Map<string, PlatformCharge>()
+    let rows: UsageRecord[] | undefined
     const delays = ctx.opts.settlementDelays ?? [1000, 3000, 10000, 30000, 60000]
     void (async () => {
       for (let attempt = 0; attempt < delays.length; attempt++) {
@@ -181,18 +182,23 @@ export class HostUsage {
           })
         }
         if (epoch === this.epoch) {
-          const rows = ctx.usage
+          // 这一轮的用量行只在第一次读（原来每次重试都整读当月的用量文件），之后用上次写下的；
+          // 内容没变的行不再重复写（docs/perf-audit-2026-10-18.md D13）
+          rows ??= ctx.usage
             .load(original.settlement!.startedAt)
             .filter(row => row.sessionId === id && row.turnId === turnId)
-          ctx.usage.append(
-            rows.map(row => {
-              const model = usage.models[row.model]
-              // 已经按时间补录过实扣的，按 ID 还是查不到时不改回「—」
-              if (!model || (row.costMatch === 'time' && model.costSource !== 'platform')) return row
-              return { ...row, ...model, costMatch: undefined }
-            }),
-          )
-          ctx.opts.emit({ kind: 'usage_recorded' })
+          const next = rows.map(row => {
+            const model = usage.models[row.model]
+            // 已经按时间补录过实扣的，按 ID 还是查不到时不改回「—」
+            if (!model || (row.costMatch === 'time' && model.costSource !== 'platform')) return row
+            return { ...row, ...model, costMatch: undefined }
+          })
+          const changed = next.filter((row, i) => JSON.stringify(row) !== JSON.stringify(rows![i]))
+          rows = next
+          if (changed.length) {
+            ctx.usage.append(changed)
+            ctx.opts.emit({ kind: 'usage_recorded' })
+          }
         }
         if (usage.settlement!.complete) return
       }
@@ -235,8 +241,10 @@ export class HostUsage {
     const items = new Map<string, readonly Item[]>()
     for (const turn of [...turns.values()]) {
       const { sessionId, turnId } = turn.rows[0]
+      // 没打开的会话只流式读统计条目，不整读整解析（docs/perf-audit-2026-10-18.md B8）
       if (!items.has(sessionId))
-        items.set(sessionId, ctx.runtimes.get(sessionId)?.snapshot.items ?? ctx.store.loadItems(sessionId))
+        items.set(sessionId, ctx.runtimes.get(sessionId)?.snapshot.items ?? (await ctx.store.loadTurnStats(sessionId)))
+      if (signal.aborted || ctx.closing) return 0
       const item = items.get(sessionId)!.find(i => i.kind === 'turn_stats' && i.turnId === turnId)
       if (item?.kind === 'turn_stats') stats.set(turn.key, item)
       const owner = item?.kind === 'turn_stats' ? item.usage.settlement?.account : undefined

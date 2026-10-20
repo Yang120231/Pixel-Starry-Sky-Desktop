@@ -25,8 +25,18 @@ export async function initProjectTools(ctx: AppContext): Promise<void> {
       ctx.events.broadcast('projectTools:changed')
     }, 80)
   }
+  // 服务输出：单独的通知、最多每 300 ms 一次，只有环境页和代码模式的服务列表理它（docs/perf-audit-2026-10-18.md B2）
+  let outputTimer: ReturnType<typeof setTimeout> | null = null
+  const outputChanged = (): void => {
+    if (outputTimer) return
+    outputTimer = setTimeout(() => {
+      outputTimer = null
+      ctx.events.broadcast('projectTools:changed', { kind: 'output' })
+    }, 300)
+  }
   // Git 面板（docs/ui/git-panel.md）：本机放弃未跟踪文件时移到回收站
   const tools = new ProjectTools(dir, host, changed, {
+    outputChanged,
     stopTerminals: stopTerminalsUnder,
     trash: async files => {
       for (const file of files) await shell.trashItem(file.absolute)

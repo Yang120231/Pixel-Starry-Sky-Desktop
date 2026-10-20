@@ -630,10 +630,16 @@ function AgentFocus({
         })
     }
     load()
-    const timer = live ? window.setInterval(load, 2500) : undefined
+    // 窗口在后台时不轮询，回到前台马上取一次（docs/perf-audit-2026-10-18.md B7）
+    const timer = live ? window.setInterval(() => document.visibilityState === 'visible' && load(), 2500) : undefined
+    const onVisible = (): void => {
+      if (live && document.visibilityState === 'visible') load()
+    }
+    document.addEventListener('visibilitychange', onVisible)
     return () => {
       cancelled = true
       window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
     }
   }, [sessionId, agent.id, live])
 

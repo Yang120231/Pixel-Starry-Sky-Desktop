@@ -46,8 +46,9 @@ export interface IpcChannelSpec {
  * 4（2026-10-11）：手机端取会话尾部和单条完整内容（engine:openSessionTail、engine:itemDetail，docs/mobile-remote.md §5.2）。
  * 5（2026-10-14）：RPC 隧道和内存统计（tunnel:*、stats，docs/ui/wsl-mode.md 第 3 步）。
  * 6（2026-10-14）：项目的附加文件夹（engine:setProjectFolders，会话带 extraDirs，docs/ui/multi-root-projects.md §3.5）。
+ * 7（2026-10-20）：按需取图片原图（engine:image）；桌面界面的快照和事件里不再带图片数据（docs/perf-audit-2026-10-18.md B1）。
  */
-export const REMOTE_PROTOCOL = 6
+export const REMOTE_PROTOCOL = 7
 
 export const IPC_CONTRACT = {
   'projectImport:scan': { kind: 'invoke', route: 'local', trust: 'sender' },
@@ -203,6 +204,7 @@ export const IPC_CONTRACT = {
   },
   'engine:engines': { kind: 'invoke', route: 'selected', ids: [0], remote: 'engine:engines', trust: 'sender' },
   'engine:event': { kind: 'push', route: 'push', trust: 'none' },
+  'engine:image': { kind: 'invoke', route: 'resource', ids: [0, 1], remote: 'engine:image', trust: 'sender' },
   'engine:itemDetail': {
     kind: 'invoke',
     route: 'resource',

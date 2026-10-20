@@ -73,7 +73,7 @@ export function MachineDialogs() {
     }
   }
   useEffect(() => {
-    return window.pixelsky?.projectTools.onChange(() => setRevision(v => v + 1))
+    return window.pixelsky?.projectTools.onChange(kind => kind === 'state' && setRevision(v => v + 1))
   }, [])
   useEffect(() => {
     void initMachines().catch(e => setError(message(e)))

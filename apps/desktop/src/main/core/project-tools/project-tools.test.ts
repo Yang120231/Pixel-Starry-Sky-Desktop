@@ -285,7 +285,15 @@ describe('local services', () => {
     expect(redact('Bearer abcdsecret password=private secret-value', ['secret-value'])).not.toContain('secret-value')
   })
   it('persists definitions, runs a real process, reports exit and excludes secrets', async () => {
-    const services = new Services(root, host, () => {})
+    // 输出只走 outputChanged（只有显示输出的地方重取），状态变化（启动、退出）才走 changed
+    const calls: string[] = []
+    const services = new Services(
+      root,
+      host,
+      () => calls.push('state'),
+      async () => {},
+      () => calls.push('output'),
+    )
     managers.push(services)
     await services.init()
     await writeFile(join(project, 'service.cjs'), "console.log('service-ready');setTimeout(()=>process.exit(0),200)")
@@ -298,6 +306,8 @@ describe('local services', () => {
       await new Promise(r => setTimeout(r, 50))
     expect(services.get(service.id)).toMatchObject({ status: 'stopped', exitCode: 0, pid: null })
     expect(services.get(service.id).output).toContain('service-ready')
+    expect(calls).toContain('output')
+    expect(calls.filter(c => c === 'state').length).toBeGreaterThan(0)
     await expect(services.save({ projectId: 'p' }, { name: 'escape', command: 'node', cwd: '..' })).rejects.toThrow()
     const restored = new Services(root, host, () => {})
     managers.push(restored)

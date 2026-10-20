@@ -9,6 +9,26 @@ try {
 } catch {
   /* 使用空草稿 */
 }
+// 每按一个键都把全部草稿 stringify 写一遍太费（docs/perf-audit-2026-10-18.md D9）：攒 400 ms 再写；
+// 窗口切到后台、关闭前马上写，不丢最后几个字
+let timer: ReturnType<typeof setTimeout> | null = null
+function flush(): void {
+  if (timer) clearTimeout(timer)
+  timer = null
+  try {
+    localStorage.setItem(STORAGE, JSON.stringify(drafts))
+  } catch {
+    /* 当前窗口内仍保留 */
+  }
+}
+function persist(): void {
+  if (!timer) timer = setTimeout(flush, 400)
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', () => timer && flush())
+  document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && timer && flush())
+}
+
 const listeners = new Set<() => void>()
 const subscribe = (listener: () => void) => {
   listeners.add(listener)
@@ -22,11 +42,7 @@ export function migrateNewComposerDraft(key: string): void {
   if (!drafts['new-session'] || drafts[key] !== undefined) return
   drafts = { ...drafts, [key]: drafts['new-session'] }
   delete drafts['new-session']
-  try {
-    localStorage.setItem(STORAGE, JSON.stringify(drafts))
-  } catch {
-    /* 当前窗口内仍保留 */
-  }
+  persist()
   listeners.forEach(listener => listener())
 }
 
@@ -37,11 +53,7 @@ export function useComposerDraft(key: string): [string, (value: string | ((previ
       const text = typeof next === 'function' ? next(drafts[key] ?? '') : next
       drafts = { ...drafts, [key]: text }
       if (!text) delete drafts[key]
-      try {
-        localStorage.setItem(STORAGE, JSON.stringify(drafts))
-      } catch {
-        /* 当前窗口内仍保留 */
-      }
+      persist()
       listeners.forEach(listener => listener())
     },
     [key],
@@ -57,11 +69,7 @@ export function appendComposerDraft(key: string, text: string): void {
   if (!text) return
   const current = drafts[key] ?? ''
   drafts = { ...drafts, [key]: current ? `${current}\n${text}` : text }
-  try {
-    localStorage.setItem(STORAGE, JSON.stringify(drafts))
-  } catch {
-    /* 当前窗口内仍保留 */
-  }
+  persist()
   listeners.forEach(listener => listener())
 }
 
@@ -70,11 +78,7 @@ export function appendComposerInline(key: string, text: string): void {
   if (!text) return
   const current = drafts[key] ?? ''
   drafts = { ...drafts, [key]: !current || /\s$/.test(current) ? current + text : `${current} ${text}` }
-  try {
-    localStorage.setItem(STORAGE, JSON.stringify(drafts))
-  } catch {
-    /* 当前窗口内仍保留 */
-  }
+  persist()
   listeners.forEach(listener => listener())
 }
 
@@ -84,10 +88,6 @@ export function removeComposerDraftTail(key: string, text: string): void {
   if (!text || !current.endsWith(text)) return
   const rest = current.slice(0, current.length - text.length).replace(/\n$/, '')
   drafts = { ...drafts, [key]: rest }
-  try {
-    localStorage.setItem(STORAGE, JSON.stringify(drafts))
-  } catch {
-    /* 当前窗口内仍保留 */
-  }
+  persist()
   listeners.forEach(listener => listener())
 }

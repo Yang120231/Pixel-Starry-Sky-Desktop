@@ -138,6 +138,17 @@ export const terminalMessages = {
     en: 'Terminals start in the project directory. Settings affect new terminals only.',
   },
   'terminal.settings': { zh: '终端设置', en: 'Terminal settings' },
+  'terminal.scrollback': { zh: '回滚行数', en: 'Scrollback' },
+  'terminal.scrollbackHint': {
+    zh: '每个终端往上能翻多少行。行数越多越占内存（1 万行跑满约 14 MB 一个）。',
+    en: 'How many lines each terminal keeps for scrolling back. More lines use more memory (about 14 MB per terminal at 10,000).',
+  },
+  'terminal.scrollbackLines': { zh: '{n} 行', en: '{n} lines' },
+  'terminal.screenReader': { zh: '读屏支持', en: 'Screen reader support' },
+  'terminal.screenReaderHint': {
+    zh: '用读屏软件时打开：终端内容同步给读屏软件朗读。不用读屏时关着更省内存和 CPU。',
+    en: 'Turn on if you use a screen reader so terminal output is read aloud. Leave off to save memory and CPU.',
+  },
   'terminal.encoding': { zh: '终端编码', en: 'Terminal encoding' },
   'terminal.encodingHint': {
     zh: 'PowerShell 和 cmd 的中文编码。UTF-8 下读 UTF-8 文件、跑 git / node / python 输出的中文不乱码，但 ping、ipconfig 这类系统命令会改用英文提示；只认 GBK 的老工具选「跟随系统」。新开的终端生效。',

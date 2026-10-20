@@ -820,6 +820,8 @@ export class MobileGateway {
     // 任务、Git 状态变了（电脑上已经合并过）：手机上开着的工具页重新取。
     // 手机只看事件内容不看通道名，旧版手机认不得 kind: 'tools'，会直接忽略
     if (channel === 'projectTools:changed') {
+      // 只是服务多了几行输出：手机工具页不显示实时输出，不用重取
+      if ((args[0] as { kind?: unknown } | undefined)?.kind === 'output') return
       for (const peer of this.peers.values()) peer.rpc.event('projectTools:changed', { kind: 'tools' })
       return
     }

@@ -13,6 +13,7 @@ import { terminalFilePath } from './fileLinks'
 import { COMMAND_PALETTE, NEW_TERMINAL, TOGGLE_TERMINAL } from '@/features/layout/shortcuts'
 import { isMac } from '@/features/layout/keybindings'
 import { isCopyKey } from './copyKey'
+import { terminalPrefs, useTerminalPrefs } from './prefs'
 import { useI18n } from '@/i18n/I18nProvider'
 
 const ansi = [
@@ -56,7 +57,14 @@ export function TerminalView({
     [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   useEffect(() => {
     const el = host.current!
-    const term = new Terminal({ cursorBlink: true, scrollback: 10000, allowProposedApi: false, screenReaderMode: true })
+    // 回滚行数、读屏支持是本机设置（prefs.ts），下面的 effect 改了马上换
+    const prefs = terminalPrefs()
+    const term = new Terminal({
+      cursorBlink: true,
+      scrollback: Number(prefs.scrollback),
+      allowProposedApi: false,
+      screenReaderMode: prefs.screenReader,
+    })
     const fit = new FitAddon(),
       search = new SearchAddon()
     term.loadAddon(fit)
@@ -248,6 +256,13 @@ export function TerminalView({
   useEffect(() => {
     if (visible) requestAnimationFrame(() => refit.current())
   }, [visible, record.generation, record.status])
+  const prefs = useTerminalPrefs()
+  useEffect(() => {
+    const term = instance.current
+    if (!term) return
+    term.options.scrollback = Number(prefs.scrollback)
+    term.options.screenReaderMode = prefs.screenReader
+  }, [prefs])
   useEffect(() => {
     if (!menu) return
     const dismiss = () => setMenu(null)

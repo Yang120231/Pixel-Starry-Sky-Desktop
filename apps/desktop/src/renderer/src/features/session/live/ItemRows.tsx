@@ -58,6 +58,7 @@ import { STEP_CLOCK_MS, baseName, clockText } from './currentStep'
 import { useSince } from './stepClock'
 import { useMinimal } from '@/features/appearance/ThemeProvider'
 import { NativeNoticeAction } from '@/features/resume/NativeNoticeAction'
+import { clipOutput, OUTPUT_ALL_MAX } from './outputClip'
 
 type ItemOf<K extends Item['kind']> = Extract<Item, { kind: K }>
 
@@ -76,7 +77,7 @@ export function UserBubble({ item, actions }: { item: ItemOf<'user'>; actions?: 
         <UserText text={item.text} />
         {!!item.attachments?.length && (
           <div className="mt-2">
-            <ImageAttachments images={item.attachments} />
+            <ImageAttachments images={item.attachments} itemId={item.id} />
           </div>
         )}
         {!!item.files?.length && (
@@ -90,7 +91,7 @@ export function UserBubble({ item, actions }: { item: ItemOf<'user'>; actions?: 
     <div className="conversation-user-bubble min-w-0 rounded-2xl rounded-br-md bg-subtle px-4 py-2.5 text-prose break-words whitespace-pre-wrap text-fg">
       {!!item.attachments?.length && (
         <div className="mb-2">
-          <ImageAttachments images={item.attachments} />
+          <ImageAttachments images={item.attachments} itemId={item.id} />
         </div>
       )}
       {!!item.files?.length && (
@@ -203,6 +204,11 @@ function Chevron({ open }: { open: boolean }) {
  */
 const thinkingStart = new Map<string, number>()
 const thinkingTook = new Map<string, number>()
+/** 两张表只增不删（docs/perf-audit-2026-10-18.md D7）：超过上限丢最早的，最早的那些早已不在屏幕上 */
+const THINKING_KEEP = 2000
+function capThinking(map: Map<string, number>): void {
+  while (map.size > THINKING_KEEP) map.delete(map.keys().next().value!)
+}
 
 /**
  * 思考过程：默认折叠；进行中显示「思考中 · 用时」，结束后「思考了 N 秒」（参照 Claude 桌面版）。
@@ -220,9 +226,15 @@ export function ReasoningBlock({ item }: { item: ItemOf<'reasoning'> }) {
     const timer = setInterval(() => tick(n => n + 1), 1000)
     return () => clearInterval(timer)
   }, [look.clock])
-  if (running && !thinkingStart.has(item.id)) thinkingStart.set(item.id, Date.now())
+  if (running && !thinkingStart.has(item.id)) {
+    thinkingStart.set(item.id, Date.now())
+    capThinking(thinkingStart)
+  }
   const started = thinkingStart.get(item.id)
-  if (!running && started !== undefined && !thinkingTook.has(item.id)) thinkingTook.set(item.id, Date.now() - started)
+  if (!running && started !== undefined && !thinkingTook.has(item.id)) {
+    thinkingTook.set(item.id, Date.now() - started)
+    capThinking(thinkingTook)
+  }
   const took = (running ? undefined : item.durationMs) ?? thinkingTook.get(item.id) ?? null
   if (!running && !hasText && took === null) return null
   const elapsed = running && started !== undefined ? Date.now() - started : 0
@@ -445,10 +457,14 @@ const OUTPUT_HEAD = 120
 const OUTPUT_TAIL = 120
 
 /** 工具输出：太长时中间折起来，点一下看全部 */
+const formatNumber = (n: number): string => n.toLocaleString()
+
 function LongOutput({ text }: { text: string }) {
   useI18n()
   const [all, setAll] = useState(false)
-  const lines = useMemo(() => text.split('\n'), [text])
+  // 按字数折叠时不用按行切（几 MB 的输出每来一段都切一遍很费）
+  const clipped = useMemo(() => clipOutput(text), [text])
+  const lines = useMemo(() => (clipped ? [] : text.split('\n')), [text, clipped])
   const hidden = lines.length - OUTPUT_HEAD - OUTPUT_TAIL
   const button = (label: string, onClick: () => void): ReactNode => (
     <button
@@ -459,6 +475,28 @@ function LongOutput({ text }: { text: string }) {
       {label}
     </button>
   )
+  // 很长的（通常是一两行几 MB）先按字数折叠，「显示全部」也有上限（outputClip.ts）
+  if (clipped) {
+    if (all)
+      return (
+        <>
+          <AnsiText text={text.length > OUTPUT_ALL_MAX ? text.slice(0, OUTPUT_ALL_MAX) : text} />
+          {text.length > OUTPUT_ALL_MAX && (
+            <span className="my-1 block font-sans text-meta text-fg-muted">
+              {tr('session.live.outputTooLong', { n: formatNumber(text.length - OUTPUT_ALL_MAX) })}
+            </span>
+          )}
+          {button(tr('session.live.outputCollapse'), () => setAll(false))}
+        </>
+      )
+    return (
+      <>
+        <AnsiText text={clipped.head} />
+        {button(tr('session.live.outputShowAllChars', { n: formatNumber(clipped.hidden) }), () => setAll(true))}
+        <AnsiText text={clipped.tail} />
+      </>
+    )
+  }
   if (hidden <= 20) return <AnsiText text={text} />
   if (all)
     return (
@@ -806,7 +844,7 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
         ))}
       {open && images.length > 0 && (
         <div className="mt-1 mb-1.5 ml-[23px]">
-          <ImageAttachments images={images} />
+          <ImageAttachments images={images} itemId={item.id} />
         </div>
       )}
       {open && viewedImage && (

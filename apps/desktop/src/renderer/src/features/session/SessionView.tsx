@@ -48,6 +48,7 @@ import {
 } from '@/features/engine'
 import './conversation.css'
 import { TranscriptMenu } from './contextMenu/TranscriptMenu'
+import { ImageSessionContext } from './attachments/imageSource'
 
 export interface SessionViewProps {
   /** 当前会话，null 表示新会话（显示欢迎页） */
@@ -282,27 +283,30 @@ function LiveSessionView({
                       </div>
                     </div>
                   )}
-                  <MessageActionsContext.Provider value={branch.messageActions}>
-                    <ApprovalWaitContext.Provider value={approvalWait}>
-                      <LiveTranscript
-                        snapshot={snapshot}
-                        footer={inlinePlan && <InlinePlan plan={inlinePlan} working={fullProgress.working} />}
-                        header={
-                          forkedFrom && (
-                            <button
-                              type="button"
-                              data-forked-from
-                              onClick={() => paneActions.open(forkedFrom.sessionId)}
-                              className="conversation-message press inline-flex items-center gap-1.5 self-start rounded-md px-1.5 py-0.5 text-meta text-fg-muted hover:bg-hover hover:text-fg"
-                            >
-                              <GitBranch size={12} strokeWidth={1.75} />
-                              {tr('fork.from', { title: forkedFrom.title })}
-                            </button>
-                          )
-                        }
-                      />
-                    </ApprovalWaitContext.Provider>
-                  </MessageActionsContext.Provider>
+                  {/* 对话里的图片不带数据，按会话 id 按需取原图（attachments/imageSource.ts） */}
+                  <ImageSessionContext.Provider value={sessionId}>
+                    <MessageActionsContext.Provider value={branch.messageActions}>
+                      <ApprovalWaitContext.Provider value={approvalWait}>
+                        <LiveTranscript
+                          snapshot={snapshot}
+                          footer={inlinePlan && <InlinePlan plan={inlinePlan} working={fullProgress.working} />}
+                          header={
+                            forkedFrom && (
+                              <button
+                                type="button"
+                                data-forked-from
+                                onClick={() => paneActions.open(forkedFrom.sessionId)}
+                                className="conversation-message press inline-flex items-center gap-1.5 self-start rounded-md px-1.5 py-0.5 text-meta text-fg-muted hover:bg-hover hover:text-fg"
+                              >
+                                <GitBranch size={12} strokeWidth={1.75} />
+                                {tr('fork.from', { title: forkedFrom.title })}
+                              </button>
+                            )
+                          }
+                        />
+                      </ApprovalWaitContext.Provider>
+                    </MessageActionsContext.Provider>
+                  </ImageSessionContext.Provider>
                   {progress.visible && !trace && (
                     <ProgressCard
                       key={sessionId}

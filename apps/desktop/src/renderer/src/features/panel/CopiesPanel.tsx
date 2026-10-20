@@ -41,8 +41,15 @@ function CopiesBody({ projectId, name, demo }: { projectId: string; name: string
       return
     }
     let gone = false
-    const refresh = () =>
-      window
+    // 每个副本要跑几条 git：同一时间只取一次，取的时候又变了就等这次完了再取一次
+    let running: Promise<void> | null = null,
+      again = false
+    const refresh = (): Promise<void> => {
+      if (running) {
+        again = true
+        return running
+      }
+      running = window
         .pixelsky!.projectTools.copies(projectId)
         .then(next => {
           if (!gone) setCopies(next)
@@ -50,6 +57,15 @@ function CopiesBody({ projectId, name, demo }: { projectId: string; name: string
         .catch(e => {
           if (!gone) setError(e.message)
         })
+        .finally(() => {
+          running = null
+          if (again && !gone) {
+            again = false
+            void refresh()
+          }
+        })
+      return running
+    }
     void refresh()
     void window
       .pixelsky!.projectTools.branches(projectId)
@@ -57,7 +73,8 @@ function CopiesBody({ projectId, name, demo }: { projectId: string; name: string
         if (!gone) setBranches(next)
       })
       .catch(() => {})
-    const off = window.pixelsky!.projectTools.onChange(() => void refresh())
+    // 只是服务多了几行输出时不重取（docs/perf-audit-2026-10-18.md B2）
+    const off = window.pixelsky!.projectTools.onChange(kind => kind === 'state' && void refresh())
     return () => {
       gone = true
       off()

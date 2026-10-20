@@ -174,12 +174,40 @@ export function languageLabel(lang: string | null | undefined): string | null {
 /** 太长的内容不高亮（highlight.js 是同步的，几万行会卡住界面），直接按纯文本显示 */
 const MAX_LENGTH = 100_000
 
+/**
+ * 高亮结果（hast 语法树，不缓存 React 元素）按 (语言, 内容) 缓存（docs/perf-audit-2026-10-18.md B4）：
+ * 回复写完从流式换成完整渲染、长对话折叠后再展开、点「显示更早」时，代码块会重新挂载，原来每次都整段重新高亮。
+ * 最近用过的留着，总字数超过上限丢最早的；语法树只读，不会被改
+ */
+const treeCache = new Map<string, Root>()
+const TREE_CACHE_CHARS = 2_000_000
+let cachedChars = 0
+
+export function highlightTree(lang: string, code: string): Root {
+  const key = lang + '\n' + code
+  const hit = treeCache.get(key)
+  if (hit) {
+    treeCache.delete(key)
+    treeCache.set(key, hit)
+    return hit
+  }
+  const tree = lowlight.highlight(lang, code)
+  treeCache.set(key, tree)
+  cachedChars += key.length
+  for (const [old] of treeCache) {
+    if (cachedChars <= TREE_CACHE_CHARS || treeCache.size <= 1) break
+    treeCache.delete(old)
+    cachedChars -= old.length
+  }
+  return tree
+}
+
 /** 把一段代码高亮成 React 元素；lang 为 null 或内容过长时原样返回文字 */
 export function highlight(code: string, lang: string | null): ReactNode {
   if (!lang || code.length > MAX_LENGTH) return code
   let tree: Root
   try {
-    tree = lowlight.highlight(lang, code)
+    tree = highlightTree(lang, code)
   } catch {
     return code
   }
@@ -201,7 +229,7 @@ export function highlightSegments(code: string, lang: string | null): Segment[][
   if (!lang || code.length > MAX_LENGTH) return plain()
   let tree: Root
   try {
-    tree = lowlight.highlight(lang, code)
+    tree = highlightTree(lang, code)
   } catch {
     return plain()
   }

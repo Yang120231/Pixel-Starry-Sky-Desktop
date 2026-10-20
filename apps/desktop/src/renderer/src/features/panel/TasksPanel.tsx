@@ -5,6 +5,7 @@ import { ConfirmDialog } from '@/ui/ConfirmDialog'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import { useEngineState } from '@/features/engine'
+import { useSessionDigests } from '@/features/engine/sessionDigest'
 import { OPEN_SESSION_EVENT } from '@/features/engine/openRequests'
 import { useProjectContext } from './projectContext'
 import { useTaskLocation } from './taskNavigation'
@@ -110,7 +111,8 @@ function TasksBody({ projectId, name, demo }: { projectId: string; name: string;
   // 固定到左侧栏（docs/ui/files-search-terminal-pins.md §5）
   const pins = usePinnedTasks()
   const pinnedNow = (task: ManualTask): boolean => pins.some(p => p.id === task.id) || (!demo && !!task.pinnedAt)
-  const snapshots = useEngineState(s => s.snapshots),
+  // 只看各会话最新的待办：别的会话在输出时不跟着重算（docs/perf-audit-2026-10-18.md B3）
+  const digests = useSessionDigests(),
     sessions = useEngineState(s => s.sessions)
   useEffect(() => {
     if (demo || !window.pixelsky) return
@@ -129,7 +131,8 @@ function TasksBody({ projectId, name, demo }: { projectId: string; name: string;
       }
     }
     void load()
-    const off = window.pixelsky.projectTools.onChange(() => void load())
+    // 只是服务多了几行输出时不重取（docs/perf-audit-2026-10-18.md B2）
+    const off = window.pixelsky.projectTools.onChange(kind => kind === 'state' && void load())
     return () => {
       stopped = true
       off()
@@ -140,15 +143,15 @@ function TasksBody({ projectId, name, demo }: { projectId: string; name: string;
       plan => demo || sessions.some(session => session.record.id === plan.sessionId && !session.record.archivedAt),
     )
     for (const session of sessions.filter(s => s.record.projectId === projectId && !s.record.archivedAt)) {
-      const item = snapshots[session.record.id]?.items.filter(i => i.kind === 'todo').at(-1)
-      if (!item || item.kind !== 'todo') continue
+      const item = digests[session.record.id]?.todo
+      if (!item) continue
       const next = { sessionId: session.record.id, title: session.record.title, item },
         idx = result.findIndex(p => p.sessionId === next.sessionId)
       if (idx >= 0) result[idx] = next
       else result.push(next)
     }
     return result
-  }, [data.plans, snapshots, sessions, projectId])
+  }, [data.plans, digests, sessions, projectId])
   const matches = (title: string, status: string) =>
     (filter === 'all' || filter === status) && title.toLowerCase().includes(query.toLowerCase())
   const tasks = data.tasks.filter(t => matches([t.title, t.note, ...t.tags].join(' '), t.status))

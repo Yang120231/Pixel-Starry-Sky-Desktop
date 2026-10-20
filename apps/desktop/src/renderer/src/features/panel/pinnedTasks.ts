@@ -55,7 +55,9 @@ export function usePinnedTasks(): ManualTask[] {
     if (isDemo || !window.pixelsky) return
     void reloadPinnedTasks().catch(() => undefined)
     // 任务被改动 / 删除、项目被移除后重新读
-    return window.pixelsky.projectTools.onChange(() => void reloadPinnedTasks().catch(() => undefined))
+    return window.pixelsky.projectTools.onChange(
+      kind => kind === 'state' && void reloadPinnedTasks().catch(() => undefined),
+    )
   }, [machine])
   return useSyncExternalStore(
     fn => {

@@ -19,11 +19,16 @@ export class ProjectTools {
     dir: string,
     host: ToolsHost,
     changed: () => void,
-    opts: { trash?: GitTrash; stopTerminals?: (path: string) => Promise<void> } = {},
+    opts: {
+      trash?: GitTrash
+      stopTerminals?: (path: string) => Promise<void>
+      /** 只是服务多了几行输出（不是状态变化）：单独通知，只有看输出的地方重取（docs/perf-audit-2026-10-18.md B2） */
+      outputChanged?: () => void
+    } = {},
   ) {
     this.tasks = new Tasks(dir, host, changed)
     // 服务和副本互相引用：删除副本前先停它目录里的服务，启动服务前核对副本
-    this.services = new Services(dir, host, changed, (id, path) => this.copies.verifyPath(id, path))
+    this.services = new Services(dir, host, changed, (id, path) => this.copies.verifyPath(id, path), opts.outputChanged)
     this.copies = new Copies(dir, host, changed, async path => {
       await opts.stopTerminals?.(path)
       await this.services.stopPath(path)

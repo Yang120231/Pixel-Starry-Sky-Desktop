@@ -74,7 +74,11 @@ export function toBlocks(items: Item[], running: boolean, cache: ChangesCache, o
     let prev = ''
     for (const item of items) {
       if (!isSubagentWork(item)) prev = item.id
-      else if (completedChange(item)) hiddenChanges.set(prev, [...(hiddenChanges.get(prev) ?? []), item])
+      else if (completedChange(item)) {
+        const list = hiddenChanges.get(prev)
+        if (list) list.push(item)
+        else hiddenChanges.set(prev, [item])
+      }
     }
   }
   const blocks: Block[] = []

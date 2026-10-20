@@ -9,6 +9,7 @@
 // 写入都是同步的小文件操作：保证顺序，量也很小（只在条目开始 / 完成时写，不写流式增量）。
 import {
   appendFileSync,
+  createReadStream,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -18,6 +19,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { join } from 'node:path'
+import { createInterface } from 'node:readline'
 import type {
   EngineDefaults,
   EngineId,
@@ -276,6 +278,31 @@ export class Store {
       tmp = `${file}.tmp`
     writeFileSync(tmp, items.map(item => JSON.stringify(item) + '\n').join(''), 'utf8')
     replaceFile(tmp, file)
+  }
+
+  /**
+   * 只读每轮的统计条目（turn_stats）：后台补录实扣用，流式读、只解析含 turn_stats 的行，
+   * 不把整个对话（可能上百 MB、带图片）读进来解析（docs/perf-audit-2026-10-18.md B8）。同一个 id 取最后一次的内容
+   */
+  async loadTurnStats(sessionId: string): Promise<Extract<Item, { kind: 'turn_stats' }>[]> {
+    const file = join(this.sessionDir(sessionId), 'items.jsonl')
+    if (!existsSync(file)) return []
+    const byId = new Map<string, Extract<Item, { kind: 'turn_stats' }>>()
+    const lines = createInterface({ input: createReadStream(file, { encoding: 'utf8' }), crlfDelay: Infinity })
+    try {
+      for await (const line of lines) {
+        if (!line.includes('"turn_stats"')) continue
+        try {
+          const item = JSON.parse(line) as Item
+          if (item?.kind === 'turn_stats' && typeof item.id === 'string') byId.set(item.id, item)
+        } catch {
+          // 跳过写坏的行
+        }
+      }
+    } catch {
+      // 读到一半出错（文件被删）：用已经读到的
+    }
+    return [...byId.values()]
   }
 
   /** 读出全部条目；同一个 id 出现多次时保留第一次的位置、最后一次的内容 */

@@ -20,8 +20,14 @@ import {
 } from './annotate'
 import { imageBlob } from './images'
 
-/** 标注过的图 → 原图（这次运行期间保留，再次打开时可以「用原图」） */
+/** 标注过的图 → 原图（这次运行期间保留，再次打开时可以「用原图」）；只留最近 10 张，原图可能很大 */
 const originals = new Map<string, ImageAttachment>()
+const MAX_ORIGINALS = 10
+function rememberOriginal(id: string, original: ImageAttachment): void {
+  originals.delete(id)
+  originals.set(id, original)
+  while (originals.size > MAX_ORIGINALS) originals.delete(originals.keys().next().value!)
+}
 
 const TOOLS: { id: Tool; icon: typeof Square; label: 'annotate.box' | 'annotate.arrow' | 'annotate.text' }[] = [
   { id: 'box', icon: Square, label: 'annotate.box' },
@@ -118,7 +124,7 @@ export function ImageAnnotator({
       const blob = await toBlob(c)
       if (blob.size > MAX_IMAGE_BYTES) throw new Error(tr('annotate.tooLarge'))
       const next = await toAttachment(blob, image.name, c.width, c.height)
-      originals.set(next.id, original ?? image)
+      rememberOriginal(next.id, original ?? image)
       onDone(next)
     } catch (err) {
       setError((err as Error).message)

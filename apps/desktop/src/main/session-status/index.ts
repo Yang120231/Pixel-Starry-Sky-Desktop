@@ -1,7 +1,7 @@
 // 侧栏对话状态图标的数据（docs/ui/sidebar-status-icons.md §4）：把 SessionStatusService 接到 Electron 上。
 // 对话列表和事件来自本机引擎宿主（ctx.engine / ctx.hostListeners），窗口获得焦点用 app 的 browser-window-focus。
 import { join } from 'node:path'
-import { app, net } from 'electron'
+import { app, BrowserWindow, net } from 'electron'
 import type { HostEvent } from '@pixelsky/protocol'
 import type { AppContext } from '../app/context'
 import { runGit } from '../core/project-tools/git'
@@ -136,8 +136,12 @@ export async function initSessionStatus(ctx: AppContext): Promise<() => void> {
   service.sessionsChanged()
   folders()
   later(FIRST_PR_MS, prs)
-  const everyFolders = setInterval(folders, FOLDER_EVERY_MS),
-    everyPrs = setInterval(prs, PR_EVERY_MS)
+  // 定时查只在有窗口看得见时做：软件收在托盘、窗口最小化时不起 git / gh（docs/perf-audit-2026-10-18.md D10）；
+  // 窗口回到前台时 onFocus 会补查（超过最小间隔的话）
+  const shown = (): boolean =>
+    BrowserWindow.getAllWindows().some(w => !w.isDestroyed() && w.isVisible() && !w.isMinimized())
+  const everyFolders = setInterval(() => shown() && folders(), FOLDER_EVERY_MS),
+    everyPrs = setInterval(() => shown() && prs(), PR_EVERY_MS)
   everyFolders.unref?.()
   everyPrs.unref?.()
 

@@ -129,6 +129,7 @@ const engine: EngineBridge = {
   openSession: id => call('engine:openSession', id),
   openSessionTail: (id, opts) => call('engine:openSessionTail', id, opts),
   itemDetail: (id, itemId) => call('engine:itemDetail', id, itemId),
+  image: (id, itemId, imageId) => call('engine:image', id, itemId, imageId),
   send: (id, text) => call('engine:send', id, text),
   context: (id, detail) => call('engine:context', id, detail),
   compact: id => call('engine:compact', id),
@@ -334,7 +335,8 @@ const projectTools: ProjectToolsBridge = {
   gitCompare: (ref, kind) => call('projectTools:gitCompare', ref, kind),
   gitHistoryAction: (ref, action) => call('projectTools:gitHistoryAction', ref, action),
   onChange: cb => {
-    const listener = (): void => cb()
+    const listener = (_event: unknown, payload?: { kind?: unknown } | null): void =>
+      cb(payload?.kind === 'output' ? 'output' : 'state')
     on('projectTools:changed', listener)
     return () => ipcRenderer.removeListener('projectTools:changed', listener)
   },

@@ -38,7 +38,8 @@ function start(): void {
   }
   if (!window.pixelsky) return
   void load()
-  stop = window.pixelsky.projectTools.onChange(() => void load())
+  // 只是服务多了几行输出时不重取（docs/perf-audit-2026-10-18.md B2）
+  stop = window.pixelsky.projectTools.onChange(kind => kind === 'state' && void load())
 }
 
 function subscribe(fn: () => void): () => void {

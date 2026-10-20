@@ -1960,6 +1960,10 @@ export const catalog = {
     "zh": "继续编辑",
     "en": "Keep editing"
   },
+  "ui.DiffView.showRest": {
+    "zh": "显示剩余 {n} 行",
+    "en": "Show remaining {n} lines"
+  },
   "ui.ConfirmDialog.discard": {
     "zh": "放弃改动",
     "en": "Discard changes"

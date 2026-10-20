@@ -11,7 +11,7 @@ import { app, BrowserWindow, dialog, net, session, type IpcMainInvokeEvent } fro
 import * as ipc from '../ipc/guard'
 import { nativeText, windowLocale } from '../app/ui-language'
 import { EngineHost } from '@pixelsky/engine'
-import type { HostEvent, SessionRecord } from '@pixelsky/protocol'
+import type { HostEvent, OpenedSession, SessionRecord } from '@pixelsky/protocol'
 import type { AppContext } from '../app/context'
 import { platformCalls, platformCharges, accountCalls, accountSummary } from '../platform/billing'
 import { onAccountChange, signedInEmail } from '../account/account'
@@ -42,6 +42,7 @@ import { machineOf } from '../machines/identity'
 import { initArtifacts } from '../artifacts/ipc'
 import { resolveTerminalTarget, workspaceToolsHost } from '../workspace/resolve'
 import { ENGINE_OPS, addProjectPaths, type EngineOpContext } from '../core/engine/ops'
+import { openedForDesktop } from '../core/engine/desktop-images'
 import { listImportCandidates } from '../core/importProjects'
 import { opEntries, type InvokeName, type OpTable } from '../core/ops'
 import { SearchRegistry } from '../core/search-registry'
@@ -146,9 +147,14 @@ export async function initEngine(ctx: AppContext): Promise<void> {
 
   const handle = (channel: ipc.InvokeChannel, fn: (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown): void => {
     ipc.handle(channel, (event, ...args) => {
-      if (channel.startsWith('engine:') && ctx.machines)
-        return ctx.machines.invoke(channel, args, () => fn(event, ...args))
-      return fn(event, ...args)
+      const result =
+        channel.startsWith('engine:') && ctx.machines
+          ? ctx.machines.invoke(channel, args, () => fn(event, ...args))
+          : fn(event, ...args)
+      // 桌面界面打开会话：快照里不带图片原图（远端机器的也一样；手机经 engineCall 拿完整的，docs/perf-audit-2026-10-18.md B1）
+      if (channel === 'engine:openSession')
+        return Promise.resolve(result).then(opened => openedForDesktop(opened as OpenedSession))
+      return result
     })
   }
 

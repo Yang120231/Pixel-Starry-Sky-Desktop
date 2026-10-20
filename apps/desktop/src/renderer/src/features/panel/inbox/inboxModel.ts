@@ -42,7 +42,10 @@ export function laneOf(summary: SessionSummary): InboxLane | null {
   return null
 }
 
-export function signatureOf(lane: InboxLane, summary: SessionSummary, snapshot: SessionSnapshot | undefined): string {
+/** 只用到快照里等你批准的请求（useInbox 传的是 sessionDigest 的摘要） */
+type PendingOf = Pick<SessionSnapshot, 'pending'>
+
+export function signatureOf(lane: InboxLane, summary: SessionSummary, snapshot: PendingOf | undefined): string {
   const at = summary.record.updatedAt
   if (lane === 'waiting')
     return 'w:' + (snapshot?.pending.length ? snapshot.pending.map(p => p.requestId).join(',') : at)
@@ -56,7 +59,7 @@ export function signatureOf(lane: InboxLane, summary: SessionSummary, snapshot: 
  */
 export function buildInbox(input: {
   sessions: readonly SessionSummary[]
-  snapshots: Readonly<Record<string, SessionSnapshot>>
+  snapshots: Readonly<Record<string, PendingOf>>
   projects: readonly ProjectRecord[]
   onMachine: (sessionId: string) => boolean
   dismissed: Readonly<Record<string, string>>

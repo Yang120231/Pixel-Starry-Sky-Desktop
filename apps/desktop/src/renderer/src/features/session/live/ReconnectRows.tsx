@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { Check, RotateCw } from 'lucide-react'
 import type { Item } from '@pixelsky/protocol'
 import { bridge } from '@/features/engine'
+import { fullImages } from '../attachments/imageSource'
 
 type UserItem = Extract<Item, { kind: 'user' }>
 
@@ -41,10 +42,12 @@ export function DismissedNote({ item, sessionId }: { item: UserItem; sessionId?:
     setBusy(true)
     setError(null)
     try {
+      // 对话里的图片不带数据：重发前按需取原图（attachments/imageSource.ts）
+      const attachments = item.attachments?.length ? await fullImages(item.attachments, sessionId, item.id) : []
       await bridge.send(sessionId, {
         text: item.text,
         clientMessageId: crypto.randomUUID(),
-        ...(item.attachments?.length ? { attachments: item.attachments } : {}),
+        ...(attachments.length ? { attachments } : {}),
         ...(item.files?.length ? { files: item.files } : {}),
       })
     } catch (e) {

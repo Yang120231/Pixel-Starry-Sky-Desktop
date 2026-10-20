@@ -2,6 +2,7 @@
 // 演示模式用 mock/inbox.ts，操作只改内存。
 import { useMemo, useSyncExternalStore } from 'react'
 import { useEngineState } from '@/features/engine'
+import { useSessionDigests } from '@/features/engine/sessionDigest'
 import { machineOf, useMachines } from '@/features/machines/store'
 import { isDemo } from '@/data'
 import { buildInbox, type InboxItem } from './inboxModel'
@@ -56,7 +57,8 @@ export function resolveDemoInbox(sessionId: string): void {
 
 export function useInbox(): InboxItem[] {
   const sessions = useEngineState(s => s.sessions)
-  const snapshots = useEngineState(s => s.snapshots)
+  // 只看等你批准的请求：别的会话在输出时不跟着重算（docs/perf-audit-2026-10-18.md B3）
+  const snapshots = useSessionDigests()
   const projects = useEngineState(s => s.projects)
   const machine = useMachines().currentId
   const marks = useSyncExternalStore(subscribe, () => dismissed)

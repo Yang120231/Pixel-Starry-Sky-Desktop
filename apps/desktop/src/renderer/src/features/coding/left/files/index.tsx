@@ -22,9 +22,15 @@ function useRefreshKey(sessionId: string | null, visible: boolean): number {
     if (previous.current === 'running' && state !== 'running') setKey(k => k + 1)
     previous.current = state
   }, [state])
+  // 切回窗口时刷新，但 10 秒内只刷一次：每次 Alt-Tab 都整棵重读、跑好几条 git（docs/perf-audit-2026-10-18.md B5）
+  const lastFocus = useRef(0)
   useEffect(() => {
     if (!visible) return
-    const onFocus = (): void => setKey(k => k + 1)
+    const onFocus = (): void => {
+      if (Date.now() - lastFocus.current < 10_000) return
+      lastFocus.current = Date.now()
+      setKey(k => k + 1)
+    }
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
   }, [visible])

@@ -1,7 +1,8 @@
 // 会话在任务看板 / 底部运行状态胶囊里算哪一类（docs/ui/task-board.md §2.1、§7）。纯函数，不依赖 window。
 // 等你批准 / 出错 / 已暂停直接用「待处理」的结果（含「标记已处理」），三处数字始终一致；
 // 剩下的会话里，真在跑的算「运行中」，有新回复没看的算「新回复」（也是在等你）。
-import type { ApprovalRequest, QueueSummary, SessionSnapshot, SessionSummary } from '@pixelsky/protocol'
+import type { ApprovalRequest, QueueSummary, SessionSummary } from '@pixelsky/protocol'
+import type { SessionDigest } from '@/features/engine/sessionDigest'
 import type { InboxItem } from '@/features/panel/inbox/inboxModel'
 
 export type SessionLane = 'waiting' | 'failed' | 'paused' | 'unread' | 'running'
@@ -30,10 +31,10 @@ export interface SessionCard {
 export const isRunning = (s: SessionSummary): boolean =>
   (s.state !== 'idle' && s.state !== 'waiting') || (s.state === 'idle' && !!s.background)
 
-/** 会话快照里最新的待办清单进度 */
-export function progressOf(snapshot: SessionSnapshot | undefined): SessionCard['progress'] {
-  const todo = snapshot?.items.findLast(item => item.kind === 'todo')
-  if (!todo || todo.kind !== 'todo' || !todo.steps.length) return null
+/** 会话最新的待办清单进度（sessionDigest 里已经找好最新的那条） */
+export function progressOf(digest: Pick<SessionDigest, 'todo'> | undefined): SessionCard['progress'] {
+  const todo = digest?.todo
+  if (!todo || !todo.steps.length) return null
   return { done: todo.steps.filter(s => s.status === 'completed').length, total: todo.steps.length }
 }
 
@@ -43,7 +44,7 @@ const order = (a: SessionCard, b: SessionCard): number =>
 /** 当前机器上要上看板 / 胶囊的会话（sessions 已经按机器筛过）；不含归档、做完看过的 */
 export function sessionCards(input: {
   sessions: readonly SessionSummary[]
-  snapshots: Readonly<Record<string, SessionSnapshot>>
+  snapshots: Readonly<Record<string, Pick<SessionDigest, 'todo'>>>
   projectNames: Readonly<Record<string, string>>
   unread: Readonly<Record<string, boolean>>
   /** 「待处理」的结果（useInbox）：等你批准 / 出错 / 已暂停 */

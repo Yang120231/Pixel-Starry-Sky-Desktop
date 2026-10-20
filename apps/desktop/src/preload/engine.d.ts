@@ -98,6 +98,8 @@ export interface EngineBridge {
   ): Promise<import('../shared/types/mobile').SessionTail>
   /** 一条的完整内容；会话或条目不存在时为 null */
   itemDetail(id: string, itemId: string): Promise<import('../shared/types/mobile').ItemDetail | null>
+  /** 一张图的原图：桌面界面的快照里图片不带数据，显示、复制、重发时按需取；找不到为 null */
+  image(id: string, itemId: string, imageId: string): Promise<import('@pixelsky/protocol').ImageAttachment | null>
   send(id: string, input: string | MessageInput): Promise<SendReceipt>
   /** summary：最近请求加本地估算，不调接口；full（默认）：调 Token 计数接口 */
   context(

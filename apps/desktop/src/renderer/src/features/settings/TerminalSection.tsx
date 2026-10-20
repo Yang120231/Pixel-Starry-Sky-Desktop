@@ -11,13 +11,42 @@ import {
   terminalSetEncoding,
   useTerminalStore,
 } from '@/features/terminal/store'
-import { SectionTitle, SettingRow } from './SettingRow'
+import { SectionTitle, SettingRow, Toggle } from './SettingRow'
+import {
+  SCROLLBACK_CHOICES,
+  setTerminalScreenReader,
+  setTerminalScrollback,
+  useTerminalPrefs,
+  type ScrollbackChoice,
+} from '@/features/terminal/prefs'
 import { useSettings } from './SettingsProvider'
 import type { TerminalEncoding, TerminalProfile } from '../../../../shared/types/terminal'
 import { isDemo } from '@/data'
 import { translateMessage } from '@/i18n/core'
 import { useMachines } from '@/features/machines/store'
 import { useUnsavedCheck } from './unsavedEdits'
+
+/** 回滚行数、读屏支持（本机设置，SSH 机器上的终端也用） */
+function TerminalViewPrefs() {
+  const { t } = useI18n()
+  const prefs = useTerminalPrefs()
+  return (
+    <>
+      <SettingRow title={t('terminal.scrollback')} description={t('terminal.scrollbackHint')}>
+        <Select<ScrollbackChoice>
+          label={t('terminal.scrollback')}
+          value={prefs.scrollback}
+          fitContent
+          options={SCROLLBACK_CHOICES.map(n => ({ value: n, label: t('terminal.scrollbackLines', { n }) }))}
+          onChange={setTerminalScrollback}
+        />
+      </SettingRow>
+      <SettingRow title={t('terminal.screenReader')} description={t('terminal.screenReaderHint')}>
+        <Toggle label={t('terminal.screenReader')} checked={prefs.screenReader} onChange={setTerminalScreenReader} />
+      </SettingRow>
+    </>
+  )
+}
 
 export function TerminalSection() {
   const machines = useMachines()
@@ -74,6 +103,7 @@ export function TerminalSection() {
       <section>
         <SectionTitle>{t('terminal.settings')}</SectionTitle>
         <p className="text-ui text-fg-muted">{t('SSH_SHELL_MANAGED_REMOTELY')}</p>
+        <TerminalViewPrefs />
       </section>
     )
   return (
@@ -119,6 +149,7 @@ export function TerminalSection() {
           />
         </SettingRow>
       )}
+      <TerminalViewPrefs />
       <div className="space-y-2">
         {state.profiles.map(p => (
           <div key={p.id} className="rounded-md border border-line px-3 py-2">

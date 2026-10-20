@@ -504,6 +504,12 @@ export function parseIgnoredOutput(out: string): string[] {
 }
 
 /**
+ * 文件树的 git 查询只读：不抢 index.lock（AI 同时在跑 git 时不会让它失败），不弹凭据框
+ * （docs/perf-audit-2026-10-18.md B5）
+ */
+const quietGit = (): NodeJS.ProcessEnv => ({ ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0' })
+
+/**
  * 被 .gitignore 等规则忽略的路径（相对 cwd）。不能加 --no-empty-directory：它会丢掉「没被忽略的未跟踪目录」里的被忽略文件。
  * 任何失败都返回 []（不是仓库、超时，或 git 报「directory entry not superset of prefix」——文件夹在上层仓库的忽略目录里时会这样）
  */
@@ -525,7 +531,7 @@ function gitIgnored(cwd: string): Promise<string[]> {
         '--',
         '.',
       ],
-      { windowsHide: true, timeout: 4000, maxBuffer: 4 * 1024 * 1024, encoding: 'utf8' },
+      { windowsHide: true, timeout: 4000, maxBuffer: 4 * 1024 * 1024, encoding: 'utf8', env: quietGit() },
       (err, output) => resolveIgnored(err ? [] : parseIgnoredOutput(output)),
     )
   })
@@ -547,7 +553,7 @@ function gitStatus(cwd: string): Promise<Record<string, string>> {
         '--',
         '.',
       ],
-      { windowsHide: true, timeout: 4000, maxBuffer: 1024 * 1024, encoding: 'utf8' },
+      { windowsHide: true, timeout: 4000, maxBuffer: 1024 * 1024, encoding: 'utf8', env: quietGit() },
       async (err, output) => {
         if (err) {
           resolveStatus({})

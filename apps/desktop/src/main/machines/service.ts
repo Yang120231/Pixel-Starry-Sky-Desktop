@@ -380,7 +380,9 @@ export class Machines {
           this.hostEvent(message)
         } else if (!['engines', 'engine_config'].includes(message.kind) || this.currentId === id)
           this.broadcast(channel, message)
-      } else if (channel === 'projectTools:changed') this.broadcast(channel, null)
+      } else if (channel === 'projectTools:changed')
+        // 只是服务输出变了（{ kind: 'output' }）照原样转，别的面板靠它跳过重取
+        this.broadcast(channel, (raw as { kind?: unknown } | null)?.kind === 'output' ? { kind: 'output' } : null)
     }
     state.projects = await this.call(id, 'engine:projects', [])
     state.sessions = await this.call(id, 'engine:sessions', [])

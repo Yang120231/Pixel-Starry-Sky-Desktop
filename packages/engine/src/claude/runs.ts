@@ -439,8 +439,30 @@ export function transcriptItems(rows: readonly Msg[], cwd: string, opts: Transcr
 }
 
 /** 读一个子智能体的对话，转成条目（只读显示用） */
+/**
+ * 追踪面板运行中每 2.5 秒取一次：文件没变（大小、修改时间都一样）就用上次解析的结果，
+ * 不再每次同步整读、整解析（docs/perf-audit-2026-10-18.md B7）。只留最近几个
+ */
+const transcripts = new Map<string, { size: number; mtimeMs: number; items: Item[] }>()
+const TRANSCRIPT_CACHE = 8
+
 export function loadSubagentTranscript(sessionDir: string, agentId: string, cwd: string): Item[] {
   const file = agentFile(sessionDir, agentId)
   if (!file) throw new Error('这个子智能体还没有保存会话')
-  return transcriptItems(readRows(file), cwd, { task: true, limit: TRANSCRIPT_ITEMS })
+  const key = `${file}|${cwd}`
+  let stat: { size: number; mtimeMs: number } | null = null
+  try {
+    stat = statSync(file)
+  } catch {
+    // 读不到就按没缓存处理，下面 readRows 会给出原因
+  }
+  const hit = transcripts.get(key)
+  if (stat && hit && hit.size === stat.size && hit.mtimeMs === stat.mtimeMs) return hit.items
+  const items = transcriptItems(readRows(file), cwd, { task: true, limit: TRANSCRIPT_ITEMS })
+  if (stat) {
+    transcripts.delete(key)
+    transcripts.set(key, { size: stat.size, mtimeMs: stat.mtimeMs, items })
+    while (transcripts.size > TRANSCRIPT_CACHE) transcripts.delete(transcripts.keys().next().value!)
+  }
+  return items
 }

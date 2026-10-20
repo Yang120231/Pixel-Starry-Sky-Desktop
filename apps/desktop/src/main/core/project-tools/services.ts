@@ -130,6 +130,8 @@ export class Services {
     private host: ToolsHost,
     private changed: () => void,
     private validateWorkspace: (id: string, path: string) => Promise<void> = async () => {},
+    /** 只有输出变了时调它（没给就当状态变化），副本、任务、Git、手机工具页不用跟着重取 */
+    private outputChanged: () => void = changed,
   ) {
     this.store = new JsonStore(join(dir, 'services.json'), { version: 1, services: [] })
   }
@@ -291,7 +293,7 @@ export class Services {
         const text = decoder.write(chunk)
         if (text) {
           s.output = (s.output + redact(text, secrets)).slice(-24_000)
-          this.changed()
+          this.outputChanged()
         }
       }
     child.stdout?.on('data', update(runtime.decoders.stdout))
