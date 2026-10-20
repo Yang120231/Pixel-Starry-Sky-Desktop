@@ -10,6 +10,7 @@ import type {
 import type { EngineConfig, EngineInfo, EngineJob, EngineLogin } from './engine'
 import type { CacheWarning, CompactionProgress, RequestCacheUsage, RequestRetryState, TurnUsage, Usage } from './usage'
 import type { Item } from './item'
+import type { EngineAccounts } from './accounts'
 import type { ApprovalRequest } from './approval'
 import type { AgentRuns, BackgroundTask, SubagentStatus } from './agents'
 
@@ -138,5 +139,7 @@ export type HostEvent =
   | { kind: 'native_import'; token: string; read: number; total: number }
   /** 引擎授权登录的进度（设置 › 模型通道） */
   | { kind: 'engine_login'; login: EngineLogin }
+  /** 订阅账号列表变了（添加、切换、移除、自动切换，docs/ui/engine-accounts.md） */
+  | { kind: 'engine_accounts'; accounts: EngineAccounts }
   /** 写入了新的用量记录（或清空了），用量页据此刷新 */
   | { kind: 'usage_recorded' }

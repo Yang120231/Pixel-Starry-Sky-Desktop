@@ -75,6 +75,8 @@ import {
 import { pinNewTask } from '@/features/model-channels/newTaskDefault'
 import { openAuthDialog } from '@/features/model-channels/authDialogStore'
 import { useChannelEngines } from '@/features/model-channels/loginStore'
+import { openAccountsPage, useAccounts } from '@/features/model-channels/accountsStore'
+import { AccountPickList } from '@/features/model-channels/AccountsUI'
 import { MenuRow, TRIGGER } from './ComposerMenus'
 import { QuotaInline } from './quota/QuotaInline'
 
@@ -154,6 +156,10 @@ export function ModelSourceMenu({
   const trigger = useRef<HTMLButtonElement>(null)
   const list = useRef<HTMLDivElement>(null)
   const [fit, setFit] = useState({ height: 420, cols: true })
+  // ChatGPT 账号行的「切换账号」：存了的账号列成子菜单（docs/ui/engine-accounts.md §6）；远程机器上为 null，还是去设置
+  const codexAccounts = useAccounts('codex')
+  const [accountMenu, setAccountMenu] = useState(false)
+  const accountAnchor = useRef<HTMLButtonElement>(null)
   // 菜单向上弹出，最高只到裁剪它的容器（窗格）顶部，不能按窗口顶部算：
   // 窗格在顶栏下面（分屏时可能更低），按窗口算时长菜单的上半截会被窗格裁掉。
   // 两栏也按窗格算：窗格放不下 540px（两边各留 8px）时按标签页显示；菜单横向挪进窗格里（Popover within）。
@@ -459,13 +465,54 @@ export function ModelSourceMenu({
             </>
           )}
         </span>
-        <button
-          type="button"
-          onClick={onClick}
-          className="shrink-0 rounded px-1.5 py-0.5 text-label text-fg-muted hover:bg-hover hover:text-fg"
-        >
-          {label}
-        </button>
+        {c === 'chatgpt' && codexAccounts ? (
+          <>
+            <button
+              ref={accountAnchor}
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={accountMenu}
+              data-account-switch
+              onClick={() => setAccountMenu(v => !v)}
+              className={cn(
+                'flex shrink-0 items-center gap-0.5 rounded px-1.5 py-0.5 text-label text-fg-muted hover:bg-hover hover:text-fg',
+                accountMenu && 'bg-selected text-fg',
+              )}
+            >
+              {label}
+              <ChevronRight size={12} strokeWidth={1.75} />
+            </button>
+            <Popover
+              open={accountMenu}
+              onClose={() => setAccountMenu(false)}
+              anchor={accountAnchor}
+              side="right"
+              align="start"
+              offset={8}
+              className="w-72"
+              role="menu"
+            >
+              <AccountPickList
+                engine="codex"
+                onDone={() => setAccountMenu(false)}
+                onManage={() => {
+                  setAccountMenu(false)
+                  openAccountsPage('chatgpt')
+                  openChannels()
+                }}
+                footer={<p className="px-2 pt-1.5 pb-1 text-label text-fg-faint">{tr('accounts.menuHint')}</p>}
+              />
+            </Popover>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={onClick}
+            className="shrink-0 rounded px-1.5 py-0.5 text-label text-fg-muted hover:bg-hover hover:text-fg"
+          >
+            {label}
+          </button>
+        )}
       </div>
     )
   }

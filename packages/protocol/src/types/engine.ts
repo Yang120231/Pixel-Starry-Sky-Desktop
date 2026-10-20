@@ -232,6 +232,8 @@ export interface EngineLogin {
   /** 输出的最后一行（去掉颜色） */
   line: string | null
   error: string | null
+  /** 登录的是哪个订阅账号（docs/ui/engine-accounts.md）：add 是添加新账号，账号 id 是重新登录那个账号；没有是当前账号 */
+  target?: 'add' | string
 }
 
 export interface EngineUpdateResult {

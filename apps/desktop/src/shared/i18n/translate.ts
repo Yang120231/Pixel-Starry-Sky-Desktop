@@ -46,6 +46,7 @@ import { subagentMessages } from './subagentMessages'
 import { subagentStopMessages } from './subagentStopMessages'
 import { subagentRouteMessages } from './subagentRouteMessages'
 import { connectorsMessages } from './connectorsMessages'
+import { accountMessages } from './accountMessages'
 import { progressLineMessages } from './progressLineMessages'
 import { traceHistoryMessages } from './traceHistoryMessages'
 import { wslMessages } from './wslMessages'
@@ -118,6 +119,7 @@ export const allMessages = {
   ...subagentStopMessages,
   ...subagentRouteMessages,
   ...connectorsMessages,
+  ...accountMessages,
   ...progressLineMessages,
   ...traceHistoryMessages,
   ...extensionCenterMessages,

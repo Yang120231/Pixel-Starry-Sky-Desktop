@@ -11,7 +11,21 @@ import type {
   SideTurn,
 } from '@pixelsky/protocol'
 import type { SessionPatch } from '../../../shared/types/engine'
-import { artifactRef, engineConfigPatch, engineId, int, mcpOp, str, usageListQuery, usageQuery, value } from '../args'
+import {
+  accountAuto,
+  accountId,
+  accountPatch,
+  artifactRef,
+  engineConfigPatch,
+  engineId,
+  int,
+  loginMethod,
+  mcpOp,
+  str,
+  usageListQuery,
+  usageQuery,
+  value,
+} from '../args'
 import type { OpTable } from '../ops'
 import type { ToolsHost } from '../project-tools/common'
 import type { SearchRegistry } from '../search-registry'
@@ -161,6 +175,16 @@ export const ENGINE_OPS = {
   },
   'engine:loginCancel': (c, engine) => c.host.cancelLogin(engineId(engine)),
   'engine:logout': (c, engine) => c.host.logoutEngine(engineId(engine)),
+  'engine:accounts': (c, engine) => c.host.accounts(engineId(engine)),
+  'engine:accountsQuota': (c, engine, force) => c.host.accountsQuota(engineId(engine), force === true),
+  'engine:accountAdd': (c, engine, method) => c.host.addAccount(engineId(engine), loginMethod(method)),
+  'engine:accountRelogin': (c, engine, id, method) =>
+    c.host.reloginAccount(engineId(engine), accountId(id), loginMethod(method)),
+  'engine:accountSwitch': (c, engine, id) => c.host.switchAccount(engineId(engine), accountId(id)),
+  'engine:accountRemove': (c, engine, id) => c.host.removeAccount(engineId(engine), accountId(id)),
+  'engine:accountUpdate': (c, engine, id, patch) =>
+    c.host.updateAccount(engineId(engine), accountId(id), accountPatch(patch)),
+  'engine:accountAuto': (c, engine, patch) => c.host.setAccountAuto(engineId(engine), accountAuto(patch)),
   'engine:retrySettings': c => c.host.retrySettings(),
   'engine:setRetrySettings': (c, maxRetries) => c.host.setRetrySettings(maxRetries as number),
   'engine:projects': c => c.host.projects(),

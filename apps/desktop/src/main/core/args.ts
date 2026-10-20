@@ -2,7 +2,16 @@
 import { isAbsolute } from 'node:path'
 import type { UsageQuery } from '@pixelsky/engine'
 import { COST_MISSING, COST_STATES } from '@pixelsky/protocol'
-import type { EngineConfigPatch, EngineId, McpOp, UsageDimension, UsageFilter, UsageRangeId } from '@pixelsky/protocol'
+import type {
+  AccountAutoSwitch,
+  AccountPatch,
+  EngineConfigPatch,
+  EngineId,
+  McpOp,
+  UsageDimension,
+  UsageFilter,
+  UsageRangeId,
+} from '@pixelsky/protocol'
 
 export { value } from './project-tools/common'
 
@@ -20,6 +29,49 @@ export function int(v: unknown, fallback: number, max: number): number {
 export function engineId(v: unknown): EngineId {
   if (v !== 'claude' && v !== 'codex' && v !== 'pixel') throw new Error('未知引擎')
   return v
+}
+
+/** 登录方式：浏览器（默认）/ 设备码 */
+export function loginMethod(v: unknown): 'browser' | 'device' | undefined {
+  if (v !== undefined && v !== 'browser' && v !== 'device') throw new Error('登录方式不对')
+  return v
+}
+
+/** 订阅账号 id（docs/ui/engine-accounts.md）：default 或 a_ 加 12 位十六进制 */
+export function accountId(v: unknown): string {
+  if (typeof v !== 'string' || !/^(default|a_[a-f0-9]{12})$/.test(v)) throw new Error('账号不对')
+  return v
+}
+
+/** 改账号：备注、上移；别的字段丢掉 */
+export function accountPatch(v: unknown): AccountPatch {
+  const o = v && typeof v === 'object' ? (v as Record<string, unknown>) : {}
+  const out: AccountPatch = {}
+  if (o.label !== undefined) {
+    if (o.label !== null && (typeof o.label !== 'string' || o.label.length > 200)) throw new Error('备注不对')
+    out.label = o.label
+  }
+  if (o.move !== undefined) {
+    if (o.move !== 'up') throw new Error('参数 move 不对')
+    out.move = 'up'
+  }
+  return out
+}
+
+/** 自动换账号的设置：只收认得的字段 */
+export function accountAuto(v: unknown): Partial<AccountAutoSwitch> {
+  const o = v && typeof v === 'object' ? (v as Record<string, unknown>) : {}
+  const out: Partial<AccountAutoSwitch> = {}
+  for (const key of ['enabled', 'switchBack', 'notice'] as const)
+    if (o[key] !== undefined) {
+      if (typeof o[key] !== 'boolean') throw new Error(`参数 ${key} 不对`)
+      out[key] = o[key]
+    }
+  if (o.order !== undefined) {
+    if (o.order !== 'list' && o.order !== 'most') throw new Error('参数 order 不对')
+    out.order = o.order
+  }
+  return out
 }
 
 /**

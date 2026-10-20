@@ -198,7 +198,13 @@ export class HostSettings {
 
   /** 启动进程要用到的全部引擎级设置；和进程启动时的不同，就在下一条消息前重启进程（--resume 接上原对话） */
   launchKey(engine: EngineId): string {
-    return JSON.stringify([this.file.paths[engine] ?? null, this.file.env[engine] ?? {}, this.launchOptions(engine)])
+    // 订阅账号换了（docs/ui/engine-accounts.md）也要换进程：CODEX_HOME 不同
+    return JSON.stringify([
+      this.file.paths[engine] ?? null,
+      this.file.env[engine] ?? {},
+      this.launchOptions(engine),
+      this.ctx.m.accounts.currentId(engine),
+    ])
   }
 
   /**

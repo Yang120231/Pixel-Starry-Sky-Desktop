@@ -127,6 +127,15 @@ export class Store {
     return join(this.dir, 'sessions', id)
   }
 
+  /** 订阅账号（docs/ui/engine-accounts.md）：用户可改的 JSON，读的一方再校验 */
+  loadAccounts(): unknown {
+    return readJson<unknown>(join(this.dir, 'engine-accounts.json'))
+  }
+
+  saveAccounts(data: unknown): void {
+    writeJson(join(this.dir, 'engine-accounts.json'), data)
+  }
+
   loadProjects(): ProjectRecord[] {
     const data = readJson<{ projects?: ProjectRecord[] }>(join(this.dir, 'projects.json'))
     return Array.isArray(data?.projects) ? data.projects : []

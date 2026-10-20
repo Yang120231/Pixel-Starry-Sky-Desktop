@@ -199,22 +199,32 @@ export class HostQueue {
    * - 次数按当前设置算（0 是关闭）；这一轮有过输出就从头算，否则接着上次累加；
    *   累计（total）超过当前 max 的 3 倍也不再重连，上游每次出几个字就断的话不能一直「继续」。
    */
-  reconnect(id: string, queueId: string, error: string | null, generation?: number): boolean {
+  reconnect(
+    id: string,
+    queueId: string,
+    error: string | null,
+    generation?: number,
+    opts: { account?: boolean } = {},
+  ): boolean {
     const { ctx } = this
     const rt = ctx.runtimes.get(id)
     if (!rt || ctx.closing || rt.snapshot.queuePaused || rt.stopping) return false
     if (generation !== undefined && generation !== rt.generation) return false
     const item = rt.snapshot.queue.find(q => q.id === queueId)
     if (!item || item.mode !== 'normal' || item.text.trimStart().startsWith('/')) return false
-    const kind = connectionKind(error)
-    if (kind === null || (kind === 'exit' && !item.delivered)) return false
-    if (rt.turn?.engineRetried) return false
+    // 换了订阅账号再发（docs/ui/engine-accounts.md §5）：不是连接问题，不看错误种类和重连次数，马上派发
+    const account = opts.account === true
+    if (!account) {
+      const kind = connectionKind(error)
+      if (kind === null || (kind === 'exit' && !item.delivered)) return false
+      if (rt.turn?.engineRetried) return false
+    }
     const max = reconnectLimit(ctx.m.settings.file.maxRetries)
-    const attempt = rt.turn?.progressed ? 1 : (item.reconnect?.attempt ?? 0) + 1
+    const attempt = account || rt.turn?.progressed ? 1 : (item.reconnect?.attempt ?? 0) + 1
     const total = (item.reconnect ? reconnectTotal(item.reconnect) : 0) + 1
-    if (max <= 0 || attempt > max || total > max * RECONNECT_TOTAL_FACTOR) return false
+    if (!account && (max <= 0 || attempt > max || total > max * RECONNECT_TOTAL_FACTOR)) return false
     const now = Date.now()
-    const delay = ctx.opts.reconnectDelays?.[attempt - 1] ?? reconnectDelay(attempt)
+    const delay = account ? 0 : (ctx.opts.reconnectDelays?.[attempt - 1] ?? reconnectDelay(attempt))
     const next: QueuedMessage = {
       ...item,
       status: 'queued',
@@ -229,6 +239,7 @@ export class HostQueue {
         at: now + delay,
         reason: (error ?? '').split('\n')[0].slice(0, 300),
         ...(item.delivered ? {} : { resend: true }),
+        ...(account ? { account: true } : {}),
       },
     }
     rt.snapshot = { ...rt.snapshot, queue: [next, ...rt.snapshot.queue.filter(q => q.id !== queueId)] }
@@ -246,7 +257,10 @@ export class HostQueue {
   reconnectPlan(id: string, item: QueuedMessage): ReconnectPlan {
     if (!item.reconnect) return { kind: 'normal' }
     const max = reconnectLimit(this.ctx.m.settings.file.maxRetries)
-    if (item.reconnect.attempt > max || reconnectTotal(item.reconnect) > max * RECONNECT_TOTAL_FACTOR)
+    if (
+      (!item.reconnect.account && item.reconnect.attempt > max) ||
+      reconnectTotal(item.reconnect) > max * RECONNECT_TOTAL_FACTOR
+    )
       return { kind: 'fail', error: item.reconnect.reason || '连接中断' }
     const original = item.messageUuid
       ? this.ctx.m.sessions.runtime(id).snapshot.items.find(i => i.id === item.messageUuid && i.kind === 'user')

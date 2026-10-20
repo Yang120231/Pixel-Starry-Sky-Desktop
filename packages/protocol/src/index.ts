@@ -1,4 +1,10 @@
 export type {
+  AccountAutoSwitch,
+  AccountEngine,
+  AccountPatch,
+  EngineAccount,
+  EngineAccountQuota,
+  EngineAccounts,
   AgentRun,
   AgentRuns,
   AlwaysScope,
@@ -90,6 +96,7 @@ export type {
   Usage,
   WorkflowRun,
 } from './types'
+export { DEFAULT_ACCOUNT } from './types'
 export type {
   BillingSource,
   CallClient,

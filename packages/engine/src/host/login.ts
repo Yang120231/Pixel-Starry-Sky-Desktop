@@ -18,6 +18,13 @@ interface Running {
   finished: boolean
 }
 
+/** 登录到某个订阅账号（docs/ui/engine-accounts.md）：用哪个命令登录、成功后怎么核对（返回错误文字，null 是成功） */
+export interface LoginTarget {
+  target: 'add' | string
+  login(method: 'browser' | 'device', onLine: (line: string) => void): Promise<LoginProcess>
+  verify(): Promise<string | null>
+}
+
 /** 一行输出里的授权信息；Pixel 没有登录命令 */
 function parseLine(engine: EngineId, line: string): { url?: string; userCode?: string; awaitingCode?: boolean } {
   if (engine === 'claude') return parseClaudeLogin(line)
@@ -30,11 +37,12 @@ export class HostLogin {
 
   constructor(private readonly ctx: HostContext) {}
 
-  loginEngine(engine: EngineId, method: 'browser' | 'device' = 'browser'): EngineLogin {
+  loginEngine(engine: EngineId, method: 'browser' | 'device' = 'browser', account?: LoginTarget): EngineLogin {
     const busy = this.running.get(engine)
     if (busy) return busy.state
     const adapter = this.ctx.adapters[engine]
     if (!adapter?.login) throw new Error('这个引擎不支持在应用里登录')
+    const login = account ? account.login : adapter.login.bind(adapter)
     const run: Running = {
       state: {
         engine,
@@ -46,6 +54,7 @@ export class HostLogin {
         awaitingCode: false,
         line: null,
         error: null,
+        ...(account ? { target: account.target } : {}),
       },
       proc: null,
       sentAt: 0,
@@ -55,7 +64,7 @@ export class HostLogin {
     this.running.set(engine, run)
     this.emit(run, run.state, true)
     const first = run.state
-    void this.start(run, adapter.login.bind(adapter))
+    void this.start(run, login, account?.verify)
     return first
   }
 
@@ -105,6 +114,7 @@ export class HostLogin {
   private async start(
     run: Running,
     login: (method: 'browser' | 'device', onLine: (line: string) => void) => Promise<LoginProcess>,
+    verify?: () => Promise<string | null>,
   ): Promise<void> {
     const { engine, method } = run.state
     let proc: LoginProcess
@@ -132,6 +142,16 @@ export class HostLogin {
       return
     }
     this.emit(run, { ...run.state, phase: 'verify' }, true)
+    if (verify) {
+      try {
+        const error = await verify()
+        if (run.finished) return
+        this.finish(run, error ? { phase: 'failed', error } : { phase: 'done' })
+      } catch (err) {
+        this.finish(run, { phase: 'failed', error: (err as Error).message })
+      }
+      return
+    }
     try {
       const info = (await this.ctx.m.settings.engines(true)).find(e => e.id === engine)
       if (run.finished) return

@@ -1,7 +1,11 @@
 // 引擎系统：主进程、预加载脚本、渲染进程共用的接口类型。规格见 docs/engines.md §5.1
 
 import type {
+  AccountAutoSwitch,
+  AccountPatch,
   ApprovalDecision,
+  EngineAccountQuota,
+  EngineAccounts,
   EngineCatalog,
   EngineConfig,
   EngineConfigPatch,
@@ -54,6 +58,17 @@ export interface EngineBridge {
   cancelLogin(engine: EngineId): Promise<void>
   /** 取消授权（claude auth logout / codex logout），结束后重新检测 */
   logoutEngine(engine: EngineId): Promise<EngineUpdateResult>
+  /** 订阅账号多开（docs/ui/engine-accounts.md）：列表变了看 engine:event 的 engine_accounts */
+  accounts(engine: EngineId): Promise<EngineAccounts>
+  /** 各账号的额度（缓存 60 秒，force 重新读） */
+  accountsQuota(engine: EngineId, force?: boolean): Promise<EngineAccountQuota[]>
+  /** 添加账号：登录进度看 engine_login（target 'add'） */
+  addAccount(engine: EngineId, method?: 'browser' | 'device'): Promise<EngineLogin>
+  reloginAccount(engine: EngineId, id: string, method?: 'browser' | 'device'): Promise<EngineLogin>
+  switchAccount(engine: EngineId, id: string): Promise<EngineAccounts>
+  removeAccount(engine: EngineId, id: string): Promise<EngineAccounts>
+  updateAccount(engine: EngineId, id: string, patch: AccountPatch): Promise<EngineAccounts>
+  setAccountAuto(engine: EngineId, patch: Partial<AccountAutoSwitch>): Promise<EngineAccounts>
   retrySettings(): Promise<{ maxRetries: number | null }>
   /** 系统代理补给本机引擎的状态（会重新查一次系统代理） */
   systemProxy(): Promise<import('../shared/types/system-proxy').SystemProxyStatus>

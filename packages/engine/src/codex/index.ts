@@ -1,6 +1,7 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type {
+  AccountProbe,
   CloseOptions,
   EngineAdapter,
   EngineSession,
@@ -38,6 +39,7 @@ import { loadCodexRuns } from './runs'
 import { CODEX_NPM_PACKAGE, installCodexWithNpm, updateCodexWithNpm } from './update'
 import { array } from './process'
 import { codexViewedImage } from './images'
+import { accountEnv, prepareAccountHome } from './accounts'
 
 export interface CodexAdapterOptions {
   /** 用户在设置里替换的命令（绝对路径或 PATH 上的命令名，docs/ui/engine-launch.md） */
@@ -51,7 +53,10 @@ export interface CodexAdapterOptions {
   launchOptions?: () => CodexLaunchOptions
   /** 桌面端的私有 Node.js：没装 Node.js 时一键安装先装它；它和装在里面的 Codex 补在 PATH 最后（docs/ui/engine-update.md §7） */
   nodeRuntime?: NodeRuntime
+  /** 当前订阅账号的目录（docs/ui/engine-accounts.md）；null 是原来的 CODEX_HOME */
+  account?: () => string | null
 }
+
 export class CodexAdapter implements EngineAdapter {
   private cached: { info: EngineInfo; launcher: Launcher | null } | null = null
   private detecting: Promise<EngineInfo> | null = null
@@ -84,7 +89,8 @@ export class CodexAdapter implements EngineAdapter {
   readonly enginePicksSessionId = true
   /** 跨引擎接力：别的引擎期间的聊天用 thread/inject_items 注入线程（chat-log.ts） */
   readonly seedsHistory = true
-  private env(): NodeJS.ProcessEnv {
+  /** 不带订阅账号的环境：CODEX_HOME 是用户原来的目录 */
+  private baseEnv(): NodeJS.ProcessEnv {
     const base = engineEnv(this.opts.env ?? process.env)
     const extra = this.opts.extraEnv?.() ?? {}
     // 补的代理变量放最后：只在用户没设代理时才有，NO_PROXY 已经并进了用户原有的
@@ -92,6 +98,23 @@ export class CodexAdapter implements EngineAdapter {
       { ...base, ...extra, ...systemProxyEnv(base, extra, this.opts.systemProxy?.() ?? null) },
       this.opts.nodeRuntime?.paths() ?? [],
     )
+  }
+  /** 启动 Codex 用的环境：选了别的订阅账号时 CODEX_HOME 换成那个账号的目录 */
+  private env(dir: string | null | undefined = this.opts.account?.()): NodeJS.ProcessEnv {
+    const env = this.baseEnv()
+    if (!dir) return env
+    const real = env.CODEX_HOME || join(homedir(), '.codex')
+    this.prepareHome(real, dir)
+    return { ...env, ...accountEnv(real, dir, env) }
+  }
+  /** 账号目录接回原目录：同一个目录 2 秒内只做一次（env() 调得很频繁） */
+  private readonly prepared = new Map<string, number>()
+  private prepareHome(real: string, dir: string): void {
+    const key = `${real}|${dir}`
+    const at = this.prepared.get(key) ?? 0
+    if (Date.now() - at < 2000) return
+    this.prepared.set(key, Date.now())
+    prepareAccountHome(real, dir)
   }
   constructor(private readonly opts: CodexAdapterOptions = {}) {}
   checkLaunch(command: string | null, args: readonly string[]): void {
@@ -129,11 +152,62 @@ export class CodexAdapter implements EngineAdapter {
   }
   /** 取消授权：codex logout */
   async logout(): Promise<EngineUpdateResult> {
+    return this.accountLogout(undefined)
+  }
+  /** 登录到某个订阅账号的目录（添加账号、重新登录）；dir 为 null 是原来的目录 */
+  async accountLogin(
+    dir: string | null,
+    method: 'browser' | 'device',
+    onLine: (line: string) => void,
+  ): Promise<LoginProcess> {
+    const launcher = await this.loginLauncher()
+    const args = method === 'device' ? ['login', '--device-auth'] : ['login']
+    await this.reader.close()
+    const proc = runInteractive(launcher, args, toolEnvironment(launcher, this.env(dir)), onLine)
+    void proc.done.finally(() => this.reader.close()).catch(() => undefined)
+    return proc
+  }
+  /** 退出某个订阅账号（移除账号）；dir 不传是当前账号，null 是原来的目录 */
+  async accountLogout(dir: string | null | undefined): Promise<EngineUpdateResult> {
     const launcher = await this.loginLauncher()
     await this.reader.close()
-    const r = await run(launcher, ['logout'], toolEnvironment(launcher, this.env()))
+    const r = await run(launcher, ['logout'], toolEnvironment(launcher, this.env(dir)))
     await this.reader.close()
     return { ok: r.ok, output: outputTail(r), version: null }
+  }
+  /**
+   * 临时起一个 app-server 读某个账号：登录了没有、邮箱、套餐、额度（docs/ui/engine-accounts.md §3）。
+   * 不复用读取进程：它跟着当前账号走
+   */
+  async accountProbe(dir: string | null): Promise<AccountProbe> {
+    const launcher = await this.loginLauncher()
+    const proc = new CodexProcess(
+      launcher,
+      ['app-server', '--listen', 'stdio://', ...this.launchArgs()],
+      homedir(),
+      toolEnvironment(launcher, this.env(dir)),
+      { notification() {}, request: id => proc.respondError(id, 'No interactive session'), exit() {} },
+    )
+    try {
+      await proc.initialize()
+      const auth = await proc.request('account/read', { refreshToken: false })
+      const account = object(auth.account)
+      const email = string(account.email).trim() || null
+      const plan = string(account.planType).trim() || null
+      const signedIn = Object.keys(account).length > 0
+      if (account.type !== 'chatgpt') return { signedIn, email, plan, quota: null }
+      try {
+        const res = await proc.request('account/rateLimits/read', { excludeResetCreditDetails: true })
+        return { signedIn, email, plan, quota: parseCodexRateLimits(res, Date.now()) }
+      } catch (error) {
+        // 登录失效：读额度时才发现
+        if (/authentication required|unauthori[sz]ed|401/i.test((error as Error).message))
+          return { signedIn: false, email, plan, quota: null }
+        throw error
+      }
+    } finally {
+      await proc.close()
+    }
   }
   private async loginLauncher(): Promise<Launcher> {
     await this.info()
@@ -323,7 +397,8 @@ export class CodexAdapter implements EngineAdapter {
   }
   /** Codex 的数据目录：读取进程、会话进程和这里是同一份（env.CODEX_HOME，没有就是 ~/.codex） */
   codexHome(record?: SessionRecord): string {
-    const env = record && viaGateway(record) ? { ...this.env(), ...this.opts.sessionEnv?.(record) } : this.env()
+    // 订阅账号的目录里 sessions 等是接回原目录的，扫描、找线程都用原目录
+    const env = record && viaGateway(record) ? { ...this.baseEnv(), ...this.opts.sessionEnv?.(record) } : this.baseEnv()
     return env.CODEX_HOME || join(homedir(), '.codex')
   }
   /**

@@ -26,6 +26,15 @@ export interface Launcher {
   args: string[]
 }
 
+/** 临时读一次某个订阅账号（docs/ui/engine-accounts.md §3）：没登录时 signedIn 为假 */
+export interface AccountProbe {
+  signedIn: boolean
+  email: string | null
+  plan: string | null
+  /** 不是订阅登录（API Key、自己的接口）时为 null */
+  quota: QuotaReading | null
+}
+
 /** 正在跑的授权登录命令（docs/ui/model-channels.md §3） */
 export interface LoginProcess {
   /** 往命令的 stdin 写（粘贴授权码） */
@@ -169,6 +178,10 @@ export interface EngineAdapter {
   login?(method: 'browser' | 'device', onLine: (line: string) => void): Promise<LoginProcess>
   /** 取消授权：claude auth logout / codex logout */
   logout?(): Promise<EngineUpdateResult>
+  /** 订阅账号多开（docs/ui/engine-accounts.md）：dir 是账号目录，null 是原来的目录 */
+  accountLogin?(dir: string | null, method: 'browser' | 'device', onLine: (line: string) => void): Promise<LoginProcess>
+  accountLogout?(dir: string | null): Promise<EngineUpdateResult>
+  accountProbe?(dir: string | null): Promise<AccountProbe>
   /** npm 上的包名：宿主定时查最新版本，界面提示「有新版本」（docs/ui/engine-update.md） */
   readonly npmPackage?: string
   /**

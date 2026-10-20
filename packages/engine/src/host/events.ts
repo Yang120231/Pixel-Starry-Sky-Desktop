@@ -1,4 +1,5 @@
 // 事件：apply 是唯一写快照的入口（先落盘再广播，seq 递增）；适配器发来的事件在这里推导运行状态
+import { randomUUID } from 'node:crypto'
 import { reduce, replyPreview, type EngineEvent, type Item, type SessionRecord } from '@pixelsky/protocol'
 import type { HostContext, Runtime } from './context'
 import { reconnectedCount } from './queue'
@@ -141,6 +142,14 @@ export class HostEvents {
     const rt = ctx.runtimes.get(id)
     if (!rt) return
     this.trackTurn(id, rt, event)
+    // 额度用完的报错（Codex usageLimitExceeded）：这一轮失败时看要不要自动换订阅账号（accounts.ts autoSwitch）
+    if (
+      event.type === 'item_completed' &&
+      event.item.kind === 'notice' &&
+      event.item.error?.code === 'usageLimitExceeded' &&
+      rt.turn
+    )
+      rt.turn.usageLimited = true
     // 已结束轮次的迟到 result 不能清理正在执行的新轮和审批。
     if (event.type === 'turn_completed' && event.turnId !== rt.snapshot.turnId) return
     if (event.type === 'request_cache_reset') {
@@ -220,7 +229,23 @@ export class HostEvents {
         if (rt.activeId) {
           const item = rt.snapshot.queue.find(q => q.id === rt.activeId)
           if (item && event.outcome === 'failed') {
-            reconnecting = m.queue.reconnect(id, item.id, event.error ?? null)
+            // 额度用完、开了自动换账号：换到下一个账号，这条马上重新派发（下一条消息前按新账号换进程）
+            const switched = rt.turn?.usageLimited ? m.accounts.autoSwitch(id, item.id) : null
+            if (switched && m.accounts.noticeOn('codex')) {
+              const name = switched.label || switched.email || switched.id
+              this.apply(id, {
+                type: 'item_completed',
+                item: {
+                  kind: 'notice',
+                  id: `account-switch-${randomUUID()}`,
+                  level: 'info',
+                  text: `额度用完了，已自动换到 ${name} 并重新发送`,
+                },
+              })
+            }
+            reconnecting = switched
+              ? m.queue.reconnect(id, item.id, event.error ?? null, undefined, { account: true })
+              : m.queue.reconnect(id, item.id, event.error ?? null)
             if (!reconnecting)
               m.queue.changeQueue(id, item.id, {
                 status: 'failed',

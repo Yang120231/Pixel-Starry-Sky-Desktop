@@ -15,6 +15,7 @@ import type {
 import type { EngineAdapter, EngineSession } from '../adapter'
 import type { Store } from '../store'
 import type { UsageStore } from '../usage'
+import type { HostAccounts } from './accounts'
 import type { HostCache } from './cache'
 import type { HostCompaction } from './compaction'
 import type { HostEvents } from './events'
@@ -89,6 +90,8 @@ export interface TurnTrack {
   progressed: boolean
   /** 引擎自己重试过这次请求（request_retry）：宿主不再叠加一层重连 */
   engineRetried: boolean
+  /** 这一轮报过额度用完（Codex usageLimitExceeded）：失败时看要不要自动换账号（docs/ui/engine-accounts.md §5） */
+  usageLimited?: boolean
 }
 
 export interface Runtime {
@@ -133,6 +136,7 @@ export interface HostModules {
   login: HostLogin
   native: HostNative
   quota: HostQuota
+  accounts: HostAccounts
 }
 
 export interface HostContext {

@@ -6,6 +6,7 @@ import { isDemo } from '@/data'
 import { demo } from '@/data/demo'
 import type { EngineLite } from '@/data/types'
 import { bridge, useEngineState } from '@/features/engine/store'
+import { demoAddAccount } from './accountsStore'
 
 let logins: Partial<Record<EngineId, EngineLogin>> = {}
 /** 演示模式里假授权 / 取消授权过的引擎 */
@@ -40,10 +41,10 @@ export function useEngineLogin(engine: EngineId): EngineLogin | null {
   return useSyncExternalStore(subscribe, () => logins[engine] ?? null)
 }
 
-const running = (l: EngineLogin | undefined): boolean =>
+export const loginRunning = (l: EngineLogin | null | undefined): boolean =>
   !!l && l.phase !== 'done' && l.phase !== 'failed' && l.phase !== 'cancelled'
 
-const blank = (engine: EngineId, method: EngineLogin['method']): EngineLogin => ({
+const blank = (engine: EngineId, method: EngineLogin['method'], target?: string): EngineLogin => ({
   engine,
   method,
   phase: 'starting',
@@ -53,10 +54,11 @@ const blank = (engine: EngineId, method: EngineLogin['method']): EngineLogin => 
   awaitingCode: false,
   line: null,
   error: null,
+  ...(target ? { target } : {}),
 })
 
 const demoTimers = new Map<EngineId, number[]>()
-function demoFlow(engine: EngineId, method: EngineLogin['method']): void {
+function demoFlow(engine: EngineId, method: EngineLogin['method'], target?: string): void {
   demoTimers.get(engine)?.forEach(t => clearTimeout(t))
   const step = (ms: number, fn: () => void): number => window.setTimeout(fn, ms)
   const url =
@@ -65,7 +67,7 @@ function demoFlow(engine: EngineId, method: EngineLogin['method']): void {
       : engine === 'claude'
         ? 'https://claude.com/cai/oauth/authorize?code=true&demo=1'
         : 'https://auth.openai.com/oauth/authorize?demo=1'
-  put(blank(engine, method))
+  put(blank(engine, method, target))
   demoTimers.set(engine, [
     step(400, () =>
       put({
@@ -77,36 +79,52 @@ function demoFlow(engine: EngineId, method: EngineLogin['method']): void {
       }),
     ),
     step(6000, () => {
-      if (!running(logins[engine])) return
+      if (!loginRunning(logins[engine])) return
       put({ ...logins[engine]!, phase: 'verify', awaitingCode: false })
     }),
     step(6800, () => {
       if (logins[engine]?.phase !== 'verify') return
-      demoAuth = { ...demoAuth, [engine]: true }
-      demoEngines = null
+      if (target === 'add' && engine === 'codex') demoAddAccount('codex')
+      else if (!target) {
+        demoAuth = { ...demoAuth, [engine]: true }
+        demoEngines = null
+      }
       put({ ...logins[engine]!, phase: 'done' })
     }),
   ])
 }
 
-/** 开始授权；同一个引擎已经在授权就接着用那一次 */
-export async function startLogin(engine: EngineId, method: EngineLogin['method'] = 'browser'): Promise<void> {
-  if (running(logins[engine]) && logins[engine]!.method === method) return
+/**
+ * 开始授权；同一个引擎已经在授权就接着用那一次。
+ * target：订阅账号多开（docs/ui/engine-accounts.md）——'add' 添加账号，账号 id 是重新登录那个账号；不传是当前账号
+ */
+export async function startLogin(
+  engine: EngineId,
+  method: EngineLogin['method'] = 'browser',
+  target?: string,
+): Promise<void> {
+  const now = logins[engine]
+  if (loginRunning(now) && now!.method === method && now!.target === target) return
   if (isDemo) {
-    demoFlow(engine, method)
+    demoFlow(engine, method, target)
     return
   }
   if (!bridge) return
   listen()
-  // 换了方式（浏览器 ↔ 设备码）：先停掉上一次
-  if (running(logins[engine])) await bridge.cancelLogin(engine).catch(() => undefined)
-  put(blank(engine, method))
+  // 换了方式（浏览器 ↔ 设备码）或换了账号：先停掉上一次
+  if (loginRunning(now)) await bridge.cancelLogin(engine).catch(() => undefined)
+  put(blank(engine, method, target))
   pushed.delete(engine)
   try {
-    const first = await bridge.loginEngine(engine, method)
+    const first =
+      target === 'add'
+        ? await bridge.addAccount(engine, method)
+        : target
+          ? await bridge.reloginAccount(engine, target, method)
+          : await bridge.loginEngine(engine, method)
     if (!pushed.has(engine)) put(first)
   } catch (err) {
-    put({ ...blank(engine, method), phase: 'failed', error: (err as Error).message })
+    put({ ...blank(engine, method, target), phase: 'failed', error: (err as Error).message })
   }
 }
 
@@ -132,13 +150,13 @@ export async function cancelLogin(engine: EngineId): Promise<void> {
     if (logins[engine]) put({ ...logins[engine]!, phase: 'cancelled', awaitingCode: false })
     return
   }
-  if (!running(logins[engine])) return
+  if (!loginRunning(logins[engine])) return
   await bridge?.cancelLogin(engine)
 }
 
 /** 关弹窗后忘掉已经结束的那次（下次打开从头开始） */
 export function clearLogin(engine: EngineId): void {
-  if (running(logins[engine])) return
+  if (loginRunning(logins[engine])) return
   const { [engine]: _gone, ...rest } = logins
   logins = rest
   emit()
@@ -172,6 +190,7 @@ function demoEngineList(): EngineLite[] {
           status: 'ready',
           message: null,
           account: e.account ?? { email: 'linxia@example.com', plan: e.id === 'codex' ? 'plus' : 'max' },
+          auth: { kind: 'login' as const },
         }
       : { ...e, status: 'unauthenticated', account: undefined }
   })

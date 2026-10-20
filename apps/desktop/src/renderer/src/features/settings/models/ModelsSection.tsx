@@ -25,6 +25,8 @@ import { GroupTitle, SectionTitle } from '../SettingRow'
 import { takeModelsScroll } from './scroll'
 import { RequestRetrySettings } from './RequestRetrySettings'
 import { ChannelsSettings } from '@/features/model-channels/ChannelsSettings'
+import { AccountsPage } from '@/features/model-channels/AccountsPage'
+import { openAccountsPage, useAccountsPage } from '@/features/model-channels/accountsStore'
 import { AiCommitSettings } from './AiCommitSettings'
 import { ContextWindowInput } from './ContextWindowInput'
 import { setContextWindow, useContextWindows } from './contextWindows'
@@ -51,12 +53,17 @@ export function ModelsSection() {
       setWindowError((e as Error).message),
     )
   }
+  const accountsPage = useAccountsPage()
+  // 离开模型通道（换到别的设置页、关掉设置）时回到通道页
+  useEffect(() => () => openAccountsPage(null), [])
   const visibilityRef = useRef<HTMLDivElement>(null)
   const [modelQuery, setModelQuery] = useState('')
   useEffect(() => {
     if (takeModelsScroll()) visibilityRef.current?.scrollIntoView({ block: 'start' })
   }, [])
 
+  // 子页面「模型通道 › ChatGPT 账号」（docs/ui/engine-accounts.md §6）
+  if (accountsPage) return <AccountsPage channel={accountsPage} />
   return (
     <section>
       <SectionTitle>{tr('modelChannels.title')}</SectionTitle>

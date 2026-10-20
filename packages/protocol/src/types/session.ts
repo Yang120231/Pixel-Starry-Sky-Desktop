@@ -163,6 +163,8 @@ export interface QueueReconnect {
   reason: string
   /** 引擎还没收到这条消息（!delivered）：到时原样重发；否则发一句「继续」接着断开前的上下文做。只给界面提示，派发时以 delivered 为准 */
   resend?: boolean
+  /** 额度用完、自动换了订阅账号后重新派发（docs/ui/engine-accounts.md §5）：马上派发，不受重连次数限制 */
+  account?: boolean
 }
 
 export interface SendReceipt {

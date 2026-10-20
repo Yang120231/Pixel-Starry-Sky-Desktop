@@ -9,7 +9,11 @@
 // guard 工作目录锁、settings 引擎设置、projects 项目、query 搜索与产物、cache 缓存提醒、
 // usage 用量与结算、events 事件与运行状态、queue 消息队列、turn 一轮对话、sessions 会话。
 import type {
+  AccountAutoSwitch,
+  AccountPatch,
   AccountQuota,
+  EngineAccountQuota,
+  EngineAccounts,
   ApprovalDecision,
   ContextDetailLevel,
   ContextDiagnostic,
@@ -56,6 +60,7 @@ import { CodexAdapter } from '../codex'
 import { PixelAdapter } from '../pixel'
 import { Store } from '../store'
 import { UsageStore, type UsageQuery } from '../usage'
+import { HostAccounts } from './accounts'
 import { HostBranch } from './branch'
 import { HostCache } from './cache'
 import { HostCompaction } from './compaction'
@@ -117,6 +122,8 @@ export class EngineHost {
         systemProxy: () => opts.systemProxy?.('codex') ?? null,
         nodeRuntime: opts.nodeRuntime,
         sessionEnv: opts.sessionEnv,
+        // 当前订阅账号的目录（docs/ui/engine-accounts.md）；模块装好之前（构造时不会启动进程）用原来的
+        account: () => ctx.m?.accounts.currentDir('codex') ?? null,
         launchOptions: () => {
           const o = settings.launchOptions('codex')
           return {
@@ -155,6 +162,7 @@ export class EngineHost {
       login: new HostLogin(ctx),
       native: new HostNative(ctx),
       quota: new HostQuota(ctx),
+      accounts: new HostAccounts(ctx),
     }
     for (const r of store.loadRecords()) ctx.records.set(r.id, r)
     this.ctx = ctx
@@ -242,6 +250,43 @@ export class EngineHost {
   /** 取消授权，随后重新检测 */
   async logoutEngine(engine: EngineId): Promise<EngineUpdateResult> {
     return this.m.login.logoutEngine(engine)
+  }
+
+  // -------------------------------------------------------------------------
+  // 订阅账号多开（docs/ui/engine-accounts.md）
+  // -------------------------------------------------------------------------
+
+  accounts(engine: EngineId): Promise<EngineAccounts> {
+    return this.m.accounts.list(engine)
+  }
+
+  accountsQuota(engine: EngineId, force = false): Promise<EngineAccountQuota[]> {
+    return this.m.accounts.quota(engine, force)
+  }
+
+  /** 添加账号：登录进度看 engine_login（target 'add'） */
+  addAccount(engine: EngineId, method: 'browser' | 'device' = 'browser'): EngineLogin {
+    return this.m.accounts.add(engine, method)
+  }
+
+  reloginAccount(engine: EngineId, id: string, method: 'browser' | 'device' = 'browser'): EngineLogin {
+    return this.m.accounts.relogin(engine, id, method)
+  }
+
+  switchAccount(engine: EngineId, id: string): Promise<EngineAccounts> {
+    return this.m.accounts.switchTo(engine, id)
+  }
+
+  removeAccount(engine: EngineId, id: string): Promise<EngineAccounts> {
+    return this.m.accounts.remove(engine, id)
+  }
+
+  updateAccount(engine: EngineId, id: string, patch: AccountPatch): EngineAccounts {
+    return this.m.accounts.update(engine, id, patch)
+  }
+
+  setAccountAuto(engine: EngineId, patch: Partial<AccountAutoSwitch>): EngineAccounts {
+    return this.m.accounts.setAuto(engine, patch)
   }
 
   /** 一键安装：跑引擎的官方安装方式，过程推 engine_job，结束后重新检测并广播 */

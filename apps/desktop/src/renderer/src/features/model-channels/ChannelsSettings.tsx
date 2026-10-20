@@ -2,9 +2,9 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '../../i18n/core'
 // 设置 › 模型通道（docs/ui/model-channels.md §2.1）：四张通道卡（状态 + 授权 / 登录按钮），自定义接口列在第四张里；
 // 最下面「新对话用：接着上次 / 固定为」（§2.6）
-import { useState, type ReactNode } from 'react'
-import { Columns2, LogIn, PanelTop } from 'lucide-react'
-import { Button, EngineIcon, Segmented, Select, Spinner, cn } from '@/ui'
+import { useRef, useState, type ReactNode } from 'react'
+import { ChevronDown, Columns2, LogIn, PanelTop } from 'lucide-react'
+import { Button, EngineIcon, Popover, Segmented, Select, Spinner, cn } from '@/ui'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
 import { useAccount } from '@/features/account/useAccount'
 import { usePlatformCatalog } from '@/features/account/platform'
@@ -38,6 +38,8 @@ import { setMenuLayout, useChannelPrefs } from './channelPrefs'
 import { openAuthDialog } from './authDialogStore'
 import { logoutEngine, useChannelEngines } from './loginStore'
 import { currentNewTaskChoice, pinNewTask } from './newTaskDefault'
+import { ACCOUNT_ENGINE, openAccountsPage, useAccounts } from './accountsStore'
+import { AccountPickList } from './AccountsUI'
 
 export function ChannelsSettings() {
   useI18n()
@@ -61,13 +63,18 @@ function Card({
   channel,
   status,
   sub,
-  actions,
+  icon,
+  primary,
+  secondary,
   children,
 }: {
   channel: ChannelId
   status: ReactNode
   sub?: ReactNode
-  actions?: ReactNode
+  /** 右边按钮区分三列：图标、主按钮、次按钮，宽度固定，几张卡的按钮上下对齐（按钮自己用 w-full） */
+  icon?: ReactNode
+  primary?: ReactNode
+  secondary?: ReactNode
   children?: ReactNode
 }) {
   return (
@@ -86,7 +93,20 @@ function Card({
           {/* 说明和报错可能较长：换行显示，不截断 */}
           {sub && <span className="block break-words text-meta text-fg-faint">{sub}</span>}
         </span>
-        {actions && <span className="flex shrink-0 items-center gap-2">{actions}</span>}
+        {(icon || primary || secondary) && (
+          <span className="flex shrink-0 items-center gap-2">
+            <span className="flex w-4 justify-center">{icon}</span>
+            {secondary ? (
+              <>
+                <span className="flex w-28">{primary}</span>
+                <span className="flex w-24">{secondary}</span>
+              </>
+            ) : (
+              // 只有一个按钮（登录、授权、修复）：占两列，靠右
+              <span className="flex w-[13.5rem] justify-end">{primary}</span>
+            )}
+          </span>
+        )}
       </div>
       {children}
     </div>
@@ -103,7 +123,7 @@ function PlatformCard() {
       <Card
         channel="platform"
         status={tr('modelChannels.platform.desc')}
-        actions={
+        primary={
           <Button variant="primary" icon={LogIn} onClick={() => void account.login()}>
             {tr('modelChannels.platform.signIn')}
           </Button>
@@ -125,13 +145,15 @@ function PlatformCard() {
         </>
       }
       sub={tr('modelChannels.platform.engines')}
-      actions={
-        <>
-          <Button onClick={() => settings.openSettings('account')}>{tr('modelChannels.platform.account')}</Button>
-          <Button variant="ghost" onClick={() => void account.logout()}>
-            {tr('modelChannels.platform.signOut')}
-          </Button>
-        </>
+      primary={
+        <Button className={FILL} onClick={() => settings.openSettings('account')}>
+          {tr('modelChannels.platform.account')}
+        </Button>
+      }
+      secondary={
+        <Button variant="ghost" className={FILL} onClick={() => void account.logout()}>
+          {tr('modelChannels.platform.signOut')}
+        </Button>
       }
     />
   )
@@ -158,6 +180,12 @@ function AuthCard({ channel }: { channel: AuthChannel }) {
   const remote = machine !== 'local'
   // Codex 用 config.toml 里自己的接口（docs/ui/model-channels.md §3 第 6 条）
   const provider = state.kind === 'ready' && info?.auth?.kind === 'provider' ? (info.auth.provider ?? '') : null
+  // 订阅账号多开（docs/ui/engine-accounts.md）：本机、用订阅登录的才有账号下拉和「管理账号」
+  const accountEngine = ACCOUNT_ENGINE[channel]
+  const accounts = useAccounts(accountEngine)
+  const multi = !!accountEngine && !!accounts && !remote && provider === null && info?.auth?.kind === 'login'
+  const [picker, setPicker] = useState(false)
+  const pickerAnchor = useRef<HTMLSpanElement>(null)
 
   const logout = (then?: () => void): void => {
     setBusy(true)
@@ -171,38 +199,99 @@ function AuthCard({ channel }: { channel: AuthChannel }) {
   }
 
   let status: ReactNode = desc
-  let actions: ReactNode = null
+  let primary: ReactNode = null
+  let secondary: ReactNode = null
   if (state.kind === 'loading') status = <Spinner />
   else if (state.kind === 'ready') {
     const signedIn = accountText(info?.account)
     status = (
-      <span className="text-fg">
-        {provider !== null
-          ? tr('modelChannels.authCard.provider', { p0: provider })
-          : signedIn || tr(info?.auth?.kind === 'apiKey' ? 'modelChannels.authCard.apiKey' : 'modelChannels.auth.done')}
-      </span>
+      <>
+        <span className="text-fg">
+          {provider !== null
+            ? tr('modelChannels.authCard.provider', { p0: provider })
+            : signedIn ||
+              tr(info?.auth?.kind === 'apiKey' ? 'modelChannels.authCard.apiKey' : 'modelChannels.auth.done')}
+        </span>
+        {multi && accounts.accounts.length > 1 && (
+          <span> · {tr('accounts.count', { n: accounts.accounts.length })}</span>
+        )}
+      </>
     )
     // 自己配置的接口不用授权、取消不掉：只在同时还登着账号时给「取消授权」
-    actions =
-      remote || (provider !== null && !info?.account) ? null : (
+    if (multi) {
+      primary = (
         <>
-          {provider === null && (
-            <Button onClick={() => setConfirm('switch')}>{tr('modelChannels.authCard.switch')}</Button>
-          )}
-          <Button variant="ghost" onClick={() => setConfirm('logout')}>
-            {tr('modelChannels.authCard.logout')}
-          </Button>
+          <span ref={pickerAnchor} className="flex w-full">
+            <Button className={FILL} aria-haspopup="menu" aria-expanded={picker} onClick={() => setPicker(v => !v)}>
+              {tr('accounts.switch')}
+              <ChevronDown size={13} strokeWidth={1.75} className="text-fg-muted" />
+            </Button>
+          </span>
+          <Popover
+            open={picker}
+            onClose={() => setPicker(false)}
+            anchor={pickerAnchor}
+            side="bottom"
+            align="end"
+            className="w-80"
+            role="menu"
+          >
+            <AccountPickList
+              engine={accountEngine}
+              onDone={() => setPicker(false)}
+              onManage={() => {
+                setPicker(false)
+                openAccountsPage(channel)
+              }}
+              footer={
+                <>
+                  <div role="separator" className="my-1 border-t border-line-subtle" />
+                  <button
+                    type="button"
+                    data-menu-item
+                    onClick={() => {
+                      setPicker(false)
+                      setConfirm('logout')
+                    }}
+                    className="flex h-8 w-full items-center rounded-md px-2 text-left text-ui text-danger hover:bg-hover"
+                  >
+                    {tr('accounts.logoutCurrent')}
+                  </button>
+                </>
+              }
+            />
+          </Popover>
         </>
       )
+      secondary = (
+        <Button variant="ghost" className={FILL} onClick={() => openAccountsPage(channel)}>
+          {tr('accounts.manage')}
+        </Button>
+      )
+    } else if (!remote && !(provider !== null && !info?.account)) {
+      const logoutButton = (
+        <Button variant="ghost" className={FILL} onClick={() => setConfirm('logout')}>
+          {tr('modelChannels.authCard.logout')}
+        </Button>
+      )
+      if (provider === null) {
+        primary = (
+          <Button className={FILL} onClick={() => setConfirm('switch')}>
+            {tr('modelChannels.authCard.switch')}
+          </Button>
+        )
+        secondary = logoutButton
+      } else primary = logoutButton
+    }
   } else if (state.kind === 'auth') {
-    actions = remote ? null : (
+    primary = remote ? null : (
       <Button variant="primary" onClick={() => openAuthDialog(channel)}>
         {tr(`modelChannels.${channel}.signIn`)}
       </Button>
     )
   } else {
     status = <span className="text-warn">{channelStateText(channel, state)}</span>
-    actions = fix && (
+    primary = fix && (
       <Button onClick={() => settings.openSettings('engines')}>{tr(`modelChannels.action.${fixKey(fix)}`)}</Button>
     )
   }
@@ -223,12 +312,9 @@ function AuthCard({ channel }: { channel: AuthChannel }) {
             desc
           ) : null
         }
-        actions={
-          <>
-            <EngineIcon engine={engine} size={14} className="opacity-70" />
-            {actions}
-          </>
-        }
+        icon={<EngineIcon engine={engine} size={14} className="opacity-70" />}
+        primary={primary}
+        secondary={secondary}
       />
       {confirm && (
         <ConfirmDialog
@@ -254,6 +340,9 @@ function AuthCard({ channel }: { channel: AuthChannel }) {
     </>
   )
 }
+
+/** 按钮撑满它那一列、文字居中 */
+const FILL = 'w-full justify-center'
 
 const fixKey = (fix: NonNullable<ReturnType<typeof channelFix>>): 'install' | 'update' | 'view' =>
   fix === 'install' ? 'install' : fix === 'update' ? 'update' : 'view'

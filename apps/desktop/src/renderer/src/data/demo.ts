@@ -99,8 +99,15 @@ export interface DemoConnectors {
   calls: Record<string, Record<string, number>>
 }
 
+/** 订阅账号多开的演示数据（docs/ui/engine-accounts.md）：ChatGPT 授权下的几个账号和各自额度 */
+export interface DemoAccounts {
+  list: import('@pixelsky/protocol').EngineAccounts
+  quota: import('@pixelsky/protocol').EngineAccountQuota[]
+}
+
 export interface DemoSource {
   connectors: DemoConnectors
+  accounts: DemoAccounts
   /** 侧边栏、对话、输入框等界面数据（与 data/empty.ts 同形） */
   appData: AppData
   account: AccountInfo
