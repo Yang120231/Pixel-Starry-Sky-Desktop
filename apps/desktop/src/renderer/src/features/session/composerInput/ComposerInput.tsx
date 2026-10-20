@@ -10,7 +10,7 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from 'react'
 import { history, historyKeymap, insertNewline, invertedEffects, standardKeymap } from '@codemirror/commands'
-import { Compartment, EditorState, Prec, Transaction } from '@codemirror/state'
+import { Compartment, EditorState, Prec, Transaction, type TransactionSpec } from '@codemirror/state'
 import { EditorView, keymap, placeholder as placeholderExt } from '@codemirror/view'
 import { cn } from '@/ui'
 import { ActionMenu, type MenuAction } from '@/ui/ActionMenu'
@@ -73,6 +73,20 @@ export function minimalChange(from: string, to: string): { from: number; to: num
     endB--
   }
   return { from: start, to: endA, insert: to.slice(start, endB) }
+}
+
+/**
+ * 外面改了 value 时要发给编辑器的改动；一样就是 null。原来是空的（Tab 填入输入建议、回退放回原文…）：
+ * 光标放到末尾，能接着写；否则不给 selection，光标跟着改动自己映射
+ */
+export function syncValue(state: EditorState, value: string): TransactionSpec | null {
+  const change = minimalChange(state.doc.toString(), value)
+  if (!change) return null
+  return {
+    changes: change,
+    ...(state.doc.length === 0 ? { selection: { anchor: value.length } } : {}),
+    annotations: Transaction.addToHistory.of(false),
+  }
 }
 
 /** 把粘贴的文字放进输入框：长文本折成标签（plain 为真时不折，同 Ctrl+Shift+V）。粘贴事件和右键菜单共用 */
@@ -281,12 +295,11 @@ export const ComposerInput = forwardRef<ComposerInputHandle, Props>(function Com
   useLayoutEffect(() => {
     const v = view.current
     if (!v || keyRef.current !== props.composerKey) return
-    const change = minimalChange(v.state.doc.toString(), props.value)
-    if (!change) return
+    const spec = syncValue(v.state, props.value)
+    if (!spec) return
     syncing.current = true
     try {
-      // 不给 selection：光标跟着改动自己映射
-      v.dispatch({ changes: change, annotations: Transaction.addToHistory.of(false) })
+      v.dispatch(spec)
     } finally {
       syncing.current = false
     }

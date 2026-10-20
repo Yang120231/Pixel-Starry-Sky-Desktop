@@ -13,7 +13,7 @@ import {
   trimBlankLines,
   validChunks,
 } from './pasteFold'
-import { minimalChange } from './ComposerInput'
+import { minimalChange, syncValue } from './ComposerInput'
 
 const block = Array.from({ length: 30 }, (_, i) => `第 ${i + 1} 行`).join('\n')
 
@@ -110,5 +110,29 @@ describe('minimalChange', () => {
     expect(minimalChange('abcdef', 'abXYef')).toEqual({ from: 2, to: 4, insert: 'XY' })
     expect(minimalChange('abc', '')).toEqual({ from: 0, to: 3, insert: '' })
     expect(minimalChange('aaa', 'aaaa')).toEqual({ from: 3, to: 3, insert: 'a' })
+  })
+})
+
+describe('syncValue', () => {
+  const apply = (doc: string, caret: number, value: string) => {
+    const state = EditorState.create({ doc, selection: { anchor: caret } })
+    const spec = syncValue(state, value)
+    return spec && state.update(spec).state
+  }
+
+  it('空输入框被填入（Tab 填入输入建议）：光标在末尾', () => {
+    const next = apply('', 0, '帮我把测试也补上')
+    expect(next?.doc.toString()).toBe('帮我把测试也补上')
+    expect(next?.selection.main.head).toBe('帮我把测试也补上'.length)
+  })
+
+  it('原来有字：光标跟着改动映射，不跳到末尾', () => {
+    // 光标在「hello」后面，外面在开头插了「> 」
+    const next = apply('hello world', 5, '> hello world')
+    expect(next?.selection.main.head).toBe(7)
+  })
+
+  it('一样就不发改动', () => {
+    expect(syncValue(EditorState.create({ doc: 'abc' }), 'abc')).toBeNull()
   })
 })
