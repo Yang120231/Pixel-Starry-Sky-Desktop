@@ -14,6 +14,7 @@ import {
   type EngineCatalog,
   type EngineConfigPatch,
   type EngineLocalConfig,
+  type PeekScope,
   type PermissionMode,
 } from '@pixelsky/protocol'
 import { Button, CopyButton, EngineIcon, Select, Switch, cn } from '@/ui'
@@ -41,6 +42,13 @@ import { ContextWindowInput } from '../models/ContextWindowInput'
 import { useEngineCatalog } from '@/features/engine/catalog'
 import { demo, isDemo } from '@/data/demo'
 import type { EngineLite } from '@/data/types'
+
+/** 「查看本机其他会话」的选项（docs/ui/import-collab.md 第 5 项③） */
+const PEEK_OPTIONS = [
+  { value: 'off', key: 'settings.engines.EngineDetail.peekOff' },
+  { value: 'project', key: 'settings.engines.EngineDetail.peekProject' },
+  { value: 'all', key: 'settings.engines.EngineDetail.peekAll' },
+] as const
 
 export function EngineDetail({
   engine: e,
@@ -260,6 +268,41 @@ export function EngineDetail({
       )}
 
       {!e.caps.launchSettings && <p className="mt-4 text-meta text-fg-muted">{tr('codex.nativeSettings')}</p>}
+      {/* 多会话（docs/ui/import-collab.md 第 5 项③④）：只读查看本机其他会话；Claude Code 自带的跨会话收件 */}
+      {(e.id === 'claude' || e.id === 'codex') && (
+        <Group title={tr('settings.engines.EngineDetail.multiSession')}>
+          <Row
+            title={tr('settings.engines.EngineDetail.peekSessions')}
+            description={tr('settings.engines.EngineDetail.peekSessionsHint')}
+            control={
+              <Select
+                label={tr('settings.engines.EngineDetail.peekSessions')}
+                value={config.peekSessions}
+                onChange={v => run({ peekSessions: v as PeekScope })}
+                options={PEEK_OPTIONS.map(o => ({
+                  value: o.value,
+                  get label() {
+                    return tr(o.key)
+                  },
+                }))}
+              />
+            }
+          />
+          {e.caps.launchSettings && (
+            <Row
+              title={tr('settings.engines.EngineDetail.peerMessages')}
+              description={tr('settings.engines.EngineDetail.peerMessagesHint')}
+              control={
+                <Switch
+                  checked={config.peerMessages}
+                  label={tr('settings.engines.EngineDetail.peerMessages')}
+                  onChange={on => run({ peerMessages: on })}
+                />
+              }
+            />
+          )}
+        </Group>
+      )}
       {/* 上下文（GitHub #20）：Codex 也有自动压缩和模型窗口；压缩用的模型只有 Claude Code 能换 */}
       <Group title={tr('session.ContextWindowButton.context2')}>
         <Row

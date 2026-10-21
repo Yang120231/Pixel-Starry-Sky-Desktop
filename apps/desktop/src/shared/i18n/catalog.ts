@@ -3912,6 +3912,46 @@ export const catalog = {
     "zh": "开：遇到该你定的选择会停下来问你；关：自己拿主意，并在回复里说明做了哪些假设。",
     "en": "On: pause to ask when you need to decide. Off: make decisions and explain assumptions in the reply."
   },
+  "settings.engines.EngineDetail.peerMessages": {
+    "zh": "接收其他 Claude Code 会话发来的消息",
+    "en": "Accept messages from other Claude Code sessions"
+  },
+  "settings.engines.EngineDetail.peerMessagesHint": {
+    "zh": "Claude Code 自带的跨会话消息：本机其他 Claude Code 会话（包括终端里开的）发来消息时，这里的对话会自己开一轮处理，界面上只看得到它的回复、看不到消息原文。默认不接收；多个 AI 协作建议用协作频道。",
+    "en": "Claude Code's built-in cross-session messages: when another Claude Code session on this computer (including terminal ones) sends a message, the conversation here starts a turn on its own. You see only its reply, not the message. Off by default; for several AIs working together, use channels."
+  },
+  "settings.engines.EngineDetail.multiSession": {
+    "zh": "多会话",
+    "en": "Multiple sessions"
+  },
+  "settings.engines.EngineDetail.peekSessions": {
+    "zh": "查看本机其他会话",
+    "en": "View other sessions on this computer"
+  },
+  "settings.engines.EngineDetail.peekSessionsHint": {
+    "zh": "开了以后 AI 多两个只读工具：list_threads 列出其他会话（标题、引擎、状态、最近活动），read_thread 读某个会话最近几轮。只能看、不能发消息；归档的和 SSH 机器上的不算。改了从下一条消息起生效。",
+    "en": "When on, the AI gets two read-only tools: list_threads lists other sessions (title, engine, status, last activity) and read_thread reads a session's recent turns. View only, no messaging; archived and SSH sessions are excluded. Takes effect from the next message."
+  },
+  "settings.engines.EngineDetail.peekSessionsKeywords": {
+    "zh": "多会话 别的会话 其他会话 list_threads read_thread 只读 协作 threads",
+    "en": "multiple sessions other sessions list_threads read_thread read-only collaboration threads"
+  },
+  "settings.engines.EngineDetail.peerMessagesKeywords": {
+    "zh": "多会话 跨会话 消息 sendmessage crosssessioninbound 收件 协作",
+    "en": "multiple sessions cross-session messages sendmessage crosssessioninbound inbound collaboration"
+  },
+  "settings.engines.EngineDetail.peekOff": {
+    "zh": "关闭",
+    "en": "Off"
+  },
+  "settings.engines.EngineDetail.peekProject": {
+    "zh": "同一个项目",
+    "en": "Same project"
+  },
+  "settings.engines.EngineDetail.peekAll": {
+    "zh": "本机所有",
+    "en": "All on this computer"
+  },
   "settings.engines.EngineDetail.autocompactThreshold": {
     "zh": "自动压缩触发点",
     "en": "Autocompact threshold"

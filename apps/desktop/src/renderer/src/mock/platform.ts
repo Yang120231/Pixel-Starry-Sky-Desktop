@@ -169,6 +169,8 @@ const demoLocal = (): EngineLocalConfig => ({
   autoCompactPct: null,
   hidden: false,
   rememberChoices: false,
+  peerMessages: false,
+  peekSessions: 'off',
 })
 
 /** 演示模式下本机引擎的配置（设置 › 本机引擎 › 详情；只改内存） */

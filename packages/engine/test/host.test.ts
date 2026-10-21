@@ -468,8 +468,9 @@ describe('EngineHost + Claude（假引擎）', () => {
     await host.send(record.id, '自有继续')
     await waitFor(() => turnsDone(record.id) === 3)
     const relaunch = spawnArgs()[1]
-    expect(relaunch).not.toContain('--settings')
-    expect(relaunch.slice(-2)).toEqual(['--resume', record.id])
+    // 不再带网关设置：--settings 里只剩跨会话消息的收件设置
+    expect(JSON.parse(relaunch[relaunch.indexOf('--settings') + 1])).toEqual({ crossSessionInbound: 'refuse' })
+    expect(relaunch[relaunch.indexOf('--resume') + 1]).toBe(record.id)
     const selfEnv = JSON.parse(readFileSync(join(root, 'env.json'), 'utf8')) as Record<string, string | undefined>
     expect(selfEnv).toMatchObject({ base: 'https://local.invalid', key: 'old-local-key' })
     expect(selfEnv.token).not.toBe('loopback-only')
@@ -591,7 +592,9 @@ describe('EngineHost + Claude（假引擎）', () => {
     await host.update(record.id, { provider: { id: 'p1' }, model: 'deepseek-chat' })
     await host.send(record.id, '自定义测试')
     await waitFor(() => turnsDone(record.id) === 1)
-    expect(spawnArgs()[0]).toContain(settingsFile)
+    // 网关配置和收件设置合并进网关文件旁边的临时文件（只把路径放进 argv）
+    const gatewayArg = spawnArgs()[0][spawnArgs()[0].indexOf('--settings') + 1]
+    expect(gatewayArg.startsWith(settingsFile)).toBe(true)
     expect(JSON.parse(readFileSync(join(root, 'env.json'), 'utf8'))).toEqual({
       base: 'http://127.0.0.1:1234',
       token: 'loopback-only',
@@ -739,7 +742,7 @@ describe('EngineHost + Claude（假引擎）', () => {
     expect(args).toEqual(
       expect.arrayContaining(['--permission-prompt-tool', 'stdio', '--permission-mode', 'default', '--effort', 'high']),
     )
-    expect(args.slice(-2)).toEqual(['--session-id', record.id])
+    expect(args[args.indexOf('--session-id') + 1]).toBe(record.id)
 
     // 新的 host 实例（模拟重启应用）读出同样的会话和条目
     const again = makeHost()
@@ -911,7 +914,7 @@ describe('EngineHost + Claude（假引擎）', () => {
     await waitFor(() => turnsDone(record.id) === 2)
     const args = spawnArgs()
     expect(args).toHaveLength(2)
-    expect(args[1].slice(-2)).toEqual(['--resume', record.id])
+    expect(args[1][args[1].indexOf('--resume') + 1]).toBe(record.id)
   })
 
   it('运行中改权限模式：实时生效；新消息入队，停止时保留并暂停', async () => {

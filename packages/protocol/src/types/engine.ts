@@ -136,6 +136,10 @@ export type SessionDefaults = Pick<
  * - contextWindows：每个模型的上下文窗口，按额度来源分开（GitHub #20，docs/ui/context-settings-branch-switch.md §2）
  * - hidden：不在输入框的引擎菜单里显示（默认引擎不能隐藏）
  * - rememberChoices：会话里改推理强度、Ultracode、Fast、思考摘要时同时记成新会话的默认值（旧版的行为，默认关；GitHub #6）
+ * - peerMessages：Claude Code 接收本机其他 Claude Code 会话发来的消息（它自带的跨会话消息，默认关：
+ *   收到后会自己开一轮，界面看不到消息原文；docs/ui/import-collab.md 第 5 项④）
+ * - peekSessions：让 AI 只读地查看本机其他会话（pixelsky_threads 的 list_threads / read_thread，docs/ui/import-collab.md
+ *   第 5 项③）：off 关闭（默认），project 同一个项目里的，all 本机所有的。只对 Claude Code、Codex 生效
  *
  * 除 defaults 外，改了对已开始的会话也生效：下一条消息开始前用新设置重启引擎进程并接上原对话。
  */
@@ -151,7 +155,13 @@ export interface EngineLocalConfig {
   contextWindows: ContextWindows
   hidden: boolean
   rememberChoices: boolean
+  peerMessages: boolean
+  peekSessions: PeekScope
 }
+
+/** 「查看本机其他会话」的范围 */
+export type PeekScope = 'off' | 'project' | 'all'
+export const PEEK_SCOPES: readonly PeekScope[] = ['off', 'project', 'all']
 
 /**
  * 每个模型的上下文窗口（token）：platform 是像素星空云端的模型，self 是本机自己的账号；

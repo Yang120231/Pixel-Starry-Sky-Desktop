@@ -125,6 +125,11 @@ export interface ClaudeLaunchOptions {
   args?: string[]
   /** 云端 / 本机模型填了上下文窗口时按模型的自动压缩窗口，进 --settings（GitHub #20） */
   modelSettings?: ModelSettings | null
+  /**
+   * 接收本机其他 Claude Code 会话发来的消息（Claude Code 自带的跨会话消息）。默认不接收：收到后它会自己开一轮，
+   * 界面看不到消息原文（docs/ui/import-collab.md 第 5 项④，2026-10-21 实测 2.1.303）
+   */
+  peerMessages?: boolean
 }
 
 export function claudeArgs(
@@ -629,6 +634,7 @@ export class ClaudeSession implements EngineSession {
     // 允许规则：扩展的 + 在添加的账号下点的「始终允许（所有项目）」（所有账号都算）
     const allow = [...new Set([...(this.deps.extensions?.allowTools ?? []), ...(this.deps.userRules?.list() ?? [])])]
     const extra = {
+      crossSessionInbound: this.deps.launch?.peerMessages ? 'accept' : 'refuse',
       ...(this.deps.launch?.outputStyle ? { outputStyle: this.deps.launch.outputStyle } : {}),
       ...(this.deps.launch?.modelSettings ? { modelSettings: this.deps.launch.modelSettings } : {}),
       ...(allow.length ? { permissions: { allow } } : {}),

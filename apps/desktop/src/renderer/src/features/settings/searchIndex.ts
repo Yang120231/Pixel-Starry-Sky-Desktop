@@ -263,6 +263,26 @@ export const SETTINGS_INDEX: SearchEntry[] = [
   },
   {
     section: 'engines',
+    get title() {
+      return tr('settings.engines.EngineDetail.peekSessions')
+    },
+    get keywords() {
+      return tr('settings.engines.EngineDetail.peekSessionsKeywords')
+    },
+    engine: 'claude',
+  },
+  {
+    section: 'engines',
+    get title() {
+      return tr('settings.engines.EngineDetail.peerMessages')
+    },
+    get keywords() {
+      return tr('settings.engines.EngineDetail.peerMessagesKeywords')
+    },
+    engine: 'claude',
+  },
+  {
+    section: 'engines',
     title: '自动压缩触发点',
     keywords: '压缩 compact 阈值 百分比 上下文 窗口 autocompact',
     engine: 'claude',

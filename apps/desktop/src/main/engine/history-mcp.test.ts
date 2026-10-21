@@ -86,10 +86,10 @@ function post(url: string, headers: Record<string, string>, body: string): Promi
 const ping = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' })
 
 describe('historyEnabled', () => {
-  it('本机、用过至少两个引擎、不是像素星空引擎才开', () => {
+  it('本机、用过至少两个引擎才开（像素星空也挂：命令行读 HTTP MCP 服务器）', () => {
     expect(historyEnabled(record(ID_A))).toBe(true)
     expect(historyEnabled(record(ID_A, { engine: 'claude' }))).toBe(true)
-    expect(historyEnabled(record(ID_A, { engine: 'pixel' }))).toBe(false)
+    expect(historyEnabled(record(ID_A, { engine: 'pixel' }))).toBe(true)
     expect(historyEnabled(record(ID_A, { engineSessions: { claude: state('c') } }))).toBe(false)
     expect(historyEnabled(record(ID_A, { engineSessions: undefined }))).toBe(false)
     expect(historyEnabled(record(`ssh-abc~${ID_A}`))).toBe(false)

@@ -48,6 +48,7 @@ export type {
   EngineJob,
   EngineLogin,
   EngineUpdateResult,
+  PeekScope,
   SessionDefaults,
 } from './engine'
 export type {

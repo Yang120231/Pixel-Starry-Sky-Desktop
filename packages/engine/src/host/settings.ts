@@ -7,6 +7,7 @@ import {
   codedError,
   PROVIDER_ENV,
   EFFORTS,
+  PEEK_SCOPES,
   PERMISSION_MODES,
   quietWarningKey,
   type ContextWindows,
@@ -19,6 +20,7 @@ import {
   type EngineJob,
   type EngineLocalConfig,
   type EngineUpdateResult,
+  type PeekScope,
   type SessionDefaults,
   type SessionRecord,
 } from '@pixelsky/protocol'
@@ -184,6 +186,8 @@ export class HostSettings {
     autoCompactPct: number | null
     contextWindows: ContextWindows
     args: string[]
+    peerMessages: boolean
+    peekSessions: PeekScope
   } {
     const o = this.file.options[engine] ?? {}
     return {
@@ -193,6 +197,8 @@ export class HostSettings {
       contextWindows: readContextWindows(o.contextWindows),
       // 设置文件是用户可改的 JSON，读出来再过一遍
       args: Array.isArray(o.args) ? o.args.filter((a): a is string => typeof a === 'string') : [],
+      peerMessages: o.peerMessages === true,
+      peekSessions: o.peekSessions === 'project' || o.peekSessions === 'all' ? o.peekSessions : 'off',
     }
   }
 
@@ -308,6 +314,16 @@ export class HostSettings {
       if (patch.hidden && engine === this.file.defaults.engine) throw new Error('默认引擎不能隐藏，先换一个默认引擎')
       if (patch.hidden) options.hidden = true
       else delete options.hidden
+    }
+    if (patch.peerMessages !== undefined) {
+      if (typeof patch.peerMessages !== 'boolean') throw new Error('「接收其他 Claude Code 会话的消息」的值不对')
+      if (patch.peerMessages) options.peerMessages = true
+      else delete options.peerMessages
+    }
+    if (patch.peekSessions !== undefined) {
+      if (!PEEK_SCOPES.includes(patch.peekSessions)) throw new Error('「查看本机其他会话」的值不对')
+      if (patch.peekSessions === 'off') delete options.peekSessions
+      else options.peekSessions = patch.peekSessions
     }
     if (patch.rememberChoices !== undefined) {
       if (typeof patch.rememberChoices !== 'boolean') throw new Error('「记住会话里的选择」的值不对')

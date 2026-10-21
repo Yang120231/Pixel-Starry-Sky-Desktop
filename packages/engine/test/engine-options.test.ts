@@ -169,21 +169,52 @@ describe('本机引擎详情设置', () => {
     await expect(host.setEngineConfig('claude', { autoCompactPct: 33 })).rejects.toThrow('自动压缩触发点不对')
   })
 
-  it('默认不加任何参数：允许提问、跟随 Claude Code 的输出风格和压缩阈值', async () => {
+  it('默认：允许提问、跟随 Claude Code 的输出风格和压缩阈值，不接收其他 Claude Code 会话的消息', async () => {
     const host = makeHost()
     expect(host.engineConfig().claude).toMatchObject({
       outputStyle: null,
       askQuestions: true,
       autoCompactPct: null,
       hidden: false,
+      peerMessages: false,
+      peekSessions: 'off',
     })
     const s = host.createSession({ projectId: project(host).id })
     await host.send(s.id, '你好')
     await waitFor(() => turnsDone(s.id) === 1)
     const args = spawnArgs().at(-1)!
     expect(args).not.toContain('--disallowedTools')
-    expect(args).not.toContain('--settings')
+    // 只有跨会话消息的收件设置（docs/ui/import-collab.md 第 5 项④）
+    expect(JSON.parse(args[args.indexOf('--settings') + 1])).toEqual({ crossSessionInbound: 'refuse' })
     expect(envLog().autoCompact).toBeUndefined()
+  })
+
+  it('打开「接收其他 Claude Code 会话发来的消息」：--settings 里改成 accept', async () => {
+    const host = makeHost()
+    await host.setEngineConfig('claude', { peerMessages: true })
+    expect(host.engineConfig().claude.peerMessages).toBe(true)
+    const s = host.createSession({ projectId: project(host).id })
+    await host.send(s.id, '你好')
+    await waitFor(() => turnsDone(s.id) === 1)
+    const args = spawnArgs().at(-1)!
+    expect(JSON.parse(args[args.indexOf('--settings') + 1])).toMatchObject({ crossSessionInbound: 'accept' })
+    await host.setEngineConfig('claude', { peerMessages: false })
+    expect(host.engineConfig().claude.peerMessages).toBe(false)
+    await expect(host.setEngineConfig('claude', { peerMessages: 'yes' as unknown as boolean })).rejects.toThrow(
+      '接收其他 Claude Code 会话的消息',
+    )
+  })
+
+  it('「查看本机其他会话」：存 project / all，关闭时不存；每个引擎分开，值不对时报错', async () => {
+    const host = makeHost()
+    await host.setEngineConfig('codex', { peekSessions: 'project' })
+    expect(host.engineConfig().codex.peekSessions).toBe('project')
+    expect(host.engineConfig().claude.peekSessions).toBe('off')
+    await host.setEngineConfig('claude', { peekSessions: 'all' })
+    expect(host.engineConfig().claude.peekSessions).toBe('all')
+    await host.setEngineConfig('codex', { peekSessions: 'off' })
+    expect(host.engineConfig().codex.peekSessions).toBe('off')
+    await expect(host.setEngineConfig('claude', { peekSessions: 'some' as 'all' })).rejects.toThrow('查看本机其他会话')
   })
 
   it('改了引擎级选项，已开始的会话在下一条消息前重启进程并接上原对话', async () => {

@@ -63,6 +63,10 @@ export interface EngineOptions {
   args?: string[]
   /** 会话里改推理强度那几项时也记成默认值（GitHub #6）；只存 true */
   rememberChoices?: boolean
+  /** Claude Code 接收其他 Claude Code 会话发来的消息；只存 true */
+  peerMessages?: boolean
+  /** 让 AI 只读地查看本机其他会话的范围；只存 project / all */
+  peekSessions?: 'project' | 'all'
 }
 
 export const DEFAULT_SETTINGS: EngineSettingsFile = {

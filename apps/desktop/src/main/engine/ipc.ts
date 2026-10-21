@@ -34,6 +34,7 @@ import { initSubagents } from '../subagents/ipc'
 import { initAi } from '../ai/ipc'
 import { Extensions } from '../extensions/ipc'
 import { historyEnabled, historyServer } from './history-mcp'
+import { threadsServer } from './threads-mcp'
 import { bundledPixelCli } from './pixel-cli'
 import { registerQuotaIpc } from './quota-ipc'
 import { initTerminalIpc } from '../terminal/ipc'
@@ -83,7 +84,10 @@ export async function initEngine(ctx: AppContext): Promise<void> {
   // 对话历史 MCP 服务：第一次有换过引擎的对话要派发消息时才启动
   const history = historyServer(ctx)
   app.on('will-quit', () => history.close())
-  const extensions = new Extensions(ctx, history)
+  // 查看本机其他会话的 MCP 服务：设置里开了、有会话要派发消息时才启动（docs/ui/import-collab.md 第 5 项③）
+  const threads = threadsServer(ctx)
+  app.on('will-quit', () => threads.close())
+  const extensions = new Extensions(ctx, history, threads)
   // 系统代理补给本机引擎（Claude Code / Codex 只认环境变量）；远程机器的宿主不传
   const proxyLog = logger('proxy')
   const systemProxy = new SystemProxy({
