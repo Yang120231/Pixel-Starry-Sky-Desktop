@@ -261,6 +261,7 @@ const routeChannels: Record<string, string> = {
   'terminal:clipboardRead': 'hostOnly',
   'terminal:clipboardWrite': 'hostOnly',
   'terminal:openLink': 'hostOnly',
+  'terminal:paste': 'hostOnly',
   'x:unknown': 'plain',
 }
 const decodeProfiles: Record<string, string[]> = {
@@ -474,6 +475,7 @@ const decodeChannels: Record<string, string> = {
   'terminal:clipboardRead': 'first',
   'terminal:clipboardWrite': 'first',
   'terminal:openLink': 'first',
+  'terminal:paste': 'first',
   'x:unknown': 'first',
 }
 

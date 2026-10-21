@@ -385,6 +385,7 @@ const terminal: TerminalBridge = {
   close: (id, force) => call('terminal:close', id, force),
   restart: (id, force) => call('terminal:restart', id, force),
   clipboardRead: () => call('terminal:clipboardRead'),
+  paste: () => call('terminal:paste'),
   clipboardWrite: value => call('terminal:clipboardWrite', value),
   openLink: url => call('terminal:openLink', url),
   onEvent: cb => {

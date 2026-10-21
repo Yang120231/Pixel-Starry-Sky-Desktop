@@ -997,6 +997,7 @@ export const IPC_CONTRACT = {
   'terminal:chooseProgram': { kind: 'invoke', route: 'self', trust: 'window' },
   'terminal:clipboardRead': { kind: 'invoke', route: 'hostOnly', trust: 'window' },
   'terminal:clipboardWrite': { kind: 'invoke', route: 'hostOnly', trust: 'window' },
+  'terminal:paste': { kind: 'invoke', route: 'hostOnly', trust: 'window' },
   'terminal:close': { kind: 'invoke', route: 'self', trust: 'window' },
   'terminal:create': { kind: 'invoke', route: 'self', trust: 'window' },
   'terminal:event': { kind: 'push', route: 'push', trust: 'none' },

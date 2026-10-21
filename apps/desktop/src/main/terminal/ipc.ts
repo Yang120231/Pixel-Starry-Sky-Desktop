@@ -161,6 +161,9 @@ export async function initTerminalIpc(
   handle('close', (e, key, force) => service.change(e.sender.id, id(key), false, force === true))
   handle('restart', (e, key, force) => service.change(e.sender.id, id(key), true, force === true))
   handle('clipboardRead', () => clipboard.readText())
+  // 右键菜单的「粘贴」：让页面自己执行一次粘贴，焦点所在的输入框收到和 Ctrl+V 一样的 paste 事件（图片、复制的文件都在里面）；
+  // clipboard.readText 只有文字，粘贴图片要走这里
+  handle('paste', e => e.sender.paste())
   handle('clipboardWrite', (_e, value: unknown) => {
     if (typeof value !== 'string' || value.length > 2_000_000) throw new Error('终端输入过长')
     clipboard.writeText(value)

@@ -25,6 +25,8 @@ export interface TerminalBridge {
   close(id: string, force?: boolean): Promise<void>
   restart(id: string, force?: boolean): Promise<TerminalRecord>
   clipboardRead(): Promise<string>
+  /** 在焦点所在的输入框里执行一次系统粘贴（和 Ctrl+V 一样，带图片和文件） */
+  paste(): Promise<void>
   clipboardWrite(text: string): Promise<void>
   openLink(url: string): Promise<void>
   onEvent(cb: (event: TerminalEvent) => void): () => void

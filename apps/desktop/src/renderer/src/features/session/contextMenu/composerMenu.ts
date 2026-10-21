@@ -17,7 +17,7 @@ import {
 import { tr } from '@/i18n/core'
 import type { MenuAction } from '@/ui/ActionMenu'
 import { pasteField, setFolded } from '../composerInput/pasteFold'
-import { clipboardRead, clipboardWrite } from './clipboard'
+import { clipboardRead, clipboardWrite, systemPaste } from './clipboard'
 
 /** 粘贴：plain 为真时不折叠（同 Ctrl+Shift+V）。ComposerInput 的粘贴事件和菜单共用 */
 export type InsertPaste = (view: EditorView, raw: string, plain: boolean) => void
@@ -28,12 +28,17 @@ export function composerMenuActions(view: EditorView, at: number, insertPaste: I
   const ranges = state.selection.ranges.filter(r => !r.empty)
   const text = ranges.map(r => state.sliceDoc(r.from, r.to)).join('\n')
   const done = (): void => view.focus()
-  const paste = (plain: boolean) => (): void =>
+  const pasteText = (plain: boolean) => (): void =>
     void clipboardRead()
       .then(value => {
         if (value) insertPaste(view, value, plain)
       })
       .finally(done)
+  // 「粘贴」走系统粘贴，和 Ctrl+V 同一条路（图片、文件进附件）；clipboardRead 只读得到文字。「粘贴为纯文本」只要文字
+  const paste = (): void => {
+    view.focus()
+    void systemPaste().then(ok => (ok ? done() : pasteText(false)()))
+  }
   const actions: MenuAction[] = [
     { label: tr('ctxmenu.undo'), icon: Undo2, disabled: undoDepth(state) === 0, run: () => (undo(view), done()) },
     { label: tr('ctxmenu.redo'), icon: Redo2, disabled: redoDepth(state) === 0, run: () => (redo(view), done()) },
@@ -49,8 +54,8 @@ export function composerMenuActions(view: EditorView, at: number, insertPaste: I
         }),
     },
     { label: tr('ctxmenu.copy'), icon: Copy, disabled: !text, run: () => void clipboardWrite(text).then(done) },
-    { label: tr('ctxmenu.paste'), icon: ClipboardPaste, run: paste(false) },
-    { label: tr('ctxmenu.pastePlain'), icon: ClipboardType, run: paste(true) },
+    { label: tr('ctxmenu.paste'), icon: ClipboardPaste, run: paste },
+    { label: tr('ctxmenu.pastePlain'), icon: ClipboardType, run: pasteText(true) },
     {
       label: tr('ctxmenu.selectAll'),
       icon: TextSelect,
