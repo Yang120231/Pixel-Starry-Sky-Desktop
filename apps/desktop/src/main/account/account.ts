@@ -9,10 +9,12 @@ import { hostname, release } from 'node:os'
 import { join } from 'node:path'
 import { app, BrowserWindow, net, safeStorage, shell } from 'electron'
 import { codedError } from '@pixelsky/protocol'
+import { logger } from '@pixelsky/engine'
 import { nativeText, windowLocale } from '../app/ui-language'
 import { isPayWindow } from '../app/payWindowRegistry'
 import { sendTo } from '../app/rendererHealth'
 import * as ipc from '../ipc/guard'
+import { requestViaIp, withIpFallback } from './ip-fallback'
 import type {
   AccountInfo,
   AccountPlan,
@@ -250,32 +252,48 @@ function describeError(e: unknown): string {
   return '未知错误'
 }
 
+const log = logger('account')
+
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text) as unknown
+  } catch {
+    return null // 响应体不是 JSON 就当没有
+  }
+}
+
+/** fallback：获取额度和它前面的刷新令牌，域名连不上时改连备用 IP（ip-fallback.ts） */
 async function http(
   method: 'GET' | 'POST',
   path: string,
-  opts: { token?: string; body?: Record<string, unknown> } = {},
+  opts: { token?: string; body?: Record<string, unknown>; fallback?: boolean } = {},
 ): Promise<HttpResult> {
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (opts.token) headers.Authorization = `Bearer ${opts.token}`
   if (opts.body) headers['Content-Type'] = 'application/json'
-  let res: Response
+  const url = baseUrl() + path
+  const body = opts.body ? JSON.stringify(opts.body) : undefined
+  const direct = async (): Promise<HttpResult> => {
+    const res = await fetch(url, { method, headers, body, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
+    return { status: res.status, body: parseJson(await res.text().catch(() => '')) }
+  }
   try {
-    res = await fetch(baseUrl() + path, {
-      method,
-      headers,
-      body: opts.body ? JSON.stringify(opts.body) : undefined,
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    })
+    if (!opts.fallback) return await direct()
+    return await withIpFallback(
+      url,
+      direct,
+      async ip => {
+        const res = await requestViaIp(new URL(url), ip, { method, headers, body })
+        return { status: res.status, body: parseJson(res.text) }
+      },
+      {
+        idempotent: method === 'GET',
+        onSwitch: (ip, reason) => log.warn('域名连不上，改用备用地址', { ip, path, reason: describeError(reason) }),
+      },
+    )
   } catch (e) {
     throw new TransientError(`网络错误：${describeError(e)}`)
   }
-  let body: unknown = null
-  try {
-    body = await res.json()
-  } catch {
-    /* 响应体不是 JSON 就当没有 */
-  }
-  return { status: res.status, body }
 }
 
 function isObject(v: unknown): v is Record<string, unknown> {
@@ -333,6 +351,7 @@ async function doRefresh(): Promise<void> {
       refresh_token: current.refreshToken,
       client_version: app.getVersion(),
     },
+    fallback: true,
   })
   if (myEpoch !== epoch) {
     // 期间已退出或重新登录，丢弃结果；服务端已轮换出新令牌，没人持有它，要撤销掉
@@ -361,13 +380,13 @@ async function authedGet(path: string): Promise<HttpResult> {
   if (tokens.accessExpiresAt - Date.now() < REFRESH_SKEW_MS) await refreshTokens()
   let used = tokens
   if (!used) throw new AuthExpiredError()
-  let res = await http('GET', path, { token: used.accessToken })
+  let res = await http('GET', path, { token: used.accessToken, fallback: true })
   if (res.status === 401) {
     // 如果别的请求已经换过令牌，直接用新的重试，不再重复刷新
     if (tokens && tokens.accessToken === used.accessToken) await refreshTokens()
     used = tokens
     if (!used) throw new AuthExpiredError()
-    res = await http('GET', path, { token: used.accessToken })
+    res = await http('GET', path, { token: used.accessToken, fallback: true })
     if (res.status === 401) throw new AuthExpiredError()
   }
   return res
