@@ -31,16 +31,25 @@ import type {
   ChannelMessage,
   ChannelsSnapshot,
   ChannelSearchResult,
+  ChannelRelay,
   ChannelTask,
   ChannelTaskAction,
   ChannelTextMessage,
   HumanMember,
+  JoinSessionInput,
   PostInput,
   AgentPolicy,
   ChannelAttachments,
   TeamRole,
 } from '../../../shared/types/channels'
-import { isReservedMentionName, mentionsAll, parseMentions, type Mentionable } from '../../../shared/channels/mentions'
+import { RELAY_HOPS, RELAY_PAIR, RELAY_WINDOW_MINUTES } from '../../../shared/types/channels'
+import {
+  isReservedMentionName,
+  mentionsAll,
+  parseMentions,
+  splitMentions,
+  type Mentionable,
+} from '../../../shared/channels/mentions'
 import { ChannelStore, type StoredChannel } from './store'
 import {
   attachedNote,
@@ -53,8 +62,11 @@ import {
   historyLines,
   summaryOf,
   taskTitle,
+  withoutCode,
+  type Handoff,
 } from './prompt'
 import {
+  changedFiles,
   clientMessageId,
   diffTotal,
   reconcileRun,
@@ -75,6 +87,22 @@ const TOPIC_MAX = 200
 /** 频道说明最多这么长；置顶最多这么多条（docs/ui/channels-local-ai.md §3.1 #9） */
 export const NOTES_MAX = 2000
 export const PIN_MAX = 10
+/**
+ * AI 互相派活（docs/ui/import-collab.md 第 5 项①）：防刷规则的次数在 shared/types/channels.ts（界面也要写）；
+ * 这里是时间窗口和一条回复最多交给几个成员
+ */
+const RELAY_WINDOW = RELAY_WINDOW_MINUTES * 60_000
+const RELAY_TARGETS = 3
+/** 交接时带上的上一项活的回复最多这么多字；派活要求（回复里 @ 到对方的那几段）最多这么多字 */
+const HANDOFF_CHARS = 4000
+const RELAY_REQUEST_CHARS = 2000
+
+/** 别的 AI 成员交过来的一跳：提示词里写谁交的、要求是什么、交接了什么 */
+interface RelayInput {
+  author: string
+  request: string
+  handoff: Handoff
+}
 const PAGE = 200
 /** 频道消息搜索最多返回这么多条；搜索词最多这么长（和全局搜索一样） */
 const SEARCH_LIMIT = 50
@@ -278,7 +306,16 @@ export class Channels {
       last,
       stats: { total, done, failed },
       sharesDirWith: shares,
+      ...(config.bound ? { boundSession: this.boundSession(config) } : {}),
     }
+  }
+
+  /** 从已有会话加入的成员绑定的会话；会话被删了是 null */
+  private boundSession(config: AgentConfig): AgentMember['boundSession'] {
+    const s = config.sharedSessionId
+      ? this.deps.sessions().find(x => x.record.id === config.sharedSessionId)
+      : undefined
+    return s ? { id: s.record.id, title: s.record.title } : null
   }
 
   private unreadOf(channel: StoredChannel): { unread: number; mentioned: boolean; lastAt: number } {
@@ -306,6 +343,7 @@ export class Channels {
         pinned: c.pinned ?? [],
         notify: c.notify ?? 'all',
         archivedAt: c.archivedAt ?? null,
+        relay: c.relay === true,
         project: c.projectId ? (projects.get(c.projectId)?.name ?? null) : null,
         projectId: c.projectId,
         scope: 'local' as const,
@@ -316,6 +354,15 @@ export class Channels {
       .sort((a, b) => b.lastAt - a.lastAt)
     const sessionChannels: Record<string, string> = {}
     const sessionTasks: NonNullable<ChannelsSnapshot['sessionTasks']> = {}
+    // 加入了频道的会话（第 5 项②）：还没派过活也显示 # 频道
+    const sessionBindings: NonNullable<ChannelsSnapshot['sessionBindings']> = {}
+    for (const c of this.store.channels.values())
+      for (const id of c.memberIds) {
+        const m = this.member(id)
+        if (!m?.bound || !m.sharedSessionId) continue
+        ;(sessionBindings[m.sharedSessionId] ??= []).push({ channelId: c.id, memberId: m.id })
+        sessionChannels[m.sharedSessionId] = c.name
+      }
     for (const [channelId, list] of this.store.messages) {
       const name = this.store.channels.get(channelId)?.name
       if (name)
@@ -345,6 +392,7 @@ export class Channels {
       members,
       sessionChannels,
       sessionTasks,
+      sessionBindings,
       teams: team?.teams ?? [],
       invites: team?.invites ?? [],
       // 没有团队同步（团队功能关着，见 main/channels/ipc.ts 的 teamsEnabled）：报不可用，界面藏起所有团队入口
@@ -527,6 +575,8 @@ export class Channels {
       projectId?: string | null
       /** 归档 / 恢复（只有本机频道） */
       archived?: boolean
+      /** 允许 AI 成员互相派活（只有本机频道） */
+      relay?: boolean
     },
   ): Promise<void> {
     const info = this.team?.channelInfo(id)
@@ -576,6 +626,12 @@ export class Channels {
     }
     if (patch.notes !== undefined)
       c.notes = typeof patch.notes === 'string' && patch.notes.trim() ? patch.notes.trim().slice(0, NOTES_MAX) : null
+    if (patch.relay !== undefined) {
+      if (typeof patch.relay !== 'boolean') throw new Error('「允许 AI 成员互相派活」的值不对')
+      // 刚打开：防刷计数从现在算
+      if (patch.relay && !c.relay) c.relayResetAt = this.now()
+      c.relay = patch.relay
+    }
     // 归档时一并标为已读：收起来的频道不再算未读
     if (archiving) {
       c.archivedAt = this.now()
@@ -662,6 +718,8 @@ export class Channels {
       mode: raw.mode === 'shared' ? 'shared' : 'per-task',
       // 换了引擎、目录或额度来源（会话开出来就定了），原来的共用会话不能再用
       sharedSessionId: moved ? null : (existing?.sharedSessionId ?? null),
+      // 从已有会话加入的：换了这些也就不再绑着那个会话
+      ...(existing?.bound && !moved && raw.mode === 'shared' ? { bound: true } : {}),
       createdAt: existing?.createdAt ?? this.now(),
     }
     this.store.members = existing
@@ -729,6 +787,62 @@ export class Channels {
     this.changed()
   }
 
+  /**
+   * 把已有的会话加入频道（docs/ui/import-collab.md 第 5 项②）：成员绑着这个会话（一直用同一个会话），频道派来的活
+   * 就在里面接着做，上下文都在；会话不改名，照常能自己聊。同一个会话再加入别的频道时用同一个成员。
+   * 不写 channelId 时新建一个频道（默认项目是会话的项目）
+   */
+  async joinSession(raw: JoinSessionInput): Promise<{ channelId: string; memberId: string }> {
+    const sessionId = typeof raw?.sessionId === 'string' ? raw.sessionId : ''
+    const record = this.deps.sessions().find(s => s.record.id === sessionId)?.record
+    if (!record) throw new Error('会话不存在')
+    if (record.archivedAt) throw new Error('归档的会话不能加入频道，恢复后再加')
+    if (!ENGINES.has(record.engine)) throw new Error('不支持的引擎')
+    if (!this.deps.projects().some(p => p.id === record.projectId)) throw new Error('会话的项目不存在')
+    let member = this.store.members.find(m => m.bound && m.sharedSessionId === sessionId)
+    // 先查成员名，再建频道：名字不对时不留下一个空频道
+    const name = member ? member.name : cleanName(raw.name, '成员名')
+    if (!member && this.store.members.some(m => m.name.toLowerCase() === name.toLowerCase()))
+      throw new Error('已经有同名的 AI 成员')
+    if (!member && isReservedMentionName(name)) throw new Error('「全体」「all」留给 @全体，换个名字吧')
+    const existingChannel = typeof raw.channelId === 'string' && raw.channelId ? raw.channelId : null
+    if (existingChannel) this.writable(existingChannel)
+    const channelId =
+      existingChannel ?? (await this.create({ name: raw.channelName ?? '', projectId: record.projectId }))
+    if (!member) {
+      member = {
+        id: randomUUID(),
+        name,
+        engine: record.engine,
+        machineId: this.deps.machineOf(record.projectId),
+        projectId: record.projectId,
+        copyId: null,
+        // 会话自己的模型、权限照旧，频道不另外设
+        settings: {},
+        instructions: (typeof raw.instructions === 'string' ? raw.instructions : '').slice(0, INSTRUCTIONS_MAX),
+        mode: 'shared',
+        sharedSessionId: sessionId,
+        bound: true,
+        createdAt: this.now(),
+      }
+      this.store.members = [...this.store.members, member]
+      await this.store.saveMembers()
+    }
+    await this.addMember(channelId, member.id)
+    this.changed()
+    return { channelId, memberId: member.id }
+  }
+
+  /** 会话退出频道：绑着它的成员移出这个频道；不在任何频道里了就删掉这个成员（会话本身不动） */
+  async leaveSession(sessionId: string, channelId: string): Promise<void> {
+    const member = this.store.members.find(m => m.bound && m.sharedSessionId === sessionId)
+    if (!member) return
+    await this.removeMember(channelId, member.id)
+    const elsewhere = [...this.store.channels.values()].some(c => c.memberIds.includes(member.id))
+    const busy = [...this.store.runs.values()].some(r => r.memberId === member.id && r.phase !== 'ended')
+    if (!elsewhere && !busy) await this.deleteMember(member.id)
+  }
+
   // -------------------------------------------------------------------------
   // 发消息、派活
   // -------------------------------------------------------------------------
@@ -789,8 +903,8 @@ export class Channels {
     }
     this.posted.set(clientId, message.id)
     await this.store.append(message)
-    // 发消息就算看过了
-    await this.store.saveChannel({ ...c, readAt: now })
+    // 发消息就算看过了；AI 互相派活的防刷计数也从这里重新算
+    await this.store.saveChannel({ ...c, readAt: now, relayResetAt: now })
     this.pushMessage(message)
     const agents = (message.mentions ?? []).filter(id => this.member(id))
     const target = this.replyTask(channelId, replyToId)
@@ -851,13 +965,14 @@ export class Channels {
     }
   }
 
-  /** 第一次派给成员的提示词：带最近的讨论和被引用的消息 */
+  /** 第一次派给成员的提示词：带最近的讨论和被引用的消息；relay 是别的 AI 成员交过来的（谁交的、要求、交接内容） */
   private freshPrompt(
     c: StoredChannel,
     source: ChannelTextMessage,
     member: AgentConfig,
     replyToId: string | null,
     shared: boolean,
+    relay?: RelayInput,
   ): string {
     const list = this.store.messages.get(c.id) ?? []
     const locale = this.deps.locale()
@@ -884,14 +999,96 @@ export class Channels {
       channel: { name: c.name, topic: c.topic },
       notes: c.notes ?? null,
       pinned: this.pinnedLines(c),
-      author: this.nameOf(SELF_ID),
+      author: relay ? relay.author : this.nameOf(SELF_ID),
       instructions: member.instructions,
       history: historyLines(list, { beforeId: source.id, since, skip: replyToId, nameOf: this.nameOf, locale }),
       quoted: quotedText,
-      request: source.text,
+      request: relay ? relay.request : source.text,
       attached: source.attached ? { images: source.attached.images.length, files: source.attached.files.length } : null,
-      together: this.together(c, source, member.id),
+      together: relay ? [] : this.together(c, source, member.id),
+      handoff: relay?.handoff ?? null,
+      peers: c.relay ? this.relayPeers(c, member.id) : null,
     })
+  }
+
+  /** 频道允许 AI 互相派活时，告诉 AI 还有哪些成员能交活（名字和职责的第一行） */
+  private relayPeers(c: StoredChannel, selfId: string): { name: string; role: string }[] {
+    return c.memberIds.flatMap(id => {
+      const m = id === selfId ? undefined : this.member(id)
+      if (!m) return []
+      const role =
+        m.instructions
+          .split(/\r?\n/)
+          .find(line => line.trim())
+          ?.trim() ?? ''
+      return [{ name: m.name, role: role.length > 80 ? `${role.slice(0, 80)}…` : role }]
+    })
+  }
+
+  /**
+   * AI 做完一项活、回复里 @ 了频道里别的 AI 成员（代码块里的不算）：要交给谁、要求是什么、是不是超了防刷规则。
+   * 频道没开「允许 AI 成员互相派活」时什么都不做（@ 只是文字）
+   */
+  private relayPlan(
+    c: StoredChannel,
+    run: TaskRun,
+    task: ChannelTask,
+    reply: string,
+  ): { target: string; request: string; relay: ChannelRelay }[] {
+    if (!c.relay || c.archivedAt) return []
+    const members = this.channelMembers(c)
+    const paragraphs = withoutCode(reply)
+      .split(/\n\s*\n/)
+      .map(p => p.trim())
+      .filter(Boolean)
+    const targets = new Map<string, string[]>()
+    for (const paragraph of paragraphs)
+      for (const s of splitMentions(paragraph, members))
+        if (s.memberId && s.memberId !== run.memberId && this.member(s.memberId)) {
+          const list = targets.get(s.memberId) ?? []
+          if (!list.includes(paragraph)) list.push(paragraph)
+          targets.set(s.memberId, list)
+        }
+    const chain = task.relay?.chain ?? task.id
+    const hop = (task.relay?.hop ?? 0) + 1
+    let hops = this.chainHops(c, chain)
+    return [...targets].slice(0, RELAY_TARGETS).map(([target, list]) => {
+      const pair = this.pairRelays(c, run.memberId, target)
+      const held = hops >= RELAY_HOPS ? 'hops' : pair >= RELAY_PAIR ? 'pair' : null
+      if (!held) hops++
+      const text = list.join('\n\n')
+      return {
+        target,
+        request: text.length > RELAY_REQUEST_CHARS ? `${text.slice(0, RELAY_REQUEST_CHARS)}…` : text,
+        relay: { chain, hop, held },
+      }
+    })
+  }
+
+  /** 防刷计数从这之后算：你上次在频道里发言、打开互相派活或放行被拦下的接力 */
+  private relaySince(c: StoredChannel): number {
+    return c.relayResetAt ?? c.createdAt
+  }
+
+  /** 这条接力从计数起点以来已经接了几跳（被拦下没放行的不算） */
+  private chainHops(c: StoredChannel, chain: string): number {
+    const since = this.relaySince(c)
+    return (this.store.messages.get(c.id) ?? []).filter(
+      m => m.kind === 'task' && m.relay && !m.relay.held && m.relay.chain === chain && m.at > since,
+    ).length
+  }
+
+  /** 两个成员之间 10 分钟内（且在计数起点之后）互派了几次（被拦下没放行的不算） */
+  private pairRelays(c: StoredChannel, a: string, b: string): number {
+    const since = Math.max(this.relaySince(c), this.now() - RELAY_WINDOW)
+    return (this.store.messages.get(c.id) ?? []).filter(
+      m =>
+        m.kind === 'task' &&
+        m.relay &&
+        !m.relay.held &&
+        m.at > since &&
+        ((m.authorId === a && m.assigneeId === b) || (m.authorId === b && m.assigneeId === a)),
+    ).length
   }
 
   /** 置顶的消息（还在的、是文字消息的）：「名字：原文」，派活时作为资料带上 */
@@ -925,32 +1122,41 @@ export class Channels {
     return (source.mentions ?? []).filter(id => id !== memberId && this.member(id)).map(this.nameOf)
   }
 
-  private newTask(c: StoredChannel, source: ChannelTextMessage, memberId: string, replyToId: string | null): string {
+  private newTask(
+    c: StoredChannel,
+    source: ChannelTextMessage,
+    memberId: string,
+    replyToId: string | null,
+    /** 别的 AI 成员交过来的一跳：交活的成员、接力信息、要求和交接内容 */
+    relay?: RelayInput & { from: string; relay: ChannelRelay },
+  ): string {
     const member = this.member(memberId)!
     const now = this.now()
+    const text = relay ? relay.request : source.text
     const task: ChannelTask = {
       kind: 'task',
       id: randomUUID(),
       channelId: c.id,
       at: now,
-      authorId: SELF_ID,
+      authorId: relay?.from ?? SELF_ID,
       assigneeId: memberId,
       title:
-        taskTitle(source.text, this.channelMembers(c)) ||
+        taskTitle(text, this.channelMembers(c)) ||
         // 只 @ 了人、没写字：用附件的文件名
         [...(source.attached?.images ?? []), ...(source.attached?.files ?? [])]
           .map(a => a.name)
           .join('、')
           .slice(0, 60) ||
-        source.text.slice(0, 60),
+        text.slice(0, 60),
       status: 'queued',
       sessionId: null,
       sourceMessageId: source.id,
       round: 1,
+      ...(relay ? { relay: relay.relay } : {}),
     }
     void this.store.append(task).catch(e => this.deps.log?.('保存频道消息失败', e))
     this.pushMessage(task)
-    const prompt = this.freshPrompt(c, source, member, replyToId, member.mode === 'shared')
+    const prompt = this.freshPrompt(c, source, member, replyToId, member.mode === 'shared', relay)
     const run: TaskRun = {
       taskId: task.id,
       channelId: c.id,
@@ -962,7 +1168,7 @@ export class Channels {
       clientMessageId: null,
       prompt,
       // 共用会话被删了、要新开时，带完整的讨论
-      freshPrompt: member.mode === 'shared' ? this.freshPrompt(c, source, member, replyToId, false) : prompt,
+      freshPrompt: member.mode === 'shared' ? this.freshPrompt(c, source, member, replyToId, false, relay) : prompt,
       started: false,
       turnId: null,
       requests: [],
@@ -1077,7 +1283,10 @@ export class Channels {
   private async pump(memberId: string): Promise<void> {
     const runs = [...this.store.runs.values()].filter(r => r.memberId === memberId)
     const busy = runs.some(r => r.phase === 'sent')
-    const waiting = runs.filter(r => r.phase === 'waiting').sort((a, b) => a.queuedAt - b.queuedAt)
+    // 被防刷规则拦下的接力等你放行，不排进队列
+    const waiting = runs
+      .filter(r => r.phase === 'waiting' && !this.taskOf(r)?.relay?.held)
+      .sort((a, b) => a.queuedAt - b.queuedAt)
     waiting.forEach((r, i) => {
       const ahead = i + (busy ? 1 : 0)
       if (this.taskOf(r)?.ahead !== ahead) this.patch(r.channelId, r.taskId, { ahead })
@@ -1191,6 +1400,9 @@ export class Channels {
           const decide = patch.decision && run.team.author ? [run.team.author] : []
           teamResult = { text: clipResult(reply, locale), mentions: decide }
         } else if (reply) {
+          const c = this.store.channels.get(run.channelId)
+          // 回复里 @ 了别的 AI 成员、频道允许互相派活：交给他们（docs/ui/import-collab.md 第 5 项①）
+          const relays = c ? this.relayPlan(c, run, task, reply) : []
           const result: ChannelTextMessage = {
             kind: 'message',
             id: randomUUID(),
@@ -1201,11 +1413,26 @@ export class Channels {
             format: 'markdown',
             replyToId: task.id,
             taskId: task.id,
-            mentions: patch.decision ? [SELF_ID] : [],
+            // 要你决定、或接力被拦下等你放行：算 @你
+            mentions: patch.decision || relays.some(r => r.relay.held) ? [SELF_ID] : [],
           }
-          if (this.store.channels.has(run.channelId)) {
+          if (c) {
             void this.store.append(result).catch(e => this.deps.log?.('保存频道消息失败', e))
             this.pushMessage(result)
+            const handoff: Handoff = {
+              from: this.nameOf(run.memberId),
+              title: task.title,
+              reply: reply.length > HANDOFF_CHARS ? `${reply.slice(0, HANDOFF_CHARS)}…` : reply,
+              files: changedFiles(run),
+            }
+            for (const r of relays)
+              this.newTask(c, result, r.target, null, {
+                from: run.memberId,
+                author: handoff.from,
+                request: r.request,
+                handoff,
+                relay: r.relay,
+              })
           }
         }
       }
@@ -1266,6 +1493,8 @@ export class Channels {
   async taskAction(taskId: string, action: ChannelTaskAction): Promise<void> {
     // 团队卡：请求记在云端卡片上，由主人的电脑执行
     if (this.team?.card(taskId)) {
+      // 团队频道没有 AI 互相派活，也就没有被拦下的接力
+      if (action === 'continue') return
       await this.team.taskCall(taskId, teamId => this.team!.api.action(teamId, taskId, action))
       return
     }
@@ -1277,13 +1506,23 @@ export class Channels {
     const run = this.store.runs.get(taskId)
     const task = run?.team ? this.taskOf(run) : this.store.task(taskId)
     if (!task) throw new Error('任务不存在')
+    if (action === 'continue') {
+      // 放行被防刷规则拦下的接力：计数从现在重新算
+      if (!task.relay?.held || run?.phase !== 'waiting') return
+      const c = this.writable(task.channelId)
+      await this.store.saveChannel({ ...c, relayResetAt: this.now() })
+      this.patch(task.channelId, task.id, { relay: { ...task.relay, held: null } })
+      void this.pump(run.memberId)
+      return
+    }
     if (action === 'retry') {
       if (!terminal(task.status)) return
       if (!this.member(task.assigneeId)) throw new Error('成员不存在')
       const c = this.writable(task.channelId)
       const source = this.store.messages.get(c.id)?.find(m => m.id === task.sourceMessageId)
+      // 别的 AI 交过来的：派活时的提示词（交接内容）原样用
       const fresh =
-        source?.kind === 'message'
+        source?.kind === 'message' && !task.relay
           ? this.freshPrompt(c, source, this.member(task.assigneeId)!, source.replyToId ?? null, false)
           : (run?.freshPrompt ?? task.title)
       // 还没开始就失败：原样再发一次；做到一半：发「继续」

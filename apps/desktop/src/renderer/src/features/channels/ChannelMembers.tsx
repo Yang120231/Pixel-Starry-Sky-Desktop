@@ -16,7 +16,7 @@ import {
   UserPlus,
   X,
 } from 'lucide-react'
-import { Button, cn, IconButton, Select, Spinner, useComingSoon, useToast } from '@/ui'
+import { Button, cn, IconButton, Select, Spinner, Switch, useComingSoon, useToast } from '@/ui'
 import { ActionMenu, type MenuAction } from '@/ui/ActionMenu'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
 import { relativeTime } from '@/features/engine'
@@ -219,8 +219,14 @@ function AgentRow({
         ...(member.config
           ? [{ label: tr('channels.members.edit'), icon: Pencil, run: () => onEdit(member.config!) }]
           : []),
-        ...(member.sessionId
-          ? [{ label: tr('channels.openSession'), icon: ArrowUpRight, run: () => onOpenSession(member.sessionId!) }]
+        ...(member.sessionId || member.boundSession
+          ? [
+              {
+                label: tr('channels.openSession'),
+                icon: ArrowUpRight,
+                run: () => onOpenSession((member.sessionId ?? member.boundSession?.id)!),
+              },
+            ]
           : []),
         ...(readOnly
           ? []
@@ -293,6 +299,19 @@ function AgentRow({
           </span>
         </div>
         {member.warning && <div className="text-meta text-warn">{translateMessage(member.warning)}</div>}
+        {member.config?.bound &&
+          (member.boundSession ? (
+            <button
+              type="button"
+              data-bound-session
+              onClick={() => onOpenSession(member.boundSession!.id)}
+              className="block max-w-full truncate text-left text-meta text-fg-muted hover:text-fg"
+            >
+              {tr('channels.members.bound', { title: member.boundSession.title })}
+            </button>
+          ) : (
+            <div className="text-meta text-fg-faint">{tr('channels.members.boundGone')}</div>
+          ))}
         {!!member.sharesDirWith?.length && (
           <div className="text-meta text-fg-faint">
             {tr('channels.members.sharesDir', { names: member.sharesDirWith.join('、') })}
@@ -470,6 +489,25 @@ export function ChannelMembers({
                   }
                   className="h-7 w-full"
                 />
+              </dd>
+              <dt className="self-center text-fg-faint">{tr('channels.members.relay')}</dt>
+              <dd className="flex min-w-0 items-center gap-2" title={tr('channels.dialog.relayHint')}>
+                <Switch
+                  size="sm"
+                  checked={channel.relay === true}
+                  disabled={archived}
+                  label={tr('channels.dialog.relay')}
+                  onChange={on =>
+                    void channelActions
+                      .updateChannel(channel.id, { relay: on })
+                      .catch(e =>
+                        toast(tr('channels.task.actionFailed', { error: translateMessage((e as Error).message) })),
+                      )
+                  }
+                />
+                <span className="text-meta text-fg-muted">
+                  {tr(channel.relay ? 'channels.members.relayOn' : 'channels.members.relayOff')}
+                </span>
               </dd>
             </>
           )}

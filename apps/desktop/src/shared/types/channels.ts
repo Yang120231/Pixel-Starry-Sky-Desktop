@@ -118,6 +118,11 @@ export interface AgentConfig {
   mode: 'per-task' | 'shared'
   /** mode=shared 时用的会话 */
   sharedSessionId: string | null
+  /**
+   * 从已有的会话加入频道的成员（docs/ui/import-collab.md 第 5 项②）：sharedSessionId 是你自己开的那个会话，
+   * 频道派来的活就在里面接着做；没写是频道自己建的成员
+   */
+  bound?: boolean
   createdAt: number
 }
 
@@ -160,6 +165,8 @@ export interface AgentMember {
   stats?: { total: number; done: number; failed: number }
   /** 和这些成员用同一个工作目录（同时改文件可能冲突） */
   sharesDirWith?: string[]
+  /** 从已有会话加入的成员：绑定的会话（标题是会话现在的标题；会话被删了是 null） */
+  boundSession?: { id: string; title: string } | null
 }
 
 export type ChannelMember = HumanMember | AgentMember
@@ -182,6 +189,8 @@ export interface Channel {
   notify?: ChannelNotify
   /** 归档的时间（§3.1 #11）：收进列表底部「已归档」，只读，可恢复；没归档是 null / 没写 */
   archivedAt?: number | null
+  /** 允许 AI 成员互相派活（docs/ui/import-collab.md 第 5 项①，§3.2 #4）：AI 回复里的 @成员 会派活；没写是关 */
+  relay?: boolean
   /** Phase C：团队频道属于哪个团队 */
   teamId?: string
   memberIds: string[]
@@ -266,10 +275,27 @@ export interface ChannelTask extends ChannelMessageBase {
   /** Phase C：AI 成员的主人（owner key）；只有主人能同意、回答、打开会话 */
   ownerId?: string
   /** Phase C：派活的人或主人点了取消 / 停止 / 重试，等主人那台电脑执行 */
-  pendingAction?: ChannelTaskAction | null
+  pendingAction?: Exclude<ChannelTaskAction, 'continue'> | null
   /** Phase C：主人的电脑不在线（queued 时显示「上线后开始」） */
   ownerOffline?: boolean
+  /** AI 成员互相派活的一跳（authorId 是交活的成员）；held：超了防刷规则，停下等你点「继续」 */
+  relay?: ChannelRelay | null
 }
+
+/**
+ * AI 互相派活（docs/ui/import-collab.md 第 5 项①）：chain 是这条接力最早那张卡的 id，hop 从 1 数；
+ * held = hops：这条链从你上次发言 / 点「继续」以来已经接了 6 跳；pair：同一对成员 10 分钟内已经互派 4 次
+ */
+export interface ChannelRelay {
+  chain: string
+  hop: number
+  held?: 'hops' | 'pair' | null
+}
+
+/** AI 互相派活的防刷规则：一条接力最多几跳；同一对成员多少分钟内最多互派几次（主进程判断，界面写进说明） */
+export const RELAY_HOPS = 6
+export const RELAY_PAIR = 4
+export const RELAY_WINDOW_MINUTES = 10
 
 export interface ChannelEvent extends ChannelMessageBase {
   kind: 'event'
@@ -322,6 +348,8 @@ export interface ChannelsSnapshot {
    * 这些会话的系统提醒按频道的说法写，点开回到频道定位到卡片
    */
   sessionTasks?: Record<string, { channelId: string; taskId: string; memberId: string }>
+  /** 加入了频道的会话（docs/ui/import-collab.md 第 5 项②）→ 在哪些频道里、是哪个成员（会话菜单「退出频道」、标题旁的 # 频道） */
+  sessionBindings?: Record<string, { channelId: string; memberId: string }[]>
   // ── Phase C ──
   teams: TeamInfo[]
   invites: PendingInvite[]
@@ -346,6 +374,17 @@ export interface ChannelInput {
   teamId?: string | null
 }
 
+/** 把已有的会话加入频道（docs/ui/import-collab.md 第 5 项②）：channelId 不写时新建一个叫 channelName 的频道 */
+export interface JoinSessionInput {
+  sessionId: string
+  channelId?: string | null
+  channelName?: string
+  /** 成员名字（频道里 @ 它用） */
+  name: string
+  /** 职责说明，派活时带上 */
+  instructions?: string
+}
+
 /** machineId 由主进程按 projectId 推出来 */
 export type AgentInput = Omit<AgentConfig, 'id' | 'createdAt' | 'sharedSessionId' | 'machineId'> & { id?: string }
 
@@ -359,4 +398,5 @@ export interface PostInput {
   files?: FileAttachment[]
 }
 
-export type ChannelTaskAction = 'cancel' | 'stop' | 'retry'
+/** continue：放行被防刷规则拦下的那一跳 */
+export type ChannelTaskAction = 'cancel' | 'stop' | 'retry' | 'continue'

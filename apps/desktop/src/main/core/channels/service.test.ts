@@ -502,6 +502,244 @@ const image = (id: string) => ({
   height: 1,
   dataBase64: PNG,
 })
+/** 最近发给会话的那一轮做完：可选先改几个文件 */
+async function finishLast(c: Channels, reply: string, files: string[] = []): Promise<void> {
+  const s = engine.sends().at(-1)!
+  const turn = `turn-${s.clientMessageId}`
+  c.hostEvent(ev(s.sessionId, userItem(s.clientMessageId, turn)))
+  if (files.length)
+    c.hostEvent(
+      ev(s.sessionId, {
+        type: 'item_completed',
+        item: {
+          kind: 'file_change',
+          id: `f-${turn}`,
+          status: 'completed',
+          changes: files.map(path => ({ path, kind: 'update' as const, diff: '', added: 1, removed: 1 })),
+        },
+      }),
+    )
+  c.hostEvent(
+    ev(s.sessionId, {
+      type: 'item_completed',
+      item: { kind: 'assistant', id: `a-${turn}`, text: reply, status: 'completed' },
+    }),
+  )
+  c.hostEvent(ev(s.sessionId, { type: 'turn_completed', turnId: turn, outcome: 'completed', error: null }))
+  await settle()
+}
+
+describe('协作频道：AI 互相派活（docs/ui/import-collab.md 第 5 项①）', () => {
+  it('频道没开：AI 回复里的 @成员 只是文字，不派活', async () => {
+    const c = await open()
+    const a = await c.saveMember(null, agent('前端助手'))
+    const b = await c.saveMember(null, agent('审查员'))
+    const channelId = await c.create({ name: 'ch', memberIds: [a, b] })
+    expect(c.state().channels[0].relay).toBe(false)
+    await c.post(channelId, { text: '@前端助手 改按钮', clientId: '1' })
+    await settle()
+    expect(engine.sends()[0].text).not.toContain('互相派活')
+    await finishLast(c, '改好了。\n\n@审查员 请看一下。')
+    expect(tasks(c, channelId)).toHaveLength(1)
+    expect(engine.sends()).toHaveLength(1)
+  })
+
+  it('开了以后：回复里 @ 别的成员就交给他，卡片写谁交的、第几跳，提示词带交接内容；代码里的和 @自己不算', async () => {
+    const c = await open()
+    const a = await c.saveMember(null, agent('前端助手', { instructions: '负责前端页面\n第二行不带' }))
+    const b = await c.saveMember(null, agent('审查员', { instructions: '负责代码审查' }))
+    const d = await c.saveMember(null, agent('构建'))
+    const channelId = await c.create({ name: 'ch', memberIds: [a, b, d] })
+    await c.update(channelId, { relay: true })
+    expect(c.state().channels[0].relay).toBe(true)
+    await c.post(channelId, { text: '@前端助手 改按钮', clientId: '1' })
+    await settle()
+    // 派活时告诉 AI 能交给谁
+    const first = engine.sends()[0].text
+    expect(first).toContain('这个频道允许 AI 成员互相派活')
+    expect(first).toContain('- 审查员：负责代码审查')
+    expect(first).toContain('- 构建')
+    expect(first).not.toContain('- 前端助手')
+    await finishLast(
+      c,
+      '按钮改好了。\n\n@审查员 请看一下按钮改动。\n\n```\n@构建 代码里的不算\n```\n顺便提一句 `@构建` 和 @前端助手 也不算',
+      ['src/Button.tsx', 'src/tokens.css'],
+    )
+    const [orig, relay] = tasks(c, channelId)
+    expect(tasks(c, channelId)).toHaveLength(2)
+    expect(relay).toMatchObject({
+      authorId: a,
+      assigneeId: b,
+      title: '请看一下按钮改动。',
+      status: 'queued',
+      relay: { chain: orig.id, hop: 1, held: null },
+    })
+    const send = engine.sends().at(-1)!
+    expect(send.clientMessageId).toBe(`ch-${relay.id}-1`)
+    expect(send.text).toContain('交给你的人：前端助手')
+    expect(send.text).toContain('前端助手 做完「改按钮」后把活交给了你。')
+    expect(send.text).toContain('> 按钮改好了。')
+    expect(send.text).toContain('改动的文件：src/Button.tsx、src/tokens.css')
+    expect(send.text).toContain('这次的要求：\n@审查员 请看一下按钮改动。')
+    expect(send.text).toContain('- 前端助手：负责前端页面')
+    // 结果消息照常发回，没有被拦下就不算 @你
+    expect(texts(c, channelId).at(-1)).toMatchObject({ authorId: a, mentions: [] })
+    // 第二跳：审查员交回前端助手
+    await finishLast(c, '有一处问题。@前端助手 把禁用状态的颜色改深一点。')
+    expect(tasks(c, channelId)[2]).toMatchObject({ authorId: b, assigneeId: a, relay: { chain: orig.id, hop: 2 } })
+  })
+
+  it('同一对成员 10 分钟内互派到 4 次，第 5 次停下等你；点「继续」放行，计数重新开始', async () => {
+    const c = await open()
+    const a = await c.saveMember(null, agent('前端助手'))
+    const b = await c.saveMember(null, agent('审查员'))
+    const channelId = await c.create({ name: 'ch', memberIds: [a, b] })
+    await c.update(channelId, { relay: true })
+    await c.post(channelId, { text: '@前端助手 改按钮', clientId: '1' })
+    await settle()
+    // 前端助手和审查员轮流做，每次都交给对方
+    const other = (i: number) => (i % 2 ? '@前端助手 再改改' : '@审查员 请看看')
+    for (let i = 0; i < 4; i++) await finishLast(c, other(i))
+    expect(tasks(c, channelId).map(t => t.relay?.hop ?? 0)).toEqual([0, 1, 2, 3, 4])
+    expect(tasks(c, channelId).at(-1)).toMatchObject({ assigneeId: a, relay: { held: null } })
+    const sent = engine.sends().length
+    await finishLast(c, other(4))
+    const held = tasks(c, channelId).at(-1)!
+    expect(held).toMatchObject({ authorId: a, assigneeId: b, status: 'queued', relay: { hop: 5, held: 'pair' } })
+    expect(engine.sends()).toHaveLength(sent)
+    expect(c.state().channels[0].mentioned).toBe(true)
+    // 放行：派出去，计数从现在重新算
+    await c.taskAction(held.id, 'continue')
+    await settle()
+    expect(tasks(c, channelId).at(-1)).toMatchObject({ relay: { hop: 5, held: null }, sessionId: expect.any(String) })
+    expect(engine.sends().at(-1)!.clientMessageId).toBe(`ch-${held.id}-1`)
+    await finishLast(c, other(5))
+    expect(tasks(c, channelId).at(-1)).toMatchObject({ assigneeId: a, relay: { hop: 6, held: null } })
+    // 不是被拦下的卡：继续不起作用
+    await c.taskAction(tasks(c, channelId)[0].id, 'continue')
+  })
+
+  it('你在频道里发言后防刷计数重新开始', async () => {
+    const c = await open()
+    const a = await c.saveMember(null, agent('前端助手'))
+    const b = await c.saveMember(null, agent('审查员'))
+    const channelId = await c.create({ name: 'ch', memberIds: [a, b] })
+    await c.update(channelId, { relay: true })
+    await c.post(channelId, { text: '@前端助手 改按钮', clientId: '1' })
+    await settle()
+    const other = (i: number) => (i % 2 ? '@前端助手 再改改' : '@审查员 请看看')
+    for (let i = 0; i < 4; i++) await finishLast(c, other(i))
+    await c.post(channelId, { text: '你们继续，别停', clientId: '2' })
+    await finishLast(c, other(4))
+    expect(tasks(c, channelId).at(-1)).toMatchObject({ relay: { hop: 5, held: null } })
+  })
+
+  it('一条接力超过 6 跳停下等你；取消后不再派', async () => {
+    const c = await open()
+    const ids = [
+      await c.saveMember(null, agent('甲')),
+      await c.saveMember(null, agent('乙')),
+      await c.saveMember(null, agent('丙')),
+    ]
+    const names = ['甲', '乙', '丙']
+    const channelId = await c.create({ name: 'ch', memberIds: ids })
+    await c.update(channelId, { relay: true })
+    await c.post(channelId, { text: '@甲 开始', clientId: '1' })
+    await settle()
+    // 甲 → 乙 → 丙 → 甲 → 乙 → 丙 → 甲：6 跳，每一对都只有 2 次
+    for (let hop = 1; hop <= 6; hop++) await finishLast(c, `@${names[hop % 3]} 接着做`)
+    expect(tasks(c, channelId).at(-1)).toMatchObject({ relay: { hop: 6, held: null } })
+    const sent = engine.sends().length
+    await finishLast(c, '@乙 第 7 跳')
+    const held = tasks(c, channelId).at(-1)!
+    expect(held).toMatchObject({ assigneeId: ids[1], status: 'queued', relay: { hop: 7, held: 'hops' } })
+    expect(engine.sends()).toHaveLength(sent)
+    // 被拦下算 @你
+    expect(texts(c, channelId).at(-1)?.mentions).toEqual([SELF_ID])
+    await c.taskAction(held.id, 'cancel')
+    await settle()
+    expect(tasks(c, channelId).at(-1)).toMatchObject({ status: 'stopped', note: 'cancelled' })
+    expect(engine.sends()).toHaveLength(sent)
+  })
+})
+
+describe('协作频道：已有会话加入频道（docs/ui/import-collab.md 第 5 项②）', () => {
+  /** 假引擎里放一个自己开的会话 */
+  const own = (id: string, patch: Record<string, unknown> = {}) =>
+    engine.sessions.push({
+      record: { id, projectId: 'p1', engine: 'codex', title: '修登录页样式', archivedAt: null, ...patch },
+      state: 'idle',
+    } as unknown as SessionSummary)
+
+  it('加入已有频道：成员绑着这个会话，派活直接发到它，不新开、不改名；侧栏和成员面板认得出来', async () => {
+    const c = await open()
+    own('mine')
+    const channelId = await c.create({ name: '发版' })
+    const { channelId: joined, memberId } = await c.joinSession({
+      sessionId: 'mine',
+      channelId,
+      name: '前端助手',
+      instructions: '负责前端',
+    })
+    expect(joined).toBe(channelId)
+    const view = c.state().members.find(m => m.id === memberId)
+    expect(view).toMatchObject({
+      kind: 'agent',
+      engine: 'codex',
+      config: { mode: 'shared', sharedSessionId: 'mine', bound: true, instructions: '负责前端' },
+      boundSession: { id: 'mine', title: '修登录页样式' },
+    })
+    expect(c.state().sessionBindings).toEqual({ mine: [{ channelId, memberId }] })
+    expect(c.state().sessionChannels).toEqual({ mine: '发版' })
+    await c.post(channelId, { text: '@前端助手 圆角改成 6px', clientId: '1' })
+    await settle()
+    expect(engine.calls.some(x => x.channel === 'engine:createSession')).toBe(false)
+    expect(engine.calls.some(x => x.channel === 'engine:renameSession')).toBe(false)
+    expect(engine.sends()[0]).toMatchObject({ sessionId: 'mine' })
+    expect(engine.sends()[0].text).toContain('负责前端')
+  })
+
+  it('新建频道并加入；同一个会话再加入别的频道用同一个成员；退出最后一个频道时删掉成员，会话不动', async () => {
+    const c = await open()
+    own('mine')
+    const first = await c.joinSession({ sessionId: 'mine', channelName: '登录页', name: '前端助手' })
+    expect(c.state().channels.find(x => x.id === first.channelId)).toMatchObject({ name: '登录页', projectId: 'p1' })
+    const otherId = await c.create({ name: '发版' })
+    const second = await c.joinSession({ sessionId: 'mine', channelId: otherId, name: '随便写的' })
+    expect(second.memberId).toBe(first.memberId)
+    expect(c.state().members.filter(m => m.kind === 'agent')).toHaveLength(1)
+    expect(c.state().sessionBindings?.mine).toHaveLength(2)
+    await c.leaveSession('mine', first.channelId)
+    expect(c.state().sessionBindings?.mine).toEqual([{ channelId: otherId, memberId: first.memberId }])
+    expect(c.state().members.some(m => m.id === first.memberId)).toBe(true)
+    await c.leaveSession('mine', otherId)
+    expect(c.state().members.some(m => m.id === first.memberId)).toBe(false)
+    expect(c.state().sessionBindings).toEqual({})
+    expect(engine.sessions.some(s => s.record.id === 'mine')).toBe(true)
+  })
+
+  it('不能加入：会话不存在、归档了、名字重了（名字不对时不留下新建的空频道）；编辑成员不丢绑定', async () => {
+    const c = await open()
+    own('mine')
+    own('old', { archivedAt: 1 })
+    await c.saveMember(null, agent('审查员'))
+    await expect(c.joinSession({ sessionId: 'nope', channelName: 'x', name: 'a' })).rejects.toThrow('会话不存在')
+    await expect(c.joinSession({ sessionId: 'old', channelName: 'x', name: 'a' })).rejects.toThrow('归档')
+    await expect(c.joinSession({ sessionId: 'mine', channelName: '新频道', name: '审查员' })).rejects.toThrow(
+      '已经有同名的 AI 成员',
+    )
+    await expect(c.joinSession({ sessionId: 'mine', channelName: '新频道', name: '全体' })).rejects.toThrow('全体')
+    expect(c.state().channels).toHaveLength(0)
+    const { memberId } = await c.joinSession({ sessionId: 'mine', channelName: '新频道', name: '前端助手' })
+    const config = c.state().members.find(m => m.id === memberId)!
+    if (config.kind !== 'agent' || !config.config) throw new Error('成员不对')
+    await c.saveMember(null, { ...config.config, instructions: '改了职责' })
+    expect(c.state().members.find(m => m.id === memberId)).toMatchObject({
+      config: { bound: true, sharedSessionId: 'mine', instructions: '改了职责' },
+    })
+  })
+})
+
 const file = (id: string) => ({
   id,
   name: `${id}.log`,

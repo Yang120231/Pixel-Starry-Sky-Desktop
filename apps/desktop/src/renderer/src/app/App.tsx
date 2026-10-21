@@ -19,6 +19,7 @@ import { CacheMissAlerts } from '../features/session/CacheMissAlerts'
 import { NotificationDispatcher } from '../features/notifications/NotificationDispatcher'
 import { FeedbackNotifier } from '../features/feedback/FeedbackNotifier'
 import { TeamNotifier } from '../features/channels/TeamNotifier'
+import { JoinChannelHost } from '../features/channels/JoinChannelDialog'
 import { OPEN_FILES_EVENT } from '../features/files/store'
 import { FileLifecycle } from '../features/files/FileLifecycle'
 import { FileConfirm } from '../features/files/FileConfirm'
@@ -259,6 +260,7 @@ export function App() {
       <NotificationDispatcher />
       <FeedbackNotifier />
       <TeamNotifier />
+      <JoinChannelHost />
       <MachineDialogs />
       <ProjectImport />
       <WslCheckCard />

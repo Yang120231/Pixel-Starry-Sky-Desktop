@@ -11,6 +11,7 @@ import { tr } from '@/i18n/core'
 import { LayoutActionButton } from '@/features/layout/LayoutActionButton'
 import { ToolbarContext } from '@/features/layout/ToolbarContext'
 import type { ActiveWorkspace } from '@/features/editor/target'
+import { SessionChannelBadge } from '@/features/channels/SessionChannelBadge'
 
 interface SessionHeaderProps {
   title: string
@@ -25,6 +26,8 @@ interface SessionHeaderProps {
   onCloseFiles?: () => void
   /** 替换最右的面板开关（协作频道页控制成员面板）；null 时不显示，不传时是右侧面板开关 */
   panelToggle?: { open: boolean; label: string; onToggle: () => void } | null
+  /** 当前会话：加入了频道时标题旁显示「# 频道 · 成员名」（docs/ui/import-collab.md 第 5 项②） */
+  sessionId?: string | null
 }
 
 /** 跨会话区和右面板的顶栏：标题在左，工具在右侧连续排列。
@@ -40,6 +43,7 @@ export function SessionHeader({
   filesPanelOpen,
   onCloseFiles,
   panelToggle,
+  sessionId,
 }: SessionHeaderProps) {
   const { text } = useI18n()
   const commands = useCommandPalette()
@@ -96,6 +100,7 @@ export function SessionHeader({
                   {workspace.name}
                 </h1>
               ))}
+            {sessionId && <SessionChannelBadge sessionId={sessionId} />}
           </div>
         ) : null}
         {showActions && (

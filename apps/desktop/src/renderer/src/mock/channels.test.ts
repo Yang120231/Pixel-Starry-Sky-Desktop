@@ -77,8 +77,8 @@ describe('协作频道演示数据', () => {
     expect(foreign.length).toBeGreaterThan(0)
     for (const a of foreign) expect(a.kind === 'agent' && a.ownerName).toBeTruthy()
   })
-  it('未读合计 3（导航角标，团队频道关着），空界面没有频道和团队', () => {
-    expect(unreadTotal(demo.channels)).toBe(3)
+  it('未读合计 4（导航角标，团队频道关着），空界面没有频道和团队', () => {
+    expect(unreadTotal(demo.channels)).toBe(4)
     expect(empty.channelTeams).toEqual({ teams: [], invites: [], connection: 'unavailable' })
     expect(empty.channels).toEqual([])
     expect(empty.channelMembers).toEqual([])

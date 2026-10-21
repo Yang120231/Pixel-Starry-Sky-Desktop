@@ -9,18 +9,22 @@ import {
   CircleDot,
   Columns2,
   Copy,
+  Hash,
+  LogOut,
   PencilLine,
   Pin,
   PinOff,
   Trash2,
   type LucideIcon,
 } from 'lucide-react'
-import { cn } from '@/ui'
+import { cn, useToast } from '@/ui'
 import { useI18n } from '@/i18n/I18nProvider'
 import { useEngineState } from '@/features/engine'
 import { markSessionUnread } from '@/features/engine/store'
 import { paneActions } from '@/features/panes/store'
 import { useSessionActions, type SessionTarget } from './SessionActions'
+import { channelActions, channelsLive, useChannels, useSessionBindings } from '@/features/channels/store'
+import { translateMessage } from '@/i18n/core'
 export function SessionRow({
   target,
   selected,
@@ -52,6 +56,10 @@ export function SessionRow({
     if (restore) button.current?.focus({ preventScroll: true })
   }
   const unread = useEngineState(s => !!s.unread[target.id])
+  // 加入了哪些频道（docs/ui/import-collab.md 第 5 项②）：菜单里能退出
+  const bindings = useSessionBindings(target.id),
+    channels = useChannels(s => s.channels),
+    toast = useToast()
   // 菜单项点击：先关菜单（焦点不回到行内按钮，动作自己处理），再执行
   const run = (fn: () => void): void => {
     close(false)
@@ -237,6 +245,30 @@ export function SessionRow({
               disabled={actions.busy}
               onClick={() => run(() => actions.request('rename', target))}
             />
+            {channelsLive && !target.archived && (
+              <MenuItem
+                icon={Hash}
+                label={t('channels.join.menu')}
+                onClick={() => run(() => channelActions.openJoin(target.id, target.title))}
+              />
+            )}
+            {bindings.map(b => (
+              <MenuItem
+                key={b.channelId}
+                icon={LogOut}
+                label={t('channels.join.leave', { name: channels.find(c => c.id === b.channelId)?.name ?? '?' })}
+                onClick={() =>
+                  run(
+                    () =>
+                      void channelActions
+                        .leaveSession(target.id, b.channelId)
+                        .catch(e =>
+                          toast(t('channels.join.leaveFailed', { error: translateMessage((e as Error).message) })),
+                        ),
+                  )
+                }
+              />
+            ))}
             <MenuItem
               icon={target.archived ? ArchiveRestore : Archive}
               label={t(target.archived ? 'session.restore' : 'session.archive')}

@@ -167,6 +167,22 @@ export function historyLines(
   return lines
 }
 
+/** 去掉代码块和行内代码：AI 回复里代码中的 @ 不算派活 */
+export function withoutCode(text: string): string {
+  return text.replace(/```[\s\S]*?(?:```|$)/g, '').replace(/`[^`\n]*`/g, '')
+}
+
+/** AI 互相派活时交接的内容：谁、做完了哪项活、他的回复、改了哪些文件 */
+export interface Handoff {
+  from: string
+  title: string
+  reply: string
+  files: string[]
+}
+
+/** 交接时最多列出这么多个改动的文件 */
+const HANDOFF_FILES = 20
+
 export interface DispatchInput {
   locale: Locale
   channel: { name: string; topic: string | null }
@@ -184,6 +200,38 @@ export interface DispatchInput {
   attached?: { images: number; files: number } | null
   /** 这条消息 @全体：同时收到这项活的其他 AI 成员 */
   together?: string[]
+  /** 别的 AI 成员交过来的：交接内容（docs/ui/import-collab.md 第 5 项①） */
+  handoff?: Handoff | null
+  /** 频道允许 AI 成员互相派活：频道里其他 AI 成员（名字、职责第一行）；不允许时 null */
+  peers?: { name: string; role: string }[] | null
+}
+
+function handoffText(h: Handoff, locale: Locale): string {
+  const files = h.files.slice(0, HANDOFF_FILES)
+  const more = h.files.length - files.length
+  const quote = `> ${h.reply.trim().replace(/\n/g, '\n> ')}`
+  if (en(locale))
+    return [
+      `${h.from} finished "${h.title}" and handed it on to you.`,
+      `${h.from}'s reply:\n${quote}`,
+      files.length ? `Files changed: ${files.join(', ')}${more > 0 ? ` and ${more} more` : ''}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n')
+  return [
+    `${h.from} 做完「${h.title}」后把活交给了你。`,
+    `${h.from} 的回复：\n${quote}`,
+    files.length ? `改动的文件：${files.join('、')}${more > 0 ? ` 等 ${h.files.length} 个` : ''}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+function peersText(peers: { name: string; role: string }[], locale: Locale): string {
+  const list = peers.map(p => `- ${p.name}${p.role ? (en(locale) ? `: ${p.role}` : `：${p.role}`) : ''}`).join('\n')
+  return en(locale)
+    ? `AI members in this channel can hand work to each other: if another member should take over, write "@name" followed by what they should do in your reply, and the channel will hand it to them along with your reply and the files you changed. Only do this when it is really needed; if no handoff is needed, do not @ anyone.\nOther AI members in this channel:\n${list}`
+    : `这个频道允许 AI 成员互相派活：需要别的成员接着做时，在回复里写「@名字」和要他做的事，频道会把活交给他，并带上你的回复和改动的文件。确实需要时才这样做；不用交接就不要写 @。\n频道里的其他 AI 成员：\n${list}`
 }
 
 /** 置顶资料每条、合计最多这么多字（派活提示词里，超出的截掉） */
@@ -220,9 +268,11 @@ export function dispatchPrompt(input: DispatchInput): string {
     if (pinned.length) parts.push(`Pinned reference in this channel:\n${pinned.map(p => `- ${p}`).join('\n')}`)
     if (input.history.length) parts.push(`Recent discussion (oldest first):\n${input.history.join('\n')}`)
     if (input.quoted) parts.push(`Quoted message:\n> ${input.quoted.replace(/\n/g, '\n> ')}`)
+    if (input.handoff) parts.push(handoffText(input.handoff, locale))
     parts.push(
       `The request:\n${[input.request.trim(), attachedNote(input.attached?.images ?? 0, input.attached?.files ?? 0, locale)].filter(Boolean).join('\n')}`,
     )
+    if (input.peers?.length) parts.push(peersText(input.peers, locale))
     parts.push(
       'When you are done, end with one or two paragraphs summarizing what you did, which files you changed and anything left unfinished.\nIf something needs a person to decide, put it on its own line starting with "Needs your decision:".',
     )
@@ -236,9 +286,11 @@ export function dispatchPrompt(input: DispatchInput): string {
     if (pinned.length) parts.push(`频道里置顶的资料：\n${pinned.map(p => `- ${p}`).join('\n')}`)
     if (input.history.length) parts.push(`最近的讨论（从旧到新）：\n${input.history.join('\n')}`)
     if (input.quoted) parts.push(`引用的消息：\n> ${input.quoted.replace(/\n/g, '\n> ')}`)
+    if (input.handoff) parts.push(handoffText(input.handoff, locale))
     parts.push(
       `这次的要求：\n${[input.request.trim(), attachedNote(input.attached?.images ?? 0, input.attached?.files ?? 0, locale)].filter(Boolean).join('\n')}`,
     )
+    if (input.peers?.length) parts.push(peersText(input.peers, locale))
     parts.push(
       '做完后，最后用一两段话总结：做了什么、改了哪些文件、有没有没做完的。\n如果有需要人来决定的事，单独写一行，以「需要你决定：」开头。',
     )

@@ -44,6 +44,8 @@ export interface TaskRun {
   requests: ApprovalRequest[]
   /** file_change 条目 id → 改动统计 */
   diff: Record<string, { added: number; removed: number }>
+  /** file_change 条目 id → 改了哪些文件（AI 互相派活时交接用）；旧数据没有 */
+  files?: Record<string, string[]>
   /** 这一轮最后一条 assistant 回复 */
   reply: string | null
   progress: { done: number; total: number } | null
@@ -168,9 +170,14 @@ function absorb(run: TaskRun, item: Item, now: number): TaskRun {
       if (item.status !== 'completed') {
         if (!(item.id in run.diff)) return run
         const { [item.id]: _dropped, ...diff } = run.diff
-        return { ...run, diff }
+        const { [item.id]: _paths, ...files } = run.files ?? {}
+        return { ...run, diff, files }
       }
-      return { ...run, diff: { ...run.diff, [item.id]: diffStat(item.changes) } }
+      return {
+        ...run,
+        diff: { ...run.diff, [item.id]: diffStat(item.changes) },
+        files: { ...run.files, [item.id]: item.changes.slice(0, 50).map(c => c.path) },
+      }
     }
     case 'todo':
       return { ...run, progress: progressOf(item) }
@@ -179,6 +186,11 @@ function absorb(run: TaskRun, item: Item, now: number): TaskRun {
     default:
       return run
   }
+}
+
+/** 这一轮改过的文件（去重，按先后） */
+export function changedFiles(run: Pick<TaskRun, 'files'>): string[] {
+  return [...new Set(Object.values(run.files ?? {}).flat())]
 }
 
 /** 这一轮的改动合计；没有改动时 null */

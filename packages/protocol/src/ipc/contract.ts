@@ -93,6 +93,8 @@ export const IPC_CONTRACT = {
   'channels:create': { kind: 'invoke', route: 'local', trust: 'sender' },
   'channels:delete': { kind: 'invoke', route: 'local', trust: 'sender' },
   'channels:deleteMember': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'channels:joinSession': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'channels:leaveSession': { kind: 'invoke', route: 'local', trust: 'sender' },
   'channels:markRead': { kind: 'invoke', route: 'local', trust: 'sender' },
   'channels:message': { kind: 'push', route: 'push', trust: 'none' },
   'channels:messages': { kind: 'invoke', route: 'local', trust: 'sender' },

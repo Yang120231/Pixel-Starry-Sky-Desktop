@@ -27,6 +27,10 @@ export interface StoredChannel {
   notify?: ChannelNotify
   /** 归档的时间；旧数据没有（= 没归档） */
   archivedAt?: number | null
+  /** 允许 AI 成员互相派活；旧数据没有（= 关） */
+  relay?: boolean
+  /** 你最后一次在频道里发言、或放行被拦下的接力的时间：防刷计数从这之后算 */
+  relayResetAt?: number | null
   createdAt: number
   /** 看到哪里了：这之后别人发的算未读 */
   readAt: number

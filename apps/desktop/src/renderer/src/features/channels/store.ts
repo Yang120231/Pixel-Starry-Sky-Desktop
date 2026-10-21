@@ -3,6 +3,7 @@
 // 正式模式：数据都在主进程（main/core/channels/），这里订阅 channels:changed / channels:message，
 // 进入频道时按页读消息，发消息、建频道、加成员都走 window.pixelsky.channels。
 import { useSyncExternalStore } from 'react'
+import { tr } from '../../i18n/core'
 import { channelMembers, channelMessages, channels, channelTeams, isDemo } from '@/data'
 import type { Channel, ChannelMember, ChannelMessage, ChannelTask, ChannelTextMessage } from '@/data/types'
 import type {
@@ -13,6 +14,7 @@ import type {
   ChannelNotify,
   ChannelsSnapshot,
   ChannelTaskAction,
+  JoinSessionInput,
   PendingInvite,
   TeamInfo,
   TeamRole,
@@ -45,6 +47,10 @@ export interface ChannelsState {
   sessionChannels: Record<string, string>
   /** 本机频道开出来的会话 → 最近一张任务卡（系统提醒按频道的说法写） */
   sessionTasks: NonNullable<ChannelsSnapshot['sessionTasks']>
+  /** 加入了频道的会话 → 在哪些频道里、是哪个成员（docs/ui/import-collab.md 第 5 项②） */
+  sessionBindings: NonNullable<ChannelsSnapshot['sessionBindings']>
+  /** 正在把这个会话加入频道（加入频道对话框） */
+  joining: { sessionId: string; title: string } | null
   // ── Phase C：多人团队（docs/ui/channels-phase-c.md） ──
   teams: TeamInfo[]
   /** 别人邀请我（频道列表最上面的邀请卡） */
@@ -67,6 +73,8 @@ let state: ChannelsState = {
   newFrom: {},
   sessionChannels: {},
   sessionTasks: {},
+  sessionBindings: {},
+  joining: null,
   teams: channelsLive ? [] : channelTeams.teams,
   invites: channelsLive ? [] : channelTeams.invites,
   teamsConnection: channelsLive ? 'unavailable' : channelTeams.connection,
@@ -98,6 +106,12 @@ export function useChannelUnreadTotal(): number {
 /** 会话是哪个频道开出来的（侧栏、看板显示 `# 频道名`） */
 export function useSessionChannel(sessionId: string): string | null {
   return useSyncExternalStore(subscribe, () => state.sessionChannels[sessionId] ?? null)
+}
+
+const NO_BINDINGS: NonNullable<ChannelsSnapshot['sessionBindings']>[string] = []
+/** 会话加入了哪些频道、在里面是哪个成员（docs/ui/import-collab.md 第 5 项②） */
+export function useSessionBindings(sessionId: string): NonNullable<ChannelsSnapshot['sessionBindings']>[string] {
+  return useSyncExternalStore(subscribe, () => state.sessionBindings[sessionId] ?? NO_BINDINGS)
 }
 
 /** 当前频道：选中的不存在时退回第一个 */
@@ -137,6 +151,7 @@ function applySnapshot(s: ChannelsSnapshot): void {
     members: s.members,
     sessionChannels: s.sessionChannels,
     sessionTasks: s.sessionTasks ?? {},
+    sessionBindings: s.sessionBindings ?? {},
     teams: s.teams ?? [],
     invites: s.invites ?? [],
     teamsConnection: s.teamsConnection ?? 'unavailable',
@@ -312,6 +327,8 @@ export const channelActions = {
       projectId?: string | null
       /** 归档 / 恢复（docs/ui/channels-local-ai.md §3.1 #11） */
       archived?: boolean
+      /** 允许 AI 成员互相派活（docs/ui/import-collab.md 第 5 项①） */
+      relay?: boolean
     },
   ): Promise<void> {
     if (channelsBridge) return channelsBridge.update(id, patch)
@@ -364,6 +381,22 @@ export const channelActions = {
   },
   saveMember(channelId: string | null, input: AgentInput): Promise<string> {
     return channelsBridge!.saveMember(channelId, input)
+  },
+  /** 打开「加入频道」对话框（会话右键菜单；只有正式模式有） */
+  openJoin(sessionId: string, title: string): void {
+    set({ joining: { sessionId, title } })
+  },
+  closeJoin(): void {
+    if (state.joining) set({ joining: null })
+  },
+  /** 把已有会话加入频道（docs/ui/import-collab.md 第 5 项②）；不写 channelId 时新建频道 */
+  joinSession(input: JoinSessionInput): Promise<{ channelId: string; memberId: string }> {
+    if (!channelsBridge) return Promise.reject(new Error(tr('channels.join.demo')))
+    return channelsBridge.joinSession(input)
+  },
+  leaveSession(sessionId: string, channelId: string): Promise<void> {
+    if (!channelsBridge) return Promise.resolve()
+    return channelsBridge.leaveSession(sessionId, channelId)
   },
   addMember(channelId: string, memberId: string): Promise<void> {
     return channelsBridge ? channelsBridge.addMember(channelId, memberId) : demo.addMember(channelId, memberId)
@@ -604,6 +637,9 @@ const demo = {
           ? { ...t, status: 'stopped', note: 'cancelled', endedAt: Date.now() }
           : t,
       )
+    // 演示：放行被拦下的接力（AI 成员不会真的做）
+    if (action === 'continue')
+      demo.patchTask(taskId, t => (t.relay?.held ? { ...t, relay: { ...t.relay, held: null } } : t))
     return Promise.resolve()
   },
 }

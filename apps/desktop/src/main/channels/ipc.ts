@@ -20,6 +20,7 @@ import type {
   AgentInput,
   AgentPolicy,
   ChannelInput,
+  JoinSessionInput,
   ChannelTaskAction,
   PostInput,
   TeamRole,
@@ -29,7 +30,7 @@ const str = (value: unknown, what: string): string => {
   if (typeof value !== 'string' || !value) throw new Error(`${what}不正确`)
   return value
 }
-const ACTIONS = new Set<ChannelTaskAction>(['cancel', 'stop', 'retry'])
+const ACTIONS = new Set<ChannelTaskAction>(['cancel', 'stop', 'retry', 'continue'])
 const INVITE_ROLES = new Set<Exclude<TeamRole, 'owner'>>(['member', 'observer'])
 const POLICIES = new Set<AgentPolicy>(['approve', 'team'])
 const role = (value: unknown): Exclude<TeamRole, 'owner'> => {
@@ -165,6 +166,11 @@ export async function initChannels(ctx: AppContext): Promise<void> {
     channels.removeMember(str(channelId, '频道'), str(memberId, '成员')),
   )
   ipc.handle('channels:deleteMember', (_e, memberId) => channels.deleteMember(str(memberId, '成员')))
+  // 把已有会话加入频道 / 退出频道（docs/ui/import-collab.md 第 5 项②）
+  ipc.handle('channels:joinSession', (_e, input) => channels.joinSession((input ?? {}) as JoinSessionInput))
+  ipc.handle('channels:leaveSession', (_e, sessionId, channelId) =>
+    channels.leaveSession(str(sessionId, '会话'), str(channelId, '频道')),
+  )
   ipc.handle('channels:task', (_e, taskId, action) => {
     if (!ACTIONS.has(action as ChannelTaskAction)) throw new Error('不支持的操作')
     return channels.taskAction(str(taskId, '任务'), action as ChannelTaskAction)

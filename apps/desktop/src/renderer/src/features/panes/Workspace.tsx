@@ -123,6 +123,7 @@ export function WorkspaceHeader({ membersShown = false, ...props }: WorkspacePro
       }
       workspace={workspace}
       showActions={showActions && !parsed}
+      sessionId={parsed || file ? null : sessionId}
       {...props}
     />
   )

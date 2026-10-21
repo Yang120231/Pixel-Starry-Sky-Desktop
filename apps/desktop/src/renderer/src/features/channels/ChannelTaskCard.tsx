@@ -5,7 +5,7 @@ import { CircleCheck, CirclePause, CircleX, Clock, Hand, ShieldAlert, Unplug, ty
 import { Button, cn, DiffStat, Spinner, useToast } from '@/ui'
 import { canAnswerInline } from '@/features/panel/inbox/inboxModel'
 import type { ChannelMember, ChannelTask, ChannelTaskStatus } from '@/data/types'
-import type { ChannelTaskAction } from '../../../../shared/types/channels'
+import { RELAY_HOPS, RELAY_PAIR, type ChannelTaskAction } from '../../../../shared/types/channels'
 import { formatClock } from './format'
 import { agentPlace } from './ChannelMessage'
 import { canApprove, canControlTask, canWithdraw, isMyTask } from './teamModel'
@@ -48,6 +48,7 @@ export interface TaskCardActions {
 
 /** 状态文字：团队频道里等同意、等别人确认时要写明是谁 */
 function statusText(task: ChannelTask, owner: string, mine: boolean): string {
+  if (task.status === 'queued' && task.relay?.held) return tr('channels.task.heldStatus')
   if (task.status === 'approval') return tr('team.task.approval', { owner })
   if (task.status === 'waiting' && !mine) return tr('team.task.waitingOwner', { owner })
   return tr(STATUS_LABEL[task.status])
@@ -101,7 +102,13 @@ export function ChannelTaskCard({
   const assignee = membersById.get(task.assigneeId)
   const author = membersById.get(task.authorId)
   const place = agentPlace(assignee)
-  const status = task.status === 'running' ? null : STATUS_ICON[task.status]
+  // AI 互相派活被防刷规则拦下（docs/ui/import-collab.md 第 5 项①）：等你点「继续」或「到此为止」
+  const held = task.status === 'queued' ? (task.relay?.held ?? null) : null
+  const status = held
+    ? { icon: CirclePause, className: 'text-warn' }
+    : task.status === 'running'
+      ? null
+      : STATUS_ICON[task.status]
   // AI 成员的主人：别人的 AI 成员显示「林夏」，我自己的不用写
   const ownerName =
     (assignee?.kind === 'agent' && assignee.ownerName) || membersById.get(task.ownerId ?? '')?.name || '?'
@@ -122,7 +129,11 @@ export function ChannelTaskCard({
       .finally(() => setBusy(false))
   }
   const open = task.sessionId && mine ? () => onOpenSession(task.sessionId!) : null
-  const meta = [task.round && task.round > 1 ? tr('channels.task.round', { count: task.round }) : '', place]
+  const meta = [
+    task.relay ? tr('channels.task.hop', { count: task.relay.hop }) : '',
+    task.round && task.round > 1 ? tr('channels.task.round', { count: task.round }) : '',
+    place,
+  ]
     .filter(Boolean)
     .join(' · ')
   return (
@@ -131,7 +142,7 @@ export function ChannelTaskCard({
         aria-label={`${statusText(task, ownerName, mine)}：${task.title}`}
         className={cn(
           'max-w-[560px] rounded-lg border border-line-card bg-surface p-3 shadow-sm',
-          (task.status === 'waiting' || task.decision) && 'border-warn/40',
+          (task.status === 'waiting' || task.decision || held) && 'border-warn/40',
           highlight && 'search-hit',
         )}
       >
@@ -144,7 +155,11 @@ export function ChannelTaskCard({
           <span
             className={cn(
               'shrink-0 font-medium',
-              task.status === 'waiting' ? 'text-warn' : task.status === 'failed' ? 'text-danger' : 'text-fg-muted',
+              task.status === 'waiting' || held
+                ? 'text-warn'
+                : task.status === 'failed'
+                  ? 'text-danger'
+                  : 'text-fg-muted',
             )}
           >
             {statusText(task, ownerName, mine)}
@@ -190,6 +205,13 @@ export function ChannelTaskCard({
                 {tr('channels.task.waitingMore', { n: (task.waitingCount ?? 1) - 1 })}
               </span>
             )}
+          </p>
+        )}
+        {held && (
+          <p data-relay-held={held} className="mt-1.5 text-meta break-words text-warn">
+            {held === 'hops'
+              ? tr('channels.task.heldHops', { count: RELAY_HOPS })
+              : tr('channels.task.heldPair', { a: author?.name ?? '?', b: assignee?.name ?? '?', count: RELAY_PAIR })}
           </p>
         )}
         {task.decision && (
@@ -240,7 +262,26 @@ export function ChannelTaskCard({
                 {tr('channels.task.cancel')}
               </Button>
             )}
-            {live && task.status === 'queued' && control && !pending && (
+            {live && held && control && (
+              <>
+                <Button
+                  variant="primary"
+                  className="h-7 px-2.5 text-meta"
+                  disabled={busy}
+                  onClick={() => run(() => onAction!(task.id, 'continue'))}
+                >
+                  {tr('channels.task.continue')}
+                </Button>
+                <Button
+                  className="h-7 px-2.5 text-meta"
+                  disabled={busy}
+                  onClick={() => run(() => onAction!(task.id, 'cancel'))}
+                >
+                  {tr('channels.task.stopRelay')}
+                </Button>
+              </>
+            )}
+            {live && task.status === 'queued' && !held && control && !pending && (
               <Button
                 variant="ghost"
                 className="h-7 px-2.5 text-meta"

@@ -92,6 +92,7 @@ export function ChannelDialog({
   const [notes, setNotes] = useState(channel?.notes ?? '')
   const [projectId, setProjectId] = useState<string>(channel ? (channel.projectId ?? '') : (currentProject ?? ''))
   const [members, setMembers] = useState<string[]>([])
+  const [relay, setRelay] = useState(channel?.relay === true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const toast = useToast()
@@ -100,6 +101,7 @@ export function ChannelDialog({
     name !== (channel?.name ?? '') ||
     topic !== (channel?.topic ?? '') ||
     notes !== (channel?.notes ?? '') ||
+    relay !== (channel?.relay === true) ||
     members.length > 0
   const submit = () => {
     if (!name.trim() || busy) return
@@ -110,13 +112,16 @@ export function ChannelDialog({
     // 说明没存上时频道已经建好（也切过去了）：照样关掉对话框，提示一声，免得再点又建一个同名的
     const note = notes.trim() || null
     const done = channel
-      ? channelActions.updateChannel(channel.id, inTeam ? { name, topic: input.topic } : { ...input, notes: note })
+      ? channelActions.updateChannel(
+          channel.id,
+          inTeam ? { name, topic: input.topic } : { ...input, notes: note, relay },
+        )
       : channelActions
           .createChannel(teamId ? { ...input, teamId } : { ...input, memberIds: members })
           .then(id =>
-            note && !teamId
+            (note || relay) && !teamId
               ? channelActions
-                  .updateChannel(id, { notes: note })
+                  .updateChannel(id, { notes: note, ...(relay ? { relay } : {}) })
                   .catch(e => toast(tr('channels.dialog.notesFailed', { error: errorText(e) })))
               : undefined,
           )
@@ -162,6 +167,21 @@ export function ChannelDialog({
                 className={cn(INPUT, 'resize-none')}
               />
             </Field>
+          )}
+          {!inTeam && (
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                data-channel-relay
+                className="mt-0.5"
+                checked={relay}
+                onChange={e => setRelay(e.target.checked)}
+              />
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="text-list text-fg">{tr('channels.dialog.relay')}</span>
+                <span className="text-meta text-fg-muted">{tr('channels.dialog.relayHint')}</span>
+              </span>
+            </label>
           )}
           {inTeam ? (
             teamName && <p className="text-meta text-fg-faint">{tr('team.channel.inTeam', { name: teamName })}</p>
