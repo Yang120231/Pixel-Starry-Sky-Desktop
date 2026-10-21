@@ -40,6 +40,12 @@ export const errorMessages = {
     zh: '已取消授权，但 {engine} 仍然可用：它可能在用环境变量里的 API Key 或自己配置的接口',
     en: 'Signed out, but {engine} still works. It may be using an API key from an environment variable or its own provider settings',
   },
+  // Codex 目标模式（docs/ui/codex-goal.md）：输入框遇到这两个就把 /goal 按普通消息发，一般不会显示出来
+  'errors.engine.goalNoProcess': {
+    zh: '会话没在运行，发一条消息后再试',
+    en: 'The conversation isn’t running. Send a message, then try again',
+  },
+  'errors.engine.goalNoEngine': { zh: '这个引擎没有目标模式', en: 'This engine doesn’t support goals' },
   // 引擎启动方式（docs/ui/engine-launch.md §3）
   'errors.launch.notFound': {
     zh: '找不到「{command}」：请填绝对路径或 PATH 上的命令名',

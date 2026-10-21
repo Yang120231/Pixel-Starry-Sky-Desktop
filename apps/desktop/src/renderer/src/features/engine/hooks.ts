@@ -8,16 +8,21 @@ import { draftWorkspace } from '@/features/machines/drafts'
 import { notify } from '@/features/panes/store'
 import {
   ENGINES,
+  GOAL_NO_ENGINE,
+  GOAL_NO_PROCESS,
+  parseCodedError,
   type Effort,
   type EffortPanelDefaults,
   type EngineId,
   type EngineInfo,
   type FileAttachment,
+  type GoalAction,
   type ImageAttachment,
   type PermissionMode,
   type QueuedMessage,
   type QueueMove,
   type QueueSettings,
+  type SessionGoal,
   type SessionSettings,
   type SessionSnapshot,
   sourceKey,
@@ -414,6 +419,11 @@ export interface ComposerController {
    * 额度来源、权限、推理强度跟输入框；平台没登录 / 线路没读到时抛出给用户看的错误
    */
   resumeSettings(sessionModel: string | null): Partial<SessionSettings>
+  /**
+   * 目标模式（Codex /goal，docs/ui/codex-goal.md）：Codex 会话的进程在跑时直接改目标，返回 { goal }（改后的目标）；
+   * 不是 Codex 会话、进程没在跑时返回 null，调用方把 /goal 按普通消息发
+   */
+  goal(action: GoalAction): Promise<{ goal: SessionGoal | null } | null>
   /** 发送；失败时抛出给用户看的错误 */
   submit(
     text: string,
@@ -911,6 +921,17 @@ export function useComposerController(
           )
         : Promise.resolve(),
     redetect: () => void redetectEngines(),
+    goal: async action => {
+      // 运行中选了别的引擎（下一条起生效）时也不拦：/goal 交给接下来的引擎
+      if (!record || !started || record.engine !== 'codex' || (record.nextEngine ?? 'codex') !== 'codex') return null
+      try {
+        return { goal: await b.goal(record.id, action) }
+      } catch (error) {
+        const code = parseCodedError((error as Error).message)?.code
+        if (code === GOAL_NO_PROCESS || code === GOAL_NO_ENGINE) return null
+        throw error
+      }
+    },
     resumeSettings: sessionModel => {
       const picked = resumeModel({
         source,

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { delimiter } from 'node:path'
 import type {
   ApprovalDecision,
@@ -15,7 +16,16 @@ import type {
   TurnOutcome,
   Item,
 } from '@pixelsky/protocol'
-import { EMPTY_FLAGS, codedError, isQuietWarning, noticeErrorOf, viaGateway } from '@pixelsky/protocol'
+import {
+  EMPTY_FLAGS,
+  GOAL_NO_PROCESS,
+  codedError,
+  isQuietWarning,
+  noticeErrorOf,
+  parseGoalCommand,
+  viaGateway,
+} from '@pixelsky/protocol'
+import type { GoalAction, SessionGoal } from '@pixelsky/protocol'
 import { versionAtLeast } from '../exec'
 import { QUICK_CLOSE_MS, type CloseOptions, type EngineSession, type Launcher, type SessionContext } from '../adapter'
 import type { QuotaReading } from '../quota'
@@ -31,6 +41,8 @@ import { codexCommandParts } from './command'
 import { codexQuotaPatch, parseCodexRateLimits } from './quota'
 import { codexChanges, CodexTranslator, tokenCounts } from './translate'
 import { CODEX_WINDOW_ENV, codexContextConfig } from './context-config'
+import { codexGoal, goalUnsupported, sameGoal } from './goal'
+import { queueSettings } from '../queue'
 
 export interface CodexLaunchOptions {
   askQuestions: boolean
@@ -251,7 +263,19 @@ export class CodexSession implements EngineSession {
     baseline: ReturnType<typeof tokenCounts>
     usageSeen: boolean
     activity: boolean
+    /** Codex 自己开的一轮（目标模式接着做），不是像素星空发的 */
+    auto?: boolean
+    /** 自己开的一轮已经告诉宿主了（turn_started） */
+    announced?: boolean
   } | null = null
+  /** 线程的目标（docs/ui/codex-goal.md）；没有为 null */
+  private goalState: SessionGoal | null = null
+  /** 这个 Codex 有没有目标模式（thread/goal/*）；null 是还没问过 */
+  private goalSupported: boolean | null = null
+  /** turn/start 发出去了还没回：这时到的 turn/started 是自己发起的，不当成 Codex 自己开的 */
+  private startInFlight = false
+  /** 发消息时 Codex 自己开的一轮还在跑：这条消息接管它（这是那一轮的原生 id），run() 用 turn/steer 把消息送进去 */
+  private adopting: string | null = null
   private settings: SessionSettings
   private catalog: EngineCatalog | null = null
   private readonly approvals = new Map<string, Approval>()
@@ -417,6 +441,7 @@ export class CodexSession implements EngineSession {
         if (this.proc !== proc || (askFlag && this.startup === 'pending')) return
         if (!this.closed && this.active) this.finish('failed', tail || 'Codex process exited')
         this.threadId = null
+        this.setGoal(null, false)
         this.mcpStartup.clear()
         this.mcpReporter.stale()
         this.own(null)
@@ -535,6 +560,7 @@ export class CodexSession implements EngineSession {
       if (record.pendingRewind) this.ctx.clearPendingRewind?.()
       if (record.pendingFork) this.ctx.clearPendingFork?.()
       this.emitFlags()
+      await this.readGoal(proc)
       const skills = await proc
         .request('skills/list', {
           cwds: [record.cwd],
@@ -568,6 +594,17 @@ export class CodexSession implements EngineSession {
             builtin: true,
             invocation: 'slash',
           },
+          ...(this.goalSupported
+            ? [
+                {
+                  name: 'goal',
+                  description: 'Set a goal Codex keeps working toward (/goal pause · resume · clear)',
+                  source: 'engine' as const,
+                  builtin: true,
+                  invocation: 'slash' as const,
+                },
+              ]
+            : []),
           ...this.skills,
         ],
       })
@@ -640,10 +677,35 @@ export class CodexSession implements EngineSession {
     return input
   }
   send(text: string, turnId: string, userItemId: string, attachments: ImageAttachment[] = [], seed?: ChatSeed): void {
+    if (this.active?.auto && this.nativeTurnId) {
+      // 目标模式下 Codex 自己开的一轮还在跑（宿主派发这条时它刚开始）：这条消息接管那一轮，不另报它的结束
+      // （宿主的「一轮结束」不分是哪一轮，会把这条当成做完）；翻译器和用量起点沿用，run() 再把消息送进那一轮
+      this.active.id = turnId
+      this.active.auto = false
+      this.active.announced = true
+      this.adopting = this.nativeTurnId
+      this.reportedError = null
+      const active = this.active
+      void this.run(text, userItemId, attachments, seed).catch(error => {
+        if (this.active === active) this.finish('failed', (error as Error).message)
+      })
+      return
+    }
     if (this.active) {
       this.ctx.emit({ type: 'turn_completed', turnId, outcome: 'failed', error: 'Codex turn already running' })
       return
     }
+    this.startActive(turnId)
+    this.nativeTurnId = null
+    // 上次停掉的压缩一直没报 turn/started：不能把这一轮的当成它去中断
+    this.stoppedCompaction = false
+    const active = this.active
+    void this.run(text, userItemId, attachments, seed).catch(error => {
+      if (this.active === active) this.finish('failed', (error as Error).message)
+    })
+  }
+  /** 开一轮（自己发的、Codex 自己开的都走这里）：新的翻译器、用量起点 */
+  private startActive(turnId: string): void {
     this.active = {
       id: turnId,
       started: Date.now(),
@@ -658,21 +720,43 @@ export class CodexSession implements EngineSession {
       this.agents,
       this.ctx.record().cwd,
     )
-    this.nativeTurnId = null
     this.reportedError = null
     this.retryShown = false
-    // 上次停掉的压缩一直没报 turn/started：不能把这一轮的当成它去中断
-    this.stoppedCompaction = false
-    const active = this.active
-    void this.run(text, userItemId, attachments, seed).catch(error => {
-      if (this.active === active) this.finish('failed', (error as Error).message)
-    })
   }
   private async run(text: string, userItemId: string, attachments: ImageAttachment[], given?: ChatSeed): Promise<void> {
     let replay = given
     const active = this.active
     await this.open()
     if (!this.active || this.active !== active || this.closed) return
+    // 目标模式的命令：不发给模型（docs/ui/codex-goal.md §2）
+    const goal = parseGoalCommand(text)
+    if (goal) return this.runGoal(goal, active, userItemId, attachments)
+    if (this.adopting) {
+      const native = this.adopting
+      let joined = false
+      try {
+        const result = await this.proc!.request('turn/steer', {
+          threadId: this.threadId,
+          expectedTurnId: native,
+          clientUserMessageId: userItemId,
+          input: this.input(text, attachments),
+        })
+        joined = string(result.turnId) === native && this.nativeTurnId === native
+      } catch (error) {
+        log.info('消息没能接进 Codex 自己开的一轮，等它结束后另开一轮', { error: describeError(error) })
+      }
+      if (joined) {
+        this.adopting = null
+        if (this.active === active)
+          this.ctx.emit({ type: 'input_ack', id: userItemId, state: 'consumed', mode: 'normal' })
+        return
+      }
+      // 没接上：等那一轮结束（它的结束不算这条消息的结束，见 notification），再照常开一轮
+      while (this.nativeTurnId === native && this.active === active && !this.closed)
+        await new Promise(resolve => setTimeout(resolve, 100))
+      this.adopting = null
+      if (this.active !== active || this.closed) return
+    }
     const selected = this.catalog?.models?.find(m => m.id === (this.settings.model ?? this.catalog?.currentModel))
     this.active.baseline = { ...this.totals }
     const sees = !!selected?.inputModalities.includes('image')
@@ -767,6 +851,7 @@ export class CodexSession implements EngineSession {
       if (seed && !sees) this.droppedImages(injected ? seedImageCount(seed) : (seed.fallbackImages?.length ?? 0))
       if (!this.active || this.active !== active || this.closed) return
       const collab = this.collaboration()
+      this.startInFlight = true
       const result = await this.proc!.request('turn/start', {
         threadId: this.threadId,
         clientUserMessageId: userItemId,
@@ -777,6 +862,8 @@ export class CodexSession implements EngineSession {
         summary: this.settings.thinkingSummaries ? 'concise' : 'none',
         ...collab.params,
         ...this.serviceTier(),
+      }).finally(() => {
+        this.startInFlight = false
       })
       // turn/start 被拒绝时不记：Codex 那边没收到，下一轮要照样重带
       collab.commit()
@@ -1070,6 +1157,11 @@ export class CodexSession implements EngineSession {
     // 子智能体线程的事件只记进追踪（工具次数、token）
     if (eventThread && this.agents.has(eventThread)) return this.translator.child(eventThread, method, params)
     if (eventThread && this.threadId && eventThread !== this.threadId) return
+    if (method === 'thread/goal/updated' || method === 'thread/goal/cleared') {
+      this.goalSupported = true
+      this.setGoal(method === 'thread/goal/cleared' ? null : codexGoal(params.goal), true)
+      return
+    }
     // 压缩发出去后、开始前就停止了（本地已结束）：它开始时补发中断，并丢弃它之后的事件
     if (this.stoppedCompaction && !this.active && method === 'turn/started') {
       this.stoppedCompaction = false
@@ -1083,12 +1175,23 @@ export class CodexSession implements EngineSession {
     // 子智能体可能在主轮结束后才跑完：没有进行中的轮次也要更新追踪
     if (!this.active && method === 'item/completed' && object(params.item).type === 'subAgentActivity')
       return this.translator.subagent(object(params.item), true)
+    // Codex 自己开的一轮（目标模式接着做）：没有进行中的轮次、也不是自己刚发的 turn/start
+    if (!this.active && method === 'turn/started' && !this.startInFlight && !this.closed) {
+      const id = string(object(params.turn).id)
+      if (id && !this.finishedTurns.has(id)) this.beginAuto()
+    }
     if (!this.active) return
     const eventTurn = string(params.turnId || object(params.turn).id)
     if (eventTurn && this.finishedTurns.has(eventTurn)) return
     if (eventTurn && this.nativeTurnId && eventTurn !== this.nativeTurnId) return
     if (method === 'turn/started') this.nativeTurnId = string(object(params.turn).id)
     else if (method === 'turn/completed') {
+      // 接管的那一轮在消息送进去之前结束了：不算这条消息的结束，run() 接着另开一轮
+      if (this.adopting && eventTurn === this.adopting) {
+        this.markFinished(eventTurn)
+        this.nativeTurnId = null
+        return
+      }
       const turn = object(params.turn)
       this.finish(
         turn.status === 'interrupted' ? 'interrupted' : turn.status === 'failed' ? 'failed' : 'completed',
@@ -1364,6 +1467,8 @@ export class CodexSession implements EngineSession {
   private finish(outcome: TurnOutcome, error: string | null, detail: string | null = null, info?: NoticeError): void {
     const active = this.active
     if (!active) return
+    if (active.auto) this.announce(active)
+    this.adopting = null
     if (this.nativeTurnId) this.markFinished(this.nativeTurnId)
     this.active = null
     // 状态条由 turn_completed 一起清掉
@@ -1457,6 +1562,15 @@ export class CodexSession implements EngineSession {
   }
   async interrupt(): Promise<void> {
     if (this.opening) await this.opening.catch(() => {})
+    // 有进行中的目标先暂停（最多等 2 秒），不然 Codex 马上再开一轮；两轮之间按停止也要暂停
+    if (this.goalState?.status === 'active' && this.threadId && this.proc?.alive)
+      await Promise.race([
+        this.proc
+          .request('thread/goal/set', { threadId: this.threadId, status: 'paused', origin: 'user' })
+          .then(r => this.setGoal(codexGoal(object(r).goal), false))
+          .catch(() => {}),
+        new Promise(resolve => setTimeout(resolve, 2_000)),
+      ])
     if (!this.active) return
     if (!this.nativeTurnId) {
       // turn/start 还没返回：本地先结束，返回后 run() 会补发 turn/interrupt。
@@ -1479,6 +1593,153 @@ export class CodexSession implements EngineSession {
       this.finish('interrupted', null)
     }
   }
+  /** 目标模式（docs/ui/codex-goal.md）：看 / 设 / 暂停 / 继续 / 清除；不占轮次，Codex 在跑时也马上生效 */
+  async goal(action: GoalAction): Promise<SessionGoal | null> {
+    if (this.opening) await this.opening.catch(() => {})
+    const proc = this.proc
+    if (this.closed || !proc?.alive || !this.threadId) throw codedError(GOAL_NO_PROCESS)
+    return this.applyGoal(proc, action)
+  }
+
+  private async applyGoal(proc: CodexProcess, action: GoalAction): Promise<SessionGoal | null> {
+    if (this.goalSupported === false) throw new Error(NATIVE_TEXT.goalUnsupported)
+    const threadId = this.threadId
+    if (!threadId) throw codedError(GOAL_NO_PROCESS)
+    const status = (next: 'paused' | 'active') =>
+      proc.request('thread/goal/set', { threadId, status: next, origin: 'user' })
+    try {
+      let result: Message | null = null
+      if (action.kind === 'get') result = await proc.request('thread/goal/get', { threadId }, 10_000)
+      else if (action.kind === 'set')
+        result = await proc.request('thread/goal/set', {
+          threadId,
+          objective: action.objective,
+          status: 'active',
+          origin: 'user',
+        })
+      else if (action.kind === 'clear') {
+        await proc.request('thread/goal/clear', { threadId, origin: 'user' })
+        this.goalSupported = true
+        this.setGoal(null, false)
+        return null
+      } else {
+        if (!this.goalState) throw new Error(NATIVE_TEXT.goalNone)
+        result = await status(action.kind === 'pause' ? 'paused' : 'active')
+      }
+      this.goalSupported = true
+      this.setGoal(codexGoal(object(result).goal), false)
+      return this.goalState
+    } catch (error) {
+      if (goalUnsupported(error)) {
+        this.goalSupported = false
+        throw new Error(NATIVE_TEXT.goalUnsupported)
+      }
+      throw error
+    }
+  }
+
+  /** 打开线程后读一次目标（恢复的线程可能带着目标）；旧版 Codex 没有这组接口时记下来，菜单里不列 /goal */
+  private async readGoal(proc: CodexProcess): Promise<void> {
+    if (!this.threadId) return
+    try {
+      const result = await proc.request('thread/goal/get', { threadId: this.threadId }, 10_000)
+      this.goalSupported = true
+      this.setGoal(codexGoal(object(result).goal), false)
+    } catch (error) {
+      this.goalSupported = false
+      if (!goalUnsupported(error)) log.info('读不到 Codex 线程的目标', { error: describeError(error) })
+    }
+  }
+
+  /** 目标变了：告诉界面；announce 时（Codex 自己报的）状态变成完成、卡住、额度 / 预算用完在对话里说一句 */
+  private setGoal(next: SessionGoal | null, announce: boolean): void {
+    const prev = this.goalState
+    if (sameGoal(prev, next)) return
+    this.goalState = next
+    this.ctx.emit({ type: 'goal', goal: next })
+    if (!announce || !next || prev?.status === next.status) return
+    const text =
+      next.status === 'complete'
+        ? NATIVE_TEXT.goalComplete(next.objective)
+        : next.status === 'blocked'
+          ? NATIVE_TEXT.goalBlocked(next.objective)
+          : next.status === 'usageLimited'
+            ? NATIVE_TEXT.goalUsageLimited
+            : next.status === 'budgetLimited'
+              ? NATIVE_TEXT.goalBudgetLimited
+              : null
+    if (text) this.goalNotice(text, next.status === 'complete' ? 'info' : 'warn')
+  }
+
+  private goalNotice(text: string, level: 'info' | 'warn' = 'info'): void {
+    this.ctx.emit({
+      type: 'item_completed',
+      item: { kind: 'notice', id: `cx-goal-${Date.now()}-${++this.noticeSeq}`, level, text, detail: null },
+    })
+  }
+
+  /**
+   * 输入框发来的 /goal（进程没在跑时按普通消息发过来的）：做完在对话里说一句。设目标 / 继续后 Codex 自己开轮：
+   * 3 秒内开始了就接在这一轮里（这条消息那一轮就是目标的第一轮），没开始就结束这一轮
+   */
+  private async runGoal(
+    action: GoalAction,
+    active: NonNullable<CodexSession['active']>,
+    userItemId: string,
+    attachments: ImageAttachment[],
+  ): Promise<void> {
+    this.adopting = null
+    this.ctx.emit({ type: 'input_ack', id: userItemId, state: 'consumed', mode: 'normal' })
+    const end = (): void => {
+      if (this.active === active && !this.nativeTurnId) this.finish('completed', null)
+    }
+    if (attachments.length) {
+      this.goalNotice(NATIVE_TEXT.goalImages, 'warn')
+      return end()
+    }
+    let goal: SessionGoal | null
+    try {
+      goal = await this.applyGoal(this.proc!, action)
+    } catch (error) {
+      this.goalNotice((error as Error).message, 'warn')
+      return end()
+    }
+    if (this.active !== active) return
+    if (action.kind === 'get')
+      this.goalNotice(
+        goal ? NATIVE_TEXT.goalShow(goal.objective, NATIVE_TEXT.goalStatus[goal.status]) : NATIVE_TEXT.goalNone,
+      )
+    else if (action.kind === 'pause') this.goalNotice(NATIVE_TEXT.goalPaused)
+    else if (action.kind === 'clear') this.goalNotice(NATIVE_TEXT.goalCleared)
+    else {
+      this.goalNotice(action.kind === 'set' ? NATIVE_TEXT.goalSet(action.objective) : NATIVE_TEXT.goalResumed)
+      for (let i = 0; i < 30 && this.active === active && !this.nativeTurnId && !this.closed; i++)
+        await new Promise(resolve => setTimeout(resolve, 100))
+      if (this.active === active && !this.nativeTurnId) this.goalNotice(NATIVE_TEXT.goalWaiting)
+    }
+    end()
+  }
+
+  /**
+   * Codex 自己开了一轮（目标模式接着做）：自己开一轮，和普通的一轮一样显示、统计、收尾。
+   * 告诉宿主晚一个宏任务：宿主刚好要派发排队的消息时让它先派发（不然目标一直在跑，排队的消息永远等不到空闲），
+   * 派发来的消息接管这一轮（send）
+   */
+  private beginAuto(): void {
+    const turnId = randomUUID()
+    this.startActive(turnId)
+    const active = this.active!
+    active.auto = true
+    active.announced = false
+    setTimeout(() => this.announce(active), 0)
+  }
+
+  private announce(active: NonNullable<CodexSession['active']>): void {
+    if (this.active !== active || !active.auto || active.announced) return
+    active.announced = true
+    this.ctx.emit({ type: 'turn_started', turnId: active.id, execution: queueSettings(this.ctx.record()) })
+  }
+
   async close(opts: CloseOptions = {}): Promise<void> {
     this.closed = true
     if (this.mcpTimer) clearTimeout(this.mcpTimer)

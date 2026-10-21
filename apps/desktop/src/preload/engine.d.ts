@@ -14,6 +14,7 @@ import type {
   EngineInfo,
   EngineLogin,
   EngineUpdateResult,
+  GoalAction,
   HostEvent,
   Item,
   MessageInput,
@@ -24,6 +25,7 @@ import type {
   ProjectRecord,
   ProjectFolder,
   AddProjectsResult,
+  SessionGoal,
   SessionRecord,
   SessionSettings,
   SessionSummary,
@@ -189,6 +191,8 @@ export interface EngineBridge {
   setSessionPinned(id: string, pinned: boolean): Promise<SessionRecord>
   /** 停止一个后台任务 */
   stopTask(id: string, taskId: string): Promise<void>
+  /** 目标模式（Codex /goal，docs/ui/codex-goal.md）：引擎进程在跑时直接操作，返回之后的目标 */
+  goal(id: string, action: GoalAction): Promise<SessionGoal | null>
   /** 读一个后台任务的输出（最后一段） */
   taskOutput(id: string, taskId: string): Promise<TaskOutput>
   /** 会话里的 MCP 服务器：取状态或做操作（docs/ui/connectors.md）；会话进程没在跑时刷新返回 report: null 或上次的状态 */

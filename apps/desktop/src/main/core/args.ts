@@ -7,6 +7,7 @@ import type {
   AccountPatch,
   EngineConfigPatch,
   EngineId,
+  GoalAction,
   McpOp,
   UsageDimension,
   UsageFilter,
@@ -86,6 +87,17 @@ export function mcpOp(v: unknown): McpOp {
   if (op.kind === 'reconnect' || op.kind === 'login') return { kind: op.kind, name }
   if (op.kind === 'toggle' && typeof op.enabled === 'boolean') return { kind: 'toggle', name, enabled: op.enabled }
   throw new Error('未知的连接器操作')
+}
+
+/** 目标模式的操作（docs/ui/codex-goal.md）：目标文字 1–4000 字 */
+export function goalAction(v: unknown): GoalAction {
+  const a = v && typeof v === 'object' ? (v as Record<string, unknown>) : {}
+  if (a.kind === 'get' || a.kind === 'pause' || a.kind === 'resume' || a.kind === 'clear') return { kind: a.kind }
+  if (a.kind === 'set' && typeof a.objective === 'string') {
+    const objective = a.objective.trim()
+    if (objective && objective.length <= 4000) return { kind: 'set', objective }
+  }
+  throw new Error('目标操作不对')
 }
 
 const RANGES: readonly UsageRangeId[] = ['today', '7d', '30d', '90d']

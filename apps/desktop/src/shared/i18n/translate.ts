@@ -65,6 +65,7 @@ import { systemProxyMessages } from './systemProxyMessages'
 import { approvalMessages } from './approvalMessages'
 import { extstoreDetailMessages } from './extstoreDetailMessages'
 import { settingsWindowMessages } from './settingsWindowMessages'
+import { goalMessages } from './goalMessages'
 import { replaceCodedErrors } from '@pixelsky/protocol'
 import type { Locale } from './messages'
 
@@ -137,6 +138,7 @@ export const allMessages = {
   ...approvalMessages,
   ...extstoreDetailMessages,
   ...settingsWindowMessages,
+  ...goalMessages,
 }
 export type TranslationKey = keyof typeof allMessages
 

@@ -121,6 +121,11 @@ export interface EngineSession {
   /** 读一个后台任务的输出（只给最后一段）；没有后台任务的引擎不实现 */
   taskOutput?(taskId: string): Promise<TaskOutput>
   /**
+   * 目标模式（Codex /goal，docs/ui/codex-goal.md）：看 / 设 / 暂停 / 继续 / 清除，返回之后的目标（没有为 null）。
+   * 不占轮次：引擎在跑时也马上生效；没有目标模式的引擎不实现
+   */
+  goal?(action: import('@pixelsky/protocol').GoalAction): Promise<import('@pixelsky/protocol').SessionGoal | null>
+  /**
    * 借这个会话活着的进程主动读一次账号额度（docs/ui/account-quota.md §3.4）；没有进程、走网关时返回 null
    * （宿主改用适配器的临时读取），绝不为它起会话进程
    */

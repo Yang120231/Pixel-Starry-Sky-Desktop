@@ -132,6 +132,8 @@ export function reduce(s: SessionSnapshot, e: EngineEvent): SessionSnapshot {
       return s.suggestion === e.text ? s : { ...s, suggestion: e.text }
     case 'commands':
       return { ...s, commands: e.commands }
+    case 'goal':
+      return { ...s, goal: e.goal }
     case 'mcp':
       return { ...s, mcp: e.report }
     case 'turn_completed': {

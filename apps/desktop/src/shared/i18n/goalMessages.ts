@@ -1,0 +1,66 @@
+// Codex 目标模式（/goal，docs/ui/codex-goal.md）：输入框上方的目标栏、/goal 的结果提示，以及引擎在对话里说的话（NATIVE_TEXT.goal*）
+export const goalMessages = {
+  'goal.bar.label': { zh: '目标', en: 'Goal' },
+  'goal.bar.region': { zh: '当前目标', en: 'Current goal' },
+  'goal.bar.tokens': { zh: '已用 {used} token', en: '{used} tokens used' },
+  'goal.bar.tokensBudget': { zh: '已用 {used} / {budget} token', en: '{used} / {budget} tokens used' },
+  'goal.bar.time': { zh: '用时 {time}', en: '{time} elapsed' },
+  'goal.bar.pause': { zh: '暂停', en: 'Pause' },
+  'goal.bar.resume': { zh: '继续', en: 'Resume' },
+  'goal.bar.clear': { zh: '清除', en: 'Clear' },
+  'goal.bar.pauseHint': {
+    zh: '暂停后 Codex 做完这一轮就停下，不再自己接着开下一轮',
+    en: 'After pausing, Codex stops when this turn ends instead of starting the next one',
+  },
+  'goal.bar.resumeHint': { zh: 'Codex 接着朝这个目标做', en: 'Codex keeps working toward this goal' },
+  'goal.bar.clearHint': {
+    zh: '清除目标（不会停止正在跑的这一轮）',
+    en: 'Clear the goal (the current turn keeps running)',
+  },
+  'goal.status.active': { zh: '进行中', en: 'In progress' },
+  'goal.status.paused': { zh: '已暂停', en: 'Paused' },
+  'goal.status.blocked': { zh: '卡住了', en: 'Blocked' },
+  'goal.status.usageLimited': { zh: '额度用完', en: 'Usage limit reached' },
+  'goal.status.budgetLimited': { zh: '预算用完', en: 'Budget used up' },
+  'goal.status.complete': { zh: '已完成', en: 'Complete' },
+  // 引擎在对话里说的话（packages/engine/src/native/text.ts 的 goal*，原文要一字不差）
+  'goal.native.set': {
+    zh: '已设目标：{p0}。Codex 会一轮接一轮地做，直到完成；输入 /goal pause 暂停，/goal clear 清除',
+    en: 'Goal set: {p0}. Codex will keep working turn after turn until it’s done. Type /goal pause to pause or /goal clear to clear it',
+  },
+  'goal.native.waiting': {
+    zh: 'Codex 已经记下目标，会自己接着做',
+    en: 'Codex saved the goal and will keep working on it',
+  },
+  'goal.native.none': {
+    zh: '这个对话没有目标。输入 /goal 加上要达成的目标来设一个',
+    en: 'This conversation has no goal. Type /goal followed by what you want done to set one',
+  },
+  'goal.native.showActive': { zh: '当前目标（进行中）：{p0}', en: 'Current goal (in progress): {p0}' },
+  'goal.native.showPaused': { zh: '当前目标（已暂停）：{p0}', en: 'Current goal (paused): {p0}' },
+  'goal.native.showBlocked': { zh: '当前目标（卡住了）：{p0}', en: 'Current goal (blocked): {p0}' },
+  'goal.native.showUsageLimited': {
+    zh: '当前目标（额度用完）：{p0}',
+    en: 'Current goal (usage limit reached): {p0}',
+  },
+  'goal.native.showBudgetLimited': { zh: '当前目标（预算用完）：{p0}', en: 'Current goal (budget used up): {p0}' },
+  'goal.native.showComplete': { zh: '当前目标（已完成）：{p0}', en: 'Current goal (complete): {p0}' },
+  'goal.native.paused': { zh: '目标已暂停', en: 'Goal paused' },
+  'goal.native.resumed': { zh: '目标继续进行', en: 'Goal resumed' },
+  'goal.native.cleared': { zh: '目标已清除', en: 'Goal cleared' },
+  'goal.native.complete': { zh: '目标已完成：{p0}', en: 'Goal complete: {p0}' },
+  'goal.native.blocked': {
+    zh: '目标卡住了，Codex 需要你帮忙：{p0}',
+    en: 'Codex is stuck on the goal and needs your help: {p0}',
+  },
+  'goal.native.usageLimited': { zh: '额度用完了，目标先停下', en: 'Usage limit reached, so the goal is on hold' },
+  'goal.native.budgetLimited': { zh: '目标的 token 预算用完了', en: 'The goal’s token budget is used up' },
+  'goal.native.unsupported': {
+    zh: '这个 Codex 版本没有目标模式（/goal），请更新到 0.128 以上',
+    en: 'This Codex version doesn’t support goals (/goal). Update to 0.128 or later',
+  },
+  'goal.native.images': {
+    zh: '目标只能是文字，/goal 不能带图片',
+    en: 'A goal can only be text; /goal can’t include images',
+  },
+} as const

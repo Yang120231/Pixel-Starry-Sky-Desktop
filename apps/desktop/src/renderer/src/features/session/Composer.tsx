@@ -20,6 +20,7 @@ import {
   MAX_IMAGE_BYTES,
   MAX_IMAGE_COUNT,
   MAX_IMAGE_TOTAL,
+  parseGoalCommand,
   type FileAttachment,
 } from '@pixelsky/protocol'
 import { useAccount } from '@/features/account/useAccount'
@@ -36,6 +37,7 @@ import { ResizeHandle } from '@/ui/ResizeHandle'
 import { setLayoutSize, useLayoutSize } from '@/features/layout/sizes'
 import { useComposerDraft } from '@/features/engine/drafts'
 import { QueuedMessages } from './QueuedMessages'
+import { GoalBar, goalResultText } from './GoalBar'
 import { ContextWindowButton } from './ContextWindowButton'
 import { QuotaButton } from './quota/QuotaButton'
 import { useComposerStyle } from '@/features/settings/composerStyle'
@@ -573,6 +575,32 @@ export function Composer({
       if (hasContent) comingSoon(translate('发送'))
       return
     }
+    // Codex 的 /goal（docs/ui/codex-goal.md §2）：进程在跑时直接改目标，不排队、不发给模型；
+    // 不是 Codex 会话、进程没在跑、带了附件时照普通消息发（会话启动后由 Codex 会话处理，Claude Code 有自己的 /goal）
+    const goal = images.length || textFiles.length ? null : parseGoalCommand(text)
+    if (goal && canSend && !submitting.current && !pendingReads.current) {
+      const typed = text
+      submitting.current = true
+      setBusy(true)
+      setError(null)
+      let handled = true
+      try {
+        const done = await live.goal(goal)
+        if (done) {
+          setText(current => (current === typed ? '' : current))
+          toast(goalResultText(goal, done.goal))
+        } else handled = false
+      } catch (err) {
+        setError((err as Error).message)
+      } finally {
+        setBusy(false)
+        submitting.current = false
+      }
+      if (handled) {
+        ref.current?.focus()
+        return
+      }
+    }
     if (!canSend || submitting.current || pendingReads.current) return
     submitting.current = true
     const sent = text
@@ -709,6 +737,7 @@ export function Composer({
 
   return (
     <>
+      {live && <GoalBar sessionId={live.sessionId} onAction={action => live.goal(action)} />}
       {(live ?? demoQueue) && (
         <QueuedMessages
           live={(live ?? demoQueue)!}

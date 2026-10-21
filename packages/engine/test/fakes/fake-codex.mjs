@@ -17,7 +17,10 @@ if (process.env.FAKE_CODEX_REJECT_ASK && process.argv.includes('features.default
   process.stderr.write("error: unknown feature 'default_mode_request_user_input'\n")
   process.exit(2)
 }
-const out = value => process.stdout.write(JSON.stringify(value) + '\n')
+/** 攒着一起写：FAKE_CODEX_GOAL_GAP=0 时「一轮结束」和「目标接着开的下一轮」在同一个数据块里到 */
+let batching = null
+const out = value =>
+  batching ? batching.push(JSON.stringify(value)) : process.stdout.write(JSON.stringify(value) + '\n')
 const emit = (method, params) => out({ method, params })
 const lockedThread = id => {
   const value = process.env.FAKE_CODEX_LOCKED
@@ -139,6 +142,34 @@ let approvalQueue = [],
   approvalIndex = 0
 /** 协作模式像真 Codex 一样沿用到下一次 turn/start 带新的；Default 模式要开了开发中开关模型才有 request_user_input */
 let collaborationMode = 'default'
+/**
+ * 目标模式（thread/goal/*，docs/ui/codex-goal.md）：目标是 active、没有进行中的轮次时自己开一轮接着做，
+ * 做满 FAKE_CODEX_GOAL_TURNS 轮（默认 2）标完成；每轮 FAKE_CODEX_GOAL_TURN_MS 毫秒（默认 60）。
+ * 中断时进行中的目标改成暂停（和真 Codex 一样）。FAKE_CODEX_NO_GOALS：像旧版一样不认识这组方法
+ */
+let goal = null,
+  goalTurns = 0
+const emitGoal = () => emit('thread/goal/updated', { threadId: thread, turnId: turn?.id ?? null, goal })
+function continueGoal() {
+  if (!goal || goal.status !== 'active' || turn) return
+  const id = 'goal-turn-' + ++next
+  turn = { id, item: 'goal-msg-' + next, text: '继续目标：' + goal.objective, timer: null, slow: false }
+  emit('turn/started', { threadId: thread, turn: { id, status: 'inProgress' } })
+  const current = turn
+  current.timer = setTimeout(
+    () => {
+      if (turn !== current) return
+      goalTurns++
+      goal.tokensUsed += 110
+      if (goalTurns >= Number(process.env.FAKE_CODEX_GOAL_TURNS || 2)) {
+        goal.status = 'complete'
+        emitGoal()
+      }
+      finish()
+    },
+    Number(process.env.FAKE_CODEX_GOAL_TURN_MS || 60),
+  )
+}
 const defaultModeAsk = process.argv.includes('features.default_mode_request_user_input=true')
 /** thread/start、thread/resume 报的实际模型 / 推理强度 / 协作模式（FAKE_CODEX_RESUME_COLLAB 是 JSON，只有 resume 报）；不设就不报，和真 Codex 没配置时一样 */
 const threadReport = resume => ({
@@ -185,6 +216,8 @@ const models = [
 ]
 function finish(status = 'completed') {
   if (!turn) return
+  const together = process.env.FAKE_CODEX_GOAL_GAP === '0' && goal?.status === 'active' && !batching
+  if (together) batching = []
   const current = turn
   turn = null
   clearTimeout(current.timer)
@@ -210,6 +243,12 @@ function finish(status = 'completed') {
     },
   })
   emit('turn/completed', { threadId: thread, turn: { id: current.id, status, error: null } })
+  if (together) {
+    continueGoal()
+    const lines = batching
+    batching = null
+    process.stdout.write(lines.join('\n') + '\n')
+  } else if (goal?.status === 'active') setTimeout(continueGoal, 10)
   // 一轮结束之后（会话已空闲）再来一条账号额度更新；FAKE_CODEX_RATE_UPDATE_IDLE 给了就发它
   rateUpdate(true)
 }
@@ -655,9 +694,56 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
       break
     case 'turn/interrupt': {
       response(m, {})
+      if (goal?.status === 'active') {
+        goal.status = 'paused'
+        emitGoal()
+      }
       const current = turn
       if (current?.slow) setTimeout(() => turn === current && finish('interrupted'), 1000)
       else finish('interrupted')
+      break
+    }
+    case 'thread/goal/get':
+    case 'thread/goal/set':
+    case 'thread/goal/clear': {
+      if (process.env.FAKE_CODEX_NO_GOALS) {
+        out({ id: m.id, error: { code: -32600, message: 'Invalid request: unknown variant `' + m.method + '`' } })
+        break
+      }
+      if (m.method === 'thread/goal/get') {
+        response(m, { goal })
+        break
+      }
+      if (m.method === 'thread/goal/clear') {
+        const cleared = !!goal
+        goal = null
+        response(m, { cleared })
+        if (cleared) emit('thread/goal/cleared', { threadId: thread })
+        break
+      }
+      const now = Math.floor(Date.now() / 1000)
+      if (p.objective) {
+        goal = {
+          threadId: thread,
+          objective: p.objective,
+          status: p.status ?? 'active',
+          tokensUsed: 0,
+          tokenBudget: p.tokenBudget ?? null,
+          timeUsedSeconds: 0,
+          createdAt: now,
+          updatedAt: now,
+        }
+        goalTurns = 0
+      } else if (goal) {
+        if (p.status) goal.status = p.status
+        goal.updatedAt = now
+      } else {
+        rpcError(m, 'no goal')
+        break
+      }
+      response(m, { goal })
+      emitGoal()
+      if (goal.status === 'active' && !turn) setTimeout(continueGoal, 10)
       break
     }
     case 'thread/inject_items':

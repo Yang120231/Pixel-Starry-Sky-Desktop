@@ -18,6 +18,7 @@ import {
   artifactRef,
   engineConfigPatch,
   engineId,
+  goalAction,
   int,
   loginMethod,
   mcpOp,
@@ -275,6 +276,7 @@ export const ENGINE_OPS = {
     return c.host.archiveSession(str(id, 'id'), archived, stopRunning === true)
   },
   'engine:stopTask': (c, id, taskId) => c.host.stopTask(str(id, 'id'), str(taskId, 'taskId')),
+  'engine:goal': (c, id, action) => c.host.goal(str(id, 'id'), goalAction(action)),
   // 右侧「连接器」（docs/ui/connectors.md）
   'engine:mcp': (c, id, op) => c.host.mcp(str(id, 'id'), mcpOp(op)),
   'engine:taskOutput': (c, id, taskId) => c.host.taskOutput(str(id, 'id'), str(taskId, 'taskId')),

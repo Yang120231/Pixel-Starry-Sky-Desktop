@@ -48,8 +48,10 @@ import type {
   SessionSettings,
   SessionSnapshot,
   SessionSummary,
+  GoalAction,
   McpOp,
   McpOpResult,
+  SessionGoal,
   TaskOutput,
   UsagePage,
   UsageSummary,
@@ -525,6 +527,11 @@ export class EngineHost {
 
   async mcp(id: string, op: McpOp): Promise<McpOpResult> {
     return this.m.turn.mcp(id, op)
+  }
+
+  /** 目标模式（Codex /goal）：引擎进程在跑时直接操作，返回之后的目标 */
+  async goal(id: string, action: GoalAction): Promise<SessionGoal | null> {
+    return this.m.turn.goal(id, action)
   }
 
   /** 读一个后台任务的输出 */

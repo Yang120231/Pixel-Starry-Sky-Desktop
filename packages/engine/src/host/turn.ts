@@ -5,14 +5,16 @@ import type {
   ContextDetailLevel,
   ContextDiagnostic,
   ExtensionLaunch,
+  GoalAction,
   InterruptOptions,
+  SessionGoal,
   Item,
   SendReceipt,
   McpOp,
   McpOpResult,
   TaskOutput,
 } from '@pixelsky/protocol'
-import { sourceKey, viaGateway } from '@pixelsky/protocol'
+import { GOAL_NO_ENGINE, GOAL_NO_PROCESS, codedError, sourceKey, viaGateway } from '@pixelsky/protocol'
 import { queueSettings } from '../queue'
 import type { HostContext } from './context'
 import { reconnectedCount } from './queue'
@@ -388,6 +390,14 @@ export class HostTurn {
     if (!s) throw new Error('引擎没有在运行')
     if (!s.stopTask) throw new Error('这个引擎没有后台任务')
     await s.stopTask(taskId)
+  }
+
+  /** 目标模式（docs/ui/codex-goal.md）：只在引擎进程在跑时直接操作；没在跑时输入框按普通消息发 /goal */
+  async goal(id: string, action: GoalAction): Promise<SessionGoal | null> {
+    const s = this.ctx.runtimes.get(id)?.session
+    if (!s) throw codedError(GOAL_NO_PROCESS)
+    if (!s.goal) throw codedError(GOAL_NO_ENGINE)
+    return s.goal(action)
   }
 
   /** 会话里的 MCP 服务器（docs/ui/connectors.md）：进程没在跑时刷新返回空，操作报错 */

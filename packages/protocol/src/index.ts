@@ -86,6 +86,9 @@ export type {
   SessionSummary,
   SubagentStatus,
   TaskOutput,
+  GoalAction,
+  GoalStatus,
+  SessionGoal,
   TodoStep,
   ToolKind,
   NoticeAccountSwitch,
@@ -238,6 +241,7 @@ export { ENGINES, ENGINE_ORDER, isNewerVersion } from './engines'
 export { joinArgs, splitArgs } from './launchArgs'
 export type { CodedErrorInfo, ErrorParams } from './errors'
 export { ERROR_PREFIX, codedError, parseCodedError, replaceCodedErrors } from './errors'
+export { GOAL_NO_ENGINE, GOAL_NO_PROCESS, parseGoalCommand } from './types/goal'
 export {
   ERROR_CODE_KIND,
   classifyErrorText,

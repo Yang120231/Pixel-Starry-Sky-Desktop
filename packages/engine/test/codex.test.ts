@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CodexAdapter, EngineHost } from '../src'
 import {
+  GOAL_NO_PROCESS,
+  codedError,
   parseCodedError,
   type AgentRun,
   type Effort,
@@ -1407,5 +1409,141 @@ describe('Codex 接手带图片的聊天', () => {
     expect(notices(session.id).filter(t => t.includes('view images'))).toEqual([
       "The current model can't view images, so 1 earlier image(s) were not actually passed along",
     ])
+  })
+})
+
+describe('Codex 目标模式（/goal，docs/ui/codex-goal.md）', () => {
+  const snap = (id: string) => host!.open(id)
+  const sessionEvents = (events: HostEvent[], id: string) =>
+    events.flatMap(e => (e.kind === 'session' && e.sessionId === id ? [e.event] : []))
+  /** rpc 日志：Codex 进程还没起来时文件还不在 */
+  const rpcOf = (messages: () => { method?: string; params?: Record<string, unknown> }[]) => () => {
+    try {
+      return messages()
+    } catch {
+      return []
+    }
+  }
+  const noticeTexts = (id: string) => snap(id).items.flatMap(i => (i.kind === 'notice' ? [i.text] : []))
+
+  it('/goal 设目标不发给模型；Codex 自己接着开的轮照常显示、统计和收尾；做完在对话里说一句；菜单里有 /goal', async () => {
+    const { session, events, messages } = setup(60_000)
+    await host!.send(session.id, '/goal 把测试修好')
+    await wait(() => snap(session.id).goal?.status === 'complete' && snap(session.id).state === 'idle')
+    const rpc = messages()
+    expect(rpc.some(m => m.method === 'turn/start')).toBe(false)
+    expect(rpc.find(m => m.method === 'thread/goal/set')?.params).toMatchObject({
+      objective: '把测试修好',
+      status: 'active',
+      origin: 'user',
+    })
+    // 第一轮接在 /goal 这条消息那一轮里，第二轮是 Codex 自己开的
+    const replies = snap(session.id).items.flatMap(i => (i.kind === 'assistant' ? [i.text] : []))
+    expect(replies).toEqual(['继续目标：把测试修好', '继续目标：把测试修好'])
+    const ev = sessionEvents(events, session.id)
+    const started = ev.filter(e => e.type === 'turn_started').length
+    const completed = ev.filter(e => e.type === 'turn_completed')
+    expect(started).toBe(completed.length)
+    expect(completed).toHaveLength(2)
+    expect(completed.every(e => e.type === 'turn_completed' && e.outcome === 'completed')).toBe(true)
+    expect(noticeTexts(session.id)).toEqual([NATIVE_TEXT.goalSet('把测试修好'), NATIVE_TEXT.goalComplete('把测试修好')])
+    expect(snap(session.id).commands?.some(c => c.name === 'goal' && c.invocation === 'slash')).toBe(true)
+    expect(snap(session.id).goal).toMatchObject({ objective: '把测试修好', tokensUsed: 220, tokenBudget: null })
+  })
+
+  it('不在轮次里的操作：看 / 暂停 / 继续 / 清除马上生效；暂停后不再自己开轮', async () => {
+    const env = setup(60_000, { env: { FAKE_CODEX_GOAL_TURNS: '1000', FAKE_CODEX_GOAL_TURN_MS: '40' } })
+    const { session } = env
+    const messages = rpcOf(env.messages)
+    await expect(host!.goal(session.id, { kind: 'get' })).rejects.toThrow(codedError(GOAL_NO_PROCESS).message)
+    await host!.send(session.id, '/goal 一直做')
+    await wait(
+      () => messages().filter(m => m.method === 'thread/goal/set').length === 1 && snap(session.id).state === 'running',
+    )
+    expect(await host!.goal(session.id, { kind: 'get' })).toMatchObject({ objective: '一直做', status: 'active' })
+    expect(await host!.goal(session.id, { kind: 'pause' })).toMatchObject({ status: 'paused' })
+    await wait(() => snap(session.id).state === 'idle')
+    const turns = () => messages().length
+    const before = turns()
+    await new Promise(r => setTimeout(r, 200))
+    expect(snap(session.id).state).toBe('idle')
+    expect(turns()).toBe(before)
+    expect(await host!.goal(session.id, { kind: 'resume' })).toMatchObject({ status: 'active' })
+    await wait(() => snap(session.id).state === 'running')
+    expect(await host!.goal(session.id, { kind: 'clear' })).toBeNull()
+    await wait(() => snap(session.id).state === 'idle')
+    expect(snap(session.id).goal).toBeNull()
+    expect(messages().filter(m => m.method === 'thread/goal/clear')[0].params).toMatchObject({ origin: 'user' })
+  })
+
+  it('目标在跑时发的消息照样送到（接进正在跑的那一轮或另开一轮），不报「已经在跑」；停止先暂停目标再中断', async () => {
+    const { session, events, messages } = setup(60_000, {
+      env: { FAKE_CODEX_GOAL_TURNS: '1000', FAKE_CODEX_GOAL_TURN_MS: '150' },
+    })
+    await host!.send(session.id, '/goal 一直做')
+    await wait(() => snap(session.id).state === 'running')
+    await host!.send(session.id, '顺便看看日志')
+    await wait(() =>
+      messages().some(
+        m =>
+          (m.method === 'turn/steer' || m.method === 'turn/start') &&
+          JSON.stringify(m.params?.input ?? '').includes('顺便看看日志'),
+      ),
+    )
+    await wait(() => !snap(session.id).queue.length && snap(session.id).state === 'running')
+    await host!.interrupt(session.id)
+    await wait(() => snap(session.id).state === 'idle')
+    expect(snap(session.id).goal?.status).toBe('paused')
+    const rpc = messages().map(m => m.method)
+    const paused = rpc.lastIndexOf('thread/goal/set'),
+      interrupted = rpc.lastIndexOf('turn/interrupt')
+    expect(paused).toBeGreaterThan(-1)
+    expect(interrupted).toBeGreaterThan(paused)
+    const failed = sessionEvents(events, session.id).filter(e => e.type === 'turn_completed' && e.outcome === 'failed')
+    expect(failed).toEqual([])
+    const ev = sessionEvents(events, session.id)
+    expect(ev.filter(e => e.type === 'turn_started').length).toBe(ev.filter(e => e.type === 'turn_completed').length)
+    // 停了以后不会再自己开轮
+    const count = messages().length
+    await new Promise(r => setTimeout(r, 300))
+    expect(snap(session.id).state).toBe('idle')
+    expect(messages().length).toBe(count)
+  })
+
+  it('派发排队消息时 Codex 已经接着开了下一轮：消息用 turn/steer 接进那一轮，那一轮算这条消息的', async () => {
+    const { session, events, messages } = setup(60_000, {
+      env: { FAKE_CODEX_GOAL_TURNS: '1000', FAKE_CODEX_GOAL_TURN_MS: '150', FAKE_CODEX_GOAL_GAP: '0' },
+    })
+    await host!.send(session.id, '/goal 一直做')
+    await wait(() => snap(session.id).state === 'running')
+    await host!.send(session.id, '顺便看看日志')
+    const sent = () =>
+      messages().filter(
+        m =>
+          (m.method === 'turn/steer' || m.method === 'turn/start') &&
+          JSON.stringify(m.params?.input ?? '').includes('顺便看看日志'),
+      )
+    await wait(() => sent().length > 0)
+    expect(sent().map(m => m.method)).toEqual(['turn/steer'])
+    expect(sent()[0].params?.expectedTurnId).toMatch(/^goal-turn-/)
+    // 接管的那一轮做完：回复里带着这条消息，之后 Codex 照常接着开下一轮
+    await wait(() => snap(session.id).items.some(i => i.kind === 'assistant' && i.text.includes('顺便看看日志')))
+    expect(snap(session.id).items.filter(i => i.kind === 'user' && i.text === '顺便看看日志')).toHaveLength(1)
+    await wait(() => !snap(session.id).queue.length && snap(session.id).state === 'running')
+    await host!.interrupt(session.id)
+    await wait(() => snap(session.id).state === 'idle')
+    const ev = sessionEvents(events, session.id)
+    expect(ev.filter(e => e.type === 'turn_completed' && e.outcome === 'failed')).toEqual([])
+    expect(ev.filter(e => e.type === 'turn_started').length).toBe(ev.filter(e => e.type === 'turn_completed').length)
+  })
+
+  it('旧版 Codex 没有目标模式：菜单里没有 /goal；打了 /goal 提示更新，不发给模型', async () => {
+    const { session, messages } = setup(60_000, { env: { FAKE_CODEX_NO_GOALS: '1' } })
+    await host!.send(session.id, '/goal 把测试修好')
+    await wait(() => snap(session.id).state === 'idle' && noticeTexts(session.id).length > 0)
+    expect(noticeTexts(session.id)).toEqual([NATIVE_TEXT.goalUnsupported])
+    expect(messages().some(m => m.method === 'turn/start')).toBe(false)
+    expect(snap(session.id).commands?.some(c => c.name === 'goal')).toBe(false)
+    await expect(host!.goal(session.id, { kind: 'get' })).rejects.toThrow(NATIVE_TEXT.goalUnsupported)
   })
 })

@@ -54,6 +54,8 @@ export type EngineEvent =
   /** 整个条目列表换掉（接着引擎自己的会话时加载更早的 / 补上，docs/ui/claude-resume.md §4.8） */
   | { type: 'items_reset'; items: Item[] }
   | { type: 'commands'; commands: import('../extensions').SkillCommand[] }
+  /** 线程的目标（Codex /goal，docs/ui/codex-goal.md）；null 表示没有。临时状态，不落盘 */
+  | { type: 'goal'; goal: import('./goal').SessionGoal | null }
   /** 会话里 MCP 服务器的状态（docs/ui/connectors.md）；null 表示清掉（换引擎） */
   | { type: 'mcp'; report: import('./mcp').McpReport | null }
   | { type: 'queue'; items: QueuedMessage[]; paused: boolean }
@@ -88,6 +90,8 @@ export interface SessionFlags {
 /** 一个会话在界面上需要的全部状态 */
 export interface SessionSnapshot {
   commands?: import('../extensions').SkillCommand[]
+  /** 线程的目标（Codex /goal）；没有或引擎没报告时省略或为 null，不落盘 */
+  goal?: import('./goal').SessionGoal | null
   /** 会话里 MCP 服务器的状态；引擎还没报告时省略或为 null */
   mcp?: import('./mcp').McpReport | null
   /** 最近主请求 / 引擎诊断，独立于计费累计用量。旧快照无此字段时为未知。 */
