@@ -1503,11 +1503,12 @@ describe('Codex 目标模式（/goal，docs/ui/codex-goal.md）', () => {
     expect(failed).toEqual([])
     const ev = sessionEvents(events, session.id)
     expect(ev.filter(e => e.type === 'turn_started').length).toBe(ev.filter(e => e.type === 'turn_completed').length)
-    // 停了以后不会再自己开轮
-    const count = messages().length
+    // 停了以后不会再自己开轮（只数开轮的请求：一轮结束后的 mcpServerStatus/list 之类可能晚到）
+    const turns = () => messages().filter(m => m.method === 'turn/start' || m.method === 'turn/steer').length
+    const count = turns()
     await new Promise(r => setTimeout(r, 300))
     expect(snap(session.id).state).toBe('idle')
-    expect(messages().length).toBe(count)
+    expect(turns()).toBe(count)
   })
 
   it('派发排队消息时 Codex 已经接着开了下一轮：消息用 turn/steer 接进那一轮，那一轮算这条消息的', async () => {
