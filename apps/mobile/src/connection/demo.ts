@@ -240,6 +240,7 @@ export class DemoLink {
   }
   stop(): void {}
   wake(): void {}
+  reconnect(): void {}
   away(): void {}
 
   async call<T = unknown>(method: string, ...args: unknown[]): Promise<T> {

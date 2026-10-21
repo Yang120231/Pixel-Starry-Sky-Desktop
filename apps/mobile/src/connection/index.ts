@@ -10,6 +10,7 @@ import {
 } from '@pixelsky/link'
 import { inApp } from '@/platform'
 import { type Offer } from './offer'
+import { pickNode } from './nodes'
 import { DesktopLink, type LinkHooks, type LinkState } from './link'
 import { dropPush, retryDrops, syncPush } from './push'
 import { DEMO_PAIRING, DemoLink, demoEnabled } from './demo'
@@ -24,7 +25,7 @@ export { disablePush, enablePush, pushState, type PushState } from './push'
 
 const PAIR_ERRORS: Record<string, string> = {
   invalid_code: '二维码已过期或已经用过，请在电脑上重新生成。',
-  too_many_devices: '这台电脑已经配了 5 部手机，先在电脑上移除一部。',
+  too_many_devices: '每台电脑最多配对 5 部手机，这台已经满了，先在电脑上移除一部。',
 }
 
 /** 扫码后：生成手机密钥，用配对码向云端换设备令牌，存下来（等电脑上确认） */
@@ -32,9 +33,12 @@ export async function pairWithOffer(offer: Offer, phoneName: string): Promise<Pa
   if (!offer.raw.code) throw new Error('这个二维码不是经云端配对的，手机连不上。')
   const key = generateKeypair()
   let res: Response
+  let node: string | null = null
   try {
-    // App 里页面不和云端同源：按二维码里的中转地址找云端（请求走原生 HTTP，没有跨域问题）
-    const api = inApp ? bridgeApiBase(offer.raw.relay) : location.origin
+    // App 里页面不和云端同源：按二维码里的中转地址找云端（请求走原生 HTTP，没有跨域问题）。
+    // 网页版：二维码里的中转是主站列出的节点（优质节点）就配对、连接都发到那个节点，否则用页面的来源
+    node = inApp ? null : await pickNode(offer.raw.relay, location.origin)
+    const api = inApp ? bridgeApiBase(offer.raw.relay) : node ? bridgeApiBase(node) : location.origin
     res = await fetch(api + '/v1/bridge/pair', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -52,6 +56,7 @@ export async function pairWithOffer(offer: Offer, phoneName: string): Promise<Pa
     desktopId: offer.raw.desktop,
     desktopName: offer.desktopName,
     relay: offer.raw.relay,
+    ...(node ? { node } : {}),
     desktopKey: offer.raw.key,
     fingerprint: offer.fingerprint,
     phoneKey: toBase64Url(key.privateKey),
@@ -183,6 +188,11 @@ class Connections {
   active(): Pairing | null {
     const id = activeDevice()
     return this.pairings.find(p => p.deviceId === id) ?? this.pairings[0] ?? null
+  }
+
+  /** 被别的设备顶掉后点「重新连接」 */
+  reconnect(deviceId: string): void {
+    this.links.get(deviceId)?.reconnect()
   }
 
   select(deviceId: string): void {

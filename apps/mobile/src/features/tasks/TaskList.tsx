@@ -2,7 +2,7 @@
 // 每行是引擎头像（角上状态点）、标题、时间、项目名和最后一句回复（ui/SessionRow）。
 // 搜索（标题在手机上筛，对话内容问电脑）、按项目筛、显示更多（§17 第 6 项）；左上角的菜单按钮由 App 传进来。
 import { useState, type ReactNode } from 'react'
-import { CloudOff, Inbox, Laptop, Plus, SearchX, ShieldOff, WifiOff } from 'lucide-react'
+import { CloudOff, Inbox, Laptop, MonitorSmartphone, Plus, SearchX, ShieldOff, WifiOff } from 'lucide-react'
 import type { SessionSummary } from '@pixelsky/protocol'
 import type { Pairing } from '@/connection'
 import { useContentSearch, useDesktop } from '@/data/hooks'
@@ -11,6 +11,7 @@ import { linkStateText } from '@/i18n/zh'
 import { Banner, Button, Dot, Empty, IconButton, Screen, Section, Spinner } from '@/ui'
 import { Chips, ContentResults, SearchField } from '@/ui/search'
 import { SessionRow } from '@/ui/SessionRow'
+import { REPLACED_BODY, REPLACED_TITLE, ReconnectButton } from './Reconnect'
 
 export function TaskList({
   pairing,
@@ -60,7 +61,18 @@ export function TaskList({
         <IconButton label="新建会话" icon={Plus} disabled={!canAct} onClick={onNew} className="disabled:opacity-40" />
       }
     >
-      {state === 'removed' ? (
+      {state === 'replaced' && !loaded ? (
+        <Empty
+          icon={MonitorSmartphone}
+          title={REPLACED_TITLE}
+          body={REPLACED_BODY}
+          action={
+            <div className="mt-2">
+              <ReconnectButton deviceId={pairing.deviceId} />
+            </div>
+          }
+        />
+      ) : state === 'removed' ? (
         <Empty icon={ShieldOff} title="已被电脑移除" body="到「我的」里删掉这台电脑，再在电脑上重新扫码配对。" />
       ) : state === 'incompatible' && !loaded ? (
         <Empty icon={ShieldOff} title="版本不一致" body="电脑版和手机版的连接协议不一样，把两边都更新到最新版再试。" />
@@ -84,10 +96,20 @@ export function TaskList({
         </div>
       ) : (
         <div className="flex flex-col gap-5 pb-6">
-          {!ready && (
-            <Banner tone="warn" icon={<CloudOff size={18} />}>
-              {state ? linkStateText[state] : ''}：下面是{cached ? '上次打开时' : '断开前'}的内容，恢复后会自动更新。
+          {state === 'replaced' ? (
+            <Banner
+              tone="warn"
+              icon={<MonitorSmartphone size={18} />}
+              action={<ReconnectButton deviceId={pairing.deviceId} size="sm" />}
+            >
+              {REPLACED_TITLE}：下面是断开前的内容。
             </Banner>
+          ) : (
+            !ready && (
+              <Banner tone="warn" icon={<CloudOff size={18} />}>
+                {state ? linkStateText[state] : ''}：下面是{cached ? '上次打开时' : '断开前'}的内容，恢复后会自动更新。
+              </Banner>
+            )
           )}
           {sessions.length === 0 ? (
             <Empty

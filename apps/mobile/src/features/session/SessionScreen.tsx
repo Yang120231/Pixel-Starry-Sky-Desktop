@@ -14,6 +14,7 @@ import { linkStateText } from '@/i18n/zh'
 import { Banner, Screen, Spinner, cn } from '@/ui'
 import { EngineAvatar } from '@/ui/EngineAvatar'
 import { ImageViewer } from '@/ui/images'
+import { ReconnectButton } from '../tasks/Reconnect'
 import { ApprovalCard } from './ApprovalCard'
 import { EntryView, ThinkingRow, type TurnActions } from './ItemView'
 import { ModeChip } from './ModeChip'
@@ -207,10 +208,17 @@ export function SessionScreen({
       <div className="relative min-h-0 flex-1 bg-chat">
         <div ref={scroller} className="h-full overflow-y-auto overscroll-contain">
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 pt-3 pb-6">
-            {state !== 'ready' && state && (
-              <Banner tone="warn" icon={<Spinner size={14} />}>
+            {state === 'replaced' ? (
+              <Banner tone="warn" action={<ReconnectButton deviceId={pairing.deviceId} size="sm" />}>
                 {linkStateText[state]}
               </Banner>
+            ) : (
+              state !== 'ready' &&
+              state && (
+                <Banner tone="warn" icon={<Spinner size={14} />}>
+                  {linkStateText[state]}
+                </Banner>
+              )
             )}
             {error && <Banner tone="danger">{error}</Banner>}
             {retryError && <Banner tone="danger">{retryError}</Banner>}

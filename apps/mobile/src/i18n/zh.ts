@@ -11,6 +11,7 @@ export const linkStateText: Record<LinkState, string> = {
   unrecognized: '电脑上找不到这部手机的配对，可重新扫码',
   incompatible: '电脑版和手机版版本不一致，请更新',
   offline: '没有网络，稍后重试',
+  replaced: '已在其他设备连接',
 }
 
 export const sessionStateText = {

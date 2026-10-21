@@ -10,6 +10,8 @@ export interface Pairing {
   desktopName: string
   /** 二维码里的中转地址：App 里用它连（网页版和中转同源，用页面地址） */
   relay?: string
+  /** 网页版配对时跟随的中转节点（主站 /v1/bridge/nodes 列出的、二维码里给的）；没有就连页面的来源 */
+  node?: string
   /** 电脑长期公钥（base64url）和指纹 */
   desktopKey: string
   fingerprint: string

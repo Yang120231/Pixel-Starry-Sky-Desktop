@@ -37,6 +37,8 @@ export type LinkState =
   | 'incompatible'
   /** 连不上中转（没网），稍后自动重试 */
   | 'offline'
+  /** 账号的远程席位用满，被新连上的设备顶掉（关闭码 4010）：不自动重连，点「重新连接」才连 */
+  | 'replaced'
 
 export interface Hello {
   version: number
@@ -67,6 +69,8 @@ export function unbatch(data: unknown): unknown[] {
 
 /** 中转关闭码（services/cloud/internal/bridge）：令牌失效 */
 const CLOSE_UNAUTHORIZED = 4001
+/** 中转关闭码：被同账号（或同 IP）新连上的设备顶掉（docs/cloud-admin-seats-plan.md §3） */
+export const CLOSE_REPLACED = 4010
 /** 发出握手后这么久还没到 ready：断开重连 */
 const HANDSHAKE_TIMEOUT = 10_000
 /** 电脑暂时不能握手 / 握手失败后多久再试 */
@@ -76,10 +80,11 @@ const RETRY_LATER = 60_000
 /** 云端每 20 秒发一条文本心跳 tick；收到过之后这么久什么都没收到，就当连接已经死了 */
 const DEAD_AFTER = 60_000
 
-/** 网页版：和页面同源；App 里：配对时二维码给的中转地址 */
+/** 网页版：和页面同源，配对时跟随了主站列出的中转节点就连那个节点；App 里：配对时二维码给的中转地址 */
 export function relayUrl(pairing: Pairing): string {
-  if (inApp && pairing.relay) {
-    const url = new URL(pairing.relay)
+  const target = inApp ? pairing.relay : pairing.node
+  if (target) {
+    const url = new URL(target)
     url.searchParams.set('role', 'phone')
     return url.toString()
   }
@@ -117,6 +122,15 @@ export class DesktopLink {
     this.reset()
     this.ws?.close()
     this.ws = null
+  }
+
+  /** 被顶掉后用户点「重新连接」：重新连上（会顶掉别的设备） */
+  reconnect(): void {
+    if (this.pairing.status === 'removed' || !this.stopped) return
+    if (this.timer) clearTimeout(this.timer)
+    this.stopped = false
+    this.delay = 1000
+    this.open()
   }
 
   /** 页面回到前台：连接可能早被系统断了，没连着就马上重连，连着就探一下 */
@@ -209,6 +223,12 @@ export class DesktopLink {
     this.reset()
     if (code === CLOSE_UNAUTHORIZED) return this.removed()
     if (this.stopped) return
+    if (code === CLOSE_REPLACED) {
+      // 不自动重连：两台设备会来回互顶
+      this.stopped = true
+      this.set('replaced')
+      return
+    }
     this.set('offline')
     this.timer = setTimeout(() => this.open(), this.delay * (0.8 + Math.random() * 0.4))
     this.delay = Math.min(30_000, this.delay * 2)

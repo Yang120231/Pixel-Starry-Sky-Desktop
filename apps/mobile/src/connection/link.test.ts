@@ -10,7 +10,7 @@ import {
   generateKeypair,
   toBase64Url,
 } from '@pixelsky/link'
-import { DesktopLink, unbatch, type LinkState } from './link'
+import { DesktopLink, relayUrl, unbatch, type LinkState } from './link'
 import type { Pairing } from './storage'
 
 vi.mock('@/platform', () => ({ inApp: false }))
@@ -205,6 +205,30 @@ describe('DesktopLink', () => {
     expect(ws.readyState).toBe(FakeSocket.OPEN)
     expect(link.state).toBe('handshaking')
     link.stop()
+  })
+
+  it('云端 4010（被新设备顶掉）：显示已在其他设备连接，不自动重连，点重新连接才连', () => {
+    const { link, ws, saved } = setup()
+    ws.close(4010)
+    expect(link.state).toBe('replaced')
+    expect(link.pairing.status).toBe('paired')
+    expect(saved).toEqual([])
+    vi.advanceTimersByTime(120_000)
+    link.wake()
+    expect(FakeSocket.all).toHaveLength(1)
+    link.reconnect()
+    expect(FakeSocket.all).toHaveLength(2)
+    expect(link.state).toBe('connecting')
+    link.stop()
+  })
+
+  it('网页版：配对时跟随了节点就连节点，否则连页面来源', () => {
+    expect(relayUrl({ ...pairing(), node: 'wss://node1.example.test/v1/bridge/ws' })).toBe(
+      'wss://node1.example.test/v1/bridge/ws?role=phone',
+    )
+    expect(relayUrl({ ...pairing(), relay: 'wss://evil.test/v1/bridge/ws' })).toBe(
+      'wss://example.test/v1/bridge/ws?role=phone',
+    )
   })
 
   it('云端 4001 关连接才算被移除', () => {
