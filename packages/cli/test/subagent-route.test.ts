@@ -207,6 +207,46 @@ describe('子智能体类型', () => {
     })
   })
 
+  it('站点没写图片时 Chat 默认只给文字，标成猜的：Pi 内置表里收图的模型（kimi-k3）改成能发图，compat 按 route 标的继承', () => {
+    const types = [
+      {
+        ...TYPES[1],
+        route: {
+          api: 'openai-completions',
+          model: { id: 'kimi-k3', compat: { supportsReasoningEffort: false } },
+          label: 'Kimi',
+          token: 'PIXELSKY_PIXEL_SUB_TOKEN_2',
+          inferred: ['compat'],
+        },
+      },
+    ]
+    const env = {
+      [SUBAGENT_TYPES_ENV]: JSON.stringify(types),
+      [SUB_BASE_URL_ENV]: 'http://127.0.0.1:9',
+      [SUBAGENT_ENV]: '1',
+      [SUBAGENT_TYPE_ENV]: 'explore',
+    }
+    expect((subagentProvider(env)?.[1].models as Json[])[0]).toMatchObject({ input: ['text'], reasoning: false })
+    const all = [
+      {
+        provider: 'moonshotai',
+        id: 'kimi-k3',
+        api: 'openai-completions',
+        contextWindow: 1_048_576,
+        maxTokens: 1_048_576,
+        reasoning: true,
+        input: ['text', 'image'],
+        compat: { supportsReasoningEffort: true },
+      },
+    ]
+    expect((subagentProvider(env, all)?.[1].models as Json[])[0]).toMatchObject({
+      input: ['text', 'image'],
+      reasoning: true,
+      maxTokens: 524_288,
+      compat: { supportsReasoningEffort: true },
+    })
+  })
+
   it('按类型起子进程：站点、只读参数、类型名记进进度', async () => {
     const r = setup(ENV, [c => c.send(reply('found'))])
     const out = await r.call({ type: 'explore' })

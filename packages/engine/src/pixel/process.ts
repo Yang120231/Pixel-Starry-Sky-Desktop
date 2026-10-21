@@ -36,7 +36,7 @@ export class PixelProcess {
   private readonly child: ChildProcessWithoutNullStreams
   private readonly pending = new Map<
     string,
-    { resolve: (value: PixelResponse) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }
+    { resolve: (value: PixelResponse) => void; reject: (error: Error) => void; timer: NodeJS.Timeout | undefined }
   >()
   private readonly stderr = new TailBuffer()
   private sequence = 0
@@ -127,15 +127,21 @@ export class PixelProcess {
   get alive(): boolean {
     return !this.exited
   }
-  /** 发一条命令，等对应的回应（按 id 对应，不按顺序）；success: false 时抛错 */
+  /**
+   * 发一条命令，等对应的回应（按 id 对应，不按顺序）；success: false 时抛错。
+   * timeoutMs 为 0 时不限时（调用方自己管等多久，进程退出时照样失败）
+   */
   request(type: string, params: Message = {}, timeoutMs = 30_000): Promise<PixelResponse> {
     if (this.exited) return Promise.reject(new Error('Pixel process exited'))
     const id = `px-${++this.sequence}`
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(id)
-        reject(new Error(`Pixel did not respond: ${type}`))
-      }, timeoutMs)
+      const timer =
+        timeoutMs > 0
+          ? setTimeout(() => {
+              this.pending.delete(id)
+              reject(new Error(`Pixel did not respond: ${type}`))
+            }, timeoutMs)
+          : undefined
       this.pending.set(id, { resolve, reject, timer })
       this.write({ id, type, ...params })
     })

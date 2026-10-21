@@ -2,6 +2,7 @@
 import type {
   AgentRuns,
   ApprovalDecision,
+  Effort,
   ImageAttachment,
   InterruptOptions,
   Item,
@@ -65,6 +66,8 @@ export interface SessionContext {
   setUltracode(on: boolean): void
   /** Fast 模式开不了（账号或接口不支持），把记录里的开关关掉 */
   setFast(on: boolean): void
+  /** 引擎把推理强度夹到了当前模型支持的档位（像素星空：选的档位这个模型没有），记录跟着改成实际用的 */
+  setEffort?(effort: Effort): void
   /** 回退截断点已在新进程生效 */
   clearPendingRewind?(): void
   /** 分叉第一次启动成功（或改成新会话）后清掉 pendingFork */
@@ -108,6 +111,11 @@ export interface EngineSession {
   answer(requestId: string, decision: ApprovalDecision): void
   /** 改模型 / 强度 / 权限 / 开关：进程在跑就实时生效，否则下次启动时生效 */
   update(patch: Partial<SessionSettings>, strict?: boolean): Promise<void>
+  /**
+   * 这个进程换不到这个模型、要换一个进程（接上原对话）才行：像素星空经网关时，启动时只注册了当时的模型
+   * （云端线路只有会话的模型，自定义 API 是接口当时的模型）。宿主派发前据此换进程，运行中换模型时不当作已生效
+   */
+  restartsForModel?(model: string | null): boolean
   steer?(text: string, userItemId: string, attachments?: ImageAttachment[]): Promise<void>
   /**
    * 上下文明细。flags.contextLive 时运行中也可调用；否则仅宿主确认会话空闲后调用。

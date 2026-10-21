@@ -241,6 +241,9 @@ export class HostSessions {
       running &&
       ((inUse !== undefined && inUse !== sourceKey({ platform, provider })) ||
         (nextEngine ?? current.engine) !== (rt.execution?.engine ?? current.engine))
+    // 运行中换到这个进程换不过去的模型（像素星空经网关时只注册了启动时的模型）：当前这一轮照旧用原模型，
+    // 执行设置不改、也不发给进程；下一条消息派发时换进程（turn.ts pump）
+    const modelLater = running && patch.model !== undefined && rt.session?.restartsForModel?.(patch.model) === true
     const record = m.events.patchRecord(id, next)
     if (rt.execution) {
       const applied = { ...next }
@@ -252,7 +255,7 @@ export class HostSessions {
         delete applied.model
         delete applied.effort
       }
-      if (!ENGINES[current.engine].caps.liveModelSwitch && rt.snapshot.state !== 'idle') {
+      if ((!ENGINES[current.engine].caps.liveModelSwitch || modelLater) && rt.snapshot.state !== 'idle') {
         delete applied.model
         delete applied.effort
       }
@@ -288,7 +291,7 @@ export class HostSessions {
       if (remembered.permissionMode === 'full') delete remembered.permissionMode
       if (Object.keys(remembered).length > 0) m.settings.setDefaults({ ...remembered, engine: target })
       const live = { ...settings }
-      if (deferred) {
+      if (deferred || modelLater) {
         delete live.model
         delete live.effort
       }

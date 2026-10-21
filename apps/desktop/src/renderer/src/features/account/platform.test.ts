@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { classifyError, platformNoticeText } from '../session/live/errorKind'
 import {
+  fallbackSource,
   formatMultiplier,
   groupProblem,
   groupsForModel,
@@ -139,5 +140,14 @@ describe('菜单里显示的模型（§8）', () => {
     expect(visibleModels(all, ['haiku', 'opus-20251101'], [null, null])).toEqual(['opus', 'sonnet'])
     expect(visibleModels(all, ['haiku', 'opus-20251101'], ['haiku', 'sonnet'])).toEqual(['opus', 'sonnet', 'haiku'])
     expect(visibleModels(all, all, [null, null])).toEqual([])
+  })
+})
+
+describe('新装还没选过时的默认来源', () => {
+  it('登录了用平台；没登录时 Codex 用自有，像素星空也用平台（它的自有是命令行自己配的 Key，新装多半没配）', () => {
+    expect(fallbackSource('codex', 'a@b.c')).toBe('platform')
+    expect(fallbackSource('pixel', 'a@b.c')).toBe('platform')
+    expect(fallbackSource('codex', null)).toBe('self')
+    expect(fallbackSource('pixel', null)).toBe('platform')
   })
 })

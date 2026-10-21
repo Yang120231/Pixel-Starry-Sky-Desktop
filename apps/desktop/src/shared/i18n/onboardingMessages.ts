@@ -19,6 +19,10 @@ export const onboardingMessages = {
   'onboarding.skip': { zh: '先不登录', en: 'Continue without signing in' },
   'onboarding.found': { zh: '已找到 {names}，可以直接用', en: 'Found {names}, ready to use' },
   'onboarding.notFound': { zh: '没找到 Claude Code 或 Codex', en: 'Claude Code and Codex weren’t found' },
+  'onboarding.pixelReady': {
+    zh: '没找到 Claude Code 或 Codex，可以先用自带的像素星空引擎',
+    en: 'Claude Code and Codex weren’t found. You can start with the built-in Pixel Starry Sky engine',
+  },
   'onboarding.install': { zh: '安装', en: 'Install' },
   'onboarding.orWord': { zh: '或', en: 'or' },
   'onboarding.addKey': { zh: '填 API Key', en: 'add an API key' },

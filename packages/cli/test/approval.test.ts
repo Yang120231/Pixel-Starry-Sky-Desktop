@@ -59,6 +59,15 @@ describe('decidePermission', () => {
     }
   })
 
+  it('plan: 查网页（只读）和默认模式一样问用户，不直接拒绝；没有界面时照样拒绝', () => {
+    for (const t of ['web_search', 'web_fetch']) {
+      expect(decide('plan', t)).toBe('ask')
+      expect(decide('default', t)).toBe('ask')
+      const d = decidePermission({ mode: 'plan', toolName: t, hasUI: false })
+      expect(d.action === 'block' && d.reason).toContain('no interactive UI')
+    }
+  })
+
   it('没有界面时，需要询问的一律拒绝并给出原因', () => {
     for (const mode of ['default', 'acceptEdits'] as const) {
       const d = decidePermission({ mode, toolName: 'bash', hasUI: false })

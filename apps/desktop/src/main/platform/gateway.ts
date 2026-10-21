@@ -4,7 +4,17 @@ import { randomUUID } from 'node:crypto'
 import { describeError, logger, type CompactionRequestReport } from '@pixelsky/engine'
 import type { SessionRecord } from '@pixelsky/protocol'
 import type { ResolvedProvider } from '../core/providers/store'
-import { classifyError, providerHeaders, smallModelOf, upstreamUrl, type Fetch } from '../core/providers/upstream'
+import {
+  balanceProblem,
+  classifyError,
+  providerHeaders,
+  redact,
+  smallModelOf,
+  upstreamMessage,
+  upstreamUrl,
+  type Fetch,
+} from '../core/providers/upstream'
+import { stripLongContextSuffix } from './pixel-env'
 import { chatUsage, withUsageOption } from './chat-usage'
 import { CacheUsageFix } from './usageFix'
 import { compactionTap, type CompactionTap } from './compaction-tap'
@@ -20,10 +30,74 @@ export function eventEnd(buf: Buffer): number {
   return Math.max(lf < 0 ? 0 : lf + 2, crlf < 0 ? 0 : crlf + 4)
 }
 
+/**
+ * 上游中途断开时的说明。只用中文：Pi 按错误原文里的英文关键词（terminated、connection、timeout、stream ended、5xx 状态码……）
+ * 决定要不要自动重试，重试会重发整段上下文、重新计费（pi-ai utils/retry.js）
+ */
+export const MID_STREAM_TEXT = '上游连接中途断开，这次请求已停止（不自动反复重试，避免重复计费）'
+
 const midStreamError = `event: error\ndata: ${JSON.stringify({
   type: 'error',
-  error: { type: 'api_error', message: '上游连接中途断开，这次请求已停止（不自动反复重试，避免重复计费）' },
+  error: { type: 'api_error', message: MID_STREAM_TEXT },
 })}\n\n`
+
+/** Responses 中途断开：收尾用 response.failed（Pi 和 OpenAI SDK 都认这个终止事件；错误代码避开 server_error 这类会重试的词） */
+const responsesFailed = (): string =>
+  `event: response.failed\ndata: ${JSON.stringify({
+    type: 'response.failed',
+    response: {
+      id: `resp_pixelsky_${randomUUID().replace(/-/g, '')}`,
+      object: 'response',
+      status: 'failed',
+      error: { code: 'stream_interrupted', message: MID_STREAM_TEXT },
+      output: [],
+    },
+  })}\n\n`
+
+/** Chat Completions 中途断开：OpenAI SDK 读到带 error 的数据块就报错 */
+const chatFailed = `data: ${JSON.stringify({ error: { type: 'stream_interrupted', message: MID_STREAM_TEXT } })}\n\n`
+
+/** 转发出去的这段 SSE 里有没有正常的收尾事件：Messages 的 message_stop、Responses 的终止事件、Chat 的 finish_reason 或 [DONE]，或者已有错误事件 */
+const TERMINAL = {
+  messages: /^event:\s*(?:message_stop|error)\s*$|"type"\s*:\s*"message_stop"/m,
+  responses: /"type"\s*:\s*"(?:response\.(?:completed|incomplete|failed)|error)"|^event:\s*error\s*$/m,
+  chat: /"finish_reason"\s*:\s*"|^data:\s*(?:\[DONE\]|\{\s*"error"\s*:)/m,
+} as const
+
+/**
+ * 本机网关自己回的错误：类型按状态码（以前一律 authentication_error，502、413 这类也被界面认成要重新登录）。
+ * OpenAI 格式的 402 用 insufficient_quota：Pi 认这个词，不会自动重试
+ */
+export function gatewayErrorType(status: number, openai = false): string {
+  if (status === 401) return 'authentication_error'
+  if (status === 402) return openai ? 'insufficient_quota' : 'billing_error'
+  if (status === 403) return 'permission_error'
+  if (status === 404) return 'not_found_error'
+  if (status === 413) return 'request_too_large'
+  if (status === 429) return 'rate_limit_error'
+  if (status === 503 || status === 529) return 'overloaded_error'
+  if (status >= 500) return 'api_error'
+  return 'invalid_request_error'
+}
+
+/** 余额不足 / 额度用完时给像素星空的说明：带上 billing，Pi 不会自动重试（这类错误重试也没用） */
+export function balanceText(kind: 'balance' | 'quota', where: string, detail: string): string {
+  const head = kind === 'balance' ? `${where}余额不足，请充值后重试` : `${where}的额度已用完`
+  const tail = detail.length > 200 ? detail.slice(0, 200) + '…' : detail
+  return `${head}（billing${tail ? '：' + tail : ''}）`
+}
+
+/** 像素星空的上游错误里这几种状态码可能其实是余额不足（Sub2api 用 403 / 429 回），要看一眼错误体 */
+const BALANCE_STATUSES = new Set([400, 403, 429])
+
+/** 像素星空把会话的模型名原样发出：去掉 Claude Code 的 `[1m]` 后缀，上游不认（Claude Code 自己发之前会去掉） */
+export function withoutLongContextSuffix(body: string): string {
+  if (!body.includes('[1m]') && !body.includes('[1M]')) return body
+  const parsed = JSON.parse(body) as { model?: unknown }
+  if (typeof parsed.model !== 'string') return body
+  const model = stripLongContextSuffix(parsed.model)
+  return model === parsed.model ? body : JSON.stringify({ ...parsed, model })
+}
 
 /** 计数接口这些状态码当作「没有这个接口」 */
 const COUNT_TOKENS_MISSING = new Set([404, 405, 501])
@@ -109,18 +183,40 @@ export function platformGateway(options: {
     const chat = path === '/v1/chat/completions'
     const countTokens = path === '/v1/messages/count_tokens'
     const fail = (status: number, message: string): void => {
+      const type = gatewayErrorType(status, responses || chat)
       res
         .writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
         .end(
           JSON.stringify(
             responses || chat
-              ? { error: { type: 'invalid_request_error', message } }
-              : { type: 'error', error: { type: 'authentication_error', message } },
+              ? { error: { type, ...(status === 402 ? { code: type } : {}), message } }
+              : { type: 'error', error: { type, message } },
           ),
         )
     }
+    /** 像素星空的会话（Pi 会按错误原文重试；余额错误、中途断开要按它的规则回） */
+    let pixel = false
+    /** 上游报余额不足时说是谁（平台 / 自定义接口「名字」），detail 里的 Key 去掉 */
+    let balanceWhere = '平台'
+    let redactDetail = (text: string): string => text
     /** usageKey：Messages 请求的「线路或接口 + 模型」，转发时按它校正缓存用量的口径；计数接口、Responses 不传 */
     const pipe = async (upstream: Response, usageKey: string | null = null): Promise<void> => {
+      // 像素星空：余额不足 / 额度用完常以 403 / 429 回来（Sub2api），改成 402 加说明：界面按余额提示，Pi 不按 429 重试
+      if (pixel && BALANCE_STATUSES.has(upstream.status)) {
+        const text = await upstream.text()
+        const kind = balanceProblem(text)
+        if (kind) {
+          status = 402
+          headersAt = Date.now()
+          bytes += Buffer.byteLength(text)
+          log.warn('上游报余额不足或额度用完', { ...trace(), upstreamStatus: upstream.status })
+          const message = balanceText(kind, balanceWhere, redactDetail(upstreamMessage(text)))
+          tap?.fail(message)
+          fail(402, message)
+          return
+        }
+        upstream = new Response(text, { status: upstream.status, headers: upstream.headers })
+      }
       const output: Record<string, string> = {
         'Content-Type': upstream.headers.get('Content-Type') ?? 'application/json',
         'Cache-Control': 'no-store',
@@ -133,8 +229,14 @@ export function platformGateway(options: {
       headersAt = Date.now()
       tap?.response(upstream.status)
       res.writeHead(upstream.status, output)
-      // Messages 的 SSE 只按完整事件转发：上游中途断开时能接一个 error 事件收尾，而不是掐断连接
-      const sse = !responses && !chat && output['Content-Type'].includes('text/event-stream')
+      // SSE 只按完整事件转发：上游中途断开时能接一个错误事件收尾，而不是掐断连接。Messages 一直这样；
+      // Responses / Chat 只对像素星空（掐断的话 Pi 报 terminated、按它的规则重试三次）。Codex 遇到 response.failed 怎么处理没验证过，照旧
+      const sse = output['Content-Type'].includes('text/event-stream') && (pixel || (!responses && !chat))
+      const protocol = responses ? 'responses' : chat ? 'chat' : 'messages'
+      const failEvent = (): string => (responses ? responsesFailed() : chat ? chatFailed : midStreamError)
+      // 像素星空：上游正常结束却没有收尾事件（云端的 Responses 中途断开就是这样）时也补一个错误事件，
+      // 不然 Pi 报「stream ended before …」又去重试
+      let terminal = !(pixel && sse && upstream.ok)
       // 非流式的成功响应（Claude Code 流式失败后会改用非流式再试）整个收齐再校正用量，响应体不大
       const rewriter = usageKey === null ? null : usageFix.request(usageKey)
       const whole = rewriter !== null && !sse && upstream.ok && output['Content-Type'].includes('json')
@@ -159,8 +261,9 @@ export function platformGateway(options: {
               const end = eventEnd(all)
               out = all.subarray(0, end)
               tail = all.subarray(end)
-              if ((rewriter || tap) && out.length) {
+              if ((rewriter || tap || !terminal) && out.length) {
                 const text = out.toString('utf8')
+                if (!terminal && TERMINAL[protocol].test(text)) terminal = true
                 tap?.sse(text)
                 const fixed = rewriter ? rewriter.sse(text) : text
                 if (fixed !== text) out = Buffer.from(fixed, 'utf8')
@@ -174,10 +277,19 @@ export function platformGateway(options: {
         // 回 error 事件：普通请求它只改用非流式再试一次，压缩直接失败
         log.warn('上游连接中途断开', trace(error))
         tap?.fail('上游连接中途断开')
-        res.end(midStreamError)
+        res.end(failEvent())
         return
       }
       if (whole && held.length) res.write(rewriter!.json(Buffer.concat(held).toString('utf8')))
+      // 最后一个事件后面没有空行：照样转发（收尾事件可能就在这里）
+      if (!terminal && tail.length && TERMINAL[protocol].test(tail.toString('utf8'))) terminal = true
+      if (!terminal && !abort.signal.aborted) {
+        // 没收尾就结束了：半截事件丢掉，补一个错误事件
+        log.warn('上游没发收尾事件就结束了', trace())
+        tap?.fail('上游连接中途断开')
+        res.end(failEvent())
+        return
+      }
       if (tail.length) res.write(tail)
       res.end()
       tap?.end()
@@ -230,6 +342,7 @@ export function platformGateway(options: {
         body = JSON.stringify({ ...parsed, model: small ?? current })
       }
       if (!responses && !chat && !countTokens && options.rewrite) body = await options.rewrite(body, async () => ids)
+      if (pixel) body = withoutLongContextSuffix(body)
       tap = startTap(record, body, requested)
       const headers = providerHeaders(p, {
         'content-type': 'application/json',
@@ -327,6 +440,12 @@ export function platformGateway(options: {
         fail(403, '线路协议与当前引擎不兼容')
         return
       }
+      pixel = record.engine === 'pixel'
+      if (provider) {
+        const p = provider
+        balanceWhere = `自定义接口「${p.name}」`
+        redactDetail = text => redact(text, p)
+      }
       const chunks: Buffer[] = []
       let size = 0
       for await (const chunk of req) {
@@ -370,6 +489,7 @@ export function platformGateway(options: {
       for (const [name, value] of Object.entries(passthrough())) headers.set(name, value)
       if (!responses && options.rewrite)
         body = await options.rewrite(body, () => options.routeModels?.(platform.groupId) ?? Promise.resolve([]))
+      if (pixel) body = withoutLongContextSuffix(body)
       requestId = `pixelsky-${randomUUID()}`
       const model = String((JSON.parse(body) as { model?: string }).model ?? record.model ?? 'unknown')
       const modelApi = platformModelApi(model)

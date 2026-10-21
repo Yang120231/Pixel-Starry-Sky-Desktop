@@ -301,6 +301,8 @@ export interface TranslatorOptions {
   userMessage?: (text: string) => void
   /** 当前模型的上下文窗口 */
   contextWindow?: () => number | null
+  /** 当前模型的 id（压缩生成摘要用的就是它，Pi 的压缩结果里不带模型） */
+  model?: () => string | null
 }
 
 interface Totals {
@@ -320,10 +322,16 @@ export class PixelTranslator {
   private noticeSeq = 0
   /** 会话累计（切回旧会话时用 get_session_stats 的值作基线） */
   totals: Totals = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 }
-  /** 最近一次请求的上下文占用（token） */
+  /** 最近一次请求的上下文占用（token）；改它用 setContext（不是哪次请求报的，就没有输入 / 输出明细） */
   lastContext: number | null = null
+  setContext(used: number | null): void {
+    this.lastContext = used
+    this.lastRequest = null
+  }
   /** 最近一次请求用的模型 */
   lastModel: string | null = null
+  /** 最近一次请求的输入 / 缓存 / 输出（上下文明细用）；压缩后、刚接上会话时不知道 */
+  private lastRequest: { input: number; cacheRead: number; cacheWrite: number; output: number } | null = null
   private turnModels: Record<string, ModelTurnUsage> = {}
   private assistantError: string | null = null
   private compaction: { id: string; startedAt: number; preTokens: number | null } | null = null
@@ -331,6 +339,11 @@ export class PixelTranslator {
     private readonly emit: (event: EngineEvent) => void,
     private readonly options: TranslatorOptions,
   ) {}
+
+  /** 正在压缩（compaction_start 之后、compaction_end 之前） */
+  get compacting(): boolean {
+    return this.compaction !== null
+  }
 
   beginTurn(): void {
     this.items.clear()
@@ -348,6 +361,10 @@ export class PixelTranslator {
     const error = this.assistantError
     this.assistantError = null
     return error
+  }
+  /** 重试用完时 Pi 报的最后错误：最后一条助手消息没带错误时用它，这一轮照样算失败（只显示一次） */
+  failWith(text: string): void {
+    if (text && !this.assistantError) this.assistantError = text
   }
   /**
    * 批准请求对应的工具条目（批准请求里没有 toolCallId）：本轮还在跑、不在 skip 里的同名条目，
@@ -489,6 +506,7 @@ export class PixelTranslator {
     this.lastModel = string(message.responseModel) || string(message.model) || 'Pixel'
     this.addUsage(this.lastModel, counts, cost)
     this.lastContext = number(usage.totalTokens) || counts.input + counts.output + counts.cacheRead + counts.cacheWrite
+    this.lastRequest = counts
     this.emitUsage()
   }
 
@@ -533,10 +551,10 @@ export class PixelTranslator {
         model: this.lastModel,
         used: this.lastContext,
         window,
-        input: null,
-        cacheRead: null,
-        cacheWrite: null,
-        output: null,
+        input: this.lastRequest?.input ?? null,
+        cacheRead: this.lastRequest?.cacheRead ?? null,
+        cacheWrite: this.lastRequest?.cacheWrite ?? null,
+        output: this.lastRequest?.output ?? null,
         observedAt: Date.now(),
         source: 'request',
         stale: false,
@@ -696,15 +714,12 @@ export class PixelTranslator {
       },
       true,
     )
-    if (status === 'completed' && post !== null) {
-      this.lastContext = post
-      this.emitUsage()
-    }
-    // 生成摘要的那次调用也花了钱
+    // 生成摘要的那次调用也花了钱：记在压缩用的模型（会话当前的模型）名下，先记上再报用量，累计里才有它
     const usage = object(result.usage)
-    if (Object.keys(usage).length)
+    const spent = Object.keys(usage).length > 0
+    if (spent)
       this.addUsage(
-        'Pixel',
+        this.options.model?.() || this.lastModel || 'Pixel',
         {
           input: number(usage.input),
           output: number(usage.output),
@@ -713,6 +728,9 @@ export class PixelTranslator {
         },
         number(object(usage.cost).total),
       )
+    const compacted = status === 'completed' && post !== null
+    if (compacted) this.setContext(post)
+    if (compacted || spent) this.emitUsage()
   }
 
   /** 一轮结束：还在运行的条目收尾 */

@@ -52,15 +52,25 @@ const ENGINE_KEY = 'pixelsky.sources.v2'
 /** 除 Claude Code 外，每个引擎各自存一份默认（Claude Code 的在 state 里）；像素星空走 Anthropic 线路但模型自己定 */
 type OwnEngine = Exclude<EngineId, 'claude'>
 const OWN_ENGINES: readonly OwnEngine[] = ['codex', 'pixel']
-const blankPreference = (): SourcePreference => ({
-  source: 'self',
+/**
+ * 新装还没选过时的默认来源：登录了用平台；没登录时 Codex 用自有（它自己的登录），
+ * 像素星空也用平台——它的自有是命令行自己配的 Key，新装多半没配，落到自有只会发出去才报错；平台没登录时输入框直接提示登录
+ */
+export function fallbackSource(engine: OwnEngine, email: string | null): CreditSource {
+  return email || engine === 'pixel' ? 'platform' : 'self'
+}
+const blankPreference = (engine: OwnEngine): SourcePreference => ({
+  source: fallbackSource(engine, null),
   groupId: null,
   model: null,
   selfModel: null,
   providerId: null,
   customModel: null,
 })
-const enginePreferences: Record<OwnEngine, SourcePreference> = { codex: blankPreference(), pixel: blankPreference() }
+const enginePreferences: Record<OwnEngine, SourcePreference> = {
+  codex: blankPreference('codex'),
+  pixel: blankPreference('pixel'),
+}
 const engineUnsaved: Record<OwnEngine, boolean> = { codex: true, pixel: true }
 function readEnginePreferences(raw: string | null): void {
   const all = JSON.parse(raw ?? '{}') as Record<string, Record<string, unknown> | undefined>
@@ -480,7 +490,9 @@ function start(): void {
       !initial && email ? 'platform' : unsaved ? (email ? 'platform' : 'self') : undefined
     for (const engine of OWN_ENGINES)
       if ((source && enginePreferences[engine].source !== 'custom') || engineUnsaved[engine])
-        saveEnginePreference(engine, { source: source ?? (email ? 'platform' : 'self') })
+        saveEnginePreference(engine, {
+          source: source === 'platform' ? source : fallbackSource(engine, email),
+        })
     const claudeSource = state.source === 'custom' ? undefined : source
     set(
       {

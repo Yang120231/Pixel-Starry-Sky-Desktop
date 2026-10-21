@@ -163,10 +163,13 @@ describe('Codex / Pixel 的报错归类', () => {
     expect(
       turnNoticeError({ message: 'x', codexErrorInfo: { httpConnectionFailed: { httpStatusCode: 429 } } }, 'x'),
     ).toEqual({ kind: 'busy', code: 'httpConnectionFailed', status: 429 })
-    // 带状态码但不在归类表里的：只记下，不归类
+    // 5xx 和 Claude 的 server_error 一样算繁忙；带状态码但不在归类表里的：只记下，不归类
     expect(
       turnNoticeError({ message: 'x', codexErrorInfo: { httpConnectionFailed: { httpStatusCode: 502 } } }, 'x'),
-    ).toEqual({ code: 'httpConnectionFailed', status: 502 })
+    ).toEqual({ kind: 'busy', code: 'httpConnectionFailed', status: 502 })
+    expect(
+      turnNoticeError({ message: 'x', codexErrorInfo: { httpConnectionFailed: { httpStatusCode: 501 } } }, 'x'),
+    ).toEqual({ code: 'httpConnectionFailed', status: 501 })
     expect(turnNoticeError({ message: 'plain failure' }, 'plain failure')).toBeUndefined()
   })
 

@@ -43,6 +43,11 @@ export const modelChannelMessages = {
     zh: '我们自带的，启动快，不用另外装程序',
     en: 'Built in, starts fast, nothing else to install',
   },
+  // 像素星空 agent 用自有、但命令行没配 Key（输入框上方的提示条，session/SourceHintBar.tsx）
+  'modelChannels.pixelSelf.missing': {
+    zh: '像素星空 agent 没有配自己的 API Key：登录像素星空账号用账号额度，或添加一个自定义接口。',
+    en: 'The PixelSky agent has no API key of its own. Sign in to use your PixelSky credits, or add a custom endpoint.',
+  },
   'modelChannels.executor.notInstalled': { zh: '没装', en: 'Not installed' },
   'modelChannels.executor.unavailable': { zh: '暂时不可用', en: 'Unavailable' },
   'modelChannels.executor.switch': { zh: '换一个执行者', en: 'Change who runs it' },

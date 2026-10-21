@@ -85,6 +85,11 @@ export interface SessionFlags {
   fastState: 'off' | 'on' | 'cooldown' | null
   /** Fast 模式开不了的原因（CLI 给的代码，例如 not_first_party） */
   fastBlocked: string | null
+  /**
+   * 引擎进程里当前模型实际支持的推理强度（像素星空：Pi 的 get_available_thinking_levels）。
+   * model 是会话记录里的模型名：记录换了模型、进程还没跟上时不算数，界面改按模型目录。没报告时省略
+   */
+  efforts?: { model: string | null; efforts: import('./base').Effort[] }
 }
 
 /** 一个会话在界面上需要的全部状态 */

@@ -8,6 +8,8 @@ import { isDemo } from '@/data'
 import { useSettings } from '@/features/settings/SettingsProvider'
 import { requestLogFocus } from '@/features/logs/focus'
 import { requestFeedback } from '@/features/feedback/focus'
+import { useEngineCatalog } from '@/features/engine/catalog'
+import { selfSourceReady } from '@/features/model-channels/channelModel'
 import { actionsFor, classifyError, noticeActions } from './errorKind'
 
 // 纯函数在 errorKind.ts（测试不用加载引擎）；侧栏悬停卡从这里取 actionsFor
@@ -62,7 +64,13 @@ export function NoticeActions({
 }) {
   useI18n()
   const settings = useSettings()
-  const actions = noticeActions(classifyError(text, error), record, record.engine, { retry, compact })
+  // 像素星空没配自己的 Key 时不给「改用自有」（channelModel.ts selfSourceReady）
+  const catalog = useEngineCatalog(record.engine)
+  const actions = noticeActions(classifyError(text, error), record, record.engine, {
+    retry,
+    compact,
+    selfReady: selfSourceReady(record.engine, catalog),
+  })
   const viewLogs = () => {
     requestLogFocus(record.id, turnStart ?? Date.now() - 10 * 60_000)
     settings.openSettings('logs')

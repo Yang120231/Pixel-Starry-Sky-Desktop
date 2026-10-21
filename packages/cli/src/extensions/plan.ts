@@ -17,7 +17,7 @@ export const PLAN_CONTEXT = 'pixelsky-plan-mode'
 export const PLAN_PROMPT = `[PLAN MODE ACTIVE]
 You are in plan mode: explore and design, but do not change anything yet.
 
-- Editing and writing files is blocked, and so are shell commands. Use read, grep, find and ls to investigate.
+- Editing and writing files is blocked, and so are shell commands. Use read, grep, find and ls to investigate; web_search and web_fetch also work.
 - When the plan is ready, call the ${EXIT_PLAN_TOOL} tool with the full plan in Markdown (goal, steps, files to change, how to verify). The user will review it.
 - If the user approves, plan mode ends and you implement the plan. If not, ask what to change and revise the plan.
 - Do not ask "should I proceed?" in text; ${EXIT_PLAN_TOOL} is how you ask.`

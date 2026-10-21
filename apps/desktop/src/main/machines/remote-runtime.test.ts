@@ -3,8 +3,8 @@ import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { REMOTE_PROTOCOL } from '@pixelsky/protocol'
-import { createRemoteRuntime } from './remote-runtime'
+import { REMOTE_PROTOCOL, parseCodedError, type EngineInfo } from '@pixelsky/protocol'
+import { createRemoteRuntime, remotePixelReason, withRemotePixelReason } from './remote-runtime'
 
 // 远端辅助进程的方法表：用假的 RPC 对端直接调用，确认远端行为（docs/restructure.md §8.3 P6）
 let root: string, project: string
@@ -194,5 +194,29 @@ describe('remote runtime follows the local behavior', () => {
     expect(result.cancelled).toBeFalsy()
     // engine:cancelSearch 在 P6 前是空操作，现在按请求号取消（没有进行中的查询时不报错）
     await call('engine:cancelSearch', 2)
+  })
+})
+
+describe('远程的像素星空引擎为什么不可用', () => {
+  const pixel = (status: EngineInfo['status'], launch?: 'stock' | 'custom') =>
+    ({ id: 'pixel', name: '像素星空', status, message: 'Pixel CLI not found.', launch }) as EngineInfo
+  const codeOf = (message: string) => parseCodedError(message)
+
+  it('架构不认识、Node 低于 22.19、否则是没装上', () => {
+    expect(codeOf(remotePixelReason('22.19.0', 'ia32'))).toEqual({ code: 'remote.pixelArch', params: { arch: 'ia32' } })
+    expect(codeOf(remotePixelReason('22.12.0', 'x64'))).toEqual({
+      code: 'remote.pixelNode',
+      params: { version: '22.12.0', min: '22.19' },
+    })
+    expect(codeOf(remotePixelReason('24.1.0', 'arm64'))?.code).toBe('remote.pixelInstall')
+  })
+
+  it('只改找不到命令行的 pixel；用户自己设了命令的、别的引擎、装好了的都不动', () => {
+    const reason = remotePixelReason('22.12.0', 'x64')
+    const list = [pixel('missing'), { id: 'claude', status: 'missing', message: 'x' } as EngineInfo]
+    expect(withRemotePixelReason(list, reason).map(e => e.message)).toEqual([reason, 'x'])
+    expect(withRemotePixelReason([pixel('missing', 'custom')], reason)[0].message).toBe('Pixel CLI not found.')
+    expect(withRemotePixelReason([pixel('ready')], reason)[0].message).toBe('Pixel CLI not found.')
+    expect(withRemotePixelReason(list, null)).toBe(list)
   })
 })

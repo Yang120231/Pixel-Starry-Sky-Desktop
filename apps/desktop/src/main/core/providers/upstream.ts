@@ -54,7 +54,8 @@ export function redact(message: string, p: Pick<ResolvedProvider, 'apiKey' | 'he
   return out.length > 300 ? out.slice(0, 300) + '…' : out
 }
 
-function upstreamMessage(body: string): string {
+/** 上游错误体里的说明（Anthropic / OpenAI / Sub2api 的 {code, message} 几种格式）；不是 JSON 时用原文 */
+export function upstreamMessage(body: string): string {
   try {
     const json = JSON.parse(body) as { error?: { message?: unknown } | string; message?: unknown }
     if (typeof json.error === 'string') return json.error
@@ -64,6 +65,20 @@ function upstreamMessage(body: string): string {
     /* 不是 JSON，用原文 */
   }
   return body.trim()
+}
+
+/**
+ * 上游报余额不足 / 额度用完（Sub2api 的 INSUFFICIENT_BALANCE、billing_error、余额不足，OpenAI 的 insufficient_quota 等）：
+ * 它们常以 403 / 429 回来，界面按状态码会当成线路问题或繁忙，Pi 还会按 429 重试。认出来的返回是哪一种，认不出返回 null
+ */
+export function balanceProblem(body: string): 'balance' | 'quota' | null {
+  if (
+    /INSUFFICIENT_BALANCE|billing_error|insufficient[ _](?:account[ _])?balance|insufficient_quota|余额不足/i.test(body)
+  )
+    return 'balance'
+  if (/QUOTA_EXHAUSTED|USAGE_LIMIT_EXCEEDED|quota (?:is )?exhausted|usage limit exceeded|额度已用完/i.test(body))
+    return 'quota'
+  return null
 }
 
 /** HTTP 错误翻成人话（§3.1、§3.3） */

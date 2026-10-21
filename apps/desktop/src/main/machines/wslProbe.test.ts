@@ -71,9 +71,26 @@ describe('parseProbe', () => {
 describe('wslCheckItems', () => {
   it('全部满足时可以连接', () => {
     const items = wslCheckItems(probe())
-    expect(items.map(i => i.key)).toEqual(['start', 'encoding', 'node', 'claude', 'codex', 'login'])
+    expect(items.map(i => i.key)).toEqual(['start', 'encoding', 'node', 'claude', 'codex', 'pixel', 'login'])
     expect(readyToConnect(items)).toBe(true)
     expect(find(items, 'login').detail).toBe('claude')
+  })
+  it('像素星空引擎：node 22.19 以上、x64 / arm64 才能用；不够只是 warn，说清楚原因', () => {
+    expect(find(wslCheckItems(probe({ nodes: [node({ version: '22.19.0' })] })), 'pixel')).toMatchObject({
+      status: 'ok',
+      required: false,
+      detail: 'node 22.19.0',
+    })
+    const old = find(wslCheckItems(probe()), 'pixel')
+    expect(old).toMatchObject({ status: 'warn', required: false, code: 'PIXEL_NODE_OLD', detail: '22.11.0' })
+    expect(old.fix).toContain('fnm install 22')
+    expect(find(wslCheckItems(probe({ arch: null, nodes: [node({ version: '24.1.0' })] })), 'pixel')).toMatchObject({
+      status: 'warn',
+      code: 'PIXEL_ARCH',
+    })
+    // node 本身不可用时不列（node 那一项已经说了）
+    expect(wslCheckItems(probe({ nodes: [] })).some(i => i.key === 'pixel')).toBe(false)
+    expect(readyToConnect(wslCheckItems(probe()))).toBe(true)
   })
   it('探测为空或启动出错时 start 失败', () => {
     expect(wslCheckItems(null)[0]).toMatchObject({ key: 'start', status: 'fail', code: 'WSL_START_FAILED' })

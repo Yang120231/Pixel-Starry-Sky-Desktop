@@ -5,14 +5,35 @@ import { array, object, string, type Message, type PixelProcess } from './proces
 /** 模型引用：provider/id（同一个 id 可能出现在多个 provider 下） */
 export const modelRef = (model: Message): string => `${string(model.provider)}/${string(model.id)}`
 
-/** 按 provider/id 找；只给 id 时取第一个同名的 */
-export function findModel(models: Message[], ref: string): Message | undefined {
+/**
+ * 按 provider/id 找；只给 id 时取第一个同名的。
+ * provider：只在这个 provider 下找（经网关的会话只能用网关注册的模型：Pi 把内置 provider 排在前面，
+ * 按 id 找会拿到同名的内置模型，用用户自己的密钥直连厂商，绕过网关）；ref 可以带也可以不带「provider/」
+ */
+export function findModel(models: Message[], ref: string, provider?: string): Message | undefined {
+  if (provider) {
+    const id = ref.startsWith(`${provider}/`) ? ref.slice(provider.length + 1) : ref
+    return models.find(m => string(m.provider) === provider && string(m.id) === id)
+  }
   return models.find(m => modelRef(m) === ref) ?? models.find(m => string(m.id) === ref)
 }
 
 const LEVELS: Effort[] = ['low', 'medium', 'high', 'xhigh', 'max']
 
-/** 模型支持的强度，规则同 Pi 的 getSupportedThinkingLevels：不支持推理为空；xhigh / max 要模型明确映射才算支持 */
+/** Pi 的思考级别（get_available_thinking_levels）→ 我们的强度；off / minimal 没有对应 */
+export function effortsFromLevels(levels: readonly string[]): Effort[] {
+  return LEVELS.filter(level => levels.includes(level))
+}
+
+/** Pi 实际用的思考级别 → 我们的强度；off / minimal 等没有对应时为 null */
+export function effortOfLevel(level: string): Effort | null {
+  return LEVELS.find(l => l === level) ?? null
+}
+
+/**
+ * 模型支持的强度，规则同 Pi 的 getSupportedThinkingLevels：不支持推理为空；xhigh / max 要模型明确映射才算支持。
+ * 旧版命令行没有 get_available_thinking_levels 时用它
+ */
 export function modelEfforts(model: Message): Effort[] {
   if (model.reasoning !== true) return []
   const map = object(model.thinkingLevelMap)

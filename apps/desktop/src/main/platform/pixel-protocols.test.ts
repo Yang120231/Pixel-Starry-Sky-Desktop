@@ -8,6 +8,7 @@ import type { SessionRecord } from '@pixelsky/protocol'
 import { platformGateway } from './gateway'
 import { chatUsage, withUsageOption } from './chat-usage'
 import {
+  THIRD_PARTY_ANTHROPIC_COMPAT,
   chatCompat,
   engineProviderProtocols,
   groupEngines,
@@ -88,7 +89,7 @@ describe('像素星空的 OpenAI 协议：环境变量', () => {
     expect(pixelBaseUrl('openai-completions', 5)).toBe('http://127.0.0.1:5/v1')
   })
 
-  it('Responses：模型列表照旧；Chat：每个模型带 compat，默认只给文字', () => {
+  it('Responses：模型列表照旧；Chat：每个模型带 compat，图片交给引擎按协议定（标成猜的）', () => {
     const models = [{ id: 'a', contextWindow: 64000 }, { id: 'b' }]
     const responses = pixelGatewayEnv({ port: 9, secret: 's', api: 'openai-responses', models, model: 'a' })
     expect(responses).toMatchObject({
@@ -106,19 +107,23 @@ describe('像素星空的 OpenAI 协议：环境变量', () => {
       upstreamBaseUrl: 'https://api.deepseek.com',
     })
     expect(chat.PIXELSKY_PIXEL_API).toBe('openai-completions')
-    expect(JSON.parse(chat.PIXELSKY_PIXEL_MODELS)[0]).toMatchObject({
+    const first = JSON.parse(chat.PIXELSKY_PIXEL_MODELS)[0]
+    expect(first).toMatchObject({
       id: 'a',
       contextWindow: 64000,
-      input: ['text'],
       compat: { supportsStore: false, maxTokensField: 'max_tokens', thinkingFormat: 'deepseek' },
+      // DeepSeek 自己的接口：Pi 表里这个模型的 compat 优先
+      inferred: ['compat'],
     })
+    expect(first).not.toHaveProperty('input')
     // 平台会话没有模型列表：只有当前模型；什么都没有时不给变量
     const platform = pixelGatewayEnv({ port: 9, secret: 's', api: 'openai-responses', model: 'gpt' })
     expect(JSON.parse(platform.PIXELSKY_PIXEL_MODELS)).toEqual([{ id: 'gpt' }])
     expect(pixelGatewayEnv({ port: 9, secret: 's', api: 'openai-responses', model: null })).not.toHaveProperty(
       'PIXELSKY_PIXEL_MODELS',
     )
-    expect(chatCompat('https://openrouter.ai/api/v1')).not.toHaveProperty('thinkingFormat')
+    expect(chatCompat('https://openrouter.ai/api/v1')).toMatchObject({ thinkingFormat: 'openrouter' })
+    expect(chatCompat('https://relay.example/v1')).not.toHaveProperty('thinkingFormat')
   })
 
   it('子智能体类型单独的站点：只有一个模型，Chat 带 compat，带上站点名和放密钥的变量名', () => {
@@ -134,11 +139,37 @@ describe('像素星空的 OpenAI 协议：环境变量', () => {
     expect(route.model).toMatchObject({
       id: 'deepseek-chat',
       contextWindow: 64000,
-      input: ['text'],
       compat: { thinkingFormat: 'deepseek' },
     })
+    expect(route.model).not.toHaveProperty('input')
+    expect(route.inferred).toEqual(['compat'])
+    // 云端线路（没有接口地址）：Claude 不带 compat，别的模型按第三方 Anthropic 接口
+    const claude = pixelSubagentRoute({ api: 'anthropic-messages', model: 'claude-opus-4-7', label: 'L', token: 'T' })
+    expect(claude.model).toEqual({ id: 'claude-opus-4-7' })
     const anthropic = pixelSubagentRoute({ api: 'anthropic-messages', model: 'm', label: 'L', token: 'T' })
-    expect(anthropic.model).toEqual({ id: 'm' })
+    expect(anthropic.model).toEqual({ id: 'm', compat: THIRD_PARTY_ANTHROPIC_COMPAT })
+  })
+
+  it('子智能体站点：接口没写窗口时带上按系列猜的，并标成猜的（命令行按 Pi 内置表还能改）；写了的不算猜的', () => {
+    const auto = pixelSubagentRoute({
+      api: 'anthropic-messages',
+      model: 'claude-opus-4-7',
+      autoContextWindow: 1_000_000,
+      label: 'L',
+      token: 'T',
+    })
+    expect(auto.model).toEqual({ id: 'claude-opus-4-7', contextWindow: 1_000_000 })
+    expect(auto.inferred).toEqual(['contextWindow'])
+    const set = pixelSubagentRoute({
+      api: 'anthropic-messages',
+      model: 'claude-m',
+      contextWindow: 64_000,
+      autoContextWindow: 1_000_000,
+      label: 'L',
+      token: 'T',
+    })
+    expect(set.model).toEqual({ id: 'claude-m', contextWindow: 64_000 })
+    expect(set.inferred).toBeUndefined()
   })
 })
 
@@ -196,7 +227,7 @@ describe('网关：像素星空走 Responses / Chat Completions', () => {
     })
     const res = await down.post('/v1/chat/completions', { model: 'm' })
     expect(res.status).toBe(502)
-    expect(await res.json()).toMatchObject({ error: { type: 'invalid_request_error' } })
+    expect(await res.json()).toMatchObject({ error: { type: 'api_error' } })
     server.closeAllConnections()
     server.close()
     const limited = await start(

@@ -101,7 +101,7 @@ describe('skills', () => {
     expect(readdirSync(join(runtime, 'claude'))).toEqual([])
   })
 
-  it('packSkillLaunch：claude 给插件目录，codex 给技能目录，pixel 什么都没有', async () => {
+  it('packSkillLaunch：claude 给插件目录，codex 和 pixel 给技能目录（pixel 只拿两个工具都给的技能）', async () => {
     const pack = await load('with-skill')
     const wrappers = await ensureClaudeWrappers(tempDir(), [pack])
     const claude = packSkillLaunch([pack], wrappers, 'claude')
@@ -112,7 +112,11 @@ describe('skills', () => {
     expect(codex.pluginDirs).toEqual([])
     expect(codex.skillRoots).toEqual([join(pack.root, 'skills/hello'), join(pack.root, 'skills/hola')])
     expect(JSON.parse(codex.key)).toEqual([['f-skill', 1, codex.skillRoots]])
-    expect(packSkillLaunch([pack], wrappers, 'pixel')).toEqual({ key: '', pluginDirs: [], skillRoots: [] })
+    // hola 只写了 codex：多半是 Codex 特有的，不给像素星空
+    const pixel = packSkillLaunch([pack], wrappers, 'pixel')
+    expect(pixel.pluginDirs).toEqual([])
+    expect(pixel.skillRoots).toEqual([join(pack.root, 'skills/hello')])
+    expect(JSON.parse(pixel.key)).toEqual([['f-skill', 1, pixel.skillRoots]])
   })
 
   it('没有技能的扩展不进 key（图标包 / 主题开关不会让会话重启）', async () => {
@@ -120,6 +124,7 @@ describe('skills', () => {
     const wrappers = new Map<string, string>()
     expect(packSkillLaunch([icons], wrappers, 'claude')).toEqual({ key: '', pluginDirs: [], skillRoots: [] })
     expect(packSkillLaunch([icons], wrappers, 'codex')).toEqual({ key: '', pluginDirs: [], skillRoots: [] })
+    expect(packSkillLaunch([icons], wrappers, 'pixel')).toEqual({ key: '', pluginDirs: [], skillRoots: [] })
   })
 
   it('技能命令：<插件名>:<技能名>，只含 claude 能用的', async () => {

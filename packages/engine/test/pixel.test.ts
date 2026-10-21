@@ -7,7 +7,8 @@ import type { EngineInfo, HostEvent } from '@pixelsky/protocol'
 import type { EngineAdapter, EngineSession, SessionContext } from '../src/adapter'
 import { ENGINES } from '../src/registry'
 import { PIXEL_MODES, pixelModelsConfig, reservedPixelArg, mcpWaiterFor, searchToolArgs } from '../src/pixel/session'
-import { modelEfforts } from '../src/pixel/catalog'
+import { effortsFromLevels, findModel, modelEfforts } from '../src/pixel/catalog'
+import { gitBashDir, pixelShell, windowsBash } from '../src/pixel/discover'
 import { makeTmp, removeTmp } from './helpers/tmp'
 
 const FAKE = fileURLToPath(new URL('./fakes/fake-pixel.mjs', import.meta.url))
@@ -44,6 +45,7 @@ function setup(idleMs = 50, extra: Record<string, unknown> = {}, hostExtra: Reco
   const adapter = new PixelAdapter({
     launcher: { command: process.execPath, args: [FAKE] },
     env: { ...pixelEnv(), FAKE_PIXEL_LOG: log, FAKE_PIXEL_ARGV: argv, FAKE_PIXEL_DIR: join(root, 'sessions') },
+    shell: () => ({}),
     ...extra,
   } as never)
   host = new EngineHost({
@@ -86,7 +88,13 @@ describe('Pixel 引擎适配器', () => {
     expect((await b.info()).path).toBe(FAKE)
     // 都没有：PATH 上也没有 pixelsky
     const c = new PixelAdapter({ env: { ...process.env, PIXELSKY_CLI_BIN: '', PATH: root, Path: root } })
-    expect((await c.info()).status).toBe('missing')
+    expect(await c.info()).toMatchObject({ status: 'missing', message: expect.stringContaining('PIXELSKY_CLI_BIN') })
+    // 安装包自带的命令行不见了：中文说明，让用户重装
+    const lost = new PixelAdapter({
+      env: { ...process.env, PIXELSKY_CLI_BIN: '', PATH: root, Path: root },
+      bundledCli: join(root, 'resources', 'cli.mjs'),
+    })
+    expect((await lost.info()).message).toMatch(/没有找到像素星空自带的命令行.*请重新安装像素星空/)
     // 用户替换的命令找不到：直接报，不换成别的
     const d = new PixelAdapter({ env, overridePath: () => join(root, 'nope.mjs') })
     expect((await d.info()).status).toBe('missing')
@@ -153,7 +161,12 @@ describe('Pixel 引擎适配器', () => {
     expect(log.find(m => m.type === 'set_model')).toMatchObject({ provider: 'fake', modelId: 'fake-pixel' })
     expect(log.find(m => m.type === 'set_thinking_level')).toMatchObject({ level: 'high' })
     expect(snap(session.id).record.engineSessionId).toMatch(/session-\d+\.jsonl$/)
-    expect(snap(session.id).commands?.map(c => c.name)).toEqual(['compact', 'skill:probe'])
+    // 适配器自己用的扩展命令（pixelsky-mode / pixelsky-mcp）不列，用户自己装的扩展命令照常列出
+    expect(snap(session.id).commands?.map(c => c.name)).toEqual(['compact', 'review', 'skill:probe'])
+    // 上下文明细：最近一次请求的输入 / 缓存 / 输出
+    expect(snap(session.id).context).toMatchObject({ input: 100, cacheRead: 40, cacheWrite: 0, output: 20 })
+    // 不调 set_auto_retry（会写进用户自己的 Pi 设置文件）
+    expect(log.some(m => m.type === 'set_auto_retry')).toBe(false)
   })
   it('批准：允许和拒绝都往返，拒绝的命令显示已拒绝', async () => {
     const { session, messages } = setup()
@@ -364,21 +377,44 @@ describe('Pixel 引擎适配器', () => {
     expect(snap(session.id).items.filter(i => i.kind === 'user')).toHaveLength(2)
     expect(snap(session.id).items.filter(i => i.kind === 'notice')).toEqual([])
   })
-  it('续接：会话文件没了就新开并提示', async () => {
-    const { session } = setup(50)
+  it('续接：会话文件没了，宿主派发前发现（hasNativeSession），整段对话交接进新会话并提示一次', async () => {
+    const { adapter, session, messages } = setup(50)
     await host!.send(session.id, 'first')
     await wait(() => snap(session.id).items.some(i => i.kind === 'turn_stats'))
     const file = snap(session.id).record.engineSessionId!
-    writeFileSync(join(root, 'marker'), '')
-    host!.open(session.id)
+    expect(adapter.hasNativeSession(snap(session.id).record)).toBe(true)
     await new Promise(r => setTimeout(r, 200))
     const { rmSync } = await import('node:fs')
     rmSync(file)
+    expect(adapter.hasNativeSession(snap(session.id).record)).toBe(false)
     await host!.send(session.id, 'second')
     await wait(() => snap(session.id).items.filter(i => i.kind === 'turn_stats').length === 2)
     expect(snap(session.id).items.filter(i => i.kind === 'notice')).toEqual([
-      expect.objectContaining({ level: 'warn', text: expect.stringContaining('Could not resume') }),
+      expect.objectContaining({ level: 'warn', text: expect.stringContaining('像素星空 的会话记录不在了') }),
     ])
+    const prompt = messages().findLast(m => m.type === 'prompt')
+    expect(prompt.message).toContain('first')
+    expect(prompt.message.endsWith('second')).toBe(true)
+    // 没会话、id 不是路径时按在算
+    expect(adapter.hasNativeSession({ ...snap(session.id).record, engineSessionId: null })).toBe(true)
+  })
+  it('续接：文件还在却接不上（switch_session 失败），请宿主把之前的聊天带进这条消息（lostSeed）', async () => {
+    let broken = false
+    const { session, messages } = setup(50, { extraEnv: () => (broken ? { FAKE_PIXEL_SWITCH_FAIL: '1' } : {}) })
+    await host!.send(session.id, 'first')
+    await wait(() => snap(session.id).items.some(i => i.kind === 'turn_stats'))
+    await new Promise(r => setTimeout(r, 200))
+    broken = true
+    await host!.send(session.id, 'second')
+    await wait(() => snap(session.id).items.filter(i => i.kind === 'turn_stats').length === 2)
+    const notices = snap(session.id).items.filter(i => i.kind === 'notice')
+    expect(notices).toEqual([
+      expect.objectContaining({ level: 'warn', text: expect.stringContaining('没能接上原来的 像素星空 会话') }),
+    ])
+    expect(notices[0].kind === 'notice' && notices[0].detail).toContain('Session file is corrupt')
+    const prompt = messages().findLast(m => m.type === 'prompt')
+    expect(prompt.message).toContain('first')
+    expect(prompt.message.endsWith('second')).toBe(true)
   })
   it('进程崩溃：这一轮以 failed 结束并带 stderr 原因', async () => {
     const { session } = setup()
@@ -449,6 +485,32 @@ describe('Pixel 引擎适配器', () => {
       apiKey: '$PIXELSKY_PIXEL_TOKEN',
     })
     expect(JSON.stringify(launch.providers)).not.toContain('secret-1')
+  })
+  it('云端线路的窗口：没填按模型系列自动定（官方表更小取小的），填了用填的；换模型、改窗口都换进程', async () => {
+    const { session, argvs } = setup(60_000, {
+      sessionEnv: () => ({ PIXELSKY_PIXEL_BASE_URL: 'http://127.0.0.1:9/v1', PIXELSKY_PIXEL_TOKEN: 'secret-1' }),
+      // 和 host/index.ts 接的一样：设置里的窗口
+      launchOptions: () => ({ contextWindows: host!.engineConfig().pixel.contextWindows }),
+    })
+    const windowOf = (n: number): unknown =>
+      (argvs()[n].providers.pixelsky.models as Array<{ id: string; contextWindow?: number }>).map(m => [
+        m.id,
+        m.contextWindow,
+      ])
+    const turn = async (n: number): Promise<void> => {
+      await host!.send(session.id, 'hi')
+      await wait(() => argvs().length === n && idle(session.id))
+    }
+    await host!.update(session.id, { platform: { groupId: '1', account: 'a@b.c' }, model: 'deepseek-v4.1-flash' })
+    await turn(1)
+    expect(windowOf(0)).toEqual([['deepseek-v4.1-flash', 1_000_000]])
+    // 老的 Claude 模型官方只有 200K：取小的
+    await host!.update(session.id, { model: 'claude-haiku-4-5' })
+    await turn(2)
+    expect(windowOf(1)).toEqual([['claude-haiku-4-5', 200_000]])
+    await host!.setEngineConfig('pixel', { contextWindows: { platform: { 'claude-haiku-4-5': 150_000 } } })
+    await turn(3)
+    expect(windowOf(2)).toEqual([['claude-haiku-4-5', 150_000]])
   })
   it('默认再开 grep / find / ls；用户自己选了工具就不加', async () => {
     expect(searchToolArgs([])).toEqual(['--tools', '+grep,+find,+ls'])
@@ -571,5 +633,234 @@ describe('MCP 操作结果对号', () => {
   it('旧版命令行不带请求号：按操作 + 名字找，都对不上才给最早的', () => {
     expect(mcpWaiterFor(waiters, '', 'status', '')).toBe(waiters[1])
     expect(mcpWaiterFor(waiters, '', 'login', 'x')).toBe(waiters[0])
+  })
+})
+
+describe('Pixel 兼容性（网关模型、发送前准备、强度、重试、换模型）', () => {
+  const GATEWAY = { PIXELSKY_PIXEL_BASE_URL: 'http://127.0.0.1:9/v1', PIXELSKY_PIXEL_TOKEN: 'secret-1' }
+  const platform = { groupId: '1', account: 'a@b.c' }
+  const outcomes = (events: HostEvent[]) =>
+    events.flatMap(e => (e.kind === 'session' && e.event.type === 'turn_completed' ? [e.event.outcome] : []))
+  const stats = (id: string) => snap(id).items.filter(i => i.kind === 'turn_stats')
+
+  it('经网关：只认 pixelsky/<id>，不会落到 Pi 内置的同名模型（那会用本机密钥直连厂商）', async () => {
+    const { session, messages } = setup(60_000, { sessionEnv: () => GATEWAY })
+    // fake-pixel 同时是内置 provider fake 下的模型，Pi 把内置的排在前面
+    await host!.update(session.id, { platform, model: 'fake-pixel' })
+    await host!.send(session.id, 'hi')
+    await wait(() => stats(session.id).length === 1)
+    expect(messages().filter(m => m.type === 'set_model')).toEqual([
+      expect.objectContaining({ provider: 'pixelsky', modelId: 'fake-pixel' }),
+    ])
+    expect(findModel([{ provider: 'fake', id: 'x' }], 'x', 'pixelsky')).toBeUndefined()
+    expect(findModel([{ provider: 'pixelsky', id: 'x' }], 'pixelsky/x', 'pixelsky')).toMatchObject({ id: 'x' })
+  })
+
+  it('经网关、网关没注册模型：报错，不用同名的内置模型', async () => {
+    // 没给网关地址：命令行不注册 pixelsky provider
+    const { session, messages } = setup(60_000, { sessionEnv: () => ({ PIXELSKY_PIXEL_TOKEN: 'secret-1' }) })
+    await host!.update(session.id, { platform, model: 'fake-pixel' })
+    await host!.send(session.id, 'hi')
+    await wait(() => idle(session.id) && snap(session.id).record.lastOutcome === 'failed')
+    expect(snap(session.id).record.lastError).toContain('Model not found: pixelsky/fake-pixel')
+    expect(messages().some(m => m.type === 'set_model')).toBe(false)
+  })
+
+  it('发送前先压缩（比等回应的时间长）：不按超时失败，这一轮照常做完', async () => {
+    const { session, events } = setup(60_000, {
+      extraEnv: () => ({ FAKE_PIXEL_COMPACT_MS: '600' }),
+      launchOptions: () => ({ promptStartMs: 200 }),
+    })
+    await host!.send(session.id, '先总结')
+    await wait(() => stats(session.id).length === 1)
+    expect(outcomes(events)).toEqual(['completed'])
+    expect(snap(session.id).items.find(i => i.kind === 'compaction')).toMatchObject({ status: 'completed' })
+    expect(snap(session.id).items.some(i => i.kind === 'assistant' && i.text.startsWith('收到'))).toBe(true)
+  })
+
+  it('发送前一直没动静：先让 Pi 停下再按失败结束，下一条消息不会被「正在处理」拒掉', async () => {
+    const { session, messages, events } = setup(60_000, { launchOptions: () => ({ promptStartMs: 200 }) })
+    await host!.send(session.id, '卡住')
+    await wait(() => idle(session.id) && snap(session.id).record.lastOutcome === 'failed')
+    expect(snap(session.id).record.lastError).toContain('没有开始处理这条消息')
+    expect(messages().some(m => m.type === 'abort')).toBe(true)
+    host!.resumeQueue(session.id)
+    await host!.send(session.id, 'hi')
+    await wait(() => stats(session.id).length === 2)
+    expect(outcomes(events)).toEqual(['failed', 'completed'])
+    expect(snap(session.id).items.filter(i => i.kind === 'notice' && i.level === 'error')).toHaveLength(1)
+  })
+
+  it('强度：报当前模型实际支持的档位（flags.efforts），选的档位被 Pi 夹紧时记录跟着改', async () => {
+    const { session } = setup(60_000)
+    await host!.update(session.id, { effort: 'max' })
+    await host!.send(session.id, 'hi')
+    await wait(() => stats(session.id).length === 1)
+    // fake-pixel 没有 max：Pi 夹到 xhigh
+    expect(snap(session.id).flags.efforts).toEqual({
+      model: 'fake/fake-pixel',
+      efforts: ['low', 'medium', 'high', 'xhigh'],
+    })
+    expect(snap(session.id).record.effort).toBe('xhigh')
+    // 换到不能推理的模型：档位为空，记录里的强度不动（换回来还用）
+    await host!.update(session.id, { model: 'fake/fake-small' })
+    await wait(() => snap(session.id).flags.efforts?.model === 'fake/fake-small')
+    expect(snap(session.id).flags.efforts?.efforts).toEqual([])
+    expect(snap(session.id).record.effort).toBe('xhigh')
+    expect(effortsFromLevels(['off', 'minimal', 'low', 'max'])).toEqual(['low', 'max'])
+  })
+
+  it('强度：旧版命令行没有 get_available_thinking_levels，按模型定义算', async () => {
+    const { session } = setup(60_000, { extraEnv: () => ({ FAKE_PIXEL_OLD: '1' }) })
+    await host!.send(session.id, 'hi')
+    await wait(() => stats(session.id).length === 1)
+    expect(snap(session.id).flags.efforts?.efforts).toEqual(['low', 'medium', 'high', 'xhigh'])
+  })
+
+  it('重试：用完只显示一次错误；超过设置的次数就取消等着的重试，不调 set_auto_retry', async () => {
+    const { session, messages } = setup(60_000)
+    host!.setRetrySettings(1)
+    await host!.send(session.id, '重试失败')
+    await wait(() => idle(session.id) && snap(session.id).record.lastOutcome === 'failed')
+    expect(snap(session.id).record.lastError).toContain('529 overloaded')
+    expect(snap(session.id).items.filter(i => i.kind === 'notice' && i.level === 'error')).toHaveLength(1)
+    const log = messages()
+    expect(log.filter(m => m.type === 'abort_retry')).toHaveLength(1)
+    expect(log.some(m => m.type === 'set_auto_retry')).toBe(false)
+    expect(snap(session.id).retry ?? null).toBeNull()
+  })
+
+  it('重试：Pi 自己用完重试次数时错误也只显示一次', async () => {
+    const { session } = setup(60_000)
+    await host!.send(session.id, '重试失败')
+    await wait(() => idle(session.id) && snap(session.id).record.lastOutcome === 'failed')
+    expect(snap(session.id).items.filter(i => i.kind === 'notice' && i.level === 'error')).toHaveLength(1)
+  })
+
+  it('重试：等重试时停止，按中断结束，不显示红色的「Retry cancelled」', async () => {
+    const { session, events } = setup(60_000)
+    await host!.send(session.id, '重试等待')
+    await wait(() => !!snap(session.id).retry)
+    await host!.interrupt(session.id)
+    await wait(() => idle(session.id))
+    expect(outcomes(events)).toEqual(['interrupted'])
+    expect(snap(session.id).items.some(i => i.kind === 'notice' && i.level === 'error')).toBe(false)
+  })
+
+  it('压缩生成摘要的用量记在会话的模型名下，并算进累计', async () => {
+    const { session } = setup(60_000)
+    await host!.send(session.id, '压缩')
+    await wait(() => stats(session.id).length === 1)
+    const usage = stats(session.id)[0]
+    expect(usage.kind === 'turn_stats' && Object.keys(usage.usage.models)).toEqual(['fake-pixel'])
+    expect(usage.kind === 'turn_stats' && usage.usage.models['fake-pixel'].requests).toBe(2)
+  })
+
+  it('云端线路运行中换模型：这一轮照旧用原模型、不假装换了，下一条消息换进程用新模型', async () => {
+    const { session, messages, argvs } = setup(60_000, { sessionEnv: () => GATEWAY })
+    await host!.update(session.id, { platform, model: 'm1' })
+    await host!.send(session.id, '慢')
+    await wait(() => snap(session.id).items.some(i => i.kind === 'assistant'))
+    await host!.update(session.id, { model: 'm2' })
+    expect(snap(session.id).record.model).toBe('m2')
+    expect(snap(session.id).execution?.model).toBe('m1')
+    expect(messages().some(m => m.type === 'set_model' && m.modelId === 'm2')).toBe(false)
+    await host!.interrupt(session.id)
+    host!.resumeQueue(session.id)
+    await host!.send(session.id, 'hi')
+    await wait(() => stats(session.id).length === 2 && idle(session.id))
+    expect(argvs()).toHaveLength(2)
+    expect(
+      messages()
+        .filter(m => m.type === 'set_model')
+        .pop(),
+    ).toMatchObject({ provider: 'pixelsky', modelId: 'm2' })
+    expect(snap(session.id).record.lastOutcome).toBe('completed')
+  })
+
+  it('自定义 API：换到启动后才加进接口的模型，换进程接上，不再报 Model not found', async () => {
+    const endpoint = ['a']
+    const { session, messages, argvs } = setup(60_000, {
+      sessionEnv: () => ({ ...GATEWAY, PIXELSKY_PIXEL_MODELS: JSON.stringify(endpoint) }),
+    })
+    await host!.update(session.id, { provider: { id: 'p1' }, model: 'a' })
+    await host!.send(session.id, 'hi')
+    await wait(() => stats(session.id).length === 1 && idle(session.id))
+    endpoint.push('b')
+    await host!.update(session.id, { model: 'b' })
+    await host!.send(session.id, 'hi')
+    await wait(() => stats(session.id).length === 2 && idle(session.id))
+    expect(snap(session.id).record.lastOutcome).toBe('completed')
+    expect(argvs()).toHaveLength(2)
+    expect(
+      messages()
+        .filter(m => m.type === 'set_model')
+        .pop(),
+    ).toMatchObject({ provider: 'pixelsky', modelId: 'b' })
+    // 接口里已经有的模型照常运行中切换，不换进程
+    await host!.update(session.id, { model: 'a' })
+    await wait(
+      () =>
+        messages()
+          .filter(m => m.type === 'set_model')
+          .pop()?.modelId === 'a',
+    )
+    expect(argvs()).toHaveLength(2)
+  })
+})
+
+describe('Windows 上的 Git Bash（Pi 只在 ProgramFiles 下找，找不到就用 PATH 上的 bash.exe）', () => {
+  const files = (...list: string[]) => {
+    const set = new Set(list.map(f => f.toLowerCase()))
+    return (p: string) => set.has(p.toLowerCase())
+  }
+  const env = (path: string, extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv => ({
+    ProgramFiles: 'C:\\Program Files',
+    Path: path,
+    PIXELSKY_CODING_AGENT_DIR: root,
+    ...extra,
+  })
+
+  it('ProgramFiles 下有 Git Bash、或不是 Windows：什么都不用做', () => {
+    expect(pixelShell(env('C:\\Windows\\system32'), 'win32', files('C:\\Program Files\\Git\\bin\\bash.exe'))).toEqual(
+      {},
+    )
+    expect(pixelShell(env(''), 'darwin', files())).toEqual({})
+    expect(windowsBash(env(''), files('C:\\Program Files\\Git\\bin\\bash.exe'))).toBe(
+      'C:\\Program Files\\Git\\bin\\bash.exe',
+    )
+  })
+
+  it('Git 装在别的盘：从 PATH 上的 git.exe 找到它的 bin，放到会话进程 PATH 的最前面（不用 System32 的 WSL bash）', () => {
+    const exists = files(
+      'C:\\Windows\\system32\\bash.exe',
+      'D:\\Program Files\\Git\\cmd\\git.exe',
+      'D:\\Program Files\\Git\\bin\\bash.exe',
+    )
+    const path = 'C:\\Windows\\system32;D:\\Program Files\\Git\\cmd'
+    expect(gitBashDir(env(path), exists)).toBe('D:\\Program Files\\Git\\bin')
+    expect(pixelShell(env(path), 'win32', exists)).toEqual({ pathDir: 'D:\\Program Files\\Git\\bin' })
+  })
+
+  it('只有 WSL 的 bash、或什么都没有：给出中文提示', () => {
+    expect(pixelShell(env('C:\\Windows\\system32'), 'win32', files('C:\\Windows\\system32\\bash.exe')).warning).toMatch(
+      /只找到了 WSL 的 bash/,
+    )
+    expect(pixelShell(env(''), 'win32', files()).warning).toMatch(/没有找到 Git Bash.*Git for Windows/)
+  })
+
+  it('用户在 Pi 的 settings.json 里写了 shellPath：以它为准', () => {
+    writeFileSync(join(root, 'settings.json'), JSON.stringify({ shellPath: 'E:\\tools\\bash.exe' }))
+    expect(pixelShell(env(''), 'win32', files('E:\\tools\\bash.exe'))).toEqual({})
+  })
+
+  it('检测时把提示放进引擎信息的配置提示，Git 的 bin 加进会话进程的 PATH', async () => {
+    const { adapter, session, argvs } = setup(60_000, {
+      shell: () => ({ pathDir: 'D:\\Git\\bin', warning: '没有找到 Git Bash' }),
+    })
+    expect((await adapter.info()).configWarnings).toEqual(['没有找到 Git Bash'])
+    await host!.send(session.id, 'hi')
+    await wait(() => argvs().length === 1 && idle(session.id))
+    expect(argvs()[0].path.split(';')[0]).toBe('D:\\Git\\bin')
   })
 })

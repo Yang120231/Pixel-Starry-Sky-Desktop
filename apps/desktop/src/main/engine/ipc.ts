@@ -80,6 +80,7 @@ export async function initEngine(ctx: AppContext): Promise<void> {
       else void ctx.machines?.call(machine, 'platform:compaction', [record.id, report]).catch(() => {})
     },
     () => subagents.get(),
+    () => ctx.engine?.engineConfig().pixel.contextWindows.platform ?? {},
   )
   // 对话历史 MCP 服务：第一次有换过引擎的对话要派发消息时才启动
   const history = historyServer(ctx)

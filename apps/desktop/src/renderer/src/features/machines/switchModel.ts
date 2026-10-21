@@ -1,4 +1,5 @@
 // 顶栏「本机 | 云端」的判断（docs/ui/layout-v2.md §4）：「云端」就是远程机器（SSH）；本机 = id 为 local 的那台，WSL 发行版也算本机这一边
+import { ENGINES } from '@pixelsky/protocol'
 import type { CheckItem, MachineInfo, MachineState } from '../../../../shared/types/machines'
 
 export interface SwitchView {
@@ -41,16 +42,32 @@ const PROBLEM_CODES = ['NODE_MISSING', 'NODE_OLD', 'NODE_BROKEN', 'NODE_WINDOWS'
 const problemKey = (item: CheckItem): string =>
   item.code && PROBLEM_CODES.includes(item.code) ? `wsl.problem.${item.code}` : `wsl.problem.${item.key}`
 
+/**
+ * 已连接的发行版里能用的引擎：Claude Code / Codex 带版本（检查项 detail 是「版本 (路径)」，版本号取前两段，
+ * 路径里的数字不算；读不到版本只写名字），自带的像素星空引擎检查通过就列名字（版本跟着桌面端）
+ */
+export function wslEngines(items: CheckItem[] | undefined): string[] {
+  const ok = (key: CheckItem['key']) => items?.find(i => i.key === key && i.status === 'ok')
+  const list: string[] = []
+  for (const key of ['claude', 'codex'] as const) {
+    const item = ok(key)
+    if (!item) continue
+    const version = item.detail.split(' (')[0].match(/\d+\.\d+/)?.[0]
+    list.push(version ? `${ENGINES[key].name} ${version}` : ENGINES[key].name)
+  }
+  if (ok('pixel')) list.push(ENGINES.pixel.name)
+  return list
+}
+
 /** 菜单里发行版那行的状态：只读已有记录，不为了显示去启动 WSL（wsl-mode.plan.md §3.1） */
 export function wslStatusLine(m: MachineInfo): WslStatusLine {
   if (m.status === 'connected') {
-    const detail = m.wsl?.lastCheck?.items.find(i => i.key === 'claude' && i.status === 'ok')?.detail
-    const version = detail?.match(/\d+\.\d+/)?.[0]
-    return version
+    const engines = wslEngines(m.wsl?.lastCheck?.items)
+    return engines.length
       ? {
           tone: 'ok',
           key: 'wsl.status.connectedVersion',
-          params: { version: `Claude Code ${version}` },
+          params: { version: engines.join(' · ') },
           needsPrep: false,
         }
       : { tone: 'ok', key: 'wsl.status.connected', needsPrep: false }

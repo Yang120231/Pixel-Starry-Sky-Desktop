@@ -12,6 +12,8 @@ import { useAccount } from '@/features/account/useAccount'
 import { useSettings } from '@/features/settings/SettingsProvider'
 import { machineOf, openMachineManager, useMachines } from '@/features/machines/store'
 import { SOURCE_ACTION_LABEL, actionsFor } from '@/features/session/live/NoticeActions'
+import { useEngineCatalog } from '@/features/engine/catalog'
+import { selfSourceReady } from '@/features/model-channels/channelModel'
 import type { SessionPr } from '../../../../shared/types/session-status'
 import { useSessionActions } from './SessionActions'
 import { StatusGlyph, prIcon } from './SessionMarks'
@@ -139,8 +141,13 @@ function StatusCard({
   const machine = machines.find(m => m.id === machineOf(sessionId))
   const error = card?.lane === 'failed' ? (card.error ?? '') : ''
   const errorKind = errorKindOf(error)
+  const engine = record?.engine ?? 'claude'
+  // 像素星空没配自己的 Key 时不给「改用自有」（channelModel.ts selfSourceReady）
+  const catalog = useEngineCatalog(engine)
   const errorActions: CardActionId[] =
-    errorKind === 'failed' ? [] : actionsFor(errorKind, record ?? { platform: null }, record?.engine ?? 'claude')
+    errorKind === 'failed'
+      ? []
+      : actionsFor(errorKind, record ?? { platform: null }, engine, selfSourceReady(engine, catalog))
   const actions = cardActions(topic, { request, queue: card?.queue ?? null, errorActions })
   const pr = status.pr
 

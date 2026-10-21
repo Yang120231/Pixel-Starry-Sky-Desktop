@@ -1,6 +1,6 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, isAbsolute, join } from 'node:path'
 import {
   codedError,
   type AgentRuns,
@@ -15,7 +15,7 @@ import { engineEnv, systemProxyEnv } from '../env'
 import { startupReason } from '../exec'
 import { engineBase } from '../registry'
 import { runsFromSession } from './agents'
-import { customPixel, discoverPixel, pixelEnvironment } from './discover'
+import { customPixel, discoverPixel, pixelEnvironment, pixelShell } from './discover'
 import { pixelCatalog } from './catalog'
 import { PixelProcess } from './process'
 import { PixelSession, reservedPixelArg, type PixelLaunchOptions } from './session'
@@ -34,12 +34,16 @@ export interface PixelAdapterOptions {
   /** 测试里直接给启动方式（不查找、不跑 --version） */
   launcher?: Launcher
   launchOptions?: () => PixelLaunchOptions
+  /** 测试用：替换 Windows 上的 shell 检查（discover.ts pixelShell） */
+  shell?: (env: NodeJS.ProcessEnv) => { pathDir?: string; warning?: string }
 }
 
 export class PixelAdapter implements EngineAdapter {
   private cached: { info: EngineInfo; launcher: Launcher | null } | null = null
   private detecting: Promise<EngineInfo> | null = null
   private catalogCache: EngineCatalog | null = null
+  /** Windows 上命令工具要用的 Git Bash（检测时定下，见 discover.ts pixelShell） */
+  private shell: { pathDir?: string; warning?: string } = {}
   constructor(private readonly opts: PixelAdapterOptions = {}) {}
 
   private env(): NodeJS.ProcessEnv {
@@ -77,6 +81,9 @@ export class PixelAdapter implements EngineAdapter {
           launcher: this.opts.launcher,
         }
       : await discoverPixel(this.opts.overridePath?.() ?? null, this.env(), this.opts.bundledCli ?? null)
+    // Windows 上 Pi 找不到 Git Bash：装在别处的放到会话进程的 PATH 最前面；没装的（或只有 WSL 的 bash）放进设置 › 本机引擎的配置提示
+    this.shell = result.info.status === 'ready' ? (this.opts.shell ?? pixelShell)(this.env()) : {}
+    if (this.shell.warning) result.info.configWarnings = [this.shell.warning]
     this.cached = result
     this.catalogCache = null
     return result.info
@@ -119,6 +126,14 @@ export class PixelAdapter implements EngineAdapter {
       }
     }
   }
+  /**
+   * Pi 的会话文件还在不在（引擎会话 id 就是会话文件路径）：不在时宿主派发前把整段聊天交接进新会话（handoff.ts）。
+   * 还没有会话、id 不是路径（看不出来）时按在算
+   */
+  hasNativeSession(record: SessionRecord): boolean {
+    const file = record.engineSessionId
+    return !file || !isAbsolute(file) || existsSync(file)
+  }
   /** 智能体追踪：子智能体记在 Pi 主会话文件里（引擎会话 id 就是会话文件路径） */
   loadRuns(record: SessionRecord): AgentRuns {
     return {
@@ -137,12 +152,17 @@ export class PixelAdapter implements EngineAdapter {
     if (!result?.launcher || result.info.status !== 'ready')
       throw new Error(result?.info.message ?? 'Pixel is unavailable')
     const env = pixelEnvironment(result.launcher, this.env())
-    const record = ctx.record()
-    if (viaGateway(record)) {
-      // 平台 / 自定义 API 会话：不带本机的密钥，只用宿主给的网关环境
-      for (const key of Object.keys(env)) if (/^(ANTHROPIC_|OPENAI_)/i.test(key)) delete env[key]
-      Object.assign(env, this.opts.sessionEnv?.(record) ?? {})
+    if (this.shell.pathDir) {
+      // Pi 在 PATH 上找 bash.exe：Git 的 bin 放在最前面，免得找到 System32 的 WSL bash
+      const key = Object.keys(env).find(k => k.toLowerCase() === 'path') ?? 'PATH'
+      env[key] = [this.shell.pathDir, env[key] ?? ''].filter(Boolean).join(delimiter)
     }
+    const record = ctx.record()
+    // 宿主给的环境：网关会话是网关地址和会话密钥；自有会话也要，里面有子智能体设置（不含密钥）
+    const hostEnv = this.opts.sessionEnv?.(record) ?? {}
+    // 平台 / 自定义 API 会话：不带本机的密钥，只用宿主给的网关环境
+    if (viaGateway(record)) for (const key of Object.keys(env)) if (/^(ANTHROPIC_|OPENAI_)/i.test(key)) delete env[key]
+    Object.assign(env, hostEnv)
     return new PixelSession(result.launcher, env, ctx, this.opts.launchOptions?.() ?? {})
   }
 }

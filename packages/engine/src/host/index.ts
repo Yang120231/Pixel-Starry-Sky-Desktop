@@ -146,7 +146,10 @@ export class EngineHost {
         systemProxy: () => opts.systemProxy?.('pixel') ?? null,
         bundledCli: opts.pixelCli,
         sessionEnv: opts.sessionEnv,
-        launchOptions: () => ({ args: settings.launchOptions('pixel').args }),
+        launchOptions: () => {
+          const o = settings.launchOptions('pixel')
+          return { args: o.args, contextWindows: o.contextWindows }
+        },
       }),
     }
     const projects = new HostProjects(ctx)

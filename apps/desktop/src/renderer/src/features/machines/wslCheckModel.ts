@@ -1,7 +1,7 @@
 // WSL 检查卡片的纯逻辑：项排序、每项怎么显示（wsl-mode.plan.md §3.3）
 import type { CheckItem } from '../../../../shared/types/machines'
 
-const ORDER: CheckItem['key'][] = ['start', 'encoding', 'node', 'claude', 'codex', 'login']
+const ORDER: CheckItem['key'][] = ['start', 'encoding', 'node', 'claude', 'codex', 'pixel', 'login']
 
 export const sortCheckItems = (items: CheckItem[]): CheckItem[] =>
   [...items].sort((a, b) => ORDER.indexOf(a.key) - ORDER.indexOf(b.key))
@@ -33,6 +33,8 @@ const CODES: Record<string, CodeView> = {
   CLAUDE_WINDOWS: { line: true },
   CODEX_MISSING: {},
   CODEX_WINDOWS: { line: true },
+  PIXEL_NODE_OLD: { param: 'version' },
+  PIXEL_ARCH: {},
 }
 
 export interface ItemView {

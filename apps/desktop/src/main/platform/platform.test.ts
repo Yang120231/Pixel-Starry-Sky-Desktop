@@ -31,3 +31,34 @@ describe('clearGatewaySettings', () => {
     expect(() => clearGatewaySettings(join(root!, 'missing'))).not.toThrow()
   })
 })
+
+describe('分组目录存到磁盘：重启后续接的会话按它选协议', () => {
+  it('读上次存的分组：supported_apis 只给 Responses 的线路走 Responses；没读到的先按 Messages；坏文件当没有', async () => {
+    const { groupBrief, loadGroupCache, platformPixelApi } = await import('./platform')
+    const scratch = resolve('../../scratch')
+    mkdirSync(scratch, { recursive: true })
+    root = mkdtempSync(join(scratch, 'platform-groups-'))
+    const file = join(root, 'platform-groups.json')
+    writeFileSync(
+      file,
+      JSON.stringify({
+        '7': { platform: 'openai', name: 'GPT', supported_apis: ['responses'] },
+        '8': { platform: 'grok', name: 'Grok', supported_apis: ['responses', 'messages'] },
+        '9': { platform: 'kimi', name: 'Kimi', supported_apis: ['messages'] },
+        bad: { platform: 'openai' },
+        '10': { name: 'no platform' },
+      }),
+    )
+    loadGroupCache(file)
+    expect(groupBrief('7')?.name).toBe('GPT')
+    expect(groupBrief('10')).toBeNull()
+    expect(platformPixelApi('7', 'deepseek-v4-pro')).toBe('openai-responses')
+    expect(platformPixelApi('8', 'grok-4.7')).toBe('openai-responses')
+    expect(platformPixelApi('9', 'kimi-k3')).toBe('anthropic-messages')
+    expect(platformPixelApi('7', 'claude-opus-4-7')).toBe('anthropic-messages')
+    expect(platformPixelApi('404', 'kimi-k3')).toBe('anthropic-messages')
+    writeFileSync(file, '{not json')
+    expect(() => loadGroupCache(file)).not.toThrow()
+    expect(() => loadGroupCache(join(root!, 'missing.json'))).not.toThrow()
+  })
+})

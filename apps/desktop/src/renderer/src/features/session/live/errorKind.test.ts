@@ -96,6 +96,34 @@ describe('noticeActions', () => {
     ])
     expect(noticeActions(null, own, 'claude', { retry: true, compact: true })).toEqual(['retry'])
   })
+
+  it('像素星空：命令行没配自己的 Key（selfReady 不为真）时不给「改用自有」', () => {
+    const custom = { platform: null, provider: { id: 'p1' } } as never
+    expect(actionsFor('balance', platform, 'pixel')).toEqual(['open-account', 'open-menu'])
+    expect(actionsFor('auth', platform, 'pixel', false)).toEqual(['sign-in'])
+    expect(actionsFor('auth', custom, 'pixel')).toEqual(['edit-provider'])
+    expect(noticeActions('busy', platform, 'pixel', { retry: true, compact: false })).toEqual(['retry', 'open-menu'])
+    // 配了（目录里有模型）照常给；Claude Code / Codex 不受影响
+    expect(actionsFor('balance', platform, 'pixel', true)).toEqual(['open-account', 'open-menu', 'use-self'])
+    expect(noticeActions('busy', platform, 'pixel', { retry: false, compact: false, selfReady: true })).toEqual([
+      'open-menu',
+      'use-self',
+    ])
+    expect(actionsFor('auth', platform, 'codex')).toEqual(['sign-in', 'use-self'])
+  })
+})
+
+describe('按文字猜时认状态码（和协议的 classifyErrorText 一致）', () => {
+  it('余额的话盖过 403 / 429；authentication 字样在别的状态码下不算登录', () => {
+    expect(classifyError('API Error: 403 {"error":{"message":"insufficient balance"}}')).toBe('balance')
+    expect(classifyError('429 You exceeded your current quota, please check your plan and billing details')).toBe(
+      'balance',
+    )
+    expect(classifyError('HTTP 502 authentication gateway unavailable')).toBe('busy')
+    expect(classifyError('Your input exceeds the context window of this model.')).toBe('overflow')
+    expect(errorKindOf('API Error: 403 余额不足')).toBe('balance')
+    expect(errorKindOf('Error: 502 Bad Gateway')).toBe('busy')
+  })
 })
 
 describe('压缩后重试', () => {

@@ -1,7 +1,15 @@
 import { homedir, hostname, platform, arch } from 'node:os'
 import { join, dirname } from 'node:path'
 import { mkdir, writeFile } from 'node:fs/promises'
-import { REMOTE_PROTOCOL, viaGateway, type IPC_CONTRACT, type SessionRecord } from '@pixelsky/protocol'
+import {
+  REMOTE_PROTOCOL,
+  codedError,
+  viaGateway,
+  type EngineInfo,
+  type HostEvent,
+  type IPC_CONTRACT,
+  type SessionRecord,
+} from '@pixelsky/protocol'
 import { EngineHost, type EngineHostOptions } from '@pixelsky/engine'
 import { WorkspaceFiles } from '../core/workspace-files'
 import { resolveLocalWorkspace } from '../core/workspace/resolve'
@@ -17,6 +25,27 @@ import { gatewaySettings } from '../platform/compact-window'
 import type { WorkspaceRef } from '../../shared/types/workspace'
 import { TunnelEnd, type TunnelPeer } from './tunnel'
 import { collectStats } from './stats'
+import { REMOTE_CLI_NODE_MIN, remoteCliSupported } from './remote-cli'
+
+/**
+ * 桌面端没把像素星空命令行装到这台机器上时为什么（ssh.ts / wsl.ts 的 installCli 按同样的条件跳过）：
+ * 架构不是 x64 / arm64、Node 低于 Pi 要的 22.19，否则是上传或安装失败了。给引擎列表里 pixel 的说明用
+ */
+export function remotePixelReason(node: string, machineArch: string): string {
+  if (machineArch !== 'x64' && machineArch !== 'arm64')
+    return codedError('remote.pixelArch', { arch: machineArch }).message
+  if (!remoteCliSupported(node, machineArch))
+    return codedError('remote.pixelNode', { version: node, min: REMOTE_CLI_NODE_MIN.join('.') }).message
+  return codedError('remote.pixelInstall').message
+}
+
+/** 引擎列表里找不到命令行的 pixel 换上远程的原因；用户自己设了命令路径的不动（那是它自己的「找不到」） */
+export function withRemotePixelReason(list: EngineInfo[], reason: string | null): EngineInfo[] {
+  if (!reason) return list
+  return list.map(e =>
+    e.id === 'pixel' && e.status === 'missing' && e.launch !== 'custom' ? { ...e, message: reason } : e,
+  )
+}
 
 type Handler = (...args: never[]) => unknown
 type RemoteOf<Spec> = Spec extends { readonly remote: infer Method extends string } ? Method : never
@@ -39,8 +68,11 @@ export async function createRemoteRuntime(
 ) {
   const tunnel = new TunnelEnd(peer, 'remote')
   const environments = new Map<string, NodeJS.ProcessEnv>()
+  // 没装上像素星空命令行时，引擎列表里 pixel 写清楚原因（不然只有一句「找不到 pixelsky」）
+  const pixelReason = extra.pixelCli ? null : remotePixelReason(process.versions.node, arch())
   const prepare = async (record: SessionRecord) => {
-    if (!viaGateway(record)) {
+    // 像素星空的自有会话也要桌面端给的环境变量：设置 › 子智能体（和本机 platform.ts 一样每个像素星空会话都带）
+    if (!viaGateway(record) && record.engine !== 'pixel') {
       environments.delete(record.id)
       return
     }
@@ -58,7 +90,11 @@ export async function createRemoteRuntime(
   const host = new EngineHost({
     ...extra,
     dataDir: join(dataDir, 'engine'),
-    emit: event => peer.event('engine:event', event),
+    emit: (event: HostEvent) =>
+      peer.event(
+        'engine:event',
+        event.kind === 'engines' ? { ...event, engines: withRemotePixelReason(event.engines, pixelReason) } : event,
+      ),
     sessionEnv: record => environments.get(record.id) ?? {},
     validateInput: prepare,
     platformCharges: (settlement, _signal) => peer.call('platform:charges', [settlement]),
@@ -92,16 +128,20 @@ export async function createRemoteRuntime(
   // 远端只有桌面端一个调用方：搜索 / 产物扫描共用一个桶
   const owner = 'desktop'
   const toolsContext = { host: tools, tools: projectTools }
+  const engineContext = {
+    host,
+    owner,
+    searches: new SearchRegistry(),
+    scans: new SearchRegistry(),
+    tools,
+    copyPath: (projectId: string, copyId: string) => projectTools.copyPath(projectId, copyId),
+    beforeUpdate: prepare,
+  }
+  // 操作表照旧整张展开（contract.test 按 `...bindOps(表名,` 认方法），引擎列表再单独包一层：没装上命令行时写明原因
   const contractMethods: Record<ContractMethod, Handler> = {
-    ...bindOps(ENGINE_OPS, {
-      host,
-      owner,
-      searches: new SearchRegistry(),
-      scans: new SearchRegistry(),
-      tools,
-      copyPath: (projectId, copyId) => projectTools.copyPath(projectId, copyId),
-      beforeUpdate: prepare,
-    }),
+    ...bindOps(ENGINE_OPS, engineContext),
+    'engine:engines': async (force?: unknown) =>
+      withRemotePixelReason((await ENGINE_OPS['engine:engines'](engineContext, force)) as EngineInfo[], pixelReason),
     ...bindOps(FILE_OPS, { files }),
     ...bindOps(PROJECT_TOOL_OPS, toolsContext),
     directories: (input?: string) => listDirectories(input),

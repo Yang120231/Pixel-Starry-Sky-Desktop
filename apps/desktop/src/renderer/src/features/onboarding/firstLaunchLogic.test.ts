@@ -6,6 +6,7 @@ import {
   decideFirstLaunch,
   finishFirstLaunch,
   firstLaunchDone,
+  firstLaunchEngine,
   firstLaunchView,
   foundEngines,
   loginRemaining,
@@ -47,20 +48,54 @@ describe('firstLaunchView', () => {
   })
 })
 
+const engine = (id: string, status: string) => ({ id, status }) as unknown as EngineInfo
+
 describe('foundEngines', () => {
-  const engine = (id: string, status: string) => ({ id, status }) as unknown as EngineInfo
   it('检测结果还没回来：checked 为 false', () => {
-    expect(foundEngines([])).toEqual({ checked: false, found: [] })
-    expect(foundEngines([engine('pixel', 'ready')])).toEqual({ checked: false, found: [] })
+    expect(foundEngines([])).toEqual({ checked: false, found: [], pixel: false })
+    expect(foundEngines([engine('pixel', 'ready')])).toEqual({ checked: false, found: [], pixel: true })
   })
   it('装了就算找到（没登录、版本旧也算）；没装、不支持的不算', () => {
     expect(
       foundEngines([engine('claude', 'unauthenticated'), engine('codex', 'missing'), engine('pixel', 'ready')]),
-    ).toEqual({ checked: true, found: ['Claude Code'] })
+    ).toEqual({ checked: true, found: ['Claude Code'], pixel: true })
     expect(foundEngines([engine('claude', 'missing'), engine('codex', 'unsupported')])).toEqual({
       checked: true,
       found: [],
+      pixel: false,
     })
+  })
+  it('两个官方工具都没装，但自带的像素星空能启动', () => {
+    expect(foundEngines([engine('claude', 'missing'), engine('codex', 'missing'), engine('pixel', 'ready')])).toEqual({
+      checked: true,
+      found: [],
+      pixel: true,
+    })
+    expect(foundEngines([engine('claude', 'missing'), engine('pixel', 'error')]).pixel).toBe(false)
+  })
+})
+
+describe('firstLaunchEngine', () => {
+  const all = (claude: string, codex: string, pixel: string) => [
+    engine('claude', claude),
+    engine('codex', codex),
+    engine('pixel', pixel),
+  ]
+  it('检测结果还没回来时先等', () => {
+    expect(firstLaunchEngine([], 'claude')).toBeUndefined()
+    expect(firstLaunchEngine(all('missing', 'missing', 'ready'), undefined)).toBeUndefined()
+  })
+  it('默认引擎装了（没登录也算）就不换', () => {
+    expect(firstLaunchEngine(all('ready', 'missing', 'ready'), 'claude')).toBeNull()
+    expect(firstLaunchEngine(all('unauthenticated', 'missing', 'ready'), 'claude')).toBeNull()
+  })
+  it('默认引擎没装：先换装了的另一个官方工具，都没装用像素星空', () => {
+    expect(firstLaunchEngine(all('missing', 'unauthenticated', 'ready'), 'claude')).toBe('codex')
+    expect(firstLaunchEngine(all('missing', 'missing', 'ready'), 'claude')).toBe('pixel')
+    expect(firstLaunchEngine(all('unsupported', 'missing', 'ready'), 'claude')).toBe('pixel')
+  })
+  it('像素星空也起不来时不换', () => {
+    expect(firstLaunchEngine(all('missing', 'missing', 'error'), 'claude')).toBeNull()
   })
 })
 

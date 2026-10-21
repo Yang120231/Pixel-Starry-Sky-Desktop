@@ -12,11 +12,17 @@ export function claudePluginName(packId: string): string {
   return 'ext-' + packId.replace('.', '-')
 }
 
-/** 这个扩展给某个引擎用的、没被停用的技能（扩展没生效就一个都没有） */
-export function activeSkills(pack: LoadedPack, engine: 'claude' | 'codex'): ExtPackSkillInfo[] {
+/**
+ * 这个扩展给某个引擎用的、没被停用的技能（扩展没生效就一个都没有）。
+ * 清单里技能只能写 claude / codex；像素星空（Pi 和它们一样认 SKILL.md 目录）拿两个都写了的——没写 engines 的默认就是两个都给；
+ * 只给其中一个的多半写了那个工具特有的东西，不给它
+ */
+export function activeSkills(pack: LoadedPack, engine: Engine): ExtPackSkillInfo[] {
   if (!pack.info.live) return []
   const off = pack.info.inactive.skills ?? []
-  return pack.info.skills.filter(s => s.engines.includes(engine) && !off.includes(s.index))
+  const forEngine = (s: ExtPackSkillInfo): boolean =>
+    engine === 'pixel' ? s.engines.includes('claude') && s.engines.includes('codex') : s.engines.includes(engine)
+  return pack.info.skills.filter(s => forEngine(s) && !off.includes(s.index))
 }
 
 /** 技能文件夹在扩展里的相对路径（去掉结尾斜杠） */
@@ -149,13 +155,15 @@ export function gcClaudeWrappers(runtimeDir: string): void {
   }
 }
 
-/** 某个引擎的技能启动信息；key 只含“对这个引擎有技能的生效扩展”，没有时是 ''（图标包 / 主题开关不会让会话重启） */
+/**
+ * 某个引擎的技能启动信息；key 只含“对这个引擎有技能的生效扩展”，没有时是 ''（图标包 / 主题开关不会让会话重启）。
+ * Claude 走生成的插件目录；Codex 和像素星空直接给技能目录（像素星空每个目录一个 --skill，engine pixel/session.ts）
+ */
 export function packSkillLaunch(
   packs: LoadedPack[],
   wrappers: Map<string, string>,
   engine: Engine,
 ): { key: string; pluginDirs: string[]; skillRoots: string[] } {
-  if (engine === 'pixel') return { key: '', pluginDirs: [], skillRoots: [] }
   if (engine === 'claude') {
     const used = packs.filter(p => activeSkills(p, 'claude').length > 0 && wrappers.has(p.info.key))
     if (used.length === 0) return { key: '', pluginDirs: [], skillRoots: [] }
@@ -168,7 +176,7 @@ export function packSkillLaunch(
   const entries = packs
     .map(p => ({
       pack: p,
-      roots: activeSkills(p, 'codex').map(s => join(p.root, skillPath(p, s))),
+      roots: activeSkills(p, engine).map(s => join(p.root, skillPath(p, s))),
     }))
     .filter(e => e.roots.length > 0)
   if (entries.length === 0) return { key: '', pluginDirs: [], skillRoots: [] }

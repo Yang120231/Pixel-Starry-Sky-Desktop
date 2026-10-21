@@ -13,7 +13,6 @@ import {
   groupProblem,
   MODEL_SEARCH_MIN,
   matchModels,
-  groupsForModel,
   noRouteReason,
   platformModels,
   refreshPlatform,
@@ -30,30 +29,66 @@ import { openAccountsPage, useAccountsPage } from '@/features/model-channels/acc
 import { AiCommitSettings } from './AiCommitSettings'
 import { ContextWindowInput } from './ContextWindowInput'
 import { setContextWindow, useContextWindows } from './contextWindows'
+import {
+  mergedModels,
+  modelBadge,
+  routeCount,
+  sharedWindow,
+  windowBackfill,
+  windowEngines,
+  type EngineModelLists,
+  type EngineWindowMaps,
+} from './modelWindows'
 import { scrollInPane } from '@/ui/scrollInPane'
+
+/** 把平台模型的窗口写进各引擎的设置；写不进去的报给界面 */
+function writeWindows(
+  list: Array<{ engine: EngineId; model: string; value: number | null }>,
+  onError: (message: string) => void,
+): void {
+  Promise.all(list.map(w => setContextWindow(w.engine, 'platform', w.model, w.value))).catch((e: unknown) =>
+    onError((e as Error).message),
+  )
+}
 
 export function ModelsSection() {
   useI18n()
   const platform = usePlatform()
   const account = useAccount()
   const codexPlatform = usePlatform('codex')
-  const claudeModels = platformModels(platform.groups)
-  const codexModels = platformModels(codexPlatform.groups)
-  // 菜单里显示的模型和上下文窗口：Claude Code 和 Codex 两边的模型合在一起（GitHub #20）
-  const models = [...claudeModels, ...codexModels.filter(m => !claudeModels.includes(m))]
-  const claudeWindows = useContextWindows('claude').platform
-  const codexWindows = useContextWindows('codex').platform
+  const pixelPlatform = usePlatform('pixel')
+  // 菜单里显示的模型和上下文窗口：三个引擎的云端模型合在一起（GitHub #20），只有像素星空能跑的线路也列出来
+  const lists: EngineModelLists = {
+    claude: platformModels(platform.groups),
+    codex: platformModels(codexPlatform.groups),
+    pixel: platformModels(pixelPlatform.groups),
+  }
+  const models = mergedModels(lists)
+  const windows: EngineWindowMaps = {
+    claude: useContextWindows('claude').platform,
+    codex: useContextWindows('codex').platform,
+    pixel: useContextWindows('pixel').platform,
+  }
   const [windowError, setWindowError] = useState<string | null>(null)
+  // 一个模型一个值，写给每个能跑它的引擎（像素星空没填时按系列自动定，engine pixel/context-window.ts）
   const saveWindow = (model: string, value: number | null): void => {
     setWindowError(null)
-    const engines: EngineId[] = [
-      ...(claudeModels.includes(model) ? (['claude'] as const) : []),
-      ...(codexModels.includes(model) ? (['codex'] as const) : []),
-    ]
-    Promise.all(engines.map(engine => setContextWindow(engine, 'platform', model, value))).catch((e: unknown) =>
-      setWindowError((e as Error).message),
+    writeWindows(
+      windowEngines(model, lists).map(engine => ({ engine, model, value })),
+      setWindowError,
     )
   }
+  // 老版本只写了 Claude Code / Codex 的：补给同样能跑这个模型、却还没填的引擎，显示的和实际用的才一致
+  const backfillKey = JSON.stringify(windowBackfill(models, lists, windows))
+  const backfilled = useRef(new Set<string>())
+  useEffect(() => {
+    const todo = (JSON.parse(backfillKey) as ReturnType<typeof windowBackfill>).filter(
+      w => !backfilled.current.has(`${w.engine}|${w.model}|${w.value}`),
+    )
+    if (!todo.length) return
+    for (const w of todo) backfilled.current.add(`${w.engine}|${w.model}|${w.value}`)
+    writeWindows(todo, setWindowError)
+  }, [backfillKey])
   const accountsPage = useAccountsPage()
   // 离开模型通道（换到别的设置页、关掉设置）时回到通道页
   useEffect(() => () => openAccountsPage(null), [])
@@ -171,9 +206,12 @@ export function ModelsSection() {
             )}
             {matchModels(models, modelQuery).map(m => {
               const shown = !platform.hiddenModels.includes(m)
-              const lines =
-                groupsForModel(platform.groups, m).length +
-                (claudeModels.includes(m) ? 0 : groupsForModel(codexPlatform.groups, m).length)
+              const lines = routeCount(m, {
+                claude: platform.groups,
+                codex: codexPlatform.groups,
+                pixel: pixelPlatform.groups,
+              })
+              const badge = modelBadge(m, lists)
               return (
                 <div key={m} className="flex items-center gap-3 border-t border-line-subtle px-4 py-2 first:border-t-0">
                   <span
@@ -182,7 +220,7 @@ export function ModelsSection() {
                       shown ? 'text-fg' : 'text-fg-faint',
                     )}
                   >
-                    {!claudeModels.includes(m) && <EngineIcon engine="codex" size={12} />}
+                    {badge && <EngineIcon engine={badge} size={12} />}
                     <span className="truncate">{m}</span>
                   </span>
                   <span className="shrink-0 text-meta text-fg-faint">
@@ -191,7 +229,7 @@ export function ModelsSection() {
                     })}
                   </span>
                   <ContextWindowInput
-                    value={claudeWindows[m] ?? codexWindows[m] ?? null}
+                    value={sharedWindow(m, lists, windows)}
                     label={tr('contextWindow.of', { model: m })}
                     commit="blur"
                     onChange={value => saveWindow(m, value)}

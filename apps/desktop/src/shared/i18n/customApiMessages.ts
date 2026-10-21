@@ -2,8 +2,8 @@
 export const customApiMessages = {
   'customApi.source': { zh: '自定义', en: 'Custom' },
   'customApi.intro': {
-    zh: '用自己的接口地址和 API Key 跑 Claude Code / Codex，费用记在你自己的账号上。Key 用系统加密保存，不会交给引擎进程。',
-    en: 'Run Claude Code / Codex against your own endpoint and API key, billed to your own account. Keys are stored with system encryption and never handed to the engine process.',
+    zh: '用自己的接口地址和 API Key 跑 Claude Code / Codex / 像素星空，费用记在你自己的账号上（Chat Completions 兼容接口只有像素星空能用）。Key 用系统加密保存，不会交给引擎进程。',
+    en: 'Run Claude Code / Codex / Pixel Starry Sky against your own endpoint and API key, billed to your own account (Chat Completions–compatible endpoints work with Pixel Starry Sky only). Keys are stored with system encryption and never handed to the engine process.',
   },
   'customApi.add': { zh: '添加接口', en: 'Add endpoint' },
   'customApi.addEllipsis': { zh: '添加接口…', en: 'Add endpoint…' },
@@ -149,6 +149,7 @@ export const customApiMessages = {
   'customApi.envMigrating': { zh: '正在迁移…', en: 'Migrating…' },
   'customApi.envMigrated': { zh: '已迁到自定义 API「{p0}」', en: 'Moved to custom endpoint “{p0}”' },
   'customApi.envMigratedName': { zh: '{p0} 环境变量', en: '{p0} environment' },
+  'customApi.envMigratedNameVendor': { zh: '{p0} 环境变量（{p1}）', en: '{p0} environment ({p1})' },
   'customApi.envLocked': {
     zh: '这几项只能删除或迁移，不能再修改：{p0}',
     en: 'These can only be removed or migrated, not changed: {p0}',

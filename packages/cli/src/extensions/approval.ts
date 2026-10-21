@@ -55,6 +55,8 @@ export function isAllowedTool(toolName: string, allow: string | undefined): bool
     .map(ident)
     .some(p => p !== '' && (toolName === p || toolName.startsWith(p + '__')))
 }
+/** 查网页的工具：不改本机任何东西，计划模式下也能用（要不要问照默认模式） */
+export const WEB_TOOLS: ReadonlySet<string> = new Set(['web_search', 'web_fetch'])
 /** acceptEdits 下自动放行的编辑类工具 */
 export const EDIT_TOOLS: ReadonlySet<string> = new Set(['edit', 'write'])
 
@@ -139,7 +141,8 @@ export function decidePermission(input: {
   const { mode, toolName, hasUI } = input
   if (mode === 'bypassPermissions') return { action: 'allow' }
   if (READ_ONLY_TOOLS.has(toolName) || SAFE_INTERNAL_TOOLS.has(toolName)) return { action: 'allow' }
-  if (mode === 'plan') {
+  // 计划模式和 Claude 一样可以查网页（只读）：照常问用户（「不再询问」的网站照样放行），不直接拒绝
+  if (mode === 'plan' && !WEB_TOOLS.has(toolName)) {
     return {
       action: 'block',
       reason: `Tool "${toolName}" is blocked: the session is in plan mode (read-only). Use read/ls/find/grep to investigate, then present your plan to the user instead of making changes.`,

@@ -248,14 +248,16 @@ export class HostHandoff {
     const others = handoffEngines(delta, record.engine)
     // 不知道是哪个引擎时写「其他引擎」（词典里有不带 {p0} 的专用模板，所以前后不留空格）
     const during = others.length ? ` ${others.map(e => ENGINES[e].name).join('、')} ` : '其他引擎'
-    const seed = this.ctx.adapters[record.engine]?.seedsHistory
-      ? buildChatSeed(delta, built.text, undefined, {
-          carryImages: sees,
-          room,
-          skipIds,
-          fallbackImages: carry.map(c => c.image),
-        })
-      : null
+    // 会话接不上（lost，只有 recover 会传）时不能注入的引擎也要一份回放：适配器把 seed.fallback 加在消息前面发
+    const seed =
+      this.ctx.adapters[record.engine]?.seedsHistory || lost
+        ? buildChatSeed(delta, built.text, undefined, {
+            carryImages: sees,
+            room,
+            skipIds,
+            fallbackImages: carry.map(c => c.image),
+          })
+        : null
     if (seed) {
       const parts = imageParts(seedImageCount(seed), seed.omittedImages ?? 0)
       const turns = [`${seed.turns.length} 轮`, ...parts].join('，')
@@ -293,18 +295,27 @@ export class HostHandoff {
       text: `${built.text}\n\n${body}`,
       ...(carry.length ? { attachments: carry.map(c => c.image) } : {}),
       hold: false,
-      notice: showNotice
+      // 原生会话记录没了（像素星空的会话文件被删）：整段对话随这条消息交接过去，说一声
+      notice: recreate
         ? {
             kind: 'notice',
             id: randomUUID(),
-            level: 'info',
-            text:
-              mode === 'full'
-                ? `已把之前的对话交接给 ${name}（${[`${built.count} 条`, ...parts].join('，')}）`
-                : `已把${during}期间的进展同步给 ${name}${parts.length ? `（${parts.join('，')}）` : ''}`,
+            level: 'warn',
+            text: `${name} 的会话记录不在了，已改开新的引擎会话，并把之前的对话交接了过去（${[`${built.count} 条`, ...parts].join('，')}）`,
             detail: built.text,
           }
-        : null,
+        : showNotice
+          ? {
+              kind: 'notice',
+              id: randomUUID(),
+              level: 'info',
+              text:
+                mode === 'full'
+                  ? `已把之前的对话交接给 ${name}（${[`${built.count} 条`, ...parts].join('，')}）`
+                  : `已把${during}期间的进展同步给 ${name}${parts.length ? `（${parts.join('，')}）` : ''}`,
+              detail: built.text,
+            }
+          : null,
     }
   }
 

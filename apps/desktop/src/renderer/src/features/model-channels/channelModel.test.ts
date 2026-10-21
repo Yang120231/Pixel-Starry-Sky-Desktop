@@ -10,6 +10,8 @@ import {
   parseExecutorMemory,
   parseNewTask,
   pickExecutor,
+  pixelSelfMissing,
+  selfSourceReady,
   sourceOfChannel,
   type MenuInput,
 } from './channelModel'
@@ -51,6 +53,25 @@ describe('通道和现有存储互相换算（docs/ui/model-channels.md §4.1）
     expect(channelOf('pixel', 'self')).toBe('custom')
     expect(sourceOfChannel('chatgpt')).toBe('self')
     expect(sourceOfChannel('platform')).toBe('platform')
+  })
+
+  it('像素星空的自有（命令行自己配的 Key）：目录里有模型才算能用，没读到时按不能用', () => {
+    expect(selfSourceReady('pixel', { models: [{ id: 'anthropic/claude-x' } as never] })).toBe(true)
+    expect(selfSourceReady('pixel', { models: [] })).toBe(false)
+    expect(selfSourceReady('pixel', null)).toBe(false)
+    expect(selfSourceReady('pixel', {})).toBe(false)
+    // Claude Code / Codex 的自有是它们自己的登录，由引擎状态另外提示
+    expect(selfSourceReady('claude', null)).toBe(true)
+    expect(selfSourceReady('codex', { models: [] })).toBe(true)
+  })
+
+  it('像素星空用自有但一个模型都没有：提示条要说；目录没读到 / 命令行没起来不算', () => {
+    expect(pixelSelfMissing('pixel', 'self', { models: [] })).toBe(true)
+    expect(pixelSelfMissing('pixel', 'self', null)).toBe(false)
+    expect(pixelSelfMissing('pixel', 'self', {})).toBe(false)
+    expect(pixelSelfMissing('pixel', 'self', { models: [{ id: 'openai/gpt-x' } as never] })).toBe(false)
+    expect(pixelSelfMissing('pixel', 'platform', { models: [] })).toBe(false)
+    expect(pixelSelfMissing('claude', 'self', { models: [] })).toBe(false)
   })
 })
 

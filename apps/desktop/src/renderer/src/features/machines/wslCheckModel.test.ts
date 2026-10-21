@@ -51,6 +51,21 @@ describe('itemView', () => {
       fix: 'fnm install 22',
     })
   })
+  it('像素星空引擎：排在 Codex 后面；node 不够新时短说明带版本，原因和命令', () => {
+    const input = [item('login', 'info', false), item('pixel', 'ok', false), item('codex', 'warn', false)]
+    expect(sortCheckItems(input).map(i => i.key)).toEqual(['codex', 'pixel', 'login'])
+    expect(
+      itemView(item('pixel', 'warn', false, { code: 'PIXEL_NODE_OLD', detail: '22.11.0', fix: 'fnm install 22' })),
+    ).toEqual({
+      label: 'wsl.item.pixel',
+      status: 'warn',
+      short: { key: 'wsl.short.PIXEL_NODE_OLD', params: { version: '22.11.0' } },
+      line: null,
+      reason: 'wsl.reason.PIXEL_NODE_OLD',
+      fix: 'fnm install 22',
+    })
+    expect(itemView(item('pixel', 'warn', false, { code: 'PIXEL_ARCH' })).reason).toBe('wsl.reason.PIXEL_ARCH')
+  })
   it('Windows 版 claude：路径单独一行', () => {
     const v = itemView(item('claude', 'warn', false, { code: 'CLAUDE_WINDOWS', detail: '/mnt/c/x/claude' }))
     expect(v.line).toBe('/mnt/c/x/claude')

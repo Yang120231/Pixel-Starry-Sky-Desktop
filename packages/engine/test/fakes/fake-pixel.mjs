@@ -16,6 +16,7 @@ if (process.env.FAKE_PIXEL_ARGV)
       providers: process.env.PIXELSKY_PIXEL_PROVIDERS ? JSON.parse(process.env.PIXELSKY_PIXEL_PROVIDERS) : null,
       mcpFile: process.env.PIXELSKY_MCP_FILE ?? null,
       allowTools: process.env.PIXELSKY_ALLOW_TOOLS ?? null,
+      path: process.env.PATH ?? null,
     }) + '\n',
   )
 if (process.argv.includes('--version')) {
@@ -45,6 +46,12 @@ const models = [
   },
   { provider: 'fake', id: 'fake-small', name: 'Fake Small', reasoning: false, input: ['text'], contextWindow: 32000 },
 ]
+// 网关扩展注册的 provider（PIXELSKY_PIXEL_PROVIDERS）也列进来，没写窗口按 Pi 的默认 128K
+for (const [provider, config] of Object.entries(
+  process.env.PIXELSKY_PIXEL_PROVIDERS ? JSON.parse(process.env.PIXELSKY_PIXEL_PROVIDERS) : {},
+))
+  for (const m of config.models ?? [])
+    models.push({ provider, name: m.id, reasoning: false, input: ['text'], contextWindow: 128000, ...m })
 let model = models[0],
   thinkingLevel = 'medium',
   sessionNo = 1,
@@ -53,7 +60,34 @@ let model = models[0],
   tools = 0,
   messages = 0,
   approval = null,
-  steerWaiter = null
+  steerWaiter = null,
+  /** 在等的自动重试：abort / abort_retry 时调用，取消等待 */
+  retryWaiter = null
+/** Pi 的思考级别和夹紧规则（pi-ai models.js getSupportedThinkingLevels / clampThinkingLevel） */
+const LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
+const supportedLevels = m =>
+  !m.reasoning
+    ? ['off']
+    : LEVELS.filter(level => {
+        const mapped = m.thinkingLevelMap?.[level]
+        if (mapped === null) return false
+        return level === 'xhigh' || level === 'max' ? mapped !== undefined : true
+      })
+function clampLevel(m, level) {
+  const available = supportedLevels(m)
+  if (available.includes(level)) return level
+  const at = LEVELS.indexOf(level)
+  for (let i = at; i < LEVELS.length; i++) if (available.includes(LEVELS[i])) return LEVELS[i]
+  for (let i = at - 1; i >= 0; i--) if (available.includes(LEVELS[i])) return LEVELS[i]
+  return available[0] ?? 'off'
+}
+/** 和 Pi 的 setThinkingLevel 一样：按当前模型夹紧，变了才报 thinking_level_changed */
+function setLevel(level) {
+  const next = clampLevel(model, level)
+  if (next === thinkingLevel) return
+  thinkingLevel = next
+  out({ type: 'thinking_level_changed', level: next })
+}
 const usage = (input, output) => ({
   input,
   output,
@@ -320,6 +354,41 @@ async function turn(prompt) {
       type: 'message_end',
       message: assistant([], { stopReason: 'error', errorMessage: '模型接口 529 overloaded' }),
     })
+  } else if (prompt.includes('重试失败') || prompt.includes('重试等待')) {
+    // 每次都 529：最多重试 3 次（Pi 的默认），用完报 auto_retry_end(false)；等重试时 abort / abort_retry 取消等待
+    const max = 3,
+      wait = prompt.includes('重试等待') ? 5000 : 20
+    for (let attempt = 0; ; ) {
+      out({ type: 'message_start', message: assistant([]) })
+      out({
+        type: 'message_end',
+        message: assistant([], { stopReason: 'error', errorMessage: '模型接口 529 overloaded' }),
+      })
+      if (attempt >= max) {
+        out({ type: 'auto_retry_end', success: false, attempt, finalError: '模型接口 529 overloaded' })
+        break
+      }
+      attempt++
+      out({ type: 'auto_retry_start', attempt, maxAttempts: max, delayMs: wait, errorMessage: '529 overloaded' })
+      const stopped = await new Promise(resolve => {
+        const timer = setTimeout(() => resolve(false), wait)
+        retryWaiter = () => {
+          clearTimeout(timer)
+          resolve(true)
+        }
+      })
+      retryWaiter = null
+      if (stopped) {
+        out({ type: 'auto_retry_end', success: false, attempt, finalError: 'Retry cancelled' })
+        break
+      }
+    }
+    if (cancelled()) {
+      out({ type: 'agent_end', messages: [], willRetry: false })
+      out({ type: 'agent_settled', aborted: true })
+      running = null
+      return
+    }
   } else if (prompt.includes('重试')) {
     out({ type: 'auto_retry_start', attempt: 1, maxAttempts: 3, delayMs: 50, errorMessage: '529 overloaded' })
     await sleep(60)
@@ -345,6 +414,38 @@ async function turn(prompt) {
   out({ type: 'agent_end', messages: [], willRetry: false })
   out({ type: 'agent_settled', aborted: false })
   running = null
+}
+
+/**
+ * prompt 的回应在 Pi 做完发送前的准备后才发（rpc-mode.js 的 preflightResult）：
+ * 「先总结」先压缩一次上下文（FAKE_PIXEL_COMPACT_MS 毫秒，比适配器等回应的时间长）；「卡住」一直准备不完，直到 abort
+ */
+async function start(m) {
+  const run = running
+  // 只看用户这条消息本身（交接材料里可能带着以前的消息原文）
+  const own = m.message.split('</pixelsky-handoff>').pop()
+  if (own.includes('先总结')) {
+    out({ type: 'compaction_start', reason: 'threshold' })
+    await sleep(Number(process.env.FAKE_PIXEL_COMPACT_MS || 400))
+    out({
+      type: 'compaction_end',
+      reason: 'threshold',
+      result: { summary: 's', tokensBefore: 150000, estimatedTokensAfter: 3000, usage: usage(500, 50) },
+      aborted: false,
+      willRetry: false,
+    })
+  } else if (own.includes('卡住')) {
+    await new Promise(resolve => (run.release = resolve))
+    run.release = null
+  }
+  response(m, { disposition: 'started' })
+  if (run.aborted) {
+    out({ type: 'agent_end', messages: [], willRetry: false })
+    out({ type: 'agent_settled', aborted: true })
+    running = null
+    return
+  }
+  void turn(m.message)
 }
 
 readline
@@ -392,17 +493,33 @@ readline
         const found = models.find(x => x.provider === m.provider && x.id === m.modelId)
         if (!found) return fail(m, `Model not found: ${m.provider}/${m.modelId}`)
         model = found
+        // 和 Pi 一样：换模型时按新模型夹紧思考级别
+        setLevel(thinkingLevel)
         return response(m, model)
       }
       case 'set_thinking_level':
-        thinkingLevel = m.level
+        setLevel(m.level)
         return response(m)
+      case 'get_available_thinking_levels':
+        // FAKE_PIXEL_OLD：旧版命令行没有这个命令
+        if (process.env.FAKE_PIXEL_OLD) return fail(m, 'Unknown command: ' + m.type)
+        return response(m, { levels: supportedLevels(model) })
       case 'set_auto_retry':
+        return response(m)
+      case 'abort_retry':
+        retryWaiter?.()
         return response(m)
       case 'get_commands':
         return response(m, {
           commands: [
             { name: 'pixelsky-mode', source: 'extension', sourceInfo: { path: '/ext/approval.ts' } },
+            { name: 'pixelsky-mcp', source: 'extension', sourceInfo: { path: '/ext/mcp.ts' } },
+            {
+              name: 'review',
+              description: 'User extension command',
+              source: 'extension',
+              sourceInfo: { path: '/home/.pixelsky-cli/agent/extensions/review.ts' },
+            },
             {
               name: 'skill:probe',
               description: 'Probe skill',
@@ -420,6 +537,8 @@ readline
           contextUsage: { tokens: 1100, contextWindow: 200000, percent: 0.5 },
         })
       case 'switch_session':
+        // FAKE_PIXEL_SWITCH_FAIL：文件在、却接不上（例如文件坏了）
+        if (process.env.FAKE_PIXEL_SWITCH_FAIL) return fail(m, 'Session file is corrupt: ' + m.sessionPath)
         if (!existsSync(m.sessionPath)) return fail(m, 'Session file not found: ' + m.sessionPath)
         sessionFile = m.sessionPath
         return response(m, { cancelled: false })
@@ -428,8 +547,7 @@ readline
         if (running) return fail(m, 'Agent is already processing')
         messages++
         running = { aborted: false, release: null }
-        response(m, { disposition: 'started' })
-        void turn(m.message)
+        void start(m)
         return
       }
       case 'steer':
@@ -447,6 +565,7 @@ readline
         if (running) {
           running.aborted = true
           running.release?.()
+          retryWaiter?.()
           // 等批准的对话框被取消后才结束
           approval?.resolve('cancelled')
         }

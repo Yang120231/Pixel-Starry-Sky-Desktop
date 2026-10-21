@@ -4,20 +4,24 @@ import { delimiter } from 'node:path'
 import type {
   ApprovalDecision,
   ApprovalRequest,
+  Effort,
   ImageAttachment,
+  Item,
   McpOp,
   McpOpResult,
   PermissionMode,
+  SessionFlags,
   SessionSettings,
   SkillCommand,
   TurnOutcome,
 } from '@pixelsky/protocol'
-import { EMPTY_FLAGS } from '@pixelsky/protocol'
+import { EMPTY_FLAGS, viaGateway, type ContextWindows } from '@pixelsky/protocol'
 import { QUICK_CLOSE_MS, type CloseOptions, type EngineSession, type Launcher, type SessionContext } from '../adapter'
 import type { ChatSeed } from '../chat-log'
 import { McpReporter, pixelMcpServers } from '../mcp'
 import { crashReason } from '../exec'
-import { findModel, piThinkingLevel } from './catalog'
+import { effortOfLevel, effortsFromLevels, findModel, modelEfforts, piThinkingLevel } from './catalog'
+import { pixelWindow } from './context-window'
 import {
   APPROVAL_CONTEXT_STATUS,
   runsFromSession,
@@ -25,7 +29,7 @@ import {
   subagentItemId,
   type SubagentApproval,
 } from './agents'
-import { PixelProcess, array, object, string, type Message } from './process'
+import { PixelProcess, array, object, string, type Message, type PixelResponse } from './process'
 import {
   APPROVAL_OPTIONS,
   EXIT_PLAN_TOOL,
@@ -51,6 +55,13 @@ const MCP_RESULT_STATUS = 'pixelsky-mcp-result'
 const MCP_OP_TIMEOUT_MS = 95_000
 /** 命令末尾带上的请求号，命令行原样放回结果里（packages/cli/src/extensions/mcp.ts） */
 const MCP_REQ_FLAG = '--req='
+/** 适配器自己用的扩展命令，不进斜杠菜单（用户自己装的扩展命令照常列出） */
+const INTERNAL_COMMANDS = new Set([MODE_COMMAND, MCP_COMMAND])
+/**
+ * 发出提示后等 Pi 开始处理（prompt 的回应）最多等多久没动静。Pi 回应前要做发送前的准备，可能先压缩一次上下文
+ * （整段对话做一次总结请求）：压缩中、等审批时不算没动静，收到别的事件也重新计时
+ */
+export const PROMPT_START_MS = 60_000
 
 interface McpWaiter {
   req: string
@@ -94,6 +105,8 @@ export const GATEWAY_ENV = {
 export const GATEWAY_PROVIDER = 'pixelsky'
 /** 交给命令行网关扩展的 provider 配置（packages/cli/src/extensions/gateway.ts 的 PROVIDERS_ENV） */
 export const PROVIDERS_ENV = 'PIXELSKY_PIXEL_PROVIDERS'
+/** 模型定义里哪些字段是这里猜的（packages/cli/src/extensions/builtin-models.ts 的 INFERRED_ENV） */
+export const INFERRED_ENV = 'PIXELSKY_PIXEL_INFERRED'
 /** 桌面端管理的 MCP 服务器文件（packages/cli/src/extensions/mcp.ts 的 MCP_FILE_ENV） */
 export const MCP_FILE_ENV = 'PIXELSKY_MCP_FILE'
 /** 不用问就放行的工具（approval.ts 的 ALLOW_TOOLS_ENV），例如只读的对话历史服务器 */
@@ -102,6 +115,10 @@ export const ALLOW_TOOLS_ENV = 'PIXELSKY_ALLOW_TOOLS'
 export interface PixelLaunchOptions {
   /** 用户追加的启动参数 */
   args?: string[]
+  /** 设置 › 模型通道里给模型填的上下文窗口（云端线路用 platform 那份，context-window.ts） */
+  contextWindows?: ContextWindows
+  /** 测试用：等 Pi 开始处理一条提示最多多久没动静（默认 PROMPT_START_MS） */
+  promptStartMs?: number
 }
 
 /** 用户自己选工具的参数（这时不追加 SEARCH_TOOLS，以用户为准） */
@@ -137,36 +154,59 @@ export function reservedPixelArg(args: readonly string[]): string | null {
  * 需要自定义地址时生成 provider 配置（结构同 models.json）；不需要返回 null。
  * - 网关会话（PIXELSKY_PIXEL_BASE_URL）：自定义 provider "pixelsky"，密钥用 $PIXELSKY_PIXEL_TOKEN
  * - 用户自己配了 ANTHROPIC_BASE_URL / OPENAI_BASE_URL（Pi 不认这两个环境变量）：覆盖内置 provider 的 baseUrl，密钥照常用 ANTHROPIC_API_KEY / OPENAI_API_KEY
+ * windowOf：没带 contextWindow 的网关模型要告诉 Pi 的窗口（context-window.ts）；null 时交给 Pi 的默认值。
+ * inferred：每个网关模型里这里猜的字段（推理开关、图片、按系列定的窗口）加上宿主在模型的 inferred 里标的（如 compat），
+ * 命令行在 Pi 内置表里找到同名模型时以内置的为准
  */
-export function pixelModelsConfig(env: NodeJS.ProcessEnv, model: string | null): Message | null {
+export function pixelModelsConfig(
+  env: NodeJS.ProcessEnv,
+  model: string | null,
+  windowOf?: (id: string) => { window: number; auto: boolean } | null,
+): { providers: Message; inferred?: Record<string, Record<string, string[]>> } | null {
+  const inferred: Record<string, string[]> = {}
   const providers: Message = {}
   const base = env[GATEWAY_ENV.baseUrl]?.trim()
   if (base) {
     const api = env[GATEWAY_ENV.api]?.trim() || 'anthropic-messages'
-    let models: unknown[] = []
+    let models: unknown[]
     try {
       models = array(JSON.parse(env[GATEWAY_ENV.models] ?? '[]'))
     } catch {
       models = []
     }
     const id = model?.replace(new RegExp(`^${GATEWAY_PROVIDER}/`), '') ?? ''
-    const defs = models.map(m => (typeof m === 'string' ? { id: m } : object(m))).filter(m => string(m.id))
+    const defs: Message[] = models.map(m => (typeof m === 'string' ? { id: m } : object(m))).filter(m => string(m.id))
     if (id && !defs.some(m => string(m.id) === id)) defs.push({ id })
     providers[GATEWAY_PROVIDER] = {
       baseUrl: base,
       api,
       apiKey: `$${GATEWAY_ENV.token}`,
-      models: defs.map(m => ({
-        reasoning: api !== 'openai-completions',
-        input: ['text', 'image'],
-        ...m,
-      })),
+      models: defs.map(({ inferred: marked, ...m }) => {
+        const window = m.contextWindow === undefined ? (windowOf?.(string(m.id)) ?? null) : null
+        // 宿主自己标的猜的字段（inferred，不是 Pi 的字段，不写进模型定义），例如按接口地址认出的 compat
+        const guessed = [
+          ...(m.reasoning === undefined ? ['reasoning'] : []),
+          ...(m.input === undefined ? ['input'] : []),
+          ...(window?.auto ? ['contextWindow'] : []),
+          ...array(marked).filter((f): f is string => typeof f === 'string'),
+        ]
+        if (guessed.length) inferred[string(m.id)] = [...new Set(guessed)]
+        const chat = api === 'openai-completions'
+        return {
+          // Chat 的兼容接口多数不收图片、不开思考：默认只给文字，Pi 内置表里有这个模型时以内置的为准
+          reasoning: !chat,
+          input: chat ? ['text'] : ['text', 'image'],
+          ...m,
+          ...(window ? { contextWindow: window.window } : {}),
+        }
+      }),
     }
   } else {
     if (env.ANTHROPIC_BASE_URL?.trim()) providers.anthropic = { baseUrl: env.ANTHROPIC_BASE_URL.trim() }
     if (env.OPENAI_BASE_URL?.trim()) providers.openai = { baseUrl: env.OPENAI_BASE_URL.trim() }
   }
-  return Object.keys(providers).length ? { providers } : null
+  if (!Object.keys(providers).length) return null
+  return Object.keys(inferred).length ? { providers, inferred: { [GATEWAY_PROVIDER]: inferred } } : { providers }
 }
 
 type Pending = {
@@ -177,16 +217,43 @@ type Pending = {
   timer: NodeJS.Timeout | null
 }
 
+/** 正在进行的一轮 */
+interface ActiveTurn {
+  id: string
+  started: number
+  promptSent: boolean
+  /** 提示一直没开始、已经让 Pi 停下：之后的 agent_settled（aborted）按失败结束，带上这个原因 */
+  failure?: string
+}
+
+/** Pi 取消等着的重试时报的 finalError（用户停止、超过重试次数设置时）：不是请求错误 */
+const RETRY_CANCELLED = 'Retry cancelled'
+
 export class PixelSession implements EngineSession {
   private proc: PixelProcess | null = null
   private opening: Promise<void> | null = null
   private closed = false
   private ready = false
-  private active: { id: string; started: number; promptSent: boolean } | null = null
+  private active: ActiveTurn | null = null
   private settings: SessionSettings
   /** get_available_models 的原始结果（set_model 要 provider 和 modelId） */
   private models: Message[] = []
   private modelInfo: Message = {}
+  /** 经网关（云端线路 / 自定义 API）：只能用网关注册的 pixelsky/<id>，进程的环境在创建时就定了 */
+  private readonly gateway: boolean
+  /** 创建时的模型：网关环境（sessionEnv）是按它生成的 */
+  private readonly launchModel: string | null
+  /** 进程里实际在用的模型（会话记录里的写法）；没选过为 null */
+  private appliedModel: string | null = null
+  /** 当前模型支持的强度（get_available_thinking_levels）；还不知道为 null */
+  private efforts: Effort[] | null = null
+  private flags: SessionFlags = EMPTY_FLAGS
+  /** 自己在改模型 / 强度（期间 Pi 报的 thinking_level_changed 是中间状态，不当作被夹紧） */
+  private syncing = 0
+  /** 启动时没接上原来的会话文件：exists 是文件还在不在，reason 是原因；由这一轮发送前处理 */
+  private resumeFailure: { exists: boolean; reason: string } | null = null
+  /** 最近一次收到 Pi 的事件（等提示开始处理时判断有没有动静） */
+  private lastEvent = 0
   private readonly approvals = new Map<string, Pending>()
   /** 已经挂到某张审批卡片上的工具条目（批准请求里没有 toolCallId，按工具名找最早的没挂过的） */
   private readonly linked = new Map<string, string>()
@@ -216,6 +283,8 @@ export class PixelSession implements EngineSession {
     private readonly options: PixelLaunchOptions = {},
   ) {
     this.settings = { ...ctx.record() }
+    this.gateway = viaGateway(ctx.record())
+    this.launchModel = ctx.record().model
     this.mcpReporter = new McpReporter(e => ctx.emit(e), ['reconnect', 'toggle', 'login'])
     this.translator = new PixelTranslator(event => this.ctx.emit(event), {
       cwd: ctx.record().cwd,
@@ -224,7 +293,22 @@ export class PixelSession implements EngineSession {
         const w = this.modelInfo.contextWindow
         return typeof w === 'number' && w > 0 ? w : null
       },
+      model: () => string(this.modelInfo.id) || null,
     })
+  }
+
+  /** 会话记录里的模型 → Pi 的模型；经网关的只认网关注册的 */
+  private pickModel(ref: string): Message | undefined {
+    return findModel(this.models, ref, this.gateway ? GATEWAY_PROVIDER : undefined)
+  }
+
+  restartsForModel(model: string | null): boolean {
+    // 本机的模型 Pi 都认得，不用换进程
+    if (!this.gateway || !model) return false
+    if (this.ready && this.proc?.alive) return !this.pickModel(model)
+    // 进程没在跑：再起来用的还是创建时的环境（协议、注册的模型都按当时的模型定），只有当时的模型能直接用
+    const bare = (m: string | null): string => m?.replace(new RegExp(`^${GATEWAY_PROVIDER}/`), '') ?? ''
+    return bare(model) !== bare(this.launchModel)
   }
 
   private async open(): Promise<void> {
@@ -248,9 +332,13 @@ export class PixelSession implements EngineSession {
     }
     // 自定义地址：交给命令行的网关扩展 pi.registerProvider()（packages/cli/src/extensions/gateway.ts）。
     // 配置目录始终是用户自己的 ~/.pixelsky-cli/agent/，里面的 mcp.json、技能、扩展、bin/ 才会生效
-    const models = pixelModelsConfig(environment, record.model)
+    const models = pixelModelsConfig(environment, record.model, id =>
+      pixelWindow(record, id, this.options.contextWindows),
+    )
     if (models) environment[PROVIDERS_ENV] = JSON.stringify(models.providers)
     else delete environment[PROVIDERS_ENV]
+    if (models?.inferred) environment[INFERRED_ENV] = JSON.stringify(models.inferred)
+    else delete environment[INFERRED_ENV]
     // 桌面端管理的 MCP（设置 › 插件）：文件交给命令行的 MCP 扩展注册；应用自己的只读服务器不用问
     const ext = this.ctx.extensions
     if (ext?.mcpFile) environment[MCP_FILE_ENV] = ext.mcpFile
@@ -277,31 +365,42 @@ export class PixelSession implements EngineSession {
       let state = object((await proc.request('get_state')).data)
       // 续接：引擎会话 id 是会话文件路径
       const resume = record.engineSessionId
+      this.resumeFailure = null
       if (resume && string(state.sessionFile) !== resume) {
-        let resumed = false
-        if (existsSync(resume))
+        let resumed = false,
+          reason = ''
+        const exists = existsSync(resume)
+        if (exists)
           try {
             resumed = object((await proc.request('switch_session', { sessionPath: resume })).data).cancelled !== true
+            if (!resumed) reason = '切换会话被取消了'
           } catch (error) {
             if (!proc.alive) throw error
+            reason = (error as Error).message
           }
-        if (!resumed)
-          this.translator.notice(
-            'warn',
-            'Could not resume the Pixel session; started a new session (previous context was not carried over)',
-          )
+        // 接不上：这一轮发送前再处理（run），要看这条消息是不是斜杠命令、宿主带没带上之前的聊天
+        if (!resumed) this.resumeFailure = { exists, reason: reason || `会话文件不在了：${resume}` }
       }
       this.models = array((await proc.request('get_available_models')).data.models).map(object)
-      if (record.model) {
-        const model = findModel(this.models, record.model)
-        if (!model) throw new Error(`Model not found: ${record.model}`)
-        await proc.request('set_model', { provider: string(model.provider), modelId: string(model.id) })
+      this.syncing++
+      try {
+        if (record.model) {
+          const model = this.pickModel(record.model)
+          // 经网关的会话找不到网关注册的模型就报错，不能退回同名的内置模型（那会用本机的密钥直连厂商）
+          if (!model) throw new Error(`Model not found: ${this.gateway ? `${GATEWAY_PROVIDER}/` : ''}${record.model}`)
+          await proc.request('set_model', { provider: string(model.provider), modelId: string(model.id) })
+        }
+        if (this.settings.effort)
+          await proc.request('set_thinking_level', { level: piThinkingLevel(this.settings.effort) })
+      } finally {
+        this.syncing--
       }
-      if (this.settings.effort)
-        await proc.request('set_thinking_level', { level: piThinkingLevel(this.settings.effort) })
-      if (this.ctx.maxRetries === 0) await proc.request('set_auto_retry', { enabled: false })
+      this.appliedModel = record.model
+      // 重试次数不用 set_auto_retry：它会写进用户自己的 ~/.pixelsky-cli/agent/settings.json，终端里也跟着不重试了；
+      // 改成超过次数时 abort_retry（event 里的 auto_retry_start）
       state = object((await proc.request('get_state')).data)
       this.modelInfo = object(state.model)
+      await this.syncEfforts(proc, string(state.thinkingLevel))
       this.ctx.setEngineSessionId(string(state.sessionFile) || string(state.sessionId))
       // 以前的子智能体：之后的 runs 事件是整份替换，要带上它们
       this.translator.seedRuns(runsFromSession(string(state.sessionFile)).map(({ sessionFile: _, ...run }) => run))
@@ -319,21 +418,19 @@ export class PixelSession implements EngineSession {
         cost: Number(stats.cost) || 0,
       }
       const used = object(stats.contextUsage).tokens
-      this.translator.lastContext = typeof used === 'number' ? used : null
+      this.translator.setContext(typeof used === 'number' ? used : null)
       if (this.translator.lastContext !== null) this.translator.emitUsage()
-      this.ctx.emit({
-        type: 'flags',
-        flags: {
-          ...EMPTY_FLAGS,
-          compactAvailable: true,
-          contextAvailable: false,
-          steerAvailable: true,
-          fastAvailable: false,
-          fastState: 'off',
-          fastBlocked: 'Fast mode is not supported',
-          ultracodeAvailable: false,
-        },
-      })
+      this.flags = {
+        ...EMPTY_FLAGS,
+        compactAvailable: true,
+        contextAvailable: false,
+        steerAvailable: true,
+        fastAvailable: false,
+        fastState: 'off',
+        fastBlocked: 'Fast mode is not supported',
+        ultracodeAvailable: false,
+      }
+      this.emitFlags()
       if (this.settings.fast) {
         this.settings.fast = false
         this.ctx.setFast(false)
@@ -361,8 +458,8 @@ export class PixelSession implements EngineSession {
     for (const raw of array(found.data.commands)) {
       const c = object(raw)
       const name = string(c.name)
-      // 扩展命令是适配器自己用的（切换权限模式），技能和提示词模板才给用户
-      if (!name || c.source === 'extension') continue
+      // 适配器自己用的扩展命令（切换权限模式、连接器操作）不列；用户自己装的扩展命令、技能和提示词模板照常给用户
+      if (!name || (c.source === 'extension' && INTERNAL_COMMANDS.has(name))) continue
       commands.push({
         name,
         description: string(c.description),
@@ -372,6 +469,49 @@ export class PixelSession implements EngineSession {
       })
     }
     this.ctx.emit({ type: 'commands', commands })
+  }
+
+  /**
+   * 换模型 / 强度之后：问 Pi 当前模型支持哪些强度（报给界面，flags.efforts），再看实际用的思考级别，
+   * 选的档位被夹到别的档时记录跟着改（clamped）。level 是已经拿到的 get_state.thinkingLevel，不给就再问一次
+   */
+  private async syncEfforts(proc: PixelProcess, level?: string): Promise<void> {
+    const [levels, actual] = await Promise.all([
+      proc.request('get_available_thinking_levels').then(
+        r => array(r.data.levels).map(string),
+        () => null,
+      ),
+      level !== undefined
+        ? Promise.resolve(level)
+        : proc.request('get_state').then(
+            r => string(r.data.thinkingLevel),
+            () => '',
+          ),
+    ])
+    // 旧版命令行没有 get_available_thinking_levels：按模型定义自己算（规则同 Pi）
+    this.efforts = levels ? effortsFromLevels(levels) : modelEfforts(this.modelInfo)
+    this.clamped(effortOfLevel(actual))
+  }
+
+  /**
+   * Pi 把选的强度夹到了这个模型支持的档位（set_thinking_level 不报错，悄悄改）：记录改成实际用的。
+   * 模型不支持推理（实际是 off）时不改，换回能推理的模型还用原来选的
+   */
+  private clamped(actual: Effort | null): void {
+    const chosen = this.settings.effort
+    if (!chosen || !actual || actual === piThinkingLevel(chosen)) return
+    this.settings.effort = actual
+    this.ctx.setEffort?.(actual)
+  }
+
+  private emitFlags(): void {
+    this.ctx.emit({
+      type: 'flags',
+      flags: {
+        ...this.flags,
+        ...(this.efforts ? { efforts: { model: this.appliedModel, efforts: this.efforts } } : {}),
+      },
+    })
   }
 
   // ---------------------------------------------------------------------------
@@ -390,7 +530,7 @@ export class PixelSession implements EngineSession {
       this.ctx.emit({ type: 'turn_completed', turnId, outcome: 'failed', error: 'Pixel turn already running' })
       return
     }
-    const active = { id: turnId, started: Date.now(), promptSent: false }
+    const active: ActiveTurn = { id: turnId, started: Date.now(), promptSent: false }
     this.active = active
     this.promptUserSeen = false
     this.guidance.length = 0
@@ -402,7 +542,7 @@ export class PixelSession implements EngineSession {
   }
 
   private async run(
-    active: NonNullable<PixelSession['active']>,
+    active: ActiveTurn,
     text: string,
     userItemId: string,
     attachments: ImageAttachment[],
@@ -412,12 +552,16 @@ export class PixelSession implements EngineSession {
     if (this.active !== active || this.closed) return
     const sees = array(this.modelInfo.input).includes('image')
     if (attachments.length && !sees) throw new Error('This model does not support images')
+    // 原来的会话没接上：之前的聊天做成交接材料放在最前面（宿主已经带上的不再带）
+    const recovered = this.recoverLost(text, userItemId, sees)
+    const message = recovered ? `${recovered.seed.fallback}\n\n${text}` : text
+    const earlier = [...(recovered?.seed.fallbackImages ?? []), ...handoffImages]
     // 交接带的更早消息的图片排在前面；模型不能看图就不带，交接材料里说明过也只当文字理解
-    const images = sees ? [...handoffImages, ...attachments] : attachments
-    if (!sees && handoffImages.length)
+    const images = sees ? [...earlier, ...attachments] : attachments
+    if (!sees && earlier.length)
       this.translator.notice(
         'warn',
-        `The current model can't view images, so ${handoffImages.length} earlier image(s) were not actually passed along`,
+        `The current model can't view images, so ${earlier.length} earlier image(s) were not actually passed along`,
       )
     const proc = this.proc!
     const compact = /^\/compact(?:\s+([\s\S]*))?$/.exec(text.trim())
@@ -430,20 +574,99 @@ export class PixelSession implements EngineSession {
       if (this.active === active) this.finish('completed', null)
       return
     }
-    const response = await proc.request(
-      'prompt',
-      {
-        message: text,
-        ...(images.length
-          ? { images: images.map(i => ({ type: 'image', data: i.dataBase64, mimeType: i.mediaType })) }
-          : {}),
-      },
-      60_000,
-    )
+    const response = await this.startPrompt(proc, active, {
+      message,
+      ...(images.length
+        ? { images: images.map(i => ({ type: 'image', data: i.dataBase64, mimeType: i.mediaType })) }
+        : {}),
+    })
     if (this.active !== active) return
     this.ctx.emit({ type: 'input_ack', id: userItemId, state: 'consumed', mode: 'normal' })
     // handled：被扩展命令或输入处理器吃掉，不会有这一轮的 agent_settled
     if (string(response.data.disposition) === 'handled') this.finish('completed', null)
+  }
+
+  /**
+   * 发提示，等 Pi 回应。回应要等发送前的准备做完才来：可能先压缩一次上下文（整段对话做一次总结请求），
+   * 压缩中、等审批时不算没动静，收到别的事件也重新计时。一直没动静就先让 Pi 停下（不然它在后台接着跑，
+   * 之后的事件对不上这一轮、下一条消息还会被拒「Agent is already processing」），再按失败结束这一轮
+   */
+  private async startPrompt(proc: PixelProcess, active: ActiveTurn, params: Message): Promise<PixelResponse> {
+    const limit = this.options.promptStartMs ?? PROMPT_START_MS
+    this.lastEvent = Date.now()
+    const request = proc.request('prompt', params, 0)
+    let timer: NodeJS.Timeout | undefined
+    const stalled = new Promise<'stalled'>(resolve => {
+      const check = (): void => {
+        // 这一轮已经结束（停止、进程退出）：不再计时，请求自己会有结果
+        if (this.active !== active || !proc.alive) return
+        const busy = this.translator.compacting || this.approvals.size > 0
+        const quiet = Date.now() - this.lastEvent
+        if (!busy && quiet >= limit) return resolve('stalled')
+        timer = setTimeout(check, busy ? Math.min(limit, 1_000) : limit - quiet)
+      }
+      timer = setTimeout(check, limit)
+    })
+    try {
+      const result = await Promise.race([request, stalled])
+      if (result !== 'stalled') return result
+    } finally {
+      clearTimeout(timer)
+    }
+    const reason = `像素星空 ${Math.round(limit / 1000)} 秒没有开始处理这条消息，已让它停下`
+    // 停下后 Pi 会报 agent_settled（aborted）：按失败结束、带上原因，不当作用户停的（event 里看 active.failure）
+    active.failure = reason
+    try {
+      await proc.request('abort', {}, 10_000)
+    } catch {
+      // 连中断也不回应：结束进程，下一条消息重新起
+      proc.kill()
+      throw new Error(reason)
+    }
+    // 等它报完 agent_settled 再结束这一轮，不然那条事件会落到下一轮头上；一直不报（还没开始跑）就结束进程，
+    // 免得它准备完又自己跑起来
+    if (this.active === active && !(await this.waitTurnEnd(5_000))) proc.kill()
+    throw new Error(reason)
+  }
+
+  /**
+   * 启动时没接上原来的会话文件（connect 记下的 resumeFailure），这一轮发送前处理：
+   * - 斜杠命令（/compact、技能）前面不能加东西：清掉宿主的游标，下一条普通消息把整段聊天带过去
+   * - 文件没了、宿主有接力游标：宿主派发前已经发现（hasNativeSession），整段聊天已经交接进这条消息并提示过
+   * - 其他（文件还在却接不上、旧记录没有游标）：请宿主把之前的聊天做成交接材料（lostSeed），由调用方加在消息前面
+   */
+  private recoverLost(text: string, userItemId: string, sees: boolean): { seed: ChatSeed; notice: Item } | null {
+    const failure = this.resumeFailure
+    this.resumeFailure = null
+    if (!failure) return null
+    if (text.trimStart().startsWith('/')) {
+      this.ctx.forgetSeen?.()
+      this.translator.notice(
+        'warn',
+        '没能接上原来的像素星空会话，已改开新会话；下一条消息会把之前的聊天一起带过去',
+        failure.reason,
+      )
+      return null
+    }
+    if (!failure.exists && this.ctx.record().engineSessions) return null
+    const recovered = this.ctx.lostSeed?.(userItemId, sees) ?? null
+    if (!recovered) {
+      this.translator.notice(
+        'warn',
+        '没能接上原来的像素星空会话，已改开新会话（之前的上下文没有带过去）',
+        failure.reason,
+      )
+      return null
+    }
+    const notice = recovered.notice
+    this.ctx.emit({
+      type: 'item_completed',
+      item:
+        notice.kind === 'notice'
+          ? { ...notice, detail: [failure.reason, notice.detail].filter(Boolean).join('\n\n') }
+          : notice,
+    })
+    return recovered
   }
 
   async steer(text: string, id: string, attachments: ImageAttachment[] = []): Promise<void> {
@@ -488,20 +711,39 @@ export class PixelSession implements EngineSession {
 
   private event(raw: Message): void {
     const type = string(raw.type)
+    this.lastEvent = Date.now()
     if (type === 'extension_ui_request') return this.uiRequest(raw)
+    if (type === 'thinking_level_changed') {
+      // 不是我们自己在改（扩展换了强度、Pi 换模型时夹紧了）：记录跟着改成实际用的
+      if (this.ready && !this.syncing) this.clamped(effortOfLevel(string(raw.level)))
+      return
+    }
     if (!this.active) return
     if (type === 'agent_settled') {
-      if (raw.aborted === true) return this.finish('interrupted', null)
+      if (raw.aborted === true) {
+        // 提示一直没开始、是我们让它停的：按失败结束，说明原因
+        const failure = this.active.failure
+        return failure ? this.finish('failed', failure) : this.finish('interrupted', null)
+      }
       const error = this.translator.takeError()
       return error ? this.finish('failed', error) : this.finish('completed', null)
     }
     if (type === 'auto_retry_start') {
+      const attempt = Number(raw.attempt) || null
+      const most = Number(raw.maxAttempts) || null
+      // 设置 › 重试次数：Pi 的 RPC 只能整个关掉重试（还会写进用户的配置文件），超过次数就取消这次等着的重试，
+      // 这一轮以原来的错误结束
+      const limit = typeof this.ctx.maxRetries === 'number' ? this.ctx.maxRetries : null
+      if (limit !== null && attempt !== null && attempt > limit) {
+        void this.proc?.request('abort_retry').catch(() => {})
+        return
+      }
       this.ctx.emit({
         type: 'request_retry',
         retry: {
           turnId: this.active.id,
-          attempt: Number(raw.attempt) || null,
-          maxRetries: Number(raw.maxAttempts) || null,
+          attempt,
+          maxRetries: limit !== null && most !== null ? Math.min(limit, most) : (most ?? limit),
           retryAt: Date.now() + (Number(raw.delayMs) || 0),
           reason: string(raw.errorMessage),
         },
@@ -510,13 +752,10 @@ export class PixelSession implements EngineSession {
     }
     if (type === 'auto_retry_end') {
       this.ctx.emit({ type: 'request_retry', retry: null })
-      if (raw.success === false)
-        this.translator.notice(
-          'error',
-          string(raw.finalError) || 'Request failed after retries',
-          null,
-          textError(string(raw.finalError)),
-        )
+      // 重试用完：错误只在这一轮结束时显示一次（finish）。用户停止、超过次数设置时 Pi 报的「Retry cancelled」
+      // 不是错误：停止按中断结束，超过次数按原来的请求错误结束
+      const final = string(raw.finalError)
+      if (raw.success === false && final !== RETRY_CANCELLED) this.translator.failWith(final)
       return
     }
     // queue_update 不转成 queue 事件：排队由宿主管理，引导的交付以用户消息为准（userMessage）
@@ -768,20 +1007,35 @@ export class PixelSession implements EngineSession {
     this.settings = { ...before, ...patch }
     const proc = this.proc
     if (!proc?.alive || !this.ready) return
+    this.syncing++
     try {
-      if (patch.model !== undefined && patch.model !== before.model && patch.model) {
-        const model = findModel(this.models, patch.model)
-        if (!model) throw new Error(`Model not found: ${patch.model}`)
-        const response = await proc.request('set_model', {
-          provider: string(model.provider),
-          modelId: string(model.id),
-        })
-        this.modelInfo = object(response.data)
-        // 换模型后 Pi 会按新模型夹紧思考级别：重新套用选的强度
-        if (this.settings.effort)
-          await proc.request('set_thinking_level', { level: piThinkingLevel(this.settings.effort) })
+      let thinking = false
+      if (patch.model !== undefined && patch.model !== this.appliedModel && patch.model) {
+        const model = this.pickModel(patch.model)
+        // 经网关、启动时没注册这个模型：这个进程换不过去，宿主下一条消息前换进程（restartsForModel）。
+        // 先只记下来，不假装换了；强度是给新模型选的，也等新进程再套用
+        const later = !model && this.gateway && !strict
+        if (!later) {
+          if (!model) throw new Error(`Model not found: ${this.gateway ? `${GATEWAY_PROVIDER}/` : ''}${patch.model}`)
+          const response = await proc.request('set_model', {
+            provider: string(model.provider),
+            modelId: string(model.id),
+          })
+          this.modelInfo = object(response.data)
+          this.appliedModel = patch.model
+          // 换模型后 Pi 会按新模型夹紧思考级别：重新套用选的强度
+          if (this.settings.effort)
+            await proc.request('set_thinking_level', { level: piThinkingLevel(this.settings.effort) })
+          thinking = true
+        }
       } else if (patch.effort !== undefined && patch.effort !== before.effort && patch.effort) {
         await proc.request('set_thinking_level', { level: piThinkingLevel(patch.effort) })
+        thinking = true
+      }
+      // 新模型支持哪些强度、选的档位有没有被夹紧
+      if (thinking) {
+        await this.syncEfforts(proc)
+        this.emitFlags()
       }
       if (patch.permissionMode !== undefined && patch.permissionMode !== before.permissionMode) {
         // 批准扩展的命令：prompt 里以 / 开头的扩展命令立即执行，不进模型，回应 disposition 为 handled
@@ -794,6 +1048,8 @@ export class PixelSession implements EngineSession {
       // 没生效：退回原值，下一轮开始前（strict）报错；宽松调用只记设置
       this.settings = before
       if (strict) throw error
+    } finally {
+      this.syncing--
     }
   }
 

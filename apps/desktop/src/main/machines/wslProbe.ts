@@ -1,4 +1,5 @@
 import type { CheckItem } from '../../shared/types/machines'
+import { remoteCliSupported } from './remote-cli'
 
 // 通过 probeArgs() 的参数从 stdin 喂进去；用户指定的 node 路径靠 `env PIXELSKY_NODE=...` 传，
 // 因为 --exec 不会把 Windows 环境变量带进 WSL（除非配 WSLENV）。
@@ -242,6 +243,27 @@ function nodeItem(probe: WslProbe): CheckItem {
   return nodeFail('NODE_MISSING', '')
 }
 
+/**
+ * 自带的像素星空引擎（连接时装进发行版，wsl.ts installCli）：Pi 要 node 22.19 以上、x64 / arm64。可选项；
+ * node 本身不可用时不列（node 那一项已经说了）
+ */
+function pixelItem(probe: WslProbe): CheckItem | null {
+  const path = pickNode(probe)
+  const node = path ? probe.nodes.find(n => n.path === path) : undefined
+  if (!node?.version) return null
+  if (!probe.arch) return { key: 'pixel', status: 'warn', required: false, detail: '', code: 'PIXEL_ARCH' }
+  if (!remoteCliSupported(node.version, probe.arch))
+    return {
+      key: 'pixel',
+      status: 'warn',
+      required: false,
+      detail: node.version,
+      code: 'PIXEL_NODE_OLD',
+      fix: NODE_FIX,
+    }
+  return { key: 'pixel', status: 'ok', required: false, detail: `node ${node.version}` }
+}
+
 // npm 装的 Linux 版文件名也叫 claude.exe，只能按 /mnt/ 和 MZ 判断
 function cliItem(key: 'claude' | 'codex', list: WslProbeCli[]): CheckItem {
   const name = key.toUpperCase()
@@ -289,6 +311,8 @@ export function wslCheckItems(probe: WslProbe | null, startError?: string): Chec
     })
   }
   items.push(nodeItem(probe), cliItem('claude', probe.claude), cliItem('codex', probe.codex))
+  const pixel = pixelItem(probe)
+  if (pixel) items.push(pixel)
   const logged = (['claude', 'codex'] as const).filter(k => probe.login[k])
   items.push({ key: 'login', status: 'info', required: false, detail: logged.join(', ') || 'none' })
   return items

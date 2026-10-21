@@ -1,6 +1,6 @@
 // 模型通道（docs/ui/model-channels.md）：界面上只选「通道 + 模型」，谁来执行按规则定（§2.5）。
 // 存储不变，还是「引擎 + 额度来源 + 模型 / 线路 / 接口」；这里只做两边的换算，全是纯函数。
-import type { EngineId, EngineInfo } from '@pixelsky/protocol'
+import type { EngineCatalog, EngineId, EngineInfo } from '@pixelsky/protocol'
 import type { ProviderProtocol, ProviderView } from '../../../../shared/types/providers'
 import { platformModelSupportsEngine } from '../../../../shared/platform-models'
 import {
@@ -22,10 +22,36 @@ export type AuthChannel = keyof typeof AUTH_ENGINE
 
 export const isAuthChannel = (c: ChannelId): c is AuthChannel => c === 'claude' || c === 'chatgpt'
 
-/** 现有的「引擎 + 额度来源」→ 通道；像素星空 + 自有没有对应的通道，按自定义算 */
+/**
+ * 现有的「引擎 + 额度来源」→ 通道；像素星空 + 自有（命令行自己配的 Key）没有对应的通道，按自定义算（没有选中的接口）。
+ * 这个自有能不能用看 selfSourceReady；新装默认不再落到它上面（account/platform.ts 的 fallbackSource）
+ */
 export function channelOf(engine: EngineId, source: CreditSource): ChannelId {
   if (source === 'platform' || source === 'custom') return source
   return engine === 'claude' ? 'claude' : engine === 'codex' ? 'chatgpt' : 'custom'
+}
+
+/**
+ * 「自有」来源能不能用：Claude Code / Codex 的自有是它们自己的登录，由引擎状态另外提示，这里算能用；
+ * 像素星空的自有是命令行自己配的 Key（环境变量、~/.pixelsky-cli），模型目录（get_available_models 只列配了 Key 的）里有模型才算。
+ * 目录还没读到（null）时不知道，按不能用算：不提供「改用自有」
+ */
+export function selfSourceReady(engine: EngineId, catalog: Pick<EngineCatalog, 'models'> | null | undefined): boolean {
+  if (engine !== 'pixel') return true
+  return (catalog?.models?.length ?? 0) > 0
+}
+
+/**
+ * 像素星空现在用的是自有、但命令行没配 Key（目录读到了、一个模型都没有）：发出去必然失败，提示条要说清楚。
+ * 目录没读到或命令行没起来（没有 models）不算：那是引擎的问题，引擎状态另有提示
+ */
+export function pixelSelfMissing(
+  engine: EngineId | null | undefined,
+  source: CreditSource,
+  catalog: Pick<EngineCatalog, 'models'> | null | undefined,
+): boolean {
+  const models = catalog?.models
+  return engine === 'pixel' && source === 'self' && Array.isArray(models) && models.length === 0
 }
 
 export const sourceOfChannel = (c: ChannelId): CreditSource => (c === 'platform' || c === 'custom' ? c : 'self')

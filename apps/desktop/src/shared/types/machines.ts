@@ -11,7 +11,7 @@ export interface MachineInput {
 }
 /** WSL 检查卡片的一项（main 的探测生成，界面显示） */
 export interface CheckItem {
-  key: 'start' | 'encoding' | 'node' | 'claude' | 'codex' | 'login'
+  key: 'start' | 'encoding' | 'node' | 'claude' | 'codex' | 'pixel' | 'login'
   status: 'ok' | 'fail' | 'warn' | 'info'
   required: boolean
   /** 给界面显示的短事实（版本、路径、错误信息），不放中文句子 */

@@ -29,8 +29,26 @@ export function classifyError(text: string, error?: NoticeError | null): ErrorKi
 /** 换线路 / 额度来源这一类的按钮（侧栏悬停卡也用）；compact-retry 只在对话流的错误卡片上 */
 export type RouteAction = Exclude<SourceAction, 'compact-retry'>
 
-/** 侧栏状态悬停卡也用（features/sidebar/SessionStatusCard.tsx） */
+/**
+ * 这个引擎有没有能用的「自有」来源（model-channels/channelModel.ts 的 selfSourceReady）：Claude Code / Codex 是它们自己的登录，
+ * 引擎状态另有提示；像素星空的自有是命令行自己配的 Key（~/.pixelsky-cli），没配时改用自有只会再报一次错，不给这个按钮
+ */
+export function canUseSelf(engine: SessionRecord['engine'], selfReady?: boolean): boolean {
+  return engine !== 'pixel' || selfReady === true
+}
+
+/** 侧栏状态悬停卡也用（features/sidebar/SessionStatusCard.tsx）；selfReady 见 canUseSelf */
 export function actionsFor(
+  kind: ErrorKind,
+  record: Pick<SessionRecord, 'platform' | 'provider'>,
+  engine: SessionRecord['engine'],
+  selfReady?: boolean,
+): RouteAction[] {
+  const list = routeActions(kind, record, engine)
+  return canUseSelf(engine, selfReady) ? list : list.filter(a => a !== 'use-self')
+}
+
+function routeActions(
   kind: ErrorKind,
   record: Pick<SessionRecord, 'platform' | 'provider'>,
   engine: SessionRecord['engine'],
@@ -55,18 +73,19 @@ export function actionsFor(
 
 /**
  * 错误卡片上的一键按钮（纯函数）：retry 是会话空闲、队列也空着时才给「重试」；
- * 上下文超限再加「压缩后重试」（引擎支持原生压缩 compact 时），放在「重试」前面——不压缩直接重试多半还是超限
+ * 上下文超限再加「压缩后重试」（引擎支持原生压缩 compact 时），放在「重试」前面——不压缩直接重试多半还是超限。
+ * selfReady 见 canUseSelf
  */
 export function noticeActions(
   kind: ErrorKind | null,
   record: Pick<SessionRecord, 'platform' | 'provider'>,
   engine: SessionRecord['engine'],
-  options: { retry: boolean; compact: boolean },
+  options: { retry: boolean; compact: boolean; selfReady?: boolean },
 ): SourceAction[] {
   return [
     ...(kind === 'overflow' && options.retry && options.compact ? (['compact-retry'] as const) : []),
     ...(options.retry ? (['retry'] as const) : []),
-    ...(kind ? actionsFor(kind, record, engine) : []),
+    ...(kind ? actionsFor(kind, record, engine, options.selfReady) : []),
   ]
 }
 

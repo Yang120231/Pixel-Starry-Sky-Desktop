@@ -24,6 +24,7 @@ export { LONG_CONTEXT_ENV, claudeModelName } from './claude/long-context'
 export { CODEX_WINDOW_ENV } from './codex/context-config'
 export { CodexAdapter } from './codex'
 export { PixelAdapter } from './pixel'
+export { pixelAutoWindow } from './pixel/context-window'
 export { searchQuery } from './search'
 export { buildHandoff, handoffEngines, type HandoffInput } from './handoff'
 export {

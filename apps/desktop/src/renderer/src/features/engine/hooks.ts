@@ -60,7 +60,7 @@ import {
   type CreditSource,
 } from '@/features/account/platform'
 import { providersFor, resolveCustomModel, useProviders } from '@/features/account/providers'
-import { channelOf, type ChannelChoice, type ChannelId } from '@/features/model-channels/channelModel'
+import { channelOf, pixelSelfMissing, type ChannelChoice, type ChannelId } from '@/features/model-channels/channelModel'
 import { getChannelPrefs, useChannelPrefs } from '@/features/model-channels/channelPrefs'
 import { rememberNewTask, writeChoiceDefault } from '@/features/model-channels/newTaskDefault'
 import {
@@ -563,6 +563,9 @@ export function useComposerController(
     blocker = { kind: 'self-auth', message: engine.message ?? tr('engine.hooks.isNotSignedIn', { p0: engine.name }) }
   } else if (engine && engine.status !== 'ready') {
     blocker = { kind: 'self-missing', message: engine.message ?? tr('engine.hooks.isUnavailable', { p0: engine.name }) }
+  } else if (selectedEngineId === engineId && pixelSelfMissing(engineId, source, catalog)) {
+    // 像素星空用自有、命令行一个模型都没有（没配 Key）：发出去必然失败
+    blocker = { kind: 'self-missing', message: tr('modelChannels.pixelSelf.missing') }
   }
 
   /** 平台的（分组，模型）：优先保住 want 这个模型，否则沿用全局默认 */
@@ -676,9 +679,21 @@ export function useComposerController(
     if (getChannelPrefs().newTask.mode === 'last') saveDefault({ source: 'platform', groupId: id, model: m }, engineId)
   }
 
+  /**
+   * 目录里的模型。像素星空的目录 id 是 provider/id，经网关的会话记的是不带 provider 的 id（网关模型不在目录里，
+   * 命令行按 Pi 内置表里同名的模型补全定义）：对不上时按 id 找同名的，档位八九不离十，进程起来后以它报的为准
+   */
+  const catalogModel = (m: string | null) => {
+    const key = m ?? catalog?.currentModel ?? null
+    if (!key) return undefined
+    return (
+      catalog?.models?.find(model => model.id === key) ??
+      (key.includes('/') ? undefined : catalog?.models?.find(model => model.id.endsWith(`/${key}`)))
+    )
+  }
   /** 换模型后推理强度不在新模型的档位里时，改成新模型的默认档 */
   const effortPatchFor = (m: string | null): { effort?: Effort | null } => {
-    const selected = catalog?.models?.find(model => model.id === (m ?? catalog.currentModel))
+    const selected = catalogModel(m)
     const previousEffort = record?.effort ?? base.effort
     const effort =
       selected && previousEffort && !selected.efforts.includes(previousEffort) ? selected.defaultEffort : previousEffort
@@ -867,7 +882,11 @@ export function useComposerController(
         .catch(() => undefined)
     },
     effort: record ? record.effort : base.effort,
-    efforts: catalog?.models?.find(m => m.id === (model ?? catalog.currentModel))?.efforts ??
+    // 引擎进程报的当前模型实际支持的档位优先（像素星空经网关的模型不在目录里）；记录换了模型、进程还没跟上时按目录
+    efforts: (snap?.flags.efforts && snap.flags.efforts.model === model && engineId === record?.engine
+      ? snap.flags.efforts.efforts
+      : undefined) ??
+      catalogModel(model)?.efforts ??
       engine?.caps.efforts ?? ['low', 'medium', 'high', 'xhigh', 'max'],
     setEffort: effort => patch({ effort }),
     ultracodeSupported: engine?.caps.ultracode ?? false,

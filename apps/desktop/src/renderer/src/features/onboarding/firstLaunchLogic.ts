@@ -1,5 +1,5 @@
 // 第一次打开软件的欢迎页（docs/ui/first-launch-login-mockup.html）：什么时候出现、显示哪一步、看过没有
-import type { EngineInfo } from '@pixelsky/protocol'
+import type { EngineId, EngineInfo } from '@pixelsky/protocol'
 import type { LoginFailure } from '../../../../shared/types/account'
 import type { AccountStatus } from '../account/useAccount'
 
@@ -56,18 +56,40 @@ export function firstLaunchView(
   return 'welcome'
 }
 
+/** 要另外装的官方工具；像素星空引擎是自带的，单独看 */
 const ENGINE_NAMES: Record<string, string> = { claude: 'Claude Code', codex: 'Codex' }
 
+/** 装了就算（没登录、版本太旧也算：进去以后能在设置里处理） */
+const installed = (e: Pick<EngineInfo, 'status'>): boolean => e.status !== 'missing' && e.status !== 'unsupported'
+
 /**
- * 这台电脑上找到的 Claude Code / Codex：checked 是检测结果已经回来了（列表里有这两个引擎）。
- * 装了但没登录、版本太旧也算找到：进去以后能在设置里处理
+ * 这台电脑上找到的 Claude Code / Codex：checked 是检测结果已经回来了（列表里有这两个引擎）；
+ * pixel 是自带的像素星空引擎能不能启动（两个官方工具都没装时，告诉用户可以先用它）
  */
-export function foundEngines(engines: readonly EngineInfo[]): { checked: boolean; found: string[] } {
+export function foundEngines(engines: readonly EngineInfo[]): { checked: boolean; found: string[]; pixel: boolean } {
   const local = engines.filter(e => e.id in ENGINE_NAMES)
   return {
     checked: local.length > 0,
-    found: local.filter(e => e.status !== 'missing' && e.status !== 'unsupported').map(e => ENGINE_NAMES[e.id]),
+    found: local.filter(installed).map(e => ENGINE_NAMES[e.id]),
+    pixel: engines.some(e => e.id === 'pixel' && e.status === 'ready'),
   }
+}
+
+/**
+ * 新装时的默认引擎（引擎设置里默认是 Claude Code）没装：换成装了的另一个官方工具，都没装就用自带的像素星空，
+ * 免得新任务都交给一个不存在的程序。只在第一次打开的欢迎页里用（老用户自己选的不动）。
+ * undefined：检测结果还没回来（列表里还没有当前默认的引擎），等一等；null：不用换
+ */
+export function firstLaunchEngine(
+  engines: readonly Pick<EngineInfo, 'id' | 'status'>[],
+  current: EngineId | null | undefined,
+): EngineId | null | undefined {
+  const info = current ? engines.find(e => e.id === current) : undefined
+  if (!info) return undefined
+  if (installed(info)) return null
+  const other = engines.find(e => e.id !== current && e.id in ENGINE_NAMES && installed(e))
+  if (other) return other.id
+  return current !== 'pixel' && engines.some(e => e.id === 'pixel' && e.status === 'ready') ? 'pixel' : null
 }
 
 /** 主进程等授权最多 5 分钟（main/account/account.ts LOGIN_TIMEOUT_MS） */

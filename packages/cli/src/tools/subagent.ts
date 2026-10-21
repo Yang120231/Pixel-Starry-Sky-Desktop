@@ -73,6 +73,8 @@ export interface SubagentRoute {
   label: string
   /** 放这个站点会话密钥的环境变量名 */
   token: string
+  /** model 里桌面端猜的字段（如按系列定的 contextWindow），Pi 内置表里有同名模型时以内置的为准 */
+  inferred?: string[]
 }
 
 export interface SubagentTypeDef {
@@ -115,7 +117,15 @@ export function subagentTypes(env: NodeJS.ProcessEnv): SubagentTypeDef[] {
     const model = object(r.model)
     const route =
       text(r.api) && text(model.id) && TOKEN_ENV.test(text(r.token))
-        ? { api: text(r.api), model, label: text(r.label) || text(model.id), token: text(r.token) }
+        ? {
+            api: text(r.api),
+            model,
+            label: text(r.label) || text(model.id),
+            token: text(r.token),
+            ...(Array.isArray(r.inferred)
+              ? { inferred: r.inferred.filter((f): f is string => typeof f === 'string') }
+              : {}),
+          }
         : null
     types.push({
       id,
@@ -131,15 +141,19 @@ export function subagentTypes(env: NodeJS.ProcessEnv): SubagentTypeDef[] {
   return types
 }
 
-/** 子进程里注册的 provider：这个类型单独的站点（地址按协议补 /v1，和桌面端 pixelBaseUrl 一样） */
+/**
+ * 子进程里注册的 provider：这个类型单独的站点（地址按协议补 /v1，和桌面端 pixelBaseUrl 一样）。
+ * 站点没写明的推理开关、图片按协议猜（Chat 兼容接口多数不收图），网关扩展在 Pi 内置表里找到同名模型时以内置的为准
+ */
 export function subagentProviderConfig(type: SubagentTypeDef, env: NodeJS.ProcessEnv): Json | null {
   const root = env[SUB_BASE_URL_ENV]?.trim().replace(/\/+$/, '')
   if (!type.route || !root) return null
+  const chat = type.route.api === 'openai-completions'
   return {
     baseUrl: type.route.api === 'anthropic-messages' ? root : `${root}/v1`,
     api: type.route.api,
     apiKey: `$${type.route.token}`,
-    models: [{ reasoning: type.route.api !== 'openai-completions', input: ['text', 'image'], ...type.route.model }],
+    models: [{ reasoning: !chat, input: chat ? ['text'] : ['text', 'image'], ...type.route.model }],
   }
 }
 

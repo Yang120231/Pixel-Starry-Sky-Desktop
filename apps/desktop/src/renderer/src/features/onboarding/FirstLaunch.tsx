@@ -7,6 +7,7 @@ import { tr, translateMessage } from '@/i18n/core'
 import { Button, Logo, Spinner, cn } from '@/ui'
 import { isDemo } from '@/data'
 import { useEngineState } from '@/features/engine'
+import { bridge } from '@/features/engine/store'
 import { useAccount, type UseAccountResult } from '@/features/account'
 import { useSettings } from '@/features/settings/SettingsProvider'
 import type { SectionId } from '@/features/settings/SettingsDialog'
@@ -14,6 +15,7 @@ import {
   decideFirstLaunch,
   finishFirstLaunch,
   firstLaunchDone,
+  firstLaunchEngine,
   firstLaunchView,
   foundEngines,
   loginRemaining,
@@ -62,6 +64,7 @@ export function FirstLaunch() {
 
 function FirstLaunchScreen({ acc, onDone }: { acc: UseAccountResult; onDone: () => void }) {
   useI18n()
+  useFirstLaunchEngine()
   const [attempted, setAttempted] = useState(false)
   const view = firstLaunchView(acc.status, acc.failure, attempted)
   const { openSettings } = useSettings()
@@ -104,6 +107,23 @@ function FirstLaunchScreen({ acc, onDone }: { acc: UseAccountResult; onDone: () 
       </main>
     </div>
   )
+}
+
+/**
+ * 新装、默认引擎没装时换一个能用的（firstLaunchEngine）：检测结果回来后判断一次，之后用户自己换的不再动。
+ * 只在欢迎页出现时调用，用过的（旧版本升级上来的）不会走到这里
+ */
+function useFirstLaunchEngine(): void {
+  const engines = useEngineState(s => s.engines)
+  const current = useEngineState(s => s.defaults?.engine)
+  const decided = useRef(false)
+  useEffect(() => {
+    if (decided.current || !bridge) return
+    const next = firstLaunchEngine(engines, current)
+    if (next === undefined) return
+    decided.current = true
+    if (next) void bridge.setDefaultEngine(next).catch(() => undefined)
+  }, [engines, current])
 }
 
 function Brand() {
@@ -166,7 +186,7 @@ function Welcome({
 }) {
   useI18n()
   const engines = useEngineState(s => s.engines)
-  const { checked, found } = foundEngines(engines)
+  const { checked, found, pixel } = foundEngines(engines)
   return (
     <>
       <Title sub={tr('onboarding.welcomeSub')}>{tr('onboarding.welcomeTitle')}</Title>
@@ -188,14 +208,15 @@ function Welcome({
           <span
             className={cn(
               'mr-2 inline-block size-1.5 rounded-full align-[1px]',
-              found.length ? 'bg-accent' : 'bg-fg-faint',
+              found.length || pixel ? 'bg-accent' : 'bg-fg-faint',
             )}
           />
           {found.length ? (
             tr('onboarding.found', { names: found.join(' / ') })
           ) : (
             <>
-              {tr('onboarding.notFound')} ·{' '}
+              {/* 两个官方工具都没装：自带的像素星空引擎照样能用（登录用账号额度，或填 API Key） */}
+              {pixel ? tr('onboarding.pixelReady') : tr('onboarding.notFound')} ·{' '}
               <LinkButton onClick={() => onSettings('engines')}>{tr('onboarding.install')}</LinkButton>{' '}
               {tr('onboarding.orWord')}{' '}
               <LinkButton onClick={() => onSettings('models')}>{tr('onboarding.addKey')}</LinkButton>

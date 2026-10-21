@@ -88,10 +88,14 @@ export class HostTurn {
       // 在换引擎之后准备：新引擎的第一条消息就带上按新记录（engineSessions 等）决定的扩展
       const extensions = (preparedExtensions = await ctx.opts.extensions?.(record))
       const launch = m.settings.launchKey(record.engine) + m.settings.modelLaunchKey(record) + (extensions?.key ?? '')
-      // 额度来源、重试次数或引擎级设置（输出风格、允许提问、压缩触发点、路径、环境变量）变了：换一个进程，--resume 接上原对话
+      // 额度来源、重试次数或引擎级设置（输出风格、允许提问、压缩触发点、路径、环境变量）变了，
+      // 或者这个进程换不到这条消息的模型（像素星空经网关时只注册了启动时的模型）：换一个进程，--resume 接上原对话
       if (
         rt.session &&
-        (rt.sessionSource !== source || rt.sessionMaxRetries !== maxRetries || rt.sessionLaunch !== launch)
+        (rt.sessionSource !== source ||
+          rt.sessionMaxRetries !== maxRetries ||
+          rt.sessionLaunch !== launch ||
+          rt.session.restartsForModel?.(record.model ?? null) === true)
       ) {
         const old = rt.session
         rt.session = null
@@ -141,6 +145,10 @@ export class HostTurn {
           setFast: fast => {
             if (rt.execution) rt.execution.fast = fast
             m.events.patchRecord(id, { fast })
+          },
+          setEffort: effort => {
+            if (rt.execution) rt.execution.effort = effort
+            m.events.patchRecord(id, { effort })
           },
           clearPendingRewind: () => {
             if (rt.execution) rt.execution.pendingRewind = null

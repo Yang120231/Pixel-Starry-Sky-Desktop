@@ -455,7 +455,7 @@ describe('技能', () => {
     b.start()
     expect(b.skillLaunch('claude')).toEqual({ key: 'loading', pluginDirs: [], skillRoots: [] })
     expect(b.skillLaunch('codex').key).toBe('loading')
-    expect(b.skillLaunch('pixel').key).toBe('')
+    expect(b.skillLaunch('pixel').key).toBe('loading')
     await b.ready()
     expect(b.skillLaunch('claude').key).not.toBe('loading')
   })
@@ -471,6 +471,7 @@ describe('技能', () => {
     expect(existsSync(join(claude.pluginDirs[0], '.claude-plugin', 'plugin.json'))).toBe(true)
     const codex = svc.skillLaunch('codex')
     expect(codex.skillRoots).toEqual([join(dir, 'skills/hello'), join(dir, 'skills/hola')])
+    expect(svc.skillLaunch('pixel').skillRoots).toEqual([join(dir, 'skills/hello')])
     expect(svc.skillCommands().map(c => c.name)).toEqual(['ext-pixelsky-with-skill:hello'])
   })
 

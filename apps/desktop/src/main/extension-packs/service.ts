@@ -601,7 +601,6 @@ export class ExtensionPacks {
 
   /** 同步；ready 之前只给一个 key（'' 或 'loading'），不给目录 */
   skillLaunch(engine: Engine): { key: string; pluginDirs: string[]; skillRoots: string[] } {
-    if (engine === 'pixel') return { key: '', pluginDirs: [], skillRoots: [] }
     if (!this.ready_) return { key: this.preKey, pluginDirs: [], skillRoots: [] }
     return packSkillLaunch(
       this.packs.filter(p => p.info.live),

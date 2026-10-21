@@ -267,7 +267,7 @@ export function EngineDetail({
         </Group>
       )}
 
-      {!e.caps.launchSettings && <p className="mt-4 text-meta text-fg-muted">{tr('codex.nativeSettings')}</p>}
+      {e.id === 'codex' && <p className="mt-4 text-meta text-fg-muted">{tr('codex.nativeSettings')}</p>}
       {/* 多会话（docs/ui/import-collab.md 第 5 项③④）：只读查看本机其他会话；Claude Code 自带的跨会话收件 */}
       {(e.id === 'claude' || e.id === 'codex') && (
         <Group title={tr('settings.engines.EngineDetail.multiSession')}>
@@ -303,41 +303,44 @@ export function EngineDetail({
           )}
         </Group>
       )}
-      {/* 上下文（GitHub #20）：Codex 也有自动压缩和模型窗口；压缩用的模型只有 Claude Code 能换 */}
-      <Group title={tr('session.ContextWindowButton.context2')}>
-        <Row
-          title={tr('settings.engines.EngineDetail.autocompactThreshold')}
-          description={tr('settings.engines.EngineDetail.automaticallyCompactAtThis')}
-          hint={e.id === 'codex' ? tr('contextWindow.codexCompactHint') : undefined}
-          control={
-            <Select
-              label={tr('settings.engines.EngineDetail.autocompactThreshold')}
-              value={config.autoCompactPct === null ? '' : String(config.autoCompactPct)}
-              onChange={v => run({ autoCompactPct: v ? Number(v) : null })}
-              options={[
-                {
-                  value: '',
-                  get label() {
-                    return tr('settings.engines.EngineDetail.defaultBuiltInThreshold')
+      {/* 上下文（GitHub #20）：Codex 也有自动压缩和模型窗口；压缩用的模型只有 Claude Code 能换。
+          像素星空两项都不生效（Pi 的压缩阈值只认它自己的 settings.json，本机模型的窗口 Pi 自己知道），不显示 */}
+      {e.id !== 'pixel' && (
+        <Group title={tr('session.ContextWindowButton.context2')}>
+          <Row
+            title={tr('settings.engines.EngineDetail.autocompactThreshold')}
+            description={tr('settings.engines.EngineDetail.automaticallyCompactAtThis')}
+            hint={e.id === 'codex' ? tr('contextWindow.codexCompactHint') : undefined}
+            control={
+              <Select
+                label={tr('settings.engines.EngineDetail.autocompactThreshold')}
+                value={config.autoCompactPct === null ? '' : String(config.autoCompactPct)}
+                onChange={v => run({ autoCompactPct: v ? Number(v) : null })}
+                options={[
+                  {
+                    value: '',
+                    get label() {
+                      return tr('settings.engines.EngineDetail.defaultBuiltInThreshold')
+                    },
                   },
-                },
-                ...AUTO_COMPACT_PCTS.map(p => ({
-                  value: String(p),
-                  label: tr('settings.engines.EngineDetail.atUsage', { p0: p }),
-                })),
-              ]}
-            />
-          }
-        />
-        {e.caps.launchSettings && (
-          <CompactModelRow engine={e} value={config.compactModel} onChange={compactModel => run({ compactModel })} />
-        )}
-        <ModelWindowsRow
-          engine={e}
-          windows={config.contextWindows.self}
-          onChange={(model, value) => run({ contextWindows: { self: { [model]: value } } })}
-        />
-      </Group>
+                  ...AUTO_COMPACT_PCTS.map(p => ({
+                    value: String(p),
+                    label: tr('settings.engines.EngineDetail.atUsage', { p0: p }),
+                  })),
+                ]}
+              />
+            }
+          />
+          {e.caps.launchSettings && (
+            <CompactModelRow engine={e} value={config.compactModel} onChange={compactModel => run({ compactModel })} />
+          )}
+          <ModelWindowsRow
+            engine={e}
+            windows={config.contextWindows.self}
+            onChange={(model, value) => run({ contextWindows: { self: { [model]: value } } })}
+          />
+        </Group>
+      )}
 
       <Group title={tr('settings.engines.EngineDetail.advanced')}>
         <Row

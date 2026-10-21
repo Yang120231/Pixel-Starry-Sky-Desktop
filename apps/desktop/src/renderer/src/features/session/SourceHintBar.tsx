@@ -14,7 +14,13 @@ import { groupsForModel, refreshPlatform, usePlatform, type CreditSource } from 
 import { useSettings } from '@/features/settings/SettingsProvider'
 import type { ComposerController } from '@/features/engine'
 import { providersFor, useProviders } from '@/features/account/providers'
-import { isAuthChannel, type ChannelChoice } from '@/features/model-channels/channelModel'
+import {
+  isAuthChannel,
+  pixelSelfMissing,
+  selfSourceReady,
+  type ChannelChoice,
+} from '@/features/model-channels/channelModel'
+import { useEngineCatalog } from '@/features/engine/catalog'
 import { channelLabel } from '@/features/model-channels/channelLabels'
 import { openAuthDialog } from '@/features/model-channels/authDialogStore'
 
@@ -99,6 +105,9 @@ export function SourceHintBar({
   const platform = usePlatform(targetEngineId)
   const settings = useSettings()
   const providers = useProviders()
+  // 当前引擎的模型目录：像素星空的「自有」能不能用看它（selfSourceReady）
+  const engineId = live.engine?.id ?? 'claude'
+  const catalog = useEngineCatalog(engineId)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -225,14 +234,15 @@ export function SourceHintBar({
   }
 
   const b = live.blocker
-  if (!b || live.running) return null
-  const useSelf = (
+  if (live.running) return null
+  // 像素星空的自有是命令行自己配的 Key：没配时不给「用自有账号」（改过去只会再报一次错）
+  const useSelf = selfSourceReady(engineId, catalog) ? (
     <Action onClick={() => onRequestSource('self')}>
       {live.started
         ? tr('session.live.NoticeActions.continueWithOwnAccount')
         : tr('session.SourceHintBar.useOwnAccount')}
     </Action>
-  )
+  ) : null
   const usePlatformBtn = live.platformAvailable ? (
     <Action onClick={() => onRequestSource('platform')}>
       {live.started ? tr('session.live.NoticeActions.continueWithPlatform') : tr('session.SourceHintBar.usePlatform')}
@@ -240,6 +250,24 @@ export function SourceHintBar({
   ) : null
 
   const openEndpoints = <Action onClick={() => settings.openSettings('models')}>{tr('customApi.manage')}</Action>
+  if (!b) {
+    // 发送前就知道会失败：像素星空在用自有，但命令行一个能用的模型都没有（没配 Key）
+    if (!pixelSelfMissing(engineId, live.source, catalog)) return null
+    return (
+      <Bar
+        tone="warn"
+        icon={<TriangleAlert size={14} />}
+        actions={
+          <>
+            {usePlatformBtn}
+            {openEndpoints}
+          </>
+        }
+      >
+        {tr('modelChannels.pixelSelf.missing')}
+      </Bar>
+    )
+  }
   switch (b.kind) {
     case 'custom-none':
       return (

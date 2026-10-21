@@ -1,9 +1,16 @@
 import { randomBytes } from 'node:crypto'
 import { platformGateway, type GatewaySession } from './gateway'
-import { engineProviderProtocols, groupEngines, pixelApi, pixelGatewayEnv, pixelSubagentRoute } from './pixel-env'
+import {
+  engineProviderProtocols,
+  groupEngines,
+  pixelApi,
+  pixelGatewayEnv,
+  pixelSubagentRoute,
+  type PixelApi,
+} from './pixel-env'
 import { compactWindows, longContextModels } from './compact-window'
 import { once } from 'node:events'
-import { mkdirSync, readdirSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
 import type { SessionRecord } from '@pixelsky/protocol'
@@ -13,18 +20,20 @@ import {
   logger,
   LONG_CONTEXT_ENV,
   claudeModelName,
+  pixelAutoWindow,
   rewriteCompaction,
   type CompactionRequestReport,
 } from '@pixelsky/engine'
 import type { PlatformGroupInfo } from '../../shared/types/platform-catalog'
-import { platformModelSupportsEngine } from '../../shared/platform-models'
-import { platformFetch, signedInEmail } from '../account/account'
+import { platformModelApi, platformModelSupportsEngine } from '../../shared/platform-models'
+import { onAccountChange, platformFetch, signedInEmail } from '../account/account'
 import * as ipc from '../ipc/guard'
 import type { ProviderStore, ResolvedProvider } from '../core/providers/store'
 import { smallModelOf } from '../core/providers/upstream'
 import { DEFAULT_SUBAGENT_SETTINGS, type SubagentSettings, type SubagentTarget } from '../../shared/types/subagents'
 
 const log = logger('subagents')
+const groupLog = logger('platform')
 
 async function jsonRequest(path: string, method = 'GET'): Promise<unknown> {
   const res = await platformFetch(path, { method, signal: AbortSignal.timeout(30_000) })
@@ -33,10 +42,72 @@ async function jsonRequest(path: string, method = 'GET'): Promise<unknown> {
   return body.data
 }
 
-/** 最近读到的分组 → platform（openai / anthropic …）；像素星空按它选 Responses 还是 Messages */
-const groupPlatforms = new Map<string, string>()
-/** 最近读到的分组名：子智能体卡片上写站点名用 */
-const groupNames = new Map<string, string>()
+/**
+ * 最近读到的分组：platform（openai / anthropic …）和 supported_apis，像素星空按它们选 Responses 还是 Messages；
+ * 名字写在子智能体卡片上。存一份到磁盘（groupCacheFile）：重启后续接的会话在界面读分组目录之前就要选协议
+ */
+type GroupBrief = Pick<PlatformGroupInfo, 'platform' | 'name' | 'supported_apis'>
+const groupCache = new Map<string, GroupBrief>()
+let groupCacheFile: string | null = null
+
+/** 读上次存的分组（只在内存里还没有时补上）；文件坏了当没有 */
+export function loadGroupCache(file: string): void {
+  groupCacheFile = file
+  let raw: unknown
+  try {
+    raw = JSON.parse(readFileSync(file, 'utf8'))
+  } catch {
+    return
+  }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return
+  for (const [id, g] of Object.entries(raw as Record<string, Partial<GroupBrief>>)) {
+    if (!/^\d+$/.test(id) || groupCache.has(id) || !g || typeof g.platform !== 'string') continue
+    const apis = Array.isArray(g.supported_apis) ? g.supported_apis.filter(a => typeof a === 'string') : undefined
+    groupCache.set(id, { platform: g.platform, name: typeof g.name === 'string' ? g.name : '', supported_apis: apis })
+  }
+}
+
+/** 线路的协议信息；没读到过返回 null */
+export function groupBrief(id: string): GroupBrief | null {
+  return groupCache.get(id) ?? null
+}
+
+function rememberGroups(groups: PlatformGroupInfo[]): void {
+  for (const g of groups)
+    groupCache.set(g.id, {
+      platform: g.platform,
+      name: g.name,
+      supported_apis: Array.isArray(g.supported_apis) ? g.supported_apis : undefined,
+    })
+  if (!groupCacheFile) return
+  try {
+    writeFileSync(groupCacheFile, JSON.stringify(Object.fromEntries(groupCache)), { mode: 0o600 })
+  } catch (error) {
+    groupLog.warn('存不下分组目录', { error: (error as Error).message })
+  }
+}
+
+/** 在后台读一次分组目录（登录后、还没读到会话的分组时），之后启动的进程就能按它选协议；同时只读一次 */
+let refreshing: Promise<unknown> | null = null
+export function refreshGroups(): void {
+  if (refreshing || !signedInEmail()) return
+  refreshing = platformGroups()
+    .catch(error => groupLog.info('读分组目录失败', { error: (error as Error).message }))
+    .finally(() => (refreshing = null))
+}
+
+/**
+ * 云端线路上像素星空用哪种协议（Pi 的协议在进程启动时定下）：先看模型名，再看分组目录。
+ * 分组还没读到（磁盘上也没有）时先按 Anthropic，并在后台读一次目录
+ */
+export function platformPixelApi(groupId: string, model: string | null): PixelApi {
+  const group = groupBrief(groupId)
+  if (!group && !platformModelApi(model)) {
+    groupLog.info('还没读到分组目录，先按 Messages 协议启动', { groupId })
+    refreshGroups()
+  }
+  return pixelApi({ groupPlatform: group?.platform ?? null, groupApis: group?.supported_apis ?? null, model })
+}
 
 export async function platformGroups(): Promise<PlatformGroupInfo[]> {
   const data = await jsonRequest('/v1/platform/groups')
@@ -53,10 +124,7 @@ export async function platformGroups(): Promise<PlatformGroupInfo[]> {
       Array.isArray(g.models) &&
       g.models.every((m: unknown) => typeof m === 'string'),
   )
-  for (const g of groups) {
-    groupPlatforms.set(g.id, g.platform)
-    groupNames.set(g.id, g.name)
-  }
+  rememberGroups(groups)
   return groups
 }
 
@@ -159,8 +227,19 @@ export async function initPlatform(
   compaction?: (record: SessionRecord, report: CompactionRequestReport) => void,
   /** 设置 › 子智能体（只管像素星空引擎的会话） */
   subagents: () => SubagentSettings = () => DEFAULT_SUBAGENT_SETTINGS,
+  /** 设置 › 模型通道里给云端模型填的窗口（像素星空那份）：子智能体单独走云端线路时用 */
+  pixelPlatformWindows: () => Record<string, number> = () => ({}),
 ): Promise<(record: SessionRecord) => NodeJS.ProcessEnv> {
   clearGatewaySettings(join(app.getPath('userData'), 'gateway'))
+  // 重启后续接的会话要在界面读分组目录之前选协议：先用上次存的，登录后再读一次新的
+  loadGroupCache(join(app.getPath('userData'), 'platform-groups.json'))
+  let account = signedInEmail()
+  refreshGroups()
+  onAccountChange(() => {
+    const now = signedInEmail()
+    if (now && now !== account) refreshGroups()
+    account = now
+  })
   ipc.handle('platform:groups', () => platformGroups())
   ipc.handle(
     'platform:models',
@@ -232,15 +311,18 @@ export async function initPlatform(
           env[token] = entry.secret
           const provider = check.provider
           route = pixelSubagentRoute({
-            api: pixelApi({
-              protocol: provider?.protocol,
-              groupPlatform: target.kind === 'platform' ? (groupPlatforms.get(target.groupId) ?? null) : null,
-              model: target.model,
-            }),
+            api:
+              target.kind === 'platform'
+                ? platformPixelApi(target.groupId, target.model)
+                : pixelApi({ protocol: provider?.protocol, model: target.model }),
             model: target.model,
-            contextWindow: provider?.models.find(m => m.id === target.model)?.contextWindow ?? null,
+            // 自定义接口里写的；云端线路用设置 › 模型通道里给这个模型填的
+            contextWindow: provider
+              ? (provider.models.find(m => m.id === target.model)?.contextWindow ?? null)
+              : (pixelPlatformWindows()[target.model] ?? null),
+            autoContextWindow: pixelAutoWindow(target.model),
             upstreamBaseUrl: provider?.baseUrl ?? null,
-            label: provider?.name ?? (target.kind === 'platform' ? (groupNames.get(target.groupId) ?? '平台线路') : ''),
+            label: provider?.name ?? (target.kind === 'platform' ? groupBrief(target.groupId)?.name || '平台线路' : ''),
             token,
           })
         } else if (check && !check.ok)
@@ -284,11 +366,9 @@ export async function initPlatform(
     if (record.engine === 'pixel') {
       // 像素星空不读设置文件，地址 / 密钥 / 协议 / 模型直接给环境变量，由适配器写进会话自己的 models.json（密钥只在环境变量里）。
       // 协议跟着线路 / 接口走：Messages、Responses、Chat Completions（docs/own-cli.md §12）
-      const api = pixelApi({
-        protocol: provider?.protocol,
-        groupPlatform: record.platform ? (groupPlatforms.get(record.platform.groupId) ?? null) : null,
-        model: record.model,
-      })
+      const api = record.platform
+        ? platformPixelApi(record.platform.groupId, record.model)
+        : pixelApi({ protocol: provider?.protocol, model: record.model })
       return pixelGatewayEnv({
         port: address.port,
         secret: entry.secret,

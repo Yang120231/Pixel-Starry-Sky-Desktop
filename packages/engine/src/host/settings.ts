@@ -215,9 +215,11 @@ export class HostSettings {
 
   /**
    * Codex 的窗口和自动压缩在启动进程时按模型定下（GitHub #20）：用到它们时换模型也要换进程。
+   * 像素星空走云端线路时也一样：启动时只给 Pi 注册了这一个模型和它的窗口（pixel/context-window.ts）。
    * Claude Code 按模型的设置一次全写进 --settings，换模型不用重启
    */
   modelLaunchKey(record: Pick<SessionRecord, 'engine' | 'model' | 'platform' | 'provider'>): string {
+    if (record.engine === 'pixel') return record.platform ? `|${record.model ?? ''}` : ''
     if (record.engine !== 'codex') return ''
     const o = this.launchOptions('codex')
     const windows = o.contextWindows[record.platform ? 'platform' : 'self']
