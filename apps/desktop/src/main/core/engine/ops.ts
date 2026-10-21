@@ -184,6 +184,7 @@ export const ENGINE_OPS = {
   'engine:accountRemove': (c, engine, id) => c.host.removeAccount(engineId(engine), accountId(id)),
   'engine:accountUpdate': (c, engine, id, patch) =>
     c.host.updateAccount(engineId(engine), accountId(id), accountPatch(patch)),
+  'engine:accountShowDefault': (c, engine) => c.host.showDefaultAccount(engineId(engine)),
   'engine:accountAuto': (c, engine, patch) => c.host.setAccountAuto(engineId(engine), accountAuto(patch)),
   'engine:retrySettings': c => c.host.retrySettings(),
   'engine:setRetrySettings': (c, maxRetries) => c.host.setRetrySettings(maxRetries as number),

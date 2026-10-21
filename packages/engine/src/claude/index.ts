@@ -34,6 +34,7 @@ import {
   ClaudeUserRules,
   claudeAccountEnv,
   configDirBusy,
+  forgetClaudeAccount,
   holdConfigDir,
   nativeMcpServers,
   prepareClaudeAccount,
@@ -691,6 +692,11 @@ export class ClaudeAdapter implements EngineAdapter {
   /** 所有 Claude Code 进程（会话、额度临时进程、登录等）都在登记处记着用哪个配置目录 */
   accountInUse(dir: string): boolean {
     return configDirBusy(dir)
+  }
+
+  /** 删除账号：只删账号目录里本机的凭据文件（不退出登录、不联网） */
+  accountForget(dir: string): void {
+    forgetClaudeAccount(dir)
   }
 
   /**

@@ -45,6 +45,10 @@ interface EngineState {
   switchedFrom: string | null
   /** 原账号的恢复时间（毫秒）：到了才去读它的额度；不知道为 null */
   switchedFromResetsAt: number | null
+  /** 原来的账号在像素星空里删掉（隐藏）了：不列出、不会被用到（终端里照常）。只在还有添加的账号时成立 */
+  hideDefault: boolean
+  /** 删除了、凭据文件还没删的添加账号：有进程在用（换账号之前开的对话）时先留着，进程没了再删 */
+  cleanup: string[]
 }
 
 const text = (v: unknown, max = 200): string | null =>
@@ -86,16 +90,25 @@ export function readAccountsFile(raw: unknown): Partial<Record<AccountEngine, En
       const account = readAccount(a)
       if (account && !accounts.some(x => x.id === account.id)) accounts.push(account)
     }
-    const known = (id: unknown): id is string => typeof id === 'string' && accounts.some(a => a.id === id)
+    // 原来的账号隐藏着：要还有添加的账号才成立（不然没有账号可用），这时列表里不留它
+    const hideDefault = e.hideDefault === true && accounts.some(a => a.id !== DEFAULT_ACCOUNT)
+    const list = hideDefault ? accounts.filter(a => a.id !== DEFAULT_ACCOUNT) : accounts
+    const known = (id: unknown): id is string => typeof id === 'string' && list.some(a => a.id === id)
+    const cleanup: string[] = []
+    for (const id of Array.isArray(e.cleanup) ? e.cleanup : [])
+      if (typeof id === 'string' && ACCOUNT_ID.test(id) && !known(id) && !cleanup.includes(id) && cleanup.length < 100)
+        cleanup.push(id)
     out[engine] = {
-      current: known(e.current) ? e.current : DEFAULT_ACCOUNT,
-      accounts,
+      current: known(e.current) ? e.current : hideDefault ? list[0].id : DEFAULT_ACCOUNT,
+      accounts: list,
       auto: readAuto(e.auto),
       switchedFrom: known(e.switchedFrom) ? e.switchedFrom : null,
       switchedFromResetsAt:
         known(e.switchedFrom) && typeof e.switchedFromResetsAt === 'number' && Number.isFinite(e.switchedFromResetsAt)
           ? e.switchedFromResetsAt
           : null,
+      hideDefault,
+      cleanup,
     }
   }
   return out
@@ -138,6 +151,8 @@ export class HostAccounts {
       auto: { ...DEFAULT_AUTO },
       switchedFrom: null,
       switchedFromResetsAt: null,
+      hideDefault: false,
+      cleanup: [],
     })
   }
 
@@ -155,7 +170,10 @@ export class HostAccounts {
 
   currentId(engine: EngineId): string {
     const s = (this.state as Partial<Record<EngineId, EngineState>>)[engine]
-    return s && s.accounts.some(a => a.id === s.current) ? s.current : DEFAULT_ACCOUNT
+    if (!s) return DEFAULT_ACCOUNT
+    if (s.accounts.some(a => a.id === s.current)) return s.current
+    // 原来的账号隐藏着时不会回到它
+    return s.hideDefault && s.accounts.length ? s.accounts[0].id : DEFAULT_ACCOUNT
   }
 
   /** 适配器启动引擎时用的目录 */
@@ -177,7 +195,13 @@ export class HostAccounts {
 
   private snapshot(engine: AccountEngine): EngineAccounts {
     const s = this.engineState(engine)
-    return { engine, current: this.currentId(engine), accounts: s.accounts.map(a => ({ ...a })), auto: { ...s.auto } }
+    return {
+      engine,
+      current: this.currentId(engine),
+      accounts: s.accounts.map(a => ({ ...a })),
+      auto: { ...s.auto },
+      defaultHidden: s.hideDefault,
+    }
   }
 
   /** 换了当前账号：重新检测（引擎卡片上的邮箱、套餐跟着变），广播列表 */
@@ -193,6 +217,7 @@ export class HostAccounts {
   async list(engine: EngineId): Promise<EngineAccounts> {
     const e = accountEngine(engine)
     const s = this.engineState(e)
+    this.sweep(e)
     const info = await this.ctx.adapters[e]?.info().catch(() => null)
     if (this.currentId(e) === DEFAULT_ACCOUNT && info) {
       const email = text(info.account?.email),
@@ -271,10 +296,11 @@ export class HostAccounts {
     const probe = await adapter.accountProbe(dir)
     if (!probe.signedIn) return '登录命令结束了，但还没有登录成功'
     const s = this.engineState(engine)
-    // 第一次添加：原来的账号登录着就先放进列表（排第一）
-    if (!s.accounts.length) {
+    // 第一次添加：原来的账号登录着就先放进列表（排第一）。读它的时候另一个添加可能已经放进去了
+    // （两个浏览器差不多同时登录完），放之前再看一次，免得原来的账号出现两次
+    if (!s.accounts.length && !s.hideDefault) {
       const original = await adapter.accountProbe(null).catch(() => null)
-      if (original?.signedIn) {
+      if (original?.signedIn && !s.hideDefault && !s.accounts.some(a => a.id === DEFAULT_ACCOUNT)) {
         const row: EngineAccount = {
           id: DEFAULT_ACCOUNT,
           email: null,
@@ -284,13 +310,15 @@ export class HostAccounts {
           status: 'ok',
         }
         this.applyProbe(engine, row, original)
-        s.accounts.push(row)
+        s.accounts.unshift(row)
       }
     }
     const same = probe.email && s.accounts.find(a => a.email && a.email.toLowerCase() === probe.email!.toLowerCase())
     if (same) {
-      void adapter.accountLogout(dir).catch(() => undefined)
+      // 不跑退出登录（只在像素星空里生效）：新目录里刚写的凭据文件删掉
+      if (!s.cleanup.includes(id)) s.cleanup.push(id)
       this.changed(engine, false)
+      this.sweep(engine)
       return `${probe.email} 已经在列表里了`
     }
     const row: EngineAccount = { id, email: null, plan: null, label: null, addedAt: Date.now(), status: 'ok' }
@@ -315,30 +343,92 @@ export class HostAccounts {
     return this.snapshot(e)
   }
 
+  /**
+   * 删除账号（只在像素星空里生效，docs/ui/engine-accounts.md §5.1）：不跑退出登录命令、不联网，终端里的引擎和
+   * 别处登录的同一账号都不受影响。
+   * - 添加的账号：移出列表；账号目录里本机的凭据文件等没有进程在用时删掉（换账号之前开的对话照常用到进程结束）。
+   * - 原来的账号：只是隐藏（不列出、不会被用到），要还有别的可用账号才行；「显示原来的账号」放回来。
+   * 删的是当前账号时先换到别的：列表里第一个没失效的，都没有时回到原来的账号。删完没有添加的账号了，原来的账号回来
+   */
   async remove(engine: EngineId, id: string): Promise<EngineAccounts> {
     const e = accountEngine(engine)
     const s = this.engineState(e)
     this.find(e, id)
-    if (id === this.currentId(e)) throw new Error('正在用这个账号，先切换到别的账号再移除')
-    if (id === DEFAULT_ACCOUNT) throw new Error('原来的账号不能在这里移除，切换到它之后可以在模型通道里取消授权')
-    // 换账号之前开的对话可能还在用这个账号：退出登录会让它们下一轮失败，先不让移除
-    const dir = this.dir(e, id)
-    if (dir && this.adapter(e).accountInUse?.(dir))
-      throw new Error('还有对话在用这个账号（换账号之前开的）。等这些对话空闲结束、或者关掉它们之后再移除')
-    // 只退出登录、移出列表，目录骨架留着：Codex 的线程索引里记着这个目录下的路径
-    await this.adapter(e)
-      .accountLogout(this.dir(e, id))
-      .catch(() => undefined)
-    s.accounts = s.accounts.filter(a => a.id !== id)
+    const before = this.currentId(e)
+    const others = s.accounts.filter(a => a.id !== id)
+    const usable = others.find(a => a.status !== 'expired')
+    if (id === DEFAULT_ACCOUNT && !usable)
+      throw new Error('没有别的可用账号，原来的账号不能删除。先添加一个账号，或者把失效的账号重新登录')
+    if (id === before) {
+      s.current = usable?.id ?? DEFAULT_ACCOUNT
+      s.switchedFrom = null
+      s.switchedFromResetsAt = null
+    }
+    s.accounts = others
+    if (id === DEFAULT_ACCOUNT) s.hideDefault = true
+    else if (!s.cleanup.includes(id)) s.cleanup.push(id)
     if (s.switchedFrom === id) {
       s.switchedFrom = null
       s.switchedFromResetsAt = null
     }
     this.quotas.delete(`${e}:${id}`)
-    // 只剩原来的账号时清空列表，界面回到单账号
-    if (s.accounts.length === 1 && s.accounts[0].id === DEFAULT_ACCOUNT) s.accounts = []
-    this.changed(e, false)
+    // 没有添加的账号了：原来的账号不能再隐藏，列表清空，界面回到单账号
+    if (!s.accounts.some(a => a.id !== DEFAULT_ACCOUNT)) {
+      s.accounts = []
+      s.hideDefault = false
+      s.current = DEFAULT_ACCOUNT
+    }
+    this.changed(e, this.currentId(e) !== before)
+    this.sweep(e)
     return this.snapshot(e)
+  }
+
+  /** 把删除（隐藏）了的原来的账号放回列表（排第一），读一次它现在的登录状态 */
+  async showDefault(engine: EngineId): Promise<EngineAccounts> {
+    const e = accountEngine(engine)
+    const s = this.engineState(e)
+    if (!s.hideDefault) return this.snapshot(e)
+    s.hideDefault = false
+    const row: EngineAccount = {
+      id: DEFAULT_ACCOUNT,
+      email: null,
+      plan: null,
+      label: null,
+      addedAt: 0,
+      status: 'unknown',
+    }
+    s.accounts.unshift(row)
+    this.changed(e, false)
+    const probe = await this.adapter(e)
+      .accountProbe(null)
+      .catch(() => null)
+    if (probe && s.accounts.includes(row)) {
+      this.applyProbe(e, row, probe)
+      this.changed(e, false)
+    }
+    return this.snapshot(e)
+  }
+
+  /** 删除了的添加账号：没有进程在用了就删掉账号目录里本机的凭据文件；删不掉的（文件被占着）下次再试 */
+  private sweep(engine: AccountEngine): void {
+    const s = this.engineState(engine)
+    if (!s.cleanup.length) return
+    const adapter = this.ctx.adapters[engine]
+    const left = s.cleanup.filter(id => {
+      const dir = this.dir(engine, id)
+      if (!dir || !adapter?.accountForget) return false
+      if (adapter.accountInUse?.(dir)) return true
+      try {
+        adapter.accountForget(dir)
+        return false
+      } catch (error) {
+        log.warn('forget account failed', { engine, error: (error as Error).message })
+        return true
+      }
+    })
+    if (left.length === s.cleanup.length) return
+    s.cleanup = left
+    this.save()
   }
 
   update(engine: EngineId, id: string, patch: AccountPatch): EngineAccounts {

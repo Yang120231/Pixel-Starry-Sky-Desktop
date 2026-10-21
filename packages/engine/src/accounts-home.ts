@@ -31,6 +31,23 @@ export function linkedTo(path: string, target: string): boolean {
   }
 }
 
+/**
+ * 删掉账号目录里属于这个账号自己的文件（删除账号时清登录凭据）：只删直接放在 dir 里、本身是普通文件的项；
+ * 链接（接回原目录的文件夹、硬链接以外的符号链接）和文件夹一律不碰，免得顺着链接删到原目录。返回删掉了哪些
+ */
+export function removeOwnFiles(dir: string, names: readonly string[]): string[] {
+  const removed: string[] = []
+  for (const name of names) {
+    if (!name || name.includes('/') || name.includes('\\') || name === '.' || name === '..') continue
+    const path = join(dir, name)
+    const st = lstat(path)
+    if (!st || st.isSymbolicLink() || !st.isFile()) continue
+    rmSync(path, { force: true })
+    removed.push(name)
+  }
+  return removed
+}
+
 /** 把 from 里的内容并进 to（to 里已有的同名项保留原目录的，只添不改），然后删掉 from */
 function mergeInto(from: string, to: string): void {
   for (const name of readdirSync(from)) {

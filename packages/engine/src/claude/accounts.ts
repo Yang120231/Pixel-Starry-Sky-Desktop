@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { linkDir } from '../accounts-home'
+import { linkDir, removeOwnFiles } from '../accounts-home'
 import { logger } from '../log'
 
 const log = logger('engine.claude.accounts')
@@ -68,6 +68,16 @@ const isAccountKey = (key: string): boolean => ACCOUNT_KEYS.has(key) || /cache/i
 const BASE_DIR = '.pixelsky-base'
 /** 会话用的合并 MCP 配置文件的前缀（进程换掉 / 会话关闭时删，意外退出留下的空闲同步时清掉） */
 const MCP_FILE_PREFIX = '.pixelsky-mcp-'
+
+/**
+ * 删除账号时清掉的、账号自己的文件：登录凭据和账号自己的 .claude.json（登录信息 oauthAccount 在里面）。
+ * 只删本机文件，不跑 claude auth logout；macOS 上凭据在钥匙串里（条目名带目录哈希），留着不动，这个目录不会再被用到
+ */
+export const CLAUDE_OWN_FILES = ['.credentials.json', '.claude.json'] as const
+
+export function forgetClaudeAccount(dir: string): string[] {
+  return removeOwnFiles(dir, CLAUDE_OWN_FILES)
+}
 
 /** 原目录：用户自己设了 CLAUDE_CONFIG_DIR 的照用户的 */
 export function claudeRealDir(env: NodeJS.ProcessEnv): string {

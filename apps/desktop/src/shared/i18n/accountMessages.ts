@@ -15,12 +15,27 @@ export const accountMessages = {
   'accounts.rename': { zh: '改备注', en: 'Rename' },
   'accounts.renamePlaceholder': { zh: '备注，例如「公司」', en: 'Label, e.g. "Work"' },
   'accounts.moveUp': { zh: '上移', en: 'Move up' },
-  'accounts.remove': { zh: '移除这个账号', en: 'Remove this account' },
-  'accounts.removeTitle': { zh: '移除 {name}？', en: 'Remove {name}?' },
+  'accounts.remove': { zh: '删除这个账号', en: 'Delete this account' },
+  'accounts.removeTitle': { zh: '删除 {name}？', en: 'Delete {name}?' },
   'accounts.removeDesc': {
-    zh: '会退出这个账号的登录并从列表里去掉，之后要用再添加。对话记录不受影响。',
-    en: 'This signs the account out and removes it from the list. You can add it again later. Conversations are kept.',
+    zh: '只在像素星空里删除：从列表里去掉，并删掉本机为它保存的登录信息。不会退出登录，终端里和其他设备上登录的同一账号都不受影响，对话记录也不受影响。换账号之前开的对话会用它到这次结束。之后要用再添加。',
+    en: 'Only removed from PixelSky: it leaves the list and the sign-in PixelSky saved for it on this computer is deleted. It is not signed out, so the same account elsewhere (terminal, other devices) is unaffected, and conversations are kept. Conversations opened before switching keep using it until they end. Add it again any time.',
   },
+  'accounts.hideTitle': { zh: '在像素星空里删除原来的登录？', en: 'Remove the original sign-in from PixelSky?' },
+  'accounts.hideDesc': {
+    zh: '只在像素星空里隐藏本机原来的登录：像素星空不再列出、也不会用它。不会退出登录，终端里的 {engine} 照常可用。之后可以点「显示原来的账号」放回来。',
+    en: 'PixelSky hides the original sign-in on this computer and stops using it. It is not signed out: {engine} in the terminal keeps working. Use "Show original account" to bring it back.',
+  },
+  'accounts.removeCurrent': {
+    zh: '这是当前账号，删除后换到 {name}，正在进行的对话从下一条消息开始用它。',
+    en: 'This is the current account. After deleting it, PixelSky switches to {name}; ongoing conversations use it from the next message.',
+  },
+  'accounts.duplicate': { zh: '重复', en: 'Duplicate' },
+  'accounts.duplicateHint': {
+    zh: '列表里有同一个邮箱的另一项，删掉其中一个就行',
+    en: 'Another entry has the same email; delete one of them',
+  },
+  'accounts.showDefault': { zh: '显示原来的账号', en: 'Show original account' },
   'accounts.original': { zh: '本机原来的登录', en: 'Original sign-in on this computer' },
   'accounts.pageTitle': { zh: '{channel} 账号', en: '{channel} accounts' },
   'accounts.pageDesc': {

@@ -66,7 +66,10 @@ export interface EngineBridge {
   addAccount(engine: EngineId, method?: 'browser' | 'device'): Promise<EngineLogin>
   reloginAccount(engine: EngineId, id: string, method?: 'browser' | 'device'): Promise<EngineLogin>
   switchAccount(engine: EngineId, id: string): Promise<EngineAccounts>
+  /** 删除账号（只在像素星空里生效）：添加的账号删本机凭据，原来的账号只是隐藏；删的是当前账号时先换到别的 */
   removeAccount(engine: EngineId, id: string): Promise<EngineAccounts>
+  /** 把隐藏的原来的账号放回列表 */
+  showDefaultAccount(engine: EngineId): Promise<EngineAccounts>
   updateAccount(engine: EngineId, id: string, patch: AccountPatch): Promise<EngineAccounts>
   setAccountAuto(engine: EngineId, patch: Partial<AccountAutoSwitch>): Promise<EngineAccounts>
   retrySettings(): Promise<{ maxRetries: number | null }>

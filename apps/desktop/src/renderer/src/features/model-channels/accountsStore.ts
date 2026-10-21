@@ -16,6 +16,7 @@ import { demo } from '@/data/demo'
 import { bridge } from '@/features/engine/store'
 import { useMachines } from '@/features/machines/store'
 import type { AuthChannel } from './channelModel'
+import { removeNext } from './accountsModel'
 
 /** 多账号支持的通道 → 引擎 */
 export const ACCOUNT_ENGINE: Partial<Record<AuthChannel, AccountEngine>> = { chatgpt: 'codex', claude: 'claude' }
@@ -121,9 +122,27 @@ export async function switchAccount(engine: AccountEngine, id: string): Promise<
   if (bridge) putAccounts(await bridge.switchAccount(engine, id))
 }
 
+/** 删除账号（只在像素星空里生效）：删的是当前账号时主进程先换到别的；原来的账号只是隐藏 */
 export async function removeAccount(engine: AccountEngine, id: string): Promise<void> {
-  if (isDemo) return demoChange(engine, l => void (l.accounts = l.accounts.filter(a => a.id !== id)))
+  if (isDemo)
+    return demoChange(engine, l => {
+      const next = removeNext(l, id)
+      l.accounts = l.accounts.filter(a => a.id !== id)
+      if (id === DEFAULT_ACCOUNT) l.defaultHidden = true
+      if (l.current === id) l.current = next?.id ?? DEFAULT_ACCOUNT
+      if (!l.accounts.some(a => a.id !== DEFAULT_ACCOUNT)) Object.assign(l, { accounts: [], defaultHidden: false })
+    })
   if (bridge) putAccounts(await bridge.removeAccount(engine, id))
+}
+
+/** 把隐藏的原来的账号放回列表 */
+export async function showDefaultAccount(engine: AccountEngine): Promise<void> {
+  if (isDemo)
+    return demoChange(engine, l => {
+      l.defaultHidden = false
+      l.accounts.unshift({ id: DEFAULT_ACCOUNT, email: null, plan: null, label: null, addedAt: 0, status: 'unknown' })
+    })
+  if (bridge) putAccounts(await bridge.showDefaultAccount(engine))
 }
 
 export async function updateAccount(engine: AccountEngine, id: string, patch: AccountPatch): Promise<void> {

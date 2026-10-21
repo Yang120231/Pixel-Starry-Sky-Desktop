@@ -39,7 +39,7 @@ import { loadCodexRuns } from './runs'
 import { CODEX_NPM_PACKAGE, installCodexWithNpm, updateCodexWithNpm } from './update'
 import { array } from './process'
 import { codexViewedImage } from './images'
-import { accountEnv, prepareAccountHome } from './accounts'
+import { accountEnv, forgetCodexAccount, prepareAccountHome } from './accounts'
 
 export interface CodexAdapterOptions {
   /** 用户在设置里替换的命令（绝对路径或 PATH 上的命令名，docs/ui/engine-launch.md） */
@@ -182,6 +182,10 @@ export class CodexAdapter implements EngineAdapter {
     const want = resolve(dir).toLowerCase()
     for (const s of this.liveSessions) if (s.home && resolve(s.home).toLowerCase() === want && s.alive()) return true
     return false
+  }
+  /** 删除账号：只删账号目录里本机的凭据文件（不退出登录、不联网）；目录骨架留着，线程索引里记着这里的路径 */
+  accountForget(dir: string): void {
+    forgetCodexAccount(dir)
   }
 
   /**

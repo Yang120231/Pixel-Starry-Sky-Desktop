@@ -20,11 +20,13 @@ import {
   quotaWindows,
   removeAccount,
   setAccountAuto,
+  showDefaultAccount,
   switchAccount,
   updateAccount,
   useAccounts,
   useAccountsQuota,
 } from './accountsStore'
+import { canRemove, duplicateIds, removeNext } from './accountsModel'
 
 const ENGINE_NAME: Record<AccountEngine, string> = { codex: 'Codex', claude: 'Claude Code' }
 
@@ -79,6 +81,8 @@ function AccountsTable({ engine }: { engine: AccountEngine }) {
   useEffect(() => refresh(false), [engine]) // eslint-disable-line react-hooks/exhaustive-deps
   const adding = loginRunning(login) && login?.target === 'add'
   const names = Object.fromEntries(list.accounts.map(a => [a.id, accountName(a)]))
+  const duplicates = duplicateIds(list)
+  const removingNext = removing ? removeNext(list, removing.id) : null
   const act = (fn: () => Promise<void>): void =>
     void fn().catch((e: unknown) => toast(translateMessage((e as Error).message)))
 
@@ -98,6 +102,9 @@ function AccountsTable({ engine }: { engine: AccountEngine }) {
         >
           <RefreshCw size={13} className={cn(refreshing && 'animate-spin')} />
         </button>
+        {list.defaultHidden && (
+          <Button onClick={() => act(() => showDefaultAccount(engine))}>{tr('accounts.showDefault')}</Button>
+        )}
         <Button icon={Plus} disabled={adding} onClick={() => void startLogin(engine, 'browser', 'add')}>
           {tr('accounts.add')}
         </Button>
@@ -117,6 +124,8 @@ function AccountsTable({ engine }: { engine: AccountEngine }) {
           account={a}
           index={list.accounts.indexOf(a)}
           current={a.id === list.current}
+          duplicate={duplicates.has(a.id)}
+          removable={canRemove(list, a.id)}
           quota={quota.find(q => q.id === a.id)}
           onSwitch={() => act(() => switchAccount(engine, a.id))}
           onRelogin={() => void startLogin(engine, 'browser', a.id)}
@@ -134,8 +143,22 @@ function AccountsTable({ engine }: { engine: AccountEngine }) {
       <p className="border-t border-line-subtle px-4 py-2.5 text-meta text-fg-muted">{tr('accounts.footer')}</p>
       {removing && (
         <ConfirmDialog
-          title={tr('accounts.removeTitle', { name: accountName(removing) })}
-          description={tr('accounts.removeDesc')}
+          title={
+            removing.id === DEFAULT_ACCOUNT
+              ? tr('accounts.hideTitle')
+              : tr('accounts.removeTitle', { name: accountName(removing) })
+          }
+          description={
+            (removing.id === DEFAULT_ACCOUNT
+              ? tr('accounts.hideDesc', { engine: ENGINE_NAME[engine] })
+              : tr('accounts.removeDesc')) +
+            (removing.id === list.current
+              ? ' ' +
+                tr('accounts.removeCurrent', {
+                  name: removingNext ? accountName(removingNext) : tr('accounts.original'),
+                })
+              : '')
+          }
           confirmLabel={tr('accounts.remove')}
           cancelLabel={tr('accounts.cancel')}
           danger
@@ -176,6 +199,8 @@ function AccountRow({
   account: a,
   index,
   current,
+  duplicate,
+  removable,
   quota,
   onSwitch,
   onRelogin,
@@ -186,6 +211,10 @@ function AccountRow({
   account: EngineAccount
   index: number
   current: boolean
+  /** 列表里有同一个邮箱的另一项 */
+  duplicate: boolean
+  /** 能删（列表至少两项；原来的账号要有别的可用账号） */
+  removable: boolean
   quota: Parameters<typeof quotaWindows>[0]
   onSwitch: () => void
   onRelogin: () => void
@@ -226,6 +255,14 @@ function AccountRow({
             {expired && (
               <span className="shrink-0 rounded-full bg-warn/15 px-1.5 text-label leading-[18px] text-warn">
                 {tr('accounts.expired')}
+              </span>
+            )}
+            {duplicate && (
+              <span
+                title={tr('accounts.duplicateHint')}
+                className="shrink-0 rounded-full bg-warn/15 px-1.5 text-label leading-[18px] text-warn"
+              >
+                {tr('accounts.duplicate')}
               </span>
             )}
           </span>
@@ -306,7 +343,7 @@ function AccountRow({
               {tr('accounts.moveUp')}
             </MenuItem>
           )}
-          {!current && a.id !== DEFAULT_ACCOUNT && (
+          {removable && (
             <>
               <div role="separator" className="my-1 border-t border-line-subtle" />
               <MenuItem

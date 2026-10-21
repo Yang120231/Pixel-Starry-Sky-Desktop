@@ -473,6 +473,13 @@ export const IPC_CONTRACT = {
     remote: 'engine:accountUpdate',
     trust: 'sender',
   },
+  'engine:accountShowDefault': {
+    kind: 'invoke',
+    route: 'selected',
+    ids: [0],
+    remote: 'engine:accountShowDefault',
+    trust: 'sender',
+  },
   'engine:accountAuto': { kind: 'invoke', route: 'selected', ids: [0], remote: 'engine:accountAuto', trust: 'sender' },
   'engine:install': { kind: 'invoke', route: 'selected', ids: [0], remote: 'engine:install', trust: 'sender' },
   'engine:updateSession': {

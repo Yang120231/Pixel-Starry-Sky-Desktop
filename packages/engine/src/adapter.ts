@@ -184,6 +184,11 @@ export interface EngineAdapter {
   accountProbe?(dir: string | null): Promise<AccountProbe>
   /** 这个账号目录现在还有没有引擎进程在用（换账号之前开的对话）：移除账号前查，在用就不让移除（会话会因登录失效而失败） */
   accountInUse?(dir: string): boolean
+  /**
+   * 删除账号（只在像素星空里生效）：删掉账号目录里本机保存的登录凭据，不跑退出登录命令、不联网，
+   * 别处登录的同一账号不受影响。调用方保证这时没有进程在用这个目录
+   */
+  accountForget?(dir: string): void
   /** npm 上的包名：宿主定时查最新版本，界面提示「有新版本」（docs/ui/engine-update.md） */
   readonly npmPackage?: string
   /**

@@ -37,6 +37,8 @@ export interface EngineAccounts {
   /** 列表顺序就是「按列表顺序」自动切换的顺序；原来的账号登录过才在里面 */
   accounts: EngineAccount[]
   auto: AccountAutoSwitch
+  /** 原来的账号在像素星空里删掉（隐藏）了：不在列表里、不会被用到，「显示原来的账号」能恢复。旧版辅助进程没有这一项 */
+  defaultHidden?: boolean
 }
 
 /** 一个账号的额度（设置里的账号表、模型菜单的账号子菜单） */

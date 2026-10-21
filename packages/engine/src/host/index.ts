@@ -284,6 +284,10 @@ export class EngineHost {
     return this.m.accounts.remove(engine, id)
   }
 
+  showDefaultAccount(engine: EngineId): Promise<EngineAccounts> {
+    return this.m.accounts.showDefault(engine)
+  }
+
   updateAccount(engine: EngineId, id: string, patch: AccountPatch): EngineAccounts {
     return this.m.accounts.update(engine, id, patch)
   }

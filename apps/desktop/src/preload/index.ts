@@ -114,6 +114,7 @@ const engine: EngineBridge = {
   switchAccount: (engine, id) => call('engine:accountSwitch', engine, id),
   removeAccount: (engine, id) => call('engine:accountRemove', engine, id),
   updateAccount: (engine, id, patch) => call('engine:accountUpdate', engine, id, patch),
+  showDefaultAccount: engine => call('engine:accountShowDefault', engine),
   setAccountAuto: (engine, patch) => call('engine:accountAuto', engine, patch),
   retrySettings: () => call('engine:retrySettings'),
   systemProxy: () => call('engine:systemProxy'),

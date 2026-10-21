@@ -3,7 +3,7 @@
 // sqlite 用 CODEX_SQLITE_HOME 指回原目录。凭据由 codex login 自己写进去，这里不读不碰。
 import { copyFileSync, existsSync, linkSync, mkdirSync, rmSync, statSync, symlinkSync, type BigIntStats } from 'node:fs'
 import { join } from 'node:path'
-import { linkDir, linkedTo, lstat } from '../accounts-home'
+import { linkDir, linkedTo, lstat, removeOwnFiles } from '../accounts-home'
 import { logger } from '../log'
 
 const log = logger('engine.codex.accounts')
@@ -25,6 +25,13 @@ export const SHARED_DIRS = [
 
 /** 接回原目录的文件；auth.json（凭据）、.credentials.json（MCP 令牌）不在里面 */
 export const SHARED_FILES = ['config.toml', 'history.jsonl', 'session_index.jsonl', 'AGENTS.md'] as const
+
+/** 删除账号时清掉的、账号自己的文件：登录凭据 auth.json 和 MCP 令牌 .credentials.json（只删本机文件，不跑 codex logout） */
+export const CODEX_OWN_FILES = ['auth.json', '.credentials.json'] as const
+
+export function forgetCodexAccount(dir: string): string[] {
+  return removeOwnFiles(dir, CODEX_OWN_FILES)
+}
 
 /** 账号目录要用的环境变量：用户自己设了 CODEX_SQLITE_HOME 的照用户的 */
 export function accountEnv(realHome: string, dir: string, env: NodeJS.ProcessEnv): Record<string, string> {
