@@ -536,7 +536,8 @@ describe('额度用完自动换账号', () => {
     const env = setup({
       engine: 'claude',
       limited: n => n === 1,
-      resetsAt: () => (resetsAt = Date.now() + 30),
+      // 留够余量：机器忙时第一轮结束得晚，恢复时间太近会在断言前就换回原账号
+      resetsAt: () => (resetsAt = Date.now() + 1500),
     })
     const list = await env.addAccount('work@example.com')
     env.host.setAccountAuto('claude', { enabled: true })
@@ -551,7 +552,7 @@ describe('额度用完自动换账号', () => {
       resetsAt,
     })
     // 换到的账号上再聊一轮：这时已过恢复时间，结束后去看原账号，恢复了就换回去
-    await new Promise(r => setTimeout(r, 40))
+    await new Promise(r => setTimeout(r, Math.max(0, resetsAt - Date.now()) + 20))
     await env.host.send(id, '接着改')
     await vi.waitFor(async () => expect((await env.host.accounts('claude')).current).toBe('default'))
     await vi.waitFor(() => expect(env.host.open(id).state).toBe('idle'))
