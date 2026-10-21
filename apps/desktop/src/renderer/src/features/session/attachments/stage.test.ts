@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { FILE_STAGE_CHUNK_BYTES } from '@pixelsky/protocol'
 import type { FileStageRequest } from '../../../../../shared/types/workspace'
-import { discardStaged, stageFile } from './stage'
+import { discardStaged, releaseStaged, stageFile } from './stage'
 
 const ref = { projectId: 'p' }
 type Stage = (r: unknown, request: FileStageRequest) => Promise<{ path?: string }>
@@ -20,6 +20,14 @@ function bridge(stage: Stage): FileStageRequest[] {
     },
   })
   return calls
+}
+/** 内存里的 localStorage：记「输入框自己传的副本」用 */
+function storage(): void {
+  const data = new Map<string, string>()
+  vi.stubGlobal('localStorage', {
+    getItem: (k: string) => data.get(k) ?? null,
+    setItem: (k: string, v: string) => void data.set(k, v),
+  })
 }
 afterEach(() => vi.unstubAllGlobals())
 
@@ -75,13 +83,40 @@ describe('stageFile', () => {
 })
 
 describe('discardStaged', () => {
-  it('移除附件时删暂存副本；没有工作区不发，删不掉不报错', async () => {
-    const calls = bridge(async () => {
-      throw new Error('机器断开了')
+  const path = '/data/attachments/x/file-a.bin'
+  it('输入框自己传的副本：移除附件时删；没有工作区不发，删不掉不报错', async () => {
+    storage()
+    let fail = false
+    const calls = bridge(async (r, request) => {
+      if (fail) throw new Error('机器断开了')
+      return ok(r, request)
     })
-    await discardStaged('/data/attachments/x/file-a.bin', null)
+    await stageFile(bigFile(4), ref)
+    calls.length = 0
+    await discardStaged(path, null)
     expect(calls).toEqual([])
-    await expect(discardStaged('/data/attachments/x/file-a.bin', ref)).resolves.toBeUndefined()
-    expect(calls).toEqual([{ action: 'remove', path: '/data/attachments/x/file-a.bin' }])
+    fail = true
+    await expect(discardStaged(path, ref)).resolves.toBeUndefined()
+    expect(calls).toEqual([{ action: 'remove', path }])
+    // 已经删过一次：不再重复发
+    await discardStaged(path, ref)
+    expect(calls).toHaveLength(1)
+  })
+
+  it('分叉 / 回退放回输入框的副本（不是这个输入框传的）：移除时不删，原消息还要读', async () => {
+    storage()
+    const calls = bridge(ok)
+    await discardStaged('/data/attachments/y/file-from-message.bin', ref)
+    expect(calls).toEqual([])
+  })
+
+  it('发出去之后：副本归消息了，再从别处移除也不删', async () => {
+    storage()
+    const calls = bridge(ok)
+    await stageFile(bigFile(4), ref)
+    releaseStaged([path])
+    calls.length = 0
+    await discardStaged(path, ref)
+    expect(calls).toEqual([])
   })
 })

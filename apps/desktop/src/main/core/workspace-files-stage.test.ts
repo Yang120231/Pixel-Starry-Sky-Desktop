@@ -115,6 +115,18 @@ describe('合计上限', () => {
     })
   })
 
+  it('两个 begin 同时到、各自都放得下但加起来超：只收一个，另一个拒收', async () => {
+    await reserve(4)
+    const near = MAX_STAGED_TOTAL_BYTES - 4 * MAX_STAGED_FILE_BYTES - 1024 * 1024
+    const results = await Promise.allSettled(
+      ['a.zip', 'b.zip'].map(name => service.stage(ref, { action: 'begin', id: randomUUID(), name, bytes: near })),
+    )
+    expect(results.map(r => r.status).sort()).toEqual(['fulfilled', 'rejected'])
+    expect((results.find(r => r.status === 'rejected') as PromiseRejectedResult).reason.message).toMatch(
+      '合计超过 5 GB',
+    )
+  })
+
   it('超了先清过期的再算：过期副本删掉后放得下就收', async () => {
     const old = await upload('old.txt', 'x'.repeat(16))
     const past = new Date(Date.now() - STAGED_FILE_TTL_MS - 60_000)

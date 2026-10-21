@@ -65,7 +65,7 @@ import { FileAttachments } from '@/features/session/attachments/FileAttachments'
 import { readImage } from '@/features/session/attachments/images'
 import { needsConversion } from '@/features/session/attachments/convertImage'
 import { fileSize, isImageFile, readTextFile } from '@/features/session/attachments/files'
-import { discardStaged, stageFile } from '@/features/session/attachments/stage'
+import { discardStaged, releaseStaged, stageFile } from '@/features/session/attachments/stage'
 import { updateFiles, updateImages, useFileDraft, useImageDraft } from '@/features/session/attachments/drafts'
 import { Popover, PopoverItem } from '@/ui'
 import { ComposerInput, type ComposerInputHandle } from './composerInput/ComposerInput'
@@ -583,6 +583,8 @@ export function Composer({
     setError(null)
     try {
       await live.submit(sent, submission.current.id, images, textFiles)
+      // 发出去的暂存副本归消息了：之后分叉、回退放回输入框再移除，不能删它
+      releaseStaged(textFiles.flatMap(file => (file.staged && file.path ? [file.path] : [])))
       setText(current => (current === sent ? '' : current))
       const sentIds = new Set([...images, ...textFiles].map(attachment => attachment.id))
       if (images.length) await updateImages(key, current => current.filter(image => !sentIds.has(image.id)))
@@ -844,7 +846,7 @@ export function Composer({
               <FileAttachments
                 files={textFiles}
                 onRemove={id => {
-                  // 暂存到目标机器的副本跟着删（还没发出去，不会再有人读）
+                  // 这个输入框自己传的、还没发出去的副本跟着删；分叉 / 回退放回来的指向原消息的副本，不删（discardStaged）
                   const removed = textFiles.find(file => file.id === id)
                   if (removed?.staged && removed.path)
                     void discardStaged(removed.path, composerWorkspace(live?.sessionId, status, draftKey))

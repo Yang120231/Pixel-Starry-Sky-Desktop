@@ -240,6 +240,8 @@ const safeStageName = (name: string): string => {
 export class WorkspaceFiles {
   private saves = new Map<string, Promise<unknown>>()
   private stagedUploads = new Map<string, StagedUpload>()
+  /** 上一个 begin（检查合计 + 登记）做完；下一个接在后面 */
+  private beginning: Promise<unknown> = Promise.resolve()
   constructor(
     private resolveTarget: TargetResolver,
     private options: WorkspaceFilesOptions = {},
@@ -318,26 +320,33 @@ export class WorkspaceFiles {
         request.bytes > MAX_STAGED_FILE_BYTES
       )
         throw new Error('文件引用参数不正确或文件超过 1 GB')
-      if (this.stagedUploads.has(request.id)) throw new Error('文件引用编号已使用')
-      if ((await this.stagedBytes()) + request.bytes > MAX_STAGED_TOTAL_BYTES) {
-        // 先清掉过期的再算一次；还超就拒收，不删保留期里的旧副本（之前的对话可能还要读）
-        await this.cleanExpiredStages()
-        if ((await this.stagedBytes()) + request.bytes > MAX_STAGED_TOTAL_BYTES)
-          throw new Error('临时文件引用合计超过 5 GB，请先移除不用的附件，或等旧的临时副本过期（30 天）')
-      }
-      const dir = join(this.stageRoot(), request.id)
-      await mkdir(dir, { recursive: true, mode: 0o700 })
-      const part = join(dir, PART_FILE)
-      const handle = await open(part, 'wx', 0o600)
-      await handle.close()
-      this.stagedUploads.set(request.id, {
-        dir,
-        part,
-        path: join(dir, `file-${safeStageName(request.name)}`),
-        bytes: request.bytes,
-        written: 0,
-        touchedAt: Date.now(),
+      const { id, name, bytes } = request
+      // 算合计和登记之间要 await（读目录、建文件）：几个 begin 排成一队，不然并发的几个都按同一个旧合计放行，
+      // 加起来超过 5 GB
+      const begin = this.beginning.then(async () => {
+        if (this.stagedUploads.has(id)) throw new Error('文件引用编号已使用')
+        if ((await this.stagedBytes()) + bytes > MAX_STAGED_TOTAL_BYTES) {
+          // 先清掉过期的再算一次；还超就拒收，不删保留期里的旧副本（之前的对话可能还要读）
+          await this.cleanExpiredStages()
+          if ((await this.stagedBytes()) + bytes > MAX_STAGED_TOTAL_BYTES)
+            throw new Error('临时文件引用合计超过 5 GB，请先移除不用的附件，或等旧的临时副本过期（30 天）')
+        }
+        const dir = join(this.stageRoot(), id)
+        await mkdir(dir, { recursive: true, mode: 0o700 })
+        const part = join(dir, PART_FILE)
+        const handle = await open(part, 'wx', 0o600)
+        await handle.close()
+        this.stagedUploads.set(id, {
+          dir,
+          part,
+          path: join(dir, `file-${safeStageName(name)}`),
+          bytes,
+          written: 0,
+          touchedAt: Date.now(),
+        })
       })
+      this.beginning = begin.catch(() => undefined)
+      await begin
       return {}
     }
     if (request.action === 'cancel') {
