@@ -249,11 +249,45 @@ export class HostAccounts {
     })
   }
 
-  /** 重新登录某个账号（登录失效了）：登录到它自己的目录 */
+  /**
+   * 重新登录某个账号。添加的账号先登录到一个新目录，核对是同一个邮箱后这一行才改用新目录（id 跟着换）；
+   * 授权时登成了别的账号就退出新目录、原目录和原来的登录一点不动（直接登录进原目录的话，别人的凭据会盖掉它，
+   * 下次探测这一行就变成了别的账号）。Claude 在 macOS 上的凭据按目录存在钥匙串里，所以不搬文件、换目录。
+   * 原来的账号（用户本来的配置目录）仍直接登录进去：那就是用户自己的 Claude Code / Codex 登录
+   */
   relogin(engine: EngineId, id: string, method: 'browser' | 'device'): EngineLogin {
     const e = accountEngine(engine)
     const adapter = this.adapter(e)
     const row = this.find(e, id)
+    if (row.id !== DEFAULT_ACCOUNT) {
+      const fresh = 'a_' + randomBytes(6).toString('hex')
+      const dir = this.dir(e, fresh)
+      // 没用上的新目录：和删除账号一样不跑退出登录（只在像素星空里生效），凭据文件等没有进程在用时删掉
+      const reject = (message: string): string => {
+        this.forgetLater(e, fresh)
+        return message
+      }
+      return this.ctx.m.login.loginEngine(e, method, {
+        target: row.id,
+        login: (m, onLine) => adapter.accountLogin(dir, m, onLine),
+        verify: async () => {
+          const probe = await adapter.accountProbe(dir)
+          if (!probe.signedIn) return reject('登录命令结束了，但还没有登录成功')
+          // 登录期间这一行可能被移除了
+          const live = this.engineState(e).accounts.find(a => a.id === row.id)
+          if (!live) return reject('这个账号已经不在列表里了')
+          const email = probe.email?.toLowerCase()
+          if (live.email && email && live.email.toLowerCase() !== email)
+            return reject(`登录的是 ${probe.email}，不是 ${live.email}。要添加新账号请用「添加账号」`)
+          const other = this.engineState(e).accounts.find(a => a !== live && a.email?.toLowerCase() === email)
+          if (email && other) return reject(`${probe.email} 已经在列表里了`)
+          this.renameRow(e, live, fresh)
+          this.applyProbe(e, live, probe)
+          this.changed(e, this.currentId(e) === live.id)
+          return null
+        },
+      })
+    }
     const dir = this.dir(e, row.id)
     return this.ctx.m.login.loginEngine(e, method, {
       target: row.id,
@@ -268,6 +302,31 @@ export class HostAccounts {
         return null
       },
     })
+  }
+
+  /**
+   * 重新登录成功：这一行改用新目录。当前账号、换回去的原账号、额度记录跟着换 id；旧目录和删除账号一样不跑退出登录，
+   * 本机的凭据文件等没有进程在用时删掉（还在用旧目录的对话下一条消息前就按新 id 换进程了）
+   */
+  private renameRow(engine: AccountEngine, row: EngineAccount, id: string): void {
+    const s = this.engineState(engine)
+    const old = row.id
+    row.id = id
+    if (s.current === old) s.current = id
+    if (s.switchedFrom === old) s.switchedFrom = id
+    const quota = this.quotas.get(`${engine}:${old}`)
+    this.quotas.delete(`${engine}:${old}`)
+    if (quota) this.quotas.set(`${engine}:${id}`, { ...quota, id })
+    this.forgetLater(engine, old)
+  }
+
+  /** 这个添加账号的目录不再用了：记进 cleanup，没有进程在用时删掉本机的凭据文件（sweep） */
+  private forgetLater(engine: AccountEngine, id: string): void {
+    const s = this.engineState(engine)
+    if (id === DEFAULT_ACCOUNT || s.accounts.some(a => a.id === id)) return
+    if (!s.cleanup.includes(id)) s.cleanup.push(id)
+    this.save()
+    this.sweep(engine)
   }
 
   private find(engine: AccountEngine, id: string): EngineAccount {
@@ -586,7 +645,10 @@ export class HostAccounts {
     const e = record.engine as AccountEngine
     const s = this.engineState(e)
     if (!s.auto.enabled || s.accounts.length < 2 || this.autoSwitched.has(queueId)) return null
-    const from = this.currentId(e)
+    const current = this.currentId(e)
+    // 用完的是这个进程启动时的账号（rt.sessionAccount）：它晚到的失败不能记到别人头上——期间可能手动换过，
+    // 或者同一账号的另一个会话已经先换走了；账号已不在列表里时按当前的算
+    const from = rt.sessionAccount && s.accounts.some(a => a.id === rt.sessionAccount) ? rt.sessionAccount : current
     const fromRow = s.accounts.find(a => a.id === from)
     // 用完的是哪个窗口、几点恢复：换之前按原账号的邮箱取（换完再取就是新账号的了）
     const fromEvent = usedWindow(this.ctx.m.quota.lastEvent(sessionId))
@@ -594,7 +656,7 @@ export class HostAccounts {
       fromEvent.resetsAt !== null || fromEvent.window !== null
         ? fromEvent
         : usedWindow(this.ctx.m.quota.peek(QUOTA_PROVIDER[e], fromRow?.email ?? null))
-    // 当前账号记成用完，「剩余最多」和换回去都按它算
+    // 用完的账号记成用完，「剩余最多」和换回去都按它算
     const prev = this.quotas.get(`${e}:${from}`)
     this.quotas.set(`${e}:${from}`, {
       id: from,
@@ -602,19 +664,25 @@ export class HostAccounts {
       blocked: true,
       observedAt: Date.now(),
     })
-    const next = this.pickNext(e)
+    // 当前账号已经不是用完的那个（换过了）、而且还能用：不再往下换，这条在当前账号上重发
+    const currentRow = from !== current ? s.accounts.find(a => a.id === current) : undefined
+    const stay =
+      currentRow && currentRow.status !== 'expired' && (usedOf(this.quotas.get(`${e}:${current}`)) ?? 0) < 100
+    const next = stay ? currentRow : this.pickNext(e)
     if (!next) return null
     this.autoSwitched.add(queueId)
     if (this.autoSwitched.size > 500) this.autoSwitched.delete(this.autoSwitched.values().next().value!)
-    if (s.switchedFrom === null) {
+    if (s.switchedFrom === null && !stay) {
       s.switchedFrom = from
       s.switchedFromResetsAt = used.resetsAt
     }
     // 刚用完：不知道恢复时间时也先等 10 分钟再去看
     this.backCheckedAt.set(e, Date.now())
-    s.current = next.id
-    log.info('auto switched account', { engine: e, sessionId })
-    this.changed(e, true)
+    if (!stay) {
+      s.current = next.id
+      log.info('auto switched account', { engine: e, sessionId })
+      this.changed(e, true)
+    } else this.publish(e)
     return {
       engine: e,
       from,

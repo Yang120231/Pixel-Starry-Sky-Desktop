@@ -8,6 +8,7 @@ import { EngineHost, type EngineAdapter } from '../src'
 import type { AccountProbe, LoginProcess, SessionContext } from '../src/adapter'
 import { removeOwnFiles } from '../src/accounts-home'
 import { forgetCodexAccount, prepareAccountHome } from '../src/codex/accounts'
+import type { QuotaReading } from '../src/quota'
 import { readAccountsFile } from '../src/host/accounts'
 import { makeTmp, removeTmp } from './helpers/tmp'
 
@@ -153,6 +154,10 @@ function setup(
     resetsAt?: () => number
     /** 适配器报某个账号目录还有进程在用 */
     inUse?: (dir: string) => boolean
+    /** 第 n 个会话的这一轮等它放行才出结果（让额度用完的失败晚到） */
+    gate?: (session: number) => Promise<void>
+    /** 会话进程借来读额度时回的账号邮箱（第 n 个会话）；不给就没有这个能力 */
+    sessionQuota?: (session: number) => string
   } = {},
 ) {
   const engine = opts.engine ?? 'codex'
@@ -163,6 +168,9 @@ function setup(
   const loggedOut: (string | null)[] = []
   const forgotten: string[] = []
   const sends: { session: number; text: string }[] = []
+  /** 哪些会话进程被借去读了额度；临时进程（adapter.accountQuota）读了几次 */
+  const borrowed: number[] = []
+  let tempQuota = 0
   let sessions = 0
   const done = (): LoginProcess => ({
     write() {},
@@ -181,6 +189,14 @@ function setup(
       }) as EngineInfo,
     login: async () => done(),
     ...(opts.inUse ? { accountInUse: opts.inUse } : {}),
+    ...(opts.sessionQuota
+      ? {
+          accountQuota: async () => {
+            tempQuota++
+            return quotaOf('work@example.com')
+          },
+        }
+      : {}),
     accountLogin: async dir => {
       emails.set(dir, nextEmail)
       return done()
@@ -216,36 +232,52 @@ function setup(
     createSession: (ctx: SessionContext) => {
       const n = ++sessions
       return {
+        ...(opts.sessionQuota
+          ? {
+              accountQuota: async () => {
+                borrowed.push(n)
+                return quotaOf(opts.sessionQuota!(n))
+              },
+            }
+          : {}),
         send: (text, turnId) => {
           sends.push({ session: n, text })
-          setTimeout(() => {
-            if (opts.limited?.(n)) {
-              if (opts.resetsAt)
-                ctx.reportQuota?.({
-                  windows: [
-                    { id: 'five_hour', durationMins: 300, usedPercent: 100, resetsAt: opts.resetsAt(), rejected: true },
-                  ],
-                  observedAt: Date.now(),
+          void (opts.gate?.(n) ?? Promise.resolve()).then(() =>
+            setTimeout(() => {
+              if (opts.limited?.(n)) {
+                if (opts.resetsAt)
+                  ctx.reportQuota?.({
+                    windows: [
+                      {
+                        id: 'five_hour',
+                        durationMins: 300,
+                        usedPercent: 100,
+                        resetsAt: opts.resetsAt(),
+                        rejected: true,
+                      },
+                    ],
+                    observedAt: Date.now(),
+                  })
+                ctx.emit({
+                  type: 'item_completed',
+                  item: {
+                    kind: 'notice',
+                    id: `limit-${n}`,
+                    level: 'error',
+                    text: 'You have hit your usage limit',
+                    error: { kind: 'balance', code: 'usageLimitExceeded' },
+                  },
                 })
-              ctx.emit({
-                type: 'item_completed',
-                item: {
-                  kind: 'notice',
-                  id: `limit-${n}`,
-                  level: 'error',
-                  text: 'You have hit your usage limit',
-                  error: { kind: 'balance', code: 'usageLimitExceeded' },
-                },
-              })
-              ctx.emit({ type: 'turn_completed', turnId, outcome: 'failed', error: 'You have hit your usage limit' })
-            } else {
-              ctx.emit({
-                type: 'item_completed',
-                item: { kind: 'assistant', id: `a-${n}-${turnId}`, text: 'ok' } as Item,
-              })
-              ctx.emit({ type: 'turn_completed', turnId, outcome: 'completed', error: null })
-            }
-          }, 5)
+                ctx.emit({ type: 'turn_completed', turnId, outcome: 'failed', error: 'You have hit your usage limit' })
+              } else {
+                ctx.emit({
+                  type: 'item_completed',
+                  item: { kind: 'assistant', id: `a-${n}-${turnId}`, text: 'ok' } as Item,
+                })
+                ctx.emit({ type: 'turn_completed', turnId, outcome: 'completed', error: null })
+              }
+            }, 5),
+          )
         },
         interrupt: async () => {},
         answer: () => {},
@@ -278,9 +310,30 @@ function setup(
     loggedOut,
     forgotten,
     sends,
+    borrowed,
+    tempQuota: () => tempQuota,
+    /** 下一次登录（添加 / 重新登录）登进去的邮箱 */
+    loginAs: (email: string) => (nextEmail = email),
     sessions: () => sessions,
     accountsEvents,
   }
+}
+
+const quotaOf = (account: string): QuotaReading => ({
+  kind: 'ok',
+  plan: 'plus',
+  account,
+  windows: [{ id: 'five_hour', durationMins: 300, usedPercent: 20, resetsAt: null }],
+  extras: {},
+  blocked: null,
+  observedAt: Date.now(),
+})
+
+/** 手动放行的闸门：open() 之后 wait() 才返回 */
+function latch() {
+  let open!: () => void
+  const opened = new Promise<void>(r => (open = r))
+  return { open, wait: () => opened }
 }
 
 describe('宿主的账号列表', () => {
@@ -384,6 +437,59 @@ describe('宿主的账号列表', () => {
   })
 })
 
+describe('重新登录', () => {
+  const finished = async (env: ReturnType<typeof setup>) => {
+    await vi.waitFor(() =>
+      expect(env.events.findLast(e => e.kind === 'engine_login')).toMatchObject({
+        login: { phase: expect.stringMatching(/done|failed/) },
+      }),
+    )
+    const last = env.events.findLast(e => e.kind === 'engine_login')
+    return last?.kind === 'engine_login' ? last.login : null
+  }
+
+  it('授权时登成了别的账号：报错，原账号的目录和登录不动，新目录删掉本机凭据，列表里还是原来的邮箱', async () => {
+    const env = setup()
+    const list = await env.addAccount('work@example.com')
+    const work = list.accounts[1]
+    const workDir = [...env.emails].find(([, email]) => email === 'work@example.com')![0]
+    env.loginAs('other@example.com')
+    env.host.reloginAccount('codex', work.id)
+    expect(await finished(env)).toMatchObject({ phase: 'failed', error: expect.stringMatching(/other@example.com/) })
+    expect(env.emails.get(workDir)).toBe('work@example.com')
+    // 不跑退出登录（只在像素星空里生效）：没用上的新目录删掉本机凭据，原账号的目录不碰
+    expect(env.loggedOut).toEqual([])
+    expect(env.forgotten).toHaveLength(1)
+    expect(env.forgotten[0]).not.toBe(workDir)
+    // 之后探测一遍：还是原来的账号，不会变成别人
+    await env.host.accountsQuota('codex', true)
+    const after = await env.host.accounts('codex')
+    expect(after.accounts.map(a => [a.id, a.email])).toEqual([
+      ['default', 'me@example.com'],
+      [work.id, 'work@example.com'],
+    ])
+  })
+
+  it('登回同一个账号：这一行改用新目录（当前账号跟着换 id），旧目录删掉本机凭据，邮箱不变', async () => {
+    const env = setup()
+    const list = await env.addAccount('work@example.com')
+    const work = list.accounts[1]
+    await env.host.switchAccount('codex', work.id)
+    const workDir = [...env.emails].find(([, email]) => email === 'work@example.com')![0]
+    env.loginAs('work@example.com')
+    env.host.reloginAccount('codex', work.id)
+    expect(await finished(env)).toMatchObject({ phase: 'done' })
+    const after = await env.host.accounts('codex')
+    expect(after.accounts).toHaveLength(2)
+    const row = after.accounts[1]
+    expect(row.email).toBe('work@example.com')
+    expect(row.id).not.toBe(work.id)
+    expect(after.current).toBe(row.id)
+    expect(env.loggedOut).toEqual([])
+    expect(env.forgotten).toEqual([workDir])
+  })
+})
+
 describe('额度用完自动换账号', () => {
   async function send(env: ReturnType<typeof setup>) {
     const project = env.host.addProject(env.root)
@@ -470,5 +576,64 @@ describe('额度用完自动换账号', () => {
     const id = await send(env)
     await vi.waitFor(() => expect(env.host.open(id).queue[0]?.status).toBe('failed'))
     expect(env.sends).toHaveLength(2)
+  })
+
+  it('原账号的失败晚到、期间手动换到了 B：算原账号用完，在 B 上重发，不把 B 记成用完、不跳到 C', async () => {
+    const gate = latch()
+    const env = setup({ limited: n => n === 1, gate: n => (n === 1 ? gate.wait() : Promise.resolve()) })
+    await env.addAccount('work@example.com')
+    const list = await env.addAccount('third@example.com')
+    const [, b] = list.accounts
+    env.host.setAccountAuto('codex', { enabled: true })
+    const id = await send(env)
+    await vi.waitFor(() => expect(env.sends).toHaveLength(1))
+    await env.host.switchAccount('codex', b.id)
+    gate.open()
+    await vi.waitFor(() => expect(env.sends).toHaveLength(2))
+    await vi.waitFor(() => expect(env.host.open(id).state).toBe('idle'))
+    expect((await env.host.accounts('codex')).current).toBe(b.id)
+    const notice = env.host.open(id).items.find(i => i.kind === 'notice' && i.id.startsWith('account-switch-'))
+    expect(notice && notice.kind === 'notice' && notice.account).toMatchObject({ from: 'default', to: b.id })
+  })
+
+  it('同一账号的两个会话一起用完：只换一次（到 B），第二个也在 B 上重发，不把 B 记成用完', async () => {
+    const gate = latch()
+    const env = setup({ limited: n => n <= 2, gate: n => (n <= 2 ? gate.wait() : Promise.resolve()) })
+    await env.addAccount('work@example.com')
+    const list = await env.addAccount('third@example.com')
+    const [, b] = list.accounts
+    env.host.setAccountAuto('codex', { enabled: true })
+    const first = await send(env)
+    const second = await send(env)
+    await vi.waitFor(() => expect(env.sends).toHaveLength(2))
+    gate.open()
+    await vi.waitFor(() => expect(env.sends).toHaveLength(4))
+    await vi.waitFor(() => expect([first, second].map(id => env.host.open(id).state)).toEqual(['idle', 'idle']))
+    expect((await env.host.accounts('codex')).current).toBe(b.id)
+    for (const id of [first, second])
+      expect(
+        env.host
+          .open(id)
+          .items.find(i => i.kind === 'notice' && i.id.startsWith('account-switch-') && i.account?.to === b.id),
+      ).toBeTruthy()
+  })
+})
+
+describe('换账号后的额度', () => {
+  it('旧账号的会话进程还空闲着：读当前账号的额度不借它，改用临时进程；回到原账号又能借', async () => {
+    const env = setup({ sessionQuota: () => 'me@example.com' })
+    const list = await env.addAccount('work@example.com')
+    const project = env.host.addProject(env.root)
+    const id = env.host.createSession({ projectId: project.id, engine: 'codex' }).id
+    await env.host.send(id, '第一条')
+    await vi.waitFor(() => expect(env.host.open(id).state).toBe('idle'))
+    await env.host.switchAccount('codex', list.accounts[1].id)
+    const q = await env.host.refreshAccountQuota('chatgpt', { force: true })
+    expect(env.borrowed).toEqual([])
+    expect(env.tempQuota()).toBe(1)
+    expect(q.account).toBe('work@example.com')
+    await env.host.switchAccount('codex', 'default')
+    await env.host.refreshAccountQuota('chatgpt', { maxAgeMs: 0 })
+    expect(env.borrowed).toEqual([1])
   })
 })

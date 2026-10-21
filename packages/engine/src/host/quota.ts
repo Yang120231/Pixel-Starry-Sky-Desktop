@@ -131,6 +131,8 @@ export class HostQuota {
     this.lastEvents.delete(sessionId)
     this.lastEvents.set(sessionId, patch)
     if (this.lastEvents.size > 200) this.lastEvents.delete(this.lastEvents.keys().next().value!)
+    // 换账号之前开的进程（这一轮还在跑、或空闲着没关）：它的额度是原账号的，不能并进当前账号的快照
+    if (!this.onCurrentAccount(sessionId)) return
     void this.merge(provider, patch).catch(error =>
       log.warn('合并额度事件失败', { provider, error: describeError(error) }),
     )
@@ -139,7 +141,7 @@ export class HostQuota {
   /** 一轮结束：这个 provider 有人看过、快照超过 5 分钟没主动取、这个会话的进程还活着才取；绝不为它起临时进程 */
   afterTurn(sessionId: string): void {
     const provider = this.processProvider(sessionId)
-    if (!provider || !this.watched.has(provider)) return
+    if (!provider || !this.watched.has(provider) || !this.onCurrentAccount(sessionId)) return
     void this.load(provider, { maxAgeMs: AFTER_TURN_MAX_AGE_MS }, true).catch(() => undefined)
   }
 
@@ -153,6 +155,17 @@ export class HostQuota {
     const rt = this.ctx.runtimes.get(sessionId)
     if (!rt?.session || rt.sessionSource !== null) return null
     return providerOfEngine((rt.execution ?? rt.snapshot.record).engine)
+  }
+
+  /**
+   * 这个会话的进程是不是用当前订阅账号启动的（rt.sessionAccount）：换账号后，正在跑的这一轮和空闲着的旧进程
+   * 仍用原账号（下一条消息前才换进程），借它读额度、并它的额度事件都会把原账号的数据当成当前账号的
+   */
+  private onCurrentAccount(sessionId: string): boolean {
+    const rt = this.ctx.runtimes.get(sessionId)
+    if (!rt) return false
+    const engine = (rt.execution ?? rt.snapshot.record).engine
+    return rt.sessionAccount === undefined || rt.sessionAccount === this.ctx.m.accounts.currentId(engine)
   }
 
   /** 当前账号的键：adapter.info() 有缓存，基本不花时间 */
@@ -200,11 +213,12 @@ export class HostQuota {
     this.publish(provider, entry.quota)
   }
 
-  /** 借一个自有、活着的会话进程问；没有返回 null。「自有」按进程启动时的来源判断，见 processProvider */
+  /** 借一个自有、活着、用当前账号启动的会话进程问；没有返回 null。「自有」按进程启动时的来源判断，见 processProvider */
   private borrow(provider: EngineQuotaProvider): Promise<QuotaReading> | null {
     const engine = QUOTA_ENGINE[provider]
     for (const [id, rt] of this.ctx.runtimes) {
       if ((rt.execution ?? rt.snapshot.record).engine !== engine || this.processProvider(id) !== provider) continue
+      if (!this.onCurrentAccount(id)) continue
       const asked = rt.session?.accountQuota?.()
       if (asked) return asked
     }
