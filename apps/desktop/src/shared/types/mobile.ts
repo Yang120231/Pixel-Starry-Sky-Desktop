@@ -52,6 +52,42 @@ export interface MobileState {
   pairing: MobilePairing | null
 }
 
+/** 账号下的一台网页设备（云端 GET /v1/bridge/devices，跨桌面） */
+export interface MobileCloudDevice {
+  id: string
+  name: string
+  /** 配对到的那台桌面的 ID */
+  desktopId: string
+  /** 配对在这台电脑上（移除走本机的 mobile:revoke） */
+  local: boolean
+  /** 还在等桌面上确认 */
+  pending: boolean
+  online: boolean
+  /** 最近一次连接中转的 IP；云端没记过为 null */
+  lastIp: string | null
+  lastSeenAt: number | null
+  createdAt: number | null
+}
+
+/**
+ * 设置 › 手机的远程席位（docs/cloud-admin-seats-plan.md §3–5）。
+ * available 为 false：云端旧版本没有这个接口（404），界面不显示席位、照原样工作。
+ */
+export type MobileSeats =
+  | { available: false }
+  | {
+      available: true
+      /** 账号同时在线的网页设备数和上限 */
+      used: number
+      limit: number
+      /** 有优质节点权益 */
+      premium: boolean
+      /** 能买席位 / 优质节点的套餐分组（Sub2api 的订阅分组 id）；空的时候不显示购买按钮 */
+      seatGroups: number[]
+      premiumGroups: number[]
+      devices: MobileCloudDevice[]
+    }
+
 /** engine:openSessionTail 的结果：只有最后一段条目，去掉了图片、截断了长文本（§5.2） */
 export interface SessionTail {
   snapshot: SessionSnapshot

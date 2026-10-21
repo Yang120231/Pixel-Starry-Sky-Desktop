@@ -27,7 +27,10 @@ interface StoreFile {
   devices: StoredDevice[]
 }
 
-/** 最多配几部手机（云端也有同样的上限） */
+/**
+ * 每台电脑最多配几部手机（云端也有同样的上限）。和账号的远程席位（同时在线的网页设备数，
+ * docs/cloud-admin-seats-plan.md §3）是两回事：席位按账号算、超了新连上的顶掉旧的，这里按电脑算、超了不让配对。
+ */
 export const MAX_DEVICES = 5
 
 const isAccess = (v: unknown): v is MobileAccess => v === 'view' || v === 'act'

@@ -24,11 +24,14 @@ export function StorePages({
   tab,
   account,
   onRefreshAccount,
+  planGroups,
 }: {
   tab: 'plans' | 'topup'
   account: AccountInfo
   /** 强制发新请求刷新账号；返回刷新后的账号和失败原因 */
   onRefreshAccount: () => Promise<AccountRefreshResult>
+  /** 只列这些订阅分组的套餐（设置 › 手机买远程席位 / 优质节点，docs/cloud-admin-seats-plan.md §4）；不传列全部 */
+  planGroups?: number[]
 }) {
   useI18n()
   const store = useStore(account.updatedAt)
@@ -125,7 +128,7 @@ export function StorePages({
       </div>
     )
   } else {
-    const catalog: StoreCatalog = state.catalog
+    const catalog: StoreCatalog = planGroups ? onlyGroups(state.catalog, planGroups) : state.catalog
     body = (
       <div>
         {tab === 'plans' ? (
@@ -210,4 +213,9 @@ export function StorePages({
       {body}
     </div>
   )
+}
+
+/** 只留绑在这些分组上的套餐（没有分组 id 的不算） */
+export function onlyGroups(catalog: StoreCatalog, groups: number[]): StoreCatalog {
+  return { ...catalog, plans: catalog.plans.filter(p => p.groupId !== null && groups.includes(p.groupId)) }
 }

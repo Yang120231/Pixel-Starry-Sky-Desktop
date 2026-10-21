@@ -456,7 +456,7 @@ async function authedFetch(path: string, init: RequestInit): Promise<Response> {
 }
 
 /** 手机中转（docs/mobile-remote.md §6）：只能调 /v1/bridge/ 下的接口，不放宽 platformFetch 的白名单 */
-export async function bridgeFetch(method: 'POST' | 'DELETE', path: string, body?: unknown): Promise<Response> {
+export async function bridgeFetch(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown): Promise<Response> {
   if (!path.startsWith('/v1/bridge/')) throw new Error('无效的中转接口')
   return authedFetch(path, {
     method,

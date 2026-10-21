@@ -11,10 +11,11 @@ import type { AppContext } from '../app/context'
 import { shrinkImage } from '../app/images'
 import { systemCipher } from '../app/system-cipher'
 import { trayStatus } from '../app/tray'
-import type { MobileLinkStatus, MobilePrefs, MobileState } from '../../shared/types/mobile'
+import type { MobileLinkStatus, MobilePrefs, MobileSeats, MobileState } from '../../shared/types/mobile'
 import { listDirectories } from '../core/directories'
 import { addProjectPath } from '../core/engine/ops'
 import { baseUrl, bridgeFetch, bridgeToken, onAccountChange, signedInEmail } from '../account/account'
+import { parseRelay, parseSeats, pickRelay } from './cloud-devices'
 import { MobileGateway, type CloudDevices } from './gateway'
 import { RelayLink } from './relay'
 import { MobileStore } from './store'
@@ -52,6 +53,20 @@ async function cloudCall(method: 'POST' | 'DELETE', path: string, body?: unknown
   return data
 }
 
+/** GET 云端接口；404（云端旧版本还没有这个接口）返回 null */
+async function cloudGet(path: string): Promise<unknown> {
+  let res: Response
+  try {
+    res = await bridgeFetch('GET', path)
+  } catch (e) {
+    throw new Error((e as { code?: string }).code === 'AUTH_EXPIRED' ? 'MOBILE_NEED_LOGIN' : 'MOBILE_RELAY_OFFLINE')
+  }
+  if (res.status === 404) return null
+  const data = (await res.json().catch(() => ({}))) as { error?: unknown }
+  if (!res.ok) throw new Error('MOBILE_' + String(data.error ?? 'server_error').toUpperCase())
+  return data
+}
+
 export function initMobile(ctx: AppContext): void {
   const store = new MobileStore(join(app.getPath('userData'), 'mobile'), systemCipher, {
     enabled: false,
@@ -83,7 +98,28 @@ export function initMobile(ctx: AppContext): void {
     pairing: gateway.pairingState(),
   })
   const changed = (): void => ctx.events.broadcast('mobile:changed', state())
-  const relayUrl = (): string => store.prefs.relay || defaultRelay(baseUrl())
+  // 云端分配的中转（GET /v1/bridge/relay，有优质节点权益的账号分到优质节点）；没有、接口 404、出错都用默认中转
+  let assigned: string | null = null,
+    assignedFor: string | null = null,
+    resolving = false,
+    lastPremium: boolean | null = null
+  const relayUrl = (): string => pickRelay(store.prefs.relay, assigned, defaultRelay(baseUrl()))
+  /** 向云端要中转地址，拿到（或失败）后重新判断连接；取的时候换了账号就丢掉结果 */
+  const resolveRelay = (email: string): void => {
+    if (resolving) return
+    resolving = true
+    void cloudGet('/v1/bridge/relay')
+      .then(parseRelay, () => null)
+      .then(url => {
+        resolving = false
+        // 取的时候换了账号：结果作废，按新账号重新判断（会再问一次）
+        if (signedInEmail() === email) {
+          assigned = url
+          assignedFor = email
+        }
+        apply()
+      })
+  }
   const cloud: CloudDevices = {
     pairing: async () => {
       const r = (await cloudCall('POST', '/v1/bridge/pairings', { desktopId: store.desktopId })) as {
@@ -104,7 +140,8 @@ export function initMobile(ctx: AppContext): void {
     store,
     desktopName: () => hostname(),
     relay: relayUrl,
-    web: () => webUrl(relayUrl()) || null,
+    // 手机网页版总在主站（优质节点只做中转）；手机按二维码里的中转地址去连，只认主站列出的节点
+    web: () => webUrl(store.prefs.relay || defaultRelay(baseUrl())) || null,
     // 手机的调用不经过 ipc.handle，自己计时：通道名加 mobile: 前缀，卡顿诊断里和窗口的请求分得开
     call: (channel, args, owner) =>
       ipc.track(`mobile:${channel}`, async () => {
@@ -161,12 +198,23 @@ export function initMobile(ctx: AppContext): void {
   }
   const apply = (): void => {
     const { enabled } = store.prefs
-    const relay = relayUrl()
     // 换了账号：这台电脑在云端归原来的账号，换一个电脑 ID，原来配对的手机作废
     const email = signedInEmail()
     if (email && store.bindAccount(email)) stopLink()
     const key = enabled ? store.keypair() : null
     const want = enabled && !!email && !!key
+    // 没手填中转：先问云端连哪个节点。已连着的先不断，取到的地址变了下面再换
+    if (want && email && !store.prefs.relay && assignedFor !== email) {
+      resolveRelay(email)
+      if (!link) {
+        status = 'connecting'
+        error = null
+        keepAwake()
+        changed()
+        return
+      }
+    }
+    const relay = relayUrl()
     if (link && (!want || linkUrl !== relay)) stopLink()
     if (want && !link) {
       linkUrl = relay
@@ -199,6 +247,8 @@ export function initMobile(ctx: AppContext): void {
   ipc.handle('mobile:state', () => state())
   ipc.handle('mobile:setPrefs', (_e, patch: Partial<MobilePrefs>) => {
     store.setPrefs(patch ?? {})
+    // 重新打开时再问一次云端分配的节点（期间可能买了优质节点）
+    if (patch?.enabled === true) assignedFor = null
     apply()
     return state()
   })
@@ -221,6 +271,31 @@ export function initMobile(ctx: AppContext): void {
     changed()
     return state()
   })
+  // 远程席位和账号下所有网页设备（跨桌面）。云端旧版本 404：{ available: false }，界面不显示席位
+  ipc.handle('mobile:seats', async (): Promise<MobileSeats> => {
+    if (!signedInEmail()) return { available: false }
+    const seats = parseSeats(await cloudGet('/v1/bridge/devices'), store.desktopId) ?? { available: false }
+    // 优质节点权益变了（刚买或到期）：重新问云端连哪个节点
+    if (seats.available) {
+      if (lastPremium !== null && lastPremium !== seats.premium) {
+        assignedFor = null
+        apply()
+      }
+      lastPremium = seats.premium
+    }
+    return seats
+  })
+  // 移除账号下其它桌面配对的网页设备（云端按账号核对归属）；本机配对的走 mobile:revoke
+  ipc.handle('mobile:removeCloudDevice', async (_e, id: unknown) => {
+    if (typeof id !== 'string' || !id || id.length > 64) throw new Error('MOBILE_NOT_FOUND')
+    if (store.device(id)) {
+      store.removeDevice(id)
+      gateway.revoke(id)
+      changed()
+      return
+    }
+    await cloudCall('DELETE', `/v1/bridge/devices/${encodeURIComponent(id)}`)
+  })
   ipc.handle('mobile:setAccess', (_e, id: unknown, access: unknown) => {
     store.setAccess(String(id), access)
     changed()
@@ -234,6 +309,7 @@ export function initMobile(ctx: AppContext): void {
     const now = signedInEmail()
     if (now === signedIn) return
     signedIn = now
+    assigned = assignedFor = lastPremium = null
     stopLink()
     apply()
   })

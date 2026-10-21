@@ -507,6 +507,8 @@ const mobile: MobileBridge = {
   pairDecide: accept => call('mobile:pairDecide', accept),
   revoke: id => call('mobile:revoke', id),
   setAccess: (id, access) => call('mobile:setAccess', id, access),
+  seats: () => call('mobile:seats'),
+  removeCloudDevice: id => call('mobile:removeCloudDevice', id),
   onChange: cb => {
     const listener = (_event: Electron.IpcRendererEvent, value: MobileState): void => cb(value)
     on('mobile:changed', listener)
