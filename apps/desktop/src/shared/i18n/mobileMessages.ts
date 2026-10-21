@@ -38,6 +38,7 @@ export const mobileMessages = {
   },
   'mobile.seats': { zh: '远程席位', en: 'Remote seats' },
   'mobile.seatsUsed': { zh: '已用 {p0} / {p1}', en: '{p0} / {p1} in use' },
+  'mobile.seatsUnlimited': { zh: '已用 {p0}（不限）', en: '{p0} in use (unlimited)' },
   'mobile.seatsDesc': {
     zh: '账号下所有电脑合计，同时在线的网页设备不超过席位数。超出时新连上的设备会顶掉最早连上的那台。',
     en: 'Across all your computers, web devices online at the same time cannot exceed your seats. A new connection replaces the earliest one.',

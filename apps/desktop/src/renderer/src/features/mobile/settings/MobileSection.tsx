@@ -361,7 +361,9 @@ function SeatsCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
             <span className="text-title leading-none font-semibold text-fg tabular-nums">
-              {t('mobile.seatsUsed', { p0: String(seats.used), p1: String(seats.limit) })}
+              {seats.limit > 0
+                ? t('mobile.seatsUsed', { p0: String(seats.used), p1: String(seats.limit) })
+                : t('mobile.seatsUnlimited', { p0: String(seats.used) })}
             </span>
             {full && <span className="text-meta text-warn">{t('mobile.seatsFull')}</span>}
           </div>
