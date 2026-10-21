@@ -143,6 +143,21 @@ describe('Claude 账号额度：借会话进程', () => {
     expect((await host.accountQuota('claude'))?.plan).toBe('max')
   })
 
+  it('借对话进程读的额度也带上套餐倍数（凭据文件里的档位），不会把 max_20x 盖回 max', async () => {
+    mkdirSync(join(root, 'claude-config'), { recursive: true })
+    writeFileSync(
+      join(root, 'claude-config', '.credentials.json'),
+      JSON.stringify({ claudeAiOauth: { accessToken: 'secret', rateLimitTier: 'default_claude_max_20x' } }),
+    )
+    const host = makeHost({ FAKE_CLAUDE_QUOTA: '1' })
+    const record = setup(host)
+    await host.send(record.id, '你好')
+    await waitFor(() => turnsDone(record.id) === 1)
+    const q = await host.refreshAccountQuota('claude')
+    expect(spawns()).toHaveLength(1)
+    expect(q).toMatchObject({ source: 'usage', plan: 'max_20x' })
+  })
+
   it('平台会话收到的 rate_limit_event 不算到用户自己的账号上', async () => {
     const settingsFile = join(root, 'gateway.json')
     writeFileSync(settingsFile, '{}')

@@ -28,6 +28,7 @@ import { claudeMcpServers, McpReporter } from '../mcp'
 import { allowRuleStrings, writeAccountMcpFile, type ClaudeUserRules } from './accounts'
 import { ClaudeProcess, ownClaudePids, type ControlRequestFromCli } from './process'
 import { parseClaudeRateLimitEvent, parseClaudeUsage, unknownControl } from './quota'
+import { claudePlanFor } from './tier'
 import { liveClaudeSession } from './native'
 import { loadSavedRuns } from './runs'
 import { alwaysPermissions, approvalFor } from './tools'
@@ -415,7 +416,12 @@ export class ClaudeSession implements EngineSession {
     const proc = this.proc
     if (this.closed || !proc?.alive || this.procViaGateway) return null
     return proc.request('get_usage', { skip_behaviors: true }, 20_000).then(
-      raw => parseClaudeUsage(raw, Date.now()),
+      raw => {
+        const reading = parseClaudeUsage(raw, Date.now())
+        // 套餐带上倍数（Max 20x 等，只从这个会话所用账号目录的凭据文件取档位字段，tier.ts）；
+        // 不带的话这里读到的「max」会盖掉单独读额度时得到的「max_20x」
+        return reading.kind === 'ok' ? { ...reading, plan: claudePlanFor(reading.plan, this.deps.env) } : reading
+      },
       err => (unknownControl(err) ? { kind: 'no-request' as const } : Promise.reject(err)),
     )
   }
