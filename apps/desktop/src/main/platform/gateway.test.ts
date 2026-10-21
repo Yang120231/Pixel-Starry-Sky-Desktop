@@ -70,6 +70,43 @@ describe('平台代理按引擎隔离 Responses 与 Messages', () => {
     expect(upstream).not.toHaveBeenCalled()
   })
 
+  it('DeepSeek 这类没有 Claude 模型的线路：claude-* 请求换成会话模型，haiku 换小模型，线路里有的模型不动', async () => {
+    const bodies: string[] = []
+    const upstream = vi.fn(async (_path: string, init: RequestInit) => {
+      bodies.push(String(init.body))
+      return new Response('ok')
+    })
+    server = platformGateway({
+      sessions: new Map([['s', { recordId: 's', secret: 'local-secret' }]]),
+      record: () =>
+        ({
+          id: 's',
+          engine: 'claude',
+          model: 'deepseek-v4.1-pro',
+          platform: { groupId: '49', account: 'user' },
+        }) as SessionRecord,
+      account: () => 'user',
+      fetch: upstream,
+      routeModels: async () => ['deepseek-v4.1-pro', 'deepseek-v4.1-flash'],
+    })
+    server.listen(0, '127.0.0.1')
+    await once(server, 'listening')
+    for (const model of ['claude-sonnet-4-5', 'claude-haiku-4-5', 'deepseek-v4.1-flash']) {
+      const res = await fetch('http://127.0.0.1:' + (server.address() as { port: number }).port + '/v1/messages', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer local-secret' },
+        body: JSON.stringify({ model, max_tokens: 1 }),
+      })
+      expect(res.status).toBe(200)
+      await res.text()
+    }
+    expect(bodies.map(b => JSON.parse(b))).toEqual([
+      { model: 'deepseek-v4.1-pro', max_tokens: 1 },
+      { model: 'deepseek-v4.1-flash', max_tokens: 1 },
+      { model: 'deepseek-v4.1-flash', max_tokens: 1 },
+    ])
+  })
+
   it('选定账号 / 模型 / 线路才转发，退出或改回自有立即失效', async () => {
     let record = {
       id: 'session',

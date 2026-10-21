@@ -9,6 +9,7 @@ import {
   type PixelApi,
 } from './pixel-env'
 import { compactWindows, longContextModels } from './compact-window'
+import { vendorModels, vendorSmallModel } from './vendor-models'
 import { once } from 'node:events'
 import { mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -110,6 +111,9 @@ export function platformPixelApi(groupId: string, model: string | null): PixelAp
   return pixelApi({ groupPlatform: group?.platform ?? null, groupApis: group?.supported_apis ?? null, model })
 }
 
+/** 最近读到的分组模型：DeepSeek 这类没有 Claude 模型的线路，启动 Claude Code 时把默认模型指向它们 */
+const groupModels = new Map<string, string[]>()
+
 export async function platformGroups(): Promise<PlatformGroupInfo[]> {
   const data = await jsonRequest('/v1/platform/groups')
   if (!Array.isArray(data)) throw new Error('平台分组数据格式异常')
@@ -126,6 +130,7 @@ export async function platformGroups(): Promise<PlatformGroupInfo[]> {
       g.models.every((m: unknown) => typeof m === 'string'),
   )
   rememberGroups(groups)
+  for (const g of groups) groupModels.set(g.id, g.models)
   return groups
 }
 
@@ -469,6 +474,20 @@ export async function initPlatform(
       if (long.length) env[LONG_CONTEXT_ENV] = JSON.stringify(long)
       const main = claudeModelName(record.model && ids.includes(record.model) ? record.model : ids[0], env)
       const small = claudeModelName(smallModelOf(provider) ?? ids[0], env)
+      Object.assign(env, {
+        ANTHROPIC_MODEL: main,
+        ANTHROPIC_DEFAULT_OPUS_MODEL: main,
+        ANTHROPIC_DEFAULT_SONNET_MODEL: main,
+        ANTHROPIC_DEFAULT_HAIKU_MODEL: small,
+        ANTHROPIC_SMALL_FAST_MODEL: small,
+      })
+    }
+    // DeepSeek / 智谱 / Kimi 这类线路没有 Claude 模型：默认模型、别名和后台小模型都指向线路里的模型
+    // （分组列表还没读到时不设，网关照样兜底换掉线路里没有的模型）
+    const vendor = record.platform ? vendorModels(groupModels.get(record.platform.groupId) ?? []) : []
+    if (record.platform && vendor.length) {
+      const main = record.model && vendor.includes(record.model) ? record.model : vendor[0]
+      const small = vendorSmallModel(vendor, main)
       Object.assign(env, {
         ANTHROPIC_MODEL: main,
         ANTHROPIC_DEFAULT_OPUS_MODEL: main,

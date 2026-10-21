@@ -19,6 +19,7 @@ import { chatUsage, withUsageOption } from './chat-usage'
 import { CacheUsageFix } from './usageFix'
 import { compactionTap, type CompactionTap } from './compaction-tap'
 import { platformModelApi } from '../../shared/platform-models'
+import { vendorFallbackModel } from './vendor-models'
 import type { SubagentTarget } from '../../shared/types/subagents'
 
 const log = logger('gateway')
@@ -490,6 +491,16 @@ export function platformGateway(options: {
       if (!responses && options.rewrite)
         body = await options.rewrite(body, () => options.routeModels?.(platform.groupId) ?? Promise.resolve([]))
       if (pixel) body = withoutLongContextSuffix(body)
+      // DeepSeek 这类线路没有 Claude 模型：Claude Code 请求的 claude-* 换成线路里的模型（haiku 后台请求换小模型）
+      if (!responses && options.routeModels) {
+        const sent = JSON.parse(body) as { model?: unknown }
+        const fallback = vendorFallbackModel(
+          await options.routeModels(platform.groupId),
+          typeof sent.model === 'string' ? sent.model : null,
+          record.model,
+        )
+        if (fallback) body = JSON.stringify({ ...sent, model: fallback })
+      }
       requestId = `pixelsky-${randomUUID()}`
       const model = String((JSON.parse(body) as { model?: string }).model ?? record.model ?? 'unknown')
       const modelApi = platformModelApi(model)
