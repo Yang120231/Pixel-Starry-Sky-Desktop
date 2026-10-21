@@ -97,6 +97,10 @@ let quitRequested = false
 let quitReady = false
 /** 正在退出整个应用（菜单、托盘、自动更新）：这时 × 不再隐藏到托盘 */
 let quitting = false
+/** 托盘「重启像素星空」：退出流程走完后重新打开；中途在确认框里取消就清掉 */
+let relaunchOnQuit = false
+/** 复位计时到了时还在等确认的重启：确认框开得久、之后才点退出的窗口（quitClosing）接着算重启 */
+let relaunchPending = false
 /** 在退出流程里发起关闭的窗口：确认框（文件尚未保存、终端仍在运行）晚于复位计时才点退出时，要重新算作退出 */
 const quitClosing = new WeakSet<BrowserWindow>()
 let quitResetTimer: NodeJS.Timeout | null = null
@@ -105,6 +109,8 @@ function armQuitReset(): void {
   if (quitResetTimer) clearTimeout(quitResetTimer)
   quitResetTimer = setTimeout(() => {
     quitting = false
+    relaunchPending = relaunchOnQuit
+    relaunchOnQuit = false
     quitResetTimer = null
   }, 10_000)
   quitResetTimer.unref()
@@ -140,11 +146,13 @@ async function finishWindowClose(win: BrowserWindow): Promise<void> {
     if (!(await confirmTerminalClose(win))) {
       quitRequested = false
       quitting = false
+      relaunchOnQuit = relaunchPending = false
       return
     }
     // 确认框可能开了不止 10 秒，quitting 已被复位：这个窗口是退出流程里关的，就重新算作退出（macOS 关完要接着退）
     if (quitClosing.has(win)) {
       quitting = true
+      relaunchOnQuit ||= relaunchPending
       armQuitReset()
     }
     await closeWindowTerminals(win)
@@ -185,7 +193,9 @@ app.on('before-quit', event => {
   void ctx.lifecycle.shutdown().finally(() => {
     quitReady = true
     // 点过「重启以更新」：现在才打开安装程序（打不开时照常退出）
-    runPendingInstall()
+    const installing = runPendingInstall()
+    // 托盘「重启像素星空」：退出后用同样的参数再打开一份；在装更新时安装程序装完会自己打开，不再另开
+    if ((relaunchOnQuit || relaunchPending) && !installing) app.relaunch()
     app.quit()
   })
 })
@@ -546,7 +556,15 @@ app.whenReady().then(async () => {
   if (!captureDir)
     tray = initTray(ctx, {
       createWindow,
-      quit: () => app.quit(),
+      quit: () => {
+        relaunchOnQuit = relaunchPending = false
+        app.quit()
+      },
+      restart: () => {
+        relaunchOnQuit = true
+        relaunchPending = false
+        app.quit()
+      },
     })
   // macOS 点程序坞图标：没有窗口就开一个；窗口关到托盘（隐藏）了就拿回来
   app.on('activate', () => {

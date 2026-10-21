@@ -84,12 +84,19 @@ export interface TrayActions {
   open(sessionId: string): void
   dnd(until: number | null): void
   checkUpdate(): void
+  restart(): void
   quit(): void
 }
 
 export function trayMenu(
   s: TrayStatus,
-  opts: { t: Text; dndUntil: number | null; now: number },
+  opts: {
+    t: Text
+    dndUntil: number | null
+    now: number
+    /** 开发模式（pnpm dev）下为 false：Electron 一退出 electron-vite 的开发服务也跟着退，重开的那份连不上，只能灰掉 */
+    canRestart?: boolean
+  },
   act: TrayActions,
 ): MenuItemConstructorOptions[] {
   const { t } = opts
@@ -124,6 +131,7 @@ export function trayMenu(
       : { label: t('tray.dndHour'), click: () => act.dnd(opts.now + 60 * 60_000) },
     { label: t('tray.checkUpdate'), click: act.checkUpdate },
     { type: 'separator' },
+    { label: t('tray.restart'), enabled: opts.canRestart !== false, click: act.restart },
     { label: t('tray.quit'), click: act.quit },
   ]
 }
@@ -144,6 +152,8 @@ export interface TrayDeps {
   createWindow(): BrowserWindow
   /** 和标题栏菜单的退出走同一条路（未保存文件、终端确认照旧） */
   quit(): void
+  /** 走同一条退出的路，退完再重新打开（中途在确认框里取消就不重启） */
+  restart(): void
 }
 
 export interface TrayController {
@@ -217,21 +227,23 @@ export function initTray(ctx: AppContext, deps: TrayDeps): TrayController {
   const tray = new Tray(image('tray'))
   const t = (): Text => trayText(windowLocale(target()))
 
-  const quit = async (): Promise<void> => {
+  /** 退出 / 重启：有任务在运行时先问一句（重启也会停止它们） */
+  const quit = async (restart = false): Promise<void> => {
     const running = status.running.length + status.waiting.length
     if (running > 0) {
       const text = t()
       const { response } = await dialog.showMessageBox({
         type: 'question',
         title: text('tray.quitTitle'),
-        message: text('tray.quitMessage', { p0: running }),
-        buttons: [text('tray.quitCancel'), text('tray.quitConfirm')],
+        message: text(restart ? 'tray.restartMessage' : 'tray.quitMessage', { p0: running }),
+        buttons: [text('tray.quitCancel'), text(restart ? 'tray.restartConfirm' : 'tray.quitConfirm')],
         defaultId: 0,
         cancelId: 0,
       })
       if (response !== 1) return
     }
-    deps.quit()
+    if (restart) deps.restart()
+    else deps.quit()
   }
 
   const refresh = (): void => {
@@ -255,7 +267,7 @@ export function initTray(ctx: AppContext, deps: TrayDeps): TrayController {
         Menu.buildFromTemplate(
           trayMenu(
             status,
-            { t: text, dndUntil, now },
+            { t: text, dndUntil, now, canRestart: !process.env.ELECTRON_RENDERER_URL },
             {
               show: () => void showWindow(),
               newTask: () => command({ kind: 'newTask' }),
@@ -263,6 +275,7 @@ export function initTray(ctx: AppContext, deps: TrayDeps): TrayController {
               // 菜单可能很久才重建一次：「勿扰 1 小时」按点击那一刻算，不用建菜单时的时间
               dnd: until => command({ kind: 'dnd', until: until === null ? null : until - now + Date.now() }),
               checkUpdate: () => command({ kind: 'checkUpdate' }),
+              restart: () => void quit(true),
               quit: () => void quit(),
             },
           ),

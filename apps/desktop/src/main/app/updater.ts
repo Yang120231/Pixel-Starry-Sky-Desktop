@@ -21,10 +21,12 @@ let installOnQuit = false
 /** 退出流程的最后一步（index.ts 的 before-quit）：点过「重启以更新」就打开安装程序，装完自动打开新版本。
  * 不能在点按钮时直接 quitAndInstall：安装程序一启动，几秒内就会强制结束应用，未保存确认和退出清理都来不及
  * （审查报告 2026-10-14 第 3 条）。没点过时由 autoInstallOnAppQuit 在退出时静默安装 */
-export function runPendingInstall(): void {
-  if (!installOnQuit) return
+/** 返回是否打开了安装程序（安装完会自己重新打开像素星空） */
+export function runPendingInstall(): boolean {
+  if (!installOnQuit) return false
   installOnQuit = false
   autoUpdater.quitAndInstall(false, true)
+  return true
 }
 const [OWNER, REPO] = new URL(REPO_URL).pathname.slice(1).split('/')
 

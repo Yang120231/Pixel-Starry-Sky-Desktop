@@ -11,7 +11,7 @@ const session = (id: string, state: SessionState, extra: Partial<SessionSummary[
 
 const zh = trayText('zh-CN'),
   en = trayText('en-US')
-const noop = { show() {}, newTask() {}, open() {}, dnd() {}, checkUpdate() {}, quit() {} }
+const noop = { show() {}, newTask() {}, open() {}, dnd() {}, checkUpdate() {}, restart() {}, quit() {} }
 
 describe('托盘状态', () => {
   it('运行中含启动中；等你处理单独算；归档的不算', () => {
@@ -50,9 +50,22 @@ describe('托盘菜单', () => {
       '等你处理（0）',
       '勿扰 1 小时',
       '检查更新…',
+      '重启像素星空',
       '退出像素星空',
     ])
     expect(items.find(i => i.label === '运行中（0）')?.enabled).toBe(false)
+  })
+
+  it('重启和退出各走各的：点「重启像素星空」只调 restart', () => {
+    const restart = vi.fn()
+    const quit = vi.fn()
+    const items = trayMenu({ running: [], waiting: [] }, { t: en, dndUntil: null, now: 0 }, { ...noop, restart, quit })
+    items.find(i => i.label === 'Restart Pixel Starry Sky')!.click!({} as never, undefined, {} as never)
+    expect(restart).toHaveBeenCalledOnce()
+    expect(quit).not.toHaveBeenCalled()
+    // 开发模式（electron-vite 的开发服务）重开不了：灰掉
+    const dev = trayMenu({ running: [], waiting: [] }, { t: zh, dndUntil: null, now: 0, canRestart: false }, noop)
+    expect(dev.find(i => i.label === '重启像素星空')?.enabled).toBe(false)
   })
 
   it('会话列表最多 5 个，多的显示「还有 N 个」；点了打开那个会话；& 转义', () => {
