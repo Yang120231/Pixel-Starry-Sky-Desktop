@@ -78,6 +78,8 @@ describe('像素星空的 OpenAI 协议：环境变量', () => {
     expect(pixelApi({ protocol: 'responses' })).toBe('openai-responses')
     expect(pixelApi({ protocol: 'chat' })).toBe('openai-completions')
     expect(pixelApi({ groupPlatform: 'openai' })).toBe('openai-responses')
+    expect(pixelApi({ groupPlatform: 'grok', model: 'grok-4.7' })).toBe('openai-responses')
+    expect(pixelApi({ groupPlatform: 'deepseek', model: 'deepseek-v4.1-flash' })).toBe('anthropic-messages')
     expect(pixelApi({ groupPlatform: 'anthropic', model: 'gpt-6.1-sol' })).toBe('openai-responses')
     expect(pixelApi({ groupPlatform: 'openai', model: 'claude-opus-5-5' })).toBe('anthropic-messages')
     // 自定义接口可以转换协议，仍以用户配置的协议为准。
