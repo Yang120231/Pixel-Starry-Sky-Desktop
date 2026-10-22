@@ -567,6 +567,16 @@ export function signedInEmail(): string | null {
   return state.status === 'signed-in' ? state.account.email : null
 }
 
+/**
+ * 平台余额：先读一次最新的（和焦点 / 定时刷新共用在途的那次）；没登录、读不到为 null。
+ * 订阅额度用完改用平台时据此跳过余额计费的线路（docs/ui/engine-accounts.md §5.2）
+ */
+export async function platformBalance(): Promise<number | null> {
+  if (state.status !== 'signed-in') return null
+  await fetchAccount().catch(() => undefined)
+  return state.status === 'signed-in' ? state.account.balance : null
+}
+
 /** 登录会话代数：每次退出 / 重新登录都会变；软件内付款据此丢掉上一次登录里记下的订单 */
 export function accountEpoch(): number {
   return epoch

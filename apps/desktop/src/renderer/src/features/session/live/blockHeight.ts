@@ -76,8 +76,8 @@ export function itemHeight(item: Item): number {
     case 'assistant':
       return markdownHeight(item.text)
     case 'notice':
-      // 自动换账号的提示下面还有一行按钮（AccountNoticeActions）
-      return item.account ? 64 : 40
+      // 自动换账号、改用了平台的提示下面还有一行按钮（AccountNoticeActions / PlatformFallbackNoticeActions）
+      return item.account || item.fallback?.kind === 'platform' ? 64 : 40
     case 'compaction':
       return 72
     default:

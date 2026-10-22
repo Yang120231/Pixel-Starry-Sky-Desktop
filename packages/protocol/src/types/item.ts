@@ -70,6 +70,26 @@ export interface NoticeAccountSwitch {
   resetsAt: number | null
 }
 
+/**
+ * 订阅额度都用完、自动改用平台的提示（docs/ui/engine-accounts.md §5.2）：界面按它拼文字、给「换回订阅」「关闭自动改用平台」。
+ * back：额度恢复后已经换回了订阅
+ */
+export interface NoticePlatformFallback {
+  engine: 'codex' | 'claude'
+  kind: 'platform' | 'back'
+  /** 用完的订阅账号（邮箱或备注） */
+  fromName: string
+  /** 改用的线路名和模型 */
+  group: string
+  model: string
+  /** 改用平台前的模型（换回订阅用）；null 是引擎默认 */
+  selfModel: string | null
+  /** 用完的是哪个窗口；不知道为 null */
+  window: 'five_hour' | 'seven_day' | null
+  /** 订阅额度恢复时间（毫秒）；不知道为 null */
+  resetsAt: number | null
+}
+
 export type Item =
   | {
       kind: 'user'
@@ -156,6 +176,8 @@ export type Item =
       action?: { kind: 'native-earlier' | 'native-sync'; count: number }
       /** 额度用完自动换了账号 */
       account?: NoticeAccountSwitch
+      /** 订阅额度都用完、自动改用了平台（或恢复后换回了订阅） */
+      fallback?: NoticePlatformFallback
     }
   /**
    * 压缩上下文（docs/ui/compaction.md）：进行中显示动画和计时，结束后显示「压缩前 → 压缩后」和用时。

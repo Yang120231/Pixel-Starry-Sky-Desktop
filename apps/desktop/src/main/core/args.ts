@@ -63,7 +63,7 @@ export function accountPatch(v: unknown): AccountPatch {
 export function accountAuto(v: unknown): Partial<AccountAutoSwitch> {
   const o = v && typeof v === 'object' ? (v as Record<string, unknown>) : {}
   const out: Partial<AccountAutoSwitch> = {}
-  for (const key of ['enabled', 'switchBack', 'notice'] as const)
+  for (const key of ['enabled', 'switchBack', 'notice', 'platform'] as const)
     if (o[key] !== undefined) {
       if (typeof o[key] !== 'boolean') throw new Error(`参数 ${key} 不对`)
       out[key] = o[key]

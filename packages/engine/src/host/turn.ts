@@ -36,6 +36,7 @@ export class HostTurn {
       rt.pumping ||
       rt.stopping ||
       rt.inspectingContext ||
+      rt.sourceSwitching ||
       rt.snapshot.state !== 'idle'
     )
       return

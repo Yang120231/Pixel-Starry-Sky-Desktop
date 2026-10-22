@@ -228,6 +228,9 @@ export class HostSessions {
       next.titleEdited = true
     }
     if (patch.model !== undefined) next.model = patch.model
+    // 自己改了来源、线路或模型：不再自动换回订阅（docs/ui/engine-accounts.md §5.2）
+    if ((changed || (patch.model !== undefined && patch.model !== current.model)) && current.platformFallback)
+      next.platformFallback = null
     if (patch.effort !== undefined) next.effort = patch.effort
     if (patch.permissionMode !== undefined) next.permissionMode = patch.permissionMode
     if (patch.ultracode !== undefined) next.ultracode = patch.ultracode

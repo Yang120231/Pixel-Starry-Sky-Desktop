@@ -28,7 +28,7 @@ import {
 } from '../account/checkout'
 import { closePayWindow, openPayWindow } from '../account/pay-window'
 import { logger } from '@pixelsky/engine'
-import { initPlatform, validateQueuedInput } from '../platform/platform'
+import { initPlatform, platformFallbackRoute, validateQueuedInput } from '../platform/platform'
 import { initProviders } from '../providers/providers'
 import { initSubagents } from '../subagents/ipc'
 import { initAi } from '../ai/ipc'
@@ -124,6 +124,8 @@ export async function initEngine(ctx: AppContext): Promise<void> {
     },
     sessionEnv,
     validateInput: record => validateQueuedInput(record, ctx.providers),
+    // 订阅额度都用完时改用平台：挑线路和模型（docs/ui/engine-accounts.md §5.2）
+    platformRoute: ({ engine, model }) => platformFallbackRoute(engine, model),
     priceRef: (record, model) =>
       // 上下文超过 200K 的自定义模型在 Claude Code 里叫「模型名[1m]」（docs/ui/custom-api.md §10）
       record.provider

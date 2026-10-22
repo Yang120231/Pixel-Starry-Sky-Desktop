@@ -82,6 +82,19 @@ export const accountMessages = {
   'accounts.autoOrderMost': { zh: '剩余额度最多的', en: 'Most quota left' },
   'accounts.autoBack': { zh: '额度恢复后', en: 'When quota resets' },
   'accounts.autoBackDesc': { zh: '换回原来的账号', en: 'Switch back to the original account' },
+  'accounts.autoBackDescPlatform': { zh: '换回订阅', en: 'Switch back to the subscription' },
+  'accounts.autoBackDescBoth': {
+    zh: '换回原来的账号；改用了平台的对话换回订阅',
+    en: 'Switch back to the original account; conversations moved to the platform go back to the subscription',
+  },
+  'accounts.autoPlatformTitle': {
+    zh: '订阅额度都用完时改用平台继续',
+    en: 'Use the platform when subscriptions run out',
+  },
+  'accounts.autoPlatformDesc': {
+    zh: '订阅额度用完（开着自动换账号时是所有账号都用完）时，这个对话改用像素星空平台接着做：选有同名模型的线路里倍率最低的。需要登录像素星空，默认关闭。',
+    en: 'When the subscription limit is reached (with auto-switch on: on every account), continue this conversation on the PixelSky platform, using the cheapest line that has the same model. Requires a PixelSky sign-in. Off by default.',
+  },
   'accounts.autoNotice': { zh: '换的时候', en: 'When switching' },
   'accounts.autoNoticeDesc': { zh: '在对话里提示一句', en: 'Show a note in the conversation' },
   'accounts.menuHint': {
@@ -112,11 +125,49 @@ export const accountMessages = {
   'accounts.notice.autoOff': { zh: '关闭自动切换', en: 'Turn off auto-switch' },
   'accounts.notice.autoIsOff': { zh: '已关闭自动切换', en: 'Auto-switch is off' },
   'accounts.notice.settings': { zh: '设置', en: 'Settings' },
+  // 订阅额度都用完、改用了平台的提示条（docs/ui/engine-accounts.md §5.2）
+  'accounts.fallback.used': {
+    zh: '{from} 的订阅额度用完了，已改用平台（{group} · {model}）继续。',
+    en: '{from} hit its subscription limit. Continuing on the platform ({group} · {model}).',
+  },
+  'accounts.fallback.usedWindow': {
+    zh: '{from} 的{window}订阅额度用完了，已改用平台（{group} · {model}）继续。',
+    en: '{from} hit its {window} subscription limit. Continuing on the platform ({group} · {model}).',
+  },
+  'accounts.fallback.back': {
+    zh: '{from} 的订阅额度恢复了，从下一条消息起换回订阅。',
+    en: '{from} has quota again. Switching back to the subscription from the next message.',
+  },
+  'accounts.fallback.switchBack': { zh: '换回订阅', en: 'Back to subscription' },
+  'accounts.fallback.backWait': {
+    zh: '订阅额度 {time} 恢复，之后才能换回',
+    en: 'The subscription resets at {time}; you can switch back after that',
+  },
+  'accounts.fallback.switchedBack': { zh: '已换回订阅', en: 'Back on the subscription' },
+  'accounts.fallback.autoOff': { zh: '关闭自动改用平台', en: 'Turn off platform fallback' },
+  'accounts.fallback.autoIsOff': { zh: '已关闭自动改用平台', en: 'Platform fallback is off' },
   // 引擎报的原文（主进程中文，界面 translateMessage）
   'accounts.err.fallbackNotice': {
     zh: '{from} 的额度用完了，已自动换到 {to} 并重新发送这条消息',
     en: '{from} hit its usage limit. Switched to {to} and resent this message',
   },
+  // 改用平台没成（docs/ui/engine-accounts.md §5.2）：错误后面写明原因
+  'accounts.err.noFallback': {
+    zh: '{error}\n没有改用平台：{reason}',
+    en: '{error}\nDid not switch to the platform: {reason}',
+  },
+  'accounts.err.fallbackNoLine': { zh: '平台上没有这个引擎能用的线路', en: 'No platform line works with this engine' },
+  'accounts.err.fallbackNoModel': {
+    zh: '平台线路上没有这个引擎能用的模型',
+    en: 'No model on the platform lines works with this engine',
+  },
+  'accounts.err.fallbackBalance': {
+    zh: '平台余额不足，请先充值',
+    en: 'Not enough platform balance. Add credits first',
+  },
+  'accounts.err.fallbackRead': { zh: '读不到平台线路：{error}', en: 'Could not load platform lines: {error}' },
+  'accounts.err.fallbackTimeout': { zh: '读取平台线路超时', en: 'Loading platform lines timed out' },
+  'accounts.err.fallbackAccount': { zh: '平台账号已退出或切换', en: 'The platform account signed out or changed' },
   'accounts.err.claudeUsageLimit': {
     zh: 'Claude 订阅的额度用完了',
     en: 'Your Claude subscription usage limit is reached',

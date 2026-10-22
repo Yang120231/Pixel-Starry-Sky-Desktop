@@ -395,24 +395,44 @@ function AutoSwitchCard({ engine }: { engine: AccountEngine }) {
         </span>
         <Switch checked={auto.enabled} label={tr('accounts.autoTitle')} onChange={enabled => set({ enabled })} />
       </div>
-      {auto.enabled && (
+      {/* 订阅额度都用完时改用平台（docs/ui/engine-accounts.md §5.2）：和自动换账号各管各的 */}
+      <div data-account-auto-platform className="flex items-start gap-4 border-t border-line-subtle px-4 py-3">
+        <span className="min-w-0 flex-1">
+          <span className="block text-ui font-medium text-fg">{tr('accounts.autoPlatformTitle')}</span>
+          <span className="mt-0.5 block text-meta text-fg-muted">{tr('accounts.autoPlatformDesc')}</span>
+        </span>
+        <Switch
+          checked={!!auto.platform}
+          label={tr('accounts.autoPlatformTitle')}
+          onChange={platform => set({ platform })}
+        />
+      </div>
+      {(auto.enabled || auto.platform) && (
         <div className="grid gap-2.5 border-t border-line-subtle px-4 py-3 text-meta text-fg-secondary">
-          <div className="flex items-center gap-3">
-            <span className="w-24 shrink-0 text-fg-muted">{tr('accounts.autoOrder')}</span>
-            <Segmented
-              label={tr('accounts.autoOrder')}
-              value={auto.order}
-              onChange={order => set({ order })}
-              options={[
-                { value: 'list', label: tr('accounts.autoOrderList') },
-                { value: 'most', label: tr('accounts.autoOrderMost') },
-              ]}
-            />
-          </div>
+          {auto.enabled && (
+            <div className="flex items-center gap-3">
+              <span className="w-24 shrink-0 text-fg-muted">{tr('accounts.autoOrder')}</span>
+              <Segmented
+                label={tr('accounts.autoOrder')}
+                value={auto.order}
+                onChange={order => set({ order })}
+                options={[
+                  { value: 'list', label: tr('accounts.autoOrderList') },
+                  { value: 'most', label: tr('accounts.autoOrderMost') },
+                ]}
+              />
+            </div>
+          )}
           <label className="flex items-center gap-3">
             <span className="w-24 shrink-0 text-fg-muted">{tr('accounts.autoBack')}</span>
             <input type="checkbox" checked={auto.switchBack} onChange={e => set({ switchBack: e.target.checked })} />
-            {tr('accounts.autoBackDesc')}
+            {tr(
+              !auto.platform
+                ? 'accounts.autoBackDesc'
+                : auto.enabled
+                  ? 'accounts.autoBackDescBoth'
+                  : 'accounts.autoBackDescPlatform',
+            )}
           </label>
           <label className="flex items-center gap-3">
             <span className="w-24 shrink-0 text-fg-muted">{tr('accounts.autoNotice')}</span>

@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { artifactRef, engineConfigPatch, engineId, int, mcpOp, str, usageListQuery, usageQuery, value } from './args'
+import {
+  accountAuto,
+  artifactRef,
+  engineConfigPatch,
+  engineId,
+  int,
+  mcpOp,
+  str,
+  usageListQuery,
+  usageQuery,
+  value,
+} from './args'
 
 describe('shared argument checks', () => {
   it('accepts only non-empty strings as ids', () => {
@@ -100,5 +111,14 @@ describe('shared argument checks', () => {
     expect(() => mcpOp({ kind: 'login', name: '' })).toThrow('连接器名字不对')
     expect(() => mcpOp({ kind: 'delete', name: 'a' })).toThrow('未知的连接器操作')
     expect(() => mcpOp(null)).toThrow()
+  })
+
+  it('keeps the known auto-switch fields, including platform fallback', () => {
+    expect(accountAuto({ enabled: true, platform: true, order: 'most', other: 1 })).toEqual({
+      enabled: true,
+      platform: true,
+      order: 'most',
+    })
+    expect(() => accountAuto({ platform: 'yes' })).toThrow('参数 platform 不对')
   })
 })

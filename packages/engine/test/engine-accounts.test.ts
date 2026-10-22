@@ -1,10 +1,10 @@
 // 订阅账号多开（docs/ui/engine-accounts.md、engine-accounts-claude.md）：账号目录接回原目录、宿主的添加 / 切换 / 移除、
-// 额度用完自动换账号（Codex、Claude 同一套）、提示条的字段、额度恢复后换回
+// 额度用完自动换账号（Codex、Claude 同一套）、提示条的字段、额度恢复后换回；订阅额度都用完时改用平台（§5.2）
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ENGINES, type EngineAccounts, type EngineInfo, type HostEvent, type Item } from '@pixelsky/protocol'
-import { EngineHost, type EngineAdapter } from '../src'
+import { EngineHost, type EngineAdapter, type EngineHostOptions } from '../src'
 import type { AccountProbe, LoginProcess, SessionContext } from '../src/adapter'
 import { removeOwnFiles } from '../src/accounts-home'
 import { forgetCodexAccount, prepareAccountHome } from '../src/codex/accounts'
@@ -119,7 +119,7 @@ describe('账号文件', () => {
     })
     expect(file.codex?.current).toBe('default')
     expect(file.codex?.accounts.map(a => a.id)).toEqual(['default', 'a_111111111111'])
-    expect(file.codex?.auto).toEqual({ enabled: false, order: 'list', switchBack: true, notice: true })
+    expect(file.codex?.auto).toEqual({ enabled: false, order: 'list', switchBack: true, notice: true, platform: false })
   })
 
   it('原来的账号隐藏着：要还有添加的账号才成立，列表里不留它，当前账号不会落回它；待删凭据只留合法的 id', () => {
@@ -158,6 +158,8 @@ function setup(
     gate?: (session: number) => Promise<void>
     /** 会话进程借来读额度时回的账号邮箱（第 n 个会话）；不给就没有这个能力 */
     sessionQuota?: (session: number) => string
+    /** 订阅额度都用完时改用平台挑线路（主进程提供的那个） */
+    platformRoute?: EngineHostOptions['platformRoute']
   } = {},
 ) {
   const engine = opts.engine ?? 'codex'
@@ -167,7 +169,8 @@ function setup(
   let nextEmail = 'work@example.com'
   const loggedOut: (string | null)[] = []
   const forgotten: string[] = []
-  const sends: { session: number; text: string }[] = []
+  /** 每次发送：哪个进程、发的什么、这时会话用的线路（null 是自己的订阅）和模型 */
+  const sends: { session: number; text: string; platform: string | null; model: string | null }[] = []
   /** 哪些会话进程被借去读了额度；临时进程（adapter.accountQuota）读了几次 */
   const borrowed: number[] = []
   let tempQuota = 0
@@ -241,7 +244,8 @@ function setup(
             }
           : {}),
         send: (text, turnId) => {
-          sends.push({ session: n, text })
+          const record = ctx.record()
+          sends.push({ session: n, text, platform: record.platform?.groupId ?? null, model: record.model })
           void (opts.gate?.(n) ?? Promise.resolve()).then(() =>
             setTimeout(() => {
               if (opts.limited?.(n)) {
@@ -290,6 +294,7 @@ function setup(
     dataDir: join(root, 'data'),
     adapters: { [engine]: adapter },
     emit: e => events.push(e),
+    ...(opts.platformRoute ? { platformRoute: opts.platformRoute } : {}),
   })
   hosts.push(host)
   const accountsEvents = (): EngineAccounts[] => events.flatMap(e => (e.kind === 'engine_accounts' ? [e.accounts] : []))
@@ -617,6 +622,191 @@ describe('额度用完自动换账号', () => {
           .open(id)
           .items.find(i => i.kind === 'notice' && i.id.startsWith('account-switch-') && i.account?.to === b.id),
       ).toBeTruthy()
+  })
+})
+
+describe('订阅额度都用完时改用平台', () => {
+  const ROUTE = { groupId: '7', group: '便宜线路', account: 'me@pixel.test', model: 'gpt-5.5' }
+  async function send(env: ReturnType<typeof setup>, model: string | null = 'gpt-5.4') {
+    const project = env.host.addProject(env.root)
+    const record = env.host.createSession({ projectId: project.id, engine: env.engine })
+    await env.host.update(record.id, { model })
+    await env.host.send(record.id, '改一下按钮颜色')
+    return record.id
+  }
+  const noticesOf = (env: ReturnType<typeof setup>, id: string) =>
+    env.host.open(id).items.flatMap(i => (i.kind === 'notice' && i.fallback ? [i] : []))
+
+  it('默认关：额度用完就是失败，不问线路', async () => {
+    const route = vi.fn(async () => ROUTE)
+    const env = setup({ limited: n => n === 1, platformRoute: route })
+    const id = await send(env)
+    await vi.waitFor(() => expect(env.host.open(id).queue[0]?.status).toBe('failed'))
+    expect(route).not.toHaveBeenCalled()
+    expect(env.host.open(id).record.platform ?? null).toBeNull()
+  })
+
+  it('只有一个订阅账号：用完就改用挑到的线路和模型，这条用平台的进程重发；排在后面的消息一起改；提示条带字段', async () => {
+    const gate = latch()
+    const route = vi.fn(async () => {
+      await gate.wait()
+      return ROUTE
+    })
+    const env = setup({ limited: n => n === 1, platformRoute: route })
+    env.host.setAccountAuto('codex', { platform: true })
+    const id = await send(env)
+    await vi.waitFor(() => expect(route).toHaveBeenCalledTimes(1))
+    // 挑线路的时候又来一条：排在后面，等线路挑好一起改用平台
+    await env.host.send(id, '再改一下字号')
+    await new Promise(r => setTimeout(r, 30))
+    // 挑好之前不会又用订阅发一次
+    expect(env.sends).toHaveLength(1)
+    gate.open()
+    await vi.waitFor(() => expect(env.sends).toHaveLength(3))
+    await vi.waitFor(() => expect(env.host.open(id).state).toBe('idle'))
+    expect(route).toHaveBeenCalledWith({ engine: 'codex', model: 'gpt-5.4' })
+    expect(env.sends.map(s => [s.session, s.platform, s.model])).toEqual([
+      [1, null, 'gpt-5.4'],
+      [2, '7', 'gpt-5.5'],
+      [2, '7', 'gpt-5.5'],
+    ])
+    const record = env.host.open(id).record
+    expect(record.platform).toEqual({ groupId: '7', account: 'me@pixel.test' })
+    expect(record.provider ?? null).toBeNull()
+    expect(record.platformFallback).toEqual({ account: 'default', model: 'gpt-5.4', resetsAt: null })
+    const [notice] = noticesOf(env, id)
+    expect(notice.text).toMatch(/便宜线路 · gpt-5\.5/)
+    expect(notice.fallback).toEqual({
+      engine: 'codex',
+      kind: 'platform',
+      fromName: 'ChatGPT 账号',
+      group: '便宜线路',
+      model: 'gpt-5.5',
+      selfModel: 'gpt-5.4',
+      window: null,
+      resetsAt: null,
+    })
+    expect(env.host.open(id).queue).toEqual([])
+    // 新会话不受影响：默认值没有改成平台
+    expect(
+      env.host.createSession({ projectId: env.host.open(id).record.projectId, engine: 'codex' }).platform ?? null,
+    ).toBeNull()
+  })
+
+  it('开着自动换账号：先换账号，账号都用完了才改用平台', async () => {
+    const route = vi.fn(async () => ROUTE)
+    const env = setup({ limited: n => n <= 2, platformRoute: route })
+    const list = await env.addAccount('work@example.com')
+    env.host.setAccountAuto('codex', { enabled: true, platform: true })
+    const id = await send(env)
+    await vi.waitFor(() => expect(env.sends).toHaveLength(3))
+    await vi.waitFor(() => expect(env.host.open(id).state).toBe('idle'))
+    expect(env.sends.map(s => s.platform)).toEqual([null, null, '7'])
+    expect(route).toHaveBeenCalledTimes(1)
+    expect(env.host.open(id).items.some(i => i.kind === 'notice' && i.account?.to === list.accounts[1].id)).toBe(true)
+    expect(noticesOf(env, id)[0].fallback).toMatchObject({ kind: 'platform', fromName: 'work@example.com' })
+    expect(env.host.open(id).record.platformFallback?.account).toBe(list.accounts[1].id)
+  })
+
+  it('开着自动换账号、还有没用完的账号：不改用平台，照常换账号', async () => {
+    const route = vi.fn(async () => ROUTE)
+    const env = setup({ limited: n => n === 1, platformRoute: route })
+    await env.addAccount('work@example.com')
+    env.host.setAccountAuto('codex', { enabled: true, platform: true })
+    const id = await send(env)
+    await vi.waitFor(() => expect(env.sends).toHaveLength(2))
+    await vi.waitFor(() => expect(env.host.open(id).state).toBe('idle'))
+    expect(route).not.toHaveBeenCalled()
+    expect(env.sends.map(s => s.platform)).toEqual([null, null])
+  })
+
+  it('挑不到线路：这条照常失败，错误后面写明为什么没改用平台，会话来源不动', async () => {
+    const env = setup({ limited: n => n === 1, platformRoute: async () => ({ error: '平台余额不足，请先充值' }) })
+    env.host.setAccountAuto('codex', { platform: true })
+    const id = await send(env)
+    await vi.waitFor(() => expect(env.host.open(id).queue[0]?.status).toBe('failed'))
+    const snap = env.host.open(id)
+    expect(snap.queue[0].error).toBe('You have hit your usage limit\n没有改用平台：平台余额不足，请先充值')
+    expect(snap.queuePaused).toBe(true)
+    expect(snap.record.platform ?? null).toBeNull()
+    expect(snap.record.platformFallback ?? null).toBeNull()
+    expect(env.sends).toHaveLength(1)
+    expect(noticesOf(env, id)).toEqual([])
+  })
+
+  it('挑线路的时候点了停止：什么都不改，这条算失败', async () => {
+    const gate = latch()
+    const env = setup({
+      limited: n => n === 1,
+      platformRoute: async () => {
+        await gate.wait()
+        return ROUTE
+      },
+    })
+    env.host.setAccountAuto('codex', { platform: true })
+    const id = await send(env)
+    await vi.waitFor(() => expect(env.host.open(id).queue[0]?.reconnect?.account).toBe(true))
+    await env.host.interrupt(id)
+    gate.open()
+    await vi.waitFor(() => expect(env.host.open(id).queue[0]?.status).toBe('failed'))
+    await new Promise(r => setTimeout(r, 30))
+    expect(env.host.open(id).record.platform ?? null).toBeNull()
+    expect(env.sends).toHaveLength(1)
+  })
+
+  it('Claude 也一样：额度恢复后、下一轮结束时换回订阅和原来的模型，再提示一句；自己改过模型就不再换回', async () => {
+    let resetsAt = 0
+    const env = setup({
+      engine: 'claude',
+      limited: n => n === 1,
+      // 留够余量：机器忙时第一轮结束得晚，恢复时间太近会在断言前就换回
+      resetsAt: () => (resetsAt = Date.now() + 1500),
+      platformRoute: async () => ({ ...ROUTE, model: 'claude-sonnet-4-6' }),
+    })
+    env.host.setAccountAuto('claude', { platform: true })
+    const id = await send(env, 'claude-opus-4-7')
+    await vi.waitFor(() => expect(env.sends).toHaveLength(2))
+    await vi.waitFor(() => expect(env.host.open(id).state).toBe('idle'))
+    expect(env.host.open(id).record.platformFallback).toEqual({
+      account: 'default',
+      model: 'claude-opus-4-7',
+      resetsAt,
+    })
+    expect(noticesOf(env, id)[0].fallback).toMatchObject({ engine: 'claude', window: 'five_hour', resetsAt })
+    // 平台上再聊一轮：这时已过恢复时间，结束后读订阅额度，恢复了就换回去
+    await new Promise(r => setTimeout(r, Math.max(0, resetsAt - Date.now()) + 20))
+    await env.host.send(id, '接着改')
+    await vi.waitFor(() => expect(env.host.open(id).record.platformFallback ?? null).toBeNull())
+    const record = env.host.open(id).record
+    expect(record.platform ?? null).toBeNull()
+    expect(record.model).toBe('claude-opus-4-7')
+    expect(noticesOf(env, id).map(n => n.fallback?.kind)).toEqual(['platform', 'back'])
+    await vi.waitFor(() => expect(env.host.open(id).state).toBe('idle'))
+    // 下一条用订阅的新进程
+    await env.host.send(id, '最后再改一下')
+    await vi.waitFor(() => expect(env.sends).toHaveLength(4))
+    expect(env.sends.map(s => [s.session, s.platform])).toEqual([
+      [1, null],
+      [2, '7'],
+      [2, '7'],
+      [3, null],
+    ])
+  })
+
+  it('改用平台之后自己换了模型：不再自动换回', async () => {
+    const env = setup({ limited: n => n === 1, platformRoute: async () => ROUTE })
+    env.host.setAccountAuto('codex', { platform: true })
+    const id = await send(env)
+    await vi.waitFor(() => expect(env.sends).toHaveLength(2))
+    await vi.waitFor(() => expect(env.host.open(id).state).toBe('idle'))
+    expect(env.host.open(id).record.platformFallback).toBeTruthy()
+    await env.host.update(id, { model: 'gpt-5.4-mini' })
+    expect(env.host.open(id).record.platformFallback ?? null).toBeNull()
+  })
+
+  it('设置文件里的开关：旧文件没有这一项当作关，打开后存下来', () => {
+    expect(readAccountsFile({ codex: { accounts: [], auto: { enabled: true } } }).codex?.auto.platform).toBe(false)
+    expect(readAccountsFile({ codex: { accounts: [], auto: { platform: true } } }).codex?.auto.platform).toBe(true)
   })
 })
 

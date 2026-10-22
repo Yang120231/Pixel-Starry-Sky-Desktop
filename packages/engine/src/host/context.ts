@@ -73,7 +73,15 @@ export interface EngineHostOptions {
   continueText?: () => string
   /** 测试用：第 n 次自动重连前等多久（毫秒），不给按 retry.ts reconnectDelay */
   reconnectDelays?: number[]
+  /**
+   * 订阅额度都用完、自动改用平台时挑线路（docs/ui/engine-accounts.md §5.2）：按引擎和这个会话现在的模型选。
+   * 本机主进程提供（平台登录和目录在那里）；远程机器上不传，这个功能就不生效
+   */
+  platformRoute?: (query: { engine: EngineId; model: string | null }) => Promise<PlatformRouteResult>
 }
+
+/** platformRoute 的结果：选到的线路（分组 id、显示名、平台账号）和模型；一条都用不了时是原因 */
+export type PlatformRouteResult = { groupId: string; group: string; account: string; model: string } | { error: string }
 
 /** 正在跑的这一轮（turn.ts 调 send 前设置，turn_completed 读完清掉）：断线重连判断「引擎收到这条没有 / 有没有进展」用 */
 export interface TurnTrack {
@@ -110,6 +118,8 @@ export interface Runtime {
   turn?: TurnTrack
   execution: SessionRecord | null
   sessionSource: string | null | undefined
+  /** 正在为这个会话挑平台线路（订阅额度用完、自动改用平台）：挑完之前不派发，免得又用订阅发一次 */
+  sourceSwitching?: boolean
   /** 启动这个进程时的引擎级设置（launchKey）；设置变了，下一条消息前重启进程 */
   sessionLaunch?: string
   /**

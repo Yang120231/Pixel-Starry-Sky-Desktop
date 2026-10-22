@@ -1,7 +1,7 @@
 // 订阅账号多开（docs/ui/engine-accounts.md、engine-accounts-claude.md）：账号列表、切换、添加 / 重新登录 / 移除、
 // 各账号额度、额度用完自动换账号。Codex 和 Claude Code。当前账号是全局的：适配器启动引擎时按 currentDir() 换
 // CODEX_HOME / CLAUDE_CONFIG_DIR，launchKey 带上账号 id，切换后正在跑的这一轮不受影响，下一条消息前换进程接上原对话。
-import { randomBytes } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import {
   DEFAULT_ACCOUNT,
@@ -18,10 +18,13 @@ import {
   type EngineQuotaProvider,
   type QuotaWindow,
   type NoticeAccountSwitch,
+  type NoticePlatformFallback,
+  type QueuedMessage,
+  type SessionRecord,
 } from '@pixelsky/protocol'
 import type { AccountProbe } from '../adapter'
 import { logger } from '../log'
-import type { HostContext } from './context'
+import type { HostContext, PlatformRouteResult } from './context'
 
 const log = logger('engine.accounts')
 
@@ -34,8 +37,28 @@ const ACCOUNT_ID = /^a_[a-f0-9]{12}$/
 const LABEL_MAX = 40
 /** 各账号额度缓存多久 */
 const QUOTA_TTL = 60_000
+/** 改用平台时挑线路最多等多久：平台目录读不到也不能让这条一直挂着 */
+const ROUTE_TIMEOUT_MS = 30_000
 
-export const DEFAULT_AUTO: AccountAutoSwitch = { enabled: false, order: 'list', switchBack: true, notice: true }
+export const DEFAULT_AUTO: AccountAutoSwitch = {
+  enabled: false,
+  order: 'list',
+  switchBack: true,
+  notice: true,
+  platform: false,
+}
+
+/** 订阅额度都用完、要改用平台的这条消息（platformFallback 判断，fallbackToPlatform 去挑线路） */
+export interface PlatformFallbackPlan {
+  engine: AccountEngine
+  /** 用完的订阅账号 */
+  from: string
+  fromName: string
+  /** 会话现在的模型（挑线路按它，换回订阅时恢复它）；null 是引擎默认 */
+  model: string | null
+  window: NoticePlatformFallback['window']
+  resetsAt: number | null
+}
 
 interface EngineState {
   current: string
@@ -61,6 +84,7 @@ function readAuto(raw: unknown): AccountAutoSwitch {
     order: o.order === 'most' ? 'most' : 'list',
     switchBack: o.switchBack !== false,
     notice: o.notice !== false,
+    platform: o.platform === true,
   }
 }
 
@@ -139,6 +163,11 @@ export class HostAccounts {
   /** 每轮结束看原账号恢复没有：上次去读的时间、正在读的 */
   private readonly backCheckedAt = new Map<AccountEngine, number>()
   private readonly backChecking = new Set<AccountEngine>()
+  /** 改用过平台的队列项：同一条消息只改一次 */
+  private readonly platformSwitched = new Set<string>()
+  /** 改用了平台的会话，每轮结束看订阅额度恢复没有：上次去读的时间、正在读的 */
+  private readonly fallbackCheckedAt = new Map<string, number>()
+  private readonly fallbackChecking = new Set<string>()
 
   constructor(private readonly ctx: HostContext) {
     this.state = readAccountsFile(ctx.store.loadAccounts())
@@ -510,7 +539,7 @@ export class HostAccounts {
     const e = accountEngine(engine)
     const s = this.engineState(e)
     const next = { ...s.auto }
-    for (const key of ['enabled', 'switchBack', 'notice'] as const)
+    for (const key of ['enabled', 'switchBack', 'notice', 'platform'] as const)
       if (patch[key] !== undefined) {
         if (typeof patch[key] !== 'boolean') throw new Error('自动切换的设置不对')
         next[key] = patch[key]
@@ -584,8 +613,9 @@ export class HostAccounts {
    * 一轮结束：自动换过账号、开着「额度恢复后换回」时，看原账号恢复没有，恢复了就换回去（从下一条消息起）。
    * 只读原账号这一个；知道恢复时间时到了才读，不知道时最多 10 分钟读一次（docs/ui/engine-accounts-claude.md §7）
    */
-  afterTurn(engine: EngineId): void {
+  afterTurn(engine: EngineId, sessionId?: string): void {
     if (!(ENGINES as readonly string[]).includes(engine)) return
+    if (sessionId) this.fallbackBack(sessionId)
     const e = engine as AccountEngine
     const s = this.engineState(e)
     const from = s.switchedFrom
@@ -651,19 +681,8 @@ export class HostAccounts {
     const from = rt.sessionAccount && s.accounts.some(a => a.id === rt.sessionAccount) ? rt.sessionAccount : current
     const fromRow = s.accounts.find(a => a.id === from)
     // 用完的是哪个窗口、几点恢复：换之前按原账号的邮箱取（换完再取就是新账号的了）
-    const fromEvent = usedWindow(this.ctx.m.quota.lastEvent(sessionId))
-    const used =
-      fromEvent.resetsAt !== null || fromEvent.window !== null
-        ? fromEvent
-        : usedWindow(this.ctx.m.quota.peek(QUOTA_PROVIDER[e], fromRow?.email ?? null))
-    // 用完的账号记成用完，「剩余最多」和换回去都按它算
-    const prev = this.quotas.get(`${e}:${from}`)
-    this.quotas.set(`${e}:${from}`, {
-      id: from,
-      windows: prev?.windows ?? [],
-      blocked: true,
-      observedAt: Date.now(),
-    })
+    const used = this.usedFor(sessionId, e, fromRow)
+    this.markUsed(e, from)
     // 当前账号已经不是用完的那个（换过了）、而且还能用：不再往下换，这条在当前账号上重发
     const currentRow = from !== current ? s.accounts.find(a => a.id === current) : undefined
     const stay =
@@ -694,10 +713,292 @@ export class HostAccounts {
     }
   }
 
-  /** 自动换了账号要不要在对话里提示 */
+  /** 用完的是哪个窗口、几点恢复：先看这个会话最近的额度事件，没有时按这个账号的额度快照 */
+  private usedFor(
+    sessionId: string,
+    engine: AccountEngine,
+    row: EngineAccount | undefined,
+  ): Pick<NoticeAccountSwitch, 'window' | 'resetsAt'> {
+    const event = usedWindow(this.ctx.m.quota.lastEvent(sessionId))
+    return event.resetsAt !== null || event.window !== null
+      ? event
+      : usedWindow(this.ctx.m.quota.peek(QUOTA_PROVIDER[engine], row?.email ?? null))
+  }
+
+  /** 用完的账号记成用完：「剩余最多」、换回去、要不要改用平台都按它算 */
+  private markUsed(engine: AccountEngine, id: string): void {
+    const prev = this.quotas.get(`${engine}:${id}`)
+    this.quotas.set(`${engine}:${id}`, { id, windows: prev?.windows ?? [], blocked: true, observedAt: Date.now() })
+  }
+
+  /**
+   * 一轮因为额度用完失败、又没换成账号（autoSwitch 返回 null）时：开了「订阅额度都用完时改用平台」、会话走的是自己的
+   * 订阅、订阅账号都用不了（开着自动换账号时别的账号也用完 / 失效了）时，返回要改用平台的这条的信息；不改返回 null。
+   * 之后 events.ts 让这条在队首等着重发、调 fallbackToPlatform 挑线路（docs/ui/engine-accounts.md §5.2）
+   */
+  platformFallback(sessionId: string, queueId: string): PlatformFallbackPlan | null {
+    if (!this.ctx.opts.platformRoute) return null
+    const rt = this.ctx.runtimes.get(sessionId)
+    if (!rt) return null
+    const record = rt.execution ?? rt.snapshot.record
+    if (!(ENGINES as readonly string[]).includes(record.engine) || viaGateway(record)) return null
+    const e = record.engine as AccountEngine
+    const s = this.engineState(e)
+    if (!s.auto.platform || this.platformSwitched.has(queueId)) return null
+    const current = this.currentId(e)
+    const from = rt.sessionAccount && s.accounts.some(a => a.id === rt.sessionAccount) ? rt.sessionAccount : current
+    const fromRow = s.accounts.find(a => a.id === from)
+    const used = this.usedFor(sessionId, e, fromRow)
+    this.markUsed(e, from)
+    // 开着自动换账号、还有能换的（这次没换是因为同一条消息已经换过一次）：不改用平台，下一条消息再换账号
+    const usable = (a: EngineAccount): boolean =>
+      a.id !== from && a.status !== 'expired' && (usedOf(this.quotas.get(`${e}:${a.id}`)) ?? 0) < 100
+    if (s.auto.enabled && s.accounts.some(usable)) return null
+    return {
+      engine: e,
+      from,
+      fromName: nameOf(fromRow) ?? ownName(e),
+      model: rt.snapshot.record.model ?? null,
+      window: used.window,
+      resetsAt: used.resetsAt,
+    }
+  }
+
+  /**
+   * 改用平台（platformFallback 之后，这条已经在队首等着重发；rt.sourceSwitching 挡着派发，免得又用订阅发一次）。
+   * 挑到线路：这个会话改用它和选到的模型、记下 platformFallback，排在后面按订阅排的消息一起改，加提示，接着派发；
+   * 挑不到：这条照常算失败，错误后面写明为什么没改用平台。等的时候停止了、删了这条、自己改了来源或模型：什么都不改
+   */
+  async fallbackToPlatform(
+    sessionId: string,
+    queueId: string,
+    plan: PlatformFallbackPlan,
+    error: string | null,
+  ): Promise<void> {
+    const { ctx } = this
+    const rt = ctx.runtimes.get(sessionId)
+    const route = ctx.opts.platformRoute
+    if (!rt || !route) return
+    this.platformSwitched.add(queueId)
+    if (this.platformSwitched.size > 500) this.platformSwitched.delete(this.platformSwitched.values().next().value!)
+    rt.sourceSwitching = true
+    let picked: PlatformRouteResult
+    try {
+      picked = await withTimeout(route({ engine: plan.engine, model: plan.model }), ROUTE_TIMEOUT_MS)
+    } catch (err) {
+      picked = { error: (err as Error).message || '读取平台线路失败' }
+    } finally {
+      rt.sourceSwitching = false
+    }
+    if (ctx.closing || ctx.runtimes.get(sessionId) !== rt) return
+    const m = ctx.m
+    const item = rt.snapshot.queue.find(q => q.id === queueId)
+    const record = rt.snapshot.record
+    const waiting = !!item?.reconnect?.account && item.status === 'queued' && !rt.snapshot.queuePaused
+    if (
+      !waiting ||
+      viaGateway(record) ||
+      record.model !== plan.model ||
+      (record.nextEngine ?? record.engine) !== plan.engine
+    ) {
+      this.platformSwitched.delete(queueId)
+      void m.turn.pump(sessionId)
+      return
+    }
+    if ('error' in picked) {
+      // 登录平台、充值后重试这条还能再改
+      this.platformSwitched.delete(queueId)
+      log.info('platform fallback unavailable', { engine: plan.engine, sessionId })
+      m.queue.changeQueue(sessionId, queueId, {
+        status: 'failed',
+        error: `${error || '额度用完了'}\n没有改用平台：${picked.error}`,
+        reconnect: undefined,
+      })
+      rt.snapshot = { ...rt.snapshot, queuePaused: true }
+      m.queue.publishQueue(sessionId)
+      m.events.armIdle(sessionId)
+      return
+    }
+    const platform = { groupId: picked.groupId, account: picked.account }
+    m.events.patchRecord(sessionId, {
+      platform,
+      provider: null,
+      model: picked.model,
+      platformFallback: { account: plan.from, model: plan.model, resetsAt: plan.resetsAt },
+      updatedAt: Date.now(),
+    })
+    rt.snapshot = {
+      ...rt.snapshot,
+      queue: rt.snapshot.queue.map(q =>
+        q.id !== queueId && queuedOn(q, null, plan.model, plan.engine)
+          ? { ...q, settings: { ...q.settings, platform, provider: null, model: picked.model } }
+          : q,
+      ),
+    }
+    m.queue.publishQueue(sessionId)
+    // 刚用完：不知道恢复时间时也先等 10 分钟再去看
+    this.fallbackCheckedAt.set(sessionId, Date.now())
+    if (this.fallbackCheckedAt.size > 500) this.fallbackCheckedAt.delete(this.fallbackCheckedAt.keys().next().value!)
+    log.info('fell back to platform', { engine: plan.engine, sessionId })
+    if (this.noticeOn(plan.engine))
+      m.events.apply(sessionId, {
+        type: 'item_completed',
+        item: {
+          kind: 'notice',
+          id: `platform-fallback-${randomUUID()}`,
+          level: 'info',
+          text: `${plan.fromName} 的订阅额度用完了，已改用平台（${picked.group} · ${picked.model}）继续`,
+          fallback: {
+            engine: plan.engine,
+            kind: 'platform',
+            fromName: plan.fromName,
+            group: picked.group,
+            model: picked.model,
+            selfModel: plan.model,
+            window: plan.window,
+            resetsAt: plan.resetsAt,
+          },
+        },
+      })
+    void m.turn.pump(sessionId)
+  }
+
+  /**
+   * 一轮结束：这个会话因为订阅额度用完改用了平台、开着「额度恢复后换回」时，看订阅额度恢复没有；恢复了就换回自己的订阅
+   * 和原来的模型（下一条消息起）。知道恢复时间时到了才读，不知道时最多 10 分钟读一次；读的是当前账号（换回去用的就是它）
+   */
+  private fallbackBack(sessionId: string): void {
+    const rt = this.ctx.runtimes.get(sessionId)
+    const record = rt?.snapshot.record
+    const fb = record?.platformFallback
+    if (!rt || !record || !fb || !record.platform || this.fallbackChecking.has(sessionId)) return
+    if (!(ENGINES as readonly string[]).includes(record.engine)) return
+    const e = record.engine as AccountEngine
+    if (!this.engineState(e).auto.switchBack) return
+    const current = this.currentId(e)
+    const now = Date.now()
+    const due =
+      fb.resetsAt !== null && fb.account === current
+        ? now >= fb.resetsAt
+        : now - (this.fallbackCheckedAt.get(sessionId) ?? 0) >= SWITCH_BACK_CHECK_MS
+    if (!due) return
+    this.fallbackChecking.add(sessionId)
+    this.fallbackCheckedAt.set(sessionId, now)
+    void (async () => {
+      try {
+        const probe = await this.adapter(e).accountProbe(this.dir(e, current))
+        const row = this.engineState(e).accounts.find(a => a.id === current)
+        if (row) this.applyProbe(e, row, probe)
+        const quota: EngineAccountQuota | undefined =
+          probe.signedIn && probe.quota?.kind === 'ok'
+            ? { id: current, windows: probe.quota.windows, blocked: !!probe.quota.blocked, observedAt: Date.now() }
+            : undefined
+        const used = usedOf(quota)
+        const latest = this.ctx.runtimes.get(sessionId) === rt ? rt.snapshot.record : null
+        // 等的时候自己改了来源、线路或模型（platformFallback 清掉了）：不换
+        if (
+          this.ctx.closing ||
+          !latest?.platformFallback ||
+          latest.platform?.groupId !== record.platform?.groupId ||
+          latest.model !== record.model
+        )
+          return
+        if (used === null || used >= 100) {
+          // 还没恢复：按读到的恢复时间再等（不知道就按 10 分钟）
+          this.ctx.m.events.patchRecord(sessionId, {
+            platformFallback: { ...latest.platformFallback, account: current, resetsAt: resetOf(quota) },
+          })
+          return
+        }
+        this.switchToOwn(sessionId, e, latest, nameOf(row) ?? ownName(e))
+      } catch (error) {
+        log.warn('check platform fallback back failed', { engine: e, error: (error as Error).message })
+      } finally {
+        this.fallbackChecking.delete(sessionId)
+      }
+    })()
+  }
+
+  /** 订阅额度恢复了：会话换回自己的订阅和原来的模型，排在后面按这条线路排的消息一起换回 */
+  private switchToOwn(sessionId: string, engine: AccountEngine, record: SessionRecord, name: string): void {
+    const m = this.ctx.m
+    const rt = m.sessions.runtime(sessionId)
+    const fb = record.platformFallback!
+    m.events.patchRecord(sessionId, {
+      platform: null,
+      provider: null,
+      model: fb.model,
+      platformFallback: null,
+      updatedAt: Date.now(),
+    })
+    rt.snapshot = {
+      ...rt.snapshot,
+      queue: rt.snapshot.queue.map(q =>
+        queuedOn(q, record.platform ?? null, record.model, engine)
+          ? { ...q, settings: { ...q.settings, platform: null, provider: null, model: fb.model } }
+          : q,
+      ),
+    }
+    m.queue.publishQueue(sessionId)
+    this.fallbackCheckedAt.delete(sessionId)
+    log.info('switched back from platform', { engine, sessionId })
+    if (this.noticeOn(engine))
+      m.events.apply(sessionId, {
+        type: 'item_completed',
+        item: {
+          kind: 'notice',
+          id: `platform-back-${randomUUID()}`,
+          level: 'info',
+          text: `${name} 的订阅额度恢复了，从下一条消息起换回订阅`,
+          fallback: {
+            engine,
+            kind: 'back',
+            fromName: name,
+            group: '',
+            model: fb.model ?? '',
+            selfModel: fb.model,
+            window: null,
+            resetsAt: null,
+          },
+        },
+      })
+  }
+
+  /** 自动换了账号、改用了平台要不要在对话里提示 */
   noticeOn(engine: AccountEngine): boolean {
     return this.engineState(engine).auto.notice
   }
+}
+
+/** 列表里没有这个账号（只登了原来的一个）时提示条里的名字 */
+const ownName = (engine: AccountEngine): string => (engine === 'codex' ? 'ChatGPT 账号' : 'Claude 账号')
+
+/** 还在排队、按这个来源（null 是自己的订阅）和模型排的消息：改用平台 / 换回订阅时一起改 */
+function queuedOn(
+  q: QueuedMessage,
+  platform: SessionRecord['platform'] | null,
+  model: string | null,
+  engine: AccountEngine,
+): boolean {
+  const s = q.settings
+  return (
+    q.status === 'queued' &&
+    !q.reconnect &&
+    (s.engine ?? engine) === engine &&
+    !s.provider &&
+    (s.platform?.groupId ?? null) === (platform?.groupId ?? null) &&
+    (s.platform?.account ?? null) === (platform?.account ?? null) &&
+    s.model === model
+  )
+}
+
+function withTimeout<T>(task: Promise<T>, ms: number): Promise<T> {
+  let timer: NodeJS.Timeout | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('读取平台线路超时')), ms)
+    timer.unref?.()
+  })
+  return Promise.race([task, timeout]).finally(() => clearTimeout(timer))
 }
 
 /** 提示条里的账号名：邮箱优先（和样式稿一样），没有邮箱用备注 */

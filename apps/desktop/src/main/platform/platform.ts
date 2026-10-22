@@ -13,7 +13,7 @@ import { once } from 'node:events'
 import { mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
-import type { SessionRecord } from '@pixelsky/protocol'
+import type { EngineId, SessionRecord } from '@pixelsky/protocol'
 import {
   CLAUDE_COMPACT_MARKER,
   CODEX_WINDOW_ENV,
@@ -23,10 +23,11 @@ import {
   pixelAutoWindow,
   rewriteCompaction,
   type CompactionRequestReport,
+  type PlatformRouteResult,
 } from '@pixelsky/engine'
 import type { PlatformGroupInfo } from '../../shared/types/platform-catalog'
 import { platformModelApi, platformModelSupportsEngine } from '../../shared/platform-models'
-import { onAccountChange, platformFetch, signedInEmail } from '../account/account'
+import { onAccountChange, platformBalance, platformFetch, signedInEmail } from '../account/account'
 import * as ipc from '../ipc/guard'
 import type { ProviderStore, ResolvedProvider } from '../core/providers/store'
 import { smallModelOf } from '../core/providers/upstream'
@@ -185,6 +186,77 @@ function routeModels(groupId: string): Promise<string[]> {
     .catch(() => [] as string[])
   routeModelCache.set(groupId, { at: Date.now(), models })
   return models
+}
+
+/**
+ * 模型的系列（改用平台时没有同名模型就找同系列的）：Claude 的 opus / sonnet / haiku；
+ * 其余去掉厂商前缀、[1m] 这类后缀、日期和版本号（gpt-5.5-codex → gpt-codex）
+ */
+export function modelFamily(model: string): string {
+  const id = model
+    .trim()
+    .toLowerCase()
+    .replace(/\[[^\]]*\]$/, '')
+    .replace(/^.*\//, '')
+    .replace(/^(?:anthropic|openai)\./, '')
+  const claude = /(?:^|-)(opus|sonnet|haiku)(?:-|$)/.exec(id)
+  if (claude) return claude[1]
+  return id
+    .split('-')
+    .filter(t => t && !/^\d[\d.]*[a-z]?$/.test(t) && !/^\d{8}$/.test(t))
+    .join('-')
+}
+
+/**
+ * 订阅额度都用完、自动改用平台时挑线路（docs/ui/engine-accounts.md §5.2）：平台要登录着，只看这个引擎能用的线路和模型，
+ * 余额计费的线路在余额 ≤ 0 时跳过。有同名模型的线路里倍率最低的；没有就找同系列模型、倍率最低的；
+ * 还没有就取倍率最低线路的第一个模型。一条都用不了时返回原因
+ */
+export async function platformFallbackRoute(engine: EngineId, model: string | null): Promise<PlatformRouteResult> {
+  const account = signedInEmail()
+  if (!account) return { error: '没有登录像素星空账号' }
+  let groups: PlatformGroupInfo[]
+  try {
+    groups = await platformGroups()
+  } catch (error) {
+    return { error: `读不到平台线路：${(error as Error).message}` }
+  }
+  if (signedInEmail() !== account) return { error: '平台账号已退出或切换' }
+  const forEngine = groups.filter(g => groupEngines(g).includes(engine))
+  if (!forEngine.length) return { error: '平台上没有这个引擎能用的线路' }
+  const balance = forEngine.some(g => g.billing_source !== 'plan_only') ? await platformBalance() : null
+  const payable = forEngine.filter(g => g.billing_source === 'plan_only' || balance === null || balance > 0)
+  if (!payable.length) return { error: '平台余额不足，请先充值' }
+  // 目录里没列模型的线路（余额计费的线路在余额不足时不给读）按线路再读一次
+  const withModels = await Promise.all(
+    payable.map(async (g, i) => ({
+      g,
+      i,
+      models: (g.models.length ? g.models : await routeModels(g.id)).filter(m =>
+        platformModelSupportsEngine(m, engine),
+      ),
+    })),
+  )
+  const lines = withModels
+    .filter(x => x.models.length > 0)
+    .sort((a, b) => a.g.rate_multiplier - b.g.rate_multiplier || a.i - b.i)
+  if (!lines.length) return { error: '平台线路上没有这个引擎能用的模型' }
+  const pick = (line: (typeof lines)[number], m: string): PlatformRouteResult => ({
+    groupId: line.g.id,
+    group: line.g.name,
+    account,
+    model: m,
+  })
+  if (model) {
+    const exact = lines.find(x => x.models.includes(model))
+    if (exact) return pick(exact, model)
+    const family = modelFamily(model)
+    for (const line of lines) {
+      const same = line.models.find(m => modelFamily(m) === family)
+      if (same) return pick(line, same)
+    }
+  }
+  return pick(lines[0], lines[0].models[0])
 }
 
 /** 网关给 Claude Code 写的设置文件名：24 位十六进制 + .json（见 sessionEnv） */

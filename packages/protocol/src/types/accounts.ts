@@ -29,6 +29,11 @@ export interface AccountAutoSwitch {
   switchBack: boolean
   /** 换的时候在对话里提示一句 */
   notice: boolean
+  /**
+   * 订阅额度都用完时这个会话改用平台继续（docs/ui/engine-accounts.md §5.2），默认关，和 enabled 各管各的；
+   * 额度恢复后换回订阅跟着 switchBack。旧版辅助进程没有这一项（当作关）
+   */
+  platform?: boolean
 }
 
 export interface EngineAccounts {

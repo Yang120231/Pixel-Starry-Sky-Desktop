@@ -93,6 +93,7 @@ export type {
   TodoStep,
   ToolKind,
   NoticeAccountSwitch,
+  NoticePlatformFallback,
   NoticeError,
   NoticeErrorKind,
   NoticeTask,

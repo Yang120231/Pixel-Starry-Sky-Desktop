@@ -67,6 +67,7 @@ export type {
   ItemKind,
   ItemStatus,
   NoticeAccountSwitch,
+  NoticePlatformFallback,
   NoticeError,
   NoticeErrorKind,
   NoticeTask,

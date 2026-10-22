@@ -231,6 +231,9 @@ export class HostEvents {
           if (item && event.outcome === 'failed') {
             // 额度用完、开了自动换账号：换到下一个账号，这条马上重新派发（下一条消息前按新账号换进程）
             const switched = rt.turn?.usageLimited ? m.accounts.autoSwitch(id, item.id) : null
+            // 没换成账号（订阅账号都用完了）、开了「订阅额度都用完时改用平台」：这条先在队首等着，挑好平台线路再重发
+            // （docs/ui/engine-accounts.md §5.2）
+            const fallback = rt.turn?.usageLimited && !switched ? m.accounts.platformFallback(id, item.id) : null
             // 提示条：界面按 account 字段拼文字、给「换回去」「关闭自动切换」（docs/ui/engine-accounts-claude.md §3）
             if (switched && m.accounts.noticeOn(switched.engine))
               this.apply(id, {
@@ -243,9 +246,11 @@ export class HostEvents {
                   account: switched,
                 },
               })
-            reconnecting = switched
-              ? m.queue.reconnect(id, item.id, event.error ?? null, undefined, { account: true })
-              : m.queue.reconnect(id, item.id, event.error ?? null)
+            reconnecting =
+              switched || fallback
+                ? m.queue.reconnect(id, item.id, event.error ?? null, undefined, { account: true })
+                : m.queue.reconnect(id, item.id, event.error ?? null)
+            if (fallback && reconnecting) void m.accounts.fallbackToPlatform(id, item.id, fallback, event.error ?? null)
             if (!reconnecting)
               m.queue.changeQueue(id, item.id, {
                 status: 'failed',
@@ -270,8 +275,8 @@ export class HostEvents {
         if (rt.snapshot.queuePaused || rt.snapshot.queue.length === 0) this.armIdle(id)
         // 账号额度：有人看过、超过 5 分钟没取，借这个会话还活着的进程补取一次（分模型 / 额外用量 / 点数）
         m.quota.afterTurn(id)
-        // 自动换过订阅账号：原账号恢复了就换回去（从下一条消息起）
-        m.accounts.afterTurn(turnEngine)
+        // 自动换过订阅账号、改用过平台：订阅额度恢复了就换回去（从下一条消息起）
+        m.accounts.afterTurn(turnEngine, id)
         break
       }
       case 'background':

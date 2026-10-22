@@ -219,6 +219,11 @@ export interface SessionRecord extends SessionSettings {
   forkedFrom?: { sessionId: string; title: string } | null
   /** 接着引擎自己留下的会话（终端里的 Claude Code……）导入来的（docs/ui/claude-resume.md §4.5） */
   imported?: ImportedSession | null
+  /**
+   * 订阅额度用完、自动改用了平台（docs/ui/engine-accounts.md §5.2）：用完的订阅账号、改用平台前的模型、恢复时间。
+   * 额度恢复后据此换回订阅；用户自己改了来源、线路或模型就清掉，不再自动换回
+   */
+  platformFallback?: { account: string; model: string | null; resetsAt: number | null } | null
 }
 
 /**

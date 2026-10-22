@@ -81,7 +81,7 @@ import { HostSettings, type SyncableEngineSettings } from './settings'
 import { HostTurn } from './turn'
 import { HostUsage } from './usage'
 
-export type { EngineHostOptions } from './context'
+export type { EngineHostOptions, PlatformRouteResult } from './context'
 export type { SyncableEngineSettings } from './settings'
 
 export class EngineHost {
