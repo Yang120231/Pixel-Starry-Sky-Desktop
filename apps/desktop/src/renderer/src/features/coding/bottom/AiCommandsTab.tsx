@@ -98,10 +98,16 @@ export function AiCommandsTab({
             <div className="flex shrink-0 items-center gap-2 px-4 pt-2 pb-1">
               <div className="min-w-0 flex-1">
                 <CommandTitle key={entry.id} command={entry} />
-                <div className="flex gap-2 truncate text-label text-fg-faint">
-                  <span>{tr(`coding.bottom.ai.status.${entry.status}`)}</span>
-                  {entry.exitCode !== null && <span>{tr('coding.bottom.ai.exitCode', { code: entry.exitCode })}</span>}
-                  {entry.subagent && <span>{tr('coding.bottom.ai.subagent', { name: entry.subagent })}</span>}
+                <div className="flex min-w-0 gap-2 text-label text-fg-faint">
+                  <span className="shrink-0">{tr(`coding.bottom.ai.status.${entry.status}`)}</span>
+                  {entry.exitCode !== null && (
+                    <span className="shrink-0">{tr('coding.bottom.ai.exitCode', { code: entry.exitCode })}</span>
+                  )}
+                  {entry.subagent && (
+                    <span className="min-w-0 truncate" title={entry.subagent}>
+                      {tr('coding.bottom.ai.subagent', { name: entry.subagent })}
+                    </span>
+                  )}
                 </div>
               </div>
               <Button onClick={() => void rerun(entry.command)}>

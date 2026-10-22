@@ -407,7 +407,7 @@ function TasksBody({ projectId, name, demo }: { projectId: string; name: string;
                 {task.title}
               </p>
               {task.note && <p className="mt-1 whitespace-pre-wrap break-words text-meta text-fg-muted">{task.note}</p>}
-              <p className="mt-1 text-meta text-fg-faint">
+              <p className="mt-1 text-meta text-fg-faint [overflow-wrap:anywhere]">
                 {tr(statusKey[task.status])} ·{' '}
                 {tr(('projectTools.priority.' + task.priority) as 'projectTools.priority.low')}
                 {task.due && ' · ' + task.due}

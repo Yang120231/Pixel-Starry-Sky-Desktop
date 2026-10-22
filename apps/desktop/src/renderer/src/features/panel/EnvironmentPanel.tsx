@@ -182,7 +182,7 @@ function EnvironmentBody({ target, demo }: { target: WorkspaceRef; demo: boolean
                 }
               />
             </div>
-            <p className="mt-2 text-list text-fg-muted">
+            <p className="mt-2 text-list text-fg-muted [overflow-wrap:anywhere]">
               {tr('projectTools.branch')}: {data.branch ?? '—'} ·{' '}
               {data.dirty ? tr('projectTools.dirty') : tr('projectTools.clean')}
             </p>
@@ -198,7 +198,7 @@ function EnvironmentBody({ target, demo }: { target: WorkspaceRef; demo: boolean
                     {tool.path ?? ''}
                   </p>
                   {tool.expected && (
-                    <p className="text-meta text-fg-muted">
+                    <p className="text-meta text-fg-muted [overflow-wrap:anywhere]">
                       {tr('projectTools.expected')}: {tool.expected}
                     </p>
                   )}

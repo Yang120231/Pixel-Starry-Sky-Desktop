@@ -21,7 +21,7 @@ export function BranchWidget() {
     requestGitAction(action)
   }
   return (
-    <div data-branch-widget className="flex min-w-0 items-center gap-0.5">
+    <div data-branch-widget className="flex max-w-60 min-w-0 items-center gap-0.5">
       <HeaderBranch workspace={ref} label={status.branch ?? ''} variant="header" />
       {status.ahead > 0 && (
         <button

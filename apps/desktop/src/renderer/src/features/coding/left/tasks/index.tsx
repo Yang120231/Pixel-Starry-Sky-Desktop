@@ -614,7 +614,9 @@ export function TasksView({ visible }: { visible: boolean }) {
         )}
       >
         <StatusIcon status={status} />
-        <span className="shrink-0 text-fg">{task.name}</span>
+        <span className="max-w-[70%] min-w-0 shrink-0 truncate text-fg" title={task.name}>
+          {task.name}
+        </span>
         <span className={cn('min-w-0 flex-1 truncate text-meta text-fg-faint', group.kind !== 'gradle' && 'font-mono')}>
           {taskDetail(group, task)}
         </span>

@@ -593,7 +593,8 @@ export function GitHistory({
           {tr('projectTools.loading')}
         </div>
       )
-    if (detail.state === 'error') return <p className="py-2 text-meta text-danger">{detail.message}</p>
+    if (detail.state === 'error')
+      return <p className="py-2 text-meta text-danger [overflow-wrap:anywhere]">{detail.message}</p>
     return body(detail.data, detail.commits)
   }
   const files = (set: GitChangeSet) =>
@@ -631,9 +632,11 @@ export function GitHistory({
     renderDetail(key, (set, n = 0) => (
       <div className="pr-2 pb-2">
         <div className="flex items-center gap-1.5 px-1.5 pb-1 text-meta text-fg-muted">
-          <span className="min-w-0 flex-1 truncate">
-            {tr('git.history.commits', { n })} · <DiffStat {...statOf(set)} />
+          <span className="min-w-0 truncate">{tr('git.history.commits', { n })} ·</span>
+          <span className="shrink-0">
+            <DiffStat {...statOf(set)} />
           </span>
+          <span className="flex-1" />
           <SmallAction icon={Sparkles} outline={false} onClick={() => reviewRange(what, set, n)}>
             {tr('git.history.reviewChanges')}
           </SmallAction>
@@ -1309,7 +1312,7 @@ function HoverCard({
       style={style}
       className="pop-in pointer-events-none fixed z-[60] rounded-lg border border-line-card bg-popover p-2.5 text-meta shadow-menu"
     >
-      <p className="font-medium text-fg">
+      <p className="font-medium text-fg [overflow-wrap:anywhere]">
         {c.author} <span className="font-normal text-fg-faint">&lt;{c.email}&gt;</span>
       </p>
       <p className="text-fg-faint tabular-nums">

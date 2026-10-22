@@ -397,18 +397,20 @@ function FileRow({
           aria-expanded={open}
           onClick={() => void toggle()}
           title={open ? tr('artifacts.hideDiff') : tr('artifacts.viewDiff')}
-          className="flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-md pl-1.5 text-left"
+          className="flex h-full min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-md pl-1.5 text-left"
         >
           <ChevronRight size={12} className={cn('shrink-0 text-fg-faint transition-transform', open && 'rotate-90')} />
+          {/* 长文件名能缩（最少留几个字），目录只拿剩下的空间、先缩没；标签和 +N −M 不缩，不会被挤到悬停按钮底下 */}
           <span
+            title={file.path}
             className={cn(
-              'shrink-0 truncate text-list',
+              'min-w-[4em] truncate text-list',
               file.kind === 'delete' ? 'text-fg-muted line-through' : 'text-fg',
             )}
           >
             {name}
           </span>
-          {dir && <span className="min-w-0 truncate text-meta text-fg-faint">{dir}</span>}
+          {dir && <span className="min-w-0 flex-[1_1_0] truncate text-meta text-fg-faint">{dir}</span>}
           {file.kind !== 'update' && (
             <span
               className={cn(
@@ -419,7 +421,7 @@ function FileRow({
               {tr(file.kind === 'add' ? 'artifacts.kind.add' : 'artifacts.kind.delete')}
             </span>
           )}
-          <span className="flex-1" />
+          {!dir && <span className="flex-1" />}
           <DiffStat added={file.added} removed={file.removed} className="text-meta" />
         </button>
         <span className="flex shrink-0 items-center opacity-0 group-hover/file:opacity-100 group-focus-within/file:opacity-100">

@@ -2,7 +2,7 @@ import { AlertTriangle, Bell, GitBranch, XCircle } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
-import { CountBadge } from '@/ui'
+import { CountBadge, cn } from '@/ui'
 import { useGitStatus } from '@/features/panel/git/summary'
 import { useMachines } from '@/features/machines/store'
 import { useInbox } from '@/features/panel/inbox/useInbox'
@@ -25,20 +25,23 @@ function Item({
   title,
   children,
   data,
+  className,
 }: {
   onClick?: () => void
   title?: string
   children: ReactNode
   data?: string
+  /** 追加的类名：活动文字那一项用它改成可以缩 */
+  className?: string
 }) {
   if (!onClick)
     return (
-      <span data-status-item={data} title={title} className={PLAIN}>
+      <span data-status-item={data} title={title} className={cn(PLAIN, className)}>
         {children}
       </span>
     )
   return (
-    <button type="button" data-status-item={data} title={title} className={ITEM} onClick={onClick}>
+    <button type="button" data-status-item={data} title={title} className={cn(ITEM, className)} onClick={onClick}>
       {children}
     </button>
   )
@@ -53,7 +56,7 @@ export function StatusBarLeft() {
   const activity = useCodingActivity(sessionId)
   const branch = git ? branchText(git) : null
   return (
-    <div className="flex min-w-0 items-center gap-1">
+    <div className="flex min-w-0 items-center gap-1 overflow-hidden">
       {branch && (
         <Item data="branch" title={tr('coding.status.branch')} onClick={() => codingLayout.showLeft('git')}>
           <GitBranch size={14} strokeWidth={1.5} className="shrink-0" />
@@ -72,6 +75,7 @@ export function StatusBarLeft() {
         <Item
           data="activity"
           title={tr('coding.status.activityHint')}
+          className="min-w-0 shrink"
           onClick={() => {
             codingLayout.showRight('chat')
             if (activity.itemId) navigateToItem(sessionId, activity.itemId)
@@ -94,7 +98,7 @@ export function StatusBarRight() {
   const doc = tab?.document
   const machine = machines.machines.find(m => m.id === machines.currentId)
   return (
-    <div className="flex min-w-0 items-center gap-1">
+    <div className="flex shrink-0 items-center gap-1">
       {tab && doc?.kind === 'text' && (
         <>
           <Item data="cursor">

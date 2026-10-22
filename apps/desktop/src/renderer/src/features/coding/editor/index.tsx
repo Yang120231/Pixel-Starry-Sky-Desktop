@@ -96,11 +96,11 @@ function EmptyState({ scope, turn, target }: { scope: string; turn: TurnChanges 
               type="button"
               title={f.path}
               aria-label={tr('coding.files.aiTurnOpen', { name: f.name })}
-              className="press flex min-h-7 min-w-0 items-center gap-2 rounded-md px-2 text-meta hover:bg-hover"
+              className="press flex min-h-7 min-w-0 items-center gap-2 overflow-hidden rounded-md px-2 text-meta hover:bg-hover"
               onClick={() => void openCodeDiff(target, f.path)}
             >
-              <span className={cn('shrink-0', kindTone(f.kind))}>{f.name}</span>
-              <span className="min-w-0 flex-1 truncate text-fg-muted">{f.dir}</span>
+              <span className={cn('min-w-[4em] truncate', kindTone(f.kind))}>{f.name}</span>
+              <span className="min-w-0 flex-[1_1_0] truncate text-fg-muted">{f.dir}</span>
               <DiffStat added={f.added} removed={f.removed} className="text-label" />
             </button>
           ))}
@@ -139,7 +139,7 @@ function EmptyState({ scope, turn, target }: { scope: string; turn: TurnChanges 
                   openCodeTab(item.id)
                 }}
               >
-                <span className="shrink-0">{baseName(path)}</span>
+                <span className="max-w-[60%] min-w-0 shrink-0 truncate">{baseName(path)}</span>
                 <span className="min-w-0 truncate text-meta text-fg-muted">{path}</span>
               </button>
             )

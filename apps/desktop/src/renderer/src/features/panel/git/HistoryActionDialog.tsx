@@ -91,7 +91,7 @@ export function HistoryActionDialog({
       title={tr(`git.history.confirm.${kind}.title`)}
       description={
         <div data-history-action={kind}>
-          <p>{body}</p>
+          <p className="[overflow-wrap:anywhere]">{body}</p>
           {merge && (kind === 'cherryPick' || kind === 'revert') && (
             <p className="mt-1 text-fg-muted">{tr('git.history.mergeParent')}</p>
           )}

@@ -215,7 +215,9 @@ function CommandCenter({ anchor, onClose }: { anchor: RefObject<HTMLButtonElemen
                 )}
               >
                 <FileTypeIcon name={hit.path.slice(slash + 1)} kind="file" size={14} dim={dim} />
-                <span className={cn('shrink-0', dim && 'text-fg-faint')}>{hit.path.slice(slash + 1)}</span>
+                <span title={hit.path} className={cn('max-w-[70%] min-w-0 shrink-0 truncate', dim && 'text-fg-faint')}>
+                  {hit.path.slice(slash + 1)}
+                </span>
                 {slash > 0 && (
                   <span className="min-w-0 truncate text-meta text-fg-muted">{hit.path.slice(0, slash)}</span>
                 )}
