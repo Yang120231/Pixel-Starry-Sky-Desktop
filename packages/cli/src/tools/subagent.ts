@@ -231,7 +231,10 @@ export function childArgs(options: {
   entry: string
   mode: string
   sessionDir: string | null
-  /** 只读：只给 READ_ONLY_TOOLS，不给 MCP 工具 */
+  /**
+   * 只读：只给 READ_ONLY_TOOLS，关掉 MCP（--no-mcp：不连服务器）。只挡 MCP 工具的话服务器照样启动，
+   * Pi 还会因为 codemode / tool_search 不在白名单里提示「MCP tools are only reachable from…」
+   */
   readOnly?: boolean
   /** 类型的额外说明，追加在系统提示后面 */
   instructions?: string
@@ -242,9 +245,7 @@ export function childArgs(options: {
     'rpc',
     '--permission-mode',
     options.mode,
-    ...(options.readOnly
-      ? ['--tools', READ_ONLY_TOOLS.join(','), '--exclude-tools', 'mcp__*']
-      : ['--tools', '+grep,+find,+ls']),
+    ...(options.readOnly ? ['--tools', READ_ONLY_TOOLS.join(','), '--no-mcp'] : ['--tools', '+grep,+find,+ls']),
     // 前面加一行标题：Pi 把能找到的路径当文件读，带换行的文字不会被当成路径
     ...(options.instructions?.trim()
       ? [
@@ -547,14 +548,21 @@ export function createSubagentExtension(options: SubagentOptions): ExtensionFact
         }
         // 起一个子进程跑完这个任务；model 为 null 时用子进程自己的默认模型
         const attempt = async (model: { provider: string; id: string } | null): Promise<void> => {
+          const readOnly = type.tools === 'read'
           const args = childArgs({
             entry: process.argv[1] ?? '',
             mode: options.mode(),
             sessionDir,
-            readOnly: type.tools === 'read',
+            readOnly,
             instructions: type.instructions,
           })
-          const childEnv = { ...env, ...mcpChildEnv(), [SUBAGENT_ENV]: '1', [SUBAGENT_TYPE_ENV]: type.id }
+          // 只读的关了 MCP，不给桌面端的服务器文件：不然 mcp.ts 照样注册，Pi 报「no loaded extension connects MCP servers」
+          const childEnv = {
+            ...env,
+            ...(readOnly ? {} : mcpChildEnv()),
+            [SUBAGENT_ENV]: '1',
+            [SUBAGENT_TYPE_ENV]: type.id,
+          }
           const proc = options.spawnChild
             ? options.spawnChild(args, childEnv, ctx.cwd)
             : spawn(process.execPath, [...process.execArgv, ...args], {

@@ -1,9 +1,13 @@
 // 设置 › 子智能体：task 工具按类型起子进程（站点、只读、额外说明、最长运行），出错且还没动手时改走主会话的模型，
 // 同时运行有上限（docs/ui/subagent-routing.md）
 import { EventEmitter } from 'node:events'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { PassThrough, Writable } from 'node:stream'
 import { describe, expect, it } from 'vitest'
 import { subagentProvider } from '../src/extensions/gateway.ts'
+import { MCP_FILE_ENV, mcpExtension } from '../src/extensions/mcp.ts'
 import {
   READ_ONLY_TOOLS,
   SUBAGENT_ENV,
@@ -171,7 +175,7 @@ describe('子智能体类型', () => {
     expect(setup({}, []).tool().parameters.properties).not.toHaveProperty('type')
   })
 
-  it('子进程参数：只读只给读的工具、挡掉 MCP；额外说明追加到系统提示', () => {
+  it('子进程参数：只读只给读的工具、关掉 MCP；额外说明追加到系统提示', () => {
     const args = childArgs({
       entry: 'cli',
       mode: 'default',
@@ -179,14 +183,17 @@ describe('子智能体类型', () => {
       readOnly: true,
       instructions: 'Be brief.',
     })
-    expect(args).toContain(READ_ONLY_TOOLS.join(','))
-    const i = args.indexOf('--exclude-tools')
-    expect(args.slice(i, i + 2)).toEqual(['--exclude-tools', 'mcp__*'])
+    expect(args.slice(args.indexOf('--tools'), args.indexOf('--tools') + 3)).toEqual([
+      '--tools',
+      READ_ONLY_TOOLS.join(','),
+      '--no-mcp',
+    ])
     expect(args[args.indexOf('--append-system-prompt') + 1]).toBe(
       'Additional instructions for this subagent:\nBe brief.',
     )
     const plain = childArgs({ entry: 'cli', mode: 'default', sessionDir: null })
     expect(plain).toContain('+grep,+find,+ls')
+    expect(plain).not.toContain('--no-mcp')
     expect(plain).not.toContain('--append-system-prompt')
   })
 
@@ -247,13 +254,33 @@ describe('子智能体类型', () => {
     })
   })
 
-  it('按类型起子进程：站点、只读参数、类型名记进进度', async () => {
-    const r = setup(ENV, [c => c.send(reply('found'))])
-    const out = await r.call({ type: 'explore' })
-    expect(r.models()).toEqual([expect.objectContaining({ provider: SUBAGENT_PROVIDER, modelId: 'deepseek-chat' })])
-    expect(r.spawned[0]!.env[SUBAGENT_TYPE_ENV]).toBe('explore')
-    expect(r.spawned[0]!.args).toContain('--exclude-tools')
-    expect(out.details).toMatchObject({ model: 'DeepSeek 兼容 · deepseek-chat', type: 'explore', typeName: '探索' })
+  it('按类型起子进程：站点、只读参数、类型名记进进度；只读的不带桌面端的 MCP 服务器文件', async () => {
+    // 让 mcp.ts 记下服务器文件（主会话加载扩展时就是这样），子智能体靠 mcpChildEnv 带上
+    const dir = mkdtempSync(join(tmpdir(), 'pixel-subagent-mcp-'))
+    const file = join(dir, 'mcp.json')
+    try {
+      writeFileSync(file, JSON.stringify({ mcpServers: {} }))
+      process.env[MCP_FILE_ENV] = file
+      mcpExtension({
+        registerMcpServer: () => {},
+        on: () => {},
+        events: { on: () => () => {}, emit: () => {} },
+        registerCommand: () => {},
+      } as never)
+      const r = setup(ENV, [c => c.send(reply('found')), c => c.send(reply('ok'))])
+      const out = await r.call({ type: 'explore' })
+      expect(r.models()).toEqual([expect.objectContaining({ provider: SUBAGENT_PROVIDER, modelId: 'deepseek-chat' })])
+      expect(r.spawned[0]!.env[SUBAGENT_TYPE_ENV]).toBe('explore')
+      expect(r.spawned[0]!.args).toContain('--no-mcp')
+      expect(r.spawned[0]!.env[MCP_FILE_ENV]).toBeUndefined()
+      expect(out.details).toMatchObject({ model: 'DeepSeek 兼容 · deepseek-chat', type: 'explore', typeName: '探索' })
+      await r.call({})
+      expect(r.spawned[1]!.args).not.toContain('--no-mcp')
+      expect(r.spawned[1]!.env[MCP_FILE_ENV]).toBe(file)
+    } finally {
+      delete process.env[MCP_FILE_ENV]
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   it('不填类型用 general（跟随主会话）；不认识的类型报错并列出可用的', async () => {
