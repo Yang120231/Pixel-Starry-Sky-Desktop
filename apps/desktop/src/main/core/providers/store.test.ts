@@ -37,6 +37,20 @@ const input = {
 }
 
 describe('自定义 API 配置存储（docs/ui/custom-api.md §4.2）', () => {
+  it('模型的「看图」：存 true / false，自动（null）不存，别的值报错', () => {
+    const store = new ProviderStore(dir, cipher())
+    const view = store.save({
+      ...input,
+      models: [
+        { id: 'grok-4', images: true },
+        { id: 'grok-code', images: false },
+        { id: 'auto', images: null },
+      ],
+    })
+    expect(view.models).toEqual([{ id: 'grok-4', images: true }, { id: 'grok-code', images: false }, { id: 'auto' }])
+    expect(() => store.save({ ...input, models: [{ id: 'x', images: 'yes' as never }] })).toThrow('看图设置不对')
+  })
+
   it('Key 和请求头的值只在加密文件里：providers.json、返回给设置页的数据都没有', () => {
     const store = new ProviderStore(dir, cipher())
     const view = store.save(input)

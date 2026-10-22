@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertTriangle, CheckCircle2, Plus, RefreshCw, Trash2, X } from 'lucide-react'
-import { officialModels, officialPrice } from '@pixelsky/protocol'
+import { autoImageInput, officialModels, officialPrice, type ImageInputReason } from '@pixelsky/protocol'
 import { Button, IconButton, Select, Spinner, Switch, cn } from '@/ui'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
 import { useI18n } from '@/i18n/I18nProvider'
@@ -31,6 +31,20 @@ import { useUnsavedCheck } from '../unsavedEdits'
 
 /** 打码的请求头值，和主进程 MASKED_SECRET 一致 */
 const MASKED = '••••••••'
+
+/** 模型的「看图」：自动按协议和模型名判断（protocol 的 autoImageInput），或者用户指定 */
+type ImagesChoice = 'auto' | 'yes' | 'no'
+
+/** 模型行下面那行小字：为什么能 / 不能看图 */
+function imagesWhy(m: ProviderModel, guess: { images: boolean; reason: ImageInputReason }): string {
+  if (m.images === true) return tr('customApi.imagesWhy.manualYes')
+  if (m.images === false) return tr('customApi.imagesWhy.manualNo')
+  const can = tr(guess.images ? 'customApi.imagesCan' : 'customApi.imagesCannot')
+  if (guess.reason === 'builtin') return tr('customApi.imagesWhy.builtin', { p0: can })
+  if (guess.reason === 'prefix') return tr('customApi.imagesWhy.prefix', { p0: can, p1: m.id.split('/')[0] + '/' })
+  if (guess.reason === 'vision') return tr('customApi.imagesWhy.vision')
+  return tr(guess.images ? 'customApi.imagesWhy.protocolYes' : 'customApi.imagesWhy.protocolNo')
+}
 
 const TEMPLATES: Record<Exclude<ProviderTemplate, 'custom'>, { protocol: ProviderProtocol; baseUrl: string }> = {
   anthropic: { protocol: 'anthropic', baseUrl: 'https://api.anthropic.com' },
@@ -500,65 +514,93 @@ function ProviderDialog({ provider, close }: { provider: ProviderView | null; cl
               <div className="mt-1 overflow-hidden rounded-lg border border-line">
                 {models.map(m => {
                   const auto = officialPrice(m.id)
+                  const guess = autoImageInput(m.id, protocol)
+                  // 第一行模型名和删除，第二行上下文、计价参照、看图，最后一行是看图的判断依据
                   return (
                     <div
                       key={m.id}
-                      className="flex flex-wrap items-center gap-2 border-t border-line-subtle px-3 py-2 first:border-t-0"
+                      className="flex flex-col gap-1.5 border-t border-line-subtle px-3 py-2 first:border-t-0"
                     >
-                      <span className="min-w-0 flex-1 truncate font-mono text-meta text-fg">{m.id}</span>
-                      <ContextWindowInput
-                        value={m.contextWindow ?? null}
-                        onChange={contextWindow => patchModel(m.id, { contextWindow })}
-                        onDraftDirty={dirty =>
-                          setDirtyContext(prev => {
-                            if (prev.has(m.id) === dirty) return prev
-                            const next = new Set(prev)
-                            if (dirty) next.add(m.id)
-                            else next.delete(m.id)
-                            return next
-                          })
-                        }
-                        onValidity={ok =>
-                          setBadContext(prev => {
-                            const next = new Set(prev)
-                            if (ok) next.delete(m.id)
-                            else next.add(m.id)
-                            return next
-                          })
-                        }
-                      />
-                      <Select<string>
-                        label={tr('customApi.priceRef')}
-                        className="w-52"
-                        mono
-                        value={m.priceRef ?? ''}
-                        onChange={v => patchModel(m.id, { priceRef: v || null })}
-                        options={[
-                          {
-                            value: '',
-                            label: auto ? tr('customApi.priceAuto', { p0: auto.model }) : tr('customApi.priceNone'),
-                          },
-                          ...official.map(o => ({ value: o, label: o })),
-                        ]}
-                      />
-                      <IconButton
-                        icon={X}
-                        label={tr('customApi.removeModel', { p0: m.id })}
-                        onClick={() => {
-                          setModels(models.filter(x => x.id !== m.id))
-                          // 一并去掉这个模型的「填错 / 改过」标记：再加回同名模型时不会残留，保存一直灰着
-                          const without = (prev: ReadonlySet<string>) => new Set([...prev].filter(id => id !== m.id))
-                          setBadContext(without)
-                          setDirtyContext(without)
-                          // 删的是后台小模型：回到「默认」，别让下拉框显示空、保存时还带着删掉的模型
-                          if (smallModel === m.id) setSmallModel(null)
-                        }}
-                      />
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="min-w-0 flex-1 truncate font-mono text-meta text-fg">{m.id}</span>
+                        <IconButton
+                          icon={X}
+                          label={tr('customApi.removeModel', { p0: m.id })}
+                          onClick={() => {
+                            setModels(models.filter(x => x.id !== m.id))
+                            // 一并去掉这个模型的「填错 / 改过」标记：再加回同名模型时不会残留，保存一直灰着
+                            const without = (prev: ReadonlySet<string>) => new Set([...prev].filter(id => id !== m.id))
+                            setBadContext(without)
+                            setDirtyContext(without)
+                            // 删的是后台小模型：回到「默认」，别让下拉框显示空、保存时还带着删掉的模型
+                            if (smallModel === m.id) setSmallModel(null)
+                          }}
+                        />
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <ContextWindowInput
+                          value={m.contextWindow ?? null}
+                          onChange={contextWindow => patchModel(m.id, { contextWindow })}
+                          onDraftDirty={dirty =>
+                            setDirtyContext(prev => {
+                              if (prev.has(m.id) === dirty) return prev
+                              const next = new Set(prev)
+                              if (dirty) next.add(m.id)
+                              else next.delete(m.id)
+                              return next
+                            })
+                          }
+                          onValidity={ok =>
+                            setBadContext(prev => {
+                              const next = new Set(prev)
+                              if (ok) next.delete(m.id)
+                              else next.add(m.id)
+                              return next
+                            })
+                          }
+                        />
+                        <Select<string>
+                          label={tr('customApi.priceRef')}
+                          className="w-52"
+                          mono
+                          value={m.priceRef ?? ''}
+                          onChange={v => patchModel(m.id, { priceRef: v || null })}
+                          options={[
+                            {
+                              value: '',
+                              label: auto ? tr('customApi.priceAuto', { p0: auto.model }) : tr('customApi.priceNone'),
+                            },
+                            ...official.map(o => ({ value: o, label: o })),
+                          ]}
+                        />
+                        <Select<ImagesChoice>
+                          label={tr('customApi.images')}
+                          className="w-36"
+                          value={m.images === true ? 'yes' : m.images === false ? 'no' : 'auto'}
+                          onChange={v => patchModel(m.id, { images: v === 'auto' ? null : v === 'yes' })}
+                          options={[
+                            {
+                              value: 'auto',
+                              label: tr('customApi.imagesAuto', {
+                                p0: tr(guess.images ? 'customApi.imagesYes' : 'customApi.imagesNo'),
+                              }),
+                            },
+                            { value: 'yes', label: tr('customApi.imagesYes') },
+                            { value: 'no', label: tr('customApi.imagesNo') },
+                          ]}
+                        />
+                      </div>
+                      <span
+                        className={cn('text-label', m.images == null && !guess.images ? 'text-warn' : 'text-fg-faint')}
+                      >
+                        {imagesWhy(m, guess)}
+                      </span>
                     </div>
                   )
                 })}
               </div>
             )}
+            {models.length > 0 && <span className="text-meta text-fg-faint">{tr('customApi.imagesNote')}</span>}
           </Field>
 
           {protocol === 'anthropic' && (

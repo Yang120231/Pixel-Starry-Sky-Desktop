@@ -75,6 +75,45 @@ export const customApiMessages = {
   'customApi.priceRef': { zh: '计价参照', en: 'Pricing reference' },
   'customApi.priceAuto': { zh: '自动：{p0}', en: 'Auto: {p0}' },
   'customApi.priceNone': { zh: '只显示 token', en: 'Tokens only' },
+  'customApi.images': { zh: '看图', en: 'Images' },
+  'customApi.imagesAuto': { zh: '自动（{p0}）', en: 'Auto ({p0})' },
+  'customApi.imagesYes': { zh: '支持', en: 'Supported' },
+  'customApi.imagesNo': { zh: '不支持', en: 'Not supported' },
+  'customApi.imagesWhy.builtin': {
+    zh: '内置模型表里有这个模型，{p0}',
+    en: 'Found in the built-in model list: {p0}',
+  },
+  'customApi.imagesWhy.prefix': {
+    zh: '去掉 {p1} 前缀后在内置模型表里找到，{p0}',
+    en: 'Found in the built-in model list after removing the {p1} prefix: {p0}',
+  },
+  'customApi.imagesWhy.vision': {
+    zh: '名字里有 vision / vl，按能看图处理',
+    en: 'The name contains vision / vl, so images are allowed',
+  },
+  'customApi.imagesWhy.protocolYes': {
+    zh: '内置模型表里没有，按协议默认能看图',
+    en: 'Not in the built-in model list; this protocol allows images by default',
+  },
+  'customApi.imagesWhy.protocolNo': {
+    zh: '内置模型表里没有，OpenAI Chat 协议默认只收文字；能看图的话请选「支持」',
+    en: 'Not in the built-in model list; OpenAI Chat accepts text only by default. Choose "Supported" if it can read images',
+  },
+  'customApi.imagesWhy.manualYes': { zh: '已手动指定：能看图', en: 'Set manually: images allowed' },
+  'customApi.imagesWhy.manualNo': {
+    zh: '已手动指定：只收文字，附的图片会被拦下',
+    en: 'Set manually: text only; attached images are blocked',
+  },
+  'customApi.imagesCan': { zh: '能看图', en: 'images allowed' },
+  'customApi.imagesCannot': { zh: '只收文字', en: 'text only' },
+  'customApi.imagesNote': {
+    zh: '「看图」只对像素星空引擎生效；引擎目前只支持文字和图片两种输入。',
+    en: '"Images" only applies to the PixelSky engine, which currently accepts text and images only.',
+  },
+  'pixel.imageUnsupported': {
+    zh: '这个模型不支持图片。如果它其实能看图，可以在 设置 › 模型通道 › 自定义接口 里把这个模型的「看图」改成「支持」',
+    en: 'This model does not support images',
+  },
   'customApi.removeModel': { zh: '移除 {p0}', en: 'Remove {p0}' },
   'customApi.smallModel': { zh: '后台小模型', en: 'Background model' },
   'customApi.smallModelHint': {

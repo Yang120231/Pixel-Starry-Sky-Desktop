@@ -213,5 +213,28 @@ export const demoProviders: ProvidersState = {
       createdAt: 1_760_000_000_000,
       updatedAt: 1_760_000_000_000,
     },
+    {
+      // OpenAI Chat 协议的中转：「看图」有自动判断的各种情况，也有手动指定的
+      id: 'demo-grok-relay',
+      name: 'Grok 中转',
+      template: 'custom',
+      protocol: 'chat',
+      baseUrl: 'https://relay.example.com/v1',
+      auth: 'bearer',
+      models: [
+        { id: 'grok-4.7-fast-reasoning' },
+        { id: 'grok-4', images: true },
+        { id: 'xai/grok-4.7' },
+        { id: 'qwen3-vl-plus' },
+        { id: 'grok-code-fast-1' },
+      ],
+      smallModel: null,
+      modelFallback: true,
+      keyHint: '7c1e',
+      headerNames: [],
+      insecure: false,
+      createdAt: 1_760_000_000_000,
+      updatedAt: 1_760_000_000_000,
+    },
   ],
 }

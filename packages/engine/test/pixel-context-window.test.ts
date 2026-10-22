@@ -53,4 +53,26 @@ describe('像素星空经网关时的上下文窗口', () => {
       pixelsky: { own: ['reasoning'], 'claude-opus-4-7': ['reasoning', 'input', 'contextWindow'] },
     })
   })
+
+  it('pixelModelsConfig：Chat 默认只收文字，名字带 vision / vl 的默认能看图；桌面端写明的 input 不动', () => {
+    const config = pixelModelsConfig(
+      {
+        PIXELSKY_PIXEL_BASE_URL: 'http://x',
+        PIXELSKY_PIXEL_API: 'openai-completions',
+        PIXELSKY_PIXEL_MODELS: JSON.stringify([
+          { id: 'grok-4' },
+          { id: 'qwen3-vl-plus' },
+          { id: 'grok-code', input: ['text', 'image'] },
+        ]),
+      },
+      null,
+    )
+    const models = (config?.providers.pixelsky as { models: Array<{ id: string; input: string[] }> }).models
+    expect(models.map(m => [m.id, m.input])).toEqual([
+      ['grok-4', ['text']],
+      ['qwen3-vl-plus', ['text', 'image']],
+      ['grok-code', ['text', 'image']],
+    ])
+    expect(config?.inferred?.pixelsky?.['grok-code']).not.toContain('input')
+  })
 })

@@ -397,6 +397,7 @@ export async function initPlatform(
             contextWindow: provider
               ? (provider.models.find(m => m.id === target.model)?.contextWindow ?? null)
               : (pixelPlatformWindows()[target.model] ?? null),
+            images: provider?.models.find(m => m.id === target.model)?.images ?? null,
             autoContextWindow: pixelAutoWindow(target.model),
             upstreamBaseUrl: provider?.baseUrl ?? null,
             label: provider?.name ?? (target.kind === 'platform' ? groupBrief(target.groupId)?.name || '平台线路' : ''),

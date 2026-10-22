@@ -37,6 +37,13 @@ const tokens = (id: string): string[] => id.toLowerCase().split('-').filter(Bool
  * （deepseek-v4.1-flash → deepseek-flash），取段数最多的。同名的多个里协议一样的优先，再按厂商顺序
  */
 export function findBuiltin(id: string, api: string, all: readonly Json[]): Json | undefined {
+  // 中转站常写成 xai/grok-4.7：原名找不到时去掉厂商前缀再找一次（设置页「看图 · 自动」同样这样认，protocol 的 image-input.ts）
+  const found = findByName(id, api, all)
+  const bare = id.replace(/^[^/]+\//, '')
+  return found ?? (bare !== id ? findByName(bare, api, all) : undefined)
+}
+
+function findByName(id: string, api: string, all: readonly Json[]): Json | undefined {
   const pool = all.filter(m => VENDORS.includes(String(m.provider)) && typeof m.id === 'string')
   const rank = (m: Json): number => (m.api === api ? 0 : 100) + VENDORS.indexOf(String(m.provider))
   const best = (list: Json[]): Json | undefined => [...list].sort((a, b) => rank(a) - rank(b))[0]

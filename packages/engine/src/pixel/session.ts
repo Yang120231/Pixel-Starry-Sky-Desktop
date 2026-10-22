@@ -15,7 +15,7 @@ import type {
   SkillCommand,
   TurnOutcome,
 } from '@pixelsky/protocol'
-import { EMPTY_FLAGS, viaGateway, type ContextWindows } from '@pixelsky/protocol'
+import { EMPTY_FLAGS, looksVisual, viaGateway, type ContextWindows } from '@pixelsky/protocol'
 import { QUICK_CLOSE_MS, type CloseOptions, type EngineSession, type Launcher, type SessionContext } from '../adapter'
 import type { ChatSeed } from '../chat-log'
 import { McpReporter, pixelMcpServers } from '../mcp'
@@ -193,9 +193,10 @@ export function pixelModelsConfig(
         if (guessed.length) inferred[string(m.id)] = [...new Set(guessed)]
         const chat = api === 'openai-completions'
         return {
-          // Chat 的兼容接口多数不收图片、不开思考：默认只给文字，Pi 内置表里有这个模型时以内置的为准
+          // Chat 的兼容接口多数不收图片、不开思考：默认只给文字（名字一看就能看图的除外），Pi 内置表里有这个模型时以内置的为准；
+          // 用户在设置里指定了「看图」的，桌面端写明 input，不算猜的
           reasoning: !chat,
-          input: chat ? ['text'] : ['text', 'image'],
+          input: chat && !looksVisual(string(m.id)) ? ['text'] : ['text', 'image'],
           ...m,
           ...(window ? { contextWindow: window.window } : {}),
         }

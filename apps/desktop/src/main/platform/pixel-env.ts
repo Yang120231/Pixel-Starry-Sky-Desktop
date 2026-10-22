@@ -1,5 +1,6 @@
 // 像素星空会话的网关环境变量（docs/own-cli.md §12）：按线路 / 接口的协议选 Pi 的 API 种类和本机地址。
 // 不依赖 electron，单独测。
+import { looksVisual } from '@pixelsky/protocol'
 import type { ProviderModel, ProviderProtocol } from '../../shared/types/providers'
 import type { PlatformGroupInfo } from '../../shared/types/platform-catalog'
 import { platformModelApi } from '../../shared/platform-models'
@@ -165,6 +166,9 @@ export function pixelModelCompat(
   return thirdParty ? { compat: { ...THIRD_PARTY_ANTHROPIC_COMPAT } } : {}
 }
 
+/** 「看图」→ Pi 模型定义的 input */
+const imageInput = (images: boolean): string[] => (images ? ['text', 'image'] : ['text'])
+
 /** 去掉 Claude Code 的 1M 上下文后缀：像素星空把模型名原样发出去，上游不认 `[1m]` */
 export function stripLongContextSuffix(model: string): string {
   return model.replace(/\[1m\]$/i, '')
@@ -183,10 +187,12 @@ export function pixelGatewayEnv(options: {
   const ids = (options.models ?? []).map(m => ({
     id: m.id,
     ...(m.contextWindow ? { contextWindow: m.contextWindow } : {}),
+    // 用户指定了「看图」：写明 input，命令行不再按 Pi 内置表改
+    ...(typeof m.images === 'boolean' ? { input: imageInput(m.images) } : {}),
   }))
   const list = ids.length ? ids : options.model ? [{ id: options.model }] : []
   // inferred 不是 Pi 的字段：引擎（pixelModelsConfig）取出来并进 PIXELSKY_PIXEL_INFERRED。
-  // 图片不在这里写：引擎按协议定默认值（Chat 只给文字）并标成猜的，Pi 内置表里收图的模型（如 kimi-k3）照样能发图
+  // 用户没指定「看图」的不写图片：引擎按协议和名字定默认值并标成猜的，Pi 内置表里收图的模型（如 kimi-k3）照样能发图
   const models = list.map(m => ({ ...m, ...pixelModelCompat(options.api, options.upstreamBaseUrl ?? null, m.id) }))
   return {
     PIXELSKY_PIXEL_BASE_URL: pixelBaseUrl(options.api, options.port),
@@ -205,6 +211,8 @@ export function pixelSubagentRoute(options: {
   model: string
   /** 自定义接口里这个模型的上下文窗口 */
   contextWindow?: number | null
+  /** 自定义接口里给这个模型指定的「看图」；不填按协议和模型名猜 */
+  images?: boolean | null
   /** 接口里没写窗口时按模型系列猜的（engine pixelAutoWindow），命令行在 Pi 内置表里找到同名模型时以内置的为准 */
   autoContextWindow?: number | null
   upstreamBaseUrl?: string | null
@@ -218,9 +226,13 @@ export function pixelSubagentRoute(options: {
     options.model,
   )
   const window = options.contextWindow || options.autoContextWindow
-  // 图片不写：命令行按协议定默认值（Chat 只给文字），Pi 内置表里收图的模型照样能发图
+  // 图片：用户指定了就写明；没指定时命令行按协议定默认值（Chat 只给文字），名字一看就能看图的这里先标上能，
+  // 都算猜的，Pi 内置表里有这个模型时以内置的为准
+  const images = typeof options.images === 'boolean'
+  const visual = !images && options.api === 'openai-completions' && looksVisual(options.model)
   const inferred = [
     ...(!options.contextWindow && options.autoContextWindow ? ['contextWindow'] : []),
+    ...(visual ? ['input'] : []),
     ...compatInferred,
   ]
   return {
@@ -228,6 +240,7 @@ export function pixelSubagentRoute(options: {
     model: {
       id: options.model,
       ...(window ? { contextWindow: window } : {}),
+      ...(images ? { input: imageInput(options.images!) } : visual ? { input: imageInput(true) } : {}),
       ...(compat ? { compat } : {}),
     },
     label: options.label,

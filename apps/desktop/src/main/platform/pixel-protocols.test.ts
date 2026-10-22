@@ -128,6 +128,29 @@ describe('像素星空的 OpenAI 协议：环境变量', () => {
     expect(chatCompat('https://relay.example/v1')).not.toHaveProperty('thinkingFormat')
   })
 
+  it('「看图」：用户指定了写明 input（不算猜的）；子智能体没指定时 Chat 下名字带 vision / vl 的先标能看图（算猜的）', () => {
+    const env = pixelGatewayEnv({
+      port: 9,
+      secret: 's',
+      api: 'openai-completions',
+      models: [{ id: 'grok-4', images: true }, { id: 'grok-code-fast-1', images: false }, { id: 'auto' }],
+      model: 'grok-4',
+    })
+    const [yes, no, auto] = JSON.parse(env.PIXELSKY_PIXEL_MODELS)
+    expect(yes).toMatchObject({ id: 'grok-4', input: ['text', 'image'] })
+    expect(no).toMatchObject({ id: 'grok-code-fast-1', input: ['text'] })
+    expect(auto).not.toHaveProperty('input')
+    const base = { api: 'openai-completions' as const, label: 'x', token: 'T' }
+    expect(pixelSubagentRoute({ ...base, model: 'grok-4', images: true })).toMatchObject({
+      model: { input: ['text', 'image'] },
+    })
+    expect(pixelSubagentRoute({ ...base, model: 'grok-4', images: true }).inferred ?? []).not.toContain('input')
+    const visual = pixelSubagentRoute({ ...base, model: 'qwen3-vl-plus' })
+    expect(visual.model.input).toEqual(['text', 'image'])
+    expect(visual.inferred).toContain('input')
+    expect(pixelSubagentRoute({ ...base, model: 'grok-4' }).model).not.toHaveProperty('input')
+  })
+
   it('子智能体类型单独的站点：只有一个模型，Chat 带 compat，带上站点名和放密钥的变量名', () => {
     const route = pixelSubagentRoute({
       api: 'openai-completions',

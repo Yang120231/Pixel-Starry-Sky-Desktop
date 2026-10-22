@@ -196,6 +196,8 @@ export type {
 export { PROVIDER_ENV, PROVIDER_ID, sourceKey, sourceKind, viaGateway } from './source'
 export { estimateCost, officialModels, officialPrice } from './pricing'
 export type { OfficialPrice } from './pricing'
+export { autoImageInput, looksVisual, piBuiltinImage, stripVendorPrefix } from './models/image-input'
+export type { ImageInputProtocol, ImageInputReason } from './models/image-input'
 export type { SourceKind } from './source'
 export {
   COST_MISSING,

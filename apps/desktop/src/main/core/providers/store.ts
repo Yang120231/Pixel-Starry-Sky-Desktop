@@ -133,6 +133,8 @@ function parseModels(value: unknown): ProviderModel[] {
     if (typeof raw.priceRef === 'string' && raw.priceRef.trim()) out.priceRef = text(raw.priceRef, '计价参照', 200)
     else if (raw.priceRef !== undefined && raw.priceRef !== null && raw.priceRef !== '')
       throw new Error(`模型 ${id} 的计价参照不对`)
+    if (typeof raw.images === 'boolean') out.images = raw.images
+    else if (raw.images !== undefined && raw.images !== null) throw new Error(`模型 ${id} 的看图设置不对`)
     return [out]
   })
 }

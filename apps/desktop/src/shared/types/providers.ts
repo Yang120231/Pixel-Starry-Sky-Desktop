@@ -10,6 +10,8 @@ export interface ProviderModel {
   contextWindow?: number | null
   /** 计价参照：按哪个官方模型估算费用；不填按模型名自动对 */
   priceRef?: string | null
+  /** 像素星空能不能给它发图片：true 支持 / false 不支持；不填按协议和模型名自动判断（protocol 的 autoImageInput） */
+  images?: boolean | null
 }
 
 /** 给设置页看的接口：Key 只剩末 4 位，请求头只给名字 */
