@@ -28,6 +28,7 @@ import { AccountsPage } from '@/features/model-channels/AccountsPage'
 import { openAccountsPage, useAccountsPage } from '@/features/model-channels/accountsStore'
 import { AiCommitSettings } from './AiCommitSettings'
 import { ContextWindowInput } from './ContextWindowInput'
+import { CustomModelWindows } from './CustomModelWindows'
 import { setContextWindow, useContextWindows } from './contextWindows'
 import {
   mergedModels,
@@ -245,6 +246,9 @@ export function ModelsSection() {
           </div>
         </div>
       )}
+
+      {/* 自定义 API 的模型也能在这里填窗口（docs/ui/context-settings-branch-switch.md §2.3.1） */}
+      <CustomModelWindows />
 
       <GroupTitle>{tr('aiCommit.settings.title')}</GroupTitle>
       <AiCommitSettings />

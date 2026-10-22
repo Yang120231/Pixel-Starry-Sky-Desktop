@@ -1,5 +1,5 @@
 // 云端 / 本机模型的上下文窗口、Codex 的自动压缩（GitHub #20，docs/ui/context-settings-branch-switch.md §2）
-import { mkdirSync, readFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -8,10 +8,13 @@ import { ClaudeAdapter, CodexAdapter, EngineHost } from '../src'
 import { windowSettings } from '../src/claude/long-context'
 import { claudeSettingsArgument } from '../src/claude/session'
 import { codexContextConfig } from '../src/codex/context-config'
+import { CodexCatalog, FALLBACK_WINDOW, catalogWith, fallbackEntry } from '../src/codex/model-catalog'
 import { makeTmp, removeTmp } from './helpers/tmp'
 
 const FAKE_CLAUDE = fileURLToPath(new URL('./fakes/fake-claude.mjs', import.meta.url))
 const FAKE_CODEX = fileURLToPath(new URL('./fakes/fake-codex.mjs', import.meta.url))
+/** 假 Codex 的默认资料提示词（fakes/fake-codex-catalog.mjs） */
+const FAKE_DEFAULT_PROMPT = 'You are the fake Codex default prompt.'
 
 let root: string
 let events: HostEvent[]
@@ -247,6 +250,82 @@ describe('Claude Code：云端 / 本机模型的窗口', () => {
       haiku: { autoCompactWindow: 150_000 },
     })
     if (opus?.resolved) expect(settings.modelSettings[opus.resolved]).toEqual({ autoCompactWindow: 1_000_000 })
+  })
+})
+
+describe('Codex 经网关：模型目录（§2.3.1）', () => {
+  const launcher = { command: process.execPath, args: [FAKE_CODEX] }
+  const readCatalog = (argv: string): { models: Array<Record<string, unknown>> } => {
+    const path = /model_catalog_json="([^"]+)"/.exec(argv)?.[1]
+    if (!path) throw new Error('没有 model_catalog_json')
+    return JSON.parse(readFileSync(path.replace(/\\\\/g, '\\'), 'utf8'))
+  }
+
+  it('自带目录有的模型：不超上限不生成，超了复制这一项改窗口；没有的加一项默认资料', () => {
+    const bundled = [{ slug: 'gpt-5', context_window: 272_000, max_context_window: 272_000, extra: 1 }]
+    expect(catalogWith(bundled, 'gpt-5', 200_000, null, 'P')).toBeNull()
+    expect(catalogWith(bundled, 'gpt-5', null, 500_000, 'P')).toBeNull()
+    expect(catalogWith(bundled, 'gpt-5', 500_000, null, null)?.models).toEqual([
+      { slug: 'gpt-5', context_window: 500_000, max_context_window: 500_000, extra: 1 },
+    ])
+    const added = catalogWith(bundled, 'grok-4.7', null, 500_000, 'P')!.models
+    expect(added[0]).toBe(bundled[0])
+    expect(added[1]).toEqual(fallbackEntry('grok-4.7', 500_000, 'P'))
+    expect(catalogWith(bundled, 'glm-5', 300_000, 500_000, 'P')!.models[1].context_window).toBe(300_000)
+    expect(catalogWith(bundled, 'glm-5', null, null, 'P')!.models[1].max_context_window).toBe(FALLBACK_WINDOW)
+    // 没拿到默认提示词：照现在用 Codex 的默认资料
+    expect(catalogWith(bundled, 'glm-5', 300_000, null, null)).toBeNull()
+  })
+
+  it('取自带目录、实测默认提示词（只测一次，存到磁盘），写出目录文件', async () => {
+    const catalog = new CodexCatalog(join(root, 'catalog'))
+    const env = { ...process.env }
+    const file = await catalog.file(launcher, 'test', env, 'grok-4.7', null, 500_000)
+    const models = (JSON.parse(readFileSync(file!, 'utf8')) as { models: Array<Record<string, unknown>> }).models
+    expect(models.map(m => m.slug)).toEqual(['gpt-5', 'gpt-5-mini', 'o3', 'grok-4.7'])
+    expect(models[3]).toMatchObject({ context_window: 500_000, base_instructions: FAKE_DEFAULT_PROMPT })
+    expect(
+      readFileSync(
+        join(root, 'catalog', readdirSync(join(root, 'catalog')).find(n => n.startsWith('instructions-'))!),
+        'utf8',
+      ),
+    ).toBe(FAKE_DEFAULT_PROMPT)
+    expect(await catalog.file(launcher, 'test', env, 'gpt-5', 200_000, null)).toBeNull()
+    // 新的实例（重启应用）读存下的提示词
+    const again = new CodexCatalog(join(root, 'catalog'))
+    expect(await again.file(launcher, 'test', env, 'glm-5', 300_000, null)).toBeTruthy()
+  })
+
+  it('云端线路上 Codex 没有资料的模型：启动带 model_catalog_json；自有会话、用户自己写了目录时不带', async () => {
+    const { host, project, launches } = codexHost()
+    await host.setEngineConfig('codex', { contextWindows: { platform: { 'grok-4.7': 500_000 } } })
+    const s = host.createSession({
+      projectId: project.id,
+      engine: 'codex',
+      model: 'grok-4.7',
+      platform: { groupId: '7', account: 'a@example.com' },
+      permissionMode: 'ask',
+    })
+    await host.send(s.id, '一')
+    await waitFor(() => turnsDone(s.id) === 1)
+    const argv = launches().at(-1)!
+    expect(argv).toContain('model_context_window=500000')
+    const grok = readCatalog(argv).models.find(m => m.slug === 'grok-4.7')
+    expect(grok).toMatchObject({ context_window: 500_000, max_context_window: 500_000 })
+
+    const own = host.createSession({ projectId: project.id, engine: 'codex', model: 'grok-4.7', permissionMode: 'ask' })
+    await host.send(own.id, '一')
+    await waitFor(() => turnsDone(own.id) === 1)
+    expect(launches().at(-1)).not.toContain('model_catalog_json')
+
+    await host.setEngineConfig('codex', { args: ['-c', 'model_catalog_json="mine.json"'] })
+    await host.send(s.id, '二')
+    await waitFor(() => turnsDone(s.id) === 2)
+    expect(
+      launches()
+        .at(-1)!
+        .match(/model_catalog_json/g),
+    ).toHaveLength(1)
   })
 })
 

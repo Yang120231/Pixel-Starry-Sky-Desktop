@@ -1,6 +1,8 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import readline from 'node:readline'
+// 模型目录要用的两种模式（debug models、实测默认提示词）：命中时这个模块不往下执行
+import './fake-codex-catalog.mjs'
 if (process.env.FAKE_CODEX_ARGV)
   appendFileSync(process.env.FAKE_CODEX_ARGV, JSON.stringify(process.argv.slice(2)) + '\n')
 // codex logout：马上退出（账号额度测试用，确认退出登录后关掉只读进程）

@@ -41,6 +41,7 @@ import { codexCommandParts } from './command'
 import { codexQuotaPatch, parseCodexRateLimits } from './quota'
 import { codexChanges, CodexTranslator, tokenCounts } from './translate'
 import { CODEX_WINDOW_ENV, codexContextConfig } from './context-config'
+import { pixelAutoWindow } from '../pixel/context-window'
 import { codexGoal, goalUnsupported, sameGoal } from './goal'
 import { queueSettings } from '../queue'
 
@@ -60,6 +61,11 @@ export interface CodexLaunchOptions {
   rejectAsk?: () => void
   /** 会话用默认模型时，Codex 报的当前模型 */
   defaultModel?: () => string | null
+  /**
+   * 经网关时要交给 model_catalog_json 的模型目录文件（docs/ui/context-settings-branch-switch.md §2.3.1）：放开 272K 上限、
+   * 补上 Codex 没有资料的模型；window 是填的窗口，auto 是按系列自动定的。不需要时 null
+   */
+  modelCatalog?: (model: string, window: number | null, auto: number | null) => Promise<string | null>
   /** Codex 报过的各模型窗口（没改窗口时记下），算自动压缩的 token 数用 */
   knownWindows?: Map<string, number>
   /** 以前派出过的子智能体（从 rollout 还原）：接着跑完时在原来的追踪上更新 */
@@ -431,6 +437,16 @@ export class CodexSession implements EngineSession {
     })
     delete environment[CODEX_WINDOW_ENV]
     if (context.window) config('model_context_window', context.window)
+    // 经网关（云端线路、自定义 API）：Codex 把窗口限制在模型资料的上限内，没有资料的模型只有 272K。用户自己写了目录时不管
+    if (
+      gatewayProvider &&
+      model &&
+      this.options.modelCatalog &&
+      !(this.options.args ?? []).some(arg => arg.includes('model_catalog_json'))
+    ) {
+      const file = await this.options.modelCatalog(model, context.window, pixelAutoWindow(model)).catch(() => null)
+      if (file) config('model_catalog_json', file)
+    }
     if (context.limit) config('model_auto_compact_token_limit', context.limit)
     this.windowOverridden = !!context.window
     const proc = new CodexProcess(this.launcher, args, record.cwd, environment, {

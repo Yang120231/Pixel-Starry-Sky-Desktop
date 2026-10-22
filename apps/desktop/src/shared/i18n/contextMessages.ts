@@ -3,6 +3,11 @@ export const contextMessages = {
   'contextWindow.label': { zh: '上下文窗口', en: 'Context window' },
   'contextWindow.of': { zh: '{model} 的上下文窗口', en: 'Context window for {model}' },
   'contextWindow.auto': { zh: '自动', en: 'Auto' },
+  'contextWindow.customTitle': { zh: '自定义 API 的模型', en: 'Custom API models' },
+  'contextWindow.customHint': {
+    zh: '和「自定义 API」里接口配置的上下文窗口是同一个值，改哪边都一样。留空用引擎自己知道的大小。',
+    en: 'Same value as the context window in the custom API settings; editing either place changes both. Leave empty to use the engine’s own value.',
+  },
   'contextWindow.platformTitle': { zh: '上下文窗口', en: 'Context windows' },
   'contextWindow.platformHint': {
     zh: '每个模型可以填上下文窗口，如 1M、200K；留空用引擎自己知道的大小。比模型实际支持的大，请求会出错。改了以后下一条消息生效。',

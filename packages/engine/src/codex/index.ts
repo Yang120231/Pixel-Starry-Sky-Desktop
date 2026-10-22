@@ -31,6 +31,7 @@ import { codexAnchor, readCodexTurns } from './branch'
 import { CodexProcess, object, string } from './process'
 import { parseCodexRateLimits } from './quota'
 import { codexCatalog } from './catalog'
+import { CodexCatalog } from './model-catalog'
 import { CodexSession, reservedCodexArg, type CodexLaunchOptions } from './session'
 import { CodexReader } from './reader'
 import { codexThreadExists, liveCodexThreads, listCodexThreads, newerCodexTurns, readCodexThread } from './native'
@@ -65,6 +66,8 @@ export class CodexAdapter implements EngineAdapter {
   private askRejected = false
   /** Codex 报过的各模型窗口（GitHub #20）：设了自动压缩、没填窗口时按它算 token 数 */
   private readonly knownWindows = new Map<string, number>()
+  /** 经网关时交给 model_catalog_json 的模型目录（model-catalog.ts）：自带目录和默认提示词按 Codex 版本缓存 */
+  private readonly modelCatalog = new CodexCatalog()
   /** 只读的 app-server（列线程、读历史，docs/ui/codex-resume.md §3.5）：每个适配器一个，空闲 60 秒自己关 */
   private readonly reader = new CodexReader(async () => {
     await this.info()
@@ -396,6 +399,15 @@ export class CodexAdapter implements EngineAdapter {
       ...(this.opts.launchOptions?.() ?? { askQuestions: true }),
       defaultModel: () => this.catalogCache?.currentModel ?? null,
       knownWindows: this.knownWindows,
+      modelCatalog: (model, window, auto) =>
+        this.modelCatalog.file(
+          result.launcher!,
+          result.info.version,
+          toolEnvironment(result.launcher!, this.baseEnv()),
+          model,
+          window,
+          auto,
+        ),
       // 宿主的运行时里已经有（打开会话时从 rollout 读过，之后实时更新）：直接用，不再整读一遍 rollout。
       // 没有进程可接着跑了，还停在 running 的标成已中断（与 loadCodexRuns 一致）
       savedAgents: () =>
