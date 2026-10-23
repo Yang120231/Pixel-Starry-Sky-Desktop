@@ -17,6 +17,8 @@ import { TeamSync } from '../core/channels/team/sync'
 import { ChannelStore } from '../core/channels/store'
 import { Channels, type MachineLite } from '../core/channels/service'
 import { channelToolsServer } from './channel-mcp'
+import type { CheckRun } from '../../shared/types/checks'
+import type { ChannelAlertAction } from '../../shared/channels/alerts'
 import type {
   AgentInput,
   AgentPolicy,
@@ -31,7 +33,8 @@ const str = (value: unknown, what: string): string => {
   if (typeof value !== 'string' || !value) throw new Error(`${what}不正确`)
   return value
 }
-const ACTIONS = new Set<ChannelTaskAction>(['cancel', 'stop', 'retry', 'continue', 'unlimit'])
+const ACTIONS = new Set<ChannelTaskAction>(['cancel', 'stop', 'retry', 'continue', 'unlimit', 'fix'])
+const ALERT_ACTIONS = new Set<ChannelAlertAction>(['hold', 'continue', 'open', 'stop', 'reassign', 'cancel', 'dismiss'])
 const INVITE_ROLES = new Set<Exclude<TeamRole, 'owner'>>(['member', 'observer'])
 const POLICIES = new Set<AgentPolicy>(['approve', 'team'])
 const role = (value: unknown): Exclude<TeamRole, 'owner'> => {
@@ -101,6 +104,14 @@ export async function initChannels(ctx: AppContext): Promise<void> {
     deviceId,
     machineName: () => hostname() || '这台电脑',
     channelTools: true,
+    // 产出检查走项目工具的操作表，和窗口一样按会话路由到所在的机器（docs/ui/channels-collab-v2.md §8）
+    runChecks: async (sessionId, files) => {
+      const op = ctx.toolOps.get('projectTools:runChecks')
+      if (!op) return null
+      const args = [{ sessionId }, { files, when: 'channel' }]
+      const result = ctx.machines ? ctx.machines.invoke('projectTools:runChecks', args, () => op(args)) : op(args)
+      return (await result) as CheckRun | null
+    },
   })
   // 频道工具（pixelsky_channel）：频道派活的本机会话发消息前由扩展准备挂上（docs/ui/channels-collab-v2.md §1）
   const tools = channelToolsServer(() => channels)
@@ -158,6 +169,10 @@ export async function initChannels(ctx: AppContext): Promise<void> {
   ipc.handle('channels:proposal', (_e, id, messageId, accept) =>
     channels.proposal(str(id, '频道'), str(messageId, '消息'), accept === true),
   )
+  ipc.handle('channels:alert', (_e, id, messageId, action) => {
+    if (typeof action !== 'string' || !ALERT_ACTIONS.has(action as ChannelAlertAction)) throw new Error('不支持的操作')
+    return channels.alertAction(str(id, '频道'), str(messageId, '消息'), action as ChannelAlertAction)
+  })
   ipc.handle('channels:search', (_e, text, opts) => {
     const o = (opts ?? {}) as { limit?: unknown; projectId?: unknown }
     return channels.search(typeof text === 'string' ? text : '', {

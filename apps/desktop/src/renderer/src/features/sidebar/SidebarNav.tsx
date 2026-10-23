@@ -1,12 +1,13 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
-import { useComingSoon } from '@/ui'
+import { CountBadge, useComingSoon } from '@/ui'
 import { useSidebarPrefs } from '@/features/appearance/sidebar'
 import { getSidebarIcon } from '@/features/appearance/sidebarIcons'
 import { NEW_TASK, OPEN_SEARCH, withShortcut } from '@/features/layout/shortcuts'
 import { setPage, usePage } from '@/features/layout/page'
 import { useBoardTasks } from '@/features/board/boardTasks'
 import { useChannelUnreadTotal } from '@/features/channels/store'
+import { useNeeds } from '@/features/channels/needs'
 import { useEngineState, isLive } from '@/features/engine'
 import { machineOf, useMachines } from '@/features/machines/store'
 import { useOpenSearch } from '@/features/search/SearchProvider'
@@ -47,6 +48,8 @@ function ChannelsEntry() {
   const page = usePage()
   const unread = useChannelUnreadTotal()
   const unreadText = tr('sidebar.channelsUnread', { n: unread })
+  // 「需要你」的件数写在右边（docs/ui/channels-collab-v2.md §2）；没有时有未读才显示小圆点
+  const needs = useNeeds().needs.length
   const { icons } = useSidebarPrefs()
   const Icon = getSidebarIcon('channels', icons)
   return (
@@ -58,7 +61,13 @@ function ChannelsEntry() {
     >
       <Icon size={16} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
       <span className="min-w-0 flex-1 truncate">{tr('channels.section')}</span>
-      {unread > 0 && <span role="img" aria-label={unreadText} className="size-1.5 shrink-0 rounded-full bg-accent" />}
+      {needs > 0 ? (
+        <span data-needs-count="" title={tr('needs.title')}>
+          <CountBadge count={needs} max={99} />
+        </span>
+      ) : (
+        unread > 0 && <span role="img" aria-label={unreadText} className="size-1.5 shrink-0 rounded-full bg-accent" />
+      )}
     </SidebarRow>
   )
 }

@@ -17,12 +17,18 @@ import type {
   JoinSessionInput,
   PendingInvite,
   RelayRules,
+  ChannelAlertRule,
   TeamInfo,
   TeamRole,
   TeamsConnection,
 } from '../../../../shared/types/channels'
 import { getPage, subscribePage } from '@/features/layout/page'
 import { appendMessage, createMessage, firstUnreadAt, markRead, unreadTotal } from './model'
+import { channelDraftKey } from './draftKey'
+import { appendComposerDraft } from '@/features/engine/drafts'
+import { OPEN_SESSION_EVENT } from '@/features/engine/openRequests'
+import type { ChannelAlertAction } from '../../../../shared/channels/alerts'
+import { threadRootOf } from '../../../../shared/channels/threads'
 
 /** 正式模式的桥接；演示模式和没有 preload 时为 undefined */
 export const channelsBridge = isDemo ? undefined : window.pixelsky?.channels
@@ -61,6 +67,11 @@ export interface ChannelsState {
   /** unavailable = 云端没有团队接口，不显示任何团队入口 */
   teamsConnection: TeamsConnection
   teamsSyncedAt: number | null
+  /** 「需要你」（docs/ui/channels-collab-v2.md §2）：主进程算好推过来；演示模式在 needs.ts 里现算 */
+  needs: NonNullable<ChannelsSnapshot['needs']>
+  following: NonNullable<ChannelsSnapshot['following']>
+  /** 频道页正在看「需要你」（代替时间线） */
+  needsOpen: boolean
   /** 要时间线跳到并高亮的消息（置顶列表、提醒点进来）；时间线处理完清掉 */
   focus: { channelId: string; messageId: string } | null
 }
@@ -83,6 +94,9 @@ let state: ChannelsState = {
   invites: channelsLive ? [] : channelTeams.invites,
   teamsConnection: channelsLive ? 'unavailable' : channelTeams.connection,
   teamsSyncedAt: channelsLive ? null : Date.now(),
+  needs: [],
+  following: [],
+  needsOpen: false,
   focus: null,
 }
 const listeners = new Set<() => void>()
@@ -156,6 +170,8 @@ function applySnapshot(s: ChannelsSnapshot): void {
     sessionChannels: s.sessionChannels,
     sessionTasks: s.sessionTasks ?? {},
     sessionBindings: s.sessionBindings ?? {},
+    needs: s.needs ?? [],
+    following: s.following ?? [],
     teams: s.teams ?? [],
     invites: s.invites ?? [],
     teamsConnection: s.teamsConnection ?? 'unavailable',
@@ -240,6 +256,39 @@ if (channelsBridge) {
 // ---------------------------------------------------------------------------
 
 export const channelActions = {
+  /**
+   * 主动提醒上的按钮（docs/ui/channels-collab-v2.md §6）。open 打开会话（不改提醒）；换人时把「@ 标题」放进频道输入框。
+   * 演示模式只把提醒标为处理过
+   */
+  async alert(channelId: string, messageId: string, action: ChannelAlertAction): Promise<void> {
+    if (action === 'open') {
+      const m = state.messages[channelId]?.find(x => x.id === messageId)
+      const taskId = m?.kind === 'message' ? m.alert?.taskId : null
+      const task = taskId ? state.messages[channelId]?.find(x => x.id === taskId) : null
+      const need = state.needs.find(n => n.messageId === messageId)
+      const sessionId = (task?.kind === 'task' ? task.sessionId : null) ?? need?.sessionId
+      if (sessionId) window.dispatchEvent(new CustomEvent(OPEN_SESSION_EVENT, { detail: { sessionId } }))
+      return
+    }
+    if (channelsBridge) {
+      const { draft } = await channelsBridge.alert(channelId, messageId, action)
+      if (draft) appendComposerDraft(channelDraftKey(channelId), draft)
+      return
+    }
+    const list = state.messages[channelId] ?? []
+    set({
+      messages: {
+        ...state.messages,
+        [channelId]: list.map(m =>
+          m.kind === 'message' && m.id === messageId && m.alert ? { ...m, alert: { ...m.alert, state: 'done' } } : m,
+        ),
+      },
+    })
+  },
+  /** 打开 / 关掉「需要你」 */
+  openNeeds(open: boolean): void {
+    if (state.needsOpen !== open) set({ needsOpen: open })
+  },
   /** 进入频道：记下「新消息」位置并标为已读 */
   select(id: string): void {
     const channel = state.channels.find(c => c.id === id)
@@ -262,7 +311,9 @@ export const channelActions = {
     set({ replyTo: { ...state.replyTo, [channelId]: messageId } })
   },
   /** 打开 / 关掉右侧的讨论串 */
-  openThread(channelId: string, rootId: string | null): void {
+  openThread(channelId: string, id: string | null): void {
+    // 在结果上开串 = 打开任务卡的串；串里的消息 = 它所在的串
+    const rootId = id && threadRootOf(state.messages[channelId] ?? [], id)
     if ((state.thread[channelId] ?? null) === rootId) return
     set({ thread: { ...state.thread, [channelId]: rootId } })
   },
@@ -366,6 +417,9 @@ export const channelActions = {
       relay?: boolean
       /** 互相派活的停下规则（docs/ui/relay-limits-mockup.html） */
       relayRules?: RelayRules
+      /** 主动提醒的规则开关、每日简报几点发（docs/ui/channels-collab-v2.md §6） */
+      alerts?: Partial<Record<ChannelAlertRule, boolean>>
+      digestHour?: number
     },
   ): Promise<void> {
     if (channelsBridge) return channelsBridge.update(id, patch)
@@ -405,7 +459,7 @@ export const channelActions = {
         await loadMessages(channelId, !!list).catch(() => undefined)
       }
     }
-    set({ selectedId: channelId, focus: { channelId, messageId } })
+    set({ selectedId: channelId, focus: { channelId, messageId }, needsOpen: false })
   },
   /** 时间线跳过去了（或这条消息不在已读进来的消息里） */
   focusDone(): void {

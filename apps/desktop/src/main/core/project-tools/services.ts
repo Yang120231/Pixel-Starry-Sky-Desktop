@@ -49,7 +49,7 @@ async function fileText(path: string): Promise<string> {
     return ''
   }
 }
-async function findProgram(program: string): Promise<string | null> {
+export async function findProgram(program: string): Promise<string | null> {
   const out = await optional(process.platform === 'win32' ? 'where.exe' : 'which', [program])
   return out?.split(/\r?\n/).find(p => process.platform !== 'win32' || /\.(exe|cmd|bat)$/i.test(p)) ?? null
 }

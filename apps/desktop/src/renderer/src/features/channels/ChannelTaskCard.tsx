@@ -16,8 +16,9 @@ import { approvalSummary } from '@/features/session/live/approvals/model'
 import { activityTooltip, agoText } from '@/features/session/live/agentActivity'
 import { useNow } from '@/features/session/live/stepClock'
 import { taskActivity } from './taskActivity'
+import { CheckSummary } from '@/features/checks/CheckSummary'
 
-const STATUS_LABEL: Record<ChannelTaskStatus, TranslationKey> = {
+export const STATUS_LABEL: Record<ChannelTaskStatus, TranslationKey> = {
   queued: 'channels.task.queued',
   approval: 'team.task.approval',
   running: 'channels.task.running',
@@ -77,7 +78,7 @@ function statusDetail(task: ChannelTask, owner: string): string | null {
 /** 派给 AI 成员的一项活（docs/ui/channels.md §5.2，Phase B 改动见 channels-phase-b.md §6），状态变化时原地更新 */
 
 /** 等你确认的那一项写什么：提问写问题，其余和会话里的审批列表同一套摘要（docs/ui/approval-stack.md §3） */
-function waitingText(request: NonNullable<ChannelTask['request']>): string {
+export function waitingText(request: NonNullable<ChannelTask['request']>): string {
   if (request.kind === 'question') return request.questions?.[0]?.question || request.title
   if (request.kind === 'plan') return request.title
   const s = approvalSummary(request, null)
@@ -240,6 +241,20 @@ export function ChannelTaskCard({
           <p className="mt-1 text-meta text-fg-muted">{tr('team.task.ownerOffline', { owner: ownerName })}</p>
         )}
         {pending && <p className="mt-1 text-meta text-fg-faint">{tr(PENDING_KEY[pending])}</p>}
+        {task.checks && (
+          <CheckSummary
+            run={task.checks}
+            className="mt-1.5"
+            onFix={
+              onAction
+                ? () =>
+                    onAction(task.id, 'fix').catch(e =>
+                      toast(tr('checks.fixFailed', { error: translateMessage((e as Error).message) })),
+                    )
+                : undefined
+            }
+          />
+        )}
         {task.disconnected && (
           <p className="mt-1 flex items-center gap-1.5 text-meta text-fg-muted">
             <Unplug size={12} strokeWidth={1.75} className="shrink-0" />

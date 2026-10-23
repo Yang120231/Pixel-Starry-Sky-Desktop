@@ -12,6 +12,13 @@ import { readRunTasks } from './run-tasks'
 import { portStatus } from './services'
 import type { ProjectTools } from './tools'
 
+/** 只认会话的目标（{ sessionId }） */
+function sessionOf(ref: unknown): string {
+  const r = workspaceRef(ref)
+  if (!r.sessionId) throw new Error('缺少会话')
+  return r.sessionId
+}
+
 export interface ToolsOpContext {
   host: ToolsHost
   tools: ProjectTools
@@ -57,6 +64,21 @@ export const PROJECT_TOOL_OPS = {
   'projectTools:stopService': (c, id, force) => c.tools.services.stop(value(id, 200, true), force === true),
   'projectTools:restartService': (c, id) => c.tools.services.restart(value(id, 200, true)),
   'projectTools:portStatus': (_c, port) => portStatus(Number(port)),
+  // 产出检查（docs/ui/channels-collab-v2.md §8）：第一个参数是项目或会话，按它路由到所在的机器
+  'projectTools:checkPlan': (c, ref) => c.tools.checks.plan(workspaceRef(ref)),
+  'projectTools:saveCheckConfig': (c, ref, config) => {
+    const r = workspaceRef(ref)
+    return c.tools.checks.saveConfig(c.host.resolve(r).projectId, config)
+  },
+  'projectTools:runChecks': (c, ref, opts) => {
+    const o = (opts && typeof opts === 'object' ? opts : {}) as { files?: unknown; when?: unknown }
+    const files = Array.isArray(o.files)
+      ? o.files.filter((f): f is string => typeof f === 'string').slice(0, 500)
+      : null
+    return c.tools.checks.run(workspaceRef(ref), { files, when: o.when === 'channel' ? 'channel' : 'session' })
+  },
+  'projectTools:sessionChecks': (c, ref) => c.tools.checks.sessionEnabled(sessionOf(ref)),
+  'projectTools:setSessionChecks': (c, ref, on) => c.tools.checks.setSession(sessionOf(ref), on === true),
   'projectTools:copies': (c, id) => c.tools.copies.list(value(id, 200, true)),
   'projectTools:branches': (c, id) => c.tools.copies.branches(value(id, 200, true)),
   'projectTools:previewCopy': (c, id, input) => c.tools.copies.preview(value(id, 200, true), input as CopyInput),

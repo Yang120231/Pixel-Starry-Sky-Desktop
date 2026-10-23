@@ -14,6 +14,8 @@ import type { WorkspaceChoice } from '../../../../shared/types/machines'
 import { channelActions, useChannels } from './store'
 import { matchAgents } from './model'
 import { RelayRulesEditor } from './RelayRules'
+import { AlertRulesEditor } from './AlertRules'
+import { DIGEST_HOUR, alertRulesOf, type ChannelAlertRules } from '../../../../shared/channels/alerts'
 import { MemberTools } from './MemberTools'
 import { usePlatformCatalog } from '@/features/account/platform'
 import { useProviders } from '@/features/account/providers'
@@ -102,6 +104,10 @@ export function ChannelDialog({
   const [relay, setRelay] = useState(channel?.relay === true)
   const savedRules = channel ? relayRulesOf(channel) : DEFAULT_RELAY_RULES
   const [rules, setRules] = useState<RelayRules>(savedRules)
+  // 主动提醒（docs/ui/channels-collab-v2.md §6）
+  const savedAlerts = alertRulesOf(channel ?? {})
+  const [alerts, setAlerts] = useState<ChannelAlertRules>(savedAlerts)
+  const [digestHour, setDigestHour] = useState(channel?.digestHour ?? DIGEST_HOUR)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const toast = useToast()
@@ -112,6 +118,8 @@ export function ChannelDialog({
     notes !== (channel?.notes ?? '') ||
     relay !== (channel?.relay === true) ||
     JSON.stringify(rules) !== JSON.stringify(savedRules) ||
+    JSON.stringify(alerts) !== JSON.stringify(savedAlerts) ||
+    digestHour !== (channel?.digestHour ?? DIGEST_HOUR) ||
     members.length > 0
   const submit = () => {
     if (!name.trim() || busy) return
@@ -124,17 +132,22 @@ export function ChannelDialog({
     const done = channel
       ? channelActions.updateChannel(
           channel.id,
-          inTeam ? { name, topic: input.topic } : { ...input, notes: note, relay, relayRules: rules },
+          inTeam
+            ? { name, topic: input.topic }
+            : { ...input, notes: note, relay, relayRules: rules, alerts, digestHour },
         )
-      : channelActions
-          .createChannel(teamId ? { ...input, teamId } : { ...input, memberIds: members })
-          .then(id =>
-            (note || relay) && !teamId
-              ? channelActions
-                  .updateChannel(id, { notes: note, ...(relay ? { relay, relayRules: rules } : {}) })
-                  .catch(e => toast(tr('channels.dialog.notesFailed', { error: errorText(e) })))
-              : undefined,
-          )
+      : channelActions.createChannel(teamId ? { ...input, teamId } : { ...input, memberIds: members }).then(id =>
+          !teamId
+            ? channelActions
+                .updateChannel(id, {
+                  notes: note,
+                  alerts,
+                  digestHour,
+                  ...(relay ? { relay, relayRules: rules } : {}),
+                })
+                .catch(e => toast(tr('channels.dialog.notesFailed', { error: errorText(e) })))
+            : undefined,
+        )
     done.then(onClose, e => {
       setError(errorText(e))
       setBusy(false)
@@ -194,6 +207,14 @@ export function ChannelDialog({
             </label>
           )}
           {!inTeam && relay && <RelayRulesEditor value={rules} onChange={setRules} />}
+          {!inTeam && (
+            <AlertRulesEditor
+              value={alerts}
+              digestHour={digestHour}
+              onChange={setAlerts}
+              onDigestHour={setDigestHour}
+            />
+          )}
           {inTeam ? (
             teamName && <p className="text-meta text-fg-faint">{tr('team.channel.inTeam', { name: teamName })}</p>
           ) : (

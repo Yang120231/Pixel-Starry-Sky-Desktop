@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import type { AgentConfig, ChannelAttachments, ChannelMessage, ChannelTask } from '../../../shared/types/channels'
 import type { TaskRun } from './tracker'
 
-import type { ChannelNotify, RelayRules } from '../../../shared/types/channels'
+import type { ChannelAlertRule, ChannelNotify, RelayRules } from '../../../shared/types/channels'
 
 export interface StoredChannel {
   id: string
@@ -35,6 +35,10 @@ export interface StoredChannel {
   relayRules?: RelayRules
   /** 点过「这条接力不再限制」的接力（chain），最近的在后 */
   relayFree?: string[]
+  /** 主动提醒的规则开关、每日简报几点发、上次发简报的时间（docs/ui/channels-collab-v2.md §6） */
+  alerts?: Partial<Record<ChannelAlertRule, boolean>>
+  digestHour?: number
+  lastDigestAt?: number | null
   createdAt: number
   /** 看到哪里了：这之后别人发的算未读 */
   readAt: number

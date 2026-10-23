@@ -38,6 +38,7 @@ import { setLayoutSize, useLayoutSize } from '@/features/layout/sizes'
 import { useComposerDraft } from '@/features/engine/drafts'
 import { QueuedMessages } from './QueuedMessages'
 import { GoalBar, goalResultText } from './GoalBar'
+import { SessionCheckBar } from '@/features/checks/SessionCheckBar'
 import { ContextWindowButton } from './ContextWindowButton'
 import { QuotaButton } from './quota/QuotaButton'
 import { useComposerStyle } from '@/features/settings/composerStyle'
@@ -738,6 +739,7 @@ export function Composer({
   return (
     <>
       {live && <GoalBar sessionId={live.sessionId} onAction={action => live.goal(action)} />}
+      {live && <SessionCheckBar sessionId={live.sessionId} />}
       {(live ?? demoQueue) && (
         <QueuedMessages
           live={(live ?? demoQueue)!}

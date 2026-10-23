@@ -100,6 +100,10 @@ export const IPC_CONTRACT = {
   'channels:messages': { kind: 'invoke', route: 'local', trust: 'sender' },
   'channels:pin': { kind: 'invoke', route: 'local', trust: 'sender' },
   'channels:proposal': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'channels:alert': { kind: 'invoke', route: 'local', trust: 'sender' },
+  // 会话的「做完自动检查」结果（docs/ui/channels-collab-v2.md §8）：主进程按会话记最近一次，推给窗口
+  'checks:last': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'checks:session': { kind: 'push', route: 'push', trust: 'none' },
   'channels:post': { kind: 'invoke', route: 'local', trust: 'sender' },
   'channels:removeMember': { kind: 'invoke', route: 'local', trust: 'sender' },
   'channels:saveMember': { kind: 'invoke', route: 'local', trust: 'sender' },
@@ -980,6 +984,42 @@ export const IPC_CONTRACT = {
     trust: 'window',
   },
   'projectTools:tasks': { kind: 'invoke', route: 'resource', ids: [0], remote: 'projectTools:tasks', trust: 'window' },
+  // 产出检查（docs/ui/channels-collab-v2.md §8）
+  'projectTools:checkPlan': {
+    kind: 'invoke',
+    route: 'resource',
+    ids: [0],
+    remote: 'projectTools:checkPlan',
+    trust: 'window',
+  },
+  'projectTools:saveCheckConfig': {
+    kind: 'invoke',
+    route: 'resource',
+    ids: [0],
+    remote: 'projectTools:saveCheckConfig',
+    trust: 'window',
+  },
+  'projectTools:runChecks': {
+    kind: 'invoke',
+    route: 'resource',
+    ids: [0],
+    remote: 'projectTools:runChecks',
+    trust: 'window',
+  },
+  'projectTools:sessionChecks': {
+    kind: 'invoke',
+    route: 'resource',
+    ids: [0],
+    remote: 'projectTools:sessionChecks',
+    trust: 'window',
+  },
+  'projectTools:setSessionChecks': {
+    kind: 'invoke',
+    route: 'resource',
+    ids: [0],
+    remote: 'projectTools:setSessionChecks',
+    trust: 'window',
+  },
   'projectTools:updateTask': {
     kind: 'invoke',
     route: 'resource',

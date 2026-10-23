@@ -29,6 +29,7 @@ import type { SettingsWindowBridge } from './settings-window'
 import type { MainWindowAction, SettingsTarget, SettingsWindowState } from '../shared/types/settings-window'
 import type { ChannelsBridge } from './channels'
 import type { ChannelMessagePush, ChannelsSnapshot } from '../shared/types/channels'
+import type { CheckRun } from '../shared/types/checks'
 
 // 通道名一律用契约键约束：拼错或未登记的通道在这里就是类型错误
 type Listener = Parameters<typeof ipcRenderer.on>[1]
@@ -306,6 +307,17 @@ const projectTools: ProjectToolsBridge = {
   reorderTasks: (id, ids) => call('projectTools:reorderTasks', id, ids),
   environment: (ref, force) => call('projectTools:environment', ref, force),
   runTasks: (ref, templates) => call('projectTools:runTasks', ref, templates),
+  checkPlan: ref => call('projectTools:checkPlan', ref),
+  saveCheckConfig: (ref, config) => call('projectTools:saveCheckConfig', ref, config),
+  runChecks: (ref, opts) => call('projectTools:runChecks', ref, opts),
+  sessionChecks: ref => call('projectTools:sessionChecks', ref),
+  setSessionChecks: (ref, on) => call('projectTools:setSessionChecks', ref, on),
+  lastSessionCheck: sessionId => call('checks:last', sessionId),
+  onSessionCheck: cb => {
+    const listener = (_e: unknown, push: { sessionId: string; run: CheckRun | null }): void => cb(push)
+    on('checks:session', listener)
+    return () => ipcRenderer.removeListener('checks:session', listener)
+  },
   gradleTasks: (ref, buildDir) => call('projectTools:gradleTasks', ref, buildDir),
   gradleTasksCancel: (ref, buildDir) => call('projectTools:gradleTasksCancel', ref, buildDir),
   services: ref => call('projectTools:services', ref),
@@ -468,6 +480,7 @@ const channels: ChannelsBridge = {
   markRead: id => call('channels:markRead', id),
   pin: (id, messageId, pinned) => call('channels:pin', id, messageId, pinned),
   proposal: (id, messageId, accept) => call('channels:proposal', id, messageId, accept),
+  alert: (id, messageId, action) => call('channels:alert', id, messageId, action),
   search: (text, opts) => call('channels:search', text, opts),
   saveMember: (channelId, input) => call('channels:saveMember', channelId, input),
   addMember: (channelId, memberId) => call('channels:addMember', channelId, memberId),

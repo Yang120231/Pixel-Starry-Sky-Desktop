@@ -20,6 +20,7 @@ import type { PermissionMode } from '@pixelsky/protocol'
 import { IconButton, Popover, Switch, cn, useToast } from '@/ui'
 import { PERMISSION_HINTS, PERMISSION_INFO, effortLabel, type ComposerController } from '@/features/engine'
 import { EffortSlider } from './EffortSlider'
+import { useSessionCheckSwitch } from '@/features/checks/sessionChecks'
 import { effortDiff } from '@/features/engine/effortDefaults'
 import { needsFullConfirm, saferMode } from './fullAccess'
 import { FullAccessConfirm } from './FullAccessConfirm'
@@ -138,7 +139,9 @@ export function EffortMenu({ live }: { live: ComposerController }) {
     if (diff.includes('fast')) live.setFast(d.fast)
     if (diff.includes('thinkingSummaries')) live.setThinkingSummaries(d.thinkingSummaries)
   }
-  const hasSwitches = ultracodeSupported || live.fastSupported || live.thinkingSupported
+  // 做完自动检查（docs/ui/channels-collab-v2.md §8）：会话开出来以后才有
+  const [autoCheck, setAutoCheck, canCheck] = useSessionCheckSwitch(live.sessionId)
+  const hasSwitches = ultracodeSupported || live.fastSupported || live.thinkingSupported || canCheck
   // 开启的会话开关同步显示在按钮上，都用图标：Ultracode 紫色 ✦，Fast / 思考摘要强调色；名字在悬停提示里。
   const fastOn = live.fastSupported && live.fast
   const thinkingOn = live.thinkingSupported && live.thinkingSummaries
@@ -268,6 +271,17 @@ export function EffortMenu({ live }: { live: ComposerController }) {
                 desc={tr('session.ComposerMenus.showSummaryOfModel')}
                 checked={live.thinkingSummaries}
                 onChange={live.setThinkingSummaries}
+              />
+            )}
+            {canCheck && (
+              <SwitchRow
+                icon={
+                  <ListChecks size={14} strokeWidth={1.75} className={autoCheck ? 'text-accent' : 'text-fg-muted'} />
+                }
+                label={tr('checks.auto')}
+                desc={tr('checks.autoHint')}
+                checked={autoCheck}
+                onChange={setAutoCheck}
               />
             )}
           </div>

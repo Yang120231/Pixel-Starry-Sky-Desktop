@@ -6,7 +6,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { EngineEvent, HostEvent, ProjectRecord, SessionSummary } from '@pixelsky/protocol'
 import type { AgentInput, ChannelTask, ChannelTextMessage } from '../../../shared/types/channels'
 import { ChannelStore } from './store'
-import { Channels, SELF_ID } from './service'
+import { Channels, SELF_ID, type ChannelsDeps } from './service'
+import type { CheckRun } from '../../../shared/types/checks'
 
 const projects: ProjectRecord[] = [
   { id: 'p1', name: 'pixel-web', path: 'D:/web' } as ProjectRecord,
@@ -26,7 +27,7 @@ const settle = async () => {
   }
 }
 
-async function open(channelTools = true): Promise<Channels> {
+async function open(channelTools = true, extra: Partial<ChannelsDeps> = {}): Promise<Channels> {
   const store = new ChannelStore(dir)
   await store.init()
   let n = 0
@@ -57,6 +58,8 @@ async function open(channelTools = true): Promise<Channels> {
     locale: () => 'zh-CN',
     now: () => ++now,
     channelTools,
+    alertTimer: false,
+    ...extra,
   })
   opened.push(c)
   return c
@@ -140,6 +143,10 @@ describe('讨论串（§3）', () => {
     expect(other.message.threadId).toBe(card.id)
     expect(tasks(c, ch)).toHaveLength(2)
     expect(tasks(c, ch)[1].assigneeId).toBe(b)
+    // 在任务结果上开串 = 卡片的串
+    const result = texts(c, ch).find(m => m.taskId === card.id && !m.threadId)!
+    const onResult = await c.post(ch, { text: '结果收到', threadId: result.id, clientId: '6' })
+    expect(onResult.message.threadId).toBe(card.id)
     // 别处来的串 id 不认
     const stray = await c.post(ch, { text: '随便说一句', threadId: 'nope', clientId: '5' })
     expect(stray.message.threadId).toBeUndefined()
@@ -185,7 +192,11 @@ describe('频道工具（§1）', () => {
     expect(page).toContain('第 0 句')
     expect(page).toContain('前面没有了')
 
+    const unread = () => c.state().channels.find(x => x.id === ch)!.unread
+    const before = unread()
     expect(await c.toolReply(s, '先改「账号」页')).toContain('改按钮')
+    // AI 在串里的话不刷未读
+    expect(unread()).toBe(before)
     const reply = texts(c, ch).at(-1)!
     expect(reply).toMatchObject({ authorId: a, threadId: card.id, format: 'markdown', mentions: [] })
     // 串里的话不上主时间线的读取
@@ -311,5 +322,228 @@ describe('成员的扩展设置（§5）', () => {
     await settle()
     expect(sends()[0].text).not.toContain('pixelsky_channel')
     expect(c.sessionMember(sends()[0].sessionId)).toBeNull()
+  })
+})
+
+describe('产出检查（§8）', () => {
+  const failed: CheckRun = {
+    id: 'r1',
+    at: 1,
+    status: 'done',
+    items: [
+      {
+        kind: 'command',
+        label: 'test',
+        command: 'pnpm run test',
+        status: 'fail',
+        exitCode: 1,
+        ms: 5,
+        output: 'x.test.ts 失败',
+      },
+    ],
+  }
+
+  it('卡片做完后跑检查：先显示检查中，跑完写上结果；「让它修」把失败输出当追加要求发回同一个会话，新一轮清掉旧结果', async () => {
+    let release!: (run: CheckRun | null) => void
+    const asked: { sessionId: string; files: string[] }[] = []
+    const c = await open(true, {
+      runChecks: (sessionId, files) => {
+        asked.push({ sessionId, files })
+        return new Promise(r => (release = r))
+      },
+    })
+    const a = await c.saveMember(null, agent('前端'))
+    const ch = await c.create({ name: 'web', memberIds: [a] })
+    await c.post(ch, { text: '@前端 改按钮', clientId: 'go' })
+    await settle()
+    finishLast(c, '改好了')
+    await settle()
+    expect(asked).toEqual([{ sessionId: sends()[0].sessionId, files: [] }])
+    expect(tasks(c, ch)[0].checks?.status).toBe('running')
+    release(failed)
+    await settle()
+    expect(tasks(c, ch)[0].checks).toEqual(failed)
+
+    await c.taskAction(tasks(c, ch)[0].id, 'fix')
+    await settle()
+    const fix = sends().at(-1)!
+    expect(fix.sessionId).toBe(sends()[0].sessionId)
+    expect(fix.text).toContain('pnpm run test')
+    expect(fix.text).toContain('x.test.ts 失败')
+    expect(tasks(c, ch)[0]).toMatchObject({ round: 2, checks: null })
+  })
+
+  it('项目关了频道检查（返回 null）就不留结果；没过的检查才能「让它修」；重启后「检查中」清掉', async () => {
+    const c = await open(true, { runChecks: async () => null })
+    const a = await c.saveMember(null, agent('前端'))
+    const ch = await c.create({ name: 'web', memberIds: [a] })
+    await c.post(ch, { text: '@前端 改按钮', clientId: 'go' })
+    await settle()
+    finishLast(c, '改好了')
+    await settle()
+    expect(tasks(c, ch)[0].checks).toBeNull()
+    await c.taskAction(tasks(c, ch)[0].id, 'fix')
+    expect(sends()).toHaveLength(1)
+
+    let hold!: () => void
+    const d = await open(true, { runChecks: () => new Promise(r => (hold = () => r(null))) })
+    await d.post(ch, { text: '@前端 再改一下', clientId: 'go2' })
+    await settle()
+    finishLast(d, '好了')
+    await settle()
+    expect(tasks(d, ch).at(-1)?.checks?.status).toBe('running')
+    await (d as unknown as { store: ChannelStore }).store.flush()
+    const e = await open(true)
+    expect(tasks(e, ch).at(-1)?.checks).toBeNull()
+    hold()
+  })
+})
+
+describe('主动提醒（§6）', () => {
+  const MIN = 60_000
+  const request = (id: string, command: string) => ({
+    type: 'approval_request' as const,
+    request: { requestId: id, itemId: null, kind: 'command' as const, title: '运行命令', command, alwaysScopes: [] },
+  })
+  const alerts = (c: Channels, ch: string) => texts(c, ch).filter(m => m.alert)
+
+  it('等你回答超过 10 分钟提醒一次（同一个请求不重复）；回答后提醒标为处理过；进「需要你」', async () => {
+    const c = await open()
+    const a = await c.saveMember(null, agent('前端'))
+    const ch = await c.create({ name: 'web', memberIds: [a] })
+    await c.post(ch, { text: '@前端 改按钮', clientId: 'go' })
+    await settle()
+    const s = sends()[0]
+    c.hostEvent(
+      ev(s.sessionId, {
+        type: 'item_completed',
+        item: { kind: 'user', id: s.clientMessageId, text: '', createdAt: 0, turnId: 't' },
+      }),
+    )
+    c.hostEvent(ev(s.sessionId, request('r1', 'pnpm add zod')))
+    expect(tasks(c, ch)[0].status).toBe('waiting')
+    await c.checkAlerts()
+    now += 11 * MIN
+    await c.checkAlerts()
+    await c.checkAlerts()
+    expect(alerts(c, ch)).toHaveLength(1)
+    expect(alerts(c, ch)[0]).toMatchObject({
+      authorId: 'system',
+      mentions: [SELF_ID],
+      alert: { rule: 'waiting', state: 'open', taskId: tasks(c, ch)[0].id, sig: 'r1' },
+    })
+    expect(c.state().needs?.map(n => n.kind)).toEqual(['alert', 'approval'])
+    c.hostEvent(ev(s.sessionId, { type: 'approval_resolved', requestId: 'r1' } as never))
+    c.hostEvent(
+      ev(s.sessionId, {
+        type: 'item_started',
+        item: { kind: 'assistant', id: 'x', text: '', status: 'in_progress' },
+      } as never),
+    )
+    await c.checkAlerts()
+    expect(alerts(c, ch)[0].alert?.state).toBe(tasks(c, ch)[0].status === 'waiting' ? 'open' : 'done')
+  })
+
+  it('同一目录另一项活在做时，要审批的 git checkout 提醒「先暂停它」：点了就拒绝这个请求；不同目录不提醒', async () => {
+    const c = await open()
+    const a = await c.saveMember(null, agent('前端'))
+    const b = await c.saveMember(null, agent('审查员'))
+    const r = await c.saveMember(null, agent('构建', { projectId: 'ssh-ab~p2' }))
+    const ch = await c.create({ name: 'web', memberIds: [a, b, r] })
+    await c.post(ch, { text: '@前端 改按钮', clientId: '1' })
+    await c.post(ch, { text: '@审查员 看看', clientId: '2' })
+    await c.post(ch, { text: '@构建 打包', clientId: '3' })
+    await settle()
+    const [fa, , fr] = sends()
+    for (const x of [fa, fr])
+      c.hostEvent(
+        ev(x.sessionId, {
+          type: 'item_completed',
+          item: { kind: 'user', id: x.clientMessageId, text: '', createdAt: 0, turnId: 't' },
+        }),
+      )
+    c.hostEvent(ev(fr.sessionId, request('rr', 'git checkout -- .')))
+    expect(alerts(c, ch)).toHaveLength(0)
+    c.hostEvent(ev(fa.sessionId, request('ra', 'git checkout -- src/a.ts')))
+    await settle()
+    const [alert] = alerts(c, ch)
+    expect(alert.alert).toMatchObject({ rule: 'conflict', state: 'open', sig: 'ra' })
+    expect(alert.text).toContain('审查员')
+    await c.alertAction(ch, alert.id, 'hold')
+    expect(calls.find(x => x.channel === 'engine:answer')?.args).toEqual([fa.sessionId, 'ra', { type: 'deny' }])
+    expect(alerts(c, ch)[0].alert?.state).toBe('done')
+  })
+
+  it('全权限成员直接跑会丢改动的命令：中断这一轮并提醒；关了这条规则就不管', async () => {
+    const c = await open()
+    const a = await c.saveMember(null, agent('前端', { settings: { permissionMode: 'full' } }))
+    const b = await c.saveMember(null, agent('审查员'))
+    const ch = await c.create({ name: 'web', memberIds: [a, b] })
+    await c.post(ch, { text: '@前端 改按钮', clientId: '1' })
+    await c.post(ch, { text: '@审查员 看看', clientId: '2' })
+    await settle()
+    const fa = sends()[0]
+    c.hostEvent(
+      ev(fa.sessionId, {
+        type: 'item_completed',
+        item: { kind: 'user', id: fa.clientMessageId, text: '', createdAt: 0, turnId: 'tt' },
+      }),
+    )
+    const started = (id: string) =>
+      ev(fa.sessionId, {
+        type: 'item_started',
+        item: {
+          kind: 'command',
+          id,
+          command: 'git reset --hard',
+          description: null,
+          output: '',
+          exitCode: null,
+          status: 'in_progress',
+        },
+      } as never)
+    c.hostEvent(started('c1'))
+    await settle()
+    expect(calls.find(x => x.channel === 'engine:interruptTurn')?.args).toEqual([fa.sessionId, 'tt'])
+    expect(alerts(c, ch)[0].alert).toMatchObject({ rule: 'conflict', sig: 'c1' })
+    await c.update(ch, { alerts: { conflict: false } })
+    c.hostEvent(started('c2'))
+    await settle()
+    expect(alerts(c, ch)).toHaveLength(1)
+  })
+
+  it('@ 了没人接（规则打开时）：排队超过 10 分钟提醒，「换人」取消这项活并给出草稿；每日简报到点发一次', async () => {
+    // 简报按本地钟点算：从某天上午 10 点开始
+    now = new Date(2026, 9, 22, 10, 0).getTime()
+    const c = await open()
+    const a = await c.saveMember(null, agent('前端'))
+    const ch = await c.create({ name: 'web', memberIds: [a] })
+    await c.update(ch, { alerts: { unclaimed: true, digest: true }, digestHour: 9 })
+    await c.post(ch, { text: '@前端 第一项', clientId: '1' })
+    await c.post(ch, { text: '@前端 第二项', clientId: '2' })
+    await settle()
+    finishLast(c, '第一项做完了')
+    // 第二项接着开始了：让第三项排队
+    await c.post(ch, { text: '@前端 第三项', clientId: '3' })
+    await settle()
+    now += 11 * MIN
+    await c.checkAlerts()
+    const unclaimed = alerts(c, ch).find(m => m.alert?.rule === 'unclaimed')!
+    expect(unclaimed.text).toContain('第三项')
+    const { draft } = await c.alertAction(ch, unclaimed.id, 'reassign')
+    expect(draft).toBe('@ 第三项')
+    expect(tasks(c, ch).find(t => t.title === '第三项')?.status).toBe('stopped')
+
+    // 简报：把时间拨到第二天 9 点之后
+    const next = new Date(now)
+    next.setDate(next.getDate() + 1)
+    next.setHours(9, 30, 0, 0)
+    now = next.getTime()
+    await c.checkAlerts()
+    await c.checkAlerts()
+    const digests = alerts(c, ch).filter(m => m.alert?.rule === 'digest')
+    expect(digests).toHaveLength(1)
+    expect(digests[0].text).toContain('每日简报')
+    expect(digests[0].mentions).toEqual([])
   })
 })

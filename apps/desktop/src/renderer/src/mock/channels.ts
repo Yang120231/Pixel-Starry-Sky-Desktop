@@ -217,6 +217,40 @@ export const demoChannelMessages: Record<string, ChannelMessage[]> = {
       sessionId: 's-redesign',
       summary: '调整了 3 处分组顺序，补了键盘导航测试。',
       diff: { added: 42, removed: 10 },
+      endedAt: at(YESTERDAY, '10:31'),
+      // 做完后的产出检查（docs/ui/channels-collab-v2.md §8）：测试没过、新增了一处 TODO
+      checks: {
+        id: 'web-t1-check',
+        at: at(YESTERDAY, '10:31'),
+        status: 'done',
+        endedAt: at(YESTERDAY, '10:33'),
+        items: [
+          {
+            kind: 'command',
+            label: 'typecheck',
+            command: 'pnpm run typecheck',
+            status: 'pass',
+            exitCode: 0,
+            ms: 8200,
+            output: '',
+          },
+          {
+            kind: 'command',
+            label: 'test',
+            command: 'pnpm run test',
+            status: 'fail',
+            exitCode: 1,
+            ms: 21400,
+            output:
+              'FAIL src/sidebar/SidebarRow.test.tsx > 方向键在分组之间移动\nexpected 「最近任务」 to be 「账号」\n\nTests  1 failed | 86 passed',
+          },
+          {
+            kind: 'text',
+            status: 'warn',
+            findings: [{ rule: 'todo', file: 'src/sidebar/SidebarRow.tsx', line: 48, text: '// TODO 折叠后的焦点' }],
+          },
+        ],
+      },
     },
     {
       kind: 'message',
@@ -312,6 +346,18 @@ export const demoChannelMessages: Record<string, ChannelMessage[]> = {
       text: '「账号」页改完了，开始做「外观」。',
     },
     // AI 成员用频道工具提议的派活（§1）：要你点「派出去」
+    // 主动提醒（§6）：系统发的，带按钮
+    {
+      kind: 'message',
+      id: 'web-al1',
+      channelId: 'c-web',
+      at: at(TODAY, '09:51'),
+      authorId: 'system',
+      format: 'plain',
+      mentions: ['m-linxia'],
+      text: '「设置页迁移到新的表单组件」要运行 git checkout -- src/settings，同一个目录里「审查员 · 审查侧栏改版结构」还在做，可能冲掉没提交的改动。已经停着等你决定。',
+      alert: { rule: 'conflict', state: 'open', taskId: 'web-t2', sig: 'demo' },
+    },
     {
       kind: 'message',
       id: 'web-p1',

@@ -1,5 +1,6 @@
 // 协作频道的数据类型（docs/ui/channels.md §9，Phase B 的改动见 docs/ui/channels-phase-b.md §10.1）。
 // 主进程（main/core/channels/）和渲染层共用；演示数据（mock/channels.ts）只填界面要用的字段。
+import type { CheckRun } from './checks'
 import type {
   ApprovalRequest,
   EngineId,
@@ -206,6 +207,10 @@ export interface Channel {
   relay?: boolean
   /** 互相派活什么时候停下等你（docs/ui/relay-limits-mockup.html）；没写按「标准」 */
   relayRules?: RelayRules
+  /** 主动提醒的规则开关（docs/ui/channels-collab-v2.md §6）；没写的按默认（shared/channels/alerts.ts） */
+  alerts?: Partial<Record<ChannelAlertRule, boolean>>
+  /** 每日简报几点发（0–23，默认 9） */
+  digestHour?: number
   /** Phase C：团队频道属于哪个团队 */
   teamId?: string
   memberIds: string[]
@@ -243,8 +248,27 @@ export interface ChannelTextMessage extends ChannelMessageBase {
   threadId?: string | null
   /** AI 成员用频道工具 task_propose 提议的派活（§1）：要你点「派出去」才派 */
   proposal?: ChannelProposal | null
+  /** 主动提醒（docs/ui/channels-collab-v2.md §6）：系统发的，authorId 是 SYSTEM_AUTHOR */
+  alert?: ChannelAlert | null
   /** 带的图片和文件：消息里只有说明，图片数据和文件全文另存，按需用 channels:attachments 读 */
   attached?: ChannelAttachedMeta
+}
+
+/** 系统消息（主动提醒、每日简报）的作者 */
+export const SYSTEM_AUTHOR = 'system'
+
+/** 主动提醒的规则（§6）：可能删掉别人的改动、等你回答太久、很久没进展、@ 了没人接、每日简报 */
+export type ChannelAlertRule = 'conflict' | 'waiting' | 'stalled' | 'unclaimed' | 'digest'
+
+/** 一条主动提醒：open 还等你处理，done 处理过了（点了按钮或情况已经变了） */
+export interface ChannelAlert {
+  rule: ChannelAlertRule
+  state: 'open' | 'done'
+  taskId?: string | null
+  /** conflict：被先暂停的那项活 */
+  heldTaskId?: string | null
+  /** 同一件事只提醒一次：规则 + 任务 + 这个（审批请求 id、轮次等） */
+  sig?: string
 }
 
 /** 提议的派活：给谁、做什么；open 等你决定，sent 已派出（taskId 是派出的卡），dismissed 不要了 */
@@ -305,11 +329,13 @@ export interface ChannelTask extends ChannelMessageBase {
   /** Phase C：AI 成员的主人（owner key）；只有主人能同意、回答、打开会话 */
   ownerId?: string
   /** Phase C：派活的人或主人点了取消 / 停止 / 重试，等主人那台电脑执行 */
-  pendingAction?: Exclude<ChannelTaskAction, 'continue' | 'unlimit'> | null
+  pendingAction?: Exclude<ChannelTaskAction, 'continue' | 'unlimit' | 'fix'> | null
   /** Phase C：主人的电脑不在线（queued 时显示「上线后开始」） */
   ownerOffline?: boolean
   /** AI 成员互相派活的一跳（authorId 是交活的成员）；held：超了防刷规则，停下等你点「继续」 */
   relay?: ChannelRelay | null
+  /** 做完后的产出检查（docs/ui/channels-collab-v2.md §8）：running 时还在跑；项目关了频道检查时没有 */
+  checks?: CheckRun | null
 }
 
 /**
@@ -443,12 +469,54 @@ export interface ChannelsSnapshot {
   sessionTasks?: Record<string, { channelId: string; taskId: string; memberId: string }>
   /** 加入了频道的会话（docs/ui/import-collab.md 第 5 项②）→ 在哪些频道里、是哪个成员（会话菜单「退出频道」、标题旁的 # 频道） */
   sessionBindings?: Record<string, { channelId: string; memberId: string }[]>
+  /** 「需要你」（docs/ui/channels-collab-v2.md §2）：本机频道里等你处理的事，新的在前 */
+  needs?: ChannelNeed[]
+  /** 「需要你 › 跟进中」：还在排队或运行的活，新的在前 */
+  following?: ChannelFollow[]
   // ── Phase C ──
   teams: TeamInfo[]
   invites: PendingInvite[]
   teamsConnection: TeamsConnection
   /** 上次和云端同步成功的时间 */
   teamsSyncedAt: number | null
+}
+
+/**
+ * 等你处理的一件事（docs/ui/channels-collab-v2.md §2）。key 认这件事（稍后处理按它记），sig 是它现在的状态：
+ * 状态变了（新的审批请求、又失败了一次）稍后处理就不算数，马上重新出现
+ */
+export interface ChannelNeed {
+  key: string
+  kind: 'approval' | 'proposal' | 'held' | 'decision' | 'checks' | 'failed' | 'alert'
+  /** kind 是 alert 时：哪条规则（决定有哪些按钮） */
+  rule?: ChannelAlertRule
+  sig: string
+  channelId: string
+  at: number
+  /** 哪个 AI 成员（提议是提议给谁） */
+  memberId: string | null
+  taskId?: string | null
+  messageId?: string | null
+  sessionId?: string | null
+  /** 一句话：任务标题、提议的要求、提醒的内容 */
+  text: string
+  /** 补充：要你决定的事、失败原因、停下的原因、检查没过的项 */
+  detail?: string | null
+  /** 等你确认的请求（能就地允许 / 拒绝的直接处理） */
+  request?: ApprovalRequest | null
+  /** kind 是 checks 时：文本检查发现了几处 */
+  findings?: number
+}
+
+/** 跟进中的一项活 */
+export interface ChannelFollow {
+  channelId: string
+  taskId: string
+  memberId: string
+  title: string
+  status: ChannelTaskStatus
+  at: number
+  sessionId: string | null
 }
 
 /** channels:message 推送：新消息或任务卡更新 */
@@ -494,5 +562,5 @@ export interface PostInput {
 }
 
 /** continue：放行被防刷规则拦下的那一跳 */
-/** continue：放行被拦下的接力（计数重新算）；unlimit：放行并且这条接力以后不再拦 */
-export type ChannelTaskAction = 'cancel' | 'stop' | 'retry' | 'continue' | 'unlimit'
+/** continue：放行被拦下的接力（计数重新算）；unlimit：放行并且这条接力以后不再拦；fix：把产出检查没过的部分发回去让它修 */
+export type ChannelTaskAction = 'cancel' | 'stop' | 'retry' | 'continue' | 'unlimit' | 'fix'

@@ -28,6 +28,7 @@ import type {
   GitPaths,
   GitPullMode,
 } from '../shared/types/project-tools'
+import type { CheckConfig, CheckPlan, CheckRun } from '../shared/types/checks'
 
 export interface ProjectToolsBridge {
   searchTasks(text: string, projectId: string | null): Promise<ManualTask[]>
@@ -46,6 +47,15 @@ export interface ProjectToolsBridge {
   /** 代码模式左栏「任务」：项目里能跑的命令（docs/ui/coding-tasks.md） */
   /** templates：扩展提供的任务模板，主进程（或远程运行时）再校验一遍 */
   runTasks(ref: WorkspaceRef, templates?: ExtTaskTemplateWire[]): Promise<RunTaskState>
+  /** 产出检查（docs/ui/channels-collab-v2.md §8）：项目的检查计划、改设置、跑一次；会话的「做完自动检查」开关 */
+  checkPlan(ref: WorkspaceRef): Promise<CheckPlan>
+  saveCheckConfig(ref: WorkspaceRef, config: CheckConfig): Promise<CheckPlan>
+  runChecks(ref: WorkspaceRef, opts?: { files?: string[] | null }): Promise<CheckRun | null>
+  sessionChecks(ref: WorkspaceRef): Promise<boolean>
+  setSessionChecks(ref: WorkspaceRef, on: boolean): Promise<boolean>
+  /** 会话最近一次自动检查（没有时 null）；新结果推过来 */
+  lastSessionCheck(sessionId: string): Promise<CheckRun | null>
+  onSessionCheck(callback: (push: { sessionId: string; run: CheckRun | null }) => void): () => void
   /** Gradle 完整任务列表：在构建根目录跑 `gradlew tasks --all`（docs/ui/coding-tasks.md §9.2） */
   gradleTasks(ref: WorkspaceRef, buildDir: string): Promise<GradleListedTask[]>
   gradleTasksCancel(ref: WorkspaceRef, buildDir: string): Promise<void>

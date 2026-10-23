@@ -14,12 +14,19 @@ import { ChannelComposer } from './ChannelComposer'
 import { ChannelMembers } from './ChannelMembers'
 import { ChannelsEmpty } from './ChannelsEmpty'
 import { ThreadPanel } from './ThreadPanel'
+import { NeedsView } from './NeedsView'
 import { myRole } from './teamModel'
 
 const MEMBERS_WIDTH = 300
 /** 讨论串面板宽一些：放得下任务卡和输入框 */
 const THREAD_WIDTH = 380
 const NO_MESSAGES: never[] = []
+
+/** 在列表里点频道：关掉「需要你」再进频道 */
+const selectChannel = (id: string) => {
+  channelActions.openNeeds(false)
+  channelActions.select(id)
+}
 
 /** 「打开会话」：交给现有的打开请求处理（切机器、打开会话、切回工作台） */
 const openSession = (sessionId: string) =>
@@ -68,6 +75,7 @@ export function ChannelsPage({
   const messageMap = useChannels(s => s.messages)
   const replyMap = useChannels(s => s.replyTo)
   const threadMap = useChannels(s => s.thread)
+  const needsOpen = useChannels(s => s.needsOpen)
   const newFromMap = useChannels(s => s.newFrom)
   const moreMap = useChannels(s => s.more)
   const channel = useChannels(selectedChannel)
@@ -117,7 +125,7 @@ export function ChannelsPage({
     return (
       <div className="@container absolute inset-0 flex min-w-0">
         {/* 加入了团队或收到邀请时，列表要留着（团队段、邀请卡） */}
-        {hasTeams && <ChannelList channels={channels} selectedId="" onSelect={channelActions.select} agents={agents} />}
+        {hasTeams && <ChannelList channels={channels} selectedId="" onSelect={selectChannel} agents={agents} />}
         <ChannelsEmpty agents={agents} />
       </div>
     )
@@ -157,44 +165,52 @@ export function ChannelsPage({
   }
   return (
     <div className="@container absolute inset-0 flex min-w-0" data-channels-page>
-      <ChannelList channels={channels} selectedId={channel.id} onSelect={channelActions.select} agents={agents} />
-      <section aria-label={`# ${channel.name}`} className="conversation-view flex min-w-[360px] flex-1 flex-col">
-        <ChannelTimeline
-          channel={channel}
-          messages={messages}
-          members={members}
-          channelMembers={channelMembers}
-          newFrom={newFromMap[channel.id] ?? null}
-          more={!!moreMap[channel.id]}
-          onLoadOlder={() => channelActions.loadOlder(channel.id)}
-          onReply={archived ? undefined : reply}
-          taskActions={taskActions}
-          onThread={openThread}
-        />
-        {archived ? (
-          <ArchivedBar channel={channel} />
-        ) : (
-          <ChannelComposer
-            key={channel.id}
+      <ChannelList channels={channels} selectedId={channel.id} onSelect={selectChannel} agents={agents} />
+      {needsOpen ? (
+        <NeedsView />
+      ) : (
+        <section aria-label={`# ${channel.name}`} className="conversation-view flex min-w-[360px] flex-1 flex-col">
+          <ChannelTimeline
             channel={channel}
-            members={channelMembers}
-            selfId={selfId}
-            replyTo={replyTo}
-            replyAuthor={
-              replyTo
-                ? members.find(m => m.id === (replyTo.kind === 'task' ? replyTo.assigneeId : replyTo.authorId))
-                : undefined
-            }
-            followUp={followUp}
-            role={role}
-            offline={channel.scope === 'team' && connection === 'offline'}
-            onSend={(text, extra) => channelActions.send(channel.id, text, extra)}
-            onCancelReply={() => channelActions.setReplyTo(channel.id, null)}
-            inputRef={composer}
+            messages={messages}
+            members={members}
+            channelMembers={channelMembers}
+            newFrom={newFromMap[channel.id] ?? null}
+            more={!!moreMap[channel.id]}
+            onLoadOlder={() => channelActions.loadOlder(channel.id)}
+            onReply={archived ? undefined : reply}
+            taskActions={taskActions}
+            onThread={openThread}
           />
-        )}
-      </section>
-      <CollapsibleSlot open={membersShown || !!thread} width={thread ? THREAD_WIDTH : MEMBERS_WIDTH} side="right">
+          {archived ? (
+            <ArchivedBar channel={channel} />
+          ) : (
+            <ChannelComposer
+              key={channel.id}
+              channel={channel}
+              members={channelMembers}
+              selfId={selfId}
+              replyTo={replyTo}
+              replyAuthor={
+                replyTo
+                  ? members.find(m => m.id === (replyTo.kind === 'task' ? replyTo.assigneeId : replyTo.authorId))
+                  : undefined
+              }
+              followUp={followUp}
+              role={role}
+              offline={channel.scope === 'team' && connection === 'offline'}
+              onSend={(text, extra) => channelActions.send(channel.id, text, extra)}
+              onCancelReply={() => channelActions.setReplyTo(channel.id, null)}
+              inputRef={composer}
+            />
+          )}
+        </section>
+      )}
+      <CollapsibleSlot
+        open={!needsOpen && (membersShown || !!thread)}
+        width={thread ? THREAD_WIDTH : MEMBERS_WIDTH}
+        side="right"
+      >
         {thread ? (
           <ThreadPanel
             channel={channel}

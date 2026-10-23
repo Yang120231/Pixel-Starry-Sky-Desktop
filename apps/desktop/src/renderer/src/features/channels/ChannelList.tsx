@@ -7,6 +7,7 @@ import {
   CloudOff,
   Ellipsis,
   Hash,
+  Inbox,
   LogOut,
   Plus,
   Search,
@@ -22,6 +23,7 @@ import { useAccount } from '@/features/account'
 import type { AgentMember, Channel } from '@/data/types'
 import type { PendingInvite, TeamInfo } from '../../../../shared/types/channels'
 import { channelActions, channelsLive, selfMember, useChannels } from './store'
+import { useNeeds } from './needs'
 import { ChannelDialog } from './ChannelDialogs'
 import { CreateTeamDialog, TeamSettingsDialog } from './TeamDialog'
 import { roleLabel } from './TeamParts'
@@ -269,6 +271,29 @@ function SectionHeader({
 }
 
 /** 频道列表（docs/ui/channels.md §4，团队分段见 channels-phase-c.md §3.1）：搜索、本机 + 每个团队一段、邀请卡、新建频道 / 团队 */
+/** 列表顶部「需要你 N」（docs/ui/channels-collab-v2.md §2）：点开在右边看所有频道里等你处理的事 */
+function NeedsEntry() {
+  useI18n()
+  const open = useChannels(s => s.needsOpen)
+  const { needs } = useNeeds()
+  return (
+    <button
+      type="button"
+      data-needs-entry=""
+      aria-pressed={open}
+      onClick={() => channelActions.openNeeds(!open)}
+      className={cn(
+        'mt-2 flex h-8 w-full items-center gap-2 rounded-md px-2.5 text-list',
+        open ? 'bg-selected text-fg' : 'text-fg-secondary hover:bg-hover hover:text-fg',
+      )}
+    >
+      <Inbox size={15} strokeWidth={1.5} className="shrink-0" />
+      <span className="min-w-0 flex-1 truncate text-left">{tr('needs.entry')}</span>
+      {needs.length > 0 && <CountBadge count={needs.length} max={99} />}
+    </button>
+  )
+}
+
 export function ChannelList({
   channels,
   selectedId,
@@ -375,6 +400,7 @@ export function ChannelList({
             className="min-w-0 flex-1 bg-transparent text-list text-fg outline-none placeholder:text-fg-faint"
           />
         </label>
+        <NeedsEntry />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2 [scrollbar-width:thin]">
         {teamUi && invites.map(invite => <InviteCard key={invite.id} invite={invite} />)}

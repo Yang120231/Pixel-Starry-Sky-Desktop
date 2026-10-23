@@ -27,7 +27,8 @@ describe('协作频道演示数据', () => {
         expect(m.channelId).toBe(channelId)
         if (i > 0) expect(m.at, m.id).toBeGreaterThanOrEqual(list[i - 1].at)
         if (m.kind === 'event') expect(ids.has(m.actorId), m.id).toBe(true)
-        else expect(ids.has(m.authorId), m.id).toBe(true)
+        // 主动提醒是系统发的（SYSTEM_AUTHOR），不是成员
+        else if (!(m.kind === 'message' && m.alert)) expect(ids.has(m.authorId), m.id).toBe(true)
         if (m.kind === 'task') expect(ids.has(m.assigneeId), m.id).toBe(true)
         if (m.kind === 'message' && m.replyToId) expect(own.has(m.replyToId), m.id).toBe(true)
         if (m.kind === 'message') for (const id of m.mentions ?? []) expect(ids.has(id), m.id).toBe(true)

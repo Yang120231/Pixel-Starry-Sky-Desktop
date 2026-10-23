@@ -135,6 +135,8 @@ function mcpServer(channels: () => Channels | null, sessionId: string): Server {
 export interface ChannelToolsServer {
   /** 本机的频道会话：成员的扩展设置（跟随全局时 tools 为 null）和频道工具的地址、令牌；不是频道会话时 null */
   forSession(record: SessionRecord): Promise<{ tools: AgentTools | null; entry: LocalMcpEntry | null } | null>
+  /** 频道派活的会话（任何机器上的）：会话自己的「做完自动检查」不重复跑，由频道写在任务卡上 */
+  ownsSession(sessionId: string): boolean
   close(): void
 }
 
@@ -147,6 +149,7 @@ export function channelToolsServer(channels: () => Channels | null): ChannelTool
       if (!member) return null
       return { tools: member.tools, entry: await http.entry(record.id) }
     },
+    ownsSession: sessionId => channels()?.ownsSession(sessionId) ?? false,
     close: () => http.close(),
   }
 }

@@ -7,6 +7,7 @@ import { samePath, type ToolsHost } from './common'
 import { Copies } from './copies'
 import { GitTools, type GitTrash } from './git'
 import { Services } from './services'
+import { Checks } from './checks'
 import { Tasks } from './tasks'
 
 export class ProjectTools {
@@ -14,6 +15,8 @@ export class ProjectTools {
   readonly services: Services
   readonly copies: Copies
   readonly git: GitTools
+  /** 产出检查的设置和排队（docs/ui/channels-collab-v2.md §8） */
+  readonly checks: Checks
 
   constructor(
     dir: string,
@@ -34,10 +37,11 @@ export class ProjectTools {
       await this.services.stopPath(path)
     })
     this.git = new GitTools(host, changed, { trash: opts.trash })
+    this.checks = new Checks(dir, host)
   }
 
   async init(): Promise<void> {
-    await Promise.all([this.tasks.init(), this.copies.init()])
+    await Promise.all([this.tasks.init(), this.copies.init(), this.checks.init()])
     await this.services.init()
   }
 

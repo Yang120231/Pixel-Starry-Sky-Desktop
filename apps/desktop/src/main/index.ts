@@ -33,6 +33,7 @@ import { initUiLanguage, nativeText } from './app/ui-language'
 import { watchEditMenu } from './app/editMenu'
 import { initProjectTools } from './workspace/project-tools-ipc'
 import { initChannels } from './channels/ipc'
+import { initSessionChecks } from './workspace/session-checks'
 import { initNotifications } from './notifications/notifications'
 import { confirmTerminalClose, closeWindowTerminals } from './terminal/ipc'
 import { createAppContext } from './app/context'
@@ -544,6 +545,7 @@ app.whenReady().then(async () => {
   startup.step('initProjectTools')
   await initChannels(ctx) // 协作频道（本机 AI 协作），见 channels/ipc.ts
   startup.step('initChannels')
+  initSessionChecks(ctx) // 会话的「做完自动检查」，见 workspace/session-checks.ts
   // 设置独立窗口：要在 createWindow 之前，主窗口建好时登记给它（关闭、隐藏到托盘时一起关）
   settingsWindow = initSettingsWindow(ctx, {
     options: windowOptions,

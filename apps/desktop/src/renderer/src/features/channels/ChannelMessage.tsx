@@ -1,10 +1,12 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '../../i18n/core'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { CornerUpLeft, Forward, MessageSquareText, Pin, PinOff } from 'lucide-react'
+import { BellRing, CornerUpLeft, Forward, MessageSquareText, Pin, PinOff } from 'lucide-react'
 import { Avatar, Button, cn, CopyButton, EngineIcon, IconButton, useToast } from '@/ui'
 import { appendComposerDraft } from '@/features/engine/drafts'
-import { channelDraftKey } from './ChannelComposer'
+import { channelDraftKey } from './draftKey'
+import { SYSTEM_AUTHOR } from '../../../../shared/types/channels'
+import { alertActions } from '../../../../shared/channels/alerts'
 import { Markdown } from '@/ui/markdown/Markdown'
 import type { ChannelMember, ChannelTask, ChannelTextMessage } from '@/data/types'
 import { excerpt, splitMentions } from './model'
@@ -224,6 +226,41 @@ function QuoteBlock({
   )
 }
 
+/** 系统消息（主动提醒、每日简报）的作者：显示成「提醒」 */
+const SYSTEM_MEMBER = (): ChannelMember => ({ id: SYSTEM_AUTHOR, kind: 'human', name: tr('alerts.author') })
+
+/** 提醒上的按钮（docs/ui/channels-collab-v2.md §6）；处理过的只写「已处理」 */
+function AlertButtons({ message, readOnly }: { message: ChannelTextMessage; readOnly: boolean }) {
+  useI18n()
+  const toast = useToast()
+  const [busy, setBusy] = useState(false)
+  const alert = message.alert!
+  if (alert.state === 'done') return <span className="mt-0.5 block text-meta text-fg-faint">{tr('alerts.done')}</span>
+  if (readOnly) return null
+  const actions = alertActions(alert.rule)
+  return (
+    <div data-alert-actions={alert.rule} className="mt-1.5 flex flex-wrap gap-1.5">
+      {actions.map((action, i) => (
+        <Button
+          key={action}
+          variant={i === 0 ? 'primary' : 'outline'}
+          className="h-7 px-2.5 text-meta"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true)
+            channelActions
+              .alert(message.channelId, message.id, action)
+              .catch(e => toast(tr('needs.failed', { error: translateMessage((e as Error).message) })))
+              .finally(() => setBusy(false))
+          }}
+        >
+          {tr(`alerts.action.${action}`)}
+        </Button>
+      ))}
+    </div>
+  )
+}
+
 /** 讨论串的回复数和最新一条（docs/ui/channels-collab-v2.md §3） */
 export type ThreadStats = ReadonlyMap<string, { count: number; last: ChannelTextMessage }>
 
@@ -373,7 +410,8 @@ export function MessageGroup({
 }: MessageGroupProps) {
   useI18n()
   const toast = useToast()
-  const author = membersById.get(items[0].authorId)
+  const system = items[0].authorId === SYSTEM_AUTHOR
+  const author = system ? SYSTEM_MEMBER() : membersById.get(items[0].authorId)
   const togglePin = (id: string, on: boolean): void =>
     void onPin?.(id, on).catch(e => toast(tr('channels.pinFailed', { error: translateMessage((e as Error).message) })))
   return (
@@ -391,7 +429,13 @@ export function MessageGroup({
           >
             <div className="w-7 shrink-0 pt-0.5">
               {i === 0 ? (
-                <MemberAvatar member={author} />
+                system ? (
+                  <span className="inline-flex size-7 items-center justify-center rounded-md bg-subtle text-warn">
+                    <BellRing size={15} strokeWidth={1.5} />
+                  </span>
+                ) : (
+                  <MemberAvatar member={author} />
+                )
               ) : (
                 <time
                   dateTime={new Date(m.at).toISOString()}
@@ -419,6 +463,7 @@ export function MessageGroup({
               ) : (
                 m.text && <MentionText text={m.text} members={channelMembers} />
               )}
+              {m.alert && <AlertButtons message={m} readOnly={proposalsReadOnly} />}
               {m.attached && <MessageAttachments message={m} />}
               {threads && onThread && (
                 <ThreadRow rootId={m.id} stats={threads} membersById={membersById} onOpen={onThread} />

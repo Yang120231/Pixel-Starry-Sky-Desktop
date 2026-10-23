@@ -3,6 +3,7 @@ import { openResumePicker } from '@/features/resume/store'
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal, flushSync } from 'react-dom'
 import {
+  Inbox,
   Bell,
   BellOff,
   Code2,
@@ -28,6 +29,7 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react'
+import { channelActions } from '@/features/channels/store'
 import { useI18n } from '@/i18n/I18nProvider'
 import { useSettings } from '@/features/settings/SettingsProvider'
 import { OPEN_SESSION_EVENT } from '@/features/engine/openRequests'
@@ -232,6 +234,10 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
     )
     add('nav.workbench', 'nav.workbench', 'terminal.categoryWorkbench', LayoutDashboard, showWorkbench)
     add('nav.channels', 'nav.channels', 'terminal.categoryWorkbench', MessageSquare, () => setPage('channels'))
+    add('needs.open', 'needs.open', 'terminal.categoryWorkbench', Inbox, () => {
+      setPage('channels')
+      channelActions.openNeeds(true)
+    })
     add('board.open', 'board.open', 'terminal.categoryWorkbench', SquareKanban, () => setPage('board'))
     add('inbox.open', 'projectTools.inbox.palette', 'terminal.categoryWorkbench', ListChecks, () =>
       openRightTab('tasks'),

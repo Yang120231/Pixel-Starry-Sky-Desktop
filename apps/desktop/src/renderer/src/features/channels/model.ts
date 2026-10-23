@@ -9,6 +9,7 @@ import type {
   ChannelTextMessage,
 } from '@/data/types'
 import { MENTION_ALL, mentionBoundary, parseMentions } from '../../../../shared/channels/mentions'
+import { countsUnread } from '../../../../shared/channels/threads'
 
 export { excerpt, mentionsAll, parseMentions, splitMentions } from '../../../../shared/channels/mentions'
 
@@ -74,14 +75,14 @@ export function buildTimeline(
   return rows
 }
 
-/** 进入频道前最早一条未读的时间：别人发的（不含事件）里最后 unread 条中的第一条 */
+/** 进入频道前最早一条未读的时间：算未读的（别人发的、不含事件和没 @ 你的串里回复）里最后 unread 条中的第一条 */
 export function firstUnreadAt(
   messages: readonly ChannelMessage[],
   unread: number,
   selfId: string | null,
 ): number | null {
   if (unread <= 0) return null
-  const others = messages.filter(m => m.kind !== 'event' && m.authorId !== selfId)
+  const others = messages.filter(m => countsUnread(m, selfId))
   return others.slice(-unread)[0]?.at ?? null
 }
 

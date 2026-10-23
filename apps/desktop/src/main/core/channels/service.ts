@@ -43,8 +43,9 @@ import type {
   TeamRole,
 } from '../../../shared/types/channels'
 import { cleanRelayRules, relayRulesOf, type RelayRules } from '../../../shared/types/channels'
-import { AGENT_TOOLS_MAX, type AgentTools } from '../../../shared/types/channels'
-import { threadMessages } from '../../../shared/channels/threads'
+import { AGENT_TOOLS_MAX, SYSTEM_AUTHOR, type AgentTools, type ChannelAlert } from '../../../shared/types/channels'
+import { countsUnread, threadMessages, threadRootOf } from '../../../shared/channels/threads'
+import { checkProblems, fixRequest, type CheckRun } from '../../../shared/types/checks'
 import {
   isReservedMentionName,
   mentionsAll,
@@ -53,6 +54,19 @@ import {
   type Mentionable,
 } from '../../../shared/channels/mentions'
 import { ChannelStore, type StoredChannel } from './store'
+import { channelNeeds } from '../../../shared/channels/needs'
+import {
+  DIGEST_HOUR,
+  STALLED_MINUTES,
+  UNCLAIMED_MINUTES,
+  WAITING_MINUTES,
+  alertActions,
+  alertRulesOf,
+  cleanAlertRules,
+  cleanDigestHour,
+  dangerousCommand,
+  type ChannelAlertAction,
+} from '../../../shared/channels/alerts'
 import {
   attachedNote,
   clipResult,
@@ -146,6 +160,10 @@ export interface ChannelsDeps {
   teamTiming?: { progressMs?: number; statusMs?: number }
   /** 本机会话挂了频道工具（main/channels/channel-mcp.ts）：派活提示词只带最近几条、说明怎么用工具 */
   channelTools?: boolean
+  /** 产出检查（docs/ui/channels-collab-v2.md §8）：在会话的工作目录跑；项目关了频道检查时返回 null */
+  runChecks?: (sessionId: string, files: string[]) => Promise<CheckRun | null>
+  /** false：不开每分钟的提醒巡检（测试） */
+  alertTimer?: boolean
 }
 
 const terminal = (status: ChannelTask['status']): boolean =>
@@ -205,12 +223,28 @@ export class Channels {
   private readonly exec: TeamExecutor | null
   /** 团队活只在本机有的显示信息（排队前面还有几项、机器断开） */
   private readonly teamLocal = new Map<string, { ahead?: number; disconnected?: boolean }>()
+  /** 主动提醒（§6）：每项活最近一次有动静的时间、开始等你回答的时间（只在内存里，重启后重新算） */
+  private readonly seen = new Map<string, number>()
+  private readonly waitingSince = new Map<string, { request: string; at: number }>()
+  private alertTimer: ReturnType<typeof setInterval> | null = null
 
   constructor(private readonly deps: ChannelsDeps) {
     this.store = deps.store
     this.now = deps.now ?? Date.now
     this.team = deps.team ?? null
     this.exec = null
+    // 主动提醒每分钟巡检一次（测试里直接调 checkAlerts）
+    if (deps.alertTimer !== false) {
+      this.alertTimer = setInterval(
+        () => void this.checkAlerts().catch(e => this.deps.log?.('频道提醒巡检失败', e)),
+        60_000,
+      )
+      this.alertTimer.unref?.()
+    }
+    // 上次退出时还在跑的产出检查不会再有结果：清掉「检查中」
+    for (const [channelId, list] of this.store.messages)
+      for (const m of list)
+        if (m.kind === 'task' && m.checks?.status === 'running') this.store.patchTask(channelId, m.id, { checks: null })
     if (this.team) {
       const team = this.team
       this.exec = new TeamExecutor({
@@ -345,7 +379,7 @@ export class Channels {
       lastAt = channel.createdAt
     for (const m of this.store.messages.get(channel.id) ?? []) {
       lastAt = Math.max(lastAt, m.at)
-      if (m.kind === 'event' || m.authorId === SELF_ID || m.at <= channel.readAt) continue
+      if (!countsUnread(m, SELF_ID) || m.at <= channel.readAt) continue
       unread++
       if (m.kind === 'message' && m.mentions?.includes(SELF_ID)) mentioned = true
     }
@@ -366,6 +400,8 @@ export class Channels {
         archivedAt: c.archivedAt ?? null,
         relay: c.relay === true,
         relayRules: relayRulesOf(c),
+        alerts: alertRulesOf(c),
+        digestHour: c.digestHour ?? DIGEST_HOUR,
         project: c.projectId ? (projects.get(c.projectId)?.name ?? null) : null,
         projectId: c.projectId,
         scope: 'local' as const,
@@ -415,6 +451,7 @@ export class Channels {
       sessionChannels,
       sessionTasks,
       sessionBindings,
+      ...channelNeeds(this.store.channels.values(), this.store.messages, SELF_ID),
       teams: team?.teams ?? [],
       invites: team?.invites ?? [],
       // 没有团队同步（团队功能关着，见 main/channels/ipc.ts 的 teamsEnabled）：报不可用，界面藏起所有团队入口
@@ -519,6 +556,8 @@ export class Channels {
 
   /** 退出前：把攒着的运行信息写盘，等写完 */
   async dispose(): Promise<void> {
+    if (this.alertTimer) clearInterval(this.alertTimer)
+    this.alertTimer = null
     if (this.changedTimer) clearTimeout(this.changedTimer)
     this.changedTimer = null
     if (this.runsTimer) this.saveRuns()
@@ -601,6 +640,9 @@ export class Channels {
       relay?: boolean
       /** 互相派活的停下规则（只有本机频道） */
       relayRules?: RelayRules
+      /** 主动提醒的规则开关、每日简报几点发（只有本机频道） */
+      alerts?: Partial<Record<ChannelAlert['rule'], boolean>>
+      digestHour?: number
     },
   ): Promise<void> {
     const info = this.team?.channelInfo(id)
@@ -658,6 +700,8 @@ export class Channels {
     }
     const rulesChanged = patch.relayRules !== undefined
     if (rulesChanged) c.relayRules = cleanRelayRules(patch.relayRules)
+    if (patch.alerts !== undefined) c.alerts = cleanAlertRules(patch.alerts)
+    if (patch.digestHour !== undefined) c.digestHour = cleanDigestHour(patch.digestHour)
     // 归档时一并标为已读：收起来的频道不再算未读
     if (archiving) {
       c.archivedAt = this.now()
@@ -903,12 +947,13 @@ export class Channels {
     return null
   }
 
-  /** 讨论串的根：这个频道里的任务卡或消息；串里的消息再开串时归到它所在的串 */
+  /** 讨论串的根：这个频道里的任务卡或消息；串里的消息再开串时归到它所在的串，任务结果归到它的任务卡 */
   private threadRoot(channelId: string, raw: unknown): string | null {
     if (typeof raw !== 'string' || !raw) return null
-    const root = this.store.messages.get(channelId)?.find(m => m.id === raw)
+    const list = this.store.messages.get(channelId) ?? []
+    const root = list.find(m => m.id === raw)
     if (!root || root.kind === 'event') return null
-    return root.kind === 'message' && root.threadId ? root.threadId : root.id
+    return threadRootOf(list, root.id)
   }
 
   async post(channelId: string, input: PostInput): Promise<{ message: ChannelTextMessage; tasks: string[] }> {
@@ -1354,6 +1399,7 @@ export class Channels {
       request: null,
       progress: null,
       endedAt: null,
+      checks: null,
     })
     this.saveRuns()
     void this.pump(next.memberId)
@@ -1364,6 +1410,8 @@ export class Channels {
     if (run?.team) return this.patchTeam(run, patch)
     const task = this.store.patchTask(channelId, taskId, patch)
     if (task) this.pushMessage(task)
+    // 「需要你」跟着这些字段变（docs/ui/channels-collab-v2.md §2）
+    if (task && ['status', 'request', 'relay', 'checks', 'decision'].some(k => k in patch)) this.changed()
     return task
   }
 
@@ -1530,6 +1578,8 @@ export class Channels {
       }
       if (run.team) this.patchTeam(ended, patch, teamResult)
       else this.patch(run.channelId, run.taskId, patch)
+      // 做完了、后面没有排着的追加要求：跑产出检查
+      if (!run.team && finish.status === 'done' && !run.followUps.length) void this.check(ended)
       // 做的时候追加的要求：接着发
       if (run.followUps.length && finish.note !== 'cancelled') {
         const text = run.followUps.join('\n\n')
@@ -1566,6 +1616,13 @@ export class Channels {
     const caller = this.toolCaller(sessionId)
     if (!caller) return null
     return { memberId: caller.member.id, tools: caller.member.bound ? null : (caller.member.tools ?? null) }
+  }
+
+  /** 这个会话是频道开的（派活开的或共用的，任何机器上）：会话自己的自动检查交给频道 */
+  ownsSession(sessionId: string): boolean {
+    if (this.store.members.some(m => m.sharedSessionId === sessionId && !m.bound)) return true
+    for (const run of this.store.runs.values()) if (run.sessionId === sessionId) return true
+    return false
   }
 
   /** 调用工具的会话现在在做哪项活：正在做的那一轮；没有时是这个会话最近的一张卡；都没有时是成员所在的第一个频道 */
@@ -1790,6 +1847,265 @@ export class Channels {
     return taskId
   }
 
+  // -------------------------------------------------------------------------
+  // 主动提醒（docs/ui/channels-collab-v2.md §6）
+  // -------------------------------------------------------------------------
+
+  /** 发一条提醒（系统消息，算 @你）；同一件事（规则 + 任务 + sig）只发一次 */
+  private async postAlert(c: StoredChannel, alert: ChannelAlert, text: string): Promise<void> {
+    const list = this.store.messages.get(c.id) ?? []
+    if (
+      list.some(
+        m =>
+          m.kind === 'message' &&
+          m.alert?.rule === alert.rule &&
+          (m.alert.taskId ?? null) === (alert.taskId ?? null) &&
+          m.alert.sig === alert.sig,
+      )
+    )
+      return
+    const message: ChannelTextMessage = {
+      kind: 'message',
+      id: randomUUID(),
+      channelId: c.id,
+      at: this.now(),
+      authorId: SYSTEM_AUTHOR,
+      text,
+      format: alert.rule === 'digest' ? 'markdown' : 'plain',
+      mentions: alert.rule === 'digest' ? [] : [SELF_ID],
+      alert,
+    }
+    await this.store.append(message)
+    this.pushMessage(message)
+    this.changed()
+  }
+
+  /** 提醒处理过了（点了按钮或情况变了） */
+  private async closeAlert(m: ChannelTextMessage): Promise<void> {
+    if (!m.alert || m.alert.state === 'done') return
+    const next = { ...m, alert: { ...m.alert, state: 'done' as const } }
+    await this.store.append(next)
+    this.pushMessage(next)
+    this.changed()
+  }
+
+  /** 同一个工作目录（项目 + 副本）里另一项正在做的活 */
+  private sameDirRuns(run: TaskRun): TaskRun[] {
+    const member = this.member(run.memberId)
+    if (!member) return []
+    return [...this.store.runs.values()].filter(r => {
+      if (r.taskId === run.taskId || r.phase !== 'sent' || r.team) return false
+      const other = this.member(r.memberId)
+      return (
+        !!other &&
+        other.machineId === member.machineId &&
+        other.projectId === member.projectId &&
+        other.copyId === member.copyId
+      )
+    })
+  }
+
+  /**
+   * 可能删掉别人没提交的改动：同一个目录里另一项活还在做，这项活要跑会丢改动的 git 命令，或要改对方改过的文件。
+   * 要审批的：请求本身就停着，提醒你决定；全权限（不审批）的成员开始跑这种命令时先中断这一轮
+   */
+  private conflictCheck(run: TaskRun, event: HostEvent): void {
+    if (event.kind !== 'session') return
+    const c = this.store.channels.get(run.channelId)
+    const task = this.taskOf(run)
+    if (!c || !task || c.archivedAt || !alertRulesOf(c).conflict) return
+    const others = this.sameDirRuns(run)
+    if (!others.length) return
+    const en = this.deps.locale() === 'en-US'
+    const e = event.event
+    if (e.type === 'item_started' && e.item.kind === 'command' && dangerousCommand(e.item.command)) {
+      if (this.member(run.memberId)?.settings.permissionMode !== 'full' || !run.sessionId || !run.turnId) return
+      void this.deps.call('engine:interruptTurn', [run.sessionId, run.turnId]).catch(() => undefined)
+      const other = `${this.nameOf(others[0].memberId)} · ${this.taskOf(others[0])?.title ?? '?'}`
+      void this.postAlert(
+        c,
+        { rule: 'conflict', state: 'open', taskId: task.id, sig: e.item.id },
+        en
+          ? `"${task.title}" started \`${e.item.command}\` while "${other}" is still working in the same folder, which could wipe its uncommitted changes. Stopped this task for now.`
+          : `「${task.title}」开始运行 ${e.item.command}，同一个目录里「${other}」还在做，可能冲掉它没提交的改动。已经先停下这项活。`,
+      )
+      return
+    }
+    const request = task.status === 'waiting' ? task.request : null
+    if (!request) return
+    let reason: string | null = null
+    if (request.kind === 'command' && dangerousCommand(request.command))
+      reason = en ? `wants to run \`${request.command}\`` : `要运行 ${request.command}`
+    else if (request.kind === 'file_change') {
+      const files = new Set((request.changes ?? []).map(ch => ch.path))
+      const hit = others.find(o => changedFiles(o).some(f => files.has(f)))
+      if (hit) {
+        const file = changedFiles(hit).find(f => files.has(f))!
+        reason = en
+          ? `wants to change ${file}, which "${this.taskOf(hit)?.title}" also changed`
+          : `要改 ${file}，「${this.taskOf(hit)?.title}」也改过它`
+      }
+    }
+    if (!reason) return
+    const other = `${this.nameOf(others[0].memberId)} · ${this.taskOf(others[0])?.title ?? '?'}`
+    void this.postAlert(
+      c,
+      { rule: 'conflict', state: 'open', taskId: task.id, sig: request.requestId },
+      en
+        ? `"${task.title}" ${reason} while "${other}" is working in the same folder; it could wipe uncommitted changes. It is waiting for your decision.`
+        : `「${task.title}」${reason}，同一个目录里「${other}」还在做，可能冲掉没提交的改动。已经停着等你决定。`,
+    )
+  }
+
+  /** 每分钟巡检一次：等你回答太久、很久没进展、@ 了没人接；情况变了的提醒标为处理过；到点发每日简报 */
+  async checkAlerts(): Promise<void> {
+    const now = this.now()
+    const en = this.deps.locale() === 'en-US'
+    for (const c of [...this.store.channels.values()]) {
+      if (c.archivedAt) continue
+      const rules = alertRulesOf(c)
+      const list = this.store.messages.get(c.id) ?? []
+      for (const m of list) {
+        if (m.kind !== 'task') continue
+        const run = this.store.runs.get(m.id)
+        if (rules.waiting && m.status === 'waiting' && m.request) {
+          const since = this.waitingSince.get(m.id)
+          if (!since || since.request !== m.request.requestId)
+            this.waitingSince.set(m.id, { request: m.request.requestId, at: now })
+          else if (now - since.at >= WAITING_MINUTES * 60_000)
+            await this.postAlert(
+              c,
+              { rule: 'waiting', state: 'open', taskId: m.id, sig: m.request.requestId },
+              en
+                ? `"${m.title}" has been waiting for your answer for ${WAITING_MINUTES}+ minutes.`
+                : `「${m.title}」等你回答已经超过 ${WAITING_MINUTES} 分钟了。`,
+            )
+        }
+        if (rules.stalled && m.status === 'running' && run?.phase === 'sent' && run.started) {
+          const last = this.seen.get(m.id)
+          if (last === undefined) this.seen.set(m.id, now)
+          else if (now - last >= STALLED_MINUTES * 60_000)
+            await this.postAlert(
+              c,
+              { rule: 'stalled', state: 'open', taskId: m.id, sig: `${m.round ?? 1}:${last}` },
+              en
+                ? `"${m.title}" has had no new output for ${STALLED_MINUTES}+ minutes.`
+                : `「${m.title}」已经 ${STALLED_MINUTES} 分钟没有新进展了。`,
+            )
+        }
+        if (rules.unclaimed && m.status === 'queued' && !m.relay?.held && run?.phase === 'waiting') {
+          const offline = !!m.disconnected || !this.machineOnline(this.member(m.assigneeId)?.machineId ?? 'local')
+          if (offline || now - run.queuedAt >= UNCLAIMED_MINUTES * 60_000)
+            await this.postAlert(
+              c,
+              { rule: 'unclaimed', state: 'open', taskId: m.id, sig: String(m.round ?? 1) },
+              offline
+                ? en
+                  ? `"${m.title}" is waiting, but ${this.nameOf(m.assigneeId)}'s machine is offline.`
+                  : `「${m.title}」在排队，但 ${this.nameOf(m.assigneeId)} 的机器不在线。`
+                : en
+                  ? `"${m.title}" has been queued for ${this.nameOf(m.assigneeId)} for ${UNCLAIMED_MINUTES}+ minutes.`
+                  : `「${m.title}」交给 ${this.nameOf(m.assigneeId)} 后排队超过 ${UNCLAIMED_MINUTES} 分钟还没开始。`,
+            )
+        }
+      }
+      // 情况已经变了的提醒：标为处理过
+      for (const m of [...list]) {
+        if (m.kind !== 'message' || m.alert?.state !== 'open' || m.alert.rule === 'digest') continue
+        const t = m.alert.taskId ? list.find(x => x.id === m.alert!.taskId) : undefined
+        const task = t?.kind === 'task' ? t : null
+        const still =
+          !!task &&
+          (m.alert.rule === 'waiting'
+            ? task.status === 'waiting' && task.request?.requestId === m.alert.sig
+            : m.alert.rule === 'stalled'
+              ? task.status === 'running' && m.alert.sig === `${task.round ?? 1}:${this.seen.get(task.id)}`
+              : m.alert.rule === 'unclaimed'
+                ? task.status === 'queued'
+                : // conflict：还停在那个请求上，或被中断后还没重新开始
+                  (task.status === 'waiting' && task.request?.requestId === m.alert.sig) ||
+                  (task.status === 'stopped' && !task.request))
+        if (!still) await this.closeAlert(m)
+      }
+      if (rules.digest) await this.digest(c, now)
+    }
+  }
+
+  /** 每日简报：到了这个频道设的钟点、今天还没发过就发（应用没开着错过了，下次巡检补发）；什么都没有就不发 */
+  private async digest(c: StoredChannel, now: number): Promise<void> {
+    const due = new Date(now)
+    due.setHours(c.digestHour ?? DIGEST_HOUR, 0, 0, 0)
+    const dueAt = due.getTime()
+    if (now < dueAt || (c.lastDigestAt ?? c.createdAt) >= dueAt) return
+    // c 是进循环前取的，中间可能改过设置：按现在的存
+    const current = this.store.channels.get(c.id)
+    if (!current) return
+    await this.store.saveChannel({ ...current, lastDigestAt: now })
+    const from = dueAt - DAY
+    const list = this.store.messages.get(c.id) ?? []
+    const ended = list.filter(
+      (m): m is ChannelTask => m.kind === 'task' && !!m.endedAt && m.endedAt >= from && m.endedAt < dueAt,
+    )
+    const done = ended.filter(t => t.status === 'done')
+    const failed = ended.filter(t => t.status === 'failed')
+    const waiting = channelNeeds([c], this.store.messages, SELF_ID).needs
+    if (!done.length && !failed.length && !waiting.length) return
+    const en = this.deps.locale() === 'en-US'
+    const line = (t: { title?: string; text?: string; assigneeId?: string; memberId?: string | null }) =>
+      `- ${t.title ?? t.text}${t.assigneeId || t.memberId ? ` · ${this.nameOf((t.assigneeId ?? t.memberId)!)}` : ''}`
+    const parts = [
+      en
+        ? `**Daily digest**: ${done.length} done, ${failed.length} failed in the last day; ${waiting.length} waiting for you.`
+        : `**每日简报**：过去一天完成 ${done.length} 项、失败 ${failed.length} 项；还有 ${waiting.length} 件等你处理。`,
+    ]
+    if (done.length) parts.push(`${en ? 'Done' : '完成'}：\n${done.slice(0, 10).map(line).join('\n')}`)
+    if (failed.length) parts.push(`${en ? 'Failed' : '失败'}：\n${failed.slice(0, 10).map(line).join('\n')}`)
+    if (waiting.length)
+      parts.push(`${en ? 'Waiting for you' : '等你处理'}：\n${waiting.slice(0, 10).map(line).join('\n')}`)
+    await this.postAlert(c, { rule: 'digest', state: 'open', sig: String(dueAt) }, parts.join('\n\n'))
+  }
+
+  /** 提醒上的按钮；reassign 返回要放进输入框的草稿 */
+  async alertAction(channelId: string, messageId: string, action: ChannelAlertAction): Promise<{ draft?: string }> {
+    this.writable(channelId)
+    const m = this.store.messages.get(channelId)?.find(x => x.id === messageId)
+    if (m?.kind !== 'message' || !m.alert) throw new Error('提醒不存在')
+    if (!alertActions(m.alert.rule).includes(action) && action !== 'dismiss') throw new Error('不支持的操作')
+    const task = m.alert.taskId ? this.store.task(m.alert.taskId) : null
+    const request = task?.status === 'waiting' && task.request?.requestId === m.alert.sig ? task.request : null
+    let draft: string | undefined
+    if (task && action === 'hold' && request && task.sessionId)
+      await this.deps.call('engine:answer', [task.sessionId, request.requestId, { type: 'deny' }])
+    if (task && action === 'continue') {
+      if (request && task.sessionId)
+        await this.deps.call('engine:answer', [task.sessionId, request.requestId, { type: 'allow' }])
+      else if (task.status === 'stopped') await this.runAction(task.id, 'retry')
+    }
+    if (task && (action === 'stop' || action === 'cancel' || action === 'reassign'))
+      await this.runAction(task.id, action === 'stop' ? 'stop' : 'cancel')
+    if (task && action === 'reassign') draft = `@ ${task.title}`
+    if (action !== 'open') await this.closeAlert(m)
+    return draft ? { draft } : {}
+  }
+
+  /** 产出检查（docs/ui/channels-collab-v2.md §8）：卡片上先显示「检查中」，跑完写上结果；期间开始了新一轮就不写 */
+  private async check(run: TaskRun): Promise<void> {
+    const check = this.deps.runChecks
+    if (!check || !run.sessionId) return
+    const pending: CheckRun = { id: `pending-${run.taskId}-${run.round}`, at: this.now(), status: 'running', items: [] }
+    this.patch(run.channelId, run.taskId, { checks: pending })
+    let result: CheckRun | null = null
+    try {
+      result = await check(run.sessionId, changedFiles(run))
+    } catch (error) {
+      this.deps.log?.('产出检查失败', error)
+    }
+    const task = this.store.task(run.taskId)
+    if (!task || task.checks?.id !== pending.id) return
+    this.patch(run.channelId, run.taskId, { checks: result })
+    this.changed()
+  }
+
   /** 去掉很久以前结束的运行信息 */
   private prune(): void {
     const cutoff = this.now() - KEEP_ENDED
@@ -1826,7 +2142,7 @@ export class Channels {
     // 团队卡：请求记在云端卡片上，由主人的电脑执行
     if (this.team?.card(taskId)) {
       // 团队频道没有 AI 互相派活，也就没有被拦下的接力
-      if (action === 'continue' || action === 'unlimit') return
+      if (action === 'continue' || action === 'unlimit' || action === 'fix') return
       await this.team.taskCall(taskId, teamId => this.team!.api.action(teamId, taskId, action))
       return
     }
@@ -1850,6 +2166,21 @@ export class Channels {
       await this.store.saveChannel({ ...c, relayResetAt: this.now(), ...(free ? { relayFree: free } : {}) })
       this.patch(task.channelId, task.id, { relay: { ...task.relay, held: null, limit: undefined } })
       void this.pump(run.memberId)
+      return
+    }
+    if (action === 'fix') {
+      // 产出检查没过：把失败的命令输出和文本检查的发现当追加要求发回去，做完会再检查一次
+      if (task.status !== 'done' || task.checks?.status !== 'done' || !this.member(task.assigneeId)) return
+      const { failed, findings } = checkProblems(task.checks)
+      if (!failed.length && !findings.length) return
+      const c = this.writable(task.channelId)
+      const text = followUpPrompt({
+        locale: this.deps.locale(),
+        channel: c.name,
+        author: this.nameOf(SELF_ID),
+        text: fixRequest(task.checks),
+      })
+      this.nextRound(task, run ?? null, text, text)
       return
     }
     if (action === 'retry') {
@@ -1894,8 +2225,12 @@ export class Channels {
   hostEvent(event: HostEvent): void {
     if (event.kind === 'session') {
       for (const run of [...this.store.runs.values()])
-        if (run.phase === 'sent' && run.sessionId === event.sessionId)
+        if (run.phase === 'sent' && run.sessionId === event.sessionId) {
+          this.seen.set(run.taskId, this.now())
           this.apply(run, trackEvent(run, event.event, this.now()))
+          const latest = this.store.runs.get(run.taskId)
+          if (latest && !latest.team) this.conflictCheck(latest, event)
+        }
     } else if (event.kind === 'sessions') this.sessionsChanged(event.sessions)
     else if (event.kind === 'projects') this.changed()
   }
