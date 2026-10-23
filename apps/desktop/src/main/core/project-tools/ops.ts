@@ -46,6 +46,9 @@ export const PROJECT_TOOL_OPS = {
   'projectTools:tasks': (c, id) => c.tools.tasks.state(value(id, 200, true)),
   'projectTools:createTask': (c, id, input) => c.tools.tasks.create(value(id, 200, true), input as Partial<ManualTask>),
   'projectTools:updateTask': (c, id, input) => c.tools.tasks.update(value(id, 200, true), input as Partial<ManualTask>),
+  // 事项派出去的卡片变了：频道服务调（docs/ui/channels-collab-v2.md §9）
+  'projectTools:syncIssue': (c, id, input) =>
+    c.tools.tasks.syncIssue(value(id, 200, true), input as { link: unknown; status?: unknown; fresh?: boolean }),
   'projectTools:deleteTask': (c, id) => c.tools.tasks.remove(value(id, 200, true)),
   'projectTools:pinTask': (c, id, pinned) => c.tools.tasks.pin(value(id, 200, true), pinned === true),
   'projectTools:pinnedTasks': c => c.tools.tasks.pinned(),

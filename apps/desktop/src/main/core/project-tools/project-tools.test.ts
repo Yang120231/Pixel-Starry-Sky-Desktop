@@ -94,6 +94,39 @@ describe('project tools storage and task operations', () => {
     tasks.store.data.tasks[1].projectId = 'gone'
     expect(tasks.all().map(t => t.id)).toEqual([a.id])
   })
+  it('事项：负责人、验收标准校验后存下；派出的卡片写回状态，验收完成的不再改，重新派过后旧卡不管', async () => {
+    const tasks = new Tasks(root, host, () => {})
+    await tasks.init()
+    const assignee = { channelId: 'c1', memberId: 'm1', name: '前端' }
+    const a = await tasks.create('p', {
+      title: 'A',
+      assignee,
+      acceptance: [
+        { text: ' 能登录 ', done: false },
+        { text: '', done: true },
+      ],
+    })
+    expect(a).toMatchObject({ assignee, acceptance: [{ text: '能登录', done: false }], link: null })
+    await expect(tasks.update(a.id, { status: 'nope' as never })).rejects.toThrow('参数不正确')
+    await expect(tasks.update(a.id, { assignee: { channelId: 'c1' } as never })).rejects.toThrow()
+    const link = (taskId: string, state: string) => ({ channelId: 'c1', taskId, state, round: 1, checks: null, at: 1 })
+    await tasks.syncIssue(a.id, { link: link('k1', 'running'), status: 'in_progress', fresh: true })
+    expect(tasks.all()[0]).toMatchObject({ status: 'in_progress', link: { taskId: 'k1', state: 'running' } })
+    await tasks.syncIssue(a.id, {
+      link: { ...link('k1', 'done'), checks: { status: 'fail', problems: 2 } },
+      status: 'review',
+    })
+    expect(tasks.all()[0]).toMatchObject({ status: 'review', link: { checks: { status: 'fail', problems: 2 } } })
+    // 别的卡（不是刚派的）不认
+    expect(await tasks.syncIssue(a.id, { link: link('old', 'failed') })).toBeNull()
+    await tasks.update(a.id, { status: 'completed' })
+    await tasks.syncIssue(a.id, { link: link('k1', 'running'), status: 'in_progress' })
+    expect(tasks.all()[0]).toMatchObject({ status: 'completed', link: { state: 'running' } })
+    // 编辑别的字段不丢事项的字段
+    await tasks.update(a.id, { title: 'A2' })
+    expect(tasks.all()[0]).toMatchObject({ title: 'A2', assignee, link: { taskId: 'k1' } })
+    expect(await tasks.syncIssue('missing', { link: link('k1', 'done') })).toBeNull()
+  })
   it('failed snapshots restore state and keep live object references', async () => {
     const store = new JsonStore(join(root, 'data.json'), { tasks: [{ id: 'a', title: 'before' }] })
     await store.init()

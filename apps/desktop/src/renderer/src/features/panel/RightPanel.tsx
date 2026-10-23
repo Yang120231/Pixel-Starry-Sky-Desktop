@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '@/i18n/I18nProvider'
 import { BrowserTab } from './BrowserTab'
 import { TasksPanel } from './TasksPanel'
+import { CommentsPanel } from './CommentsPanel'
 import { EnvironmentPanel, OPEN_BROWSER } from './EnvironmentPanel'
 import { CopiesPanel } from './CopiesPanel'
 import { ConnectorsPanel } from './connectors/ConnectorsPanel'
@@ -202,7 +203,7 @@ export function RightPanel({ maximized = false, visible = true }: { maximized?: 
           />
         </div>
         <TerminalPanel embedded visible={visible && layout.active === 'terminal'} />
-        {(['git', 'artifacts', 'tasks', 'sandbox', 'copies', 'connectors', 'browser'] as const).map(
+        {(['git', 'artifacts', 'comments', 'tasks', 'sandbox', 'copies', 'connectors', 'browser'] as const).map(
           kind =>
             (visited.has(kind) || layout.active === kind) && (
               <div
@@ -214,6 +215,8 @@ export function RightPanel({ maximized = false, visible = true }: { maximized?: 
                   <GitPanel active={visible && layout.active === 'git'} />
                 ) : kind === 'artifacts' ? (
                   <ArtifactsPanel active={visible && layout.active === 'artifacts'} />
+                ) : kind === 'comments' ? (
+                  <CommentsPanel />
                 ) : kind === 'tasks' ? (
                   <TasksPanel />
                 ) : kind === 'sandbox' ? (

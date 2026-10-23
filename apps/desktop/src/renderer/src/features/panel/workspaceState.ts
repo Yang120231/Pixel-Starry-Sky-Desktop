@@ -10,6 +10,7 @@ export const TOOL_IDS = [
   'sandbox',
   'copies',
   'connectors',
+  'comments',
 ] as const
 export type ToolId = (typeof TOOL_IDS)[number]
 export interface PanelLayout {

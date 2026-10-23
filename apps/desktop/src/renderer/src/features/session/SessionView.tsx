@@ -33,6 +33,8 @@ import { SideChatPanel } from './sidechat/SideChatPanel'
 import { sideRefusal } from './sidechat/store'
 import { clearReviewComments, reviewMessage, useReviewComments } from './reviewComments'
 import { DiffCommentsContext } from '@/ui/code/diffComments'
+import { TurnCommentsContext, type TurnCommentsValue } from './TurnCommentCards'
+import { openTurnComment, turnOfItem } from './turnComments'
 import { paneActions } from '@/features/panes/store'
 import { isDemo, sessionDiff } from '@/data'
 import { demo } from '@/data/demo'
@@ -236,212 +238,253 @@ function LiveSessionView({
   const body = useRef<HTMLDivElement>(null)
   // 代码评论（§4）
   const review = useReviewComments(sessionId)
+  // 会话评论（docs/ui/channels-collab-v2.md §7）：条目、输入框、是否在忙都用的时候现读。
+  // 输入框控制器每来一个字都换新对象，放进依赖会让对话里每一条跟着重新渲染
+  const latest = useRef(snapshot)
+  latest.current = snapshot
+  const composerRef = useRef(composer)
+  composerRef.current = composer
+  const canHandoff = !!composer
+  const turnComments = useMemo<TurnCommentsValue | null>(
+    () =>
+      sessionId
+        ? {
+            sessionId,
+            title: title ?? '',
+            items: () => latest.current?.items ?? [],
+            handoff: canHandoff
+              ? async text => {
+                  const s = latest.current
+                  const queued = !!s && (s.state !== 'idle' || s.queue.length > 0)
+                  if (!composerRef.current) throw new Error(tr('turnComment.notReady'))
+                  await composerRef.current.submit(text)
+                  return queued ? 'queued' : 'started'
+                }
+              : null,
+          }
+        : null,
+    [sessionId, title, canHandoff],
+  )
   const forkedFrom = snapshot?.record.forkedFrom ?? null
 
   return (
     <PathLinksProvider sessionId={sessionId}>
-      <DiffCommentsContext.Provider value={review.api}>
-        <TraceContext.Provider value={sessionId ? openTrace : null}>
-          <main
-            ref={mainRef}
-            className={cn(
-              'conversation-view relative flex flex-1 flex-col bg-app',
-              embedded ? 'min-h-0 min-w-0' : 'min-w-[464px]',
-            )}
-          >
-            {!embedded && (
-              <SessionHeader
-                title={title}
-                showActions={!!snapshot && snapshot.items.length > 0}
-                sidebarOpen={sidebarOpen}
-                panelOpen={panelOpen}
-                onToggleSidebar={onToggleSidebar}
-                onTogglePanel={onTogglePanel}
-              />
-            )}
-            {sessionId ? (
-              <>
-                <div ref={body} className="conversation-body relative flex min-h-0 flex-1 flex-col overflow-hidden">
-                  {showStrips && (
-                    <div
-                      ref={strips}
-                      className="conversation-inset conversation-reading conversation-reading-strips shrink-0 pt-3"
-                    >
-                      <div className="conversation-message flex flex-col gap-2">
-                        {traceInStrips && (
-                          <div className="flex justify-end">
-                            <button
-                              type="button"
-                              onClick={() => openTrace()}
-                              className="press inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-meta text-fg-muted hover:bg-hover hover:text-fg"
-                            >
-                              <Bot size={13} strokeWidth={1.75} />
-                              {tr('session.live.AgentTracePanel.agentActivity')}{' '}
-                            </button>
-                          </div>
-                        )}
-                        <TaskStrip sessionId={sessionId} tasks={tasks} />
-                      </div>
-                    </div>
-                  )}
-                  {/* 对话里的图片不带数据，按会话 id 按需取原图（attachments/imageSource.ts） */}
-                  <ImageSessionContext.Provider value={sessionId}>
-                    <MessageActionsContext.Provider value={branch.messageActions}>
-                      <ApprovalWaitContext.Provider value={approvalWait}>
-                        <LiveTranscript
-                          snapshot={snapshot}
-                          footer={inlinePlan && <InlinePlan plan={inlinePlan} working={fullProgress.working} />}
-                          header={
-                            forkedFrom && (
+      <TurnCommentsContext.Provider value={turnComments}>
+        <DiffCommentsContext.Provider value={review.api}>
+          <TraceContext.Provider value={sessionId ? openTrace : null}>
+            <main
+              ref={mainRef}
+              className={cn(
+                'conversation-view relative flex flex-1 flex-col bg-app',
+                embedded ? 'min-h-0 min-w-0' : 'min-w-[464px]',
+              )}
+            >
+              {!embedded && (
+                <SessionHeader
+                  title={title}
+                  showActions={!!snapshot && snapshot.items.length > 0}
+                  sidebarOpen={sidebarOpen}
+                  panelOpen={panelOpen}
+                  onToggleSidebar={onToggleSidebar}
+                  onTogglePanel={onTogglePanel}
+                />
+              )}
+              {sessionId ? (
+                <>
+                  <div ref={body} className="conversation-body relative flex min-h-0 flex-1 flex-col overflow-hidden">
+                    {showStrips && (
+                      <div
+                        ref={strips}
+                        className="conversation-inset conversation-reading conversation-reading-strips shrink-0 pt-3"
+                      >
+                        <div className="conversation-message flex flex-col gap-2">
+                          {traceInStrips && (
+                            <div className="flex justify-end">
                               <button
                                 type="button"
-                                data-forked-from
-                                onClick={() => paneActions.open(forkedFrom.sessionId)}
-                                className="conversation-message press inline-flex items-center gap-1.5 self-start rounded-md px-1.5 py-0.5 text-meta text-fg-muted hover:bg-hover hover:text-fg"
+                                onClick={() => openTrace()}
+                                className="press inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-meta text-fg-muted hover:bg-hover hover:text-fg"
                               >
-                                <GitBranch size={12} strokeWidth={1.75} />
-                                {tr('fork.from', { title: forkedFrom.title })}
+                                <Bot size={13} strokeWidth={1.75} />
+                                {tr('session.live.AgentTracePanel.agentActivity')}{' '}
                               </button>
-                            )
-                          }
-                        />
-                      </ApprovalWaitContext.Provider>
-                    </MessageActionsContext.Provider>
-                  </ImageSessionContext.Provider>
-                  {progress.visible && !trace && (
-                    <ProgressCard
-                      key={sessionId}
-                      progress={progress}
-                      belowFind={find !== null}
-                      offset={stripsHeight}
-                      onOpenTrace={hasRuns ? () => openTrace() : undefined}
-                      onStopAgents={canStopAgents ? ids => stopAgents(sessionId, ids) : undefined}
-                      expandToken={expandToken}
+                            </div>
+                          )}
+                          <TaskStrip sessionId={sessionId} tasks={tasks} />
+                        </div>
+                      </div>
+                    )}
+                    {/* 对话里的图片不带数据，按会话 id 按需取原图（attachments/imageSource.ts） */}
+                    <ImageSessionContext.Provider value={sessionId}>
+                      <MessageActionsContext.Provider value={branch.messageActions}>
+                        <ApprovalWaitContext.Provider value={approvalWait}>
+                          <LiveTranscript
+                            snapshot={snapshot}
+                            footer={inlinePlan && <InlinePlan plan={inlinePlan} working={fullProgress.working} />}
+                            header={
+                              forkedFrom && (
+                                <button
+                                  type="button"
+                                  data-forked-from
+                                  onClick={() => paneActions.open(forkedFrom.sessionId)}
+                                  className="conversation-message press inline-flex items-center gap-1.5 self-start rounded-md px-1.5 py-0.5 text-meta text-fg-muted hover:bg-hover hover:text-fg"
+                                >
+                                  <GitBranch size={12} strokeWidth={1.75} />
+                                  {tr('fork.from', { title: forkedFrom.title })}
+                                </button>
+                              )
+                            }
+                          />
+                        </ApprovalWaitContext.Provider>
+                      </MessageActionsContext.Provider>
+                    </ImageSessionContext.Provider>
+                    {progress.visible && !trace && (
+                      <ProgressCard
+                        key={sessionId}
+                        progress={progress}
+                        belowFind={find !== null}
+                        offset={stripsHeight}
+                        onOpenTrace={hasRuns ? () => openTrace() : undefined}
+                        onStopAgents={canStopAgents ? ids => stopAgents(sessionId, ids) : undefined}
+                        expandToken={expandToken}
+                      />
+                    )}
+                    {find !== null && (
+                      <ConversationFind
+                        root={mainRef}
+                        focusToken={find}
+                        onClose={() => setFind(null)}
+                        folded={folded}
+                      />
+                    )}
+                    <TranscriptMenu
+                      root={body}
+                      composerKey={composerDraftKey(draftKey, composer)}
+                      cwd={snapshot?.record.cwd ?? null}
+                      items={snapshot?.items}
+                      onFind={() => setFind(n => (n ?? 0) + 1)}
+                      commentOn={turnComments ? itemId => commentOn(turnComments, itemId) : null}
+                      onAskSide={branch.sideChat ? text => openSide(text, true) : null}
+                      sideDisabled={branch.sideChat?.disabledReason ?? null}
                     />
-                  )}
-                  {find !== null && (
-                    <ConversationFind root={mainRef} focusToken={find} onClose={() => setFind(null)} folded={folded} />
-                  )}
-                  <TranscriptMenu
-                    root={body}
-                    composerKey={composerDraftKey(draftKey, composer)}
-                    cwd={snapshot?.record.cwd ?? null}
-                    items={snapshot?.items}
-                    onFind={() => setFind(n => (n ?? 0) + 1)}
-                    onAskSide={branch.sideChat ? text => openSide(text, true) : null}
-                    sideDisabled={branch.sideChat?.disabledReason ?? null}
-                  />
-                </div>
-                <ComposerArea>
-                  {kept.length > 0 && (
-                    <KeptAgentsStrip
-                      count={kept.length}
-                      onView={() => {
-                        setTrace(null)
-                        fullProgress.reveal()
-                        setExpandToken(n => n + 1)
-                        if (fullProgress.agents.length === 0) openTrace()
+                  </div>
+                  <ComposerArea>
+                    {kept.length > 0 && (
+                      <KeptAgentsStrip
+                        count={kept.length}
+                        onView={() => {
+                          setTrace(null)
+                          fullProgress.reveal()
+                          setExpandToken(n => n + 1)
+                          if (fullProgress.agents.length === 0) openTrace()
+                        }}
+                        onStopAll={() =>
+                          void stopAgents(
+                            sessionId,
+                            kept.map(k => k.id),
+                          )
+                        }
+                      />
+                    )}
+                    <RetryStatus sessionId={sessionId} retry={snapshot?.retry} />
+                    <ReconnectStatus sessionId={sessionId} queue={snapshot?.queue} paused={!!snapshot?.queuePaused} />
+                    {snapshot && (
+                      <ApprovalStack
+                        key={`approvals:${sessionId}`}
+                        sessionId={sessionId}
+                        pending={snapshot.pending}
+                        cwd={snapshot.record.cwd ?? null}
+                        bounds={mainRef}
+                        onAnswer={(req, d) =>
+                          bridge ? bridge.answer(sessionId, req.requestId, d) : demoAnswer(sessionId, req.requestId, d)
+                        }
+                        onEscape={() => focusComposer(composerDraftKey(draftKey, composer))}
+                      />
+                    )}
+                    {branch.undo && (
+                      <RewindUndoBar done={branch.undo} onUndo={branch.undoRewind} onDismiss={branch.dismissUndo} />
+                    )}
+                    <ReviewCommentsBar
+                      count={review.comments.length}
+                      onClear={() => clearReviewComments(sessionId)}
+                      onHandoff={async () => {
+                        const queued = !!snapshot && (snapshot.state !== 'idle' || snapshot.queue.length > 0)
+                        if (composer) await composer.submit(reviewMessage(review.comments))
+                        clearReviewComments(sessionId)
+                        return queued ? 'queued' : 'started'
                       }}
-                      onStopAll={() =>
-                        void stopAgents(
-                          sessionId,
-                          kept.map(k => k.id),
+                    />
+                    <Composer
+                      key={sessionId}
+                      live={composer}
+                      demoQueue={demoQueue}
+                      status={status}
+                      draftKey={draftKey}
+                      autoFocus
+                      onSideQuestion={
+                        branch.sideChat
+                          ? q => {
+                              const refused = sideRefusal(sessionId, branch.sideChat!.disabledReason)
+                              if (!refused) openSide(q)
+                              return refused
+                            }
+                          : undefined
+                      }
+                      statusExtra={
+                        branch.sideChat && (
+                          <button
+                            type="button"
+                            data-side-chat-toggle
+                            aria-pressed={side !== null}
+                            title={tr('side.hint')}
+                            onClick={() => (side ? setSide(null) : openSide())}
+                            className={cn(
+                              'press inline-flex items-center gap-1 rounded px-1 hover:bg-hover hover:text-fg',
+                              side && 'text-fg',
+                            )}
+                          >
+                            <MessagesSquare size={13} strokeWidth={1.5} />
+                            {tr('side.title')}
+                          </button>
                         )
                       }
                     />
-                  )}
-                  <RetryStatus sessionId={sessionId} retry={snapshot?.retry} />
-                  <ReconnectStatus sessionId={sessionId} queue={snapshot?.queue} paused={!!snapshot?.queuePaused} />
-                  {snapshot && (
-                    <ApprovalStack
-                      key={`approvals:${sessionId}`}
+                  </ComposerArea>
+                  {side && !trace && branch.sideChat && (
+                    <SideChatPanel
                       sessionId={sessionId}
-                      pending={snapshot.pending}
-                      cwd={snapshot.record.cwd ?? null}
-                      bounds={mainRef}
-                      onAnswer={(req, d) =>
-                        bridge ? bridge.answer(sessionId, req.requestId, d) : demoAnswer(sessionId, req.requestId, d)
-                      }
-                      onEscape={() => focusComposer(composerDraftKey(draftKey, composer))}
+                      ask={branch.sideChat.ask}
+                      cancel={branch.sideChat.cancel}
+                      disabledReason={branch.sideChat.disabledReason}
+                      initialQuestion={side.text ? side : null}
+                      belowHeader={!embedded}
+                      onClose={() => setSide(null)}
                     />
                   )}
-                  {branch.undo && (
-                    <RewindUndoBar done={branch.undo} onUndo={branch.undoRewind} onDismiss={branch.dismissUndo} />
+                  {trace && runs && (
+                    <AgentTracePanel
+                      sessionId={sessionId}
+                      runs={runs}
+                      focus={trace.focus}
+                      onFocus={focus => setTrace({ focus })}
+                      onClose={() => setTrace(null)}
+                      belowHeader={!embedded}
+                    />
                   )}
-                  <ReviewCommentsBar
-                    count={review.comments.length}
-                    onClear={() => clearReviewComments(sessionId)}
-                    onHandoff={async () => {
-                      const queued = !!snapshot && (snapshot.state !== 'idle' || snapshot.queue.length > 0)
-                      if (composer) await composer.submit(reviewMessage(review.comments))
-                      clearReviewComments(sessionId)
-                      return queued ? 'queued' : 'started'
-                    }}
-                  />
-                  <Composer
-                    key={sessionId}
-                    live={composer}
-                    demoQueue={demoQueue}
-                    status={status}
-                    draftKey={draftKey}
-                    autoFocus
-                    onSideQuestion={
-                      branch.sideChat
-                        ? q => {
-                            const refused = sideRefusal(sessionId, branch.sideChat!.disabledReason)
-                            if (!refused) openSide(q)
-                            return refused
-                          }
-                        : undefined
-                    }
-                    statusExtra={
-                      branch.sideChat && (
-                        <button
-                          type="button"
-                          data-side-chat-toggle
-                          aria-pressed={side !== null}
-                          title={tr('side.hint')}
-                          onClick={() => (side ? setSide(null) : openSide())}
-                          className={cn(
-                            'press inline-flex items-center gap-1 rounded px-1 hover:bg-hover hover:text-fg',
-                            side && 'text-fg',
-                          )}
-                        >
-                          <MessagesSquare size={13} strokeWidth={1.5} />
-                          {tr('side.title')}
-                        </button>
-                      )
-                    }
-                  />
-                </ComposerArea>
-                {side && !trace && branch.sideChat && (
-                  <SideChatPanel
-                    sessionId={sessionId}
-                    ask={branch.sideChat.ask}
-                    cancel={branch.sideChat.cancel}
-                    disabledReason={branch.sideChat.disabledReason}
-                    initialQuestion={side.text ? side : null}
-                    belowHeader={!embedded}
-                    onClose={() => setSide(null)}
-                  />
-                )}
-                {trace && runs && (
-                  <AgentTracePanel
-                    sessionId={sessionId}
-                    runs={runs}
-                    focus={trace.focus}
-                    onFocus={focus => setTrace({ focus })}
-                    onClose={() => setTrace(null)}
-                    belowHeader={!embedded}
-                  />
-                )}
-              </>
-            ) : (
-              <WelcomeView live={composer} status={status} draftKey={draftKey} />
-            )}
-          </main>
-        </TraceContext.Provider>
-      </DiffCommentsContext.Provider>
+                </>
+              ) : (
+                <WelcomeView live={composer} status={status} draftKey={draftKey} />
+              )}
+            </main>
+          </TraceContext.Provider>
+        </DiffCommentsContext.Provider>
+      </TurnCommentsContext.Provider>
     </PathLinksProvider>
   )
+}
+
+/** 右键「评论这段 / 这一轮」：这条所在的一轮还没做完时为 null（菜单里置灰） */
+function commentOn(ctx: TurnCommentsValue, itemId: string): ((quote: string) => void) | null {
+  const turn = turnOfItem(ctx.items(), itemId)
+  return turn ? quote => openTurnComment({ sessionId: ctx.sessionId, ...turn, quote }) : null
 }

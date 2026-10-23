@@ -1,7 +1,18 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage, type TranslationKey } from '../../i18n/core'
 import { useState } from 'react'
-import { CircleCheck, CirclePause, CircleX, Clock, Hand, ShieldAlert, Unplug, type LucideIcon } from 'lucide-react'
+import {
+  CircleCheck,
+  CirclePause,
+  CircleX,
+  Clock,
+  Hand,
+  ShieldAlert,
+  SquareKanban,
+  Unplug,
+  type LucideIcon,
+} from 'lucide-react'
+import { setPage } from '@/features/layout/page'
 import { Button, cn, DiffStat, Spinner, useToast } from '@/ui'
 import { canAnswerInline } from '@/features/panel/inbox/inboxModel'
 import type { ChannelMember, ChannelTask, ChannelTaskStatus } from '@/data/types'
@@ -184,6 +195,18 @@ export function ChannelTaskCard({
           </time>
         </div>
         <div className="mt-1.5 text-list font-medium break-words text-fg">{task.title}</div>
+        {task.issue && (
+          // 从任务看板的事项派来的：点了去看板（docs/ui/channels-collab-v2.md §9）
+          <button
+            type="button"
+            data-task-issue
+            onClick={() => setPage('board')}
+            className="press mt-1 inline-flex max-w-full items-center gap-1 self-start rounded px-1 text-meta text-fg-muted hover:bg-hover hover:text-fg"
+          >
+            <SquareKanban size={12} strokeWidth={1.75} className="shrink-0" />
+            <span className="truncate">{tr('board.issue.chip', { title: task.issue.title })}</span>
+          </button>
+        )}
         {task.summary && <p className="mt-1 text-list break-words text-fg-secondary">{task.summary}</p>}
         {activity && (
           <p

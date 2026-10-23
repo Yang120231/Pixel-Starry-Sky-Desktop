@@ -29,6 +29,7 @@ import type {
   GitPullMode,
 } from '../shared/types/project-tools'
 import type { CheckConfig, CheckPlan, CheckRun } from '../shared/types/checks'
+import type { IssueLink } from '../shared/types/project-tools'
 
 export interface ProjectToolsBridge {
   searchTasks(text: string, projectId: string | null): Promise<ManualTask[]>
@@ -53,6 +54,14 @@ export interface ProjectToolsBridge {
   runChecks(ref: WorkspaceRef, opts?: { files?: string[] | null }): Promise<CheckRun | null>
   sessionChecks(ref: WorkspaceRef): Promise<boolean>
   setSessionChecks(ref: WorkspaceRef, on: boolean): Promise<boolean>
+  /**
+   * 事项派出去的卡片变了（docs/ui/channels-collab-v2.md §9）：写上卡片的情况、按卡片改状态。
+   * 平时由主进程的频道服务调；已经验收完成的事项不再改状态
+   */
+  syncIssue(
+    id: string,
+    input: { link: IssueLink; status?: ManualTask['status']; fresh?: boolean },
+  ): Promise<ManualTask | null>
   /** 会话最近一次自动检查（没有时 null）；新结果推过来 */
   lastSessionCheck(sessionId: string): Promise<CheckRun | null>
   onSessionCheck(callback: (push: { sessionId: string; run: CheckRun | null }) => void): () => void

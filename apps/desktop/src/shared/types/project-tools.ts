@@ -1,11 +1,44 @@
 import type { Item } from '@pixelsky/protocol'
 
+/** review = 待验收：交给 AI 成员的事项做完了，等你验收（docs/ui/channels-collab-v2.md §9） */
+export type ManualTaskStatus = 'pending' | 'in_progress' | 'review' | 'completed'
+export const MANUAL_TASK_STATUSES: readonly ManualTaskStatus[] = ['pending', 'in_progress', 'review', 'completed']
+
+/** 事项的负责人：频道里的 AI 成员（没有 = 我自己） */
+export interface IssueAssignee {
+  channelId: string
+  memberId: string
+  /** 成员名，频道读不到时也能显示 */
+  name: string
+}
+
+/** 验收标准的一条：派活时带给 AI，待验收时由你勾 */
+export interface AcceptanceItem {
+  text: string
+  done: boolean
+}
+export const ACCEPTANCE_MAX = 20
+
+/** 交给 AI 成员后，派出去的那张任务卡的情况（频道那边改，事项这边只显示） */
+export interface IssueLink {
+  channelId: string
+  /** 频道里的任务卡 id */
+  taskId: string
+  state: 'queued' | 'approval' | 'running' | 'waiting' | 'done' | 'failed' | 'stopped'
+  round: number
+  /** 产出检查：running = 检查中；problems = 没过的命令数 + 文本发现数 */
+  checks?: { status: 'running' | 'pass' | 'fail'; problems: number } | null
+  /** 失败原因（第一行） */
+  error?: string | null
+  at: number
+}
+
 export interface ManualTask {
   id: string
   projectId: string
   title: string
   note: string
-  status: 'pending' | 'in_progress' | 'completed'
+  status: ManualTaskStatus
   priority: 'low' | 'normal' | 'high'
   due: string
   tags: string[]
@@ -16,6 +49,10 @@ export interface ManualTask {
   pinnedAt?: number | null
   /** 改成已完成的时间；没完成为 null，旧数据没有（任务看板「已完成」按它算最近 7 天，没有时用 updatedAt） */
   completedAt?: number | null
+  /** 事项（docs/ui/channels-collab-v2.md §9）：负责人、验收标准、派出去的卡片；没有的是旧数据或我自己做的 */
+  assignee?: IssueAssignee | null
+  acceptance?: AcceptanceItem[]
+  link?: IssueLink | null
 }
 export interface AiPlan {
   sessionId: string

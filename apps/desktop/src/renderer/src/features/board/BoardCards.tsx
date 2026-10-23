@@ -17,6 +17,7 @@ import { relativeTime } from '@/features/engine'
 import { canAnswerInline, canResume } from '@/features/panel/inbox/inboxModel'
 import type { ManualTask } from '../../../../shared/types/project-tools'
 import { overdue } from './boardModel'
+import { IssueLine } from './IssueParts'
 import type { SessionCard, SessionLane } from './sessionLanes'
 import { useSessionChannel } from '@/features/channels/store'
 
@@ -66,6 +67,8 @@ export function TaskCard({
   onMenu,
   onDragStart,
   onDragEnd,
+  onDispatch,
+  onReview,
 }: {
   task: ManualTask
   column: string
@@ -77,6 +80,9 @@ export function TaskCard({
   onMenu: (x: number, y: number, trigger: HTMLElement) => void
   onDragStart: () => void
   onDragEnd: () => void
+  /** 事项（docs/ui/channels-collab-v2.md §9）：交给负责人、验收 */
+  onDispatch: () => void
+  onReview: () => void
 }) {
   const done = task.status === 'completed'
   const late = overdue(task, now)
@@ -183,6 +189,7 @@ export function TaskCard({
         ))}
       </div>
       {firstLine && <p className="truncate pl-6 text-meta text-fg-muted">{firstLine}</p>}
+      <IssueLine task={task} busy={busy} onDispatch={onDispatch} onReview={onReview} />
     </div>
   )
 }

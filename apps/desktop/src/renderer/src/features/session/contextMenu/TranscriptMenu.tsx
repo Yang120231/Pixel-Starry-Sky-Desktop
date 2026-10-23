@@ -9,6 +9,7 @@ import {
   FileText,
   FolderOpen,
   FolderTree,
+  MessageSquarePlus,
   MessageSquareQuote,
   MessagesSquare,
   Search,
@@ -49,9 +50,18 @@ interface Props {
   onAskSide: ((text: string) => void) | null
   /** 旁聊暂时不能问的原因 */
   sideDisabled: string | null
+  /** 评论这条所在的一轮（docs/ui/channels-collab-v2.md §7）：还没做完时返回 null；不能评论时整个为 null */
+  commentOn?: ((itemId: string) => ((quote: string) => void) | null) | null
 }
 
 const menuKey = (e: KeyboardEvent): boolean => e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')
+
+/** 选区开头所在的那条（[data-search-item]） */
+function selectionItem(): string | null {
+  const node = window.getSelection()?.anchorNode
+  const el = node instanceof Element ? node : (node?.parentElement ?? null)
+  return el?.closest<HTMLElement>('[data-search-item]')?.dataset.searchItem ?? null
+}
 
 /** 选区在对话流里时取出文字，否则空串 */
 function selectionIn(stream: Element): string {
@@ -60,7 +70,7 @@ function selectionIn(stream: Element): string {
   return cleanSelection(selection.toString())
 }
 
-export function TranscriptMenu({ root, composerKey, cwd, items, onFind, onAskSide, sideDisabled }: Props) {
+export function TranscriptMenu({ root, composerKey, cwd, items, onFind, onAskSide, sideDisabled, commentOn }: Props) {
   useI18n()
   const toast = useToast()
   const links = useContext(PathLinksContext)
@@ -90,6 +100,8 @@ export function TranscriptMenu({ root, composerKey, cwd, items, onFind, onAskSid
     }
     const target = transcriptTarget(el)
     const selected = selectionIn(stream)
+    const selectedItem = selected ? selectionItem() : null
+    const commentSelection = selectedItem && commentOn ? commentOn(selectedItem) : null
 
     if (selected)
       add(tr('ctxmenu.section.selection'), [
@@ -103,6 +115,17 @@ export function TranscriptMenu({ root, composerKey, cwd, items, onFind, onAskSid
                 disabled: !!sideDisabled,
                 title: sideDisabled ?? undefined,
                 run: () => onAskSide(quoteBlock(selected)),
+              },
+            ]
+          : []),
+        ...(selectedItem && commentOn
+          ? [
+              {
+                label: tr('turnComment.addSelection'),
+                icon: MessageSquarePlus,
+                disabled: !commentSelection,
+                title: commentSelection ? undefined : tr('turnComment.notDone'),
+                run: () => commentSelection?.(selected),
               },
             ]
           : []),
@@ -185,6 +208,7 @@ export function TranscriptMenu({ root, composerKey, cwd, items, onFind, onAskSid
     const item = target.item ? items?.find(i => i.id === target.item) : undefined
     if (item && (item.kind === 'user' || item.kind === 'assistant') && item.text) {
       const text = item.text
+      const commentTurn = commentOn ? commentOn(item.id) : null
       add(tr('ctxmenu.section.message'), [
         { label: tr('ctxmenu.message.copy'), icon: Copy, run: () => copy(text) },
         { label: tr('ctxmenu.message.quote'), icon: MessageSquareQuote, run: () => quote(text) },
@@ -202,6 +226,17 @@ export function TranscriptMenu({ root, composerKey, cwd, items, onFind, onAskSid
             selection?.addRange(range)
           },
         },
+        ...(commentOn
+          ? [
+              {
+                label: tr('turnComment.add'),
+                icon: MessageSquarePlus,
+                disabled: !commentTurn,
+                title: commentTurn ? undefined : tr('turnComment.notDone'),
+                run: () => commentTurn?.(''),
+              },
+            ]
+          : []),
       ])
     }
     return actions

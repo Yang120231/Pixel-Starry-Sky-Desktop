@@ -119,6 +119,7 @@ export const demoChannels: Channel[] = [
     name: '网页版改版',
     topic: '把网页版工作台改成 Codex 式布局，并迁移设置页表单',
     project: 'pixel-web',
+    projectId: 'pixel-web',
     scope: 'local',
     // 频道说明和置顶（docs/ui/channels-local-ai.md §3.1 #9）
     notes: '改完要跑 pnpm check；不要改 API 和数据库结构。',
@@ -280,6 +281,8 @@ export const demoChannelMessages: Record<string, ChannelMessage[]> = {
       assigneeId: 'a-frontend',
       title: '设置页迁移到新的表单组件',
       status: 'running',
+      // 从任务看板的事项派来的（docs/ui/channels-collab-v2.md §9）
+      issue: { id: 'b-form', title: '设置页迁移到新的表单组件' },
       sessionId: 's-settings-form',
       summary: null,
       diff: null,

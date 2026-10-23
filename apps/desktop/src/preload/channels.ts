@@ -17,6 +17,7 @@ import type {
   TeamRole,
 } from '../shared/types/channels'
 import type { ChannelAlertAction } from '../shared/channels/alerts'
+import type { IssueDispatch } from '../shared/types/channels'
 
 /** 协作频道 Phase B（docs/ui/channels-phase-b.md §11） */
 export interface ChannelsBridge {
@@ -54,6 +55,8 @@ export interface ChannelsBridge {
   proposal(channelId: string, messageId: string, accept: boolean): Promise<string | null>
   /** 主动提醒上的按钮（docs/ui/channels-collab-v2.md §6）；换人时返回要放进输入框的草稿 */
   alert(channelId: string, messageId: string, action: ChannelAlertAction): Promise<{ draft?: string }>
+  /** 把任务看板的事项交给频道成员（docs/ui/channels-collab-v2.md §9）：返回派出的任务卡 id */
+  dispatchIssue(channelId: string, issue: IssueDispatch): Promise<{ taskId: string }>
   /** 搜频道消息（§3.1 #8）：新的在前；projectId 只搜默认项目是它的频道 */
   search(text: string, opts?: { limit?: number; projectId?: string | null }): Promise<ChannelSearchResult>
   delete(id: string): Promise<void>

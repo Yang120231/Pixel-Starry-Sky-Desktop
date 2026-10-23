@@ -80,6 +80,11 @@ const demoPatch = (id: string, patch: Partial<ManualTask>): ManualTask => {
   return next
 }
 
+/** 马上重读一次（派完事项后：不等主进程的改动通知，免得「交给…」还能再点） */
+export async function reloadBoardTasks(): Promise<void> {
+  if (!isDemo) await load()
+}
+
 export async function updateBoardTask(id: string, patch: Partial<ManualTask>): Promise<void> {
   if (isDemo) {
     demoPatch(id, patch)
@@ -106,6 +111,8 @@ export async function createBoardTask(projectId: string, input: Partial<ManualTa
       updatedAt: now,
       completedAt: input.status === 'completed' ? now : null,
       pinnedAt: null,
+      assignee: input.assignee ?? null,
+      acceptance: input.acceptance ?? [],
     }
     set({ tasks: [...state.tasks, task] })
     return

@@ -53,8 +53,8 @@ describe('任务看板分列', () => {
     const sessions = [card('run', 'running'), card('w', 'waiting'), card('u', 'unread')]
     const input = { tasks, sessions, filter: all, knownProjects: new Set(['p']), showOlder: false, now: NOW }
     const cols = buildColumns(input)
-    expect(ids(cols)).toEqual({ todo: ['a'], doing: ['run', 'b'], waiting: ['w', 'u'], done: ['c', 'e'] })
-    expect(cols[3].older).toBe(1)
+    expect(ids(cols)).toEqual({ todo: ['a'], doing: ['run', 'b'], review: [], waiting: ['w', 'u'], done: ['c', 'e'] })
+    expect(cols[4].older).toBe(1)
     expect(ids(buildColumns({ ...input, showOlder: true })).done).toEqual(['c', 'e', 'd'])
   })
 
@@ -65,6 +65,7 @@ describe('任务看板分列', () => {
     expect(ids(buildColumns({ ...base, filter: { ...all, projects: ['q'] } }))).toEqual({
       todo: ['other'],
       doing: [],
+      review: [],
       waiting: ['s2'],
       done: [],
     })

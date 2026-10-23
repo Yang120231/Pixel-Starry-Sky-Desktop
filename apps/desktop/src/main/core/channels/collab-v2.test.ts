@@ -547,3 +547,65 @@ describe('主动提醒（§6）', () => {
     expect(digests[0].mentions).toEqual([])
   })
 })
+
+describe('事项（§9）', () => {
+  it('交给成员：@ 他派一张卡，卡上记着事项；卡片的状态和检查合并后写回事项，检查跑完才进待验收；打回 = 串里追加要求', async () => {
+    let release!: (run: CheckRun | null) => void
+    const synced: {
+      id: string
+      input: { link: { state: string; taskId: string; checks?: unknown }; status?: string; fresh?: boolean }
+    }[] = []
+    const c = await open(true, {
+      runChecks: () => new Promise(r => (release = r)),
+      syncIssue: async (id, input) => {
+        synced.push({ id, input })
+      },
+    })
+    const a = await c.saveMember(null, agent('前端'))
+    const b = await c.saveMember(null, agent('审查员'))
+    const ch = await c.create({ name: 'web', memberIds: [a, b] })
+    await expect(c.dispatchIssue(ch, { id: 'i1', title: '登录页', memberId: 'nobody' })).rejects.toThrow('不在频道里')
+    const { taskId } = await c.dispatchIssue(ch, {
+      id: 'i1',
+      title: '登录页',
+      note: '按设计稿改',
+      memberId: a,
+      acceptance: ['能登录', ' ', '有错误提示'],
+    })
+    // 返回时事项上已经写好这张卡
+    expect(synced.map(x => x.input.link.taskId)).toEqual([taskId])
+    const card = tasks(c, ch)[0]
+    expect(card).toMatchObject({ id: taskId, assigneeId: a, issue: { id: 'i1', title: '登录页' } })
+    expect(texts(c, ch)[0].text).toBe('@前端 事项：登录页\n\n按设计稿改\n\n验收标准：\n1. 能登录\n2. 有错误提示')
+    await settle()
+    expect(sends()[0].text).toContain('1. 能登录')
+    await new Promise(r => setTimeout(r, 350))
+    // 派出时马上写回一次（看板上不会再点出第二张卡），之后的变化合并后写
+    expect(synced[0]).toMatchObject({ id: 'i1', input: { status: 'in_progress', fresh: true, link: { taskId } } })
+    expect(synced.at(-1)).toMatchObject({ id: 'i1', input: { status: 'in_progress', fresh: false } })
+
+    finishLast(c, '改好了')
+    await settle()
+    await new Promise(r => setTimeout(r, 350))
+    // 做完紧接着开始检查：还是进行中
+    expect(synced.at(-1)!.input).toMatchObject({
+      status: 'in_progress',
+      link: { state: 'done', checks: { status: 'running' } },
+    })
+    release({ id: 'r', at: 1, status: 'done', items: [] })
+    await settle()
+    await new Promise(r => setTimeout(r, 350))
+    expect(synced.at(-1)!.input).toMatchObject({
+      status: 'review',
+      fresh: false,
+      link: { checks: { status: 'pass', problems: 0 } },
+    })
+
+    // 打回：在卡片的串里 @ 同一个成员 = 追加要求，事项回到进行中
+    await c.post(ch, { text: '@前端 验收没通过：按钮颜色不对', threadId: taskId, clientId: 'rej' })
+    await settle()
+    await new Promise(r => setTimeout(r, 350))
+    expect(tasks(c, ch)[0].round).toBe(2)
+    expect(synced.at(-1)!.input).toMatchObject({ status: 'in_progress', link: { taskId, round: 2 } })
+  })
+})

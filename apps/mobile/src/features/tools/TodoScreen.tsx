@@ -13,6 +13,7 @@ import { Loading, ToolFrame, type ToolProps } from './common'
 const DONE_STEP = 10
 
 const GROUPS: readonly { status: TaskStatus; title: string }[] = [
+  { status: 'review', title: '待验收' },
   { status: 'in_progress', title: '进行中' },
   { status: 'pending', title: '待办' },
   { status: 'completed', title: '已完成' },

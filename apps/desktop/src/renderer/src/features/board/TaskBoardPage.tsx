@@ -1,7 +1,19 @@
 // 任务看板页（docs/ui/task-board.md）：跨项目的四列——待办、进行中、等你、已完成。
 // 手动任务能拖着换列；AI 卡片（会话）的位置由会话自己的状态决定，只能在卡片上直接处理。
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, Check, ChevronDown, ExternalLink, Pencil, Pin, PinOff, Plus, Search, Trash2 } from 'lucide-react'
+import {
+  ArrowLeft,
+  Check,
+  ChevronDown,
+  ExternalLink,
+  Pencil,
+  Pin,
+  PinOff,
+  Plus,
+  Search,
+  Trash2,
+  Workflow,
+} from 'lucide-react'
 import { Button, Segmented, Select, cn } from '@/ui'
 import { ActionMenu } from '@/ui/ActionMenu'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
@@ -24,29 +36,39 @@ import { AiCard, TaskCard } from './BoardCards'
 import { STATUS_OF, buildColumns, type BoardKind, type ColumnId } from './boardModel'
 import { createBoardTask, deleteBoardTask, markDemoPinned, updateBoardTask, useBoardTasks } from './boardTasks'
 import { useSessionCards } from './useSessionCards'
+import { IssueFields, ReviewDialog, RulesDialog, dispatchIssue, useAssignRules, useAssigneeChoices } from './IssueParts'
+import { acceptanceText, assigneeKey, matchRule, parseAcceptance, sameAcceptance } from './issues'
+import type { IssueAssignee } from '../../../../shared/types/project-tools'
 
 const COLUMN_NAME = {
   todo: 'board.column.todo',
   doing: 'board.column.doing',
+  review: 'board.column.review',
   waiting: 'board.column.waiting',
   done: 'board.column.done',
 } as const
 const COLUMN_EMPTY = {
   todo: 'board.empty.todo',
   doing: 'board.empty.doing',
+  review: 'board.empty.review',
   waiting: 'board.empty.waiting',
   done: 'board.empty.done',
 } as const
 const STATUS_KEY = {
   pending: 'projectTools.pending',
   in_progress: 'projectTools.inProgress',
+  review: 'projectTools.review',
   completed: 'projectTools.completed',
 } as const
 /** 「等你」列里还没打开过的会话，后台读一次快照好显示审批内容（和「待处理」一样最多 20 个） */
 const MAX_PREFETCH = 20
 const DRAG_TYPE = 'application/x-pixelsky-board-task'
 
-type Form = Pick<ManualTask, 'title' | 'note' | 'status' | 'priority' | 'due' | 'tags'>
+// 事项的负责人、验收标准（一行一条）也在编辑里（docs/ui/channels-collab-v2.md §9）
+type Form = Pick<ManualTask, 'title' | 'note' | 'status' | 'priority' | 'due' | 'tags'> & {
+  assignee: IssueAssignee | null
+  acceptance: string
+}
 const formOf = (t: ManualTask): Form => ({
   title: t.title,
   note: t.note,
@@ -54,7 +76,19 @@ const formOf = (t: ManualTask): Form => ({
   priority: t.priority,
   due: t.due,
   tags: t.tags,
+  assignee: t.assignee ?? null,
+  acceptance: acceptanceText(t.acceptance),
 })
+
+/** 保存编辑时发的改动：基本字段只发改过的，负责人和验收标准变了才发 */
+function editPatch(task: ManualTask, form: Form): Partial<ManualTask> {
+  const patch: Partial<ManualTask> = changedTaskFields(formOf(task), form)
+  const before = task.assignee ? assigneeKey(task.assignee) : ''
+  if ((form.assignee ? assigneeKey(form.assignee) : '') !== before) patch.assignee = form.assignee
+  const acceptance = parseAcceptance(form.acceptance, task.acceptance)
+  if (!sameAcceptance(acceptance, task.acceptance)) patch.acceptance = acceptance
+  return patch
+}
 
 export function TaskBoardPage() {
   useI18n()
@@ -79,6 +113,11 @@ export function TaskBoardPage() {
   const [creating, setCreating] = useState<{ title: string; projectId: string } | null>(null)
   const [editing, setEditing] = useState<{ task: ManualTask; form: Form } | null>(null)
   const [deleting, setDeleting] = useState<ManualTask | null>(null)
+  const [reviewing, setReviewing] = useState<ManualTask | null>(null)
+  const [rulesOpen, setRulesOpen] = useState(false)
+  const [rules, setRules] = useAssignRules()
+  const choices = useAssigneeChoices(editing?.task.projectId ?? null)
+  const allChoices = useAssigneeChoices(null)
   const [menu, setMenu] = useState<{ task: ManualTask; x: number; y: number; trigger: HTMLElement } | null>(null)
   const [dragging, setDragging] = useState<string | null>(null)
   const [over, setOver] = useState<ColumnId | null>(null)
@@ -155,7 +194,13 @@ export function TaskBoardPage() {
     if (!creating || !creating.title.trim()) return
     const draft = creating
     void run(async () => {
-      await createBoardTask(draft.projectId, { title: draft.title.trim(), status: 'pending' })
+      // 分配规则命中时直接填上负责人
+      const assignee = matchRule(rules, { title: draft.title, tags: [], projectId: draft.projectId }, allChoices)
+      await createBoardTask(draft.projectId, {
+        title: draft.title.trim(),
+        status: 'pending',
+        ...(assignee ? { assignee } : {}),
+      })
       lastProject.current = draft.projectId
       setCreating(null)
     })
@@ -177,11 +222,12 @@ export function TaskBoardPage() {
     const { task, form } = editing
     void run(async () => {
       // 只发改过的字段：弹窗开着时状态可能已在别处（右栏、侧栏固定项、手机）改过
-      await updateBoardTask(task.id, changedTaskFields(formOf(task), form))
+      await updateBoardTask(task.id, editPatch(task, form))
       setEditing(null)
     })
   }
 
+  const dispatch = (task: ManualTask) => void run(() => dispatchIssue(task))
   const openCard = (id: string) => {
     showWorkbench()
     paneActions.open(id)
@@ -256,6 +302,9 @@ export function TaskBoardPage() {
             className={cn(FIELD, 'pl-8')}
           />
         </label>
+        <Button variant="ghost" icon={Workflow} className="h-8 text-meta" onClick={() => setRulesOpen(true)}>
+          {tr('board.rules.open')}
+        </Button>
         <Button variant="primary" icon={Plus} className="h-8" onClick={startCreate}>
           {tr('board.newTask')}
         </Button>
@@ -266,146 +315,154 @@ export function TaskBoardPage() {
         </p>
       )}
       <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto px-4 pb-4">
-        {columns.map(column => {
-          const count = column.tasks.length + column.sessions.length
-          const accepts = !!STATUS_OF[column.id]
-          const refused = dragging !== null && !accepts
-          return (
-            <section
-              key={column.id}
-              data-board-column={column.id}
-              aria-label={tr('board.columnLabel', { name: tr(COLUMN_NAME[column.id]), n: count })}
-              onDragOver={e => {
-                if (!dragging) return
-                e.preventDefault()
-                e.dataTransfer.dropEffect = accepts ? 'move' : 'none'
-                if (over !== column.id) setOver(column.id)
-              }}
-              onDragLeave={e => {
-                if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(o => (o === column.id ? null : o))
-              }}
-              onDrop={e => (accepts ? drop(column.id, e) : (e.preventDefault(), setOver(null)))}
-              title={refused ? tr('board.dropNotAllowed') : undefined}
-              className={cn(
-                'flex min-h-0 min-w-[260px] flex-1 flex-col rounded-xl border border-transparent bg-subtle/60 transition-colors',
-                over === column.id && accepts && 'border-accent-line bg-accent-soft/40',
-                over === column.id && refused && 'border-danger/40',
-                refused && 'opacity-60',
-              )}
-            >
-              <header className="flex shrink-0 items-center gap-2 px-3 pt-3 pb-2">
-                <h2 className="text-ui font-medium text-fg">{tr(COLUMN_NAME[column.id])}</h2>
-                <span className="text-meta text-fg-faint tabular-nums">{count}</span>
-                <span className="flex-1" />
-                {column.id === 'todo' && (
-                  <button
-                    type="button"
-                    aria-label={tr('board.newTask')}
-                    title={tr('board.newTask')}
-                    onClick={startCreate}
-                    className="flex size-6 items-center justify-center rounded-md text-fg-muted hover:bg-hover hover:text-fg"
-                  >
-                    <Plus size={14} />
-                  </button>
+        {columns
+          .filter(c => c.id !== 'review' || c.tasks.length > 0)
+          .map(column => {
+            const count = column.tasks.length + column.sessions.length
+            const accepts = !!STATUS_OF[column.id]
+            const refused = dragging !== null && !accepts
+            return (
+              <section
+                key={column.id}
+                data-board-column={column.id}
+                aria-label={tr('board.columnLabel', { name: tr(COLUMN_NAME[column.id]), n: count })}
+                onDragOver={e => {
+                  if (!dragging) return
+                  e.preventDefault()
+                  e.dataTransfer.dropEffect = accepts ? 'move' : 'none'
+                  if (over !== column.id) setOver(column.id)
+                }}
+                onDragLeave={e => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(o => (o === column.id ? null : o))
+                }}
+                onDrop={e => (accepts ? drop(column.id, e) : (e.preventDefault(), setOver(null)))}
+                title={refused ? tr('board.dropNotAllowed') : undefined}
+                className={cn(
+                  'flex min-h-0 min-w-[260px] flex-1 flex-col rounded-xl border border-transparent bg-subtle/60 transition-colors',
+                  over === column.id && accepts && 'border-accent-line bg-accent-soft/40',
+                  over === column.id && refused && 'border-danger/40',
+                  refused && 'opacity-60',
                 )}
-              </header>
-              <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2 [scrollbar-width:thin]">
-                {column.id === 'todo' && creating && (
-                  <div className="flex flex-col gap-2 rounded-lg border border-accent-line bg-surface p-2.5 shadow-sm">
-                    <input
-                      autoFocus
-                      maxLength={200}
-                      value={creating.title}
-                      placeholder={tr('board.newTaskPlaceholder')}
-                      aria-label={tr('projectTools.taskTitle')}
-                      onChange={e => setCreating({ ...creating, title: e.target.value })}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
-                          e.preventDefault()
-                          saveCreate()
-                        } else if (e.key === 'Escape') {
-                          e.preventDefault()
-                          setCreating(null)
-                        }
-                      }}
-                      className={FIELD}
-                    />
-                    <div className="flex items-center gap-2">
-                      <Select
-                        label={tr('board.project')}
-                        value={creating.projectId}
-                        options={projects.map(p => ({ value: p.id, label: p.name }))}
-                        onChange={projectId => setCreating({ ...creating, projectId })}
-                        className="min-w-0 flex-1"
+              >
+                <header className="flex shrink-0 items-center gap-2 px-3 pt-3 pb-2">
+                  <h2 className="text-ui font-medium text-fg">{tr(COLUMN_NAME[column.id])}</h2>
+                  <span className="text-meta text-fg-faint tabular-nums">{count}</span>
+                  <span className="flex-1" />
+                  {column.id === 'todo' && (
+                    <button
+                      type="button"
+                      aria-label={tr('board.newTask')}
+                      title={tr('board.newTask')}
+                      onClick={startCreate}
+                      className="flex size-6 items-center justify-center rounded-md text-fg-muted hover:bg-hover hover:text-fg"
+                    >
+                      <Plus size={14} />
+                    </button>
+                  )}
+                </header>
+                <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2 [scrollbar-width:thin]">
+                  {column.id === 'todo' && creating && (
+                    <div className="flex flex-col gap-2 rounded-lg border border-accent-line bg-surface p-2.5 shadow-sm">
+                      <input
+                        autoFocus
+                        maxLength={200}
+                        value={creating.title}
+                        placeholder={tr('board.newTaskPlaceholder')}
+                        aria-label={tr('projectTools.taskTitle')}
+                        onChange={e => setCreating({ ...creating, title: e.target.value })}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                            e.preventDefault()
+                            saveCreate()
+                          } else if (e.key === 'Escape') {
+                            e.preventDefault()
+                            setCreating(null)
+                          }
+                        }}
+                        className={FIELD}
                       />
-                      <Button
-                        variant="primary"
-                        className="h-8"
-                        disabled={busy || !creating.title.trim()}
-                        onClick={saveCreate}
-                      >
-                        {tr('board.save')}
-                      </Button>
-                      <Button variant="ghost" className="h-8" onClick={() => setCreating(null)}>
-                        {tr('board.cancel')}
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Select
+                          label={tr('board.project')}
+                          value={creating.projectId}
+                          options={projects.map(p => ({ value: p.id, label: p.name }))}
+                          onChange={projectId => setCreating({ ...creating, projectId })}
+                          className="min-w-0 flex-1"
+                        />
+                        <Button
+                          variant="primary"
+                          className="h-8"
+                          disabled={busy || !creating.title.trim()}
+                          onClick={saveCreate}
+                        >
+                          {tr('board.save')}
+                        </Button>
+                        <Button variant="ghost" className="h-8" onClick={() => setCreating(null)}>
+                          {tr('board.cancel')}
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                )}
-                {column.sessions.map(card => (
-                  <AiCard
-                    key={card.id}
-                    card={card}
-                    column={column.id}
-                    now={now}
-                    busy={busy}
-                    onOpen={() => openCard(card.id)}
-                    onAllow={() =>
-                      sessionAction(card.id, () => bridge!.answer(card.id, card.request!.requestId, { type: 'allow' }))
-                    }
-                    onDeny={() =>
-                      sessionAction(card.id, () => bridge!.answer(card.id, card.request!.requestId, { type: 'deny' }))
-                    }
-                    onRetry={() =>
-                      sessionAction(card.id, () => bridge!.send(card.id, tr('session.live.NoticeActions.retryMessage')))
-                    }
-                    onResume={() => sessionAction(card.id, () => bridge!.resumeQueue(card.id))}
-                  />
-                ))}
-                {column.tasks.map(task => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    column={column.id}
-                    project={names.get(task.projectId) ?? ''}
-                    now={now}
-                    busy={busy}
-                    onToggle={() => toggle(task)}
-                    onOpen={() => setEditing({ task, form: formOf(task) })}
-                    onMenu={(x, y, trigger) => setMenu({ task, x, y, trigger })}
-                    onDragStart={() => setDragging(task.id)}
-                    onDragEnd={() => {
-                      setDragging(null)
-                      setOver(null)
-                    }}
-                  />
-                ))}
-                {!count && !(column.id === 'todo' && creating) && (
-                  <p className="px-2 py-6 text-center text-meta text-fg-faint">{tr(COLUMN_EMPTY[column.id])}</p>
-                )}
-                {column.id === 'done' && (column.older > 0 || showOlder) && (
-                  <button
-                    type="button"
-                    onClick={() => setShowOlder(v => !v)}
-                    className="mx-auto rounded-md px-2 py-1 text-meta text-fg-muted hover:bg-hover hover:text-fg"
-                  >
-                    {showOlder ? tr('board.hideOlder') : tr('board.showOlder', { n: column.older })}
-                  </button>
-                )}
-              </div>
-            </section>
-          )
-        })}
+                  )}
+                  {column.sessions.map(card => (
+                    <AiCard
+                      key={card.id}
+                      card={card}
+                      column={column.id}
+                      now={now}
+                      busy={busy}
+                      onOpen={() => openCard(card.id)}
+                      onAllow={() =>
+                        sessionAction(card.id, () =>
+                          bridge!.answer(card.id, card.request!.requestId, { type: 'allow' }),
+                        )
+                      }
+                      onDeny={() =>
+                        sessionAction(card.id, () => bridge!.answer(card.id, card.request!.requestId, { type: 'deny' }))
+                      }
+                      onRetry={() =>
+                        sessionAction(card.id, () =>
+                          bridge!.send(card.id, tr('session.live.NoticeActions.retryMessage')),
+                        )
+                      }
+                      onResume={() => sessionAction(card.id, () => bridge!.resumeQueue(card.id))}
+                    />
+                  ))}
+                  {column.tasks.map(task => (
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      column={column.id}
+                      project={names.get(task.projectId) ?? ''}
+                      now={now}
+                      busy={busy}
+                      onToggle={() => toggle(task)}
+                      onOpen={() => setEditing({ task, form: formOf(task) })}
+                      onMenu={(x, y, trigger) => setMenu({ task, x, y, trigger })}
+                      onDispatch={() => dispatch(task)}
+                      onReview={() => setReviewing(task)}
+                      onDragStart={() => setDragging(task.id)}
+                      onDragEnd={() => {
+                        setDragging(null)
+                        setOver(null)
+                      }}
+                    />
+                  ))}
+                  {!count && !(column.id === 'todo' && creating) && (
+                    <p className="px-2 py-6 text-center text-meta text-fg-faint">{tr(COLUMN_EMPTY[column.id])}</p>
+                  )}
+                  {column.id === 'done' && (column.older > 0 || showOlder) && (
+                    <button
+                      type="button"
+                      onClick={() => setShowOlder(v => !v)}
+                      className="mx-auto rounded-md px-2 py-1 text-meta text-fg-muted hover:bg-hover hover:text-fg"
+                    >
+                      {showOlder ? tr('board.hideOlder') : tr('board.showOlder', { n: column.older })}
+                    </button>
+                  )}
+                </div>
+              </section>
+            )
+          })}
       </div>
 
       {projectMenu && (
@@ -530,6 +587,14 @@ export function TaskBoardPage() {
                 />
                 <span className="self-center text-meta text-fg-faint">{names.get(editing.task.projectId) ?? ''}</span>
               </div>
+              <IssueFields
+                choices={choices}
+                assignee={editing.form.assignee}
+                acceptance={editing.form.acceptance}
+                suggestion={matchRule(rules, { ...editing.form, projectId: editing.task.projectId }, choices)}
+                onAssignee={assignee => setEditing({ ...editing, form: { ...editing.form, assignee } })}
+                onAcceptance={acceptance => setEditing({ ...editing, form: { ...editing.form, acceptance } })}
+              />
               <Field label={tr('projectTools.due')}>
                 <input
                   type="date"
@@ -560,6 +625,13 @@ export function TaskBoardPage() {
             </div>
           }
         />
+      )}
+
+      {reviewing && (
+        <ReviewDialog task={tasks.find(t => t.id === reviewing.id) ?? reviewing} onClose={() => setReviewing(null)} />
+      )}
+      {rulesOpen && (
+        <RulesDialog projects={projects} saved={rules} onSave={setRules} onClose={() => setRulesOpen(false)} />
       )}
 
       {deleting && (

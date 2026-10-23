@@ -5,6 +5,7 @@ import { tr } from '../../../i18n/core'
 import {
   memo,
   useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -53,6 +54,7 @@ import { reconnectView } from './reconnectView'
 import { DismissedNote, ReconnectLine } from './ReconnectRows'
 import { NoticeActions } from './NoticeActions'
 import { AssistantMessageActions, UserMessageActions } from './MessageActions'
+import { TurnCommentButton, TurnCommentList, TurnCommentsContext } from '../TurnCommentCards'
 import { platformNoticeText } from './errorKind'
 import { useItemLocation } from '@/features/search/useItemLocation'
 import { ExpandScope } from '@/features/search/expand'
@@ -107,6 +109,7 @@ const ItemView = memo(function ItemView({
   reconnectFailed?: boolean
 }) {
   useI18n()
+  const commentable = !!useContext(TurnCommentsContext)
   switch (item.kind) {
     case 'user':
       if (item.reconnect) return <ReconnectLine attempt={item.reconnect} failed={!!reconnectFailed} />
@@ -140,12 +143,23 @@ const ItemView = memo(function ItemView({
       return <CompactionRow item={item} />
     case 'turn_stats':
       // 这一轮回复的「复制」放在统计行最前面，不额外占一行
+      // 「评论这一轮」也在这一行；评论卡接在下面（docs/ui/channels-collab-v2.md §7）
       return (
-        <TurnStats
-          usage={item.usage}
-          className="conversation-message -mt-1 px-0.5"
-          leading={reply ? <AssistantMessageActions text={reply} /> : undefined}
-        />
+        <>
+          <TurnStats
+            usage={item.usage}
+            className="conversation-message -mt-1 px-0.5"
+            leading={
+              reply || commentable ? (
+                <>
+                  {reply && <AssistantMessageActions text={reply} />}
+                  <TurnCommentButton turnKey={item.id} />
+                </>
+              ) : undefined
+            }
+          />
+          <TurnCommentList turnKey={item.id} />
+        </>
       )
     default:
       return null

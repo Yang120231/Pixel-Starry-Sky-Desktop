@@ -112,6 +112,13 @@ export async function initChannels(ctx: AppContext): Promise<void> {
       const result = ctx.machines ? ctx.machines.invoke('projectTools:runChecks', args, () => op(args)) : op(args)
       return (await result) as CheckRun | null
     },
+    // 事项派出去的卡片变了：写回事项，按事项 id 路由到项目所在的机器（docs/ui/channels-collab-v2.md §9）
+    syncIssue: async (issueId, input) => {
+      const op = ctx.toolOps.get('projectTools:syncIssue')
+      if (!op) return
+      const args = [issueId, input]
+      await (ctx.machines ? ctx.machines.invoke('projectTools:syncIssue', args, () => op(args)) : op(args))
+    },
   })
   // 频道工具（pixelsky_channel）：频道派活的本机会话发消息前由扩展准备挂上（docs/ui/channels-collab-v2.md §1）
   const tools = channelToolsServer(() => channels)
@@ -173,6 +180,7 @@ export async function initChannels(ctx: AppContext): Promise<void> {
     if (typeof action !== 'string' || !ALERT_ACTIONS.has(action as ChannelAlertAction)) throw new Error('不支持的操作')
     return channels.alertAction(str(id, '频道'), str(messageId, '消息'), action as ChannelAlertAction)
   })
+  ipc.handle('channels:dispatchIssue', (_e, id, issue) => channels.dispatchIssue(str(id, '频道'), issue))
   ipc.handle('channels:search', (_e, text, opts) => {
     const o = (opts ?? {}) as { limit?: unknown; projectId?: unknown }
     return channels.search(typeof text === 'string' ? text : '', {

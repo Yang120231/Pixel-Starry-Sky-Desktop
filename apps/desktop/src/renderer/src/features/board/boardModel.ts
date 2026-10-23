@@ -2,12 +2,14 @@
 import type { ManualTask } from '../../../../shared/types/project-tools'
 import { isWaiting, type SessionCard } from './sessionLanes'
 
-export type ColumnId = 'todo' | 'doing' | 'waiting' | 'done'
-export const COLUMNS: ColumnId[] = ['todo', 'doing', 'waiting', 'done']
+// review = 待验收（docs/ui/channels-collab-v2.md §9）：交给 AI 成员的事项做完了等你验收；没有时这一列不显示
+export type ColumnId = 'todo' | 'doing' | 'review' | 'waiting' | 'done'
+export const COLUMNS: ColumnId[] = ['todo', 'doing', 'review', 'waiting', 'done']
 /** 手动任务能拖进去的列（「等你」里只有会话） */
 export const STATUS_OF: Partial<Record<ColumnId, ManualTask['status']>> = {
   todo: 'pending',
   doing: 'in_progress',
+  review: 'review',
   done: 'completed',
 }
 export const RECENT_DONE_MS = 7 * 86_400_000
@@ -89,6 +91,7 @@ export function buildColumns(input: {
       sessions: sessions.filter(s => !isWaiting(s.lane)),
       older: 0,
     },
+    { id: 'review', tasks: tasks.filter(t => t.status === 'review').sort(taskOrder), sessions: [], older: 0 },
     { id: 'waiting', tasks: [], sessions: sessions.filter(s => isWaiting(s.lane)), older: 0 },
     {
       id: 'done',

@@ -1,10 +1,73 @@
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
-import type { ManualTask } from '../../../shared/types/project-tools'
+import {
+  ACCEPTANCE_MAX,
+  MANUAL_TASK_STATUSES,
+  type AcceptanceItem,
+  type IssueAssignee,
+  type IssueLink,
+  type ManualTask,
+} from '../../../shared/types/project-tools'
 import { codedError } from '@pixelsky/protocol'
 import { JsonStore, value, type ToolsHost } from './common'
 
 type Input = Partial<ManualTask>
+
+const LINK_STATES: readonly IssueLink['state'][] = [
+  'queued',
+  'approval',
+  'running',
+  'waiting',
+  'done',
+  'failed',
+  'stopped',
+]
+const record = (v: unknown): Record<string, unknown> => {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error('参数不正确')
+  return v as Record<string, unknown>
+}
+
+/** 负责人：null = 我自己 */
+export function cleanAssignee(v: unknown): IssueAssignee | null {
+  if (v === null) return null
+  const r = record(v)
+  return {
+    channelId: value(r.channelId, 200, true),
+    memberId: value(r.memberId, 200, true),
+    name: value(r.name, 80, true),
+  }
+}
+
+/** 验收标准：去掉空行，最多 20 条 */
+export function cleanAcceptance(v: unknown): AcceptanceItem[] {
+  if (!Array.isArray(v) || v.length > ACCEPTANCE_MAX) throw new Error('参数不正确')
+  return v
+    .map(item => ({ text: value(record(item).text, 300), done: record(item).done === true }))
+    .filter(item => item.text)
+}
+
+/** 派出去的卡片：频道那边写，这里只校验形状 */
+export function cleanLink(v: unknown): IssueLink | null {
+  if (v === null) return null
+  const r = record(v)
+  const state = r.state as IssueLink['state']
+  if (!LINK_STATES.includes(state) || typeof r.round !== 'number' || typeof r.at !== 'number')
+    throw new Error('参数不正确')
+  const checks = r.checks == null ? null : record(r.checks)
+  if (checks && (!['running', 'pass', 'fail'].includes(checks.status as string) || typeof checks.problems !== 'number'))
+    throw new Error('参数不正确')
+  return {
+    channelId: value(r.channelId, 200, true),
+    taskId: value(r.taskId, 200, true),
+    state,
+    round: r.round,
+    checks: checks
+      ? { status: checks.status as 'running' | 'pass' | 'fail', problems: checks.problems as number }
+      : null,
+    error: r.error == null ? null : value(r.error, 300),
+    at: r.at,
+  }
+}
 export class Tasks {
   readonly store: JsonStore<{ version: 1; tasks: ManualTask[] }>
   constructor(
@@ -28,11 +91,11 @@ export class Tasks {
   private fields(
     input: Input,
     prior?: ManualTask,
-  ): Omit<ManualTask, 'id' | 'projectId' | 'order' | 'createdAt' | 'updatedAt'> {
+  ): Omit<ManualTask, 'id' | 'projectId' | 'order' | 'createdAt' | 'updatedAt' | 'completedAt' | 'pinnedAt'> {
     if (!input || typeof input !== 'object') throw new Error('参数不正确')
     const status = input.status ?? prior?.status ?? 'pending',
       priority = input.priority ?? prior?.priority ?? 'normal'
-    if (!['pending', 'in_progress', 'completed'].includes(status) || !['low', 'normal', 'high'].includes(priority))
+    if (!MANUAL_TASK_STATUSES.includes(status) || !['low', 'normal', 'high'].includes(priority))
       throw new Error('参数不正确')
     const due = input.due === undefined ? (prior?.due ?? '') : value(input.due, 10)
     if (due && (!/^\d{4}-\d{2}-\d{2}$/.test(due) || Number.isNaN(Date.parse(due)))) throw new Error('日期不正确')
@@ -45,6 +108,10 @@ export class Tasks {
       priority,
       due,
       tags: [...new Set(tags.map(t => value(t, 40, true)))],
+      // 事项的字段：没传的沿用原来的（docs/ui/channels-collab-v2.md §9）
+      assignee: input.assignee === undefined ? (prior?.assignee ?? null) : cleanAssignee(input.assignee),
+      acceptance: input.acceptance === undefined ? (prior?.acceptance ?? []) : cleanAcceptance(input.acceptance),
+      link: input.link === undefined ? (prior?.link ?? null) : cleanLink(input.link),
     }
   }
   async create(projectId: string, input: Input): Promise<ManualTask> {
@@ -82,6 +149,28 @@ export class Tasks {
       return task
     })
     this.changed()
+    return result
+  }
+  /**
+   * 派出去的卡片变了（频道那边调，docs/ui/channels-collab-v2.md §9）：写上卡片的情况，按卡片改事项状态。
+   * 已经验收完成的不再改状态；fresh = 刚派出去的新卡片，其余时候只认事项上记着的那张卡（重新派过以后旧卡的变化不管）
+   */
+  async syncIssue(id: string, input: { link: unknown; status?: unknown; fresh?: boolean }): Promise<ManualTask | null> {
+    const link = cleanLink(record(input).link)
+    const status = input.status
+    if (status !== undefined && !MANUAL_TASK_STATUSES.includes(status as ManualTask['status']))
+      throw new Error('参数不正确')
+    const result = await this.store.transaction(data => {
+      const task = data.tasks.find(t => t.id === id)
+      if (!task || !link) return null
+      if (!input.fresh && task.link && task.link.taskId !== link.taskId) return null
+      const now = Date.now()
+      task.link = link
+      task.updatedAt = now
+      if (status && task.status !== 'completed' && task.status !== status) task.status = status as ManualTask['status']
+      return task
+    })
+    if (result) this.changed()
     return result
   }
   /** 固定到左侧栏 / 取消固定；不改 updatedAt（固定不算编辑） */

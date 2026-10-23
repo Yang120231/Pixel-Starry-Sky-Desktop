@@ -46,6 +46,7 @@ import { cleanRelayRules, relayRulesOf, type RelayRules } from '../../../shared/
 import { AGENT_TOOLS_MAX, SYSTEM_AUTHOR, type AgentTools, type ChannelAlert } from '../../../shared/types/channels'
 import { countsUnread, threadMessages, threadRootOf } from '../../../shared/channels/threads'
 import { checkProblems, fixRequest, type CheckRun } from '../../../shared/types/checks'
+import { ACCEPTANCE_MAX, type IssueLink, type ManualTaskStatus } from '../../../shared/types/project-tools'
 import {
   isReservedMentionName,
   mentionsAll,
@@ -162,6 +163,11 @@ export interface ChannelsDeps {
   channelTools?: boolean
   /** 产出检查（docs/ui/channels-collab-v2.md §8）：在会话的工作目录跑；项目关了频道检查时返回 null */
   runChecks?: (sessionId: string, files: string[]) => Promise<CheckRun | null>
+  /** 事项派出去的卡片变了：写回任务看板的事项（docs/ui/channels-collab-v2.md §9）；没接时不写 */
+  syncIssue?: (
+    issueId: string,
+    input: { link: IssueLink; status?: ManualTaskStatus; fresh?: boolean },
+  ) => Promise<unknown>
   /** false：不开每分钟的提醒巡检（测试） */
   alertTimer?: boolean
 }
@@ -556,6 +562,8 @@ export class Channels {
 
   /** 退出前：把攒着的运行信息写盘，等写完 */
   async dispose(): Promise<void> {
+    for (const t of this.issueTimers.values()) clearTimeout(t)
+    this.issueTimers.clear()
     if (this.alertTimer) clearInterval(this.alertTimer)
     this.alertTimer = null
     if (this.changedTimer) clearTimeout(this.changedTimer)
@@ -1412,7 +1420,97 @@ export class Channels {
     if (task) this.pushMessage(task)
     // 「需要你」跟着这些字段变（docs/ui/channels-collab-v2.md §2）
     if (task && ['status', 'request', 'relay', 'checks', 'decision'].some(k => k in patch)) this.changed()
+    // 事项派出的卡片：状态、检查、轮次变了写回事项
+    if (task?.issue && ['status', 'checks', 'round', 'error', 'issue'].some(k => k in patch))
+      this.syncIssue(task.id, 'issue' in patch)
     return task
+  }
+
+  private readonly issueTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  private readonly issueFresh = new Set<string>()
+  /**
+   * 卡片的情况写回事项（docs/ui/channels-collab-v2.md §9）。合并 300ms 内的变化（做完紧接着开始检查，
+   * 不让事项在「待验收」和「进行中」之间闪）；写的时候读卡片最新的样子
+   */
+  private syncIssue(taskId: string, fresh: boolean): void {
+    if (!this.deps.syncIssue) return
+    if (fresh) this.issueFresh.add(taskId)
+    const prev = this.issueTimers.get(taskId)
+    if (prev) clearTimeout(prev)
+    const timer = setTimeout(() => void this.syncIssueNow(taskId), 300)
+    timer.unref?.()
+    this.issueTimers.set(taskId, timer)
+  }
+
+  /** 马上写回（等着的合并取消掉）；写失败只记日志 */
+  private async syncIssueNow(taskId: string): Promise<void> {
+    const pending = this.issueTimers.get(taskId)
+    if (pending) clearTimeout(pending)
+    this.issueTimers.delete(taskId)
+    const isFresh = this.issueFresh.delete(taskId)
+    const task = this.store.task(taskId)
+    if (!task?.issue || !this.deps.syncIssue) return
+    const checks = !task.checks
+      ? null
+      : task.checks.status === 'running'
+        ? { status: 'running' as const, problems: 0 }
+        : (() => {
+            const { failed, findings } = checkProblems(task.checks)
+            const problems = failed.length + findings.length
+            return { status: problems ? ('fail' as const) : ('pass' as const), problems }
+          })()
+    const link: IssueLink = {
+      channelId: task.channelId,
+      taskId: task.id,
+      state: task.status,
+      round: task.round ?? 1,
+      checks,
+      error: task.error ?? null,
+      at: this.now(),
+    }
+    // 做完、检查也跑完了才进「待验收」；失败、停下不改状态（卡片上看得到，可以重派）
+    const status: ManualTaskStatus | undefined =
+      task.status === 'done'
+        ? checks?.status === 'running'
+          ? 'in_progress'
+          : 'review'
+        : task.status === 'failed' || task.status === 'stopped'
+          ? undefined
+          : 'in_progress'
+    await this.deps
+      .syncIssue(task.issue.id, { link, ...(status ? { status } : {}), fresh: isFresh })
+      .catch(e => this.deps.log?.('事项同步失败', e))
+  }
+
+  /** 把任务看板的事项交给频道成员：发一条 @ 他的消息，派出的卡片记上事项（docs/ui/channels-collab-v2.md §9） */
+  async dispatchIssue(channelId: string, raw: unknown): Promise<{ taskId: string }> {
+    if (this.isTeam(channelId)) throw new Error('事项只能交给本机频道的成员')
+    const c = this.writable(channelId)
+    const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+    const text = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
+    const id = text(r.id, 200),
+      title = text(r.title, 200),
+      note = text(r.note, 4000),
+      memberId = text(r.memberId, 200)
+    const acceptance = (Array.isArray(r.acceptance) ? r.acceptance : [])
+      .slice(0, ACCEPTANCE_MAX)
+      .map(a => text(a, 300))
+      .filter(Boolean)
+    if (!id || !title) throw new Error('参数不正确')
+    const member = this.member(memberId)
+    if (!member || !c.memberIds.includes(memberId)) throw new Error('这个成员不在频道里')
+    const en = this.deps.locale() === 'en-US'
+    const parts = [en ? `@${member.name} Issue: ${title}` : `@${member.name} 事项：${title}`]
+    if (note) parts.push(note)
+    if (acceptance.length)
+      parts.push([en ? 'Acceptance criteria:' : '验收标准：', ...acceptance.map((a, i) => `${i + 1}. ${a}`)].join('\n'))
+    const { tasks } = await this.post(channelId, { text: parts.join('\n\n'), clientId: randomUUID() })
+    const taskId = tasks.find(t => this.store.task(t)?.assigneeId === memberId) ?? tasks[0]
+    if (!taskId) throw new Error('没有派出去：成员没接这项活')
+    this.patch(channelId, taskId, { issue: { id, title } })
+    // 等事项上写好卡片再返回：不然看板上「交给…」还能再点一次，派出两张卡
+    await this.syncIssueNow(taskId)
+    return { taskId }
   }
 
   /** 成员空出来了就开始它最早排队的那项活；还在忙就更新排队的「前面还有 N 项」 */

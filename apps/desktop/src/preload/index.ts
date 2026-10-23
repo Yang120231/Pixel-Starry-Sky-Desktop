@@ -312,6 +312,7 @@ const projectTools: ProjectToolsBridge = {
   runChecks: (ref, opts) => call('projectTools:runChecks', ref, opts),
   sessionChecks: ref => call('projectTools:sessionChecks', ref),
   setSessionChecks: (ref, on) => call('projectTools:setSessionChecks', ref, on),
+  syncIssue: (id, input) => call('projectTools:syncIssue', id, input),
   lastSessionCheck: sessionId => call('checks:last', sessionId),
   onSessionCheck: cb => {
     const listener = (_e: unknown, push: { sessionId: string; run: CheckRun | null }): void => cb(push)
@@ -481,6 +482,7 @@ const channels: ChannelsBridge = {
   pin: (id, messageId, pinned) => call('channels:pin', id, messageId, pinned),
   proposal: (id, messageId, accept) => call('channels:proposal', id, messageId, accept),
   alert: (id, messageId, action) => call('channels:alert', id, messageId, action),
+  dispatchIssue: (id, issue) => call('channels:dispatchIssue', id, issue),
   search: (text, opts) => call('channels:search', text, opts),
   saveMember: (channelId, input) => call('channels:saveMember', channelId, input),
   addMember: (channelId, memberId) => call('channels:addMember', channelId, memberId),

@@ -14,6 +14,7 @@ import type {
   ChannelNotify,
   ChannelsSnapshot,
   ChannelTaskAction,
+  IssueDispatch,
   JoinSessionInput,
   PendingInvite,
   RelayRules,
@@ -388,6 +389,45 @@ export const channelActions = {
       }
     }
     set({ messages: appendMessage(state.messages, message), ...keepReply })
+  },
+  /** 从频道页以外发一条消息（会话评论交给成员、事项派活）：不动输入框的引用回复 */
+  async postText(channelId: string, text: string, threadId: string | null = null): Promise<ChannelTextMessage | null> {
+    const body = text.trim()
+    if (!body) return null
+    if (channelsBridge) {
+      const { message } = await channelsBridge.post(channelId, {
+        text: body,
+        clientId: crypto.randomUUID(),
+        ...(threadId ? { threadId } : {}),
+      })
+      const list = state.messages[channelId]
+      if (list) set({ messages: { ...state.messages, [channelId]: upsertMessage(list, message) } })
+      return message
+    }
+    const self = selfMember(state)
+    const channel = state.channels.find(c => c.id === channelId)
+    if (!self || !channel) return null
+    const message = createMessage({
+      id: `local-${crypto.randomUUID()}`,
+      channelId,
+      authorId: self.id,
+      text: body,
+      replyToId: null,
+      members: state.members.filter(m => channel.memberIds.includes(m.id)),
+      now: Date.now(),
+    })
+    if (threadId) message.threadId = threadId
+    set({ messages: appendMessage(state.messages, message) })
+    return message
+  },
+  /** 把任务看板的事项交给频道成员（docs/ui/channels-collab-v2.md §9）：返回派出的任务卡 id；演示模式只发消息 */
+  async dispatchIssue(channelId: string, issue: IssueDispatch): Promise<string | null> {
+    if (channelsBridge) return (await channelsBridge.dispatchIssue(channelId, issue)).taskId
+    const member = state.members.find(m => m.id === issue.memberId)
+    const lines = [`@${member?.name ?? ''} ${tr('board.issue.chip', { title: issue.title })}`]
+    if (issue.note) lines.push(issue.note)
+    await channelActions.postText(channelId, lines.join('\n\n'))
+    return null
   },
   /** 一条消息带的图片和文件全文（演示模式只在本次运行的内存里） */
   attachments(channelId: string, messageId: string): Promise<ChannelAttachments> {

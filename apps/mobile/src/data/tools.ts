@@ -80,7 +80,8 @@ export type FileDocument =
   | { kind: 'image'; path: string; dataUrl: string; bytes: number }
   | { kind: 'unsupported'; path: string; reason: string; bytes: number }
 
-export type TaskStatus = 'pending' | 'in_progress' | 'completed'
+/** review = 待验收：交给 AI 成员的事项做完了，等你验收（桌面端 docs/ui/channels-collab-v2.md §9） */
+export type TaskStatus = 'pending' | 'in_progress' | 'review' | 'completed'
 
 export interface ManualTask {
   id: string

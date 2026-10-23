@@ -19,6 +19,7 @@ const openTask = (task: ManualTask): void => openTaskIn(task.projectId, task.id)
 const statusKey = {
   pending: 'projectTools.pending',
   in_progress: 'projectTools.inProgress',
+  review: 'projectTools.review',
   completed: 'projectTools.completed',
 } as const
 

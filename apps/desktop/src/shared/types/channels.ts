@@ -336,6 +336,18 @@ export interface ChannelTask extends ChannelMessageBase {
   relay?: ChannelRelay | null
   /** 做完后的产出检查（docs/ui/channels-collab-v2.md §8）：running 时还在跑；项目关了频道检查时没有 */
   checks?: CheckRun | null
+  /** 从任务看板的事项派出来的（docs/ui/channels-collab-v2.md §9）：卡片上显示「事项：标题」，状态写回事项 */
+  issue?: { id: string; title: string } | null
+}
+
+/** 把事项交给频道成员（channels:dispatchIssue） */
+export interface IssueDispatch {
+  /** 事项 id（远端机器上的带机器前缀） */
+  id: string
+  title: string
+  note: string
+  memberId: string
+  acceptance: string[]
 }
 
 /**

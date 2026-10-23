@@ -11,6 +11,7 @@ export const projectToolsMessages = {
   'projectTools.all': { zh: '全部', en: 'All' },
   'projectTools.pending': { zh: '待处理', en: 'Pending' },
   'projectTools.inProgress': { zh: '进行中', en: 'In progress' },
+  'projectTools.review': { zh: '待验收', en: 'To review' },
   'projectTools.completed': { zh: '已完成', en: 'Completed' },
   'projectTools.aiPlan': { zh: 'AI 计划', en: 'AI plan' },
   'projectTools.myTasks': { zh: '我的待办', en: 'My tasks' },

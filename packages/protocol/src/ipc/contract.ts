@@ -101,6 +101,7 @@ export const IPC_CONTRACT = {
   'channels:pin': { kind: 'invoke', route: 'local', trust: 'sender' },
   'channels:proposal': { kind: 'invoke', route: 'local', trust: 'sender' },
   'channels:alert': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'channels:dispatchIssue': { kind: 'invoke', route: 'local', trust: 'sender' },
   // 会话的「做完自动检查」结果（docs/ui/channels-collab-v2.md §8）：主进程按会话记最近一次，推给窗口
   'checks:last': { kind: 'invoke', route: 'local', trust: 'sender' },
   'checks:session': { kind: 'push', route: 'push', trust: 'none' },
@@ -1018,6 +1019,14 @@ export const IPC_CONTRACT = {
     route: 'resource',
     ids: [0],
     remote: 'projectTools:setSessionChecks',
+    trust: 'window',
+  },
+  // 事项派出去的卡片变了（docs/ui/channels-collab-v2.md §9）：主进程的频道服务调，窗口不用
+  'projectTools:syncIssue': {
+    kind: 'invoke',
+    route: 'resource',
+    ids: [0],
+    remote: 'projectTools:syncIssue',
     trust: 'window',
   },
   'projectTools:updateTask': {

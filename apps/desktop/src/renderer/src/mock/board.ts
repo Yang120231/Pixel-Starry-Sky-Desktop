@@ -47,6 +47,36 @@ export function demoBoardTasks(now: number): ManualTask[] {
       pinnedAt: now - DAY,
     }),
     task('b-island', 'pixel-desktop', '轮次跳转条在窄窗口下改成悬浮', { status: 'in_progress', tags: ['界面'] }),
+    // 事项（docs/ui/channels-collab-v2.md §9）：交给频道成员在做的、做完等验收的
+    task('b-form', 'pixel-web', '设置页迁移到新的表单组件', {
+      status: 'in_progress',
+      tags: ['界面'],
+      assignee: { channelId: 'c-web', memberId: 'a-frontend', name: '前端助手' },
+      acceptance: [
+        { text: '所有设置项都用新的表单组件', done: false },
+        { text: '键盘能走完整个表单', done: false },
+      ],
+      link: { channelId: 'c-web', taskId: 'web-t2', state: 'running', round: 1, checks: null, at: now - 600_000 },
+    }),
+    task('b-login', 'pixel-web', '登录页错误提示改成内联', {
+      status: 'review',
+      tags: ['界面'],
+      note: '密码错误、网络错误都显示在输入框下面',
+      assignee: { channelId: 'c-web', memberId: 'a-frontend', name: '前端助手' },
+      acceptance: [
+        { text: '密码错误显示在密码框下面', done: true },
+        { text: '网络错误能重试', done: false },
+        { text: '屏幕阅读器能读到错误', done: false },
+      ],
+      link: {
+        channelId: 'c-web',
+        taskId: 'web-t1',
+        state: 'done',
+        round: 1,
+        checks: { status: 'fail', problems: 2 },
+        at: now - 1_800_000,
+      },
+    }),
     task('b-draft', 'pixel-web', '草稿按会话保存，切换不丢', {
       status: 'completed',
       completedAt: now - 2 * 3_600_000,

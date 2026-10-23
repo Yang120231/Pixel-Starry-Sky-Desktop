@@ -31,6 +31,7 @@ const drafts = new Map<string, { editing: string | null; form: typeof blank; ori
 const statusKey = {
   pending: 'projectTools.pending',
   in_progress: 'projectTools.inProgress',
+  review: 'projectTools.review',
   completed: 'projectTools.completed',
 } as const
 
@@ -245,7 +246,7 @@ function TasksBody({ projectId, name, demo }: { projectId: string; name: string;
         <Select
           label={tr('projectTools.tasksTitle')}
           value={filter}
-          options={['all', 'pending', 'in_progress', 'completed'].map(id => ({
+          options={['all', 'pending', 'in_progress', 'review', 'completed'].map(id => ({
             value: id,
             label: id === 'all' ? tr('projectTools.all') : tr(statusKey[id as keyof typeof statusKey]),
           }))}
