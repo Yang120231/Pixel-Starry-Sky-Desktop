@@ -191,6 +191,8 @@ export interface Channel {
   archivedAt?: number | null
   /** 允许 AI 成员互相派活（docs/ui/import-collab.md 第 5 项①，§3.2 #4）：AI 回复里的 @成员 会派活；没写是关 */
   relay?: boolean
+  /** 互相派活什么时候停下等你（docs/ui/relay-limits-mockup.html）；没写按「标准」 */
+  relayRules?: RelayRules
   /** Phase C：团队频道属于哪个团队 */
   teamId?: string
   memberIds: string[]
@@ -275,7 +277,7 @@ export interface ChannelTask extends ChannelMessageBase {
   /** Phase C：AI 成员的主人（owner key）；只有主人能同意、回答、打开会话 */
   ownerId?: string
   /** Phase C：派活的人或主人点了取消 / 停止 / 重试，等主人那台电脑执行 */
-  pendingAction?: Exclude<ChannelTaskAction, 'continue'> | null
+  pendingAction?: Exclude<ChannelTaskAction, 'continue' | 'unlimit'> | null
   /** Phase C：主人的电脑不在线（queued 时显示「上线后开始」） */
   ownerOffline?: boolean
   /** AI 成员互相派活的一跳（authorId 是交活的成员）；held：超了防刷规则，停下等你点「继续」 */
@@ -284,18 +286,81 @@ export interface ChannelTask extends ChannelMessageBase {
 
 /**
  * AI 互相派活（docs/ui/import-collab.md 第 5 项①）：chain 是这条接力最早那张卡的 id，hop 从 1 数；
- * held = hops：这条链从你上次发言 / 点「继续」以来已经接了 6 跳；pair：同一对成员 10 分钟内已经互派 4 次
+ * held = hops：这条链从你上次发言 / 点「继续」以来接满了规定的跳数；pair：同一对成员规定时间内互派满了次数；
+ * duration：这条链从开始（或上次放行）以来运行满了规定时间。limit 是停下时的那个上限（跳数 / 次数 / 分钟），界面照着写
  */
 export interface ChannelRelay {
   chain: string
   hop: number
-  held?: 'hops' | 'pair' | null
+  held?: 'hops' | 'pair' | 'duration' | null
+  limit?: number
 }
 
-/** AI 互相派活的防刷规则：一条接力最多几跳；同一对成员多少分钟内最多互派几次（主进程判断，界面写进说明） */
-export const RELAY_HOPS = 6
-export const RELAY_PAIR = 4
-export const RELAY_WINDOW_MINUTES = 10
+/**
+ * 频道的接力规则（docs/ui/relay-limits-mockup.html）：到哪个上限就停下等你。null 是不限。
+ * hops：一条接力最多几跳；pair：同一对成员 windowMinutes 分钟内最多互派几次；maxMinutes：一条接力最长运行几分钟；
+ * notify：停下时 @你（按频道的提醒设置发系统通知）
+ */
+export interface RelayRules {
+  hops: number | null
+  pair: number | null
+  windowMinutes: number
+  maxMinutes: number | null
+  notify: boolean
+}
+
+export type RelayPreset = 'careful' | 'standard' | 'long'
+
+/** 谨慎是原来写死的规则；新建和原来的频道都按「标准」；长期任务不限次数、最长 4 小时 */
+export const RELAY_PRESETS: Readonly<Record<RelayPreset, RelayRules>> = {
+  careful: { hops: 6, pair: 4, windowMinutes: 10, maxMinutes: null, notify: true },
+  standard: { hops: 20, pair: 6, windowMinutes: 10, maxMinutes: null, notify: true },
+  long: { hops: null, pair: null, windowMinutes: 10, maxMinutes: 240, notify: true },
+}
+export const DEFAULT_RELAY_RULES: RelayRules = RELAY_PRESETS.standard
+/** 可选的互派计数时间窗口、最长运行（分钟） */
+export const RELAY_WINDOWS = [10, 30, 60] as const
+export const RELAY_DURATIONS = [30, 60, 240, 480, 1440] as const
+export const RELAY_HOPS_MAX = 200
+export const RELAY_PAIR_MAX = 100
+
+/** 频道生效的接力规则 */
+export function relayRulesOf(channel: { relayRules?: RelayRules | null }): RelayRules {
+  return channel.relayRules ?? DEFAULT_RELAY_RULES
+}
+
+/** 规则正好是哪个预设（不看 notify）；都不是为 null（自定义） */
+export function relayPresetOf(rules: RelayRules): RelayPreset | null {
+  const same = (a: RelayRules, b: RelayRules) =>
+    a.hops === b.hops &&
+    a.pair === b.pair &&
+    a.maxMinutes === b.maxMinutes &&
+    (a.pair === null || a.windowMinutes === b.windowMinutes)
+  return (Object.keys(RELAY_PRESETS) as RelayPreset[]).find(p => same(rules, RELAY_PRESETS[p])) ?? null
+}
+
+/** 检查并整理界面 / IPC 传来的规则；不对时抛中文错误 */
+export function cleanRelayRules(raw: unknown): RelayRules {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  const count = (v: unknown, max: number, label: string): number | null => {
+    if (v === null) return null
+    if (typeof v !== 'number' || !Number.isInteger(v) || v < 1 || v > max)
+      throw new Error(`${label}要在 1～${max} 之间`)
+    return v
+  }
+  const windowMinutes = r.windowMinutes
+  if (!RELAY_WINDOWS.includes(windowMinutes as never)) throw new Error('互派次数的时间窗口不对')
+  const maxMinutes = r.maxMinutes
+  if (maxMinutes !== null && !RELAY_DURATIONS.includes(maxMinutes as never)) throw new Error('最长运行时间不对')
+  if (typeof r.notify !== 'boolean') throw new Error('到上限时的提醒设置不对')
+  return {
+    hops: count(r.hops, RELAY_HOPS_MAX, '跳数'),
+    pair: count(r.pair, RELAY_PAIR_MAX, '互派次数'),
+    windowMinutes: windowMinutes as number,
+    maxMinutes: maxMinutes as number | null,
+    notify: r.notify,
+  }
+}
 
 export interface ChannelEvent extends ChannelMessageBase {
   kind: 'event'
@@ -399,4 +464,5 @@ export interface PostInput {
 }
 
 /** continue：放行被防刷规则拦下的那一跳 */
-export type ChannelTaskAction = 'cancel' | 'stop' | 'retry' | 'continue'
+/** continue：放行被拦下的接力（计数重新算）；unlimit：放行并且这条接力以后不再拦 */
+export type ChannelTaskAction = 'cancel' | 'stop' | 'retry' | 'continue' | 'unlimit'

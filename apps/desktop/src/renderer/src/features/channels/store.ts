@@ -16,6 +16,7 @@ import type {
   ChannelTaskAction,
   JoinSessionInput,
   PendingInvite,
+  RelayRules,
   TeamInfo,
   TeamRole,
   TeamsConnection,
@@ -329,6 +330,8 @@ export const channelActions = {
       archived?: boolean
       /** 允许 AI 成员互相派活（docs/ui/import-collab.md 第 5 项①） */
       relay?: boolean
+      /** 互相派活的停下规则（docs/ui/relay-limits-mockup.html） */
+      relayRules?: RelayRules
     },
   ): Promise<void> {
     if (channelsBridge) return channelsBridge.update(id, patch)
@@ -638,7 +641,7 @@ const demo = {
           : t,
       )
     // 演示：放行被拦下的接力（AI 成员不会真的做）
-    if (action === 'continue')
+    if (action === 'continue' || action === 'unlimit')
       demo.patchTask(taskId, t => (t.relay?.held ? { ...t, relay: { ...t.relay, held: null } } : t))
     return Promise.resolve()
   },

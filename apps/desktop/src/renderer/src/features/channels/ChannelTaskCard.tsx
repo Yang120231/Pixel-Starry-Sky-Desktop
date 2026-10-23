@@ -5,7 +5,10 @@ import { CircleCheck, CirclePause, CircleX, Clock, Hand, ShieldAlert, Unplug, ty
 import { Button, cn, DiffStat, Spinner, useToast } from '@/ui'
 import { canAnswerInline } from '@/features/panel/inbox/inboxModel'
 import type { ChannelMember, ChannelTask, ChannelTaskStatus } from '@/data/types'
-import { RELAY_HOPS, RELAY_PAIR, type ChannelTaskAction } from '../../../../shared/types/channels'
+import { RELAY_PRESETS, relayRulesOf, type ChannelTaskAction } from '../../../../shared/types/channels'
+import { ChannelDialog } from './ChannelDialogs'
+import { relayDuration } from './RelayRules'
+import { useChannels } from './store'
 import { formatClock } from './format'
 import { agentPlace } from './ChannelMessage'
 import { canApprove, canControlTask, canWithdraw, isMyTask } from './teamModel'
@@ -104,6 +107,12 @@ export function ChannelTaskCard({
   const place = agentPlace(assignee)
   // AI 互相派活被防刷规则拦下（docs/ui/import-collab.md 第 5 项①）：等你点「继续」或「到此为止」
   const held = task.status === 'queued' ? (task.relay?.held ?? null) : null
+  // 停下时的上限：老数据没记，按原来写死的规则（谨慎）；互派次数的时间窗口按频道现在的规则
+  const channel = useChannels(s => s.channels.find(c => c.id === task.channelId) ?? null)
+  const [editRules, setEditRules] = useState(false)
+  const careful = RELAY_PRESETS.careful
+  const limit = task.relay?.limit ?? (held === 'pair' ? careful.pair! : held === 'hops' ? careful.hops! : 0)
+  const window = relayDuration(channel ? relayRulesOf(channel).windowMinutes : careful.windowMinutes)
   const status = held
     ? { icon: CirclePause, className: 'text-warn' }
     : task.status === 'running'
@@ -138,6 +147,7 @@ export function ChannelTaskCard({
     .join(' · ')
   return (
     <div className="conversation-message mt-3 pl-10" data-channel-message={task.id}>
+      {editRules && channel && <ChannelDialog channel={channel} agents={[]} onClose={() => setEditRules(false)} />}
       <article
         aria-label={`${statusText(task, ownerName, mine)}：${task.title}`}
         className={cn(
@@ -210,8 +220,15 @@ export function ChannelTaskCard({
         {held && (
           <p data-relay-held={held} className="mt-1.5 text-meta break-words text-warn">
             {held === 'hops'
-              ? tr('channels.task.heldHops', { count: RELAY_HOPS })
-              : tr('channels.task.heldPair', { a: author?.name ?? '?', b: assignee?.name ?? '?', count: RELAY_PAIR })}
+              ? tr('channels.task.heldHops', { count: limit })
+              : held === 'duration'
+                ? tr('channels.task.heldDuration', { time: relayDuration(limit) })
+                : tr('channels.task.heldPair', {
+                    a: author?.name ?? '?',
+                    b: assignee?.name ?? '?',
+                    count: limit,
+                    window,
+                  })}
           </p>
         )}
         {task.decision && (
@@ -270,15 +287,32 @@ export function ChannelTaskCard({
                   disabled={busy}
                   onClick={() => run(() => onAction!(task.id, 'continue'))}
                 >
-                  {tr('channels.task.continue')}
+                  {held === 'hops'
+                    ? tr('channels.task.continueHops', { count: limit })
+                    : held === 'duration'
+                      ? tr('channels.task.continueDuration', { time: relayDuration(limit) })
+                      : tr('channels.task.continue')}
                 </Button>
                 <Button
+                  className="h-7 px-2.5 text-meta"
+                  disabled={busy}
+                  onClick={() => run(() => onAction!(task.id, 'unlimit'))}
+                >
+                  {tr('channels.task.unlimit')}
+                </Button>
+                <Button
+                  variant="ghost"
                   className="h-7 px-2.5 text-meta"
                   disabled={busy}
                   onClick={() => run(() => onAction!(task.id, 'cancel'))}
                 >
                   {tr('channels.task.stopRelay')}
                 </Button>
+                {channel && channel.scope === 'local' && (
+                  <Button variant="ghost" className="h-7 px-2.5 text-meta" onClick={() => setEditRules(true)}>
+                    {tr('channels.task.editRules')}
+                  </Button>
+                )}
               </>
             )}
             {live && task.status === 'queued' && !held && control && !pending && (

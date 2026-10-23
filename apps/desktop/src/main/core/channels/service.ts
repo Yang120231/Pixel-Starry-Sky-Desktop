@@ -42,7 +42,7 @@ import type {
   ChannelAttachments,
   TeamRole,
 } from '../../../shared/types/channels'
-import { RELAY_HOPS, RELAY_PAIR, RELAY_WINDOW_MINUTES } from '../../../shared/types/channels'
+import { cleanRelayRules, relayRulesOf, type RelayRules } from '../../../shared/types/channels'
 import {
   isReservedMentionName,
   mentionsAll,
@@ -88,11 +88,11 @@ const TOPIC_MAX = 200
 export const NOTES_MAX = 2000
 export const PIN_MAX = 10
 /**
- * AI 互相派活（docs/ui/import-collab.md 第 5 项①）：防刷规则的次数在 shared/types/channels.ts（界面也要写）；
- * 这里是时间窗口和一条回复最多交给几个成员
+ * AI 互相派活（docs/ui/import-collab.md 第 5 项①）：停下的规则按频道设置（shared/types/channels.ts 的 RelayRules）；
+ * 这里是一条回复最多交给几个成员、记几条「不再限制」的接力
  */
-const RELAY_WINDOW = RELAY_WINDOW_MINUTES * 60_000
 const RELAY_TARGETS = 3
+const RELAY_FREE_MAX = 50
 /** 交接时带上的上一项活的回复最多这么多字；派活要求（回复里 @ 到对方的那几段）最多这么多字 */
 const HANDOFF_CHARS = 4000
 const RELAY_REQUEST_CHARS = 2000
@@ -344,6 +344,7 @@ export class Channels {
         notify: c.notify ?? 'all',
         archivedAt: c.archivedAt ?? null,
         relay: c.relay === true,
+        relayRules: relayRulesOf(c),
         project: c.projectId ? (projects.get(c.projectId)?.name ?? null) : null,
         projectId: c.projectId,
         scope: 'local' as const,
@@ -577,6 +578,8 @@ export class Channels {
       archived?: boolean
       /** 允许 AI 成员互相派活（只有本机频道） */
       relay?: boolean
+      /** 互相派活的停下规则（只有本机频道） */
+      relayRules?: RelayRules
     },
   ): Promise<void> {
     const info = this.team?.channelInfo(id)
@@ -632,6 +635,8 @@ export class Channels {
       if (patch.relay && !c.relay) c.relayResetAt = this.now()
       c.relay = patch.relay
     }
+    const rulesChanged = patch.relayRules !== undefined
+    if (rulesChanged) c.relayRules = cleanRelayRules(patch.relayRules)
     // 归档时一并标为已读：收起来的频道不再算未读
     if (archiving) {
       c.archivedAt = this.now()
@@ -639,7 +644,20 @@ export class Channels {
       this.event(id, 'archived')
     }
     await this.store.saveChannel(c)
+    if (rulesChanged) this.releaseHeld(c)
     this.changed()
+  }
+
+  /** 改了接力规则：按新规则已经不该拦的接力直接放行（计数照旧，不清零） */
+  private releaseHeld(c: StoredChannel): void {
+    for (const run of this.store.runs.values()) {
+      if (run.channelId !== c.id || run.phase !== 'waiting') continue
+      const task = this.taskOf(run)
+      if (!task?.relay?.held) continue
+      if (this.relayHeld(c, task.relay.chain, task.authorId, task.assigneeId)) continue
+      this.patch(task.channelId, task.id, { relay: { ...task.relay, held: null, limit: undefined } })
+      void this.pump(run.memberId)
+    }
   }
 
   /** 删除频道：消息没了，开出来的会话保留；进行中的活照常做完，不再跟踪 */
@@ -1051,18 +1069,45 @@ export class Channels {
         }
     const chain = task.relay?.chain ?? task.id
     const hop = (task.relay?.hop ?? 0) + 1
-    let hops = this.chainHops(c, chain)
+    let extra = 0
     return [...targets].slice(0, RELAY_TARGETS).map(([target, list]) => {
-      const pair = this.pairRelays(c, run.memberId, target)
-      const held = hops >= RELAY_HOPS ? 'hops' : pair >= RELAY_PAIR ? 'pair' : null
-      if (!held) hops++
+      const stop = this.relayHeld(c, chain, run.memberId, target, extra)
+      if (!stop) extra++
       const text = list.join('\n\n')
       return {
         target,
         request: text.length > RELAY_REQUEST_CHARS ? `${text.slice(0, RELAY_REQUEST_CHARS)}…` : text,
-        relay: { chain, hop, held },
+        relay: { chain, hop, held: stop?.held ?? null, ...(stop ? { limit: stop.limit } : {}) },
       }
     })
+  }
+
+  /**
+   * 按频道的接力规则，这条接力再交一次（from 交给 to）要不要停下；不停为 null。
+   * extra：同一条回复里前面已经放行、还没存进消息的几跳
+   */
+  private relayHeld(
+    c: StoredChannel,
+    chain: string,
+    from: string,
+    to: string,
+    extra = 0,
+  ): { held: 'hops' | 'pair' | 'duration'; limit: number } | null {
+    if (c.relayFree?.includes(chain)) return null
+    const rules = relayRulesOf(c)
+    if (rules.hops !== null && this.chainHops(c, chain) + extra >= rules.hops)
+      return { held: 'hops', limit: rules.hops }
+    if (rules.pair !== null && this.pairRelays(c, from, to, rules.windowMinutes) >= rules.pair)
+      return { held: 'pair', limit: rules.pair }
+    if (rules.maxMinutes !== null && this.now() - this.chainStart(c, chain) >= rules.maxMinutes * 60_000)
+      return { held: 'duration', limit: rules.maxMinutes }
+    return null
+  }
+
+  /** 这条接力从什么时候算运行时间：最早那张卡派出的时间，或之后的计数起点（放行、你发言） */
+  private chainStart(c: StoredChannel, chain: string): number {
+    const first = (this.store.messages.get(c.id) ?? []).find(m => m.id === chain)
+    return Math.max(this.relaySince(c), first?.at ?? 0)
   }
 
   /** 防刷计数从这之后算：你上次在频道里发言、打开互相派活或放行被拦下的接力 */
@@ -1078,9 +1123,9 @@ export class Channels {
     ).length
   }
 
-  /** 两个成员之间 10 分钟内（且在计数起点之后）互派了几次（被拦下没放行的不算） */
-  private pairRelays(c: StoredChannel, a: string, b: string): number {
-    const since = Math.max(this.relaySince(c), this.now() - RELAY_WINDOW)
+  /** 两个成员之间 windowMinutes 分钟内（且在计数起点之后）互派了几次（被拦下没放行的不算） */
+  private pairRelays(c: StoredChannel, a: string, b: string, windowMinutes: number): number {
+    const since = Math.max(this.relaySince(c), this.now() - windowMinutes * 60_000)
     return (this.store.messages.get(c.id) ?? []).filter(
       m =>
         m.kind === 'task' &&
@@ -1414,7 +1459,8 @@ export class Channels {
             replyToId: task.id,
             taskId: task.id,
             // 要你决定、或接力被拦下等你放行：算 @你
-            mentions: patch.decision || relays.some(r => r.relay.held) ? [SELF_ID] : [],
+            mentions:
+              patch.decision || (relays.some(r => r.relay.held) && c && relayRulesOf(c).notify) ? [SELF_ID] : [],
           }
           if (c) {
             void this.store.append(result).catch(e => this.deps.log?.('保存频道消息失败', e))
@@ -1494,7 +1540,7 @@ export class Channels {
     // 团队卡：请求记在云端卡片上，由主人的电脑执行
     if (this.team?.card(taskId)) {
       // 团队频道没有 AI 互相派活，也就没有被拦下的接力
-      if (action === 'continue') return
+      if (action === 'continue' || action === 'unlimit') return
       await this.team.taskCall(taskId, teamId => this.team!.api.action(teamId, taskId, action))
       return
     }
@@ -1506,12 +1552,17 @@ export class Channels {
     const run = this.store.runs.get(taskId)
     const task = run?.team ? this.taskOf(run) : this.store.task(taskId)
     if (!task) throw new Error('任务不存在')
-    if (action === 'continue') {
-      // 放行被防刷规则拦下的接力：计数从现在重新算
+    if (action === 'continue' || action === 'unlimit') {
+      // 放行被接力规则拦下的接力：计数从现在重新算；unlimit 还把这条接力记成以后不再拦
       if (!task.relay?.held || run?.phase !== 'waiting') return
       const c = this.writable(task.channelId)
-      await this.store.saveChannel({ ...c, relayResetAt: this.now() })
-      this.patch(task.channelId, task.id, { relay: { ...task.relay, held: null } })
+      const chain = task.relay.chain
+      const free =
+        action === 'unlimit'
+          ? [...(c.relayFree ?? []).filter(x => x !== chain), chain].slice(-RELAY_FREE_MAX)
+          : c.relayFree
+      await this.store.saveChannel({ ...c, relayResetAt: this.now(), ...(free ? { relayFree: free } : {}) })
+      this.patch(task.channelId, task.id, { relay: { ...task.relay, held: null, limit: undefined } })
       void this.pump(run.memberId)
       return
     }

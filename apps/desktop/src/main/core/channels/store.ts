@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import type { AgentConfig, ChannelAttachments, ChannelMessage, ChannelTask } from '../../../shared/types/channels'
 import type { TaskRun } from './tracker'
 
-import type { ChannelNotify } from '../../../shared/types/channels'
+import type { ChannelNotify, RelayRules } from '../../../shared/types/channels'
 
 export interface StoredChannel {
   id: string
@@ -31,6 +31,10 @@ export interface StoredChannel {
   relay?: boolean
   /** 你最后一次在频道里发言、或放行被拦下的接力的时间：防刷计数从这之后算 */
   relayResetAt?: number | null
+  /** 接力规则；旧数据没有（= 标准） */
+  relayRules?: RelayRules
+  /** 点过「这条接力不再限制」的接力（chain），最近的在后 */
+  relayFree?: string[]
   createdAt: number
   /** 看到哪里了：这之后别人发的算未读 */
   readAt: number

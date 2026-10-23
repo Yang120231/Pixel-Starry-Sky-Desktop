@@ -9,10 +9,11 @@ import { useEngineState, PERMISSION_INFO } from '@/features/engine'
 import { useEngineCatalog } from '@/features/engine/catalog'
 import { useMachines } from '@/features/machines/store'
 import type { AgentMember, Channel } from '@/data/types'
-import type { AgentConfig } from '../../../../shared/types/channels'
+import { DEFAULT_RELAY_RULES, relayRulesOf, type AgentConfig, type RelayRules } from '../../../../shared/types/channels'
 import type { WorkspaceChoice } from '../../../../shared/types/machines'
 import { channelActions, useChannels } from './store'
 import { matchAgents } from './model'
+import { RelayRulesEditor } from './RelayRules'
 import { usePlatformCatalog } from '@/features/account/platform'
 import { useProviders } from '@/features/account/providers'
 import { channelLabel } from '@/features/model-channels/channelLabels'
@@ -98,6 +99,8 @@ export function ChannelDialog({
   const [members, setMembers] = useState<string[]>([])
   const [memberQuery, setMemberQuery] = useState('')
   const [relay, setRelay] = useState(channel?.relay === true)
+  const savedRules = channel ? relayRulesOf(channel) : DEFAULT_RELAY_RULES
+  const [rules, setRules] = useState<RelayRules>(savedRules)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const toast = useToast()
@@ -107,6 +110,7 @@ export function ChannelDialog({
     topic !== (channel?.topic ?? '') ||
     notes !== (channel?.notes ?? '') ||
     relay !== (channel?.relay === true) ||
+    JSON.stringify(rules) !== JSON.stringify(savedRules) ||
     members.length > 0
   const submit = () => {
     if (!name.trim() || busy) return
@@ -119,14 +123,14 @@ export function ChannelDialog({
     const done = channel
       ? channelActions.updateChannel(
           channel.id,
-          inTeam ? { name, topic: input.topic } : { ...input, notes: note, relay },
+          inTeam ? { name, topic: input.topic } : { ...input, notes: note, relay, relayRules: rules },
         )
       : channelActions
           .createChannel(teamId ? { ...input, teamId } : { ...input, memberIds: members })
           .then(id =>
             (note || relay) && !teamId
               ? channelActions
-                  .updateChannel(id, { notes: note, ...(relay ? { relay } : {}) })
+                  .updateChannel(id, { notes: note, ...(relay ? { relay, relayRules: rules } : {}) })
                   .catch(e => toast(tr('channels.dialog.notesFailed', { error: errorText(e) })))
               : undefined,
           )
@@ -188,6 +192,7 @@ export function ChannelDialog({
               </span>
             </label>
           )}
+          {!inTeam && relay && <RelayRulesEditor value={rules} onChange={setRules} />}
           {inTeam ? (
             teamName && <p className="text-meta text-fg-faint">{tr('team.channel.inTeam', { name: teamName })}</p>
           ) : (

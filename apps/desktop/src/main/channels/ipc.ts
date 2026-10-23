@@ -30,7 +30,7 @@ const str = (value: unknown, what: string): string => {
   if (typeof value !== 'string' || !value) throw new Error(`${what}不正确`)
   return value
 }
-const ACTIONS = new Set<ChannelTaskAction>(['cancel', 'stop', 'retry', 'continue'])
+const ACTIONS = new Set<ChannelTaskAction>(['cancel', 'stop', 'retry', 'continue', 'unlimit'])
 const INVITE_ROLES = new Set<Exclude<TeamRole, 'owner'>>(['member', 'observer'])
 const POLICIES = new Set<AgentPolicy>(['approve', 'team'])
 const role = (value: unknown): Exclude<TeamRole, 'owner'> => {

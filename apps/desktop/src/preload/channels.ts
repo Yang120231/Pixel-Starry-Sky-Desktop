@@ -12,6 +12,7 @@ import type {
   ChannelTaskAction,
   ChannelTextMessage,
   PostInput,
+  RelayRules,
   TeamRole,
 } from '../shared/types/channels'
 
@@ -38,6 +39,8 @@ export interface ChannelsBridge {
       archived?: boolean
       /** 允许 AI 成员互相派活（docs/ui/import-collab.md 第 5 项①） */
       relay?: boolean
+      /** 互相派活的停下规则（docs/ui/relay-limits-mockup.html） */
+      relayRules?: RelayRules
     },
   ): Promise<void>
   /** 置顶 / 取消置顶一条文字消息（docs/ui/channels-local-ai.md §3.1 #9） */

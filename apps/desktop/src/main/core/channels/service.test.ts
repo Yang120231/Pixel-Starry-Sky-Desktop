@@ -3,7 +3,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { EngineEvent, HostEvent, ProjectRecord, SessionSnapshot, SessionSummary } from '@pixelsky/protocol'
-import type { AgentInput, ChannelTask, ChannelTextMessage } from '../../../shared/types/channels'
+import {
+  RELAY_PRESETS,
+  type AgentInput,
+  type ChannelTask,
+  type ChannelTextMessage,
+} from '../../../shared/types/channels'
 import { ChannelStore } from './store'
 import { Channels, SELF_ID, type MachineLite } from './service'
 
@@ -594,7 +599,7 @@ describe('协作频道：AI 互相派活（docs/ui/import-collab.md 第 5 项①
     const a = await c.saveMember(null, agent('前端助手'))
     const b = await c.saveMember(null, agent('审查员'))
     const channelId = await c.create({ name: 'ch', memberIds: [a, b] })
-    await c.update(channelId, { relay: true })
+    await c.update(channelId, { relay: true, relayRules: RELAY_PRESETS.careful })
     await c.post(channelId, { text: '@前端助手 改按钮', clientId: '1' })
     await settle()
     // 前端助手和审查员轮流做，每次都交给对方
@@ -624,7 +629,7 @@ describe('协作频道：AI 互相派活（docs/ui/import-collab.md 第 5 项①
     const a = await c.saveMember(null, agent('前端助手'))
     const b = await c.saveMember(null, agent('审查员'))
     const channelId = await c.create({ name: 'ch', memberIds: [a, b] })
-    await c.update(channelId, { relay: true })
+    await c.update(channelId, { relay: true, relayRules: RELAY_PRESETS.careful })
     await c.post(channelId, { text: '@前端助手 改按钮', clientId: '1' })
     await settle()
     const other = (i: number) => (i % 2 ? '@前端助手 再改改' : '@审查员 请看看')
@@ -643,7 +648,7 @@ describe('协作频道：AI 互相派活（docs/ui/import-collab.md 第 5 项①
     ]
     const names = ['甲', '乙', '丙']
     const channelId = await c.create({ name: 'ch', memberIds: ids })
-    await c.update(channelId, { relay: true })
+    await c.update(channelId, { relay: true, relayRules: RELAY_PRESETS.careful })
     await c.post(channelId, { text: '@甲 开始', clientId: '1' })
     await settle()
     // 甲 → 乙 → 丙 → 甲 → 乙 → 丙 → 甲：6 跳，每一对都只有 2 次
@@ -660,6 +665,81 @@ describe('协作频道：AI 互相派活（docs/ui/import-collab.md 第 5 项①
     await settle()
     expect(tasks(c, channelId).at(-1)).toMatchObject({ status: 'stopped', note: 'cancelled' })
     expect(engine.sends()).toHaveLength(sent)
+  })
+
+  it('接力规则：没设过的频道按「标准」；规则不对时报错', async () => {
+    const c = await open()
+    const channelId = await c.create({ name: 'ch' })
+    expect(c.state().channels[0].relayRules).toEqual(RELAY_PRESETS.standard)
+    await c.update(channelId, { relayRules: RELAY_PRESETS.long })
+    expect(c.state().channels[0].relayRules).toEqual(RELAY_PRESETS.long)
+    await expect(c.update(channelId, { relayRules: { ...RELAY_PRESETS.long, hops: 0 } })).rejects.toThrow('跳数')
+    await expect(c.update(channelId, { relayRules: { ...RELAY_PRESETS.long, windowMinutes: 7 } })).rejects.toThrow(
+      '时间窗口',
+    )
+  })
+
+  it('跳数、互派不限时运行满最长时间停下（记下上限）；不提醒时不算 @你', async () => {
+    const c = await open()
+    const a = await c.saveMember(null, agent('前端助手'))
+    const b = await c.saveMember(null, agent('审查员'))
+    const channelId = await c.create({ name: 'ch', memberIds: [a, b] })
+    await c.update(channelId, { relay: true, relayRules: { ...RELAY_PRESETS.long, maxMinutes: 30, notify: false } })
+    await c.post(channelId, { text: '@前端助手 改按钮', clientId: '1' })
+    await settle()
+    const other = (i: number) => (i % 2 ? '@前端助手 再改改' : '@审查员 请看看')
+    // 不限次数：互派 10 次也不停
+    for (let i = 0; i < 10; i++) await finishLast(c, other(i))
+    expect(tasks(c, channelId).at(-1)).toMatchObject({ relay: { hop: 10, held: null } })
+    now += 31 * 60_000
+    await finishLast(c, other(10))
+    expect(tasks(c, channelId).at(-1)).toMatchObject({
+      status: 'queued',
+      relay: { hop: 11, held: 'duration', limit: 30 },
+    })
+    expect(texts(c, channelId).at(-1)?.mentions).toEqual([])
+  })
+
+  it('「这条接力不再限制」：放行，之后这条接力不再拦；改宽规则时已经停下的直接放行', async () => {
+    const c = await open()
+    const a = await c.saveMember(null, agent('前端助手'))
+    const b = await c.saveMember(null, agent('审查员'))
+    const channelId = await c.create({ name: 'ch', memberIds: [a, b] })
+    await c.update(channelId, { relay: true, relayRules: { ...RELAY_PRESETS.careful, hops: 2, pair: null } })
+    await c.post(channelId, { text: '@前端助手 改按钮', clientId: '1' })
+    await settle()
+    const other = (i: number) => (i % 2 ? '@前端助手 再改改' : '@审查员 请看看')
+    for (let i = 0; i < 3; i++) await finishLast(c, other(i))
+    const held = tasks(c, channelId).at(-1)!
+    expect(held).toMatchObject({ relay: { hop: 3, held: 'hops', limit: 2 } })
+    await c.taskAction(held.id, 'unlimit')
+    await settle()
+    expect(tasks(c, channelId).at(-1)).toMatchObject({ relay: { hop: 3, held: null }, sessionId: expect.any(String) })
+    for (let i = 3; i < 8; i++) await finishLast(c, other(i))
+    expect(tasks(c, channelId).at(-1)).toMatchObject({ relay: { hop: 8, held: null } })
+  })
+
+  it('把接力规则改宽：已经停下、按新规则不该拦的接力直接放行', async () => {
+    const c = await open()
+    const a = await c.saveMember(null, agent('前端助手'))
+    const b = await c.saveMember(null, agent('审查员'))
+    const channelId = await c.create({ name: 'ch', memberIds: [a, b] })
+    await c.update(channelId, { relay: true, relayRules: { ...RELAY_PRESETS.careful, hops: 2, pair: null } })
+    await c.post(channelId, { text: '@前端助手 改按钮', clientId: '1' })
+    await settle()
+    const other = (i: number) => (i % 2 ? '@前端助手 再改改' : '@审查员 请看看')
+    for (let i = 0; i < 3; i++) await finishLast(c, other(i))
+    const held = tasks(c, channelId).at(-1)!
+    expect(held).toMatchObject({ relay: { hop: 3, held: 'hops' } })
+    const sent = engine.sends().length
+    // 只改提醒：还是 2 跳，照样停着
+    await c.update(channelId, { relayRules: { ...RELAY_PRESETS.careful, hops: 2, pair: null, notify: false } })
+    await settle()
+    expect(tasks(c, channelId).at(-1)).toMatchObject({ relay: { held: 'hops' } })
+    await c.update(channelId, { relayRules: RELAY_PRESETS.standard })
+    await settle()
+    expect(tasks(c, channelId).at(-1)).toMatchObject({ id: held.id, relay: { held: null } })
+    expect(engine.sends().length).toBe(sent + 1)
   })
 })
 
