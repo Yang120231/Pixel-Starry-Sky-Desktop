@@ -12,6 +12,7 @@ import type { AgentMember, Channel } from '@/data/types'
 import type { AgentConfig } from '../../../../shared/types/channels'
 import type { WorkspaceChoice } from '../../../../shared/types/machines'
 import { channelActions, useChannels } from './store'
+import { matchAgents } from './model'
 import { usePlatformCatalog } from '@/features/account/platform'
 import { useProviders } from '@/features/account/providers'
 import { channelLabel } from '@/features/model-channels/channelLabels'
@@ -65,6 +66,9 @@ function useProjectOptions(): SelectOption<string>[] {
 // 频道
 // ---------------------------------------------------------------------------
 
+/** 新建频道时 AI 成员超过这么多个，列表上面多一个搜索框 */
+const MEMBER_SEARCH_MIN = 8
+
 /** 新建频道（channel 为空）或编辑频道的名字、主题、默认项目 */
 export function ChannelDialog({
   channel,
@@ -92,6 +96,7 @@ export function ChannelDialog({
   const [notes, setNotes] = useState(channel?.notes ?? '')
   const [projectId, setProjectId] = useState<string>(channel ? (channel.projectId ?? '') : (currentProject ?? ''))
   const [members, setMembers] = useState<string[]>([])
+  const [memberQuery, setMemberQuery] = useState('')
   const [relay, setRelay] = useState(channel?.relay === true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -198,22 +203,60 @@ export function ChannelDialog({
             </div>
           )}
           {!channel && !inTeam && agents.length > 0 && (
-            <fieldset className="flex flex-col gap-1">
-              <legend className="mb-1.5 text-meta font-medium text-fg-muted">{tr('channels.dialog.members')}</legend>
-              {agents.map(a => (
-                <label key={a.id} className="flex h-8 items-center gap-2 rounded-md px-1 hover:bg-hover">
-                  <input
-                    type="checkbox"
-                    checked={members.includes(a.id)}
-                    onChange={e =>
-                      setMembers(list => (e.target.checked ? [...list, a.id] : list.filter(id => id !== a.id)))
-                    }
-                  />
-                  <EngineIcon engine={a.engine} size={14} />
-                  <span className="min-w-0 truncate text-list text-fg">{a.name}</span>
-                  {a.project && <span className="ml-auto shrink-0 text-meta text-fg-faint">{a.project}</span>}
-                </label>
-              ))}
+            <fieldset aria-label={tr('channels.dialog.members')} className="flex flex-col gap-1.5">
+              {/* 成员多时不把弹窗撑开：列表在框里滚动（约 6 行），超过 8 个可以搜（docs/ui/channel-dialog-overflow-mockup.html） */}
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-meta font-medium text-fg-muted">
+                  {tr('channels.dialog.members')}
+                  {members.length > 0 && (
+                    <span className="ml-1.5 font-normal text-fg-faint">
+                      {tr('channels.dialog.membersPicked', { n: members.length })}
+                    </span>
+                  )}
+                </span>
+                {members.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setMembers([])}
+                    className="press text-meta text-accent-fg hover:underline"
+                  >
+                    {tr('channels.dialog.membersClear')}
+                  </button>
+                )}
+              </div>
+              {agents.length > MEMBER_SEARCH_MIN && (
+                <input
+                  value={memberQuery}
+                  onChange={e => setMemberQuery(e.target.value)}
+                  // 在搜索框里回车不提交表单（不然一回车就建好了频道）
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') e.preventDefault()
+                  }}
+                  placeholder={tr('channels.dialog.membersSearch')}
+                  aria-label={tr('channels.dialog.membersSearch')}
+                  spellCheck={false}
+                  className="h-8 rounded-md border border-line bg-subtle px-2.5 text-meta text-fg outline-none placeholder:text-fg-faint focus:border-line-strong focus:bg-surface"
+                />
+              )}
+              <div className="flex max-h-[212px] flex-col gap-0.5 overflow-y-auto rounded-lg border border-line-card p-1 [scrollbar-width:thin]">
+                {matchAgents(agents, memberQuery).length === 0 && (
+                  <p className="px-1.5 py-1.5 text-meta text-fg-faint">{tr('channels.dialog.membersNoMatch')}</p>
+                )}
+                {matchAgents(agents, memberQuery).map(a => (
+                  <label key={a.id} className="flex h-8 shrink-0 items-center gap-2 rounded-md px-1.5 hover:bg-hover">
+                    <input
+                      type="checkbox"
+                      checked={members.includes(a.id)}
+                      onChange={e =>
+                        setMembers(list => (e.target.checked ? [...list, a.id] : list.filter(id => id !== a.id)))
+                      }
+                    />
+                    <EngineIcon engine={a.engine} size={14} />
+                    <span className="min-w-0 truncate text-list text-fg">{a.name}</span>
+                    {a.project && <span className="ml-auto shrink-0 text-meta text-fg-faint">{a.project}</span>}
+                  </label>
+                ))}
+              </div>
             </fieldset>
           )}
           <button type="submit" hidden />

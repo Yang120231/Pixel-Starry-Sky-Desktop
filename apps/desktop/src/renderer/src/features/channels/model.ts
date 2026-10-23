@@ -1,5 +1,6 @@
 // 协作频道的纯函数（docs/ui/channels.md §5–§6）。不依赖 window，可以直接单测。
 import type {
+  AgentMember,
   Channel,
   ChannelEvent,
   ChannelMember,
@@ -201,4 +202,11 @@ export function createMessage(input: {
     replyToId: input.replyToId ?? null,
     mentions,
   }
+}
+
+/** 新建频道时按名字、项目筛 AI 成员（不分大小写）；空查询全部 */
+export function matchAgents<T extends Pick<AgentMember, 'name' | 'project'>>(agents: readonly T[], query: string): T[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return [...agents]
+  return agents.filter(a => a.name.toLowerCase().includes(q) || (a.project ?? '').toLowerCase().includes(q))
 }

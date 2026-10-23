@@ -112,21 +112,25 @@ export function ConfirmDialog({
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
         tabIndex={-1}
-        className="pop-in w-full max-w-md rounded-xl border border-line-card bg-popover p-5 text-fg shadow-popover outline-none"
+        // 最高到窗口高度（外层留了 p-4）：标题和按钮固定，内容多了在中间滚动，不会把弹窗撑出窗口
+        className="pop-in flex max-h-full w-full max-w-md flex-col rounded-xl border border-line-card bg-popover p-5 text-fg shadow-popover outline-none"
       >
-        <h3 id={titleId} className="break-words text-section font-semibold">
+        <h3 id={titleId} className="shrink-0 break-words text-section font-semibold">
           {title}
         </h3>
-        <div id={descriptionId} className="mt-3 text-list leading-relaxed text-fg-secondary">
+        <div
+          id={descriptionId}
+          className="-mx-1 mt-3 min-h-0 overflow-y-auto px-1 text-list leading-relaxed text-fg-secondary [scrollbar-width:thin]"
+        >
           {description}
         </div>
         {error && (
-          <p role="alert" className="mt-3 break-words text-meta text-danger">
+          <p role="alert" className="mt-3 shrink-0 break-words text-meta text-danger">
             {error}
           </p>
         )}
         {asking && <DiscardBar onKeep={() => setAsking(false)} onDiscard={onCancel} />}
-        <div className="mt-5 flex flex-wrap justify-end gap-2">
+        <div className="mt-5 flex shrink-0 flex-wrap justify-end gap-2">
           <button
             ref={cancel}
             disabled={busy}
