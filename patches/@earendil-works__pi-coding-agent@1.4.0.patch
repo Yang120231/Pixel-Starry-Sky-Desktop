@@ -1,5 +1,5 @@
 diff --git a/dist/cli/args.js b/dist/cli/args.js
-index ec17d54377ea8ff8d27a338069809cc9f91e46d2..7bf4829fc8f0633a7f15a973e4e83cd98f4dc3e8 100644
+index ec17d54..7bf4829 100644
 --- a/dist/cli/args.js
 +++ b/dist/cli/args.js
 @@ -280,15 +280,11 @@ ${chalk.bold("Usage:")}
@@ -20,7 +20,7 @@ index ec17d54377ea8ff8d27a338069809cc9f91e46d2..7bf4829fc8f0633a7f15a973e4e83cd9
  ${chalk.bold("Options:")}
    --provider <name>              Provider to search for --model (requires --model)
 diff --git a/dist/core/slash-commands.js b/dist/core/slash-commands.js
-index 25cc1c504fc52f91dae19cabf27221e3c459e46d..af863e6296ba4b4252bf6717943f767c7e391be2 100644
+index 25cc1c5..af863e6 100644
 --- a/dist/core/slash-commands.js
 +++ b/dist/core/slash-commands.js
 @@ -1,4 +1,5 @@
@@ -48,7 +48,7 @@ index 25cc1c504fc52f91dae19cabf27221e3c459e46d..af863e6296ba4b4252bf6717943f767c
      { name: "new", description: "Start a new session" },
      { name: "compact", description: "Manually compact the session context" },
 diff --git a/dist/extensions/mcp/index.js b/dist/extensions/mcp/index.js
-index 8ebc6df8ab912f6af3ebb1a4446dcb1e285af77f..0457a94ba68ab8fb47fe6f1ea12c4cac59c58a57 100644
+index 8ebc6df..aea3773 100644
 --- a/dist/extensions/mcp/index.js
 +++ b/dist/extensions/mcp/index.js
 @@ -244,6 +244,76 @@ export function createMcpExtension(options = {}) {
@@ -129,7 +129,7 @@ index 8ebc6df8ab912f6af3ebb1a4446dcb1e285af77f..0457a94ba68ab8fb47fe6f1ea12c4cac
          const registeredServers = () => {
              const registered = [];
 diff --git a/dist/modes/interactive/interactive-mode.js b/dist/modes/interactive/interactive-mode.js
-index d2343a5bb53c9d9ab8060e0a242f561da2cbfd3a..285cbec1726f59dc7775acb12792a7171f51a358 100644
+index 5303aad..e69be78 100644
 --- a/dist/modes/interactive/interactive-mode.js
 +++ b/dist/modes/interactive/interactive-mode.js
 @@ -658,7 +658,7 @@ export class InteractiveMode {
@@ -141,7 +141,7 @@ index d2343a5bb53c9d9ab8060e0a242f561da2cbfd3a..285cbec1726f59dc7775acb12792a717
          if (this.session.scopedModels.length > 0 && this.shouldShowStartupDetails()) {
              const modelList = this.session.scopedModels
                  .map((sm) => {
-@@ -2544,6 +2544,17 @@ export class InteractiveMode {
+@@ -2503,6 +2503,17 @@ export class InteractiveMode {
              text = text.trim();
              if (!text)
                  return;
@@ -160,10 +160,10 @@ index d2343a5bb53c9d9ab8060e0a242f561da2cbfd3a..285cbec1726f59dc7775acb12792a717
              if (text === "/settings") {
                  this.showSettingsSelector();
 diff --git a/dist/utils/tools-manager.js b/dist/utils/tools-manager.js
-index 39b1f1ae3357925c68127b580340208c5d557ed9..77e24475735e8ead0ed997a8e1cebd18f4b12307 100644
+index fdb4a12..4d21d0b 100644
 --- a/dist/utils/tools-manager.js
 +++ b/dist/utils/tools-manager.js
-@@ -305,6 +305,11 @@ export async function ensureTool(tool, onStatus) {
+@@ -306,6 +306,11 @@ export async function ensureTool(tool, onStatus) {
      const config = TOOLS[tool];
      if (!config)
          return undefined;
@@ -176,7 +176,7 @@ index 39b1f1ae3357925c68127b580340208c5d557ed9..77e24475735e8ead0ed997a8e1cebd18
          onStatus?.({ type: "warning", message: `${config.name} not found. Offline mode enabled, skipping download.` });
          return undefined;
 diff --git a/package.json b/package.json
-index a23911cbf3c88f6c73aecdbb14251a9071e5a472..c5d6629053530cbd02b16ab8db66d26a33e00c66 100644
+index e0955b0..dc6f824 100644
 --- a/package.json
 +++ b/package.json
 @@ -4,7 +4,8 @@
