@@ -206,6 +206,41 @@ describe('像素星空子智能体 → 智能体追踪', () => {
     })
     expect(transcriptItems(join(root, 'missing.jsonl'), '/proj')).toEqual([])
   })
+
+  it('子智能体读到的图片：追踪窗口的工具条目带上图片', () => {
+    const file = join(root, 'child-image.jsonl')
+    writeFileSync(
+      file,
+      jsonl([
+        {
+          type: 'message',
+          id: 'm1',
+          message: {
+            role: 'assistant',
+            content: [{ type: 'toolCall', id: 'k1', name: 'read', arguments: { path: '/proj/a.png' } }],
+          },
+        },
+        {
+          type: 'message',
+          id: 'm2',
+          message: {
+            role: 'toolResult',
+            toolCallId: 'k1',
+            content: [
+              { type: 'text', text: 'Read image file [image/png]' },
+              { type: 'image', data: 'iVBORw0KGgo=', mimeType: 'image/png' },
+            ],
+          },
+        },
+      ]),
+    )
+    const [item] = transcriptItems(file, '/proj')
+    expect(item).toMatchObject({
+      kind: 'tool',
+      status: 'completed',
+      images: [{ id: `${item.id}-img0`, mediaType: 'image/png', dataBase64: 'iVBORw0KGgo=' }],
+    })
+  })
 })
 
 function runsFromSessionRows(rows: Array<Record<string, unknown>>) {

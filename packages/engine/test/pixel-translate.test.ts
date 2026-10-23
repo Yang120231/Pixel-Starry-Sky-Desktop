@@ -99,6 +99,30 @@ describe('Pixel 事件翻译', () => {
     expect(events.map(e => e.type)).toEqual(['item_started', 'item_delta', 'item_delta', 'item_started'])
     expect(events[2]).toMatchObject({ delta: 'c' })
   })
+  it('read 读到图片：工具条目带上图片，能在对话里点开看；不认识的类型和出错的结果不带', () => {
+    const { t, events } = setup()
+    const content = [
+      { type: 'text', text: 'Read image file [image/png]' },
+      { type: 'image', data: 'iVBORw0KGgo=', mimeType: 'image/png' },
+      { type: 'image', data: 'AAAA', mimeType: 'image/bmp' },
+    ]
+    t.event({ type: 'tool_execution_start', toolCallId: 'c', toolName: 'read', args: { path: '/proj/a.png' } })
+    t.event({ type: 'tool_execution_end', toolCallId: 'c', toolName: 'read', result: { content }, isError: false })
+    const done = events.filter(e => e.type === 'item_completed').pop()
+    expect(done).toMatchObject({
+      item: {
+        kind: 'tool',
+        output: 'Read image file [image/png]\n[图片]\n[图片]',
+        images: [{ mediaType: 'image/png', dataBase64: 'iVBORw0KGgo=', bytes: 9 }],
+      },
+    })
+    const item = (done as Extract<EngineEvent, { type: 'item_completed' }>).item
+    expect(item.kind === 'tool' && item.images?.map(i => i.id)).toEqual([`${item.id}-img0`])
+
+    t.event({ type: 'tool_execution_start', toolCallId: 'd', toolName: 'read', args: { path: '/proj/b.png' } })
+    t.event({ type: 'tool_execution_end', toolCallId: 'd', toolName: 'read', result: { content }, isError: true })
+    expect(events.filter(e => e.type === 'item_completed').pop()).not.toHaveProperty('item.images')
+  })
   it('压缩：start/end 生成条目并给出压缩前后大小', () => {
     const { t, events } = setup()
     t.event({ type: 'compaction_start', reason: 'manual' })

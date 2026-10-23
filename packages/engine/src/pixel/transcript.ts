@@ -2,7 +2,7 @@
 import type { Item } from '@pixelsky/protocol'
 import { entries } from './agents'
 import { array, object, string } from './process'
-import { toolItem } from './translate'
+import { resultImages, toolItem } from './translate'
 
 function textOf(content: unknown): string {
   if (typeof content === 'string') return content
@@ -46,8 +46,10 @@ export function transcriptItems(file: string, cwd: string): Item[] {
       const status = failed ? (/denied|blocked/i.test(output) ? 'declined' : 'failed') : 'completed'
       if (prior.kind === 'command')
         items[index] = { ...prior, output, exitCode: failed ? (status === 'declined' ? null : 1) : 0, status }
-      else if (prior.kind === 'tool') items[index] = { ...prior, output: prior.output || output, status }
-      else if ('status' in prior) items[index] = { ...prior, status } as Item
+      else if (prior.kind === 'tool') {
+        const images = failed ? [] : resultImages(m, prior.id)
+        items[index] = { ...prior, output: prior.output || output, status, ...(images.length ? { images } : {}) }
+      } else if ('status' in prior) items[index] = { ...prior, status } as Item
     }
   }
   // 没等到结果的工具（子智能体被停掉）

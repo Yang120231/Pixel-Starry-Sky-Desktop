@@ -7,6 +7,7 @@ import type {
   ApprovalRequest,
   EngineEvent,
   FileChange,
+  ImageAttachment,
   Item,
   ItemStatus,
   ModelTurnUsage,
@@ -15,8 +16,8 @@ import type {
   ToolKind,
   TurnUsage,
 } from '@pixelsky/protocol'
-import { IMAGE_PLACEHOLDER, httpStatusOf, noticeErrorOf } from '@pixelsky/protocol'
-import { displayPath } from '../claude/tools'
+import { IMAGE_MEDIA_TYPES, IMAGE_PLACEHOLDER, httpStatusOf, noticeErrorOf } from '@pixelsky/protocol'
+import { MAX_RESULT_IMAGES, displayPath } from '../claude/tools'
 import { diffAdded, diffText } from '../diff'
 import { MAX_OUTPUT, clip } from '../output'
 import { cut } from '../text'
@@ -49,6 +50,30 @@ export function resultText(result: unknown): string {
     })
     .filter(Boolean)
     .join('\n')
+}
+
+/** 工具结果里的图片（例如 read 了一张图片）：对话里显示缩略图，点开看大图；超出总量的仍只显示「[图片]」 */
+export function resultImages(result: unknown, id: string): ImageAttachment[] {
+  const images: ImageAttachment[] = []
+  let total = 0
+  for (const block of array(object(result).content)) {
+    const b = object(block)
+    const mediaType = string(b.mimeType) as ImageAttachment['mediaType']
+    const data = string(b.data)
+    if (b.type !== 'image' || !IMAGE_MEDIA_TYPES.includes(mediaType) || !data) continue
+    if (total + data.length > MAX_RESULT_IMAGES) continue
+    total += data.length
+    images.push({
+      id: `${id}-img${images.length}`,
+      name: '',
+      mediaType,
+      bytes: Math.floor((data.length * 3) / 4),
+      width: 0,
+      height: 0,
+      dataBase64: data,
+    })
+  }
+  return images
 }
 
 /** 批准扩展拒绝 / 用户拒绝 / 计划模式拦下的工具调用：显示成「已拒绝」，不算失败 */
@@ -671,7 +696,13 @@ export class PixelTranslator {
       // 子智能体被停止时工具不算出错，条目要跟着运行记录记成中断，卡片才不会写「已完成」
       const stopped =
         string(raw.toolName) === SUBAGENT_TOOL && this.agents.get(string(raw.toolCallId))?.state === 'stopped'
-      item = { ...prior, output: text, status: stopped && status === 'completed' ? 'interrupted' : status }
+      const images = isError ? [] : resultImages(result, id)
+      item = {
+        ...prior,
+        output: text,
+        status: stopped && status === 'completed' ? 'interrupted' : status,
+        ...(images.length ? { images } : {}),
+      }
     }
     this.put(item, true)
   }

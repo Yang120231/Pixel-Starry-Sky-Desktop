@@ -161,7 +161,7 @@ function baseToolItem(id: string, name: string, input: Input, cwd: string): Item
 
 const IMAGE_TYPES = new Set<string>(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
 /** 工具结果里的图片最多带这么多（base64 字符，所有图片合计）；超出的仍只显示「[图片]」 */
-const MAX_RESULT_IMAGES = 3_000_000
+export const MAX_RESULT_IMAGES = 3_000_000
 
 /** tool_result 里的图片（例如 Read 了一张图片）：对话里显示缩略图 */
 export function resultImages(content: unknown, id: string): ImageAttachment[] {
