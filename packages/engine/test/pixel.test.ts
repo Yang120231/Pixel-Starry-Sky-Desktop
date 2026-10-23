@@ -10,6 +10,9 @@ import { PIXEL_MODES, pixelModelsConfig, reservedPixelArg, mcpWaiterFor, searchT
 import { effortsFromLevels, findModel, modelEfforts } from '../src/pixel/catalog'
 import { gitBashDir, pixelShell, windowsBash } from '../src/pixel/discover'
 import { makeTmp, removeTmp } from './helpers/tmp'
+import { answerOf, completeLines, pixelSideArgs, pixelSideModel, sideUserArgs } from '../src/pixel/side'
+
+const NL = String.fromCharCode(10)
 
 const FAKE = fileURLToPath(new URL('./fakes/fake-pixel.mjs', import.meta.url))
 let root: string, host: EngineHost | undefined
@@ -118,6 +121,54 @@ describe('Pixel 引擎适配器', () => {
       'high',
       'max',
     ])
+  })
+  it('旁聊：复制会话文件单独问一次，不用工具、不带 MCP，原会话文件不变、副本删掉；出错报原因', async () => {
+    const { session, argvs } = setup()
+    await expect(host!.sideQuestion(session.id, '先问', [])).rejects.toThrow('先在主对话里发一条消息')
+    await host!.send(session.id, '你好')
+    await wait(() => idle(session.id) && !!snap(session.id).record.engineSessionId)
+    const file = snap(session.id).record.engineSessionId!
+    const before = readFileSync(file, 'utf8')
+    const answer = await host!.sideQuestion(session.id, '这个项目用什么语言', [
+      { question: '上一问', answer: '上一答' },
+    ])
+    expect(answer).toMatch(/^旁聊回答：\d+ 行，no-tools，问：问：这个项目用什么语言$/)
+    expect(readFileSync(file, 'utf8')).toBe(before)
+    const side = argvs().find(a => a.argv.includes('-p'))
+    expect(side.argv.slice(0, 2)).toEqual(['-p', '--session'])
+    // 明确指定会话的模型：Pi 恢复不了会话里的模型时会悄悄换成别的
+    expect(side.argv.slice(3)).toEqual(['--no-tools', '--no-skills', '--model', 'fake/fake-pixel'])
+    expect(side.argv[2]).not.toBe(file)
+    expect(existsSync(side.argv[2])).toBe(false)
+    expect(side.mcpFile).toBeNull()
+    await expect(host!.sideQuestion(session.id, '旁聊失败', [])).rejects.toThrow('side boom')
+  })
+  it('旁聊的参数：用户追加的照带、去掉选工具 / 加技能的；模型按网关规则；报错取第一行；会话文件截到完整的行', () => {
+    expect(sideUserArgs(['-e', 'x.ts', '--tools', 'bash', '-nt', '--tools=read', '--skill', 'd', '--verbose'])).toEqual(
+      ['-e', 'x.ts', '--verbose'],
+    )
+    expect(pixelSideArgs('s.jsonl', null, ['-e', 'x.ts'])).toEqual([
+      '-e',
+      'x.ts',
+      '-p',
+      '--session',
+      's.jsonl',
+      '--no-tools',
+      '--no-skills',
+    ])
+    expect(pixelSideModel({ model: 'fake/m', platform: null, provider: null })).toBe('fake/m')
+    expect(pixelSideModel({ model: 'glm-5', platform: { groupId: 'g', account: 'a' }, provider: null })).toBe(
+      'pixelsky/glm-5',
+    )
+    expect(pixelSideModel({ model: 'pixelsky/glm-5', platform: { groupId: 'g', account: 'a' }, provider: null })).toBe(
+      'pixelsky/glm-5',
+    )
+    expect(pixelSideModel({ model: null, platform: null, provider: null })).toBeNull()
+    expect(answerOf(' 回答 ', '')).toBe('回答')
+    const stderr = ['', 'No API key found for the selected model.', '', 'Use /login…', '  docs/providers.md'].join(NL)
+    expect(() => answerOf('', stderr)).toThrow(/^No API key found for the selected model\.$/)
+    expect(completeLines('{"a":1}' + NL + '{"b"')).toBe('{"a":1}' + NL)
+    expect(completeLines('{"b"')).toBeNull()
   })
   it('目录：起不来时记下启动错误，之后起得来就清掉', async () => {
     let fail = 'catalog boom'

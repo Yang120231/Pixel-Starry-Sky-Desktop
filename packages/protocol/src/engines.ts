@@ -92,7 +92,8 @@ export const ENGINES: Record<EngineId, EngineDescriptor> = {
     accent: null,
     nativeModelPrefix: null,
   },
-  // 自己的命令行智能体（packages/cli，基于 Pi，docs/own-cli.md）：能力先保守，和 Codex 一样回退 / 旁聊 / 后台任务关着
+  // 自己的命令行智能体（packages/cli，基于 Pi，docs/own-cli.md）：能力先保守，回退 / 后台任务关着；
+  // 旁聊复制 Pi 会话文件单独问一次（engine pixel/side.ts）
   pixel: {
     id: 'pixel',
     name: '像素星空',
@@ -103,6 +104,7 @@ export const ENGINES: Record<EngineId, EngineDescriptor> = {
       resume: true,
       steer: true,
       rewind: false,
+      sideChat: true,
       // 模型 / 强度走 RPC set_model / set_thinking_level，权限模式走批准扩展的 /pixelsky-mode 命令，都是运行中实时生效
       liveModelSwitch: true,
       livePermissionSwitch: true,

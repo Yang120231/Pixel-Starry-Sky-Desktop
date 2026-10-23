@@ -15,7 +15,7 @@ import type {
   SkillCommand,
   TurnOutcome,
 } from '@pixelsky/protocol'
-import { EMPTY_FLAGS, looksVisual, viaGateway, type ContextWindows } from '@pixelsky/protocol'
+import { EMPTY_FLAGS, looksVisual, viaGateway, type ContextWindows, type SessionRecord } from '@pixelsky/protocol'
 import { QUICK_CLOSE_MS, type CloseOptions, type EngineSession, type Launcher, type SessionContext } from '../adapter'
 import type { ChatSeed } from '../chat-log'
 import { McpReporter, pixelMcpServers } from '../mcp'
@@ -119,6 +119,19 @@ export interface PixelLaunchOptions {
   contextWindows?: ContextWindows
   /** 测试用：等 Pi 开始处理一条提示最多多久没动静（默认 PROMPT_START_MS） */
   promptStartMs?: number
+}
+
+/** 网关 / 自定义地址的模型配置交给命令行的网关扩展（PROVIDERS_ENV、INFERRED_ENV）；会话进程和旁聊共用 */
+export function applyPixelModels(
+  environment: NodeJS.ProcessEnv,
+  record: SessionRecord,
+  contextWindows: ContextWindows | undefined,
+): void {
+  const models = pixelModelsConfig(environment, record.model, id => pixelWindow(record, id, contextWindows))
+  if (models) environment[PROVIDERS_ENV] = JSON.stringify(models.providers)
+  else delete environment[PROVIDERS_ENV]
+  if (models?.inferred) environment[INFERRED_ENV] = JSON.stringify(models.inferred)
+  else delete environment[INFERRED_ENV]
 }
 
 /** 用户自己选工具的参数（这时不追加 SEARCH_TOOLS，以用户为准） */
@@ -333,13 +346,7 @@ export class PixelSession implements EngineSession {
     }
     // 自定义地址：交给命令行的网关扩展 pi.registerProvider()（packages/cli/src/extensions/gateway.ts）。
     // 配置目录始终是用户自己的 ~/.pixelsky-cli/agent/，里面的 mcp.json、技能、扩展、bin/ 才会生效
-    const models = pixelModelsConfig(environment, record.model, id =>
-      pixelWindow(record, id, this.options.contextWindows),
-    )
-    if (models) environment[PROVIDERS_ENV] = JSON.stringify(models.providers)
-    else delete environment[PROVIDERS_ENV]
-    if (models?.inferred) environment[INFERRED_ENV] = JSON.stringify(models.inferred)
-    else delete environment[INFERRED_ENV]
+    applyPixelModels(environment, record, this.options.contextWindows)
     // 桌面端管理的 MCP（设置 › 插件）：文件交给命令行的 MCP 扩展注册；应用自己的只读服务器不用问
     const ext = this.ctx.extensions
     if (ext?.mcpFile) environment[MCP_FILE_ENV] = ext.mcpFile

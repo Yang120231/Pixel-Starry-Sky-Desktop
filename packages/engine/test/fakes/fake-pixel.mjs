@@ -23,6 +23,26 @@ if (process.argv.includes('--version')) {
   process.stdout.write('1.2.0\n')
   process.exit(0)
 }
+// -p：旁聊（pixel/side.ts）。从 stdin 读问题，读 --session 指向的会话文件（副本），往副本里追加一行（像真 Pi 一样写会话），
+// 回答里写明看到了几行、问题是什么、工具开没开；问题里有「旁聊失败」时报错退出
+if (process.argv.includes('-p')) {
+  let input = ''
+  for await (const chunk of process.stdin) input += chunk
+  const file = process.argv[process.argv.indexOf('--session') + 1]
+  const lines = readFileSync(file, 'utf8').split(String.fromCharCode(10)).filter(Boolean).length
+  appendFileSync(
+    file,
+    JSON.stringify({ type: 'message', message: { role: 'user', content: input } }) + String.fromCharCode(10),
+  )
+  if (input.includes('旁聊失败')) {
+    process.stderr.write('Error: side boom' + String.fromCharCode(10))
+    process.exit(1)
+  }
+  const tools = process.argv.includes('--no-tools') ? 'no-tools' : 'tools'
+  const question = input.trim().split(String.fromCharCode(10)).at(-1)
+  process.stdout.write(`旁聊回答：${lines} 行，${tools}，问：${question}` + String.fromCharCode(10))
+  process.exit(0)
+}
 // FAKE_PIXEL_START_FAIL：起不来（报错退出），用来测启动错误
 if (process.env.FAKE_PIXEL_START_FAIL) {
   process.stderr.write('Error: ' + process.env.FAKE_PIXEL_START_FAIL + '\n')

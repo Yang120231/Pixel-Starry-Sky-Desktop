@@ -18,7 +18,15 @@ import { runsFromSession } from './agents'
 import { customPixel, discoverPixel, pixelEnvironment, pixelShell } from './discover'
 import { pixelCatalog } from './catalog'
 import { PixelProcess } from './process'
-import { PixelSession, reservedPixelArg, type PixelLaunchOptions } from './session'
+import {
+  ALLOW_TOOLS_ENV,
+  applyPixelModels,
+  MCP_FILE_ENV,
+  PixelSession,
+  reservedPixelArg,
+  type PixelLaunchOptions,
+} from './session'
+import { pixelSideModel, pixelSideQuestion } from './side'
 import { transcriptItems } from './transcript'
 
 export interface PixelAdapterOptions {
@@ -151,18 +159,51 @@ export class PixelAdapter implements EngineAdapter {
     const result = this.cached
     if (!result?.launcher || result.info.status !== 'ready')
       throw new Error(result?.info.message ?? 'Pixel is unavailable')
-    const env = pixelEnvironment(result.launcher, this.env())
+    return new PixelSession(
+      result.launcher,
+      this.sessionEnvironment(result.launcher, ctx.record()),
+      ctx,
+      this.opts.launchOptions?.() ?? {},
+    )
+  }
+
+  /** 旁聊：复制会话文件单独问一次（side.ts），不用工具，不改原会话；MCP、技能都不带 */
+  async sideQuestion(record: SessionRecord, prompt: string, signal: AbortSignal): Promise<string> {
+    await this.info()
+    const result = this.cached
+    if (!result?.launcher || result.info.status !== 'ready')
+      throw new Error(result?.info.message ?? 'Pixel is unavailable')
+    const file = record.engineSessionId
+    if (!file || !isAbsolute(file)) throw new Error('先在主对话里发一条消息')
+    const env = this.sessionEnvironment(result.launcher, record)
+    applyPixelModels(env, record, this.opts.launchOptions?.().contextWindows)
+    delete env[MCP_FILE_ENV]
+    delete env[ALLOW_TOOLS_ENV]
+    return pixelSideQuestion({
+      launcher: result.launcher,
+      sessionFile: file,
+      cwd: record.cwd,
+      env,
+      model: pixelSideModel(record),
+      userArgs: this.opts.launchOptions?.().args,
+      prompt,
+      signal,
+    })
+  }
+
+  /** 会话进程的环境：Git Bash、宿主给的网关 / 子智能体设置；网关会话去掉本机的密钥 */
+  private sessionEnvironment(launcher: Launcher, record: SessionRecord): NodeJS.ProcessEnv {
+    const env = pixelEnvironment(launcher, this.env())
     if (this.shell.pathDir) {
       // Pi 在 PATH 上找 bash.exe：Git 的 bin 放在最前面，免得找到 System32 的 WSL bash
       const key = Object.keys(env).find(k => k.toLowerCase() === 'path') ?? 'PATH'
       env[key] = [this.shell.pathDir, env[key] ?? ''].filter(Boolean).join(delimiter)
     }
-    const record = ctx.record()
     // 宿主给的环境：网关会话是网关地址和会话密钥；自有会话也要，里面有子智能体设置（不含密钥）
     const hostEnv = this.opts.sessionEnv?.(record) ?? {}
     // 平台 / 自定义 API 会话：不带本机的密钥，只用宿主给的网关环境
     if (viaGateway(record)) for (const key of Object.keys(env)) if (/^(ANTHROPIC_|OPENAI_)/i.test(key)) delete env[key]
     Object.assign(env, hostEnv)
-    return new PixelSession(result.launcher, env, ctx, this.opts.launchOptions?.() ?? {})
+    return env
   }
 }
