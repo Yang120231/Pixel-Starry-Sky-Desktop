@@ -8,7 +8,15 @@ import { EngineHost, type EngineHostOptions } from '../src/host'
 import type { HostContext } from '../src/host/context'
 import { Store } from '../src/store'
 import { ENGINES } from '../src/registry'
-import { connectionKind, isConnectionError, reconnectDelay, reconnectLimit } from '../src/retry'
+import {
+  BLOCKED_DELAYS,
+  FIREWALL_BLOCKED,
+  blockedDelay,
+  connectionKind,
+  isConnectionError,
+  reconnectDelay,
+  reconnectLimit,
+} from '../src/retry'
 
 let root: string
 let hosts: EngineHost[]
@@ -184,6 +192,29 @@ describe('断线自动重连', () => {
     await until(() => host.open(record.id).queue[0]?.status === 'failed')
     expect(session().inputs).toHaveLength(1)
     expect(host.open(record.id).queue[0].reconnected).toBeUndefined()
+  })
+
+  it('被 Cloudflare 拦截：引擎自己重试过也照样自动重发，标 blocked，按长间隔等', async () => {
+    const { host, record, send, session } = setup({ reconnectDelays: undefined })
+    await send('a')
+    await until(() => !!session()?.active)
+    session().engineRetry()
+    session().finish('failed', FIREWALL_BLOCKED)
+    await until(() => !!host.open(record.id).queue[0]?.reconnect)
+    const r = host.open(record.id).queue[0].reconnect!
+    expect(r).toMatchObject({ attempt: 1, blocked: true })
+    expect(r.at - r.since).toBeGreaterThanOrEqual(BLOCKED_DELAYS[0] * 0.8 - 5)
+    await host.interrupt(record.id)
+  })
+
+  it('一般的断线引擎自己重试过就不再重连（被拦截的才例外）', async () => {
+    const { host, record, send, session } = setup()
+    await send('a')
+    await until(() => !!session()?.active)
+    session().engineRetry()
+    session().drop()
+    await until(() => host.open(record.id).queue[0]?.status === 'failed')
+    expect(session().inputs).toHaveLength(1)
   })
 
   it('重连次数设成 0 就是关闭自动重连', async () => {
@@ -798,8 +829,22 @@ describe('retry.ts 自动重连规则', () => {
       'HTTP 401',
     ])
       expect(connectionKind(text), String(text)).toBeNull()
+    // 被拦截的排在「请求太频繁 / 403」前面
+    for (const text of [
+      FIREWALL_BLOCKED,
+      'unexpected status 403 Forbidden: <html>…, url: https://chatgpt.com/backend-api/codex/responses, cf-ray: a4eedbd67b3004ac-HKG',
+    ])
+      expect(connectionKind(text), text).toBe('blocked')
+    expect(connectionKind('HTTP 403 Forbidden')).toBeNull()
     for (const text of ['Codex 意外退出（代码 1）', DROPPED, '余额不足', null])
       expect(isConnectionError(text), String(text)).toBe(connectionKind(text) !== null)
+  })
+
+  it('被拦截的等待时间：30 秒、1、2、4 分钟，之后每次 5 分钟，±20% 抖动', () => {
+    expect([1, 2, 3, 4, 5, 6].map(n => blockedDelay(n, () => 0.5))).toEqual([
+      30_000, 60_000, 120_000, 240_000, 300_000, 300_000,
+    ])
+    expect(blockedDelay(1, () => 0)).toBe(24_000)
   })
 
   it('等待时间 1 秒起翻倍、封顶 30 秒、±20% 抖动；次数跟随请求重试设置', () => {

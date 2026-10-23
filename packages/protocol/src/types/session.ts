@@ -168,6 +168,8 @@ export interface QueueReconnect {
   resend?: boolean
   /** 额度用完、自动换了订阅账号后重新派发（docs/ui/engine-accounts.md §5）：马上派发，不受重连次数限制 */
   account?: boolean
+  /** 被 Cloudflare 这类防护拦下（engine retry.ts 'blocked'）：等得更久，界面写「被拦截」而不是「连接中断」 */
+  blocked?: boolean
 }
 
 export interface SendReceipt {

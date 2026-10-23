@@ -5,7 +5,7 @@ import type { MessageInput, QueuedMessage, QueueMove, QueueSummary, SendReceipt 
 import { codedError, messageWithFiles } from '@pixelsky/protocol'
 import { messageInput, queueSettings, sameQueueSettings } from '../queue'
 import { ENGINES } from '../registry'
-import { connectionKind, reconnectDelay, reconnectLimit } from '../retry'
+import { blockedDelay, connectionKind, reconnectDelay, reconnectLimit } from '../retry'
 import type { HostContext, Runtime } from './context'
 
 /** 派发一条队列项前要发什么（reconnectPlan） */
@@ -214,17 +214,21 @@ export class HostQueue {
     if (!item || item.mode !== 'normal' || item.text.trimStart().startsWith('/')) return false
     // 换了订阅账号再发（docs/ui/engine-accounts.md §5）：不是连接问题，不看错误种类和重连次数，马上派发
     const account = opts.account === true
+    const kind = account ? null : connectionKind(error)
     if (!account) {
-      const kind = connectionKind(error)
       if (kind === null || (kind === 'exit' && !item.delivered)) return false
-      if (rt.turn?.engineRetried) return false
+      // 引擎自己重试过还是失败的不再重连；被拦截的除外：引擎那几次是一口气连发的，隔久一点再发才有用
+      if (rt.turn?.engineRetried && kind !== 'blocked') return false
     }
     const max = reconnectLimit(ctx.m.settings.file.maxRetries)
     const attempt = account || rt.turn?.progressed ? 1 : (item.reconnect?.attempt ?? 0) + 1
     const total = (item.reconnect ? reconnectTotal(item.reconnect) : 0) + 1
     if (!account && (max <= 0 || attempt > max || total > max * RECONNECT_TOTAL_FACTOR)) return false
     const now = Date.now()
-    const delay = account ? 0 : (ctx.opts.reconnectDelays?.[attempt - 1] ?? reconnectDelay(attempt))
+    const delay = account
+      ? 0
+      : (ctx.opts.reconnectDelays?.[attempt - 1] ??
+        (kind === 'blocked' ? blockedDelay(attempt) : reconnectDelay(attempt)))
     const next: QueuedMessage = {
       ...item,
       status: 'queued',
@@ -240,6 +244,7 @@ export class HostQueue {
         reason: (error ?? '').split('\n')[0].slice(0, 300),
         ...(item.delivered ? {} : { resend: true }),
         ...(account ? { account: true } : {}),
+        ...(kind === 'blocked' ? { blocked: true } : {}),
       },
     }
     rt.snapshot = { ...rt.snapshot, queue: [next, ...rt.snapshot.queue.filter(q => q.id !== queueId)] }

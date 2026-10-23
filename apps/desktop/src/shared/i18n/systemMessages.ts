@@ -1571,6 +1571,10 @@ export const systemMessages = {
     zh: '正在自动重连，请先停止再回退',
     en: 'Auto-reconnecting. Stop it before rewinding',
   },
+  'system.firewallBlocked': {
+    zh: '被 ChatGPT 的 Cloudflare 防护拦截了：请求太频繁，或代理节点的 IP 被拦。隔一会儿再发，一直不行就换个代理节点',
+    en: "Blocked by ChatGPT's Cloudflare protection: too many requests, or your proxy's IP is blocked. Try again in a while, or switch proxy nodes if it keeps happening",
+  },
   'system.reconnectOriginalGone': {
     zh: '原消息已不在对话里，请重试或撤回',
     en: 'The original message is no longer in the conversation. Retry or withdraw it',

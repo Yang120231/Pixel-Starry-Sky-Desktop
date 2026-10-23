@@ -36,6 +36,7 @@ import { readCodexTurns, revertTarget } from './branch'
 import { codexCatalog } from './catalog'
 import { codexThreadName } from './native'
 import { describeError, logger } from '../log'
+import { FIREWALL_BLOCKED, isFirewallBlock } from '../retry'
 import { NATIVE_TEXT } from '../native/text'
 import { codexCommandParts } from './command'
 import { codexQuotaPatch, parseCodexRateLimits } from './quota'
@@ -176,6 +177,16 @@ export function codexRetryState(raw: unknown, turnId: string): RequestRetryState
   }
 }
 
+/**
+ * Cloudflare 拦下的请求（docs/ui/error-retry.md §被拦截）：Codex 会一口气连发 10 次（WebSocket 5 次再 HTTPS 5 次），只会接着被拦。
+ * 给详情用的几行：状态码、cf-ray、地址（原文是一整页 HTML，不放进对话）
+ */
+export function firewallDetail(text: string): string {
+  const ray = /cf-ray:\s*([\w-]+)/i.exec(text)?.[1]
+  const url = /url:\s*([^\s,]+)/i.exec(text)?.[1]
+  return ['HTTP status: 403', ...(ray ? [`cf-ray: ${ray}`] : []), ...(url ? [`url: ${url}`] : [])].join('\n')
+}
+
 /** Codex 这一轮换了模型（model/rerouted）：给对话里的提示；原因认不出时写在详情里 */
 export function codexRerouteNotice(params: Message): { text: string; detail: string | null } | null {
   const from = string(params.fromModel),
@@ -301,6 +312,8 @@ export class CodexSession implements EngineSession {
   /** 派出过的子智能体：每轮换新翻译器也要保留 */
   private readonly agents = new Map<string, AgentRun>()
   private reportedError: string | null = null
+  /** 这一轮被 Cloudflare 拦下了、已经让 Codex 停手：结束时按 FIREWALL_BLOCKED 报（宿主隔一会儿自动重发） */
+  private blocked: { detail: string } | null = null
   /** 这一轮正显示着 Codex 的重连状态条（codexRetryState）：有新输出或一轮结束时清掉 */
   private retryShown = false
   /** 同一毫秒内的多条报错也要各自保留，id 不能只靠时间戳 */
@@ -701,6 +714,7 @@ export class CodexSession implements EngineSession {
       this.active.announced = true
       this.adopting = this.nativeTurnId
       this.reportedError = null
+      this.blocked = null
       const active = this.active
       void this.run(text, userItemId, attachments, seed).catch(error => {
         if (this.active === active) this.finish('failed', (error as Error).message)
@@ -737,6 +751,7 @@ export class CodexSession implements EngineSession {
       this.ctx.record().cwd,
     )
     this.reportedError = null
+    this.blocked = null
     this.retryShown = false
   }
   private async run(text: string, userItemId: string, attachments: ImageAttachment[], given?: ChatSeed): Promise<void> {
@@ -1209,6 +1224,13 @@ export class CodexSession implements EngineSession {
         return
       }
       const turn = object(params.turn)
+      const blocked = this.blocked ?? this.firewall(string(object(turn.error).message), false)
+      if (blocked)
+        return this.finish('failed', FIREWALL_BLOCKED, blocked.detail, {
+          kind: 'busy',
+          code: 'firewallBlocked',
+          status: 403,
+        })
       this.finish(
         turn.status === 'interrupted' ? 'interrupted' : turn.status === 'failed' ? 'failed' : 'completed',
         string(object(turn.error).message) || null,
@@ -1284,6 +1306,20 @@ export class CodexSession implements EngineSession {
           diagnosticStale: true,
         },
       })
+    } else if (this.blocked && (method === 'error' || method === 'warning')) {
+      // 已经让 Codex 停手了：之后的重连、回退到 HTTPS 的提示、报错都不再显示（结束时报一句能看懂的）
+      return
+    } else if (
+      (method === 'error' || method === 'warning') &&
+      this.firewall(
+        [string(object(params.error).message || params.message), string(object(params.error).additionalDetails)].join(
+          '\n',
+        ),
+        // 经本机网关的（平台、自定义接口）403 是网关自己拒的，不是 Cloudflare
+        !this.procViaGateway && codexRetryState(params.error, this.active.id).reason === 'HTTP 403',
+      )
+    ) {
+      return
     } else if (method === 'error' && params.willRetry === true) {
       // Codex 自己在重连：显示成「正在重试 n/m」状态条，不再每次一条红色报错；最后还是失败时 turn/completed 会报
       this.retryShown = true
@@ -1479,6 +1515,20 @@ export class CodexSession implements EngineSession {
     if (decision.type === 'allow_all')
       for (const [pendingId, pending] of this.approvals)
         if (pending.request.canAllowAll) this.answer(pendingId, { type: 'allow' })
+  }
+  /**
+   * 被 Cloudflare 拦下了（原文带 cf-ray 且是 403，或重连原因是 HTTP 403）：记下来、让 Codex 停手（turn/interrupt），
+   * turn/completed 时报 FIREWALL_BLOCKED，宿主按「被拦截」隔一会儿自动重发（retry.ts blockedDelay）。不是的返回 null
+   */
+  private firewall(text: string, status403: boolean): { detail: string } | null {
+    if (this.blocked) return this.blocked
+    if (!status403 && !isFirewallBlock(text)) return null
+    this.blocked = { detail: firewallDetail(text) }
+    log.warn('请求被 Cloudflare 拦截，停止 Codex 自己的重连', { ray: /cf-ray:\s*([\w-]+)/i.exec(text)?.[1] ?? null })
+    this.clearRetry()
+    const turnId = this.nativeTurnId
+    if (turnId && this.proc) this.proc.request('turn/interrupt', { threadId: this.threadId, turnId }).catch(() => {})
+    return this.blocked
   }
   private finish(outcome: TurnOutcome, error: string | null, detail: string | null = null, info?: NoticeError): void {
     const active = this.active

@@ -10,12 +10,26 @@ export function retryLimit(value: unknown): number | null {
  * 一轮失败的原因是哪一类连接问题（docs/ui/error-retry.md）：
  * 'network'：断线、超时、网关 5xx、上游繁忙——请求没送到或回复没收完，重连有用；
  * 'exit'：引擎进程意外退出——不知道消息收没收到，只有引擎确认收到过这条才值得「继续」；
+ * 'blocked'：被 Cloudflare 这类防护拦下（403 + 一整页 HTML、带 cf-ray）——马上重试只会接着被拦，隔久一点再发（blockedDelay）；
  * null：不是连接问题。登录失效、余额不足、模型不可用、请求被拒、限额这些重连也没用，照常失败。
  * 原文同时带网络关键词和「意外退出」的算 'network'。引擎已经把常见报错翻成中文（claude/apiError.ts），中英文都认。
  */
-export type ConnectionKind = 'network' | 'exit'
+export type ConnectionKind = 'network' | 'exit' | 'blocked'
+
+/** Codex 遇到 Cloudflare 拦截时这一轮的报错（codex/session.ts），界面按原文翻译，改了要同步 systemMessages.ts */
+export const FIREWALL_BLOCKED =
+  '被 ChatGPT 的 Cloudflare 防护拦截了：请求太频繁，或代理节点的 IP 被拦。隔一会儿再发，一直不行就换个代理节点'
+
+/** 是不是被 Cloudflare 这类防护拦下的：上面那句，或原文带 cf-ray 且是 403 */
+export function isFirewallBlock(text: string | null | undefined): boolean {
+  if (!text) return false
+  return text.includes(FIREWALL_BLOCKED) || (/cf-ray/i.test(text) && /\b403\b|forbidden/i.test(text))
+}
+
 export function connectionKind(text: string | null | undefined): ConnectionKind | null {
   if (!text) return null
+  // 要排在「请求被拒 / 太频繁」前面：那些重试没用，被拦截的隔一会儿再发有用
+  if (isFirewallBlock(text)) return 'blocked'
   if (
     /登录已失效|余额|账单|API Key 无效|没有权限|找不到所选模型|请求太频繁|限额|上下文太长|请求无效|\b40[0-4]\b|\b429\b|unauthori[sz]ed|forbidden|billing|insufficient|quota|rate.?limit|Prompt is too long/i.test(
       text,
@@ -39,6 +53,13 @@ export function isConnectionError(text: string | null | undefined): boolean {
 /** 第几次自动重连前等多久（毫秒）：1 秒起翻倍，封顶 30 秒，加 ±20% 随机（很多会话同时断线时不一起重连） */
 export function reconnectDelay(attempt: number, random = Math.random): number {
   const base = Math.min(30_000, 1000 * 2 ** Math.max(0, attempt - 1))
+  return Math.round(base * (0.8 + random() * 0.4))
+}
+
+/** 被拦截后第几次自动重发前等多久：30 秒、1 分钟、2 分钟、4 分钟，之后每次 5 分钟，加 ±20% 随机 */
+export const BLOCKED_DELAYS = [30_000, 60_000, 120_000, 240_000, 300_000]
+export function blockedDelay(attempt: number, random = Math.random): number {
+  const base = BLOCKED_DELAYS[Math.min(BLOCKED_DELAYS.length - 1, Math.max(0, attempt - 1))]
   return Math.round(base * (0.8 + random() * 0.4))
 }
 

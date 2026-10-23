@@ -314,30 +314,22 @@ export class CodexAdapter implements EngineAdapter {
     await this.info(force)
     return this.catalogCache ?? { outputStyles: [], currentOutputStyle: null }
   }
+  /**
+   * 子智能体的记录（详情面板跑着时每 2.5 秒读一次）：用常驻的读取进程读，不再每次新起一个 codex.exe
+   * （以前一个子智能体开着详情两分钟就起了五十多个进程）
+   */
   async subagentTranscript(record: SessionRecord, agentId: string): Promise<Item[]> {
-    if (!this.cached?.launcher || !/^[A-Za-z0-9-]{1,100}$/.test(agentId)) throw new Error('Invalid Codex subagent')
-    const proc = new CodexProcess(
-      this.cached.launcher,
-      ['app-server', ...this.launchArgs()],
-      record.cwd,
-      toolEnvironment(this.cached.launcher, this.env()),
-      { notification() {}, request: id => proc.respondError(id, 'Read-only history'), exit() {} },
+    if (!/^[A-Za-z0-9-]{1,100}$/.test(agentId)) throw new Error('Invalid Codex subagent')
+    const result = await this.reader.request('thread/read', { threadId: agentId, includeTurns: true })
+    const translator = new CodexTranslator(
+      () => {},
+      undefined,
+      undefined,
+      string(object(result.thread).cwd) || record.cwd,
     )
-    try {
-      await proc.initialize()
-      const result = await proc.request('thread/read', { threadId: agentId, includeTurns: true })
-      const translator = new CodexTranslator(
-        () => {},
-        undefined,
-        undefined,
-        string(object(result.thread).cwd) || record.cwd,
-      )
-      for (const turn of array(object(result.thread).turns))
-        for (const item of array(object(turn).items)) translator.item(object(item), true, false)
-      return [...translator.items.values()]
-    } finally {
-      await proc.close()
-    }
+    for (const turn of array(object(result.thread).turns))
+      for (const item of array(object(turn).items)) translator.item(object(item), true, false)
+    return [...translator.items.values()]
   }
   /**
    * 回退 / 分叉的截断点：起一个临时 app-server 冷读线程的轮次（不 resume），按用户消息 clientId 求「最后保留的一轮」。

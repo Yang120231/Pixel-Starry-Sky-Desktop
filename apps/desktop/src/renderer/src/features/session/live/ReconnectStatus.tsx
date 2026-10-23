@@ -9,6 +9,7 @@ import { bridge } from '@/features/engine'
 import { isReconnecting, reconnectPhase } from '../queueView'
 
 /** 断线后宿主正在自动重连（Codex 的 Reconnecting n/m）：倒计时、立即重连、停止；样子和 RetryStatus 一样。
+ *  被 Cloudflare 拦截的（reconnect.blocked）写「被拦截，隔一会儿自动重发」，等得更久（engine retry.ts blockedDelay）。
  *  队列暂停时（比如重启后恢复出来的）不会自己重连：不转圈、没有进度条，给「继续重连」/「停止」 */
 export function ReconnectStatus({
   sessionId,
@@ -75,10 +76,19 @@ export function ReconnectStatus({
             className={cn('shrink-0 text-warn', connecting && 'animate-spin [animation-duration:1.1s]')}
           />
           <span className="text-meta text-fg-secondary tabular-nums">
-            {tr(paused ? 'session.reconnect.paused' : 'session.reconnect.reconnecting', {
-              p0: reconnect.attempt,
-              p1: reconnect.max,
-            })}
+            {tr(
+              reconnect.blocked
+                ? paused
+                  ? 'session.reconnect.blockedPaused'
+                  : 'session.reconnect.blocked'
+                : paused
+                  ? 'session.reconnect.paused'
+                  : 'session.reconnect.reconnecting',
+              {
+                p0: reconnect.attempt,
+                p1: reconnect.max,
+              },
+            )}
             <span className="mx-1 inline-flex gap-[3px] align-middle" aria-hidden>
               {Array.from({ length: reconnect.max }, (_, i) => (
                 <i

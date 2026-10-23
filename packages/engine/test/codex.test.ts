@@ -16,6 +16,7 @@ import {
 } from '@pixelsky/protocol'
 import type { EngineAdapter, EngineSession, SessionContext } from '../src/adapter'
 import { ENGINES } from '../src/registry'
+import { FIREWALL_BLOCKED } from '../src/retry'
 import {
   codexPermission,
   codexRerouteNotice,
@@ -162,6 +163,28 @@ describe('Codex app-server adapter', () => {
       text: 'exceeded retry limit, last status: 502 Bad Gateway',
       detail: ['upstream connect error', 'type: responseTooManyFailedAttempts', 'HTTP status: 502'].join('\n'),
     })
+  })
+  it('被 Cloudflare 拦截：第一次重连就让 Codex 停手，报一句能看懂的（HTML 不进对话），宿主隔一会儿自动重发', async () => {
+    const { session, events } = setup()
+    await host!.send(session.id, '被拦截')
+    await wait(() => !!host!.open(session.id).queue[0]?.reconnect)
+    expect(host!.open(session.id).queue[0].reconnect).toMatchObject({ attempt: 1, blocked: true })
+    const notices = host!.open(session.id).items.filter(i => i.kind === 'notice')
+    expect(notices).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        text: FIREWALL_BLOCKED,
+        detail: ['HTTP status: 403', 'cf-ray: abc123-HKG', 'url: https://chatgpt.com/backend-api/codex/responses'].join(
+          '\n',
+        ),
+        error: { kind: 'busy', code: 'firewallBlocked', status: 403 },
+      }),
+    ])
+    // 没有显示「正在重试 n/5」：Codex 后面那 4 次没发出去
+    expect(
+      events.some(e => e.kind === 'session' && e.sessionId === session.id && e.event.type === 'request_retry'),
+    ).toBe(false)
+    await host!.interrupt(session.id)
   })
   it('换了模型：对话里一条提示，用量记在实际用的模型上；重连后接上了就收起状态条', async () => {
     const { session, events } = setup()

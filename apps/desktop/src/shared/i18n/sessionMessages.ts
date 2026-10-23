@@ -113,6 +113,14 @@ export const sessionMessages = {
     zh: '连接中断，正在重连 {p0}/{p1}',
     en: 'Connection lost. Reconnecting {p0}/{p1}',
   },
+  'session.reconnect.blocked': {
+    zh: '请求被拦截，隔一会儿自动重发 {p0}/{p1}',
+    en: 'Request blocked. Resending later {p0}/{p1}',
+  },
+  'session.reconnect.blockedPaused': {
+    zh: '请求被拦截，自动重发已暂停 {p0}/{p1}',
+    en: 'Request blocked. Auto-resend paused {p0}/{p1}',
+  },
   'session.reconnect.inSeconds': { zh: '· 约 {p0} 秒后', en: '· in about {p0}s' },
   'session.reconnect.connecting': { zh: '· 正在连接…', en: '· Connecting…' },
   'session.reconnect.now': { zh: '立即重连', en: 'Reconnect now' },

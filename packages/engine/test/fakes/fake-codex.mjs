@@ -569,6 +569,28 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
         process.exit(3)
         return
       }
+      if (text.includes('被拦截')) {
+        // Cloudflare 拦下：Codex 会一口气重连 5 次再失败；像素星空应在第一次就让它停手（turn/interrupt）
+        const html =
+          '<html><head></head><body>blocked</body></html>, url: https://chatgpt.com/backend-api/codex/responses, cf-ray: abc123-HKG'
+        const err = n => ({
+          message: `Reconnecting... ${n}/5`,
+          additionalDetails: `unexpected status 403 Forbidden: ${html}`,
+          codexErrorInfo: { responseStreamConnectionFailed: { httpStatusCode: 403 } },
+        })
+        emit('error', { threadId: thread, turnId: id, willRetry: true, error: err(1) })
+        const current = turn
+        setTimeout(() => {
+          if (turn !== current) return
+          for (let n = 2; n <= 5; n++) emit('error', { threadId: thread, turnId: id, willRetry: true, error: err(n) })
+          turn = null
+          emit('turn/completed', {
+            threadId: thread,
+            turn: { id: current.id, status: 'failed', error: { message: `unexpected status 403 Forbidden: ${html}` } },
+          })
+        }, 300)
+        return
+      }
       if (text.includes('重连')) {
         const err = n => ({
           message: `Reconnecting... ${n}/2`,
