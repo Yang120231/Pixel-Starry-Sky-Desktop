@@ -1,6 +1,7 @@
 // 侧栏对话左边那一格放什么（docs/ui/sidebar-status-icons.md §2）：一格只放一个，先后见 statusOf。纯函数，不依赖 window。
 import type { ApprovalRequest, QueueSummary } from '@pixelsky/protocol'
 import type { SessionPr } from '../../../../shared/types/session-status'
+import { DEFAULT_PR_DISPLAY, type PrDisplay } from './prDisplay'
 import type { MachineInfo } from '../../../../shared/types/machines'
 import type { TranslationKey } from '@/i18n/core'
 import { classifyError, type ErrorKind } from '@/features/session/live/errorKind'
@@ -44,7 +45,7 @@ export const isProblem = (kind: StatusKind | null): boolean => !!kind && kind in
 export const isPrKind = (kind: StatusKind | null): kind is 'pr' | 'pr-conflict' =>
   kind === 'pr' || kind === 'pr-conflict'
 
-/** 已关闭的 PR 过了 7 天不再显示 */
+/** 已关闭的 PR 过了 7 天悬停卡里也不再列 */
 export const CLOSED_PR_DAYS = 7
 
 /** 主进程也不推过期的已关闭 PR；这里再过滤一次，免得界面一直开着时它还挂着 */
@@ -54,6 +55,38 @@ export function visiblePrs(prs: readonly SessionPr[] | undefined, now = Date.now
     const at = Date.parse(pr.closedAt)
     return Number.isNaN(at) || now - at <= CLOSED_PR_DAYS * 86_400_000
   })
+}
+
+/** 开着的 PR 要不要你处理：检查没过或有冲突 */
+export const prNeedsAttention = (pr: SessionPr): boolean =>
+  !pr.unknown && pr.state === 'open' && (pr.ci === 'fail' || pr.conflict)
+
+/** 图标被哪条规则藏起来了（没藏是 null）：悬停卡里写明 */
+export function prIconHidden(
+  pr: SessionPr,
+  display: Pick<PrDisplay, 'hiddenPrs' | 'doneDays' | 'openMode'>,
+  now = Date.now(),
+): 'hidden' | 'expired' | 'quiet' | null {
+  if (display.hiddenPrs.includes(pr.url.toLowerCase())) return 'hidden'
+  if (pr.state === 'merged' || pr.state === 'closed') {
+    if (display.doneDays === -1) return null
+    const at = pr.closedAt ? Date.parse(pr.closedAt) : NaN
+    return !Number.isNaN(at) && now - at <= display.doneDays * 86_400_000 ? null : 'expired'
+  }
+  return display.openMode === 'attention' && !prNeedsAttention(pr) ? 'quiet' : null
+}
+
+/** 侧栏要出图标的 PR（按「最需要看」的先后）：去掉隐藏的、合并 / 关闭过了显示期的、按设置不显示的开着的 */
+export function iconPrs(
+  prs: readonly SessionPr[] | undefined,
+  display: PrDisplay | undefined,
+  sessionId: string | undefined,
+  now = Date.now(),
+): SessionPr[] {
+  const list = visiblePrs(prs, now)
+  display ??= DEFAULT_PR_DISPLAY
+  if (sessionId && display.hiddenSessions.includes(sessionId)) return []
+  return list.filter(pr => !prIconHidden(pr, display, now))
 }
 
 export interface StatusInput {
@@ -67,16 +100,23 @@ export interface StatusInput {
   /** 对话所在的机器；只有 ssh / wsl 且断开 / 出错才算「连不上」 */
   machine?: Pick<MachineInfo, 'kind' | 'status'> | null
   prs?: readonly SessionPr[]
+  /** 对话里只是提到过的 PR 链接数（不出图标，悬停卡里列） */
+  mentioned?: number
+  /** PR 图标显示哪些（prDisplay.ts）；不传用默认（合并、关闭后 1 天，开着的都显示） */
+  display?: PrDisplay
+  sessionId?: string
   now?: number
 }
 
 export interface SessionStatus {
   mark: StatusKind | null
   label: { key: TranslationKey; tone: LabelTone } | null
-  /** 最需要看的 PR（已去掉过期的已关闭） */
+  /** 要出图标的、最需要看的 PR（iconPrs 的第一个） */
   pr: SessionPr | null
-  /** 左边格子被别的占了，PR 挪到右边（小图标放在字 / 时间前面） */
+  /** PR 图标放右边（字 / 时间前面）；左边格子不放 PR */
   prInline: boolean
+  /** 有 PR（含隐藏了图标的、只是提到的）：整行悬停能弹 PR 卡，在卡里恢复显示 */
+  hasPrs: boolean
 }
 
 /**
@@ -91,11 +131,11 @@ export const errorKindOf = (error: string | null | undefined): Exclude<ErrorKind
 
 /**
  * 先后（一格只放一个）：approve / question > auth / balance / route / failed / folder > busy / offline
- * > paused > running > unread > pr-conflict > pr。被占了又有 PR：prInline。
+ * > paused > running > unread。PR 不占左边格子，图标一律放右边（prInline）
  */
 export function statusOf(input: StatusInput): SessionStatus {
   const { card } = input
-  const pr = visiblePrs(input.prs, input.now)[0] ?? null
+  const pr = iconPrs(input.prs, input.display, input.sessionId, input.now)[0] ?? null
   const error = card?.lane === 'failed' ? errorKindOf(card.error) : null
   const offline =
     !!input.machine &&
@@ -112,19 +152,19 @@ export function statusOf(input: StatusInput): SessionStatus {
   else if (card?.lane === 'paused') mark = 'paused'
   else if (input.running) mark = 'running'
   else if (input.unread || card?.lane === 'unread') mark = 'unread'
-  else if (pr) mark = pr.state === 'open' && pr.conflict && !pr.unknown ? 'pr-conflict' : 'pr'
   return {
     mark,
     label: (mark && LABEL[mark]) || null,
     pr,
-    prInline: !!pr && !isPrKind(mark),
+    prInline: !!pr,
+    hasPrs: !!pr || visiblePrs(input.prs, input.now).length > 0 || (input.mentioned ?? 0) > 0,
   }
 }
 
-/** 悬停卡讲什么：问题类讲问题；PR 占着格子讲 PR；跑着 / 新回复 + 有 PR 时也讲 PR；其余不弹 */
+/** 悬停卡讲什么：问题类讲问题；有 PR（图标藏了的、只是提到的也算）讲 PR；其余不弹 */
 export function topicOf(status: SessionStatus): StatusKind | null {
-  if (isProblem(status.mark) || isPrKind(status.mark)) return status.mark
-  return status.pr ? 'pr' : null
+  if (isProblem(status.mark)) return status.mark
+  return status.hasPrs ? 'pr' : null
 }
 
 /** 悬停卡里的按钮（最多三个，再加「打开对话」）；具体怎么做由卡片组件接 */
@@ -141,8 +181,6 @@ export type CardActionId =
   | 'open-account'
   | 'sign-in'
   | 'edit-provider'
-  | 'open-pr'
-  | 'copy-pr'
   | 'refresh'
 
 export const MAX_CARD_ACTIONS = 3
@@ -170,7 +208,7 @@ export function cardActions(
   else if (topic === 'offline') list.push('reconnect')
   else if (topic === 'paused') {
     if (canResume(context.queue)) list.push('resume')
-  } else if (isPrKind(topic)) list.push('open-pr', 'copy-pr', 'refresh')
+  } else if (isPrKind(topic)) list.push('refresh') // 打开、复制、隐藏在每个 PR 那一行上
   return list.slice(0, MAX_CARD_ACTIONS)
 }
 

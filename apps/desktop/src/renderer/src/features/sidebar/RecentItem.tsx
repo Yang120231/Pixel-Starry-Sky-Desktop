@@ -3,10 +3,11 @@ import { useMemo } from 'react'
 import { Dot } from '@/ui'
 import { projects, type RecentItem as Recent, type SessionStatus } from '@/data'
 import { SessionRow } from './SessionRow'
-import { StatusGlyph, ringOf } from './SessionMarks'
+import { InlinePr, ringOf } from './SessionMarks'
 import { StatusHover } from './SessionStatusCard'
 import { statusOf as sessionStatusOf } from './sessionStatusModel'
 import { useSessionStatus } from './useSessionStatus'
+import { usePrDisplay } from './prDisplay'
 
 /** 最近任务如果同时是某个项目下的会话，就沿用它的状态 */
 function statusOf(id: string): SessionStatus {
@@ -19,7 +20,7 @@ function statusOf(id: string): SessionStatus {
 
 const DOT_TONE = { idle: 'muted', running: 'success', unread: 'accent' } as const
 
-/** 最近任务：左边 6px 状态圆点，中间标题，右边时间；有 PR 时标题后面是真的 PR 图标（鼠标停上去看详情） */
+/** 最近任务：左边 6px 状态圆点，中间标题，右边时间；有 PR 时标题后面是小 PR 图标（鼠标停在行上看详情） */
 export function RecentItem({
   item,
   status,
@@ -33,8 +34,14 @@ export function RecentItem({
   onSelect: (id: string) => void
 }) {
   useI18n()
-  const prs = useSessionStatus().prs[item.id]
-  const prStatus = useMemo(() => sessionStatusOf({ running: false, unread: false, prs }), [prs])
+  const extra = useSessionStatus()
+  const prs = extra.prs[item.id]
+  const mentioned = extra.mentioned[item.id]?.length ?? 0
+  const display = usePrDisplay()
+  const prStatus = useMemo(
+    () => sessionStatusOf({ running: false, unread: false, prs, mentioned, display, sessionId: item.id }),
+    [prs, mentioned, display, item.id],
+  )
   return (
     <SessionRow
       target={{
@@ -55,11 +62,9 @@ export function RecentItem({
         <Dot tone={DOT_TONE[status ?? statusOf(item.id)]} size={6} />
       </span>
       <span className="min-w-0 flex-1 truncate">{item.title}</span>
-      {prStatus.pr && (
-        <StatusHover sessionId={item.id} title={item.title} status={prStatus} className="flex shrink-0">
-          <StatusGlyph kind={prStatus.mark ?? 'pr'} pr={prStatus.pr} size={14} ring={ringOf(selected)} />
-        </StatusHover>
-      )}
+      <StatusHover sessionId={item.id} title={item.title} status={prStatus} className="flex shrink-0">
+        {prStatus.pr && <InlinePr pr={prStatus.pr} ring={ringOf(selected)} />}
+      </StatusHover>
     </SessionRow>
   )
 }

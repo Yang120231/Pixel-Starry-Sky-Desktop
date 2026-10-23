@@ -13,7 +13,7 @@ import { useSessionChannel } from '@/features/channels/store'
 /**
  * 项目下面的对话（docs/ui/sidebar-styles.md「大文件夹」版）：标题和项目名对齐，状态挂在项目文件夹图标正下方，
  * 右边是时间（有问题的写「等你 / 要登录 / 出错…」）；新回复的标题用主色加粗，当前打开的有底色。
- * 状态格放什么见 sessionStatusModel.statusOf（docs/ui/sidebar-status-icons.md），鼠标停上去弹出详情和操作
+ * 状态格放什么见 sessionStatusModel.statusOf（docs/ui/sidebar-status-icons.md），PR 图标在右边时间前面；鼠标停在行上弹出详情和操作
  */
 export function SessionItem({
   session,
@@ -68,17 +68,16 @@ export function SessionItem({
         )
       }
     >
-      {status.mark && (
-        <StatusHover
-          sessionId={session.id}
-          title={session.title}
-          status={status}
-          card={card}
-          className="absolute left-[5px] flex w-3.5 items-center justify-center"
-        >
-          <SessionStatusMark status={status} ring={ring} />
-        </StatusHover>
-      )}
+      {/* 左边那一格；悬停卡挂在整行上（没有图标、PR 图标藏了也能弹） */}
+      <StatusHover
+        sessionId={session.id}
+        title={session.title}
+        status={status}
+        card={card}
+        className="absolute left-[5px] flex w-3.5 items-center justify-center"
+      >
+        {status.mark && <SessionStatusMark status={status} ring={ring} />}
+      </StatusHover>
       <span className={cn('min-w-0 truncate', !channel && 'flex-1', fresh && 'font-semibold text-accent-fg')}>
         {session.title}
       </span>

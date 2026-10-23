@@ -115,11 +115,11 @@ describe('SessionStatusMark', () => {
 })
 
 describe('右边的字和小 PR 图标', () => {
-  it('问题类的字代替时间；PR 被占了时小图标在字前面（13px）', () => {
-    const status = statusOf({ running: false, unread: false, folderMissing: true, prs: [pr({ state: 'merged' })] })
+  it('问题类的字代替时间；有 PR 时小图标在字前面（13px）', () => {
+    const status = statusOf({ running: false, unread: false, folderMissing: true, prs: [pr({ state: 'draft' })] })
     const out = html(<StatusLabel status={status} />)
     expect(out).toContain('文件夹没了')
-    expect(out).toContain('data-session-pr="merged"')
+    expect(out).toContain('data-session-pr="draft"')
     expect(out).toContain('width="13"')
     expect(out.indexOf('data-session-pr')).toBeLessThan(out.indexOf('文件夹没了'))
   })
@@ -135,17 +135,17 @@ describe('右边的字和小 PR 图标', () => {
     expect(out).toContain('要登录')
   })
 
-  it('没有问题时 SessionMarks 写时间，被占着有 PR 时时间前面有小图标', () => {
+  it('没有问题时 SessionMarks 写时间，有 PR 时时间前面有小图标', () => {
     const plain = html(<SessionMarks running={false} unread={false} time="3天" />)
     expect(plain).toContain('3天')
     expect(plain).not.toContain('data-session-pr')
     const busy = statusOf({ running: true, unread: false, prs: [pr()] })
     const out = html(<SessionMarks running unread={false} time="刚刚" status={busy} />)
     expect(out.indexOf('data-session-pr')).toBeLessThan(out.indexOf('刚刚'))
-    // 格子里已经是 PR 时右边不再放
-    const left = statusOf({ running: false, unread: false, prs: [pr()] })
-    const none = html(<SessionMarks running={false} unread={false} time="刚刚" status={left} />)
-    expect(none).not.toContain('data-session-pr')
+    // 空闲的对话 PR 也放右边（左边格子不放 PR）
+    const idle = statusOf({ running: false, unread: false, prs: [pr()] })
+    const right = html(<SessionMarks running={false} unread={false} time="刚刚" status={idle} />)
+    expect(right.indexOf('data-session-pr')).toBeLessThan(right.indexOf('刚刚'))
   })
 
   it('InlinePr 开着有冲突用冲突图标', () => {

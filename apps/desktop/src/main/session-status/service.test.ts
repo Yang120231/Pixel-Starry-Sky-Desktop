@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { SessionStatusState } from '../../shared/types/session-status'
 import type { SessionLite } from './folders'
 import type { GhResult } from './gh'
+import { createsPr } from './github'
 import { LOOKUPS_PER_CYCLE, SessionStatusService, type PrLinks, type RestResponse } from './service'
 
 const ok = (stdout: string): GhResult => ({ code: 0, stdout, stderr: '', missing: false, timedOut: false })
@@ -26,14 +27,17 @@ const ghPr = (n: number, extra: Record<string, unknown> = {}) => ({
 })
 
 function memoryLinks(initial: Record<string, string[]> = {}): PrLinks {
-  const data = { ...initial }
+  const own: Record<string, string[]> = { ...initial }
+  const mentioned: Record<string, string[]> = {}
   return {
-    get: id => data[id] ?? [],
-    add: (id, urls) => {
-      const before = data[id] ?? []
+    get: id => own[id] ?? [],
+    mentioned: id => (mentioned[id] ?? []).filter(u => !(own[id] ?? []).includes(u)),
+    add: (id, urls, isOwn = false) => {
+      const box = isOwn ? own : mentioned
+      const before = box[id] ?? []
       const next = [...before, ...urls.filter(u => !before.includes(u))]
-      data[id] = next
-      return next.length !== before.length
+      box[id] = next
+      return isOwn && next.length !== before.length
     },
     retain: () => undefined,
   }
@@ -275,12 +279,28 @@ describe('SessionStatusService rest fallback', () => {
 })
 
 describe('SessionStatusService links', () => {
-  it('noteLinks records urls found in output and reports new ones', () => {
+  it('noteLinks: only links from creating a PR count as own and trigger a lookup', () => {
     const { service } = setup()
-    const spy = vi.fn()
-    expect(service.noteLinks('s1', 'done: https://github.com/o/r/pull/12 ')).toBe(true)
-    expect(service.noteLinks('s1', 'again https://github.com/o/r/pull/12')).toBe(false)
-    expect(service.noteLinks('s1', 'no links')).toBe(false)
-    expect(spy).not.toHaveBeenCalled()
+    expect(service.noteLinks('s1', 'done: https://github.com/o/r/pull/12 ', true)).toBe(true)
+    expect(service.noteLinks('s1', 'again https://github.com/o/r/pull/12', true)).toBe(false)
+    expect(service.noteLinks('s1', 'no links', true)).toBe(false)
+    expect(service.noteLinks('s1', 'see https://github.com/x/y/pull/3')).toBe(false)
+  })
+
+  it('mentioned links are published without lookup, minus ones already known as own', () => {
+    const { service } = setup()
+    service.noteLinks('s1', 'https://github.com/o/r/pull/12', true)
+    service.noteLinks('s1', 'https://github.com/o/r/pull/12 https://github.com/x/y/pull/3')
+    expect(service.state().mentioned).toEqual({ s1: ['https://github.com/x/y/pull/3'] })
+  })
+})
+
+describe('createsPr', () => {
+  it('recognizes gh pr create and PR-creating tools', () => {
+    expect(createsPr({ kind: 'command', command: 'git push -u origin x && gh pr create --fill' })).toBe(true)
+    expect(createsPr({ kind: 'command', command: 'git push origin feat' })).toBe(true)
+    expect(createsPr({ kind: 'command', command: 'gh pr view 12' })).toBe(false)
+    expect(createsPr({ kind: 'tool', name: 'mcp__github__create_pull_request' })).toBe(true)
+    expect(createsPr({ kind: 'tool', name: 'WebFetch' })).toBe(false)
   })
 })

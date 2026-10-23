@@ -5,7 +5,7 @@ import type { SessionStatusState } from '../../../../shared/types/session-status
 import { isDemo } from '@/data'
 import { demo } from '@/data/demo'
 
-export const EMPTY_SESSION_STATUS: SessionStatusState = { missingFolders: {}, prs: {}, gh: 'missing' }
+export const EMPTY_SESSION_STATUS: SessionStatusState = { missingFolders: {}, prs: {}, mentioned: {}, gh: 'missing' }
 
 let state: SessionStatusState = EMPTY_SESSION_STATUS
 let started = false
@@ -20,13 +20,15 @@ function start(): void {
   if (started) return
   started = true
   if (isDemo) {
-    state = demo().sessionStatus ?? EMPTY_SESSION_STATUS
+    state = { ...EMPTY_SESSION_STATUS, ...demo().sessionStatus }
     return
   }
   const bridge = window.pixelsky?.sessionStatus
   if (!bridge) return
-  bridge.onChange(set)
-  void bridge.get().then(set, () => undefined)
+  // 旧的主进程（开发时只重载了界面）没有 mentioned
+  const take = (value: SessionStatusState): void => set({ ...EMPTY_SESSION_STATUS, ...value })
+  bridge.onChange(take)
+  void bridge.get().then(take, () => undefined)
 }
 
 function subscribe(callback: () => void): () => void {

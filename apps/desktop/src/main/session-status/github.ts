@@ -54,6 +54,14 @@ export function extractPrUrls(text: string): PrLink[] {
   return [...found.values()]
 }
 
+const CREATE_COMMAND = /\bgh(?:\.exe)?\s+pr\s+create\b|\bgit\s+push\b/i
+const CREATE_TOOL = /create_pull_request|pull_request_create|create_pr\b|createpullrequest/i
+
+/** 这一步是不是在建 / 推 PR：命令里有 gh pr create 或 git push（推送时 GitHub 会给出这个分支的 PR 链接），或建 PR 的工具（GitHub MCP 的 create_pull_request 等） */
+export function createsPr(item: { kind: 'command'; command: string } | { kind: 'tool'; name: string }): boolean {
+  return item.kind === 'command' ? CREATE_COMMAND.test(item.command) : CREATE_TOOL.test(item.name)
+}
+
 /** 单个 PR 链接（记下来的那种）→ 仓库和编号 */
 export function parsePrUrl(url: string): PrLink | null {
   const links = extractPrUrls(url)

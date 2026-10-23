@@ -76,7 +76,7 @@ const PRS: Array<{ id: string; title: string; pr: PrFields }> = [
       conflict: false,
       additions: 14,
       deletions: 6,
-      closedAt: iso(DAY),
+      closedAt: iso(3 * 60 * MIN),
     },
   },
   {
@@ -138,6 +138,42 @@ export const statusDemoSessionState: SessionStatusState = {
       ),
     ],
     ...Object.fromEntries(PRS.map(p => [p.id, [full(p.pr, `feat/${p.id.slice(5)}`)]])),
+    // 出问题的对话也有 PR：问题卡下面附一行，点「查看 PR」切过去
+    's-st-busy': [
+      full(
+        {
+          number: 415,
+          title: '组件文件统一用 PascalCase',
+          state: 'open',
+          ci: 'pending',
+          ciFailed: 0,
+          conflict: false,
+          additions: 48,
+          deletions: 48,
+        },
+        'chore/rename-components',
+      ),
+    ],
+    // 一个对话建了好几个 PR：卡里列 3 个，其余折叠
+    's-st-pr-open': [
+      full(PRS[0].pr, 'feat/pr-open'),
+      ...[409, 407, 404, 401].map((number, i) =>
+        full(
+          {
+            number,
+            title: ['导出加进度条', '导出文件名带日期', '导出时去掉空行', '导出按钮挪到工具栏'][i],
+            state: i < 1 ? 'open' : 'merged',
+            ci: 'pass',
+            ciFailed: 0,
+            conflict: false,
+            additions: 10 + i * 7,
+            deletions: 2 + i,
+            closedAt: i < 1 ? null : iso((i + 1) * 60 * MIN),
+          },
+          `feat/export-${number}`,
+        ),
+      ),
+    ],
     // 最近任务里的「频道话题支持引用回复」：原来演示数据里 hasPr 的那条
     'r-channel-quote': [
       full(
@@ -154,6 +190,12 @@ export const statusDemoSessionState: SessionStatusState = {
         'feat/quote-reply',
       ),
     ],
+  },
+  // 对话里只是提到的 PR（看别人仓库的发布说明时出现的链接）：不出图标，卡里折叠列出
+  mentioned: {
+    's-st-pr-merged': [11233, 11230, 11183, 11173, 10730, 11016, 11150].map(
+      n => `https://github.com/earendil-works/pi/pull/${n}`,
+    ),
   },
   gh: 'ready',
 }

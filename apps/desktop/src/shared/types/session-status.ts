@@ -1,4 +1,4 @@
-// 侧栏对话状态图标要的额外信号（docs/ui/sidebar-status-icons.md）：工作文件夹还在不在、对话关联的 GitHub PR。
+// 侧栏对话状态图标要的额外信号（docs/ui/sidebar-status-icons.md、docs/ui/sidebar-pr-v2-mockup.html）：工作文件夹还在不在、对话关联的 GitHub PR。
 // 主进程算好推给界面；只读，不改远端。
 
 /** 对话关联的一个 PR */
@@ -30,6 +30,8 @@ export interface SessionStatusState {
   missingFolders: Record<string, true>
   /** 对话关联的 PR，按「最需要看」排好：检查没过 / 有冲突的开着的 > 开着的 > 草稿 > 已合并 > 已关闭 */
   prs: Record<string, SessionPr[]>
+  /** 对话里只是提到过的 PR 链接（不是这个对话建的，不查状态、不出图标，悬停卡里折叠列出） */
+  mentioned: Record<string, string[]>
   /** 本机有没有能用的 gh（装了且登录了）；悬停卡里提示用 */
   gh: 'ready' | 'missing' | 'signed-out'
 }

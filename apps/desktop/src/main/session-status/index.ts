@@ -8,6 +8,7 @@ import { runGit } from '../core/project-tools/git'
 import * as ipc from '../ipc/guard'
 import { machineOf } from '../machines/identity'
 import { createGhRunner } from './gh'
+import { createsPr } from './github'
 import { PrLinkStore } from './links'
 import { SessionStatusService, type RestResponse } from './service'
 
@@ -120,7 +121,9 @@ export async function initSessionStatus(ctx: AppContext): Promise<() => void> {
       const item = event.item
       const text =
         item.kind === 'command' || item.kind === 'tool' ? item.output : item.kind === 'assistant' ? item.text : ''
-      if (text && service.noteLinks(e.sessionId, text)) sessionPrsSoon(e.sessionId, PR_DEBOUNCE_MS)
+      // 只有建 PR 的那一步输出里的链接算这个对话自己的；其余（回复、别的命令输出）只是提到
+      const own = (item.kind === 'command' || item.kind === 'tool') && createsPr(item)
+      if (text && service.noteLinks(e.sessionId, text, own)) sessionPrsSoon(e.sessionId, PR_DEBOUNCE_MS)
     }
   }
   ctx.hostListeners.add(onHostEvent)

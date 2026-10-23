@@ -24,8 +24,12 @@ export interface RestResponse {
 }
 
 export interface PrLinks {
+  /** 这个对话自己建的 PR 链接（会查状态） */
   get(sessionId: string): string[]
-  add(sessionId: string, urls: string[]): boolean
+  /** 只是提到过的（不查状态） */
+  mentioned(sessionId: string): string[]
+  /** 返回自己建的有没有新增 */
+  add(sessionId: string, urls: string[], own?: boolean): boolean
   retain(keep: ReadonlySet<string>): void
 }
 
@@ -85,7 +89,13 @@ export class SessionStatusService {
   constructor(private readonly deps: StatusDeps) {}
 
   state(): SessionStatusState {
-    return { missingFolders: this.missing, prs: this.prs, gh: this.gh }
+    const mentioned: Record<string, string[]> = {}
+    for (const s of localSessions(this.deps.sessions())) {
+      const known = new Set((this.prs[s.id] ?? []).map(p => p.url.toLowerCase()))
+      const urls = this.deps.links.mentioned(s.id).filter(u => !known.has(u.toLowerCase()))
+      if (urls.length) mentioned[s.id] = urls
+    }
+    return { missingFolders: this.missing, prs: this.prs, mentioned, gh: this.gh }
   }
 
   // ---- 对话列表变了：只在「有哪些对话 / 在哪个文件夹」变了时才重查 ----
@@ -133,16 +143,18 @@ export class SessionStatusService {
 
   // ---- PR ----
 
-  /** 对话里出现了 PR 链接：记下来；有新的返回 true */
-  noteLinks(sessionId: string, text: string): boolean {
+  /** 对话里出现了 PR 链接：记下来；own 是这个对话建的。自己建的有新的返回 true（要去查状态） */
+  noteLinks(sessionId: string, text: string, own = false): boolean {
     const links = extractPrUrls(text)
-    return (
-      links.length > 0 &&
-      this.deps.links.add(
-        sessionId,
-        links.map(l => l.url),
-      )
+    if (!links.length) return false
+    const added = this.deps.links.add(
+      sessionId,
+      links.map(l => l.url),
+      own,
     )
+    // 只是提到的不查状态，直接推给界面（悬停卡里折叠列出）
+    if (!own) this.publish()
+    return added
   }
 
   /** 重查 PR：sessionId 不传查全部；force 忽略缓存（手动刷新） */

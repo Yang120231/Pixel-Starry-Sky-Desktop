@@ -4,7 +4,6 @@ import { Pin } from 'lucide-react'
 import { cn } from '@/ui'
 import { SessionMarks, StatusLabel, ringOf } from './SessionMarks'
 import { StatusHover } from './SessionStatusCard'
-import { topicOf } from './sessionStatusModel'
 import { useRowStatus } from './useRowStatus'
 import type { PinnedSession } from '@/features/engine/sidebarData'
 import { SessionRow } from './SessionRow'
@@ -46,7 +45,7 @@ export function PinnedList({
 
 /**
  * 置顶行：左边是图钉不变；右边有问题时写字（前面 13px 小图标），有 PR 时 13px 的 PR 图标放在时间前面
- * （docs/ui/sidebar-status-icons.md §5）。鼠标停在图钉和标题上弹状态详情
+ * （docs/ui/sidebar-status-icons.md §5）。鼠标停在行上弹状态详情
  */
 function PinnedRow({
   session,
@@ -64,8 +63,6 @@ function PinnedRow({
   const running = session.status === 'running'
   const unread = session.status === 'unread'
   const status = useRowStatus(session.id, { card, running, unread })
-  // 置顶行左边没有状态格：PR 一律放右边
-  const right = { ...status, prInline: !!status.pr }
   const ring = ringOf(selected)
   const content = (
     <>
@@ -86,26 +83,29 @@ function PinnedRow({
       trailing={
         lane ? (
           <span className={cn('shrink-0 text-meta', LANE_TONE[lane])}>{tr(LANE_LABEL[lane])}</span>
-        ) : right.label ? (
-          <StatusLabel status={right} ring={ring} icon />
+        ) : status.label ? (
+          <StatusLabel status={status} ring={ring} icon />
         ) : (
-          <SessionMarks running={running} unread={unread} time={session.time} lead={false} status={right} ring={ring} />
+          <SessionMarks
+            running={running}
+            unread={unread}
+            time={session.time}
+            lead={false}
+            status={status}
+            ring={ring}
+          />
         )
       }
     >
-      {topicOf(status) ? (
-        <StatusHover
-          sessionId={session.id}
-          title={session.title}
-          status={status}
-          card={card}
-          className="flex min-w-0 flex-1 items-center gap-2.5"
-        >
-          {content}
-        </StatusHover>
-      ) : (
-        content
-      )}
+      <StatusHover
+        sessionId={session.id}
+        title={session.title}
+        status={status}
+        card={card}
+        className="flex min-w-0 flex-1 items-center gap-2.5"
+      >
+        {content}
+      </StatusHover>
     </SessionRow>
   )
 }
