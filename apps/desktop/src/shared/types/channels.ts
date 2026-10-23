@@ -123,8 +123,21 @@ export interface AgentConfig {
    * 频道派来的活就在里面接着做；没写是频道自己建的成员
    */
   bound?: boolean
+  /**
+   * 这个成员能用的扩展（docs/ui/channels-collab-v2.md §5）：没写或 null 是跟随全局（设置 › 扩展里开着的都用）；
+   * only 是只用列出的扩展（MCP、技能、插件的 id），没列的这个成员的会话里不挂。频道工具（pixelsky_channel）总是有
+   */
+  tools?: AgentTools | null
   createdAt: number
 }
+
+/** 成员只用这些扩展（id 来自设置 › 扩展里像素星空管理的条目） */
+export interface AgentTools {
+  mode: 'only'
+  ids: string[]
+}
+/** 只用这些扩展时最多勾这么多个 */
+export const AGENT_TOOLS_MAX = 100
 
 export interface AgentMember {
   id: string
@@ -223,8 +236,23 @@ export interface ChannelTextMessage extends ChannelMessageBase {
   mentions?: string[]
   /** AI 成员发回的任务结果：对应的任务卡 */
   taskId?: string | null
+  /**
+   * 讨论串（docs/ui/channels-collab-v2.md §3）：发在哪张任务卡 / 哪条消息的串里；有这个字段的消息不在主时间线显示，
+   * 只在串里。任务结果（taskId）仍在主时间线，串里也列出来
+   */
+  threadId?: string | null
+  /** AI 成员用频道工具 task_propose 提议的派活（§1）：要你点「派出去」才派 */
+  proposal?: ChannelProposal | null
   /** 带的图片和文件：消息里只有说明，图片数据和文件全文另存，按需用 channels:attachments 读 */
   attached?: ChannelAttachedMeta
+}
+
+/** 提议的派活：给谁、做什么；open 等你决定，sent 已派出（taskId 是派出的卡），dismissed 不要了 */
+export interface ChannelProposal {
+  assigneeId: string
+  request: string
+  state: 'open' | 'sent' | 'dismissed'
+  taskId?: string | null
 }
 
 /** 消息带的附件说明（本机频道；团队频道不支持） */
@@ -456,6 +484,8 @@ export type AgentInput = Omit<AgentConfig, 'id' | 'createdAt' | 'sharedSessionId
 export interface PostInput {
   text: string
   replyToId?: string | null
+  /** 发在这张任务卡 / 这条消息的讨论串里：串里 @ 同一个成员 = 追加要求，不 @ 只是留言 */
+  threadId?: string | null
   /** 防止重复发送 */
   clientId: string
   /** 图片和文本文件（只有本机频道支持） */

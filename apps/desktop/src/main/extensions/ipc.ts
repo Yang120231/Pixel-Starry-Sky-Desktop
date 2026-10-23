@@ -12,6 +12,7 @@ import { resolveWorkspace } from '../workspace/resolve'
 import { HISTORY_SERVER_NAME, type HistoryServer } from '../engine/history-mcp'
 import { THREADS_SERVER_NAME, type ThreadsServer } from '../engine/threads-mcp'
 import type { LocalMcpEntry } from '../engine/local-mcp'
+import { CHANNEL_SERVER_NAME } from '../channels/channel-mcp'
 
 /**
  * 扩展（MCP / 插件 / 技能 / 命令行）的主进程一侧：服务实现在 extensions/service.ts。
@@ -43,9 +44,12 @@ export class Extensions {
   async prepare(record: SessionRecord): Promise<ExtensionLaunch> {
     // 应用自己的只读 MCP 服务器：换过引擎的对话挂对话历史，新引擎可以按需查更早的部分；
     // 设置里开了「查看本机其他会话」时挂 list_threads / read_thread（docs/ui/import-collab.md 第 5 项③）
+    // 频道派活的会话挂频道工具，成员设了「只用这些」时只带勾选的扩展（docs/ui/channels-collab-v2.md §1、§5）
+    const channel = await this.ctx.channelTools?.forSession(record).catch(() => null)
     const own: [string, LocalMcpEntry | null | undefined][] = [
       [HISTORY_SERVER_NAME, await this.history?.entry(record)],
       [THREADS_SERVER_NAME, await this.threads?.entry(record)],
+      [CHANNEL_SERVER_NAME, channel?.entry],
     ]
     const servers = Object.fromEntries(
       own.flatMap(([name, entry]) =>
@@ -54,8 +58,9 @@ export class Extensions {
           : [],
       ),
     )
-    const base = this.get().launch(record.cwd, record.engine, this.env(record.engine), servers)
-    // 这些工具只读，不用每次查都等用户批准
+    const only = channel?.tools ? new Set(channel.tools.ids) : undefined
+    const base = this.get().launch(record.cwd, record.engine, this.env(record.engine), servers, only)
+    // 这些工具只读（频道工具只在频道里留记录），不用每次都等用户批准
     const allow = Object.keys(servers).map(name => `mcp__${name}`)
     const launch = allow.length ? { ...base, allowTools: allow } : base
     // 扩展包里的技能：Claude 走生成的插件目录，Codex 走技能目录；没有时 key 和原来一字不差

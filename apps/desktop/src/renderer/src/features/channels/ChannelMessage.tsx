@@ -1,8 +1,10 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '../../i18n/core'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { CornerUpLeft, Pin, PinOff } from 'lucide-react'
-import { Avatar, cn, CopyButton, EngineIcon, IconButton, useToast } from '@/ui'
+import { CornerUpLeft, Forward, MessageSquareText, Pin, PinOff } from 'lucide-react'
+import { Avatar, Button, cn, CopyButton, EngineIcon, IconButton, useToast } from '@/ui'
+import { appendComposerDraft } from '@/features/engine/drafts'
+import { channelDraftKey } from './ChannelComposer'
 import { Markdown } from '@/ui/markdown/Markdown'
 import type { ChannelMember, ChannelTask, ChannelTextMessage } from '@/data/types'
 import { excerpt, splitMentions } from './model'
@@ -222,6 +224,116 @@ function QuoteBlock({
   )
 }
 
+/** 讨论串的回复数和最新一条（docs/ui/channels-collab-v2.md §3） */
+export type ThreadStats = ReadonlyMap<string, { count: number; last: ChannelTextMessage }>
+
+/**
+ * 卡片 / 消息下面那一行：「3 条回复 · 最新：前端：…」，点开右侧讨论串。
+ * 还没有回复时（只给任务卡用）是一个悬停才显示的「在串里讨论」
+ */
+export function ThreadRow({
+  rootId,
+  stats,
+  membersById,
+  onOpen,
+  idle,
+}: {
+  rootId: string
+  stats: ThreadStats
+  membersById: ReadonlyMap<string, ChannelMember>
+  onOpen: (id: string) => void
+  /** 没有回复时也显示（悬停可见） */
+  idle?: boolean
+}) {
+  useI18n()
+  const s = stats.get(rootId)
+  if (!s && !idle) return null
+  return (
+    <button
+      type="button"
+      data-thread-row={rootId}
+      onClick={() => onOpen(rootId)}
+      className={cn(
+        'mt-1 flex max-w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 text-left text-meta hover:bg-hover',
+        s ? 'text-fg-muted' : 'text-fg-faint opacity-0 group-hover/thread:opacity-100 focus-visible:opacity-100',
+      )}
+    >
+      <MessageSquareText size={13} strokeWidth={1.5} className="shrink-0" />
+      {s ? (
+        <>
+          <span className="shrink-0 font-medium text-accent-fg">
+            {tr('channels.thread.replies', { count: s.count })}
+          </span>
+          <span className="min-w-0 truncate">
+            ·{' '}
+            {tr('channels.thread.latest', {
+              name: membersById.get(s.last.authorId)?.name ?? '?',
+              text: excerpt(s.last.text),
+            })}
+          </span>
+        </>
+      ) : (
+        <span>{tr('channels.thread.start')}</span>
+      )}
+    </button>
+  )
+}
+
+/** AI 成员用 task_propose 提议的派活：派出去 / 改一下 / 不要（docs/ui/channels-collab-v2.md §1） */
+function ProposalCard({
+  message,
+  membersById,
+  readOnly,
+}: {
+  message: ChannelTextMessage
+  membersById: ReadonlyMap<string, ChannelMember>
+  readOnly: boolean
+}) {
+  useI18n()
+  const toast = useToast()
+  const [busy, setBusy] = useState(false)
+  const p = message.proposal!
+  const target = membersById.get(p.assigneeId)?.name ?? '?'
+  const decide = (accept: boolean) => {
+    setBusy(true)
+    channelActions
+      .proposal(message.channelId, message.id, accept)
+      .catch(e => toast(tr('channels.proposal.failed', { error: translateMessage((e as Error).message) })))
+      .finally(() => setBusy(false))
+  }
+  // 改一下：把「@成员 要求」放进输入框，改好了自己发
+  const edit = () => appendComposerDraft(channelDraftKey(message.channelId), `@${target} ${p.request}`)
+  return (
+    <div
+      data-proposal={p.state}
+      className="mt-1 flex flex-col gap-1.5 rounded-lg border border-line-card bg-surface px-3 py-2"
+    >
+      <div className="flex min-w-0 items-center gap-1.5 text-meta font-medium text-fg-secondary">
+        <Forward size={13} strokeWidth={1.5} className="shrink-0" />
+        <span className="min-w-0 truncate">{tr('channels.proposal.title', { name: target })}</span>
+      </div>
+      <p className="text-prose break-words whitespace-pre-wrap text-fg-body">{p.request}</p>
+      {p.state === 'open' && !readOnly ? (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Button variant="primary" className="h-7 px-2.5 text-meta" disabled={busy} onClick={() => decide(true)}>
+            {tr('channels.proposal.send')}
+          </Button>
+          <Button className="h-7 px-2.5 text-meta" disabled={busy} onClick={edit}>
+            {tr('channels.proposal.edit')}
+          </Button>
+          <Button variant="ghost" className="h-7 px-2.5 text-meta" disabled={busy} onClick={() => decide(false)}>
+            {tr('channels.proposal.dismiss')}
+          </Button>
+        </div>
+      ) : p.state !== 'open' ? (
+        <span className="text-meta text-fg-faint">
+          {tr(p.state === 'sent' ? 'channels.proposal.sent' : 'channels.proposal.dismissed')}
+        </span>
+      ) : null}
+    </div>
+  )
+}
+
 export interface MessageGroupProps {
   items: ChannelTextMessage[]
   /** 全部成员（作者可能已经离开频道） */
@@ -237,6 +349,11 @@ export interface MessageGroupProps {
   pinned?: ReadonlySet<string>
   /** 置顶 / 取消置顶（只有本机频道有，docs/ui/channels-local-ai.md §3.1 #9） */
   onPin?: (id: string, pinned: boolean) => Promise<void>
+  /** 讨论串：回复数和打开（串面板里的消息不再开串时不传） */
+  threads?: ThreadStats
+  onThread?: (id: string) => void
+  /** 提议卡只读（归档的频道）；不传时按能不能回复判断 */
+  proposalsReadOnly?: boolean
 }
 
 /** 同一作者的连续消息：第一条带头像和作者行，后面的悬停时在头像位置显示时间 */
@@ -250,6 +367,9 @@ export function MessageGroup({
   onJump,
   pinned,
   onPin,
+  threads,
+  onThread,
+  proposalsReadOnly = !onReply,
 }: MessageGroupProps) {
   useI18n()
   const toast = useToast()
@@ -292,12 +412,17 @@ export function MessageGroup({
                   onJump={onJump}
                 />
               )}
-              {m.format === 'markdown' ? (
+              {m.proposal ? (
+                <ProposalCard message={m} membersById={membersById} readOnly={proposalsReadOnly} />
+              ) : m.format === 'markdown' ? (
                 <Folded text={m.text} />
               ) : (
                 m.text && <MentionText text={m.text} members={channelMembers} />
               )}
               {m.attached && <MessageAttachments message={m} />}
+              {threads && onThread && (
+                <ThreadRow rootId={m.id} stats={threads} membersById={membersById} onOpen={onThread} />
+              )}
               {pinned?.has(m.id) && (
                 <span data-pinned className="mt-0.5 inline-flex items-center gap-1 text-meta text-fg-faint">
                   <Pin size={11} strokeWidth={1.75} />
@@ -317,6 +442,15 @@ export function MessageGroup({
                   size={24}
                   iconSize={13}
                   onClick={() => onReply(m.id)}
+                />
+              )}
+              {onThread && (
+                <IconButton
+                  icon={MessageSquareText}
+                  label={tr('channels.thread.open')}
+                  size={24}
+                  iconSize={13}
+                  onClick={() => onThread(m.id)}
                 />
               )}
               <CopyButton text={m.text} label={tr('channels.copy')} iconOnly />

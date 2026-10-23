@@ -66,6 +66,8 @@ export interface TaskRun {
   attach?: string[]
   /** 这一轮还没做完时追加的要求带的附件，做完后跟着 followUps 一起发 */
   followUpAttach?: string[]
+  /** 这项活用频道工具（docs/ui/channels-collab-v2.md §1）做过的事：串里回复几次、提议几次、直接交给了谁 */
+  tools?: { replies: number; proposals: number; handover: string[] }
 }
 
 /** 新的一轮运行信息（团队执行端用；本机频道在 service.ts 里自己拼） */

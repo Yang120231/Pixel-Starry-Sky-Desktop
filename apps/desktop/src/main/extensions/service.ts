@@ -572,11 +572,15 @@ export class ExtensionService {
     engine: 'claude' | 'codex' | 'pixel' = 'claude',
     extraEnv: Record<string, string> = {},
     extraServers: Record<string, McpConfig> = {},
+    /** 频道成员「只用这些」（docs/ui/channels-collab-v2.md §5）：MCP、技能、插件只留这些 id；命令行不受影响 */
+    only?: ReadonlySet<string>,
   ): ExtensionLaunch {
     project = realpathSync(project)
     const env = { ...this.runtimeEnv(project), ...extraEnv }
     const entries = effective(
-        this.config.entries.filter(e => (e.engines ?? ['claude']).includes(engine)),
+        this.config.entries.filter(
+          e => (e.engines ?? ['claude']).includes(engine) && (!only || e.kind === 'cli' || only.has(e.id)),
+        ),
         project,
       ),
       pluginDirs: string[] = [],

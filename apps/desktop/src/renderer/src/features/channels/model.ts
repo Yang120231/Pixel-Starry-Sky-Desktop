@@ -46,6 +46,8 @@ export function buildTimeline(
   let group: Extract<TimelineRow, { kind: 'group' }> | null = null
   let newPlaced = false
   for (const m of messages) {
+    // 只在讨论串里的消息不上主时间线（docs/ui/channels-collab-v2.md §3）
+    if (m.kind === 'message' && m.threadId) continue
     const day = dayStart(m.at)
     if (day !== lastDay) {
       rows.push({ kind: 'day', key: `day-${day}`, at: day })

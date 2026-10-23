@@ -45,6 +45,8 @@ export interface ChannelsBridge {
   ): Promise<void>
   /** 置顶 / 取消置顶一条文字消息（docs/ui/channels-local-ai.md §3.1 #9） */
   pin(channelId: string, messageId: string, pinned: boolean): Promise<void>
+  /** AI 成员提议的派活：派出去（返回任务卡 id）或不要（docs/ui/channels-collab-v2.md §1） */
+  proposal(channelId: string, messageId: string, accept: boolean): Promise<string | null>
   /** 搜频道消息（§3.1 #8）：新的在前；projectId 只搜默认项目是它的频道 */
   search(text: string, opts?: { limit?: number; projectId?: string | null }): Promise<ChannelSearchResult>
   delete(id: string): Promise<void>

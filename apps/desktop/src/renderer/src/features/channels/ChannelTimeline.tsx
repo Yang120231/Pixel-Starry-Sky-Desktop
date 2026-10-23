@@ -6,7 +6,8 @@ import { Spinner, useToast } from '@/ui'
 import type { Channel, ChannelEvent, ChannelMember, ChannelMessage } from '@/data/types'
 import { buildTimeline } from './model'
 import { formatDay } from './format'
-import { MessageGroup, type Quotable } from './ChannelMessage'
+import { MessageGroup, ThreadRow, type Quotable } from './ChannelMessage'
+import { threadStats } from '../../../../shared/channels/threads'
 import { ChannelTaskCard, type TaskCardActions } from './ChannelTaskCard'
 import { channelActions, useChannels } from './store'
 
@@ -65,6 +66,7 @@ export function ChannelTimeline({
   onLoadOlder,
   onReply,
   taskActions,
+  onThread,
 }: {
   channel: Channel
   messages: readonly ChannelMessage[]
@@ -77,12 +79,15 @@ export function ChannelTimeline({
   /** 没有时不能回复（归档的频道只读） */
   onReply?: (id: string) => void
   taskActions: TaskCardActions
+  /** 打开讨论串（docs/ui/channels-collab-v2.md §3）；团队频道没有 */
+  onThread?: (id: string) => void
 }) {
   useI18n()
   const scroller = useRef<HTMLDivElement>(null)
   const nearBottom = useRef(true)
   const [highlight, setHighlight] = useState<string | null>(null)
   const rows = useMemo(() => buildTimeline(messages, { newFrom }), [messages, newFrom])
+  const threads = useMemo(() => threadStats(messages), [messages])
   const membersById = useMemo(() => new Map(members.map(m => [m.id, m])), [members])
   const messagesById = useMemo(
     () => new Map(messages.filter((m): m is Quotable => m.kind !== 'event').map(m => [m.id, m])),
@@ -248,13 +253,25 @@ export function ChannelTimeline({
               )
             case 'task':
               return (
-                <ChannelTaskCard
-                  key={row.key}
-                  task={row.message}
-                  membersById={membersById}
-                  highlight={highlight === row.message.id}
-                  {...taskActions}
-                />
+                <div key={row.key} className="group/thread">
+                  <ChannelTaskCard
+                    task={row.message}
+                    membersById={membersById}
+                    highlight={highlight === row.message.id}
+                    {...taskActions}
+                  />
+                  {onThread && (
+                    <div className="conversation-message pl-10">
+                      <ThreadRow
+                        rootId={row.message.id}
+                        stats={threads}
+                        membersById={membersById}
+                        onOpen={onThread}
+                        idle={!!onReply}
+                      />
+                    </div>
+                  )}
+                </div>
               )
             case 'group':
               return (
@@ -267,6 +284,8 @@ export function ChannelTimeline({
                   highlight={highlight}
                   onReply={onReply}
                   onJump={jump}
+                  threads={threads}
+                  onThread={onThread}
                   pinned={pinned}
                   onPin={
                     channel.scope === 'local' && !channel.archivedAt

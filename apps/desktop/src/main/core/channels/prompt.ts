@@ -5,6 +5,8 @@ import { excerpt, splitMentions, type Mentionable } from '../../../shared/channe
 
 /** 最近的讨论最多带这么多条 / 这么多字，先到哪个停在哪个 */
 export const HISTORY_MESSAGES = 20
+/** 会话有频道工具（channel_read 能往前翻）时只带这么多条（docs/ui/channels-collab-v2.md §1） */
+export const HISTORY_WITH_TOOLS = 5
 export const HISTORY_CHARS = 8000
 /** 任务卡标题、摘要的长度上限 */
 export const TITLE_MAX = 60
@@ -118,10 +120,10 @@ export function droppedNote(images: number, files: number, locale: Locale): stri
   return `（频道里还有 ${parts.filter(Boolean).join('、')} 超过一条消息的上限，这次没带上）`
 }
 
-/** 历史里的一行；事件不带（null） */
-function historyLine(m: ChannelMessage, nameOf: (id: string) => string, locale: Locale): string | null {
+/** 历史里的一行；事件和只在讨论串里的消息不带（null） */
+export function historyLine(m: ChannelMessage, nameOf: (id: string) => string, locale: Locale): string | null {
   const colon = en(locale) ? ': ' : '：'
-  if (m.kind === 'event') return null
+  if (m.kind === 'event' || (m.kind === 'message' && m.threadId)) return null
   if (m.kind === 'task') {
     const status = STATUS[m.status][en(locale) ? 1 : 0]
     return en(locale)
@@ -146,15 +148,18 @@ export function historyLines(
     beforeId: string
     since?: number | null
     skip?: string | null
+    /** 最多几条，默认 HISTORY_MESSAGES */
+    limit?: number
     nameOf: (id: string) => string
     locale: Locale
   },
 ): string[] {
+  const limit = opts.limit ?? HISTORY_MESSAGES
   const end = messages.findIndex(m => m.id === opts.beforeId)
   const earlier = end < 0 ? messages : messages.slice(0, end)
   const lines: string[] = []
   let chars = 0
-  for (let i = earlier.length - 1; i >= 0 && lines.length < HISTORY_MESSAGES; i--) {
+  for (let i = earlier.length - 1; i >= 0 && lines.length < limit; i--) {
     const m = earlier[i]
     if (opts.since != null && m.at <= opts.since) break
     if (m.id === opts.skip) continue
@@ -204,23 +209,48 @@ export interface DispatchInput {
   handoff?: Handoff | null
   /** 频道允许 AI 成员互相派活：频道里其他 AI 成员（名字、职责第一行）；不允许时 null */
   peers?: { name: string; role: string }[] | null
+  /** 会话挂了频道工具（pixelsky_channel）：说明能翻更早的讨论、在串里回复、提议派活；relay 时还能直接交接 */
+  tools?: { relay: boolean } | null
+}
+
+function toolsText(tools: { relay: boolean }, locale: Locale): string {
+  if (en(locale))
+    return [
+      "You have the channel tools (MCP server pixelsky_channel): channel_read reads earlier messages in this channel (only the last few are above), thread_read reads the discussion thread of a task card, channel_reply posts a short note in this task's thread (progress, questions; it does not interrupt anyone), and task_propose suggests giving a task to another AI member (the user decides whether to send it).",
+      tools.relay
+        ? 'This channel lets AI members hand work to each other: task_handover gives part of the work to another member right away. For the same handoff use either task_handover or "@name" in your final reply, not both.'
+        : '',
+    ]
+      .filter(Boolean)
+      .join('\n')
+  return [
+    '你有频道工具（MCP 服务 pixelsky_channel）：channel_read 读这个频道更早的消息（上面只带了最近几条），thread_read 读某张任务卡的讨论串，channel_reply 在这项活的串里写一句（进展、问题，不会打断别人），task_propose 提议把一项活交给别的 AI 成员（由用户决定派不派）。',
+    tools.relay
+      ? '这个频道允许 AI 成员互相派活：task_handover 可以直接把一部分活交给别的成员。同一次交接用 task_handover 或在最后的回复里写「@名字」二选一，不要两样都用。'
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
 }
 
 function handoffText(h: Handoff, locale: Locale): string {
   const files = h.files.slice(0, HANDOFF_FILES)
   const more = h.files.length - files.length
-  const quote = `> ${h.reply.trim().replace(/\n/g, '\n> ')}`
+  // 用频道工具 task_handover 做到一半交过来的：没有回复，要求里写了要做什么
+  const quote = h.reply.trim() ? `> ${h.reply.trim().replace(/\n/g, '\n> ')}` : ''
   if (en(locale))
     return [
-      `${h.from} finished "${h.title}" and handed it on to you.`,
-      `${h.from}'s reply:\n${quote}`,
+      quote
+        ? `${h.from} finished "${h.title}" and handed it on to you.`
+        : `${h.from} is working on "${h.title}" and handed this part to you.`,
+      quote ? `${h.from}'s reply:\n${quote}` : '',
       files.length ? `Files changed: ${files.join(', ')}${more > 0 ? ` and ${more} more` : ''}` : '',
     ]
       .filter(Boolean)
       .join('\n')
   return [
-    `${h.from} 做完「${h.title}」后把活交给了你。`,
-    `${h.from} 的回复：\n${quote}`,
+    quote ? `${h.from} 做完「${h.title}」后把活交给了你。` : `${h.from} 在做「${h.title}」，把这部分交给了你。`,
+    quote ? `${h.from} 的回复：\n${quote}` : '',
     files.length ? `改动的文件：${files.join('、')}${more > 0 ? ` 等 ${h.files.length} 个` : ''}` : '',
   ]
     .filter(Boolean)
@@ -273,6 +303,7 @@ export function dispatchPrompt(input: DispatchInput): string {
       `The request:\n${[input.request.trim(), attachedNote(input.attached?.images ?? 0, input.attached?.files ?? 0, locale)].filter(Boolean).join('\n')}`,
     )
     if (input.peers?.length) parts.push(peersText(input.peers, locale))
+    if (input.tools) parts.push(toolsText(input.tools, locale))
     parts.push(
       'When you are done, end with one or two paragraphs summarizing what you did, which files you changed and anything left unfinished.\nIf something needs a person to decide, put it on its own line starting with "Needs your decision:".',
     )
@@ -291,6 +322,7 @@ export function dispatchPrompt(input: DispatchInput): string {
       `这次的要求：\n${[input.request.trim(), attachedNote(input.attached?.images ?? 0, input.attached?.files ?? 0, locale)].filter(Boolean).join('\n')}`,
     )
     if (input.peers?.length) parts.push(peersText(input.peers, locale))
+    if (input.tools) parts.push(toolsText(input.tools, locale))
     parts.push(
       '做完后，最后用一两段话总结：做了什么、改了哪些文件、有没有没做完的。\n如果有需要人来决定的事，单独写一行，以「需要你决定：」开头。',
     )

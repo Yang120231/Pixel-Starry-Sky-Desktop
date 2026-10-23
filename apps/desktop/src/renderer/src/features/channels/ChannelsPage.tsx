@@ -13,9 +13,12 @@ import { ChannelTimeline } from './ChannelTimeline'
 import { ChannelComposer } from './ChannelComposer'
 import { ChannelMembers } from './ChannelMembers'
 import { ChannelsEmpty } from './ChannelsEmpty'
+import { ThreadPanel } from './ThreadPanel'
 import { myRole } from './teamModel'
 
 const MEMBERS_WIDTH = 300
+/** 讨论串面板宽一些：放得下任务卡和输入框 */
+const THREAD_WIDTH = 380
 const NO_MESSAGES: never[] = []
 
 /** 「打开会话」：交给现有的打开请求处理（切机器、打开会话、切回工作台） */
@@ -64,6 +67,7 @@ export function ChannelsPage({
   const members = useChannels(s => s.members)
   const messageMap = useChannels(s => s.messages)
   const replyMap = useChannels(s => s.replyTo)
+  const threadMap = useChannels(s => s.thread)
   const newFromMap = useChannels(s => s.newFrom)
   const moreMap = useChannels(s => s.more)
   const channel = useChannels(selectedChannel)
@@ -139,6 +143,14 @@ export function ChannelsPage({
         }
       : {}),
   }
+  // 讨论串（docs/ui/channels-collab-v2.md §3）：团队频道没有；根消息不在了就不显示
+  const threadRoot = channel.scope === 'local' ? (threadMap[channel.id] ?? null) : null
+  const thread = threadRoot && messages.some(m => m.id === threadRoot) ? threadRoot : null
+  const openThread = channel.scope === 'local' ? (id: string) => channelActions.openThread(channel.id, id) : undefined
+  const closeThread = () => {
+    channelActions.openThread(channel.id, null)
+    composer.current?.focus()
+  }
   const closeMembers = () => {
     onToggleMembers()
     composer.current?.focus()
@@ -157,6 +169,7 @@ export function ChannelsPage({
           onLoadOlder={() => channelActions.loadOlder(channel.id)}
           onReply={archived ? undefined : reply}
           taskActions={taskActions}
+          onThread={openThread}
         />
         {archived ? (
           <ArchivedBar channel={channel} />
@@ -181,14 +194,29 @@ export function ChannelsPage({
           />
         )}
       </section>
-      <CollapsibleSlot open={membersShown} width={MEMBERS_WIDTH} side="right">
-        <ChannelMembers
-          channel={channel}
-          members={channelMembers}
-          allMembers={members}
-          onClose={closeMembers}
-          onOpenSession={openSession}
-        />
+      <CollapsibleSlot open={membersShown || !!thread} width={thread ? THREAD_WIDTH : MEMBERS_WIDTH} side="right">
+        {thread ? (
+          <ThreadPanel
+            channel={channel}
+            rootId={thread}
+            messages={messages}
+            members={members}
+            channelMembers={channelMembers}
+            selfId={selfId}
+            taskActions={taskActions}
+            readOnly={archived}
+            onClose={closeThread}
+            width={THREAD_WIDTH}
+          />
+        ) : (
+          <ChannelMembers
+            channel={channel}
+            members={channelMembers}
+            allMembers={members}
+            onClose={closeMembers}
+            onOpenSession={openSession}
+          />
+        )}
       </CollapsibleSlot>
     </div>
   )

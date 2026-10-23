@@ -113,6 +113,28 @@ describe('管理配置与凭据', () => {
     px.dispose?.()
     expect(existsSync(px.mcpFile!)).toBe(false)
   })
+  it('频道成员「只用这些」：MCP / 技能只留勾选的，命令行照旧；应用自己的 MCP 总是有；key 跟着变', () => {
+    const mcp = { type: 'http' as const, url: 'https://example.com/mcp' }
+    const keep = service.upsert({ kind: 'mcp', name: 'keep', scope: global, mcp })
+    service.upsert({ kind: 'mcp', name: 'drop', scope: global, mcp })
+    const cli = service.upsert({ kind: 'cli', name: 'tool', scope: global, command: process.execPath, args: [] })
+    const own = { pixelsky_channel: { type: 'http' as const, url: 'http://127.0.0.1:1/mcp' } }
+    const all = service.launch(project, 'claude', {}, own)
+    const only = service.launch(project, 'claude', {}, own, new Set([keep.id]))
+    expect(Object.keys(JSON.parse(readFileSync(only.mcpFile!, 'utf8')).mcpServers)).toEqual([
+      'keep',
+      'pixelsky_channel',
+    ])
+    expect(Object.keys(JSON.parse(readFileSync(all.mcpFile!, 'utf8')).mcpServers)).toEqual([
+      'keep',
+      'drop',
+      'pixelsky_channel',
+    ])
+    expect(only.key).not.toBe(all.key)
+    expect(only.key).toContain(cli.id)
+    all.dispose?.()
+    only.dispose?.()
+  })
   it('凭据无法解密时仍能显示其他配置，重新填写前保留原加密文件', () => {
     const dir = join(root, 'broken')
     mkdirSync(dir)

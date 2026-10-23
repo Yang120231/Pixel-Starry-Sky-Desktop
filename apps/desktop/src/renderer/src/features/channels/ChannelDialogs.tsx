@@ -14,6 +14,7 @@ import type { WorkspaceChoice } from '../../../../shared/types/machines'
 import { channelActions, useChannels } from './store'
 import { matchAgents } from './model'
 import { RelayRulesEditor } from './RelayRules'
+import { MemberTools } from './MemberTools'
 import { usePlatformCatalog } from '@/features/account/platform'
 import { useProviders } from '@/features/account/providers'
 import { channelLabel } from '@/features/model-channels/channelLabels'
@@ -333,6 +334,7 @@ export function AgentDialog({
   const [permission, setPermission] = useState<PermissionMode | ''>(editing?.settings.permissionMode ?? '')
   const [instructions, setInstructions] = useState(editing?.instructions ?? '')
   const [mode, setMode] = useState<AgentConfig['mode']>(editing?.mode ?? 'per-task')
+  const [tools, setTools] = useState<AgentConfig['tools']>(editing?.tools ?? null)
   // 名字和职责说明（最长 2000 字）是自己打的字：改过就先问再关
   const dirty = name !== (editing?.name ?? '') || instructions !== (editing?.instructions ?? '')
   const [busy, setBusy] = useState(false)
@@ -415,6 +417,7 @@ export function AgentDialog({
         },
         instructions,
         mode,
+        tools,
       }),
     )
   }
@@ -583,6 +586,9 @@ export function AgentDialog({
                 onChange={setMode}
               />
             </div>
+            {!editing?.bound && (
+              <MemberTools engine={engine} projectId={projectId} value={tools ?? null} onChange={setTools} />
+            )}
             <button type="submit" hidden />
           </form>
         </div>

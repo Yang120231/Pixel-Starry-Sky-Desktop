@@ -42,6 +42,8 @@ export interface ChannelsState {
   selectedId: string | null
   /** 频道 id → 正在回复的消息 id */
   replyTo: Record<string, string | null>
+  /** 频道 id → 右侧打开的讨论串（任务卡或消息 id；docs/ui/channels-collab-v2.md §3） */
+  thread: Record<string, string | null>
   /** 频道 id → 进入时「新消息」分隔线的位置 */
   newFrom: Record<string, number | null>
   /** 频道开出来的会话 → 频道名 */
@@ -71,6 +73,7 @@ let state: ChannelsState = {
   more: {},
   selectedId: null,
   replyTo: {},
+  thread: {},
   newFrom: {},
   sessionChannels: {},
   sessionTasks: {},
@@ -258,19 +261,49 @@ export const channelActions = {
     if ((state.replyTo[channelId] ?? null) === messageId) return
     set({ replyTo: { ...state.replyTo, [channelId]: messageId } })
   },
+  /** 打开 / 关掉右侧的讨论串 */
+  openThread(channelId: string, rootId: string | null): void {
+    if ((state.thread[channelId] ?? null) === rootId) return
+    set({ thread: { ...state.thread, [channelId]: rootId } })
+  },
+  /** AI 成员提议的派活：派出去或不要（演示模式只改内存里的状态） */
+  async proposal(channelId: string, messageId: string, accept: boolean): Promise<void> {
+    if (channelsBridge) {
+      await channelsBridge.proposal(channelId, messageId, accept)
+      return
+    }
+    const list = state.messages[channelId] ?? []
+    set({
+      messages: {
+        ...state.messages,
+        [channelId]: list.map(m =>
+          m.kind === 'message' && m.id === messageId && m.proposal
+            ? { ...m, proposal: { ...m.proposal, state: accept ? 'sent' : 'dismissed' } }
+            : m,
+        ),
+      },
+    })
+  },
   /**
    * 以「你」的身份发一条消息。正式模式交给主进程（解析 @、派活），失败时抛出原因；
-   * 演示模式只追加到内存，AI 成员不会回复。
+   * 演示模式只追加到内存，AI 成员不会回复。threadId：发在这个讨论串里（不用引用）
    */
-  async send(channelId: string, text: string, extra: ChannelAttachments = { images: [], files: [] }): Promise<void> {
+  async send(
+    channelId: string,
+    text: string,
+    extra: ChannelAttachments = { images: [], files: [] },
+    threadId: string | null = null,
+  ): Promise<void> {
     const body = text.trim()
-    const replyToId = state.replyTo[channelId] ?? null
+    const replyToId = threadId ? null : (state.replyTo[channelId] ?? null)
+    const keepReply = threadId ? { replyTo: state.replyTo } : { replyTo: { ...state.replyTo, [channelId]: null } }
     const attached = extra.images.length > 0 || extra.files.length > 0
     if (!body && !attached) return
     if (channelsBridge) {
       const { message } = await channelsBridge.post(channelId, {
         text: body,
         replyToId,
+        ...(threadId ? { threadId } : {}),
         clientId: crypto.randomUUID(),
         ...(extra.images.length ? { attachments: extra.images } : {}),
         ...(extra.files.length ? { files: extra.files } : {}),
@@ -278,7 +311,7 @@ export const channelActions = {
       const list = state.messages[channelId] ?? []
       set({
         messages: { ...state.messages, [channelId]: upsertMessage(list, message) },
-        replyTo: { ...state.replyTo, [channelId]: null },
+        ...keepReply,
       })
       return
     }
@@ -295,6 +328,7 @@ export const channelActions = {
       members,
       now: Date.now(),
     })
+    if (threadId) message.threadId = threadId
     if (attached) {
       demoAttachments.set(message.id, extra)
       message.attached = {
@@ -302,7 +336,7 @@ export const channelActions = {
         files: extra.files.map(({ text: _t, tail: _l, ...meta }) => meta),
       }
     }
-    set({ messages: appendMessage(state.messages, message), replyTo: { ...state.replyTo, [channelId]: null } })
+    set({ messages: appendMessage(state.messages, message), ...keepReply })
   },
   /** 一条消息带的图片和文件全文（演示模式只在本次运行的内存里） */
   attachments(channelId: string, messageId: string): Promise<ChannelAttachments> {

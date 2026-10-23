@@ -99,6 +99,7 @@ export const IPC_CONTRACT = {
   'channels:message': { kind: 'push', route: 'push', trust: 'none' },
   'channels:messages': { kind: 'invoke', route: 'local', trust: 'sender' },
   'channels:pin': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'channels:proposal': { kind: 'invoke', route: 'local', trust: 'sender' },
   'channels:post': { kind: 'invoke', route: 'local', trust: 'sender' },
   'channels:removeMember': { kind: 'invoke', route: 'local', trust: 'sender' },
   'channels:saveMember': { kind: 'invoke', route: 'local', trust: 'sender' },

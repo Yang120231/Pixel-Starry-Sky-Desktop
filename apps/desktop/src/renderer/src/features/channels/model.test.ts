@@ -94,6 +94,14 @@ describe('频道时间线', () => {
       'b3',
     ])
   })
+  it('只在讨论串里的消息不上主时间线，也不打断前后的分组', () => {
+    const rows = buildTimeline([
+      text('a1', 'me', DAY1 + min(600)),
+      text('in', 'fe', DAY1 + min(601), { threadId: 'a1' }),
+      text('a2', 'me', DAY1 + min(602)),
+    ])
+    expect(rows.map(r => (r.kind === 'group' ? r.items.map(i => i.id).join('+') : r.kind))).toEqual(['day', 'a1+a2'])
+  })
   it('跨天插日期分隔并断开分组；新消息分隔只插一次', () => {
     const rows = buildTimeline(
       [

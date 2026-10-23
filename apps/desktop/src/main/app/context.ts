@@ -4,6 +4,7 @@ import type { ProjectTools } from '../core/project-tools/tools'
 import type { ExtensionPacks } from '../extension-packs/service'
 import type { Machines } from '../machines/service'
 import type { ProviderStore } from '../core/providers/store'
+import type { ChannelToolsServer } from '../channels/channel-mcp'
 import { EventBus } from './events'
 import { Lifecycle } from './lifecycle'
 
@@ -26,6 +27,8 @@ export interface AppContext {
   providers: ProviderStore | null
   /** 扩展包（extension-packs/ipc.ts 的 initExtensionPacks；和 extensions/ 的 MCP / 插件是两回事） */
   extPacks: ExtensionPacks | null
+  /** 频道工具 MCP 和成员的扩展设置（channels/ipc.ts 的 initChannels；docs/ui/channels-collab-v2.md §1、§5） */
+  channelTools: ChannelToolsServer | null
   /**
    * 不经过窗口调用引擎操作表（engine/ipc.ts 的 initEngine）：和窗口的调用走同一层路由（含 SSH 机器），
    * owner 是搜索 / 产物扫描的分桶。手机端（main/mobile/）用它
@@ -50,6 +53,7 @@ export function createAppContext(): AppContext {
     projectTools: null,
     providers: null,
     extPacks: null,
+    channelTools: null,
     engineCall: null,
     toolOps: new Map(),
   }

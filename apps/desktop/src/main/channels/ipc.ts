@@ -16,6 +16,7 @@ import { TeamRealtime } from '../core/channels/team/realtime'
 import { TeamSync } from '../core/channels/team/sync'
 import { ChannelStore } from '../core/channels/store'
 import { Channels, type MachineLite } from '../core/channels/service'
+import { channelToolsServer } from './channel-mcp'
 import type {
   AgentInput,
   AgentPolicy,
@@ -99,7 +100,12 @@ export async function initChannels(ctx: AppContext): Promise<void> {
     team: team ?? undefined,
     deviceId,
     machineName: () => hostname() || '这台电脑',
+    channelTools: true,
   })
+  // 频道工具（pixelsky_channel）：频道派活的本机会话发消息前由扩展准备挂上（docs/ui/channels-collab-v2.md §1）
+  const tools = channelToolsServer(() => channels)
+  ctx.channelTools = tools
+  app.on('will-quit', () => tools.close())
   ctx.events.taps.add((channel, args) => {
     try {
       if (channel === 'engine:event') channels.hostEvent(args[0] as HostEvent)
@@ -148,6 +154,9 @@ export async function initChannels(ctx: AppContext): Promise<void> {
   ipc.handle('channels:markRead', (_e, id) => channels.markRead(str(id, '频道')))
   ipc.handle('channels:pin', (_e, id, messageId, pinned) =>
     channels.pin(str(id, '频道'), str(messageId, '消息'), pinned === true),
+  )
+  ipc.handle('channels:proposal', (_e, id, messageId, accept) =>
+    channels.proposal(str(id, '频道'), str(messageId, '消息'), accept === true),
   )
   ipc.handle('channels:search', (_e, text, opts) => {
     const o = (opts ?? {}) as { limit?: unknown; projectId?: unknown }

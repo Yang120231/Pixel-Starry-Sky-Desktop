@@ -39,6 +39,10 @@ import { MENTION_ALL } from '../../../../shared/channels/mentions'
 import { MentionMenu } from './MentionMenu'
 import { canDispatch, mentionNote } from './teamModel'
 
+/** 频道（或它的一个讨论串）输入框的草稿键；演示数据和真实数据共用草稿存储，演示模式加前缀避免混在一起 */
+export const channelDraftKey = (channelId: string, threadId?: string | null): string =>
+  `${isDemo ? 'demo:' : ''}channel:${channelId}${threadId ? `:thread:${threadId}` : ''}`
+
 const LINE_HEIGHT = 24
 const MAX_ROWS = 8
 
@@ -55,6 +59,8 @@ export function ChannelComposer({
   onSend,
   onCancelReply,
   inputRef,
+  threadId = null,
+  placeholder,
 }: {
   channel: Channel
   /** 这个频道的成员 */
@@ -72,12 +78,14 @@ export function ChannelComposer({
   onSend: (text: string, extra: ChannelAttachments) => Promise<void>
   onCancelReply: () => void
   inputRef: RefObject<HTMLTextAreaElement | null>
+  /** 讨论串面板里的输入框（docs/ui/channels-collab-v2.md §3）：草稿单独存，排版收窄 */
+  threadId?: string | null
+  placeholder?: string
 }) {
   useI18n()
   const menuId = useId()
   const team = channel.scope === 'team'
-  // 演示数据和真实数据共用草稿存储，演示模式加前缀避免混在一起
-  const draftKey = `${isDemo ? 'demo:' : ''}channel:${channel.id}`
+  const draftKey = channelDraftKey(channel.id, threadId)
   const [value, setValue] = useComposerDraft(draftKey)
   const attach = useChannelAttachments(draftKey)
   const fileInput = useRef<HTMLInputElement>(null)
@@ -226,7 +234,7 @@ export function ChannelComposer({
   }
 
   return (
-    <div className="conversation-inset conversation-reading shrink-0 pb-4">
+    <div className={threadId ? 'shrink-0 px-3 pb-3' : 'conversation-inset conversation-reading shrink-0 pb-4'}>
       <div className="relative">
         {menuOpen && (
           <MentionMenu
@@ -340,12 +348,13 @@ export function ChannelComposer({
               placeholder={
                 offline
                   ? tr('team.composer.offline')
-                  : tr(
+                  : (placeholder ??
+                    tr(
                       channelsLive && !hasAgents
                         ? 'channels.composer.placeholderNoAgents'
                         : 'channels.composer.placeholder',
                       { name: channel.name },
-                    )
+                    ))
               }
               role="combobox"
               aria-autocomplete="list"
@@ -379,7 +388,7 @@ export function ChannelComposer({
           </div>
         </div>
       </div>
-      {isDemo && <p className="mt-1.5 px-1 text-meta text-fg-faint">{tr('channels.composer.demoHint')}</p>}
+      {isDemo && !threadId && <p className="mt-1.5 px-1 text-meta text-fg-faint">{tr('channels.composer.demoHint')}</p>}
     </div>
   )
 }
