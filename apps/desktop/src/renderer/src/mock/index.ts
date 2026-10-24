@@ -29,6 +29,7 @@ import {
   demoEngineConfig,
   demoEngineStatus,
   demoPlatformGroups,
+  demoPlatformKeys,
   demoProviders,
 } from './platform'
 import { demoToolBrowser, demoToolCopies, demoToolEnvironment, demoToolRunTasks, demoToolTasks } from './projectTools'
@@ -50,6 +51,7 @@ export const demoSource: DemoSource = {
   store: demoStore,
   checkout: demoCheckout,
   platformGroups: demoPlatformGroups,
+  platformKeys: demoPlatformKeys,
   providers: demoProviders,
   engines: {
     status: demoEngineStatus,

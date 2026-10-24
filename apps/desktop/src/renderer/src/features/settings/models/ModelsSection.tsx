@@ -27,6 +27,8 @@ import { ChannelsSettings } from '@/features/model-channels/ChannelsSettings'
 import { AccountsPage } from '@/features/model-channels/AccountsPage'
 import { openAccountsPage, useAccountsPage } from '@/features/model-channels/accountsStore'
 import { AiCommitSettings } from './AiCommitSettings'
+import { KeyChip, KeyLegend, KeyModeRow } from './PlatformKeyMode'
+import { useKeyMode } from '@/features/account/keyMode'
 import { ContextWindowInput } from './ContextWindowInput'
 import { CustomModelWindows } from './CustomModelWindows'
 import { setContextWindow, useContextWindows } from './contextWindows'
@@ -56,6 +58,7 @@ export function ModelsSection() {
   useI18n()
   const platform = usePlatform()
   const account = useAccount()
+  const keyMode = useKeyMode().mode
   const codexPlatform = usePlatform('codex')
   const pixelPlatform = usePlatform('pixel')
   // 菜单里显示的模型和上下文窗口：三个引擎的云端模型合在一起（GitHub #20），只有像素星空能跑的线路也列出来
@@ -127,6 +130,10 @@ export function ModelsSection() {
               {platform.loading ? tr('session.ModelSourceMenu.refreshing') : tr('account.AccountMenu.refresh')}
             </button>
           </div>
+          <KeyModeRow />
+          {platform.groups.some(g => g.key) && (
+            <p className="mb-2 text-right text-meta text-fg-muted">{tr('platformKey.routesHint')}</p>
+          )}
           {platform.groups.length === 0 ? (
             <div className="rounded-lg border border-dashed border-line px-4 py-6 text-center text-meta text-fg-muted">
               {platform.loading ? (
@@ -154,7 +161,8 @@ export function ModelsSection() {
                         {problem ?? tr('settings.models.ModelsSection.models', { p0: g.models.length })}
                       </span>
                     </span>
-                    <span className="shrink-0 text-ui text-fg-secondary tabular-nums">
+                    <KeyChip value={g.key} mode={keyMode} />
+                    <span className="min-w-11 shrink-0 text-right text-ui text-fg-secondary tabular-nums">
                       {formatMultiplier(g.rate_multiplier)}
                     </span>
                   </div>
@@ -162,6 +170,7 @@ export function ModelsSection() {
               })}
             </div>
           )}
+          {platform.groups.some(g => g.key) && <KeyLegend mode={keyMode} />}
         </div>
       )}
 

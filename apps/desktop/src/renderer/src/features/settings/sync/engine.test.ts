@@ -47,6 +47,8 @@ async function computer(cloud: ReturnType<typeof fakeCloud>, preset: Record<stri
   const FakeStorage = storageClass()
   const storage = new FakeStorage()
   for (const [k, v] of Object.entries(preset)) storage.setItem(k, v)
+  // 扣费用的 Key 存在主进程（docs/ui/platform-key-mode.md）
+  let keyMode = 'auto'
   const activate = () => {
     vi.stubGlobal('Storage', FakeStorage)
     vi.stubGlobal('StorageEvent', FakeStorageEvent)
@@ -64,6 +66,7 @@ async function computer(cloud: ReturnType<typeof fakeCloud>, preset: Record<stri
         },
         engine: { onEvent: () => () => {} },
         editor: { state: async () => ({ window: 'reuse' }), preferences: async () => ({}) },
+        platformCatalog: { keyMode: async () => keyMode, setKeyMode: async (m: string) => (keyMode = m) },
       },
     })
   }
@@ -77,7 +80,14 @@ async function computer(cloud: ReturnType<typeof fakeCloud>, preset: Record<stri
     activate()
     await sync.syncNow()
   }
-  return { storage, sync, run, activate }
+  return {
+    storage,
+    sync,
+    run,
+    activate,
+    keyMode: () => keyMode,
+    setKeyMode: (m: string) => void (keyMode = m),
+  }
 }
 
 beforeEach(() => {
@@ -134,6 +144,17 @@ describe('两台电脑之间同步设置', () => {
     expect(cloud.settings['desktop.accent']).toBeUndefined()
     await b.run()
     expect(b.storage.getItem('pixelsky.accent')).toBeNull()
+
+    // 扣费用的 Key：默认的自动不传；改成我的 Key 带过去，改回自动也带过去
+    expect(cloud.settings['desktop.platform.keyMode']).toBeUndefined()
+    a.setKeyMode('own')
+    await a.run()
+    await b.run()
+    expect(b.keyMode()).toBe('own')
+    a.setKeyMode('auto')
+    await a.run()
+    await b.run()
+    expect(b.keyMode()).toBe('auto')
   })
 
   it('关掉某个分类后既不上传也不接收', async () => {
@@ -175,6 +196,7 @@ describe('在别的窗口里开启同步', () => {
         },
         engine: { onEvent: () => () => {} },
         editor: { state: async () => ({ window: 'reuse' }), preferences: async () => ({}) },
+        platformCatalog: { keyMode: async () => 'auto', setKeyMode: async (m: string) => m },
       },
     })
     vi.resetModules()

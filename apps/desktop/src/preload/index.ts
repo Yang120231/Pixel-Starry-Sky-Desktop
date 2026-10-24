@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { HostEvent, IpcChannelName } from '@pixelsky/protocol'
 import type { AccountState, PayWindowEvent } from '../shared/types/account'
+import type { PlatformKeyMode } from '../shared/types/platform-catalog'
 import type { AccountBridge } from './account'
 import type { AppInfoBridge } from './app-info'
 import type { UpdateBridge } from './update'
@@ -607,6 +608,8 @@ contextBridge.exposeInMainWorld('pixelsky', {
   platformCatalog: {
     groups: () => call('platform:groups'),
     models: (id: string) => call('platform:models', id),
+    keyMode: () => call('platform:keyMode'),
+    setKeyMode: (mode: PlatformKeyMode) => call('platform:setKeyMode', mode),
   },
   providers: {
     list: () => call('providers:list'),

@@ -5,7 +5,7 @@ import { tr } from '../../i18n/core'
 import { useEffect, useSyncExternalStore } from 'react'
 import { ENGINES, type EngineId } from '@pixelsky/protocol'
 import type { AccountState } from '../../../../shared/types/account'
-import type { PlatformGroupInfo } from '../../../../shared/types/platform-catalog'
+import type { PlatformGroupInfo, PlatformKeyMode } from '../../../../shared/types/platform-catalog'
 import { platformModelsForEngine } from '../../../../shared/platform-models'
 import { demo } from '@/data/demo'
 
@@ -332,10 +332,25 @@ export function refreshedSelection(
   return own.some(g => g.modelsError) ? {} : resolvePlatform(own, groupId, model)
 }
 
+/** 正在读目录时切换了扣费 Key：读完再读一次，线路上的 Key 标签才对 */
+let reloadAfter = false
+
+/** 切换扣费用的 Key 后重读目录（docs/ui/platform-key-mode.md）；演示模式按演示数据现算 */
+export function reloadPlatformKeys(mode: PlatformKeyMode): void {
+  if (window.pixelsky?.demo) {
+    const keys = demo().platformKeys(mode)
+    set({ groups: state.groups.map(g => ({ ...g, key: keys[g.id] ?? null })) })
+    return
+  }
+  if (state.loading) reloadAfter = true
+  else void refreshPlatform()
+}
+
 export async function refreshPlatform(): Promise<void> {
   const api = window.pixelsky?.platformCatalog
   // 演示模式用假目录，不请求真实服务
   if (!api || window.pixelsky?.demo || !state.email || state.loading) return
+  reloadAfter = false
   const gen = generation
   set({ loading: true, error: null })
   try {
@@ -361,6 +376,7 @@ export async function refreshPlatform(): Promise<void> {
   } catch (e) {
     if (gen === generation) set({ groups: [], loaded: true, loading: false, error: (e as Error).message })
   }
+  if (reloadAfter && gen === generation) void refreshPlatform()
 }
 
 // ---------------------------------------------------------------------------
@@ -467,8 +483,9 @@ function start(): void {
   if (started) return
   started = true
   if (window.pixelsky?.demo) {
-    // 演示模式：假目录，选择照常保存在内存里
-    const groups = demo().platformGroups.map(g => ({ ...g, modelsError: null }))
+    // 演示模式：假目录，选择照常保存在内存里；扣费 Key 一开始是默认的自动
+    const keys = demo().platformKeys('auto')
+    const groups = demo().platformGroups.map(g => ({ ...g, key: keys[g.id] ?? null, modelsError: null }))
     set({ email: demo().account.email, groups, loaded: true, ...resolvePlatform(groups, state.groupId, state.model) })
     return
   }

@@ -1,7 +1,7 @@
 // 演示模式下的平台目录（--demo）。真实目录来自适配层 /v1/platform/groups（docs/ui/platform-groups.md）
 import { ENGINES, type EngineCatalog, type EngineConfig, type EngineLocalConfig } from '@pixelsky/protocol'
 import type { EngineLite } from '@/data/types'
-import type { PlatformGroupInfo } from '../../../shared/types/platform-catalog'
+import type { PlatformGroupInfo, PlatformGroupKey, PlatformKeyMode } from '../../../shared/types/platform-catalog'
 import type { ProvidersState } from '../../../shared/types/providers'
 
 export const demoPlatformGroups: PlatformGroupInfo[] = [
@@ -33,6 +33,24 @@ export const demoPlatformGroups: PlatformGroupInfo[] = [
     models: ['claude-sonnet-5-5', 'claude-haiku-4-5'],
   },
 ]
+
+/** 演示用户在网站上自己建过 Key 的线路（Pro 月卡没建过） */
+const DEMO_OWN_KEYS: Record<string, string> = { '11': '工作用', '13': 'Pixel Starry Sky CLI · default' }
+
+/**
+ * 每条线路按「扣费用的 Key」会记在哪把 Key 上（docs/ui/platform-key-mode.md）：
+ * 自动都是客户端专用的托管 Key；我的 Key 有用户的就用它，没有的线路仍是托管 Key
+ */
+export function demoPlatformKeys(mode: PlatformKeyMode): Record<string, PlatformGroupKey> {
+  return Object.fromEntries(
+    demoPlatformGroups.map(g => {
+      const own = DEMO_OWN_KEYS[g.id]
+      const key =
+        mode === 'own' && own ? { name: own, own: true } : { name: `像素星空 · ${g.name} · 演示电脑`, own: false }
+      return [g.id, key]
+    }),
+  )
+}
 
 /** 演示模式下本机引擎的检测结果（设置 › 本机引擎） */
 export const demoEngineStatus: EngineLite[] = [

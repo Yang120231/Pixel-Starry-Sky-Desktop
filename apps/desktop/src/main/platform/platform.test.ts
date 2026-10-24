@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({ app: { getPath: () => '', on: () => undefined } }))
 
-const { clearGatewaySettings } = await import('./platform')
+const { clearGatewaySettings, groupKey } = await import('./platform')
 
 let root: string | undefined
 afterEach(() => {
@@ -60,5 +60,25 @@ describe('分组目录存到磁盘：重启后续接的会话按它选协议', (
     writeFileSync(file, '{not json')
     expect(() => loadGroupCache(file)).not.toThrow()
     expect(() => loadGroupCache(join(root!, 'missing.json'))).not.toThrow()
+  })
+})
+
+describe('线路当前扣费的 Key', () => {
+  it('名字和 own 都对才认，旧云端没有、格式不对都当作没有', () => {
+    expect(groupKey({ name: '工作用', own: true })).toEqual({ name: '工作用', own: true })
+    expect(groupKey({ name: '像素星空 · GPT Plus · 我的电脑', own: false, extra: 1 })).toEqual({
+      name: '像素星空 · GPT Plus · 我的电脑',
+      own: false,
+    })
+    for (const bad of [
+      undefined,
+      null,
+      'x',
+      {},
+      { name: '', own: true },
+      { name: 1, own: true },
+      { name: 'a', own: 'yes' },
+    ])
+      expect(groupKey(bad)).toBeNull()
   })
 })

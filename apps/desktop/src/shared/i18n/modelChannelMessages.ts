@@ -228,4 +228,33 @@ export const modelChannelMessages = {
     zh: 'DeepSeek、通义、Kimi、本地 Ollama 等兼容接口 → 像素星空 agent 执行',
     en: 'DeepSeek, Qwen, Kimi, local Ollama and other compatible APIs → runs with the PixelSky agent',
   },
+  // 扣费用的 Key（docs/ui/platform-key-mode.md）
+  'platformKey.title': { zh: '扣费用的 Key', en: 'Key used for billing' },
+  'platformKey.desc': {
+    zh: '在客户端里用平台额度时，用量记在哪把 Key 上',
+    en: 'Which key your usage is recorded on when you use platform credits in the app',
+  },
+  'platformKey.auto': { zh: '自动', en: 'Auto' },
+  'platformKey.own': { zh: '我的 Key', en: 'My keys' },
+  'platformKey.autoHint': {
+    zh: '每条线路用一把客户端专用的 Key，调用记录里名字是「像素星空 · 线路名 · 这台电脑的名字」，和你自己建的 Key 分开记账；退出登录后自动删除。',
+    en: 'Each route uses a key just for this app, shown in your call history as “像素星空 · route · this computer”, so its usage is kept apart from keys you created. It is deleted when you sign out.',
+  },
+  'platformKey.ownHint': {
+    zh: '线路里有你在网站上建的 Key 就记在它上面（有多把时用最早建的那把）；没有你的 Key 的线路，仍用客户端专用的 Key。',
+    en: 'Usage goes to a key you created on the website for that route (the oldest one if you have several). Routes without one of your keys still use the app key.',
+  },
+  'platformKey.routesHint': {
+    zh: '右边是这条线路当前扣费的 Key',
+    en: 'The key each route is billed to is on the right',
+  },
+  'platformKey.app': { zh: '客户端专用', en: 'App key' },
+  'platformKey.appTitle': { zh: '客户端专用的 Key：{name}', en: 'App key: {name}' },
+  'platformKey.ownTitle': { zh: '你在网站上建的 Key：{name}', en: 'Your key from the website: {name}' },
+  'platformKey.fallbackTitle': {
+    zh: '这条线路没有你建的 Key，用 {name}',
+    en: 'You have no key for this route, so it uses {name}',
+  },
+  'platformKey.legendOwn': { zh: '你建的 Key', en: 'Your key' },
+  'platformKey.legendFallback': { zh: '没有你的 Key，用客户端专用的', en: 'No key of yours, uses the app key' },
 } as const

@@ -392,6 +392,12 @@ async function authedGet(path: string): Promise<HttpResult> {
   return res
 }
 
+/** 每个平台请求都带的请求头（扣费用的 Key，main/platform/key-mode.ts 设置） */
+let platformHeaders: () => Record<string, string> = () => ({})
+export function setPlatformHeaders(fn: () => Record<string, string>): void {
+  platformHeaders = fn
+}
+
 /** 平台网络请求只在主进程内使用令牌，不把凭据发给渲染层或引擎。 */
 export async function platformFetch(path: string, init: RequestInit = {}): Promise<Response> {
   if (
@@ -400,7 +406,9 @@ export async function platformFetch(path: string, init: RequestInit = {}): Promi
     !path.startsWith('/v1/oauth/usage/summary?')
   )
     throw new Error('无效的平台接口')
-  return authedFetch(path, init)
+  const headers = new Headers(init.headers)
+  for (const [name, value] of Object.entries(platformHeaders())) headers.set(name, value)
+  return authedFetch(path, { ...init, headers })
 }
 
 /** 设置云同步（docs/ui/settings-sync.md §5.1）：只能读写 /v1/oauth/settings，不放宽 platformFetch 的白名单 */

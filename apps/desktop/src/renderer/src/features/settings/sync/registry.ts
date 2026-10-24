@@ -144,6 +144,17 @@ export const SYNC_ENTRIES: readonly SyncEntry[] = [
   storageEntry('desktop.platform.claude', 'platform', 'pixelsky.platform.preference.v1'),
   storageEntry('desktop.platform.codex', 'platform', 'pixelsky.sources.v2'),
   storageEntry('desktop.platform.hiddenModels', 'platform', 'pixelsky.platform.hiddenModels'),
+  // 扣费用的 Key（docs/ui/platform-key-mode.md）：存在主进程
+  {
+    key: 'desktop.platform.keyMode',
+    category: 'platform',
+    // 默认的自动不传（和其他设置一样，undefined 表示默认值）
+    read: async () => ((await window.pixelsky?.platformCatalog.keyMode()) === 'own' ? 'own' : undefined),
+    write: async value => {
+      if (value === 'auto' || value === 'own' || value === null)
+        await window.pixelsky?.platformCatalog.setKeyMode(value ?? 'auto')
+    },
+  },
   storageEntry('desktop.channels.executor', 'platform', 'pixelsky.channels.executor.v1'),
   storageEntry('desktop.channels.newTask', 'platform', 'pixelsky.channels.newTask.v1'),
   storageEntry('desktop.channels.menuLayout', 'platform', 'pixelsky.channels.menuLayout.v1'),

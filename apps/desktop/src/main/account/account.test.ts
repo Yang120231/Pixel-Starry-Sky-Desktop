@@ -97,7 +97,9 @@ writeFileSync(
   }),
 )
 
-const { deviceName, extensionsFetch, initAccount, platformFetch, signedInEmail } = await import('./account')
+const { deviceName, extensionsFetch, initAccount, platformFetch, setPlatformHeaders, signedInEmail } = await import(
+  './account'
+)
 const { markPayWindow } = await import('../app/payWindowRegistry')
 vi.useFakeTimers({ toFake: ['setInterval'] })
 initAccount()
@@ -169,6 +171,24 @@ describe('extensionsFetch 的代理提示', () => {
     await extensionsFetch('GET', '/v1/extensions/publisher')
     await expect(extensionsFetch('GET', '/v1/platform/x')).rejects.toThrow()
     expect(mocks.netCalls).toEqual([])
+  })
+})
+
+describe('platformFetch 的公共请求头', () => {
+  it('每个平台请求都带上设置的请求头（扣费用的 Key），调用方自己的请求头保留', async () => {
+    let mode = 'auto'
+    setPlatformHeaders(() => ({ 'X-PixelSky-Key-Mode': mode }))
+    try {
+      requests.length = 0
+      await platformFetch('/v1/platform/groups')
+      mode = 'own'
+      await platformFetch('/v1/platform/messages', { method: 'POST', headers: { 'X-PixelSky-Group': '2' } })
+      expect(requests.map(r => r.headers.get('X-PixelSky-Key-Mode'))).toEqual(['auto', 'own'])
+      expect(requests[1].headers.get('X-PixelSky-Group')).toBe('2')
+      expect(requests[1].headers.get('Authorization')).toBe('Bearer pss_a')
+    } finally {
+      setPlatformHeaders(() => ({}))
+    }
   })
 })
 

@@ -26,7 +26,7 @@ import type { MachineState, WorkspaceChoice } from '../../../shared/types/machin
 import type { AccountInfo, StoreCatalog } from '../../../shared/types/account'
 import type { AccountBridge } from '../../../preload/account'
 import type { ArtifactPreview } from '../../../shared/types/artifacts'
-import type { PlatformGroupInfo } from '../../../shared/types/platform-catalog'
+import type { PlatformGroupInfo, PlatformGroupKey, PlatformKeyMode } from '../../../shared/types/platform-catalog'
 import type { ProvidersState } from '../../../shared/types/providers'
 import type { BrowserState } from '../../../shared/types/project-browser'
 import type {
@@ -119,6 +119,8 @@ export interface DemoSource {
   /** 软件内付款的假桥和会随到账变化的演示账号（mock/checkout.ts，docs/ui/in-app-payment.md §6.10） */
   checkout: DemoCheckout
   platformGroups: PlatformGroupInfo[]
+  /** 每条线路按扣费 Key 模式会用的 Key（docs/ui/platform-key-mode.md） */
+  platformKeys(mode: PlatformKeyMode): Record<string, PlatformGroupKey>
   /** 自定义 API 的两条假接口 */
   providers: ProvidersState
   engines: {

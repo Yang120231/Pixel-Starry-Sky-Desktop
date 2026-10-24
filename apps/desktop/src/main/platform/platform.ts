@@ -26,9 +26,10 @@ import {
   type CompactionRequestReport,
   type PlatformRouteResult,
 } from '@pixelsky/engine'
-import type { PlatformGroupInfo } from '../../shared/types/platform-catalog'
+import type { PlatformGroupInfo, PlatformGroupKey } from '../../shared/types/platform-catalog'
 import { platformModelApi, platformModelSupportsEngine } from '../../shared/platform-models'
 import { onAccountChange, platformBalance, platformFetch, signedInEmail } from '../account/account'
+import { initKeyMode } from './key-mode'
 import * as ipc from '../ipc/guard'
 import type { ProviderStore, ResolvedProvider } from '../core/providers/store'
 import { smallModelOf } from '../core/providers/upstream'
@@ -114,21 +115,30 @@ export function platformPixelApi(groupId: string, model: string | null): PixelAp
 /** 最近读到的分组模型：DeepSeek 这类没有 Claude 模型的线路，启动 Claude Code 时把默认模型指向它们 */
 const groupModels = new Map<string, string[]>()
 
+/** 线路当前扣费的 Key（docs/ui/platform-key-mode.md）：旧云端没有、格式不对都当作没有 */
+export function groupKey(value: unknown): PlatformGroupKey | null {
+  if (!value || typeof value !== 'object') return null
+  const { name, own } = value as Record<string, unknown>
+  return typeof name === 'string' && name && typeof own === 'boolean' ? { name, own } : null
+}
+
 export async function platformGroups(): Promise<PlatformGroupInfo[]> {
   const data = await jsonRequest('/v1/platform/groups')
   if (!Array.isArray(data)) throw new Error('平台分组数据格式异常')
-  const groups = data.filter(
-    (g): g is PlatformGroupInfo =>
-      !!g &&
-      typeof g.id === 'string' &&
-      /^\d+$/.test(g.id) &&
-      typeof g.name === 'string' &&
-      typeof g.rate_multiplier === 'number' &&
-      Number.isFinite(g.rate_multiplier) &&
-      g.rate_multiplier >= 0 &&
-      Array.isArray(g.models) &&
-      g.models.every((m: unknown) => typeof m === 'string'),
-  )
+  const groups = data
+    .filter(
+      (g): g is PlatformGroupInfo =>
+        !!g &&
+        typeof g.id === 'string' &&
+        /^\d+$/.test(g.id) &&
+        typeof g.name === 'string' &&
+        typeof g.rate_multiplier === 'number' &&
+        Number.isFinite(g.rate_multiplier) &&
+        g.rate_multiplier >= 0 &&
+        Array.isArray(g.models) &&
+        g.models.every((m: unknown) => typeof m === 'string'),
+    )
+    .map(g => ({ ...g, key: groupKey(g.key) }))
   rememberGroups(groups)
   for (const g of groups) groupModels.set(g.id, g.models)
   return groups
@@ -317,6 +327,7 @@ export async function initPlatform(
     if (now && now !== account) refreshGroups()
     account = now
   })
+  initKeyMode()
   ipc.handle('platform:groups', () => platformGroups())
   ipc.handle(
     'platform:models',
