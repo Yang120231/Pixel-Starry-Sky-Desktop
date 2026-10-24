@@ -20,7 +20,7 @@ import { OVERLAY_EVENT, collectOverlays, overlayHidesBrowser, pointShowsPlacehol
 import { PreviewViewport } from './PreviewViewport'
 import { useProjectContext } from './projectContext'
 import { FIELD, NoProject, ToolError, useOperation } from './ToolsUi'
-import type { BrowserState } from '../../../../shared/types/project-browser'
+import type { BrowserAnnotation, BrowserState } from '../../../../shared/types/project-browser'
 import type { WorkspaceRef } from '../../../../shared/types/workspace'
 import { demo as demoData } from '@/data/demo'
 
@@ -63,7 +63,15 @@ function BrowserBody({
   const [address, setAddress] = useState(''),
     [note, setNote] = useState(''),
     [notesOpen, setNotesOpen] = useState(false)
-  const [send, setSend] = useState<{ sessionId: string; text: string } | null>(null)
+  /** 确认框里待发送的批注：发送后只移除这几条，确认期间新加的保留 */
+  const [send, setSend] = useState<{
+    sessionId: string
+    text: string
+    pageId: string
+    notes: BrowserAnnotation[]
+  } | null>(null)
+  /** 刚发出去、已从列表移除的批注：提示几秒，可以放回列表（不撤回已发出的消息） */
+  const [sent, setSent] = useState<{ pageId: string; notes: BrowserAnnotation[] } | null>(null)
   const controller = useComposerController(send?.sessionId ?? target.sessionId ?? null)
   /** 被弹出层挡住、视图藏起来时铺在占位框里的截图（定格画面）；没有时 null */
   const [snapshot, setSnapshot] = useState<string | null>(null)
@@ -95,6 +103,11 @@ function BrowserBody({
       void window.pixelsky?.projectBrowser.viewport(target, null).catch(() => {})
     }
   }, [])
+  useEffect(() => {
+    if (!sent) return
+    const timer = window.setTimeout(() => setSent(null), 6000)
+    return () => window.clearTimeout(timer)
+  }, [sent])
   useEffect(() => {
     setAddress(page?.url ?? '')
   }, [page?.id, page?.url])
@@ -425,6 +438,27 @@ function BrowserBody({
                   {tr('projectTools.save')}
                 </Button>
               </form>
+              {sent?.pageId === page.id && (
+                <div className="flex items-center gap-2 rounded-md bg-accent-soft px-2.5 py-1.5 text-meta text-accent-fg">
+                  <span className="min-w-0 flex-1">
+                    {tr('projectTools.annotationSent', { p0: String(sent.notes.length) })}
+                  </span>
+                  <button
+                    disabled={busy}
+                    className="shrink-0 underline"
+                    onClick={() =>
+                      void run(async () => {
+                        const notes = sent.notes
+                        setSent(null)
+                        for (const a of notes)
+                          setState(await window.pixelsky!.projectBrowser.annotate(target, page.id, a.text))
+                      })
+                    }
+                  >
+                    {tr('projectTools.restoreAnnotation')}
+                  </button>
+                </div>
+              )}
               {page.annotations.map(a => (
                 <div key={a.id} className="flex items-start gap-2 text-meta text-fg-secondary">
                   <p className="min-w-0 flex-1 break-words whitespace-pre-wrap" title={a.url}>
@@ -464,6 +498,8 @@ function BrowserBody({
                       text: page.annotations
                         .map(a => tr('projectTools.annotationMessage', { p0: a.url, p1: a.text }))
                         .join('\n\n'),
+                      pageId: page.id,
+                      notes: page.annotations,
                     })
                 }}
               >
@@ -477,7 +513,10 @@ function BrowserBody({
         <ConfirmDialog
           title={tr('projectTools.sendAnnotation')}
           description={
-            <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-list">{send.text}</pre>
+            <>
+              <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-list">{send.text}</pre>
+              <p className="mt-2 text-meta text-fg-muted">{tr('projectTools.annotationSendHint')}</p>
+            </>
           }
           confirmLabel={tr('projectTools.sendAnnotation')}
           cancelLabel={tr('projectTools.cancel')}
@@ -488,6 +527,10 @@ function BrowserBody({
               if (!controller) throw new Error(tr('projectTools.noConversation'))
               await controller.submit(send.text)
               setSend(null)
+              // 已发送的批注从列表移除，不用再手动删
+              for (const a of send.notes)
+                setState(await window.pixelsky!.projectBrowser.removeAnnotation(target, send.pageId, a.id))
+              setSent({ pageId: send.pageId, notes: send.notes })
             })
           }
           onCancel={() => setSend(null)}

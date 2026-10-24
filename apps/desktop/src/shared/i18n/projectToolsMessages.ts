@@ -88,6 +88,15 @@ export const projectToolsMessages = {
   'projectTools.annotation': { zh: '批注', en: 'Annotation' },
   'projectTools.annotationPlaceholder': { zh: '写下对当前网页的批注', en: 'Add a note about this page' },
   'projectTools.sendAnnotation': { zh: '发送到当前会话', en: 'Send to current conversation' },
+  'projectTools.annotationSendHint': {
+    zh: '发送后，这些批注会从批注列表中移除。',
+    en: 'These annotations will be removed from the list after sending.',
+  },
+  'projectTools.annotationSent': {
+    zh: '已发送 {p0} 条批注到当前会话，已从列表移除',
+    en: 'Sent {p0} annotation(s) to the conversation and removed them from the list',
+  },
+  'projectTools.restoreAnnotation': { zh: '恢复', en: 'Restore' },
   'projectTools.noConversation': { zh: '打开一个会话后才能发送批注', en: 'Open a conversation to send an annotation' },
   'projectTools.invalidUrl': {
     zh: '只支持 http:// 或 https:// 地址',
