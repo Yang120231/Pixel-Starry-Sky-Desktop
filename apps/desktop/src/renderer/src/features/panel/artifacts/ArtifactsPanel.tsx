@@ -24,19 +24,12 @@ import { relativeTime } from '@/features/engine'
 import { motionEnabled } from '@/features/panes/motion'
 import { openFile } from '@/features/files/store'
 import { machineOf } from '@/features/machines/store'
-import type {
-  ArtifactDelivery,
-  ArtifactFile,
-  ArtifactResponse,
-  ArtifactTurn,
-  DeliveryType,
-  FileChange,
-} from '@pixelsky/protocol'
+import type { ArtifactDelivery, ArtifactFile, ArtifactResponse, ArtifactTurn, DeliveryType } from '@pixelsky/protocol'
 import type { WorkspaceRef } from '../../../../../shared/types/workspace'
 import { useProjectContext } from '../projectContext'
 import { NoProject, useRemember } from '../ToolsUi'
 import { EmptyState, PanelCard } from '../PanelSurface'
-import { groupBySession, splitArtifactPath } from './artifactsModel'
+import { artifactDiffs, groupBySession, splitArtifactPath } from './artifactsModel'
 import { ArtifactPreview } from './ArtifactPreview'
 import { demo as demoData } from '@/data/demo'
 import {
@@ -50,6 +43,8 @@ import {
 } from './focus'
 
 const DAYS = 7
+/** Windows 上同一个文件的路径不区分大小写 */
+const caseInsensitive = typeof window !== 'undefined' && window.pixelsky?.platform === 'win32'
 const TYPE_ICON: Record<DeliveryType | 'other', LucideIcon> = {
   document: FileText,
   image: Image,
@@ -360,7 +355,8 @@ function FileRow({
 }) {
   useI18n()
   const [open, setOpen] = useState(false)
-  const [change, setChange] = useState<FileChange | null | 'loading'>(null)
+  // 这一轮改过这个文件的每次 diff（按先后）；同一轮改了几次时行数是合计，要全显示
+  const [diffs, setDiffs] = useState<string[] | null | 'loading'>(null)
   const { name, dir } = splitArtifactPath(file.local ?? file.path)
   const toggle = async () => {
     if (open) {
@@ -369,26 +365,38 @@ function FileRow({
     }
     await show()
   }
+  // 取到的 diff 对应哪组改动记录；这一轮之后又改了这个文件（列表刷新）时重新取
+  const idsKey = file.itemIds.join('\n')
+  const loadedFor = useRef('')
   const show = async () => {
     setOpen(true)
-    if (change && change !== 'loading') return
-    setChange('loading')
+    if (diffs && diffs !== 'loading' && loadedFor.current === idsKey) return
+    loadedFor.current = idsKey
+    setDiffs('loading')
     if (demo) {
-      setChange(demoData().artifacts.change(file.itemId, file.path))
+      const changes = file.itemIds.map(itemId => demoData().artifacts.changes(itemId))
+      setDiffs(artifactDiffs(file, changes, caseInsensitive))
       return
     }
-    try {
-      const item = await window.pixelsky!.artifacts.change({ sessionId: turn.sessionId, itemId: file.itemId })
-      setChange(item?.changes.find(c => c.path === file.path) ?? null)
-    } catch {
-      setChange(null)
-    }
+    const items = await Promise.all(
+      file.itemIds.map(itemId =>
+        window.pixelsky!.artifacts.change({ sessionId: turn.sessionId, itemId }).catch(() => null),
+      ),
+    )
+    if (loadedFor.current !== idsKey) return
+    const changes = items.map(item => item?.changes ?? null)
+    setDiffs(artifactDiffs(file, changes, caseInsensitive))
   }
   const latestShow = useRef(show)
   latestShow.current = show
   useEffect(() => {
     if (autoOpen) void latestShow.current()
   }, [autoOpen])
+  const latestOpen = useRef(open)
+  latestOpen.current = open
+  useEffect(() => {
+    if (latestOpen.current && loadedFor.current && loadedFor.current !== idsKey) void latestShow.current()
+  }, [idsKey])
   return (
     <li className="group/file">
       <div className="flex h-7 min-w-0 items-center gap-1 rounded-md pr-0.5 hover:bg-hover">
@@ -445,13 +453,22 @@ function FileRow({
       </div>
       {open && (
         <div className="mb-1.5 ml-5 overflow-hidden rounded-md border border-line-subtle">
-          {change === 'loading' ? (
+          {diffs === 'loading' ? (
             <div className="flex items-center gap-2 p-2 text-meta text-fg-muted">
               <Spinner size={12} />
               {tr('projectTools.loading')}
             </div>
-          ) : change?.diff ? (
-            <DiffView diff={change.diff} path={file.path} className="max-h-80" />
+          ) : diffs?.length ? (
+            <div className="max-h-80 overflow-auto">
+              {diffs.map((diff, i) => (
+                <DiffView
+                  key={i}
+                  diff={diff}
+                  path={file.path}
+                  className={i > 0 ? 'border-t border-line-subtle' : undefined}
+                />
+              ))}
+            </div>
           ) : (
             <p className="p-2 text-meta text-fg-faint">{tr('artifacts.diffMissing')}</p>
           )}

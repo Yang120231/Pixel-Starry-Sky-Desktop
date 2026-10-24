@@ -145,6 +145,7 @@ export function sessionArtifacts(
                 removed: prior.removed + change.removed,
                 kind: change.kind === 'delete' ? 'delete' : prior.kind === 'add' ? 'add' : change.kind,
                 itemId: item.id,
+                itemIds: prior.itemIds.includes(item.id) ? prior.itemIds : [...prior.itemIds, item.id],
               }
             : {
                 path: change.path,
@@ -155,6 +156,7 @@ export function sessionArtifacts(
                 added: change.added,
                 removed: change.removed,
                 itemId: item.id,
+                itemIds: [item.id],
               },
         )
       } else outside.push(key(absolute))

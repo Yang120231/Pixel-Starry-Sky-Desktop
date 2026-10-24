@@ -22,8 +22,10 @@ export interface ArtifactFile {
   kind: 'add' | 'update' | 'delete'
   added: number
   removed: number
-  /** 最后一条改动记录，用来看差异、跳到对话 */
+  /** 最后一条改动记录，用来跳到对话 */
   itemId: string
+  /** 这一轮改过这个文件的所有改动记录（按先后），看差异时逐条显示；行数是它们的合计 */
+  itemIds: string[]
 }
 
 export interface ArtifactTurn {

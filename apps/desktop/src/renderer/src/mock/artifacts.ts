@@ -15,6 +15,7 @@ const file = ({ path: local, kind, added, removed }: FileChange, itemId: string)
   added,
   removed,
   itemId,
+  itemIds: [itemId],
 })
 
 export const demoArtifacts: ArtifactResponse = {
@@ -104,11 +105,10 @@ export const demoArtifacts: ArtifactResponse = {
   partial: false,
 }
 
-/** 产物面板点开一个文件：取对话里那次改动的 diff */
-export function demoArtifactChange(itemId: string, path: string): FileChange | null {
+/** 产物面板点开一个文件：取对话里那条改动记录的全部改动 */
+export function demoArtifactChanges(itemId: string): FileChange[] | null {
   for (const snap of Object.values(workbenchSnapshots))
-    for (const item of snap.items)
-      if (item.id === itemId && item.kind === 'file_change') return item.changes.find(c => c.path === path) ?? null
+    for (const item of snap.items) if (item.id === itemId && item.kind === 'file_change') return item.changes
   return null
 }
 

@@ -1,5 +1,5 @@
 // 产物面板的纯函数（docs/ui/artifacts-panel.md）
-import type { ArtifactTurn } from '@pixelsky/protocol'
+import type { ArtifactFile, ArtifactTurn, FileChange } from '@pixelsky/protocol'
 
 export interface SessionGroup {
   sessionId: string
@@ -36,6 +36,23 @@ export function formatBytes(bytes: number | null): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1).replace(/\.0$/, '')} KB`
   return `${(bytes / 1024 / 1024).toFixed(1).replace(/\.0$/, '')} MB`
+}
+
+/**
+ * 一个文件这一轮的所有 diff：changes 是 file.itemIds 各条改动记录里的改动（按先后，取不到的为 null）。
+ * 同一条记录里同一个文件也可能出现几次，全都要；路径可能是相对的也可能是绝对的，两种都认
+ */
+export function artifactDiffs(
+  file: Pick<ArtifactFile, 'path' | 'absolute'>,
+  changes: ReadonlyArray<readonly FileChange[] | null>,
+  caseInsensitive: boolean,
+): string[] {
+  const norm = (p: string): string => {
+    const s = p.replace(/\\/g, '/')
+    return caseInsensitive ? s.toLowerCase() : s
+  }
+  const want = new Set([norm(file.path), norm(file.absolute)])
+  return changes.flatMap(list => (list ?? []).filter(c => c.diff && want.has(norm(c.path))).map(c => c.diff))
 }
 
 /** 路径拆成文件名和目录（兼容 Windows 分隔符） */

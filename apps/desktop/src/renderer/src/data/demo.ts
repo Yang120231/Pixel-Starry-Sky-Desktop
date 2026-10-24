@@ -130,7 +130,8 @@ export interface DemoSource {
   }
   artifacts: {
     response: ArtifactResponse
-    change(itemId: string, path: string): FileChange | null
+    /** 一条改动记录里的全部改动；没有这条记录时 null */
+    changes(itemId: string): FileChange[] | null
     preview(path: string): ArtifactPreview
   }
   context: ContextWindow

@@ -1,7 +1,7 @@
 // 演示数据汇总：只由 main.tsx 在演示模式下动态加载，装进 data/demo.ts（docs/restructure.md §9.3）
 import type { DemoSource } from '@/data/demo'
 import { demoAccount } from './account'
-import { demoArtifactChange, demoArtifactPreview, demoArtifacts } from './artifacts'
+import { demoArtifactChanges, demoArtifactPreview, demoArtifacts } from './artifacts'
 import { demoContext } from './context'
 import { demoQuota } from './quota'
 import {
@@ -57,7 +57,7 @@ export const demoSource: DemoSource = {
     codexCatalog: demoCodexCatalog,
     config: demoEngineConfig,
   },
-  artifacts: { response: demoArtifacts, change: demoArtifactChange, preview: demoArtifactPreview },
+  artifacts: { response: demoArtifacts, changes: demoArtifactChanges, preview: demoArtifactPreview },
   context: demoContext,
   quota: demoQuota(),
   files: { contents: DEMO_FILES, editorState: DEMO_EDITOR_STATE, directory: demoDirectory, document: demoDocument },

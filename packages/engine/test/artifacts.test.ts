@@ -87,6 +87,10 @@ describe('产物：变更', () => {
         ['u2', '再删一个', [['src/old.ts', 'delete', 0, 9, 'e5']]],
       ]),
     )
+    // 同一轮改了几次的文件：记下每一条改动记录，面板展开时逐条显示（行数是它们的合计）
+    const files = res.turns.flatMap(t => t.files)
+    expect(files.find(f => f.local === 'src/a.ts')?.itemIds).toEqual(['e1', 'e2'])
+    expect(files.find(f => f.local === 'src/b.ts')?.itemIds).toEqual(['e2'])
     expect(res.turns[0].sessionId).toBe(r.id)
     expect(res.outsideCount).toBe(1)
     expect((host as unknown as { runtimes: Map<string, unknown> }).runtimes.size).toBe(0)

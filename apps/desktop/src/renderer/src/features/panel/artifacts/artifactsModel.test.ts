@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { ArtifactTurn } from '@pixelsky/protocol'
-import { formatBytes, groupBySession, splitArtifactPath } from './artifactsModel'
+import type { ArtifactTurn, FileChange } from '@pixelsky/protocol'
+import { artifactDiffs, formatBytes, groupBySession, splitArtifactPath } from './artifactsModel'
 
 const turn = (sessionId: string, at: number): ArtifactTurn => ({
   sessionId,
@@ -31,5 +31,20 @@ describe('产物面板显示规则', () => {
     ]).toEqual(['', '512 B', '2 KB', '1.5 KB', '3 MB'])
     expect(splitArtifactPath('C:\\Users\\x\\报告.md')).toEqual({ name: '报告.md', dir: 'C:/Users/x' })
     expect(splitArtifactPath('a.md')).toEqual({ name: 'a.md', dir: '' })
+  })
+  it('展开文件：取这一轮每条改动记录里这个文件的 diff，相对 / 绝对路径都认，取不到的跳过', () => {
+    const file = { path: 'config/app.yml', absolute: 'D:\\w\\config\\app.yml' }
+    const c = (path: string, diff: string): FileChange => ({ path, kind: 'update', diff, added: 1, removed: 0 })
+    const diffs = artifactDiffs(
+      file,
+      [
+        [c('config/app.yml', '+a'), c('other.ts', '+x')],
+        null,
+        [c('D:/W/config/APP.yml', '+b'), c('config/app.yml', ''), c('config\\app.yml', '+c')],
+      ],
+      true,
+    )
+    expect(diffs).toEqual(['+a', '+b', '+c'])
+    expect(artifactDiffs(file, [[c('D:/W/config/APP.yml', '+b')]], false)).toEqual([])
   })
 })
