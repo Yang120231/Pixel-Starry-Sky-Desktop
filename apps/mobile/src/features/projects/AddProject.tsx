@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { ChevronRight, CornerLeftUp, Folder, FolderPlus } from 'lucide-react'
 import type { ProjectRecord } from '@pixelsky/protocol'
 import { callTool, toolError, useToolData, type DirectoryChoices } from '@/data/tools'
+import { L } from '@/i18n'
 import { Banner, Button, Empty, Screen, Section, Spinner, cn } from '@/ui'
 import { SearchField } from '@/ui/search'
 
@@ -57,14 +58,18 @@ export function AddProject({
 
   return (
     <Screen
-      title="添加项目"
-      subtitle="选电脑上的一个文件夹"
+      title={L('添加项目', 'Add project')}
+      subtitle={L('选电脑上的一个文件夹', 'Choose a folder on your computer')}
       onBack={onBack}
       footer={
         <div className="border-t border-line-subtle p-3">
           <Button variant="primary" className="w-full" disabled={!dir || busy || !!already} onClick={() => void add()}>
             {busy ? <Spinner size={16} /> : <FolderPlus size={18} />}
-            {already ? `「${already.name}」已经是项目` : dir ? `把「${baseName(dir.path)}」加为项目` : '加为项目'}
+            {already
+              ? L(`「${already.name}」已经是项目`, `“${already.name}” is already a project`)
+              : dir
+                ? L(`把「${baseName(dir.path)}」加为项目`, `Add “${baseName(dir.path)}” as a project`)
+                : L('加为项目', 'Add as project')}
           </Button>
         </div>
       }
@@ -84,21 +89,21 @@ export function AddProject({
           <input
             value={typed}
             onChange={e => setTyped(e.target.value)}
-            placeholder={dir?.path ?? '输入文件夹路径'}
+            placeholder={dir?.path ?? L('输入文件夹路径', 'Enter a folder path')}
             enterKeyHint="go"
             spellCheck={false}
             autoCapitalize="off"
             className="min-h-11 min-w-0 flex-1 rounded-xl border border-line-subtle bg-surface px-3 font-mono text-meta outline-none focus:border-line-composer-focus"
           />
           <Button size="sm" type="submit" disabled={!typed.trim()}>
-            前往
+            {L('前往', 'Go')}
           </Button>
         </form>
         {(error ?? list.error) && <Banner tone="danger">{error ?? list.error}</Banner>}
         {!dir ? (
           !list.error && (
             <div className="flex items-center justify-center gap-2 py-16 text-meta text-fg-muted">
-              <Spinner /> 正在读取…
+              <Spinner /> {L('正在读取…', 'Loading…')}
             </div>
           )
         ) : (
@@ -107,7 +112,7 @@ export function AddProject({
               {dir.path}
             </div>
             {dir.directories.length > 12 && (
-              <SearchField value={filter} onChange={setFilter} placeholder="筛选文件夹" />
+              <SearchField value={filter} onChange={setFilter} placeholder={L('筛选文件夹', 'Filter folders')} />
             )}
             <Section>
               {dir.parent && (
@@ -119,7 +124,7 @@ export function AddProject({
                   }}
                   className="flex min-h-12 w-full items-center gap-3 px-4 text-left text-ui text-fg-secondary active:bg-hover"
                 >
-                  <CornerLeftUp size={18} className="shrink-0" /> 上一级
+                  <CornerLeftUp size={18} className="shrink-0" /> {L('上一级', 'Up one level')}
                 </button>
               )}
               {shown?.map((name, i) => {
@@ -139,12 +144,14 @@ export function AddProject({
                   >
                     <Folder size={18} strokeWidth={1.75} className="shrink-0 text-accent-fg" />
                     <span className="min-w-0 flex-1 truncate text-ui">{name}</span>
-                    {project && <span className="shrink-0 text-label text-fg-faint">已是项目</span>}
+                    {project && (
+                      <span className="shrink-0 text-label text-fg-faint">{L('已是项目', 'Already a project')}</span>
+                    )}
                     <ChevronRight size={16} className="shrink-0 text-fg-faint" />
                   </button>
                 )
               })}
-              {!dir.directories.length && <Empty icon={Folder} title="没有子文件夹" />}
+              {!dir.directories.length && <Empty icon={Folder} title={L('没有子文件夹', 'No subfolders')} />}
             </Section>
           </>
         )}

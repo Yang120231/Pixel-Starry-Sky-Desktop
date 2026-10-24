@@ -1,0 +1,20 @@
+{
+  "id": "./",
+  "name": "PixelSky",
+  "short_name": "PixelSky",
+  "description": "View and handle PixelSky tasks running on your computer from your phone",
+  "lang": "en",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f8f8f6",
+  "theme_color": "#1f1f1e",
+  "categories": ["productivity", "developer"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -5,24 +5,27 @@ import { ChevronRight, FileDiff, Package } from 'lucide-react'
 import type { ArtifactResponse, Item } from '@pixelsky/protocol'
 import { ago } from '@/data/tasks'
 import { fileSize, useToolData } from '@/data/tools'
+import { L } from '@/i18n'
 import { Banner, DiffView, Empty, Section, Segmented, cn } from '@/ui'
 import { Loading, PathRow, ToolFrame, type ToolProps } from './common'
 
-const DAYS = [
-  { value: '1', label: '今天' },
-  { value: '7', label: '7 天' },
-  { value: '30', label: '30 天' },
-] as const
+type Days = '1' | '7' | '30'
 
-const DELIVERY_TEXT: Record<string, string> = {
-  document: '文档',
-  image: '图片',
-  table: '表格',
-  web: '网页',
-  archive: '压缩包',
-  media: '音视频',
-  other: '文件',
-}
+const dayOptions = (): readonly { value: Days; label: string }[] => [
+  { value: '1', label: L('今天', 'Today') },
+  { value: '7', label: L('7 天', '7 days') },
+  { value: '30', label: L('30 天', '30 days') },
+]
+
+const deliveryText = (): Record<string, string> => ({
+  document: L('文档', 'Document'),
+  image: L('图片', 'Image'),
+  table: L('表格', 'Spreadsheet'),
+  web: L('网页', 'Web page'),
+  archive: L('压缩包', 'Archive'),
+  media: L('音视频', 'Media'),
+  other: L('文件', 'File'),
+})
 
 interface ChangeTarget {
   sessionId: string
@@ -36,26 +39,33 @@ export function ArtifactsScreen(props: ToolProps) {
 }
 
 function ListPage({ tool }: { tool: ToolProps }) {
-  const [days, setDays] = useState<(typeof DAYS)[number]['value']>('7')
+  const [days, setDays] = useState<Days>('7')
   const list = useToolData<ArtifactResponse>(tool.deviceId, 'engine:artifacts', [
     { projectId: tool.project.id, days: Number(days) },
   ])
   const r = list.data
   const turns = r?.turns.filter(t => t.files.length) ?? []
   return (
-    <ToolFrame tool={tool} title="产物" loading={list.loading} onRefresh={list.reload}>
+    <ToolFrame tool={tool} title={L('产物', 'Artifacts')} loading={list.loading} onRefresh={list.reload}>
       <div className="px-4 pt-1 pb-4">
-        <Segmented<(typeof DAYS)[number]['value']> options={DAYS} value={days} onChange={setDays} />
+        <Segmented<Days> options={dayOptions()} value={days} onChange={setDays} />
       </div>
       {!r ? (
         <Loading error={list.error} />
       ) : !turns.length && !r.delivered.length ? (
-        <Empty icon={Package} title="没有产物" body="这段时间 AI 没有在这个项目里改过文件。" />
+        <Empty
+          icon={Package}
+          title={L('没有产物', 'No artifacts')}
+          body={L(
+            '这段时间 AI 没有在这个项目里改过文件。',
+            'AI didn’t change any files in this project during this period.',
+          )}
+        />
       ) : (
         <div className="flex flex-col gap-5 pb-6">
           {list.error && <Banner tone="danger">{list.error}</Banner>}
           {r.delivered.length > 0 && (
-            <Section title="交给你的">
+            <Section title={L('交给你的', 'Delivered to you')}>
               {r.delivered.map((d, i) => (
                 <PathRow
                   key={d.sessionId + d.itemId + d.path}
@@ -66,10 +76,14 @@ function ListPage({ tool }: { tool: ToolProps }) {
                       JSON.stringify({ sessionId: d.sessionId, itemId: d.itemId, path: d.path } satisfies ChangeTarget),
                     )
                   }
-                  badge={<span className="shrink-0 text-label text-fg-faint">{DELIVERY_TEXT[d.type] ?? '文件'}</span>}
+                  badge={
+                    <span className="shrink-0 text-label text-fg-faint">
+                      {deliveryText()[d.type] ?? L('文件', 'File')}
+                    </span>
+                  }
                   trailing={
                     <span className="pr-2 text-label text-fg-faint">
-                      {d.exists ? (d.bytes !== null ? fileSize(d.bytes) : '') : '已删除'}
+                      {d.exists ? (d.bytes !== null ? fileSize(d.bytes) : '') : L('已删除', 'Deleted')}
                     </span>
                   }
                 />
@@ -106,7 +120,7 @@ function ListPage({ tool }: { tool: ToolProps }) {
                   badge={
                     f.kind !== 'update' && (
                       <span className={cn('shrink-0 text-label', f.kind === 'add' ? 'text-success' : 'text-danger')}>
-                        {f.kind === 'add' ? '新建' : '删除'}
+                        {f.kind === 'add' ? L('新建', 'New') : L('删除', 'Deleted')}
                       </span>
                     )
                   }
@@ -121,11 +135,16 @@ function ListPage({ tool }: { tool: ToolProps }) {
           ))}
           {r.outsideCount > 0 && (
             <p className="px-5 text-label text-fg-faint">
-              另有 {r.outsideCount} 个项目目录外的文件被改过，请到电脑上看。
+              {L(
+                `另有 ${r.outsideCount} 个项目目录外的文件被改过，请到电脑上看。`,
+                `${r.outsideCount} ${r.outsideCount === 1 ? 'file' : 'files'} outside the project folder ${r.outsideCount === 1 ? 'was' : 'were'} changed. View them on your computer.`,
+              )}
             </p>
           )}
           {(r.truncated || r.partial) && (
-            <p className="px-5 text-label text-fg-faint">记录较多，只列出了最近的一部分。</p>
+            <p className="px-5 text-label text-fg-faint">
+              {L('记录较多，只列出了最近的一部分。', 'Too many records. Only the most recent are listed.')}
+            </p>
           )}
         </div>
       )}
@@ -151,12 +170,16 @@ function ChangePage({ tool, target }: { tool: ToolProps; target: ChangeTarget })
           onClick={() => tool.onOpenSession(target.sessionId)}
           className="mr-1 min-h-9 rounded-full px-3 text-meta text-accent-fg active:bg-hover"
         >
-          打开会话
+          {L('打开会话', 'Open conversation')}
         </button>
       }
     >
       {change.loaded && !change.data ? (
-        <Empty icon={FileDiff} title="找不到这次改动" body="会话记录可能已经被清掉。" />
+        <Empty
+          icon={FileDiff}
+          title={L('找不到这次改动', 'Change not found')}
+          body={L('会话记录可能已经被清掉。', 'The conversation history may have been cleared.')}
+        />
       ) : !c ? (
         <Loading error={change.error} />
       ) : (

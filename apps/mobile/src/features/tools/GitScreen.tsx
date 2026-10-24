@@ -3,8 +3,8 @@
 import { useState } from 'react'
 import { ArrowDown, ArrowUp, GitBranch, Minus, Plus, Upload } from 'lucide-react'
 import {
-  GIT_CODE_TEXT,
   callTool,
+  gitCodeText,
   gitChangeCount,
   gitFailureText,
   toolError,
@@ -15,6 +15,7 @@ import {
   type GitResult,
   type GitStatus,
 } from '@/data/tools'
+import { L } from '@/i18n'
 import { Banner, Button, DiffView, Empty, Section, Spinner, cn } from '@/ui'
 import { ConfirmSheet } from '@/ui/sheet'
 import { Loading, PathRow, ToolFrame, type ToolProps } from './common'
@@ -25,11 +26,11 @@ interface DiffTarget {
   origPath: string | null
 }
 
-const AREAS: readonly { area: GitArea; title: string }[] = [
-  { area: 'conflicted', title: '冲突' },
-  { area: 'staged', title: '已暂存' },
-  { area: 'unstaged', title: '改动' },
-  { area: 'untracked', title: '未跟踪' },
+const areas = (): readonly { area: GitArea; title: string }[] => [
+  { area: 'conflicted', title: L('冲突', 'Conflicts') },
+  { area: 'staged', title: L('已暂存', 'Staged') },
+  { area: 'unstaged', title: L('改动', 'Changes') },
+  { area: 'untracked', title: L('未跟踪', 'Untracked') },
 ]
 
 export function GitScreen(props: ToolProps) {
@@ -81,7 +82,7 @@ function StatusPage({ tool }: { tool: ToolProps }) {
       'commit',
       'projectTools:gitCommit',
       { message: message.trim(), all: !s?.staged.length, push: pushAfter },
-      pushAfter ? '已提交并推送' : '已提交',
+      pushAfter ? L('已提交并推送', 'Committed and pushed') : L('已提交', 'Committed'),
     )
     if (ok) setMessage('')
   }
@@ -102,7 +103,7 @@ function StatusPage({ tool }: { tool: ToolProps }) {
                   value={message}
                   onChange={e => setMessage(e.target.value)}
                   rows={2}
-                  placeholder="提交说明"
+                  placeholder={L('提交说明', 'Commit message')}
                   className="field-sizing-content max-h-32 min-h-11 w-full resize-none rounded-xl border border-line-composer bg-surface px-3 py-2.5 text-prose outline-none focus:border-line-composer-focus"
                 />
                 <div className="flex items-center gap-2">
@@ -114,7 +115,7 @@ function StatusPage({ tool }: { tool: ToolProps }) {
                       onChange={e => setPushAfter(e.target.checked)}
                       className="size-4 accent-[var(--color-primary)]"
                     />
-                    提交后推送
+                    {L('提交后推送', 'Push after commit')}
                   </label>
                   <Button
                     variant="primary"
@@ -123,7 +124,12 @@ function StatusPage({ tool }: { tool: ToolProps }) {
                     onClick={() => setConfirm('commit')}
                   >
                     {action.busy === 'commit' && <Spinner size={13} />}
-                    {s.staged.length ? `提交 ${s.staged.length} 个文件` : `提交全部改动（${count}）`}
+                    {s.staged.length
+                      ? L(
+                          `提交 ${s.staged.length} 个文件`,
+                          `Commit ${s.staged.length} ${s.staged.length === 1 ? 'file' : 'files'}`,
+                        )
+                      : L(`提交全部改动（${count}）`, `Commit all changes (${count})`)}
                   </Button>
                 </div>
               </>
@@ -131,7 +137,9 @@ function StatusPage({ tool }: { tool: ToolProps }) {
             {canPush && (
               <Button disabled={disabled} onClick={() => setConfirm('push')} className="w-full">
                 {action.busy === 'push' ? <Spinner size={15} /> : <Upload size={17} />}
-                {s.upstream ? `推送 ${s.ahead} 个提交` : `发布分支到 ${remote}`}
+                {s.upstream
+                  ? L(`推送 ${s.ahead} 个提交`, `Push ${s.ahead} ${s.ahead === 1 ? 'commit' : 'commits'}`)
+                  : L(`发布分支到 ${remote}`, `Publish branch to ${remote}`)}
               </Button>
             )}
           </div>
@@ -141,9 +149,17 @@ function StatusPage({ tool }: { tool: ToolProps }) {
       {!s ? (
         <Loading error={status.error} />
       ) : s.missing ? (
-        <Empty icon={GitBranch} title="电脑上没有找到 Git" body="安装 Git 后再试。" />
+        <Empty
+          icon={GitBranch}
+          title={L('电脑上没有找到 Git', 'Git not found on the computer')}
+          body={L('安装 Git 后再试。', 'Install Git and try again.')}
+        />
       ) : !s.repo ? (
-        <Empty icon={GitBranch} title="不是 Git 仓库" body="这个项目还没有用 Git 管理。" />
+        <Empty
+          icon={GitBranch}
+          title={L('不是 Git 仓库', 'Not a Git repository')}
+          body={L('这个项目还没有用 Git 管理。', 'This project isn’t managed with Git yet.')}
+        />
       ) : (
         <div className="flex flex-col gap-5 pt-1 pb-6">
           {status.error && <Banner tone="danger">{status.error}</Banner>}
@@ -158,10 +174,14 @@ function StatusPage({ tool }: { tool: ToolProps }) {
               <GitBranch size={20} strokeWidth={1.75} className="shrink-0 text-fg-muted" />
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate font-mono text-ui">
-                  {s.detached ? '分离 HEAD' : (s.branch ?? '（没有分支）')}
+                  {s.detached ? L('分离 HEAD', 'Detached HEAD') : (s.branch ?? L('（没有分支）', '(no branch)'))}
                 </span>
                 <span className="truncate text-meta text-fg-muted">
-                  {s.initial ? '还没有提交' : s.upstream ? `跟踪 ${s.upstream}` : '没有上游分支'}
+                  {s.initial
+                    ? L('还没有提交', 'No commits yet')
+                    : s.upstream
+                      ? L(`跟踪 ${s.upstream}`, `Tracking ${s.upstream}`)
+                      : L('没有上游分支', 'No upstream branch')}
                 </span>
               </span>
               {(s.ahead > 0 || s.behind > 0) && (
@@ -182,11 +202,38 @@ function StatusPage({ tool }: { tool: ToolProps }) {
               )}
             </div>
           </Section>
-          {s.operation && <Banner tone="warn">正在进行 {s.operation}，请到电脑上完成或中止。</Banner>}
-          {s.busySessions > 0 && <Banner tone="warn">AI 正在这个工作区运行，它可能还在改文件。</Banner>}
-          {s.behind > 0 && <Banner>远端有 {s.behind} 个新提交，拉取请到电脑上做。</Banner>}
-          {count === 0 && <Empty icon={GitBranch} title="没有改动" body="工作区是干净的。" />}
-          {AREAS.map(({ area, title }) => {
+          {s.operation && (
+            <Banner tone="warn">
+              {L(
+                `正在进行 ${s.operation}，请到电脑上完成或中止。`,
+                `A ${s.operation} is in progress. Finish or abort it on your computer.`,
+              )}
+            </Banner>
+          )}
+          {s.busySessions > 0 && (
+            <Banner tone="warn">
+              {L(
+                'AI 正在这个工作区运行，它可能还在改文件。',
+                'AI is running in this workspace and may still be editing files.',
+              )}
+            </Banner>
+          )}
+          {s.behind > 0 && (
+            <Banner>
+              {L(
+                `远端有 ${s.behind} 个新提交，拉取请到电脑上做。`,
+                `The remote has ${s.behind} new ${s.behind === 1 ? 'commit' : 'commits'}. Pull on your computer.`,
+              )}
+            </Banner>
+          )}
+          {count === 0 && (
+            <Empty
+              icon={GitBranch}
+              title={L('没有改动', 'No changes')}
+              body={L('工作区是干净的。', 'The working tree is clean.')}
+            />
+          )}
+          {areas().map(({ area, title }) => {
             const files = s[area]
             if (!files.length) return null
             const staged = area === 'staged'
@@ -214,7 +261,7 @@ function StatusPage({ tool }: { tool: ToolProps }) {
                       }
                       className="text-meta text-accent-fg disabled:opacity-40"
                     >
-                      {staged ? '全部取消暂存' : '全部暂存'}
+                      {staged ? L('全部取消暂存', 'Unstage all') : L('全部暂存', 'Stage all')}
                     </button>
                   )
                 }
@@ -238,17 +285,31 @@ function StatusPage({ tool }: { tool: ToolProps }) {
               </Section>
             )
           })}
-          {s.truncated && <p className="px-5 text-label text-fg-faint">改动太多，只列出了前 5000 项。</p>}
+          {s.truncated && (
+            <p className="px-5 text-label text-fg-faint">
+              {L('改动太多，只列出了前 5000 项。', 'Too many changes. Only the first 5000 are listed.')}
+            </p>
+          )}
         </div>
       )}
       {confirm && s && (
         <ConfirmSheet
-          title={confirm === 'commit' ? `提交到 ${s.branch ?? '当前分支'}` : '推送'}
-          confirm={confirm === 'commit' ? (pushAfter ? '提交并推送' : '提交') : '推送'}
+          title={
+            confirm === 'commit'
+              ? L(`提交到 ${s.branch ?? '当前分支'}`, `Commit to ${s.branch ?? 'current branch'}`)
+              : L('推送', 'Push')
+          }
+          confirm={
+            confirm === 'commit'
+              ? pushAfter
+                ? L('提交并推送', 'Commit and push')
+                : L('提交', 'Commit')
+              : L('推送', 'Push')
+          }
           onConfirm={() =>
             void (confirm === 'commit'
               ? commit()
-              : action.run('push', 'projectTools:gitPush', { publish: !s.upstream }, '已推送'))
+              : action.run('push', 'projectTools:gitPush', { publish: !s.upstream }, L('已推送', 'Pushed')))
           }
           onClose={() => setConfirm(null)}
         >
@@ -257,8 +318,14 @@ function StatusPage({ tool }: { tool: ToolProps }) {
           ) : (
             <p>
               {s.upstream
-                ? `把 ${s.branch} 的 ${s.ahead} 个提交推送到 ${s.upstream}。`
-                : `把 ${s.branch} 发布到 ${remote}，并设为上游分支。`}
+                ? L(
+                    `把 ${s.branch} 的 ${s.ahead} 个提交推送到 ${s.upstream}。`,
+                    `Push ${s.ahead} ${s.ahead === 1 ? 'commit' : 'commits'} on ${s.branch} to ${s.upstream}.`,
+                  )
+                : L(
+                    `把 ${s.branch} 发布到 ${remote}，并设为上游分支。`,
+                    `Publish ${s.branch} to ${remote} and set it as the upstream branch.`,
+                  )}
             </p>
           )}
         </ConfirmSheet>
@@ -275,7 +342,15 @@ function CommitSummary({ status, message, push }: { status: GitStatus; message: 
     <div className="flex flex-col gap-2.5">
       <p className="rounded-lg bg-subtle px-3 py-2 whitespace-pre-wrap text-fg">{message}</p>
       <p>
-        {status.staged.length ? '提交已暂存的' : '暂存并提交全部'} {files.length} 个文件：
+        {status.staged.length
+          ? L(
+              `提交已暂存的 ${files.length} 个文件：`,
+              `Commit ${files.length} staged ${files.length === 1 ? 'file' : 'files'}:`,
+            )
+          : L(
+              `暂存并提交全部 ${files.length} 个文件：`,
+              `Stage and commit all ${files.length} ${files.length === 1 ? 'file' : 'files'}:`,
+            )}
       </p>
       <ul className="flex flex-col gap-0.5 font-mono text-label">
         {files.slice(0, 20).map(f => (
@@ -283,9 +358,9 @@ function CommitSummary({ status, message, push }: { status: GitStatus; message: 
             {f.code === '?' ? 'A' : f.code} {f.path}
           </li>
         ))}
-        {files.length > 20 && <li>…等 {files.length} 个</li>}
+        {files.length > 20 && <li>{L(`…等 ${files.length} 个`, `…${files.length} in total`)}</li>}
       </ul>
-      {push && <p>提交后推送到 {push}。</p>}
+      {push && <p>{L(`提交后推送到 ${push}。`, `Then push to ${push}.`)}</p>}
     </div>
   )
 }
@@ -323,7 +398,7 @@ function FileRow({
                 ? 'bg-subtle text-warn'
                 : 'bg-subtle text-success',
           )}
-          title={GIT_CODE_TEXT[file.code]}
+          title={gitCodeText()[file.code]}
         >
           {file.code === '?' ? 'U' : file.code}
         </span>
@@ -333,7 +408,9 @@ function FileRow({
         canAct && (
           <button
             type="button"
-            aria-label={staged ? `取消暂存 ${file.path}` : `暂存 ${file.path}`}
+            aria-label={
+              staged ? L(`取消暂存 ${file.path}`, `Unstage ${file.path}`) : L(`暂存 ${file.path}`, `Stage ${file.path}`)
+            }
             disabled={busy}
             onClick={onStage}
             className="flex size-10 items-center justify-center rounded-full text-fg-muted active:bg-hover disabled:opacity-40"
@@ -360,7 +437,7 @@ function DiffPage({ tool, target }: { tool: ToolProps; target: DiffTarget }) {
       title={target.path.split('/').pop()}
       subtitle={
         <span className="font-mono">
-          {AREAS.find(a => a.area === target.area)?.title} · {target.path}
+          {areas().find(a => a.area === target.area)?.title} · {target.path}
         </span>
       }
       loading={diff.loading}
@@ -377,7 +454,7 @@ function DiffPage({ tool, target }: { tool: ToolProps; target: DiffTarget }) {
               }
             >
               {action.busy ? <Spinner size={15} /> : staged ? <Minus size={17} /> : <Plus size={17} />}
-              {staged ? '取消暂存这个文件' : '暂存这个文件'}
+              {staged ? L('取消暂存这个文件', 'Unstage this file') : L('暂存这个文件', 'Stage this file')}
             </Button>
           </div>
         )
@@ -387,9 +464,17 @@ function DiffPage({ tool, target }: { tool: ToolProps; target: DiffTarget }) {
       {!d ? (
         <Loading error={diff.error} />
       ) : d.binary ? (
-        <Empty icon={GitBranch} title="二进制文件" body="不能按行比较。" />
+        <Empty
+          icon={GitBranch}
+          title={L('二进制文件', 'Binary file')}
+          body={L('不能按行比较。', 'Can’t compare line by line.')}
+        />
       ) : d.tooLarge ? (
-        <Empty icon={GitBranch} title="文件太大" body="超过 2 MB，请到电脑上看。" />
+        <Empty
+          icon={GitBranch}
+          title={L('文件太大', 'File too large')}
+          body={L('超过 2 MB，请到电脑上看。', 'Over 2 MB. View it on your computer.')}
+        />
       ) : (
         <div className="flex flex-col gap-2 pb-6">
           <div className="flex items-center gap-3 px-4 pt-2 font-mono text-meta">
@@ -399,7 +484,14 @@ function DiffPage({ tool, target }: { tool: ToolProps; target: DiffTarget }) {
           <div className="mx-3 overflow-hidden rounded-xl border border-line-subtle bg-surface">
             <DiffView diff={d.diff} />
           </div>
-          {d.cut && <p className="px-5 text-label text-fg-faint">改动太多，只显示了前面一部分，完整的请到电脑上看。</p>}
+          {d.cut && (
+            <p className="px-5 text-label text-fg-faint">
+              {L(
+                '改动太多，只显示了前面一部分，完整的请到电脑上看。',
+                'Too many changes. Only the first part is shown; view the full diff on your computer.',
+              )}
+            </p>
+          )}
         </div>
       )}
     </ToolFrame>

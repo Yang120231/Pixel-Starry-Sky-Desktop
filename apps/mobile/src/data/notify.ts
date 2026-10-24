@@ -1,6 +1,7 @@
 // 本机通知（docs/mobile-remote.md §15，M4b）：比较前后两次会话列表，找出值得提醒的变化。
 // 只看列表（电脑推来的 sessions 事件），不需要打开会话；内容不经第三方，所以可以带任务标题（用户确认）。
 import type { SessionSummary } from '@pixelsky/protocol'
+import { L } from '@/i18n'
 import { taskTitle } from './tasks'
 
 export interface Reminder {
@@ -22,17 +23,19 @@ export function reminders(prev: readonly SessionSummary[] | null, next: readonly
     const old = before.get(s.record.id)
     const title = taskTitle(s)
     if (s.state === 'waiting' && old?.state !== 'waiting')
-      out.push({ kind: 'waiting', sessionId: s.record.id, title: '等你处理', body: title })
+      out.push({ kind: 'waiting', sessionId: s.record.id, title: L('等你处理', 'Needs you'), body: title })
     else if (busy(old) && s.state === 'idle') {
       if (s.record.lastOutcome === 'failed')
         out.push({
           kind: 'failed',
           sessionId: s.record.id,
-          title: '任务出错了',
-          body: s.record.lastError ? `${title}：${s.record.lastError.slice(0, 80)}` : title,
+          title: L('任务出错了', 'Task failed'),
+          body: s.record.lastError
+            ? L(`${title}：${s.record.lastError.slice(0, 80)}`, `${title}: ${s.record.lastError.slice(0, 80)}`)
+            : title,
         })
       else if (s.record.lastOutcome === 'completed')
-        out.push({ kind: 'completed', sessionId: s.record.id, title: '任务完成', body: title })
+        out.push({ kind: 'completed', sessionId: s.record.id, title: L('任务完成', 'Task completed'), body: title })
     }
   }
   return out

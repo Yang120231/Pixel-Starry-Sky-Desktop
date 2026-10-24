@@ -1,6 +1,7 @@
 // 对话条目的折叠由 protocol 的 foldTurns 做（两端共用）；这里是手机端显示要用的纯函数：摘要行、时间戳、思考用时、待办进度、重试。
 import { diffStat, summarizeProcess } from '@pixelsky/protocol'
 import type { Item } from '@pixelsky/protocol'
+import { L } from '@/i18n'
 
 /** 一步的简短说明（折叠行和运行中露出的最近几步用） */
 export function stepTitle(item: Item): string {
@@ -10,9 +11,9 @@ export function stepTitle(item: Item): string {
     case 'tool':
       return item.title ? `${item.name} · ${item.title}` : item.name
     case 'reasoning':
-      return '思考'
+      return L('思考', 'Thinking')
     case 'compaction':
-      return '压缩上下文'
+      return L('压缩上下文', 'Compacting context')
     default:
       return ''
   }
@@ -22,8 +23,7 @@ export function stepTitle(item: Item): string {
 export function turnDuration(stats: Extract<Item, { kind: 'turn_stats' }> | null): string {
   const ms = stats?.usage.durationMs
   if (!ms || ms < 1000) return ''
-  const s = Math.round(ms / 1000)
-  return s < 60 ? `用时 ${s} 秒` : `用时 ${Math.floor(s / 60)} 分 ${s % 60} 秒`
+  return L(`用时 ${spanText(ms)}`, `Took ${spanText(ms)}`)
 }
 
 /**
@@ -41,12 +41,13 @@ export function retryNoticeId(items: readonly Item[], running: boolean, queued: 
 }
 
 /** 点「重试」时发的话（同桌面：接着出错前的上下文做） */
-export const RETRY_MESSAGE = '继续'
+export const retryMessage = (): string => L('继续', 'Continue')
 
 /** 一段时间说成「N 秒」「M 分 S 秒」 */
 function spanText(ms: number): string {
   const s = Math.max(1, Math.round(ms / 1000))
-  return s < 60 ? `${s} 秒` : `${Math.floor(s / 60)} 分 ${s % 60} 秒`
+  if (s < 60) return L(`${s} 秒`, `${s}s`)
+  return L(`${Math.floor(s / 60)} 分 ${s % 60} 秒`, `${Math.floor(s / 60)}m ${s % 60}s`)
 }
 
 /** 主智能体的步数：命令、工具、改文件（不含子智能体名下的步骤、派出子智能体的调用本身、思考、待办、提示） */
@@ -70,18 +71,24 @@ export function processLine(items: readonly Item[]): string {
   const changes = items.flatMap(i => (i.kind === 'file_change' ? i.changes : []))
   const sum = summarizeProcess(items)
   const parts: string[] = []
-  if (steps) parts.push(`做了 ${steps} 步`)
+  if (steps) parts.push(L(`做了 ${steps} 步`, steps === 1 ? '1 step' : `${steps} steps`))
   if (sum.edits) {
     const { added, removed } = diffStat(changes)
-    parts.push(`改了 ${sum.edits} 个文件 +${added} −${removed}`)
+    parts.push(
+      L(
+        `改了 ${sum.edits} 个文件 +${added} −${removed}`,
+        `${sum.edits === 1 ? '1 file' : `${sum.edits} files`} changed +${added} −${removed}`,
+      ),
+    )
   }
-  if (sum.agents) parts.push(`${sum.agents} 个子智能体`)
-  if (sum.failed) parts.push(`${sum.failed} 步失败`)
+  if (sum.agents) parts.push(L(`${sum.agents} 个子智能体`, sum.agents === 1 ? '1 subagent' : `${sum.agents} subagents`))
+  if (sum.failed) parts.push(L(`${sum.failed} 步失败`, `${sum.failed} failed`))
   return parts.join(' · ')
 }
 
 const GAP_MS = 5 * 60_000
 const pad = (n: number) => String(n).padStart(2, '0')
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 /** 时间戳文字：今天「14:32」，昨天「昨天 14:32」，今年「10月12日 14:32」，更早带年份 */
 export function dividerText(at: number, now: number): string {
@@ -91,9 +98,11 @@ export function dividerText(at: number, now: number): string {
   const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
   const diff = Math.round((day(n) - day(d)) / 86_400_000)
   if (diff === 0) return hm
-  if (diff === 1) return `昨天 ${hm}`
+  if (diff === 1) return L(`昨天 ${hm}`, `Yesterday ${hm}`)
+  const sameYear = d.getFullYear() === n.getFullYear()
   const md = `${d.getMonth() + 1}月${d.getDate()}日 ${hm}`
-  return d.getFullYear() === n.getFullYear() ? md : `${d.getFullYear()}年${md}`
+  const en = `${MONTHS[d.getMonth()]} ${d.getDate()}${sameYear ? '' : `, ${d.getFullYear()}`} ${hm}`
+  return L(sameYear ? md : `${d.getFullYear()}年${md}`, en)
 }
 
 /**
@@ -133,11 +142,13 @@ export function thinkingLabel(item: Extract<Item, { kind: 'reasoning' }>, now: n
   if (!running && started !== undefined && !thinkingTook.has(item.id)) thinkingTook.set(item.id, now - started)
   if (running) {
     const elapsed = started === undefined ? 0 : now - started
-    return elapsed >= 1000 ? `思考中 ${spanText(elapsed)}` : '正在思考'
+    return elapsed >= 1000
+      ? L(`思考中 ${spanText(elapsed)}`, `Thinking ${spanText(elapsed)}`)
+      : L('正在思考', 'Thinking…')
   }
   const took = item.durationMs ?? thinkingTook.get(item.id)
-  if (took !== undefined) return `思考了 ${spanText(took)}`
-  return item.text.trim() ? '思考了' : null
+  if (took !== undefined) return L(`思考了 ${spanText(took)}`, `Thought for ${spanText(took)}`)
+  return item.text.trim() ? L('思考了', 'Thought') : null
 }
 
 /** 最近一份待办的进度：「计划 3/5」加进行中的那一步；没有待办返回 null */

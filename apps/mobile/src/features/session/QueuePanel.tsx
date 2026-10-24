@@ -17,6 +17,7 @@ import {
   queueMoveArg,
   queueTitle,
 } from '@/data/queue'
+import { L } from '@/i18n'
 import { Button, Spinner, cn } from '@/ui'
 import { ActionSheet, type SheetAction } from '@/ui/sheet'
 
@@ -54,7 +55,9 @@ export function QueuePanel({
       if (method === 'engine:cancelQueued' && typeof result === 'string') onRecall(result)
     } catch (e) {
       setError(
-        (e as Error).message === 'MOBILE_FORBIDDEN' ? '这部手机是「只看」。' : queueErrorText((e as Error).message),
+        (e as Error).message === 'MOBILE_FORBIDDEN'
+          ? L('这部手机是「只看」。', 'This phone is set to “View only”.')
+          : queueErrorText((e as Error).message),
       )
     } finally {
       setBusy(null)
@@ -69,14 +72,16 @@ export function QueuePanel({
     if (isReconnecting(q))
       return [
         {
-          label: snapshot.queuePaused ? '继续重连' : '立即重连',
-          hint: snapshot.queuePaused ? '自动重连已暂停，现在接着连' : '不等倒计时，现在就连',
+          label: snapshot.queuePaused ? L('继续重连', 'Resume reconnecting') : L('立即重连', 'Reconnect now'),
+          hint: snapshot.queuePaused
+            ? L('自动重连已暂停，现在接着连', 'Auto-reconnect is paused. Continue now')
+            : L('不等倒计时，现在就连', 'Skip the countdown and connect now'),
           disabled: q.status === 'dispatching',
           onSelect: () => void run(q.id, 'engine:runQueuedNow', q.id),
         },
         {
-          label: '停止',
-          hint: '不再自动重连，这条算发送失败',
+          label: L('停止', 'Stop'),
+          hint: L('不再自动重连，这条算发送失败', 'Stop reconnecting and mark this message as failed to send'),
           danger: true,
           onSelect: () => void run(q.id, 'engine:interrupt'),
         },
@@ -85,27 +90,37 @@ export function QueuePanel({
       list.push(
         q.error
           ? {
-              label: '重试',
-              hint: q.status === 'uncertain' ? '核对过再重新执行，可能重复上次已经做过的操作' : undefined,
+              label: L('重试', 'Retry'),
+              hint:
+                q.status === 'uncertain'
+                  ? L(
+                      '核对过再重新执行，可能重复上次已经做过的操作',
+                      'Check first: running it again may repeat what was already done',
+                    )
+                  : undefined,
               onSelect: () => void run(q.id, 'engine:runQueuedNow', q.id),
             }
           : {
-              label: '插队',
-              hint: '停下当前这一轮，先发这条',
+              label: L('插队', 'Send now'),
+              hint: L('停下当前这一轮，先发这条', 'Stop the current turn and send this first'),
               onSelect: () => void run(q.id, 'engine:runQueuedNow', q.id),
             },
       )
     if (canSteer(q, snapshot))
       list.push({
-        label: '引导',
-        hint: '不停下，把这条作为补充说明交给正在做的这一轮',
+        label: L('引导', 'Steer'),
+        hint: L('不停下，把这条作为补充说明交给正在做的这一轮', 'Add this to the current turn without stopping it'),
         onSelect: () => void run(q.id, 'engine:steerQueued', q.id, snapshot.turnId),
       })
     if (q.status === 'queued') {
       list.push(
-        { label: '上移', disabled: up === null, onSelect: () => void run(q.id, 'engine:moveQueued', q.id, up) },
         {
-          label: '下移',
+          label: L('上移', 'Move up'),
+          disabled: up === null,
+          onSelect: () => void run(q.id, 'engine:moveQueued', q.id, up),
+        },
+        {
+          label: L('下移', 'Move down'),
           disabled: down === null,
           onSelect: () => void run(q.id, 'engine:moveQueued', q.id, down),
         },
@@ -113,22 +128,25 @@ export function QueuePanel({
     }
     if (!isPending(q))
       list.push({
-        label: '撤回',
-        hint: '文字放回输入框（图片不会放回）',
+        label: L('撤回', 'Withdraw'),
+        hint: L('文字放回输入框（图片不会放回）', "The text goes back to the input box (images don't)"),
         danger: true,
         onSelect: () => void run(q.id, 'engine:cancelQueued', q.id),
       })
     if (canDismiss(q))
       list.push({
-        label: '关掉',
-        hint: '不重发也不撤回：消息留在对话里标「未送达」，可以直接接着说',
+        label: L('关掉', 'Dismiss'),
+        hint: L(
+          '不重发也不撤回：消息留在对话里标「未送达」，可以直接接着说',
+          "Don't resend or withdraw: the message stays in the conversation marked “Not delivered”, and you can keep going",
+        ),
         onSelect: () => void run(q.id, 'engine:dismissQueued', q.id),
       })
     return list
   }
 
   return (
-    <section aria-label="消息队列" className="border-t border-line-subtle px-3 pt-2">
+    <section aria-label={L('消息队列', 'Message queue')} className="border-t border-line-subtle px-3 pt-2">
       <div className="flex min-h-8 items-center gap-1.5 px-1 text-meta text-fg-muted">
         {paused ? <Pause size={13} /> : <CornerDownRight size={13} />}
         <span>
@@ -143,7 +161,8 @@ export function QueuePanel({
             onClick={() => void run('resume', 'engine:resumeQueue')}
             className="min-h-8 px-2 text-accent-fg"
           >
-            {busy === 'resume' ? <Spinner size={12} /> : null}继续队列
+            {busy === 'resume' ? <Spinner size={12} /> : null}
+            {L('继续队列', 'Resume queue')}
           </Button>
         )}
         {items.length > COLLAPSED && (
@@ -152,7 +171,7 @@ export function QueuePanel({
             onClick={() => setOpen(o => !o)}
             className="flex min-h-8 items-center gap-0.5 rounded-lg px-1.5 active:bg-hover"
           >
-            {open ? '收起' : `全部 ${items.length} 条`}
+            {open ? L('收起', 'Collapse') : L(`全部 ${items.length} 条`, `All ${items.length}`)}
             {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
         )}
@@ -186,15 +205,23 @@ export function QueuePanel({
                 </span>
               )}
             </span>
-            <span className="line-clamp-2 text-list text-fg-secondary">{q.text || '（只有图片）'}</span>
+            <span className="line-clamp-2 text-list text-fg-secondary">
+              {q.text || L('（只有图片）', '(Images only)')}
+            </span>
             {q.error && (
               <span className="truncate text-label text-warn">
                 {q.error.split('\n')[0]}
-                {!!q.reconnected && ` · 已自动重连 ${q.reconnected} 次`}
+                {!!q.reconnected &&
+                  L(
+                    ` · 已自动重连 ${q.reconnected} 次`,
+                    ` · Auto-reconnected ${q.reconnected === 1 ? 'once' : `${q.reconnected} times`}`,
+                  )}
               </span>
             )}
             {q.reconnect && isReconnecting(q) && (
-              <span className="truncate text-label text-fg-faint">{q.reconnect.reason || '连接中断'}</span>
+              <span className="truncate text-label text-fg-faint">
+                {q.reconnect.reason || L('连接中断', 'Connection lost')}
+              </span>
             )}
           </button>
         ))}
@@ -202,7 +229,7 @@ export function QueuePanel({
       {error && <p className="px-1 pb-1 text-meta text-danger">{error}</p>}
       {menu && (
         <ActionSheet
-          title={menu.text.length > 40 ? menu.text.slice(0, 40) + '…' : menu.text || '这条消息'}
+          title={menu.text.length > 40 ? menu.text.slice(0, 40) + '…' : menu.text || L('这条消息', 'This message')}
           actions={actionsFor(menu)}
           onClose={() => setMenu(null)}
         />

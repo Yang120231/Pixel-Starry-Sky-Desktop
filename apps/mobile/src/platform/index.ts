@@ -4,6 +4,7 @@ import { Capacitor } from '@capacitor/core'
 import { App as CapApp } from '@capacitor/app'
 import { LocalNotifications } from '@capacitor/local-notifications'
 import { ForegroundService, type ServiceType } from '@capawesome-team/capacitor-android-foreground-service'
+import { L } from '@/i18n'
 
 /** 在安卓 App 里（不是浏览器） */
 export const inApp = Capacitor.isNativePlatform()
@@ -20,8 +21,8 @@ function prepare(): Promise<boolean> {
     try {
       await LocalNotifications.createChannel({
         id: CHANNEL,
-        name: '任务提醒',
-        description: '任务等你处理、完成或出错时提醒',
+        name: L('任务提醒', 'Task alerts'),
+        description: L('任务等你处理、完成或出错时提醒', 'Alerts when a task needs you, finishes or fails'),
         importance: 4,
         visibility: 0,
       })
@@ -68,8 +69,17 @@ export async function keepAlive(on: boolean, count = 1): Promise<void> {
       await prepare()
       await ForegroundService.startForegroundService({
         id: KEEP_ALIVE_ID,
-        title: '像素星空',
-        body: count > 1 ? `正在连接 ${count} 台电脑，有任务要处理时会提醒你` : '正在连接电脑，有任务要处理时会提醒你',
+        title: L('像素星空', 'PixelSky'),
+        body:
+          count > 1
+            ? L(
+                `正在连接 ${count} 台电脑，有任务要处理时会提醒你`,
+                `Connected to ${count} computers. You’ll be alerted when a task needs you`,
+              )
+            : L(
+                '正在连接电脑，有任务要处理时会提醒你',
+                'Connected to your computer. You’ll be alerted when a task needs you',
+              ),
         smallIcon: 'ic_stat_pixelsky',
         silent: true,
         // 安卓的 FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING（插件的类型里只列了定位和麦克风），和清单里声明的一致

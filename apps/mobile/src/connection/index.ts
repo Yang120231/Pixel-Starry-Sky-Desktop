@@ -15,6 +15,7 @@ import { DesktopLink, type LinkHooks, type LinkState } from './link'
 import { dropPush, retryDrops, syncPush } from './push'
 import { DEMO_PAIRING, DemoLink, demoEnabled } from './demo'
 import { activeDevice, loadPairings, savePairings, setActiveDevice, type Pairing } from './storage'
+import { L } from '@/i18n'
 
 export type { Hello, LinkState } from './link'
 export type { Pairing } from './storage'
@@ -23,14 +24,26 @@ export { findOffer, parseOffer, readOffer, type Offer } from './offer'
 export { activeDevice, setActiveDevice } from './storage'
 export { disablePush, enablePush, pushState, type PushState } from './push'
 
-const PAIR_ERRORS: Record<string, string> = {
-  invalid_code: '二维码已过期或已经用过，请在电脑上重新生成。',
-  too_many_devices: '每台电脑最多配对 5 部手机，这台已经满了，先在电脑上移除一部。',
-}
+const pairErrors = (): Record<string, string> => ({
+  invalid_code: L(
+    '二维码已过期或已经用过，请在电脑上重新生成。',
+    'The QR code has expired or was already used. Generate a new one on your computer.',
+  ),
+  too_many_devices: L(
+    '每台电脑最多配对 5 部手机，这台已经满了，先在电脑上移除一部。',
+    'Each computer can pair with up to 5 phones and this one is full. Remove one on your computer first.',
+  ),
+})
 
 /** 扫码后：生成手机密钥，用配对码向云端换设备令牌，存下来（等电脑上确认） */
 export async function pairWithOffer(offer: Offer, phoneName: string): Promise<Pairing> {
-  if (!offer.raw.code) throw new Error('这个二维码不是经云端配对的，手机连不上。')
+  if (!offer.raw.code)
+    throw new Error(
+      L(
+        '这个二维码不是经云端配对的，手机连不上。',
+        'This QR code isn’t for cloud pairing, so the phone can’t connect.',
+      ),
+    )
   const key = generateKeypair()
   let res: Response
   let node: string | null = null
@@ -45,11 +58,14 @@ export async function pairWithOffer(offer: Offer, phoneName: string): Promise<Pa
       body: JSON.stringify({ code: offer.raw.code, name: phoneName }),
     })
   } catch {
-    throw new Error('连不上云端，检查一下网络。')
+    throw new Error(L('连不上云端，检查一下网络。', 'Can’t reach the cloud. Check your network.'))
   }
   const body = (await res.json().catch(() => ({}))) as { deviceId?: string; token?: string; error?: string }
   if (!res.ok || !body.deviceId || !body.token)
-    throw new Error(PAIR_ERRORS[body.error ?? ''] ?? '配对失败，请在电脑上重新生成二维码。')
+    throw new Error(
+      pairErrors()[body.error ?? ''] ??
+        L('配对失败，请在电脑上重新生成二维码。', 'Pairing failed. Generate a new QR code on your computer.'),
+    )
   const pairing: Pairing = {
     deviceId: body.deviceId,
     token: body.token,
@@ -188,6 +204,11 @@ class Connections {
   active(): Pairing | null {
     const id = activeDevice()
     return this.pairings.find(p => p.deviceId === id) ?? this.pairings[0] ?? null
+  }
+
+  /** 断线横幅上点「立即重试」：不等退避，马上重连 */
+  retryNow(deviceId: string): void {
+    this.links.get(deviceId)?.wake()
   }
 
   /** 被别的设备顶掉后点「重新连接」 */

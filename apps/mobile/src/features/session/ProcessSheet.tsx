@@ -2,6 +2,7 @@
 // 子智能体名下的步骤缩进并标出名字；命令和工具再点开看输出，被截断的有「查看完整」。
 import type { ReactNode } from 'react'
 import type { Item } from '@pixelsky/protocol'
+import { L } from '@/i18n'
 import { MarkdownText } from '@/ui/Markdown'
 import { Sheet } from '@/ui/sheet'
 import { Changes, Step, TodoCard, type TurnActions } from './steps'
@@ -23,7 +24,9 @@ export function ProcessSheet({
   return (
     <Sheet title={title} onClose={onClose}>
       <div className="flex flex-col gap-2 px-4 py-3">
-        {rows.length === 0 && <p className="py-6 text-center text-meta text-fg-muted">没有可看的步骤</p>}
+        {rows.length === 0 && (
+          <p className="py-6 text-center text-meta text-fg-muted">{L('没有可看的步骤', 'No steps to show')}</p>
+        )}
         {rows.map(item => {
           const sub = 'subagent' in item ? item.subagent : undefined
           return (

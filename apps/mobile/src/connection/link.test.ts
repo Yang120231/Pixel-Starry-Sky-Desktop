@@ -134,8 +134,23 @@ describe('DesktopLink', () => {
     vi.advanceTimersByTime(10_000)
     expect(ws.readyState).toBe(FakeSocket.CLOSED)
     expect(link.state).toBe('offline')
+    // 断线横幅用：第几次、什么时候再试
+    expect(link.retries).toBe(1)
+    expect(link.retryAt).toBeGreaterThan(Date.now())
     vi.advanceTimersByTime(2_000)
     expect(FakeSocket.all).toHaveLength(2)
+    expect(link.retryAt).toBeNull()
+    link.stop()
+  })
+
+  it('立即重试：不等退避马上重连', () => {
+    const { link, ws } = setup()
+    ws.close(1006)
+    expect(link.state).toBe('offline')
+    link.wake()
+    expect(FakeSocket.all).toHaveLength(2)
+    expect(link.state).toBe('connecting')
+    expect(link.retryAt).toBeNull()
     link.stop()
   })
 

@@ -4,6 +4,7 @@ import { Pin } from 'lucide-react'
 import type { EngineId } from '@pixelsky/protocol'
 import { EngineAvatar } from './EngineAvatar'
 import { cn } from './index'
+import { L } from '@/i18n'
 
 export type SessionTone = 'danger' | 'online' | 'warn'
 const TEXT: Record<SessionTone, string> = { danger: 'text-danger', online: 'text-online', warn: 'text-warn' }
@@ -68,7 +69,9 @@ export function SessionRow({
           >
             {title}
           </span>
-          {pinned && <Pin size={12} aria-label="已置顶" className="shrink-0 self-center text-fg-faint" />}
+          {pinned && (
+            <Pin size={12} aria-label={L('已置顶', 'Pinned')} className="shrink-0 self-center text-fg-faint" />
+          )}
           <span className="shrink-0 text-label text-fg-faint">{time}</span>
         </span>
         {(project || second) && (

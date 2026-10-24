@@ -4,13 +4,26 @@ import { Bell, BellOff } from 'lucide-react'
 import { disablePush, enablePush, pushState, type PushState } from '@/connection'
 import { useConnections } from '@/data/hooks'
 import { Row, Section } from '@/ui'
+import { L } from '@/i18n'
 
-const SUBTITLE: Record<Exclude<PushState, 'unsupported'>, string> = {
-  install: 'iPhone / iPad 要先添加到主屏幕，从桌面图标打开后再开',
-  denied: '通知被系统关掉了：到系统设置里允许这个网页（或主屏幕上的图标）发通知',
-  off: '电脑上有任务等你处理、完成或出错时提醒你（不带任务内容）',
-  on: '已打开。网页开着时直接在页面上看，不另外提醒',
-}
+const subtitles = (): Record<Exclude<PushState, 'unsupported'>, string> => ({
+  install: L(
+    'iPhone / iPad 要先添加到主屏幕，从桌面图标打开后再开',
+    'On iPhone / iPad, add to Home Screen first, then turn this on after opening from the icon',
+  ),
+  denied: L(
+    '通知被系统关掉了：到系统设置里允许这个网页（或主屏幕上的图标）发通知',
+    'Notifications are turned off by the system: allow this site (or its Home Screen icon) to send notifications in system settings',
+  ),
+  off: L(
+    '电脑上有任务等你处理、完成或出错时提醒你（不带任务内容）',
+    'Alerts you when a task on your computer needs you, finishes or fails (without task content)',
+  ),
+  on: L(
+    '已打开。网页开着时直接在页面上看，不另外提醒',
+    'On. While the page is open you’ll see updates there, without extra alerts',
+  ),
+})
 
 export function PushRow({ onInstall }: { onInstall: () => void }) {
   const { list } = useConnections()
@@ -22,7 +35,7 @@ export function PushRow({ onInstall }: { onInstall: () => void }) {
   const toggle = async () => {
     if (state === 'install') return onInstall()
     if (state === 'denied' || busy) return
-    if (state === 'on' && !confirm('关掉锁屏提醒？')) return
+    if (state === 'on' && !confirm(L('关掉锁屏提醒？', 'Turn off lock-screen alerts?'))) return
     setBusy(true)
     setError(null)
     try {
@@ -30,10 +43,16 @@ export function PushRow({ onInstall }: { onInstall: () => void }) {
       else {
         const r = await enablePush(list)
         setState(r.state)
-        if (r.failed.length) setError(`${r.failed.join('、')} 没登记上，稍后关掉再打开一次`)
+        if (r.failed.length)
+          setError(
+            L(
+              `${r.failed.join('、')} 没登记上，稍后关掉再打开一次`,
+              `Couldn’t register ${r.failed.join(', ')}. Turn this off and on again later`,
+            ),
+          )
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : '没开成，稍后再试')
+      setError(e instanceof Error ? e.message : L('没开成，稍后再试', 'Couldn’t turn on. Try again later'))
       setState(pushState())
     } finally {
       setBusy(false)
@@ -41,14 +60,14 @@ export function PushRow({ onInstall }: { onInstall: () => void }) {
   }
 
   return (
-    <Section title="提醒">
+    <Section title={L('提醒', 'Alerts')}>
       <Row
         icon={state === 'on' ? <Bell size={22} strokeWidth={1.5} /> : <BellOff size={22} strokeWidth={1.5} />}
-        title="锁屏提醒"
-        subtitle={error ?? (busy ? '正在设置…' : SUBTITLE[state])}
+        title={L('锁屏提醒', 'Lock-screen alerts')}
+        subtitle={error ?? (busy ? L('正在设置…', 'Setting up…') : subtitles()[state])}
         trailing={
           state === 'on' || state === 'off' ? (
-            <span className="text-meta text-fg-muted">{state === 'on' ? '已打开' : '打开'}</span>
+            <span className="text-meta text-fg-muted">{state === 'on' ? L('已打开', 'On') : L('打开', 'Turn on')}</span>
           ) : undefined
         }
         onClick={state === 'denied' ? undefined : () => void toggle()}

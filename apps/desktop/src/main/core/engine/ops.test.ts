@@ -21,6 +21,7 @@ describe('mobileChangeNotice', () => {
     )
     expect(mobileChangeNotice(record, { permissionMode: 'ask', effort: 'low' })).toBeNull()
     expect(mobileChangeNotice(null, { effort: 'high' })).toBe('手机把强度改成了「high」')
+    expect(mobileChangeNotice(record, { fast: true })).toBe('手机把快速模式改成了「开」')
   })
 })
 

@@ -1,6 +1,7 @@
 // 消息队列（docs/mobile-remote.md §17 第 2 项）：哪些放进队列面板、每条显示什么、能做什么。
 // 规则和桌面端 features/session/queueView.ts、QueuedMessages.tsx 一样（docs/ui/message-queue.md）。
 import { replaceCodedErrors, type QueueMove, type QueuedMessage, type SessionSnapshot } from '@pixelsky/protocol'
+import { L } from '@/i18n'
 
 /** 空闲时直接发送、正在启动的消息：显示在对话里，不放进队列面板 */
 export function isStarting(q: QueuedMessage, paused: boolean): boolean {
@@ -30,20 +31,20 @@ export const isPending = (q: QueuedMessage): boolean => q.status === 'dispatchin
 /** paused：整个队列暂停（比如电脑重启后恢复出来的）。重连项这时不会自己重连，要点「继续重连」 */
 export function queueLabel(q: QueuedMessage, paused = false): string {
   if (q.reconnect && isReconnecting(q))
-    return `${paused ? '重连已暂停' : '正在重连'} ${q.reconnect.attempt}/${q.reconnect.max}`
-  if (isSendFailure(q)) return '发送失败'
-  if (q.status === 'failed') return '执行失败'
-  if (q.status === 'uncertain') return '待核对'
-  if (q.status === 'delivering') return '等待接收'
-  if (q.status === 'dispatching') return '正在启动'
-  if (q.held) return '已暂停'
-  return '排队中'
+    return `${paused ? L('重连已暂停', 'Reconnect paused') : L('正在重连', 'Reconnecting')} ${q.reconnect.attempt}/${q.reconnect.max}`
+  if (isSendFailure(q)) return L('发送失败', 'Failed to send')
+  if (q.status === 'failed') return L('执行失败', 'Failed')
+  if (q.status === 'uncertain') return L('待核对', 'Needs checking')
+  if (q.status === 'delivering') return L('等待接收', 'Waiting to be received')
+  if (q.status === 'dispatching') return L('正在启动', 'Starting')
+  if (q.held) return L('已暂停', 'Paused')
+  return L('排队中', 'Queued')
 }
 
 /** 面板标题：全是发送失败的、暂停了的、普通排队 */
 export function queueTitle(items: QueuedMessage[], paused: boolean): string {
-  if (items.length && items.every(isSendFailure)) return '发送失败'
-  return paused || items.some(q => q.held) ? '队列已暂停' : '排队中'
+  if (items.length && items.every(isSendFailure)) return L('发送失败', 'Failed to send')
+  return paused || items.some(q => q.held) ? L('队列已暂停', 'Queue paused') : L('排队中', 'Queued')
 }
 
 /** 能不能「引导」：这条还在排队，引擎支持运行中引导，当前有一轮在跑（设置是否一致由电脑判断） */
@@ -91,5 +92,7 @@ export function queueMoveArg(
 
 /** 操作失败时给人看的话：电脑回的「队列已变化」是带代码的错误，换成中文；别的原样 */
 export function queueErrorText(message: string): string {
-  return replaceCodedErrors(message, info => (info.code === 'queue.changed' ? '队列已变化，排序未保存' : message))
+  return replaceCodedErrors(message, info =>
+    info.code === 'queue.changed' ? L('队列已变化，排序未保存', 'The queue changed; new order not saved') : message,
+  )
 }

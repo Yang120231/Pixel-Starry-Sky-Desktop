@@ -295,7 +295,7 @@ function cutText(text: string, limit: number): string {
 const PHONE_MODES = ['ask', 'edits', 'plan'] as const
 type PhoneMode = (typeof PHONE_MODES)[number]
 
-/** 手机能改的会话设置（新建和修改共用）；平台、接口、引擎、fast、ultracode 不让手机动 */
+/** 手机能改的会话设置（新建和修改共用）；平台、接口、引擎、ultracode 不让手机动 */
 export interface PhoneSettings {
   permissionMode?: PhoneMode
   /** null：用引擎默认的模型 */
@@ -303,6 +303,8 @@ export interface PhoneSettings {
   /** null：用引擎默认的强度 */
   effort?: Effort | null
   thinkingSummaries?: boolean
+  /** 快速模式（docs/mobile-remote.md §25）：引擎有 fast 能力才收 */
+  fast?: boolean
 }
 
 /**
@@ -324,15 +326,20 @@ export function phoneSettings(o: Record<string, unknown>): PhoneSettings {
     if (typeof o.thinkingSummaries !== 'boolean') throw new Error('MOBILE_BAD_ARGUMENT')
     out.thinkingSummaries = o.thinkingSummaries
   }
+  if (o.fast !== undefined) {
+    if (typeof o.fast !== 'boolean') throw new Error('MOBILE_BAD_ARGUMENT')
+    out.fast = o.fast
+  }
   return out
 }
 
-/** 引擎能力表认不认这些设置：权限模式要在 caps.permissionModes 里、强度在 caps.efforts 里、思考摘要要引擎有这个开关 */
+/** 引擎能力表认不认这些设置：权限模式要在 caps.permissionModes 里、强度在 caps.efforts 里、思考摘要和快速模式要引擎有这个开关 */
 export function checkSettings(caps: EngineCaps, s: PhoneSettings): void {
   if (s.permissionMode !== undefined && !caps.permissionModes.includes(s.permissionMode))
     throw new Error('MOBILE_BAD_ARGUMENT')
   if (s.effort && !caps.efforts.includes(s.effort)) throw new Error('MOBILE_BAD_ARGUMENT')
   if (s.thinkingSummaries !== undefined && !caps.thinkingSummaries) throw new Error('MOBILE_BAD_ARGUMENT')
+  if (s.fast !== undefined && !caps.fast) throw new Error('MOBILE_BAD_ARGUMENT')
 }
 
 const asBoolean = (v: unknown): boolean => {

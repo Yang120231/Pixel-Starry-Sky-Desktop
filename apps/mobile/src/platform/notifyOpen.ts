@@ -4,8 +4,10 @@ import { useEffect, useRef } from 'react'
 
 export interface NotifyTarget {
   device: string
-  /** 没有时回概览 */
+  /** 没有时回概览（「等你处理」的逐个处理） */
   session: string | null
+  /** 「有 N 个任务等你处理」这一种：打开后直奔审批卡；没带会话时逐个处理等你的会话（docs/mobile-remote.md §25） */
+  waiting: boolean
 }
 
 const ID = /^[A-Za-z0-9_.:~-]{1,128}$/
@@ -16,7 +18,7 @@ export function readNotifyTarget(hash: string): NotifyTarget | null {
   const device = q.get('device')
   if (!q.has('open') || !device || !ID.test(device)) return null
   const session = q.get('open')
-  return { device, session: session && ID.test(session) ? session : null }
+  return { device, session: session && ID.test(session) ? session : null, waiting: q.get('waiting') === '1' }
 }
 
 /** 页面打开时看一次地址（看完从地址栏去掉），之后听 service worker 发来的消息 */
@@ -32,9 +34,13 @@ export function useNotifyOpen(open: (target: NotifyTarget) => void): void {
     const sw = 'serviceWorker' in navigator ? navigator.serviceWorker : null
     if (!sw) return
     const onMessage = (e: MessageEvent) => {
-      const d = e.data as { type?: unknown; device?: unknown; session?: unknown } | null
+      const d = e.data as { type?: unknown; device?: unknown; session?: unknown; waiting?: unknown } | null
       if (d?.type !== 'pixelsky-open' || typeof d.device !== 'string' || !ID.test(d.device)) return
-      ref.current({ device: d.device, session: typeof d.session === 'string' && ID.test(d.session) ? d.session : null })
+      ref.current({
+        device: d.device,
+        session: typeof d.session === 'string' && ID.test(d.session) ? d.session : null,
+        waiting: d.waiting === true,
+      })
     }
     sw.addEventListener('message', onMessage)
     return () => sw.removeEventListener('message', onMessage)

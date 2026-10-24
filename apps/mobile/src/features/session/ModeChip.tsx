@@ -3,20 +3,43 @@
 // 往更宽的权限切确认一次；完全放行手机上开不了，电脑上已经开着的只能往下降。只看档的手机只能看。
 // 能力和模型目录按「下一个引擎」算（运行中选了别的引擎还没生效时，设置算它的，和电脑网关一致）；
 // 用自定义接口的会话模型来自那个接口，不在引擎目录里，手机上只显示不让改。
+// 快速模式（§25）：引擎有 fast 才显示开关，打开确认一次（按更高的价格计费），开着时胶囊末尾「⚡快速」。
 import { useState } from 'react'
-import { ChevronDown } from 'lucide-react'
-import { ENGINES, type Effort, type PermissionMode, type SessionRecord } from '@pixelsky/protocol'
+import { ChevronDown, Zap } from 'lucide-react'
+import { ENGINES, type Effort, type PermissionMode, type SessionFlags, type SessionRecord } from '@pixelsky/protocol'
 import type { DesktopLink } from '@/connection'
 import { useCatalog } from '@/data/hooks'
-import { effortOptions, modeChip, modelLabel, modelOptions, permissionOptions, widens } from '@/data/mode'
+import {
+  effortOptions,
+  fastConfirm,
+  fastStatus,
+  modeChip,
+  modelLabel,
+  modelOptions,
+  permissionOptions,
+  widens,
+} from '@/data/mode'
+import { L } from '@/i18n'
+import { cn } from '@/ui'
 import { ModeSheet } from '@/ui/ModeSheet'
 
-type Patch = Partial<Pick<SessionRecord, 'permissionMode' | 'model' | 'effort' | 'thinkingSummaries'>>
+type Patch = Partial<Pick<SessionRecord, 'permissionMode' | 'model' | 'effort' | 'thinkingSummaries' | 'fast'>>
 
-const ERRORS: Record<string, string> = {
-  MOBILE_FORBIDDEN: '这部手机是「只看」，改不了。',
-  MOBILE_UNSUPPORTED: '电脑上的像素星空版本较旧，先更新电脑版。',
-  MOBILE_BAD_ARGUMENT: '电脑不接受这个设置。',
+/** 电脑回的错误代码 → 给人看的话；别的原样 */
+function errorText(code: string): string {
+  switch (code) {
+    case 'MOBILE_FORBIDDEN':
+      return L('这部手机是「只看」，改不了。', "This phone is set to “View only” and can't change this.")
+    case 'MOBILE_UNSUPPORTED':
+      return L(
+        '电脑上的像素星空版本较旧，先更新电脑版。',
+        'The PixelSky app on your computer is out of date. Update it first.',
+      )
+    case 'MOBILE_BAD_ARGUMENT':
+      return L('电脑不接受这个设置。', "The computer didn't accept this setting.")
+    default:
+      return code
+  }
 }
 
 export function ModeChip({
@@ -24,12 +47,15 @@ export function ModeChip({
   link,
   sessionId,
   record,
+  flags,
   canAct,
 }: {
   deviceId: string
   link: DesktopLink | undefined
   sessionId: string
   record: SessionRecord
+  /** 快速模式能不能开、是否在冷却（电脑上引擎报告的） */
+  flags: SessionFlags | null
   canAct: boolean
 }) {
   const [open, setOpen] = useState(false)
@@ -42,6 +68,7 @@ export function ModeChip({
   const text = [chip.permission, chip.model, chip.effort].filter(Boolean).join(' · ')
   const caps = ENGINES[engine]?.caps
   const model = catalog.models?.find(m => m.id === record.model)
+  const fast = fastStatus(flags)
 
   const apply = async (patch: Patch) => {
     if (!link) return
@@ -51,7 +78,7 @@ export function ModeChip({
       await link.call('engine:updateSession', sessionId, patch)
     } catch (e) {
       const code = (e as Error).message
-      setError(ERRORS[code] ?? code)
+      setError(errorText(code))
     } finally {
       setBusy(false)
     }
@@ -66,51 +93,88 @@ export function ModeChip({
           className="inline-flex max-w-full items-center gap-0.5 rounded-full border border-line-subtle bg-surface py-0.5 pr-1.5 pl-2.5 text-label text-fg-muted active:bg-hover"
         >
           <span className="truncate">{text}</span>
+          {record.fast && caps?.fast && (
+            <span
+              data-fast-chip
+              className={cn(
+                'inline-flex shrink-0 items-center gap-0.5 font-medium',
+                fast.cooldown ? 'text-fg-faint line-through' : 'text-warn',
+              )}
+            >
+              <span className="font-normal text-fg-muted">&nbsp;·&nbsp;</span>
+              <Zap size={11} fill="currentColor" />
+              {L('快速', 'Fast')}
+            </span>
+          )}
           <ChevronDown size={13} className="shrink-0" />
         </button>
       </div>
       {open && (
         <ModeSheet
-          title="这个会话的模式"
+          title={L('这个会话的模式', 'Conversation mode')}
           busy={busy}
           readOnly={!canAct || catalog.unsupported}
           error={
             error ??
             (catalog.unsupported
-              ? '电脑上的像素星空版本较旧，手机还不能改模式。'
+              ? L(
+                  '电脑上的像素星空版本较旧，手机还不能改模式。',
+                  "The PixelSky app on your computer is out of date, so the phone can't change modes yet.",
+                )
               : !canAct
-                ? '没连上电脑，或这部手机是「只看」。'
+                ? L(
+                    '没连上电脑，或这部手机是「只看」。',
+                    'Not connected to the computer, or this phone is set to “View only”.',
+                  )
                 : null)
           }
           note={[
-            caps && !caps.liveModelSwitch && '模型和强度下一轮生效。',
-            caps && !caps.livePermissionSwitch && '正在运行时改权限，下一轮生效。',
-            '换模型、调高强度会改变费用。',
+            caps &&
+              !caps.liveModelSwitch &&
+              L('模型和强度下一轮生效。', 'Model and effort changes apply from the next turn.'),
+            caps &&
+              !caps.livePermissionSwitch &&
+              L('正在运行时改权限，下一轮生效。', 'Permission changes made while running apply from the next turn.'),
+            caps?.fast
+              ? L(
+                  '换模型、调高强度、打开快速模式会改变费用。',
+                  'Changing the model, raising effort, or turning on fast mode changes the cost.',
+                )
+              : L('换模型、调高强度会改变费用。', 'Changing the model or raising effort changes the cost.'),
           ]
             .filter(Boolean)
-            .join('')}
+            .join(L('', ' '))}
           onClose={() => setOpen(false)}
           groups={[
             {
               key: 'permission',
-              title: '权限',
+              title: L('权限', 'Permissions'),
               options: permissionOptions(engine, record.permissionMode),
               value: record.permissionMode,
               onPick: v => {
                 const to = v as PermissionMode
-                if (widens(record.permissionMode, to) && !confirm('放宽权限：AI 改文件时不再先问你。确定吗？')) return
+                if (
+                  widens(record.permissionMode, to) &&
+                  !confirm(
+                    L(
+                      '放宽权限：AI 改文件时不再先问你。确定吗？',
+                      'Loosen permissions: the AI will edit files without asking you first. Continue?',
+                    ),
+                  )
+                )
+                  return
                 void apply({ permissionMode: to })
               },
             },
             {
               key: 'model',
               title: custom
-                ? '模型（自定义接口的，在电脑上改）'
+                ? L('模型（自定义接口的，在电脑上改）', 'Model (custom endpoint, change it on the computer)')
                 : catalog.models === null && !catalog.unsupported
-                  ? '模型（正在取）'
-                  : '模型',
+                  ? L('模型（正在取）', 'Model (loading)')
+                  : L('模型', 'Model'),
               options: custom
-                ? [{ value: record.model ?? '', label: record.model ? modelLabel(record.model) : '默认' }]
+                ? [{ value: record.model ?? '', label: record.model ? modelLabel(record.model) : L('默认', 'Default') }]
                 : modelOptions(catalog.models, record.model),
               value: record.model ?? '',
               onPick: v => {
@@ -122,24 +186,42 @@ export function ModeChip({
             },
             {
               key: 'effort',
-              title: '推理强度',
+              title: L('推理强度', 'Reasoning effort'),
               options: effortOptions(engine, model, record.effort),
               value: record.effort ?? '',
               onPick: v => void apply({ effort: (v || null) as Effort | null }),
             },
           ]}
-          toggles={
-            caps?.thinkingSummaries
+          toggles={[
+            ...(caps?.fast
+              ? [
+                  {
+                    key: 'fast',
+                    label: L('快速模式', 'Fast mode'),
+                    icon: <Zap size={14} fill="currentColor" className="text-warn" />,
+                    hint: fast.hint,
+                    warn: fast.warn,
+                    // 开不了时开关变灰；已经开着的照样能关
+                    disabled: !fast.available && !record.fast,
+                    value: record.fast,
+                    onChange: (v: boolean) => {
+                      if (v && !confirm(fastConfirm())) return
+                      void apply({ fast: v })
+                    },
+                  },
+                ]
+              : []),
+            ...(caps?.thinkingSummaries
               ? [
                   {
                     key: 'thinking',
-                    label: '显示思考摘要',
+                    label: L('显示思考摘要', 'Show thinking summaries'),
                     value: record.thinkingSummaries,
-                    onChange: v => void apply({ thinkingSummaries: v }),
+                    onChange: (v: boolean) => void apply({ thinkingSummaries: v }),
                   },
                 ]
-              : []
-          }
+              : []),
+          ]}
         />
       )}
     </>

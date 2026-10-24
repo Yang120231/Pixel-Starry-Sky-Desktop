@@ -3,6 +3,7 @@
 // resetKey 变了（换了页面）就清掉错误，别的页面照常显示。
 import { Component, type ReactNode } from 'react'
 import { RefreshCw } from 'lucide-react'
+import { L } from '@/i18n'
 
 interface Props {
   resetKey: string
@@ -29,16 +30,18 @@ export class PageBoundary extends Component<Props, { failed: boolean; offline: b
     if (!this.state.failed) return this.props.children
     return (
       <div className="flex h-app min-w-0 flex-1 flex-col items-center justify-center gap-3 bg-app px-8 text-center">
-        <p className="text-ui text-fg">这一页没加载出来</p>
+        <p className="text-ui text-fg">{L('这一页没加载出来', 'This page didn’t load')}</p>
         <p className="text-meta text-fg-muted">
-          {this.state.offline ? '现在没有网络，连上后再点重试。' : '可能是网络不稳，点重试再加载一次。'}
+          {this.state.offline
+            ? L('现在没有网络，连上后再点重试。', 'You’re offline. Tap Retry once you’re connected.')
+            : L('可能是网络不稳，点重试再加载一次。', 'The network may be unstable. Tap Retry to load it again.')}
         </p>
         <button
           type="button"
           onClick={this.retry}
           className="mt-1 inline-flex min-h-11 items-center gap-2 rounded-full border border-line-subtle bg-surface px-5 text-ui text-fg-secondary active:bg-hover"
         >
-          <RefreshCw size={16} /> 重试
+          <RefreshCw size={16} /> {L('重试', 'Retry')}
         </button>
       </div>
     )

@@ -2,6 +2,7 @@
 // 路径都相对项目目录，越界由电脑按项目目录校验（和电脑上的文件面板同一套）。
 import { ChevronRight, File, FileImage, Folder, FolderOpen } from 'lucide-react'
 import { fileSize, useToolData, type DirectoryListing, type FileDocument } from '@/data/tools'
+import { L } from '@/i18n'
 import { Banner, Empty, Section, cn } from '@/ui'
 import { CopyButton, FileText, langOf } from '@/ui/code'
 import { Loading, splitPath, ToolFrame, type ToolProps } from './common'
@@ -19,9 +20,17 @@ function DirectoryPage({ tool, path }: { tool: ToolProps; path: string }) {
   const list = useToolData<DirectoryListing>(tool.deviceId, 'files:list', [{ projectId: tool.project.id }, path])
   const parts = path ? path.split('/') : []
   return (
-    <ToolFrame tool={tool} title={path ? splitPath(path).name : '文件'} loading={list.loading} onRefresh={list.reload}>
+    <ToolFrame
+      tool={tool}
+      title={path ? splitPath(path).name : L('文件', 'Files')}
+      loading={list.loading}
+      onRefresh={list.reload}
+    >
       {parts.length > 0 && (
-        <nav aria-label="路径" className="flex flex-wrap items-center gap-0.5 px-4 pt-2 pb-3 text-meta text-fg-muted">
+        <nav
+          aria-label={L('路径', 'Path')}
+          className="flex flex-wrap items-center gap-0.5 px-4 pt-2 pb-3 text-meta text-fg-muted"
+        >
           <button type="button" onClick={() => tool.onSub('d:')} className="rounded px-1 py-0.5 active:bg-hover">
             {tool.project.name}
           </button>
@@ -43,7 +52,7 @@ function DirectoryPage({ tool, path }: { tool: ToolProps; path: string }) {
       {!list.data ? (
         <Loading error={list.error} />
       ) : !list.data.entries.length ? (
-        <Empty icon={FolderOpen} title="空文件夹" />
+        <Empty icon={FolderOpen} title={L('空文件夹', 'Empty folder')} />
       ) : (
         <div className="flex flex-col gap-3 pt-1 pb-6">
           {list.error && <Banner tone="danger">{list.error}</Banner>}
@@ -72,7 +81,11 @@ function DirectoryPage({ tool, path }: { tool: ToolProps; path: string }) {
               )
             })}
           </Section>
-          {list.data.truncated && <p className="px-5 text-label text-fg-faint">文件太多，只列出了一部分。</p>}
+          {list.data.truncated && (
+            <p className="px-5 text-label text-fg-faint">
+              {L('文件太多，只列出了一部分。', 'Too many files. Only some are listed.')}
+            </p>
+          )}
         </div>
       )}
     </ToolFrame>
@@ -100,10 +113,21 @@ function FilePage({ tool, path }: { tool: ToolProps; path: string }) {
           <span className="text-label text-fg-faint">{fileSize(doc.bytes)}</span>
         </div>
       ) : doc.kind === 'unsupported' ? (
-        <Empty icon={File} title="不能在手机上打开" body={`${doc.reason}（${fileSize(doc.bytes)}）`} />
+        <Empty
+          icon={File}
+          title={L('不能在手机上打开', 'Can’t open on the phone')}
+          body={L(`${doc.reason}（${fileSize(doc.bytes)}）`, `${doc.reason} (${fileSize(doc.bytes)})`)}
+        />
       ) : (
         <div className="flex flex-col pb-6">
-          {doc.cut && <Banner tone="warn">文件太长，只显示了开头一部分，完整的请到电脑上看。</Banner>}
+          {doc.cut && (
+            <Banner tone="warn">
+              {L(
+                '文件太长，只显示了开头一部分，完整的请到电脑上看。',
+                'File too long. Only the beginning is shown; view the full file on your computer.',
+              )}
+            </Banner>
+          )}
           <FileText code={doc.content} lang={langOf(path)} />
         </div>
       )}

@@ -2,6 +2,7 @@
 // packages/ui 抽出后，和桌面端相同的部分改用那里的。
 import { useSyncExternalStore, type ButtonHTMLAttributes, type ReactNode, type Ref } from 'react'
 import { ChevronLeft, ChevronRight, Menu, type LucideIcon } from 'lucide-react'
+import { L } from '@/i18n'
 
 export const cn = (...parts: (string | false | null | undefined)[]): string => parts.filter(Boolean).join(' ')
 
@@ -82,7 +83,9 @@ export function MenuButton({ badge, onClick }: { badge?: number; onClick(): void
   return (
     <button
       type="button"
-      aria-label={badge ? `打开菜单（${badge} 个等你处理）` : '打开菜单'}
+      aria-label={
+        badge ? L(`打开菜单（${badge} 个等你处理）`, `Open menu (${badge} need you)`) : L('打开菜单', 'Open menu')
+      }
       onClick={onClick}
       className="relative flex size-11 shrink-0 items-center justify-center rounded-full text-fg-secondary active:bg-hover min-[900px]:hidden"
     >
@@ -137,7 +140,7 @@ export function Screen({
         )}
       >
         {onBack ? (
-          <IconButton label="返回" icon={ChevronLeft} onClick={onBack} />
+          <IconButton label={L('返回', 'Back')} icon={ChevronLeft} onClick={onBack} />
         ) : (
           (leading ?? <span className="w-3" />)
         )}
@@ -195,7 +198,7 @@ export function Spinner({ size = 14, className }: { size?: number; className?: s
 /** 三个跳动的点：正在思考 */
 export function Typing() {
   return (
-    <span aria-label="正在处理" className="inline-flex items-center gap-1">
+    <span aria-label={L('正在处理', 'Working')} className="inline-flex items-center gap-1">
       {[0, 1, 2].map(i => (
         <span
           key={i}
@@ -304,7 +307,8 @@ export function Banner({
   children,
   action,
 }: {
-  tone?: 'muted' | 'danger' | 'warn'
+  /** ok：恢复了（绿底，例如「已重新连上」） */
+  tone?: 'muted' | 'danger' | 'warn' | 'ok'
   icon?: ReactNode
   children: ReactNode
   action?: ReactNode
@@ -317,7 +321,9 @@ export function Banner({
           ? 'bg-subtle text-danger'
           : tone === 'warn'
             ? 'bg-subtle text-warn'
-            : 'bg-subtle text-fg-secondary',
+            : tone === 'ok'
+              ? 'bg-accent-soft text-accent-fg'
+              : 'bg-subtle text-fg-secondary',
       )}
     >
       {icon && <span className="shrink-0">{icon}</span>}
@@ -384,7 +390,7 @@ export function Segmented<T extends string>({
 
 /** unified diff：+ / − 行着色，@@ 行变淡；外面套圆角框 */
 export function DiffView({ diff, ref }: { diff: string; ref?: Ref<HTMLPreElement> }) {
-  if (!diff) return <p className="px-3 py-2 text-meta text-fg-muted">没有改动内容</p>
+  if (!diff) return <p className="px-3 py-2 text-meta text-fg-muted">{L('没有改动内容', 'No changes')}</p>
   return (
     <pre ref={ref} className="overflow-x-auto py-1.5 font-mono text-label leading-relaxed">
       {diff.split('\n').map((line, i) => (
@@ -401,5 +407,14 @@ export function DiffView({ diff, ref }: { diff: string; ref?: Ref<HTMLPreElement
         </div>
       ))}
     </pre>
+  )
+}
+
+/** 键帽（快捷键提示，只在有键盘的设备上显示） */
+export function Kbd({ children }: { children: ReactNode }) {
+  return (
+    <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded-md border border-b-2 border-line-strong bg-surface px-1 font-mono text-label leading-none text-fg-muted">
+      {children}
+    </kbd>
   )
 }

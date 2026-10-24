@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { WIDE, cn, useMedia } from './index'
+import { L } from '@/i18n'
 
 export interface SheetAction {
   label: string
@@ -60,7 +61,7 @@ export function ActionSheet({ title, actions, onClose }: { title?: string; actio
           onClick={onClose}
           className="min-h-14 rounded-2xl bg-popover text-ui font-medium text-fg shadow-popover active:bg-hover"
         >
-          取消
+          {L('取消', 'Cancel')}
         </button>
       </div>
     </div>,
@@ -117,7 +118,7 @@ export function ConfirmSheet({
           onClick={onClose}
           className="min-h-14 rounded-2xl bg-popover text-ui font-medium text-fg shadow-popover active:bg-hover"
         >
-          取消
+          {L('取消', 'Cancel')}
         </button>
       </div>
     </div>,
@@ -197,7 +198,7 @@ export function Sheet({
           </div>
           <button
             type="button"
-            aria-label="关闭"
+            aria-label={L('关闭', 'Close')}
             onClick={onClose}
             className="flex size-11 shrink-0 items-center justify-center rounded-full text-fg-secondary active:bg-hover"
           >

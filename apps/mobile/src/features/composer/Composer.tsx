@@ -9,11 +9,16 @@ import { ENGINES, type EngineId } from '@pixelsky/protocol'
 import type { DesktopLink } from '@/connection'
 import { imageDataUrl, usePendingImages } from '@/data/images'
 import { attemptFor, sendKey, type SendAttempt } from '@/data/retry'
+import { L } from '@/i18n'
 import { FINE_POINTER, Spinner, cn, useMedia } from '@/ui'
 import { AttachButton, AttachmentStrip } from '@/ui/images'
 
 /** 快捷回复：点了原样发出去 */
-export const QUICK_REPLIES = ['继续', '按你推荐的来', '提交吧']
+export const quickReplies = () => [
+  L('继续', 'Continue'),
+  L('按你推荐的来', 'Go with your recommendation'),
+  L('提交吧', 'Commit it'),
+]
 
 export function Composer({
   link,
@@ -80,7 +85,11 @@ export function Composer({
       if (latest.current === sent) onDraft('')
       images.discard(attachments.map(i => i.id))
     } catch (e) {
-      setError((e as Error).message === 'MOBILE_FORBIDDEN' ? '这部手机是「只看」。' : (e as Error).message)
+      setError(
+        (e as Error).message === 'MOBILE_FORBIDDEN'
+          ? L('这部手机是「只看」。', 'This phone is “View only”.')
+          : (e as Error).message,
+      )
     } finally {
       setBusy(false)
     }
@@ -89,8 +98,9 @@ export function Composer({
   // 运行中且没字：右边键是停止；有字（或带图）仍是发送，消息进队列
   const stopping = running && !draft.trim() && images.images.length === 0
   const name =
-    ({ claude: 'Claude', codex: 'Codex', pixel: '像素星空' } as Partial<Record<EngineId, string>>)[engine] ??
-    ENGINES[engine]?.name
+    ({ claude: 'Claude', codex: 'Codex', pixel: L('像素星空', 'PixelSky') } as Partial<Record<EngineId, string>>)[
+      engine
+    ] ?? ENGINES[engine]?.name
   const shownError = error ?? images.error
   const quick = suggest && !quickSent && canAct && !busy && !draft.trim() && !images.images.length
   return (
@@ -98,7 +108,7 @@ export function Composer({
       {shownError && <p className="px-1 pb-1.5 text-meta text-danger">{shownError}</p>}
       {quick && (
         <div className="no-scrollbar -mx-3 flex gap-2 overflow-x-auto px-3 pb-2">
-          {QUICK_REPLIES.map(text => (
+          {quickReplies().map(text => (
             <button
               key={text}
               type="button"
@@ -127,15 +137,22 @@ export function Composer({
               if (ready) void send()
             }}
             rows={1}
+            data-key-target="composer"
             disabled={!canAct}
             enterKeyHint="send"
-            placeholder={!canAct ? '连接后才能发消息' : running ? '补充说明（会排在后面）…' : `给 ${name} 发消息`}
+            placeholder={
+              !canAct
+                ? L('连上电脑后才能发消息，写好的字会留着', 'Connect to the computer to send. Your draft is kept.')
+                : running
+                  ? L('补充说明（会排在后面）…', 'Add a follow-up (queued)…')
+                  : L(`给 ${name} 发消息`, `Message ${name}`)
+            }
             className="field-sizing-content max-h-40 min-h-9 flex-1 resize-none bg-transparent py-1.5 text-prose text-fg outline-none placeholder:text-fg-faint"
           />
           {stopping ? (
             <button
               type="button"
-              aria-label="停止"
+              aria-label={L('停止', 'Stop')}
               disabled={!canAct}
               onClick={stop}
               className="mb-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-fg disabled:bg-subtle disabled:text-fg-faint"
@@ -145,7 +162,7 @@ export function Composer({
           ) : (
             <button
               type="button"
-              aria-label="发送"
+              aria-label={L('发送', 'Send')}
               disabled={!ready}
               onClick={() => void send()}
               className={cn(

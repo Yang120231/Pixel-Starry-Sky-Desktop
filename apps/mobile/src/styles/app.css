@@ -254,3 +254,25 @@ body {
   height: 28px;
   background: linear-gradient(to bottom, transparent, var(--bg-chat));
 }
+
+/* 有鼠标的设备（电脑浏览器、接了键盘的平板，docs/mobile-remote.md §25）：
+   原来只在按下时变色的按钮、列表行，鼠标移上去也给底色；回复上的「复制」鼠标移到卡片上才露出来；键盘操作时有焦点框 */
+@media (hover: hover) and (pointer: fine) {
+  [class*='active:bg-hover']:not(:disabled):not([aria-current]):hover {
+    background-color: var(--bg-hover);
+  }
+  .hover-reveal {
+    opacity: 0;
+    transition: opacity 0.12s;
+  }
+  .group:hover .hover-reveal,
+  .hover-reveal:focus-visible {
+    opacity: 1;
+  }
+}
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--accent-border);
+    outline-offset: 2px;
+  }
+}

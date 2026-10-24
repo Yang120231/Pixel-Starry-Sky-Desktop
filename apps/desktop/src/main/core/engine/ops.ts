@@ -113,13 +113,14 @@ const MODE_LABEL: Record<string, string> = { ask: '每步问我', edits: '自动
 /** 手机改了会话设置时留在会话里的那句话（只写真的变了的项）；都没变时返回 null */
 export function mobileChangeNotice(before: SessionRecord | null, patch: SessionPatch): string | null {
   const parts: string[] = []
-  const changed = <K extends 'permissionMode' | 'model' | 'effort' | 'thinkingSummaries'>(key: K): boolean =>
+  const changed = <K extends 'permissionMode' | 'model' | 'effort' | 'thinkingSummaries' | 'fast'>(key: K): boolean =>
     patch[key] !== undefined && (!before || patch[key] !== before[key])
   if (changed('permissionMode'))
     parts.push(`模式改成了「${MODE_LABEL[patch.permissionMode!] ?? patch.permissionMode}」`)
   if (changed('model')) parts.push(`模型改成了「${patch.model ?? '引擎默认'}」`)
   if (changed('effort')) parts.push(`强度改成了「${patch.effort ?? '引擎默认'}」`)
   if (changed('thinkingSummaries')) parts.push(`思考摘要改成了「${patch.thinkingSummaries ? '开' : '关'}」`)
+  if (changed('fast')) parts.push(`快速模式改成了「${patch.fast ? '开' : '关'}」`)
   return parts.length ? `手机把${parts.join('，把')}` : null
 }
 

@@ -6,6 +6,7 @@ import { useState, type ReactNode } from 'react'
 import { Check, ChevronRight, CircleAlert, FileText, ListTodo, RotateCcw, X } from 'lucide-react'
 import type { Item, TurnEntry } from '@pixelsky/protocol'
 import { latestTodo, processLine, stepCount, thinkingLabel } from '@/data/turns'
+import { L } from '@/i18n'
 import { Button, Dot, Spinner, Typing, cn } from '@/ui'
 import { CopyButton } from '@/ui/code'
 import { MarkdownText } from '@/ui/Markdown'
@@ -30,7 +31,7 @@ export function EntryView({ entry, last, waiting, truncated, onDetail, actions }
   const more = (id: string) =>
     truncated.includes(id) && (
       <button type="button" onClick={() => onDetail(id)} className="mt-1.5 text-meta font-medium text-accent-fg">
-        内容较长，查看完整 ›
+        {L('内容较长，查看完整 ›', 'Long content, view all ›')}
       </button>
     )
   if (entry.type === 'process') {
@@ -40,7 +41,12 @@ export function EntryView({ entry, last, waiting, truncated, onDetail, actions }
   switch (item.kind) {
     case 'user':
       // 断线后电脑自动发的「继续」：一行小字，不当成你说的话
-      if (item.reconnect) return <p className="text-label text-fg-faint">已自动重连 · 第 {item.reconnect} 次</p>
+      if (item.reconnect)
+        return (
+          <p className="text-label text-fg-faint">
+            {L(`已自动重连 · 第 ${item.reconnect} 次`, `Auto-reconnected · attempt ${item.reconnect}`)}
+          </p>
+        )
       if (item.dismissed)
         return (
           <div className="flex flex-col items-end gap-1">
@@ -48,7 +54,7 @@ export function EntryView({ entry, last, waiting, truncated, onDetail, actions }
               <UserBubble item={item} more={more(item.id)} actions={actions} />
             </div>
             <p className="text-label text-fg-faint">
-              <span className="text-warn">未送达</span> · 已关掉
+              <span className="text-warn">{L('未送达', 'Not delivered')}</span> · {L('已关掉', 'Dismissed')}
             </p>
           </div>
         )
@@ -64,13 +70,13 @@ export function EntryView({ entry, last, waiting, truncated, onDetail, actions }
     case 'compaction':
       return (
         <p className="self-center text-label text-fg-faint">
-          {item.status === 'running' ? '正在压缩…' : '上下文已压缩'}
+          {item.status === 'running' ? L('正在压缩…', 'Compacting…') : L('上下文已压缩', 'Context compacted')}
         </p>
       )
     case 'turn_stats':
       return item.outcome === 'interrupted' ? (
         <div className="flex items-center gap-1.5 text-label text-fg-faint">
-          <X size={12} /> 已停止
+          <X size={12} /> {L('已停止', 'Stopped')}
         </div>
       ) : null
     default:
@@ -82,7 +88,7 @@ export function EntryView({ entry, last, waiting, truncated, onDetail, actions }
 export function ThinkingRow() {
   return (
     <div className="flex items-center gap-2 text-meta text-fg-muted">
-      正在思考 <Typing />
+      {L('正在思考', 'Thinking')} <Typing />
     </div>
   )
 }
@@ -98,7 +104,7 @@ function UserBubble({
 }) {
   return (
     <div className="flex flex-col items-end pl-10">
-      {item.mode === 'guidance' && <span className="mb-0.5 pr-1 text-label text-fg-faint">补充</span>}
+      {item.mode === 'guidance' && <span className="mb-0.5 pr-1 text-label text-fg-faint">{L('补充', 'Steer')}</span>}
       {(item.text || (!item.files?.length && !item.attachments?.length)) && (
         <div className="rounded-2xl rounded-br-md bg-bubble-user px-3.5 py-2.5 text-prose break-words whitespace-pre-wrap text-bubble-user-fg">
           {item.text}
@@ -112,7 +118,7 @@ function UserBubble({
       {!!item.files?.length && (
         <span className="mt-1 flex max-w-full items-center gap-1 text-meta text-fg-muted">
           <FileText size={14} className="shrink-0" />
-          <span className="truncate">{item.files.map(f => f.name).join('、')}</span>
+          <span className="truncate">{item.files.map(f => f.name).join(L('、', ', '))}</span>
         </span>
       )}
       {more}
@@ -135,7 +141,7 @@ function AssistantCard({
   const running = item.status === 'running'
   if (!item.text.trim() && !running) return null
   return (
-    <div className="max-w-full self-start rounded-2xl rounded-bl-md border border-line-subtle bg-card-assistant px-3.5 py-3">
+    <div className="group max-w-full self-start rounded-2xl rounded-bl-md border border-line-subtle bg-card-assistant px-3.5 py-3">
       <MarkdownText text={item.text} />
       {running && (
         <div className={item.text ? 'mt-1.5' : undefined}>
@@ -144,7 +150,7 @@ function AssistantCard({
       )}
       {more}
       {copy && !running && item.text && !truncated && (
-        <CopyButton text={item.text} label="" className="mt-0.5 -mb-1 -ml-2" />
+        <CopyButton text={item.text} label="" className="hover-reveal mt-0.5 -mb-1 -ml-2" />
       )}
     </div>
   )
@@ -190,7 +196,7 @@ function NoticeBar({ item, actions }: { item: Extract<Item, { kind: 'notice' }>;
         {item.id === actions.retryId && (
           <span className="mt-2 flex">
             <Button size="sm" disabled={actions.retrying} onClick={actions.retry}>
-              {actions.retrying ? <Spinner size={12} /> : <RotateCcw size={14} />} 重试
+              {actions.retrying ? <Spinner size={12} /> : <RotateCcw size={14} />} {L('重试', 'Retry')}
             </Button>
           </span>
         )}
@@ -245,13 +251,19 @@ function Process({
         )}
         <span className="min-w-0 truncate">
           {waiting ? (
-            `等你允许${steps ? ` · ${steps} 步` : ''}`
+            L(
+              `等你允许${steps ? ` · ${steps} 步` : ''}`,
+              `Waiting for your approval${steps ? (steps === 1 ? ' · 1 step' : ` · ${steps} steps`) : ''}`,
+            )
           ) : running ? (
-            `正在执行${steps ? ` · ${steps} 步` : ''}`
+            L(
+              `正在执行${steps ? ` · ${steps} 步` : ''}`,
+              `Running${steps ? (steps === 1 ? ' · 1 step' : ` · ${steps} steps`) : ''}`,
+            )
           ) : line ? (
             <LineText line={line} />
           ) : (
-            '过程'
+            L('过程', 'Process')
           )}
         </span>
         <ChevronRight size={14} className="shrink-0" />
@@ -264,7 +276,7 @@ function Process({
       )}
       {open && (
         <ProcessSheet
-          title={line || '过程'}
+          title={line || L('过程', 'Process')}
           items={items}
           more={more}
           actions={actions}
@@ -290,13 +302,13 @@ function PlanRow({ items, onOpen }: { items: Item[]; onOpen?: () => void }) {
       >
         <ListTodo size={14} className="shrink-0" />
         <span className="shrink-0">
-          计划 {todo.at}/{todo.total}
+          {L('计划', 'Plan')} {todo.at}/{todo.total}
         </span>
         {todo.current && <span className="truncate text-fg-faint">· {todo.current}</span>}
         <ChevronRight size={14} className="shrink-0" />
       </button>
       {open && (
-        <Sheet title={`计划 ${todo.at}/${todo.total}`} onClose={() => setOpen(false)}>
+        <Sheet title={`${L('计划', 'Plan')} ${todo.at}/${todo.total}`} onClose={() => setOpen(false)}>
           <div className="px-4 py-3">
             <TodoCard item={card} />
           </div>
@@ -313,7 +325,7 @@ function LineText({ line }: { line: string }) {
       {line.split(' · ').map((p, i) => (
         <span key={i}>
           {i > 0 && ' · '}
-          {p.endsWith('步失败') ? <span className="text-danger">{p}</span> : p}
+          {p.endsWith(L('步失败', ' failed')) ? <span className="text-danger">{p}</span> : p}
         </span>
       ))}
     </>

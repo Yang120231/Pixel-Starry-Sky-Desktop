@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { modeChip, modelLabel } from './mode'
+import { fastStatus, modeChip, modelLabel } from './mode'
 
 describe('modeChip', () => {
   it('names the four permission modes', () => {
@@ -45,5 +45,41 @@ describe('modelLabel', () => {
   it('falls back to the raw name, truncated when long', () => {
     expect(modelLabel('gpt-5')).toBe('gpt-5')
     expect(modelLabel('my-custom-model-with-a-long-name')).toBe('my-custom-model-…')
+  })
+})
+
+describe('fastStatus', () => {
+  const flags = (
+    fastAvailable: boolean | null,
+    fastState: 'off' | 'on' | 'cooldown' | null,
+    fastBlocked: string | null,
+  ) => ({
+    fastAvailable,
+    fastState,
+    fastBlocked,
+  })
+
+  it('can turn on by default, with the price hint', () => {
+    expect(fastStatus(null)).toEqual({
+      available: true,
+      hint: '回复更快，按更高的价格计费',
+      warn: false,
+      cooldown: false,
+    })
+    expect(fastStatus(flags(true, 'off', null)).available).toBe(true)
+  })
+
+  it('names why it cannot turn on', () => {
+    expect(fastStatus(flags(false, null, 'preference'))).toMatchObject({
+      available: false,
+      hint: '暂时不可用：账号没有开启 Fast 模式',
+      warn: true,
+    })
+    expect(fastStatus(flags(false, null, 'something_new')).hint).toBe('暂时不可用：原因未知')
+  })
+
+  it('shows cooldown and the Codex hints', () => {
+    expect(fastStatus(flags(true, 'cooldown', null))).toMatchObject({ available: true, cooldown: true, warn: true })
+    expect(fastStatus(flags(true, 'on', 'codex_gateway')).hint).toBe('接口支持 Fast 时生效，不支持的打开了也没有效果')
   })
 })

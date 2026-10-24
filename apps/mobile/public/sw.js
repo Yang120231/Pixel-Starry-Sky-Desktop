@@ -1,6 +1,8 @@
 // 网页版的 service worker（docs/mobile-remote.md §20）：只做一件事——打开页面时没有网络，显示「没有网络」页，而不是浏览器自带的错误页。
 // 故意不缓存 JS / CSS / 接口，也不碰 /v1/bridge 和 WebSocket：每次发版后页面都直接取最新的，不会读到旧版本。
 const CACHE = 'pixelsky-offline-v1'
+/** 页面写进来的界面语言（src/i18n/index.ts）：推送通知的文字跟它；清旧缓存时不能删 */
+const PREFS = 'pixelsky-prefs'
 const OFFLINE = './offline.html' // 相对 sw.js，线上就是 /m/offline.html
 
 self.addEventListener('install', event => {
@@ -13,7 +15,7 @@ self.addEventListener('activate', event => {
   event.waitUntil(
     (async () => {
       // 改了离线页就把 CACHE 加一个版本号，旧的在这里清掉
-      for (const key of await caches.keys()) if (key !== CACHE) await caches.delete(key)
+      for (const key of await caches.keys()) if (key !== CACHE && key !== PREFS) await caches.delete(key)
       // 第一次装好后，已经打开的页面也归它管（否则要刷新一次才生效）
       await self.clients.claim()
     })(),
@@ -28,11 +30,32 @@ self.addEventListener('fetch', event => {
 
 // 锁屏提醒（docs/mobile-remote.md §22.2、§23）：电脑经云端推来 { kind, count, session?, badge?, device }，不带任务标题。
 // 每条推送都显示通知（iOS 要求，不显示的话会被取消订阅）；电脑那边只推给不在线或页面在后台的手机。
-// 点通知：只涉及一个会话时直接打开它，否则回概览；badge 是主屏幕图标上的数字（等你处理的个数）。
+// 点通知：只涉及一个会话时直接打开它；「等你处理」涉及几个会话时逐个处理（§25），别的回概览；badge 是主屏幕图标上的数字（等你处理的个数）。
+// 文字跟手机的界面语言（§25）：页面存在 Cache Storage 里；没存过时按系统语言
 const TEXT = {
-  waiting: n => `有 ${n} 个任务等你处理`,
-  failed: n => `${n} 个任务出错了`,
-  completed: n => `${n} 个任务完成`,
+  zh: {
+    app: '像素星空',
+    other: '电脑上的任务有新情况',
+    waiting: n => `有 ${n} 个任务等你处理`,
+    failed: n => `${n} 个任务出错了`,
+    completed: n => `${n} 个任务完成`,
+  },
+  en: {
+    app: 'PixelSky',
+    other: 'Something changed in your tasks',
+    waiting: n => (n === 1 ? '1 task needs your attention' : `${n} tasks need your attention`),
+    failed: n => (n === 1 ? '1 task failed' : `${n} tasks failed`),
+    completed: n => (n === 1 ? '1 task finished' : `${n} tasks finished`),
+  },
+}
+
+async function uiLang() {
+  try {
+    const saved = await (await caches.open(PREFS)).match('./lang')
+    const v = saved && (await saved.text())
+    if (v === 'zh' || v === 'en') return v
+  } catch {}
+  return /^zh/i.test(self.navigator?.language || '') ? 'zh' : 'en'
 }
 const ID = /^[A-Za-z0-9_.:~-]{1,128}$/
 
@@ -41,20 +64,24 @@ self.addEventListener('push', event => {
   try {
     data = event.data ? event.data.json() : {}
   } catch {}
-  const text = TEXT[data.kind]
+  const kind = ['waiting', 'failed', 'completed'].includes(data.kind) ? data.kind : null
   const count = Number.isInteger(data.count) && data.count > 0 ? data.count : 1
   const target = {
     device: typeof data.device === 'string' && ID.test(data.device) ? data.device : null,
     session: typeof data.session === 'string' && ID.test(data.session) ? data.session : null,
+    waiting: data.kind === 'waiting',
   }
   const jobs = [
-    self.registration.showNotification('像素星空', {
-      body: text ? text(count) : '电脑上的任务有新情况',
-      // 同一种只留最新一条
-      tag: 'pixelsky-' + (text ? data.kind : 'other'),
-      renotify: true,
-      icon: './icons/icon-192.png',
-      data: target,
+    uiLang().then(lang => {
+      const t = TEXT[lang]
+      return self.registration.showNotification(t.app, {
+        body: kind ? t[kind](count) : t.other,
+        // 同一种只留最新一条
+        tag: 'pixelsky-' + (kind || 'other'),
+        renotify: true,
+        icon: './icons/icon-192.png',
+        data: target,
+      })
     }),
   ]
   const nav = self.navigator
@@ -65,7 +92,7 @@ self.addEventListener('push', event => {
 
 self.addEventListener('notificationclick', event => {
   event.notification.close()
-  const { device, session } = event.notification.data || {}
+  const { device, session, waiting } = event.notification.data || {}
   event.waitUntil(
     (async () => {
       const scope = self.registration.scope
@@ -80,10 +107,12 @@ self.addEventListener('notificationclick', event => {
         } catch {
           // 有的浏览器不许在这时拉到前台：照样告诉页面
         }
-        if (device) (shown || open).postMessage({ type: 'pixelsky-open', device, session })
+        if (device) (shown || open).postMessage({ type: 'pixelsky-open', device, session, waiting: !!waiting })
         return
       }
-      const hash = device ? `#open=${encodeURIComponent(session || '')}&device=${encodeURIComponent(device)}` : ''
+      const hash = device
+        ? `#open=${encodeURIComponent(session || '')}&device=${encodeURIComponent(device)}${waiting ? '&waiting=1' : ''}`
+        : ''
       return self.clients.openWindow(scope + hash)
     })(),
   )

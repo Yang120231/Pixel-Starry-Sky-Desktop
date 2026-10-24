@@ -24,6 +24,12 @@ export interface ModeToggle {
   key: string
   label: string
   hint?: string
+  /** 提示是开不了 / 冷却的原因：用警示色 */
+  warn?: boolean
+  /** 名字前的小图标 */
+  icon?: ReactNode
+  /** 这一项拨不了（引擎、账号不支持） */
+  disabled?: boolean
   value: boolean
   onChange(value: boolean): void
 }
@@ -109,18 +115,21 @@ export function ModeSheet({
                 className={cn(
                   'flex min-h-12 items-center gap-3 px-4 py-2',
                   i > 0 && 'border-t border-line-subtle',
-                  locked && 'opacity-50',
+                  (locked || t.disabled) && 'opacity-50',
                 )}
               >
                 <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="text-ui">{t.label}</span>
-                  {t.hint && <span className="text-label text-fg-muted">{t.hint}</span>}
+                  <span className="inline-flex items-center gap-1.5 text-ui">
+                    {t.icon}
+                    {t.label}
+                  </span>
+                  {t.hint && <span className={cn('text-label', t.warn ? 'text-warn' : 'text-fg-muted')}>{t.hint}</span>}
                 </span>
                 <input
                   type="checkbox"
                   role="switch"
                   checked={t.value}
-                  disabled={locked}
+                  disabled={locked || t.disabled}
                   onChange={e => t.onChange(e.target.checked)}
                   className="size-5 shrink-0 accent-[var(--color-primary)]"
                 />

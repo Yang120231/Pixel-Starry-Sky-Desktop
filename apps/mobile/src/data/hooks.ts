@@ -13,6 +13,7 @@ import type {
   SessionSummary,
 } from '@pixelsky/protocol'
 import { connections, type DesktopLink, type LinkState, type Pairing } from '@/connection'
+import { L } from '@/i18n'
 import { desktopLists, NO_LISTS } from './desktop'
 import { imageDataUrl, imageKey, rememberImage } from './images'
 import { applyEvent, applyTail, emptyView, prependOlder, replaceItem, type SessionView, type Tail } from './session'
@@ -130,7 +131,7 @@ export function useSession(deviceId: string, sessionId: string): SessionData {
 
   const image = useCallback(
     async (itemId: string, index: number) => {
-      if (!link) throw new Error('还没连上电脑')
+      if (!link) throw new Error(L('还没连上电脑', 'Not connected to the computer yet'))
       const got = await link.call<ImageAttachment>('image', sessionId, itemId, index)
       const url = imageDataUrl(got)
       rememberImage(imageKey(sessionId, itemId, index), url)

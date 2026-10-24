@@ -3,11 +3,12 @@
 // 主区的页面：概览、会话、新建会话、工具、加项目、我的；配对、添加电脑和扫码是整页。打开 #pair=… 的链接时先进配对页。
 // 用浏览器历史做返回：手机上的返回手势 / 返回键能回到上一页（抽屉开着时先关抽屉）。
 import { Suspense, lazy, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Plus, Smartphone } from 'lucide-react'
+import { CheckCircle2, Plus, Smartphone } from 'lucide-react'
 import type { ProjectRecord } from '@pixelsky/protocol'
 import { connections, parseOffer, readOffer, type Offer } from '@/connection'
 import { useConnections, useDesktop } from '@/data/hooks'
-import { groupTasks } from '@/data/tasks'
+import { groupTasks, sessionList } from '@/data/tasks'
+import { nextInTriage, startTriage, triagePosition, type Triage } from '@/data/triage'
 import type { ToolId } from '@/data/tools'
 import { currentProject, rememberProject, rememberedProject } from '@/data/workspace'
 import { Composer } from '@/features/composer/Composer'
@@ -18,12 +19,16 @@ import { NewTask } from '@/features/tasks/NewTask'
 import { TaskList } from '@/features/tasks/TaskList'
 import type { ToolProps } from '@/features/tools/common'
 import { onBackButton } from '@/platform'
+import { focusTarget, useShortcuts } from '@/platform/keys'
 import { setBadge, useNotifyOpen } from '@/platform/notifyOpen'
 import { loadPage } from '@/platform/version'
+import { linkStateLabel } from '@/i18n/labels'
 import { Button, Empty, MenuButton, Screen, Spinner, WIDE, WIDER, useMedia } from '@/ui'
 import { PageBoundary } from '@/ui/PageBoundary'
+import { ShortcutSheet } from './Shortcuts'
 import { UpdateBanner } from './UpdateBanner'
 import { useReminders } from './reminders'
+import { L } from '@/i18n'
 
 // 不是每次打开都用到的页面按需加载（扫码用相机和二维码库，工具页有 Git / 文件 / 产物 / 任务），主包小一些
 const AddComputer = lazy(() =>
@@ -59,7 +64,12 @@ const pageLoading = (
 
 type Route =
   | { page: 'home' }
-  | { page: 'session'; id: string }
+  /** notify：从「等你处理」的通知点进来的（审批已经在电脑上处理掉时说一声） */
+  | { page: 'session'; id: string; notify?: boolean }
+  /** 点了「有 N 个任务等你处理」：等列表到了再打开第一个（docs/mobile-remote.md §25） */
+  | { page: 'triage' }
+  /** 逐个处理都过完了；count 是这一批有几个（0：打开时已经都在电脑上处理了） */
+  | { page: 'triageDone'; count: number }
   | { page: 'new'; projectId?: string | null; text?: string }
   | { page: 'tool'; tool: ToolId; projectId: string; sub?: string | null }
   | { page: 'addProject' }
@@ -88,7 +98,10 @@ function initialPair(): { offer: Offer | null; error: string | null } | null {
     const offer = readOffer(location.href)
     return offer ? { offer, error: null } : null
   } catch {
-    return { offer: null, error: '二维码内容不对，请在电脑上重新生成。' }
+    return {
+      offer: null,
+      error: L('二维码内容不对，请在电脑上重新生成。', 'The QR code is invalid. Generate a new one on your computer.'),
+    }
   }
 }
 
@@ -113,17 +126,27 @@ const parentDir = (path: string): string | null => {
   return i > 0 ? clean.slice(0, i) || null : null
 }
 
+/** 换界面语言时整个界面重挂（main.tsx）：重挂时留在原来那一页（浏览历史里记着），第一次打开照旧从概览开始 */
+let mountedOnce = false
+
 export function App() {
   const [initial] = useState(initialPair)
   const [pair, setPair] = useState(initial)
-  const [route, setRoute] = useState<Route>(() => (pair ? { page: 'pair' } : (demoStart() ?? { page: 'home' })))
+  const [route, setRoute] = useState<Route>(() =>
+    pair
+      ? { page: 'pair' }
+      : (demoStart() ?? (mountedOnce ? (history.state as Route | null) : null) ?? { page: 'home' }),
+  )
+  useEffect(() => {
+    mountedOnce = true
+  }, [])
   const [drawer, setDrawer] = useState(false)
   const [panel, setPanel] = useState<Panel | null>(null)
   const wide = useMedia(WIDE)
   const wider = useMedia(WIDER)
   const { active } = useConnections()
   const deviceId = active?.deviceId
-  const { link, state, sessions, projects, cached } = useDesktop(deviceId)
+  const { link, state, sessions, projects, loaded, cached } = useDesktop(deviceId)
   const waiting = groupTasks(sessions).waiting.length
   const canAct = state === 'ready' && link?.hello?.access === 'act'
 
@@ -173,25 +196,88 @@ export function App() {
     (route.page === 'tool' ? projects.find(p => p.id === route.projectId) : null) ??
     currentProject(projects, sessions, openSession, chosen)
 
+  // 逐个处理等你的会话（点「有 N 个任务等你处理」的通知进来的）；离开这一批的会话就结束
+  const [triage, setTriage] = useState<Triage | null>(null)
+  const inTriage = triage && route.page === 'session' ? triagePosition(triage, route.id) : null
+  useEffect(() => {
+    if (triage && !inTriage && route.page !== 'triage') setTriage(null)
+  }, [triage, inTriage, route.page])
+
   // 点通知：切到那台电脑、打开那个会话（没有会话就回概览）。先记下电脑，免得上面「换了电脑回概览」把会话页又换掉
-  const openFrom = (device: string, sessionId: string | null) => {
+  // 「等你处理」没带会话（涉及几个）：先显示「正在连接电脑…」，列表到了逐个处理
+  const openFrom = (device: string, sessionId: string | null, waiting = false) => {
     if (!connections.list().some(p => p.deviceId === device)) return
     if (device !== deviceId) {
       lastDevice.current = device
       setPanel(null)
       connections.select(device)
     }
-    if (sessionId) go({ page: 'session', id: sessionId })
-    else replace({ page: 'home' })
+    setTriage(null)
+    if (sessionId) go({ page: 'session', id: sessionId, ...(waiting ? { notify: true } : {}) })
+    else replace({ page: waiting ? 'triage' : 'home' })
   }
   useReminders(openFrom)
-  useNotifyOpen(t => openFrom(t.device, t.session))
+  useNotifyOpen(t => openFrom(t.device, t.session, t.waiting))
   // 主屏幕图标上的数字：这台电脑上等你处理的个数（页面在后台时由推送更新，sw.js）
-  // 没连上、或还是本机缓存的旧列表时不动它（不然刚打开先被清零、或写上过期的数）
-  const fresh = state === 'ready' && !cached
+  // 没连上、列表还没取到、或还是本机缓存的旧列表时不动它（不然刚打开先被清零、或写上过期的数）
+  const fresh = state === 'ready' && loaded && !cached
   useEffect(() => {
     if (fresh) setBadge(waiting)
   }, [fresh, waiting])
+  // 列表是电脑上最新的了：记下这一批，打开第一个；一个都没有就是都在电脑上处理过了
+  useEffect(() => {
+    if (route.page !== 'triage' || !fresh) return
+    const next = startTriage(sessions)
+    setTriage(next)
+    replace(next ? { page: 'session', id: next.ids[0], notify: true } : { page: 'triageDone', count: 0 })
+  }, [route.page, fresh, sessions, replace])
+  /** 这一个处理完了（或跳过）：去下一个还在等你的，没有了显示「都处理完了」 */
+  const triageNext = (current: string) => {
+    if (!triage) return
+    const next = nextInTriage(triage, current, sessions)
+    if (next) replace({ page: 'session', id: next, notify: true })
+    else {
+      setTriage(null)
+      replace({ page: 'triageDone', count: triage.ids.length })
+    }
+  }
+  // 键盘快捷键（电脑浏览器、接了键盘的平板，§25）：没连电脑时都不管
+  const [keysOpen, setKeysOpen] = useState(false)
+  useShortcuts(s => {
+    if (!active) return false
+    switch (s) {
+      case 'search':
+        if (focusTarget('search')) return
+        if (wide) return false
+        // 窄屏：搜索框在抽屉里，先拉出抽屉
+        setDrawer(true)
+        requestAnimationFrame(() => focusTarget('search'))
+        return
+      case 'new':
+        if (!canAct) return false
+        return newSession(null)
+      case 'prev':
+      case 'next': {
+        // 和抽屉里的顺序一样：等你处理的在前，其余置顶的在前、再按时间
+        const list = sessionList(sessions, Infinity)
+        const ids = [...list.waiting, ...list.rest].map(x => x.record.id)
+        if (!ids.length) return false
+        const i = openSession ? ids.indexOf(openSession) : -1
+        const j = i < 0 ? 0 : Math.max(0, Math.min(ids.length - 1, i + (s === 'next' ? 1 : -1)))
+        if (ids[j] !== openSession) go({ page: 'session', id: ids[j] })
+        return
+      }
+      case 'focus':
+        return focusTarget('composer') ? undefined : false
+      case 'stop':
+        if (!openSession || !canAct) return false
+        void link?.call('engine:interrupt', openSession).catch(() => undefined)
+        return
+      case 'help':
+        setKeysOpen(true)
+        return
+    }
+  })
   // 安卓返回键：抽屉开着先关；二级页面返回；一级页面退到后台
   const routeRef = useRef(route)
   routeRef.current = route
@@ -233,7 +319,7 @@ export function App() {
     try {
       setPair({ offer: parseOffer(text), error: null })
     } catch {
-      setPair({ offer: null, error: '这不是像素星空的配对二维码。' })
+      setPair({ offer: null, error: L('这不是像素星空的配对二维码。', 'This isn’t a PixelSky pairing QR code.') })
     }
     replace({ page: 'pair' })
   }
@@ -287,14 +373,17 @@ export function App() {
     return route.page === 'me' ? (
       <MeScreen menu={null} onAdd={add} onInstall={install} />
     ) : (
-      <Screen large title="像素星空">
+      <Screen large title={L('像素星空', 'PixelSky')}>
         <Empty
           icon={Smartphone}
-          title="还没有连接电脑"
-          body="在电脑上打开像素星空 › 设置 › 手机 › 添加手机，扫屏幕上的二维码，或复制配对链接粘贴过来。"
+          title={L('还没有连接电脑', 'No computer connected')}
+          body={L(
+            '在电脑上打开像素星空 › 设置 › 手机 › 添加手机，扫屏幕上的二维码，或复制配对链接粘贴过来。',
+            'On your computer, open PixelSky › Settings › Phone › Add a phone, then scan the QR code on screen or copy the pairing link and paste it here.',
+          )}
           action={
             <Button variant="primary" onClick={add} className="mt-2">
-              <Plus size={18} /> 添加电脑
+              <Plus size={18} /> {L('添加电脑', 'Add a computer')}
             </Button>
           }
         />
@@ -347,10 +436,52 @@ export function App() {
         deviceId={active.deviceId}
         sessionId={route.id}
         leading={menu}
+        notify={!!route.notify}
+        triage={inTriage && inTriage.total > 1 ? { ...inTriage, onNext: () => triageNext(route.id) } : null}
         onNew={projectId => newSession(projectId)}
         onTool={tool}
         onArchived={() => replace({ page: 'home' })}
       />
+    )
+  else if (route.page === 'triage')
+    main = (
+      <Screen title={L('等你处理', 'Needs you')} leading={menu}>
+        <div className="flex flex-col items-center gap-3 px-8 py-20 text-center text-fg-muted">
+          <Spinner size={22} />
+          <div className="text-ui text-fg">
+            {state && state !== 'ready' && state !== 'connecting'
+              ? linkStateLabel(state)
+              : L('正在连接电脑…', 'Connecting to your computer…')}
+          </div>
+          <div className="text-meta">
+            {L('连上后打开等你处理的会话', 'Conversations that need you will open once connected')}
+          </div>
+        </div>
+      </Screen>
+    )
+  else if (route.page === 'triageDone')
+    main = (
+      <Screen title={L('等你处理', 'Needs you')} leading={menu}>
+        <Empty
+          icon={CheckCircle2}
+          title={L('都处理完了', 'All caught up')}
+          body={
+            route.count
+              ? L(
+                  `${route.count} 个会话都处理过了。`,
+                  route.count === 1
+                    ? 'You’ve handled 1 conversation.'
+                    : `You’ve handled all ${route.count} conversations.`,
+                )
+              : L('等你处理的都已经在电脑上处理了。', 'Everything that needed you was handled on your computer.')
+          }
+          action={
+            <Button onClick={() => replace({ page: 'home' })} className="mt-2">
+              {L('回到会话列表', 'Back to conversations')}
+            </Button>
+          }
+        />
+      </Screen>
     )
   else if (route.page === 'addProject')
     main = (
@@ -378,8 +509,12 @@ export function App() {
         })}
       />
     ) : (
-      <Screen title="项目" leading={menu}>
-        <Empty icon={Smartphone} title="找不到这个项目" body="电脑上可能已经移除了它。" />
+      <Screen title={L('项目', 'Project')} leading={menu}>
+        <Empty
+          icon={Smartphone}
+          title={L('找不到这个项目', 'Project not found')}
+          body={L('电脑上可能已经移除了它。', 'It may have been removed on your computer.')}
+        />
       </Screen>
     )
   } else
@@ -409,6 +544,7 @@ export function App() {
       onHome={() => top('home')}
       onMe={() => top('me')}
       onAddComputer={add}
+      onShortcuts={() => setKeysOpen(true)}
     />
   )
 
@@ -437,12 +573,13 @@ export function App() {
           </PageBoundary>
         </aside>
       )}
+      {keysOpen && <ShortcutSheet onClose={() => setKeysOpen(false)} />}
       {!wide && drawer && (
         <div className="fixed inset-0 z-30 flex">
           <div className="drawer-in flex h-full w-[min(86vw,340px)] flex-col shadow-popover">{nav}</div>
           <button
             type="button"
-            aria-label="关闭菜单"
+            aria-label={L('关闭菜单', 'Close menu')}
             onClick={() => setDrawer(false)}
             className="fade-in flex-1 bg-scrim"
           />
@@ -457,6 +594,8 @@ function Session({
   deviceId,
   sessionId,
   leading,
+  notify,
+  triage,
   onNew,
   onTool,
   onArchived,
@@ -464,6 +603,8 @@ function Session({
   deviceId: string
   sessionId: string
   leading: ReactNode
+  notify: boolean
+  triage: { index: number; total: number; onNext(): void } | null
   onNew(projectId: string): void
   onTool(tool: ToolId, projectId: string): void
   onArchived(): void
@@ -479,6 +620,8 @@ function Session({
       pairing={pairing}
       sessionId={sessionId}
       leading={leading}
+      notify={notify}
+      triage={triage}
       onRecall={text => setDraft(d => (d.trim() ? d.trimEnd() + '\n' + text : text))}
       onNew={onNew}
       onTool={onTool}

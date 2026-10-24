@@ -5,6 +5,7 @@ import { Brain, Check, ChevronRight, FileDiff, ListTodo, SquareTerminal, Wrench 
 import type { ImageAttachment, Item } from '@pixelsky/protocol'
 import { imageError, imageKey, knownImage } from '@/data/images'
 import { stepTitle } from '@/data/turns'
+import { L } from '@/i18n'
 import { DiffView, Spinner, cn } from '@/ui'
 import { ImageTiles } from '@/ui/images'
 
@@ -62,7 +63,7 @@ export function MessageImages({
         tiles={images.map((img, i) => ({
           key: img.id + '/' + i,
           src: urls[i],
-          label: img.width && img.height ? `${img.width}×${img.height}` : '图片',
+          label: img.width && img.height ? `${img.width}×${img.height}` : L('图片', 'Image'),
           loading: loading === i,
         }))}
       />
@@ -117,7 +118,9 @@ export function Step({ item, more, actions }: { item: Item; more: ReactNode; act
         </span>
         {isRunning && <Spinner size={11} className="text-fg-faint" />}
         {item.kind === 'command' && !!item.exitCode && (
-          <span className="text-label text-danger">退出码 {item.exitCode}</span>
+          <span className="text-label text-danger">
+            {L('退出码', 'Exit code')} {item.exitCode}
+          </span>
         )}
         {body && (
           <ChevronRight size={15} className={cn('shrink-0 text-fg-faint transition-transform', open && 'rotate-90')} />
@@ -134,7 +137,7 @@ export function Step({ item, more, actions }: { item: Item; more: ReactNode; act
 }
 
 export function Pre({ text }: { text: string }) {
-  if (!text) return <p className="px-3 py-2 text-meta text-fg-muted">没有输出</p>
+  if (!text) return <p className="px-3 py-2 text-meta text-fg-muted">{L('没有输出', 'No output')}</p>
   return (
     <pre className="max-h-72 overflow-auto px-3 py-2 font-mono text-label break-all whitespace-pre-wrap text-fg-secondary">
       {text}
@@ -147,7 +150,8 @@ export function TodoCard({ item }: { item: Extract<Item, { kind: 'todo' }> }) {
   return (
     <div className="rounded-2xl border border-line-subtle bg-surface px-3.5 py-3">
       <div className="mb-2 flex items-center gap-1.5 text-meta font-medium text-fg-muted">
-        <ListTodo size={15} /> 计划 · {item.steps.filter(s => s.status === 'completed').length}/{item.steps.length}
+        <ListTodo size={15} /> {L('计划', 'Plan')} · {item.steps.filter(s => s.status === 'completed').length}/
+        {item.steps.length}
       </div>
       <ul className="flex flex-col gap-1.5">
         {item.steps.map((s, i) => (
@@ -186,7 +190,10 @@ export function Changes({ item, more }: { item: Extract<Item, { kind: 'file_chan
     <div className="overflow-hidden rounded-2xl border border-line-subtle bg-surface">
       <div className="flex items-center gap-2 px-3.5 pt-3 pb-1 text-meta text-fg-muted">
         <FileDiff size={15} />
-        改动了 {item.changes.length} 个文件
+        {L(
+          `改动了 ${item.changes.length} 个文件`,
+          item.changes.length === 1 ? 'Changed 1 file' : `Changed ${item.changes.length} files`,
+        )}
         <span className="ml-auto font-mono">
           <span className="text-success">+{added}</span> <span className="text-danger">−{removed}</span>
         </span>
@@ -204,8 +211,8 @@ export function Changes({ item, more }: { item: Extract<Item, { kind: 'file_chan
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate text-ui">
                   {name}
-                  {c.kind === 'add' && <span className="ml-1.5 text-label text-success">新建</span>}
-                  {c.kind === 'delete' && <span className="ml-1.5 text-label text-danger">删除</span>}
+                  {c.kind === 'add' && <span className="ml-1.5 text-label text-success">{L('新建', 'New')}</span>}
+                  {c.kind === 'delete' && <span className="ml-1.5 text-label text-danger">{L('删除', 'Deleted')}</span>}
                 </span>
                 {dir && <span className="truncate font-mono text-label text-fg-faint">{dir}</span>}
               </span>

@@ -1,5 +1,6 @@
 // 新建任务：选项目、引擎，写第一句话（可以带图片）。引擎默认用电脑上设的那个（docs/mobile-remote.md §17 第 7 项）；
-// 权限模式、模型、强度默认用电脑上的设置，也可以在「模式」里先选好（C2，§21.5；完全放行只能在电脑上开）。线路总是用电脑上的。
+// 权限模式、模型、强度、快速模式默认用电脑上的设置，也可以在「模式」里先选好（C2，§21.5；完全放行只能在电脑上开；
+// 快速模式 §25，打开确认一次）。线路总是用电脑上的。
 import { useRef, useState } from 'react'
 import { Check, ChevronRight, Folder, Send } from 'lucide-react'
 import {
@@ -12,9 +13,18 @@ import {
 } from '@pixelsky/protocol'
 import type { Pairing } from '@/connection'
 import { useCatalog, useDefaultEngine, useDesktop } from '@/data/hooks'
-import { effortOptions, modeChip, modelOptions, permissionOptions, widens } from '@/data/mode'
+import {
+  effortOptions,
+  fastConfirm,
+  fastDefaultHint,
+  modeChip,
+  modelOptions,
+  permissionOptions,
+  widens,
+} from '@/data/mode'
 import { imageDataUrl, usePendingImages } from '@/data/images'
 import { attemptFor, sendKey, type SendAttempt } from '@/data/retry'
+import { L } from '@/i18n'
 import { Banner, Button, Empty, Screen, Section, Segmented, Spinner, cn } from '@/ui'
 import { AttachButton, AttachmentStrip } from '@/ui/images'
 import { ModeSheet } from '@/ui/ModeSheet'
@@ -24,8 +34,9 @@ interface Settings {
   permissionMode: PermissionMode | null
   model: string | null
   effort: Effort | null
+  fast: boolean | null
 }
-const DESKTOP: Settings = { permissionMode: null, model: null, effort: null }
+const DESKTOP: Settings = { permissionMode: null, model: null, effort: null, fast: null }
 
 export function NewTask({
   pairing,
@@ -94,14 +105,21 @@ export function NewTask({
       onCreated(sessionId)
     } catch (e) {
       const code = (e as Error).message
-      setError(code === 'MOBILE_BAD_ARGUMENT' ? '电脑不接受这个模式，换一个或用电脑上的设置。' : code)
+      setError(
+        code === 'MOBILE_BAD_ARGUMENT'
+          ? L(
+              '电脑不接受这个模式，换一个或用电脑上的设置。',
+              "The computer didn't accept this mode. Pick another or use the computer's settings.",
+            )
+          : code,
+      )
       setBusy(false)
     }
   }
 
   return (
     <Screen
-      title="新建会话"
+      title={L('新建会话', 'New conversation')}
       onBack={onBack}
       footer={
         <div className="border-t border-line-subtle p-3">
@@ -112,22 +130,32 @@ export function NewTask({
             onClick={() => void create()}
           >
             {busy ? <Spinner size={16} /> : <Send size={17} />}
-            {busy ? '正在创建…' : '开始'}
+            {busy ? L('正在创建…', 'Creating…') : L('开始', 'Start')}
           </Button>
         </div>
       }
     >
       {loaded && projects.length === 0 ? (
-        <Empty icon={Folder} title="电脑上还没有项目" body="先在电脑上的像素星空里添加一个项目文件夹。" />
+        <Empty
+          icon={Folder}
+          title={L('电脑上还没有项目', 'No projects on the computer yet')}
+          body={L(
+            '先在电脑上的像素星空里添加一个项目文件夹。',
+            'Add a project folder in PixelSky on the computer first.',
+          )}
+        />
       ) : (
         <div className="flex flex-col gap-6 py-4">
-          <Section title="要做什么">
+          <Section title={L('要做什么', 'What should it do')}>
             <textarea
               value={text}
               onChange={e => setText(e.target.value)}
               rows={5}
               autoFocus
-              placeholder="例如：把登录页的按钮改成圆角，并补上单元测试"
+              placeholder={L(
+                '例如：把登录页的按钮改成圆角，并补上单元测试',
+                'e.g. Round the buttons on the login page and add unit tests',
+              )}
               className="block min-h-32 w-full resize-none bg-transparent px-4 py-3.5 text-prose text-fg outline-none placeholder:text-fg-faint"
             />
             <div className="flex items-end gap-1 border-t border-line-subtle px-2 pt-1.5 pb-1">
@@ -140,13 +168,15 @@ export function NewTask({
                     onRemove={images.remove}
                   />
                 ) : (
-                  <span className="block py-2.5 text-meta text-fg-faint">可以加截图或照片</span>
+                  <span className="block py-2.5 text-meta text-fg-faint">
+                    {L('可以加截图或照片', 'You can add screenshots or photos')}
+                  </span>
                 )}
               </div>
             </div>
           </Section>
           {images.error && <Banner tone="danger">{images.error}</Banner>}
-          <Section title="项目">
+          <Section title={L('项目', 'Project')}>
             {projects.map((p, i) => (
               <button
                 key={p.id}
@@ -169,15 +199,19 @@ export function NewTask({
             ))}
           </Section>
           <div className="px-4">
-            <div className="px-1 pb-2 text-meta font-medium text-fg-muted">引擎</div>
+            <div className="px-1 pb-2 text-meta font-medium text-fg-muted">{L('引擎', 'Engine')}</div>
             <Segmented<EngineId>
               options={ENGINE_ORDER.map(id => ({ value: id, label: ENGINES[id].name }))}
               value={engine}
               onChange={setPicked}
             />
-            {defaultEngine && !picked && <p className="mt-2 px-1 text-label text-fg-faint">默认用电脑上设的引擎。</p>}
+            {defaultEngine && !picked && (
+              <p className="mt-2 px-1 text-label text-fg-faint">
+                {L('默认用电脑上设的引擎。', 'Defaults to the engine set on the computer.')}
+              </p>
+            )}
           </div>
-          <Section title="模式">
+          <Section title={L('模式', 'Mode')}>
             <button
               type="button"
               onClick={() => setModeOpen(true)}
@@ -206,8 +240,9 @@ export function NewTask({
 /** 「每步问我 · Opus 4.1 · 高」；没选的项不显示，全没选是「用电脑上的设置」 */
 function modeText(mode: Settings): string {
   const chip = modeChip({ permissionMode: mode.permissionMode ?? 'ask', model: mode.model, effort: mode.effort })
-  const parts = [mode.permissionMode && chip.permission, chip.model, chip.effort].filter(Boolean)
-  return parts.length ? parts.join(' · ') : '用电脑上的设置'
+  const speed = mode.fast === null ? null : mode.fast ? L('快速', 'Fast') : L('普通速度', 'Normal speed')
+  const parts = [mode.permissionMode && chip.permission, chip.model, chip.effort, speed].filter(Boolean)
+  return parts.length ? parts.join(' · ') : L('用电脑上的设置', "Computer's settings")
 }
 
 function NewMode({
@@ -227,26 +262,46 @@ function NewMode({
   const model = catalog.models?.find(m => m.id === mode.model)
   return (
     <ModeSheet
-      title="新会话的模式"
+      title={L('新会话的模式', 'Mode for the new conversation')}
       readOnly={catalog.unsupported}
-      error={catalog.unsupported ? '电脑上的像素星空版本较旧，新会话用电脑上的设置。' : null}
-      note="没选的项用电脑上的设置。"
+      error={
+        catalog.unsupported
+          ? L(
+              '电脑上的像素星空版本较旧，新会话用电脑上的设置。',
+              "The PixelSky app on your computer is out of date. The new conversation will use the computer's settings.",
+            )
+          : null
+      }
+      note={L('没选的项用电脑上的设置。', "Anything not selected uses the computer's settings.")}
       onClose={onClose}
       groups={[
         {
           key: 'permission',
-          title: '权限',
+          title: L('权限', 'Permissions'),
           options: permissionOptions(engine, null),
           value: mode.permissionMode ?? '',
           onPick: v => {
             const to = (v || null) as PermissionMode | null
-            if (to && widens(null, to) && !confirm('放宽权限：AI 改文件时不再先问你。确定吗？')) return
+            if (
+              to &&
+              widens(null, to) &&
+              !confirm(
+                L(
+                  '放宽权限：AI 改文件时不再先问你。确定吗？',
+                  "Loosen permissions? The AI won't ask before editing files.",
+                ),
+              )
+            )
+              return
             onChange({ permissionMode: to })
           },
         },
         {
           key: 'model',
-          title: catalog.models === null && !catalog.unsupported ? '模型（正在取）' : '模型',
+          title:
+            catalog.models === null && !catalog.unsupported
+              ? L('模型（正在取）', 'Model (loading)')
+              : L('模型', 'Model'),
           options: modelOptions(catalog.models, mode.model),
           value: mode.model ?? '',
           // 换了模型：强度可能不在新模型的范围里，回到默认
@@ -254,11 +309,29 @@ function NewMode({
         },
         {
           key: 'effort',
-          title: '推理强度',
+          title: L('推理强度', 'Reasoning effort'),
           options: effortOptions(engine, model, mode.effort),
           value: mode.effort ?? '',
           onPick: v => onChange({ effort: (v || null) as Effort | null }),
         },
+        ...(ENGINES[engine]?.caps.fast
+          ? [
+              {
+                key: 'fast',
+                title: L('速度', 'Speed'),
+                options: [
+                  { value: '', label: L('电脑上的设置', "Computer's settings") },
+                  { value: 'off', label: L('普通', 'Normal') },
+                  { value: 'on', label: L('快速模式', 'Fast mode'), hint: fastDefaultHint() },
+                ],
+                value: mode.fast === null ? '' : mode.fast ? 'on' : 'off',
+                onPick: (v: string) => {
+                  if (v === 'on' && !confirm(fastConfirm())) return
+                  onChange({ fast: v === '' ? null : v === 'on' })
+                },
+              },
+            ]
+          : []),
       ]}
     />
   )

@@ -1,5 +1,6 @@
 // 配对文字（二维码内容 / 配对链接）的解析。不碰存储和网络，单独放在这里方便测试。
 import { decodeOffer, fingerprint, fromBase64Url, type PairingOffer } from '@pixelsky/link'
+import { L } from '@/i18n'
 
 /** 二维码里的电脑信息（给配对页显示） */
 export interface Offer {
@@ -56,8 +57,14 @@ export function findOffer(pasted: string): Offer {
   if (!tokens.length)
     throw new Error(
       /pair|pixelsky/i.test(text)
-        ? '这个链接不完整或被改动过，请回到电脑上重新复制配对链接。'
-        : '没有找到配对链接。请在电脑的 设置 › 手机 › 添加手机 里点「复制配对链接」，再粘贴到这里。',
+        ? L(
+            '这个链接不完整或被改动过，请回到电脑上重新复制配对链接。',
+            'This link is incomplete or was modified. Copy the pairing link again on your computer.',
+          )
+        : L(
+            '没有找到配对链接。请在电脑的 设置 › 手机 › 添加手机 里点「复制配对链接」，再粘贴到这里。',
+            'No pairing link found. On your computer, go to Settings › Phone › Add a phone, click “Copy pairing link”, then paste it here.',
+          ),
     )
   // 多个链接时取第一个能解开且没过期的；只有全都过期才报过期
   const offers: Offer[] = []
@@ -68,8 +75,20 @@ export function findOffer(pasted: string): Offer {
       // 换下一个候选
     }
   }
-  if (!offers.length) throw new Error('这个配对链接不对（可能复制得不完整），请在电脑上重新复制。')
+  if (!offers.length)
+    throw new Error(
+      L(
+        '这个配对链接不对（可能复制得不完整），请在电脑上重新复制。',
+        'This pairing link is invalid (it may be incomplete). Copy it again on your computer.',
+      ),
+    )
   const fresh = offers.find(o => !o.expired)
-  if (!fresh) throw new Error('这个配对链接已经过期（5 分钟有效），请在电脑上重新生成。')
+  if (!fresh)
+    throw new Error(
+      L(
+        '这个配对链接已经过期（5 分钟有效），请在电脑上重新生成。',
+        'This pairing link has expired (valid for 5 minutes). Generate a new one on your computer.',
+      ),
+    )
   return fresh
 }

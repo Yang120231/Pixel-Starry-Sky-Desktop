@@ -4,6 +4,7 @@
 //   取过的和自己发的放在内存里，翻回来不用再取。
 import { useCallback, useState } from 'react'
 import type { ImageAttachment } from '@pixelsky/protocol'
+import { L } from '@/i18n'
 
 /** 一条消息最多几张（和电脑一样） */
 export const MAX_IMAGES = 5
@@ -38,7 +39,7 @@ const toBase64 = (blob: Blob): Promise<string> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(String(reader.result).replace(/^data:[^,]*,/, ''))
-    reader.onerror = () => reject(reader.error ?? new Error('读不了这张图片'))
+    reader.onerror = () => reject(reader.error ?? new Error(L('读不了这张图片', "Couldn't read this image")))
     reader.readAsDataURL(blob)
   })
 
@@ -48,7 +49,9 @@ export async function compressImage(file: File, budget: number): Promise<ImageAt
   try {
     bitmap = await createImageBitmap(file)
   } catch {
-    throw new Error(`「${file.name || '图片'}」打不开，换一张试试`)
+    throw new Error(
+      L(`「${file.name || '图片'}」打不开，换一张试试`, `Couldn't open “${file.name || 'image'}”. Try another one.`),
+    )
   }
   try {
     for (const [edge, quality] of STEPS) {
@@ -57,7 +60,7 @@ export async function compressImage(file: File, budget: number): Promise<ImageAt
       canvas.width = width
       canvas.height = height
       const g = canvas.getContext('2d')
-      if (!g) throw new Error('这台手机不支持压缩图片')
+      if (!g) throw new Error(L('这台手机不支持压缩图片', "This phone can't compress images"))
       g.fillStyle = '#fff'
       g.fillRect(0, 0, width, height)
       g.drawImage(bitmap, 0, 0, width, height)
@@ -78,7 +81,12 @@ export async function compressImage(file: File, budget: number): Promise<ImageAt
   } finally {
     bitmap.close()
   }
-  throw new Error('图片太大，压缩后还是发不了，少选几张试试')
+  throw new Error(
+    L(
+      '图片太大，压缩后还是发不了，少选几张试试',
+      'Images are too large to send even after compression. Try selecting fewer.',
+    ),
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -110,9 +118,15 @@ export function knownImage(image: ImageAttachment, key: string): string | null {
 /** 取图失败时给人看的话 */
 export function imageError(e: unknown): string {
   const message = (e as Error)?.message ?? String(e)
-  if (message.includes('MOBILE_UNSUPPORTED')) return '电脑上的像素星空版本太旧，更新后才能在手机上看图'
-  if (message.includes('MOBILE_TOO_LARGE')) return '图片太大，请到电脑上看'
-  if (message.includes('MOBILE_NOT_FOUND')) return '找不到这张图片（可能已经被清掉）'
+  if (message.includes('MOBILE_UNSUPPORTED'))
+    return L(
+      '电脑上的像素星空版本太旧，更新后才能在手机上看图',
+      'The PixelSky app on your computer is out of date. Update it to view images on your phone.',
+    )
+  if (message.includes('MOBILE_TOO_LARGE'))
+    return L('图片太大，请到电脑上看', 'Image is too large. View it on the computer.')
+  if (message.includes('MOBILE_NOT_FOUND'))
+    return L('找不到这张图片（可能已经被清掉）', "Couldn't find this image (it may have been cleared)")
   return message
 }
 
@@ -140,9 +154,15 @@ export function usePendingImages(): PendingImages {
     async (files: File[]) => {
       setError(null)
       const room = MAX_IMAGES - images.length
-      if (room <= 0) return setError(`一条消息最多 ${MAX_IMAGES} 张图片`)
+      if (room <= 0) return setError(L(`一条消息最多 ${MAX_IMAGES} 张图片`, `Up to ${MAX_IMAGES} images per message`))
       const chosen = files.filter(f => f.type.startsWith('image/') || !f.type).slice(0, room)
-      if (files.length > room) setError(`一条消息最多 ${MAX_IMAGES} 张图片，多出来的没有加`)
+      if (files.length > room)
+        setError(
+          L(
+            `一条消息最多 ${MAX_IMAGES} 张图片，多出来的没有加`,
+            `Up to ${MAX_IMAGES} images per message. The extra ones weren't added.`,
+          ),
+        )
       if (!chosen.length) return
       setBusy(true)
       try {
@@ -152,7 +172,8 @@ export function usePendingImages(): PendingImages {
           budgetFor(images.length + chosen.length),
           Math.floor((TOTAL_BUDGET - used) / chosen.length),
         )
-        if (each < 40 * 1024) throw new Error('图片放不下了，先删掉几张再加')
+        if (each < 40 * 1024)
+          throw new Error(L('图片放不下了，先删掉几张再加', 'No room for more images. Remove some first.'))
         const done: ImageAttachment[] = []
         for (const file of chosen) done.push(await compressImage(file, each))
         setImages(list => [...list, ...done])

@@ -227,7 +227,13 @@ const change = (path: string, code: string) => ({ path, origPath: null, code, lo
 
 /** 假的电脑连接：和 DesktopLink 一样的对外样子，call 直接回假数据 */
 export class DemoLink {
-  state: LinkState = 'ready'
+  // ?link=offline|desktop_offline|replaced：截断线横幅（docs/mobile-remote.md §25）
+  state: LinkState =
+    (['offline', 'desktop_offline', 'replaced'] as const).find(
+      s => s === new URLSearchParams(location.search).get('link'),
+    ) ?? 'ready'
+  retries = 3
+  retryAt: number | null = Date.now() + 5000
   hello: Hello = { version: 1, name: '演示电脑', access: 'act', tools: true, queueMoveBefore: true }
 
   constructor(

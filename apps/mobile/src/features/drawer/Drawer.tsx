@@ -25,8 +25,10 @@ import { desktopLists } from '@/data/desktop'
 import { useConnections, useContentSearch, useDesktop } from '@/data/hooks'
 import { ago, filterTasks, groupTasks, sessionList, sessionStatus, taskTitle } from '@/data/tasks'
 import { TOOL_NAMES, toolError, type ToolId } from '@/data/tools'
-import { linkStateText } from '@/i18n/zh'
-import { Dot, Spinner, cn } from '@/ui'
+import { L } from '@/i18n'
+import { linkStateLabel } from '@/i18n/labels'
+import { isMac } from '@/platform/keys'
+import { Dot, FINE_POINTER, Kbd, Spinner, cn, useMedia } from '@/ui'
 import { ContentResults, SearchField } from '@/ui/search'
 import { SessionRow } from '@/ui/SessionRow'
 import { Sheet } from '@/ui/sheet'
@@ -58,6 +60,8 @@ export interface DrawerProps {
   onMe(): void
   /** 扫码加电脑（能扫码时才有） */
   onAddComputer(): void
+  /** 打开键盘快捷键表（有键盘的设备上才显示入口） */
+  onShortcuts(): void
 }
 
 export function Drawer(props: DrawerProps) {
@@ -75,12 +79,22 @@ export function Drawer(props: DrawerProps) {
   const rows = [...list.waiting, ...list.rest]
   const waiting = groupTasks(sessions).waiting.length
   const manyProjects = projects.length > 1
+  // 有键盘鼠标（电脑浏览器、接了键盘的平板）：标出快捷键
+  const keys = useMedia(FINE_POINTER)
+  const mac = isMac()
 
   return (
-    <nav aria-label="导航" className="flex h-full min-h-0 flex-col bg-sidebar text-fg">
+    <nav aria-label={L('导航', 'Navigation')} className="flex h-full min-h-0 flex-col bg-sidebar text-fg">
       <div className="flex shrink-0 flex-col gap-2 px-3 pt-[max(env(safe-area-inset-top),12px)] pb-2">
         <ComputerSwitcher deviceId={deviceId} onAdd={props.onAddComputer} />
-        <SearchField value={query} onChange={setQuery} placeholder="搜索会话" className="bg-surface" />
+        <SearchField
+          value={query}
+          onChange={setQuery}
+          placeholder={L('搜索会话', 'Search conversations')}
+          className="bg-surface"
+          keyTarget="search"
+          hint={keys && <Kbd>{mac ? '⌘K' : 'Ctrl K'}</Kbd>}
+        />
         <button
           type="button"
           disabled={!canAct || !projects.length}
@@ -88,8 +102,13 @@ export function Drawer(props: DrawerProps) {
           className="flex min-h-11 items-center gap-2.5 rounded-xl px-3 text-ui text-fg active:bg-hover disabled:opacity-40"
         >
           <SquarePen size={18} strokeWidth={1.75} className="shrink-0 text-fg-secondary" />
-          <span className="shrink-0">新建会话</span>
+          <span className="shrink-0">{L('新建会话', 'New conversation')}</span>
           {project && <span className="ml-auto truncate text-meta text-fg-muted">{project.name}</span>}
+          {keys && (
+            <span className={cn('shrink-0', !project && 'ml-auto')}>
+              <Kbd>{mac ? '⌥N' : 'Alt N'}</Kbd>
+            </span>
+          )}
         </button>
       </div>
 
@@ -104,14 +123,23 @@ export function Drawer(props: DrawerProps) {
             onOpen={onSession}
           />
         )}
-        <h2 className="px-3 pt-1 pb-1.5 text-meta font-medium text-fg-muted">{searching ? '标题匹配' : '最近对话'}</h2>
+        <h2 className="px-3 pt-1 pb-1.5 text-meta font-medium text-fg-muted">
+          {searching ? L('标题匹配', 'Title matches') : L('最近对话', 'Recent')}
+        </h2>
         {!loaded ? (
           <div className="flex items-center justify-center gap-2 py-10 text-meta text-fg-muted">
-            {state && state !== 'ready' ? linkStateText[state] : <Spinner />}
+            {state && state !== 'ready' ? linkStateLabel(state) : <Spinner />}
           </div>
         ) : !rows.length ? (
           <p className="px-3 py-6 text-meta text-fg-muted">
-            {searching ? '没有匹配的会话' : projects.length ? '还没有会话' : '电脑上还没有项目，到「更多」里添加一个。'}
+            {searching
+              ? L('没有匹配的会话', 'No matching conversations')
+              : projects.length
+                ? L('还没有会话', 'No conversations yet')
+                : L(
+                    '电脑上还没有项目，到「更多」里添加一个。',
+                    'No projects on the computer yet. Add one under “More”.',
+                  )}
           </p>
         ) : (
           <div className="flex flex-col">
@@ -136,17 +164,32 @@ export function Drawer(props: DrawerProps) {
                 onClick={() => setLimit(n => n + DRAWER_STEP)}
                 className="min-h-10 rounded-xl px-3 text-left text-meta text-accent-fg active:bg-hover"
               >
-                显示更多（还有 {list.more} 个）
+                {L(`显示更多（还有 ${list.more} 个）`, `Show more (${list.more} more)`)}
               </button>
             )}
           </div>
         )}
       </div>
 
+      {keys && (
+        <button
+          type="button"
+          onClick={props.onShortcuts}
+          className="mx-2 mb-1 flex min-h-9 shrink-0 items-center gap-2 rounded-xl px-3 text-meta text-fg-muted active:bg-hover"
+        >
+          <Kbd>?</Kbd> {L('键盘快捷键', 'Keyboard shortcuts')}
+        </button>
+      )}
       <div className="flex shrink-0 gap-1 border-t border-line-subtle px-2 pt-1.5 pb-[max(env(safe-area-inset-bottom),6px)]">
-        <FooterButton icon={LayoutList} label="会话" active={page === 'home'} badge={waiting} onClick={onHome} />
-        <FooterButton icon={MoreHorizontal} label="更多" active={false} onClick={() => setMore(true)} />
-        <FooterButton icon={UserRound} label="我的" active={page === 'me'} onClick={onMe} />
+        <FooterButton
+          icon={LayoutList}
+          label={L('会话', 'Conversations')}
+          active={page === 'home'}
+          badge={waiting}
+          onClick={onHome}
+        />
+        <FooterButton icon={MoreHorizontal} label={L('更多', 'More')} active={false} onClick={() => setMore(true)} />
+        <FooterButton icon={UserRound} label={L('我的', 'Me')} active={page === 'me'} onClick={onMe} />
       </div>
       {more && <MoreSheet {...props} canAct={canAct} onClose={() => setMore(false)} />}
     </nav>
@@ -207,15 +250,17 @@ function MoreSheet({
     setRefreshError(null)
     void desktopLists
       .refresh(deviceId)
-      .catch(e => setRefreshError(`刷新失败：${toolError(e)}`))
+      .catch(e => setRefreshError(L(`刷新失败：${toolError(e)}`, `Refresh failed: ${toolError(e)}`)))
       .finally(() => setRefreshing(false))
   }
   return (
-    <Sheet title="更多" onClose={onClose}>
+    <Sheet title={L('更多', 'More')} onClose={onClose}>
       <div className="flex flex-col gap-5 py-3">
         {project && (
           <section className="flex flex-col">
-            <h3 className="px-4 pb-1.5 text-meta font-medium text-fg-muted">「{project.name}」的工具</h3>
+            <h3 className="px-4 pb-1.5 text-meta font-medium text-fg-muted">
+              {L(`「${project.name}」的工具`, `Tools for “${project.name}”`)}
+            </h3>
             <div className="mx-3 grid grid-cols-4 gap-1.5">
               {TOOLS.map(({ id, icon: Icon }) => (
                 <button
@@ -234,12 +279,17 @@ function MoreSheet({
               ))}
             </div>
             {!tools && ready && (
-              <p className="px-4 pt-1.5 text-label text-fg-faint">电脑上的像素星空版本较旧，更新后才能用。</p>
+              <p className="px-4 pt-1.5 text-label text-fg-faint">
+                {L(
+                  '电脑上的像素星空版本较旧，更新后才能用。',
+                  'The PixelSky app on your computer is out of date. Update it to use these.',
+                )}
+              </p>
             )}
           </section>
         )}
         <section className="flex flex-col">
-          <h3 className="px-4 pb-1.5 text-meta font-medium text-fg-muted">当前项目</h3>
+          <h3 className="px-4 pb-1.5 text-meta font-medium text-fg-muted">{L('当前项目', 'Current project')}</h3>
           <div className="mx-3 overflow-hidden rounded-xl border border-line-subtle bg-surface">
             {projects.map((p, i) => (
               <button
@@ -271,7 +321,7 @@ function MoreSheet({
               )}
             >
               <FolderPlus size={18} strokeWidth={1.75} className="shrink-0" />
-              添加项目
+              {L('添加项目', 'Add project')}
             </button>
           </div>
         </section>
@@ -282,7 +332,7 @@ function MoreSheet({
           className="mx-3 flex min-h-12 items-center justify-center gap-2 rounded-xl border border-line-subtle bg-surface text-ui text-fg-secondary active:bg-hover disabled:opacity-40"
         >
           <RefreshCw size={16} className={cn(refreshing && 'animate-spin')} />
-          刷新列表
+          {L('刷新列表', 'Refresh list')}
         </button>
         {refreshError && <p className="-mt-3 px-4 text-meta text-danger">{refreshError}</p>}
       </div>
@@ -307,10 +357,10 @@ function ComputerSwitcher({ deviceId, onAdd }: { deviceId: string; onAdd(): void
         className="flex min-h-14 w-full items-center gap-3 px-3.5 text-left active:bg-hover"
       >
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-ui font-medium">{active?.desktopName ?? '电脑'}</span>
+          <span className="truncate text-ui font-medium">{active?.desktopName ?? L('电脑', 'Computer')}</span>
           <span className="flex items-center gap-1.5 text-meta text-fg-muted">
             <Dot tone={tone(state)} pulse={state === 'connecting' || state === 'handshaking'} />
-            <span className="truncate">{state ? linkStateText[state] : ''}</span>
+            <span className="truncate">{state ? linkStateLabel(state) : ''}</span>
           </span>
         </span>
         <ChevronsUpDown size={17} className="shrink-0 text-fg-faint" />
@@ -344,7 +394,7 @@ function ComputerSwitcher({ deviceId, onAdd }: { deviceId: string; onAdd(): void
             className="flex min-h-12 w-full items-center gap-2.5 border-t border-line-subtle px-3.5 text-left text-ui text-accent-fg active:bg-hover"
           >
             <Plus size={17} className="shrink-0" />
-            <span className="min-w-0 flex-1">添加电脑</span>
+            <span className="min-w-0 flex-1">{L('添加电脑', 'Add computer')}</span>
           </button>
         </div>
       )}

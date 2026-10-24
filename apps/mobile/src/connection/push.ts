@@ -5,6 +5,7 @@ import { fromBase64Url } from '@pixelsky/link'
 import { inApp } from '@/platform'
 import { isStandalone } from '@/platform/pwa'
 import type { Pairing } from './storage'
+import { L } from '@/i18n'
 
 /** unsupported：浏览器不支持；install：iPhone / iPad 要先添加到主屏幕；denied：系统里拒绝了通知 */
 export type PushState = 'unsupported' | 'install' | 'denied' | 'off' | 'on'
@@ -65,7 +66,8 @@ const sameKey = (a: ArrayBuffer | null | undefined, b: Uint8Array): boolean =>
 
 /** 装好的 service worker（public/sw.js）。没注册上时 ready 永远不会完成，所以先查、再限时等 */
 async function worker(): Promise<ServiceWorkerRegistration> {
-  const broken = () => new Error('提醒组件没装好，刷新页面后再试')
+  const broken = () =>
+    new Error(L('提醒组件没装好，刷新页面后再试', 'Alerts aren’t set up yet. Refresh the page and try again'))
   if (!(await navigator.serviceWorker.getRegistration(import.meta.env.BASE_URL))) throw broken()
   return Promise.race([
     navigator.serviceWorker.ready,
@@ -76,8 +78,8 @@ async function worker(): Promise<ServiceWorkerRegistration> {
 /** 取到（或新建）这个浏览器的推送订阅；云端换了公钥时重新订阅 */
 async function subscription(): Promise<PushSubscription> {
   const res = await api('GET', '/v1/bridge/push/key')
-  if (res.status === 404) throw new Error('云端还没有开通推送')
-  if (!res.ok) throw new Error('连不上云端，稍后再试')
+  if (res.status === 404) throw new Error(L('云端还没有开通推送', 'Push notifications aren’t enabled on the cloud yet'))
+  if (!res.ok) throw new Error(L('连不上云端，稍后再试', 'Can’t reach the cloud. Try again later'))
   const key = fromBase64Url(((await res.json()) as { key: string }).key)
   const reg = await worker()
   const prior = await reg.pushManager.getSubscription()
@@ -100,7 +102,8 @@ async function register(sub: PushSubscription, pairings: readonly Pairing[]): Pr
     ),
   )
   const failed = targets.filter((_, i) => !ok[i]).map(p => p.desktopName)
-  if (targets.length && failed.length === targets.length) throw new Error('云端没登记上，稍后再试')
+  if (targets.length && failed.length === targets.length)
+    throw new Error(L('云端没登记上，稍后再试', 'Couldn’t register with the cloud. Try again later'))
   return failed
 }
 

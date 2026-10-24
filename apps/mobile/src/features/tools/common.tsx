@@ -2,6 +2,7 @@
 import type { ReactNode } from 'react'
 import { RefreshCw, X } from 'lucide-react'
 import type { ProjectRecord } from '@pixelsky/protocol'
+import { L } from '@/i18n'
 import { Banner, IconButton, Screen, Spinner, cn } from '@/ui'
 
 export interface ToolProps {
@@ -58,7 +59,7 @@ export function ToolFrame({
           {onRefresh && (
             <button
               type="button"
-              aria-label="刷新"
+              aria-label={L('刷新', 'Refresh')}
               disabled={loading}
               onClick={onRefresh}
               className="flex size-11 items-center justify-center rounded-full text-fg-secondary active:bg-hover"
@@ -66,7 +67,7 @@ export function ToolFrame({
               {loading ? <Spinner size={16} /> : <RefreshCw size={19} strokeWidth={1.75} />}
             </button>
           )}
-          {top && tool.onClose && <IconButton label="关闭" icon={X} onClick={tool.onClose} />}
+          {top && tool.onClose && <IconButton label={L('关闭', 'Close')} icon={X} onClick={tool.onClose} />}
         </>
       }
     >
@@ -80,7 +81,7 @@ export function Loading({ error, className }: { error?: string | null; className
   if (error) return <Banner tone="danger">{error}</Banner>
   return (
     <div className={cn('flex items-center justify-center gap-2 py-16 text-meta text-fg-muted', className)}>
-      <Spinner /> 正在读取…
+      <Spinner /> {L('正在读取…', 'Loading…')}
     </div>
   )
 }

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import jsQR from 'jsqr'
 import { CameraOff, ClipboardPaste, ScanLine } from 'lucide-react'
 import { Button, Empty, Screen } from '@/ui'
+import { L } from '@/i18n'
 
 /** 能不能在页面里开相机（安全上下文 + 有 mediaDevices） */
 export const canScan = () =>
@@ -19,7 +20,12 @@ export function ScanScreen({
 }) {
   const video = useRef<HTMLVideoElement>(null)
   const [error, setError] = useState<string | null>(
-    canScan() ? null : '这里打不开相机。可以粘贴电脑上复制的配对链接，或用手机自带的相机 / 微信扫二维码。',
+    canScan()
+      ? null
+      : L(
+          '这里打不开相机。可以粘贴电脑上复制的配对链接，或用手机自带的相机 / 微信扫二维码。',
+          'The camera can’t be opened here. Paste the pairing link copied on your computer, or scan the QR code with your phone’s camera or WeChat.',
+        ),
   )
   const done = useRef(false)
 
@@ -57,7 +63,14 @@ export function ScanScreen({
         }
         frame = requestAnimationFrame(tick)
       })
-      .catch(() => setError('没有相机权限。到系统设置里允许使用相机，或改用粘贴配对链接。'))
+      .catch(() =>
+        setError(
+          L(
+            '没有相机权限。到系统设置里允许使用相机，或改用粘贴配对链接。',
+            'No camera permission. Allow camera access in system settings, or paste the pairing link instead.',
+          ),
+        ),
+      )
     return () => {
       cancelAnimationFrame(frame)
       stream?.getTracks().forEach(t => t.stop())
@@ -65,16 +78,16 @@ export function ScanScreen({
   }, [onResult])
 
   return (
-    <Screen title="扫码连接电脑" onBack={onBack}>
+    <Screen title={L('扫码连接电脑', 'Scan to connect a computer')} onBack={onBack}>
       {error ? (
         <Empty
           icon={CameraOff}
-          title="打不开相机"
+          title={L('打不开相机', 'Can’t open the camera')}
           body={error}
           action={
             onPaste && (
               <Button variant="primary" onClick={onPaste} className="mt-2">
-                <ClipboardPaste size={18} /> 粘贴配对链接
+                <ClipboardPaste size={18} /> {L('粘贴配对链接', 'Paste pairing link')}
               </Button>
             )
           }
@@ -90,8 +103,10 @@ export function ScanScreen({
             />
           </div>
           <p className="text-center text-meta text-fg-muted">
-            在电脑上打开像素星空 › 设置 › 手机 ›
-            添加手机，把二维码放进框里。二维码就在这台设备的屏幕上时，改用粘贴配对链接。
+            {L(
+              '在电脑上打开像素星空 › 设置 › 手机 › 添加手机，把二维码放进框里。二维码就在这台设备的屏幕上时，改用粘贴配对链接。',
+              'On your computer, open PixelSky › Settings › Phone › Add a phone, and fit the QR code in the frame. If the QR code is on this device’s screen, paste the pairing link instead.',
+            )}
           </p>
         </div>
       )}

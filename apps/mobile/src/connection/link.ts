@@ -94,6 +94,10 @@ export function relayUrl(pairing: Pairing): string {
 export class DesktopLink {
   state: LinkState = 'connecting'
   hello: Hello | null = null
+  /** 断开后连续重连了几次（连上清零），断线横幅写「第几次」（docs/mobile-remote.md §25） */
+  retries = 0
+  /** 下一次自动重连的时间（毫秒时间戳）；没排着时为 null */
+  retryAt: number | null = null
   private ws: WebSocket | null = null
   private rpc: RpcCore | null = null
   private channel: SecureChannel | null = null
@@ -174,6 +178,10 @@ export class DesktopLink {
 
   private set(state: LinkState): void {
     if (this.state === state) return
+    if (state === 'ready') {
+      this.retries = 0
+      this.retryAt = null
+    }
     this.state = state
     this.hooks.onState(state)
   }
@@ -187,6 +195,7 @@ export class DesktopLink {
   }
 
   private open(): void {
+    this.retryAt = null
     this.unguard()
     this.reset()
     this.set('connecting')
@@ -229,8 +238,11 @@ export class DesktopLink {
       this.set('replaced')
       return
     }
+    const wait = this.delay * (0.8 + Math.random() * 0.4)
+    this.retries++
+    this.retryAt = Date.now() + wait
     this.set('offline')
-    this.timer = setTimeout(() => this.open(), this.delay * (0.8 + Math.random() * 0.4))
+    this.timer = setTimeout(() => this.open(), wait)
     this.delay = Math.min(30_000, this.delay * 2)
   }
 

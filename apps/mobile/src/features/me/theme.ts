@@ -1,12 +1,14 @@
 // 主题：跟随系统 / 浅色 / 深色，写到 <html data-theme>（tokens.css 按它切换）
 import { useEffect, useState } from 'react'
+import { L } from '@/i18n'
 
 export type ThemePreference = 'system' | 'light' | 'dark'
-export const THEMES = [
-  { value: 'system', label: '跟随系统' },
-  { value: 'light', label: '浅色' },
-  { value: 'dark', label: '深色' },
-] as const
+export const themeOptions = () =>
+  [
+    { value: 'system', label: L('跟随系统', 'System') },
+    { value: 'light', label: L('浅色', 'Light') },
+    { value: 'dark', label: L('深色', 'Dark') },
+  ] as const
 
 const KEY = 'pixelsky.mobile.theme'
 const dark = () => window.matchMedia('(prefers-color-scheme: dark)').matches

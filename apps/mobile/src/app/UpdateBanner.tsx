@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { RefreshCw, X } from 'lucide-react'
 import { useNewVersion } from '@/platform/version'
+import { L } from '@/i18n'
 
 export function UpdateBanner() {
   const found = useNewVersion()
@@ -16,11 +17,11 @@ export function UpdateBanner() {
           onClick={() => location.reload()}
           className="flex min-h-9 items-center gap-1.5 rounded-l-full py-1.5 pr-2 pl-3.5 font-medium active:opacity-70"
         >
-          <RefreshCw size={14} aria-hidden /> 有新版本 · 点这里刷新
+          <RefreshCw size={14} aria-hidden /> {L('有新版本 · 点这里刷新', 'New version available · Tap to refresh')}
         </button>
         <button
           type="button"
-          aria-label="先不刷新"
+          aria-label={L('先不刷新', 'Not now')}
           onClick={() => setDismissed(true)}
           className="flex min-h-9 items-center rounded-r-full py-1.5 pr-3 pl-1.5 opacity-80 active:opacity-60"
         >

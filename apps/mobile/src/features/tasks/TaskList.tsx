@@ -7,11 +7,12 @@ import type { SessionSummary } from '@pixelsky/protocol'
 import type { Pairing } from '@/connection'
 import { useContentSearch, useDesktop } from '@/data/hooks'
 import { RECENT_STEP, ago, filterTasks, sessionList, sessionStatus, taskProjects, taskTitle } from '@/data/tasks'
-import { linkStateText } from '@/i18n/zh'
-import { Banner, Button, Dot, Empty, IconButton, Screen, Section, Spinner } from '@/ui'
+import { L } from '@/i18n'
+import { linkStateLabel } from '@/i18n/labels'
+import { Button, Dot, Empty, IconButton, Screen, Section, Spinner } from '@/ui'
 import { Chips, ContentResults, SearchField } from '@/ui/search'
 import { SessionRow } from '@/ui/SessionRow'
-import { REPLACED_BODY, REPLACED_TITLE, ReconnectButton } from './Reconnect'
+import { ConnectionBanner, ReconnectButton, replacedBody, replacedTitle } from './Reconnect'
 
 export function TaskList({
   pairing,
@@ -44,7 +45,7 @@ export function TaskList({
   return (
     <Screen
       large
-      title="会话"
+      title={L('会话', 'Conversations')}
       leading={menu}
       subtitle={
         <span className="inline-flex items-center gap-1.5 rounded-full bg-subtle px-2.5 py-1 text-meta text-fg-secondary">
@@ -54,18 +55,24 @@ export function TaskList({
             tone={ready ? 'online' : state === 'removed' || state === 'incompatible' ? 'danger' : 'muted'}
             pulse={state === 'connecting' || state === 'handshaking'}
           />
-          <span className="text-fg-muted">{state ? linkStateText[state] : ''}</span>
+          <span className="text-fg-muted">{state ? linkStateLabel(state) : ''}</span>
         </span>
       }
       actions={
-        <IconButton label="新建会话" icon={Plus} disabled={!canAct} onClick={onNew} className="disabled:opacity-40" />
+        <IconButton
+          label={L('新建会话', 'New conversation')}
+          icon={Plus}
+          disabled={!canAct}
+          onClick={onNew}
+          className="disabled:opacity-40"
+        />
       }
     >
       {state === 'replaced' && !loaded ? (
         <Empty
           icon={MonitorSmartphone}
-          title={REPLACED_TITLE}
-          body={REPLACED_BODY}
+          title={replacedTitle()}
+          body={replacedBody()}
           action={
             <div className="mt-2">
               <ReconnectButton deviceId={pairing.deviceId} />
@@ -73,76 +80,111 @@ export function TaskList({
           }
         />
       ) : state === 'removed' ? (
-        <Empty icon={ShieldOff} title="已被电脑移除" body="到「我的」里删掉这台电脑，再在电脑上重新扫码配对。" />
+        <Empty
+          icon={ShieldOff}
+          title={L('已被电脑移除', 'Removed by the computer')}
+          body={L(
+            '到「我的」里删掉这台电脑，再在电脑上重新扫码配对。',
+            'Remove this computer under “Me”, then scan the QR code on the computer again to pair.',
+          )}
+        />
       ) : state === 'incompatible' && !loaded ? (
-        <Empty icon={ShieldOff} title="版本不一致" body="电脑版和手机版的连接协议不一样，把两边都更新到最新版再试。" />
+        <Empty
+          icon={ShieldOff}
+          title={L('版本不一致', 'Version mismatch')}
+          body={L(
+            '电脑版和手机版的连接协议不一样，把两边都更新到最新版再试。',
+            'The computer and phone use different connection protocols. Update both to the latest version and try again.',
+          )}
+        />
       ) : state === 'unrecognized' && !loaded ? (
         <Empty
           icon={ShieldOff}
-          title="电脑上找不到配对"
-          body="电脑可能已移除这部手机，或重装过。会自动再试；也可以到「我的」里删掉这台电脑后重新扫码。"
+          title={L('电脑上找不到配对', 'Pairing not found on the computer')}
+          body={L(
+            '电脑可能已移除这部手机，或重装过。会自动再试；也可以到「我的」里删掉这台电脑后重新扫码。',
+            'The computer may have removed this phone or been reinstalled. Retrying automatically. You can also remove this computer under “Me” and scan the QR code again.',
+          )}
         />
       ) : state === 'desktop_offline' && !loaded ? (
         <Empty
           icon={CloudOff}
-          title="电脑不在线"
-          body="打开电脑上的像素星空，并在 设置 › 手机 里保持「允许手机远程连接」打开。"
+          title={L('电脑不在线', 'Computer offline')}
+          body={L(
+            '打开电脑上的像素星空，并在 设置 › 手机 里保持「允许手机远程连接」打开。',
+            'Open PixelSky on the computer and keep “Allow remote phone connections” on in Settings › Phone.',
+          )}
         />
       ) : state === 'offline' && !loaded ? (
-        <Empty icon={WifiOff} title="连不上网络" body="检查一下手机网络，恢复后会自动重连。" />
+        <Empty
+          icon={WifiOff}
+          title={L('连不上网络', 'No network')}
+          body={L(
+            '检查一下手机网络，恢复后会自动重连。',
+            "Check your phone's network. It will reconnect automatically once it's back.",
+          )}
+        />
       ) : !loaded ? (
         <div className="flex items-center justify-center gap-2 py-16 text-meta text-fg-muted">
-          <Spinner /> 正在连接电脑…
+          <Spinner /> {L('正在连接电脑…', 'Connecting to the computer…')}
         </div>
       ) : (
         <div className="flex flex-col gap-5 pb-6">
-          {state === 'replaced' ? (
-            <Banner
-              tone="warn"
-              icon={<MonitorSmartphone size={18} />}
-              action={<ReconnectButton deviceId={pairing.deviceId} size="sm" />}
-            >
-              {REPLACED_TITLE}：下面是断开前的内容。
-            </Banner>
-          ) : (
-            !ready && (
-              <Banner tone="warn" icon={<CloudOff size={18} />}>
-                {state ? linkStateText[state] : ''}：下面是{cached ? '上次打开时' : '断开前'}的内容，恢复后会自动更新。
-              </Banner>
-            )
-          )}
+          <ConnectionBanner
+            deviceId={pairing.deviceId}
+            kept={L(
+              `下面是${cached ? '上次打开时' : '断开前'}的内容，恢复后会自动更新。`,
+              `Showing content from ${cached ? 'the last visit' : 'before the disconnect'}. It will update once reconnected.`,
+            )}
+          />
           {sessions.length === 0 ? (
             <Empty
               icon={Inbox}
-              title="还没有会话"
-              body="在手机上给电脑派个活儿，结果和改动都能在这里看。"
+              title={L('还没有会话', 'No conversations yet')}
+              body={L(
+                '在手机上给电脑派个活儿，结果和改动都能在这里看。',
+                'Give your computer a task from your phone. Results and changes show up here.',
+              )}
               action={
                 <Button variant="primary" disabled={!canAct} onClick={onNew} className="mt-2">
-                  <Plus size={18} /> 新建会话
+                  <Plus size={18} /> {L('新建会话', 'New conversation')}
                 </Button>
               }
             />
           ) : (
             <>
               <div className="flex flex-col gap-2.5">
-                <SearchField value={query} onChange={setQuery} placeholder="搜索会话标题、项目、对话内容" />
+                <SearchField
+                  value={query}
+                  onChange={setQuery}
+                  placeholder={L('搜索会话标题、项目、对话内容', 'Search titles, projects, and messages')}
+                />
                 {withTasks.length > 1 && (
                   <Chips
                     value={projectId ?? ''}
                     onChange={setProject}
-                    items={[{ value: '', label: '全部项目' }, ...withTasks.map(p => ({ value: p.id, label: p.name }))]}
+                    items={[
+                      { value: '', label: L('全部项目', 'All projects') },
+                      ...withTasks.map(p => ({ value: p.id, label: p.name })),
+                    ]}
                   />
                 )}
               </div>
               <Group
-                title="等你处理"
+                title={L('等你处理', 'Needs you')}
                 tone="danger"
                 list={list.waiting}
                 project={showProject ? projectName : undefined}
                 onOpen={onOpen}
               />
               <Group
-                title={searching ? '标题匹配' : list.waiting.length ? '其他会话' : undefined}
+                title={
+                  searching
+                    ? L('标题匹配', 'Title matches')
+                    : list.waiting.length
+                      ? L('其他会话', 'Other conversations')
+                      : undefined
+                }
                 list={list.rest}
                 project={showProject ? projectName : undefined}
                 onOpen={onOpen}
@@ -153,7 +195,7 @@ export function TaskList({
                       onClick={() => setRecentLimit(n => n + RECENT_STEP)}
                       className="flex min-h-12 w-full items-center justify-center border-t border-line-subtle text-meta text-accent-fg active:bg-hover"
                     >
-                      显示更多（还有 {list.more} 个）
+                      {L(`显示更多（还有 ${list.more} 个）`, `Show more (${list.more} more)`)}
                     </button>
                   )
                 }
@@ -170,8 +212,15 @@ export function TaskList({
               {searching && !filtered.length && !content.loading && !content.results.length && (
                 <Empty
                   icon={SearchX}
-                  title="没有找到"
-                  body={content.unsupported ? '电脑上的像素星空版本较旧，只能搜标题和项目名。' : '换个关键词试试。'}
+                  title={L('没有找到', 'No results')}
+                  body={
+                    content.unsupported
+                      ? L(
+                          '电脑上的像素星空版本较旧，只能搜标题和项目名。',
+                          'The PixelSky app on your computer is out of date, so only titles and project names can be searched.',
+                        )
+                      : L('换个关键词试试。', 'Try a different keyword.')
+                  }
                 />
               )}
             </>

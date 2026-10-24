@@ -2,6 +2,7 @@
 // 两轮相隔久了插时间；审批 / 提问卡片替换输入框；停止键在输入框里；回到最新。输入框由 App 传进来（features 之间不互相导入）。
 // 输入框上面是消息队列和模式胶囊（点开改模式）；点图片全屏看；最近一轮出错可以「重试」（§17）。
 // 右上角「+」「⋯」见 SessionMenu；这一轮答完、手里没在写的时候，输入框上面给几句快捷回复（App 传给输入框的 suggest）。
+// 从「等你处理」的通知点进来（§25）：审批已经在电脑上处理掉时说一声；逐个处理时顶上一条「等你处理 2 / 3」，答完自动去下一个。
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ArrowDown, Square } from 'lucide-react'
 import { foldTurns, type ApprovalDecision } from '@pixelsky/protocol'
@@ -9,12 +10,12 @@ import type { Pairing } from '@/connection'
 import { useDesktop, useSession } from '@/data/hooks'
 import { attemptFor, sendKey, type SendAttempt } from '@/data/retry'
 import { toolError, type ToolId } from '@/data/tools'
-import { RETRY_MESSAGE, retryNoticeId, timeDividers } from '@/data/turns'
-import { linkStateText } from '@/i18n/zh'
+import { retryMessage, retryNoticeId, timeDividers } from '@/data/turns'
+import { L } from '@/i18n'
 import { Banner, Screen, Spinner, cn } from '@/ui'
 import { EngineAvatar } from '@/ui/EngineAvatar'
 import { ImageViewer } from '@/ui/images'
-import { ReconnectButton } from '../tasks/Reconnect'
+import { ConnectionBanner } from '../tasks/Reconnect'
 import { ApprovalCard } from './ApprovalCard'
 import { EntryView, ThinkingRow, type TurnActions } from './ItemView'
 import { ModeChip } from './ModeChip'
@@ -25,6 +26,8 @@ export function SessionScreen({
   pairing,
   sessionId,
   leading,
+  notify = false,
+  triage = null,
   composer,
   onRecall,
   onNew,
@@ -35,6 +38,10 @@ export function SessionScreen({
   sessionId: string
   /** 窄屏左上角的抽屉按钮（宽屏抽屉常驻，按钮自己藏起来） */
   leading?: ReactNode
+  /** 从「等你处理」的通知点进来的 */
+  notify?: boolean
+  /** 逐个处理等你的会话：第几个、一共几个、去下一个 */
+  triage?: { index: number; total: number; onNext(): void } | null
   /** 输入框；running 是会话页算好的「正在跑」（含启动中），停止键 / 占位字都跟它走；suggest：这一轮答完了，可以给快捷回复 */
   composer(running: boolean, suggest: boolean): ReactNode
   /** 队列里撤回的消息：文字放回输入框 */
@@ -61,12 +68,12 @@ export function SessionScreen({
   const project = projects.find(p => p.id === record?.projectId)?.name
   const engine = record?.engine ?? 'claude'
   const status = pending
-    ? { text: '等你允许', tone: 'danger' as const }
+    ? { text: L('等你允许', 'Waiting for your approval'), tone: 'danger' as const }
     : running
-      ? { text: '正在回复…', tone: 'online' as const }
+      ? { text: L('正在回复…', 'Replying…'), tone: 'online' as const }
       : record?.lastOutcome === 'failed'
-        ? { text: '出错了', tone: 'warn' as const }
-        : { text: '等你回复', tone: 'muted' as const }
+        ? { text: L('出错了', 'Error'), tone: 'warn' as const }
+        : { text: L('等你回复', 'Your turn'), tone: 'muted' as const }
 
   // 新内容到了、而且本来就在底部时，跟着滚到底；不在底部时显示「回到最新」
   const scroller = useRef<HTMLDivElement>(null)
@@ -94,6 +101,26 @@ export function SessionScreen({
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
   }
 
+  // 从通知点进来时，审批已经在电脑上处理掉了（快照到了、一直没见到待审批）：说一声，不然以为点错了
+  const [seenPending, setSeenPending] = useState(false)
+  useEffect(() => {
+    if (pending) setSeenPending(true)
+  }, [pending])
+  // 只在打开后还没有新动静时说；会话里来了新条目（你发了消息、AI 接着做）就收起
+  const firstCount = useRef<number | null>(null)
+  if (snapshot && firstCount.current === null) firstCount.current = snapshot.items.length
+  const handledElsewhere =
+    (notify || !!triage) && !!snapshot && !pending && !seenPending && snapshot.items.length === firstCount.current
+  // 逐个处理：这个会话等你的都答完了，停一下让人看到卡片收起，再去下一个
+  const triageNext = useRef(triage?.onNext)
+  triageNext.current = triage?.onNext
+  const inTriage = !!triage
+  useEffect(() => {
+    if (!inTriage || !seenPending || pending) return
+    const timer = setTimeout(() => triageNext.current?.(), 700)
+    return () => clearTimeout(timer)
+  }, [inTriage, seenPending, pending])
+
   const answer = async (d: ApprovalDecision) => {
     if (link && pending) await link.call('engine:answer', sessionId, pending.requestId, d)
   }
@@ -109,12 +136,13 @@ export function SessionScreen({
     if (!link || retrying || !retryId) return
     setRetrying(true)
     setRetryError(null)
-    const current = attemptFor(retryAttempt.current, sendKey(`${sessionId}/${retryId}`, RETRY_MESSAGE, []), () =>
+    const text = retryMessage()
+    const current = attemptFor(retryAttempt.current, sendKey(`${sessionId}/${retryId}`, text, []), () =>
       crypto.randomUUID(),
     )
     retryAttempt.current = current
     link
-      .call('engine:send', sessionId, { text: RETRY_MESSAGE, clientMessageId: current.id })
+      .call('engine:send', sessionId, { text, clientMessageId: current.id })
       .then(() => {
         if (retryAttempt.current === current) retryAttempt.current = null
       })
@@ -125,9 +153,9 @@ export function SessionScreen({
   const [menuError, setMenuError] = useState<string | null>(null)
   // 加载更早的消息、查看完整内容失败：和菜单的错误一样放在输入框上面
   const [loadError, setLoadError] = useState<string | null>(null)
-  const load = (what: string, run: () => Promise<void>) => {
+  const load = (failed: string, run: () => Promise<void>) => {
     setLoadError(null)
-    run().catch(e => setLoadError(`${what}失败：${toolError(e)}`))
+    run().catch(e => setLoadError(L(`${failed}：${toolError(e)}`, `${failed}: ${toolError(e)}`)))
   }
   // 快捷回复：答完了（最后一条不是你的）、没在跑、没排队、没有「重试」
   const suggest =
@@ -141,7 +169,7 @@ export function SessionScreen({
       title={
         <>
           <EngineAvatar engine={engine} size={36} status={{ tone: status.tone, pulse: running && !pending }} />
-          <span className="max-w-full truncate">{record?.title || '会话'}</span>
+          <span className="max-w-full truncate">{record?.title || L('会话', 'Conversation')}</span>
         </>
       }
       subtitle={`${status.text}${project ? ` · ${project}` : ''}`}
@@ -164,6 +192,35 @@ export function SessionScreen({
           {/* 「⋯」里置顶、归档的错误：放在输入框上面，对话滚到哪都看得见 */}
           {menuError && <p className="px-4 pt-1.5 pb-1 text-meta text-danger">{menuError}</p>}
           {loadError && <p className="px-4 pt-1.5 pb-1 text-meta text-danger">{loadError}</p>}
+          {handledElsewhere && (
+            <Banner>{L('这个请求已经在电脑上处理了', 'This request was already handled on the computer')}</Banner>
+          )}
+          {triage && (
+            <div
+              data-triage
+              className="mx-4 mb-2 flex items-center gap-2.5 rounded-xl bg-notify/10 px-3 py-1.5 text-meta text-fg-secondary"
+            >
+              {triage.total <= 10 && (
+                <span className="flex shrink-0 gap-1" aria-hidden>
+                  {Array.from({ length: triage.total }, (_, i) => (
+                    <i
+                      key={i}
+                      className={cn(
+                        'size-1.5 rounded-full',
+                        i < triage.index - 1 ? 'bg-online' : i === triage.index - 1 ? 'bg-notify' : 'bg-line-strong',
+                      )}
+                    />
+                  ))}
+                </span>
+              )}
+              <span className="min-w-0 flex-1">
+                {L('等你处理', 'Needs you')} {triage.index} / {triage.total}
+              </span>
+              <button type="button" onClick={triage.onNext} className="min-h-9 px-1 text-fg-muted underline">
+                {pending ? L('跳过', 'Skip') : L('下一个', 'Next')}
+              </button>
+            </div>
+          )}
           {pending ? (
             <>
               <ApprovalCard
@@ -177,11 +234,11 @@ export function SessionScreen({
               {running && canAct && (
                 <button
                   type="button"
-                  aria-label="停止"
+                  aria-label={L('停止', 'Stop')}
                   onClick={() => void link?.call('engine:interrupt', sessionId).catch(() => undefined)}
                   className="mx-auto mb-3 flex min-h-11 items-center justify-center gap-1.5 rounded-full px-4 text-meta text-fg-secondary active:bg-hover"
                 >
-                  <Square size={14} /> 停止
+                  <Square size={14} /> {L('停止', 'Stop')}
                 </button>
               )}
             </>
@@ -196,6 +253,7 @@ export function SessionScreen({
                   link={link}
                   sessionId={sessionId}
                   record={snapshot.record}
+                  flags={snapshot.flags ?? null}
                   canAct={canAct}
                 />
               )}
@@ -208,32 +266,28 @@ export function SessionScreen({
       <div className="relative min-h-0 flex-1 bg-chat">
         <div ref={scroller} className="h-full overflow-y-auto overscroll-contain">
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 pt-3 pb-6">
-            {state === 'replaced' ? (
-              <Banner tone="warn" action={<ReconnectButton deviceId={pairing.deviceId} size="sm" />}>
-                {linkStateText[state]}
-              </Banner>
-            ) : (
-              state !== 'ready' &&
-              state && (
-                <Banner tone="warn" icon={<Spinner size={14} />}>
-                  {linkStateText[state]}
-                </Banner>
-              )
-            )}
+            <ConnectionBanner
+              deviceId={pairing.deviceId}
+              kept={
+                snapshot
+                  ? L('下面是断开前的内容。', 'Below is what was here before the connection dropped.')
+                  : undefined
+              }
+            />
             {error && <Banner tone="danger">{error}</Banner>}
             {retryError && <Banner tone="danger">{retryError}</Banner>}
             {!snapshot && !error && (
               <div className="flex items-center justify-center gap-2 py-16 text-meta text-fg-muted">
-                <Spinner /> 正在加载…
+                <Spinner /> {L('正在加载…', 'Loading…')}
               </div>
             )}
             {view.before && (
               <button
                 type="button"
-                onClick={() => load('加载更早的消息', loadOlder)}
+                onClick={() => load(L('加载更早的消息失败', "Couldn't load earlier messages"), loadOlder)}
                 className="self-center rounded-full bg-subtle px-3 py-1.5 text-meta text-fg-secondary"
               >
-                加载更早的消息
+                {L('加载更早的消息', 'Load earlier messages')}
               </button>
             )}
             {entries.map((entry, i) => {
@@ -251,7 +305,7 @@ export function SessionScreen({
                     last={i === entries.length - 1}
                     waiting={!!pending}
                     truncated={view.truncated}
-                    onDetail={id => load('查看完整内容', () => detail(id))}
+                    onDetail={id => load(L('查看完整内容失败', "Couldn't load the full content"), () => detail(id))}
                     actions={actions}
                   />
                 </div>
@@ -263,7 +317,7 @@ export function SessionScreen({
         <div className="chat-fade" />
         <button
           type="button"
-          aria-label="回到最新"
+          aria-label={L('回到最新', 'Jump to latest')}
           onClick={toBottom}
           className={cn(
             'absolute right-4 bottom-3 flex size-10 items-center justify-center rounded-full border border-line bg-popover text-fg-secondary shadow-popover transition-all',

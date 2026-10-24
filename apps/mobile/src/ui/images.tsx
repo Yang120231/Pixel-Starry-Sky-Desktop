@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import { ImageIcon, ImagePlus, X } from 'lucide-react'
 import { ActionSheet } from './sheet'
 import { Spinner, cn } from './index'
+import { L } from '@/i18n'
 
 /** 加图片：点了选「拍照」或「从相册选」（App 里只有带 capture 的输入框才直接开相机） */
 export function AttachButton({ onFiles, disabled }: { onFiles(files: File[]): void; disabled?: boolean }) {
@@ -19,7 +20,7 @@ export function AttachButton({ onFiles, disabled }: { onFiles(files: File[]): vo
     <>
       <button
         type="button"
-        aria-label="添加图片"
+        aria-label={L('添加图片', 'Add image')}
         disabled={disabled}
         onClick={() => setMenu(true)}
         className="mb-0.5 flex size-9 shrink-0 items-center justify-center rounded-full text-fg-muted active:bg-hover disabled:opacity-40"
@@ -30,11 +31,11 @@ export function AttachButton({ onFiles, disabled }: { onFiles(files: File[]): vo
       <input ref={album} type="file" accept="image/*" multiple hidden onChange={e => picked(e.target)} />
       {menu && (
         <ActionSheet
-          title="添加图片（最多 5 张，会压缩后发送）"
+          title={L('添加图片（最多 5 张，会压缩后发送）', 'Add images (up to 5, compressed before sending)')}
           onClose={() => setMenu(false)}
           actions={[
-            { label: '拍照', onSelect: () => camera.current?.click() },
-            { label: '从相册选', onSelect: () => album.current?.click() },
+            { label: L('拍照', 'Take photo'), onSelect: () => camera.current?.click() },
+            { label: L('从相册选', 'Choose from library'), onSelect: () => album.current?.click() },
           ]}
         />
       )}
@@ -60,7 +61,7 @@ export function AttachmentStrip({
           <img src={i.src} alt="" className="size-16 rounded-xl border border-line-subtle object-cover" />
           <button
             type="button"
-            aria-label="删掉这张图片"
+            aria-label={L('删掉这张图片', 'Remove this image')}
             onClick={() => onRemove(i.id)}
             className="absolute -top-1.5 -right-1.5 flex size-6 items-center justify-center rounded-full bg-fg text-app shadow"
           >
@@ -102,7 +103,7 @@ export function ImageTiles({
         <button
           key={t.key}
           type="button"
-          aria-label="查看图片"
+          aria-label={L('查看图片', 'View image')}
           onClick={() => onOpen(i)}
           className="relative flex size-20 items-center justify-center overflow-hidden rounded-xl border border-line-subtle bg-subtle text-fg-faint active:opacity-80"
         >
@@ -127,7 +128,7 @@ export function ImageViewer({ src, onClose }: { src: string; onClose(): void }) 
       <img src={src} alt="" className="max-h-full max-w-full object-contain" />
       <button
         type="button"
-        aria-label="关闭"
+        aria-label={L('关闭', 'Close')}
         onClick={onClose}
         className="absolute top-[max(env(safe-area-inset-top),12px)] right-3 flex size-10 items-center justify-center rounded-full bg-white/15 text-white"
       >

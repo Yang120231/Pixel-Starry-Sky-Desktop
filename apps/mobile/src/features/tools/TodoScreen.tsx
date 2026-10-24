@@ -5,6 +5,7 @@ import { Check, Circle, CircleDot, Flag, ListChecks, Plus } from 'lucide-react'
 import type { TodoStep } from '@pixelsky/protocol'
 import { ago } from '@/data/tasks'
 import { callTool, toolError, useToolData, type ManualTask, type TaskState, type TaskStatus } from '@/data/tools'
+import { L } from '@/i18n'
 import { Banner, Empty, Section, Spinner, cn } from '@/ui'
 import { ActionSheet, type SheetAction } from '@/ui/sheet'
 import { Loading, ToolFrame, type ToolProps } from './common'
@@ -12,11 +13,11 @@ import { Loading, ToolFrame, type ToolProps } from './common'
 /** 已完成先列几条 */
 const DONE_STEP = 10
 
-const GROUPS: readonly { status: TaskStatus; title: string }[] = [
-  { status: 'review', title: '待验收' },
-  { status: 'in_progress', title: '进行中' },
-  { status: 'pending', title: '待办' },
-  { status: 'completed', title: '已完成' },
+const groups = (): readonly { status: TaskStatus; title: string }[] => [
+  { status: 'review', title: L('待验收', 'To review') },
+  { status: 'in_progress', title: L('进行中', 'In progress') },
+  { status: 'pending', title: L('待办', 'To do') },
+  { status: 'completed', title: L('已完成', 'Done') },
 ]
 
 export function TodoScreen(tool: ToolProps) {
@@ -50,14 +51,17 @@ export function TodoScreen(tool: ToolProps) {
 
   const actions = (task: ManualTask): SheetAction[] => [
     ...(task.status !== 'in_progress' && task.status !== 'completed'
-      ? [{ label: '开始做', onSelect: () => setStatus(task, 'in_progress') }]
+      ? [{ label: L('开始做', 'Start'), onSelect: () => setStatus(task, 'in_progress') }]
       : []),
     ...(task.status !== 'completed'
-      ? [{ label: '标记完成', onSelect: () => setStatus(task, 'completed') }]
-      : [{ label: '重新打开', onSelect: () => setStatus(task, 'pending') }]),
+      ? [{ label: L('标记完成', 'Mark as done'), onSelect: () => setStatus(task, 'completed') }]
+      : [{ label: L('重新打开', 'Reopen'), onSelect: () => setStatus(task, 'pending') }]),
     {
-      label: '交给 AI',
-      hint: '在这个项目里新建会话，任务内容先放进输入框',
+      label: L('交给 AI', 'Hand to AI'),
+      hint: L(
+        '在这个项目里新建会话，任务内容先放进输入框',
+        'Start a new conversation in this project with the task in the input box',
+      ),
       onSelect: () => {
         if (task.status === 'pending') setStatus(task, 'in_progress')
         tool.onNewSession(tool.project.id, task.note.trim() ? `${task.title}\n\n${task.note.trim()}` : task.title)
@@ -68,7 +72,7 @@ export function TodoScreen(tool: ToolProps) {
   return (
     <ToolFrame
       tool={tool}
-      title="任务"
+      title={L('任务', 'Tasks')}
       loading={state.loading}
       onRefresh={state.reload}
       footer={
@@ -85,12 +89,12 @@ export function TodoScreen(tool: ToolProps) {
               onChange={e => setTitle(e.target.value)}
               maxLength={200}
               enterKeyHint="done"
-              placeholder="添加待办…"
+              placeholder={L('添加待办…', 'Add a to-do…')}
               className="min-h-11 min-w-0 flex-1 rounded-xl border border-line-composer bg-surface px-3 text-prose outline-none focus:border-line-composer-focus"
             />
             <button
               type="submit"
-              aria-label="添加"
+              aria-label={L('添加', 'Add')}
               disabled={busy || !title.trim()}
               className={cn(
                 'flex size-11 shrink-0 items-center justify-center rounded-full',
@@ -109,9 +113,13 @@ export function TodoScreen(tool: ToolProps) {
         <div className="flex flex-col gap-5 pt-1 pb-6">
           {(error ?? state.error) && <Banner tone="danger">{error ?? state.error}</Banner>}
           {!data.tasks.length && !data.plans.length && (
-            <Empty icon={ListChecks} title="还没有任务" body="在下面添加一条待办，或者让 AI 做个计划。" />
+            <Empty
+              icon={ListChecks}
+              title={L('还没有任务', 'No tasks yet')}
+              body={L('在下面添加一条待办，或者让 AI 做个计划。', 'Add a to-do below, or ask AI to make a plan.')}
+            />
           )}
-          {GROUPS.map(({ status, title: heading }) => {
+          {groups().map(({ status, title: heading }) => {
             let list = data.tasks.filter(t => t.status === status)
             if (!list.length) return null
             const done = status === 'completed'
@@ -143,7 +151,10 @@ export function TodoScreen(tool: ToolProps) {
                     onClick={() => setDoneLimit(n => n + DONE_STEP)}
                     className="flex min-h-12 w-full items-center justify-center border-t border-line-subtle text-meta text-accent-fg active:bg-hover"
                   >
-                    显示更多（还有 {list.length - shown.length} 条）
+                    {L(
+                      `显示更多（还有 ${list.length - shown.length} 条）`,
+                      `Show more (${list.length - shown.length} left)`,
+                    )}
                   </button>
                 )}
               </Section>
@@ -154,7 +165,8 @@ export function TodoScreen(tool: ToolProps) {
               key={plan.sessionId}
               title={
                 <>
-                  AI 计划 · <span className="truncate">{plan.title || '未命名会话'}</span>
+                  {L('AI 计划', 'AI plan')} ·{' '}
+                  <span className="truncate">{plan.title || L('未命名会话', 'Untitled conversation')}</span>
                 </>
               }
             >
@@ -196,7 +208,11 @@ function TaskRow({
         type="button"
         role="checkbox"
         aria-checked={done}
-        aria-label={done ? `重新打开「${task.title}」` : `完成「${task.title}」`}
+        aria-label={
+          done
+            ? L(`重新打开「${task.title}」`, `Reopen “${task.title}”`)
+            : L(`完成「${task.title}」`, `Complete “${task.title}”`)
+        }
         disabled={!canAct}
         onClick={onToggle}
         className="flex size-12 shrink-0 items-center justify-center text-fg-muted disabled:opacity-60"
@@ -223,7 +239,7 @@ function TaskRow({
         </span>
         {task.note && <span className="line-clamp-2 text-meta text-fg-muted">{task.note}</span>}
         <span className="text-label text-fg-faint">
-          {task.due ? `截止 ${task.due} · ` : ''}
+          {task.due ? L(`截止 ${task.due} · `, `Due ${task.due} · `) : ''}
           {ago(done ? (task.completedAt ?? task.updatedAt) : task.updatedAt)}
         </span>
       </button>

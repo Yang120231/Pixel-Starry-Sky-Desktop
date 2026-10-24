@@ -72,8 +72,23 @@
     </style>
   </head>
   <body>
-    <h1>没有网络</h1>
-    <p>连不上像素星空。检查一下手机的网络，好了再点重试。已经配好的电脑不会丢。</p>
-    <button type="button" onclick="location.reload()">重试</button>
+    <h1 id="t">没有网络</h1>
+    <p id="b">连不上像素星空。检查一下手机的网络，好了再点重试。已经配好的电脑不会丢。</p>
+    <button id="r" type="button" onclick="location.reload()">重试</button>
+    <script>
+      // 跟手机版的界面语言（src/i18n/index.ts 存在 localStorage）；没设过按系统语言
+      try {
+        var pref = localStorage.getItem('pixelsky.mobile.lang')
+        var en = pref ? pref === 'en' : !/^zh/i.test(navigator.language || '')
+        if (en) {
+          document.documentElement.lang = 'en'
+          document.title = 'No network · PixelSky'
+          document.getElementById('t').textContent = 'No network'
+          document.getElementById('b').textContent =
+            "Can't reach PixelSky. Check your phone's network, then tap Retry. Your paired computers are kept."
+          document.getElementById('r').textContent = 'Retry'
+        }
+      } catch (e) {}
+    </script>
   </body>
 </html>

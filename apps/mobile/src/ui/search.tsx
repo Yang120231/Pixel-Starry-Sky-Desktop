@@ -1,18 +1,26 @@
 // 搜索框、项目筛选、对话内容的搜索结果（docs/mobile-remote.md §17 第 6 项、§18.3）
+import type { ReactNode } from 'react'
 import { MessageSquareText, Search, X } from 'lucide-react'
 import type { SearchResult } from '@pixelsky/protocol'
 import { Section, Spinner, cn } from './index'
+import { L } from '@/i18n'
 
 export function SearchField({
   value,
   onChange,
   placeholder,
   className = 'mx-4',
+  keyTarget,
+  hint,
 }: {
   value: string
   onChange(value: string): void
   placeholder: string
   className?: string
+  /** 快捷键聚焦用（platform/keys 的 focusTarget） */
+  keyTarget?: 'search'
+  /** 没输入时右边的提示（快捷键键帽） */
+  hint?: ReactNode
 }) {
   return (
     <label
@@ -28,10 +36,17 @@ export function SearchField({
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
         enterKeyHint="search"
+        {...(keyTarget ? { 'data-key-target': keyTarget } : {})}
         className="min-w-0 flex-1 bg-transparent text-ui text-fg outline-none placeholder:text-fg-faint [&::-webkit-search-cancel-button]:hidden"
       />
+      {!value && hint}
       {value && (
-        <button type="button" aria-label="清除" onClick={() => onChange('')} className="-mr-1 p-1 text-fg-faint">
+        <button
+          type="button"
+          aria-label={L('清除', 'Clear')}
+          onClick={() => onChange('')}
+          className="-mr-1 p-1 text-fg-faint"
+        >
           <X size={16} />
         </button>
       )}
@@ -101,7 +116,7 @@ export function ContentResults({
       className={className}
       title={
         <>
-          <MessageSquareText size={13} /> 对话内容
+          <MessageSquareText size={13} /> {L('对话内容', 'Conversation content')}
           {loading && <Spinner size={11} className="text-fg-faint" />}
         </>
       }
@@ -116,7 +131,7 @@ export function ContentResults({
             i > 0 && 'border-t border-line-subtle',
           )}
         >
-          <span className="line-clamp-1 text-ui">{r.title.trim() || '未命名会话'}</span>
+          <span className="line-clamp-1 text-ui">{r.title.trim() || L('未命名会话', 'Untitled conversation')}</span>
           <span className="line-clamp-2 text-meta text-fg-muted">
             {r.snippet.map((f, j) =>
               f.match ? (
@@ -130,17 +145,19 @@ export function ContentResults({
           </span>
           <span className="text-label text-fg-faint">
             {r.projectName} · {when(r.updatedAt)}
-            {(r.sessionMatches ?? 0) > 1 && <> · {r.sessionMatches} 处</>}
+            {(r.sessionMatches ?? 0) > 1 && <> · {L(`${r.sessionMatches} 处`, `${r.sessionMatches} matches`)}</>}
           </span>
         </button>
       ))}
       {!hits.length && (
         <div className="flex items-center justify-center gap-2 py-4 text-meta text-fg-muted">
-          <Spinner size={12} /> 正在搜对话内容…
+          <Spinner size={12} /> {L('正在搜对话内容…', 'Searching conversations…')}
         </div>
       )}
       {truncated && (
-        <p className="border-t border-line-subtle px-4 py-2.5 text-label text-fg-faint">结果较多，只显示最相关的</p>
+        <p className="border-t border-line-subtle px-4 py-2.5 text-label text-fg-faint">
+          {L('结果较多，只显示最相关的', 'Many results; showing the most relevant')}
+        </p>
       )}
     </Section>
   )

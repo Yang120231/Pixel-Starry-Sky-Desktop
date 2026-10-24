@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Check, Copy } from 'lucide-react'
 import { loadHighlighter, loadedHighlighter, type Highlighter } from './highlight'
 import { cn } from './index'
+import { L } from '@/i18n'
 
 /** 复制文字；剪贴板接口不让用时（局域网 http 不是安全上下文、个别 WebView）退回老办法 */
 export async function copyText(text: string): Promise<boolean> {
@@ -30,7 +31,15 @@ export async function copyText(text: string): Promise<boolean> {
 }
 
 /** 「复制」按钮：点了显示「已复制」一会儿 */
-export function CopyButton({ text, label = '复制', className }: { text: string; label?: string; className?: string }) {
+export function CopyButton({
+  text,
+  label = L('复制', 'Copy'),
+  className,
+}: {
+  text: string
+  label?: string
+  className?: string
+}) {
   const [done, setDone] = useState<boolean | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
   useEffect(() => () => clearTimeout(timer.current), [])
@@ -51,7 +60,7 @@ export function CopyButton({ text, label = '复制', className }: { text: string
       )}
     >
       {done ? <Check size={14} /> : <Copy size={14} />}
-      {done ? '已复制' : done === false ? '复制失败' : label}
+      {done ? L('已复制', 'Copied') : done === false ? L('复制失败', 'Copy failed') : label}
     </button>
   )
 }
@@ -73,7 +82,7 @@ export function CodeBlock({ code, lang }: { code: string; lang: string | null })
   return (
     <div className="code-block overflow-hidden rounded-lg border border-line-subtle bg-subtle">
       <div className="flex items-center justify-between border-b border-line-subtle pl-3 text-label text-fg-faint">
-        <span className="truncate font-mono">{lang || '代码'}</span>
+        <span className="truncate font-mono">{lang || L('代码', 'Code')}</span>
         <CopyButton text={code} />
       </div>
       <pre>

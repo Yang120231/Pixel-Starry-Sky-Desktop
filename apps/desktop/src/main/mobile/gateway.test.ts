@@ -258,7 +258,7 @@ describe('MobileGateway calls', () => {
     await p.call('engine:createSession', { projectId: 'proj', engine: 'codex', platform: {}, provider: {}, fast: true })
     await p.call('engine:send', 's1', { text: 'hi', clientMessageId: 'c1', settings: { model: 'x' } })
     expect(t.calls.slice(-2)).toEqual([
-      ['engine:createSession', [{ projectId: 'proj', engine: 'codex' }], 'mobile:p1'],
+      ['engine:createSession', [{ projectId: 'proj', engine: 'codex', fast: true }], 'mobile:p1'],
       ['engine:send', ['s1', { text: 'hi', clientMessageId: 'c1' }], 'mobile:p1'],
     ])
     await expect(p.call('engine:deleteSession', 's1')).rejects.toThrow('MOBILE_UNSUPPORTED')
@@ -647,7 +647,7 @@ describe('MobileGateway session settings', () => {
     return { t, calls, mutations: () => calls.filter(c => !['engine:sessions', 'engine:catalog'].includes(c[0])) }
   }
 
-  it('passes only the permission mode, model, effort and thinking summaries of an update, and marks it as from the phone', async () => {
+  it('passes only the permission mode, model, effort, thinking summaries and fast mode of an update, and marks it as from the phone', async () => {
     const { t, calls, mutations } = settingsSetup()
     const p = await paired(t)
     await p.call('engine:updateSession', 'cc', {
@@ -665,7 +665,11 @@ describe('MobileGateway session settings', () => {
     expect(mutations()).toEqual([
       [
         'engine:updateSession',
-        ['cc', { permissionMode: 'edits', model: 'opus', effort: 'high', thinkingSummaries: true }, 'mobile'],
+        [
+          'cc',
+          { permissionMode: 'edits', model: 'opus', effort: 'high', thinkingSummaries: true, fast: true },
+          'mobile',
+        ],
       ],
     ])
     // 模型对着这个会话的引擎查目录
@@ -690,7 +694,8 @@ describe('MobileGateway session settings', () => {
     await bad('cc', { model: 'gpt-x' })
     await bad('cc', { model: '' })
     await bad('cc', { model: 5 })
-    await bad('cc', { engine: 'codex', platform: null, fast: true })
+    await bad('cc', { fast: 'yes' })
+    await bad('cc', { engine: 'codex', platform: null, ultracode: true })
     await bad('cc', undefined)
     await bad('', { model: 'opus' })
     await expect(p.call('engine:updateSession', 'nope', { model: 'opus' })).rejects.toThrow('MOBILE_NOT_FOUND')
@@ -700,6 +705,7 @@ describe('MobileGateway session settings', () => {
     expect(mutations()).toHaveLength(1)
     // 选了下一个引擎还没生效：按下一个引擎的能力核对（像素星空没有思考摘要）
     await bad('next', { thinkingSummaries: true })
+    await bad('next', { fast: true })
     // 自定义接口的会话：模型不能从手机改（目录对不上），别的照常
     await bad('api', { model: 'opus' })
     await bad('api', { model: null })
@@ -759,6 +765,7 @@ describe('MobileGateway session settings', () => {
             model: 'opus',
             effort: 'low',
             thinkingSummaries: false,
+            fast: true,
           },
         ],
       ],
@@ -814,7 +821,7 @@ describe('MobileGateway session settings', () => {
     expect(calls.filter(c => c[0] === 'engine:catalog')).toEqual([['engine:catalog', ['codex']]])
   })
 
-  it('checks the engine capability table: permission modes, efforts, thinking summaries', () => {
+  it('checks the engine capability table: permission modes, efforts, thinking summaries, fast mode', () => {
     const codex = ENGINES.codex.caps
     expect(() => checkSettings(codex, { permissionMode: 'plan', effort: 'ultra' })).not.toThrow()
     // 引擎没有计划模式（旧版 Codex 的情形）：不让选
@@ -823,7 +830,12 @@ describe('MobileGateway session settings', () => {
     expect(() => checkSettings(noPlan, { permissionMode: 'edits' })).not.toThrow()
     expect(() => checkSettings(ENGINES.pixel.caps, { thinkingSummaries: true })).toThrow('MOBILE_BAD_ARGUMENT')
     expect(() => checkSettings(ENGINES.claude.caps, { effort: 'ultra' })).toThrow('MOBILE_BAD_ARGUMENT')
-    expect(phoneSettings({ permissionMode: 'ask', fast: true, engine: 'codex' })).toEqual({ permissionMode: 'ask' })
+    expect(() => checkSettings(ENGINES.pixel.caps, { fast: true })).toThrow('MOBILE_BAD_ARGUMENT')
+    expect(() => checkSettings(codex, { fast: true })).not.toThrow()
+    expect(phoneSettings({ permissionMode: 'ask', fast: true, ultracode: true, engine: 'codex' })).toEqual({
+      permissionMode: 'ask',
+      fast: true,
+    })
   })
 })
 

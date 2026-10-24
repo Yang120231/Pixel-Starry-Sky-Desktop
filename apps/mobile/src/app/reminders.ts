@@ -5,6 +5,7 @@ import type { SessionSummary } from '@pixelsky/protocol'
 import { connections } from '@/connection'
 import { reminders } from '@/data/notify'
 import { inApp, keepAlive, notify, onAppState, onNotificationTap, prepareNotifications } from '@/platform'
+import { L } from '@/i18n'
 
 export function useReminders(open: (deviceId: string, sessionId: string) => void): void {
   const openRef = useRef(open)
@@ -23,7 +24,10 @@ export function useReminders(open: (deviceId: string, sessionId: string) => void
       const desktop = connections.list().find(p => p.deviceId === deviceId)?.desktopName ?? ''
       const many = connections.list().length > 1
       for (const r of found)
-        void notify(r.title, many && desktop ? `${r.body}（${desktop}）` : r.body, { deviceId, sessionId: r.sessionId })
+        void notify(r.title, many && desktop ? L(`${r.body}（${desktop}）`, `${r.body} (${desktop})`) : r.body, {
+          deviceId,
+          sessionId: r.sessionId,
+        })
     }
     connections.eventListeners.add(onEvent)
     // 刚配对好的电脑：从这时起要通知权限

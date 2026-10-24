@@ -1,5 +1,6 @@
 // 任务列表分组（docs/mobile-remote.md §8.3）：等你处理、运行中、最近；搜索和按项目筛选（§17 第 6 项）
 import { ENGINES, containsTerms, searchTerms, type ProjectRecord, type SessionSummary } from '@pixelsky/protocol'
+import { L } from '@/i18n'
 
 export interface TaskGroups {
   waiting: SessionSummary[]
@@ -47,25 +48,32 @@ export function sessionList(sessions: readonly SessionSummary[], limit = RECENT_
 export function sessionStatus(
   s: SessionSummary,
 ): { tone: 'danger' | 'online' | 'warn'; text: string; pulse?: boolean } | null {
-  if (s.state === 'waiting') return { tone: 'danger', text: '等你处理' }
-  if (s.state === 'starting') return { tone: 'online', text: '正在启动…', pulse: true }
-  if (s.state === 'running') return { tone: 'online', text: '正在回复…', pulse: true }
-  if (s.record.lastOutcome === 'failed') return { tone: 'warn', text: '出错了' }
+  if (s.state === 'waiting') return { tone: 'danger', text: L('等你处理', 'Needs you') }
+  if (s.state === 'starting') return { tone: 'online', text: L('正在启动…', 'Starting…'), pulse: true }
+  if (s.state === 'running') return { tone: 'online', text: L('正在回复…', 'Replying…'), pulse: true }
+  if (s.record.lastOutcome === 'failed') return { tone: 'warn', text: L('出错了', 'Error') }
   return null
 }
 
 /** 列表里显示的标题：没有标题时用「未命名会话」 */
 export function taskTitle(s: SessionSummary): string {
-  return s.record.title.trim() || '未命名会话'
+  return s.record.title.trim() || L('未命名会话', 'Untitled conversation')
 }
 
 /** 「3 分钟前」这样的相对时间 */
 export function ago(at: number, now = Date.now()): string {
   const s = Math.max(0, Math.round((now - at) / 1000))
-  if (s < 60) return '刚刚'
-  if (s < 3600) return `${Math.floor(s / 60)} 分钟前`
-  if (s < 86400) return `${Math.floor(s / 3600)} 小时前`
-  return `${Math.floor(s / 86400)} 天前`
+  if (s < 60) return L('刚刚', 'Just now')
+  if (s < 3600) {
+    const n = Math.floor(s / 60)
+    return L(`${n} 分钟前`, `${n} min ago`)
+  }
+  if (s < 86400) {
+    const n = Math.floor(s / 3600)
+    return L(`${n} 小时前`, n === 1 ? '1 hour ago' : `${n} hours ago`)
+  }
+  const n = Math.floor(s / 86400)
+  return L(`${n} 天前`, n === 1 ? '1 day ago' : `${n} days ago`)
 }
 
 /**
