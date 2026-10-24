@@ -1,6 +1,7 @@
 import { createServer, type Server } from 'node:http'
 import { once } from 'node:events'
 import { randomUUID } from 'node:crypto'
+import { setTimeout as delay } from 'node:timers/promises'
 import { describeError, logger, type CompactionRequestReport } from '@pixelsky/engine'
 import type { SessionRecord } from '@pixelsky/protocol'
 import type { ResolvedProvider } from '../core/providers/store'
@@ -104,6 +105,32 @@ export function withoutLongContextSuffix(body: string): string {
 const COUNT_TOKENS_MISSING = new Set([404, 405, 501])
 const COUNT_TOKENS_RECHECK_MS = 60 * 60_000
 
+/**
+ * 平台的「在途预留」冲突（docs/ui/queue-jump-balance-403.md）：Sub2api 给每个请求先按估算占住一笔余额，
+ * 被中断的请求要等后台计费扣完才释放；紧接着的请求（插队、停了马上再发）会因为「余额 − 在途 < 估算」被拒，
+ * 回 403 billing_error「insufficient balance」，过几秒就好。同一个平台账号最近这么久内断开过请求，才认为是这种情况
+ */
+export const RESERVATION_WINDOW_MS = 20_000
+/** 认出预留冲突后隔这么久重发一次（只重发一次；被拒的请求 Sub2api 没转发，不扣费） */
+export const RESERVATION_RETRY_MS = 2_500
+
+/** 等 ms；引擎断开（signal）时立刻抛出，交给外面按「引擎先断开了连接」收尾 */
+const sleep = (ms: number, signal: AbortSignal): Promise<void> => delay(ms, undefined, { signal })
+
+/**
+ * 是不是 Sub2api 在途预留拒绝的回应：403 且错误文字正好是「insufficient balance」（Messages 和 Responses 的错误体都认）。
+ * 余额真的用完（鉴权层）写的是「Insufficient account balance」，不算；余额低于预留门槛回的是同一句，分不出来，只多重发一次
+ */
+export function reservationConflict(status: number, text: string): boolean {
+  if (status !== 403) return false
+  try {
+    const message = (JSON.parse(text) as { error?: { message?: unknown } }).error?.message
+    return typeof message === 'string' && message.trim().toLowerCase() === 'insufficient balance'
+  } catch {
+    return false
+  }
+}
+
 export interface GatewaySession {
   secret: string
   recordId: string
@@ -144,9 +171,17 @@ export function platformGateway(options: {
   ) => ((requestId: string, model: string, chargeId?: string) => void | Promise<void>) | undefined
   /** Claude Code 压缩请求的实时进度（接通、首字、已输出多少、上游报错），按会话报给宿主 */
   compaction?: (record: SessionRecord, report: CompactionRequestReport) => void
+  /** 在途预留冲突的等待（测试时缩短）：最近断开过的时间窗口、重发前等多久 */
+  reservationRetry?: { windowMs: number; delayMs: number }
 }): Server {
   /** 没有计数接口的自定义接口地址 → 发现的时间；过一小时再试一次（接口可能补上了） */
   const noCountTokens = new Map<string, number>()
+  /** 平台账号 → 最近一次引擎断开平台请求的时间（那个请求的在途预留可能还没释放） */
+  const recentAborts = new Map<string, number>()
+  const reservationRetry = options.reservationRetry ?? {
+    windowMs: RESERVATION_WINDOW_MS,
+    delayMs: RESERVATION_RETRY_MS,
+  }
   /** 上游的缓存用量口径（GitHub #34）：按线路 / 接口 + 模型记住，含缓存的改回标准口径 */
   const usageFix = new CacheUsageFix()
   return createServer(async (req, res) => {
@@ -162,6 +197,11 @@ export function platformGateway(options: {
     let sessionId: string | null = null
     /** 已知的、不用每次记警告的失败（自定义接口没有计数接口） */
     let quiet = false
+    /** 已经发往平台的请求属于哪个平台账号：引擎中途断开时记下（Sub2api 那边可能还占着它的在途预留） */
+    let sentAccount: string | null = null
+    const noteAbort = (): void => {
+      if (sentAccount) recentAborts.set(sentAccount, Date.now())
+    }
     /** 是压缩请求时读出进度报给会话 */
     let tap: CompactionTap | null = null
     const startTap = (record: SessionRecord, body: string, requested: unknown): CompactionTap | null => {
@@ -294,8 +334,10 @@ export function platformGateway(options: {
       if (tail.length) res.write(tail)
       res.end()
       tap?.end()
-      if (abort.signal.aborted) log.info('引擎先断开了连接', trace())
-      else if (upstream.status >= 400 && !quiet) log.warn('上游返回错误', trace())
+      if (abort.signal.aborted) {
+        noteAbort()
+        log.info('引擎先断开了连接', trace())
+      } else if (upstream.status >= 400 && !quiet) log.warn('上游返回错误', trace())
       else {
         const usage = chat && upstream.ok ? chatUsage(chatTail) : null
         log.debug('请求完成', { ...trace(), ...(usage ? { usage } : {}) })
@@ -512,12 +554,26 @@ export function platformGateway(options: {
       tap = startTap(record, body, parsed.model)
       // 先记下再发：记不上（SSH 断了）就不发，免得扣了费却对不上这一轮
       await trackRequest?.(requestId, model)
-      const upstream = await options.fetch(responses ? '/v1/platform/responses' : '/v1/platform/messages', {
-        method: 'POST',
-        headers,
-        body,
-        signal: abort.signal,
-      })
+      const send = (): Promise<Response> =>
+        options.fetch(responses ? '/v1/platform/responses' : '/v1/platform/messages', {
+          method: 'POST',
+          headers,
+          body,
+          signal: abort.signal,
+        })
+      sentAccount = platform.account
+      let upstream = await send()
+      // 刚断开过一个请求（插队、停了马上再发）就被在途预留拒了：旧请求的预留几秒后才释放，等一下原样重发一次，
+      // 引擎看不到这次拒绝（docs/ui/queue-jump-balance-403.md）。还被拒就照常转给引擎
+      const aborted = recentAborts.get(platform.account)
+      if (upstream.status === 403 && aborted !== undefined && Date.now() - aborted <= reservationRetry.windowMs) {
+        const text = await upstream.text()
+        if (reservationConflict(upstream.status, text)) {
+          log.info('平台的在途预留还没释放，稍后重发一次', { ...trace(), abortedMsAgo: Date.now() - aborted })
+          await sleep(reservationRetry.delayMs, abort.signal)
+          upstream = await send()
+        } else upstream = new Response(text, { status: upstream.status, headers: upstream.headers })
+      }
       // Sub2api 不认我们的 ID，调用记录按它自己生成、回在响应头里的 ID 记（docs/cloud-service.md §4.9）
       const chargeId = upstream.headers.get('x-client-request-id')
       if (chargeId && chargeId !== requestId && /^[a-f0-9-]{36}$/.test(chargeId))
@@ -528,6 +584,7 @@ export function platformGateway(options: {
     } catch (error) {
       if (abort.signal.aborted) tap?.end()
       else tap?.fail((error as Error).message || '上游请求失败')
+      if (abort.signal.aborted) noteAbort()
       if (abort.signal.aborted) log.info('引擎先断开了连接', trace(error))
       else if (res.headersSent) log.warn('上游连接中途断开', trace(error))
       else if ((error as { code?: unknown }).code !== 'AUTH_EXPIRED') log.warn('上游请求失败', trace(error))

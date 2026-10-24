@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Server } from 'node:http'
 import type { SessionRecord } from '@pixelsky/protocol'
 import { CLAUDE_COMPACT_MARKER, setLogSink, type CompactionRequestReport } from '@pixelsky/engine'
-import { eventEnd, platformGateway } from './gateway'
+import { eventEnd, platformGateway, reservationConflict } from './gateway'
 import type { ResolvedProvider } from '../core/providers/store'
 let server: Server
 afterEach(() => {
@@ -767,5 +767,148 @@ describe('像素星空子智能体单独的站点（docs/ui/subagent-routing.md�
     current = null
     expect((await post('/v1/chat/completions', 'sub-secret', 'deepseek-chat')).status).toBe(401)
     expect(platform).toHaveLength(1)
+  })
+})
+
+describe('平台的在途预留冲突：刚断开过请求就被拒的，等一下重发一次（docs/ui/queue-jump-balance-403.md）', () => {
+  const CONFLICT = JSON.stringify({ type: 'error', error: { type: 'billing_error', message: 'insufficient balance' } })
+  const conflict = () => new Response(CONFLICT, { status: 403 })
+  const RETRY_LOG = '平台的在途预留还没释放，稍后重发一次'
+  afterEach(() => setLogSink(null))
+
+  it('认得出：只认 403 + 「insufficient balance」，余额真的用完（Insufficient account balance）不算', () => {
+    expect(reservationConflict(403, CONFLICT)).toBe(true)
+    // Responses 的错误体
+    expect(reservationConflict(403, JSON.stringify({ error: { message: 'insufficient balance' } }))).toBe(true)
+    expect(
+      reservationConflict(
+        403,
+        JSON.stringify({ type: 'error', error: { type: 'billing_error', message: 'Insufficient account balance' } }),
+      ),
+    ).toBe(false)
+    expect(reservationConflict(429, CONFLICT)).toBe(false)
+    expect(reservationConflict(403, 'insufficient balance')).toBe(false)
+  })
+
+  /**
+   * 起网关：上游按 queue 排好的回复依次回；没排的回一个一直在输出的流（引擎断开时报错，像真实的 fetch）。
+   * interrupt() 像插队那样发一个请求再断开它，等网关记下断开
+   */
+  async function setup(delayMs = 10, windowMs = 5_000) {
+    const logs: string[] = []
+    setLogSink({ enabled: () => true, write: (_level, _scope, message) => logs.push(message) })
+    const replies: Array<() => Response> = []
+    let calls = 0
+    server = platformGateway({
+      sessions: new Map([['s', { recordId: 's', secret: 'local-secret' }]]),
+      record: () => ({ id: 's', engine: 'claude', platform: { groupId: '2', account: 'user' } }) as SessionRecord,
+      account: () => 'user',
+      fetch: async (_path, init) => {
+        calls++
+        const next = replies.shift()
+        if (next) return next()
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('event: message_start\n\n'))
+              init.signal?.addEventListener('abort', () => controller.error(new Error('aborted')))
+            },
+          }),
+          { headers: { 'Content-Type': 'text/event-stream' } },
+        )
+      },
+      reservationRetry: { windowMs, delayMs },
+    })
+    server.listen(0, '127.0.0.1')
+    await once(server, 'listening')
+    const url = 'http://127.0.0.1:' + (server.address() as { port: number }).port + '/v1/messages'
+    const post = (signal?: AbortSignal) =>
+      fetch(url, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer local-secret' },
+        body: JSON.stringify({ model: 'claude-sonnet-5' }),
+        signal,
+      })
+    const until = async (message: string) => {
+      for (let i = 0; i < 200 && !logs.includes(message); i++) await new Promise(r => setTimeout(r, 5))
+    }
+    const interrupt = async () => {
+      const ctl = new AbortController()
+      const res = await post(ctl.signal)
+      await res.body!.getReader().read()
+      ctl.abort()
+      await until('引擎先断开了连接')
+    }
+    return {
+      post,
+      interrupt,
+      until,
+      logs,
+      calls: () => calls,
+      queue: (...next: Array<() => Response>) => void replies.push(...next),
+    }
+  }
+
+  it('插队：断开 A 后 B 被预留拒了，网关等一下重发，引擎拿到正常的回复', async () => {
+    const gw = await setup()
+    await gw.interrupt()
+    gw.queue(conflict, () => new Response('ok'))
+    const res = await gw.post()
+    expect(res.status).toBe(200)
+    expect(await res.text()).toBe('ok')
+    expect(gw.calls()).toBe(3)
+    expect(gw.logs).toContain(RETRY_LOG)
+  })
+
+  it('最近没断开过请求：同样的 403 照常转给引擎，不重发', async () => {
+    const gw = await setup()
+    gw.queue(conflict)
+    const res = await gw.post()
+    expect(res.status).toBe(403)
+    expect(await res.json()).toMatchObject({ error: { message: 'insufficient balance' } })
+    expect(gw.calls()).toBe(1)
+    expect(gw.logs).not.toContain(RETRY_LOG)
+  })
+
+  it('只重发一次：重发还被拒就照常转给引擎；别的 403 不重发、原样转发', async () => {
+    const gw = await setup()
+    await gw.interrupt()
+    gw.queue(conflict, conflict)
+    const res = await gw.post()
+    expect(res.status).toBe(403)
+    expect(await res.json()).toMatchObject({ error: { message: 'insufficient balance' } })
+    expect(gw.calls()).toBe(3)
+
+    const other = JSON.stringify({ type: 'error', error: { type: 'permission_error', message: 'forbidden' } })
+    gw.queue(() => new Response(other, { status: 403 }))
+    const res2 = await gw.post()
+    expect(res2.status).toBe(403)
+    expect(await res2.text()).toBe(other)
+    expect(gw.calls()).toBe(4)
+  })
+
+  it('断开已经过了时间窗口：同样的 403 照常转给引擎，不重发', async () => {
+    const gw = await setup(10, 30)
+    await gw.interrupt()
+    await new Promise(r => setTimeout(r, 80))
+    gw.queue(conflict)
+    const res = await gw.post()
+    expect(res.status).toBe(403)
+    expect(gw.calls()).toBe(2)
+    expect(gw.logs).not.toContain(RETRY_LOG)
+  })
+
+  it('等重发时引擎断开：不再重发', async () => {
+    const gw = await setup(300)
+    await gw.interrupt()
+    gw.queue(conflict, () => new Response('ok'))
+    const ctl = new AbortController()
+    const pending = gw.post(ctl.signal).catch(() => null)
+    await gw.until(RETRY_LOG)
+    expect(gw.logs).toContain(RETRY_LOG)
+    ctl.abort()
+    await pending
+    await new Promise(r => setTimeout(r, 400))
+    expect(gw.calls()).toBe(2)
   })
 })
