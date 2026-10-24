@@ -1,7 +1,17 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { setCurrentLocale } from '../../../i18n/core'
 import type { GitFileChange, GitStatus } from '../../../../../shared/types/project-tools'
-import { ago, diffMode, gitSections, needsCommitAll, neighbour, sameGitDiff, splitPath, syncState } from './gitModel'
+import {
+  ago,
+  diffMode,
+  gitAbsolutePath,
+  gitSections,
+  needsCommitAll,
+  neighbour,
+  sameGitDiff,
+  splitPath,
+  syncState,
+} from './gitModel'
 
 afterEach(() => setCurrentLocale('zh-CN'))
 const f = (path: string, code: GitFileChange['code'] = 'M'): GitFileChange => ({
@@ -54,6 +64,9 @@ describe('Git 面板显示规则', () => {
     expect(diffMode('inline', 800)).toBe('inline')
   })
   it('路径拆分与「多久之前」', () => {
+    expect(gitAbsolutePath('E:\\中文 项目\\', 'textures/a.png')).toBe('E:\\中文 项目\\textures\\a.png')
+    expect(gitAbsolutePath('/home/project/', 'textures/a.png')).toBe('/home/project/textures/a.png')
+    expect(gitAbsolutePath('/', 'a.png')).toBe('/a.png')
     expect(splitPath('src/a/b.ts')).toEqual({ name: 'b.ts', dir: 'src/a' })
     expect(splitPath('b.ts')).toEqual({ name: 'b.ts', dir: '' })
     const now = 10_000_000
@@ -83,5 +96,15 @@ describe('sameGitDiff', () => {
     expect(sameGitDiff(d, { ...d, modified: 'NEW' })).toBe(false)
     expect(sameGitDiff(d, { ...d, original: null })).toBe(false)
     expect(sameGitDiff(d, { ...d, tooLarge: true })).toBe(false)
+  })
+  it('图片字节变化时刷新预览；新增和删除也算变化', () => {
+    const image = { dataUrl: 'data:image/png;base64,OLD', bytes: 3 }
+    const before = { ...d, original: null, modified: null, binary: true, images: { original: image, modified: image } }
+    expect(sameGitDiff(before, structuredClone(before))).toBe(true)
+    expect(
+      sameGitDiff(before, { ...before, images: { original: image, modified: { ...image, dataUrl: 'NEW' } } }),
+    ).toBe(false)
+    expect(sameGitDiff(before, { ...before, images: { original: image, modified: null } })).toBe(false)
+    expect(sameGitDiff(before, { ...before, images: undefined })).toBe(false)
   })
 })

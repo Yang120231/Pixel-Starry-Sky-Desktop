@@ -27,6 +27,8 @@ import { loadLanguage } from '@/features/editor/code/languages'
 import { useRemember } from '../ToolsUi'
 import type { GitArea, GitDiff, GitFileChange } from '../../../../../shared/types/project-tools'
 import { diffMode, sameGitDiff, SPLIT_MIN_WIDTH, splitPath } from './gitModel'
+import { GitImageDiff } from './GitImageDiff'
+import { imageMime } from '../../../../../shared/imageFiles'
 
 const COLLAPSE = { margin: 3, minSize: 4 }
 
@@ -232,7 +234,7 @@ export function GitDiffView({
           size={26}
           iconSize={14}
           onClick={() => jump(-1)}
-          disabled={!diff || !!same}
+          disabled={!diff || diff.binary || diff.tooLarge || !!same}
         />
         <IconButton
           icon={ChevronDown}
@@ -240,7 +242,7 @@ export function GitDiffView({
           size={26}
           iconSize={14}
           onClick={() => jump(1)}
-          disabled={!diff || !!same}
+          disabled={!diff || diff.binary || diff.tooLarge || !!same}
         />
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-line-subtle px-3 py-1.5">
@@ -251,7 +253,7 @@ export function GitDiffView({
             disabled={width < SPLIT_MIN_WIDTH}
             onChange={setPreferred}
             options={[
-              { value: 'inline', label: tr('git.diff.inline') },
+              { value: 'inline', label: tr(diff?.images ? 'git.diff.image.stacked' : 'git.diff.inline') },
               { value: 'split', label: tr('git.diff.split') },
             ]}
           />
@@ -333,9 +335,19 @@ export function GitDiffView({
           <Spinner size={13} />
           {tr('git.diff.loading')}
         </div>
+      ) : diff.images ? (
+        <GitImageDiff diff={diff} mode={mode} id={`git:${area}:${file.path}`} />
       ) : diff.binary || diff.tooLarge || same ? (
         <p className="m-3 rounded-md bg-subtle p-3 text-center text-meta text-fg-muted">
-          {tr(diff.binary ? 'git.diff.binary' : diff.tooLarge ? 'git.diff.tooLarge' : 'git.diff.same')}
+          {tr(
+            diff.tooLarge
+              ? imageMime(file.path)
+                ? 'git.diff.image.tooLarge'
+                : 'git.diff.tooLarge'
+              : diff.binary
+                ? 'git.diff.binary'
+                : 'git.diff.same',
+          )}
         </p>
       ) : (
         <DiffEditor key={`${file.path}:${area}:${mode}`} diff={diff} mode={mode} navRef={nav} />

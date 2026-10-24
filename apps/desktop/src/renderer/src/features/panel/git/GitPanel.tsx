@@ -63,6 +63,7 @@ import {
   type GitSection,
 } from './gitModel'
 import { GitDiffView } from './GitDiffView'
+import { GitFileMenu, type GitFileMenuPosition } from './GitFileMenu'
 import type { GitFileActions } from '@/features/coding/editor/gitDiffTabs'
 import { AI_COMMIT_PAD, AiCommitButton, AiCommitNote, useAiCommit } from './AiCommit'
 import { BranchMenu } from './BranchMenu'
@@ -142,6 +143,7 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
   const [message, setMessage] = useState('')
   const ai = useAiCommit({ target, demo, message, setMessage })
   const [selected, setSelected] = useState<{ area: GitArea; path: string } | null>(null)
+  const [fileMenu, setFileMenu] = useState<(GitFileMenuPosition & { area: GitArea; path: string }) | null>(null)
   const [menu, setMenu] = useState(false)
   const branchTrigger = useRef<HTMLButtonElement>(null)
   const [branches, setBranches] = useState<Branch[]>([])
@@ -458,6 +460,9 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
     onUnstage: area === 'staged' ? () => void unstage([file.path]) : undefined,
     onDiscard: area === 'unstaged' || area === 'untracked' ? () => discardFile(file, area) : undefined,
   })
+  const menuFile = fileMenu
+    ? sections.find(s => s.area === fileMenu.area)?.files.find(f => f.path === fileMenu.path)
+    : undefined
   const overlay = confirm && (
     <ConfirmDialog
       title={confirm.title}
@@ -840,6 +845,20 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
                   return (
                     <li
                       key={section.area + ':' + file.path}
+                      data-git-file={file.path}
+                      onContextMenu={e => {
+                        e.preventDefault()
+                        const trigger = e.currentTarget.querySelector('button')!
+                        trigger.focus({ preventScroll: true })
+                        setFileMenu({ x: e.clientX, y: e.clientY, trigger, area: section.area, path: file.path })
+                      }}
+                      onKeyDown={e => {
+                        if (e.key !== 'ContextMenu' && !(e.key === 'F10' && e.shiftKey)) return
+                        e.preventDefault()
+                        const trigger = e.currentTarget.querySelector('button')!
+                        const rect = trigger.getBoundingClientRect()
+                        setFileMenu({ x: rect.left + 20, y: rect.bottom, trigger, area: section.area, path: file.path })
+                      }}
                       className={cn(
                         'group/file flex h-7 min-w-0 items-center gap-1 rounded-md pr-0.5 hover:bg-hover',
                         ((currentDiff?.area === section.area && currentDiff.path === file.path) ||
@@ -940,6 +959,31 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
         </div>
       )}
       {overlay}
+      {fileMenu && menuFile && (
+        <GitFileMenu
+          file={menuFile}
+          target={target}
+          root={status.root ?? ''}
+          demo={demo}
+          position={fileMenu}
+          busy={busy}
+          {...fileActions(menuFile, fileMenu.area)}
+          onDiff={() => {
+            if (routeGitDiff(hasCodeOpener()) === 'center')
+              openGitDiffTab(workDiffInput(target, workspaceKey, demo, fileMenu.area, menuFile))
+            else setSelected({ area: fileMenu.area, path: menuFile.path })
+          }}
+          onHistory={
+            fileMenu.area !== 'untracked' && menuFile.code !== 'A'
+              ? () => showFileHistory(menuFile.path, 'repo')
+              : undefined
+          }
+          onClose={() => {
+            setFileMenu(null)
+            fileMenu.trigger.focus({ preventScroll: true })
+          }}
+        />
+      )}
     </div>
   )
 }

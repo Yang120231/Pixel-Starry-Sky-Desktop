@@ -602,6 +602,9 @@ export function GitHistory({
       <>
         <ChangedFiles
           files={set.files}
+          target={target}
+          root={status.root ?? ''}
+          demo={demo}
           onOpenFile={index => {
             const local = set.files[index].local
             if (local) void openFile(target, local)

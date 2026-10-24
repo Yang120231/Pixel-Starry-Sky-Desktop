@@ -1,11 +1,14 @@
 // 提交历史的小部件（docs/ui/git-panel.md §9.3–9.5）：分支线单元格、引用标记、改动文件列表
 import { Cloud, FileClock, FileCode2, GitBranch, GitCommitHorizontal, Tag } from 'lucide-react'
+import { useState } from 'react'
 import { cn, IconButton } from '@/ui'
 import { tr } from '@/i18n/core'
 import type { GitCommitFile } from '../../../../../shared/types/project-tools'
 import type { GraphRow, SyncState } from './graph'
 import { SYNC_TITLE_KEY, type Badge, type BadgeKind, type BadgeTone } from './historyModel'
 import { splitPath } from './gitModel'
+import { GitFileMenu, type GitFileMenuPosition } from './GitFileMenu'
+import type { WorkspaceRef } from '../../../../../shared/types/workspace'
 
 /** 一行（不含展开的详情）的高度：两行文字 */
 export const ROW_H = 44
@@ -237,12 +240,18 @@ const CODE_COLOR: Record<GitCommitFile['code'], string> = {
 /** 一个提交 / 一段比较里改动的文件：状态字母、文件名、目录、+/−；点了看差异，悬停可以打开文件、看这个文件的历史 */
 export function ChangedFiles({
   files,
+  target,
+  root,
+  demo,
   onOpen,
   onOpenFile,
   onHistory,
   isCurrent,
 }: {
   files: GitCommitFile[]
+  target: WorkspaceRef
+  root: string
+  demo: boolean
   onOpen: (index: number) => void
   /** 打开工作区里这个文件现在的版本；只给 local 不为空的文件显示 */
   onOpenFile?: (index: number) => void
@@ -250,6 +259,9 @@ export function ChangedFiles({
   /** 代码模式下中栏正开着这个文件的对比：高亮这一行 */
   isCurrent?: (file: GitCommitFile) => boolean
 }) {
+  const [menu, setMenu] = useState<(GitFileMenuPosition & { path: string }) | null>(null)
+  const menuIndex = menu ? files.findIndex(f => f.path === menu.path) : -1
+  const menuFile = files[menuIndex]
   return (
     <ul className="flex flex-col">
       {files.map((file, i) => {
@@ -257,6 +269,22 @@ export function ChangedFiles({
         return (
           <li
             key={file.path}
+            data-git-history-file={file.path}
+            onContextMenu={e => {
+              e.preventDefault()
+              e.stopPropagation()
+              const trigger = e.currentTarget.querySelector('button')!
+              trigger.focus({ preventScroll: true })
+              setMenu({ x: e.clientX, y: e.clientY, trigger, path: file.path })
+            }}
+            onKeyDown={e => {
+              if (e.key !== 'ContextMenu' && !(e.key === 'F10' && e.shiftKey)) return
+              e.preventDefault()
+              e.stopPropagation()
+              const trigger = e.currentTarget.querySelector('button')!
+              const rect = trigger.getBoundingClientRect()
+              setMenu({ x: rect.left + 20, y: rect.bottom, trigger, path: file.path })
+            }}
             className={cn(
               'group/file flex min-w-0 items-center rounded-md hover:bg-hover',
               isCurrent?.(file) && 'bg-selected',
@@ -318,6 +346,22 @@ export function ChangedFiles({
           </li>
         )
       })}
+      {menu && menuFile && (
+        <GitFileMenu
+          file={menuFile}
+          target={target}
+          root={root}
+          demo={demo}
+          position={menu}
+          onDiff={() => onOpen(menuIndex)}
+          onOpen={onOpenFile && menuFile.local ? () => onOpenFile(menuIndex) : undefined}
+          onHistory={onHistory ? () => onHistory(menuIndex) : undefined}
+          onClose={() => {
+            setMenu(null)
+            menu.trigger.focus({ preventScroll: true })
+          }}
+        />
+      )}
     </ul>
   )
 }

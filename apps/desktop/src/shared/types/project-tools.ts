@@ -290,6 +290,12 @@ export interface GitDiff {
   modified: string | null
   binary: boolean
   tooLarge: boolean
+  /** 图片的两端来自实际比较的 Git 版本；null 表示该端文件不存在。 */
+  images?: { original: GitDiffImage | null; modified: GitDiffImage | null }
+}
+export interface GitDiffImage {
+  dataUrl: string
+  bytes: number
 }
 export interface GitBranch {
   name: string

@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { lstat, mkdir, readdir, realpath, stat, open, rename, unlink, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { basename, dirname, isAbsolute, join, relative, resolve, sep, extname } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import {
   FILE_STAGE_CHUNK_BYTES,
   MAX_STAGED_FILE_BYTES,
@@ -14,6 +14,7 @@ import {
 } from '@pixelsky/protocol'
 import { grepWorkspace } from './workspace-grep'
 import { IGNORED_STATUS } from '../../shared/types/workspace'
+import { IMAGE_LIMIT, imageMime } from '../../shared/imageFiles'
 import type {
   DirectoryListing,
   FileDocument,
@@ -25,18 +26,9 @@ import type {
 
 export const TEXT_LIMIT = 2 * 1024 * 1024
 export const READ_LIMIT = 10 * 1024 * 1024
-const IMAGE_LIMIT = 8 * 1024 * 1024
 const PAGE_LIMIT = 500
 const SEARCH_LIMIT = 200
 const HASH = (b: Buffer): string => createHash('sha256').update(b).digest('hex')
-const IMAGES: Record<string, string> = {
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.webp': 'image/webp',
-  '.avif': 'image/avif',
-}
 export type TargetResolver = (ref: WorkspaceRef) => WorkspaceTarget
 
 export function workspaceRef(value: unknown): WorkspaceRef {
@@ -569,7 +561,7 @@ export class WorkspaceFiles {
     const at = locateFolder(this.target(ref), path)
     const file = await workspacePath(at.root, at.rel, 'file')
     const info = await stat(file)
-    const image = IMAGES[extname(file).toLowerCase()]
+    const image = imageMime(file)
     try {
       const bytes = await boundedRead(file, image ? IMAGE_LIMIT : READ_LIMIT)
       if (image)

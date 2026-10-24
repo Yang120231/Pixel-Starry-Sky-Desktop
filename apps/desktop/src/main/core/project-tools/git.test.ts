@@ -6,7 +6,8 @@ import { spawn } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GitResult, GitStatus } from '../../../shared/types/project-tools'
 import { git, type ToolsHost } from './common'
-import { GitTools, pathBatches } from './git'
+import { DIFF_LIMIT, GitTools, pathBatches } from './git'
+import { IMAGE_LIMIT } from '../../../shared/imageFiles'
 
 // 数 git 进程：真起进程，只是记下调用
 vi.mock('node:child_process', async importOriginal => {
@@ -158,6 +159,97 @@ describe('Git 面板：状态与差异', () => {
     const subStatus = await sub.status(ref)
     expect(subStatus.staged.find(f => f.path === 'web/a.txt')?.local).toBe('a.txt')
     expect(subStatus.staged.find(f => f.path === 'new.txt')?.local).toBeNull()
+  })
+})
+
+describe('Git 图片版本', { timeout: 30_000 }, () => {
+  const base = Buffer.from([137, 80, 78, 71, 0, 255, 1])
+  const staged = Buffer.from([137, 80, 78, 71, 0, 254, 2])
+  const work = Buffer.from([137, 80, 78, 71, 0, 253, 3])
+  const preview = (b: Buffer) => ({ dataUrl: `data:image/png;base64,${b.toString('base64')}`, bytes: b.length })
+
+  it('暂存比较 HEAD 与 index，未暂存比较 index 与工作区；历史不读取当前文件', async () => {
+    await init()
+    await writeFile(join(project, '贴图 空格.PNG'), base)
+    await commitAll('base image')
+    const from = await git(project, ['rev-parse', 'HEAD'])
+    await writeFile(join(project, '贴图 空格.PNG'), staged)
+    await commitAll('second image')
+    const to = await git(project, ['rev-parse', 'HEAD'])
+    await writeFile(join(project, '贴图 空格.PNG'), work)
+    const g = tools()
+    const historical = await g.diff(ref, { path: '贴图 空格.PNG', area: 'commit', from: from.trim(), to: to.trim() })
+    expect(historical).toMatchObject({
+      binary: true,
+      original: null,
+      modified: null,
+      images: { original: preview(base), modified: preview(staged) },
+    })
+    await git(project, ['add', '贴图 空格.PNG'])
+    await writeFile(join(project, '贴图 空格.PNG'), base)
+    expect((await g.diff(ref, { path: '贴图 空格.PNG', area: 'staged' })).images).toEqual({
+      original: preview(staged),
+      modified: preview(work),
+    })
+    expect((await g.diff(ref, { path: '贴图 空格.PNG', area: 'unstaged' })).images).toEqual({
+      original: preview(work),
+      modified: preview(base),
+    })
+  })
+
+  it('新增、删除、改名、根提交都保留正确的缺失一端', async () => {
+    await init()
+    await writeFile(join(project, 'old.png'), base)
+    const g = tools()
+    expect((await g.diff(ref, { path: 'old.png', area: 'untracked' })).images).toEqual({
+      original: null,
+      modified: preview(base),
+    })
+    await git(project, ['add', 'old.png'])
+    expect((await g.diff(ref, { path: 'old.png', area: 'staged' })).images).toEqual({
+      original: null,
+      modified: preview(base),
+    })
+    await commitAll('root image')
+    const to = (await git(project, ['rev-parse', 'HEAD'])).trim()
+    expect((await g.diff(ref, { path: 'old.png', area: 'commit', from: null, to })).images).toEqual({
+      original: null,
+      modified: preview(base),
+    })
+    await git(project, ['mv', 'old.png', 'new.png'])
+    expect((await g.diff(ref, { path: 'new.png', origPath: 'old.png', area: 'staged' })).images).toEqual({
+      original: preview(base),
+      modified: preview(base),
+    })
+    await rm(join(project, 'new.png'))
+    expect((await g.diff(ref, { path: 'new.png', area: 'unstaged' })).images).toEqual({
+      original: preview(base),
+      modified: null,
+    })
+    await git(project, ['add', '-A'])
+    expect((await g.diff(ref, { path: 'old.png', area: 'staged' })).images).toEqual({
+      original: preview(base),
+      modified: null,
+    })
+  })
+
+  it('图片可以超过文本的 2MB 上限，但超过 8MB 不传输预览', async () => {
+    await init()
+    const large = Buffer.alloc(DIFF_LIMIT + 1, 7)
+    await writeFile(join(project, 'large.png'), large)
+    const g = tools()
+    expect((await g.diff(ref, { path: 'large.png', area: 'untracked' })).images?.modified?.bytes).toBe(large.length)
+    await git(project, ['add', 'large.png'])
+    expect((await g.diff(ref, { path: 'large.png', area: 'staged' })).images?.modified?.dataUrl).toBe(
+      preview(large).dataUrl,
+    )
+    await writeFile(join(project, 'large.png'), Buffer.alloc(IMAGE_LIMIT + 1))
+    expect(await g.diff(ref, { path: 'large.png', area: 'unstaged' })).toMatchObject({
+      tooLarge: true,
+      original: null,
+      modified: null,
+    })
+    expect((await g.diff(ref, { path: 'large.png', area: 'unstaged' })).images).toBeUndefined()
   })
 })
 

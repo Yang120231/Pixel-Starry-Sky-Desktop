@@ -57,7 +57,7 @@ export function ImagePreview({ id, src, name, bytes }: { id: string; src: string
       <ImageStageView stage={stage} src={src} alt={name} vector={vector} background={prefs.background}>
         <div
           data-image-toolbar=""
-          className="absolute right-3 bottom-3 flex items-center gap-0.5 rounded-lg border border-line-card bg-popover p-1 shadow-md"
+          className="absolute right-3 bottom-3 flex max-w-[calc(100%-24px)] flex-wrap items-center justify-end gap-0.5 rounded-lg border border-line-card bg-popover p-1 shadow-md"
         >
           <button
             type="button"

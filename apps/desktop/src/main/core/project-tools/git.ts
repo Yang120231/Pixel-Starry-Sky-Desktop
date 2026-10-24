@@ -26,6 +26,7 @@ import type {
   GitStatus,
 } from '../../../shared/types/project-tools'
 import { workspaceEntry, workspacePath } from '../workspace-files'
+import { IMAGE_LIMIT, imageMime } from '../../../shared/imageFiles'
 import { samePath, value, type ToolsHost } from './common'
 import {
   classifyGitError,
@@ -541,15 +542,15 @@ export class GitTools {
     this.metas.set(rootKey, meta)
   }
 
-  private async blob(repo: Repo, spec: string): Promise<Buffer | null> {
+  private async blob(repo: Repo, spec: string, limit = DIFF_LIMIT): Promise<Buffer | null> {
     const run = await runGit(repo.root, ['cat-file', 'blob', spec], {
       timeout: this.timeout('diff'),
-      limit: DIFF_LIMIT,
+      limit,
     })
     return run.code === 0 ? run.stdout : null
   }
 
-  private async worktree(repo: Repo, path: string): Promise<Buffer | null> {
+  private async worktree(repo: Repo, path: string, limit = DIFF_LIMIT): Promise<Buffer | null> {
     let file: string
     try {
       file = await workspacePath(repo.root, path, 'file')
@@ -557,7 +558,7 @@ export class GitTools {
       return null
     }
     const info = await stat(file)
-    if (info.size > DIFF_LIMIT) return Buffer.alloc(DIFF_LIMIT + 1)
+    if (info.size > limit) return Buffer.alloc(limit + 1)
     return readFile(file)
   }
 
@@ -566,6 +567,8 @@ export class GitTools {
     if (!repo || repo === 'missing') throw new Error('当前项目不是可用的 Git 仓库')
     const path = value(input.path, 4096, true).replace(/\\/g, '/')
     const orig = input.origPath ? value(input.origPath, 4096, true).replace(/\\/g, '/') : path
+    const mime = imageMime(path)
+    const limit = mime ? IMAGE_LIMIT : DIFF_LIMIT
     if (!['staged', 'unstaged', 'untracked', 'conflicted', 'commit'].includes(input.area)) throw new Error('参数不正确')
     let a: Buffer | null, b: Buffer | null
     if (input.area === 'commit') {
@@ -573,16 +576,29 @@ export class GitTools {
       const from = input.from ?? null
       if (!isHash(input.to) || (from !== null && !isHash(from))) throw new Error('参数不正确')
       ;[a, b] = await Promise.all([
-        from ? this.blob(repo, `${from}:${orig}`) : Promise.resolve(null),
-        this.blob(repo, `${input.to}:${path}`),
+        from ? this.blob(repo, `${from}:${orig}`, limit) : Promise.resolve(null),
+        this.blob(repo, `${input.to}:${path}`, limit),
       ])
     } else if (input.area === 'staged')
-      [a, b] = await Promise.all([this.blob(repo, `HEAD:${orig}`), this.blob(repo, `:${path}`)])
+      [a, b] = await Promise.all([this.blob(repo, `HEAD:${orig}`, limit), this.blob(repo, `:${path}`, limit)])
     else if (input.area === 'unstaged')
-      [a, b] = await Promise.all([this.blob(repo, `:${path}`), this.worktree(repo, path)])
-    else if (input.area === 'untracked') [a, b] = [Buffer.alloc(0), await this.worktree(repo, path)]
-    else [a, b] = await Promise.all([this.blob(repo, `:2:${path}`), this.worktree(repo, path)])
-    const tooLarge = (a?.length ?? 0) > DIFF_LIMIT || (b?.length ?? 0) > DIFF_LIMIT
+      [a, b] = await Promise.all([this.blob(repo, `:${path}`, limit), this.worktree(repo, path, limit)])
+    else if (input.area === 'untracked')
+      [a, b] = [mime ? null : Buffer.alloc(0), await this.worktree(repo, path, limit)]
+    else [a, b] = await Promise.all([this.blob(repo, `:2:${path}`, limit), this.worktree(repo, path, limit)])
+    const tooLarge = (a?.length ?? 0) > limit || (b?.length ?? 0) > limit
+    if (mime && !tooLarge) {
+      const image = (data: Buffer | null, type: string) =>
+        data === null ? null : { dataUrl: `data:${type};base64,${data.toString('base64')}`, bytes: data.length }
+      return {
+        path,
+        original: null,
+        modified: null,
+        binary: true,
+        tooLarge: false,
+        images: { original: image(a, imageMime(orig) ?? mime), modified: image(b, mime) },
+      }
+    }
     const binary = !tooLarge && ((!!a && isBinary(a)) || (!!b && isBinary(b)))
     if (tooLarge || binary) return { path, original: null, modified: null, binary, tooLarge }
     return { path, original: a ? lf(text(a)) : null, modified: b ? lf(text(b)) : null, binary: false, tooLarge: false }

@@ -81,10 +81,19 @@ export function neighbour(
   return i < 0 ? null : (flat[i + delta] ?? null)
 }
 
+/** Git 的路径总是用 /；完整路径保留仓库根目录的平台分隔符，也适用于已删除的文件。 */
+export function gitAbsolutePath(root: string, path: string): string {
+  const separator = root.includes('\\') ? '\\' : '/'
+  return root.replace(/[\\/]+$/, '') + separator + path.replace(/[\\/]/g, separator)
+}
+
 /** 两次读到的对比是不是一样（状态刷新后重读：一样就不替换，编辑器不重建、滚动位置不丢） */
 export const sameGitDiff = (a: GitDiff, b: GitDiff): boolean =>
   a.path === b.path &&
   a.original === b.original &&
   a.modified === b.modified &&
   a.binary === b.binary &&
-  a.tooLarge === b.tooLarge
+  a.tooLarge === b.tooLarge &&
+  a.images?.original?.dataUrl === b.images?.original?.dataUrl &&
+  a.images?.modified?.dataUrl === b.images?.modified?.dataUrl &&
+  !!a.images === !!b.images
