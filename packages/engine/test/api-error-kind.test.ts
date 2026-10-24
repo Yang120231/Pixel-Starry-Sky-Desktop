@@ -225,3 +225,35 @@ describe('已知代码 / 状态码优先于上下文字样', () => {
     expect(apiNoticeError(null, 'API Error: 400 context_length_exceeded')?.kind).toBe('overflow')
   })
 })
+
+describe('余额不足盖过 403 / 429 和登录失败的代码', () => {
+  // 实测（2026-10-24 日志）：平台上游回 403，Claude Code 记成 authentication_failed
+  const raw = 'Failed to authenticate. API Error: 403 insufficient balance'
+
+  it('说成余额问题、卡片按余额给按钮，不再说没有权限', () => {
+    expect(friendlyApiError('authentication_failed', raw)).toBe(ERROR_TEXT.billing_error)
+    expect(apiNoticeError('authentication_failed', raw)).toEqual({
+      kind: 'balance',
+      code: 'authentication_failed',
+      status: 403,
+    })
+    // 没有合成消息、只有原文时也一样
+    expect(friendlyApiError(null, raw)).toBe(ERROR_TEXT.billing_error)
+    expect(apiNoticeError(null, raw)?.kind).toBe('balance')
+    expect(friendlyApiError('rate_limit', 'API Error: 429 You exceeded your current quota')).toBe(
+      ERROR_TEXT.billing_error,
+    )
+  })
+
+  it('真的没有权限、登录失效照旧', () => {
+    const forbidden =
+      'Failed to authenticate. API Error: 403 Your API key does not have permission to use the specified resource.'
+    expect(friendlyApiError('authentication_failed', forbidden)).toBe(
+      '没有权限：当前账号或 API Key 不能用这个模型或资源',
+    )
+    expect(apiNoticeError('authentication_failed', forbidden)?.kind).toBe('route')
+    expect(
+      apiNoticeError('authentication_failed', 'Please run /login · API Error: 401 OAuth token has expired')?.kind,
+    ).toBe('auth')
+  })
+})

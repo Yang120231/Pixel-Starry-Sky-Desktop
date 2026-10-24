@@ -82,6 +82,9 @@ export function friendlyApiError(code: string | null, raw: string): string | nul
   if (format) return format[1]
   const c = code || errorCodeFromText(raw)
   if (!c) return null
+  // 余额不足常用 403 / 429 报，Claude Code 把 403 也记成 authentication_failed：原文说清楚是余额的先认余额
+  // （「403 insufficient balance」以前被说成没有权限，卡片给的是换线路的按钮）
+  if (classifyErrorText(raw) === 'balance') return ERROR_TEXT.billing_error
   const status = httpStatusOf(raw)
   switch (c) {
     case 'authentication_failed':
@@ -119,6 +122,8 @@ export function apiNoticeError(code: string | null, raw: string): NoticeError | 
   // 已知的代码 / 状态码优先：限流提示里带 “too many tokens” 之类的话不能被当成上下文超限
   else if (!byCode && errorKindOfStatus(status) === undefined && isOverflowText(raw)) kind = 'overflow'
   else if (CJK.test(raw)) kind = classifyErrorText(raw) ?? byCode
+  // 和 friendlyApiError 一样：说清楚是余额的盖过 403 / 429 和 authentication_failed
+  else if (classifyErrorText(raw) === 'balance') kind = 'balance'
   else if (c === 'authentication_failed' && PERMISSION.test(raw)) kind = 'route'
   else if (c === 'server_error' && UNREACHABLE.test(raw)) kind = undefined
   else kind = byCode ?? errorKindOfStatus(status) ?? classifyErrorText(raw) ?? undefined
