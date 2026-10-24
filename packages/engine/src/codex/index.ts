@@ -27,6 +27,8 @@ import { withPath, type NodeRuntime } from '../npm'
 import { outputTail, run, runInteractive, startupReason } from '../exec'
 import { engineBase } from '../registry'
 import { customCodex, discoverCodex, toolEnvironment } from './discover'
+import { codexOneShot } from './oneshot'
+import { OneShotError, type OneShotReply, type OneShotRequest } from '../oneshot'
 import { codexAnchor, readCodexTurns } from './branch'
 import { CodexProcess, object, string } from './process'
 import { parseCodexRateLimits } from './quota'
@@ -318,6 +320,17 @@ export class CodexAdapter implements EngineAdapter {
    * 子智能体的记录（详情面板跑着时每 2.5 秒读一次）：用常驻的读取进程读，不再每次新起一个 codex.exe
    * （以前一个子智能体开着详情两分钟就起了五十多个进程）
    */
+  /** 不带会话、用当前登录的账号单独问一次（AI 写提交信息，docs/ui/ai-commit-channels.md §4） */
+  async oneShot(req: OneShotRequest, signal: AbortSignal): Promise<OneShotReply> {
+    const info = await this.info()
+    const launcher = this.cached?.launcher
+    if (!launcher || info.status === 'missing' || info.status === 'outdated' || info.status === 'unsupported')
+      throw new OneShotError('notInstalled', info.message ?? 'Codex 没有安装')
+    if (info.status === 'unauthenticated') throw new OneShotError('notAuthorized', info.message ?? 'Codex 没有登录')
+    if (info.status !== 'ready') throw new OneShotError('failed', info.message ?? 'Codex 不可用')
+    return codexOneShot(launcher, this.launchArgs(), toolEnvironment(launcher, this.env()), req, signal)
+  }
+
   async subagentTranscript(record: SessionRecord, agentId: string): Promise<Item[]> {
     if (!/^[A-Za-z0-9-]{1,100}$/.test(agentId)) throw new Error('Invalid Codex subagent')
     const result = await this.reader.request('thread/read', { threadId: agentId, includeTurns: true })

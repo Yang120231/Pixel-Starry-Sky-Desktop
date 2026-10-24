@@ -23,6 +23,7 @@ export {
 export { LONG_CONTEXT_ENV, claudeModelName } from './claude/long-context'
 export { CODEX_WINDOW_ENV } from './codex/context-config'
 export { CodexAdapter } from './codex'
+export { OneShotError, type OneShotProblem, type OneShotReply, type OneShotRequest } from './oneshot'
 export { PixelAdapter } from './pixel'
 export { pixelAutoWindow } from './pixel/context-window'
 export { searchQuery } from './search'

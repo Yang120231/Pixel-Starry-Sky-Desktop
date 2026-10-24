@@ -156,6 +156,26 @@ if (process.env.FAKE_CLAUDE_CHAIN) {
     })
   }
 }
+if (arg('--output-format') === 'json' && !process.env.FAKE_CLAUDE_CHAIN) {
+  // 单独问一次（AI 写提交信息）：回「收到：<最后一行>」带用量；问题含「额度用完」→ 像真实 CLI 一样 is_error
+  let q = ''
+  process.stdin.setEncoding('utf8')
+  process.stdin.on('data', d => (q += d))
+  process.stdin.on('end', () => {
+    const question = q.trim().split('\n').at(-1)
+    const limited = q.includes('额度用完')
+    process.stdout.write(
+      JSON.stringify({
+        type: 'result',
+        is_error: limited,
+        result: limited ? "You've hit your usage limit · resets 3pm" : `收到：${question}｜模型=${arg('--model')}`,
+        usage: { input_tokens: 12, output_tokens: 3, cache_read_input_tokens: 40, cache_creation_input_tokens: 0 },
+        modelUsage: { [arg('--model') ?? 'fake-model']: { inputTokens: 12, outputTokens: 3 } },
+      }) + '\n',
+    )
+    process.exit(0)
+  })
+}
 function chain(type, uuid, text) {
   const file = transcriptFile()
   if (!file || !process.env.FAKE_CLAUDE_CHAIN) return

@@ -65,6 +65,7 @@ import { UsageStore, type UsageQuery } from '../usage'
 import { HostAccounts } from './accounts'
 import { HostBranch } from './branch'
 import { HostCheckpoints } from './checkpoints'
+import { OneShotError } from '../oneshot'
 import { HostCache } from './cache'
 import { HostCompaction } from './compaction'
 import type { EngineHostOptions, HostContext, HostModules, Runtime } from './context'
@@ -582,6 +583,17 @@ export class EngineHost {
   /** 撤销最近一次回退（发新消息或重启前） */
   undoRewind(id: string): Promise<void> {
     return this.m.branch.undoRewind(id)
+  }
+
+  /** 不带会话、用引擎自己的登录单独问一次（AI 写提交信息的 Claude / ChatGPT 授权通道，docs/ui/ai-commit-channels.md） */
+  oneShot(
+    engine: EngineId,
+    req: import('../oneshot').OneShotRequest,
+    signal: AbortSignal,
+  ): Promise<import('../oneshot').OneShotReply> {
+    const adapter = this.ctx.adapters[engine]
+    if (!adapter?.oneShot) return Promise.reject(new OneShotError('failed', '这个引擎不能单独问'))
+    return adapter.oneShot(req, signal)
   }
 
   /** 会话的对话检查点：每轮的快照情况、改动卡片撤回的文件（docs/ui/undo-changes.md） */

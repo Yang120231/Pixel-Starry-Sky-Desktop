@@ -71,6 +71,7 @@ function deps(over: Partial<CommitMessageDeps> = {}): CommitMessageDeps & { call
     },
     provider: () => null,
     fetch: async () => new Response('{}'),
+    engine: async () => ({ text: '', model: null, usage: null }),
     ...over,
   }
 }
@@ -281,5 +282,63 @@ describe('writeCommitMessage', () => {
       problem: 'provider',
       detail: 'noKey',
     })
+  })
+
+  it('Claude / ChatGPT 授权：本机引擎问一次，说明和改动在一条消息里；不扣余额', async () => {
+    const asked: unknown[] = []
+    const d = deps({
+      engine: async (engine, req) => {
+        asked.push(engine, req.model)
+        expect(req.prompt).toContain('You write git commit messages.')
+        expect(req.prompt).toContain('Branch: fix/login')
+        return {
+          text: '"fix: 登录"',
+          model: 'claude-haiku-4-5',
+          usage: { input: 9, output: 2, cacheRead: 0, cacheWrite: 0 },
+        }
+      },
+    })
+    expect(await writeCommitMessage(d, { ...request, source: 'claude', model: 'haiku', groups: [] }, never)).toEqual({
+      ok: true,
+      message: 'fix: 登录',
+      model: 'claude-haiku-4-5',
+      groupId: null,
+      usage: { input: 9, output: 2, cacheRead: 0, cacheWrite: 0 },
+      partial: 1,
+      chargeable: false,
+    })
+    // 模型留空：跟随引擎自己的设置
+    await writeCommitMessage(d, { ...request, source: 'codex', model: '' }, never)
+    expect(asked).toEqual(['claude', 'haiku', 'codex', null])
+    expect(d.calls).toEqual([])
+  })
+
+  it('Claude / ChatGPT 授权：没装、没授权、额度用完照原因报；总超时不当成停止', async () => {
+    const thrower = (kind: string, message: string) =>
+      deps({ engine: async () => Promise.reject(Object.assign(new Error(message), { kind })) })
+    const claude = { ...request, source: 'claude' as const }
+    expect(await writeCommitMessage(thrower('usageLimit', 'resets 3pm'), claude, never)).toEqual({
+      ok: false,
+      problem: 'usageLimit',
+      detail: 'resets 3pm',
+    })
+    expect((await writeCommitMessage(thrower('notInstalled', 'x'), claude, never)).ok).toBe(false)
+    expect(await writeCommitMessage(thrower('notAuthorized', 'x'), claude, never)).toMatchObject({
+      problem: 'notAuthorized',
+    })
+    expect(await writeCommitMessage(thrower('cancelled', ''), claude, never)).toMatchObject({ problem: 'timeout' })
+    expect(await writeCommitMessage(thrower('weird', 'boom'), claude, never)).toMatchObject({
+      problem: 'failed',
+      detail: 'boom',
+    })
+    const stop = new AbortController()
+    stop.abort()
+    const d = thrower('cancelled', '')
+    expect(await writeCommitMessage({ ...d, context: async () => context }, claude, stop.signal)).toMatchObject({
+      problem: 'cancelled',
+    })
+    expect(
+      await writeCommitMessage(deps({ engine: async () => ({ text: ' ', model: null, usage: null }) }), claude, never),
+    ).toMatchObject({ problem: 'empty' })
   })
 })

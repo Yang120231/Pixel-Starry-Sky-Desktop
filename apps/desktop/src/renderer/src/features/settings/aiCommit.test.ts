@@ -5,9 +5,16 @@ import type { ProviderView } from '../../../../shared/types/providers'
 import {
   AI_COMMIT_MODEL_KEY,
   AI_COMMIT_WRITING_KEY,
+  CODEX_SMALL,
+  commitChannels,
+  commitCodexModel,
   commitGroups,
   commitProvider,
   DEFAULT_MODEL,
+  defaultSource,
+  effectiveSource,
+  fallbackSource,
+  type CommitChannelContext,
   DEFAULT_WRITING,
   estimateUsd,
   readModel,
@@ -29,10 +36,27 @@ describe('读设置', () => {
     })
   })
   afterEach(() => vi.unstubAllGlobals())
-  it('没有存过时用默认：显示按钮、跟随仓库、标题加正文、云端 Opus 5.5、自动线路', () => {
+  it('没有存过时用默认：显示按钮、跟随仓库、标题加正文、通道自动、云端 Opus 5.5、Claude Haiku、Codex 小模型', () => {
     expect(readWriting()).toEqual(DEFAULT_WRITING)
     expect(readModel()).toEqual(DEFAULT_MODEL)
-    expect(DEFAULT_MODEL.model).toBe('claude-opus-5-5')
+    expect(DEFAULT_MODEL).toMatchObject({
+      source: null,
+      model: 'claude-opus-5-5',
+      claudeModel: 'haiku',
+      codexModel: CODEX_SMALL,
+    })
+  })
+  it('选过的通道和「跟随引擎」（null）照存的读', () => {
+    localStorage.setItem(
+      AI_COMMIT_MODEL_KEY,
+      JSON.stringify({ source: 'codex', claudeModel: null, codexModel: 'gpt-x' }),
+    )
+    expect(readModel()).toMatchObject({ source: 'codex', claudeModel: null, codexModel: 'gpt-x' })
+    // 旧版本存的 platform 当成选过
+    localStorage.setItem(AI_COMMIT_MODEL_KEY, JSON.stringify({ source: 'platform' }))
+    expect(readModel()).toMatchObject({ source: 'platform', claudeModel: 'haiku' })
+    localStorage.setItem(AI_COMMIT_MODEL_KEY, JSON.stringify({ source: 'gemini', codexModel: 3 }))
+    expect(readModel()).toMatchObject({ source: null, codexModel: CODEX_SMALL })
   })
   it('不合法的值回到默认；额外要求最多 1000 字', () => {
     localStorage.setItem(
@@ -90,5 +114,74 @@ describe('estimateUsd', () => {
     expect(estimateUsd(null, 'claude-opus-5-5')).toBeNull()
     expect(estimateUsd(usage, 'my-private-model')).toBeNull()
     expect(estimateUsd(usage, 'my-private-model', 1, 'claude-opus-5-5')).toBeCloseTo(0.086, 6)
+  })
+})
+
+describe('通道', () => {
+  type Status = 'ready' | 'unauthenticated' | 'missing'
+  const ctx = (o: {
+    email?: string | null
+    claude?: Status
+    codex?: Status
+    providers?: number
+    remote?: boolean
+  }): CommitChannelContext => ({
+    platform: { email: o.email ?? null, loaded: true, loading: false, groups: [group('1', 1, ['claude-opus-5-5'])] },
+    engines: [
+      ...(o.claude ? [{ id: 'claude' as const, status: o.claude, message: null }] : []),
+      ...(o.codex ? [{ id: 'codex' as const, status: o.codex, message: null }] : []),
+    ],
+    providers: Array.from({ length: o.providers ?? 0 }),
+    remote: o.remote ?? false,
+  })
+
+  it('没选过：Claude 授权 → 像素星空 → ChatGPT 授权 → 自定义接口，用第一条能用的', () => {
+    expect(defaultSource(ctx({ claude: 'ready', email: 'a@b', codex: 'ready' }))).toBe('claude')
+    expect(defaultSource(ctx({ claude: 'unauthenticated', email: 'a@b', codex: 'ready' }))).toBe('platform')
+    expect(defaultSource(ctx({ claude: 'missing', codex: 'ready', providers: 1 }))).toBe('codex')
+    expect(defaultSource(ctx({ claude: 'missing', codex: 'unauthenticated', providers: 1 }))).toBe('custom')
+    // 引擎还没检测完：先当 Claude 授权，不落到已经读好的自定义接口（要花钱）上
+    expect(defaultSource(ctx({ providers: 1 }))).toBe('claude')
+    // 都不能用：像素星空（写的时候提示登录）
+    expect(defaultSource(ctx({ claude: 'missing', codex: 'missing' }))).toBe('platform')
+  })
+
+  it('选过的照旧，哪怕现在不能用', () => {
+    const c = ctx({ claude: 'ready', codex: 'unauthenticated' })
+    expect(effectiveSource({ source: 'codex' }, c)).toBe('codex')
+    expect(effectiveSource({ source: null }, c)).toBe('claude')
+  })
+
+  it('列表：能用的在前，没设置好的放到后面，各自按顺序；引擎还没检测完的先列着', () => {
+    const list = commitChannels(ctx({ codex: 'ready', email: null, providers: 2 }))
+    expect(list.ready.map(c => c.source)).toEqual(['claude', 'codex', 'custom'])
+    expect(list.ready[0].state.kind).toBe('loading')
+    expect(list.unset).toEqual([{ source: 'platform', state: { kind: 'signin' } }])
+  })
+
+  it('远程机器上：两条授权通道在本机跑，先当能用（写的时候再报）', () => {
+    expect(commitChannels(ctx({ claude: 'missing', remote: true })).ready.map(c => c.source)).toEqual([
+      'claude',
+      'codex',
+    ])
+  })
+
+  it('这次改用：除了失败的那条以外第一条能用的', () => {
+    const c = ctx({ claude: 'ready', email: 'a@b', codex: 'ready' })
+    expect(fallbackSource('claude', c)).toBe('platform')
+    expect(fallbackSource('platform', c)).toBe('claude')
+    expect(fallbackSource('claude', ctx({ claude: 'ready' }))).toBeNull()
+  })
+
+  it('Codex 小模型：目录里第一个名字带 mini 的，没有就跟随 Codex', () => {
+    const models = [
+      { id: 'gpt-5.5', label: 'GPT-5.5' },
+      { id: 'gpt-5.4-mini', label: 'GPT-5.4 mini' },
+    ] as Parameters<typeof commitCodexModel>[1]
+    expect(commitCodexModel(CODEX_SMALL, models)).toBe('gpt-5.4-mini')
+    expect(commitCodexModel(CODEX_SMALL, [])).toBeNull()
+    expect(commitCodexModel(CODEX_SMALL, undefined)).toBeNull()
+    expect(commitCodexModel('gpt-5.5', models)).toBe('gpt-5.5')
+    expect(commitCodexModel(null, models)).toBeNull()
   })
 })

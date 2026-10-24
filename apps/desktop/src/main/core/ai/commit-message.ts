@@ -1,6 +1,8 @@
 // AI 写提交信息（docs/ui/ai-commit-codex-warnings-history.md §2）：取改动 → 拼提示 → 调一次模型 → 清理返回。
 // 云端走 /v1/platform/messages（带线路，Sub2api 照常按线路倍率扣费），线路拒绝时换下一条；
-// 自定义 API 用已有的接口配置。出错都换成 AiProblem，界面按它给说法和按钮
+// 自定义 API 用已有的接口配置；Claude / ChatGPT 授权在本机单独问一次引擎（docs/ui/ai-commit-channels.md §4），用订阅额度、不扣余额。
+// 出错都换成 AiProblem，界面按它给说法和按钮
+import type { OneShotReply, OneShotRequest } from '@pixelsky/engine'
 import type { AiCommitRequest, AiCommitResult, AiProblem } from '../../../shared/types/ai'
 import type { GitCommitContext, GitContextFile } from '../../../shared/types/project-tools'
 import type { WorkspaceRef } from '../../../shared/types/workspace'
@@ -29,6 +31,8 @@ export interface CommitMessageDeps {
   platform(body: string, groupId: string, signal: AbortSignal): Promise<Response>
   provider(id: string): ResolvedProvider | null
   fetch: Fetch
+  /** Claude / ChatGPT 授权：本机引擎单独问一次；出错抛带 kind 的错误（OneShotError） */
+  engine(engine: 'claude' | 'codex', req: OneShotRequest, signal: AbortSignal): Promise<OneShotReply>
 }
 
 /** 成功时还带上计费用的 ID（云端回传的 X-Client-Request-ID） */
@@ -138,6 +142,27 @@ function thrown(error: unknown, cancel: AbortSignal): { problem: AiProblem; deta
 
 const fail = (problem: AiProblem, detail = ''): CommitMessageOutcome => ({ ok: false, problem, detail })
 
+const ENGINE_PROBLEMS = new Set<AiProblem>([
+  'notInstalled',
+  'notAuthorized',
+  'usageLimit',
+  'model',
+  'timeout',
+  'cancelled',
+  'failed',
+])
+
+/** 引擎单独问一次时抛出的错误 → 原因（OneShotError 的 kind 和 AiProblem 同名） */
+function engineProblem(error: unknown, cancel: AbortSignal): { problem: AiProblem; detail: string } {
+  if (cancel.aborted) return { problem: 'cancelled', detail: '' }
+  const e = error as { kind?: unknown; message?: string }
+  const problem =
+    typeof e?.kind === 'string' && ENGINE_PROBLEMS.has(e.kind as AiProblem) ? (e.kind as AiProblem) : 'failed'
+  // 不是用户停的：是这边的总超时把引擎停了
+  if (problem === 'cancelled') return { problem: 'timeout', detail: '' }
+  return { problem, detail: cut(e?.message ?? String(error)) }
+}
+
 export async function writeCommitMessage(
   deps: CommitMessageDeps,
   req: AiCommitRequest,
@@ -180,6 +205,32 @@ export async function writeCommitMessage(
       partial,
       chargeable: groupId !== null,
       ...(chargeId ? { chargeId } : {}),
+    }
+  }
+
+  if (req.source === 'claude' || req.source === 'codex') {
+    let reply: OneShotReply
+    try {
+      // 命令行没有单独的系统提示入口，说明和改动放在一条消息里
+      reply = await deps.engine(
+        req.source,
+        { prompt: `${system}\n\n---\n\n${prompt}`, model: req.model || null },
+        signal,
+      )
+    } catch (error) {
+      const t = engineProblem(error, cancel)
+      return fail(t.problem, t.detail)
+    }
+    const message = cleanMessage(reply.text)
+    if (!message) return fail('empty')
+    return {
+      ok: true,
+      message,
+      model: reply.model ?? req.model,
+      groupId: null,
+      usage: reply.usage,
+      partial,
+      chargeable: false,
     }
   }
 

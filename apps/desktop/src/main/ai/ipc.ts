@@ -1,5 +1,7 @@
 // AI 写提交信息的 IPC（docs/ui/ai-commit-codex-warnings-history.md §2.5）。在本机主进程执行：账号令牌和自定义接口的 Key
-// 只在这里；要提交的改动按项目所在机器取（SSH 项目转发到那台机器）。云端请求照常记下计费 ID，之后按它查实际扣费
+// 只在这里；要提交的改动按项目所在机器取（SSH 项目转发到那台机器）。云端请求照常记下计费 ID，之后按它查实际扣费；
+// Claude / ChatGPT 授权用本机引擎单独问一次（docs/ui/ai-commit-channels.md §4）
+import { OneShotError } from '@pixelsky/engine'
 import { randomUUID } from 'node:crypto'
 import type { PlatformCharge, PlatformSettlement } from '@pixelsky/protocol'
 import type { AiCommitRequest, AiCommitResult } from '../../shared/types/ai'
@@ -30,13 +32,16 @@ export function aiCommitRequest(input: unknown): AiCommitRequest {
     throw new Error('参数不正确')
   if (v.providerId !== null && (typeof v.providerId !== 'string' || !ID.test(v.providerId)))
     throw new Error('参数不正确')
-  if (typeof v.model !== 'string' || !v.model.trim() || v.model.length > 200) throw new Error('参数不正确')
+  const source = oneOf(v.source, ['platform', 'claude', 'codex', 'custom'])
+  // Claude / ChatGPT 授权的模型可以留空：跟随引擎自己的设置
+  const engine = source === 'claude' || source === 'codex'
+  if (typeof v.model !== 'string' || (!engine && !v.model.trim()) || v.model.length > 200) throw new Error('参数不正确')
   if (typeof v.instructions !== 'string' || v.instructions.length > 1000) throw new Error('参数不正确')
   return {
     requestId: v.requestId,
     ref: workspaceRef(v.ref),
     scope: oneOf(v.scope, ['staged', 'all']),
-    source: oneOf(v.source, ['platform', 'custom']),
+    source,
     groups: groups as string[],
     providerId: v.providerId,
     model: v.model.trim(),
@@ -91,6 +96,10 @@ export function initAi(ctx: AppContext): void {
           },
           provider: id => ctx.providers?.resolve(id) ?? null,
           fetch: (url, init) => fetch(url, init),
+          engine: (engine, request, signal) =>
+            ctx.engine
+              ? ctx.engine.oneShot(engine, request, signal)
+              : Promise.reject(new OneShotError('failed', '引擎还没准备好')),
         },
         req,
         abort.signal,

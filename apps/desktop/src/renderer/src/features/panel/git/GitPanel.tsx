@@ -64,7 +64,7 @@ import {
 } from './gitModel'
 import { GitDiffView } from './GitDiffView'
 import type { GitFileActions } from '@/features/coding/editor/gitDiffTabs'
-import { AiCommitButton, AiCommitNote, useAiCommit } from './AiCommit'
+import { AI_COMMIT_PAD, AiCommitButton, AiCommitNote, useAiCommit } from './AiCommit'
 import { BranchMenu } from './BranchMenu'
 import { GitHistory } from './GitHistory'
 import { FILE_HISTORY_EVENT, takeFileHistory } from './fileHistory'
@@ -752,7 +752,7 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
                 }}
                 className={cn(
                   'block max-h-40 min-h-14 w-full resize-y rounded-md border border-line bg-surface px-2.5 py-2 text-list text-fg outline-none placeholder:text-fg-faint focus-visible:border-accent',
-                  ai.enabled && 'pr-8',
+                  ai.enabled && AI_COMMIT_PAD,
                 )}
               />
               {ai.enabled && (

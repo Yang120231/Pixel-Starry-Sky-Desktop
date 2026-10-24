@@ -41,7 +41,8 @@ import {
 } from './accounts'
 import { claudeInstaller, customClaude, discoverClaude, parseAuthStatus, type ClaudeDiscovery } from './discover'
 import { claudePlanFor } from './tier'
-import { rewindFilesOnce, sideQuestionOnce, type HelperTarget, type RewindFilesReply } from './helper'
+import { oneShotOnce, rewindFilesOnce, sideQuestionOnce, type HelperTarget, type RewindFilesReply } from './helper'
+import { OneShotError, type OneShotReply, type OneShotRequest } from '../oneshot'
 import { ClaudeProcess, ownClaudePids } from './process'
 import { parseClaudeUsage, unknownControl } from './quota'
 import { obj, str } from './shape'
@@ -476,6 +477,18 @@ export class ClaudeAdapter implements EngineAdapter {
   async sideQuestion(record: SessionRecord, prompt: string, signal: AbortSignal): Promise<string> {
     const target = await this.helperTarget(record)
     return sideQuestionOnce(target, prompt, record.model && claudeModelName(record.model, target.env), signal)
+  }
+
+  /** 不带会话、用当前订阅账号单独问一次（AI 写提交信息，docs/ui/ai-commit-channels.md §4） */
+  async oneShot(req: OneShotRequest, signal: AbortSignal): Promise<OneShotReply> {
+    const d = await this.discover(false)
+    const status = d.info.status
+    if (!d.launcher || status === 'missing' || status === 'outdated' || status === 'unsupported')
+      throw new OneShotError('notInstalled', d.info.message ?? 'Claude Code 没有安装')
+    if (status === 'unauthenticated') throw new OneShotError('notAuthorized', d.info.message ?? 'Claude Code 没有登录')
+    if (status !== 'ready') throw new OneShotError('failed', d.info.message ?? 'Claude Code 不可用')
+    const env = this.env()
+    return oneShotOnce(d.launcher, env, { ...req, model: req.model && claudeModelName(req.model, env) }, signal)
   }
 
   /**

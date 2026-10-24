@@ -591,6 +591,19 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
         }, 300)
         return
       }
+      if (text.includes('额度用完')) {
+        const current = turn
+        turn = null
+        emit('turn/completed', {
+          threadId: thread,
+          turn: {
+            id: current.id,
+            status: 'failed',
+            error: { message: "You've hit your usage limit.", codexErrorInfo: 'usageLimitExceeded' },
+          },
+        })
+        return
+      }
       if (text.includes('重连')) {
         const err = n => ({
           message: `Reconnecting... ${n}/2`,

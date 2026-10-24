@@ -1,11 +1,14 @@
 // 短命的辅助进程（docs/ui/rewind-fork-sidechat.md §0）：不占用会话进程，做完就退出。
 // - 恢复代码：stream-json 模式发 rewind_files 控制请求（可以只预览），不调用模型
 // - 旁聊：-p 单次问答，--fork-session --no-session-persistence --tools ""，没有工具、不写会话记录
+// - 单独问一次（AI 写提交信息）：-p，不带会话，在临时目录里跑
 import { spawn } from 'node:child_process'
+import { tmpdir } from 'node:os'
 import type { Launcher, RewindFilesReply } from '../adapter'
 export type { RewindFilesReply }
 import { IS_WINDOWS, killTree } from '../exec'
 import { logger } from '../log'
+import { ONE_SHOT_TIMEOUT, OneShotError, oneShotProblem, type OneShotReply, type OneShotRequest } from '../oneshot'
 import { holdConfigDir } from './accounts'
 import { ClaudeProcess, ownClaudePids } from './process'
 
@@ -173,6 +176,122 @@ export function sideQuestionOnce(
     })
     child.stdin.end(prompt)
   })
+}
+
+/**
+ * 不带会话单独问一次的启动参数（AI 写提交信息，docs/ui/ai-commit-channels.md §4）：没有工具、不起 MCP、不留记录。
+ * 说明和内容都从 stdin 进，不用 --system-prompt（命令行里的换行和引号在 Windows 的 .cmd 启动器上不可靠）
+ */
+export function oneShotArgs(model: string | null): string[] {
+  return [
+    '-p',
+    '--output-format',
+    'json',
+    '--no-session-persistence',
+    '--tools',
+    '',
+    '--strict-mcp-config',
+    ...(model ? ['--model', model] : []),
+  ]
+}
+
+/** 单独问一次：在临时目录里跑（不读项目的 CLAUDE.md），用 env 里的订阅账号 */
+export function oneShotOnce(
+  launcher: Launcher,
+  env: NodeJS.ProcessEnv,
+  req: OneShotRequest,
+  signal: AbortSignal,
+): Promise<OneShotReply> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) return reject(new OneShotError('cancelled', '已停止'))
+    const child = spawn(launcher.command, [...launcher.args, ...oneShotArgs(req.model)], {
+      cwd: tmpdir(),
+      env,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
+      detached: !IS_WINDOWS,
+    })
+    let out = '',
+      err = '',
+      settled = false
+    const pid = child.pid
+    if (pid !== undefined) ownClaudePids.add(pid)
+    const release = holdConfigDir(env.CLAUDE_CONFIG_DIR)
+    const done = (fn: () => void): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      signal.removeEventListener('abort', onAbort)
+      fn()
+    }
+    const onAbort = (): void => {
+      killTree(child)
+      done(() => reject(new OneShotError('cancelled', '已停止')))
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+    const timer = setTimeout(() => {
+      killTree(child)
+      done(() => reject(new OneShotError('timeout', 'Claude Code 太久没有回答')))
+    }, ONE_SHOT_TIMEOUT)
+    child.stdout.on('data', (d: Buffer) => (out += d.toString('utf8')))
+    child.stderr.on('data', (d: Buffer) => (err = (err + d.toString('utf8')).slice(-4000)))
+    child.stdin.on('error', () => undefined)
+    child.on('error', e => {
+      if (pid !== undefined) ownClaudePids.delete(pid)
+      release()
+      done(() => reject(new OneShotError('failed', e.message)))
+    })
+    child.on('close', () => {
+      if (pid !== undefined) ownClaudePids.delete(pid)
+      release()
+      done(() => {
+        try {
+          resolve(parseOneShot(out))
+        } catch (e) {
+          if (e instanceof OneShotError) return reject(e)
+          const text = lastLine(err) || (e as Error).message
+          reject(new OneShotError(oneShotProblem(text), text))
+        }
+      })
+    })
+    child.stdin.end(req.prompt)
+  })
+}
+
+/** -p --output-format json 的结果：回答、实际用的模型和用量；is_error 时按原话分类抛出 */
+export function parseOneShot(stdout: string): OneShotReply {
+  const line = stdout
+    .trim()
+    .split(/\r?\n/)
+    .reverse()
+    .find(l => l.trim().startsWith('{'))
+  if (!line) throw new Error('Claude Code 没有回答')
+  const j = JSON.parse(line) as {
+    result?: unknown
+    is_error?: unknown
+    usage?: Record<string, unknown>
+    modelUsage?: Record<string, unknown>
+  }
+  const text = typeof j.result === 'string' ? j.result : ''
+  if (j.is_error === true) {
+    const message = text || 'Claude Code 回答失败'
+    throw new OneShotError(oneShotProblem(message), message)
+  }
+  const n = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
+  const u = j.usage
+  const models = j.modelUsage && typeof j.modelUsage === 'object' ? Object.keys(j.modelUsage) : []
+  return {
+    text,
+    model: models[0] ?? null,
+    usage: u
+      ? {
+          input: n(u.input_tokens),
+          output: n(u.output_tokens),
+          cacheRead: n(u.cache_read_input_tokens),
+          cacheWrite: n(u.cache_creation_input_tokens),
+        }
+      : null,
+  }
 }
 
 /** -p --output-format json 的结果；is_error 时把 result 当错误原因 */

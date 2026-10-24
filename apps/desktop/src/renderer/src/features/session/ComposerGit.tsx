@@ -9,7 +9,7 @@ import { isDemo } from '@/data'
 import { refKey } from '@/features/editor/target'
 import { openRightTab } from '@/features/panel/workspaceStore'
 import { requestGitAction } from '@/features/panel/git/GitPanel'
-import { AiCommitButton, AiCommitNote, useAiCommit } from '@/features/panel/git/AiCommit'
+import { AI_COMMIT_PAD, AiCommitButton, AiCommitNote, useAiCommit } from '@/features/panel/git/AiCommit'
 import { changeCount, failureHint, failureTitle, needsCommitAll, syncState } from '@/features/panel/git/gitModel'
 import { applyDemoGit, publishGitStatus, useGitStatus } from '@/features/panel/git/summary'
 import type { GitFailure, GitResult, GitStatus } from '../../../../shared/types/project-tools'
@@ -300,7 +300,7 @@ function CommitBox({ target, status, onDone }: { target: WorkspaceRef; status: G
           }}
           className={cn(
             'block max-h-40 min-h-16 w-full resize-none rounded-md border border-line bg-surface px-2.5 py-2 text-list text-fg outline-none placeholder:text-fg-faint focus-visible:border-accent',
-            ai.enabled && 'pr-8',
+            ai.enabled && AI_COMMIT_PAD,
           )}
         />
         {ai.enabled && <AiCommitButton ai={ai} scope={scope} disabled={git.busy || changed === 0} />}

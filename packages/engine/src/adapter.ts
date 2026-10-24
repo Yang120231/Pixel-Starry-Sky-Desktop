@@ -20,6 +20,7 @@ import type {
 import type { ChatSeed } from './chat-log'
 import type { NativeSessionList, ListOptions, LiveState, NativeRead, NewerTurns, ReadOptions } from './native/types'
 import type { AccountQuotaPatch, QuotaReading } from './quota'
+import type { OneShotReply, OneShotRequest } from './oneshot'
 
 /** 要启动的程序：可执行文件 + 固定在前面的参数（例如用 node 跑 cli.js 时是 [cli.js]） */
 export interface Launcher {
@@ -257,6 +258,8 @@ export interface EngineAdapter {
   close?(opts?: CloseOptions): Promise<void>
   /** 旁聊：带着会话上下文单独问一次，没有工具、不写记录（§3） */
   sideQuestion?(record: SessionRecord, prompt: string, signal: AbortSignal): Promise<string>
+  /** 不带会话、用引擎自己的登录单独问一次（AI 写提交信息，docs/ui/ai-commit-channels.md）；出错抛 OneShotError */
+  oneShot?(req: OneShotRequest, signal: AbortSignal): Promise<OneShotReply>
 }
 
 /** 恢复代码的结果；files 是绝对路径 */
