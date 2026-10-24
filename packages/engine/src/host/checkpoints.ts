@@ -305,17 +305,20 @@ export class HostCheckpoints {
   }
 
   /**
-   * 判断「最后一轮之后手改过」用什么比：
-   * - 对话里最后一轮（跳过没送达的、断线重连发的「继续」——它记在原消息上）有结束时的快照：比内容；
-   * - 没拍到（快照停用、出错）但记了结束时间：比修改时间；
-   * - 都没有（这一轮没跑完应用就关了、旧记录）：退回和最近一次拍到的结束快照比，之后几轮改的也会算进去
+   * 判断「最后一轮之后手改过」用什么比：对话里还在的轮次中最近结束的那一轮。
+   * 按结束时间挑、不按消息顺序：中途插入的引导、断线重连发的「继续」没有自己的记录（结束记在原消息上），
+   * 「关掉」的原消息可能跑过一半、结束照样记了。
+   * - 它有结束时的快照：比内容；没拍到（快照停用、出错）：比修改时间；
+   * - 之后又开始过一轮、没等到结束（应用中途关了），或者都没记结束时间（旧记录）：
+   *   退回和最近一次拍到的结束快照比，之后几轮改的也会算进去
    */
   private lastEnd(id: string, state: State): { tree?: string; endedAt?: number } | null {
-    const items = this.ctx.m.sessions.runtime(id).snapshot.items
-    const last = items.findLast(item => item.kind === 'user' && !item.dismissed && item.reconnect === undefined)
-    const turn = last ? state.data.turns[last.id] : undefined
-    if (turn?.after || turn?.endedAt) return { tree: turn.after, endedAt: turn.endedAt }
     const turns = this.presentTurns(id, state)
+    let latest: TurnData | undefined
+    for (const { turn } of turns) if (turn.endedAt && (!latest || turn.endedAt > latest.endedAt!)) latest = turn
+    const end = latest?.endedAt
+    const unfinished = !!end && turns.some(({ turn }) => turn.before && !turn.endedAt && turn.at > end)
+    if (latest && !unfinished) return { tree: latest.after, endedAt: end }
     for (let i = turns.length - 1; i >= 0; i--) if (turns[i]!.turn.after) return { tree: turns[i]!.turn.after }
     return null
   }

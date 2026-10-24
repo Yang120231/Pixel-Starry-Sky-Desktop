@@ -347,14 +347,14 @@ describe('对话检查点（宿主）', () => {
     expect((await host.rewindPreview(id, a)).code).toMatchObject({ ok: true, edited: ['keep.txt'] })
   })
 
-  it('最后一条没送达：判断手改时跳过它，用之前那一轮的结束时间', async () => {
+  it('对话最后是中途插入的引导、没送达的消息：它们没有自己的结束记录，用最近结束的那一轮', async () => {
     write('keep.txt', 'v0\n')
     const { host, id, send } = setup({ a: { 'keep.txt': 'v1\n' }, b: { 'keep.txt': 'v2\n' } })
     const a = await send('a')
     const checkpoints = internals(host)
     for (let i = 0; i < 3; i++) checkpoints.failed(id, new CheckpointError('timeout', '拍快照超时'))
     await sendUntil(host, id, 'b', turn => !!turn?.endedAt)
-    // 对话最后多一条没送达的消息（没有快照、没有结束时间）：不跳过就只能退回和 a 结束时比，b 改的会算成手改
+    // 按消息顺序取最后一条就落到它们身上，只能退回和 a 结束时比，b 改的会算成手改
     const runtime = (
       host as unknown as { m: { sessions: { runtime(id: string): { snapshot: SessionSnapshot } } } }
     ).m.sessions.runtime(id)
@@ -362,6 +362,7 @@ describe('对话检查点（宿主）', () => {
       ...runtime.snapshot,
       items: [
         ...runtime.snapshot.items,
+        { kind: 'user', id: 'steer', text: '换个写法', createdAt: Date.now(), mode: 'guidance' },
         { kind: 'user', id: 'gone', text: 'c', createdAt: Date.now(), dismissed: true },
       ],
     }
