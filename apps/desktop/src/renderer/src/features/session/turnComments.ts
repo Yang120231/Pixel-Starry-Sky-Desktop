@@ -163,23 +163,37 @@ export function useTurnCommentDraft(): TurnCommentDraft | null {
 
 // ── 纯函数 ──
 
-/** 每一轮的统计行 id → 第几轮 */
+/** 开启新一轮的用户消息：中途插入的引导、断线重连自动发的「继续」都接着原来那一轮 */
+const startsTurn = (item: Item): boolean =>
+  item.kind === 'user' && item.mode !== 'guidance' && item.reconnect === undefined
+
+/**
+ * 每一轮的统计行 id → 第几轮：按用户发的消息数（和检查点面板的 #N 一致）。
+ * 没有统计行的轮次（进程意外退出、强制停止）也算数；断线重连的一轮有两个统计行，编号相同
+ */
 export function turnNumbers(items: readonly Item[]): Map<string, number> {
   const map = new Map<string, number>()
-  for (const item of items) if (item.kind === 'turn_stats') map.set(item.id, map.size + 1)
+  let turn = 0
+  for (const item of items) {
+    if (startsTurn(item)) turn++
+    else if (item.kind === 'turn_stats') map.set(item.id, Math.max(turn, 1))
+  }
   return map
 }
 
 /**
- * 某条消息属于哪一轮：往后找第一个统计行。还在进行的一轮没有统计行，返回 null（做完了才能评论）
+ * 某条消息属于哪一轮：往后找这一轮里的统计行，不越过下一条用户消息。
+ * 还在进行、或者没有统计行就结束了的一轮（进程意外退出、强制停止），评论没地方放，返回 null
  */
 export function turnOfItem(items: readonly Item[], itemId: string): { turnKey: string; turn: number } | null {
   const start = items.findIndex(i => i.id === itemId)
   if (start < 0) return null
   let turn = 0
-  for (let i = 0; i < start; i++) if (items[i].kind === 'turn_stats') turn++
-  for (let i = start; i < items.length; i++)
-    if (items[i].kind === 'turn_stats') return { turnKey: items[i].id, turn: turn + 1 }
+  for (let i = 0; i <= start; i++) if (startsTurn(items[i])) turn++
+  for (let i = start; i < items.length; i++) {
+    if (i > start && startsTurn(items[i])) return null
+    if (items[i].kind === 'turn_stats') return { turnKey: items[i].id, turn: Math.max(turn, 1) }
+  }
   return null
 }
 

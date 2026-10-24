@@ -132,7 +132,11 @@ export const branchMessages = {
   // 会话评论（docs/ui/channels-collab-v2.md §7）
   'turnComment.add': { zh: '评论这一轮', en: 'Comment on this turn' },
   'turnComment.addSelection': { zh: '评论这段', en: 'Comment on selection' },
-  'turnComment.notDone': { zh: '这一轮做完了才能评论', en: 'You can comment once this turn finishes' },
+  // 还在进行，或者没有统计行就结束了（强制停止、进程意外退出），评论没地方放
+  'turnComment.notDone': {
+    zh: '这一轮还没做完，或者中途停止了，不能评论',
+    en: 'You can only comment on a finished turn; this one is still running or was stopped',
+  },
   'turnComment.title': { zh: '第 {n} 轮的评论', en: 'Comment on turn {n}' },
   'turnComment.placeholder': {
     zh: '哪里要改？Ctrl+Enter 保存，Esc 取消',
