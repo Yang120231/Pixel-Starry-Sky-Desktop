@@ -12,7 +12,7 @@ export function codexChanges(value: unknown): FileChange[] {
       const kind = string(object(change.kind).type || change.kind)
       // 新建文件时 Codex 给的可能是文件原文而不是 diff：换成全是 + 的 diff，行数才对
       const original = string(change.diff)
-      const diff = kind === 'add' && original && !/^[+@-]/m.test(original) ? diffAdded(original).diff : original,
+      const diff = kind === 'add' && original && !looksLikeDiff(original) ? diffAdded(original).diff : original,
         lines = diff.split('\n')
       return {
         path: string(change.path),
@@ -23,6 +23,15 @@ export function codexChanges(value: unknown): FileChange[] {
       }
     })
     .filter(change => !!change.path)
+}
+/**
+ * 新建文件的 diff 字段是不是 diff：有 @@ 段头，或者每行都以 + 开头。
+ * 不能只看有没有行以 - 开头：YAML 列表、Markdown 列表的原文也会这样
+ */
+function looksLikeDiff(text: string): boolean {
+  if (/^@@ -\d/m.test(text)) return true
+  const lines = text.replace(/\r\n/g, '\n').replace(/\n$/, '').split('\n')
+  return lines.every(l => l.startsWith('+'))
 }
 const statusOf = (value: unknown, complete: boolean): ItemStatus =>
   value === 'failed'

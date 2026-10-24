@@ -54,4 +54,20 @@ describe('工具行的展示数据', () => {
       removed: 1,
     })
   })
+
+  it('Codex 新建文件：原文里有 - 开头的行（YAML 列表）也当原文；已经是 diff 的原样保留', () => {
+    expect(codexChanges([{ path: 'a.yml', kind: 'add', diff: 'list:\n- one\n- two\n' }])[0]).toMatchObject({
+      diff: '+list:\n+- one\n+- two',
+      added: 3,
+      removed: 0,
+    })
+    expect(codexChanges([{ path: 'b.txt', kind: 'add', diff: '@@ -0,0 +1,2 @@\n+a\n+b' }])[0]).toMatchObject({
+      diff: '@@ -0,0 +1,2 @@\n+a\n+b',
+      added: 2,
+    })
+    expect(codexChanges([{ path: 'c.txt', kind: 'add', diff: '+a\n+b' }])[0]).toMatchObject({
+      diff: '+a\n+b',
+      added: 2,
+    })
+  })
 })
