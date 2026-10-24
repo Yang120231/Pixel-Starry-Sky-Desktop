@@ -277,12 +277,15 @@ export class HostCheckpoints {
     }
   }
 
-  /** 对话里还在的各轮（按顺序）和它们的快照；回退移除的轮次不算 */
+  /**
+   * 对话里还在的各轮（按顺序）和它们的快照；回退移除的轮次不算。
+   * 失效的轮次也留着：失效的是开始前的快照，结束时的可能还好好的，跳过它会把它改的文件当成手改
+   */
   private presentTurns(id: string, state: State): { itemId: string; turn: TurnData }[] {
     return this.ctx.m.sessions
       .runtime(id)
       .snapshot.items.flatMap(item =>
-        item.kind === 'user' && state.data.turns[item.id] && !state.data.turns[item.id]!.lost
+        item.kind === 'user' && state.data.turns[item.id]
           ? [{ itemId: item.id, turn: state.data.turns[item.id]! }]
           : [],
       )

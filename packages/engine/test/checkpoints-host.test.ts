@@ -260,6 +260,21 @@ describe('对话检查点（宿主）', () => {
     expect(saved.turns[a].lost).toBe(true)
   })
 
+  it('后一轮失效了：它结束时的快照照样用来判断手改，它改的文件不误报成手改', async () => {
+    write('keep.txt', 'v0\n')
+    const { host, id, send } = setup({ a: { 'keep.txt': 'v1\n' }, b: { 'keep.txt': 'v2\n' } })
+    const a = await send('a')
+    const b = await send('b')
+    const states = (
+      host as unknown as {
+        m: { checkpoints: { states: Map<string, { data: { turns: Record<string, { lost?: true }> } }> } }
+      }
+    ).m.checkpoints.states
+    states.get(id)!.data.turns[b]!.lost = true
+    expect((await host.rewindPreview(id, a)).code).toMatchObject({ ok: true, files: ['keep.txt'], edited: [] })
+    expect(await host.revertFiles(id, a, ['keep.txt'], false)).toMatchObject({ kind: 'conflict' })
+  })
+
   it('没打开检查点时不拍快照', async () => {
     const host = new EngineHost({
       dataDir: join(root, 'data'),
