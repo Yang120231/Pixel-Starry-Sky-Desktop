@@ -31,8 +31,8 @@ export interface BranchFile {
   deletions: number | null
   /** 写回上级的办法：replace 直接换成分支的版本、auto 三方自动合并、conflict 合不了 */
   merge: BranchFileMerge
-  /** 合不了的原因（conflict 时） */
-  reason?: 'conflict' | 'binary' | 'deleted' | 'removedThere' | 'addedBoth'
+  /** 合不了的原因（conflict 时）；submodule：子模块（gitlink）的改动，没法按文件写回 */
+  reason?: 'conflict' | 'binary' | 'deleted' | 'removedThere' | 'addedBoth' | 'submodule'
 }
 
 /** 合并前的检查（engine:branchStatus） */
@@ -47,6 +47,11 @@ export interface BranchStatus {
   parentBranch: string | null
   /** 副本还在（同目录时为 true） */
   copyExists: boolean
+  /**
+   * 副本在，但找不到上级目录的 Git 仓库（或没有代码起点），算不出副本里的改动（files 为空不代表没改动）：
+   * 不能合并代码，也不能删副本（比如 A→B→C，B 合并回 A 时删了副本，再合并 C 回 B）
+   */
+  codeUnknown: boolean
   files: BranchFile[]
   conflicts: number
   /** 能压成一个提交：没有冲突，这些文件在上级目录里原来也没有没提交的改动 */

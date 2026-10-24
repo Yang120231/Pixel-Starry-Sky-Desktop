@@ -18,6 +18,7 @@ import {
 import { TurnRail } from './TurnRail'
 import { MergeCard } from '../branch/BranchViews'
 import { markTurnReviewed, useTurnReviewed } from '@/features/coding/review'
+import { turnRevisions } from '@/features/coding/ai/turnChangesModel'
 import { reuseTurns, turnsOf, type Turn } from './turnRailModel'
 import { useTurnRailOn } from '@/features/settings/turnRail'
 import { useTranscriptWindowSize } from '@/features/settings/longConversation'
@@ -173,10 +174,13 @@ const TurnChanges = memo(function TurnChanges({
   data,
   sessionId,
   turnKey,
+  revision,
 }: {
   data: ChangedFiles
   sessionId: string | null
   turnKey: string
+  /** 这一轮的版本（turnRevision）：「全部保留」记下它，断线重连的「继续」又改了文件就重新显示按钮 */
+  revision: string
 }) {
   const target = useMemo(() => (sessionId ? { sessionId } : undefined), [sessionId])
   // 分组时每组多一行小标题
@@ -193,11 +197,11 @@ const TurnChanges = memo(function TurnChanges({
     [sessionId, turnKey],
   )
   const keepAll = useMemo(
-    () => (sessionId ? () => markTurnReviewed(sessionId, turnKey) : undefined),
-    [sessionId, turnKey],
+    () => (sessionId ? () => markTurnReviewed(sessionId, turnKey, revision) : undefined),
+    [sessionId, turnKey, revision],
   )
   // 点过「全部保留」后按钮收起
-  const kept = useTurnReviewed(sessionId, turnKey)
+  const kept = useTurnReviewed(sessionId, turnKey, revision)
   // 撤回 / 恢复这一轮的文件（docs/ui/undo-changes.md §3）
   const { undo, dialog } = useTurnUndo(turnKey)
   return (
@@ -399,6 +403,8 @@ export function LiveTranscript({
     return toBlocks(reconnects.items, running, changesCache.current.map, { subagents })
   }, [reconnects, running, sessionId, subagents])
   // 每轮统计行对应的回复：和显示在外面的「最后的回复」是同一段（中间穿插工具调用的过渡话不算）
+  // 每轮的版本（全部保留之后又有新改动要能看出来）；按完整快照算，和编辑器里 useTurnChanges 的 revision 一致
+  const revisions = useMemo(() => turnRevisions(snapshot?.items ?? NO_ITEMS), [snapshot?.items])
   const replies = useMemo(() => turnReplies(reconnects.items, { subagents }), [reconnects, subagents])
   // 子智能体要批准时，它的小框写「等你批准」
   const pending = snapshot?.pending
@@ -698,7 +704,16 @@ export function LiveTranscript({
         </div>
       )
     }
-    if (b.type === 'changes') return <TurnChanges key={b.key} data={b.data} sessionId={sessionId} turnKey={b.turnKey} />
+    if (b.type === 'changes')
+      return (
+        <TurnChanges
+          key={b.key}
+          data={b.data}
+          sessionId={sessionId}
+          turnKey={b.turnKey}
+          revision={revisions.get(b.turnKey) ?? ''}
+        />
+      )
     // 统计关闭时 TurnStats 不产生 DOM，避免外层空块在 flex 列表里留下间距。
     if (b.item.kind === 'turn_stats') return <ItemView key={b.item.id} item={b.item} reply={replies.get(b.item.id)} />
     const isUser = b.item.kind === 'user' && !b.item.reconnect

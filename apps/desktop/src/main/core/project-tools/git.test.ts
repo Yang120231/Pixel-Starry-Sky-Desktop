@@ -349,6 +349,28 @@ describe('Git 图片版本', { timeout: 30_000 }, () => {
     })
   })
 
+  it('Git LFS 指针写明的真实大小超过上限：直接按文件太大返回，不去换（文字、图片都一样）', async () => {
+    await init()
+    // 假过滤器：被调用就会换出小内容、不再是 tooLarge，以此证明没调用
+    await git(project, ['config', 'filter.fake.clean', 'cat'])
+    await git(project, ['config', 'filter.fake.smudge', 'echo smudged'])
+    const pointer = (size: number): string =>
+      'version https://git-lfs.github.com/spec/v1\noid sha256:' + '0'.repeat(64) + `\nsize ${size}\n`
+    await writeFile(join(project, '.gitattributes'), '*.txt filter=fake\n*.png filter=fake\n')
+    await writeFile(join(project, 'big.txt'), pointer(3 * 1024 * 1024))
+    await writeFile(join(project, 'big.png'), pointer(9 * 1024 * 1024))
+    await writeFile(join(project, 'mid.png'), pointer(3 * 1024 * 1024))
+    await commitAll('big pointers')
+    await writeFile(join(project, 'big.txt'), 'small\n')
+    await writeFile(join(project, 'big.png'), base)
+    await writeFile(join(project, 'mid.png'), base)
+    const g = tools()
+    expect(await g.diff(ref, { path: 'big.txt', area: 'unstaged' })).toMatchObject({ tooLarge: true, original: null })
+    expect(await g.diff(ref, { path: 'big.png', area: 'unstaged' })).toMatchObject({ tooLarge: true, image: true })
+    // 图片上限更大：3MB 的指针对图片不算太大，照常去换
+    expect(await g.diff(ref, { path: 'mid.png', area: 'unstaged' })).toMatchObject({ tooLarge: false })
+  })
+
   it('Git LFS 指针：换不成图片时标成 lfs；格式按内容认，改名前后不是图片的一端写明', async () => {
     await init()
     const pointer = 'version https://git-lfs.github.com/spec/v1\noid sha256:' + '0'.repeat(64) + '\nsize 12345\n'

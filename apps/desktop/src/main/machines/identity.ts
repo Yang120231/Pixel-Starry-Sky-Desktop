@@ -23,6 +23,8 @@ const fields = new Set([
   'messageId',
   'toolUseId',
   'workspaceSessionId',
+  // 分支会话 record.branch.startAfter 指向快照里的条目 id（条目 id 会加前缀，它也要跟着加，分隔线才对得上）
+  'startAfter',
 ])
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i
 const resourceId = /^(ssh|wsl)-[a-f0-9-]+~[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i

@@ -28,6 +28,26 @@ describe('machine resource ownership', () => {
     expect(encoded.text).toBe(id)
     expect(remoteIds(encoded, machine, false)).toEqual(raw)
   })
+  it('prefixes branch.startAfter like the item ids it points at, but not copyId or user text', () => {
+    const item = '44444444-4444-4444-8444-444444444444'
+    const raw = {
+      record: { id, branch: { startAfter: item, copyId: id, gitBranch: 'feature', mergedAt: null } },
+      items: [{ kind: 'user', id: item, text: item }],
+    }
+    const encoded = remoteIds(raw, machine, true)
+    expect(encoded.record.branch.startAfter).toBe(machine + '~' + item)
+    expect(encoded.items[0].id).toBe(encoded.record.branch.startAfter)
+    // copyId 现有行为不变（它在字段集合里，会加前缀）；分支名、null 原样
+    expect(encoded.record.branch.copyId).toBe(machine + '~' + id)
+    expect(encoded.record.branch.gitBranch).toBe('feature')
+    expect(encoded.record.branch.mergedAt).toBeNull()
+    expect(remoteIds(encoded, machine, false)).toEqual(raw)
+    expect(remoteIds({ branch: { startAfter: null } }, machine, true)).toEqual({ branch: { startAfter: null } })
+    // 不是 uuid 的值（用户文字）不会被改
+    expect(remoteIds({ branch: { startAfter: 'some-item' } }, machine, true)).toEqual({
+      branch: { startAfter: 'some-item' },
+    })
+  })
   it('routes references by ownership even after another machine is selected', () => {
     expect(argumentMachine([{ projectId: machine + '~' + id }])).toBe(machine)
     expect(argumentMachine([machine + '~' + id, 'hello'])).toBe(machine)

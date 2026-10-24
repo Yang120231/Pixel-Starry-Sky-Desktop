@@ -5,7 +5,7 @@ import { FileText, GitBranch, GitMerge, MessageSquare, X } from 'lucide-react'
 import type { NoticeBranchMerge, PendingMerge, SessionRecord } from '@pixelsky/protocol'
 import { tr, translateMessage } from '@/i18n/core'
 import { useI18n } from '@/i18n/I18nProvider'
-import { cn, DiffStat, IconButton } from '@/ui'
+import { cn, DiffStat, IconButton, useComingSoon } from '@/ui'
 import { bridge } from '@/features/engine'
 import { useEngineState } from '@/features/engine/store'
 import { paneActions } from '@/features/panes/store'
@@ -29,6 +29,7 @@ export function BranchDialogHost() {
 /** 分支会话顶部的横条：从哪开出来、代码在哪个副本；右边「合并回主会话」 */
 export function BranchBanner({ record }: { record: SessionRecord }) {
   useI18n()
+  const comingSoon = useComingSoon()
   const b = record.branch!
   const parentId = record.forkedFrom?.sessionId ?? null
   const parent = useEngineState(s =>
@@ -77,7 +78,7 @@ export function BranchBanner({ record }: { record: SessionRecord }) {
           data-branch-merge
           disabled={busy}
           title={busy ? tr('merge.runningSelf') : undefined}
-          onClick={() => openMergeDialog(record.id)}
+          onClick={() => (bridge ? openMergeDialog(record.id) : comingSoon(tr(mergeLabel(record, 'banner'))))}
           className="press inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-line bg-surface px-3 text-meta text-fg hover:bg-hover disabled:opacity-50"
         >
           <GitMerge size={13} strokeWidth={1.75} />

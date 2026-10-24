@@ -11,6 +11,7 @@ import { ENGINES } from '../src/registry'
 import { helpersExited, parseRewindReply, parseSideAnswer, sideQuestionArgs } from '../src/claude/helper'
 import { claudeArgs } from '../src/claude/session'
 import { sidePrompt } from '../src/host/branch'
+import { codexAnchor, type CodexTurnInfo } from '../src/codex/branch'
 
 const FAKE = fileURLToPath(new URL('./fakes/fake-claude.mjs', import.meta.url))
 
@@ -68,6 +69,26 @@ class StubCodex implements EngineAdapter {
       async update() {},
       async close() {},
     }
+  }
+}
+
+/** 带轮次的假 Codex：每条消息一轮（turn-1、turn-2…，clientId 是我们的条目 id），截断点按真的 codexAnchor 算 */
+class ThreadCodex extends StubCodex {
+  readonly turns: CodexTurnInfo[] = []
+  readonly sent: string[] = []
+  createSession(ctx: SessionContext): EngineSession {
+    const inner = super.createSession(ctx)
+    return {
+      ...inner,
+      send: (text, turnId, userItemId, ...rest) => {
+        this.sent.push(text)
+        this.turns.push({ id: `turn-${this.turns.length + 1}`, clientIds: [userItemId] })
+        inner.send(text, turnId, userItemId, ...rest)
+      },
+    }
+  }
+  rewindAnchor(_record: unknown, userItemIds: string[]) {
+    return codexAnchor(this.turns, userItemIds)
   }
 }
 
@@ -429,6 +450,70 @@ describe('开分支（docs/ui/branch-merge.md）', () => {
     await host.send(forked.record.id, { text: '接着', clientMessageId: 'f1' })
     await waitFor(() => turnsDone(forked.record.id) === 1)
     expect(visible().at(-1)).toEqual(['一', '二'])
+  })
+
+  it('回退了还没发就带上整个会话：截在回退点，不带刚回退掉的轮次', async () => {
+    const host = makeHost()
+    const { record } = await conversation(host, ['一', '二', '三'])
+    await host.rewind(record.id, 'm2')
+    const pending = host.open(record.id).record.pendingRewind
+    expect(pending).toBeTruthy()
+    const forked = await host.forkSession(record.id, null, '整个')
+    expect(forked.record.pendingFork).toEqual({ from: host.open(record.id).record.engineSessionId, at: pending })
+    expect(userTexts(host, forked.record.id)).toEqual(['一', '二'])
+    await host.send(forked.record.id, { text: '接着', clientMessageId: 'f1' })
+    await waitFor(() => turnsDone(forked.record.id) === 1)
+    expect(visible().at(-1)).toEqual(['一', '二'])
+  })
+
+  it('Codex：回退了还没发就带上整个会话，截在回退点（线程现在的最后一轮是刚回退掉的）', async () => {
+    const codex = new ThreadCodex()
+    const host = makeHost({}, { codex })
+    const project = host.addProject(mkdtempSync(join(root, 'proj-')))
+    const record = host.createSession({ projectId: project.id, engine: 'codex' })
+    for (const [i, text] of ['一', '二', '三'].entries()) {
+      await host.send(record.id, { text, clientMessageId: `m${i}` })
+      await waitFor(() => turnsDone(record.id) === i + 1)
+    }
+    await host.rewind(record.id, 'm2')
+    expect(host.open(record.id).record.pendingRewind).toBe('turn-2')
+    const forked = await host.forkSession(record.id, null, '整个')
+    expect(forked.record.pendingFork).toEqual({ from: 'codex-thread', at: 'turn-2' })
+    expect(forked.record.engineSessions?.codex?.seen).not.toBeNull()
+    // 从某条消息开分支照常按线程的轮次找
+    const fromItem = await host.forkSession(record.id, 'm1')
+    expect(fromItem.record.pendingFork).toEqual({ from: 'codex-thread', at: 'turn-1' })
+  })
+
+  it('合并摘要不加在斜杠命令前面：命令原样发，摘要留给下一条普通消息', async () => {
+    const codex = new ThreadCodex()
+    const host = makeHost({}, { codex })
+    const project = host.addProject(mkdtempSync(join(root, 'proj-')))
+    const record = host.createSession({ projectId: project.id, engine: 'codex' })
+    await host.send(record.id, { text: '一', clientMessageId: 'm0' })
+    await waitFor(() => turnsDone(record.id) === 1)
+    const forked = await host.forkSession(record.id, null, '试试', { branch: { ...branch, copyId: null } })
+    host.recordMerge(
+      forked.record.id,
+      {
+        sessionId: forked.record.id,
+        title: '试试',
+        summary: '· 改成短信验证码',
+        code: 'none',
+        files: [],
+        copyRemoved: false,
+        gitBranch: null,
+      },
+      {},
+    )
+    await host.send(record.id, { text: '  /compact', clientMessageId: 'c1' })
+    await waitFor(() => turnsDone(record.id) === 2)
+    expect(codex.sent.at(-1)?.trim()).toBe('/compact')
+    expect(host.open(record.id).record.pendingMerge).toMatchObject({ title: '试试' })
+    await host.send(record.id, { text: '接着做后端', clientMessageId: 'n1' })
+    await waitFor(() => turnsDone(record.id) === 3)
+    expect(codex.sent.at(-1)).toMatch(/^\[分支合并\][\s\S]*改成短信验证码[\s\S]*\n\n接着做后端$/)
+    expect(host.open(record.id).record.pendingMerge).toBeNull()
   })
 
   it('换了工作目录：原记录复制进新目录对应的文件夹，用 --resume 接上；branch 记下起点', async () => {

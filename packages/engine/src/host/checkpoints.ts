@@ -338,11 +338,15 @@ export class HostCheckpoints {
    * 这一轮结束时的样子：结束时没拍到（应用中途退出、快照停用）就用之后最近一轮开始前的。
    * 没有开始前快照的轮次跳过：用更后面的，它们改的文件会多报成冲突（宁可多问一次）
    */
-  private endOf(id: string, state: State, itemId: string): string | null {
+  private endOf(id: string, state: State, itemId: string): { tree: string; at?: number } | null {
     const turns = this.presentTurns(id, state)
     const i = turns.findIndex(t => t.itemId === itemId)
     if (i < 0) return null
-    return turns[i]!.turn.after ?? turns.slice(i + 1).find(t => t.turn.before)?.turn.before ?? null
+    const turn = turns[i]!.turn
+    // at：拍这份快照的时间（结束快照缺了内容时退回比修改时间用）
+    if (turn.after) return { tree: turn.after, at: turn.endedAt }
+    const next = turns.slice(i + 1).find(t => t.turn.before)
+    return next ? { tree: next.turn.before!, at: next.turn.at } : null
   }
 
   /** 回退到这条消息之前要还原哪些文件（branch.ts 有快照时用它） */
@@ -447,9 +451,23 @@ export class HostCheckpoints {
     const end = force ? null : this.endOf(id, state, itemId)
     if (end) {
       const conflicts: Extract<RevertFilesResult, { kind: 'conflict' }>['conflicts'] = []
+      // 结束时的快照缺没缺内容：第一次读失败时才查
+      let missing: boolean | undefined
       for (const t of targets) {
-        // 结束时的快照缺了内容：比不了，当作没手改过（和结束时没拍到一样）
-        const then = await state.repo.blob(end, t.rel).catch(() => 'special' as const)
+        let then: TreeBlob
+        try {
+          then = await state.repo.blob(end.tree, t.rel)
+        } catch (err) {
+          // 结束时的快照缺了内容（项目的 git 清理了借来的对象）：比不了内容，退回和 preview 一样比修改时间；
+          // 别的错误（git 出错、超时）不猜，撤回失败、不动文件
+          missing ??= await state.repo.incomplete(end.tree, LATER_TIMEOUT).catch(() => false)
+          if (!missing) throw err
+          // 没有快照时间（旧记录）：和结束时没拍到一样，当作没手改过
+          if (end.at === undefined || !this.changedSince(state.data.cwd, [t.rel], end.at).length) continue
+          // 没有结束时的内容：给出撤回会丢掉的全部改动（这一轮开始前 → 现在）
+          conflicts.push({ path: t.input, ...conflictDiff(t.blob as Buffer | null, readOrNull(t.file)) })
+          continue
+        }
         if (then === 'special') continue
         const now = readOrNull(t.file)
         if (sameContent(then, now)) continue

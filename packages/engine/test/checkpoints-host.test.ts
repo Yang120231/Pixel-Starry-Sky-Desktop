@@ -3,8 +3,8 @@ import { existsSync, mkdirSync, readFileSync, rmSync, utimesSync, writeFileSync 
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { EngineInfo, ImageAttachment, SessionSettings, SessionSnapshot } from '@pixelsky/protocol'
-import type { EngineAdapter, EngineSession, SessionContext } from '../src/adapter'
-import { CHECKPOINT_EXPIRED, CheckpointError } from '../src/checkpoints'
+import type { EngineAdapter, EngineSession, RewindFilesReply, SessionContext } from '../src/adapter'
+import { CHECKPOINT_EXPIRED, CheckpointError, type ShadowRepo } from '../src/checkpoints'
 import { EngineHost } from '../src/host'
 import { ENGINES } from '../src/registry'
 import { makeTmp, removeTmp } from './helpers/tmp'
@@ -65,10 +65,35 @@ class EditingAdapter implements EngineAdapter {
   }
 }
 
-function setup(edits: Record<string, Record<string, string>>) {
+/** 还带引擎自己的检查点（rewindFiles）：记下调用，还原时把 a.txt / keep.txt 改回最初 */
+class RewindingAdapter extends EditingAdapter {
+  readonly calls: { userItemId: string; dryRun: boolean }[] = []
+  createSession(ctx: SessionContext) {
+    // 引擎的检查点要有引擎会话
+    if (!ctx.record().engineSessionId) ctx.setEngineSessionId('engine-session')
+    return super.createSession(ctx)
+  }
+  async rewindFiles(
+    _record: unknown,
+    userItemId: string,
+    dryRun: boolean,
+    beforeRestore?: (files: string[]) => void,
+  ): Promise<RewindFilesReply> {
+    this.calls.push({ userItemId, dryRun })
+    const files = [join(work, 'a.txt'), join(work, 'keep.txt')]
+    if (!dryRun) {
+      beforeRestore?.(files)
+      rmSync(files[0]!, { force: true })
+      writeFileSync(files[1]!, 'v0\n')
+    }
+    return { ok: true, files, insertions: 0, deletions: 2 }
+  }
+}
+
+function setup(edits: Record<string, Record<string, string>>, adapter: EngineAdapter = new EditingAdapter(edits)) {
   const host = new EngineHost({
     dataDir: join(root, 'data'),
-    adapters: { claude: new EditingAdapter(edits) },
+    adapters: { claude: adapter },
     checkpoints: true,
     emit: () => {},
   })
@@ -106,7 +131,7 @@ const internals = (host: EngineHost) =>
     host as unknown as {
       m: {
         checkpoints: {
-          states: Map<string, { data: { turns: Record<string, TurnRecord> } }>
+          states: Map<string, { repo: ShadowRepo; data: { turns: Record<string, TurnRecord> } }>
           beforeTurn(id: string, itemId: string): Promise<void>
           failed(id: string, err: Error): void
         }
@@ -367,6 +392,69 @@ describe('对话检查点（宿主）', () => {
       ],
     }
     expect((await host.rewindPreview(id, a)).code).toMatchObject({ ok: true, files: ['keep.txt'], edited: [] })
+  })
+
+  it('只勾了几个文件、确认时快照失效了：报失效、不改用引擎的检查点（没勾的手改不被改回）；全部还原时才改用', async () => {
+    write('keep.txt', 'v0\n')
+    const adapter = new RewindingAdapter({ a: { 'a.txt': 'a\n', 'keep.txt': 'v1\n' } })
+    const { host, id, send } = setup({}, adapter)
+    const a = await send('a')
+    write('keep.txt', 'hand\n')
+    expect((await host.rewindPreview(id, a)).code).toMatchObject({ ok: true, checkpoint: true })
+    // 预览到确认之间快照缺了内容（项目的 git 清理了对象）
+    rmSync(join(root, 'data', 'sessions', id, 'checkpoints'), { recursive: true })
+    await expect(host.rewind(id, a, { conversation: false, code: true, paths: ['a.txt'] })).rejects.toThrow(
+      CHECKPOINT_EXPIRED,
+    )
+    expect(adapter.calls).toEqual([])
+    expect(read('a.txt')).toBe('a\n')
+    expect(read('keep.txt')).toBe('hand\n')
+    // 同时回退对话：对话照样回退，代码没动、说明原因
+    const both = await host.rewind(id, a, { conversation: true, code: true, paths: ['a.txt'] })
+    expect(both.codeSkipped).toBe(CHECKPOINT_EXPIRED)
+    expect(adapter.calls).toEqual([])
+    expect(read('keep.txt')).toBe('hand\n')
+    await host.undoRewind(id)
+    // 全部还原（没传 paths）：对话检查点失效了才改用引擎自己的
+    const all = await host.rewind(id, a, { conversation: false, code: true })
+    expect(adapter.calls).toEqual([{ userItemId: a, dryRun: false }])
+    expect(all.filesRestored).toBe(2)
+    expect(read('a.txt')).toBeNull()
+    expect(read('keep.txt')).toBe('v0\n')
+  })
+
+  it('撤回时结束快照缺了内容：退回比修改时间，之后手改过的报冲突，没改过的照常撤回', async () => {
+    write('keep.txt', 'v0\n')
+    write('other.txt', 'o0\n')
+    const { host, id, send } = setup({ a: { 'keep.txt': 'v1\n', 'other.txt': 'o1\n' } })
+    const a = await send('a')
+    // 结束时的树不在了（git 清理掉了）：读它报错，查一遍确认是缺内容
+    internals(host).states.get(id)!.data.turns[a]!.after = '0123456789abcdef0123456789abcdef01234567'
+    write('keep.txt', 'hand\n')
+    const later = (Date.now() + 10_000) / 1000
+    utimesSync(join(work, 'keep.txt'), later, later)
+    const result = await host.revertFiles(id, a, ['keep.txt', 'other.txt'], false)
+    expect(result).toMatchObject({ kind: 'conflict', conflicts: [{ path: 'keep.txt' }] })
+    if (result.kind === 'conflict') expect(result.conflicts[0]!.diff).toContain('+hand')
+    expect(read('keep.txt')).toBe('hand\n')
+    expect(await host.revertFiles(id, a, ['other.txt'], false)).toMatchObject({
+      kind: 'done',
+      reverted: ['other.txt'],
+    })
+    expect(read('other.txt')).toBe('o0\n')
+  })
+
+  it('撤回时读结束快照出了别的错（不是缺内容）：撤回失败，不动文件', async () => {
+    write('keep.txt', 'v0\n')
+    const { host, id, send } = setup({ a: { 'keep.txt': 'v1\n' } })
+    const a = await send('a')
+    const repo = internals(host).states.get(id)!.repo
+    const after = internals(host).states.get(id)!.data.turns[a]!.after!
+    const blob = repo.blob.bind(repo)
+    repo.blob = (tree, path) =>
+      tree === after ? Promise.reject(new CheckpointError('failed', 'git 出错了')) : blob(tree, path)
+    await expect(host.revertFiles(id, a, ['keep.txt'], false)).rejects.toThrow('git 出错了')
+    expect(read('keep.txt')).toBe('v1\n')
   })
 
   it('没打开检查点时不拍快照', async () => {

@@ -159,6 +159,16 @@ export function runGit(
   })
 }
 
+/** LFS 指针里写的真实大小（`size N` 行）；不是指针或没写返回 null */
+export const lfsPointerSize = (pointer: Buffer): number | null => {
+  if (!isLfsPointer(pointer)) return null
+  const m = /^size (\d+)$/m.exec(pointer.toString('latin1'))
+  return m ? Number(m[1]) : null
+}
+
+/** content() 的返回：LFS 指针写明的真实大小已超上限，没去换（不让 git-lfs 把整个大文件下下来再丢掉） */
+const LFS_TOO_LARGE = Symbol('lfsTooLarge')
+
 const text = (b: Buffer): string => b.toString('utf8')
 const lf = (s: string): string => s.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n')
 const isBinary = (b: Buffer): boolean => b.subarray(0, 8000).includes(0)
@@ -605,9 +615,10 @@ export class GitTools {
 
   /**
    * 一端的内容。Git LFS 管理的文件在 Git 里是指针：装了 git-lfs 时按 .gitattributes 换成真正的内容，换不了原样返回指针。
-   * 普通文件不走 filters（免得换行之类的过滤改了内容）
+   * 普通文件不走 filters（免得换行之类的过滤改了内容）。指针写明的真实大小超过 limit 就不换，返回 LFS_TOO_LARGE：
+   * 大小预检（probe）看到的只是 130 字节的指针，放行后 --filters 会把整个大文件换出来
    */
-  private async content(repo: Repo, probe: DiffProbe, limit: number): Promise<Buffer> {
+  private async content(repo: Repo, probe: DiffProbe, limit: number): Promise<Buffer | typeof LFS_TOO_LARGE> {
     const source = probe.source
     if ('file' in source) {
       if (!source.link) return readFile(source.file)
@@ -617,6 +628,8 @@ export class GitTools {
     const run = await runGit(repo.root, ['cat-file', 'blob', source.blob], { timeout: this.timeout('diff'), limit })
     if (run.code !== 0 || run.timedOut) throw readError(run)
     if (!isLfsPointer(run.stdout)) return run.stdout
+    const real = lfsPointerSize(run.stdout)
+    if (real !== null && real > limit) return LFS_TOO_LARGE
     const smudged = await runGit(repo.root, ['cat-file', '--filters', source.blob], {
       timeout: this.timeout('diff'),
       limit,
@@ -663,7 +676,7 @@ export class GitTools {
     if (probes.some(p => p && p.size > limit)) return tooLarge
     if (image && input.images === false) return base
     const [a, b] = await Promise.all(probes.map(p => (p ? this.content(repo, p, limit) : null)))
-    if ([a, b].some(d => d && d.length > limit)) return tooLarge
+    if (a === LFS_TOO_LARGE || b === LFS_TOO_LARGE || [a, b].some(d => d && d.length > limit)) return tooLarge
     if (image) {
       // 格式按内容认（扩展名可能和内容不一致）；认不出就写明这一端不是能显示的图片
       const side = (data: Buffer | null): GitDiffImageSide => {

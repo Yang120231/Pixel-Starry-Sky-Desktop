@@ -269,8 +269,9 @@ export class HostTurn {
       if (rt.snapshot.suggestion) m.events.apply(id, { type: 'suggestion', text: null })
       m.events.apply(id, { type: 'status', state: 'running' })
       m.events.apply(id, { type: 'turn_started', turnId, execution: queueSettings(rt.execution) })
-      // 合并回来的分支摘要放在这条消息前面（docs/ui/branch-merge.md §5.2），用户消息条目里仍是原文；发出就清掉
-      merge = resume ? null : (rt.snapshot.record.pendingMerge ?? null)
+      // 合并回来的分支摘要放在这条消息前面（docs/ui/branch-merge.md §5.2），用户消息条目里仍是原文；发出就清掉。
+      // 斜杠命令（/compact 等）要原样交给引擎，前面加东西就不认了：摘要不动，留给下一条普通消息（同 handoff 的 hold）
+      merge = resume || text.trimStart().startsWith('/') ? null : (rt.snapshot.record.pendingMerge ?? null)
       if (merge) m.events.patchRecord(id, { pendingMerge: null })
       const sent = merge ? `${mergeContext(merge)}\n\n${handoff.text}` : handoff.text
       rt.session.send(sent, turnId, userItemId, attachments, handoff.seed, handoff.attachments)

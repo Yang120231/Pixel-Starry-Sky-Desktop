@@ -6,11 +6,14 @@ import type { Item } from '@pixelsky/protocol'
 /** 不到「设置的轮数 + 这个数」轮的对话不折叠（只藏几轮没意义） */
 export const FOLD_MARGIN = 10
 
-/** 每一轮（一条正常发出的我方消息，引导消息不算）在 items 里的下标；和 turnRailModel.turnsOf 同一个定义 */
+/**
+ * 每一轮（一条正常发出的我方消息，引导消息、断线重连自动发的「继续」不算）在 items 里的下标；
+ * 和 turnRailModel.turnsOf / changeBlocks 同一个定义
+ */
 export function turnStarts(items: readonly Item[]): number[] {
   const starts: number[] = []
   items.forEach((item, i) => {
-    if (item.kind === 'user' && item.mode !== 'guidance') starts.push(i)
+    if (item.kind === 'user' && item.mode !== 'guidance' && item.reconnect === undefined) starts.push(i)
   })
   return starts
 }

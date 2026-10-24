@@ -596,7 +596,11 @@ export class WorkspaceFiles {
     const spec = `HEAD:${prefix.trim()}${rel.replaceAll('\\', '/')}`
     let content = await git(['show', spec])
     // Git LFS 管理的文件 HEAD 里是指针：装了 git-lfs 时换成真正的内容（不然整个文件都标成改过）；换不了（没装时工作区也是指针）照旧
-    if (content !== null && isLfsPointer(content)) content = (await git(['cat-file', '--filters', spec])) ?? content
+    if (content !== null && isLfsPointer(content)) {
+      // 指针写明的真实大小超过读取上限就不换（--filters 会把整个大文件换出来，再被 maxBuffer 丢掉）
+      const real = Number(/^size (\d+)$/m.exec(content)?.[1])
+      if (!(real > READ_LIMIT)) content = (await git(['cat-file', '--filters', spec])) ?? content
+    }
     return content === null || content.includes('\0') ? null : content.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n')
   }
 

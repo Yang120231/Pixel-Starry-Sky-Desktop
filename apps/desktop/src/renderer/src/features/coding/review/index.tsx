@@ -24,7 +24,7 @@ export function useTurnBaseline(tab: OpenFile | null): string | null {
 /** 红绿装饰 + 每块的保留 / 撤销 / 问 AI；基准为 null 时返回常量空数组。返回值已 memo */
 export function useAiReviewExtensions(tab: OpenFile | null): readonly Extension[] {
   const target = useReviewTarget(tab)
-  const reviewed = useReviewed(target.scope)
+  const reviewed = useReviewed(target.scope, target.revision)
   const toast = useToast()
   const toastRef = useRef(toast)
   useEffect(() => {

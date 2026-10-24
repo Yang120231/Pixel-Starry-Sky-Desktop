@@ -143,6 +143,19 @@ describe('项目文件', () => {
     expect(await service.headContent(ref, 'data.txt')).toBe('smudged\n')
     expect(await service.read(ref, 'fake.png')).toMatchObject({ kind: 'text', content: 'not really a png' })
   })
+  it('HEAD 里是 Git LFS 指针且真实大小超过读取上限时不去换', async () => {
+    const run = (...args: string[]) => execFileSync('git', args, { cwd: root, windowsHide: true })
+    run('init', '--quiet')
+    run('config', 'filter.fake.clean', 'cat')
+    run('config', 'filter.fake.smudge', 'echo smudged')
+    const pointer = 'version https://git-lfs.github.com/spec/v1\noid sha256:' + '0'.repeat(64) + '\nsize 99999999999\n'
+    await writeFile(join(root, '.gitattributes'), 'data.txt filter=fake\n')
+    await writeFile(join(root, 'data.txt'), pointer)
+    run('add', '.')
+    run('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '--quiet', '-m', 'fixture')
+    // 没去换：还是指针原文（换了会得到 smudged）
+    expect(await service.headContent(ref, 'data.txt')).toBe(pointer)
+  })
 })
 
 describe('多文件夹项目（docs/ui/multi-root-projects.md §3.4）', () => {

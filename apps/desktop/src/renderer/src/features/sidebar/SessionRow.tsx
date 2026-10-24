@@ -293,7 +293,9 @@ export function SessionRow({
                 disabled={busy}
                 hint={busy ? t('branch.menu.busy') : record.branch?.copyId ? undefined : t('branch.menu.carryNotes')}
                 title={t('branch.menu.mergeDesc', { title: parent.title })}
-                onClick={() => run(() => openMergeDialog(target.id))}
+                onClick={() =>
+                  run(() => (isLive ? openMergeDialog(target.id) : comingSoon(t(mergeLabel(record, 'menu')))))
+                }
               />
             )}
             <MenuSeparator />

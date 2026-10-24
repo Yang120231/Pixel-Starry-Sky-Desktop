@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { FileChange, Item } from '@pixelsky/protocol'
-import { latestTurnChanges, relativePath } from './turnChangesModel'
+import { latestTurnChanges, relativePath, turnRevision, turnRevisions } from './turnChangesModel'
 
 type Status = Extract<Item, { kind: 'file_change' }>['status']
 const user = (id: string, mode?: 'guidance'): Item => ({
@@ -107,6 +107,53 @@ describe('latestTurnChanges', () => {
   it('空 diff 不进 diffs，文件照样列出', () => {
     const items = [user('u1'), edit('e1', [change('a.bin', 'update', '', 0, 0)])]
     expect(latestTurnChanges(items, false, '', false)!.files[0].diffs).toEqual([])
+  })
+  it('revision 是这一轮最后一条已完成改动的 id：断线重连的新改动并进同一轮后 turnKey 不变、revision 变', () => {
+    const resumed: Item = { kind: 'user', id: 'u1-reconnect-1', text: '继续', createdAt: 0, reconnect: 1 }
+    const before = [user('u1'), edit('e1', [change('a.ts')]), edit('e1b', [change('a.ts')], 'running')]
+    const after = [...before, resumed, edit('e2', [change('b.ts')])]
+    const kept = latestTurnChanges(before, false, '', false)!
+    const now = latestTurnChanges(after, false, '', false)!
+    expect(kept.revision).toBe('e1')
+    expect(now.turnKey).toBe(kept.turnKey)
+    expect(now.revision).toBe('e2')
+    expect(now.revision).not.toBe(kept.revision)
+    // 没有新改动：revision 不变（失败的、还在跑的不算）
+    expect(latestTurnChanges([...before, edit('e3', [change('c.ts')], 'failed')], false, '', false)!.revision).toBe(
+      'e1',
+    )
+  })
+  it('turnRevision 和 latestTurnChanges 对同一轮给出同一个值；别的轮、没有改动为空串', () => {
+    const items = [
+      edit('s1', [change('s.ts')]),
+      user('u1'),
+      edit('e1', [change('a.ts')]),
+      user('g', 'guidance'),
+      edit('e2', [change('b.ts')]),
+      user('u2'),
+      edit('e3', [change('c.ts')]),
+    ]
+    expect(turnRevision(items, 'start')).toBe('s1')
+    expect(turnRevision(items, 'u1')).toBe('e2')
+    expect(turnRevision(items, 'u2')).toBe('e3')
+    expect(turnRevision(items, 'nope')).toBe('')
+    expect(turnRevision([user('u9')], 'u9')).toBe('')
+    expect(latestTurnChanges(items, false, '', false)!.revision).toBe(turnRevision(items, 'u2'))
+    expect(latestTurnChanges(items.slice(0, 5), false, '', false)!.revision).toBe(turnRevision(items, 'u1'))
+  })
+  it('turnRevisions 一次算出每一轮的版本；断线重连的「继续」后新改动并进同一轮、版本变了', () => {
+    const reconnect: Item = { ...user('r1'), reconnect: 1 } as Item
+    const before = [edit('s1', [change('s.ts')]), user('u1'), edit('e1', [change('a.ts')])]
+    const after = [...before, reconnect, edit('e2', [change('b.ts')])]
+    expect([...turnRevisions(before)]).toEqual([
+      ['start', 's1'],
+      ['u1', 'e1'],
+    ])
+    expect(turnRevisions(after).get('u1')).toBe('e2')
+    expect(turnRevisions(after).get('start')).toBe('s1')
+    expect(turnRevisions(after).has('r1')).toBe(false)
+    for (const key of ['start', 'u1']) expect(turnRevisions(after).get(key)).toBe(turnRevision(after, key))
+    expect(turnRevisions([user('u9')]).size).toBe(0)
   })
   it('第一条用户消息之前的改动记在 start；没有改动时 null', () => {
     expect(latestTurnChanges([edit('e1', [change('a.ts')])], false, '', false)!.turnKey).toBe('start')

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronDown, GitBranch, GitMerge } from 'lucide-react'
-import { cn } from '@/ui'
+import { cn, useComingSoon } from '@/ui'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import { isDemo } from '@/data'
 import { demo as demoData } from '@/data/demo'
+import { isLive } from '@/features/engine'
 import { BranchMenu, type BranchMenuAction } from '@/features/panel/git/BranchMenu'
 import {
   branchParent,
@@ -40,6 +41,7 @@ export function HeaderBranch({
 }) {
   const up = variant === 'composer'
   useI18n()
+  const comingSoon = useComingSoon()
   const api = window.pixelsky?.projectTools
   const [menu, setMenu] = useState(false)
   const trigger = useRef<HTMLButtonElement>(null)
@@ -162,7 +164,7 @@ export function HeaderBranch({
       </button>
       {menu && (
         <BranchMenu
-          actions={branchActions(target)}
+          actions={branchActions(target, comingSoon)}
           branches={branches}
           loading={loading}
           onClose={close}
@@ -226,7 +228,7 @@ export function HeaderBranch({
 }
 
 /** 会话输入框上方的分支菜单：顶部多两项「开分支…」「合并回主会话…」（docs/ui/branch-merge.md §2） */
-function branchActions(target: WorkspaceRef): BranchMenuAction[] {
+function branchActions(target: WorkspaceRef, comingSoon: (what: string) => void): BranchMenuAction[] {
   const id = target.sessionId
   if (!id) return []
   const record = sessionRecord(id)
@@ -250,7 +252,8 @@ function branchActions(target: WorkspaceRef): BranchMenuAction[] {
       label: tr(mergeLabel(record, 'menu')),
       desc: busy ? tr('branch.menu.busy') : tr('branch.menu.mergeDesc', { title: parent.title }),
       disabled: busy,
-      onClick: () => openMergeDialog(id),
+      // 演示模式没有引擎：合并弹窗会一直加载，和侧栏、分支横条一样提示「敬请期待」
+      onClick: () => (isLive ? openMergeDialog(id) : comingSoon(tr(mergeLabel(record, 'menu')))),
     })
   return actions
 }

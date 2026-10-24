@@ -13,10 +13,12 @@ export interface ReviewTarget {
   /** 这个文件这一轮有没有改过 */
   file: TurnFile | null
   scope: string | null
+  /** 这一轮的版本（TurnChanges.revision）：整轮「全部保留」只对标记时的版本有效 */
+  revision: string
   running: boolean
   baseline: string | null
 }
-const NONE: ReviewTarget = { file: null, scope: null, running: false, baseline: null }
+const NONE: ReviewTarget = { file: null, scope: null, revision: '', running: false, baseline: null }
 
 interface CacheEntry {
   version: string
@@ -54,7 +56,7 @@ export function useReviewTarget(tab: OpenFile | null): ReviewTarget {
     const file = turn.files.find(f => same(f.path, path)) ?? null
     if (!file) return NONE
     const scope = `${sessionId}:${turn.turnKey}:${file.path}`
-    const base = { file, scope, running: turn.running }
+    const base = { file, scope, revision: turn.revision, running: turn.running }
     if (content === null || readonly) return { ...base, baseline: null }
     // 新文件：HEAD 里没有（演示模式下 HEAD 是空串）
     const isNew = head === null || head === ''

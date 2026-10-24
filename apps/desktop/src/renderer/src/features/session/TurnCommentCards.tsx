@@ -18,6 +18,7 @@ import {
   updateTurnComment,
   useTurnCommentDraft,
   useTurnComments,
+  withCurrentTurns,
   type TurnComment,
 } from './turnComments'
 
@@ -73,8 +74,10 @@ export function TurnCommentList({ turnKey }: { turnKey: string }) {
   if (!ctx) return null
   const editing = draft?.sessionId === ctx.sessionId && draft.turnKey === turnKey ? draft : null
   if (!editing && !comments.length) return null
-  const open = comments.filter(c => !c.resolved)
-  const resolved = comments.filter(c => c.resolved)
+  // 存的编号可能是旧规则算的：按当前对话重算（withCurrentTurns）
+  const current = withCurrentTurns(comments, ctx.items())
+  const open = current.filter(c => !c.resolved)
+  const resolved = current.filter(c => c.resolved)
   return (
     <div data-search-item={turnKey} data-turn-comments className="conversation-message mt-2 flex flex-col gap-2">
       {open.map(c => (
@@ -206,7 +209,8 @@ export function CommentCard({
     if (!ctx?.handoff) return
     setBusy(true)
     try {
-      const how = await ctx.handoff(commentMessage(c))
+      // 发出去时再按当前对话算一次编号（卡片显示的是上次渲染时的）
+      const how = await ctx.handoff(commentMessage(withCurrentTurns([c], ctx.items())[0]))
       updateTurnComment(sessionId, c.id, { handedTo: { kind: 'ai' } })
       toast(tr(how === 'started' ? 'turnComment.started' : 'turnComment.queued'))
     } catch (err) {
@@ -343,7 +347,7 @@ function ToChannelDialog({ comment, ctx, onClose }: { comment: TurnComment; ctx:
         setBusy(true)
         setError(null)
         channelActions
-          .postText(channel.id, channelRequest(comment, member.name, ctx.title))
+          .postText(channel.id, channelRequest(withCurrentTurns([comment], ctx.items())[0], member.name, ctx.title))
           .then(() => {
             updateTurnComment(ctx.sessionId, comment.id, {
               handedTo: { kind: 'channel', channel: channel.name, member: member.name },

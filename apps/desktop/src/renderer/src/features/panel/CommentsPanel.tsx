@@ -8,8 +8,9 @@ import { usePaneState } from '@/features/panes/store'
 import { focusedTab } from '@/features/panes/tree'
 import { isSessionTab } from '@/features/panes/keepAlive'
 import { CommentCard } from '@/features/session/TurnCommentCards'
-import { useTurnComments } from '@/features/session/turnComments'
+import { panelComments, useTurnComments } from '@/features/session/turnComments'
 import { useReviewComments } from '@/features/session/reviewComments'
+import { useEngineState } from '@/features/engine/store'
 
 /** 当前聚焦的会话标签（文件标签、新会话标签不算） */
 function useFocusedSession(): string | null {
@@ -22,11 +23,9 @@ export function CommentsPanel() {
   const sessionId = useFocusedSession()
   const comments = useTurnComments(sessionId)
   const code = useReviewComments(sessionId).comments
+  const items = useEngineState(s => (sessionId ? s.snapshots[sessionId]?.items : undefined))
   const [onlyOpen, setOnlyOpen] = useState(true)
-  const shown = useMemo(
-    () => [...comments].filter(c => !onlyOpen || !c.resolved).sort((a, b) => a.turn - b.turn || a.at - b.at),
-    [comments, onlyOpen],
-  )
+  const shown = useMemo(() => panelComments(comments, items, onlyOpen), [comments, items, onlyOpen])
   if (!sessionId) return <p className="p-4 text-meta text-fg-faint">{tr('turnComment.panelNoSession')}</p>
   const empty = comments.length === 0 && code.length === 0
   return (

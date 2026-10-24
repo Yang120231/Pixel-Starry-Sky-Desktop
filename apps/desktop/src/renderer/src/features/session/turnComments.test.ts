@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { Item } from '@pixelsky/protocol'
-import { channelRequest, commentMessage, turnNumbers, turnOfItem } from './turnComments'
+import {
+  channelRequest,
+  commentMessage,
+  panelComments,
+  turnNumbers,
+  turnOfItem,
+  withCurrentTurns,
+  type TurnComment,
+} from './turnComments'
 
 const user = (id: string) => ({ kind: 'user', id, text: id }) as unknown as Item
 const reply = (id: string) => ({ kind: 'assistant', id, text: id, status: 'completed' }) as unknown as Item
@@ -59,6 +67,57 @@ describe('会话评论（docs/ui/channels-collab-v2.md §7）', () => {
     expect(turnOfItem(list, 'a1')).toEqual({ turnKey: 't1a', turn: 1 })
     expect(turnOfItem(list, 'a2')).toEqual({ turnKey: 't1b', turn: 1 })
     expect(turnOfItem(list, 'u2')).toEqual({ turnKey: 't2', turn: 2 })
+  })
+
+  it('旧评论存的是旧规则（按统计行数）算的编号：显示和发出前按 turnKey 重算，对不上的保留存的数字', () => {
+    // 第一轮被强制停止、没有统计行：旧规则里 t2 是第 1 轮，新规则是第 2 轮
+    const list = [user('u1'), reply('a1'), user('u2'), reply('a2'), stats('t2')]
+    const mk = (id: string, turnKey: string, turn: number, at: number, resolved = false): TurnComment => ({
+      id,
+      turnKey,
+      turn,
+      quote: '',
+      text: id,
+      at,
+      resolved,
+    })
+    const old = mk('c1', 't2', 1, 2)
+    const gone = mk('c2', 'deleted', 7, 1)
+    const [fixed, kept] = withCurrentTurns([old, gone], list)
+    expect(fixed.turn).toBe(2)
+    expect(kept).toBe(gone)
+    expect(old.turn).toBe(1)
+    // 交给 AI / 频道时用重算后的编号
+    expect(commentMessage(fixed)).toBe('关于第 2 轮：\n\n' + 'c1')
+    expect(channelRequest(fixed, '审查员', '登录页')).toContain('第 2 轮')
+    // 编号本来就对的原样返回，不产生新对象
+    const right = mk('c3', 't2', 2, 3)
+    expect(withCurrentTurns([right], list)[0]).toBe(right)
+  })
+
+  it('右侧面板的评论：按重算后的轮次排序，只看没解决的；会话没加载时用存的编号', () => {
+    const list = [user('u1'), reply('a1'), stats('t1'), user('u2'), reply('a2'), stats('t2')]
+    const mk = (id: string, turnKey: string, turn: number, at: number, resolved = false): TurnComment => ({
+      id,
+      turnKey,
+      turn,
+      quote: '',
+      text: id,
+      at,
+      resolved,
+    })
+    // 存的编号是反的（旧规则算错了），重算后 t1 在前
+    const comments = [mk('b', 't2', 1, 1), mk('a', 't1', 2, 2), mk('r', 't1', 2, 3, true)]
+    expect(panelComments(comments, list, false).map(c => [c.id, c.turn])).toEqual([
+      ['a', 1],
+      ['r', 1],
+      ['b', 2],
+    ])
+    expect(panelComments(comments, list, true).map(c => c.id)).toEqual(['a', 'b'])
+    expect(panelComments(comments, undefined, true).map(c => [c.id, c.turn])).toEqual([
+      ['b', 1],
+      ['a', 2],
+    ])
   })
 
   it('交给 AI：关于第 N 轮 + 引用（每行加 >）+ 评论；交给成员：@ 他并写清会话和轮次', () => {

@@ -94,6 +94,17 @@ describe('长对话窗口', () => {
     expect(reclaimHidden(120, 110, 20)).toBeNull()
   })
 
+  it('断线重连的「继续」不算一轮：窗口不会恰好从它开始，轮数和跳转条一致', () => {
+    const resumed: Item = { kind: 'user', id: 'u1-reconnect-1', text: '继续', createdAt: 0, reconnect: 1 }
+    const list = [user('u0'), reply('a0'), user('u1'), reply('a1'), resumed, reply('a1b'), user('u2'), reply('a2')]
+    expect(turnStarts(list)).toEqual([0, 2, 6])
+    expect(turnStarts(list)).toHaveLength(turnsOf(list).length)
+    // 隐藏 1 轮：从 u1 开始（带着前半段、「继续」和后半段）
+    expect(items(list, 1)[0].id).toBe('u1')
+    // 「继续」后面的回复属于第 2 轮：要显示它就从 u1 开始，不是从「继续」开始
+    expect(revealFor(list, turnStarts(list), 2, 'a1b')).toBe(1)
+  })
+
   it('引导消息属于它前面那一轮', () => {
     const list = [user('u0'), reply('a0'), user('u1'), user('g', 'guidance'), reply('a1'), user('u2'), reply('a2')]
     expect(revealFor(list, turnStarts(list), 2, 'g')).toBe(1)

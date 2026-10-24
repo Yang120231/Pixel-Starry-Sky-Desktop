@@ -182,6 +182,28 @@ export function turnNumbers(items: readonly Item[]): Map<string, number> {
 }
 
 /**
+ * 评论里存的 turn 是写评论那会儿的编号；编号规则改过（旧：按统计行数，新：按用户消息数），旧评论不会自己迁移。
+ * 显示和发给 AI / 频道前按 turnKey 在当前 items 里重新算；对不上（这一轮的统计行已不在）时保留存的数字
+ */
+export function withCurrentTurns(comments: readonly TurnComment[], items: readonly Item[]): TurnComment[] {
+  const numbers = turnNumbers(items)
+  return comments.map(c => {
+    const turn = numbers.get(c.turnKey) ?? c.turn
+    return turn === c.turn ? c : { ...c, turn }
+  })
+}
+
+/** 右侧面板里列出的评论：编号按当前对话重算，再按轮次、时间排；onlyOpen 时去掉已解决的。items 为 undefined（会话没加载）时用存的编号 */
+export function panelComments(
+  comments: readonly TurnComment[],
+  items: readonly Item[] | undefined,
+  onlyOpen: boolean,
+): TurnComment[] {
+  const current = items ? withCurrentTurns(comments, items) : [...comments]
+  return current.filter(c => !onlyOpen || !c.resolved).sort((a, b) => a.turn - b.turn || a.at - b.at)
+}
+
+/**
  * 某条消息属于哪一轮：往后找这一轮里的统计行，不越过下一条用户消息。
  * 还在进行、或者没有统计行就结束了的一轮（进程意外退出、强制停止），评论没地方放，返回 null
  */

@@ -251,6 +251,8 @@ export class HostBranch {
     const none = checkpoints.expired(record.id, userItemId)
       ? CHECKPOINT_EXPIRED
       : '这条消息没有代码检查点，代码保持不变'
+    // 只勾了其中几个文件：引擎的检查点只能整轮还原，会把没勾的（可能是手改的）也改回去，宁可不还原
+    if (paths) throw new Error(none)
     const adapter = this.ctx.adapters[record.engine]
     if (!ENGINES[record.engine].caps.rewindCode || !adapter?.rewindFiles || !record.engineSessionId)
       throw new Error(none)
@@ -429,11 +431,22 @@ export class HostBranch {
     const adapter = ctx.adapters[source.engine]
     // 来源是还没启动的分叉会话（Codex）时，从它要 fork 的原线程里算截断点
     const thread = source.engineSessionId ?? source.pendingFork?.from ?? null
-    const anchor = thread ? await adapter?.rewindAnchor?.({ ...source, engineSessionId: thread }, later) : null
+    // 来源回退了还没发消息：原生记录要等下次启动才截到 pendingRewind，现在的末端还是刚回退掉的轮次
+    const rewound = source.engineSessionId ? (source.pendingRewind ?? null) : null
+    // 带上整个会话：截断点就是回退点，不用再到记录里找（找到的末端是没截断的）
+    const anchor =
+      thread && !(userItemId === null && rewound)
+        ? await adapter?.rewindAnchor?.({ ...source, engineSessionId: thread }, later)
+        : null
     if (ctx.closing) throw new Error('应用正在退出')
-    // 还没启动的分叉会话里，被分叉的消息都没进过线程（unchanged）：沿用它原来的 pendingFork.at，不要挪到线程现在的最后一轮
+    // 被分叉的消息都没进过线程（unchanged）：不要挪到线程现在的最后一轮——
+    // 还没启动的分叉会话沿用它原来的 pendingFork.at，回退了还没发的沿用回退点
     const anchorAt =
-      anchor?.unchanged && !source.engineSessionId && source.pendingFork ? source.pendingFork.at : anchor?.at
+      rewound && (userItemId === null || anchor?.unchanged)
+        ? rewound
+        : anchor?.unchanged && !source.engineSessionId && source.pendingFork
+          ? source.pendingFork.at
+          : anchor?.at
     const now = Date.now()
     // 分叉出的会话只带当前引擎的原生会话：截断点找到了，它读到的位置不变或退到最后处理的那一轮末尾；
     // 没找到就是新会话什么都没看到，第一条消息带完整交接

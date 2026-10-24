@@ -125,8 +125,10 @@ export function MergeDialog({ sessionId }: { sessionId: string }) {
   const copyMode = status?.mode === 'copy'
   const hasCode = copyMode && files.length > 0 && !!status?.copyExists
   const codeOn = hasCode && code && (status?.conflicts ?? 0) === 0
+  // 副本在但算不出改动（找不到上级的仓库）：代码不能合并，也不能删副本
+  const codeUnknown = copyMode && !!status?.codeUnknown
   // 代码没合并时不能删副本（改动还在里面）
-  const removeLocked = copyMode && files.length > 0 && !codeOn
+  const removeLocked = codeUnknown || (copyMode && files.length > 0 && !codeOn)
   const removeOn = copyMode && !!status?.copyExists && removeCopy && !removeLocked
   const chatOn = chat && summary !== null
   const running = status?.running
@@ -161,7 +163,7 @@ export function MergeDialog({ sessionId }: { sessionId: string }) {
 
   const confirmLabel = busy
     ? tr('merge.merging')
-    : !hasCode || (codeOn && chat)
+    : (!hasCode && !codeUnknown) || (codeOn && chat)
       ? tr('merge.submit')
       : codeOn
         ? tr('merge.submitCode')
@@ -206,13 +208,15 @@ export function MergeDialog({ sessionId }: { sessionId: string }) {
                     ? tr('merge.codeShared', { title: parentTitle })
                     : !status.copyExists
                       ? tr('merge.copyGone')
-                      : files.length
-                        ? tr('merge.codeMeta', {
-                            from: status.gitBranch ?? '',
-                            to: status.parentBranch ?? parentTitle,
-                            n: files.length,
-                          })
-                        : tr('merge.codeNone')}
+                      : codeUnknown
+                        ? tr('merge.codeUnknown', { title: parentTitle })
+                        : files.length
+                          ? tr('merge.codeMeta', {
+                              from: status.gitBranch ?? '',
+                              to: status.parentBranch ?? parentTitle,
+                              n: files.length,
+                            })
+                          : tr('merge.codeNone')}
               </span>
               {hasCode && (
                 <div
@@ -309,8 +313,13 @@ export function MergeDialog({ sessionId }: { sessionId: string }) {
                   {tr('merge.removeCopy')}
                   {status.gitBranch && <span className="font-mono text-fg-faint">{status.gitBranch}</span>}
                 </label>
-                {removeLocked && status.conflicts === 0 && (
-                  <p className="text-meta text-fg-muted">{tr('merge.keepCopy')}</p>
+                {codeUnknown ? (
+                  <p className="text-meta text-fg-muted" data-merge-code-unknown>
+                    {tr('merge.codeUnknownKeep')}
+                  </p>
+                ) : (
+                  removeLocked &&
+                  status.conflicts === 0 && <p className="text-meta text-fg-muted">{tr('merge.keepCopy')}</p>
                 )}
               </div>
             )}

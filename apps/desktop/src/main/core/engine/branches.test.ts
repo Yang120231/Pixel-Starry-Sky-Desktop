@@ -1,13 +1,42 @@
 // 开分支 / 合并回主会话（docs/ui/branch-merge.md）：真实的临时 Git 仓库 + 真实的副本，引擎用假的
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import {
+  access,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  readlink,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EngineHost } from '@pixelsky/engine'
 import type { ForkOptions, Item, NoticeBranchMerge, SessionBranch, SessionRecord } from '@pixelsky/protocol'
 import { git, type ToolsHost } from '../project-tools/common'
 import { ProjectTools } from '../project-tools/tools'
-import { branchStatus, branchSummary, createBranch, draftSummary, mergeBranch, prepareBranch } from './branches'
+import {
+  branchStatus,
+  branchSummary,
+  commitPaths,
+  createBranch,
+  draftSummary,
+  mergeBranch,
+  prepareBranch,
+} from './branches'
+
+// chmod 可以让它失败：模拟存不了权限的文件系统（vfat U 盘等）
+const fsMock = vi.hoisted(() => ({ chmodFails: false }))
+vi.mock('node:fs/promises', async importOriginal => {
+  const real = await importOriginal<typeof import('node:fs/promises')>()
+  const chmod: typeof real.chmod = (...args) =>
+    fsMock.chmodFails ? Promise.reject(Object.assign(new Error('EPERM'), { code: 'EPERM' })) : real.chmod(...args)
+  return { ...real, chmod, default: { ...real, chmod } }
+})
 
 let root: string, project: string, tools: ProjectTools, host: FakeHost
 
@@ -97,6 +126,9 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  fsMock.chmodFails = false
+  vi.unstubAllEnvs()
+  vi.restoreAllMocks()
   await tools.shutdown()
   await rm(root, { recursive: true, force: true, maxRetries: 4, retryDelay: 150 })
 })
@@ -159,6 +191,9 @@ describe('开分支', () => {
     host.records.get('main')!.cwd = join(project, 'web')
     const { id, cwd } = await branchWithCopy(false)
     expect(cwd).not.toBe(join(project, 'web'))
+    // 不带结尾的分隔符（Claude 按工作目录编码项目文件夹，多一个「-」就找不到会话记录）
+    expect(cwd).not.toMatch(/[\\/]$/)
+    expect(cwd).toBe(resolve(tools.copies.get(host.records.get(id)!.branch!.copyId!).path, 'web'))
     expect(await readFile(join(cwd, 'w.txt'), 'utf8')).toBe('w\n')
     host.records.get(id)!.branch!.copyRemoved = true
     await expect(createBranch(deps(), id, null, { title: 'x', copy: null })).rejects.toThrow('副本已经删掉')
@@ -175,6 +210,7 @@ describe('合并', () => {
     expect(status).toMatchObject({
       mode: 'copy',
       copyExists: true,
+      codeUnknown: false,
       conflicts: 0,
       canCommit: true,
       parentBranch: 'main',
@@ -293,6 +329,254 @@ describe('合并', () => {
     })
     expect(await exists(cwd)).toBe(true)
     await expect(mergeBranch(deps(), id, { code: null, removeCopy: false, summary: null })).rejects.toThrow('至少')
+  })
+})
+
+const applyOnly = { code: { commit: false, message: '' }, removeCopy: false, summary: null }
+
+describe('合并：算不出改动、删副本失败', () => {
+  it('A→B→C：B 合并回 A 删了副本后，C 算不出改动，不能合并代码也不删副本', async () => {
+    const b = await branchWithCopy()
+    const c = await createBranch(deps(), b.id, null, {
+      title: '再试试',
+      copy: { name: 'try2', branch: 'pixelsky/try2', carry: true },
+    })
+    await writeFile(join(c.record.cwd, 'c.txt'), 'c\n')
+    // B 自己没改代码：合并时删副本
+    await mergeBranch(deps(), b.id, { code: { commit: false, message: '' }, removeCopy: true, summary: 'b' })
+    expect(await exists(b.cwd)).toBe(false)
+
+    const status = await branchStatus(deps(), c.record.id)
+    expect(status).toMatchObject({ copyExists: true, codeUnknown: true, files: [] })
+    await expect(
+      mergeBranch(deps(), c.record.id, { code: { commit: false, message: '' }, removeCopy: true, summary: 'c' }),
+    ).rejects.toThrow('算不出副本里的改动')
+    // 只合并对话：代码算没合并，要删副本也不删
+    expect(await mergeBranch(deps(), c.record.id, { code: null, removeCopy: true, summary: 'c' })).toEqual({
+      code: 'skipped',
+      files: 0,
+    })
+    expect(host.merges.at(-1)).toMatchObject({ merge: { code: 'skipped', copyRemoved: false }, patch: {} })
+    expect(await readFile(join(c.record.cwd, 'c.txt'), 'utf8')).toBe('c\n')
+  })
+
+  it('删副本失败时代码起点照样挪到这次合并的位置', async () => {
+    const { id, cwd } = await branchWithCopy()
+    await writeFile(join(cwd, 'c.txt'), 'c\n')
+    vi.spyOn(tools.copies, 'remove').mockRejectedValueOnce(new Error('副本被占用'))
+    const result = await mergeBranch(deps(), id, { ...applyOnly, removeCopy: true })
+    expect(result).toEqual({ code: 'applied', files: 1, removeError: '副本被占用' })
+    const start = host.merges[0].patch.startCommit
+    expect(start).toBeTruthy()
+    expect(await out(project, ['rev-parse', `refs/pixelsky/branch-start/${id}`])).toBe(start)
+    expect((await branchStatus(deps(), id)).files).toEqual([])
+  })
+})
+
+describe('写回上级', () => {
+  async function commitAll(message: string) {
+    await git(project, ['add', '-A'])
+    await git(project, ['commit', '-q', '-m', message])
+  }
+
+  it('只改大小写的改名先删后写，文件不会丢，压成提交时也是改名；文件夹换成同名文件也能写', async () => {
+    await writeFile(join(project, 'Readme.md'), 'readme\n')
+    await mkdir(join(project, 'lib'))
+    await writeFile(join(project, 'lib', 'x.txt'), 'x\n')
+    await mkdir(join(project, 'docs', 'deep'), { recursive: true })
+    await writeFile(join(project, 'docs', 'deep', 'only.txt'), 'o\n')
+    await commitAll('files')
+    const { id, cwd } = await branchWithCopy()
+    await git(cwd, ['mv', 'Readme.md', 'README.md'])
+    await rm(join(cwd, 'lib'), { recursive: true })
+    await writeFile(join(cwd, 'lib'), 'now a file\n')
+    await rm(join(cwd, 'docs'), { recursive: true })
+    expect((await branchStatus(deps(), id)).files.map(f => [f.path, f.status])).toEqual([
+      ['README.md', 'added'],
+      ['Readme.md', 'deleted'],
+      ['docs/deep/only.txt', 'deleted'],
+      ['lib', 'added'],
+      ['lib/x.txt', 'deleted'],
+    ])
+    expect(await mergeBranch(deps(), id, { ...applyOnly, code: { commit: true, message: 'ren' } })).toEqual({
+      code: 'committed',
+      files: 5,
+    })
+    const names = await readdir(project)
+    expect(names).toContain('README.md')
+    expect(names).not.toContain('Readme.md')
+    expect(await readFile(join(project, 'README.md'), 'utf8')).toBe('readme\n')
+    expect(await readFile(join(project, 'lib'), 'utf8')).toBe('now a file\n')
+    // 删空的文件夹一起删掉
+    expect(await exists(join(project, 'docs'))).toBe(false)
+    // 不分大小写的磁盘上 git add 认不出只改大小写的改名：提交里也要是新名字，提交之后干干净净
+    expect(await out(project, ['ls-tree', '-r', '--name-only', 'HEAD'])).toBe('README.md\na.txt\nb.txt\nlib')
+    expect(await out(project, ['ls-files'])).toBe('README.md\na.txt\nb.txt\nlib')
+    expect(await out(project, ['status', '--porcelain'])).toBe('')
+  })
+
+  it('途经的文件夹是符号链接时不写（不会写到链接指向的地方）', async () => {
+    const outside = join(root, 'outside')
+    await mkdir(outside)
+    const { id, cwd } = await branchWithCopy()
+    await mkdir(join(cwd, 'ext'))
+    await writeFile(join(cwd, 'ext', 'new.txt'), 'n\n')
+    await writeFile(join(cwd, 'c.txt'), 'c\n')
+    // Windows 上用 junction，不用管理员权限
+    await symlink(outside, join(project, 'ext'), process.platform === 'win32' ? 'junction' : 'dir')
+    await expect(mergeBranch(deps(), id, applyOnly)).rejects.toThrow('路径里有符号链接')
+    expect(await readdir(outside)).toEqual([])
+    // 准备阶段就发现了，一个文件都没写
+    expect(await exists(join(project, 'c.txt'))).toBe(false)
+  })
+
+  it('上级里的文件是符号链接：删掉链接再写，不改链接指向的文件', async () => {
+    const outside = join(root, 'outside.txt')
+    await writeFile(outside, 'secret\n')
+    await git(project, ['config', 'core.symlinks', 'true'])
+    // 建不了文件链接（Windows 没开开发者模式）时跳过
+    const made = await symlink(outside, join(project, 'link.txt')).then(
+      () => true,
+      () => false,
+    )
+    if (!made) return
+    await commitAll('link')
+    const { id, cwd } = await branchWithCopy()
+    await rm(join(cwd, 'link.txt'))
+    await writeFile(join(cwd, 'link.txt'), 'plain\n')
+    expect(await mergeBranch(deps(), id, applyOnly)).toEqual({ code: 'applied', files: 1 })
+    expect((await lstat(join(project, 'link.txt'))).isSymbolicLink()).toBe(false)
+    expect(await readFile(join(project, 'link.txt'), 'utf8')).toBe('plain\n')
+    expect(await readFile(outside, 'utf8')).toBe('secret\n')
+  })
+
+  it('符号链接按 core.symlinks 建链接或写成文本；可执行位跟着 Git 里的模式', async () => {
+    await git(project, ['config', 'core.filemode', 'false'])
+    await git(project, ['config', 'core.symlinks', 'false'])
+    const { id, cwd } = await branchWithCopy()
+    // 副本单独关掉 core.symlinks：工作区里的普通文件保留索引里的 120000（和 Windows 上一样），上级的设置另外改
+    await git(project, ['config', 'extensions.worktreeConfig', 'true'])
+    await git(cwd, ['config', '--worktree', 'core.symlinks', 'false'])
+    const addLink = async (name: string, target: string) => {
+      await writeFile(join(cwd, name), target)
+      const sha = await out(cwd, ['hash-object', '-w', name])
+      await git(cwd, ['update-index', '--add', '--cacheinfo', `120000,${sha},${name}`])
+    }
+    await addLink('lnk', 'a.txt')
+    await writeFile(join(cwd, 'b.txt'), 'b1\nb2\nb3\nb4\nb5\nb6\n')
+    await git(cwd, ['update-index', '--chmod=+x', 'b.txt'])
+    // 上级 core.symlinks=false：写成内容是链接目标的文本文件
+    await mergeBranch(deps(), id, applyOnly)
+    expect((await lstat(join(project, 'lnk'))).isSymbolicLink()).toBe(false)
+    expect(await readFile(join(project, 'lnk'), 'utf8')).toBe('a.txt')
+    expect(await readFile(join(project, 'b.txt'), 'utf8')).toBe('b1\nb2\nb3\nb4\nb5\nb6\n')
+    if (process.platform !== 'win32') expect((await stat(join(project, 'b.txt'))).mode & 0o111).not.toBe(0)
+
+    // 上级允许符号链接：建链接（Windows 建不了时退回写成文本）
+    await git(project, ['config', 'core.symlinks', 'true'])
+    await addLink('lnk2', 'b.txt')
+    expect((await branchStatus(deps(), id)).files.map(f => f.path)).toEqual(['lnk2'])
+    await mergeBranch(deps(), id, applyOnly)
+    const info = await lstat(join(project, 'lnk2'))
+    if (info.isSymbolicLink()) expect(await readlink(join(project, 'lnk2'))).toBe('b.txt')
+    else expect(await readFile(join(project, 'lnk2'), 'utf8')).toBe('b.txt')
+  })
+
+  it('写盘用检出的样子：按上级的 .gitattributes 换行（直接换上的和三方合并的都是）', async () => {
+    await writeFile(join(project, '.gitattributes'), '*.crlf text eol=crlf\n')
+    await writeFile(join(project, 'm.crlf'), 'm1\r\nm2\r\nm3\r\nm4\r\nm5\r\n')
+    await commitAll('crlf')
+    const { id, cwd } = await branchWithCopy()
+    expect(await readFile(join(cwd, 'm.crlf'), 'utf8')).toBe('m1\r\nm2\r\nm3\r\nm4\r\nm5\r\n')
+    await writeFile(join(cwd, 'n.crlf'), 'n1\nn2\n')
+    await writeFile(join(cwd, 'm.crlf'), 'm1\r\nm2\r\nm3\r\nm4\r\nM5\r\n')
+    await writeFile(join(project, 'm.crlf'), 'M1\r\nm2\r\nm3\r\nm4\r\nm5\r\n')
+    const status = await branchStatus(deps(), id)
+    expect(status.files.find(f => f.path === 'm.crlf')).toMatchObject({ merge: 'auto' })
+    await mergeBranch(deps(), id, applyOnly)
+    expect(await readFile(join(project, 'n.crlf'), 'utf8')).toBe('n1\r\nn2\r\n')
+    expect(await readFile(join(project, 'm.crlf'), 'utf8')).toBe('M1\r\nm2\r\nm3\r\nm4\r\nM5\r\n')
+  })
+
+  it('LFS 指针换不成文件内容时不写，上级里的文件不动', async () => {
+    // 装了 git-lfs 时让它跳过下载、原样给出指针（和没装 git-lfs 一样；建副本时也要，对象下载不到）
+    vi.stubEnv('GIT_LFS_SKIP_SMUDGE', '1')
+    // 装了 git-lfs 时 add 也走它的过滤：指针原样存进去（没装时按普通文件存，一样）
+    const pointer = (n: string) => `version https://git-lfs.github.com/spec/v1\noid sha256:${n.repeat(64)}\nsize 12\n`
+    await writeFile(join(project, '.gitattributes'), '*.bin filter=lfs diff=lfs merge=lfs -text\n')
+    await writeFile(join(project, 'big.bin'), pointer('a'))
+    await commitAll('lfs')
+    const { id, cwd } = await branchWithCopy()
+    await writeFile(join(cwd, 'big.bin'), pointer('b'))
+    await writeFile(join(cwd, 'c.txt'), 'c\n')
+    await expect(mergeBranch(deps(), id, applyOnly)).rejects.toThrow('没能把 Git LFS 指针换成文件内容')
+    expect(await readFile(join(project, 'big.bin'), 'utf8')).toBe(pointer('a'))
+    expect(await exists(join(project, 'c.txt'))).toBe(false)
+  })
+
+  it('子模块的改动算冲突，不当成删除', async () => {
+    const { id, cwd } = await branchWithCopy()
+    const head = await out(cwd, ['rev-parse', 'HEAD'])
+    // 没初始化的子模块：空文件夹 + 索引里的 gitlink
+    await mkdir(join(cwd, 'sub'))
+    await git(cwd, ['update-index', '--add', '--cacheinfo', `160000,${head},sub`])
+    const status = await branchStatus(deps(), id)
+    expect(status.files.find(f => f.path === 'sub')).toMatchObject({ merge: 'conflict', reason: 'submodule' })
+    expect(status.conflicts).toBe(1)
+  })
+
+  it('普通文件改成符号链接：先删文件再建链接；压成提交时按 Git 里的模式（链接、可执行位）提交', async () => {
+    // Windows 上 git init 设 core.filemode=false，这里各平台一样
+    await git(project, ['config', 'core.filemode', 'false'])
+    await git(project, ['config', 'core.symlinks', 'true'])
+    const { id, cwd } = await branchWithCopy()
+    await git(project, ['config', 'extensions.worktreeConfig', 'true'])
+    await git(cwd, ['config', '--worktree', 'core.symlinks', 'false'])
+    // 副本里 a.txt 改成指向 b.txt 的链接，b.txt 加上可执行位
+    await writeFile(join(cwd, 'a.txt'), 'b.txt')
+    const sha = await out(cwd, ['hash-object', '-w', 'a.txt'])
+    await git(cwd, ['update-index', '--cacheinfo', `120000,${sha},a.txt`])
+    await writeFile(join(cwd, 'b.txt'), 'b1\nb2\nb3\nb4\nb5\nb6\n')
+    await git(cwd, ['update-index', '--chmod=+x', 'b.txt'])
+    const canLink = await symlink('x', join(root, 'probe')).then(
+      () => true,
+      () => false,
+    )
+    const result = await mergeBranch(deps(), id, { ...applyOnly, code: { commit: true, message: 'link' } })
+    expect(result).toEqual({ code: 'committed', files: 2 })
+    // 能建链接的环境里一定是链接（原来的普通文件不会让它退回写成文本）；建不了时写成内容是链接目标的文本
+    expect((await lstat(join(project, 'a.txt'))).isSymbolicLink()).toBe(canLink)
+    if (canLink) expect(await readlink(join(project, 'a.txt'))).toBe('b.txt')
+    else expect(await readFile(join(project, 'a.txt'), 'utf8')).toBe('b.txt')
+    const tree = (await out(project, ['ls-tree', 'HEAD', 'a.txt', 'b.txt'])).split('\n').map(l => l.split(' ')[0])
+    expect(tree).toEqual(['120000', '100755'])
+    if (canLink) expect(await out(project, ['status', '--porcelain'])).toBe('')
+  })
+
+  it('设不上可执行位（存不了权限的文件系统）不算写失败', async () => {
+    const { id, cwd } = await branchWithCopy()
+    await writeFile(join(cwd, 'b.txt'), 'b1\nb2\nb3\nb4\nb5\nb6\n')
+    await git(cwd, ['update-index', '--chmod=+x', 'b.txt'])
+    fsMock.chmodFails = true
+    expect(await mergeBranch(deps(), id, applyOnly)).toEqual({ code: 'applied', files: 1 })
+    expect(await readFile(join(project, 'b.txt'), 'utf8')).toBe('b1\nb2\nb3\nb4\nb5\nb6\n')
+  })
+
+  it('提交只按算好的模式和对象名：别的暂存改动不跟着提交，文件名按字面；和 HEAD 一样时不提交', async () => {
+    await writeFile(join(project, 'x.txt'), 'x\n')
+    await commitAll('x')
+    await writeFile(join(project, '[x].txt'), 'literal\n')
+    await writeFile(join(project, 'x.txt'), 'dirty\n')
+    await writeFile(join(project, 'staged.txt'), 's\n')
+    await git(project, ['add', 'staged.txt'])
+    const sha = await out(project, ['hash-object', '-w', '[x].txt'])
+    const entry = { path: '[x].txt', entry: { mode: '100644', sha } }
+    expect(await commitPaths(project, [entry], 'm')).toBe(true)
+    expect(await out(project, ['show', '--name-only', '--format=', 'HEAD'])).toBe('[x].txt')
+    expect(await out(project, ['status', '--porcelain'])).toBe('A  staged.txt\n M x.txt')
+    expect(await commitPaths(project, [entry], 'm')).toBe(false)
+    expect(await commitPaths(project, [{ path: 'gone.txt', entry: null }], 'm')).toBe(false)
+    expect(await out(project, ['log', '--format=%s'])).toBe('m\nx\ninit')
   })
 })
 

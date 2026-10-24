@@ -143,6 +143,14 @@ export const branchMergeMessages = {
   },
   'merge.codeNone': { zh: '分支里还没改代码', en: 'No code changes in the branch' },
   'merge.copyGone': { zh: '副本已经不在了，代码没法合并', en: 'The copy is gone; code cannot be merged' },
+  'merge.codeUnknown': {
+    zh: '找不到「{title}」的 Git 仓库，算不出副本里的改动',
+    en: 'Cannot find the Git repository of “{title}”, so changes in the copy cannot be worked out',
+  },
+  'merge.codeUnknownKeep': {
+    zh: '代码这次没法合并，副本保留，免得改动丢了；可以只合并对话。',
+    en: 'Code cannot be merged this time and the copy is kept so nothing is lost; you can merge only the conversation.',
+  },
   'merge.commit': { zh: '压成一个提交', en: 'One commit' },
   'merge.apply': { zh: '只放进工作区', en: 'Working tree only' },
   'merge.commitMsg': { zh: '提交信息', en: 'Commit message' },
@@ -168,6 +176,7 @@ export const branchMergeMessages = {
   'merge.reason.deleted': { zh: '分支里删了，那边又改过', en: 'deleted in the branch, changed there' },
   'merge.reason.removedThere': { zh: '那边删了，分支里改过', en: 'deleted there, changed in the branch' },
   'merge.reason.addedBoth': { zh: '两边都新建了这个文件', en: 'created on both sides' },
+  'merge.reason.submodule': { zh: '子模块的改动没法合并', en: 'submodule changes cannot be merged' },
   'merge.conflicts': {
     zh: '{n} 个文件合不上：「{title}」那边也改了。先在那边提交或撤销这些文件，或者在副本里手动处理；这次可以只合并对话。',
     en: '{n} files conflict with changes in “{title}”. Commit or discard them there, or resolve them in the copy; you can merge only the conversation this time.',
@@ -206,6 +215,27 @@ export const branchMergeMessages = {
     en: 'Changes are in “{title}”’s folder, but the commit failed: {error}',
   },
   'merge.removeFailed': { zh: '合并好了，但副本没删掉：{error}', en: 'Merged, but the copy was not deleted: {error}' },
+  // 主进程报的错（按原文匹配翻译）
+  'merge.error.codeUnknown': {
+    zh: '找不到上级目录的 Git 仓库，算不出副本里的改动，代码没法合并',
+    en: 'Cannot find the Git repository of the parent folder, so changes in the copy cannot be worked out and code cannot be merged',
+  },
+  'merge.error.symlinkPath': {
+    zh: '路径里有符号链接，不能写：{path}',
+    en: 'The path goes through a symbolic link, so it cannot be written: {path}',
+  },
+  'merge.error.lfs': {
+    zh: '没能把 Git LFS 指针换成文件内容（可能没装 git-lfs），不能合并：{path}',
+    en: 'Could not turn the Git LFS pointer into the file content (git-lfs may not be installed), so it cannot be merged: {path}',
+  },
+  'merge.error.partial': {
+    zh: '写到一半出错：{error}。已经写进去的文件：{files}',
+    en: 'Writing stopped partway: {error}. Files already written: {files}',
+  },
+  'merge.error.oldGit': {
+    zh: 'git 版本低于 2.26，要提交的文件太多，没法一次提交；请升级 git，或者选「只放进工作区」',
+    en: 'Git is older than 2.26 and there are too many files to commit at once; upgrade Git or choose “Working tree only”',
+  },
 
   // 合并卡片和输入框上方的提示
   'merge.card.title': { zh: '合并了分支「{title}」', en: 'Merged branch “{title}”' },
