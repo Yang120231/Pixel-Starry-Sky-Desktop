@@ -316,8 +316,11 @@ export type RewindCodePreview =
       /** 用的是对话检查点（docs/ui/undo-changes.md）：能只还原其中几个文件 */
       checkpoint?: boolean
     }
-  /** compacted：没有检查点，而且这条消息在上下文压缩之前（Claude Code 只保留压缩之后的检查点，GitHub #82） */
-  | { ok: false; reason: 'unsupported' | 'no-checkpoint' | 'compacted' | 'failed'; message?: string }
+  /**
+   * compacted：没有检查点，而且这条消息在上下文压缩之前（Claude Code 只保留压缩之后的检查点，GitHub #82）；
+   * expired：有过对话检查点，但快照缺了内容（项目的 git 清理了借来的对象、快照文件被删），引擎自己也没有检查点
+   */
+  | { ok: false; reason: 'unsupported' | 'no-checkpoint' | 'compacted' | 'expired' | 'failed'; message?: string }
 
 export interface RewindPreview {
   code: RewindCodePreview

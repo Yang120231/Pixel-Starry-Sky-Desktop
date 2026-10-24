@@ -39,6 +39,9 @@ interface GitRun {
   missing: boolean
 }
 
+/** 快照缺了内容、不能再用时的说法（界面翻译见 branchMessages 的 branch.checkpointExpired） */
+export const CHECKPOINT_EXPIRED = '这一轮的代码快照已失效（项目的 git 清理了旧内容，或快照文件被删），代码保持不变'
+
 export class CheckpointError extends Error {
   constructor(
     readonly reason: 'no-git' | 'timeout' | 'failed',
@@ -170,9 +173,18 @@ export class ShadowRepo {
     return run.stdout
   }
 
-  /** 第一次用时建仓库：借项目的对象库、用项目的索引起步（没改过的文件不用重新算） */
+  /** git 认它是仓库要有 HEAD、objects/、refs/ */
+  private complete(): boolean {
+    return ['HEAD', 'objects', 'refs'].every(name => existsSync(join(this.gitDir, name)))
+  }
+
+  /**
+   * 第一次用时建仓库：借项目的对象库、用项目的索引起步（没改过的文件不用重新算）。
+   * 影子仓库从不建分支，refs/ 里只有空目录，复制、同步、清理空目录的工具会把它丢掉，git 就不认这个仓库了
+   * （「not a git repository」），快照对象其实还在：每次用前检查，缺了就补上
+   */
   private async init(): Promise<void> {
-    if (this.ready) return
+    if (this.ready && this.complete()) return
     if (!existsSync(this.workTree) || !statSync(this.workTree).isDirectory())
       throw new CheckpointError('failed', '工作目录不存在')
     if (!existsSync(join(this.gitDir, 'HEAD'))) {
@@ -193,6 +205,10 @@ export class ShadowRepo {
       )
       await this.borrowObjects()
     }
+    mkdirSync(join(this.gitDir, 'refs', 'heads'), { recursive: true })
+    mkdirSync(join(this.gitDir, 'refs', 'tags'), { recursive: true })
+    mkdirSync(join(this.gitDir, 'objects', 'info'), { recursive: true })
+    mkdirSync(join(this.gitDir, 'info'), { recursive: true })
     // 存原样字节：项目 .gitattributes 的换行转换（text=auto、eol）、过滤器（LFS）、编码转换都不要，
     // 否则写回去的是转换过的内容。info/attributes 优先于工作树里的 .gitattributes
     writeFileSync(join(this.gitDir, 'info', 'attributes'), '* -text -filter -ident -working-tree-encoding\n')
@@ -295,6 +311,26 @@ export class ShadowRepo {
       const [mode] = entry.split(' ')
       if (mode !== '100644' && mode !== '100755') return 'special'
       return this.must(['cat-file', 'blob', `${tree}:${path}`])
+    })
+  }
+
+  /**
+   * 快照缺了内容：借来的项目对象被项目的 git 清理掉了（改写历史后 gc），或者影子仓库被删过。
+   * 树本身不在也算缺；只查有没有，不读文件内容
+   */
+  incomplete(tree: string, timeout = this.timeout): Promise<boolean> {
+    return this.serial(async () => {
+      await this.init()
+      const run = await this.git(['rev-list', '--objects', '--missing=print', tree, '--'], timeout)
+      if (run.missing) throw new CheckpointError('no-git', '没有找到 git')
+      if (run.timedOut) throw new CheckpointError('timeout', '检查快照超时')
+      if (run.code !== 0) {
+        // 只认「对象不在」；别的错误（比如很旧的 git 不认 --missing）不能当成缺内容，否则好好的快照会被记成失效
+        if (/bad object|not a valid object|not a tree object|unable to read|could not read/i.test(run.stderr))
+          return true
+        throw new CheckpointError('failed', run.stderr.trim() || 'rev-list 失败')
+      }
+      return /^\?/m.test(run.stdout.toString('utf8'))
     })
   }
 

@@ -1,10 +1,10 @@
 // 对话检查点接进宿主（docs/ui/undo-changes.md）：每轮前后拍快照、改动卡片撤回 / 恢复、回退只还原部分文件
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { EngineInfo, ImageAttachment, SessionSettings } from '@pixelsky/protocol'
 import type { EngineAdapter, EngineSession, SessionContext } from '../src/adapter'
-import { CheckpointError } from '../src/checkpoints'
+import { CHECKPOINT_EXPIRED, CheckpointError } from '../src/checkpoints'
 import { EngineHost } from '../src/host'
 import { ENGINES } from '../src/registry'
 import { makeTmp, removeTmp } from './helpers/tmp'
@@ -221,6 +221,43 @@ describe('对话检查点（宿主）', () => {
     )
     const a = await send('a')
     expect(host.checkpoints(id)).toMatchObject({ disabled: null, turns: [{ itemId: a, files: ['a.txt'] }] })
+  })
+
+  it('快照缺了内容（影子仓库被删过）：预览说快照失效、不再列出，回退代码报失效、不动文件', async () => {
+    write('keep.txt', 'v0\n')
+    const { host, id, send } = setup({ a: { 'keep.txt': 'v1\n' }, b: { 'keep.txt': 'v2\n' } })
+    const a = await send('a')
+    const b = await send('b')
+    rmSync(join(root, 'data', 'sessions', id, 'checkpoints'), { recursive: true })
+    expect((await host.rewindPreview(id, a)).code).toEqual({
+      ok: false,
+      reason: 'expired',
+      message: CHECKPOINT_EXPIRED,
+    })
+    expect(host.checkpoints(id).turns.map(t => t.itemId)).toEqual([b])
+    await expect(host.rewind(id, a, { conversation: false, code: true })).rejects.toThrow(CHECKPOINT_EXPIRED)
+    expect(read('keep.txt')).toBe('v2\n')
+    // 同时回退对话：对话照样回退，告诉界面代码为什么没恢复
+    const result = await host.rewind(id, a, { conversation: true, code: true })
+    expect(result.codeSkipped).toBe(CHECKPOINT_EXPIRED)
+    expect(read('keep.txt')).toBe('v2\n')
+  })
+
+  it('改动卡片撤回时才发现快照失效：跳过并说明，记为失效', async () => {
+    write('keep.txt', 'v0\n')
+    const { host, id, send } = setup({ a: { 'keep.txt': 'v1\n' } })
+    const a = await send('a')
+    rmSync(join(root, 'data', 'sessions', id, 'checkpoints'), { recursive: true })
+    expect(await host.revertFiles(id, a, ['keep.txt'], false)).toEqual({
+      kind: 'done',
+      revertId: null,
+      reverted: [],
+      skipped: [{ path: 'keep.txt', reason: 'no-checkpoint', message: CHECKPOINT_EXPIRED }],
+    })
+    expect(read('keep.txt')).toBe('v1\n')
+    expect(host.checkpoints(id).turns).toEqual([])
+    const saved = JSON.parse(readFileSync(join(root, 'data', 'sessions', id, 'checkpoints.json'), 'utf8'))
+    expect(saved.turns[a].lost).toBe(true)
   })
 
   it('没打开检查点时不拍快照', async () => {

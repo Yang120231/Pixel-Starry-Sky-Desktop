@@ -10,7 +10,7 @@ import type {
   RevertSkip,
   RewindCodePreview,
 } from '@pixelsky/protocol'
-import { CheckpointError, ShadowRepo, workPath, type TreeBlob } from '../checkpoints'
+import { CHECKPOINT_EXPIRED, CheckpointError, ShadowRepo, workPath, type TreeBlob } from '../checkpoints'
 import { diffText } from '../diff'
 import { describeError, logger } from '../log'
 import { UNDO_LIMIT } from './branch'
@@ -39,6 +39,8 @@ interface TurnData {
   /** 这一轮改了哪些文件（before → after） */
   files?: string[]
   at: number
+  /** 快照缺了内容（项目的 git 清理了借来的对象、影子仓库被删过）：不能再用 */
+  lost?: true
 }
 
 interface FileData {
@@ -224,7 +226,32 @@ export class HostCheckpoints {
 
   /** 这条消息有开始前的快照 */
   has(id: string, itemId: string): boolean {
-    return !!this.usable(id)?.data.turns[itemId]?.before
+    const turn = this.usable(id)?.data.turns[itemId]
+    return !!turn?.before && !turn.lost
+  }
+
+  /** 这条消息原来有快照、但已经失效 */
+  expired(id: string, itemId: string): boolean {
+    return !!this.usable(id)?.data.turns[itemId]?.lost
+  }
+
+  /** 用快照前查一遍内容还全不全；缺了就记下失效（以后不再列出、不再用）。查不了（git 出错）时当成完整，交给后面的命令报错 */
+  private async intact(id: string, state: State, itemId: string): Promise<boolean> {
+    const turn = state.data.turns[itemId]
+    if (!turn?.before || turn.lost) return false
+    let incomplete = false
+    try {
+      incomplete = await state.repo.incomplete(turn.before, LATER_TIMEOUT)
+    } catch (err) {
+      log.warn('检查快照失败', { session: id, error: describeError(err) })
+    }
+    if (!incomplete) return true
+    log.info('快照缺了内容，记为失效', { session: id, item: itemId })
+    if (this.states.get(id) === state && state.data.turns[itemId] === turn) {
+      state.data.turns[itemId] = { ...turn, lost: true }
+      this.save(id, state)
+    }
+    return false
   }
 
   list(id: string): CheckpointList {
@@ -237,7 +264,7 @@ export class HostCheckpoints {
     if (state)
       for (const item of items) {
         const turn = item.kind === 'user' ? state.data.turns[item.id] : undefined
-        if (turn?.before) turns.push({ itemId: item.id, files: turn.files ?? null, at: turn.at })
+        if (turn?.before && !turn.lost) turns.push({ itemId: item.id, files: turn.files ?? null, at: turn.at })
       }
     const reverted = [...(this.reverts.get(id)?.entries() ?? [])]
       .filter(([, r]) => present.has(r.itemId))
@@ -255,7 +282,7 @@ export class HostCheckpoints {
     return this.ctx.m.sessions
       .runtime(id)
       .snapshot.items.flatMap(item =>
-        item.kind === 'user' && state.data.turns[item.id]
+        item.kind === 'user' && state.data.turns[item.id] && !state.data.turns[item.id]!.lost
           ? [{ itemId: item.id, turn: state.data.turns[item.id]! }]
           : [],
       )
@@ -282,11 +309,18 @@ export class HostCheckpoints {
     const before = state?.data.turns[itemId]?.before
     if (!state || !before) return { ok: false, reason: 'no-checkpoint' }
     try {
+      if (!(await this.intact(id, state, itemId))) return { ok: false, reason: 'expired', message: CHECKPOINT_EXPIRED }
       const current = await state.repo.capture(LATER_TIMEOUT)
       const changes = await state.repo.diff(before, current)
       const last = this.lastAfter(id, state)
       const names = new Set(changes.map(c => c.path))
-      const edited = last ? (await state.repo.diff(last, current)).map(c => c.path).filter(p => names.has(p)) : []
+      // 最后一轮结束时的快照也可能缺了内容：查不出手改，不挡回退
+      const edited = last
+        ? await state.repo.diff(last, current).then(
+            list => list.map(c => c.path).filter(p => names.has(p)),
+            () => [],
+          )
+        : []
       let size = 0
       for (const c of changes) size += fileSize(join(state.data.cwd, c.path))
       return {
@@ -305,12 +339,13 @@ export class HostCheckpoints {
 
   /**
    * 把文件还原到这条消息之前（branch.ts 回退）；paths 只还原这些（相对工作目录）。
-   * 返回还原前的内容（撤销用），总共超过 UNDO_LIMIT 时为 null
+   * 返回还原前的内容（撤销用），总共超过 UNDO_LIMIT 时为 null；快照失效时整个返回 null（没动文件，可以改用引擎自己的检查点）
    */
-  async restore(id: string, itemId: string, paths?: string[]): Promise<{ saved: Saved | null; count: number }> {
+  async restore(id: string, itemId: string, paths?: string[]): Promise<{ saved: Saved | null; count: number } | null> {
     const state = this.usable(id)
     const before = state?.data.turns[itemId]?.before
     if (!state || !before) throw new Error('这条消息没有代码快照，代码保持不变')
+    if (!(await this.intact(id, state, itemId))) return null
     const current = await state.repo.capture(LATER_TIMEOUT)
     const only = paths ? new Set(paths) : null
     const changes = (await state.repo.diff(before, current)).filter(c => !only || only.has(c.path))
@@ -347,6 +382,10 @@ export class HostCheckpoints {
       for (const path of paths) skip(path, 'no-checkpoint')
       return { kind: 'done', revertId: null, reverted: [], skipped }
     }
+    if (!(await this.intact(id, state, itemId))) {
+      for (const path of paths) skipped.push({ path, reason: 'no-checkpoint', message: CHECKPOINT_EXPIRED })
+      return { kind: 'done', revertId: null, reverted: [], skipped }
+    }
     const before = turn.before
     const targets: { input: string; rel: string; file: string; blob: TreeBlob }[] = []
     const inside = paths.flatMap(input => {
@@ -366,7 +405,8 @@ export class HostCheckpoints {
     if (end) {
       const conflicts: Extract<RevertFilesResult, { kind: 'conflict' }>['conflicts'] = []
       for (const t of targets) {
-        const then = await state.repo.blob(end, t.rel)
+        // 结束时的快照缺了内容：比不了，当作没手改过（和结束时没拍到一样）
+        const then = await state.repo.blob(end, t.rel).catch(() => 'special' as const)
         if (then === 'special') continue
         const now = readOrNull(t.file)
         if (sameContent(then, now)) continue

@@ -313,7 +313,9 @@ function CodePart({
           ? tr('checkpoint.noCode')
           : code.reason === 'compacted'
             ? tr('rewind.compacted')
-            : tr('rewind.codeFailed', { reason: translateMessage(code.message ?? '') })}
+            : code.reason === 'expired'
+              ? tr('branch.checkpointExpired')
+              : tr('rewind.codeFailed', { reason: translateMessage(code.message ?? '') })}
       </p>
     )
   if (code.files.length === 0) return <p className="text-meta text-fg-muted">{tr('checkpoint.unchanged')}</p>

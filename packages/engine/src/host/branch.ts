@@ -15,6 +15,7 @@ import type {
   SessionRecord,
   SideTurn,
 } from '@pixelsky/protocol'
+import { CHECKPOINT_EXPIRED } from '../checkpoints'
 import { ENGINES } from '../registry'
 import type { HostContext } from './context'
 import { lastTurnReply } from './events'
@@ -120,8 +121,20 @@ export class HostBranch {
   }
 
   private async codePreview(record: SessionRecord, userItemId: string): Promise<RewindCodePreview> {
+    const checkpoints = this.ctx.m.checkpoints
     // 有对话检查点（docs/ui/undo-changes.md）先用它：任何引擎都行，能只还原其中几个文件
-    if (this.ctx.m.checkpoints.has(record.id, userItemId)) return this.ctx.m.checkpoints.preview(record.id, userItemId)
+    if (checkpoints.has(record.id, userItemId)) {
+      const own = await checkpoints.preview(record.id, userItemId)
+      if (own.ok || own.reason !== 'expired') return own
+    }
+    // 对话检查点失效了：试引擎自己的检查点，也没有就说快照失效
+    const engine = await this.engineCodePreview(record, userItemId)
+    if (!engine.ok && checkpoints.expired(record.id, userItemId))
+      return { ok: false, reason: 'expired', message: CHECKPOINT_EXPIRED }
+    return engine
+  }
+
+  private async engineCodePreview(record: SessionRecord, userItemId: string): Promise<RewindCodePreview> {
     const adapter = this.ctx.adapters[record.engine]
     if (!ENGINES[record.engine].caps.rewindCode || !adapter?.rewindFiles) return { ok: false, reason: 'unsupported' }
     if (!record.engineSessionId) return { ok: false, reason: 'no-checkpoint' }
@@ -165,7 +178,8 @@ export class HostBranch {
     const record = rt.snapshot.record
     if (!options.conversation && !options.code) throw new Error('请选择要恢复的内容')
     // 引擎不能回退对话时，有对话检查点的消息仍能只恢复代码（docs/ui/undo-changes.md §4）
-    const codeOnly = !options.conversation && m.checkpoints.has(id, userItemId)
+    const codeOnly =
+      !options.conversation && (m.checkpoints.has(id, userItemId) || m.checkpoints.expired(id, userItemId))
     if (!ENGINES[record.engine].caps.rewind && !codeOnly) throw new Error('当前引擎暂不支持回退')
     const { index, target } = this.userItem(id, userItemId)
     const before = rewindState(record)
@@ -180,9 +194,10 @@ export class HostBranch {
         } catch (err) {
           // 只恢复代码时照旧报错；同时回退对话时对话照样回退，告诉界面代码没恢复（GitHub #82）
           if (!options.conversation) throw err
-          codeSkipped = (await this.beforeCompaction(id, index, userItemId))
-            ? '这条消息在上下文压缩之前，Claude Code 只保留压缩之后的代码检查点，代码保持不变'
-            : (err as Error).message
+          codeSkipped =
+            !m.checkpoints.expired(id, userItemId) && (await this.beforeCompaction(id, index, userItemId))
+              ? '这条消息在上下文压缩之前，Claude Code 只保留压缩之后的代码检查点，代码保持不变'
+              : (err as Error).message
         }
       const removed = options.conversation ? rt.snapshot.items.slice(index) : []
       if (options.conversation) await this.truncate(id, index, userItemId)
@@ -214,11 +229,18 @@ export class HostBranch {
 
   /** 还原文件；先存一份当前内容（太大时不存，返回 null 表示还原了但不能撤销代码）。paths 只对对话检查点有效 */
   private async restoreCode(record: SessionRecord, userItemId: string, paths?: string[]): Promise<UndoEntry['files']> {
-    if (this.ctx.m.checkpoints.has(record.id, userItemId))
-      return (await this.ctx.m.checkpoints.restore(record.id, userItemId, paths)).saved
+    const checkpoints = this.ctx.m.checkpoints
+    if (checkpoints.has(record.id, userItemId)) {
+      const restored = await checkpoints.restore(record.id, userItemId, paths)
+      if (restored) return restored.saved
+    }
+    // 对话检查点失效了（restore 返回 null 或之前预览时查出来的）：改用引擎自己的检查点
+    const none = checkpoints.expired(record.id, userItemId)
+      ? CHECKPOINT_EXPIRED
+      : '这条消息没有代码检查点，代码保持不变'
     const adapter = this.ctx.adapters[record.engine]
     if (!ENGINES[record.engine].caps.rewindCode || !adapter?.rewindFiles || !record.engineSessionId)
-      throw new Error('这条消息没有代码检查点，代码保持不变')
+      throw new Error(none)
     // 一个辅助进程里先预览、存一份当前内容、再还原（GitHub #35：原来预览和还原各起一次进程）
     let size = 0
     const saved: { path: string; data: Buffer | null }[] = []
@@ -229,10 +251,7 @@ export class HostBranch {
         saved.push({ path, data })
       }
     })
-    if (!done.ok)
-      throw new Error(
-        done.reason === 'no-checkpoint' ? '这条消息没有代码检查点，代码保持不变' : done.message || '没能还原代码',
-      )
+    if (!done.ok) throw new Error(done.reason === 'no-checkpoint' ? none : done.message || '没能还原代码')
     return size <= UNDO_LIMIT ? saved : null
   }
 

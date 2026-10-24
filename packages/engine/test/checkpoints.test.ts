@@ -1,7 +1,7 @@
 // 影子 Git 仓库（docs/ui/undo-changes.md §2），用真实 git
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ShadowRepo, workPath } from '../src/checkpoints'
@@ -98,6 +98,51 @@ describe('ShadowRepo', () => {
     write('a.txt', 'b\n')
     const tree = await repo.capture()
     expect((await repo.blob(tree, 'a.txt'))?.toString()).toBe('b\n')
+  })
+
+  it('空的 refs/ 被复制、同步工具丢掉（git 报 not a git repository）：自动补上，原来的快照照样能用', async () => {
+    write('a.txt', 'one\n')
+    const before = await repo.capture()
+    write('a.txt', 'two\n')
+    // 运行中被删（ready 已经是 true）
+    rmSync(join(root, 'shadow', 'refs'), { recursive: true })
+    const after = await repo.capture()
+    expect(await repo.diff(before, after)).toEqual([{ path: 'a.txt', status: 'modified', insertions: 1, deletions: 1 }])
+    // 重新打开软件后（新的 ShadowRepo）
+    rmSync(join(root, 'shadow', 'refs'), { recursive: true })
+    const reopened = new ShadowRepo(join(root, 'shadow'), work)
+    expect((await reopened.blob(before, 'a.txt'))?.toString()).toBe('one\n')
+    // HEAD 也没了：重新初始化，对象还在
+    rmSync(join(root, 'shadow', 'HEAD'))
+    const again = new ShadowRepo(join(root, 'shadow'), work)
+    expect((await again.blob(after, 'a.txt'))?.toString()).toBe('two\n')
+  })
+
+  it('借来的项目对象被项目的 git 清理掉（改写历史后 gc）：查得出快照缺了内容', async () => {
+    const g = (...args: string[]): string =>
+      execFileSync('git', ['-c', 'user.email=a@b.c', '-c', 'user.name=a', ...args], { cwd: work }).toString()
+    g('init', '-q')
+    write('a.txt', 'v1\n')
+    write('src/b.txt', 'b\n')
+    g('add', '.')
+    g('commit', '-qm', 'one')
+    // 没提交的文件让根树存在影子仓库里，src/ 的树和 a.txt 的内容是借来的
+    write('extra.txt', 'x\n')
+    const before = await repo.capture()
+    expect(existsSync(join(root, 'shadow', 'objects', before.slice(0, 2), before.slice(2)))).toBe(true)
+    expect(await repo.incomplete(before)).toBe(false)
+    write('a.txt', 'v2\n')
+    write('src/b.txt', 'b2\n')
+    g('add', 'a.txt', 'src')
+    g('commit', '-q', '--amend', '-m', 'one')
+    g('reflog', 'expire', '--expire=now', '--all')
+    g('gc', '-q', '--prune=now')
+    const after = await repo.capture()
+    expect(await repo.incomplete(before)).toBe(true)
+    expect(await repo.incomplete(after)).toBe(false)
+    // 整个影子仓库被删过：重建后旧的树不在
+    rmSync(join(root, 'shadow'), { recursive: true })
+    expect(await new ShadowRepo(join(root, 'shadow'), work).incomplete(after)).toBe(true)
   })
 
   it('工作目录外的路径', () => {

@@ -361,7 +361,9 @@ function CodeSummary({
             ? tr('rewind.noCheckpoint')
             : code.reason === 'unsupported'
               ? tr('rewind.unsupportedCode')
-              : tr('rewind.codeFailed', { reason: translateMessage(code.message ?? '') })}
+              : code.reason === 'expired'
+                ? tr('branch.checkpointExpired')
+                : tr('rewind.codeFailed', { reason: translateMessage(code.message ?? '') })}
       </div>
     )
   if (code.files.length === 0)

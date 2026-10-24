@@ -334,6 +334,10 @@ export const branchMessages = {
     zh: '这条消息没有代码检查点，代码保持不变',
     en: 'This message has no code checkpoint; the code stays as it is',
   },
+  'branch.checkpointExpired': {
+    zh: '这一轮的代码快照已失效（项目的 git 清理了旧内容，或快照文件被删），代码保持不变',
+    en: "This turn's code snapshot is no longer usable (the project's git cleaned up old content, or the snapshot files were deleted); the code stays as it is",
+  },
   'branch.restoreFailed': { zh: '没能还原代码', en: 'Could not restore the code' },
   'branch.undoStale': {
     zh: '回退之后有了新的对话，不能撤销了',
