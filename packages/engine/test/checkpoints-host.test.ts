@@ -1,8 +1,8 @@
 // 对话检查点接进宿主（docs/ui/undo-changes.md）：每轮前后拍快照、改动卡片撤回 / 恢复、回退只还原部分文件
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { EngineInfo, ImageAttachment, SessionSettings } from '@pixelsky/protocol'
+import type { EngineInfo, ImageAttachment, SessionSettings, SessionSnapshot } from '@pixelsky/protocol'
 import type { EngineAdapter, EngineSession, SessionContext } from '../src/adapter'
 import { CHECKPOINT_EXPIRED, CheckpointError } from '../src/checkpoints'
 import { EngineHost } from '../src/host'
@@ -90,6 +90,47 @@ function setup(edits: Record<string, Record<string, string>>) {
     return host.open(id).items.find(i => i.kind === 'user' && i.text === text)!.id
   }
   return { host, id, send }
+}
+
+interface TurnRecord {
+  before?: string
+  after?: string
+  at: number
+  endedAt?: number
+  lost?: true
+}
+
+/** 宿主里的检查点模块（测试里改它的行为、看它记下的数据） */
+const internals = (host: EngineHost) =>
+  (
+    host as unknown as {
+      m: {
+        checkpoints: {
+          states: Map<string, { data: { turns: Record<string, TurnRecord> } }>
+          beforeTurn(id: string, itemId: string): Promise<void>
+          failed(id: string, err: Error): void
+        }
+      }
+    }
+  ).m.checkpoints
+
+/** 发一条消息，等这一轮结束、done(这一轮的检查点记录) 为真；返回用户消息 id */
+async function sendUntil(
+  host: EngineHost,
+  id: string,
+  text: string,
+  done: (turn: TurnRecord | undefined) => boolean,
+): Promise<string> {
+  await host.send(id, { text, clientMessageId: text })
+  let itemId = ''
+  await until(() => {
+    const snap = host.open(id)
+    const user = snap.items.find(i => i.kind === 'user' && i.text === text)
+    if (!user || snap.state !== 'idle') return false
+    itemId = user.id
+    return done(internals(host).states.get(id)?.data.turns[user.id])
+  }, `turn ${text}`)
+  return itemId
 }
 
 describe('对话检查点（宿主）', () => {
@@ -265,14 +306,66 @@ describe('对话检查点（宿主）', () => {
     const { host, id, send } = setup({ a: { 'keep.txt': 'v1\n' }, b: { 'keep.txt': 'v2\n' } })
     const a = await send('a')
     const b = await send('b')
-    const states = (
-      host as unknown as {
-        m: { checkpoints: { states: Map<string, { data: { turns: Record<string, { lost?: true }> } }> } }
-      }
-    ).m.checkpoints.states
-    states.get(id)!.data.turns[b]!.lost = true
+    internals(host).states.get(id)!.data.turns[b]!.lost = true
     expect((await host.rewindPreview(id, a)).code).toMatchObject({ ok: true, files: ['keep.txt'], edited: [] })
     expect(await host.revertFiles(id, a, ['keep.txt'], false)).toMatchObject({ kind: 'conflict' })
+  })
+
+  it('开始前的快照没拍到（没拍完、出错）：结束时照样拍，它改的文件不算手改，真手改照样标出', async () => {
+    write('keep.txt', 'v0\n')
+    const { host, id, send } = setup({ a: { 'keep.txt': 'v1\n' }, b: { 'keep.txt': 'v2\n', 'b.txt': 'b\n' } })
+    const a = await send('a')
+    const checkpoints = internals(host)
+    const beforeTurn = checkpoints.beforeTurn
+    checkpoints.beforeTurn = async () => {}
+    const b = await sendUntil(host, id, 'b', turn => !!turn?.after)
+    checkpoints.beforeTurn = beforeTurn
+    expect(checkpoints.states.get(id)!.data.turns[b]).toMatchObject({
+      after: expect.any(String),
+      endedAt: expect.any(Number),
+    })
+    expect(checkpoints.states.get(id)!.data.turns[b]!.before).toBeUndefined()
+    // 没有开始前的快照：不能回到它之前
+    expect(host.checkpoints(id).turns.map(t => t.itemId)).toEqual([a])
+    expect((await host.rewindPreview(id, a)).code).toMatchObject({ ok: true, files: ['b.txt', 'keep.txt'], edited: [] })
+    write('keep.txt', 'hand\n')
+    expect((await host.rewindPreview(id, a)).code).toMatchObject({ ok: true, edited: ['keep.txt'] })
+  })
+
+  it('快照停用后拍不了：按修改时间判断，这一轮里 AI 改的不算手改，结束后手改的算', async () => {
+    write('keep.txt', 'v0\n')
+    const { host, id, send } = setup({ a: { 'keep.txt': 'v1\n' }, b: { 'keep.txt': 'v2\n' } })
+    const a = await send('a')
+    const checkpoints = internals(host)
+    for (let i = 0; i < 3; i++) checkpoints.failed(id, new CheckpointError('timeout', '拍快照超时'))
+    const b = await sendUntil(host, id, 'b', turn => !!turn?.endedAt)
+    expect(checkpoints.states.get(id)!.data.turns[b]).toEqual({ at: expect.any(Number), endedAt: expect.any(Number) })
+    expect((await host.rewindPreview(id, a)).code).toMatchObject({ ok: true, files: ['keep.txt'], edited: [] })
+    write('keep.txt', 'hand\n')
+    const later = (Date.now() + 10_000) / 1000
+    utimesSync(join(work, 'keep.txt'), later, later)
+    expect((await host.rewindPreview(id, a)).code).toMatchObject({ ok: true, edited: ['keep.txt'] })
+  })
+
+  it('最后一条没送达：判断手改时跳过它，用之前那一轮的结束时间', async () => {
+    write('keep.txt', 'v0\n')
+    const { host, id, send } = setup({ a: { 'keep.txt': 'v1\n' }, b: { 'keep.txt': 'v2\n' } })
+    const a = await send('a')
+    const checkpoints = internals(host)
+    for (let i = 0; i < 3; i++) checkpoints.failed(id, new CheckpointError('timeout', '拍快照超时'))
+    await sendUntil(host, id, 'b', turn => !!turn?.endedAt)
+    // 对话最后多一条没送达的消息（没有快照、没有结束时间）：不跳过就只能退回和 a 结束时比，b 改的会算成手改
+    const runtime = (
+      host as unknown as { m: { sessions: { runtime(id: string): { snapshot: SessionSnapshot } } } }
+    ).m.sessions.runtime(id)
+    runtime.snapshot = {
+      ...runtime.snapshot,
+      items: [
+        ...runtime.snapshot.items,
+        { kind: 'user', id: 'gone', text: 'c', createdAt: Date.now(), dismissed: true },
+      ],
+    }
+    expect((await host.rewindPreview(id, a)).code).toMatchObject({ ok: true, files: ['keep.txt'], edited: [] })
   })
 
   it('没打开检查点时不拍快照', async () => {

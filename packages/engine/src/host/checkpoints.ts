@@ -29,6 +29,8 @@ const LATER_TIMEOUT = 60_000
 const SLOW_LIMIT = 3
 /** 影子仓库超过这个大小就删掉并停用 */
 export const CHECKPOINT_LIMIT = 200 * 1024 * 1024
+/** 按修改时间判断手改时留的余量：有的文件系统时间精度只有 2 秒，这一轮最后写的文件不能算成之后改的 */
+const MTIME_SLACK = 2_000
 /** 冲突确认框里的 diff 最多这么长 */
 const CONFLICT_DIFF_LIMIT = 20_000
 
@@ -38,7 +40,10 @@ interface TurnData {
   after?: string
   /** 这一轮改了哪些文件（before → after） */
   files?: string[]
+  /** 开始前快照拍好的时间；没有开始前快照的（只记了结束）是结束的时间 */
   at: number
+  /** 这一轮结束的时间（快照停用、没拍到时也记） */
+  endedAt?: number
   /** 快照缺了内容（项目的 git 清理了借来的对象、影子仓库被删过）：不能再用 */
   lost?: true
 }
@@ -202,20 +207,28 @@ export class HostCheckpoints {
     void this.checkSize(id, state)
   }
 
-  /** 一轮结束时拍一次，记下这一轮改了哪些文件（events.ts turn_completed）；不等它 */
+  /**
+   * 一轮结束时（events.ts turn_completed）：记下结束时间，再拍一次、记下这一轮改了哪些文件；不等它。
+   * 开始前没拍到（没拍完、出错）也拍、停用了拍不了也记时间：判断「之后手改过」要用（lastEnd）
+   */
   afterTurn(id: string, itemId: string): void {
-    const state = this.capturable(id)
-    const turn = state?.data.turns[itemId]
-    if (!state || !turn?.before) return
-    const before = turn.before
+    const state = this.usable(id)
+    if (!state) return
+    const now = Date.now()
+    const entry: TurnData = { ...(state.data.turns[itemId] ?? { at: now }), endedAt: now }
+    state.data.turns[itemId] = entry
+    this.save(id, state)
+    if (!this.capturable(id)) return
     void (async () => {
       const after = await this.capture(id, state)
       if (!after) return
       try {
-        const files = (await state.repo.diff(before, after)).map(c => c.path)
-        // 期间会话换了目录、被停用：不写
-        if (this.states.get(id) !== state || state.data.disabled) return
-        state.data.turns[itemId] = { ...turn, after, files }
+        const files =
+          entry.before && !entry.lost ? (await state.repo.diff(entry.before, after)).map(c => c.path) : undefined
+        // 期间会话换了目录、被停用、这条消息重新发了（开始前的快照换了）：不写
+        const current = state.data.turns[itemId]
+        if (this.states.get(id) !== state || state.data.disabled || !current || current.before !== entry.before) return
+        state.data.turns[itemId] = { ...current, after, ...(files ? { files } : {}) }
         this.save(id, state)
         void this.checkSize(id, state)
       } catch (err) {
@@ -291,19 +304,42 @@ export class HostCheckpoints {
       )
   }
 
-  /** 对话里最后一次拍到的「一轮结束时」：之后的改动算手改 */
-  private lastAfter(id: string, state: State): string | null {
+  /**
+   * 判断「最后一轮之后手改过」用什么比：
+   * - 对话里最后一轮（跳过没送达的、断线重连发的「继续」——它记在原消息上）有结束时的快照：比内容；
+   * - 没拍到（快照停用、出错）但记了结束时间：比修改时间；
+   * - 都没有（这一轮没跑完应用就关了、旧记录）：退回和最近一次拍到的结束快照比，之后几轮改的也会算进去
+   */
+  private lastEnd(id: string, state: State): { tree?: string; endedAt?: number } | null {
+    const items = this.ctx.m.sessions.runtime(id).snapshot.items
+    const last = items.findLast(item => item.kind === 'user' && !item.dismissed && item.reconnect === undefined)
+    const turn = last ? state.data.turns[last.id] : undefined
+    if (turn?.after || turn?.endedAt) return { tree: turn.after, endedAt: turn.endedAt }
     const turns = this.presentTurns(id, state)
-    for (let i = turns.length - 1; i >= 0; i--) if (turns[i]!.turn.after) return turns[i]!.turn.after!
+    for (let i = turns.length - 1; i >= 0; i--) if (turns[i]!.turn.after) return { tree: turns[i]!.turn.after }
     return null
   }
 
-  /** 这一轮结束时的样子：结束时没拍到（应用中途退出）就用下一轮开始前的 */
+  /** 这些改动里在 endedAt 之后被改过的文件（修改时间晚于它；删掉的不算：还原只是放回来，不丢内容） */
+  private changedSince(cwd: string, paths: string[], endedAt: number): string[] {
+    return paths.filter(path => {
+      try {
+        return statSync(join(cwd, path)).mtimeMs > endedAt + MTIME_SLACK
+      } catch {
+        return false
+      }
+    })
+  }
+
+  /**
+   * 这一轮结束时的样子：结束时没拍到（应用中途退出、快照停用）就用之后最近一轮开始前的。
+   * 没有开始前快照的轮次跳过：用更后面的，它们改的文件会多报成冲突（宁可多问一次）
+   */
   private endOf(id: string, state: State, itemId: string): string | null {
     const turns = this.presentTurns(id, state)
     const i = turns.findIndex(t => t.itemId === itemId)
     if (i < 0) return null
-    return turns[i]!.turn.after ?? turns[i + 1]?.turn.before ?? null
+    return turns[i]!.turn.after ?? turns.slice(i + 1).find(t => t.turn.before)?.turn.before ?? null
   }
 
   /** 回退到这条消息之前要还原哪些文件（branch.ts 有快照时用它） */
@@ -315,15 +351,16 @@ export class HostCheckpoints {
       if (!(await this.intact(id, state, itemId))) return { ok: false, reason: 'expired', message: CHECKPOINT_EXPIRED }
       const current = await state.repo.capture(LATER_TIMEOUT)
       const changes = await state.repo.diff(before, current)
-      const last = this.lastAfter(id, state)
-      const names = new Set(changes.map(c => c.path))
-      // 最后一轮结束时的快照也可能缺了内容：查不出手改，不挡回退
-      const edited = last
-        ? await state.repo.diff(last, current).then(
-            list => list.map(c => c.path).filter(p => names.has(p)),
-            () => [],
-          )
-        : []
+      const last = this.lastEnd(id, state)
+      const paths = changes.map(c => c.path)
+      const names = new Set(paths)
+      const byTime = (): string[] => (last?.endedAt ? this.changedSince(state.data.cwd, paths, last.endedAt) : [])
+      // 结束时的快照也可能缺了内容：退回比修改时间，都不行就不标，不挡回退
+      const edited = last?.tree
+        ? await state.repo
+            .diff(last.tree, current)
+            .then(list => list.map(c => c.path).filter(p => names.has(p)), byTime)
+        : byTime()
       let size = 0
       for (const c of changes) size += fileSize(join(state.data.cwd, c.path))
       return {
