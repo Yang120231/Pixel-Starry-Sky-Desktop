@@ -142,13 +142,15 @@ export function EffortMenu({ live }: { live: ComposerController }) {
   // 做完自动检查（docs/ui/channels-collab-v2.md §8）：会话开出来以后才有
   const [autoCheck, setAutoCheck, canCheck] = useSessionCheckSwitch(live.sessionId)
   const hasSwitches = ultracodeSupported || live.fastSupported || live.thinkingSupported || canCheck
-  // 开启的会话开关同步显示在按钮上，都用图标：Ultracode 紫色 ✦，Fast / 思考摘要强调色；名字在悬停提示里。
+  // 开启的会话开关同步显示在按钮上，都用图标：Ultracode 紫色 ✦，Fast / 思考摘要 / 做完自动检查强调色；名字在悬停提示里。
   const fastOn = live.fastSupported && live.fast
   const thinkingOn = live.thinkingSupported && live.thinkingSummaries
+  const checkOn = canCheck && autoCheck
   const modes = [
     ultracode && 'Ultracode',
     fastOn && tr('session.ComposerMenus.fastMode'),
     thinkingOn && tr('session.ComposerMenus.showThinkingSummaries'),
+    checkOn && tr('checks.auto'),
   ]
     .filter(Boolean)
     .join(' · ')
@@ -172,11 +174,12 @@ export function EffortMenu({ live }: { live: ComposerController }) {
         <span key={effort ?? ''} className={cn(top && 'effort-max')} style={accentStyle}>
           {effortLabel(effort)}
         </span>
-        {(ultracode || fastOn || thinkingOn) && (
+        {(ultracode || fastOn || thinkingOn || checkOn) && (
           <span className="flex items-center gap-0.5 text-accent" aria-hidden>
             {ultracode && <Sparkles size={13} strokeWidth={1.75} className="text-ultracode" />}
             {fastOn && <Zap size={13} strokeWidth={1.75} />}
             {thinkingOn && <Brain size={13} strokeWidth={1.75} />}
+            {checkOn && <ListChecks size={13} strokeWidth={1.75} data-auto-check-on />}
           </span>
         )}
         <ChevronDown size={14} strokeWidth={1.5} className="text-fg-muted" />
