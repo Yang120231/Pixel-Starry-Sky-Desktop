@@ -115,7 +115,8 @@ export function sessionArtifacts(
     if (turn.byPath.size) turns.push({ ...turn, files: [...turn.byPath.values()] })
   }
   for (const item of items) {
-    if (item.kind === 'user' && item.mode !== 'guidance') {
+    // 中途插入的引导、断线重连自动发的「继续」都接着原来那一轮，不另起一轮
+    if (item.kind === 'user' && item.mode !== 'guidance' && item.reconnect === undefined) {
       flush()
       turn = {
         ...turn,

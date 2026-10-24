@@ -123,7 +123,9 @@ export function toBlocks(items: Item[], running: boolean, cache: ChangesCache, o
       continue
     }
     const item = entry.item
-    if (item.kind === 'user' && item.mode !== 'guidance') {
+    // 断线重连自动发的「继续」接着原来那一轮（宿主把快照记在原消息上）：不另起一张卡片，
+    // 重连前后的改动合成一张放在最后，撤回用原消息的快照
+    if (item.kind === 'user' && item.mode !== 'guidance' && item.reconnect === undefined) {
       // 上一轮最后一个结束点之后还有改动（例如中断了、没有统计行）：卡片放到这一轮末尾
       placeCard()
       finishRound()

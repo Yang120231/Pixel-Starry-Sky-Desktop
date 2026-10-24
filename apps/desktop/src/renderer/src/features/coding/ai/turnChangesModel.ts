@@ -1,5 +1,5 @@
 // 「AI 这一轮改的」：从会话条目里取最近一轮已完成的文件改动，按路径合并（纯函数）
-// 分轮规则照 packages/protocol/src/turnFold.ts：不是 guidance 的 user 条目开始新的一轮（本文件不 import 它）
+// 分轮规则照对话里的改动卡片（session/live/changeBlocks.ts）：不是引导、也不是断线重连「继续」的 user 条目开始新的一轮
 import type { Item } from '@pixelsky/protocol'
 
 export interface TurnFile {
@@ -35,7 +35,8 @@ export function relativePath(root: string, path: string, caseInsensitive: boolea
   return p.replace(/^\.\//, '')
 }
 
-const isTurnUser = (item: Item): boolean => item.kind === 'user' && item.mode !== 'guidance'
+const isTurnUser = (item: Item): boolean =>
+  item.kind === 'user' && item.mode !== 'guidance' && item.reconnect === undefined
 const completedChange = (item: Item): item is FileChangeItem =>
   item.kind === 'file_change' && item.status === 'completed'
 

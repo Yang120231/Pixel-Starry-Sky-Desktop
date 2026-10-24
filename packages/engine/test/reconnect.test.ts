@@ -166,6 +166,26 @@ describe('断线自动重连', () => {
     expect(host.open(record.id).queue).toEqual([])
   })
 
+  it('重试过的消息又断线重连：「继续」那一轮的检查点记在重试那条上，不是第一次发的', async () => {
+    const { host, record, send, session, hostCtx } = setup()
+    const keys: string[] = []
+    hostCtx().m.checkpoints.afterTurn = (_id: string, key: string) => void keys.push(key)
+    await send('a')
+    await until(() => !!session()?.active)
+    session().finish('failed', '登录已失效，请重新登录')
+    await until(() => host.open(record.id).queue[0]?.status === 'failed')
+    await host.runQueuedNow(record.id, 'a')
+    await until(() => session().inputs.length === 2)
+    const retried = session().inputs[1].id
+    expect(retried).toMatch(/^a-retry-/)
+    session().drop()
+    await until(() => session().inputs.length === 3)
+    expect(session().inputs[2].text.split('\n').at(-1)).toBe('继续')
+    session().finish()
+    await until(() => host.open(record.id).state === 'idle')
+    expect(keys).toEqual(['a', retried, retried])
+  })
+
   it('次数用完才算发送失败，记下自动重连了几次；之后可以关掉，对话里那条标「未送达」', async () => {
     const { host, record, send, users, session } = setup()
     host.setRetrySettings(2)

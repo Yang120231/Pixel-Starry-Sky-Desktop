@@ -76,6 +76,19 @@ describe('一轮一张改动卡片（GitHub #40）', () => {
     expect(kinds(blocks).slice(0, 4)).toEqual(['user', 'process', 'changes(1)', 'user'])
   })
 
+  it('断线重连自动发的「继续」接着原来那一轮：重连前后只有一张卡片，按原消息找快照', () => {
+    const resumed = { kind: 'user', id: 'u1-reconnect-1', text: '继续', createdAt: 0, reconnect: 1 } as Item
+    const flow = [user('u1'), edit('e1', 'a.ts'), stats('s1'), resumed, edit('e2', 'b.ts'), reply('r2'), stats('s2')]
+    const blocks = toBlocks(flow, false, new Map())
+    const found = cards(blocks)
+    expect(found).toHaveLength(1)
+    expect(found[0]).toMatchObject({ key: 'changes-u1', turnKey: 'u1', data: { files: { length: 2 } } })
+    // 卡片在最后一行统计之前；「继续」照样显示在对话里
+    const order = kinds(blocks)
+    expect(order.indexOf('changes(2)')).toBe(order.lastIndexOf('turn_stats') - 1)
+    expect(blocks.some(b => b.type === 'item' && b.item.id === 'u1-reconnect-1')).toBe(true)
+  })
+
   it('条目没变时复用缓存的卡片数据（memo 能跳过）', () => {
     const cache = new Map()
     const a = cards(toBlocks(items, false, cache))[0]

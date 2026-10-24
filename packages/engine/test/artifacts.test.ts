@@ -95,6 +95,21 @@ describe('产物：变更', () => {
     expect(res.outsideCount).toBe(1)
     expect((host as unknown as { runtimes: Map<string, unknown> }).runtimes.size).toBe(0)
   })
+  it('中途插入的引导、断线重连自动发的「继续」接着原来那一轮，不另起一轮', async () => {
+    record('重连', [
+      user('u1', '改设置页'),
+      edit('e1', [change('src/a.ts')]),
+      { kind: 'user', id: 'g1', text: '顺便改下标题', createdAt: Date.now(), mode: 'guidance' },
+      edit('e2', [change('src/b.ts')]),
+      { kind: 'user', id: 'u1-reconnect-1', text: '继续', createdAt: Date.now(), reconnect: 1 },
+      edit('e3', [change('src/c.ts')]),
+    ])
+    await reopen()
+    const res = await host.artifacts(query(), workspace)
+    expect(res.turns.map(t => [t.userItemId, t.prompt, t.files.map(f => f.local)])).toEqual([
+      ['u1', '改设置页', ['src/a.ts', 'src/b.ts', 'src/c.ts']],
+    ])
+  })
   it('只看最近几天；同一条目以最后一版为准；只看这个工作区（副本目录的会话不算）', async () => {
     const old = Date.now() - 10 * DAY
     record('旧的', [user('u0', '很久以前', old), edit('e0', [change('a.ts')])], { updatedAt: old })

@@ -263,6 +263,14 @@ export class HostEvents {
           ...(reply === undefined ? {} : { lastReply: reply }),
           updatedAt: Date.now(),
         })
+        // 对话检查点记在哪条消息上（下面可能把队列项删掉，先取）：「继续」那一轮接着原消息，
+        // 队列项的 messageUuid 就是原消息 id（重试过的是重试那条，不是第一次发的）
+        const turn = rt.turn
+        const checkpointId = turn
+          ? turn.resume
+            ? (rt.snapshot.queue.find(q => q.id === turn.queueId)?.messageUuid ?? turn.queueId)
+            : turn.userItemId
+          : null
         // 连接问题断开的：这条留在队首，等一会儿自动接着做，队列不暂停（queue.ts reconnect）
         let reconnecting = false
         if (rt.activeId) {
@@ -300,8 +308,8 @@ export class HostEvents {
           } else if (item) m.queue.removeQueue(id, item.id, 'accepted')
           rt.activeId = null
         }
-        // 对话检查点：这一轮结束时再拍一次（「继续」的那一轮记在原消息上）
-        if (rt.turn) m.checkpoints.afterTurn(id, rt.turn.resume ? rt.turn.queueId : rt.turn.userItemId)
+        // 对话检查点：这一轮结束时再拍一次
+        if (checkpointId) m.checkpoints.afterTurn(id, checkpointId)
         rt.turn = undefined
         const turnEngine = (rt.execution ?? rt.snapshot.record).engine
         const awaitingGuidance = rt.snapshot.queue.some(q => q.status === 'delivering')

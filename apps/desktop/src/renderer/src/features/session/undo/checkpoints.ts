@@ -45,7 +45,8 @@ function demoList(snapshot: SessionSnapshot, reverted: CheckpointList['reverted'
     if (current) turns.push({ itemId: current.itemId, files: [...current.files], at: current.at })
   }
   for (const item of snapshot.items) {
-    if (item.kind === 'user' && item.mode !== 'guidance') {
+    // 和宿主一样：断线重连的「继续」接着原消息那一轮
+    if (item.kind === 'user' && item.mode !== 'guidance' && item.reconnect === undefined) {
       flush()
       current = { itemId: item.id, files: new Set(), at: item.createdAt ?? Date.now() }
     } else if (item.kind === 'file_change' && current) for (const c of item.changes) current.files.add(c.path)

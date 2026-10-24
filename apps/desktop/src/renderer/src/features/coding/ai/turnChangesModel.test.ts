@@ -47,6 +47,13 @@ describe('latestTurnChanges', () => {
     expect(result.turnKey).toBe('u1')
     expect(result.files.map(f => f.path)).toEqual(['a.ts', 'b.ts'])
   })
+  it('断线重连自动发的「继续」不分轮：重连前后的改动都算这一轮', () => {
+    const resumed: Item = { kind: 'user', id: 'u1-reconnect-1', text: '继续', createdAt: 0, reconnect: 1 }
+    const items = [user('u1'), edit('e1', [change('a.ts')]), resumed, edit('e2', [change('b.ts')])]
+    const result = latestTurnChanges(items, false, '', false)!
+    expect(result.turnKey).toBe('u1')
+    expect(result.files.map(f => f.path)).toEqual(['a.ts', 'b.ts'])
+  })
   it('绝对路径和相对路径合并，diffs 按出现顺序', () => {
     const items = [
       user('u1'),

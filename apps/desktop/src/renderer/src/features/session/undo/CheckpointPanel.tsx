@@ -41,7 +41,11 @@ export function CheckpointPanel({
 }) {
   useI18n()
   const users = useMemo(
-    () => snapshot.items.filter((i): i is UserItem => i.kind === 'user' && i.mode !== 'guidance'),
+    // 断线重连自动发的「继续」不算一轮（接着原消息，对话里也不给它「回退」）
+    () =>
+      snapshot.items.filter(
+        (i): i is UserItem => i.kind === 'user' && i.mode !== 'guidance' && i.reconnect === undefined,
+      ),
     [snapshot.items],
   )
   const list = checkpoints.list
