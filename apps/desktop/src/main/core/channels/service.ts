@@ -29,8 +29,11 @@ import type {
   ChannelNotify,
   ChannelMember,
   ChannelMessage,
+  ChannelNeed,
   ChannelsSnapshot,
   ChannelSearchResult,
+  NeedGone,
+  NeedMark,
   ChannelRelay,
   ChannelTask,
   ChannelTaskAction,
@@ -215,6 +218,12 @@ const TOOL_REPLY_CHARS = 8000
 const TOOL_REPLIES_MAX = 30
 const TOOL_PROPOSALS_MAX = 5
 
+/** 判断「需要你」里会话在不在用：现有的会话 id、会话列表里出现过的机器 */
+interface KnownSessions {
+  ids: Set<string>
+  machines: Set<string>
+}
+
 export class Channels {
   private readonly store: ChannelStore
   private readonly now: () => number
@@ -233,6 +242,8 @@ export class Channels {
   private readonly seen = new Map<string, number>()
   private readonly waitingSince = new Map<string, { request: string; at: number }>()
   private alertTimer: ReturnType<typeof setInterval> | null = null
+  /** 上次会话事件里的会话 id（排好序拼起来）：增删了才重算「需要你」 */
+  private sessionIds = ''
 
   constructor(private readonly deps: ChannelsDeps) {
     this.store = deps.store
@@ -251,6 +262,7 @@ export class Channels {
     for (const [channelId, list] of this.store.messages)
       for (const m of list)
         if (m.kind === 'task' && m.checks?.status === 'running') this.store.patchTask(channelId, m.id, { checks: null })
+    this.stopOrphans()
     if (this.team) {
       const team = this.team
       this.exec = new TeamExecutor({
@@ -457,13 +469,76 @@ export class Channels {
       sessionChannels,
       sessionTasks,
       sessionBindings,
-      ...channelNeeds(this.store.channels.values(), this.store.messages, SELF_ID),
+      ...this.needs(),
       teams: team?.teams ?? [],
       invites: team?.invites ?? [],
       // 没有团队同步（团队功能关着，见 main/channels/ipc.ts 的 teamsEnabled）：报不可用，界面藏起所有团队入口
       teamsConnection: this.team ? (team?.connection ?? 'signed-out') : 'unavailable',
       teamsSyncedAt: team?.syncedAt ?? null,
     }
+  }
+
+  /** 「需要你」（docs/ui/channels-collab-v2.md §2）：等你处理的、标为已处理的、跟进中的 */
+  private needs(): Pick<ChannelsSnapshot, 'needs' | 'needsDone' | 'following'> {
+    // 会话列表每次快照只取一次（旧的失败可能有几百条）
+    const sessions = this.deps.sessions()
+    const known: KnownSessions = {
+      ids: new Set(sessions.map(s => s.record.id)),
+      machines: new Set(sessions.map(s => this.deps.machineOf(s.record.projectId))),
+    }
+    const { needs, done, following } = channelNeeds(this.store.channels.values(), this.store.messages, SELF_ID, n =>
+      this.needGone(n, known),
+    )
+    return { needs, needsDone: done, following }
+  }
+
+  /** 找不到目标（§2.1）：成员删了、会话不在了、提醒对应的任务卡不在了 */
+  private needGone(n: ChannelNeed, known: KnownSessions): NeedGone | null {
+    if (n.kind === 'alert') {
+      if (!n.taskId) return null
+      const task = this.store.task(n.taskId)
+      if (!task) return 'task'
+      if (!this.member(task.assigneeId)) return 'member'
+      return this.sessionGone(task.assigneeId, task.sessionId ?? null, false, known) ? 'session' : null
+    }
+    if (n.memberId && !this.member(n.memberId)) return 'member'
+    if (n.kind === 'approval' || n.kind === 'checks' || n.kind === 'failed')
+      return this.sessionGone(n.memberId, n.sessionId ?? null, n.kind === 'approval', known) ? 'session' : null
+    return null
+  }
+
+  /**
+   * 成员的会话不在了：只看连着、而且会话列表里已经有它的会话的机器（断开的机器、刚启动或刚连上还没拉到会话列表的
+   * 机器都不可信）。required：没有会话也算不在（要你确认得有会话才能回答）
+   */
+  private sessionGone(
+    memberId: string | null,
+    sessionId: string | null,
+    required: boolean,
+    known: KnownSessions,
+  ): boolean {
+    const member = memberId ? this.member(memberId) : undefined
+    if (!member || !this.machineOnline(member.machineId) || !known.machines.has(member.machineId)) return false
+    if (!sessionId) return required
+    return !known.ids.has(sessionId)
+  }
+
+  /** 标为已处理 / 恢复（§2.1）：记在频道里，顺手清掉已经不在列表里的旧记录 */
+  async markNeeds(items: NeedMark[], done: boolean): Promise<void> {
+    const byChannel = new Map<string, NeedMark[]>()
+    for (const item of items) byChannel.set(item.channelId, [...(byChannel.get(item.channelId) ?? []), item])
+    for (const [channelId, marks] of byChannel) {
+      const c = this.store.channels.get(channelId)
+      if (!c) continue
+      const live = new Set(channelNeeds([{ id: c.id }], this.store.messages, SELF_ID).needs.map(n => n.key))
+      const next = Object.fromEntries(Object.entries(c.needsDone ?? {}).filter(([key]) => live.has(key)))
+      for (const m of marks) {
+        if (done && live.has(m.key)) next[m.key] = m.sig
+        else delete next[m.key]
+      }
+      await this.store.saveChannel({ ...c, needsDone: next })
+    }
+    this.changed()
   }
 
   /**
@@ -2341,6 +2416,12 @@ export class Channels {
       const member = this.member(run.memberId)
       if (member && this.machineOnline(member.machineId)) this.finish(run, { status: 'failed', error: '会话已删除' })
     }
+    // 「需要你」里找不到会话的要重新分组；会话事件很频繁（每次状态变化都有），只在会话增删时推
+    const key = [...ids].sort().join('\n')
+    if (key !== this.sessionIds) {
+      this.sessionIds = key
+      this.changed()
+    }
   }
 
   /** 机器连上 / 断开（machines:changed） */
@@ -2386,6 +2467,18 @@ export class Channels {
     }
     for (const m of new Set([...this.store.runs.values()].filter(r => r.phase === 'waiting').map(r => r.memberId)))
       void this.pump(m)
+  }
+
+  /**
+   * 启动时（§2.1 D）：本机频道里还没结束、却没有运行记录的任务卡（上次退出时运行记录没写完）不会再有动静，
+   * 标成已停止，免得一直挂在「跟进中」
+   */
+  private stopOrphans(): void {
+    const now = this.now()
+    for (const [channelId, list] of this.store.messages)
+      for (const m of list)
+        if (m.kind === 'task' && !terminal(m.status) && !this.store.runs.has(m.id))
+          this.store.patchTask(channelId, m.id, { status: 'stopped', endedAt: now })
   }
 
   // -------------------------------------------------------------------------

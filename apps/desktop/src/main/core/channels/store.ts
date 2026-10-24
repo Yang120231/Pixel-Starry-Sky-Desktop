@@ -39,6 +39,8 @@ export interface StoredChannel {
   alerts?: Partial<Record<ChannelAlertRule, boolean>>
   digestHour?: number
   lastDigestAt?: number | null
+  /** 「需要你」里标为已处理的（docs/ui/channels-collab-v2.md §2.1）：key → 当时的 sig；旧数据没有 */
+  needsDone?: Record<string, string>
   createdAt: number
   /** 看到哪里了：这之后别人发的算未读 */
   readAt: number

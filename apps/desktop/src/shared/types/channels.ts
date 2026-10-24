@@ -483,6 +483,8 @@ export interface ChannelsSnapshot {
   sessionBindings?: Record<string, { channelId: string; memberId: string }[]>
   /** 「需要你」（docs/ui/channels-collab-v2.md §2）：本机频道里等你处理的事，新的在前 */
   needs?: ChannelNeed[]
+  /** 标为已处理、状态还没变的（「已处理 N 件」里能恢复），新的在前 */
+  needsDone?: ChannelNeed[]
   /** 「需要你 › 跟进中」：还在排队或运行的活，新的在前 */
   following?: ChannelFollow[]
   // ── Phase C ──
@@ -518,6 +520,17 @@ export interface ChannelNeed {
   request?: ApprovalRequest | null
   /** kind 是 checks 时：文本检查发现了几处 */
   findings?: number
+  /** 找不到目标（§2.1）：会话不在了、成员删了、提醒对应的任务卡不在了；这类折叠成一组，不算侧栏数字 */
+  gone?: NeedGone | null
+}
+
+export type NeedGone = 'session' | 'member' | 'task'
+
+/** 标为已处理 / 恢复的一件事（channels:markNeeds） */
+export interface NeedMark {
+  channelId: string
+  key: string
+  sig: string
 }
 
 /** 跟进中的一项活 */

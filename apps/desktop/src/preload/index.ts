@@ -486,6 +486,7 @@ const channels: ChannelsBridge = {
   search: (text, opts) => call('channels:search', text, opts),
   saveMember: (channelId, input) => call('channels:saveMember', channelId, input),
   addMember: (channelId, memberId) => call('channels:addMember', channelId, memberId),
+  markNeeds: (items, done) => call('channels:markNeeds', items, done),
   removeMember: (channelId, memberId) => call('channels:removeMember', channelId, memberId),
   deleteMember: memberId => call('channels:deleteMember', memberId),
   joinSession: input => call('channels:joinSession', input),

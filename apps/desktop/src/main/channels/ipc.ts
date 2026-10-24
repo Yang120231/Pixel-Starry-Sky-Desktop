@@ -25,6 +25,7 @@ import type {
   ChannelInput,
   JoinSessionInput,
   ChannelTaskAction,
+  NeedMark,
   PostInput,
   TeamRole,
 } from '../../shared/types/channels'
@@ -179,6 +180,18 @@ export async function initChannels(ctx: AppContext): Promise<void> {
   ipc.handle('channels:alert', (_e, id, messageId, action) => {
     if (typeof action !== 'string' || !ALERT_ACTIONS.has(action as ChannelAlertAction)) throw new Error('不支持的操作')
     return channels.alertAction(str(id, '频道'), str(messageId, '消息'), action as ChannelAlertAction)
+  })
+  ipc.handle('channels:markNeeds', (_e, raw: unknown, done) => {
+    if (!Array.isArray(raw) || raw.length > 1000) throw new Error('参数不正确')
+    const marks: NeedMark[] = (raw as unknown[]).map(item => {
+      const i = (item ?? {}) as Partial<NeedMark>
+      return {
+        channelId: str(i.channelId, '频道'),
+        key: str(i.key, '提醒'),
+        sig: typeof i.sig === 'string' ? i.sig : '',
+      }
+    })
+    return channels.markNeeds(marks, done === true)
   })
   ipc.handle('channels:dispatchIssue', (_e, id, issue) => channels.dispatchIssue(str(id, '频道'), issue))
   ipc.handle('channels:search', (_e, text, opts) => {

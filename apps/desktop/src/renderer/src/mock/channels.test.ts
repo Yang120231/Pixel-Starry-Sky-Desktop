@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { demo } from './demo'
-import { DEMO_TEAMS, demoChannelData } from './channels'
+import { DEMO_DELETED_MEMBER, DEMO_TEAMS, demoChannelData } from './channels'
 import { empty } from '@/data/empty'
 import type { ChannelTask } from '@/data/types'
 import { unreadTotal } from '../features/channels/model'
@@ -29,7 +29,8 @@ describe('协作频道演示数据', () => {
         if (m.kind === 'event') expect(ids.has(m.actorId), m.id).toBe(true)
         // 主动提醒是系统发的（SYSTEM_AUTHOR），不是成员
         else if (!(m.kind === 'message' && m.alert)) expect(ids.has(m.authorId), m.id).toBe(true)
-        if (m.kind === 'task') expect(ids.has(m.assigneeId), m.id).toBe(true)
+        // 例外：一张交给已删成员的旧卡（演示「需要你」里找不到成员的那一组）
+        if (m.kind === 'task' && m.assigneeId !== DEMO_DELETED_MEMBER) expect(ids.has(m.assigneeId), m.id).toBe(true)
         if (m.kind === 'message' && m.replyToId) expect(own.has(m.replyToId), m.id).toBe(true)
         if (m.kind === 'message') for (const id of m.mentions ?? []) expect(ids.has(id), m.id).toBe(true)
       })

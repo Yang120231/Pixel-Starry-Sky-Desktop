@@ -1,5 +1,5 @@
 // 「需要你」（docs/ui/channels-collab-v2.md §2）：从本机频道的消息里找出等你处理的事和还在跟进的活。纯函数，不碰磁盘和引擎
-import type { ChannelFollow, ChannelMessage, ChannelNeed, ChannelTask } from '../types/channels'
+import type { ChannelFollow, ChannelMessage, ChannelNeed, ChannelTask, NeedGone } from '../types/channels'
 import { checkProblems } from '../types/checks'
 import { threadMessages } from './threads'
 
@@ -17,21 +17,33 @@ function taskSession(list: readonly ChannelMessage[], taskId: string): string | 
   return t?.kind === 'task' ? (t.sessionId ?? null) : null
 }
 
+/** 能不能「标为已处理」（§2.1）：会话还在的「要你确认」不行，得允许 / 拒绝 */
+export function canMarkNeed(need: Pick<ChannelNeed, 'kind' | 'gone'>): boolean {
+  return need.kind !== 'approval' || !!need.gone
+}
+
+/**
+ * 所有本机频道里等你处理的事（needs，含找不到目标的）、标为已处理且状态没变的（done）、跟进中的活。
+ * c.needsDone：标为已处理时记下的 key → sig；gone：判断找不到目标（主进程才知道会话和成员在不在）
+ */
 export function channelNeeds(
-  channels: Iterable<{ id: string; archivedAt?: number | null }>,
+  channels: Iterable<{ id: string; archivedAt?: number | null; needsDone?: Record<string, string> }>,
   messages: ReadonlyMap<string, readonly ChannelMessage[]>,
   selfId: string,
-): { needs: ChannelNeed[]; following: ChannelFollow[] } {
+  gone?: (need: ChannelNeed) => NeedGone | null,
+): { needs: ChannelNeed[]; done: ChannelNeed[]; following: ChannelFollow[] } {
   const needs: ChannelNeed[] = []
+  const done: ChannelNeed[] = []
   const following: ChannelFollow[] = []
   for (const c of channels) {
     if (c.archivedAt) continue
     const list = messages.get(c.id) ?? []
+    const found: ChannelNeed[] = []
     for (const m of list) {
       const base = { channelId: c.id, at: m.at }
       if (m.kind === 'message') {
         if (m.proposal?.state === 'open')
-          needs.push({
+          found.push({
             ...base,
             key: `proposal:${m.id}`,
             kind: 'proposal',
@@ -41,7 +53,7 @@ export function channelNeeds(
             text: m.proposal.request,
           })
         if (m.alert?.state === 'open')
-          needs.push({
+          found.push({
             ...base,
             key: `alert:${m.id}`,
             kind: 'alert',
@@ -66,7 +78,7 @@ export function channelNeeds(
       }
       const round = m.round ?? 1
       if (m.status === 'waiting' && m.request)
-        needs.push({
+        found.push({
           ...task,
           key: `approval:${m.id}`,
           kind: 'approval',
@@ -74,7 +86,7 @@ export function channelNeeds(
           request: m.request,
         })
       else if (m.status === 'queued' && m.relay?.held)
-        needs.push({
+        found.push({
           ...task,
           key: `held:${m.id}`,
           kind: 'held',
@@ -82,11 +94,11 @@ export function channelNeeds(
           detail: m.relay.held,
         })
       else if (m.status === 'failed')
-        needs.push({ ...task, key: `failed:${m.id}`, kind: 'failed', sig: String(round), detail: m.error ?? null })
+        found.push({ ...task, key: `failed:${m.id}`, kind: 'failed', sig: String(round), detail: m.error ?? null })
       else if (m.status === 'done') {
         const problems = m.checks?.status === 'done' ? checkProblems(m.checks) : null
         if (problems && (problems.failed.length || problems.findings.length))
-          needs.push({
+          found.push({
             ...task,
             key: `checks:${m.id}`,
             kind: 'checks',
@@ -95,7 +107,7 @@ export function channelNeeds(
             findings: problems.findings.length,
           })
         if (m.decision && !answered(list, m, selfId))
-          needs.push({ ...task, key: `decision:${m.id}`, kind: 'decision', sig: `${round}`, detail: m.decision })
+          found.push({ ...task, key: `decision:${m.id}`, kind: 'decision', sig: `${round}`, detail: m.decision })
       }
       if (ACTIVE.has(m.status) && !(m.status === 'queued' && m.relay?.held) && m.status !== 'waiting')
         following.push({
@@ -108,8 +120,15 @@ export function channelNeeds(
           sessionId: m.sessionId ?? null,
         })
     }
+    for (const n of found) {
+      const why = gone?.(n) ?? null
+      const need = why ? { ...n, gone: why } : n
+      if (canMarkNeed(need) && c.needsDone?.[n.key] === n.sig) done.push(need)
+      else needs.push(need)
+    }
   }
   needs.sort((a, b) => b.at - a.at)
+  done.sort((a, b) => b.at - a.at)
   following.sort((a, b) => b.at - a.at)
-  return { needs, following }
+  return { needs, done, following }
 }

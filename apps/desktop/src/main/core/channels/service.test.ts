@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -1014,6 +1014,96 @@ describe('协作频道：失败、停止、重试', () => {
     await c.post(channelId, { text: '@前端助手 做', clientId: '1' })
     await settle()
     expect(tasks(c, channelId)[0]).toMatchObject({ status: 'failed', error: '项目目录不存在' })
+  })
+})
+
+describe('「需要你」：标为已处理、找不到目标（docs/ui/channels-collab-v2.md §2.1）', () => {
+  it('会话删了的失败算找不到会话；标为已处理后不再出现，重启后还记得，可以恢复', async () => {
+    const c = await open()
+    const a = await c.saveMember(null, agent('前端助手'))
+    const b = await c.saveMember(null, agent('后端助手'))
+    const channelId = await c.create({ name: 'ch', memberIds: [a, b] })
+    await c.post(channelId, { text: '@前端助手 一', clientId: '1' })
+    await c.post(channelId, { text: '@后端助手 二', clientId: '2' })
+    await settle()
+    const two = tasks(c, channelId)[1]
+    engine.sessions.splice(1)
+    c.hostEvent({ kind: 'sessions', sessions: engine.sessions })
+    const need = c.state().needs?.find(n => n.key === `failed:${two.id}`)
+    expect(need).toMatchObject({ kind: 'failed', gone: 'session', detail: '会话已删除' })
+
+    await c.markNeeds([{ channelId, key: need!.key, sig: need!.sig }], true)
+    expect(c.state().needs?.some(n => n.key === need!.key)).toBe(false)
+    expect(c.state().needsDone?.map(n => n.key)).toEqual([need!.key])
+    await settle()
+    await c.dispose()
+
+    const again = await open()
+    expect(again.state().needs?.some(n => n.key === need!.key)).toBe(false)
+    await again.markNeeds([{ channelId, key: need!.key, sig: need!.sig }], false)
+    expect(again.state().needs?.some(n => n.key === need!.key)).toBe(true)
+    expect(again.state().needsDone).toEqual([])
+  })
+
+  it('会话列表里还没有那台机器的会话（刚连上、没拉到列表）时不算找不到会话', async () => {
+    machines.push({ id: 'ssh-ab', name: 'build-01', connected: true })
+    const c = await open()
+    const a = await c.saveMember(null, agent('构建助手', { projectId: 'ssh-ab~p2' }))
+    const channelId = await c.create({ name: 'ch', memberIds: [a] })
+    await c.post(channelId, { text: '@构建助手 打包', clientId: '1' })
+    await settle()
+    const task = tasks(c, channelId)[0]
+    const cmid = engine.sends()[0].clientMessageId
+    c.hostEvent(ev('ssh-ab~s1', userItem(cmid, 'k')))
+    c.hostEvent(ev('ssh-ab~s1', { type: 'turn_completed', turnId: 'k', outcome: 'failed', error: '502' }))
+    c.hostEvent(ev('ssh-ab~s1', { type: 'queue', items: [], paused: true }))
+    expect(tasks(c, channelId)[0]).toMatchObject({ status: 'failed', sessionId: 'ssh-ab~s1' })
+    // 本机还有会话，build-01 的一个都没有：不判断
+    engine.sessions.splice(0)
+    engine.sessions.push({ record: { id: 'local-1', projectId: 'p1' }, state: 'idle' } as SessionSummary)
+    const key = `failed:${task.id}`
+    expect(c.state().needs?.find(n => n.key === key)?.gone).toBeUndefined()
+    // 拉到了 build-01 的会话列表、里面没有这个会话：找不到会话
+    engine.sessions.push({ record: { id: 'ssh-ab~s9', projectId: 'ssh-ab~p2' }, state: 'idle' } as SessionSummary)
+    expect(c.state().needs?.find(n => n.key === key)?.gone).toBe('session')
+  })
+
+  it('又失败一次（sig 变了）重新出现；成员删了的算找不到成员', async () => {
+    const c = await open()
+    const a = await c.saveMember(null, agent('前端助手'))
+    const channelId = await c.create({ name: 'ch', memberIds: [a] })
+    engine.fail.set('engine:send', '项目目录不存在')
+    await c.post(channelId, { text: '@前端助手 做', clientId: '1' })
+    await settle()
+    const task = tasks(c, channelId)[0]
+    const first = c.state().needs!.find(n => n.key === `failed:${task.id}`)!
+    expect(first.gone).toBeUndefined()
+    await c.markNeeds([{ channelId, key: first.key, sig: first.sig }], true)
+    expect(c.state().needs).toEqual([])
+    await c.taskAction(task.id, 'retry')
+    await settle()
+    expect(c.state().needs!.find(n => n.key === first.key)).toMatchObject({ sig: '2' })
+
+    await c.deleteMember(a)
+    expect(c.state().needs!.find(n => n.key === first.key)?.gone).toBe('member')
+  })
+
+  it('启动时还没结束、却没有运行记录的任务卡标成已停止，不再挂在跟进中', async () => {
+    const c = await open()
+    const a = await c.saveMember(null, agent('前端助手'))
+    const channelId = await c.create({ name: 'ch', memberIds: [a] })
+    await c.post(channelId, { text: '@前端助手 改', clientId: '1' })
+    await settle()
+    const task = tasks(c, channelId)[0]
+    c.hostEvent(ev('s1', userItem(`ch-${task.id}-1`, 'k')))
+    expect(c.state().following?.map(f => f.taskId)).toEqual([task.id])
+    await settle()
+    await c.dispose()
+    await writeFile(join(dir, 'runs.json'), '[]')
+
+    const again = await open()
+    expect(tasks(again, channelId)[0]).toMatchObject({ status: 'stopped' })
+    expect(again.state().following).toEqual([])
   })
 })
 

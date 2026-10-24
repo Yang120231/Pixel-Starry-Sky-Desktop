@@ -52,24 +52,37 @@ export function visibleNeed(need: ChannelNeed, all: Snoozes, now: number): boole
 const NO_NEEDS: ChannelNeed[] = []
 const NO_FOLLOWING: ChannelFollow[] = []
 
-/** 等你处理的（去掉稍后处理的）、稍后处理了几件、跟进中的 */
-export function useNeeds(): { needs: ChannelNeed[]; snoozed: number; following: ChannelFollow[] } {
+/**
+ * needs：等你处理的（去掉稍后处理的和找不到目标的，侧栏数字按它算）；gone：找不到目标的（折叠成一组，§2.1）；
+ * done：标为已处理的；snoozed：稍后处理了几件；following：跟进中的
+ */
+export function useNeeds(): {
+  needs: ChannelNeed[]
+  gone: ChannelNeed[]
+  done: ChannelNeed[]
+  snoozed: number
+  following: ChannelFollow[]
+} {
   const live = useChannels(s => (channelsLive ? s.needs : NO_NEEDS))
+  const liveDone = useChannels(s => (channelsLive ? s.needsDone : NO_NEEDS))
   const liveFollowing = useChannels(s => (channelsLive ? s.following : NO_FOLLOWING))
   const channels = useChannels(s => s.channels)
   const messages = useChannels(s => s.messages)
+  const marks = useChannels(s => s.demoMarks)
+  const members = useChannels(s => s.members)
   const self = useChannels(s => selfIdIn(s, undefined))
-  // 演示模式：按演示数据里的消息现算（团队频道不算）
+  // 演示模式：按演示数据里的消息现算（团队频道不算）；演示数据里没有会话列表，只按成员在不在判断找不到目标
   const demo = useMemo(
     () =>
       channelsLive
         ? null
         : channelNeeds(
-            channels.filter(c => c.scope === 'local'),
+            channels.filter(c => c.scope === 'local').map(c => ({ ...c, needsDone: marks[c.id] })),
             new Map(Object.entries(messages)),
             self ?? '',
+            n => (n.memberId && !members.some(m => m.id === n.memberId) ? 'member' : null),
           ),
-    [channels, messages, self],
+    [channels, messages, self, marks, members],
   )
   const all = useSyncExternalStore(
     l => {
@@ -88,7 +101,13 @@ export function useNeeds(): { needs: ChannelNeed[]; snoozed: number; following: 
     return () => clearTimeout(timer)
   }, [source, all, now])
   return useMemo(() => {
-    const needs = source.filter(n => visibleNeed(n, all, now))
-    return { needs, snoozed: source.length - needs.length, following: demo?.following ?? liveFollowing }
-  }, [source, all, now, demo, liveFollowing])
+    const visible = source.filter(n => visibleNeed(n, all, now))
+    return {
+      needs: visible.filter(n => !n.gone),
+      gone: visible.filter(n => !!n.gone),
+      done: demo?.done ?? liveDone,
+      snoozed: source.length - visible.length,
+      following: demo?.following ?? liveFollowing,
+    }
+  }, [source, all, now, demo, liveDone, liveFollowing])
 }

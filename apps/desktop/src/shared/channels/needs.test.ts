@@ -70,6 +70,27 @@ describe('「需要你」（docs/ui/channels-collab-v2.md §2）', () => {
     expect(following.map(f => f.taskId).sort()).toEqual(['queue', 'run'])
     expect(channelNeeds([{ id: 'c', archivedAt: 1 }], new Map([['c', list]]), 'you').needs).toEqual([])
   })
+
+  it('标为已处理（§2.1）：sig 没变的进 done，变了重新出现；会话还在的「要你确认」标不掉', () => {
+    const marks = { 'failed:fail': '2', 'checks:checks': 'old', 'approval:wait': 'r1' }
+    const { needs, done } = channelNeeds([{ id: 'c', needsDone: marks }], new Map([['c', list]]), 'you')
+    expect(done.map(n => n.key)).toEqual(['failed:fail'])
+    expect(needs.map(n => n.key)).toContain('checks:checks')
+    expect(needs.map(n => n.key)).toContain('approval:wait')
+  })
+
+  it('找不到目标的带上原因；这时「要你确认」也能标为已处理', () => {
+    const gone = (n: { kind: string }) => (n.kind === 'approval' ? 'session' : n.kind === 'failed' ? 'member' : null)
+    const { needs, done } = channelNeeds(
+      [{ id: 'c', needsDone: { 'approval:wait': 'r1' } }],
+      new Map([['c', list]]),
+      'you',
+      gone,
+    )
+    expect(done.map(n => [n.key, n.gone])).toEqual([['approval:wait', 'session']])
+    expect(needs.find(n => n.key === 'failed:fail')?.gone).toBe('member')
+    expect(needs.find(n => n.key === 'held:held')?.gone).toBeUndefined()
+  })
 })
 
 describe('主动提醒的规则（§6）', () => {

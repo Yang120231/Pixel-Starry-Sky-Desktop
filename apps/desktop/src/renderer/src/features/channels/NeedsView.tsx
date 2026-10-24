@@ -4,6 +4,10 @@ import { useState, type ReactNode } from 'react'
 import {
   AlarmClock,
   BellRing,
+  Check,
+  CheckCheck,
+  ChevronLeft,
+  ChevronRight,
   CircleDashed,
   CircleX,
   Forward,
@@ -18,9 +22,10 @@ import { Button, IconButton, Popover, PopoverItem, Spinner, useToast } from '@/u
 import { OPEN_SESSION_EVENT, bridge as engineBridge } from '@/features/engine'
 import { relativeTime } from '@/features/engine/labels'
 import { canAnswerInline } from '@/features/panel/inbox/inboxModel'
-import type { ChannelFollow, ChannelNeed } from '../../../../shared/types/channels'
+import type { ChannelFollow, ChannelNeed, NeedGone, NeedMark } from '../../../../shared/types/channels'
 import type { ChannelAlertAction } from '../../../../shared/channels/alerts'
 import { alertActions } from '../../../../shared/channels/alerts'
+import { canMarkNeed } from '../../../../shared/channels/needs'
 import { channelActions, useChannels } from './store'
 import { snooze, snoozeTimes, useNeeds } from './needs'
 import { STATUS_LABEL, waitingText } from './ChannelTaskCard'
@@ -54,6 +59,14 @@ const ALERT_LABEL: Record<ChannelAlertAction, TranslationKey> = {
   cancel: 'alerts.action.cancel',
   dismiss: 'alerts.action.dismiss',
 }
+
+const GONE_LABEL: Record<NeedGone, TranslationKey> = {
+  session: 'needs.gone.session',
+  member: 'needs.gone.member',
+  task: 'needs.gone.task',
+}
+
+const markOf = ({ channelId, key, sig }: ChannelNeed): NeedMark => ({ channelId, key, sig })
 
 const openSession = (sessionId: string) =>
   window.dispatchEvent(new CustomEvent(OPEN_SESSION_EVENT, { detail: { sessionId } }))
@@ -109,6 +122,7 @@ function Row({
   at,
   actions,
   data,
+  tag,
 }: {
   icon: LucideIcon
   where: string
@@ -117,6 +131,8 @@ function Row({
   at: number
   actions: ReactNode
   data: string
+  /** 找不到目标的原因（§2.1） */
+  tag?: string
 }) {
   useI18n()
   return (
@@ -127,8 +143,16 @@ function Row({
           <span className="min-w-0 truncate">{where}</span>
           <span className="shrink-0 tabular-nums">{relativeTime(at)}</span>
         </div>
-        <p className="mt-0.5 text-list break-words text-fg">{text}</p>
+        <p className={`mt-0.5 text-list break-words ${tag ? 'text-fg-muted' : 'text-fg'}`}>{text}</p>
         {detail && <p className="mt-0.5 text-meta break-words text-fg-muted">{detail}</p>}
+        {tag && (
+          <span
+            data-need-gone=""
+            className="mt-1 inline-flex items-center rounded-md border border-line px-1.5 text-meta text-warn"
+          >
+            {tag}
+          </span>
+        )}
       </div>
       <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">{actions}</div>
     </li>
@@ -142,21 +166,39 @@ function Row({
 export function NeedsView() {
   useI18n()
   const toast = useToast()
-  const { needs, snoozed, following } = useNeeds()
+  const { needs, gone, done, snoozed, following } = useNeeds()
   const channels = useChannels(s => s.channels)
   const members = useChannels(s => s.members)
   const [busy, setBusy] = useState<string | null>(null)
+  const [goneOpen, setGoneOpen] = useState(false)
+  const [confirmAll, setConfirmAll] = useState(false)
+  const [showDone, setShowDone] = useState(false)
   const channelName = (id: string) => channels.find(c => c.id === id)?.name ?? '?'
-  const memberName = (id: string | null) => (id ? (members.find(m => m.id === id)?.name ?? '?') : null)
+  // 删掉的成员不写名字（找不到目标的那一行标签里写了「成员已删除」）
+  const memberName = (id: string | null) => (id ? (members.find(m => m.id === id)?.name ?? null) : null)
   const where = (n: { channelId: string; memberId: string | null }) =>
     [`# ${channelName(n.channelId)}`, memberName(n.memberId)].filter(Boolean).join(' · ')
+  const fail = (e: unknown) => toast(tr('needs.failed', { error: translateMessage((e as Error).message) }))
   const run = (key: string, fn: () => Promise<unknown>) => {
     setBusy(key)
     fn()
-      .catch(e => toast(tr('needs.failed', { error: translateMessage((e as Error).message) })))
+      .catch(fail)
       .finally(() => setBusy(null))
   }
   const small = 'h-7 px-2.5 text-meta'
+  /** 标为已处理（§2.1），提示条上能撤销 */
+  const mark = (list: ChannelNeed[]) => {
+    const items = list.filter(canMarkNeed).map(markOf)
+    if (!items.length) return
+    channelActions.markNeeds(items, true).then(
+      () =>
+        toast(items.length === 1 ? tr('needs.marked') : tr('needs.markedMany', { count: items.length }), {
+          action: { label: tr('needs.undo'), run: () => void channelActions.markNeeds(items, false).catch(fail) },
+        }),
+      fail,
+    )
+  }
+  const markable = [...needs, ...gone].filter(canMarkNeed)
 
   const actionsOf = (n: ChannelNeed): ReactNode => {
     const off = busy === n.key
@@ -165,6 +207,25 @@ export function NeedsView() {
         {tr('needs.view')}
       </Button>
     )
+    // 找不到目标：只留查看和标为已处理；会话不在的失败还能在新会话重试（重试时会话不在会新开）
+    if (n.gone)
+      return (
+        <>
+          {n.kind === 'failed' && n.gone === 'session' && (
+            <Button
+              className={small}
+              disabled={off}
+              onClick={() => run(n.key, () => channelActions.task(n.taskId!, 'retry'))}
+            >
+              {tr('needs.retryNew')}
+            </Button>
+          )}
+          {view}
+          <Button variant="primary" className={small} onClick={() => mark([n])}>
+            {tr('needs.markDone')}
+          </Button>
+        </>
+      )
     switch (n.kind) {
       case 'approval':
         return canAnswerInline(n.request ?? null) && n.sessionId ? (
@@ -309,6 +370,39 @@ export function NeedsView() {
     >
       <div className="flex h-11 shrink-0 items-center gap-2 px-5">
         <h2 className="min-w-0 flex-1 truncate text-ui font-medium text-fg">{tr('needs.title')}</h2>
+        {!showDone && markable.length > 0 && (
+          <div className="relative">
+            <Button variant="ghost" className={small} onClick={() => setConfirmAll(v => !v)}>
+              <CheckCheck size={14} strokeWidth={1.6} />
+              {tr('needs.markAll')}
+            </Button>
+            <Popover
+              open={confirmAll}
+              onClose={() => setConfirmAll(false)}
+              side="bottom"
+              align="end"
+              className="w-72 p-3"
+            >
+              <p className="text-list text-fg">{tr('needs.markAllConfirm', { count: markable.length })}</p>
+              <p className="mt-1 mb-3 text-meta text-fg-muted">{tr('needs.markAllHint')}</p>
+              <div className="flex justify-end gap-1.5">
+                <Button variant="ghost" className={small} onClick={() => setConfirmAll(false)}>
+                  {tr('needs.cancel')}
+                </Button>
+                <Button
+                  variant="primary"
+                  className={small}
+                  onClick={() => {
+                    setConfirmAll(false)
+                    mark(markable)
+                  }}
+                >
+                  {tr('needs.markDone')}
+                </Button>
+              </div>
+            </Popover>
+          </div>
+        )}
         <IconButton
           icon={X}
           label={tr('needs.close')}
@@ -318,62 +412,45 @@ export function NeedsView() {
         />
       </div>
       <div className="selectable min-h-0 flex-1 overflow-y-auto px-3 pb-6 [scrollbar-width:thin]">
-        <div className="mx-auto flex max-w-3xl flex-col gap-5">
-          <div>
-            <h3 className="px-3 pb-1 text-label font-medium text-fg-muted">
-              {tr('needs.todo', { count: needs.length })}
-              {snoozed > 0 && <span className="ml-2 text-fg-faint">{tr('needs.snoozed', { count: snoozed })}</span>}
+        {showDone ? (
+          <div className="mx-auto flex max-w-3xl flex-col">
+            <h3 className="flex items-center gap-1 px-1 pb-1 text-label font-medium text-fg-muted">
+              <IconButton
+                icon={ChevronLeft}
+                label={tr('needs.back')}
+                size={24}
+                iconSize={14}
+                onClick={() => setShowDone(false)}
+              />
+              {tr('needs.doneTitle', { count: done.length })}
             </h3>
-            {needs.length === 0 ? (
-              <p className="px-3 py-4 text-list text-fg-faint">{tr('needs.empty')}</p>
+            {done.length === 0 ? (
+              <p className="px-3 py-4 text-list text-fg-faint">{tr('needs.doneEmpty')}</p>
             ) : (
               <ul className="flex flex-col">
-                {needs.map(n => (
+                {done.map(n => (
                   <Row
                     key={n.key}
-                    data={n.kind}
+                    data="done"
                     icon={ICON[n.kind]}
                     where={`${tr(KIND_LABEL[n.kind])} · ${where(n)}`}
                     text={n.text}
                     detail={detailOf(n)}
+                    tag={n.gone ? tr(GONE_LABEL[n.gone]) : undefined}
                     at={n.at}
                     actions={
                       <>
-                        {busy === n.key && <Spinner size={12} />}
-                        {actionsOf(n)}
-                        <Later need={n} />
-                      </>
-                    }
-                  />
-                ))}
-              </ul>
-            )}
-          </div>
-          <div>
-            <h3 className="px-3 pb-1 text-label font-medium text-fg-muted">
-              {tr('needs.following', { count: following.length })}
-            </h3>
-            {following.length === 0 ? (
-              <p className="px-3 py-4 text-list text-fg-faint">{tr('needs.followingEmpty')}</p>
-            ) : (
-              <ul className="flex flex-col">
-                {following.map((f: ChannelFollow) => (
-                  <Row
-                    key={f.taskId}
-                    data="following"
-                    icon={CircleDashed}
-                    where={where(f)}
-                    text={f.title}
-                    detail={tr(STATUS_LABEL[f.status])}
-                    at={f.at}
-                    actions={
-                      <>
-                        {f.sessionId && (
-                          <Button className={small} onClick={() => openSession(f.sessionId!)}>
-                            {tr('needs.openSession')}
-                          </Button>
-                        )}
-                        <Button variant="ghost" className={small} onClick={() => show(f.channelId, f.taskId)}>
+                        <Button
+                          className={small}
+                          onClick={() => void channelActions.markNeeds([markOf(n)], false).catch(fail)}
+                        >
+                          {tr('needs.restore')}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          className={small}
+                          onClick={() => show(n.channelId, n.taskId ?? n.messageId)}
+                        >
                           {tr('needs.view')}
                         </Button>
                       </>
@@ -383,7 +460,139 @@ export function NeedsView() {
               </ul>
             )}
           </div>
-        </div>
+        ) : (
+          <div className="mx-auto flex max-w-3xl flex-col gap-5">
+            <div>
+              <h3 className="flex items-baseline gap-2 px-3 pb-1 text-label font-medium text-fg-muted">
+                <span className="min-w-0 flex-1">
+                  {tr('needs.todo', { count: needs.length })}
+                  {snoozed > 0 && <span className="ml-2 text-fg-faint">{tr('needs.snoozed', { count: snoozed })}</span>}
+                </span>
+                {done.length > 0 && (
+                  <button
+                    type="button"
+                    data-needs-done-link=""
+                    className="inline-flex shrink-0 items-center font-normal text-fg-faint hover:text-fg-muted"
+                    onClick={() => setShowDone(true)}
+                  >
+                    {tr('needs.doneLink', { count: done.length })}
+                    <ChevronRight size={12} />
+                  </button>
+                )}
+              </h3>
+              {needs.length === 0 ? (
+                <p className="px-3 py-4 text-list text-fg-faint">{tr('needs.empty')}</p>
+              ) : (
+                <ul className="flex flex-col">
+                  {needs.map(n => (
+                    <Row
+                      key={n.key}
+                      data={n.kind}
+                      icon={ICON[n.kind]}
+                      where={`${tr(KIND_LABEL[n.kind])} · ${where(n)}`}
+                      text={n.text}
+                      detail={detailOf(n)}
+                      at={n.at}
+                      actions={
+                        <>
+                          {busy === n.key && <Spinner size={12} />}
+                          {actionsOf(n)}
+                          {canMarkNeed(n) && (
+                            <IconButton
+                              icon={Check}
+                              label={tr('needs.markDone')}
+                              size={26}
+                              iconSize={14}
+                              onClick={() => mark([n])}
+                            />
+                          )}
+                          <Later need={n} />
+                        </>
+                      }
+                    />
+                  ))}
+                </ul>
+              )}
+              {gone.length > 0 && (
+                <div data-needs-gone="" className="mt-1 border-t border-line-subtle pt-1.5">
+                  <div className="flex items-center gap-2 rounded-lg px-3 py-1 text-meta text-fg-muted hover:bg-hover">
+                    <button
+                      type="button"
+                      aria-expanded={goneOpen}
+                      className="flex min-w-0 flex-1 items-center gap-2 py-0.5 text-left"
+                      onClick={() => setGoneOpen(v => !v)}
+                    >
+                      <ChevronRight
+                        size={12}
+                        className={`shrink-0 transition-transform ${goneOpen ? 'rotate-90' : ''}`}
+                      />
+                      <span className="truncate">{tr('needs.goneGroup', { count: gone.length })}</span>
+                    </button>
+                    <Button variant="ghost" className={small} onClick={() => mark(gone)}>
+                      {tr('needs.markAll')}
+                    </Button>
+                  </div>
+                  {goneOpen && (
+                    <ul className="flex flex-col">
+                      {gone.map(n => (
+                        <Row
+                          key={n.key}
+                          data={n.kind}
+                          icon={ICON[n.kind]}
+                          where={`${tr(KIND_LABEL[n.kind])} · ${where(n)}`}
+                          text={n.text}
+                          detail={detailOf(n)}
+                          tag={tr(GONE_LABEL[n.gone!])}
+                          at={n.at}
+                          actions={
+                            <>
+                              {busy === n.key && <Spinner size={12} />}
+                              {actionsOf(n)}
+                            </>
+                          }
+                        />
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+            <div>
+              <h3 className="px-3 pb-1 text-label font-medium text-fg-muted">
+                {tr('needs.following', { count: following.length })}
+              </h3>
+              {following.length === 0 ? (
+                <p className="px-3 py-4 text-list text-fg-faint">{tr('needs.followingEmpty')}</p>
+              ) : (
+                <ul className="flex flex-col">
+                  {following.map((f: ChannelFollow) => (
+                    <Row
+                      key={f.taskId}
+                      data="following"
+                      icon={CircleDashed}
+                      where={where(f)}
+                      text={f.title}
+                      detail={tr(STATUS_LABEL[f.status])}
+                      at={f.at}
+                      actions={
+                        <>
+                          {f.sessionId && (
+                            <Button className={small} onClick={() => openSession(f.sessionId!)}>
+                              {tr('needs.openSession')}
+                            </Button>
+                          )}
+                          <Button variant="ghost" className={small} onClick={() => show(f.channelId, f.taskId)}>
+                            {tr('needs.view')}
+                          </Button>
+                        </>
+                      }
+                    />
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </section>
   )

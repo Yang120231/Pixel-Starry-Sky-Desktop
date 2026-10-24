@@ -15,6 +15,9 @@ const at = (day: number, clock: string, seconds = 0): number => {
   return day + (h * 60 + m) * 60_000 + seconds * 1000
 }
 
+/** 已经删掉的 AI 成员：只出现在一张旧任务卡上，不在成员列表里（「需要你」的找不到目标，docs/ui/channels-collab-v2.md §2.1） */
+export const DEMO_DELETED_MEMBER = 'a-tester'
+
 export const demoChannelMembers: ChannelMember[] = [
   { id: 'm-linxia', kind: 'human', name: '林夏', you: true, role: 'owner', userId: 'u:linxia', online: true },
   {
@@ -399,6 +402,22 @@ export const demoChannelMessages: Record<string, ChannelMessage[]> = {
     },
   ],
   'c-release': [
+    // 交给已经删掉的成员、失败了的旧活：「需要你」里折叠在「找不到会话或成员的旧提醒」（docs/ui/channels-collab-v2.md §2.1）
+    {
+      kind: 'task',
+      id: 'rel-t0',
+      channelId: 'c-release',
+      at: at(YESTERDAY, '09:40'),
+      endedAt: at(YESTERDAY, '09:52'),
+      authorId: 'm-linxia',
+      assigneeId: DEMO_DELETED_MEMBER,
+      title: '补发布页的 e2e 截图',
+      status: 'failed',
+      error: '会话已删除',
+      sessionId: null,
+      summary: null,
+      diff: null,
+    },
     {
       kind: 'message',
       id: 'rel-m1',

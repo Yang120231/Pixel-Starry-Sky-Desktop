@@ -16,6 +16,7 @@ import type {
   ChannelTaskAction,
   IssueDispatch,
   JoinSessionInput,
+  NeedMark,
   PendingInvite,
   RelayRules,
   ChannelAlertRule,
@@ -70,7 +71,11 @@ export interface ChannelsState {
   teamsSyncedAt: number | null
   /** 「需要你」（docs/ui/channels-collab-v2.md §2）：主进程算好推过来；演示模式在 needs.ts 里现算 */
   needs: NonNullable<ChannelsSnapshot['needs']>
+  /** 标为已处理、状态还没变的（§2.1） */
+  needsDone: NonNullable<ChannelsSnapshot['needsDone']>
   following: NonNullable<ChannelsSnapshot['following']>
+  /** 演示模式标为已处理的：频道 id → key → sig（正式模式记在主进程） */
+  demoMarks: Record<string, Record<string, string>>
   /** 频道页正在看「需要你」（代替时间线） */
   needsOpen: boolean
   /** 要时间线跳到并高亮的消息（置顶列表、提醒点进来）；时间线处理完清掉 */
@@ -96,7 +101,9 @@ let state: ChannelsState = {
   teamsConnection: channelsLive ? 'unavailable' : channelTeams.connection,
   teamsSyncedAt: channelsLive ? null : Date.now(),
   needs: [],
+  needsDone: [],
   following: [],
+  demoMarks: {},
   needsOpen: false,
   focus: null,
 }
@@ -172,6 +179,7 @@ function applySnapshot(s: ChannelsSnapshot): void {
     sessionTasks: s.sessionTasks ?? {},
     sessionBindings: s.sessionBindings ?? {},
     needs: s.needs ?? [],
+    needsDone: s.needsDone ?? [],
     following: s.following ?? [],
     teams: s.teams ?? [],
     invites: s.invites ?? [],
@@ -285,6 +293,19 @@ export const channelActions = {
         ),
       },
     })
+  },
+  /** 「需要你」里标为已处理（done）/ 恢复（docs/ui/channels-collab-v2.md §2.1）；演示模式只记在内存 */
+  async markNeeds(items: NeedMark[], done: boolean): Promise<void> {
+    if (!items.length) return
+    if (channelsBridge) return channelsBridge.markNeeds(items, done)
+    const marks = { ...state.demoMarks }
+    for (const item of items) {
+      const channel = { ...marks[item.channelId] }
+      if (done) channel[item.key] = item.sig
+      else delete channel[item.key]
+      marks[item.channelId] = channel
+    }
+    set({ demoMarks: marks })
   },
   /** 打开 / 关掉「需要你」 */
   openNeeds(open: boolean): void {
