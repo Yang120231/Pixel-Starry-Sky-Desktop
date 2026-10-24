@@ -134,8 +134,9 @@ export function toBlocks(items: Item[], running: boolean, cache: ChangesCache, o
       placed = 0
       card = -1
     }
-    // 一轮的统计放在这一轮最后（改动文件卡片之后），docs/ui/usage.md §4
-    if (item.kind === 'turn_stats') placeCard()
+    // 一轮的统计放在这一轮最后（改动文件卡片之后），docs/ui/usage.md §4。
+    // 「继续」之前也先放：断开的那段常常没有统计行，续做期间卡片照样显示，结束时再挪到最后、带上之后的改动
+    if (item.kind === 'turn_stats' || (item.kind === 'user' && item.reconnect !== undefined)) placeCard()
     if (completedChange(item)) round.push(item)
     if (isTool(item) && !(box && isSubagentCall(item))) {
       const last = blocks[blocks.length - 1]

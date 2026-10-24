@@ -89,6 +89,15 @@ describe('一轮一张改动卡片（GitHub #40）', () => {
     expect(blocks.some(b => b.type === 'item' && b.item.id === 'u1-reconnect-1')).toBe(true)
   })
 
+  it('断开的那段没有统计行、「继续」还在跑：断开前的改动卡片照样显示在「继续」之前，结束后挪到最后', () => {
+    const resumed = { kind: 'user', id: 'u1-reconnect-1', text: '继续', createdAt: 0, reconnect: 1 } as Item
+    const running = toBlocks([user('u1'), edit('e1', 'a.ts'), resumed, edit('e2', 'b.ts')], true, new Map())
+    expect(kinds(running)).toEqual(['user', 'process', 'changes(1)', 'user', 'process'])
+    expect(cards(running)[0]).toMatchObject({ turnKey: 'u1' })
+    const done = toBlocks([user('u1'), edit('e1', 'a.ts'), resumed, edit('e2', 'b.ts'), stats('s2')], false, new Map())
+    expect(kinds(done)).toEqual(['user', 'process', 'user', 'process', 'changes(2)', 'turn_stats'])
+  })
+
   it('条目没变时复用缓存的卡片数据（memo 能跳过）', () => {
     const cache = new Map()
     const a = cards(toBlocks(items, false, cache))[0]
