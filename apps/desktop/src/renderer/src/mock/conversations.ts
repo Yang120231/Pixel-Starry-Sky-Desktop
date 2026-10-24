@@ -904,7 +904,7 @@ export const failed = (id: string): Item =>
 const errors = snapshot(
   record('demo-claude-errors', {
     lastOutcome: 'failed',
-    lastError: '登录已失效：在终端运行 claude auth login 重新登录',
+    lastError: '登录已失效：点「重新登录」重新授权，不用去终端',
     updatedAt: T0 - 4 * MIN,
   }),
   [
@@ -957,7 +957,7 @@ const errors = snapshot(
       kind: 'notice',
       id: 'd-n3',
       level: 'error',
-      text: '登录已失效：在终端运行 claude auth login 重新登录',
+      text: '登录已失效：点「重新登录」重新授权，不用去终端',
       detail:
         'HTTP 401\nauthentication_error: OAuth token has expired. Please obtain a new token or refresh your existing token.',
     },

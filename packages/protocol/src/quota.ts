@@ -98,6 +98,11 @@ export interface AccountQuota {
   refreshable: boolean
   /** status 为 error 时的原因；message 是主进程文案（中文原文，界面 translateMessage） */
   error: { code: QuotaErrorCode; message: string } | null
+  /**
+   * 登录 / 换账号后清掉了旧记录、正在重读（docs/ui/claude-login-recovery.md §1 第 1 条）：界面显示「读取额度…」。
+   * 读完的快照没有这一项
+   */
+  pending?: boolean
 }
 
 /** quota:refresh 的选项 */

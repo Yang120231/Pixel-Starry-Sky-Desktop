@@ -6,6 +6,8 @@ import {
   classifyErrorText,
   isNoticeErrorKind,
   type NoticeError,
+  type EngineAccount,
+  type EngineAccounts,
   type NoticeErrorKind,
   type SessionRecord,
 } from '@pixelsky/protocol'
@@ -100,6 +102,36 @@ export async function compactThenRetry(
   if (!compact) throw new Error(tr('system.engineDoesNotSupport'))
   await compact()
   await retry()
+}
+
+/** 自己订阅的登录失效时卡片上的按钮（docs/ui/claude-login-recovery.md §1 第 4 条） */
+export type LoginAction =
+  /** 重新登录：多账号时 target 是当前账号（重新登录那一个），单账号时不传（普通登录） */
+  | { kind: 'relogin'; target?: string }
+  /** 换成另一个没失效的账号 */
+  | { kind: 'switch'; account: EngineAccount }
+
+/**
+ * Claude Code / Codex 用自己的订阅（不走平台、不是自定义接口）报登录失效：给「重新登录」，有别的没失效的账号时再给「换成 X」。
+ * 其他情况返回空
+ */
+export function loginActions(
+  kind: ErrorKind | null,
+  record: Pick<SessionRecord, 'platform' | 'provider'>,
+  engine: SessionRecord['engine'],
+  accounts: Pick<EngineAccounts, 'current' | 'accounts'> | null,
+): LoginAction[] {
+  if (kind !== 'auth' || record.platform || record.provider) return []
+  if (engine !== 'claude' && engine !== 'codex') return []
+  const list = accounts?.accounts ?? []
+  const current = accounts?.current
+  const other = list.find(a => a.id !== current && a.status !== 'expired')
+  // 当前账号在列表里才指定它（原来的账号第一次添加账号时没登录，就不在列表里：走普通登录）
+  const listed = !!current && list.some(a => a.id === current)
+  return [
+    { kind: 'relogin', ...(listed ? { target: current } : {}) },
+    ...(other ? [{ kind: 'switch' as const, account: other }] : []),
+  ]
 }
 
 /** 平台会话里的「登录已失效」不是 Claude Code 自己的登录：换成平台的说法 */

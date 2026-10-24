@@ -25,11 +25,18 @@ const openUrl = (url: string): void => {
 }
 
 export function AuthDialogHost() {
-  const channel = useAuthDialog()
-  return channel ? <AuthDialog key={channel} channel={channel} /> : null
+  const request = useAuthDialog()
+  return request ? (
+    <AuthDialog
+      key={`${request.channel}|${request.target ?? ''}`}
+      channel={request.channel}
+      target={request.target}
+      onDone={request.onDone}
+    />
+  ) : null
 }
 
-function AuthDialog({ channel }: { channel: AuthChannel }) {
+function AuthDialog({ channel, target, onDone }: { channel: AuthChannel; target?: string; onDone?: () => void }) {
   useI18n()
   const engine = AUTH_ENGINE[channel]
   const name = channel === 'claude' ? 'Claude' : 'ChatGPT'
@@ -47,10 +54,22 @@ function AuthDialog({ channel }: { channel: AuthChannel }) {
 
   // 打开就开始授权（引擎没装时先让用户去装）
   useEffect(() => {
-    if (!needsInstall) void startLogin(engine)
+    if (!needsInstall) void startLogin(engine, 'browser', target)
     // 只在打开时跑一次
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // 登录成功：调一次 onDone（错误卡片的「重新登录」借它重发失败的那条消息）。只认这次弹窗起的登录：
+  // 先看到过进行中（开始 / 等授权 / 验证），之后变成完成才算——别处上一次登录留下的「已完成」不能一打开就当成登录好了
+  const sawRunning = useRef(false)
+  const doneFired = useRef(false)
+  if (running && (login?.target ?? undefined) === target) sawRunning.current = true
+  useEffect(() => {
+    if (doneFired.current || !sawRunning.current) return
+    if (login?.phase !== 'done' || (login.target ?? undefined) !== target) return
+    doneFired.current = true
+    onDone?.()
+  }, [login?.phase, login?.target, target, onDone])
 
   const close = (): void => {
     if (running) void cancelLogin(engine)
@@ -198,7 +217,7 @@ function AuthDialog({ channel }: { channel: AuthChannel }) {
         )}
         <button
           type="button"
-          onClick={() => void startLogin(engine, 'browser')}
+          onClick={() => void startLogin(engine, 'browser', target)}
           className="self-start text-meta text-accent-fg hover:underline"
         >
           {tr('modelChannels.auth.backToBrowser')}
@@ -268,7 +287,7 @@ function AuthDialog({ channel }: { channel: AuthChannel }) {
             {tr('modelChannels.auth.noBrowser')}{' '}
             <button
               type="button"
-              onClick={() => void startLogin(engine, 'device')}
+              onClick={() => void startLogin(engine, 'device', target)}
               className="text-accent-fg hover:underline"
             >
               {tr('modelChannels.auth.useDevice')}
@@ -307,7 +326,11 @@ function AuthDialog({ channel }: { channel: AuthChannel }) {
               {tr('modelChannels.auth.terminal')}
             </Button>
           )}
-          {finished && <Button onClick={() => void startLogin(engine)}>{tr('modelChannels.action.retry')}</Button>}
+          {finished && (
+            <Button onClick={() => void startLogin(engine, 'browser', target)}>
+              {tr('modelChannels.action.retry')}
+            </Button>
+          )}
           {login?.phase === 'done' ? (
             <Button variant="primary" onClick={close}>
               {tr('modelChannels.auth.finish')}

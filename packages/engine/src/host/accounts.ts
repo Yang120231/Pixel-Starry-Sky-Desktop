@@ -25,6 +25,7 @@ import {
 import type { AccountProbe } from '../adapter'
 import { logger } from '../log'
 import type { HostContext, PlatformRouteResult } from './context'
+import { providerOfEngine } from './quota'
 
 const log = logger('engine.accounts')
 
@@ -237,7 +238,13 @@ export class HostAccounts {
   private changed(engine: AccountEngine, redetect: boolean): void {
     this.save()
     this.publish(engine)
-    if (redetect) void this.ctx.m.settings.engines(true).catch(() => undefined)
+    if (!redetect) return
+    // 当前账号换了（切换、重新登录、自动换）：重新检测后，额度按新账号清掉重读（docs/ui/claude-login-recovery.md §1 第 1 条）
+    const provider = providerOfEngine(engine)
+    void this.ctx.m.settings
+      .engines(true)
+      .then(() => (provider ? this.ctx.m.quota.reset(provider) : undefined))
+      .catch(() => undefined)
   }
 
   /**

@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { translateMessage } from '../../../../../shared/i18n/translate'
 import { errorKindOf } from '../../sidebar/sessionStatusModel'
-import { actionsFor, classifyError, compactThenRetry, noticeActions } from './errorKind'
+import { actionsFor, classifyError, compactThenRetry, loginActions, noticeActions } from './errorKind'
 
 describe('classifyError', () => {
   it('引擎给了 kind 就用它，不看文字', () => {
@@ -169,5 +169,47 @@ describe('侧栏状态', () => {
     expect(errorKindOf('上下文太长：先压缩（/compact）或开一个新会话')).toBe('failed')
     expect(errorKindOf('请求太频繁，已触发限额')).toBe('busy')
     expect(errorKindOf('工作目录不存在')).toBe('failed')
+  })
+})
+
+describe('loginActions（自己订阅的登录失效，docs/ui/claude-login-recovery.md §1 第 4 条）', () => {
+  const own = { platform: null, provider: null } as const
+  const account = (id: string, status: 'ok' | 'expired' | 'unknown' = 'ok') => ({
+    id,
+    email: `${id}@example.com`,
+    plan: null,
+    label: null,
+    addedAt: 0,
+    status,
+  })
+
+  it('单账号：只给「重新登录」（普通登录，不指定账号）', () => {
+    expect(loginActions('auth', own, 'claude', null)).toEqual([{ kind: 'relogin' }])
+    expect(loginActions('auth', own, 'codex', { current: 'default', accounts: [] })).toEqual([{ kind: 'relogin' }])
+  })
+
+  it('多账号：重新登录当前那个；有别的没失效的账号时再给「换成 X」', () => {
+    const accounts = { current: 'a_1', accounts: [account('default', 'expired'), account('a_1'), account('a_2')] }
+    expect(loginActions('auth', own, 'claude', accounts)).toEqual([
+      { kind: 'relogin', target: 'a_1' },
+      { kind: 'switch', account: account('a_2') },
+    ])
+    // 当前是原来的账号、但它不在列表里（第一次添加账号时没登录）：普通登录，不指定账号
+    const unlisted = { current: 'default', accounts: [account('a_1')] }
+    expect(loginActions('auth', own, 'claude', unlisted)).toEqual([
+      { kind: 'relogin' },
+      { kind: 'switch', account: account('a_1') },
+    ])
+    const allExpired = { current: 'a_1', accounts: [account('a_1'), account('a_2', 'expired')] }
+    expect(loginActions('auth', own, 'claude', allExpired)).toEqual([{ kind: 'relogin', target: 'a_1' }])
+  })
+
+  it('不是登录失效、平台 / 自定义接口的会话、像素星空引擎：不给', () => {
+    expect(loginActions('busy', own, 'claude', null)).toEqual([])
+    expect(
+      loginActions('auth', { platform: { groupId: '1', account: 'a@b.c' }, provider: null }, 'claude', null),
+    ).toEqual([])
+    expect(loginActions('auth', { platform: null, provider: { id: 'my' } }, 'claude', null)).toEqual([])
+    expect(loginActions('auth', own, 'pixel', null)).toEqual([])
   })
 })

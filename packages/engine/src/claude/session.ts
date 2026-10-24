@@ -645,20 +645,27 @@ export class ClaudeSession implements EngineSession {
     if (settingsArg) args.push('--settings', settingsArg)
     args.push(...(this.deps.launch?.args ?? []))
     const launchedViaGateway = viaGateway(rec)
-    const proc: ClaudeProcess = new ClaudeProcess(this.deps.launcher, args, rec.cwd, this.deps.env, {
-      onMessage: m => {
-        if (this.proc === proc) {
-          // 额度事件不进对话：只汇报给宿主（账号额度，docs/ui/account-quota.md）
-          if (m.type === 'rate_limit_event') return this.onRateLimit(m)
-          if (this.contextFrame(m)) return
-          this.onInputFrame(m)
-          this.translator.handle(m)
-        }
+    const proc: ClaudeProcess = new ClaudeProcess(
+      this.deps.launcher,
+      args,
+      rec.cwd,
+      this.deps.env,
+      {
+        onMessage: m => {
+          if (this.proc === proc) {
+            // 额度事件不进对话：只汇报给宿主（账号额度，docs/ui/account-quota.md）
+            if (m.type === 'rate_limit_event') return this.onRateLimit(m)
+            if (this.contextFrame(m)) return
+            this.onInputFrame(m)
+            this.translator.handle(m)
+          }
+        },
+        onControlRequest: r => this.onControlRequest(proc, r),
+        onControlCancel: id => this.onControlCancel(id),
+        onExit: (code, tail) => this.onExit(proc, code, tail),
       },
-      onControlRequest: r => this.onControlRequest(proc, r),
-      onControlCancel: id => this.onControlCancel(id),
-      onExit: (code, tail) => this.onExit(proc, code, tail),
-    })
+      'session',
+    )
     try {
       // 输入建议、子智能体进度摘要、每个后台任务单独停止
       const init = await proc.request(

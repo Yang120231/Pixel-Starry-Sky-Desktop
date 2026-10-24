@@ -1,6 +1,6 @@
 // Claude Code 适配器
 import { homedir } from 'node:os'
-import { delimiter, dirname, join } from 'node:path'
+import { basename, delimiter, dirname, join } from 'node:path'
 import {
   EFFORTS,
   codedError,
@@ -33,6 +33,7 @@ import { engineBase } from '../registry'
 import {
   ClaudeUserRules,
   claudeAccountEnv,
+  claudeRealDir,
   configDirBusy,
   forgetClaudeAccount,
   holdConfigDir,
@@ -43,7 +44,10 @@ import { claudeInstaller, customClaude, discoverClaude, parseAuthStatus, type Cl
 import { claudePlanFor } from './tier'
 import { oneShotOnce, rewindFilesOnce, sideQuestionOnce, type HelperTarget, type RewindFilesReply } from './helper'
 import { OneShotError, type OneShotReply, type OneShotRequest } from '../oneshot'
-import { ClaudeProcess, ownClaudePids } from './process'
+import { ClaudeProcess, ownClaudePids, type ClaudeProcessPurpose } from './process'
+import { claudeLoginTimes, describeLoginTimes } from './credentials'
+import { LoginGate, RESUME_GATE_MIN_MS } from './login-gate'
+import { logger } from '../log'
 import { parseClaudeUsage, unknownControl } from './quota'
 import { obj, str } from './shape'
 import { ClaudeSession, reservedClaudeArg, type ClaudeLaunchOptions } from './session'
@@ -101,6 +105,17 @@ export interface ClaudeAdapterOptions {
 const CATALOG_TTL = 30 * 60_000
 /** 后台刷新握手失败、留着旧列表时，隔多久再试 */
 const CATALOG_RETRY = 60_000
+/** 临时进程（握手、读额度、预热）的参数：stream-json 收发控制请求，不发消息 */
+const PROBE_ARGS = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose']
+/**
+ * 临时进程用完：先关输入让它自己退出，这么久没退才强制结束（docs/ui/claude-login-recovery.md §1 第 2 条）。
+ * 正在刷新登录时被强制结束，服务器已经换了新凭据、新的却没写回文件，登录就丢了
+ */
+export const PROBE_CLOSE_MS = 3_000
+/** 预热进程就是为了把登录刷新完，多给些时间 */
+const WARMUP_CLOSE_MS = 10_000
+
+const log = logger('engine.claude')
 
 function isEffort(x: unknown): x is Effort {
   return typeof x === 'string' && (EFFORTS as readonly string[]).includes(x)
@@ -158,9 +173,78 @@ export class ClaudeAdapter implements EngineAdapter {
 
   /** 「始终允许（所有项目）」在添加的账号下由像素星空记（所有账号的会话启动时带上） */
   private readonly userRules: ClaudeUserRules | null
+  /** 刷新登录的排队（docs/ui/claude-login-recovery.md §1 第 2 条）；读不到到期时间时打开软件后排一次 */
+  private readonly loginGate = new LoginGate(dir => claudeLoginTimes(dir))
 
   constructor(private readonly opts: ClaudeAdapterOptions = {}) {
     this.userRules = opts.dataDir ? new ClaudeUserRules(join(opts.dataDir, 'claude-user-rules.json')) : null
+    this.loginGate.arm()
+  }
+
+  /** 电脑从待机唤醒：待机够久时，读不到到期时间的账号下一次后台读取前先预热 */
+  resumed(sleptMs: number): void {
+    if (sleptMs >= RESUME_GATE_MIN_MS) this.loginGate.arm()
+  }
+
+  /** 这个配置目录的登录时间（写日志用，不含凭据）：对话报登录失效时记一笔，分清是自然过期还是被作废 */
+  loginTimes(dir: string | null = this.opts.account?.() ?? null): Record<string, unknown> {
+    return describeLoginTimes(
+      claudeLoginTimes(claudeRealDir(dir ? claudeAccountEnv(this.baseEnv(), dir) : this.baseEnv())),
+    )
+  }
+
+  /**
+   * 起后台临时进程（握手、读额度、账号探测、单独问一次）之前：访问凭据快过期时先只起一个预热进程把登录刷新完，
+   * 别的最多等 15 秒。对话进程不走这里
+   */
+  private async freshLogin(launcher: Launcher, env: NodeJS.ProcessEnv): Promise<void> {
+    if (this.closedForQuota) return
+    const dir = claudeRealDir(env)
+    const started = Date.now()
+    const result = await this.loginGate.before(dir, () => this.warmUp(launcher, env))
+    if (result === 'skip') return
+    log.info('先刷新登录', {
+      result,
+      waitMs: Date.now() - started,
+      // 配置目录的最后一段：原来的是 .claude，添加的账号是 a_xxxx
+      dir: basename(dir),
+      ...describeLoginTimes(claudeLoginTimes(dir)),
+    })
+  }
+
+  /** 预热：问一次 get_usage（要用访问凭据，过期了 Claude Code 会先刷新），然后正常关闭、给足时间写回凭据 */
+  private async warmUp(launcher: Launcher, env: NodeJS.ProcessEnv): Promise<void> {
+    const proc = this.probeProcess(launcher, env, 'login-warmup')
+    try {
+      await proc.request('initialize', {}, 30_000)
+      await proc.request('get_usage', { skip_behaviors: true }, 20_000).catch(() => undefined)
+    } finally {
+      this.release(proc, WARMUP_CLOSE_MS)
+    }
+  }
+
+  /** 临时进程：在主目录、带上追加的参数，不处理消息；登记进 quotaProcs，应用退出时 close() 一起结束 */
+  private probeProcess(launcher: Launcher, env: NodeJS.ProcessEnv, purpose: ClaudeProcessPurpose): ClaudeProcess {
+    const proc = new ClaudeProcess(
+      launcher,
+      [...PROBE_ARGS, ...this.launchArgs()],
+      homedir(),
+      env,
+      {
+        onMessage: () => undefined,
+        onControlRequest: () => undefined,
+        onControlCancel: () => undefined,
+        onExit: () => undefined,
+      },
+      purpose,
+    )
+    this.quotaProcs.add(proc)
+    return proc
+  }
+
+  /** 临时进程用完：关输入让它自己退出，timeoutMs 没退才强制结束；退了再从 quotaProcs 里拿掉 */
+  private release(proc: ClaudeProcess, timeoutMs = PROBE_CLOSE_MS): void {
+    void proc.close(timeoutMs).finally(() => this.quotaProcs.delete(proc))
   }
 
   /** 不带订阅账号的环境：配置目录是用户原来的 */
@@ -488,6 +572,7 @@ export class ClaudeAdapter implements EngineAdapter {
     if (status === 'unauthenticated') throw new OneShotError('notAuthorized', d.info.message ?? 'Claude Code 没有登录')
     if (status !== 'ready') throw new OneShotError('failed', d.info.message ?? 'Claude Code 不可用')
     const env = this.env()
+    await this.freshLogin(d.launcher, env)
     return oneShotOnce(d.launcher, env, { ...req, model: req.model && claudeModelName(req.model, env) }, signal)
   }
 
@@ -535,19 +620,14 @@ export class ClaudeAdapter implements EngineAdapter {
   }
 
   /**
-   * 和握手一样在主目录、用自己的账号环境（不带网关变量）；initialize 30 秒、get_usage 20 秒；无论成败都杀掉进程。
+   * 和握手一样在主目录、用自己的账号环境（不带网关变量）；initialize 30 秒、get_usage 20 秒；无论成败都关掉进程（先等它自己退出）。
    * current 为假是读别的订阅账号（账号表）：模型列表和「认不认识 get_usage」不记进缓存
    */
   private async probeQuota(launcher: Launcher, env: NodeJS.ProcessEnv, current: boolean): Promise<QuotaReading> {
     if (this.closedForQuota) throw new Error('Claude Code unavailable: 应用正在退出')
-    const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose']
-    const proc = new ClaudeProcess(launcher, [...args, ...this.launchArgs()], homedir(), env, {
-      onMessage: () => undefined,
-      onControlRequest: () => undefined,
-      onControlCancel: () => undefined,
-      onExit: () => undefined,
-    })
-    this.quotaProcs.add(proc)
+    await this.freshLogin(launcher, env)
+    if (this.closedForQuota) throw new Error('Claude Code unavailable: 应用正在退出')
+    const proc = this.probeProcess(launcher, env, current ? 'quota' : 'account')
     try {
       const init = await proc.request('initialize', {}, 30_000)
       if (current) this.refreshModels(init.models)
@@ -564,12 +644,11 @@ export class ClaudeAdapter implements EngineAdapter {
       if (current) this.usageRequest = reading.kind !== 'no-request'
       return reading.kind === 'ok' ? { ...reading, account: email, plan: claudePlanFor(reading.plan, env) } : reading
     } finally {
-      proc.kill()
-      this.quotaProcs.delete(proc)
+      this.release(proc)
     }
   }
 
-  /** 应用退出：杀掉还在问额度的临时进程 */
+  /** 应用退出：立刻结束还在跑的临时进程（握手、读额度、预热，含正在正常关闭的） */
   async close(opts: CloseOptions = {}): Promise<void> {
     this.closedForQuota = true
     const procs = [...this.quotaProcs]
@@ -632,13 +711,9 @@ export class ClaudeAdapter implements EngineAdapter {
    * 回应前进程就退出了给出原因；超时或别的失败返回 null。
    */
   private async handshake(launcher: Launcher): Promise<{ catalog: EngineCatalog } | { error: string } | null> {
-    const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose']
-    const proc = new ClaudeProcess(launcher, [...args, ...this.launchArgs()], homedir(), this.env(), {
-      onMessage: () => undefined,
-      onControlRequest: () => undefined,
-      onControlCancel: () => undefined,
-      onExit: () => undefined,
-    })
+    const env = this.env()
+    await this.freshLogin(launcher, env)
+    const proc = this.probeProcess(launcher, env, 'catalog')
     try {
       const init = await proc.request('initialize', {}, 30_000)
       const styles = Array.isArray(init.available_output_styles)
@@ -655,7 +730,7 @@ export class ClaudeAdapter implements EngineAdapter {
       if (proc.alive) return null
       return { error: startupReason(proc.stderrTail) || (err as Error).message }
     } finally {
-      proc.kill()
+      this.release(proc)
     }
   }
 
@@ -720,6 +795,8 @@ export class ClaudeAdapter implements EngineAdapter {
   async accountProbe(dir: string | null): Promise<AccountProbe> {
     const launcher = await this.loginLauncher()
     const env = this.env(dir)
+    // 账号表逐个探测：这个账号的访问凭据快过期时先预热，免得读状态 / 读额度的临时进程在刷新到一半时被结束
+    await this.freshLogin(launcher, env)
     const r = await this.holding(env, () => run(launcher, ['auth', 'status', '--json'], env))
     const status = parseAuthStatus(r.stdout)
     if (!status) throw new Error(outputTail(r) || '读不到 Claude Code 的登录状态')

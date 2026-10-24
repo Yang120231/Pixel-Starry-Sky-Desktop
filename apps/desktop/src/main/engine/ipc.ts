@@ -7,7 +7,7 @@
 // 同时按原顺序带起依赖引擎的模块：平台额度、SSH 机器、扩展、终端、产物面板的本机操作。
 import { join } from 'node:path'
 import { writeFile } from 'node:fs/promises'
-import { app, BrowserWindow, dialog, net, session, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, dialog, net, powerMonitor, session, type IpcMainInvokeEvent } from 'electron'
 import * as ipc from '../ipc/guard'
 import { nativeText, windowLocale } from '../app/ui-language'
 import { EngineHost } from '@pixelsky/engine'
@@ -144,6 +144,7 @@ export async function initEngine(ctx: AppContext): Promise<void> {
   })
   ctx.engine = h
   registerQuotaIpc(h)
+  watchSleep(h)
   backfillAfterSignIn(h)
   // 引擎有新版本时设置 › 本机引擎提示「更新」（docs/ui/engine-update.md）
   scheduleEngineUpdateChecks(() => h.checkEngineUpdates())
@@ -306,4 +307,23 @@ function backfillAfterSignIn(h: EngineHost): void {
   }
   onAccountChange(schedule)
   schedule()
+}
+
+/**
+ * 待机 / 唤醒（docs/ui/claude-login-recovery.md §1）：记日志，唤醒时告诉宿主待机了多久——Claude 读不到登录到期时间（macOS）时，
+ * 待机够久后下一次后台读取前先刷新登录
+ */
+function watchSleep(host: EngineHost): void {
+  const log = logger('app')
+  let since: number | null = null
+  powerMonitor.on('suspend', () => {
+    since = Date.now()
+    log.info('待机')
+  })
+  powerMonitor.on('resume', () => {
+    const sleptMs = since === null ? 0 : Date.now() - since
+    since = null
+    log.info('唤醒', { sleptMin: Math.round(sleptMs / 60_000) })
+    host.resumed(sleptMs)
+  })
 }

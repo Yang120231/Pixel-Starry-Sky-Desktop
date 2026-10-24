@@ -13,7 +13,8 @@ import {
 
 /** assistant 消息里 error 字段的说明 */
 export const ERROR_TEXT: Record<string, string> = {
-  authentication_failed: '登录已失效：在终端运行 claude auth login 重新登录',
+  // 「登录已失效」开头别改：平台 / 自定义接口的会话按这个开头换成各自的说法（renderer errorKind.ts platformNoticeText）
+  authentication_failed: '登录已失效：点「重新登录」重新授权，不用去终端',
   oauth_org_not_allowed: '当前账号的组织不允许使用 Claude Code',
   account_on_hold: '账号已被暂停',
   verification_required: '账号需要验证',

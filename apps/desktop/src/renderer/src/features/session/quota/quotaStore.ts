@@ -62,7 +62,9 @@ function listen(): void {
   listening = true
   try {
     b.onChange(q => {
-      if (q.provider !== 'platform' && belongs(q, wanted[q.provider])) put(q.provider, { quota: q })
+      // pending：登录 / 换账号后主进程清掉了旧记录、正在重读，显示「读取中」（docs/ui/claude-login-recovery.md §1 第 1 条）
+      if (q.provider !== 'platform' && belongs(q, wanted[q.provider]))
+        put(q.provider, { quota: q, loading: q.pending === true || !!pending[q.provider] })
     })
   } catch {
     listening = false
@@ -93,6 +95,8 @@ function entry(provider: EngineQuotaProvider, account: string | null | undefined
 
 /** 当前存的快照（非 hook；测试和一次性判断用） */
 export const getQuota = (provider: EngineQuotaProvider): AccountQuota | null => entry(provider).quota
+/** 是不是正在读（非 hook；测试和一次性判断用） */
+export const quotaLoading = (provider: EngineQuotaProvider): boolean => entry(provider).loading
 
 /**
  * 告诉存储这个 provider 当前通道的账号（引擎检测到的邮箱；检测不到传 null）。

@@ -10,7 +10,9 @@ import { requestLogFocus } from '@/features/logs/focus'
 import { requestFeedback } from '@/features/feedback/focus'
 import { useEngineCatalog } from '@/features/engine/catalog'
 import { selfSourceReady } from '@/features/model-channels/channelModel'
-import { actionsFor, classifyError, noticeActions } from './errorKind'
+import { openAuthDialog } from '@/features/model-channels/authDialogStore'
+import { accountName, switchAccount, useAccounts } from '@/features/model-channels/accountsStore'
+import { actionsFor, classifyError, loginActions, noticeActions, type LoginAction } from './errorKind'
 
 // 纯函数在 errorKind.ts（测试不用加载引擎）；侧栏悬停卡从这里取 actionsFor
 export { actionsFor, noticeActions }
@@ -66,11 +68,24 @@ export function NoticeActions({
   const settings = useSettings()
   // 像素星空没配自己的 Key 时不给「改用自有」（channelModel.ts selfSourceReady）
   const catalog = useEngineCatalog(record.engine)
-  const actions = noticeActions(classifyError(text, error), record, record.engine, {
+  const kind = classifyError(text, error)
+  const ownAuth = kind === 'auth' && !record.platform && !record.provider
+  const accountEngine = ownAuth && (record.engine === 'claude' || record.engine === 'codex') ? record.engine : undefined
+  const accounts = useAccounts(accountEngine)
+  const logins = loginActions(kind, record, record.engine, accounts)
+  const actions = noticeActions(kind, record, record.engine, {
     retry,
     compact,
     selfReady: selfSourceReady(record.engine, catalog),
   })
+  // 登录好 / 换好账号后重发失败的那条（和「重试」一样）
+  const resend = (): void => (isDemo ? demoRetry(record.id) : requestSourceAction(record.id, 'retry'))
+  const runLogin = (a: LoginAction): void => {
+    if (!accountEngine) return
+    if (a.kind === 'relogin')
+      openAuthDialog(accountEngine === 'claude' ? 'claude' : 'chatgpt', { target: a.target, onDone: resend })
+    else void switchAccount(accountEngine, a.account.id).then(resend, () => undefined)
+  }
   const viewLogs = () => {
     requestLogFocus(record.id, turnStart ?? Date.now() - 10 * 60_000)
     settings.openSettings('logs')
@@ -86,6 +101,22 @@ export function NoticeActions({
   }
   return (
     <div data-notice-actions className="mt-1.5 flex flex-wrap gap-1.5 pl-[27px]">
+      {logins.map(a => (
+        <button
+          key={a.kind}
+          type="button"
+          onClick={() => runLogin(a)}
+          className={
+            a.kind === 'relogin'
+              ? 'press h-7 rounded-md border border-accent bg-accent px-2.5 text-meta text-accent-on hover:opacity-90'
+              : 'press h-7 rounded-md border border-line bg-surface px-2.5 text-meta text-fg-secondary hover:bg-hover hover:text-fg'
+          }
+        >
+          {a.kind === 'relogin'
+            ? tr('session.live.NoticeActions.signInAgain')
+            : tr('session.live.NoticeActions.switchAccount', { name: accountName(a.account) })}
+        </button>
+      ))}
       {actions.map(a => (
         <button
           key={a}

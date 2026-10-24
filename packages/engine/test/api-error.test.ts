@@ -26,7 +26,7 @@ describe('报错归类', () => {
     [
       'authentication_failed',
       'Please run /login · API Error: 401 OAuth token has expired',
-      '登录已失效：在终端运行 claude auth login 重新登录',
+      '登录已失效：点「重新登录」重新授权，不用去终端',
     ],
     [
       'rate_limit',

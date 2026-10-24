@@ -52,7 +52,7 @@ interface Entry {
   unrefreshableVersion: string | null
 }
 
-const providerOfEngine = (engine: EngineId): EngineQuotaProvider | null =>
+export const providerOfEngine = (engine: EngineId): EngineQuotaProvider | null =>
   engine === 'claude' ? 'claude' : engine === 'codex' ? 'chatgpt' : null
 
 const hasData = (q: Pick<AccountQuota, 'windows' | 'extras' | 'blocked'>): boolean =>
@@ -121,6 +121,29 @@ export class HostQuota {
   async refresh(provider: EngineQuotaProvider, opts: QuotaRefreshOptions = {}): Promise<AccountQuota> {
     this.watched.add(provider)
     return this.load(provider, opts, false)
+  }
+
+  /**
+   * 登录 / 重新登录 / 换账号成功、对话报登录失效后（docs/ui/claude-login-recovery.md §1 第 1 条）：丢掉当前账号的额度记录
+   * （含「不支持」、失败等待、别名），先广播「读取中」，再马上读一次。失效期间读到的「不支持 / 出错」不再挡住重新登录后的读取
+   */
+  async reset(provider: EngineQuotaProvider): Promise<void> {
+    if (this.ctx.closing) return
+    let id: Identity
+    try {
+      id = await this.identity(provider)
+    } catch {
+      return
+    }
+    this.alias.delete(id.infoKey)
+    this.redetected.delete(id.infoKey)
+    this.entries.delete(id.key)
+    this.entries.delete(id.infoKey)
+    // 引擎还不可用（没登录好）：没有订阅额度，告诉界面不显示，不留「读取中」
+    if (!id.ready) return this.publish(provider, { ...emptyQuota(provider, id.email), status: 'unsupported' })
+    this.publish(provider, { ...this.entry(id.infoKey, provider, id.email).quota, pending: true })
+    if (!this.watched.has(provider)) this.watched.add(provider)
+    await this.load(provider, { force: true }, false).catch(() => undefined)
   }
 
   /** 事件进来：核对来源（只认自有的 Claude / Codex 会话）后合并进当前账号的快照并广播 */

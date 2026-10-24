@@ -260,6 +260,10 @@ export interface EngineAdapter {
   sideQuestion?(record: SessionRecord, prompt: string, signal: AbortSignal): Promise<string>
   /** 不带会话、用引擎自己的登录单独问一次（AI 写提交信息，docs/ui/ai-commit-channels.md）；出错抛 OneShotError */
   oneShot?(req: OneShotRequest, signal: AbortSignal): Promise<OneShotReply>
+  /** 电脑从待机唤醒（docs/ui/claude-login-recovery.md §1 第 2 条）：sleptMs 是待机了多久 */
+  resumed?(sleptMs: number): void
+  /** 当前账号登录凭据的到期时间（写日志用，不含凭据本身）；读不到的引擎不实现 */
+  loginTimes?(): Record<string, unknown>
 }
 
 /** 恢复代码的结果；files 是绝对路径 */

@@ -668,3 +668,49 @@ describe('HostQuota.afterTurn', () => {
     expect(ask).not.toHaveBeenCalled()
   })
 })
+
+describe('HostQuota.reset（登录 / 换账号后，docs/ui/claude-login-recovery.md §1 第 1 条）', () => {
+  it('失效期间记成「不支持」：reset 先广播「读取中」，马上重读，不等 10 分钟', async () => {
+    const r = rig()
+    r.next.claude = async () => ({ kind: 'unsupported' })
+    await r.quota.refresh('claude')
+    expect((await r.quota.get('claude'))?.status).toBe('unsupported')
+    r.next.claude = async () => okReading(18)
+    advance(5_000)
+    r.sent.length = 0
+    await r.quota.reset('claude')
+    expect(r.sent[0]).toMatchObject({ status: 'empty', pending: true, account: 'a@example.com' })
+    expect(r.sent.at(-1)).toMatchObject({ status: 'ok' })
+    expect(r.sent.at(-1)?.pending).toBeUndefined()
+    expect(r.adapterCalls.claude).toBe(2)
+  })
+
+  it('失败等待也清掉：退避期间 reset 照样读', async () => {
+    const r = rig()
+    r.next.claude = async () => {
+      throw new Error('boom')
+    }
+    await r.quota.refresh('claude')
+    r.next.claude = async () => okReading()
+    await r.quota.reset('claude')
+    expect(r.adapterCalls.claude).toBe(2)
+    expect((await r.quota.get('claude'))?.status).toBe('ok')
+  })
+
+  it('引擎还没登录好：告诉界面不显示，不留「读取中」，不读', async () => {
+    const r = rig()
+    r.account.status = 'unauthenticated'
+    await r.quota.reset('claude')
+    expect(r.sent).toEqual([expect.objectContaining({ status: 'unsupported' })])
+    expect(r.sent[0].pending).toBeUndefined()
+    expect(r.adapterCalls.claude).toBe(0)
+  })
+
+  it('应用正在退出：什么都不做', async () => {
+    const r = rig()
+    r.ctx.closing = true
+    await r.quota.reset('claude')
+    expect(r.sent).toEqual([])
+    expect(r.adapterCalls.claude).toBe(0)
+  })
+})

@@ -83,6 +83,17 @@ describe('存储（有桥）', () => {
     push({ ...next, provider: 'platform' })
     expect(store.getQuota('claude')).toBe(next)
   })
+  it('主进程推来「读取中」（登录 / 换账号后清掉了旧记录）：显示读取中，读完的快照推来后不再读取中', async () => {
+    const { push } = bridge(null, sample())
+    const store = await import('./quotaStore')
+    await store.ensureQuota('claude', 'linxia@example.com')
+    push(sample({ status: 'empty', windows: [], fetchedAt: null, pending: true }))
+    expect(store.getQuota('claude')?.status).toBe('empty')
+    expect(store.quotaLoading('claude')).toBe(true)
+    push(sample())
+    expect(store.getQuota('claude')?.status).toBe('ok')
+    expect(store.quotaLoading('claude')).toBe(false)
+  })
   it('手动刷新返回是否成功：失败快照返回 false', async () => {
     const failed = sample({ status: 'error', error: { code: 'network', message: 'x' } })
     bridge(null, failed)

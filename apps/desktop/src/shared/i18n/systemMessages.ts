@@ -1022,9 +1022,14 @@ export const systemMessages = {
     zh: '使用 {p0}',
     en: 'Use {p0}',
   },
+  // 旧版本存在会话里的说法
   'system.signInExpiredRun': {
     zh: '登录已失效：在终端运行 claude auth login 重新登录',
     en: 'Sign-in expired. Run claude auth login in a terminal to sign in again.',
+  },
+  'system.signInExpiredRelogin': {
+    zh: '登录已失效：点「重新登录」重新授权，不用去终端',
+    en: 'Sign-in expired. Click "Sign in again" to re-authorize; no terminal needed.',
   },
   'system.yourOrganizationDoesNot': {
     zh: '当前账号的组织不允许使用 Claude Code',

@@ -67,12 +67,19 @@ export async function rewindFilesOnce(
   const started = performance.now()
   const ms = (): number => Math.round(performance.now() - started)
   const timing: Record<string, number> = {}
-  const proc = new ClaudeProcess(target.launcher, [...REWIND_ARGS, ...target.resumeArgs], target.cwd, target.env, {
-    onMessage: () => undefined,
-    onControlRequest: () => undefined,
-    onControlCancel: () => undefined,
-    onExit: () => undefined,
-  })
+  const proc = new ClaudeProcess(
+    target.launcher,
+    [...REWIND_ARGS, ...target.resumeArgs],
+    target.cwd,
+    target.env,
+    {
+      onMessage: () => undefined,
+      onControlRequest: () => undefined,
+      onControlCancel: () => undefined,
+      onExit: () => undefined,
+    },
+    'rewind',
+  )
   try {
     await proc.request('initialize', {}, REWIND_INIT_TIMEOUT_MS)
     timing.initMs = ms()

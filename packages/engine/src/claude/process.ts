@@ -33,6 +33,9 @@ interface Pending {
   timer: NodeJS.Timeout
 }
 
+/** 进程是干什么的（写进退出日志，docs/ui/claude-login-recovery.md §1 第 3 条） */
+export type ClaudeProcessPurpose = 'session' | 'catalog' | 'quota' | 'account' | 'login-warmup' | 'rewind'
+
 /** 进程退出后等 stdio 读完的最长时间（见 exitPromise） */
 const STDIO_DRAIN_MS = 1_000
 
@@ -47,6 +50,8 @@ export class ClaudeProcess {
   private exited = false
   /** close() / kill() 之后为真：退出不算异常（日志用） */
   private stopping = false
+  /** 我们是怎么结束它的：关输入让它自己退出 / 强制结束 / 关了输入没退、超时后强制结束 */
+  private ending: 'closed' | 'killed' | 'close-timeout' | null = null
   readonly exitPromise: Promise<void>
 
   constructor(
@@ -55,6 +60,7 @@ export class ClaudeProcess {
     cwd: string,
     env: NodeJS.ProcessEnv,
     private readonly h: ClaudeProcessHandlers,
+    purpose?: ClaudeProcessPurpose,
   ) {
     this.child = spawn(launcher.command, [...launcher.args, ...args], {
       cwd,
@@ -75,6 +81,7 @@ export class ClaudeProcess {
       { command: launcher.command, cwd },
       () => this.stderr.toString(),
       () => this.stopping,
+      () => ({ ...(purpose ? { purpose } : {}), ...(this.ending ? { ended: this.ending } : {}) }),
     )
     // 处理器抛错（例如模型给的工具参数形状不对）：记日志、接着处理后面的消息，不能变成主进程未捕获异常，
     // 也不能让同一块里后面的消息（包括本轮结束那一帧）丢掉（审查报告 2026-10-14）
@@ -203,16 +210,18 @@ export class ClaudeProcess {
   async close(timeoutMs = 5_000): Promise<void> {
     if (this.exited) return
     this.stopping = true
+    this.ending ??= 'closed'
     this.child.stdin.end()
-    const timer = setTimeout(() => this.kill(), timeoutMs)
+    const timer = setTimeout(() => this.kill('close-timeout'), timeoutMs)
     await this.exitPromise
     clearTimeout(timer)
   }
 
   /** 强制结束，连同它启动的子进程（正在跑的命令）一起结束 */
-  kill(): void {
+  kill(how: 'killed' | 'close-timeout' = 'killed'): void {
     if (this.exited) return
     this.stopping = true
+    if (this.ending !== 'close-timeout') this.ending = how
     killTree(this.child)
   }
 }

@@ -5,6 +5,7 @@ import type { LoginProcess } from '../adapter'
 import { parseClaudeLogin } from '../claude/login'
 import { parseCodexLogin } from '../codex/login'
 import type { HostContext } from './context'
+import { providerOfEngine } from './quota'
 
 /** 登录命令最多等这么久（用户去浏览器里授权的时间） */
 export const LOGIN_TIMEOUT_MS = 10 * 60_000
@@ -155,8 +156,12 @@ export class HostLogin {
     try {
       const info = (await this.ctx.m.settings.engines(true)).find(e => e.id === engine)
       if (run.finished) return
-      if (info?.status === 'ready') this.finish(run, { phase: 'done' })
-      else this.finish(run, { phase: 'failed', error: info?.message ?? '登录命令结束了，但还没有登录成功' })
+      if (info?.status === 'ready') {
+        this.finish(run, { phase: 'done' })
+        // 登录好了：失效期间读到的额度（「不支持 / 出错」）作废，马上重读（docs/ui/claude-login-recovery.md §1 第 1 条）
+        const provider = providerOfEngine(engine)
+        if (provider) void this.ctx.m.quota.reset(provider)
+      } else this.finish(run, { phase: 'failed', error: info?.message ?? '登录命令结束了，但还没有登录成功' })
     } catch (err) {
       this.finish(run, { phase: 'failed', error: (err as Error).message })
     }

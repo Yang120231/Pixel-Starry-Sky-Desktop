@@ -3,6 +3,10 @@ import { randomUUID } from 'node:crypto'
 import { reduce, replyPreview, type EngineEvent, type Item, type SessionRecord } from '@pixelsky/protocol'
 import type { HostContext, Runtime } from './context'
 import { reconnectedCount } from './queue'
+import { providerOfEngine } from './quota'
+import { logger } from '../log'
+
+const log = logger('engine.host')
 
 type DeltaEvent = Extract<EngineEvent, { type: 'item_delta' }>
 
@@ -31,7 +35,35 @@ export class HostEvents {
   /** 每个会话一条还没应用的文字增量（同一条目同一字段的连续增量合并在这里） */
   private readonly pendingDelta = new Map<string, DeltaEvent>()
 
+  /** 各引擎上次处理「自己的订阅登录失效」的时间：同一个引擎 60 秒内只处理一次 */
+  private readonly loginFailedAt = new Map<string, number>()
+
   constructor(private readonly ctx: HostContext) {}
+
+  /**
+   * 用自己订阅的对话报登录失效（docs/ui/claude-login-recovery.md §1）：记一笔带凭据到期时间的日志（分清自然过期还是被作废），
+   * 重新检测引擎（界面上的通道状态跟着变成「要授权」），再把额度按当前账号清掉重读
+   */
+  private ownLoginFailed(id: string, rt: Runtime): void {
+    const engine = (rt.execution ?? rt.snapshot.record).engine
+    const provider = providerOfEngine(engine)
+    if (!provider) return
+    const now = Date.now()
+    if (now - (this.loginFailedAt.get(engine) ?? 0) < 60_000) return
+    this.loginFailedAt.set(engine, now)
+    const adapter = this.ctx.adapters[engine]
+    log.warn('自己的订阅登录失效', {
+      engine,
+      sessionId: id,
+      account: rt.sessionAccount ?? null,
+      ...(adapter?.loginTimes?.() ?? {}),
+    })
+    const { m } = this.ctx
+    void m.settings
+      .engines(true)
+      .then(() => m.quota.reset(provider))
+      .catch(() => undefined)
+  }
 
   /** 把合并好的增量应用出去；先删再应用，apply 里再调用也不会递归 */
   private flushDelta(id: string): void {
@@ -150,6 +182,13 @@ export class HostEvents {
       rt.turn
     )
       rt.turn.usageLimited = true
+    if (
+      event.type === 'item_completed' &&
+      event.item.kind === 'notice' &&
+      event.item.error?.kind === 'auth' &&
+      rt.sessionSource === null
+    )
+      this.ownLoginFailed(id, rt)
     // 已结束轮次的迟到 result 不能清理正在执行的新轮和审批。
     if (event.type === 'turn_completed' && event.turnId !== rt.snapshot.turnId) return
     if (event.type === 'request_cache_reset') {

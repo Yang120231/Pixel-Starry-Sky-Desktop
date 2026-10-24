@@ -585,6 +585,11 @@ export class EngineHost {
     return this.m.branch.undoRewind(id)
   }
 
+  /** 电脑从待机唤醒：转告各适配器（Claude 待机够久时下一次后台读取前先刷新登录，docs/ui/claude-login-recovery.md） */
+  resumed(sleptMs: number): void {
+    for (const adapter of Object.values(this.ctx.adapters)) adapter?.resumed?.(sleptMs)
+  }
+
   /** 不带会话、用引擎自己的登录单独问一次（AI 写提交信息的 Claude / ChatGPT 授权通道，docs/ui/ai-commit-channels.md） */
   oneShot(
     engine: EngineId,

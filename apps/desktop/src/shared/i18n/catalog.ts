@@ -1340,6 +1340,10 @@ export const catalog = {
     "zh": "重新登录",
     "en": "Sign in again"
   },
+  "session.live.NoticeActions.switchAccount": {
+    "zh": "换成 {name}",
+    "en": "Switch to {name}"
+  },
   "session.live.RetryStatus.requestRetryProgress": {
     "zh": "请求重试进度",
     "en": "Request retry progress"
