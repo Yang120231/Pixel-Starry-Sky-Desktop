@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
+  ArrowUpRight,
   ChevronRight,
   File,
   FileArchive,
@@ -31,6 +32,27 @@ import { NoProject, useRemember } from '../ToolsUi'
 import { EmptyState, PanelCard } from '../PanelSurface'
 import { artifactDiffs, groupBySession, splitArtifactPath } from './artifactsModel'
 import { ArtifactPreview } from './ArtifactPreview'
+import {
+  DELIVERED_MAX,
+  EMPTY_FOLD,
+  TURN_FILES_MAX,
+  collapseAll,
+  collapseAllDelivered,
+  deliveredOpen,
+  expandAll,
+  expandAllDelivered,
+  groupDelivered,
+  readFold,
+  revealTurn,
+  sessionOpen,
+  toggleDelivered,
+  toggleSession,
+  toggleTurn,
+  turnOpen,
+  turnsSummary,
+  type DeliveredGroup,
+  type FoldState,
+} from './fold'
 import { demo as demoData } from '@/data/demo'
 import {
   FOCUS_OPEN_MAX,
@@ -93,6 +115,12 @@ function ArtifactsBody({
   const [now, setNow] = useState(Date.now)
   const remote = machineOf(target.sessionId ?? target.projectId) !== 'local'
   const toast = useToast()
+  // 伸缩（fold.ts）：按项目记在本机；「交付」按类型筛选只在这次打开里有效
+  const [storedFold, storeFold] = useRemember<FoldState>('pixelsky.artifacts.fold.' + target.projectId, EMPTY_FOLD)
+  const fold = readFold(storedFold)
+  const latestFold = useRef({ fold, storeFold })
+  latestFold.current = { fold, storeFold }
+  const [deliveredType, setDeliveredType] = useState<ArtifactDelivery['type'] | 'all'>('all')
 
   const load = async () => {
     if (demo || !window.pixelsky) return
@@ -153,8 +181,11 @@ function ArtifactsBody({
     pendingFocus.current = null
     finishArtifactsFocus(pending.focus.token)
     const turn = findFocusTurn(data.turns, pending.focus)
-    if (turn) setFocused({ key: turnKey(turn), token: pending.focus.token })
-    else toast(tr('artifacts.focusMissing'))
+    if (turn) {
+      // 定位的这一轮和它的会话可能收着：先展开，TurnBlock 才在、才能滚过去
+      latestFold.current.storeFold(revealTurn(latestFold.current.fold, turn))
+      setFocused({ key: turnKey(turn), token: pending.focus.token })
+    } else toast(tr('artifacts.focusMissing'))
   }, [data, loading, toast])
   useEffect(() => {
     if (!focused) return
@@ -163,6 +194,15 @@ function ArtifactsBody({
   }, [focused])
 
   const groups = useMemo(() => groupBySession(data?.turns ?? []), [data])
+  const deliveredTypes = useMemo(() => [...new Set((data?.delivered ?? []).map(d => d.type))], [data])
+  // 刷新后选的类型没有了：回到全部
+  const activeType = deliveredType !== 'all' && deliveredTypes.includes(deliveredType) ? deliveredType : 'all'
+  const deliveredGroups = useMemo(
+    () => groupDelivered((data?.delivered ?? []).filter(d => activeType === 'all' || d.type === activeType)),
+    [data, activeType],
+  )
+  const turnCount = groups.reduce((n, g) => n + g.turns.length, 0)
+  const deliveredCount = deliveredGroups.reduce((n, g) => n + g.items.length, 0)
   if (preview)
     return (
       <ArtifactPreview
@@ -208,6 +248,73 @@ function ArtifactsBody({
           ]}
         />
       </div>
+      {data && tab === 'delivered' && deliveredTypes.length > 1 && (
+        <div
+          role="radiogroup"
+          aria-label={tr('artifacts.typeFilter')}
+          className="flex shrink-0 flex-wrap gap-1 px-3 pt-2"
+        >
+          {(['all', ...deliveredTypes] as const).map(t => (
+            <button
+              key={t}
+              type="button"
+              role="radio"
+              aria-checked={activeType === t}
+              onClick={() => setDeliveredType(t)}
+              className={cn(
+                'rounded-full border px-2 text-meta leading-5',
+                activeType === t
+                  ? 'border-transparent bg-accent-soft text-accent-fg'
+                  : 'border-line text-fg-muted hover:bg-hover hover:text-fg',
+              )}
+            >
+              {tr(`artifacts.type.${t}`)}{' '}
+              {t === 'all' ? data.delivered.length : data.delivered.filter(d => d.type === t).length}
+            </button>
+          ))}
+        </div>
+      )}
+      {data && (tab === 'changes' ? groups.length > 0 : deliveredGroups.length > 0) && (
+        <div className="flex shrink-0 items-center gap-0.5 px-3 pt-1.5 text-meta text-fg-muted">
+          <span className="min-w-0 flex-1 truncate">
+            {tab === 'changes'
+              ? tr('artifacts.countChanges', { sessions: groups.length, turns: turnCount })
+              : tr('artifacts.countDelivered', { sessions: deliveredGroups.length, files: deliveredCount })}
+          </span>
+          <button
+            type="button"
+            onClick={() =>
+              storeFold(
+                tab === 'changes'
+                  ? expandAll(fold, groups)
+                  : expandAllDelivered(
+                      fold,
+                      deliveredGroups.map(g => g.sessionId),
+                    ),
+              )
+            }
+            className="shrink-0 rounded-md px-1.5 py-0.5 hover:bg-hover hover:text-fg"
+          >
+            {tr('artifacts.expandAll')}
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              storeFold(
+                tab === 'changes'
+                  ? collapseAll(fold, groups)
+                  : collapseAllDelivered(
+                      fold,
+                      deliveredGroups.map(g => g.sessionId),
+                    ),
+              )
+            }
+            className="shrink-0 rounded-md px-1.5 py-0.5 hover:bg-hover hover:text-fg"
+          >
+            {tr('artifacts.collapseAll')}
+          </button>
+        </div>
+      )}
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-3">
         {error && (
           <p role="alert" className="shrink-0 rounded-md bg-subtle p-2 text-meta text-danger">
@@ -229,48 +336,68 @@ function ArtifactsBody({
               />
             </PanelCard>
           ) : (
-            groups.map(g => (
-              <section
-                key={g.sessionId}
-                data-artifact-session={g.sessionId}
-                className="shrink-0 rounded-lg border border-line-card bg-surface shadow-sm"
-              >
-                <button
-                  type="button"
-                  onClick={() => openSession(g.sessionId, null)}
-                  className="flex w-full min-w-0 items-center gap-2 border-b border-line-subtle px-3 py-2 text-left hover:bg-hover"
+            groups.map(g => {
+              const open = sessionOpen(fold, g.sessionId)
+              const sum = open ? null : turnsSummary(g.turns)
+              return (
+                <section
+                  key={g.sessionId}
+                  data-artifact-session={g.sessionId}
+                  className="shrink-0 rounded-lg border border-line-card bg-surface shadow-sm"
                 >
-                  <EngineIcon engine={g.engine} size={14} />
-                  <span className="min-w-0 flex-1 truncate text-list font-medium text-fg">{g.title}</span>
-                  {g.archived && (
-                    <span className="shrink-0 rounded bg-subtle px-1.5 text-meta text-fg-muted">
-                      {tr('artifacts.archived')}
-                    </span>
-                  )}
-                </button>
-                {g.turns.map(turn => (
-                  <TurnBlock
-                    key={turnKey(turn)}
-                    turn={turn}
-                    target={target}
-                    demo={demo}
-                    now={now}
-                    focusToken={focused?.key === turnKey(turn) ? focused.token : undefined}
-                  />
-                ))}
-              </section>
-            ))
+                  <CardHead
+                    open={open}
+                    onToggle={() => storeFold(toggleSession(fold, g.sessionId))}
+                    onJump={() => openSession(g.sessionId, null)}
+                  >
+                    <EngineIcon engine={g.engine} size={14} />
+                    <span className="min-w-0 flex-1 truncate text-list font-medium text-fg">{g.title}</span>
+                    {g.archived && (
+                      <span className="shrink-0 rounded bg-subtle px-1.5 text-meta text-fg-muted">
+                        {tr('artifacts.archived')}
+                      </span>
+                    )}
+                    {sum && (
+                      <>
+                        <span className="shrink-0 text-meta text-fg-faint">
+                          {tr('artifacts.sessionSummary', { turns: g.turns.length, files: sum.files })}
+                        </span>
+                        <DiffStat added={sum.added} removed={sum.removed} className="text-meta" />
+                      </>
+                    )}
+                  </CardHead>
+                  {open &&
+                    g.turns.map(turn => (
+                      <TurnBlock
+                        key={turnKey(turn)}
+                        turn={turn}
+                        target={target}
+                        demo={demo}
+                        now={now}
+                        open={turnOpen(fold, g, turn)}
+                        onToggle={() => storeFold(toggleTurn(fold, g, turn))}
+                        focusToken={focused?.key === turnKey(turn) ? focused.token : undefined}
+                      />
+                    ))}
+                </section>
+              )
+            })
           )
         ) : data.delivered.length === 0 ? (
           <PanelCard>
             <EmptyState icon={Package} title={tr('artifacts.deliveredEmpty')} hint={tr('artifacts.deliveredHint')} />
           </PanelCard>
         ) : (
-          <ul className="flex shrink-0 flex-col gap-1">
-            {data.delivered.map(d => (
-              <DeliveryRow key={d.absolute} item={d} now={now} onOpen={() => setPreview(d)} />
-            ))}
-          </ul>
+          deliveredGroups.map(g => (
+            <DeliveredCard
+              key={g.sessionId}
+              group={g}
+              now={now}
+              open={deliveredOpen(fold, g.sessionId)}
+              onToggle={() => storeFold(toggleDelivered(fold, g.sessionId))}
+              onOpen={setPreview}
+            />
+          ))
         )}
         {data && tab === 'changes' && data.outsideCount > 0 && (
           <button
@@ -288,53 +415,139 @@ function ArtifactsBody({
   )
 }
 
+/** 会话卡片的标题行：点它收起 / 展开；行尾「跳到对话」鼠标移上去才出现（原来点标题就是跳转，现在改成伸缩） */
+function CardHead({
+  open,
+  onToggle,
+  onJump,
+  children,
+}: {
+  open: boolean
+  onToggle(): void
+  onJump(): void
+  children: ReactNode
+}) {
+  useI18n()
+  return (
+    <div
+      className={cn(
+        'group/head flex min-w-0 items-center gap-1 pr-1.5 hover:bg-hover',
+        open ? 'rounded-t-lg border-b border-line-subtle' : 'rounded-lg',
+      )}
+    >
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={onToggle}
+        className="flex min-w-0 flex-1 items-center gap-2 py-2 pl-2 text-left"
+      >
+        <ChevronRight size={12} className={cn('shrink-0 text-fg-faint transition-transform', open && 'rotate-90')} />
+        {children}
+      </button>
+      <IconButton
+        icon={ArrowUpRight}
+        label={tr('artifacts.jump')}
+        size={22}
+        iconSize={12}
+        onClick={onJump}
+        className="opacity-0 group-hover/head:opacity-100 focus-visible:opacity-100"
+      />
+    </div>
+  )
+}
+
 function TurnBlock({
   turn,
   target,
   demo,
   now,
+  open,
+  onToggle,
   focusToken,
 }: {
   turn: ArtifactTurn
   target: WorkspaceRef
   demo: boolean
   now: number
+  open: boolean
+  onToggle(): void
   /** 「审查」定位到这一轮：滚过来、闪一下、展开前几个文件的 diff */
   focusToken?: number
 }) {
   useI18n()
   const ref = useRef<HTMLDivElement>(null)
+  // 文件太多时先列一部分；「审查」定位过来时全列出（记在状态里：定位的高亮两秒后就撤，列表不能跟着缩回去）
+  const [all, setAll] = useState(!!focusToken)
   useEffect(() => {
-    if (focusToken && ref.current) scrollInPane(ref.current, 'start', { behavior: motionEnabled() ? 'smooth' : 'auto' })
+    if (!focusToken) return
+    setAll(true)
+    if (ref.current) scrollInPane(ref.current, 'start', { behavior: motionEnabled() ? 'smooth' : 'auto' })
   }, [focusToken])
+  const full = all || turn.files.length <= TURN_FILES_MAX
+  const files = full ? turn.files : turn.files.slice(0, TURN_FILES_MAX)
+  const sum = open ? null : turnsSummary([turn])
   return (
     <div
       ref={ref}
       data-artifact-turn={turnKey(turn)}
-      className={cn('border-b border-line-subtle px-1.5 py-1.5 last:border-b-0', !!focusToken && 'search-hit')}
+      className={cn('border-b border-line-subtle px-1.5 py-1 last:border-b-0', !!focusToken && 'search-hit')}
     >
-      <button
-        type="button"
-        onClick={() => openSession(turn.sessionId, turn.userItemId)}
-        title={tr('artifacts.jump')}
-        className="flex w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-meta text-fg-muted hover:bg-hover"
-      >
-        <MessageSquareText size={12} className="shrink-0" />
-        <span className="min-w-0 flex-1 truncate">{turn.prompt || tr('artifacts.noPrompt')}</span>
-        <span className="shrink-0 text-fg-faint tabular-nums">{relativeTime(turn.at, now)}</span>
-      </button>
-      <ul className="flex flex-col">
-        {turn.files.map((f, i) => (
-          <FileRow
-            key={f.absolute}
-            file={f}
-            turn={turn}
-            target={target}
-            demo={demo}
-            autoOpen={focusToken && i < FOCUS_OPEN_MAX ? focusToken : undefined}
-          />
-        ))}
-      </ul>
+      <div className="group/turn flex min-w-0 items-center gap-1 rounded-md pr-0.5 hover:bg-hover">
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={onToggle}
+          className={cn(
+            'flex min-w-0 flex-1 items-center gap-1.5 py-1 pl-1.5 text-left text-meta',
+            open ? 'text-fg-secondary' : 'text-fg-muted',
+          )}
+        >
+          <ChevronRight size={12} className={cn('shrink-0 text-fg-faint transition-transform', open && 'rotate-90')} />
+          <span className="min-w-0 flex-1 truncate">{turn.prompt || tr('artifacts.noPrompt')}</span>
+          {sum && (
+            <>
+              <span className="shrink-0 rounded bg-subtle px-1 leading-4 text-fg-muted">
+                {tr('artifacts.turnFiles', { count: sum.files })}
+              </span>
+              <DiffStat added={sum.added} removed={sum.removed} />
+            </>
+          )}
+          <span className="shrink-0 text-fg-faint tabular-nums">{relativeTime(turn.at, now)}</span>
+        </button>
+        <IconButton
+          icon={ArrowUpRight}
+          label={tr('artifacts.jumpTurn')}
+          size={22}
+          iconSize={12}
+          onClick={() => openSession(turn.sessionId, turn.userItemId)}
+          className="opacity-0 group-hover/turn:opacity-100 focus-visible:opacity-100"
+        />
+      </div>
+      {open && (
+        <>
+          <ul className="flex flex-col pl-3">
+            {files.map((f, i) => (
+              <FileRow
+                key={f.absolute}
+                file={f}
+                turn={turn}
+                target={target}
+                demo={demo}
+                autoOpen={focusToken && i < FOCUS_OPEN_MAX ? focusToken : undefined}
+              />
+            ))}
+          </ul>
+          {!full && (
+            <button
+              type="button"
+              onClick={() => setAll(true)}
+              className="mt-0.5 ml-5 rounded-md px-1 text-meta text-accent-fg hover:underline"
+            >
+              {tr('artifacts.moreFiles', { count: turn.files.length - TURN_FILES_MAX })}
+            </button>
+          )}
+        </>
+      )}
     </div>
   )
 }
@@ -478,6 +691,60 @@ function FileRow({
   )
 }
 
+/** 「交付」的一个会话：标题行能收起；交付多时先列几个 */
+function DeliveredCard({
+  group,
+  now,
+  open,
+  onToggle,
+  onOpen,
+}: {
+  group: DeliveredGroup
+  now: number
+  open: boolean
+  onToggle(): void
+  onOpen(item: ArtifactDelivery): void
+}) {
+  useI18n()
+  const [all, setAll] = useState(false)
+  const full = all || group.items.length <= DELIVERED_MAX
+  const items = full ? group.items : group.items.slice(0, DELIVERED_MAX)
+  return (
+    <section
+      data-artifact-delivered-session={group.sessionId}
+      className="shrink-0 rounded-lg border border-line-card bg-surface shadow-sm"
+    >
+      <CardHead open={open} onToggle={onToggle} onJump={() => openSession(group.sessionId, null)}>
+        <span className="min-w-0 flex-1 truncate text-list font-medium text-fg">{group.title}</span>
+        {!open && (
+          <span className="shrink-0 text-meta text-fg-faint">
+            {tr('artifacts.deliveredSummary', { count: group.items.length, time: relativeTime(group.at, now) })}
+          </span>
+        )}
+      </CardHead>
+      {open && (
+        <ul className="flex flex-col px-1.5 py-1">
+          {items.map(d => (
+            <DeliveryRow key={d.absolute} item={d} now={now} onOpen={() => onOpen(d)} />
+          ))}
+          {!full && (
+            <li>
+              <button
+                type="button"
+                onClick={() => setAll(true)}
+                className="ml-1 rounded-md px-1 text-meta text-accent-fg hover:underline"
+              >
+                {tr('artifacts.moreDelivered', { count: group.items.length - DELIVERED_MAX })}
+              </button>
+            </li>
+          )}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+/** 交付的一个文件：一行（类型图标、文件名、目录、时间），点开预览 */
 function DeliveryRow({ item, now, onOpen }: { item: ArtifactDelivery; now: number; onOpen: () => void }) {
   useI18n()
   const Icon = TYPE_ICON[item.type]
@@ -488,29 +755,26 @@ function DeliveryRow({ item, now, onOpen }: { item: ArtifactDelivery; now: numbe
         type="button"
         onClick={onOpen}
         data-artifact-delivery={item.absolute}
+        title={item.absolute}
         className={cn(
-          'flex w-full min-w-0 items-start gap-2.5 rounded-lg border border-line-card bg-surface px-3 py-2 text-left shadow-sm hover:border-line-strong',
+          'flex h-7 w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 text-left hover:bg-hover',
           !item.exists && 'opacity-60',
         )}
       >
-        <Icon size={16} className="mt-0.5 shrink-0 text-fg-muted" />
-        <span className="min-w-0 flex-1">
-          <span className="flex min-w-0 items-center gap-1.5">
-            <span className="min-w-0 truncate text-list font-medium text-fg">{name}</span>
-            {!item.inside && (
-              <span className="shrink-0 rounded bg-subtle px-1 text-[10px] leading-4 text-fg-muted">
-                {tr('artifacts.outsideBadge')}
-              </span>
-            )}
-            {!item.exists && <span className="shrink-0 text-meta text-danger">{tr('artifacts.missing')}</span>}
+        <Icon size={14} className="shrink-0 text-fg-muted" />
+        <span className="min-w-[4em] truncate text-list text-fg">{name}</span>
+        {dir ? (
+          <span className="min-w-0 flex-[1_1_0] truncate text-meta text-fg-faint">{dir}</span>
+        ) : (
+          <span className="flex-1" />
+        )}
+        {!item.inside && (
+          <span className="shrink-0 rounded bg-subtle px-1 text-[10px] leading-4 text-fg-muted">
+            {tr('artifacts.outsideBadge')}
           </span>
-          <span className="block truncate text-meta text-fg-faint" title={item.absolute}>
-            {dir}
-          </span>
-          <span className="block truncate text-meta text-fg-muted">
-            {item.title} · {relativeTime(item.at, now)}
-          </span>
-        </span>
+        )}
+        {!item.exists && <span className="shrink-0 text-meta text-danger">{tr('artifacts.missing')}</span>}
+        <span className="shrink-0 text-meta text-fg-faint tabular-nums">{relativeTime(item.at, now)}</span>
       </button>
     </li>
   )
