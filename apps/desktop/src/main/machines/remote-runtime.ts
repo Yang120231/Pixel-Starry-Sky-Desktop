@@ -136,6 +136,7 @@ export async function createRemoteRuntime(
     scans: new SearchRegistry(),
     tools,
     copyPath: (projectId: string, copyId: string) => projectTools.copyPath(projectId, copyId),
+    projectTools: () => projectTools,
     beforeUpdate: prepare,
   }
   // 操作表照旧整张展开（contract.test 按 `...bindOps(表名,` 认方法），引擎列表再单独包一层：没装上命令行时写明原因

@@ -25,6 +25,7 @@ import { artifactMessages } from '../../../shared/i18n/artifactMessages'
 import { errorMessages } from '../../../shared/i18n/errorMessages'
 import { contentMessages } from '../../../shared/i18n/contentMessages'
 import { branchMessages } from '../../../shared/i18n/branchMessages'
+import { branchMergeMessages } from '../../../shared/i18n/branchMergeMessages'
 import { updateMessages } from '../../../shared/i18n/updateMessages'
 import { customApiMessages } from '../../../shared/i18n/customApiMessages'
 import { logMessages } from '../../../shared/i18n/logMessages'
@@ -97,6 +98,7 @@ const dictionaries: Record<string, Record<string, unknown>> = {
   errorMessages,
   contentMessages,
   branchMessages,
+  branchMergeMessages,
   updateMessages,
   customApiMessages,
   logMessages,

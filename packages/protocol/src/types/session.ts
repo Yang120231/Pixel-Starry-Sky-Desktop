@@ -219,6 +219,10 @@ export interface SessionRecord extends SessionSettings {
   pendingFork?: { from: string; at: string } | null
   /** 从哪个会话分叉出来的（顶部一行「分叉自『…』」） */
   forkedFrom?: { sessionId: string; title: string } | null
+  /** 「开分支」开出的会话（docs/ui/branch-merge.md §3.2）：上级就是 forkedFrom；普通分叉没有 */
+  branch?: SessionBranch | null
+  /** 合并回来的分支摘要（docs/ui/branch-merge.md §5.2）：下一条消息发给 AI 时放在前面，发出后清掉 */
+  pendingMerge?: PendingMerge | null
   /** 接着引擎自己留下的会话（终端里的 Claude Code……）导入来的（docs/ui/claude-resume.md §4.5） */
   imported?: ImportedSession | null
   /**
@@ -379,6 +383,39 @@ export type RevertFilesResult =
       reverted: string[]
       skipped: { path: string; reason: RevertSkip; message?: string }[]
     }
+
+/** 开分支的会话（docs/ui/branch-merge.md §3.2） */
+export interface SessionBranch {
+  /** 副本 id；null 是和上级同一个目录（只分开对话） */
+  copyId: string | null
+  /** 副本所在的 Git 分支；同目录时为 null */
+  gitBranch: string | null
+  /** 开分支时上级所在的分支（显示用）；不是 Git 仓库或分离头指针时为 null */
+  baseBranch: string | null
+  /** 代码起点（含开分支时上级没提交的改动）：合并时按它算分支自己的改动；同目录时为 null */
+  startCommit: string | null
+  /** 带过来的最后一个条目 id：分支自己的内容从它后面开始；什么都没带时为 null */
+  startAfter: string | null
+  /** 最近一次合并回上级的时间；还没合并过为 null */
+  mergedAt: number | null
+  /** 合并时删了副本：这个会话只能回看 */
+  copyRemoved?: boolean
+}
+
+/** 等着带给 AI 的分支合并摘要 */
+export interface PendingMerge {
+  /** 分支会话 id */
+  sessionId: string
+  title: string
+  summary: string
+}
+
+/** 开分支 / 分叉的选项：不传时和原来的分叉一样（同一个工作目录、没有 branch） */
+export interface ForkOptions {
+  /** 新会话的工作目录（开分支建的副本） */
+  cwd?: string
+  branch?: Omit<SessionBranch, 'startAfter' | 'mergedAt'>
+}
 
 /** 分叉结果：新会话，以及放进它输入框的原文和图片 */
 export interface ForkResult {

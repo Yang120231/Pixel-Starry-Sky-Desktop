@@ -1,7 +1,7 @@
 // 一个会话对应的 Claude Code 进程：启动 / 恢复、发消息、审批、中断、改设置（docs/engines.md §9）
 import { randomUUID } from 'node:crypto'
 import { readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import {
   codedError,
   contextDiagnostic,
@@ -37,10 +37,15 @@ import {
   claudeSessionDir,
   claudeTranscriptExists,
   copyTranscriptUntil,
+  encodeCwd,
   findClaudeTranscript,
   seedTranscript,
 } from './transcript'
 import { ClaudeTranslator } from './translate'
+
+/** 两个目录是不是同一个（Windows 不分大小写） */
+const samePath = (a: string, b: string): boolean =>
+  process.platform === 'win32' ? resolve(a).toLowerCase() === resolve(b).toLowerCase() : resolve(a) === resolve(b)
 import { obj, str } from './shape'
 import { claudeModelName, type ModelSettings } from './long-context'
 
@@ -584,6 +589,8 @@ export class ClaudeSession implements EngineSession {
    * 分叉 / 回退的截断点在最近一次压缩之前：Claude Code 加载不到那里（--resume-session-at 报找不到），
    * 自己把记录复制到截断点为止，存成新的引擎会话再 --resume（docs/ui/rewind-fork-sidechat.md §2.4）。
    * 分叉用分支自己的 id，回退换一个新 id（原会话的记录不动）。不需要复制时返回 null，复制不成返回 'failed'。
+   * 开分支换了工作目录（原记录不在新目录对应的文件夹里）时也复制：Claude Code 只在当前目录的文件夹里找要接着的会话
+   * （docs/ui/branch-merge.md §3.2）
    */
   private async copyCompacted(
     cwd: string,
@@ -599,9 +606,17 @@ export class ClaudeSession implements EngineSession {
         : null
     if (!at || !source) return null
     try {
-      if ((await anchorPosition(source, at)) !== 'compacted') return null
+      const encoded = encodeCwd(cwd)
+      const home = join(this.deps.projectsDir, encoded)
+      // 记录不在新工作目录的文件夹里才算换了目录；长路径的文件夹名被 Claude Code 截断加了哈希，按前缀认
+      const folder = basename(dirname(source))
+      const inHome =
+        samePath(dirname(source), home) ||
+        (encoded.length > 200 && folder.toLowerCase().startsWith(`${encoded.slice(0, 200)}-`.toLowerCase()))
+      const moved = !!fork && !inHome
+      if (!moved && (await anchorPosition(source, at)) !== 'compacted') return null
       const target = fork ? sid : randomUUID()
-      const file = await copyTranscriptUntil(source, at, target)
+      const file = await copyTranscriptUntil(source, at, target, moved ? home : dirname(source))
       return file ? { sid: target, file } : 'failed'
     } catch {
       return 'failed'

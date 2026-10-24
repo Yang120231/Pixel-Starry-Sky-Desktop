@@ -208,6 +208,7 @@ export async function initEngine(ctx: AppContext): Promise<void> {
     scans,
     tools: workspaceToolsHost(ctx),
     copyPath: async (projectId, copyId) => ctx.projectTools?.copyPath(projectId, copyId),
+    projectTools: () => ctx.projectTools ?? undefined,
   }
   for (const [channel, op] of opEntries(ENGINE_OPS))
     handle(channel, (event, ...args) => op({ ...context, owner: owner(event) }, ...args))

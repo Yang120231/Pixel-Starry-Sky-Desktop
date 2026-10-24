@@ -1,5 +1,5 @@
 // Codex 回退 / 分叉（docs/codex-engine.md「回退与分叉」）：截断点纯函数 + 宿主 + 假 Codex
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -320,6 +320,30 @@ describe('Codex 分叉', { timeout: 20_000 }, () => {
     expect(clientIds(after.engineSessionId!)).toEqual(['m0', 'm1', 'f0'])
     expect(clientIds('fake-thread')).toEqual(['m0', 'm1', 'm2'])
     expect(notices(forked.record.id)).toEqual([])
+  })
+
+  it('开分支带上整个会话、换到副本目录：thread/fork 从最后一轮接着，cwd 是副本（docs/ui/branch-merge.md §3.2）', async () => {
+    const { session, messages, say, conversation } = setup()
+    await conversation(['一', '二'])
+    const copy = mkdtempSync(join(root, 'copy-'))
+    const forked = await host!.forkSession(session.id, null, '副本里', {
+      cwd: copy,
+      branch: { copyId: 'c1', gitBranch: 'pixelsky/x', baseBranch: 'main', startCommit: 'abc' },
+    })
+    expect(forked.text).toBe('')
+    expect(forked.record.pendingFork).toEqual({ from: 'fake-thread', at: 'turn-2' })
+    const from = messages().length
+    await say(forked.record.id, '在副本里', 'f0')
+    expect(
+      messages()
+        .slice(from)
+        .filter(m => m.method === 'thread/fork'),
+    ).toEqual([
+      expect.objectContaining({
+        params: expect.objectContaining({ threadId: 'fake-thread', lastTurnId: 'turn-2', cwd: copy }),
+      }),
+    ])
+    expect(clientIds(host!.open(forked.record.id).record.engineSessionId!)).toEqual(['m0', 'm1', 'f0'])
   })
 
   it('thread/fork 显式带 modelProvider：平台 / 自定义接口是网关的 provider，自己账号是 config 里的当前 provider', async () => {

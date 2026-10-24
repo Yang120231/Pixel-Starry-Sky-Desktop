@@ -15,6 +15,7 @@ export function ConfirmDialog({
   confirmDisabled,
   extra,
   dirty,
+  wide,
   onConfirm,
   onCancel,
 }: {
@@ -33,6 +34,8 @@ export function ConfirmDialog({
   extra?: { label: string; onClick: () => void }
   /** 弹窗里是表单且有没保存的改动：取消 / Esc / 点背景先在弹窗里问一句「放弃改动？」，不直接关 */
   dirty?: boolean
+  /** 内容多的表单（合并面板）：宽一些 */
+  wide?: boolean
   onConfirm: () => void
   onCancel: () => void
 }) {
@@ -113,7 +116,11 @@ export function ConfirmDialog({
         aria-describedby={descriptionId}
         tabIndex={-1}
         // 最高到窗口高度（外层留了 p-4）：标题和按钮固定，内容多了在中间滚动，不会把弹窗撑出窗口
-        className="pop-in flex max-h-full w-full max-w-md flex-col rounded-xl border border-line-card bg-popover p-5 text-fg shadow-popover outline-none"
+        className={cn(
+          'pop-in flex max-h-full w-full flex-col',
+          wide ? 'max-w-xl' : 'max-w-md',
+          'rounded-xl border border-line-card bg-popover p-5 text-fg shadow-popover outline-none',
+        )}
       >
         <h3 id={titleId} className="shrink-0 break-words text-section font-semibold">
           {title}

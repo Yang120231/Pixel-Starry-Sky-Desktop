@@ -12,11 +12,13 @@ import type {
   SendReceipt,
   McpOp,
   McpOpResult,
+  PendingMerge,
   TaskOutput,
 } from '@pixelsky/protocol'
 import { GOAL_NO_ENGINE, GOAL_NO_PROCESS, codedError, sourceKey, viaGateway } from '@pixelsky/protocol'
 import { queueSettings } from '../queue'
 import type { HostContext } from './context'
+import { mergeContext } from './branch'
 import { reconnectedCount } from './queue'
 import { NEW_TITLE, titleFrom } from './title'
 
@@ -57,6 +59,8 @@ export class HostTurn {
     m.queue.changeQueue(id, item.id, { status: 'dispatching' })
     m.events.apply(id, { type: 'status', state: 'starting' })
     let preparedExtensions: ExtensionLaunch | undefined
+    // 这次带上的合并摘要：没发出去（下面抛错）时放回去，下一次再带
+    let merge: PendingMerge | null = null
     try {
       // 自动重连的项（不管等了多久、中间换没换过模型 / 额度来源）一律用会话现在的设置，不用入队时存的那份
       const settings = item.reconnect ? queueSettings(rt.snapshot.record) : item.settings
@@ -265,9 +269,14 @@ export class HostTurn {
       if (rt.snapshot.suggestion) m.events.apply(id, { type: 'suggestion', text: null })
       m.events.apply(id, { type: 'status', state: 'running' })
       m.events.apply(id, { type: 'turn_started', turnId, execution: queueSettings(rt.execution) })
-      rt.session.send(handoff.text, turnId, userItemId, attachments, handoff.seed, handoff.attachments)
+      // 合并回来的分支摘要放在这条消息前面（docs/ui/branch-merge.md §5.2），用户消息条目里仍是原文；发出就清掉
+      merge = resume ? null : (rt.snapshot.record.pendingMerge ?? null)
+      if (merge) m.events.patchRecord(id, { pendingMerge: null })
+      const sent = merge ? `${mergeContext(merge)}\n\n${handoff.text}` : handoff.text
+      rt.session.send(sent, turnId, userItemId, attachments, handoff.seed, handoff.attachments)
     } catch (err) {
       if (ctx.runtimes.get(id) !== rt) return
+      if (merge && !rt.snapshot.record.pendingMerge) m.events.patchRecord(id, { pendingMerge: merge })
       const error = (err as Error).message
       // 设上 activeId 之后、发给引擎之前的同步步骤（写盘等）抛错：这一轮没在跑，清掉 activeId / turn，
       // 不然会话一直不空闲；下面的判断仍按「走到了这一步」算

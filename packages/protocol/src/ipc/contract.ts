@@ -48,8 +48,9 @@ export interface IpcChannelSpec {
  * 6（2026-10-14）：项目的附加文件夹（engine:setProjectFolders，会话带 extraDirs，docs/ui/multi-root-projects.md §3.5）。
  * 7（2026-10-20）：按需取图片原图（engine:image）；桌面界面的快照和事件里不再带图片数据（docs/perf-audit-2026-10-18.md B1）。
  * 8（2026-10-20）：新增 files:stage，在 SSH / WSL 工作区暂存文件引用。
+ * 9（2026-10-24）：开分支 / 合并回主会话（engine:branch*、engine:dropPendingMerge，docs/ui/branch-merge.md §6）。
  */
-export const REMOTE_PROTOCOL = 8
+export const REMOTE_PROTOCOL = 9
 
 export const IPC_CONTRACT = {
   'projectImport:scan': { kind: 'invoke', route: 'local', trust: 'sender' },
@@ -381,6 +382,37 @@ export const IPC_CONTRACT = {
     trust: 'sender',
   },
   'engine:fork': { kind: 'invoke', route: 'resource', ids: [0, 1], remote: 'engine:fork', trust: 'sender' },
+  // 开分支 / 合并回主会话（docs/ui/branch-merge.md §6）
+  'engine:branch': { kind: 'invoke', route: 'resource', ids: [0, 1], remote: 'engine:branch', trust: 'sender' },
+  'engine:branchPrepare': {
+    kind: 'invoke',
+    route: 'resource',
+    ids: [0],
+    remote: 'engine:branchPrepare',
+    trust: 'sender',
+  },
+  'engine:branchStatus': {
+    kind: 'invoke',
+    route: 'resource',
+    ids: [0],
+    remote: 'engine:branchStatus',
+    trust: 'sender',
+  },
+  'engine:branchMerge': { kind: 'invoke', route: 'resource', ids: [0], remote: 'engine:branchMerge', trust: 'sender' },
+  'engine:branchSummary': {
+    kind: 'invoke',
+    route: 'resource',
+    ids: [0],
+    remote: 'engine:branchSummary',
+    trust: 'sender',
+  },
+  'engine:dropPendingMerge': {
+    kind: 'invoke',
+    route: 'resource',
+    ids: [0],
+    remote: 'engine:dropPendingMerge',
+    trust: 'sender',
+  },
   'engine:sideQuestion': {
     kind: 'invoke',
     route: 'resource',

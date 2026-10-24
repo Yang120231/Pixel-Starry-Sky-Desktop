@@ -5,6 +5,8 @@ import { Bot, GitBranch, History, MessagesSquare } from 'lucide-react'
 import { SessionHeader } from './SessionHeader'
 import { Transcript } from './Transcript'
 import { Composer, composerDraftKey } from './Composer'
+import { BranchBanner, BranchReadOnlyBar, BranchStartDivider, PendingMergeBar } from './branch/BranchViews'
+import { branchReadOnly } from './branch/store'
 import { ComposerArea } from './ComposerArea'
 import { WelcomeView } from './WelcomeView'
 import { hasConversation } from './conversation'
@@ -274,6 +276,16 @@ function LiveSessionView({
     [sessionId, title, canHandoff],
   )
   const forkedFrom = snapshot?.record.forkedFrom ?? null
+  // 开分支开出的会话（docs/ui/branch-merge.md §4）：顶部横条代替「分叉自」，带过来的部分后面一行「分支从这里开始」
+  const record = snapshot?.record ?? null
+  const branchStart = useMemo(() => {
+    const b = record?.branch
+    if (!b || !items) return null
+    const from = b.startAfter ? items.findIndex(i => i.id === b.startAfter) + 1 : 0
+    if (from <= 0 && b.startAfter) return null
+    return items.slice(from).find(i => i.kind === 'user')?.id ?? null
+  }, [record?.branch, items])
+  const readOnly = branchReadOnly(record)
 
   return (
     <PathLinksProvider sessionId={sessionId}>
@@ -299,6 +311,7 @@ function LiveSessionView({
               )}
               {sessionId ? (
                 <>
+                  {record?.branch && <BranchBanner record={record} />}
                   <div ref={body} className="conversation-body relative flex min-h-0 flex-1 flex-col overflow-hidden">
                     {showStrips && (
                       <div
@@ -330,8 +343,10 @@ function LiveSessionView({
                             <LiveTranscript
                               snapshot={snapshot}
                               footer={inlinePlan && <InlinePlan plan={inlinePlan} working={fullProgress.working} />}
+                              divider={branchStart ? { beforeItemId: branchStart, node: <BranchStartDivider /> } : null}
                               header={
-                                forkedFrom && (
+                                forkedFrom &&
+                                !record?.branch && (
                                   <button
                                     type="button"
                                     data-forked-from
@@ -424,60 +439,67 @@ function LiveSessionView({
                         return queued ? 'queued' : 'started'
                       }}
                     />
-                    <Composer
-                      key={sessionId}
-                      live={composer}
-                      demoQueue={demoQueue}
-                      status={status}
-                      draftKey={draftKey}
-                      autoFocus
-                      onSideQuestion={
-                        branch.sideChat
-                          ? q => {
-                              const refused = sideRefusal(sessionId, branch.sideChat!.disabledReason)
-                              if (!refused) openSide(q)
-                              return refused
-                            }
-                          : undefined
-                      }
-                      statusExtra={
-                        <>
-                          {checkpoints && snapshot && (
-                            <button
-                              ref={checkpointAnchor}
-                              type="button"
-                              data-checkpoint-toggle
-                              aria-pressed={checkpointOpen}
-                              title={tr('checkpoint.hint')}
-                              onClick={() => setCheckpointOpen(v => !v)}
-                              className={cn(
-                                'press inline-flex items-center gap-1 rounded px-1 hover:bg-hover hover:text-fg',
-                                checkpointOpen && 'text-fg',
-                              )}
-                            >
-                              <History size={13} strokeWidth={1.5} />
-                              {tr('checkpoint.button')}
-                            </button>
-                          )}
-                          {branch.sideChat && (
-                            <button
-                              type="button"
-                              data-side-chat-toggle
-                              aria-pressed={side !== null}
-                              title={tr('side.hint')}
-                              onClick={() => (side ? setSide(null) : openSide())}
-                              className={cn(
-                                'press inline-flex items-center gap-1 rounded px-1 hover:bg-hover hover:text-fg',
-                                side && 'text-fg',
-                              )}
-                            >
-                              <MessagesSquare size={13} strokeWidth={1.5} />
-                              {tr('side.title')}
-                            </button>
-                          )}
-                        </>
-                      }
-                    />
+                    {record?.pendingMerge && !readOnly && (
+                      <PendingMergeBar sessionId={sessionId} pending={record.pendingMerge} />
+                    )}
+                    {readOnly ? (
+                      <BranchReadOnlyBar />
+                    ) : (
+                      <Composer
+                        key={sessionId}
+                        live={composer}
+                        demoQueue={demoQueue}
+                        status={status}
+                        draftKey={draftKey}
+                        autoFocus
+                        onSideQuestion={
+                          branch.sideChat
+                            ? q => {
+                                const refused = sideRefusal(sessionId, branch.sideChat!.disabledReason)
+                                if (!refused) openSide(q)
+                                return refused
+                              }
+                            : undefined
+                        }
+                        statusExtra={
+                          <>
+                            {checkpoints && snapshot && (
+                              <button
+                                ref={checkpointAnchor}
+                                type="button"
+                                data-checkpoint-toggle
+                                aria-pressed={checkpointOpen}
+                                title={tr('checkpoint.hint')}
+                                onClick={() => setCheckpointOpen(v => !v)}
+                                className={cn(
+                                  'press inline-flex items-center gap-1 rounded px-1 hover:bg-hover hover:text-fg',
+                                  checkpointOpen && 'text-fg',
+                                )}
+                              >
+                                <History size={13} strokeWidth={1.5} />
+                                {tr('checkpoint.button')}
+                              </button>
+                            )}
+                            {branch.sideChat && (
+                              <button
+                                type="button"
+                                data-side-chat-toggle
+                                aria-pressed={side !== null}
+                                title={tr('side.hint')}
+                                onClick={() => (side ? setSide(null) : openSide())}
+                                className={cn(
+                                  'press inline-flex items-center gap-1 rounded px-1 hover:bg-hover hover:text-fg',
+                                  side && 'text-fg',
+                                )}
+                              >
+                                <MessagesSquare size={13} strokeWidth={1.5} />
+                                {tr('side.title')}
+                              </button>
+                            )}
+                          </>
+                        }
+                      />
+                    )}
                   </ComposerArea>
                   {checkpoints && <CheckpointWarmup sessionId={sessionId} draftKey={composerKey} />}
                   {checkpoints && snapshot && checkpointOpen && (

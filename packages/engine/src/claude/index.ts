@@ -58,6 +58,7 @@ import {
   claudeTranscriptExists,
   defaultProjectsDir,
   findClaudeTranscript,
+  findLeafAnchor,
   findRewindAnchor,
   pointLastPrompt,
 } from './transcript'
@@ -367,7 +368,9 @@ export class ClaudeAdapter implements EngineAdapter {
 
   async rewindAnchor(record: SessionRecord, userItemIds: string[]): Promise<{ at: string | null } | null> {
     const file = findClaudeTranscript(this.projectsDir(), record.cwd, record.engineSessionId ?? record.id)
-    return file ? findRewindAnchor(file, userItemIds) : null
+    if (!file) return null
+    // 一条都不给是带上整个会话开分支：截在记录末端
+    return userItemIds.length ? findRewindAnchor(file, userItemIds) : findLeafAnchor(file)
   }
 
   async beforeCompaction(record: SessionRecord, userItemId: string): Promise<boolean> {

@@ -6,12 +6,16 @@ import { normalizeSessionTitle } from '@pixelsky/protocol'
 import type {
   EngineId,
   EngineSessionState,
+  ForkOptions,
   ForkResult,
   Item,
+  NoticeBranchMerge,
+  PendingMerge,
   RewindCodePreview,
   RewindOptions,
   RewindPreview,
   RewindResult,
+  SessionBranch,
   SessionRecord,
   SideTurn,
 } from '@pixelsky/protocol'
@@ -20,6 +24,15 @@ import { ENGINES } from '../registry'
 import type { HostContext } from './context'
 import { lastTurnReply } from './events'
 import { derivedSeen, lastItemId } from './handoff'
+
+/** 合并回来的分支摘要带给 AI 时的说法（docs/ui/branch-merge.md §5.2） */
+export function mergeContext(merge: PendingMerge): string {
+  return [
+    `[分支合并] 用户在分支会话「${merge.title}」里接着这段对话试了一个方案，已经合并回来。下面是那边的摘要，接着回答时以它为准：`,
+    merge.summary.trim(),
+    '[分支合并结束]',
+  ].join('\n')
+}
 
 /** 还原代码前存一份当前内容，总共超过这个大小就不提供代码撤销 */
 export const UNDO_LIMIT = 20 * 1024 * 1024
@@ -396,15 +409,21 @@ export class HostBranch {
     }
   }
 
-  /** 从某条用户消息之前分叉出新会话：带上它之前的对话，原会话不变 */
-  async fork(id: string, userItemId: string, title?: string): Promise<ForkResult> {
+  /**
+   * 从某条用户消息之前分叉出新会话：带上它之前的对话，原会话不变。
+   * userItemId 为 null 时带上整个会话（开分支，docs/ui/branch-merge.md §3.2），要求会话空闲；
+   * opts 给了工作目录和 branch 时就是「开分支」开出的会话
+   */
+  async fork(id: string, userItemId: string | null, title?: string, opts: ForkOptions = {}): Promise<ForkResult> {
     const { ctx } = this
     const m = ctx.m
     if (ctx.closing) throw new Error('应用正在退出')
     const rt = m.sessions.runtime(id)
     const source = rt.snapshot.record
     if (!ENGINES[source.engine].caps.fork) throw new Error('当前引擎暂不支持分叉')
-    const { index, target } = this.userItem(id, userItemId)
+    if (userItemId === null) this.assertIdle(id)
+    const { index, target } =
+      userItemId === null ? { index: rt.snapshot.items.length, target: null } : this.userItem(id, userItemId)
     const items = rt.snapshot.items.slice(0, index)
     const later = rt.snapshot.items.slice(index).flatMap(item => (item.kind === 'user' ? [item.id] : []))
     const adapter = ctx.adapters[source.engine]
@@ -454,6 +473,10 @@ export class HostBranch {
       forkedFrom: { sessionId: source.id, title: source.title },
       // 导入来的标记只属于原对话，不然同一个终端会话被两条记录认领
       imported: null,
+      cwd: opts.cwd ?? source.cwd,
+      branch: opts.branch ? { ...opts.branch, startAfter: items.at(-1)?.id ?? null, mergedAt: null } : null,
+      // 上级等着带的合并摘要不跟过来
+      pendingMerge: null,
     }
     const notice: Item[] =
       !anchorAt && thread && items.length > 0
@@ -470,12 +493,58 @@ export class HostBranch {
     ctx.store.saveRecord(record)
     ctx.store.replaceItems(record.id, [...items, ...notice])
     m.events.broadcastSessions()
+    if (!target) return { record, text: '' }
     return {
       record,
       text: target.text,
       ...(target.attachments?.length ? { attachments: target.attachments } : {}),
       ...(target.files?.length ? { files: target.files } : {}),
     }
+  }
+
+  /** 分支会话自己的条目（带过来的部分之后）：写合并摘要用 */
+  branchItems(id: string): Item[] {
+    const snap = this.ctx.m.sessions.runtime(id).snapshot
+    const after = snap.record.branch?.startAfter ?? null
+    const index = after ? snap.items.findIndex(item => item.id === after) : -1
+    return snap.items.slice(index + 1)
+  }
+
+  /**
+   * 合并回上级之后（docs/ui/branch-merge.md §5.2）：上级会话里加一张「分支合并」卡片，摘要等着下一条消息带给 AI；
+   * 分支会话记下合并时间（和新的代码起点、副本是否删掉）
+   */
+  recordMerge(id: string, merge: NoticeBranchMerge, branchPatch: Partial<SessionBranch>): void {
+    const m = this.ctx.m
+    const record = m.sessions.runtime(id).snapshot.record
+    const parentId = record.forkedFrom?.sessionId
+    if (!record.branch || !parentId) throw new Error('这个会话不是开分支开出来的')
+    const parent = m.sessions.runtime(parentId)
+    const verb = merge.code === 'committed' || merge.code === 'applied' ? '代码和结论' : '结论'
+    m.events.apply(parentId, {
+      type: 'item_completed',
+      item: { kind: 'notice', id: randomUUID(), level: 'info', text: `合并了分支「${record.title}」的${verb}`, merge },
+    })
+    // 上一个合并回来的摘要还没带给 AI：两份接在一起，不覆盖
+    const before = parent.snapshot.record.pendingMerge ?? null
+    m.events.patchRecord(parentId, {
+      pendingMerge: !merge.summary
+        ? before
+        : before
+          ? {
+              sessionId: id,
+              title: `${before.title}」「${record.title}`,
+              summary: `${before.summary.trim()}\n\n（分支「${record.title}」）\n${merge.summary}`,
+            }
+          : { sessionId: id, title: record.title, summary: merge.summary },
+    })
+    m.events.patchRecord(id, { branch: { ...record.branch, ...branchPatch, mergedAt: Date.now() } })
+  }
+
+  /** 这次不带合并摘要 */
+  dropPendingMerge(id: string): void {
+    const m = this.ctx.m
+    if (m.sessions.runtime(id).snapshot.record.pendingMerge) m.events.patchRecord(id, { pendingMerge: null })
   }
 
   /** 旁聊：带着主对话的上下文单独问一次（主任务运行中也可以） */

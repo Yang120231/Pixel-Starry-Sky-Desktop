@@ -626,9 +626,36 @@ export class EngineHost {
     return this.m.checkpoints.restoreFiles(id, revertId, paths)
   }
 
-  /** 从某条用户消息之前分叉出新会话（§2） */
-  forkSession(id: string, userItemId: string, title?: string): Promise<ForkResult> {
-    return this.m.branch.fork(id, userItemId, title)
+  /**
+   * 从某条用户消息之前分叉出新会话（§2）；userItemId 为 null 时带上整个会话。
+   * opts 带工作目录和 branch 时是「开分支」（docs/ui/branch-merge.md §3）
+   */
+  forkSession(
+    id: string,
+    userItemId: string | null,
+    title?: string,
+    opts?: import('@pixelsky/protocol').ForkOptions,
+  ): Promise<ForkResult> {
+    return this.m.branch.fork(id, userItemId, title, opts)
+  }
+
+  /** 分支会话自己的条目（带过来的部分之后，docs/ui/branch-merge.md §5.2） */
+  branchItems(id: string): Item[] {
+    return this.m.branch.branchItems(id)
+  }
+
+  /** 合并回上级之后：上级加合并卡片、等着带摘要，分支会话记下合并（docs/ui/branch-merge.md §5.2） */
+  recordMerge(
+    id: string,
+    merge: import('@pixelsky/protocol').NoticeBranchMerge,
+    branchPatch: Partial<import('@pixelsky/protocol').SessionBranch>,
+  ): void {
+    this.m.branch.recordMerge(id, merge, branchPatch)
+  }
+
+  /** 这次不带合并摘要 */
+  dropPendingMerge(id: string): void {
+    this.m.branch.dropPendingMerge(id)
   }
 
   /** 旁聊：单独问一次，不进主对话（§3） */

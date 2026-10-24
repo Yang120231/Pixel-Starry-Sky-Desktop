@@ -29,6 +29,8 @@ import {
 } from '../args'
 import type { OpTable } from '../ops'
 import type { ToolsHost } from '../project-tools/common'
+import type { ProjectTools } from '../project-tools/tools'
+import { branchStatus, branchSummary, createBranch, mergeBranch, prepareBranch } from './branches'
 import type { SearchRegistry } from '../search-registry'
 import { workspaceRef } from '../workspace-files'
 import { readArtifact } from '../artifact-files'
@@ -44,6 +46,8 @@ export interface EngineOpContext {
   tools: ToolsHost
   /** 新会话绑定到副本时取副本路径；项目工具还没初始化时返回 undefined */
   copyPath(projectId: string, copyId: string): Promise<string | undefined>
+  /** 项目工具（开分支建副本、合并后删副本）；还没初始化时返回 undefined */
+  projectTools?(): ProjectTools | undefined
   /** 修改会话设置之前（远端：先向桌面端取平台环境变量） */
   beforeUpdate?(record: SessionRecord): Promise<void>
 }
@@ -264,6 +268,20 @@ export const ENGINE_OPS = {
   'engine:nativeSessionAction': (c, id, kind) => c.host.nativeSessionAction(str(id, 'id'), kind),
   'engine:fork': (c, id, itemId, title) =>
     c.host.forkSession(str(id, 'id'), str(itemId, 'itemId'), typeof title === 'string' ? title : undefined),
+  // 开分支 / 合并回主会话（docs/ui/branch-merge.md §6）
+  'engine:branchPrepare': (c, id) => prepareBranch({ host: c.host, tools: c.projectTools?.() }, str(id, 'id')),
+  'engine:branch': (c, id, itemId, input) =>
+    createBranch(
+      { host: c.host, tools: c.projectTools?.() },
+      str(id, 'id'),
+      itemId === null ? null : str(itemId, 'itemId'),
+      input as Parameters<typeof createBranch>[3],
+    ),
+  'engine:branchStatus': (c, id) => branchStatus({ host: c.host, tools: c.projectTools?.() }, str(id, 'id')),
+  'engine:branchMerge': (c, id, opts) => mergeBranch({ host: c.host, tools: c.projectTools?.() }, str(id, 'id'), opts),
+  'engine:branchSummary': (c, id, language) =>
+    branchSummary({ host: c.host, tools: c.projectTools?.() }, str(id, 'id'), language),
+  'engine:dropPendingMerge': (c, id) => c.host.dropPendingMerge(str(id, 'id')),
   'engine:sideQuestion': (c, id, question, history) =>
     c.host.sideQuestion(str(id, 'id'), str(question, 'question'), sideHistory(history)),
   'engine:cancelSideQuestion': (c, id) => c.host.cancelSideQuestion(str(id, 'id')),

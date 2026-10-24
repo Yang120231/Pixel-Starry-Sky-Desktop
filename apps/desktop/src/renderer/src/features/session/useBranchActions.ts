@@ -17,6 +17,7 @@ import { appendComposerDraft, removeComposerDraftTail } from '@/features/engine/
 import { updateFiles, updateImages } from '@/features/session/attachments/drafts'
 import { fitAttachments } from '@/features/session/attachments/fit'
 import { paneActions } from '@/features/panes/store'
+import { branchReadOnly, openBranchDialog } from './branch/store'
 import type { MessageActionsValue } from './live/MessageActions'
 import type { RewindDone } from './ComposerNotices'
 import type { SideAsk, SideCancel } from './sidechat/store'
@@ -55,6 +56,8 @@ export function useBranchActions(
   }, [state])
   const firstUserId = snapshot?.items.find(i => i.kind === 'user')?.id ?? null
   const title = snapshot?.record.title ?? ''
+  // 合并后删了副本的分支只能回看，消息上也不能再开分支
+  const readOnly = branchReadOnly(snapshot?.record)
 
   const refreshCheckpoints = checkpoints?.refresh
   // 回退（对话和 / 或代码）：消息旁的回退和检查点面板共用（docs/ui/undo-changes.md §4）
@@ -142,8 +145,13 @@ export function useBranchActions(
             paneActions.open(key)
           }
         : null,
+      // 从这条消息开分支（docs/ui/branch-merge.md §2）：演示模式没有引擎，只提示
+      branch:
+        caps.fork && !readOnly
+          ? item => (bridge ? openBranchDialog(sessionId, item.id) : comingSoon(tr('branch.message.fromHere')))
+          : null,
     }
-  }, [sessionId, caps, busy, firstUserId, title, comingSoon, checkpointTurns, rewind])
+  }, [sessionId, caps, busy, firstUserId, title, comingSoon, checkpointTurns, rewind, readOnly])
 
   const undoRewind = async (): Promise<void> => {
     if (!sessionId || !undo) return

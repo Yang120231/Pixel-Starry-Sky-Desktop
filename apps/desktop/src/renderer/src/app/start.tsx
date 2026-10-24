@@ -28,6 +28,7 @@ import { SettingsSyncRunner } from '../features/settings/sync/RestoreNotice'
 import { MainActionHost } from '../features/settings/MainActionHost'
 import { WorkspaceReporter } from '../features/settings/WorkspaceReporter'
 import { AuthDialogHost } from '../features/model-channels/AuthDialog'
+import { BranchDialogHost } from '../features/session/branch/BranchViews'
 import { startWindowActivity } from '../features/layout/windowActivity'
 import { startAutoSave } from '../features/editor/autoSave'
 import { startLoopClock } from '../features/layout/loopClock'
@@ -61,6 +62,7 @@ createRoot(document.getElementById('root')!, reactRootErrorOptions).render(
                     <App />
                     <ShortcutsHelp />
                     <AuthDialogHost />
+                    <BranchDialogHost />
                     <ResumeHost />
                     <ResumeHintHost />
                     <RecoveredNotice />

@@ -265,3 +265,47 @@ describe('鼠标在侧栏里时冻结按最近活动的排序', () => {
     expect(list.map(s => s.record.id)).toEqual(['a', 'b', 'c'])
   })
 })
+
+describe('开分支的会话挂在上级下面（docs/ui/branch-merge.md §4）', () => {
+  it('紧跟在上级后面按层缩进，带标签；上级不在列表里时单独显示', () => {
+    const projects: ProjectRecord[] = [{ id: 'p', name: '项目', path: 'test', addedAt: 1 }]
+    const branch = (copyId: string | null, extra = {}) => ({
+      copyId,
+      gitBranch: copyId ? 'pixelsky/x' : null,
+      baseBranch: 'main',
+      startCommit: copyId ? 'abc' : null,
+      startAfter: null,
+      mergedAt: null,
+      ...extra,
+    })
+    const rec = (id: string, updatedAt: number, parent?: string, b?: ReturnType<typeof branch>, more = {}) => ({
+      record: {
+        id,
+        projectId: 'p',
+        title: id,
+        updatedAt,
+        ...(parent ? { forkedFrom: { sessionId: parent, title: parent }, branch: b } : {}),
+        ...more,
+      },
+      state: 'idle',
+    })
+    const sessions = [
+      rec('b1', 9, 'main', branch('c1')),
+      rec('other', 8),
+      rec('b2', 7, 'b1', branch(null)),
+      rec('main', 6),
+      rec('done', 5, 'main', branch('c2', { mergedAt: 1, copyRemoved: true })),
+      rec('orphan', 4, 'archived', branch('c3')),
+      rec('archived', 3, undefined, undefined, { archivedAt: 1 }),
+    ] as SessionSummary[]
+    const rows = sidebarData(projects, sessions, {}, String).projects[0].sessions
+    expect(rows.map(r => [r.id, r.branch?.depth ?? null, r.branch?.tag ?? null])).toEqual([
+      ['other', null, null],
+      ['main', null, null],
+      ['b1', 1, 'copy'],
+      ['b2', 2, 'shared'],
+      ['done', 1, 'merged'],
+      ['orphan', 0, 'copy'],
+    ])
+  })
+})

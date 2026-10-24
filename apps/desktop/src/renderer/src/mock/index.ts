@@ -86,7 +86,12 @@ export const demoSource: DemoSource = {
   terminal: { profiles: demoTerminalProfiles, output: demoTerminalOutput },
   sessions: demoSessions,
   conversations: {
-    snapshots: { ...showcaseSnapshots, ...workbenchSnapshots, ...codingSnapshots, ...codexResumeSnapshots },
+    snapshots: {
+      ...showcaseSnapshots,
+      ...workbenchSnapshots,
+      ...codingSnapshots,
+      ...codexResumeSnapshots,
+    },
     subagentTranscript: showcaseSubagentTranscript,
     taskOutput: showcaseTaskOutput,
     rewindPreview: demoRewindPreview,

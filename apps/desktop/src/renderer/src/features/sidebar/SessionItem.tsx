@@ -57,7 +57,8 @@ export function SessionItem({
       selected={selected}
       onSelect={onSelect}
       flipKey={flipKey}
-      className="[&>button]:pl-[28px]"
+      className={session.branch?.depth ? undefined : '[&>button]:pl-[28px]'}
+      indent={session.branch?.depth ? 28 + Math.min(session.branch.depth, 3) * 14 : undefined}
       trailing={
         reason && lane ? (
           <span className={cn('shrink-0 text-meta', LANE_TONE[lane])}>{tr(LANE_LABEL[lane])}</span>
@@ -78,9 +79,32 @@ export function SessionItem({
       >
         {status.mark && <SessionStatusMark status={status} ring={ring} />}
       </StatusHover>
-      <span className={cn('min-w-0 truncate', !channel && 'flex-1', fresh && 'font-semibold text-accent-fg')}>
+      {!!session.branch?.depth && (
+        <span
+          aria-hidden
+          className="-mt-2.5 -mr-1 h-3 w-2.5 shrink-0 rounded-bl-md border-b border-l border-fg-faint/70"
+        />
+      )}
+      <span
+        className={cn(
+          'min-w-0 truncate',
+          !channel && !session.branch && 'flex-1',
+          fresh && 'font-semibold text-accent-fg',
+        )}
+      >
         {session.title}
       </span>
+      {session.branch && (
+        <span
+          data-branch-tag={session.branch.tag}
+          className={cn(
+            'mr-auto inline-flex h-[18px] shrink-0 items-center rounded-full px-1.5 text-[10.5px] font-medium',
+            session.branch.tag === 'copy' ? 'bg-accent-soft text-accent-fg' : 'bg-subtle text-fg-muted',
+          )}
+        >
+          {tr(`branch.tag.${session.branch.tag}`)}
+        </span>
+      )}
       {channel && <span className="max-w-[45%] shrink-0 truncate text-meta text-fg-faint"># {channel}</span>}
     </SessionRow>
   )

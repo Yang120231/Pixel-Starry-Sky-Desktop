@@ -34,6 +34,8 @@ export interface Session {
   status: SessionStatus
   /** 右侧时间，例如「刚刚」「3天」 */
   time?: string
+  /** 开分支开出的会话（docs/ui/branch-merge.md §4）：挂在上级下面第几层、标签 */
+  branch?: { depth: number; tag: 'copy' | 'shared' | 'merged' }
 }
 
 export interface Project {

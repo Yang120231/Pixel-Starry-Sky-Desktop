@@ -3,6 +3,7 @@ import { tr } from '../../../i18n/core'
 // 真实会话的对话流：按「轮」排列条目，每轮的过程收成一行「执行」（docs/ui/conversation-concise.md），
 // 里面连续的工具调用串成一组；每轮结束后显示改动文件卡片
 import {
+  Fragment,
   memo,
   useCallback,
   useContext,
@@ -15,6 +16,7 @@ import {
   type ReactNode,
 } from 'react'
 import { TurnRail } from './TurnRail'
+import { MergeCard } from '../branch/BranchViews'
 import { markTurnReviewed, useTurnReviewed } from '@/features/coding/review'
 import { reuseTurns, turnsOf, type Turn } from './turnRailModel'
 import { useTurnRailOn } from '@/features/settings/turnRail'
@@ -271,11 +273,14 @@ export function LiveTranscript({
   snapshot,
   header,
   footer,
+  divider,
 }: {
   snapshot: SessionSnapshot | null
   header?: ReactNode
   /** 对话末尾（最后一轮后面）：极简模式下运行中的计划（InlinePlan） */
   footer?: ReactNode
+  /** 放在某条条目前面的分隔（开分支的会话：「分支从这里开始」，docs/ui/branch-merge.md §4） */
+  divider?: { beforeItemId: string; node: ReactNode } | null
 }) {
   useI18n()
   const scroller = useRef<HTMLDivElement>(null)
@@ -721,6 +726,17 @@ export function LiveTranscript({
         </div>
       )
     }
+    // 合并回来的分支（docs/ui/branch-merge.md §5.2）
+    if (item.kind === 'notice' && item.merge)
+      return (
+        <div
+          key={item.id}
+          data-search-item={item.id}
+          className={['conversation-message', highlight === item.id ? 'search-hit' : ''].join(' ')}
+        >
+          <MergeCard merge={item.merge} />
+        </div>
+      )
     // 小框（docs/ui/subagent-box.md）：派发子智能体的调用、后台子智能体完成的提示
     const boxed =
       subagents === 'box' && (item.kind === 'tool' ? isSubagentCall(item) : item.kind === 'notice' && !!item.task)
@@ -846,7 +862,16 @@ export function LiveTranscript({
                     </span>
                   </div>
                 )}
-                {blocks.map((b, i) => renderBlock(b, i))}
+                {blocks.map((b, i) =>
+                  divider && b.type === 'item' && b.item.id === divider.beforeItemId ? (
+                    <Fragment key={`divider-${b.item.id}`}>
+                      {divider.node}
+                      {renderBlock(b, i)}
+                    </Fragment>
+                  ) : (
+                    renderBlock(b, i)
+                  ),
+                )}
                 {footer}
                 {starting.map(q => (
                   <div key={q.id} data-starting-message={q.id} className="flex flex-col gap-3">

@@ -1,9 +1,19 @@
 import { useEffect, useMemo, useState, type RefObject } from 'react'
-import { Check, GitBranch, Plus } from 'lucide-react'
+import { Check, GitBranch, Plus, type LucideIcon } from 'lucide-react'
 import { Popover, cn } from '@/ui'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import type { GitBranch as Branch } from '../../../../../shared/types/project-tools'
+
+/** 菜单顶部的额外动作（输入框上方那一行：开分支 / 合并回主会话，docs/ui/branch-merge.md §2） */
+export interface BranchMenuAction {
+  key: string
+  icon: LucideIcon
+  label: string
+  desc: string
+  disabled?: boolean
+  onClick: () => void
+}
 
 /** 分支菜单（docs/ui/git-panel.md §2.6）：搜索、本地 / 远程两组、被副本占用的置灰、输入新名字时可以新建 */
 export function BranchMenu({
@@ -14,7 +24,9 @@ export function BranchMenu({
   onClose,
   anchor,
   side = 'bottom',
+  actions = [],
 }: {
+  actions?: BranchMenuAction[]
   /** 触发按钮：点它算「里面」，由按钮自己的 onClick 切换；窄栏里菜单渲染到 body，不会被裁掉，放不下自动翻面 */
   anchor?: RefObject<HTMLElement | null>
   /** 优先放哪一边（输入框上方那一行用 top，docs/ui/composer-git.md） */
@@ -56,6 +68,29 @@ export function BranchMenu({
       aria-label={tr('git.branch.menu')}
       className="flex max-h-80 w-72 flex-col overflow-hidden"
     >
+      {actions.length > 0 && (
+        <div className="shrink-0 border-b border-line-subtle p-1" data-branch-menu-actions>
+          {actions.map(a => (
+            <button
+              key={a.key}
+              type="button"
+              data-branch-menu-action={a.key}
+              disabled={a.disabled}
+              onClick={() => {
+                onClose()
+                a.onClick()
+              }}
+              className="flex w-full items-start gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-hover disabled:cursor-default disabled:opacity-45 disabled:hover:bg-transparent"
+            >
+              <a.icon size={15} strokeWidth={1.5} className="mt-0.5 shrink-0 text-accent-fg" />
+              <span className="flex min-w-0 flex-col">
+                <span className="text-list font-medium text-fg">{a.label}</span>
+                <span className="text-meta text-fg-muted">{a.desc}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
       <div className="shrink-0 border-b border-line-subtle p-2">
         <input
           autoFocus

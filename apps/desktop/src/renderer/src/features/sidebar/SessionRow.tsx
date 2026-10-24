@@ -9,6 +9,8 @@ import {
   CircleDot,
   Columns2,
   Copy,
+  GitBranch,
+  GitMerge,
   Hash,
   LogOut,
   PencilLine,
@@ -17,14 +19,24 @@ import {
   Trash2,
   type LucideIcon,
 } from 'lucide-react'
-import { cn, useToast } from '@/ui'
+import { cn, useComingSoon, useToast } from '@/ui'
 import { useI18n } from '@/i18n/I18nProvider'
-import { useEngineState } from '@/features/engine'
+import { isLive, useEngineState } from '@/features/engine'
 import { markSessionUnread } from '@/features/engine/store'
 import { paneActions } from '@/features/panes/store'
 import { useSessionActions, type SessionTarget } from './SessionActions'
 import { channelActions, channelsLive, useChannels, useSessionBindings } from '@/features/channels/store'
 import { translateMessage } from '@/i18n/core'
+import {
+  branchParent,
+  branchReadOnly,
+  canBranch,
+  mergeLabel,
+  openBranchDialog,
+  openMergeDialog,
+  sessionBusy,
+  sessionRecord,
+} from '@/features/session/branch/store'
 export function SessionRow({
   target,
   selected,
@@ -33,7 +45,10 @@ export function SessionRow({
   trailing,
   className,
   flipKey,
+  indent,
 }: {
+  /** 按钮左边距（px）：开分支的子会话按层缩进；不传用 className 里的 */
+  indent?: number
   target: SessionTarget
   selected: boolean
   onSelect: (id: string) => void
@@ -59,7 +74,19 @@ export function SessionRow({
   // 加入了哪些频道（docs/ui/import-collab.md 第 5 项②）：菜单里能退出
   const bindings = useSessionBindings(target.id),
     channels = useChannels(s => s.channels),
-    toast = useToast()
+    toast = useToast(),
+    comingSoon = useComingSoon()
+  // 菜单打开时读一次会话记录（开分支 / 合并、顶上那行「主会话 · main / 分支 · 分支名」，docs/ui/branch-merge.md §2）
+  const record = position ? sessionRecord(target.id) : null
+  const busy = position ? sessionBusy(target.id) : false
+  const branchable = !isLive || canBranch(record)
+  const readOnly = branchReadOnly(record)
+  const parent = branchParent(record)
+  const meta = !record?.branch
+    ? t('branch.menu.metaMain')
+    : record.branch.copyId
+      ? t('branch.menu.metaCopy', { branch: record.branch.gitBranch ?? '' })
+      : t('branch.menu.metaShared')
   // 菜单项点击：先关菜单（焦点不回到行内按钮，动作自己处理），再执行
   const run = (fn: () => void): void => {
     close(false)
@@ -124,6 +151,7 @@ export function SessionRow({
         type="button"
         title={target.title}
         onClick={() => onSelect(target.id)}
+        style={indent ? { paddingLeft: indent } : undefined}
         className="flex h-full min-w-0 flex-1 items-center gap-2.5 overflow-hidden rounded-md pl-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
       >
         {children}
@@ -181,7 +209,7 @@ export function SessionRow({
             role="menu"
             aria-label={t('session.menu')}
             data-session-menu
-            className="pop-in no-drag fixed z-[70] min-w-44 rounded-lg border border-line-card bg-popover p-1 text-fg shadow-menu"
+            className="pop-in no-drag fixed z-[70] w-56 rounded-xl border border-line-card bg-popover p-1 text-fg shadow-menu"
             style={{
               left: coords?.x ?? position.x,
               top: coords?.y ?? position.y,
@@ -211,6 +239,10 @@ export function SessionRow({
               }
             }}
           >
+            <div data-session-menu-head className="mb-1 border-b border-line-subtle px-2.5 pt-1.5 pb-2">
+              <div className="truncate text-meta font-semibold text-fg">{target.title}</div>
+              <div className="truncate text-label text-fg-faint">{meta}</div>
+            </div>
             <MenuItem
               icon={target.pinned ? PinOff : Pin}
               label={t(target.pinned ? 'session.unpin' : 'session.pin')}
@@ -229,6 +261,7 @@ export function SessionRow({
               disabled={target.running}
               onClick={() => run(() => markSessionUnread(target.id, !unread))}
             />
+            <MenuSeparator />
             <MenuItem
               icon={Columns2}
               label={t('session.openInSplit')}
@@ -239,6 +272,31 @@ export function SessionRow({
                 })
               }
             />
+            {branchable && (
+              <MenuItem
+                icon={GitBranch}
+                label={t('branch.menu.fork')}
+                data="branch"
+                disabled={busy || readOnly}
+                hint={
+                  busy ? t('branch.menu.busy') : readOnly ? t('branch.menu.copyRemoved') : t('branch.menu.forkHint')
+                }
+                title={t('branch.menu.forkDesc')}
+                onClick={() => run(() => (isLive ? openBranchDialog(target.id) : comingSoon(t('branch.menu.fork'))))}
+              />
+            )}
+            {record && parent && !readOnly && (
+              <MenuItem
+                icon={GitMerge}
+                label={t(mergeLabel(record, 'menu'))}
+                data="merge"
+                disabled={busy}
+                hint={busy ? t('branch.menu.busy') : record.branch?.copyId ? undefined : t('branch.menu.carryNotes')}
+                title={t('branch.menu.mergeDesc', { title: parent.title })}
+                onClick={() => run(() => openMergeDialog(target.id))}
+              />
+            )}
+            <MenuSeparator />
             <MenuItem
               icon={PencilLine}
               label={t('session.rename')}
@@ -275,9 +333,8 @@ export function SessionRow({
               disabled={actions.busy}
               onClick={() => run(() => actions.request(target.archived ? 'restore' : 'archive', target))}
             />
-            <div role="separator" className="my-1 border-t border-line-subtle" />
+            <MenuSeparator />
             <MenuItem icon={Copy} label={t('session.copyId')} onClick={() => run(() => actions.copyId(target))} />
-            <div role="separator" className="my-1 border-t border-line-subtle" />
             <MenuItem
               icon={Trash2}
               label={t('session.deleteMenu')}
@@ -292,31 +349,53 @@ export function SessionRow({
   )
 }
 
+function MenuSeparator() {
+  return <div role="separator" className="mx-1 my-1 border-t border-line-subtle" />
+}
+
+/** 菜单项：图标灰、悬停变深；右边小字提示（「带上对话」、不能用的原因） */
 function MenuItem({
   icon: Icon,
   label,
   onClick,
   disabled,
   danger,
+  hint,
+  title,
+  data,
 }: {
   icon: LucideIcon
   label: string
   onClick: () => void
   disabled?: boolean
   danger?: boolean
+  hint?: string
+  title?: string
+  data?: string
 }) {
   return (
     <button
       role="menuitem"
       disabled={disabled}
       onClick={onClick}
+      title={title}
+      data-menu-item={data}
       className={cn(
-        'flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-ui hover:bg-hover disabled:opacity-40',
-        danger && 'text-danger',
+        'group/item flex h-[30px] w-full items-center gap-2.5 rounded-md px-2.5 text-left text-list hover:bg-hover focus-visible:bg-hover focus-visible:outline-none disabled:cursor-default disabled:hover:bg-transparent',
+        danger ? 'text-danger hover:bg-danger/10' : 'text-fg',
       )}
     >
-      <Icon size={15} strokeWidth={1.5} />
-      {label}
+      <Icon
+        size={15}
+        strokeWidth={1.5}
+        className={cn(
+          'shrink-0',
+          danger ? 'text-danger' : 'text-fg-muted group-hover/item:text-fg group-disabled/item:text-fg-muted',
+          disabled && 'opacity-40',
+        )}
+      />
+      <span className={cn('min-w-0 flex-1 truncate', disabled && 'opacity-40')}>{label}</span>
+      {hint && <span className="max-w-[45%] shrink-0 truncate text-label text-fg-faint">{hint}</span>}
     </button>
   )
 }

@@ -3,10 +3,11 @@ import { tr, translateMessage } from '../../../i18n/core'
 // 消息下方的操作：我方消息「复制 / 分叉 / 回退」，助手回复「复制」
 // （docs/ui/chat-fixes-queue-actions-cost.md §2、docs/ui/rewind-fork-sidechat.md §1–§2）
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
-import { GitBranch, Undo2 } from 'lucide-react'
+import { GitBranch, MessagesSquare, Undo2 } from 'lucide-react'
 import type { Item, RewindOptions, RewindPreview } from '@pixelsky/protocol'
 import { CopyButton, cn } from '@/ui'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
+import { Popover } from '@/ui/Popover'
 import { useMessageActionsPosition } from '@/features/settings/messageActions'
 
 type UserItem = Extract<Item, { kind: 'user' }>
@@ -20,6 +21,8 @@ export interface MessageActionsValue {
   rewind(item: UserItem, options: RewindOptions): Promise<void>
   /** 引擎不支持分叉时为 null */
   fork: ((item: UserItem) => Promise<void>) | null
+  /** 从这条消息开分支（打开开分支弹窗，docs/ui/branch-merge.md §2）；不能开分支时为 null */
+  branch: ((item: UserItem) => void) | null
 }
 
 export const MessageActionsContext = createContext<MessageActionsValue | null>(null)
@@ -51,6 +54,8 @@ export function UserMessageActions({ item }: { item: UserItem }) {
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [branchMenu, setBranchMenu] = useState(false)
+  const branchButton = useRef<HTMLButtonElement>(null)
   const position = useMessageActionsPosition()
   if (item.mode === 'guidance') return null
   const reason = actions?.rewindDisabledReason ?? null
@@ -87,7 +92,7 @@ export function UserMessageActions({ item }: { item: UserItem }) {
           </span>
         )}
         {item.text && <CopyButton text={item.text} label={tr('session.message.copy')} iconOnly />}
-        {actions?.fork && (
+        {actions?.fork && !actions.branch && (
           <button
             type="button"
             disabled={busy}
@@ -98,6 +103,73 @@ export function UserMessageActions({ item }: { item: UserItem }) {
           >
             <GitBranch size={13} strokeWidth={1.5} />
           </button>
+        )}
+        {actions?.branch && (
+          <>
+            <button
+              ref={branchButton}
+              type="button"
+              data-message-branch
+              disabled={busy}
+              aria-haspopup="menu"
+              aria-expanded={branchMenu}
+              onClick={() => setBranchMenu(v => !v)}
+              aria-label={tr('branch.message.fromHere')}
+              title={tr('branch.message.fromHereDesc')}
+              className={cn(ICON, branchMenu && 'bg-selected text-fg')}
+            >
+              <GitBranch size={13} strokeWidth={1.5} />
+            </button>
+            <Popover
+              open={branchMenu}
+              onClose={() => setBranchMenu(false)}
+              anchor={branchButton}
+              align="end"
+              role="menu"
+              aria-label={tr('branch.message.fromHere')}
+              className="w-72"
+            >
+              {[
+                {
+                  key: 'branch',
+                  icon: GitBranch,
+                  label: tr('branch.message.fromHere'),
+                  desc: tr('branch.message.fromHereDesc'),
+                  onClick: () => actions.branch!(item),
+                },
+                ...(actions.fork
+                  ? [
+                      {
+                        key: 'fork',
+                        icon: MessagesSquare,
+                        label: tr('branch.message.forkOnly'),
+                        desc: tr('branch.message.forkOnlyDesc'),
+                        onClick: () => void run(() => actions.fork!(item)),
+                      },
+                    ]
+                  : []),
+              ].map(o => (
+                <button
+                  key={o.key}
+                  type="button"
+                  role="menuitem"
+                  data-menu-item
+                  data-message-branch-option={o.key}
+                  onClick={() => {
+                    setBranchMenu(false)
+                    o.onClick()
+                  }}
+                  className="flex w-full items-start gap-2.5 rounded-md px-2.5 py-2 text-left hover:bg-hover focus-visible:bg-hover focus-visible:outline-none"
+                >
+                  <o.icon size={15} strokeWidth={1.5} className="mt-0.5 shrink-0 text-fg-secondary" />
+                  <span className="flex min-w-0 flex-col gap-0.5">
+                    <span className="text-ui font-medium text-fg">{o.label}</span>
+                    <span className="text-meta text-fg-muted">{o.desc}</span>
+                  </span>
+                </button>
+              ))}
+            </Popover>
+          </>
         )}
         {actions && (
           <button

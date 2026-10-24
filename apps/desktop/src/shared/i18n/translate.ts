@@ -19,6 +19,7 @@ import { artifactMessages } from './artifactMessages'
 import { errorMessages } from './errorMessages'
 import { contentMessages } from './contentMessages'
 import { branchMessages } from './branchMessages'
+import { branchMergeMessages } from './branchMergeMessages'
 import { updateMessages } from './updateMessages'
 import { customApiMessages } from './customApiMessages'
 import { logMessages } from './logMessages'
@@ -93,6 +94,7 @@ export const allMessages = {
   ...errorMessages,
   ...contentMessages,
   ...branchMessages,
+  ...branchMergeMessages,
   ...updateMessages,
   ...customApiMessages,
   ...logMessages,

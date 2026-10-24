@@ -416,6 +416,115 @@ describe('分叉', () => {
   })
 })
 
+describe('开分支（docs/ui/branch-merge.md）', () => {
+  const branch = { copyId: 'copy-1', gitBranch: 'pixelsky/try', baseBranch: 'main', startCommit: 'abc' }
+
+  it('带上整个会话：截在记录末端，输入框是空的', async () => {
+    const host = makeHost()
+    const { record } = await conversation(host, ['一', '二'])
+    const forked = await host.forkSession(record.id, null, '整个')
+    expect(forked.text).toBe('')
+    expect(userTexts(host, forked.record.id)).toEqual(['一', '二'])
+    expect(forked.record.pendingFork?.at).toBeTruthy()
+    await host.send(forked.record.id, { text: '接着', clientMessageId: 'f1' })
+    await waitFor(() => turnsDone(forked.record.id) === 1)
+    expect(visible().at(-1)).toEqual(['一', '二'])
+  })
+
+  it('换了工作目录：原记录复制进新目录对应的文件夹，用 --resume 接上；branch 记下起点', async () => {
+    const host = makeHost()
+    const { record } = await conversation(host, ['一', '二'])
+    const other = mkdtempSync(join(root, 'copy-'))
+    const forked = await host.forkSession(record.id, null, '副本里', { cwd: other, branch })
+    const items = host.open(record.id).items
+    expect(forked.record.cwd).toBe(other)
+    expect(forked.record.branch).toEqual({ ...branch, startAfter: items.at(-1)!.id, mergedAt: null })
+    expect(host.branchItems(forked.record.id)).toEqual([])
+    await host.send(forked.record.id, { text: '在副本里改', clientMessageId: 'f1' })
+    await waitFor(() => turnsDone(forked.record.id) === 1)
+    const args = spawnArgs().at(-1)!
+    expect(args).not.toContain('--fork-session')
+    expect(args.slice(args.indexOf('--resume'), args.indexOf('--resume') + 2)).toEqual([
+      '--resume',
+      forked.record.engineSessionId,
+    ])
+    expect(visible().at(-1)).toEqual(['一', '二'])
+    const moved = join(
+      root,
+      'claude-projects',
+      other.replace(/[^A-Za-z0-9]/g, '-'),
+      `${forked.record.engineSessionId}.jsonl`,
+    )
+    expect(existsSync(moved)).toBe(true)
+    expect(host.open(forked.record.id).items.some(i => i.kind === 'notice')).toBe(false)
+    expect(host.branchItems(forked.record.id).map(i => i.kind)).toContain('user')
+  })
+
+  it('合并回来：上级加卡片、下一条消息前面带上摘要（条目里仍是原文），发出后清掉', async () => {
+    const host = makeHost()
+    const { record, cwd } = await conversation(host, ['一'])
+    const forked = await host.forkSession(record.id, null, '试试', { branch: { ...branch, copyId: null } })
+    host.recordMerge(
+      forked.record.id,
+      {
+        sessionId: forked.record.id,
+        title: '试试',
+        summary: '· 改成短信验证码',
+        code: 'none',
+        files: [],
+        copyRemoved: false,
+        gitBranch: null,
+      },
+      { copyRemoved: false },
+    )
+    const parent = host.open(record.id)
+    expect(parent.items.at(-1)).toMatchObject({ kind: 'notice', merge: { title: '试试', code: 'none' } })
+    expect(parent.record.pendingMerge).toEqual({
+      sessionId: forked.record.id,
+      title: '试试',
+      summary: '· 改成短信验证码',
+    })
+    expect(host.open(forked.record.id).record.branch?.mergedAt).toBeTypeOf('number')
+
+    await host.send(record.id, { text: '接着做后端', clientMessageId: 'n1' })
+    await waitFor(() => turnsDone(record.id) === 2)
+    expect(userTexts(host, record.id).at(-1)).toBe('接着做后端')
+    expect(host.open(record.id).record.pendingMerge).toBeNull()
+    const sid = host.open(record.id).record.engineSessionId!
+    const transcript = readFileSync(
+      join(root, 'claude-projects', cwd.replace(/[^A-Za-z0-9]/g, '-'), `${sid}.jsonl`),
+      'utf8',
+    )
+    expect(transcript).toContain('[分支合并]')
+    expect(transcript).toContain('改成短信验证码')
+  })
+
+  it('这次不带摘要；不是开分支开出的会话不能记合并', async () => {
+    const host = makeHost()
+    const { record } = await conversation(host, ['一'])
+    const forked = await host.forkSession(record.id, null, '试试', { branch: { ...branch, copyId: null } })
+    const merge = {
+      sessionId: forked.record.id,
+      title: '试试',
+      summary: 'S',
+      code: 'none' as const,
+      files: [],
+      copyRemoved: false,
+      gitBranch: null,
+    }
+    host.recordMerge(forked.record.id, merge, {})
+    // 上一份还没带给 AI 又合并了一个分支：两份接在一起，不覆盖
+    const second = await host.forkSession(record.id, null, '再试', { branch: { ...branch, copyId: null } })
+    host.recordMerge(second.record.id, { ...merge, sessionId: second.record.id, title: '再试', summary: 'T' }, {})
+    expect(host.open(record.id).record.pendingMerge).toMatchObject({ title: '试试」「再试' })
+    expect(host.open(record.id).record.pendingMerge!.summary).toMatch(/^S\n\n.*再试.*\nT$/)
+    host.dropPendingMerge(record.id)
+    expect(host.open(record.id).record.pendingMerge).toBeNull()
+    const plain = await host.forkSession(record.id, 'm0')
+    expect(() => host.recordMerge(plain.record.id, merge, {})).toThrow('不是开分支')
+  })
+})
+
 describe('旁聊', () => {
   it('带着主对话的上下文，没有工具，不写记录、不进主对话', async () => {
     const host = makeHost()

@@ -19,6 +19,7 @@ import {
   user,
 } from './conversations'
 import { statusDemoSnapshots } from './statusDemo'
+import { branchMergeSnapshots } from './branchMerge'
 
 const HOUR = 60 * MIN
 const DAY = 24 * HOUR
@@ -517,5 +518,6 @@ export const workbenchSnapshots: Record<string, SessionSnapshot> = Object.fromEn
     changelog(),
   ]
     .map(s => [s.record.id, s] as const)
-    .concat(Object.entries(statusDemoSnapshots)),
+    .concat(Object.entries(statusDemoSnapshots))
+    .concat(Object.entries(branchMergeSnapshots)),
 )

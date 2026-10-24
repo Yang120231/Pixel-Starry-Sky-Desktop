@@ -1,12 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ChevronDown, GitBranch } from 'lucide-react'
+import { ChevronDown, GitBranch, GitMerge } from 'lucide-react'
 import { cn } from '@/ui'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import { isDemo } from '@/data'
 import { demo as demoData } from '@/data/demo'
-import { BranchMenu } from '@/features/panel/git/BranchMenu'
+import { BranchMenu, type BranchMenuAction } from '@/features/panel/git/BranchMenu'
+import {
+  branchParent,
+  branchReadOnly,
+  canBranch,
+  mergeLabel,
+  openBranchDialog,
+  openMergeDialog,
+  sessionBusy,
+  sessionRecord,
+} from './branch/store'
 import { failureHint, failureTitle } from '@/features/panel/git/gitModel'
 import { publishGitStatus } from '@/features/panel/git/summary'
 import { beforeSwitch, type SwitchCheck } from '@/features/panel/git/summarize'
@@ -152,6 +162,7 @@ export function HeaderBranch({
       </button>
       {menu && (
         <BranchMenu
+          actions={branchActions(target)}
           branches={branches}
           loading={loading}
           onClose={close}
@@ -212,4 +223,34 @@ export function HeaderBranch({
       )}
     </span>
   )
+}
+
+/** 会话输入框上方的分支菜单：顶部多两项「开分支…」「合并回主会话…」（docs/ui/branch-merge.md §2） */
+function branchActions(target: WorkspaceRef): BranchMenuAction[] {
+  const id = target.sessionId
+  if (!id) return []
+  const record = sessionRecord(id)
+  if (!canBranch(record) || branchReadOnly(record)) return []
+  const busy = sessionBusy(id)
+  const actions: BranchMenuAction[] = [
+    {
+      key: 'branch',
+      icon: GitBranch,
+      label: tr('branch.menu.fork'),
+      desc: busy ? tr('branch.menu.busy') : tr('branch.menu.forkDesc'),
+      disabled: busy,
+      onClick: () => openBranchDialog(id),
+    },
+  ]
+  const parent = branchParent(record)
+  if (record && parent)
+    actions.push({
+      key: 'merge',
+      icon: GitMerge,
+      label: tr(mergeLabel(record, 'menu')),
+      desc: busy ? tr('branch.menu.busy') : tr('branch.menu.mergeDesc', { title: parent.title }),
+      disabled: busy,
+      onClick: () => openMergeDialog(id),
+    })
+  return actions
 }

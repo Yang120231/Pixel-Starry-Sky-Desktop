@@ -50,7 +50,13 @@ export function sidebarData(
     archivedAt: s.record.archivedAt ?? null,
     bottomedAt: s.record.bottomedAt ?? null,
     pinnedAt: s.record.pinnedAt ?? null,
+    ...(s.record.branch ? { branch: { depth: 0, tag: branchTag(s.record.branch) } } : {}),
   })
+  const parents = new Map(
+    sessions.flatMap(s =>
+      s.record.branch && s.record.forkedFrom ? [[s.record.id, s.record.forkedFrom.sessionId]] : [],
+    ),
+  )
   const active = sessions.filter(s => !s.record.archivedAt),
     names = Object.fromEntries(projects.map(p => [p.id, p.name]))
   const result = projects.map(p => {
@@ -63,10 +69,13 @@ export function sidebarData(
       expanded: true,
       running: list.some(s => !s.record.archivedAt && busy(s)),
       // 置顶的会话只显示在「置顶」分组
-      sessions: list
-        .filter(s => !s.record.archivedAt && !s.record.pinnedAt)
-        .map(row)
-        .sort(bottomOrder),
+      sessions: nestBranches(
+        list
+          .filter(s => !s.record.archivedAt && !s.record.pinnedAt)
+          .map(row)
+          .sort(bottomOrder),
+        id => parents.get(id) ?? null,
+      ),
       archived: list
         .filter(s => s.record.archivedAt)
         .map(row)
@@ -92,6 +101,41 @@ export function sidebarData(
     recent,
   }
 }
+/** 侧栏标签：分支（副本里）/ 同目录 / 已合并 */
+function branchTag(b: NonNullable<SessionSummary['record']['branch']>): 'copy' | 'shared' | 'merged' {
+  return b.copyRemoved || b.mergedAt ? 'merged' : b.copyId ? 'copy' : 'shared'
+}
+
+/**
+ * 开分支开出的会话挂在上级下面（docs/ui/branch-merge.md §4）：上级在同一个列表里时紧跟在它后面、按层缩进，
+ * 子会话之间保持原来的先后；上级不在列表里（归档、置顶）的照常单独显示
+ */
+export function nestBranches<T extends { id: string; branch?: { depth: number; tag: 'copy' | 'shared' | 'merged' } }>(
+  rows: T[],
+  parentOf: (id: string) => string | null,
+): T[] {
+  const ids = new Set(rows.map(r => r.id))
+  const children = new Map<string, T[]>()
+  const top: T[] = []
+  for (const r of rows) {
+    const p = parentOf(r.id)
+    if (p && p !== r.id && ids.has(p)) children.set(p, [...(children.get(p) ?? []), r])
+    else top.push(r)
+  }
+  const out: T[] = []
+  const seen = new Set<string>()
+  const walk = (r: T, depth: number): void => {
+    if (seen.has(r.id)) return
+    seen.add(r.id)
+    out.push(r.branch ? { ...r, branch: { ...r.branch, depth } } : r)
+    for (const c of children.get(r.id) ?? []) walk(c, depth + 1)
+  }
+  for (const r of top) walk(r, 0)
+  // 环（不该有）：剩下的按原样放在最后
+  for (const r of rows) if (!seen.has(r.id)) out.push(r)
+  return out
+}
+
 /** 最近任务来自两个以上项目才显示：只有一个项目时它和项目列表完全重复（docs/ui/conversation-ux-2.md §2.3） */
 export function recentSpansProjects(recent: Array<Pick<RecentItem, 'projectId' | 'project'>>): boolean {
   return new Set(recent.map(r => r.projectId ?? r.project ?? '')).size > 1

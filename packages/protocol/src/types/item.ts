@@ -90,6 +90,28 @@ export interface NoticePlatformFallback {
   resetsAt: number | null
 }
 
+/** 分支合并卡片的内容（docs/ui/branch-merge.md §5.2） */
+export interface NoticeBranchMerge {
+  /** 分支会话 id 和标题 */
+  sessionId: string
+  title: string
+  /** 带回来的摘要；只合并了代码时为 null */
+  summary: string | null
+  /** 代码：committed 压成一个提交、applied 放进了工作区、none 没有代码要合并（同目录或没改动）、skipped 没合并代码 */
+  code: 'committed' | 'applied' | 'none' | 'skipped'
+  /** 压成一个提交时的提交信息 */
+  commitMessage?: string | null
+  files: {
+    path: string
+    status: 'added' | 'modified' | 'deleted'
+    additions: number | null
+    deletions: number | null
+  }[]
+  /** 合并时删了副本和分支 */
+  copyRemoved: boolean
+  gitBranch: string | null
+}
+
 export type Item =
   | {
       kind: 'user'
@@ -178,6 +200,8 @@ export type Item =
       account?: NoticeAccountSwitch
       /** 订阅额度都用完、自动改用了平台（或恢复后换回了订阅） */
       fallback?: NoticePlatformFallback
+      /** 合并回来的分支（docs/ui/branch-merge.md §5.2）：显示成「分支合并」卡片 */
+      merge?: NoticeBranchMerge
     }
   /**
    * 压缩上下文（docs/ui/compaction.md）：进行中显示动画和计时，结束后显示「压缩前 → 压缩后」和用时。

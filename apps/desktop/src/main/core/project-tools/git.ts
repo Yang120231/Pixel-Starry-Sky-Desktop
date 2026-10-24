@@ -98,14 +98,14 @@ function killTree(pid: number | undefined): void {
 export function runGit(
   cwd: string,
   args: string[],
-  opts: { timeout: number; input?: string; limit?: number },
+  opts: { timeout: number; input?: string; limit?: number; env?: NodeJS.ProcessEnv },
 ): Promise<GitRun> {
   return new Promise(resolvePromise => {
     const child = spawn(
       'git',
       ['-c', 'core.quotepath=false', '-c', 'color.ui=false', '-c', 'advice.detachedHead=false', '-C', cwd, ...args],
       {
-        env: { ...process.env, ...GIT_ENV },
+        env: { ...process.env, ...GIT_ENV, ...opts.env },
         windowsHide: true,
         detached: process.platform !== 'win32',
         stdio: [opts.input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],

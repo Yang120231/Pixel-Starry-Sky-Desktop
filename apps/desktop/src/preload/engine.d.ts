@@ -160,6 +160,21 @@ export interface EngineBridge {
   restoreFiles(id: string, revertId: string, paths?: string[]): Promise<void>
   /** 从这条用户消息之前分叉出新会话（§2） */
   fork(id: string, itemId: string, title?: string): Promise<import('@pixelsky/protocol').ForkResult>
+  /** 开分支 / 合并回主会话（docs/ui/branch-merge.md §6） */
+  branchPrepare(id: string): Promise<import('../shared/types/branch').BranchPrepare>
+  /** itemId 为 null 时带上整个会话 */
+  branch(
+    id: string,
+    itemId: string | null,
+    input: import('../shared/types/branch').BranchCreateInput,
+  ): Promise<import('@pixelsky/protocol').ForkResult>
+  branchStatus(id: string): Promise<import('../shared/types/branch').BranchStatus>
+  branchMerge(
+    id: string,
+    opts: import('../shared/types/branch').BranchMergeOptions,
+  ): Promise<import('../shared/types/branch').BranchMergeResult>
+  branchSummary(id: string, language: 'zh' | 'en'): Promise<import('../shared/types/branch').BranchSummaryResult>
+  dropPendingMerge(id: string): Promise<void>
   /** 接着引擎自己留下的会话（docs/ui/claude-resume.md）：第一步，只读头部；subfolders 连项目子文件夹里开的一起列 */
   nativeSessions(
     projectId: string,

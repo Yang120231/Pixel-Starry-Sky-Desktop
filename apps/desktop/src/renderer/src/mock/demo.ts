@@ -5,6 +5,7 @@ import { COMPOSER, RAIL_ITEMS } from '@/data/constants'
 import { DEMO_TEAMS, demoChannelData } from './channels'
 import { SHOWCASE_PROJECT, SHOWCASE_SESSIONS, showcaseSnapshots } from './conversations'
 import { CODING_SESSION } from './coding'
+import { BRANCH_MERGE_SESSIONS } from './branchMerge'
 import { statusDemoProjects } from './statusDemo'
 
 // 参考图改动卡片里两个文件的 diff（点文件行展开，docs/ui/changes-inline-diff.md）；行数和卡片上的 +27 −8、+15 −2 对得上
@@ -104,6 +105,7 @@ export const demo: AppData = {
         { id: 's-redesign', title: '重构网页版工作台为 Codex 式布局', status: 'unread', pinnedAt: 1 },
         { id: 's-settings-form', title: '设置页迁移到新的表单组件', status: 'running' },
         { id: 's-cloud-onboarding', title: '把云主机配置引导改成两步', status: 'idle', time: '3天' },
+        ...BRANCH_MERGE_SESSIONS,
       ],
       archived: [{ id: 's-archived-demo', title: '已完成的项目检查', status: 'idle', time: '5天', archivedAt: 1 }],
     },

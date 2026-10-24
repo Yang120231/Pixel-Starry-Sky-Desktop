@@ -111,6 +111,12 @@ export async function findRewindAnchor(file: string, userIds: string[]): Promise
   return rewindAnchorIn(await transcriptIndex(file), userIds)
 }
 
+/** 带上整个会话开分支的截断点：当前分支末端（docs/ui/branch-merge.md §3.2）；空记录时 null */
+export async function findLeafAnchor(file: string): Promise<{ at: string } | null> {
+  const leaf = leafOf(await transcriptIndex(file))
+  return leaf ? { at: leaf } : null
+}
+
 /**
  * 截断点在记录里的位置。Claude Code 恢复会话时只加载最近一次压缩之后的部分，更早的条目
  * 用 --resume-session-at 找不到（报 No message found…，docs/ui/rewind-fork-sidechat.md §2.4）。
@@ -121,15 +127,22 @@ export async function anchorPosition(file: string, at: string): Promise<'loaded'
 }
 
 /**
- * 把记录复制到截断点为止（含截断点），存成同目录下 <sessionId>.jsonl，返回新文件路径；截断点不在记录里时返回 null。
+ * 把记录复制到截断点为止（含截断点），存成 <sessionId>.jsonl（默认和原记录同目录；开分支换了工作目录时放进新目录对应的文件夹，
+ * docs/ui/branch-merge.md §3.2），返回新文件路径；截断点不在记录里时返回 null。
  * 截断点是最后一条，Claude Code 用 --resume 加载时从它往回接，之前的压缩摘要照常生效（§2.4）。
  * 分块读写；同名记录已存在时抛错
  */
-export async function copyTranscriptUntil(file: string, at: string, sessionId: string): Promise<string | null> {
+export async function copyTranscriptUntil(
+  file: string,
+  at: string,
+  sessionId: string,
+  dir = dirname(file),
+): Promise<string | null> {
   const row = (await transcriptIndex(file)).rows.get(at)
   if (!row) return null
   const end = row.first ?? row
-  const path = join(dirname(file), `${sessionId}.jsonl`)
+  mkdirSync(dir, { recursive: true })
+  const path = join(dir, `${sessionId}.jsonl`)
   await copyRowsTo(file, end.offset + end.len, path, sessionId)
   return path
 }
