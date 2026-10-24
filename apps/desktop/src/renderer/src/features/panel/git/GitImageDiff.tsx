@@ -1,14 +1,21 @@
 import { ImagePreview } from '@/features/editor/ImagePreview'
 import { cn } from '@/ui'
 import { tr } from '@/i18n/core'
-import type { GitDiff } from '../../../../../shared/types/project-tools'
+import type { GitDiff, GitDiffImageSide } from '../../../../../shared/types/project-tools'
+
+/** 没有图片的一端写什么：新增 / 删除、Git LFS 没下载、改名前后不是图片 */
+function missingText(side: 'original' | 'modified', image: Exclude<GitDiffImageSide, { dataUrl: string }>): string {
+  if (image?.unavailable === 'lfs') return tr('git.diff.image.lfs')
+  if (image?.unavailable === 'notImage') return tr('git.diff.image.notImage')
+  return tr(side === 'original' ? 'git.diff.image.added' : 'git.diff.image.deleted')
+}
 
 /** 两端各自保留缩放和位置；新增 / 删除明确显示缺失的一端。 */
 export function GitImageDiff({ diff, mode, id }: { diff: GitDiff; mode: 'inline' | 'split'; id: string }) {
   return (
     <div data-git-image-diff={mode} className={cn('flex min-h-0 flex-1', mode === 'split' ? 'flex-row' : 'flex-col')}>
       {(['original', 'modified'] as const).map((side, index) => {
-        const image = diff.images?.[side]
+        const image = diff.images?.[side] ?? null
         const label = tr(side === 'original' ? 'git.diff.image.before' : 'git.diff.image.after')
         return (
           <section
@@ -23,7 +30,7 @@ export function GitImageDiff({ diff, mode, id }: { diff: GitDiff; mode: 'inline'
             <div className="shrink-0 border-b border-line-subtle bg-subtle px-3 py-1 text-meta text-fg-secondary">
               {label}
             </div>
-            {image ? (
+            {image && 'dataUrl' in image ? (
               <ImagePreview
                 id={`${id}:${side}`}
                 src={image.dataUrl}
@@ -31,8 +38,8 @@ export function GitImageDiff({ diff, mode, id }: { diff: GitDiff; mode: 'inline'
                 bytes={image.bytes}
               />
             ) : (
-              <p className="flex flex-1 items-center justify-center p-6 text-meta text-fg-muted">
-                {tr(side === 'original' ? 'git.diff.image.added' : 'git.diff.image.deleted')}
+              <p className="flex flex-1 items-center justify-center p-6 text-center text-meta text-fg-muted">
+                {missingText(side, image)}
               </p>
             )}
           </section>

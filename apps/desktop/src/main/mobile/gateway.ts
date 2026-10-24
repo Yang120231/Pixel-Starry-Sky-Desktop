@@ -245,7 +245,8 @@ export const PHONE_TOOLS: Readonly<Record<string, PhoneTool>> = {
       if (!['staged', 'unstaged', 'untracked', 'conflicted'].includes(o.area as string))
         throw new Error('MOBILE_BAD_ARGUMENT')
       const origPath = typeof o.origPath === 'string' ? { origPath: asString(o.origPath, 4096) } : {}
-      return [workspaceArg(a[0]), { path: asString(o.path, 4096), area: o.area, ...origPath }]
+      // 手机不显示图片对比：images: false 让主进程不读图片
+      return [workspaceArg(a[0]), { path: asString(o.path, 4096), area: o.area, ...origPath, images: false }]
     },
   },
   'projectTools:tasks': { access: 'view', args: a => [asString(a[0])] },

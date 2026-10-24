@@ -163,9 +163,11 @@ describe('Git 面板：状态与差异', () => {
 })
 
 describe('Git 图片版本', { timeout: 30_000 }, () => {
-  const base = Buffer.from([137, 80, 78, 71, 0, 255, 1])
-  const staged = Buffer.from([137, 80, 78, 71, 0, 254, 2])
-  const work = Buffer.from([137, 80, 78, 71, 0, 253, 3])
+  // PNG 文件头加几个字节：格式按内容认
+  const png = (...rest: number[]) => Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, ...rest])
+  const base = png(0, 255, 1)
+  const staged = png(0, 254, 2)
+  const work = png(0, 253, 3)
   const preview = (b: Buffer) => ({ dataUrl: `data:image/png;base64,${b.toString('base64')}`, bytes: b.length })
 
   it('暂存比较 HEAD 与 index，未暂存比较 index 与工作区；历史不读取当前文件', async () => {
@@ -235,21 +237,152 @@ describe('Git 图片版本', { timeout: 30_000 }, () => {
 
   it('图片可以超过文本的 2MB 上限，但超过 8MB 不传输预览', async () => {
     await init()
-    const large = Buffer.alloc(DIFF_LIMIT + 1, 7)
+    const large = Buffer.concat([png(), Buffer.alloc(DIFF_LIMIT + 1, 7)])
     await writeFile(join(project, 'large.png'), large)
     const g = tools()
-    expect((await g.diff(ref, { path: 'large.png', area: 'untracked' })).images?.modified?.bytes).toBe(large.length)
+    expect((await g.diff(ref, { path: 'large.png', area: 'untracked' })).images?.modified).toMatchObject({
+      bytes: large.length,
+    })
     await git(project, ['add', 'large.png'])
-    expect((await g.diff(ref, { path: 'large.png', area: 'staged' })).images?.modified?.dataUrl).toBe(
-      preview(large).dataUrl,
-    )
+    expect((await g.diff(ref, { path: 'large.png', area: 'staged' })).images?.modified).toMatchObject({
+      dataUrl: preview(large).dataUrl,
+    })
     await writeFile(join(project, 'large.png'), Buffer.alloc(IMAGE_LIMIT + 1))
     expect(await g.diff(ref, { path: 'large.png', area: 'unstaged' })).toMatchObject({
       tooLarge: true,
+      image: true,
       original: null,
       modified: null,
     })
     expect((await g.diff(ref, { path: 'large.png', area: 'unstaged' })).images).toBeUndefined()
+  })
+
+  it('两端没变时带上次的 version 只回 unchanged，不再读图片；变了照常返回', async () => {
+    await init()
+    await writeFile(join(project, 'a.png'), base)
+    await commitAll('base image')
+    await writeFile(join(project, 'a.png'), work)
+    const g = tools()
+    const first = await g.diff(ref, { path: 'a.png', area: 'unstaged' })
+    expect(first.version).toMatch(/^[0-9a-f]{40}$/)
+    const blobs = spawned('blob')
+    expect(await g.diff(ref, { path: 'a.png', area: 'unstaged', known: first.version })).toEqual({
+      path: 'a.png',
+      original: null,
+      modified: null,
+      binary: true,
+      tooLarge: false,
+      version: first.version,
+      unchanged: true,
+    })
+    expect(spawned('blob')).toBe(blobs)
+    await writeFile(join(project, 'a.png'), staged)
+    const next = await g.diff(ref, { path: 'a.png', area: 'unstaged', known: first.version })
+    expect(next.unchanged).toBeUndefined()
+    expect(next.version).not.toBe(first.version)
+    expect(next.images).toEqual({ original: preview(base), modified: preview(staged) })
+  })
+
+  it('读不出来时报错，不当成新增或删除（图片和文字都是）', async () => {
+    await init()
+    await writeFile(join(project, 'a.png'), base)
+    await writeFile(join(project, 'a.txt'), 'hello\n')
+    await commitAll('base')
+    const slow = tools({ timeouts: { diff: 1 } })
+    await expect(slow.diff(ref, { path: 'a.png', area: 'unstaged' })).rejects.toThrow('git.diffTimeout')
+    await expect(slow.diff(ref, { path: 'a.txt', area: 'staged' })).rejects.toThrow('git.diffTimeout')
+  })
+
+  it('工作区的符号链接比链接写的路径，不跟到目标（指向项目外也能比）', async () => {
+    await init()
+    await writeFile(join(root, 'outside.txt'), 'secret')
+    try {
+      await symlink('../outside.txt', join(project, 'out'), 'file')
+    } catch {
+      return // Windows 没开开发者模式不能建符号链接
+    }
+    expect(await tools().diff(ref, { path: 'out', area: 'untracked' })).toMatchObject({
+      original: '',
+      modified: '../outside.txt',
+    })
+  })
+
+  it('文字对比也按 version 跳过重读；手机（images: false）不读图片', async () => {
+    await init()
+    await writeFile(join(project, 'a.txt'), 'one\n')
+    await writeFile(join(project, 'a.png'), base)
+    await commitAll('base')
+    await writeFile(join(project, 'a.txt'), 'two\n')
+    await writeFile(join(project, 'a.png'), work)
+    const g = tools()
+    const first = await g.diff(ref, { path: 'a.txt', area: 'unstaged' })
+    expect(first).toMatchObject({ original: 'one\n', modified: 'two\n', binary: false })
+    const blobs = spawned('blob')
+    expect(await g.diff(ref, { path: 'a.txt', area: 'unstaged', known: first.version })).toMatchObject({
+      unchanged: true,
+      original: null,
+    })
+    expect(await g.diff(ref, { path: 'a.png', area: 'unstaged', images: false })).toMatchObject({
+      binary: true,
+      tooLarge: false,
+    })
+    expect(spawned('blob')).toBe(blobs)
+    await writeFile(join(project, 'a.txt'), 'three\n')
+    expect(await g.diff(ref, { path: 'a.txt', area: 'unstaged', known: first.version })).toMatchObject({
+      modified: 'three\n',
+    })
+  })
+
+  it('文字文件是 Git LFS 指针时按 .gitattributes 换成真正的内容再比', async () => {
+    await init()
+    // 用一个假的过滤器代替 git-lfs（测试机不一定装了）：clean 原样存，smudge 输出真正的内容
+    await git(project, ['config', 'filter.fake.clean', 'cat'])
+    await git(project, ['config', 'filter.fake.smudge', 'echo smudged'])
+    const pointer = 'version https://git-lfs.github.com/spec/v1\noid sha256:' + '0'.repeat(64) + '\nsize 5\n'
+    await writeFile(join(project, '.gitattributes'), 'data.txt filter=fake\n')
+    await writeFile(join(project, 'data.txt'), pointer)
+    await commitAll('pointer')
+    await writeFile(join(project, 'data.txt'), 'smudged\nmore\n')
+    expect(await tools().diff(ref, { path: 'data.txt', area: 'unstaged' })).toMatchObject({
+      original: 'smudged\n',
+      modified: 'smudged\nmore\n',
+    })
+  })
+
+  it('Git LFS 指针：换不成图片时标成 lfs；格式按内容认，改名前后不是图片的一端写明', async () => {
+    await init()
+    const pointer = 'version https://git-lfs.github.com/spec/v1\noid sha256:' + '0'.repeat(64) + '\nsize 12345\n'
+    await writeFile(join(project, 'lfs.png'), pointer)
+    await commitAll('lfs pointer')
+    const g = tools()
+    expect(
+      (
+        await g.diff(ref, {
+          path: 'lfs.png',
+          area: 'commit',
+          from: null,
+          to: (await git(project, ['rev-parse', 'HEAD'])).trim(),
+        })
+      ).images,
+    ).toEqual({
+      original: null,
+      modified: { unavailable: 'lfs' },
+    })
+    await writeFile(join(project, 'lfs.png'), base)
+    expect((await g.diff(ref, { path: 'lfs.png', area: 'unstaged' })).images).toEqual({
+      original: { unavailable: 'lfs' },
+      modified: preview(base),
+    })
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 1])
+    await writeFile(join(project, 'note.txt'), 'hello')
+    await commitAll('text')
+    await git(project, ['mv', 'note.txt', 'photo.png'])
+    await writeFile(join(project, 'photo.png'), jpeg)
+    await git(project, ['add', 'photo.png'])
+    expect((await g.diff(ref, { path: 'photo.png', origPath: 'note.txt', area: 'staged' })).images).toEqual({
+      original: { unavailable: 'notImage' },
+      modified: { dataUrl: `data:image/jpeg;base64,${jpeg.toString('base64')}`, bytes: jpeg.length },
+    })
   })
 })
 

@@ -1,8 +1,10 @@
 // Git 面板的主进程实现（docs/ui/git-panel.md）。不依赖 Electron：本机由 workspace/project-tools-ipc.ts 注入回收站，
 // SSH 辅助进程注入数据目录下的 trash/（core/project-tools/trash.ts）；都不注入时用 git clean。所有命令以参数数组执行，路径前一律加 `--`。
 import { spawn } from 'node:child_process'
-import { lstat, readFile, stat } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { lstat, readFile, readlink, stat } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
+import { codedError, parseCodedError } from '@pixelsky/protocol'
 import type { WorkspaceRef } from '../../../shared/types/workspace'
 import type {
   GitAction,
@@ -14,6 +16,7 @@ import type {
   GitCommitDetail,
   GitCompareResult,
   GitDiff,
+  GitDiffImageSide,
   GitDiffInput,
   GitFailure,
   GitLogPage,
@@ -25,8 +28,9 @@ import type {
   GitResult,
   GitStatus,
 } from '../../../shared/types/project-tools'
-import { workspaceEntry, workspacePath } from '../workspace-files'
-import { IMAGE_LIMIT, imageMime } from '../../../shared/imageFiles'
+import { workspaceEntry } from '../workspace-files'
+import { isLfsPointer } from '../lfs'
+import { IMAGE_LIMIT, imageMime, sniffImage } from '../../../shared/imageFiles'
 import { samePath, value, type ToolsHost } from './common'
 import {
   classifyGitError,
@@ -158,6 +162,20 @@ export function runGit(
 const text = (b: Buffer): string => b.toString('utf8')
 const lf = (s: string): string => s.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n')
 const isBinary = (b: Buffer): boolean => b.subarray(0, 8000).includes(0)
+
+/** 对比的一端：Git 里的对象（rev:path、:0:path、:2:path，name 是其中的路径）或工作区文件（link：是符号链接） */
+type DiffSource = { blob: string; name: string } | { file: string; link?: boolean }
+interface DiffProbe {
+  source: DiffSource
+  size: number
+  /** 内容变没变：对象名，或工作区文件的大小和修改时间 */
+  stamp: string
+}
+
+const readError = (run: GitRun): Error =>
+  run.timedOut
+    ? codedError('git.diffTimeout')
+    : codedError('git.diffRead', { detail: run.stderr.trim().split('\n').pop() || `exit ${run.code}` })
 
 function pathList(input: unknown): string[] {
   if (!Array.isArray(input) || input.length > MAX_PATHS) throw new Error('参数不正确')
@@ -542,66 +560,126 @@ export class GitTools {
     this.metas.set(rootKey, meta)
   }
 
-  private async blob(repo: Repo, spec: string, limit = DIFF_LIMIT): Promise<Buffer | null> {
-    const run = await runGit(repo.root, ['cat-file', 'blob', spec], {
+  /**
+   * 对比两端现在是哪个版本、多大；null 表示这一端没有文件（新增 / 删除，或子模块、目录这类不是文件的）。
+   * 读不出来（超时、git 出错、文件读不了）直接报错，不当成「新增」「已删除」
+   */
+  private async probe(repo: Repo, sources: (DiffSource | null)[]): Promise<(DiffProbe | null)[]> {
+    const specs = sources.flatMap(s => (s && 'blob' in s ? [s.blob] : []))
+    if (specs.some(s => /[\r\n]/.test(s))) throw new Error('参数不正确')
+    const found = new Map<string, DiffProbe | null>()
+    if (specs.length) {
+      const run = await runGit(repo.root, ['cat-file', '--batch-check'], {
+        timeout: this.timeout('diff'),
+        input: specs.join('\n') + '\n',
+      })
+      if (run.code !== 0 || run.timedOut) throw readError(run)
+      const lines = text(run.stdout).split('\n')
+      for (const [i, spec] of specs.entries()) {
+        const source = sources.find(s => s && 'blob' in s && s.blob === spec)!
+        const m = /^([0-9a-f]{40,64}) (\w+) (\d+)$/.exec(lines[i] ?? '')
+        if (m) found.set(spec, m[2] === 'blob' ? { source, size: Number(m[3]), stamp: m[1] } : null)
+        else if (lines[i] === `${spec} missing`) found.set(spec, null)
+        else throw codedError('git.diffRead', { detail: lines[i] || 'no output' })
+      }
+    }
+    return Promise.all(
+      sources.map(async s => {
+        if (!s) return null
+        if ('blob' in s) return found.get(s.blob) ?? null
+        // 符号链接不跟到目标（目标可能在项目外）：Git 里存的是链接写的路径，这一端也比它
+        let file: string
+        try {
+          file = (await workspaceEntry(repo.root, s.file)).path
+        } catch (e) {
+          if (parseCodedError((e as Error).message)?.code === 'files.notFound') return null
+          throw e
+        }
+        const info = await lstat(file)
+        const link = info.isSymbolicLink()
+        if (!info.isFile() && !link) return null
+        return { source: { file, link }, size: info.size, stamp: `${info.size}:${info.mtimeMs}` }
+      }),
+    )
+  }
+
+  /**
+   * 一端的内容。Git LFS 管理的文件在 Git 里是指针：装了 git-lfs 时按 .gitattributes 换成真正的内容，换不了原样返回指针。
+   * 普通文件不走 filters（免得换行之类的过滤改了内容）
+   */
+  private async content(repo: Repo, probe: DiffProbe, limit: number): Promise<Buffer> {
+    const source = probe.source
+    if ('file' in source) {
+      if (!source.link) return readFile(source.file)
+      const target = await readlink(source.file)
+      return Buffer.from(process.platform === 'win32' ? target.replace(/\\/g, '/') : target)
+    }
+    const run = await runGit(repo.root, ['cat-file', 'blob', source.blob], { timeout: this.timeout('diff'), limit })
+    if (run.code !== 0 || run.timedOut) throw readError(run)
+    if (!isLfsPointer(run.stdout)) return run.stdout
+    const smudged = await runGit(repo.root, ['cat-file', '--filters', source.blob], {
       timeout: this.timeout('diff'),
       limit,
     })
-    return run.code === 0 ? run.stdout : null
+    return smudged.code === 0 && !smudged.timedOut ? smudged.stdout : run.stdout
   }
 
-  private async worktree(repo: Repo, path: string, limit = DIFF_LIMIT): Promise<Buffer | null> {
-    let file: string
-    try {
-      file = await workspacePath(repo.root, path, 'file')
-    } catch {
-      return null
-    }
-    const info = await stat(file)
-    if (info.size > limit) return Buffer.alloc(limit + 1)
-    return readFile(file)
-  }
-
+  /**
+   * 一个文件的对比（docs/ui/git-panel.md §2.5）。返回两端的版本 version；调用方带上次的 version（known）来、两端都没变时
+   * 只回 unchanged，不再读、不再传内容（Git 状态每次刷新都会重读打开着的对比）。
+   * 改名前后有一边是图片就按图片比，两端以 data URL 返回；images: false（手机）时不读图片
+   */
   async diff(ref: WorkspaceRef, input: GitDiffInput): Promise<GitDiff> {
     const repo = await this.repo(ref)
     if (!repo || repo === 'missing') throw new Error('当前项目不是可用的 Git 仓库')
     const path = value(input.path, 4096, true).replace(/\\/g, '/')
     const orig = input.origPath ? value(input.origPath, 4096, true).replace(/\\/g, '/') : path
-    const mime = imageMime(path)
-    const limit = mime ? IMAGE_LIMIT : DIFF_LIMIT
     if (!['staged', 'unstaged', 'untracked', 'conflicted', 'commit'].includes(input.area)) throw new Error('参数不正确')
-    let a: Buffer | null, b: Buffer | null
-    if (input.area === 'commit') {
-      // 历史里的一个文件（docs/ui/git-panel.md §9.5）：from 为 null 是根提交，和空文件比；删除的文件 to 那边没有
-      const from = input.from ?? null
-      if (!isHash(input.to) || (from !== null && !isHash(from))) throw new Error('参数不正确')
-      ;[a, b] = await Promise.all([
-        from ? this.blob(repo, `${from}:${orig}`, limit) : Promise.resolve(null),
-        this.blob(repo, `${input.to}:${path}`, limit),
-      ])
-    } else if (input.area === 'staged')
-      [a, b] = await Promise.all([this.blob(repo, `HEAD:${orig}`, limit), this.blob(repo, `:${path}`, limit)])
-    else if (input.area === 'unstaged')
-      [a, b] = await Promise.all([this.blob(repo, `:${path}`, limit), this.worktree(repo, path, limit)])
-    else if (input.area === 'untracked')
-      [a, b] = [mime ? null : Buffer.alloc(0), await this.worktree(repo, path, limit)]
-    else [a, b] = await Promise.all([this.blob(repo, `:2:${path}`, limit), this.worktree(repo, path, limit)])
-    const tooLarge = (a?.length ?? 0) > limit || (b?.length ?? 0) > limit
-    if (mime && !tooLarge) {
-      const image = (data: Buffer | null, type: string) =>
-        data === null ? null : { dataUrl: `data:${type};base64,${data.toString('base64')}`, bytes: data.length }
-      return {
-        path,
-        original: null,
-        modified: null,
-        binary: true,
-        tooLarge: false,
-        images: { original: image(a, imageMime(orig) ?? mime), modified: image(b, mime) },
+    // 历史里的一个文件（docs/ui/git-panel.md §9.5）：from 为 null 是根提交，和空文件比；删除的文件 to 那边没有
+    const from = input.area === 'commit' ? (input.from ?? null) : null
+    if (input.area === 'commit' && (!isHash(input.to) || (from !== null && !isHash(from))))
+      throw new Error('参数不正确')
+    const image = !!(imageMime(path) || imageMime(orig))
+    const blob = (rev: string, name: string): DiffSource => ({ blob: rev + ':' + name, name })
+    const file: DiffSource = { file: path }
+    const sources: [DiffSource | null, DiffSource | null] =
+      input.area === 'commit'
+        ? [from ? blob(from, orig) : null, blob(input.to, path)]
+        : input.area === 'staged'
+          ? [blob('HEAD', orig), blob(':0', path)]
+          : input.area === 'unstaged'
+            ? [blob(':0', path), file]
+            : input.area === 'untracked'
+              ? [null, file]
+              : [blob(':2', path), file]
+    const probes = await this.probe(repo, sources)
+    const version = createHash('sha1')
+      .update(JSON.stringify([image, path, ...probes.map(p => p && [p.stamp, p.size])]))
+      .digest('hex')
+    const base = { path, original: null, modified: null, binary: image, tooLarge: false, version }
+    if (typeof input.known === 'string' && input.known === version) return { ...base, unchanged: true }
+    const limit = image ? IMAGE_LIMIT : DIFF_LIMIT
+    const tooLarge: GitDiff = { ...base, tooLarge: true, ...(image ? { image: true } : {}) }
+    if (probes.some(p => p && p.size > limit)) return tooLarge
+    if (image && input.images === false) return base
+    const [a, b] = await Promise.all(probes.map(p => (p ? this.content(repo, p, limit) : null)))
+    if ([a, b].some(d => d && d.length > limit)) return tooLarge
+    if (image) {
+      // 格式按内容认（扩展名可能和内容不一致）；认不出就写明这一端不是能显示的图片
+      const side = (data: Buffer | null): GitDiffImageSide => {
+        if (data === null) return null
+        if (isLfsPointer(data)) return { unavailable: 'lfs' }
+        const type = sniffImage(data)
+        return type
+          ? { dataUrl: `data:${type};base64,${data.toString('base64')}`, bytes: data.length }
+          : { unavailable: 'notImage' }
       }
+      return { ...base, images: { original: side(a), modified: side(b) } }
     }
-    const binary = !tooLarge && ((!!a && isBinary(a)) || (!!b && isBinary(b)))
-    if (tooLarge || binary) return { path, original: null, modified: null, binary, tooLarge }
-    return { path, original: a ? lf(text(a)) : null, modified: b ? lf(text(b)) : null, binary: false, tooLarge: false }
+    // 未跟踪的文件和空文件比
+    const before = a ?? (input.area === 'untracked' ? Buffer.alloc(0) : null)
+    if ((before && isBinary(before)) || (b && isBinary(b))) return { ...base, binary: true }
+    return { ...base, original: before ? lf(text(before)) : null, modified: b ? lf(text(b)) : null }
   }
 
   /** AI 写提交信息要发给模型的改动（docs/ui/ai-commit-codex-warnings-history.md §2.2）：只读，按上限截好 */

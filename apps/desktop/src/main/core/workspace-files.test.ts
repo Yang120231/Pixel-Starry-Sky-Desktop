@@ -80,7 +80,7 @@ describe('项目文件', () => {
     await writeFile(join(root, 'binary.bin'), Buffer.from([0, 1, 2]))
     await writeFile(join(root, 'legacy.txt'), Buffer.from([255, 254, 65]))
     await writeFile(join(root, 'large.txt'), Buffer.alloc(TEXT_LIMIT + 1, 65))
-    await writeFile(join(root, 'pic.png'), Buffer.from([137, 80, 78, 71]))
+    await writeFile(join(root, 'pic.png'), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
     expect(await service.read(ref, 'binary.bin')).toMatchObject({ kind: 'unsupported' })
     expect(await service.read(ref, 'legacy.txt')).toMatchObject({ kind: 'unsupported' })
     const large = await service.read(ref, 'large.txt')
@@ -94,7 +94,7 @@ describe('项目文件', () => {
     })
     expect(await service.read(ref, 'pic.png')).toMatchObject({
       kind: 'image',
-      dataUrl: 'data:image/png;base64,iVBORw==',
+      dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
     })
   })
   it('Git 标记以项目为准，兼容项目位于仓库子目录', async () => {
@@ -127,6 +127,21 @@ describe('项目文件', () => {
     await writeFile(join(root, 'new.txt'), 'new')
     expect(await service.headContent(ref, 'new.txt')).toBeNull()
     await expect(nested.headContent(ref, '../new.txt')).rejects.toThrow('files.outsideProject')
+  })
+  it('HEAD 里是 Git LFS 指针时按 .gitattributes 换成真正的内容；扩展名是图片、内容不是时按普通文件显示', async () => {
+    // 用一个假的过滤器代替 git-lfs（测试机不一定装了）：clean 原样存，smudge 输出真正的内容
+    const pointer = 'version https://git-lfs.github.com/spec/v1\noid sha256:' + '0'.repeat(64) + '\nsize 5\n'
+    const run = (...args: string[]) => execFileSync('git', args, { cwd: root, windowsHide: true })
+    run('init', '--quiet')
+    run('config', 'filter.fake.clean', 'cat')
+    run('config', 'filter.fake.smudge', 'echo smudged')
+    await writeFile(join(root, '.gitattributes'), 'data.txt filter=fake\n')
+    await writeFile(join(root, 'data.txt'), pointer)
+    await writeFile(join(root, 'fake.png'), 'not really a png')
+    run('add', '.')
+    run('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '--quiet', '-m', 'fixture')
+    expect(await service.headContent(ref, 'data.txt')).toBe('smudged\n')
+    expect(await service.read(ref, 'fake.png')).toMatchObject({ kind: 'text', content: 'not really a png' })
   })
 })
 

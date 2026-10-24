@@ -13,7 +13,7 @@ import {
 import { ActionMenu, type MenuAction } from '@/ui/ActionMenu'
 import { useToast } from '@/ui'
 import { tr, translateMessage } from '@/i18n/core'
-import { openFile, showFiles } from '@/features/files/store'
+import { showFiles } from '@/features/files/store'
 import { isRemoteRef, revealPath } from '@/features/files/reveal'
 import type { WorkspaceRef } from '../../../../../shared/types/workspace'
 import { gitAbsolutePath, splitPath } from './gitModel'
@@ -65,10 +65,7 @@ export function GitFileMenu({
       label: tr('git.file.revealTree'),
       icon: FolderSearch,
       disabled: !available,
-      run: () =>
-        void openFile(target, file.local!)
-          .then(() => showFiles(target, file.local!))
-          .catch(report),
+      run: () => showFiles(target, file.local!),
     },
     {
       label: tr('git.file.revealExplorer'),

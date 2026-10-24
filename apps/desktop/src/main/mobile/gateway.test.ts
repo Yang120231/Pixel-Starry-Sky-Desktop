@@ -331,7 +331,7 @@ describe('MobileGateway calls', () => {
     await p.call('projectTools:createTask', 'proj', { title: '写测试', status: 'pending', order: 5, projectId: 'x' })
     await p.call('projectTools:updateTask', 't1', { status: 'completed', pinnedAt: 1 })
     expect(calls.map(c => [c[0], c[1]])).toEqual([
-      ['projectTools:gitDiff', [{ projectId: 'proj' }, { path: 'a.ts', area: 'unstaged' }]],
+      ['projectTools:gitDiff', [{ projectId: 'proj' }, { path: 'a.ts', area: 'unstaged', images: false }]],
       ['files:read', [{ projectId: 'proj' }, 'big.txt']],
       ['files:read', [{ sessionId: 's1' }, 'p.png']],
       ['engine:artifacts', [{ projectId: 'proj', days: 30, requestId: 1 }]],

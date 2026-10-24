@@ -4,6 +4,8 @@ export const errorMessages = {
   'errors.files.relativePath': { zh: '请使用项目内的相对路径', en: 'Use a path inside the project' },
   'errors.files.outsideProject': { zh: '文件路径超出项目', en: 'The path is outside the project' },
   'errors.files.notFound': { zh: '文件或目录已不存在', en: 'The file or folder no longer exists' },
+  'errors.git.diffTimeout': { zh: '读取对比内容超时，请稍后重试', en: 'Timed out reading the diff. Try again later' },
+  'errors.git.diffRead': { zh: '读取对比内容失败：{detail}', en: "Couldn't read the diff: {detail}" },
   'errors.files.changedOutside': {
     zh: '文件已被其他程序修改，请重新加载后再保存；当前草稿仍保留',
     en: 'The file was changed by another program. Reload before saving; your draft is kept',

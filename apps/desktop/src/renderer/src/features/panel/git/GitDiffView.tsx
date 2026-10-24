@@ -16,7 +16,7 @@ import { EditorView, lineNumbers } from '@codemirror/view'
 import { goToNextChunk, goToPreviousChunk, MergeView, unifiedMergeView } from '@codemirror/merge'
 import { Button, IconButton, Segmented, Spinner } from '@/ui'
 import { useI18n } from '@/i18n/I18nProvider'
-import { tr } from '@/i18n/core'
+import { tr, translateMessage } from '@/i18n/core'
 import { editorChrome } from '@/features/editor/code/theme'
 import { diffPackExtensions } from '@/features/editor/code/packs'
 import { useEditorPacksTick } from '@/features/editor/code/packEvents'
@@ -28,7 +28,6 @@ import { useRemember } from '../ToolsUi'
 import type { GitArea, GitDiff, GitFileChange } from '../../../../../shared/types/project-tools'
 import { diffMode, sameGitDiff, SPLIT_MIN_WIDTH, splitPath } from './gitModel'
 import { GitImageDiff } from './GitImageDiff'
-import { imageMime } from '../../../../../shared/imageFiles'
 
 const COLLAPSE = { margin: 3, minSize: 4 }
 
@@ -130,7 +129,8 @@ export function GitDiffView({
   file: GitFileChange
   /** commit：历史里一个提交的文件（docs/ui/git-panel.md §9.5） */
   area: GitArea | 'commit'
-  load: () => Promise<GitDiff>
+  /** known：上次读到的图片对比的 version，两端都没变时 main 只回 unchanged */
+  load: (known?: string) => Promise<GitDiff>
   /** 中栏的 Git 对比标签没有「返回」和上一个 / 下一个文件（左栏的列表一直在） */
   onBack?: () => void
   onNeighbour?: (delta: 1 | -1) => void
@@ -170,6 +170,8 @@ export function GitDiffView({
   // 只有这个文件已经显示出结果（对比或报错）才算后台重读：第一次还没读完就被刷新打断时照常重读、报错照常显示
   const shown = useRef('')
   const settled = useRef(false)
+  const latest = useRef(diff)
+  latest.current = diff
   useEffect(() => {
     let gone = false
     const key = `${area}|${file.code}|${file.path}`
@@ -180,11 +182,11 @@ export function GitDiffView({
       setDiff(null)
       setError('')
     }
-    load().then(
+    load(quiet ? latest.current?.version : undefined).then(
       d => {
         if (gone) return
         settled.current = true
-        setDiff(prev => (quiet && prev && sameGitDiff(prev, d) ? prev : d))
+        setDiff(prev => (quiet && prev && (d.unchanged || sameGitDiff(prev, d)) ? prev : d))
         setError('')
       },
       e => {
@@ -328,7 +330,7 @@ export function GitDiffView({
       </div>
       {error ? (
         <p role="alert" className="m-3 rounded-md bg-subtle p-2 text-meta text-danger">
-          {error}
+          {translateMessage(error)}
         </p>
       ) : !diff ? (
         <div className="flex items-center justify-center gap-2 p-6 text-meta text-fg-muted">
@@ -336,12 +338,17 @@ export function GitDiffView({
           {tr('git.diff.loading')}
         </div>
       ) : diff.images ? (
-        <GitImageDiff diff={diff} mode={mode} id={`git:${area}:${file.path}`} />
+        // 历史里不同提交的同一张图各记各的缩放
+        <GitImageDiff
+          diff={diff}
+          mode={mode}
+          id={`git:${area}:${file.path}${area === 'commit' && diff.version ? ':' + diff.version : ''}`}
+        />
       ) : diff.binary || diff.tooLarge || same ? (
         <p className="m-3 rounded-md bg-subtle p-3 text-center text-meta text-fg-muted">
           {tr(
             diff.tooLarge
-              ? imageMime(file.path)
+              ? diff.image
                 ? 'git.diff.image.tooLarge'
                 : 'git.diff.tooLarge'
               : diff.binary

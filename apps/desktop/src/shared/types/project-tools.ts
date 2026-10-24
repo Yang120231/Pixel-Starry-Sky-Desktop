@@ -281,22 +281,35 @@ export interface GitStatus {
   busySessions: number
 }
 /** 差异：工作区的四组；或历史里两个提交之间的一个文件（from 为 null 是根提交） */
-export type GitDiffInput =
+/** known：上次返回的 version，两端都没变时只回 unchanged；images: false 时图片不读内容（手机只显示说明） */
+export type GitDiffInput = (
   | { path: string; area: GitArea; origPath?: string | null }
   | { path: string; area: 'commit'; origPath?: string | null; from: string | null; to: string }
+) & { known?: string; images?: false }
 export interface GitDiff {
   path: string
   original: string | null
   modified: string | null
   binary: boolean
   tooLarge: boolean
-  /** 图片的两端来自实际比较的 Git 版本；null 表示该端文件不存在。 */
-  images?: { original: GitDiffImage | null; modified: GitDiffImage | null }
+  /** 图片的两端来自实际比较的 Git 版本 */
+  images?: { original: GitDiffImageSide; modified: GitDiffImageSide }
+  /** 图片对比：超过 8MB 时 tooLarge 也带上它，提示写图片的上限 */
+  image?: true
+  /** 两端的版本（对象名、工作区文件的大小和修改时间算出来的） */
+  version?: string
+  /** 和请求里的 known 一样：两端都没变，沿用上次的结果（这次不带 images） */
+  unchanged?: true
 }
 export interface GitDiffImage {
   dataUrl: string
   bytes: number
 }
+/**
+ * null：这一端没有文件（新增 / 删除）；lfs：Git LFS 的指针，图片内容没下载或没装 git-lfs；
+ * notImage：这一端的内容不是能显示的图片（比如改名前是文本、扩展名和内容对不上）
+ */
+export type GitDiffImageSide = GitDiffImage | { unavailable: 'lfs' | 'notImage' } | null
 export interface GitBranch {
   name: string
   remote: boolean

@@ -149,6 +149,14 @@ export const gitMessages = {
   'git.diff.image.stacked': { zh: '上下', en: 'Stacked' },
   'git.diff.image.added': { zh: '新增图片，没有修改前的版本', en: 'New image; no previous version' },
   'git.diff.image.deleted': { zh: '图片已删除', en: 'Image deleted' },
+  'git.diff.image.lfs': {
+    zh: '这是 Git LFS 管理的图片，内容还没下载（装好 git-lfs 后运行 git lfs pull）',
+    en: "This image is stored with Git LFS and hasn't been downloaded (install git-lfs, then run git lfs pull)",
+  },
+  'git.diff.image.notImage': {
+    zh: '这一端的内容不是能显示的图片',
+    en: 'This side is not a viewable image',
+  },
   'git.diff.image.tooLarge': {
     zh: '图片超过 8MB，无法预览对比',
     en: 'Image is larger than 8 MB and cannot be previewed',

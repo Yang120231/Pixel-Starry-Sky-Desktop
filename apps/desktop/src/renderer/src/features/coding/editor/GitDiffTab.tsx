@@ -32,7 +32,7 @@ export function GitDiffTab({ id }: { id: string }) {
   if (!data) return null
   const can = diffActions(data.area)
   const api = window.pixelsky?.projectTools
-  const load = (): Promise<GitDiff> => {
+  const load = (known?: string): Promise<GitDiff> => {
     if (data.area === 'commit') {
       const input = {
         area: 'commit' as const,
@@ -45,7 +45,7 @@ export function GitDiffTab({ id }: { id: string }) {
     }
     return data.demo
       ? Promise.resolve(demoData().git.diff(data.path))
-      : api!.gitDiff(data.ref, { path: data.path, area: data.area, origPath: data.origPath })
+      : api!.gitDiff(data.ref, { path: data.path, area: data.area, origPath: data.origPath, known })
   }
   const file = {
     path: data.path,

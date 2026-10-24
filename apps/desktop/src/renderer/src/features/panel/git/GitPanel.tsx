@@ -490,10 +490,15 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
           // 每次读到新状态都重读一次（文件还在同一区、字母没变时内容也可能变了）
           revision={stamp}
           {...fileActions(selectedFile, selected.area)}
-          load={() =>
+          load={known =>
             demo
               ? Promise.resolve(demoData().git.diff(selectedFile.path))
-              : api!.gitDiff(target, { path: selectedFile.path, area: selected.area, origPath: selectedFile.origPath })
+              : api!.gitDiff(target, {
+                  path: selectedFile.path,
+                  area: selected.area,
+                  origPath: selectedFile.origPath,
+                  known,
+                })
           }
           onBack={() => setSelected(null)}
           onHistory={
@@ -850,7 +855,12 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
                         e.preventDefault()
                         const trigger = e.currentTarget.querySelector('button')!
                         trigger.focus({ preventScroll: true })
-                        setFileMenu({ x: e.clientX, y: e.clientY, trigger, area: section.area, path: file.path })
+                        // 菜单键 / Shift+F10 已经在 keydown 里打开了这一行的菜单时，随后的 contextmenu 不再挪位置
+                        setFileMenu(m =>
+                          m?.area === section.area && m.path === file.path
+                            ? m
+                            : { x: e.clientX, y: e.clientY, trigger, area: section.area, path: file.path },
+                        )
                       }}
                       onKeyDown={e => {
                         if (e.key !== 'ContextMenu' && !(e.key === 'F10' && e.shiftKey)) return

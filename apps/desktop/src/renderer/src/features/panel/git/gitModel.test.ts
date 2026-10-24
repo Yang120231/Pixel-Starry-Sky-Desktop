@@ -106,5 +106,9 @@ describe('sameGitDiff', () => {
     ).toBe(false)
     expect(sameGitDiff(before, { ...before, images: { original: image, modified: null } })).toBe(false)
     expect(sameGitDiff(before, { ...before, images: undefined })).toBe(false)
+    const lfs = { ...before, images: { original: { unavailable: 'lfs' as const }, modified: image } }
+    expect(sameGitDiff(lfs, structuredClone(lfs))).toBe(true)
+    expect(sameGitDiff(lfs, before)).toBe(false)
+    expect(sameGitDiff(lfs, { ...lfs, images: { original: { unavailable: 'notImage' }, modified: image } })).toBe(false)
   })
 })

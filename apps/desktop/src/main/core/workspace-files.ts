@@ -14,7 +14,8 @@ import {
 } from '@pixelsky/protocol'
 import { grepWorkspace } from './workspace-grep'
 import { IGNORED_STATUS } from '../../shared/types/workspace'
-import { IMAGE_LIMIT, imageMime } from '../../shared/imageFiles'
+import { IMAGE_LIMIT, imageMime, sniffImage } from '../../shared/imageFiles'
+import { isLfsPointer } from './lfs'
 import type {
   DirectoryListing,
   FileDocument,
@@ -564,8 +565,10 @@ export class WorkspaceFiles {
     const image = imageMime(file)
     try {
       const bytes = await boundedRead(file, image ? IMAGE_LIMIT : READ_LIMIT)
-      if (image)
-        return { kind: 'image', path, dataUrl: `data:${image};base64,${bytes.toString('base64')}`, bytes: bytes.length }
+      // 格式按内容认；扩展名是图片、内容不是（LFS 指针、改了扩展名的文本）时按普通文件显示
+      const type = image ? sniffImage(bytes) : undefined
+      if (type)
+        return { kind: 'image', path, dataUrl: `data:${type};base64,${bytes.toString('base64')}`, bytes: bytes.length }
       return { ...decode(path, bytes), readonly: bytes.length > TEXT_LIMIT }
     } catch (e) {
       return { kind: 'unsupported', path, reason: (e as Error).message, bytes: info.size }
@@ -590,7 +593,10 @@ export class WorkspaceFiles {
       })
     const prefix = await git(['rev-parse', '--show-prefix'])
     if (prefix === null) return null
-    const content = await git(['show', `HEAD:${prefix.trim()}${rel.replaceAll('\\', '/')}`])
+    const spec = `HEAD:${prefix.trim()}${rel.replaceAll('\\', '/')}`
+    let content = await git(['show', spec])
+    // Git LFS 管理的文件 HEAD 里是指针：装了 git-lfs 时换成真正的内容（不然整个文件都标成改过）；换不了（没装时工作区也是指针）照旧
+    if (content !== null && isLfsPointer(content)) content = (await git(['cat-file', '--filters', spec])) ?? content
     return content === null || content.includes('\0') ? null : content.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n')
   }
 

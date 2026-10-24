@@ -2,6 +2,7 @@
 import type {
   GitArea,
   GitDiff,
+  GitDiffImageSide,
   GitFailureKind,
   GitFileChange,
   GitStatus,
@@ -94,6 +95,14 @@ export const sameGitDiff = (a: GitDiff, b: GitDiff): boolean =>
   a.modified === b.modified &&
   a.binary === b.binary &&
   a.tooLarge === b.tooLarge &&
-  a.images?.original?.dataUrl === b.images?.original?.dataUrl &&
-  a.images?.modified?.dataUrl === b.images?.modified?.dataUrl &&
-  !!a.images === !!b.images
+  !!a.images === !!b.images &&
+  sameImageSide(a.images?.original, b.images?.original) &&
+  sameImageSide(a.images?.modified, b.images?.modified)
+
+const sameImageSide = (a: GitDiffImageSide | undefined, b: GitDiffImageSide | undefined): boolean =>
+  a === b ||
+  (!!a &&
+    !!b &&
+    ('dataUrl' in a
+      ? 'dataUrl' in b && a.dataUrl === b.dataUrl
+      : 'unavailable' in b && a.unavailable === b.unavailable))

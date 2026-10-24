@@ -275,7 +275,8 @@ export function ChangedFiles({
               e.stopPropagation()
               const trigger = e.currentTarget.querySelector('button')!
               trigger.focus({ preventScroll: true })
-              setMenu({ x: e.clientX, y: e.clientY, trigger, path: file.path })
+              // 菜单键 / Shift+F10 已经在 keydown 里打开了这一行的菜单时，随后的 contextmenu 不再挪位置
+              setMenu(m => (m?.path === file.path ? m : { x: e.clientX, y: e.clientY, trigger, path: file.path }))
             }}
             onKeyDown={e => {
               if (e.key !== 'ContextMenu' && !(e.key === 'F10' && e.shiftKey)) return
