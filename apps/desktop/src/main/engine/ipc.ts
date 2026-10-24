@@ -114,6 +114,7 @@ export async function initEngine(ctx: AppContext): Promise<void> {
       fetch: (url, init) => net.fetch(url, init),
     }),
     dataDir: join(app.getPath('userData'), 'engine'),
+    checkpoints: true,
     pixelCli: bundledPixelCli(),
     // 有 SSH 机器时由它合并本机与远端的项目 / 会话再广播
     emit: (e: HostEvent) => {

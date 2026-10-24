@@ -407,6 +407,8 @@ export class HostSessions {
       }
       ctx.records.delete(id)
       m.queue.forget(id)
+      // 记录删掉之后：一轮结束时的快照不会再开始，等正在跑的 git 结束再删目录
+      await m.checkpoints.forget(id)
       ctx.store.deleteSession(id)
       m.events.broadcastSessions()
     } finally {

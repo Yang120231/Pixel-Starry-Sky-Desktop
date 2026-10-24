@@ -44,6 +44,7 @@ import { isSubagentCall, isSubagentWork, viaGateway, type Item, type SessionSnap
 import { Spinner, cn } from '@/ui'
 import type { ChangedFiles } from '@/data'
 import { ChangedFilesCard } from '../ChangedFilesCard'
+import { useTurnUndo } from '../undo/useTurnUndo'
 import { TurnStats } from '../TurnStats'
 import { Markdown } from '@/ui/markdown/Markdown'
 import { NoticeRow, ReasoningBlock, TodoCard, ToolItemRow, UserBubble } from './ItemRows'
@@ -195,15 +196,21 @@ const TurnChanges = memo(function TurnChanges({
   )
   // 点过「全部保留」后按钮收起
   const kept = useTurnReviewed(sessionId, turnKey)
+  // 撤回 / 恢复这一轮的文件（docs/ui/undo-changes.md §3）
+  const { undo, dialog } = useTurnUndo(turnKey)
   return (
-    <ChangedFilesCard
-      className="conversation-message"
-      data={data}
-      target={target}
-      style={style}
-      onReview={review}
-      onKeepAll={kept ? undefined : keepAll}
-    />
+    <>
+      <ChangedFilesCard
+        className="conversation-message"
+        data={data}
+        target={target}
+        style={style}
+        onReview={review}
+        onKeepAll={kept ? undefined : keepAll}
+        undo={undo}
+      />
+      {dialog}
+    </>
   )
 })
 

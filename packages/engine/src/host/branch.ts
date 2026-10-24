@@ -120,6 +120,8 @@ export class HostBranch {
   }
 
   private async codePreview(record: SessionRecord, userItemId: string): Promise<RewindCodePreview> {
+    // 有对话检查点（docs/ui/undo-changes.md）先用它：任何引擎都行，能只还原其中几个文件
+    if (this.ctx.m.checkpoints.has(record.id, userItemId)) return this.ctx.m.checkpoints.preview(record.id, userItemId)
     const adapter = this.ctx.adapters[record.engine]
     if (!ENGINES[record.engine].caps.rewindCode || !adapter?.rewindFiles) return { ok: false, reason: 'unsupported' }
     if (!record.engineSessionId) return { ok: false, reason: 'no-checkpoint' }
@@ -161,8 +163,10 @@ export class HostBranch {
     this.assertIdle(id)
     const rt = m.sessions.runtime(id)
     const record = rt.snapshot.record
-    if (!ENGINES[record.engine].caps.rewind) throw new Error('当前引擎暂不支持回退')
     if (!options.conversation && !options.code) throw new Error('请选择要恢复的内容')
+    // 引擎不能回退对话时，有对话检查点的消息仍能只恢复代码（docs/ui/undo-changes.md §4）
+    const codeOnly = !options.conversation && m.checkpoints.has(id, userItemId)
+    if (!ENGINES[record.engine].caps.rewind && !codeOnly) throw new Error('当前引擎暂不支持回退')
     const { index, target } = this.userItem(id, userItemId)
     const before = rewindState(record)
     ctx.changingSessions.add(id)
@@ -172,7 +176,7 @@ export class HostBranch {
       let codeSkipped: string | undefined
       if (options.code)
         try {
-          files = await this.restoreCode(record, userItemId)
+          files = await this.restoreCode(record, userItemId, options.paths)
         } catch (err) {
           // 只恢复代码时照旧报错；同时回退对话时对话照样回退，告诉界面代码没恢复（GitHub #82）
           if (!options.conversation) throw err
@@ -208,8 +212,10 @@ export class HostBranch {
     }
   }
 
-  /** 还原文件；先存一份当前内容（太大时不存，返回空数组表示还原了但不能撤销代码） */
-  private async restoreCode(record: SessionRecord, userItemId: string): Promise<UndoEntry['files']> {
+  /** 还原文件；先存一份当前内容（太大时不存，返回 null 表示还原了但不能撤销代码）。paths 只对对话检查点有效 */
+  private async restoreCode(record: SessionRecord, userItemId: string, paths?: string[]): Promise<UndoEntry['files']> {
+    if (this.ctx.m.checkpoints.has(record.id, userItemId))
+      return (await this.ctx.m.checkpoints.restore(record.id, userItemId, paths)).saved
     const adapter = this.ctx.adapters[record.engine]
     if (!ENGINES[record.engine].caps.rewindCode || !adapter?.rewindFiles || !record.engineSessionId)
       throw new Error('这条消息没有代码检查点，代码保持不变')

@@ -14,8 +14,8 @@ type UserItem = Extract<Item, { kind: 'user' }>
 /** 由会话视图提供：能不能回退 / 分叉、为什么不能、执行 */
 export interface MessageActionsValue {
   rewindDisabledReason: string | null
-  /** 引擎能在回退时恢复代码 */
-  rewindCode: boolean
+  /** 回退这条消息时能恢复代码：引擎自己能，或者有对话检查点（docs/ui/undo-changes.md） */
+  rewindCode(item: UserItem): boolean
   rewindPreview(item: UserItem): Promise<RewindPreview>
   rewind(item: UserItem, options: RewindOptions): Promise<void>
   /** 引擎不支持分叉时为 null */
@@ -38,7 +38,7 @@ const ROW =
 const ICON =
   'press no-drag inline-flex size-6 items-center justify-center rounded-md text-fg-muted hover:bg-hover hover:text-fg disabled:pointer-events-none disabled:opacity-40'
 
-type Choice = 'both' | 'conversation' | 'code'
+export type Choice = 'both' | 'conversation' | 'code'
 const OPTIONS: Record<Choice, RewindOptions> = {
   both: { conversation: true, code: true },
   conversation: { conversation: true, code: false },
@@ -70,7 +70,7 @@ export function UserMessageActions({ item }: { item: UserItem }) {
   const start = (): void => {
     if (!actions) return
     // 不能恢复代码的引擎，勾过「不再确认」就直接回退对话
-    if (!actions.rewindCode && skipConfirm()) {
+    if (!actions.rewindCode(item) && skipConfirm()) {
       void run(() => actions.rewind(item, OPTIONS.conversation))
       return
     }
@@ -105,7 +105,7 @@ export function UserMessageActions({ item }: { item: UserItem }) {
             disabled={!!reason || busy}
             onClick={start}
             aria-label={tr('session.message.rewind')}
-            title={reason ?? (actions.rewindCode ? tr('rewind.hint') : tr('session.message.rewindHint'))}
+            title={reason ?? (actions.rewindCode(item) ? tr('rewind.hint') : tr('session.message.rewindHint'))}
             className={ICON}
           >
             <Undo2 size={13} strokeWidth={1.5} />
@@ -122,8 +122,8 @@ export function UserMessageActions({ item }: { item: UserItem }) {
             setConfirming(false)
             setError(null)
           }}
-          onConfirm={(choice, skip) =>
-            void run(() => actions.rewind(item, OPTIONS[choice])).then(ok => {
+          onConfirm={(choice, skip, paths) =>
+            void run(() => actions.rewind(item, rewindOptions(choice, paths))).then(ok => {
               if (!ok) return
               if (skip) {
                 try {
@@ -139,6 +139,15 @@ export function UserMessageActions({ item }: { item: UserItem }) {
       )}
     </>
   )
+}
+
+/**
+ * 选项 + 只还原哪些文件：paths 为 null 是全部；空数组（全取消勾选）时不动代码，「代码和对话」就只回退对话
+ */
+export function rewindOptions(choice: Choice, paths: string[] | null): RewindOptions {
+  const base = OPTIONS[choice]
+  if (!paths || !base.code) return base
+  return paths.length ? { ...base, paths } : { ...base, code: false }
 }
 
 /** 自动换成「恢复代码和对话」后这么久不能点回退，免得点到没看清的选项 */
@@ -161,10 +170,14 @@ function RewindDialog({
   busy: boolean
   error: string | null
   onCancel: () => void
-  onConfirm: (choice: Choice, skip: boolean) => void
+  /** paths：只还原这些（对话检查点能挑文件）；null 是全部 */
+  onConfirm: (choice: Choice, skip: boolean, paths: string[] | null) => void
 }) {
   useI18n()
+  const rewindCode = actions.rewindCode(item)
   const [preview, setPreview] = useState<RewindPreview | null>(null)
+  /** 取消勾选的文件（docs/ui/undo-changes.md §4） */
+  const [unchecked, setUnchecked] = useState<ReadonlySet<string>>(() => new Set())
   const [choice, setChoice] = useState<Choice>('conversation')
   const [skip, setSkip] = useState(false)
   const touched = useRef(false)
@@ -176,7 +189,7 @@ function RewindDialog({
   actionsRef.current = actions
   itemRef.current = item
   useEffect(() => {
-    if (!actions.rewindCode) return
+    if (!rewindCode) return
     let alive = true
     actionsRef.current
       .rewindPreview(itemRef.current)
@@ -193,7 +206,7 @@ function RewindDialog({
       alive = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 有意只按消息 id 和能否恢复代码重跑
-  }, [item.id, actions.rewindCode])
+  }, [item.id, rewindCode])
   useEffect(() => {
     if (!settling) return
     const timer = setTimeout(() => setSettling(false), SETTLE_MS)
@@ -201,14 +214,14 @@ function RewindDialog({
   }, [settling])
   // 检查了几秒
   useEffect(() => {
-    if (preview || !actions.rewindCode) return
+    if (preview || !rewindCode) return
     const started = Date.now()
     const timer = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 500)
     return () => clearInterval(timer)
-  }, [preview, actions.rewindCode])
+  }, [preview, rewindCode])
 
   // 不能恢复代码的引擎：保持原来的简单确认
-  if (!actions.rewindCode)
+  if (!rewindCode)
     return (
       <ConfirmDialog
         title={tr('session.message.rewindTitle')}
@@ -224,13 +237,16 @@ function RewindDialog({
         busy={busy}
         error={error}
         onCancel={onCancel}
-        onConfirm={() => onConfirm('conversation', skip)}
+        onConfirm={() => onConfirm('conversation', skip, null)}
       />
     )
 
   const code = preview?.code
   const hasFiles = !!code && code.ok && code.files.length > 0
   const codeOptions = hasFiles
+  // 对话检查点能只还原其中几个文件；Claude Code 自己的检查点只能全部还原
+  const pickable = hasFiles && code.ok && code.checkpoint === true
+  const chosen = pickable && code.ok ? code.files.filter(f => !unchecked.has(f)) : null
   return (
     <ConfirmDialog
       title={tr('rewind.title')}
@@ -270,7 +286,23 @@ function RewindDialog({
               )
             })}
           </div>
-          <CodeSummary preview={preview} elapsed={elapsed} />
+          <CodeSummary
+            preview={preview}
+            elapsed={elapsed}
+            picker={
+              pickable
+                ? {
+                    unchecked,
+                    toggle: path =>
+                      setUnchecked(current => {
+                        const next = new Set(current)
+                        if (!next.delete(path)) next.add(path)
+                        return next
+                      }),
+                  }
+                : null
+            }
+          />
           {choice === 'conversation' ? (
             <SkipBox checked={skip} onChange={setSkip} label={tr('rewind.skip')} />
           ) : (
@@ -283,14 +315,31 @@ function RewindDialog({
       danger
       busy={busy}
       error={error}
-      confirmDisabled={settling || (choice !== 'conversation' && !preview)}
+      confirmDisabled={
+        settling || (choice !== 'conversation' && !preview) || (choice === 'code' && chosen?.length === 0)
+      }
       onCancel={onCancel}
-      onConfirm={() => onConfirm(choice, choice === 'conversation' && skip)}
+      onConfirm={() =>
+        onConfirm(
+          choice,
+          choice === 'conversation' && skip,
+          chosen && code?.ok && chosen.length < code.files.length ? chosen : null,
+        )
+      }
     />
   )
 }
 
-function CodeSummary({ preview, elapsed }: { preview: RewindPreview | null; elapsed: number }) {
+function CodeSummary({
+  preview,
+  elapsed,
+  picker,
+}: {
+  preview: RewindPreview | null
+  elapsed: number
+  /** 能挑文件时：每个文件一个勾选框，全部列出 */
+  picker: { unchecked: ReadonlySet<string>; toggle: (path: string) => void } | null
+}) {
   useI18n()
   const box = 'rounded-lg border border-line-subtle bg-subtle px-3 py-2 text-meta'
   if (!preview)
@@ -321,27 +370,56 @@ function CodeSummary({ preview, elapsed }: { preview: RewindPreview | null; elap
         {tr('rewind.unchanged')}
       </div>
     )
-  const shown = code.files.slice(0, 5)
+  const shown = picker ? code.files : code.files.slice(0, 5)
+  const edited = new Set(code.edited ?? [])
+  const kept = picker ? code.files.filter(f => !picker.unchecked.has(f)).length : code.files.length
   return (
     <div className={cn(box, 'flex flex-col gap-1 text-fg-secondary')} data-rewind-code="files">
       <div className="flex items-center gap-2 text-fg">
-        <span>{code.files.length === 1 ? tr('rewind.filesOne') : tr('rewind.files', { n: code.files.length })}</span>
+        <span>
+          {picker
+            ? tr('checkpoint.restoreCount', { k: kept, n: code.files.length })
+            : code.files.length === 1
+              ? tr('rewind.filesOne')
+              : tr('rewind.files', { n: code.files.length })}
+        </span>
         <span className="tabular-nums">
           <span className="text-success">+{code.insertions}</span>{' '}
           <span className="text-danger">−{code.deletions}</span>
         </span>
       </div>
-      <ul className="flex flex-col font-mono text-code-path">
-        {shown.map(f => (
-          <li key={f} className="truncate" title={f}>
-            {f}
-          </li>
-        ))}
+      <ul
+        data-rewind-files
+        className={cn('flex flex-col font-mono text-code-path', picker && 'max-h-40 overflow-y-auto')}
+      >
+        {shown.map(f =>
+          picker ? (
+            <li key={f}>
+              <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 hover:bg-hover">
+                <input type="checkbox" checked={!picker.unchecked.has(f)} onChange={() => picker.toggle(f)} />
+                <span className="min-w-0 flex-1 truncate" title={f}>
+                  {f}
+                </span>
+                {edited.has(f) && (
+                  <span className="shrink-0 font-sans text-meta text-warn">{tr('checkpoint.edited')}</span>
+                )}
+              </label>
+            </li>
+          ) : (
+            <li key={f} className="truncate" title={f}>
+              {f}
+            </li>
+          ),
+        )}
         {code.files.length > shown.length && (
           <li className="font-sans text-fg-muted">{tr('rewind.more', { n: code.files.length - shown.length })}</li>
         )}
       </ul>
-      <p className="text-fg-muted">{tr('rewind.overwrite')}</p>
+      {code.edited?.length ? (
+        <p className="text-warn">{tr('checkpoint.editedWarn', { n: code.edited.length })}</p>
+      ) : (
+        <p className="text-fg-muted">{tr('rewind.overwrite')}</p>
+      )}
       {!code.undoable && <p className="text-warn">{tr('rewind.noUndo')}</p>}
     </div>
   )

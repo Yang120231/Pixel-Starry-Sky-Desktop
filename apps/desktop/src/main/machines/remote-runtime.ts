@@ -90,6 +90,7 @@ export async function createRemoteRuntime(
   const host = new EngineHost({
     ...extra,
     dataDir: join(dataDir, 'engine'),
+    checkpoints: true,
     emit: (event: HostEvent) =>
       peer.event(
         'engine:event',

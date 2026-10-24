@@ -64,6 +64,7 @@ import { Store } from '../store'
 import { UsageStore, type UsageQuery } from '../usage'
 import { HostAccounts } from './accounts'
 import { HostBranch } from './branch'
+import { HostCheckpoints } from './checkpoints'
 import { HostCache } from './cache'
 import { HostCompaction } from './compaction'
 import type { EngineHostOptions, HostContext, HostModules, Runtime } from './context'
@@ -166,6 +167,7 @@ export class EngineHost {
       turn: new HostTurn(ctx),
       sessions: new HostSessions(ctx),
       branch: new HostBranch(ctx),
+      checkpoints: new HostCheckpoints(ctx),
       handoff: new HostHandoff(ctx),
       login: new HostLogin(ctx),
       native: new HostNative(ctx),
@@ -582,6 +584,31 @@ export class EngineHost {
     return this.m.branch.undoRewind(id)
   }
 
+  /** 会话的对话检查点：每轮的快照情况、改动卡片撤回的文件（docs/ui/undo-changes.md） */
+  checkpoints(id: string): import('@pixelsky/protocol').CheckpointList {
+    return this.m.checkpoints.list(id)
+  }
+
+  /** 开始打字时：还没拍过快照就在后台先拍第一次，发消息时不用等 */
+  prepareCheckpoints(id: string): void {
+    this.m.checkpoints.prepare(id)
+  }
+
+  /** 改动卡片撤回文件：改回这一轮开始前的内容；之后又被改过、没确认时只返回冲突 */
+  revertFiles(
+    id: string,
+    userItemId: string,
+    paths: string[],
+    force: boolean,
+  ): Promise<import('@pixelsky/protocol').RevertFilesResult> {
+    return this.m.checkpoints.revertFiles(id, userItemId, paths, force)
+  }
+
+  /** 恢复改动卡片撤回的文件 */
+  restoreFiles(id: string, revertId: string, paths?: string[]): Promise<void> {
+    return this.m.checkpoints.restoreFiles(id, revertId, paths)
+  }
+
   /** 从某条用户消息之前分叉出新会话（§2） */
   forkSession(id: string, userItemId: string, title?: string): Promise<ForkResult> {
     return this.m.branch.fork(id, userItemId, title)
@@ -664,6 +691,8 @@ export class EngineHost {
     await Promise.all([
       ...all.map(rt => rt.session?.close({ quick: true }).catch(() => undefined)),
       ...Object.values(this.ctx.adapters).map(adapter => adapter?.close?.({ quick: true }).catch(() => undefined)),
+      // 对话检查点在后台跑的 git 直接结束，不等它拍完
+      this.m.checkpoints.shutdown(),
     ])
   }
 }

@@ -52,7 +52,21 @@ export interface EngineOpContext {
 function rewindOptions(raw: unknown): RewindOptions {
   if (raw === undefined) return { conversation: true, code: false }
   const o = (raw ?? {}) as Record<string, unknown>
-  return { conversation: o.conversation === true, code: o.code === true }
+  return {
+    conversation: o.conversation === true,
+    code: o.code === true,
+    // 远程机器经 JSON 转发，没传的参数可能变成 null
+    ...(o.paths != null ? { paths: pathList(o.paths) } : {}),
+  }
+}
+
+/** 文件路径列表（撤回、只还原其中几个文件） */
+function pathList(raw: unknown): string[] {
+  if (!Array.isArray(raw) || raw.length > 10_000) throw new Error('参数不正确')
+  return raw.map(p => {
+    if (typeof p !== 'string' || !p || p.length > 4096) throw new Error('参数不正确')
+    return p
+  })
 }
 
 /** 队列调序目标：有限数字是旧版手机的「挪到第几位」；{ before: 非空消息 id | null } 是新形态；别的一律报参数错误，不悄悄当成第 0 位 */
@@ -225,6 +239,13 @@ export const ENGINE_OPS = {
   'engine:rewindPreview': (c, id, itemId) => c.host.rewindPreview(str(id, 'id'), str(itemId, 'itemId')),
   'engine:rewind': (c, id, itemId, raw) => c.host.rewind(str(id, 'id'), str(itemId, 'itemId'), rewindOptions(raw)),
   'engine:undoRewind': (c, id) => c.host.undoRewind(str(id, 'id')),
+  // 对话检查点：改动卡片按文件撤回 / 恢复、检查点面板（docs/ui/undo-changes.md）
+  'engine:checkpoints': (c, id) => c.host.checkpoints(str(id, 'id')),
+  'engine:prepareCheckpoints': (c, id) => c.host.prepareCheckpoints(str(id, 'id')),
+  'engine:revertFiles': (c, id, itemId, paths, force) =>
+    c.host.revertFiles(str(id, 'id'), str(itemId, 'itemId'), pathList(paths), force === true),
+  'engine:restoreFiles': (c, id, revertId, paths) =>
+    c.host.restoreFiles(str(id, 'id'), str(revertId, 'revertId'), paths == null ? undefined : pathList(paths)),
   // 接着引擎自己留下的会话（终端里的 Claude Code，docs/ui/claude-resume.md）
   'engine:nativeSessions': (c, projectId, engine, opts) =>
     c.host.nativeSessions(str(projectId, 'projectId'), engineId(engine), {

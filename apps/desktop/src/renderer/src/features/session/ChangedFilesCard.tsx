@@ -1,7 +1,7 @@
 import { translateMessage } from '../../i18n/core'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
-import { CheckCheck, ChevronRight, FileDiff, ScanEye, SquareArrowOutUpRight, Undo2 } from 'lucide-react'
+import { CheckCheck, ChevronRight, FileDiff, Redo2, ScanEye, SquareArrowOutUpRight, Undo2 } from 'lucide-react'
 import { Button, DiffStat, IconButton, cn, useComingSoon, useToast } from '@/ui'
 import { DiffView } from '@/ui/code/DiffView'
 import { changedFiles, type ChangedFile, type ChangedFiles } from '@/data'
@@ -14,9 +14,19 @@ import { useState, type CSSProperties } from 'react'
 import { useAppMode } from '@/features/coding/mode'
 import { openCodeDiff } from '@/features/coding/editor'
 
+/** 撤回这一轮的改动（docs/ui/undo-changes.md §3）；路径是卡片里的 dir + name */
+export interface CardUndo {
+  /** 不能撤回的原因（运行中、没有快照等）；null 可以撤回 */
+  disabledReason: string | null
+  reverted: ReadonlySet<string>
+  pending: boolean
+  revert: (paths: string[]) => void
+  restore: (paths: string[]) => void
+}
+
 /**
  * 改动文件卡片；data 不传时用演示数据。
- * 真实会话里没做好的按钮不显示（docs/ui/conversation-ux.md §2.1）：「撤销」只在演示模式出现，「审查」要传 onReview。
+ * 真实会话里没做好的按钮不显示（docs/ui/conversation-ux.md §2.1）：「审查」要传 onReview，撤回要传 undo。
  * 点文件行在卡片里展开这一轮的 diff，行尾图标打开编辑器；没有 diff 的文件点行直接打开（docs/ui/changes-inline-diff.md）。
  */
 export function ChangedFilesCard({
@@ -25,6 +35,7 @@ export function ChangedFilesCard({
   target,
   onReview,
   onKeepAll,
+  undo,
   style,
 }: {
   className?: string
@@ -34,6 +45,7 @@ export function ChangedFilesCard({
   onReview?: () => void
   /** 代码模式：整轮标记为已审查 */
   onKeepAll?: () => void
+  undo?: CardUndo | null
 }) {
   useI18n()
   const comingSoon = useComingSoon()
@@ -53,6 +65,7 @@ export function ChangedFilesCard({
   /** 一个文件一行；prefix 区分分组（同一个文件可能在两组里），展开状态按它记 */
   const fileRow = (f: ChangedFile, prefix: string) => {
     const path = f.dir + f.name
+    const reverted = !!undo?.reverted.has(path)
     const ref = target ?? (isDemo && projects[0] ? { projectId: projects[0].id } : null)
     const openInEditor = (): void => {
       if (ref) void openFile(ref, path, undefined, 1, f.newText).catch(e => setError(e.message))
@@ -82,6 +95,7 @@ export function ChangedFilesCard({
       <li key={path}>
         <div
           data-change-row
+          data-reverted={reverted || undefined}
           className="group/file flex h-[34px] items-center gap-1 rounded-md pr-1 pl-2 text-list hover:bg-hover"
         >
           <button
@@ -108,12 +122,53 @@ ${path}${ref && !isRemoteRef(ref) ? `\n${tr('path.hintDiff')}` : ''}`
                 )}
               />
             )}
-            <span data-file-path className={cn('min-w-0 flex-1 truncate', !diffs.length && 'hover:underline')}>
-              <span className="text-fg-muted">{f.dir}</span>
-              <span className="text-fg">{f.name}</span>
+            <span
+              data-file-path
+              className={cn(
+                'min-w-0 flex-1 truncate',
+                !diffs.length && 'hover:underline',
+                reverted && 'text-fg-faint line-through',
+              )}
+            >
+              <span className={reverted ? undefined : 'text-fg-muted'}>{f.dir}</span>
+              <span className={reverted ? undefined : 'text-fg'}>{f.name}</span>
             </span>
-            <DiffStat added={f.added} removed={f.removed} className="shrink-0 text-meta" />
+            <DiffStat
+              added={f.added}
+              removed={f.removed}
+              className={cn('shrink-0 text-meta', reverted && 'line-through opacity-50')}
+            />
           </button>
+          {undo &&
+            (reverted ? (
+              <>
+                <span className="shrink-0 text-meta text-fg-muted">{tr('undo.reverted')}</span>
+                <Button
+                  variant="ghost"
+                  icon={Redo2}
+                  className="h-[26px] shrink-0 px-1.5 text-meta"
+                  disabled={undo.pending}
+                  title={undo.disabledReason ?? tr('undo.restore')}
+                  onClick={() => (undo.disabledReason ? toast(undo.disabledReason) : undo.restore([path]))}
+                >
+                  {tr('undo.restore')}
+                </Button>
+              </>
+            ) : (
+              <IconButton
+                icon={Undo2}
+                label={f.created ? tr('undo.fileNew') : tr('undo.file')}
+                size={26}
+                iconSize={14}
+                disabled={undo.pending}
+                data-undo-file
+                onClick={() => (undo.disabledReason ? toast(undo.disabledReason) : undo.revert([path]))}
+                className={cn(
+                  'opacity-0 group-hover/file:opacity-100 focus-visible:opacity-100',
+                  undo.disabledReason && 'text-fg-faint',
+                )}
+              />
+            ))}
           {diffs.length > 0 && ref && (
             <IconButton
               icon={SquareArrowOutUpRight}
@@ -144,6 +199,9 @@ ${path}${ref && !isRemoteRef(ref) ? `\n${tr('path.hintDiff')}` : ''}`
       </li>
     )
   }
+  const paths = [...new Set(data.files.map(f => f.dir + f.name))]
+  const revertedCount = undo ? paths.filter(p => undo.reverted.has(p)).length : 0
+  const allReverted = !!undo && revertedCount === paths.length && paths.length > 0
   return (
     <section
       data-changes-card
@@ -154,24 +212,36 @@ ${path}${ref && !isRemoteRef(ref) ? `\n${tr('path.hintDiff')}` : ''}`
       <div data-changes-head className="flex min-h-10 items-center gap-2 px-4 pt-1.5 pb-0.5">
         <FileDiff size={15} strokeWidth={1.5} className="shrink-0 text-fg-muted" />
         <span data-changes-title className="min-w-[5.5em] shrink truncate text-list font-medium text-fg">
-          {tr(
-            data.files.length === 1 ? 'session.ChangedFilesCard.editedFile' : 'session.ChangedFilesCard.editedFiles',
-            { n: data.files.length },
-          )}
+          {allReverted
+            ? tr('undo.allReverted')
+            : tr(
+                data.files.length === 1
+                  ? 'session.ChangedFilesCard.editedFile'
+                  : 'session.ChangedFilesCard.editedFiles',
+                { n: data.files.length },
+              )}
         </span>
         <DiffStat added={data.added} removed={data.removed} className="shrink-0 text-meta" />
         <span className="flex-1" />
         {/* 卡片窄于 440px：三个按钮只剩图标（文字进 title / aria-label），标题才不会被挤没 */}
-        {isDemo && (
+        {undo && (
           <Button
             variant="ghost"
-            icon={Undo2}
+            icon={allReverted ? Redo2 : Undo2}
+            data-undo-turn
             className="h-7 px-2 text-meta @max-[440px]/changes:px-1.5"
-            title={tr('session.ChangedFilesCard.undo')}
-            aria-label={tr('session.ChangedFilesCard.undo')}
-            onClick={() => comingSoon(tr('session.ChangedFilesCard.undo'))}
+            disabled={undo.pending}
+            title={undo.disabledReason ?? (allReverted ? tr('undo.restoreAll') : tr('undo.turnHint'))}
+            aria-label={allReverted ? tr('undo.restoreAll') : tr('undo.turn')}
+            onClick={() =>
+              undo.disabledReason
+                ? toast(undo.disabledReason)
+                : allReverted
+                  ? undo.restore(paths)
+                  : undo.revert(paths.filter(p => !undo.reverted.has(p)))
+            }
           >
-            <span className="@max-[440px]/changes:hidden">{tr('session.ChangedFilesCard.undo')}</span>
+            <span className="@max-[440px]/changes:hidden">{allReverted ? tr('undo.restoreAll') : tr('undo.turn')}</span>
           </Button>
         )}
         {code && onKeepAll && (
@@ -226,6 +296,26 @@ ${path}${ref && !isRemoteRef(ref) ? `\n${tr('path.hintDiff')}` : ''}`
         </div>
       ) : (
         <ul className="px-2 pb-2">{data.files.map(f => fileRow(f, ''))}</ul>
+      )}
+      {undo && revertedCount > 0 && !allReverted && (
+        <div
+          data-undo-foot
+          className="flex h-8 items-center gap-2 border-t border-line-subtle px-4 text-meta text-fg-muted"
+        >
+          <span className="min-w-0 flex-1 truncate">
+            {revertedCount === 1 ? tr('undo.revertedOne') : tr('undo.revertedCount', { n: revertedCount })}
+          </span>
+          <button
+            type="button"
+            className="press shrink-0 text-accent-fg hover:underline disabled:opacity-40"
+            disabled={undo.pending}
+            onClick={() =>
+              undo.disabledReason ? toast(undo.disabledReason) : undo.restore(paths.filter(p => undo.reverted.has(p)))
+            }
+          >
+            {tr('undo.restoreAll')}
+          </button>
+        </div>
       )}
       {error && (
         <p role="status" className="px-4 pb-3 text-meta text-danger">

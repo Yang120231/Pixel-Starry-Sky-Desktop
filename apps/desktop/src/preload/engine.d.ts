@@ -145,6 +145,19 @@ export interface EngineBridge {
   ): Promise<import('@pixelsky/protocol').RewindResult>
   /** 撤销最近一次回退 */
   undoRewind(id: string): Promise<void>
+  /** 对话检查点：每轮的快照情况、改动卡片撤回的文件（docs/ui/undo-changes.md） */
+  checkpoints(id: string): Promise<import('@pixelsky/protocol').CheckpointList>
+  /** 开始打字时预先拍第一次快照（docs/ui/undo-changes.md §2） */
+  prepareCheckpoints(id: string): Promise<void>
+  /** 改动卡片撤回文件；之后又被改过、force 不为真时只返回冲突 */
+  revertFiles(
+    id: string,
+    itemId: string,
+    paths: string[],
+    force: boolean,
+  ): Promise<import('@pixelsky/protocol').RevertFilesResult>
+  /** 恢复撤回的文件 */
+  restoreFiles(id: string, revertId: string, paths?: string[]): Promise<void>
   /** 从这条用户消息之前分叉出新会话（§2） */
   fork(id: string, itemId: string, title?: string): Promise<import('@pixelsky/protocol').ForkResult>
   /** 接着引擎自己留下的会话（docs/ui/claude-resume.md）：第一步，只读头部；subfolders 连项目子文件夹里开的一起列 */

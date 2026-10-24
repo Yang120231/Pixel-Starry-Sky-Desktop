@@ -23,4 +23,16 @@ describe('改动卡片数据', () => {
       ['src/b.ts', 1, 0, undefined],
     ])
   })
+
+  it('这一轮第一次改动是新建的文件标 created（撤回 = 删掉），只加了几行的修改不算', () => {
+    const data = toChangedFiles([
+      { ...change('new.ts', '+x'), kind: 'add' },
+      change('new.ts', '+y'),
+      change('grow.ts', '+z', 3, 0),
+    ])!
+    expect(data.files.map(f => [f.name, f.created ?? false])).toEqual([
+      ['new.ts', true],
+      ['grow.ts', false],
+    ])
+  })
 })

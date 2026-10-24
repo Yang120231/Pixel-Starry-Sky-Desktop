@@ -261,6 +261,8 @@ export class HostEvents {
           } else if (item) m.queue.removeQueue(id, item.id, 'accepted')
           rt.activeId = null
         }
+        // 对话检查点：这一轮结束时再拍一次（「继续」的那一轮记在原消息上）
+        if (rt.turn) m.checkpoints.afterTurn(id, rt.turn.resume ? rt.turn.queueId : rt.turn.userItemId)
         rt.turn = undefined
         const turnEngine = (rt.execution ?? rt.snapshot.record).engine
         const awaitingGuidance = rt.snapshot.queue.some(q => q.status === 'delivering')

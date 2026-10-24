@@ -214,7 +214,121 @@ export const branchMessages = {
   'annotate.keep': { zh: '继续标注', en: 'Keep annotating' },
   'annotate.tooLarge': { zh: '标注后的图片超过 10 MiB', en: 'The annotated image is larger than 10 MiB' },
 
+  // 撤回改动：改动卡片按文件撤回、检查点面板（docs/ui/undo-changes.md）
+  'undo.file': { zh: '撤回这个文件', en: 'Revert this file' },
+  'undo.fileNew': { zh: '撤回（删除这个新建的文件）', en: 'Revert (delete this new file)' },
+  'undo.turn': { zh: '撤回本轮', en: 'Revert turn' },
+  'undo.turnHint': {
+    zh: '把这张卡片里的文件都改回这一轮开始前',
+    en: 'Put every file in this card back as it was before this turn',
+  },
+  'undo.restore': { zh: '恢复', en: 'Restore' },
+  'undo.restoreAll': { zh: '全部恢复', en: 'Restore all' },
+  'undo.reverted': { zh: '已撤回', en: 'Reverted' },
+  'undo.revertedCount': { zh: '已撤回 {n} 个文件', en: '{n} files reverted' },
+  'undo.revertedOne': { zh: '已撤回 1 个文件', en: '1 file reverted' },
+  'undo.allReverted': { zh: '本轮改动已全部撤回', en: 'All changes in this turn reverted' },
+  'undo.busy': { zh: '任务运行中，停止后才能撤回', en: 'Stop the running task to revert' },
+  'undo.noCheckpoint': {
+    zh: '这一轮没有代码快照（这次更新之前的消息，或者发送时快照没来得及拍完）',
+    en: 'This turn has no code snapshot (sent before this update, or the snapshot was not ready when it was sent)',
+  },
+  'undo.skipped': { zh: '{path} 没有撤回：{reason}', en: '{path} was not reverted: {reason}' },
+  'undo.conflictTitle': { zh: '撤回 {name}？', en: 'Revert {name}?' },
+  'undo.conflictTitleMany': { zh: '撤回 {n} 个文件？', en: 'Revert {n} files?' },
+  'undo.conflictDesc': {
+    zh: '这一轮之后又改过（后面的轮次或你手改的），撤回会一起丢掉这些修改：',
+    en: 'Changed again after this turn (by later turns or by you); reverting also discards these edits:',
+  },
+  'undo.conflictBinary': { zh: '二进制文件，无法显示差异', en: 'Binary file; cannot show the difference' },
+  'undo.conflictRestore': {
+    zh: '撤回后可以在改动卡片里点「恢复」找回。',
+    en: 'You can get them back with “Restore” on the changes card.',
+  },
+  'undo.confirm': { zh: '撤回', en: 'Revert' },
+  // 检查点面板
+  'checkpoint.button': { zh: '检查点', en: 'Checkpoints' },
+  'checkpoint.hint': {
+    zh: '回到某一轮之前：代码、对话或两者',
+    en: 'Go back to before a turn: code, conversation, or both',
+  },
+  'checkpoint.title': { zh: '回到哪个状态', en: 'Go back to' },
+  'checkpoint.turns': { zh: '共 {n} 轮', en: '{n} turns' },
+  'checkpoint.empty': { zh: '还没有发过消息', en: 'No messages yet' },
+  'checkpoint.now': { zh: '现在', en: 'Now' },
+  'checkpoint.filesN': { zh: '改了 {n} 个文件', en: '{n} files changed' },
+  'checkpoint.filesOne': { zh: '改了 1 个文件', en: '1 file changed' },
+  'checkpoint.noFiles': { zh: '没有改代码', en: 'No code changes' },
+  'checkpoint.pending': { zh: '有代码快照', en: 'Code snapshot saved' },
+  'checkpoint.noSnapshot': { zh: '没有代码快照', en: 'No code snapshot' },
+  'checkpoint.goBack': { zh: '回到 #{n} 之前', en: 'Back to before #{n}' },
+  'checkpoint.mode.both': { zh: '代码和对话', en: 'Code and conversation' },
+  'checkpoint.mode.code': { zh: '只代码', en: 'Code only' },
+  'checkpoint.mode.conversation': { zh: '只对话', en: 'Conversation only' },
+  'checkpoint.restoreCount': {
+    zh: '还原 {k} / {n} 个文件（取消勾选的保持现在的内容）',
+    en: 'Restore {k} of {n} files (unchecked files stay as they are)',
+  },
+  'checkpoint.allFiles': { zh: '还原 {n} 个文件', en: 'Restore {n} files' },
+  'checkpoint.engineAll': {
+    zh: '用 Claude Code 的检查点，会还原全部文件',
+    en: 'Uses the Claude Code checkpoint; all files will be restored',
+  },
+  'checkpoint.edited': { zh: '你手改过', en: 'Edited by you' },
+  'checkpoint.editedWarn': {
+    zh: '{n} 个文件在最后一轮之后被你手改过，还原会覆盖这些修改。',
+    en: '{n} files were edited by you after the last turn; restoring overwrites those edits.',
+  },
+  'checkpoint.removeTurns': {
+    zh: '移除 {n} 轮对话，#{k} 的消息放回输入框。',
+    en: 'Removes {n} turns; message #{k} goes back into the input box.',
+  },
+  'checkpoint.noConversation': {
+    zh: '当前引擎不能回退对话',
+    en: 'The current engine cannot rewind the conversation',
+  },
+  'checkpoint.noCode': {
+    zh: '这一轮之前没有代码快照，只能回退对话',
+    en: 'No code snapshot before this turn; only the conversation can be rewound',
+  },
+  'checkpoint.unchanged': { zh: '代码和那时一样，不用还原', en: 'The code is the same as then; nothing to restore' },
+  'checkpoint.confirm': { zh: '回到这里', en: 'Go back here' },
+  'checkpoint.busy': { zh: '任务运行中，停止后才能回退', en: 'Stop the running task to go back' },
+  'checkpoint.disabled.no-git': {
+    zh: '没有找到 git，代码快照没有开启（安装 Git 后重启应用）',
+    en: 'Git was not found, so code snapshots are off (install Git and restart)',
+  },
+  'checkpoint.disabled.slow': {
+    zh: '项目太大、拍快照太慢，这次运行里不再给这个会话拍新的快照（已有的照样能用，重启后再试）',
+    en: 'The project is too large to snapshot quickly; no new snapshots for this session until restart (existing ones still work)',
+  },
+  'checkpoint.disabled.too-large': {
+    zh: '代码快照超过 200 MiB，这个会话已停用',
+    en: 'Code snapshots exceeded 200 MiB and are off for this session',
+  },
+  'checkpoint.disabled.failed': {
+    zh: '代码快照出错，已停用',
+    en: 'Code snapshots failed and are off',
+  },
+
   // 引擎报的错（中文原文 → 英文）
+  'undo.err.busy': { zh: '请先停止当前任务再撤回', en: 'Stop the current task before reverting' },
+  'undo.err.gone': {
+    zh: '撤回记录已经没有了（重启过应用）',
+    en: 'The revert record is gone (the app was restarted)',
+  },
+  'undo.err.noSnapshot': {
+    zh: '这条消息没有代码快照，代码保持不变',
+    en: 'This message has no code snapshot; the code stays as it is',
+  },
+  'undo.skip.outside': { zh: '不在工作目录里', en: 'Not inside the working folder' },
+  'undo.skip.excluded': {
+    zh: '被 .gitignore 或默认规则排除，没有快照',
+    en: 'Excluded by .gitignore or the default rules, so there is no snapshot',
+  },
+  'undo.skip.noCheckpoint': { zh: '这一轮没有代码快照', en: 'This turn has no code snapshot' },
+  'undo.skip.special': { zh: '子模块或链接，不能撤回', en: 'A submodule or link; cannot be reverted' },
+  'undo.skip.failed': { zh: '读写失败', en: 'Could not read or write the file' },
   'branch.pickSomething': { zh: '请选择要恢复的内容', en: 'Choose what to restore' },
   'branch.noCheckpoint': {
     zh: '这条消息没有代码检查点，代码保持不变',

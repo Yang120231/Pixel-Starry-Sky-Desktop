@@ -297,6 +297,8 @@ export interface NativeActionResult {
 export interface RewindOptions {
   conversation: boolean
   code: boolean
+  /** 只还原这些文件（相对工作目录，预览给出的路径）；省略时全部（docs/ui/undo-changes.md §4） */
+  paths?: string[]
 }
 
 /** 回退前的代码检查：要还原哪些文件；做不了时给原因 */
@@ -309,6 +311,10 @@ export type RewindCodePreview =
       deletions: number
       /** 还原前能不能先存一份以便撤销（总共不超过 20 MiB） */
       undoable: boolean
+      /** 最后一轮结束之后又被改过（手改等）的文件，还原会盖掉；只有对话检查点能查 */
+      edited?: string[]
+      /** 用的是对话检查点（docs/ui/undo-changes.md）：能只还原其中几个文件 */
+      checkpoint?: boolean
     }
   /** compacted：没有检查点，而且这条消息在上下文压缩之前（Claude Code 只保留压缩之后的检查点，GitHub #82） */
   | { ok: false; reason: 'unsupported' | 'no-checkpoint' | 'compacted' | 'failed'; message?: string }
@@ -329,6 +335,47 @@ export interface RewindResult {
   /** 同时选了恢复对话和代码、代码没能恢复时：对话照样回退了，这里是代码没恢复的原因（GitHub #82） */
   codeSkipped?: string
 }
+
+/** 对话检查点停用的原因：没装 git / 拍快照太慢 / 超过大小上限 / 其他错误 */
+export type CheckpointDisabled = 'no-git' | 'slow' | 'too-large' | 'failed'
+
+/** 一轮（一条我方消息）的检查点 */
+export interface CheckpointTurn {
+  itemId: string
+  /** 这一轮改了哪些文件（相对工作目录）；这一轮还没结束、没拍到结束时的快照为 null */
+  files: string[] | null
+  at: number
+}
+
+/** 改动卡片里撤回的文件（只在内存里，重启后没有） */
+export interface RevertedFiles {
+  revertId: string
+  itemId: string
+  /** 撤回时传进来的路径，原样 */
+  paths: string[]
+}
+
+/** 会话的对话检查点（docs/ui/undo-changes.md） */
+export interface CheckpointList {
+  disabled: CheckpointDisabled | null
+  message?: string
+  turns: CheckpointTurn[]
+  reverted: RevertedFiles[]
+}
+
+/** 文件不能撤回的原因：在工作目录外 / 被排除 / 这一轮没有快照 / 子模块或链接 / 读写失败 */
+export type RevertSkip = 'outside' | 'excluded' | 'no-checkpoint' | 'special' | 'failed'
+
+/** 撤回文件：这一轮之后又被改过、没确认时只返回冲突，不改文件；否则返回撤回结果 */
+export type RevertFilesResult =
+  | { kind: 'conflict'; conflicts: { path: string; diff: string; added: number; removed: number }[] }
+  | {
+      kind: 'done'
+      /** 恢复时用；一个都没撤回时为 null */
+      revertId: string | null
+      reverted: string[]
+      skipped: { path: string; reason: RevertSkip; message?: string }[]
+    }
 
 /** 分叉结果：新会话，以及放进它输入框的原文和图片 */
 export interface ForkResult {

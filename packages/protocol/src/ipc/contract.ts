@@ -322,6 +322,29 @@ export const IPC_CONTRACT = {
     trust: 'sender',
   },
   'engine:undoRewind': { kind: 'invoke', route: 'resource', ids: [0], remote: 'engine:undoRewind', trust: 'sender' },
+  // 对话检查点（docs/ui/undo-changes.md）
+  'engine:checkpoints': { kind: 'invoke', route: 'resource', ids: [0], remote: 'engine:checkpoints', trust: 'sender' },
+  'engine:prepareCheckpoints': {
+    kind: 'invoke',
+    route: 'resource',
+    ids: [0],
+    remote: 'engine:prepareCheckpoints',
+    trust: 'sender',
+  },
+  'engine:revertFiles': {
+    kind: 'invoke',
+    route: 'resource',
+    ids: [0, 1],
+    remote: 'engine:revertFiles',
+    trust: 'sender',
+  },
+  'engine:restoreFiles': {
+    kind: 'invoke',
+    route: 'resource',
+    ids: [0],
+    remote: 'engine:restoreFiles',
+    trust: 'sender',
+  },
   'engine:cancelNativeImport': {
     kind: 'invoke',
     route: 'resource',

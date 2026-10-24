@@ -205,6 +205,11 @@ export class HostTurn {
       // 当前模型能不能看图要问目录（异步），所以先问好再算交接
       const sees = await m.handoff.modelSees(id, record)
       if (!stillCurrent()) return
+      // 对话检查点（docs/ui/undo-changes.md §2）：发给引擎之前给工作目录拍快照；「继续」接着原来那一轮，不另拍
+      if (!resume) {
+        await m.checkpoints.beforeTurn(id, userItemId)
+        if (!stillCurrent()) return
+      }
       const handoff = m.handoff.plan(
         id,
         record,

@@ -1,7 +1,7 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Bot, GitBranch, MessagesSquare } from 'lucide-react'
+import { Bot, GitBranch, History, MessagesSquare } from 'lucide-react'
 import { SessionHeader } from './SessionHeader'
 import { Transcript } from './Transcript'
 import { Composer, composerDraftKey } from './Composer'
@@ -28,6 +28,8 @@ import { RetryStatus } from './live/RetryStatus'
 import { ReconnectStatus } from './live/ReconnectStatus'
 import { MessageActionsContext } from './live/MessageActions'
 import { useBranchActions } from './useBranchActions'
+import { CheckpointWarmup, CheckpointsContext, useCheckpointsState } from './undo/checkpoints'
+import { CheckpointPanel } from './undo/CheckpointPanel'
 import { RewindUndoBar, ReviewCommentsBar } from './ComposerNotices'
 import { SideChatPanel } from './sidechat/SideChatPanel'
 import { sideRefusal } from './sidechat/store'
@@ -225,7 +227,13 @@ function LiveSessionView({
 
   // 回退（含代码、撤销）、分叉、旁聊（docs/ui/rewind-fork-sidechat.md）
   const composerKey = draftKey ?? sessionId ?? ''
-  const branch = useBranchActions(sessionId, snapshot, composerKey)
+  // 对话检查点：改动卡片按文件撤回、检查点面板（docs/ui/undo-changes.md）
+  const checkpoints = useCheckpointsState(sessionId, snapshot)
+  const branch = useBranchActions(sessionId, snapshot, composerKey, checkpoints)
+  const [checkpointOpen, setCheckpointOpen] = useState(false)
+  useEffect(() => setCheckpointOpen(false), [sessionId])
+  const checkpointAnchor = useRef<HTMLButtonElement>(null)
+  const engineCaps = snapshot ? ENGINES[snapshot.record.engine]?.caps : undefined
   // 旁聊面板：null 关着；token 每次从 /btw 打开加一
   // draft：文字只放进旁聊输入框，不直接发（对话区右键「在旁聊里问」）
   const [side, setSide] = useState<{ text: string; token: number; draft?: boolean } | null>(null)
@@ -316,27 +324,29 @@ function LiveSessionView({
                     )}
                     {/* 对话里的图片不带数据，按会话 id 按需取原图（attachments/imageSource.ts） */}
                     <ImageSessionContext.Provider value={sessionId}>
-                      <MessageActionsContext.Provider value={branch.messageActions}>
-                        <ApprovalWaitContext.Provider value={approvalWait}>
-                          <LiveTranscript
-                            snapshot={snapshot}
-                            footer={inlinePlan && <InlinePlan plan={inlinePlan} working={fullProgress.working} />}
-                            header={
-                              forkedFrom && (
-                                <button
-                                  type="button"
-                                  data-forked-from
-                                  onClick={() => paneActions.open(forkedFrom.sessionId)}
-                                  className="conversation-message press inline-flex items-center gap-1.5 self-start rounded-md px-1.5 py-0.5 text-meta text-fg-muted hover:bg-hover hover:text-fg"
-                                >
-                                  <GitBranch size={12} strokeWidth={1.75} />
-                                  {tr('fork.from', { title: forkedFrom.title })}
-                                </button>
-                              )
-                            }
-                          />
-                        </ApprovalWaitContext.Provider>
-                      </MessageActionsContext.Provider>
+                      <CheckpointsContext.Provider value={checkpoints}>
+                        <MessageActionsContext.Provider value={branch.messageActions}>
+                          <ApprovalWaitContext.Provider value={approvalWait}>
+                            <LiveTranscript
+                              snapshot={snapshot}
+                              footer={inlinePlan && <InlinePlan plan={inlinePlan} working={fullProgress.working} />}
+                              header={
+                                forkedFrom && (
+                                  <button
+                                    type="button"
+                                    data-forked-from
+                                    onClick={() => paneActions.open(forkedFrom.sessionId)}
+                                    className="conversation-message press inline-flex items-center gap-1.5 self-start rounded-md px-1.5 py-0.5 text-meta text-fg-muted hover:bg-hover hover:text-fg"
+                                  >
+                                    <GitBranch size={12} strokeWidth={1.75} />
+                                    {tr('fork.from', { title: forkedFrom.title })}
+                                  </button>
+                                )
+                              }
+                            />
+                          </ApprovalWaitContext.Provider>
+                        </MessageActionsContext.Provider>
+                      </CheckpointsContext.Provider>
                     </ImageSessionContext.Provider>
                     {progress.visible && !trace && (
                       <ProgressCard
@@ -431,25 +441,68 @@ function LiveSessionView({
                           : undefined
                       }
                       statusExtra={
-                        branch.sideChat && (
-                          <button
-                            type="button"
-                            data-side-chat-toggle
-                            aria-pressed={side !== null}
-                            title={tr('side.hint')}
-                            onClick={() => (side ? setSide(null) : openSide())}
-                            className={cn(
-                              'press inline-flex items-center gap-1 rounded px-1 hover:bg-hover hover:text-fg',
-                              side && 'text-fg',
-                            )}
-                          >
-                            <MessagesSquare size={13} strokeWidth={1.5} />
-                            {tr('side.title')}
-                          </button>
-                        )
+                        <>
+                          {checkpoints && snapshot && (
+                            <button
+                              ref={checkpointAnchor}
+                              type="button"
+                              data-checkpoint-toggle
+                              aria-pressed={checkpointOpen}
+                              title={tr('checkpoint.hint')}
+                              onClick={() => setCheckpointOpen(v => !v)}
+                              className={cn(
+                                'press inline-flex items-center gap-1 rounded px-1 hover:bg-hover hover:text-fg',
+                                checkpointOpen && 'text-fg',
+                              )}
+                            >
+                              <History size={13} strokeWidth={1.5} />
+                              {tr('checkpoint.button')}
+                            </button>
+                          )}
+                          {branch.sideChat && (
+                            <button
+                              type="button"
+                              data-side-chat-toggle
+                              aria-pressed={side !== null}
+                              title={tr('side.hint')}
+                              onClick={() => (side ? setSide(null) : openSide())}
+                              className={cn(
+                                'press inline-flex items-center gap-1 rounded px-1 hover:bg-hover hover:text-fg',
+                                side && 'text-fg',
+                              )}
+                            >
+                              <MessagesSquare size={13} strokeWidth={1.5} />
+                              {tr('side.title')}
+                            </button>
+                          )}
+                        </>
                       }
                     />
                   </ComposerArea>
+                  {checkpoints && <CheckpointWarmup sessionId={sessionId} draftKey={composerKey} />}
+                  {checkpoints && snapshot && checkpointOpen && (
+                    <CheckpointPanel
+                      open
+                      anchor={checkpointAnchor}
+                      snapshot={snapshot}
+                      checkpoints={checkpoints}
+                      canRewindConversation={!!engineCaps?.rewind}
+                      engineRewindCode={engineCaps?.rewindCode === true}
+                      preview={item =>
+                        bridge
+                          ? bridge.rewindPreview(sessionId, item.id)
+                          : Promise.resolve(
+                              demo().conversations.rewindPreview(
+                                sessionId,
+                                item.id,
+                                snapshot.items.find(i => i.kind === 'user')?.id ?? null,
+                              ),
+                            )
+                      }
+                      rewind={branch.rewind}
+                      onClose={() => setCheckpointOpen(false)}
+                    />
+                  )}
                   {side && !trace && branch.sideChat && (
                     <SideChatPanel
                       sessionId={sessionId}

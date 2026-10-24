@@ -347,4 +347,19 @@ export class Store {
   deleteSession(id: string): void {
     rmSync(this.sessionDir(id), { recursive: true, force: true })
   }
+
+  /** 对话检查点的影子 Git 仓库（docs/ui/undo-changes.md §2），删会话时一起删 */
+  checkpointDir(id: string): string {
+    return join(this.sessionDir(id), 'checkpoints')
+  }
+
+  loadCheckpoints(id: string): unknown {
+    return readJson<unknown>(join(this.sessionDir(id), 'checkpoints.json'))
+  }
+
+  saveCheckpoints(id: string, data: unknown): void {
+    const dir = this.sessionDir(id)
+    mkdirSync(dir, { recursive: true })
+    writeJson(join(dir, 'checkpoints.json'), data)
+  }
 }

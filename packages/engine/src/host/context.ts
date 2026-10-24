@@ -20,6 +20,7 @@ import type { HostCache } from './cache'
 import type { HostCompaction } from './compaction'
 import type { HostEvents } from './events'
 import type { HostBranch } from './branch'
+import type { HostCheckpoints } from './checkpoints'
 import type { HostGuard } from './guard'
 import type { HostHandoff } from './handoff'
 import type { HostLogin } from './login'
@@ -51,6 +52,8 @@ export interface EngineHostOptions {
   sessionEnv?: (record: SessionRecord) => NodeJS.ProcessEnv
   /** 像素星空命令行的自带入口（开发时 packages/cli/src/cli.ts；PIXELSKY_CLI_BIN 优先于它，再其次是 PATH 上的 pixelsky） */
   pixelCli?: string | null
+  /** 对话检查点（docs/ui/undo-changes.md）：每轮前后给工作目录拍快照。桌面端和远程辅助进程打开，测试默认关 */
+  checkpoints?: boolean
   /** 保存数据的目录（Electron 里是 userData/engine） */
   dataDir: string
   /** 广播事件给界面 */
@@ -147,6 +150,7 @@ export interface HostModules {
   turn: HostTurn
   sessions: HostSessions
   branch: HostBranch
+  checkpoints: HostCheckpoints
   handoff: HostHandoff
   login: HostLogin
   native: HostNative
