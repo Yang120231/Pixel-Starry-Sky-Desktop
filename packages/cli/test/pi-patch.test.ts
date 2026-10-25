@@ -196,3 +196,16 @@ describe('Pi 补丁：extensions/mcp/index.js 把连接状态交给桌面端', (
     expect(text).toContain('done?.(failure, url);')
   })
 })
+
+describe('Pi 补丁：compaction.js 的 token 估算更保守', () => {
+  it('ASCII 按 3 个字符一个 token，中文每个字一个 token（原来一律字符数 / 4，中文少算好几倍，压缩触发太晚）', async () => {
+    const { estimateTokens } = (await import(/* @vite-ignore */ distUrl('core/compaction/compaction.js'))) as {
+      estimateTokens: (message: unknown) => number
+    }
+    const user = (content: string): unknown => ({ role: 'user', content })
+    expect(estimateTokens(user('a'.repeat(300)))).toBe(100)
+    expect(estimateTokens(user('中'.repeat(300)))).toBe(300)
+    const result = { role: 'toolResult', content: [{ type: 'text', text: '服务器配置'.repeat(100) }] }
+    expect(estimateTokens(result)).toBe(500)
+  })
+})
