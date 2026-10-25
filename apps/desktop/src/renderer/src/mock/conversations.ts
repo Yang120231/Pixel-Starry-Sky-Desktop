@@ -364,6 +364,17 @@ draft:9f2c  41 字
 draft:a71e   0 字
 ${F}
 
+草稿从输入到落盘的流程（mermaid 代码块，画成图，可切回源码、放大；docs/ui/mermaid.md）：
+
+${F}mermaid
+flowchart LR
+  A[输入] --> B{停顿 300ms?}
+  B -- 是 --> C[写入 localStorage]
+  B -- 否 --> D[只留在内存]
+  C --> E[切换会话时读回]
+  D --> E
+${F}
+
 参考 React 文档的 [useSyncExternalStore](https://react.dev/reference/react/useSyncExternalStore)。
 
 ---

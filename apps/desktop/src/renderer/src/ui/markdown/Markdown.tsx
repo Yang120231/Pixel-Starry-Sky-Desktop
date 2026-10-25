@@ -9,6 +9,7 @@ import { InlineCode, MarkdownLink, PathLinksContext, keepLocalPaths } from './pa
 import { MarkdownImage } from './MarkdownImage'
 import { Callout, isAlertKind, remarkAlerts } from './alerts'
 import { hasMath, normalizeMath, useMathPlugins, type PluggableList } from './math'
+import { MermaidBlock, StreamingContext } from './MermaidBlock'
 import { createStreamSplitter, type StreamBlocks } from './streamBlocks'
 import { createTailThrottle, type TailThrottle } from './tailThrottle'
 import { rehypeHeadingIds, rehypeSourceLines } from './document'
@@ -67,13 +68,10 @@ const components: Components = {
   pre: ({ node }) => {
     const { code, lang } = fencedCode(node)
     const line = lineOf(node)
-    return line === undefined ? (
-      <CodeBlock code={code} lang={lang} />
-    ) : (
-      <div data-line={line}>
-        <CodeBlock code={code} lang={lang} />
-      </div>
-    )
+    // mermaid 代码块画成图（docs/ui/mermaid.md）；文件预览（文档模式）不画
+    const block =
+      lang === 'mermaid' && line === undefined ? <MermaidBlock code={code} /> : <CodeBlock code={code} lang={lang} />
+    return line === undefined ? block : <div data-line={line}>{block}</div>
   },
 }
 
@@ -143,14 +141,16 @@ function StreamingBody({ text }: { text: string }) {
   const { completed, tail } = useThrottledBlocks(latest)
   return (
     <PathLinksContext.Provider value={null}>
-      {completed.map((block, i) => (
-        <StreamChunk key={i} text={block} />
-      ))}
-      {tail.trim() === '' ? null : tail.length <= STREAM_MARKDOWN_LIMIT ? (
-        <StreamChunk text={tail} />
-      ) : (
-        <p className="whitespace-pre-wrap">…{tail.slice(-STREAM_MARKDOWN_LIMIT)}</p>
-      )}
+      <StreamingContext.Provider value={true}>
+        {completed.map((block, i) => (
+          <StreamChunk key={i} text={block} />
+        ))}
+        {tail.trim() === '' ? null : tail.length <= STREAM_MARKDOWN_LIMIT ? (
+          <StreamChunk text={tail} />
+        ) : (
+          <p className="whitespace-pre-wrap">…{tail.slice(-STREAM_MARKDOWN_LIMIT)}</p>
+        )}
+      </StreamingContext.Provider>
     </PathLinksContext.Provider>
   )
 }

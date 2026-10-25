@@ -1,6 +1,6 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
-import { memo, useMemo, useState } from 'react'
+import { memo, useMemo, useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { CopyButton, cn } from '@/ui'
 import { highlight, languageLabel, resolveLanguage } from './highlight'
@@ -21,11 +21,20 @@ export const CodeBlock = memo(function CodeBlock({
   code,
   lang,
   className,
+  tools,
+  notice,
+  view,
 }: {
   code: string
   /** 代码块标注的语言（```ts 里的 ts）；没有标注时为 null */
   lang: string | null
   className?: string
+  /** 标题栏里复制按钮前的控件（Mermaid 的「源码 / 图」切换、放大） */
+  tools?: ReactNode
+  /** 标题栏下面的一行提示（Mermaid 渲染失败的原因） */
+  notice?: ReactNode
+  /** 替换代码区的内容（Mermaid 的图）；复制仍复制源码，不折叠 */
+  view?: ReactNode
 }) {
   useI18n()
   // Markdown 解析出来的代码末尾常带一个换行，去掉免得多出一行空白
@@ -34,7 +43,7 @@ export const CodeBlock = memo(function CodeBlock({
   const label = languageLabel(lang) ?? tr('code.CodeBlock.code')
   const body = useMemo(() => highlight(text, resolved), [text, resolved])
   const lines = useMemo(() => text.split('\n').length, [text])
-  const foldable = shouldFold(lines)
+  const foldable = !view && shouldFold(lines)
   const [expanded, setExpanded] = useState(false)
   const folded = foldable && !expanded
 
@@ -48,22 +57,28 @@ export const CodeBlock = memo(function CodeBlock({
     >
       <div className="flex h-8 items-center justify-between border-b border-line-subtle pr-1.5 pl-3">
         <span className="truncate text-meta text-fg-muted">{label}</span>
-        <CopyButton text={text} label={tr('code.CodeBlock.copyCode')} />
+        <div className="flex items-center gap-1">
+          {tools}
+          <CopyButton text={text} label={tr('code.CodeBlock.copyCode')} />
+        </div>
       </div>
-      <div className="relative">
-        <pre
-          className={cn(
-            'selectable overflow-x-auto px-3 py-2.5 font-mono text-[12.5px] leading-relaxed text-fg',
-            // 20 行（lh 是一行的高度）加上下内边距
-            folded && 'max-h-[calc(20lh+1.25rem)] overflow-y-hidden',
+      {notice}
+      {view ?? (
+        <div className="relative">
+          <pre
+            className={cn(
+              'selectable overflow-x-auto px-3 py-2.5 font-mono text-[12.5px] leading-relaxed text-fg',
+              // 20 行（lh 是一行的高度）加上下内边距
+              folded && 'max-h-[calc(20lh+1.25rem)] overflow-y-hidden',
+            )}
+          >
+            <code>{body}</code>
+          </pre>
+          {folded && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-linear-to-t from-subtle to-transparent" />
           )}
-        >
-          <code>{body}</code>
-        </pre>
-        {folded && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-linear-to-t from-subtle to-transparent" />
-        )}
-      </div>
+        </div>
+      )}
       {foldable && (
         <button
           type="button"
