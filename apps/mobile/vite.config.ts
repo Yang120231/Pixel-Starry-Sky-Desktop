@@ -33,9 +33,8 @@ function versionFile(): Plugin {
   }
 }
 
-// App（Capacitor）里页面从根路径加载：`vite build --mode app`
-export default defineConfig(({ mode }) => ({
-  base: mode === 'app' ? '/' : '/m/',
+export default defineConfig({
+  base: '/m/',
   plugins: [react(), tailwindcss(), versionFile()],
   define: { __BUILD_ID__: JSON.stringify(buildId) },
   resolve: { alias: { '@': resolve(import.meta.dirname, 'src') } },
@@ -45,4 +44,4 @@ export default defineConfig(({ mode }) => ({
     proxy: { '/v1/bridge': { target: cloud, ws: true, changeOrigin: false } },
   },
   build: { outDir: 'dist', target: 'es2022' },
-}))
+})

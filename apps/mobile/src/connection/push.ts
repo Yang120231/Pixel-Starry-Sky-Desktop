@@ -1,8 +1,7 @@
 // 锁屏提醒：网页推送（docs/mobile-remote.md §22.2）。手机在云端登记推送订阅（每台配对的电脑各一个设备，各登记一次），
 // 电脑有任务等你处理 / 完成 / 出错时经云端推过来，service worker（public/sw.js）显示通知。
-// 推送内容只有种类和数量，不带任务标题。只在网页版、正式构建、https 下可用；安卓 App 里不显示这一项。
+// 推送内容只有种类和数量，不带任务标题。只在正式构建、https 下可用。
 import { fromBase64Url } from '@pixelsky/link'
-import { inApp } from '@/platform'
 import { isStandalone } from '@/platform/pwa'
 import type { Pairing } from './storage'
 import { L } from '@/i18n'
@@ -17,7 +16,6 @@ const isApple = (): boolean =>
 
 function supported(): boolean {
   return (
-    !inApp &&
     !import.meta.env.DEV &&
     window.isSecureContext &&
     'serviceWorker' in navigator &&
@@ -42,7 +40,6 @@ function setWanted(on: boolean): void {
 }
 
 export function pushState(): PushState {
-  if (inApp) return 'unsupported'
   // iOS 只有添加到主屏幕后的网页才有 PushManager（16.4 起）
   if (!supported()) return isApple() && !isStandalone() ? 'install' : 'unsupported'
   if (Notification.permission === 'denied') return 'denied'
@@ -165,14 +162,12 @@ async function dropToken(token: string): Promise<boolean> {
 
 /** 在手机上忘掉一台电脑：那台电脑别再推过来。没取消成就记下，联网后补 */
 export function dropPush(p: Pairing): void {
-  if (inApp) return
   void dropToken(p.token).then(ok => {
     if (!ok) saveDrops([...new Set([...pendingDrops(), p.token])])
   })
 }
 
 export async function retryDrops(): Promise<void> {
-  if (inApp) return
   const left: string[] = []
   for (const token of pendingDrops()) if (!(await dropToken(token))) left.push(token)
   saveDrops(left)

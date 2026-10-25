@@ -16,7 +16,6 @@ import {
   keypairFrom,
   type HandshakeResult,
 } from '@pixelsky/link'
-import { inApp } from '@/platform'
 import { browserCodec } from './codec'
 import type { Pairing } from './storage'
 
@@ -80,9 +79,9 @@ const RETRY_LATER = 60_000
 /** 云端每 20 秒发一条文本心跳 tick；收到过之后这么久什么都没收到，就当连接已经死了 */
 const DEAD_AFTER = 60_000
 
-/** 网页版：和页面同源，配对时跟随了主站列出的中转节点就连那个节点；App 里：配对时二维码给的中转地址 */
+/** 和页面同源；配对时跟随了主站列出的中转节点就连那个节点 */
 export function relayUrl(pairing: Pairing): string {
-  const target = inApp ? pairing.relay : pairing.node
+  const target = pairing.node
   if (target) {
     const url = new URL(target)
     url.searchParams.set('role', 'phone')

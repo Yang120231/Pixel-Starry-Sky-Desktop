@@ -18,7 +18,6 @@ import { SessionScreen } from '@/features/session/SessionScreen'
 import { NewTask } from '@/features/tasks/NewTask'
 import { TaskList } from '@/features/tasks/TaskList'
 import type { ToolProps } from '@/features/tools/common'
-import { onBackButton } from '@/platform'
 import { focusTarget, useShortcuts } from '@/platform/keys'
 import { setBadge, useNotifyOpen } from '@/platform/notifyOpen'
 import { loadPage } from '@/platform/version'
@@ -27,7 +26,6 @@ import { Button, Empty, MenuButton, Screen, Spinner, WIDE, WIDER, useMedia } fro
 import { PageBoundary } from '@/ui/PageBoundary'
 import { ShortcutSheet } from './Shortcuts'
 import { UpdateBanner } from './UpdateBanner'
-import { useReminders } from './reminders'
 import { L } from '@/i18n'
 
 // 不是每次打开都用到的页面按需加载（扫码用相机和二维码库，工具页有 Git / 文件 / 产物 / 任务），主包小一些
@@ -216,7 +214,6 @@ export function App() {
     if (sessionId) go({ page: 'session', id: sessionId, ...(waiting ? { notify: true } : {}) })
     else replace({ page: waiting ? 'triage' : 'home' })
   }
-  useReminders(openFrom)
   useNotifyOpen(t => openFrom(t.device, t.session, t.waiting))
   // 主屏幕图标上的数字：这台电脑上等你处理的个数（页面在后台时由推送更新，sw.js）
   // 没连上、列表还没取到、或还是本机缓存的旧列表时不动它（不然刚打开先被清零、或写上过期的数）
@@ -278,19 +275,6 @@ export function App() {
         return
     }
   })
-  // 安卓返回键：抽屉开着先关；二级页面返回；一级页面退到后台
-  const routeRef = useRef(route)
-  routeRef.current = route
-  const drawerRef = useRef(drawer)
-  drawerRef.current = drawer
-  useEffect(
-    () =>
-      onBackButton(
-        () => drawerRef.current || !['home', 'me'].includes(routeRef.current.page),
-        () => (drawerRef.current ? setDrawer(false) : history.back()),
-      ),
-    [],
-  )
   // 窄屏从左边缘往右滑拉出抽屉
   useEffect(() => {
     if (wide) return

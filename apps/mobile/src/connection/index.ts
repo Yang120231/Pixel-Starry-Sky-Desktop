@@ -8,7 +8,6 @@ import {
   pairRequest,
   toBase64Url,
 } from '@pixelsky/link'
-import { inApp } from '@/platform'
 import { type Offer } from './offer'
 import { pickNode } from './nodes'
 import { DesktopLink, type LinkHooks, type LinkState } from './link'
@@ -48,10 +47,9 @@ export async function pairWithOffer(offer: Offer, phoneName: string): Promise<Pa
   let res: Response
   let node: string | null = null
   try {
-    // App 里页面不和云端同源：按二维码里的中转地址找云端（请求走原生 HTTP，没有跨域问题）。
-    // 网页版：二维码里的中转是主站列出的节点（优质节点）就配对、连接都发到那个节点，否则用页面的来源
-    node = inApp ? null : await pickNode(offer.raw.relay, location.origin)
-    const api = inApp ? bridgeApiBase(offer.raw.relay) : node ? bridgeApiBase(node) : location.origin
+    // 二维码里的中转是主站列出的节点（优质节点）就配对、连接都发到那个节点，否则用页面的来源
+    node = await pickNode(offer.raw.relay, location.origin)
+    const api = node ? bridgeApiBase(node) : location.origin
     res = await fetch(api + '/v1/bridge/pair', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -1,9 +1,8 @@
 // 发了新版的提示（docs/mobile-remote.md §21）：sw.js 不缓存页面，下次「打开」就是新的，
 // 但已经开着的页面 JS 不会自己换，用户会一直用旧页面。所以页面回到前台和每 10 分钟取一次 version.json
 // （构建时生成，内容 {"build":"构建号"}，部署时和 index.html 一起换），和编进页面的 __BUILD_ID__ 不一样就提示刷新。
-// dev 和 App（Capacitor）里不检查：App 的页面就在安装包里，换版本要装新包。
+// dev 里不检查。
 import { useEffect, useState } from 'react'
-import { inApp } from './index'
 
 /** 多久取一次（页面一直在前台时） */
 export const CHECK_INTERVAL = 10 * 60 * 1000
@@ -81,7 +80,7 @@ export function watchNewBuild(onNew: () => void, deps: WatchDeps): () => void {
 export function useNewVersion(): boolean {
   const [found, setFound] = useState(false)
   useEffect(() => {
-    if (inApp || import.meta.env.DEV || !currentBuild) return
+    if (import.meta.env.DEV || !currentBuild) return
     return watchNewBuild(() => setFound(true), {
       current: currentBuild,
       fetchRemote: () => fetchBuild(),

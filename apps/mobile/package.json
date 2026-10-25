@@ -3,22 +3,14 @@
   "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "像素星空手机端（网页版先行，之后用 Capacitor 包成 App；docs/mobile-remote.md §8）",
+  "description": "像素星空网页版：手机、平板、浏览器（/m/，docs/mobile-remote.md；不出原生 App，D125）",
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run",
-    "build:app": "vite build --mode app",
-    "android:sync": "vite build --mode app && cap sync android",
-    "android:apk": "node scripts/android-build.mjs"
+    "test": "vitest run"
   },
   "dependencies": {
-    "@capacitor/android": "^8.5.3",
-    "@capacitor/app": "^8.1.2",
-    "@capacitor/core": "^8.5.3",
-    "@capacitor/local-notifications": "^8.3.1",
-    "@capawesome-team/capacitor-android-foreground-service": "^8.1.0",
     "@pixelsky/link": "workspace:*",
     "@pixelsky/protocol": "workspace:*",
     "hast-util-to-jsx-runtime": "^2.3.6",
@@ -31,7 +23,6 @@
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
-    "@capacitor/cli": "^8.5.3",
     "@tailwindcss/vite": "^4.3.3",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

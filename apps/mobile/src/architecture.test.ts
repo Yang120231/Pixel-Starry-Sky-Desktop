@@ -64,12 +64,6 @@ describe('mobile dependency rules', () => {
     }
   })
 
-  it('lets only platform/ use Capacitor', () => {
-    for (const f of files)
-      for (const imp of f.imports)
-        if (/^@capacitor\/|^@capawesome/.test(imp)) expect(area(f.file), `${f.file} → ${imp}`).toBe('platform')
-  })
-
   it('never imports the desktop app', () => {
     for (const f of files)
       for (const imp of f.imports) expect(imp, f.file).not.toMatch(/apps\/desktop|@pixelsky\/desktop/)

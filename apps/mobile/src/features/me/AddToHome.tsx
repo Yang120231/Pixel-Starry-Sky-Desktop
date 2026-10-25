@@ -129,8 +129,8 @@ export function AddToHome({ onBack }: { onBack(): void }) {
           </p>
           <p className="text-fg-secondary">
             {L(
-              '后台提醒仍然收不到：网页切到后台就会被浏览器暂停，连接断了。要提醒请用安卓 App，或者回到页面查看。',
-              'You still won’t get alerts in the background: the browser pauses the page and the connection drops. For alerts, use the Android app, or come back to the page to check.',
+              '添加后可以在「我的」里打开「锁屏提醒」：网页切到后台会被浏览器暂停，有任务等你处理、完成或出错时靠它提醒。',
+              'After adding it, turn on “Lock-screen alerts” in Me: the browser pauses the page in the background, so alerts for tasks that need you, finish or fail come through there.',
             )}
           </p>
         </div>

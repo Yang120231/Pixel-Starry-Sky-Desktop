@@ -1,9 +1,7 @@
 // 网页版的「添加到主屏幕」（docs/mobile-remote.md §20）：manifest 和图标在 public/，这里是运行时的两件事——
 // 1. 提前接住浏览器的 beforeinstallprompt（Chrome / Edge 在页面加载早期就发，React 还没挂上就错过了），点按钮时直接弹系统的安装框；
 // 2. 注册只管「没网时显示离线页」的 service worker（public/sw.js）。
-// 安卓 App（Capacitor）里这些都不用，全部空操作。
 import { useSyncExternalStore } from 'react'
-import { inApp } from './index'
 
 interface InstallPromptEvent extends Event {
   prompt(): Promise<void>
@@ -53,7 +51,7 @@ export async function promptInstall(): Promise<boolean> {
 
 /** 0 = 不显示入口（App 里、已经从主屏幕打开、刚装好）；1 = 显示，点开看步骤；2 = 显示，点了直接弹系统安装框 */
 function snapshot(): 0 | 1 | 2 {
-  if (inApp || installed || isStandalone()) return 0
+  if (installed || isStandalone()) return 0
   return deferred ? 2 : 1
 }
 
@@ -73,7 +71,7 @@ export function useInstallEntry(): 0 | 1 | 2 {
  * updateViaCache: 'none'：sw.js 自己也不走 HTTP 缓存，改了离线页后能很快更新。
  */
 export function registerServiceWorker(): void {
-  if (inApp || import.meta.env.DEV || !window.isSecureContext || !('serviceWorker' in navigator)) return
+  if (import.meta.env.DEV || !window.isSecureContext || !('serviceWorker' in navigator)) return
   const base = import.meta.env.BASE_URL
   // 等页面加载完再注册，不和首屏抢网络
   window.addEventListener('load', () => {

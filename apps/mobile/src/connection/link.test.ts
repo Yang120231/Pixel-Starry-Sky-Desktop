@@ -13,8 +13,6 @@ import {
 import { DesktopLink, relayUrl, unbatch, type LinkState } from './link'
 import type { Pairing } from './storage'
 
-vi.mock('@/platform', () => ({ inApp: false }))
-
 class FakeSocket {
   static OPEN = 1
   static CLOSED = 3
