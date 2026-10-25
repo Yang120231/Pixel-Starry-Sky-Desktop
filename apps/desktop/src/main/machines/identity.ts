@@ -23,6 +23,8 @@ const fields = new Set([
   'messageId',
   'toolUseId',
   'workspaceSessionId',
+  // 定时任务开出的会话指向来源任务（docs/ui/board-schedule.md）
+  'scheduleTaskId',
   // 分支会话 record.branch.startAfter 指向快照里的条目 id（条目 id 会加前缀，它也要跟着加，分隔线才对得上）
   'startAfter',
 ])

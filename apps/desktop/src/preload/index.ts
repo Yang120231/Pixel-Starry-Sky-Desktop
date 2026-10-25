@@ -326,6 +326,7 @@ const projectTools: ProjectToolsBridge = {
   sessionChecks: ref => call('projectTools:sessionChecks', ref),
   setSessionChecks: (ref, on) => call('projectTools:setSessionChecks', ref, on),
   syncIssue: (id, input) => call('projectTools:syncIssue', id, input),
+  runSchedule: id => call('schedule:runNow', id),
   lastSessionCheck: sessionId => call('checks:last', sessionId),
   onSessionCheck: cb => {
     const listener = (_e: unknown, push: { sessionId: string; run: CheckRun | null }): void => cb(push)

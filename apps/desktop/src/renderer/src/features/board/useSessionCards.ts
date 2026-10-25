@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import { isLive, useEngineState, useSidebarData } from '@/features/engine'
 import { useSessionDigests } from '@/features/engine/sessionDigest'
 import { machineOf, useMachines } from '@/features/machines/store'
+import { demo } from '@/data/demo'
 import { useInbox } from '@/features/panel/inbox/useInbox'
 import { demoSessionCards, sessionCards, type SessionCard } from './sessionLanes'
 
@@ -23,6 +24,8 @@ export function useSessionCards(): SessionCard[] {
           ...sidebar.pinned.map(s => ({ ...s, projectId: s.projectId ?? '', project: s.project ?? '' })),
         ],
         inbox,
+        undefined,
+        demo().scheduledSessions,
       )
     return sessionCards({
       sessions: sessions.filter(s => machineOf(s.record.id) === machine),

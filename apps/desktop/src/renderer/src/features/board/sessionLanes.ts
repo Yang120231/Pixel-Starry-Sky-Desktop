@@ -25,6 +25,8 @@ export interface SessionCard {
   queue: QueueSummary | null
   /** 运行中：这一轮计划的进度（有计划且读到了快照时） */
   progress: { done: number; total: number } | null
+  /** 定时任务开出来的会话（卡片上显示「⏱ 定时」，docs/ui/board-schedule.md） */
+  scheduled?: boolean
 }
 
 /** 真在跑：不空闲也不在等你，或者这一轮说完了但后台子智能体还在跑 */
@@ -70,6 +72,7 @@ export function sessionCards(input: {
       error: item?.error ?? null,
       queue: item?.queue ?? s.queue ?? null,
       progress: lane === 'running' ? progressOf(snapshot) : null,
+      ...(s.record.scheduleTaskId ? { scheduled: true } : {}),
     })
   }
   return cards.sort(order)
@@ -86,6 +89,7 @@ export function demoSessionCards(
   }>,
   inbox: readonly InboxItem[],
   now = Date.now(),
+  scheduledIds: readonly string[] = [],
 ): SessionCard[] {
   const fromInbox = new Set(inbox.map(item => item.sessionId))
   const cards: SessionCard[] = inbox.map(item => ({
@@ -99,6 +103,7 @@ export function demoSessionCards(
     error: item.error,
     queue: item.queue,
     progress: null,
+    ...(scheduledIds.includes(item.sessionId) ? { scheduled: true } : {}),
   }))
   sessions.forEach((s, i) => {
     if (!s.status || s.status === 'idle' || fromInbox.has(s.id)) return

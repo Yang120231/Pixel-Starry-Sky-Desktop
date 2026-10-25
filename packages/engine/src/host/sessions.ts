@@ -40,7 +40,11 @@ export class HostSessions {
 
   createSession(
     /** rememberChoices: false：按别处存的配置开的会话（频道成员），不把这几项记成默认值 */
-    opts: { projectId: string } & Partial<SessionSettings> & { engine?: EngineId; rememberChoices?: false },
+    opts: { projectId: string } & Partial<SessionSettings> & {
+        engine?: EngineId
+        rememberChoices?: false
+        scheduleTaskId?: string
+      },
     workspacePath?: string,
   ): SessionRecord {
     const { ctx } = this
@@ -77,6 +81,7 @@ export class HostSessions {
       bottomedAt: null,
       pinnedAt: null,
       titleEdited: false,
+      ...(typeof opts.scheduleTaskId === 'string' ? { scheduleTaskId: opts.scheduleTaskId } : {}),
     }
     ctx.records.set(record.id, record)
     ctx.store.saveRecord(record)

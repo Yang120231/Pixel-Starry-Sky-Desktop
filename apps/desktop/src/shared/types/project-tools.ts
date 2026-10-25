@@ -1,4 +1,4 @@
-import type { Item } from '@pixelsky/protocol'
+import type { EngineId, Item, PermissionMode } from '@pixelsky/protocol'
 
 /** review = 待验收：交给 AI 成员的事项做完了，等你验收（docs/ui/channels-collab-v2.md §9） */
 export type ManualTaskStatus = 'pending' | 'in_progress' | 'review' | 'completed'
@@ -33,6 +33,49 @@ export interface IssueLink {
   at: number
 }
 
+/** 定时任务（docs/ui/board-schedule.md）：频率只给预设，时间按本机本地时区 */
+export type ScheduleFreq = 'hourly' | 'daily' | 'weekdays' | 'weekly'
+export const SCHEDULE_FREQS: readonly ScheduleFreq[] = ['hourly', 'daily', 'weekdays', 'weekly']
+/** 每个定时任务最多留几条运行记录 */
+export const SCHEDULE_RUNS_MAX = 20
+
+/** 一次运行：missed = 应用没开错过了（不补跑），skipped = 上一次还在跑 */
+export interface ScheduleRun {
+  /** 计划的时间点；手动运行是点击的时间 */
+  at: number
+  trigger: 'schedule' | 'manual'
+  status: 'running' | 'done' | 'failed' | 'missed' | 'skipped'
+  /** 开出（或续上）的会话；交给频道成员的运行没有 */
+  sessionId?: string | null
+  /** 交给频道成员时派出去的卡片 */
+  card?: { channelId: string; taskId: string } | null
+  endedAt?: number | null
+  /** 失败 / 跳过的原因，或结果的第一句 */
+  note?: string | null
+}
+
+export interface TaskSchedule {
+  enabled: boolean
+  freq: ScheduleFreq
+  /** 0-23；每小时只用 minute */
+  hour: number
+  minute: number
+  /** 0 = 周日 … 6；只有每周用 */
+  weekday: number
+  /** 交给本机引擎时用的引擎、模型（null = 引擎默认）；任务有负责人（频道成员）时交给成员，这两项不用 */
+  engine: EngineId
+  model: string | null
+  /** 无人值守，默认只读（plan） */
+  permission: PermissionMode
+  /** new = 每次新开会话；resume = 续在上一次的会话里 */
+  session: 'new' | 'resume'
+  /** 主进程维护：最近一个已经处理过（运行、跳过或错过）的时间点；改频率或重新启用时重置到「现在之前最近的一个」 */
+  lastSlot: number
+  lastSessionId?: string | null
+  /** 新的在前，最多 SCHEDULE_RUNS_MAX 条 */
+  runs: ScheduleRun[]
+}
+
 export interface ManualTask {
   id: string
   projectId: string
@@ -53,6 +96,8 @@ export interface ManualTask {
   assignee?: IssueAssignee | null
   acceptance?: AcceptanceItem[]
   link?: IssueLink | null
+  /** 定时任务（docs/ui/board-schedule.md）：有它的任务只出现在看板的「定时」列，不进待办 / 进行中 / 已完成 */
+  schedule?: TaskSchedule | null
 }
 export interface AiPlan {
   sessionId: string

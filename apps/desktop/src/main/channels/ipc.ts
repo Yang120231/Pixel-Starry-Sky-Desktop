@@ -148,6 +148,7 @@ export async function initChannels(ctx: AppContext): Promise<void> {
     },
   })
   // 频道工具（pixelsky_channel）：频道派活的本机会话发消息前由扩展准备挂上（docs/ui/channels-collab-v2.md §1）
+  ctx.dispatchIssue = (channelId, issue) => channels.dispatchIssue(channelId, issue)
   const tools = channelToolsServer(() => channels)
   ctx.channelTools = tools
   app.on('will-quit', () => tools.close())

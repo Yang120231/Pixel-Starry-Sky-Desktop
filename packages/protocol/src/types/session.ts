@@ -245,6 +245,8 @@ export interface SessionRecord extends SessionSettings {
    * 额度恢复后据此换回订阅；用户自己改了来源、线路或模型就清掉，不再自动换回
    */
   platformFallback?: { account: string; model: string | null; resetsAt: number | null } | null
+  /** 定时任务开出来的会话（docs/ui/board-schedule.md）：来源任务的 id；看板的 AI 卡片据此显示「⏱ 定时」 */
+  scheduleTaskId?: string | null
 }
 
 /**

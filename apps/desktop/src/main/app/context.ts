@@ -27,6 +27,8 @@ export interface AppContext {
   providers: ProviderStore | null
   /** 扩展包（extension-packs/ipc.ts 的 initExtensionPacks；和 extensions/ 的 MCP / 插件是两回事） */
   extPacks: ExtensionPacks | null
+  /** 把事项交给频道成员（channels/ipc.ts 的 initChannels）：定时任务交给频道成员时用（docs/ui/board-schedule.md） */
+  dispatchIssue: ((channelId: string, issue: unknown) => Promise<{ taskId: string }>) | null
   /** 频道工具 MCP 和成员的扩展设置（channels/ipc.ts 的 initChannels；docs/ui/channels-collab-v2.md §1、§5） */
   channelTools: ChannelToolsServer | null
   /**
@@ -53,6 +55,7 @@ export function createAppContext(): AppContext {
     projectTools: null,
     providers: null,
     extPacks: null,
+    dispatchIssue: null,
     channelTools: null,
     engineCall: null,
     toolOps: new Map(),

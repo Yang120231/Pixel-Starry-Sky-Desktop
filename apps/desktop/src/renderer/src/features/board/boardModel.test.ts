@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ManualTask } from '../../../../shared/types/project-tools'
-import { buildColumns, overdue, taskOrder, type BoardFilter } from './boardModel'
+import { defaultSchedule } from './scheduleModel'
+import { buildColumns, overdue, scheduleTasks, taskOrder, type BoardFilter } from './boardModel'
 import { laneCounts, sessionCards, type SessionCard } from './sessionLanes'
 import type { SessionSummary } from '@pixelsky/protocol'
 import type { InboxItem } from '@/features/panel/inbox/inboxModel'
@@ -86,6 +87,29 @@ describe('任务看板分列', () => {
     expect(overdue(task('t', { due: '2026-10-11' }), NOW)).toBe(true)
     expect(overdue(task('t', { due: '2026-10-12' }), NOW)).toBe(false)
     expect(overdue(task('t', { due: '2026-10-11', status: 'completed' }), NOW)).toBe(false)
+  })
+})
+
+describe('定时任务（docs/ui/board-schedule.md）', () => {
+  const sched = defaultSchedule()
+  const tasks = [
+    task('plain'),
+    task('every-day', { schedule: sched }),
+    task('gone', { projectId: 'x', schedule: sched }),
+  ]
+  const base = { tasks, knownProjects: new Set(['p']) }
+  it('定时任务只在「定时」列，不进待办等列', () => {
+    const input = { ...base, sessions: [], filter: all, showOlder: false, now: NOW }
+    expect(ids(buildColumns(input)).todo).toEqual(['plain'])
+    expect(scheduleTasks({ ...base, filter: all }).map(t => t.id)).toEqual(['every-day'])
+  })
+  it('「我的待办」「AI」不显示定时列；筛选「定时」只剩定时任务和定时开出来的会话', () => {
+    expect(scheduleTasks({ ...base, filter: { ...all, kind: 'mine' } })).toEqual([])
+    expect(scheduleTasks({ ...base, filter: { ...all, kind: 'ai' } })).toEqual([])
+    const sessions = [card('s1', 'running'), { ...card('s2', 'waiting'), scheduled: true }]
+    const cols = buildColumns({ ...base, sessions, filter: { ...all, kind: 'schedule' }, showOlder: false, now: NOW })
+    expect(ids(cols)).toEqual({ todo: [], doing: [], review: [], waiting: ['s2'], done: [] })
+    expect(scheduleTasks({ ...base, filter: { ...all, kind: 'schedule', query: 'nothing' } })).toEqual([])
   })
 })
 

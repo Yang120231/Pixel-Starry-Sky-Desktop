@@ -5,6 +5,9 @@ import {
   ArrowLeft,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
   ExternalLink,
   Pencil,
   Pin,
@@ -23,7 +26,8 @@ import { isDemo, projects as demoProjects } from '@/data'
 import { bridge, isLive, useEngineState } from '@/features/engine'
 import { openSession } from '@/features/engine/store'
 import { machineOf, useMachines } from '@/features/machines/store'
-import { showWorkbench } from '@/features/layout/page'
+import { setPage, showWorkbench } from '@/features/layout/page'
+import { channelActions, useChannels } from '@/features/channels/store'
 import { paneActions } from '@/features/panes/store'
 import { openTask } from '@/features/panel/openTask'
 import { pinTask } from '@/features/panel/pinnedTasks'
@@ -33,12 +37,29 @@ import type { ManualTask } from '../../../../shared/types/project-tools'
 import { changedTaskFields } from './taskPatch'
 import { ListInput } from '@/features/panel/ListInput'
 import { AiCard, TaskCard } from './BoardCards'
-import { STATUS_OF, buildColumns, type BoardKind, type ColumnId } from './boardModel'
-import { createBoardTask, deleteBoardTask, markDemoPinned, updateBoardTask, useBoardTasks } from './boardTasks'
+import { STATUS_OF, buildColumns, scheduleTasks, type BoardKind, type ColumnId } from './boardModel'
+import {
+  createBoardTask,
+  deleteBoardTask,
+  markDemoPinned,
+  runBoardSchedule,
+  updateBoardTask,
+  useBoardTasks,
+} from './boardTasks'
+import { FlowScheduleCard, ScheduleCard, ScheduleEmpty, ScheduleFields, ScheduleHistoryDialog } from './ScheduleParts'
+import { SCHEDULE_TEMPLATES, defaultSchedule, sameSchedule } from './scheduleModel'
 import { useSessionCards } from './useSessionCards'
-import { IssueFields, ReviewDialog, RulesDialog, dispatchIssue, useAssignRules, useAssigneeChoices } from './IssueParts'
+import {
+  IssueFields,
+  ReviewDialog,
+  RulesDialog,
+  dispatchIssue,
+  openIssueCard,
+  useAssignRules,
+  useAssigneeChoices,
+} from './IssueParts'
 import { acceptanceText, assigneeKey, matchRule, parseAcceptance, sameAcceptance } from './issues'
-import type { IssueAssignee } from '../../../../shared/types/project-tools'
+import type { IssueAssignee, ScheduleRun, TaskSchedule } from '../../../../shared/types/project-tools'
 
 const COLUMN_NAME = {
   todo: 'board.column.todo',
@@ -68,6 +89,8 @@ const DRAG_TYPE = 'application/x-pixelsky-board-task'
 type Form = Pick<ManualTask, 'title' | 'note' | 'status' | 'priority' | 'due' | 'tags'> & {
   assignee: IssueAssignee | null
   acceptance: string
+  /** 定时运行（docs/ui/board-schedule.md）；null = 普通任务 */
+  schedule: TaskSchedule | null
 }
 const formOf = (t: ManualTask): Form => ({
   title: t.title,
@@ -78,6 +101,7 @@ const formOf = (t: ManualTask): Form => ({
   tags: t.tags,
   assignee: t.assignee ?? null,
   acceptance: acceptanceText(t.acceptance),
+  schedule: t.schedule ?? null,
 })
 
 /** 保存编辑时发的改动：基本字段只发改过的，负责人和验收标准变了才发 */
@@ -87,6 +111,7 @@ function editPatch(task: ManualTask, form: Form): Partial<ManualTask> {
   if ((form.assignee ? assigneeKey(form.assignee) : '') !== before) patch.assignee = form.assignee
   const acceptance = parseAcceptance(form.acceptance, task.acceptance)
   if (!sameAcceptance(acceptance, task.acceptance)) patch.acceptance = acceptance
+  if (!sameSchedule(form.schedule, task.schedule)) patch.schedule = form.schedule
   return patch
 }
 
@@ -106,14 +131,21 @@ export function TaskBoardPage() {
   )
   const names = useMemo(() => new Map(projects.map(p => [p.id, p.name])), [projects])
   const [projectFilter, setProjectFilter] = useRemember<string[]>('pixelsky.board.projects', [])
-  const [kind, setKind] = useRemember<BoardKind>('pixelsky.board.kind', 'all')
+  const [storedKind, setKind] = useRemember<BoardKind>('pixelsky.board.kind', 'all')
+  const [scheduleCollapsed, setScheduleCollapsed] = useRemember<boolean>('pixelsky.board.scheduleCollapsed', false)
+  // 定时任务只在本机的项目上跑（docs/ui/board-schedule.md）
+  const canSchedule = machine === 'local'
+  const kind: BoardKind = storedKind === 'schedule' && !canSchedule ? 'all' : storedKind
+  const engines = useEngineState(s => s.engines)
+  const channels = useChannels(s => s.channels)
+  const [historyId, setHistoryId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [showOlder, setShowOlder] = useState(false)
   const [now, setNow] = useState(Date.now)
   const [creating, setCreating] = useState<{ title: string; projectId: string } | null>(null)
   // 新建任务的输入框关掉后焦点回到点开它的「+」
   useRestoreFocus(!!creating)
-  const [editing, setEditing] = useState<{ task: ManualTask; form: Form } | null>(null)
+  const [editing, setEditing] = useState<{ task: ManualTask; form: Form; isNew?: boolean } | null>(null)
   const [deleting, setDeleting] = useState<ManualTask | null>(null)
   const [reviewing, setReviewing] = useState<ManualTask | null>(null)
   const [rulesOpen, setRulesOpen] = useState(false)
@@ -146,6 +178,29 @@ export function TaskBoardPage() {
       }),
     [tasks, sessions, filterProjects, kind, query, names, showOlder, now],
   )
+
+  const scheduled = useMemo(
+    () =>
+      canSchedule
+        ? scheduleTasks({
+            tasks,
+            filter: { projects: filterProjects, kind, query },
+            knownProjects: new Set(names.keys()),
+          })
+        : [],
+    [canSchedule, tasks, filterProjects, kind, query, names],
+  )
+  // 频道里每天定时运行的流程：只读列出，点开跳到频道
+  const flows = useMemo(() => {
+    if (!canSchedule || kind === 'mine' || kind === 'ai') return []
+    const q = query.trim().toLocaleLowerCase()
+    return channels
+      .filter(c => !c.archivedAt && (!filterProjects.length || (!!c.projectId && filterProjects.includes(c.projectId))))
+      .flatMap(channel => (channel.schedules ?? []).map(flow => ({ channel, flow })))
+      .filter(({ flow }) => !q || flow.title.toLocaleLowerCase().includes(q))
+  }, [canSchedule, kind, query, channels, filterProjects])
+  const historyTask = historyId ? tasks.find(t => t.id === historyId) : undefined
+  const showSchedule = canSchedule && (kind === 'schedule' || scheduled.length > 0 || flows.length > 0)
 
   // 等你处理但还没打开过的会话：后台读一次快照，好显示审批内容
   const fetched = useRef(new Set<string>())
@@ -192,6 +247,53 @@ export function TaskBoardPage() {
     }
     setCreating({ title: '', projectId })
   }
+  const startCreateSchedule = (template?: (typeof SCHEDULE_TEMPLATES)[number]) => {
+    const projectId = defaultProject()
+    if (!projectId) {
+      setError(tr('board.noProject'))
+      return
+    }
+    const engine = engines.find(e => e.status === 'ready')?.id ?? engines[0]?.id
+    setEditing({
+      isNew: true,
+      task: {
+        id: '',
+        projectId,
+        title: '',
+        note: '',
+        status: 'pending',
+        priority: 'normal',
+        due: '',
+        tags: [],
+        order: 0,
+        createdAt: 0,
+        updatedAt: 0,
+      },
+      form: {
+        title: template ? tr(`board.schedule.tpl.${template.id}.title`) : '',
+        note: template ? tr(`board.schedule.tpl.${template.id}.note`) : '',
+        status: 'pending',
+        priority: 'normal',
+        due: '',
+        tags: [],
+        assignee: null,
+        acceptance: '',
+        schedule: {
+          ...defaultSchedule(engine),
+          ...(template
+            ? { freq: template.freq, hour: template.hour, minute: template.minute, weekday: template.weekday }
+            : {}),
+        },
+      },
+    })
+  }
+  const toggleSchedule = (task: ManualTask, enabled: boolean) =>
+    void run(() => updateBoardTask(task.id, { schedule: { ...task.schedule!, enabled } }))
+  const openRun = (run: ScheduleRun) => {
+    setHistoryId(null)
+    if (run.sessionId) openCard(run.sessionId)
+    else if (run.card) openIssueCard(run.card)
+  }
   const saveCreate = () => {
     if (!creating || !creating.title.trim()) return
     const draft = creating
@@ -221,10 +323,23 @@ export function TaskBoardPage() {
     })
   const saveEdit = () => {
     if (!editing || !editing.form.title.trim()) return
-    const { task, form } = editing
+    const { task, form, isNew } = editing
     void run(async () => {
-      // 只发改过的字段：弹窗开着时状态可能已在别处（右栏、侧栏固定项、手机）改过
-      await updateBoardTask(task.id, editPatch(task, form))
+      if (isNew) {
+        await createBoardTask(task.projectId, {
+          title: form.title.trim(),
+          note: form.note,
+          priority: form.priority,
+          tags: form.tags.filter(Boolean),
+          ...(form.schedule ? {} : { status: form.status, due: form.due }),
+          ...(form.assignee ? { assignee: form.assignee } : {}),
+          ...(form.schedule ? { schedule: form.schedule } : {}),
+        })
+        lastProject.current = task.projectId
+      } else {
+        // 只发改过的字段：弹窗开着时状态可能已在别处（右栏、侧栏固定项、手机）改过
+        await updateBoardTask(task.id, editPatch(task, form))
+      }
       setEditing(null)
     })
   }
@@ -285,6 +400,7 @@ export function TaskBoardPage() {
             { value: 'all', label: tr('board.filter.all') },
             { value: 'mine', label: tr('board.filter.mine') },
             { value: 'ai', label: tr('board.filter.ai') },
+            ...(canSchedule ? [{ value: 'schedule' as const, label: tr('board.filter.schedule') }] : []),
           ]}
         />
         <label className="relative flex h-8 w-56 items-center">
@@ -317,8 +433,92 @@ export function TaskBoardPage() {
         </p>
       )}
       <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto px-4 pb-4">
+        {showSchedule &&
+          (scheduleCollapsed ? (
+            <section
+              data-board-column="schedule"
+              aria-label={tr('board.columnLabel', {
+                name: tr('board.column.schedule'),
+                n: scheduled.length + flows.length,
+              })}
+              className="flex w-9 shrink-0 flex-col items-center gap-2 rounded-xl border border-accent-line/40 bg-accent-soft/30 py-3"
+            >
+              <button
+                type="button"
+                aria-label={tr('board.schedule.expand')}
+                title={tr('board.schedule.expand')}
+                onClick={() => setScheduleCollapsed(false)}
+                className="flex size-6 items-center justify-center rounded-md text-fg-muted hover:bg-hover hover:text-fg"
+              >
+                <ChevronRight size={14} />
+              </button>
+              <Clock size={14} className="text-accent-fg" aria-hidden />
+              <span className="text-meta text-fg-faint tabular-nums">{scheduled.length + flows.length}</span>
+            </section>
+          ) : (
+            <section
+              data-board-column="schedule"
+              aria-label={tr('board.columnLabel', {
+                name: tr('board.column.schedule'),
+                n: scheduled.length + flows.length,
+              })}
+              className="flex min-h-0 w-[236px] shrink-0 flex-col rounded-xl border border-accent-line/40 bg-accent-soft/30"
+            >
+              <header className="flex shrink-0 items-center gap-2 px-3 pt-3 pb-2">
+                <Clock size={14} className="text-accent-fg" aria-hidden />
+                <h2 className="text-ui font-medium text-fg">{tr('board.column.schedule')}</h2>
+                <span className="text-meta text-fg-faint tabular-nums">{scheduled.length + flows.length}</span>
+                <span className="flex-1" />
+                <button
+                  type="button"
+                  aria-label={tr('board.schedule.collapse')}
+                  title={tr('board.schedule.collapse')}
+                  onClick={() => setScheduleCollapsed(true)}
+                  className="flex size-6 items-center justify-center rounded-md text-fg-muted hover:bg-hover hover:text-fg"
+                >
+                  <ChevronLeft size={14} />
+                </button>
+              </header>
+              <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2 [scrollbar-width:thin]">
+                {scheduled.map(task => (
+                  <ScheduleCard
+                    key={task.id}
+                    task={task}
+                    project={names.get(task.projectId) ?? ''}
+                    now={now}
+                    busy={busy}
+                    onOpen={() => setHistoryId(task.id)}
+                    onToggle={enabled => toggleSchedule(task, enabled)}
+                  />
+                ))}
+                {flows.map(({ channel, flow }) => (
+                  <FlowScheduleCard
+                    key={`${channel.id}-${flow.id}`}
+                    channel={channel}
+                    flow={flow}
+                    onOpen={() => {
+                      setPage('channels')
+                      channelActions.select(channel.id)
+                    }}
+                  />
+                ))}
+                {!scheduled.length && !flows.length && (
+                  <ScheduleEmpty onTemplate={id => startCreateSchedule(SCHEDULE_TEMPLATES.find(t => t.id === id))} />
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => startCreateSchedule()}
+                className="press m-2 mt-0 inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-meta text-fg-muted hover:bg-hover hover:text-fg"
+              >
+                <Plus size={13} />
+                {tr(scheduled.length || flows.length ? 'board.schedule.add' : 'board.schedule.own')}
+              </button>
+            </section>
+          ))}
         {columns
           .filter(c => c.id !== 'review' || c.tasks.length > 0)
+          .filter(c => kind !== 'schedule' || c.sessions.length > 0)
           .map(column => {
             const count = column.tasks.length + column.sessions.length
             const accepts = !!STATUS_OF[column.id]
@@ -535,8 +735,20 @@ export function TaskBoardPage() {
 
       {editing && (
         <ConfirmDialog
-          title={tr('board.edit')}
+          title={tr(editing.isNew ? 'board.newTask' : 'board.edit')}
           focusInput
+          wide={!!editing.form.schedule}
+          extra={
+            editing.task.schedule && !editing.isNew
+              ? {
+                  label: tr('board.delete'),
+                  onClick: () => {
+                    setDeleting(editing.task)
+                    setEditing(null)
+                  },
+                }
+              : undefined
+          }
           busy={busy}
           error={error ? translateMessage(error) : null}
           confirmLabel={tr('board.save')}
@@ -560,7 +772,7 @@ export function TaskBoardPage() {
                   className={FIELD}
                 />
               </Field>
-              <Field label={tr('projectTools.note')}>
+              <Field label={tr(editing.form.schedule ? 'board.schedule.note' : 'projectTools.note')}>
                 <textarea
                   maxLength={4000}
                   value={editing.form.note}
@@ -568,16 +780,35 @@ export function TaskBoardPage() {
                   className={cn(FIELD, 'h-20 py-2')}
                 />
               </Field>
-              <div className="flex flex-wrap gap-2">
-                <Select
-                  label={tr('projectTools.pending')}
-                  value={editing.form.status}
-                  options={Object.entries(STATUS_KEY).map(([value, key]) => ({
-                    value: value as ManualTask['status'],
-                    label: tr(key),
-                  }))}
-                  onChange={status => setEditing({ ...editing, form: { ...editing.form, status } })}
+              {canSchedule && (
+                <ScheduleFields
+                  schedule={editing.form.schedule}
+                  assignee={editing.form.assignee}
+                  choices={choices}
+                  onChange={schedule => setEditing({ ...editing, form: { ...editing.form, schedule } })}
+                  onAssignee={assignee => setEditing({ ...editing, form: { ...editing.form, assignee } })}
                 />
+              )}
+              <div className="flex flex-wrap gap-2">
+                {editing.isNew && (
+                  <Select
+                    label={tr('board.project')}
+                    value={editing.task.projectId}
+                    options={projects.map(p => ({ value: p.id, label: p.name }))}
+                    onChange={projectId => setEditing({ ...editing, task: { ...editing.task, projectId } })}
+                  />
+                )}
+                {!editing.form.schedule && (
+                  <Select
+                    label={tr('projectTools.pending')}
+                    value={editing.form.status}
+                    options={Object.entries(STATUS_KEY).map(([value, key]) => ({
+                      value: value as ManualTask['status'],
+                      label: tr(key),
+                    }))}
+                    onChange={status => setEditing({ ...editing, form: { ...editing.form, status } })}
+                  />
+                )}
                 <Select
                   label={tr('projectTools.priority.normal')}
                   value={editing.form.priority}
@@ -587,24 +818,30 @@ export function TaskBoardPage() {
                   }))}
                   onChange={priority => setEditing({ ...editing, form: { ...editing.form, priority } })}
                 />
-                <span className="self-center text-meta text-fg-faint">{names.get(editing.task.projectId) ?? ''}</span>
+                {!editing.isNew && (
+                  <span className="self-center text-meta text-fg-faint">{names.get(editing.task.projectId) ?? ''}</span>
+                )}
               </div>
-              <IssueFields
-                choices={choices}
-                assignee={editing.form.assignee}
-                acceptance={editing.form.acceptance}
-                suggestion={matchRule(rules, { ...editing.form, projectId: editing.task.projectId }, choices)}
-                onAssignee={assignee => setEditing({ ...editing, form: { ...editing.form, assignee } })}
-                onAcceptance={acceptance => setEditing({ ...editing, form: { ...editing.form, acceptance } })}
-              />
-              <Field label={tr('projectTools.due')}>
-                <input
-                  type="date"
-                  value={editing.form.due}
-                  onChange={e => setEditing({ ...editing, form: { ...editing.form, due: e.target.value } })}
-                  className={FIELD}
+              {!editing.form.schedule && (
+                <IssueFields
+                  choices={choices}
+                  assignee={editing.form.assignee}
+                  acceptance={editing.form.acceptance}
+                  suggestion={matchRule(rules, { ...editing.form, projectId: editing.task.projectId }, choices)}
+                  onAssignee={assignee => setEditing({ ...editing, form: { ...editing.form, assignee } })}
+                  onAcceptance={acceptance => setEditing({ ...editing, form: { ...editing.form, acceptance } })}
                 />
-              </Field>
+              )}
+              {!editing.form.schedule && (
+                <Field label={tr('projectTools.due')}>
+                  <input
+                    type="date"
+                    value={editing.form.due}
+                    onChange={e => setEditing({ ...editing, form: { ...editing.form, due: e.target.value } })}
+                    className={FIELD}
+                  />
+                </Field>
+              )}
               <Field label={tr('projectTools.tags')}>
                 <ListInput
                   value={editing.form.tags}
@@ -612,23 +849,43 @@ export function TaskBoardPage() {
                   className={FIELD}
                 />
               </Field>
-              <button
-                type="button"
-                onClick={() => {
-                  const task = editing.task
-                  setEditing(null)
-                  openTask(task.projectId, task.id)
-                }}
-                className="inline-flex items-center gap-1.5 self-start text-meta text-fg-muted hover:text-fg"
-              >
-                <ExternalLink size={13} />
-                {tr('board.viewInProject')}
-              </button>
+              {!editing.isNew && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const task = editing.task
+                    setEditing(null)
+                    openTask(task.projectId, task.id)
+                  }}
+                  className="inline-flex items-center gap-1.5 self-start text-meta text-fg-muted hover:text-fg"
+                >
+                  <ExternalLink size={13} />
+                  {tr('board.viewInProject')}
+                </button>
+              )}
             </div>
           }
         />
       )}
 
+      {historyTask?.schedule && (
+        <ScheduleHistoryDialog
+          task={historyTask}
+          project={names.get(historyTask.projectId) ?? ''}
+          engineName={engines.find(e => e.id === historyTask.schedule!.engine)?.name ?? historyTask.schedule.engine}
+          now={now}
+          busy={busy}
+          error={error ? translateMessage(error) : null}
+          onRun={() => void run(() => runBoardSchedule(historyTask.id))}
+          onToggle={() => toggleSchedule(historyTask, !historyTask.schedule!.enabled)}
+          onEdit={() => {
+            setHistoryId(null)
+            setEditing({ task: historyTask, form: formOf(historyTask) })
+          }}
+          onOpenRun={openRun}
+          onClose={() => setHistoryId(null)}
+        />
+      )}
       {reviewing && (
         <ReviewDialog task={tasks.find(t => t.id === reviewing.id) ?? reviewing} onClose={() => setReviewing(null)} />
       )}

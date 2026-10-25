@@ -26,7 +26,7 @@ function BoardEntry() {
   const known = new Set(
     isLive ? projects.filter(p => machineOf(p.id) === machine).map(p => p.id) : demoProjects.map(p => p.id),
   )
-  const todo = tasks.filter(t => t.status !== 'completed' && known.has(t.projectId)).length
+  const todo = tasks.filter(t => t.status !== 'completed' && !t.schedule && known.has(t.projectId)).length
   const { icons } = useSidebarPrefs()
   const Icon = getSidebarIcon('board', icons)
   return (

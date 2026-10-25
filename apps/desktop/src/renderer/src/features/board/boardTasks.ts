@@ -1,10 +1,11 @@
 // 任务看板的手动任务（docs/ui/task-board.md §7）：当前机器所有项目的任务，读一次后跟着主进程的改动通知刷新；
 // 有人订阅（看板页、侧栏「任务看板」行）时才读。演示模式用 mock/board.ts，改动只在内存里。
 import { useEffect, useRef, useSyncExternalStore } from 'react'
+import { tr } from '@/i18n/core'
 import { useMachines } from '@/features/machines/store'
 import { isDemo } from '@/data'
 import { demo } from '@/data/demo'
-import type { ManualTask } from '../../../../shared/types/project-tools'
+import { SCHEDULE_RUNS_MAX, type ManualTask } from '../../../../shared/types/project-tools'
 
 interface State {
   tasks: ManualTask[]
@@ -113,11 +114,32 @@ export async function createBoardTask(projectId: string, input: Partial<ManualTa
       pinnedAt: null,
       assignee: input.assignee ?? null,
       acceptance: input.acceptance ?? [],
+      schedule: input.schedule ?? null,
     }
     set({ tasks: [...state.tasks, task] })
     return
   }
   await window.pixelsky!.projectTools.createTask(projectId, input)
+  await load()
+}
+
+/** 定时任务立即运行一次；演示模式只在内存里记一条已完成的手动运行 */
+export async function runBoardSchedule(id: string): Promise<void> {
+  if (isDemo) {
+    const schedule = state.tasks.find(t => t.id === id)?.schedule
+    if (!schedule) return
+    if (schedule.runs.some(r => r.status === 'running')) throw new Error(tr('board.schedule.alreadyRunning'))
+    const at = Date.now()
+    const run = {
+      at,
+      trigger: 'manual' as const,
+      status: 'done' as const,
+      endedAt: at + 180_000,
+    }
+    demoPatch(id, { schedule: { ...schedule, runs: [run, ...schedule.runs].slice(0, SCHEDULE_RUNS_MAX) } })
+    return
+  }
+  await window.pixelsky!.projectTools.runSchedule(id)
   await load()
 }
 

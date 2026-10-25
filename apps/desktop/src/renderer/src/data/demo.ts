@@ -178,6 +178,8 @@ export interface DemoSource {
   }
   /** 任务看板的演示任务（几个演示项目都有，docs/ui/task-board.md §7）；now 是打开看板的时间 */
   boardTasks(now: number): ManualTask[]
+  /** 定时任务开出来的演示会话 id（看板 AI 卡片显示「⏱ 定时」，docs/ui/board-schedule.md） */
+  scheduledSessions: readonly string[]
   remoteCalls(now: number): RemoteCall[]
   usageRecords(now: number): UsageRecord[]
   search: { projects: Array<{ id: string; name: string }>; run(query: SearchQuery): SearchResponse }

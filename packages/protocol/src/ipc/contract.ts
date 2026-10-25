@@ -53,6 +53,8 @@ export interface IpcChannelSpec {
 export const REMOTE_PROTOCOL = 9
 
 export const IPC_CONTRACT = {
+  // 定时任务「立即运行」（docs/ui/board-schedule.md）：调度只在本机跑，不经过远端
+  'schedule:runNow': { kind: 'invoke', route: 'local', trust: 'sender' },
   'projectImport:scan': { kind: 'invoke', route: 'local', trust: 'sender' },
   'projectImport:paths': { kind: 'invoke', route: 'local', trust: 'sender' },
   'projectImport:choose': { kind: 'invoke', route: 'local', trust: 'sender' },

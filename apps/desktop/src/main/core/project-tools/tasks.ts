@@ -7,9 +7,11 @@ import {
   type IssueAssignee,
   type IssueLink,
   type ManualTask,
+  type TaskSchedule,
 } from '../../../shared/types/project-tools'
 import { codedError } from '@pixelsky/protocol'
 import { JsonStore, value, type ToolsHost } from './common'
+import { cleanSchedule } from './schedule'
 
 type Input = Partial<ManualTask>
 
@@ -112,6 +114,11 @@ export class Tasks {
       assignee: input.assignee === undefined ? (prior?.assignee ?? null) : cleanAssignee(input.assignee),
       acceptance: input.acceptance === undefined ? (prior?.acceptance ?? []) : cleanAcceptance(input.acceptance),
       link: input.link === undefined ? (prior?.link ?? null) : cleanLink(input.link),
+      // 定时设置（docs/ui/board-schedule.md）：没传的沿用；运行记录只由 mutateSchedule 改
+      schedule:
+        input.schedule === undefined
+          ? (prior?.schedule ?? null)
+          : cleanSchedule(input.schedule, prior?.schedule, Date.now()),
     }
   }
   async create(projectId: string, input: Input): Promise<ManualTask> {
@@ -172,6 +179,16 @@ export class Tasks {
     })
     if (result) this.changed()
     return result
+  }
+  /** 主进程的定时调度改运行记录、lastSlot（docs/ui/board-schedule.md）；不改 updatedAt。任务没有定时设置时什么也不做 */
+  async mutateSchedule(id: string, change: (schedule: TaskSchedule) => void): Promise<void> {
+    const touched = await this.store.transaction(data => {
+      const schedule = data.tasks.find(t => t.id === id)?.schedule
+      if (!schedule) return false
+      change(schedule)
+      return true
+    })
+    if (touched) this.changed()
   }
   /** 固定到左侧栏 / 取消固定；不改 updatedAt（固定不算编辑） */
   async pin(id: string, pinned: boolean): Promise<ManualTask> {

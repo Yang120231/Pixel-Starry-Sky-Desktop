@@ -270,6 +270,7 @@ export function AiCard({
         <span className="mt-0.5 shrink-0 rounded bg-subtle px-1.5 text-label text-fg-muted">{tr('board.ai')}</span>
       </div>
       <div className="flex min-w-0 items-center gap-1.5 pl-6 text-meta text-fg-faint">
+        {card.scheduled && <span className="shrink-0 text-accent-fg">{tr('board.schedule.badge')} ·</span>}
         <span className={cn('shrink-0', lane.tone)}>{tr(lane.label)}</span>
         {card.project && <span className="min-w-0 truncate">· {card.project}</span>}
         {channel && <span className="min-w-0 truncate">· # {channel}</span>}

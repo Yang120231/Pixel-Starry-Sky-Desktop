@@ -2,6 +2,8 @@
 import type { InboxItem } from '@/features/panel/inbox/inboxModel'
 
 const now = Date.now()
+/** 定时任务开出来的演示会话（照参考图借用已有的会话，看板上显示「⏱ 定时」） */
+export const demoScheduledSessions: readonly string[] = ['s-settings-form']
 export const demoInbox: InboxItem[] = [
   {
     sessionId: 's-settings-form',

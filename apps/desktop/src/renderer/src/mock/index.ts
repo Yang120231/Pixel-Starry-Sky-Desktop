@@ -17,7 +17,7 @@ import { demo, demoIdleDays } from './demo'
 import { DEMO_EDITOR_STATE, DEMO_FILES, demoDirectory, demoDocument } from './files'
 import { demoGitBranches, demoGitDiff, demoGitHistory, demoGitStatus } from './git'
 import { demoExtStore } from './extStore'
-import { demoInbox } from './inbox'
+import { demoInbox, demoScheduledSessions } from './inbox'
 import { demoConnectors } from './connectors'
 import { demoAccounts } from './accounts'
 import { statusDemoInbox, statusDemoSessionState } from './statusDemo'
@@ -71,6 +71,7 @@ export const demoSource: DemoSource = {
   machineProjects: demoMachineProjects,
   machineWorkspaces: demoMachineWorkspaces,
   boardTasks: demoBoardTasks,
+  scheduledSessions: demoScheduledSessions,
   connectors: demoConnectors,
   accounts: demoAccounts,
   projectTools: {
