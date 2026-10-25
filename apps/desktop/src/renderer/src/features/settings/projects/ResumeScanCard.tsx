@@ -1,6 +1,6 @@
 // 设置 › 项目「原来的 AI 会话」（docs/ui/resume-scan-mockup.html）：手动扫一遍全部本机项目里 Claude Code / Codex 留下的会话，
 // 点「接着聊」打开那个项目、那个引擎的选择框。远程机器上只说明原因、给「切换到本机」。
-import { useRef, useState } from 'react'
+import { memo, useRef, useState } from 'react'
 import { History, Monitor, RotateCw } from 'lucide-react'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
@@ -225,57 +225,15 @@ export function ResumeScanCard({ onOpened }: { onOpened: () => void }) {
                   {view.rows.map(row => {
                     const project = byId.get(row.projectId)
                     if (!project) return null
-                    const latest = rowLatest(row)
                     return (
-                      <tr
+                      <ScanTableRow
                         key={row.projectId}
-                        data-resume-scan-row={row.projectId}
-                        className={cn('border-b border-line-subtle', row.state === 'remote' && 'opacity-60')}
-                      >
-                        <td className="max-w-0 py-2 pr-2">
-                          <div className="truncate font-medium text-fg">{project.name}</div>
-                          <div className="truncate text-label text-fg-faint" title={project.path}>
-                            {project.path}
-                          </div>
-                        </td>
-                        {row.state === 'remote' ? (
-                          <td colSpan={3} className="py-2 pr-2 text-fg-faint">
-                            {tr('resume.scan.remoteRow')}
-                          </td>
-                        ) : (
-                          <>
-                            {ENGINES.map(e => (
-                              <td key={e} className="py-2 pr-2 text-fg">
-                                <EngineCell row={row} engine={e} />
-                              </td>
-                            ))}
-                            <td className="py-2 pr-2 text-fg-secondary">
-                              {row.state === 'scanning'
-                                ? tr('resume.scan.scanning')
-                                : row.state === 'waiting'
-                                  ? tr(scan.running ? 'resume.scan.waiting' : 'resume.scan.skipped')
-                                  : latest
-                                    ? relativeTime(latest)
-                                    : '—'}
-                            </td>
-                          </>
-                        )}
-                        <td className="py-2 text-right whitespace-nowrap">
-                          {row.state !== 'remote' && (
-                            <span className="inline-flex items-center gap-1">
-                              {row.state === 'done' && <ContinueButton row={row} onOpened={onOpened} />}
-                              <IconButton
-                                icon={RotateCw}
-                                label={tr('resume.scan.rescanOne')}
-                                size={26}
-                                iconSize={13}
-                                disabled={row.state === 'scanning' || (scan.running && row.state === 'waiting')}
-                                onClick={() => void rescanProject(row.projectId)}
-                              />
-                            </span>
-                          )}
-                        </td>
-                      </tr>
+                        row={row}
+                        name={project.name}
+                        path={project.path}
+                        running={scan.running}
+                        onOpened={onOpened}
+                      />
                     )
                   })}
                 </tbody>
@@ -299,3 +257,73 @@ export function ResumeScanCard({ onOpened }: { onOpened: () => void }) {
     </div>
   )
 }
+
+/**
+ * 表格的一行：扫描时每扫完一个项目整张表换一次，没变的行（同一个 row 对象）不重画，几百个项目时不再越扫越卡
+ */
+const ScanTableRow = memo(function ScanTableRow({
+  row,
+  name,
+  path,
+  running,
+  onOpened,
+}: {
+  row: ScanRow
+  name: string
+  path: string
+  running: boolean
+  onOpened: () => void
+}) {
+  useI18n()
+  const latest = rowLatest(row)
+  return (
+    <tr
+      data-resume-scan-row={row.projectId}
+      className={cn('border-b border-line-subtle', row.state === 'remote' && 'opacity-60')}
+    >
+      <td className="max-w-0 py-2 pr-2">
+        <div className="truncate font-medium text-fg">{name}</div>
+        <div className="truncate text-label text-fg-faint" title={path}>
+          {path}
+        </div>
+      </td>
+      {row.state === 'remote' ? (
+        <td colSpan={3} className="py-2 pr-2 text-fg-faint">
+          {tr('resume.scan.remoteRow')}
+        </td>
+      ) : (
+        <>
+          {ENGINES.map(e => (
+            <td key={e} className="py-2 pr-2 text-fg">
+              <EngineCell row={row} engine={e} />
+            </td>
+          ))}
+          <td className="py-2 pr-2 text-fg-secondary">
+            {row.state === 'scanning'
+              ? tr('resume.scan.scanning')
+              : row.state === 'waiting'
+                ? tr(running ? 'resume.scan.waiting' : 'resume.scan.skipped')
+                : latest
+                  ? relativeTime(latest)
+                  : '—'}
+          </td>
+        </>
+      )}
+      <td className="py-2 text-right whitespace-nowrap">
+        {row.state !== 'remote' && (
+          <span className="inline-flex items-center gap-1">
+            {row.state === 'done' && <ContinueButton row={row} onOpened={onOpened} />}
+            <IconButton
+              icon={RotateCw}
+              label={tr('resume.scan.rescanOne')}
+              size={26}
+              iconSize={13}
+              disabled={row.state === 'scanning' || (running && row.state === 'waiting')}
+              onClick={() => void rescanProject(row.projectId)}
+            />
+          </span>
+        )}
+      </td>
+    </tr>
+  )
+})
