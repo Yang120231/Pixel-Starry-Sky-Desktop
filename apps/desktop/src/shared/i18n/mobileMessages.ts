@@ -10,6 +10,10 @@ export const mobileMessages = {
     zh: '关掉后手机连不上，已配对的手机保留。',
     en: 'Phones cannot connect while this is off. Paired phones are kept.',
   },
+  'mobile.accountVisible': {
+    zh: '开启期间，这台电脑的名字会显示在你的账号下，方便网页版找到它。',
+    en: 'While this is on, this computer’s name is shown under your account so the web version can find it.',
+  },
   'mobile.relay': { zh: '中转地址', en: 'Relay address' },
   'mobile.relayDesc': {
     zh: '留空就用云端中转（和登录是同一个服务）。只有本机测试时才需要填。',

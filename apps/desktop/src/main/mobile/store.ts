@@ -59,6 +59,8 @@ export class MobileStore {
   private readonly file: string
   private readonly secrets: SecureStore
   private key: Keypair | null = null
+  /** 这次启动新生成了电脑密钥（第一次或原来的丢了/坏了） */
+  keyGenerated = false
 
   constructor(
     private readonly dir: string,
@@ -96,6 +98,7 @@ export class MobileStore {
     }
     // 私钥换了，以前配对的手机都握不了手，一起清掉
     this.key = generateKeypair()
+    this.keyGenerated = true
     this.secrets.set('desktop', { privateKey: toBase64Url(this.key.privateKey) })
     if (this.devices.length) {
       this.devices = []

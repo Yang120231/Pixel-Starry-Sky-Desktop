@@ -5,7 +5,8 @@ import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { deflateRawSync, inflateRawSync } from 'node:zlib'
 import { app, powerSaveBlocker } from 'electron'
-import { fingerprint, fromBase64Url, type Codec } from '@pixelsky/link'
+import { logger } from '@pixelsky/engine'
+import { fingerprint, fromBase64Url, toBase64Url, type Codec } from '@pixelsky/link'
 import * as ipc from '../ipc/guard'
 import type { AppContext } from '../app/context'
 import { shrinkImage } from '../app/images'
@@ -15,6 +16,7 @@ import type { MobileLinkStatus, MobilePrefs, MobileSeats, MobileState } from '..
 import { listDirectories } from '../core/directories'
 import { addProjectPath } from '../core/engine/ops'
 import { baseUrl, bridgeFetch, bridgeToken, onAccountChange, signedInEmail } from '../account/account'
+import { createDesktopRegistrar } from './desktop-register'
 import { parseRelay, parseSeats, pickRelay } from './cloud-devices'
 import { MobileGateway, type CloudDevices } from './gateway'
 import { RelayLink } from './relay'
@@ -120,6 +122,24 @@ export function initMobile(ctx: AppContext): void {
         apply()
       })
   }
+  // 登记到账号：网页版靠它列出这台电脑（旧云端 404 静默跳过）
+  const registrar = createDesktopRegistrar({
+    signedIn: () => !!signedInEmail(),
+    scope: () => `${baseUrl()}|${signedInEmail() ?? ''}`,
+    input: () => {
+      const key = store.prefs.enabled ? store.keypair() : null
+      return {
+        enabled: store.prefs.enabled,
+        id: store.desktopId,
+        name: hostname(),
+        key: key ? toBase64Url(key.publicKey) : null,
+        regenerated: store.keyGenerated,
+      }
+    },
+    call: (method, path, body) => bridgeFetch(method, path, body),
+    ver: app.getVersion(),
+    warn: msg => logger('mobile').warn(msg),
+  })
   const cloud: CloudDevices = {
     pairing: async () => {
       const r = (await cloudCall('POST', '/v1/bridge/pairings', { desktopId: store.desktopId })) as {
@@ -229,6 +249,7 @@ export function initMobile(ctx: AppContext): void {
         onStatus: (next, reason) => {
           status = next
           error = reason
+          if (next === 'online') void registrar.sync()
           if (next !== 'online') gateway.dropAll()
           changed()
         },
@@ -242,11 +263,15 @@ export function initMobile(ctx: AppContext): void {
     }
     keepAwake()
     changed()
+    // 电脑 ID / 名字 / 密钥变了（和已登记的一样会跳过）；开关关着时也同步，用来重试没成功的注销（登录后会走到这里）
+    if (status === 'online' || !store.prefs.enabled) void registrar.sync()
   }
 
   ipc.handle('mobile:state', () => state())
   ipc.handle('mobile:setPrefs', (_e, patch: Partial<MobilePrefs>) => {
+    const wasEnabled = store.prefs.enabled
     store.setPrefs(patch ?? {})
+    if (wasEnabled && !store.prefs.enabled) void registrar.unregister(store.desktopId)
     // 重新打开时再问一次云端分配的节点（期间可能买了优质节点）
     if (patch?.enabled === true) assignedFor = null
     apply()

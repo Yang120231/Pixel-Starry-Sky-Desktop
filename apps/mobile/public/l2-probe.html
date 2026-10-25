@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>像素星空 · 登录往返测试</title>
+    <style>
+      body {
+        font:
+          15px/1.6 system-ui,
+          sans-serif;
+        margin: 0;
+        padding: 16px;
+        max-width: 640px;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        margin: 12px 0;
+      }
+      td {
+        border-bottom: 1px solid #8884;
+        padding: 6px 4px;
+        vertical-align: top;
+        word-break: break-all;
+      }
+      td:first-child {
+        white-space: nowrap;
+        padding-right: 12px;
+      }
+      button {
+        font: inherit;
+        padding: 8px 16px;
+        margin-right: 8px;
+      }
+      .hint {
+        opacity: 0.7;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>登录往返测试</h1>
+    <p class="hint">一次性测试页：只验证「跳到登录页再回来」后页面存储还在不在，不会换令牌，也不会显示授权码。</p>
+    <p class="hint">请从主屏幕图标打开本页再点开始（测独立窗口的情况），再到 Safari 里另测一次。</p>
+    <table id="info"></table>
+    <div id="resultBox" hidden>
+      <h2>往返结果</h2>
+      <table id="result"></table>
+    </div>
+    <button id="start">开始登录测试</button>
+    <button id="copy">复制结果</button>
+    <button id="clear">清除这次测试</button>
+    <script>
+      ;(function () {
+        var K = 'pixelsky.l2probe.'
+        var tables = { info: [], result: [] }
+        function add(t, k, v) {
+          tables[t].push([k, v])
+        }
+        function mark(ok) {
+          return ok ? '✓' : '✗'
+        }
+        function mode() {
+          var s = matchMedia('(display-mode: standalone)').matches
+          return (
+            (s || navigator.standalone ? '独立窗口（主屏幕应用）' : '浏览器标签页') +
+            '（display-mode=' +
+            s +
+            ', navigator.standalone=' +
+            navigator.standalone +
+            '）'
+          )
+        }
+        function b64url(buf) {
+          return btoa(String.fromCharCode.apply(null, new Uint8Array(buf)))
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=+$/, '')
+        }
+        function rand(n) {
+          return b64url(crypto.getRandomValues(new Uint8Array(n)))
+        }
+        function get(store, key) {
+          try {
+            return store.getItem(key)
+          } catch (e) {
+            return null
+          }
+        }
+        function set(key, v) {
+          try {
+            sessionStorage.setItem(key, v)
+          } catch (e) {}
+          try {
+            localStorage.setItem(key, v)
+          } catch (e) {}
+        }
+
+        // localStorage 可能被禁用：读写都包起来，页面照样能显示
+        var hadMarker = get(localStorage, K + 'marker') !== null
+        if (!hadMarker) {
+          try {
+            localStorage.setItem(K + 'marker', new Date().toISOString())
+          } catch (e) {}
+        }
+        var q = new URLSearchParams(location.search)
+        var returning = q.has('code') || q.has('error')
+        var hasToken = function () {
+          return get(localStorage, 'auth_token') !== null
+        }
+        var yn = function (b) {
+          return b ? '有' : '没有'
+        }
+
+        add('info', '显示模式', mode())
+        add('info', '浏览器', navigator.userAgent)
+        add('info', '测试标记 ' + K + 'marker', hadMarker ? '已存在' : '刚创建')
+        var keys = []
+        try {
+          for (var i = 0; i < localStorage.length; i++) {
+            var n = localStorage.key(i)
+            if (n.indexOf('pixelsky.') === 0 && n.indexOf(K) !== 0) keys.push(n)
+          }
+        } catch (e) {}
+        add('info', '主应用配对数据（只列名字）', keys.length ? keys.join('，') : '没有')
+
+        var t0 = Number(get(localStorage, K + 'startedAt') || get(sessionStorage, K + 'startedAt'))
+        add('info', '面板登录（auth_token）', yn(hasToken()))
+        var started = !!t0
+        if (started) {
+          var state = q.get('state')
+          var ss = get(sessionStorage, K + 'state'),
+            ls = get(localStorage, K + 'state')
+          var sv = get(sessionStorage, K + 'verifier'),
+            lv = get(localStorage, K + 'verifier')
+          add(
+            'result',
+            '返回结果',
+            q.has('error')
+              ? '✗ error=' + q.get('error')
+              : returning
+                ? '✓ 带回授权码（长度 ' + (q.get('code') || '').length + '）'
+                : '✗ 没有带回授权码',
+          )
+          var before = get(localStorage, K + 'hadToken') || get(sessionStorage, K + 'hadToken')
+          add('result', '跳走前面板登录', before === null ? '不知道' : yn(before === '1'))
+          add('result', '返回后面板登录', yn(hasToken()))
+          add('result', 'state 与 sessionStorage 一致', mark(state && state === ss))
+          add('result', 'state 与 localStorage 一致', mark(state && state === ls))
+          add('result', 'sessionStorage 里还有 verifier', mark(!!sv))
+          add('result', 'localStorage 里还有 verifier', mark(!!lv))
+          add('result', '测试标记还在', mark(hadMarker))
+          add('result', '返回时的显示模式', mode())
+          add('result', '耗时', t0 ? Math.round((Date.now() - t0) / 1000) + ' 秒' : '✗ 不知道（开始时间丢了）')
+          if (returning) history.replaceState(null, '', location.pathname)
+        }
+
+        function render(id) {
+          var el = document.getElementById(id)
+          tables[id].forEach(function (r) {
+            var tr = document.createElement('tr')
+            r.forEach(function (c) {
+              var td = document.createElement('td')
+              td.textContent = c
+              tr.appendChild(td)
+            })
+            el.appendChild(tr)
+          })
+        }
+        render('info')
+        render('result')
+        document.getElementById('resultBox').hidden = !started
+
+        document.getElementById('start').onclick = async function () {
+          var verifier = rand(32),
+            state = rand(16)
+          var hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
+          set(K + 'verifier', verifier)
+          set(K + 'state', state)
+          set(K + 'startedAt', String(Date.now()))
+          set(K + 'hadToken', hasToken() ? '1' : '0')
+          location.href =
+            location.origin +
+            '/cli/oauth?response_type=code&client_id=pixelsky-web' +
+            '&redirect_uri=' +
+            encodeURIComponent(location.origin + '/m/l2-probe.html') +
+            '&code_challenge=' +
+            b64url(hash) +
+            '&code_challenge_method=S256&state=' +
+            state
+        }
+        document.getElementById('clear').onclick = function () {
+          ;['verifier', 'state', 'startedAt', 'hadToken'].forEach(function (k) {
+            try {
+              sessionStorage.removeItem(K + k)
+              localStorage.removeItem(K + k)
+            } catch (e) {}
+          })
+          location.reload()
+        }
+        document.getElementById('copy').onclick = function () {
+          var all = tables.info.concat(started ? [['--- 往返结果 ---', '']].concat(tables.result) : [])
+          var text = all
+            .map(function (r) {
+              return r[0] + '：' + r[1]
+            })
+            .join('\n')
+          var done = function () {
+            alert('已复制')
+          }
+          ;(navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(done, function () {
+            prompt('请手动复制', text)
+          })
+        }
+      })()
+    </script>
+  </body>
+</html>

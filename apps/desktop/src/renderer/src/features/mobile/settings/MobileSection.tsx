@@ -23,6 +23,7 @@ const SEATS_POLL_MS = 30_000
  */
 export function MobileSection() {
   const { t, locale } = useI18n()
+  const acc = useAccount()
   const bridge = window.pixelsky?.mobile
   const [state, setState] = useState<MobileState | null>(null)
   const [relay, setRelay] = useState('')
@@ -149,6 +150,9 @@ export function MobileSection() {
               <span className="text-fg-faint">· {t('mobile.fingerprint', { p0: state.fingerprint })}</span>
             )}
           </p>
+        )}
+        {state.prefs.enabled && acc.status === 'signed-in' && (
+          <p className="mt-1 text-meta text-fg-faint">{t('mobile.accountVisible')}</p>
         )}
       </SettingRow>
 
