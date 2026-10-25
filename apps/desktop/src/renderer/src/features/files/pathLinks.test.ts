@@ -87,6 +87,21 @@ describe('wholeTextFile', () => {
     })
   })
 
+  it('file:/// 地址也认，#L 行号照样拆出来', async () => {
+    const ref = { sessionId: 's3' }
+    expect(await wholeTextFile(ref, 'file:///D:/repo/README.md')).toEqual({
+      path: 'README.md',
+      line: null,
+      column: null,
+    })
+    expect(await wholeTextFile(ref, 'file:///D:/repo/src/a.ts#L12')).toEqual({
+      path: 'src/a.ts',
+      line: 12,
+      column: null,
+    })
+    expect(await wholeTextFile(ref, 'file:///C:/elsewhere/a.ts')).toBeNull()
+  })
+
   it('文字里还有别的内容时不算', async () => {
     expect(await wholeTextFile({ sessionId: 's3' }, 'see src/a.ts')).toBeNull()
     expect(await wholeTextFile({ sessionId: 's3' }, 'src/a.ts,')).toBeNull()

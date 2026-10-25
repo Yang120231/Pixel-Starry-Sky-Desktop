@@ -2,7 +2,7 @@
 // 项目 / 会话的根目录（含附加文件夹）缓存 30 秒，目录列表缓存几秒：鼠标划过同一屏输出、一条回复里有很多路径时不会反复读盘。
 import { machineOf } from '@/features/machines/store'
 import type { WorkspaceRef, WorkspaceTarget } from '../../../../shared/types/workspace'
-import type { LinkTarget } from '@/ui/markdown/pathLinks'
+import { linkPathText, type LinkTarget } from '@/ui/markdown/pathLinks'
 import { findPathMatches, projectPath } from './pathMatch'
 
 const LIST_TTL = 5000
@@ -131,7 +131,8 @@ export interface FileTarget {
  * 文字里还有别的内容、或者文件不存在时为 null。
  */
 export async function wholeTextFile(ref: WorkspaceRef, text: string): Promise<FileTarget | null> {
-  const value = text.trim()
+  // `file:///D:/x/a.html` 这种写法先换成路径（路径规则不认前面紧挨着 / 的盘符）
+  const value = (/^\s*file:/i.test(text) ? (linkPathText(text.trim()) ?? '') : text).trim()
   const [match] = findPathMatches(value)
   if (!match || match.start !== 0 || match.end !== value.length) return null
   const path = await workspaceFilePath(ref, match.raw)

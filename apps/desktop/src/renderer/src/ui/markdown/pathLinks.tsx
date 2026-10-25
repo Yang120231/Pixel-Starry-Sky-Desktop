@@ -50,7 +50,7 @@ export function maybePath(text: string): boolean {
     t.length > 2 &&
     t.length <= 260 &&
     !/\s/.test(t) &&
-    /\.[A-Za-z]\w{0,9}(?::\d+(?::\d+)?|\(\d+(?:,\s*\d+)?\))?$/.test(t)
+    /\.[A-Za-z]\w{0,9}(?::\d+(?::\d+)?|\(\d+(?:,\s*\d+)?\)|#L\d+(?:C\d+)?(?:-L?\d+(?:C\d+)?)?)?$/.test(t)
   )
 }
 

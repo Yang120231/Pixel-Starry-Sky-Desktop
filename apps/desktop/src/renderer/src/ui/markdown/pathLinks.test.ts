@@ -8,6 +8,7 @@ describe('maybePath', () => {
     expect(maybePath('src/a.ts:12:4')).toBe(true)
     expect(maybePath('Program.cs(10,5)')).toBe(true)
     expect(maybePath('README.md')).toBe(true)
+    expect(maybePath('file:///D:/x/a.ts#L12')).toBe(true)
   })
 
   it('命令、普通单词、版本号、太长的不查', () => {
