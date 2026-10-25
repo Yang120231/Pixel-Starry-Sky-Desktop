@@ -29,7 +29,14 @@ import { cardsOf, lanesOf } from './runFilter'
 import { SessionItem } from './SessionItem'
 import { ProjectRow } from './ProjectRow'
 import { GroupNameDialog } from './GroupNameDialog'
-import { SHOWN_SESSIONS, projectCounts, projectFolders, visibleSessions } from './projectTreeModel'
+import {
+  ARCHIVED_PAGE,
+  SHOWN_SESSIONS,
+  projectCounts,
+  projectFolders,
+  visibleArchived,
+  visibleSessions,
+} from './projectTreeModel'
 import {
   addToGroup,
   arrangeProjects,
@@ -91,6 +98,8 @@ export function ProjectTree({
   const saved = prefs.order ?? []
   const [showAll, setShowAll] = useState<Record<string, boolean>>({})
   const [archivedOpen, setArchivedOpen] = useState<Record<string, boolean>>({})
+  // 展开的归档列到第几个（每点一次「还有 N 个」多列 ARCHIVED_PAGE 个）
+  const [archivedShown, setArchivedShown] = useState<Record<string, number>>({})
   // Ctrl / Shift 选中的项目（准备组成分区）；Esc 或普通点击清掉
   const [picked, setPicked] = useState<string[]>([])
   const anchor = useRef<string | null>(null)
@@ -329,14 +338,29 @@ export function ProjectTree({
                   onClick={() => setArchivedOpen(state => ({ ...state, [p.id]: !state[p.id] }))}
                 />
                 {archivedOpen[p.id] &&
-                  p.archived.map(session => (
-                    <SessionItem
-                      key={session.id}
-                      session={session}
-                      selected={session.id === selectedSessionId}
-                      onSelect={onSelectSession}
-                    />
-                  ))}
+                  (() => {
+                    const limit = archivedShown[p.id] ?? ARCHIVED_PAGE
+                    const { shown: archived, hidden: more } = visibleArchived(p.archived, limit, selectedSessionId)
+                    return (
+                      <>
+                        {archived.map(session => (
+                          <SessionItem
+                            key={session.id}
+                            session={session}
+                            selected={session.id === selectedSessionId}
+                            onSelect={onSelectSession}
+                          />
+                        ))}
+                        {more > 0 && (
+                          <MoreRow
+                            label={tr('sidebar.tree.more', { count: more })}
+                            open={false}
+                            onClick={() => setArchivedShown(state => ({ ...state, [p.id]: limit + ARCHIVED_PAGE }))}
+                          />
+                        )}
+                      </>
+                    )
+                  })()}
               </>
             )}
           </div>

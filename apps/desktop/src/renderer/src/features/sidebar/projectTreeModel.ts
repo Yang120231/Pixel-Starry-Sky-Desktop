@@ -41,6 +41,20 @@ export function visibleSessions<T extends Pick<Session, 'id' | 'status'>>(
   return { shown, hidden: sessions.length - shown.length }
 }
 
+/** 展开「已归档」后每次多列这么多个：用久了一个项目能归档上千个，一次全画会让侧栏卡住 */
+export const ARCHIVED_PAGE = 50
+
+/** 已归档的先列前 limit 个；当前打开的那个在后面也列出来 */
+export function visibleArchived<T extends Pick<Session, 'id'>>(
+  archived: readonly T[],
+  limit: number,
+  selected: string | null,
+): { shown: T[]; hidden: number } {
+  if (archived.length <= limit) return { shown: [...archived], hidden: 0 }
+  const shown = archived.filter((s, i) => i < limit || s.id === selected)
+  return { shown, hidden: archived.length - shown.length }
+}
+
 /** 多文件夹项目的每个文件夹：主文件夹在前（index 0），附加文件夹 index 从 1 起，和文件接口的「::N」对应；单文件夹项目返回空 */
 export function projectFolders(
   project: Pick<Project, 'path' | 'folders'>,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SessionLane } from '@/features/board/sessionLanes'
-import { projectCounts, projectFolders, visibleSessions } from './projectTreeModel'
+import { ARCHIVED_PAGE, projectCounts, projectFolders, visibleArchived, visibleSessions } from './projectTreeModel'
 
 const session = (id: string, status: 'idle' | 'running' | 'unread' = 'idle') => ({ id, title: id, status })
 
@@ -68,5 +68,27 @@ describe('多文件夹项目的文件夹', () => {
   it('单文件夹项目没有', () => {
     expect(projectFolders({ path: 'D:/PixelSky' })).toEqual([])
     expect(projectFolders({ path: 'D:/PixelSky', folders: [] })).toEqual([])
+  })
+})
+
+describe('已归档先列几个', () => {
+  const archived = Array.from({ length: 120 }, (_, i) => ({ id: `a${i}` }))
+  it('不超过上限全列', () => {
+    expect(visibleArchived(archived.slice(0, 10), ARCHIVED_PAGE, null)).toEqual({
+      shown: archived.slice(0, 10),
+      hidden: 0,
+    })
+  })
+  it('超过上限只列前 limit 个，点「还有 N 个」后上限加一页', () => {
+    expect(visibleArchived(archived, ARCHIVED_PAGE, null)).toEqual({
+      shown: archived.slice(0, ARCHIVED_PAGE),
+      hidden: 120 - ARCHIVED_PAGE,
+    })
+    expect(visibleArchived(archived, ARCHIVED_PAGE * 3, null).hidden).toBe(0)
+  })
+  it('当前打开的归档会话在后面也列出来', () => {
+    const { shown, hidden } = visibleArchived(archived, ARCHIVED_PAGE, 'a99')
+    expect(shown.at(-1)?.id).toBe('a99')
+    expect(hidden).toBe(120 - ARCHIVED_PAGE - 1)
   })
 })
