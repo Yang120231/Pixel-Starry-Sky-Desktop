@@ -43,7 +43,8 @@ function spawnArgs(): string[][] {
   }
 }
 
-const envLog = (): { autoCompact?: string } => JSON.parse(readFileSync(join(root, 'env.json'), 'utf8'))
+const envLog = (): { autoCompact?: string; todoTools?: string } =>
+  JSON.parse(readFileSync(join(root, 'env.json'), 'utf8'))
 
 async function waitFor<T>(pick: () => T | undefined | null | false, timeoutMs = 10_000): Promise<T> {
   const start = Date.now()
@@ -170,6 +171,8 @@ describe('本机引擎详情设置', () => {
     const settings = args[args.indexOf('--settings') + 1]
     expect(JSON.parse(settings)).toMatchObject({ outputStyle: 'Explanatory' })
     expect(envLog().autoCompact).toBe('70')
+    // 任务清单工具默认打开（不开的话 -p 模式下模型没有待办工具，进度卡片出不来）
+    expect(envLog().todoTools).toBe('1')
     await expect(host.setEngineConfig('claude', { autoCompactPct: 33 })).rejects.toThrow('自动压缩触发点不对')
   })
 

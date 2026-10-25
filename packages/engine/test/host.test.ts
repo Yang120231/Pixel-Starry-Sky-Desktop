@@ -452,6 +452,7 @@ describe('EngineHost + Claude（假引擎）', () => {
     expect(JSON.parse(readFileSync(join(root, 'env.json'), 'utf8'))).toEqual({
       base: 'http://127.0.0.1:1234',
       token: 'loopback-only',
+      todoTools: '1',
     })
     expect(host.open(record.id).record.platform?.groupId).toBe('7')
     expect(host.usageSummary({ range: 'today', filter: {}, now: Date.now() }).groups.route[0].key).toBe('pixelsky')
@@ -598,6 +599,7 @@ describe('EngineHost + Claude（假引擎）', () => {
     expect(JSON.parse(readFileSync(join(root, 'env.json'), 'utf8'))).toEqual({
       base: 'http://127.0.0.1:1234',
       token: 'loopback-only',
+      todoTools: '1',
     })
     expect(host.usageSummary({ range: 'today', filter: {}, now: Date.now() }).groups.route[0].key).toBe('api-key')
     // 引擎报的费用不用：fake-model 对不上官方价格，只留 token

@@ -441,6 +441,9 @@ export class ClaudeAdapter implements EngineAdapter {
     // 文件检查点：-p 模式默认不记，回退时要靠它恢复代码（docs/ui/rewind-fork-sidechat.md §1）；
     // 用户设了 CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING 时 Claude Code 自己会关掉
     env.CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING = 'true'
+    // 任务清单工具（TaskCreate / TaskUpdate）：-p 模式默认不给模型，不开的话进度卡片和对话里的计划永远出不来；
+    // 用户自己设了（包括设成 0）就照用户的
+    env.CLAUDE_CODE_ENABLE_TODO_TOOLS ??= '1'
     if (pathDirs.length) env.PATH = [...pathDirs, env.PATH ?? env.Path ?? ''].join(delimiter)
     return env
   }

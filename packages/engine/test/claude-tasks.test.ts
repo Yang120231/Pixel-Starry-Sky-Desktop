@@ -1,0 +1,134 @@
+// Claude Code 新版的任务工具（TaskCreate / TaskUpdate）拼成待办清单：进度卡片和对话里的计划要靠它
+// 帧序列照 2.1.310 实际跑出来的（CLAUDE_CODE_ENABLE_TODO_TOOLS=1，先 ToolSearch 再建任务）
+import { describe, expect, it } from 'vitest'
+import type { EngineEvent, Item } from '@pixelsky/protocol'
+import { ClaudeTranslator } from '../src/claude/translate'
+import { TaskBoard } from '../src/claude/tasks'
+
+type Todo = Extract<Item, { kind: 'todo' }>
+
+function translator(): { t: ClaudeTranslator; todos: () => Todo[] } {
+  const events: EngineEvent[] = []
+  const t = new ClaudeTranslator('D:/work', {
+    emit: e => events.push(e),
+    sessionId: () => {},
+    permissionMode: () => {},
+    turnEnded: () => {},
+    fastState: () => {},
+  })
+  t.startTurn('turn-1')
+  const todos = () =>
+    events.flatMap(e =>
+      (e.type === 'item_started' || e.type === 'item_completed') && e.item.kind === 'todo' ? [e.item] : [],
+    )
+  return { t, todos }
+}
+
+let msg = 0
+const use = (t: ClaudeTranslator, id: string, name: string, input: Record<string, unknown>) =>
+  t.handle({
+    type: 'assistant',
+    message: { id: `msg_${++msg}`, content: [{ type: 'tool_use', id, name, input }] },
+    parent_tool_use_id: null,
+  })
+const result = (t: ClaudeTranslator, id: string, content: string, toolUseResult: unknown, isError = false) =>
+  t.handle({
+    type: 'user',
+    message: { content: [{ type: 'tool_result', tool_use_id: id, content, is_error: isError }] },
+    tool_use_result: toolUseResult,
+    parent_tool_use_id: null,
+  })
+
+describe('TaskCreate / TaskUpdate → 待办清单', () => {
+  it('建三条、改状态：每次调用都带完整的清单，最后一次就是现在的清单', () => {
+    const { t, todos } = translator()
+    use(t, 'ts', 'ToolSearch', { query: 'select:TaskCreate,TaskUpdate', max_results: 2 })
+    result(t, 'ts', 'ok', { matches: ['TaskCreate', 'TaskUpdate'] })
+    ;['A: write', 'B: test', 'C: docs'].forEach((subject, i) => {
+      use(t, `c${i}`, 'TaskCreate', { subject, description: 'd' })
+      result(t, `c${i}`, `Task #${i + 1} created successfully: ${subject}`, { task: { id: String(i + 1), subject } })
+    })
+    use(t, 'u1', 'TaskUpdate', { taskId: '1', status: 'in_progress' })
+    result(t, 'u1', 'Updated task #1 status', { success: true, taskId: '1' })
+    use(t, 'u2', 'TaskUpdate', { taskId: '1', status: 'completed' })
+    use(t, 'u3', 'TaskUpdate', { taskId: '2', status: 'in_progress' })
+    const last = todos().at(-1)!
+    expect(last.id).toBe('c0')
+    expect(last.steps).toEqual([
+      { text: 'A: write', status: 'completed' },
+      { text: 'B: test', status: 'in_progress' },
+      { text: 'C: docs', status: 'pending' },
+    ])
+    // 第一次建任务时还没拿到编号，也已经列出来
+    expect(todos()[0].steps).toEqual([{ text: 'A: write', status: 'pending' }])
+  })
+
+  it('结果里没有 task.id 时从「Task #N created」取编号；建失败的丢掉', () => {
+    const board = new TaskBoard()
+    board.apply('a', 'TaskCreate', { subject: '写代码' })
+    board.resolve('a', 'Task #7 created successfully: 写代码', false, undefined)
+    board.apply('b', 'TaskCreate', { subject: '坏的' })
+    board.resolve('b', 'error', true, undefined)
+    expect(board.apply('u', 'TaskUpdate', { taskId: '7', status: 'completed' })).toEqual([
+      { text: '写代码', status: 'completed' },
+    ])
+  })
+
+  it('deleted 删掉；不认识的编号又没给名字时不凭空加一条；改名字照改', () => {
+    const board = new TaskBoard()
+    board.apply('a', 'TaskCreate', { subject: 'one' })
+    board.resolve('a', '', false, { task: { id: '1' } })
+    board.apply('b', 'TaskCreate', { subject: 'two' })
+    board.resolve('b', '', false, { task: { id: '2' } })
+    expect(board.apply('u', 'TaskUpdate', { taskId: '9', status: 'completed' })).toHaveLength(2)
+    expect(board.apply('u', 'TaskUpdate', { taskId: '1', status: 'deleted' })).toEqual([
+      { text: 'two', status: 'pending' },
+    ])
+    expect(board.apply('u', 'TaskUpdate', { taskId: '2', subject: 'two!' })).toEqual([
+      { text: 'two!', status: 'pending' },
+    ])
+  })
+
+  it('别的工具不归它管；旧的 TodoWrite 照旧', () => {
+    expect(new TaskBoard().apply('x', 'Bash', { command: 'ls' })).toBeNull()
+    const { t, todos } = translator()
+    use(t, 'w', 'TodoWrite', { todos: [{ content: '旧清单', status: 'in_progress' }] })
+    expect(todos().at(-1)?.steps).toEqual([{ text: '旧清单', status: 'in_progress' }])
+  })
+})
+
+describe('任务清单在执行块里只占一行', () => {
+  it('同一轮的任务调用都更新第一次调用那一行；结果晚到不会把清单写回旧的', () => {
+    const { t, todos } = translator()
+    use(t, 'c1', 'TaskCreate', { subject: 'one' })
+    result(t, 'c1', 'Task #1 created successfully: one', { task: { id: '1' } })
+    use(t, 'c2', 'TaskCreate', { subject: 'two' })
+    result(t, 'c2', 'Task #2 created successfully: two', { task: { id: '2' } })
+    // 两次改状态在同一条消息里发出，结果一起回来：先回来的 u1 不能把 u2 的变化盖掉
+    t.handle({
+      type: 'assistant',
+      message: {
+        id: 'msg_pair',
+        content: [
+          { type: 'tool_use', id: 'u1', name: 'TaskUpdate', input: { taskId: '1', status: 'completed' } },
+          { type: 'tool_use', id: 'u2', name: 'TaskUpdate', input: { taskId: '2', status: 'in_progress' } },
+        ],
+      },
+      parent_tool_use_id: null,
+    })
+    result(t, 'u1', 'Updated task #1 status', { success: true })
+    expect(new Set(todos().map(i => i.id))).toEqual(new Set(['c1']))
+    expect(todos().at(-1)?.steps).toEqual([
+      { text: 'one', status: 'completed' },
+      { text: 'two', status: 'in_progress' },
+    ])
+  })
+
+  it('新的一轮另开一行', () => {
+    const { t, todos } = translator()
+    use(t, 'a', 'TaskCreate', { subject: 'one' })
+    t.startTurn('turn-2')
+    use(t, 'b', 'TaskCreate', { subject: 'two' })
+    expect(todos().at(-1)?.id).toBe('b')
+  })
+})

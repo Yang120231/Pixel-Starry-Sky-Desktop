@@ -25,6 +25,7 @@ import type {
 import { backgroundAgents, estimateCost, officialPrice } from '@pixelsky/protocol'
 import { Runs } from './runs'
 import { completeToolItem, toolItem } from './tools'
+import { TaskBoard } from './tasks'
 import { RequestCacheReader } from './request-cache'
 import { requestRetryState } from './retry-state'
 import { ContextReader } from './context'
@@ -126,6 +127,10 @@ export class ClaudeTranslator {
   private blocks = new Map<string, OpenBlock>()
   /** 已开始、还没拿到结果的工具调用：key = tool_use.id */
   private tools = new Map<string, Item>()
+  /** 新版任务工具（TaskCreate / TaskUpdate）拼出的整份待办清单 */
+  private taskBoard = new TaskBoard()
+  /** 这一轮任务清单那一行的条目 id：同一轮的任务调用都更新这一行，执行块里不刷出一串「待办」 */
+  private taskItemId: string | null = null
   /** 用户拒绝过的工具调用（结果标成 declined 而不是 failed） */
   private declined = new Set<string>()
   private usage: Usage = {
@@ -217,6 +222,7 @@ export class ClaudeTranslator {
   startTurn(turnId: string): void {
     this.requestCache.begin(turnId)
     this.turnId = turnId
+    this.taskItemId = null
     this.halted = false
     this.retry = null
     this.apiError = null
@@ -764,8 +770,15 @@ export class ClaudeTranslator {
       } else if (block.type === 'tool_use') {
         const id = str(block.id) || this.nextId('tool')
         if (this.tools.has(id)) continue
-        const item = toolItem(id, str(block.name), obj(block.input), this.cwd)
+        const name = str(block.name)
+        const steps = this.taskBoard.apply(id, name, obj(block.input))
+        if (steps) this.taskItemId ??= id
+        const item: Item = steps
+          ? { kind: 'todo', id: this.taskItemId ?? id, steps, status: 'running' }
+          : toolItem(id, name, obj(block.input), this.cwd)
         this.toolInputs.set(id, obj(block.input))
+        // 共用那一行的、还没拿到结果的调用也换成最新清单：中断收尾时按它们写，不会写回旧快照
+        if (steps) for (const [key, open] of this.tools) if (open.id === item.id) this.tools.set(key, item)
         this.tools.set(id, item)
         this.cb.emit({ type: 'item_started', item })
       }
@@ -797,6 +810,7 @@ export class ClaudeTranslator {
       if (!item) continue
       this.tools.delete(id)
       const isError = block.is_error === true
+      this.taskBoard.resolve(id, block.content, isError, msg.tool_use_result)
       const result = obj(msg.tool_use_result)
       if (str(result.agentId) && this.runs.agentResult(result)) this.emitRuns()
       const status: ItemStatus | undefined = isError && this.declined.has(id) ? 'declined' : undefined
@@ -812,9 +826,11 @@ export class ClaudeTranslator {
         this.syncBackground()
         continue
       }
+      const done = completeToolItem(item, block.content, isError, msg.tool_use_result, status)
+      // 任务清单那一行几次调用共用：结果晚到时写现在的清单，不拿这次调用时的旧快照盖掉后面的
       this.cb.emit({
         type: 'item_completed',
-        item: completeToolItem(item, block.content, isError, msg.tool_use_result, status),
+        item: done.kind === 'todo' && this.taskItemId === done.id ? { ...done, steps: this.taskBoard.steps() } : done,
       })
     }
   }

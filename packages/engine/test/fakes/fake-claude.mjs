@@ -43,6 +43,7 @@ if (process.env.FAKE_CLAUDE_ENV_LOG)
       token: process.env.ANTHROPIC_AUTH_TOKEN,
       key: process.env.ANTHROPIC_API_KEY,
       autoCompact: process.env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE,
+      todoTools: process.env.CLAUDE_CODE_ENABLE_TODO_TOOLS,
     }),
   )
 if (process.env.FAKE_CLAUDE_LOG) appendFileSync(process.env.FAKE_CLAUDE_LOG, JSON.stringify(argv) + '\n')
