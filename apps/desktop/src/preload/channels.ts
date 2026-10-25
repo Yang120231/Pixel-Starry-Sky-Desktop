@@ -11,6 +11,7 @@ import type {
   JoinSessionInput,
   ChannelTaskAction,
   NeedMark,
+  FlowAction,
   ChannelTextMessage,
   PostInput,
   RelayRules,
@@ -58,6 +59,8 @@ export interface ChannelsBridge {
   alert(channelId: string, messageId: string, action: ChannelAlertAction): Promise<{ draft?: string }>
   /** 「需要你」里标为已处理（done）/ 恢复（docs/ui/channels-collab-v2.md §2.1） */
   markNeeds(items: NeedMark[], done: boolean): Promise<void>
+  /** 流程卡：建草稿 / 改草稿 / 开始 / 暂停 / 继续 / 停止 / 丢弃（docs/ui/channels-pipeline.md §4）；建的时候返回流程卡消息 id */
+  flow(channelId: string, action: FlowAction): Promise<{ messageId: string }>
   /** 把任务看板的事项交给频道成员（docs/ui/channels-collab-v2.md §9）：返回派出的任务卡 id */
   dispatchIssue(channelId: string, issue: IssueDispatch): Promise<{ taskId: string }>
   /** 搜频道消息（§3.1 #8）：新的在前；projectId 只搜默认项目是它的频道 */

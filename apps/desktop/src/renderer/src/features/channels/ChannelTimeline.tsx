@@ -9,6 +9,7 @@ import { formatDay } from './format'
 import { MessageGroup, ThreadRow, type Quotable } from './ChannelMessage'
 import { threadStats } from '../../../../shared/channels/threads'
 import { ChannelTaskCard, type TaskCardActions } from './ChannelTaskCard'
+import { ChannelFlowCard } from './ChannelFlowCard'
 import { channelActions, useChannels } from './store'
 
 /** 离底部这么近时，新消息到来自动跟到底部 */
@@ -272,6 +273,17 @@ export function ChannelTimeline({
                     </div>
                   )}
                 </div>
+              )
+            case 'flow':
+              return (
+                <ChannelFlowCard
+                  key={row.key}
+                  message={row.message}
+                  membersById={membersById}
+                  channelMembers={channelMembers}
+                  readOnly={!!channel.archivedAt || channel.scope !== 'local'}
+                  highlight={highlight === row.message.id}
+                />
               )
             case 'group':
               return (

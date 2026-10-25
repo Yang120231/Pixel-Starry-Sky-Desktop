@@ -84,11 +84,57 @@ const TOOLS = [
     },
     annotations: WRITE,
   },
+  {
+    name: 'task_done',
+    description:
+      '流程里的一步确实做完了：交付这一步（摘要、改了哪些文件），流程才会往下走。审查步骤要写 verdict（pass 通过 / reject 打回）、打回时 issues 列出问题；让你拆流程的活用 steps 交回拆好的步骤。只有流程里的活能用，一轮只算第一次。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        summary: { type: 'string', minLength: 1, description: '一两句话：做了什么、结论是什么' },
+        files: { type: 'array', items: { type: 'string' }, description: '你改了哪些文件（相对路径），可不填' },
+        verdict: { type: 'string', enum: ['pass', 'reject'], description: '审查步骤：通过或打回' },
+        issues: { type: 'array', items: { type: 'string' }, description: '打回时的问题，一条一个，要具体到能照着改' },
+        steps: {
+          type: 'array',
+          description: '拆流程时：拆好的步骤（最多 9 步）',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string', description: '这一步做什么' },
+              member: { type: 'string', description: '谁做（成员名字）' },
+              deps: { type: 'array', items: { type: 'integer' }, description: '要先交付的步骤序号（从 1 数）' },
+              kind: { type: 'string', enum: ['work', 'review', 'summary'] },
+              target: { type: 'integer', description: 'review：审第几步' },
+            },
+            required: ['title', 'member'],
+          },
+        },
+      },
+      required: ['summary'],
+    },
+    annotations: WRITE,
+  },
+  {
+    name: 'member_ask',
+    description:
+      '流程里需要别的成员提供东西（它做的那一步的细节、一个决定）时问它，不用用户批准。问完结束这一轮，回答来了会作为新消息发给你；对方正在做时等它这一轮做完再答。次数算进频道的接力规则。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        member: { type: 'string', minLength: 1, description: 'AI 成员的名字' },
+        question: { type: 'string', minLength: 1, description: '要问什么，写清楚背景' },
+      },
+      required: ['member', 'question'],
+    },
+    annotations: WRITE,
+  },
 ].map(tool => ({ ...tool, annotations: { title: tool.name, ...tool.annotations } }))
 
 const INSTRUCTIONS =
   '你是像素星空协作频道里的 AI 成员。channel_read / thread_read 查频道记录；channel_reply 在你这项活的串里写进展；' +
-  'task_propose 提议给别的成员派活（用户决定）；频道允许时 task_handover 直接交接。不能删消息、改频道设置、给别的频道发消息。'
+  'task_propose 提议给别的成员派活（用户决定）；频道允许时 task_handover 直接交接。' +
+  '流程里的一步：做完调用 task_done 交付，需要别的成员提供东西用 member_ask。不能删消息、改频道设置、给别的频道发消息。'
 
 const str = (args: ToolArgs, key: string, required = false): string | undefined => {
   const value = args[key]
@@ -122,6 +168,10 @@ function mcpServer(channels: () => Channels | null, sessionId: string): Server {
           return text(await c.toolPropose(sessionId, str(args, 'member', true)!, str(args, 'request', true)!))
         case 'task_handover':
           return text(await c.toolHandover(sessionId, str(args, 'member', true)!, str(args, 'request', true)!))
+        case 'task_done':
+          return text(c.toolDone(sessionId, args))
+        case 'member_ask':
+          return text(await c.toolAsk(sessionId, str(args, 'member', true)!, str(args, 'question', true)!))
         default:
           return text(`没有这个工具：${request.params.name}`, true)
       }

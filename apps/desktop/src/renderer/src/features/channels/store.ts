@@ -14,6 +14,8 @@ import type {
   ChannelNotify,
   ChannelsSnapshot,
   ChannelTaskAction,
+  ChannelFlow,
+  FlowAction,
   IssueDispatch,
   JoinSessionInput,
   NeedMark,
@@ -559,6 +561,11 @@ export const channelActions = {
   deleteMember(memberId: string): Promise<void> {
     return channelsBridge!.deleteMember(memberId)
   },
+  /** 流程卡上的操作（docs/ui/channels-pipeline.md §4.5）；返回流程消息 id。演示模式只改内存，AI 成员不会真的做 */
+  async flow(channelId: string, action: FlowAction): Promise<string> {
+    if (channelsBridge) return (await channelsBridge.flow(channelId, action)).messageId
+    return demo.flow(channelId, action)
+  },
   task(taskId: string, action: ChannelTaskAction): Promise<void> {
     return channelsBridge ? channelsBridge.task(taskId, action) : demo.task(taskId, action)
   },
@@ -781,6 +788,79 @@ const demo = {
           ? { ...t, status: 'queued' }
           : { ...t, status: 'stopped', note: 'rejected', endedAt: Date.now() },
     )
+  },
+  flow(channelId: string, action: FlowAction): string {
+    const list = state.messages[channelId] ?? []
+    if (action.type === 'create') {
+      const author = selfIdIn(state, state.channels.find(c => c.id === channelId)?.memberIds) ?? ''
+      const planner = action.planner
+      const id = demoId('flow')
+      const flow: ChannelFlow = {
+        title: action.title,
+        status: planner ? 'planning' : 'draft',
+        steps: (action.steps ?? []).map(x => ({ ...x, taskId: null, status: 'pending', rejects: 0 })),
+        maxRejects: 3,
+        planner: planner ? { ...planner, taskId: null } : null,
+      }
+      const message = createMessage({
+        id,
+        channelId,
+        authorId: author,
+        text: action.title,
+        members: [],
+        now: Date.now(),
+      })
+      set({ messages: appendMessage(state.messages, { ...message, flow }) })
+      return id
+    }
+    const patch = (change: (f: ChannelFlow) => ChannelFlow | null): void => {
+      set({
+        messages: {
+          ...state.messages,
+          [channelId]: list.flatMap(m =>
+            m.kind === 'message' && m.id === action.messageId && m.flow
+              ? ((f): ChannelTextMessage[] => (f ? [{ ...m, flow: f }] : []))(change(m.flow))
+              : [m],
+          ),
+        },
+      })
+    }
+    const stepStatus = (f: ChannelFlow, status: ChannelFlow['status']): ChannelFlow => ({ ...f, status, paused: null })
+    switch (action.type) {
+      case 'update':
+        patch(f => ({
+          ...f,
+          title: action.title ?? f.title,
+          steps: action.steps
+            ? action.steps.map(x => ({ ...x, taskId: null, status: 'pending', rejects: 0 }))
+            : f.steps,
+        }))
+        break
+      case 'start':
+      case 'resume':
+        patch(f => {
+          const done = new Set(f.steps.filter(x => x.status === 'delivered').map(x => x.id))
+          const steps = f.steps.map(x =>
+            x.status === 'pending' && x.deps.every(d => done.has(d)) ? { ...x, status: 'running' as const } : x,
+          )
+          return { ...stepStatus(f, 'running'), steps }
+        })
+        break
+      case 'pause':
+        patch(f => stepStatus(f, 'paused'))
+        break
+      case 'stop':
+        patch(f => ({
+          ...stepStatus(f, 'stopped'),
+          steps: f.steps.map(x => (x.status === 'running' || x.status === 'asking' ? { ...x, status: 'stopped' } : x)),
+        }))
+        break
+      case 'discard':
+        // 和正式数据一样：丢弃 = 标成已停止（消息记录只追加，不删）
+        patch(f => stepStatus(f, 'stopped'))
+        break
+    }
+    return action.messageId
   },
   task(taskId: string, action: ChannelTaskAction): Promise<void> {
     if (action === 'cancel')

@@ -251,9 +251,73 @@ export interface ChannelTextMessage extends ChannelMessageBase {
   proposal?: ChannelProposal | null
   /** 主动提醒（docs/ui/channels-collab-v2.md §6）：系统发的，authorId 是 SYSTEM_AUTHOR */
   alert?: ChannelAlert | null
+  /** 流程（docs/ui/channels-pipeline.md §4）：这条消息就是流程卡，步骤和状态都在这里 */
+  flow?: ChannelFlow | null
   /** 带的图片和文件：消息里只有说明，图片数据和文件全文另存，按需用 channels:attachments 读 */
   attached?: ChannelAttachedMeta
 }
+
+/** 流程里一步的类型：干活、审查某一步、汇总 */
+export type FlowStepKind = 'work' | 'review' | 'summary'
+
+/** 流程里一步的临时设置（第 20 项）：不写的跟随成员 */
+export type FlowStepSettings = Partial<Pick<SessionSettings, 'model' | 'effort' | 'fast' | 'ultracode'>>
+
+/** 一步交付的内容（task_done） */
+export interface FlowResult {
+  summary: string
+  files: string[]
+  /** 审查步骤：通过 / 打回 */
+  verdict?: 'pass' | 'reject'
+  issues?: string[]
+}
+
+export interface FlowStep {
+  id: string
+  title: string
+  memberId: string
+  /** 这些步骤都交付了才开始 */
+  deps: string[]
+  kind: FlowStepKind
+  /** kind 是 review：审哪一步 */
+  target?: string | null
+  settings?: FlowStepSettings | null
+  /** 开始后对应的任务卡 */
+  taskId: string | null
+  /** asking：问了别的成员、在等回答 */
+  status: 'pending' | 'running' | 'asking' | 'delivered' | 'failed' | 'stopped'
+  /** 被审查打回过几次 */
+  rejects: number
+  result?: FlowResult | null
+}
+
+/** 流程停下的原因：失败、做完没交付、打回到上限、等回答超时 */
+export type FlowPause = 'failed' | 'no-delivery' | 'reject-limit' | 'ask-timeout'
+
+/** 流程（docs/ui/channels-pipeline.md §4）：挂在一条文字消息上 */
+export interface ChannelFlow {
+  title: string
+  /** planning：成员在拆；draft：等你确认 */
+  status: 'planning' | 'draft' | 'running' | 'paused' | 'done' | 'stopped'
+  paused?: { reason: FlowPause; stepId: string } | null
+  steps: FlowStep[]
+  /** 审查最多打回几次，超了停下 */
+  maxRejects: number
+  /** 拆流程的成员和要求（status 是 planning 时） */
+  planner?: { memberId: string; request: string; taskId: string | null } | null
+  /** 成员之间问过的问题（算进接力规则） */
+  asks?: { from: string; to: string; at: number }[]
+}
+
+/** 建 / 改流程草稿时的一步（channels:flow） */
+export type FlowStepInput = Pick<FlowStep, 'id' | 'title' | 'memberId' | 'deps' | 'kind'> &
+  Partial<Pick<FlowStep, 'target' | 'settings'>>
+
+/** 流程卡上的操作（channels:flow） */
+export type FlowAction =
+  | { type: 'create'; title: string; steps?: FlowStepInput[]; planner?: { memberId: string; request: string } }
+  | { type: 'update'; messageId: string; title?: string; steps?: FlowStepInput[] }
+  | { type: 'start' | 'pause' | 'resume' | 'stop' | 'discard'; messageId: string }
 
 /** 系统消息（主动提醒、每日简报）的作者 */
 export const SYSTEM_AUTHOR = 'system'
@@ -339,6 +403,8 @@ export interface ChannelTask extends ChannelMessageBase {
   checks?: CheckRun | null
   /** 从任务看板的事项派出来的（docs/ui/channels-collab-v2.md §9）：卡片上显示「事项：标题」，状态写回事项 */
   issue?: { id: string; title: string } | null
+  /** 流程里的一步（docs/ui/channels-pipeline.md §4）：流程卡消息 id、步骤 id；拆流程的活 stepId 是空串 */
+  flow?: { messageId: string; stepId: string } | null
 }
 
 /** 把事项交给频道成员（channels:dispatchIssue） */
@@ -502,7 +568,9 @@ export interface ChannelsSnapshot {
  */
 export interface ChannelNeed {
   key: string
-  kind: 'approval' | 'proposal' | 'held' | 'decision' | 'checks' | 'failed' | 'alert'
+  kind: 'approval' | 'proposal' | 'held' | 'decision' | 'checks' | 'failed' | 'alert' | 'flow'
+  /** kind 是 flow 时：草稿等你确认（null），或停下的原因 */
+  pause?: FlowPause | null
   /** kind 是 alert 时：哪条规则（决定有哪些按钮） */
   rule?: ChannelAlertRule
   sig: string

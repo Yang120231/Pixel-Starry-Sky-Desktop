@@ -181,6 +181,8 @@ export async function initChannels(ctx: AppContext): Promise<void> {
     if (typeof action !== 'string' || !ALERT_ACTIONS.has(action as ChannelAlertAction)) throw new Error('不支持的操作')
     return channels.alertAction(str(id, '频道'), str(messageId, '消息'), action as ChannelAlertAction)
   })
+  // 参数的形状由 Channels.flowAction 逐项校验
+  ipc.handle('channels:flow', (_e, id, action: unknown) => channels.flowAction(str(id, '频道'), action))
   ipc.handle('channels:markNeeds', (_e, raw: unknown, done) => {
     if (!Array.isArray(raw) || raw.length > 1000) throw new Error('参数不正确')
     const marks: NeedMark[] = (raw as unknown[]).map(item => {

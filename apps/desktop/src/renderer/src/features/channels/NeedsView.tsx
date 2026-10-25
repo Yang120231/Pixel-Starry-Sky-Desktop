@@ -11,6 +11,7 @@ import {
   CircleDashed,
   CircleX,
   Forward,
+  Workflow,
   Hand,
   HelpCircle,
   ListChecks,
@@ -38,6 +39,7 @@ const ICON: Record<ChannelNeed['kind'], LucideIcon> = {
   checks: ListChecks,
   failed: CircleX,
   alert: BellRing,
+  flow: Workflow,
 }
 
 const KIND_LABEL: Record<ChannelNeed['kind'], TranslationKey> = {
@@ -48,6 +50,7 @@ const KIND_LABEL: Record<ChannelNeed['kind'], TranslationKey> = {
   checks: 'needs.kind.checks',
   failed: 'needs.kind.failed',
   alert: 'needs.kind.alert',
+  flow: 'needs.kind.flow',
 }
 
 const ALERT_LABEL: Record<ChannelAlertAction, TranslationKey> = {
@@ -331,6 +334,8 @@ export function NeedsView() {
             {view}
           </>
         )
+      case 'flow':
+        return view
       case 'alert':
         return (
           <>
@@ -358,6 +363,7 @@ export function NeedsView() {
       return tr('needs.checksDetail', {
         items: [n.detail, n.findings ? tr('checks.findings', { count: n.findings }) : null].filter(Boolean).join(' · '),
       })
+    if (n.kind === 'flow') return tr(n.pause ? `channels.flow.pause.${n.pause}` : 'channels.flow.needsDraft')
     if (n.kind === 'failed' || n.kind === 'decision') return n.detail ? translateMessage(n.detail) : null
     return null
   }

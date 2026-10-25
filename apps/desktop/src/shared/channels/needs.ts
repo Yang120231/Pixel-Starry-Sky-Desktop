@@ -65,6 +65,23 @@ export function channelNeeds(
             sessionId: (m.alert.taskId && taskSession(list, m.alert.taskId)) || null,
             text: m.text,
           })
+        // 流程（channels-pipeline.md §4）：草稿等你确认、自己停下了等你看（你点的暂停不算）
+        const flow = m.flow
+        if (flow?.status === 'draft' || (flow?.status === 'paused' && flow.paused)) {
+          const step = flow.paused ? flow.steps.find(s => s.id === flow.paused!.stepId) : undefined
+          found.push({
+            ...base,
+            key: `flow:${m.id}`,
+            kind: 'flow',
+            sig: flow.status === 'draft' ? 'draft' : `${flow.paused?.reason}:${flow.paused?.stepId}`,
+            memberId: step?.memberId ?? null,
+            messageId: m.id,
+            taskId: step?.taskId ?? null,
+            pause: flow.status === 'paused' ? (flow.paused?.reason ?? null) : null,
+            text: flow.title,
+            detail: step?.title ?? null,
+          })
+        }
         continue
       }
       if (m.kind !== 'task') continue

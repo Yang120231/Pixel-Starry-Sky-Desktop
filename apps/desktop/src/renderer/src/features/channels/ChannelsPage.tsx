@@ -11,6 +11,7 @@ import type { TaskCardActions } from './ChannelTaskCard'
 import { ChannelList } from './ChannelList'
 import { ChannelTimeline } from './ChannelTimeline'
 import { ChannelComposer } from './ChannelComposer'
+import { NewFlowButton } from './NewFlowButton'
 import { ChannelMembers } from './ChannelMembers'
 import { ChannelsEmpty } from './ChannelsEmpty'
 import { ThreadPanel } from './ThreadPanel'
@@ -185,24 +186,27 @@ export function ChannelsPage({
           {archived ? (
             <ArchivedBar channel={channel} />
           ) : (
-            <ChannelComposer
-              key={channel.id}
-              channel={channel}
-              members={channelMembers}
-              selfId={selfId}
-              replyTo={replyTo}
-              replyAuthor={
-                replyTo
-                  ? members.find(m => m.id === (replyTo.kind === 'task' ? replyTo.assigneeId : replyTo.authorId))
-                  : undefined
-              }
-              followUp={followUp}
-              role={role}
-              offline={channel.scope === 'team' && connection === 'offline'}
-              onSend={(text, extra) => channelActions.send(channel.id, text, extra)}
-              onCancelReply={() => channelActions.setReplyTo(channel.id, null)}
-              inputRef={composer}
-            />
+            <>
+              {channel.scope === 'local' && <NewFlowButton channel={channel} members={channelMembers} />}
+              <ChannelComposer
+                key={channel.id}
+                channel={channel}
+                members={channelMembers}
+                selfId={selfId}
+                replyTo={replyTo}
+                replyAuthor={
+                  replyTo
+                    ? members.find(m => m.id === (replyTo.kind === 'task' ? replyTo.assigneeId : replyTo.authorId))
+                    : undefined
+                }
+                followUp={followUp}
+                role={role}
+                offline={channel.scope === 'team' && connection === 'offline'}
+                onSend={(text, extra) => channelActions.send(channel.id, text, extra)}
+                onCancelReply={() => channelActions.setReplyTo(channel.id, null)}
+                inputRef={composer}
+              />
+            </>
           )}
         </section>
       )}

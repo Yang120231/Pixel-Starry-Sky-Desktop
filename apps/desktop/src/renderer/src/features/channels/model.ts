@@ -22,6 +22,7 @@ export type TimelineRow =
   | { kind: 'new'; key: string }
   | { kind: 'group'; key: string; authorId: string; items: ChannelTextMessage[] }
   | { kind: 'task'; key: string; message: ChannelTask }
+  | { kind: 'flow'; key: string; message: ChannelTextMessage }
   | { kind: 'event'; key: string; message: ChannelEvent }
 
 /** 同一作者的连续消息在这个间隔内合并成一组 */
@@ -60,7 +61,10 @@ export function buildTimeline(
       newPlaced = true
       group = null
     }
-    if (m.kind === 'message') {
+    if (m.kind === 'message' && m.flow) {
+      rows.push({ kind: 'flow', key: m.id, message: m })
+      group = null
+    } else if (m.kind === 'message') {
       const last = group?.items[group.items.length - 1]
       if (group && last && group.authorId === m.authorId && !m.replyToId && m.at - last.at <= gap) group.items.push(m)
       else {

@@ -494,6 +494,7 @@ const channels: ChannelsBridge = {
   proposal: (id, messageId, accept) => call('channels:proposal', id, messageId, accept),
   alert: (id, messageId, action) => call('channels:alert', id, messageId, action),
   markNeeds: (items, done) => call('channels:markNeeds', items, done),
+  flow: (id, action) => call('channels:flow', id, action),
   dispatchIssue: (id, issue) => call('channels:dispatchIssue', id, issue),
   search: (text, opts) => call('channels:search', text, opts),
   saveMember: (channelId, input) => call('channels:saveMember', channelId, input),

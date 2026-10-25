@@ -2,7 +2,7 @@
 // 纯函数：输入一项活的运行信息和一个事件，返回新的运行信息、要改的任务卡字段，以及这一轮是不是结束了。
 import { diffStat } from '@pixelsky/protocol'
 import type { ApprovalRequest, EngineEvent, Item, SessionSnapshot } from '@pixelsky/protocol'
-import type { ChannelActivity, ChannelStep, ChannelTask } from '../../../shared/types/channels'
+import type { ChannelActivity, ChannelStep, ChannelTask, FlowResult, FlowStep } from '../../../shared/types/channels'
 
 /** 团队频道派来的活（Phase C §9.1）：任务卡在云端，状态写回云端；本机运行信息照存 runs.json */
 export interface TeamRunRef {
@@ -68,6 +68,29 @@ export interface TaskRun {
   followUpAttach?: string[]
   /** 这项活用频道工具（docs/ui/channels-collab-v2.md §1）做过的事：串里回复几次、提议几次、直接交给了谁 */
   tools?: { replies: number; proposals: number; handover: string[] }
+  // ── 流程（docs/ui/channels-pipeline.md §4）；flow 之外的几项跟着 nextRound 带到下一轮，done 每轮重来 ──
+  /** 流程里的一步：流程卡消息 id、步骤 id（拆流程的活是空串） */
+  flow?: { messageId: string; stepId: string }
+  /** 这一轮调过 task_done（第一次算数） */
+  done?: FlowResult & { steps?: FlowStep[] }
+  /** 问了别的成员、还在等回答 */
+  ask?: { to: string; question: string; at: number }
+  /** 等的回答在这一轮还没结束时就到了：这一轮结束后接着发 */
+  answer?: { from: string; text: string }
+  /** 这一轮是在回答别人的问题（不算这一步的交付） */
+  answering?: FlowQuestion
+  /** 排着等回答的问题（这一步还在做时问过来的） */
+  inbox?: FlowQuestion[]
+  /** 已经提醒过一次「做完了就 task_done」 */
+  reminded?: boolean
+}
+
+/** 流程里一个成员问另一个成员的问题 */
+export interface FlowQuestion {
+  from: string
+  /** 提问的那一步的任务卡 */
+  fromTaskId: string
+  question: string
 }
 
 /** 新的一轮运行信息（团队执行端用；本机频道在 service.ts 里自己拼） */

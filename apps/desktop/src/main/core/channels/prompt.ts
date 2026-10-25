@@ -339,3 +339,179 @@ export function followUpPrompt(input: { locale: Locale; channel: string; author:
 
 /** 做到一半失败 / 停止后重试：和错误卡片的「重试」一样，发一条「继续」 */
 export const continuePrompt = (locale: Locale): string => (en(locale) ? 'Try again' : '继续')
+
+// ---------------------------------------------------------------------------
+// 流程（docs/ui/channels-pipeline.md §4.4）
+// ---------------------------------------------------------------------------
+
+/** 流程概览里的一行：「② 写代码 · 程序员 · 已交付」 */
+export interface FlowLine {
+  no: string
+  title: string
+  member: string
+  status: string
+  /** 这一行就是收到提示词的这一步 */
+  self?: boolean
+}
+
+/** 依赖步骤交上来的东西 */
+export interface FlowInput {
+  no: string
+  title: string
+  member: string
+  summary: string
+  files: string[]
+}
+
+export interface FlowStepPromptInput {
+  locale: Locale
+  channel: { name: string; topic: string | null }
+  notes?: string | null
+  pinned?: string[]
+  instructions: string
+  flow: string
+  lines: FlowLine[]
+  step: { no: string; title: string; kind: 'work' | 'review' | 'summary' }
+  inputs: FlowInput[]
+  /** 审查步骤：被审的那一步 */
+  target?: FlowInput | null
+  /** 流程里别的成员（member_ask 能问的） */
+  peers: string[]
+}
+
+function inputText(i: FlowInput, locale: Locale): string {
+  const files = i.files.slice(0, HANDOFF_FILES)
+  const more = i.files.length - files.length
+  const list = files.length
+    ? en(locale)
+      ? `\n  Files: ${files.join(', ')}${more > 0 ? ` and ${more} more` : ''}`
+      : `\n  文件：${files.join('、')}${more > 0 ? ` 等 ${i.files.length} 个` : ''}`
+    : ''
+  return en(locale)
+    ? `- ${i.no} ${i.title} (${i.member}): ${i.summary}${list}`
+    : `- ${i.no} ${i.title}（${i.member}）：${i.summary}${list}`
+}
+
+/** 流程里一步的提示词：流程概览、这一步要做什么、依赖交上来的东西、怎么交付 */
+export function flowStepPrompt(input: FlowStepPromptInput): string {
+  const { locale, channel, step } = input
+  const pinned = pinnedRefs(input.pinned ?? [])
+  const overview = input.lines
+    .map(l => `${l.self ? '→ ' : '  '}${l.no} ${l.title} · ${l.member} · ${l.status}`)
+    .join('\n')
+  const peers = input.peers.length ? input.peers.join(en(locale) ? ', ' : '、') : null
+  if (en(locale))
+    return [
+      `You are doing one step of the flow "${input.flow}" in the channel #${channel.name}.${channel.topic ? ` (Channel topic: ${channel.topic})` : ''}`,
+      input.instructions.trim() ? `Your role:\n${input.instructions.trim()}` : '',
+      input.notes?.trim() ? `Channel guidelines:\n${input.notes.trim()}` : '',
+      pinned.length ? `Pinned reference:\n${pinned.map(p => `- ${p}`).join('\n')}` : '',
+      `The flow (→ is your step):\n${overview}`,
+      input.inputs.length
+        ? `Delivered by earlier steps:\n${input.inputs.map(i => inputText(i, locale)).join('\n')}`
+        : '',
+      input.target
+        ? `Review ${input.target.no} "${input.target.title}" by ${input.target.member}. Look at the actual changes with git diff / git status. When done, call task_done with verdict "pass", or "reject" plus issues (one problem per item, concrete enough to fix).`
+        : '',
+      step.kind === 'summary'
+        ? 'This is the final step: read what every step delivered, check that the pieces fit together, and write a summary for the user (what was done, which files, anything unresolved).'
+        : '',
+      `Your step: ${step.no} ${step.title}`,
+      `When you are really done, call the task_done tool (summary, files you changed); the flow moves on only after task_done. If you need something from another member${peers ? ` (${peers})` : ''}, call member_ask and then end your turn; the answer will be sent to you as a new message.`,
+    ]
+      .filter(Boolean)
+      .join('\n\n')
+  return [
+    `你在协作频道 #${channel.name} 里做流程「${input.flow}」的一步。${channel.topic ? `（频道主题：${channel.topic}）` : ''}`,
+    input.instructions.trim() ? `你的职责：\n${input.instructions.trim()}` : '',
+    input.notes?.trim() ? `频道说明：\n${input.notes.trim()}` : '',
+    pinned.length ? `频道里置顶的资料：\n${pinned.map(p => `- ${p}`).join('\n')}` : '',
+    `整个流程（→ 是你这一步）：\n${overview}`,
+    input.inputs.length ? `前面的步骤交上来的：\n${input.inputs.map(i => inputText(i, locale)).join('\n')}` : '',
+    input.target
+      ? `审查 ${input.target.no}「${input.target.title}」（${input.target.member} 做的）。用 git diff / git status 看实际改动。审完调用 task_done：verdict 写 "pass"（通过）或 "reject"（打回），打回时 issues 一条写一个问题，要具体到能照着改。`
+      : '',
+    step.kind === 'summary'
+      ? '这是最后一步：读每一步交上来的东西，确认它们接得上，给用户写一份总结（做了什么、改了哪些文件、还有什么没解决）。'
+      : '',
+    `你这一步：${step.no} ${step.title}`,
+    `确实做完了再调用 task_done 工具交付（摘要、你改的文件）；流程只在 task_done 之后往下走。需要别的成员${peers ? `（${peers}）` : ''}提供东西时，调用 member_ask，然后结束这一轮，回答会作为新消息发给你。`,
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+/** 让成员拆流程的提示词 */
+export function flowPlanPrompt(input: {
+  locale: Locale
+  channel: string
+  request: string
+  members: { name: string; role: string }[]
+}): string {
+  const sep = en(input.locale) ? ': ' : '：'
+  const list = input.members.map(m => `- ${m.name}${m.role ? `${sep}${m.role}` : ''}`).join('\n')
+  if (en(input.locale))
+    return [
+      `In the channel #${input.channel}, the user wants this done by several AI members as a flow:\n${input.request}`,
+      `Members you can use:\n${list}`,
+      'Split it into at most 9 steps. Each step: title (what to do), member (exact name), deps (numbers of the steps that must be delivered first, counting from 1), kind ("work"; "review" with target = the step number it reviews; or "summary" for the final wrap-up). Steps that do not depend on each other run in parallel. Do not do the work yourself.',
+      'When the split is ready, call task_done with summary (one line) and steps. The user will check it and start it.',
+    ].join('\n\n')
+  return [
+    `用户想在频道 #${input.channel} 里让几个 AI 成员按流程做这件事：\n${input.request}`,
+    `能用的成员：\n${list}`,
+    '把它拆成最多 9 步。每一步写：title（做什么）、member（成员名字，原样写）、deps（要先交付的步骤序号，从 1 数）、kind（"work" 干活；"review" 审查，target 写审第几步；"summary" 最后汇总）。互相不依赖的步骤会同时做。不要自己动手做这件事。',
+    '拆好后调用 task_done：summary 写一句话，steps 写上面的步骤。用户确认后才会开始。',
+  ].join('\n\n')
+}
+
+const quote = (text: string): string => `> ${text.trim().replace(/\n/g, '\n> ')}`
+
+/** 别的成员问过来的问题（发给被问的成员） */
+export function flowAskPrompt(locale: Locale, from: string, question: string): string {
+  return en(locale)
+    ? `${from} (another member of the flow) asks you:\n${quote(question)}\n\nAnswer in your reply; the answer will be passed to ${from}. Do not call task_done for this: answering does not change your own delivery.`
+    : `${from}（流程里的另一个成员）问你：\n${quote(question)}\n\n直接在回复里回答，回答会转给 ${from}。这次不用调用 task_done，回答不改你自己的交付。`
+}
+
+/** 被问的成员的回答（发回给提问的人） */
+export function flowAnswerPrompt(locale: Locale, from: string, answer: string): string {
+  return en(locale)
+    ? `${from}'s answer:\n${quote(answer)}\n\nContinue your step; call task_done when it is really done.`
+    : `${from} 的回答：\n${quote(answer)}\n\n接着做你这一步，确实做完了再调用 task_done。`
+}
+
+/** 一轮做完了却没交付：提醒一次 */
+export function flowRemindPrompt(locale: Locale): string {
+  return en(locale)
+    ? 'Your turn ended without task_done, so the flow is still waiting on this step. If it is done, call task_done now (summary, files). If not, keep going, or say exactly what is missing.'
+    : '你这一轮结束了，但还没有调用 task_done，流程还在等这一步。做完了就现在调用 task_done（摘要、文件）；没做完就接着做，或者写清楚还差什么。'
+}
+
+/** 被审查打回：问题清单 */
+export function flowRejectPrompt(
+  locale: Locale,
+  reviewer: string,
+  issues: string[],
+  round: number,
+  max: number,
+): string {
+  const list = issues.map((x, i) => `${i + 1}. ${x}`).join('\n')
+  return en(locale)
+    ? `${reviewer} reviewed your step and sent it back (${round}/${max}):\n${list}\n\nFix these, then call task_done again.`
+    : `${reviewer} 审查了你这一步，打回了（第 ${round} / ${max} 次）：\n${list}\n\n改好后再调用 task_done。`
+}
+
+/** 被审的那一步改完了：再审一次 */
+export function flowReviewAgainPrompt(locale: Locale, target: FlowInput): string {
+  return en(locale)
+    ? `${target.no} "${target.title}" was changed after your review:\n${inputText(target, locale)}\n\nReview it again and call task_done with the verdict.`
+    : `${target.no}「${target.title}」按你的意见改过了：\n${inputText(target, locale)}\n\n再审一次，审完调用 task_done 给出结论。`
+}
+
+/** 等的回答一直没来，你点了继续：自己判断 */
+export function flowNoAnswerPrompt(locale: Locale): string {
+  return en(locale)
+    ? 'The answer you asked for did not come. Decide on your own, continue your step and call task_done when it is really done; note what you assumed.'
+    : '你问的问题一直没等到回答。自己判断后接着做这一步，确实做完了再调用 task_done，并写明你做了什么假设。'
+}
