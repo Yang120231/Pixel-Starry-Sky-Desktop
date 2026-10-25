@@ -100,7 +100,7 @@ export function WorkspaceTabs({
               data-panel-tab={id}
               data-active={id === layout.active || undefined}
               className={cn(
-                'group flex h-7 max-w-[min(32rem,80vw)] shrink-0 items-center gap-1 rounded-lg border pr-1',
+                'group flex h-7 max-w-[min(32rem,80vw)] shrink-0 items-center gap-1 rounded-sm border pr-1',
                 id === layout.active
                   ? 'tab-current border-transparent font-semibold text-fg'
                   : 'border-transparent text-fg-muted hover:bg-hover',
@@ -119,7 +119,7 @@ export function WorkspaceTabs({
                 title={
                   file ? `${file.project} / ${displayPath(file.ref, file.path)}` : (parseFileTab(id)?.path ?? label(id))
                 }
-                className="flex h-full min-w-0 items-center gap-1.5 rounded-md px-2 text-meta"
+                className="flex h-full min-w-0 items-center gap-1.5 rounded-sm px-2 text-meta"
                 onClick={() => onSelect(id)}
                 onKeyDown={e => {
                   if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {

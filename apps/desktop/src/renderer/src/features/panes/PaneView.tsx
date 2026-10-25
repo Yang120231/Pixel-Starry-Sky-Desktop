@@ -379,7 +379,7 @@ function Tab({
       onClick={() => paneActions.activate(leafId, tab)}
       onAuxClick={e => e.button === 1 && paneActions.closeTab(leafId, tab)}
       className={cn(
-        'group/tab flex h-7 max-w-60 shrink-0 cursor-grab touch-none items-center gap-1.5 rounded-lg border pr-1 pl-2 text-meta select-none transition-colors',
+        'group/tab flex h-7 max-w-60 shrink-0 cursor-grab touch-none items-center gap-1.5 rounded-sm border pr-1 pl-2 text-meta select-none transition-colors',
         active
           ? 'tab-current border-transparent font-semibold text-fg'
           : 'border-transparent text-fg-muted hover:bg-hover hover:text-fg',
