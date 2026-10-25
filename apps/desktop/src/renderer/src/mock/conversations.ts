@@ -42,6 +42,7 @@ export const SHOWCASE_SESSIONS = [
   { id: 'demo-claude-subagents', title: '后台子智能体：改动按子智能体分组' },
   { id: 'demo-claude-subagent-stop', title: '停止：连同后台子智能体' },
   { id: 'demo-claude-subagent-kept', title: '停止：后台子智能体继续运行' },
+  { id: 'demo-claude-export', title: '导出对话：含疑似密钥（演示用的假密钥）' },
 ] as const
 
 type SessionId = (typeof SHOWCASE_SESSIONS)[number]['id']
@@ -2123,6 +2124,42 @@ const subagentKept = snapshot(
   },
 )
 
+// ---------- 导出对话：几处假密钥，导出时被扫描出来（docs/ui/conversation-export.md） ----------
+
+// 假密钥拼出来，源码里没有完整的整串，免得被密钥扫描当成真的
+const FAKE_SK = 'sk-proj-' + 'DEMO0DEMO0DEMO0DEMO0DEMO0' + 'Qm2z'
+const FAKE_GH = 'ghp_' + 'DEMO0DEMO0DEMO0DEMO0DEMO0DEMO0' + 'k3Lq'
+const exportDemo = snapshot(record('demo-claude-export'), [
+  user('ex-u1', '登录页刷新 token 后又被踢出来，帮我查一下', 30),
+  {
+    kind: 'tool',
+    id: 'ex-t1',
+    tool: 'read',
+    name: 'Read',
+    title: 'src/auth/refresh.ts',
+    output: ['export async function refresh() {', '  // ...', '}'].join('\n'),
+    status: 'completed',
+  },
+  assistant('ex-a1', '刷新请求用的是过期的 refresh token，我先看看环境变量是怎么配的。'),
+  stats('ex-s1', 'completed', { durationMs: 12_000, models: { 'claude-opus-5-5': opus(2_100, 520, 0.04, 2) } }),
+  user('ex-u2', ['开发环境里是这样配的：', 'OPENAI_API_KEY=' + FAKE_SK].join('\n'), 24),
+  {
+    kind: 'command',
+    id: 'ex-c1',
+    command: 'cat .env',
+    description: '看看环境变量',
+    output: ['API_BASE=https://api.example.com', 'STRIPE_SECRET_KEY=' + 'rk_live_' + 'DEMO0DEMO0DEMO0'].join('\n'),
+    exitCode: 0,
+    status: 'completed',
+  },
+  assistant('ex-a2', '.env 里的密钥没问题，问题在刷新时没带上 refresh token。'),
+  stats('ex-s2', 'completed', { durationMs: 18_000, models: { 'claude-opus-5-5': opus(3_300, 640, 0.06, 2) } }),
+  user('ex-u3', '我的 GitHub 令牌是 ' + FAKE_GH + '，用它把修复推上去', 18),
+  { kind: 'reasoning', id: 'ex-r3', text: '用户给了令牌，不应该写进任何文件或提交信息里。', status: 'completed' },
+  assistant('ex-a3', '已修复：刷新时带上 refresh token，失败才回到登录页。令牌我没有保存。'),
+  stats('ex-s3', 'completed', { durationMs: 24_000, models: { 'claude-opus-5-5': opus(4_100, 880, 0.08, 3) } }),
+])
+
 export const showcaseSnapshots: Record<string, SessionSnapshot> = Object.fromEntries(
   [
     markdown,
@@ -2147,6 +2184,7 @@ export const showcaseSnapshots: Record<string, SessionSnapshot> = Object.fromEnt
     subagents,
     subagentStop,
     subagentKept,
+    exportDemo,
   ].map(s => [s.record.id, s]),
 )
 

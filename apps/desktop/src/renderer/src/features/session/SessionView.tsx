@@ -55,6 +55,7 @@ import {
 } from '@/features/engine'
 import './conversation.css'
 import { TranscriptMenu } from './contextMenu/TranscriptMenu'
+import { openExport } from '@/features/export/store'
 import { ImageSessionContext } from './attachments/imageSource'
 
 export interface SessionViewProps {
@@ -389,6 +390,7 @@ function LiveSessionView({
                       items={snapshot?.items}
                       onFind={() => setFind(n => (n ?? 0) + 1)}
                       commentOn={turnComments ? itemId => commentOn(turnComments, itemId) : null}
+                      onExportTurn={sessionId ? itemId => openExport({ sessionId, itemId }) : null}
                       onAskSide={branch.sideChat ? text => openSide(text, true) : null}
                       sideDisabled={branch.sideChat?.disabledReason ?? null}
                     />

@@ -37,6 +37,7 @@ import { longConversationMessages } from './longConversationMessages'
 import { tabMenuMessages } from './tabMenuMessages'
 import { minimalModeMessages } from './minimalModeMessages'
 import { imageViewerMessages } from './imageViewerMessages'
+import { exportMessages } from './exportMessages'
 import { mermaidMessages } from './mermaidMessages'
 import { modelChannelMessages } from './modelChannelMessages'
 import { fullAccessMessages } from './fullAccessMessages'
@@ -113,6 +114,7 @@ export const allMessages = {
   ...tabMenuMessages,
   ...minimalModeMessages,
   ...imageViewerMessages,
+  ...exportMessages,
   ...mermaidMessages,
   ...modelChannelMessages,
   ...fullAccessMessages,

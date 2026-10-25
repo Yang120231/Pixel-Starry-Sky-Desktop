@@ -43,6 +43,7 @@ import { longConversationMessages } from '../../../shared/i18n/longConversationM
 import { tabMenuMessages } from '../../../shared/i18n/tabMenuMessages'
 import { minimalModeMessages } from '../../../shared/i18n/minimalModeMessages'
 import { imageViewerMessages } from '../../../shared/i18n/imageViewerMessages'
+import { exportMessages } from '../../../shared/i18n/exportMessages'
 import { mermaidMessages } from '../../../shared/i18n/mermaidMessages'
 import { modelChannelMessages } from '../../../shared/i18n/modelChannelMessages'
 import { fullAccessMessages } from '../../../shared/i18n/fullAccessMessages'
@@ -117,6 +118,7 @@ const dictionaries: Record<string, Record<string, unknown>> = {
   tabMenuMessages,
   minimalModeMessages,
   imageViewerMessages,
+  exportMessages,
   mermaidMessages,
   modelChannelMessages,
   fullAccessMessages,

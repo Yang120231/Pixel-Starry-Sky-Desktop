@@ -29,6 +29,7 @@ import { loadShellEnv } from './app/shell-env'
 import { initMobile } from './mobile/ipc'
 import { initWorkspace } from './workspace/files-ipc'
 import { initWindowControls, observeWindowControls } from './app/window-controls'
+import { initExport } from './export/ipc'
 import { initUiLanguage, nativeText } from './app/ui-language'
 import { watchEditMenu } from './app/editMenu'
 import { initProjectTools } from './workspace/project-tools-ipc'
@@ -515,6 +516,7 @@ app.whenReady().then(async () => {
   startup.step('diagnostics') // 上面的卡顿诊断、内存监控、应用菜单、界面语言
   initWindowControls()
   startup.step('initWindowControls')
+  initExport() // 导出对话的保存对话框，见 export/ipc.ts
   initNotifications() // 系统通知，见 notifications/notifications.ts
   startup.step('initNotifications')
   initAccount() // 账号登录与额度，见 account/account.ts

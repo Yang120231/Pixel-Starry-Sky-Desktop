@@ -7,6 +7,7 @@ import {
   Bell,
   BellOff,
   Code2,
+  Download,
   Command,
   File,
   History,
@@ -77,6 +78,8 @@ import { rankCommands } from './rank'
 import { getAppMode, setAppMode } from '@/features/coding/mode'
 import { codingLayout } from '@/features/coding/layoutStore'
 import { demoSessionChanges } from '@/data/demo'
+import { openExport } from '@/features/export/store'
+import { hasExportable } from '@/features/export/model'
 
 interface CommandItem {
   id: string
@@ -442,6 +445,16 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
       undefined,
       hasFile,
       t('palette.noFile'),
+    )
+    add(
+      'session.export',
+      'export.command',
+      'palette.sessions',
+      Download,
+      () => openExport({ sessionId: target!.id }),
+      undefined,
+      () => hasSession() && hasExportable(getEngineState().snapshots[target!.id]?.items),
+      hasSession() ? t('export.command.empty') : t('palette.noSession'),
     )
     add(
       'session.rename',

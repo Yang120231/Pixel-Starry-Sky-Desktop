@@ -18,6 +18,7 @@ import type { ProjectToolsBridge } from './project-tools'
 import type { NotificationClick } from '../shared/types/notifications'
 import type { NotificationsBridge } from './notifications'
 import type { ArtifactsBridge } from './artifacts'
+import type { ExportBridge } from './export'
 import type { LogBridge } from './log'
 import type { TrayBridge } from './tray'
 import type { MobileBridge } from './mobile'
@@ -430,6 +431,10 @@ const artifacts: ArtifactsBridge = {
   open: target => call('artifacts:open', target),
   reveal: target => call('artifacts:reveal', target),
 }
+// 导出对话（docs/ui/conversation-export.md）：内容在渲染层写好，主进程弹保存对话框、写文件
+const conversationExport: ExportBridge = {
+  save: input => call('export:save', input),
+}
 // 系统通知：要不要提醒由渲染层判断，主进程负责弹出（docs/ui/notifications.md）
 const notifications: NotificationsBridge = {
   supported: () => call('notify:supported'),
@@ -687,6 +692,7 @@ contextBridge.exposeInMainWorld('pixelsky', {
   terminal,
   notifications,
   artifacts,
+  conversationExport,
   extensions: {
     state: ref => call('extensions:state', ref),
     save: data => call('extensions:save', data),

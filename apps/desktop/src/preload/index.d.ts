@@ -13,6 +13,7 @@ import type { ProjectToolsBridge } from './project-tools'
 import type { TerminalBridge } from './terminal'
 import type { NotificationsBridge } from './notifications'
 import type { ArtifactsBridge } from './artifacts'
+import type { ExportBridge } from './export'
 import type { LogBridge } from './log'
 
 export type * from './account'
@@ -22,6 +23,7 @@ export type * from './project-tools'
 export type * from './terminal'
 export type * from './notifications'
 export type * from './artifacts'
+export type * from './export'
 export type * from './providers'
 export type * from './log'
 export type * from './feedback'
@@ -82,6 +84,8 @@ export interface PixelskyBridge {
   channels: import('./channels').ChannelsBridge
   /** 产物面板（docs/ui/artifacts-panel.md） */
   artifacts: ArtifactsBridge
+  /** 导出对话（docs/ui/conversation-export.md） */
+  conversationExport: ExportBridge
 }
 
 declare global {

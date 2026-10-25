@@ -573,6 +573,8 @@ export const IPC_CONTRACT = {
     remote: 'engine:usageSummary',
     trust: 'sender',
   },
+  // 对话导出（docs/ui/conversation-export.md）：渲染层把写好的内容交给主进程，弹保存对话框并写文件；只在本机
+  'export:save': { kind: 'invoke', route: 'local', trust: 'sender' },
   'extensions:changed': { kind: 'push', route: 'push', trust: 'none' },
   'extensions:check': { kind: 'invoke', route: 'local', trust: 'sender' },
   'extensions:choose': { kind: 'invoke', route: 'local', trust: 'sender' },

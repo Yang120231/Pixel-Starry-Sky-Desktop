@@ -5,6 +5,7 @@ import { useContext, useEffect, useRef, useState, type RefObject } from 'react'
 import {
   AtSign,
   Copy,
+  Download,
   ExternalLink,
   FileText,
   FolderOpen,
@@ -50,6 +51,8 @@ interface Props {
   onAskSide: ((text: string) => void) | null
   /** 旁聊暂时不能问的原因 */
   sideDisabled: string | null
+  /** 导出这条所在的一轮（docs/ui/conversation-export.md）；不能导出时为 null */
+  onExportTurn?: ((itemId: string) => void) | null
   /** 评论这条所在的一轮（docs/ui/channels-collab-v2.md §7）：还没做完时返回 null；不能评论时整个为 null */
   commentOn?: ((itemId: string) => ((quote: string) => void) | null) | null
 }
@@ -70,7 +73,17 @@ function selectionIn(stream: Element): string {
   return cleanSelection(selection.toString())
 }
 
-export function TranscriptMenu({ root, composerKey, cwd, items, onFind, onAskSide, sideDisabled, commentOn }: Props) {
+export function TranscriptMenu({
+  root,
+  composerKey,
+  cwd,
+  items,
+  onFind,
+  onAskSide,
+  sideDisabled,
+  commentOn,
+  onExportTurn,
+}: Props) {
   useI18n()
   const toast = useToast()
   const links = useContext(PathLinksContext)
@@ -237,6 +250,7 @@ export function TranscriptMenu({ root, composerKey, cwd, items, onFind, onAskSid
               },
             ]
           : []),
+        ...(onExportTurn ? [{ label: tr('export.menu.turn'), icon: Download, run: () => onExportTurn(item.id) }] : []),
       ])
     }
     return actions

@@ -18,6 +18,7 @@ import { SessionActionsProvider } from '../features/sidebar/SessionActions'
 import { ArchiveOldHost } from '../features/sidebar/ArchiveOldHost'
 import { TerminalProvider } from '../features/terminal/TerminalProvider'
 import { ResumeHost } from '../features/resume/ResumeHost'
+import { ExportHost } from '../features/export/ExportDialog'
 import { ResumeHintHost } from '../features/resume/ResumeHintHost'
 import { CommandPaletteProvider } from '../features/commands/CommandPaletteProvider'
 import { ShortcutsHelp } from '../features/layout/ShortcutsHelp'
@@ -66,6 +67,7 @@ createRoot(document.getElementById('root')!, reactRootErrorOptions).render(
                     <BranchDialogHost />
                     <ArchiveOldHost />
                     <ResumeHost />
+                    <ExportHost />
                     <ResumeHintHost />
                     <RecoveredNotice />
                     <ExtStoreToastHost />

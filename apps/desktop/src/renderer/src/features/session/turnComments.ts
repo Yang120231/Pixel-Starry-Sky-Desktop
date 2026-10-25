@@ -164,7 +164,7 @@ export function useTurnCommentDraft(): TurnCommentDraft | null {
 // ── 纯函数 ──
 
 /** 开启新一轮的用户消息：中途插入的引导、断线重连自动发的「继续」都接着原来那一轮 */
-const startsTurn = (item: Item): boolean =>
+export const startsTurn = (item: Item): boolean =>
   item.kind === 'user' && item.mode !== 'guidance' && item.reconnect === undefined
 
 /**
