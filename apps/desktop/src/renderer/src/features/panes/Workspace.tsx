@@ -286,6 +286,7 @@ export function Workspace(props: WorkspaceProps) {
           ref={areaRef}
           className="pane-area relative min-h-0 flex-1 overflow-hidden"
           data-resizing={resizing !== null || undefined}
+          data-multi={multi || undefined}
         >
           {all.map(leaf => {
             const maximized = layout.maximized === leaf.id

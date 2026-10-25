@@ -201,3 +201,28 @@
 .tab-strip-wrap:has(> [data-fade-right]) > [data-tab-scroll='right'] {
   display: flex;
 }
+
+/* 标签行（docs/ui/session-cards-plan.md）：胶囊浮在外框上、垂直居中，下面留 8px 才到卡片，不和卡片相连。
+   对话标签和右侧面板的标签共用 */
+.tab-row {
+  height: 44px;
+  padding-bottom: 8px;
+  align-items: center;
+}
+/* 当前标签：和卡片同色的小胶囊，一圈淡描边 + 一点阴影 */
+.tab-current {
+  background: var(--bg-workbench);
+  box-shadow:
+    0 0 0 1px var(--border-card),
+    var(--shadow-sm);
+}
+/* 分屏：窗格之间留 6px 缝（每格各 3px），卡片四角都圆；缝本身就是分界，分隔线只在悬停 / 拖动时显示 */
+.pane-area[data-multi] .pane-box {
+  padding: 3px;
+}
+.pane-area[data-multi] .pane-card {
+  border-radius: 10px;
+}
+.pane-area[data-multi] .pane-divider:not(:hover, [data-active]) .pane-divider-line {
+  background: transparent;
+}

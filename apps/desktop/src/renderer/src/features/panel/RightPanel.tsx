@@ -1,6 +1,7 @@
 import { machineOf, useMachines } from '@/features/machines/store'
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '@/i18n/I18nProvider'
+import { cn } from '@/ui'
 import { BrowserTab } from './BrowserTab'
 import { TasksPanel } from './TasksPanel'
 import { CommentsPanel } from './CommentsPanel'
@@ -151,7 +152,7 @@ export function RightPanel({ maximized = false, visible = true }: { maximized?: 
   return (
     <aside
       data-right-workspace
-      className="relative flex h-full min-h-0 w-full min-w-0 flex-col border-l border-line-layout bg-panel"
+      className={cn('relative flex h-full min-h-0 w-full min-w-0 flex-col', !maximized && 'pl-1.5')}
       onKeyDown={e => {
         if (
           e.defaultPrevented ||
@@ -175,7 +176,7 @@ export function RightPanel({ maximized = false, visible = true }: { maximized?: 
         onClose={ids => void close(ids)}
         onMoveFile={moveFile}
       />
-      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="pane-card relative flex min-h-0 min-w-0 flex-1 flex-col">
         {parsed && layout.active && (
           <FileEditor
             key={layout.active}

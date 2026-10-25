@@ -493,12 +493,19 @@
 .layout-resize-handle[data-resizing]::after {
   opacity: 1;
 }
-/* 主区无描边，只在最外层绘制底色，内部不重复叠加壁纸透明底。 */
+/* 主区外框和侧栏同色（docs/ui/session-cards-plan.md）；对话区、右侧面板各是一张 .pane-card。
+   里面的 --bg-app / --bg-panel 透明，内容不重复叠加底色（壁纸模式也只叠一层）。 */
 .workbench-surface {
   --bg-app: transparent;
   --bg-panel: transparent;
   --border-layout: transparent;
+  background: var(--bg-sidebar);
+}
+.pane-card {
   background: var(--bg-workbench);
+  border-radius: 10px 10px 0 0;
+  /* 描边画在里面：单窗格时卡片贴着 .pane-box 的边，外描边会被它的 overflow:hidden 裁掉 */
+  box-shadow: inset 0 0 0 1px var(--border-card);
 }
 /* 主区直接贴合窗口，拖动边从 48px 顶栏下方的正文开始。 */
 .sidebar-resize {
@@ -1060,7 +1067,8 @@
 .right-workspace-resize {
   top: 0;
   bottom: 0;
-  left: -4px;
+  /* 落在对话卡片和面板卡片之间 6px 的缝里 */
+  left: -1px;
 }
 
 /* 拖任务到左侧栏固定时，侧栏内侧描一圈强调色（docs/ui/files-search-terminal-pins.md §5） */

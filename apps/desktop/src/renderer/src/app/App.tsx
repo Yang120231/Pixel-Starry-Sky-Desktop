@@ -40,7 +40,7 @@ import { ChannelsPage } from '../features/channels/ChannelsPage'
 import { TaskBoardPage } from '../features/board/TaskBoardPage'
 
 /** 各栏宽度，需与对应组件的 class 保持一致（docs/ui/workbench.md §2.1） */
-const SESSION_MIN_WIDTH = 464 // SessionView min-w-[464px]
+const SESSION_MIN_WIDTH = 464 + 12 // SessionView min-w-[464px]，加上主区左右各 6px 的留白（docs/ui/session-cards-plan.md）
 
 /** 协作频道页：频道列表 + 时间线最小宽 + 成员面板（docs/ui/channels.md §3） */
 const CHANNEL_LIST_WIDTH = 260
@@ -315,7 +315,7 @@ export function App() {
             <div className="relative flex min-h-0 flex-1">
               {/* 频道页叠在工作台上面；工作台只是不可见（不用 display:none），窗格测量、终端、浏览器都保持原样 */}
               <div
-                className={cn('workbench-content flex min-h-0 min-w-0 flex-1', !onWorkbench && 'invisible')}
+                className={cn('workbench-content flex min-h-0 min-w-0 flex-1 px-1.5', !onWorkbench && 'invisible')}
                 inert={!onWorkbench}
                 aria-hidden={!onWorkbench || undefined}
               >
@@ -333,7 +333,7 @@ export function App() {
                 <div data-vt-chat-right className="relative flex min-h-0 shrink-0">
                   <CollapsibleSlot
                     open={panelOpen}
-                    width={panelMaximized ? windowWidth - (sidebarOpen ? sidebarWidth : 0) : panelWidth}
+                    width={panelMaximized ? windowWidth - (sidebarOpen ? sidebarWidth : 0) - 12 : panelWidth}
                     side="right"
                   >
                     <RightPanel maximized={panelMaximized} visible={panelOpen} />
@@ -356,8 +356,13 @@ export function App() {
                   )}
                 </div>
               </div>
-              {page === 'channels' && <ChannelsPage membersShown={membersShown} onToggleMembers={togglePanel} />}
-              {page === 'board' && <TaskBoardPage />}
+              {page !== 'workbench' && (
+                // 频道页、任务看板也是一张卡片，和对话页一样离顶栏 8px、离两边 6px
+                <div className="pane-card absolute inset-x-1.5 top-2 bottom-0">
+                  {page === 'channels' && <ChannelsPage membersShown={membersShown} onToggleMembers={togglePanel} />}
+                  {page === 'board' && <TaskBoardPage />}
+                </div>
+              )}
             </div>
           </div>
         </>

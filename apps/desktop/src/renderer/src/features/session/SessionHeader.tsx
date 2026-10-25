@@ -85,17 +85,33 @@ export function SessionHeader({
         {workspace?.name || title ? (
           // 标题 + 项目名（两种模式一样，docs/ui/layout-v2.md §4）；新对话标签没有标题，只写项目名
           <div data-header-workspace className="flex min-w-0 items-baseline gap-2">
+            {/* 有项目时是一行淡色面包屑「项目 › 标题」，标签栏才是主角（docs/ui/session-header-layouts-mockup.html 方案二） */}
+            {title && workspace?.name && (
+              <>
+                <span
+                  title={workspace.path || workspace.name}
+                  className="max-w-[40%] shrink-0 truncate text-meta text-fg-muted"
+                >
+                  {workspace.name}
+                </span>
+                <span aria-hidden className="shrink-0 text-meta text-fg-faint">
+                  ›
+                </span>
+              </>
+            )}
             {title && (
-              <h1 title={title} className="min-w-0 truncate text-ui font-semibold text-fg">
+              <h1
+                title={title}
+                className={cn(
+                  'min-w-0 truncate',
+                  workspace?.name ? 'text-meta text-fg-secondary' : 'text-ui font-semibold text-fg',
+                )}
+              >
                 {title}
               </h1>
             )}
             {workspace?.name &&
-              (title ? (
-                <span title={workspace.path || workspace.name} className="shrink-0 truncate text-meta text-fg-muted">
-                  {workspace.name}
-                </span>
-              ) : (
+              (title ? null : (
                 <h1 title={workspace.path || workspace.name} className="min-w-0 truncate text-ui font-semibold text-fg">
                   {workspace.name}
                 </h1>
