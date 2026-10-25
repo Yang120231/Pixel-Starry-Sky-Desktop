@@ -51,6 +51,19 @@ describe('自定义 API 配置存储（docs/ui/custom-api.md §4.2）', () => {
     expect(() => store.save({ ...input, models: [{ id: 'x', images: 'yes' as never }] })).toThrow('看图设置不对')
   })
 
+  it('费用倍率：0 到 10（0 = 免费分组）；1 和空存成 null；编辑时不给就沿用；读回保留', () => {
+    const store = new ProviderStore(dir, cipher())
+    const view = store.save({ ...input, costMultiplier: 0.3 })
+    expect(view.costMultiplier).toBe(0.3)
+    expect(store.save({ ...input, id: view.id, name: '改名' }).costMultiplier).toBe(0.3)
+    expect(new ProviderStore(dir, cipher()).get(view.id)?.costMultiplier).toBe(0.3)
+    expect(store.save({ ...input, id: view.id, costMultiplier: 1 }).costMultiplier).toBeNull()
+    expect(store.save({ ...input, id: view.id, costMultiplier: null }).costMultiplier).toBeNull()
+    expect(store.save({ ...input, id: view.id, costMultiplier: 0 }).costMultiplier).toBe(0)
+    for (const bad of [-1, 11, Number.NaN])
+      expect(() => store.save({ ...input, costMultiplier: bad })).toThrow('费用倍率')
+  })
+
   it('Key 和请求头的值只在加密文件里：providers.json、返回给设置页的数据都没有', () => {
     const store = new ProviderStore(dir, cipher())
     const view = store.save(input)

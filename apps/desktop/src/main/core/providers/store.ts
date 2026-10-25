@@ -27,6 +27,8 @@ export interface StoredProvider {
   models: ProviderModel[]
   smallModel: string | null
   modelFallback: boolean
+  /** 费用倍率（docs/ui/custom-api.md §4.3）；null 按 1 */
+  costMultiplier?: number | null
   headerNames: string[]
   createdAt: number
   updatedAt: number
@@ -139,6 +141,14 @@ function parseModels(value: unknown): ProviderModel[] {
   })
 }
 
+/** 费用倍率：0 到 10 的数（0 = 免费分组）；1 存成 null */
+function parseMultiplier(value: unknown): number | null {
+  if (value === undefined || value === null || value === '') return null
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 10)
+    throw new Error('费用倍率要是 0 到 10 之间的数，例如 0.3')
+  return value === 1 ? null : value
+}
+
 const copy = (p: StoredProvider): StoredProvider => ({
   ...p,
   models: p.models.map(m => ({ ...m })),
@@ -184,6 +194,13 @@ export class ProviderStore {
           models: parseModels(p.models),
           smallModel: keptSmallModel(p.smallModel, parseModels(p.models)),
           modelFallback: p.modelFallback !== false,
+          costMultiplier: (() => {
+            try {
+              return parseMultiplier(p.costMultiplier)
+            } catch {
+              return null
+            }
+          })(),
           headerNames: Array.isArray(p.headerNames)
             ? p.headerNames.filter(h => typeof h === 'string' && HEADER_NAME.test(h))
             : [],
@@ -317,6 +334,8 @@ export class ProviderStore {
       smallModel: protocol === 'anthropic' ? keptSmallModel(small, models) : null,
       modelFallback:
         input.modelFallback !== undefined ? input.modelFallback !== false : (existing?.modelFallback ?? true),
+      costMultiplier:
+        input.costMultiplier !== undefined ? parseMultiplier(input.costMultiplier) : (existing?.costMultiplier ?? null),
       headerNames,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,

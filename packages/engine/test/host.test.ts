@@ -654,6 +654,25 @@ describe('EngineHost + Claude（假引擎）', () => {
     expect(m?.costUsd).toBeCloseTo((m!.input * 3 + m!.output * 15 + m!.cacheRead * 0.3 + m!.cacheWrite * 3.75) / 1e6)
   })
 
+  it('自定义 API 的估算费用乘接口的费用倍率（中转站打折）', async () => {
+    writeFileSync(join(root, 'gateway.json'), '{}')
+    const host = makeHost(
+      60_000,
+      {},
+      () => ({ ANTHROPIC_AUTH_TOKEN: 'loopback-only', PIXELSKY_GATEWAY_SETTINGS: join(root, 'gateway.json') }),
+      false,
+      { priceRef: () => 'claude-sonnet-4-5', costMultiplier: r => (r.provider?.id === 'p1' ? 0.3 : null) },
+    )
+    const { record } = setup(host)
+    await host.update(record.id, { provider: { id: 'p1' } })
+    await host.send(record.id, '算钱')
+    await waitFor(() => turnsDone(record.id) === 1)
+    const stats = host.open(record.id).items.find(i => i.kind === 'turn_stats')
+    const m = stats?.kind === 'turn_stats' ? stats.usage.models['fake-model'] : undefined
+    const full = (m!.input * 3 + m!.output * 15 + m!.cacheRead * 0.3 + m!.cacheWrite * 3.75) / 1e6
+    expect(m?.costUsd).toBeCloseTo(full * 0.3)
+  })
+
   it('网关模式没有网关设置文件时不启动，不落到引擎自己的登录上', async () => {
     const host = makeHost(60_000, {}, () => ({ ANTHROPIC_AUTH_TOKEN: 'loopback-only' }))
     const { record } = setup(host)

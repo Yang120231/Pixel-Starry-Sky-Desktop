@@ -43,13 +43,34 @@ function stripModel(model: string): string {
 }
 
 /**
- * 模型对价格：先精确对，再去掉前缀和后缀对；都对不上用计价参照（ref）；还没有返回 null（只显示 token）。
+ * 去前后缀之后还对不上时再试的写法（规则参照 tern 的 pricing.rs，MIT）：
+ * 版本号写成点（claude-sonnet-4.5 → claude-sonnet-4-5）；中转站给别家模型加的 claude- 前缀（claude-gpt-5 → gpt-5）
+ */
+function candidates(model: string): string[] {
+  const m = stripModel(model)
+  const out = [m, m.replace(/(\d)\.(\d)/g, '$1-$2')]
+  const fake = m.match(/^claude-((?:gpt|o\d|chatgpt|codex)\b.*)$/)
+  if (fake) out.push(fake[1])
+  return out
+}
+
+const first = (names: string[]): OfficialPrice | null => {
+  for (const m of names) {
+    const p = price(m)
+    if (p) return p
+  }
+  return null
+}
+
+/**
+ * 模型对价格：先精确对、去掉前缀和后缀对，再用计价参照（ref），最后才换几种常见写法猜；都对不上返回 null（只显示 token）。
  */
 export function officialPrice(model: string, ref?: string | null): OfficialPrice | null {
   if (!model && !ref) return null
-  const direct = model ? (price(model) ?? price(stripModel(model))) : null
-  if (direct) return direct
-  return ref ? (price(ref) ?? price(stripModel(ref))) : null
+  const name = model ? [model, stripModel(model)] : []
+  const reference = ref ? [ref, stripModel(ref)] : []
+  // 用户填的计价参照优先于猜出来的写法
+  return first([...name, ...reference, ...(model ? candidates(model) : []), ...(ref ? candidates(ref) : [])])
 }
 
 /** 这一轮这个模型的估算费用（美元）；对不上价格时为 null */

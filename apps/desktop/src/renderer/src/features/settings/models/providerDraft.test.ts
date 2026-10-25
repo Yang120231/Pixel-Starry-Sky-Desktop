@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { isProviderDraftDirty, mergeLatest, shouldConfirmClose, type ProviderDraft } from './providerDraft'
+import {
+  isProviderDraftDirty,
+  mergeLatest,
+  parseMultiplierText,
+  shouldConfirmClose,
+  type ProviderDraft,
+} from './providerDraft'
 
 const base = (): ProviderDraft => ({
   template: 'custom',
@@ -11,6 +17,7 @@ const base = (): ProviderDraft => ({
   models: [{ id: 'm1' }],
   smallModel: null,
   fallback: true,
+  multiplier: '',
   headersText: '',
 })
 
@@ -65,6 +72,16 @@ describe('shouldConfirmClose', () => {
   })
   it('「新增模型」框里有字：要确认', () => {
     expect(run({ newModel: 'm2' })).toBe(true)
+  })
+})
+
+describe('费用倍率输入框', () => {
+  it('空 = 按 1（null），合法的数照存（0 是免费分组），填错的不收', () => {
+    expect(parseMultiplierText('')).toBeNull()
+    expect(parseMultiplierText('0')).toBe(0)
+    expect(parseMultiplierText(' 0.3 ')).toBe(0.3)
+    expect(parseMultiplierText('10')).toBe(10)
+    for (const bad of ['-1', '11', 'abc', '0.3x']) expect(parseMultiplierText(bad)).toBeUndefined()
   })
 })
 

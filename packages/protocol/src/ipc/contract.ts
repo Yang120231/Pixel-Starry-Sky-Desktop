@@ -704,6 +704,7 @@ export const IPC_CONTRACT = {
   'ai:cancel': { kind: 'invoke', route: 'local', trust: 'window' },
   'ai:commitCharge': { kind: 'invoke', route: 'local', trust: 'window' },
   'ai:commitMessage': { kind: 'invoke', route: 'local', trust: 'window' },
+  'providers:billing': { kind: 'invoke', route: 'local', trust: 'sender' },
   'providers:changed': { kind: 'push', route: 'push', trust: 'none' },
   'providers:list': { kind: 'invoke', route: 'local', trust: 'sender' },
   'providers:models': { kind: 'invoke', route: 'local', trust: 'sender' },

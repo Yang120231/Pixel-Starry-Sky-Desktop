@@ -13,6 +13,16 @@ describe('按官方模型定价估算（docs/ui/custom-api.md §4.3）', () => {
     expect(officialPrice('deepseek-chat', 'gpt-5')?.model).toBe('gpt-5')
     expect(officialPrice('toString')).toBeNull()
   })
+  it('版本号写成点、中转站加的假 claude- 前缀也对得上；OpenAI 本来带点的名字照旧精确对', () => {
+    expect(officialPrice('claude-sonnet-4.5')?.model).toBe('claude-sonnet-4-5')
+    expect(officialPrice('relay/claude-sonnet-4.5-20250929')?.model).toBe('claude-sonnet-4-5')
+    expect(officialPrice('claude-gpt-5')?.model).toBe('gpt-5')
+    expect(officialPrice('gpt-5.1')?.model).toBe('gpt-5.1')
+    expect(officialPrice('claude-deepseek-chat')).toBeNull()
+    // 用户填的计价参照优先于猜出来的写法
+    expect(officialPrice('claude-sonnet-4.5', 'claude-haiku-4-5')?.model).toBe('claude-haiku-4-5')
+  })
+
   it('按 token 乘单价', () => {
     const p = officialPrice('claude-sonnet-4-5')
     expect(estimateCost({ input: 1_000_000, output: 100_000, cacheRead: 1_000_000, cacheWrite: 0 }, p)).toBeCloseTo(

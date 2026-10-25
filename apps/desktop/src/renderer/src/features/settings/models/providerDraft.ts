@@ -16,7 +16,17 @@ export interface ProviderDraft {
   models: ProviderModel[]
   smallModel: string | null
   fallback: boolean
+  /** 费用倍率输入框里的文字，空串 = 按 1 */
+  multiplier: string
   headersText: string
+}
+
+/** 费用倍率输入框的文字 → 要存的值；空 = null（按 1），填得不对 = undefined */
+export function parseMultiplierText(text: string): number | null | undefined {
+  const t = text.trim()
+  if (!t) return null
+  const n = Number(t)
+  return Number.isFinite(n) && n >= 0 && n <= 10 ? n : undefined
 }
 
 /** 模型条目去掉 null / undefined 的字段并按键名排序：{id} 和 {id, contextWindow: null} 是同一个模型 */

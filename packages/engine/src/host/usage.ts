@@ -125,10 +125,12 @@ export class HostUsage {
    * 对不上价格的只留 token（docs/ui/custom-api.md §4.3）
    */
   private customEstimate(record: SessionRecord, usage: TurnUsage): TurnUsage {
+    const multiplier = this.ctx.opts.costMultiplier?.(record) ?? 1
     const models = Object.fromEntries(
       Object.entries(usage.models).map(([model, m]) => {
         const price = officialPrice(model, this.ctx.opts.priceRef?.(record, model))
-        const costUsd = estimateCost(m, price)
+        const cost = estimateCost(m, price)
+        const costUsd = cost === null ? null : cost * multiplier
         return [model, { ...m, costUsd, costSource: 'estimate' as const }]
       }),
     )

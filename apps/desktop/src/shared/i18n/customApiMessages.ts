@@ -126,6 +126,62 @@ export const customApiMessages = {
     zh: '请求的模型不在列表里时，换成后台小模型或当前模型',
     en: 'When a request names a model not in the list, use the background model or the current model instead',
   },
+  'customApi.multiplier': { zh: '费用倍率（选填）', en: 'Cost multiplier (optional)' },
+  'customApi.multiplierHint': {
+    zh: '估算的费用按官方价乘这个数，中转站打三折就填 0.3；留空按 1',
+    en: 'Estimated cost = official price × this number, e.g. 0.3 for a relay at 30%; empty means 1',
+  },
+  'customApi.multiplierBad': {
+    zh: '费用倍率要是 0 到 10 之间的数，例如 0.3',
+    en: 'The cost multiplier must be a number from 0 to 10, e.g. 0.3',
+  },
+  'customApi.billing.badFormat': {
+    zh: '中转站返回的倍率格式不对，请手动填写',
+    en: 'The relay returned an unexpected multiplier format; enter it manually',
+  },
+  'customApi.billing.closed': {
+    zh: '这个中转站没有公开价格页（要登录才能看），请手动填写',
+    en: 'This relay has no public pricing page (login required); enter it manually',
+  },
+  'customApi.billing.unknown': {
+    zh: '认不出这个接口用的中转系统（目前认 sub2api 和 new-api），请手动填写',
+    en: 'Couldn’t recognise the relay software (sub2api and new-api are supported); enter it manually',
+  },
+  'customApi.readBilling': { zh: '从中转站读取', en: 'Read from relay' },
+  'customApi.billingSub2api': {
+    zh: '中转站（sub2api）查到这个 Key 的倍率是 {p0}。',
+    en: 'The relay (sub2api) reports a multiplier of {p0} for this key.',
+  },
+  'customApi.billingPeak': {
+    zh: '高峰时段 {p0}–{p1} 另乘 {p2}（估算按非高峰）。',
+    en: 'Peak hours {p0}–{p1} add ×{p2} (estimates use off-peak).',
+  },
+  'customApi.billingPeakNow': {
+    zh: '现在是高峰时段 {p0}–{p1}，另乘 {p2}（估算按非高峰）。',
+    en: 'Peak hours now ({p0}–{p1}) add ×{p2} (estimates use off-peak).',
+  },
+  'customApi.billingNewApi': {
+    zh: '{p0}（new-api）：查不到这个 Key 在哪个分组，请选你所在的分组。',
+    en: '{p0} (new-api): the key’s group can’t be read; pick your group.',
+  },
+  'customApi.billingGroup': { zh: '分组', en: 'Group' },
+  'customApi.billingModel': {
+    zh: '按模型 {p0} 算：中转站价格是官方价的 {p1} 倍。',
+    en: 'Based on {p0}: the relay charges {p1}× the official price.',
+  },
+  'customApi.billingNoModel': {
+    zh: '模型列表里没有对得上官方价的模型，算不出建议值，请手动填写。',
+    en: 'No model in the list matches an official price, so no suggestion; enter it manually.',
+  },
+  'customApi.billingRecharge': {
+    zh: '充值折扣 {p0}（充值单价 ÷ 美元汇率）。',
+    en: 'Top-up discount {p0} (top-up price ÷ USD rate).',
+  },
+  'customApi.billingApply': { zh: '填入 {p0}', en: 'Use {p0}' },
+  'customApi.billingNoGroups': {
+    zh: '中转站没有公开可用的分组，请手动填写。',
+    en: 'The relay lists no public groups; enter it manually.',
+  },
   'customApi.headers': { zh: '附加请求头（选填）', en: 'Extra headers (optional)' },
   'customApi.headersHint': {
     zh: '每行一个「名称: 值」；已保存的值显示为 ••••••••，不改就留着',

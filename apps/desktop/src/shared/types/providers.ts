@@ -27,6 +27,8 @@ export interface ProviderView {
   smallModel: string | null
   /** 请求的模型不在列表里时换成后台小模型或当前模型 */
   modelFallback: boolean
+  /** 费用倍率：估算的官方价乘它（中转站打折，例如 0.3）；null 按 1 */
+  costMultiplier?: number | null
   /** Key 末 4 位；null 表示没有 Key（或系统加密不可用、重启后丢了） */
   keyHint: string | null
   headerNames: string[]
@@ -47,6 +49,8 @@ export interface ProviderInput {
   models?: ProviderModel[]
   smallModel?: string | null
   modelFallback?: boolean
+  /** 不给表示不改，null 表示清掉（按 1） */
+  costMultiplier?: number | null
   /** 留空或不给表示不改 */
   apiKey?: string
   /** 附加请求头：值为 MASKED_SECRET 表示不改；不在这里的旧请求头删掉 */
@@ -59,6 +63,32 @@ export interface ProvidersState {
   persistent: boolean
   warning: string | null
 }
+
+/**
+ * 「从中转站读取」费用倍率（docs/ui/custom-api.md §4.3）：
+ * - sub2api：用这个 Key 查到的实际倍率（分组 × 用户专属 × 高峰）；
+ * - new-api：公开价格页的分组倍率、各模型相对官方价的倍数和充值折扣，Key 在哪个分组查不到，要用户选；
+ * - unknown：认不出或没开放，message 是原因
+ */
+export type RelayBilling =
+  | {
+      kind: 'sub2api'
+      /** 现在生效的倍率（含高峰） */
+      multiplier: number
+      /** 不算高峰的倍率（分组倍率或用户专属倍率） */
+      base: number
+      peak: { start: string; end: string; multiplier: number; active: boolean } | null
+    }
+  | {
+      kind: 'new-api'
+      site: string | null
+      groups: { name: string; label: string; ratio: number }[]
+      /** 接口模型列表里的模型：中转站的模型价相对官方价的倍数；对不上官方价或按次计费的为 null */
+      models: { id: string; factor: number | null }[]
+      /** 充值折扣：充值单价 ÷ 美元汇率（例如 ¥2.5 买 $1 额度、汇率 7.3 → 0.34）；读不到为 null */
+      recharge: number | null
+    }
+  | { kind: 'unknown'; message: string }
 
 export type ProviderProblem = 'auth' | 'quota' | 'model' | 'not_found' | 'timeout' | 'network' | 'redirect' | 'other'
 

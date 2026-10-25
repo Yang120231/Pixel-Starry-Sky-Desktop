@@ -10,6 +10,7 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '@/i18n/core'
 import {
   readProviderModels,
+  readRelayBilling,
   removeProvider,
   saveProvider,
   testProvider,
@@ -23,10 +24,12 @@ import type {
   ProviderTemplate,
   ProviderTestResult,
   ProviderView,
+  RelayBilling,
 } from '../../../../../shared/types/providers'
 import { FIELD } from '../engines/parts'
 import { ContextWindowInput } from './ContextWindowInput'
-import { mergeLatest, shouldConfirmClose, type ProviderDraft } from './providerDraft'
+import { mergeLatest, parseMultiplierText, shouldConfirmClose, type ProviderDraft } from './providerDraft'
+import { multiplierText, newApiSuggestion, referenceModel } from './relayBilling'
 import { useUnsavedCheck } from '../unsavedEdits'
 
 /** 打码的请求头值，和主进程 MASKED_SECRET 一致 */
@@ -196,6 +199,7 @@ const draftOf = (p: ProviderView): ProviderDraft => ({
   models: p.models,
   smallModel: p.smallModel,
   fallback: p.modelFallback,
+  multiplier: p.costMultiplier == null ? '' : String(p.costMultiplier),
   headersText: p.headerNames.map(n => `${n}: ${MASKED}`).join('\n'),
 })
 
@@ -216,8 +220,13 @@ function ProviderDialog({ provider, close }: { provider: ProviderView | null; cl
   const [newModel, setNewModel] = useState('')
   const [smallModel, setSmallModel] = useState<string | null>(provider?.smallModel ?? null)
   const [fallback, setFallback] = useState(provider?.modelFallback ?? true)
+  const [multiplier, setMultiplier] = useState(
+    provider?.costMultiplier === null || provider?.costMultiplier === undefined ? '' : String(provider.costMultiplier),
+  )
   const [headersText, setHeadersText] = useState((provider?.headerNames ?? []).map(n => `${n}: ${MASKED}`).join('\n'))
-  const [busy, setBusy] = useState<'save' | 'test' | 'models' | null>(null)
+  const [busy, setBusy] = useState<'save' | 'test' | 'models' | 'billing' | null>(null)
+  const [billing, setBilling] = useState<RelayBilling | null>(null)
+  const [billingGroup, setBillingGroup] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<ProviderTestResult | null>(null)
   const [readCount, setReadCount] = useState<number | null>(null)
@@ -233,6 +242,7 @@ function ProviderDialog({ provider, close }: { provider: ProviderView | null; cl
     models,
     smallModel,
     fallback,
+    multiplier,
     headersText,
   }
   const contextInvalid = models.some(m => badContext.has(m.id))
@@ -281,6 +291,11 @@ function ProviderDialog({ provider, close }: { provider: ProviderView | null; cl
       setError(tr('customApi.headersBad', { p0: parsed.bad }))
       return null
     }
+    const costMultiplier = parseMultiplierText(d.multiplier)
+    if (costMultiplier === undefined) {
+      setError(tr('customApi.multiplierBad'))
+      return null
+    }
     return {
       ...(provider ? { id: provider.id } : {}),
       name: d.name,
@@ -293,12 +308,13 @@ function ProviderDialog({ provider, close }: { provider: ProviderView | null; cl
       smallModel:
         d.protocol === 'anthropic' && d.smallModel && d.models.some(m => m.id === d.smallModel) ? d.smallModel : null,
       modelFallback: d.fallback,
+      costMultiplier,
       ...(d.apiKey.trim() ? { apiKey: d.apiKey.trim() } : {}),
       headers: parsed.headers,
     }
   }
 
-  const run = async (kind: 'save' | 'test' | 'models'): Promise<void> => {
+  const run = async (kind: 'save' | 'test' | 'models' | 'billing'): Promise<void> => {
     // 对话框开着时这个接口在别处（另一个设置窗口）改过：保存时这边没动的字段用最新的
     const latest = provider && providers.providers.find(p => p.id === provider.id)
     const data = input(
@@ -311,12 +327,18 @@ function ProviderDialog({ provider, close }: { provider: ProviderView | null; cl
     setError(null)
     if (kind === 'test') setResult(null)
     if (kind === 'models') setReadCount(null)
+    if (kind === 'billing') setBilling(null)
     try {
       if (kind === 'save') {
         await saveProvider(data)
         close()
       } else if (kind === 'test') setResult(await testProvider(data))
-      else {
+      else if (kind === 'billing') {
+        const b = await readRelayBilling(data)
+        setBilling(b)
+        // 都等用户点「填入」再写进输入框；new-api 默认选倍率最低的分组
+        if (b.kind === 'new-api') setBillingGroup(b.groups[0]?.name ?? '')
+      } else {
         const ids = await readProviderModels(data)
         setModels(current => [...current, ...ids.filter(id => !current.some(m => m.id === id)).map(id => ({ id }))])
         setReadCount(ids.length)
@@ -625,6 +647,25 @@ function ProviderDialog({ provider, close }: { provider: ProviderView | null; cl
             </div>
             <Switch checked={fallback} label={tr('customApi.fallback')} onChange={setFallback} />
           </div>
+          <Field label={tr('customApi.multiplier')} hint={tr('customApi.multiplierHint')}>
+            <div className="flex items-center gap-2">
+              <input
+                className={cn(FIELD, 'w-32 font-mono')}
+                inputMode="decimal"
+                value={multiplier}
+                spellCheck={false}
+                placeholder="1"
+                aria-invalid={parseMultiplierText(multiplier) === undefined}
+                onChange={e => setMultiplier(e.target.value)}
+              />
+              <Button variant="outline" icon={RefreshCw} disabled={locked} onClick={() => void run('billing')}>
+                {busy === 'billing' ? tr('customApi.reading') : tr('customApi.readBilling')}
+              </Button>
+            </div>
+            {billing && (
+              <BillingResult billing={billing} group={billingGroup} setGroup={setBillingGroup} apply={setMultiplier} />
+            )}
+          </Field>
           <Field label={tr('customApi.headers')} hint={tr('customApi.headersHint')}>
             <textarea
               className={cn(FIELD, 'min-h-16 font-mono text-meta')}
@@ -686,5 +727,68 @@ function ProviderDialog({ provider, close }: { provider: ProviderView | null; cl
       )}
     </div>,
     document.body,
+  )
+}
+
+/** 「从中转站读取」的结果：sub2api 已经填好；new-api 选分组后填入建议值；认不出时说原因 */
+function BillingResult({
+  billing,
+  group,
+  setGroup,
+  apply,
+}: {
+  billing: RelayBilling
+  group: string
+  setGroup(name: string): void
+  apply(text: string): void
+}) {
+  if (billing.kind === 'unknown') return <p className="text-meta text-fg-faint">{translateMessage(billing.message)}</p>
+  if (billing.kind === 'sub2api')
+    return (
+      <div className="flex flex-col items-start gap-1.5 text-meta text-fg-secondary">
+        <span>
+          {tr('customApi.billingSub2api', { p0: multiplierText(billing.base) })}
+          {billing.peak &&
+            ' ' +
+              tr(billing.peak.active ? 'customApi.billingPeakNow' : 'customApi.billingPeak', {
+                p0: billing.peak.start,
+                p1: billing.peak.end,
+                p2: multiplierText(billing.peak.multiplier),
+              })}
+        </span>
+        <Button variant="outline" onClick={() => apply(multiplierText(billing.base))}>
+          {tr('customApi.billingApply', { p0: multiplierText(billing.base) })}
+        </Button>
+      </div>
+    )
+  const ref = referenceModel(billing)
+  const value = newApiSuggestion(billing, group)
+  if (!billing.groups.length) return <p className="text-meta text-fg-faint">{tr('customApi.billingNoGroups')}</p>
+  return (
+    <div className="flex flex-col gap-1.5 rounded-lg border border-line p-2.5 text-meta text-fg-secondary">
+      <span>{tr('customApi.billingNewApi', { p0: billing.site ?? 'new-api' })}</span>
+      <div className="flex flex-wrap items-center gap-2">
+        <span>{tr('customApi.billingGroup')}</span>
+        <Select<string>
+          label={tr('customApi.billingGroup')}
+          value={group}
+          onChange={setGroup}
+          options={billing.groups.map(g => ({ value: g.name, label: `${g.label} ×${multiplierText(g.ratio)}` }))}
+        />
+      </div>
+      <span className="text-fg-faint">
+        {ref
+          ? tr('customApi.billingModel', { p0: ref.id, p1: multiplierText(ref.factor) })
+          : tr('customApi.billingNoModel')}
+        {billing.recharge !== null && ' ' + tr('customApi.billingRecharge', { p0: multiplierText(billing.recharge) })}
+      </span>
+      {value !== null && (
+        <div>
+          <Button variant="outline" onClick={() => apply(multiplierText(value))}>
+            {tr('customApi.billingApply', { p0: multiplierText(value) })}
+          </Button>
+        </div>
+      )}
+    </div>
   )
 }

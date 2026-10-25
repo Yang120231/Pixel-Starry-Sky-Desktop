@@ -8,6 +8,7 @@ import type {
   ProvidersState,
   ProviderTestResult,
   ProviderView,
+  RelayBilling,
 } from '../../../../shared/types/providers'
 import { demo } from '@/data/demo'
 
@@ -107,6 +108,12 @@ export async function removeProvider(id: string): Promise<void> {
 export async function testProvider(input: ProviderInput): Promise<ProviderTestResult> {
   if (window.pixelsky?.demo) return { ok: true, status: 200, model: input.models?.[0]?.id ?? null }
   return window.pixelsky!.providers.test(input)
+}
+
+/** 从中转站读取费用倍率；演示模式给一份 sub2api 的样子 */
+export async function readRelayBilling(input: ProviderInput): Promise<RelayBilling> {
+  if (window.pixelsky?.demo) return { kind: 'sub2api', multiplier: 0.6, base: 0.6, peak: null }
+  return window.pixelsky!.providers.billing(input)
 }
 
 export async function readProviderModels(input: ProviderInput): Promise<string[]> {

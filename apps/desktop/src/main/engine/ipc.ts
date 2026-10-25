@@ -132,6 +132,7 @@ export async function initEngine(ctx: AppContext): Promise<void> {
       record.provider
         ? ctx.providers?.get(record.provider.id)?.models.find(m => m.id === model.replace(/\[1m\]$/i, ''))?.priceRef
         : null,
+    costMultiplier: record => (record.provider ? ctx.providers?.get(record.provider.id)?.costMultiplier : null),
     extensions: record => extensions.prepare(record),
     historyTool: historyEnabled,
     platformCharges,

@@ -628,6 +628,7 @@ contextBridge.exposeInMainWorld('pixelsky', {
     remove: id => call('providers:remove', id),
     test: input => call('providers:test', input),
     models: input => call('providers:models', input),
+    billing: input => call('providers:billing', input),
     onChange: callback => {
       const listener = (_e: Electron.IpcRendererEvent, state: import('../shared/types/providers').ProvidersState) =>
         callback(state)

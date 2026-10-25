@@ -159,6 +159,7 @@ export function useAiCommit({
         if (!chosen) return fail('provider', 'missing')
         if (!chosen.provider.keyHint) return fail('provider', 'noKey')
         priceRef = chosen.provider.models.find(m => m.id === chosen.model)?.priceRef ?? null
+        multiplier = chosen.provider.costMultiplier ?? 1
         request = { ...base, source: 'custom', groups: [], providerId: chosen.provider.id, model: chosen.model }
       }
       const result = await api.commitMessage(request)

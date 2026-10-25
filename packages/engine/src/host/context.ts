@@ -68,6 +68,8 @@ export interface EngineHostOptions {
   validateInput?: (record: SessionRecord) => Promise<void>
   /** 自定义 API 会话：这个模型的计价参照（官方模型名）；不给就按模型名自动对（docs/ui/custom-api.md §4.3） */
   priceRef?: (record: SessionRecord, model: string) => string | null | undefined
+  /** 自定义 API 会话：估算费用乘的倍率（中转站打折）；不给按 1 */
+  costMultiplier?: (record: SessionRecord) => number | null | undefined
   /** npm 包的最新版本号（桌面端用系统代理查 registry）；不给就不提示引擎有新版本（docs/ui/engine-update.md） */
   /** 授权登录最多等多久（毫秒），默认 10 分钟；测试用 */
   loginTimeoutMs?: number
