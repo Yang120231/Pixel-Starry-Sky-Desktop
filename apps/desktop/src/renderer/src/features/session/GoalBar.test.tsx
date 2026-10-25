@@ -11,7 +11,7 @@ vi.mock('@/features/engine/store', () => ({
     selector({ snapshots: Object.fromEntries(Object.entries(goals).map(([id, goal]) => [id, { goal }])) }),
 }))
 import { I18nProvider } from '@/i18n/I18nProvider'
-import { GoalBar, goalResultText, goalUsageText } from './GoalBar'
+import { GoalBar, goalResultText, goalStats, goalUsageText } from './GoalBar'
 
 const goal = (patch: Partial<SessionGoal> = {}): SessionGoal => ({
   objective: '把测试修好',
@@ -67,5 +67,25 @@ describe('GoalBar', () => {
       '已设目标：修 bug。Codex 会一轮接一轮地做，直到完成；输入 /goal pause 暂停，/goal clear 清除',
     )
     expect(goalResultText({ kind: 'clear' }, null)).toBe('目标已清除')
+  })
+
+  it('默认收起：整行是展开按钮，完整目标和明细要点开才显示', () => {
+    goals.e = goal({ objective: '第一行\n第二行' })
+    const html = render('e')
+    expect(html).toContain('aria-expanded="false"')
+    expect(html).not.toContain('完整目标')
+  })
+
+  it('展开区的四格：预算比例封顶 1、预算 0 当用完；没设预算、没更新时间时的写法；卡住标警告', () => {
+    const [status, tokens, time, updated] = goalStats(goal({ status: 'blocked', tokenBudget: 10_000 }))
+    expect(status).toMatchObject({ value: '卡住了', warn: true })
+    expect(tokens).toMatchObject({ value: '12.3k / 10k', share: 1 })
+    expect(time.value).toBe('1m 35s')
+    expect(updated.value).toBe('—')
+    expect(goalStats(goal({ tokenBudget: 0 }))[1].share).toBe(1)
+    expect(goalStats(goal({ tokenBudget: 50_000 }))[1].share).toBeCloseTo(12_345 / 50_000)
+    const none = goalStats(goal())
+    expect(none[0].warn).toBe(false)
+    expect(none[1]).toEqual({ label: '已用 token', value: '12.3k（没设预算）' })
   })
 })
