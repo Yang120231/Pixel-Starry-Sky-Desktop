@@ -6,7 +6,7 @@ import { tr } from '@/i18n/core'
 import type { GitCommitFile } from '../../../../../shared/types/project-tools'
 import type { GraphRow, SyncState } from './graph'
 import { SYNC_TITLE_KEY, type Badge, type BadgeKind, type BadgeTone } from './historyModel'
-import { splitPath } from './gitModel'
+import { SECTION_PAGE, sectionPage, splitPath } from './gitModel'
 import { GitFileMenu, type GitFileMenuPosition } from './GitFileMenu'
 import type { WorkspaceRef } from '../../../../../shared/types/workspace'
 
@@ -260,109 +260,130 @@ export function ChangedFiles({
   isCurrent?: (file: GitCommitFile) => boolean
 }) {
   const [menu, setMenu] = useState<(GitFileMenuPosition & { path: string }) | null>(null)
+  // 大提交（首次导入、依赖升级）有几千个文件：先列一页，点「再显示」接着列；下标仍对应 files
+  const [shown, setShown] = useState(SECTION_PAGE)
+  const page = sectionPage(files, shown)
   const menuIndex = menu ? files.findIndex(f => f.path === menu.path) : -1
   const menuFile = files[menuIndex]
   return (
-    <ul className="flex flex-col">
-      {files.map((file, i) => {
-        const { name, dir } = splitPath(file.path)
-        return (
-          <li
-            key={file.path}
-            data-git-history-file={file.path}
-            onContextMenu={e => {
-              e.preventDefault()
-              e.stopPropagation()
-              const trigger = e.currentTarget.querySelector('button')!
-              trigger.focus({ preventScroll: true })
-              // 菜单键 / Shift+F10 已经在 keydown 里打开了这一行的菜单时，随后的 contextmenu 不再挪位置
-              setMenu(m => (m?.path === file.path ? m : { x: e.clientX, y: e.clientY, trigger, path: file.path }))
-            }}
-            onKeyDown={e => {
-              if (e.key !== 'ContextMenu' && !(e.key === 'F10' && e.shiftKey)) return
-              e.preventDefault()
-              e.stopPropagation()
-              const trigger = e.currentTarget.querySelector('button')!
-              const rect = trigger.getBoundingClientRect()
-              setMenu({ x: rect.left + 20, y: rect.bottom, trigger, path: file.path })
-            }}
-            className={cn(
-              'group/file flex min-w-0 items-center rounded-md hover:bg-hover',
-              isCurrent?.(file) && 'bg-selected',
-            )}
-          >
-            <button
-              type="button"
-              onClick={() => onOpen(i)}
-              title={`${tr('git.viewDiff')} · ${file.origPath ? file.origPath + ' → ' : ''}${file.path}`}
-              className="flex h-7 min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 text-left"
+    <>
+      <ul className="flex flex-col">
+        {page.visible.map((file, i) => {
+          const { name, dir } = splitPath(file.path)
+          return (
+            <li
+              key={file.path}
+              data-git-history-file={file.path}
+              onContextMenu={e => {
+                e.preventDefault()
+                e.stopPropagation()
+                const trigger = e.currentTarget.querySelector('button')!
+                trigger.focus({ preventScroll: true })
+                // 菜单键 / Shift+F10 已经在 keydown 里打开了这一行的菜单时，随后的 contextmenu 不再挪位置
+                setMenu(m => (m?.path === file.path ? m : { x: e.clientX, y: e.clientY, trigger, path: file.path }))
+              }}
+              onKeyDown={e => {
+                if (e.key !== 'ContextMenu' && !(e.key === 'F10' && e.shiftKey)) return
+                e.preventDefault()
+                e.stopPropagation()
+                const trigger = e.currentTarget.querySelector('button')!
+                const rect = trigger.getBoundingClientRect()
+                setMenu({ x: rect.left + 20, y: rect.bottom, trigger, path: file.path })
+              }}
+              className={cn(
+                'group/file flex min-w-0 items-center rounded-md hover:bg-hover',
+                isCurrent?.(file) && 'bg-selected',
+              )}
             >
-              <span
-                className={cn('w-3 shrink-0 text-center font-mono text-[11px] font-semibold', CODE_COLOR[file.code])}
+              <button
+                type="button"
+                onClick={() => onOpen(i)}
+                title={`${tr('git.viewDiff')} · ${file.origPath ? file.origPath + ' → ' : ''}${file.path}`}
+                className="flex h-7 min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 text-left"
               >
-                {file.code}
-              </span>
-              <span
-                className={cn(
-                  // 窄侧栏里悬停出两个按钮时，文件名可以截短，不压到右边的 +/−
-                  'min-w-0 truncate text-list',
-                  file.code === 'D' ? 'text-fg-muted line-through' : 'text-fg',
+                <span
+                  className={cn('w-3 shrink-0 text-center font-mono text-[11px] font-semibold', CODE_COLOR[file.code])}
+                >
+                  {file.code}
+                </span>
+                <span
+                  className={cn(
+                    // 窄侧栏里悬停出两个按钮时，文件名可以截短，不压到右边的 +/−
+                    'min-w-0 truncate text-list',
+                    file.code === 'D' ? 'text-fg-muted line-through' : 'text-fg',
+                  )}
+                >
+                  {name}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-meta text-fg-faint">
+                  {file.origPath ? `${splitPath(file.origPath).name} → ` : ''}
+                  {dir}
+                </span>
+                {file.insertions !== null && (
+                  <span className="shrink-0 font-mono text-[11px] tabular-nums">
+                    <span className="text-success">+{file.insertions}</span>{' '}
+                    <span className="text-danger">−{file.deletions}</span>
+                  </span>
                 )}
-              >
-                {name}
-              </span>
-              <span className="min-w-0 flex-1 truncate text-meta text-fg-faint">
-                {file.origPath ? `${splitPath(file.origPath).name} → ` : ''}
-                {dir}
-              </span>
-              {file.insertions !== null && (
-                <span className="shrink-0 font-mono text-[11px] tabular-nums">
-                  <span className="text-success">+{file.insertions}</span>{' '}
-                  <span className="text-danger">−{file.deletions}</span>
+              </button>
+              {onOpenFile && file.local && (
+                <span className="shrink-0 opacity-0 group-hover/file:opacity-100 group-focus-within/file:opacity-100">
+                  <IconButton
+                    icon={FileCode2}
+                    label={tr('git.open')}
+                    size={22}
+                    iconSize={12}
+                    onClick={() => onOpenFile(i)}
+                  />
                 </span>
               )}
-            </button>
-            {onOpenFile && file.local && (
-              <span className="shrink-0 opacity-0 group-hover/file:opacity-100 group-focus-within/file:opacity-100">
-                <IconButton
-                  icon={FileCode2}
-                  label={tr('git.open')}
-                  size={22}
-                  iconSize={12}
-                  onClick={() => onOpenFile(i)}
-                />
-              </span>
-            )}
-            {onHistory && file.code !== 'D' && (
-              <span className="shrink-0 opacity-0 group-hover/file:opacity-100 group-focus-within/file:opacity-100">
-                <IconButton
-                  icon={FileClock}
-                  label={tr('git.history.file.show')}
-                  size={22}
-                  iconSize={12}
-                  onClick={() => onHistory(i)}
-                />
-              </span>
-            )}
-          </li>
-        )
-      })}
-      {menu && menuFile && (
-        <GitFileMenu
-          file={menuFile}
-          target={target}
-          root={root}
-          demo={demo}
-          position={menu}
-          onDiff={() => onOpen(menuIndex)}
-          onOpen={onOpenFile && menuFile.local ? () => onOpenFile(menuIndex) : undefined}
-          onHistory={onHistory ? () => onHistory(menuIndex) : undefined}
-          onClose={() => {
-            setMenu(null)
-            menu.trigger.focus({ preventScroll: true })
-          }}
-        />
-      )}
-    </ul>
+              {onHistory && file.code !== 'D' && (
+                <span className="shrink-0 opacity-0 group-hover/file:opacity-100 group-focus-within/file:opacity-100">
+                  <IconButton
+                    icon={FileClock}
+                    label={tr('git.history.file.show')}
+                    size={22}
+                    iconSize={12}
+                    onClick={() => onHistory(i)}
+                  />
+                </span>
+              )}
+            </li>
+          )
+        })}
+        {menu && menuFile && (
+          <GitFileMenu
+            file={menuFile}
+            target={target}
+            root={root}
+            demo={demo}
+            position={menu}
+            onDiff={() => onOpen(menuIndex)}
+            onOpen={onOpenFile && menuFile.local ? () => onOpenFile(menuIndex) : undefined}
+            onHistory={onHistory ? () => onHistory(menuIndex) : undefined}
+            onClose={() => {
+              setMenu(null)
+              menu.trigger.focus({ preventScroll: true })
+            }}
+          />
+        )}
+      </ul>
+      <ShowMore rest={page.rest} onMore={() => setShown(n => n + SECTION_PAGE)} />
+    </>
+  )
+}
+
+/** 一组没列完时末尾的「再显示 N 个」（Git 面板的更改、历史里一个提交的文件） */
+export function ShowMore({ rest, onMore }: { rest: number; onMore: () => void }) {
+  if (rest <= 0) return null
+  return (
+    <button
+      type="button"
+      data-git-more
+      onClick={onMore}
+      className="flex h-7 w-full items-center rounded-md pl-7 text-left text-meta text-fg-muted hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+    >
+      {tr('git.showMore', { n: Math.min(rest, SECTION_PAGE), rest })}
+    </button>
   )
 }

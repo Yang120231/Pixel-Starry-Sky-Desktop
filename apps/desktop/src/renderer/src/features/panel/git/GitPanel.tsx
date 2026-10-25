@@ -70,6 +70,7 @@ import type { GitFileActions } from '@/features/coding/editor/gitDiffTabs'
 import { AI_COMMIT_PAD, AiCommitButton, AiCommitNote, useAiCommit } from './AiCommit'
 import { BranchMenu } from './BranchMenu'
 import { GitHistory } from './GitHistory'
+import { ShowMore } from './HistoryParts'
 import { FILE_HISTORY_EVENT, takeFileHistory } from './fileHistory'
 import { publishGitStatus, refreshGitStatus, useGitLoadError, useGitRevision, useGitStatus } from './summary'
 import { demoApply } from './demoGit'
@@ -969,7 +970,6 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
                 })}
               </ul>
               <ShowMore
-                area={section.area}
                 rest={sectionPage(section.files, shown[section.area]).rest}
                 onMore={() =>
                   setShown(s => ({ ...s, [section.area]: (s[section.area] ?? SECTION_PAGE) + SECTION_PAGE }))
@@ -1006,20 +1006,5 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
         />
       )}
     </div>
-  )
-}
-
-/** 一组没画完时末尾的「再显示 N 个」 */
-function ShowMore({ area, rest, onMore }: { area: GitArea; rest: number; onMore: () => void }) {
-  if (rest <= 0) return null
-  return (
-    <button
-      type="button"
-      data-git-more={area}
-      onClick={onMore}
-      className="flex h-7 w-full items-center rounded-md pl-7 text-left text-meta text-fg-muted hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
-    >
-      {tr('git.showMore', { n: Math.min(rest, SECTION_PAGE), rest })}
-    </button>
   )
 }
