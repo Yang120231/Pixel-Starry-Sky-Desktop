@@ -9,6 +9,20 @@ import type { TargetResolver } from './workspace-files'
 // 检测不开进程（docs/ui/open-with.md）：快捷方式由测试给，版本读 exe 换成固定值
 const links = vi.hoisted(() => ({ list: [] as ShortcutTarget[] }))
 vi.mock('./shortcuts', () => ({ findShortcuts: async () => links.list }))
+// 启动编辑器不真开进程：记下 spawn 的参数，马上回报已启动
+const spawned = vi.hoisted(() => [] as { program: string; options: Record<string, unknown> }[])
+vi.mock('node:child_process', async importOriginal => {
+  const { EventEmitter } = await import('node:events')
+  return {
+    ...(await importOriginal<typeof import('node:child_process')>()),
+    spawn: (program: string, _args: string[], options: Record<string, unknown>) => {
+      spawned.push({ program, options })
+      const child = Object.assign(new EventEmitter(), { unref: () => undefined })
+      queueMicrotask(() => child.emit('spawn'))
+      return child
+    },
+  }
+})
 vi.mock('./exe-version', () => ({
   exeVersion: async (path: string) => (path.endsWith('Trae CN.exe') ? '3.3.99' : undefined),
 }))
@@ -41,6 +55,25 @@ describe('Trae 检测与启动', () => {
       'D:\\项目 (1)\\main.ts:12:3',
     ])
     expect(editorArgs('code', 'new', 'D:\\项目 (1)')).toEqual(['--new-window', 'D:\\项目 (1)'])
+  })
+})
+
+describe('启动编辑器', () => {
+  it('窗口不隐藏：windowsHide 会让 VS Code 的第一个窗口按隐藏打开，进程在后台、看不到窗口', async () => {
+    const root = temp()
+    const exe = join(root, 'Microsoft VS Code', 'Code.exe')
+    mkdirSync(join(exe, '..'), { recursive: true })
+    writeFileSync(exe, '')
+    const file = join(root, 'a.md')
+    writeFileSync(file, '')
+    const editors = new Editors(temp(), noWorkspace)
+    await editors.init()
+    await editors.configure('vscode', exe)
+    spawned.length = 0
+    expect(await editors.openFile(file)).toMatchObject({ target: file })
+    expect(spawned).toEqual([
+      { program: exe, options: expect.objectContaining({ windowsHide: false, detached: true }) },
+    ])
   })
 })
 

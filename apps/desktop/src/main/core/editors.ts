@@ -481,7 +481,8 @@ async function launch(program: string, args: string[]): Promise<void> {
   const env = { ...process.env }
   delete env.ELECTRON_RUN_AS_NODE
   await new Promise<void>((done, fail) => {
-    const child = spawn(program, args, { shell: false, windowsHide: true, detached: true, stdio: 'ignore', env })
+    // windowsHide 会让 Windows 把编辑器的第一个窗口按隐藏打开（VS Code 进程在后台、看不到窗口），这里必须是 false
+    const child = spawn(program, args, { shell: false, windowsHide: false, detached: true, stdio: 'ignore', env })
     child.once('error', e => fail(new Error('编辑器启动失败：' + e.message)))
     child.once('spawn', () => {
       child.unref()
