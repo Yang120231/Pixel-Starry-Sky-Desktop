@@ -1,7 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { StringDecoder } from 'node:string_decoder'
 import type { Launcher } from '../adapter'
-import { LineSplitter, TailBuffer } from '../jsonl'
+import { LineSplitter, TailBuffer, droppedRef } from '../jsonl'
 import { logger, redact } from '../log'
 import { logProcess } from '../process-log'
 import { killTree } from '../exec'
@@ -52,16 +52,18 @@ export class CodexProcess {
       () => this.stopping,
     )
     const decoder = new StringDecoder('utf8')
-    const splitter = new LineSplitter()
+    // 超长的字符串边收边截短；截短后仍太大的整条丢掉，对应的请求报错，进程照常运行（docs/engine-output-limits.md）
+    const splitter = new LineSplitter(dropped => {
+      const { id, kind: method } = droppedRef(dropped.head, 'method')
+      log.warn('协议消息太大，已丢弃', { pid: this.child.pid, chars: dropped.length, id, method })
+      const request = typeof id === 'number' ? this.pending.get(id) : undefined
+      if (!request || method) return
+      clearTimeout(request.timer)
+      this.pending.delete(id as number)
+      request.reject(new Error(`Codex response too large (${Math.round(dropped.length / 1024 / 1024)} MB), dropped`))
+    })
     this.child.stdout.on('data', (data: Buffer) => {
-      const lines = splitter.push(decoder.write(data))
-      if (splitter.pending > 40 * 1024 * 1024) {
-        this.stderr.push('Codex protocol frame exceeds limit')
-        log.warn('协议帧超过上限，结束进程', { pid: this.child.pid })
-        this.kill()
-        return
-      }
-      for (const line of lines) {
+      for (const line of splitter.push(decoder.write(data))) {
         let value: Message
         try {
           value = object(JSON.parse(line))

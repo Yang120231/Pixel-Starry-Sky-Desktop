@@ -3,7 +3,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { StringDecoder } from 'node:string_decoder'
 import type { Launcher } from '../adapter'
-import { LineSplitter, TailBuffer } from '../jsonl'
+import { LineSplitter, TailBuffer, droppedRef } from '../jsonl'
 import { logger, redact } from '../log'
 import { logProcess } from '../process-log'
 import { killTree } from '../exec'
@@ -64,16 +64,18 @@ export class PixelProcess {
       () => this.stopping,
     )
     const decoder = new StringDecoder('utf8')
-    const splitter = new LineSplitter()
+    // 超长的字符串边收边截短；截短后仍太大的整条丢掉，对应的命令报错，进程照常运行（docs/engine-output-limits.md）
+    const splitter = new LineSplitter(dropped => {
+      const { id, kind: type } = droppedRef(dropped.head, 'type')
+      log.warn('协议消息太大，已丢弃', { pid: this.child.pid, chars: dropped.length, id, type })
+      const request = type === 'response' && typeof id === 'string' ? this.pending.get(id) : undefined
+      if (!request) return
+      clearTimeout(request.timer)
+      this.pending.delete(id as string)
+      request.reject(new Error(`Pixel response too large (${Math.round(dropped.length / 1024 / 1024)} MB), dropped`))
+    })
     this.child.stdout.on('data', (data: Buffer) => {
-      const lines = splitter.push(decoder.write(data))
-      if (splitter.pending > 40 * 1024 * 1024) {
-        this.stderr.push('Pixel protocol frame exceeds limit')
-        log.warn('协议帧超过上限，结束进程', { pid: this.child.pid })
-        this.kill()
-        return
-      }
-      for (const raw of lines) {
+      for (const raw of splitter.push(decoder.write(data))) {
         // 只按 \n 切；兼容 CRLF，去掉行尾的 \r（\r 可能落在上一块末尾，所以在整行拼好后再去）
         const line = raw.replace(/\r$/, '')
         let value: Message
