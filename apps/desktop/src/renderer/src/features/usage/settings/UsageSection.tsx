@@ -183,7 +183,8 @@ export function UsageSection({ onOpenSession }: { onOpenSession: (sessionId: str
             key={d}
             className="inline-flex h-7 items-center gap-1 rounded-full border border-accent-line bg-accent-soft pr-1 pl-2.5 text-meta text-accent-fg"
           >
-            {DIMENSION_LABEL[d]}：{dimLabel(d, v)}
+            {DIMENSION_LABEL[d]}：
+            {(d === 'session' && summary?.groups.session?.find(r => r.key === v)?.title) || dimLabel(d, v)}
             <button
               type="button"
               aria-label={tr('settings.usage.UsageSection.removeFilter', { p0: DIMENSION_LABEL[d] })}

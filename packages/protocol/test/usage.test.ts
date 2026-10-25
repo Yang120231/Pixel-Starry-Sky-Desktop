@@ -6,6 +6,8 @@ import {
   emptyTotals,
   listRecords,
   rangeWindow,
+  SESSION_OTHERS_KEY,
+  SESSION_ROWS_MAX,
   summarize,
   toCsv,
   totalTokens,
@@ -279,5 +281,42 @@ describe('toCsv', () => {
     expect(lines[2].endsWith('已中断')).toBe(true)
     expect(lines[3].split(',')[11]).toBe('0.500000')
     expect(lines[3].endsWith('完成')).toBe(true)
+  })
+})
+
+describe('按会话维度（docs/ui/usage.md §13）', () => {
+  const at = (i: number) => NOW - 1000 * i
+  it('每个会话各算各的（分叉出来的不并到上级），标题和项目取最近一条，按费用降序', () => {
+    const records = [
+      rec({ id: 'a1', sessionId: 'a', turnId: 't1', sessionTitle: '旧标题', endedAt: at(5), costUsd: 1 }),
+      rec({
+        id: 'a2',
+        sessionId: 'a',
+        turnId: 't2',
+        sessionTitle: '新标题',
+        project: 'p2',
+        endedAt: at(1),
+        costUsd: 1,
+      }),
+      rec({ id: 'b1', sessionId: 'b', turnId: 't1', sessionTitle: '分叉', costUsd: 5 }),
+      rec({ id: 'c1', sessionId: 'c', turnId: 't1', costUsd: null, input: 1000 }),
+    ]
+    const rows = summarize(records, '7d', {}, NOW).groups.session
+    expect(rows.map(r => r.key)).toEqual(['b', 'a', 'c'])
+    expect(rows[1]).toMatchObject({ sessionId: 'a', title: '新标题', project: 'p2', turns: 2, costUsd: 2 })
+    expect(dimValue(records[0], 'session')).toBe('a')
+    expect(summarize(records, '7d', { session: 'b' }, NOW).totals.records).toBe(1)
+  })
+  it('超过 50 个会话时其余合成一行，合计不丢', () => {
+    const records = Array.from({ length: SESSION_ROWS_MAX + 3 }, (_, i) =>
+      rec({ id: `s${i}`, sessionId: `s${i}`, turnId: 't', costUsd: 100 - i }),
+    )
+    const rows = summarize(records, '7d', {}, NOW).groups.session
+    expect(rows).toHaveLength(SESSION_ROWS_MAX + 1)
+    expect(rows[0].key).toBe('s0')
+    const other = rows[SESSION_ROWS_MAX]
+    expect(other).toMatchObject({ key: SESSION_OTHERS_KEY, others: 3, turns: 3, records: 3, input: 30 })
+    expect(other.costUsd).toBe(100 - 50 + 100 - 51 + 100 - 52)
+    expect(rows.reduce((s, r) => s + r.records, 0)).toBe(records.length)
   })
 })

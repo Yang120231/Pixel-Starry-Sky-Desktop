@@ -101,7 +101,7 @@ export function goalAction(v: unknown): GoalAction {
 }
 
 const RANGES: readonly UsageRangeId[] = ['today', '7d', '30d', '90d']
-const DIMENSIONS: readonly UsageDimension[] = ['model', 'project', 'engine', 'route', 'cost']
+const DIMENSIONS: readonly UsageDimension[] = ['model', 'project', 'engine', 'route', 'cost', 'session']
 /** 费用情况只认这几个值（docs/ui/usage.md §12） */
 const COST_VALUES: readonly string[] = [COST_MISSING, ...COST_STATES]
 

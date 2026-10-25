@@ -39,7 +39,7 @@ export interface UsageRecord {
 }
 
 export type UsageRangeId = 'today' | '7d' | '30d' | '90d'
-export type UsageDimension = 'model' | 'project' | 'engine' | 'route' | 'cost'
+export type UsageDimension = 'model' | 'project' | 'engine' | 'route' | 'cost' | 'session'
 
 /** 筛选条件：每个维度一个值，可以叠加；费用情况（cost）多一个值 'missing' = 所有没有费用的记录 */
 export type UsageFilter = Partial<Record<UsageDimension, string>>
@@ -91,8 +91,20 @@ export interface UsageBucket extends UsageTotals {
 }
 
 export interface UsageGroupRow extends UsageTotals {
+  /** 按会话时是原始会话 ID（筛选用，远端机器上没有机器前缀） */
   key: string
+  /** 按会话（docs/ui/usage.md §13）：会话 ID。字段名叫 sessionId，远端响应经 identity.ts 自动加机器前缀，打开会话用它 */
+  sessionId?: string
+  /** 按会话：最近一条记录里的标题和项目（记录时的快照） */
+  title?: string
+  project?: string | null
+  /** 按会话：「其余 N 个会话」汇总行，N 在这里；不能点 */
+  others?: number
 }
+
+/** 按会话最多列出的行数，其余合成一行（§13） */
+export const SESSION_ROWS_MAX = 50
+export const SESSION_OTHERS_KEY = '__others__'
 
 export interface UsageSummary {
   totals: UsageTotals
@@ -180,6 +192,7 @@ function matches(r: UsageRecord, filter: UsageFilter): boolean {
 export function dimValue(r: UsageRecord, dim: UsageDimension): string {
   if (dim === 'project') return r.project ?? ''
   if (dim === 'cost') return costState(r)
+  if (dim === 'session') return r.sessionId
   return r[dim]
 }
 
@@ -216,7 +229,9 @@ export function summarize(records: UsageRecord[], range: UsageRangeId, filter: U
     engine: new Map(),
     route: new Map(),
     cost: new Map(),
+    session: new Map(),
   }
+  const sessionLatest = new Map<string, number>()
 
   for (const r of records) {
     if (!matches(r, filter)) continue
@@ -239,6 +254,10 @@ export function summarize(records: UsageRecord[], range: UsageRangeId, filter: U
         groupMaps[dim].set(key, g)
       }
       add(g.row, r, g.turns)
+      if (dim === 'session' && r.endedAt >= (sessionLatest.get(key) ?? 0)) {
+        sessionLatest.set(key, r.endedAt)
+        Object.assign(g.row, { sessionId: r.sessionId, title: r.sessionTitle, project: r.project })
+      }
     }
   }
 
@@ -256,8 +275,34 @@ export function summarize(records: UsageRecord[], range: UsageRangeId, filter: U
       engine: sortRows(groupMaps.engine),
       route: sortRows(groupMaps.route),
       cost: sortRows(groupMaps.cost),
+      session: sessionRows(groupMaps.session),
     },
   }
+}
+
+const SUM_KEYS = [
+  'input',
+  'cacheRead',
+  'cacheWrite',
+  'output',
+  'costUsd',
+  'costKnown',
+  'records',
+  'turns',
+  'requests',
+] as const
+
+/** 按会话：费用从高到低（没费用的按 token），只留前 SESSION_ROWS_MAX 个，其余合成一行（§13） */
+function sessionRows(m: Map<string, { row: UsageGroupRow }>): UsageGroupRow[] {
+  const all = [...m.values()].map(g => g.row).sort((a, b) => b.costUsd - a.costUsd || totalTokens(b) - totalTokens(a))
+  if (all.length <= SESSION_ROWS_MAX) return all
+  const rest = all.slice(SESSION_ROWS_MAX)
+  const others: UsageGroupRow = { ...emptyTotals(), key: SESSION_OTHERS_KEY, others: rest.length }
+  for (const r of rest) {
+    for (const k of SUM_KEYS) others[k] += r[k]
+    if (r.costActual) others.costActual = (others.costActual ?? 0) + r.costActual
+  }
+  return [...all.slice(0, SESSION_ROWS_MAX), others]
 }
 
 /** 明细：最新在前，分页 */

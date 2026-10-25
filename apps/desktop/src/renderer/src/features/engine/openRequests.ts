@@ -13,7 +13,7 @@ import { searchTerms } from '@pixelsky/protocol'
 
 export const OPEN_SESSION_EVENT = 'pixelsky:open-session'
 
-function sessionExists(id: string): boolean {
+export function sessionExists(id: string): boolean {
   if (isLive) return getEngineState().sessions.some(s => s.record.id === id)
   return demoProjects.some(p => p.sessions.some(s => s.id === id))
 }

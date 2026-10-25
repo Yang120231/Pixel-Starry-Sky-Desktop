@@ -55,6 +55,10 @@ describe('shared argument checks', () => {
     expect(usageQuery({ filter: { cost: 'bogus', route: 'cli' }, now: 1 }).filter).toEqual({ route: 'cli' })
   })
 
+  it('lets the session usage dimension and filter through', () => {
+    expect(usageQuery({ filter: { session: 'abc', bogus: 'x' }, now: 1 }).filter).toEqual({ session: 'abc' })
+  })
+
   it('checks artifact references', () => {
     const abs = process.platform === 'win32' ? 'C:\\a\\b.txt' : '/a/b.txt'
     expect(artifactRef({ sessionId: 's', path: abs, itemId: 'i' })).toEqual({ sessionId: 's', path: abs, itemId: 'i' })

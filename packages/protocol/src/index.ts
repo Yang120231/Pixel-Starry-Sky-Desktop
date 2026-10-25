@@ -211,6 +211,8 @@ export type { ImageInputProtocol, ImageInputReason } from './models/image-input'
 export type { SourceKind } from './source'
 export {
   COST_MISSING,
+  SESSION_OTHERS_KEY,
+  SESSION_ROWS_MAX,
   COST_STATES,
   cacheHitRate,
   costState,

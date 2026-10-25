@@ -12,6 +12,11 @@ describe('machine resource ownership', () => {
     expect(machineOf(wsl + '~' + id)).toBe(wsl)
     expect(argumentMachine([{ projectId: wsl + '~' + id }])).toBe(wsl)
   })
+  it('usage session rows: sessionId gets the machine prefix, key and the session filter stay raw', () => {
+    const row = { key: id, sessionId: id, title: 't' }
+    expect(remoteIds([row], machine, true)).toEqual([{ key: id, sessionId: machine + '~' + id, title: 't' }])
+    expect(remoteIds({ filter: { session: id } }, machine, false)).toEqual({ filter: { session: id } })
+  })
   it('keeps identical remote and local resources distinct without rewriting user content', () => {
     const raw = {
       record: { id, projectId: id, engineSessionId: id },

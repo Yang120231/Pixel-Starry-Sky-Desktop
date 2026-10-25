@@ -140,6 +140,9 @@ export const DIMENSION_LABEL: Record<UsageDimension, string> = {
   get cost() {
     return tr('usageCost.dimension')
   },
+  get session() {
+    return tr('settings.usage.Distribution.session')
+  },
 }
 
 const ROUTE_LABEL: Record<UsageRoute, string> = {
@@ -165,11 +168,17 @@ const ENGINE_LABEL: Record<string, string> = {
   },
 }
 
+/** 会话 ID 的前 8 位（去掉远端机器前缀） */
+export function shortId(id: string): string {
+  return id.slice(id.indexOf('~') + 1, id.indexOf('~') + 9)
+}
+
 /** 分布表、筛选圆片里显示的名称 */
 export function dimLabel(dim: UsageDimension, key: string): string {
   if (dim === 'route') return ROUTE_LABEL[key as UsageRoute] ?? key
   if (dim === 'engine') return ENGINE_LABEL[key] ?? key
   if (dim === 'project') return key || tr('usage.format.noProject')
+  if (dim === 'session') return shortId(key)
   if (dim === 'cost') {
     const t = COST_TEXT[key as CostState]
     return t ? tr(t[0]) : key
