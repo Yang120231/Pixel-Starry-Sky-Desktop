@@ -1,6 +1,6 @@
 // Codex 单独问一次（AI 写提交信息的 ChatGPT 授权通道，docs/ui/ai-commit-channels.md §4）：起一个临时 app-server，
 // 在临时目录里开线程（只读沙箱、从不审批、尽量不留记录），发一条消息，等这一轮结束，取最后一条回复
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Launcher } from '../adapter'
@@ -14,6 +14,7 @@ import {
 } from '../oneshot'
 import { CodexProcess, object, string, type Message } from './process'
 import { tokenCounts } from './translate'
+import { removeTree } from '../exec'
 
 /** Codex 错误里的 codexErrorInfo → 原因；认不出时按原话分类 */
 export function codexOneShotProblem(error: unknown): OneShotProblem {
@@ -33,7 +34,7 @@ export function codexOneShotProblem(error: unknown): OneShotProblem {
 function removeLater(dir: string): void {
   setTimeout(() => {
     try {
-      rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 })
+      removeTree(dir, { maxRetries: 3, retryDelay: 200 })
     } catch {
       // 临时目录，删不掉也不影响
     }

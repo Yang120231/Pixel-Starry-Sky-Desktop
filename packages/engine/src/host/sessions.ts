@@ -411,12 +411,20 @@ export class HostSessions {
         ctx.runtimes.delete(id)
         await rt.session?.close()
       }
+      const record = ctx.records.get(id)
       ctx.records.delete(id)
       m.queue.forget(id)
       // 记录删掉之后：一轮结束时的快照不会再开始，等正在跑的 git 结束再删目录
       await m.checkpoints.forget(id)
-      ctx.store.deleteSession(id)
-      m.events.broadcastSessions()
+      try {
+        ctx.store.deleteSession(id)
+      } catch (error) {
+        // 目录没删掉（被别的程序占着之类）：会话放回列表，可以再删一次，不会变成「会话已不存在」
+        if (record) ctx.records.set(id, record)
+        throw error
+      } finally {
+        m.events.broadcastSessions()
+      }
     } finally {
       ctx.changingSessions.delete(id)
     }

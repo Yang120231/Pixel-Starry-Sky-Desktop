@@ -4,12 +4,12 @@
 // 没有资料的模型照 Codex 的默认资料，只改窗口；默认资料的提示词不在目录里，按版本实测一次（假服务记下第一条 developer 消息）
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Launcher } from '../adapter'
-import { killTree, run } from '../exec'
+import { killTree, run, removeTree } from '../exec'
 import { logger } from '../log'
 
 const log = logger('engine.codex')
@@ -84,7 +84,7 @@ function isolated(env: NodeJS.ProcessEnv, home: string): NodeJS.ProcessEnv {
 function removeLater(dir: string): void {
   setTimeout(() => {
     try {
-      rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 })
+      removeTree(dir, { maxRetries: 3, retryDelay: 200 })
     } catch {
       // 临时目录，删不掉也不影响
     }

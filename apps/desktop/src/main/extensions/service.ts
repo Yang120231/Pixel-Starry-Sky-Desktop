@@ -32,6 +32,7 @@ import {
   scope,
   skillFile,
   text,
+  removeTree,
 } from '@pixelsky/engine'
 import type {
   ExtensionCheck,
@@ -259,7 +260,7 @@ export class ExtensionService {
         e.description = e.description || e.components[0].description
         e.digest = digest(root)
       } catch (error) {
-        rmSync(inside(this.dir, root), { recursive: true, force: true })
+        removeTree(inside(this.dir, root))
         throw error
       }
       created = root
@@ -270,7 +271,7 @@ export class ExtensionService {
       this.save()
     } catch (error) {
       this.config.entries = before
-      if (created) rmSync(inside(this.dir, created), { recursive: true, force: true })
+      if (created) removeTree(inside(this.dir, created))
       throw error
     }
     if (created && existing?.path) this.retired.push(existing.path)
@@ -355,7 +356,7 @@ export class ExtensionService {
           chmodSync(p, stat.isDirectory() ? 0o700 : 0o600)
         }
         writable(target)
-        rmSync(target, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+        removeTree(target, { maxRetries: 5, retryDelay: 100 })
       }
     }
   }
@@ -441,7 +442,7 @@ export class ExtensionService {
           components: [c],
           digest: digest(pack),
         }
-        rmSync(inside(join(this.dir, 'packages'), root), { recursive: true, force: true })
+        removeTree(inside(join(this.dir, 'packages'), root))
       }
       if (engines) e.engines = engines
       e.sourceDigest = sourceDigest
@@ -455,8 +456,7 @@ export class ExtensionService {
       }
       return e
     } catch (error) {
-      for (const dir of [root, pack])
-        if (dir && existsSync(dir)) rmSync(inside(join(this.dir, 'packages'), dir), { recursive: true, force: true })
+      for (const dir of [root, pack]) if (dir && existsSync(dir)) removeTree(inside(join(this.dir, 'packages'), dir))
       throw error
     }
   }
@@ -482,9 +482,9 @@ export class ExtensionService {
           target = join(pack, 'skills', e.name)
         this.copy(stage, target)
         this.skillPackage(pack, e.name, source)
-        rmSync(inside(this.dir, stage), { recursive: true, force: true })
+        removeTree(inside(this.dir, stage))
         this.copy(pack, stage)
-        rmSync(inside(this.dir, pack), { recursive: true, force: true })
+        removeTree(inside(this.dir, pack))
         void c
       } else {
         const file = join(stage, '.claude-plugin/plugin.json')
@@ -518,8 +518,7 @@ export class ExtensionService {
       }
       return { changed, message: changed ? '发现更新，可点击应用更新' : '已是最新版本' }
     } finally {
-      if (this.config.entries.every(e => e.path !== stage) && existsSync(stage))
-        rmSync(inside(this.dir, stage), { recursive: true, force: true })
+      if (this.config.entries.every(e => e.path !== stage) && existsSync(stage)) removeTree(inside(this.dir, stage))
     }
   }
   importMcp(raw: string, s: ExtensionScope): number {
@@ -682,7 +681,7 @@ export class ExtensionService {
     // 退出时（will-quit）调用：Windows 上旧包被占用删不掉时不抛，后面的旧包照样删
     for (const path of this.retired)
       try {
-        if (existsSync(path)) rmSync(inside(join(this.dir, 'packages'), path), { recursive: true, force: true })
+        if (existsSync(path)) removeTree(inside(join(this.dir, 'packages'), path))
       } catch {
         // 删不掉的留着（配置里已不引用它，不影响使用），不能让退出流程因为它中断
       }

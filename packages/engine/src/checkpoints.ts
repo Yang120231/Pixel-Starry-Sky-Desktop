@@ -2,7 +2,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve } from 'node:path'
-import { killTree } from './exec'
+import { killTree, removeTree } from './exec'
 
 /** 默认排除的目录：依赖和构建缓存，体积大、AI 一般不改；项目自己的 .gitignore 照常生效 */
 export const DEFAULT_EXCLUDES = [
@@ -377,7 +377,7 @@ export class ShadowRepo {
   /** 删掉整个影子仓库 */
   async destroy(): Promise<void> {
     await this.serial(async () => {
-      rmSync(this.gitDir, { recursive: true, force: true })
+      removeTree(this.gitDir)
       this.ready = false
     })
   }

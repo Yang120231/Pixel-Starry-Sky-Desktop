@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, isAbsolute, join } from 'node:path'
 import {
@@ -12,7 +12,7 @@ import {
 } from '@pixelsky/protocol'
 import type { EngineAdapter, EngineSession, Launcher, SessionContext } from '../adapter'
 import { engineEnv, systemProxyEnv } from '../env'
-import { startupReason } from '../exec'
+import { startupReason, removeTree } from '../exec'
 import { engineBase } from '../registry'
 import { runsFromSession } from './agents'
 import { customPixel, discoverPixel, pixelEnvironment, pixelShell } from './discover'
@@ -128,7 +128,7 @@ export class PixelAdapter implements EngineAdapter {
       await proc.close()
       // Windows 上目录可能还被占着（EBUSY / EPERM）：删不掉就留给系统清，不能盖掉已经拿到的结果
       try {
-        rmSync(cwd, { recursive: true, force: true })
+        removeTree(cwd)
       } catch {
         // 留下的空临时目录无害
       }

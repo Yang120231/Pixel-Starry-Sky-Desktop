@@ -2,12 +2,12 @@
 // Pi 的引擎会话 id 就是会话文件路径：复制一份到临时目录，`-p --session <副本> --no-tools --no-skills` 从 stdin 读问题、
 // 回答印在 stdout，问完把副本删掉。主会话可能正在写这个文件，复制时截到最后一个完整的行。
 import { spawn } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { viaGateway, type SessionRecord } from '@pixelsky/protocol'
 import type { Launcher } from '../adapter'
-import { IS_WINDOWS, killTree } from '../exec'
+import { IS_WINDOWS, killTree, removeTree } from '../exec'
 import { GATEWAY_PROVIDER } from './session'
 
 /** 旁聊最长等多久（和 Claude 的一样） */
@@ -96,7 +96,7 @@ export function pixelSideQuestion(opts: {
   const cleanup = (): void => {
     // Windows 上进程刚退出时文件可能还被占着：删不掉就留给系统清
     try {
-      rmSync(dir, { recursive: true, force: true })
+      removeTree(dir)
     } catch {
       // 留下的临时副本无害
     }

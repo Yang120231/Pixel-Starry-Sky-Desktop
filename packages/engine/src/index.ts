@@ -3,7 +3,7 @@ export type { EngineAdapter, EngineSession, Launcher, SessionContext } from './a
 export { ClaudeAdapter, type ClaudeAdapterOptions } from './claude'
 export { ENGINES, ENGINE_ORDER } from './registry'
 export { engineEnv } from './env'
-export { resolveCommand, type ResolvedCommand } from './exec'
+export { removeTree, resolveCommand, type ResolvedCommand } from './exec'
 export { NPM_MIRROR, type NodeRuntime, type NpmTool } from './npm'
 export {
   ConsoleLineDecoder,

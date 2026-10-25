@@ -15,7 +15,6 @@ import {
   readFileSync,
   readdirSync,
   renameSync,
-  rmSync,
   writeFileSync,
 } from 'node:fs'
 import { join } from 'node:path'
@@ -32,6 +31,7 @@ import type {
 import { isQuietWarning } from '@pixelsky/protocol'
 import { messageInput, type QueueFile } from './queue'
 import { retryLimit } from './retry'
+import { removeTree } from './exec'
 
 const VERSION = 1
 
@@ -349,7 +349,7 @@ export class Store {
   }
 
   deleteSession(id: string): void {
-    rmSync(this.sessionDir(id), { recursive: true, force: true })
+    removeTree(this.sessionDir(id))
   }
 
   /** 对话检查点的影子 Git 仓库（docs/ui/undo-changes.md §2），删会话时一起删 */

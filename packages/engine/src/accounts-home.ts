@@ -13,6 +13,7 @@ import {
   type BigIntStats,
 } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { removeTree } from './exec'
 
 export const lstat = (p: string): BigIntStats | null => {
   try {
@@ -60,7 +61,7 @@ function mergeInto(from: string, to: string): void {
       cpSync(src, dst, { recursive: true })
     }
   }
-  rmSync(from, { recursive: true, force: true })
+  removeTree(from)
 }
 
 /**

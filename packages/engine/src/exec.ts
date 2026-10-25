@@ -1,6 +1,6 @@
 // 找可执行文件、跑一次性命令（--version 之类）
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
-import { accessSync, constants, existsSync, statSync } from 'node:fs'
+import { accessSync, chmodSync, constants, existsSync, lstatSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { delimiter, extname, isAbsolute, join } from 'node:path'
 import type { Launcher } from './adapter'
@@ -29,6 +29,33 @@ export function killTree(child: ChildProcess): void {
   } catch {
     // 已经退出
   }
+}
+
+/**
+ * 递归删除（不存在不报错）。Electron 44 带的 Node 24.21 的 rmSync 碰到只读文件（git 的对象文件）整个失败、
+ * 报 EPERM，一个都不删（24.22 修了）：失败时把里面的只读文件改成可写再删一次。符号链接、目录联接不跟进去
+ */
+export function removeTree(path: string, opts: { maxRetries?: number; retryDelay?: number } = {}): void {
+  const remove = (): void => rmSync(path, { recursive: true, force: true, ...opts })
+  try {
+    remove()
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EPERM') throw error
+    writable(path)
+    remove()
+  }
+}
+
+function writable(path: string): void {
+  let st
+  try {
+    st = lstatSync(path)
+  } catch {
+    return
+  }
+  if (st.isSymbolicLink()) return
+  if (st.isDirectory()) for (const name of readdirSync(path)) writable(join(path, name))
+  else if (!(st.mode & 0o200)) chmodSync(path, 0o666)
 }
 
 export function isFile(p: string): boolean {

@@ -2,11 +2,12 @@
 // 期望值以当前行为为准（重构前的安全网），不是对行为的规定。
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EngineInfo, HostEvent, ImageAttachment, SessionSettings, TurnUsage } from '@pixelsky/protocol'
 import type { EngineAdapter, EngineSession, SessionContext } from '../src/adapter'
 import { EngineHost } from '../src/host'
 import { ENGINES } from '../src/registry'
+import { Store } from '../src/store'
 import { makeTmp, removeTmp } from './helpers/tmp'
 
 let root: string
@@ -289,6 +290,27 @@ describe('归档与删除', () => {
     expect(() => s.host.open(s.record.id)).toThrow('会话不存在')
     expect(s.host.projects()).toHaveLength(1)
     expect(s.host.usageList({ range: 'today', now: Date.now() + 10, filter: {}, offset: 0, limit: 10 }).total).toBe(1)
+  })
+
+  it('目录删不掉：报错，会话留在列表里，可以再删一次', async () => {
+    const s = setup()
+    await s.send('a')
+    await until(() => !!s.adapter.sessions[0]?.active)
+    s.adapter.sessions[0].finish('completed', { durationMs: 10, models: {} })
+    await until(() => s.host.open(s.record.id).state === 'idle')
+    const spy = vi.spyOn(Store.prototype, 'deleteSession').mockImplementationOnce(() => {
+      throw Object.assign(new Error('EPERM, Permission denied'), { code: 'EPERM' })
+    })
+    try {
+      await expect(s.host.deleteSession(s.record.id)).rejects.toThrow('EPERM')
+      expect(s.host.sessions().map(x => x.record.id)).toContain(s.record.id)
+      expect(existsSync(s.sessionDir)).toBe(true)
+      await s.host.deleteSession(s.record.id)
+      expect(s.host.sessions().map(x => x.record.id)).not.toContain(s.record.id)
+      expect(existsSync(s.sessionDir)).toBe(false)
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   it('删除不存在的会话 id 不报错，非法 id 报错', async () => {

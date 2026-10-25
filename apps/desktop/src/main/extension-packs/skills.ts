@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
 import { copyFile, mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type { ExtPackSkillInfo, SkillCommand } from '@pixelsky/protocol'
 import type { LoadedPack } from './loader'
+import { removeTree } from '@pixelsky/engine'
 
 type Engine = 'claude' | 'codex' | 'pixel'
 
@@ -148,7 +149,7 @@ export function gcClaudeWrappers(runtimeDir: string): void {
   }
   for (const name of names) {
     try {
-      rmSync(join(root, name), { recursive: true, force: true })
+      removeTree(join(root, name))
     } catch {
       // EBUSY / EPERM：留着
     }
