@@ -2,8 +2,10 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '../../i18n/core'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Trash2 } from 'lucide-react'
 import { PERMISSION_MODES, type Effort, type EngineId, type PermissionMode } from '@pixelsky/protocol'
-import { Button, cn, EngineIcon, Segmented, Select, useToast, type SelectOption } from '@/ui'
+import { Button, cn, EngineIcon, IconButton, Segmented, Select, Switch, useToast, type SelectOption } from '@/ui'
+import { formatTime } from '@/features/usage/format'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
 import { useEngineState, PERMISSION_INFO } from '@/features/engine'
 import { useEngineCatalog } from '@/features/engine/catalog'
@@ -14,7 +16,7 @@ import type { AgentMember, Channel } from '@/data/types'
 import { DEFAULT_RELAY_RULES, relayRulesOf, type AgentConfig, type RelayRules } from '../../../../shared/types/channels'
 import type { WorkspaceChoice } from '../../../../shared/types/machines'
 import { channelActions, useChannels } from './store'
-import { matchAgents } from './model'
+import { matchAgents, scheduleToInput } from './model'
 import { RelayRulesEditor } from './RelayRules'
 import { AlertRulesEditor } from './AlertRules'
 import { DIGEST_HOUR, alertRulesOf, type ChannelAlertRules } from '../../../../shared/channels/alerts'
@@ -34,6 +36,63 @@ import {
 
 const INPUT =
   'w-full min-w-0 rounded-md border border-line bg-surface px-3 py-2 text-ui text-fg outline-none focus:border-accent-line focus:ring-2 focus:ring-composer-ring'
+
+/** 频道的定时运行列表（docs/ui/channels-pipeline.md §10.3）：开关、删除马上存，不跟对话框的「保存」走 */
+function ScheduleList({ channelId }: { channelId: string }) {
+  useI18n()
+  const toast = useToast()
+  const list = useChannels(s => s.channels.find(c => c.id === channelId)?.schedules) ?? []
+  // 整个列表一起存：存完（主进程推回新列表）之前不能再点，免得第二下按旧列表覆盖第一下
+  const [busy, setBusy] = useState(false)
+  const save = (next: typeof list) => {
+    setBusy(true)
+    return channelActions
+      .updateChannel(channelId, { schedules: next.map(scheduleToInput) })
+      .catch(e => toast(errorText(e)))
+      .finally(() => setBusy(false))
+  }
+  return (
+    <Field label={tr('channels.schedule.title')}>
+      {list.length === 0 ? (
+        <p className="text-meta text-fg-faint">{tr('channels.schedule.empty')}</p>
+      ) : (
+        <ul className="flex flex-col gap-1.5">
+          {list.map(sc => (
+            <li key={sc.id} className="flex flex-col gap-0.5">
+              <div className="flex items-center gap-2 text-ui text-fg">
+                <span className="min-w-0 flex-1 truncate">{sc.title}</span>
+                <span className="shrink-0 text-meta text-fg-muted">
+                  {tr('channels.schedule.daily', { h: sc.hour })}
+                </span>
+                <Switch
+                  size="sm"
+                  checked={sc.enabled}
+                  disabled={busy}
+                  label={tr('channels.schedule.enable', { name: sc.title })}
+                  onChange={on => void save(list.map(x => (x.id === sc.id ? { ...x, enabled: on } : x)))}
+                />
+                <IconButton
+                  icon={Trash2}
+                  iconSize={14}
+                  size={26}
+                  label={tr('channels.schedule.delete', { name: sc.title })}
+                  disabled={busy}
+                  onClick={() => void save(list.filter(x => x.id !== sc.id))}
+                />
+              </div>
+              <span className="text-meta text-fg-faint">
+                {sc.lastRunAt
+                  ? tr('channels.schedule.lastRun', { time: formatTime(sc.lastRunAt) })
+                  : tr('channels.schedule.never')}
+              </span>
+              {sc.lastError && <span className="text-meta text-warn">{translateMessage(sc.lastError)}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Field>
+  )
+}
 
 function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: ReactNode }) {
   return (
@@ -244,6 +303,7 @@ export function ChannelDialog({
               />
             </Field>
           )}
+          {!inTeam && channel && <ScheduleList channelId={channel.id} />}
           {!inTeam && (
             <AlertRulesEditor
               value={alerts}

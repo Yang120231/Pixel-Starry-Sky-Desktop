@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import type { AgentConfig, ChannelAttachments, ChannelMessage, ChannelTask } from '../../../shared/types/channels'
 import type { TaskRun } from './tracker'
 
-import type { ChannelAlertRule, ChannelNotify, RelayRules } from '../../../shared/types/channels'
+import type { ChannelAlertRule, ChannelNotify, FlowSchedule, RelayRules } from '../../../shared/types/channels'
 
 export interface StoredChannel {
   id: string
@@ -35,6 +35,8 @@ export interface StoredChannel {
   relayRules?: RelayRules
   /** 牵头成员（docs/ui/channels-pipeline.md §8.3）；旧数据没有（= 不启用） */
   lead?: string | null
+  /** 每天定时运行的流程（docs/ui/channels-pipeline.md §10.3）；旧数据没有 */
+  schedules?: FlowSchedule[]
   /** 点过「这条接力不再限制」的接力（chain），最近的在后 */
   relayFree?: string[]
   /** 主动提醒的规则开关、每日简报几点发、上次发简报的时间（docs/ui/channels-collab-v2.md §6） */

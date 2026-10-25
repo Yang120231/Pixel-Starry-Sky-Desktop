@@ -8,6 +8,7 @@ import type {
   ChannelTask,
   ChannelTextMessage,
 } from '@/data/types'
+import type { FlowSchedule, FlowScheduleInput } from '../../../../shared/types/channels'
 import { MENTION_ALL, mentionBoundary, parseMentions } from '../../../../shared/channels/mentions'
 import { countsUnread } from '../../../../shared/channels/threads'
 
@@ -218,4 +219,17 @@ export function matchAgents<T extends Pick<AgentMember, 'name' | 'project'>>(age
   const q = query.trim().toLowerCase()
   if (!q) return [...agents]
   return agents.filter(a => a.name.toLowerCase().includes(q) || (a.project ?? '').toLowerCase().includes(q))
+}
+
+/** 定时 → 存定时时传给主进程的样子（去掉运行时字段，主进程按 id 保留） */
+export function scheduleToInput(s: FlowSchedule): FlowScheduleInput {
+  return {
+    id: s.id,
+    title: s.title,
+    hour: s.hour,
+    steps: s.steps,
+    limits: s.limits,
+    enabled: s.enabled,
+    isolate: s.isolate,
+  }
 }

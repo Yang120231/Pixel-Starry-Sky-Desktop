@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import type { ChannelFlow } from '../../../shared/types/channels'
-import { cleanLimits, cleanSteps, copyPlan, draftProblem, limitHit, planSteps, startable, withStep } from './flow'
+import type { FlowSchedule } from '../../../shared/types/channels'
+import {
+  cleanLimits,
+  cleanSchedule,
+  cleanSteps,
+  copyPlan,
+  draftProblem,
+  limitHit,
+  planSteps,
+  scheduleDue,
+  startable,
+  withStep,
+} from './flow'
 
 const members: Record<string, { name: string; local: boolean }> = {
   a: { name: '画师', local: true },
@@ -93,13 +105,57 @@ describe('流程第二批的纯函数（docs/ui/channels-pipeline.md §6）', ()
 
   it('护栏：清洗截到范围、空是不限；按计数起点判断', () => {
     expect(cleanLimits(undefined)).toBeUndefined()
-    expect(cleanLimits({ rounds: 999, minutes: 1 })).toEqual({ rounds: 200, minutes: 5 })
-    expect(cleanLimits({ rounds: '', minutes: null })).toEqual({ rounds: null, minutes: null })
+    expect(cleanLimits({ rounds: 999, minutes: 1 })).toEqual({ rounds: 200, minutes: 5, costUsd: null })
+    expect(cleanLimits({ rounds: '', minutes: null, costUsd: '' })).toEqual({
+      rounds: null,
+      minutes: null,
+      costUsd: null,
+    })
+    // 花费按分取，不取整
+    expect(cleanLimits({ costUsd: '2.345' })?.costUsd).toBe(2.35)
+    expect(cleanLimits({ costUsd: 0.001 })?.costUsd).toBe(0.01)
+    expect(cleanLimits({ costUsd: 5000 })?.costUsd).toBe(1000)
     const f = flowOf([], { limits: { rounds: 5, minutes: 10 }, since: { at: 0, rounds: 2 } })
     expect(limitHit(f, 6, 0)).toBeNull()
     expect(limitHit(f, 7, 0)).toBe('rounds')
     expect(limitHit(f, 3, 10 * 60_000)).toBe('time')
     expect(limitHit({ ...f, limits: null }, 99, 1e9)).toBeNull()
+    // 花费：从继续那一刻的已知花费算起；轮次先于花费
+    const g = flowOf([], { limits: { rounds: 5, minutes: null, costUsd: 1 }, since: { at: 0, rounds: 0, cost: 0.5 } })
+    expect(limitHit(g, 0, 0, 1.4)).toBeNull()
+    expect(limitHit(g, 0, 0, 1.5)).toBe('cost')
+    expect(limitHit(g, 5, 0, 1.5)).toBe('rounds')
+    // 旧数据的起点没有 cost：从 0 算
+    expect(limitHit({ ...g, since: { at: 0, rounds: 0 } }, 0, 0, 1)).toBe('cost')
+  })
+
+  it('定时运行：三项护栏都要；钟点 0–23；到点跑一次，错过了当天补一次', () => {
+    const steps = [{ id: 's1', title: '巡检', memberId: 'a', kind: 'work' }]
+    const limits = { rounds: 5, minutes: 30, costUsd: 2 }
+    expect(cleanSchedule({ title: '早报', hour: 9, steps, limits })).toMatchObject({
+      id: null,
+      hour: 9,
+      enabled: true,
+      limits,
+      steps: [{ id: 's1', deps: [], kind: 'work' }],
+    })
+    expect(cleanSchedule({ title: '早报', hour: 9, steps, limits }).steps[0]).not.toHaveProperty('status')
+    expect(() => cleanSchedule({ title: '早报', hour: 9, steps, limits: { ...limits, costUsd: null } })).toThrow(
+      '都要设',
+    )
+    expect(() => cleanSchedule({ title: '早报', hour: 24, steps, limits })).toThrow('钟点')
+    expect(() => cleanSchedule({ title: '', hour: 9, steps, limits })).toThrow('名字')
+    expect(() => cleanSchedule({ title: '早报', hour: 9, steps: [], limits })).toThrow('步骤')
+
+    const at = (d: number, h: number, m = 0) => new Date(2026, 9, d, h, m).getTime()
+    const s = { hour: 9, enabled: true, lastRunAt: at(24, 9, 1) } as FlowSchedule
+    expect(scheduleDue(s, at(25, 8, 59))).toBe(false)
+    expect(scheduleDue(s, at(25, 9))).toBe(true)
+    // 今天到点处理过了
+    expect(scheduleDue({ ...s, lastRunAt: at(25, 9) }, at(25, 23))).toBe(false)
+    // 关着的不跑；电脑关了几天，开机当天补一次
+    expect(scheduleDue({ ...s, enabled: false }, at(25, 10))).toBe(false)
+    expect(scheduleDue({ ...s, lastRunAt: at(20, 9) }, at(25, 18))).toBe(true)
   })
 
   it('副本规划：串行不建；同时开始的各建一个；单依赖沿用；同一前驱分两路各建；汇合回主目录；开关关掉不建', () => {

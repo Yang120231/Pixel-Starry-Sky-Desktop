@@ -1,7 +1,14 @@
 // 流程（docs/ui/channels-pipeline.md §4）的纯函数：清洗草稿、校验、哪些步骤能开始、把拆好的流程变成步骤。
 // 不碰磁盘和引擎；调度（开始一步、交付后接着走）在 service.ts
 import { EFFORTS, type Effort } from '@pixelsky/protocol'
-import type { ChannelFlow, FlowLimits, FlowStep, FlowStepKind, FlowStepSettings } from '../../../shared/types/channels'
+import type {
+  ChannelFlow,
+  FlowLimits,
+  FlowSchedule,
+  FlowStep,
+  FlowStepKind,
+  FlowStepSettings,
+} from '../../../shared/types/channels'
 
 export const FLOW_MAX_STEPS = 9
 export const FLOW_MAX_REJECTS = 3
@@ -131,6 +138,8 @@ export function planSteps(raw: unknown, byName: (name: string) => string | null)
 const ROUNDS_MAX = 200
 const MINUTES_MIN = 5
 const MINUTES_MAX = 1440
+const COST_MIN = 0.01
+const COST_MAX = 1000
 
 /** 没设护栏时开始运行用的默认值 */
 export const defaultLimits = (steps: number): FlowLimits => ({ rounds: Math.max(12, steps * 4), minutes: 120 })
@@ -143,14 +152,26 @@ export function cleanLimits(raw: unknown): FlowLimits | undefined {
     const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() ? Number(v) : NaN
     return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n))) : null
   }
-  return { rounds: num(r.rounds, 1, ROUNDS_MAX), minutes: num(r.minutes, MINUTES_MIN, MINUTES_MAX) }
+  // 花费按分算，不取整
+  const usd =
+    typeof r.costUsd === 'number'
+      ? r.costUsd
+      : typeof r.costUsd === 'string' && r.costUsd.trim()
+        ? Number(r.costUsd)
+        : NaN
+  return {
+    rounds: num(r.rounds, 1, ROUNDS_MAX),
+    minutes: num(r.minutes, MINUTES_MIN, MINUTES_MAX),
+    costUsd: Number.isFinite(usd) ? Math.min(COST_MAX, Math.max(COST_MIN, Math.round(usd * 100) / 100)) : null,
+  }
 }
 
-/** 超了哪一项护栏；used：流程里各步骤任务卡的轮次加起来 */
-export function limitHit(flow: ChannelFlow, used: number, now: number): 'rounds' | 'time' | null {
+/** 超了哪一项护栏；used：流程里各步骤任务卡的轮次加起来；cost：已知花费（下限，没价格的部分不算） */
+export function limitHit(flow: ChannelFlow, used: number, now: number, cost = 0): 'rounds' | 'time' | 'cost' | null {
   const { limits, since } = flow
   if (!limits || !since) return null
   if (limits.rounds !== null && used - since.rounds >= limits.rounds) return 'rounds'
+  if (limits.costUsd != null && cost - (since.cost ?? 0) >= limits.costUsd) return 'cost'
   if (limits.minutes !== null && now - since.at >= limits.minutes * 60_000) return 'time'
   return null
 }
@@ -201,4 +222,49 @@ export function copyPlan(flow: ChannelFlow, messageId: string, stepId: string, s
   const from = mine === 'main' ? null : flow.steps.find(s => s.copy?.id === mine)!.copy!
   if (!busy) return from ? { kind: 'reuse', copy: from } : { kind: 'main', merge: [] }
   return { kind: 'new', ...copyName(messageId, flow, stepId), base: from?.branch ?? null }
+}
+
+// ── 每天定时运行（docs/ui/channels-pipeline.md §10.3）──────────────────────
+
+export const SCHEDULE_MAX = 5
+
+/** 界面传来的一条定时（不可信）：步骤清洗，护栏三项都要有，钟点 0–23；运行时的字段由调用方按 id 补 */
+export function cleanSchedule(
+  raw: unknown,
+): Pick<FlowSchedule, 'title' | 'hour' | 'steps' | 'limits' | 'enabled' | 'isolate'> & { id: string | null } {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  const title = text(r.title, FLOW_TITLE_MAX)
+  if (!title) throw new Error('定时运行要有名字')
+  const hour = typeof r.hour === 'number' && Number.isInteger(r.hour) && r.hour >= 0 && r.hour <= 23 ? r.hour : null
+  if (hour === null) throw new Error('定时运行的钟点不对')
+  const steps = cleanSteps(r.steps)
+  if (!steps.length) throw new Error('定时运行里还没有步骤')
+  const limits = cleanLimits(r.limits ?? {})!
+  if (limits.rounds === null || limits.minutes === null || limits.costUsd == null)
+    throw new Error('定时运行没人看着：轮次、时长、花费的上限都要设')
+  return {
+    id: typeof r.id === 'string' && r.id ? r.id.slice(0, 64) : null,
+    title,
+    hour,
+    steps: steps.map(({ id, title, memberId, deps, kind, target, settings, gate }) => ({
+      id,
+      title,
+      memberId,
+      deps,
+      kind,
+      ...(target ? { target } : {}),
+      ...(settings ? { settings } : {}),
+      ...(gate ? { gate } : {}),
+    })),
+    limits: { rounds: limits.rounds, minutes: limits.minutes, costUsd: limits.costUsd },
+    enabled: r.enabled !== false,
+    ...(r.isolate === false ? { isolate: false } : {}),
+  }
+}
+
+/** 今天该不该跑：开着、今天这个钟点已过、今天还没到点处理过（错过了当天任何时候补一次，跨多天也只补一次） */
+export function scheduleDue(s: FlowSchedule, now: number): boolean {
+  const due = new Date(now)
+  due.setHours(s.hour, 0, 0, 0)
+  return s.enabled && now >= due.getTime() && s.lastRunAt < due.getTime()
 }

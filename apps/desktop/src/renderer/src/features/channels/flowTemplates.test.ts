@@ -71,7 +71,11 @@ describe('flowTemplates', () => {
       settings: { model: 'opus', effort: 'high' },
     })
     expect(r.steps[1]).toMatchObject({ memberId: 'x2', gate: true, target: 's1' })
-    expect(r.limits).toEqual({ rounds: 12, minutes: 60 })
+    expect(r.limits).toEqual({ rounds: 12, minutes: 60, costUsd: null })
+    const priced = { ...t, limits: { rounds: 1, minutes: 2, costUsd: 5 } }
+    expect(applyTemplate(priced, 'q', []).limits?.costUsd).toBe(5)
+    const bad = { ...t, limits: { rounds: 1, minutes: 2, costUsd: -3 } }
+    expect(applyTemplate(bad, 'q', []).limits?.costUsd).toBeNull()
   })
 
   it('名字不分大小写；对不上留空；引擎不同丢掉模型', () => {

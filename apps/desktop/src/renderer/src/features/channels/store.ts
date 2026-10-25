@@ -23,6 +23,7 @@ import type {
   PendingInvite,
   RelayRules,
   ChannelAlertRule,
+  FlowScheduleInput,
   TeamInfo,
   TeamRole,
   TeamsConnection,
@@ -486,14 +487,25 @@ export const channelActions = {
       digestHour?: number
       /** 牵头成员（docs/ui/channels-pipeline.md §8.3）；null 是不启用 */
       lead?: string | null
+      /** 每天定时运行的流程（§10.3）：整份列表，主进程按 id 保留运行时字段 */
+      schedules?: FlowScheduleInput[]
     },
   ): Promise<void> {
     if (channelsBridge) return channelsBridge.update(id, patch)
-    const { archived, ...rest } = patch
+    const { archived, schedules, ...rest } = patch
+    // 演示：按 id 保留已有定时的运行字段，新的补上
+    const old = state.channels.find(c => c.id === id)?.schedules ?? []
+    const nextSchedules = schedules?.map(x => ({
+      lastRunAt: 0,
+      lastFlowMessageId: null,
+      ...old.find(o => o.id === x.id),
+      ...x,
+      id: x.id ?? crypto.randomUUID(),
+    }))
     set({
       channels: state.channels.map(c => {
         if (c.id !== id) return c
-        const next = { ...c, ...rest, projectId: c.projectId }
+        const next = { ...c, ...rest, projectId: c.projectId, ...(nextSchedules ? { schedules: nextSchedules } : {}) }
         if (archived !== undefined) next.archivedAt = archived ? Date.now() : null
         return archived ? { ...next, unread: 0, mentioned: false } : next
       }),

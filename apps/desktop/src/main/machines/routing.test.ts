@@ -552,6 +552,11 @@ describe('resolveRoute golden table', () => {
     expect(resolveRoute('engine:send', [wsl + '~' + U], L)).toEqual({ kind: 'remote', machine: wsl })
     expect(resolveRoute('engine:send', [{ sessionId: wsl + '~' + U }], M1)).toEqual({ kind: 'remote', machine: wsl })
   })
+  it('keeps a usage query that carries a local sessionId on this machine (channel flow usage)', () => {
+    expect(
+      resolveRoute('engine:usageList', [{ range: '30d', filter: { session: U }, sessionId: U, offset: 0 }], M1),
+    ).toEqual({ kind: 'local' })
+  })
   it('does not mutate arguments', () => {
     const args = [{ projectId: R1, nested: { id: L } }, R1]
     const before = JSON.stringify(args)

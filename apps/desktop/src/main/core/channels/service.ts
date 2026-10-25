@@ -18,6 +18,8 @@ import {
   type ProjectRecord,
   type SessionRecord,
   type SessionSummary,
+  type UsagePage,
+  type UsageRecord,
 } from '@pixelsky/protocol'
 import type { Locale } from '../../../shared/i18n/messages'
 import type {
@@ -46,6 +48,7 @@ import type {
   ChannelFlow,
   FlowPause,
   FlowResult,
+  FlowSchedule,
   FlowStep,
   FlowStepSettings,
   TeamRole,
@@ -63,6 +66,7 @@ import {
   type Mentionable,
 } from '../../../shared/channels/mentions'
 import { ChannelStore, type StoredChannel } from './store'
+import { addUsage, emptyUsage, knownCost, sumUsage, turnKey } from './flowUsage'
 import { channelNeeds } from '../../../shared/channels/needs'
 import {
   DIGEST_HOUR,
@@ -108,12 +112,15 @@ import {
   FLOW_TITLE_MAX,
   allDelivered,
   cleanLimits,
+  cleanSchedule,
   cleanSteps,
   copyPlan,
   defaultLimits,
   draftProblem,
   limitHit,
   planSteps,
+  SCHEDULE_MAX,
+  scheduleDue,
   startable,
   withStep,
   type CopyPlan,
@@ -276,6 +283,11 @@ const STEP_STATUS: Record<'zh' | 'en', Record<FlowStep['status'], string>> = {
     stopped: 'stopped',
   },
 }
+
+/** 用量记录变了以后等这么久再重算（一轮结束会一下来好几条）；结束了的流程只重算最近这么久的；一个会话最多翻这么多页 */
+const USAGE_DEBOUNCE_MS = 2000
+const USAGE_RECENT_MS = 3 * DAY
+const USAGE_PAGES = 10
 
 /** 不带 @ 的消息至少这么长才交给牵头成员（docs/ui/channels-pipeline.md §8.3） */
 const LEAD_MIN_CHARS = 8
@@ -493,6 +505,7 @@ export class Channels {
         relay: c.relay === true,
         relayRules: relayRulesOf(c),
         lead: c.lead ?? null,
+        schedules: c.schedules ?? [],
         alerts: alertRulesOf(c),
         digestHour: c.digestHour ?? DIGEST_HOUR,
         project: c.projectId ? (projects.get(c.projectId)?.name ?? null) : null,
@@ -716,6 +729,8 @@ export class Channels {
     this.issueTimers.clear()
     if (this.alertTimer) clearInterval(this.alertTimer)
     this.alertTimer = null
+    if (this.usageTimer) clearTimeout(this.usageTimer)
+    this.usageTimer = null
     if (this.changedTimer) clearTimeout(this.changedTimer)
     this.changedTimer = null
     if (this.runsTimer) this.saveRuns()
@@ -800,6 +815,8 @@ export class Channels {
       relayRules?: RelayRules
       /** 牵头成员（只有本机频道，docs/ui/channels-pipeline.md §8.3）：null 不启用 */
       lead?: string | null
+      /** 每天定时运行的流程（只有本机频道，§10.3）：整个列表一起存 */
+      schedules?: unknown[]
       /** 主动提醒的规则开关、每日简报几点发（只有本机频道） */
       alerts?: Partial<Record<ChannelAlert['rule'], boolean>>
       digestHour?: number
@@ -866,6 +883,7 @@ export class Channels {
         throw new Error('牵头成员要选这个频道里本机的 AI 成员')
       c.lead = patch.lead
     }
+    if (patch.schedules !== undefined) c.schedules = this.cleanSchedules(c, patch.schedules)
     if (patch.alerts !== undefined) c.alerts = cleanAlertRules(patch.alerts)
     if (patch.digestHour !== undefined) c.digestHour = cleanDigestHour(patch.digestHour)
     // 归档时一并标为已读：收起来的频道不再算未读
@@ -2353,7 +2371,7 @@ export class Channels {
     messageId: string,
     reason: FlowPause,
     stepId: string,
-    limit?: 'rounds' | 'time',
+    limit?: 'rounds' | 'time' | 'cost',
   ): void {
     // 你点了暂停的流程（paused 为空）也记上原因，继续时按原因处理
     this.updateFlow(channelId, messageId, f =>
@@ -2372,7 +2390,7 @@ export class Channels {
   private overLimit(channelId: string, messageId: string, stepId: string): boolean {
     const flow = this.flowMessage(channelId, messageId)?.flow
     if (!flow || flow.status !== 'running') return false
-    const hit = limitHit(flow, this.flowRoundsUsed(flow), this.now())
+    const hit = limitHit(flow, this.flowRoundsUsed(flow), this.now(), knownCost(flow.steps))
     if (hit) this.pauseFlow(channelId, messageId, 'limit', stepId, hit)
     return !!hit
   }
@@ -2802,7 +2820,7 @@ export class Channels {
       ...f,
       status: 'running',
       paused: null,
-      ...(f.limits ? { since: { at: this.now(), rounds: used } } : {}),
+      ...(f.limits ? { since: { at: this.now(), rounds: used, cost: knownCost(f.steps) } } : {}),
       steps: f.steps.map(s => (s.status === 'failed' && !s.taskId ? { ...s, status: 'pending' } : s)),
     }))
     for (const s of steps) {
@@ -2826,6 +2844,167 @@ export class Channels {
         this.sendBack(c.id, m.id, review.id)
     }
     this.advance(c.id, m.id)
+  }
+
+  // ── 用量（§10.1）：用量记录变了就重算还在跑、或最近有轮次的流程 ──
+  private usageTimer: ReturnType<typeof setTimeout> | null = null
+  private usageBusy = false
+  private usageAgain = false
+
+  private usageChanged(): void {
+    if (this.usageTimer) return
+    this.usageTimer = setTimeout(() => {
+      this.usageTimer = null
+      void this.refreshUsage().catch(e => this.deps.log?.('流程用量刷新失败', e))
+    }, USAGE_DEBOUNCE_MS)
+    this.usageTimer.unref?.()
+  }
+
+  /** 重算流程步骤的用量；进行中再来一次就合并成跑完后再跑一次 */
+  async refreshUsage(): Promise<void> {
+    if (this.usageBusy) {
+      this.usageAgain = true
+      return
+    }
+    this.usageBusy = true
+    try {
+      const now = this.now()
+      const flows: { channelId: string; id: string }[] = []
+      for (const [channelId, list] of this.store.messages)
+        for (const m of list)
+          if (
+            m.kind === 'message' &&
+            m.flow?.steps.some(s => s.turns?.length) &&
+            (m.flow.status === 'running' ||
+              m.flow.status === 'paused' ||
+              // 结束了的只看最近几天：平台线路对账、事后补录会改金额
+              m.flow.steps.some(s => s.taskId && (this.store.task(s.taskId)?.endedAt ?? now) > now - USAGE_RECENT_MS))
+          )
+            flows.push({ channelId, id: m.id })
+      const bySession = new Map<string, UsageRecord[]>()
+      for (const { channelId, id } of flows) {
+        const flow = this.flowMessage(channelId, id)?.flow
+        if (!flow) continue
+        for (const sid of new Set(flow.steps.flatMap(s => (s.turns ?? []).map(k => k.slice(0, k.lastIndexOf(':'))))))
+          if (!bySession.has(sid)) bySession.set(sid, await this.sessionUsage(sid, now))
+        const next = flow.steps.map(s => {
+          if (!s.turns?.length) return null
+          const u = sumUsage(
+            [...new Set(s.turns.map(k => k.slice(0, k.lastIndexOf(':'))))].flatMap(sid => bySession.get(sid) ?? []),
+            s.turns,
+          )
+          // 记录只增不减：少了是超出 30 天或页数（停了很久的流程），留着原来的，花费上限的起点不往回掉
+          return s.usage && u.records < s.usage.records ? s.usage : u
+        })
+        // 没变不写（流程消息是整条追加的）
+        if (next.every((u, i) => JSON.stringify(u) === JSON.stringify(flow.steps[i].usage ?? null))) continue
+        this.updateFlow(channelId, id, f => ({
+          ...f,
+          steps: f.steps.map((s, i) => (next[i] ? { ...s, usage: next[i] } : s)),
+        }))
+        // 花费可能刚越过上限
+        const active = flow.steps.find(s => s.status === 'running' || s.status === 'asking')
+        if (active) this.overLimit(channelId, id, active.id)
+      }
+    } finally {
+      this.usageBusy = false
+      if (this.usageAgain) {
+        this.usageAgain = false
+        void this.refreshUsage().catch(e => this.deps.log?.('流程用量刷新失败', e))
+      }
+    }
+  }
+
+  /** 一个会话最近 30 天的用量记录 */
+  private async sessionUsage(sessionId: string, now: number): Promise<UsageRecord[]> {
+    const out: UsageRecord[] = []
+    for (let offset = 0, page = 0; page < USAGE_PAGES; page++) {
+      // usageList 在契约里按「当前选中的机器」走；参数带 sessionId 让它按会话走本机（流程只有本机成员，machines/routing.ts）
+      const res = (await this.deps.call('engine:usageList', [
+        { range: '30d', filter: { session: sessionId }, sessionId, now, offset, limit: 500 },
+      ])) as UsagePage
+      out.push(...res.records)
+      offset += res.records.length
+      if (!res.records.length || offset >= res.total) break
+    }
+    return out
+  }
+
+  /** 整条流程的用量（各步骤加起来） */
+  flowUsage(flow: { steps: FlowStep[] }): ReturnType<typeof emptyUsage> {
+    return flow.steps.reduce((u, s) => (s.usage ? addUsage(u, s.usage) : u), emptyUsage())
+  }
+
+  // ── 每天定时运行（§10.3）──
+
+  /** 存定时：清洗、按 id 保留运行时的字段；新建的从现在算（今天已经过了的钟点明天才跑）；至少一个能计价的成员 */
+  private cleanSchedules(c: StoredChannel, raw: unknown[]): FlowSchedule[] {
+    if (!Array.isArray(raw)) throw new Error('定时运行的设置不对')
+    if (raw.length > SCHEDULE_MAX) throw new Error(`一个频道最多 ${SCHEDULE_MAX} 个定时运行`)
+    const now = this.now()
+    return raw.map(item => {
+      const s = cleanSchedule(item)
+      const old = s.id ? c.schedules?.find(x => x.id === s.id) : undefined
+      // 花费上限要能起作用：至少有一步的成员会报价格（Codex 不报）。只查新建、改了步骤的：成员后来被删的旧定时照样能关、能删别的
+      const same = !!old && JSON.stringify(old.steps) === JSON.stringify(s.steps)
+      const priced =
+        same ||
+        s.steps.some(step => {
+          const m = this.member(step.memberId)
+          return !!m && ENGINE_INFO[m.engine]?.caps.costUsd !== false
+        })
+      if (!priced) throw new Error(`「${s.title}」里没有能算出花费的成员，花费上限不会起作用，不能定时运行`)
+      return {
+        ...s,
+        id: old?.id ?? randomUUID(),
+        lastRunAt: old?.lastRunAt ?? now,
+        lastFlowMessageId: old?.lastFlowMessageId ?? null,
+        lastError: old?.lastError ?? null,
+      }
+    })
+  }
+
+  /** 每分钟巡检：到点的定时开一条流程；上一次还没结束就跳过；先记下「处理过」再开，崩了也不会重复开 */
+  private async runSchedules(c: StoredChannel, now: number): Promise<void> {
+    for (const { id } of c.schedules ?? []) {
+      // 读存着的最新那份再判断：上一次巡检还没跑完时两次巡检会重叠，saveChannel 同步换掉内存里的频道，判断和记下之间没有 await
+      const cur = this.store.channels.get(c.id)
+      const s = cur?.archivedAt ? undefined : cur?.schedules?.find(x => x.id === id)
+      if (!s || !scheduleDue(s, now)) continue
+      const save = async (patch: Partial<FlowSchedule>) => {
+        const cur = this.store.channels.get(c.id)
+        if (!cur) return
+        await this.store.saveChannel({
+          ...cur,
+          schedules: (cur.schedules ?? []).map(x => (x.id === s.id ? { ...x, ...patch } : x)),
+        })
+        this.changed()
+      }
+      await save({ lastRunAt: now })
+      const prev = s.lastFlowMessageId ? this.flowMessage(c.id, s.lastFlowMessageId)?.flow : undefined
+      if (prev && ['planning', 'draft', 'running', 'paused'].includes(prev.status)) {
+        await save({ lastError: '上一次还没结束，今天跳过' })
+        continue
+      }
+      let messageId: string | null = null
+      try {
+        messageId = (
+          await this.flowAction(c.id, {
+            type: 'create',
+            title: s.title,
+            steps: s.steps,
+            limits: s.limits,
+            ...(s.isolate === false ? { isolate: false } : {}),
+          })
+        ).messageId
+        await this.flowAction(c.id, { type: 'start', messageId })
+        await save({ lastFlowMessageId: messageId, lastError: null })
+      } catch (e) {
+        // 没开成：建了一半的草稿丢掉，明天再试
+        if (messageId) await this.flowAction(c.id, { type: 'discard', messageId }).catch(() => undefined)
+        await save({ lastError: message(e) })
+      }
+    }
   }
 
   /** 正在由牵头拆的频道（同步占位，免得连发两条拆两个） */
@@ -2958,7 +3137,7 @@ export class Channels {
           status: 'running',
           paused: null,
           limits: x.limits === undefined ? defaultLimits(x.steps.length) : x.limits,
-          since: { at: this.now(), rounds: 0 },
+          since: { at: this.now(), rounds: 0, cost: 0 },
         }))
         this.advance(channelId, messageId)
         break
@@ -3202,6 +3381,7 @@ export class Channels {
       }
       if (rules.digest) await this.digest(c, now)
       this.askTimeouts(c, now)
+      await this.runSchedules(c, now)
     }
   }
 
@@ -3299,6 +3479,16 @@ export class Channels {
   }
 
   private apply(run: TaskRun, tracked: Tracked): void {
+    // 流程步骤的每个新轮次记下来（断线重连、重试、追加、打回、回答都会换轮次），按它算这一步的用量（§10.1）
+    const turn = tracked.run.turnId
+    if (tracked.run.flow?.stepId && turn && turn !== run.turnId && tracked.run.sessionId) {
+      const key = turnKey(tracked.run.sessionId, turn)
+      const { messageId, stepId } = tracked.run.flow
+      this.updateFlow(run.channelId, messageId, f => {
+        const s = f.steps.find(x => x.id === stepId)
+        return !s || s.turns?.includes(key) ? f : withStep(f, stepId, { turns: [...(s.turns ?? []), key] })
+      })
+    }
     if (tracked.run !== run) {
       this.store.runs.set(run.taskId, tracked.run)
       this.saveRuns(!tracked.finish && tracked.run.started === run.started)
@@ -3407,6 +3597,7 @@ export class Channels {
         }
     } else if (event.kind === 'sessions') this.sessionsChanged(event.sessions)
     else if (event.kind === 'projects') this.changed()
+    else if (event.kind === 'usage_recorded') this.usageChanged()
   }
 
   /** 会话被删了：进行中的活算失败（只看连着的机器，断开的机器会话列表不可信） */

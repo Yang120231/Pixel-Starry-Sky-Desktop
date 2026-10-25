@@ -129,6 +129,19 @@ export const demoChannels: Channel[] = [
     pinned: ['web-m2'],
     // 牵头成员（docs/ui/channels-pipeline.md §8.3）
     lead: 'a-frontend',
+    // 每天定时运行（§10.3）
+    schedules: [
+      {
+        id: 'sch-web1',
+        title: '每天整理未提交的改动',
+        hour: 9,
+        steps: [{ id: 's1', title: '整理改动并写提交说明', memberId: 'a-frontend', deps: [], kind: 'work' }],
+        limits: { rounds: 12, minutes: 120, costUsd: 3 },
+        enabled: true,
+        lastRunAt: YESTERDAY + 9 * 3_600_000,
+        lastFlowMessageId: null,
+      },
+    ],
     memberIds: ['m-linxia', 'a-frontend', 'a-reviewer'],
     unread: 2,
     mentioned: true,
@@ -415,7 +428,7 @@ export const demoChannelMessages: Record<string, ChannelMessage[]> = {
         title: '登录页新按钮',
         status: 'running',
         maxRejects: 3,
-        limits: { rounds: 12, minutes: 120 },
+        limits: { rounds: 12, minutes: 120, costUsd: 5 },
         since: { at: at(TODAY, '10:20'), rounds: 0 },
         steps: [
           {
@@ -428,6 +441,18 @@ export const demoChannelMessages: Record<string, ChannelMessage[]> = {
             status: 'delivered',
             rejects: 0,
             copy: { id: 'copy-f1', branch: 'pixelsky/flow-web1-a', path: '.pixelsky/copies/flow-web1-a' },
+            usage: {
+              input: 18_400,
+              cacheRead: 96_000,
+              cacheWrite: 12_000,
+              output: 5_200,
+              costUsd: 0.42,
+              costKnown: 3,
+              records: 3,
+              turns: 1,
+              unrecorded: 0,
+              why: {},
+            },
             result: { summary: '出了 3 张按钮状态图，放在 assets/login。', files: ['assets/login/button.png'] },
           },
           {
@@ -452,6 +477,19 @@ export const demoChannelMessages: Record<string, ChannelMessage[]> = {
             taskId: 'web-ft2',
             status: 'running',
             rejects: 0,
+            // Codex 不报费用：只有 token
+            usage: {
+              input: 40_000,
+              cacheRead: 0,
+              cacheWrite: 0,
+              output: 9_000,
+              costUsd: 0,
+              costKnown: 0,
+              records: 2,
+              turns: 1,
+              unrecorded: 0,
+              why: { engine: 2 },
+            },
           },
           {
             id: 'f3',

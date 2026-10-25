@@ -3,6 +3,7 @@
 import type { CheckRun } from './checks'
 import type {
   ApprovalRequest,
+  CostState,
   EngineId,
   FileAttachment,
   FileChange,
@@ -210,6 +211,8 @@ export interface Channel {
   relayRules?: RelayRules
   /** 牵头成员（docs/ui/channels-pipeline.md §8.3）：不带 @ 的需求交给它拆成流程；null / 没写是不启用 */
   lead?: string | null
+  /** 每天定时运行的流程（§10.3），只有本机频道 */
+  schedules?: FlowSchedule[]
   /** 主动提醒的规则开关（docs/ui/channels-collab-v2.md §6）；没写的按默认（shared/channels/alerts.ts） */
   alerts?: Partial<Record<ChannelAlertRule, boolean>>
   /** 每日简报几点发（0–23，默认 9） */
@@ -295,6 +298,29 @@ export interface FlowStep {
   gate?: boolean
   /** 这一步用的 Git 副本（第 11 项，并行时才建）；分支名给汇合步骤合并用 */
   copy?: { id: string; branch: string; path: string } | null
+  /** 这一步跑过的轮次（`会话 id:轮次 id`，§10.1），按它从用量记录里算这一步的 token 和花费；流程只有本机成员，不带机器前缀 */
+  turns?: string[]
+  /** 这一步的用量（主进程按 turns 算好缓存，用量记录变了再刷新） */
+  usage?: FlowUsage | null
+}
+
+/** 一步（或几步加起来）的用量（docs/ui/channels-pipeline.md §10.1）：字段和用量页的 UsageTotals 同名 */
+export interface FlowUsage {
+  input: number
+  cacheRead: number
+  cacheWrite: number
+  output: number
+  /** 有费用的记录的费用合计（是下限：costKnown 小于 records 时显示「≥」） */
+  costUsd: number
+  costKnown: number
+  /** 其中平台实扣的记录条数 */
+  costActual?: number
+  records: number
+  /** 记下的轮次数；其中一条用量记录都没找到的（还没结束、中断了没记） */
+  turns: number
+  unrecorded: number
+  /** 没有费用的记录各是什么原因 */
+  why: Partial<Record<CostState, number>>
 }
 
 /** 流程停下的原因：失败、做完没交付、打回到上限、等回答超时、到护栏上限（第 13 项）、汇合前主目录有没提交的改动（第 11 项） */
@@ -304,7 +330,32 @@ export type FlowPause = 'failed' | 'no-delivery' | 'reject-limit' | 'ask-timeout
 export interface FlowLimits {
   rounds: number | null
   minutes: number | null
+  /** 已知花费上限（美元，§10.2）；只按有价格的部分算；没写 / null 不限 */
+  costUsd?: number | null
 }
+
+/** 每天定时运行的流程（docs/ui/channels-pipeline.md §10.3） */
+export interface FlowSchedule {
+  id: string
+  title: string
+  /** 每天几点（本地时间，0–23） */
+  hour: number
+  /** 建定时那一刻的步骤快照 */
+  steps: FlowStepInput[]
+  /** 无人看着时三项都必须设 */
+  limits: { rounds: number; minutes: number; costUsd: number }
+  isolate?: boolean
+  enabled: boolean
+  /** 上次到点处理的时间（跳过、失败也算） */
+  lastRunAt: number
+  lastFlowMessageId: string | null
+  /** 上次没开成的原因；成功时清空 */
+  lastError?: string | null
+}
+
+/** 存定时时界面传来的（运行时的字段由主进程按 id 保留） */
+export type FlowScheduleInput = Pick<FlowSchedule, 'title' | 'hour' | 'steps' | 'limits' | 'enabled'> &
+  Partial<Pick<FlowSchedule, 'id' | 'isolate'>>
 
 /** 流程（docs/ui/channels-pipeline.md §4）：挂在一条文字消息上 */
 export interface ChannelFlow {
@@ -312,7 +363,7 @@ export interface ChannelFlow {
   /** planning：成员在拆；draft：等你确认 */
   status: 'planning' | 'draft' | 'running' | 'paused' | 'done' | 'stopped'
   /** limit：超的是哪一项 */
-  paused?: { reason: FlowPause; stepId: string; limit?: 'rounds' | 'time' } | null
+  paused?: { reason: FlowPause; stepId: string; limit?: 'rounds' | 'time' | 'cost' } | null
   steps: FlowStep[]
   /** 审查最多打回几次，超了停下 */
   maxRejects: number
@@ -323,7 +374,7 @@ export interface ChannelFlow {
   /** 护栏（第 13 项）；没写 = 不限（第二批之前的流程） */
   limits?: FlowLimits | null
   /** 护栏的计数起点：开始运行或上次继续时的时间和已用轮次 */
-  since?: { at: number; rounds: number } | null
+  since?: { at: number; rounds: number; cost?: number } | null
   /** 并行步骤用独立的 Git 副本（第 11 项）；没写 = 开 */
   isolate?: boolean
 }
@@ -608,7 +659,7 @@ export interface ChannelNeed {
   /** kind 是 flow、pause 是 gate 时：等你确认的那一步 */
   stepId?: string | null
   /** pause 是 limit 时：超的是哪一项 */
-  limit?: 'rounds' | 'time' | null
+  limit?: 'rounds' | 'time' | 'cost' | null
   /** kind 是 alert 时：哪条规则（决定有哪些按钮） */
   rule?: ChannelAlertRule
   sig: string

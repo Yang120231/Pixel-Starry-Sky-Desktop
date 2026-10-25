@@ -10,6 +10,7 @@ import type { ChannelMember, ChannelTask, ChannelTextMessage } from '@/data/type
 import type {
   ChannelFlow,
   FlowAction,
+  FlowUsage,
   FlowStep,
   FlowStepInput,
   FlowStepKind,
@@ -17,6 +18,8 @@ import type {
 } from '../../../../shared/types/channels'
 import { MemberAvatar } from './ChannelMessage'
 import { GateActions } from './GateActions'
+import { formatCardCost, formatTokens, costHint } from '@/features/usage/format'
+import { scheduleToInput } from './model'
 import { channelActions, useChannels } from './store'
 import { saveTemplate, TEMPLATE_MAX, TEMPLATE_NAME_MAX, toTemplate } from './flowTemplates'
 
@@ -267,6 +270,66 @@ function flowTotal(flow: ChannelFlow, tasks: ChannelTask[], now: number): string
   return rounds > 0 ? tr('channels.flow.dur.total', { time, rounds }) : time
 }
 
+const WHY_KEY = {
+  engine: 'engine',
+  pending: 'pending',
+  platform: 'platform',
+  'no-price': 'noPrice',
+} as const
+
+/** 一步（或整条流程）的用量文字：token + 费用；没有费用时写最常见的原因 */
+function usageText(u: FlowUsage | null | undefined): { text: string; title: string } | null {
+  if (!u || u.records <= 0) return null
+  const tokens = tr('channels.flow.usage.tokens', {
+    n: formatTokens(u.input + u.cacheRead + u.cacheWrite + u.output),
+  })
+  let cost = formatCardCost(u)
+  let title = ''
+  if (u.costKnown === 0) {
+    const top = (Object.entries(u.why) as [keyof typeof WHY_KEY, number][])
+      .filter(([k]) => k in WHY_KEY)
+      .sort((a, b) => b[1] - a[1])[0]?.[0]
+    if (top) {
+      cost += ' ' + tr(`channels.flow.usage.reason.${WHY_KEY[top]}`)
+      title = costHint(top)
+    }
+  }
+  return { text: `${u.unrecorded > 0 ? '≥ ' : ''}${tokens} · ${cost}`, title }
+}
+
+function sumUsage(list: readonly FlowUsage[]): FlowUsage {
+  const t: FlowUsage = {
+    input: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    output: 0,
+    costUsd: 0,
+    costKnown: 0,
+    costActual: 0,
+    records: 0,
+    turns: 0,
+    unrecorded: 0,
+    why: {},
+  }
+  for (const u of list) {
+    t.input += u.input
+    t.cacheRead += u.cacheRead
+    t.cacheWrite += u.cacheWrite
+    t.output += u.output
+    t.costUsd += u.costUsd
+    t.costKnown += u.costKnown
+    t.costActual = (t.costActual ?? 0) + (u.costActual ?? 0)
+    t.records += u.records
+    t.turns += u.turns
+    t.unrecorded += u.unrecorded
+    for (const [k, n] of Object.entries(u.why) as [keyof FlowUsage['why'], number][]) t.why[k] = (t.why[k] ?? 0) + n
+  }
+  return t
+}
+
+/** 花费上限输入框里的数：正数才算，其余 = 不限 */
+const costNum = (v: string): number | null => (Number(v) > 0 && Number.isFinite(Number(v)) ? Number(v) : null)
+
 const newStepId = (steps: readonly FlowStepInput[]): string => {
   let id: string
   do id = 's' + crypto.randomUUID().slice(0, 4)
@@ -278,24 +341,164 @@ function LimitInput({
   label,
   value,
   disabled,
+  decimal,
   onChange,
 }: {
   label: string
   value: string
   disabled: boolean
+  decimal?: boolean
   onChange: (v: string) => void
 }) {
   return (
     <input
-      inputMode="numeric"
+      inputMode={decimal ? 'decimal' : 'numeric'}
       aria-label={label}
       placeholder={tr('channels.flow.limitsNone')}
       value={value}
       disabled={disabled}
-      onChange={e => onChange(e.target.value.replace(/\D/g, ''))}
-      className="h-6 w-14 rounded-md border border-line bg-surface px-1.5 text-center text-meta text-fg outline-none focus:border-accent"
+      // 小数只留第一个点：「1.2.3」不会悄悄变成不限
+      onChange={e =>
+        onChange(
+          decimal
+            ? e.target.value.replace(/[^\d.]/g, '').replace(/^(\d*\.\d*).*$/, '$1')
+            : e.target.value.replace(/\D/g, ''),
+        )
+      }
+      className={cn(
+        'h-6 rounded-md border border-line bg-surface px-1.5 text-center text-meta text-fg outline-none focus:border-accent',
+        decimal ? 'w-16' : 'w-14',
+      )}
     />
   )
+}
+
+/** 草稿上的「每天定时运行…」（§10.3）：三项护栏都必须填；存成频道的定时，和这份草稿无关 */
+function ScheduleButton({
+  channelId,
+  title,
+  steps,
+  isolate,
+}: {
+  channelId: string
+  title: string
+  steps: readonly FlowStepInput[]
+  isolate: boolean
+}) {
+  useI18n()
+  const toast = useToast()
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [hour, setHour] = useState('9')
+  const [rounds, setRounds] = useState('')
+  const [minutes, setMinutes] = useState('')
+  const [cost, setCost] = useState('')
+  const anchor = useRef<HTMLSpanElement>(null)
+  const hours: SelectOption<string>[] = Array.from({ length: 24 }, (_, h) => ({
+    value: String(h),
+    label: tr('channels.flow.schedule.hourOpt', { h }),
+  }))
+  const existing = useChannels(s => s.channels.find(c => c.id === channelId)?.schedules)
+  const r = Number(rounds)
+  const m = Number(minutes)
+  const c = costNum(cost)
+  const ready = r > 0 && m > 0 && c !== null && steps.length > 0
+  const toggle = () => {
+    if (!open) {
+      setRounds(String(Math.max(12, steps.length * 4)))
+      setMinutes('120')
+      setCost('')
+    }
+    setOpen(!open)
+  }
+  const save = () => {
+    if (!ready || busy) return
+    setBusy(true)
+    channelActions
+      .updateChannel(channelId, {
+        schedules: [
+          ...(existing ?? []).map(scheduleToInput),
+          {
+            title: title.trim() || steps[0].title,
+            hour: Number(hour),
+            steps: steps.map(toInput),
+            limits: { rounds: r, minutes: m, costUsd: c },
+            enabled: true,
+            isolate,
+          },
+        ],
+      })
+      .then(() => {
+        toast(tr('channels.flow.schedule.saved', { h: hour }))
+        setOpen(false)
+      })
+      .catch((e: unknown) =>
+        toast(tr('channels.flow.schedule.failed', { error: translateMessage((e as Error)?.message ?? String(e)) })),
+      )
+      .finally(() => setBusy(false))
+  }
+  const field = (label: string, value: string, set: (v: string) => void, decimal?: boolean) => (
+    <label className="flex items-center justify-between gap-2 text-meta text-fg-muted">
+      {label}
+      <LimitInput label={label} value={value} disabled={false} decimal={decimal} onChange={set} />
+    </label>
+  )
+  return (
+    <>
+      <span ref={anchor} className="inline-flex shrink-0">
+        <Button className="h-7 px-2.5 text-meta" disabled={steps.length === 0} onClick={toggle}>
+          {tr('channels.flow.schedule.add')}
+        </Button>
+      </span>
+      <Popover
+        open={open}
+        onClose={() => setOpen(false)}
+        anchor={anchor}
+        align="end"
+        role="dialog"
+        className="w-64 p-3"
+      >
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-2 text-meta text-fg-muted">
+            {tr('channels.flow.schedule.hour')}
+            <div className="w-24">
+              <Select label={tr('channels.flow.schedule.hour')} value={hour} options={hours} onChange={setHour} />
+            </div>
+          </div>
+          {field(tr('channels.flow.schedule.rounds'), rounds, setRounds)}
+          {field(tr('channels.flow.schedule.minutes'), minutes, setMinutes)}
+          {field(tr('channels.flow.schedule.cost'), cost, setCost, true)}
+          <Button variant="primary" className="self-end" disabled={!ready || busy} onClick={save}>
+            {tr('channels.flow.schedule.save')}
+          </Button>
+        </div>
+      </Popover>
+    </>
+  )
+}
+
+/** 设了花费上限时的提醒：哪些成员的费用算不进上限（引擎能力看 caps.costUsd，平台额度对账晚几分钟） */
+function CostWarning({ steps, membersById }: { steps: readonly FlowStepInput[]; membersById: Members }) {
+  useI18n()
+  const engines = useEngineState(s => s.engines)
+  const agents = [...new Set(steps.map(s => membersById.get(s.memberId)))].flatMap(m =>
+    m?.kind === 'agent' ? [m] : [],
+  )
+  if (agents.length === 0) return null
+  const canCost = (engine: string) => engines.find(e => e.id === engine)?.caps?.costUsd ?? true
+  const noCost = agents.filter(m => !canCost(m.engine))
+  const platform = agents.filter(m => canCost(m.engine) && m.config?.settings.platform)
+  const names = (list: typeof agents) => list.map(m => m.name).join(', ')
+  const text =
+    noCost.length === agents.length
+      ? tr('channels.flow.costWarn.none')
+      : [
+          noCost.length ? tr('channels.flow.costWarn.codex', { names: names(noCost) }) : '',
+          platform.length ? tr('channels.flow.costWarn.platform', { names: names(platform) }) : '',
+        ]
+          .filter(Boolean)
+          .join(' · ')
+  return text ? <p className="mt-1 text-meta text-warn">{text}</p> : null
 }
 
 /** 草稿：一行一步，改完自动保存；开始运行前先存一次 */
@@ -321,7 +524,9 @@ function DraftEditor({
     String(flow.limits ? (flow.limits.rounds ?? '') : Math.max(12, flow.steps.length * 4)),
   )
   const [minutes, setMinutes] = useState(() => String(flow.limits ? (flow.limits.minutes ?? '') : 120))
+  const [cost, setCost] = useState(() => String(flow.limits?.costUsd ?? ''))
   const [isolate, setIsolate] = useState(flow.isolate !== false)
+  const local = useChannels(s => s.channels.find(c => c.id === message.channelId)?.scope === 'local')
   const dirty = useRef(false)
   const edit = (change: (list: FlowStepInput[]) => FlowStepInput[]) => {
     dirty.current = true
@@ -335,7 +540,11 @@ function DraftEditor({
     messageId: message.id,
     ...(title.trim() ? { title } : {}),
     steps,
-    limits: { rounds: rounds.trim() ? Number(rounds) : null, minutes: minutes.trim() ? Number(minutes) : null },
+    limits: {
+      rounds: rounds.trim() ? Number(rounds) : null,
+      minutes: minutes.trim() ? Number(minutes) : null,
+      costUsd: costNum(cost),
+    },
     isolate,
   })
 
@@ -356,7 +565,7 @@ function DraftEditor({
     pending.current = true
     const t = window.setTimeout(() => save.current(), AUTOSAVE_MS)
     return () => window.clearTimeout(t)
-  }, [title, steps, rounds, minutes, isolate, message.channelId])
+  }, [title, steps, rounds, minutes, cost, isolate, message.channelId])
   // 切走频道时还没存的改动也存上
   useEffect(() => () => save.current(), [])
 
@@ -514,7 +723,14 @@ function DraftEditor({
           disabled={readOnly}
           onChange={v => editLimit(setMinutes, v)}
         />
-        {tr('channels.flow.limitsMinutes')}
+        {tr('channels.flow.limitsMinutes')} {tr('channels.flow.limitsCost')}
+        <LimitInput
+          label={tr('channels.flow.limitsCostLabel')}
+          value={cost}
+          disabled={readOnly}
+          decimal
+          onChange={v => editLimit(setCost, v)}
+        />
         <label className="ml-auto flex items-center gap-1.5">
           <input
             type="checkbox"
@@ -528,12 +744,14 @@ function DraftEditor({
           {tr('channels.flow.isolate')}
         </label>
       </div>
+      {costNum(cost) !== null && <CostWarning steps={steps} membersById={membersById} />}
       {!readOnly && (
         <div className="mt-2 flex items-center gap-2">
           <Button icon={Plus} className="h-7 px-2.5" onClick={add} disabled={agents.length === 0}>
             {tr('channels.flow.addStep')}
           </Button>
           <span className="flex-1" />
+          {local && <ScheduleButton channelId={message.channelId} title={title} steps={steps} isolate={isolate} />}
           {steps.length > 0 && (
             <SaveTemplate
               steps={steps}
@@ -541,6 +759,7 @@ function DraftEditor({
               limits={{
                 rounds: rounds.trim() ? Number(rounds) : null,
                 minutes: minutes.trim() ? Number(minutes) : null,
+                costUsd: costNum(cost),
               }}
               membersById={membersById}
             />
@@ -557,7 +776,7 @@ function DraftEditor({
   )
 }
 
-const limitText = (kind: 'Rounds' | 'Minutes', n: number | null): string =>
+const limitText = (kind: 'Rounds' | 'Minutes' | 'Cost', n: number | null): string =>
   n == null ? tr('channels.flow.limitsNone') : tr(`channels.flow.limitsShown${kind}`, { n })
 
 /** 一步现在的状态文字 */
@@ -650,6 +869,10 @@ export function ChannelFlowCard({
     return () => window.clearInterval(t)
   }, [flow.status])
   const total = flow.status === 'draft' || flow.status === 'planning' ? '' : flowTotal(flow, tasks, now)
+  const flowUsage =
+    flow.status === 'draft' || flow.status === 'planning'
+      ? null
+      : usageText(sumUsage(flow.steps.flatMap(s => (s.usage ? [s.usage] : []))))
   const tone =
     flow.status === 'paused'
       ? 'bg-subtle text-warn'
@@ -747,7 +970,15 @@ export function ChannelFlowCard({
                         </span>
                         {(() => {
                           const stats = stepStats(s, s.taskId ? taskOf.get(s.taskId) : undefined, now)
-                          return stats && <span className="truncate pl-7 text-meta text-fg-faint">{stats}</span>
+                          const usage = usageText(s.usage)
+                          const line = [stats, usage?.text].filter(Boolean).join(' · ')
+                          return (
+                            line && (
+                              <span className="truncate pl-7 text-meta text-fg-faint" title={usage?.title || undefined}>
+                                {line}
+                              </span>
+                            )
+                          )
                         })()}
                         {s.copy && (
                           <span className="truncate pl-7 text-meta text-fg-faint">
@@ -776,6 +1007,11 @@ export function ChannelFlowCard({
               </ol>
             )}
             {total && <p className="mt-1.5 px-1.5 text-meta text-fg-faint">{total}</p>}
+            {flowUsage && (
+              <p className="mt-1 px-1.5 text-meta text-fg-faint" title={flowUsage.title || undefined}>
+                {flowUsage.text} · {tr('channels.flow.usage.noPlan')}
+              </p>
+            )}
             {!readOnly && (flow.status === 'running' || flow.status === 'paused') && (
               <div className="mt-2 flex items-center justify-end gap-2">
                 {flow.limits && (
@@ -783,7 +1019,7 @@ export function ChannelFlowCard({
                     {tr('channels.flow.limitsShown', {
                       rounds: limitText('Rounds', flow.limits.rounds),
                       minutes: limitText('Minutes', flow.limits.minutes),
-                    })}
+                    }) + (flow.limits.costUsd ? ` · ${limitText('Cost', flow.limits.costUsd)}` : '')}
                   </span>
                 )}
                 {flow.status === 'running' ? (

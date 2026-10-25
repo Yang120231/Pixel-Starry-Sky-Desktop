@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { EngineEvent, HostEvent, ProjectRecord, SessionSummary } from '@pixelsky/protocol'
+import type { EngineEvent, HostEvent, ProjectRecord, SessionSummary, UsageRecord } from '@pixelsky/protocol'
 import type { AgentInput, ChannelFlow, ChannelTask, ChannelTextMessage } from '../../../shared/types/channels'
 import { ChannelStore } from './store'
 import { Channels, type ChannelsDeps } from './service'
@@ -15,6 +15,8 @@ let now: number
 let opened: Channels[]
 let calls: { channel: string; args: unknown[] }[]
 let sessions: SessionSummary[]
+/** 假的用量记录（engine:usageList 按 filter.session 取） */
+let usage: UsageRecord[]
 
 const settle = async () => {
   for (let i = 0; i < 10; i++) {
@@ -38,6 +40,11 @@ async function open(extra: Partial<ChannelsDeps> = {}): Promise<Channels> {
       }
       if (channel === 'engine:send')
         return { queueId: (args[1] as { clientMessageId: string }).clientMessageId, status: 'queued' }
+      if (channel === 'engine:usageList') {
+        const q = args[0] as { filter: { session: string }; offset: number; limit: number }
+        const all = usage.filter(r => r.sessionId === q.filter.session)
+        return { records: all.slice(q.offset, q.offset + q.limit), total: all.length, offset: q.offset }
+      }
       return null
     },
     emit: () => {},
@@ -113,6 +120,7 @@ beforeEach(async () => {
   opened = []
   calls = []
   sessions = []
+  usage = []
 })
 afterEach(async () => {
   for (const c of opened) await c.dispose()
@@ -588,5 +596,156 @@ describe('流程第三批（docs/ui/channels-pipeline.md §8）', () => {
     // 牵头被移出频道：设置清掉
     await c.removeMember(ch, a)
     expect(c.state().channels.find(x => x.id === ch)?.lead).toBeNull()
+  })
+})
+
+describe('流程第四批（docs/ui/channels-pipeline.md §10）', () => {
+  /** 这个会话最后一轮的用量记录 */
+  const record = (s: string, costUsd: number | null, input = 100): UsageRecord =>
+    ({
+      id: `${s}:turn-${lastTo(s).clientMessageId}:m`,
+      sessionId: s,
+      turnId: `turn-${lastTo(s).clientMessageId}`,
+      model: 'm',
+      engine: 'claude',
+      input,
+      cacheRead: 0,
+      cacheWrite: 0,
+      output: 10,
+      costUsd,
+      costSource: costUsd === null ? null : 'estimate',
+    }) as unknown as UsageRecord
+
+  it('用量：步骤记下跑过的轮次，按轮次从用量记录算 token 和花费；按会话取、带 sessionId 走本机', async () => {
+    const { c, a, b, ch } = await setup()
+    const { messageId } = await c.flowAction(ch, {
+      type: 'create',
+      title: '用量',
+      steps: [
+        { id: 's1', title: '画贴图', memberId: a, deps: [], kind: 'work' },
+        { id: 's2', title: '写代码', memberId: b, deps: ['s1'], kind: 'work' },
+      ],
+    })
+    await c.flowAction(ch, { type: 'start', messageId })
+    await settle()
+    const s1 = sessionOf(c, ch, 's1')
+    usage.push(record(s1, 0.25))
+    await endTurn(c, s1, '还没好')
+    usage.push(record(s1, null, 50))
+    c.toolDone(s1, { summary: '好了' })
+    await endTurn(c, s1, '好了')
+    expect(stepOf(c, ch, 's1').turns).toHaveLength(2)
+    await c.refreshUsage()
+    expect(stepOf(c, ch, 's1').usage).toMatchObject({
+      input: 150,
+      output: 20,
+      costUsd: 0.25,
+      costKnown: 1,
+      records: 2,
+      turns: 2,
+      unrecorded: 0,
+    })
+    const q = calls.find(x => x.channel === 'engine:usageList')!.args[0] as Record<string, unknown>
+    expect(q).toMatchObject({ sessionId: s1, filter: { session: s1 } })
+    // 还没有记录的轮次算「没记录」；没变不重写
+    const s2 = sessionOf(c, ch, 's2')
+    await endTurn(c, s2, '写了一半')
+    await c.refreshUsage()
+    expect(stepOf(c, ch, 's2').usage).toMatchObject({ records: 0, turns: 1, unrecorded: 1 })
+    const before = JSON.stringify(flowOf(c, ch))
+    await c.refreshUsage()
+    expect(JSON.stringify(flowOf(c, ch))).toBe(before)
+    // 记录超出 30 天取不到了：留着原来的
+    usage = []
+    await c.refreshUsage()
+    expect(stepOf(c, ch, 's1').usage).toMatchObject({ costUsd: 0.25, records: 2 })
+  })
+
+  it('花费上限：已知花费到了就停下；继续后从当时的花费再给一整份', async () => {
+    const { c, a, b, ch } = await setup()
+    const { messageId } = await c.flowAction(ch, {
+      type: 'create',
+      title: '花费',
+      limits: { rounds: null, minutes: null, costUsd: 1 },
+      steps: [
+        { id: 's1', title: '画贴图', memberId: a, deps: [], kind: 'work' },
+        { id: 's2', title: '写代码', memberId: b, deps: ['s1'], kind: 'work' },
+      ],
+    })
+    await c.flowAction(ch, { type: 'start', messageId })
+    await settle()
+    const s1 = sessionOf(c, ch, 's1')
+    usage.push(record(s1, 1.2))
+    c.toolDone(s1, { summary: '好了' })
+    await endTurn(c, s1, '好了')
+    await c.refreshUsage()
+    expect(flowOf(c, ch)).toMatchObject({ status: 'paused', paused: { reason: 'limit', limit: 'cost' } })
+    await c.flowAction(ch, { type: 'resume', messageId })
+    await settle()
+    expect(flowOf(c, ch)).toMatchObject({ status: 'running', since: { cost: 1.2 } })
+    await c.refreshUsage()
+    expect(flowOf(c, ch).status).toBe('running')
+  })
+
+  it('定时运行：到点开一条流程，同一天不重复；上一次没结束就跳过；没开成记原因；没有能计价的成员不能存', async () => {
+    const at = (d: number, h: number, m = 0) => new Date(2026, 9, d, h, m).getTime()
+    now = at(25, 8)
+    const { c, a, ch } = await setup()
+    const schedule = {
+      title: '早巡检',
+      hour: 9,
+      enabled: true,
+      limits: { rounds: 5, minutes: 30, costUsd: 2 },
+      steps: [{ id: 's1', title: '巡检', memberId: a, deps: [], kind: 'work' as const }],
+    }
+    await c.update(ch, { schedules: [schedule] })
+    const saved = c.state().channels.find(x => x.id === ch)!.schedules![0]
+    expect(saved).toMatchObject({ title: '早巡检', lastFlowMessageId: null })
+    await c.checkAlerts()
+    expect(c.messages(ch).messages.some(m => m.kind === 'message' && m.flow)).toBe(false)
+
+    now = at(25, 9, 5)
+    // 两次巡检重叠也只开一条
+    await Promise.all([c.checkAlerts(), c.checkAlerts()])
+    await settle()
+    expect(flowOf(c, ch)).toMatchObject({ title: '早巡检', status: 'running', limits: schedule.limits })
+    const first = c.state().channels.find(x => x.id === ch)!.schedules![0]
+    expect(first.lastFlowMessageId).toBeTruthy()
+    // 同一天不再开；改设置保留运行时的字段
+    await c.update(ch, { schedules: [{ ...schedule, id: first.id, title: '早巡检2' }] })
+    await c.checkAlerts()
+    const flows = () => c.messages(ch).messages.filter(m => m.kind === 'message' && m.flow)
+    expect(flows()).toHaveLength(1)
+    expect(c.state().channels.find(x => x.id === ch)!.schedules![0].lastFlowMessageId).toBe(first.lastFlowMessageId)
+
+    // 第二天上一次还在跑：跳过，记原因
+    now = at(26, 10)
+    await c.checkAlerts()
+    expect(flows()).toHaveLength(1)
+    expect(c.state().channels.find(x => x.id === ch)!.schedules![0].lastError).toContain('还没结束')
+
+    // 第三天上一次结束了，但成员被移出频道：没开成，草稿丢掉，记原因
+    const s1 = sessionOf(c, ch, 's1')
+    c.toolDone(s1, { summary: '好了' })
+    await endTurn(c, s1, '好了')
+    await c.removeMember(ch, a)
+    now = at(27, 9)
+    await c.checkAlerts()
+    await settle()
+    expect(flows()).toHaveLength(1)
+    expect(c.state().channels.find(x => x.id === ch)!.schedules![0].lastError).toBeTruthy()
+    // 成员删掉了：步骤没改的旧定时照样能关
+    await c.deleteMember(a)
+    await c.update(ch, { schedules: [{ ...schedule, id: first.id, enabled: false }] })
+    expect(c.state().channels.find(x => x.id === ch)!.schedules![0].enabled).toBe(false)
+
+    // 只有 Codex（不报价格）的不能定时
+    const x = await c.saveMember(null, { ...agent('跑腿'), engine: 'codex' })
+    await expect(
+      c.update(ch, { schedules: [{ ...schedule, steps: [{ ...schedule.steps[0], memberId: x }] }] }),
+    ).rejects.toThrow('花费上限不会起作用')
+    await expect(
+      c.update(ch, { schedules: [{ ...schedule, limits: { ...schedule.limits, costUsd: null } }] as never }),
+    ).rejects.toThrow('都要设')
   })
 })

@@ -130,6 +130,9 @@ export function toTemplate(
   }
 }
 
+/** 模板里的花费上限：不是正数（旧模板没有、数据坏了）就是不限 */
+const validCost = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null)
+
 /** 套用：成员按名字（不分大小写）对上，对不上的步骤 memberId 留空；模型只在引擎相同时保留；{request} 换成这句话 */
 export function applyTemplate(
   t: FlowTemplate,
@@ -160,7 +163,7 @@ export function applyTemplate(
   return {
     title: request,
     steps,
-    ...(t.limits ? { limits: t.limits } : {}),
+    ...(t.limits ? { limits: { ...t.limits, costUsd: validCost(t.limits.costUsd) } } : {}),
     ...(t.isolate !== undefined ? { isolate: t.isolate } : {}),
     unmatched,
   }

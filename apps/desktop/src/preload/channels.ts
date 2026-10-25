@@ -19,7 +19,7 @@ import type {
   TeamRole,
 } from '../shared/types/channels'
 import type { ChannelAlertAction } from '../shared/channels/alerts'
-import type { IssueDispatch } from '../shared/types/channels'
+import type { FlowScheduleInput, IssueDispatch } from '../shared/types/channels'
 
 /** 协作频道 Phase B（docs/ui/channels-phase-b.md §11） */
 export interface ChannelsBridge {
@@ -48,6 +48,8 @@ export interface ChannelsBridge {
       relayRules?: RelayRules
       /** 牵头成员（docs/ui/channels-pipeline.md §8.3）：null 不启用 */
       lead?: string | null
+      /** 每天定时运行的流程（docs/ui/channels-pipeline.md §10.3）：整个列表一起存 */
+      schedules?: FlowScheduleInput[]
       /** 主动提醒的规则开关、每日简报几点发（docs/ui/channels-collab-v2.md §6） */
       alerts?: Partial<Record<ChannelAlertRule, boolean>>
       digestHour?: number
