@@ -10,6 +10,7 @@ export type {
   ProjectFolder,
   QueueSettings,
   QueueMove,
+  QueueLimit,
   QueueReconnect,
   QueueStatus,
   QueueSummary,

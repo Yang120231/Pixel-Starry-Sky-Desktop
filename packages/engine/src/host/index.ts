@@ -493,6 +493,10 @@ export class EngineHost {
     this.m.queue.moveQueued(id, queueId, to)
   }
 
+  pauseReconnect(id: string): void {
+    this.m.queue.pauseReconnect(id)
+  }
+
   resumeQueue(id: string): void {
     this.m.queue.resumeQueue(id)
   }

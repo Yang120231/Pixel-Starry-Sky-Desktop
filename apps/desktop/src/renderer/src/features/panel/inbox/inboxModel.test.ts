@@ -68,6 +68,13 @@ describe('待处理分栏', () => {
     ])
     expect(items[1]).toMatchObject({ error: '额度不足', project: '项目' })
   })
+  it('等限流恢复自动继续的会话（有 limitAt）不算出错；已暂停的照旧', () => {
+    const items = build([
+      summary('wait', { lastOutcome: 'failed' }, 'idle', { queued: 1, failed: 0, paused: false, limitAt: 5_000 }),
+      summary('stopped', { lastOutcome: 'failed' }, 'idle', { queued: 1, failed: 0, paused: true }),
+    ])
+    expect(items.map(i => [i.sessionId, i.lane])).toEqual([['stopped', 'failed']])
+  })
   it('只显示当前机器的会话，同一栏按更新时间倒序', () => {
     const items = build(
       [

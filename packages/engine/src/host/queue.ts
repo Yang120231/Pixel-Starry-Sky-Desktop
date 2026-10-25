@@ -1,11 +1,11 @@
 // 消息队列：发送、排队、撤回、关掉、调序、继续、插队、引导、断线自动重连（docs/ui/message-queue.md）
 import { randomUUID } from 'node:crypto'
 import { statSync } from 'node:fs'
-import type { MessageInput, QueuedMessage, QueueMove, QueueSummary, SendReceipt } from '@pixelsky/protocol'
+import type { MessageInput, QueueLimit, QueuedMessage, QueueMove, QueueSummary, SendReceipt } from '@pixelsky/protocol'
 import { codedError, messageWithFiles } from '@pixelsky/protocol'
 import { messageInput, queueSettings, sameQueueSettings } from '../queue'
 import { ENGINES } from '../registry'
-import { blockedDelay, connectionKind, reconnectDelay, reconnectLimit } from '../retry'
+import { blockedDelay, connectionKind, LIMIT_MAX_TRIES, limitDelay, reconnectDelay, reconnectLimit } from '../retry'
 import type { HostContext, Runtime } from './context'
 
 /** 派发一条队列项前要发什么（reconnectPlan） */
@@ -25,6 +25,16 @@ export const RECONNECT_LOST = '原消息已不在对话里，请重试或撤回'
 const waitingReconnect = (q: QueuedMessage): boolean =>
   !!q.reconnect && (q.status === 'queued' || q.status === 'dispatching')
 
+/** 在等限流恢复后自动继续的项（docs/ui/rate-limit-resume.md） */
+const waitingLimit = (q: QueuedMessage): boolean => !!q.reconnect?.limited && waitingReconnect(q)
+
+/** 下一次自动继续的时间点（侧栏时钟用）：队列没暂停、次数没用完才有 */
+const limitAtOf = (queue: readonly QueuedMessage[], paused: boolean): number | undefined => {
+  if (paused) return undefined
+  const q = queue.find(waitingLimit)
+  return q && (q.limit?.tries.length ?? 0) < LIMIT_MAX_TRIES ? q.reconnect!.at : undefined
+}
+
 /** 累计自动重连的上限是当前 max 的几倍（每次有输出 attempt 都从 1 重算，没有总上限会无限「继续」烧额度） */
 export const RECONNECT_TOTAL_FACTOR = 3
 
@@ -37,15 +47,20 @@ export const reconnectTotal = (r: { attempt: number; total?: number }): number =
 export const reconnectedCount = (r: { attempt: number; total?: number }, sent: boolean): number =>
   Math.max(0, reconnectTotal(r) - (sent ? 0 : 1))
 
-/** 自动重连停下来：这些项（except 除外）转成发送失败，记下自动重连了几次 */
-const settleReconnects = (queue: QueuedMessage[], except?: string): QueuedMessage[] =>
+/** 自动重连停下来：这些项（except 除外，match 限定哪些项）转成发送失败，记下自动重连了几次 */
+const settleReconnects = (
+  queue: QueuedMessage[],
+  except?: string,
+  match: (q: QueuedMessage) => boolean = waitingReconnect,
+): QueuedMessage[] =>
   queue.map(q =>
-    q.reconnect && q.id !== except && waitingReconnect(q)
+    q.reconnect && q.id !== except && match(q)
       ? {
           ...q,
           status: 'failed' as const,
           error: q.reconnect.reason || '连接中断',
           reconnect: undefined,
+          limit: undefined,
           reconnected: reconnectedCount(q.reconnect, false),
         }
       : q,
@@ -67,7 +82,8 @@ export class HostQueue {
       const queued = queue.filter(q => q.status === 'queued').length
       const failed = queue.filter(q => q.status === 'failed' || q.status === 'uncertain').length
       if (!queued && !failed) return null
-      return { queued, failed, paused: rt.snapshot.queuePaused }
+      const limitAt = limitAtOf(queue, rt.snapshot.queuePaused)
+      return { queued, failed, paused: rt.snapshot.queuePaused, ...(limitAt === undefined ? {} : { limitAt }) }
     }
     if (!this.queueHints.has(id)) this.queueHints.set(id, this.ctx.store.peekQueue(id))
     return this.queueHints.get(id) ?? null
@@ -108,12 +124,12 @@ export class HostQueue {
     // 失败 / 待核对项留给用户处理，都不会挡住这条，也不会被它顺带执行。
     const idle = rt.snapshot.state === 'idle' && !rt.pumping && !rt.stopping && !rt.activeId
     const held = idle && rt.snapshot.queuePaused
-    // 暂停着的自动重连（重启后恢复的，或停止时的残留）不能当普通排队项一起 held：先结算成发送失败，再算 held
-    const settled = held ? settleReconnects(rt.snapshot.queue) : rt.snapshot.queue
+    // 暂停着的自动重连（重启后恢复的，或停止时的残留）不能当普通排队项一起 held：先结算成发送失败，再算 held。
+    // 在等限流恢复的（没暂停）：用户自己发了消息就当取消等待，同样先结算（docs/ui/rate-limit-resume.md）
+    const cancel = held ? waitingReconnect : idle ? waitingLimit : null
+    const settled = cancel ? settleReconnects(rt.snapshot.queue, undefined, cancel) : rt.snapshot.queue
     // 引擎其实收到过的（delivered）：结算后关掉时对话里那条不标「未送达」
-    const received = new Set(
-      held ? rt.snapshot.queue.filter(q => waitingReconnect(q) && q.delivered).map(q => q.id) : [],
-    )
+    const received = new Set(cancel ? rt.snapshot.queue.filter(q => cancel(q) && q.delivered).map(q => q.id) : [])
     const queue = settled.map(q => (held && q.status === 'queued' ? { ...q, held: true } : q))
     // 前面没有会先执行的排队项时，这条就是「现在执行」，界面不把它当排队显示。
     if (idle && !queue.some(q => q.status === 'queued' && !q.held)) item.direct = true
@@ -140,7 +156,10 @@ export class HostQueue {
     const rt = ctx.m.sessions.runtime(id)
     ctx.store.saveQueue(id, { items: rt.snapshot.queue, paused: rt.snapshot.queuePaused, receipts: rt.receipts })
     ctx.m.events.apply(id, { type: 'queue', items: rt.snapshot.queue, paused: rt.snapshot.queuePaused })
-    const key = rt.snapshot.queuePaused && rt.snapshot.queue.length ? `p${rt.snapshot.queue.length}` : ''
+    const limitAt = limitAtOf(rt.snapshot.queue, rt.snapshot.queuePaused)
+    const key =
+      (rt.snapshot.queuePaused && rt.snapshot.queue.length ? `p${rt.snapshot.queue.length}` : '') +
+      (limitAt === undefined ? '' : `l${limitAt}`)
     if ((this.queueKeys.get(id) ?? '') !== key) {
       this.queueKeys.set(id, key)
       ctx.m.events.broadcastSessions()
@@ -235,6 +254,7 @@ export class HostQueue {
       error: null,
       held: false,
       direct: true,
+      limit: undefined,
       reconnect: {
         attempt,
         max,
@@ -254,6 +274,60 @@ export class HostQueue {
   }
 
   /**
+   * 一轮因限流 / 额度用完失败（retry.ts limitKind）、又没换成账号 / 平台：这条留在队首，等到恢复时间（没有就退避 1、5、15 分钟）
+   * 再发「继续」（docs/ui/rate-limit-resume.md）。到点继续后仍被限流记一次（limit.tries），满 LIMIT_MAX_TRIES 次停下来
+   * （队列暂停，卡片给「手动重试」）；这一轮有过输出（成功推进）就从头算。前提同 reconnect：没停止、没暂停、普通消息不是斜杠命令。
+   * 不看请求重试次数设置（卡片上有自己的勾选框）。返回 false 时调用方照常标失败
+   */
+  limitWait(
+    id: string,
+    queueId: string,
+    error: string | null,
+    info: Pick<QueueLimit, 'kind' | 'window' | 'resetsAt'>,
+  ): boolean {
+    const { ctx } = this
+    const rt = ctx.runtimes.get(id)
+    if (!rt || ctx.closing || rt.snapshot.queuePaused || rt.stopping) return false
+    const item = rt.snapshot.queue.find(q => q.id === queueId)
+    if (!item || item.mode !== 'normal' || item.text.trimStart().startsWith('/')) return false
+    const now = Date.now()
+    const prev = rt.turn?.progressed || !item.reconnect?.limited ? undefined : item.limit
+    const tries = prev ? [...prev.tries, now] : []
+    const resetsAt = info.resetsAt !== null && info.resetsAt > now ? info.resetsAt : null
+    const stopped = tries.length >= LIMIT_MAX_TRIES
+    const next: QueuedMessage = {
+      ...item,
+      status: 'queued',
+      error: null,
+      held: false,
+      direct: true,
+      limit: { kind: info.kind, window: info.window, resetsAt, tries },
+      reconnect: {
+        attempt: Math.min(tries.length + 1, LIMIT_MAX_TRIES),
+        max: LIMIT_MAX_TRIES,
+        total: (item.reconnect ? reconnectTotal(item.reconnect) : 0) + 1,
+        since: now,
+        at: stopped ? now : now + (ctx.opts.limitDelays?.[tries.length] ?? limitDelay(tries.length, resetsAt, now)),
+        reason: (error ?? '').split('\n')[0].slice(0, 300),
+        ...(item.delivered ? {} : { resend: true }),
+        limited: true,
+      },
+    }
+    rt.snapshot = {
+      ...rt.snapshot,
+      queue: [next, ...rt.snapshot.queue.filter(q => q.id !== queueId)],
+      ...(stopped ? { queuePaused: true } : {}),
+    }
+    if (stopped && rt.reconnectTimer) {
+      clearTimeout(rt.reconnectTimer)
+      rt.reconnectTimer = null
+    }
+    this.publishQueue(id)
+    if (!stopped && !this.armReconnect(id)) queueMicrotask(() => void ctx.m.turn.pump(id))
+    return true
+  }
+
+  /**
    * 派发一条队列项前校验：自动重连的项发什么（turn.ts 派发时调用，唯一的判断处）。
    * 引擎收到过原消息（delivered）且它还在对话里：只发「继续」；收到过但已经不在对话里：不发，让调用方标失败；
    * 没收到过：原样重发，沿用原条目（messageUuid ?? id），时间也沿用。
@@ -262,9 +336,10 @@ export class HostQueue {
   reconnectPlan(id: string, item: QueuedMessage): ReconnectPlan {
     if (!item.reconnect) return { kind: 'normal' }
     const max = reconnectLimit(this.ctx.m.settings.file.maxRetries)
-    // 换了订阅账号再发的不是连接问题，不受重连次数（包括设成 0 关闭）的限制
+    // 换了订阅账号再发的、等限流恢复的不是连接问题，不受重连次数（包括设成 0 关闭）的限制
     if (
       !item.reconnect.account &&
+      !item.reconnect.limited &&
       (item.reconnect.attempt > max || reconnectTotal(item.reconnect) > max * RECONNECT_TOTAL_FACTOR)
     )
       return { kind: 'fail', error: item.reconnect.reason || '连接中断' }
@@ -288,7 +363,25 @@ export class HostQueue {
     if (!rt || !rt.snapshot.queue.some(waitingReconnect)) return
     if (rt.reconnectTimer) clearTimeout(rt.reconnectTimer)
     rt.reconnectTimer = null
+    const limits = rt.snapshot.queue.filter(waitingLimit)
     rt.snapshot = { ...rt.snapshot, queuePaused: true, queue: settleReconnects(rt.snapshot.queue) }
+    this.publishQueue(id)
+    // 限流卡片上的「取消等待」/「关闭」：卡片收起，不留一条发送失败（对话里已有报错）；对话里找不到原消息的留作失败项
+    for (const q of limits)
+      try {
+        this.dismissQueued(id, q.id, !q.delivered)
+      } catch {
+        // 留在队列里让用户重试或撤回
+      }
+  }
+
+  /** 取消「恢复后自动继续」：清掉计时器、暂停队列，卡片留着当提示；勾回去用 resumeQueue */
+  pauseReconnect(id: string): void {
+    const rt = this.ctx.runtimes.get(id)
+    if (!rt || !rt.snapshot.queue.some(waitingLimit)) throw new Error('没有在等待恢复的消息')
+    if (rt.reconnectTimer) clearTimeout(rt.reconnectTimer)
+    rt.reconnectTimer = null
+    rt.snapshot = { ...rt.snapshot, queuePaused: true }
     this.publishQueue(id)
   }
 

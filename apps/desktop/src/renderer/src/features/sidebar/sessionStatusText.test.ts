@@ -13,6 +13,7 @@ const KINDS: StatusKind[] = [
   'folder',
   'offline',
   'paused',
+  'limit',
   'running',
   'unread',
   'pr-conflict',

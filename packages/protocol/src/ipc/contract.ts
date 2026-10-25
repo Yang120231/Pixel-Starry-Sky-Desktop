@@ -297,6 +297,14 @@ export const IPC_CONTRACT = {
     mobile: 'act',
     trust: 'sender',
   },
+  'engine:pauseReconnect': {
+    kind: 'invoke',
+    route: 'resource',
+    ids: [0],
+    remote: 'engine:pauseReconnect',
+    mobile: 'act',
+    trust: 'sender',
+  },
   'engine:resumeQueue': {
     kind: 'invoke',
     route: 'resource',

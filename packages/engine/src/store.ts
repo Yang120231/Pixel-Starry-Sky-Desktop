@@ -256,7 +256,11 @@ export class Store {
             error: settled ? (item.error ?? null) : '上次退出前已开始交付，请核对后再重试',
             ...(delivered === undefined ? {} : { delivered }),
             ...(!settled && reconnect
-              ? { reconnect: undefined, reconnected: Math.max(0, (reconnect.total ?? reconnect.attempt) - 1) }
+              ? {
+                  reconnect: undefined,
+                  limit: undefined,
+                  reconnected: Math.max(0, (reconnect.total ?? reconnect.attempt) - 1),
+                }
               : {}),
             // 旧版本可能把重连项存成 held：整体已暂停，界面要显示「已暂停」卡片，所以去掉 held
             ...(settled && reconnect && item.held ? { held: false } : {}),

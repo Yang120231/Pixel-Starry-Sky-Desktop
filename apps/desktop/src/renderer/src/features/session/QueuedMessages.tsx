@@ -21,7 +21,15 @@ import { Button, IconButton, Spinner, cn } from '@/ui'
 import { effortLabel, type ComposerController, type QueueController } from '@/features/engine'
 import { ImageAttachments } from '@/features/session/attachments/ImageAttachments'
 import { FileAttachments } from '@/features/session/attachments/FileAttachments'
-import { canDismiss, isReconnecting, isSendFailure, isStarting, queueMoveKey, queueMoveTarget } from './queueView'
+import {
+  canDismiss,
+  isLimitWait,
+  isReconnecting,
+  isSendFailure,
+  isStarting,
+  queueMoveKey,
+  queueMoveTarget,
+} from './queueView'
 import { useProviders } from '@/features/account/providers'
 import { canCopyImported, isResumeLiveError } from '@/features/resume/model'
 import { nativeSessionAction, useEngineState } from '@/features/engine/store'
@@ -96,7 +104,9 @@ export function QueuedMessages({
     return () => ro.disconnect()
   }, [root])
   // 正在执行的、以及空闲时直接发送正在启动的消息都显示在对话里，不算排队；正在自动重连的显示重连卡片
-  const items = live.queue.filter(q => q.status !== 'running' && !isStarting(q, live.queuePaused) && !isReconnecting(q))
+  const items = live.queue.filter(
+    q => q.status !== 'running' && !isStarting(q, live.queuePaused) && !isReconnecting(q) && !isLimitWait(q),
+  )
   if (!items.length) return null
   const action = async (id: string, fn: () => Promise<unknown>) => {
     if (busy) return

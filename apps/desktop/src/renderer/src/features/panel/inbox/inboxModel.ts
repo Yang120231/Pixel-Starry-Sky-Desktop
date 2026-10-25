@@ -37,6 +37,7 @@ export function laneOf(summary: SessionSummary): InboxLane | null {
   if (summary.record.archivedAt) return null
   if (summary.state === 'waiting') return 'waiting'
   if (summary.state !== 'idle') return null
+  if (summary.queue?.limitAt) return null // 等限流 / 额度恢复后自动继续：侧栏已显示时钟，不算出错
   if (summary.record.lastOutcome === 'failed') return 'failed'
   if (summary.queue?.paused && summary.queue.queued + summary.queue.failed > 0) return 'paused'
   return null

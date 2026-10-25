@@ -26,6 +26,7 @@ export const SHOWCASE_SESSIONS = [
   { id: 'demo-claude-errors', title: '报错：自有额度' },
   { id: 'demo-claude-platform', title: '报错：平台余额不足' },
   { id: 'demo-claude-send-failed', title: '报错：发送失败（消息队列）' },
+  { id: 'demo-claude-rate-limit', title: '报错：额度用完，等到点自动继续' },
   { id: 'demo-claude-running', title: '运行中：进度卡片、后台任务、重试' },
   { id: 'demo-claude-compacting', title: '运行中：压缩上下文（循环播放）' },
   { id: 'demo-claude-steps', title: '运行中：当前步骤（循环播放）' },
@@ -1067,6 +1068,59 @@ const sendFailures = snapshot(
     ],
   },
 )
+
+// ---------- 5c 额度用完：等到点自动继续（docs/ui/rate-limit-resume.md） ----------
+
+const rateLimit = (() => {
+  const since = T0 - 20_000
+  const at = T0 + 83 * MIN + 45_000
+  return snapshot(
+    record('demo-claude-rate-limit', {
+      lastOutcome: 'failed',
+      lastError: 'Claude 订阅的额度用完了',
+      updatedAt: T0 - MIN,
+    }),
+    [
+      user('rl-u1', '把设置页的保存逻辑拆成独立的 hook，再补上测试', 8),
+      assistant('rl-a1', '先把保存逻辑拆进 useSettingsSave，再补测试。'),
+      {
+        kind: 'notice',
+        id: 'rl-n1',
+        level: 'error',
+        text: 'Claude 订阅的额度用完了',
+        detail: "You've hit your limit · resets 3:30pm",
+        error: { kind: 'balance', code: 'usageLimitExceeded' },
+      },
+      failed('rl-s1'),
+    ],
+    {
+      queue: [
+        {
+          id: 'rl-q1',
+          text: '把设置页的保存逻辑拆成独立的 hook，再补上测试',
+          createdAt: T0 - 8 * MIN,
+          settings: { model: 'claude-opus-5-5', effort: 'high', platform: null },
+          status: 'queued',
+          error: null,
+          mode: 'normal',
+          direct: true,
+          delivered: true,
+          messageUuid: 'rl-u1',
+          limit: { kind: 'quota', window: 'five_hour', resetsAt: at - 5_000, tries: [] },
+          reconnect: {
+            attempt: 1,
+            max: 3,
+            total: 1,
+            since,
+            at,
+            reason: 'Claude 订阅的额度用完了',
+            limited: true,
+          },
+        },
+      ],
+    },
+  )
+})()
 
 // ---------- 6 运行中 ----------
 
@@ -2168,6 +2222,7 @@ export const showcaseSnapshots: Record<string, SessionSnapshot> = Object.fromEnt
     errors,
     platform,
     sendFailures,
+    rateLimit,
     running,
     compacting,
     steps,

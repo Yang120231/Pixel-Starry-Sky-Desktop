@@ -78,6 +78,8 @@ export interface EngineHostOptions {
   continueText?: () => string
   /** 测试用：第 n 次自动重连前等多久（毫秒），不给按 retry.ts reconnectDelay */
   reconnectDelays?: number[]
+  /** 测试用：限流后第 n 次自动继续前等多久（毫秒），不给按 retry.ts limitDelay */
+  limitDelays?: number[]
   /**
    * 订阅额度都用完、自动改用平台时挑线路（docs/ui/engine-accounts.md §5.2）：按引擎和这个会话现在的模型选。
    * 本机主进程提供（平台登录和目录在那里）；远程机器上不传，这个功能就不生效

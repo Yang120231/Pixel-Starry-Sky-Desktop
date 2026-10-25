@@ -84,7 +84,7 @@ export function resetShort(resetsAt: number, now: number): string {
   return tr('quota.reset.date', { p0: monthDayText(resetsAt) })
 }
 
-function durationText(ms: number): string {
+export function durationText(ms: number): string {
   const mins = Math.max(1, Math.ceil(ms / 60_000))
   if (mins < 60) return tr('quota.duration.min', { p0: mins })
   if (mins < 1_440) {

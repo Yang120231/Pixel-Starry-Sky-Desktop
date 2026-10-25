@@ -135,6 +135,8 @@ export interface EngineBridge {
   runQueuedNow(id: string, queueId: string): Promise<void>
   steerQueued(id: string, queueId: string, expectedTurnId: string): Promise<void>
   resumeQueue(id: string): Promise<void>
+  /** 限流等待中取消「恢复后自动继续」：暂停队列、清掉计时器（docs/ui/rate-limit-resume.md） */
+  pauseReconnect(id: string): Promise<void>
   /** 回退前检查代码：要还原哪些文件（docs/ui/rewind-fork-sidechat.md §1） */
   rewindPreview(id: string, itemId: string): Promise<import('@pixelsky/protocol').RewindPreview>
   /** 回退到这条用户消息之前（对话和 / 或代码），回退对话时返回它的原文和图片 */

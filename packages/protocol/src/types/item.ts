@@ -127,6 +127,8 @@ export type Item =
       engine?: EngineId
       /** 连接中断后宿主自动发的「继续」是第几次重连：界面显示成一行小字，不当成用户说的话 */
       reconnect?: number
+      /** 这条「继续」是限流 / 额度用完后到点自动发的（docs/ui/rate-limit-resume.md）：开始等的时间和到点的时间（毫秒） */
+      limit?: { since: number; at: number }
       /** 发送失败后用户点了「关掉」：没送到，留在对话里变淡，标「未送达」 */
       dismissed?: boolean
     }

@@ -720,6 +720,27 @@ export class HostAccounts {
     }
   }
 
+  /**
+   * 额度用完又没换成账号 / 平台时，限流卡片要写的窗口和恢复时间（docs/ui/rate-limit-resume.md）：
+   * 只对走自己订阅的会话读额度事件；经网关的平台 / 自定义接口、只有一条 429 的（kind 为 rate）都是 null
+   */
+  limitReading(sessionId: string, kind: 'quota' | 'rate'): Pick<NoticeAccountSwitch, 'window' | 'resetsAt'> {
+    const none = { window: null, resetsAt: null }
+    const rt = this.ctx.runtimes.get(sessionId)
+    if (!rt || kind !== 'quota') return none
+    const record = rt.execution ?? rt.snapshot.record
+    if (!(ENGINES as readonly string[]).includes(record.engine) || viaGateway(record)) return none
+    const e = record.engine as AccountEngine
+    const s = this.engineState(e)
+    const from =
+      rt.sessionAccount && s.accounts.some(a => a.id === rt.sessionAccount) ? rt.sessionAccount : this.currentId(e)
+    return this.usedFor(
+      sessionId,
+      e,
+      s.accounts.find(a => a.id === from),
+    )
+  }
+
   /** 用完的是哪个窗口、几点恢复：先看这个会话最近的额度事件，没有时按这个账号的额度快照 */
   private usedFor(
     sessionId: string,

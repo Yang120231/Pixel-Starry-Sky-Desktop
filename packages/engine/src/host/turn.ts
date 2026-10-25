@@ -256,6 +256,9 @@ export class HostTurn {
           turnId,
           engine: record.engine,
           ...(resume ? { reconnect: item.reconnect!.attempt } : {}),
+          ...(resume && item.reconnect!.limited
+            ? { limit: { since: item.reconnect!.since, at: item.reconnect!.at } }
+            : {}),
         },
       })
       const latest = rt.snapshot.record

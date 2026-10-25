@@ -14,6 +14,19 @@ const error = (id: string): Item => ({ kind: 'notice', id, level: 'error', text:
 const ids = (items: Item[]) => items.map(i => i.id)
 
 describe('reconnectView', () => {
+  it('限流后自动发的「继续」（带 limit）不算重连小字：前面的报错行留着', () => {
+    const resumed: Item = {
+      kind: 'user',
+      id: 'c1',
+      text: '继续',
+      createdAt: 0,
+      reconnect: 1,
+      limit: { since: 0, at: 1 },
+    }
+    const items = [user('u'), error('e1'), resumed, reply('r2')]
+    expect(ids(reconnectView(items, false).items)).toEqual(['u', 'e1', 'c1', 'r2'])
+  })
+
   it('没有重连时原样返回', () => {
     const items = [user('u'), reply('r'), error('e')]
     expect(reconnectView(items, false).items).toBe(items)

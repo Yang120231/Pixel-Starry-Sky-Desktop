@@ -116,3 +116,42 @@ export function useDemoQueueController(sessionId: string | null): QueueControlle
     resumeQueue: async () => setQueue(queue => queue.map(q => (q.held ? { ...q, held: false } : q)), false),
   }
 }
+
+/**
+ * 演示模式里限流卡片的按钮（docs/ui/rate-limit-resume.md）：勾选框 = 队列暂停与否；
+ * 「现在就试」把等待项换成对话里一行「已继续」；取消 / 关闭直接拿掉
+ */
+export function demoLimitAction(sessionId: string, action: 'pause' | 'resume' | 'now' | 'cancel'): void {
+  if (!isDemo) return
+  updateDemoSnapshot(sessionId, snap => {
+    const item = snap.queue.find(q => q.reconnect?.limited)
+    if (!item || !item.reconnect) return snap
+    if (action === 'pause') return { ...snap, queuePaused: true }
+    if (action === 'resume') return { ...snap, queuePaused: false }
+    const queue = snap.queue.filter(q => q !== item)
+    if (action === 'cancel') return { ...snap, queue, queuePaused: false }
+    const now = Date.now()
+    return {
+      ...snap,
+      queue,
+      queuePaused: false,
+      items: [
+        ...snap.items,
+        {
+          kind: 'user',
+          id: demoId('demo-limit'),
+          text: tr('session.live.NoticeActions.retryMessage'),
+          createdAt: now,
+          reconnect: 1,
+          limit: { since: item.reconnect.since, at: now },
+        },
+        {
+          kind: 'assistant',
+          id: demoId('demo-reply'),
+          text: NOT_SENT,
+          status: 'completed',
+        },
+      ],
+    }
+  })
+}

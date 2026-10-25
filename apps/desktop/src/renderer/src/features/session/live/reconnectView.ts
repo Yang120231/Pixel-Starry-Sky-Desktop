@@ -1,7 +1,8 @@
 import type { Item } from '@pixelsky/protocol'
 
 const isTurnStart = (item: Item): boolean => item.kind === 'user' && item.mode !== 'guidance'
-const isMarker = (item: Item | undefined): boolean => item?.kind === 'user' && !!item.reconnect
+// 限流后自动发的「继续」不算：它前面的报错行要留着（画面见 docs/ui/rate-limit-resume.md），自己显示成一行「已继续」
+const isMarker = (item: Item | undefined): boolean => item?.kind === 'user' && !!item.reconnect && !item.limit
 const isError = (item: Item): boolean => item.kind === 'notice' && item.level === 'error'
 
 /**

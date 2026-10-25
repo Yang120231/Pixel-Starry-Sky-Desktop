@@ -139,6 +139,23 @@ describe('statusOf：先后', () => {
   })
 })
 
+describe('statusOf：等额度恢复', () => {
+  it('在等限流后自动继续：时钟排在出错类前面，写剩余时间，悬停卡讲这件事，没有按钮', () => {
+    const status = statusOf({ running: false, unread: false, card: failed('Claude 订阅的额度用完了'), limitAt: 5_000 })
+    expect(status.mark).toBe('limit')
+    expect(status.limitAt).toBe(5_000)
+    expect(status.label?.key).toBe('sidebar.tree.tag.limit')
+    expect(topicOf(status)).toBe('limit')
+    expect(cardActions('limit', { request: null, queue: null, errorActions: [] })).toEqual([])
+  })
+
+  it('等批准排在它前面；没在等（limitAt 为空）照旧', () => {
+    expect(markOf({ card: waiting('command'), limitAt: 5_000 })).toBe('approve')
+    expect(markOf({ card: failed('429'), limitAt: null })).toBe('busy')
+    expect(statusOf({ running: false, unread: false, limitAt: null }).limitAt).toBeNull()
+  })
+})
+
 describe('statusOf：PR 图标', () => {
   it('一律放右边', () => {
     const s = statusOf({ ...base, prs: [pr()] })

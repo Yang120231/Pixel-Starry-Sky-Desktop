@@ -109,6 +109,7 @@ export const sidebarMessages = {
   'sidebar.tree.tag.auth': { zh: '要登录', en: 'Sign in' },
   'sidebar.tree.tag.balance': { zh: '余额不足', en: 'Low balance' },
   'sidebar.tree.tag.route': { zh: '换线路', en: 'Change route' },
+  'sidebar.tree.tag.limit': { zh: '等额度', en: 'Waiting' },
   'sidebar.tree.tag.busy': { zh: '繁忙', en: 'Busy' },
   'sidebar.tree.tag.folder': { zh: '文件夹没了', en: 'Folder gone' },
   'sidebar.tree.tag.offline': { zh: '连不上', en: 'Offline' },
@@ -157,6 +158,9 @@ export const sidebarMessages = {
   'sidebar.status.title.folder': { zh: '工作文件夹找不到了', en: 'Working folder not found' },
   'sidebar.status.title.offline': { zh: '连不上 {name}', en: 'Cannot reach {name}' },
   'sidebar.status.title.paused': { zh: '暂停 · 还有 {count} 条排着', en: 'Paused · {count} queued' },
+  'sidebar.status.limit.title': { zh: '等待额度恢复', en: 'Waiting for quota to reset' },
+  'sidebar.status.limit.detail': { zh: '{p0} 自动继续，还剩 {p1}', en: 'Continues automatically at {p0}, {p1} left' },
+  'sidebar.status.limit.note': { zh: '点开会话可以取消等待', en: 'Open the chat to cancel the wait' },
   'sidebar.status.folderGone': {
     zh: '被移动或删除了，这个对话没法接着跑。',
     en: 'It was moved or deleted, so this chat cannot continue.',

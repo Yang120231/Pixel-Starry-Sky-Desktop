@@ -142,6 +142,8 @@ export interface QueuedMessage {
   /** 连接中断、宿主正在自动重连（retry.ts isConnectionError）：到时间之前留在队首不派发，
    *  界面显示重连卡片而不是放进消息队列 */
   reconnect?: QueueReconnect
+  /** 因限流 / 额度用完在等到点自动继续（docs/ui/rate-limit-resume.md）：和 reconnect 一起出现，界面显示限流卡片而不是重连卡片 */
+  limit?: QueueLimit
   /** 自动重连了几次还是没接上（或用户点了停止）才算失败的：界面在错误原因后面写「已自动重连 n 次」 */
   reconnected?: number
 }
@@ -170,6 +172,19 @@ export interface QueueReconnect {
   account?: boolean
   /** 被 Cloudflare 这类防护拦下（engine retry.ts 'blocked'）：等得更久，界面写「被拦截」而不是「连接中断」 */
   blocked?: boolean
+  /** 因限流 / 额度用完在等（对应 QueuedMessage.limit）：不受重连次数设置限制，次数按 limit.tries 算 */
+  limited?: boolean
+}
+
+/** 限流 / 额度用完后的等待（engine retry.ts limitKind / limitDelay） */
+export interface QueueLimit {
+  /** quota：订阅额度用完（窗口见 window）；rate：只有一条 429 */
+  kind: 'quota' | 'rate'
+  window: 'five_hour' | 'seven_day' | null
+  /** 引擎给的恢复时间（毫秒）；没有为 null，按退避等 */
+  resetsAt: number | null
+  /** 到点自动继续后仍被限流的时间点；满 3 个就不再自动继续 */
+  tries: number[]
 }
 
 export interface SendReceipt {
@@ -457,4 +472,6 @@ export interface QueueSummary {
   queued: number
   failed: number
   paused: boolean
+  /** 在等限流恢复后自动继续时，下一次继续的时间点（侧栏时钟用）；没在等、已暂停或已停止时省略 */
+  limitAt?: number
 }

@@ -240,6 +240,7 @@ export const ENGINE_OPS = {
   'engine:runQueuedNow': (c, id, q) => c.host.runQueuedNow(str(id, 'id'), str(q, 'queueId')),
   'engine:steerQueued': (c, id, q, turn) => c.host.steerQueued(str(id, 'id'), str(q, 'queueId'), str(turn, 'turnId')),
   'engine:resumeQueue': (c, id) => c.host.resumeQueue(str(id, 'id')),
+  'engine:pauseReconnect': (c, id) => c.host.pauseReconnect(str(id, 'id')),
   'engine:rewindPreview': (c, id, itemId) => c.host.rewindPreview(str(id, 'id'), str(itemId, 'itemId')),
   'engine:rewind': (c, id, itemId, raw) => c.host.rewind(str(id, 'id'), str(itemId, 'itemId'), rewindOptions(raw)),
   'engine:undoRewind': (c, id) => c.host.undoRewind(str(id, 'id')),

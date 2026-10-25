@@ -19,6 +19,7 @@ export type StatusKind =
   | 'folder'
   | 'offline'
   | 'paused'
+  | 'limit'
   | 'running'
   | 'unread'
   | 'pr-conflict'
@@ -38,6 +39,8 @@ const LABEL: Partial<Record<StatusKind, { key: TranslationKey; tone: LabelTone }
   folder: { key: 'sidebar.tree.tag.folder', tone: 'danger' },
   offline: { key: 'sidebar.tree.tag.offline', tone: 'warn' },
   paused: { key: 'sidebar.tree.tag.paused', tone: 'muted' },
+  // 右边写的是剩余时间（StatusLabel 按 limitAt 画），这个词条只当没有时间时的兜底
+  limit: { key: 'sidebar.tree.tag.limit', tone: 'warn' },
 }
 
 /** 有字的问题类（悬停卡只给这些和 PR 弹） */
@@ -105,6 +108,8 @@ export interface StatusInput {
   /** PR 图标显示哪些（prDisplay.ts）；不传用默认（合并、关闭后 1 天，开着的都显示） */
   display?: PrDisplay
   sessionId?: string
+  /** 在等限流 / 额度恢复后自动继续：下一次继续的时间点（毫秒，QueueSummary.limitAt） */
+  limitAt?: number | null
   now?: number
 }
 
@@ -117,6 +122,8 @@ export interface SessionStatus {
   prInline: boolean
   /** 有 PR（含隐藏了图标的、只是提到的）：整行悬停能弹 PR 卡，在卡里恢复显示 */
   hasPrs: boolean
+  /** mark 是 limit 时，下一次自动继续的时间点 */
+  limitAt: number | null
 }
 
 /**
@@ -130,7 +137,7 @@ export const errorKindOf = (error: string | null | undefined): Exclude<ErrorKind
 }
 
 /**
- * 先后（一格只放一个）：approve / question > auth / balance / route / failed / folder > busy / offline
+ * 先后（一格只放一个）：approve / question > limit（在等额度恢复，报错已经由它接手）> auth / balance / route / failed / folder > busy / offline
  * > paused > running > unread。PR 不占左边格子，图标一律放右边（prInline）
  */
 export function statusOf(input: StatusInput): SessionStatus {
@@ -145,7 +152,8 @@ export function statusOf(input: StatusInput): SessionStatus {
   if (card?.lane === 'waiting') {
     const kind = card.request?.kind
     mark = kind === 'command' || kind === 'file_change' || kind === 'tool' ? 'approve' : 'question'
-  } else if (error && error !== 'busy') mark = error
+  } else if (input.limitAt) mark = 'limit'
+  else if (error && error !== 'busy') mark = error
   else if (input.folderMissing) mark = 'folder'
   else if (error === 'busy') mark = 'busy'
   else if (offline) mark = 'offline'
@@ -158,6 +166,7 @@ export function statusOf(input: StatusInput): SessionStatus {
     pr,
     prInline: !!pr,
     hasPrs: !!pr || visiblePrs(input.prs, input.now).length > 0 || (input.mentioned ?? 0) > 0,
+    limitAt: mark === 'limit' ? (input.limitAt ?? null) : null,
   }
 }
 

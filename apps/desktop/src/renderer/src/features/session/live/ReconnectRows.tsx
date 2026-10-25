@@ -6,6 +6,7 @@ import { Check, RotateCw } from 'lucide-react'
 import type { Item } from '@pixelsky/protocol'
 import { bridge } from '@/features/engine'
 import { fullImages } from '../attachments/imageSource'
+import { clockText, durationText } from '../quota/quotaModel'
 
 type UserItem = Extract<Item, { kind: 'user' }>
 
@@ -28,6 +29,20 @@ export function ReconnectLine({ attempt, failed }: { attempt: number; failed: bo
           · {tr('session.reconnect.dropped', { p0: attempt })}
         </>
       )}
+    </div>
+  )
+}
+
+/** 限流 / 额度用完后到点继续的那条「继续」：收起成一行「已在 14:30 继续 · 等了 1 小时 43 分」（docs/ui/rate-limit-resume.md） */
+export function LimitResumedLine({ at, since, sentAt }: { at: number; since: number; sentAt: number }) {
+  useI18n()
+  return (
+    <div data-limit-resumed className="flex items-center gap-1.5 px-0.5 text-label text-fg-faint tabular-nums">
+      <span className="inline-flex items-center gap-1 text-success">
+        <Check size={12} strokeWidth={2} className="shrink-0" />
+        {tr('session.limit.done', { p0: clockText(sentAt) })}
+      </span>
+      · {tr('session.limit.waited', { p0: durationText(Math.max(at, sentAt) - since) })}
     </div>
   )
 }

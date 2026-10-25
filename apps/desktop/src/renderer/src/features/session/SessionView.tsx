@@ -27,6 +27,7 @@ import { ConversationFind, useFindShortcut, type FoldedMatches } from '@/feature
 import { expandItems } from '@/features/search/expand'
 import { foldedMatches } from './live/foldedText'
 import { RetryStatus } from './live/RetryStatus'
+import { RateLimitCard } from './live/RateLimitCard'
 import { ReconnectStatus } from './live/ReconnectStatus'
 import { MessageActionsContext } from './live/MessageActions'
 import { useBranchActions } from './useBranchActions'
@@ -415,6 +416,12 @@ function LiveSessionView({
                     )}
                     <RetryStatus sessionId={sessionId} retry={snapshot?.retry} />
                     <ReconnectStatus sessionId={sessionId} queue={snapshot?.queue} paused={!!snapshot?.queuePaused} />
+                    <RateLimitCard
+                      sessionId={sessionId}
+                      queue={snapshot?.queue}
+                      paused={!!snapshot?.queuePaused}
+                      engine={snapshot?.record.engine}
+                    />
                     {snapshot && (
                       <ApprovalStack
                         key={`approvals:${sessionId}`}

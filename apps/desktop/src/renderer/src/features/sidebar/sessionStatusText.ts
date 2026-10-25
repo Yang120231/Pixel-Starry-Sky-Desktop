@@ -3,6 +3,7 @@ import { tr, translateMessage } from '@/i18n/core'
 import type { SessionRecord } from '@pixelsky/protocol'
 import type { SessionCard } from '@/features/board/sessionLanes'
 import { platformNoticeText } from '@/features/session/live/errorKind'
+import { resetClock, durationText } from '@/features/session/quota/quotaModel'
 import type { StatusKind } from './sessionStatusModel'
 
 /** 标题、说明（命令 / 路径 / 错误原文这类用等宽字）、补充一句；PR 的标题卡片自己画，这里给空 */
@@ -14,6 +15,9 @@ export function describeTopic(
     machineName?: string
     machineError?: string | null
     error: string
+    /** 在等额度恢复：下一次自动继续的时间点 */
+    limitAt?: number | null
+    now?: number
   },
 ): { title: string; detail: string; note?: string; mono?: boolean } {
   const request = input.card?.request ?? null
@@ -60,6 +64,15 @@ export function describeTopic(
         }),
         detail: '',
       }
+    case 'limit': {
+      const now = input.now ?? Date.now()
+      const at = input.limitAt ?? now
+      return {
+        title: tr('sidebar.status.limit.title'),
+        detail: tr('sidebar.status.limit.detail', { p0: resetClock(at, now), p1: durationText(Math.max(0, at - now)) }),
+        note: tr('sidebar.status.limit.note'),
+      }
+    }
     case 'auth':
     case 'balance':
     case 'route':

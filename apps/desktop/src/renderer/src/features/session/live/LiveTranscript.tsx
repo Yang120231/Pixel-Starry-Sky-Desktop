@@ -57,7 +57,7 @@ import { PortTip } from './PortTip'
 import { CompactionLiveContext, type CompactionLive } from './compactionLive'
 import { isReconnecting, isStarting } from '../queueView'
 import { reconnectView } from './reconnectView'
-import { DismissedNote, ReconnectLine } from './ReconnectRows'
+import { DismissedNote, LimitResumedLine, ReconnectLine } from './ReconnectRows'
 import { NoticeActions } from './NoticeActions'
 import { AssistantMessageActions, UserMessageActions } from './MessageActions'
 import { TurnCommentButton, TurnCommentList, TurnCommentsContext } from '../TurnCommentCards'
@@ -118,6 +118,7 @@ const ItemView = memo(function ItemView({
   const commentable = !!useContext(TurnCommentsContext)
   switch (item.kind) {
     case 'user':
+      if (item.limit) return <LimitResumedLine at={item.limit.at} since={item.limit.since} sentAt={item.createdAt} />
       if (item.reconnect) return <ReconnectLine attempt={item.reconnect} failed={!!reconnectFailed} />
       if (item.dismissed)
         return (

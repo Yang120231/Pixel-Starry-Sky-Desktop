@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react'
 import { tr } from '@/i18n/core'
 import {
   CirclePause,
+  Clock,
   CloudOff,
   FolderX,
   GitMerge,
@@ -19,6 +21,7 @@ import {
 } from 'lucide-react'
 import { Dot, Spinner, cn } from '@/ui'
 import { StatusDot } from '@/features/session/live/StatusDot'
+import { sidebarRemaining } from '@/features/session/live/limitModel'
 import type { SessionPr } from '../../../../shared/types/session-status'
 import { ciFailed, type LabelTone, type SessionStatus, type StatusKind } from './sessionStatusModel'
 
@@ -85,6 +88,7 @@ const ICON: Partial<Record<StatusKind, { icon: LucideIcon; tone: string }>> = {
   folder: { icon: FolderX, tone: 'text-danger' },
   offline: { icon: CloudOff, tone: 'text-warn' },
   paused: { icon: CirclePause, tone: 'text-fg-faint' },
+  limit: { icon: Clock, tone: 'text-active' },
   'pr-conflict': { icon: GitMergeConflict, tone: 'text-warn' },
 }
 
@@ -168,7 +172,11 @@ export function StatusLabel({
     <>
       {inline}
       {icon && <StatusGlyph kind={status.mark} size={13} ring={ring} />}
-      <span className={cn('shrink-0 text-meta font-semibold', TONE[status.label.tone])}>{tr(status.label.key)}</span>
+      {status.mark === 'limit' && status.limitAt ? (
+        <LimitRemaining at={status.limitAt} />
+      ) : (
+        <span className={cn('shrink-0 text-meta font-semibold', TONE[status.label.tone])}>{tr(status.label.key)}</span>
+      )}
     </>
   )
 }
@@ -176,3 +184,18 @@ export function StatusLabel({
 /** CI 小红点外圈的颜色：跟行的底色（选中 / 悬停 / 平时） */
 export const ringOf = (selected: boolean): string =>
   selected ? 'ring-selected' : 'ring-sidebar group-hover/session:ring-hover'
+
+/** 等额度恢复的对话右边的剩余时间（超过 1 小时 1:23，不足 12 分），每 15 秒刷新；悬停卡里写全 */
+function LimitRemaining({ at }: { at: number }) {
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    setNow(Date.now())
+    const timer = window.setInterval(() => setNow(Date.now()), 15_000)
+    return () => window.clearInterval(timer)
+  }, [at])
+  return (
+    <span data-limit-remaining className="shrink-0 text-meta font-semibold text-active tabular-nums">
+      {sidebarRemaining(Math.max(0, at - now))}
+    </span>
+  )
+}

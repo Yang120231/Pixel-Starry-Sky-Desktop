@@ -4,6 +4,7 @@ import { reduce, replyPreview, type EngineEvent, type Item, type SessionRecord }
 import type { HostContext, Runtime } from './context'
 import { reconnectedCount } from './queue'
 import { providerOfEngine } from './quota'
+import { limitKind } from '../retry'
 import { logger } from '../log'
 
 const log = logger('engine.host')
@@ -298,6 +299,15 @@ export class HostEvents {
                 ? m.queue.reconnect(id, item.id, event.error ?? null, undefined, { account: true })
                 : m.queue.reconnect(id, item.id, event.error ?? null)
             if (fallback && reconnecting) void m.accounts.fallbackToPlatform(id, item.id, fallback, event.error ?? null)
+            // 限流 / 额度用完又没有别的账号可换：留在队首，等到恢复时间再发「继续」（docs/ui/rate-limit-resume.md）
+            if (!reconnecting && !switched && !fallback) {
+              const kind = limitKind(event.error, rt.turn?.usageLimited)
+              if (kind)
+                reconnecting = m.queue.limitWait(id, item.id, event.error ?? null, {
+                  kind,
+                  ...m.accounts.limitReading(id, kind),
+                })
+            }
             if (!reconnecting)
               m.queue.changeQueue(id, item.id, {
                 status: 'failed',

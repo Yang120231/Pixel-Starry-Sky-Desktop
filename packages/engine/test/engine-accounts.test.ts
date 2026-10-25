@@ -503,13 +503,23 @@ describe('额度用完自动换账号', () => {
     return record.id
   }
 
-  it('默认关：额度用完就是失败，不换账号', async () => {
+  it('默认关：额度用完不换账号，这条等额度恢复后自动继续（docs/ui/rate-limit-resume.md）', async () => {
     const env = setup({ limited: n => n === 1 })
     await env.addAccount('work@example.com')
     const id = await send(env)
-    await vi.waitFor(() => expect(env.host.open(id).queue[0]?.status).toBe('failed'))
+    await vi.waitFor(() => expect(env.host.open(id).queue[0]?.limit).toMatchObject({ kind: 'quota', tries: [] }))
+    expect(env.host.open(id).queue[0]).toMatchObject({ status: 'queued', reconnect: { limited: true } })
     expect((await env.host.accounts('codex')).current).toBe('default')
     expect(env.sessions()).toBe(1)
+  })
+
+  it('额度事件带恢复时间：等到那之后再继续，卡片写 5 小时窗口', async () => {
+    const resetsAt = Date.now() + 3_600_000
+    const env = setup({ limited: n => n === 1, resetsAt: () => resetsAt })
+    const id = await send(env)
+    await vi.waitFor(() => expect(env.host.open(id).queue[0]?.limit).toMatchObject({ window: 'five_hour', resetsAt }))
+    expect(env.host.open(id).queue[0].reconnect?.at).toBe(resetsAt + 5_000)
+    expect(env.sends).toHaveLength(1)
   })
 
   it('打开后：换到下一个账号、对话里提示一句，这条用新账号的进程重新派发', async () => {
@@ -575,12 +585,12 @@ describe('额度用完自动换账号', () => {
     expect(env.host.open(id).queue).toEqual([])
   })
 
-  it('所有账号都用完：只换一次，第二次照常失败', async () => {
+  it('所有账号都用完：只换一次，第二次没有账号可换，转成等额度恢复', async () => {
     const env = setup({ limited: () => true })
     await env.addAccount('work@example.com')
     env.host.setAccountAuto('codex', { enabled: true })
     const id = await send(env)
-    await vi.waitFor(() => expect(env.host.open(id).queue[0]?.status).toBe('failed'))
+    await vi.waitFor(() => expect(env.host.open(id).queue[0]?.limit).toMatchObject({ kind: 'quota' }))
     expect(env.sends).toHaveLength(2)
   })
 
@@ -637,11 +647,11 @@ describe('订阅额度都用完时改用平台', () => {
   const noticesOf = (env: ReturnType<typeof setup>, id: string) =>
     env.host.open(id).items.flatMap(i => (i.kind === 'notice' && i.fallback ? [i] : []))
 
-  it('默认关：额度用完就是失败，不问线路', async () => {
+  it('默认关：额度用完不问线路，转成等额度恢复', async () => {
     const route = vi.fn(async () => ROUTE)
     const env = setup({ limited: n => n === 1, platformRoute: route })
     const id = await send(env)
-    await vi.waitFor(() => expect(env.host.open(id).queue[0]?.status).toBe('failed'))
+    await vi.waitFor(() => expect(env.host.open(id).queue[0]?.limit).toMatchObject({ kind: 'quota' }))
     expect(route).not.toHaveBeenCalled()
     expect(env.host.open(id).record.platform ?? null).toBeNull()
   })

@@ -68,3 +68,27 @@ export const RECONNECT_DEFAULT = 5
 export function reconnectLimit(maxRetries: number | null): number {
   return maxRetries === null ? RECONNECT_DEFAULT : maxRetries
 }
+
+/**
+ * 一轮失败是不是限流 / 额度用完（docs/ui/rate-limit-resume.md）：重连没用，要等到恢复时间再「继续」。
+ * quota：引擎报了订阅额度用完（usageLimited）；rate：原文是 429 / 请求太频繁。余额不足（也常用 429 报）和被防护拦截的不算。
+ */
+export type LimitKind = 'quota' | 'rate'
+export function limitKind(text: string | null | undefined, usageLimited = false): LimitKind | null {
+  if (usageLimited) return 'quota'
+  if (!text || isFirewallBlock(text) || /余额|账单|billing|insufficient/i.test(text)) return null
+  return /\b429\b|请求太频繁|rate.?limit|too many requests/i.test(text) ? 'rate' : null
+}
+
+/** 到点继续后连续几次仍被限流就不再自动继续 */
+export const LIMIT_MAX_TRIES = 3
+/** 没有恢复时间时第几次失败后等多久：1、5、15 分钟 */
+export const LIMIT_BACKOFF = [60_000, 300_000, 900_000]
+/** 到恢复时间后多等一会儿再发，免得卡在边界上又被限流一次 */
+export const LIMIT_SLACK_MS = 5_000
+
+/** 下一次自动继续等多久（毫秒）：有还没到的恢复时间等到它之后，否则按已失败次数退避 */
+export function limitDelay(tries: number, resetsAt: number | null, now: number): number {
+  if (resetsAt !== null && resetsAt > now) return resetsAt - now + LIMIT_SLACK_MS
+  return LIMIT_BACKOFF[Math.min(LIMIT_BACKOFF.length - 1, Math.max(0, tries))]
+}

@@ -52,6 +52,7 @@ export type {
   QuestionOption,
   QueueSettings,
   QueueMove,
+  QueueLimit,
   QueueReconnect,
   QueueStatus,
   QueueSummary,

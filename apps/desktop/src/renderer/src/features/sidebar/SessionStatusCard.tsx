@@ -297,7 +297,14 @@ function StatusCard({
         ? SOURCE_ACTION_LABEL[id]
         : tr(ACTION_KEY[id])
 
-  const text = describeTopic(topic, { card, record, machineName: machine?.name, machineError: machine?.error, error })
+  const text = describeTopic(topic, {
+    card,
+    record,
+    machineName: machine?.name,
+    machineError: machine?.error,
+    error,
+    limitAt: status.limitAt,
+  })
   return (
     <div
       ref={ref}

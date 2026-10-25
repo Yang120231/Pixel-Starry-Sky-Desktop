@@ -151,6 +151,7 @@ const engine: EngineBridge = {
   runQueuedNow: (id, queueId) => call('engine:runQueuedNow', id, queueId),
   steerQueued: (id, queueId, turnId) => call('engine:steerQueued', id, queueId, turnId),
   resumeQueue: id => call('engine:resumeQueue', id),
+  pauseReconnect: id => call('engine:pauseReconnect', id),
   rewindPreview: (id, itemId) => call('engine:rewindPreview', id, itemId),
   rewind: (id, itemId, options) => call('engine:rewind', id, itemId, options),
   undoRewind: id => call('engine:undoRewind', id),

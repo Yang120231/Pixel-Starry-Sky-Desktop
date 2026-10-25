@@ -8,8 +8,16 @@ export function isStarting(q: QueuedMessage, paused: boolean): boolean {
 /** 断线后正在自动重连的那条：显示重连卡片（ReconnectStatus），不放进消息队列。
  *  单独暂停（held）的留在队列里等「继续队列」，不算重连中 */
 export function isReconnecting(q: QueuedMessage): boolean {
-  return !!q.reconnect && !q.held && (q.status === 'queued' || q.status === 'dispatching')
+  return waitingReconnect(q) && !q.reconnect?.limited
 }
+
+/** 因限流 / 额度用完在等到点自动继续的那条：显示限流卡片（RateLimitCard），不放进消息队列，也不算断线重连 */
+export function isLimitWait(q: QueuedMessage): boolean {
+  return waitingReconnect(q) && !!q.reconnect?.limited
+}
+
+const waitingReconnect = (q: QueuedMessage): boolean =>
+  !!q.reconnect && !q.held && (q.status === 'queued' || q.status === 'dispatching')
 
 /** 到点后过了这么久还是排队、没开始派发：宿主那边没排上（会话忙、锁住等），卡片不再装作「正在连接」 */
 const STALLED_MS = 3000
