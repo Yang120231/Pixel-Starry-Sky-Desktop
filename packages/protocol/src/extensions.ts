@@ -16,6 +16,16 @@ export interface ExtensionComponent {
   mcp?: McpConfig
   invocable?: boolean
 }
+/** 插件自带的钩子：只展示，由 Claude Code 自己在对应事件执行 */
+export interface ExtensionHook {
+  event: string
+  /** 匹配条件（工具名、会话来源等）；没写表示该事件每次都触发 */
+  matcher: string
+  type: string
+  /** command 类型是命令行，http 是地址，prompt / agent 是提示词 */
+  command: string
+  timeout?: number
+}
 export interface ExtensionCheck {
   status: 'connected' | 'ready' | 'error' | 'auth'
   message: string
@@ -35,6 +45,8 @@ export interface ExtensionEntry {
   path?: string
   version?: string
   components: ExtensionComponent[]
+  /** 插件自带钩子，每次读取状态时现读（不落盘）；不是插件或没有时为空 */
+  hooks?: ExtensionHook[]
   mcp?: McpConfig
   command?: string
   args?: string[]

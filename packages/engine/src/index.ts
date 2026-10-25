@@ -69,6 +69,7 @@ export {
   mcpConfig,
   object,
   pluginDirectory,
+  pluginHooks,
   scope,
   skillFile,
   strings,

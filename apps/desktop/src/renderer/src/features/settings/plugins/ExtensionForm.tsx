@@ -46,7 +46,8 @@ export function ExtensionForm({
   target: FormTarget
   scope: ExtensionScope
   refTarget: WorkspaceRef | null
-  onDone: () => void
+  /** note：要替换默认提示（「下一轮生效…」）时的文字 */
+  onDone: (note?: string) => void
   onCancel: () => void
 }) {
   const t = usePluginText(),
@@ -126,9 +127,10 @@ export function ExtensionForm({
     setError(null)
     setBusy(true)
     try {
+      let note: string | undefined
       if (target.mode === 'json') await bridge.importMcp(json, scope)
-      else if (target.mode === 'local' || target.mode === 'git')
-        await bridge.import({
+      else if (target.mode === 'local' || target.mode === 'git') {
+        const imported = await bridge.import({
           kind: target.kind as 'plugin' | 'skill',
           source: target.mode === 'git' ? 'git' : 'local',
           location,
@@ -137,7 +139,10 @@ export function ExtensionForm({
           name: name || undefined,
           engines,
         })
-      else {
+        // 带命令钩子的插件主进程导入后不启用，告诉用户去列表里开
+        if (imported.kind === 'plugin' && !imported.enabled && imported.hooks?.length)
+          note = tr('plugins.hooks.imported')
+      } else {
         const parsed = JSON.parse(args)
         await bridge.save({
           id: e?.id,
@@ -160,7 +165,7 @@ export function ExtensionForm({
           ...(target.kind === 'skill' ? { text: source, expectedVersion: version } : {}),
         })
       }
-      onDone()
+      onDone(note)
     } catch (error) {
       setError((error as Error).message)
     } finally {

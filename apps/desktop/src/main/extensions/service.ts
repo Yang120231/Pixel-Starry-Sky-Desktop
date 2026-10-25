@@ -28,6 +28,7 @@ import {
   mcpConfig,
   object,
   pluginDirectory,
+  pluginHooks,
   scope,
   skillFile,
   text,
@@ -137,7 +138,8 @@ export class ExtensionService {
     this.nativeCache.set(key, { at: now, value })
     return value
   }
-  state(project: string | null): ExtensionState {
+  /** withHooks：只有界面要看钩子，内部按 id 找条目的调用不用为每个插件读文件 */
+  state(project: string | null, withHooks = false): ExtensionState {
     const native = this.native(project)
     const entries = [
       ...this.config.entries.filter(
@@ -151,6 +153,8 @@ export class ExtensionService {
       ...e,
       components: e.components.map(c => ({ ...c, mcp: c.mcp ? this.hide(c.mcp) : undefined })),
       mcp: e.mcp ? this.hide(e.mcp) : undefined,
+      // 钩子不存进配置，要时现读：已导入的旧插件也能看到，原生插件走同一处
+      ...(withHooks && e.kind === 'plugin' && e.path ? { hooks: pluginHooks(e.path) } : {}),
     }))
     return {
       entries: redacted,
@@ -404,7 +408,8 @@ export class ExtensionService {
           description: p.description,
           version: p.version,
           scope: data.scope,
-          enabled: true,
+          // 带命令钩子的插件导入后先不启用：用户在列表里打开时才有「会运行本机命令」的提示
+          enabled: !pluginHooks(root).some(h => h.type === 'command'),
           origin: 'managed',
           source: { kind: source, location: data.location, subdir: data.subdir, revision },
           path: root,
@@ -489,8 +494,12 @@ export class ExtensionService {
         nextDigest = digest(stage),
         changed = e.sourceDigest ? sourceDigest !== e.sourceDigest : nextDigest !== e.digest
       if (apply && changed) {
+        const commands = (dir: string) => pluginHooks(dir).filter(h => h.type === 'command').length
+        // 新版本比旧版本多了本机命令钩子：先停用，用户打开时走启用提示（和导入一样）
+        const newHooks = e.enabled && commands(stage) > commands(e.path)
         const next = {
           ...e,
+          ...(newHooks ? { enabled: false } : {}),
           path: stage,
           digest: nextDigest,
           sourceDigest,
@@ -502,7 +511,10 @@ export class ExtensionService {
         this.config.entries = this.config.entries.map(x => (x.id === id ? next : x))
         this.save()
         this.retired.push(e.path)
-        return { changed, message: '已更新，下一轮生效' }
+        return {
+          changed,
+          message: newHooks ? '已更新。新版本会运行本机命令，已先停用，确认后在列表里打开' : '已更新，下一轮生效',
+        }
       }
       return { changed, message: changed ? '发现更新，可点击应用更新' : '已是最新版本' }
     } finally {

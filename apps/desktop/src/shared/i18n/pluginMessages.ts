@@ -1,3 +1,38 @@
 export const pluginMessages = {
+  'plugins.updatedHooksOff': {
+    zh: '已更新。新版本会运行本机命令，已先停用，确认后在列表里打开',
+    en: 'Updated. The new version runs local commands, so it was turned off; turn it on in the list after reviewing',
+  },
   'plugins.title': { zh: '插件配置', en: 'Plugins' },
+  'plugins.hooks.count': { zh: '钩子', en: 'hooks' },
+  'plugins.hooks.title': { zh: '自带钩子', en: 'Bundled hooks' },
+  'plugins.hooks.note': {
+    zh: '启用插件后，Claude Code 会在对应事件运行下面的命令；这里只展示。',
+    en: 'Once enabled, Claude Code runs these commands on the matching events. They are only listed here.',
+  },
+  'plugins.hooks.matches': { zh: '匹配', en: 'Matches' },
+  'plugins.hooks.always': { zh: '每次触发', en: 'Every time' },
+  'plugins.hooks.separator': { zh: '、', en: ', ' },
+  'plugins.hooks.warn': {
+    zh: '这个插件会在 {events} 时运行本机命令',
+    en: 'This plugin runs local commands on: {events}',
+  },
+  'plugins.hooks.imported': {
+    zh: '已导入。这个插件带钩子，先没有启用：看清它要运行的命令后，在列表里打开开关。',
+    en: 'Imported but not enabled, because it has hooks. Check the commands it runs, then turn it on in the list.',
+  },
+  'plugins.hooks.cancel': { zh: '取消', en: 'Cancel' },
+  'plugins.hooks.confirm': { zh: '仍然启用', en: 'Enable anyway' },
+  'plugins.hooks.event.SessionStart': { zh: '会话开始', en: 'session start' },
+  'plugins.hooks.event.SessionEnd': { zh: '会话结束', en: 'session end' },
+  'plugins.hooks.event.UserPromptSubmit': { zh: '每条消息发送时', en: 'every message sent' },
+  'plugins.hooks.event.PreToolUse': { zh: '工具调用前', en: 'before tool calls' },
+  'plugins.hooks.event.PostToolUse': { zh: '工具调用后', en: 'after tool calls' },
+  'plugins.hooks.event.PostToolUseFailure': { zh: '工具调用失败后', en: 'after tool call failures' },
+  'plugins.hooks.event.PermissionRequest': { zh: '请求权限时', en: 'permission requests' },
+  'plugins.hooks.event.Notification': { zh: '发通知时', en: 'notifications' },
+  'plugins.hooks.event.Stop': { zh: '回复结束', en: 'reply end' },
+  'plugins.hooks.event.SubagentStart': { zh: '子代理开始', en: 'subagent start' },
+  'plugins.hooks.event.SubagentStop': { zh: '子代理结束', en: 'subagent end' },
+  'plugins.hooks.event.PreCompact': { zh: '压缩对话前', en: 'before compaction' },
 } as const

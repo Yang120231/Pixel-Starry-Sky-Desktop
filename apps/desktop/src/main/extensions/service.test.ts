@@ -343,6 +343,67 @@ describe('管理配置与凭据', () => {
     service.remove(e.id)
     expect(existsSync(src)).toBe(true)
   })
+  it('更新后新版本多了本机命令钩子：先停用，要用户自己打开（走启用提示）', async () => {
+    const src = join(root, 'grows')
+    mkdirSync(join(src, '.claude-plugin'), { recursive: true })
+    writeFileSync(join(src, '.claude-plugin/plugin.json'), JSON.stringify({ name: 'grows', version: '1.0' }))
+    const e = await service.import({ kind: 'plugin', source: 'local', location: src, scope: global })
+    expect(e.enabled).toBe(true)
+    mkdirSync(join(src, 'hooks'))
+    writeFileSync(
+      join(src, 'hooks/hooks.json'),
+      JSON.stringify({ hooks: { SessionStart: [{ hooks: [{ type: 'command', command: 'node x.js' }] }] } }),
+    )
+    expect((await service.update(e.id, true)).message).toContain('已先停用')
+    expect(service.state(null).entries.find(x => x.id === e.id)?.enabled).toBe(false)
+    expect(service.launch(project).pluginDirs).toEqual([])
+  })
+  it('插件自带钩子：应用管理的和 Claude 原生安装的都在状态里列出，其他条目没有', async () => {
+    const hooks = JSON.stringify({
+      hooks: {
+        SessionStart: [{ matcher: 'startup', hooks: [{ type: 'command', command: 'node boot.js', timeout: 15 }] }],
+      },
+    })
+    const make = (dir: string, name: string): string => {
+      mkdirSync(join(dir, '.claude-plugin'), { recursive: true })
+      mkdirSync(join(dir, 'hooks'))
+      writeFileSync(join(dir, '.claude-plugin/plugin.json'), JSON.stringify({ name, version: '1.0' }))
+      writeFileSync(join(dir, 'hooks/hooks.json'), hooks)
+      return dir
+    }
+    const installed = make(join(root, 'installed'), 'installed')
+    mkdirSync(join(root, 'native/plugins'), { recursive: true })
+    writeFileSync(
+      join(root, 'native/plugins/installed_plugins.json'),
+      JSON.stringify({ plugins: { installed: [{ scope: 'user', installPath: installed, version: '1.0' }] } }),
+    )
+    await service.import({
+      kind: 'plugin',
+      source: 'local',
+      location: make(join(root, 'managed'), 'managed'),
+      scope: global,
+    })
+    service.upsert({ kind: 'cli', name: 'my-cli', scope: global, command: process.execPath, args: [] })
+    const entries = service.state(null, true).entries
+    const expected = [
+      { event: 'SessionStart', matcher: 'startup', type: 'command', command: 'node boot.js', timeout: 15 },
+    ]
+    expect(entries.find(e => e.name === 'managed')).toMatchObject({ origin: 'managed', hooks: expected })
+    expect(entries.find(e => e.name === 'installed')).toMatchObject({ origin: 'native', hooks: expected })
+    expect(entries.find(e => e.name === 'my-cli')?.hooks).toBeUndefined()
+    // 带命令钩子的插件导入后不启用（列表里开时才有提示）；内部查条目的 state() 不读钩子
+    expect(entries.find(e => e.name === 'managed')?.enabled).toBe(false)
+    expect(service.launch(project).pluginDirs).toEqual([])
+    expect(service.state(null).entries.find(e => e.name === 'managed')?.hooks).toBeUndefined()
+    // 只有 http 钩子（不跑本机命令）的插件导入后照常启用
+    const web = join(root, 'web')
+    mkdirSync(join(web, '.claude-plugin'), { recursive: true })
+    writeFileSync(
+      join(web, '.claude-plugin/plugin.json'),
+      JSON.stringify({ name: 'web', hooks: { Stop: [{ hooks: [{ type: 'http', url: 'https://example.com/h' }] }] } }),
+    )
+    expect((await service.import({ kind: 'plugin', source: 'local', location: web, scope: global })).enabled).toBe(true)
+  })
   it('不能加密时凭据只在内存，重启会要求重新填写', () => {
     const path = join(root, 'transient'),
       transient = new ExtensionService(path, { ...cipher, available: () => false }, () => ({

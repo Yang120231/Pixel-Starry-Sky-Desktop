@@ -1,7 +1,15 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { effective, expandedMcp, inside, mcpConfig, pluginDirectory, skillFile } from '../src/extensions/parse'
+import {
+  effective,
+  expandedMcp,
+  inside,
+  mcpConfig,
+  pluginDirectory,
+  pluginHooks,
+  skillFile,
+} from '../src/extensions/parse'
 import type { ExtensionEntry } from '@pixelsky/protocol'
 import { makeTmp, removeTmp } from './helpers/tmp'
 let root: string
@@ -92,5 +100,75 @@ describe('扩展解析与范围', () => {
     writeFileSync(join(root, 'a.json'), JSON.stringify({ mcpServers: { fromFile: { command: 'node' } } }))
     writeFileSync(join(root, '.claude-plugin/plugin.json'), JSON.stringify({ name: 'tools', mcpServers: ['a.json'] }))
     expect(pluginDirectory(root).components).toMatchObject([{ kind: 'mcp', name: 'fromFile' }])
+  })
+})
+
+describe('插件自带钩子', () => {
+  const manifest = (hooks?: unknown): void => {
+    mkdirSync(join(root, '.claude-plugin'), { recursive: true })
+    writeFileSync(join(root, '.claude-plugin/plugin.json'), JSON.stringify({ name: 'hooky', hooks }))
+  }
+  const cmd = (command: string): unknown => ({ type: 'command', command, timeout: 15 })
+  it('读 manifest 指向的文件和默认 hooks/hooks.json，同一文件不重复，坏文件与包外路径只跳过', () => {
+    manifest(['./hooks/a.json', './hooks/a.json', './hooks/bad.json', './hooks/missing.json', { Stop: [] }])
+    mkdirSync(join(root, 'hooks'))
+    writeFileSync(
+      join(root, 'hooks/a.json'),
+      JSON.stringify({
+        hooks: {
+          SessionStart: [{ matcher: 'startup|resume', hooks: [cmd('node a.js')] }],
+          UserPromptSubmit: [{ hooks: [cmd('node b.js'), { type: 'http', url: 'https://example.com/h' }, {}] }],
+        },
+      }),
+    )
+    writeFileSync(join(root, 'hooks/bad.json'), '{')
+    writeFileSync(
+      join(root, 'hooks/hooks.json'),
+      JSON.stringify({ PreToolUse: [{ matcher: 'Bash', hooks: [cmd('c')] }] }),
+    )
+    expect(pluginHooks(root)).toEqual([
+      { event: 'SessionStart', matcher: 'startup|resume', type: 'command', command: 'node a.js', timeout: 15 },
+      { event: 'UserPromptSubmit', matcher: '', type: 'command', command: 'node b.js', timeout: 15 },
+      { event: 'UserPromptSubmit', matcher: '', type: 'http', command: 'https://example.com/h' },
+      { event: 'PreToolUse', matcher: 'Bash', type: 'command', command: 'c', timeout: 15 },
+    ])
+  })
+  it('manifest 内联的钩子对象（带或不带外层 hooks）也读，没有钩子返回空', () => {
+    manifest({ hooks: { Stop: [{ hooks: [cmd('x')] }] } })
+    expect(pluginHooks(root).map(h => h.event)).toEqual(['Stop'])
+    manifest({ Notification: [{ hooks: [cmd('y')] }] })
+    expect(pluginHooks(root).map(h => h.event)).toEqual(['Notification'])
+    manifest()
+    expect(pluginHooks(root)).toEqual([])
+    expect(pluginHooks(join(root, 'nope'))).toEqual([])
+  })
+  it('manifest 路径指到包外时不读', () => {
+    const pkg = join(root, 'pkg')
+    mkdirSync(join(pkg, '.claude-plugin'), { recursive: true })
+    writeFileSync(
+      join(pkg, '.claude-plugin/plugin.json'),
+      JSON.stringify({ name: 'hooky', hooks: ['../outside.json'] }),
+    )
+    writeFileSync(join(root, 'outside.json'), JSON.stringify({ hooks: { Stop: [{ hooks: [cmd('x')] }] } }))
+    expect(pluginHooks(pkg)).toEqual([])
+  })
+  it('目录链接（junction）指到包外时不读，包外文件内容不会进列表', () => {
+    const pkg = join(root, 'pkg'),
+      outside = join(root, 'outside')
+    mkdirSync(join(pkg, '.claude-plugin'), { recursive: true })
+    mkdirSync(outside)
+    writeFileSync(join(outside, 'h.json'), JSON.stringify({ hooks: { Stop: [{ hooks: [cmd('x')] }] } }))
+    symlinkSync(outside, join(pkg, 'hooks'), 'junction')
+    writeFileSync(join(pkg, '.claude-plugin/plugin.json'), JSON.stringify({ name: 'hooky', hooks: ['./hooks/h.json'] }))
+    expect(pluginHooks(pkg)).toEqual([])
+  })
+  it('最多 200 条，单条命令截 2000 字符', () => {
+    manifest()
+    mkdirSync(join(root, 'hooks'))
+    const many = Array.from({ length: 250 }, () => cmd('x'.repeat(3000)))
+    writeFileSync(join(root, 'hooks/hooks.json'), JSON.stringify({ hooks: { Stop: [{ hooks: many }] } }))
+    const hooks = pluginHooks(root)
+    expect(hooks).toHaveLength(200)
+    expect(hooks[0].command).toHaveLength(2000)
   })
 })

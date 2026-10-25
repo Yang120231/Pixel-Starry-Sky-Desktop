@@ -231,6 +231,7 @@ export type {
   ExtensionCheck,
   ExtensionComponent,
   ExtensionEntry,
+  ExtensionHook,
   ExtensionImport,
   ExtensionInput,
   ExtensionKind,

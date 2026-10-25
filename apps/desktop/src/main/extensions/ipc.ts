@@ -121,7 +121,8 @@ export class Extensions {
       changed()
       return value
     }
-    handle('state', ref => service().state(project(ref)))
+    // 只有插件页要显示钩子；会话的连接器面板（带 sessionId）不用每次读钩子文件
+    handle('state', ref => service().state(project(ref), !(ref && typeof ref === 'object' && 'sessionId' in ref)))
     handle('save', raw => {
       const data = object(raw)
       return mutate(() => service().upsert({ ...data, scope: checkedScope(data.scope) }))
@@ -132,7 +133,7 @@ export class Extensions {
         const s = checkedScope(data.scope),
           e = await service().import({ ...data, scope: s })
         return service()
-          .state(s.kind === 'project' ? s.path : null)
+          .state(s.kind === 'project' ? s.path : null, true)
           .entries.find(x => x.id === e.id)!
       })
     })

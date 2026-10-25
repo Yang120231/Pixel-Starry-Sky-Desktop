@@ -23,6 +23,7 @@ import {
 import { Button, cn, IconButton, Popover, Switch } from '@/ui'
 import { useSettingsWorkspace } from '../useSettingsWorkspace'
 import { usePluginText } from './text'
+import { HookList, HookWarning, needsHookAsk } from './hooks'
 import { ExtensionForm, type FormTarget } from './ExtensionForm'
 import { extensionTemplates } from '@/data/extensionTemplates'
 const ICONS: Record<ExtensionKind, LucideIcon> = { plugin: Puzzle, mcp: Plug, cli: Terminal, skill: Star }
@@ -47,7 +48,8 @@ export function PluginsSection() {
     [detail, setDetail] = useState<string | null>(null),
     [catalog, setCatalog] = useState(false),
     [adding, setAdding] = useState(false),
-    [confirm, setConfirm] = useState<string | null>(null)
+    [confirm, setConfirm] = useState<string | null>(null),
+    [hookAsk, setHookAsk] = useState<string | null>(null)
   const [busy, setBusy] = useState(false),
     [message, setMessage] = useState(''),
     [error, setError] = useState<string | null>(null),
@@ -319,9 +321,9 @@ export function PluginsSection() {
           target={form}
           scope={scope}
           refTarget={workspace.ref}
-          onDone={() => {
+          onDone={note => {
             setForm(null)
-            setMessage('下一轮生效，当前任务继续运行。')
+            setMessage(note ?? '下一轮生效，当前任务继续运行。')
             void refresh()
           }}
           onCancel={() => setForm(null)}
@@ -357,6 +359,7 @@ export function PluginsSection() {
               ))}
             </ul>
           )}
+          {!!selected.hooks?.length && <HookList hooks={selected.hooks} />}
           {nativeSkill && (
             <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-md bg-subtle p-3 text-meta">
               {nativeSkill}
@@ -481,6 +484,9 @@ export function PluginsSection() {
                         · {t(e.scope.kind === 'global' ? '全局' : '当前项目')}
                         {e.version ? ' · ' + e.version : ''}
                         {!row.component && e.kind === 'plugin' ? ' · ' + e.components.length + ' ' + t('组件') : ''}
+                        {!row.component && e.hooks?.length
+                          ? ' · ' + e.hooks.length + ' ' + tr('plugins.hooks.count')
+                          : ''}
                         {row.component ? ' · ' + t('随插件启用') : ''}
                       </span>
                     </button>
@@ -504,10 +510,26 @@ export function PluginsSection() {
                         checked={e.enabled}
                         disabled={busy}
                         label={`${e.name} · ${t('已启用')}`}
-                        onChange={on => void act(() => bridge!.toggle(e.id, on))}
+                        onChange={on => {
+                          if (needsHookAsk(on, e.hooks)) setHookAsk(hookAsk === e.id ? null : e.id)
+                          else void act(() => bridge!.toggle(e.id, on))
+                        }}
                       />
                     ) : (
                       <span className="text-label text-fg-faint">{t(row.component ? '随插件启用' : '只读')}</span>
+                    )}
+                    {hookAsk === e.id && !row.component && (
+                      <HookWarning
+                        hooks={e.hooks ?? []}
+                        busy={busy}
+                        onCancel={() => setHookAsk(null)}
+                        onConfirm={() =>
+                          void act(async () => {
+                            await bridge!.toggle(e.id, true)
+                            setHookAsk(null)
+                          })
+                        }
+                      />
                     )}
                   </div>
                 )

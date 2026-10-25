@@ -2,7 +2,14 @@ import { createHash } from 'node:crypto'
 import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs'
 import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { parse } from 'yaml'
-import type { ExtensionComponent, ExtensionEntry, ExtensionInput, ExtensionScope, McpConfig } from '@pixelsky/protocol'
+import type {
+  ExtensionComponent,
+  ExtensionEntry,
+  ExtensionHook,
+  ExtensionInput,
+  ExtensionScope,
+  McpConfig,
+} from '@pixelsky/protocol'
 
 export const MASKED_SECRET = '••••••••'
 export const object = (v: unknown): Record<string, unknown> =>
@@ -220,6 +227,56 @@ export function pluginDirectory(root: string): {
     version: typeof manifest.version === 'string' ? manifest.version : '',
     components,
   }
+}
+/**
+ * 读插件自带的钩子（只读展示）：manifest 的 hooks（路径 / 路径数组 / 内联对象）加默认的 hooks/hooks.json，
+ * 文件里是 { hooks: { 事件: [{ matcher, hooks: [{ type, command, timeout }] }] } }，也容许省掉外层 hooks。
+ * 任何一处坏了只跳过那一处，不抛错
+ */
+export function pluginHooks(root: string): ExtensionHook[] {
+  const out: ExtensionHook[] = [],
+    seen = new Set<string>()
+  const add = (raw: unknown): void => {
+    const doc = object(raw),
+      events = object(doc.hooks ?? doc)
+    for (const [event, groups] of Object.entries(events))
+      for (const group of Array.isArray(groups) ? groups : []) {
+        const g = object(group)
+        for (const hook of Array.isArray(g.hooks) ? g.hooks : []) {
+          const h = object(hook),
+            command = [h.command, h.url, h.prompt].find(v => typeof v === 'string' && v.trim()) as string | undefined
+          if (!command || out.length >= 200) continue
+          out.push({
+            event,
+            matcher: typeof g.matcher === 'string' ? g.matcher : '',
+            type: typeof h.type === 'string' ? h.type : 'command',
+            command: command.slice(0, 2000),
+            ...(typeof h.timeout === 'number' ? { timeout: h.timeout } : {}),
+          })
+        }
+      }
+  }
+  const file = (path: string): void => {
+    try {
+      const full = inside(root, join(root, path))
+      if (seen.has(full) || !existsSync(full)) return
+      inside(realpathSync(root), realpathSync(full)) // 链接指到包外的跳过（catch）
+      seen.add(full)
+      add(jsonFile(full))
+    } catch {
+      /* 坏文件不影响其他钩子 */
+    }
+  }
+  try {
+    const value = jsonFile(join(root, '.claude-plugin/plugin.json')).hooks
+    for (const item of Array.isArray(value) ? value : value === undefined ? [] : [value])
+      if (typeof item === 'string') file(item)
+      else add(item)
+  } catch {
+    /* 没有或损坏的 manifest 只看默认位置 */
+  }
+  file('hooks/hooks.json')
+  return out
 }
 export function effective(entries: ExtensionEntry[], project: string | null): ExtensionEntry[] {
   const result = new Map<string, ExtensionEntry>()
