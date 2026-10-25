@@ -23,6 +23,8 @@ import { FIELD, NoProject, ToolError, useOperation } from './ToolsUi'
 import type { BrowserAnnotation, BrowserState } from '../../../../shared/types/project-browser'
 import type { WorkspaceRef } from '../../../../shared/types/workspace'
 import { demo as demoData } from '@/data/demo'
+import { isPortUrl, parsePort, portUrl, sameService } from '@/features/coding/bottom/portsModel'
+import { usePortState } from '@/features/session/live/portTips'
 
 export function BrowserTab({
   requested,
@@ -80,6 +82,17 @@ function BrowserBody({
     requestedSeq = useRef(0)
   const { busy, error, setError, run } = useOperation()
   const page = state?.pages.find(p => p.id === state.activeId)
+  const [port, setPort] = useState('')
+  const found = usePortState(target.sessionId).found
+  const openUrl = (url: string) =>
+    run(async () => {
+      const same = isPortUrl(url) ? state?.pages.find(p => sameService(p.url, url)) : undefined
+      const browser = window.pixelsky!.projectBrowser
+      setState(await (same ? browser.select(target, same.id) : browser.navigate(target, null, url)))
+    })
+  const openPort = (n: number | null) => {
+    if (n) void openUrl(portUrl(n)).then(ok => ok && setPort(''))
+  }
   useEffect(() => {
     if (demo) return
     let gone = false
@@ -122,7 +135,7 @@ function BrowserBody({
       return
     requestedSeq.current = requested.seq
     onHandled?.(requested.seq)
-    void run(async () => setState(await window.pixelsky!.projectBrowser.navigate(target, null, requested.url)))
+    void openUrl(requested.url)
   }, [requested, state?.scope])
   useEffect(() => {
     if (demo || !page) return
@@ -406,6 +419,52 @@ function BrowserBody({
                 : tr('projectTools.browserEmpty')}
             </p>
             {!page && <p>{tr('projectTools.browserEmptyHint')}</p>}
+            {!page && !demo && (
+              <div data-port-entry className="pointer-events-auto mt-2 flex w-full max-w-72 flex-col gap-2">
+                <p>{tr('portTip.manualHint')}</p>
+                <form
+                  className="flex gap-1"
+                  onSubmit={e => {
+                    e.preventDefault()
+                    openPort(parsePort(port))
+                  }}
+                >
+                  <label className="flex h-8 min-w-0 flex-1 items-center rounded-md border border-line bg-surface px-2.5 font-mono text-list focus-within:border-accent">
+                    <span className="text-fg-faint">localhost:</span>
+                    <input
+                      inputMode="numeric"
+                      value={port}
+                      onChange={e => setPort(e.target.value)}
+                      placeholder={tr('portTip.portPlaceholder')}
+                      aria-label={tr('portTip.portPlaceholder')}
+                      title={tr('portTip.portInvalid')}
+                      className="min-w-0 flex-1 bg-transparent text-fg outline-none"
+                    />
+                  </label>
+                  <Button type="submit" disabled={busy || parsePort(port) === null}>
+                    {tr('projectTools.go')}
+                  </Button>
+                </form>
+                {found.length > 0 && (
+                  <div className="text-left text-fg-faint">
+                    {tr('portTip.found')}
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {found.map(f => (
+                        <button
+                          key={f.port}
+                          type="button"
+                          disabled={busy}
+                          onClick={() => openPort(f.port)}
+                          className="rounded-sm bg-subtle px-1.5 font-mono text-fg-secondary hover:bg-hover"
+                        >
+                          :{f.port}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

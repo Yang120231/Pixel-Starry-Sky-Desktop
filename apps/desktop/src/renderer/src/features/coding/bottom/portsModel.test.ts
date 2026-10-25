@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { findPorts, mergePorts } from './portsModel'
+import { findPorts, isPortUrl, mergePorts, parsePort, sameService } from './portsModel'
 
 describe('findPorts', () => {
   it('认 localhost / 127.0.0.1 / 0.0.0.0 / [::1]，去重并排序', () => {
@@ -38,5 +38,33 @@ describe('mergePorts', () => {
   })
   it('服务端口超范围时忽略', () => {
     expect(mergePorts([], [{ label: 'x', port: 0 }])).toEqual([])
+  })
+})
+
+describe('parsePort', () => {
+  it('只收 1–65535 的整数', () => {
+    expect(parsePort(' 8080 ')).toBe(8080)
+    expect(parsePort('65535')).toBe(65535)
+    for (const bad of ['', '0', '65536', '80.5', '-1', '80a', '１２３', 'localhost:80'])
+      expect(parsePort(bad), bad).toBeNull()
+  })
+})
+
+describe('sameService', () => {
+  it('同协议同主机端口算同一个服务，路径不同也算', () => {
+    expect(sameService('http://localhost:5173/about', 'http://localhost:5173')).toBe(true)
+    expect(sameService('http://localhost:5173/', 'http://localhost:5174')).toBe(false)
+  })
+  it('file:// 和打不开的地址不算', () => {
+    expect(sameService('file:///a/b.html', 'file:///a/c.html')).toBe(false)
+    expect(sameService('not a url', 'http://localhost:1')).toBe(false)
+  })
+})
+
+describe('isPortUrl', () => {
+  it('只认 portUrl 拼出来的无路径地址，带路径的（健康检查）不算', () => {
+    expect(isPortUrl('http://localhost:3000')).toBe(true)
+    expect(isPortUrl('http://127.0.0.1:3000/health')).toBe(false)
+    expect(isPortUrl('http://localhost:3000/health')).toBe(false)
   })
 })

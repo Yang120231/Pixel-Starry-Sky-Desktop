@@ -48,6 +48,7 @@ import { mermaidMessages } from '../../../shared/i18n/mermaidMessages'
 import { modelChannelMessages } from '../../../shared/i18n/modelChannelMessages'
 import { fullAccessMessages } from '../../../shared/i18n/fullAccessMessages'
 import { htmlPreviewMessages } from '../../../shared/i18n/htmlPreviewMessages'
+import { portPreviewMessages } from '../../../shared/i18n/portPreviewMessages'
 import { recoveryMessages } from '../../../shared/i18n/recoveryMessages'
 import { pathClickMessages } from '../../../shared/i18n/pathClickMessages'
 import { contextMenuMessages } from '../../../shared/i18n/contextMenuMessages'
@@ -123,6 +124,7 @@ const dictionaries: Record<string, Record<string, unknown>> = {
   modelChannelMessages,
   fullAccessMessages,
   htmlPreviewMessages,
+  portPreviewMessages,
   recoveryMessages,
   pathClickMessages,
   contextMenuMessages,

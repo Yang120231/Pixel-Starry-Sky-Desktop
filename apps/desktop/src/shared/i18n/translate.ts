@@ -42,6 +42,7 @@ import { mermaidMessages } from './mermaidMessages'
 import { modelChannelMessages } from './modelChannelMessages'
 import { fullAccessMessages } from './fullAccessMessages'
 import { htmlPreviewMessages } from './htmlPreviewMessages'
+import { portPreviewMessages } from './portPreviewMessages'
 import { recoveryMessages } from './recoveryMessages'
 import { pathClickMessages } from './pathClickMessages'
 import { contextMenuMessages } from './contextMenuMessages'
@@ -119,6 +120,7 @@ export const allMessages = {
   ...modelChannelMessages,
   ...fullAccessMessages,
   ...htmlPreviewMessages,
+  ...portPreviewMessages,
   ...recoveryMessages,
   ...pathClickMessages,
   ...contextMenuMessages,

@@ -49,3 +49,24 @@ export function mergePorts(
     .sort((a, b) => a[0] - b[0])
     .map(([port, sources]) => ({ port, url: portUrl(port), sources }))
 }
+
+/** 手动输入的端口：只收 1–65535 的整数，其它（带小数、带字母、空）返回 null */
+export function parsePort(text: string): number | null {
+  const t = text.trim()
+  if (!/^\d{1,5}$/.test(t)) return null
+  const port = Number(t)
+  return port >= 1 && port <= 65535 ? port : null
+}
+
+/** 端口入口（提示条、空状态）发的就是 portUrl(port)，没有路径；带路径的请求（服务的健康检查地址）要照样导航过去 */
+export const isPortUrl = (url: string): boolean => /^http:\/\/localhost:\d+$/.test(url)
+
+/** 同一个本机服务（协议加主机端口相同）已经开着一页就切回去，不再新开一页；file:// 等不算 */
+export function sameService(open: string, url: string): boolean {
+  try {
+    const a = new URL(url)
+    return /^https?:$/.test(a.protocol) && new URL(open).origin === a.origin
+  } catch {
+    return false
+  }
+}

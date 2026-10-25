@@ -52,6 +52,8 @@ import { TurnStats } from '../TurnStats'
 import { Markdown } from '@/ui/markdown/Markdown'
 import { NoticeRow, ReasoningBlock, TodoCard, ToolItemRow, UserBubble } from './ItemRows'
 import { CompactionRow } from './CompactionRow'
+import { usePublishPorts } from './portTips'
+import { PortTip } from './PortTip'
 import { CompactionLiveContext, type CompactionLive } from './compactionLive'
 import { isReconnecting, isStarting } from '../queueView'
 import { reconnectView } from './reconnectView'
@@ -324,6 +326,7 @@ export function LiveTranscript({
   // 轮次跳转条（docs/ui/turn-rail.md）
   const showTurns = useTurnRailOn()
   const sessionId = snapshot?.record.id ?? null
+  usePublishPorts(sessionId, snapshot?.items ?? NO_ITEMS)
   // 导入的终端会话（原地接着的）：打开 / 窗口回到前台时查终端里有没有又聊了新的
   // 只在执行者还是导入的那个引擎、还在接着导入的会话（或复制出来还没启动）时写「正在加载 X 会话」，引擎名取正在启动的执行者
   const importedEngine = loadingImportedEngine(snapshot?.record)
@@ -887,6 +890,7 @@ export function LiveTranscript({
                     renderBlock(b, i)
                   ),
                 )}
+                <PortTip />
                 {footer}
                 {starting.map(q => (
                   <div key={q.id} data-starting-message={q.id} className="flex flex-col gap-3">
