@@ -301,7 +301,7 @@ export function FileEditor({
         {explorer && treeVisible && (
           <aside
             data-editor-explorer
-            className="flex w-[32%] min-w-52 max-w-72 shrink-0 flex-col border-l border-line-layout bg-panel @max-[660px]/filepane:absolute @max-[660px]/filepane:inset-y-0 @max-[660px]/filepane:right-0 @max-[660px]/filepane:z-20 @max-[660px]/filepane:w-60 @max-[660px]/filepane:shadow-menu"
+            className="flex w-[32%] min-w-52 max-w-72 shrink-0 flex-col border-l border-line-layout bg-panel @max-[660px]/filepane:absolute @max-[660px]/filepane:inset-y-0 @max-[660px]/filepane:right-0 @max-[660px]/filepane:z-20 @max-[660px]/filepane:w-60 @max-[660px]/filepane:bg-popover @max-[660px]/filepane:shadow-menu"
           >
             {explorer}
           </aside>
