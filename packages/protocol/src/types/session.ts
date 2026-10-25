@@ -247,6 +247,11 @@ export interface SessionRecord extends SessionSettings {
   platformFallback?: { account: string; model: string | null; resetsAt: number | null } | null
   /** 定时任务开出来的会话（docs/ui/board-schedule.md）：来源任务的 id；看板的 AI 卡片据此显示「⏱ 定时」 */
   scheduleTaskId?: string | null
+  /**
+   * Codex 目标是像素星空关进程时暂停的（docs/ui/codex-goal.md §2.1）：那时目标的 updatedAt。下次发普通消息时，
+   * 目标还是这次暂停的样子就改回进行中；用户自己停止、暂停的不记
+   */
+  goalHeldAt?: number | null
 }
 
 /**

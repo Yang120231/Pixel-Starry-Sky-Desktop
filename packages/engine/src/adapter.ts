@@ -73,6 +73,8 @@ export interface SessionContext {
   clearPendingRewind?(): void
   /** 分叉第一次启动成功（或改成新会话）后清掉 pendingFork */
   clearPendingFork?(): void
+  /** 关进程时暂停了 Codex 目标：记下它的 updatedAt（record.goalHeldAt），null 清掉 */
+  holdGoal?(updatedAt: number | null): void
   /**
    * 原来的引擎会话接不上（恢复 / 回退 / 分叉失败），已经改开了新会话：宿主把这一轮之前的整段聊天做成回放
    * （userItemId 是这一轮自己的用户消息，不算在内），连同要显示的提示一起给适配器注进新会话；没有可带的返回 null

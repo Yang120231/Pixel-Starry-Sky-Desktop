@@ -1567,6 +1567,53 @@ describe('Codex 目标模式（/goal，docs/ui/codex-goal.md）', () => {
     expect(turns()).toBe(count)
   })
 
+  it('关进程时暂停的目标，重开后发消息改回进行中接着做；用户自己停止的不改回（docs/ui/codex-goal.md §2.1）', async () => {
+    const goalFile = join(root, 'goal.json')
+    const reopen = async (stop: boolean) => {
+      const env = setup(60_000, {
+        env: { FAKE_CODEX_GOAL_TURNS: '1000', FAKE_CODEX_GOAL_TURN_MS: '40', FAKE_CODEX_GOAL_FILE: goalFile },
+      })
+      const messages = rpcOf(env.messages)
+      await host!.send(env.session.id, '/goal 一直做')
+      await wait(() => snap(env.session.id).goal?.status === 'active' && snap(env.session.id).state === 'running')
+      if (stop) {
+        await host!.interrupt(env.session.id)
+        await wait(() => snap(env.session.id).state === 'idle')
+      }
+      await host!.shutdown()
+      const held = JSON.parse(readFileSync(goalFile, 'utf8'))
+      expect(held.status).toBe('paused')
+      host = new EngineHost({
+        dataDir: join(root, 'engine'),
+        adapters: { codex: env.adapter },
+        emit: () => {},
+        idleMs: 60_000,
+      })
+      expect(host.open(env.session.id).record.goalHeldAt ?? null).toBe(stop ? null : held.updatedAt * 1000)
+      rmSync(env.log, { force: true })
+      await host.send(env.session.id, '继续')
+      await wait(() => messages().some(m => m.method === 'turn/start'))
+      return { id: env.session.id, messages }
+    }
+    const closed = await reopen(false)
+    await wait(() => snap(closed.id).goal?.status === 'active')
+    const rpc = closed.messages().map(m => m.method)
+    expect(rpc.indexOf('thread/goal/set')).toBeGreaterThan(rpc.indexOf('turn/start'))
+    expect(snap(closed.id).record.goalHeldAt ?? null).toBeNull()
+    // 改回进行中以后 Codex 自己接着开轮
+    await wait(
+      () => snap(closed.id).items.filter(i => i.kind === 'assistant' && i.text.startsWith('继续目标')).length >= 2,
+    )
+    await host!.shutdown()
+    host = undefined
+    rmSync(goalFile, { force: true })
+
+    const stopped = await reopen(true)
+    await wait(() => snap(stopped.id).state === 'idle')
+    expect(snap(stopped.id).goal?.status).toBe('paused')
+    expect(stopped.messages().some(m => m.method === 'thread/goal/set')).toBe(false)
+  })
+
   it('派发排队消息时 Codex 已经接着开了下一轮：消息用 turn/steer 接进那一轮，那一轮算这条消息的', async () => {
     const { session, events, messages } = setup(60_000, {
       env: { FAKE_CODEX_GOAL_TURNS: '1000', FAKE_CODEX_GOAL_TURN_MS: '150', FAKE_CODEX_GOAL_GAP: '0' },

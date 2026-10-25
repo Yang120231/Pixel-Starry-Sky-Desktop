@@ -163,6 +163,10 @@ export class HostTurn {
             if (rt.execution) rt.execution.pendingFork = null
             m.events.patchRecord(id, { pendingFork: null })
           },
+          holdGoal: goalHeldAt => {
+            if (rt.execution) rt.execution.goalHeldAt = goalHeldAt
+            m.events.patchRecord(id, { goalHeldAt })
+          },
           lostSeed: (userItemId, sees) =>
             m.handoff.recover(
               id,

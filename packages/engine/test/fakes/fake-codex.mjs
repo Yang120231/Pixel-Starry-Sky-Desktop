@@ -147,11 +147,17 @@ let collaborationMode = 'default'
 /**
  * 目标模式（thread/goal/*，docs/ui/codex-goal.md）：目标是 active、没有进行中的轮次时自己开一轮接着做，
  * 做满 FAKE_CODEX_GOAL_TURNS 轮（默认 2）标完成；每轮 FAKE_CODEX_GOAL_TURN_MS 毫秒（默认 60）。
- * 中断时进行中的目标改成暂停（和真 Codex 一样）。FAKE_CODEX_NO_GOALS：像旧版一样不认识这组方法
+ * 中断时进行中的目标改成暂停（和真 Codex 一样）。FAKE_CODEX_NO_GOALS：像旧版一样不认识这组方法。
+ * FAKE_CODEX_GOAL_FILE：目标存进这个文件，下一个进程接着用（像真 Codex 存在 state 库里）
  */
-let goal = null,
+const goalFile = process.env.FAKE_CODEX_GOAL_FILE
+let goal = goalFile && existsSync(goalFile) ? JSON.parse(readFileSync(goalFile, 'utf8')) : null,
   goalTurns = 0
-const emitGoal = () => emit('thread/goal/updated', { threadId: thread, turnId: turn?.id ?? null, goal })
+const saveGoal = () => goalFile && writeFileSync(goalFile, JSON.stringify(goal))
+const emitGoal = () => {
+  saveGoal()
+  emit('thread/goal/updated', { threadId: thread, turnId: turn?.id ?? null, goal })
+}
 function continueGoal() {
   if (!goal || goal.status !== 'active' || turn) return
   const id = 'goal-turn-' + ++next
@@ -754,6 +760,7 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
       if (m.method === 'thread/goal/clear') {
         const cleared = !!goal
         goal = null
+        saveGoal()
         response(m, { cleared })
         if (cleared) emit('thread/goal/cleared', { threadId: thread })
         break

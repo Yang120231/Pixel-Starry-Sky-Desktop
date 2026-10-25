@@ -906,7 +906,22 @@ export class CodexSession implements EngineSession {
         this.proc?.request('turn/interrupt', { threadId: this.threadId, turnId }).catch(() => {})
       }
       this.ctx.emit({ type: 'input_ack', id: userItemId, state: 'consumed', mode: 'normal' })
+      if (this.active === active) await this.releaseGoal()
     }
+  }
+  /**
+   * 关进程时暂停的目标（docs/ui/codex-goal.md §2.1）：消息已经送进这一轮，目标还是那次暂停的样子（期间没在别处改过）
+   * 就改回进行中。轮次进行中改不会多开一轮，这一轮做完 Codex 接着做
+   */
+  private async releaseGoal(): Promise<void> {
+    const held = this.ctx.record().goalHeldAt
+    if (held == null) return
+    this.ctx.holdGoal?.(null)
+    const goal = this.goalState
+    if (goal?.status !== 'paused' || goal.updatedAt !== held || !this.proc?.alive) return
+    await this.applyGoal(this.proc, { kind: 'resume' }).catch(error =>
+      log.info('目标没能改回进行中', { error: describeError(error) }),
+    )
   }
   async update(patch: Partial<SessionSettings>): Promise<void> {
     if (this.active) return
@@ -1628,12 +1643,17 @@ export class CodexSession implements EngineSession {
   }
   async interrupt(): Promise<void> {
     if (this.opening) await this.opening.catch(() => {})
-    // 有进行中的目标先暂停（最多等 2 秒），不然 Codex 马上再开一轮；两轮之间按停止也要暂停
+    // 有进行中的目标先暂停（最多等 2 秒），不然 Codex 马上再开一轮；两轮之间按停止也要暂停。
+    // 关进程时暂停的记下来，下次发消息时改回进行中（docs/ui/codex-goal.md §2.1）
     if (this.goalState?.status === 'active' && this.threadId && this.proc?.alive)
       await Promise.race([
         this.proc
           .request('thread/goal/set', { threadId: this.threadId, status: 'paused', origin: 'user' })
-          .then(r => this.setGoal(codexGoal(object(r).goal), false))
+          .then(r => {
+            const goal = codexGoal(object(r).goal)
+            this.setGoal(goal, false)
+            if (this.closed && goal?.status === 'paused') this.ctx.holdGoal?.(goal.updatedAt)
+          })
           .catch(() => {}),
         new Promise(resolve => setTimeout(resolve, 2_000)),
       ])
@@ -1671,6 +1691,8 @@ export class CodexSession implements EngineSession {
     if (this.goalSupported === false) throw new Error(NATIVE_TEXT.goalUnsupported)
     const threadId = this.threadId
     if (!threadId) throw codedError(GOAL_NO_PROCESS)
+    // 用户自己动了目标：关进程时记下的暂停作废，按用户的来
+    if (action.kind !== 'get' && this.ctx.record().goalHeldAt != null) this.ctx.holdGoal?.(null)
     const status = (next: 'paused' | 'active') =>
       proc.request('thread/goal/set', { threadId, status: next, origin: 'user' })
     try {
