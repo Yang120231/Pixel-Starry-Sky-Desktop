@@ -50,6 +50,8 @@ export function buildTimeline(
   for (const m of messages) {
     // 只在讨论串里的消息不上主时间线（docs/ui/channels-collab-v2.md §3）
     if (m.kind === 'message' && m.threadId) continue
+    // 牵头成员直接回答了、没拆出步骤的流程（docs/ui/channels-pipeline.md §8.3）：回答在任务卡下面，流程卡不显示
+    if (m.kind === 'message' && m.flow?.planner?.auto && m.flow.status === 'stopped' && !m.flow.steps.length) continue
     const day = dayStart(m.at)
     if (day !== lastDay) {
       rows.push({ kind: 'day', key: `day-${day}`, at: day })

@@ -33,6 +33,8 @@ export interface StoredChannel {
   relayResetAt?: number | null
   /** 接力规则；旧数据没有（= 标准） */
   relayRules?: RelayRules
+  /** 牵头成员（docs/ui/channels-pipeline.md §8.3）；旧数据没有（= 不启用） */
+  lead?: string | null
   /** 点过「这条接力不再限制」的接力（chain），最近的在后 */
   relayFree?: string[]
   /** 主动提醒的规则开关、每日简报几点发、上次发简报的时间（docs/ui/channels-collab-v2.md §6） */

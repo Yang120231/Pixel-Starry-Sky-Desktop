@@ -463,6 +463,8 @@ export function flowPlanPrompt(input: {
   channel: string
   request: string
   members: { name: string; role: string }[]
+  /** 牵头成员按用户不带 @ 的消息自动拆的：只是问题、一步能做完时直接回答 */
+  auto?: boolean
 }): string {
   const sep = en(input.locale) ? ': ' : '：'
   const list = input.members.map(m => `- ${m.name}${m.role ? `${sep}${m.role}` : ''}`).join('\n')
@@ -472,13 +474,23 @@ export function flowPlanPrompt(input: {
       `Members you can use:\n${list}`,
       'Split it into at most 9 steps. Each step: title (what to do), member (exact name), deps (numbers of the steps that must be delivered first, counting from 1), kind ("work"; "review" with target = the step number it reviews; or "summary" for the final wrap-up). Steps that do not depend on each other run in parallel. Do not do the work yourself.',
       'When the split is ready, call task_done with summary (one line) and steps. The user will check it and start it.',
-    ].join('\n\n')
+      input.auto
+        ? 'You are the lead of this channel and the user did not name anyone. If this is just a question, or one member can finish it in one go, do not call task_done: answer directly in your reply.'
+        : '',
+    ]
+      .filter(Boolean)
+      .join('\n\n')
   return [
     `用户想在频道 #${input.channel} 里让几个 AI 成员按流程做这件事：\n${input.request}`,
     `能用的成员：\n${list}`,
     '把它拆成最多 9 步。每一步写：title（做什么）、member（成员名字，原样写）、deps（要先交付的步骤序号，从 1 数）、kind（"work" 干活；"review" 审查，target 写审第几步；"summary" 最后汇总）。互相不依赖的步骤会同时做。不要自己动手做这件事。',
     '拆好后调用 task_done：summary 写一句话，steps 写上面的步骤。用户确认后才会开始。',
-  ].join('\n\n')
+    input.auto
+      ? '你是这个频道的牵头成员，用户没有点名交给谁。如果这只是个问题，或者一个成员一次就能做完，不要调用 task_done，直接在回复里回答。'
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n')
 }
 
 const quote = (text: string): string => `> ${text.trim().replace(/\n/g, '\n> ')}`

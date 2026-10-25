@@ -277,6 +277,9 @@ const STEP_STATUS: Record<'zh' | 'en', Record<FlowStep['status'], string>> = {
   },
 }
 
+/** 不带 @ 的消息至少这么长才交给牵头成员（docs/ui/channels-pipeline.md §8.3） */
+const LEAD_MIN_CHARS = 8
+
 /** 汇合步骤开始前主目录有没提交的改动（第 11 项）：这一步算失败，流程按 dirty 停下 */
 const DIRTY_ERROR = '项目主目录有没提交的改动：先提交或暂存，再继续流程'
 
@@ -489,6 +492,7 @@ export class Channels {
         archivedAt: c.archivedAt ?? null,
         relay: c.relay === true,
         relayRules: relayRulesOf(c),
+        lead: c.lead ?? null,
         alerts: alertRulesOf(c),
         digestHour: c.digestHour ?? DIGEST_HOUR,
         project: c.projectId ? (projects.get(c.projectId)?.name ?? null) : null,
@@ -794,6 +798,8 @@ export class Channels {
       relay?: boolean
       /** 互相派活的停下规则（只有本机频道） */
       relayRules?: RelayRules
+      /** 牵头成员（只有本机频道，docs/ui/channels-pipeline.md §8.3）：null 不启用 */
+      lead?: string | null
       /** 主动提醒的规则开关、每日简报几点发（只有本机频道） */
       alerts?: Partial<Record<ChannelAlert['rule'], boolean>>
       digestHour?: number
@@ -854,6 +860,12 @@ export class Channels {
     }
     const rulesChanged = patch.relayRules !== undefined
     if (rulesChanged) c.relayRules = cleanRelayRules(patch.relayRules)
+    if (patch.lead !== undefined) {
+      // 牵头要能拆流程：本频道的本机 AI 成员
+      if (patch.lead !== null && !this.flowMemberCheck(c)(String(patch.lead))?.local)
+        throw new Error('牵头成员要选这个频道里本机的 AI 成员')
+      c.lead = patch.lead
+    }
     if (patch.alerts !== undefined) c.alerts = cleanAlertRules(patch.alerts)
     if (patch.digestHour !== undefined) c.digestHour = cleanDigestHour(patch.digestHour)
     // 归档时一并标为已读：收起来的频道不再算未读
@@ -1009,7 +1021,11 @@ export class Channels {
     }
     const c = this.writable(channelId)
     if (!c.memberIds.includes(memberId) || memberId === SELF_ID) return
-    await this.store.saveChannel({ ...c, memberIds: c.memberIds.filter(id => id !== memberId) })
+    await this.store.saveChannel({
+      ...c,
+      memberIds: c.memberIds.filter(id => id !== memberId),
+      ...(c.lead === memberId ? { lead: null } : {}),
+    })
     for (const run of [...this.store.runs.values()])
       if (run.channelId === channelId && run.memberId === memberId && run.phase === 'waiting')
         this.finish(run, { status: 'stopped', note: 'cancelled' })
@@ -1029,7 +1045,11 @@ export class Channels {
     await this.store.saveMembers()
     for (const c of this.store.channels.values())
       if (c.memberIds.includes(memberId))
-        await this.store.saveChannel({ ...c, memberIds: c.memberIds.filter(id => id !== memberId) })
+        await this.store.saveChannel({
+          ...c,
+          memberIds: c.memberIds.filter(id => id !== memberId),
+          ...(c.lead === memberId ? { lead: null } : {}),
+        })
     for (const [id, run] of this.store.runs) if (run.memberId === memberId) this.store.runs.delete(id)
     this.saveRuns()
     this.changed()
@@ -1173,6 +1193,8 @@ export class Channels {
       this.followUp(c, target, message)
       tasks.push(target.id)
     } else for (const id of agents) tasks.push(this.newTask(c, message, id, replyToId ?? threadId))
+    // 没派给任何人的需求：交给牵头成员（docs/ui/channels-pipeline.md §8.3）
+    if (!tasks.length && this.leadTakes(c, message)) void this.leadPlan(c, message)
     this.changed()
     return { message, tasks }
   }
@@ -2453,8 +2475,11 @@ export class Channels {
     if (!stepId) {
       // 拆流程的活：交回的步骤成为草稿；没交回就是空草稿，你自己写
       const steps = run.done?.steps
-      if (m.flow.status === 'planning' && m.flow.planner?.taskId === run.taskId)
-        this.updateFlow(run.channelId, messageId, f => ({ ...f, status: 'draft', ...(steps ? { steps } : {}) }))
+      if (m.flow.status !== 'planning' || m.flow.planner?.taskId !== run.taskId) return
+      // 牵头自动拆、没交回步骤：它直接回答了（回复照常发在卡片下），流程不留草稿
+      if (m.flow.planner.auto && finish.status === 'done' && !steps?.length)
+        this.updateFlow(run.channelId, messageId, f => ({ ...f, status: 'stopped' }))
+      else this.updateFlow(run.channelId, messageId, f => ({ ...f, status: 'draft', ...(steps ? { steps } : {}) }))
       return
     }
     if (m.flow.status !== 'running' && m.flow.status !== 'paused') return
@@ -2803,8 +2828,39 @@ export class Channels {
     this.advance(c.id, m.id)
   }
 
+  /** 正在由牵头拆的频道（同步占位，免得连发两条拆两个） */
+  private readonly leading = new Set<string>()
+
+  /** 这条消息交给牵头成员（docs/ui/channels-pipeline.md §8.3）：主时间线、不带 @、不是斜杠命令、够长、没有正在拆的 */
+  private leadTakes(c: StoredChannel, m: ChannelTextMessage): boolean {
+    const text = m.text.trim()
+    if (!c.lead || !this.flowMemberCheck(c)(c.lead)?.local) return false
+    if (m.mentions?.length || m.threadId || m.replyToId || text.length < LEAD_MIN_CHARS || text.startsWith('/'))
+      return false
+    // 带图片 / 文件的：拆流程只带文字，看不到附件，照旧只是留言
+    if (m.attached?.images.length || m.attached?.files.length) return false
+    if (this.leading.has(c.id)) return false
+    return !(this.store.messages.get(c.id) ?? []).some(x => x.kind === 'message' && x.flow?.status === 'planning')
+  }
+
+  /** 牵头成员拆这条需求：和「让成员拆」同一条路，拆出的是草稿，你确认后才开始；只是问题时它直接回答 */
+  private async leadPlan(c: StoredChannel, m: ChannelTextMessage): Promise<void> {
+    this.leading.add(c.id)
+    try {
+      await this.flowAction(
+        c.id,
+        { type: 'create', title: m.text, planner: { memberId: c.lead, request: m.text } },
+        true,
+      )
+    } catch (e) {
+      this.deps.log?.('牵头拆流程失败', e)
+    } finally {
+      this.leading.delete(c.id)
+    }
+  }
+
   /** 流程卡上的操作（channels:flow）：建草稿（手写或让成员拆）、改草稿、开始、暂停、继续、停止、丢弃 */
-  async flowAction(channelId: string, raw: unknown): Promise<{ messageId: string }> {
+  async flowAction(channelId: string, raw: unknown, auto = false): Promise<{ messageId: string }> {
     if (this.isTeam(channelId)) throw new Error('团队频道暂时不支持流程')
     const c = this.writable(channelId)
     const a = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
@@ -2827,7 +2883,7 @@ export class Channels {
         if (!check) throw new Error('这个成员不在频道里')
         if (!check.local) throw new Error(`「${check.name}」在 SSH 机器上，流程暂时只支持本机的成员`)
         if (!request) throw new Error('写一句要拆的需求')
-        planner = { memberId, request, taskId: null }
+        planner = { memberId, request, taskId: null, ...(auto ? { auto: true } : {}) }
       }
       const message: ChannelTextMessage & { flow: ChannelFlow } = {
         kind: 'message',
@@ -2857,8 +2913,15 @@ export class Channels {
           channel: c.name,
           request: planner.request,
           members: this.relayPeers(c, '').filter(x => local.has(x.name)),
+          auto,
         })
-        const name = locale === 'en-US' ? `Plan the flow: ${title}` : `拆流程：${title}`
+        const name = auto
+          ? locale === 'en-US'
+            ? `Lead: ${title}`
+            : `牵头处理：${title}`
+          : locale === 'en-US'
+            ? `Plan the flow: ${title}`
+            : `拆流程：${title}`
         const taskId = this.flowTask(c, message, planner.memberId, name, '', prompt)
         this.updateFlow(channelId, message.id, f => ({ ...f, planner: { ...f.planner!, taskId } }))
         void this.pump(planner.memberId)

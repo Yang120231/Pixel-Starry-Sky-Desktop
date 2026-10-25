@@ -127,6 +127,8 @@ export const demoChannels: Channel[] = [
     // 频道说明和置顶（docs/ui/channels-local-ai.md §3.1 #9）
     notes: '改完要跑 pnpm check；不要改 API 和数据库结构。',
     pinned: ['web-m2'],
+    // 牵头成员（docs/ui/channels-pipeline.md §8.3）
+    lead: 'a-frontend',
     memberIds: ['m-linxia', 'a-frontend', 'a-reviewer'],
     unread: 2,
     mentioned: true,
@@ -487,6 +489,8 @@ export const demoChannelMessages: Record<string, ChannelMessage[]> = {
       sessionId: null,
       summary: '出了 3 张按钮状态图，放在 assets/login。',
       diff: { added: 3, removed: 0 },
+      startedAt: at(TODAY, '10:20', 8),
+      round: 2,
       endedAt: at(TODAY, '10:26'),
       flow: { messageId: 'web-flow1', stepId: 'f1' },
     },
@@ -502,6 +506,8 @@ export const demoChannelMessages: Record<string, ChannelMessage[]> = {
       sessionId: null,
       summary: null,
       diff: null,
+      startedAt: at(TODAY, '10:26', 8),
+      round: 1,
       flow: { messageId: 'web-flow1', stepId: 'f2' },
     },
   ],

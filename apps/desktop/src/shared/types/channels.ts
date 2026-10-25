@@ -208,6 +208,8 @@ export interface Channel {
   relay?: boolean
   /** 互相派活什么时候停下等你（docs/ui/relay-limits-mockup.html）；没写按「标准」 */
   relayRules?: RelayRules
+  /** 牵头成员（docs/ui/channels-pipeline.md §8.3）：不带 @ 的需求交给它拆成流程；null / 没写是不启用 */
+  lead?: string | null
   /** 主动提醒的规则开关（docs/ui/channels-collab-v2.md §6）；没写的按默认（shared/channels/alerts.ts） */
   alerts?: Partial<Record<ChannelAlertRule, boolean>>
   /** 每日简报几点发（0–23，默认 9） */
@@ -314,8 +316,8 @@ export interface ChannelFlow {
   steps: FlowStep[]
   /** 审查最多打回几次，超了停下 */
   maxRejects: number
-  /** 拆流程的成员和要求（status 是 planning 时） */
-  planner?: { memberId: string; request: string; taskId: string | null } | null
+  /** 拆流程的成员和要求（status 是 planning 时）；auto：牵头成员按你不带 @ 的消息自动拆的（§8.3） */
+  planner?: { memberId: string; request: string; taskId: string | null; auto?: boolean } | null
   /** 成员之间问过的问题（算进接力规则） */
   asks?: { from: string; to: string; at: number }[]
   /** 护栏（第 13 项）；没写 = 不限（第二批之前的流程） */
@@ -420,6 +422,8 @@ export interface ChannelTask extends ChannelMessageBase {
   /** 机器断开了，重连后继续跟踪 */
   disconnected?: boolean
   /** 这一轮结束的时间 */
+  /** 真正开始做的时间（不含排队，§8.2）；旧卡片没有 */
+  startedAt?: number | null
   endedAt?: number | null
   /** Phase C：AI 成员的主人（owner key）；只有主人能同意、回答、打开会话 */
   ownerId?: string

@@ -484,6 +484,8 @@ export const channelActions = {
       /** 主动提醒的规则开关、每日简报几点发（docs/ui/channels-collab-v2.md §6） */
       alerts?: Partial<Record<ChannelAlertRule, boolean>>
       digestHour?: number
+      /** 牵头成员（docs/ui/channels-pipeline.md §8.3）；null 是不启用 */
+      lead?: string | null
     },
   ): Promise<void> {
     if (channelsBridge) return channelsBridge.update(id, patch)

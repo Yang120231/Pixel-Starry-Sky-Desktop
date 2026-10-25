@@ -94,6 +94,20 @@ describe('频道时间线', () => {
       'b3',
     ])
   })
+  it('牵头成员直接回答、没拆出步骤的流程不上时间线；手动的空流程照常显示', () => {
+    const flow = (auto: boolean) => ({
+      title: 't',
+      status: 'stopped' as const,
+      steps: [],
+      maxRejects: 3,
+      planner: { memberId: 'fe', request: 'r', taskId: null, auto },
+    })
+    const rows = buildTimeline([
+      text('auto', 'me', DAY1 + min(600), { flow: flow(true) }),
+      text('manual', 'me', DAY1 + min(601), { flow: flow(false) }),
+    ])
+    expect(rows.map(r => (r.kind === 'flow' ? r.key : r.kind))).toEqual(['day', 'manual'])
+  })
   it('只在讨论串里的消息不上主时间线，也不打断前后的分组', () => {
     const rows = buildTimeline([
       text('a1', 'me', DAY1 + min(600)),

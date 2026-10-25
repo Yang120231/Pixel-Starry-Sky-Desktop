@@ -82,7 +82,7 @@ describe('任务状态跟踪（§5.1）', () => {
       { type: 'turn_completed', turnId: 'turn1', outcome: 'completed', error: null },
     ])
     expect(r.patches.filter(p => 'status' in p)).toEqual([
-      { status: 'running', request: null, progress: null, activity: null },
+      { status: 'running', request: null, progress: null, activity: null, startedAt: expect.any(Number) },
       { status: 'waiting', request: request('r1'), waitingCount: 1 },
       { status: 'running', request: null, waitingCount: 0 },
     ])
@@ -207,6 +207,8 @@ describe('任务状态跟踪（§5.1）', () => {
       { type: 'turn_completed', turnId: 'turn2', outcome: 'completed', error: null },
     ])
     expect(r.finish).toEqual({ status: 'done' })
+    // 开始时间只记第一次，续做那一轮不覆盖
+    expect(r.patches.filter(p => 'startedAt' in p)).toHaveLength(1)
     // 重连后这条被标失败（次数用完）：按失败收尾
     const gaveUp = feed(run(), [
       { type: 'item_completed', item: user('ch-t1-1', 'turn1') },

@@ -6,7 +6,7 @@ import type { Effort } from '@pixelsky/protocol'
 import { Button, cn, IconButton, Popover, Segmented, Select, Spinner, useToast, type SelectOption } from '@/ui'
 import { useEngineState } from '@/features/engine'
 import { effortLabel } from '@/features/engine/labels'
-import type { ChannelMember, ChannelTextMessage } from '@/data/types'
+import type { ChannelMember, ChannelTask, ChannelTextMessage } from '@/data/types'
 import type {
   ChannelFlow,
   FlowAction,
@@ -17,7 +17,8 @@ import type {
 } from '../../../../shared/types/channels'
 import { MemberAvatar } from './ChannelMessage'
 import { GateActions } from './GateActions'
-import { channelActions } from './store'
+import { channelActions, useChannels } from './store'
+import { saveTemplate, TEMPLATE_MAX, TEMPLATE_NAME_MAX, toTemplate } from './flowTemplates'
 
 const NUMBERS = '①②③④⑤⑥⑦⑧⑨'
 const num = (i: number): string => NUMBERS[i] ?? String(i + 1)
@@ -160,6 +161,110 @@ function StepSettings({
       </Popover>
     </>
   )
+}
+
+/** 流程卡头上的「存为模板」：填个名字存到本机（docs/ui/channels-pipeline.md §8.1） */
+function SaveTemplate({
+  steps,
+  limits,
+  isolate,
+  membersById,
+}: {
+  steps: readonly FlowStepInput[]
+  limits?: ChannelFlow['limits']
+  isolate?: boolean
+  membersById: Members
+}) {
+  useI18n()
+  const toast = useToast()
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const anchor = useRef<HTMLSpanElement>(null)
+  const save = () => {
+    const n = name.trim()
+    if (!n) return
+    const lookup = (id: string) => {
+      const m = membersById.get(id)
+      return m ? { name: m.name, engine: m.kind === 'agent' ? m.engine : undefined } : undefined
+    }
+    if (!saveTemplate(toTemplate({ steps, limits, isolate }, n, lookup)))
+      return toast(tr('channels.flow.tplFull', { n: TEMPLATE_MAX }))
+    toast(tr('channels.flow.tplSaved', { name: n.slice(0, TEMPLATE_NAME_MAX) }))
+    setOpen(false)
+    setName('')
+  }
+  return (
+    <>
+      <span ref={anchor} className="inline-flex shrink-0">
+        <Button className="h-7 px-2.5 text-meta" onClick={() => setOpen(o => !o)}>
+          {tr('channels.flow.saveTpl')}
+        </Button>
+      </span>
+      <Popover
+        open={open}
+        onClose={() => setOpen(false)}
+        anchor={anchor}
+        align="end"
+        role="dialog"
+        className="w-64 p-3"
+      >
+        <div className="flex flex-col gap-2">
+          <input
+            autoFocus
+            maxLength={TEMPLATE_NAME_MAX}
+            aria-label={tr('channels.flow.tplName')}
+            placeholder={tr('channels.flow.tplName')}
+            value={name}
+            onChange={e => setName(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.nativeEvent.isComposing) save()
+            }}
+            className="h-8 rounded-md border border-line bg-surface px-2 text-ui text-fg outline-none focus:border-accent"
+          />
+          <Button variant="primary" className="self-end" disabled={!name.trim()} onClick={save}>
+            {tr('channels.flow.tplSave')}
+          </Button>
+        </div>
+      </Popover>
+    </>
+  )
+}
+
+/** 时长的文字：1 分钟内秒、1 小时内分秒、再长小时 + 分 */
+const durText = (ms: number): string => {
+  const s = Math.max(0, Math.round(ms / 1000))
+  if (s < 60) return tr('channels.flow.dur.s', { s })
+  const m = Math.floor(s / 60)
+  return m < 60
+    ? tr('channels.flow.dur.ms', { m, s: s % 60 })
+    : tr('channels.flow.dur.hm', { h: Math.floor(m / 60), m: m % 60 })
+}
+
+/** 一步的耗时行：「3 分 12 秒 · 2 轮 · 打回 1 次」（§8.2）；没有的部分不显示 */
+function stepStats(step: FlowStep, task: ChannelTask | undefined, now: number): string {
+  if (!task) return ''
+  const start = task.startedAt ?? task.at
+  const parts = [
+    start ? durText((task.endedAt ?? now) - start) : '',
+    task.round ? tr('channels.flow.dur.rounds', { n: task.round }) : '',
+    step.rejects > 0 ? tr('channels.flow.dur.rejects', { n: step.rejects }) : '',
+  ]
+  return parts.filter(Boolean).join(' · ')
+}
+
+/** 整条流程的耗时：开始运行到最后一个任务结束（运行中到现在），不把并行的加起来 */
+function flowTotal(flow: ChannelFlow, tasks: ChannelTask[], now: number): string {
+  // 从最早那一步开始算（since 是护栏的计数起点，继续时会重置）
+  const starts = tasks.map(t => t.startedAt ?? t.at)
+  const start = starts.length ? Math.min(...starts) : flow.since?.at
+  if (!start) return ''
+  const ends = tasks.flatMap(t => (t.endedAt ? [t.endedAt] : []))
+  const end = flow.status === 'running' ? now : Math.max(0, ...ends)
+  if (end <= start) return ''
+  const m = Math.round((end - start) / 60_000)
+  const time = m < 1 ? durText(end - start) : m < 60 ? tr('channels.flow.dur.min', { m }) : durText(end - start)
+  const rounds = tasks.reduce((n, t) => n + (t.round ?? 0), 0)
+  return rounds > 0 ? tr('channels.flow.dur.total', { time, rounds }) : time
 }
 
 const newStepId = (steps: readonly FlowStepInput[]): string => {
@@ -322,6 +427,7 @@ function DraftEditor({
                 <Select
                   label={tr('channels.flow.member')}
                   value={s.memberId}
+                  placeholder={tr('channels.flow.pickMember')}
                   options={agentOptions}
                   disabled={readOnly}
                   onChange={v => patchStep(s.id, { memberId: v })}
@@ -428,6 +534,17 @@ function DraftEditor({
             {tr('channels.flow.addStep')}
           </Button>
           <span className="flex-1" />
+          {steps.length > 0 && (
+            <SaveTemplate
+              steps={steps}
+              isolate={isolate}
+              limits={{
+                rounds: rounds.trim() ? Number(rounds) : null,
+                minutes: minutes.trim() ? Number(minutes) : null,
+              }}
+              membersById={membersById}
+            />
+          )}
           <Button disabled={busy} onClick={() => void run({ type: 'discard', messageId: message.id })}>
             {tr('channels.flow.discard')}
           </Button>
@@ -522,6 +639,17 @@ export function ChannelFlowCard({
   const act = (type: 'pause' | 'resume' | 'stop' | 'discard') => void run({ type, messageId: message.id })
   const agents = channelMembers.filter(m => m.kind === 'agent')
   const planner = flow.planner ? membersById.get(flow.planner.memberId) : undefined
+  const channelMessages = useChannels(s => s.messages[message.channelId])
+  const taskOf = new Map<string, ChannelTask>()
+  for (const m of channelMessages ?? []) if (m.kind === 'task') taskOf.set(m.id, m)
+  const tasks = flow.steps.flatMap(s => (s.taskId && taskOf.get(s.taskId) ? [taskOf.get(s.taskId)!] : []))
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    if (flow.status !== 'running') return
+    const t = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(t)
+  }, [flow.status])
+  const total = flow.status === 'draft' || flow.status === 'planning' ? '' : flowTotal(flow, tasks, now)
   const tone =
     flow.status === 'paused'
       ? 'bg-subtle text-warn'
@@ -548,9 +676,22 @@ export function ChannelFlowCard({
             <div className="flex items-center gap-2 text-meta">
               <Workflow size={14} strokeWidth={1.75} className="shrink-0 text-fg-muted" />
               <span className="min-w-0 flex-1 truncate text-ui font-semibold text-fg">{flow.title}</span>
+              {flow.planner?.auto && (
+                <span className="max-w-40 shrink-0 truncate text-fg-faint">
+                  {tr('channels.flow.autoPlan', { name: planner?.name ?? '?' })}
+                </span>
+              )}
               <span className={cn('shrink-0 rounded-md px-1.5 py-0.5', tone)}>
                 {tr(`channels.flow.status.${flow.status}`)}
               </span>
+              {flow.steps.length > 0 && (
+                <SaveTemplate
+                  steps={flow.steps}
+                  limits={flow.limits}
+                  isolate={flow.isolate}
+                  membersById={membersById}
+                />
+              )}
             </div>
             {flow.status === 'paused' && flow.paused && (
               <p className="mt-1 text-meta text-warn">
@@ -604,6 +745,10 @@ export function ChannelFlowCard({
                             {st.text}
                           </span>
                         </span>
+                        {(() => {
+                          const stats = stepStats(s, s.taskId ? taskOf.get(s.taskId) : undefined, now)
+                          return stats && <span className="truncate pl-7 text-meta text-fg-faint">{stats}</span>
+                        })()}
                         {s.copy && (
                           <span className="truncate pl-7 text-meta text-fg-faint">
                             {tr('channels.flow.copy', { branch: s.copy.branch })}
@@ -630,6 +775,7 @@ export function ChannelFlowCard({
                 })}
               </ol>
             )}
+            {total && <p className="mt-1.5 px-1.5 text-meta text-fg-faint">{total}</p>}
             {!readOnly && (flow.status === 'running' || flow.status === 'paused') && (
               <div className="mt-2 flex items-center justify-end gap-2">
                 {flow.limits && (

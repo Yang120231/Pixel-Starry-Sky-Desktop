@@ -516,3 +516,77 @@ describe('流程第二批（docs/ui/channels-pipeline.md §6）', () => {
     expect(removed.sort()).toEqual(['c1', 'c2'])
   })
 })
+
+describe('流程第三批（docs/ui/channels-pipeline.md §8）', () => {
+  it('任务卡记下真正开始的时间（第一轮，不含排队）', async () => {
+    const { c, a, ch } = await setup()
+    const { messageId } = await c.flowAction(ch, {
+      type: 'create',
+      title: '计时',
+      steps: [{ id: 's1', title: '画贴图', memberId: a, deps: [], kind: 'work' }],
+    })
+    await c.flowAction(ch, { type: 'start', messageId })
+    await settle()
+    const s1 = sessionOf(c, ch, 's1')
+    expect(tasks(c, ch)[0].startedAt ?? null).toBeNull()
+    c.toolDone(s1, { summary: '好了' })
+    await endTurn(c, s1, '好了')
+    const card = tasks(c, ch)[0]
+    expect(card.startedAt).toBeGreaterThan(card.at)
+    expect(card.endedAt).toBeGreaterThan(card.startedAt!)
+  })
+
+  it('牵头成员：不带 @ 的需求自动拆成流程；一次只拆一个；@、太短、斜杠、讨论串不触发；直接回答时不留草稿', async () => {
+    const { c, a, b, ch } = await setup()
+    await expect(c.update(ch, { lead: 'nobody' })).rejects.toThrow('牵头成员')
+    // 没设牵头：只是留言
+    await c.post(ch, { text: '帮我把登录页改成两步验证', clientId: 'p0' })
+    await settle()
+    expect(sends()).toHaveLength(0)
+
+    await c.update(ch, { lead: a })
+    expect(c.state().channels.find(x => x.id === ch)?.lead).toBe(a)
+    await c.post(ch, { text: '好的', clientId: 'p1' })
+    await c.post(ch, { text: '/compact 现在整理一下上下文', clientId: 'p2' })
+    await settle()
+    expect(sends()).toHaveLength(0)
+
+    await c.post(ch, { text: '帮我把登录页改成两步验证', clientId: 'p3' })
+    await c.post(ch, { text: '顺便把注册页也改了吧谢谢', clientId: 'p4' })
+    await settle()
+    const flows = () => c.messages(ch).messages.filter((m): m is ChannelTextMessage => m.kind === 'message' && !!m.flow)
+    expect(flows()).toHaveLength(1)
+    expect(flows()[0].flow).toMatchObject({ status: 'planning', planner: { memberId: a, auto: true } })
+    expect(tasks(c, ch)[0].title).toContain('牵头处理')
+    const s = tasks(c, ch)[0].sessionId!
+    expect(lastTo(s).text).toContain('你是这个频道的牵头成员')
+
+    // 只是问题：不调 task_done 直接回答，流程不留草稿
+    await endTurn(c, s, '两步验证用短信验证码就行。')
+    expect(flows()[0].flow?.status).toBe('stopped')
+
+    // 有 @ 的照常派活，不交给牵头
+    await c.post(ch, { text: '@程序员 写一下单元测试吧', clientId: 'p5' })
+    await settle()
+    expect(flows()).toHaveLength(1)
+    expect(tasks(c, ch).at(-1)?.assigneeId).toBe(b)
+
+    // 再来一条需求：这次拆成步骤，变成草稿等你确认
+    await c.post(ch, { text: '做一个新的设置页并且审查一遍', clientId: 'p6' })
+    await settle()
+    const planning = tasks(c, ch).at(-1)!
+    expect(planning.assigneeId).toBe(a)
+    c.toolDone(planning.sessionId!, { summary: '拆好了', steps: [{ title: '写设置页', member: '程序员' }] })
+    await endTurn(c, planning.sessionId!, '拆好了')
+    expect(flows().at(-1)?.flow?.status).toBe('draft')
+
+    // 讨论串里的不触发
+    await c.post(ch, { text: '这个设置页也要支持深色主题', threadId: planning.id, clientId: 'p7' })
+    await settle()
+    expect(flows()).toHaveLength(2)
+
+    // 牵头被移出频道：设置清掉
+    await c.removeMember(ch, a)
+    expect(c.state().channels.find(x => x.id === ch)?.lead).toBeNull()
+  })
+})

@@ -270,7 +270,14 @@ export function trackEvent(run: TaskRun, event: EngineEvent, now = Date.now()): 
       activity: null,
       notice: null,
     }
-    return { run: next, patch: { status: 'running', request: null, progress: null, activity: null }, finish: null }
+    // 第一轮真正开始的时间（不含排队）：卡片和流程算耗时用（docs/ui/channels-pipeline.md §8.2）
+    // 断线重连、重试自动发的那条不算重新开始
+    const startedAt = run.round === 1 && event.item.id === run.clientMessageId ? { startedAt: now } : {}
+    return {
+      run: next,
+      patch: { status: 'running', request: null, progress: null, activity: null, ...startedAt },
+      finish: null,
+    }
   }
   if (!run.started) return none
   if (event.type === 'turn_started')

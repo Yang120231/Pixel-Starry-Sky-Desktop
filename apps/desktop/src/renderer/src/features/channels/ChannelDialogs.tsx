@@ -109,6 +109,11 @@ export function ChannelDialog({
   const [members, setMembers] = useState<string[]>([])
   const [memberQuery, setMemberQuery] = useState('')
   const [relay, setRelay] = useState(channel?.relay === true)
+  const [lead, setLead] = useState(channel?.lead ?? '')
+  const channelMembers = useChannels(s => s.members)
+  const leadOptions = channelMembers.filter(
+    m => m.kind === 'agent' && m.machineId === 'local' && channel?.memberIds.includes(m.id),
+  )
   const savedRules = channel ? relayRulesOf(channel) : DEFAULT_RELAY_RULES
   const [rules, setRules] = useState<RelayRules>(savedRules)
   // 主动提醒（docs/ui/channels-collab-v2.md §6）
@@ -124,6 +129,7 @@ export function ChannelDialog({
     topic !== (channel?.topic ?? '') ||
     notes !== (channel?.notes ?? '') ||
     relay !== (channel?.relay === true) ||
+    lead !== (channel?.lead ?? '') ||
     JSON.stringify(rules) !== JSON.stringify(savedRules) ||
     JSON.stringify(alerts) !== JSON.stringify(savedAlerts) ||
     digestHour !== (channel?.digestHour ?? DIGEST_HOUR) ||
@@ -141,7 +147,15 @@ export function ChannelDialog({
           channel.id,
           inTeam
             ? { name, topic: input.topic }
-            : { ...input, notes: note, relay, relayRules: rules, alerts, digestHour },
+            : {
+                ...input,
+                notes: note,
+                relay,
+                relayRules: rules,
+                alerts,
+                digestHour,
+                ...(lead !== (channel.lead ?? '') ? { lead: lead || null } : {}),
+              },
         )
       : channelActions.createChannel(teamId ? { ...input, teamId } : { ...input, memberIds: members }).then(id =>
           !teamId
@@ -214,6 +228,22 @@ export function ChannelDialog({
             </label>
           )}
           {!inTeam && relay && <RelayRulesEditor value={rules} onChange={setRules} />}
+          {!inTeam && channel && (
+            <Field
+              label={tr('channels.dialog.lead')}
+              hint={<span className="text-meta text-fg-muted">{tr('channels.dialog.leadHint')}</span>}
+            >
+              <Select
+                label={tr('channels.dialog.lead')}
+                value={lead}
+                options={[
+                  { value: '', label: tr('channels.dialog.leadNone') },
+                  ...leadOptions.map(m => ({ value: m.id, label: m.name })),
+                ]}
+                onChange={setLead}
+              />
+            </Field>
+          )}
           {!inTeam && (
             <AlertRulesEditor
               value={alerts}

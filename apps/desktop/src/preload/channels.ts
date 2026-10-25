@@ -46,6 +46,8 @@ export interface ChannelsBridge {
       relay?: boolean
       /** 互相派活的停下规则（docs/ui/relay-limits-mockup.html） */
       relayRules?: RelayRules
+      /** 牵头成员（docs/ui/channels-pipeline.md §8.3）：null 不启用 */
+      lead?: string | null
       /** 主动提醒的规则开关、每日简报几点发（docs/ui/channels-collab-v2.md §6） */
       alerts?: Partial<Record<ChannelAlertRule, boolean>>
       digestHour?: number
