@@ -156,7 +156,15 @@ export function SessionRow({
       >
         {children}
       </button>
-      <div className="relative flex h-full min-w-6 shrink-0 items-center justify-end">
+      {/* 悬停按钮浮在右边：悬停 / 菜单打开时让出两个按钮的宽度，标题省略而不是被按钮压住 */}
+      <div
+        className={cn(
+          'relative flex h-full shrink-0 items-center justify-end',
+          position
+            ? 'min-w-[3.125rem]'
+            : 'min-w-6 group-hover/session:min-w-[3.125rem] group-focus-within/session:min-w-[3.125rem]',
+        )}
+      >
         <span
           className={cn(
             'flex items-center gap-1.5 group-hover/session:invisible group-focus-within/session:invisible',
