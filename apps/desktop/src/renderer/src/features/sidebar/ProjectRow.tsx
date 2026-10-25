@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
+  Archive,
   Ellipsis,
   Folder,
   FolderOpen,
@@ -21,6 +22,8 @@ import { machineOf } from '@/features/machines/store'
 import { paneActions } from '@/features/panes/store'
 import type { Project } from '@/data'
 import { ProjectFoldersDialog } from './ProjectFoldersDialog'
+import { planArchive, DEFAULT_DAYS } from './archiveOld'
+import { collectArchiveItems, openArchiveOld } from './archiveOldData'
 
 /**
  * 侧栏项目行：文件夹图标（展开时是打开的文件夹）+ 名字（docs/ui/sidebar-styles.md「大文件夹」版）。点击展开 / 收起；右键、⋯ 按钮、ContextMenu 键或 Shift+F10 打开项目菜单。
@@ -111,6 +114,10 @@ export function ProjectRow({
     close(false)
     paneActions.open(null, { project: project.id })
   }
+  // 菜单打开时数一次：按默认天数能归档几个（不订阅，菜单一收就不再算）
+  const oldCount = position
+    ? planArchive(collectArchiveItems(), { days: DEFAULT_DAYS, projectId: project.id, now: Date.now() }).pick.length
+    : 0
   const item =
     'flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-ui hover:bg-hover disabled:opacity-40 disabled:hover:bg-transparent'
   const action =
@@ -292,6 +299,22 @@ export function ProjectRow({
             >
               <SquareArrowOutUpRight size={15} strokeWidth={1.5} />
               {t('project.openEditor')}
+            </button>
+            <button
+              role="menuitem"
+              onClick={() => {
+                close(false)
+                openArchiveOld(project.id)
+              }}
+              className={item}
+            >
+              <Archive size={15} strokeWidth={1.5} />
+              {t('archiveOld.menu')}
+              {oldCount > 0 && (
+                <span className="ml-auto pl-3 text-meta text-fg-faint">
+                  {t('archiveOld.menuHint', { count: oldCount })}
+                </span>
+              )}
             </button>
             <div role="separator" className="my-1 border-t border-line-subtle" />
             <button role="menuitem" onClick={() => run(() => setDialog('remove'))} className={cn(item, 'text-danger')}>

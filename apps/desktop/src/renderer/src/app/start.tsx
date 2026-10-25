@@ -15,6 +15,7 @@ import { WallpaperLayer } from '../features/appearance/WallpaperLayer'
 import { SearchProvider } from '../features/search/SearchProvider'
 import { I18nProvider } from '../i18n/I18nProvider'
 import { SessionActionsProvider } from '../features/sidebar/SessionActions'
+import { ArchiveOldHost } from '../features/sidebar/ArchiveOldHost'
 import { TerminalProvider } from '../features/terminal/TerminalProvider'
 import { ResumeHost } from '../features/resume/ResumeHost'
 import { ResumeHintHost } from '../features/resume/ResumeHintHost'
@@ -63,6 +64,7 @@ createRoot(document.getElementById('root')!, reactRootErrorOptions).render(
                     <ShortcutsHelp />
                     <AuthDialogHost />
                     <BranchDialogHost />
+                    <ArchiveOldHost />
                     <ResumeHost />
                     <ResumeHintHost />
                     <RecoveredNotice />

@@ -89,6 +89,17 @@ const SESSION_CSS_DIFFS = [
   ].join('\n'),
 ]
 
+/** 几天没收发消息（批量归档旧会话，docs/ui/archive-old-sessions.md）；置顶的 s-redesign、运行中的 s-settings-form 也列在「不会归档」里 */
+export const demoIdleDays: Record<string, number> = {
+  's-redesign': 40,
+  's-settings-form': 20,
+  's-cloud-onboarding': 3,
+  's-old-error': 15,
+  's-old-mermaid': 21,
+  's-old-ssh': 60,
+  's-old-hello': 21,
+}
+
 export const demo: AppData = {
   currentUser: { name: '林夏' },
   railItems: RAIL_ITEMS,
@@ -105,6 +116,9 @@ export const demo: AppData = {
         { id: 's-redesign', title: '重构网页版工作台为 Codex 式布局', status: 'unread', pinnedAt: 1 },
         { id: 's-settings-form', title: '设置页迁移到新的表单组件', status: 'running' },
         { id: 's-cloud-onboarding', title: '把云主机配置引导改成两步', status: 'idle', time: '3天' },
+        { id: 's-old-error', title: '帮我看看这个报错', status: 'idle', time: '2周' },
+        { id: 's-old-mermaid', title: '整理 Mermaid 渲染方案', status: 'idle', time: '3周' },
+        { id: 's-old-ssh', title: 'SSH 重连排查', status: 'idle', time: '2月' },
         ...BRANCH_MERGE_SESSIONS,
       ],
       archived: [{ id: 's-archived-demo', title: '已完成的项目检查', status: 'idle', time: '5天', archivedAt: 1 }],
@@ -124,7 +138,11 @@ export const demo: AppData = {
     ...statusDemoProjects,
     { id: 'pixel-desktop', name: 'pixel-desktop', branch: 'feat/turn-island', sessions: [] },
     { id: 'pixel-channel', name: 'pixel-channel', sessions: [] },
-    { id: 'docs-site', name: 'docs-site', sessions: [] },
+    {
+      id: 'docs-site',
+      name: 'docs-site',
+      sessions: [{ id: 's-old-hello', title: '你好', status: 'idle', time: '3周' }],
+    },
     { id: 'research-notes', name: 'research-notes', sessions: [] },
   ],
   recent: [

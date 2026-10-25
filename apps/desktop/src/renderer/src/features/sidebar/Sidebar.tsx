@@ -2,7 +2,17 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useReducedMotion } from '@/features/appearance/ThemeProvider'
-import { ChevronDown, ChevronsDownUp, ChevronsUpDown, FolderInput, FolderPlus, Import, X } from 'lucide-react'
+import {
+  Archive,
+  ChevronDown,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  Ellipsis,
+  FolderInput,
+  FolderPlus,
+  Import,
+  X,
+} from 'lucide-react'
 import { IconButton, cn, useComingSoon, useToast } from '@/ui'
 import { ActionMenu } from '@/ui/ActionMenu'
 import {
@@ -23,6 +33,7 @@ import { PinnedList } from './PinnedList'
 import { PinnedTasks } from './PinnedTasks'
 import { TASK_DRAG_TYPE, draggedTask, pinTask } from '@/features/panel/pinnedTasks'
 import { ProjectTree } from './ProjectTree'
+import { openArchiveOld } from './archiveOldData'
 import { arrangeProjects, groupKey } from './projectGroups'
 import { RecentItem } from './RecentItem'
 import { RunStatusPill } from './RunStatusPill'
@@ -62,6 +73,8 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
     const rect = e.currentTarget.getBoundingClientRect()
     setAddMenu({ x: rect.left, y: rect.bottom + 4 })
   }
+  // 「项目」标题右边的「⋯」：归档旧会话（范围是全部项目）
+  const [moreMenu, setMoreMenu] = useState<{ x: number; y: number } | null>(null)
   const onNewTask = isLive ? () => onSelectSession(null) : undefined
   const AddProjectIcon = getSidebarIcon('addProject', prefs.icons)
   // 把任务清单里的任务拖到侧栏任意位置松开：固定到「固定任务」（docs/ui/files-search-terminal-pins.md §5）
@@ -189,6 +202,19 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
                   onClick={() => setProjectsCollapsed(foldKeys, anyOpen)}
                 />
               )}
+              {!runFilter && projects.length > 0 && (
+                <IconButton
+                  icon={Ellipsis}
+                  label={tr('archiveOld.projectsMenu')}
+                  size={22}
+                  iconSize={14}
+                  aria-haspopup="menu"
+                  onClick={e => {
+                    const rect = e.currentTarget.getBoundingClientRect()
+                    setMoreMenu({ x: rect.left, y: rect.bottom + 4 })
+                  }}
+                />
+              )}
               <IconButton
                 icon={AddProjectIcon}
                 label={tr('sidebar.action.addProject')}
@@ -200,6 +226,15 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
             </span>
           }
         >
+          {moreMenu && (
+            <ActionMenu
+              x={moreMenu.x}
+              y={moreMenu.y}
+              label={tr('archiveOld.projectsMenu')}
+              onClose={() => setMoreMenu(null)}
+              actions={[{ label: tr('archiveOld.menu'), icon: Archive, run: () => openArchiveOld(null) }]}
+            />
+          )}
           {addMenu && (
             <ActionMenu
               x={addMenu.x}

@@ -427,6 +427,15 @@ function archived(): SessionSnapshot {
   )
 }
 
+// ---------- 很久没动过的会话（批量归档旧会话的演示，docs/ui/archive-old-sessions.md） ----------
+
+function oldSession(id: string, title: string, projectId: string, days: number, ask: string, reply: string) {
+  return snapshot(
+    sessionRecord(id, title, projectId, { createdAt: T0 - days * DAY - 10 * MIN, updatedAt: T0 - days * DAY }),
+    [user(`${id}-u`, ask, days * 24 * 60 + 10), assistant(`${id}-a`, reply)],
+  )
+}
+
 function cloudReconnect(): SessionSnapshot {
   return snapshot(
     sessionRecord('r-cloud-reconnect', '修复云主机断线后仍显示已连接', 'pixel-desktop', { updatedAt: T0 - MIN }),
@@ -513,6 +522,31 @@ export const workbenchSnapshots: Record<string, SessionSnapshot> = Object.fromEn
     settingsForm(),
     cloudOnboarding(),
     archived(),
+    oldSession(
+      's-old-error',
+      '帮我看看这个报错',
+      'pixel-web',
+      15,
+      '帮我看看这个报错：Cannot read properties of undefined',
+      '是 props 还没传进来就读了 user.name，加一个空值判断就行。',
+    ),
+    oldSession(
+      's-old-mermaid',
+      '整理 Mermaid 渲染方案',
+      'pixel-web',
+      21,
+      '整理一下 Mermaid 图表怎么渲染比较合适',
+      '建议按需加载 mermaid，渲染失败时回退显示源码。',
+    ),
+    oldSession(
+      's-old-ssh',
+      'SSH 重连排查',
+      'pixel-web',
+      60,
+      'SSH 断开后偶尔连不上，帮我排查',
+      '多半是旧连接没清理干净，重连前先关掉旧的通道。',
+    ),
+    oldSession('s-old-hello', '你好', 'docs-site', 21, '你好', '你好，有什么可以帮你的？'),
     cloudReconnect(),
     channelQuote(),
     changelog(),

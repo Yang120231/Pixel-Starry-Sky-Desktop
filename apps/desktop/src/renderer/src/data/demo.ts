@@ -183,6 +183,8 @@ export interface DemoSource {
   search: { projects: Array<{ id: string; name: string }>; run(query: SearchQuery): SearchResponse }
   terminal: { profiles: TerminalProfile[]; output: string }
   sessions: DemoSessions
+  /** 演示会话 id → 已经几天没收发消息（批量归档旧会话用，没写的算 0 天；docs/ui/archive-old-sessions.md） */
+  idleDays: Record<string, number>
   /** 用真实对话组件显示的演示会话（docs/ui/demo-conversation.md）：会话快照、子智能体记录、后台任务输出 */
   conversations: {
     snapshots: Record<string, SessionSnapshot>

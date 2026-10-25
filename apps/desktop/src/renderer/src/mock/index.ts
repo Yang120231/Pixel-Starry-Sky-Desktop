@@ -13,7 +13,7 @@ import {
 } from './conversations'
 import { codingSnapshots } from './coding'
 import { workbenchSnapshots } from './workbench'
-import { demo } from './demo'
+import { demo, demoIdleDays } from './demo'
 import { DEMO_EDITOR_STATE, DEMO_FILES, demoDirectory, demoDocument } from './files'
 import { demoGitBranches, demoGitDiff, demoGitHistory, demoGitStatus } from './git'
 import { demoExtStore } from './extStore'
@@ -85,6 +85,7 @@ export const demoSource: DemoSource = {
   search: { projects: demoSearchProjects, run: searchDemo },
   terminal: { profiles: demoTerminalProfiles, output: demoTerminalOutput },
   sessions: demoSessions,
+  idleDays: demoIdleDays,
   conversations: {
     snapshots: {
       ...showcaseSnapshots,
